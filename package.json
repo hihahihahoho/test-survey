@@ -5,7 +5,7 @@
   "description": "Soạn & duyệt bộ câu hỏi khảo sát, xuất ra Google Forms API v1 hoặc Apps Script",
   "scripts": {
     "build": "node build.mjs --dist",
-    "test": "node build.mjs --google && node test/engine.test.mjs && node test/appsscript.test.mjs",
+    "test": "node build.mjs --google && node test/render.test.mjs && node test/engine.test.mjs && node test/appsscript.test.mjs",
     "dev": "node build.mjs && python3 -m http.server 8000"
   },
   "engines": {

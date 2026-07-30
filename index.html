@@ -66,18 +66,31 @@
   textarea.t-input{max-width:100%;resize:vertical;min-height:24px;line-height:22px}
 
   .opt{display:flex;align-items:flex-start;gap:12px;padding:7px 0;cursor:pointer}
-  .opt input{position:absolute;opacity:0;width:0;height:0}
+  /* Ẩn ĐÚNG ô radio/checkbox gốc, không ẩn mọi input.
+     Trước đây selector là `.opt input` nên nó ẩn luôn cả ô text của "Khác:".
+     Và phải phủ cả grid lẫn scale — inputs ở đó không nằm trong .opt, nếu
+     không khai báo sẽ hiện ô gốc của trình duyệt cạnh vòng tròn giả. */
+  .opt input[type="radio"],.opt input[type="checkbox"],
+  .scale-item input,
+  table.grid input{position:absolute;opacity:0;width:0;height:0}
   .mark{flex:none;width:20px;height:20px;margin-top:1px;border:2px solid var(--ink-2);background:#fff;position:relative}
   .mark.radio{border-radius:50%}
   .mark.check{border-radius:2px}
-  .opt input:checked + .mark.radio{border-color:var(--purple)}
-  .opt input:checked + .mark.radio::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--purple)}
-  .opt input:checked + .mark.check{background:var(--purple);border-color:var(--purple)}
-  .opt input:checked + .mark.check::after{content:"";position:absolute;left:4px;top:0;width:6px;height:11px;
+  /* Không gắn tiền tố .opt — trạng thái đã chọn phải dùng chung cho grid và scale. */
+  input:checked + .mark.radio{border-color:var(--purple)}
+  input:checked + .mark.radio::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--purple)}
+  input:checked + .mark.check{background:var(--purple);border-color:var(--purple)}
+  input:checked + .mark.check::after{content:"";position:absolute;left:4px;top:0;width:6px;height:11px;
     border:solid #fff;border-width:0 2px 2px 0;transform:rotate(40deg)}
+  input:focus-visible + .mark{outline:2px solid var(--purple);outline-offset:2px}
   .opt-label{font-size:14px;color:var(--ink);padding-top:1px}
-  .opt .other-input{margin-left:4px;flex:1;max-width:260px}
   .opt.exclusive{border-top:1px solid #eceff1;margin-top:6px;padding-top:12px}
+
+  /* Hàng "Khác:" — ô text nằm NGOÀI <label>, vì click vào phần tử con của
+     label sẽ toggle checkbox, khiến không gõ được vào ô. */
+  .opt-row{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+  .opt-row .opt{flex:none}
+  .opt-row .other-input{flex:1;min-width:180px;max-width:280px}
 
   .dd{appearance:none;-webkit-appearance:none;border:1px solid var(--line);border-radius:4px;background:#fff;
     font-family:inherit;font-size:14px;color:var(--ink);padding:9px 34px 9px 12px;min-width:240px;max-width:100%;cursor:pointer;
@@ -712,12 +725,13 @@ function renderQuestion(item, q) {
 
       let otherInp = null;
       if (o.isOther) {
-        otherInp = Object.assign(el("input", "t-input other-input"), { type: "text" });
+        otherInp = Object.assign(el("input", "t-input other-input"),
+          { type: "text", placeholder: "Câu trả lời của bạn" });
         const cur = isCheck
           ? (state.answers[id] || []).find(v => String(v).startsWith("__OTHER__"))
           : state.answers[id];
         if (cur && String(cur).startsWith("__OTHER__")) otherInp.value = String(cur).slice(10);
-        otherInp.onclick = e => e.stopPropagation();
+
         otherInp.oninput = () => {
           const v = "__OTHER__:" + otherInp.value;
           if (isCheck) {
@@ -727,7 +741,15 @@ function renderQuestion(item, q) {
           } else if (inp.checked) state.answers[id] = v;
           clearErr(item.itemId);
         };
-        lab.appendChild(otherInp);
+
+        // Gõ vào ô là tự tick, như Google Forms. Nếu đã đủ số cho phép thì
+        // onchange bỏ tick lại và báo lỗi — nhả focus luôn để khỏi gõ vô ích.
+        otherInp.onfocus = () => {
+          if (inp.checked) return;
+          inp.checked = true;
+          inp.onchange();
+          if (!inp.checked) otherInp.blur();
+        };
       }
 
       inp.onchange = () => {
@@ -761,7 +783,16 @@ function renderQuestion(item, q) {
       };
 
       registry.push({ inp, o });
-      box.appendChild(lab);
+
+      if (otherInp) {
+        // label và ô text là hai node ngang cấp, không lồng nhau
+        const row = el("div", "opt-row");
+        row.appendChild(lab);
+        row.appendChild(otherInp);
+        box.appendChild(row);
+      } else {
+        box.appendChild(lab);
+      }
     });
     return box;
   }
