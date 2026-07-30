@@ -137,6 +137,20 @@ class Preload extends Phaser.Scene {
    ========================================================================== */
 function sprite(scene, x, y, frame) { return scene.add.image(x, y, "kit", frame); }
 
+/* Nền full-bleed: asset bg bị trim (model chừa mép trong ô) nên setDisplaySize
+   theo canvas sẽ hở viền. Scale theo vùng CUT kiểu cover + bù tâm lệch do trim. */
+function coverBG(scene, frameName) {
+  const img = scene.add.image(0, 0, "kit", frameName);
+  const f = img.frame;
+  const s = Math.max(W / f.cutWidth, H / f.cutHeight);
+  img.setScale(s);
+  img.setPosition(
+    CX - (f.x + f.cutWidth / 2 - f.realWidth / 2) * s,
+    H / 2 - (f.y + f.cutHeight / 2 - f.realHeight / 2) * s
+  );
+  return img;
+}
+
 function fitW(img, w) { img.setScale(w / img.width); return img; }
 function fitH(img, h) { img.setScale(h / img.height); return img; }
 
@@ -169,8 +183,7 @@ const PACK_TINTS = [0xffffff, 0x9fd0ff, 0xffc2d8, 0xffe29a, 0xb9f3c9, 0xd9c6ff];
 class Home extends Phaser.Scene {
   constructor() { super("Home"); }
   create() {
-    const bg = this.add.image(CX, H / 2, "kit", "25-bg-main");
-    bg.setDisplaySize(W, H);
+    coverBG(this, "25-bg-main");
 
     label(this, CX, 92, "MỞ TÚI KHUI QUÀ", 34, { stroke: "#0a1a4a", strokeThickness: 8 });
     label(this, CX, 128, "Cùng iPAY săn quà mỗi ngày", 13);
@@ -264,7 +277,7 @@ const PRIZES = [
 class Play extends Phaser.Scene {
   constructor() { super("Play"); }
   create() {
-    this.add.image(CX, H / 2, "kit", "26-bg-blur").setDisplaySize(W, H);
+    coverBG(this, "26-bg-blur");
     label(this, CX, 150, "Chọn một túi may mắn", 20, { stroke: "#0a1a4a", strokeThickness: 6 });
 
     fitW(sprite(this, CX, 430, "22-board-panel"), 330);
@@ -502,6 +515,95 @@ window.__figmaDOM = function () {
   }
   walk(scene.children.list, 0, 0, 1, 1, 1);
   return root;
+};
+
+/* Cùng nguồn display list nhưng xuất SVG — đường "paste vào Figma không plugin"
+   ngay hôm nay: Figma parse SVG trên clipboard thành node thật (mỗi element một
+   layer, <text> thành text layer). Chưa có Auto Layout như đường Kiwi, nhưng
+   test bàn giao được ngay.
+   Kỹ thuật crop atlas không phình file: atlas nhúng MỘT lần trong <defs>, mỗi
+   frame một <symbol viewBox="cutX cutY w h"><use #atlas></symbol> — viewBox
+   của symbol chính là cửa sổ crop; sprite chỉ là <use> nhẹ. */
+window.__figmaSVG = async function () {
+  const scene = ["Play", "Home", "Preload"].map(k => game.scene.getScene(k))
+    .find(s => s && s.scene.isActive());
+  if (!scene) throw new Error("không có scene active");
+
+  const atlasImg = game.textures.get("kit").getSourceImage();
+
+  /* Mỗi (frame × tint) nướng MỘT lần thành data-URL crop riêng.
+     Không dùng <symbol>/<use> crop chung atlas nữa: Chrome không clip nội dung
+     symbol khi lồng <use> → sprite kéo theo hàng xóm trong atlas tràn ra (đã
+     dính). Crop riêng còn cho phép nướng tint của Phaser vào ảnh luôn. */
+  const baked = new Map();
+  function bake(f, tint) {
+    const key = f.name + "|" + (tint ?? "");
+    if (baked.has(key)) return baked.get(key);
+    const c = document.createElement("canvas");
+    c.width = f.cutWidth; c.height = f.cutHeight;
+    const ctx = c.getContext("2d");
+    ctx.drawImage(atlasImg, f.cutX, f.cutY, f.cutWidth, f.cutHeight,
+                  0, 0, f.cutWidth, f.cutHeight);
+    if (tint != null && tint !== 0xffffff) {
+      ctx.globalCompositeOperation = "multiply";
+      ctx.fillStyle = "#" + tint.toString(16).padStart(6, "0");
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.globalCompositeOperation = "destination-in";   // giữ alpha gốc
+      ctx.drawImage(atlasImg, f.cutX, f.cutY, f.cutWidth, f.cutHeight,
+                    0, 0, f.cutWidth, f.cutHeight);
+    }
+    const url = c.toDataURL("image/png");
+    baked.set(key, url);
+    return url;
+  }
+
+  const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const body = [];
+
+  function walk(list, ox, oy, sx, sy, alpha) {
+    for (const go of list) {
+      if (!go.visible) continue;
+      const a = alpha * (go.alpha ?? 1);
+      if (go.type === "Container") {
+        walk(go.list, ox + go.x * sx, oy + go.y * sy, sx * go.scaleX, sy * go.scaleY, a);
+        continue;
+      }
+      const x = ox + go.x * sx, y = oy + go.y * sy;
+      if (go.type === "Image" && go.frame && go.frame.texture.key === "kit") {
+        const f = go.frame;
+        const gsx = go.scaleX * sx, gsy = go.scaleY * sy;
+        const left = x - f.realWidth * gsx * go.originX + f.x * gsx;
+        const top = y - f.realHeight * gsy * go.originY + f.y * gsy;
+        const tint = (go.tintTopLeft ?? 0xffffff) !== 0xffffff ? go.tintTopLeft : null;
+        const url = bake(f, tint);
+        body.push(`<image href="${url}" x="${left.toFixed(1)}" y="${top.toFixed(1)}" ` +
+          `width="${(f.cutWidth * gsx).toFixed(1)}" height="${(f.cutHeight * gsy).toFixed(1)}" ` +
+          `opacity="${a.toFixed(3)}" data-frame="${f.name}"/>`);
+      } else if (go.type === "Text") {
+        const st = go.style;
+        const size = parseFloat(st.fontSize);
+        const lines = String(go.text).split("\n");
+        const lh = size * 1.15;
+        const cx0 = x + go.displayWidth * (0.5 - go.originX);
+        const ty0 = y - go.displayHeight * go.originY + size * 0.85;
+        lines.forEach((ln, i) => {
+          body.push(`<text x="${cx0.toFixed(1)}" y="${(ty0 + i * lh).toFixed(1)}" ` +
+            `text-anchor="middle" font-family="Arial" font-weight="900" ` +
+            `font-size="${size}" fill="${st.color}" opacity="${a.toFixed(3)}">${esc(ln)}</text>`);
+        });
+      } else if (go.type === "Rectangle") {
+        const rw = go.width * go.scaleX * sx, rh = go.height * go.scaleY * sy;
+        const c = go.fillColor ?? 0, fa = (go.fillAlpha ?? 1) * a;
+        body.push(`<rect x="${(x - rw * go.originX).toFixed(1)}" y="${(y - rh * go.originY).toFixed(1)}" ` +
+          `width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" ` +
+          `fill="rgb(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255})" fill-opacity="${fa.toFixed(3)}"/>`);
+      }
+    }
+  }
+  walk(scene.children.list, 0, 0, 1, 1, 1);
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" ` +
+    `viewBox="0 0 ${W} ${H}">${body.join("")}</svg>`;
 };
 </script>
 </body>
