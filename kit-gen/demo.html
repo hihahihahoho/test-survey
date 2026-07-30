@@ -3,169 +3,435 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Demo màn home — Game UI Kit</title>
+<title>Demo «Mở túi - Khui quà» — Game UI Kit v3</title>
 <style>
-  :root{ --ink:#1b1b22; }
-  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;min-height:100%}
   body{
     font-family:"Arial Rounded MT Bold","SF Pro Rounded",-apple-system,"Segoe UI",sans-serif;
-    display:flex;flex-direction:column;align-items:center;gap:14px;
-    padding:18px 10px 40px;transition:background .35s;
+    background:#14161d;color:#fff;
+    display:flex;flex-direction:column;align-items:center;gap:14px;padding:18px 10px 40px;
   }
-  /* nền trang theo style — asset nền trong suốt nên đặt lên nền nào cũng được */
-  body[data-style="candy"]{background:radial-gradient(circle at 50% 18%,#ffe9f2,#ffd1e4 45%,#c9f0dd)}
-  body[data-style="pixel"]{background:repeating-linear-gradient(45deg,#232449 0 24px,#1a1c2c 24px 48px)}
-  body[data-style="neon"] {background:radial-gradient(circle at 50% 15%,#1c1440,#0b0b12 70%)}
-  body[data-style="tet"]  {background:radial-gradient(circle at 50% 15%,#a41212,#7d0a0a 70%)}
-  body[data-style="flat"] {background:linear-gradient(180deg,#dfe9f5,#f2f4f7)}
-
-  /* ---------- chọn style ---------- */
   .switcher{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
   .switcher button{
-    border:2px solid rgba(0,0,0,.25);background:rgba(255,255,255,.85);cursor:pointer;
-    font:600 13px/1 inherit;color:var(--ink);padding:8px 14px;border-radius:99px;
+    border:2px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);cursor:pointer;
+    font:600 13px/1 inherit;color:#fff;padding:8px 14px;border-radius:99px;
   }
-  .switcher button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
-  .hint{font-size:11.5px;color:rgba(0,0,0,.55);background:rgba(255,255,255,.7);
-    padding:4px 12px;border-radius:99px}
-  body[data-style="neon"] .hint,body[data-style="pixel"] .hint,body[data-style="tet"] .hint{
-    color:rgba(255,255,255,.8);background:rgba(0,0,0,.35)}
+  .switcher button[aria-pressed="true"]{background:#fff;color:#14161d;border-color:#fff}
+  .hint{font-size:11.5px;color:rgba(255,255,255,.55);text-align:center;max-width:560px}
 
-  /* ---------- khung điện thoại ---------- */
+  /* ============ khung điện thoại 390×844 ============ */
   .phone{
-    position:relative;width:min(400px,96vw);aspect-ratio:9/18;
-    border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.4);
-    border:6px solid #111;background:transparent;
+    position:relative;width:min(400px,96vw);aspect-ratio:390/844;
+    border-radius:34px;overflow:hidden;border:6px solid #000;
+    box-shadow:0 24px 60px rgba(0,0,0,.55);background:#0a0c14;
+    user-select:none;
   }
-  .screen{position:absolute;inset:0}
-
-  /* slot = vị trí cố định; img bên trong contain nên style nào cũng vừa */
+  .stage{position:absolute;inset:0}
+  .layer{position:absolute;inset:0}
+  .bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
   .slot{position:absolute;display:flex;align-items:center;justify-content:center}
-  .slot img{max-width:100%;max-height:100%;filter:drop-shadow(0 4px 10px rgba(0,0,0,.25))}
-  .slot .txt{
-    position:absolute;font-weight:800;color:#fff;letter-spacing:.5px;white-space:nowrap;
-    text-shadow:0 2px 4px rgba(0,0,0,.55);pointer-events:none;
-  }
+  .slot>img{max-width:100%;max-height:100%}
+  .txt{position:absolute;font-weight:800;color:#fff;letter-spacing:.4px;white-space:nowrap;
+       text-shadow:0 2px 5px rgba(0,0,0,.6);pointer-events:none}
+  .clickable{cursor:pointer}
+  .clickable:active{transform:scale(.96)}
+  [hidden]{display:none !important}
 
-  .coin   {left:3%;  top:2.2%; width:34%; height:7%}
-  .coin .txt{font-size:clamp(13px,4vw,17px);transform:translateX(16%)}
-  .timer  {right:3%; top:2.2%; width:32%; height:8%}
-  .timer .txt{font-size:clamp(13px,3.8vw,16px);letter-spacing:2px}
+  /* ---------- header ---------- */
+  .hdr-btn{top:6.5%;width:12.5%;aspect-ratio:1;cursor:pointer}
+  .hdr-btn.back{left:4%} .hdr-btn.sound{right:4%}
+  .hdr-btn svg{position:absolute;width:46%;height:46%;fill:none;stroke:#fff;stroke-width:2.6;
+    stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+  .hdr-btn .mute{position:absolute;width:58%;height:3px;background:#ff5566;border-radius:2px;
+    transform:rotate(-45deg);box-shadow:0 0 4px rgba(0,0,0,.6)}
 
-  .title{position:absolute;left:0;right:0;top:11.5%;text-align:center;pointer-events:none}
-  .title b{
-    display:inline-block;font-size:clamp(22px,7vw,30px);line-height:1.15;color:#fff;
-    text-shadow:0 3px 0 rgba(0,0,0,.35),0 6px 18px rgba(0,0,0,.4);letter-spacing:1px;
-  }
-  .title small{display:block;font-size:12.5px;font-weight:700;color:rgba(255,255,255,.92);
-    text-shadow:0 1px 3px rgba(0,0,0,.5);margin-top:2px}
+  /* ---------- title & đếm ngược ---------- */
+  .title{position:absolute;left:0;right:0;top:13.5%;text-align:center;pointer-events:none}
+  .title b{font-size:clamp(24px,7.6vw,33px);line-height:1.12;display:block;
+    text-shadow:0 3px 0 rgba(0,0,0,.35),0 8px 22px rgba(0,0,0,.5);letter-spacing:1px}
+  .title small{font-size:12px;font-weight:700;opacity:.95;display:block;margin-top:3px;
+    text-shadow:0 1px 3px rgba(0,0,0,.6)}
+  .cd{position:absolute;left:0;right:0;top:22.5%;display:flex;gap:6px;justify-content:center;
+    align-items:center;pointer-events:none}
+  .cd .unit{position:relative;width:11%;aspect-ratio:1}
+  .cd .unit img{width:100%;height:100%}
+  .cd .unit b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:clamp(15px,4.6vw,20px);text-shadow:0 2px 3px rgba(0,0,0,.55)}
+  .cd .unit small{position:absolute;left:0;right:0;bottom:-15px;text-align:center;font-size:9px;
+    font-weight:700;opacity:.9;text-shadow:0 1px 2px rgba(0,0,0,.7)}
+  .cd .colon{font-weight:800;font-size:18px;text-shadow:0 2px 3px rgba(0,0,0,.6)}
 
-  .basket {left:14%; top:20%;  width:72%; height:26%}
-  .progress{left:12%;top:47.5%;width:76%; height:6.5%}
-  .progress .txt{font-size:12px;transform:translateY(-4%)}
-  .cta    {left:9%;  top:55%;  width:82%; height:12%;cursor:pointer}
-  .cta .txt{font-size:clamp(20px,6.4vw,27px)}
-  .cta:active{transform:scale(.97)}
-  .turns{position:absolute;left:0;right:0;top:67.5%;text-align:center;font-size:12.5px;
-    font-weight:700;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+  /* ---------- khay & túi ---------- */
+  .board{left:9%;top:29%;width:82%;aspect-ratio:1}
+  .packs{position:absolute;left:13%;top:31.5%;width:74%;height:26.5%;
+    display:grid;grid-template-columns:repeat(3,1fr);gap:4%}
+  .pack{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;
+    transition:transform .15s}
+  .pack img{max-width:100%;max-height:100%;filter:drop-shadow(0 5px 8px rgba(0,0,0,.35))}
+  .pack:hover{transform:translateY(-3%) scale(1.04)}
 
-  .addturn{left:6%;  top:72%; width:20%; height:11%;cursor:pointer}
-  .addturn .txt{bottom:-4%;font-size:11px}
-  .chip{
-    position:absolute;width:31%;height:6.2%;cursor:pointer;border:0;border-radius:14px;
-    font:800 12.5px/1 inherit;color:#fff;background:rgba(0,0,0,.45);
-    border:2px solid rgba(255,255,255,.5);text-shadow:0 1px 2px rgba(0,0,0,.5);
-  }
-  .chip:active{transform:scale(.96)}
-  .chip.bxh {left:32%; top:74%}
-  .chip.lich{left:66%; top:74%}
-  .foot{position:absolute;left:0;right:0;bottom:2.4%;text-align:center;font-size:10.5px;
-    color:rgba(255,255,255,.75);text-shadow:0 1px 2px rgba(0,0,0,.5)}
+  /* ---------- mascot + CTA ---------- */
+  .mascot-home{left:2%;bottom:15.5%;width:30%;height:24%;pointer-events:none}
+  .cta{left:22%;top:63.5%;width:56%;height:9.5%;cursor:pointer}
+  .cta .txt{font-size:clamp(17px,5.4vw,23px)}
+  .chip-turns{position:absolute;left:50%;top:73.5%;transform:translateX(-50%);
+    background:rgba(4,18,46,.72);border:1.5px solid rgba(255,255,255,.45);border-radius:99px;
+    font-size:12px;font-weight:700;padding:5px 14px;text-shadow:none}
+
+  /* ---------- tab bar ---------- */
+  .tabbar{position:absolute;left:0;right:0;bottom:0;height:10.5%;display:flex;
+    justify-content:space-around;align-items:center;padding:0 2%;
+    background:linear-gradient(180deg,transparent,rgba(0,0,10,.55) 40%)}
+  .tab{position:relative;width:22%;height:78%;cursor:pointer;display:flex;
+    align-items:center;justify-content:center}
+  .tab img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+  .tab span{position:relative;font-size:9.5px;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,.8);
+    top:18%}
+  .tab svg{position:relative;width:26%;aspect-ratio:1;fill:#fff;top:-12%;
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+
+  /* ---------- loading ---------- */
+  .loadwrap{position:absolute;left:14%;width:72%;bottom:12%}
+  .progress{position:relative;width:100%;aspect-ratio:220/32}
+  .progress img.track{position:absolute;inset:0;width:100%;height:100%}
+  /* Fill lồng TRONG track: inset đo theo tỷ lệ track/fill của Figma gốc (204/220, 17/32).
+     Đổi % bằng clip-path trên khung .clip — KHÔNG scale <img>, để đầu bo tròn không méo. */
+  .progress .clip{position:absolute;left:4.5%;top:26%;width:91%;height:48%;
+    border-radius:999px;overflow:hidden;
+    clip-path:inset(0 calc(100% - var(--p,0)*1%) 0 0 round 999px)}
+  .progress .clip img{width:100%;height:100%}
+  .loadwrap .txt{position:static;display:block;text-align:center;margin-top:10px;font-size:12.5px}
+
+  /* ---------- gameplay ---------- */
+  .gp-stage{position:absolute;inset:0}
+  .gp-hint{position:absolute;left:0;right:0;top:20%;text-align:center;font-size:15px;
+    font-weight:800;text-shadow:0 2px 6px rgba(0,0,0,.8)}
+  .gp-chosen{position:absolute;left:28%;top:30%;width:44%;height:32%;cursor:pointer}
+  .gp-burst{position:absolute;left:14%;top:22%;width:72%;height:48%;pointer-events:none;
+    mix-blend-mode:screen;opacity:0;transition:opacity .25s}
+  .mascot-peek{position:absolute;right:-2%;bottom:9%;width:34%;height:26%;pointer-events:none}
 
   /* ---------- popup ---------- */
-  .overlay{
-    position:absolute;inset:0;background:rgba(0,0,0,.55);display:none;
-    align-items:center;justify-content:center;z-index:5;
-  }
-  .overlay.show{display:flex}
-  .popup{position:relative;width:88%;aspect-ratio:1/1.06;cursor:pointer}
-  .popup>img.frame{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
-  .popup .content{
-    position:absolute;left:14%;right:14%;top:20%;bottom:24%;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4%;
-  }
-  .popup .content img{max-width:100%;max-height:74%;object-fit:contain}
-  .popup .p-title{
-    position:absolute;left:0;right:0;top:6.5%;text-align:center;font-weight:800;
-    font-size:clamp(14px,4.6vw,19px);color:#fff;text-shadow:0 2px 4px rgba(0,0,0,.6)}
-  .popup .p-ok{
-    position:absolute;left:0;right:0;bottom:9%;text-align:center;font-weight:800;
-    font-size:15px;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,.6)}
+  .ovl{position:absolute;inset:0;background:rgba(2,10,30,.72);z-index:50;
+    display:flex;align-items:center;justify-content:center}
+  .glow{position:absolute;left:50%;top:55%;width:120%;aspect-ratio:2/1;transform:translate(-50%,-50%);
+    background:radial-gradient(ellipse,rgba(255,70,90,.5),transparent 70%);filter:blur(30px);
+    pointer-events:none}
+  .pop{position:relative;width:80%}
+  .pop.tall{aspect-ratio:361/524}
+  .pop.short{aspect-ratio:361/300}
+  .pop>img.panel{position:absolute;inset:0;width:100%;height:100%}
+  .pop .ribbon{position:absolute;left:50%;top:0;width:74%;height:17%;transform:translate(-50%,-55%)}
+  .pop .ribbon img{width:100%;height:100%;object-fit:contain}
+  .pop .ribbon .txt{font-size:clamp(13px,4vw,17px)}
+  .pop .art{position:absolute;left:20%;top:16%;width:60%;height:44%;display:flex;
+    align-items:center;justify-content:center}
+  .pop .art img.prize{position:relative;max-width:100%;max-height:100%;z-index:2;
+    filter:drop-shadow(0 6px 14px rgba(0,0,0,.4))}
+  .pop .art img.burst{position:absolute;inset:-18%;width:136%;height:136%;
+    mix-blend-mode:screen;z-index:1}
+  .pop .body{position:absolute;left:10%;right:10%;top:62%;text-align:center;font-size:13.5px;
+    font-weight:700;line-height:1.45;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+  .pop .btns{position:absolute;left:0;right:0;bottom:0;transform:translateY(38%);
+    display:flex;gap:4%;justify-content:center}
+  .pop .pbtn{position:relative;width:42%;aspect-ratio:140/59;cursor:pointer}
+  .pop .pbtn img{width:100%;height:100%}
+  .pop .pbtn .txt{font-size:clamp(12px,3.6vw,15px)}
+  .pop.short .art{top:20%;height:34%}
+  .pop.short .body{top:58%}
 
-  /* ---------- toast ---------- */
-  .toastbox{
-    position:absolute;left:12%;width:76%;height:7%;top:-12%;z-index:6;
-    transition:top .35s cubic-bezier(.2,.9,.3,1.2);
-  }
-  .toastbox.show{top:3%}
-  .toastbox .txt{font-size:13px;transform:translateX(8%)}
+  /* ---------- màn phụ (tab) ---------- */
+  .subpage{position:absolute;inset:0}
+  .sub-title{position:absolute;left:0;right:0;top:7.2%;text-align:center;font-size:16px;
+    font-weight:800;text-shadow:0 2px 4px rgba(0,0,0,.6)}
+  .cards{position:absolute;left:5%;right:5%;top:14%;bottom:12%;overflow:auto;
+    display:flex;flex-direction:column;gap:10px;padding:4px}
+  .card{background:rgba(255,255,255,.94);color:#1c2333;border-radius:14px;padding:12px 14px;
+    display:flex;align-items:center;gap:10px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+  .card .info{flex:1;min-width:0}
+  .card b{font-size:13px;display:block}
+  .card small{font-size:11px;color:#5b6474}
+  .card .mini-progress{position:relative;width:100%;aspect-ratio:220/32;max-width:150px;margin-top:6px}
+  .card .obtn{position:relative;width:92px;aspect-ratio:132/44;cursor:pointer;flex:none}
+  .card .obtn img{width:100%;height:100%}
+  .card .obtn .txt{font-size:10.5px;color:#fff}
+  .card img.picon{width:44px;height:44px;object-fit:contain;flex:none}
 </style>
 </head>
-<body data-style="candy">
+<body>
 
 <div class="switcher" id="switcher"></div>
-<div class="hint">Đổi style = đổi 1 đường dẫn thư mục — cùng bộ component, HTML text đè lên asset trống</div>
+<div class="hint">Demo flow «Mở túi - Khui quà» lắp từ asset AI-gen đã cắt tự động.
+Đổi style = đổi 1 đường dẫn thư mục. Mọi chữ là HTML — asset không chữ.</div>
 
-<div class="phone"><div class="screen">
-
-  <div class="slot coin"><img data-a="09-coin-counter"><span class="txt" id="coinTxt">1.250</span></div>
-  <div class="slot timer"><img data-a="08-countdown"><span class="txt" id="timerTxt">00:59</span></div>
-
-  <div class="title"><b>VÒNG QUÀ<br>MAY MẮN</b><small>Chơi mỗi ngày — nhận quà liền tay</small></div>
-
-  <div class="slot basket"><img data-a="04-gift-basket"></div>
-
-  <div class="slot progress"><img data-a="12-progress"><span class="txt">Nhiệm vụ 3/5</span></div>
-
-  <div class="slot cta" id="btnPlay"><img data-a="07-cta-button"><span class="txt">CHƠI NGAY</span></div>
-  <div class="turns" id="turnsTxt">Còn 3 lượt hôm nay</div>
-
-  <div class="slot addturn" id="btnAdd"><img data-a="06-add-turn"><span class="txt">+1 lượt</span></div>
-  <button class="chip bxh"  id="btnBxh">BẢNG XẾP HẠNG</button>
-  <button class="chip lich" id="btnLich">LỊCH SỬ</button>
-
-  <div class="foot">Demo lắp từ asset sinh tự động — kit-gen/kits/&lt;style&gt;/</div>
-
-  <div class="slot toastbox" id="toast"><img data-a="11-toast"><span class="txt" id="toastTxt">Thành công!</span></div>
-
-  <div class="overlay" id="overlay">
-    <div class="popup" id="popup" title="Bấm để đóng">
-      <img class="frame" data-a="02-popup">
-      <div class="p-title" id="popTitle"></div>
-      <div class="content" id="popContent"></div>
-      <div class="p-ok">Bấm để đóng</div>
-    </div>
-  </div>
-
-</div></div>
+<div class="phone"><div class="stage" id="stage"></div></div>
 
 <script>
 "use strict";
-/* Toàn bộ demo chỉ có MỘT biến trạng thái quyết định giao diện: tên style.
-   Tên file asset trùng nhau giữa các thư mục nên đổi style = đổi prefix. */
-const STYLES = [
-  ["candy", "Kẹo ngọt"], ["pixel", "Pixel"], ["neon", "Neon"], ["tet", "Tết"], ["flat", "Flat"]
+const STYLES = [["ipay", "Fintech xanh"], ["candy", "Kẹo ngọt"], ["tet", "Tết"]];
+let style = "ipay";
+const src = n => `kits/${style}/${n}.png`;
+const $ = sel => document.querySelector(sel);
+const stage = document.getElementById("stage");
+
+/* trạng thái game */
+const state = { turns: 3, screen: "loading" };
+
+const ICONS = {
+  back: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+  sound: '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="#fff" stroke="none"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg>',
+  home: '<svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
+  task: '<svg viewBox="0 0 24 24" stroke="none"><path d="M5 3h14v18H5z" fill="none" stroke="#fff" stroke-width="2"/><path d="M8 8h8M8 12h8M8 16h5" stroke="#fff" stroke-width="2"/></svg>',
+  gift: '<svg viewBox="0 0 24 24" stroke="none"><path d="M4 9h16v12H4z M2 6h20v3H2z M12 6v15" fill="none" stroke="#fff" stroke-width="2"/></svg>',
+  clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>'
+};
+
+/* ===================== render từng màn ===================== */
+function img(a, cls = "") { return `<img data-a="${a}" ${cls ? `class="${cls}"` : ""}>`; }
+
+function renderLoading() {
+  stage.innerHTML = `
+    <img class="bg" data-a="25-bg-main">
+    <div class="title" style="top:30%"><b>MỞ TÚI<br>KHUI QUÀ</b><small>Quà xịn mỗi ngày</small></div>
+    <div class="slot" style="left:30%;top:44%;width:40%;height:22%">${img("17-mascot-idle")}</div>
+    <div class="loadwrap">
+      <div class="progress">${img("07-progress-track", "track")}
+        <div class="clip" id="loadClip">${img("08-progress-fill")}</div></div>
+      <span class="txt" id="loadTxt">Đang tải… 0%</span>
+    </div>`;
+  hydrate();
+  let p = 0;
+  const t = setInterval(() => {
+    p = Math.min(100, p + 2 + Math.random() * 6);
+    $("#loadClip").style.setProperty("--p", p);
+    $("#loadTxt").textContent = `Đang tải… ${Math.round(p)}%`;
+    if (p >= 100) { clearInterval(t); setTimeout(() => go("home"), 350); }
+  }, 60);
+}
+
+function packGrid(clickable) {
+  return `<div class="packs">${[0, 1, 2, 3, 4, 5].map(i =>
+    `<div class="pack" data-i="${i}" style="filter:hue-rotate(${i * 25}deg)">
+       ${img("20-game-object-closed")}</div>`).join("")}</div>`;
+}
+
+function renderHome() {
+  stage.innerHTML = `
+    <img class="bg" data-a="25-bg-main">
+    <div class="slot hdr-btn back clickable" title="Quay lại app">${img("04-btn-circle")}${ICONS.back}</div>
+    <div class="slot hdr-btn sound clickable" id="btnSound">${img("04-btn-circle")}${ICONS.sound}
+      <i class="mute" id="muteBar" hidden></i></div>
+    <div class="title"><b>MỞ TÚI KHUI QUÀ</b><small>Cùng iPAY săn quà Tết</small></div>
+    <div class="cd" id="cd"></div>
+    <div class="slot board">${img("22-board-panel")}</div>
+    ${packGrid(false)}
+    <div class="slot mascot-home">${img("17-mascot-idle")}</div>
+    <div class="slot cta clickable" id="btnPlay">${img("01-btn-pill-red")}<span class="txt">MỞ TÚI NGAY</span></div>
+    <div class="chip-turns" id="chipTurns"></div>
+    ${tabbar("home")}`;
+  hydrate();
+  renderCountdown();
+  updateTurns();
+  $("#btnPlay").onclick = () => state.turns > 0 ? go("gameplay") : popupNoTurns();
+  $("#btnSound").onclick = () => { const m = $("#muteBar"); m.hidden = !m.hidden; };
+  document.querySelectorAll(".pack").forEach(p => p.onclick = () =>
+    state.turns > 0 ? go("gameplay") : popupNoTurns());
+}
+
+function tabbar(active) {
+  const tabs = [["home", "Trang chủ", ICONS.home], ["task", "Nhiệm vụ", ICONS.task],
+                ["gift", "Giỏ quà", ICONS.gift], ["hist", "Lịch sử", ICONS.clock]];
+  return `<div class="tabbar">${tabs.map(([id, label, icon]) =>
+    `<div class="tab clickable" data-tab="${id}">
+       ${img(id === active ? "06-tab-chip-active" : "05-tab-chip-idle")}${icon}<span>${label}</span>
+     </div>`).join("")}</div>`;
+}
+
+function wireTabs() {
+  document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+    const id = t.dataset.tab;
+    if (id === "home") go("home");
+    else go("sub", id);
+  });
+}
+
+function renderCountdown() {
+  const cd = $("#cd");
+  if (!cd) return;
+  const end = Date.now() + (2 * 24 * 3600 + 11 * 3600 + 30 * 60) * 1000;
+  const units = [["ngày", 0], ["giờ", 0], ["phút", 0], ["giây", 0]];
+  cd.innerHTML = units.map(([lbl], i) =>
+    `${i ? '<span class="colon">:</span>' : ""}
+     <span class="unit">${img("11-digit-plate")}<b data-u="${i}">0</b><small>${lbl}</small></span>`).join("");
+  hydrate(cd);
+  const tick = () => {
+    let s = Math.max(0, Math.floor((end - Date.now()) / 1000));
+    const d = [Math.floor(s / 86400), Math.floor(s / 3600) % 24, Math.floor(s / 60) % 60, s % 60];
+    cd.querySelectorAll("b[data-u]").forEach((b, i) => b.textContent = String(d[i]).padStart(2, "0"));
+  };
+  tick();
+  clearInterval(renderCountdown._t);
+  renderCountdown._t = setInterval(tick, 1000);
+}
+
+/* ---------- gameplay: chọn túi → mở → kết quả ---------- */
+function renderGameplay() {
+  stage.innerHTML = `
+    <img class="bg" data-a="26-bg-blur">
+    <div class="gp-hint">Chọn một túi may mắn</div>
+    <div class="slot board" style="top:26%">${img("22-board-panel")}</div>
+    ${packGrid(true)}
+    <div class="slot mascot-peek">${img("18-mascot-peek")}</div>
+    ${tabbar("home")}`;
+  hydrate();
+  document.querySelectorAll(".pack").forEach(p => p.onclick = () => renderReveal(+p.dataset.i));
+}
+
+function renderReveal(i) {
+  stage.innerHTML = `
+    <img class="bg" data-a="26-bg-blur">
+    <div class="gp-hint">Chạm để mở túi!</div>
+    <div class="slot gp-burst" id="burst">${img("16-fx-burst")}</div>
+    <div class="slot gp-chosen clickable" id="chosen" style="filter:hue-rotate(${i * 25}deg)">
+      ${img("20-game-object-closed")}</div>
+    <div class="slot mascot-peek">${img("18-mascot-peek")}</div>`;
+  hydrate();
+  $("#chosen").onclick = () => {
+    $("#chosen").querySelector("img").src = src("21-game-object-open");
+    $("#burst").style.opacity = 1;
+    state.turns--;
+    setTimeout(popupResult, 650);
+  };
+}
+
+/* ---------- popup ---------- */
+const PRIZES = [
+  { art: "14-reward-voucher",   title: "CHÚC MỪNG!", body: "Bạn nhận được 1 voucher ưu đãi.<br>Quà đã vào Giỏ quà của bạn." },
+  { art: "15-reward-giftbox",   title: "CHÚC MỪNG!", body: "Bạn nhận được 1 phần quà.<br>Điền địa chỉ để nhận hàng nhé." },
+  { art: "19-mascot-celebrate", title: "TIẾC QUÁ!",  body: "Chúc bạn may mắn lần sau.<br>Làm nhiệm vụ để có thêm lượt." }
 ];
-let style = "candy";
-const src = name => `kits/${style}/${name}.png`;
+
+function popupResult() {
+  const prize = PRIZES[Math.floor(Math.random() * PRIZES.length)];
+  overlay(`
+    <div class="pop tall">
+      ${img("24-popup-panel-tall", "panel")}
+      <div class="ribbon">${img("10-popup-ribbon")}<span class="txt">${prize.title}</span></div>
+      <div class="art">${img("16-fx-burst", "burst")}${img(prize.art, "prize")}</div>
+      <div class="body">${prize.body}</div>
+      <div class="btns">
+        <div class="pbtn" data-act="gift">${img("02-btn-pill-blue")}<span class="txt">GIỎ QUÀ</span></div>
+        <div class="pbtn" data-act="again">${img("01-btn-pill-red")}<span class="txt">TIẾP TỤC</span></div>
+      </div>
+    </div>`);
+  $('[data-act="gift"]').onclick = e => { e.stopPropagation(); closeOverlay(); go("sub", "gift"); };
+  $('[data-act="again"]').onclick = e => { e.stopPropagation(); closeOverlay();
+    state.turns > 0 ? go("gameplay") : go("home"); };
+}
+
+function popupNoTurns() {
+  overlay(`
+    <div class="pop short">
+      ${img("09-popup-panel-short", "panel")}
+      <div class="ribbon">${img("10-popup-ribbon")}<span class="txt">HẾT LƯỢT</span></div>
+      <div class="art">${img("19-mascot-celebrate", "prize")}</div>
+      <div class="body">Bạn đã dùng hết lượt hôm nay.<br>Làm nhiệm vụ để nhận thêm lượt nhé!</div>
+      <div class="btns">
+        <div class="pbtn" data-act="task">${img("02-btn-pill-blue")}<span class="txt">NHIỆM VỤ</span></div>
+      </div>
+    </div>`);
+  $('[data-act="task"]').onclick = e => { e.stopPropagation(); closeOverlay(); go("sub", "task"); };
+}
+
+function overlay(inner) {
+  const ovl = document.createElement("div");
+  ovl.className = "ovl";
+  ovl.id = "ovl";
+  ovl.innerHTML = `<div class="glow"></div>${inner}`;
+  ovl.onclick = closeOverlay;
+  ovl.querySelector(".pop").onclick = e => e.stopPropagation();
+  stage.appendChild(ovl);
+  hydrate(ovl);
+}
+function closeOverlay() { const o = $("#ovl"); if (o) o.remove(); }
+
+/* ---------- màn phụ theo tab ---------- */
+function renderSub(tab) {
+  const titles = { task: "Nhiệm vụ", gift: "Giỏ quà của bạn", hist: "Lịch sử mở túi" };
+  let cards = "";
+  if (tab === "task") {
+    cards = [["Đăng nhập mỗi ngày", "1/1 — hoàn thành", 100, "NHẬN"],
+             ["Chuyển tiền 3 lần", "2/3 — sắp xong", 66, "THỰC HIỆN"],
+             ["Mời 1 người bạn", "0/1", 0, "THỰC HIỆN"]].map(([t, d, p, btn]) => `
+      <div class="card"><div class="info"><b>${t}</b><small>${d}</small>
+        <div class="mini-progress progress">${img("07-progress-track", "track")}
+          <div class="clip" style="--p:${p}">${img("08-progress-fill")}</div></div></div>
+        <div class="obtn clickable">${img("03-btn-pill-outline")}<span class="txt">${btn}</span></div>
+      </div>`).join("");
+    cards += `
+      <div class="card"><div class="info"><b>Sưu tập mảnh ghép</b>
+        <small>Đủ 4 mảnh đổi quà lớn — đã có 2/4</small>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          ${img("12-piece-active", "picon")}${img("12-piece-active", "picon")}
+          ${img("13-piece-locked", "picon")}${img("13-piece-locked", "picon")}
+        </div></div>
+      </div>`;
+  } else if (tab === "gift") {
+    cards = [["Voucher ưu đãi 50K", "HSD: 29/02/2026", "14-reward-voucher"],
+             ["Phần quà may mắn", "Chờ điền địa chỉ nhận", "15-reward-giftbox"]]
+      .map(([t, d, icon]) => `
+      <div class="card">${img(icon, "picon")}<div class="info"><b>${t}</b><small>${d}</small></div>
+        <div class="obtn clickable">${img("03-btn-pill-outline")}<span class="txt">DÙNG NGAY</span></div>
+      </div>`).join("");
+  } else {
+    cards = [["Hôm nay 09:41", "Trúng voucher ưu đãi", "14-reward-voucher"],
+             ["Hôm qua 20:15", "Chúc bạn may mắn", "19-mascot-celebrate"],
+             ["Hôm qua 08:02", "Trúng phần quà", "15-reward-giftbox"]]
+      .map(([t, d, icon]) => `
+      <div class="card">${img(icon, "picon")}<div class="info"><b>${d}</b><small>${t}</small></div></div>`).join("");
+  }
+  stage.innerHTML = `
+    <img class="bg" data-a="26-bg-blur">
+    <div class="slot hdr-btn back clickable" id="btnBack">${img("04-btn-circle")}${ICONS.back}</div>
+    <div class="slot hdr-btn sound clickable" id="btnHome2">${img("04-btn-circle")}${ICONS.home}</div>
+    <div class="sub-title">${titles[tab]}</div>
+    <div class="cards">${cards}</div>
+    <div class="slot clickable" id="floatBadge" title="Về game"
+         style="right:3%;bottom:12.5%;width:18%;aspect-ratio:1;z-index:20">
+      ${img("23-floating-entry-badge")}</div>
+    ${tabbar(tab)}`;
+  hydrate();
+  $("#btnBack").onclick = () => go("home");
+  $("#btnHome2").onclick = () => go("home");
+  $("#floatBadge").onclick = () => go("home");
+}
+
+/* ===================== khung điều phối ===================== */
+function updateTurns() {
+  const c = $("#chipTurns");
+  if (c) c.textContent = `Còn ${state.turns} lượt hôm nay`;
+}
+
+function hydrate(root = stage) {
+  root.querySelectorAll("img[data-a]").forEach(im => { im.src = src(im.dataset.a); });
+  wireTabs();
+}
+
+function go(screen, arg) {
+  state.screen = screen;
+  clearInterval(renderCountdown._t);
+  if (screen === "loading") renderLoading();
+  else if (screen === "home") renderHome();
+  else if (screen === "gameplay") renderGameplay();
+  else if (screen === "sub") renderSub(arg);
+}
 
 function applyStyle(s) {
   style = s;
-  document.body.dataset.style = s;
-  document.querySelectorAll("img[data-a]").forEach(img => { img.src = src(img.dataset.a); });
   document.querySelectorAll("#switcher button").forEach(b =>
     b.setAttribute("aria-pressed", String(b.dataset.s === s)));
+  hydrate(document.body);
 }
 
 const switcher = document.getElementById("switcher");
@@ -173,57 +439,11 @@ STYLES.forEach(([id, label]) => {
   const b = document.createElement("button");
   b.textContent = label;
   b.dataset.s = id;
-  b.onclick = () => applyStyle(id);
+  b.onclick = () => { applyStyle(id); };
   switcher.appendChild(b);
 });
-
-/* ---------- tương tác tối thiểu cho ra dáng màn home ---------- */
-let turns = 3, coins = 1250;
-const $ = id => document.getElementById(id);
-
-function toast(msg) {
-  $("toastTxt").textContent = msg;
-  $("toast").classList.add("show");
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => $("toast").classList.remove("show"), 1800);
-}
-
-function openPopup(title, imgs) {
-  $("popTitle").textContent = title;
-  const box = $("popContent");
-  box.innerHTML = "";
-  imgs.forEach(a => {
-    const im = document.createElement("img");
-    im.src = src(a);
-    box.appendChild(im);
-  });
-  $("overlay").classList.add("show");
-}
-$("popup").onclick = () => $("overlay").classList.remove("show");
-
-$("btnPlay").onclick = () => {
-  if (turns <= 0) { toast("Hết lượt hôm nay rồi!"); return; }
-  turns--; coins += 100;
-  $("turnsTxt").textContent = `Còn ${turns} lượt hôm nay`;
-  $("coinTxt").textContent = coins.toLocaleString("vi-VN");
-  openPopup("Chúc mừng! Bạn nhận được quà", ["10-prize-card", "03-form"]);
-};
-$("btnAdd").onclick = () => {
-  turns++;
-  $("turnsTxt").textContent = `Còn ${turns} lượt hôm nay`;
-  toast("+1 lượt chơi!");
-};
-$("btnBxh").onclick  = () => openPopup("Bảng xếp hạng tuần", ["01-leaderboard"]);
-$("btnLich").onclick = () => openPopup("Lịch sử trúng thưởng", ["05-history"]);
-
-/* đồng hồ đếm ngược cho sống động */
-let secs = 59;
-setInterval(() => {
-  secs = (secs + 59) % 60;
-  $("timerTxt").textContent = "00:" + String(secs).padStart(2, "0");
-}, 1000);
-
 applyStyle(style);
+go("loading");
 </script>
 </body>
 </html>

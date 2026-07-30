@@ -5,12 +5,20 @@ Proof-of-concept cho hướng tool #2 trong [analysis/ket-qua-dot-1.md](../analy
 
 ## Ý tưởng
 
-1 sprite sheet = lưới 4×3 chứa đúng **12 component cố định** (bảng xếp hạng, popup, form,
-giỏ quà, lịch sử, cộng lượt, CTA, đếm ngược, đếm xu, thẻ quà, toast, thanh tiến độ) —
-thứ tự và nội dung khoá cứng trong prompt, chỉ khối *style* thay đổi.
+Contract **26 element / 3 sheet** rút từ Figma game thật (VietinBank iPay "Mở túi - Khui quà",
+phân tích bằng sub-agent đọc trang Components + 34 màn hình flow):
 
-Vì layout cố định nên bước cắt là **thuần cơ học**: chia lưới → tách nền (chroma-key màu
-nền phẳng) → trim → đặt tên theo contract. Không cần người ngồi crop.
+- **main** (4×4, ô ngang 3:2): 3 nút pill + nút tròn + tab idle/active + progress **máng và
+  thanh chạy tách rời** + ô số đếm ngược + ruy băng + panel popup ngang + mảnh ghép
+  sáng/khoá + voucher + hộp quà + hiệu ứng nổ sáng
+- **tall** (4×2, ô dọc 3:4): mascot 3 pose (đứng/ngó/ăn mừng) + túi quà **đóng và mở** +
+  khay + popup dọc + nút nổi vào game
+- **bg** (2×1): nền chính + nền mờ (game thật dùng nền mờ nhiều gấp 25 lần nền sáng)
+
+Quy tắc tách phần: **cái gì code cần điều khiển độc lập thì là file riêng, nằm ở ô riêng**
+— progress đổi %, tab swap state, túi swap đóng→mở, mascot đổi pose theo màn.
+Chỉ khâu GEN ẢNH cần AI; crop + tách nền + lấp lỗ là code thuần, chạy lại là ra đúng
+từng đó file, đúng từng đó tên.
 
 ## Chạy
 
@@ -39,11 +47,13 @@ preview.html    bảng so sánh trực quan
 open demo.html
 ```
 
-Màn home mini-game lắp từ chính asset đã cắt: coin counter, đếm ngược chạy thật, giỏ quà,
-CTA, popup nhận quà (thẻ quà + form), bảng xếp hạng, lịch sử, toast, +1 lượt.
+Full flow «Mở túi - Khui quà» lắp từ asset đã cắt: **loading** (progress track + fill lồng
+nhau, đổi % bằng clip-path) → **home** (đếm ngược 4 ô số chạy thật, khay 6 túi hue-rotate,
+mascot đứng) → **chọn túi** (mascot ngó) → **mở túi** (swap ảnh đóng→mở + nổ sáng) →
+**popup kết quả** (panel dọc + ruy băng cưỡi mép trên + quà + 2 nút thò dưới mép) →
+màn Nhiệm vụ/Giỏ quà/Lịch sử (tab active/idle, card CSS, mảnh ghép sưu tập).
 **Đổi style = đổi 1 đường dẫn thư mục** — tên file trùng nhau nên switcher chỉ đổi prefix.
-Toàn bộ chữ là HTML đè lên asset trống (component không chữ), đúng workflow production:
-text đổi theo campaign mà không đụng vào ảnh.
+Toàn bộ chữ là HTML đè lên asset trống — text đổi theo campaign mà không đụng vào ảnh.
 
 ## Điểm cần biết
 

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
 Cắt sprite sheet UI kit thành từng asset đã crop + tách nền.
+Contract v3: MỖI STYLE CÓ NHIỀU SHEET (main 4x4, tall 4x2, bg 2x1) — element nào
+code cần điều khiển độc lập (progress track/fill, tab idle/active, túi đóng/mở)
+nằm ở ô riêng nên thành file riêng.
 
-  raw/<style>.png  (grid 4x3, nền phẳng một màu)
+  raw/<style>-<sheet>.png
       │  1. màu nền = median viền ngoài của cả sheet
       │  2. chroma-key toàn sheet → alpha; thêm mask NGHIÊM (chỉ pixel đặc)
       │  3. label các khối pixel liền nhau (connected components) trên mask nghiêm
@@ -34,9 +37,9 @@ HALO = 14                  # nới bbox để giữ glow/viền mềm quanh asse
 PAD = 6
 
 cfg = json.load(open(os.path.join(HERE, "styles.json")))
-COLS, ROWS = cfg["grid"]["cols"], cfg["grid"]["rows"]
-COMPONENTS = cfg["components"]
-assert len(COMPONENTS) == COLS * ROWS, "số component phải khớp lưới"
+for _sh in cfg["sheets"]:
+    _n = _sh["grid"]["cols"] * _sh["grid"]["rows"]
+    assert len(_sh["components"]) == _n, "sheet %s: component phải khớp lưới" % _sh["id"]
 
 
 def border_colors(img, strip=8):
@@ -180,63 +183,67 @@ def label_blobs(strict, W, H):
 manifest = {"styles": {}}
 for style in cfg["styles"]:
     sid = style["id"]
-    src_path = os.path.join(HERE, "raw", f"{sid}.png")
-    if not os.path.exists(src_path):
-        print(f"⚠ bỏ qua {sid}: chưa có raw/{sid}.png")
-        continue
-
     threshold = style.get("threshold", DEFAULT_THRESHOLD)
     strict_threshold = style.get("grow_threshold", threshold + GROW_OFFSET)
-    raw_img = Image.open(src_path)
-    W, H = raw_img.size
-    cell_w, cell_h = W / COLS, H / ROWS
-
-    # Ưu tiên alpha thật: nếu model gen được nền trong suốt thì không chroma-key
-    # (chroma-key là nguồn của lỗi "khoét ruột" khi ruột component trùng màu nền).
-    has_alpha = "A" in raw_img.getbands() and raw_img.getchannel("A").getextrema()[0] < 128
-    if has_alpha:
-        bg = None
-        keyed, strict = alpha_sheet(raw_img)
-        mode = "alpha thật"
-    else:
-        sheet = raw_img.convert("RGB")
-        bg = border_colors(sheet)
-        keyed, strict = key_sheet(sheet, bg, threshold, strict_threshold)
-        filled = fill_holes(keyed, sheet, W, H)
-        mode = f"chroma-key {len(bg)} màu nền {bg}, lấp {filled}px lỗ oan"
-    blobs = label_blobs(strict, W, H)
-
-    # mỗi khối về ô chứa trọng tâm của nó
-    cell_boxes = [None] * (COLS * ROWS)
-    for box, n, (cx, cy) in blobs:
-        idx = min(ROWS - 1, int(cy // cell_h)) * COLS + min(COLS - 1, int(cx // cell_w))
-        cur = cell_boxes[idx]
-        cell_boxes[idx] = box if cur is None else (
-            min(cur[0], box[0]), min(cur[1], box[1]), max(cur[2], box[2]), max(cur[3], box[3]))
-
     out_dir = os.path.join(HERE, "kits", sid)
-    os.makedirs(out_dir, exist_ok=True)
+    entry = {"sheets": {}, "assets": [], "empty_cells": []}
 
-    files, empty = [], []
-    for idx, comp in enumerate(COMPONENTS):
-        box = cell_boxes[idx]
-        if box is None:
-            empty.append(comp["file"])
+    for sh in cfg["sheets"]:
+        job = f"{sid}-{sh['id']}"
+        src_path = os.path.join(HERE, "raw", f"{job}.png")
+        if not os.path.exists(src_path):
+            print(f"⚠ bỏ qua {job}: chưa có raw/{job}.png")
             continue
-        l, t, r, b = box
-        piece = keyed.crop((max(0, l - HALO - PAD), max(0, t - HALO - PAD),
-                            min(W, r + HALO + PAD), min(H, b + HALO + PAD)))
-        fp = os.path.join(out_dir, f"{comp['file']}.png")
-        piece.save(fp)
-        files.append({"file": comp["file"] + ".png", "w": piece.width, "h": piece.height})
 
-    manifest["styles"][sid] = {
-        "mode": mode, "threshold": threshold, "strict_threshold": strict_threshold,
-        "bg_detected": bg, "sheet": [W, H], "blobs": len(blobs),
-        "assets": files, "empty_cells": empty
-    }
-    print(f"✓ {sid}: {len(files)}/12, {len(blobs)} khối, {mode}" +
-          (f" — Ô TRỐNG: {empty}" if empty else ""))
+        COLS, ROWS = sh["grid"]["cols"], sh["grid"]["rows"]
+        raw_img = Image.open(src_path)
+        W, H = raw_img.size
+        cell_w, cell_h = W / COLS, H / ROWS
+
+        has_alpha = "A" in raw_img.getbands() and raw_img.getchannel("A").getextrema()[0] < 128
+        if has_alpha:
+            bg = None
+            keyed, strict = alpha_sheet(raw_img)
+            mode = "alpha thật"
+        else:
+            sheet_rgb = raw_img.convert("RGB")
+            bg = border_colors(sheet_rgb)
+            keyed, strict = key_sheet(sheet_rgb, bg, threshold, strict_threshold)
+            filled = fill_holes(keyed, sheet_rgb, W, H)
+            mode = f"chroma-key {len(bg)} màu, lấp {filled}px lỗ oan"
+        blobs = label_blobs(strict, W, H)
+
+        cell_boxes = [None] * (COLS * ROWS)
+        for box, n, (cx, cy) in blobs:
+            idx = min(ROWS - 1, int(cy // cell_h)) * COLS + min(COLS - 1, int(cx // cell_w))
+            cur = cell_boxes[idx]
+            cell_boxes[idx] = box if cur is None else (
+                min(cur[0], box[0]), min(cur[1], box[1]), max(cur[2], box[2]), max(cur[3], box[3]))
+
+        os.makedirs(out_dir, exist_ok=True)
+        n_ok = 0
+        for idx, comp in enumerate(sh["components"]):
+            box = cell_boxes[idx]
+            if box is None:
+                entry["empty_cells"].append(comp["file"])
+                continue
+            l, t, r, b = box
+            piece = keyed.crop((max(0, l - HALO - PAD), max(0, t - HALO - PAD),
+                                min(W, r + HALO + PAD), min(H, b + HALO + PAD)))
+            piece.save(os.path.join(out_dir, f"{comp['file']}.png"))
+            entry["assets"].append({"file": comp["file"] + ".png", "sheet": sh["id"],
+                                    "w": piece.width, "h": piece.height})
+            n_ok += 1
+
+        entry["sheets"][sh["id"]] = {"mode": mode, "bg_detected": bg,
+                                     "size": [W, H], "blobs": len(blobs), "cut": n_ok}
+        print(f"✓ {job}: {n_ok}/{len(sh['components'])}, {len(blobs)} khối, {mode}")
+
+    manifest["styles"][sid] = entry
+    total = len(entry["assets"])
+    want = sum(len(sh["components"]) for sh in cfg["sheets"])
+    print(f"— {sid}: {total}/{want} asset" +
+          (f", Ô TRỐNG: {entry['empty_cells']}" if entry["empty_cells"] else ""))
 
 json.dump(manifest, open(os.path.join(HERE, "kits", "manifest.json"), "w"),
           indent=2, ensure_ascii=False)
