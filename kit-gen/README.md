@@ -33,12 +33,29 @@ logs/           log từng con codex
 preview.html    bảng so sánh trực quan
 ```
 
+## Demo màn home
+
+```bash
+open demo.html
+```
+
+Màn home mini-game lắp từ chính asset đã cắt: coin counter, đếm ngược chạy thật, giỏ quà,
+CTA, popup nhận quà (thẻ quà + form), bảng xếp hạng, lịch sử, toast, +1 lượt.
+**Đổi style = đổi 1 đường dẫn thư mục** — tên file trùng nhau nên switcher chỉ đổi prefix.
+Toàn bộ chữ là HTML đè lên asset trống (component không chữ), đúng workflow production:
+text đổi theo campaign mà không đụng vào ảnh.
+
 ## Điểm cần biết
 
-- Màu nền mỗi style được khai trong prompt là **một màu phẳng** — điều kiện để chroma-key
-  hoạt động. Style neon có glow sẽ giữ lại quầng sáng quanh asset (chấp nhận được ở mức PoC).
-- Model có thể vẽ lệch lưới hoặc gộp ô — `slice.py` báo `empty_cells` trong manifest khi
-  một ô không có gì sau khi tách nền. Đó là thước đo độ tin cậy của cách này.
-- Text tiếng Việt có dấu hay bị vẽ sai nên prompt dùng nhãn không dấu ("CHOI NGAY").
-  Bản production nên để component **không chữ** rồi ghép text bằng code/Figma sau.
+- Prompt yêu cầu **nền trong suốt + không chữ + ruột đặc**. Tool image-gen của codex trả
+  RGB không alpha, nhưng model vẽ nền caro "fake transparent" — slicer chroma-key theo
+  1–2 màu nền lấy từ viền sheet nên caro hay màu phẳng đều cắt được.
+- **Lấp lỗ oan**: fill trắng trong component (ô input…) trùng màu caro sẽ bị key nhầm →
+  vùng trong suốt nào nằm KÍN trong lòng component (không thông ra rìa sheet) được lấp lại
+  bằng pixel gốc. Đánh đổi: lỗ xuyên thật trong thiết kế (khe quai giỏ…) cũng bị lấp —
+  manifest ghi số pixel đã lấp để soát.
+- Model có thể vẽ lệch lưới hoặc gộp ô — slicer gán khối pixel về ô theo trọng tâm
+  (connected-component), chịu được component tràn vạch lưới; `empty_cells` trong manifest
+  là thước đo độ tin cậy.
+- Component **không chữ có chủ đích** — text ghép sau bằng code/Figma (xem demo.html).
 - Muốn thêm style: thêm một mục vào `styles.json` rồi chạy lại 3 lệnh. Không sửa code.

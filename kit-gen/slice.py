@@ -39,7 +39,10 @@ COMPONENTS = cfg["components"]
 assert len(COMPONENTS) == COLS * ROWS, "số component phải khớp lưới"
 
 
-def border_median(img, strip=8):
+def border_colors(img, strip=8):
+    """Màu nền lấy từ viền ngoài sheet. Trả về 1 HOẶC 2 màu:
+    model hay vẽ nền caro 'fake transparent' (2 tông xám trắng xen kẽ) khi được
+    yêu cầu nền trong suốt — khi đó phải key cả hai tông, một màu là không đủ."""
     w, h = img.size
     px = img.load()
     samples = []
@@ -50,21 +53,42 @@ def border_median(img, strip=8):
         for x in list(range(strip)) + list(range(w - strip, w)):
             samples.append(px[x, y])
     samples.sort()
-    return samples[len(samples) // 2]
+    c1 = samples[len(samples) // 2]
+    far = [s for s in samples
+           if math.dist(s, c1) > 30]
+    if len(far) > len(samples) * 0.05:      # có tông thứ hai thật sự (caro)
+        far.sort()
+        return [c1, far[len(far) // 2]]
+    return [c1]
 
 
-def key_sheet(sheet, bg, threshold, strict_threshold):
-    """Trả về (RGBA đã tách nền, bytearray mask nghiêm)."""
+def alpha_sheet(img):
+    """Sheet có ALPHA THẬT (model gen nền trong suốt) — không cần chroma-key.
+    Mask nghiêm = pixel gần như đục hẳn, để glow bán trong suốt không nối
+    hai component thành một khối."""
+    rgba = img.convert("RGBA")
+    a = rgba.getchannel("A").tobytes()
+    strict = bytearray(len(a))
+    for i, v in enumerate(a):
+        if v >= 240:
+            strict[i] = 1
+    return rgba, strict
+
+
+def key_sheet(sheet, bgs, threshold, strict_threshold):
+    """Fallback khi sheet KHÔNG có alpha: chroma-key theo 1–2 màu nền
+    (2 màu = nền caro fake-transparent). d = khoảng cách tới màu nền GẦN NHẤT.
+    Trả về (RGBA đã tách nền, bytearray mask nghiêm)."""
     w, h = sheet.size
     out = Image.new("RGBA", (w, h))
     strict = bytearray(w * h)
     src, dst = sheet.load(), out.load()
-    br, bgc, bb = bg
     for y in range(h):
         row = y * w
         for x in range(w):
-            r, g, b = src[x, y]
-            d = math.sqrt((r - br) ** 2 + (g - bgc) ** 2 + (b - bb) ** 2)
+            p = src[x, y]
+            d = min(math.dist(p, bg) for bg in bgs)
+            r, g, b = p
             if d < threshold:
                 dst[x, y] = (r, g, b, 0)
             else:
@@ -72,6 +96,56 @@ def key_sheet(sheet, bg, threshold, strict_threshold):
                 if d >= strict_threshold:
                     strict[row + x] = 1
     return out, strict
+
+
+def fill_holes(keyed, sheet_rgb, W, H):
+    """Lấp các vùng trong suốt NẰM KÍN trong lòng component.
+
+    Nền thật luôn thông ra rìa sheet; vùng trong suốt không với tới rìa nghĩa là
+    chroma-key đã khoét oan ruột component (ô input trắng ≈ trắng caro của nền
+    fake-transparent). Flood-fill từ rìa qua các pixel trong suốt → phần trong
+    suốt còn lại là lỗ oan, khôi phục bằng pixel gốc.
+
+    Đánh đổi có chủ đích: lỗ xuyên thật sự trong thiết kế (khe quai giỏ…) cũng
+    bị lấp. Với UI component thì ruột đặc đúng nhiều hơn sai; ghi nhận số lỗ
+    đã lấp vào manifest để soát lại."""
+    dst = keyed.load()
+    src = sheet_rgb.load()
+    transparent = bytearray(W * H)
+    for y in range(H):
+        row = y * W
+        for x in range(W):
+            if dst[x, y][3] == 0:
+                transparent[row + x] = 1
+
+    outside = bytearray(W * H)
+    q = deque()
+    for x in range(W):
+        for y in (0, H - 1):
+            i = y * W + x
+            if transparent[i] and not outside[i]:
+                outside[i] = 1; q.append(i)
+    for y in range(H):
+        for x in (0, W - 1):
+            i = y * W + x
+            if transparent[i] and not outside[i]:
+                outside[i] = 1; q.append(i)
+    while q:
+        i = q.popleft()
+        x, y = i % W, i // W
+        if x > 0 and transparent[i - 1] and not outside[i - 1]: outside[i - 1] = 1; q.append(i - 1)
+        if x < W - 1 and transparent[i + 1] and not outside[i + 1]: outside[i + 1] = 1; q.append(i + 1)
+        if y > 0 and transparent[i - W] and not outside[i - W]: outside[i - W] = 1; q.append(i - W)
+        if y < H - 1 and transparent[i + W] and not outside[i + W]: outside[i + W] = 1; q.append(i + W)
+
+    filled = 0
+    for i in range(W * H):
+        if transparent[i] and not outside[i]:
+            x, y = i % W, i // W
+            r, g, b = src[x, y]
+            dst[x, y] = (r, g, b, 255)
+            filled += 1
+    return filled
 
 
 def label_blobs(strict, W, H):
@@ -113,11 +187,23 @@ for style in cfg["styles"]:
 
     threshold = style.get("threshold", DEFAULT_THRESHOLD)
     strict_threshold = style.get("grow_threshold", threshold + GROW_OFFSET)
-    sheet = Image.open(src_path).convert("RGB")
-    W, H = sheet.size
+    raw_img = Image.open(src_path)
+    W, H = raw_img.size
     cell_w, cell_h = W / COLS, H / ROWS
-    bg = border_median(sheet)
-    keyed, strict = key_sheet(sheet, bg, threshold, strict_threshold)
+
+    # Ưu tiên alpha thật: nếu model gen được nền trong suốt thì không chroma-key
+    # (chroma-key là nguồn của lỗi "khoét ruột" khi ruột component trùng màu nền).
+    has_alpha = "A" in raw_img.getbands() and raw_img.getchannel("A").getextrema()[0] < 128
+    if has_alpha:
+        bg = None
+        keyed, strict = alpha_sheet(raw_img)
+        mode = "alpha thật"
+    else:
+        sheet = raw_img.convert("RGB")
+        bg = border_colors(sheet)
+        keyed, strict = key_sheet(sheet, bg, threshold, strict_threshold)
+        filled = fill_holes(keyed, sheet, W, H)
+        mode = f"chroma-key {len(bg)} màu nền {bg}, lấp {filled}px lỗ oan"
     blobs = label_blobs(strict, W, H)
 
     # mỗi khối về ô chứa trọng tâm của nó
@@ -145,11 +231,11 @@ for style in cfg["styles"]:
         files.append({"file": comp["file"] + ".png", "w": piece.width, "h": piece.height})
 
     manifest["styles"][sid] = {
-        "threshold": threshold, "strict_threshold": strict_threshold,
+        "mode": mode, "threshold": threshold, "strict_threshold": strict_threshold,
         "bg_detected": bg, "sheet": [W, H], "blobs": len(blobs),
         "assets": files, "empty_cells": empty
     }
-    print(f"✓ {sid}: {len(files)}/12, {len(blobs)} khối, nền {bg}" +
+    print(f"✓ {sid}: {len(files)}/12, {len(blobs)} khối, {mode}" +
           (f" — Ô TRỐNG: {empty}" if empty else ""))
 
 json.dump(manifest, open(os.path.join(HERE, "kits", "manifest.json"), "w"),

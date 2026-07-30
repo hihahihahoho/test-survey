@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo màn home — Game UI Kit</title>
+<style>
+  :root{ --ink:#1b1b22; }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0;min-height:100%}
+  body{
+    font-family:"Arial Rounded MT Bold","SF Pro Rounded",-apple-system,"Segoe UI",sans-serif;
+    display:flex;flex-direction:column;align-items:center;gap:14px;
+    padding:18px 10px 40px;transition:background .35s;
+  }
+  /* nền trang theo style — asset nền trong suốt nên đặt lên nền nào cũng được */
+  body[data-style="candy"]{background:radial-gradient(circle at 50% 18%,#ffe9f2,#ffd1e4 45%,#c9f0dd)}
+  body[data-style="pixel"]{background:repeating-linear-gradient(45deg,#232449 0 24px,#1a1c2c 24px 48px)}
+  body[data-style="neon"] {background:radial-gradient(circle at 50% 15%,#1c1440,#0b0b12 70%)}
+  body[data-style="tet"]  {background:radial-gradient(circle at 50% 15%,#a41212,#7d0a0a 70%)}
+  body[data-style="flat"] {background:linear-gradient(180deg,#dfe9f5,#f2f4f7)}
+
+  /* ---------- chọn style ---------- */
+  .switcher{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+  .switcher button{
+    border:2px solid rgba(0,0,0,.25);background:rgba(255,255,255,.85);cursor:pointer;
+    font:600 13px/1 inherit;color:var(--ink);padding:8px 14px;border-radius:99px;
+  }
+  .switcher button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .hint{font-size:11.5px;color:rgba(0,0,0,.55);background:rgba(255,255,255,.7);
+    padding:4px 12px;border-radius:99px}
+  body[data-style="neon"] .hint,body[data-style="pixel"] .hint,body[data-style="tet"] .hint{
+    color:rgba(255,255,255,.8);background:rgba(0,0,0,.35)}
+
+  /* ---------- khung điện thoại ---------- */
+  .phone{
+    position:relative;width:min(400px,96vw);aspect-ratio:9/18;
+    border-radius:34px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.4);
+    border:6px solid #111;background:transparent;
+  }
+  .screen{position:absolute;inset:0}
+
+  /* slot = vị trí cố định; img bên trong contain nên style nào cũng vừa */
+  .slot{position:absolute;display:flex;align-items:center;justify-content:center}
+  .slot img{max-width:100%;max-height:100%;filter:drop-shadow(0 4px 10px rgba(0,0,0,.25))}
+  .slot .txt{
+    position:absolute;font-weight:800;color:#fff;letter-spacing:.5px;white-space:nowrap;
+    text-shadow:0 2px 4px rgba(0,0,0,.55);pointer-events:none;
+  }
+
+  .coin   {left:3%;  top:2.2%; width:34%; height:7%}
+  .coin .txt{font-size:clamp(13px,4vw,17px);transform:translateX(16%)}
+  .timer  {right:3%; top:2.2%; width:32%; height:8%}
+  .timer .txt{font-size:clamp(13px,3.8vw,16px);letter-spacing:2px}
+
+  .title{position:absolute;left:0;right:0;top:11.5%;text-align:center;pointer-events:none}
+  .title b{
+    display:inline-block;font-size:clamp(22px,7vw,30px);line-height:1.15;color:#fff;
+    text-shadow:0 3px 0 rgba(0,0,0,.35),0 6px 18px rgba(0,0,0,.4);letter-spacing:1px;
+  }
+  .title small{display:block;font-size:12.5px;font-weight:700;color:rgba(255,255,255,.92);
+    text-shadow:0 1px 3px rgba(0,0,0,.5);margin-top:2px}
+
+  .basket {left:14%; top:20%;  width:72%; height:26%}
+  .progress{left:12%;top:47.5%;width:76%; height:6.5%}
+  .progress .txt{font-size:12px;transform:translateY(-4%)}
+  .cta    {left:9%;  top:55%;  width:82%; height:12%;cursor:pointer}
+  .cta .txt{font-size:clamp(20px,6.4vw,27px)}
+  .cta:active{transform:scale(.97)}
+  .turns{position:absolute;left:0;right:0;top:67.5%;text-align:center;font-size:12.5px;
+    font-weight:700;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+
+  .addturn{left:6%;  top:72%; width:20%; height:11%;cursor:pointer}
+  .addturn .txt{bottom:-4%;font-size:11px}
+  .chip{
+    position:absolute;width:31%;height:6.2%;cursor:pointer;border:0;border-radius:14px;
+    font:800 12.5px/1 inherit;color:#fff;background:rgba(0,0,0,.45);
+    border:2px solid rgba(255,255,255,.5);text-shadow:0 1px 2px rgba(0,0,0,.5);
+  }
+  .chip:active{transform:scale(.96)}
+  .chip.bxh {left:32%; top:74%}
+  .chip.lich{left:66%; top:74%}
+  .foot{position:absolute;left:0;right:0;bottom:2.4%;text-align:center;font-size:10.5px;
+    color:rgba(255,255,255,.75);text-shadow:0 1px 2px rgba(0,0,0,.5)}
+
+  /* ---------- popup ---------- */
+  .overlay{
+    position:absolute;inset:0;background:rgba(0,0,0,.55);display:none;
+    align-items:center;justify-content:center;z-index:5;
+  }
+  .overlay.show{display:flex}
+  .popup{position:relative;width:88%;aspect-ratio:1/1.06;cursor:pointer}
+  .popup>img.frame{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+  .popup .content{
+    position:absolute;left:14%;right:14%;top:20%;bottom:24%;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4%;
+  }
+  .popup .content img{max-width:100%;max-height:74%;object-fit:contain}
+  .popup .p-title{
+    position:absolute;left:0;right:0;top:6.5%;text-align:center;font-weight:800;
+    font-size:clamp(14px,4.6vw,19px);color:#fff;text-shadow:0 2px 4px rgba(0,0,0,.6)}
+  .popup .p-ok{
+    position:absolute;left:0;right:0;bottom:9%;text-align:center;font-weight:800;
+    font-size:15px;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,.6)}
+
+  /* ---------- toast ---------- */
+  .toastbox{
+    position:absolute;left:12%;width:76%;height:7%;top:-12%;z-index:6;
+    transition:top .35s cubic-bezier(.2,.9,.3,1.2);
+  }
+  .toastbox.show{top:3%}
+  .toastbox .txt{font-size:13px;transform:translateX(8%)}
+</style>
+</head>
+<body data-style="candy">
+
+<div class="switcher" id="switcher"></div>
+<div class="hint">Đổi style = đổi 1 đường dẫn thư mục — cùng bộ component, HTML text đè lên asset trống</div>
+
+<div class="phone"><div class="screen">
+
+  <div class="slot coin"><img data-a="09-coin-counter"><span class="txt" id="coinTxt">1.250</span></div>
+  <div class="slot timer"><img data-a="08-countdown"><span class="txt" id="timerTxt">00:59</span></div>
+
+  <div class="title"><b>VÒNG QUÀ<br>MAY MẮN</b><small>Chơi mỗi ngày — nhận quà liền tay</small></div>
+
+  <div class="slot basket"><img data-a="04-gift-basket"></div>
+
+  <div class="slot progress"><img data-a="12-progress"><span class="txt">Nhiệm vụ 3/5</span></div>
+
+  <div class="slot cta" id="btnPlay"><img data-a="07-cta-button"><span class="txt">CHƠI NGAY</span></div>
+  <div class="turns" id="turnsTxt">Còn 3 lượt hôm nay</div>
+
+  <div class="slot addturn" id="btnAdd"><img data-a="06-add-turn"><span class="txt">+1 lượt</span></div>
+  <button class="chip bxh"  id="btnBxh">BẢNG XẾP HẠNG</button>
+  <button class="chip lich" id="btnLich">LỊCH SỬ</button>
+
+  <div class="foot">Demo lắp từ asset sinh tự động — kit-gen/kits/&lt;style&gt;/</div>
+
+  <div class="slot toastbox" id="toast"><img data-a="11-toast"><span class="txt" id="toastTxt">Thành công!</span></div>
+
+  <div class="overlay" id="overlay">
+    <div class="popup" id="popup" title="Bấm để đóng">
+      <img class="frame" data-a="02-popup">
+      <div class="p-title" id="popTitle"></div>
+      <div class="content" id="popContent"></div>
+      <div class="p-ok">Bấm để đóng</div>
+    </div>
+  </div>
+
+</div></div>
+
+<script>
+"use strict";
+/* Toàn bộ demo chỉ có MỘT biến trạng thái quyết định giao diện: tên style.
+   Tên file asset trùng nhau giữa các thư mục nên đổi style = đổi prefix. */
+const STYLES = [
+  ["candy", "Kẹo ngọt"], ["pixel", "Pixel"], ["neon", "Neon"], ["tet", "Tết"], ["flat", "Flat"]
+];
+let style = "candy";
+const src = name => `kits/${style}/${name}.png`;
+
+function applyStyle(s) {
+  style = s;
+  document.body.dataset.style = s;
+  document.querySelectorAll("img[data-a]").forEach(img => { img.src = src(img.dataset.a); });
+  document.querySelectorAll("#switcher button").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.s === s)));
+}
+
+const switcher = document.getElementById("switcher");
+STYLES.forEach(([id, label]) => {
+  const b = document.createElement("button");
+  b.textContent = label;
+  b.dataset.s = id;
+  b.onclick = () => applyStyle(id);
+  switcher.appendChild(b);
+});
+
+/* ---------- tương tác tối thiểu cho ra dáng màn home ---------- */
+let turns = 3, coins = 1250;
+const $ = id => document.getElementById(id);
+
+function toast(msg) {
+  $("toastTxt").textContent = msg;
+  $("toast").classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => $("toast").classList.remove("show"), 1800);
+}
+
+function openPopup(title, imgs) {
+  $("popTitle").textContent = title;
+  const box = $("popContent");
+  box.innerHTML = "";
+  imgs.forEach(a => {
+    const im = document.createElement("img");
+    im.src = src(a);
+    box.appendChild(im);
+  });
+  $("overlay").classList.add("show");
+}
+$("popup").onclick = () => $("overlay").classList.remove("show");
+
+$("btnPlay").onclick = () => {
+  if (turns <= 0) { toast("Hết lượt hôm nay rồi!"); return; }
+  turns--; coins += 100;
+  $("turnsTxt").textContent = `Còn ${turns} lượt hôm nay`;
+  $("coinTxt").textContent = coins.toLocaleString("vi-VN");
+  openPopup("Chúc mừng! Bạn nhận được quà", ["10-prize-card", "03-form"]);
+};
+$("btnAdd").onclick = () => {
+  turns++;
+  $("turnsTxt").textContent = `Còn ${turns} lượt hôm nay`;
+  toast("+1 lượt chơi!");
+};
+$("btnBxh").onclick  = () => openPopup("Bảng xếp hạng tuần", ["01-leaderboard"]);
+$("btnLich").onclick = () => openPopup("Lịch sử trúng thưởng", ["05-history"]);
+
+/* đồng hồ đếm ngược cho sống động */
+let secs = 59;
+setInterval(() => {
+  secs = (secs + 59) % 60;
+  $("timerTxt").textContent = "00:" + String(secs).padStart(2, "0");
+}, 1000);
+
+applyStyle(style);
+</script>
+</body>
+</html>
