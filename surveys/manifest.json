@@ -5,8 +5,16 @@
       "file": "creative-audit-2026.json",
       "name": "Hiện trạng công việc & công cụ — Creative Team",
       "note": "Đo tỷ trọng công việc, bản đồ công cụ theo công đoạn, và điểm yếu của công cụ hiện tại.",
-      "questions": 56,
+      "questions": 57,
       "minutes": 19
+    },
+    {
+      "id": "game-uikit-pipeline-2026",
+      "file": "game-uikit-pipeline-2026.json",
+      "name": "Pipeline UI kit cho campaign mini-game",
+      "note": "Đo bộ screen & component tối thiểu, định dạng bàn giao cần thiết, và mức tự động hoá mong muốn cho pipeline ý tưởng → UI kit.",
+      "questions": 33,
+      "minutes": 13
     }
   ]
 }

@@ -116,7 +116,26 @@ ok(!mod.isEmpty("A")&&!mod.isEmpty(["A"]), "không coi giá trị thật là tr�
 
 const s = mod.stats(form);
 console.log(`\n[6] engine tự đếm: ${s.total} câu · ${s.required} bắt buộc · ${s.branches} nhánh · ~${s.minutes} phút`);
-ok(s.total===56 && s.branches===4, "khớp với số build.mjs báo");
+ok(s.total===57 && s.branches===4, "khớp với số build.mjs báo");
+
+console.log("\n[7] kiểm tra chung cho mọi survey trong manifest");
+const {surveys} = JSON.parse(readFileSync("surveys/manifest.json","utf8"));
+ok(surveys.length>=2, `manifest có ${surveys.length} survey`);
+for (const sv of surveys){
+  const f = mod.normalize(JSON.parse(readFileSync("surveys/"+sv.file,"utf8")));
+  const pg = mod.paginate(f);
+  const ids = new Set(f.items.filter(i=>i.pageBreakItem).map(i=>i.itemId));
+  const bad = [];
+  f.items.forEach(it=>{
+    const cq = it.questionItem?.question?.choiceQuestion;
+    if(!cq) return;
+    cq.options.forEach(o=>{ if(o.goToSectionId && !ids.has(o.goToSectionId)) bad.push(it.title+" → "+o.goToSectionId); });
+  });
+  ok(bad.length===0, `${sv.id}: ${pg.length} phần, mọi đích nhảy tồn tại${bad.length?" — SAI: "+bad.join(", "):""}`);
+  const big = f.items.filter(it=>it.questionGroupItem &&
+    (it.questionGroupItem.questions.length>8 || it.questionGroupItem.grid.columns.options.length>6));
+  ok(big.length===0, `${sv.id}: không grid nào vượt 8×6${big.length?" — "+big.map(b=>b.title).join(", "):""}`);
+}
 
 console.log(fail? `\n${fail} kiểm tra THẤT BẠI` : "\nTất cả kiểm tra PASS");
 process.exit(fail?1:0);

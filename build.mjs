@@ -68,23 +68,15 @@ for (const file of files) {
               `${stats.grids} grid (${stats.gridRows} dòng) · ` +
               `${stats.branches} câu phân nhánh · ~${stats.minutes} phút`);
 
-  /* mô phỏng các nhánh chính để chắc skip-logic không bỏ sót / lặp */
-  const gateG = "Bạn có làm ảnh tĩnh, illustration, graphic hoặc icon không?";
-  const gateM = "Bạn có làm animation, motion graphic hoặc video không?";
-  const gate3 = "Bạn có làm 3D hoặc asset game không?";
-  const gateX = "Bạn muốn làm gì tiếp?";
-  const paths = {
-    "graphic only":  { [gateG]: "Có",    [gateM]: "Không", [gate3]: "Không" },
-    "motion only":   { [gateG]: "Không", [gateM]: "Có",    [gate3]: "Không" },
-    "3d only":       { [gateG]: "Không", [gateM]: "Không", [gate3]: "Có" },
-    "cả ba mảng":    { [gateG]: "Có",    [gateM]: "Có",    [gate3]: "Có" },
-    "gửi luôn":      { [gateG]: "Có",    [gateM]: "Không", [gate3]: "Không",
-                       [gateX]: "Gửi luôn" }
-  };
-  for (const [label, ans] of Object.entries(paths)) {
+  /* Mô phỏng các nhánh để chắc skip-logic không bỏ sót phần nào và không lặp.
+     Mỗi survey tự khai `meta.testPaths` = { nhãn: { "tiêu đề câu": "đáp án" } }.
+     Không khai thì vẫn chạy một lượt mặc định (mọi câu lọc để trống → đi thẳng). */
+  const paths = mod.meta.testPaths || { "mặc định": {} };
+  const pathLen = Math.max(...Object.keys(paths).map(k => k.length));
+  for (const [label, answers] of Object.entries(paths)) {
     try {
-      const p = walk(form, { ...ans, [gateX]: ans[gateX] ?? "Trả lời thêm phần mở (khoảng 4 phút)" });
-      console.log(`   nhánh ${label.padEnd(13)} → ${p.length} phần`);
+      const p = walk(form, answers);
+      console.log(`   nhánh ${label.padEnd(pathLen)} → ${p.length} phần`);
     } catch (e) {
       console.error(`   ✗ nhánh ${label}: ${e.message}`);
       hardFail = true;

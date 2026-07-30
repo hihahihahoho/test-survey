@@ -1,0 +1,1459 @@
+{
+  "info": {
+    "title": "Khảo sát pipeline UI kit cho campaign mini-game",
+    "documentTitle": "Game UI Kit Pipeline Survey 2026",
+    "description": "MỤC ĐÍCH\nChúng tôi đang xem xét xây một pipeline đi từ ý tưởng campaign đến bộ UI kit dùng được ngay: chọn loại game, sinh sơ đồ screen, dựng component theo brand kit, rồi xuất ra thứ mà bên nhận cần (Figma, demo HTML bấm được, Lottie, sprite sheet…).\n\nKhảo sát này để biết bộ screen và component tối thiểu của một campaign game thực tế gồm những gì, và định dạng bàn giao nào là thật sự cần thiết chứ không phải làm cho có.\n\nAI NÊN TRẢ LỜI\nBất kỳ ai từng tham gia một campaign mini-game: designer, illustrator, animator, dev, QA, PM, marketing. Mỗi vai trò thấy một phần khác nhau của cùng một quy trình, nên cần đủ các góc.\n\nCAM KẾT\n· Không dùng để đánh giá cá nhân.\n· Câu đầu tiên là câu sàng lọc — nếu bạn không tham gia làm campaign game thì gửi luôn, không phải trả lời tiếp.\n\nTHỜI GIAN\nKhoảng 10–12 phút nếu bạn có tham gia."
+  },
+  "items": [
+    {
+      "itemId": "sec_screen",
+      "title": "Câu sàng lọc",
+      "pageBreakItem": {},
+      "description": "Campaign mini-game ở đây là các game nhỏ gắn với chiến dịch marketing: vòng xoay may mắn, thẻ cào, lật thẻ, quiz, bắt vật rơi, điểm danh tích điểm… Thường sống vài tuần rồi tắt."
+    },
+    {
+      "itemId": "q0001",
+      "title": "Bạn có tham gia làm campaign mini-game không?",
+      "questionItem": {
+        "question": {
+          "questionId": "q0002",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có, tôi trực tiếp làm",
+                "goToAction": "NEXT_SECTION"
+              },
+              {
+                "value": "Có, tôi review hoặc điều phối",
+                "goToAction": "NEXT_SECTION"
+              },
+              {
+                "value": "Không tham gia",
+                "goToAction": "SUBMIT_FORM"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_role",
+      "title": "Phần 1 · Bạn đứng ở đâu trong quy trình",
+      "pageBreakItem": {}
+    },
+    {
+      "itemId": "q0003",
+      "title": "Vai trò chính của bạn",
+      "questionItem": {
+        "question": {
+          "questionId": "q0004",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "UI / Product Designer"
+              },
+              {
+                "value": "Graphic Designer"
+              },
+              {
+                "value": "Illustrator / Character Artist"
+              },
+              {
+                "value": "Motion Designer / Animator"
+              },
+              {
+                "value": "Game Artist"
+              },
+              {
+                "value": "Dev game / frontend"
+              },
+              {
+                "value": "QA"
+              },
+              {
+                "value": "PM / Project Manager"
+              },
+              {
+                "value": "Marketing"
+              },
+              {
+                "value": "Art Director / Lead"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0005",
+      "title": "Trong một campaign game, bạn phụ trách phần nào?",
+      "questionItem": {
+        "question": {
+          "questionId": "q0006",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Lên ý tưởng & cơ chế game"
+              },
+              {
+                "value": "Sơ đồ screen / flow"
+              },
+              {
+                "value": "UI design"
+              },
+              {
+                "value": "Illustration & art"
+              },
+              {
+                "value": "Animation & hiệu ứng"
+              },
+              {
+                "value": "Dựng game (code)"
+              },
+              {
+                "value": "Tích hợp & bàn giao"
+              },
+              {
+                "value": "QA / kiểm thử"
+              },
+              {
+                "value": "Nội dung & thể lệ"
+              },
+              {
+                "value": "Điều phối & deadline"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0007",
+      "title": "Team bạn làm khoảng bao nhiêu campaign game?",
+      "questionItem": {
+        "question": {
+          "questionId": "q0008",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Dưới 1 cái / tháng"
+              },
+              {
+                "value": "1–2 cái / tháng"
+              },
+              {
+                "value": "3–5 cái / tháng"
+              },
+              {
+                "value": "Trên 5 cái / tháng"
+              },
+              {
+                "value": "Không đều, theo mùa chiến dịch"
+              },
+              {
+                "value": "Không rõ"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_types",
+      "title": "Phần 2 · Loại game và nhịp làm",
+      "pageBreakItem": {},
+      "description": "Chấm theo thực tế 6–12 tháng gần đây."
+    },
+    {
+      "itemId": "q0009",
+      "title": "Các loại campaign game bạn làm nhiều hay ít?",
+      "questionGroupItem": {
+        "questions": [
+          {
+            "questionId": "q000a",
+            "required": true,
+            "rowQuestion": {
+              "title": "Vòng xoay may mắn"
+            }
+          },
+          {
+            "questionId": "q000b",
+            "required": true,
+            "rowQuestion": {
+              "title": "Thẻ cào / lật thẻ / mở hộp quà"
+            }
+          },
+          {
+            "questionId": "q000c",
+            "required": true,
+            "rowQuestion": {
+              "title": "Quiz, trắc nghiệm, đoán đúng"
+            }
+          },
+          {
+            "questionId": "q000d",
+            "required": true,
+            "rowQuestion": {
+              "title": "Bắt vật rơi / tap nhanh / lắc điện thoại"
+            }
+          },
+          {
+            "questionId": "q000e",
+            "required": true,
+            "rowQuestion": {
+              "title": "Ghép hình, memory, tìm điểm khác"
+            }
+          },
+          {
+            "questionId": "q000f",
+            "required": true,
+            "rowQuestion": {
+              "title": "Điểm danh & tích điểm, nuôi cây"
+            }
+          },
+          {
+            "questionId": "q000g",
+            "required": true,
+            "rowQuestion": {
+              "title": "Runner / jump / endless đơn giản"
+            }
+          },
+          {
+            "questionId": "q000h",
+            "required": true,
+            "rowQuestion": {
+              "title": "Đua top, bảng xếp hạng, chuỗi nhiệm vụ"
+            }
+          }
+        ],
+        "grid": {
+          "columns": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Rất nhiều"
+              },
+              {
+                "value": "Nhiều"
+              },
+              {
+                "value": "Trung bình"
+              },
+              {
+                "value": "Ít"
+              },
+              {
+                "value": "Chưa từng làm"
+              }
+            ]
+          },
+          "shuffleQuestions": false
+        }
+      }
+    },
+    {
+      "itemId": "q000i",
+      "title": "Từ lúc nhận brief đến lúc game lên live thường mất bao lâu?",
+      "questionItem": {
+        "question": {
+          "questionId": "q000j",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Dưới 3 ngày"
+              },
+              {
+                "value": "3–7 ngày"
+              },
+              {
+                "value": "1–2 tuần"
+              },
+              {
+                "value": "2–4 tuần"
+              },
+              {
+                "value": "Trên 1 tháng"
+              },
+              {
+                "value": "Rất khác nhau"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q000k",
+      "title": "Một campaign game mới tái dùng được khoảng bao nhiêu phần từ game trước?",
+      "description": "Con số này quyết định trực tiếp việc pipeline có đáng xây hay không.",
+      "questionItem": {
+        "question": {
+          "questionId": "q000l",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Gần như làm mới hết (dưới 20%)"
+              },
+              {
+                "value": "20–40%"
+              },
+              {
+                "value": "40–60%"
+              },
+              {
+                "value": "60–80%"
+              },
+              {
+                "value": "Phần lớn chỉ đổi chủ đề (trên 80%)"
+              },
+              {
+                "value": "Không rõ"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_screens",
+      "title": "Phần 3 · Bộ screen tối thiểu",
+      "pageBreakItem": {},
+      "description": "Với một campaign game điển hình, mỗi screen dưới đây cần đến mức nào?"
+    },
+    {
+      "itemId": "q000m",
+      "title": "Mức cần thiết của từng screen",
+      "questionGroupItem": {
+        "questions": [
+          {
+            "questionId": "q000n",
+            "required": true,
+            "rowQuestion": {
+              "title": "Landing / intro + nút Chơi ngay"
+            }
+          },
+          {
+            "questionId": "q000o",
+            "required": true,
+            "rowQuestion": {
+              "title": "Thể lệ & điều khoản"
+            }
+          },
+          {
+            "questionId": "q000p",
+            "required": true,
+            "rowQuestion": {
+              "title": "Màn chơi (gameplay)"
+            }
+          },
+          {
+            "questionId": "q000q",
+            "required": true,
+            "rowQuestion": {
+              "title": "Popup thắng + lộ quà"
+            }
+          },
+          {
+            "questionId": "q000r",
+            "required": true,
+            "rowQuestion": {
+              "title": "Popup thua / hết lượt"
+            }
+          },
+          {
+            "questionId": "q000s",
+            "required": true,
+            "rowQuestion": {
+              "title": "Form nhận quà (tên, SĐT, địa chỉ)"
+            }
+          },
+          {
+            "questionId": "q000t",
+            "required": true,
+            "rowQuestion": {
+              "title": "Kho quà / lịch sử trúng thưởng"
+            }
+          },
+          {
+            "questionId": "q000u",
+            "required": true,
+            "rowQuestion": {
+              "title": "Bảng xếp hạng"
+            }
+          }
+        ],
+        "grid": {
+          "columns": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Luôn cần"
+              },
+              {
+                "value": "Thường cần"
+              },
+              {
+                "value": "Thỉnh thoảng"
+              },
+              {
+                "value": "Không cần"
+              },
+              {
+                "value": "Không rõ"
+              }
+            ]
+          },
+          "shuffleQuestions": false
+        }
+      }
+    },
+    {
+      "itemId": "q000v",
+      "title": "Screen nào hay bị phát hiện thiếu vào phút cuối?",
+      "description": "Đây là danh sách hay bị quên nhất — chọn những cái bạn từng phải làm gấp.",
+      "questionItem": {
+        "question": {
+          "questionId": "q000w",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Loading & trạng thái chờ"
+              },
+              {
+                "value": "Lỗi mạng / lỗi hệ thống"
+              },
+              {
+                "value": "Hết hạn campaign"
+              },
+              {
+                "value": "Hết quà / hết suất"
+              },
+              {
+                "value": "Nạp thêm lượt (đổi điểm, xem quảng cáo)"
+              },
+              {
+                "value": "Điểm danh hằng ngày"
+              },
+              {
+                "value": "Mời bạn / chia sẻ"
+              },
+              {
+                "value": "Xác nhận trước khi dùng lượt"
+              },
+              {
+                "value": "Trạng thái chưa đăng nhập"
+              },
+              {
+                "value": "Empty state (chưa có quà, chưa có ai trên bảng xếp hạng)"
+              },
+              {
+                "value": "Không bị thiếu, luôn đủ từ đầu",
+                "_exclusive": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_components",
+      "title": "Phần 4 · Bộ component và asset",
+      "pageBreakItem": {},
+      "description": "Cùng cách chấm như phần trước."
+    },
+    {
+      "itemId": "q000x",
+      "title": "Mức cần thiết của từng component",
+      "questionGroupItem": {
+        "questions": [
+          {
+            "questionId": "q000y",
+            "required": true,
+            "rowQuestion": {
+              "title": "Button đủ state (thường, nhấn, mờ, đang tải)"
+            }
+          },
+          {
+            "questionId": "q000z",
+            "required": true,
+            "rowQuestion": {
+              "title": "Khung popup dùng chung (header, nút đóng, CTA)"
+            }
+          },
+          {
+            "questionId": "q0010",
+            "required": true,
+            "rowQuestion": {
+              "title": "Input & form nhận quà (text, số, tỉnh/thành, checkbox điều khoản)"
+            }
+          },
+          {
+            "questionId": "q0011",
+            "required": true,
+            "rowQuestion": {
+              "title": "Toast / thông báo ngắn"
+            }
+          },
+          {
+            "questionId": "q0012",
+            "required": true,
+            "rowQuestion": {
+              "title": "Bộ đếm lượt chơi & điểm"
+            }
+          },
+          {
+            "questionId": "q0013",
+            "required": true,
+            "rowQuestion": {
+              "title": "Thẻ quà (prize card)"
+            }
+          },
+          {
+            "questionId": "q0014",
+            "required": true,
+            "rowQuestion": {
+              "title": "Thanh tiến độ / chuỗi nhiệm vụ"
+            }
+          },
+          {
+            "questionId": "q0015",
+            "required": true,
+            "rowQuestion": {
+              "title": "Đồng hồ đếm ngược"
+            }
+          }
+        ],
+        "grid": {
+          "columns": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Luôn cần"
+              },
+              {
+                "value": "Thường cần"
+              },
+              {
+                "value": "Thỉnh thoảng"
+              },
+              {
+                "value": "Không cần"
+              },
+              {
+                "value": "Không rõ"
+              }
+            ]
+          },
+          "shuffleQuestions": false
+        }
+      }
+    },
+    {
+      "itemId": "q0016",
+      "title": "Ngoài UI, một campaign game thường cần thêm asset gì?",
+      "questionItem": {
+        "question": {
+          "questionId": "q0017",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Background dọc (portrait)"
+              },
+              {
+                "value": "Background ngang (landscape)"
+              },
+              {
+                "value": "Hoạ tiết trang trí / khung viền"
+              },
+              {
+                "value": "Hiệu ứng particle (lấp lánh, confetti)"
+              },
+              {
+                "value": "Ảnh quà theo từng loại"
+              },
+              {
+                "value": "Mascot / character + nhiều pose"
+              },
+              {
+                "value": "Icon set riêng cho game"
+              },
+              {
+                "value": "Số & chữ dạng hoạ tiết (number art)"
+              },
+              {
+                "value": "Sprite sheet / atlas"
+              },
+              {
+                "value": "Âm thanh & nhạc nền"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_output",
+      "title": "Phần 5 · Bộ UI kit phải nhả ra cái gì",
+      "pageBreakItem": {},
+      "description": "Phần quan trọng nhất. Chấm theo cái thật sự dùng đến, không phải cái nghe hợp lý.\nNếu bạn là dev hoặc QA, đây là chỗ ý kiến của bạn quan trọng nhất."
+    },
+    {
+      "itemId": "q0018",
+      "title": "Bản thiết kế & bản trình bày",
+      "questionGroupItem": {
+        "questions": [
+          {
+            "questionId": "q0019",
+            "required": true,
+            "rowQuestion": {
+              "title": "Figma component set + variants"
+            }
+          },
+          {
+            "questionId": "q001a",
+            "required": true,
+            "rowQuestion": {
+              "title": "Figma prototype bấm được"
+            }
+          },
+          {
+            "questionId": "q001b",
+            "required": true,
+            "rowQuestion": {
+              "title": "Demo HTML/CSS bấm được (mở link là chơi thử)"
+            }
+          },
+          {
+            "questionId": "q001c",
+            "required": true,
+            "rowQuestion": {
+              "title": "PDF / slide deck bàn giao (sơ đồ screen + ảnh preview + spec)"
+            }
+          },
+          {
+            "questionId": "q001d",
+            "required": true,
+            "rowQuestion": {
+              "title": "Spec bàn giao dạng văn bản (state, kích thước, safe area)"
+            }
+          }
+        ],
+        "grid": {
+          "columns": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Rất cần"
+              },
+              {
+                "value": "Cần"
+              },
+              {
+                "value": "Chưa rõ"
+              },
+              {
+                "value": "Không cần"
+              },
+              {
+                "value": "Không áp dụng"
+              }
+            ]
+          },
+          "shuffleQuestions": false
+        }
+      }
+    },
+    {
+      "itemId": "q001e",
+      "title": "Asset & dữ liệu cho dev",
+      "questionGroupItem": {
+        "questions": [
+          {
+            "questionId": "q001f",
+            "required": true,
+            "rowQuestion": {
+              "title": "Lottie / Rive cho animation"
+            }
+          },
+          {
+            "questionId": "q001g",
+            "required": true,
+            "rowQuestion": {
+              "title": "Sprite sheet / atlas"
+            }
+          },
+          {
+            "questionId": "q001h",
+            "required": true,
+            "rowQuestion": {
+              "title": "PNG & SVG export đủ kích thước"
+            }
+          },
+          {
+            "questionId": "q001i",
+            "required": true,
+            "rowQuestion": {
+              "title": "Design token dạng JSON (màu, spacing, radius)"
+            }
+          }
+        ],
+        "grid": {
+          "columns": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Rất cần"
+              },
+              {
+                "value": "Cần"
+              },
+              {
+                "value": "Chưa rõ"
+              },
+              {
+                "value": "Không cần"
+              },
+              {
+                "value": "Không áp dụng"
+              }
+            ]
+          },
+          "shuffleQuestions": false
+        }
+      }
+    },
+    {
+      "itemId": "q001j",
+      "title": "Nếu chỉ được có MỘT thứ, bạn chọn dạng nào?",
+      "questionItem": {
+        "question": {
+          "questionId": "q001k",
+          "required": true,
+          "choiceQuestion": {
+            "type": "DROP_DOWN",
+            "options": [
+              {
+                "value": "Figma component set"
+              },
+              {
+                "value": "Figma prototype bấm được"
+              },
+              {
+                "value": "Demo HTML bấm được"
+              },
+              {
+                "value": "PDF / slide deck bàn giao"
+              },
+              {
+                "value": "Spec bàn giao dạng văn bản"
+              },
+              {
+                "value": "Lottie / Rive"
+              },
+              {
+                "value": "Sprite sheet / atlas"
+              },
+              {
+                "value": "PNG & SVG export"
+              },
+              {
+                "value": "Design token JSON"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001l",
+      "title": "Demo HTML bấm được có giúp gì thật sự cho bạn không?",
+      "description": "Trả lời thẳng. Nếu demo HTML không ai dùng thì không nên đưa vào pipeline.",
+      "questionItem": {
+        "question": {
+          "questionId": "q001m",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Rất cần — để review với marketing trước khi dev dựng"
+              },
+              {
+                "value": "Cần — để chốt cảm giác chuyển động & luồng"
+              },
+              {
+                "value": "Có thì tốt, không có cũng được"
+              },
+              {
+                "value": "Không cần — Figma prototype là đủ"
+              },
+              {
+                "value": "Không cần — làm demo là tốn thêm công vô ích"
+              },
+              {
+                "value": "Không rõ"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001n",
+      "title": "Dev dựng game bằng gì?",
+      "questionItem": {
+        "question": {
+          "questionId": "q001o",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "HTML / CSS / JS thuần"
+              },
+              {
+                "value": "React / Vue"
+              },
+              {
+                "value": "Phaser"
+              },
+              {
+                "value": "PixiJS"
+              },
+              {
+                "value": "Cocos Creator"
+              },
+              {
+                "value": "Unity"
+              },
+              {
+                "value": "Godot"
+              },
+              {
+                "value": "Chỉ nhúng WebView trong app"
+              },
+              {
+                "value": "Lottie thuần, không có engine"
+              },
+              {
+                "value": "Không rõ"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001p",
+      "title": "Lúc bàn giao có phải làm PDF hoặc slide không?",
+      "questionItem": {
+        "question": {
+          "questionId": "q001q",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có, gần như mỗi lần"
+              },
+              {
+                "value": "Có, khi cần trình bày với khách hoặc cấp trên"
+              },
+              {
+                "value": "Có, nhưng làm tay nên rất mất thời gian"
+              },
+              {
+                "value": "Không, chỉ gửi link Figma"
+              },
+              {
+                "value": "Không bao giờ làm"
+              },
+              {
+                "value": "Không rõ"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001r",
+      "title": "Nếu có PDF hoặc slide bàn giao, trong đó cần những gì?",
+      "questionItem": {
+        "question": {
+          "questionId": "q001s",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Sơ đồ screen flow"
+              },
+              {
+                "value": "Ảnh từng screen kèm chú thích"
+              },
+              {
+                "value": "Danh sách state & trường hợp biên (hết quà, lỗi, hết hạn)"
+              },
+              {
+                "value": "Bảng màu & font"
+              },
+              {
+                "value": "Danh sách asset kèm tên file"
+              },
+              {
+                "value": "Spec animation (thời lượng, easing)"
+              },
+              {
+                "value": "Thể lệ & nội dung copy"
+              },
+              {
+                "value": "Changelog giữa các phiên bản"
+              },
+              {
+                "value": "Link Figma & link demo"
+              },
+              {
+                "value": "Tỉ lệ trúng & cơ chế quà"
+              },
+              {
+                "value": "Không cần PDF hay slide",
+                "_exclusive": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001t",
+      "title": "Ai là người đọc bản PDF hoặc slide đó nhiều nhất?",
+      "questionItem": {
+        "question": {
+          "questionId": "q001u",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Khách hàng / đối tác"
+              },
+              {
+                "value": "Marketing & PM nội bộ"
+              },
+              {
+                "value": "Dev"
+              },
+              {
+                "value": "QA"
+              },
+              {
+                "value": "Cấp trên duyệt"
+              },
+              {
+                "value": "Chỉ để lưu trữ, gần như không ai đọc"
+              },
+              {
+                "value": "Không có bản này"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_pipeline",
+      "title": "Phần 6 · Từ ý tưởng đến UI kit",
+      "pageBreakItem": {},
+      "description": "Phần này quyết định pipeline sẽ nhận đầu vào gì và tự động đến đâu."
+    },
+    {
+      "itemId": "q001v",
+      "title": "Hiện tại, từ lúc có ý tưởng đến lúc có bộ UI kit dùng được, quy trình đi qua những bước nào?",
+      "description": "Câu tự luận duy nhất bắt buộc. Viết dạng: đầu vào → các bước → đầu ra, kèm ai làm bước nào.\nVí dụ mẫu: “PM gửi brief + danh sách quà → designer tìm ref 1 buổi → vẽ 6 screen trong Figma 2 ngày → illustrator vẽ background & mascot 2 ngày → export PNG rồi gửi dev qua Drive → dev hỏi lại thiếu state hết quà.”",
+      "questionItem": {
+        "question": {
+          "questionId": "q001w",
+          "required": true,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001x",
+      "title": "Dựng khung & component — nên tự động đến mức nào?",
+      "questionGroupItem": {
+        "questions": [
+          {
+            "questionId": "q001y",
+            "required": true,
+            "rowQuestion": {
+              "title": "Chọn loại game từ thư viện mẫu có sẵn"
+            }
+          },
+          {
+            "questionId": "q001z",
+            "required": true,
+            "rowQuestion": {
+              "title": "Sinh sơ đồ screen từ mô tả ý tưởng"
+            }
+          },
+          {
+            "questionId": "q0020",
+            "required": true,
+            "rowQuestion": {
+              "title": "Sinh wireframe từng screen"
+            }
+          },
+          {
+            "questionId": "q0021",
+            "required": true,
+            "rowQuestion": {
+              "title": "Dựng bộ component theo brand kit (màu, font, logo)"
+            }
+          }
+        ],
+        "grid": {
+          "columns": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Rất cần"
+              },
+              {
+                "value": "Cần"
+              },
+              {
+                "value": "Chưa rõ"
+              },
+              {
+                "value": "Không cần"
+              },
+              {
+                "value": "Không áp dụng"
+              }
+            ]
+          },
+          "shuffleQuestions": false
+        }
+      }
+    },
+    {
+      "itemId": "q0022",
+      "title": "Sinh art & xuất bản bàn giao — nên tự động đến mức nào?",
+      "questionGroupItem": {
+        "questions": [
+          {
+            "questionId": "q0023",
+            "required": true,
+            "rowQuestion": {
+              "title": "Sinh background & hoạ tiết bằng AI"
+            }
+          },
+          {
+            "questionId": "q0024",
+            "required": true,
+            "rowQuestion": {
+              "title": "Sinh ảnh quà và icon"
+            }
+          },
+          {
+            "questionId": "q0025",
+            "required": true,
+            "rowQuestion": {
+              "title": "Xuất Figma component set"
+            }
+          },
+          {
+            "questionId": "q0026",
+            "required": true,
+            "rowQuestion": {
+              "title": "Xuất demo HTML bấm được"
+            }
+          },
+          {
+            "questionId": "q0027",
+            "required": true,
+            "rowQuestion": {
+              "title": "Xuất PDF / slide bàn giao (sơ đồ screen + ảnh preview + spec)"
+            }
+          }
+        ],
+        "grid": {
+          "columns": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Rất cần"
+              },
+              {
+                "value": "Cần"
+              },
+              {
+                "value": "Chưa rõ"
+              },
+              {
+                "value": "Không cần"
+              },
+              {
+                "value": "Không áp dụng"
+              }
+            ]
+          },
+          "shuffleQuestions": false
+        }
+      }
+    },
+    {
+      "itemId": "q0028",
+      "title": "Bạn muốn đưa gì vào làm đầu vào cho pipeline?",
+      "questionItem": {
+        "question": {
+          "questionId": "q0029",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Mô tả ý tưởng bằng chữ"
+              },
+              {
+                "value": "Chọn loại game từ danh sách có sẵn"
+              },
+              {
+                "value": "Brand kit (màu, font, logo)"
+              },
+              {
+                "value": "Danh sách quà & tỉ lệ trúng"
+              },
+              {
+                "value": "Mascot / character có sẵn"
+              },
+              {
+                "value": "Ảnh reference / moodboard"
+              },
+              {
+                "value": "Thể lệ & nội dung copy"
+              },
+              {
+                "value": "Nền tảng đích (web, app, WebView)"
+              },
+              {
+                "value": "Deadline"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002a",
+      "title": "Bạn muốn pipeline nhả ra bản hoàn thiện đến mức nào?",
+      "description": "Trả lời theo mức bạn thật sự muốn kiểm soát, không theo mức nghe tham vọng nhất.",
+      "questionItem": {
+        "question": {
+          "questionId": "q002b",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Chỉ khung wireframe — art tôi tự làm hết"
+              },
+              {
+                "value": "Khung + component đã đúng brand, chưa có art"
+              },
+              {
+                "value": "Gần hoàn chỉnh, tôi chỉnh lại nhiều"
+              },
+              {
+                "value": "Gần như xong, chỉ sửa chi tiết nhỏ"
+              },
+              {
+                "value": "Xong hẳn, không cần sửa"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002c",
+      "title": "Có phần nào bạn cho rằng KHÔNG nên để pipeline tự làm?",
+      "questionItem": {
+        "question": {
+          "questionId": "q002d",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Cơ chế game & tỉ lệ trúng"
+              },
+              {
+                "value": "Hướng art & concept"
+              },
+              {
+                "value": "Character / mascot"
+              },
+              {
+                "value": "Màu sắc & typography"
+              },
+              {
+                "value": "Nội dung, thể lệ, câu chữ"
+              },
+              {
+                "value": "Bố cục screen chính"
+              },
+              {
+                "value": "Animation & cảm giác chuyển động"
+              },
+              {
+                "value": "Kiểm tra pháp lý & điều khoản"
+              },
+              {
+                "value": "Không có phần nào — tự động được hết thì càng tốt",
+                "_exclusive": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_issues",
+      "title": "Phần 7 · Chỗ đang tắc",
+      "pageBreakItem": {}
+    },
+    {
+      "itemId": "q002e",
+      "title": "Làm campaign game hiện tại vướng gì?",
+      "questionItem": {
+        "question": {
+          "questionId": "q002f",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Deadline quá ngắn so với lượng screen"
+              },
+              {
+                "value": "Brief đổi giữa đường"
+              },
+              {
+                "value": "Thể lệ chốt muộn nên UI phải sửa"
+              },
+              {
+                "value": "Danh sách quà đến muộn"
+              },
+              {
+                "value": "Thiếu state (hết quà, lỗi, hết hạn) đến cuối mới phát hiện"
+              },
+              {
+                "value": "Mỗi game lại dựng lại component từ đầu"
+              },
+              {
+                "value": "Không có thư viện dùng lại"
+              },
+              {
+                "value": "Bàn giao cho dev phải qua lại nhiều lần"
+              },
+              {
+                "value": "Không khớp giữa Figma và game chạy thật"
+              },
+              {
+                "value": "Asset nặng, game tải chậm"
+              },
+              {
+                "value": "Không vướng gì đáng kể",
+                "_exclusive": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002g",
+      "title": "Phần nào lặp lại nhiều nhất giữa các campaign game?",
+      "description": "Không bắt buộc. Càng cụ thể càng tốt — đây là phần đầu tiên pipeline nên làm.",
+      "questionItem": {
+        "question": {
+          "questionId": "q002h",
+          "required": false,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002i",
+      "title": "Team đã có thư viện hoặc template dùng lại cho campaign game chưa?",
+      "questionItem": {
+        "question": {
+          "questionId": "q002j",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có, được tổ chức tốt và ai cũng dùng"
+              },
+              {
+                "value": "Có nhưng mỗi người một bản riêng"
+              },
+              {
+                "value": "Có nhưng cũ, tìm lại mất thời gian hơn làm mới"
+              },
+              {
+                "value": "Chưa có"
+              },
+              {
+                "value": "Không rõ"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_end",
+      "title": "Phần 8 · Ý kiến thêm",
+      "pageBreakItem": {},
+      "description": "Tất cả câu ở phần này đều không bắt buộc."
+    },
+    {
+      "itemId": "q002k",
+      "title": "Bạn hình dung pipeline này lý tưởng thì dùng như thế nào? Mô tả một lần dùng cụ thể.",
+      "questionItem": {
+        "question": {
+          "questionId": "q002l",
+          "required": false,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002m",
+      "title": "Có câu nào trong khảo sát này bạn thấy khó hiểu hoặc không khớp với thực tế của bạn?",
+      "questionItem": {
+        "question": {
+          "questionId": "q002n",
+          "required": false,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002o",
+      "title": "Bạn có muốn dùng thử sớm và góp ý trực tiếp không?",
+      "questionItem": {
+        "question": {
+          "questionId": "q002p",
+          "required": false,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có"
+              },
+              {
+                "value": "Tuỳ, nếu không ảnh hưởng deadline"
+              },
+              {
+                "value": "Không"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002q",
+      "title": "Tên hoặc nickname",
+      "description": "Không bắt buộc.",
+      "questionItem": {
+        "question": {
+          "questionId": "q002r",
+          "required": false,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002s",
+      "title": "Email hoặc Slack handle",
+      "description": "Không bắt buộc.",
+      "questionItem": {
+        "question": {
+          "questionId": "q002t",
+          "required": false,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    }
+  ]
+}

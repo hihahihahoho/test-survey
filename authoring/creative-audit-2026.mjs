@@ -46,10 +46,24 @@ const TASKS = [
   "Làm biến thể từ template", "Resize & xuất đa tỷ lệ", "Bàn giao asset cho dev"
 ];
 
+const GATE_G = "Bạn có làm ảnh tĩnh, illustration, graphic hoặc icon không?";
+const GATE_M = "Bạn có làm animation, motion graphic hoặc video không?";
+const GATE_3 = "Bạn có làm 3D hoặc asset game không?";
+const GATE_X = "Bạn muốn làm gì tiếp?";
+const MORE = "Trả lời thêm phần mở (khoảng 4 phút)";
+
 export const meta = {
   id: "creative-audit-2026",
   name: "Hiện trạng công việc & công cụ — Creative Team",
-  note: "Đo tỷ trọng công việc, bản đồ công cụ theo công đoạn, và điểm yếu của công cụ hiện tại."
+  note: "Đo tỷ trọng công việc, bản đồ công cụ theo công đoạn, và điểm yếu của công cụ hiện tại.",
+  /* build.mjs mô phỏng từng nhánh này để chắc không phần nào bị bỏ sót hay lặp */
+  testPaths: {
+    "chỉ graphic":  { [GATE_G]: "Có",    [GATE_M]: "Không", [GATE_3]: "Không", [GATE_X]: MORE },
+    "chỉ motion":   { [GATE_G]: "Không", [GATE_M]: "Có",    [GATE_3]: "Không", [GATE_X]: MORE },
+    "chỉ 3D":       { [GATE_G]: "Không", [GATE_M]: "Không", [GATE_3]: "Có",    [GATE_X]: MORE },
+    "cả ba mảng":   { [GATE_G]: "Có",    [GATE_M]: "Có",    [GATE_3]: "Có",    [GATE_X]: MORE },
+    "gửi luôn":     { [GATE_G]: "Có",    [GATE_M]: "Không", [GATE_3]: "Không", [GATE_X]: "Gửi luôn" }
+  }
 };
 
 export function build() {
@@ -93,6 +107,11 @@ export function build() {
          "Website / landing page", "Video / TVC", "Print / OOH", "Brand asset / pitch deck",
          "__OTHER__"],
         { req: true, desc: "Chọn tất cả những kênh áp dụng." }),
+      RADIO("Bạn có tham gia làm campaign mini-game không? (vòng xoay, thẻ cào, quiz, bắt vật rơi…)",
+        ["Có, thường xuyên", "Có, thỉnh thoảng", "Không"],
+        { req: true,
+          desc: "Chỉ để biết ai nên nhận khảo sát riêng về pipeline UI kit cho campaign game. " +
+                "Khảo sát này không hỏi sâu về phần đó." }),
 
       /* ===================== P2 · Khối lượng (1/2) ===================== */
       PAGE("sec_work_static", "Phần 2 · Khối lượng công việc (1/2)",
@@ -188,7 +207,7 @@ export function build() {
       /* ===================== Gate A ===================== */
       PAGE("sec_gate_graphic", "Phần 5 · Bạn làm những mảng nào?",
         "Ba câu hỏi lọc, để bỏ qua những phần không liên quan đến bạn."),
-      RADIO("Bạn có làm ảnh tĩnh, illustration, graphic hoặc icon không?",
+      RADIO(GATE_G,
         [{ value: "Có", goTo: "NEXT" }, { value: "Không", goTo: "sec_gate_motion" }], { req: true }),
 
       /* ===================== Module Graphic ===================== */
@@ -212,7 +231,7 @@ export function build() {
 
       /* ===================== Gate B ===================== */
       PAGE("sec_gate_motion", "Phần 5 · Mảng chuyển động"),
-      RADIO("Bạn có làm animation, motion graphic hoặc video không?",
+      RADIO(GATE_M,
         [{ value: "Có", goTo: "NEXT" }, { value: "Không", goTo: "sec_gate_3d" }], { req: true }),
 
       /* ===================== Module Motion ===================== */
@@ -232,7 +251,7 @@ export function build() {
 
       /* ===================== Gate C ===================== */
       PAGE("sec_gate_3d", "Phần 5 · Mảng 3D & game"),
-      RADIO("Bạn có làm 3D hoặc asset game không?",
+      RADIO(GATE_3,
         [{ value: "Có", goTo: "NEXT" }, { value: "Không", goTo: "sec_weak" }], { req: true }),
 
       /* ===================== Module 3D / Game ===================== */
@@ -317,7 +336,8 @@ export function build() {
          "Upscale & sharpen",
          "Xuất đủ format & density (@1x/@2x/@3x, PNG/WebP/SVG)",
          "Đặt tên file theo convention & đóng gói bàn giao",
-         "Kiểm tra tự động trước bàn giao (safe area, font, size, color profile)"],
+         "Kiểm tra tự động trước bàn giao (safe area, font, size, color profile)",
+         "Xuất PDF / slide bàn giao (ảnh preview + spec + changelog)"],
         NEED, { req: true }),
       GRID("Chuyển động & nhân vật",
         ["Đổi text, ảnh, màu trên template motion có sẵn",
@@ -344,6 +364,7 @@ export function build() {
          "Animation chạy sai trên app", "Lottie dùng feature platform không hỗ trợ",
          "Thiếu linked asset hoặc thiếu font", "Phải export lại nhiều lần",
          "Không biết version nào là mới nhất",
+         "Phải tự dựng PDF / slide trình bày mỗi lần bàn giao",
          { value: "Không gặp vấn đề đáng kể", exclusive: true }], { req: true }),
       RADIO("Một tuần bạn phải export lại vì sai spec khoảng bao nhiêu lần?",
         ["0", "1–2", "3–5", "6–10", "Trên 10", "Không rõ"], { req: true }),
@@ -355,8 +376,8 @@ export function build() {
       PAGE("sec_gate_extra", "Xong phần chính — cảm ơn bạn",
         "Đến đây là đã đủ dữ liệu cho phần định lượng. Còn khoảng 4 phút câu mở, " +
         "hoàn toàn tuỳ bạn. Nếu đang gấp, cứ gửi luôn."),
-      RADIO("Bạn muốn làm gì tiếp?",
-        [{ value: "Trả lời thêm phần mở (khoảng 4 phút)", goTo: "NEXT" },
+      RADIO(GATE_X,
+        [{ value: MORE, goTo: "NEXT" },
          { value: "Gửi luôn", goTo: "SUBMIT" }], { req: true }),
 
       /* ===================== P10 · Phần mở ===================== */

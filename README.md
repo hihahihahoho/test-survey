@@ -23,21 +23,23 @@ Nếu vẫn muốn double-click `index.html`, sang tab **JSON → Mở file…**
 ```
 authoring/
   helpers.mjs               cú pháp gọn (TXT/RADIO/CHECK/GRID/PAGE…) + lint + mô phỏng skip-logic
-  creative-audit-2026.mjs   bộ câu hỏi — SỬA Ở ĐÂY
+  creative-audit-2026.mjs      hiện trạng công việc & công cụ — SỬA Ở ĐÂY
+  game-uikit-pipeline-2026.mjs pipeline UI kit cho campaign mini-game
 build.mjs                   authoring/*.mjs → surveys/*.json + manifest.json
 surveys/
   manifest.json             danh sách survey cho picker trên toolbar
-  creative-audit-2026.json  dữ liệu app (Forms API v1 + field mở rộng _exclusive)
+  *.json                    dữ liệu app (Forms API v1 + field mở rộng _exclusive)
   google/                   bản đã strip, đưa thẳng sang Google Forms (node build.mjs --google)
 index.html                  engine + trình xem + bộ sinh Apps Script (không chứa nội dung câu hỏi)
+test/render.test.mjs        chặn regression CSS & cấu trúc DOM
 test/engine.test.mjs        test engine trên JSON đã build
-test/appsscript.test.mjs    chạy script .gs sinh ra với FormApp giả
+test/appsscript.test.mjs    chạy script .gs sinh ra với FormApp giả (mọi survey)
 ```
 
 Test (không cần browser, không gọi Google):
 
 ```bash
-node build.mjs --google && node test/engine.test.mjs && node test/appsscript.test.mjs
+npm test
 ```
 
 ## Deploy (Cloudflare Pages)
@@ -62,11 +64,28 @@ Trang này là **demo tĩnh để duyệt câu hỏi** — không thu câu trả
 để kiểm tra logic; dữ liệu không rời khỏi trình duyệt. Muốn thu thật thì dùng tab Apps Script
 tạo Google Form.
 
+## Hai survey hiện có
+
+| Survey | Đối tượng | Dài | Mục tiêu |
+|---|---|---|---|
+| `creative-audit-2026` | Cả creative team | ~15 phút | Tỷ trọng công việc, bản đồ công cụ theo công đoạn, điểm yếu công cụ |
+| `game-uikit-pipeline-2026` | Ai làm campaign mini-game — kể cả dev, QA, PM, marketing | ~12 phút | Bộ screen & component tối thiểu, định dạng bàn giao cần thiết, mức tự động hoá mong muốn |
+
+Survey game tách riêng, không nhét thành một phần của survey kia, vì: survey kia đã đầy ở mức
+15 phút; và đối tượng khác nhau — câu về định dạng bàn giao và engine phải có **dev** trả lời,
+câu về thể lệ và quà phải có **PM/marketing**, không chỉ designer.
+
+Survey `creative-audit-2026` có một câu sàng lọc *"Bạn có tham gia làm campaign mini-game
+không?"* để biết ai nên nhận survey thứ hai. Survey game cũng tự sàng lọc ở câu đầu: trả lời
+"Không tham gia" là gửi form luôn.
+
 ## Thêm survey mới
 
 1. Tạo `authoring/<id>.mjs`, export `meta` (có `id`, `name`, `note`) và `build()`.
-2. `node build.mjs` — tự cập nhật `surveys/` và `manifest.json`.
-3. Reload trang, chọn survey mới ở dropdown trên toolbar.
+2. Khai `meta.testPaths` = `{ nhãn: { "tiêu đề câu lọc": "đáp án" } }` nếu survey có skip-logic —
+   `build.mjs` sẽ mô phỏng từng nhánh để chắc không phần nào bị bỏ sót hay lặp vô hạn.
+3. `node build.mjs` — tự cập nhật `surveys/` và `manifest.json`.
+4. Reload trang, chọn survey mới ở dropdown trên toolbar.
 
 ## Ba tab
 
