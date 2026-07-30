@@ -338,7 +338,7 @@ let game;
 function boot() {
   if (game) game.destroy(true);
   document.getElementById("game").innerHTML = "";
-  game = new Phaser.Game({
+  game = window.game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: "game",
     width: W, height: H,
@@ -417,6 +417,92 @@ function addTurn() {
 }
 
 boot();
+
+/* =============================================================================
+   Cầu nối CANVAS → FIGMA: dựng lại scene đang chạy thành DOM.
+
+   Canvas là hộp đen với mọi DOM capturer (html.to.design, figma-h2d) — chụp
+   canvas chỉ ra MỘT ảnh bẹt. Nhưng Phaser biết hết display list: sprite nào,
+   frame atlas nào, toạ độ, scale, alpha, text gì. Hàm này walk display list
+   của scene đang active và dựng một bản DOM tương đương:
+     · Image (atlas "kit") → <div> crop đúng vùng cutX/cutY của atlas.png
+       (kể cả trim offset spriteSourceSize) — mỗi sprite một layer
+     · Text → <div> đúng font/size/màu — thành text layer thật
+     · Rectangle (overlay mờ) → <div> nền rgba
+   figma-export/capture.mjs gọi hàm này qua playwright rồi đưa replica cho
+   figma-h2d chụp ra IR. KHÔNG dùng cho gameplay — chỉ để export.
+   ========================================================================== */
+window.__figmaDOM = function () {
+  const scene = ["Play", "Home", "Preload"].map(k => game.scene.getScene(k))
+    .find(s => s && s.scene.isActive());
+  if (!scene) throw new Error("không có scene active");
+
+  const atlasSrc = `kits/${STYLE}/atlas.png`;
+  const atlasTex = game.textures.get("kit");
+  const atlasImg = atlasTex.getSourceImage();
+  const AW = atlasImg.width, AH = atlasImg.height;
+
+  const root = document.createElement("div");
+  root.id = "figma-canvas-root";
+  root.style.cssText = `position:fixed;left:0;top:0;width:${W}px;height:${H}px;` +
+    "overflow:hidden;background:#0d1330;z-index:-1;font-family:Arial";
+  document.body.appendChild(root);
+
+  const put = el => root.appendChild(el);
+
+  function walk(list, ox, oy, sx, sy, alpha) {
+    for (const go of list) {
+      if (!go.visible) continue;
+      const a = alpha * (go.alpha ?? 1);
+      if (go.type === "Container") {
+        walk(go.list, ox + go.x * sx, oy + go.y * sy, sx * go.scaleX, sy * go.scaleY, a);
+        continue;
+      }
+      const x = ox + go.x * sx, y = oy + go.y * sy;
+
+      if (go.type === "Image" && go.frame && go.frame.texture === atlasTex) {
+        const f = go.frame;
+        const gsx = go.scaleX * sx, gsy = go.scaleY * sy;
+        const boxW = go.width * gsx, boxH = go.height * gsy;   // sourceSize box
+        const left = x - boxW * go.originX + f.x * gsx;        // f.x/f.y = trim offset
+        const top = y - boxH * go.originY + f.y * gsy;
+        const d = document.createElement("div");
+        d.dataset.frame = f.name;
+        d.style.cssText =
+          `position:absolute;left:${left.toFixed(1)}px;top:${top.toFixed(1)}px;` +
+          `width:${(f.cutWidth * gsx).toFixed(1)}px;height:${(f.cutHeight * gsy).toFixed(1)}px;` +
+          `background-image:url("${atlasSrc}");` +
+          `background-position:${(-f.cutX * gsx).toFixed(1)}px ${(-f.cutY * gsy).toFixed(1)}px;` +
+          `background-size:${(AW * gsx).toFixed(1)}px ${(AH * gsy).toFixed(1)}px;` +
+          `opacity:${a.toFixed(3)}`;
+        put(d);
+      } else if (go.type === "Text") {
+        const st = go.style;
+        const d = document.createElement("div");
+        d.textContent = go.text;
+        d.style.cssText =
+          `position:absolute;left:${(x - go.displayWidth * go.originX).toFixed(1)}px;` +
+          `top:${(y - go.displayHeight * go.originY).toFixed(1)}px;` +
+          `font-size:${parseFloat(st.fontSize)}px;font-weight:900;` +
+          `font-family:${st.fontFamily};color:${st.color};` +
+          `white-space:pre-line;text-align:center;line-height:1.15;` +
+          `width:${go.displayWidth.toFixed(1)}px;opacity:${a.toFixed(3)}`;
+        put(d);
+      } else if (go.type === "Rectangle") {
+        const d = document.createElement("div");
+        const rw = go.width * go.scaleX * sx, rh = go.height * go.scaleY * sy;
+        const c = go.fillColor ?? 0, fa = (go.fillAlpha ?? 1) * a;
+        d.style.cssText =
+          `position:absolute;left:${(x - rw * go.originX).toFixed(1)}px;` +
+          `top:${(y - rh * go.originY).toFixed(1)}px;width:${rw.toFixed(1)}px;height:${rh.toFixed(1)}px;` +
+          `background:rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${fa.toFixed(3)})`;
+        put(d);
+      }
+    }
+  }
+  walk(scene.children.list, 0, 0, 1, 1, 1);
+  return root;
+};
 </script>
 </body>
 </html>
