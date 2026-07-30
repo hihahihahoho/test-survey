@@ -25,8 +25,12 @@ for s in cfg["styles"]:
             if sh["id"] != "bg" else
             "The two background scenes each fill their own half of the image completely, edge to edge, with a thin 24px gap between them.",
             "",
-            "BACKGROUND of the sheet: fully TRANSPARENT (PNG alpha channel). If transparency is not supported,",
-            f"use one flat solid background color: {s['bg']} — no gradient, no texture, no pattern, no grid lines.",
+            f"BACKGROUND of the sheet: one flat solid chroma-key color: {s['bg']}.",
+            "No gradient, no texture, NO checkerboard or transparency pattern, no grid lines.",
+            "This exact background color must NEVER appear inside any element — pick element colors far from it.",
+            "",
+            "SIZING: every element is drawn at a CONSISTENT scale — each fills about 70-80% of its",
+            "cell's width (or height for tall elements), so all elements look uniform in size.",
             "",
             "ABSOLUTELY NO TEXT: no letters, no digits, no words, no characters of any language",
             "anywhere in the image. All faces, banners, buttons, plates and screens are BLANK — text will",
@@ -52,7 +56,7 @@ PY
 run_one() {
   local job="$1"
   local task
-  task="Generate ONE image with your image generation tool, landscape (1536x1024 if supported), using EXACTLY the prompt between the IMAGE PROMPT markers below. IMPORTANT: request a TRANSPARENT background (PNG with alpha) if your tool supports it. Then save/copy the generated PNG to exactly this path: ${ROOT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
+  task="Generate ONE image with your image generation tool, landscape (1536x1024 if supported), using EXACTLY the prompt between the IMAGE PROMPT markers below. Then save/copy the generated PNG to exactly this path: ${ROOT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
 
 --- IMAGE PROMPT START ---
 $(cat "prompts/${job}.txt")

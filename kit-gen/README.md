@@ -57,13 +57,15 @@ Toàn bộ chữ là HTML đè lên asset trống — text đổi theo campaign 
 
 ## Điểm cần biết
 
-- Prompt yêu cầu **nền trong suốt + không chữ + ruột đặc**. Tool image-gen của codex trả
-  RGB không alpha, nhưng model vẽ nền caro "fake transparent" — slicer chroma-key theo
-  1–2 màu nền lấy từ viền sheet nên caro hay màu phẳng đều cắt được.
-- **Lấp lỗ oan**: fill trắng trong component (ô input…) trùng màu caro sẽ bị key nhầm →
-  vùng trong suốt nào nằm KÍN trong lòng component (không thông ra rìa sheet) được lấp lại
-  bằng pixel gốc. Đánh đổi: lỗ xuyên thật trong thiết kế (khe quai giỏ…) cũng bị lấp —
-  manifest ghi số pixel đã lấp để soát.
+- **Nền = màu chroma-key chát** (magenta cho style xanh, green cho style ấm — chọn ngoài
+  palette, prompt cấm dùng màu key trong element). Slicer matte theo công thức **Vlahos +
+  despill**: alpha đo bằng mức "nhiễm key" của từng pixel nên glow phai mượt không răng
+  cưa, ruột rỗng có chủ đích được rỗng thật, và viền không ám màu nền. Bài học: nền caro
+  "fake transparent" nhìn hay nhưng phá matte (mép gặm hình bàn cờ, ruột bị lấp caro) —
+  các chế độ cũ (binary + lấp lỗ) vẫn còn trong code làm đường lùi cho sheet nền nhạt.
+- **Canvas chuẩn hoá**: mỗi element xuất đúng kích thước ô của sheet (main 384×256,
+  tall 384×512, bg 768×1024), căn giữa — cùng element ở mọi style ra file cùng size,
+  layout demo không xô lệch. Ảnh gốc chưa cắt ở `raw/`, prompt từng sheet ở `prompts/`.
 - Model có thể vẽ lệch lưới hoặc gộp ô — slicer gán khối pixel về ô theo trọng tâm
   (connected-component), chịu được component tràn vạch lưới; `empty_cells` trong manifest
   là thước đo độ tin cậy.

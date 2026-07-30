@@ -1,26 +1,24 @@
 #!/usr/bin/env python3
 """
-Cắt sprite sheet UI kit thành từng asset đã crop + tách nền.
-Contract v3: MỖI STYLE CÓ NHIỀU SHEET (main 4x4, tall 4x2, bg 2x1) — element nào
+Cắt sprite sheet UI kit thành từng asset: tách nền alpha MỀM + chuẩn hoá canvas.
+Contract v3: mỗi style nhiều sheet (main 4x4, tall 4x2, bg 2x1) — element nào
 code cần điều khiển độc lập (progress track/fill, tab idle/active, túi đóng/mở)
 nằm ở ô riêng nên thành file riêng.
 
   raw/<style>-<sheet>.png
-      │  1. màu nền = median viền ngoài của cả sheet
-      │  2. chroma-key toàn sheet → alpha; thêm mask NGHIÊM (chỉ pixel đặc)
-      │  3. label các khối pixel liền nhau (connected components) trên mask nghiêm
-      │  4. gán mỗi khối về ô lưới chứa TRỌNG TÂM của nó; mỗi ô = hợp bbox các khối
-      │  5. crop + trim + đệm
+      │  1. màu nền = median viền ngoài của sheet
+      │  2. matte: nền KEY màu chát (magenta/green) → alpha MỀM theo khoảng cách
+      │     màu + un-mix màu nền khỏi viền (glow phai mượt, không răng cưa);
+      │     nền nhạt/caro kiểu cũ → binary key + lấp lỗ oan (đường lùi)
+      │  3. label khối pixel liền nhau trên mask nghiêm, gán khối về ô theo trọng tâm
+      │  4. mỗi element XUẤT TRÊN CANVAS CỐ ĐỊNH = kích thước ô của sheet, căn giữa
+      │     → cùng element ở mọi style ra file CÙNG KÍCH THƯỚC, layout không xô lệch
       ▼
-  kits/<style>/01-leaderboard.png … 12-progress.png   (RGBA, đã crop)
+  kits/<style>/01-btn-pill-red.png … 26-bg-blur.png   (RGBA, canvas đồng nhất)
 
-Vì sao không crop cứng theo lưới hay "nở bbox":
-  · crop cứng: component vẽ tràn vạch lưới sẽ bị chém cụt (giỏ quà tết mất nơ).
-  · nở bbox: hàng xóm cũng tràn vạch → chạm là nuốt nguyên hàng xóm (đã dính ở neon/candy).
-  · connected-component: khối của ai thuộc về người đó theo TRỌNG TÂM, kể cả khi
-    tràn vạch — miễn hai component không dính hẳn vào nhau.
-  · label trên mask NGHIÊM (ngưỡng cao) để glow nhạt (style neon) không bắc cầu
-    nối hai component thành một khối; glow quanh asset được giữ lại bằng HALO px.
+Vì sao matte mềm: glow là dải bán trong suốt — cắt alpha nhị phân là mép bị gặm
+răng cưa (nát); trên nền caro 2 tông còn gặm đúng hình bàn cờ. Nền key một màu
+chát + alpha ramp + un-mix là cách chuẩn của greenscreen.
 
 Tên file GIỐNG HỆT nhau giữa các style — đó là hợp đồng nội dung.
 Chạy:  python3 slice.py
@@ -30,10 +28,10 @@ from collections import deque
 from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_THRESHOLD = 52     # cutout: pixel cách màu nền hơn mức này là thuộc asset
-GROW_OFFSET = 60           # mask nghiêm mặc định = threshold + 60 (style ghi đè được)
-MIN_BLOB = 12              # khối nhỏ hơn (px) coi là nhiễu, bỏ
-HALO = 14                  # nới bbox để giữ glow/viền mềm quanh asset
+DEFAULT_THRESHOLD = 52   # tâm ramp: dưới lo → trong suốt, trên hi → đục hẳn
+GROW_OFFSET = 60         # mask nghiêm = threshold + 60 (style ghi đè bằng grow_threshold)
+MIN_BLOB = 12            # khối nhỏ hơn (px) coi là nhiễu
+HALO = 14                # nới bbox giữ glow quanh element
 PAD = 6
 
 cfg = json.load(open(os.path.join(HERE, "styles.json")))
@@ -43,9 +41,7 @@ for _sh in cfg["sheets"]:
 
 
 def border_colors(img, strip=8):
-    """Màu nền lấy từ viền ngoài sheet. Trả về 1 HOẶC 2 màu:
-    model hay vẽ nền caro 'fake transparent' (2 tông xám trắng xen kẽ) khi được
-    yêu cầu nền trong suốt — khi đó phải key cả hai tông, một màu là không đủ."""
+    """Màu nền từ viền ngoài sheet. 1 màu (key phẳng) hoặc 2 màu (caro kiểu cũ)."""
     w, h = img.size
     px = img.load()
     samples = []
@@ -57,31 +53,76 @@ def border_colors(img, strip=8):
             samples.append(px[x, y])
     samples.sort()
     c1 = samples[len(samples) // 2]
-    far = [s for s in samples
-           if math.dist(s, c1) > 30]
-    if len(far) > len(samples) * 0.05:      # có tông thứ hai thật sự (caro)
+    far = [s for s in samples if math.dist(s, c1) > 30]
+    if len(far) > len(samples) * 0.05:
         far.sort()
         return [c1, far[len(far) // 2]]
     return [c1]
 
 
-def alpha_sheet(img):
-    """Sheet có ALPHA THẬT (model gen nền trong suốt) — không cần chroma-key.
-    Mask nghiêm = pixel gần như đục hẳn, để glow bán trong suốt không nối
-    hai component thành một khối."""
-    rgba = img.convert("RGBA")
-    a = rgba.getchannel("A").tobytes()
-    strict = bytearray(len(a))
-    for i, v in enumerate(a):
-        if v >= 240:
-            strict[i] = 1
-    return rgba, strict
+def is_key_color(bgs):
+    """Nền là màu key chát (bão hoà cao, 1 màu) → dùng matte mềm, bỏ lấp lỗ."""
+    if len(bgs) != 1:
+        return False
+    r, g, b = bgs[0]
+    return max(r, g, b) - min(r, g, b) > 80
 
 
-def key_sheet(sheet, bgs, threshold, strict_threshold):
-    """Fallback khi sheet KHÔNG có alpha: chroma-key theo 1–2 màu nền
-    (2 màu = nền caro fake-transparent). d = khoảng cách tới màu nền GẦN NHẤT.
-    Trả về (RGBA đã tách nền, bytearray mask nghiêm)."""
+def matte_chroma(sheet, key):
+    """Chroma-key thực thụ theo Vlahos + DESPILL, cho nền key green/magenta.
+
+    Ramp theo khoảng-cách-màu là chưa đủ: glow bán trong suốt TRỘN với nền key
+    cho ra pixel "đủ xa" màu key → được giữ đục nguyên màu trộn → viền ám xanh
+    lá / hồng (đã dính). Vlahos đo thẳng mức "nhiễm key" của từng pixel:
+
+      green key:   spill = g - max(r, b)
+      magenta key: spill = min(r, b) - g
+      alpha = 1 - spill / SREF      (SREF = spill của màu key thuần đo từ nền)
+
+    Pixel key thuần → alpha 0 (kể cả ruột rỗng nằm kín — không cần thông ra
+    rìa). Pixel trộn → alpha đúng độ trong suốt thật. Rồi DESPILL: cắt phần
+    kênh key vượt trội để màu giữ lại không còn ám key.
+
+    Đánh đổi ghi rõ: element CÓ MÀU GẦN KEY (xanh lá trên nền green, tím trên
+    nền magenta) sẽ bị mờ/xỉn — vì vậy prompt đã cấm dùng màu key trong element
+    và key được chọn ngoài palette của style."""
+    kr, kg, kb = key
+    is_green = kg > max(kr, kb)
+    sref = max(40, (kg - max(kr, kb)) if is_green else (min(kr, kb) - kg))
+    w, h = sheet.size
+    out = Image.new("RGBA", (w, h))
+    strict = bytearray(w * h)
+    src, dst = sheet.load(), out.load()
+    for y in range(h):
+        row = y * w
+        for x in range(w):
+            r, g, b = src[x, y]
+            spill = (g - max(r, b)) if is_green else (min(r, b) - g)
+            if spill <= 0:
+                dst[x, y] = (r, g, b, 255)
+                strict[row + x] = 1
+                continue
+            a = 1 - spill / sref
+            if a <= 0.04:
+                continue                          # nền / gần nền → trong suốt
+            if is_green:
+                g = max(r, b)                     # despill: cắt green vượt trội
+            else:
+                m = spill // 2                    # despill magenta: hạ r và b
+                r = max(0, r - m)
+                b = max(0, b - m)
+            if a >= 1:
+                dst[x, y] = (r, g, b, 255)
+                strict[row + x] = 1
+            else:
+                dst[x, y] = (r, g, b, round(a * 255))
+                if a >= 0.95:
+                    strict[row + x] = 1
+    return out, strict
+
+
+def key_binary(sheet, bgs, threshold, strict_threshold):
+    """Đường lùi cho nền nhạt/caro (sheet cũ): binary key 1–2 màu nền."""
     w, h = sheet.size
     out = Image.new("RGBA", (w, h))
     strict = bytearray(w * h)
@@ -101,17 +142,21 @@ def key_sheet(sheet, bgs, threshold, strict_threshold):
     return out, strict
 
 
+def alpha_sheet(img):
+    """Sheet có alpha thật từ model — dùng thẳng."""
+    rgba = img.convert("RGBA")
+    a = rgba.getchannel("A").tobytes()
+    strict = bytearray(len(a))
+    for i, v in enumerate(a):
+        if v >= 240:
+            strict[i] = 1
+    return rgba, strict
+
+
 def fill_holes(keyed, sheet_rgb, W, H):
-    """Lấp các vùng trong suốt NẰM KÍN trong lòng component.
-
-    Nền thật luôn thông ra rìa sheet; vùng trong suốt không với tới rìa nghĩa là
-    chroma-key đã khoét oan ruột component (ô input trắng ≈ trắng caro của nền
-    fake-transparent). Flood-fill từ rìa qua các pixel trong suốt → phần trong
-    suốt còn lại là lỗ oan, khôi phục bằng pixel gốc.
-
-    Đánh đổi có chủ đích: lỗ xuyên thật sự trong thiết kế (khe quai giỏ…) cũng
-    bị lấp. Với UI component thì ruột đặc đúng nhiều hơn sai; ghi nhận số lỗ
-    đã lấp vào manifest để soát lại."""
+    """Chỉ dùng ở đường lùi nền nhạt: lấp vùng trong suốt nằm kín trong element
+    (ruột trắng bị key nhầm vì trắng ≈ nền). Nền key chát KHÔNG cần — và không
+    được dùng, vì nó sẽ lấp cả ruột rỗng có chủ đích (nút outline)."""
     dst = keyed.load()
     src = sheet_rgb.load()
     transparent = bytearray(W * H)
@@ -120,7 +165,6 @@ def fill_holes(keyed, sheet_rgb, W, H):
         for x in range(W):
             if dst[x, y][3] == 0:
                 transparent[row + x] = 1
-
     outside = bytearray(W * H)
     q = deque()
     for x in range(W):
@@ -140,7 +184,6 @@ def fill_holes(keyed, sheet_rgb, W, H):
         if x < W - 1 and transparent[i + 1] and not outside[i + 1]: outside[i + 1] = 1; q.append(i + 1)
         if y > 0 and transparent[i - W] and not outside[i - W]: outside[i - W] = 1; q.append(i - W)
         if y < H - 1 and transparent[i + W] and not outside[i + W]: outside[i + W] = 1; q.append(i + W)
-
     filled = 0
     for i in range(W * H):
         if transparent[i] and not outside[i]:
@@ -152,7 +195,7 @@ def fill_holes(keyed, sheet_rgb, W, H):
 
 
 def label_blobs(strict, W, H):
-    """BFS 4-hướng trên mask nghiêm → [(bbox, size, centroid)] cho từng khối."""
+    """BFS 4-hướng trên mask nghiêm → [(bbox, size, centroid)] từng khối."""
     seen = bytearray(W * H)
     blobs = []
     for start in range(W * H):
@@ -180,6 +223,20 @@ def label_blobs(strict, W, H):
     return blobs
 
 
+def normalize_canvas(piece, cw, ch):
+    """Đặt element lên canvas cố định (đúng kích thước ô), căn giữa.
+    Element tràn ô (bbox to hơn canvas) thì thu vừa, giữ tỷ lệ.
+    → cùng element ở mọi style ra file CÙNG kích thước; layout demo không xô lệch,
+    anchor chữ đè ổn định."""
+    if piece.width > cw or piece.height > ch:
+        k = min(cw / piece.width, ch / piece.height)
+        piece = piece.resize((max(1, round(piece.width * k)),
+                              max(1, round(piece.height * k))), Image.LANCZOS)
+    canvas = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+    canvas.paste(piece, ((cw - piece.width) // 2, (ch - piece.height) // 2), piece)
+    return canvas
+
+
 manifest = {"styles": {}}
 for style in cfg["styles"]:
     sid = style["id"]
@@ -199,6 +256,7 @@ for style in cfg["styles"]:
         raw_img = Image.open(src_path)
         W, H = raw_img.size
         cell_w, cell_h = W / COLS, H / ROWS
+        CW, CH = round(cell_w), round(cell_h)          # canvas chuẩn của sheet này
 
         has_alpha = "A" in raw_img.getbands() and raw_img.getchannel("A").getextrema()[0] < 128
         if has_alpha:
@@ -208,9 +266,13 @@ for style in cfg["styles"]:
         else:
             sheet_rgb = raw_img.convert("RGB")
             bg = border_colors(sheet_rgb)
-            keyed, strict = key_sheet(sheet_rgb, bg, threshold, strict_threshold)
-            filled = fill_holes(keyed, sheet_rgb, W, H)
-            mode = f"chroma-key {len(bg)} màu, lấp {filled}px lỗ oan"
+            if is_key_color(bg):
+                keyed, strict = matte_chroma(sheet_rgb, bg[0])
+                mode = f"matte Vlahos + despill, key {bg[0]}"
+            else:
+                keyed, strict = key_binary(sheet_rgb, bg, threshold, strict_threshold)
+                filled = fill_holes(keyed, sheet_rgb, W, H)
+                mode = f"binary {len(bg)} màu nhạt (đường lùi), lấp {filled}px"
         blobs = label_blobs(strict, W, H)
 
         cell_boxes = [None] * (COLS * ROWS)
@@ -230,14 +292,16 @@ for style in cfg["styles"]:
             l, t, r, b = box
             piece = keyed.crop((max(0, l - HALO - PAD), max(0, t - HALO - PAD),
                                 min(W, r + HALO + PAD), min(H, b + HALO + PAD)))
-            piece.save(os.path.join(out_dir, f"{comp['file']}.png"))
+            content = (piece.width, piece.height)
+            canvas = normalize_canvas(piece, CW, CH)
+            canvas.save(os.path.join(out_dir, f"{comp['file']}.png"))
             entry["assets"].append({"file": comp["file"] + ".png", "sheet": sh["id"],
-                                    "w": piece.width, "h": piece.height})
+                                    "canvas": [CW, CH], "content": list(content)})
             n_ok += 1
 
-        entry["sheets"][sh["id"]] = {"mode": mode, "bg_detected": bg,
+        entry["sheets"][sh["id"]] = {"mode": mode, "bg_detected": bg, "canvas": [CW, CH],
                                      "size": [W, H], "blobs": len(blobs), "cut": n_ok}
-        print(f"✓ {job}: {n_ok}/{len(sh['components'])}, {len(blobs)} khối, {mode}")
+        print(f"✓ {job}: {n_ok}/{len(sh['components'])} (canvas {CW}x{CH}), {len(blobs)} khối, {mode}")
 
     manifest["styles"][sid] = entry
     total = len(entry["assets"])
