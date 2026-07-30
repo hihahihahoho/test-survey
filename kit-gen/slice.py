@@ -225,16 +225,48 @@ def label_blobs(strict, W, H):
 
 def normalize_canvas(piece, cw, ch):
     """Đặt element lên canvas cố định (đúng kích thước ô), căn giữa.
-    Element tràn ô (bbox to hơn canvas) thì thu vừa, giữ tỷ lệ.
-    → cùng element ở mọi style ra file CÙNG kích thước; layout demo không xô lệch,
-    anchor chữ đè ổn định."""
+    Element tràn ô thì thu vừa, giữ tỷ lệ. Trả về (canvas, (w, h) ruột SAU scale)
+    — con số này đi vào manifest và atlas Phaser (spriteSourceSize)."""
     if piece.width > cw or piece.height > ch:
         k = min(cw / piece.width, ch / piece.height)
         piece = piece.resize((max(1, round(piece.width * k)),
                               max(1, round(piece.height * k))), Image.LANCZOS)
     canvas = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
     canvas.paste(piece, ((cw - piece.width) // 2, (ch - piece.height) // 2), piece)
-    return canvas
+    return canvas, (piece.width, piece.height)
+
+
+def pack_atlas(items, max_w=2048):
+    """Shelf-pack các mảnh RUỘT (đã crop chặt) thành 1 atlas + json Phaser.
+
+    Format JSON Hash của Phaser: frame = vị trí ruột trong atlas,
+    sourceSize = canvas chuẩn hoá, spriteSourceSize = vị trí ruột trong canvas
+    → Phaser tự bù đệm, sprite hành xử như ảnh canvas đầy đủ nhưng texture
+    chỉ tốn đúng phần ruột."""
+    items = sorted(items, key=lambda it: -it[1].height)
+    x = y = row_h = 0
+    placed = []
+    for name, tight, (W, H), (ox, oy) in items:
+        if x + tight.width > max_w:
+            x = 0
+            y += row_h + 2
+            row_h = 0
+        placed.append((name, tight, (W, H), (ox, oy), (x, y)))
+        x += tight.width + 2
+        row_h = max(row_h, tight.height)
+    atlas_h = y + row_h
+    atlas = Image.new("RGBA", (max_w, atlas_h), (0, 0, 0, 0))
+    frames = {}
+    for name, tight, (W, H), (ox, oy), (ax, ay) in placed:
+        atlas.paste(tight, (ax, ay))
+        frames[name] = {
+            "frame": {"x": ax, "y": ay, "w": tight.width, "h": tight.height},
+            "rotated": False, "trimmed": True,
+            "spriteSourceSize": {"x": ox, "y": oy, "w": tight.width, "h": tight.height},
+            "sourceSize": {"w": W, "h": H}
+        }
+    return atlas, {"frames": frames,
+                   "meta": {"image": "atlas.png", "size": {"w": max_w, "h": atlas_h}, "scale": "1"}}
 
 
 manifest = {"styles": {}}
@@ -244,6 +276,7 @@ for style in cfg["styles"]:
     strict_threshold = style.get("grow_threshold", threshold + GROW_OFFSET)
     out_dir = os.path.join(HERE, "kits", sid)
     entry = {"sheets": {}, "assets": [], "empty_cells": []}
+    atlas_items = []
 
     for sh in cfg["sheets"]:
         job = f"{sid}-{sh['id']}"
@@ -292,16 +325,26 @@ for style in cfg["styles"]:
             l, t, r, b = box
             piece = keyed.crop((max(0, l - HALO - PAD), max(0, t - HALO - PAD),
                                 min(W, r + HALO + PAD), min(H, b + HALO + PAD)))
-            content = (piece.width, piece.height)
-            canvas = normalize_canvas(piece, CW, CH)
+            canvas, (pw, ph) = normalize_canvas(piece, CW, CH)
             canvas.save(os.path.join(out_dir, f"{comp['file']}.png"))
+            ox, oy = (CW - pw) // 2, (CH - ph) // 2
+            atlas_items.append((comp["file"], canvas.crop((ox, oy, ox + pw, oy + ph)),
+                                (CW, CH), (ox, oy)))
             entry["assets"].append({"file": comp["file"] + ".png", "sheet": sh["id"],
-                                    "canvas": [CW, CH], "content": list(content)})
+                                    "canvas": [CW, CH], "content": [pw, ph]})
             n_ok += 1
 
         entry["sheets"][sh["id"]] = {"mode": mode, "bg_detected": bg, "canvas": [CW, CH],
                                      "size": [W, H], "blobs": len(blobs), "cut": n_ok}
         print(f"✓ {job}: {n_ok}/{len(sh['components'])} (canvas {CW}x{CH}), {len(blobs)} khối, {mode}")
+
+    if atlas_items:
+        atlas_img, atlas_json = pack_atlas(atlas_items)
+        atlas_img.save(os.path.join(out_dir, "atlas.png"))
+        json.dump(atlas_json, open(os.path.join(out_dir, "atlas.json"), "w"), indent=1)
+        entry["atlas"] = {"image": "atlas.png", "json": "atlas.json",
+                          "size": [atlas_img.width, atlas_img.height]}
+        print(f"  atlas {sid}: {atlas_img.width}x{atlas_img.height}, {len(atlas_items)} frame")
 
     manifest["styles"][sid] = entry
     total = len(entry["assets"])

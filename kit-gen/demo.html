@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Demo «Mở túi - Khui quà» — Game UI Kit v3</title>
+<title>Demo «Mở túi - Khui quà» — Phaser 4 + Game UI Kit</title>
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;min-height:100%}
   body{
     font-family:"Arial Rounded MT Bold","SF Pro Rounded",-apple-system,"Segoe UI",sans-serif;
     background:#14161d;color:#fff;
-    display:flex;flex-direction:column;align-items:center;gap:14px;padding:18px 10px 40px;
+    display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px 10px 40px;
   }
   .switcher{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
   .switcher button{
@@ -18,432 +18,405 @@
     font:600 13px/1 inherit;color:#fff;padding:8px 14px;border-radius:99px;
   }
   .switcher button[aria-pressed="true"]{background:#fff;color:#14161d;border-color:#fff}
-  .hint{font-size:11.5px;color:rgba(255,255,255,.55);text-align:center;max-width:560px}
+  .hint{font-size:11.5px;color:rgba(255,255,255,.55);text-align:center;max-width:600px}
+  .hint b{color:rgba(255,255,255,.8)}
 
-  /* ============ khung điện thoại 390×844 ============ */
+  /* khung điện thoại chứa canvas Phaser + lớp DOM overlay */
   .phone{
     position:relative;width:min(400px,96vw);aspect-ratio:390/844;
     border-radius:34px;overflow:hidden;border:6px solid #000;
     box-shadow:0 24px 60px rgba(0,0,0,.55);background:#0a0c14;
-    user-select:none;
   }
-  .stage{position:absolute;inset:0}
-  .layer{position:absolute;inset:0}
-  .bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-  .slot{position:absolute;display:flex;align-items:center;justify-content:center}
-  .slot>img{max-width:100%;max-height:100%}
-  .txt{position:absolute;font-weight:800;color:#fff;letter-spacing:.4px;white-space:nowrap;
-       text-shadow:0 2px 5px rgba(0,0,0,.6);pointer-events:none}
-  .clickable{cursor:pointer}
-  .clickable:active{transform:scale(.96)}
-  [hidden]{display:none !important}
+  #game{position:absolute;inset:0}
+  #game canvas{width:100% !important;height:100% !important}
 
-  /* ---------- header ---------- */
-  .hdr-btn{top:6.5%;width:12.5%;aspect-ratio:1;cursor:pointer}
-  .hdr-btn.back{left:4%} .hdr-btn.sound{right:4%}
-  .hdr-btn svg{position:absolute;width:46%;height:46%;fill:none;stroke:#fff;stroke-width:2.6;
-    stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
-  .hdr-btn .mute{position:absolute;width:58%;height:3px;background:#ff5566;border-radius:2px;
-    transform:rotate(-45deg);box-shadow:0 0 4px rgba(0,0,0,.6)}
-
-  /* ---------- title & đếm ngược ---------- */
-  .title{position:absolute;left:0;right:0;top:13.5%;text-align:center;pointer-events:none}
-  .title b{font-size:clamp(24px,7.6vw,33px);line-height:1.12;display:block;
-    text-shadow:0 3px 0 rgba(0,0,0,.35),0 8px 22px rgba(0,0,0,.5);letter-spacing:1px}
-  .title small{font-size:12px;font-weight:700;opacity:.95;display:block;margin-top:3px;
-    text-shadow:0 1px 3px rgba(0,0,0,.6)}
-  .cd{position:absolute;left:0;right:0;top:22.5%;display:flex;gap:6px;justify-content:center;
-    align-items:center;pointer-events:none}
-  .cd .unit{position:relative;width:11%;aspect-ratio:1}
-  .cd .unit img{width:100%;height:100%}
-  .cd .unit b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    font-size:clamp(15px,4.6vw,20px);text-shadow:0 2px 3px rgba(0,0,0,.55)}
-  .cd .unit small{position:absolute;left:0;right:0;bottom:-15px;text-align:center;font-size:9px;
-    font-weight:700;opacity:.9;text-shadow:0 1px 2px rgba(0,0,0,.7)}
-  .cd .colon{font-weight:800;font-size:18px;text-shadow:0 2px 3px rgba(0,0,0,.6)}
-
-  /* ---------- khay & túi ---------- */
-  .board{left:9%;top:29%;width:82%;aspect-ratio:1}
-  .packs{position:absolute;left:13%;top:31.5%;width:74%;height:26.5%;
-    display:grid;grid-template-columns:repeat(3,1fr);gap:4%}
-  .pack{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;
-    transition:transform .15s}
-  .pack img{max-width:100%;max-height:100%;filter:drop-shadow(0 5px 8px rgba(0,0,0,.35))}
-  .pack:hover{transform:translateY(-3%) scale(1.04)}
-
-  /* ---------- mascot + CTA ---------- */
-  .mascot-home{left:2%;bottom:15.5%;width:30%;height:24%;pointer-events:none}
-  .cta{left:22%;top:63.5%;width:56%;height:9.5%;cursor:pointer}
-  .cta .txt{font-size:clamp(17px,5.4vw,23px)}
-  .chip-turns{position:absolute;left:50%;top:73.5%;transform:translateX(-50%);
-    background:rgba(4,18,46,.72);border:1.5px solid rgba(255,255,255,.45);border-radius:99px;
-    font-size:12px;font-weight:700;padding:5px 14px;text-shadow:none}
-
-  /* ---------- tab bar ---------- */
-  .tabbar{position:absolute;left:0;right:0;bottom:0;height:10.5%;display:flex;
-    justify-content:space-around;align-items:center;padding:0 2%;
-    background:linear-gradient(180deg,transparent,rgba(0,0,10,.55) 40%)}
-  .tab{position:relative;width:22%;height:78%;cursor:pointer;display:flex;
-    align-items:center;justify-content:center}
-  .tab img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
-  .tab span{position:relative;font-size:9.5px;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,.8);
-    top:18%}
-  .tab svg{position:relative;width:26%;aspect-ratio:1;fill:#fff;top:-12%;
-    filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
-
-  /* ---------- loading ---------- */
-  .loadwrap{position:absolute;left:14%;width:72%;bottom:12%}
-  .progress{position:relative;width:100%;aspect-ratio:220/32}
-  .progress img.track{position:absolute;inset:0;width:100%;height:100%}
-  /* Fill lồng TRONG track: inset đo theo tỷ lệ track/fill của Figma gốc (204/220, 17/32).
-     Đổi % bằng clip-path trên khung .clip — KHÔNG scale <img>, để đầu bo tròn không méo. */
-  .progress .clip{position:absolute;left:4.5%;top:26%;width:91%;height:48%;
-    border-radius:999px;overflow:hidden;
-    clip-path:inset(0 calc(100% - var(--p,0)*1%) 0 0 round 999px)}
-  .progress .clip img{width:100%;height:100%}
-  .loadwrap .txt{position:static;display:block;text-align:center;margin-top:10px;font-size:12.5px}
-
-  /* ---------- gameplay ---------- */
-  .gp-stage{position:absolute;inset:0}
-  .gp-hint{position:absolute;left:0;right:0;top:20%;text-align:center;font-size:15px;
-    font-weight:800;text-shadow:0 2px 6px rgba(0,0,0,.8)}
-  .gp-chosen{position:absolute;left:28%;top:30%;width:44%;height:32%;cursor:pointer}
-  .gp-burst{position:absolute;left:14%;top:22%;width:72%;height:48%;pointer-events:none;
-    mix-blend-mode:screen;opacity:0;transition:opacity .25s}
-  .mascot-peek{position:absolute;right:-2%;bottom:9%;width:34%;height:26%;pointer-events:none}
-
-  /* ---------- popup ---------- */
-  .ovl{position:absolute;inset:0;background:rgba(2,10,30,.72);z-index:50;
-    display:flex;align-items:center;justify-content:center}
-  .glow{position:absolute;left:50%;top:55%;width:120%;aspect-ratio:2/1;transform:translate(-50%,-50%);
-    background:radial-gradient(ellipse,rgba(255,70,90,.5),transparent 70%);filter:blur(30px);
-    pointer-events:none}
-  .pop{position:relative;width:80%}
-  .pop.tall{aspect-ratio:361/524}
-  .pop.short{aspect-ratio:361/300}
-  .pop>img.panel{position:absolute;inset:0;width:100%;height:100%}
-  .pop .ribbon{position:absolute;left:50%;top:0;width:74%;height:17%;transform:translate(-50%,-55%)}
-  .pop .ribbon img{width:100%;height:100%;object-fit:contain}
-  .pop .ribbon .txt{font-size:clamp(13px,4vw,17px)}
-  .pop .art{position:absolute;left:20%;top:16%;width:60%;height:44%;display:flex;
-    align-items:center;justify-content:center}
-  .pop .art img.prize{position:relative;max-width:100%;max-height:100%;z-index:2;
-    filter:drop-shadow(0 6px 14px rgba(0,0,0,.4))}
-  .pop .art img.burst{position:absolute;inset:-18%;width:136%;height:136%;
-    mix-blend-mode:screen;z-index:1}
-  .pop .body{position:absolute;left:10%;right:10%;top:62%;text-align:center;font-size:13.5px;
-    font-weight:700;line-height:1.45;text-shadow:0 1px 3px rgba(0,0,0,.5)}
-  .pop .btns{position:absolute;left:0;right:0;bottom:0;transform:translateY(38%);
-    display:flex;gap:4%;justify-content:center}
-  .pop .pbtn{position:relative;width:42%;aspect-ratio:140/59;cursor:pointer}
-  .pop .pbtn img{width:100%;height:100%}
-  .pop .pbtn .txt{font-size:clamp(12px,3.6vw,15px)}
-  .pop.short .art{top:20%;height:34%}
-  .pop.short .body{top:58%}
-
-  /* ---------- màn phụ (tab) ---------- */
-  .subpage{position:absolute;inset:0}
-  .sub-title{position:absolute;left:0;right:0;top:7.2%;text-align:center;font-size:16px;
-    font-weight:800;text-shadow:0 2px 4px rgba(0,0,0,.6)}
-  .cards{position:absolute;left:5%;right:5%;top:14%;bottom:12%;overflow:auto;
-    display:flex;flex-direction:column;gap:10px;padding:4px}
-  .card{background:rgba(255,255,255,.94);color:#1c2333;border-radius:14px;padding:12px 14px;
-    display:flex;align-items:center;gap:10px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+  /* ---------- DOM overlay (màn phụ + form) — phần "hybrid" ---------- */
+  #dom{position:absolute;inset:0;z-index:10;display:none;flex-direction:column;
+    background:rgba(4,10,26,.55);backdrop-filter:blur(6px)}
+  #dom.show{display:flex}
+  #dom .bar{display:flex;align-items:center;gap:10px;padding:14px 14px 8px}
+  #dom .bar b{flex:1;text-align:center;font-size:16px;text-shadow:0 2px 4px rgba(0,0,0,.6)}
+  #dom .bar button{
+    border:0;background:rgba(255,255,255,.14);color:#fff;cursor:pointer;
+    width:38px;height:38px;border-radius:50%;font-size:16px;font-weight:800;
+  }
+  #dom .cards{flex:1;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:8px 14px 20px}
+  .card{background:rgba(255,255,255,.95);color:#1c2333;border-radius:14px;padding:12px 14px;
+    display:flex;align-items:center;gap:10px;box-shadow:0 4px 14px rgba(0,0,0,.3)}
   .card .info{flex:1;min-width:0}
   .card b{font-size:13px;display:block}
   .card small{font-size:11px;color:#5b6474}
-  .card .mini-progress{position:relative;width:100%;aspect-ratio:220/32;max-width:150px;margin-top:6px}
-  .card .obtn{position:relative;width:92px;aspect-ratio:132/44;cursor:pointer;flex:none}
-  .card .obtn img{width:100%;height:100%}
-  .card .obtn .txt{font-size:10.5px;color:#fff}
-  .card img.picon{width:44px;height:44px;object-fit:contain;flex:none}
+  .card img{width:46px;height:46px;object-fit:contain;flex:none}
+  .card .bar-track{position:relative;height:10px;border-radius:99px;background:#dfe4ee;
+    margin-top:8px;max-width:170px;overflow:hidden}
+  .card .bar-fill{position:absolute;inset:0;right:auto;border-radius:99px;
+    background:linear-gradient(180deg,#ffb056,#ff7a3c)}
+  .card button{
+    border:2px solid #2f6fed;background:#fff;color:#2f6fed;cursor:pointer;flex:none;
+    font:800 11px/1 inherit;padding:9px 12px;border-radius:99px;
+  }
+  .card input{width:100%;border:1.5px solid #c8d0de;border-radius:10px;padding:9px 10px;
+    font:600 13px/1.2 inherit;color:#1c2333;margin-top:8px}
+  .card .primary{background:#e8342c;border-color:#e8342c;color:#fff}
 </style>
 </head>
 <body>
 
 <div class="switcher" id="switcher"></div>
-<div class="hint">Demo flow «Mở túi - Khui quà» lắp từ asset AI-gen đã cắt tự động.
-Đổi style = đổi 1 đường dẫn thư mục. Mọi chữ là HTML — asset không chữ.</div>
+<div class="hint">Chạy trên <b>Phaser 4.2</b> (open source, MIT) — kit AI-gen nạp bằng
+<b>texture atlas trimmed</b> sinh tự động từ manifest. Đổi style = nạp atlas khác.
+Form/danh sách là DOM overlay (hybrid). Cần mở qua http (npm run dev), không mở file:// được.</div>
 
-<div class="phone"><div class="stage" id="stage"></div></div>
+<div class="phone">
+  <div id="game"></div>
+  <div id="dom">
+    <div class="bar"><button id="domBack">‹</button><b id="domTitle"></b><button id="domClose">✕</button></div>
+    <div class="cards" id="domCards"></div>
+  </div>
+</div>
 
+<script src="vendor/phaser.min.js"></script>
 <script>
 "use strict";
+/* =============================================================================
+   Cấu hình chung
+   ========================================================================== */
 const STYLES = [["ipay", "Fintech xanh"], ["candy", "Kẹo ngọt"], ["tet", "Tết"]];
-let style = "ipay";
-const src = n => `kits/${style}/${n}.png`;
-const $ = sel => document.querySelector(sel);
-const stage = document.getElementById("stage");
+let STYLE = localStorage.getItem("kit-style") || "ipay";
+const W = 390, H = 844, CX = W / 2;
+const state = { turns: 3 };
+const END_AT = Date.now() + (2 * 86400 + 11 * 3600 + 30 * 60) * 1000;
 
-/* trạng thái game */
-const state = { turns: 3, screen: "loading" };
+const kimg = n => `kits/${STYLE}/${n}.png`;
 
-const ICONS = {
-  back: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
-  sound: '<svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="#fff" stroke="none"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg>',
-  home: '<svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
-  task: '<svg viewBox="0 0 24 24" stroke="none"><path d="M5 3h14v18H5z" fill="none" stroke="#fff" stroke-width="2"/><path d="M8 8h8M8 12h8M8 16h5" stroke="#fff" stroke-width="2"/></svg>',
-  gift: '<svg viewBox="0 0 24 24" stroke="none"><path d="M4 9h16v12H4z M2 6h20v3H2z M12 6v15" fill="none" stroke="#fff" stroke-width="2"/></svg>',
-  clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>'
-};
-
-/* ===================== render từng màn ===================== */
-function img(a, cls = "") { return `<img data-a="${a}" ${cls ? `class="${cls}"` : ""}>`; }
-
-function renderLoading() {
-  stage.innerHTML = `
-    <img class="bg" data-a="25-bg-main">
-    <div class="title" style="top:30%"><b>MỞ TÚI<br>KHUI QUÀ</b><small>Quà xịn mỗi ngày</small></div>
-    <div class="slot" style="left:30%;top:44%;width:40%;height:22%">${img("17-mascot-idle")}</div>
-    <div class="loadwrap">
-      <div class="progress">${img("07-progress-track", "track")}
-        <div class="clip" id="loadClip">${img("08-progress-fill")}</div></div>
-      <span class="txt" id="loadTxt">Đang tải… 0%</span>
-    </div>`;
-  hydrate();
-  let p = 0;
-  const t = setInterval(() => {
-    p = Math.min(100, p + 2 + Math.random() * 6);
-    $("#loadClip").style.setProperty("--p", p);
-    $("#loadTxt").textContent = `Đang tải… ${Math.round(p)}%`;
-    if (p >= 100) { clearInterval(t); setTimeout(() => go("home"), 350); }
-  }, 60);
+/* =============================================================================
+   Boot: nạp trước track/fill để Preload có thanh progress thật
+   ========================================================================== */
+class Boot extends Phaser.Scene {
+  constructor() { super("Boot"); }
+  preload() {
+    this.load.image("boot-track", kimg("07-progress-track"));
+    this.load.image("boot-fill", kimg("08-progress-fill"));
+  }
+  create() { this.scene.start("Preload"); }
 }
 
-function packGrid(clickable) {
-  return `<div class="packs">${[0, 1, 2, 3, 4, 5].map(i =>
-    `<div class="pack" data-i="${i}" style="filter:hue-rotate(${i * 25}deg)">
-       ${img("20-game-object-closed")}</div>`).join("")}</div>`;
+/* =============================================================================
+   Preload: nạp atlas kit, thanh progress dùng chính track/fill của kit
+   ========================================================================== */
+class Preload extends Phaser.Scene {
+  constructor() { super("Preload"); }
+  preload() {
+    this.cameras.main.setBackgroundColor("#0d1330");
+    this.add.text(CX, H * 0.34, "MỞ TÚI\nKHUI QUÀ", {
+      fontFamily: "Arial Rounded MT Bold, Arial", fontSize: 44, fontStyle: "900",
+      color: "#ffffff", align: "center", stroke: "#0a1a4a", strokeThickness: 8
+    }).setOrigin(0.5);
+
+    const bw = 280;
+    const track = this.add.image(CX, H * 0.62, "boot-track");
+    track.setDisplaySize(bw, bw * track.height / track.width);
+    const fill = this.add.image(CX, H * 0.62, "boot-fill");
+    fill.setDisplaySize(bw, bw * fill.height / fill.width);
+    const pct = this.add.text(CX, H * 0.62 + 46, "0%", {
+      fontFamily: "Arial", fontSize: 15, fontStyle: "bold", color: "#cfe0ff"
+    }).setOrigin(0.5);
+
+    this.load.on("progress", p => {
+      fill.setCrop(0, 0, fill.width * p, fill.height);
+      pct.setText(Math.round(p * 100) + "%");
+    });
+
+    this.load.atlas("kit", `kits/${STYLE}/atlas.png`, `kits/${STYLE}/atlas.json`);
+  }
+  create() { this.time.delayedCall(250, () => this.scene.start("Home")); }
 }
 
-function renderHome() {
-  stage.innerHTML = `
-    <img class="bg" data-a="25-bg-main">
-    <div class="slot hdr-btn back clickable" title="Quay lại app">${img("04-btn-circle")}${ICONS.back}</div>
-    <div class="slot hdr-btn sound clickable" id="btnSound">${img("04-btn-circle")}${ICONS.sound}
-      <i class="mute" id="muteBar" hidden></i></div>
-    <div class="title"><b>MỞ TÚI KHUI QUÀ</b><small>Cùng iPAY săn quà Tết</small></div>
-    <div class="cd" id="cd"></div>
-    <div class="slot board">${img("22-board-panel")}</div>
-    ${packGrid(false)}
-    <div class="slot mascot-home">${img("17-mascot-idle")}</div>
-    <div class="slot cta clickable" id="btnPlay">${img("01-btn-pill-red")}<span class="txt">MỞ TÚI NGAY</span></div>
-    <div class="chip-turns" id="chipTurns"></div>
-    ${tabbar("home")}`;
-  hydrate();
-  renderCountdown();
-  updateTurns();
-  $("#btnPlay").onclick = () => state.turns > 0 ? go("gameplay") : popupNoTurns();
-  $("#btnSound").onclick = () => { const m = $("#muteBar"); m.hidden = !m.hidden; };
-  document.querySelectorAll(".pack").forEach(p => p.onclick = () =>
-    state.turns > 0 ? go("gameplay") : popupNoTurns());
+/* =============================================================================
+   Tiện ích dựng UI từ atlas
+   ========================================================================== */
+function sprite(scene, x, y, frame) { return scene.add.image(x, y, "kit", frame); }
+
+function fitW(img, w) { img.setScale(w / img.width); return img; }
+function fitH(img, h) { img.setScale(h / img.height); return img; }
+
+function label(scene, x, y, text, size, opts = {}) {
+  return scene.add.text(x, y, text, Object.assign({
+    fontFamily: "Arial Rounded MT Bold, Arial", fontSize: size, fontStyle: "900",
+    color: "#ffffff", align: "center",
+    stroke: opts.stroke ?? "#00000055", strokeThickness: opts.strokeThickness ?? 0,
+    shadow: { offsetY: 2, color: "#00000088", blur: 4, fill: true }
+  }, opts)).setOrigin(0.5);
 }
 
-function tabbar(active) {
-  const tabs = [["home", "Trang chủ", ICONS.home], ["task", "Nhiệm vụ", ICONS.task],
-                ["gift", "Giỏ quà", ICONS.gift], ["hist", "Lịch sử", ICONS.clock]];
-  return `<div class="tabbar">${tabs.map(([id, label, icon]) =>
-    `<div class="tab clickable" data-tab="${id}">
-       ${img(id === active ? "06-tab-chip-active" : "05-tab-chip-idle")}${icon}<span>${label}</span>
-     </div>`).join("")}</div>`;
+function pillButton(scene, x, y, frame, w, text, fontSize, onTap) {
+  const c = scene.add.container(x, y);
+  const img = fitW(scene.add.image(0, 0, "kit", frame), w);
+  const t = label(scene, 0, 0, text, fontSize);
+  c.add([img, t]);
+  c.setSize(w, img.displayHeight);
+  c.setInteractive({ useHandCursor: true });
+  c.on("pointerdown", () => scene.tweens.add({ targets: c, scale: 0.94, duration: 70, yoyo: true }));
+  if (onTap) c.on("pointerup", onTap);
+  return c;
 }
 
-function wireTabs() {
-  document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
-    const id = t.dataset.tab;
-    if (id === "home") go("home");
-    else go("sub", id);
+const PACK_TINTS = [0xffffff, 0x9fd0ff, 0xffc2d8, 0xffe29a, 0xb9f3c9, 0xd9c6ff];
+
+/* =============================================================================
+   Home
+   ========================================================================== */
+class Home extends Phaser.Scene {
+  constructor() { super("Home"); }
+  create() {
+    const bg = this.add.image(CX, H / 2, "kit", "25-bg-main");
+    bg.setDisplaySize(W, H);
+
+    label(this, CX, 92, "MỞ TÚI KHUI QUÀ", 34, { stroke: "#0a1a4a", strokeThickness: 8 });
+    label(this, CX, 128, "Cùng iPAY săn quà mỗi ngày", 13);
+
+    this.buildCountdown(180);
+
+    // khay + 6 túi
+    const board = fitW(sprite(this, CX, 430, "22-board-panel"), 330);
+    this.packs = [];
+    const gx = [-92, 0, 92], gy = [385, 480];
+    for (let i = 0; i < 6; i++) {
+      const p = fitH(sprite(this, CX + gx[i % 3], gy[(i / 3) | 0], "20-game-object-closed"), 105);
+      p.setTint(PACK_TINTS[i]);
+      p.setInteractive({ useHandCursor: true });
+      p.on("pointerup", () => this.tryPlay());
+      this.packs.push(p);
+    }
+
+    fitH(sprite(this, 56, 700, "17-mascot-idle"), 190);
+
+    pillButton(this, CX, 626, "01-btn-pill-red", 250, "MỞ TÚI NGAY", 25, () => this.tryPlay());
+    this.turnsTxt = label(this, CX, 676, "", 13);
+    this.updateTurns();
+
+    this.buildTabbar("home");
+  }
+
+  buildCountdown(y) {
+    const units = ["ngày", "giờ", "phút", "giây"];
+    this.cdTexts = [];
+    const xs = [CX - 117, CX - 39, CX + 39, CX + 117];
+    xs.forEach((x, i) => {
+      fitH(sprite(this, x, y, "11-digit-plate"), 52);
+      this.cdTexts.push(label(this, x, y, "00", 20));
+      label(this, x, y + 40, units[i], 10);
+      if (i) label(this, (x + xs[i - 1]) / 2, y, ":", 20);
+    });
+    const tick = () => {
+      let s = Math.max(0, Math.floor((END_AT - Date.now()) / 1000));
+      const d = [Math.floor(s / 86400), Math.floor(s / 3600) % 24, Math.floor(s / 60) % 60, s % 60];
+      this.cdTexts.forEach((t, i) => t.setText(String(d[i]).padStart(2, "0")));
+    };
+    tick();
+    this.time.addEvent({ delay: 1000, loop: true, callback: tick });
+  }
+
+  buildTabbar(active) {
+    const tabs = [["home", "Trang chủ", "🏠"], ["task", "Nhiệm vụ", "📋"],
+                  ["gift", "Giỏ quà", "🎁"], ["hist", "Lịch sử", "🕘"]];
+    tabs.forEach(([id, name, icon], i) => {
+      const x = 57 + i * 92, y = H - 52;
+      const chip = fitW(sprite(this, x, y, id === active ? "06-tab-chip-active" : "05-tab-chip-idle"), 72);
+      label(this, x, y - 10, icon, 18);
+      label(this, x, y + 16, name, 9.5);
+      const hit = this.add.zone(x, y, 86, 84).setInteractive({ useHandCursor: true });
+      hit.on("pointerup", () => id === "home" ? null : openDom(id));
+    });
+  }
+
+  updateTurns() { this.turnsTxt.setText(`Còn ${state.turns} lượt hôm nay`); }
+
+  tryPlay() {
+    if (state.turns <= 0) return this.noTurns();
+    this.scene.start("Play");
+  }
+
+  noTurns() {
+    const dim = this.add.rectangle(CX, H / 2, W, H, 0x020a1e, 0.72).setInteractive();
+    const c = this.add.container(CX, H / 2 - 20);
+    const panel = fitW(this.add.image(0, 0, "kit", "09-popup-panel-short"), 320);
+    const ribbon = fitW(this.add.image(0, -panel.displayHeight / 2, "kit", "10-popup-ribbon"), 230);
+    const mc = fitH(this.add.image(0, -26, "kit", "19-mascot-celebrate"), 130);
+    c.add([panel, ribbon, label(this, 0, -panel.displayHeight / 2, "HẾT LƯỢT", 17), mc,
+           label(this, 0, 58, "Bạn đã dùng hết lượt hôm nay.\nLàm nhiệm vụ để nhận thêm lượt nhé!", 12.5)]);
+    const btn = pillButton(this, 0, panel.displayHeight / 2 + 6, "02-btn-pill-blue", 150, "NHIỆM VỤ", 14,
+      () => { dim.destroy(); c.destroy(); openDom("task"); });
+    c.add(btn);
+    dim.on("pointerup", () => { dim.destroy(); c.destroy(); });
+  }
+}
+
+/* =============================================================================
+   Play: chọn túi → mở → kết quả
+   ========================================================================== */
+const PRIZES = [
+  { art: "14-reward-voucher",   title: "CHÚC MỪNG!", body: "Bạn nhận được 1 voucher ưu đãi.\nQuà đã vào Giỏ quà của bạn." },
+  { art: "15-reward-giftbox",   title: "CHÚC MỪNG!", body: "Bạn nhận được 1 phần quà.\nĐiền địa chỉ để nhận hàng nhé." },
+  { art: "19-mascot-celebrate", title: "TIẾC QUÁ!",  body: "Chúc bạn may mắn lần sau.\nLàm nhiệm vụ để có thêm lượt." }
+];
+
+class Play extends Phaser.Scene {
+  constructor() { super("Play"); }
+  create() {
+    this.add.image(CX, H / 2, "kit", "26-bg-blur").setDisplaySize(W, H);
+    label(this, CX, 150, "Chọn một túi may mắn", 20, { stroke: "#0a1a4a", strokeThickness: 6 });
+
+    fitW(sprite(this, CX, 430, "22-board-panel"), 330);
+    const gx = [-92, 0, 92], gy = [385, 480];
+    this.packs = [];
+    for (let i = 0; i < 6; i++) {
+      const p = fitH(sprite(this, CX + gx[i % 3], gy[(i / 3) | 0], "20-game-object-closed"), 105);
+      p.setTint(PACK_TINTS[i]);
+      p.setInteractive({ useHandCursor: true });
+      p.on("pointerup", () => this.choose(i));
+      this.packs.push(p);
+    }
+    this.mascot = fitH(sprite(this, W - 52, H - 160, "18-mascot-peek"), 200);
+  }
+
+  choose(i) {
+    this.packs.forEach((p, j) => {
+      p.disableInteractive();
+      if (j !== i) this.tweens.add({ targets: p, alpha: 0.15, scale: p.scale * 0.85, duration: 250 });
+    });
+    const p = this.packs[i];
+    this.tweens.add({
+      targets: p, x: CX, y: 400, scale: 260 / p.height * p.scale / (p.displayHeight / p.height),
+      duration: 420, ease: "Back.Out",
+      onComplete: () => {
+        label(this, CX, 170, "Chạm để mở túi!", 16);
+        p.setInteractive({ useHandCursor: true });
+        p.once("pointerup", () => this.open(p));
+      }
+    });
+  }
+
+  open(p) {
+    const burst = sprite(this, p.x, p.y, "16-fx-burst").setBlendMode(Phaser.BlendModes.ADD)
+      .setAlpha(0).setScale(0.4);
+    burst.setDepth(p.depth - 1);
+    p.setTexture("kit", "21-game-object-open");
+    this.cameras.main.flash(220, 255, 255, 220);
+    this.tweens.add({ targets: burst, alpha: 1, scale: 1.6, angle: 25, duration: 500, ease: "Cubic.Out" });
+    state.turns--;
+    this.time.delayedCall(620, () => this.result());
+  }
+
+  result() {
+    const prize = PRIZES[(Math.random() * PRIZES.length) | 0];
+    this.add.rectangle(CX, H / 2, W, H, 0x020a1e, 0.74).setInteractive();
+
+    const c = this.add.container(CX, H / 2 + 500);   // trượt từ dưới lên
+    const panel = fitW(this.add.image(0, 0, "kit", "24-popup-panel-tall"), 320);
+    const ph = panel.displayHeight;
+    const ribbon = fitW(this.add.image(0, -ph / 2, "kit", "10-popup-ribbon"), 240);
+    const burst = this.add.image(0, -ph * 0.12, "kit", "16-fx-burst")
+      .setBlendMode(Phaser.BlendModes.ADD).setScale(0.9);
+    const art = fitH(this.add.image(0, -ph * 0.12, "kit", prize.art), 170);
+    c.add([panel, burst, art, ribbon,
+           label(this, 0, -ph / 2, prize.title, 17),
+           label(this, 0, ph * 0.22, prize.body, 13)]);
+    c.add(pillButton(this, -80, ph / 2 + 4, "02-btn-pill-blue", 148, "GIỎ QUÀ", 14,
+      () => { openDom("gift"); }));
+    c.add(pillButton(this, 80, ph / 2 + 4, "01-btn-pill-red", 148, "TIẾP TỤC", 14,
+      () => this.scene.start(state.turns > 0 ? "Play" : "Home")));
+    this.tweens.add({ targets: c, y: H / 2 - 14, duration: 460, ease: "Back.Out" });
+    this.tweens.add({ targets: burst, angle: 360, duration: 14000, repeat: -1 });
+  }
+}
+
+/* =============================================================================
+   Khởi tạo game + switcher + DOM overlay
+   ========================================================================== */
+let game;
+function boot() {
+  if (game) game.destroy(true);
+  document.getElementById("game").innerHTML = "";
+  game = new Phaser.Game({
+    type: Phaser.AUTO,
+    parent: "game",
+    width: W, height: H,
+    backgroundColor: "#0d1330",
+    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+    scene: [Boot, Preload, Home, Play]
   });
 }
 
-function renderCountdown() {
-  const cd = $("#cd");
-  if (!cd) return;
-  const end = Date.now() + (2 * 24 * 3600 + 11 * 3600 + 30 * 60) * 1000;
-  const units = [["ngày", 0], ["giờ", 0], ["phút", 0], ["giây", 0]];
-  cd.innerHTML = units.map(([lbl], i) =>
-    `${i ? '<span class="colon">:</span>' : ""}
-     <span class="unit">${img("11-digit-plate")}<b data-u="${i}">0</b><small>${lbl}</small></span>`).join("");
-  hydrate(cd);
-  const tick = () => {
-    let s = Math.max(0, Math.floor((end - Date.now()) / 1000));
-    const d = [Math.floor(s / 86400), Math.floor(s / 3600) % 24, Math.floor(s / 60) % 60, s % 60];
-    cd.querySelectorAll("b[data-u]").forEach((b, i) => b.textContent = String(d[i]).padStart(2, "0"));
-  };
-  tick();
-  clearInterval(renderCountdown._t);
-  renderCountdown._t = setInterval(tick, 1000);
-}
-
-/* ---------- gameplay: chọn túi → mở → kết quả ---------- */
-function renderGameplay() {
-  stage.innerHTML = `
-    <img class="bg" data-a="26-bg-blur">
-    <div class="gp-hint">Chọn một túi may mắn</div>
-    <div class="slot board" style="top:26%">${img("22-board-panel")}</div>
-    ${packGrid(true)}
-    <div class="slot mascot-peek">${img("18-mascot-peek")}</div>
-    ${tabbar("home")}`;
-  hydrate();
-  document.querySelectorAll(".pack").forEach(p => p.onclick = () => renderReveal(+p.dataset.i));
-}
-
-function renderReveal(i) {
-  stage.innerHTML = `
-    <img class="bg" data-a="26-bg-blur">
-    <div class="gp-hint">Chạm để mở túi!</div>
-    <div class="slot gp-burst" id="burst">${img("16-fx-burst")}</div>
-    <div class="slot gp-chosen clickable" id="chosen" style="filter:hue-rotate(${i * 25}deg)">
-      ${img("20-game-object-closed")}</div>
-    <div class="slot mascot-peek">${img("18-mascot-peek")}</div>`;
-  hydrate();
-  $("#chosen").onclick = () => {
-    $("#chosen").querySelector("img").src = src("21-game-object-open");
-    $("#burst").style.opacity = 1;
-    state.turns--;
-    setTimeout(popupResult, 650);
-  };
-}
-
-/* ---------- popup ---------- */
-const PRIZES = [
-  { art: "14-reward-voucher",   title: "CHÚC MỪNG!", body: "Bạn nhận được 1 voucher ưu đãi.<br>Quà đã vào Giỏ quà của bạn." },
-  { art: "15-reward-giftbox",   title: "CHÚC MỪNG!", body: "Bạn nhận được 1 phần quà.<br>Điền địa chỉ để nhận hàng nhé." },
-  { art: "19-mascot-celebrate", title: "TIẾC QUÁ!",  body: "Chúc bạn may mắn lần sau.<br>Làm nhiệm vụ để có thêm lượt." }
-];
-
-function popupResult() {
-  const prize = PRIZES[Math.floor(Math.random() * PRIZES.length)];
-  overlay(`
-    <div class="pop tall">
-      ${img("24-popup-panel-tall", "panel")}
-      <div class="ribbon">${img("10-popup-ribbon")}<span class="txt">${prize.title}</span></div>
-      <div class="art">${img("16-fx-burst", "burst")}${img(prize.art, "prize")}</div>
-      <div class="body">${prize.body}</div>
-      <div class="btns">
-        <div class="pbtn" data-act="gift">${img("02-btn-pill-blue")}<span class="txt">GIỎ QUÀ</span></div>
-        <div class="pbtn" data-act="again">${img("01-btn-pill-red")}<span class="txt">TIẾP TỤC</span></div>
-      </div>
-    </div>`);
-  $('[data-act="gift"]').onclick = e => { e.stopPropagation(); closeOverlay(); go("sub", "gift"); };
-  $('[data-act="again"]').onclick = e => { e.stopPropagation(); closeOverlay();
-    state.turns > 0 ? go("gameplay") : go("home"); };
-}
-
-function popupNoTurns() {
-  overlay(`
-    <div class="pop short">
-      ${img("09-popup-panel-short", "panel")}
-      <div class="ribbon">${img("10-popup-ribbon")}<span class="txt">HẾT LƯỢT</span></div>
-      <div class="art">${img("19-mascot-celebrate", "prize")}</div>
-      <div class="body">Bạn đã dùng hết lượt hôm nay.<br>Làm nhiệm vụ để nhận thêm lượt nhé!</div>
-      <div class="btns">
-        <div class="pbtn" data-act="task">${img("02-btn-pill-blue")}<span class="txt">NHIỆM VỤ</span></div>
-      </div>
-    </div>`);
-  $('[data-act="task"]').onclick = e => { e.stopPropagation(); closeOverlay(); go("sub", "task"); };
-}
-
-function overlay(inner) {
-  const ovl = document.createElement("div");
-  ovl.className = "ovl";
-  ovl.id = "ovl";
-  ovl.innerHTML = `<div class="glow"></div>${inner}`;
-  ovl.onclick = closeOverlay;
-  ovl.querySelector(".pop").onclick = e => e.stopPropagation();
-  stage.appendChild(ovl);
-  hydrate(ovl);
-}
-function closeOverlay() { const o = $("#ovl"); if (o) o.remove(); }
-
-/* ---------- màn phụ theo tab ---------- */
-function renderSub(tab) {
-  const titles = { task: "Nhiệm vụ", gift: "Giỏ quà của bạn", hist: "Lịch sử mở túi" };
-  let cards = "";
-  if (tab === "task") {
-    cards = [["Đăng nhập mỗi ngày", "1/1 — hoàn thành", 100, "NHẬN"],
-             ["Chuyển tiền 3 lần", "2/3 — sắp xong", 66, "THỰC HIỆN"],
-             ["Mời 1 người bạn", "0/1", 0, "THỰC HIỆN"]].map(([t, d, p, btn]) => `
-      <div class="card"><div class="info"><b>${t}</b><small>${d}</small>
-        <div class="mini-progress progress">${img("07-progress-track", "track")}
-          <div class="clip" style="--p:${p}">${img("08-progress-fill")}</div></div></div>
-        <div class="obtn clickable">${img("03-btn-pill-outline")}<span class="txt">${btn}</span></div>
-      </div>`).join("");
-    cards += `
-      <div class="card"><div class="info"><b>Sưu tập mảnh ghép</b>
-        <small>Đủ 4 mảnh đổi quà lớn — đã có 2/4</small>
-        <div style="display:flex;gap:6px;margin-top:8px">
-          ${img("12-piece-active", "picon")}${img("12-piece-active", "picon")}
-          ${img("13-piece-locked", "picon")}${img("13-piece-locked", "picon")}
-        </div></div>
-      </div>`;
-  } else if (tab === "gift") {
-    cards = [["Voucher ưu đãi 50K", "HSD: 29/02/2026", "14-reward-voucher"],
-             ["Phần quà may mắn", "Chờ điền địa chỉ nhận", "15-reward-giftbox"]]
-      .map(([t, d, icon]) => `
-      <div class="card">${img(icon, "picon")}<div class="info"><b>${t}</b><small>${d}</small></div>
-        <div class="obtn clickable">${img("03-btn-pill-outline")}<span class="txt">DÙNG NGAY</span></div>
-      </div>`).join("");
-  } else {
-    cards = [["Hôm nay 09:41", "Trúng voucher ưu đãi", "14-reward-voucher"],
-             ["Hôm qua 20:15", "Chúc bạn may mắn", "19-mascot-celebrate"],
-             ["Hôm qua 08:02", "Trúng phần quà", "15-reward-giftbox"]]
-      .map(([t, d, icon]) => `
-      <div class="card">${img(icon, "picon")}<div class="info"><b>${d}</b><small>${t}</small></div></div>`).join("");
-  }
-  stage.innerHTML = `
-    <img class="bg" data-a="26-bg-blur">
-    <div class="slot hdr-btn back clickable" id="btnBack">${img("04-btn-circle")}${ICONS.back}</div>
-    <div class="slot hdr-btn sound clickable" id="btnHome2">${img("04-btn-circle")}${ICONS.home}</div>
-    <div class="sub-title">${titles[tab]}</div>
-    <div class="cards">${cards}</div>
-    <div class="slot clickable" id="floatBadge" title="Về game"
-         style="right:3%;bottom:12.5%;width:18%;aspect-ratio:1;z-index:20">
-      ${img("23-floating-entry-badge")}</div>
-    ${tabbar(tab)}`;
-  hydrate();
-  $("#btnBack").onclick = () => go("home");
-  $("#btnHome2").onclick = () => go("home");
-  $("#floatBadge").onclick = () => go("home");
-}
-
-/* ===================== khung điều phối ===================== */
-function updateTurns() {
-  const c = $("#chipTurns");
-  if (c) c.textContent = `Còn ${state.turns} lượt hôm nay`;
-}
-
-function hydrate(root = stage) {
-  root.querySelectorAll("img[data-a]").forEach(im => { im.src = src(im.dataset.a); });
-  wireTabs();
-}
-
-function go(screen, arg) {
-  state.screen = screen;
-  clearInterval(renderCountdown._t);
-  if (screen === "loading") renderLoading();
-  else if (screen === "home") renderHome();
-  else if (screen === "gameplay") renderGameplay();
-  else if (screen === "sub") renderSub(arg);
-}
-
-function applyStyle(s) {
-  style = s;
-  document.querySelectorAll("#switcher button").forEach(b =>
-    b.setAttribute("aria-pressed", String(b.dataset.s === s)));
-  hydrate(document.body);
-}
-
 const switcher = document.getElementById("switcher");
-STYLES.forEach(([id, label]) => {
+STYLES.forEach(([id, name]) => {
   const b = document.createElement("button");
-  b.textContent = label;
+  b.textContent = name;
   b.dataset.s = id;
-  b.onclick = () => { applyStyle(id); };
+  b.setAttribute("aria-pressed", String(id === STYLE));
+  b.onclick = () => {
+    STYLE = id;
+    localStorage.setItem("kit-style", id);
+    switcher.querySelectorAll("button").forEach(x =>
+      x.setAttribute("aria-pressed", String(x.dataset.s === id)));
+    closeDom();
+    boot();
+  };
   switcher.appendChild(b);
 });
-applyStyle(style);
-go("loading");
+
+/* ---------- DOM overlay (hybrid): màn phụ + form nhận quà ---------- */
+const dom = document.getElementById("dom");
+const domCards = document.getElementById("domCards");
+const domTitle = document.getElementById("domTitle");
+document.getElementById("domClose").onclick = closeDom;
+document.getElementById("domBack").onclick = closeDom;
+function closeDom() { dom.classList.remove("show"); }
+
+function openDom(tab) {
+  const titles = { task: "Nhiệm vụ", gift: "Giỏ quà của bạn", hist: "Lịch sử mở túi" };
+  domTitle.textContent = titles[tab];
+  let html = "";
+  if (tab === "task") {
+    html = [["Đăng nhập mỗi ngày", "1/1 — hoàn thành", 100, "NHẬN"],
+            ["Chuyển tiền 3 lần", "2/3 — sắp xong", 66, "THỰC HIỆN"],
+            ["Mời 1 người bạn", "0/1", 0, "THỰC HIỆN"]].map(([t, d, p, btn]) => `
+      <div class="card"><div class="info"><b>${t}</b><small>${d}</small>
+        <div class="bar-track"><div class="bar-fill" style="width:${p}%"></div></div></div>
+        <button onclick="addTurn()">${btn}</button></div>`).join("");
+    html += `<div class="card"><img src="${kimg("12-piece-active")}"><img src="${kimg("12-piece-active")}">
+      <img src="${kimg("13-piece-locked")}"><img src="${kimg("13-piece-locked")}">
+      <div class="info"><b>Sưu tập mảnh ghép</b><small>Đủ 4 mảnh đổi quà lớn — đã có 2/4</small></div></div>`;
+  } else if (tab === "gift") {
+    html = `
+      <div class="card"><img src="${kimg("14-reward-voucher")}">
+        <div class="info"><b>Voucher ưu đãi 50K</b><small>HSD: 29/02/2026</small></div>
+        <button>DÙNG NGAY</button></div>
+      <div class="card"><img src="${kimg("15-reward-giftbox")}">
+        <div class="info"><b>Phần quà may mắn — điền địa chỉ nhận</b>
+          <input placeholder="Họ tên người nhận">
+          <input placeholder="Số điện thoại" inputmode="tel">
+          <input placeholder="Địa chỉ nhận hàng"></div></div>
+      <div class="card" style="justify-content:center">
+        <button class="primary" onclick="closeDom()">XÁC NHẬN</button></div>`;
+  } else {
+    html = [["Hôm nay 09:41", "Trúng voucher ưu đãi", "14-reward-voucher"],
+            ["Hôm qua 20:15", "Chúc bạn may mắn", "19-mascot-celebrate"],
+            ["Hôm qua 08:02", "Trúng phần quà", "15-reward-giftbox"]].map(([t, d, ic]) => `
+      <div class="card"><img src="${kimg(ic)}">
+        <div class="info"><b>${d}</b><small>${t}</small></div></div>`).join("");
+  }
+  domCards.innerHTML = html;
+  dom.classList.add("show");
+}
+function addTurn() {
+  state.turns++;
+  const home = game.scene.getScene("Home");
+  if (home && home.scene.isActive()) home.updateTurns();
+  closeDom();
+}
+
+boot();
 </script>
 </body>
 </html>

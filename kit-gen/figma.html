@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kit → Figma (DOM mode) — Mở túi Khui quà</title>
+<!--
+  DOM MODE cho html.to.design / Figma MCP.
+
+  demo.html chạy Phaser (canvas) — plugin import Figma sẽ chụp canvas thành MỘT
+  ảnh bẹt, mất hết layer. Trang này render CÙNG các màn, CÙNG bộ asset, nhưng
+  bằng DOM thuần: mỗi element là một <img> định vị tuyệt đối, mỗi chữ là một
+  text node → html.to.design biến mỗi thứ thành một layer Figma riêng, text
+  thành text layer sửa được.
+
+  Cách dùng với html.to.design (Chrome extension):
+    1. npm run dev (trang cần http để fetch manifest)
+    2. Mở trang này, chọn style ở góc (hoặc ?style=tet)
+    3. Bấm extension → Capture → dán vào plugin html.to.design trong Figma
+  Mỗi .frame 390×844 sẽ thành một Frame trong Figma.
+-->
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#1b1d26;font-family:"Arial Rounded MT Bold","SF Pro Rounded",-apple-system,"Segoe UI",sans-serif}
+  .toolbar{position:sticky;top:0;z-index:99;background:#12141b;color:#fff;padding:10px 16px;
+    display:flex;gap:8px;align-items:center;font-size:13px}
+  .toolbar button{border:1.5px solid #555;background:#222;color:#fff;border-radius:99px;
+    padding:6px 13px;font:600 12px/1 inherit;cursor:pointer}
+  .toolbar button[aria-pressed="true"]{background:#fff;color:#111;border-color:#fff}
+  .toolbar span{opacity:.6}
+  .board{display:flex;gap:28px;padding:26px;overflow-x:auto;align-items:flex-start}
+  .stack{display:flex;flex-direction:column;gap:8px}
+  .stack>small{color:#8b90a0;font:600 11px/1 sans-serif;letter-spacing:.06em;text-transform:uppercase}
+
+  .frame{position:relative;width:390px;height:844px;flex:none;overflow:hidden;
+    border-radius:24px;background:#0d1330}
+  .frame img{position:absolute}
+  .frame .bg{left:0;top:0;width:390px;height:844px;object-fit:cover}
+  .t{position:absolute;color:#fff;font-weight:900;text-align:center;white-space:pre-line;
+    text-shadow:0 2px 4px rgba(0,0,0,.55);transform:translate(-50%,-50%);line-height:1.15}
+  .dim{position:absolute;inset:0;background:rgba(2,10,30,.72)}
+  .white-card{position:absolute;background:rgba(255,255,255,.95);border-radius:14px;
+    box-shadow:0 4px 14px rgba(0,0,0,.3)}
+  .white-card .t{color:#1c2333;text-shadow:none}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <b>DOM mode → Figma</b>
+  <span>· mỗi element một layer, không canvas ·</span>
+  <span id="styleBtns"></span>
+</div>
+<div class="board" id="board"></div>
+
+<script>
+"use strict";
+const qs = new URLSearchParams(location.search);
+let STYLE = qs.get("style") || localStorage.getItem("kit-style") || "ipay";
+const STYLES = [["ipay", "Fintech"], ["candy", "Kẹo ngọt"], ["tet", "Tết"]];
+let META = null;
+
+/* ---- content-fit: đặt <img> sao cho RUỘT asset (content box trong manifest)
+   có đúng kích thước yêu cầu, tâm tại (cx, cy) — bù phần đệm canvas ---- */
+function el(html) {
+  const t = document.createElement("template");
+  t.innerHTML = html.trim();
+  return t.content.firstChild;
+}
+function img(frame, name, cx, cy, opt) {   // opt: {w} hoặc {h} = kích thước RUỘT
+  const m = META[name] || { canvas: [100, 100], content: [100, 100] };
+  const [W, H] = m.canvas, [cw, ch] = m.content;
+  const s = opt.w ? opt.w / cw : opt.h / ch;
+  const dw = W * s, dh = H * s;
+  frame.appendChild(el(
+    `<img src="kits/${STYLE}/${name}.png" alt="${name}"
+          style="left:${(cx - dw / 2).toFixed(1)}px;top:${(cy - dh / 2).toFixed(1)}px;
+                 width:${dw.toFixed(1)}px;height:${dh.toFixed(1)}px">`));
+  return { w: cw * s, h: ch * s };
+}
+function txt(frame, text, cx, cy, size, extra = "") {
+  frame.appendChild(el(
+    `<div class="t" style="left:${cx}px;top:${cy}px;font-size:${size}px;${extra}">${text}</div>`));
+}
+
+/* ================= các màn ================= */
+function frameShell(title) {
+  const stack = el(`<div class="stack"><small>${title}</small></div>`);
+  const f = el(`<div class="frame"></div>`);
+  stack.appendChild(f);
+  document.getElementById("board").appendChild(stack);
+  return f;
+}
+function bg(f, name) {
+  f.appendChild(el(`<img class="bg" src="kits/${STYLE}/${name}.png" alt="${name}">`));
+}
+
+function screenLoading() {
+  const f = frameShell("MH Loading");
+  bg(f, "25-bg-main");
+  txt(f, "MỞ TÚI\nKHUI QUÀ", 195, 300, 44, "letter-spacing:1px");
+  img(f, "17-mascot-idle", 195, 460, { h: 170 });
+  img(f, "07-progress-track", 195, 640, { w: 280 });
+  const fill = META["08-progress-fill"];
+  // fill 70%: bọc trong khung clip
+  const clip = el(`<div style="position:absolute;left:${195 - 140 * 0.91}px;top:${640 - 9}px;
+    width:${280 * 0.91 * 0.7}px;height:18px;overflow:hidden;border-radius:99px"></div>`);
+  f.appendChild(clip);
+  img(clip, "08-progress-fill", 140 * 0.91 * 0.7 + (140 * 0.91 * (1 - 0.7)) - 140 * 0.91 + 127, 9, { w: 280 * 0.91 });
+  txt(f, "Đang tải… 70%", 195, 682, 14);
+}
+
+function homePacks(f, y1 = 385, y2 = 480) {
+  img(f, "22-board-panel", 195, 430, { w: 316 });
+  const hues = [0, 40, 90, 160, 220, 280];
+  [0, 1, 2].forEach(i => {
+    const im = img(f, "20-game-object-closed", 103 + i * 92, y1, { h: 100 });
+  });
+  [0, 1, 2].forEach(i => img(f, "20-game-object-closed", 103 + i * 92, y2, { h: 100 }));
+  // đổi màu túi bằng filter để thấy 6 biến thể (Figma sẽ giữ như ảnh)
+  [...f.querySelectorAll('img[alt="20-game-object-closed"]')].forEach((im, i) =>
+    im.style.filter = `hue-rotate(${[0, 40, 90, 160, 220, 280][i]}deg)`);
+}
+
+function screenHome() {
+  const f = frameShell("MH Home");
+  bg(f, "25-bg-main");
+  img(f, "04-btn-circle", 36, 66, { w: 44 });
+  img(f, "04-btn-circle", 354, 66, { w: 44 });
+  txt(f, "‹", 36, 64, 22); txt(f, "♪", 354, 64, 17);
+  txt(f, "MỞ TÚI KHUI QUÀ", 195, 96, 31);
+  txt(f, "Cùng iPAY săn quà mỗi ngày", 195, 128, 13);
+  const xs = [78, 156, 234, 312], units = ["ngày", "giờ", "phút", "giây"], vals = ["02", "11", "29", "54"];
+  xs.forEach((x, i) => {
+    img(f, "11-digit-plate", x, 180, { h: 50 });
+    txt(f, vals[i], x, 180, 20);
+    txt(f, units[i], x, 218, 10);
+    if (i) txt(f, ":", (x + xs[i - 1]) / 2, 180, 20);
+  });
+  homePacks(f);
+  img(f, "17-mascot-idle", 56, 700, { h: 185 });
+  img(f, "01-btn-pill-red", 195, 626, { w: 250 });
+  txt(f, "MỞ TÚI NGAY", 195, 626, 25);
+  txt(f, "Còn 3 lượt hôm nay", 195, 676, 13);
+  const tabs = [["🏠", "Trang chủ", "06-tab-chip-active"], ["📋", "Nhiệm vụ", "05-tab-chip-idle"],
+                ["🎁", "Giỏ quà", "05-tab-chip-idle"], ["🕘", "Lịch sử", "05-tab-chip-idle"]];
+  tabs.forEach(([ic, name, chip], i) => {
+    const x = 57 + i * 92;
+    img(f, chip, x, 792, { w: 70 });
+    txt(f, ic, x, 782, 17);
+    txt(f, name, x, 808, 9.5);
+  });
+}
+
+function screenChoose() {
+  const f = frameShell("MH Gameplay — chọn túi");
+  bg(f, "26-bg-blur");
+  txt(f, "Chọn một túi may mắn", 195, 150, 20);
+  homePacks(f);
+  img(f, "18-mascot-peek", 338, 690, { h: 195 });
+}
+
+function screenResult() {
+  const f = frameShell("Popup kết quả");
+  bg(f, "26-bg-blur");
+  f.appendChild(el(`<div class="dim"></div>`));
+  const cy = 408;
+  const panel = img(f, "24-popup-panel-tall", 195, cy, { w: 320 });
+  img(f, "16-fx-burst", 195, cy - 60, { w: 250 });
+  img(f, "14-reward-voucher", 195, cy - 60, { h: 160 });
+  img(f, "10-popup-ribbon", 195, cy - panel.h / 2, { w: 235 });
+  txt(f, "CHÚC MỪNG!", 195, cy - panel.h / 2, 17);
+  txt(f, "Bạn nhận được 1 voucher ưu đãi.\nQuà đã vào Giỏ quà của bạn.", 195, cy + panel.h * 0.22, 13);
+  img(f, "02-btn-pill-blue", 115, cy + panel.h / 2 + 4, { w: 148 });
+  txt(f, "GIỎ QUÀ", 115, cy + panel.h / 2 + 4, 14);
+  img(f, "01-btn-pill-red", 275, cy + panel.h / 2 + 4, { w: 148 });
+  txt(f, "TIẾP TỤC", 275, cy + panel.h / 2 + 4, 14);
+}
+
+function screenTask() {
+  const f = frameShell("MH Nhiệm vụ");
+  bg(f, "26-bg-blur");
+  img(f, "04-btn-circle", 36, 66, { w: 44 }); txt(f, "‹", 36, 64, 22);
+  txt(f, "Nhiệm vụ", 195, 66, 17);
+  const rows = [["Đăng nhập mỗi ngày", "1/1 — hoàn thành", 1], ["Chuyển tiền 3 lần", "2/3 — sắp xong", 0.66],
+                ["Mời 1 người bạn", "0/1", 0]];
+  rows.forEach(([t, d, p], i) => {
+    const y = 130 + i * 108;
+    f.appendChild(el(`<div class="white-card" style="left:20px;top:${y}px;width:350px;height:92px"></div>`));
+    txt(f, t, 150, y + 26, 14, "color:#1c2333;text-shadow:none;font-weight:900");
+    txt(f, d, 150, y + 47, 11, "color:#5b6474;text-shadow:none;font-weight:600");
+    img(f, "07-progress-track", 118, y + 70, { w: 165 });
+    if (p > 0) {
+      const clip = el(`<div style="position:absolute;left:${43}px;top:${y + 64}px;width:${150 * p}px;height:12px;overflow:hidden;border-radius:99px"></div>`);
+      f.appendChild(clip);
+      img(clip, "08-progress-fill", 75, 6, { w: 150 });
+    }
+    img(f, "03-btn-pill-outline", 310, y + 46, { w: 96 });
+    txt(f, p >= 1 ? "NHẬN" : "LÀM", 310, y + 46, 11);
+  });
+  const y = 130 + 3 * 108;
+  f.appendChild(el(`<div class="white-card" style="left:20px;top:${y}px;width:350px;height:110px"></div>`));
+  txt(f, "Sưu tập mảnh ghép — 2/4", 195, y + 22, 13.5, "color:#1c2333;text-shadow:none");
+  ["12-piece-active", "12-piece-active", "13-piece-locked", "13-piece-locked"].forEach((n, i) =>
+    img(f, n, 90 + i * 70, y + 66, { w: 58 }));
+  img(f, "23-floating-entry-badge", 338, 760, { w: 76 });
+}
+
+/* ================= boot ================= */
+async function build() {
+  document.getElementById("board").innerHTML = "";
+  const mf = await (await fetch("kits/manifest.json", { cache: "no-store" })).json();
+  META = {};
+  mf.styles[STYLE].assets.forEach(a => META[a.file.replace(/\.png$/, "")] = a);
+  screenLoading(); screenHome(); screenChoose(); screenResult(); screenTask();
+}
+const bts = document.getElementById("styleBtns");
+STYLES.forEach(([id, name]) => {
+  const b = el(`<button aria-pressed="${id === STYLE}">${name}</button>`);
+  b.onclick = () => { STYLE = id; localStorage.setItem("kit-style", id);
+    bts.querySelectorAll("button").forEach((x, i) => x.setAttribute("aria-pressed", String(STYLES[i][0] === id)));
+    build(); };
+  bts.appendChild(b);
+});
+build();
+</script>
+</body>
+</html>

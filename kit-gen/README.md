@@ -41,7 +41,27 @@ logs/           log từng con codex
 preview.html    bảng so sánh trực quan
 ```
 
-## Demo màn home
+## Chạy demo
+
+```bash
+npm run dev          # từ gốc repo — demo cần http, mở file:// sẽ không nạp được atlas
+# → http://localhost:8000/kit-gen/demo.html   (game Phaser)
+# → http://localhost:8000/kit-gen/figma.html  (DOM mode để xuất Figma)
+# → http://localhost:8000/kit-gen/preview.html (soát từng asset)
+```
+
+## Hai chế độ render, một bộ kit
+
+| File | Render | Dùng để |
+|---|---|---|
+| `demo.html` | **Phaser 4.2** (canvas, vendor sẵn trong `vendor/`) | Chơi thật: Boot → Preload (progress bar từ track/fill của kit) → Home → chọn túi → mở túi → popup kết quả. Form/danh sách là DOM overlay (hybrid) |
+| `figma.html` | **DOM thuần** — mỗi element một `<img>`, mỗi chữ một text node | Xuất sang Figma bằng html.to.design: canvas là hộp đen với plugin (ra một ảnh bẹt), DOM mode ra **từng layer riêng, text layer sửa được**. 5 frame 390×844: Loading, Home, Gameplay, Popup, Nhiệm vụ |
+
+Kit nạp vào Phaser qua **texture atlas trimmed** (`kits/<style>/atlas.png + atlas.json`) do
+`slice.py` sinh ra — `sourceSize`/`spriteSourceSize` lấy thẳng từ canvas/content trong manifest,
+nên Phaser tự bù đệm canvas, sprite hành xử như ảnh khít viền. Đổi style = nạp atlas khác.
+
+## Demo màn home (mô tả cũ)
 
 ```bash
 open demo.html

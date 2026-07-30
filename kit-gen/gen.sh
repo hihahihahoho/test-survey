@@ -27,7 +27,7 @@ for s in cfg["styles"]:
             "",
             f"BACKGROUND of the sheet: one flat solid chroma-key color: {s['bg']}.",
             "No gradient, no texture, NO checkerboard or transparency pattern, no grid lines.",
-            "This exact background color must NEVER appear inside any element — pick element colors far from it.",
+            "This exact background color — and any hue CLOSE to it — must NEVER appear inside any element; pick element colors far from it on the color wheel.",
             "",
             "SIZING: every element is drawn at a CONSISTENT scale — each fills about 70-80% of its",
             "cell's width (or height for tall elements), so all elements look uniform in size.",
@@ -76,8 +76,10 @@ $(cat "prompts/${job}.txt")
   fi
 }
 
-echo "Bắt đầu $(date +%H:%M:%S) — chạy song song"
+FILTER="${1:-}"
+echo "Bắt đầu $(date +%H:%M:%S) — chạy song song${FILTER:+ (lọc: $FILTER)}"
 while read -r job; do
+  [[ -n "$FILTER" && "$job" != *"$FILTER"* ]] && continue
   run_one "$job" &
 done < <(python3 -c "
 import json
