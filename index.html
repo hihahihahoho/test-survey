@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Survey Builder</title>
+<style>
+  :root{
+    --purple:#673ab7; --purple-dark:#5b2ea6; --purple-light:#f0ebf8;
+    --ink:#202124; --ink-2:#5f6368; --ink-3:#70757a;
+    --line:#dadce0; --red:#d93025; --radius:8px;
+    --font:"Google Sans",Roboto,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:var(--font);background:var(--purple-light);color:var(--ink);
+       -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+
+  /* ---------- Toolbar (công cụ duyệt, không thuộc form) ---------- */
+  .toolbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding:8px 16px;background:#fff;border-bottom:1px solid var(--line);box-shadow:0 1px 2px rgba(60,64,67,.15)}
+  .toolbar .brand{font-weight:600;font-size:13px;color:var(--ink-2);margin-right:4px;white-space:nowrap}
+  .tabs{display:flex;gap:2px;background:#f1f3f4;border-radius:99px;padding:3px}
+  .tab{border:0;background:transparent;cursor:pointer;font-family:inherit;font-size:13px;
+    font-weight:500;color:var(--ink-2);padding:6px 14px;border-radius:99px}
+  .tab[aria-selected="true"]{background:var(--purple);color:#fff}
+  .spacer{flex:1}
+  .tbtn{border:1px solid var(--line);background:#fff;cursor:pointer;font-family:inherit;
+    font-size:13px;font-weight:500;color:var(--purple);padding:7px 14px;border-radius:4px}
+  .tbtn:hover{background:#f6f1fd}
+  .tbtn.plain{color:var(--ink-2)}
+  .meta-pill{font-size:12px;color:var(--ink-3);border:1px solid var(--line);border-radius:99px;
+    padding:4px 10px;white-space:nowrap}
+  #surveyPicker{border:1px solid var(--line);border-radius:4px;background:#fff;font-family:inherit;
+    font-size:13px;color:var(--ink);padding:6px 8px;max-width:260px}
+
+  .wrap{max-width:770px;margin:0 auto;padding:12px 12px 80px}
+  .view{display:none}
+  .view.active{display:block}
+
+  /* ---------- Cards ---------- */
+  .card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:24px;margin-bottom:12px}
+  .card.head{border-top:10px solid var(--purple);padding-top:22px}
+  .form-title{font-size:32px;font-weight:400;line-height:135%;margin:0 0 8px}
+  .form-desc{font-size:14px;color:var(--ink);white-space:pre-wrap;margin:0}
+  .req-note{color:var(--red);font-size:14px;margin:14px 0 0}
+  .divider{height:1px;background:var(--line);margin:14px 0 0}
+  .section-title{font-size:24px;font-weight:400;margin:0 0 8px}
+  .section-desc{font-size:14px;color:var(--ink);white-space:pre-wrap;margin:0}
+
+  /* ---------- Question ---------- */
+  .q-title{font-size:16px;font-weight:400;line-height:24px;margin:0 0 2px;white-space:pre-wrap}
+  .q-title .star{color:var(--red);margin-left:2px}
+  .q-desc{font-size:12px;color:var(--ink-2);margin:4px 0 0;white-space:pre-wrap}
+  .q-body{margin-top:14px}
+  .q-error{display:none;align-items:center;gap:6px;color:var(--red);font-size:12px;margin-top:10px}
+  .q-error.show{display:flex}
+  .q-error svg{flex:none}
+  .card.invalid{border-color:var(--red)}
+
+  .t-input{width:100%;max-width:400px;border:0;border-bottom:1px solid var(--line);background:transparent;
+    font-family:inherit;font-size:14px;color:var(--ink);padding:6px 2px;outline:none}
+  .t-input::placeholder{color:var(--ink-3)}
+  .t-input:hover{border-bottom-color:var(--ink-2)}
+  .t-input:focus{border-bottom:2px solid var(--purple);padding-bottom:5px}
+  textarea.t-input{max-width:100%;resize:vertical;min-height:24px;line-height:22px}
+
+  .opt{display:flex;align-items:flex-start;gap:12px;padding:7px 0;cursor:pointer}
+  .opt input{position:absolute;opacity:0;width:0;height:0}
+  .mark{flex:none;width:20px;height:20px;margin-top:1px;border:2px solid var(--ink-2);background:#fff;position:relative}
+  .mark.radio{border-radius:50%}
+  .mark.check{border-radius:2px}
+  .opt input:checked + .mark.radio{border-color:var(--purple)}
+  .opt input:checked + .mark.radio::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--purple)}
+  .opt input:checked + .mark.check{background:var(--purple);border-color:var(--purple)}
+  .opt input:checked + .mark.check::after{content:"";position:absolute;left:4px;top:0;width:6px;height:11px;
+    border:solid #fff;border-width:0 2px 2px 0;transform:rotate(40deg)}
+  .opt-label{font-size:14px;color:var(--ink);padding-top:1px}
+  .opt .other-input{margin-left:4px;flex:1;max-width:260px}
+  .opt.exclusive{border-top:1px solid #eceff1;margin-top:6px;padding-top:12px}
+
+  .dd{appearance:none;-webkit-appearance:none;border:1px solid var(--line);border-radius:4px;background:#fff;
+    font-family:inherit;font-size:14px;color:var(--ink);padding:9px 34px 9px 12px;min-width:240px;max-width:100%;cursor:pointer;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='%235f6368'><path d='M7 10l5 5 5-5z'/></svg>");
+    background-repeat:no-repeat;background-position:right 6px center}
+  .dd:focus{outline:none;border-color:var(--purple)}
+
+  .scale{display:flex;align-items:flex-end;gap:4px;overflow-x:auto;padding:4px 0}
+  .scale .lbl{font-size:14px;color:var(--ink);padding-bottom:8px;white-space:nowrap}
+  .scale .lbl.low{margin-right:8px}
+  .scale .lbl.high{margin-left:8px}
+  .scale-item{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:44px;cursor:pointer}
+  .scale-item .num{font-size:14px;color:var(--ink)}
+  .scale-item .mark{margin:0}
+
+  .grid-scroll{overflow-x:auto;margin:0 -4px}
+  table.grid{border-collapse:collapse;width:100%;min-width:min-content}
+  table.grid th,table.grid td{padding:10px 8px;text-align:center;font-weight:400;font-size:13px}
+  table.grid th.rowh,table.grid td.rowh{text-align:left;font-size:14px;min-width:170px;max-width:280px;
+    padding-left:4px;color:var(--ink);position:sticky;left:0;background:inherit}
+  table.grid thead th{color:var(--ink-2);font-size:12px;vertical-align:bottom;min-width:76px}
+  table.grid thead th.rowh{background:#fff}
+  table.grid tbody tr{background:#fff}
+  table.grid tbody tr:nth-child(odd){background:#f8f9fa}
+  table.grid tbody tr.row-invalid{background:#fce8e6}
+  table.grid td .mark{margin:0 auto}
+  table.grid label{display:block;cursor:pointer}
+
+  .nav{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:4px}
+  .btn{border:0;border-radius:4px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:500;
+    padding:10px 24px;background:var(--purple);color:#fff;box-shadow:0 1px 2px rgba(60,64,67,.3)}
+  .btn:hover{background:var(--purple-dark)}
+  .btn.ghost{background:transparent;color:var(--purple);box-shadow:none;padding:10px 16px}
+  .btn.ghost:hover{background:#f6f1fd}
+  .clear-link{background:none;border:0;cursor:pointer;font-family:inherit;font-size:14px;color:var(--purple);padding:10px 8px}
+  .clear-link:hover{text-decoration:underline}
+  .progress{display:flex;align-items:center;gap:10px;margin:0 0 12px}
+  .progress .track{flex:1;height:4px;border-radius:2px;background:#e0e0e0;overflow:hidden}
+  .progress .track i{display:block;height:100%;background:var(--purple);border-radius:2px;transition:width .25s}
+  .progress .pct{font-size:12px;color:var(--ink-2);white-space:nowrap}
+  .foot-note{font-size:11px;color:var(--ink-3);text-align:center;margin:22px 0 0;line-height:1.6}
+
+  .json-panel{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+  .json-panel h2{font-size:16px;font-weight:500;margin:0 0 4px}
+  .json-panel p.hint{font-size:12px;color:var(--ink-2);margin:0 0 12px}
+  .json-panel code{background:#f1f3f4;padding:1px 4px;border-radius:3px;font-size:11.5px}
+  #jsonText,#scriptText{width:100%;min-height:52vh;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:12px;line-height:1.55;color:var(--ink);border:1px solid var(--line);border-radius:4px;
+    padding:12px;resize:vertical;tab-size:2}
+  #jsonText:focus,#scriptText:focus{outline:none;border-color:var(--purple)}
+  #scriptText{background:#fbfbfc}
+  .json-panel ol.steps{margin:0 0 12px;padding-left:22px;font-size:13px;color:var(--ink-2)}
+  .json-panel ol.steps li{margin-bottom:5px}
+  .json-panel ol.steps b{color:var(--ink)}
+  .json-panel a{color:var(--purple)}
+  .caveat{border-left:3px solid #f9ab00;background:#fef7e0;padding:10px 12px;border-radius:0 4px 4px 0;
+    font-size:12.5px;color:#5f4400;margin:0 0 12px;white-space:pre-wrap}
+  .json-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+  .json-msg{font-size:12px;margin-left:4px}
+  .json-msg.ok{color:#188038}
+  .json-msg.err{color:var(--red)}
+
+  .outline{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:8px 0}
+  .ol-sec{display:flex;align-items:baseline;gap:10px;padding:14px 20px 8px;margin-top:6px;border-top:1px solid var(--line)}
+  .ol-sec:first-child{border-top:0;margin-top:0}
+  .ol-sec .n{font-size:11px;color:var(--purple);font-weight:600;letter-spacing:.04em;white-space:nowrap}
+  .ol-sec .t{font-size:15px;font-weight:500}
+  .ol-sec .id{font-size:10.5px;color:var(--ink-3);font-family:ui-monospace,monospace;margin-left:auto}
+  .ol-q{display:flex;gap:10px;padding:7px 20px;align-items:baseline}
+  .ol-q:hover{background:#faf8fe}
+  .ol-q .idx{font-size:12px;color:var(--ink-3);min-width:24px;text-align:right;flex:none}
+  .ol-q .txt{font-size:13.5px;flex:1}
+  .ol-q .txt .star{color:var(--red)}
+  .ol-q .txt small{display:block;color:var(--ink-3);font-size:11.5px;margin-top:2px}
+  .ol-q .txt small.branch{color:#1967d2}
+  .badge{flex:none;font-size:10.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;
+    padding:2px 7px;border-radius:3px;background:#f1f3f4;color:var(--ink-2);white-space:nowrap}
+  .badge.grid{background:#e8f0fe;color:#1967d2}
+  .badge.choice{background:#e6f4ea;color:#137333}
+  .badge.text{background:#fef7e0;color:#b06000}
+  .badge.scale{background:#f3e8fd;color:#7b1fa2}
+  .ol-stats{display:flex;gap:18px;flex-wrap:wrap;padding:14px 20px;background:#faf8fe;
+    border-bottom:1px solid var(--line);font-size:12px;color:var(--ink-2)}
+  .ol-stats b{color:var(--ink);font-weight:600}
+
+  .result pre{background:#f8f9fa;border:1px solid var(--line);border-radius:4px;padding:12px;
+    overflow:auto;max-height:50vh;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+
+  .boot-err{background:#fff;border:1px solid var(--line);border-left:4px solid var(--red);
+    border-radius:var(--radius);padding:20px 24px}
+  .boot-err h2{font-size:18px;font-weight:500;margin:0 0 10px}
+  .boot-err p{margin:0 0 10px;font-size:13.5px;color:var(--ink-2)}
+  .boot-err pre{background:#f1f3f4;padding:10px 12px;border-radius:4px;font-size:12.5px;
+    font-family:ui-monospace,monospace;overflow-x:auto;margin:0 0 12px}
+
+  @media(max-width:600px){
+    .card{padding:20px 16px}
+    .form-title{font-size:26px}
+    .wrap{padding:8px 6px 60px}
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="brand">Survey Builder</span>
+  <select id="surveyPicker" title="Chọn survey"></select>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true"  data-view="form">Xem trước</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="outline">Duyệt câu hỏi</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="json">JSON</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="script">Apps Script</button>
+  </div>
+  <span class="spacer"></span>
+  <span class="meta-pill" id="metaPill"></span>
+  <button class="tbtn" id="btnDownload">Tải JSON</button>
+</div>
+
+<div class="wrap">
+  <div class="view active" id="view-form"></div>
+  <div class="view" id="view-outline"></div>
+  <div class="view" id="view-json">
+    <div class="json-panel">
+      <h2>JSON — schema Google Forms API v1</h2>
+      <p class="hint">
+        Nguồn dữ liệu là các file trong <code>surveys/</code>. Sửa nội dung nên sửa ở
+        <code>authoring/&lt;id&gt;.mjs</code> rồi chạy <code>node build.mjs</code>; ô dưới đây để thử nhanh.
+        Chấp nhận 2 định dạng: (1) chuẩn Forms API v1 — <code>{ info, items[] }</code> với
+        <code>questionItem</code>, <code>questionGroupItem</code>, <code>pageBreakItem</code>,
+        <code>textItem</code>, skip-logic qua <code>options[].goToSectionId</code> / <code>goToAction</code>;
+        (2) định dạng gọn — <code>{ title, items:[{type,title,choices,…}] }</code>.
+        Nút <b>Tải JSON</b> xuất bản đã strip field mở rộng <code>_exclusive</code>, dùng được ngay
+        với <code>forms.batchUpdate</code>.
+      </p>
+      <textarea id="jsonText" spellcheck="false"></textarea>
+      <div class="json-actions">
+        <button class="btn" id="btnLoadJson">Nạp JSON</button>
+        <button class="tbtn" id="btnFormat">Format</button>
+        <label class="tbtn" style="display:inline-block">
+          Mở file…<input type="file" id="fileInput" accept=".json,application/json" hidden>
+        </label>
+        <button class="tbtn plain" id="btnCopy">Copy</button>
+        <span class="json-msg" id="jsonMsg"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="view" id="view-script">
+    <div class="json-panel">
+      <h2>Apps Script — tạo Google Form thật</h2>
+      <ol class="steps">
+        <li>Bấm <b>Copy</b>, mở <a href="https://script.google.com" target="_blank" rel="noopener">script.google.com</a> → <b>New project</b>.</li>
+        <li>Xoá hết nội dung <code>Code.gs</code>, dán vào, đặt tên project rồi <b>Save</b>.</li>
+        <li>Chọn hàm <code>createForm</code> → <b>Run</b>. Lần đầu Google hỏi quyền, chọn <b>Review permissions → Allow</b>.</li>
+        <li>Mở <b>Execution log</b> để lấy link edit &amp; link điền của form vừa tạo.</li>
+      </ol>
+      <p class="hint" id="scriptCaveat"></p>
+      <textarea id="scriptText" spellcheck="false" readonly></textarea>
+      <div class="json-actions">
+        <button class="btn" id="btnCopyScript">Copy</button>
+        <button class="tbtn" id="btnDownloadScript">Tải .gs</button>
+        <span class="json-msg" id="scriptMsg"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================================
+   ENGINE — không chứa nội dung câu hỏi.
+   Câu hỏi nằm trong surveys/*.json (sinh ra từ authoring/*.mjs qua build.mjs).
+   ========================================================================== */
+
+const el = (tag, cls, txt) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (txt != null) n.textContent = txt;
+  return n;
+};
+
+/* ---------------------------------------------------------------------------
+   Ô "loại trừ" trong checkbox: tick nó thì bỏ hết ô khác (vd "Không dùng cái nào").
+   Chỉ nhận marker tường minh `_exclusive`, KHÔNG đoán theo nhãn — nhiều phương án
+   hợp lệ cũng bắt đầu bằng "Không" ("Không được tự cài software",
+   "Không giữ được nhất quán brand"), đoán theo chữ sẽ xoá oan lựa chọn khác.
+   `_exclusive` là field mở rộng, bị strip khi xuất JSON cho Google Forms.
+   --------------------------------------------------------------------------- */
+const isExclusive = o => o._exclusive === true;
+
+/* Xuất JSON cho Google Forms: bỏ field mở rộng, vì batchUpdate từ chối field lạ. */
+function forGoogleForms(form) {
+  const out = JSON.parse(JSON.stringify(form));
+  out.items.forEach(it => {
+    const cq = it.questionItem && it.questionItem.question.choiceQuestion;
+    if (cq) cq.options.forEach(o => { delete o._exclusive; });
+  });
+  return out;
+}
+
+/* Giới hạn "chọn tối đa N" đọc trực tiếp từ nội dung câu hỏi, để không phải
+   thêm field ngoài schema Google. */
+function maxSelectOf(it) {
+  const m = ((it.title || "") + " " + (it.description || "")).match(/tối đa\s+(\d+)/i);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+/* ==========================================================================
+   NORMALIZE — chấp nhận cả định dạng gọn
+   ========================================================================== */
+function optsOf(list) {
+  return list.map(v => {
+    if (v === "__OTHER__") return { isOther: true };
+    if (typeof v === "string") return { value: v };
+    const o = { value: v.value };
+    if (v.goTo === "NEXT") o.goToAction = "NEXT_SECTION";
+    else if (v.goTo === "SUBMIT") o.goToAction = "SUBMIT_FORM";
+    else if (v.goTo) o.goToSectionId = v.goTo;
+    if (v.exclusive) o._exclusive = true;
+    return o;
+  });
+}
+
+const SIMPLE_MAP = {
+  text: () => ({ textQuestion: { paragraph: false } }),
+  paragraph: () => ({ textQuestion: { paragraph: true } }),
+  radio: it => ({ choiceQuestion: { type: "RADIO", options: optsOf(it.choices || []), shuffle: !!it.shuffle } }),
+  checkbox: it => ({ choiceQuestion: { type: "CHECKBOX", options: optsOf(it.choices || []), shuffle: !!it.shuffle } }),
+  dropdown: it => ({ choiceQuestion: { type: "DROP_DOWN", options: optsOf(it.choices || []), shuffle: !!it.shuffle } }),
+  scale: it => ({ scaleQuestion: { low: it.low ?? 1, high: it.high ?? 5, lowLabel: it.lowLabel, highLabel: it.highLabel } }),
+  date: () => ({ dateQuestion: { includeYear: true } }),
+  time: () => ({ timeQuestion: { duration: false } })
+};
+
+function normalize(raw) {
+  if (!raw || typeof raw !== "object") throw new Error("JSON phải là một object.");
+  const form = { info: {}, items: [] };
+  const info = raw.info || {};
+  form.info.title = info.title || raw.title || "Untitled form";
+  form.info.documentTitle = info.documentTitle || raw.documentTitle || form.info.title;
+  form.info.description = info.description ?? raw.description ?? "";
+
+  const items = raw.items || raw.questions || [];
+  if (!Array.isArray(items)) throw new Error("`items` phải là array.");
+
+  let auto = 0;
+  const gid = () => "auto_" + (++auto).toString(36);
+
+  items.forEach((it, i) => {
+    if (!it || typeof it !== "object") return;
+    const out = { itemId: it.itemId || gid(), title: it.title || "" };
+    if (it.description) out.description = it.description;
+
+    if (it.pageBreakItem || it.type === "page" || it.type === "section") { out.pageBreakItem = {}; form.items.push(out); return; }
+    if (it.textItem || it.type === "note" || it.type === "text_block") { out.textItem = {}; form.items.push(out); return; }
+    if (it.imageItem) { out.imageItem = it.imageItem; form.items.push(out); return; }
+
+    if (it.questionGroupItem) {
+      const g = it.questionGroupItem;
+      out.questionGroupItem = {
+        questions: (g.questions || []).map(sq => ({
+          questionId: sq.questionId || gid(),
+          required: !!sq.required,
+          rowQuestion: { title: (sq.rowQuestion && sq.rowQuestion.title) || sq.title || "" }
+        })),
+        grid: {
+          columns: {
+            type: (g.grid && g.grid.columns && g.grid.columns.type) || "RADIO",
+            options: (g.grid && g.grid.columns && g.grid.columns.options) || []
+          }
+        }
+      };
+      form.items.push(out); return;
+    }
+
+    if (it.questionItem) {
+      const src = it.questionItem.question || {};
+      out.questionItem = { question: Object.assign({}, src, { questionId: src.questionId || gid(), required: !!src.required }) };
+      form.items.push(out); return;
+    }
+
+    if (it.type === "grid" || it.type === "checkbox_grid") {
+      out.questionGroupItem = {
+        questions: (it.rows || []).map(r => ({ questionId: gid(), required: !!it.required, rowQuestion: { title: r } })),
+        grid: { columns: { type: it.type === "checkbox_grid" ? "CHECKBOX" : "RADIO", options: optsOf(it.columns || []) } }
+      };
+      form.items.push(out); return;
+    }
+
+    const mk = SIMPLE_MAP[it.type];
+    if (!mk) { console.warn("Item #" + i + ": type không nhận diện được:", it.type); return; }
+    out.questionItem = { question: Object.assign({ questionId: gid(), required: !!it.required }, mk(it)) };
+    form.items.push(out);
+  });
+
+  if (!form.items.length) throw new Error("Không tìm thấy item nào hợp lệ.");
+  return form;
+}
+
+function paginate(form) {
+  const pages = [{ header: null, items: [] }];
+  form.items.forEach(it => {
+    if (it.pageBreakItem) pages.push({ header: it, items: [] });
+    else pages[pages.length - 1].items.push(it);
+  });
+  if (!pages[0].header && !pages[0].items.length && pages.length > 1) pages.shift();
+  return pages;
+}
+
+function stats(form) {
+  let total = 0, required = 0, rows = 0, branches = 0, sec = 0;
+  form.items.forEach(it => {
+    if (it.questionGroupItem) {
+      total++;
+      const n = it.questionGroupItem.questions.length;
+      rows += n;
+      if (it.questionGroupItem.questions.some(q => q.required)) required++;
+      sec += 10 + n * 8;
+    } else if (it.questionItem) {
+      total++;
+      const q = it.questionItem.question;
+      if (q.required) required++;
+      const isPara = q.textQuestion && q.textQuestion.paragraph;
+      sec += isPara ? (q.required ? 50 : 20) : 13;
+      if (q.choiceQuestion && q.choiceQuestion.options.some(o => o.goToSectionId || o.goToAction)) branches++;
+    }
+  });
+  return { total, required, rows, branches, minutes: Math.max(1, Math.round(sec / 60)) };
+}
+
+/* ==========================================================================
+   STATE
+   ========================================================================== */
+const state = { form: null, pages: [], page: 0, history: [], answers: {}, submitted: false, sourceName: "" };
+
+function setForm(form, sourceName) {
+  state.form = form;
+  state.pages = paginate(form);
+  state.page = 0;
+  state.history = [];
+  state.answers = {};
+  state.submitted = false;
+  if (sourceName) state.sourceName = sourceName;
+  document.title = form.info.documentTitle || form.info.title;
+  renderAll();
+}
+
+function renderAll() {
+  renderForm();
+  renderOutline();
+  renderScript();
+  document.getElementById("jsonText").value = JSON.stringify(state.form, null, 2);
+  const s = stats(state.form);
+  document.getElementById("metaPill").textContent =
+    `${s.total} câu · ${state.pages.length} phần · ~${s.minutes} phút`;
+}
+
+/* ==========================================================================
+   FORM VIEW
+   ========================================================================== */
+function renderForm() {
+  const root = document.getElementById("view-form");
+  root.innerHTML = "";
+  if (state.submitted) return renderThanks(root);
+
+  if (state.pages.length > 1) {
+    const bar = el("div", "progress");
+    const track = el("div", "track");
+    const fill = el("i");
+    fill.style.width = Math.round(((state.page + 1) / state.pages.length) * 100) + "%";
+    track.appendChild(fill);
+    bar.appendChild(track);
+    bar.appendChild(el("span", "pct", `Phần ${state.page + 1} / ${state.pages.length}`));
+    root.appendChild(bar);
+  }
+
+  if (state.page === 0) {
+    const head = el("div", "card head");
+    head.appendChild(el("h1", "form-title", state.form.info.title));
+    if (state.form.info.description) head.appendChild(el("p", "form-desc", state.form.info.description));
+    const anyReq = state.form.items.some(it =>
+      (it.questionItem && it.questionItem.question.required) ||
+      (it.questionGroupItem && it.questionGroupItem.questions.some(q => q.required)));
+    if (anyReq) {
+      head.appendChild(el("div", "divider"));
+      head.appendChild(el("p", "req-note", "* Cho biết đây là câu hỏi bắt buộc"));
+    }
+    root.appendChild(head);
+  }
+
+  const page = state.pages[state.page];
+  if (page.header) {
+    const c = el("div", "card");
+    c.appendChild(el("h2", "section-title", page.header.title || ""));
+    if (page.header.description) c.appendChild(el("p", "section-desc", page.header.description));
+    root.appendChild(c);
+  }
+  page.items.forEach(it => root.appendChild(renderItem(it)));
+
+  const nav = el("div", "card");
+  const row = el("div", "nav");
+  if (state.history.length) {
+    const back = el("button", "btn ghost", "Quay lại");
+    back.onclick = () => { state.page = state.history.pop(); renderForm(); window.scrollTo(0, 0); };
+    row.appendChild(back);
+  }
+  const isLast = state.page === state.pages.length - 1;
+  const next = el("button", "btn", isLast ? "Gửi" : "Tiếp");
+  next.onclick = () => {
+    if (!validatePage()) return;
+    const target = resolveNext();
+    if (target === "SUBMIT" || target >= state.pages.length) state.submitted = true;
+    else { state.history.push(state.page); state.page = target; }
+    renderForm();
+    window.scrollTo(0, 0);
+  };
+  row.appendChild(next);
+
+  const clear = el("button", "clear-link", "Xoá hết câu trả lời");
+  clear.onclick = () => {
+    if (confirm("Xoá toàn bộ câu trả lời đã nhập?")) {
+      state.answers = {}; state.page = 0; state.history = []; renderForm(); window.scrollTo(0, 0);
+    }
+  };
+  row.appendChild(clear);
+  nav.appendChild(row);
+  root.appendChild(nav);
+
+  root.appendChild(el("p", "foot-note",
+    "Bản xem trước cục bộ — câu trả lời chỉ nằm trong bộ nhớ trình duyệt, không gửi đi đâu."));
+}
+
+/* skip-logic: lấy câu phân nhánh cuối cùng trên trang (giống Google Forms) */
+function resolveNext() {
+  const items = state.pages[state.page].items;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    if (!it.questionItem) continue;
+    const cq = it.questionItem.question.choiceQuestion;
+    if (!cq || !["RADIO", "DROP_DOWN"].includes(cq.type)) continue;
+    if (!cq.options.some(o => o.goToSectionId || o.goToAction)) continue;
+
+    const opt = cq.options.find(o => o.value === state.answers[it.questionItem.question.questionId]);
+    if (!opt) return state.page + 1;
+    if (opt.goToAction === "SUBMIT_FORM") return "SUBMIT";
+    if (opt.goToAction === "RESTART_FORM") return 0;
+    if (opt.goToSectionId) {
+      const idx = state.pages.findIndex(p => p.header && p.header.itemId === opt.goToSectionId);
+      if (idx >= 0) return idx;
+    }
+    return state.page + 1;
+  }
+  return state.page + 1;
+}
+
+function renderThanks(root) {
+  const c = el("div", "card head result");
+  c.appendChild(el("h1", "form-title", state.form.info.title));
+  c.appendChild(el("p", "form-desc",
+    "Đã ghi nhận câu trả lời. Cảm ơn bạn — kết quả tổng hợp sẽ được chia sẻ lại cho cả team.\n\n" +
+    "Đây là bản xem trước cục bộ, dữ liệu chỉ nằm trên máy bạn."));
+  c.appendChild(el("div", "divider"));
+  c.appendChild(Object.assign(el("p"), {
+    style: "font-size:13px;color:#5f6368;margin:14px 0 8px",
+    textContent: "Payload câu trả lời (để kiểm tra logic):"
+  }));
+  const pre = el("pre");
+  pre.textContent = JSON.stringify(buildResponsePayload(), null, 2);
+  c.appendChild(pre);
+
+  const row = el("div", "nav");
+  const again = el("button", "btn", "Làm lại từ đầu");
+  again.onclick = () => {
+    state.answers = {}; state.submitted = false; state.page = 0; state.history = [];
+    renderForm(); window.scrollTo(0, 0);
+  };
+  row.appendChild(again);
+  const dl = el("button", "btn ghost", "Tải câu trả lời (JSON)");
+  dl.onclick = () => download("survey-response.json", JSON.stringify(buildResponsePayload(), null, 2));
+  row.appendChild(dl);
+  c.appendChild(row);
+  root.appendChild(c);
+}
+
+function buildResponsePayload() {
+  const out = {};
+  state.form.items.forEach(it => {
+    if (it.questionItem) {
+      const v = state.answers[it.questionItem.question.questionId];
+      if (!isEmpty(v)) out[it.title || it.itemId] = v;
+    } else if (it.questionGroupItem) {
+      const g = {};
+      it.questionGroupItem.questions.forEach(sq => {
+        const v = state.answers[sq.questionId];
+        if (!isEmpty(v)) g[sq.rowQuestion.title] = v;
+      });
+      if (Object.keys(g).length) out[it.title] = g;
+    }
+  });
+  return out;
+}
+
+function renderItem(it) {
+  const card = el("div", "card");
+  card.dataset.itemId = it.itemId;
+
+  if (it.textItem) {
+    card.appendChild(el("h3", "section-title", it.title || ""));
+    if (it.description) card.appendChild(el("p", "section-desc", it.description));
+    return card;
+  }
+
+  const h = el("div", "q-title");
+  h.appendChild(document.createTextNode(it.title || ""));
+  const required = it.questionItem
+    ? !!it.questionItem.question.required
+    : (it.questionGroupItem ? it.questionGroupItem.questions.some(q => q.required) : false);
+  if (required) h.appendChild(Object.assign(el("span", "star"), { textContent: " *" }));
+  card.appendChild(h);
+  if (it.description) card.appendChild(el("p", "q-desc", it.description));
+
+  const body = el("div", "q-body");
+  if (it.questionItem) body.appendChild(renderQuestion(it, it.questionItem.question));
+  else if (it.questionGroupItem) body.appendChild(renderGrid(it));
+  card.appendChild(body);
+
+  const err = el("div", "q-error");
+  err.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 1 21h22L12 2zm1 15h-2v-2h2v2zm0-4h-2V8h2v5z"/></svg>';
+  err.appendChild(el("span", null, required ? "Đây là câu hỏi bắt buộc" : "Chưa hợp lệ"));
+  card.appendChild(err);
+  return card;
+}
+
+function showErr(itemId, text) {
+  const card = document.querySelector(`#view-form .card[data-item-id="${itemId}"]`);
+  if (!card) return;
+  card.classList.add("invalid");
+  const e = card.querySelector(".q-error");
+  if (e) { e.classList.add("show"); if (text) e.querySelector("span").textContent = text; }
+}
+function clearErr(itemId) {
+  const card = document.querySelector(`#view-form .card[data-item-id="${itemId}"]`);
+  if (!card) return;
+  card.classList.remove("invalid");
+  const e = card.querySelector(".q-error");
+  if (e) e.classList.remove("show");
+}
+
+function renderQuestion(item, q) {
+  const id = q.questionId;
+
+  if (q.textQuestion) {
+    const inp = q.textQuestion.paragraph
+      ? Object.assign(el("textarea", "t-input"), { rows: 3, placeholder: "Câu trả lời của bạn" })
+      : Object.assign(el("input", "t-input"), { type: "text", placeholder: "Câu trả lời của bạn" });
+    inp.value = state.answers[id] || "";
+    inp.oninput = () => { state.answers[id] = inp.value; clearErr(item.itemId); };
+    if (q.textQuestion.paragraph) {
+      inp.style.overflow = "hidden";
+      inp.addEventListener("input", () => { inp.style.height = "auto"; inp.style.height = inp.scrollHeight + "px"; });
+    }
+    return inp;
+  }
+
+  if (q.dateQuestion || q.timeQuestion) {
+    const inp = Object.assign(el("input", "t-input"),
+      { type: q.dateQuestion ? "date" : "time", style: "max-width:200px" });
+    inp.value = state.answers[id] || "";
+    inp.oninput = () => { state.answers[id] = inp.value; clearErr(item.itemId); };
+    return inp;
+  }
+
+  if (q.scaleQuestion) {
+    const s = q.scaleQuestion;
+    const wrap = el("div", "scale");
+    if (s.lowLabel) wrap.appendChild(el("span", "lbl low", s.lowLabel));
+    for (let v = s.low; v <= s.high; v++) {
+      const lab = el("label", "scale-item");
+      lab.appendChild(el("span", "num", String(v)));
+      const inp = Object.assign(el("input"), { type: "radio", name: id, value: String(v) });
+      inp.checked = state.answers[id] === String(v);
+      inp.onchange = () => { state.answers[id] = String(v); clearErr(item.itemId); };
+      lab.appendChild(inp);
+      lab.appendChild(el("span", "mark radio"));
+      wrap.appendChild(lab);
+    }
+    if (s.highLabel) wrap.appendChild(el("span", "lbl high", s.highLabel));
+    return wrap;
+  }
+
+  if (q.choiceQuestion) {
+    const cq = q.choiceQuestion;
+    const options = cq.options || [];
+
+    if (cq.type === "DROP_DOWN") {
+      const sel = el("select", "dd");
+      sel.appendChild(Object.assign(el("option"), { value: "", textContent: "Chọn" }));
+      options.forEach(o => {
+        if (o.isOther) return;
+        sel.appendChild(Object.assign(el("option"), { value: o.value, textContent: o.value }));
+      });
+      sel.value = state.answers[id] || "";
+      sel.onchange = () => { state.answers[id] = sel.value; clearErr(item.itemId); };
+      return sel;
+    }
+
+    const isCheck = cq.type === "CHECKBOX";
+    const cap = isCheck ? maxSelectOf(item) : null;
+    const box = el("div");
+    if (isCheck && !Array.isArray(state.answers[id]))
+      state.answers[id] = state.answers[id] ? [state.answers[id]] : [];
+
+    const registry = [];
+    const valueOf = o => (o.isOther ? "__OTHER__" : o.value);
+    const isOn = o => {
+      const a = state.answers[id];
+      if (isCheck) return (a || []).some(v => o.isOther ? String(v).startsWith("__OTHER__") : v === o.value);
+      return o.isOther ? String(a || "").startsWith("__OTHER__") : a === o.value;
+    };
+
+    options.forEach(o => {
+      const excl = isCheck && isExclusive(o);
+      const lab = el("label", "opt" + (excl ? " exclusive" : ""));
+      const inp = Object.assign(el("input"),
+        { type: isCheck ? "checkbox" : "radio", name: id, value: valueOf(o) });
+      inp.checked = isOn(o);
+
+      lab.appendChild(inp);
+      lab.appendChild(el("span", "mark " + (isCheck ? "check" : "radio")));
+      lab.appendChild(el("span", "opt-label", o.isOther ? "Khác:" : o.value));
+
+      let otherInp = null;
+      if (o.isOther) {
+        otherInp = Object.assign(el("input", "t-input other-input"), { type: "text" });
+        const cur = isCheck
+          ? (state.answers[id] || []).find(v => String(v).startsWith("__OTHER__"))
+          : state.answers[id];
+        if (cur && String(cur).startsWith("__OTHER__")) otherInp.value = String(cur).slice(10);
+        otherInp.onclick = e => e.stopPropagation();
+        otherInp.oninput = () => {
+          const v = "__OTHER__:" + otherInp.value;
+          if (isCheck) {
+            const arr = (state.answers[id] || []).filter(x => !String(x).startsWith("__OTHER__"));
+            if (inp.checked) arr.push(v);
+            state.answers[id] = arr;
+          } else if (inp.checked) state.answers[id] = v;
+          clearErr(item.itemId);
+        };
+        lab.appendChild(otherInp);
+      }
+
+      inp.onchange = () => {
+        const encoded = o.isOther ? "__OTHER__:" + (otherInp ? otherInp.value : "") : o.value;
+        if (isCheck) {
+          let arr = (state.answers[id] || []).filter(x =>
+            o.isOther ? !String(x).startsWith("__OTHER__") : x !== o.value);
+          if (inp.checked) {
+            if (excl) {
+              arr = [];                                   // ô thoát → bỏ hết ô khác
+            } else {
+              arr = arr.filter(x => {                     // chọn ô thường → bỏ ô thoát
+                const src = options.find(oo => !oo.isOther && oo.value === x);
+                return !(src && isExclusive(src));
+              });
+              if (cap && arr.length >= cap) {
+                inp.checked = false;
+                showErr(item.itemId, `Chỉ chọn được tối đa ${cap} phương án.`);
+                return;
+              }
+            }
+            arr.push(encoded);
+          }
+          state.answers[id] = arr;
+          registry.forEach(r => { if (r.inp !== inp) r.inp.checked = isOn(r.o); });
+        } else {
+          state.answers[id] = encoded;
+        }
+        if (o.isOther && inp.checked && otherInp) otherInp.focus();
+        clearErr(item.itemId);
+      };
+
+      registry.push({ inp, o });
+      box.appendChild(lab);
+    });
+    return box;
+  }
+
+  return el("p", "q-desc", "(loại câu hỏi chưa hỗ trợ trong bản xem trước)");
+}
+
+function renderGrid(it) {
+  const g = it.questionGroupItem;
+  const cols = (g.grid.columns.options || []).map(o => o.value);
+  const multi = g.grid.columns.type === "CHECKBOX";
+
+  const scroll = el("div", "grid-scroll");
+  const tbl = el("table", "grid");
+  const thead = el("thead");
+  const trh = el("tr");
+  trh.appendChild(el("th", "rowh"));
+  cols.forEach(c => trh.appendChild(el("th", null, c)));
+  thead.appendChild(trh);
+  tbl.appendChild(thead);
+
+  const tb = el("tbody");
+  g.questions.forEach(sq => {
+    const tr = el("tr");
+    tr.dataset.qid = sq.questionId;
+    tr.appendChild(el("td", "rowh", sq.rowQuestion.title));
+    cols.forEach(c => {
+      const td = el("td");
+      const lab = el("label");
+      const inp = Object.assign(el("input"),
+        { type: multi ? "checkbox" : "radio", name: sq.questionId, value: c });
+      if (multi) inp.checked = (state.answers[sq.questionId] || []).includes(c);
+      else inp.checked = state.answers[sq.questionId] === c;
+      inp.onchange = () => {
+        if (multi) {
+          const arr = (state.answers[sq.questionId] || []).filter(x => x !== c);
+          if (inp.checked) arr.push(c);
+          state.answers[sq.questionId] = arr;
+        } else {
+          state.answers[sq.questionId] = c;
+        }
+        tr.classList.remove("row-invalid");
+        clearErr(it.itemId);
+      };
+      lab.appendChild(inp);
+      lab.appendChild(el("span", "mark " + (multi ? "check" : "radio")));
+      td.appendChild(lab);
+      tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+  tbl.appendChild(tb);
+  scroll.appendChild(tbl);
+  return scroll;
+}
+
+function isEmpty(v) {
+  if (v == null) return true;
+  if (Array.isArray(v)) return v.filter(x => String(x) !== "__OTHER__:").length === 0;
+  const s = String(v);
+  return s === "__OTHER__:" || s.trim() === "";
+}
+
+function validatePage() {
+  let firstBad = null;
+  state.pages[state.page].items.forEach(it => {
+    const card = document.querySelector(`#view-form .card[data-item-id="${it.itemId}"]`);
+    if (!card) return;
+    let bad = false, note = null;
+
+    if (it.questionItem) {
+      const q = it.questionItem.question;
+      const v = state.answers[q.questionId];
+      if (q.required && isEmpty(v)) bad = true;
+      const cap = maxSelectOf(it);
+      if (cap && Array.isArray(v) && v.length > cap) { bad = true; note = `Chỉ chọn được tối đa ${cap} phương án.`; }
+    } else if (it.questionGroupItem) {
+      it.questionGroupItem.questions.forEach(sq => {
+        const rowBad = sq.required && isEmpty(state.answers[sq.questionId]);
+        const tr = card.querySelector(`tr[data-qid="${sq.questionId}"]`);
+        if (tr) tr.classList.toggle("row-invalid", !!rowBad);
+        if (rowBad) bad = true;
+      });
+      if (bad) note = "Vui lòng trả lời tất cả các dòng.";
+    }
+
+    card.classList.toggle("invalid", bad);
+    const e = card.querySelector(".q-error");
+    if (e) {
+      e.classList.toggle("show", bad);
+      if (bad && note) e.querySelector("span").textContent = note;
+    }
+    if (bad && !firstBad) firstBad = card;
+  });
+
+  if (firstBad) { firstBad.scrollIntoView({ behavior: "smooth", block: "center" }); return false; }
+  return true;
+}
+
+/* ==========================================================================
+   OUTLINE VIEW
+   ========================================================================== */
+function typeInfo(it) {
+  if (it.textItem) return { label: "ghi chú", cls: "" };
+  if (it.questionGroupItem) {
+    const g = it.questionGroupItem;
+    const t = g.grid.columns.type === "CHECKBOX" ? "grid ✓" : "grid";
+    return { label: `${t} ${g.questions.length}×${g.grid.columns.options.length}`, cls: "grid" };
+  }
+  const q = it.questionItem.question;
+  if (q.textQuestion) return { label: q.textQuestion.paragraph ? "tự luận" : "text", cls: "text" };
+  if (q.scaleQuestion) return { label: `scale ${q.scaleQuestion.low}–${q.scaleQuestion.high}`, cls: "scale" };
+  if (q.dateQuestion) return { label: "date", cls: "text" };
+  if (q.timeQuestion) return { label: "time", cls: "text" };
+  if (q.choiceQuestion) {
+    const map = { RADIO: "radio", CHECKBOX: "checkbox", DROP_DOWN: "dropdown" };
+    return { label: `${map[q.choiceQuestion.type] || "choice"} · ${q.choiceQuestion.options.length}`, cls: "choice" };
+  }
+  return { label: "?", cls: "" };
+}
+
+function renderOutline() {
+  const root = document.getElementById("view-outline");
+  root.innerHTML = "";
+  const box = el("div", "outline");
+
+  const s = stats(state.form);
+  const st = el("div", "ol-stats");
+  [["Tổng câu hỏi", s.total], ["Bắt buộc", s.required], ["Phần", state.pages.length],
+   ["Dòng grid", s.rows], ["Câu phân nhánh", s.branches], ["Ước lượng", s.minutes + " phút"]]
+    .forEach(([k, v]) => {
+      const sp = el("span");
+      sp.appendChild(document.createTextNode(k + ": "));
+      sp.appendChild(Object.assign(el("b"), { textContent: String(v) }));
+      st.appendChild(sp);
+    });
+  box.appendChild(st);
+
+  let sec = 0, n = 0;
+  state.form.items.forEach(it => {
+    if (it.pageBreakItem) {
+      sec++;
+      const d = el("div", "ol-sec");
+      d.appendChild(el("span", "n", "P" + sec));
+      d.appendChild(el("span", "t", it.title || ""));
+      d.appendChild(el("span", "id", it.itemId));
+      box.appendChild(d);
+      return;
+    }
+    const row = el("div", "ol-q");
+    const ti = typeInfo(it);
+    if (it.textItem) row.appendChild(el("span", "idx", "—"));
+    else { n++; row.appendChild(el("span", "idx", String(n))); }
+
+    const txt = el("span", "txt");
+    txt.appendChild(document.createTextNode(it.title || ""));
+    const req = it.questionItem ? it.questionItem.question.required
+      : (it.questionGroupItem ? it.questionGroupItem.questions.some(q => q.required) : false);
+    if (req) txt.appendChild(Object.assign(el("span", "star"), { textContent: " *" }));
+
+    let sub = "", branch = "";
+    if (it.questionItem && it.questionItem.question.choiceQuestion) {
+      const cq = it.questionItem.question.choiceQuestion;
+      sub = cq.options.map(o => o.isOther ? "Khác…" : o.value).join(" · ");
+      const br = cq.options.filter(o => o.goToSectionId || o.goToAction);
+      if (br.length) branch = "↳ " + br.map(o =>
+        `${o.value} → ${o.goToAction === "NEXT_SECTION" ? "phần kế tiếp"
+          : o.goToAction === "SUBMIT_FORM" ? "gửi form" : o.goToSectionId}`).join("  |  ");
+    } else if (it.questionGroupItem) {
+      sub = "cột: " + it.questionGroupItem.grid.columns.options.map(o => o.value).join(" · ");
+    } else if (it.description) {
+      sub = it.description.split("\n")[0];
+    }
+    if (sub) txt.appendChild(Object.assign(el("small"), { textContent: sub }));
+    if (branch) txt.appendChild(Object.assign(el("small", "branch"), { textContent: branch }));
+    row.appendChild(txt);
+    row.appendChild(el("span", "badge " + ti.cls, ti.label));
+    box.appendChild(row);
+  });
+
+  root.appendChild(box);
+}
+
+/* ==========================================================================
+   TABS · JSON IO
+   ========================================================================== */
+document.querySelectorAll(".tab").forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", String(x === t)));
+    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+    document.getElementById("view-" + t.dataset.view).classList.add("active");
+    window.scrollTo(0, 0);
+  };
+});
+const goTab = name => document.querySelector(`.tab[data-view="${name}"]`).click();
+
+function msg(text, ok) {
+  const m = document.getElementById("jsonMsg");
+  m.textContent = text;
+  m.className = "json-msg " + (ok ? "ok" : "err");
+  if (ok) setTimeout(() => { m.textContent = ""; }, 3000);
+}
+
+document.getElementById("btnLoadJson").onclick = () => {
+  let raw;
+  try { raw = JSON.parse(document.getElementById("jsonText").value); }
+  catch (e) { return msg("JSON sai cú pháp: " + e.message, false); }
+  let form;
+  try { form = normalize(raw); }
+  catch (e) { return msg("Không nạp được: " + e.message, false); }
+  setForm(form, "dán tay");
+  msg(`Đã nạp ${stats(form).total} câu hỏi.`, true);
+  goTab("form");
+};
+
+document.getElementById("btnFormat").onclick = () => {
+  const ta = document.getElementById("jsonText");
+  try { ta.value = JSON.stringify(JSON.parse(ta.value), null, 2); msg("Đã format.", true); }
+  catch (e) { msg("JSON sai cú pháp: " + e.message, false); }
+};
+
+document.getElementById("btnCopy").onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(document.getElementById("jsonText").value);
+    msg("Đã copy.", true);
+  } catch { msg("Không copy được, hãy chọn tay.", false); }
+};
+
+document.getElementById("fileInput").onchange = e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    document.getElementById("jsonText").value = r.result;
+    document.getElementById("btnLoadJson").click();
+    state.sourceName = f.name;
+  };
+  r.readAsText(f);
+  e.target.value = "";
+};
+
+function download(name, text) {
+  const a = el("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+document.getElementById("btnDownload").onclick = () =>
+  download((state.sourceName || "survey").replace(/\.json$/, "") + ".google.json",
+           JSON.stringify(forGoogleForms(state.form), null, 2));
+
+/* ==========================================================================
+   APPS SCRIPT GENERATOR
+   Sinh một file .gs tự chứa: bộ dựng bằng FormApp + spec JSON nhúng kèm.
+   Viết theo ES5 (var / function) để chạy được cả runtime V8 và Rhino cũ.
+   ========================================================================== */
+
+/* Những gì Google Forms KHÔNG làm được, phải nói rõ thay vì im lặng bỏ qua. */
+function scriptCaveats(form) {
+  const out = [];
+  const excl = [];
+  form.items.forEach(it => {
+    const cq = it.questionItem && it.questionItem.question.choiceQuestion;
+    if (cq) cq.options.forEach(o => { if (o._exclusive) excl.push(`${it.title} → "${o.value}"`); });
+  });
+  if (excl.length) out.push(
+    `Google Forms không có "ô loại trừ" (tick ô này thì bỏ hết ô khác). ` +
+    `${excl.length} ô sau sẽ mất tính năng đó trên form thật — người trả lời vẫn tick được cùng lúc ` +
+    `với lựa chọn khác, cần làm sạch ở bước phân tích:\n· ` + excl.join("\n· "));
+
+  const caps = form.items.filter(it => {
+    const cq = it.questionItem && it.questionItem.question.choiceQuestion;
+    return cq && cq.type === "CHECKBOX" && maxSelectOf(it);
+  });
+  if (caps.length) out.push(
+    `${caps.length} câu "chọn tối đa N" được dựng bằng response validation của Google ` +
+    `(requireSelectAtMost) nên vẫn có hiệu lực thật.`);
+
+  return out;
+}
+
+function buildAppsScript(form) {
+  const spec = forGoogleForms(form);           // bỏ field mở rộng
+  const s = stats(form);
+  const sections = form.items.filter(i => i.pageBreakItem).length;
+  const caveats = scriptCaveats(form);
+
+  const header = [
+    "/**",
+    " * " + (form.info.title || "Google Form"),
+    " *",
+    " * Sinh tự động từ Survey Builder.",
+    ` * ${s.total} câu hỏi · ${sections} phần · ${s.branches} câu phân nhánh.`,
+    " *",
+    " * CÁCH DÙNG",
+    " *   1. script.google.com → New project, xoá Code.gs, dán toàn bộ file này.",
+    " *   2. Chọn hàm createForm → Run. Lần đầu Google sẽ hỏi quyền.",
+    " *   3. Xem Execution log để lấy link edit và link điền.",
+    " *",
+    " * Chạy lại sẽ tạo một form MỚI, không ghi đè form cũ.",
+    caveats.length ? " *\n * LƯU Ý\n" + caveats.map(c =>
+      c.split("\n").map(l => " *   " + l).join("\n")).join("\n *\n") : "",
+    " */"
+  ].filter(Boolean).join("\n");
+
+  const body = String.raw`
+function createForm() {
+  var spec = FORM_SPEC;
+  var form = FormApp.create(spec.info.documentTitle || spec.info.title);
+  form.setTitle(spec.info.title);
+  if (spec.info.description) form.setDescription(spec.info.description);
+  form.setProgressBar(true);
+
+  var pageById = {};   // itemId của pageBreak -> PageBreakItem, để nối nhánh
+  var pending = [];    // câu phân nhánh, nối ở lượt 2 vì đích có thể nằm sau
+
+  // Nếu item đầu tiên là pageBreak thì dựng nó thành section header, không phải
+  // page break — nếu không, trang tiêu đề sẽ trống trơn và người trả lời phải
+  // bấm Tiếp một lần vô nghĩa. Trừ khi có nhánh nào trỏ ngược về nó.
+  var navTargets = {};
+  spec.items.forEach(function (it) {
+    var cq = it.questionItem && it.questionItem.question.choiceQuestion;
+    if (!cq) return;
+    cq.options.forEach(function (o) { if (o.goToSectionId) navTargets[o.goToSectionId] = true; });
+  });
+  var inlineFirst = spec.items.length > 0 && spec.items[0].pageBreakItem && !navTargets[spec.items[0].itemId];
+
+  spec.items.forEach(function (it, idx) {
+    if (it.pageBreakItem) {
+      if (idx === 0 && inlineFirst) {
+        setMeta(form.addSectionHeaderItem(), it);
+      } else {
+        pageById[it.itemId] = setMeta(form.addPageBreakItem(), it);
+      }
+      return;
+    }
+    if (it.textItem) { setMeta(form.addSectionHeaderItem(), it); return; }
+    if (it.questionGroupItem) { addGrid(form, it); return; }
+    if (it.questionItem) { addQuestion(form, it, pending); return; }
+  });
+
+  // Lượt 2 — điều hướng theo lựa chọn.
+  // Google chỉ áp dụng điều hướng khi câu đó là câu CUỐI của phần, nên trong
+  // spec mỗi câu lọc được đặt riêng một phần.
+  for (var i = 0; i < pending.length; i++) {
+    var p = pending[i];
+    var choices = [];
+    for (var j = 0; j < p.options.length; j++) {
+      var o = p.options[j];
+      if (o.isOther) continue;                       // ô "Khác" không nhận điều hướng
+      if (o.goToAction === 'SUBMIT_FORM')       choices.push(p.item.createChoice(o.value, FormApp.PageNavigationType.SUBMIT));
+      else if (o.goToAction === 'RESTART_FORM') choices.push(p.item.createChoice(o.value, FormApp.PageNavigationType.RESTART));
+      else if (o.goToSectionId && pageById[o.goToSectionId])
+                                                choices.push(p.item.createChoice(o.value, pageById[o.goToSectionId]));
+      else                                      choices.push(p.item.createChoice(o.value, FormApp.PageNavigationType.CONTINUE));
+    }
+    p.item.setChoices(choices);
+  }
+
+  Logger.log('Đã tạo: ' + form.getTitle());
+  Logger.log('Sửa form:  ' + form.getEditUrl());
+  Logger.log('Link điền: ' + form.getPublishedUrl());
+  Logger.log('Số item:   ' + form.getItems().length);
+  return form;
+}
+
+/* ---- tiêu đề + mô tả, dùng chung cho mọi loại item ---- */
+function setMeta(item, it) {
+  item.setTitle(it.title || '');
+  if (it.description) item.setHelpText(it.description);
+  return item;
+}
+
+/* ---- grid: dòng = câu con, cột = thang đo ---- */
+function addGrid(form, it) {
+  var g = it.questionGroupItem;
+  var multi = g.grid.columns.type === 'CHECKBOX';
+  var item = multi ? form.addCheckboxGridItem() : form.addGridItem();
+
+  var rows = [], cols = [], anyRequired = false, k;
+  for (k = 0; k < g.questions.length; k++) {
+    rows.push(g.questions[k].rowQuestion.title);
+    if (g.questions[k].required) anyRequired = true;
+  }
+  for (k = 0; k < g.grid.columns.options.length; k++) cols.push(g.grid.columns.options[k].value);
+
+  setMeta(item, it);
+  item.setRows(rows).setColumns(cols);
+  // Google áp dụng "bắt buộc" cho toàn bộ dòng, không theo từng dòng riêng.
+  if (anyRequired) item.setRequired(true);
+  return item;
+}
+
+/* ---- câu hỏi đơn ---- */
+function addQuestion(form, it, pending) {
+  var q = it.questionItem.question;
+  var item = null;
+
+  if (q.textQuestion) {
+    item = q.textQuestion.paragraph ? form.addParagraphTextItem() : form.addTextItem();
+
+  } else if (q.scaleQuestion) {
+    var sc = q.scaleQuestion;
+    item = form.addScaleItem().setBounds(sc.low, sc.high);
+    if (sc.lowLabel || sc.highLabel) item.setLabels(sc.lowLabel || '', sc.highLabel || '');
+
+  } else if (q.dateQuestion) {
+    item = form.addDateItem();
+
+  } else if (q.timeQuestion) {
+    item = form.addTimeItem();
+
+  } else if (q.choiceQuestion) {
+    var cq = q.choiceQuestion;
+    var values = [], hasOther = false, hasNav = false, i;
+    for (i = 0; i < cq.options.length; i++) {
+      var o = cq.options[i];
+      if (o.isOther) { hasOther = true; continue; }
+      values.push(o.value);
+      if (o.goToSectionId || o.goToAction) hasNav = true;
+    }
+
+    if (cq.type === 'CHECKBOX')       item = form.addCheckboxItem();
+    else if (cq.type === 'DROP_DOWN') item = form.addListItem();
+    else                              item = form.addMultipleChoiceItem();
+
+    item.setChoiceValues(values);
+    // Dropdown của Google không hỗ trợ ô "Khác".
+    if (hasOther && item.showOtherOption) item.showOtherOption(true);
+    if (cq.shuffle && item.setShuffleOptions) item.setShuffleOptions(true);
+
+    if (cq.type === 'CHECKBOX') {
+      var cap = maxSelect(it);
+      if (cap) item.setValidation(
+        FormApp.createCheckboxValidation().requireSelectAtMost(cap).build());
+    }
+    if (hasNav) pending.push({ item: item, options: cq.options });
+
+  } else {
+    Logger.log('Bỏ qua item không nhận diện được: ' + (it.title || it.itemId));
+    return null;
+  }
+
+  setMeta(item, it);
+  if (q.required && item.setRequired) item.setRequired(true);
+  return item;
+}
+
+/* ---- đọc giới hạn "chọn tối đa N" từ chính nội dung câu hỏi ---- */
+function maxSelect(it) {
+  var m = ((it.title || '') + ' ' + (it.description || '')).match(/tối đa\s+(\d+)/i);
+  return m ? parseInt(m[1], 10) : null;
+}
+`;
+
+  return header + "\n\nvar FORM_SPEC = " + JSON.stringify(spec, null, 2) + ";\n" + body;
+}
+
+function renderScript() {
+  document.getElementById("scriptText").value = buildAppsScript(state.form);
+  const box = document.getElementById("scriptCaveat");
+  const c = scriptCaveats(state.form);
+  box.className = c.length ? "caveat" : "hint";
+  box.textContent = c.join("\n\n");
+}
+
+function scriptMsg(text, ok) {
+  const m = document.getElementById("scriptMsg");
+  m.textContent = text;
+  m.className = "json-msg " + (ok ? "ok" : "err");
+  if (ok) setTimeout(() => { m.textContent = ""; }, 3000);
+}
+
+document.getElementById("btnCopyScript").onclick = async () => {
+  const ta = document.getElementById("scriptText");
+  try { await navigator.clipboard.writeText(ta.value); scriptMsg("Đã copy — dán vào Code.gs.", true); }
+  catch { ta.select(); scriptMsg("Không copy tự động được, đã chọn sẵn — bấm Cmd+C.", false); }
+};
+
+document.getElementById("btnDownloadScript").onclick = () => {
+  const name = (state.sourceName || "survey").replace(/\.json$/, "") + ".gs";
+  const a = el("a");
+  a.href = URL.createObjectURL(new Blob([document.getElementById("scriptText").value],
+    { type: "text/javascript" }));
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+/* ==========================================================================
+   BOOT — nạp danh sách survey từ surveys/manifest.json
+   ========================================================================== */
+const picker = document.getElementById("surveyPicker");
+
+async function loadSurvey(file) {
+  const res = await fetch("surveys/" + file, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status} khi tải surveys/${file}`);
+  setForm(normalize(await res.json()), file);
+}
+
+picker.onchange = () => {
+  loadSurvey(picker.value).catch(e => bootError(e));
+  goTab("form");
+};
+
+function bootError(err) {
+  picker.style.display = "none";
+  const root = document.getElementById("view-form");
+  root.innerHTML = "";
+  const box = el("div", "boot-err");
+  box.appendChild(el("h2", null, "Không đọc được surveys/manifest.json"));
+  box.appendChild(el("p", null,
+    "Nếu bạn mở file bằng cách double-click (giao thức file://), trình duyệt chặn việc đọc file cạnh bên. " +
+    "Chạy một local server rồi mở lại:"));
+  const pre = el("pre");
+  pre.textContent = "cd " + "\"" + location.pathname.replace(/\/index\.html$/, "") + "\"\n" +
+                    "python3 -m http.server 8000\n" +
+                    "# rồi mở http://localhost:8000";
+  box.appendChild(pre);
+  box.appendChild(el("p", null,
+    "Hoặc sang tab JSON và bấm “Mở file…” để chọn trực tiếp một file trong surveys/."));
+  box.appendChild(el("p", null, "Chi tiết lỗi: " + err.message));
+  root.appendChild(box);
+  document.getElementById("metaPill").textContent = "chưa nạp được survey";
+}
+
+(async function boot() {
+  try {
+    const res = await fetch("surveys/manifest.json", { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const { surveys } = await res.json();
+    if (!surveys || !surveys.length) throw new Error("manifest.json không có survey nào");
+    surveys.forEach(s => {
+      const o = el("option", null, `${s.name}  (${s.questions} câu · ~${s.minutes}′)`);
+      o.value = s.file;
+      o.title = s.note || "";
+      picker.appendChild(o);
+    });
+    picker.value = surveys[0].file;
+    await loadSurvey(surveys[0].file);
+  } catch (e) {
+    bootError(e);
+  }
+})();
+</script>
+</body>
+</html>

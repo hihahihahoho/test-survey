@@ -1,0 +1,2476 @@
+{
+  "info": {
+    "title": "Khảo sát hiện trạng công việc & công cụ — Creative Team",
+    "documentTitle": "Creative Workflow & Tooling Audit 2026",
+    "description": "MỤC ĐÍCH\nKhảo sát này thu thập ba thứ: (1) mỗi người đang làm loại việc gì và mỗi loại chiếm bao nhiêu khối lượng, (2) ở từng công đoạn mọi người đang dùng công cụ nào, (3) những công cụ đó còn thiếu hoặc còn tắc ở đâu.\n\nKẾT QUẢ DÙNG ĐỂ LÀM GÌ\nQuyết định nên xây công cụ nội bộ hoặc đưa AI vào công đoạn nào để thực sự giảm việc thủ công. Kết quả tổng hợp sẽ được chia sẻ lại cho cả team.\n\nCAM KẾT\n· Không dùng để đánh giá năng lực, KPI hay xếp hạng cá nhân.\n· Không có câu trả lời đúng hay sai. Trả lời theo thực tế, không theo mong đợi.\n· Phần tên và email nằm ở cuối và không bắt buộc.\n\nTHỜI GIAN\nPhần chính khoảng 15 phút. Khảo sát tự bỏ qua những mảng bạn không làm, nên nhiều người sẽ xong nhanh hơn. Hết phần chính bạn có thể gửi luôn, hoặc trả lời thêm khoảng 4 phút câu mở.\n\nNếu có câu nào chưa rõ nghĩa, hãy chọn phương án gần nhất rồi ghi lại ở phần Ý kiến mở — chúng tôi sẽ sửa cho vòng khảo sát sau."
+  },
+  "items": [
+    {
+      "itemId": "sec_profile",
+      "title": "Phần 1 · Vai trò của bạn",
+      "pageBreakItem": {},
+      "description": "Ba câu nhanh để tổng hợp kết quả theo nhóm."
+    },
+    {
+      "itemId": "q0001",
+      "title": "Vai trò chính của bạn hiện nay",
+      "description": "Chọn vai trò chiếm phần lớn thời gian, kể cả khi bạn kiêm nhiều mảng.",
+      "questionItem": {
+        "question": {
+          "questionId": "q0002",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Graphic Designer"
+              },
+              {
+                "value": "UI / Product Designer"
+              },
+              {
+                "value": "Illustrator / Character Artist"
+              },
+              {
+                "value": "Motion Designer / Animator"
+              },
+              {
+                "value": "Game Artist"
+              },
+              {
+                "value": "3D Artist"
+              },
+              {
+                "value": "Video Editor"
+              },
+              {
+                "value": "Art Director / Team Lead"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0003",
+      "title": "Số năm kinh nghiệm trong ngành",
+      "questionItem": {
+        "question": {
+          "questionId": "q0004",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Dưới 1 năm"
+              },
+              {
+                "value": "1–3 năm"
+              },
+              {
+                "value": "3–5 năm"
+              },
+              {
+                "value": "5–8 năm"
+              },
+              {
+                "value": "Trên 8 năm"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0005",
+      "title": "Output của bạn đi vào đâu?",
+      "description": "Chọn tất cả những kênh áp dụng.",
+      "questionItem": {
+        "question": {
+          "questionId": "q0006",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "App / sản phẩm số"
+              },
+              {
+                "value": "Game"
+              },
+              {
+                "value": "Social media (organic)"
+              },
+              {
+                "value": "Ads / performance creative"
+              },
+              {
+                "value": "Website / landing page"
+              },
+              {
+                "value": "Video / TVC"
+              },
+              {
+                "value": "Print / OOH"
+              },
+              {
+                "value": "Brand asset / pitch deck"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_work_static",
+      "title": "Phần 2 · Khối lượng công việc (1/2)",
+      "pageBreakItem": {},
+      "description": "Chấm theo khối lượng công việc thực tế của bạn trong 2–3 tháng gần đây.\nCách chấm: Rất nhiều = chiếm phần lớn thời gian trong tuần · Nhiều = làm thường xuyên · Trung bình = làm đều nhưng không nhiều · Ít / rất ít = thỉnh thoảng · Không làm = không thuộc việc của tôi."
+    },
+    {
+      "itemId": "q0007",
+      "title": "Thiết kế & minh hoạ",
+      "questionGroupItem": {
+        "questions": [
+          {
+            "questionId": "q0008",
+            "required": true,
+            "rowQuestion": {
+              "title": "Icon app, icon UI"
+            }
+          },
+          {
+            "questionId": "q0009",
+            "required": true,
+            "rowQuestion": {
+              "title": "Màn hình UI (app / web)"
+            }
+          },
+          {
+            "questionId": "q000a",
+            "required": true,
+            "rowQuestion": {
+              "title": "Character / mascot"
+            }
+          },
+          {
+            "questionId": "q000b",
+            "required": true,
+            "rowQuestion": {
+              "title": "Illustration / key visual"
+            }
+          },
+          {
+            "questionId": "q000c",
+            "required": true,
+            "rowQuestion": {
+              "title": "Banner quảng cáo (ads, performance)"
+            }
+          },
+          {
+            "questionId": "q000d",
+            "required": true,
+            "rowQuestion": {
+              "title": "Graphic social (post, story, carousel, thumbnail)"
+            }
+          }
+        ],
+        "grid": {
+          "columns": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Rất nhiều"
+              },
+              {
+                "value": "Nhiều"
+              },
+              {
+                "value": "Trung bình"
+              },
+              {
+                "value": "Ít / rất ít"
+              },
+              {
+                "value": "Không làm"
+              }
+            ]
+          },
+          "shuffleQuestions": false
+        }
+      }
+    },
+    {
+      "itemId": "q000e",
+      "title": "Ảnh, hậu kỳ & tài liệu",
+      "questionGroupItem": {
+        "questions": [
+          {
+            "questionId": "q000f",
+            "required": true,
+            "rowQuestion": {
+              "title": "Ảnh sản phẩm / ghép ảnh (composite)"
+            }
+          },
+          {
+            "questionId": "q000g",
+            "required": true,
+            "rowQuestion": {
+              "title": "Retouch & chỉnh sửa ảnh có sẵn"
+            }
+          },
+          {
+            "questionId": "q000h",
+            "required": true,
+            "rowQuestion": {
+              "title": "Infographic / data visual"
+            }
+          },
+          {
+            "questionId": "q000i",
+            "required": true,
+            "rowQuestion": {
+              "title": "Print / OOH / pitch deck / brand asset"
+            }
+          }
+        ],
+        "grid": {
+          "columns": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Rất nhiều"
+              },
+              {
+                "value": "Nhiều"
+              },
+              {
+                "value": "Trung bình"
+              },
+              {
+                "value": "Ít / rất ít"
+              },
+              {
+                "value": "Không làm"
+              }
+            ]
+          },
+          "shuffleQuestions": false
+        }
+      }
+    },
+    {
+      "itemId": "sec_work_motion",
+      "title": "Phần 2 · Khối lượng công việc (2/2)",
+      "pageBreakItem": {},
+      "description": "Cách chấm: Rất nhiều = chiếm phần lớn thời gian trong tuần · Nhiều = làm thường xuyên · Trung bình = làm đều nhưng không nhiều · Ít / rất ít = thỉnh thoảng · Không làm = không thuộc việc của tôi."
+    },
+    {
+      "itemId": "q000j",
+      "title": "Chuyển động, 3D & game",
+      "questionGroupItem": {
+        "questions": [
+          {
+            "questionId": "q000k",
+            "required": true,
+            "rowQuestion": {
+              "title": "Animation UI / micro-interaction (Lottie, Rive)"
+            }
+          },
+          {
+            "questionId": "q000l",
+            "required": true,
+            "rowQuestion": {
+              "title": "Animation character & rigging"
+            }
+          },
+          {
+            "questionId": "q000m",
+            "required": true,
+            "rowQuestion": {
+              "title": "Motion graphic / video ads / edit video"
+            }
+          },
+          {
+            "questionId": "q000n",
+            "required": true,
+            "rowQuestion": {
+              "title": "Asset game (item, tile, UI game, effect)"
+            }
+          },
+          {
+            "questionId": "q000o",
+            "required": true,
+            "rowQuestion": {
+              "title": "3D modeling / render"
+            }
+          }
+        ],
+        "grid": {
+          "columns": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Rất nhiều"
+              },
+              {
+                "value": "Nhiều"
+              },
+              {
+                "value": "Trung bình"
+              },
+              {
+                "value": "Ít / rất ít"
+              },
+              {
+                "value": "Không làm"
+              }
+            ]
+          },
+          "shuffleQuestions": false
+        }
+      }
+    },
+    {
+      "itemId": "q000p",
+      "title": "Việc nào ngốn thời gian nhất của bạn?",
+      "textItem": {},
+      "description": "Ba câu dưới đây hỏi về THỜI GIAN, không phải tần suất — nên câu trả lời có thể khác hẳn phần chấm khối lượng ở trên. Một việc mỗi tháng chỉ làm hai lần nhưng mỗi lần mất hai ngày vẫn có thể là việc ngốn thời gian nhất của bạn.\nChỉ câu đầu bắt buộc. Nếu không nghĩ ra hạng hai, hạng ba thì cứ để trống."
+    },
+    {
+      "itemId": "q000q",
+      "title": "Việc ngốn nhiều thời gian nhất",
+      "questionItem": {
+        "question": {
+          "questionId": "q000r",
+          "required": true,
+          "choiceQuestion": {
+            "type": "DROP_DOWN",
+            "options": [
+              {
+                "value": "Icon app / icon UI"
+              },
+              {
+                "value": "Màn hình UI"
+              },
+              {
+                "value": "Character / mascot"
+              },
+              {
+                "value": "Illustration / key visual"
+              },
+              {
+                "value": "Banner quảng cáo"
+              },
+              {
+                "value": "Graphic social / thumbnail"
+              },
+              {
+                "value": "Ảnh sản phẩm / composite"
+              },
+              {
+                "value": "Retouch ảnh"
+              },
+              {
+                "value": "Infographic"
+              },
+              {
+                "value": "Print / OOH / pitch deck"
+              },
+              {
+                "value": "Animation UI (Lottie / Rive)"
+              },
+              {
+                "value": "Animation character & rigging"
+              },
+              {
+                "value": "Motion graphic / video"
+              },
+              {
+                "value": "Asset game"
+              },
+              {
+                "value": "3D modeling / render"
+              },
+              {
+                "value": "Làm biến thể từ template"
+              },
+              {
+                "value": "Resize & xuất đa tỷ lệ"
+              },
+              {
+                "value": "Bàn giao asset cho dev"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q000s",
+      "title": "Ngốn nhiều thời gian thứ hai",
+      "questionItem": {
+        "question": {
+          "questionId": "q000t",
+          "required": false,
+          "choiceQuestion": {
+            "type": "DROP_DOWN",
+            "options": [
+              {
+                "value": "Icon app / icon UI"
+              },
+              {
+                "value": "Màn hình UI"
+              },
+              {
+                "value": "Character / mascot"
+              },
+              {
+                "value": "Illustration / key visual"
+              },
+              {
+                "value": "Banner quảng cáo"
+              },
+              {
+                "value": "Graphic social / thumbnail"
+              },
+              {
+                "value": "Ảnh sản phẩm / composite"
+              },
+              {
+                "value": "Retouch ảnh"
+              },
+              {
+                "value": "Infographic"
+              },
+              {
+                "value": "Print / OOH / pitch deck"
+              },
+              {
+                "value": "Animation UI (Lottie / Rive)"
+              },
+              {
+                "value": "Animation character & rigging"
+              },
+              {
+                "value": "Motion graphic / video"
+              },
+              {
+                "value": "Asset game"
+              },
+              {
+                "value": "3D modeling / render"
+              },
+              {
+                "value": "Làm biến thể từ template"
+              },
+              {
+                "value": "Resize & xuất đa tỷ lệ"
+              },
+              {
+                "value": "Bàn giao asset cho dev"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q000u",
+      "title": "Ngốn nhiều thời gian thứ ba",
+      "questionItem": {
+        "question": {
+          "questionId": "q000v",
+          "required": false,
+          "choiceQuestion": {
+            "type": "DROP_DOWN",
+            "options": [
+              {
+                "value": "Icon app / icon UI"
+              },
+              {
+                "value": "Màn hình UI"
+              },
+              {
+                "value": "Character / mascot"
+              },
+              {
+                "value": "Illustration / key visual"
+              },
+              {
+                "value": "Banner quảng cáo"
+              },
+              {
+                "value": "Graphic social / thumbnail"
+              },
+              {
+                "value": "Ảnh sản phẩm / composite"
+              },
+              {
+                "value": "Retouch ảnh"
+              },
+              {
+                "value": "Infographic"
+              },
+              {
+                "value": "Print / OOH / pitch deck"
+              },
+              {
+                "value": "Animation UI (Lottie / Rive)"
+              },
+              {
+                "value": "Animation character & rigging"
+              },
+              {
+                "value": "Motion graphic / video"
+              },
+              {
+                "value": "Asset game"
+              },
+              {
+                "value": "3D modeling / render"
+              },
+              {
+                "value": "Làm biến thể từ template"
+              },
+              {
+                "value": "Resize & xuất đa tỷ lệ"
+              },
+              {
+                "value": "Bàn giao asset cho dev"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_process",
+      "title": "Phần 3 · Nhịp làm việc",
+      "pageBreakItem": {},
+      "description": "Ước lượng theo một tuần bình thường, không phải tuần cao điểm."
+    },
+    {
+      "itemId": "q000w",
+      "title": "Một tuần bạn bàn giao khoảng bao nhiêu asset hoàn chỉnh?",
+      "description": "Mỗi tỷ lệ hoặc kích thước xuất ra tính là một asset.",
+      "questionItem": {
+        "question": {
+          "questionId": "q000x",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Dưới 5"
+              },
+              {
+                "value": "5–15"
+              },
+              {
+                "value": "16–30"
+              },
+              {
+                "value": "31–60"
+              },
+              {
+                "value": "Trên 60"
+              },
+              {
+                "value": "Khó ước lượng"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q000y",
+      "title": "Một asset điển hình mất bao lâu từ lúc nhận brief đến lúc bàn giao?",
+      "questionItem": {
+        "question": {
+          "questionId": "q000z",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Dưới 30 phút"
+              },
+              {
+                "value": "30 phút – 1 giờ"
+              },
+              {
+                "value": "1–3 giờ"
+              },
+              {
+                "value": "3–8 giờ"
+              },
+              {
+                "value": "Trên 1 ngày"
+              },
+              {
+                "value": "Rất khác nhau, không có mức điển hình"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0010",
+      "title": "Trong công việc một tuần, phần là biến thể của cái đã có (cùng layout, khác nội dung) chiếm khoảng bao nhiêu?",
+      "questionItem": {
+        "question": {
+          "questionId": "q0011",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Dưới 20%"
+              },
+              {
+                "value": "20–40%"
+              },
+              {
+                "value": "40–60%"
+              },
+              {
+                "value": "60–80%"
+              },
+              {
+                "value": "Trên 80%"
+              },
+              {
+                "value": "Không rõ"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0012",
+      "title": "Với một asset điển hình, mỗi công đoạn chiếm bao nhiêu thời gian?",
+      "questionGroupItem": {
+        "questions": [
+          {
+            "questionId": "q0013",
+            "required": true,
+            "rowQuestion": {
+              "title": "Đọc brief & làm rõ yêu cầu"
+            }
+          },
+          {
+            "questionId": "q0014",
+            "required": true,
+            "rowQuestion": {
+              "title": "Research / tìm reference"
+            }
+          },
+          {
+            "questionId": "q0015",
+            "required": true,
+            "rowQuestion": {
+              "title": "Ideation, sketch, layout"
+            }
+          },
+          {
+            "questionId": "q0016",
+            "required": true,
+            "rowQuestion": {
+              "title": "Tạo nội dung chính (vẽ, dựng, gen)"
+            }
+          },
+          {
+            "questionId": "q0017",
+            "required": true,
+            "rowQuestion": {
+              "title": "Hậu kỳ (tách nền, retouch, color)"
+            }
+          },
+          {
+            "questionId": "q0018",
+            "required": true,
+            "rowQuestion": {
+              "title": "Animation / rigging"
+            }
+          },
+          {
+            "questionId": "q0019",
+            "required": true,
+            "rowQuestion": {
+              "title": "Resize & xuất nhiều phiên bản"
+            }
+          },
+          {
+            "questionId": "q001a",
+            "required": true,
+            "rowQuestion": {
+              "title": "Đặt tên, đóng gói, bàn giao"
+            }
+          }
+        ],
+        "grid": {
+          "columns": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Rất nhiều"
+              },
+              {
+                "value": "Nhiều"
+              },
+              {
+                "value": "Trung bình"
+              },
+              {
+                "value": "Ít"
+              },
+              {
+                "value": "Không áp dụng"
+              }
+            ]
+          },
+          "shuffleQuestions": false
+        }
+      }
+    },
+    {
+      "itemId": "sec_tools_common",
+      "title": "Phần 4 · Công cụ — phần dùng chung",
+      "pageBreakItem": {},
+      "description": "Chọn tất cả công cụ bạn thực sự dùng, kể cả công cụ cá nhân hoặc bạn tự trả tiền.\nSau phần này, khảo sát chỉ hỏi tiếp về những mảng bạn thực sự làm."
+    },
+    {
+      "itemId": "q001b",
+      "title": "Bạn tìm reference ở đâu?",
+      "questionItem": {
+        "question": {
+          "questionId": "q001c",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Pinterest"
+              },
+              {
+                "value": "Behance"
+              },
+              {
+                "value": "Dribbble"
+              },
+              {
+                "value": "Google Images"
+              },
+              {
+                "value": "Mobbin"
+              },
+              {
+                "value": "Savee / Cosmos"
+              },
+              {
+                "value": "ArtStation"
+              },
+              {
+                "value": "Instagram / TikTok"
+              },
+              {
+                "value": "Awwwards / Land-book"
+              },
+              {
+                "value": "Xem trực tiếp đối thủ"
+              },
+              {
+                "value": "Thư viện nội bộ (Notion, Milanote, Drive)"
+              },
+              {
+                "value": "Hỏi AI (ChatGPT, Claude, Gemini)"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001d",
+      "title": "Tìm reference cho một việc thường mất bao lâu?",
+      "questionItem": {
+        "question": {
+          "questionId": "q001e",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Dưới 10 phút"
+              },
+              {
+                "value": "10–30 phút"
+              },
+              {
+                "value": "30–60 phút"
+              },
+              {
+                "value": "Hơn 1 giờ"
+              },
+              {
+                "value": "Rất khác nhau"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001f",
+      "title": "Bạn dùng công cụ AI nào để tạo ảnh?",
+      "questionItem": {
+        "question": {
+          "questionId": "q001g",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Midjourney"
+              },
+              {
+                "value": "ComfyUI (Stable Diffusion / Flux)"
+              },
+              {
+                "value": "Automatic1111 / Forge"
+              },
+              {
+                "value": "Adobe Firefly"
+              },
+              {
+                "value": "Photoshop Generative Fill"
+              },
+              {
+                "value": "Gemini / Nano Banana"
+              },
+              {
+                "value": "Ideogram"
+              },
+              {
+                "value": "Leonardo"
+              },
+              {
+                "value": "Recraft"
+              },
+              {
+                "value": "Krea"
+              },
+              {
+                "value": "Freepik AI"
+              },
+              {
+                "value": "Không dùng AI tạo ảnh",
+                "_exclusive": true
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001h",
+      "title": "Bạn export & tối ưu file bằng gì?",
+      "questionItem": {
+        "question": {
+          "questionId": "q001i",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Export trực tiếp từ công cụ thiết kế"
+              },
+              {
+                "value": "Figma export preset / plugin"
+              },
+              {
+                "value": "Photoshop Actions / Image Processor"
+              },
+              {
+                "value": "TinyPNG / Squoosh"
+              },
+              {
+                "value": "ImageOptim"
+              },
+              {
+                "value": "SVGO / SVGOMG"
+              },
+              {
+                "value": "LottieFiles optimizer"
+              },
+              {
+                "value": "Script hoặc CLI tự viết"
+              },
+              {
+                "value": "Làm tay từng file"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001j",
+      "title": "Asset được lưu và bàn giao qua đâu?",
+      "questionItem": {
+        "question": {
+          "questionId": "q001k",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Figma"
+              },
+              {
+                "value": "Google Drive"
+              },
+              {
+                "value": "Dropbox"
+              },
+              {
+                "value": "Slack / Telegram / Zalo"
+              },
+              {
+                "value": "Git repo"
+              },
+              {
+                "value": "Server / NAS nội bộ"
+              },
+              {
+                "value": "Jira / Asana attachment"
+              },
+              {
+                "value": "Notion"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001l",
+      "title": "Bạn có đang dùng cơ chế tự động sẵn có nào trong công cụ không?",
+      "description": "Chọn những cái bạn thực sự dùng, không phải những cái bạn biết là có.",
+      "questionItem": {
+        "question": {
+          "questionId": "q001m",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Photoshop Actions / Batch / Image Processor"
+              },
+              {
+                "value": "After Effects expression"
+              },
+              {
+                "value": "After Effects Essential Graphics"
+              },
+              {
+                "value": "Figma component & variants"
+              },
+              {
+                "value": "Figma plugin"
+              },
+              {
+                "value": "Illustrator action / script"
+              },
+              {
+                "value": "Rive state machine"
+              },
+              {
+                "value": "Không dùng cái nào",
+                "_exclusive": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001n",
+      "title": "Bạn có tự viết được script, action hoặc plugin không?",
+      "questionItem": {
+        "question": {
+          "questionId": "q001o",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có, viết được"
+              },
+              {
+                "value": "Sửa được script người khác viết"
+              },
+              {
+                "value": "Không, nhưng muốn học"
+              },
+              {
+                "value": "Không, và không có nhu cầu"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_gate_graphic",
+      "title": "Phần 5 · Bạn làm những mảng nào?",
+      "pageBreakItem": {},
+      "description": "Ba câu hỏi lọc, để bỏ qua những phần không liên quan đến bạn."
+    },
+    {
+      "itemId": "q001p",
+      "title": "Bạn có làm ảnh tĩnh, illustration, graphic hoặc icon không?",
+      "questionItem": {
+        "question": {
+          "questionId": "q001q",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có",
+                "goToAction": "NEXT_SECTION"
+              },
+              {
+                "value": "Không",
+                "goToSectionId": "sec_gate_motion"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_mod_graphic",
+      "title": "Phần 5A · Công cụ cho ảnh tĩnh, illustration & graphic",
+      "pageBreakItem": {}
+    },
+    {
+      "itemId": "q001r",
+      "title": "Vẽ, dựng & vector — bạn dùng gì?",
+      "questionItem": {
+        "question": {
+          "questionId": "q001s",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Photoshop"
+              },
+              {
+                "value": "Procreate"
+              },
+              {
+                "value": "Clip Studio Paint"
+              },
+              {
+                "value": "Krita"
+              },
+              {
+                "value": "Affinity Photo"
+              },
+              {
+                "value": "Illustrator"
+              },
+              {
+                "value": "Figma"
+              },
+              {
+                "value": "Affinity Designer"
+              },
+              {
+                "value": "Inkscape"
+              },
+              {
+                "value": "Sketch"
+              },
+              {
+                "value": "Icon set có sẵn (Iconify, Phosphor, Lucide, Font Awesome…)"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001t",
+      "title": "Tách nền / masking — bạn dùng gì?",
+      "questionItem": {
+        "question": {
+          "questionId": "q001u",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Photoshop Select Subject / Remove Background"
+              },
+              {
+                "value": "Photoshop làm tay (pen, channel, refine edge)"
+              },
+              {
+                "value": "remove.bg"
+              },
+              {
+                "value": "Photoroom"
+              },
+              {
+                "value": "Adobe Express / Firefly"
+              },
+              {
+                "value": "Figma remove background"
+              },
+              {
+                "value": "ComfyUI node (rembg, BiRefNet, SAM)"
+              },
+              {
+                "value": "Canva"
+              },
+              {
+                "value": "Không làm phần này",
+                "_exclusive": true
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001v",
+      "title": "Retouch, finishing & upscale — bạn dùng gì?",
+      "questionItem": {
+        "question": {
+          "questionId": "q001w",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Photoshop"
+              },
+              {
+                "value": "Lightroom / Camera Raw"
+              },
+              {
+                "value": "Capture One"
+              },
+              {
+                "value": "Generative Fill / Generative Expand"
+              },
+              {
+                "value": "Preset & Action có sẵn"
+              },
+              {
+                "value": "Topaz (Gigapixel / Photo AI)"
+              },
+              {
+                "value": "Photoshop Super Resolution"
+              },
+              {
+                "value": "Upscaler trong ComfyUI (ESRGAN…)"
+              },
+              {
+                "value": "Magnific / Krea upscale"
+              },
+              {
+                "value": "Không làm phần này",
+                "_exclusive": true
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_gate_motion",
+      "title": "Phần 5 · Mảng chuyển động",
+      "pageBreakItem": {}
+    },
+    {
+      "itemId": "q001x",
+      "title": "Bạn có làm animation, motion graphic hoặc video không?",
+      "questionItem": {
+        "question": {
+          "questionId": "q001y",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có",
+                "goToAction": "NEXT_SECTION"
+              },
+              {
+                "value": "Không",
+                "goToSectionId": "sec_gate_3d"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_mod_motion",
+      "title": "Phần 5B · Công cụ cho animation, motion & video",
+      "pageBreakItem": {}
+    },
+    {
+      "itemId": "q001z",
+      "title": "Animation & video — bạn dùng công cụ gì?",
+      "questionItem": {
+        "question": {
+          "questionId": "q0020",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "After Effects"
+              },
+              {
+                "value": "Adobe Animate"
+              },
+              {
+                "value": "Blender (Grease Pencil)"
+              },
+              {
+                "value": "Spine"
+              },
+              {
+                "value": "Moho"
+              },
+              {
+                "value": "Toon Boom"
+              },
+              {
+                "value": "Rive"
+              },
+              {
+                "value": "Figma prototype / Smart Animate"
+              },
+              {
+                "value": "Premiere Pro"
+              },
+              {
+                "value": "DaVinci Resolve"
+              },
+              {
+                "value": "CapCut"
+              },
+              {
+                "value": "Final Cut"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0021",
+      "title": "Animation cho app / web — bạn bàn giao ở dạng gì?",
+      "questionItem": {
+        "question": {
+          "questionId": "q0022",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Lottie (Bodymovin)"
+              },
+              {
+                "value": "dotLottie"
+              },
+              {
+                "value": "Rive (.riv)"
+              },
+              {
+                "value": "GIF / APNG"
+              },
+              {
+                "value": "MP4 / WebM"
+              },
+              {
+                "value": "SVG animation"
+              },
+              {
+                "value": "Spec để dev tự code (CSS, Compose, SwiftUI)"
+              },
+              {
+                "value": "Không làm phần này",
+                "_exclusive": true
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0023",
+      "title": "Bạn dùng công cụ AI nào để tạo video hoặc animation?",
+      "questionItem": {
+        "question": {
+          "questionId": "q0024",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Runway"
+              },
+              {
+                "value": "Kling"
+              },
+              {
+                "value": "Google Veo"
+              },
+              {
+                "value": "Sora"
+              },
+              {
+                "value": "Hailuo / MiniMax"
+              },
+              {
+                "value": "Luma"
+              },
+              {
+                "value": "Pika"
+              },
+              {
+                "value": "Wan / Hunyuan (chạy local)"
+              },
+              {
+                "value": "Không dùng",
+                "_exclusive": true
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_gate_3d",
+      "title": "Phần 5 · Mảng 3D & game",
+      "pageBreakItem": {}
+    },
+    {
+      "itemId": "q0025",
+      "title": "Bạn có làm 3D hoặc asset game không?",
+      "questionItem": {
+        "question": {
+          "questionId": "q0026",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có",
+                "goToAction": "NEXT_SECTION"
+              },
+              {
+                "value": "Không",
+                "goToSectionId": "sec_weak"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_mod_3d",
+      "title": "Phần 5C · Công cụ cho 3D & game",
+      "pageBreakItem": {}
+    },
+    {
+      "itemId": "q0027",
+      "title": "3D & pipeline game — bạn dùng gì?",
+      "questionItem": {
+        "question": {
+          "questionId": "q0028",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Blender"
+              },
+              {
+                "value": "Cinema 4D"
+              },
+              {
+                "value": "Maya"
+              },
+              {
+                "value": "3ds Max"
+              },
+              {
+                "value": "Houdini"
+              },
+              {
+                "value": "Substance Painter / Designer"
+              },
+              {
+                "value": "Spline"
+              },
+              {
+                "value": "ZBrush"
+              },
+              {
+                "value": "Unity"
+              },
+              {
+                "value": "Unreal Engine"
+              },
+              {
+                "value": "Godot"
+              },
+              {
+                "value": "Cocos"
+              },
+              {
+                "value": "Texture packer / atlas tool"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0029",
+      "title": "Bạn dùng công cụ AI nào để tạo asset 3D?",
+      "questionItem": {
+        "question": {
+          "questionId": "q002a",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Tripo / Rodin"
+              },
+              {
+                "value": "Meshy"
+              },
+              {
+                "value": "Hunyuan3D"
+              },
+              {
+                "value": "Luma / Genie"
+              },
+              {
+                "value": "Không dùng",
+                "_exclusive": true
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_weak",
+      "title": "Phần 6 · Công cụ hiện tại còn thiếu gì",
+      "pageBreakItem": {},
+      "description": "Với mỗi công đoạn, chọn những vấn đề bạn thực sự gặp. Mỗi dòng chọn được nhiều ô. Công đoạn bạn không làm thì để trống cả dòng."
+    },
+    {
+      "itemId": "q002b",
+      "title": "Công cụ ở mỗi công đoạn có vấn đề gì?",
+      "questionGroupItem": {
+        "questions": [
+          {
+            "questionId": "q002c",
+            "required": false,
+            "rowQuestion": {
+              "title": "Research / tìm reference"
+            }
+          },
+          {
+            "questionId": "q002d",
+            "required": false,
+            "rowQuestion": {
+              "title": "Tạo ảnh bằng AI"
+            }
+          },
+          {
+            "questionId": "q002e",
+            "required": false,
+            "rowQuestion": {
+              "title": "Vẽ, dựng, vector & icon"
+            }
+          },
+          {
+            "questionId": "q002f",
+            "required": false,
+            "rowQuestion": {
+              "title": "Tách nền, retouch, hậu kỳ"
+            }
+          },
+          {
+            "questionId": "q002g",
+            "required": false,
+            "rowQuestion": {
+              "title": "Animation & bàn giao motion"
+            }
+          },
+          {
+            "questionId": "q002h",
+            "required": false,
+            "rowQuestion": {
+              "title": "3D & asset game"
+            }
+          },
+          {
+            "questionId": "q002i",
+            "required": false,
+            "rowQuestion": {
+              "title": "Resize và xuất nhiều phiên bản"
+            }
+          },
+          {
+            "questionId": "q002j",
+            "required": false,
+            "rowQuestion": {
+              "title": "Quản lý version & bàn giao asset"
+            }
+          }
+        ],
+        "grid": {
+          "columns": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Chậm / nặng máy"
+              },
+              {
+                "value": "Kết quả không nhất quán"
+              },
+              {
+                "value": "Phải làm tay từng file"
+              },
+              {
+                "value": "Thiếu tính năng cần có"
+              },
+              {
+                "value": "Đắt / không có license"
+              },
+              {
+                "value": "Ổn, không vấn đề"
+              }
+            ]
+          },
+          "shuffleQuestions": false
+        }
+      }
+    },
+    {
+      "itemId": "q002k",
+      "title": "Công cụ nào làm bạn mất thời gian nhất, và tắc ở thao tác cụ thể nào?",
+      "description": "Ví dụ mẫu: “After Effects — phải duplicate comp cho từng tỷ lệ rồi canh lại text bị tràn.”\nKhông bắt buộc, nhưng đây là phần hữu ích nhất của khảo sát.",
+      "questionItem": {
+        "question": {
+          "questionId": "q002l",
+          "required": false,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002m",
+      "title": "Bạn có gặp hạn chế nào về máy móc, license hoặc hạ tầng không?",
+      "questionItem": {
+        "question": {
+          "questionId": "q002n",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "GPU yếu, không chạy được AI trên máy"
+              },
+              {
+                "value": "RAM / CPU không đủ"
+              },
+              {
+                "value": "Ổ cứng hết chỗ"
+              },
+              {
+                "value": "Không được tự cài software"
+              },
+              {
+                "value": "Thiếu license (Adobe, Topaz, Midjourney…)"
+              },
+              {
+                "value": "Mạng chậm khi upload / download"
+              },
+              {
+                "value": "Policy không cho dùng AI tool bên ngoài"
+              },
+              {
+                "value": "Không có hạn chế đáng kể",
+                "_exclusive": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002o",
+      "title": "Brand guideline hoặc design system hiện tại dùng được ngay chưa?",
+      "questionItem": {
+        "question": {
+          "questionId": "q002p",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có, đầy đủ và cập nhật"
+              },
+              {
+                "value": "Có nhưng thiếu hoặc lỗi thời"
+              },
+              {
+                "value": "Đang xây"
+              },
+              {
+                "value": "Không có, mỗi người tự làm"
+              },
+              {
+                "value": "Không rõ"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002q",
+      "title": "Bạn có template hoặc master file dùng lại được cho việc lặp lại không?",
+      "questionItem": {
+        "question": {
+          "questionId": "q002r",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có, được tổ chức tốt"
+              },
+              {
+                "value": "Có, nhưng tự làm riêng và không chia sẻ"
+              },
+              {
+                "value": "Có, nhưng rối và tìm lại mất thời gian"
+              },
+              {
+                "value": "Không có"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_ai",
+      "title": "Phần 7 · AI trong công việc thật",
+      "pageBreakItem": {},
+      "description": "Phần này để biết AI đang đứng ở đâu trong quy trình và đang tắc ở đâu."
+    },
+    {
+      "itemId": "q002s",
+      "title": "AI đang tham gia vào công việc thật của bạn ở mức nào?",
+      "questionItem": {
+        "question": {
+          "questionId": "q002t",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Chưa dùng"
+              },
+              {
+                "value": "Có thử nhưng chưa dùng cho việc thật"
+              },
+              {
+                "value": "Dùng cho draft / ideation"
+              },
+              {
+                "value": "Dùng ra asset cuối, nhưng phải sửa nhiều"
+              },
+              {
+                "value": "Dùng ra asset cuối, gần như không phải sửa"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002u",
+      "title": "Sau khi AI ra kết quả, bạn thường phải sửa những gì?",
+      "questionItem": {
+        "question": {
+          "questionId": "q002v",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Tách nền"
+              },
+              {
+                "value": "Sửa tay, mặt, chi tiết cơ thể"
+              },
+              {
+                "value": "Sửa logo & chi tiết brand"
+              },
+              {
+                "value": "Color grading cho khớp brand"
+              },
+              {
+                "value": "Text / typography"
+              },
+              {
+                "value": "Upscale & sharpen"
+              },
+              {
+                "value": "Sửa perspective / crop lại"
+              },
+              {
+                "value": "Ghép nhiều ảnh thành một"
+              },
+              {
+                "value": "Thêm grain, shadow, ánh sáng"
+              },
+              {
+                "value": "Gần như không phải sửa",
+                "_exclusive": true
+              },
+              {
+                "value": "Không dùng AI",
+                "_exclusive": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002w",
+      "title": "Thời gian sửa sau AI chiếm khoảng bao nhiêu tổng thời gian làm asset đó?",
+      "questionItem": {
+        "question": {
+          "questionId": "q002x",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Dưới 20%"
+              },
+              {
+                "value": "20–40%"
+              },
+              {
+                "value": "40–60%"
+              },
+              {
+                "value": "60–80%"
+              },
+              {
+                "value": "Trên 80%"
+              },
+              {
+                "value": "Không dùng AI"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002y",
+      "title": "Điều gì cản bạn dùng AI cho việc thật? Chọn tối đa 3.",
+      "questionItem": {
+        "question": {
+          "questionId": "q002z",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Không giữ được nhất quán character / mascot"
+              },
+              {
+                "value": "Không giữ được nhất quán brand (màu, style, typography)"
+              },
+              {
+                "value": "Chất lượng chưa đủ chuẩn bàn giao"
+              },
+              {
+                "value": "Prompt mất quá nhiều thời gian thử"
+              },
+              {
+                "value": "Kết quả ngẫu nhiên, khó kiểm soát"
+              },
+              {
+                "value": "Vấn đề bản quyền / pháp lý"
+              },
+              {
+                "value": "Máy hoặc GPU không đủ"
+              },
+              {
+                "value": "Chưa có ai hướng dẫn"
+              },
+              {
+                "value": "Quy trình công ty chưa cho phép"
+              },
+              {
+                "value": "Không có rào cản đáng kể",
+                "_exclusive": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0030",
+      "title": "Công ty có mascot hoặc character xuất hiện lặp lại qua nhiều campaign không?",
+      "questionItem": {
+        "question": {
+          "questionId": "q0031",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có, 1–2 nhân vật cố định"
+              },
+              {
+                "value": "Có nhiều nhân vật, dùng luân phiên"
+              },
+              {
+                "value": "Có, nhưng mỗi campaign vẽ lại theo style khác"
+              },
+              {
+                "value": "Không dùng character"
+              },
+              {
+                "value": "Không rõ"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_auto",
+      "title": "Phần 8 · Công đoạn nào nên tự động hoá",
+      "pageBreakItem": {},
+      "description": "Chấm theo nhu cầu công việc của bạn. Công đoạn bạn không làm thì chọn “Không áp dụng”."
+    },
+    {
+      "itemId": "q0032",
+      "title": "Ảnh, export & bàn giao",
+      "questionGroupItem": {
+        "questions": [
+          {
+            "questionId": "q0033",
+            "required": true,
+            "rowQuestion": {
+              "title": "Tách nền / tạo mask đối tượng"
+            }
+          },
+          {
+            "questionId": "q0034",
+            "required": true,
+            "rowQuestion": {
+              "title": "Resize & crop đa tỷ lệ (1:1, 4:5, 16:9, 9:16)"
+            }
+          },
+          {
+            "questionId": "q0035",
+            "required": true,
+            "rowQuestion": {
+              "title": "Áp preset màu theo brand"
+            }
+          },
+          {
+            "questionId": "q0036",
+            "required": true,
+            "rowQuestion": {
+              "title": "Upscale & sharpen"
+            }
+          },
+          {
+            "questionId": "q0037",
+            "required": true,
+            "rowQuestion": {
+              "title": "Xuất đủ format & density (@1x/@2x/@3x, PNG/WebP/SVG)"
+            }
+          },
+          {
+            "questionId": "q0038",
+            "required": true,
+            "rowQuestion": {
+              "title": "Đặt tên file theo convention & đóng gói bàn giao"
+            }
+          },
+          {
+            "questionId": "q0039",
+            "required": true,
+            "rowQuestion": {
+              "title": "Kiểm tra tự động trước bàn giao (safe area, font, size, color profile)"
+            }
+          }
+        ],
+        "grid": {
+          "columns": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Rất cần"
+              },
+              {
+                "value": "Cần"
+              },
+              {
+                "value": "Chưa rõ"
+              },
+              {
+                "value": "Không cần"
+              },
+              {
+                "value": "Không áp dụng"
+              }
+            ]
+          },
+          "shuffleQuestions": false
+        }
+      }
+    },
+    {
+      "itemId": "q003a",
+      "title": "Chuyển động & nhân vật",
+      "questionGroupItem": {
+        "questions": [
+          {
+            "questionId": "q003b",
+            "required": true,
+            "rowQuestion": {
+              "title": "Đổi text, ảnh, màu trên template motion có sẵn"
+            }
+          },
+          {
+            "questionId": "q003c",
+            "required": true,
+            "rowQuestion": {
+              "title": "Nhân bản composition sang nhiều tỷ lệ & render hàng loạt"
+            }
+          },
+          {
+            "questionId": "q003d",
+            "required": true,
+            "rowQuestion": {
+              "title": "Tối ưu Lottie / đóng gói dotLottie"
+            }
+          },
+          {
+            "questionId": "q003e",
+            "required": true,
+            "rowQuestion": {
+              "title": "Sinh 4–8 pose từ character có sẵn"
+            }
+          },
+          {
+            "questionId": "q003f",
+            "required": true,
+            "rowQuestion": {
+              "title": "Sinh biến thể màu / theme cho icon set"
+            }
+          }
+        ],
+        "grid": {
+          "columns": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Rất cần"
+              },
+              {
+                "value": "Cần"
+              },
+              {
+                "value": "Chưa rõ"
+              },
+              {
+                "value": "Không cần"
+              },
+              {
+                "value": "Không áp dụng"
+              }
+            ]
+          },
+          "shuffleQuestions": false
+        }
+      }
+    },
+    {
+      "itemId": "q003g",
+      "title": "Bộ tỷ lệ hoặc kích thước bạn phải xuất thường xuyên",
+      "questionItem": {
+        "question": {
+          "questionId": "q003h",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "1:1 (1080×1080)"
+              },
+              {
+                "value": "4:5 (1080×1350)"
+              },
+              {
+                "value": "9:16 (1080×1920)"
+              },
+              {
+                "value": "16:9"
+              },
+              {
+                "value": "Banner web nhiều size lẻ"
+              },
+              {
+                "value": "App icon & density @1x/@2x/@3x"
+              },
+              {
+                "value": "Icon nhiều size (16/24/32/48…)"
+              },
+              {
+                "value": "Print (CMYK, 300dpi)"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003i",
+      "title": "Mô tả một quy trình lặp lại của bạn theo dạng: đầu vào → các bước → đầu ra",
+      "description": "Đây là câu tự luận duy nhất bắt buộc, vì nó là input trực tiếp để xây công cụ.\nVí dụ mẫu: “1 ảnh sản phẩm + 1 dòng headline → tách nền, đặt vào 4 artboard, đổi màu nền theo campaign, export PNG và WebP → 8 file.”",
+      "questionItem": {
+        "question": {
+          "questionId": "q003j",
+          "required": true,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_handoff",
+      "title": "Phần 9 · Bàn giao & chất lượng",
+      "pageBreakItem": {}
+    },
+    {
+      "itemId": "q003k",
+      "title": "Khi bàn giao cho dev hoặc marketing, bạn thường gặp vấn đề gì?",
+      "questionItem": {
+        "question": {
+          "questionId": "q003l",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Sai naming, bên nhận phải hỏi lại"
+              },
+              {
+                "value": "Thiếu size / density"
+              },
+              {
+                "value": "Sai format (cần SVG nhưng nhận PNG…)"
+              },
+              {
+                "value": "File quá nặng"
+              },
+              {
+                "value": "Animation chạy sai trên app"
+              },
+              {
+                "value": "Lottie dùng feature platform không hỗ trợ"
+              },
+              {
+                "value": "Thiếu linked asset hoặc thiếu font"
+              },
+              {
+                "value": "Phải export lại nhiều lần"
+              },
+              {
+                "value": "Không biết version nào là mới nhất"
+              },
+              {
+                "value": "Không gặp vấn đề đáng kể",
+                "_exclusive": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003m",
+      "title": "Một tuần bạn phải export lại vì sai spec khoảng bao nhiêu lần?",
+      "questionItem": {
+        "question": {
+          "questionId": "q003n",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "0"
+              },
+              {
+                "value": "1–2"
+              },
+              {
+                "value": "3–5"
+              },
+              {
+                "value": "6–10"
+              },
+              {
+                "value": "Trên 10"
+              },
+              {
+                "value": "Không rõ"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003o",
+      "title": "Bạn có checklist kiểm tra trước khi bàn giao không?",
+      "questionItem": {
+        "question": {
+          "questionId": "q003p",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có, dạng văn bản dùng chung"
+              },
+              {
+                "value": "Có, checklist riêng của tôi"
+              },
+              {
+                "value": "Chỉ nhớ trong đầu"
+              },
+              {
+                "value": "Không có"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_gate_extra",
+      "title": "Xong phần chính — cảm ơn bạn",
+      "pageBreakItem": {},
+      "description": "Đến đây là đã đủ dữ liệu cho phần định lượng. Còn khoảng 4 phút câu mở, hoàn toàn tuỳ bạn. Nếu đang gấp, cứ gửi luôn."
+    },
+    {
+      "itemId": "q003q",
+      "title": "Bạn muốn làm gì tiếp?",
+      "questionItem": {
+        "question": {
+          "questionId": "q003r",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Trả lời thêm phần mở (khoảng 4 phút)",
+                "goToAction": "NEXT_SECTION"
+              },
+              {
+                "value": "Gửi luôn",
+                "goToAction": "SUBMIT_FORM"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_extra",
+      "title": "Phần 10 · Ý kiến mở",
+      "pageBreakItem": {},
+      "description": "Tất cả câu ở phần này đều không bắt buộc. Đây thường là phần cho ra insight tốt nhất."
+    },
+    {
+      "itemId": "q003s",
+      "title": "Trong một ngày làm việc, phần là thao tác thủ công lặp lại chiếm bao nhiêu?",
+      "questionItem": {
+        "question": {
+          "questionId": "q003t",
+          "required": false,
+          "scaleQuestion": {
+            "low": 1,
+            "high": 5,
+            "lowLabel": "Gần như không có",
+            "highLabel": "Gần như toàn bộ"
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003u",
+      "title": "Điều gì làm bạn mất hứng nhất trong công việc hàng ngày?",
+      "questionItem": {
+        "question": {
+          "questionId": "q003v",
+          "required": false,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003w",
+      "title": "Nếu được một điều ước cho quy trình của team, bạn ước gì?",
+      "questionItem": {
+        "question": {
+          "questionId": "q003x",
+          "required": false,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003y",
+      "title": "Có công đoạn nào bạn nghĩ không nên để AI hoặc công cụ làm thay không? Vì sao?",
+      "questionItem": {
+        "question": {
+          "questionId": "q003z",
+          "required": false,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0040",
+      "title": "Có câu nào trong khảo sát này bạn thấy khó hiểu hoặc không khớp với công việc thật của bạn?",
+      "description": "Giúp chúng tôi sửa cho những vòng khảo sát sau.",
+      "questionItem": {
+        "question": {
+          "questionId": "q0041",
+          "required": false,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0042",
+      "title": "Bạn sẵn sàng dành bao nhiêu thời gian để học một công cụ nội bộ mới?",
+      "questionItem": {
+        "question": {
+          "questionId": "q0043",
+          "required": false,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Dưới 30 phút"
+              },
+              {
+                "value": "1–2 giờ"
+              },
+              {
+                "value": "Nửa ngày"
+              },
+              {
+                "value": "1 ngày hoặc hơn"
+              },
+              {
+                "value": "Không có thời gian — công cụ phải dùng được ngay"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0044",
+      "title": "Bạn có muốn dùng thử sớm và góp ý trực tiếp (pilot user) không?",
+      "questionItem": {
+        "question": {
+          "questionId": "q0045",
+          "required": false,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có"
+              },
+              {
+                "value": "Tuỳ, nếu không ảnh hưởng deadline"
+              },
+              {
+                "value": "Không"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0046",
+      "title": "Tên hoặc nickname",
+      "description": "Không bắt buộc. Chỉ dùng để hỏi thêm nếu cần, không gắn vào báo cáo.",
+      "questionItem": {
+        "question": {
+          "questionId": "q0047",
+          "required": false,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0048",
+      "title": "Email hoặc Slack handle",
+      "description": "Không bắt buộc.",
+      "questionItem": {
+        "question": {
+          "questionId": "q0049",
+          "required": false,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    }
+  ]
+}
