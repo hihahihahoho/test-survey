@@ -32,10 +32,11 @@ const WORK_ANCHOR =
   "Trung bình = làm đều nhưng không nhiều · Ít / rất ít = thỉnh thoảng · " +
   "Không làm = không thuộc việc của tôi.";
 
-/* Danh sách việc dùng cho 3 câu xếp hạng "ngốn thời gian nhất".
-   Dùng xếp hạng có thứ tự thay vì checkbox giới hạn 3: không có thông báo lỗi khi
-   tick quá số, không phải quét 18 dòng, và khi phân tích chấm được điểm 3–2–1 nên
-   tách được "việc ít gặp nhưng mỗi lần rất tốn" khỏi "việc làm hàng ngày nhưng nhanh". */
+/* Danh sách việc cho câu "ngốn thời gian nhất".
+   Giới hạn 5 (không phải không giới hạn) vì grid tỷ trọng ở trên đã là câu "chọn
+   thoải mái"; nếu câu này cũng mở thì nó chỉ lặp lại grid. Giữ giới hạn mới tách
+   được "việc ít gặp nhưng mỗi lần rất tốn" khỏi "việc làm hàng ngày nhưng nhanh".
+   Con số 5 đủ rộng để hầu như không ai chạm trần. */
 const TASKS = [
   "Icon app / icon UI", "Màn hình UI", "Character / mascot", "Illustration / key visual",
   "Banner quảng cáo", "Graphic social / thumbnail", "Ảnh sản phẩm / composite",
@@ -120,14 +121,13 @@ export function build() {
          "Asset game (item, tile, UI game, effect)",
          "3D modeling / render"],
         WORK, { req: true }),
-      NOTE("Việc nào ngốn thời gian nhất của bạn?",
-        "Ba câu dưới đây hỏi về THỜI GIAN, không phải tần suất — nên câu trả lời có thể khác hẳn " +
-        "phần chấm khối lượng ở trên. Một việc mỗi tháng chỉ làm hai lần nhưng mỗi lần mất hai ngày " +
-        "vẫn có thể là việc ngốn thời gian nhất của bạn.\n" +
-        "Chỉ câu đầu bắt buộc. Nếu không nghĩ ra hạng hai, hạng ba thì cứ để trống."),
-      DROP("Việc ngốn nhiều thời gian nhất", TASKS, { req: true }),
-      DROP("Ngốn nhiều thời gian thứ hai", TASKS),
-      DROP("Ngốn nhiều thời gian thứ ba", TASKS),
+      CHECK("Chọn tối đa 5 việc ngốn nhiều thời gian nhất của bạn",
+        TASKS.concat(["__OTHER__"]),
+        { req: true,
+          desc: "Câu này hỏi về THỜI GIAN, không phải tần suất — nên câu trả lời có thể khác hẳn " +
+                "phần chấm khối lượng ở trên. Một việc mỗi tháng chỉ làm hai lần nhưng mỗi lần mất " +
+                "hai ngày vẫn có thể là việc ngốn thời gian nhất của bạn.\n" +
+                "Nếu việc của bạn không có trong danh sách, ghi vào ô Khác." }),
 
       /* ===================== P3 · Nhịp làm việc ===================== */
       PAGE("sec_process", "Phần 3 · Nhịp làm việc",

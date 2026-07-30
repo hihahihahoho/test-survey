@@ -69,7 +69,7 @@ ok(falsePos.length===0, `không nhận sai ô nào${falsePos.length?": "+falsePo
 
 console.log("\n[3] giới hạn \"chọn tối đa N\"");
 const caps = form.items.filter(it=>mod.maxSelectOf(it)).map(it=>[mod.maxSelectOf(it), it.title.slice(0,52)]);
-ok(caps.length===1, `tìm thấy ${caps.length} câu có giới hạn (mong đợi 1 — câu rào cản AI)`);
+ok(caps.length===2, `tìm thấy ${caps.length} câu có giới hạn (mong đợi 2)`);
 caps.forEach(([n,t])=>console.log(`      tối đa ${n} · ${t}…`));
 
 console.log("\n[4] skip-logic trên JSON đã build");
@@ -116,7 +116,7 @@ ok(!mod.isEmpty("A")&&!mod.isEmpty(["A"]), "không coi giá trị thật là tr�
 
 const s = mod.stats(form);
 console.log(`\n[6] engine tự đếm: ${s.total} câu · ${s.required} bắt buộc · ${s.branches} nhánh · ~${s.minutes} phút`);
-ok(s.total===58 && s.branches===4, "khớp với số build.mjs báo");
+ok(s.total===56 && s.branches===4, "khớp với số build.mjs báo");
 
 console.log(fail? `\n${fail} kiểm tra THẤT BẠI` : "\nTất cả kiểm tra PASS");
 process.exit(fail?1:0);

@@ -164,8 +164,9 @@ ok(log.choicesSet.every(i => i.choices.every(c => c.nav)),
 
 console.log("\n[5] giới hạn \"chọn tối đa N\" thành validation thật của Google");
 const validated = log.items.filter(i => i.validation);
-ok(validated.length === 1, `${validated.length} câu có validation (mong đợi 1)`);
-ok(validated.every(i => i.validation.atMost === 3), "requireSelectAtMost(3)");
+ok(validated.length === 2, `${validated.length} câu có validation (mong đợi 2)`);
+ok(validated.some(i => i.validation.atMost === 5), "câu \"ngốn thời gian\" → requireSelectAtMost(5)");
+ok(validated.some(i => i.validation.atMost === 3), "câu \"rào cản AI\" → requireSelectAtMost(3)");
 
 console.log("\n[6] grid, thang đo, ô Khác");
 const grids = log.items.filter(i => i.kind === "GRID" || i.kind === "CHECKBOX_GRID");
@@ -183,11 +184,14 @@ const wantOther = spec.items.filter(it => {
   return cq && cq.type !== "DROP_DOWN" && cq.options.some(o => o.isOther);
 }).length;
 ok(others.length === wantOther, `${others.length} câu bật ô "Khác" (mong đợi ${wantOther})`);
-const lists = log.items.filter(i => i.kind === "LIST");
-ok(lists.length === 3, `${lists.length} dropdown (3 câu xếp hạng ngốn thời gian)`);
-ok(lists.every(i => i.other === false), 'dropdown không bật ô "Khác" (Google không hỗ trợ)');
-ok(lists.every(i => i.choiceValues.length === 18), "mỗi dropdown xếp hạng có đủ 18 lựa chọn");
-ok(lists.filter(i => i.required).length === 1, "chỉ hạng #1 bắt buộc, #2 và #3 tuỳ chọn");
+ok(log.items.filter(i => i.kind === "LIST").every(i => i.other === false),
+   'dropdown không bật ô "Khác" (Google không hỗ trợ)');
+const timeSink = log.items.find(i => i.title && i.title.indexOf("ngốn nhiều thời gian nhất") > 0);
+ok(!!timeSink && timeSink.kind === "CHECKBOX", 'câu "ngốn thời gian" là checkbox');
+ok(timeSink && timeSink.choiceValues.length === 18, `có 18 lựa chọn dựng sẵn (ô Khác không nằm trong setChoiceValues)`);
+ok(timeSink && timeSink.other === true, 'bật ô "Khác" cho người trả lời tự ghi');
+ok(timeSink && timeSink.validation && timeSink.validation.atMost === 5, "giới hạn 5 lựa chọn");
+ok(timeSink && timeSink.required === true, "bắt buộc");
 
 console.log("\n[7] bắt buộc & log");
 const wantRequired = spec.items.filter(it => {

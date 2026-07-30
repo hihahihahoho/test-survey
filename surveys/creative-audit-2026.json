@@ -342,19 +342,14 @@
     },
     {
       "itemId": "q000p",
-      "title": "Việc nào ngốn thời gian nhất của bạn?",
-      "textItem": {},
-      "description": "Ba câu dưới đây hỏi về THỜI GIAN, không phải tần suất — nên câu trả lời có thể khác hẳn phần chấm khối lượng ở trên. Một việc mỗi tháng chỉ làm hai lần nhưng mỗi lần mất hai ngày vẫn có thể là việc ngốn thời gian nhất của bạn.\nChỉ câu đầu bắt buộc. Nếu không nghĩ ra hạng hai, hạng ba thì cứ để trống."
-    },
-    {
-      "itemId": "q000q",
-      "title": "Việc ngốn nhiều thời gian nhất",
+      "title": "Chọn tối đa 5 việc ngốn nhiều thời gian nhất của bạn",
+      "description": "Câu này hỏi về THỜI GIAN, không phải tần suất — nên câu trả lời có thể khác hẳn phần chấm khối lượng ở trên. Một việc mỗi tháng chỉ làm hai lần nhưng mỗi lần mất hai ngày vẫn có thể là việc ngốn thời gian nhất của bạn.\nNếu việc của bạn không có trong danh sách, ghi vào ô Khác.",
       "questionItem": {
         "question": {
-          "questionId": "q000r",
+          "questionId": "q000q",
           "required": true,
           "choiceQuestion": {
-            "type": "DROP_DOWN",
+            "type": "CHECKBOX",
             "options": [
               {
                 "value": "Icon app / icon UI"
@@ -409,146 +404,9 @@
               },
               {
                 "value": "Bàn giao asset cho dev"
-              }
-            ],
-            "shuffle": false
-          }
-        }
-      }
-    },
-    {
-      "itemId": "q000s",
-      "title": "Ngốn nhiều thời gian thứ hai",
-      "questionItem": {
-        "question": {
-          "questionId": "q000t",
-          "required": false,
-          "choiceQuestion": {
-            "type": "DROP_DOWN",
-            "options": [
-              {
-                "value": "Icon app / icon UI"
               },
               {
-                "value": "Màn hình UI"
-              },
-              {
-                "value": "Character / mascot"
-              },
-              {
-                "value": "Illustration / key visual"
-              },
-              {
-                "value": "Banner quảng cáo"
-              },
-              {
-                "value": "Graphic social / thumbnail"
-              },
-              {
-                "value": "Ảnh sản phẩm / composite"
-              },
-              {
-                "value": "Retouch ảnh"
-              },
-              {
-                "value": "Infographic"
-              },
-              {
-                "value": "Print / OOH / pitch deck"
-              },
-              {
-                "value": "Animation UI (Lottie / Rive)"
-              },
-              {
-                "value": "Animation character & rigging"
-              },
-              {
-                "value": "Motion graphic / video"
-              },
-              {
-                "value": "Asset game"
-              },
-              {
-                "value": "3D modeling / render"
-              },
-              {
-                "value": "Làm biến thể từ template"
-              },
-              {
-                "value": "Resize & xuất đa tỷ lệ"
-              },
-              {
-                "value": "Bàn giao asset cho dev"
-              }
-            ],
-            "shuffle": false
-          }
-        }
-      }
-    },
-    {
-      "itemId": "q000u",
-      "title": "Ngốn nhiều thời gian thứ ba",
-      "questionItem": {
-        "question": {
-          "questionId": "q000v",
-          "required": false,
-          "choiceQuestion": {
-            "type": "DROP_DOWN",
-            "options": [
-              {
-                "value": "Icon app / icon UI"
-              },
-              {
-                "value": "Màn hình UI"
-              },
-              {
-                "value": "Character / mascot"
-              },
-              {
-                "value": "Illustration / key visual"
-              },
-              {
-                "value": "Banner quảng cáo"
-              },
-              {
-                "value": "Graphic social / thumbnail"
-              },
-              {
-                "value": "Ảnh sản phẩm / composite"
-              },
-              {
-                "value": "Retouch ảnh"
-              },
-              {
-                "value": "Infographic"
-              },
-              {
-                "value": "Print / OOH / pitch deck"
-              },
-              {
-                "value": "Animation UI (Lottie / Rive)"
-              },
-              {
-                "value": "Animation character & rigging"
-              },
-              {
-                "value": "Motion graphic / video"
-              },
-              {
-                "value": "Asset game"
-              },
-              {
-                "value": "3D modeling / render"
-              },
-              {
-                "value": "Làm biến thể từ template"
-              },
-              {
-                "value": "Resize & xuất đa tỷ lệ"
-              },
-              {
-                "value": "Bàn giao asset cho dev"
+                "isOther": true
               }
             ],
             "shuffle": false
@@ -563,12 +421,12 @@
       "description": "Ước lượng theo một tuần bình thường, không phải tuần cao điểm."
     },
     {
-      "itemId": "q000w",
+      "itemId": "q000r",
       "title": "Một tuần bạn bàn giao khoảng bao nhiêu asset hoàn chỉnh?",
       "description": "Mỗi tỷ lệ hoặc kích thước xuất ra tính là một asset.",
       "questionItem": {
         "question": {
-          "questionId": "q000x",
+          "questionId": "q000s",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -598,11 +456,11 @@
       }
     },
     {
-      "itemId": "q000y",
+      "itemId": "q000t",
       "title": "Một asset điển hình mất bao lâu từ lúc nhận brief đến lúc bàn giao?",
       "questionItem": {
         "question": {
-          "questionId": "q000z",
+          "questionId": "q000u",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -632,11 +490,11 @@
       }
     },
     {
-      "itemId": "q0010",
+      "itemId": "q000v",
       "title": "Trong công việc một tuần, phần là biến thể của cái đã có (cùng layout, khác nội dung) chiếm khoảng bao nhiêu?",
       "questionItem": {
         "question": {
-          "questionId": "q0011",
+          "questionId": "q000w",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -666,61 +524,61 @@
       }
     },
     {
-      "itemId": "q0012",
+      "itemId": "q000x",
       "title": "Với một asset điển hình, mỗi công đoạn chiếm bao nhiêu thời gian?",
       "questionGroupItem": {
         "questions": [
           {
-            "questionId": "q0013",
+            "questionId": "q000y",
             "required": true,
             "rowQuestion": {
               "title": "Đọc brief & làm rõ yêu cầu"
             }
           },
           {
-            "questionId": "q0014",
+            "questionId": "q000z",
             "required": true,
             "rowQuestion": {
               "title": "Research / tìm reference"
             }
           },
           {
-            "questionId": "q0015",
+            "questionId": "q0010",
             "required": true,
             "rowQuestion": {
               "title": "Ideation, sketch, layout"
             }
           },
           {
-            "questionId": "q0016",
+            "questionId": "q0011",
             "required": true,
             "rowQuestion": {
               "title": "Tạo nội dung chính (vẽ, dựng, gen)"
             }
           },
           {
-            "questionId": "q0017",
+            "questionId": "q0012",
             "required": true,
             "rowQuestion": {
               "title": "Hậu kỳ (tách nền, retouch, color)"
             }
           },
           {
-            "questionId": "q0018",
+            "questionId": "q0013",
             "required": true,
             "rowQuestion": {
               "title": "Animation / rigging"
             }
           },
           {
-            "questionId": "q0019",
+            "questionId": "q0014",
             "required": true,
             "rowQuestion": {
               "title": "Resize & xuất nhiều phiên bản"
             }
           },
           {
-            "questionId": "q001a",
+            "questionId": "q0015",
             "required": true,
             "rowQuestion": {
               "title": "Đặt tên, đóng gói, bàn giao"
@@ -759,11 +617,11 @@
       "description": "Chọn tất cả công cụ bạn thực sự dùng, kể cả công cụ cá nhân hoặc bạn tự trả tiền.\nSau phần này, khảo sát chỉ hỏi tiếp về những mảng bạn thực sự làm."
     },
     {
-      "itemId": "q001b",
+      "itemId": "q0016",
       "title": "Bạn tìm reference ở đâu?",
       "questionItem": {
         "question": {
-          "questionId": "q001c",
+          "questionId": "q0017",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -814,11 +672,11 @@
       }
     },
     {
-      "itemId": "q001d",
+      "itemId": "q0018",
       "title": "Tìm reference cho một việc thường mất bao lâu?",
       "questionItem": {
         "question": {
-          "questionId": "q001e",
+          "questionId": "q0019",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -845,11 +703,11 @@
       }
     },
     {
-      "itemId": "q001f",
+      "itemId": "q001a",
       "title": "Bạn dùng công cụ AI nào để tạo ảnh?",
       "questionItem": {
         "question": {
-          "questionId": "q001g",
+          "questionId": "q001b",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -901,11 +759,11 @@
       }
     },
     {
-      "itemId": "q001h",
+      "itemId": "q001c",
       "title": "Bạn export & tối ưu file bằng gì?",
       "questionItem": {
         "question": {
-          "questionId": "q001i",
+          "questionId": "q001d",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -947,11 +805,11 @@
       }
     },
     {
-      "itemId": "q001j",
+      "itemId": "q001e",
       "title": "Asset được lưu và bàn giao qua đâu?",
       "questionItem": {
         "question": {
-          "questionId": "q001k",
+          "questionId": "q001f",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -990,12 +848,12 @@
       }
     },
     {
-      "itemId": "q001l",
+      "itemId": "q001g",
       "title": "Bạn có đang dùng cơ chế tự động sẵn có nào trong công cụ không?",
       "description": "Chọn những cái bạn thực sự dùng, không phải những cái bạn biết là có.",
       "questionItem": {
         "question": {
-          "questionId": "q001m",
+          "questionId": "q001h",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -1032,11 +890,11 @@
       }
     },
     {
-      "itemId": "q001n",
+      "itemId": "q001i",
       "title": "Bạn có tự viết được script, action hoặc plugin không?",
       "questionItem": {
         "question": {
-          "questionId": "q001o",
+          "questionId": "q001j",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -1066,11 +924,11 @@
       "description": "Ba câu hỏi lọc, để bỏ qua những phần không liên quan đến bạn."
     },
     {
-      "itemId": "q001p",
+      "itemId": "q001k",
       "title": "Bạn có làm ảnh tĩnh, illustration, graphic hoặc icon không?",
       "questionItem": {
         "question": {
-          "questionId": "q001q",
+          "questionId": "q001l",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -1095,11 +953,11 @@
       "pageBreakItem": {}
     },
     {
-      "itemId": "q001r",
+      "itemId": "q001m",
       "title": "Vẽ, dựng & vector — bạn dùng gì?",
       "questionItem": {
         "question": {
-          "questionId": "q001s",
+          "questionId": "q001n",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -1147,11 +1005,11 @@
       }
     },
     {
-      "itemId": "q001t",
+      "itemId": "q001o",
       "title": "Tách nền / masking — bạn dùng gì?",
       "questionItem": {
         "question": {
-          "questionId": "q001u",
+          "questionId": "q001p",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -1194,11 +1052,11 @@
       }
     },
     {
-      "itemId": "q001v",
+      "itemId": "q001q",
       "title": "Retouch, finishing & upscale — bạn dùng gì?",
       "questionItem": {
         "question": {
-          "questionId": "q001w",
+          "questionId": "q001r",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -1249,11 +1107,11 @@
       "pageBreakItem": {}
     },
     {
-      "itemId": "q001x",
+      "itemId": "q001s",
       "title": "Bạn có làm animation, motion graphic hoặc video không?",
       "questionItem": {
         "question": {
-          "questionId": "q001y",
+          "questionId": "q001t",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -1278,11 +1136,11 @@
       "pageBreakItem": {}
     },
     {
-      "itemId": "q001z",
+      "itemId": "q001u",
       "title": "Animation & video — bạn dùng công cụ gì?",
       "questionItem": {
         "question": {
-          "questionId": "q0020",
+          "questionId": "q001v",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -1333,11 +1191,11 @@
       }
     },
     {
-      "itemId": "q0021",
+      "itemId": "q001w",
       "title": "Animation cho app / web — bạn bàn giao ở dạng gì?",
       "questionItem": {
         "question": {
-          "questionId": "q0022",
+          "questionId": "q001x",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -1377,11 +1235,11 @@
       }
     },
     {
-      "itemId": "q0023",
+      "itemId": "q001y",
       "title": "Bạn dùng công cụ AI nào để tạo video hoặc animation?",
       "questionItem": {
         "question": {
-          "questionId": "q0024",
+          "questionId": "q001z",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -1429,11 +1287,11 @@
       "pageBreakItem": {}
     },
     {
-      "itemId": "q0025",
+      "itemId": "q0020",
       "title": "Bạn có làm 3D hoặc asset game không?",
       "questionItem": {
         "question": {
-          "questionId": "q0026",
+          "questionId": "q0021",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -1458,11 +1316,11 @@
       "pageBreakItem": {}
     },
     {
-      "itemId": "q0027",
+      "itemId": "q0022",
       "title": "3D & pipeline game — bạn dùng gì?",
       "questionItem": {
         "question": {
-          "questionId": "q0028",
+          "questionId": "q0023",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -1516,11 +1374,11 @@
       }
     },
     {
-      "itemId": "q0029",
+      "itemId": "q0024",
       "title": "Bạn dùng công cụ AI nào để tạo asset 3D?",
       "questionItem": {
         "question": {
-          "questionId": "q002a",
+          "questionId": "q0025",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -1557,61 +1415,61 @@
       "description": "Với mỗi công đoạn, chọn những vấn đề bạn thực sự gặp. Mỗi dòng chọn được nhiều ô. Công đoạn bạn không làm thì để trống cả dòng."
     },
     {
-      "itemId": "q002b",
+      "itemId": "q0026",
       "title": "Công cụ ở mỗi công đoạn có vấn đề gì?",
       "questionGroupItem": {
         "questions": [
           {
-            "questionId": "q002c",
+            "questionId": "q0027",
             "required": false,
             "rowQuestion": {
               "title": "Research / tìm reference"
             }
           },
           {
-            "questionId": "q002d",
+            "questionId": "q0028",
             "required": false,
             "rowQuestion": {
               "title": "Tạo ảnh bằng AI"
             }
           },
           {
-            "questionId": "q002e",
+            "questionId": "q0029",
             "required": false,
             "rowQuestion": {
               "title": "Vẽ, dựng, vector & icon"
             }
           },
           {
-            "questionId": "q002f",
+            "questionId": "q002a",
             "required": false,
             "rowQuestion": {
               "title": "Tách nền, retouch, hậu kỳ"
             }
           },
           {
-            "questionId": "q002g",
+            "questionId": "q002b",
             "required": false,
             "rowQuestion": {
               "title": "Animation & bàn giao motion"
             }
           },
           {
-            "questionId": "q002h",
+            "questionId": "q002c",
             "required": false,
             "rowQuestion": {
               "title": "3D & asset game"
             }
           },
           {
-            "questionId": "q002i",
+            "questionId": "q002d",
             "required": false,
             "rowQuestion": {
               "title": "Resize và xuất nhiều phiên bản"
             }
           },
           {
-            "questionId": "q002j",
+            "questionId": "q002e",
             "required": false,
             "rowQuestion": {
               "title": "Quản lý version & bàn giao asset"
@@ -1647,12 +1505,12 @@
       }
     },
     {
-      "itemId": "q002k",
+      "itemId": "q002f",
       "title": "Công cụ nào làm bạn mất thời gian nhất, và tắc ở thao tác cụ thể nào?",
       "description": "Ví dụ mẫu: “After Effects — phải duplicate comp cho từng tỷ lệ rồi canh lại text bị tràn.”\nKhông bắt buộc, nhưng đây là phần hữu ích nhất của khảo sát.",
       "questionItem": {
         "question": {
-          "questionId": "q002l",
+          "questionId": "q002g",
           "required": false,
           "textQuestion": {
             "paragraph": true
@@ -1661,11 +1519,11 @@
       }
     },
     {
-      "itemId": "q002m",
+      "itemId": "q002h",
       "title": "Bạn có gặp hạn chế nào về máy móc, license hoặc hạ tầng không?",
       "questionItem": {
         "question": {
-          "questionId": "q002n",
+          "questionId": "q002i",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -1702,11 +1560,11 @@
       }
     },
     {
-      "itemId": "q002o",
+      "itemId": "q002j",
       "title": "Brand guideline hoặc design system hiện tại dùng được ngay chưa?",
       "questionItem": {
         "question": {
-          "questionId": "q002p",
+          "questionId": "q002k",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -1733,11 +1591,11 @@
       }
     },
     {
-      "itemId": "q002q",
+      "itemId": "q002l",
       "title": "Bạn có template hoặc master file dùng lại được cho việc lặp lại không?",
       "questionItem": {
         "question": {
-          "questionId": "q002r",
+          "questionId": "q002m",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -1767,11 +1625,11 @@
       "description": "Phần này để biết AI đang đứng ở đâu trong quy trình và đang tắc ở đâu."
     },
     {
-      "itemId": "q002s",
+      "itemId": "q002n",
       "title": "AI đang tham gia vào công việc thật của bạn ở mức nào?",
       "questionItem": {
         "question": {
-          "questionId": "q002t",
+          "questionId": "q002o",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -1798,11 +1656,11 @@
       }
     },
     {
-      "itemId": "q002u",
+      "itemId": "q002p",
       "title": "Sau khi AI ra kết quả, bạn thường phải sửa những gì?",
       "questionItem": {
         "question": {
-          "questionId": "q002v",
+          "questionId": "q002q",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -1849,11 +1707,11 @@
       }
     },
     {
-      "itemId": "q002w",
+      "itemId": "q002r",
       "title": "Thời gian sửa sau AI chiếm khoảng bao nhiêu tổng thời gian làm asset đó?",
       "questionItem": {
         "question": {
-          "questionId": "q002x",
+          "questionId": "q002s",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -1883,11 +1741,11 @@
       }
     },
     {
-      "itemId": "q002y",
+      "itemId": "q002t",
       "title": "Điều gì cản bạn dùng AI cho việc thật? Chọn tối đa 3.",
       "questionItem": {
         "question": {
-          "questionId": "q002z",
+          "questionId": "q002u",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -1930,11 +1788,11 @@
       }
     },
     {
-      "itemId": "q0030",
+      "itemId": "q002v",
       "title": "Công ty có mascot hoặc character xuất hiện lặp lại qua nhiều campaign không?",
       "questionItem": {
         "question": {
-          "questionId": "q0031",
+          "questionId": "q002w",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -1967,54 +1825,54 @@
       "description": "Chấm theo nhu cầu công việc của bạn. Công đoạn bạn không làm thì chọn “Không áp dụng”."
     },
     {
-      "itemId": "q0032",
+      "itemId": "q002x",
       "title": "Ảnh, export & bàn giao",
       "questionGroupItem": {
         "questions": [
           {
-            "questionId": "q0033",
+            "questionId": "q002y",
             "required": true,
             "rowQuestion": {
               "title": "Tách nền / tạo mask đối tượng"
             }
           },
           {
-            "questionId": "q0034",
+            "questionId": "q002z",
             "required": true,
             "rowQuestion": {
               "title": "Resize & crop đa tỷ lệ (1:1, 4:5, 16:9, 9:16)"
             }
           },
           {
-            "questionId": "q0035",
+            "questionId": "q0030",
             "required": true,
             "rowQuestion": {
               "title": "Áp preset màu theo brand"
             }
           },
           {
-            "questionId": "q0036",
+            "questionId": "q0031",
             "required": true,
             "rowQuestion": {
               "title": "Upscale & sharpen"
             }
           },
           {
-            "questionId": "q0037",
+            "questionId": "q0032",
             "required": true,
             "rowQuestion": {
               "title": "Xuất đủ format & density (@1x/@2x/@3x, PNG/WebP/SVG)"
             }
           },
           {
-            "questionId": "q0038",
+            "questionId": "q0033",
             "required": true,
             "rowQuestion": {
               "title": "Đặt tên file theo convention & đóng gói bàn giao"
             }
           },
           {
-            "questionId": "q0039",
+            "questionId": "q0034",
             "required": true,
             "rowQuestion": {
               "title": "Kiểm tra tự động trước bàn giao (safe area, font, size, color profile)"
@@ -2047,40 +1905,40 @@
       }
     },
     {
-      "itemId": "q003a",
+      "itemId": "q0035",
       "title": "Chuyển động & nhân vật",
       "questionGroupItem": {
         "questions": [
           {
-            "questionId": "q003b",
+            "questionId": "q0036",
             "required": true,
             "rowQuestion": {
               "title": "Đổi text, ảnh, màu trên template motion có sẵn"
             }
           },
           {
-            "questionId": "q003c",
+            "questionId": "q0037",
             "required": true,
             "rowQuestion": {
               "title": "Nhân bản composition sang nhiều tỷ lệ & render hàng loạt"
             }
           },
           {
-            "questionId": "q003d",
+            "questionId": "q0038",
             "required": true,
             "rowQuestion": {
               "title": "Tối ưu Lottie / đóng gói dotLottie"
             }
           },
           {
-            "questionId": "q003e",
+            "questionId": "q0039",
             "required": true,
             "rowQuestion": {
               "title": "Sinh 4–8 pose từ character có sẵn"
             }
           },
           {
-            "questionId": "q003f",
+            "questionId": "q003a",
             "required": true,
             "rowQuestion": {
               "title": "Sinh biến thể màu / theme cho icon set"
@@ -2113,11 +1971,11 @@
       }
     },
     {
-      "itemId": "q003g",
+      "itemId": "q003b",
       "title": "Bộ tỷ lệ hoặc kích thước bạn phải xuất thường xuyên",
       "questionItem": {
         "question": {
-          "questionId": "q003h",
+          "questionId": "q003c",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -2156,12 +2014,12 @@
       }
     },
     {
-      "itemId": "q003i",
+      "itemId": "q003d",
       "title": "Mô tả một quy trình lặp lại của bạn theo dạng: đầu vào → các bước → đầu ra",
       "description": "Đây là câu tự luận duy nhất bắt buộc, vì nó là input trực tiếp để xây công cụ.\nVí dụ mẫu: “1 ảnh sản phẩm + 1 dòng headline → tách nền, đặt vào 4 artboard, đổi màu nền theo campaign, export PNG và WebP → 8 file.”",
       "questionItem": {
         "question": {
-          "questionId": "q003j",
+          "questionId": "q003e",
           "required": true,
           "textQuestion": {
             "paragraph": true
@@ -2175,11 +2033,11 @@
       "pageBreakItem": {}
     },
     {
-      "itemId": "q003k",
+      "itemId": "q003f",
       "title": "Khi bàn giao cho dev hoặc marketing, bạn thường gặp vấn đề gì?",
       "questionItem": {
         "question": {
-          "questionId": "q003l",
+          "questionId": "q003g",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -2222,11 +2080,11 @@
       }
     },
     {
-      "itemId": "q003m",
+      "itemId": "q003h",
       "title": "Một tuần bạn phải export lại vì sai spec khoảng bao nhiêu lần?",
       "questionItem": {
         "question": {
-          "questionId": "q003n",
+          "questionId": "q003i",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -2256,11 +2114,11 @@
       }
     },
     {
-      "itemId": "q003o",
+      "itemId": "q003j",
       "title": "Bạn có checklist kiểm tra trước khi bàn giao không?",
       "questionItem": {
         "question": {
-          "questionId": "q003p",
+          "questionId": "q003k",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -2290,11 +2148,11 @@
       "description": "Đến đây là đã đủ dữ liệu cho phần định lượng. Còn khoảng 4 phút câu mở, hoàn toàn tuỳ bạn. Nếu đang gấp, cứ gửi luôn."
     },
     {
-      "itemId": "q003q",
+      "itemId": "q003l",
       "title": "Bạn muốn làm gì tiếp?",
       "questionItem": {
         "question": {
-          "questionId": "q003r",
+          "questionId": "q003m",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -2320,11 +2178,11 @@
       "description": "Tất cả câu ở phần này đều không bắt buộc. Đây thường là phần cho ra insight tốt nhất."
     },
     {
-      "itemId": "q003s",
+      "itemId": "q003n",
       "title": "Trong một ngày làm việc, phần là thao tác thủ công lặp lại chiếm bao nhiêu?",
       "questionItem": {
         "question": {
-          "questionId": "q003t",
+          "questionId": "q003o",
           "required": false,
           "scaleQuestion": {
             "low": 1,
@@ -2336,11 +2194,11 @@
       }
     },
     {
-      "itemId": "q003u",
+      "itemId": "q003p",
       "title": "Điều gì làm bạn mất hứng nhất trong công việc hàng ngày?",
       "questionItem": {
         "question": {
-          "questionId": "q003v",
+          "questionId": "q003q",
           "required": false,
           "textQuestion": {
             "paragraph": true
@@ -2349,11 +2207,11 @@
       }
     },
     {
-      "itemId": "q003w",
+      "itemId": "q003r",
       "title": "Nếu được một điều ước cho quy trình của team, bạn ước gì?",
       "questionItem": {
         "question": {
-          "questionId": "q003x",
+          "questionId": "q003s",
           "required": false,
           "textQuestion": {
             "paragraph": true
@@ -2362,11 +2220,11 @@
       }
     },
     {
-      "itemId": "q003y",
+      "itemId": "q003t",
       "title": "Có công đoạn nào bạn nghĩ không nên để AI hoặc công cụ làm thay không? Vì sao?",
       "questionItem": {
         "question": {
-          "questionId": "q003z",
+          "questionId": "q003u",
           "required": false,
           "textQuestion": {
             "paragraph": true
@@ -2375,12 +2233,12 @@
       }
     },
     {
-      "itemId": "q0040",
+      "itemId": "q003v",
       "title": "Có câu nào trong khảo sát này bạn thấy khó hiểu hoặc không khớp với công việc thật của bạn?",
       "description": "Giúp chúng tôi sửa cho những vòng khảo sát sau.",
       "questionItem": {
         "question": {
-          "questionId": "q0041",
+          "questionId": "q003w",
           "required": false,
           "textQuestion": {
             "paragraph": true
@@ -2389,11 +2247,11 @@
       }
     },
     {
-      "itemId": "q0042",
+      "itemId": "q003x",
       "title": "Bạn sẵn sàng dành bao nhiêu thời gian để học một công cụ nội bộ mới?",
       "questionItem": {
         "question": {
-          "questionId": "q0043",
+          "questionId": "q003y",
           "required": false,
           "choiceQuestion": {
             "type": "RADIO",
@@ -2420,11 +2278,11 @@
       }
     },
     {
-      "itemId": "q0044",
+      "itemId": "q003z",
       "title": "Bạn có muốn dùng thử sớm và góp ý trực tiếp (pilot user) không?",
       "questionItem": {
         "question": {
-          "questionId": "q0045",
+          "questionId": "q0040",
           "required": false,
           "choiceQuestion": {
             "type": "RADIO",
@@ -2445,12 +2303,12 @@
       }
     },
     {
-      "itemId": "q0046",
+      "itemId": "q0041",
       "title": "Tên hoặc nickname",
       "description": "Không bắt buộc. Chỉ dùng để hỏi thêm nếu cần, không gắn vào báo cáo.",
       "questionItem": {
         "question": {
-          "questionId": "q0047",
+          "questionId": "q0042",
           "required": false,
           "textQuestion": {
             "paragraph": false
@@ -2459,12 +2317,12 @@
       }
     },
     {
-      "itemId": "q0048",
+      "itemId": "q0043",
       "title": "Email hoặc Slack handle",
       "description": "Không bắt buộc.",
       "questionItem": {
         "question": {
-          "questionId": "q0049",
+          "questionId": "q0044",
           "required": false,
           "textQuestion": {
             "paragraph": false
