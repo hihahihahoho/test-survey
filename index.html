@@ -1107,6 +1107,25 @@ function createForm() {
   if (spec.info.description) form.setDescription(spec.info.description);
   form.setProgressBar(true);
 
+  // TẮT thu thập email tự động, khai tường minh chứ không dựa vào default của
+  // Google — vì default có thể khác theo policy của Workspace. Nếu bật, mỗi phản
+  // hồi bị gắn email người trả lời, và lời cam kết "tên & email không bắt buộc"
+  // ở đầu form thành sai. Danh tính chỉ đến từ hai câu tuỳ chọn ở cuối form.
+  var emailMode = 'chưa rõ';
+  try {
+    if (form.setEmailCollectionType && FormApp.EmailCollectionType) {
+      form.setEmailCollectionType(FormApp.EmailCollectionType.DO_NOT_COLLECT);
+      emailMode = 'ĐÃ TẮT (setEmailCollectionType)';
+    } else if (form.setCollectEmail) {
+      form.setCollectEmail(false);
+      emailMode = 'ĐÃ TẮT (setCollectEmail)';
+    } else {
+      emailMode = 'KHÔNG ĐẶT ĐƯỢC — hãy kiểm tra tay ở Cài đặt › Phản hồi';
+    }
+  } catch (e) {
+    emailMode = 'LỖI: ' + e.message + ' — hãy kiểm tra tay ở Cài đặt › Phản hồi';
+  }
+
   var pageById = {};   // itemId của pageBreak -> PageBreakItem, để nối nhánh
   var pending = [];    // câu phân nhánh, nối ở lượt 2 vì đích có thể nằm sau
 
@@ -1157,6 +1176,7 @@ function createForm() {
   Logger.log('Sửa form:  ' + form.getEditUrl());
   Logger.log('Link điền: ' + form.getPublishedUrl());
   Logger.log('Số item:   ' + form.getItems().length);
+  Logger.log('Thu thập email tự động: ' + emailMode);
   return form;
 }
 

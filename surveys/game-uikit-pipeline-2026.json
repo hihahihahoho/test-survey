@@ -2,21 +2,49 @@
   "info": {
     "title": "Khảo sát pipeline UI kit cho campaign mini-game",
     "documentTitle": "Game UI Kit Pipeline Survey 2026",
-    "description": "MỤC ĐÍCH\nChúng tôi đang xem xét xây một pipeline đi từ ý tưởng campaign đến bộ UI kit dùng được ngay: chọn loại game, sinh sơ đồ screen, dựng component theo brand kit, rồi xuất ra thứ mà bên nhận cần (Figma, demo HTML bấm được, Lottie, sprite sheet…).\n\nKhảo sát này để biết bộ screen và component tối thiểu của một campaign game thực tế gồm những gì, và định dạng bàn giao nào là thật sự cần thiết chứ không phải làm cho có.\n\nAI NÊN TRẢ LỜI\nBất kỳ ai từng tham gia một campaign mini-game: designer, illustrator, animator, dev, QA, PM, marketing. Mỗi vai trò thấy một phần khác nhau của cùng một quy trình, nên cần đủ các góc.\n\nCAM KẾT\n· Không dùng để đánh giá cá nhân.\n· Câu đầu tiên là câu sàng lọc — nếu bạn không tham gia làm campaign game thì gửi luôn, không phải trả lời tiếp.\n\nTHỜI GIAN\nKhoảng 10–12 phút nếu bạn có tham gia."
+    "description": "MỤC ĐÍCH\nChúng tôi đang xem xét xây một pipeline đi từ ý tưởng campaign đến bộ UI kit dùng được ngay: chọn loại game, sinh sơ đồ screen, dựng component theo brand kit, rồi xuất ra thứ mà bên nhận cần (Figma, demo HTML bấm được, Lottie, sprite sheet…).\n\nKhảo sát này để biết bộ screen và component tối thiểu của một campaign game thực tế gồm những gì, và định dạng bàn giao nào là thật sự cần thiết chứ không phải làm cho có.\n\nAI NÊN TRẢ LỜI\nBất kỳ ai từng tham gia một campaign mini-game: designer, illustrator, animator, dev, QA, PM, marketing. Mỗi vai trò thấy một phần khác nhau của cùng một quy trình, nên cần đủ các góc.\n\nVỀ VIỆC GHI TÊN\nKhảo sát này KHÔNG ẩn danh — có tên để chúng tôi hỏi lại khi cần làm rõ.\n\nCAM KẾT\n· Không dùng để đánh giá cá nhân.\n· Báo cáo ở dạng tổng hợp, không nêu tên ai gắn với một câu trả lời cụ thể.\n· Google không tự thu thập email của bạn — form đã tắt tính năng đó.\n· Sau phần mở đầu là câu sàng lọc — nếu bạn không tham gia làm campaign game thì gửi luôn, không phải trả lời tiếp.\n\nTHỜI GIAN\nKhoảng 10–12 phút nếu bạn có tham gia."
   },
   "items": [
     {
       "itemId": "sec_screen",
-      "title": "Câu sàng lọc",
+      "title": "Bắt đầu",
       "pageBreakItem": {},
       "description": "Campaign mini-game ở đây là các game nhỏ gắn với chiến dịch marketing: vòng xoay may mắn, thẻ cào, lật thẻ, quiz, bắt vật rơi, điểm danh tích điểm… Thường sống vài tuần rồi tắt."
     },
     {
       "itemId": "q0001",
-      "title": "Bạn có tham gia làm campaign mini-game không?",
+      "title": "Tên hoặc nickname",
+      "description": "Ghi tên mọi người vẫn gọi bạn trong team là được.",
       "questionItem": {
         "question": {
           "questionId": "q0002",
+          "required": true,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0003",
+      "title": "Email hoặc Slack handle",
+      "description": "Không bắt buộc. Chỉ cần nếu bạn muốn nhận kết quả tổng hợp hoặc tham gia dùng thử.",
+      "questionItem": {
+        "question": {
+          "questionId": "q0004",
+          "required": false,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0005",
+      "title": "Bạn có tham gia làm campaign mini-game không?",
+      "questionItem": {
+        "question": {
+          "questionId": "q0006",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -45,11 +73,11 @@
       "pageBreakItem": {}
     },
     {
-      "itemId": "q0003",
+      "itemId": "q0007",
       "title": "Vai trò chính của bạn",
       "questionItem": {
         "question": {
-          "questionId": "q0004",
+          "questionId": "q0008",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -94,11 +122,11 @@
       }
     },
     {
-      "itemId": "q0005",
+      "itemId": "q0009",
       "title": "Trong một campaign game, bạn phụ trách phần nào?",
       "questionItem": {
         "question": {
-          "questionId": "q0006",
+          "questionId": "q000a",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -143,11 +171,11 @@
       }
     },
     {
-      "itemId": "q0007",
+      "itemId": "q000b",
       "title": "Team bạn làm khoảng bao nhiêu campaign game?",
       "questionItem": {
         "question": {
-          "questionId": "q0008",
+          "questionId": "q000c",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -183,61 +211,61 @@
       "description": "Chấm theo thực tế 6–12 tháng gần đây."
     },
     {
-      "itemId": "q0009",
+      "itemId": "q000d",
       "title": "Các loại campaign game bạn làm nhiều hay ít?",
       "questionGroupItem": {
         "questions": [
           {
-            "questionId": "q000a",
+            "questionId": "q000e",
             "required": true,
             "rowQuestion": {
               "title": "Vòng xoay may mắn"
             }
           },
           {
-            "questionId": "q000b",
+            "questionId": "q000f",
             "required": true,
             "rowQuestion": {
               "title": "Thẻ cào / lật thẻ / mở hộp quà"
             }
           },
           {
-            "questionId": "q000c",
+            "questionId": "q000g",
             "required": true,
             "rowQuestion": {
               "title": "Quiz, trắc nghiệm, đoán đúng"
             }
           },
           {
-            "questionId": "q000d",
+            "questionId": "q000h",
             "required": true,
             "rowQuestion": {
               "title": "Bắt vật rơi / tap nhanh / lắc điện thoại"
             }
           },
           {
-            "questionId": "q000e",
+            "questionId": "q000i",
             "required": true,
             "rowQuestion": {
               "title": "Ghép hình, memory, tìm điểm khác"
             }
           },
           {
-            "questionId": "q000f",
+            "questionId": "q000j",
             "required": true,
             "rowQuestion": {
               "title": "Điểm danh & tích điểm, nuôi cây"
             }
           },
           {
-            "questionId": "q000g",
+            "questionId": "q000k",
             "required": true,
             "rowQuestion": {
               "title": "Runner / jump / endless đơn giản"
             }
           },
           {
-            "questionId": "q000h",
+            "questionId": "q000l",
             "required": true,
             "rowQuestion": {
               "title": "Đua top, bảng xếp hạng, chuỗi nhiệm vụ"
@@ -270,11 +298,11 @@
       }
     },
     {
-      "itemId": "q000i",
+      "itemId": "q000m",
       "title": "Từ lúc nhận brief đến lúc game lên live thường mất bao lâu?",
       "questionItem": {
         "question": {
-          "questionId": "q000j",
+          "questionId": "q000n",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -304,12 +332,12 @@
       }
     },
     {
-      "itemId": "q000k",
+      "itemId": "q000o",
       "title": "Một campaign game mới tái dùng được khoảng bao nhiêu phần từ game trước?",
       "description": "Con số này quyết định trực tiếp việc pipeline có đáng xây hay không.",
       "questionItem": {
         "question": {
-          "questionId": "q000l",
+          "questionId": "q000p",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -345,61 +373,61 @@
       "description": "Với một campaign game điển hình, mỗi screen dưới đây cần đến mức nào?"
     },
     {
-      "itemId": "q000m",
+      "itemId": "q000q",
       "title": "Mức cần thiết của từng screen",
       "questionGroupItem": {
         "questions": [
           {
-            "questionId": "q000n",
+            "questionId": "q000r",
             "required": true,
             "rowQuestion": {
               "title": "Landing / intro + nút Chơi ngay"
             }
           },
           {
-            "questionId": "q000o",
+            "questionId": "q000s",
             "required": true,
             "rowQuestion": {
               "title": "Thể lệ & điều khoản"
             }
           },
           {
-            "questionId": "q000p",
+            "questionId": "q000t",
             "required": true,
             "rowQuestion": {
               "title": "Màn chơi (gameplay)"
             }
           },
           {
-            "questionId": "q000q",
+            "questionId": "q000u",
             "required": true,
             "rowQuestion": {
               "title": "Popup thắng + lộ quà"
             }
           },
           {
-            "questionId": "q000r",
+            "questionId": "q000v",
             "required": true,
             "rowQuestion": {
               "title": "Popup thua / hết lượt"
             }
           },
           {
-            "questionId": "q000s",
+            "questionId": "q000w",
             "required": true,
             "rowQuestion": {
               "title": "Form nhận quà (tên, SĐT, địa chỉ)"
             }
           },
           {
-            "questionId": "q000t",
+            "questionId": "q000x",
             "required": true,
             "rowQuestion": {
               "title": "Kho quà / lịch sử trúng thưởng"
             }
           },
           {
-            "questionId": "q000u",
+            "questionId": "q000y",
             "required": true,
             "rowQuestion": {
               "title": "Bảng xếp hạng"
@@ -432,12 +460,12 @@
       }
     },
     {
-      "itemId": "q000v",
+      "itemId": "q000z",
       "title": "Screen nào hay bị phát hiện thiếu vào phút cuối?",
       "description": "Đây là danh sách hay bị quên nhất — chọn những cái bạn từng phải làm gấp.",
       "questionItem": {
         "question": {
-          "questionId": "q000w",
+          "questionId": "q0010",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -489,61 +517,61 @@
       "description": "Cùng cách chấm như phần trước."
     },
     {
-      "itemId": "q000x",
+      "itemId": "q0011",
       "title": "Mức cần thiết của từng component",
       "questionGroupItem": {
         "questions": [
           {
-            "questionId": "q000y",
+            "questionId": "q0012",
             "required": true,
             "rowQuestion": {
               "title": "Button đủ state (thường, nhấn, mờ, đang tải)"
             }
           },
           {
-            "questionId": "q000z",
+            "questionId": "q0013",
             "required": true,
             "rowQuestion": {
               "title": "Khung popup dùng chung (header, nút đóng, CTA)"
             }
           },
           {
-            "questionId": "q0010",
+            "questionId": "q0014",
             "required": true,
             "rowQuestion": {
               "title": "Input & form nhận quà (text, số, tỉnh/thành, checkbox điều khoản)"
             }
           },
           {
-            "questionId": "q0011",
+            "questionId": "q0015",
             "required": true,
             "rowQuestion": {
               "title": "Toast / thông báo ngắn"
             }
           },
           {
-            "questionId": "q0012",
+            "questionId": "q0016",
             "required": true,
             "rowQuestion": {
               "title": "Bộ đếm lượt chơi & điểm"
             }
           },
           {
-            "questionId": "q0013",
+            "questionId": "q0017",
             "required": true,
             "rowQuestion": {
               "title": "Thẻ quà (prize card)"
             }
           },
           {
-            "questionId": "q0014",
+            "questionId": "q0018",
             "required": true,
             "rowQuestion": {
               "title": "Thanh tiến độ / chuỗi nhiệm vụ"
             }
           },
           {
-            "questionId": "q0015",
+            "questionId": "q0019",
             "required": true,
             "rowQuestion": {
               "title": "Đồng hồ đếm ngược"
@@ -576,11 +604,11 @@
       }
     },
     {
-      "itemId": "q0016",
+      "itemId": "q001a",
       "title": "Ngoài UI, một campaign game thường cần thêm asset gì?",
       "questionItem": {
         "question": {
-          "questionId": "q0017",
+          "questionId": "q001b",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -631,40 +659,40 @@
       "description": "Phần quan trọng nhất. Chấm theo cái thật sự dùng đến, không phải cái nghe hợp lý.\nNếu bạn là dev hoặc QA, đây là chỗ ý kiến của bạn quan trọng nhất."
     },
     {
-      "itemId": "q0018",
+      "itemId": "q001c",
       "title": "Bản thiết kế & bản trình bày",
       "questionGroupItem": {
         "questions": [
           {
-            "questionId": "q0019",
+            "questionId": "q001d",
             "required": true,
             "rowQuestion": {
               "title": "Figma component set + variants"
             }
           },
           {
-            "questionId": "q001a",
+            "questionId": "q001e",
             "required": true,
             "rowQuestion": {
               "title": "Figma prototype bấm được"
             }
           },
           {
-            "questionId": "q001b",
+            "questionId": "q001f",
             "required": true,
             "rowQuestion": {
               "title": "Demo HTML/CSS bấm được (mở link là chơi thử)"
             }
           },
           {
-            "questionId": "q001c",
+            "questionId": "q001g",
             "required": true,
             "rowQuestion": {
               "title": "PDF / slide deck bàn giao (sơ đồ screen + ảnh preview + spec)"
             }
           },
           {
-            "questionId": "q001d",
+            "questionId": "q001h",
             "required": true,
             "rowQuestion": {
               "title": "Spec bàn giao dạng văn bản (state, kích thước, safe area)"
@@ -697,33 +725,33 @@
       }
     },
     {
-      "itemId": "q001e",
+      "itemId": "q001i",
       "title": "Asset & dữ liệu cho dev",
       "questionGroupItem": {
         "questions": [
           {
-            "questionId": "q001f",
+            "questionId": "q001j",
             "required": true,
             "rowQuestion": {
               "title": "Lottie / Rive cho animation"
             }
           },
           {
-            "questionId": "q001g",
+            "questionId": "q001k",
             "required": true,
             "rowQuestion": {
               "title": "Sprite sheet / atlas"
             }
           },
           {
-            "questionId": "q001h",
+            "questionId": "q001l",
             "required": true,
             "rowQuestion": {
               "title": "PNG & SVG export đủ kích thước"
             }
           },
           {
-            "questionId": "q001i",
+            "questionId": "q001m",
             "required": true,
             "rowQuestion": {
               "title": "Design token dạng JSON (màu, spacing, radius)"
@@ -756,11 +784,11 @@
       }
     },
     {
-      "itemId": "q001j",
+      "itemId": "q001n",
       "title": "Nếu chỉ được có MỘT thứ, bạn chọn dạng nào?",
       "questionItem": {
         "question": {
-          "questionId": "q001k",
+          "questionId": "q001o",
           "required": true,
           "choiceQuestion": {
             "type": "DROP_DOWN",
@@ -799,12 +827,12 @@
       }
     },
     {
-      "itemId": "q001l",
+      "itemId": "q001p",
       "title": "Demo HTML bấm được có giúp gì thật sự cho bạn không?",
       "description": "Trả lời thẳng. Nếu demo HTML không ai dùng thì không nên đưa vào pipeline.",
       "questionItem": {
         "question": {
-          "questionId": "q001m",
+          "questionId": "q001q",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -834,11 +862,11 @@
       }
     },
     {
-      "itemId": "q001n",
+      "itemId": "q001r",
       "title": "Dev dựng game bằng gì?",
       "questionItem": {
         "question": {
-          "questionId": "q001o",
+          "questionId": "q001s",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -883,11 +911,11 @@
       }
     },
     {
-      "itemId": "q001p",
+      "itemId": "q001t",
       "title": "Lúc bàn giao có phải làm PDF hoặc slide không?",
       "questionItem": {
         "question": {
-          "questionId": "q001q",
+          "questionId": "q001u",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -917,11 +945,11 @@
       }
     },
     {
-      "itemId": "q001r",
+      "itemId": "q001v",
       "title": "Nếu có PDF hoặc slide bàn giao, trong đó cần những gì?",
       "questionItem": {
         "question": {
-          "questionId": "q001s",
+          "questionId": "q001w",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -967,11 +995,11 @@
       }
     },
     {
-      "itemId": "q001t",
+      "itemId": "q001x",
       "title": "Ai là người đọc bản PDF hoặc slide đó nhiều nhất?",
       "questionItem": {
         "question": {
-          "questionId": "q001u",
+          "questionId": "q001y",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -1010,12 +1038,12 @@
       "description": "Phần này quyết định pipeline sẽ nhận đầu vào gì và tự động đến đâu."
     },
     {
-      "itemId": "q001v",
+      "itemId": "q001z",
       "title": "Hiện tại, từ lúc có ý tưởng đến lúc có bộ UI kit dùng được, quy trình đi qua những bước nào?",
       "description": "Câu tự luận duy nhất bắt buộc. Viết dạng: đầu vào → các bước → đầu ra, kèm ai làm bước nào.\nVí dụ mẫu: “PM gửi brief + danh sách quà → designer tìm ref 1 buổi → vẽ 6 screen trong Figma 2 ngày → illustrator vẽ background & mascot 2 ngày → export PNG rồi gửi dev qua Drive → dev hỏi lại thiếu state hết quà.”",
       "questionItem": {
         "question": {
-          "questionId": "q001w",
+          "questionId": "q0020",
           "required": true,
           "textQuestion": {
             "paragraph": true
@@ -1024,33 +1052,33 @@
       }
     },
     {
-      "itemId": "q001x",
+      "itemId": "q0021",
       "title": "Dựng khung & component — nên tự động đến mức nào?",
       "questionGroupItem": {
         "questions": [
           {
-            "questionId": "q001y",
+            "questionId": "q0022",
             "required": true,
             "rowQuestion": {
               "title": "Chọn loại game từ thư viện mẫu có sẵn"
             }
           },
           {
-            "questionId": "q001z",
+            "questionId": "q0023",
             "required": true,
             "rowQuestion": {
               "title": "Sinh sơ đồ screen từ mô tả ý tưởng"
             }
           },
           {
-            "questionId": "q0020",
+            "questionId": "q0024",
             "required": true,
             "rowQuestion": {
               "title": "Sinh wireframe từng screen"
             }
           },
           {
-            "questionId": "q0021",
+            "questionId": "q0025",
             "required": true,
             "rowQuestion": {
               "title": "Dựng bộ component theo brand kit (màu, font, logo)"
@@ -1083,40 +1111,40 @@
       }
     },
     {
-      "itemId": "q0022",
+      "itemId": "q0026",
       "title": "Sinh art & xuất bản bàn giao — nên tự động đến mức nào?",
       "questionGroupItem": {
         "questions": [
           {
-            "questionId": "q0023",
+            "questionId": "q0027",
             "required": true,
             "rowQuestion": {
               "title": "Sinh background & hoạ tiết bằng AI"
             }
           },
           {
-            "questionId": "q0024",
+            "questionId": "q0028",
             "required": true,
             "rowQuestion": {
               "title": "Sinh ảnh quà và icon"
             }
           },
           {
-            "questionId": "q0025",
+            "questionId": "q0029",
             "required": true,
             "rowQuestion": {
               "title": "Xuất Figma component set"
             }
           },
           {
-            "questionId": "q0026",
+            "questionId": "q002a",
             "required": true,
             "rowQuestion": {
               "title": "Xuất demo HTML bấm được"
             }
           },
           {
-            "questionId": "q0027",
+            "questionId": "q002b",
             "required": true,
             "rowQuestion": {
               "title": "Xuất PDF / slide bàn giao (sơ đồ screen + ảnh preview + spec)"
@@ -1149,11 +1177,11 @@
       }
     },
     {
-      "itemId": "q0028",
+      "itemId": "q002c",
       "title": "Bạn muốn đưa gì vào làm đầu vào cho pipeline?",
       "questionItem": {
         "question": {
-          "questionId": "q0029",
+          "questionId": "q002d",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -1195,12 +1223,12 @@
       }
     },
     {
-      "itemId": "q002a",
+      "itemId": "q002e",
       "title": "Bạn muốn pipeline nhả ra bản hoàn thiện đến mức nào?",
       "description": "Trả lời theo mức bạn thật sự muốn kiểm soát, không theo mức nghe tham vọng nhất.",
       "questionItem": {
         "question": {
-          "questionId": "q002b",
+          "questionId": "q002f",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -1227,11 +1255,11 @@
       }
     },
     {
-      "itemId": "q002c",
+      "itemId": "q002g",
       "title": "Có phần nào bạn cho rằng KHÔNG nên để pipeline tự làm?",
       "questionItem": {
         "question": {
-          "questionId": "q002d",
+          "questionId": "q002h",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -1276,11 +1304,11 @@
       "pageBreakItem": {}
     },
     {
-      "itemId": "q002e",
+      "itemId": "q002i",
       "title": "Làm campaign game hiện tại vướng gì?",
       "questionItem": {
         "question": {
-          "questionId": "q002f",
+          "questionId": "q002j",
           "required": true,
           "choiceQuestion": {
             "type": "CHECKBOX",
@@ -1326,12 +1354,12 @@
       }
     },
     {
-      "itemId": "q002g",
+      "itemId": "q002k",
       "title": "Phần nào lặp lại nhiều nhất giữa các campaign game?",
       "description": "Không bắt buộc. Càng cụ thể càng tốt — đây là phần đầu tiên pipeline nên làm.",
       "questionItem": {
         "question": {
-          "questionId": "q002h",
+          "questionId": "q002l",
           "required": false,
           "textQuestion": {
             "paragraph": true
@@ -1340,11 +1368,11 @@
       }
     },
     {
-      "itemId": "q002i",
+      "itemId": "q002m",
       "title": "Team đã có thư viện hoặc template dùng lại cho campaign game chưa?",
       "questionItem": {
         "question": {
-          "questionId": "q002j",
+          "questionId": "q002n",
           "required": true,
           "choiceQuestion": {
             "type": "RADIO",
@@ -1377,11 +1405,11 @@
       "description": "Tất cả câu ở phần này đều không bắt buộc."
     },
     {
-      "itemId": "q002k",
+      "itemId": "q002o",
       "title": "Bạn hình dung pipeline này lý tưởng thì dùng như thế nào? Mô tả một lần dùng cụ thể.",
       "questionItem": {
         "question": {
-          "questionId": "q002l",
+          "questionId": "q002p",
           "required": false,
           "textQuestion": {
             "paragraph": true
@@ -1390,11 +1418,11 @@
       }
     },
     {
-      "itemId": "q002m",
+      "itemId": "q002q",
       "title": "Có câu nào trong khảo sát này bạn thấy khó hiểu hoặc không khớp với thực tế của bạn?",
       "questionItem": {
         "question": {
-          "questionId": "q002n",
+          "questionId": "q002r",
           "required": false,
           "textQuestion": {
             "paragraph": true
@@ -1403,11 +1431,11 @@
       }
     },
     {
-      "itemId": "q002o",
+      "itemId": "q002s",
       "title": "Bạn có muốn dùng thử sớm và góp ý trực tiếp không?",
       "questionItem": {
         "question": {
-          "questionId": "q002p",
+          "questionId": "q002t",
           "required": false,
           "choiceQuestion": {
             "type": "RADIO",
@@ -1423,34 +1451,6 @@
               }
             ],
             "shuffle": false
-          }
-        }
-      }
-    },
-    {
-      "itemId": "q002q",
-      "title": "Tên hoặc nickname",
-      "description": "Không bắt buộc.",
-      "questionItem": {
-        "question": {
-          "questionId": "q002r",
-          "required": false,
-          "textQuestion": {
-            "paragraph": false
-          }
-        }
-      }
-    },
-    {
-      "itemId": "q002s",
-      "title": "Email hoặc Slack handle",
-      "description": "Không bắt buộc.",
-      "questionItem": {
-        "question": {
-          "questionId": "q002t",
-          "required": false,
-          "textQuestion": {
-            "paragraph": false
           }
         }
       }

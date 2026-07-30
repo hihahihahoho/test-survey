@@ -51,9 +51,13 @@ export function build() {
         "AI NÊN TRẢ LỜI\n" +
         "Bất kỳ ai từng tham gia một campaign mini-game: designer, illustrator, animator, dev, QA, PM, " +
         "marketing. Mỗi vai trò thấy một phần khác nhau của cùng một quy trình, nên cần đủ các góc.\n\n" +
+        "VỀ VIỆC GHI TÊN\n" +
+        "Khảo sát này KHÔNG ẩn danh — có tên để chúng tôi hỏi lại khi cần làm rõ.\n\n" +
         "CAM KẾT\n" +
         "· Không dùng để đánh giá cá nhân.\n" +
-        "· Câu đầu tiên là câu sàng lọc — nếu bạn không tham gia làm campaign game thì gửi luôn, " +
+        "· Báo cáo ở dạng tổng hợp, không nêu tên ai gắn với một câu trả lời cụ thể.\n" +
+        "· Google không tự thu thập email của bạn — form đã tắt tính năng đó.\n" +
+        "· Sau phần mở đầu là câu sàng lọc — nếu bạn không tham gia làm campaign game thì gửi luôn, " +
         "không phải trả lời tiếp.\n\n" +
         "THỜI GIAN\n" +
         "Khoảng 10–12 phút nếu bạn có tham gia."
@@ -61,9 +65,15 @@ export function build() {
     items: [
 
       /* ===================== Sàng lọc ===================== */
-      PAGE("sec_screen", "Câu sàng lọc",
+      PAGE("sec_screen", "Bắt đầu",
         "Campaign mini-game ở đây là các game nhỏ gắn với chiến dịch marketing: vòng xoay may mắn, " +
         "thẻ cào, lật thẻ, quiz, bắt vật rơi, điểm danh tích điểm… Thường sống vài tuần rồi tắt."),
+      TXT("Tên hoặc nickname", { req: true,
+        desc: "Ghi tên mọi người vẫn gọi bạn trong team là được." }),
+      TXT("Email hoặc Slack handle",
+        { desc: "Không bắt buộc. Chỉ cần nếu bạn muốn nhận kết quả tổng hợp hoặc tham gia dùng thử." }),
+      /* Câu sàng lọc PHẢI là câu cuối của phần này — Google Forms chỉ áp dụng
+         điều hướng theo lựa chọn cho câu cuối cùng của một section. */
       RADIO(GATE,
         [{ value: "Có, tôi trực tiếp làm", goTo: "NEXT" },
          { value: "Có, tôi review hoặc điều phối", goTo: "NEXT" },
@@ -275,9 +285,8 @@ export function build() {
       PARA("Bạn hình dung pipeline này lý tưởng thì dùng như thế nào? Mô tả một lần dùng cụ thể."),
       PARA("Có câu nào trong khảo sát này bạn thấy khó hiểu hoặc không khớp với thực tế của bạn?"),
       RADIO("Bạn có muốn dùng thử sớm và góp ý trực tiếp không?",
-        ["Có", "Tuỳ, nếu không ảnh hưởng deadline", "Không"]),
-      TXT("Tên hoặc nickname", { desc: "Không bắt buộc." }),
-      TXT("Email hoặc Slack handle", { desc: "Không bắt buộc." })
+        ["Có", "Tuỳ, nếu không ảnh hưởng deadline", "Không"])
+      /* Tên & email đã hỏi ở đầu form, không hỏi lại ở đây. */
     ]
   };
 }

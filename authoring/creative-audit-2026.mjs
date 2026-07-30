@@ -80,10 +80,14 @@ export function build() {
         "KẾT QUẢ DÙNG ĐỂ LÀM GÌ\n" +
         "Quyết định nên xây công cụ nội bộ hoặc đưa AI vào công đoạn nào để thực sự giảm việc thủ công. " +
         "Kết quả tổng hợp sẽ được chia sẻ lại cho cả team.\n\n" +
+        "VỀ VIỆC GHI TÊN\n" +
+        "Khảo sát này KHÔNG ẩn danh — có tên để chúng tôi hỏi lại khi câu trả lời cần làm rõ, và để " +
+        "biết ai muốn tham gia dùng thử công cụ. Team nhỏ nên ẩn danh cũng chỉ là hình thức.\n\n" +
         "CAM KẾT\n" +
         "· Không dùng để đánh giá năng lực, KPI hay xếp hạng cá nhân.\n" +
+        "· Báo cáo ở dạng tổng hợp. Không nêu tên ai gắn với một câu trả lời cụ thể.\n" +
         "· Không có câu trả lời đúng hay sai. Trả lời theo thực tế, không theo mong đợi.\n" +
-        "· Phần tên và email nằm ở cuối và không bắt buộc.\n\n" +
+        "· Google không tự thu thập email của bạn — form đã tắt tính năng đó.\n\n" +
         "THỜI GIAN\n" +
         "Phần chính khoảng 15 phút. Khảo sát tự bỏ qua những mảng bạn không làm, nên nhiều người sẽ " +
         "xong nhanh hơn. Hết phần chính bạn có thể gửi luôn, hoặc trả lời thêm khoảng 4 phút câu mở.\n\n" +
@@ -93,8 +97,12 @@ export function build() {
     items: [
 
       /* ===================== P1 · Vai trò ===================== */
-      PAGE("sec_profile", "Phần 1 · Vai trò của bạn",
-        "Ba câu nhanh để tổng hợp kết quả theo nhóm."),
+      PAGE("sec_profile", "Phần 1 · Bạn là ai",
+        "Vài câu nhanh để tổng hợp kết quả theo nhóm và để hỏi lại khi cần."),
+      TXT("Tên hoặc nickname", { req: true,
+        desc: "Ghi tên mọi người vẫn gọi bạn trong team là được." }),
+      TXT("Email hoặc Slack handle",
+        { desc: "Không bắt buộc. Chỉ cần nếu bạn muốn nhận kết quả tổng hợp hoặc tham gia dùng thử." }),
       RADIO("Vai trò chính của bạn hiện nay",
         ["Graphic Designer", "UI / Product Designer", "Illustrator / Character Artist",
          "Motion Designer / Animator", "Game Artist", "3D Artist", "Video Editor",
@@ -394,10 +402,8 @@ export function build() {
         ["Dưới 30 phút", "1–2 giờ", "Nửa ngày", "1 ngày hoặc hơn",
          "Không có thời gian — công cụ phải dùng được ngay"]),
       RADIO("Bạn có muốn dùng thử sớm và góp ý trực tiếp (pilot user) không?",
-        ["Có", "Tuỳ, nếu không ảnh hưởng deadline", "Không"]),
-      TXT("Tên hoặc nickname",
-        { desc: "Không bắt buộc. Chỉ dùng để hỏi thêm nếu cần, không gắn vào báo cáo." }),
-      TXT("Email hoặc Slack handle", { desc: "Không bắt buộc." })
+        ["Có", "Tuỳ, nếu không ảnh hưởng deadline", "Không"])
+      /* Tên & email đã hỏi ở Phần 1, không hỏi lại ở đây. */
     ]
   };
 }

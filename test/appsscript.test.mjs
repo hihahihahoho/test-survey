@@ -64,6 +64,8 @@ function runScript(gs) {
     setTitle: v => { log.form.title = v; return form; },
     setDescription: v => { log.form.desc = v; return form; },
     setProgressBar: v => { log.form.progress = v; return form; },
+    setEmailCollectionType: v => { log.emailMode = v; return form; },
+    setCollectEmail: v => { log.emailCollect = v; return form; },
     getTitle: () => log.form.title,
     getEditUrl: () => "https://example.test/edit",
     getPublishedUrl: () => "https://example.test/view",
@@ -85,6 +87,7 @@ function runScript(gs) {
   const FormApp = {
     create: t => { log.form.created = t; return form; },
     PageNavigationType: { SUBMIT: "«SUBMIT»", RESTART: "«RESTART»", CONTINUE: "«CONTINUE»" },
+    EmailCollectionType: { DO_NOT_COLLECT: "DO_NOT_COLLECT", VERIFIED: "VERIFIED" },
     createCheckboxValidation: () => {
       const b = { atMost: null };
       b.requireSelectAtMost = n => { b.atMost = n; return b; };
@@ -207,6 +210,10 @@ for (const s of surveys) {
      log.logs.some(l => l.indexOf("Link điền:") === 0), "log ra link edit và link điền");
   ok(log.form.desc === form.info.description, "giữ nguyên phần mô tả mở đầu");
   ok(log.form.progress === true, "bật progress bar");
+  ok(log.emailMode === "DO_NOT_COLLECT" || log.emailCollect === false,
+     `tắt tường minh việc Google tự thu thập email (${log.emailMode ?? log.emailCollect})`);
+  ok(log.logs.some(l => l.indexOf("Thu thập email tự động:") === 0),
+     "log ra trạng thái thu thập email để kiểm tra lại");
 }
 
 /* ==========================================================================
@@ -227,6 +234,16 @@ console.log("\n══ riêng · creative-audit-2026 ══");
   const sink = r.log.items.find(i => i.title && i.title.indexOf("ngốn nhiều thời gian nhất") > 0);
   ok(sink && sink.kind === "CHECKBOX" && sink.other === true && sink.validation.atMost === 5,
      'câu "ngốn thời gian" là checkbox, có ô Khác, giới hạn 5');
+  /* tên phải ở Phần 1, hỏi đúng một lần */
+  const names = r.log.items.filter(i => i.title === "Tên hoặc nickname");
+  ok(names.length === 1 && names[0].required === true, "câu Tên hỏi một lần và bắt buộc");
+  const firstBreak2 = r.log.items.findIndex(i => i.kind === "PAGE_BREAK");
+  ok(r.log.items.indexOf(names[0]) < firstBreak2,
+     "câu Tên nằm trong phần đầu tiên, không phải cuối form");
+  ok(!/nằm ở cuối và không bắt buộc/.test(r.form.info.description),
+     "lời cam kết không còn nói tên nằm ở cuối (đã chuyển lên đầu)");
+  ok(/KHÔNG ẩn danh/.test(r.form.info.description),
+     "nói rõ khảo sát không ẩn danh, thay vì hứa ẩn danh rồi hỏi tên");
   const scale = r.log.items.find(i => i.kind === "SCALE");
   ok(scale && scale.bounds[0] === 1 && scale.bounds[1] === 5 && scale.labels[0] && scale.labels[1],
      "scale 1–5 có đủ 2 nhãn");
@@ -246,12 +263,25 @@ console.log("\n══ riêng · game-uikit-pipeline-2026 ══");
      '"Không tham gia" → gửi form luôn, không phải xem tiếp');
   ok(gate && gate.choices.filter(c => c.nav === "«CONTINUE»").length === 2,
      "hai phương án còn lại đều đi tiếp");
-  ok(r.log.items.indexOf(gate) === 1 && r.log.items[0].kind === "SECTION_HEADER",
-     "câu sàng lọc đứng ngay sau section header đầu — đúng vị trí câu cuối của section");
+  /* Phân nhánh của Google chỉ áp dụng cho câu CUỐI của section, nên câu sàng lọc
+     phải là item cuối cùng trước page break đầu tiên — kể cả sau khi thêm tên & email
+     vào trước nó. */
+  const firstBreak = r.log.items.findIndex(i => i.kind === "PAGE_BREAK");
+  const lastOfSection1 = r.log.items[firstBreak - 1];
+  ok(lastOfSection1 === gate,
+     `câu sàng lọc là câu cuối của section đầu (thấy: "${lastOfSection1 && lastOfSection1.title}")`);
+  ok(r.log.items[0].kind === "SECTION_HEADER", "section đầu là header, không phải page break");
+  const nameQ = r.log.items.find(i => i.title === "Tên hoặc nickname");
+  ok(nameQ && nameQ.kind === "TEXT" && nameQ.required === true,
+     "câu Tên đặt ở đầu form và bắt buộc");
+  ok(r.log.items.indexOf(nameQ) < r.log.items.indexOf(gate),
+     "Tên hỏi TRƯỚC câu sàng lọc, nên người bị sàng lọc ra vẫn có tên");
   const must = r.log.items.find(i => i.title && i.title.indexOf("chỉ được có MỘT thứ") > 0);
   ok(must && must.kind === "LIST" && must.required === true,
      'câu "chỉ được có MỘT thứ" là dropdown bắt buộc');
   ok(r.log.items.filter(i => i.kind === "GRID").length === 7, "7 grid định lượng");
+  ok(r.log.items.filter(i => i.title === "Tên hoặc nickname").length === 1,
+     "không hỏi trùng tên ở cuối form");
   /* bước render PDF/slide phải có mặt ở cả phần bàn giao và phần pipeline */
   const pdfRows = r.log.items
     .filter(i => i.kind === "GRID")
