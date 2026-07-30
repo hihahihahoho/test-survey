@@ -27,7 +27,7 @@
     },
     {
       "itemId": "q0003",
-      "title": "Email hoặc Slack handle",
+      "title": "Email",
       "description": "Không bắt buộc. Chỉ cần nếu bạn muốn nhận kết quả tổng hợp hoặc tham gia dùng thử.",
       "questionItem": {
         "question": {

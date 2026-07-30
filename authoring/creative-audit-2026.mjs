@@ -12,7 +12,9 @@
      · Mọi thang đo gắn nhãn đầy đủ, cùng chiều thấp→cao, luôn có ô thoát
        ("Không làm" / "Không áp dụng" / "Không rõ") để không bắt người ta đoán.
      · Skip-logic — ai không làm mảng nào thì không phải xem module của mảng đó.
-     · Đúng 1 câu tự luận bắt buộc; phần mở là opt-in sau khi đã xong phần chính.
+     · Chỉ 2 câu tự luận bắt buộc, đều là câu trực tiếp dùng để quyết định xây gì.
+       (Cỡ mẫu dưới 10 người: dữ liệu định lượng quá mỏng để kết luận, nên câu mở
+       mới là phần có giá trị — không để nó thành opt-in dễ bị bỏ qua.)
      · Câu hỏi trung tính, một ý một câu, không gợi ý sẵn câu trả lời.
      · KHÔNG hỏi người trả lời chấm điểm các giải pháp chưa tồn tại — việc đó
        để workshop sau khi đã có dữ liệu; survey chỉ đo nhu cầu theo công đoạn.
@@ -49,8 +51,6 @@ const TASKS = [
 const GATE_G = "Bạn có làm ảnh tĩnh, illustration, graphic hoặc icon không?";
 const GATE_M = "Bạn có làm animation, motion graphic hoặc video không?";
 const GATE_3 = "Bạn có làm 3D hoặc asset game không?";
-const GATE_X = "Bạn muốn làm gì tiếp?";
-const MORE = "Trả lời thêm phần mở (khoảng 4 phút)";
 
 export const meta = {
   id: "creative-audit-2026",
@@ -58,11 +58,10 @@ export const meta = {
   note: "Đo tỷ trọng công việc, bản đồ công cụ theo công đoạn, và điểm yếu của công cụ hiện tại.",
   /* build.mjs mô phỏng từng nhánh này để chắc không phần nào bị bỏ sót hay lặp */
   testPaths: {
-    "chỉ graphic":  { [GATE_G]: "Có",    [GATE_M]: "Không", [GATE_3]: "Không", [GATE_X]: MORE },
-    "chỉ motion":   { [GATE_G]: "Không", [GATE_M]: "Có",    [GATE_3]: "Không", [GATE_X]: MORE },
-    "chỉ 3D":       { [GATE_G]: "Không", [GATE_M]: "Không", [GATE_3]: "Có",    [GATE_X]: MORE },
-    "cả ba mảng":   { [GATE_G]: "Có",    [GATE_M]: "Có",    [GATE_3]: "Có",    [GATE_X]: MORE },
-    "gửi luôn":     { [GATE_G]: "Có",    [GATE_M]: "Không", [GATE_3]: "Không", [GATE_X]: "Gửi luôn" }
+    "chỉ graphic":  { [GATE_G]: "Có",    [GATE_M]: "Không", [GATE_3]: "Không" },
+    "chỉ motion":   { [GATE_G]: "Không", [GATE_M]: "Có",    [GATE_3]: "Không" },
+    "chỉ 3D":       { [GATE_G]: "Không", [GATE_M]: "Không", [GATE_3]: "Có" },
+    "cả ba mảng":   { [GATE_G]: "Có",    [GATE_M]: "Có",    [GATE_3]: "Có" }
   }
 };
 
@@ -89,8 +88,8 @@ export function build() {
         "· Không có câu trả lời đúng hay sai. Trả lời theo thực tế, không theo mong đợi.\n" +
         "· Google không tự thu thập email của bạn — form đã tắt tính năng đó.\n\n" +
         "THỜI GIAN\n" +
-        "Phần chính khoảng 15 phút. Khảo sát tự bỏ qua những mảng bạn không làm, nên nhiều người sẽ " +
-        "xong nhanh hơn. Hết phần chính bạn có thể gửi luôn, hoặc trả lời thêm khoảng 4 phút câu mở.\n\n" +
+        "Khoảng 17 phút. Khảo sát tự bỏ qua những mảng bạn không làm, nên nhiều người sẽ xong nhanh hơn.\n" +
+        "Có hai câu tự luận bắt buộc — đó là hai câu chúng tôi thật sự cần, phần còn lại chỉ bấm chọn.\n\n" +
         "Nếu có câu nào chưa rõ nghĩa, hãy chọn phương án gần nhất rồi ghi lại ở phần Ý kiến mở — " +
         "chúng tôi sẽ sửa cho vòng khảo sát sau."
     },
@@ -101,7 +100,7 @@ export function build() {
         "Vài câu nhanh để tổng hợp kết quả theo nhóm và để hỏi lại khi cần."),
       TXT("Tên hoặc nickname", { req: true,
         desc: "Ghi tên mọi người vẫn gọi bạn trong team là được." }),
-      TXT("Email hoặc Slack handle",
+      TXT("Email",
         { desc: "Không bắt buộc. Chỉ cần nếu bạn muốn nhận kết quả tổng hợp hoặc tham gia dùng thử." }),
       RADIO("Vai trò chính của bạn hiện nay",
         ["Graphic Designer", "UI / Product Designer", "Illustrator / Character Artist",
@@ -200,7 +199,7 @@ export function build() {
          "SVGO / SVGOMG", "LottieFiles optimizer", "Script hoặc CLI tự viết",
          "Làm tay từng file", "__OTHER__"], { req: true }),
       CHECK("Asset được lưu và bàn giao qua đâu?",
-        ["Figma", "Google Drive", "Dropbox", "Slack / Telegram / Zalo", "Git repo",
+        ["Figma", "Google Drive", "Dropbox", "Telegram / Zalo / chat nội bộ", "Git repo",
          "Server / NAS nội bộ", "Jira / Asana attachment", "Notion", "__OTHER__"], { req: true }),
       CHECK("Bạn có đang dùng cơ chế tự động sẵn có nào trong công cụ không?",
         ["Photoshop Actions / Batch / Image Processor", "After Effects expression",
@@ -288,8 +287,9 @@ export function build() {
          "Quản lý version & bàn giao asset"],
         WEAK, { multi: true }),
       PARA("Công cụ nào làm bạn mất thời gian nhất, và tắc ở thao tác cụ thể nào?",
-        { desc: "Ví dụ mẫu: “After Effects — phải duplicate comp cho từng tỷ lệ rồi canh lại text bị tràn.”\n" +
-                "Không bắt buộc, nhưng đây là phần hữu ích nhất của khảo sát." }),
+        { req: true,
+          desc: "Ví dụ mẫu: “After Effects — phải duplicate comp cho từng tỷ lệ rồi canh lại text bị tràn.”\n" +
+                "Đây là phần hữu ích nhất của cả khảo sát, nên bắt buộc. Viết một hai câu cũng được." }),
       CHECK("Bạn có gặp hạn chế nào về máy móc, license hoặc hạ tầng không?",
         ["GPU yếu, không chạy được AI trên máy", "RAM / CPU không đủ", "Ổ cứng hết chỗ",
          "Không được tự cài software", "Thiếu license (Adobe, Topaz, Midjourney…)",
@@ -380,17 +380,10 @@ export function build() {
         ["Có, dạng văn bản dùng chung", "Có, checklist riêng của tôi",
          "Chỉ nhớ trong đầu", "Không có"], { req: true }),
 
-      /* ===================== Cổng phần mở rộng ===================== */
-      PAGE("sec_gate_extra", "Xong phần chính — cảm ơn bạn",
-        "Đến đây là đã đủ dữ liệu cho phần định lượng. Còn khoảng 4 phút câu mở, " +
-        "hoàn toàn tuỳ bạn. Nếu đang gấp, cứ gửi luôn."),
-      RADIO(GATE_X,
-        [{ value: MORE, goTo: "NEXT" },
-         { value: "Gửi luôn", goTo: "SUBMIT" }], { req: true }),
-
       /* ===================== P10 · Phần mở ===================== */
       PAGE("sec_extra", "Phần 10 · Ý kiến mở",
-        "Tất cả câu ở phần này đều không bắt buộc. Đây thường là phần cho ra insight tốt nhất."),
+        "Tất cả câu ở phần này đều KHÔNG bắt buộc — bỏ trống câu nào cũng được. " +
+        "Nhưng đây thường là phần cho ra insight tốt nhất, nên nếu còn sức thì viết vài dòng."),
       SCALE("Trong một ngày làm việc, phần là thao tác thủ công lặp lại chiếm bao nhiêu?",
         1, 5, "Gần như không có", "Gần như toàn bộ"),
       PARA("Điều gì làm bạn mất hứng nhất trong công việc hàng ngày?"),

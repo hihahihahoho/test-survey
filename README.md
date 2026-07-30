@@ -68,11 +68,11 @@ tạo Google Form.
 
 | Survey | Đối tượng | Dài | Mục tiêu |
 |---|---|---|---|
-| `creative-audit-2026` | Cả creative team | ~15 phút | Tỷ trọng công việc, bản đồ công cụ theo công đoạn, điểm yếu công cụ |
+| `creative-audit-2026` | Cả creative team | ~17 phút | Tỷ trọng công việc, bản đồ công cụ theo công đoạn, điểm yếu công cụ |
 | `game-uikit-pipeline-2026` | Ai làm campaign mini-game — kể cả dev, QA, PM, marketing | ~12 phút | Bộ screen & component tối thiểu, định dạng bàn giao cần thiết, mức tự động hoá mong muốn |
 
 Survey game tách riêng, không nhét thành một phần của survey kia, vì: survey kia đã đầy ở mức
-15 phút; và đối tượng khác nhau — câu về định dạng bàn giao và engine phải có **dev** trả lời,
+17 phút; và đối tượng khác nhau — câu về định dạng bàn giao và engine phải có **dev** trả lời,
 câu về thể lệ và quà phải có **PM/marketing**, không chỉ designer.
 
 Survey `creative-audit-2026` có một câu sàng lọc *"Bạn có tham gia làm campaign mini-game
@@ -148,7 +148,7 @@ cùng trên trang là câu quyết định**. Nên để câu lọc đứng mộ
 - skip-logic lặp vô hạn (mô phỏng bằng `walk()`)
 - grid quá lớn (> 8 dòng hoặc > 6 cột) → gây straightlining
 - checkbox dài mà không có ô thoát
-- quá 2 câu tự luận bắt buộc
+- quá 2 câu tự luận bắt buộc (cỡ mẫu nhỏ thì câu mở mới là dữ liệu chính, nhưng bắt buộc quá nhiều làm tăng tỷ lệ bỏ giữa)
 - ước lượng thời gian vượt 20 phút
 
 ## Đưa sang Google Forms thật

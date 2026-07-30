@@ -70,7 +70,7 @@ export function build() {
         "thẻ cào, lật thẻ, quiz, bắt vật rơi, điểm danh tích điểm… Thường sống vài tuần rồi tắt."),
       TXT("Tên hoặc nickname", { req: true,
         desc: "Ghi tên mọi người vẫn gọi bạn trong team là được." }),
-      TXT("Email hoặc Slack handle",
+      TXT("Email",
         { desc: "Không bắt buộc. Chỉ cần nếu bạn muốn nhận kết quả tổng hợp hoặc tham gia dùng thử." }),
       /* Câu sàng lọc PHẢI là câu cuối của phần này — Google Forms chỉ áp dụng
          điều hướng theo lựa chọn cho câu cuối cùng của một section. */

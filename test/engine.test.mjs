@@ -43,7 +43,7 @@ const ok=(c,m)=>{ if(!c){console.log("  ✗ "+m); fail++;} else console.log("  �
 
 console.log("\n[1] normalize + paginate JSON đã build");
 ok(form.items.length === raw.items.length, `giữ đủ ${raw.items.length} item`);
-ok(pages.length === 17, `chia thành ${pages.length} phần (mong đợi 17)`);
+ok(pages.length === 16, `chia thành ${pages.length} phần (mong đợi 16)`);
 ok(JSON.stringify(raw).includes("_exclusive"), "surveys/*.json GIỮ _exclusive (engine cần marker)");
 const g = JSON.parse(readFileSync("surveys/google/creative-audit-2026.json","utf8"));
 ok(!JSON.stringify(g).includes("_exclusive"), "surveys/google/*.json đã strip _exclusive (Forms API chấp nhận)");
@@ -96,18 +96,18 @@ function qid(title){
 }
 const A={ [qid("Bạn có làm ảnh tĩnh, illustration, graphic hoặc icon không?")]:"Không",
           [qid("Bạn có làm animation, motion graphic hoặc video không?")]:"Có",
-          [qid("Bạn có làm 3D hoặc asset game không?")]:"Không",
-          [qid("Bạn muốn làm gì tiếp?")]:"Gửi luôn" };
+          [qid("Bạn có làm 3D hoặc asset game không?")]:"Không" };
 let p=0, path=[], guard=0;
 while(p!=="SUBMIT" && p<pages.length && guard++<50){
   path.push(pages[p].header?pages[p].header.itemId:"(đầu)");
   p=next(p,A);
 }
-ok(p==="SUBMIT", "nhánh motion-only + \"Gửi luôn\" kết thúc bằng SUBMIT");
+ok(p>=pages.length, "nhánh motion-only đi hết form rồi kết thúc");
 ok(!path.includes("sec_mod_graphic"), "bỏ qua module graphic");
 ok(path.includes("sec_mod_motion"),  "vào module motion");
 ok(!path.includes("sec_mod_3d"),     "bỏ qua module 3D");
-ok(!path.includes("sec_extra"),      "bỏ qua phần mở rộng khi chọn Gửi luôn");
+ok(path.includes("sec_extra"),       "phần ý kiến mở nằm trong luồng chính, không còn cổng opt-in");
+ok(!path.includes("sec_gate_extra"), "trang cổng opt-in đã bị bỏ khỏi form");
 console.log("      " + path.join(" → "));
 
 console.log("\n[5] validate ô trống");
@@ -116,7 +116,7 @@ ok(!mod.isEmpty("A")&&!mod.isEmpty(["A"]), "không coi giá trị thật là tr�
 
 const s = mod.stats(form);
 console.log(`\n[6] engine tự đếm: ${s.total} câu · ${s.required} bắt buộc · ${s.branches} nhánh · ~${s.minutes} phút`);
-ok(s.total===57 && s.branches===4, "khớp với số build.mjs báo");
+ok(s.total===56 && s.branches===3, "khớp với số build.mjs báo");
 
 console.log("\n[7] kiểm tra chung cho mọi survey trong manifest");
 const {surveys} = JSON.parse(readFileSync("surveys/manifest.json","utf8"));

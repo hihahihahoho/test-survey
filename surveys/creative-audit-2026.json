@@ -2,7 +2,7 @@
   "info": {
     "title": "Khảo sát hiện trạng công việc & công cụ — Creative Team",
     "documentTitle": "Creative Workflow & Tooling Audit 2026",
-    "description": "MỤC ĐÍCH\nKhảo sát này thu thập ba thứ: (1) mỗi người đang làm loại việc gì và mỗi loại chiếm bao nhiêu khối lượng, (2) ở từng công đoạn mọi người đang dùng công cụ nào, (3) những công cụ đó còn thiếu hoặc còn tắc ở đâu.\n\nKẾT QUẢ DÙNG ĐỂ LÀM GÌ\nQuyết định nên xây công cụ nội bộ hoặc đưa AI vào công đoạn nào để thực sự giảm việc thủ công. Kết quả tổng hợp sẽ được chia sẻ lại cho cả team.\n\nVỀ VIỆC GHI TÊN\nKhảo sát này KHÔNG ẩn danh — có tên để chúng tôi hỏi lại khi câu trả lời cần làm rõ, và để biết ai muốn tham gia dùng thử công cụ. Team nhỏ nên ẩn danh cũng chỉ là hình thức.\n\nCAM KẾT\n· Không dùng để đánh giá năng lực, KPI hay xếp hạng cá nhân.\n· Báo cáo ở dạng tổng hợp. Không nêu tên ai gắn với một câu trả lời cụ thể.\n· Không có câu trả lời đúng hay sai. Trả lời theo thực tế, không theo mong đợi.\n· Google không tự thu thập email của bạn — form đã tắt tính năng đó.\n\nTHỜI GIAN\nPhần chính khoảng 15 phút. Khảo sát tự bỏ qua những mảng bạn không làm, nên nhiều người sẽ xong nhanh hơn. Hết phần chính bạn có thể gửi luôn, hoặc trả lời thêm khoảng 4 phút câu mở.\n\nNếu có câu nào chưa rõ nghĩa, hãy chọn phương án gần nhất rồi ghi lại ở phần Ý kiến mở — chúng tôi sẽ sửa cho vòng khảo sát sau."
+    "description": "MỤC ĐÍCH\nKhảo sát này thu thập ba thứ: (1) mỗi người đang làm loại việc gì và mỗi loại chiếm bao nhiêu khối lượng, (2) ở từng công đoạn mọi người đang dùng công cụ nào, (3) những công cụ đó còn thiếu hoặc còn tắc ở đâu.\n\nKẾT QUẢ DÙNG ĐỂ LÀM GÌ\nQuyết định nên xây công cụ nội bộ hoặc đưa AI vào công đoạn nào để thực sự giảm việc thủ công. Kết quả tổng hợp sẽ được chia sẻ lại cho cả team.\n\nVỀ VIỆC GHI TÊN\nKhảo sát này KHÔNG ẩn danh — có tên để chúng tôi hỏi lại khi câu trả lời cần làm rõ, và để biết ai muốn tham gia dùng thử công cụ. Team nhỏ nên ẩn danh cũng chỉ là hình thức.\n\nCAM KẾT\n· Không dùng để đánh giá năng lực, KPI hay xếp hạng cá nhân.\n· Báo cáo ở dạng tổng hợp. Không nêu tên ai gắn với một câu trả lời cụ thể.\n· Không có câu trả lời đúng hay sai. Trả lời theo thực tế, không theo mong đợi.\n· Google không tự thu thập email của bạn — form đã tắt tính năng đó.\n\nTHỜI GIAN\nKhoảng 17 phút. Khảo sát tự bỏ qua những mảng bạn không làm, nên nhiều người sẽ xong nhanh hơn.\nCó hai câu tự luận bắt buộc — đó là hai câu chúng tôi thật sự cần, phần còn lại chỉ bấm chọn.\n\nNếu có câu nào chưa rõ nghĩa, hãy chọn phương án gần nhất rồi ghi lại ở phần Ý kiến mở — chúng tôi sẽ sửa cho vòng khảo sát sau."
   },
   "items": [
     {
@@ -27,7 +27,7 @@
     },
     {
       "itemId": "q0003",
-      "title": "Email hoặc Slack handle",
+      "title": "Email",
       "description": "Không bắt buộc. Chỉ cần nếu bạn muốn nhận kết quả tổng hợp hoặc tham gia dùng thử.",
       "questionItem": {
         "question": {
@@ -878,7 +878,7 @@
                 "value": "Dropbox"
               },
               {
-                "value": "Slack / Telegram / Zalo"
+                "value": "Telegram / Zalo / chat nội bộ"
               },
               {
                 "value": "Git repo"
@@ -1561,11 +1561,11 @@
     {
       "itemId": "q002l",
       "title": "Công cụ nào làm bạn mất thời gian nhất, và tắc ở thao tác cụ thể nào?",
-      "description": "Ví dụ mẫu: “After Effects — phải duplicate comp cho từng tỷ lệ rồi canh lại text bị tràn.”\nKhông bắt buộc, nhưng đây là phần hữu ích nhất của khảo sát.",
+      "description": "Ví dụ mẫu: “After Effects — phải duplicate comp cho từng tỷ lệ rồi canh lại text bị tràn.”\nĐây là phần hữu ích nhất của cả khảo sát, nên bắt buộc. Viết một hai câu cũng được.",
       "questionItem": {
         "question": {
           "questionId": "q002m",
-          "required": false,
+          "required": true,
           "textQuestion": {
             "paragraph": true
           }
@@ -2206,47 +2206,17 @@
       }
     },
     {
-      "itemId": "sec_gate_extra",
-      "title": "Xong phần chính — cảm ơn bạn",
-      "pageBreakItem": {},
-      "description": "Đến đây là đã đủ dữ liệu cho phần định lượng. Còn khoảng 4 phút câu mở, hoàn toàn tuỳ bạn. Nếu đang gấp, cứ gửi luôn."
-    },
-    {
-      "itemId": "q003s",
-      "title": "Bạn muốn làm gì tiếp?",
-      "questionItem": {
-        "question": {
-          "questionId": "q003t",
-          "required": true,
-          "choiceQuestion": {
-            "type": "RADIO",
-            "options": [
-              {
-                "value": "Trả lời thêm phần mở (khoảng 4 phút)",
-                "goToAction": "NEXT_SECTION"
-              },
-              {
-                "value": "Gửi luôn",
-                "goToAction": "SUBMIT_FORM"
-              }
-            ],
-            "shuffle": false
-          }
-        }
-      }
-    },
-    {
       "itemId": "sec_extra",
       "title": "Phần 10 · Ý kiến mở",
       "pageBreakItem": {},
-      "description": "Tất cả câu ở phần này đều không bắt buộc. Đây thường là phần cho ra insight tốt nhất."
+      "description": "Tất cả câu ở phần này đều KHÔNG bắt buộc — bỏ trống câu nào cũng được. Nhưng đây thường là phần cho ra insight tốt nhất, nên nếu còn sức thì viết vài dòng."
     },
     {
-      "itemId": "q003u",
+      "itemId": "q003s",
       "title": "Trong một ngày làm việc, phần là thao tác thủ công lặp lại chiếm bao nhiêu?",
       "questionItem": {
         "question": {
-          "questionId": "q003v",
+          "questionId": "q003t",
           "required": false,
           "scaleQuestion": {
             "low": 1,
@@ -2258,8 +2228,21 @@
       }
     },
     {
-      "itemId": "q003w",
+      "itemId": "q003u",
       "title": "Điều gì làm bạn mất hứng nhất trong công việc hàng ngày?",
+      "questionItem": {
+        "question": {
+          "questionId": "q003v",
+          "required": false,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003w",
+      "title": "Nếu được một điều ước cho quy trình của team, bạn ước gì?",
       "questionItem": {
         "question": {
           "questionId": "q003x",
@@ -2272,7 +2255,7 @@
     },
     {
       "itemId": "q003y",
-      "title": "Nếu được một điều ước cho quy trình của team, bạn ước gì?",
+      "title": "Có công đoạn nào bạn nghĩ không nên để AI hoặc công cụ làm thay không? Vì sao?",
       "questionItem": {
         "question": {
           "questionId": "q003z",
@@ -2285,7 +2268,8 @@
     },
     {
       "itemId": "q0040",
-      "title": "Có công đoạn nào bạn nghĩ không nên để AI hoặc công cụ làm thay không? Vì sao?",
+      "title": "Có câu nào trong khảo sát này bạn thấy khó hiểu hoặc không khớp với công việc thật của bạn?",
+      "description": "Giúp chúng tôi sửa cho những vòng khảo sát sau.",
       "questionItem": {
         "question": {
           "questionId": "q0041",
@@ -2298,24 +2282,10 @@
     },
     {
       "itemId": "q0042",
-      "title": "Có câu nào trong khảo sát này bạn thấy khó hiểu hoặc không khớp với công việc thật của bạn?",
-      "description": "Giúp chúng tôi sửa cho những vòng khảo sát sau.",
-      "questionItem": {
-        "question": {
-          "questionId": "q0043",
-          "required": false,
-          "textQuestion": {
-            "paragraph": true
-          }
-        }
-      }
-    },
-    {
-      "itemId": "q0044",
       "title": "Bạn sẵn sàng dành bao nhiêu thời gian để học một công cụ nội bộ mới?",
       "questionItem": {
         "question": {
-          "questionId": "q0045",
+          "questionId": "q0043",
           "required": false,
           "choiceQuestion": {
             "type": "RADIO",
@@ -2342,11 +2312,11 @@
       }
     },
     {
-      "itemId": "q0046",
+      "itemId": "q0044",
       "title": "Bạn có muốn dùng thử sớm và góp ý trực tiếp (pilot user) không?",
       "questionItem": {
         "question": {
-          "questionId": "q0047",
+          "questionId": "q0045",
           "required": false,
           "choiceQuestion": {
             "type": "RADIO",

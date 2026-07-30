@@ -210,6 +210,7 @@ for (const s of surveys) {
      log.logs.some(l => l.indexOf("Link điền:") === 0), "log ra link edit và link điền");
   ok(log.form.desc === form.info.description, "giữ nguyên phần mô tả mở đầu");
   ok(log.form.progress === true, "bật progress bar");
+  ok(!gs.includes("Slack"), "không còn nhắc Slack (team không dùng)");
   ok(log.emailMode === "DO_NOT_COLLECT" || log.emailCollect === false,
      `tắt tường minh việc Google tự thu thập email (${log.emailMode ?? log.emailCollect})`);
   ok(log.logs.some(l => l.indexOf("Thu thập email tự động:") === 0),
@@ -229,8 +230,17 @@ console.log("\n══ riêng · creative-audit-2026 ══");
        === pb.find(p => p.title === "Phần 5 · Mảng chuyển động"),
      '"Không" nhảy đúng sang phần chuyển động');
   ok(gate && gate.choices.find(c => c.value === "Có").nav === "«CONTINUE»", '"Có" đi tiếp');
-  const extra = r.log.choicesSet.find(i => i.title === "Bạn muốn làm gì tiếp?");
-  ok(!!extra && extra.choices.some(c => c.nav === "«SUBMIT»"), '"Gửi luôn" → SUBMIT');
+  /* Cổng opt-in "gửi luôn / trả lời thêm" đã bỏ: với cỡ mẫu dưới 10 người, câu mở
+     là phần có giá trị nhất nên không để nó nằm sau một cửa dễ bấm bỏ qua. */
+  ok(!r.log.choicesSet.some(i => i.title === "Bạn muốn làm gì tiếp?"),
+     "không còn cổng opt-in trước phần ý kiến mở");
+  const reqParas = r.spec.items.filter(it =>
+    it.questionItem && it.questionItem.question.textQuestion
+    && it.questionItem.question.textQuestion.paragraph
+    && it.questionItem.question.required);
+  ok(reqParas.length === 2,
+     `${reqParas.length} câu tự luận bắt buộc, nằm trong phần chính: ` +
+     reqParas.map(q => '"' + q.title.slice(0, 34) + '…"').join(", "));
   const sink = r.log.items.find(i => i.title && i.title.indexOf("ngốn nhiều thời gian nhất") > 0);
   ok(sink && sink.kind === "CHECKBOX" && sink.other === true && sink.validation.atMost === 5,
      'câu "ngốn thời gian" là checkbox, có ô Khác, giới hạn 5');
