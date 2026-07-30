@@ -7,3 +7,4 @@ surveys/google/
 node_modules/
 .DS_Store
 *.log
+logs/
