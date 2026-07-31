@@ -36,6 +36,9 @@ GROW_OFFSET = 60         # mask nghiêm = threshold + 60 (style ghi đè bằng 
 MIN_BLOB = 12            # khối nhỏ hơn (px) coi là nhiễu
 HALO = 14                # nới bbox giữ glow quanh element
 PAD = 6
+BLEED = 0.12             # vành canvas ngoài ô (mỗi phía, theo tỷ lệ ô): trang trí
+                         # tràn RANH GIỚI Ô vẫn được vớt (mask sở hữu khối lo phần
+                         # không vớt nhầm đồ hàng xóm); engine bù 1+2*BLEED khi fit
 
 cfg = json.load(open(os.path.join(HERE, "styles.json")))
 for _sh in cfg["sheets"]:
@@ -83,8 +86,10 @@ def matte_chroma(sheet, key):
       alpha = 1 - spill / SREF      (SREF = spill của màu key thuần đo từ nền)
 
     Pixel key thuần → alpha 0 (kể cả ruột rỗng nằm kín — không cần thông ra
-    rìa). Pixel trộn → alpha đúng độ trong suốt thật. Rồi DESPILL: cắt phần
-    kênh key vượt trội để màu giữ lại không còn ám key.
+    rìa). Pixel trộn → alpha đúng độ trong suốt thật. Rồi UN-PREMULTIPLY theo
+    màu key: quan sát C = α·F + (1−α)·K ⇒ màu thật F = (C − (1−α)·K)/α.
+    (Despill kiểu cắt kênh cũ làm mép SẠM ĐEN và ruột bán trong suốt lem —
+    trừ sáng thay vì gỡ nền; un-premultiply gỡ đúng phần nền trộn vào.)
 
     Đánh đổi ghi rõ: element CÓ MÀU GẦN KEY (xanh lá trên nền green, tím trên
     nền magenta) sẽ bị mờ/xỉn — vì vậy prompt đã cấm dùng màu key trong element
@@ -108,19 +113,14 @@ def matte_chroma(sheet, key):
             a = 1 - spill / sref
             if a <= 0.04:
                 continue                          # nền / gần nền → trong suốt
-            if is_green:
-                g = max(r, b)                     # despill: cắt green vượt trội
-            else:
-                m = spill // 2                    # despill magenta: hạ r và b
-                r = max(0, r - m)
-                b = max(0, b - m)
-            if a >= 1:
-                dst[x, y] = (r, g, b, 255)
+            # un-premultiply: gỡ phần nền key đã trộn vào, trả màu thật
+            inv = 1 - a
+            r = min(255, max(0, round((r - inv * kr) / a)))
+            g = min(255, max(0, round((g - inv * kg) / a)))
+            b = min(255, max(0, round((b - inv * kb) / a)))
+            dst[x, y] = (r, g, b, round(a * 255))
+            if a >= 0.95:
                 strict[row + x] = 1
-            else:
-                dst[x, y] = (r, g, b, round(a * 255))
-                if a >= 0.95:
-                    strict[row + x] = 1
     return out, strict
 
 
@@ -267,6 +267,15 @@ def snap_to_safe(canvas, sk, safe):
     else:
         dx = round(sx + sw / 2 - (cl + cr) / 2 * s)
         dy = round(sy + sh / 2 - (ct + cb) / 2 * s)
+    # kẹp dịch chuyển: đừng đẩy content (kể cả trang trí) lòi khỏi canvas khi còn chỗ
+    ab = canvas.getchannel("A").getbbox()
+    if ab:
+        lo, hi = -math.floor(ab[0] * s), W - math.ceil(ab[2] * s)
+        if lo <= hi:
+            dx = min(max(dx, lo), hi)
+        lo, hi = -math.floor(ab[1] * s), H - math.ceil(ab[3] * s)
+        if lo <= hi:
+            dy = min(max(dy, lo), hi)
     out = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     out.paste(scaled, (dx, dy), scaled)
     return out
@@ -447,17 +456,19 @@ for style in cfg["styles"]:
 
         os.makedirs(out_dir, exist_ok=True)
         n_ok = 0
+        BX, BY = round(cell_w * BLEED), round(cell_h * BLEED)
+        CVW, CVH = CW + 2 * BX, CH + 2 * BY       # canvas = ô + vành bleed
         for idx, comp in enumerate(sh["components"]):
             row, col = divmod(idx, COLS)
             cx0, cy0 = round(col * cell_w), round(row * cell_h)
-            canvas = Image.new("RGBA", (CW, CH), (0, 0, 0, 0))
+            canvas = Image.new("RGBA", (CVW, CVH), (0, 0, 0, 0))
             if comp["skel"]["shape"] == "full":
                 # Ô full-bleed (bg): KHÔNG key gì cả — artwork phủ kín ô, key chỉ
                 # còn ở dải gap → matte trên artwork là tự phá ảnh (đã dính: nền
                 # blur bị ăn sạch). Crop nguyên ô đục 100%, gọt dải gap phẳng ở mép.
                 cell_rgb = raw_img.convert("RGB").crop((cx0, cy0, cx0 + CW, cy0 + CH))
                 fl, ft, fr, fb = trim_flat_cell(cell_rgb)
-                canvas.paste(cell_rgb.crop((fl, ft, fr, fb)).convert("RGBA"), (fl, ft))
+                canvas.paste(cell_rgb.crop((fl, ft, fr, fb)).convert("RGBA"), (BX + fl, BY + ft))
             else:
                 box = cell_boxes[idx]
                 if box is None:
@@ -468,9 +479,11 @@ for style in cfg["styles"]:
                 # ghép game/Figma luôn gán theo khung — trang trí tràn ngoài khung được
                 # giữ nguyên chỗ, model vẽ bay bổng cỡ nào cũng không xô layout.
                 # Chỉ dán vùng bbox (nới HALO) của blob THUỘC ô → junk hàng xóm không lọt.
+                # Vùng crop ĐƯỢC với sang ô bên cạnh (tối đa hết vành bleed) để vớt
+                # trang trí tràn ranh giới ô — mask sở hữu khối chặn đồ của hàng xóm.
                 l, t, r, b = box
-                L = max(cx0, l - HALO - PAD); T = max(cy0, t - HALO - PAD)
-                R = min(cx0 + CW, r + HALO + PAD); B = min(cy0 + CH, b + HALO + PAD)
+                L = max(0, cx0 - BX, l - HALO - PAD); T = max(0, cy0 - BY, t - HALO - PAD)
+                R = min(W, cx0 + CW + BX, r + HALO + PAD); B = min(H, cy0 + CH + BY, b + HALO + PAD)
                 region = keyed.crop((L, T, R, B))
                 # Mask theo QUYỀN SỞ HỮU khối: pixel chỉ giữ nếu thuộc khối đã gán
                 # cho ô này (nới MaxFilter ăn quầng glow mềm quanh khối). Không mask
@@ -486,11 +499,11 @@ for style in cfg["styles"]:
                             mp[xx - L, yy - T] = 255
                 msk = fill_mask_holes(msk.filter(ImageFilter.MaxFilter(2 * HALO + 1)))
                 region.putalpha(ImageChops.multiply(region.getchannel("A"), msk))
-                canvas.paste(region, (L - cx0, T - cy0), region)
+                canvas.paste(region, (L - (cx0 - BX), T - (cy0 - BY)), region)
             sk = comp["skel"]
             sw, sh_ = round(CW * sk["w"]), round(CH * sk["h"])
-            sx = (CW - sw) // 2
-            sy = CH - sh_ - round(CH * 0.04) if sk.get("anchor") == "bottom" else (CH - sh_) // 2
+            sx = BX + (CW - sw) // 2
+            sy = BY + (CH - sh_ - round(CH * 0.04) if sk.get("anchor") == "bottom" else (CH - sh_) // 2)
             canvas = snap_to_safe(canvas, sk, (sx, sy, sw, sh_))
             canvas.save(os.path.join(out_dir, f"{comp['file']}.png"))
             abox = canvas.getchannel("A").getbbox()
@@ -509,15 +522,22 @@ for style in cfg["styles"]:
             dev_y = (oy + ph / 2) - (sy + sh_ / 2)
             if abs(dev_x) > CW * 0.06 or abs(dev_y) > CH * 0.06:
                 print(f"  ⚠ {sid}/{comp['file']}: ruột lệch khung safe ({dev_x:+.0f},{dev_y:+.0f})px")
-            atlas_items.append((comp["file"], tight, (CW, CH), (ox, oy)))
+            # content chạm mép canvas (đã gồm bleed) = raw vẽ tràn quá cả vành → mất nét
+            if comp["skel"]["shape"] != "full" and (
+                    ox == 0 or oy == 0 or ox + pw == CVW or oy + ph == CVH):
+                print(f"  ⚠ {sid}/{comp['file']}: content chạm mép canvas — raw tràn quá vành bleed")
+            atlas_items.append((comp["file"], tight, (CVW, CVH), (ox, oy)))
             entry["assets"].append({"file": comp["file"] + ".png", "sheet": sh["id"],
-                                    "canvas": [CW, CH], "content": [pw, ph],
+                                    "canvas": [CVW, CVH], "cell": [CW, CH], "bleed": [BX, BY],
+                                    "content": [pw, ph],
                                     "content_at": [ox, oy], "safe": [sx, sy, sw, sh_]})
             n_ok += 1
 
-        entry["sheets"][sh["id"]] = {"mode": mode, "bg_detected": bg, "canvas": [CW, CH],
+        entry["sheets"][sh["id"]] = {"mode": mode, "bg_detected": bg,
+                                     "canvas": [CVW, CVH], "cell": [CW, CH], "bleed": [BX, BY],
                                      "size": [W, H], "blobs": len(blobs), "cut": n_ok}
-        print(f"✓ {job}: {n_ok}/{len(sh['components'])} (canvas {CW}x{CH}), {len(blobs)} khối, {mode}")
+        print(f"✓ {job}: {n_ok}/{len(sh['components'])} (canvas {CVW}x{CVH} = ô {CW}x{CH} + bleed), "
+              f"{len(blobs)} khối, {mode}")
 
     if atlas_items:
         atlas_img, atlas_json = pack_atlas(atlas_items)

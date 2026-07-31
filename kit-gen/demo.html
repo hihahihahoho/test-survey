@@ -88,6 +88,10 @@ const state = { turns: 3 };
 const END_AT = Date.now() + (2 * 86400 + 11 * 3600 + 30 * 60) * 1000;
 
 const kimg = n => `kits/${STYLE}/${n}.png`;
+const timg = n => `kits/${STYLE}/tight/${n}.png`;   // ruột crop chặt, không vành bleed
+/* canvas kit = ô + vành bleed 12% mỗi phía (slice.py BLEED) → fit theo canvas
+   phải nhân bù để THÂN element ra đúng cỡ như khi canvas = ô */
+const BLEED_COMP = 1.24;
 
 /* =============================================================================
    Boot: nạp trước track/fill để Preload có thanh progress thật
@@ -95,8 +99,8 @@ const kimg = n => `kits/${STYLE}/${n}.png`;
 class Boot extends Phaser.Scene {
   constructor() { super("Boot"); }
   preload() {
-    this.load.image("boot-track", kimg("07-progress-track"));
-    this.load.image("boot-fill", kimg("08-progress-fill"));
+    this.load.image("boot-track", timg("07-progress-track"));
+    this.load.image("boot-fill", timg("08-progress-fill"));
   }
   create() { this.scene.start("Preload"); }
 }
@@ -151,8 +155,8 @@ function coverBG(scene, frameName) {
   return img;
 }
 
-function fitW(img, w) { img.setScale(w / img.width); return img; }
-function fitH(img, h) { img.setScale(h / img.height); return img; }
+function fitW(img, w) { img.setScale(w * BLEED_COMP / img.width); return img; }
+function fitH(img, h) { img.setScale(h * BLEED_COMP / img.height); return img; }
 
 function label(scene, x, y, text, size, opts = {}) {
   return scene.add.text(x, y, text, Object.assign({
@@ -402,15 +406,15 @@ function openDom(tab) {
       <div class="card"><div class="info"><b>${t}</b><small>${d}</small>
         <div class="bar-track"><div class="bar-fill" style="width:${p}%"></div></div></div>
         <button onclick="addTurn()">${btn}</button></div>`).join("");
-    html += `<div class="card"><img src="${kimg("12-piece-active")}"><img src="${kimg("12-piece-active")}">
-      <img src="${kimg("13-piece-locked")}"><img src="${kimg("13-piece-locked")}">
+    html += `<div class="card"><img src="${timg("12-piece-active")}"><img src="${timg("12-piece-active")}">
+      <img src="${timg("13-piece-locked")}"><img src="${timg("13-piece-locked")}">
       <div class="info"><b>Sưu tập mảnh ghép</b><small>Đủ 4 mảnh đổi quà lớn — đã có 2/4</small></div></div>`;
   } else if (tab === "gift") {
     html = `
-      <div class="card"><img src="${kimg("14-reward-voucher")}">
+      <div class="card"><img src="${timg("14-reward-voucher")}">
         <div class="info"><b>Voucher ưu đãi 50K</b><small>HSD: 29/02/2026</small></div>
         <button>DÙNG NGAY</button></div>
-      <div class="card"><img src="${kimg("15-reward-giftbox")}">
+      <div class="card"><img src="${timg("15-reward-giftbox")}">
         <div class="info"><b>Phần quà may mắn — điền địa chỉ nhận</b>
           <input placeholder="Họ tên người nhận">
           <input placeholder="Số điện thoại" inputmode="tel">
@@ -421,7 +425,7 @@ function openDom(tab) {
     html = [["Hôm nay 09:41", "Trúng voucher ưu đãi", "14-reward-voucher"],
             ["Hôm qua 20:15", "Chúc bạn may mắn", "19-mascot-celebrate"],
             ["Hôm qua 08:02", "Trúng phần quà", "15-reward-giftbox"]].map(([t, d, ic]) => `
-      <div class="card"><img src="${kimg(ic)}">
+      <div class="card"><img src="${timg(ic)}">
         <div class="info"><b>${d}</b><small>${t}</small></div></div>`).join("");
   }
   domCards.innerHTML = html;
