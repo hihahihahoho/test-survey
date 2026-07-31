@@ -63,6 +63,10 @@
   .bar { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; align-items: center }
   a { color: #7fb0ff }
   .muted { color: #8b93ab; font-size: 11px }
+  .seg { display: flex; background: #10121a; border: 1px solid #2f3445; border-radius: 8px;
+         overflow: hidden; margin: 6px 0 }
+  .seg button { flex: 1; background: none; border-radius: 0; color: #8b93ab; font-weight: 600 }
+  .seg button.on { background: #2f6fed; color: #fff }
 </style>
 <body>
 <aside>
@@ -71,21 +75,42 @@
   <label>Style</label>
   <select id="styleSel"></select>
 
-  <h2>Branding</h2>
-  <label>Mô tả art style (prose — feed thẳng cho model)</label>
-  <textarea id="styleProse" rows="4"></textarea>
-  <div class="row" style="margin-top:8px">
-    <div><label>Primary</label><input type="color" id="brandP" value="#d42a1e"></div>
-    <div><label>Secondary</label><input type="color" id="brandS" value="#f5c64a"></div>
-    <div style="flex:1"><label>Gradient (mô tả chữ, tuỳ chọn)</label>
-      <input type="text" id="brandG" placeholder="vd: warm red→gold vertical"></div>
+  <h2>Art style <span class="muted">(chọn 1 trong 2)</span></h2>
+  <div class="seg" id="styleModeSeg">
+    <button data-m="prompt">✍️ Gõ prompt</button>
+    <button data-m="inspo">🖼 Ảnh inspo</button>
   </div>
-  <label>Ảnh brand (logo / key visual — đính kèm mọi sheet)</label>
-  <input type="file" id="brandFile" accept="image/*" multiple>
-  <div id="brandList"></div>
-  <label>Ảnh inspo (tham khảo mood chung)</label>
-  <input type="file" id="inspoFile" accept="image/*" multiple>
-  <div id="inspoList"></div>
+  <div id="styleModePrompt">
+    <label>Preset có sẵn (chọn để điền nhanh, sửa thoải mái)</label>
+    <select id="presetSel"><option value="">— chọn preset —</option></select>
+    <label>Mô tả art style (prose — feed thẳng cho model)</label>
+    <textarea id="styleProse" rows="4"></textarea>
+  </div>
+  <div id="styleModeInspo">
+    <label>Ảnh inspo — model bám style/chất liệu/palette của ảnh</label>
+    <input type="file" id="inspoFile" accept="image/*" multiple>
+    <div id="inspoList"></div>
+  </div>
+
+  <h2>Branding <span class="muted">(chọn 1 trong 2)</span></h2>
+  <div class="seg" id="brandModeSeg">
+    <button data-m="colors">🎨 Màu</button>
+    <button data-m="image">🖼 Ảnh brand</button>
+  </div>
+  <div id="brandModeColors">
+    <div class="row" style="margin-top:8px">
+      <div><label>Primary</label><input type="color" id="brandP" value="#d42a1e"></div>
+      <div><label>Secondary</label><input type="color" id="brandS" value="#f5c64a"></div>
+      <div style="flex:1"><label>Gradient (mô tả chữ, tuỳ chọn)</label>
+        <input type="text" id="brandG" placeholder="vd: warm red→gold vertical"></div>
+    </div>
+  </div>
+  <div id="brandModeImage">
+    <label>Ảnh brand (logo / key visual — đính kèm mọi sheet)</label>
+    <input type="file" id="brandFile" accept="image/*" multiple>
+    <div id="brandList"></div>
+  </div>
+
   <label>Nền chroma key</label>
   <select id="keySel">
     <option value="pure vivid green #00FF00">green #00FF00</option>
@@ -169,11 +194,13 @@ function buildLibSheets() {
       if (cur.length + b.items.length > cc.max && cur.length) chunks.push([]);
       chunks[chunks.length - 1].push(...b.items);
     }
-    chunks.forEach((its, i) => {
+    let nBase = 0;   // đánh số ỔN ĐỊNH: chunk có tên riêng (sheetHint) không chiếm số
+    chunks.forEach((its) => {
       const hint = its.every(e => e.sheetHint) ? its[0].sheetHint : null;
+      if (!hint) nBase++;
       const grid = cc.grids[its.length];
       out.push({
-        id: hint ?? cc.base + (i ? i + 1 : ""),
+        id: hint ?? cc.base + (nBase > 1 ? nBase : ""),
         grid: grid ? { cols: grid[0], rows: grid[1] } : { cols: 4, rows: Math.ceil(its.length / 4) },
         ...(grid ? {} : { invalid: true }),
         cell_hint: cc.hint,
@@ -206,6 +233,45 @@ async function load() {
   pick(cfg.styles[0].id);
 }
 
+/* ---- preset art style có sẵn ---- */
+const PRESETS = {
+  "Neon cyberpunk": "dark cyberpunk mini-game UI, deep navy panels with neon magenta and cyan glowing edges, holographic scanline sheen, futuristic and energetic",
+  "Kawaii pastel": "soft kawaii pastel game UI, chubby rounded shapes in cream, baby pink and mint, gentle inner glow, adorable and calm",
+  "Pixel art 16-bit": "crisp 16-bit pixel art game UI, chunky pixels, limited retro palette, hard clean edges, nostalgic arcade vibe",
+  "Cartoon nét đậm": "hand-drawn cartoon game UI with thick dark outlines, bold flat colors, comic-style cel shading, playful and punchy",
+  "Đất sét 3D": "claymation-style 3D game UI, matte clay material with soft rounded edges and subtle thumbprint texture, warm studio lighting",
+  "Gỗ fantasy RPG": "fantasy RPG game UI carved from rich wood with brass rivets, leather straps and parchment fills, warm tavern lighting",
+  "Kính mờ premium": "premium glassmorphism UI, frosted translucent glass panels with soft colorful gradients behind, thin light borders, airy and modern",
+  "Sci-fi kim loại": "sci-fi HUD game UI, brushed metal plates with glowing energy edges, carbon fiber texture, precise and high-tech",
+  "Màu nước cổ tích": "storybook watercolor game UI, soft watercolor washes with paper grain, hand-painted edges, dreamy and warm",
+  "Đen vàng sang trọng": "luxury game UI in glossy black lacquer with gold foil trim, elegant serif-free ornaments, rich and exclusive",
+};
+document.addEventListener("DOMContentLoaded", () => {
+  const ps = $("presetSel");
+  ps.innerHTML += Object.keys(PRESETS).map(k => `<option>${k}</option>`).join("");
+  ps.onchange = () => { if (ps.value) $("styleProse").value = PRESETS[ps.value]; };
+});
+
+/* segmented "chọn 1 trong 2": Style = prompt|inspo, Branding = colors|image */
+function setSeg(segId, mode, boxes) {
+  document.querySelectorAll(`#${segId} button`).forEach(b =>
+    b.classList.toggle("on", b.dataset.m === mode));
+  for (const [m, boxId] of Object.entries(boxes))
+    $(boxId).style.display = m === mode ? "" : "none";
+}
+function applyModes() {
+  setSeg("styleModeSeg", style.styleMode ?? "prompt",
+    { prompt: "styleModePrompt", inspo: "styleModeInspo" });
+  setSeg("brandModeSeg", style.brand?.mode ?? "colors",
+    { colors: "brandModeColors", image: "brandModeImage" });
+}
+document.querySelectorAll("#styleModeSeg button").forEach(b => b.onclick = () => {
+  style.styleMode = b.dataset.m; applyModes();
+});
+document.querySelectorAll("#brandModeSeg button").forEach(b => b.onclick = () => {
+  (style.brand ??= {}).mode = b.dataset.m; applyModes();
+});
+
 function pick(id) {
   style = cfg.styles.find(s => s.id === id);
   $("styleProse").value = style.style;
@@ -213,6 +279,7 @@ function pick(id) {
   $("brandS").value = style.brand?.secondary ?? "#f5c64a";
   $("brandG").value = style.brand?.gradient ?? "";
   $("keySel").value = style.bg;
+  applyModes();
   renderBrand(); renderInspo(); renderChars(); renderSheets();
 }
 

@@ -60,16 +60,23 @@ for s in cfg["styles"]:
                 "The SECOND attached image is a character REFERENCE PHOTO: every character",
                 "cell must show EXACTLY this character — same species, face, colors, costume,",
                 "materials and proportions — re-drawn cleanly in this sheet's art style.", ""]
-        if s.get("brand"):
+        # Branding: mode "colors" → dòng palette; mode "image" → ảnh brand đính kèm
+        bmode = s.get("brand", {}).get("mode", "colors")
+        if s.get("brand") and bmode == "colors" and s["brand"].get("primary"):
             b = s["brand"]
             bl = f"Brand palette: primary {b.get('primary')}, secondary {b.get('secondary')}"
             if b.get("gradient"):
                 bl += f", gradient {b['gradient']}"
             lines += [bl + " — use these as the dominant UI colors.", ""]
-        if s.get("brand", {}).get("refs") or s.get("inspo"):
+        use_brand_refs = bmode == "image" and s.get("brand", {}).get("refs")
+        use_inspo = s.get("styleMode", "prompt") == "inspo" and s.get("inspo")
+        if use_brand_refs or use_inspo:
             lines += [
                 "Also attached: brand / inspiration reference images — match their color",
-                "mood, material finish and overall vibe (do NOT copy their layout).", ""]
+                "mood, material finish and overall vibe (do NOT copy their layout).",
+                "IMPORTANT: even though the reference images have their own backgrounds,",
+                "the sheet background MUST still be the exact flat chroma-key color above —",
+                "NEVER reuse a reference background color, especially not for character cells.", ""]
         if sh.get("note"):
             lines += [sh["note"], ""]
         for r in range(rows):
@@ -79,7 +86,9 @@ for s in cfg["styles"]:
                 lines.append(f"{i + 1}) {comps[i]['spec']}")
             lines.append("")
         lines += [
-            f"Art style: {s['style']}.",
+            ("Art style: faithfully match the attached inspiration reference image(s) — "
+             "same rendering technique, materials, palette and level of detail."
+             if use_inspo else f"Art style: {s['style']}."),
             f"All {len(comps)} elements share the exact same consistent style and belong to one coherent game. Game-ready UI asset quality, landscape 3:2."
         ]
         open(f"prompts/{s['id']}-{sh['id']}.txt", "w").write("\n".join(lines))
@@ -87,8 +96,10 @@ for s in cfg["styles"]:
         att = [f"skeleton/{sh['id']}.png"]
         if sh.get("ref"):
             att.append(sh["ref"])
-        att += s.get("brand", {}).get("refs", [])
-        att += s.get("inspo", [])
+        if use_brand_refs:
+            att += s["brand"]["refs"]
+        if use_inspo:
+            att += s["inspo"]
         open(f"prompts/{s['id']}-{sh['id']}.att", "w").write("\n".join(att) + "\n")
         print("prompt →", f"prompts/{s['id']}-{sh['id']}.txt", f"(+{len(att)} ảnh kèm)")
 PY
@@ -139,6 +150,8 @@ import json
 cfg = json.load(open('styles.json'))
 for s in cfg['styles']:
     for sh in cfg['sheets']:
+        if sh.get('styles') and s['id'] not in sh['styles']:
+            continue
         print(f\"{s['id']}-{sh['id']}\")")
 wait
 echo "Xong $(date +%H:%M:%S)"
