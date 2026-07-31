@@ -122,9 +122,12 @@
     previous" (chip, mảnh ghép, túi…) tự đi liền nhau</div>
   <div id="elems"></div>
 
-  <h2>Characters <span class="muted">(mỗi con: 1 ảnh ref + bộ pose riêng)</span></h2>
+  <h2>Characters <span class="muted">(mỗi con 1 ảnh ref — pose dùng BỘ CHUNG)</span></h2>
   <div id="chars"></div>
   <button class="ghost" id="addChar">+ Thêm character</button>
+  <label style="margin-top:12px">Bộ pose chung — áp cho MỌI character (4/8/12/16 pose)</label>
+  <div class="poses" id="sharedPoses"></div>
+  <div class="muted" id="sharedPosesCount" style="margin-top:4px"></div>
 
   <h2>Hành động</h2>
   <div class="bar">
@@ -282,7 +285,7 @@ function pick(id) {
   $("brandG").value = style.brand?.gradient ?? "";
   $("keySel").value = style.bg;
   applyModes();
-  renderBrand(); renderInspo(); renderChars(); renderSheets();
+  renderBrand(); renderInspo(); renderChars(); renderSharedPoses(); renderSheets();
 }
 
 function collect() {
@@ -358,30 +361,51 @@ function renderElems() {
 
 /* ================= characters ================= */
 const POSE_GRIDS = { 4: [2, 2], 8: [4, 2], 12: [4, 3], 16: [4, 4] };
+const DEFAULT_POSES = ["idle", "wave", "point", "hold-gift", "cheer", "sad", "run", "think"];
 function charSheetId(c) { return `pose-${c.id}`; }
 
+/* BỘ POSE CHUNG: mọi character của mọi style dùng cùng một bộ dáng — asset
+   các con luôn song song nhau (mỗi char là một "skin" của cùng bộ pose). */
 function syncCharSheets() {
+  const poses = cfg.characterPoses ?? (cfg.characterPoses = [...DEFAULT_POSES]);
+  const grid = POSE_GRIDS[poses.length];
+  const alive = new Set(cfg.styles.flatMap(s => (s.characters ?? []).map(c => `pose-${c.id}|${s.id}`)));
   cfg.sheets = cfg.sheets.filter(sh =>
-    !(sh.id.startsWith("pose-") && sh.styles?.includes(style.id) &&
-      !(style.characters ?? []).some(c => charSheetId(c) === sh.id)));
-  for (const c of style.characters ?? []) {
-    const poses = c.poses ?? [];
-    const grid = POSE_GRIDS[poses.length];
-    if (!grid) continue;
-    const sheet = {
-      id: charSheetId(c), styles: [style.id], ref: c.ref, grid: { cols: grid[0], rows: grid[1] },
-      cell_hint: "cell containing ONE full-body character",
-      note: "All cells show THE SAME character as in the attached REFERENCE PHOTO: match its species, face, colors, costume, materials and proportions exactly — only the pose and viewing angle change per cell, like one character turnaround sheet.",
-      components: poses.map(pid => ({
-        file: `pose-${c.id}-${pid}`,
-        vi: `${c.vi}: ${KITSIL.POSES[pid].vi}`,
-        spec: `the SAME character from the reference photo, ${KITSIL.POSES[pid].prompt}, full body`,
-        skel: { shape: "pose", pose: pid, w: grid[0] === 2 ? 0.3 : 0.55, h: 0.85 }
-      }))
-    };
-    const i = cfg.sheets.findIndex(sh => sh.id === sheet.id);
-    if (i >= 0) cfg.sheets[i] = sheet; else cfg.sheets.push(sheet);
-  }
+    !sh.id.startsWith("pose-") || sh.styles?.some(sid => alive.has(`${sh.id}|${sid}`)));
+  for (const s of cfg.styles)
+    for (const c of s.characters ?? []) {
+      const sheet = {
+        id: charSheetId(c), styles: [s.id], ref: c.ref,
+        grid: grid ? { cols: grid[0], rows: grid[1] } : { cols: 4, rows: Math.ceil(poses.length / 4) },
+        ...(grid ? {} : { invalid: true }),
+        cell_hint: "cell containing ONE full-body character",
+        note: "All cells show THE SAME character as in the attached REFERENCE PHOTO: match its species, face, colors, costume, materials and proportions exactly — only the pose and viewing angle change per cell, like one character turnaround sheet.",
+        components: poses.map(pid => ({
+          file: `pose-${c.id}-${pid}`,
+          vi: `${c.vi}: ${KITSIL.POSES[pid].vi}`,
+          spec: `the SAME character from the reference photo, ${KITSIL.POSES[pid].prompt}, full body`,
+          skel: { shape: "pose", pose: pid, w: (grid?.[0] ?? 4) === 2 ? 0.3 : 0.55, h: 0.85 }
+        }))
+      };
+      const i = cfg.sheets.findIndex(sh => sh.id === sheet.id);
+      if (i >= 0) cfg.sheets[i] = sheet; else cfg.sheets.push(sheet);
+    }
+}
+
+function renderSharedPoses() {
+  const poses = cfg.characterPoses ?? (cfg.characterPoses = [...DEFAULT_POSES]);
+  const box = $("sharedPoses");
+  box.innerHTML = Object.entries(KITSIL.POSES).map(([pid, p]) => `
+    <div class="pose ${poses.includes(pid) ? "on" : ""}" data-pose="${pid}">
+      <svg viewBox="0 0 60 84">${KITSIL.poseSVG(pid, 60, 84)}</svg><small>${p.vi}</small>
+    </div>`).join("");
+  box.querySelectorAll(".pose").forEach(el => el.onclick = () => {
+    const pid = el.dataset.pose;
+    cfg.characterPoses = poses.includes(pid) ? poses.filter(x => x !== pid) : [...poses, pid];
+    syncCharSheets(); renderSharedPoses(); renderSheets();
+  });
+  $("sharedPosesCount").textContent = `đang chọn: ${cfg.characterPoses.length} pose` +
+    (POSE_GRIDS[cfg.characterPoses.length] ? "" : " — ⚠ cần 4/8/12/16");
 }
 
 function renderChars() {
@@ -402,12 +426,7 @@ function renderChars() {
           <input type="file" accept="image/*" data-k="ref" hidden>
         </div>
         <button class="ghost" data-k="del">🗑</button>
-      </div>
-      <div class="poses">${Object.entries(KITSIL.POSES).map(([pid, p]) => `
-        <div class="pose ${c.poses?.includes(pid) ? "on" : ""}" data-pose="${pid}">
-          <svg viewBox="0 0 60 84">${KITSIL.poseSVG(pid, 60, 84)}</svg><small>${p.vi}</small>
-        </div>`).join("")}</div>
-      <div class="muted" style="margin-top:4px">chọn 4 / 8 / 12 / 16 pose — đang: <b>${c.poses?.length ?? 0}</b></div>`;
+      </div>`;
     div.querySelector('[data-k="vi"]').onchange = e => { c.vi = e.target.value; };
     div.querySelector('[data-k="del"]').onclick = () => {
       style.characters = style.characters.filter(x => x !== c);
@@ -421,19 +440,13 @@ function renderChars() {
       await api("/api/upload", { path: c.ref, dataURL: await readFile(f) });
       renderChars(); renderSheets(); log(`✓ upload ref cho ${c.id}`);
     };
-    div.querySelectorAll(".pose").forEach(el => el.onclick = () => {
-      const pid = el.dataset.pose;
-      c.poses ??= [];
-      c.poses = c.poses.includes(pid) ? c.poses.filter(x => x !== pid) : [...c.poses, pid];
-      syncCharSheets(); renderChars(); renderSheets();
-    });
     box.appendChild(div);
   }
 }
 $("addChar").onclick = () => {
   const id = prompt("id character (không dấu, vd: lan, robo):");
   if (!id || !/^[a-z0-9-]+$/.test(id)) return;
-  (style.characters ??= []).push({ id, vi: id, ref: null, poses: ["wave", "cheer", "sad", "run"] });
+  (style.characters ??= []).push({ id, vi: id, ref: null });
   syncCharSheets(); renderChars(); renderSheets();
 };
 
