@@ -87,8 +87,12 @@
 <aside>
   <h1>🎨 Kit Studio</h1>
 
-  <label>Style</label>
-  <select id="styleSel"></select>
+  <label>Bộ kit đang soạn <span class="muted">— mỗi kit một cấu hình, gen/slice riêng</span></label>
+  <div class="row">
+    <select id="styleSel" style="flex:1"></select>
+    <button class="ghost" id="addKit" title="Tạo kit mới">＋</button>
+    <button class="ghost" id="delKit" title="Xoá kit này">🗑</button>
+  </div>
 
   <h2>Art style <span class="muted">(chọn 1 trong 2)</span></h2>
   <div class="seg" id="styleModeSeg">
@@ -247,11 +251,36 @@ async function load() {
   const present = new Set(cfg.sheets.flatMap(sh => sh.components.map(c => c.file)));
   sel = new Set(LIB.elements.filter(e => present.has(e.file)).map(e => e.file));
   const s = $("styleSel");
-  s.innerHTML = cfg.styles.map(x => `<option value="${x.id}">${x.id} — ${x.vi}</option>`).join("");
-  s.onchange = () => pick(s.value);
+  refreshKitSel();
+  s.onchange = () => { if (style) collect(); pick(s.value); };
   renderElems();
   pick(cfg.styles[0].id);
 }
+
+function refreshKitSel() {
+  const s = $("styleSel");
+  s.innerHTML = cfg.styles.map(x => `<option value="${x.id}">${x.id} — ${x.vi}</option>`).join("");
+  if (style) s.value = style.id;
+}
+$("addKit").onclick = () => {
+  const id = prompt("id kit mới (không dấu, vd: xuan26):");
+  if (!id || !/^[a-z0-9-]+$/.test(id)) return;
+  if (cfg.styles.some(x => x.id === id)) return log(`⚠ kit "${id}" đã tồn tại`);
+  const vi = prompt("tên hiển thị (tiếng Việt):") || id;
+  if (style) collect();
+  cfg.styles.push({ id, vi, style: "", styleMode: "prompt",
+    bg: "pure vivid green #00FF00",
+    brand: { mode: "colors", primary: "#d42a1e", secondary: "#f5c64a" }, characters: [] });
+  refreshKitSel(); pick(id); log(`✓ tạo kit "${id}" — nhớ 💾 Lưu contract`);
+};
+$("delKit").onclick = () => {
+  if (cfg.styles.length <= 1) return log("⚠ phải còn ít nhất 1 kit");
+  if (!confirm(`Xoá kit "${style.id}" khỏi contract?`)) return;
+  cfg.styles = cfg.styles.filter(x => x !== style);
+  style = null;
+  syncCharSheets();
+  refreshKitSel(); pick(cfg.styles[0].id); log("✓ đã xoá — nhớ 💾 Lưu contract");
+};
 
 /* ---- preset art style có sẵn ---- */
 const PRESETS = {
@@ -294,6 +323,7 @@ document.querySelectorAll("#brandModeSeg button").forEach(b => b.onclick = () =>
 
 function pick(id) {
   style = cfg.styles.find(s => s.id === id);
+  $("styleSel").value = id;
   $("styleProse").value = style.style;
   $("brandP").value = style.brand?.primary ?? "#d42a1e";
   $("brandS").value = style.brand?.secondary ?? "#f5c64a";
