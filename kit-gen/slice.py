@@ -308,12 +308,38 @@ for style in cfg["styles"]:
                 mode = f"binary {len(bg)} màu nhạt (đường lùi), lấp {filled}px"
         blobs = label_blobs(strict, W, H)
 
-        cell_boxes = [None] * (COLS * ROWS)
+        cell_blobs = [[] for _ in range(COLS * ROWS)]
         for box, n, (cx, cy) in blobs:
             idx = min(ROWS - 1, int(cy // cell_h)) * COLS + min(COLS - 1, int(cx // cell_w))
-            cur = cell_boxes[idx]
-            cell_boxes[idx] = box if cur is None else (
-                min(cur[0], box[0]), min(cur[1], box[1]), max(cur[2], box[2]), max(cur[3], box[3]))
+            cell_blobs[idx].append((box, n))
+
+        # Đốm tí hon dính sát BIÊN ô = rơi vãi từ ô hàng xóm (spec bắt element chừa
+        # ≥40px padding nên blob xịn không bám mép). Không lọc là nó kéo bbox union
+        # rộng tới mép, crop múc theo cả mảng bán-trong-suốt của hàng xóm (đã dính:
+        # đèn lồng của ribbon tết lạc vào 11-digit-plate). Sao/sparkle quanh burst
+        # nằm giữa ô và to hơn hẳn 1% nên không bị đụng.
+        edge = 0.06
+        cell_boxes = [None] * (COLS * ROWS)
+        dropped = 0
+        for idx, blist in enumerate(cell_blobs):
+            if not blist:
+                continue
+            main_n = max(n for _, n in blist)
+            row, col = divmod(idx, COLS)
+            cl, ct = col * cell_w, row * cell_h
+            mx, my = cell_w * edge, cell_h * edge
+            for box, n in blist:
+                l, t, r, b = box
+                near_edge = (r <= cl + mx or l >= cl + cell_w - mx or
+                             b <= ct + my or t >= ct + cell_h - my)
+                if n < main_n * 0.01 and near_edge:
+                    dropped += 1
+                    continue
+                cur = cell_boxes[idx]
+                cell_boxes[idx] = box if cur is None else (
+                    min(cur[0], box[0]), min(cur[1], box[1]), max(cur[2], box[2]), max(cur[3], box[3]))
+        if dropped:
+            print(f"  · {job}: bỏ {dropped} đốm rơi vãi sát biên ô")
 
         os.makedirs(out_dir, exist_ok=True)
         n_ok = 0

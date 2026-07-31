@@ -19,17 +19,45 @@
    --svg — đường cũ: SVG lên clipboard, paste ra layer + text sửa được nhưng
        KHÔNG có Auto Layout, ảnh nằm trong shape. Giữ để đối chứng.
 
-   Prereq: server đang chạy (python3 -m http.server), BASE trỏ đúng.
+   Server: KHÔNG cần chạy trước — CLI tự mở static server tạm trên port trống
+   phục vụ repo root. Muốn dùng server sẵn có thì set BASE=http://localhost:8124.
    ========================================================================== */
 import { createRequire } from "node:module"
 import { spawnSync } from "node:child_process"
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import { dirname, resolve } from "node:path"
+import { createServer } from "node:http"
+import { mkdirSync, readFileSync, writeFileSync, createReadStream, existsSync, statSync } from "node:fs"
+import { dirname, resolve, join, normalize, extname } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const BASE = process.env.BASE ?? "http://localhost:8000"
+const ROOT = resolve(HERE, "../..")           // repo root (chứa kit-gen/)
 const OUT = resolve(HERE, ".captures")
+
+const MIME = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript",
+  ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg",
+  ".css": "text/css", ".svg": "image/svg+xml", ".xlsx": "application/octet-stream" }
+
+/* Static server tối giản phục vụ repo root trên port trống. */
+function startServer() {
+  return new Promise(ok => {
+    const srv = createServer((req, res) => {
+      const path = normalize(join(ROOT, decodeURIComponent(new URL(req.url, "http://x").pathname)))
+      if (!path.startsWith(ROOT) || !existsSync(path) || !statSync(path).isFile()) {
+        res.writeHead(404); res.end(); return
+      }
+      res.writeHead(200, { "content-type": MIME[extname(path)] ?? "application/octet-stream" })
+      createReadStream(path).pipe(res)
+    })
+    srv.listen(0, "127.0.0.1", () => ok(srv))
+  })
+}
+
+let server = null
+let BASE = process.env.BASE
+if (!BASE) {
+  server = await startServer()
+  BASE = `http://127.0.0.1:${server.address().port}`
+}
 
 const args = process.argv.slice(2)
 const style = args.find(a => !a.startsWith("--")) ?? "ipay"
@@ -131,4 +159,5 @@ try {
   }
 } finally {
   await browser.close()
+  server?.close()
 }
