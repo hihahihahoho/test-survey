@@ -56,21 +56,36 @@ let M, KIT, AM, CHAR;
 const A = n => AM[n] ?? null;
 const src = n => `kits/${KIT}/tight/${n}.png`;
 
-/* đặt 1 element vào màn: x,y = tâm (%), w hoặc h (px) — cạnh kia theo tỉ lệ content.
-   nine: co giãn 9-slice theo insets manifest. txt: chữ đè giữa element. */
+/* khung THÂN (safe zone) của element trong toạ độ ảnh tight — contract slice đảm bảo
+   thân nằm đúng khung này, trang trí (tia sáng, hoa...) được tràn ra ngoài */
+function safeOf(a) {
+  return a.safe
+    ? { x: a.safe[0] - a.content_at[0], y: a.safe[1] - a.content_at[1], w: a.safe[2], h: a.safe[3] }
+    : { x: 0, y: 0, w: a.content[0], h: a.content[1] };
+}
+
+/* đặt 1 element: x,y = TÂM THÂN (%) — bw/bh = cỡ THÂN (px, khuyên dùng: decor tràn
+   không xô layout); w/h = cỡ cả content. nine: co giãn 9-slice. txt: chữ đè giữa. */
 function put(scr, name, o) {
   const a = A(name);
   if (!a) return null;
-  const [cw, ch] = a.content;
-  const w = o.w ?? o.h * cw / ch, h = o.h ?? o.w * ch / cw;
+  const [cw, ch] = a.content, sf = safeOf(a);
+  let w, h, dx = 0, dy = 0;
+  if (o.w && o.h) { w = o.w; h = o.h; }                 // panel/row: ép đúng cỡ cho trước
+  else {
+    const s = o.bw ? o.bw / sf.w : o.bh ? o.bh / sf.h : o.w ? o.w / cw : o.h / ch;
+    w = cw * s; h = ch * s;
+    // dịch sao cho TÂM THÂN (không phải tâm bbox) rơi đúng (x,y)
+    dx = (cw / 2 - (sf.x + sf.w / 2)) * s; dy = (ch / 2 - (sf.y + sf.h / 2)) * s;
+  }
   const d = document.createElement("div");
   d.className = "it";
   d.style.cssText = `left:${o.x}%;top:${o.y}%;width:${w}px;height:${h}px;` +
-    (o.z ? `z-index:${o.z};` : "") + (o.css ?? "");
+    `margin:${dy}px 0 0 ${dx}px;` + (o.z ? `z-index:${o.z};` : "") + (o.css ?? "");
   if (o.nine && a.slice9) {
-    const [l, t, r, b] = a.slice9, s = Math.min(1, h / ch, w / cw);
+    const [l, t, r, b] = a.slice9, ns = Math.min(1, h / ch, w / cw);
     d.style.borderStyle = "solid";
-    d.style.borderWidth = `${t * s}px ${r * s}px ${b * s}px ${l * s}px`;
+    d.style.borderWidth = `${t * ns}px ${r * ns}px ${b * ns}px ${l * ns}px`;
     d.style.borderImage = `url("${src(name)}") ${t} ${r} ${b} ${l} fill stretch`;
   } else {
     d.innerHTML = `<img src="${src(name)}" alt="">`;
@@ -85,12 +100,48 @@ function put(scr, name, o) {
   scr.appendChild(d);
   return d;
 }
-function text(scr, txt, x, y, css) {
+/* đo độ sáng trung bình của 1 asset (cache theo src) → chữ đè lên nó tự chọn
+   màu tối/sáng, kit nào cũng đọc được (row trắng ipay, row đỏ tet...) */
+const LUM = {};
+function lumOf(name) {
+  const key = src(name);
+  if (!(key in LUM)) LUM[key] = new Promise(res => {
+    const im = new Image();
+    im.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = c.height = 24;
+      const g = c.getContext("2d");
+      g.drawImage(im, 0, 0, 24, 24);
+      const d = g.getImageData(0, 0, 24, 24).data;
+      let s = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4)
+        if (d[i + 3] > 128) { s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; n++; }
+      res(n ? s / n / 255 : 0);
+    };
+    im.onerror = () => res(0);
+    im.src = key;
+  });
+  return LUM[key];
+}
+async function autoInk(el, name) {
+  if (!el) return;
+  const ink = (await lumOf(name)) > 0.55
+    ? "color:#1c3560;text-shadow:none"
+    : "color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.65)";
+  el.querySelectorAll(".tx").forEach(t => t.style.cssText += ";" + ink);
+}
+
+function text(scr, txt, x, y, css, onAsset) {
   const t = document.createElement("div");
   t.className = "free";
   t.style.cssText = `left:${x}%;top:${y}%;` + (css ?? "font-size:15px");
   t.textContent = txt;
   scr.appendChild(t);
+  // chữ nằm trên 1 asset sáng màu → tự đổi mực tối (đo độ sáng như autoInk)
+  if (onAsset && A(onAsset)) lumOf(onAsset).then(l => {
+    if (l > 0.55) t.style.cssText += ";color:#1c3560;text-shadow:none";
+  });
+  return t;
 }
 function bg(scr, name, dim) {
   if (A(name)) scr.innerHTML = `<img class="bg" src="${src(name)}" alt="">`;
@@ -100,19 +151,20 @@ const pose = p => A(`pose-${CHAR}-${p}`) ? `pose-${CHAR}-${p}` : null;
 
 /* ============================ 4 màn cơ bản ============================ */
 function scrHome(scr) {
+  /* căn theo CONTRACT của bg-home: podium ở NỬA DƯỚI (mascot đứng lên đó),
+     vùng giữa-trên để trống cho tiêu đề (ribbon), UI điều khiển dồn xuống đáy */
   bg(scr, "25-bg-home");
-  put(scr, "50-counter-pill", { x: 20, y: 6, w: 110, txt: "1.250 ⭐", tcss: "font-size:13px;padding-left:38px" });
+  autoInk(put(scr, "50-counter-pill", { x: 20, y: 6, w: 110, txt: "1.250 ⭐", tcss: "font-size:13px;padding-left:38px" }), "50-counter-pill");
   put(scr, "04-btn-circle", { x: 90, y: 6, w: 44, txt: "⚙", tcss: "font-size:18px" });
-  put(scr, "10-popup-ribbon", { x: 50, y: 15, w: 270, txt: "SĂN QUÀ MAY MẮN", tcss: "font-size:15px;margin-top:-6px" });
-  if (pose("wave")) put(scr, pose("wave"), { x: 50, y: 43, h: 250 });
-  const tr = put(scr, "07-progress-track", { x: 50, y: 63, w: 250 });
+  put(scr, "10-popup-ribbon", { x: 50, y: 14, bw: 250, txt: "SĂN QUÀ MAY MẮN", tcss: "font-size:15px;margin-top:-6px" });
+  // thân mascot cao 225px, tâm y57% → chân chạm mặt podium (~76%, contract: podium nửa dưới)
+  if (pose("wave")) put(scr, pose("wave"), { x: 50, y: 57, bh: 225 });
+  const tr = put(scr, "07-progress-track", { x: 50, y: 82.5, w: 240, z: 2 });
   if (tr) put(scr, "08-progress-fill",
-    { x: 39.5, y: 63, w: 150, h: parseFloat(tr.style.height) * 0.62, css: "z-index:1" });
-  text(scr, "Lượt chơi hôm nay: 3/5", 50, 58, "font-size:12.5px");
-  put(scr, "01-btn-pill-red", { x: 50, y: 75, w: 250, nine: true, txt: "CHƠI NGAY", tcss: "font-size:19px" });
-  put(scr, "03-btn-pill-outline", { x: 50, y: 85.5, w: 210, nine: true, txt: "Nhiệm vụ", tcss: "font-size:15px" });
-  put(scr, "05-tab-chip-idle", { x: 30, y: 94.5, w: 105, nine: true, txt: "Quà của tôi", tcss: "font-size:12px" });
-  put(scr, "06-tab-chip-active", { x: 70, y: 94.5, w: 105, nine: true, txt: "Xếp hạng", tcss: "font-size:12px" });
+    { x: 40, y: 82.5, w: 144, h: parseFloat(tr.style.height) * 0.62, z: 2 });
+  // chữ đè TRÊN track (nền track tối, đọc được ở mọi kit — không thả lên bg)
+  text(scr, "Lượt chơi: 3/5", 50, 82.5, "font-size:11.5px;z-index:3");
+  put(scr, "01-btn-pill-red", { x: 50, y: 91, w: 250, nine: true, z: 2, txt: "CHƠI NGAY", tcss: "font-size:19px" });
 }
 
 function scrBoard(scr) {
@@ -120,53 +172,56 @@ function scrBoard(scr) {
   put(scr, "22-board-panel", { x: 50, y: 54, w: 350, h: 480, nine: true });
   put(scr, "10-popup-ribbon", { x: 50, y: 9, w: 250, z: 2, txt: "BẢNG XẾP HẠNG", tcss: "font-size:14px;margin-top:-6px" });
   put(scr, "41-btn-close", { x: 91, y: 17, w: 38, z: 2 });
-  put(scr, "46-rank-badge-2", { x: 27, y: 23.5, w: 58, z: 2 });
-  put(scr, "45-rank-badge-1", { x: 50, y: 22, w: 70, z: 2 });
-  put(scr, "47-rank-badge-3", { x: 73, y: 23.5, w: 58, z: 2 });
-  const RTX = "font-size:13px;color:#1c3560;text-shadow:none";
+  put(scr, "46-rank-badge-2", { x: 27, y: 23.5, bw: 52, z: 2 });
+  put(scr, "45-rank-badge-1", { x: 50, y: 22, bw: 62, z: 2 });
+  put(scr, "47-rank-badge-3", { x: 73, y: 23.5, bw: 52, z: 2 });
+  const RTX = "font-size:13px";
   const rows = [["Minh Anh", "12.480"], ["Hải Đăng", "11.020"], ["Thu Trang", "9.750"]];
   rows.forEach(([n, p], i) => {
     const r = put(scr, "48-rank-row", { x: 50, y: 35 + i * 10.5, w: 300, h: 52, nine: true, z: 2 });
     if (r) r.innerHTML += `<div class="tx" style="left:16px;right:auto;${RTX}">${i + 1}.  ${n}</div>
       <div class="tx" style="right:18px;left:auto;${RTX}">${p}</div>`;
+    autoInk(r, "48-rank-row");
   });
   const me = put(scr, "49-rank-row-self", { x: 50, y: 70, w: 300, h: 54, nine: true, z: 2 });
   if (me) me.innerHTML += `<div class="tx" style="left:16px;right:auto;${RTX}">27.  Bạn</div>
     <div class="tx" style="right:18px;left:auto;${RTX}">8.450</div>`;
+  autoInk(me, "49-rank-row-self");
   put(scr, "02-btn-pill-blue", { x: 50, y: 82, w: 220, nine: true, z: 2, txt: "CHƠI TIẾP", tcss: "font-size:16px" });
-  if (pose("view-34")) put(scr, pose("view-34"), { x: 14, y: 92, h: 110, z: 3 });
+  if (pose("view-34")) put(scr, pose("view-34"), { x: 14, y: 92, bh: 100, z: 3 });
 }
 
 function scrGift(scr) {
   bg(scr, "26-bg-play", true);
   put(scr, "16-fx-burst", { x: 50, y: 34, w: 300 });
   put(scr, "09-popup-panel-short", { x: 50, y: 56, w: 340, h: 310, nine: true });
-  put(scr, "51-reward-giftbox-open", { x: 50, y: 33, h: 180, z: 2 });
-  text(scr, "CHÚC MỪNG!", 50, 48.5, "font-size:20px;z-index:2");
-  put(scr, "14-reward-voucher", { x: 50, y: 57.5, w: 150, z: 2, txt: "50.000đ", tcss: "font-size:15px" });
-  text(scr, "Bạn nhận được 1 voucher", 50, 66, "font-size:12.5px;z-index:2");
+  put(scr, "51-reward-giftbox-open", { x: 50, y: 34, bh: 140, z: 2 });
+  text(scr, "CHÚC MỪNG!", 50, 49.5, "font-size:20px;z-index:2", "09-popup-panel-short");
+  autoInk(put(scr, "14-reward-voucher", { x: 50, y: 58, bw: 140, z: 2, txt: "50.000đ", tcss: "font-size:15px" }), "14-reward-voucher");
+  text(scr, "Bạn nhận được 1 voucher", 50, 66, "font-size:12.5px;z-index:2", "09-popup-panel-short");
   put(scr, "02-btn-pill-blue", { x: 50, y: 75.5, w: 210, nine: true, z: 2, txt: "NHẬN QUÀ", tcss: "font-size:16px" });
-  if (pose("cheer")) put(scr, pose("cheer"), { x: 85, y: 91, h: 130, z: 3 });
+  if (pose("cheer")) put(scr, pose("cheer"), { x: 85, y: 91, bh: 118, z: 3 });
 }
 
 function scrEnvelope(scr) {
   bg(scr, "25-bg-home", true);
   put(scr, "16-fx-burst", { x: 50, y: 42, w: 320 });
-  /* phong bì PART-BASED: nắp (flap) ghép khớp bề ngang thân (body) — game mở nắp runtime */
-  const body = put(scr, "52-envelope-body", { x: 50, y: 44, h: 235, z: 2 });
-  if (body) {
-    const bw = parseFloat(body.style.width);
-    const fa = A("53-envelope-flap");
+  /* phong bì PART-BASED: nắp (flap) ghép khớp bề ngang THÂN body — đo bằng safe zone
+     nên trang trí tràn không làm lệch khớp; game mở nắp runtime */
+  const ba = A("52-envelope-body"), fa = A("53-envelope-flap");
+  if (ba) {
+    const bs = safeOf(ba), BH = 220, BW = BH * bs.w / bs.h;
+    put(scr, "52-envelope-body", { x: 50, y: 45, bh: BH, z: 2 });
     if (fa) {
-      const fh = bw * fa.content[1] / fa.content[0];
-      const topPct = 44 - 235 / 600 * 50;              // mép trên thân (%)
-      put(scr, "53-envelope-flap", { x: 50, y: topPct + fh / 600 * 50, w: bw, z: 3 });
+      const fs = safeOf(fa), FH = BW * fs.h / fs.w;
+      const topPct = 45 - BH / 600 * 50;               // mép trên thân (%)
+      put(scr, "53-envelope-flap", { x: 50, y: topPct + FH / 600 * 50, bw: BW, z: 3 });
     }
   }
   text(scr, "LÌ XÌ MAY MẮN", 50, 12, "font-size:21px");
   text(scr, "Chạm để mở phong bì", 50, 68.5, "font-size:13px;z-index:4");
   put(scr, "01-btn-pill-red", { x: 50, y: 79, w: 230, nine: true, z: 4, txt: "MỞ LÌ XÌ", tcss: "font-size:18px" });
-  if (pose("hold-gift")) put(scr, pose("hold-gift"), { x: 15, y: 91, h: 125, z: 4 });
+  if (pose("hold-gift")) put(scr, pose("hold-gift"), { x: 15, y: 91, bh: 118, z: 4 });
 }
 
 const SCREENS = [
