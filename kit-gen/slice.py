@@ -225,6 +225,41 @@ def label_blobs(strict, W, H):
     return blobs
 
 
+def trim_flat_cell(cell_rgb):
+    """Ô full-bleed: gọt các cột/hàng PHẲNG (một màu đều — dải gap màu key giữa
+    hai nửa, hay mép key sót) ở 4 mép. Cột artwork thật luôn biến thiên dọc
+    (trời→đất) nên không bị gọt. Trả bbox (l, t, r, b)."""
+    W, H = cell_rgb.size
+    px = cell_rgb.load()
+
+    def flat_col(x):
+        r0, g0, b0 = px[x, 0]
+        for i in range(1, 16):
+            r, g, b = px[x, (i * (H - 1)) // 15]
+            if abs(r - r0) > 14 or abs(g - g0) > 14 or abs(b - b0) > 14:
+                return False
+        return True
+
+    def flat_row(y):
+        r0, g0, b0 = px[0, y]
+        for i in range(1, 16):
+            r, g, b = px[(i * (W - 1)) // 15, y]
+            if abs(r - r0) > 14 or abs(g - g0) > 14 or abs(b - b0) > 14:
+                return False
+        return True
+
+    lim_x, lim_y = W // 8, H // 8
+    l = 0
+    while l < lim_x and flat_col(l): l += 1
+    r = W
+    while r > W - lim_x and flat_col(r - 1): r -= 1
+    t = 0
+    while t < lim_y and flat_row(t): t += 1
+    b = H
+    while b > H - lim_y and flat_row(b - 1): b -= 1
+    return l, t, r, b
+
+
 def pack_atlas(items, max_w=2048):
     """Shelf-pack các mảnh RUỘT (đã crop chặt) thành 1 atlas + json Phaser.
 
@@ -333,23 +368,31 @@ for style in cfg["styles"]:
         os.makedirs(out_dir, exist_ok=True)
         n_ok = 0
         for idx, comp in enumerate(sh["components"]):
-            box = cell_boxes[idx]
-            if box is None:
-                entry["empty_cells"].append(comp["file"])
-                continue
             row, col = divmod(idx, COLS)
             cx0, cy0 = round(col * cell_w), round(row * cell_h)
-            # Canvas = NGUYÊN Ô, KHÔNG căn lại theo bbox nội dung: khung SAFE ZONE
-            # của contract (skel trong styles.json) nằm cố định trong ô, nên toạ độ
-            # ghép game/Figma luôn gán theo khung — trang trí tràn ngoài khung được
-            # giữ nguyên chỗ, model vẽ bay bổng cỡ nào cũng không xô layout.
-            # Chỉ dán vùng bbox (nới HALO) của blob THUỘC ô → junk hàng xóm không lọt.
-            l, t, r, b = box
-            L = max(cx0, l - HALO - PAD); T = max(cy0, t - HALO - PAD)
-            R = min(cx0 + CW, r + HALO + PAD); B = min(cy0 + CH, b + HALO + PAD)
             canvas = Image.new("RGBA", (CW, CH), (0, 0, 0, 0))
-            region = keyed.crop((L, T, R, B))
-            canvas.paste(region, (L - cx0, T - cy0), region)
+            if comp["skel"]["shape"] == "full":
+                # Ô full-bleed (bg): KHÔNG key gì cả — artwork phủ kín ô, key chỉ
+                # còn ở dải gap → matte trên artwork là tự phá ảnh (đã dính: nền
+                # blur bị ăn sạch). Crop nguyên ô đục 100%, gọt dải gap phẳng ở mép.
+                cell_rgb = raw_img.convert("RGB").crop((cx0, cy0, cx0 + CW, cy0 + CH))
+                fl, ft, fr, fb = trim_flat_cell(cell_rgb)
+                canvas.paste(cell_rgb.crop((fl, ft, fr, fb)).convert("RGBA"), (fl, ft))
+            else:
+                box = cell_boxes[idx]
+                if box is None:
+                    entry["empty_cells"].append(comp["file"])
+                    continue
+                # Canvas = NGUYÊN Ô, KHÔNG căn lại theo bbox nội dung: khung SAFE ZONE
+                # của contract (skel trong styles.json) nằm cố định trong ô, nên toạ độ
+                # ghép game/Figma luôn gán theo khung — trang trí tràn ngoài khung được
+                # giữ nguyên chỗ, model vẽ bay bổng cỡ nào cũng không xô layout.
+                # Chỉ dán vùng bbox (nới HALO) của blob THUỘC ô → junk hàng xóm không lọt.
+                l, t, r, b = box
+                L = max(cx0, l - HALO - PAD); T = max(cy0, t - HALO - PAD)
+                R = min(cx0 + CW, r + HALO + PAD); B = min(cy0 + CH, b + HALO + PAD)
+                region = keyed.crop((L, T, R, B))
+                canvas.paste(region, (L - cx0, T - cy0), region)
             canvas.save(os.path.join(out_dir, f"{comp['file']}.png"))
             abox = canvas.getchannel("A").getbbox()
             if abox is None:
@@ -365,6 +408,12 @@ for style in cfg["styles"]:
             sw, sh_ = round(CW * sk["w"]), round(CH * sk["h"])
             sx = (CW - sw) // 2
             sy = CH - sh_ - round(CH * 0.04) if sk.get("anchor") == "bottom" else (CH - sh_) // 2
+            # ruột lệch tâm khung safe nhiều = model vẽ sai chỗ → cảnh báo để đối
+            # chiếu raw/ (bbox gồm cả trang trí tràn nên lệch nhẹ là bình thường)
+            dev_x = (ox + pw / 2) - (sx + sw / 2)
+            dev_y = (oy + ph / 2) - (sy + sh_ / 2)
+            if abs(dev_x) > CW * 0.06 or abs(dev_y) > CH * 0.06:
+                print(f"  ⚠ {sid}/{comp['file']}: ruột lệch khung safe ({dev_x:+.0f},{dev_y:+.0f})px")
             atlas_items.append((comp["file"], tight, (CW, CH), (ox, oy)))
             entry["assets"].append({"file": comp["file"] + ".png", "sheet": sh["id"],
                                     "canvas": [CW, CH], "content": [pw, ph],

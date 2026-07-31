@@ -6,8 +6,9 @@ cd "$(dirname "$0")"
 ROOT="$(pwd)"
 mkdir -p raw logs prompts
 
-# Khung xương layout (ảnh ref đính kèm codex) — deterministic từ styles.json
-python3 skeleton.py
+# Khung xương layout (ảnh ref đính kèm codex) — deterministic từ styles.json.
+# Bản HTML/SVG (nét, đẹp); thiếu playwright thì rơi về bản PIL.
+node render-skeleton.mjs || python3 skeleton.py
 
 # Build prompt cho từng (style, sheet) → prompts/<style>-<sheet>.txt
 python3 - <<'PY'

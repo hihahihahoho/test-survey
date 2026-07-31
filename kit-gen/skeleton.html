@@ -1,0 +1,109 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>skeleton — khung xương layout từ styles.json</title>
+<!-- ============================================================================
+  Vẽ KHUNG XƯƠNG layout bằng HTML/SVG (nét hơn bản PIL cũ). Mỗi ô:
+    · khung SAFE ZONE (viền đậm) = hợp đồng toạ độ — thân element lấp đầy khung
+    · silhouette xám gợi hình khối; trang trí được tràn ra ngoài khung, trong ô
+  render-skeleton.mjs mở file này bằng playwright, gọi build(cfg) rồi chụp
+  từng #sheet-<id> ra skeleton/<id>.png (1536×1024 — đúng khổ ảnh gen).
+  Mở tay qua http cũng xem được (tự fetch styles.json).
+============================================================================ -->
+<style>
+  body { margin: 0; background: #fff; font-family: sans-serif }
+  .sheet { width: 1536px; height: 1024px; background: #f2f2f2;
+           position: relative; margin: 24px auto; overflow: hidden }
+  .cell { position: absolute; box-sizing: border-box; border: 1px solid #d9d9d9 }
+  .safe { position: absolute; border: 4px solid #464646; border-radius: 6px;
+          box-sizing: border-box }
+  .cell svg { position: absolute; overflow: visible }
+  h4 { width: 1536px; margin: 16px auto 0 }
+</style>
+<div id="sheets"></div>
+<script>
+const FILL = "#9a9a9a", EDGE = "#606060";
+const S = (w, h) => `fill="${FILL}" stroke="${EDGE}" stroke-width="3"`;
+
+/* Silhouette vẽ trong hệ toạ độ khung safe (0,0 → w,h) */
+function silhouette(shape, w, h, uid) {
+  const c = S(w, h);
+  if (shape === "pill" || shape === "bar")
+    return `<rect x="0" y="0" width="${w}" height="${h}" rx="${h / 2}" ${c}/>`;
+  if (shape === "rrect")
+    return `<rect x="0" y="0" width="${w}" height="${h}" rx="${Math.min(w, h) / 6}" ${c}/>`;
+  if (shape === "circle") {
+    const r = Math.min(w, h) / 2;
+    return `<circle cx="${w / 2}" cy="${h / 2}" r="${r}" ${c}/>`;
+  }
+  if (shape === "burst") {
+    const R = Math.min(w, h) / 2, pts = [];
+    for (let i = 0; i < 16; i++) {
+      const a = i * Math.PI / 8, r = i % 2 ? R * 0.45 : R;
+      pts.push(`${w / 2 + r * Math.cos(a)},${h / 2 + r * Math.sin(a)}`);
+    }
+    return `<polygon points="${pts.join(" ")}" ${c}/>`;
+  }
+  if (shape === "puzzle") {
+    // thân bo góc + vấu tròn trên đỉnh, vết khuyết tròn bên trái (mask)
+    const tab = Math.min(w, h) * 0.22, rx = Math.min(w, h) / 8;
+    return `<mask id="pz${uid}">
+        <rect x="0" y="${tab}" width="${w}" height="${h - tab}" rx="${rx}" fill="#fff"/>
+        <circle cx="${w / 2}" cy="${tab}" r="${tab}" fill="#fff"/>
+        <circle cx="0" cy="${(h + tab) / 2}" r="${tab}" fill="#000"/>
+      </mask>
+      <rect x="-6" y="-6" width="${w + 12}" height="${h + 12}" fill="${FILL}" mask="url(#pz${uid})"/>`;
+  }
+  if (shape === "figure") {
+    // đầu tròn + thân capsule + hai tay — chỉ pin vị trí/cỡ, không pin dáng
+    const hr = Math.min(w * 0.4, h * 0.24);
+    const by = hr * 1.8, bw = w * 0.66, bh = h - by;
+    const aw = w * 0.15, ah = bh * 0.5;
+    return `<circle cx="${w / 2}" cy="${hr}" r="${hr}" ${c}/>
+      <rect x="${(w - bw) / 2}" y="${by}" width="${bw}" height="${bh}" rx="${bw / 3}" ${c}/>
+      <rect x="${(w - bw) / 2 - aw * 0.8}" y="${by + bh * 0.06}" width="${aw}" height="${ah}" rx="${aw / 2}" ${c}
+            transform="rotate(12 ${(w - bw) / 2} ${by + bh * 0.06})"/>
+      <rect x="${(w + bw) / 2 - aw * 0.2}" y="${by + bh * 0.06}" width="${aw}" height="${ah}" rx="${aw / 2}" ${c}
+            transform="rotate(-12 ${(w + bw) / 2} ${by + bh * 0.06})"/>`;
+  }
+  if (shape === "full")
+    return `<rect x="2" y="2" width="${w - 4}" height="${h - 4}" ${c}/>`;
+  return "";
+}
+
+function build(cfg) {
+  const root = document.getElementById("sheets");
+  root.innerHTML = "";
+  let uid = 0;
+  for (const sh of cfg.sheets) {
+    const { cols, rows } = sh.grid;
+    const W = 1536, H = 1024, cw = W / cols, ch = H / rows;
+    const title = document.createElement("h4");
+    title.textContent = `${sh.id} — ${cols}×${rows}`;
+    root.appendChild(title);
+    const div = document.createElement("div");
+    div.className = "sheet";
+    div.id = "sheet-" + sh.id;
+    sh.components.forEach((comp, i) => {
+      const r = (i / cols) | 0, c = i % cols;
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.style.cssText = `left:${c * cw}px;top:${r * ch}px;width:${cw}px;height:${ch}px`;
+      const sk = comp.skel, ew = cw * sk.w, eh = ch * sk.h;
+      const ex = (cw - ew) / 2;
+      const ey = sk.anchor === "bottom" ? ch - eh - ch * 0.04 : (ch - eh) / 2;
+      cell.innerHTML =
+        `<svg style="left:${ex}px;top:${ey}px" width="${ew}" height="${eh}">` +
+        silhouette(sk.shape, ew, eh, uid++) + `</svg>` +
+        (sk.shape === "full" ? "" :
+          `<div class="safe" style="left:${ex}px;top:${ey}px;width:${ew}px;height:${eh}px"></div>`);
+      div.appendChild(cell);
+    });
+    root.appendChild(div);
+  }
+}
+
+/* mở tay qua http thì tự fetch; playwright thì gọi build(cfg) trực tiếp */
+if (location.protocol !== "file:")
+  fetch("styles.json").then(r => r.json()).then(build).catch(() => {});
+window.__build = build;
+</script>
