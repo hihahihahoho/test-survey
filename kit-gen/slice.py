@@ -354,8 +354,12 @@ for style in cfg["styles"]:
             canvas, (pw, ph) = normalize_canvas(piece, CW, CH)
             canvas.save(os.path.join(out_dir, f"{comp['file']}.png"))
             ox, oy = (CW - pw) // 2, (CH - ph) // 2
-            atlas_items.append((comp["file"], canvas.crop((ox, oy, ox + pw, oy + ph)),
-                                (CW, CH), (ox, oy)))
+            tight = canvas.crop((ox, oy, ox + pw, oy + ph))
+            # tight/ = ruột crop chặt, không đệm canvas — cho Figma/designer lấy lẻ
+            # (file canvas ở trên vẫn là hợp đồng layout cho engine)
+            os.makedirs(os.path.join(out_dir, "tight"), exist_ok=True)
+            tight.save(os.path.join(out_dir, "tight", f"{comp['file']}.png"))
+            atlas_items.append((comp["file"], tight, (CW, CH), (ox, oy)))
             entry["assets"].append({"file": comp["file"] + ".png", "sheet": sh["id"],
                                     "canvas": [CW, CH], "content": [pw, ph]})
             n_ok += 1

@@ -68,14 +68,16 @@ function el(html) {
 }
 function img(frame, name, cx, cy, opt) {   // opt: {w} hoặc {h} = kích thước RUỘT
   const m = META[name] || { canvas: [100, 100], content: [100, 100] };
-  const [W, H] = m.canvas, [cw, ch] = m.content;
+  const [cw, ch] = m.content;
   const s = opt.w ? opt.w / cw : opt.h / ch;
-  const dw = W * s, dh = H * s;
+  const dw = cw * s, dh = ch * s;
+  // dùng tight/ (ruột crop chặt, không đệm canvas) → capture sang Figma ra node
+  // đúng cỡ element, không phải hộp chữ nhật ôm cả đệm trong suốt
   frame.appendChild(el(
-    `<img src="kits/${STYLE}/${name}.png" alt="${name}"
+    `<img src="kits/${STYLE}/tight/${name}.png" alt="${name}"
           style="left:${(cx - dw / 2).toFixed(1)}px;top:${(cy - dh / 2).toFixed(1)}px;
                  width:${dw.toFixed(1)}px;height:${dh.toFixed(1)}px">`));
-  return { w: cw * s, h: ch * s };
+  return { w: dw, h: dh };
 }
 function txt(frame, text, cx, cy, size, extra = "") {
   frame.appendChild(el(
