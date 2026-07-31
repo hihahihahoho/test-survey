@@ -169,7 +169,8 @@
     <button class="ghost" id="sliceBtn">✂️ Slice</button>
     <button class="ghost" id="figmaBtn">📋 Copy Figma bảng element</button>
   </div>
-  <div class="muted">Sau slice: <a href="preview.html" target="_blank">preview</a> ·
+  <div class="muted">Sau slice: <a href="screens.html" target="_blank" id="screensLink">🖼 màn hình demo</a> ·
+    <a href="preview.html" target="_blank">preview</a> ·
     <a href="demo.html" target="_blank">demo game</a></div>
   <div id="log" style="margin-top:10px">sẵn sàng…</div>
 </aside>
@@ -356,6 +357,7 @@ document.querySelectorAll("#brandModeSeg button").forEach(b => b.onclick = () =>
 function pick(id) {
   style = cfg.styles.find(s => s.id === id);
   $("styleSel").value = id;
+  $("screensLink").href = `screens.html?kit=${id}`;
   $("styleProse").value = style.style;
   $("brandP").value = style.brand?.primary ?? "#d42a1e";
   $("brandS").value = style.brand?.secondary ?? "#f5c64a";

@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8">
+<title>Kit Screens — màn hình lắp từ element</title>
+<!-- ============================================================================
+  screens.html — preview TĨNH các màn cơ bản của mini-game, lắp 100% từ element
+  đã slice trong kits/<kit>/tight/ + manifest.json:
+    Home · Bảng xếp hạng · Mở quà · Mở lì xì
+  · Panel / nút / hàng BXH co giãn bằng 9-SLICE insets trong manifest (không vỡ nét).
+  · Text là DOM overlay (asset không chữ theo contract) — sang Figma thành text node.
+  · Mỗi màn 1 nút copy Figma (figma-h2d), hoặc copy cả 4 màn một phát.
+  Mở: http://localhost:8125/kit-gen/screens.html?kit=ipay
+============================================================================ -->
+<style>
+  * { box-sizing: border-box; margin: 0 }
+  body { background: #14161f; color: #e8eaf2; font: 13px/1.5 system-ui; padding: 20px }
+  header { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px }
+  h1 { font-size: 15px; margin-right: 8px }
+  select, button { background: #262b3a; color: #fff; border: 1px solid #3a4157;
+                   border-radius: 8px; padding: 7px 12px; font: 700 12px system-ui; cursor: pointer }
+  button.blue { background: #2f6fed; border-color: #2f6fed }
+  #msg { color: #9fd0a0; font-size: 12px }
+  .shots { display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-start }
+  .wrap { display: flex; flex-direction: column; gap: 8px }
+  .wrap .cap { display: flex; align-items: center; gap: 8px; font-weight: 700 }
+  .screen { position: relative; width: 400px; height: 600px; overflow: hidden;
+            border-radius: 18px; background: #0d0f16; flex: none }
+  .screen img.bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover }
+  .dim { position: absolute; inset: 0; background: rgba(4, 10, 26, .55); backdrop-filter: blur(5px) }
+  .it { position: absolute; transform: translate(-50%, -50%); display: flex;
+        align-items: center; justify-content: center }
+  .it > img { width: 100%; height: 100%; display: block }
+  .it .tx { position: absolute; color: #fff; font-weight: 800; text-align: center;
+            text-shadow: 0 2px 6px rgba(0, 0, 0, .45); white-space: pre-line }
+  .free { position: absolute; transform: translate(-50%, -50%); color: #fff; font-weight: 800;
+          text-align: center; text-shadow: 0 2px 8px rgba(0, 0, 0, .55); white-space: pre-line }
+</style>
+<body>
+<header>
+  <h1>🖼 Màn hình lắp từ kit</h1>
+  <select id="kitSel"></select>
+  <select id="charSel" title="character dùng trong các màn"></select>
+  <button class="blue" id="copyAll">📋 Copy CẢ 4 MÀN ra Figma</button>
+  <span id="msg">các màn lắp từ kits/&lt;kit&gt;/tight — panel/nút co giãn bằng 9-slice</span>
+</header>
+<div class="shots" id="shots"></div>
+
+<script src="figma-export/figma-h2d.global.js"></script>
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const qs = new URLSearchParams(location.search);
+let M, KIT, AM, CHAR;
+
+/* asset theo tên (không .png); null nếu kit không có element đó → màn tự bỏ qua */
+const A = n => AM[n] ?? null;
+const src = n => `kits/${KIT}/tight/${n}.png`;
+
+/* đặt 1 element vào màn: x,y = tâm (%), w hoặc h (px) — cạnh kia theo tỉ lệ content.
+   nine: co giãn 9-slice theo insets manifest. txt: chữ đè giữa element. */
+function put(scr, name, o) {
+  const a = A(name);
+  if (!a) return null;
+  const [cw, ch] = a.content;
+  const w = o.w ?? o.h * cw / ch, h = o.h ?? o.w * ch / cw;
+  const d = document.createElement("div");
+  d.className = "it";
+  d.style.cssText = `left:${o.x}%;top:${o.y}%;width:${w}px;height:${h}px;` +
+    (o.z ? `z-index:${o.z};` : "") + (o.css ?? "");
+  if (o.nine && a.slice9) {
+    const [l, t, r, b] = a.slice9, s = Math.min(1, h / ch, w / cw);
+    d.style.borderStyle = "solid";
+    d.style.borderWidth = `${t * s}px ${r * s}px ${b * s}px ${l * s}px`;
+    d.style.borderImage = `url("${src(name)}") ${t} ${r} ${b} ${l} fill stretch`;
+  } else {
+    d.innerHTML = `<img src="${src(name)}" alt="">`;
+  }
+  if (o.txt) {
+    const t = document.createElement("div");
+    t.className = "tx";
+    t.style.cssText = o.tcss ?? "font-size:16px";
+    t.textContent = o.txt;
+    d.appendChild(t);
+  }
+  scr.appendChild(d);
+  return d;
+}
+function text(scr, txt, x, y, css) {
+  const t = document.createElement("div");
+  t.className = "free";
+  t.style.cssText = `left:${x}%;top:${y}%;` + (css ?? "font-size:15px");
+  t.textContent = txt;
+  scr.appendChild(t);
+}
+function bg(scr, name, dim) {
+  if (A(name)) scr.innerHTML = `<img class="bg" src="${src(name)}" alt="">`;
+  if (dim) scr.innerHTML += `<div class="dim"></div>`;
+}
+const pose = p => A(`pose-${CHAR}-${p}`) ? `pose-${CHAR}-${p}` : null;
+
+/* ============================ 4 màn cơ bản ============================ */
+function scrHome(scr) {
+  bg(scr, "25-bg-home");
+  put(scr, "50-counter-pill", { x: 20, y: 6, w: 110, txt: "1.250 ⭐", tcss: "font-size:13px;padding-left:38px" });
+  put(scr, "04-btn-circle", { x: 90, y: 6, w: 44, txt: "⚙", tcss: "font-size:18px" });
+  put(scr, "10-popup-ribbon", { x: 50, y: 15, w: 270, txt: "SĂN QUÀ MAY MẮN", tcss: "font-size:15px;margin-top:-6px" });
+  if (pose("wave")) put(scr, pose("wave"), { x: 50, y: 43, h: 250 });
+  const tr = put(scr, "07-progress-track", { x: 50, y: 63, w: 250 });
+  if (tr) put(scr, "08-progress-fill",
+    { x: 39.5, y: 63, w: 150, h: parseFloat(tr.style.height) * 0.62, css: "z-index:1" });
+  text(scr, "Lượt chơi hôm nay: 3/5", 50, 58, "font-size:12.5px");
+  put(scr, "01-btn-pill-red", { x: 50, y: 75, w: 250, nine: true, txt: "CHƠI NGAY", tcss: "font-size:19px" });
+  put(scr, "03-btn-pill-outline", { x: 50, y: 85.5, w: 210, nine: true, txt: "Nhiệm vụ", tcss: "font-size:15px" });
+  put(scr, "05-tab-chip-idle", { x: 30, y: 94.5, w: 105, nine: true, txt: "Quà của tôi", tcss: "font-size:12px" });
+  put(scr, "06-tab-chip-active", { x: 70, y: 94.5, w: 105, nine: true, txt: "Xếp hạng", tcss: "font-size:12px" });
+}
+
+function scrBoard(scr) {
+  bg(scr, "26-bg-play", true);
+  put(scr, "22-board-panel", { x: 50, y: 54, w: 350, h: 480, nine: true });
+  put(scr, "10-popup-ribbon", { x: 50, y: 9, w: 250, z: 2, txt: "BẢNG XẾP HẠNG", tcss: "font-size:14px;margin-top:-6px" });
+  put(scr, "41-btn-close", { x: 91, y: 17, w: 38, z: 2 });
+  put(scr, "46-rank-badge-2", { x: 27, y: 23.5, w: 58, z: 2 });
+  put(scr, "45-rank-badge-1", { x: 50, y: 22, w: 70, z: 2 });
+  put(scr, "47-rank-badge-3", { x: 73, y: 23.5, w: 58, z: 2 });
+  const RTX = "font-size:13px;color:#1c3560;text-shadow:none";
+  const rows = [["Minh Anh", "12.480"], ["Hải Đăng", "11.020"], ["Thu Trang", "9.750"]];
+  rows.forEach(([n, p], i) => {
+    const r = put(scr, "48-rank-row", { x: 50, y: 35 + i * 10.5, w: 300, h: 52, nine: true, z: 2 });
+    if (r) r.innerHTML += `<div class="tx" style="left:16px;right:auto;${RTX}">${i + 1}.  ${n}</div>
+      <div class="tx" style="right:18px;left:auto;${RTX}">${p}</div>`;
+  });
+  const me = put(scr, "49-rank-row-self", { x: 50, y: 70, w: 300, h: 54, nine: true, z: 2 });
+  if (me) me.innerHTML += `<div class="tx" style="left:16px;right:auto;${RTX}">27.  Bạn</div>
+    <div class="tx" style="right:18px;left:auto;${RTX}">8.450</div>`;
+  put(scr, "02-btn-pill-blue", { x: 50, y: 82, w: 220, nine: true, z: 2, txt: "CHƠI TIẾP", tcss: "font-size:16px" });
+  if (pose("view-34")) put(scr, pose("view-34"), { x: 14, y: 92, h: 110, z: 3 });
+}
+
+function scrGift(scr) {
+  bg(scr, "26-bg-play", true);
+  put(scr, "16-fx-burst", { x: 50, y: 34, w: 300 });
+  put(scr, "09-popup-panel-short", { x: 50, y: 56, w: 340, h: 310, nine: true });
+  put(scr, "51-reward-giftbox-open", { x: 50, y: 33, h: 180, z: 2 });
+  text(scr, "CHÚC MỪNG!", 50, 48.5, "font-size:20px;z-index:2");
+  put(scr, "14-reward-voucher", { x: 50, y: 57.5, w: 150, z: 2, txt: "50.000đ", tcss: "font-size:15px" });
+  text(scr, "Bạn nhận được 1 voucher", 50, 66, "font-size:12.5px;z-index:2");
+  put(scr, "02-btn-pill-blue", { x: 50, y: 75.5, w: 210, nine: true, z: 2, txt: "NHẬN QUÀ", tcss: "font-size:16px" });
+  if (pose("cheer")) put(scr, pose("cheer"), { x: 85, y: 91, h: 130, z: 3 });
+}
+
+function scrEnvelope(scr) {
+  bg(scr, "25-bg-home", true);
+  put(scr, "16-fx-burst", { x: 50, y: 42, w: 320 });
+  /* phong bì PART-BASED: nắp (flap) ghép khớp bề ngang thân (body) — game mở nắp runtime */
+  const body = put(scr, "52-envelope-body", { x: 50, y: 44, h: 235, z: 2 });
+  if (body) {
+    const bw = parseFloat(body.style.width);
+    const fa = A("53-envelope-flap");
+    if (fa) {
+      const fh = bw * fa.content[1] / fa.content[0];
+      const topPct = 44 - 235 / 600 * 50;              // mép trên thân (%)
+      put(scr, "53-envelope-flap", { x: 50, y: topPct + fh / 600 * 50, w: bw, z: 3 });
+    }
+  }
+  text(scr, "LÌ XÌ MAY MẮN", 50, 12, "font-size:21px");
+  text(scr, "Chạm để mở phong bì", 50, 68.5, "font-size:13px;z-index:4");
+  put(scr, "01-btn-pill-red", { x: 50, y: 79, w: 230, nine: true, z: 4, txt: "MỞ LÌ XÌ", tcss: "font-size:18px" });
+  if (pose("hold-gift")) put(scr, pose("hold-gift"), { x: 15, y: 91, h: 125, z: 4 });
+}
+
+const SCREENS = [
+  ["Màn HOME", scrHome], ["Bảng xếp hạng", scrBoard],
+  ["Mở quà", scrGift], ["Mở lì xì", scrEnvelope],
+];
+
+/* ============================ khung + copy Figma ============================ */
+function render() {
+  AM = Object.fromEntries(M.styles[KIT].assets.map(a => [a.file.replace(".png", ""), a]));
+  const chars = [...new Set(M.styles[KIT].assets.map(a => /^pose-(.+?)-/.exec(a.file)?.[1]).filter(Boolean))];
+  const cs = $("#charSel");
+  cs.innerHTML = chars.map(c => `<option ${c === CHAR ? "selected" : ""}>${c}</option>`).join("") ||
+    "<option value=''>— không có character —</option>";
+  CHAR = chars.includes(CHAR) ? CHAR : chars[0];
+  const shots = $("#shots");
+  shots.innerHTML = "";
+  for (const [name, fn] of SCREENS) {
+    const w = document.createElement("div");
+    w.className = "wrap";
+    w.innerHTML = `<div class="cap"><span>${name}</span><button>📋 Figma</button></div>`;
+    const scr = document.createElement("div");
+    scr.className = "screen";
+    fn(scr);
+    w.appendChild(scr);
+    w.querySelector("button").onclick = () => copyScreens([[name, scr]]);
+    shots.appendChild(w);
+  }
+}
+async function copyScreens(list) {
+  try {
+    const docs = [];
+    for (const [name, scr] of list)
+      docs.push(await figmaH2D.captureElement(scr, { name: `${KIT} · ${name}` }));
+    await figmaH2D.writeFigmaClipboard(docs, { source: "kit-screens" });
+    $("#msg").textContent = `📋 đã copy ${docs.length} màn (${KIT}) — sang Figma Cmd+V`;
+  } catch (e) { $("#msg").textContent = "❌ " + (e.message ?? e); }
+}
+$("#copyAll").onclick = () =>
+  copyScreens([...$("#shots").querySelectorAll(".wrap")].map((w, i) =>
+    [SCREENS[i][0], w.querySelector(".screen")]));
+
+async function boot() {
+  M = await (await fetch("kits/manifest.json?" + Date.now())).json();
+  const kits = Object.keys(M.styles);
+  KIT = qs.get("kit") && kits.includes(qs.get("kit")) ? qs.get("kit") : kits[0];
+  $("#kitSel").innerHTML = kits.map(k => `<option ${k === KIT ? "selected" : ""}>📦 ${k}</option>`).join("");
+  $("#kitSel").onchange = e => { KIT = e.target.value.replace("📦 ", ""); history.replaceState(0, "", `?kit=${KIT}`); render(); };
+  $("#charSel").onchange = e => { CHAR = e.target.value; render(); };
+  render();
+}
+boot();
+</script>
+</body>
+</html>
