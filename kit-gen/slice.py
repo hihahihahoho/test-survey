@@ -27,7 +27,8 @@ Chạy:  python3 slice.py
 """
 import json, math, os
 from collections import deque
-from PIL import Image
+from array import array
+from PIL import Image, ImageChops, ImageFilter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_THRESHOLD = 52   # tâm ramp: dưới lo → trong suốt, trên hi → đục hẳn
@@ -197,8 +198,11 @@ def fill_holes(keyed, sheet_rgb, W, H):
 
 
 def label_blobs(strict, W, H):
-    """BFS 4-hướng trên mask nghiêm → [(bbox, size, centroid)] từng khối."""
+    """BFS 4-hướng trên mask nghiêm → ([(bbox, size, centroid, id)], labelmap).
+    labelmap[i] = id khối (1-based) tại pixel i — dùng mask pixel theo QUYỀN SỞ
+    HỮU khối khi crop ô (chặn phần thân khối hàng xóm tràn vào vùng crop)."""
     seen = bytearray(W * H)
+    labelmap = array("H", bytes(2 * W * H))
     blobs = []
     for start in range(W * H):
         if not strict[start] or seen[start]:
@@ -208,8 +212,11 @@ def label_blobs(strict, W, H):
         l = r = start % W
         t = b = start // W
         n = sx = sy = 0
+        lbl = len(blobs) + 1
+        px_list = []
         while q:
             i = q.popleft()
+            px_list.append(i)
             x, y = i % W, i // W
             n += 1; sx += x; sy += y
             if x < l: l = x
@@ -221,8 +228,10 @@ def label_blobs(strict, W, H):
             if y > 0 and strict[i - W] and not seen[i - W]: seen[i - W] = 1; q.append(i - W)
             if y < H - 1 and strict[i + W] and not seen[i + W]: seen[i + W] = 1; q.append(i + W)
         if n >= MIN_BLOB:
-            blobs.append(((l, t, r + 1, b + 1), n, (sx / n, sy / n)))
-    return blobs
+            for i in px_list:
+                labelmap[i] = lbl
+            blobs.append(((l, t, r + 1, b + 1), n, (sx / n, sy / n), lbl))
+    return blobs, labelmap
 
 
 def snap_to_safe(canvas, sk, safe):
@@ -261,6 +270,37 @@ def snap_to_safe(canvas, sk, safe):
     out = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     out.paste(scaled, (dx, dy), scaled)
     return out
+
+
+def fill_mask_holes(msk):
+    """Lấp vùng 0 KÍN trong mask (không thông ra biên): ruột bán-trong-suốt
+    (kính, hollow có glow) nằm dưới ngưỡng strict nên không thuộc blob nào —
+    nhưng bị viền element bao kín thì vẫn là ruột, phải giữ."""
+    w, h = msk.size
+    mp = msk.load()
+    seen = bytearray(w * h)
+    q = deque()
+    for x in range(w):
+        for y in (0, h - 1):
+            if mp[x, y] == 0 and not seen[y * w + x]:
+                seen[y * w + x] = 1
+                q.append((x, y))
+    for y in range(h):
+        for x in (0, w - 1):
+            if mp[x, y] == 0 and not seen[y * w + x]:
+                seen[y * w + x] = 1
+                q.append((x, y))
+    while q:
+        x, y = q.popleft()
+        for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+            if 0 <= nx < w and 0 <= ny < h and mp[nx, ny] == 0 and not seen[ny * w + nx]:
+                seen[ny * w + nx] = 1
+                q.append((nx, ny))
+    for y in range(h):
+        for x in range(w):
+            if mp[x, y] == 0 and not seen[y * w + x]:
+                mp[x, y] = 255
+    return msk
 
 
 def trim_flat_cell(cell_rgb):
@@ -368,12 +408,12 @@ for style in cfg["styles"]:
                 keyed, strict = key_binary(sheet_rgb, bg, threshold, strict_threshold)
                 filled = fill_holes(keyed, sheet_rgb, W, H)
                 mode = f"binary {len(bg)} màu nhạt (đường lùi), lấp {filled}px"
-        blobs = label_blobs(strict, W, H)
+        blobs, labelmap = label_blobs(strict, W, H)
 
         cell_blobs = [[] for _ in range(COLS * ROWS)]
-        for box, n, (cx, cy) in blobs:
+        for box, n, (cx, cy), lbl in blobs:
             idx = min(ROWS - 1, int(cy // cell_h)) * COLS + min(COLS - 1, int(cx // cell_w))
-            cell_blobs[idx].append((box, n))
+            cell_blobs[idx].append((box, n, lbl))
 
         # Đốm tí hon dính sát BIÊN ô = rơi vãi từ ô hàng xóm (spec bắt element chừa
         # ≥40px padding nên blob xịn không bám mép). Không lọc là nó kéo bbox union
@@ -382,21 +422,23 @@ for style in cfg["styles"]:
         # nằm giữa ô và to hơn hẳn 1% nên không bị đụng.
         edge = 0.06
         cell_boxes = [None] * (COLS * ROWS)
+        cell_keep = [set() for _ in range(COLS * ROWS)]   # id các khối được giữ / ô
         dropped = 0
         for idx, blist in enumerate(cell_blobs):
             if not blist:
                 continue
-            main_n = max(n for _, n in blist)
+            main_n = max(n for _, n, _ in blist)
             row, col = divmod(idx, COLS)
             cl, ct = col * cell_w, row * cell_h
             mx, my = cell_w * edge, cell_h * edge
-            for box, n in blist:
+            for box, n, lbl in blist:
                 l, t, r, b = box
                 near_edge = (r <= cl + mx or l >= cl + cell_w - mx or
                              b <= ct + my or t >= ct + cell_h - my)
                 if n < main_n * 0.01 and near_edge:
                     dropped += 1
                     continue
+                cell_keep[idx].add(lbl)
                 cur = cell_boxes[idx]
                 cell_boxes[idx] = box if cur is None else (
                     min(cur[0], box[0]), min(cur[1], box[1]), max(cur[2], box[2]), max(cur[3], box[3]))
@@ -430,6 +472,20 @@ for style in cfg["styles"]:
                 L = max(cx0, l - HALO - PAD); T = max(cy0, t - HALO - PAD)
                 R = min(cx0 + CW, r + HALO + PAD); B = min(cy0 + CH, b + HALO + PAD)
                 region = keyed.crop((L, T, R, B))
+                # Mask theo QUYỀN SỞ HỮU khối: pixel chỉ giữ nếu thuộc khối đã gán
+                # cho ô này (nới MaxFilter ăn quầng glow mềm quanh khối). Không mask
+                # là thân khối hàng xóm tràn vào vùng crop bị múc theo (đã dính:
+                # nóc hộp quà ô dưới lọt vào đáy tab chip).
+                keep = cell_keep[idx]
+                msk = Image.new("L", (R - L, B - T), 0)
+                mp = msk.load()
+                for yy in range(T, B):
+                    base = yy * W
+                    for xx in range(L, R):
+                        if labelmap[base + xx] in keep:
+                            mp[xx - L, yy - T] = 255
+                msk = fill_mask_holes(msk.filter(ImageFilter.MaxFilter(2 * HALO + 1)))
+                region.putalpha(ImageChops.multiply(region.getchannel("A"), msk))
                 canvas.paste(region, (L - cx0, T - cy0), region)
             sk = comp["skel"]
             sw, sh_ = round(CW * sk["w"]), round(CH * sk["h"])
