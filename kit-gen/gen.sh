@@ -66,6 +66,10 @@ for s in cfg["styles"]:
             if b.get("gradient"):
                 bl += f", gradient {b['gradient']}"
             lines += [bl + " — use these as the dominant UI colors.", ""]
+        if s.get("brand", {}).get("refs") or s.get("inspo"):
+            lines += [
+                "Also attached: brand / inspiration reference images — match their color",
+                "mood, material finish and overall vibe (do NOT copy their layout).", ""]
         if sh.get("note"):
             lines += [sh["note"], ""]
         for r in range(rows):
@@ -83,6 +87,7 @@ for s in cfg["styles"]:
         att = [f"skeleton/{sh['id']}.png"]
         if sh.get("ref"):
             att.append(sh["ref"])
+        att += s.get("brand", {}).get("refs", [])
         att += s.get("inspo", [])
         open(f"prompts/{s['id']}-{sh['id']}.att", "w").write("\n".join(att))
         print("prompt →", f"prompts/{s['id']}-{sh['id']}.txt", f"(+{len(att)} ảnh kèm)")

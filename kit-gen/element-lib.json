@@ -1,0 +1,416 @@
+{
+  "_note": "Thư viện element cho studio — sheet UI dàn trang ĐỘNG từ selection. cell: landscape (ô 4:cột ngang 3:2) | portrait | full. group: các element phải liền kề (spec 'SAME as previous'). sheetHint: tên sheet ưu tiên khi cả chunk cùng group. Thứ tự trong file = thứ tự dàn trang (07 track và 08 fill cách xa nhau có chủ đích).",
+  "elements": [
+    {
+      "file": "01-btn-pill-red",
+      "vi": "Nút đỏ (CTA)",
+      "spec": "glossy 3D candy-red capsule button, wide pill shape, soft white top highlight, darker red bevel rim, blank face",
+      "skel": {
+        "shape": "pill",
+        "w": 0.78,
+        "h": 0.4
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "02-btn-pill-blue",
+      "vi": "Nút xanh",
+      "spec": "glossy 3D azure-blue capsule button, wide pill shape, cyan rim light, gradient from light blue top to deep blue bottom, blank face",
+      "skel": {
+        "shape": "pill",
+        "w": 0.78,
+        "h": 0.4
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "03-btn-pill-outline",
+      "vi": "Nút viền",
+      "spec": "wide capsule outline button, thick glowing stroke, fully hollow see-through interior, soft outer glow, no fill",
+      "skel": {
+        "shape": "pill",
+        "w": 0.78,
+        "h": 0.4
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "16-fx-burst",
+      "vi": "Hiệu ứng nổ sáng",
+      "spec": "radial light burst with four-point sparkles and soft golden rays, centered explosion",
+      "skel": {
+        "shape": "burst",
+        "w": 0.6,
+        "h": 0.9
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "07-progress-track",
+      "vi": "Progress: máng",
+      "spec": "empty horizontal capsule groove, dark inset well, thin light outer rim, hollow interior, no fill inside",
+      "skel": {
+        "shape": "bar",
+        "w": 0.84,
+        "h": 0.26
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "04-btn-circle",
+      "vi": "Nút tròn",
+      "spec": "round glossy button plate, 3D dome, EMPTY center with no icon, light rim highlight top-left, soft drop shadow",
+      "skel": {
+        "shape": "circle",
+        "w": 0.55,
+        "h": 0.82
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "11-digit-plate",
+      "vi": "Ô số đếm ngược",
+      "spec": "small rounded-square 3D plate for one countdown digit, gradient face, beveled edge, glossy top highlight, EMPTY center with no number",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.38,
+        "h": 0.58
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "10-popup-ribbon",
+      "vi": "Ruy băng tiêu đề",
+      "spec": "ornate 3D banner ribbon plate for a modal heading, slight upward arc, bright outline, empty blank face",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.84,
+        "h": 0.44
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "12-piece-active",
+      "vi": "Mảnh ghép sáng",
+      "spec": "single jigsaw puzzle piece with one tab and one blank, vivid saturated colorful glossy 3D surface, bright rim light",
+      "skel": {
+        "shape": "puzzle",
+        "w": 0.48,
+        "h": 0.72
+      },
+      "cell": "landscape",
+      "group": "piece"
+    },
+    {
+      "file": "13-piece-locked",
+      "vi": "Mảnh ghép khoá",
+      "spec": "jigsaw puzzle piece with IDENTICAL outline and silhouette as the previous piece, but locked state: flat desaturated grey, matte, faint inner edge, no highlight",
+      "skel": {
+        "shape": "puzzle",
+        "w": 0.48,
+        "h": 0.72
+      },
+      "cell": "landscape",
+      "group": "piece"
+    },
+    {
+      "file": "05-tab-chip-idle",
+      "vi": "Tab thường",
+      "spec": "rounded-square glassy tab chip, muted translucent dark tone, thin light border, flat empty face",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.42,
+        "h": 0.62
+      },
+      "cell": "landscape",
+      "group": "chip"
+    },
+    {
+      "file": "06-tab-chip-active",
+      "vi": "Tab đang chọn",
+      "spec": "tab chip with the SAME shape and size as the previous chip, but selected state: bright glowing border, luminous fill, outer bloom",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.42,
+        "h": 0.62
+      },
+      "cell": "landscape",
+      "group": "chip"
+    },
+    {
+      "file": "08-progress-fill",
+      "vi": "Progress: thanh chạy",
+      "spec": "the plain INNER filling of a progress bar, ONLY the sliding jelly bar itself: smooth glossy capsule, vivid warm orange-to-coral gradient, bright specular streak along the top, rounded caps — absolutely NO outer frame, NO metal or gold rim, NO border, NO ornaments, flowers or charms (the decorated track is a SEPARATE element)",
+      "skel": {
+        "shape": "bar",
+        "w": 0.78,
+        "h": 0.13,
+        "plain": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "14-reward-voucher",
+      "vi": "Quà voucher",
+      "spec": "3D voucher coupon ticket token with perforated notch on both sides, glossy foil surface, tilted slightly, empty blank face",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.64,
+        "h": 0.48
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "15-reward-giftbox",
+      "vi": "Quà hộp",
+      "spec": "3D wrapped gift box with ribbon bow, glossy paper, floating slightly with soft shadow below",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.48,
+        "h": 0.68
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "09-popup-panel-short",
+      "vi": "Popup ngang (S/M)",
+      "spec": "rounded rectangle modal panel, landscape orientation, decorative double border, clean corners, flat EVEN interior fill suitable for stretching, empty inside",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.84,
+        "h": 0.72
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "17-mascot-idle",
+      "vi": "Mascot đứng",
+      "spec": "full-body cute 3D mascot character standing and waving, friendly smile, big rounded head, facing viewer",
+      "skel": {
+        "shape": "figure",
+        "w": 0.55,
+        "h": 0.8
+      },
+      "cell": "portrait",
+      "group": "mascot"
+    },
+    {
+      "file": "18-mascot-peek",
+      "vi": "Mascot ngó",
+      "spec": "the SAME mascot character peeking in from the lower corner, only upper body and one arm visible, leaning inward, looking up",
+      "skel": {
+        "shape": "figure",
+        "w": 0.6,
+        "h": 0.55,
+        "anchor": "bottom"
+      },
+      "cell": "portrait",
+      "group": "mascot"
+    },
+    {
+      "file": "19-mascot-celebrate",
+      "vi": "Mascot ăn mừng",
+      "spec": "the SAME mascot character celebrating with both arms raised, happy expression, small sparkles around",
+      "skel": {
+        "shape": "figure",
+        "w": 0.6,
+        "h": 0.8
+      },
+      "cell": "portrait",
+      "group": "mascot"
+    },
+    {
+      "file": "24-popup-panel-tall",
+      "vi": "Popup dọc (L)",
+      "spec": "tall rounded rectangle modal panel, portrait orientation, decorative double border, soft inner vignette, empty interior",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.78,
+        "h": 0.84
+      },
+      "cell": "portrait"
+    },
+    {
+      "file": "20-game-object-closed",
+      "vi": "Túi quà đóng",
+      "spec": "sealed glossy foil gift pouch standing upright, crimped top and bottom edges, plain circular emblem centered on the front, blank wrapper",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.62,
+        "h": 0.74
+      },
+      "cell": "portrait",
+      "group": "pouch"
+    },
+    {
+      "file": "21-game-object-open",
+      "vi": "Túi quà mở",
+      "spec": "the SAME foil gift pouch but torn open at the top, wrapper edges flared outward, bright golden light spilling from inside, empty interior visible",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.62,
+        "h": 0.74
+      },
+      "cell": "portrait",
+      "group": "pouch"
+    },
+    {
+      "file": "22-board-panel",
+      "vi": "Khay đựng túi",
+      "spec": "rounded-square translucent glass tray panel, glowing border with bracket corners, frosted interior, completely empty, no grid lines",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.8,
+        "h": 0.78
+      },
+      "cell": "portrait"
+    },
+    {
+      "file": "23-floating-entry-badge",
+      "vi": "Nút nổi vào game",
+      "spec": "circular glossy game-entry badge with the SAME small mascot character popping out of the top, gradient disc, glowing rim, soft shadow",
+      "skel": {
+        "shape": "circle",
+        "w": 0.62,
+        "h": 0.47
+      },
+      "cell": "portrait"
+    },
+    {
+      "file": "27-pose-idle",
+      "vi": "Pose đứng",
+      "spec": "the mascot standing straight facing the viewer, arms relaxed at the sides, neutral friendly smile, full body",
+      "skel": {
+        "shape": "pose",
+        "pose": "idle",
+        "w": 0.55,
+        "h": 0.82
+      },
+      "cell": "portrait",
+      "group": "mascot-pose",
+      "sheetHint": "pose"
+    },
+    {
+      "file": "28-pose-wave",
+      "vi": "Pose vẫy chào",
+      "spec": "the SAME mascot waving hello with one arm raised high, warm welcoming smile, full body",
+      "skel": {
+        "shape": "pose",
+        "pose": "wave",
+        "w": 0.58,
+        "h": 0.82
+      },
+      "cell": "portrait",
+      "group": "mascot-pose",
+      "sheetHint": "pose"
+    },
+    {
+      "file": "29-pose-point",
+      "vi": "Pose chỉ tay",
+      "spec": "the SAME mascot pointing forward and slightly sideways with one extended arm, confident look, full body",
+      "skel": {
+        "shape": "pose",
+        "pose": "point",
+        "w": 0.62,
+        "h": 0.82
+      },
+      "cell": "portrait",
+      "group": "mascot-pose",
+      "sheetHint": "pose"
+    },
+    {
+      "file": "30-pose-hold-gift",
+      "vi": "Pose ôm quà",
+      "spec": "the SAME mascot hugging a wrapped gift box with both arms in front of its chest, delighted expression, full body",
+      "skel": {
+        "shape": "pose",
+        "pose": "hold-gift",
+        "w": 0.58,
+        "h": 0.82
+      },
+      "cell": "portrait",
+      "group": "mascot-pose",
+      "sheetHint": "pose"
+    },
+    {
+      "file": "31-pose-cheer",
+      "vi": "Pose ăn mừng",
+      "spec": "the SAME mascot jumping in celebration with both arms thrown up, eyes closed in joy, tiny sparkles around, full body",
+      "skel": {
+        "shape": "pose",
+        "pose": "cheer",
+        "w": 0.62,
+        "h": 0.85
+      },
+      "cell": "portrait",
+      "group": "mascot-pose",
+      "sheetHint": "pose"
+    },
+    {
+      "file": "32-pose-sad",
+      "vi": "Pose buồn",
+      "spec": "the SAME mascot with drooping shoulders and head tilted down, sad puppy eyes, one tear drop, full body",
+      "skel": {
+        "shape": "pose",
+        "pose": "sad",
+        "w": 0.55,
+        "h": 0.78
+      },
+      "cell": "portrait",
+      "group": "mascot-pose",
+      "sheetHint": "pose"
+    },
+    {
+      "file": "33-pose-run",
+      "vi": "Pose chạy",
+      "spec": "the SAME mascot running toward one side with a dynamic lean, one leg lifted, determined face, small motion lines, full body",
+      "skel": {
+        "shape": "pose",
+        "pose": "run",
+        "w": 0.68,
+        "h": 0.8
+      },
+      "cell": "portrait",
+      "group": "mascot-pose",
+      "sheetHint": "pose"
+    },
+    {
+      "file": "34-pose-think",
+      "vi": "Pose suy nghĩ",
+      "spec": "the SAME mascot in a puzzled thinking pose, one hand on its chin, eyes looking up sideways, full body",
+      "skel": {
+        "shape": "pose",
+        "pose": "think",
+        "w": 0.55,
+        "h": 0.8
+      },
+      "cell": "portrait",
+      "group": "mascot-pose",
+      "sheetHint": "pose"
+    },
+    {
+      "file": "25-bg-main",
+      "vi": "Nền chính",
+      "spec": "bright cheerful vertical game background scene with sky and stylized ground, scattered gift boxes, empty upper-middle area for a title, rich detail, NO characters, NO mascots, NO creatures of any kind, fills its entire cell edge to edge",
+      "skel": {
+        "shape": "full",
+        "w": 1.0,
+        "h": 1.0
+      },
+      "cell": "full",
+      "group": "bg"
+    },
+    {
+      "file": "26-bg-blur",
+      "vi": "Nền mờ",
+      "spec": "the SAME background scene but heavily depth-of-field blurred and darkened, low contrast, cooler tone, no readable detail, NO characters or creatures, fills its entire cell edge to edge",
+      "skel": {
+        "shape": "full",
+        "w": 1.0,
+        "h": 1.0
+      },
+      "cell": "full",
+      "group": "bg"
+    }
+  ]
+}
