@@ -130,12 +130,15 @@ def matte_chroma(sheet, key):
                 strict[row + x] = 1
     # LÀM CỨNG RUỘT: màu gần key (đỏ sậm/viền bóng trên nền magenta) cho alpha
     # lửng lơ NGAY TRONG THÂN khối → composite lên nền tối bị loang lổ vết thủng.
-    # Thân element theo contract luôn đục 100% ⇒ vùng đặc (fill kín lỗ, co 2px
-    # chừa mép anti-alias) ép alpha = 255; màu giữ nguyên F đã un-premultiply.
-    # Tia/glow mảnh (< 5px) không sống sót qua phép co nên vẫn mềm như cũ.
+    # Vùng đặc (fill kín lỗ, co 2px chừa mép anti-alias) ∩ pixel VỐN ĐÃ khá đục
+    # (α > 0.35) → ép alpha = 255. Giao với "vốn đã khá đục" là bắt buộc: ruột
+    # RỖNG CỐ Ý (nút outline, khối hollow) có α≈0 nằm kín trong viền — lấp mù
+    # quáng là hoá mảng đen đặc (đã dính). Tia/glow mảnh không qua phép co.
     alpha = out.getchannel("A")
     solid = fill_mask_holes(alpha.point(lambda v: 255 if v > 128 else 0))
-    out.putalpha(ImageChops.lighter(alpha, solid.filter(ImageFilter.MinFilter(5))))
+    interior = solid.filter(ImageFilter.MinFilter(5))
+    semi = alpha.point(lambda v: 255 if v > 90 else 0)
+    out.putalpha(ImageChops.lighter(alpha, ImageChops.darker(interior, semi)))
     return out, strict
 
 
