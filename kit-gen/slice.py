@@ -225,6 +225,44 @@ def label_blobs(strict, W, H):
     return blobs
 
 
+def snap_to_safe(canvas, sk, safe):
+    """Nắn nội dung về KHUNG SAFE: model vẽ gần đúng chứ không đúng 100% —
+    dò LÕI element (vùng phủ alpha dày ≥50% hàng/cột dày nhất — tua rua, đèn
+    lồng, tia sáng mảnh không tính), rồi scale + dịch cho lõi khớp khung safe.
+    Hình học (nút, panel...) được scale; nhân vật/burst chỉ dịch (scale thân
+    nhân vật theo lõi dễ phá dáng). Nhờ vậy MỌI style ra thân cùng cỡ, cùng
+    toạ độ — trang trí đi theo tự nhiên."""
+    if sk["shape"] == "full":
+        return canvas
+    W, H = canvas.size
+    sx, sy, sw, sh = safe
+    a = canvas.getchannel("A").load()
+    row_cov = [sum(1 for x in range(W) if a[x, y] >= 128) for y in range(H)]
+    col_cov = [sum(1 for y in range(H) if a[x, y] >= 128) for x in range(W)]
+    if not any(row_cov):
+        return canvas
+    rmax, cmax = max(row_cov), max(col_cov)
+    rows = [y for y, c in enumerate(row_cov) if c >= rmax * 0.5]
+    cols = [x for x, c in enumerate(col_cov) if c >= cmax * 0.5]
+    cl, ct, cr, cb = min(cols), min(rows), max(cols) + 1, max(rows) + 1
+
+    s = 1.0
+    if sk["shape"] in ("pill", "bar", "rrect", "circle", "puzzle"):
+        s = min(sw / (cr - cl), sh / (cb - ct))
+        s = max(0.7, min(1.35, s))          # chặn scale hoang khi dò lõi trượt
+    scaled = canvas if s == 1.0 else canvas.resize(
+        (max(1, round(W * s)), max(1, round(H * s))), Image.LANCZOS)
+    if sk.get("anchor") == "bottom":        # mascot ngó: đáy lõi chạm đáy khung
+        dx = round(sx + sw / 2 - (cl + cr) / 2 * s)
+        dy = round(sy + sh - cb * s)
+    else:
+        dx = round(sx + sw / 2 - (cl + cr) / 2 * s)
+        dy = round(sy + sh / 2 - (ct + cb) / 2 * s)
+    out = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    out.paste(scaled, (dx, dy), scaled)
+    return out
+
+
 def trim_flat_cell(cell_rgb):
     """Ô full-bleed: gọt các cột/hàng PHẲNG (một màu đều — dải gap màu key giữa
     hai nửa, hay mép key sót) ở 4 mép. Cột artwork thật luôn biến thiên dọc
@@ -393,6 +431,11 @@ for style in cfg["styles"]:
                 R = min(cx0 + CW, r + HALO + PAD); B = min(cy0 + CH, b + HALO + PAD)
                 region = keyed.crop((L, T, R, B))
                 canvas.paste(region, (L - cx0, T - cy0), region)
+            sk = comp["skel"]
+            sw, sh_ = round(CW * sk["w"]), round(CH * sk["h"])
+            sx = (CW - sw) // 2
+            sy = CH - sh_ - round(CH * 0.04) if sk.get("anchor") == "bottom" else (CH - sh_) // 2
+            canvas = snap_to_safe(canvas, sk, (sx, sy, sw, sh_))
             canvas.save(os.path.join(out_dir, f"{comp['file']}.png"))
             abox = canvas.getchannel("A").getbbox()
             if abox is None:
@@ -404,10 +447,6 @@ for style in cfg["styles"]:
             # tight/ = ruột crop chặt, không đệm canvas — cho Figma/designer lấy lẻ
             os.makedirs(os.path.join(out_dir, "tight"), exist_ok=True)
             tight.save(os.path.join(out_dir, "tight", f"{comp['file']}.png"))
-            sk = comp["skel"]
-            sw, sh_ = round(CW * sk["w"]), round(CH * sk["h"])
-            sx = (CW - sw) // 2
-            sy = CH - sh_ - round(CH * 0.04) if sk.get("anchor") == "bottom" else (CH - sh_) // 2
             # ruột lệch tâm khung safe nhiều = model vẽ sai chỗ → cảnh báo để đối
             # chiếu raw/ (bbox gồm cả trang trí tràn nên lệch nhẹ là bình thường)
             dev_x = (ox + pw / 2) - (sx + sw / 2)
