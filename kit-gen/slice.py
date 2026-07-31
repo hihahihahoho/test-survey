@@ -28,7 +28,7 @@ Chạy:  python3 slice.py
 import json, math, os
 from collections import deque
 from array import array
-from PIL import Image, ImageChops, ImageFilter
+from PIL import Image, ImageChops, ImageFilter, ImageOps
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_THRESHOLD = 52   # tâm ramp: dưới lo → trong suốt, trên hi → đục hẳn
@@ -239,6 +239,44 @@ def label_blobs(strict, W, H):
                 labelmap[i] = lbl
             blobs.append(((l, t, r + 1, b + 1), n, (sx / n, sy / n), lbl))
     return blobs, labelmap
+
+
+POSE_SIDE = {"wave": 1, "point": 1, "run": 1, "fly": 1}   # xương kỳ vọng bên PHẢI ảnh
+
+
+def normalize_pose_side(canvas, want, tag):
+    """gpt-image không bị ràng buộc cứng theo xương (không phải ControlNet) nên
+    hay MIRROR tay/hướng. Với pose bất đối xứng: đo trọng tâm alpha nửa TRÊN
+    (tay giơ/đầu nghiêng kéo trọng tâm về bên đó) so với trục thân — ngược bên
+    kỳ vọng thì lật ngang. Lật sprite là phép không mất mát nên luôn an toàn."""
+    a = canvas.getchannel("A")
+    box = a.getbbox()
+    if not box:
+        return canvas
+    l, t, r, b = box
+    px = a.load()
+
+    def centroid_x(y0, y1):
+        sx = n = 0
+        for y in range(y0, y1):
+            for x in range(l, r):
+                if px[x, y] > 60:
+                    sx += x; n += 1
+        return sx / n if n else None
+
+    h = b - t
+    # Mốc so sánh là TRỤC THÂN (trọng tâm nửa dưới — chân/thân đối xứng), KHÔNG
+    # phải giữa bbox: bbox bị chính cánh tay giơ kéo lệch nên so với bbox sẽ
+    # flip oan pose đã đúng (đã dính).
+    top = centroid_x(t, t + max(1, h * 2 // 5))
+    bot = centroid_x(b - max(1, h * 2 // 5), b)
+    if top is None or bot is None:
+        return canvas
+    bias = top - bot
+    if bias * want < 0 and abs(bias) > (r - l) * 0.02:
+        print(f"  ↔ {tag}: model mirror pose — lật ngang cho đúng hướng xương")
+        return ImageOps.mirror(canvas)
+    return canvas
 
 
 def snap_to_safe(canvas, sk, safe):
@@ -510,6 +548,8 @@ for style in cfg["styles"]:
                 region.putalpha(ImageChops.multiply(region.getchannel("A"), msk))
                 canvas.paste(region, (L - (cx0 - BX), T - (cy0 - BY)), region)
             sk = comp["skel"]
+            if sk["shape"] == "pose" and POSE_SIDE.get(sk.get("pose")):
+                canvas = normalize_pose_side(canvas, POSE_SIDE[sk["pose"]], f"{sid}/{comp['file']}")
             sw, sh_ = round(CW * sk["w"]), round(CH * sk["h"])
             sx = BX + (CW - sw) // 2
             sy = BY + (CH - sh_ - round(CH * 0.04) if sk.get("anchor") == "bottom" else (CH - sh_) // 2)

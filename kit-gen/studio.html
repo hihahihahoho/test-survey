@@ -67,6 +67,21 @@
          overflow: hidden; margin: 6px 0 }
   .seg button { flex: 1; background: none; border-radius: 0; color: #8b93ab; font-weight: 600 }
   .seg button.on { background: #2f6fed; color: #fff }
+  .drop { border: 1.5px dashed #3a4157; border-radius: 10px; padding: 14px 10px;
+          text-align: center; color: #8b93ab; font-size: 11.5px; cursor: pointer;
+          transition: border-color .15s, background .15s; user-select: none }
+  .drop:hover { border-color: #2f6fed; color: #b9c3dd }
+  .drop.armed { border-color: #2f6fed; background: rgba(47,111,237,.08); color: #cfe0ff }
+  .drop.armed::after { content: " — Cmd+V để dán"; color: #7fb0ff }
+  .drop.mini { padding: 0; width: 56px; height: 56px; display: flex; align-items: center;
+               justify-content: center; overflow: hidden; flex: none }
+  .drop.mini img { width: 100%; height: 100%; object-fit: contain }
+  .thumbs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px }
+  .thumbs .th { position: relative; width: 62px; height: 62px; border-radius: 8px;
+                overflow: hidden; background: #10121a; border: 1px solid #2f3445 }
+  .thumbs .th img { width: 100%; height: 100%; object-fit: cover }
+  .thumbs .th b { position: absolute; top: 1px; right: 4px; cursor: pointer; color: #fff;
+                  text-shadow: 0 1px 3px #000; font-size: 13px }
 </style>
 <body>
 <aside>
@@ -88,8 +103,8 @@
   </div>
   <div id="styleModeInspo">
     <label>Ảnh inspo — model bám style/chất liệu/palette của ảnh</label>
-    <input type="file" id="inspoFile" accept="image/*" multiple>
-    <div id="inspoList"></div>
+    <div class="drop" id="inspoDrop">bấm chọn · kéo thả · dán ảnh</div>
+    <div class="thumbs" id="inspoList"></div>
   </div>
 
   <h2>Branding <span class="muted">(chọn 1 trong 2)</span></h2>
@@ -107,8 +122,8 @@
   </div>
   <div id="brandModeImage">
     <label>Ảnh brand (logo / key visual — đính kèm mọi sheet)</label>
-    <input type="file" id="brandFile" accept="image/*" multiple>
-    <div id="brandList"></div>
+    <div class="drop" id="brandDrop">bấm chọn · kéo thả · dán ảnh</div>
+    <div class="thumbs" id="brandList"></div>
   </div>
 
   <label>Nền chroma key</label>
@@ -296,38 +311,61 @@ function collect() {
   style.bg = $("keySel").value;
 }
 
-/* ================= upload helpers (brand / inspo / char ref) ================= */
+/* ================= upload: dropzone bấm chọn / kéo thả / Cmd+V paste ================= */
 async function uploadFiles(files, prefix) {
   const out = [];
   for (const f of files) {
-    const path = `refs/${prefix}-${Date.now()}-${f.name.replace(/[^a-z0-9.]+/gi, "_")}`;
+    const path = `refs/${prefix}-${Date.now()}-${(f.name || "paste.png").replace(/[^a-z0-9.]+/gi, "_")}`;
     await api("/api/upload", { path, dataURL: await readFile(f) });
     out.push(path);
   }
   return out;
 }
-function chipList(el, arr, onDel) {
+
+let armedDrop = null;   // dropzone đang "vũ trang" nhận Cmd+V
+function makeDrop(el, onFiles) {
+  const input = document.createElement("input");
+  input.type = "file"; input.accept = "image/*"; input.multiple = true; input.hidden = true;
+  document.body.appendChild(input);
+  input.onchange = () => { if (input.files.length) onFiles([...input.files]); input.value = ""; };
+  const arm = () => {
+    document.querySelectorAll(".drop.armed").forEach(d => d.classList.remove("armed"));
+    el.classList.add("armed"); armedDrop = { el, onFiles };
+  };
+  el.onclick = e => { arm(); if (!e.detail || e.detail === 1) input.click(); };
+  el.ondragover = e => { e.preventDefault(); arm(); };
+  el.ondrop = e => {
+    e.preventDefault();
+    const fs = [...e.dataTransfer.files].filter(f => f.type.startsWith("image/"));
+    if (fs.length) onFiles(fs);
+  };
+}
+window.addEventListener("paste", e => {
+  const fs = [...(e.clipboardData?.files ?? [])].filter(f => f.type.startsWith("image/"));
+  if (fs.length && armedDrop) { e.preventDefault(); armedDrop.onFiles(fs); }
+});
+
+function thumbList(el, arr, onDel) {
   el.innerHTML = (arr ?? []).map((p, i) =>
-    `<span class="chip"><img src="${p}" style="width:18px;height:18px;object-fit:cover;border-radius:4px">
-     ${p.split("/").pop().slice(0, 22)} <b data-i="${i}">✕</b></span>`).join("");
-  el.querySelectorAll("b").forEach(b => b.onclick = () => onDel(+b.dataset.i));
+    `<div class="th" title="${p}"><img src="${p}"><b data-i="${i}">✕</b></div>`).join("");
+  el.querySelectorAll("b").forEach(b => b.onclick = ev => { ev.stopPropagation(); onDel(+b.dataset.i); });
 }
 function renderBrand() {
-  chipList($("brandList"), style.brand?.refs, i => { style.brand.refs.splice(i, 1); renderBrand(); });
+  thumbList($("brandList"), style.brand?.refs, i => { style.brand.refs.splice(i, 1); renderBrand(); });
 }
 function renderInspo() {
-  chipList($("inspoList"), style.inspo, i => { style.inspo.splice(i, 1); renderInspo(); });
+  thumbList($("inspoList"), style.inspo, i => { style.inspo.splice(i, 1); renderInspo(); });
 }
-$("brandFile").onchange = async e => {
-  const paths = await uploadFiles(e.target.files, `brand-${style.id}`);
+makeDrop($("brandDrop"), async fs => {
+  const paths = await uploadFiles(fs, `brand-${style.id}`);
   ((style.brand ??= {}).refs ??= []).push(...paths);
-  e.target.value = ""; renderBrand(); log(`✓ upload ${paths.length} ảnh brand`);
-};
-$("inspoFile").onchange = async e => {
-  const paths = await uploadFiles(e.target.files, `inspo-${style.id}`);
+  renderBrand(); log(`✓ nhận ${paths.length} ảnh brand`);
+});
+makeDrop($("inspoDrop"), async fs => {
+  const paths = await uploadFiles(fs, `inspo-${style.id}`);
   (style.inspo ??= []).push(...paths);
-  e.target.value = ""; renderInspo(); log(`✓ upload ${paths.length} ảnh inspo`);
-};
+  renderInspo(); log(`✓ nhận ${paths.length} ảnh inspo`);
+});
 
 /* ================= element picker ================= */
 function renderElems() {
@@ -416,14 +454,12 @@ function renderChars() {
     div.className = "char";
     div.innerHTML = `
       <div class="row">
-        <img class="ref" src="${c.ref ?? ""}" onerror="this.style.opacity=.15">
+        <div class="drop mini" data-k="refDrop" title="ảnh ref: bấm chọn / kéo thả / dán">
+          ${c.ref ? `<img src="${c.ref}?${Date.now()}">` : "📷"}
+        </div>
         <div style="flex:1">
           <input type="text" value="${c.vi}" data-k="vi" placeholder="Tên">
-          <div class="row" style="margin-top:6px">
-            <button class="ghost" data-k="refBtn">📷 Ảnh ref</button>
-            <span class="muted">${c.ref ?? "chưa có ảnh"}</span>
-          </div>
-          <input type="file" accept="image/*" data-k="ref" hidden>
+          <div class="muted" style="margin-top:4px">${c.ref ?? "chưa có ảnh ref"}</div>
         </div>
         <button class="ghost" data-k="del">🗑</button>
       </div>`;
@@ -432,14 +468,11 @@ function renderChars() {
       style.characters = style.characters.filter(x => x !== c);
       syncCharSheets(); renderChars(); renderSheets();
     };
-    div.querySelector('[data-k="refBtn"]').onclick = () =>
-      div.querySelector('[data-k="ref"]').click();
-    div.querySelector('[data-k="ref"]').onchange = async e => {
-      const f = e.target.files[0]; if (!f) return;
+    makeDrop(div.querySelector('[data-k="refDrop"]'), async fs => {
       c.ref = `refs/char-${c.id}.png`;
-      await api("/api/upload", { path: c.ref, dataURL: await readFile(f) });
-      renderChars(); renderSheets(); log(`✓ upload ref cho ${c.id}`);
-    };
+      await api("/api/upload", { path: c.ref, dataURL: await readFile(fs[0]) });
+      syncCharSheets(); renderChars(); renderSheets(); log(`✓ nhận ảnh ref cho ${c.id}`);
+    });
     box.appendChild(div);
   }
 }

@@ -46,6 +46,8 @@ for s in cfg["styles"]:
             "grid lines or plain shapes into the artwork.",
             "",
             f"BACKGROUND of the sheet: one flat solid chroma-key color: {s['bg']}.",
+            "This background rule OVERRIDES the art style and every reference image:",
+            "never use a style-colored, scene or gradient background for the sheet.",
             "No gradient, no texture, NO checkerboard or transparency pattern, no grid lines.",
             "This exact background color — and any hue CLOSE to it — must NEVER appear inside any element; pick element colors far from it on the color wheel.",
             "",
