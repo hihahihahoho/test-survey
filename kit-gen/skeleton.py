@@ -109,8 +109,10 @@ def main():
                 d.rounded_rectangle([ex, ey, ex + ew, ey + eh], radius=eh / 2, fill=FILL)
             else:
                 SHAPES[sk["shape"]](d, ex, ey, ex + ew, ey + eh)
-            # khung safe zone đè lên trên silhouette
-            d.rectangle([ex, ey, ex + ew, ey + eh], outline=SAFE, width=4)
+            # khung safe zone đè lên trên silhouette (element free: khung động
+            # theo art, không vẽ khung)
+            if not sk.get("free"):
+                d.rectangle([ex, ey, ex + ew, ey + eh], outline=SAFE, width=4)
         # kẻ lưới sau cùng cho nét mảnh đè lên trên
         for c in range(1, cols):
             d.line([c * cw, 0, c * cw, SH], fill=GRID, width=2)

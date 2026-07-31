@@ -589,7 +589,7 @@ function renderSheets() {
       const ex = c * cw + (cw - ew) / 2;
       const ey = r * ch + (sk.anchor === "bottom" ? ch - eh - ch * 0.04 : (ch - eh) / 2);
       cells += `<g transform="translate(${ex},${ey})">${KITSIL.silhouette(sk.shape, ew, eh, uid++, sk)}</g>`;
-      if (sk.shape !== "full")
+      if (sk.shape !== "full" && !sk.free)
         cells += `<rect x="${ex}" y="${ey}" width="${ew}" height="${eh}" fill="none" stroke="#464646" stroke-width="4" rx="6"/>`;
       cells += `<text x="${c * cw + 8}" y="${r * ch + 20}" font-size="15" fill="#777"
         stroke="#f2f2f2" stroke-width="6" paint-order="stroke">${comp.file}</text>`;

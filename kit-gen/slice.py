@@ -287,26 +287,36 @@ def normalize_pose_side(canvas, want, tag):
     return canvas
 
 
-def snap_to_safe(canvas, sk, safe):
-    """Nắn nội dung về KHUNG SAFE: model vẽ gần đúng chứ không đúng 100% —
-    dò LÕI element (vùng phủ alpha dày ≥50% hàng/cột dày nhất — tua rua, đèn
-    lồng, tia sáng mảnh không tính), rồi scale + dịch cho lõi khớp khung safe.
-    Hình học (nút, panel...) được scale; nhân vật/burst chỉ dịch (scale thân
-    nhân vật theo lõi dễ phá dáng). Nhờ vậy MỌI style ra thân cùng cỡ, cùng
-    toạ độ — trang trí đi theo tự nhiên."""
-    if sk["shape"] == "full":
-        return canvas
+def measure_core(canvas):
+    """Dò LÕI element: vùng phủ alpha dày ≥50% hàng/cột dày nhất — tua rua,
+    đèn lồng, tia sáng mảnh không tính. Trả (l, t, r, b) hoặc None nếu rỗng."""
     W, H = canvas.size
-    sx, sy, sw, sh = safe
     a = canvas.getchannel("A").load()
     row_cov = [sum(1 for x in range(W) if a[x, y] >= 128) for y in range(H)]
     col_cov = [sum(1 for y in range(H) if a[x, y] >= 128) for x in range(W)]
     if not any(row_cov):
-        return canvas
+        return None
     rmax, cmax = max(row_cov), max(col_cov)
     rows = [y for y, c in enumerate(row_cov) if c >= rmax * 0.5]
     cols = [x for x, c in enumerate(col_cov) if c >= cmax * 0.5]
-    cl, ct, cr, cb = min(cols), min(rows), max(cols) + 1, max(rows) + 1
+    return min(cols), min(rows), max(cols) + 1, max(rows) + 1
+
+
+def snap_to_safe(canvas, sk, safe):
+    """Nắn nội dung về KHUNG SAFE: model vẽ gần đúng chứ không đúng 100% —
+    dò LÕI element rồi scale + dịch cho lõi khớp khung safe. Hình học (nút,
+    panel...) được scale; nhân vật/burst chỉ dịch (scale thân nhân vật theo
+    lõi dễ phá dáng). Nhờ vậy MỌI style ra thân cùng cỡ, cùng toạ độ —
+    trang trí đi theo tự nhiên. (Element `free` KHÔNG qua đây: giữ nguyên
+    art, safe zone = lõi đo được — khung động theo ý art.)"""
+    if sk["shape"] == "full":
+        return canvas
+    W, H = canvas.size
+    sx, sy, sw, sh = safe
+    core = measure_core(canvas)
+    if core is None:
+        return canvas
+    cl, ct, cr, cb = core
 
     s = 1.0
     if sk["shape"] in ("pill", "bar", "rrect", "circle", "puzzle"):
@@ -575,7 +585,15 @@ for style in cfg["styles"]:
             if pre and sk["shape"] != "full" and (
                     pre[0] == 0 or pre[1] == 0 or pre[2] == CVW or pre[3] == CVH):
                 print(f"  ⚠ {sid}/{comp['file']}: content chạm mép canvas — raw tràn quá vành bleed, bị cụt")
-            canvas = snap_to_safe(canvas, sk, (sx, sy, sw, sh_))
+            if sk.get("free"):
+                # KHUNG ĐỘNG: không nắn art — safe zone = LÕI ĐO ĐƯỢC của chính
+                # art này (padding tự sinh khi cắt, đúng ý "để AI vẽ tự do")
+                core = measure_core(canvas)
+                safe_box = [core[0], core[1], core[2] - core[0], core[3] - core[1]] \
+                    if core else [sx, sy, sw, sh_]
+            else:
+                canvas = snap_to_safe(canvas, sk, (sx, sy, sw, sh_))
+                safe_box = [sx, sy, sw, sh_]
             canvas.save(os.path.join(out_dir, f"{comp['file']}.png"))
             abox = canvas.getchannel("A").getbbox()
             if abox is None:
@@ -588,16 +606,20 @@ for style in cfg["styles"]:
             os.makedirs(os.path.join(out_dir, "tight"), exist_ok=True)
             tight.save(os.path.join(out_dir, "tight", f"{comp['file']}.png"))
             # ruột lệch tâm khung safe nhiều = model vẽ sai chỗ → cảnh báo để đối
-            # chiếu raw/ (bbox gồm cả trang trí tràn nên lệch nhẹ là bình thường)
-            dev_x = (ox + pw / 2) - (sx + sw / 2)
-            dev_y = (oy + ph / 2) - (sy + sh_ / 2)
-            if abs(dev_x) > CW * 0.06 or abs(dev_y) > CH * 0.06:
-                print(f"  ⚠ {sid}/{comp['file']}: ruột lệch khung safe ({dev_x:+.0f},{dev_y:+.0f})px")
+            # chiếu raw/ (bbox gồm cả trang trí tràn nên lệch nhẹ là bình thường;
+            # element free có khung bám theo art nên không có khái niệm lệch)
+            if not sk.get("free"):
+                dev_x = (ox + pw / 2) - (sx + sw / 2)
+                dev_y = (oy + ph / 2) - (sy + sh_ / 2)
+                if abs(dev_x) > CW * 0.06 or abs(dev_y) > CH * 0.06:
+                    print(f"  ⚠ {sid}/{comp['file']}: ruột lệch khung safe ({dev_x:+.0f},{dev_y:+.0f})px")
             atlas_items.append((comp["file"], tight, (CVW, CVH), (ox, oy)))
             asset = {"file": comp["file"] + ".png", "sheet": sh["id"],
                      "canvas": [CVW, CVH], "cell": [CW, CH], "bleed": [BX, BY],
                      "content": [pw, ph],
-                     "content_at": [ox, oy], "safe": [sx, sy, sw, sh_]}
+                     "content_at": [ox, oy], "safe": safe_box}
+            if sk.get("free"):
+                asset["freeSafe"] = True     # safe = lõi đo từ art, không phải khung contract
             if sk.get("slice9"):
                 # inset 9-slice theo RUỘT (px trên tight/): pill góc tròn = h/2 nên
                 # inset ngang hơi quá bán kính; rrect theo bán kính min/6

@@ -52,7 +52,7 @@ function build(cfg) {
       cell.innerHTML =
         `<svg style="left:${ex}px;top:${ey}px" width="${ew}" height="${eh}">` +
         silhouette(sk.shape, ew, eh, uid++, sk) + `</svg>` +
-        (sk.shape === "full" || sk.shape === "empty" ? "" :
+        (sk.shape === "full" || sk.shape === "empty" || sk.free ? "" :
           `<div class="safe" style="left:${ex}px;top:${ey}px;width:${ew}px;height:${eh}px"></div>`);
       div.appendChild(cell);
     });
