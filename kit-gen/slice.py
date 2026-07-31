@@ -25,7 +25,7 @@ chát + alpha ramp + un-mix là cách chuẩn của greenscreen.
 Tên file GIỐNG HỆT nhau giữa các style — đó là hợp đồng nội dung.
 Chạy:  python3 slice.py
 """
-import json, math, os
+import json, math, os, sys
 from collections import deque
 from array import array
 from PIL import Image, ImageChops, ImageFilter, ImageOps
@@ -425,9 +425,15 @@ def pack_atlas(items, max_w=2048):
                    "meta": {"image": "atlas.png", "size": {"w": max_w, "h": atlas_h}, "scale": "1"}}
 
 
-manifest = {"styles": {}}
+# filter CLI: `python3 slice.py ipay tet` chỉ cắt các style đó (manifest merge, không mất style khác)
+ONLY = set(sys.argv[1:])
+mpath = os.path.join(HERE, "kits", "manifest.json")
+manifest = json.load(open(mpath)) if os.path.exists(mpath) else {"styles": {}}
+manifest.setdefault("styles", {})
 for style in cfg["styles"]:
     sid = style["id"]
+    if ONLY and sid not in ONLY:
+        continue
     threshold = style.get("threshold", DEFAULT_THRESHOLD)
     strict_threshold = style.get("grow_threshold", threshold + GROW_OFFSET)
     out_dir = os.path.join(HERE, "kits", sid)

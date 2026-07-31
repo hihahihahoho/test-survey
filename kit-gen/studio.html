@@ -265,9 +265,10 @@ function buildLibSheets() {
   return out;
 }
 
-/* sheet character ("pose" mặc định + pose-<char> mọi style) giữ nguyên, phần lib thay mới */
+/* sheet character (pose-<char> theo từng style) giữ nguyên, phần lib thay mới.
+   KHÔNG còn sheet "pose" generic: mascot CHỈ đến từ character có ảnh ref. */
 function rebuildSheets() {
-  const charSheets = cfg.sheets.filter(sh => sh.id === "pose" || sh.id.startsWith("pose-"));
+  const charSheets = cfg.sheets.filter(sh => sh.id.startsWith("pose-"));
   cfg.sheets = [...buildLibSheets(), ...charSheets];
 }
 
@@ -290,16 +291,16 @@ async function load() {
 
 function refreshKitSel() {
   const s = $("styleSel");
-  s.innerHTML = cfg.styles.map(x => `<option value="${x.id}">${x.id} — ${x.vi}</option>`).join("");
+  // CHỈ tên kit — không kèm mô tả style (dễ nhầm với mục Art style bên dưới)
+  s.innerHTML = cfg.styles.map(x => `<option value="${x.id}">📦 ${x.id}</option>`).join("");
   if (style) s.value = style.id;
 }
 $("addKit").onclick = () => {
-  const id = prompt("id kit mới (không dấu, vd: xuan26):");
+  const id = prompt("Tên kit mới (không dấu, vd: xuan26):");
   if (!id || !/^[a-z0-9-]+$/.test(id)) return;
   if (cfg.styles.some(x => x.id === id)) return log(`⚠ kit "${id}" đã tồn tại`);
-  const vi = prompt("tên hiển thị (tiếng Việt):") || id;
   if (style) collect();
-  cfg.styles.push({ id, vi, style: "", styleMode: "prompt",
+  cfg.styles.push({ id, vi: id, style: "", styleMode: "prompt",
     bg: "pure vivid green #00FF00",
     brand: { mode: "colors", primary: "#d42a1e", secondary: "#f5c64a" }, characters: [] });
   refreshKitSel(); pick(id); log(`✓ tạo kit "${id}" — nhớ 💾 Lưu contract`);
@@ -491,7 +492,8 @@ function syncCharSheets() {
           components: comps
         };
         padEmpty(comps, grid, sheet.id);
-        const i = cfg.sheets.findIndex(sh => sh.id === sheet.id);
+        // upsert theo (id, style): hai kit cùng có char id "soc" là hai sheet riêng
+        const i = cfg.sheets.findIndex(sh => sh.id === sheet.id && sh.styles?.includes(s.id));
         if (i >= 0) cfg.sheets[i] = sheet; else cfg.sheets.push(sheet);
       });
 }
@@ -678,8 +680,8 @@ async function resumeGen() {
 }
 
 $("sliceBtn").onclick = async () => {
-  log("✂️ đang slice…");
-  const r = await api("/api/slice");
+  log(`✂️ đang slice kit "${style.id}"…`);
+  const r = await api("/api/slice", { styles: [style.id] });
   log(r.out);
 };
 

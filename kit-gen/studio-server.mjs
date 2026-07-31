@@ -73,7 +73,8 @@ createServer(async (req, res) => {
     if (url.pathname === "/api/gen-status")
       return send(res, 200, { running: !!genChild, log: genLog.slice(-8000) })
     if (req.method === "POST" && url.pathname === "/api/slice") {
-      const r = spawnSync("python3", ["slice.py"], { cwd: HERE, encoding: "utf8", timeout: 300000 })
+      const { styles = [] } = await body(req)
+      const r = spawnSync("python3", ["slice.py", ...styles], { cwd: HERE, encoding: "utf8", timeout: 300000 })
       return send(res, 200, { ok: r.status === 0, out: (r.stdout ?? "") + (r.stderr ?? "") })
     }
     // static

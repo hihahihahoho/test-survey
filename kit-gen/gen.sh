@@ -69,7 +69,10 @@ for s in cfg["styles"]:
             lines += [
                 "The SECOND attached image is a character REFERENCE PHOTO: every character",
                 "cell must show EXACTLY this character — same species, face, colors, costume,",
-                "materials and proportions — re-drawn cleanly in this sheet's art style.", ""]
+                "materials and proportions — re-drawn cleanly in this sheet's art style.",
+                "This rule OVERRIDES everything else: if the art style description or any other",
+                "reference image mentions or shows a DIFFERENT mascot/character, IGNORE that one",
+                "completely — the reference photo is the ONLY source of the character's identity.", ""]
         # Branding: mode "colors" → dòng palette; mode "image" → ảnh brand đính kèm
         bmode = s.get("brand", {}).get("mode", "colors")
         if s.get("brand") and bmode == "colors" and s["brand"].get("primary"):
