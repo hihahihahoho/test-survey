@@ -101,7 +101,10 @@ def main():
             ew, eh = cw * sk["w"], ch * sk["h"]
             ex = x0 + (cw - ew) / 2
             ey = y0 + ch - eh - ch * 0.04 if sk.get("anchor") == "bottom" else y0 + (ch - eh) / 2
-            SHAPES[sk["shape"]](d, ex, ey, ex + ew, ey + eh)
+            if sk.get("plain") and sk["shape"] in ("pill", "bar"):
+                d.rounded_rectangle([ex, ey, ex + ew, ey + eh], radius=eh / 2, fill=FILL)
+            else:
+                SHAPES[sk["shape"]](d, ex, ey, ex + ew, ey + eh)
             # khung safe zone đè lên trên silhouette
             d.rectangle([ex, ey, ex + ew, ey + eh], outline=SAFE, width=4)
         # kẻ lưới sau cùng cho nét mảnh đè lên trên

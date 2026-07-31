@@ -22,11 +22,11 @@
 <div id="sheets"></div>
 <script>
 const FILL = "#9a9a9a", EDGE = "#606060";
-const S = (w, h) => `fill="${FILL}" stroke="${EDGE}" stroke-width="3"`;
 
-/* Silhouette vẽ trong hệ toạ độ khung safe (0,0 → w,h) */
-function silhouette(shape, w, h, uid) {
-  const c = S(w, h);
+/* Silhouette vẽ trong hệ toạ độ khung safe (0,0 → w,h).
+   plain = silhouette TRƠN không viền → gợi ý element phẳng không khung. */
+function silhouette(shape, w, h, uid, plain) {
+  const c = plain ? `fill="${FILL}"` : `fill="${FILL}" stroke="${EDGE}" stroke-width="3"`;
   if (shape === "pill" || shape === "bar")
     return `<rect x="0" y="0" width="${w}" height="${h}" rx="${h / 2}" ${c}/>`;
   if (shape === "rrect")
@@ -93,7 +93,7 @@ function build(cfg) {
       const ey = sk.anchor === "bottom" ? ch - eh - ch * 0.04 : (ch - eh) / 2;
       cell.innerHTML =
         `<svg style="left:${ex}px;top:${ey}px" width="${ew}" height="${eh}">` +
-        silhouette(sk.shape, ew, eh, uid++) + `</svg>` +
+        silhouette(sk.shape, ew, eh, uid++, sk.plain) + `</svg>` +
         (sk.shape === "full" ? "" :
           `<div class="safe" style="left:${ex}px;top:${ey}px;width:${ew}px;height:${eh}px"></div>`);
       div.appendChild(cell);
