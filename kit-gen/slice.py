@@ -138,7 +138,32 @@ def matte_chroma(sheet, key):
     solid = fill_mask_holes(alpha.point(lambda v: 255 if v > 128 else 0))
     interior = solid.filter(ImageFilter.MinFilter(5))
     semi = alpha.point(lambda v: 255 if v > 90 else 0)
-    out.putalpha(ImageChops.lighter(alpha, ImageChops.darker(interior, semi)))
+    hard = ImageChops.darker(interior, semi)          # ruột loang → ép đục
+    # MÉP MƯỢT: blur nhẹ alpha (0.7px) khử răng cưa AA-trên-nền-key;
+    # ruột đã ép đục riêng nên blur không ăn mỏng thân
+    soft = alpha.filter(ImageFilter.GaussianBlur(0.7))
+    out.putalpha(ImageChops.lighter(hard, soft))
+    # KHỬ ÁM MÀU KEY ở biên/bóng đổ (NGOÀI ruột đặc): bóng mềm trộn nền magenta
+    # ra tím bùn mà distance-guard giữ gần-đục → un-premultiply gỡ không hết.
+    # Despill phần dư: magenta dư = min(r,b)−g; green dư = g−max(r,b). Chỉ áp
+    # ngoài ruột nên thân tím/xanh lá hợp lệ (đã đục) không bị xỉn.
+    ap, ip, op = out.getchannel("A").load(), interior.load(), out.load()
+    for y in range(h):
+        for x in range(w):
+            if not ap[x, y]:
+                continue
+            r, g, b, a4 = op[x, y]
+            # trong ruột đặc chỉ khử ở pixel TỐI (bóng đổ); thân màu sáng giữ nguyên
+            if ip[x, y] and 0.3 * r + 0.59 * g + 0.11 * b >= 90:
+                continue
+            if is_green:
+                ex = g - max(r, b)
+                if ex > 0:
+                    op[x, y] = (r, g - round(ex * 0.7), b, a4)
+            else:
+                ex = min(r, b) - g
+                if ex > 0:
+                    op[x, y] = (r - round(ex * 0.7), g, b - round(ex * 0.7), a4)
     return out, strict
 
 
