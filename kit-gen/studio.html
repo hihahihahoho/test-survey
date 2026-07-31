@@ -698,7 +698,7 @@ $("figmaBtn").onclick = async () => {
   for (const a of assets) {
     const cell = document.createElement("div");
     cell.style.cssText = "text-align:center;font:11px sans-serif;color:#333";
-    cell.innerHTML = `<img src="kits/${style.id}/tight/${a.file}" style="max-width:150px;max-height:130px"><div>${a.file.replace(".png", "")}</div>`;
+    cell.innerHTML = `<img src="kits/${style.id}/tight/${a.file}?${Date.now()}" style="max-width:150px;max-height:130px"><div>${a.file.replace(".png", "")}</div>`;
     board.appendChild(cell);
   }
   document.body.appendChild(board);

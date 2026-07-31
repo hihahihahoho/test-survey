@@ -54,7 +54,8 @@ let M, KIT, AM, CHAR;
 
 /* asset theo tên (không .png); null nếu kit không có element đó → màn tự bỏ qua */
 const A = n => AM[n] ?? null;
-const src = n => `kits/${KIT}/tight/${n}.png`;
+const TICK = Date.now();          // cache-bust: slice lại là ảnh mới ăn ngay
+const src = n => `kits/${KIT}/tight/${n}.png?${TICK}`;
 
 /* khung THÂN (safe zone) của element trong toạ độ ảnh tight — contract slice đảm bảo
    thân nằm đúng khung này, trang trí (tia sáng, hoa...) được tràn ra ngoài */

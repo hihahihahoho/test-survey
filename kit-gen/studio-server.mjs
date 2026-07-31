@@ -80,7 +80,10 @@ createServer(async (req, res) => {
     // static
     const path = normalize(join(ROOT, decodeURIComponent(url.pathname)))
     if (path.startsWith(ROOT) && existsSync(path) && statSync(path).isFile()) {
-      res.writeHead(200, { "content-type": MIME[extname(path)] ?? "application/octet-stream" })
+      // no-cache: asset đổi sau mỗi lần slice/gen — browser phải revalidate,
+      // không thì Copy-Figma nhúng bản ảnh cũ trong cache (đã dính)
+      res.writeHead(200, { "content-type": MIME[extname(path)] ?? "application/octet-stream",
+                           "cache-control": "no-cache" })
       return createReadStream(path).pipe(res)
     }
     res.writeHead(404); res.end("404")
