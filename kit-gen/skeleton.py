@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """skeleton.py — vẽ ảnh KHUNG XƯƠNG layout cho từng sheet từ styles.json.
 
-Ảnh này đính kèm vào codex (gen.sh: codex exec -i) làm reference để model đặt
-element đúng ô, đúng cỡ, đúng silhouette — thay vì chỉ tả bằng lời. Chung cho
-mọi style (layout không đổi theo style) → skeleton/<sheet>.png.
+Mỗi ô có KHUNG SAFE ZONE (viền chữ nhật) + silhouette xám lấp đầy khung:
+  · THÂN element phải lấp đầy khung safe zone — khung là HỢP ĐỒNG TOẠ ĐỘ,
+    engine/Figma luôn gán vị trí theo khung này (slice.py crop nguyên ô nên
+    khung nằm cố định trong canvas ra).
+  · Trang trí (hoa, đèn lồng, tua rua...) được TRÀN ra ngoài khung thoải mái,
+    miễn nằm trong ô — vừa sáng tạo vừa trong khuôn khổ.
+
+Ảnh đính kèm vào codex (gen.sh: codex exec -i) làm reference. Chung cho mọi
+style (layout không đổi theo style) → skeleton/<sheet>.png.
 
 Không chữ, không số trong skeleton (tránh model bê text vào ảnh gen).
 Deterministic 100%: cùng styles.json → cùng ảnh.
@@ -19,6 +25,7 @@ BG = (242, 242, 242)
 GRID = (200, 200, 200)
 FILL = (154, 154, 154)
 EDGE = (96, 96, 96)
+SAFE = (70, 70, 70)      # viền khung safe zone
 
 
 def pill(d, x0, y0, x1, y1):
@@ -95,6 +102,8 @@ def main():
             ex = x0 + (cw - ew) / 2
             ey = y0 + ch - eh - ch * 0.04 if sk.get("anchor") == "bottom" else y0 + (ch - eh) / 2
             SHAPES[sk["shape"]](d, ex, ey, ex + ew, ey + eh)
+            # khung safe zone đè lên trên silhouette
+            d.rectangle([ex, ey, ex + ew, ey + eh], outline=SAFE, width=4)
         # kẻ lưới sau cùng cho nét mảnh đè lên trên
         for c in range(1, cols):
             d.line([c * cw, 0, c * cw, H], fill=GRID, width=2)

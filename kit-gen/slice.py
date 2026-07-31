@@ -11,8 +11,10 @@ nằm ở ô riêng nên thành file riêng.
       │     màu + un-mix màu nền khỏi viền (glow phai mượt, không răng cưa);
       │     nền nhạt/caro kiểu cũ → binary key + lấp lỗ oan (đường lùi)
       │  3. label khối pixel liền nhau trên mask nghiêm, gán khối về ô theo trọng tâm
-      │  4. mỗi element XUẤT TRÊN CANVAS CỐ ĐỊNH = kích thước ô của sheet, căn giữa
-      │     → cùng element ở mọi style ra file CÙNG KÍCH THƯỚC, layout không xô lệch
+      │  4. mỗi element XUẤT TRÊN CANVAS = NGUYÊN Ô của sheet, GIỮ NGUYÊN TOẠ ĐỘ
+      │     (không căn lại theo bbox) → khung SAFE ZONE của contract nằm cố định
+      │     trong canvas, manifest ghi "safe": engine/Figma luôn gán vị trí theo
+      │     khung; trang trí được tràn ngoài khung mà không xô layout
       ▼
   kits/<style>/01-btn-pill-red.png … 26-bg-blur.png   (RGBA, canvas đồng nhất)
 
@@ -223,19 +225,6 @@ def label_blobs(strict, W, H):
     return blobs
 
 
-def normalize_canvas(piece, cw, ch):
-    """Đặt element lên canvas cố định (đúng kích thước ô), căn giữa.
-    Element tràn ô thì thu vừa, giữ tỷ lệ. Trả về (canvas, (w, h) ruột SAU scale)
-    — con số này đi vào manifest và atlas Phaser (spriteSourceSize)."""
-    if piece.width > cw or piece.height > ch:
-        k = min(cw / piece.width, ch / piece.height)
-        piece = piece.resize((max(1, round(piece.width * k)),
-                              max(1, round(piece.height * k))), Image.LANCZOS)
-    canvas = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
-    canvas.paste(piece, ((cw - piece.width) // 2, (ch - piece.height) // 2), piece)
-    return canvas, (piece.width, piece.height)
-
-
 def pack_atlas(items, max_w=2048):
     """Shelf-pack các mảnh RUỘT (đã crop chặt) thành 1 atlas + json Phaser.
 
@@ -348,20 +337,38 @@ for style in cfg["styles"]:
             if box is None:
                 entry["empty_cells"].append(comp["file"])
                 continue
+            row, col = divmod(idx, COLS)
+            cx0, cy0 = round(col * cell_w), round(row * cell_h)
+            # Canvas = NGUYÊN Ô, KHÔNG căn lại theo bbox nội dung: khung SAFE ZONE
+            # của contract (skel trong styles.json) nằm cố định trong ô, nên toạ độ
+            # ghép game/Figma luôn gán theo khung — trang trí tràn ngoài khung được
+            # giữ nguyên chỗ, model vẽ bay bổng cỡ nào cũng không xô layout.
+            # Chỉ dán vùng bbox (nới HALO) của blob THUỘC ô → junk hàng xóm không lọt.
             l, t, r, b = box
-            piece = keyed.crop((max(0, l - HALO - PAD), max(0, t - HALO - PAD),
-                                min(W, r + HALO + PAD), min(H, b + HALO + PAD)))
-            canvas, (pw, ph) = normalize_canvas(piece, CW, CH)
+            L = max(cx0, l - HALO - PAD); T = max(cy0, t - HALO - PAD)
+            R = min(cx0 + CW, r + HALO + PAD); B = min(cy0 + CH, b + HALO + PAD)
+            canvas = Image.new("RGBA", (CW, CH), (0, 0, 0, 0))
+            region = keyed.crop((L, T, R, B))
+            canvas.paste(region, (L - cx0, T - cy0), region)
             canvas.save(os.path.join(out_dir, f"{comp['file']}.png"))
-            ox, oy = (CW - pw) // 2, (CH - ph) // 2
-            tight = canvas.crop((ox, oy, ox + pw, oy + ph))
+            abox = canvas.getchannel("A").getbbox()
+            if abox is None:
+                entry["empty_cells"].append(comp["file"])
+                continue
+            ox, oy = abox[0], abox[1]
+            pw, ph = abox[2] - abox[0], abox[3] - abox[1]
+            tight = canvas.crop(abox)
             # tight/ = ruột crop chặt, không đệm canvas — cho Figma/designer lấy lẻ
-            # (file canvas ở trên vẫn là hợp đồng layout cho engine)
             os.makedirs(os.path.join(out_dir, "tight"), exist_ok=True)
             tight.save(os.path.join(out_dir, "tight", f"{comp['file']}.png"))
+            sk = comp["skel"]
+            sw, sh_ = round(CW * sk["w"]), round(CH * sk["h"])
+            sx = (CW - sw) // 2
+            sy = CH - sh_ - round(CH * 0.04) if sk.get("anchor") == "bottom" else (CH - sh_) // 2
             atlas_items.append((comp["file"], tight, (CW, CH), (ox, oy)))
             entry["assets"].append({"file": comp["file"] + ".png", "sheet": sh["id"],
-                                    "canvas": [CW, CH], "content": [pw, ph]})
+                                    "canvas": [CW, CH], "content": [pw, ph],
+                                    "content_at": [ox, oy], "safe": [sx, sy, sw, sh_]})
             n_ok += 1
 
         entry["sheets"][sh["id"]] = {"mode": mode, "bg_detected": bg, "canvas": [CW, CH],
