@@ -22,8 +22,12 @@ for s in cfg["styles"]:
         cols, rows = sh["grid"]["cols"], sh["grid"]["rows"]
         comps = sh["components"]
         assert len(comps) == cols * rows, f'{sh["id"]}: {len(comps)} component ≠ lưới {cols}x{rows}'
+        portrait = sh.get("orient") == "portrait"
         lines = [
-            "A game UI kit sprite sheet for a mobile mini-game marketing campaign.",
+            "Canvas orientation: " + ("PORTRAIT 1024x1536." if portrait else "LANDSCAPE 1536x1024."),
+            "A game UI kit sprite sheet for a mobile mini-game marketing campaign."
+            if len(comps) > 1 else
+            "A single full-bleed background scene for a mobile mini-game.",
             f"Exactly {len(comps)} elements arranged in a STRICT grid of {cols} columns and {rows} rows, evenly spaced.",
             f"Each cell is a {sh.get('cell_hint', 'cell')}. Each element sits fully inside its own invisible cell,",
             "centered, keeping at least 40px of empty background padding on every side of the element;",
@@ -89,7 +93,8 @@ for s in cfg["styles"]:
             ("Art style: faithfully match the attached inspiration reference image(s) — "
              "same rendering technique, materials, palette and level of detail."
              if use_inspo else f"Art style: {s['style']}."),
-            f"All {len(comps)} elements share the exact same consistent style and belong to one coherent game. Game-ready UI asset quality, landscape 3:2."
+            f"All {len(comps)} elements share the exact same consistent style and belong to one coherent game. "
+            "Game-ready UI asset quality, " + ("portrait 2:3." if portrait else "landscape 3:2.")
         ]
         open(f"prompts/{s['id']}-{sh['id']}.txt", "w").write("\n".join(lines))
         # file đính kèm cho job: skeleton trước, ref nhân vật rồi inspo của style
@@ -107,7 +112,7 @@ PY
 run_one() {
   local job="$1"
   local task
-  task="Generate ONE image with your image generation tool, landscape (1536x1024 if supported), using EXACTLY the prompt between the IMAGE PROMPT markers below. The attached images are, in order: the layout skeleton, then any character reference photo / inspiration images the prompt mentions. Then save/copy the generated PNG to exactly this path: ${ROOT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
+  task="Generate ONE image with your image generation tool, at the CANVAS ORIENTATION stated on the first line of the prompt (1536x1024 landscape or 1024x1536 portrait, if supported), using EXACTLY the prompt between the IMAGE PROMPT markers below. The attached images are, in order: the layout skeleton, then any character reference photo / inspiration images the prompt mentions. Then save/copy the generated PNG to exactly this path: ${ROOT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
 
 --- IMAGE PROMPT START ---
 $(cat "prompts/${job}.txt")

@@ -191,43 +191,6 @@
       "cell": "landscape"
     },
     {
-      "file": "17-mascot-idle",
-      "vi": "Mascot đứng",
-      "spec": "full-body cute 3D mascot character standing and waving, friendly smile, big rounded head, facing viewer",
-      "skel": {
-        "shape": "figure",
-        "w": 0.55,
-        "h": 0.8
-      },
-      "cell": "portrait",
-      "group": "mascot"
-    },
-    {
-      "file": "18-mascot-peek",
-      "vi": "Mascot ngó",
-      "spec": "the SAME mascot character peeking in from the lower corner, only upper body and one arm visible, leaning inward, looking up",
-      "skel": {
-        "shape": "figure",
-        "w": 0.6,
-        "h": 0.55,
-        "anchor": "bottom"
-      },
-      "cell": "portrait",
-      "group": "mascot"
-    },
-    {
-      "file": "19-mascot-celebrate",
-      "vi": "Mascot ăn mừng",
-      "spec": "the SAME mascot character celebrating with both arms raised, happy expression, small sparkles around",
-      "skel": {
-        "shape": "figure",
-        "w": 0.6,
-        "h": 0.8
-      },
-      "cell": "portrait",
-      "group": "mascot"
-    },
-    {
       "file": "24-popup-panel-tall",
       "vi": "Popup dọc (L)",
       "spec": "tall rounded rectangle modal panel, portrait orientation, decorative double border, soft inner vignette, empty interior",
@@ -274,153 +237,6 @@
         "slice9": true
       },
       "cell": "portrait"
-    },
-    {
-      "file": "23-floating-entry-badge",
-      "vi": "Nút nổi vào game",
-      "spec": "circular glossy game-entry badge with the SAME small mascot character popping out of the top, gradient disc, glowing rim, soft shadow",
-      "skel": {
-        "shape": "circle",
-        "w": 0.62,
-        "h": 0.47
-      },
-      "cell": "portrait"
-    },
-    {
-      "file": "27-pose-idle",
-      "vi": "Pose đứng",
-      "spec": "the mascot standing straight facing the viewer, arms relaxed at the sides, neutral friendly smile, full body",
-      "skel": {
-        "shape": "pose",
-        "pose": "idle",
-        "w": 0.55,
-        "h": 0.82
-      },
-      "cell": "portrait",
-      "group": "mascot-pose",
-      "sheetHint": "pose"
-    },
-    {
-      "file": "28-pose-wave",
-      "vi": "Pose vẫy chào",
-      "spec": "the SAME mascot waving hello with one arm raised high, warm welcoming smile, full body",
-      "skel": {
-        "shape": "pose",
-        "pose": "wave",
-        "w": 0.58,
-        "h": 0.82
-      },
-      "cell": "portrait",
-      "group": "mascot-pose",
-      "sheetHint": "pose"
-    },
-    {
-      "file": "29-pose-point",
-      "vi": "Pose chỉ tay",
-      "spec": "the SAME mascot pointing forward and slightly sideways with one extended arm, confident look, full body",
-      "skel": {
-        "shape": "pose",
-        "pose": "point",
-        "w": 0.62,
-        "h": 0.82
-      },
-      "cell": "portrait",
-      "group": "mascot-pose",
-      "sheetHint": "pose"
-    },
-    {
-      "file": "30-pose-hold-gift",
-      "vi": "Pose ôm quà",
-      "spec": "the SAME mascot hugging a wrapped gift box with both arms in front of its chest, delighted expression, full body",
-      "skel": {
-        "shape": "pose",
-        "pose": "hold-gift",
-        "w": 0.58,
-        "h": 0.82
-      },
-      "cell": "portrait",
-      "group": "mascot-pose",
-      "sheetHint": "pose"
-    },
-    {
-      "file": "31-pose-cheer",
-      "vi": "Pose ăn mừng",
-      "spec": "the SAME mascot jumping in celebration with both arms thrown up, eyes closed in joy, tiny sparkles around, full body",
-      "skel": {
-        "shape": "pose",
-        "pose": "cheer",
-        "w": 0.62,
-        "h": 0.85
-      },
-      "cell": "portrait",
-      "group": "mascot-pose",
-      "sheetHint": "pose"
-    },
-    {
-      "file": "32-pose-sad",
-      "vi": "Pose buồn",
-      "spec": "the SAME mascot with drooping shoulders and head tilted down, sad puppy eyes, one tear drop, full body",
-      "skel": {
-        "shape": "pose",
-        "pose": "sad",
-        "w": 0.55,
-        "h": 0.78
-      },
-      "cell": "portrait",
-      "group": "mascot-pose",
-      "sheetHint": "pose"
-    },
-    {
-      "file": "33-pose-run",
-      "vi": "Pose chạy",
-      "spec": "the SAME mascot running toward one side with a dynamic lean, one leg lifted, determined face, small motion lines, full body",
-      "skel": {
-        "shape": "pose",
-        "pose": "run",
-        "w": 0.68,
-        "h": 0.8
-      },
-      "cell": "portrait",
-      "group": "mascot-pose",
-      "sheetHint": "pose"
-    },
-    {
-      "file": "34-pose-think",
-      "vi": "Pose suy nghĩ",
-      "spec": "the SAME mascot in a puzzled thinking pose, one hand on its chin, eyes looking up sideways, full body",
-      "skel": {
-        "shape": "pose",
-        "pose": "think",
-        "w": 0.55,
-        "h": 0.8
-      },
-      "cell": "portrait",
-      "group": "mascot-pose",
-      "sheetHint": "pose"
-    },
-    {
-      "file": "25-bg-main",
-      "vi": "Nền chính",
-      "spec": "bright cheerful vertical game background scene with sky and stylized ground, scattered gift boxes, empty upper-middle area for a title, rich detail, NO characters, NO mascots, NO creatures of any kind, fills its entire cell edge to edge",
-      "skel": {
-        "shape": "full",
-        "w": 1.0,
-        "h": 1.0
-      },
-      "cell": "full",
-      "group": "bg"
-    },
-    {
-      "file": "26-bg-blur",
-      "vi": "Nền mờ",
-      "spec": "the SAME background scene but heavily depth-of-field blurred and darkened, low contrast, cooler tone, no readable detail, NO characters or creatures, fills its entire cell edge to edge",
-      "skel": {
-        "shape": "full",
-        "w": 1.0,
-        "h": 1.0
-      },
-      "cell": "full",
-      "group": "bg"
     },
     {
       "file": "35-input-field",
@@ -626,32 +442,32 @@
       "spec": "a wrapped gift box with the SAME design as this kit's gift box but OPEN: lid tilted off, golden light rays and sparkles rising from inside",
       "skel": {
         "shape": "rrect",
-        "w": 0.34,
-        "h": 0.72
+        "w": 0.6,
+        "h": 0.74
       },
       "cell": "portrait",
       "group": "giftstate"
     },
     {
-      "file": "52-envelope-closed",
-      "vi": "Lì xì đóng",
-      "spec": "traditional red lucky-money envelope standing upright, sealed, ornate gold trim emblem, blank face",
+      "file": "52-envelope-body",
+      "vi": "Lì xì: thân",
+      "spec": "the FRONT BODY of a lucky-money envelope WITHOUT its top flap: upright rectangle with a straight top edge, ornate trim and emblem, blank face — the separate flap piece is another element",
       "skel": {
         "shape": "rrect",
-        "w": 0.3,
-        "h": 0.7
+        "w": 0.55,
+        "h": 0.62
       },
       "cell": "portrait",
       "group": "envelope"
     },
     {
-      "file": "53-envelope-open",
-      "vi": "Lì xì mở",
-      "spec": "the SAME lucky-money envelope OPEN at the top with a gold coin peeking out and small sparkles",
+      "file": "53-envelope-flap",
+      "vi": "Lì xì: nắp",
+      "spec": "ONLY the detached triangular TOP FLAP of the SAME envelope, pointing downward, matching design and trim exactly, nothing else",
       "skel": {
         "shape": "rrect",
-        "w": 0.3,
-        "h": 0.7
+        "w": 0.55,
+        "h": 0.3
       },
       "cell": "portrait",
       "group": "envelope"
@@ -662,10 +478,34 @@
       "spec": "golden champion trophy cup with two handles on a small base, glossy, blank plaque",
       "skel": {
         "shape": "rrect",
-        "w": 0.32,
-        "h": 0.75
+        "w": 0.6,
+        "h": 0.74
       },
       "cell": "portrait"
+    },
+    {
+      "file": "25-bg-home",
+      "vi": "Nền màn HOME",
+      "spec": "vertical mobile game HOME screen background: welcoming hero scene with a stage or podium area in the lower half for game objects, decorative side framing, clear empty upper-middle area reserved for a title, rich but not noisy detail, NO characters, NO creatures, NO UI widgets, fills the whole image edge to edge",
+      "skel": {
+        "shape": "full",
+        "w": 1.0,
+        "h": 1.0
+      },
+      "cell": "full",
+      "sheetHint": "bg-home"
+    },
+    {
+      "file": "26-bg-play",
+      "vi": "Nền màn CHƠI",
+      "spec": "vertical mobile game GAMEPLAY background of the SAME world: calmer and more open than the home scene, soft depth, large uncluttered middle area where gameplay objects will sit, matching palette and lighting, NO characters, NO creatures, NO UI widgets, fills the whole image edge to edge",
+      "skel": {
+        "shape": "full",
+        "w": 1.0,
+        "h": 1.0
+      },
+      "cell": "full",
+      "sheetHint": "bg-play"
     }
   ]
 }

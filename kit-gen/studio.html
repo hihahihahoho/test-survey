@@ -172,7 +172,8 @@ async function api(path, payload) {
 const CLASS_CFG = {
   landscape: { base: "main", grids: { 4: [2, 2], 8: [4, 2], 12: [4, 3], 16: [4, 4] }, max: 16, hint: "landscape 3:2 cell" },
   portrait:  { base: "tall", grids: { 4: [2, 2], 8: [4, 2] }, max: 8, hint: "portrait 3:4 cell" },
-  full:      { base: "bg",   grids: { 2: [2, 1] }, max: 2, hint: "portrait 3:4 cell, full-bleed scene" },
+  // bg: MỖI SCENE MỘT ẢNH RIÊNG khổ dọc full-res (blur/dim là chuyện runtime overlay)
+  full:      { base: "bg",   grids: { 1: [1, 1] }, max: 1, hint: "full-bleed portrait scene", orient: "portrait" },
 };
 
 function buildLibSheets() {
@@ -201,6 +202,7 @@ function buildLibSheets() {
       const grid = cc.grids[its.length];
       out.push({
         id: hint ?? cc.base + (nBase > 1 ? nBase : ""),
+        ...(cc.orient ? { orient: cc.orient } : {}),
         grid: grid ? { cols: grid[0], rows: grid[1] } : { cols: 4, rows: Math.ceil(its.length / 4) },
         ...(grid ? {} : { invalid: true }),
         cell_hint: cc.hint,
@@ -211,9 +213,9 @@ function buildLibSheets() {
   return out;
 }
 
-/* pose-<char> sheets của MỌI style giữ nguyên, phần lib thay mới */
+/* sheet character ("pose" mặc định + pose-<char> mọi style) giữ nguyên, phần lib thay mới */
 function rebuildSheets() {
-  const charSheets = cfg.sheets.filter(sh => sh.id.startsWith("pose-"));
+  const charSheets = cfg.sheets.filter(sh => sh.id === "pose" || sh.id.startsWith("pose-"));
   cfg.sheets = [...buildLibSheets(), ...charSheets];
 }
 
@@ -333,7 +335,7 @@ function renderElems() {
     const items = LIB.elements.filter(e => e.cell === cls);
     const h = document.createElement("div");
     h.className = "muted"; h.style.margin = "8px 0 4px";
-    h.textContent = { landscape: "Ô ngang (nút, panel, progress…)", portrait: "Ô dọc (mascot, túi, popup L…)", full: "Nền full-bleed" }[cls];
+    h.textContent = { landscape: "Ô ngang (nút, panel, progress…)", portrait: "Ô dọc (túi, popup L, lì xì…)", full: "Nền theo scene (mỗi scene 1 ảnh dọc riêng)" }[cls];
     box.appendChild(h);
     const grid = document.createElement("div");
     grid.className = "elems";
@@ -445,7 +447,8 @@ function renderSheets() {
     if (sh.styles && !sh.styles.includes(style.id)) continue;
     const job = `${style.id}-${sh.id}`;
     const { cols, rows } = sh.grid;
-    const W = 1536, H = 1024, cw = W / cols, ch = H / rows;
+    const [W, H] = sh.orient === "portrait" ? [1024, 1536] : [1536, 1024];
+    const cw = W / cols, ch = H / rows;
     const head = document.createElement("div");
     head.className = "sheet-head";
     head.innerHTML = `<input type="checkbox" ${genPick.has(job) ? "checked" : ""} ${sh.invalid ? "disabled" : ""} title="gen sheet này">

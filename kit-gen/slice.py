@@ -112,6 +112,12 @@ def matte_chroma(sheet, key):
                 strict[row + x] = 1
                 continue
             a = 1 - spill / sref
+            # Phao theo KHOẢNG CÁCH MÀU: màu thật của element nếu bị pha với key
+            # luôn bị kéo VỀ GẦN key — pixel xa key mà vẫn dính spill (tím than
+            # trên nền magenta) là màu ruột element, không phải nền trộn. Lấy
+            # max hai ước lượng: chỉ cứu thêm, không cắt bớt (glow vẫn nhờ Vlahos).
+            d2 = (r - kr) ** 2 + (g - kg) ** 2 + (b - kb) ** 2
+            a = max(a, min(1.0, d2 ** 0.5 / 200))
             if a <= 0.04:
                 continue                          # nền / gần nền → trong suốt
             # un-premultiply: gỡ phần nền key đã trộn vào, trả màu thật

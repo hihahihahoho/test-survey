@@ -92,15 +92,19 @@ function frameShell(title) {
   document.getElementById("board").appendChild(stack);
   return f;
 }
-function bg(f, name) {
+function bg(f, name, dim) {
   f.appendChild(el(`<img class="bg" src="kits/${STYLE}/${name}.png" alt="${name}">`));
+  // dim = LỚP OVERLAY RUNTIME (đúng tư duy asset: không có "nền mờ" riêng —
+  // scene bg + overlay tối/blur do code đè lên khi mở modal)
+  if (dim) f.appendChild(el(`<div style="position:absolute;inset:0;
+    background:rgba(4,10,26,.55);backdrop-filter:blur(4px)"></div>`));
 }
 
 function screenLoading() {
   const f = frameShell("MH Loading");
-  bg(f, "25-bg-main");
+  bg(f, "25-bg-home");
   txt(f, "MỞ TÚI\nKHUI QUÀ", 195, 300, 44, "letter-spacing:1px");
-  img(f, "17-mascot-idle", 195, 460, { h: 170 });
+  img(f, "27-pose-idle", 195, 460, { h: 170 });
   img(f, "07-progress-track", 195, 640, { w: 280 });
   const fill = META["08-progress-fill"];
   // fill 70%: bọc trong khung clip
@@ -125,7 +129,7 @@ function homePacks(f, y1 = 385, y2 = 480) {
 
 function screenHome() {
   const f = frameShell("MH Home");
-  bg(f, "25-bg-main");
+  bg(f, "25-bg-home");
   img(f, "04-btn-circle", 36, 66, { w: 44 });
   img(f, "04-btn-circle", 354, 66, { w: 44 });
   txt(f, "‹", 36, 64, 22); txt(f, "♪", 354, 64, 17);
@@ -139,7 +143,7 @@ function screenHome() {
     if (i) txt(f, ":", (x + xs[i - 1]) / 2, 180, 20);
   });
   homePacks(f);
-  img(f, "17-mascot-idle", 56, 700, { h: 185 });
+  img(f, "27-pose-idle", 56, 700, { h: 185 });
   img(f, "01-btn-pill-red", 195, 626, { w: 250 });
   txt(f, "MỞ TÚI NGAY", 195, 626, 25);
   txt(f, "Còn 3 lượt hôm nay", 195, 676, 13);
@@ -155,15 +159,15 @@ function screenHome() {
 
 function screenChoose() {
   const f = frameShell("MH Gameplay — chọn túi");
-  bg(f, "26-bg-blur");
+  bg(f, "26-bg-play");
   txt(f, "Chọn một túi may mắn", 195, 150, 20);
   homePacks(f);
-  img(f, "18-mascot-peek", 338, 690, { h: 195 });
+  img(f, "34-pose-think", 338, 690, { h: 195 });
 }
 
 function screenResult() {
   const f = frameShell("Popup kết quả");
-  bg(f, "26-bg-blur");
+  bg(f, "26-bg-play", true);
   f.appendChild(el(`<div class="dim"></div>`));
   const cy = 408;
   const panel = img(f, "24-popup-panel-tall", 195, cy, { w: 320 });
@@ -180,7 +184,7 @@ function screenResult() {
 
 function screenTask() {
   const f = frameShell("MH Nhiệm vụ");
-  bg(f, "26-bg-blur");
+  bg(f, "26-bg-play", true);
   img(f, "04-btn-circle", 36, 66, { w: 44 }); txt(f, "‹", 36, 64, 22);
   txt(f, "Nhiệm vụ", 195, 66, 17);
   const rows = [["Đăng nhập mỗi ngày", "1/1 — hoàn thành", 1], ["Chuyển tiền 3 lần", "2/3 — sắp xong", 0.66],
@@ -204,7 +208,7 @@ function screenTask() {
   txt(f, "Sưu tập mảnh ghép — 2/4", 195, y + 22, 13.5, "color:#1c2333;text-shadow:none");
   ["12-piece-active", "12-piece-active", "13-piece-locked", "13-piece-locked"].forEach((n, i) =>
     img(f, n, 90 + i * 70, y + 66, { w: 58 }));
-  img(f, "23-floating-entry-badge", 338, 760, { w: 76 });
+  img(f, "04-btn-circle", 338, 760, { w: 76 });
 }
 
 /* ================= boot ================= */

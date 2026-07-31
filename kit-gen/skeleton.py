@@ -89,9 +89,10 @@ def main():
     os.makedirs(outdir, exist_ok=True)
     for sh in cfg["sheets"]:
         cols, rows = sh["grid"]["cols"], sh["grid"]["rows"]
-        img = Image.new("RGB", (W, H), BG)
+        SW, SH = (1024, 1536) if sh.get("orient") == "portrait" else (W, H)
+        img = Image.new("RGB", (SW, SH), BG)
         d = ImageDraw.Draw(img)
-        cw, ch = W / cols, H / rows
+        cw, ch = SW / cols, SH / rows
         for i, comp in enumerate(sh["components"]):
             r, c = divmod(i, cols)
             x0, y0 = c * cw, r * ch
@@ -110,9 +111,9 @@ def main():
             d.rectangle([ex, ey, ex + ew, ey + eh], outline=SAFE, width=4)
         # kẻ lưới sau cùng cho nét mảnh đè lên trên
         for c in range(1, cols):
-            d.line([c * cw, 0, c * cw, H], fill=GRID, width=2)
+            d.line([c * cw, 0, c * cw, SH], fill=GRID, width=2)
         for r in range(1, rows):
-            d.line([0, r * ch, W, r * ch], fill=GRID, width=2)
+            d.line([0, r * ch, SW, r * ch], fill=GRID, width=2)
         path = os.path.join(outdir, f"{sh['id']}.png")
         img.save(path)
         print("skeleton →", path)

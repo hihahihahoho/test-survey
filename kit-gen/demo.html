@@ -187,7 +187,7 @@ const PACK_TINTS = [0xffffff, 0x9fd0ff, 0xffc2d8, 0xffe29a, 0xb9f3c9, 0xd9c6ff];
 class Home extends Phaser.Scene {
   constructor() { super("Home"); }
   create() {
-    coverBG(this, "25-bg-main");
+    coverBG(this, "25-bg-home");
 
     label(this, CX, 92, "MỞ TÚI KHUI QUÀ", 34, { stroke: "#0a1a4a", strokeThickness: 8 });
     label(this, CX, 128, "Cùng iPAY săn quà mỗi ngày", 13);
@@ -206,7 +206,7 @@ class Home extends Phaser.Scene {
       this.packs.push(p);
     }
 
-    fitH(sprite(this, 56, 700, "17-mascot-idle"), 190);
+    fitH(sprite(this, 56, 700, "27-pose-idle"), 190);
 
     pillButton(this, CX, 626, "01-btn-pill-red", 250, "MỞ TÚI NGAY", 25, () => this.tryPlay());
     this.turnsTxt = label(this, CX, 676, "", 13);
@@ -260,7 +260,7 @@ class Home extends Phaser.Scene {
     const panel = fitW(this.add.image(0, 0, "kit", "09-popup-panel-short"), 320);
     const ribbon = fitW(this.add.image(0, -panel.displayHeight / 2, "kit", "10-popup-ribbon"), 230);
     // pose buồn từ sheet pose (kit mới); kit cũ chưa có thì rơi về mascot thường
-    const sadFrame = this.textures.get("kit").has("32-pose-sad") ? "32-pose-sad" : "19-mascot-celebrate";
+    const sadFrame = this.textures.get("kit").has("32-pose-sad") ? "32-pose-sad" : "31-pose-cheer";
     const mc = fitH(this.add.image(0, -26, "kit", sadFrame), 130);
     c.add([panel, ribbon, label(this, 0, -panel.displayHeight / 2, "HẾT LƯỢT", 17), mc,
            label(this, 0, 58, "Bạn đã dùng hết lượt hôm nay.\nLàm nhiệm vụ để nhận thêm lượt nhé!", 12.5)]);
@@ -283,7 +283,7 @@ const PRIZES = [
 class Play extends Phaser.Scene {
   constructor() { super("Play"); }
   create() {
-    coverBG(this, "26-bg-blur");
+    coverBG(this, "26-bg-play");
     label(this, CX, 150, "Chọn một túi may mắn", 20, { stroke: "#0a1a4a", strokeThickness: 6 });
 
     fitW(sprite(this, CX, 430, "22-board-panel"), 330);
@@ -296,7 +296,7 @@ class Play extends Phaser.Scene {
       p.on("pointerup", () => this.choose(i));
       this.packs.push(p);
     }
-    this.mascot = fitH(sprite(this, W - 52, H - 160, "18-mascot-peek"), 200);
+    this.mascot = fitH(sprite(this, W - 52, H - 160, "34-pose-think"), 200);
   }
 
   choose(i) {
@@ -423,7 +423,7 @@ function openDom(tab) {
         <button class="primary" onclick="closeDom()">XÁC NHẬN</button></div>`;
   } else {
     html = [["Hôm nay 09:41", "Trúng voucher ưu đãi", "14-reward-voucher"],
-            ["Hôm qua 20:15", "Chúc bạn may mắn", "19-mascot-celebrate"],
+            ["Hôm qua 20:15", "Chúc bạn may mắn", "31-pose-cheer"],
             ["Hôm qua 08:02", "Trúng phần quà", "15-reward-giftbox"]].map(([t, d, ic]) => `
       <div class="card"><img src="${timg(ic)}">
         <div class="info"><b>${d}</b><small>${t}</small></div></div>`).join("");

@@ -31,12 +31,15 @@ function build(cfg) {
   let uid = 0;
   for (const sh of cfg.sheets) {
     const { cols, rows } = sh.grid;
-    const W = 1536, H = 1024, cw = W / cols, ch = H / rows;
+    const [W, H] = sh.orient === "portrait" ? [1024, 1536] : [1536, 1024];
+    const cw = W / cols, ch = H / rows;
     const title = document.createElement("h4");
     title.textContent = `${sh.id} — ${cols}×${rows}`;
     root.appendChild(title);
     const div = document.createElement("div");
     div.className = "sheet";
+    div.style.width = W + "px";
+    div.style.height = H + "px";
     div.id = "sheet-" + sh.id;
     sh.components.forEach((comp, i) => {
       const r = (i / cols) | 0, c = i % cols;
