@@ -89,7 +89,7 @@ for s in cfg["styles"]:
             att.append(sh["ref"])
         att += s.get("brand", {}).get("refs", [])
         att += s.get("inspo", [])
-        open(f"prompts/{s['id']}-{sh['id']}.att", "w").write("\n".join(att))
+        open(f"prompts/{s['id']}-{sh['id']}.att", "w").write("\n".join(att) + "\n")
         print("prompt →", f"prompts/{s['id']}-{sh['id']}.txt", f"(+{len(att)} ảnh kèm)")
 PY
 
@@ -103,15 +103,16 @@ $(cat "prompts/${job}.txt")
 --- IMAGE PROMPT END ---"
 
   local att=()
-  while IFS= read -r p; do
+  while IFS= read -r p || [[ -n "$p" ]]; do
     [[ -n "$p" && -f "${ROOT}/${p}" ]] && att+=(-i "${ROOT}/${p}")
   done < "prompts/${job}.att"
 
+  # bash 3.2 + set -u: mảng rỗng nổ "unbound variable" nếu expand thẳng
   codex exec \
     -s workspace-write \
     -C "${ROOT}" \
     --skip-git-repo-check \
-    "${att[@]}" \
+    ${att[@]+"${att[@]}"} \
     -o "logs/${job}.last.txt" \
     "${task}" >"logs/${job}.log" 2>&1
   local rc=$?

@@ -532,10 +532,22 @@ for style in cfg["styles"]:
             if abs(dev_x) > CW * 0.06 or abs(dev_y) > CH * 0.06:
                 print(f"  ⚠ {sid}/{comp['file']}: ruột lệch khung safe ({dev_x:+.0f},{dev_y:+.0f})px")
             atlas_items.append((comp["file"], tight, (CVW, CVH), (ox, oy)))
-            entry["assets"].append({"file": comp["file"] + ".png", "sheet": sh["id"],
-                                    "canvas": [CVW, CVH], "cell": [CW, CH], "bleed": [BX, BY],
-                                    "content": [pw, ph],
-                                    "content_at": [ox, oy], "safe": [sx, sy, sw, sh_]})
+            asset = {"file": comp["file"] + ".png", "sheet": sh["id"],
+                     "canvas": [CVW, CVH], "cell": [CW, CH], "bleed": [BX, BY],
+                     "content": [pw, ph],
+                     "content_at": [ox, oy], "safe": [sx, sy, sw, sh_]}
+            if sk.get("slice9"):
+                # inset 9-slice theo RUỘT (px trên tight/): pill góc tròn = h/2 nên
+                # inset ngang hơi quá bán kính; rrect theo bán kính min/6
+                if sk["shape"] in ("pill", "bar"):
+                    ins_x = min(round(ph * 0.52), (pw - 4) // 2)
+                    ins_y = min(round(ph * 0.4), (ph - 4) // 2)
+                else:
+                    m = round(min(pw, ph) * 0.3)
+                    ins_x = min(m, (pw - 4) // 2)
+                    ins_y = min(m, (ph - 4) // 2)
+                asset["slice9"] = [ins_x, ins_y, ins_x, ins_y]
+            entry["assets"].append(asset)
             n_ok += 1
 
         entry["sheets"][sh["id"]] = {"mode": mode, "bg_detected": bg,

@@ -8,7 +8,8 @@
       "skel": {
         "shape": "pill",
         "w": 0.78,
-        "h": 0.4
+        "h": 0.4,
+        "slice9": true
       },
       "cell": "landscape"
     },
@@ -19,7 +20,8 @@
       "skel": {
         "shape": "pill",
         "w": 0.78,
-        "h": 0.4
+        "h": 0.4,
+        "slice9": true
       },
       "cell": "landscape"
     },
@@ -30,7 +32,8 @@
       "skel": {
         "shape": "pill",
         "w": 0.78,
-        "h": 0.4
+        "h": 0.4,
+        "slice9": true
       },
       "cell": "landscape"
     },
@@ -52,7 +55,8 @@
       "skel": {
         "shape": "bar",
         "w": 0.84,
-        "h": 0.26
+        "h": 0.26,
+        "slice9": true
       },
       "cell": "landscape"
     },
@@ -74,7 +78,8 @@
       "skel": {
         "shape": "rrect",
         "w": 0.38,
-        "h": 0.58
+        "h": 0.58,
+        "slice9": true
       },
       "cell": "landscape"
     },
@@ -120,7 +125,8 @@
       "skel": {
         "shape": "rrect",
         "w": 0.42,
-        "h": 0.62
+        "h": 0.62,
+        "slice9": true
       },
       "cell": "landscape",
       "group": "chip"
@@ -132,7 +138,8 @@
       "skel": {
         "shape": "rrect",
         "w": 0.42,
-        "h": 0.62
+        "h": 0.62,
+        "slice9": true
       },
       "cell": "landscape",
       "group": "chip"
@@ -178,7 +185,8 @@
       "skel": {
         "shape": "rrect",
         "w": 0.84,
-        "h": 0.72
+        "h": 0.72,
+        "slice9": true
       },
       "cell": "landscape"
     },
@@ -226,7 +234,8 @@
       "skel": {
         "shape": "rrect",
         "w": 0.78,
-        "h": 0.84
+        "h": 0.84,
+        "slice9": true
       },
       "cell": "portrait"
     },
@@ -261,7 +270,8 @@
       "skel": {
         "shape": "rrect",
         "w": 0.8,
-        "h": 0.78
+        "h": 0.78,
+        "slice9": true
       },
       "cell": "portrait"
     },
@@ -411,6 +421,251 @@
       },
       "cell": "full",
       "group": "bg"
+    },
+    {
+      "file": "35-input-field",
+      "vi": "Ô nhập liệu",
+      "spec": "flat rounded input field with a light inner well and subtle inner shadow, thin border, completely empty",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.8,
+        "h": 0.34,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "form"
+    },
+    {
+      "file": "36-select-field",
+      "vi": "Ô chọn (select)",
+      "spec": "the SAME input field but as a dropdown select: a small down-pointing chevron arrow plate attached at the right end",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.8,
+        "h": 0.34,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "form"
+    },
+    {
+      "file": "37-checkbox-on",
+      "vi": "Checkbox bật",
+      "spec": "small rounded-square checkbox in CHECKED state with a bold tick mark inside, glossy 3D",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.3,
+        "h": 0.45
+      },
+      "cell": "landscape",
+      "group": "checkbox"
+    },
+    {
+      "file": "38-checkbox-off",
+      "vi": "Checkbox tắt",
+      "spec": "the SAME checkbox UNCHECKED: empty inner well, no tick",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.3,
+        "h": 0.45
+      },
+      "cell": "landscape",
+      "group": "checkbox"
+    },
+    {
+      "file": "39-toggle-on",
+      "vi": "Toggle bật",
+      "spec": "pill toggle switch in ON state, round knob on the RIGHT, bright vivid fill, glossy",
+      "skel": {
+        "shape": "pill",
+        "w": 0.44,
+        "h": 0.3
+      },
+      "cell": "landscape",
+      "group": "toggle"
+    },
+    {
+      "file": "40-toggle-off",
+      "vi": "Toggle tắt",
+      "spec": "the SAME toggle switch OFF: knob on the LEFT, muted grey fill",
+      "skel": {
+        "shape": "pill",
+        "w": 0.44,
+        "h": 0.3
+      },
+      "cell": "landscape",
+      "group": "toggle"
+    },
+    {
+      "file": "41-btn-close",
+      "vi": "Nút đóng",
+      "spec": "small round close button with a bold diagonal cross mark, 3D glossy dome",
+      "skel": {
+        "shape": "circle",
+        "w": 0.42,
+        "h": 0.62
+      },
+      "cell": "landscape",
+      "group": "smallbtn"
+    },
+    {
+      "file": "42-btn-back",
+      "vi": "Nút back",
+      "spec": "the SAME style small round button with a bold left-pointing arrow instead of the cross",
+      "skel": {
+        "shape": "circle",
+        "w": 0.42,
+        "h": 0.62
+      },
+      "cell": "landscape",
+      "group": "smallbtn"
+    },
+    {
+      "file": "43-btn-pill-pressed",
+      "vi": "Nút CTA nhấn",
+      "spec": "wide capsule button in PRESSED state: same shape as this kit's main CTA button but darker, pushed-in look, shorter highlight",
+      "skel": {
+        "shape": "pill",
+        "w": 0.78,
+        "h": 0.4,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "btnstate"
+    },
+    {
+      "file": "44-btn-pill-disabled",
+      "vi": "Nút CTA disabled",
+      "spec": "the SAME capsule button in DISABLED state: flat desaturated grey, matte, no gloss",
+      "skel": {
+        "shape": "pill",
+        "w": 0.78,
+        "h": 0.4,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "btnstate"
+    },
+    {
+      "file": "45-rank-badge-1",
+      "vi": "Huy chương #1",
+      "spec": "round 1st-place medal badge with gold laurel wreath, blank center face",
+      "skel": {
+        "shape": "circle",
+        "w": 0.4,
+        "h": 0.6
+      },
+      "cell": "landscape",
+      "group": "medal"
+    },
+    {
+      "file": "46-rank-badge-2",
+      "vi": "Huy chương #2",
+      "spec": "the SAME medal badge in SILVER for 2nd place",
+      "skel": {
+        "shape": "circle",
+        "w": 0.4,
+        "h": 0.6
+      },
+      "cell": "landscape",
+      "group": "medal"
+    },
+    {
+      "file": "47-rank-badge-3",
+      "vi": "Huy chương #3",
+      "spec": "the SAME medal badge in BRONZE for 3rd place",
+      "skel": {
+        "shape": "circle",
+        "w": 0.4,
+        "h": 0.6
+      },
+      "cell": "landscape",
+      "group": "medal"
+    },
+    {
+      "file": "48-rank-row",
+      "vi": "Hàng BXH",
+      "spec": "wide leaderboard row bar: rounded strip with a circular avatar slot on the left and long empty space for name and score, subtle even fill",
+      "skel": {
+        "shape": "bar",
+        "w": 0.86,
+        "h": 0.42,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "rankrow"
+    },
+    {
+      "file": "49-rank-row-self",
+      "vi": "Hàng BXH của mình",
+      "spec": "the SAME leaderboard row but HIGHLIGHTED as the current player: glowing bright border and brighter fill",
+      "skel": {
+        "shape": "bar",
+        "w": 0.86,
+        "h": 0.42,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "rankrow"
+    },
+    {
+      "file": "50-counter-pill",
+      "vi": "Counter lượt/xu",
+      "spec": "small capsule counter chip with a circular icon slot on one end and empty space for a number, glossy",
+      "skel": {
+        "shape": "pill",
+        "w": 0.6,
+        "h": 0.32,
+        "slice9": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "51-reward-giftbox-open",
+      "vi": "Quà hộp MỞ",
+      "spec": "a wrapped gift box with the SAME design as this kit's gift box but OPEN: lid tilted off, golden light rays and sparkles rising from inside",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.34,
+        "h": 0.72
+      },
+      "cell": "portrait",
+      "group": "giftstate"
+    },
+    {
+      "file": "52-envelope-closed",
+      "vi": "Lì xì đóng",
+      "spec": "traditional red lucky-money envelope standing upright, sealed, ornate gold trim emblem, blank face",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.3,
+        "h": 0.7
+      },
+      "cell": "portrait",
+      "group": "envelope"
+    },
+    {
+      "file": "53-envelope-open",
+      "vi": "Lì xì mở",
+      "spec": "the SAME lucky-money envelope OPEN at the top with a gold coin peeking out and small sparkles",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.3,
+        "h": 0.7
+      },
+      "cell": "portrait",
+      "group": "envelope"
+    },
+    {
+      "file": "54-trophy-cup",
+      "vi": "Cúp vô địch",
+      "spec": "golden champion trophy cup with two handles on a small base, glossy, blank plaque",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.32,
+        "h": 0.75
+      },
+      "cell": "portrait"
     }
   ]
 }
