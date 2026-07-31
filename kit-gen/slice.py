@@ -391,6 +391,8 @@ for style in cfg["styles"]:
     atlas_items = []
 
     for sh in cfg["sheets"]:
+        if sh.get("styles") and sid not in sh["styles"]:
+            continue                     # sheet riêng của style khác (vd pose-<char>)
         job = f"{sid}-{sh['id']}"
         src_path = os.path.join(HERE, "raw", f"{job}.png")
         if not os.path.exists(src_path):
@@ -552,7 +554,8 @@ for style in cfg["styles"]:
 
     manifest["styles"][sid] = entry
     total = len(entry["assets"])
-    want = sum(len(sh["components"]) for sh in cfg["sheets"])
+    want = sum(len(sh["components"]) for sh in cfg["sheets"]
+               if not sh.get("styles") or sid in sh["styles"])
     print(f"— {sid}: {total}/{want} asset" +
           (f", Ô TRỐNG: {entry['empty_cells']}" if entry["empty_cells"] else ""))
 

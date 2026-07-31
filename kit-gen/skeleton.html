@@ -20,55 +20,10 @@
   h4 { width: 1536px; margin: 16px auto 0 }
 </style>
 <div id="sheets"></div>
+<script src="silhouettes.js"></script>
 <script>
-const FILL = "#9a9a9a", EDGE = "#606060";
-
-/* Silhouette vẽ trong hệ toạ độ khung safe (0,0 → w,h).
-   plain = silhouette TRƠN không viền → gợi ý element phẳng không khung. */
-function silhouette(shape, w, h, uid, plain) {
-  const c = plain ? `fill="${FILL}"` : `fill="${FILL}" stroke="${EDGE}" stroke-width="3"`;
-  if (shape === "pill" || shape === "bar")
-    return `<rect x="0" y="0" width="${w}" height="${h}" rx="${h / 2}" ${c}/>`;
-  if (shape === "rrect")
-    return `<rect x="0" y="0" width="${w}" height="${h}" rx="${Math.min(w, h) / 6}" ${c}/>`;
-  if (shape === "circle") {
-    const r = Math.min(w, h) / 2;
-    return `<circle cx="${w / 2}" cy="${h / 2}" r="${r}" ${c}/>`;
-  }
-  if (shape === "burst") {
-    const R = Math.min(w, h) / 2, pts = [];
-    for (let i = 0; i < 16; i++) {
-      const a = i * Math.PI / 8, r = i % 2 ? R * 0.45 : R;
-      pts.push(`${w / 2 + r * Math.cos(a)},${h / 2 + r * Math.sin(a)}`);
-    }
-    return `<polygon points="${pts.join(" ")}" ${c}/>`;
-  }
-  if (shape === "puzzle") {
-    // thân bo góc + vấu tròn trên đỉnh, vết khuyết tròn bên trái (mask)
-    const tab = Math.min(w, h) * 0.22, rx = Math.min(w, h) / 8;
-    return `<mask id="pz${uid}">
-        <rect x="0" y="${tab}" width="${w}" height="${h - tab}" rx="${rx}" fill="#fff"/>
-        <circle cx="${w / 2}" cy="${tab}" r="${tab}" fill="#fff"/>
-        <circle cx="0" cy="${(h + tab) / 2}" r="${tab}" fill="#000"/>
-      </mask>
-      <rect x="-6" y="-6" width="${w + 12}" height="${h + 12}" fill="${FILL}" mask="url(#pz${uid})"/>`;
-  }
-  if (shape === "figure") {
-    // đầu tròn + thân capsule + hai tay — chỉ pin vị trí/cỡ, không pin dáng
-    const hr = Math.min(w * 0.4, h * 0.24);
-    const by = hr * 1.8, bw = w * 0.66, bh = h - by;
-    const aw = w * 0.15, ah = bh * 0.5;
-    return `<circle cx="${w / 2}" cy="${hr}" r="${hr}" ${c}/>
-      <rect x="${(w - bw) / 2}" y="${by}" width="${bw}" height="${bh}" rx="${bw / 3}" ${c}/>
-      <rect x="${(w - bw) / 2 - aw * 0.8}" y="${by + bh * 0.06}" width="${aw}" height="${ah}" rx="${aw / 2}" ${c}
-            transform="rotate(12 ${(w - bw) / 2} ${by + bh * 0.06})"/>
-      <rect x="${(w + bw) / 2 - aw * 0.2}" y="${by + bh * 0.06}" width="${aw}" height="${ah}" rx="${aw / 2}" ${c}
-            transform="rotate(-12 ${(w + bw) / 2} ${by + bh * 0.06})"/>`;
-  }
-  if (shape === "full")
-    return `<rect x="2" y="2" width="${w - 4}" height="${h - 4}" ${c}/>`;
-  return "";
-}
+/* silhouette + pose OpenPose lấy từ silhouettes.js (dùng chung với studio) */
+const silhouette = (shape, w, h, uid, skel) => KITSIL.silhouette(shape, w, h, uid, skel);
 
 function build(cfg) {
   const root = document.getElementById("sheets");
@@ -93,7 +48,7 @@ function build(cfg) {
       const ey = sk.anchor === "bottom" ? ch - eh - ch * 0.04 : (ch - eh) / 2;
       cell.innerHTML =
         `<svg style="left:${ex}px;top:${ey}px" width="${ew}" height="${eh}">` +
-        silhouette(sk.shape, ew, eh, uid++, sk.plain) + `</svg>` +
+        silhouette(sk.shape, ew, eh, uid++, sk) + `</svg>` +
         (sk.shape === "full" ? "" :
           `<div class="safe" style="left:${ex}px;top:${ey}px;width:${ew}px;height:${eh}px"></div>`);
       div.appendChild(cell);

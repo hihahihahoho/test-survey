@@ -17,6 +17,8 @@ cfg = json.load(open("styles.json"))
 
 for s in cfg["styles"]:
     for sh in cfg["sheets"]:
+        if sh.get("styles") and s["id"] not in sh["styles"]:
+            continue                      # sheet riêng của style khác (vd pose-<char>)
         cols, rows = sh["grid"]["cols"], sh["grid"]["rows"]
         comps = sh["components"]
         assert len(comps) == cols * rows, f'{sh["id"]}: {len(comps)} component ≠ lưới {cols}x{rows}'
@@ -29,7 +31,7 @@ for s in cfg["styles"]:
             if sh["id"] != "bg" else
             "The two background scenes each fill their own half of the image completely, edge to edge, with a thin 24px gap between them.",
             "",
-            "The ATTACHED IMAGE is the layout skeleton of this exact sheet. In each cell,",
+            "The FIRST attached image is the layout skeleton of this exact sheet. In each cell,",
             "the dark rectangular frame is the SAFE ZONE and the gray silhouette shows the",
             "element's rough shape:",
             "- the element's MAIN BODY must fill the safe-zone frame exactly (position and size);",
@@ -53,6 +55,17 @@ for s in cfg["styles"]:
             "semi-transparent, or showing the background through it (except where a spec explicitly says hollow).",
             ""
         ]
+        if sh.get("ref"):
+            lines += [
+                "The SECOND attached image is a character REFERENCE PHOTO: every character",
+                "cell must show EXACTLY this character — same species, face, colors, costume,",
+                "materials and proportions — re-drawn cleanly in this sheet's art style.", ""]
+        if s.get("brand"):
+            b = s["brand"]
+            bl = f"Brand palette: primary {b.get('primary')}, secondary {b.get('secondary')}"
+            if b.get("gradient"):
+                bl += f", gradient {b['gradient']}"
+            lines += [bl + " — use these as the dominant UI colors.", ""]
         if sh.get("note"):
             lines += [sh["note"], ""]
         for r in range(rows):
@@ -66,24 +79,34 @@ for s in cfg["styles"]:
             f"All {len(comps)} elements share the exact same consistent style and belong to one coherent game. Game-ready UI asset quality, landscape 3:2."
         ]
         open(f"prompts/{s['id']}-{sh['id']}.txt", "w").write("\n".join(lines))
-        print("prompt →", f"prompts/{s['id']}-{sh['id']}.txt")
+        # file đính kèm cho job: skeleton trước, ref nhân vật rồi inspo của style
+        att = [f"skeleton/{sh['id']}.png"]
+        if sh.get("ref"):
+            att.append(sh["ref"])
+        att += s.get("inspo", [])
+        open(f"prompts/{s['id']}-{sh['id']}.att", "w").write("\n".join(att))
+        print("prompt →", f"prompts/{s['id']}-{sh['id']}.txt", f"(+{len(att)} ảnh kèm)")
 PY
 
 run_one() {
   local job="$1"
-  local sheet="${job#*-}"
   local task
-  task="Generate ONE image with your image generation tool, landscape (1536x1024 if supported), using EXACTLY the prompt between the IMAGE PROMPT markers below. The attached image is the layout skeleton referenced by the prompt — use it as the placement/size reference for every element. Then save/copy the generated PNG to exactly this path: ${ROOT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
+  task="Generate ONE image with your image generation tool, landscape (1536x1024 if supported), using EXACTLY the prompt between the IMAGE PROMPT markers below. The attached images are, in order: the layout skeleton, then any character reference photo / inspiration images the prompt mentions. Then save/copy the generated PNG to exactly this path: ${ROOT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
 
 --- IMAGE PROMPT START ---
 $(cat "prompts/${job}.txt")
 --- IMAGE PROMPT END ---"
 
+  local att=()
+  while IFS= read -r p; do
+    [[ -n "$p" && -f "${ROOT}/${p}" ]] && att+=(-i "${ROOT}/${p}")
+  done < "prompts/${job}.att"
+
   codex exec \
     -s workspace-write \
     -C "${ROOT}" \
     --skip-git-repo-check \
-    -i "${ROOT}/skeleton/${sheet}.png" \
+    "${att[@]}" \
     -o "logs/${job}.last.txt" \
     "${task}" >"logs/${job}.log" 2>&1
   local rc=$?

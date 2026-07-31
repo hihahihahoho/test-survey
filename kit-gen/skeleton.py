@@ -79,7 +79,8 @@ def figure(d, x0, y0, x1, y1):
 
 
 SHAPES = {"pill": pill, "rrect": rrect, "circle": circle, "bar": pill,
-          "burst": burst, "puzzle": puzzle, "figure": figure}
+          "burst": burst, "puzzle": puzzle, "figure": figure,
+          "pose": figure}   # fallback PIL: pose vẽ như figure (bản HTML mới có stick OpenPose)
 
 
 def main():

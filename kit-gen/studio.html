@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8">
+<title>Kit Studio — contract → gen → showcase</title>
+<!-- ============================================================================
+  Studio soạn UI kit: chọn style + branding + inspo, khai báo NHIỀU character
+  (mỗi con một ảnh ref + bộ pose riêng), xem skeleton live, bắn codex gen,
+  slice, và Copy bảng element sang Figma (figh2d, không plugin).
+  Chạy:  node kit-gen/studio-server.mjs  →  http://localhost:8125/kit-gen/studio.html
+============================================================================ -->
+<style>
+  * { box-sizing: border-box }
+  body { margin: 0; font: 13px/1.45 -apple-system, "Segoe UI", sans-serif;
+         background: #14161d; color: #e8eaf2; display: flex; min-height: 100vh }
+  aside { width: 380px; flex: none; padding: 14px; overflow-y: auto; height: 100vh;
+          background: #1a1d27; border-right: 1px solid #2a2e3d }
+  main { flex: 1; padding: 14px 18px; overflow-y: auto; height: 100vh }
+  h1 { font-size: 15px; margin: 0 0 10px }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+       color: #8b93ab; margin: 18px 0 8px; border-top: 1px solid #2a2e3d; padding-top: 12px }
+  label { display: block; font-size: 11px; color: #8b93ab; margin: 8px 0 2px }
+  input[type=text], textarea, select {
+    width: 100%; background: #10121a; color: #e8eaf2; border: 1px solid #2f3445;
+    border-radius: 8px; padding: 7px 9px; font: inherit }
+  textarea { resize: vertical }
+  input[type=color] { width: 44px; height: 28px; border: 0; background: none; padding: 0 }
+  .row { display: flex; gap: 8px; align-items: center }
+  button { background: #2f6fed; color: #fff; border: 0; border-radius: 8px;
+           padding: 8px 12px; font: 700 12px/1 inherit; cursor: pointer }
+  button.ghost { background: #262b3a }
+  button:disabled { opacity: .5; cursor: default }
+  .chip { display: inline-flex; align-items: center; gap: 4px; background: #262b3a;
+          border-radius: 99px; padding: 4px 10px; margin: 2px; font-size: 11px }
+  .char { background: #20242f; border: 1px solid #2f3445; border-radius: 10px;
+          padding: 10px; margin: 8px 0 }
+  .char img.ref { width: 56px; height: 56px; object-fit: contain; background: #10121a;
+                  border-radius: 8px; flex: none }
+  .poses { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 8px }
+  .pose { text-align: center; background: #10121a; border: 2px solid #2f3445;
+          border-radius: 8px; padding: 4px 2px; cursor: pointer; user-select: none }
+  .pose.on { border-color: #2f6fed }
+  .pose svg { width: 34px; height: 46px; display: block; margin: 0 auto }
+  .pose small { font-size: 9.5px; color: #8b93ab }
+  .sheet-box { background: #f2f2f2; border-radius: 6px; margin: 6px 0 16px; overflow: hidden }
+  .sheet-box svg { display: block; width: 100% }
+  .sheet-head { display: flex; align-items: center; gap: 8px; margin-top: 14px }
+  .sheet-head b { font-size: 12.5px }
+  .sheet-head small { color: #8b93ab }
+  #log { background: #0c0e14; border: 1px solid #2a2e3d; border-radius: 8px;
+         padding: 10px; white-space: pre-wrap; font: 11px/1.5 ui-monospace, monospace;
+         max-height: 260px; overflow-y: auto; color: #9fd0a0 }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; align-items: center }
+  a { color: #7fb0ff }
+  .muted { color: #8b93ab; font-size: 11px }
+</style>
+<body>
+<aside>
+  <h1>🎨 Kit Studio</h1>
+
+  <label>Style</label>
+  <select id="styleSel"></select>
+
+  <h2>Branding</h2>
+  <label>Mô tả art style (prose — feed thẳng cho model)</label>
+  <textarea id="styleProse" rows="4"></textarea>
+  <div class="row" style="margin-top:8px">
+    <div><label>Primary</label><input type="color" id="brandP" value="#d42a1e"></div>
+    <div><label>Secondary</label><input type="color" id="brandS" value="#f5c64a"></div>
+    <div style="flex:1"><label>Gradient (mô tả chữ, tuỳ chọn)</label>
+      <input type="text" id="brandG" placeholder="vd: warm red→gold vertical"></div>
+  </div>
+  <label>Nền chroma key</label>
+  <select id="keySel">
+    <option value="pure vivid green #00FF00">green #00FF00</option>
+    <option value="pure vivid magenta #FF00FF">magenta #FF00FF</option>
+  </select>
+  <label>Ảnh inspo (đính kèm mọi sheet của style)</label>
+  <input type="file" id="inspoFile" accept="image/*" multiple>
+  <div id="inspoList"></div>
+
+  <h2>Characters <span class="muted">(mỗi con: 1 ảnh ref + bộ pose riêng)</span></h2>
+  <div id="chars"></div>
+  <button class="ghost" id="addChar">+ Thêm character</button>
+
+  <h2>Hành động</h2>
+  <div class="bar">
+    <button id="saveBtn">💾 Lưu contract</button>
+    <button id="genBtn">⚡ Gen sheet đã chọn</button>
+  </div>
+  <div class="bar">
+    <button class="ghost" id="sliceBtn">✂️ Slice</button>
+    <button class="ghost" id="figmaBtn">📋 Copy Figma bảng element</button>
+  </div>
+  <div class="muted">Sau slice: <a href="preview.html" target="_blank">preview</a> ·
+    <a href="demo.html" target="_blank">demo game</a></div>
+  <div id="log" style="margin-top:10px">sẵn sàng…</div>
+</aside>
+
+<main>
+  <div class="muted">Skeleton live theo contract — ô nào tick ⚡ sẽ được gen lại.
+    Khung đậm = safe zone (thân element), silhouette/bộ xương = gợi ý hình khối.</div>
+  <div id="sheets"></div>
+</main>
+
+<script src="silhouettes.js"></script>
+<script src="figma-export/figma-h2d.global.js"></script>
+<script>
+"use strict";
+let cfg = null;
+let style = null;              // style object đang chọn
+const genPick = new Set();     // job "style-sheet" được tick gen
+
+const $ = id => document.getElementById(id);
+const log = m => { $("log").textContent = m; $("log").scrollTop = 1e9; };
+
+/* ---------------- contract load / bind ---------------- */
+async function load() {
+  cfg = await (await fetch("styles.json?" + Date.now())).json();
+  const sel = $("styleSel");
+  sel.innerHTML = cfg.styles.map(s => `<option value="${s.id}">${s.id} — ${s.vi}</option>`).join("");
+  sel.onchange = () => pick(sel.value);
+  pick(cfg.styles[0].id);
+}
+
+function pick(id) {
+  style = cfg.styles.find(s => s.id === id);
+  $("styleProse").value = style.style;
+  $("brandP").value = style.brand?.primary ?? "#d42a1e";
+  $("brandS").value = style.brand?.secondary ?? "#f5c64a";
+  $("brandG").value = style.brand?.gradient ?? "";
+  $("keySel").value = style.bg;
+  renderInspo(); renderChars(); renderSheets();
+}
+
+function collect() {
+  style.style = $("styleProse").value;
+  style.brand = { primary: $("brandP").value, secondary: $("brandS").value };
+  if ($("brandG").value.trim()) style.brand.gradient = $("brandG").value.trim();
+  style.bg = $("keySel").value;
+}
+
+/* ---------------- inspo ---------------- */
+function renderInspo() {
+  $("inspoList").innerHTML = (style.inspo ?? []).map((p, i) =>
+    `<span class="chip">${p.split("/").pop()} <b style="cursor:pointer" data-i="${i}">✕</b></span>`).join("");
+  $("inspoList").querySelectorAll("b").forEach(b => b.onclick = () => {
+    style.inspo.splice(+b.dataset.i, 1); renderInspo();
+  });
+}
+$("inspoFile").onchange = async e => {
+  for (const f of e.target.files) {
+    const dataURL = await new Promise(ok => {
+      const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(f);
+    });
+    const path = `refs/inspo-${style.id}-${Date.now()}-${f.name.replace(/[^a-z0-9.]+/gi, "_")}`;
+    await api("/api/upload", { path, dataURL });
+    (style.inspo ??= []).push(path);
+  }
+  e.target.value = ""; renderInspo(); log("đã upload inspo");
+};
+
+/* ---------------- characters ---------------- */
+function charSheetId(c) { return `pose-${c.id}`; }
+
+/* đồng bộ sheet pose-<char> trong cfg.sheets theo style.characters */
+function syncCharSheets() {
+  cfg.sheets = cfg.sheets.filter(sh =>
+    !(sh.id.startsWith("pose-") && sh.styles?.includes(style.id) &&
+      !(style.characters ?? []).some(c => charSheetId(c) === sh.id)));
+  for (const c of style.characters ?? []) {
+    const poses = c.poses ?? [];
+    if (![4, 8].includes(poses.length)) continue;   // grid 2×2 hoặc 4×2
+    const grid = poses.length === 4 ? { cols: 2, rows: 2 } : { cols: 4, rows: 2 };
+    const sheet = {
+      id: charSheetId(c), styles: [style.id], ref: c.ref, grid,
+      cell_hint: "landscape cell containing ONE full-body standing character",
+      note: "All cells show THE SAME character as in the attached REFERENCE PHOTO: match its species, face, colors, costume, materials and proportions exactly — only the pose changes per cell, like one character turnaround sheet.",
+      components: poses.map(pid => ({
+        file: `pose-${c.id}-${pid}`,
+        vi: `${c.vi}: ${KITSIL.POSES[pid].vi}`,
+        spec: `the SAME character from the reference photo, ${KITSIL.POSES[pid].prompt}, full body`,
+        skel: { shape: "pose", pose: pid, w: poses.length === 4 ? 0.3 : 0.55, h: 0.85 }
+      }))
+    };
+    const i = cfg.sheets.findIndex(sh => sh.id === sheet.id);
+    if (i >= 0) cfg.sheets[i] = sheet; else cfg.sheets.push(sheet);
+  }
+}
+
+function renderChars() {
+  const box = $("chars");
+  box.innerHTML = "";
+  for (const c of style.characters ?? []) {
+    const div = document.createElement("div");
+    div.className = "char";
+    div.innerHTML = `
+      <div class="row">
+        <img class="ref" src="${c.ref ?? ""}" onerror="this.style.opacity=.2">
+        <div style="flex:1">
+          <input type="text" value="${c.vi}" data-k="vi" placeholder="Tên">
+          <label>Ảnh ref: ${c.ref ?? "chưa có"} — <label style="display:inline;color:#7fb0ff;cursor:pointer">chọn ảnh<input type="file" accept="image/*" data-k="ref" hidden></label></label>
+        </div>
+        <button class="ghost" data-k="del">🗑</button>
+      </div>
+      <div class="poses">${Object.entries(KITSIL.POSES).map(([pid, p]) => `
+        <div class="pose ${c.poses?.includes(pid) ? "on" : ""}" data-pose="${pid}">
+          <svg viewBox="0 0 60 84">${KITSIL.poseSVG(pid, 60, 84)}</svg><small>${p.vi}</small>
+        </div>`).join("")}</div>
+      <div class="muted" style="margin-top:4px">chọn đúng 4 hoặc 8 pose (lưới 2×2 / 4×2) — đang: <b>${c.poses?.length ?? 0}</b></div>`;
+    div.querySelector('[data-k="vi"]').onchange = e => { c.vi = e.target.value; };
+    div.querySelector('[data-k="del"]').onclick = () => {
+      style.characters = style.characters.filter(x => x !== c);
+      syncCharSheets(); renderChars(); renderSheets();
+    };
+    div.querySelector('[data-k="ref"]').onchange = async e => {
+      const f = e.target.files[0]; if (!f) return;
+      const dataURL = await new Promise(ok => {
+        const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(f);
+      });
+      c.ref = `refs/${c.id}.png`;
+      await api("/api/upload", { path: c.ref, dataURL });
+      renderChars(); log(`đã upload ref cho ${c.id}`);
+    };
+    div.querySelectorAll(".pose").forEach(el => el.onclick = () => {
+      const pid = el.dataset.pose;
+      c.poses ??= [];
+      c.poses = c.poses.includes(pid) ? c.poses.filter(x => x !== pid) : [...c.poses, pid];
+      syncCharSheets(); renderChars(); renderSheets();
+    });
+    box.appendChild(div);
+  }
+}
+$("addChar").onclick = () => {
+  const id = prompt("id character (không dấu, vd: lan, robo):");
+  if (!id || !/^[a-z0-9-]+$/.test(id)) return;
+  (style.characters ??= []).push({ id, vi: id, ref: null, poses: ["wave", "cheer", "sad", "run"] });
+  syncCharSheets(); renderChars(); renderSheets();
+};
+
+/* ---------------- skeleton preview ---------------- */
+function renderSheets() {
+  syncCharSheets();
+  const root = $("sheets");
+  root.innerHTML = "";
+  let uid = 0;
+  for (const sh of cfg.sheets) {
+    if (sh.styles && !sh.styles.includes(style.id)) continue;
+    const job = `${style.id}-${sh.id}`;
+    const { cols, rows } = sh.grid;
+    const W = 1536, H = 1024, cw = W / cols, ch = H / rows;
+    const head = document.createElement("div");
+    head.className = "sheet-head";
+    head.innerHTML = `<input type="checkbox" ${genPick.has(job) ? "checked" : ""} title="gen sheet này">
+      <b>${sh.id}</b> <small>${cols}×${rows}${sh.ref ? " · ref: " + sh.ref : ""} · job ${job}</small>`;
+    head.querySelector("input").onchange = e =>
+      e.target.checked ? genPick.add(job) : genPick.delete(job);
+    root.appendChild(head);
+
+    let cells = "";
+    sh.components.forEach((comp, i) => {
+      const r = (i / cols) | 0, c = i % cols;
+      const sk = comp.skel, ew = cw * sk.w, eh = ch * sk.h;
+      const ex = c * cw + (cw - ew) / 2;
+      const ey = r * ch + (sk.anchor === "bottom" ? ch - eh - ch * 0.04 : (ch - eh) / 2);
+      cells += `<g transform="translate(${ex},${ey})">${KITSIL.silhouette(sk.shape, ew, eh, uid++, sk)}</g>`;
+      if (sk.shape !== "full")
+        cells += `<rect x="${ex}" y="${ey}" width="${ew}" height="${eh}" fill="none" stroke="#464646" stroke-width="4" rx="6"/>`;
+      cells += `<text x="${c * cw + 8}" y="${r * ch + 20}" font-size="15" fill="#777">${comp.file}</text>`;
+    });
+    let gridLines = "";
+    for (let c = 1; c < cols; c++) gridLines += `<line x1="${c * cw}" y1="0" x2="${c * cw}" y2="${H}" stroke="#d4d4d4" stroke-width="2"/>`;
+    for (let r = 1; r < rows; r++) gridLines += `<line x1="0" y1="${r * ch}" x2="${W}" y2="${r * ch}" stroke="#d4d4d4" stroke-width="2"/>`;
+    const box = document.createElement("div");
+    box.className = "sheet-box";
+    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${cells}${gridLines}</svg>`;
+    root.appendChild(box);
+  }
+}
+
+/* ---------------- actions ---------------- */
+async function api(path, payload) {
+  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload ?? {}) });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error ?? r.status);
+  return j;
+}
+
+$("saveBtn").onclick = async () => {
+  collect(); syncCharSheets();
+  await api("/api/save-contract", { contract: cfg });
+  log("✓ đã lưu styles.json (backup: styles.json.bak)");
+};
+
+$("genBtn").onclick = async () => {
+  collect(); syncCharSheets();
+  await api("/api/save-contract", { contract: cfg });
+  const filters = [...genPick];
+  if (!filters.length) return log("chưa tick sheet nào (checkbox cạnh tên sheet)");
+  await api("/api/gen", { filters });
+  log("⚡ gen đang chạy: " + filters.join(", "));
+  const timer = setInterval(async () => {
+    const s = await (await fetch("/api/gen-status")).json();
+    log(s.log);
+    if (!s.running) { clearInterval(timer); log(s.log + "\n→ bấm Slice để cắt"); }
+  }, 3000);
+};
+
+$("sliceBtn").onclick = async () => {
+  log("✂️ đang slice…");
+  const r = await api("/api/slice");
+  log(r.out);
+};
+
+/* Copy bảng element sang Figma: dựng DOM board ẩn từ tight/ → figh2d clipboard */
+$("figmaBtn").onclick = async () => {
+  const m = await (await fetch("kits/manifest.json?" + Date.now())).json();
+  const assets = m.styles[style.id]?.assets ?? [];
+  if (!assets.length) return log("chưa có kit đã slice cho style này");
+  const board = document.createElement("div");
+  board.style.cssText = "position:fixed;left:0;top:0;background:#fff;padding:24px;" +
+    "display:grid;grid-template-columns:repeat(6,160px);gap:16px;z-index:-1";
+  for (const a of assets) {
+    const cell = document.createElement("div");
+    cell.style.cssText = "text-align:center;font:11px sans-serif;color:#333";
+    cell.innerHTML = `<img src="kits/${style.id}/tight/${a.file}" style="max-width:150px;max-height:130px"><div>${a.file.replace(".png", "")}</div>`;
+    board.appendChild(cell);
+  }
+  document.body.appendChild(board);
+  await new Promise(ok => setTimeout(ok, 600));      // đợi ảnh nạp
+  const doc = await figmaH2D.captureElement(board);
+  await figmaH2D.writeFigmaClipboard([doc], { source: "kit-studio" });
+  board.remove();
+  log(`📋 đã copy ${assets.length} element (${style.id}) — sang Figma Cmd+V`);
+};
+
+load();
+</script>
+</body>
+</html>
