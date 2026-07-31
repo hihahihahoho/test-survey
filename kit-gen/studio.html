@@ -57,6 +57,18 @@
   .sheet-head b { font-size: 12.5px }
   .sheet-head small { color: #8b93ab }
   .sheet-head .bad { color: #ff8f8f; font-weight: 700 }
+  .st { font-size: 10px; font-weight: 700; border-radius: 99px; padding: 3px 9px; flex: none }
+  .st.run { background: #3b3416; color: #ffd76a; animation: pulse 1.2s infinite }
+  .st.ok { background: #16351f; color: #7fe09a }
+  .st.fail { background: #3a1620; color: #ff8f9f }
+  @keyframes pulse { 50% { opacity: .35 } }
+  .tabs { display: flex; gap: 2px; margin-top: 8px }
+  .tabs button { background: #262b3a; color: #8b93ab; border-radius: 6px 6px 0 0;
+                 padding: 5px 12px; font-size: 11px }
+  .tabs button.on { background: #f2f2f2; color: #111 }
+  .sheet-wrap .sheet-box { margin: 0 0 16px; border-radius: 0 6px 6px 6px }
+  .sheet-box img.raw { display: block; width: 100% }
+  .sheet-box .norw { padding: 34px; text-align: center; color: #666; font-size: 12px }
   #log { background: #0c0e14; border: 1px solid #2a2e3d; border-radius: 8px;
          padding: 10px; white-space: pre-wrap; font: 11px/1.5 ui-monospace, monospace;
          max-height: 240px; overflow-y: auto; color: #9fd0a0 }
@@ -176,6 +188,9 @@ let cfg = null, LIB = null;
 let style = null;                 // style object đang chọn
 let sel = new Set();              // element files được chọn (chung mọi style)
 const genPick = new Set();        // job "style-sheet" được tick gen
+const jobStatus = new Map();      // job → run | ok | fail (badge cạnh tên sheet)
+let rawTick = Date.now();         // cache-bust ảnh raw/<job>.png sau mỗi lượt gen
+let genTimer = null;
 
 const $ = id => document.getElementById(id);
 const log = m => { $("log").textContent = m; $("log").scrollTop = 1e9; };
@@ -255,6 +270,7 @@ async function load() {
   s.onchange = () => { if (style) collect(); pick(s.value); };
   renderElems();
   pick(cfg.styles[0].id);
+  resumeGen();
 }
 
 function refreshKitSel() {
@@ -472,8 +488,9 @@ function renderSharedPoses() {
     cfg.characterPoses = poses.includes(pid) ? poses.filter(x => x !== pid) : [...poses, pid];
     syncCharSheets(); renderSharedPoses(); renderSheets();
   });
-  $("sharedPosesCount").textContent = `đang chọn: ${cfg.characterPoses.length} pose` +
-    (POSE_GRIDS[cfg.characterPoses.length] ? "" : " — ⚠ cần 4/8/12/16");
+  const okGrid = !!POSE_GRIDS[cfg.characterPoses.length];
+  $("sharedPosesCount").innerHTML = `đang chọn: ${cfg.characterPoses.length} pose` +
+    (okGrid ? "" : ' — <b style="color:#ff8f8f">⚠ phải đúng 4/8/12/16 pose mới gen được</b>');
 }
 
 function renderChars() {
@@ -527,9 +544,15 @@ function renderSheets() {
     const cw = W / cols, ch = H / rows;
     const head = document.createElement("div");
     head.className = "sheet-head";
+    const isPose = sh.id === "pose" || sh.id.startsWith("pose-");
+    const need = isPose
+      ? Object.keys(POSE_GRIDS).join("/") + " pose"
+      : Object.keys((Object.values(CLASS_CFG).find(cc => cc.hint === sh.cell_hint) ?? CLASS_CFG.landscape).grids).join("/") + " ô";
+    const st = jobStatus.get(job);
     head.innerHTML = `<input type="checkbox" ${genPick.has(job) ? "checked" : ""} ${sh.invalid ? "disabled" : ""} title="gen sheet này">
       <b>${sh.id}</b> <small>${cols}×${rows}${sh.ref ? " · ref: " + sh.ref : ""} · job ${job}</small>
-      ${sh.invalid ? `<span class="bad">⚠ ${sh.components.length} ô — cần đủ ${Object.keys(CLASS_CFG[sh.cell_hint.includes("full") ? "full" : sh.cell_hint.includes("portrait") ? "portrait" : "landscape"].grids).join("/")} để gen</span>` : ""}`;
+      ${st ? `<span class="st ${st}">${{ run: "⏳ đang gen", ok: "✅ xong", fail: "❌ lỗi" }[st]}</span>` : ""}
+      ${sh.invalid ? `<span class="bad">⚠ ${sh.components.length} ô — cần ${need} mới gen được</span>` : ""}`;
     head.querySelector("input").onchange = e =>
       e.target.checked ? genPick.add(job) : genPick.delete(job);
     root.appendChild(head);
@@ -543,14 +566,30 @@ function renderSheets() {
       cells += `<g transform="translate(${ex},${ey})">${KITSIL.silhouette(sk.shape, ew, eh, uid++, sk)}</g>`;
       if (sk.shape !== "full")
         cells += `<rect x="${ex}" y="${ey}" width="${ew}" height="${eh}" fill="none" stroke="#464646" stroke-width="4" rx="6"/>`;
-      cells += `<text x="${c * cw + 8}" y="${r * ch + 20}" font-size="15" fill="#777">${comp.file}</text>`;
+      cells += `<text x="${c * cw + 8}" y="${r * ch + 20}" font-size="15" fill="#777"
+        stroke="#f2f2f2" stroke-width="6" paint-order="stroke">${comp.file}</text>`;
     });
     let gridLines = "";
     for (let c = 1; c < cols; c++) gridLines += `<line x1="${c * cw}" y1="0" x2="${c * cw}" y2="${H}" stroke="#d4d4d4" stroke-width="2"/>`;
     for (let r = 1; r < rows; r++) gridLines += `<line x1="0" y1="${r * ch}" x2="${W}" y2="${r * ch}" stroke="#d4d4d4" stroke-width="2"/>`;
     const box = document.createElement("div");
-    box.className = "sheet-box";
-    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${cells}${gridLines}</svg>`;
+    box.className = "sheet-wrap";
+    box.dataset.job = job;
+    box.innerHTML = `
+      <div class="tabs">
+        <button data-t="skel" class="on">Skeleton</button>
+        <button data-t="raw">Ảnh gen</button>
+      </div>
+      <div class="sheet-box" data-p="skel"><svg viewBox="0 0 ${W} ${H}">${cells}${gridLines}</svg></div>
+      <div class="sheet-box" data-p="raw" style="display:none">
+        <img class="raw" src="raw/${job}.png?${rawTick}"
+             onerror="this.parentElement.innerHTML='<div class=norw>chưa có ảnh gen cho sheet này — tick ⚡ rồi bấm Gen</div>'">
+      </div>`;
+    box.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+      box.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
+      box.querySelectorAll("[data-p]").forEach(p =>
+        p.style.display = p.dataset.p === b.dataset.t ? "" : "none");
+    });
     root.appendChild(box);
   }
 }
@@ -559,7 +598,9 @@ function renderSheets() {
 function validate() {
   const bad = cfg.sheets.filter(sh => sh.invalid);
   if (bad.length) {
-    log(`⚠ sheet ${bad.map(s => s.id).join(", ")} có số ô lẻ — thêm/bớt element cho đủ lưới rồi lưu`);
+    log(`❌ KHÔNG GEN ĐƯỢC — sheet ${bad.map(s => s.id).join(", ")} có số ô lẻ.\n` +
+      `Thêm/bớt element (hoặc pose) cho đủ lưới — xem badge ⚠ đỏ cạnh tên sheet bên phải.`);
+    document.querySelector(".sheet-head .bad")?.scrollIntoView({ behavior: "smooth", block: "center" });
     return false;
   }
   return true;
@@ -573,19 +614,60 @@ $("saveBtn").onclick = async () => {
 };
 
 $("genBtn").onclick = async () => {
-  collect(); rebuildSheets(); syncCharSheets();
-  if (!validate()) return;
-  await api("/api/save-contract", { contract: cfg });
-  const filters = [...genPick];
-  if (!filters.length) return log("chưa tick sheet nào (checkbox cạnh tên sheet)");
-  await api("/api/gen", { filters });
+  try {
+    collect(); rebuildSheets(); syncCharSheets();
+    if (!validate()) return;
+    let filters = [...genPick];
+    if (!filters.length) {
+      const all = cfg.sheets
+        .filter(sh => !sh.invalid && (!sh.styles || sh.styles.includes(style.id)))
+        .map(sh => `${style.id}-${sh.id}`);
+      if (!confirm(`Chưa tick sheet nào — gen TẤT CẢ ${all.length} sheet của kit "${style.id}"?`))
+        return log("⚠ tick ô vuông cạnh tên sheet (cột phải) rồi bấm Gen lại");
+      filters = all;
+    }
+    await api("/api/save-contract", { contract: cfg });
+    await api("/api/gen", { filters });
+    watchGen(filters);
+  } catch (e) { log("❌ " + (e.message ?? e)); }
+};
+
+/* theo dõi gen: badge ⏳/✅/❌ từng sheet + log stream; xong tự mở tab "Ảnh gen" */
+function watchGen(filters) {
+  $("genBtn").disabled = true; $("genBtn").textContent = "⏳ đang gen…";
+  filters.forEach(j => jobStatus.set(j, "run"));
+  renderSheets();
   log("⚡ gen đang chạy: " + filters.join(", "));
-  const timer = setInterval(async () => {
+  clearInterval(genTimer);
+  genTimer = setInterval(async () => {
     const s = await (await fetch("/api/gen-status")).json();
     log(s.log);
-    if (!s.running) { clearInterval(timer); log(s.log + "\n→ bấm Slice để cắt"); }
-  }, 3000);
-};
+    let changed = false;
+    for (const m of s.log.matchAll(/^(OK|FAIL)\s+(\S+)/gm)) {
+      const st = m[1] === "OK" ? "ok" : "fail";
+      if (jobStatus.get(m[2]) !== st) { jobStatus.set(m[2], st); changed = true; }
+    }
+    if (changed || !s.running) { rawTick = Date.now(); renderSheets(); }
+    if (!s.running) {
+      clearInterval(genTimer); genTimer = null;
+      $("genBtn").disabled = false; $("genBtn").textContent = "⚡ Gen sheet đã chọn";
+      log(s.log + '\n✅ xong — ảnh nằm ở tab "Ảnh gen" dưới mỗi sheet, ưng thì bấm ✂️ Slice');
+      for (const [job, st] of jobStatus) if (st === "ok")
+        document.querySelector(`.sheet-wrap[data-job="${job}"] [data-t="raw"]`)?.click();
+    }
+  }, 2500);
+}
+
+/* reload trang giữa chừng vẫn bám lại tiến trình gen đang chạy */
+async function resumeGen() {
+  try {
+    const s = await (await fetch("/api/gen-status")).json();
+    if (!s.running) return;
+    const filters = (s.log.split("\n")[0] ?? "").replace("$ ./gen.sh", "")
+      .trim().split(/\s+/).filter(Boolean);
+    watchGen(filters);
+  } catch {}
+}
 
 $("sliceBtn").onclick = async () => {
   log("✂️ đang slice…");
