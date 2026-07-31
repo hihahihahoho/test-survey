@@ -139,10 +139,13 @@ def matte_chroma(sheet, key):
     interior = solid.filter(ImageFilter.MinFilter(5))
     semi = alpha.point(lambda v: 255 if v > 90 else 0)
     hard = ImageChops.darker(interior, semi)          # ruột loang → ép đục
-    # MÉP MƯỢT: blur nhẹ alpha (0.7px) khử răng cưa AA-trên-nền-key;
-    # ruột đã ép đục riêng nên blur không ăn mỏng thân
+    # MÉP MƯỢT hai tầng: mép đặc blur nhẹ 0.7px (khử răng cưa AA-trên-nền-key,
+    # thân không mỏng đi vì ruột đã ép đục); vùng GLOW alpha thấp blur nặng 3.5px
+    # — alpha glow nhiễu hạt (noise gpt-image trộn nền key) làm viền lởm chởm
     soft = alpha.filter(ImageFilter.GaussianBlur(0.7))
-    out.putalpha(ImageChops.lighter(hard, soft))
+    glow = alpha.filter(ImageFilter.GaussianBlur(3.5))
+    hi = alpha.point(lambda v: 255 if v > 128 else 0)
+    out.putalpha(Image.composite(ImageChops.lighter(hard, soft), glow, hi))
     # KHỬ ÁM MÀU KEY ở biên/bóng đổ (NGOÀI ruột đặc): bóng mềm trộn nền magenta
     # ra tím bùn mà distance-guard giữ gần-đục → un-premultiply gỡ không hết.
     # Despill phần dư: magenta dư = min(r,b)−g; green dư = g−max(r,b). Chỉ áp
@@ -599,6 +602,10 @@ for style in cfg["styles"]:
                         if labelmap[base + xx] in keep:
                             mp[xx - L, yy - T] = 255
                 msk = fill_mask_holes(msk.filter(ImageFilter.MaxFilter(2 * HALO + 1)))
+                # feather biên mask: cắt cứng làm mép glow lởm chởm hình blob
+                # (đã dính ở fx-burst) — blur 6px cho vùng crop PHAI DẦN qua cả
+                # những lump 10-20px của blob dò trên glow nhiễu
+                msk = msk.filter(ImageFilter.GaussianBlur(6))
                 region.putalpha(ImageChops.multiply(region.getchannel("A"), msk))
                 canvas.paste(region, (L - (cx0 - BX), T - (cy0 - BY)), region)
             sk = comp["skel"]
