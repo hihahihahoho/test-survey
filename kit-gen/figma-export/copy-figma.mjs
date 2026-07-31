@@ -1,28 +1,29 @@
 #!/usr/bin/env node
 /* ============================================================================
-   copy-figma.mjs — chụp MÀN GAME ĐANG CHẠY (canvas Phaser) và đưa lên
-   clipboard để dán vào Figma. KHÔNG cần plugin, KHÔNG cần extension.
+   copy-figma.mjs — chụp màn game và đưa lên clipboard để DÁN THẲNG vào Figma.
+   KHÔNG cần plugin, KHÔNG cần extension.
 
-   node kit-gen/figma-export/copy-figma.mjs [style] [--svg|--kiwi] [--screen Home]
+   node kit-gen/figma-export/copy-figma.mjs [style] [--h2d|--dom|--svg] [--screen Home]
 
-   --svg  (mặc định) — chạy được NGAY HÔM NAY:
-       display list Phaser → __figmaSVG() → SVG (mỗi frame nướng thành data-URL
-       crop riêng, tint nướng luôn vào ảnh; chữ là <text>) → pbcopy.
-       (Không dùng <symbol>/<use> crop atlas chung: Chrome không clip nội dung
-       symbol lồng use → sprite kéo theo hàng xóm trong atlas — đã dính.)
-       Sang Figma Cmd+V: mỗi sprite một layer, text thành text layer sửa được.
-       Giới hạn so với đường Kiwi: không Auto Layout, ảnh là fill trong shape.
+   --h2d  (mặc định) — clipboard định dạng figh2d/figmeta mà Figma parse khi
+       Cmd+V thành NODE THẬT (frame + image fill + text layer). Encoder là
+       package figma-h2d của open-design-vnpay (vendored figma-h2d.global.js —
+       cùng bundle vẫn dùng để capture IR). Nguồn: display list Phaser →
+       __figmaDOM() replica → captureElement → toFigmaClipboardHtml → NSPasteboard
+       flavor public.html (viết bằng JXA, không giới hạn kích thước như osascript -e).
 
-   --kiwi — clipboard định dạng gốc Figma (node thật + Auto Layout), theo spec
-       open-design-vnpay đã PoC end-to-end. CẦN folder figma-clip-poc từ máy
-       anhnd13 (~/Documents/figma-skill/figma-clip-poc) — đặt vào một trong các
-       đường dẫn KIWI_CANDIDATES dưới đây là flag này tự chạy.
+   --dom — như --h2d nhưng nguồn là figma.html (DOM flex THẬT, không phải canvas)
+       → Figma dựng được cấu trúc layout tốt hơn hẳn từ styles flexbox.
+       Chọn frame bằng --screen (Loading|Home|Choose|Result|Task).
 
-   Prereq: server đang chạy (npm run dev / python3 -m http.server), BASE trỏ đúng.
+   --svg — đường cũ: SVG lên clipboard, paste ra layer + text sửa được nhưng
+       KHÔNG có Auto Layout, ảnh nằm trong shape. Giữ để đối chứng.
+
+   Prereq: server đang chạy (python3 -m http.server), BASE trỏ đúng.
    ========================================================================== */
 import { createRequire } from "node:module"
 import { spawnSync } from "node:child_process"
-import { mkdirSync, writeFileSync, existsSync } from "node:fs"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -30,15 +31,9 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const BASE = process.env.BASE ?? "http://localhost:8000"
 const OUT = resolve(HERE, ".captures")
 
-const KIWI_CANDIDATES = [
-  resolve(HERE, "figma-clip-poc"),                                  // đặt PoC vào đây
-  "/Users/tungnt2/Documents/work/figma-clip-poc",
-  "/Users/tungnt2/Documents/work/open-design-vnpay/packages/figma-clip/dist/index.mjs",
-]
-
 const args = process.argv.slice(2)
 const style = args.find(a => !a.startsWith("--")) ?? "ipay"
-const kiwi = args.includes("--kiwi")
+const mode = args.includes("--svg") ? "svg" : args.includes("--dom") ? "dom" : "h2d"
 const screen = args.includes("--screen") ? args[args.indexOf("--screen") + 1] : "Home"
 
 function requirePlaywright() {
@@ -51,46 +46,89 @@ function requirePlaywright() {
   throw new Error("Không tìm thấy playwright")
 }
 
-function pbcopy(text) {
+function pbcopyText(text) {
   const r = spawnSync("pbcopy", [], { input: text })
   if (r.status !== 0) throw new Error("pbcopy lỗi")
 }
 
-if (kiwi) {
-  const found = KIWI_CANDIDATES.find(existsSync)
-  if (!found) {
-    console.error(
-      "✗ --kiwi chưa chạy được trên máy này: thiếu encoder figma-clip.\n" +
-      "  PoC đã verify end-to-end nằm ở máy anhnd13: ~/Documents/figma-skill/figma-clip-poc\n" +
-      "  → xin folder đó, đặt vào: " + KIWI_CANDIDATES[0] + "\n" +
-      "  (bộ chuyển IR có sẵn: design-v3/contract-pipeline/studio/scripts/h2d-to-figclip.mjs)\n" +
-      "  Trong lúc chờ, dùng --svg: paste ra layer thật, chỉ thiếu Auto Layout.")
-    process.exit(2)
-  }
-  console.error("figma-clip tìm thấy ở " + found + " — đường kiwi chưa được lắp tự động, báo Claude lắp nốt.")
-  process.exit(2)
+/* Đưa HTML lên clipboard đúng flavor public.html (Figma đọc text/html khi paste).
+   pbcopy chỉ set plain text; osascript -e «data HTML…» thì vướng ARG_MAX với
+   payload vài MB → JXA đọc từ file, không giới hạn. */
+function pbcopyHtml(htmlFile) {
+  const jxa = `
+    ObjC.import('AppKit');
+    const pb = $.NSPasteboard.generalPasteboard;
+    pb.clearContents;
+    const html = $.NSString.stringWithContentsOfFileEncodingError(
+      '${htmlFile}', $.NSUTF8StringEncoding, null);
+    pb.setStringForType(html, $.NSPasteboardTypeHTML);
+    pb.setStringForType('', $.NSPasteboardTypeString);
+  `
+  const r = spawnSync("osascript", ["-l", "JavaScript", "-e", jxa], { encoding: "utf8" })
+  if (r.status !== 0) throw new Error("JXA clipboard lỗi: " + r.stderr)
 }
 
-/* ---------------- SVG path ---------------- */
+const bundle = readFileSync(resolve(HERE, "figma-h2d.global.js"), "utf8")
 const { chromium } = requirePlaywright()
 mkdirSync(OUT, { recursive: true })
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 480, height: 1000 } })
-try {
+
+async function gotoDemo() {
   await page.goto(`${BASE}/kit-gen/demo.html`)
   await page.evaluate(st => localStorage.setItem("kit-style", st), style)
   await page.goto(`${BASE}/kit-gen/demo.html`)
   await page.waitForFunction(sc => window.game?.scene?.isActive?.(sc), screen, { timeout: 20000 })
   await page.waitForTimeout(400)
-  const svg = await page.evaluate(() => window.__figmaSVG())
-  const file = resolve(OUT, `${style}-${screen.toLowerCase()}.svg`)
-  writeFileSync(file, svg)
-  pbcopy(svg)
-  const uses = (svg.match(/<image /g) ?? []).length
-  const texts = (svg.match(/<text /g) ?? []).length
-  console.log(`✓ ${file}`)
-  console.log(`✓ ĐÃ COPY vào clipboard (${(svg.length / 1024 / 1024).toFixed(1)}MB): ` +
-    `${uses} sprite + ${texts} text — sang Figma bấm Cmd+V`)
+}
+
+try {
+  if (mode === "svg") {
+    await gotoDemo()
+    const svg = await page.evaluate(() => window.__figmaSVG())
+    const file = resolve(OUT, `${style}-${screen.toLowerCase()}.svg`)
+    writeFileSync(file, svg)
+    pbcopyText(svg)
+    const uses = (svg.match(/<image /g) ?? []).length
+    const texts = (svg.match(/<text /g) ?? []).length
+    console.log(`✓ ${file}`)
+    console.log(`✓ ĐÃ COPY SVG (${(svg.length / 1024 / 1024).toFixed(1)}MB): ` +
+      `${uses} sprite + ${texts} text — sang Figma bấm Cmd+V`)
+  } else {
+    let html
+    if (mode === "h2d") {
+      await gotoDemo()
+      await page.addScriptTag({ content: bundle })
+      html = await page.evaluate(async () => {
+        const root = window.__figmaDOM()
+        const doc = await figmaH2D.captureElement(root)
+        root.remove()
+        const { html } = await figmaH2D.toFigmaClipboardHtml([doc], { source: "kit-gen-demo" })
+        return html
+      })
+    } else { // dom — figma.html, DOM flex thật
+      await page.goto(`${BASE}/kit-gen/figma.html?style=${style}`)
+      await page.waitForLoadState("networkidle")
+      await page.waitForTimeout(600)
+      await page.addScriptTag({ content: bundle })
+      html = await page.evaluate(async (sc) => {
+        for (const stack of document.querySelectorAll(".stack")) {
+          const name = stack.querySelector("small")?.textContent?.trim() ?? ""
+          if (!name.toLowerCase().includes(sc.toLowerCase())) continue
+          const doc = await figmaH2D.captureElement(stack.querySelector(".frame"))
+          const { html } = await figmaH2D.toFigmaClipboardHtml([doc], { source: "kit-gen-dom" })
+          return html
+        }
+        throw new Error("không thấy frame " + sc)
+      }, screen)
+    }
+    const file = resolve(OUT, `${style}-${screen.toLowerCase()}.${mode}.html`)
+    writeFileSync(file, html)
+    pbcopyHtml(file)
+    console.log(`✓ ${file}`)
+    console.log(`✓ ĐÃ COPY figh2d (${(html.length / 1024 / 1024).toFixed(1)}MB, nguồn ${mode}) ` +
+      `— sang Figma bấm Cmd+V, sẽ ra node thật`)
+  }
 } finally {
   await browser.close()
 }

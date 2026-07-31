@@ -255,7 +255,9 @@ class Home extends Phaser.Scene {
     const c = this.add.container(CX, H / 2 - 20);
     const panel = fitW(this.add.image(0, 0, "kit", "09-popup-panel-short"), 320);
     const ribbon = fitW(this.add.image(0, -panel.displayHeight / 2, "kit", "10-popup-ribbon"), 230);
-    const mc = fitH(this.add.image(0, -26, "kit", "19-mascot-celebrate"), 130);
+    // pose buồn từ sheet pose (kit mới); kit cũ chưa có thì rơi về mascot thường
+    const sadFrame = this.textures.get("kit").has("32-pose-sad") ? "32-pose-sad" : "19-mascot-celebrate";
+    const mc = fitH(this.add.image(0, -26, "kit", sadFrame), 130);
     c.add([panel, ribbon, label(this, 0, -panel.displayHeight / 2, "HẾT LƯỢT", 17), mc,
            label(this, 0, 58, "Bạn đã dùng hết lượt hôm nay.\nLàm nhiệm vụ để nhận thêm lượt nhé!", 12.5)]);
     const btn = pillButton(this, 0, panel.displayHeight / 2 + 6, "02-btn-pill-blue", 150, "NHIỆM VỤ", 14,
@@ -271,7 +273,7 @@ class Home extends Phaser.Scene {
 const PRIZES = [
   { art: "14-reward-voucher",   title: "CHÚC MỪNG!", body: "Bạn nhận được 1 voucher ưu đãi.\nQuà đã vào Giỏ quà của bạn." },
   { art: "15-reward-giftbox",   title: "CHÚC MỪNG!", body: "Bạn nhận được 1 phần quà.\nĐiền địa chỉ để nhận hàng nhé." },
-  { art: "19-mascot-celebrate", title: "TIẾC QUÁ!",  body: "Chúc bạn may mắn lần sau.\nLàm nhiệm vụ để có thêm lượt." }
+  { art: "32-pose-sad",         title: "TIẾC QUÁ!",  body: "Chúc bạn may mắn lần sau.\nLàm nhiệm vụ để có thêm lượt.", lose: true }
 ];
 
 class Play extends Phaser.Scene {
@@ -339,6 +341,9 @@ class Play extends Phaser.Scene {
       () => { openDom("gift"); }));
     c.add(pillButton(this, 80, ph / 2 + 4, "01-btn-pill-red", 148, "TIẾP TỤC", 14,
       () => this.scene.start(state.turns > 0 ? "Play" : "Home")));
+    // trúng giải: mascot ăn mừng ngó vào từ mép panel (trượt thì ảnh giữa đã là pose buồn)
+    if (!prize.lose && this.textures.get("kit").has("31-pose-cheer"))
+      c.add(fitH(this.add.image(-152, ph / 2 - 46, "kit", "31-pose-cheer"), 150));
     this.tweens.add({ targets: c, y: H / 2 - 14, duration: 460, ease: "Back.Out" });
     this.tweens.add({ targets: burst, angle: 360, duration: 14000, repeat: -1 });
   }
@@ -445,15 +450,38 @@ boot();
    figma-export/capture.mjs gọi hàm này qua playwright rồi đưa replica cho
    figma-h2d chụp ra IR. KHÔNG dùng cho gameplay — chỉ để export.
    ========================================================================== */
+/* Nướng (frame × tint) thành data-URL crop riêng — dùng chung cho cả
+   __figmaDOM lẫn __figmaSVG. Tint của Phaser nướng thẳng vào ảnh
+   (multiply + destination-in giữ alpha). Cache theo frame|tint. */
+const __baked = new Map();
+function __bakeFrame(f, tint) {
+  const key = f.name + "|" + (tint ?? "");
+  if (__baked.has(key)) return __baked.get(key);
+  const atlasImg = game.textures.get("kit").getSourceImage();
+  const c = document.createElement("canvas");
+  c.width = f.cutWidth; c.height = f.cutHeight;
+  const ctx = c.getContext("2d");
+  ctx.drawImage(atlasImg, f.cutX, f.cutY, f.cutWidth, f.cutHeight,
+                0, 0, f.cutWidth, f.cutHeight);
+  if (tint != null && tint !== 0xffffff) {
+    ctx.globalCompositeOperation = "multiply";
+    ctx.fillStyle = "#" + tint.toString(16).padStart(6, "0");
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.globalCompositeOperation = "destination-in";
+    ctx.drawImage(atlasImg, f.cutX, f.cutY, f.cutWidth, f.cutHeight,
+                  0, 0, f.cutWidth, f.cutHeight);
+  }
+  const url = c.toDataURL("image/png");
+  __baked.set(key, url);
+  return url;
+}
+
 window.__figmaDOM = function () {
   const scene = ["Play", "Home", "Preload"].map(k => game.scene.getScene(k))
     .find(s => s && s.scene.isActive());
   if (!scene) throw new Error("không có scene active");
 
-  const atlasSrc = `kits/${STYLE}/atlas.png`;
   const atlasTex = game.textures.get("kit");
-  const atlasImg = atlasTex.getSourceImage();
-  const AW = atlasImg.width, AH = atlasImg.height;
 
   const root = document.createElement("div");
   root.id = "figma-canvas-root";
@@ -476,17 +504,16 @@ window.__figmaDOM = function () {
       if (go.type === "Image" && go.frame && go.frame.texture === atlasTex) {
         const f = go.frame;
         const gsx = go.scaleX * sx, gsy = go.scaleY * sy;
-        const boxW = go.width * gsx, boxH = go.height * gsy;   // sourceSize box
-        const left = x - boxW * go.originX + f.x * gsx;        // f.x/f.y = trim offset
-        const top = y - boxH * go.originY + f.y * gsy;
+        const left = x - f.realWidth * gsx * go.originX + f.x * gsx;  // f.x/f.y = trim offset
+        const top = y - f.realHeight * gsy * go.originY + f.y * gsy;
+        const tint = (go.tintTopLeft ?? 0xffffff) !== 0xffffff ? go.tintTopLeft : null;
         const d = document.createElement("div");
         d.dataset.frame = f.name;
         d.style.cssText =
           `position:absolute;left:${left.toFixed(1)}px;top:${top.toFixed(1)}px;` +
           `width:${(f.cutWidth * gsx).toFixed(1)}px;height:${(f.cutHeight * gsy).toFixed(1)}px;` +
-          `background-image:url("${atlasSrc}");` +
-          `background-position:${(-f.cutX * gsx).toFixed(1)}px ${(-f.cutY * gsy).toFixed(1)}px;` +
-          `background-size:${(AW * gsx).toFixed(1)}px ${(AH * gsy).toFixed(1)}px;` +
+          `background-image:url("${__bakeFrame(f, tint)}");` +
+          `background-size:100% 100%;` +
           `opacity:${a.toFixed(3)}`;
         put(d);
       } else if (go.type === "Text") {
@@ -529,33 +556,11 @@ window.__figmaSVG = async function () {
     .find(s => s && s.scene.isActive());
   if (!scene) throw new Error("không có scene active");
 
-  const atlasImg = game.textures.get("kit").getSourceImage();
-
-  /* Mỗi (frame × tint) nướng MỘT lần thành data-URL crop riêng.
-     Không dùng <symbol>/<use> crop chung atlas nữa: Chrome không clip nội dung
+  /* Mỗi (frame × tint) nướng MỘT lần thành data-URL crop riêng (__bakeFrame).
+     Không dùng <symbol>/<use> crop chung atlas: Chrome không clip nội dung
      symbol khi lồng <use> → sprite kéo theo hàng xóm trong atlas tràn ra (đã
      dính). Crop riêng còn cho phép nướng tint của Phaser vào ảnh luôn. */
-  const baked = new Map();
-  function bake(f, tint) {
-    const key = f.name + "|" + (tint ?? "");
-    if (baked.has(key)) return baked.get(key);
-    const c = document.createElement("canvas");
-    c.width = f.cutWidth; c.height = f.cutHeight;
-    const ctx = c.getContext("2d");
-    ctx.drawImage(atlasImg, f.cutX, f.cutY, f.cutWidth, f.cutHeight,
-                  0, 0, f.cutWidth, f.cutHeight);
-    if (tint != null && tint !== 0xffffff) {
-      ctx.globalCompositeOperation = "multiply";
-      ctx.fillStyle = "#" + tint.toString(16).padStart(6, "0");
-      ctx.fillRect(0, 0, c.width, c.height);
-      ctx.globalCompositeOperation = "destination-in";   // giữ alpha gốc
-      ctx.drawImage(atlasImg, f.cutX, f.cutY, f.cutWidth, f.cutHeight,
-                    0, 0, f.cutWidth, f.cutHeight);
-    }
-    const url = c.toDataURL("image/png");
-    baked.set(key, url);
-    return url;
-  }
+  const bake = __bakeFrame;
 
   const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const body = [];

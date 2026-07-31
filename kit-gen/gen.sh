@@ -6,6 +6,9 @@ cd "$(dirname "$0")"
 ROOT="$(pwd)"
 mkdir -p raw logs prompts
 
+# Khung xương layout (ảnh ref đính kèm codex) — deterministic từ styles.json
+python3 skeleton.py
+
 # Build prompt cho từng (style, sheet) → prompts/<style>-<sheet>.txt
 python3 - <<'PY'
 import json
@@ -25,6 +28,12 @@ for s in cfg["styles"]:
             if sh["id"] != "bg" else
             "The two background scenes each fill their own half of the image completely, edge to edge, with a thin 24px gap between them.",
             "",
+            "The ATTACHED IMAGE is the layout skeleton of this exact sheet: each gray silhouette",
+            "marks the position, size and rough shape of the element that belongs in that cell.",
+            "Match every element's placement and scale to its silhouette precisely.",
+            "The skeleton is ONLY a placement guide: do NOT copy its gray color, outlines,",
+            "grid lines or plain shapes into the artwork.",
+            "",
             f"BACKGROUND of the sheet: one flat solid chroma-key color: {s['bg']}.",
             "No gradient, no texture, NO checkerboard or transparency pattern, no grid lines.",
             "This exact background color — and any hue CLOSE to it — must NEVER appear inside any element; pick element colors far from it on the color wheel.",
@@ -39,6 +48,8 @@ for s in cfg["styles"]:
             "semi-transparent, or showing the background through it (except where a spec explicitly says hollow).",
             ""
         ]
+        if sh.get("note"):
+            lines += [sh["note"], ""]
         for r in range(rows):
             lines.append(f"Row {r + 1}, left to right:")
             for c in range(cols):
@@ -55,8 +66,9 @@ PY
 
 run_one() {
   local job="$1"
+  local sheet="${job#*-}"
   local task
-  task="Generate ONE image with your image generation tool, landscape (1536x1024 if supported), using EXACTLY the prompt between the IMAGE PROMPT markers below. Then save/copy the generated PNG to exactly this path: ${ROOT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
+  task="Generate ONE image with your image generation tool, landscape (1536x1024 if supported), using EXACTLY the prompt between the IMAGE PROMPT markers below. The attached image is the layout skeleton referenced by the prompt — use it as the placement/size reference for every element. Then save/copy the generated PNG to exactly this path: ${ROOT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
 
 --- IMAGE PROMPT START ---
 $(cat "prompts/${job}.txt")
@@ -66,6 +78,7 @@ $(cat "prompts/${job}.txt")
     -s workspace-write \
     -C "${ROOT}" \
     --skip-git-repo-check \
+    -i "${ROOT}/skeleton/${sheet}.png" \
     -o "logs/${job}.last.txt" \
     "${task}" >"logs/${job}.log" 2>&1
   local rc=$?
@@ -76,10 +89,16 @@ $(cat "prompts/${job}.txt")
   fi
 }
 
-FILTER="${1:-}"
-echo "Bắt đầu $(date +%H:%M:%S) — chạy song song${FILTER:+ (lọc: $FILTER)}"
+# Filter: mỗi arg là một substring, job khớp BẤT KỲ arg nào thì chạy (không arg = chạy hết)
+FILTERS=("$@")
+match() {
+  [[ ${#FILTERS[@]} -eq 0 ]] && return 0
+  local f; for f in "${FILTERS[@]}"; do [[ "$1" == *"$f"* ]] && return 0; done
+  return 1
+}
+echo "Bắt đầu $(date +%H:%M:%S) — chạy song song${FILTERS[*]:+ (lọc: ${FILTERS[*]})}"
 while read -r job; do
-  [[ -n "$FILTER" && "$job" != *"$FILTER"* ]] && continue
+  match "$job" || continue
   run_one "$job" &
 done < <(python3 -c "
 import json

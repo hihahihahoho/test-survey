@@ -920,6 +920,11 @@ var figmaH2D = (() => {
   var KG_MARKER_SKIP = /* @__PURE__ */ new Set(["data-node-id", "data-name", "data-testid"]);
   function kgComponentMarker(el) {
     if (el.tagName.toLowerCase() === "svg") {
+      const figIcon = el.getAttribute("data-fig-icon");
+      if (figIcon) {
+        const key = el.getAttribute("data-fig-icon-key");
+        return `kg:fig|fig-comp=${figIcon}${key ? `;fig-key=${key}` : ""}`;
+      }
       const m = (el.getAttribute("class") ?? "").match(/lucide-([a-z0-9-]+)/);
       return m ? `icon/${m[1]}` : void 0;
     }
