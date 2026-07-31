@@ -97,6 +97,8 @@ def main():
             r, c = divmod(i, cols)
             x0, y0 = c * cw, r * ch
             sk = comp["skel"]
+            if sk["shape"] == "empty":
+                continue                      # ô đệm cố ý bỏ trống
             if sk["shape"] == "full":
                 d.rectangle([x0 + 2, y0 + 2, x0 + cw - 2, y0 + ch - 2], fill=FILL, outline=EDGE, width=3)
                 continue

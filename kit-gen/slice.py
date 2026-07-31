@@ -506,6 +506,8 @@ for style in cfg["styles"]:
         BX, BY = round(cell_w * BLEED), round(cell_h * BLEED)
         CVW, CVH = CW + 2 * BX, CH + 2 * BY       # canvas = ô + vành bleed
         for idx, comp in enumerate(sh["components"]):
+            if comp["skel"]["shape"] == "empty":
+                continue                      # ô đệm cố ý bỏ trống — không cắt
             row, col = divmod(idx, COLS)
             cx0, cy0 = round(col * cell_w), round(row * cell_h)
             canvas = Image.new("RGBA", (CVW, CVH), (0, 0, 0, 0))
@@ -612,7 +614,8 @@ for style in cfg["styles"]:
 
     manifest["styles"][sid] = entry
     total = len(entry["assets"])
-    want = sum(len(sh["components"]) for sh in cfg["sheets"]
+    want = sum(sum(1 for c in sh["components"] if c["skel"]["shape"] != "empty")
+               for sh in cfg["sheets"]
                if not sh.get("styles") or sid in sh["styles"])
     print(f"— {sid}: {total}/{want} asset" +
           (f", Ô TRỐNG: {entry['empty_cells']}" if entry["empty_cells"] else ""))

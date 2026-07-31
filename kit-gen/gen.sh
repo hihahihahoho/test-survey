@@ -22,13 +22,17 @@ for s in cfg["styles"]:
         cols, rows = sh["grid"]["cols"], sh["grid"]["rows"]
         comps = sh["components"]
         assert len(comps) == cols * rows, f'{sh["id"]}: {len(comps)} component ≠ lưới {cols}x{rows}'
+        n_real = sum(1 for c in comps if c["skel"].get("shape") != "empty")
         portrait = sh.get("orient") == "portrait"
         lines = [
             "Canvas orientation: " + ("PORTRAIT 1024x1536." if portrait else "LANDSCAPE 1536x1024."),
             "A game UI kit sprite sheet for a mobile mini-game marketing campaign."
             if len(comps) > 1 else
             "A single full-bleed background scene for a mobile mini-game.",
-            f"Exactly {len(comps)} elements arranged in a STRICT grid of {cols} columns and {rows} rows, evenly spaced.",
+            f"Exactly {n_real} elements arranged in a STRICT grid of {cols} columns and {rows} rows, evenly spaced."
+            + ("" if n_real == len(comps) else
+               f" The LAST {len(comps) - n_real} cell(s) of the grid are INTENTIONALLY EMPTY:"
+               " draw absolutely nothing there — pure flat background over the whole cell."),
             f"Each cell is a {sh.get('cell_hint', 'cell')}. Each element sits fully inside its own invisible cell,",
             "centered, keeping at least 40px of empty background padding on every side of the element;",
             "elements never touch each other and never touch the image edges."
@@ -95,7 +99,7 @@ for s in cfg["styles"]:
             ("Art style: faithfully match the attached inspiration reference image(s) — "
              "same rendering technique, materials, palette and level of detail."
              if use_inspo else f"Art style: {s['style']}."),
-            f"All {len(comps)} elements share the exact same consistent style and belong to one coherent game. "
+            f"All {n_real} elements share the exact same consistent style and belong to one coherent game. "
             "Game-ready UI asset quality, " + ("portrait 2:3." if portrait else "landscape 3:2.")
         ]
         open(f"prompts/{s['id']}-{sh['id']}.txt", "w").write("\n".join(lines))

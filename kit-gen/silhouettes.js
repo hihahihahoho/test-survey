@@ -84,6 +84,7 @@
 
   function silhouette(shape, w, h, uid, skel = {}) {
     const c = skel.plain ? `fill="${FILL}"` : `fill="${FILL}" stroke="${EDGE}" stroke-width="3"`;
+    if (shape === "empty") return "";          // ô đệm cố ý bỏ trống
     if (shape === "pose") return poseSVG(skel.pose, w, h);
     if (shape === "pill" || shape === "bar")
       return `<rect x="0" y="0" width="${w}" height="${h}" rx="${h / 2}" ${c}/>`;
