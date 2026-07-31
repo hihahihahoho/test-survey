@@ -36,9 +36,10 @@ GROW_OFFSET = 60         # mask nghiêm = threshold + 60 (style ghi đè bằng 
 MIN_BLOB = 12            # khối nhỏ hơn (px) coi là nhiễu
 HALO = 14                # nới bbox giữ glow quanh element
 PAD = 6
-BLEED = 0.12             # vành canvas ngoài ô (mỗi phía, theo tỷ lệ ô): trang trí
+BLEED = 0.18             # vành canvas ngoài ô (mỗi phía, theo tỷ lệ ô): trang trí
                          # tràn RANH GIỚI Ô vẫn được vớt (mask sở hữu khối lo phần
-                         # không vớt nhầm đồ hàng xóm); engine bù 1+2*BLEED khi fit
+                         # không vớt nhầm đồ hàng xóm); engine bù 1+2*BLEED khi fit.
+                         # Đo thực tế: model tràn tới ~17% ô (đèn lồng ribbon tết)
 
 cfg = json.load(open(os.path.join(HERE, "styles.json")))
 for _sh in cfg["sheets"]:
@@ -504,6 +505,12 @@ for style in cfg["styles"]:
             sw, sh_ = round(CW * sk["w"]), round(CH * sk["h"])
             sx = BX + (CW - sw) // 2
             sy = BY + (CH - sh_ - round(CH * 0.04) if sk.get("anchor") == "bottom" else (CH - sh_) // 2)
+            # Audit chạm mép TRƯỚC snap: snap kéo content vào trong canvas nên vết
+            # cụt (cắt ở biên vùng crop) sẽ "tàng hình" nếu đo sau
+            pre = canvas.getchannel("A").getbbox()
+            if pre and sk["shape"] != "full" and (
+                    pre[0] == 0 or pre[1] == 0 or pre[2] == CVW or pre[3] == CVH):
+                print(f"  ⚠ {sid}/{comp['file']}: content chạm mép canvas — raw tràn quá vành bleed, bị cụt")
             canvas = snap_to_safe(canvas, sk, (sx, sy, sw, sh_))
             canvas.save(os.path.join(out_dir, f"{comp['file']}.png"))
             abox = canvas.getchannel("A").getbbox()
@@ -522,10 +529,6 @@ for style in cfg["styles"]:
             dev_y = (oy + ph / 2) - (sy + sh_ / 2)
             if abs(dev_x) > CW * 0.06 or abs(dev_y) > CH * 0.06:
                 print(f"  ⚠ {sid}/{comp['file']}: ruột lệch khung safe ({dev_x:+.0f},{dev_y:+.0f})px")
-            # content chạm mép canvas (đã gồm bleed) = raw vẽ tràn quá cả vành → mất nét
-            if comp["skel"]["shape"] != "full" and (
-                    ox == 0 or oy == 0 or ox + pw == CVW or oy + ph == CVH):
-                print(f"  ⚠ {sid}/{comp['file']}: content chạm mép canvas — raw tràn quá vành bleed")
             atlas_items.append((comp["file"], tight, (CVW, CVH), (ox, oy)))
             entry["assets"].append({"file": comp["file"] + ".png", "sheet": sh["id"],
                                     "canvas": [CVW, CVH], "cell": [CW, CH], "bleed": [BX, BY],

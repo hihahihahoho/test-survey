@@ -89,9 +89,9 @@ const END_AT = Date.now() + (2 * 86400 + 11 * 3600 + 30 * 60) * 1000;
 
 const kimg = n => `kits/${STYLE}/${n}.png`;
 const timg = n => `kits/${STYLE}/tight/${n}.png`;   // ruột crop chặt, không vành bleed
-/* canvas kit = ô + vành bleed 12% mỗi phía (slice.py BLEED) → fit theo canvas
+/* canvas kit = ô + vành bleed 18% mỗi phía (slice.py BLEED) → fit theo canvas
    phải nhân bù để THÂN element ra đúng cỡ như khi canvas = ô */
-const BLEED_COMP = 1.24;
+const BLEED_COMP = 1.36;
 
 /* =============================================================================
    Boot: nạp trước track/fill để Preload có thanh progress thật
