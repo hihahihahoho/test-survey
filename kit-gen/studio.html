@@ -663,9 +663,17 @@ function watchGen(filters) {
     if (!s.running) {
       clearInterval(genTimer); genTimer = null;
       $("genBtn").disabled = false; $("genBtn").textContent = "⚡ Gen sheet đã chọn";
-      log(s.log + '\n✅ xong — ảnh nằm ở tab "Ảnh gen" dưới mỗi sheet, ưng thì bấm ✂️ Slice');
       for (const [job, st] of jobStatus) if (st === "ok")
         document.querySelector(`.sheet-wrap[data-job="${job}"] [data-t="raw"]`)?.click();
+      // TỰ SLICE sau gen: không thì kits/tight vẫn là bản cắt cũ — Copy Figma
+      // lấy element cũ, nhìn y hệt "bị cache" (đã dính nhiều lần)
+      if ([...jobStatus.values()].includes("ok")) {
+        log(s.log + "\n✂️ gen xong — tự slice cho kit khớp raw mới (≈1-2 phút)…");
+        const r = await api("/api/slice", { styles: [style.id] });
+        log(r.out + "\n✅ slice xong — Copy Figma / màn demo giờ chắc chắn là ảnh MỚI");
+      } else {
+        log(s.log + "\n✅ xong — không sheet nào gen thành công nên giữ nguyên kit cũ");
+      }
     }
   }, 2500);
 }
