@@ -856,6 +856,37 @@ for style in cfg["styles"]:
             else:
                 canvas = snap_to_safe(canvas, sk, (sx, sy, sw, sh_))
                 safe_box = [sx, sy, sw, sh_]
+            # DỌN ĐỐM MỒ CÔI — phải nằm SAU snap_to_safe: snap resample nội
+            # dung làm cầu alpha mờ nối đốm với thân MỎNG ĐI rồi đứt, tức đốm
+            # chỉ tách rời ở ảnh CUỐI (đã dính: dọn trước snap thấy n2=1 nên
+            # bỏ qua, ảnh lưu ra vẫn còn đốm). Đốm = cụm TỐI, NHỎ, tách khỏi
+            # thân ở ngưỡng α>60; sparkle sáng màu cố ý → giữ. Dọn cả quầng mờ
+            # quanh đốm (nới 4px), chừa lãnh thổ thân.
+            if HAS_PYMATTING and comp["skel"]["shape"] != "full":
+                ca = np.asarray(canvas)
+                aa = ca[..., 3]
+                lb2, n2 = ndimage.label(aa > 60)
+                if n2 > 1:
+                    sizes2 = ndimage.sum(aa > 60, lb2, range(1, n2 + 1))
+                    main_id = int(np.argmax(sizes2)) + 1
+                    main_sz = sizes2[main_id - 1]
+                    protect = ndimage.binary_dilation(lb2 == main_id, iterations=1)
+                    lum2 = 0.3 * ca[..., 0] + 0.59 * ca[..., 1] + 0.11 * ca[..., 2]
+                    kill = np.zeros(aa.shape, dtype=bool)
+                    for j in range(1, n2 + 1):
+                        sz = sizes2[j - 1]
+                        if j == main_id or sz > max(60, main_sz * 0.004):
+                            continue
+                        mk = lb2 == j
+                        if lum2[mk].mean() < 100:
+                            kill |= ndimage.binary_dilation(mk, iterations=4) & ~protect
+                    if kill.any():
+                        # quét nốt quầng mờ + cầu alpha thấp quanh vùng vừa diệt
+                        kill |= ndimage.binary_dilation(kill, iterations=8) & (aa < 60) & ~protect
+                        ca = ca.copy()
+                        ca[kill] = 0
+                        canvas = Image.fromarray(ca)
+                        print(f"  · {sid}/{comp['file']}: dọn {int(kill.sum())}px đốm tối mồ côi")
             canvas.save(os.path.join(out_dir, f"{comp['file']}.png"))
             abox = canvas.getchannel("A").getbbox()
             if abox is None:
