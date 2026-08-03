@@ -30,6 +30,13 @@ from collections import deque
 from array import array
 from PIL import Image, ImageChops, ImageFilter, ImageOps
 
+try:
+    import numpy as np
+    from pymatting import estimate_alpha_cf, estimate_foreground_ml
+    HAS_PYMATTING = True
+except ImportError:                       # máy thiếu lib → đường lùi Vlahos
+    HAS_PYMATTING = False
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_THRESHOLD = 52   # tâm ramp: dưới lo → trong suốt, trên hi → đục hẳn
 GROW_OFFSET = 60         # mask nghiêm = threshold + 60 (style ghi đè bằng grow_threshold)
@@ -76,6 +83,71 @@ def is_key_color(bgs):
 
 
 def matte_chroma(sheet, key):
+    """Matte cho nền key chát: closed-form matting (PyMatting) nếu có lib,
+    không thì đường lùi Vlahos per-pixel."""
+    if HAS_PYMATTING:
+        return matte_pymatting(sheet, key)
+    return matte_vlahos(sheet, key)
+
+
+def matte_pymatting(sheet, key):
+    """Closed-form matting với trimap TỰ SINH từ màu key đã biết.
+
+    Vlahos đoán alpha ĐỘC LẬP từng pixel → bóng đổ/glow trộn nền cho alpha
+    nhiễu, phải vá bằng blur + despill mà vẫn sót (dải tím đáy toggle, burst
+    loang lổ — đã dính). Closed-form matting (Levin et al. — cùng loại toán
+    trong Refine Edge của Photoshop) giải alpha TOÀN CỤC theo mô hình
+    color-line, chỉ cần chia sẵn 3 vùng nhờ màu key cố định:
+      • nền chắc chắn:  nhiễm key ≥ 90%                → alpha 0
+      • element chắc:   không nhiễm key, co 2px        → alpha 1
+      • dải nghi vấn:   mép / bóng đổ / glow           → solver quyết, mượt
+    estimate_foreground_ml gỡ màu nền đã trộn vào pixel biên (thay
+    un-premultiply). Hậu kỳ giữ từ đường cũ: ép đục ruột loang + despill
+    magenta/green dư ở glow-bóng; BỎ blur 2 tầng — alpha solver đã mượt sẵn,
+    blur chỉ làm bết sparkle."""
+    kr, kg, kb = key
+    is_green = kg > max(kr, kb)
+    arr = np.asarray(sheet, dtype=np.float64)
+    r, g, b = arr[..., 0], arr[..., 1], arr[..., 2]
+    spill = (g - np.maximum(r, b)) if is_green else (np.minimum(r, b) - g)
+    sref = max(40.0, (kg - max(kr, kb)) if is_green else (min(kr, kb) - kg))
+    fg_sure = Image.fromarray(((spill <= 0) * 255).astype(np.uint8))
+    fg_sure = np.asarray(fg_sure.filter(ImageFilter.MinFilter(5))) > 128
+    trimap = np.full(spill.shape, 0.5)
+    trimap[fg_sure] = 1.0
+    trimap[np.clip(spill / sref, 0, 1) >= 0.9] = 0.0
+    alpha = estimate_alpha_cf(arr / 255.0, trimap)
+    fgc = np.clip(estimate_foreground_ml(arr / 255.0, alpha) * 255, 0, 255)
+    a8 = np.rint(np.clip(alpha, 0, 1) * 255).astype(np.uint8)
+    # ÉP ĐỤC RUỘT như đường cũ: màu gần key NẰM TRONG THÂN cho alpha lửng lơ →
+    # loang lổ trên nền tối. Vùng đặc (lấp lỗ, co 2px) ∩ pixel vốn khá đục
+    # (α>90) → 255; ruột RỖNG CỐ Ý (α≈0 nằm kín) không bị lấp.
+    aimg = Image.fromarray(a8)
+    solid = fill_mask_holes(aimg.point(lambda v: 255 if v > 128 else 0))
+    interior = solid.filter(ImageFilter.MinFilter(5))
+    semi = aimg.point(lambda v: 255 if v > 90 else 0)
+    a8 = np.maximum(a8, np.asarray(ImageChops.darker(interior, semi)))
+    # DESPILL phần key dư ở biên/bóng (ngoài ruột đặc, hoặc ruột TỐI = bóng đổ):
+    # glow bán trong suốt vẫn giữ chút magenta thật trong màu trộn → trung hoà
+    # 70% như đường cũ, thân màu sáng hợp lệ không bị xỉn.
+    R, G, B = fgc[..., 0], fgc[..., 1], fgc[..., 2]
+    ex = (G - np.maximum(R, B)) if is_green else (np.minimum(R, B) - G)
+    inn = np.asarray(interior) > 0
+    lum = 0.3 * R + 0.59 * G + 0.11 * B
+    m = (a8 > 0) & (ex > 0) & (~inn | (lum < 90))
+    cut = np.where(m, ex * 0.7, 0)
+    if is_green:
+        G -= cut
+    else:
+        R -= cut
+        B -= cut
+    out = Image.fromarray(
+        np.dstack([np.clip(fgc, 0, 255).astype(np.uint8), a8[..., None]]))
+    strict = bytearray((a8 >= 242).astype(np.uint8).tobytes())
+    return out, strict
+
+
+def matte_vlahos(sheet, key):
     """Chroma-key thực thụ theo Vlahos + DESPILL, cho nền key green/magenta.
 
     Ramp theo khoảng-cách-màu là chưa đủ: glow bán trong suốt TRỘN với nền key
@@ -514,7 +586,8 @@ for style in cfg["styles"]:
             bg = border_colors(sheet_rgb)
             if is_key_color(bg):
                 keyed, strict = matte_chroma(sheet_rgb, bg[0])
-                mode = f"matte Vlahos + despill, key {bg[0]}"
+                mode = (f"matte closed-form PyMatting + despill, key {bg[0]}"
+                        if HAS_PYMATTING else f"matte Vlahos + despill, key {bg[0]}")
             else:
                 keyed, strict = key_binary(sheet_rgb, bg, threshold, strict_threshold)
                 filled = fill_holes(keyed, sheet_rgb, W, H)
