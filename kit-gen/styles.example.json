@@ -1,0 +1,40 @@
+{
+  "_note": "Contract v4 — rút từ Figma game thật (VietinBank iPay 'Mở túi - Khui quà', fileKey vqpCLz0PsQXhddbSHWRH5R). Element nào code cần điều khiển độc lập (đổi %, swap state) thì tách thành file riêng, nằm ở Ô KHÁC NHAU trên sheet. Thứ tự trong components = thứ tự ô row-major; tên file giữ số thứ tự semantic. Element có glow đặt ở ô biên/góc. Track và fill của progress KHÔNG kề nhau. skel = khung xương vẽ vào ảnh ref cho codex (skeleton.py): shape + w/h theo tỷ lệ ô; anchor 'bottom' = dính đáy ô.",
+  "sheets": [],
+  "styles": [
+    {
+      "id": "demo",
+      "vi": "demo",
+      "style": "",
+      "styleMode": "prompt",
+      "bg": "pure vivid magenta #FF00FF",
+      "brand": {
+        "mode": "colors",
+        "primary": "#d42a1e",
+        "secondary": "#f5c64a"
+      },
+      "characters": []
+    }
+  ],
+  "characterPoses": [
+    "idle",
+    "wave",
+    "point",
+    "hold-gift",
+    "cheer",
+    "sad",
+    "run",
+    "think",
+    "sit",
+    "jump",
+    "bow",
+    "thumbs-up",
+    "fly",
+    "walk",
+    "dance",
+    "present",
+    "view-34",
+    "view-side",
+    "view-back"
+  ]
+}

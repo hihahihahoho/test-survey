@@ -1,0 +1,10 @@
+# Dữ liệu gen/test cục bộ — repo chỉ giữ bộ công cụ trắng (styles.example.json là mẫu)
+raw/
+kits/
+logs/
+prompts/
+refs/
+matte-compare/
+styles.json
+styles.json.bak
+nohup.out

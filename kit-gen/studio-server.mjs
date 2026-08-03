@@ -22,6 +22,11 @@ const HERE = dirname(fileURLToPath(import.meta.url))       // kit-gen/
 const ROOT = resolve(HERE, "..")                           // repo root
 const PORT = Number(process.env.PORT ?? 8125)
 
+// Clone mới không có styles.json (gitignore — repo chỉ giữ bộ trắng):
+// nhân bản từ contract mẫu để studio chạy được ngay
+if (!existsSync(join(HERE, "styles.json")) && existsSync(join(HERE, "styles.example.json")))
+  copyFileSync(join(HERE, "styles.example.json"), join(HERE, "styles.json"))
+
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript",
   ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg",
   ".css": "text/css", ".svg": "image/svg+xml" }
