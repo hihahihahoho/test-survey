@@ -146,6 +146,7 @@ $(cat "prompts/${job}.txt")
   done < "prompts/${job}.att"
 
   # bash 3.2 + set -u: mảng rỗng nổ "unbound variable" nếu expand thẳng
+  local t0=$(date +%s)
   codex exec \
     -s workspace-write \
     -C "${ROOT}" \
@@ -154,10 +155,18 @@ $(cat "prompts/${job}.txt")
     -o "logs/${job}.last.txt" \
     "${task}" >"logs/${job}.log" 2>&1
   local rc=$?
-  if [[ $rc -eq 0 && -f "raw/${job}.png" ]]; then
-    echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)"
+  # Phán theo SẢN PHẨM, không tin mã thoát: codex hay sập vì lỗi API transient
+  # SAU khi đã lưu ảnh xong (đã dính: badge ❌ oan, auto-slice bị bỏ qua).
+  # Ảnh được ghi mới trong lượt chạy này = job thành công.
+  local mt=$(stat -f %m "raw/${job}.png" 2>/dev/null || echo 0)
+  if [[ "$mt" -ge "$t0" ]]; then
+    if [[ $rc -eq 0 ]]; then
+      echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)"
+    else
+      echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)  (codex rc=${rc} sau khi đã lưu ảnh — bỏ qua)"
+    fi
   else
-    echo "FAIL ${job} (rc=${rc}, xem logs/${job}.log)"
+    echo "FAIL ${job} (rc=${rc}, ảnh không được ghi mới — xem logs/${job}.log)"
   fi
 }
 
