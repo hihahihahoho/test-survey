@@ -33,6 +33,7 @@ from PIL import Image, ImageChops, ImageFilter, ImageOps
 try:
     import numpy as np
     from pymatting import estimate_alpha_cf, estimate_foreground_ml
+    from scipy import ndimage
     HAS_PYMATTING = True
 except ImportError:                       # máy thiếu lib → đường lùi Vlahos
     HAS_PYMATTING = False
@@ -113,26 +114,39 @@ def matte_pymatting(sheet, key):
     sref = max(40.0, (kg - max(kr, kb)) if is_green else (min(kr, kb) - kg))
     fg_sure = Image.fromarray(((spill <= 0) * 255).astype(np.uint8))
     fg_sure = np.asarray(fg_sure.filter(ImageFilter.MinFilter(5))) > 128
+    # nn = biên nền/nghi-vấn LÀM MƯỢT trước khi cắt: noise gpt-image trên vùng
+    # glow-trộn-key làm contour sn=0.9 lởm chởm → alpha viền răng cưa (đã dính)
+    sn = np.clip(spill / sref, 0, 1)
+    sn_s = np.asarray(Image.fromarray(np.rint(sn * 255).astype(np.uint8))
+                      .filter(ImageFilter.GaussianBlur(2))) / 255.0
     trimap = np.full(spill.shape, 0.5)
     trimap[fg_sure] = 1.0
-    trimap[np.clip(spill / sref, 0, 1) >= 0.9] = 0.0
+    trimap[sn_s >= 0.9] = 0.0
     alpha = estimate_alpha_cf(arr / 255.0, trimap)
     fgc = np.clip(estimate_foreground_ml(arr / 255.0, alpha) * 255, 0, 255)
     a8 = np.rint(np.clip(alpha, 0, 1) * 255).astype(np.uint8)
-    # ÉP ĐỤC RUỘT như đường cũ: màu gần key NẰM TRONG THÂN cho alpha lửng lơ →
-    # loang lổ trên nền tối. Vùng đặc (lấp lỗ, co 2px) ∩ pixel vốn khá đục
-    # (α>90) → 255; ruột RỖNG CỐ Ý (α≈0 nằm kín) không bị lấp.
+    # VÁ LỖ NHỎ (thay vì ép đục cả ruột): cụm bán-trong-suốt < 400px nằm trong
+    # thân đặc là "ruột loang" → ép 255; mảng semi LỚN liền khối là chủ ý nghệ
+    # thuật (gradient glow của burst, ruột kính board-panel) — ép là san phẳng
+    # alpha thành slab đục viền lởm chởm (đã dính). Ruột RỖNG CỐ Ý (α≈0) không
+    # nằm trong dải 90–242 nên vô can.
     aimg = Image.fromarray(a8)
-    solid = fill_mask_holes(aimg.point(lambda v: 255 if v > 128 else 0))
-    interior = solid.filter(ImageFilter.MinFilter(5))
-    semi = aimg.point(lambda v: 255 if v > 90 else 0)
-    a8 = np.maximum(a8, np.asarray(ImageChops.darker(interior, semi)))
+    interior = aimg.point(lambda v: 255 if v > 128 else 0).filter(ImageFilter.MinFilter(5))
+    inn = np.asarray(interior) > 0
+    semi_m = (a8 > 90) & (a8 < 242) & inn
+    lbl, nlb = ndimage.label(semi_m)
+    if nlb:
+        sizes = ndimage.sum(semi_m, lbl, range(1, nlb + 1))
+        a8[np.isin(lbl, np.nonzero(sizes < 400)[0] + 1)] = 255
+    # FEATHER vùng alpha thấp: mép ngoài glow phai dần thay vì đứt gãy; mép đặc
+    # (α>128) giữ nguyên độ nét
+    lo = np.asarray(Image.fromarray(a8).filter(ImageFilter.GaussianBlur(3)))
+    a8 = np.where(a8 > 128, a8, lo).astype(np.uint8)
     # DESPILL phần key dư ở biên/bóng (ngoài ruột đặc, hoặc ruột TỐI = bóng đổ):
     # glow bán trong suốt vẫn giữ chút magenta thật trong màu trộn → trung hoà
     # 70% như đường cũ, thân màu sáng hợp lệ không bị xỉn.
     R, G, B = fgc[..., 0], fgc[..., 1], fgc[..., 2]
     ex = (G - np.maximum(R, B)) if is_green else (np.minimum(R, B) - G)
-    inn = np.asarray(interior) > 0
     lum = 0.3 * R + 0.59 * G + 0.11 * B
     m = (a8 > 0) & (ex > 0) & (~inn | (lum < 90))
     cut = np.where(m, ex * 0.7, 0)
