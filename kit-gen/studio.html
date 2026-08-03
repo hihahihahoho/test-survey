@@ -692,18 +692,22 @@ $("figmaBtn").onclick = async () => {
   const m = await (await fetch("kits/manifest.json?" + Date.now())).json();
   const assets = m.styles[style.id]?.assets ?? [];
   if (!assets.length) return log("chưa có kit đã slice cho style này");
-  // Element đặt ở KÍCH THƯỚC PIXEL THẬT của tight/ (manifest content = [w,h]):
-  // figma-h2d chụp theo CSS px → layer Figma đúng 1:1 với asset, designer
-  // không phải đoán scale (thumbnail max-width cũ làm mọi element bị co).
+  // Kích thước NHẤT QUÁN theo hệ toạ độ thiết kế: asset gen là @2x nên element
+  // UI + bg hiển thị 50% (nút cao 106px thật → 53pt chuẩn mobile); riêng
+  // MASCOT pose giữ 1:1 theo yêu cầu. Ảnh nguồn vẫn nét @2x — Figma scale
+  // bitmap xuống, designer phóng to lại không vỡ. Nhãn ghi cả 2 cỡ.
   const board = document.createElement("div");
   board.style.cssText = "position:fixed;left:0;top:0;background:#fff;padding:24px;" +
-    "display:flex;flex-wrap:wrap;align-items:flex-start;gap:24px;width:3600px;z-index:-1";
+    "display:flex;flex-wrap:wrap;align-items:flex-start;gap:24px;width:2400px;z-index:-1";
   for (const a of assets) {
     const [w, h] = a.content;
+    const scale = a.file.startsWith("pose-") ? 1 : 0.5;
+    const dw = Math.round(w * scale), dh = Math.round(h * scale);
     const cell = document.createElement("div");
     cell.style.cssText = "text-align:center;font:11px sans-serif;color:#333";
     cell.innerHTML = `<img src="kits/${style.id}/tight/${a.file}?${Date.now()}" ` +
-      `style="width:${w}px;height:${h}px;display:block;margin:0 auto"><div>${a.file.replace(".png", "")}</div>`;
+      `style="width:${dw}px;height:${dh}px;display:block;margin:0 auto">` +
+      `<div>${a.file.replace(".png", "")} · ${dw}×${dh}${scale === 1 ? "" : ` (@2x ${w}×${h})`}</div>`;
     board.appendChild(cell);
   }
   document.body.appendChild(board);

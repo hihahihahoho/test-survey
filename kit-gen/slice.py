@@ -38,6 +38,25 @@ try:
 except ImportError:                       # máy thiếu lib → đường lùi Vlahos
     HAS_PYMATTING = False
 
+try:                                      # deep matting: alpha glow/bán-trong-suốt
+    import torch                          # mượt hơn hẳn closed-form (so găng burst)
+    from transformers import VitMatteImageProcessor, VitMatteForImageMatting
+    HAS_VITMATTE = True
+except ImportError:
+    HAS_VITMATTE = False
+_VITMATTE = None
+
+
+def vitmatte_model():
+    """Nạp lười 1 lần (~8s): chỉ trả giá khi có sheet key cần matte."""
+    global _VITMATTE
+    if _VITMATTE is None:
+        p = VitMatteImageProcessor.from_pretrained("hustvl/vitmatte-small-composition-1k")
+        m = VitMatteForImageMatting.from_pretrained("hustvl/vitmatte-small-composition-1k")
+        m.eval()
+        _VITMATTE = (p, m)
+    return _VITMATTE
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_THRESHOLD = 52   # tâm ramp: dưới lo → trong suốt, trên hi → đục hẳn
 GROW_OFFSET = 60         # mask nghiêm = threshold + 60 (style ghi đè bằng grow_threshold)
@@ -119,10 +138,22 @@ def matte_pymatting(sheet, key):
     sn = np.clip(spill / sref, 0, 1)
     sn_s = np.asarray(Image.fromarray(np.rint(sn * 255).astype(np.uint8))
                       .filter(ImageFilter.GaussianBlur(2))) / 255.0
-    trimap = np.full(spill.shape, 0.5)
-    trimap[fg_sure] = 1.0
-    trimap[sn_s >= 0.9] = 0.0
-    alpha = estimate_alpha_cf(arr / 255.0, trimap)
+    if HAS_VITMATTE:
+        # ViTMatte (ViT-small, trimap-based SOTA): alpha vùng nghi vấn mượt và
+        # đúng cấu trúc tia/glow hơn hẳn closed-form (bảng so găng burst)
+        proc, mdl = vitmatte_model()
+        tm8 = np.full(spill.shape, 128, dtype=np.uint8)
+        tm8[fg_sure] = 255
+        tm8[sn_s >= 0.9] = 0
+        inp = proc(images=sheet, trimaps=Image.fromarray(tm8), return_tensors="pt")
+        with torch.no_grad():
+            alpha = mdl(**inp).alphas[0, 0, :sheet.height, :sheet.width]
+        alpha = alpha.numpy().astype(np.float64)
+    else:
+        trimap = np.full(spill.shape, 0.5)
+        trimap[fg_sure] = 1.0
+        trimap[sn_s >= 0.9] = 0.0
+        alpha = estimate_alpha_cf(arr / 255.0, trimap)
     fgc = np.clip(estimate_foreground_ml(arr / 255.0, alpha) * 255, 0, 255)
     a8 = np.rint(np.clip(alpha, 0, 1) * 255).astype(np.uint8)
     # VÁ LỖ NHỎ (thay vì ép đục cả ruột): cụm bán-trong-suốt < 400px nằm trong
@@ -600,7 +631,8 @@ for style in cfg["styles"]:
             bg = border_colors(sheet_rgb)
             if is_key_color(bg):
                 keyed, strict = matte_chroma(sheet_rgb, bg[0])
-                mode = (f"matte closed-form PyMatting + despill, key {bg[0]}"
+                mode = ((f"matte ViTMatte + despill, key {bg[0]}" if HAS_VITMATTE
+                         else f"matte closed-form PyMatting + despill, key {bg[0]}")
                         if HAS_PYMATTING else f"matte Vlahos + despill, key {bg[0]}")
             else:
                 keyed, strict = key_binary(sheet_rgb, bg, threshold, strict_threshold)
