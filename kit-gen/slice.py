@@ -180,13 +180,17 @@ def matte_pymatting(sheet, key, noclamp=None):
     if nlb:
         sizes = ndimage.sum(semi_m, lbl, range(1, nlb + 1))
         a8[np.isin(lbl, np.nonzero(sizes < 400)[0] + 1)] = 255
+    # KHỬ RĂNG CƯA mép đặc: soften alpha 0.7px toàn cục (sub-pixel AA như
+    # Photoshop) — mép silhouette hết bậc thang mà thân không mỏng đi
+    a8 = np.asarray(Image.fromarray(a8).filter(ImageFilter.GaussianBlur(0.7)))
     # FEATHER vùng alpha thấp: mép ngoài glow phai dần thay vì đứt gãy; mép đặc
     # (α>128) giữ nguyên độ nét
     lo = np.asarray(Image.fromarray(a8).filter(ImageFilter.GaussianBlur(3)))
     a8 = np.where(a8 > 128, a8, lo).astype(np.uint8)
-    # DESPILL phần key dư ở biên/bóng (ngoài ruột đặc, hoặc ruột TỐI = bóng đổ):
-    # glow bán trong suốt vẫn giữ chút magenta thật trong màu trộn → trung hoà
-    # 70% như đường cũ, thân màu sáng hợp lệ không bị xỉn.
+    # DESPILL phần key dư ở biên/bóng (ngoài ruột đặc, hoặc ruột TỐI = bóng đổ),
+    # BẢO TOÀN ĐỘ SÁNG: bản cũ trừ thẳng kênh R/B làm pixel biên trắng-pha-key
+    # sập tối → viền chì mờ quanh element (đã dính) — giờ trừ xong scale lại
+    # về đúng luminance ban đầu: chỉ đổi SẮC, không đổi SÁNG.
     R, G, B = fgc[..., 0], fgc[..., 1], fgc[..., 2]
     ex = (G - np.maximum(R, B)) if is_green else (np.minimum(R, B) - G)
     lum = 0.3 * R + 0.59 * G + 0.11 * B
@@ -197,6 +201,26 @@ def matte_pymatting(sheet, key, noclamp=None):
     else:
         R -= cut
         B -= cut
+    lum2 = 0.3 * R + 0.59 * G + 0.11 * B
+    scale = np.clip(np.where(lum2 > 1, lum / np.maximum(lum2, 1), 1.0), 1.0, 1.8)
+    fgc *= scale[..., None]
+    # DEFRINGE kiểu Photoshop (decontamination như Photoroom): dải mỏng 3px sát
+    # vùng trong suốt lấy MÀU lan từ ruột đặc gần nhất (alpha giữ nguyên) —
+    # pixel biên là màu element trộn nền, un-mix kiểu gì cũng lem; thay hẳn màu
+    # là sạch. Dải chỉ 3px nên bóng đổ rộng/kính (xa mép trong suốt) vô can.
+    outer = a8 < 8
+    band = ndimage.binary_dilation(outer, iterations=3) & ~outer
+    known = a8 >= 200
+    filled = known.copy()
+    Fp = fgc.copy()
+    for _ in range(4):
+        w_ = ndimage.uniform_filter(filled.astype(np.float64), 3)
+        Fs = np.dstack([ndimage.uniform_filter(Fp[..., c] * filled, 3) for c in range(3)])
+        upd = (~filled) & (w_ > 1e-6)
+        Fp[upd] = Fs[upd] / w_[upd, None]
+        filled |= upd
+    take = band & filled & ~known
+    fgc = np.where(take[..., None], Fp, fgc)
     out = Image.fromarray(
         np.dstack([np.clip(fgc, 0, 255).astype(np.uint8), a8[..., None]]))
     strict = bytearray((a8 >= 242).astype(np.uint8).tobytes())
@@ -695,6 +719,27 @@ for style in cfg["styles"]:
                     rowm = a8_[oy]
                     for ox in range(x1 - x0):
                         strict[base + ox] = 1 if rowm[ox] >= 242 else 0
+                # VÀNH ĐAI quanh ô: tấm đen hay TRÀN qua ranh ô vài px — phần
+                # tràn đi đường matte thường thành mảng ĐEN ĐỤC dính vào crop
+                # (đã dính: sọc đen mép burst). Trong vành, pixel gần-đen hoặc
+                # nhiễm key → trong suốt; art hàng xóm sáng màu không bị đụng.
+                M = round(min(cell_w, cell_h) * 0.2)
+                ex0, ey0 = max(0, x0 - M), max(0, y0 - M)
+                ex1, ey1 = min(W, x1 + M), min(H, y1 + M)
+                ring = np.asarray(sheet_rgb.crop((ex0, ey0, ex1, ey1)), dtype=np.float64)
+                rr2, gg2, bb2 = ring[..., 0], ring[..., 1], ring[..., 2]
+                sp2 = (gg2 - np.maximum(rr2, bb2)) if isg_ else (np.minimum(rr2, bb2) - gg2)
+                kill = (ring.max(axis=2) < 40) | (np.clip(sp2 / sref_, 0, 1) > 0.5)
+                kill[y0 - ey0:y1 - ey0, x0 - ex0:x1 - ex0] = False   # trong ô đã xử ở trên
+                ka = np.asarray(keyed.crop((ex0, ey0, ex1, ey1)))
+                ka = ka.copy()
+                ka[kill] = 0
+                keyed.paste(Image.fromarray(ka), (ex0, ey0))
+                for oy in range(ey1 - ey0):
+                    base = (ey0 + oy) * W + ex0
+                    krow = kill[oy]
+                    for ox in np.nonzero(krow)[0]:
+                        strict[base + ox] = 0
                 print(f"  ✦ {job}/{comp['file']}: ô glow nền đen → alpha theo kênh sáng")
         blobs, labelmap = label_blobs(strict, W, H)
 
