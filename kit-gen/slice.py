@@ -663,36 +663,38 @@ for style in cfg["styles"]:
         # trên nền đen C = α·F ⇒ α = max(R,G,B), F = C/α (un-premultiply).
         # Chính xác tuyệt đối, không model nào phải đoán. Raw cũ (ô glow vẫn nền
         # key) tự phát hiện qua góc ô chưa đen → giữ nguyên đường matte thường.
-        if bg is not None and is_key_color(bg):
-            kp, cpx = keyed.load(), sheet_rgb.load()
+        if bg is not None and is_key_color(bg) and HAS_PYMATTING:
+            kr_, kg_, kb_ = bg[0]
+            isg_ = kg_ > max(kr_, kb_)
+            sref_ = max(40.0, (kg_ - max(kr_, kb_)) if isg_ else (min(kr_, kb_) - kg_))
             for idx, comp in enumerate(sh["components"]):
                 if comp["skel"].get("matte") != "glow":
                     continue
                 row, col = divmod(idx, COLS)
                 x0, y0 = round(col * cell_w), round(row * cell_h)
                 x1, y1 = round((col + 1) * cell_w), round((row + 1) * cell_h)
-                lums = []
-                for cx, cy in [(x0, y0), (x1 - 8, y0), (x0, y1 - 8), (x1 - 8, y1 - 8)]:
-                    for dy in range(8):
-                        for dx in range(8):
-                            r_, g_, b_ = cpx[cx + dx, cy + dy]
-                            lums.append(0.3 * r_ + 0.59 * g_ + 0.11 * b_)
-                lums.sort()
-                if lums[len(lums) // 2] >= 60:
-                    continue                  # nền ô chưa đen — raw đời cũ
-                for yy in range(y0, y1):
-                    base = yy * W
-                    for xx in range(x0, x1):
-                        r_, g_, b_ = cpx[xx, yy]
-                        a_ = max(r_, g_, b_)
-                        if a_ <= 8:
-                            kp[xx, yy] = (0, 0, 0, 0)
-                            strict[base + xx] = 0
-                        else:
-                            kp[xx, yy] = (min(255, round(r_ * 255 / a_)),
-                                          min(255, round(g_ * 255 / a_)),
-                                          min(255, round(b_ * 255 / a_)), a_)
-                            strict[base + xx] = 1 if a_ >= 242 else 0
+                reg = np.asarray(sheet_rgb.crop((x0, y0, x1, y1)), dtype=np.float64)
+                rr, gg, bb_ = reg[..., 0], reg[..., 1], reg[..., 2]
+                sp = (gg - np.maximum(rr, bb_)) if isg_ else (np.minimum(rr, bb_) - gg)
+                snc = np.clip(sp / sref_, 0, 1)
+                lumc = 0.3 * rr + 0.59 * gg + 0.11 * bb_
+                # tấm đen: model chừa mép key quanh ô nên KHÔNG dò ở góc —
+                # đếm tỷ lệ pixel vừa tối vừa sạch key trên cả ô
+                if ((lumc < 60) & (snc < 0.3)).mean() < 0.25:
+                    continue                  # ô chưa có tấm đen — raw đời cũ
+                mx = reg.max(axis=2)
+                BP = 18.0                     # black-point: nhiễu tối của gpt-image → 0
+                a = np.clip((mx - BP) / (255.0 - BP), 0, 1)
+                a[snc > 0.5] = 0.0            # mép key quanh tấm đen → trong suốt
+                F = np.clip(reg * 255.0 / np.maximum(mx, 1.0)[..., None], 0, 255)
+                a8_ = np.rint(a * 255).astype(np.uint8)
+                keyed.paste(Image.fromarray(
+                    np.dstack([F.astype(np.uint8), a8_[..., None]])), (x0, y0))
+                for oy in range(y1 - y0):
+                    base = (y0 + oy) * W + x0
+                    rowm = a8_[oy]
+                    for ox in range(x1 - x0):
+                        strict[base + ox] = 1 if rowm[ox] >= 242 else 0
                 print(f"  ✦ {job}/{comp['file']}: ô glow nền đen → alpha theo kênh sáng")
         blobs, labelmap = label_blobs(strict, W, H)
 
