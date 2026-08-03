@@ -658,6 +658,42 @@ for style in cfg["styles"]:
                 keyed, strict = key_binary(sheet_rgb, bg, threshold, strict_threshold)
                 filled = fill_holes(keyed, sheet_rgb, W, H)
                 mode = f"binary {len(bg)} màu nhạt (đường lùi), lấp {filled}px"
+        # Ô matte:"glow" vẽ trên NỀN ĐEN (contract mới, gen.sh chèn lệnh riêng):
+        # tách kiểu "vật liệu phát sáng" của Photoshop — ánh sáng là phép CỘNG,
+        # trên nền đen C = α·F ⇒ α = max(R,G,B), F = C/α (un-premultiply).
+        # Chính xác tuyệt đối, không model nào phải đoán. Raw cũ (ô glow vẫn nền
+        # key) tự phát hiện qua góc ô chưa đen → giữ nguyên đường matte thường.
+        if bg is not None and is_key_color(bg):
+            kp, cpx = keyed.load(), sheet_rgb.load()
+            for idx, comp in enumerate(sh["components"]):
+                if comp["skel"].get("matte") != "glow":
+                    continue
+                row, col = divmod(idx, COLS)
+                x0, y0 = round(col * cell_w), round(row * cell_h)
+                x1, y1 = round((col + 1) * cell_w), round((row + 1) * cell_h)
+                lums = []
+                for cx, cy in [(x0, y0), (x1 - 8, y0), (x0, y1 - 8), (x1 - 8, y1 - 8)]:
+                    for dy in range(8):
+                        for dx in range(8):
+                            r_, g_, b_ = cpx[cx + dx, cy + dy]
+                            lums.append(0.3 * r_ + 0.59 * g_ + 0.11 * b_)
+                lums.sort()
+                if lums[len(lums) // 2] >= 60:
+                    continue                  # nền ô chưa đen — raw đời cũ
+                for yy in range(y0, y1):
+                    base = yy * W
+                    for xx in range(x0, x1):
+                        r_, g_, b_ = cpx[xx, yy]
+                        a_ = max(r_, g_, b_)
+                        if a_ <= 8:
+                            kp[xx, yy] = (0, 0, 0, 0)
+                            strict[base + xx] = 0
+                        else:
+                            kp[xx, yy] = (min(255, round(r_ * 255 / a_)),
+                                          min(255, round(g_ * 255 / a_)),
+                                          min(255, round(b_ * 255 / a_)), a_)
+                            strict[base + xx] = 1 if a_ >= 242 else 0
+                print(f"  ✦ {job}/{comp['file']}: ô glow nền đen → alpha theo kênh sáng")
         blobs, labelmap = label_blobs(strict, W, H)
 
         cell_blobs = [[] for _ in range(COLS * ROWS)]

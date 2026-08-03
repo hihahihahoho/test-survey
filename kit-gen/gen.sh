@@ -99,7 +99,17 @@ for s in cfg["styles"]:
             lines.append(f"Row {r + 1}, left to right:")
             for c in range(cols):
                 i = r * cols + c
-                lines.append(f"{i + 1}) {comps[i]['spec']}")
+                spec = comps[i]["spec"]
+                if comps[i]["skel"].get("matte") == "glow":
+                    # nền ô ĐEN cho hiệu ứng phát sáng: slicer tách alpha theo
+                    # kênh sáng (C = α·F trên nền đen) — chính xác tuyệt đối,
+                    # hết phụ thuộc model matting đoán vùng glow trộn key
+                    spec += (" — SPECIAL CELL BACKGROUND: this ONE cell's background is PURE"
+                             " BLACK #000000 filling the whole cell with a hard edge at the"
+                             " cell borders (the chroma-key color does NOT apply inside this"
+                             " cell); the light effect is drawn ADDITIVELY on black — where"
+                             " there is no light the cell stays pure black")
+                lines.append(f"{i + 1}) {spec}")
             lines.append("")
         lines += [
             ("Art style: faithfully match the attached inspiration reference image(s) — "
