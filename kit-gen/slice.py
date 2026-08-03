@@ -204,22 +204,27 @@ def matte_pymatting(sheet, key, noclamp=None):
     lum2 = 0.3 * R + 0.59 * G + 0.11 * B
     scale = np.clip(np.where(lum2 > 1, lum / np.maximum(lum2, 1), 1.0), 1.0, 1.8)
     fgc *= scale[..., None]
-    # DEFRINGE kiểu Photoshop (decontamination như Photoroom): dải mỏng 3px sát
-    # vùng trong suốt lấy MÀU lan từ ruột đặc gần nhất (alpha giữ nguyên) —
-    # pixel biên là màu element trộn nền, un-mix kiểu gì cũng lem; thay hẳn màu
-    # là sạch. Dải chỉ 3px nên bóng đổ rộng/kính (xa mép trong suốt) vô can.
+    # DEFRINGE kiểu Photoshop (decontamination như Photoroom): ViTMatte ôm rộng
+    # hơn silhouette vài px → vành pixel MÀU-TRỘN-NỀN alpha cao, despill xong
+    # thành vành XÁM quanh element (đã dính, sâu 4-6px chứ không chỉ sát mép).
+    # Nguồn màu phải là RUỘT THẬT (α≥245, cách mép >6px) — bản đầu lấy cả pixel
+    # α≥200 làm nguồn nên vành xám tự sơn lại chính nó. Chỉ thay pixel TRUNG
+    # TÍNH (sat<45): vành nhiễm key sau despill là xám không sắc, còn bevel/
+    # viền vàng nghệ sĩ vẽ chủ ý có sắc rõ → không bị phá.
     outer = a8 < 8
-    band = ndimage.binary_dilation(outer, iterations=3) & ~outer
-    known = a8 >= 200
+    near = ndimage.binary_dilation(outer, iterations=6)
+    band = near & ~outer & (a8 >= 8)
+    known = (a8 >= 245) & ~near
     filled = known.copy()
     Fp = fgc.copy()
-    for _ in range(4):
+    for _ in range(8):
         w_ = ndimage.uniform_filter(filled.astype(np.float64), 3)
         Fs = np.dstack([ndimage.uniform_filter(Fp[..., c] * filled, 3) for c in range(3)])
         upd = (~filled) & (w_ > 1e-6)
         Fp[upd] = Fs[upd] / w_[upd, None]
         filled |= upd
-    take = band & filled & ~known
+    sat = fgc.max(axis=2) - fgc.min(axis=2)
+    take = band & filled & ~known & (sat < 45)
     fgc = np.where(take[..., None], Fp, fgc)
     out = Image.fromarray(
         np.dstack([np.clip(fgc, 0, 255).astype(np.uint8), a8[..., None]]))
