@@ -72,6 +72,22 @@ createServer(async (req, res) => {
     }
     if (url.pathname === "/api/gen-status")
       return send(res, 200, { running: !!genChild, log: genLog.slice(-8000) })
+    if (url.pathname === "/api/stale") {
+      // kit đã cắt có cũ hơn raw không? (Copy-Figma dùng để tự slice khi cần)
+      const sid = url.searchParams.get("style") ?? ""
+      if (!/^[\w-]+$/.test(sid)) return send(res, 400, { error: "style?" })
+      const { readdirSync } = await import("node:fs")
+      const newest = (dir, pre = "") => {
+        try {
+          return Math.max(0, ...readdirSync(dir)
+            .filter(f => f.startsWith(pre) && f.endsWith(".png"))
+            .map(f => statSync(join(dir, f)).mtimeMs))
+        } catch { return 0 }
+      }
+      const rawAt = newest(join(HERE, "raw"), sid + "-")
+      const kitAt = newest(join(HERE, "kits", sid))
+      return send(res, 200, { stale: rawAt > kitAt, rawAt, kitAt })
+    }
     if (req.method === "POST" && url.pathname === "/api/slice") {
       const { styles = [] } = await body(req)
       const r = spawnSync("python3", ["slice.py", ...styles], { cwd: HERE, encoding: "utf8", timeout: 300000 })

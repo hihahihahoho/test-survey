@@ -697,6 +697,16 @@ $("sliceBtn").onclick = async () => {
 
 /* Copy bảng element sang Figma: DOM board từ tight/ → figh2d clipboard */
 $("figmaBtn").onclick = async () => {
+  // raw mới hơn kit → slice trước cho chắc chắn copy bản MỚI (đã dính nhiều
+  // lần cảnh "tưởng cache" vì gen xong quên slice); kit khớp thì copy ngay
+  try {
+    const st = await (await fetch(`/api/stale?style=${style.id}`)).json();
+    if (st.stale) {
+      log("⚠ raw mới hơn kit đã cắt — tự slice trước khi copy (≈1-2 phút)…");
+      const r = await api("/api/slice", { styles: [style.id] });
+      log(r.out);
+    }
+  } catch {}
   const m = await (await fetch("kits/manifest.json?" + Date.now())).json();
   const assets = m.styles[style.id]?.assets ?? [];
   if (!assets.length) return log("chưa có kit đã slice cho style này");
