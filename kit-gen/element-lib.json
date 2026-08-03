@@ -1,526 +1,528 @@
 {
- "_note": "Thư viện element cho studio — sheet UI dàn trang ĐỘNG từ selection. cell: landscape (ô 4:cột ngang 3:2) | portrait | full. group: các element phải liền kề (spec 'SAME as previous'). sheetHint: tên sheet ưu tiên khi cả chunk cùng group. Thứ tự trong file = thứ tự dàn trang (07 track và 08 fill cách xa nhau có chủ đích).",
- "elements": [
-  {
-   "file": "01-btn-pill-red",
-   "vi": "Nút đỏ (CTA)",
-   "spec": "glossy 3D candy-red capsule button, wide pill shape, soft white top highlight, darker red bevel rim, blank face",
-   "skel": {
-    "shape": "pill",
-    "w": 0.78,
-    "h": 0.4,
-    "slice9": true
-   },
-   "cell": "landscape"
-  },
-  {
-   "file": "02-btn-pill-blue",
-   "vi": "Nút xanh",
-   "spec": "glossy 3D azure-blue capsule button, wide pill shape, cyan rim light, gradient from light blue top to deep blue bottom, blank face",
-   "skel": {
-    "shape": "pill",
-    "w": 0.78,
-    "h": 0.4,
-    "slice9": true
-   },
-   "cell": "landscape"
-  },
-  {
-   "file": "03-btn-pill-outline",
-   "vi": "Nút viền",
-   "spec": "wide capsule outline button, thick glowing stroke, fully hollow see-through interior, soft outer glow, no fill",
-   "skel": {
-    "shape": "pill",
-    "w": 0.78,
-    "h": 0.4,
-    "slice9": true
-   },
-   "cell": "landscape"
-  },
-  {
-   "file": "16-fx-burst",
-   "vi": "Hiệu ứng nổ sáng",
-   "spec": "radial light burst with four-point sparkles and soft golden rays, centered explosion",
-   "skel": {
-    "shape": "burst",
-    "w": 0.6,
-    "h": 0.9,
-    "free": true
-   },
-   "cell": "landscape"
-  },
-  {
-   "file": "07-progress-track",
-   "vi": "Progress: máng",
-   "spec": "empty horizontal capsule groove, dark inset well, thin light outer rim, hollow interior, no fill inside",
-   "skel": {
-    "shape": "bar",
-    "w": 0.84,
-    "h": 0.26,
-    "slice9": true
-   },
-   "cell": "landscape"
-  },
-  {
-   "file": "04-btn-circle",
-   "vi": "Nút tròn",
-   "spec": "round glossy button plate, 3D dome, EMPTY center with no icon, light rim highlight top-left, soft drop shadow",
-   "skel": {
-    "shape": "circle",
-    "w": 0.55,
-    "h": 0.82,
-    "free": true
-   },
-   "cell": "landscape"
-  },
-  {
-   "file": "11-digit-plate",
-   "vi": "Ô số đếm ngược",
-   "spec": "small rounded-square 3D plate for one countdown digit, gradient face, beveled edge, glossy top highlight, EMPTY center with no number",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.38,
-    "h": 0.58,
-    "slice9": true,
-    "free": true
-   },
-   "cell": "landscape"
-  },
-  {
-   "file": "10-popup-ribbon",
-   "vi": "Ruy băng tiêu đề",
-   "spec": "ornate 3D banner ribbon plate for a modal heading, slight upward arc, bright outline, empty blank face",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.84,
-    "h": 0.44,
-    "free": true
-   },
-   "cell": "landscape"
-  },
-  {
-   "file": "12-piece-active",
-   "vi": "Mảnh ghép sáng",
-   "spec": "single jigsaw puzzle piece with one tab and one blank, vivid saturated colorful glossy 3D surface, bright rim light",
-   "skel": {
-    "shape": "puzzle",
-    "w": 0.48,
-    "h": 0.72
-   },
-   "cell": "landscape",
-   "group": "piece"
-  },
-  {
-   "file": "13-piece-locked",
-   "vi": "Mảnh ghép khoá",
-   "spec": "jigsaw puzzle piece with IDENTICAL outline and silhouette as the previous piece, but locked state: flat desaturated grey, matte, faint inner edge, no highlight",
-   "skel": {
-    "shape": "puzzle",
-    "w": 0.48,
-    "h": 0.72
-   },
-   "cell": "landscape",
-   "group": "piece"
-  },
-  {
-   "file": "05-tab-chip-idle",
-   "vi": "Tab thường",
-   "spec": "rounded-square glassy tab chip, muted translucent dark tone, thin light border, flat empty face",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.42,
-    "h": 0.62,
-    "slice9": true
-   },
-   "cell": "landscape",
-   "group": "chip"
-  },
-  {
-   "file": "06-tab-chip-active",
-   "vi": "Tab đang chọn",
-   "spec": "tab chip with the SAME shape and size as the previous chip, but selected state: bright glowing border, luminous fill, outer bloom",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.42,
-    "h": 0.62,
-    "slice9": true
-   },
-   "cell": "landscape",
-   "group": "chip"
-  },
-  {
-   "file": "08-progress-fill",
-   "vi": "Progress: thanh chạy",
-   "spec": "the plain INNER filling of a progress bar, ONLY the sliding jelly bar itself: smooth glossy capsule, vivid warm orange-to-coral gradient, bright specular streak along the top, rounded caps — absolutely NO outer frame, NO metal or gold rim, NO border, NO ornaments, flowers or charms (the decorated track is a SEPARATE element)",
-   "skel": {
-    "shape": "bar",
-    "w": 0.78,
-    "h": 0.13,
-    "plain": true
-   },
-   "cell": "landscape"
-  },
-  {
-   "file": "14-reward-voucher",
-   "vi": "Quà voucher",
-   "spec": "3D voucher coupon ticket token with perforated notch on both sides, glossy foil surface, tilted slightly, empty blank face",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.64,
-    "h": 0.48,
-    "free": true
-   },
-   "cell": "landscape"
-  },
-  {
-   "file": "15-reward-giftbox",
-   "vi": "Quà hộp",
-   "spec": "3D wrapped gift box with ribbon bow, glossy paper, floating slightly with soft shadow below",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.48,
-    "h": 0.68
-   },
-   "cell": "landscape"
-  },
-  {
-   "file": "09-popup-panel-short",
-   "vi": "Popup ngang (S/M)",
-   "spec": "rounded rectangle modal panel, landscape orientation, decorative double border, clean corners, flat EVEN interior fill suitable for stretching, empty inside",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.84,
-    "h": 0.72,
-    "slice9": true,
-    "free": true
-   },
-   "cell": "landscape"
-  },
-  {
-   "file": "24-popup-panel-tall",
-   "vi": "Popup dọc (L)",
-   "spec": "tall rounded rectangle modal panel, portrait orientation, decorative double border, soft inner vignette, empty interior",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.78,
-    "h": 0.84,
-    "slice9": true,
-    "free": true
-   },
-   "cell": "portrait"
-  },
-  {
-   "file": "20-game-object-closed",
-   "vi": "Túi quà đóng",
-   "spec": "sealed glossy foil gift pouch standing upright, crimped top and bottom edges, plain circular emblem centered on the front, blank wrapper",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.62,
-    "h": 0.74
-   },
-   "cell": "portrait",
-   "group": "pouch"
-  },
-  {
-   "file": "21-game-object-open",
-   "vi": "Túi quà mở",
-   "spec": "the SAME foil gift pouch but torn open at the top, wrapper edges flared outward, bright golden light spilling from inside, empty interior visible",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.62,
-    "h": 0.74
-   },
-   "cell": "portrait",
-   "group": "pouch"
-  },
-  {
-   "file": "22-board-panel",
-   "vi": "Khay đựng túi",
-   "spec": "rounded-square translucent glass tray panel, glowing border with bracket corners, frosted interior, completely empty, no grid lines",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.8,
-    "h": 0.78,
-    "slice9": true,
-    "free": true
-   },
-   "cell": "portrait"
-  },
-  {
-   "file": "35-input-field",
-   "vi": "Ô nhập liệu",
-   "spec": "flat rounded input field with a light inner well and subtle inner shadow, thin border, completely empty",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.8,
-    "h": 0.34,
-    "slice9": true
-   },
-   "cell": "landscape",
-   "group": "form"
-  },
-  {
-   "file": "36-select-field",
-   "vi": "Ô chọn (select)",
-   "spec": "the SAME input field but as a dropdown select: a small down-pointing chevron arrow plate attached at the right end",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.8,
-    "h": 0.34,
-    "slice9": true
-   },
-   "cell": "landscape",
-   "group": "form"
-  },
-  {
-   "file": "37-checkbox-on",
-   "vi": "Checkbox bật",
-   "spec": "small rounded-square checkbox in CHECKED state with a bold tick mark inside, glossy 3D",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.3,
-    "h": 0.45
-   },
-   "cell": "landscape",
-   "group": "checkbox"
-  },
-  {
-   "file": "38-checkbox-off",
-   "vi": "Checkbox tắt",
-   "spec": "the SAME checkbox UNCHECKED: empty inner well, no tick",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.3,
-    "h": 0.45
-   },
-   "cell": "landscape",
-   "group": "checkbox"
-  },
-  {
-   "file": "39-toggle-on",
-   "vi": "Toggle bật",
-   "spec": "pill toggle switch in ON state, round knob on the RIGHT, bright vivid fill, glossy",
-   "skel": {
-    "shape": "pill",
-    "w": 0.44,
-    "h": 0.3
-   },
-   "cell": "landscape",
-   "group": "toggle"
-  },
-  {
-   "file": "40-toggle-off",
-   "vi": "Toggle tắt",
-   "spec": "the SAME toggle switch OFF: knob on the LEFT, muted grey fill",
-   "skel": {
-    "shape": "pill",
-    "w": 0.44,
-    "h": 0.3
-   },
-   "cell": "landscape",
-   "group": "toggle"
-  },
-  {
-   "file": "41-btn-close",
-   "vi": "Nút đóng",
-   "spec": "small round close button with a bold diagonal cross mark, 3D glossy dome",
-   "skel": {
-    "shape": "circle",
-    "w": 0.42,
-    "h": 0.62,
-    "free": true
-   },
-   "cell": "landscape",
-   "group": "smallbtn"
-  },
-  {
-   "file": "42-btn-back",
-   "vi": "Nút back",
-   "spec": "the SAME style small round button with a bold left-pointing arrow instead of the cross",
-   "skel": {
-    "shape": "circle",
-    "w": 0.42,
-    "h": 0.62,
-    "free": true
-   },
-   "cell": "landscape",
-   "group": "smallbtn"
-  },
-  {
-   "file": "43-btn-pill-pressed",
-   "vi": "Nút CTA nhấn",
-   "spec": "wide capsule button in PRESSED state: same shape as this kit's main CTA button but darker, pushed-in look, shorter highlight",
-   "skel": {
-    "shape": "pill",
-    "w": 0.78,
-    "h": 0.4,
-    "slice9": true
-   },
-   "cell": "landscape",
-   "group": "btnstate"
-  },
-  {
-   "file": "44-btn-pill-disabled",
-   "vi": "Nút CTA disabled",
-   "spec": "the SAME capsule button in DISABLED state: flat desaturated grey, matte, no gloss",
-   "skel": {
-    "shape": "pill",
-    "w": 0.78,
-    "h": 0.4,
-    "slice9": true
-   },
-   "cell": "landscape",
-   "group": "btnstate"
-  },
-  {
-   "file": "45-rank-badge-1",
-   "vi": "Huy chương #1",
-   "spec": "round 1st-place medal badge with gold laurel wreath, blank center face",
-   "skel": {
-    "shape": "circle",
-    "w": 0.4,
-    "h": 0.6,
-    "free": true
-   },
-   "cell": "landscape",
-   "group": "medal"
-  },
-  {
-   "file": "46-rank-badge-2",
-   "vi": "Huy chương #2",
-   "spec": "the SAME medal badge in SILVER for 2nd place",
-   "skel": {
-    "shape": "circle",
-    "w": 0.4,
-    "h": 0.6,
-    "free": true
-   },
-   "cell": "landscape",
-   "group": "medal"
-  },
-  {
-   "file": "47-rank-badge-3",
-   "vi": "Huy chương #3",
-   "spec": "the SAME medal badge in BRONZE for 3rd place",
-   "skel": {
-    "shape": "circle",
-    "w": 0.4,
-    "h": 0.6,
-    "free": true
-   },
-   "cell": "landscape",
-   "group": "medal"
-  },
-  {
-   "file": "48-rank-row",
-   "vi": "Hàng BXH",
-   "spec": "wide leaderboard row bar: rounded strip with a circular avatar slot on the left and long empty space for name and score, subtle even fill",
-   "skel": {
-    "shape": "bar",
-    "w": 0.86,
-    "h": 0.42,
-    "slice9": true
-   },
-   "cell": "landscape",
-   "group": "rankrow"
-  },
-  {
-   "file": "49-rank-row-self",
-   "vi": "Hàng BXH của mình",
-   "spec": "the SAME leaderboard row but HIGHLIGHTED as the current player: glowing bright border and brighter fill",
-   "skel": {
-    "shape": "bar",
-    "w": 0.86,
-    "h": 0.42,
-    "slice9": true
-   },
-   "cell": "landscape",
-   "group": "rankrow"
-  },
-  {
-   "file": "50-counter-pill",
-   "vi": "Counter lượt/xu",
-   "spec": "small capsule counter chip with a circular icon slot on one end and empty space for a number, glossy",
-   "skel": {
-    "shape": "pill",
-    "w": 0.6,
-    "h": 0.32,
-    "slice9": true,
-    "free": true
-   },
-   "cell": "landscape"
-  },
-  {
-   "file": "51-reward-giftbox-open",
-   "vi": "Quà hộp MỞ",
-   "spec": "a wrapped gift box with the SAME design as this kit's gift box but OPEN: lid tilted off, golden light rays and sparkles rising from inside",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.6,
-    "h": 0.74
-   },
-   "cell": "portrait",
-   "group": "giftstate"
-  },
-  {
-   "file": "52-envelope-body",
-   "vi": "Lì xì: thân",
-   "spec": "the FRONT BODY of a lucky-money envelope WITHOUT its top flap: upright rectangle with a straight top edge, ornate trim and emblem, blank face — the separate flap piece is another element",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.55,
-    "h": 0.62
-   },
-   "cell": "portrait",
-   "group": "envelope"
-  },
-  {
-   "file": "53-envelope-flap",
-   "vi": "Lì xì: nắp",
-   "spec": "ONLY the detached triangular TOP FLAP of the SAME envelope, pointing downward, matching design and trim exactly, nothing else",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.55,
-    "h": 0.3
-   },
-   "cell": "portrait",
-   "group": "envelope"
-  },
-  {
-   "file": "54-trophy-cup",
-   "vi": "Cúp vô địch",
-   "spec": "golden champion trophy cup with two handles on a small base, glossy, blank plaque",
-   "skel": {
-    "shape": "rrect",
-    "w": 0.6,
-    "h": 0.74,
-    "free": true
-   },
-   "cell": "portrait"
-  },
-  {
-   "file": "25-bg-home",
-   "vi": "Nền màn HOME",
-   "spec": "vertical mobile game HOME screen background: welcoming hero scene with a stage or podium area in the lower half for game objects, decorative side framing, clear empty upper-middle area reserved for a title, rich but not noisy detail, NO characters, NO creatures, NO UI widgets, fills the whole image edge to edge",
-   "skel": {
-    "shape": "full",
-    "w": 1.0,
-    "h": 1.0
-   },
-   "cell": "full",
-   "sheetHint": "bg-home"
-  },
-  {
-   "file": "26-bg-play",
-   "vi": "Nền màn CHƠI",
-   "spec": "vertical mobile game GAMEPLAY background of the SAME world: calmer and more open than the home scene, soft depth, large uncluttered middle area where gameplay objects will sit, matching palette and lighting, NO characters, NO creatures, NO UI widgets, fills the whole image edge to edge",
-   "skel": {
-    "shape": "full",
-    "w": 1.0,
-    "h": 1.0
-   },
-   "cell": "full",
-   "sheetHint": "bg-play"
-  }
- ]
+  "_note": "Thư viện element cho studio — sheet UI dàn trang ĐỘNG từ selection. cell: landscape (ô 4:cột ngang 3:2) | portrait | full. group: các element phải liền kề (spec 'SAME as previous'). sheetHint: tên sheet ưu tiên khi cả chunk cùng group. Thứ tự trong file = thứ tự dàn trang (07 track và 08 fill cách xa nhau có chủ đích).",
+  "elements": [
+    {
+      "file": "01-btn-pill-red",
+      "vi": "Nút đỏ (CTA)",
+      "spec": "glossy 3D candy-red capsule button, wide pill shape, soft white top highlight, darker red bevel rim, blank face",
+      "skel": {
+        "shape": "pill",
+        "w": 0.78,
+        "h": 0.4,
+        "slice9": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "02-btn-pill-blue",
+      "vi": "Nút xanh",
+      "spec": "glossy 3D azure-blue capsule button, wide pill shape, cyan rim light, gradient from light blue top to deep blue bottom, blank face",
+      "skel": {
+        "shape": "pill",
+        "w": 0.78,
+        "h": 0.4,
+        "slice9": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "03-btn-pill-outline",
+      "vi": "Nút viền",
+      "spec": "wide capsule outline button, thick glowing stroke, fully hollow see-through interior, soft outer glow, no fill",
+      "skel": {
+        "shape": "pill",
+        "w": 0.78,
+        "h": 0.4,
+        "slice9": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "16-fx-burst",
+      "vi": "Hiệu ứng nổ sáng",
+      "spec": "radial light burst with four-point sparkles and soft golden rays, centered explosion; the glow must be perfectly SMOOTH and CLEAN — no film grain, no noise texture, no patchy haze: every ray and the halo fade evenly into the flat background color, and the whole burst stays inside the cell",
+      "skel": {
+        "shape": "burst",
+        "w": 0.6,
+        "h": 0.9,
+        "free": true,
+        "matte": "glow"
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "07-progress-track",
+      "vi": "Progress: máng",
+      "spec": "empty horizontal capsule groove, dark inset well, thin light outer rim, hollow interior, no fill inside",
+      "skel": {
+        "shape": "bar",
+        "w": 0.84,
+        "h": 0.26,
+        "slice9": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "04-btn-circle",
+      "vi": "Nút tròn",
+      "spec": "round glossy button plate, 3D dome, EMPTY center with no icon, light rim highlight top-left, soft drop shadow",
+      "skel": {
+        "shape": "circle",
+        "w": 0.55,
+        "h": 0.82,
+        "free": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "11-digit-plate",
+      "vi": "Ô số đếm ngược",
+      "spec": "small rounded-square 3D plate for one countdown digit, gradient face, beveled edge, glossy top highlight, EMPTY center with no number",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.38,
+        "h": 0.58,
+        "slice9": true,
+        "free": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "10-popup-ribbon",
+      "vi": "Ruy băng tiêu đề",
+      "spec": "ornate 3D banner ribbon plate for a modal heading, slight upward arc, bright outline, empty blank face",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.84,
+        "h": 0.44,
+        "free": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "12-piece-active",
+      "vi": "Mảnh ghép sáng",
+      "spec": "single jigsaw puzzle piece with one tab and one blank, vivid saturated colorful glossy 3D surface, bright rim light",
+      "skel": {
+        "shape": "puzzle",
+        "w": 0.48,
+        "h": 0.72
+      },
+      "cell": "landscape",
+      "group": "piece"
+    },
+    {
+      "file": "13-piece-locked",
+      "vi": "Mảnh ghép khoá",
+      "spec": "jigsaw puzzle piece with IDENTICAL outline and silhouette as the previous piece, but locked state: flat desaturated grey, matte, faint inner edge, no highlight",
+      "skel": {
+        "shape": "puzzle",
+        "w": 0.48,
+        "h": 0.72
+      },
+      "cell": "landscape",
+      "group": "piece"
+    },
+    {
+      "file": "05-tab-chip-idle",
+      "vi": "Tab thường",
+      "spec": "rounded-square glassy tab chip, muted translucent dark tone, thin light border, flat empty face",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.42,
+        "h": 0.62,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "chip"
+    },
+    {
+      "file": "06-tab-chip-active",
+      "vi": "Tab đang chọn",
+      "spec": "tab chip with the SAME shape and size as the previous chip, but selected state: bright glowing border, luminous fill, outer bloom",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.42,
+        "h": 0.62,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "chip"
+    },
+    {
+      "file": "08-progress-fill",
+      "vi": "Progress: thanh chạy",
+      "spec": "the plain INNER filling of a progress bar, ONLY the sliding jelly bar itself: smooth glossy capsule, vivid warm orange-to-coral gradient, bright specular streak along the top, rounded caps — absolutely NO outer frame, NO metal or gold rim, NO border, NO ornaments, flowers or charms (the decorated track is a SEPARATE element)",
+      "skel": {
+        "shape": "bar",
+        "w": 0.78,
+        "h": 0.13,
+        "plain": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "14-reward-voucher",
+      "vi": "Quà voucher",
+      "spec": "3D voucher coupon ticket token with perforated notch on both sides, glossy foil surface, tilted slightly, empty blank face",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.64,
+        "h": 0.48,
+        "free": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "15-reward-giftbox",
+      "vi": "Quà hộp",
+      "spec": "3D wrapped gift box with ribbon bow, glossy paper, floating slightly with soft shadow below",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.48,
+        "h": 0.68
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "09-popup-panel-short",
+      "vi": "Popup ngang (S/M)",
+      "spec": "rounded rectangle modal panel, landscape orientation, decorative double border, clean corners, flat EVEN interior fill suitable for stretching, empty inside",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.84,
+        "h": 0.72,
+        "slice9": true,
+        "free": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "24-popup-panel-tall",
+      "vi": "Popup dọc (L)",
+      "spec": "tall rounded rectangle modal panel, portrait orientation, decorative double border, soft inner vignette, empty interior",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.78,
+        "h": 0.84,
+        "slice9": true,
+        "free": true
+      },
+      "cell": "portrait"
+    },
+    {
+      "file": "20-game-object-closed",
+      "vi": "Túi quà đóng",
+      "spec": "sealed glossy foil gift pouch standing upright, crimped top and bottom edges, plain circular emblem centered on the front, blank wrapper",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.62,
+        "h": 0.74
+      },
+      "cell": "portrait",
+      "group": "pouch"
+    },
+    {
+      "file": "21-game-object-open",
+      "vi": "Túi quà mở",
+      "spec": "the SAME foil gift pouch but torn open at the top, wrapper edges flared outward, bright golden light spilling from inside, empty interior visible",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.62,
+        "h": 0.74
+      },
+      "cell": "portrait",
+      "group": "pouch"
+    },
+    {
+      "file": "22-board-panel",
+      "vi": "Khay đựng túi",
+      "spec": "rounded-square translucent glass tray panel, glowing border with bracket corners, frosted interior, completely empty, no grid lines; the glass is GENUINELY see-through: the flat background color of the sheet must show through the frosted interior (never paint the interior opaque white)",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.8,
+        "h": 0.78,
+        "slice9": true,
+        "free": true,
+        "matte": "glass"
+      },
+      "cell": "portrait"
+    },
+    {
+      "file": "35-input-field",
+      "vi": "Ô nhập liệu",
+      "spec": "flat rounded input field with a light inner well and subtle inner shadow, thin border, completely empty",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.8,
+        "h": 0.34,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "form"
+    },
+    {
+      "file": "36-select-field",
+      "vi": "Ô chọn (select)",
+      "spec": "the SAME input field but as a dropdown select: a small down-pointing chevron arrow plate attached at the right end",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.8,
+        "h": 0.34,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "form"
+    },
+    {
+      "file": "37-checkbox-on",
+      "vi": "Checkbox bật",
+      "spec": "small rounded-square checkbox in CHECKED state with a bold tick mark inside, glossy 3D",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.3,
+        "h": 0.45
+      },
+      "cell": "landscape",
+      "group": "checkbox"
+    },
+    {
+      "file": "38-checkbox-off",
+      "vi": "Checkbox tắt",
+      "spec": "the SAME checkbox UNCHECKED: empty inner well, no tick",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.3,
+        "h": 0.45
+      },
+      "cell": "landscape",
+      "group": "checkbox"
+    },
+    {
+      "file": "39-toggle-on",
+      "vi": "Toggle bật",
+      "spec": "pill toggle switch in ON state, round knob on the RIGHT, bright vivid fill, glossy",
+      "skel": {
+        "shape": "pill",
+        "w": 0.44,
+        "h": 0.3
+      },
+      "cell": "landscape",
+      "group": "toggle"
+    },
+    {
+      "file": "40-toggle-off",
+      "vi": "Toggle tắt",
+      "spec": "the SAME toggle switch OFF: knob on the LEFT, muted grey fill",
+      "skel": {
+        "shape": "pill",
+        "w": 0.44,
+        "h": 0.3
+      },
+      "cell": "landscape",
+      "group": "toggle"
+    },
+    {
+      "file": "41-btn-close",
+      "vi": "Nút đóng",
+      "spec": "small round close button with a bold diagonal cross mark, 3D glossy dome",
+      "skel": {
+        "shape": "circle",
+        "w": 0.42,
+        "h": 0.62,
+        "free": true
+      },
+      "cell": "landscape",
+      "group": "smallbtn"
+    },
+    {
+      "file": "42-btn-back",
+      "vi": "Nút back",
+      "spec": "the SAME style small round button with a bold left-pointing arrow instead of the cross",
+      "skel": {
+        "shape": "circle",
+        "w": 0.42,
+        "h": 0.62,
+        "free": true
+      },
+      "cell": "landscape",
+      "group": "smallbtn"
+    },
+    {
+      "file": "43-btn-pill-pressed",
+      "vi": "Nút CTA nhấn",
+      "spec": "wide capsule button in PRESSED state: same shape as this kit's main CTA button but darker, pushed-in look, shorter highlight",
+      "skel": {
+        "shape": "pill",
+        "w": 0.78,
+        "h": 0.4,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "btnstate"
+    },
+    {
+      "file": "44-btn-pill-disabled",
+      "vi": "Nút CTA disabled",
+      "spec": "the SAME capsule button in DISABLED state: flat desaturated grey, matte, no gloss",
+      "skel": {
+        "shape": "pill",
+        "w": 0.78,
+        "h": 0.4,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "btnstate"
+    },
+    {
+      "file": "45-rank-badge-1",
+      "vi": "Huy chương #1",
+      "spec": "round 1st-place medal badge with gold laurel wreath, blank center face",
+      "skel": {
+        "shape": "circle",
+        "w": 0.4,
+        "h": 0.6,
+        "free": true
+      },
+      "cell": "landscape",
+      "group": "medal"
+    },
+    {
+      "file": "46-rank-badge-2",
+      "vi": "Huy chương #2",
+      "spec": "the SAME medal badge in SILVER for 2nd place",
+      "skel": {
+        "shape": "circle",
+        "w": 0.4,
+        "h": 0.6,
+        "free": true
+      },
+      "cell": "landscape",
+      "group": "medal"
+    },
+    {
+      "file": "47-rank-badge-3",
+      "vi": "Huy chương #3",
+      "spec": "the SAME medal badge in BRONZE for 3rd place",
+      "skel": {
+        "shape": "circle",
+        "w": 0.4,
+        "h": 0.6,
+        "free": true
+      },
+      "cell": "landscape",
+      "group": "medal"
+    },
+    {
+      "file": "48-rank-row",
+      "vi": "Hàng BXH",
+      "spec": "wide leaderboard row bar: rounded strip with a circular avatar slot on the left and long empty space for name and score, subtle even fill",
+      "skel": {
+        "shape": "bar",
+        "w": 0.86,
+        "h": 0.42,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "rankrow"
+    },
+    {
+      "file": "49-rank-row-self",
+      "vi": "Hàng BXH của mình",
+      "spec": "the SAME leaderboard row but HIGHLIGHTED as the current player: glowing bright border and brighter fill",
+      "skel": {
+        "shape": "bar",
+        "w": 0.86,
+        "h": 0.42,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "rankrow"
+    },
+    {
+      "file": "50-counter-pill",
+      "vi": "Counter lượt/xu",
+      "spec": "small capsule counter chip with a circular icon slot on one end and empty space for a number, glossy",
+      "skel": {
+        "shape": "pill",
+        "w": 0.6,
+        "h": 0.32,
+        "slice9": true,
+        "free": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "51-reward-giftbox-open",
+      "vi": "Quà hộp MỞ",
+      "spec": "a wrapped gift box with the SAME design as this kit's gift box but OPEN: lid tilted off, golden light rays and sparkles rising from inside",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.6,
+        "h": 0.74
+      },
+      "cell": "portrait",
+      "group": "giftstate"
+    },
+    {
+      "file": "52-envelope-body",
+      "vi": "Lì xì: thân",
+      "spec": "the FRONT BODY of a lucky-money envelope WITHOUT its top flap: upright rectangle with a straight top edge, ornate trim and emblem, blank face — the separate flap piece is another element",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.55,
+        "h": 0.62
+      },
+      "cell": "portrait",
+      "group": "envelope"
+    },
+    {
+      "file": "53-envelope-flap",
+      "vi": "Lì xì: nắp",
+      "spec": "ONLY the detached triangular TOP FLAP of the SAME envelope, pointing downward, matching design and trim exactly, nothing else",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.55,
+        "h": 0.3
+      },
+      "cell": "portrait",
+      "group": "envelope"
+    },
+    {
+      "file": "54-trophy-cup",
+      "vi": "Cúp vô địch",
+      "spec": "golden champion trophy cup with two handles on a small base, glossy, blank plaque",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.6,
+        "h": 0.74,
+        "free": true
+      },
+      "cell": "portrait"
+    },
+    {
+      "file": "25-bg-home",
+      "vi": "Nền màn HOME",
+      "spec": "vertical mobile game HOME screen background: welcoming hero scene with a stage or podium area in the lower half for game objects, decorative side framing, clear empty upper-middle area reserved for a title, rich but not noisy detail, NO characters, NO creatures, NO UI widgets, fills the whole image edge to edge",
+      "skel": {
+        "shape": "full",
+        "w": 1.0,
+        "h": 1.0
+      },
+      "cell": "full",
+      "sheetHint": "bg-home"
+    },
+    {
+      "file": "26-bg-play",
+      "vi": "Nền màn CHƠI",
+      "spec": "vertical mobile game GAMEPLAY background of the SAME world: calmer and more open than the home scene, soft depth, large uncluttered middle area where gameplay objects will sit, matching palette and lighting, NO characters, NO creatures, NO UI widgets, fills the whole image edge to edge",
+      "skel": {
+        "shape": "full",
+        "w": 1.0,
+        "h": 1.0
+      },
+      "cell": "full",
+      "sheetHint": "bg-play"
+    }
+  ]
 }

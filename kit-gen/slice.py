@@ -102,15 +102,16 @@ def is_key_color(bgs):
     return max(r, g, b) - min(r, g, b) > 80
 
 
-def matte_chroma(sheet, key):
-    """Matte cho nền key chát: closed-form matting (PyMatting) nếu có lib,
-    không thì đường lùi Vlahos per-pixel."""
+def matte_chroma(sheet, key, noclamp=None):
+    """Matte cho nền key chát: ViTMatte/closed-form nếu có lib, không thì
+    đường lùi Vlahos per-pixel. noclamp: mask bool (H,W) — vùng ô của element
+    matte:"glow"/"glass" được MIỄN clamp vật lý (xem matte_pymatting)."""
     if HAS_PYMATTING:
-        return matte_pymatting(sheet, key)
+        return matte_pymatting(sheet, key, noclamp)
     return matte_vlahos(sheet, key)
 
 
-def matte_pymatting(sheet, key):
+def matte_pymatting(sheet, key, noclamp=None):
     """Closed-form matting với trimap TỰ SINH từ màu key đã biết.
 
     Vlahos đoán alpha ĐỘC LẬP từng pixel → bóng đổ/glow trộn nền cho alpha
@@ -154,6 +155,16 @@ def matte_pymatting(sheet, key):
         trimap[fg_sure] = 1.0
         trimap[sn_s >= 0.9] = 0.0
         alpha = estimate_alpha_cf(arr / 255.0, trimap)
+    # CLAMP VẬT LÝ: trên nền key, alpha thật ≥ 1 − spill/sref (pixel ít nhiễm
+    # key không thể bán trong suốt — nếu trong thì key phải lộ ra). Model thấy
+    # "trông giống glow" là hạ alpha bừa → khoang hộp quà thủng lỗ (đã dính).
+    # Element matte:"glow"/"glass" (cờ trong contract) được MIỄN: halo pháo
+    # sáng đẹp là nhờ model làm mềm quá mức vật lý — đó là chủ ý nghệ thuật.
+    vl = 1.0 - sn
+    m = (alpha > 0.04) & (vl > alpha)
+    if noclamp is not None:
+        m &= ~noclamp
+    alpha = np.where(m, vl, alpha)
     fgc = np.clip(estimate_foreground_ml(arr / 255.0, alpha) * 255, 0, 255)
     a8 = np.rint(np.clip(alpha, 0, 1) * 255).astype(np.uint8)
     # VÁ LỖ NHỎ (thay vì ép đục cả ruột): cụm bán-trong-suốt < 400px nằm trong
@@ -630,7 +641,16 @@ for style in cfg["styles"]:
             sheet_rgb = raw_img.convert("RGB")
             bg = border_colors(sheet_rgb)
             if is_key_color(bg):
-                keyed, strict = matte_chroma(sheet_rgb, bg[0])
+                noclamp = None
+                if HAS_PYMATTING and any(c["skel"].get("matte") in ("glow", "glass")
+                                         for c in sh["components"]):
+                    noclamp = np.zeros((H, W), dtype=bool)
+                    for _i, c in enumerate(sh["components"]):
+                        if c["skel"].get("matte") in ("glow", "glass"):
+                            _r, _c = divmod(_i, COLS)
+                            noclamp[round(_r * cell_h):round((_r + 1) * cell_h),
+                                    round(_c * cell_w):round((_c + 1) * cell_w)] = True
+                keyed, strict = matte_chroma(sheet_rgb, bg[0], noclamp)
                 mode = ((f"matte ViTMatte + despill, key {bg[0]}" if HAS_VITMATTE
                          else f"matte closed-form PyMatting + despill, key {bg[0]}")
                         if HAS_PYMATTING else f"matte Vlahos + despill, key {bg[0]}")
