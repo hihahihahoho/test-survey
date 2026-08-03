@@ -113,7 +113,13 @@ for s in cfg["styles"]:
             lines.append("")
         lines += [
             ("Art style: faithfully match the attached inspiration reference image(s) — "
-             "same rendering technique, materials, palette and level of detail."
+             "same rendering technique, materials, palette and level of detail. "
+             "IMPORTANT: this reference OVERRIDES every material/finish word inside the "
+             "per-cell descriptions above ('glossy', '3D', 'plastic', 'candy', specific "
+             "color shades…) — those only describe the DEFAULT look. Re-imagine every "
+             "element in the reference's actual materials, textures and palette, keeping "
+             "only each cell's SHAPE, layout and color ROLE (primary vs secondary vs "
+             "neutral element)."
              if use_inspo else f"Art style: {s['style']}."),
             f"All {n_real} elements share the exact same consistent style and belong to one coherent game. "
             "Game-ready UI asset quality, " + ("portrait 2:3." if portrait else "landscape 3:2.")
