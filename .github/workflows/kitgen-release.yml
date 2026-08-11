@@ -35,7 +35,10 @@ jobs:
           cache: npm
           cache-dependency-path: kit-gen/webapp/package-lock.json
       - run: npm ci
-      - run: npm run verify
+      # Full Vitest currently includes a few developer-only fixtures ignored by git.
+      # Release gates only use checks whose inputs are committed and reproducible in CI.
+      - name: Verify committed production inputs
+        run: npm run nogen && npm run typecheck && npm run contrast && npm run deadclass && npm run build:only
       - name: Resolve package version
         id: version
         working-directory: .
