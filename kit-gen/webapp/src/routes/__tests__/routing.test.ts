@@ -6,14 +6,13 @@
  *     npx vitest run --dir src/routes
  * Đã ghi yêu cầu mở rộng `include` ở teams/react/NEEDS-appshell.md (N1).
  */
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import { parseProjectParams, parseRunParams } from "../params";
 import {
   designSearchSchema, kitSearchSchema, settingsSearchSchema, setupSearchSchema,
 } from "../search-schemas";
 import { requireSetup } from "../guards";
 import { useSetupStore } from "@/lib/store";
-import { isRedirect } from "@tanstack/react-router";
 
 describe("params — id sai dạng phải KHÔNG khớp route (⇒ 404), không lọt sang agent", () => {
   it("nhận id hợp lệ", () => {
@@ -79,42 +78,10 @@ describe("setup ?redirect= — chặn open-redirect ra ngoài", () => {
   });
 });
 
-describe("guard — chưa setup xong thì ép về /setup", () => {
-  beforeEach(() => {
+describe("local-first routing has no onboarding gate", () => {
+  it("continues regardless of stale setup state", () => {
     useSetupStore.setState({ completed: false });
-  });
-
-  /* Hình dạng của `redirect()` ĐƯỢC ĐO chứ không đoán: object trả về chỉ có
-     đúng một khoá `options`, mọi thứ (to/search/replace/statusCode) nằm trong
-     đó. Bản test đầu tôi viết `thrown.to` và nó FAIL — giữ lại ghi chú này để
-     người sau không mất công tìm lại. */
-  it("chưa xong ⇒ ném redirect tới /setup, có nhớ chỗ định tới", () => {
-    let thrown: unknown = null;
-    try {
-      requireSetup("/p/tet26-a7f3/design");
-    } catch (e) {
-      thrown = e;
-    }
-    expect(isRedirect(thrown)).toBe(true);
-    const opts = (thrown as { options: { to?: string; search?: { redirect?: string }; replace?: boolean } }).options;
-    expect(opts.to).toBe("/setup");
-    expect(opts.search?.redirect).toBe("/p/tet26-a7f3/design");
-    // `replace` để nút Back không đá user ngược vào trang bị chặn
-    expect(opts.replace).toBe(true);
-  });
-
-  it("đã xong ⇒ đi tiếp, không ném gì", () => {
-    useSetupStore.setState({ completed: true });
-    expect(() => requireSetup("/p/tet26-a7f3")).not.toThrow();
-  });
-
-  it("từ trang chủ thì không nhét redirect='/' vô nghĩa", () => {
-    let thrown: unknown = null;
-    try {
-      requireSetup("/");
-    } catch (e) {
-      thrown = e;
-    }
-    expect((thrown as { options: { search?: Record<string, unknown> } }).options.search).toEqual({});
+    expect(() => requireSetup("/p/tet26-a7f3/design")).not.toThrow();
+    expect(() => requireSetup("/")).not.toThrow();
   });
 });

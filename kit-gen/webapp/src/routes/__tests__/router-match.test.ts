@@ -162,30 +162,15 @@ const GUARDED: [string, { options: unknown }, string][] = [
   ["S2b /p/:id/settings", projectSettingsRoute, "/p/tet26-a7f3/settings"],
 ];
 
-describe("guard 'chưa setup xong ⇒ ép về /setup'", () => {
-  it.each(GUARDED)("%s có guard và ép về /setup khi chưa xong", (_label, route, pathname) => {
+describe("local-first routes skip obsolete onboarding", () => {
+  it.each(GUARDED)("%s opens with stale setup state", (_label, route, pathname) => {
     useSetupStore.setState({ completed: false });
-    const fn = beforeLoadOf(route);
-    expect(fn, "route này THIẾU guard — user chưa cài gì sẽ rơi thẳng vào màn trống").toBeTypeOf("function");
-
-    let thrown: unknown = null;
-    try {
-      fn!({ location: { pathname } });
-    } catch (e) {
-      thrown = e;
-    }
+    expect(() => beforeLoadOf(route)!({ location: { pathname } })).not.toThrow();
+  });
+  it("/setup redirects to workspace", () => {
+    const fn = beforeLoadOf(setupRoute); let thrown: unknown = null;
+    try { fn!({ location: { pathname: "/setup" } }); } catch (e) { thrown = e; }
     expect(isRedirect(thrown)).toBe(true);
-    expect((thrown as { options: { to?: string } }).options.to).toBe("/setup");
-  });
-
-  it("S0 /setup KHÔNG có guard — nếu có sẽ đá vòng tròn /setup → /setup", () => {
-    expect(beforeLoadOf(setupRoute)).toBeUndefined();
-  });
-
-  it("đã setup xong ⇒ mọi route đi tiếp, không ném gì", () => {
-    useSetupStore.setState({ completed: true });
-    for (const [, route, pathname] of GUARDED) {
-      expect(() => beforeLoadOf(route)!({ location: { pathname } })).not.toThrow();
-    }
+    expect((thrown as { options: { to?: string } }).options.to).toBe("/");
   });
 });

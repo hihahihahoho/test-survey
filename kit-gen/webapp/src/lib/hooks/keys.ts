@@ -20,6 +20,7 @@ export const qk = {
   health: () => ["health"] as const,
   /** #2 — CẤM poll; staleTime 60s ở hook. */
   doctor: () => ["doctor"] as const,
+  update: () => ["update"] as const,
   workspaces: () => ["workspaces"] as const,
 
   projects: {

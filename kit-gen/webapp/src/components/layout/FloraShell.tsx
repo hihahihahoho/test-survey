@@ -6,6 +6,8 @@ import { useUiStore, applyTheme } from "@/lib/store";
 import type { AgentStatus } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { AgentPill } from "./AgentPill";
+import type { ConnectionStatus } from "@/lib/api";
+import { RuntimeStatus } from "./RuntimeStatus";
 import { FLORA, FOCUS, FLOATBAR } from "./flora";
 
 /**
@@ -51,6 +53,8 @@ export interface FloraShellProps {
   rail?: React.ReactNode;
   banner?: React.ReactNode;
   agentStatus: AgentStatus;
+  connectionStatus?: ConnectionStatus;
+  onRecheck?: () => void;
   onAgentPillClick?: () => void;
   workspaceLabel?: string;
   onWorkspaceClick?: () => void;
@@ -65,6 +69,8 @@ export function FloraShell({
   rail,
   banner,
   agentStatus,
+  connectionStatus,
+  onRecheck,
   onAgentPillClick,
   workspaceLabel,
   onWorkspaceClick,
@@ -185,7 +191,7 @@ export function FloraShell({
           <TooltipContent>{isDark ? "Giao diện tối" : "Giao diện sáng"}</TooltipContent>
         </Tooltip>
 
-        <AgentPill status={agentStatus} onOpen={onAgentPillClick} />
+        {connectionStatus && onRecheck ? <RuntimeStatus status={connectionStatus} onRecheck={onRecheck} /> : <AgentPill status={agentStatus} onOpen={onAgentPillClick} />}
         </div>
       </header>
 

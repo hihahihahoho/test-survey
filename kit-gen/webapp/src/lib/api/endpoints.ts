@@ -62,6 +62,12 @@ function parse<S extends z.ZodType>(schema: S, data: unknown, what: string): z.i
 /* ═════════ A. Hệ thống & môi trường (#1–#6) ═════════ */
 
 export const systemApi = {
+  async checkUpdate() {
+    return await httpGet("/api/update") as { currentVersion: string; latestVersion: string; available: boolean; checkedAt: string };
+  },
+  async installUpdate() {
+    return await httpPost("/api/update", {}) as { ok: boolean; previousVersion?: string; restartRequired?: boolean };
+  },
   /** #2 — CẤM poll (chạy `codex debug prompt-input`, ~1s/lần). Cache 60s ở tầng hook. */
   async doctor(opts: { refresh?: boolean } = {}) {
     const data = await httpGet(`/api/doctor${opts.refresh ? "?refresh=1" : ""}`);

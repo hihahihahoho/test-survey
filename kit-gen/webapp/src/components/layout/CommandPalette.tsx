@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
-  BookOpen, Boxes, Compass, FolderOpen, Images, Keyboard, LayoutGrid, Pencil, Plus,
+  BookOpen, Boxes, Compass, Images, Keyboard, LayoutGrid, Pencil, Plus,
   RefreshCw, Settings, Terminal, Trash2, Upload, Wrench, Zap,
 } from "lucide-react";
 import {
@@ -98,8 +98,6 @@ export function CommandPalette(props: CommandPaletteProps) {
         run: go(() => void navigate({ to: "/settings", search: { tab: "about" } })) },
 
       { id: "agent.recheck", group: "Công cụ local", icon: RefreshCw, label: "Kiểm tra lại công cụ local", run: onRecheckAgent },
-      { id: "agent.setup", group: "Công cụ local", icon: FolderOpen, label: "Chạy lại hướng dẫn cài đặt",
-        run: go(() => void navigate({ to: "/setup" })) },
 
       { id: "help.shortcuts", group: "Trợ giúp", icon: Keyboard, label: "Xem bảng phím tắt", hint: ["?"], run: onShortcutsHelp },
       /* INTEGRATION: `features/docs/**` có bảng tra 40+ mã lỗi nhưng trước đây không

@@ -141,6 +141,8 @@ export function AppLayout({ screen, projectId, fileId, children, simplified = fa
     <>
       <FloraShell
         agentStatus={status.pill as AgentStatus}
+        connectionStatus={status}
+        onRecheck={recheck}
         onAgentPillClick={() => setAgentSheetOpen(true)}
         workspaceLabel={status.workspaceLabel ?? undefined}
         onWorkspaceClick={() => void navigate({ to: "/settings", search: { tab: "agent" } })}

@@ -35,6 +35,18 @@ export async function run({ api, call, agentDir, tmp }) {
     ok(r.json.items.every(w => !("path" in w) && !("root" in w)), "không có field path/root")
     eq(r.json.activeId, r.json.items.find(w => w.active).id, "activeId khớp")
   })
+  await it("GET /api/update đọc manifest tĩnh, không phụ thuộc GitHub API", async () => {
+    const original = globalThis.fetch
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      version: "99.0.0", archive: "https://example.test/kitgen-runtime-99.0.0.tar.gz",
+    }), { status: 200, headers: { "content-type": "application/json" } })
+    try {
+      const r = await api("GET", "/api/update")
+      eq(r.status, 200, "status")
+      eq(r.json.latestVersion, "99.0.0", "latest version")
+      eq(r.json.available, true, "update available")
+    } finally { globalThis.fetch = original }
+  })
 
   // ─────────────────────────────────────────── 2. CORS / HOST / preflight
   describe("bảo mật vận chuyển")

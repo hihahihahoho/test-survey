@@ -8,10 +8,12 @@ ORIGIN="${KITGEN_ORIGIN:-http://127.0.0.1:$PORT}"
 RELEASE_URL="${KITGEN_RELEASE_URL:-}"
 RELEASE_REPO="${KITGEN_RELEASE_REPO:-hihahihahoho/test-survey}"
 RELEASE_CHANNEL="${KITGEN_RELEASE_CHANNEL:-latest}"
+RELEASE_MANIFEST="${KITGEN_RELEASE_MANIFEST:-https://raw.githubusercontent.com/hihahihahoho/test-survey/feat/kitgen-local-runtime/kit-gen/release.json}"
 AUTO_RELEASE=0
 ARCHIVE=""
 EXPECTED_SHA=""
 NO_START=0
+IS_UPDATE=0
 CODEX_PROFILE="${KITGEN_CODEX_PROFILE:-default}"
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -25,7 +27,7 @@ while [ "$#" -gt 0 ]; do
     --no-start) NO_START=1 ;;
     --codex-default) CODEX_PROFILE="default" ;;
     --codex-img) CODEX_PROFILE="separate" ;;
-    --update) ;;
+    --update) IS_UPDATE=1 ;;
     -h|--help)
       echo "Usage: install.sh [--archive runtime.tar.gz | --release-url URL] [--sha256 HASH]"
       echo "                  [--repo OWNER/REPO]"
@@ -59,15 +61,12 @@ if ! is_release "$SELF_DIR" && ! is_source "$SELF_DIR" && [ -z "$ARCHIVE" ] && [
   AUTO_RELEASE=1
   command -v curl >/dev/null 2>&1 || { echo "curl is required." >&2; exit 1; }
   case "$RELEASE_REPO" in */*) ;; *) echo "Invalid GitHub repository: $RELEASE_REPO" >&2; exit 2 ;; esac
-  API="https://api.github.com/repos/$RELEASE_REPO/releases/$RELEASE_CHANNEL"
-  META="$(curl -fsSL --retry 3 -H 'Accept: application/vnd.github+json' "$API" 2>/dev/null || true)"
+  META="$(curl -fsSL --retry 3 "$RELEASE_MANIFEST" 2>/dev/null || true)"
   if [ -n "$META" ]; then
-    RELEASE_URL="$(printf '%s' "$META" | python3 -c 'import json,sys; a=json.load(sys.stdin).get("assets",[]); print(next((x["browser_download_url"] for x in a if x["name"].endswith(".tar.gz")), ""))')"
+    RELEASE_URL="$(printf '%s' "$META" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("archive", ""))')"
   else
-    # The unauthenticated GitHub API is rate-limited. Resolve the web redirect
-    # instead, then use the deterministic asset name produced by build-runtime.
-    TAG="$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/$RELEASE_REPO/releases/latest" 2>/dev/null | sed 's|.*/tag/||')"
-    case "$TAG" in kitgen-v*) VERSION="${TAG#kitgen-v}"; RELEASE_URL="https://github.com/$RELEASE_REPO/releases/download/$TAG/kitgen-runtime-$VERSION.tar.gz" ;; esac
+    echo "Cannot read the KitGen release manifest." >&2
+    exit 1
   fi
   [ -n "$RELEASE_URL" ] || { echo "The latest release has no KitGen runtime archive." >&2; exit 1; }
 fi
@@ -121,9 +120,30 @@ rm -rf "$NEW"
 mkdir -p "$NEW"
 cp -R "$CANDIDATE/." "$NEW/"
 NODE="$(command -v node 2>/dev/null || true)"
-[ -n "$NODE" ] || { echo "Node >=20 is required." >&2; exit 1; }
-MAJOR="$($NODE -p 'Number(process.versions.node.split(".")[0])')"
-[ "$MAJOR" -ge 20 ] || { echo "Node >=20 is required." >&2; exit 1; }
+MAJOR=0
+[ -z "$NODE" ] || MAJOR="$($NODE -p 'Number(process.versions.node.split(".")[0])')"
+if [ "$MAJOR" -lt 20 ]; then
+  NODE_VERSION="20.19.5"
+  case "$(uname -s)-$(uname -m)" in
+    Darwin-arm64) NODE_PLATFORM="darwin-arm64" ;;
+    Darwin-x86_64) NODE_PLATFORM="darwin-x64" ;;
+    Linux-aarch64|Linux-arm64) NODE_PLATFORM="linux-arm64" ;;
+    Linux-x86_64) NODE_PLATFORM="linux-x64" ;;
+    *) echo "Unsupported platform for automatic Node installation: $(uname -s) $(uname -m)" >&2; exit 1 ;;
+  esac
+  NODE_PKG="node-v$NODE_VERSION-$NODE_PLATFORM.tar.gz"
+  NODE_BASE="https://nodejs.org/dist/v$NODE_VERSION"
+  echo "Installing private Node.js runtime..."
+  curl -fsSL --retry 3 "$NODE_BASE/$NODE_PKG" -o "$TMP/$NODE_PKG"
+  curl -fsSL --retry 3 "$NODE_BASE/SHASUMS256.txt" -o "$TMP/node-shasums.txt"
+  EXPECTED_NODE_SHA="$(awk -v f="$NODE_PKG" '$2 == f { print $1 }' "$TMP/node-shasums.txt")"
+  ACTUAL_NODE_SHA="$(shasum -a 256 "$TMP/$NODE_PKG" | awk '{print $1}')"
+  [ -n "$EXPECTED_NODE_SHA" ] && [ "$EXPECTED_NODE_SHA" = "$ACTUAL_NODE_SHA" ] || { echo "Node checksum mismatch." >&2; exit 1; }
+  rm -rf "$KITGEN_HOME/tools/node"
+  mkdir -p "$KITGEN_HOME/tools/node"
+  tar -xzf "$TMP/$NODE_PKG" -C "$KITGEN_HOME/tools/node" --strip-components=1
+  NODE="$KITGEN_HOME/tools/node/bin/node"
+fi
 command -v python3 >/dev/null 2>&1 || { echo "Python 3 is required." >&2; exit 1; }
 # Self-test before switching current; production artifacts intentionally omit tests.
 "$NODE" --check "$NEW/agent/server.mjs" >/dev/null
@@ -133,7 +153,22 @@ PREVIOUS="$(readlink "$KITGEN_HOME/current" 2>/dev/null || true)"
 ln -sfn "$DEST" "$KITGEN_HOME/current"
 VENV="$WORKSPACE/.venv"
 [ -x "$VENV/bin/python" ] || python3 -m venv "$VENV"
-"$VENV/bin/python" -c 'import PIL' >/dev/null 2>&1 || "$VENV/bin/python" -m pip install --quiet pillow
+"$VENV/bin/python" -c 'import PIL,numpy,scipy,pymatting' >/dev/null 2>&1 || {
+  echo "Installing image-processing dependencies..."
+  "$VENV/bin/python" -m pip install --quiet --upgrade pillow numpy scipy pymatting
+}
+
+# Keep Codex inside KitGen's home when it is not already installed. This avoids
+# sudo/global npm permissions and leaves login as the only interactive step.
+if ! command -v codex >/dev/null 2>&1; then
+  echo "Installing Codex CLI..."
+  mkdir -p "$KITGEN_HOME/tools"
+  "$KITGEN_HOME/tools/node/bin/npm" install --silent --prefix "$KITGEN_HOME/tools" @openai/codex 2>/dev/null || \
+    "$(dirname "$NODE")/npm" install --silent --prefix "$KITGEN_HOME/tools" @openai/codex
+fi
+CODEX_BIN="$(command -v codex 2>/dev/null || true)"
+[ -n "$CODEX_BIN" ] || CODEX_BIN="$KITGEN_HOME/tools/node_modules/.bin/codex"
+[ -x "$CODEX_BIN" ] || { echo "Codex CLI installation failed." >&2; exit 1; }
 mkdir -p "$WORKSPACE/.kitgen/engine" "$WORKSPACE/projects"
 cp -R "$DEST/engine/." "$WORKSPACE/.kitgen/engine/"
 cp "$DEST/runtime/bin/kitgen" "$KITGEN_HOME/bin/kitgen"
@@ -165,6 +200,7 @@ KITGEN_WORKSPACE='$WORKSPACE'
 KITGEN_PORT='$PORT'
 KITGEN_ORIGIN='$ORIGIN'
 KITGEN_NODE='$NODE'
+KITGEN_CODEX_BIN='$CODEX_BIN'
 KITGEN_RELEASE_URL='$([ "$AUTO_RELEASE" -eq 1 ] && printf '' || printf '%s' "$RELEASE_URL")'
 KITGEN_RELEASE_REPO='$RELEASE_REPO'
 KITGEN_RELEASE_CHANNEL='$RELEASE_CHANNEL'
@@ -197,6 +233,8 @@ echo "Command: $BIN"
 echo "Open: http://127.0.0.1:$PORT/app/"
 if [ "$CODEX_PROFILE" = "separate" ] && [ ! -f "$HOME/.codex-img/auth.json" ]; then
   echo "Login for the separate image profile: CODEX_HOME=$HOME/.codex-img codex login"
+elif [ ! -f "$HOME/.codex/auth.json" ]; then
+  echo "One step remains: $CODEX_BIN login"
 else
   echo "Image profile: Codex default (~/.codex)"
 fi

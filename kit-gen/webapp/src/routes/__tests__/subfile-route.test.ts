@@ -12,10 +12,10 @@
  *  ④ route mới có guard `requireSetup` như 9 route kia — thiếu là người chưa cài gì
  *     rơi thẳng vào bàn làm việc trống.
  */
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { createMemoryHistory, createRouter, isRedirect } from "@tanstack/react-router";
+import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { QueryClient } from "@tanstack/react-query";
 import { routeTree } from "@/routeTree";
 import { useSetupStore } from "@/lib/store";
@@ -97,27 +97,10 @@ describe("route `/p/:projectId/f/:fileId` — deep link tới bàn làm việc",
 
 /* ═════════ ④ Guard ═════════ */
 
-describe("guard của route mới", () => {
-  beforeEach(() => useSetupStore.setState({ completed: false }));
-
-  it("chưa setup xong ⇒ ép về /setup, mang theo chỗ định tới", () => {
-    const fn = (fileRoute.options as { beforeLoad?: (c: { location: { pathname: string } }) => unknown })
-      .beforeLoad;
-    expect(fn, "route file con THIẾU guard").toBeTypeOf("function");
-    let thrown: unknown = null;
-    try {
-      fn!({ location: { pathname: `/p/${PID}/f/f-abc` } });
-    } catch (e) {
-      thrown = e;
-    }
-    expect(isRedirect(thrown)).toBe(true);
-    expect((thrown as { options: { to?: string } }).options.to).toBe("/setup");
-  });
-
-  it("đã setup xong ⇒ đi tiếp", () => {
-    useSetupStore.setState({ completed: true });
-    const fn = (fileRoute.options as { beforeLoad?: (c: { location: { pathname: string } }) => unknown })
-      .beforeLoad;
+describe("route file con không bị onboarding chặn", () => {
+  it("mở thẳng với setup state cũ", () => {
+    useSetupStore.setState({ completed: false });
+    const fn = (fileRoute.options as { beforeLoad?: (c: { location: { pathname: string } }) => unknown }).beforeLoad;
     expect(() => fn!({ location: { pathname: `/p/${PID}/f/f-abc` } })).not.toThrow();
   });
 });

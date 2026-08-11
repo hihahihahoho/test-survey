@@ -2,6 +2,7 @@
    #4 /api/workspace/activate, #5 /bridge.html. /health là endpoint DUY NHẤT được poll. */
 import { invalidateDoctorCache } from "../lib/doctor.mjs"
 import { PROTOCOL } from "../lib/security.mjs"
+import { checkForUpdate, readRuntimeVersion, scheduleUpdate } from "../lib/update.mjs"
 
 export function register(r) {
   r.get("/health", async ctx => {
@@ -25,6 +26,14 @@ export function register(r) {
     const refresh = ctx.url.searchParams.get("refresh") === "1"
     if (refresh) invalidateDoctorCache()
     return { status: 200, json: await ctx.doctor(ctx.registry.active, { refresh }) }
+  })
+
+  r.get("/api/update", async () => ({ status: 200, json: await checkForUpdate() }))
+
+  r.post("/api/update", async () => {
+    const before = await readRuntimeVersion()
+    scheduleUpdate()
+    return { status: 202, json: { ok: true, previousVersion: before, restarting: true } }
   })
 
   r.get("/api/workspaces", async ctx => ({

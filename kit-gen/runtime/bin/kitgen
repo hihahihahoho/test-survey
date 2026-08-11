@@ -9,9 +9,11 @@ WORKSPACE="${KITGEN_WORKSPACE:-$HOME/KitGen}"
 PORT="${KITGEN_PORT:-8765}"
 ORIGIN="${KITGEN_ORIGIN:-http://127.0.0.1:$PORT}"
 NODE="${KITGEN_NODE:-$(command -v node 2>/dev/null || true)}"
+CODEX_BIN="${KITGEN_CODEX_BIN:-$(command -v codex 2>/dev/null || true)}"
 agent_cmd() {
   [ -n "$NODE" ] || { echo "KitGen: Node runtime not found. Run install.sh again." >&2; exit 1; }
-  exec env PATH="$WORKSPACE/.venv/bin:$PATH" "$NODE" "$SOURCE/agent/server.mjs" \
+  CODEX_DIR="$(dirname "$CODEX_BIN")"
+  exec env PATH="$WORKSPACE/.venv/bin:$CODEX_DIR:$PATH" "$NODE" "$SOURCE/agent/server.mjs" \
     --workspace "$WORKSPACE" --port "$PORT" --origin "$ORIGIN" --app-root "$SOURCE/app"
 }
 health() {

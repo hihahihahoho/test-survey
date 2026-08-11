@@ -108,6 +108,21 @@ export function useDoctor(opts: { enabled?: boolean; refresh?: boolean } = {}) {
   });
 }
 
+export function useUpdateCheck(opts: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: qk.update(),
+    queryFn: () => api.system.checkUpdate(),
+    enabled: opts.enabled ?? true,
+    staleTime: 12 * 60 * 60 * 1000,
+    refetchInterval: false,
+    retry: false,
+  });
+}
+
+export function useInstallUpdate() {
+  return useMutation({ mutationFn: () => api.system.installUpdate() });
+}
+
 /** #3 */
 export function useWorkspaces(opts: { enabled?: boolean } = {}) {
   return useQuery({
