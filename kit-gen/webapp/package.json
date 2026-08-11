@@ -11,13 +11,15 @@
     "typecheck": "tsc --noEmit",
     "contrast": "node scripts/check-contrast.mjs",
     "test": "vitest run",
+    "test:release": "vitest run --config vitest.release.config.ts",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:e2e": "playwright test",
     "test:visual": "playwright test --grep @visual",
     "deadclass": "node scripts/check-dead-classes.mjs",
     "nogen": "node scripts/check-no-gen.mjs",
-    "verify": "npm run nogen && npm run typecheck && npm run contrast && npm run deadclass && npm run test && npm run build:only"
+    "verify": "npm run nogen && npm run typecheck && npm run contrast && npm run deadclass && npm run test && npm run build:only",
+    "verify:release": "npm run nogen && npm run typecheck && npm run contrast && npm run deadclass && npm run test:release && npm run build:only"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.7.1",

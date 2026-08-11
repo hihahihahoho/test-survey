@@ -148,8 +148,8 @@ export function makeRateLimiter({ limit = 20, windowMs = 1000, staticLimit = nul
 
 /** Đọc body có TRẦN cứng → 413 trước khi nạp hết vào RAM.
  *  Quan trọng: khi vượt trần thì KHÔNG destroy socket ngay — nếu destroy trước khi
- *  response 413 được ghi ra thì client không nhận được gì (treo). Ta ngừng tích luỹ,
- *  xả (discard) phần còn lại, và chỉ cắt cứng khi bên gửi vẫn bơm quá 4× trần. */
+ *  response 413 được ghi ra thì client không nhận được gì (treo). Pause input để tạo
+ *  backpressure; sendError sẽ đóng kết nối chỉ sau khi response đã flush xong. */
 export function readBody(req, { limit }) {
   return new Promise((ok, err) => {
     const declared = Number(req.headers["content-length"] ?? NaN)
@@ -163,13 +163,11 @@ export function readBody(req, { limit }) {
       if (!over && total > limit) {
         over = true
         chunks.length = 0
+        req.pause()
         err(new AgentError("TOO_LARGE", `body > limit ${limit}`, { details: { limitBytes: limit } }))
         return
       }
-      if (over) {
-        if (total > limit * 4) req.destroy()      // bên gửi cố tình bơm tiếp → cắt
-        return
-      }
+      if (over) return
       chunks.push(c)
     })
     req.on("end", () => { if (!over) ok(Buffer.concat(chunks)) })

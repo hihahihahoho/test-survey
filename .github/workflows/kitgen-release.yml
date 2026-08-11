@@ -41,7 +41,7 @@ jobs:
           bash ../test/kitgen-launchd-start.test.sh
           bash ../test/install-launchd.test.sh
       - name: Verify web application
-        run: npm run verify
+        run: npm run verify:release
       - name: Verify integration contracts
         run: npm run test:integration
       - name: Verify local agent
