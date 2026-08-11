@@ -22,10 +22,27 @@ agent_cmd() {
 health() {
   curl -fsS -H 'X-KitGen-Client: 1' -H "Origin: $ORIGIN" "http://127.0.0.1:$PORT/health"
 }
+macos_start() {
+  domain="gui/$(id -u)"
+  service="$domain/com.kitgen.agent"
+  plist="$HOME/Library/LaunchAgents/com.kitgen.agent.plist"
+  if ! launchctl print "$service" >/dev/null 2>&1; then
+    [ -f "$plist" ] || { echo "KitGen LaunchAgent is missing: $plist" >&2; return 1; }
+    attempt=1
+    while ! launchctl bootstrap "$domain" "$plist"; do
+      launchctl print "$service" >/dev/null 2>&1 && break
+      [ "$attempt" -lt 5 ] || return 1
+      attempt=$((attempt + 1))
+      sleep 1
+    done
+  fi
+  launchctl print "$service" >/dev/null 2>&1 || return 1
+  launchctl kickstart -k "$service"
+}
 case "${1:-help}" in
   run) agent_cmd ;;
   start)
-    if [ "$(uname -s)" = Darwin ]; then launchctl kickstart -k "gui/$(id -u)/com.kitgen.agent"
+    if [ "$(uname -s)" = Darwin ]; then macos_start
     elif command -v systemctl >/dev/null 2>&1; then systemctl --user start kitgen-agent
     else nohup "$0" run >>"$HOME_DIR/agent.log" 2>&1 & fi ;;
   stop)

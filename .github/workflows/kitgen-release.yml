@@ -35,6 +35,10 @@ jobs:
           cache: npm
           cache-dependency-path: kit-gen/webapp/package-lock.json
       - run: npm ci
+      - name: Verify installer service recovery
+        run: |
+          bash ../test/kitgen-launchd-start.test.sh
+          bash ../test/install-launchd.test.sh
       # Full Vitest currently includes a few developer-only fixtures ignored by git.
       # Release gates only use checks whose inputs are committed and reproducible in CI.
       - name: Verify committed production inputs

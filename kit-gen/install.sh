@@ -47,6 +47,22 @@ trap cleanup EXIT INT TERM
 # A release directory has these three roots. Running from source is supported for development.
 is_release(){ [ -f "$1/agent/server.mjs" ] && [ -f "$1/engine/gen.sh" ] && [ -f "$1/app/index.html" ]; }
 is_source(){ [ -f "$1/agent/server.mjs" ] && [ -f "$1/gen.sh" ] && [ -f "$1/scripts/build-runtime.sh" ]; }
+wait_for_health(){
+  attempts="${1:-10}"
+  while [ "$attempts" -gt 0 ]; do
+    "$BIN" status >/dev/null 2>&1 && return 0
+    attempts=$((attempts - 1))
+    [ "$attempts" -eq 0 ] || sleep 1
+  done
+  return 1
+}
+append_install_log(){
+  [ -s "$1" ] || return 0
+  {
+    printf '\n[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S %z')" "$2"
+    cat "$1"
+  } >> "$KITGEN_HOME/install.log"
+}
 
 # Default installs always reuse the user's normal Codex profile. A separate
 # image profile can be selected later from the runtime status popover.
@@ -221,13 +237,18 @@ if [ "$NO_START" -eq 0 ]; then
     mkdir -p "$(dirname "$PLIST")"
     sed -e "s|@KITGEN_BIN@|$BIN|g" -e "s|@KITGEN_HOME@|$KITGEN_HOME|g" "$DEST/runtime/service/com.kitgen.agent.plist.in" > "$PLIST"
     DOMAIN="gui/$(id -u)"
+    SERVICE="$DOMAIN/com.kitgen.agent"
     launchctl bootout "$DOMAIN/com.kitgen.agent" 2>/dev/null || \
       launchctl unload "$PLIST" 2>/dev/null || true
-    if launchctl bootstrap "$DOMAIN" "$PLIST" 2>"$TMP/launchctl.err"; then
-      launchctl kickstart -k "$DOMAIN/com.kitgen.agent" 2>/dev/null || true
-    elif launchctl load "$PLIST" 2>>"$TMP/launchctl.err"; then
-      : # `load` supports older/partially available launchd user domains.
+    # bootout may return before launchd has fully removed the old registration.
+    for _ in 1 2 3 4 5; do
+      launchctl print "$SERVICE" >/dev/null 2>&1 || break
+      sleep 1
+    done
+    if "$BIN" start 2>"$TMP/launchctl.err"; then
+      append_install_log "$TMP/launchctl.err" "LaunchAgent start recovered after retry"
     else
+      append_install_log "$TMP/launchctl.err" "LaunchAgent start failed; using login-session fallback"
       echo "launchd is unavailable; starting KitGen for this login session instead." >&2
       cat "$TMP/launchctl.err" >&2
       nohup "$BIN" run >>"$KITGEN_HOME/agent.log" 2>&1 &
@@ -237,15 +258,20 @@ if [ "$NO_START" -eq 0 ]; then
     sed "s|@KITGEN_BIN@|$BIN|g" "$DEST/runtime/service/kitgen-agent.service.in" > "$UNIT"
     systemctl --user daemon-reload; systemctl --user enable --now kitgen-agent
   else nohup "$BIN" run >>"$KITGEN_HOME/agent.log" 2>&1 & fi
-  HEALTHY=0
-  for _ in 1 2 3 4 5 6 7 8 9 10; do
-    if "$BIN" status >/dev/null 2>&1; then HEALTHY=1; break; fi
-    sleep 1
-  done
-  if [ "$HEALTHY" -ne 1 ]; then
-    [ -n "$PREVIOUS" ] && ln -sfn "$PREVIOUS" "$KITGEN_HOME/current"
-    "$BIN" restart 2>/dev/null || true
-    echo "Update failed health check; previous runtime restored." >&2
+  if ! wait_for_health 10; then
+    if [ -n "$PREVIOUS" ]; then
+      ln -sfn "$PREVIOUS" "$KITGEN_HOME/current"
+      if ! "$BIN" restart 2>"$TMP/rollback-launchctl.err"; then
+        append_install_log "$TMP/rollback-launchctl.err" "Previous LaunchAgent restart failed"
+      fi
+      if wait_for_health 10; then
+        echo "Update failed health check; previous runtime restored and restarted." >&2
+      else
+        echo "Update failed health check; previous runtime files were restored, but its agent could not be restarted." >&2
+      fi
+    else
+      echo "Install failed health check; no previous runtime is available." >&2
+    fi
     exit 1
   fi
 fi

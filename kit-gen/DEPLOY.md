@@ -55,8 +55,10 @@ Installer hỏi profile tạo ảnh với hai lựa chọn: Codex hiện tại l
 dùng khi user chọn option 2 hoặc truyền `--codex-img`. Chế độ không tương tác dùng `--codex-default`.
 
 Installer lấy GitHub Release mới nhất, xác minh checksum ngoài archive và manifest bên trong, kiểm cú
-pháp agent rồi đổi symlink `~/.kitgen/current`. Nếu health check thất bại, symlink trở về phiên bản cũ.
-Project ở `~/KitGen` và đăng nhập tạo ảnh ở `~/.codex-img`, nằm ngoài thư mục phiên bản.
+pháp agent rồi đổi symlink `~/.kitgen/current`. Nếu health check thất bại, installer đổi về phiên bản cũ,
+đăng ký lại service nếu cần và chỉ báo khôi phục thành công sau khi health check bản cũ đạt. Lỗi `launchd`
+được giữ tại `~/.kitgen/install.log`. Project ở `~/KitGen` và đăng nhập tạo ảnh ở `~/.codex-img`, nằm ngoài
+thư mục phiên bản.
 
 Có thể dùng fork hoặc mirror:
 
