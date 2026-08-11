@@ -60,10 +60,15 @@ if ! is_release "$SELF_DIR" && ! is_source "$SELF_DIR" && [ -z "$ARCHIVE" ] && [
   command -v curl >/dev/null 2>&1 || { echo "curl is required." >&2; exit 1; }
   case "$RELEASE_REPO" in */*) ;; *) echo "Invalid GitHub repository: $RELEASE_REPO" >&2; exit 2 ;; esac
   API="https://api.github.com/repos/$RELEASE_REPO/releases/$RELEASE_CHANNEL"
-  META="$(curl -fsSL --retry 3 -H 'Accept: application/vnd.github+json' "$API")" || {
-    echo "Cannot find a KitGen release at $RELEASE_REPO ($RELEASE_CHANNEL)." >&2; exit 1;
-  }
-  RELEASE_URL="$(printf '%s' "$META" | python3 -c 'import json,sys; a=json.load(sys.stdin).get("assets",[]); print(next((x["browser_download_url"] for x in a if x["name"].endswith(".tar.gz")), ""))')"
+  META="$(curl -fsSL --retry 3 -H 'Accept: application/vnd.github+json' "$API" 2>/dev/null || true)"
+  if [ -n "$META" ]; then
+    RELEASE_URL="$(printf '%s' "$META" | python3 -c 'import json,sys; a=json.load(sys.stdin).get("assets",[]); print(next((x["browser_download_url"] for x in a if x["name"].endswith(".tar.gz")), ""))')"
+  else
+    # The unauthenticated GitHub API is rate-limited. Resolve the web redirect
+    # instead, then use the deterministic asset name produced by build-runtime.
+    TAG="$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/$RELEASE_REPO/releases/latest" 2>/dev/null | sed 's|.*/tag/||')"
+    case "$TAG" in kitgen-v*) VERSION="${TAG#kitgen-v}"; RELEASE_URL="https://github.com/$RELEASE_REPO/releases/download/$TAG/kitgen-runtime-$VERSION.tar.gz" ;; esac
+  fi
   [ -n "$RELEASE_URL" ] || { echo "The latest release has no KitGen runtime archive." >&2; exit 1; }
 fi
 if is_release "$SELF_DIR"; then
