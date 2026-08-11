@@ -11,6 +11,7 @@ import { useCreateIntent } from "./lib/useCreateIntent";
 import { useGridKeys } from "./lib/useGridKeys";
 import { useProjectDialogs } from "./lib/useProjectDialogs";
 import { ProjectDialogs } from "./ProjectDialogs";
+import { HomeSidebar, type HomeSection } from "@/features/home/components/HomeSidebar";
 
 import {
   HomeAgentOffline, HomeEmpty, HomeError, HomeGrid, HomeHeader, HomeNoMatch, HomeSkeleton,
@@ -76,6 +77,7 @@ export function ProjectsScreen(_props: ScreenProps) {
   // Ô tìm: state cục bộ cho mượt, đẩy vào bộ lọc sau 120ms.
   const [typed, setTyped] = React.useState("");
   const [query, setQuery] = React.useState("");
+  const [section, setSection] = React.useState<HomeSection>("recent");
   React.useEffect(() => {
     const t = setTimeout(() => setQuery(typed), 120);
     return () => clearTimeout(t);
@@ -166,11 +168,12 @@ export function ProjectsScreen(_props: ScreenProps) {
      khe hở — không gợi được không gian, chỉ thêm nhiễu. Canvas
      (`design/components/SheetCanvas.tsx`) GIỮ NGUYÊN. */
   return (
-    <div className="relative min-h-[calc(100dvh-3.5rem)] bg-canvas">
+    <div className="relative flex min-h-[calc(100dvh-3.5rem)] bg-canvas">
+      <HomeSidebar section={section} workspace={status.workspaceLabel ?? undefined} trashCount={trashCount} onSection={setSection} onTrash={() => nav.openTrash()} onSettings={() => void navigate({ to: "/settings", search: { tab: "agent" } })} />
       {/* §W2A-2 — TRƯỚC ĐÂY `max-w-[1600px] … lg:px-10` ⇒ H1 ở x=40 trong khi H1 của
           workflow ở x=144 và của Settings ở x=304. Nay dùng `.kg-page`, container
           DUY NHẤT của app. Chỉ còn nhịp dọc là việc riêng của màn này. */}
-      <div className="kg-page flex flex-col gap-8 py-10 sm:py-14">
+      <div className="kg-page min-w-0 flex-1 py-8">
         {/* Đang làm mới mà ĐÃ có dữ liệu: vạch 2px ở đỉnh, không che nội dung, không spinner. */}
         {data.isFetching && !data.isLoading && (
           <div className="absolute inset-x-0 top-0 h-0.5 overflow-hidden" aria-hidden>
@@ -185,12 +188,17 @@ export function ProjectsScreen(_props: ScreenProps) {
           searchRef={searchRef}
         />
 
+        <div className="mt-8 flex items-center justify-between border-b border-line-subtle pb-3">
+          <h2 className="text-title text-fg-strong">{section === "recent" ? "Gần đây" : section === "starred" ? "Đã đánh dấu" : "Tất cả bộ kit"}</h2>
+          <span className="text-caption text-fg-muted">{data.visible.length} bộ kit</span>
+        </div>
+
         {/* §6: banner DƯỚI header, TRÊN nội dung. Không overlay, không chặn màn. */}
         {gate.readOnly && !narrow && (
           <HomeAgentOffline hasCache={data.fromCache && hasKits} onRetry={refreshAll} />
         )}
 
-        <HomeBody
+        <div className="mt-5"><HomeBody
           data={data}
           gate={gate}
           agentOff={gate.readOnly && !narrow}
@@ -203,7 +211,7 @@ export function ProjectsScreen(_props: ScreenProps) {
           onOpenTrash={() => nav.openTrash()}
           onRetry={refreshAll}
           onClearSearch={clearSearch}
-        />
+        /></div>
 
         <ProjectDialogs
           dialogs={dialogs}

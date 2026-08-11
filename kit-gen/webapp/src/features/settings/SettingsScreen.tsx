@@ -1,7 +1,8 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { RefreshCw } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RefreshCw, FolderCog, SlidersHorizontal, Trash2, Info, Wrench } from "lucide-react";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useRegisterCommands, type ScreenProps } from "@/components/layout";
 import { DISPLAY } from "@/components/layout/flora";
 import { Route as SettingsRoute } from "@/routes/settings";
@@ -67,85 +68,38 @@ export function SettingsScreen(_props: ScreenProps) {
     if (tab === "env") void doctor.refetch();
   }, [recheck, tab, doctor]);
 
-  /* ── Phím tắt của màn (§3-S6) ────────────────────────────────────────── */
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "r") {
-        e.preventDefault(); // chặn F5 của trình duyệt — ở đây "làm mới" nghĩa là dò lại agent
-        recheckAll();
-        return;
-      }
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const i = Number(e.key);
-      if (Number.isInteger(i) && i >= 1 && i <= SETTINGS_TABS.length) {
-        setTab(SETTINGS_TABS[i - 1]!);
-      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "r") { e.preventDefault(); recheckAll(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [recheckAll, setTab]);
+  }, [recheckAll]);
 
-  useRegisterCommands(
-    () => [
-      ...SETTINGS_TABS.map((t) => ({
-        id: `settings.tab.${t}`,
-        label: `Cài đặt: ${TAB_LABEL[t]}`,
-        run: () => setTab(t),
-      })),
-      {
-        id: "settings.recheck",
-        label: "Kiểm tra lại công cụ local",
-        icon: RefreshCw,
-        run: recheckAll,
-      },
-    ],
-    [setTab, recheckAll],
-  );
+  useRegisterCommands(() => [{ id: "settings.recheck", label: "Kiểm tra lại công cụ local", icon: RefreshCw, run: recheckAll }], [recheckAll]);
 
+  const icons = { agent: FolderCog, env: Wrench, prefs: SlidersHorizontal, trash: Trash2, about: Info };
   return (
-    /* §W2A-2 — TRƯỚC ĐÂY `mx-auto max-w-4xl` (896px) đẩy H1 "Cài đặt" vào x=304,
-       lệch 264px so với H1 của Home. Nội dung cài đặt HẸP là đúng — nhưng nó phải
-       hẹp VỀ BÊN PHẢI (`max-w-3xl` không `mx-auto`), không được kéo tiêu đề vào
-       giữa trang. Tiêu đề nay đứng đúng mép trái chung với mọi màn khác. */
-    /* ══ P-SWEEP·14 · MÉP PHẢI ĂN VỚI HEADER ═══════════════════════════════════
-       `max-w-3xl` (768px) đặt ở CẤP TRANG làm nội dung dừng ở giữa màn 1280 trong
-       khi header phía trên chạy hết bề ngang ⇒ nửa phải trống hoác và thẻ "Tết 2026
-       · Đỏ" kết thúc lơ lửng, không thẳng với bất cứ mép nào (ảnh 28). Bảng "bất
-       nhất" chốt: mọi màn dùng chung lưới `.kg-page` 1280px, muốn hẹp thì hẹp ở CẤP
-       KHỐI (từng thẻ tự giới hạn bề rộng chữ), không hẹp ở cấp trang. */
-    <div className="kg-page flex flex-col gap-8 py-6 pb-16 sm:py-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        {/* W2B-5 · LUẬT PLAYFAIR điều ③: chỉ nhấn serif khi tiêu đề có ≥3 từ.
-            "Cài đặt" có HAI từ ⇒ từ nghiêng chiếm nửa tiêu đề và hết còn là nhấn
-            (TOA 6 gọi đúng tên: "sai liều"). Bỏ `<em>`, giữ nguyên chữ.
-            W2B-1 · cỡ chữ về const `DISPLAY` — trước đây màn này gõ riêng 30/34px,
-            lệch khỏi Home (30/38) dù cùng một cấp tiêu đề. */}
-        {/* P-SWEEP·14 — nút "Kiểm tra lại" ở đây ĐÃ BỎ. Nó đứng lơ lửng cạnh H1,
-            không thuộc tab nào, trong khi tab "Công cụ local" ĐÃ CÓ SẴN một nút y hệt
-            (`AgentTab`) ngay cạnh dòng trạng thái kết nối — tức chỗ nó có nghĩa. Phím
-            tắt ⌘R vẫn gọi `recheckAll` cho mọi tab, và lệnh "Kiểm tra lại công cụ
-            local" vẫn nằm trong bảng lệnh ⌘K: không đường vào nào bị mất. */}
-        <h1 className={`${DISPLAY} text-fg-strong`}>Cài đặt</h1>
-      </header>
-
-      {/* QA-LEAD: nội dung PHẢI nằm trong `TabsContent`. Radix luôn gắn
-          `aria-controls` lên mỗi `role="tab"`; không có `tabpanel` tương ứng thì
-          trình đọc màn hình thông báo một vùng KHÔNG TỒN TẠI trong DOM. */}
-      <Tabs value={tab} onValueChange={(v) => setTab(v as SettingsTab)}>
-        <TabsList>
-          {SETTINGS_TABS.map((t) => (
-            <TabsTrigger key={t} value={t}>{TAB_LABEL[t]}</TabsTrigger>
-          ))}
-        </TabsList>
-
-        <TabsContent value="agent" className="mt-8"><AgentTab status={status} onRecheck={recheck} /></TabsContent>
-        <TabsContent value="env" className="mt-8"><EnvTab doctor={doctor} status={status} /></TabsContent>
-        <TabsContent value="prefs" className="mt-8"><PrefsTab /></TabsContent>
-        <TabsContent value="trash" className="mt-8"><TrashTab /></TabsContent>
-        <TabsContent value="about" className="mt-8"><AboutTab status={status} /></TabsContent>
-      </Tabs>
-    </div>
+    <Dialog open onOpenChange={(open) => { if (!open) void navigate({ to: "/" }); }}>
+      <DialogContent size="xl" className="h-[min(82vh,760px)] overflow-hidden p-0">
+        <DialogTitle className="sr-only">Cài đặt KitGen</DialogTitle>
+        <DialogDescription className="sr-only">Cấu hình môi trường, workspace và ứng dụng.</DialogDescription>
+        <div className="grid min-h-0 flex-1 md:grid-cols-[220px_1fr]">
+          <aside className="border-r border-line-subtle bg-surface/70 p-3">
+            <h2 className={`px-3 pb-4 pt-2 ${DISPLAY} text-fg-strong`}>Cài đặt</h2>
+            <nav className="space-y-1">{SETTINGS_TABS.map((t) => { const Icon=icons[t]; return <button key={t} onClick={() => setTab(t)} className={`flex h-10 w-full items-center gap-3 rounded-2 px-3 text-label ${tab===t ? "bg-raised text-fg-strong" : "text-fg hover:bg-raised"}`}><Icon className="size-4" />{TAB_LABEL[t]}</button>; })}</nav>
+          </aside>
+          <div className="kg-page min-h-0 overflow-y-auto py-5 sm:py-8">
+            <Tabs value={tab} onValueChange={(v) => setTab(v as SettingsTab)}>
+              <TabsContent value="agent" className="mt-0"><AgentTab status={status} onRecheck={recheck} /></TabsContent>
+              <TabsContent value="env" className="mt-0"><EnvTab doctor={doctor} status={status} /></TabsContent>
+              <TabsContent value="prefs" className="mt-0"><PrefsTab /></TabsContent>
+              <TabsContent value="trash" className="mt-0"><TrashTab /></TabsContent>
+              <TabsContent value="about" className="mt-0"><AboutTab status={status} /></TabsContent>
+            </Tabs>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

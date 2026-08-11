@@ -149,6 +149,7 @@ export function AppLayout({ screen, projectId, fileId, children, simplified = fa
         onWorkspaceClick={() => void api.system.revealWorkspace()}
         onSettingsClick={() => void navigate({ to: "/settings", search: { tab: "agent" } })}
         onCommandPaletteOpen={() => setPaletteOpen(true)}
+        onHomeClick={() => void navigate({ to: "/" })}
         breadcrumb={
           <AppBreadcrumb
             screen={screen}

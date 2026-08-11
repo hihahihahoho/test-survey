@@ -34,7 +34,7 @@ export function AppBreadcrumb({
   return (
     <Breadcrumb>
       <BreadcrumbList className="flex-nowrap">
-        <BreadcrumbItem>
+        {!inProject && <BreadcrumbItem>
           {inProject ? (
             <BreadcrumbLink asChild>
               <Link to="/">Bộ kit của bạn</Link>
@@ -42,11 +42,10 @@ export function AppBreadcrumb({
           ) : (
             <BreadcrumbPage>Bộ kit của bạn</BreadcrumbPage>
           )}
-        </BreadcrumbItem>
+        </BreadcrumbItem>}
 
         {inProject && (
           <>
-            <BreadcrumbSeparator />
             <BreadcrumbItem className="min-w-0">
               <Button
                 variant="ghost"

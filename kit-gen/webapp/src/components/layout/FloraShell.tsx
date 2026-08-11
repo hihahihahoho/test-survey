@@ -60,6 +60,7 @@ export interface FloraShellProps {
   onWorkspaceClick?: () => void;
   onSettingsClick?: () => void;
   onCommandPaletteOpen?: () => void;
+  onHomeClick?: () => void;
   children: React.ReactNode;
 }
 
@@ -77,6 +78,7 @@ export function FloraShell({
   onWorkspaceClick,
   onSettingsClick,
   onCommandPaletteOpen,
+  onHomeClick,
   children,
 }: FloraShellProps) {
   /* Dùng store `@/lib/store` (persist có allowlist + chặn secret). Bản R0 của AppShell
@@ -105,7 +107,7 @@ export function FloraShell({
       <header className={cn("sticky top-0 z-sticky h-14 shrink-0 border-b", FLORA.canvas, FLORA.hair)}>
         <div className="kg-page flex h-full items-center gap-3">
         {/* Logo gọn: dấu vuông bo tròn + chữ. Không icon hộp to, không màu loè. */}
-        <span className="flex shrink-0 items-center gap-2">
+        <button type="button" onClick={onHomeClick} aria-label="Về trang chủ" className={cn("flex shrink-0 items-center gap-2 rounded-2", FOCUS)}>
           <span
             aria-hidden
             /* FE-2·E1 đóng nợ A1 (`NEEDS-fe2-a.md` #2): bo góc arbitrary 6px → `rounded-1`
@@ -119,7 +121,7 @@ export function FloraShell({
             className={cn("size-[18px] rounded-1 border", FLORA.accentBorder, "bg-accent/[var(--kg-tint-a)]")}
           />
           <span className="text-subtitle font-medium tracking-[-0.01em] text-fg-strong">kit-gen</span>
-        </span>
+        </button>
 
         {breadcrumb ? (
           <div className="min-w-0 flex-1 truncate">{breadcrumb}</div>
