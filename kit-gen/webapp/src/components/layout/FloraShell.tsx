@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Search, Moon, Sun, FolderOpen } from "lucide-react";
+import { Search, Moon, Sun, FolderOpen, Settings } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { KeyboardHint } from "@/components/common";
 import { useUiStore, applyTheme } from "@/lib/store";
@@ -58,6 +58,7 @@ export interface FloraShellProps {
   onAgentPillClick?: () => void;
   workspaceLabel?: string;
   onWorkspaceClick?: () => void;
+  onSettingsClick?: () => void;
   onCommandPaletteOpen?: () => void;
   children: React.ReactNode;
 }
@@ -74,6 +75,7 @@ export function FloraShell({
   onAgentPillClick,
   workspaceLabel,
   onWorkspaceClick,
+  onSettingsClick,
   onCommandPaletteOpen,
   children,
 }: FloraShellProps) {
@@ -160,7 +162,7 @@ export function FloraShell({
                 type="button"
                 onClick={onWorkspaceClick}
                 className={cn(
-                  "hidden h-8 max-w-[200px] items-center gap-1.5 px-2 lg:inline-flex",
+                  "hidden h-8 max-w-[200px] items-center gap-1.5 px-2 sm:inline-flex",
                   FLORA.pill, FLORA.fgMuted, FOCUS,
                   "transition-colors duration-fast hover:text-fg",
                 )}
@@ -172,6 +174,15 @@ export function FloraShell({
             <TooltipContent>Thư mục làm việc trên máy bạn</TooltipContent>
           </Tooltip>
         )}
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button type="button" onClick={onSettingsClick} aria-label="Mở cài đặt" className={cn("inline-flex size-8 items-center justify-center", FLORA.pill, FLORA.fgMuted, FOCUS)}>
+              <Settings className="size-4" aria-hidden />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Cài đặt</TooltipContent>
+        </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>

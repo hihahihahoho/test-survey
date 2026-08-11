@@ -123,6 +123,14 @@ export function useInstallUpdate() {
   return useMutation({ mutationFn: () => api.system.installUpdate() });
 }
 
+export function useSetImageProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (mode: "default" | "separate") => api.system.setImageProfile(mode),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.doctor() }),
+  });
+}
+
 /** #3 */
 export function useWorkspaces(opts: { enabled?: boolean } = {}) {
   return useQuery({

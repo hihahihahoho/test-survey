@@ -28,6 +28,19 @@ export function register(r) {
     return { status: 200, json: await ctx.doctor(ctx.registry.active, { refresh }) }
   })
 
+  r.patch("/api/image-profile", async ctx => {
+    const { mode } = await ctx.json()
+    if (mode !== "default" && mode !== "separate") {
+      return { status: 400, json: { error: { code: "BAD_REQUEST", message: "mode must be default or separate" } } }
+    }
+    const imageGen = mode === "separate"
+      ? { mode: "img-home", codexHome: "~/.codex-img" }
+      : { mode: "default-home" }
+    await ctx.registry.active.patchConfig({ imageGen })
+    invalidateDoctorCache()
+    return { status: 200, json: { ok: true, mode, codexHomeLabel: mode === "separate" ? "~/.codex-img" : "~/.codex" } }
+  })
+
   r.get("/api/update", async () => ({ status: 200, json: await checkForUpdate() }))
 
   r.post("/api/update", async () => {
@@ -49,6 +62,11 @@ export function register(r) {
       status: 200,
       json: { ok: true, workspaceId: ws.id, workspaceLabel: ws.label, workspaceFingerprint: ws.fingerprint },
     }
+  })
+
+  r.post("/api/workspace/reveal", async ctx => {
+    await ctx.reveal(ctx.registry.active.root)
+    return { status: 200, json: { ok: true } }
   })
 
   /** #5 — cầu dò popup: điều hướng TOP-LEVEL nên không bị mixed-content chặn (architecture §5.3).

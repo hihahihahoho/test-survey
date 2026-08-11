@@ -28,7 +28,7 @@ interface CommandDialogProps extends React.ComponentProps<typeof Dialog> {
 
 const CommandDialog = ({ children, label = "Bảng lệnh", description = "Tìm và chạy mọi hành động", ...props }: CommandDialogProps) => (
   <Dialog {...props}>
-    <DialogContent size="lg" hideClose className="top-[20%] translate-y-0 overflow-hidden p-0">
+    <DialogContent size="lg" hideClose className="overflow-hidden p-0">
       <DialogTitle className="sr-only">{label}</DialogTitle>
       <DialogDescription className="sr-only">{description}</DialogDescription>
       <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-caption [&_[cmdk-group-heading]]:text-fg-muted-raised [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-2">
@@ -47,7 +47,7 @@ const CommandInput = React.forwardRef<
     <CommandPrimitive.Input
       ref={ref}
       className={cn(
-        "flex h-12 w-full bg-transparent py-3 text-body text-fg-strong outline-none placeholder:text-fg-muted-raised disabled:cursor-not-allowed disabled:text-fg-muted",
+        "flex h-12 w-full bg-transparent py-3 text-body text-fg-strong outline-none ring-0 placeholder:text-fg-muted-raised focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:text-fg-muted",
         className
       )}
       {...props}

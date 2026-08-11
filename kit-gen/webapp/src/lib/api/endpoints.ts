@@ -68,6 +68,12 @@ export const systemApi = {
   async installUpdate() {
     return await httpPost("/api/update", {}) as { ok: boolean; previousVersion?: string; restartRequired?: boolean };
   },
+  async setImageProfile(mode: "default" | "separate") {
+    return await httpPatch("/api/image-profile", { mode }) as { ok: boolean; mode: "default" | "separate"; codexHomeLabel: string };
+  },
+  async revealWorkspace() {
+    return await httpPost("/api/workspace/reveal", {}) as { ok: boolean };
+  },
   /** #2 — CẤM poll (chạy `codex debug prompt-input`, ~1s/lần). Cache 60s ở tầng hook. */
   async doctor(opts: { refresh?: boolean } = {}) {
     const data = await httpGet(`/api/doctor${opts.refresh ? "?refresh=1" : ""}`);

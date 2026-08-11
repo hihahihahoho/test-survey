@@ -17,6 +17,7 @@ import {
   type FileScope, type ScreenId,
 } from "./screen-contract";
 import { RUN_CMD } from "./agent-commands";
+import { api } from "@/lib/api";
 import { useDocsList } from "@/features/docs/hooks";
 import { buildTabs, resolveActiveId } from "@/features/docs/lib/subfile-model";
 import { useContract } from "@/lib/hooks";
@@ -145,7 +146,8 @@ export function AppLayout({ screen, projectId, fileId, children, simplified = fa
         onRecheck={recheck}
         onAgentPillClick={() => setAgentSheetOpen(true)}
         workspaceLabel={status.workspaceLabel ?? undefined}
-        onWorkspaceClick={() => void navigate({ to: "/settings", search: { tab: "agent" } })}
+        onWorkspaceClick={() => void api.system.revealWorkspace()}
+        onSettingsClick={() => void navigate({ to: "/settings", search: { tab: "agent" } })}
         onCommandPaletteOpen={() => setPaletteOpen(true)}
         breadcrumb={
           <AppBreadcrumb

@@ -48,11 +48,8 @@ trap cleanup EXIT INT TERM
 is_release(){ [ -f "$1/agent/server.mjs" ] && [ -f "$1/engine/gen.sh" ] && [ -f "$1/app/index.html" ]; }
 is_source(){ [ -f "$1/agent/server.mjs" ] && [ -f "$1/gen.sh" ] && [ -f "$1/scripts/build-runtime.sh" ]; }
 
-if [ -t 0 ] && [ -t 1 ] && [ -z "${KITGEN_CODEX_PROFILE:-}" ]; then
-  printf '\nCodex dùng để tạo ảnh:\n  1) Cấu hình Codex hiện tại (~/.codex) [mặc định]\n  2) Profile riêng (~/.codex-img)\nChọn [1]: '
-  IFS= read -r answer || answer=""
-  [ "$answer" = "2" ] && CODEX_PROFILE="separate"
-fi
+# Default installs always reuse the user's normal Codex profile. A separate
+# image profile can be selected later from the runtime status popover.
 case "$CODEX_PROFILE" in default|separate) ;; *) echo "Invalid Codex profile: $CODEX_PROFILE" >&2; exit 2 ;; esac
 
 # Normal installs and `kitgen update` resolve the newest immutable GitHub asset.
@@ -169,6 +166,15 @@ fi
 CODEX_BIN="$(command -v codex 2>/dev/null || true)"
 [ -n "$CODEX_BIN" ] || CODEX_BIN="$KITGEN_HOME/tools/node_modules/.bin/codex"
 [ -x "$CODEX_BIN" ] || { echo "Codex CLI installation failed." >&2; exit 1; }
+
+# Playwright renders the HTML/SVG skeleton at full fidelity. Install it inside
+# KitGen's private tool prefix so users never need a global npm package.
+if ! NODE_PATH="$KITGEN_HOME/tools/node_modules" "$NODE" -e "require.resolve('playwright')" >/dev/null 2>&1; then
+  echo "Installing Playwright..."
+  "$(dirname "$NODE")/npm" install --silent --prefix "$KITGEN_HOME/tools" playwright
+fi
+PLAYWRIGHT_BROWSERS_PATH="$KITGEN_HOME/tools/playwright-browsers" \
+  "$KITGEN_HOME/tools/node_modules/.bin/playwright" install chromium >/dev/null
 mkdir -p "$WORKSPACE/.kitgen/engine" "$WORKSPACE/projects"
 cp -R "$DEST/engine/." "$WORKSPACE/.kitgen/engine/"
 cp "$DEST/runtime/bin/kitgen" "$KITGEN_HOME/bin/kitgen"
@@ -201,6 +207,8 @@ KITGEN_PORT='$PORT'
 KITGEN_ORIGIN='$ORIGIN'
 KITGEN_NODE='$NODE'
 KITGEN_CODEX_BIN='$CODEX_BIN'
+NODE_PATH='$KITGEN_HOME/tools/node_modules'
+PLAYWRIGHT_BROWSERS_PATH='$KITGEN_HOME/tools/playwright-browsers'
 KITGEN_RELEASE_URL='$([ "$AUTO_RELEASE" -eq 1 ] && printf '' || printf '%s' "$RELEASE_URL")'
 KITGEN_RELEASE_REPO='$RELEASE_REPO'
 KITGEN_RELEASE_CHANNEL='$RELEASE_CHANNEL'

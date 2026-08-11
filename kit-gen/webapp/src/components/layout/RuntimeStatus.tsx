@@ -2,7 +2,8 @@ import * as React from "react";
 import { Check, Loader2, RefreshCw, Server, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useDoctor, useInstallUpdate, useUpdateCheck } from "@/lib/hooks";
+import { useDoctor, useInstallUpdate, useSetImageProfile, useUpdateCheck } from "@/lib/hooks";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ConnectionStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { FLORA, FOCUS } from "./flora";
@@ -12,6 +13,7 @@ export function RuntimeStatus({ status, onRecheck }: { status: ConnectionStatus;
   const doctor = useDoctor({ enabled: open && status.connected });
   const update = useUpdateCheck({ enabled: status.connected });
   const install = useInstallUpdate();
+  const profile = useSetImageProfile();
   const codexReady = doctor.data?.codex?.ok === true && doctor.data?.imageGen?.available === true;
   const codexLabel = !status.connected ? "Codex —" : doctor.isLoading ? "Codex…" : codexReady ? "Codex Live" : "Codex check";
 
@@ -38,6 +40,23 @@ export function RuntimeStatus({ status, onRecheck }: { status: ConnectionStatus;
           <dt className="text-fg-muted">Codex</dt><dd className="text-fg-strong">{codexReady ? `Ready · ${doctor.data?.imageGen?.codexHomeLabel ?? "~/.codex"}` : doctor.data?.imageGen?.reason ?? "Chưa kiểm tra"}</dd>
           <dt className="text-fg-muted">KitGen</dt><dd className="text-fg-strong">{update.data ? `${update.data.currentVersion} → ${update.data.latestVersion}` : "Chưa kiểm tra"}</dd>
         </dl>
+        <div className="space-y-2">
+          <label className="text-caption text-fg-muted" htmlFor="kitgen-image-profile">Profile tạo ảnh</label>
+          <Select
+            value={doctor.data?.imageGen?.mode === "img-home" ? "separate" : "default"}
+            onValueChange={(value) => profile.mutate(value as "default" | "separate", { onSuccess: () => void doctor.refetch() })}
+            disabled={!status.connected || profile.isPending}
+          >
+            <SelectTrigger id="kitgen-image-profile"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Codex mặc định (~/.codex)</SelectItem>
+              <SelectItem value="separate">Profile riêng (~/.codex-img)</SelectItem>
+            </SelectContent>
+          </Select>
+          {doctor.data?.imageGen?.mode === "img-home" && doctor.data?.imageGen?.authPresent === false && (
+            <code className="block rounded-2 bg-raised px-3 py-2 text-caption text-fg">CODEX_HOME=~/.codex-img codex login</code>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="secondary" onClick={() => { onRecheck(); void doctor.refetch(); void update.refetch(); }}><RefreshCw aria-hidden /> Kiểm tra lại</Button>
           {update.data?.available && <Button size="sm" onClick={() => void doInstall()} loading={install.isPending}>Cập nhật</Button>}
