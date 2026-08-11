@@ -155,7 +155,7 @@ VENV="$WORKSPACE/.venv"
 [ -x "$VENV/bin/python" ] || python3 -m venv "$VENV"
 "$VENV/bin/python" -c 'import PIL,numpy,scipy,pymatting' >/dev/null 2>&1 || {
   echo "Installing image-processing dependencies..."
-  "$VENV/bin/python" -m pip install --quiet --upgrade pillow numpy scipy pymatting
+  PIP_DISABLE_PIP_VERSION_CHECK=1 "$VENV/bin/python" -m pip install --quiet --upgrade pillow numpy scipy pymatting
 }
 
 # Keep Codex inside KitGen's home when it is not already installed. This avoids
@@ -213,8 +213,18 @@ if [ "$NO_START" -eq 0 ]; then
     PLIST="$HOME/Library/LaunchAgents/com.kitgen.agent.plist"
     mkdir -p "$(dirname "$PLIST")"
     sed -e "s|@KITGEN_BIN@|$BIN|g" -e "s|@KITGEN_HOME@|$KITGEN_HOME|g" "$DEST/runtime/service/com.kitgen.agent.plist.in" > "$PLIST"
-    launchctl bootout "gui/$(id -u)/com.kitgen.agent" 2>/dev/null || true
-    launchctl bootstrap "gui/$(id -u)" "$PLIST"
+    DOMAIN="gui/$(id -u)"
+    launchctl bootout "$DOMAIN/com.kitgen.agent" 2>/dev/null || \
+      launchctl unload "$PLIST" 2>/dev/null || true
+    if launchctl bootstrap "$DOMAIN" "$PLIST" 2>"$TMP/launchctl.err"; then
+      launchctl kickstart -k "$DOMAIN/com.kitgen.agent" 2>/dev/null || true
+    elif launchctl load "$PLIST" 2>>"$TMP/launchctl.err"; then
+      : # `load` supports older/partially available launchd user domains.
+    else
+      echo "launchd is unavailable; starting KitGen for this login session instead." >&2
+      cat "$TMP/launchctl.err" >&2
+      nohup "$BIN" run >>"$KITGEN_HOME/agent.log" 2>&1 &
+    fi
   elif command -v systemctl >/dev/null 2>&1; then
     UNIT="$HOME/.config/systemd/user/kitgen-agent.service"; mkdir -p "$(dirname "$UNIT")"
     sed "s|@KITGEN_BIN@|$BIN|g" "$DEST/runtime/service/kitgen-agent.service.in" > "$UNIT"
