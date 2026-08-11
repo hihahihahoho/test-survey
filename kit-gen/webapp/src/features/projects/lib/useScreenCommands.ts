@@ -32,7 +32,7 @@ export function useProjectsCommands({
   onRefresh: () => void;
   onOpenTrash: () => void;
 }): void {
-  const noSelection = selected.length === 0 ? "Chọn ít nhất một project ở chế độ danh sách" : null;
+  const noSelection = selected.length === 0 ? "Chọn ít nhất một dự án trong danh sách" : null;
 
   useRegisterCommands(
     () => [
@@ -71,7 +71,7 @@ export function useProjectsCommands({
       {
         id: "s1.export-selected",
         label:
-          selected.length > 0 ? `Xuất .zip ${selected.length} project đã chọn` : "Xuất .zip project đã chọn",
+          selected.length > 0 ? `Xuất .zip ${selected.length} dự án đã chọn` : "Xuất .zip dự án đã chọn",
         icon: Copy,
         keywords: "export zip xuat tai ve",
         disabledReason: gate.readOnly ? gate.reason : noSelection,
@@ -79,7 +79,7 @@ export function useProjectsCommands({
       },
       {
         id: "s1.delete-selected",
-        label: selected.length > 0 ? `Xoá ${selected.length} project đã chọn` : "Xoá bộ kit đã chọn",
+        label: selected.length > 0 ? `Xoá ${selected.length} dự án đã chọn` : "Xoá dự án đã chọn",
         icon: Trash2,
         keywords: "delete remove xoa thung rac",
         disabledReason: gate.readOnly ? gate.reason : noSelection,

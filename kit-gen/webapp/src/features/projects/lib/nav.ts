@@ -17,7 +17,7 @@ export const PATHS = {
   design: (id: string, tab: "sheets" | "styles" | "advanced" = "sheets") => `/p/${pid(id)}/design?tab=${tab}`,
   runs: (id: string) => `/p/${pid(id)}/runs`,
   settingsTrash: () => "/settings?tab=trash",
-  /** FE-2·B1: đích thật của file con. Route do E1 đăng ký (`/p/:projectId/f/:fileId`). */
+  /** Đích thật của file bàn làm việc trong dự án. */
   file: (id: string, fileId: string) => `/p/${pid(id)}/f/${pid(fileId)}`,
 } as const;
 
@@ -72,8 +72,7 @@ export function createNav(navigate: Navigate): ProjectNav {
     openRuns: (id) => void navigate({ to: "/p/$projectId/runs", params: { projectId: id } }),
     openTrash: () => void navigate({ to: "/settings", search: { tab: "trash" } }),
     openFile: (projectId, fileId) => {
-      void fileId;
-      void navigate({ to: "/k/$projectId/canvas", params: { projectId } });
+      void navigate({ to: "/p/$projectId/f/$fileId", params: { projectId, fileId } });
       return true;
     },
   };

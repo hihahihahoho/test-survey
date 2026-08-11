@@ -81,7 +81,7 @@ export function RenameProjectDialog({
 
         <DialogBody className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="rename-input">Tên project</Label>
+            <Label htmlFor="rename-input">Tên dự án</Label>
             <Input
               id="rename-input"
               value={value}

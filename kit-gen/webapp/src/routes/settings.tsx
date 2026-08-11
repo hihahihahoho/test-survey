@@ -5,8 +5,8 @@ import { settingsSearchSchema } from "./search-schemas";
 import { requireSetup } from "./guards";
 
 /**
- * S6 `/settings` — 5 tab qua `?tab=agent|env|prefs|trash|about` (§2.1).
- * Full width, không rail. Tab lạ tự rơi về `agent` (xem search-schemas.ts).
+ * S6 `/settings` là route-lớp-phủ: Home vẫn mount phía sau, Settings tự portal
+ * thành modal. Tab lạ tự rơi về `agent` (xem search-schemas.ts).
  */
 export const Route = createRoute({
   getParentRoute: () => rootRoute,
@@ -14,7 +14,8 @@ export const Route = createRoute({
   validateSearch: settingsSearchSchema,
   beforeLoad: ({ location }) => requireSetup(location.pathname),
   component: () => (
-    <AppLayout screen="settings">
+    <AppLayout screen="projects">
+      <LazyScreen screen="projects" />
       <LazyScreen screen="settings" />
     </AppLayout>
   ),

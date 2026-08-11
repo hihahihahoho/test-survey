@@ -24,7 +24,7 @@ export const TEMPLATES: {
 }[] = [
   { id: "basic", title: "Kit cơ bản", icon: Package, lines: ["3 sheet · 25 ô", "24 element + 1 nền"], badge: "Khuyến nghị" },
   { id: "blank", title: "Trống", icon: FilePlus2, lines: ["0 sheet", "tự chọn từ thư viện"] },
-  { id: "from-project", title: "Từ project đang có", icon: Copy, lines: ["chọn phần muốn copy"] },
+  { id: "from-project", title: "Từ dự án đang có", icon: Copy, lines: ["chọn phần muốn sao chép"] },
   { id: "import", title: "Nhập file", icon: FileUp, lines: [".zip hoặc styles.json cũ"] },
 ];
 

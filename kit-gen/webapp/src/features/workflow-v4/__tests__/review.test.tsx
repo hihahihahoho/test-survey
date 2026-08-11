@@ -211,7 +211,7 @@ describe("§W1-2 — bước 6 có cửa ra", () => {
     expect(buttons.length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole("button", { name: /Quay lại/ })).toBeTruthy();
 
-    const xong = screen.getByRole("button", { name: /Xong — về danh sách/ });
+    const xong = screen.getByRole("button", { name: /Xong — về dự án/ });
     expect(xong.hasAttribute("disabled")).toBe(false);
     fireEvent.click(xong);
     expect(onDone).toHaveBeenCalledTimes(1);
@@ -245,7 +245,7 @@ describe("§W1-2 — bước 6 có cửa ra", () => {
   it("hàng nút KHÔNG tự dựng cửa ra — chúng do màn bơm vào (`exits`)", () => {
     render(<WorkflowActions step={6} drawable={7} onBack={() => {}} onNext={() => {}} onDraw={() => {}} onDone={() => {}} />);
     expect(screen.queryByRole("button", { name: /Tải \.zip/ })).toBeNull();
-    expect(screen.getByRole("button", { name: /Xong — về danh sách/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Xong — về dự án/ })).toBeTruthy();
   });
 
   it("nút 'Xong' của màn thật LƯU rồi mới điều hướng về danh sách", () => {
@@ -253,7 +253,7 @@ describe("§W1-2 — bước 6 có cửa ra", () => {
     // §W3-2: rời màn là mốc phải ghi đĩa — không được để nhịp debounce 2s nuốt
     // thay đổi cuối cùng của người dùng.
     expect(src).toContain("sync.saveNow()");
-    expect(src).toContain('navigate({ to: "/" })');
+    expect(src).toContain('navigate({ to: "/p/$projectId", params: { projectId } })');
   });
 });
 
@@ -315,7 +315,7 @@ describe("§W1-7 — mascot có thư viện pose đầy đủ theo nhóm", () =>
 describe("§W1-6 — ô campaign giữ được chữ", () => {
   it("gõ vào campaign thì store nhận ngay (không còn ô trôi)", () => {
     mount(<BriefStep />);
-    fireEvent.change(screen.getByLabelText("Mục tiêu / campaign"), { target: { value: "mini-game hè 2026" } });
+    fireEvent.change(screen.getByLabelText("Mục tiêu hoặc chiến dịch"), { target: { value: "mini-game hè 2026" } });
     expect(createWorkflowStore(PID).getState().campaign).toBe("mini-game hè 2026");
   });
 });

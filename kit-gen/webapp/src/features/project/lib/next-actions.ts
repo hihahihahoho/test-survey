@@ -81,11 +81,11 @@ export function nextActions(m: ProgressMatrix): NextAction[] {
       {
         id: "no-sheets",
         status: "never",
-        title: "Chưa có sheet nào trong bản thiết kế",
-        detail: "Thêm element từ thư viện để tạo sheet đầu tiên.",
+        title: "Chưa có nội dung trong bản thiết kế",
+        detail: "Chọn các thành phần cần có trong bộ kit.",
         kind: "design-sheets",
         jobs: [],
-        actionLabel: "Chọn element",
+        actionLabel: "Tạo bản thiết kế",
         needsAgent: true,
       },
     ];
@@ -96,7 +96,7 @@ export function nextActions(m: ProgressMatrix): NextAction[] {
         id: "no-variants",
         status: "never",
         title: "Chưa có phong cách nào",
-        detail: "Mỗi phong cách là một bộ màu / art style riêng cho cùng bộ element.",
+        detail: "Mỗi phong cách là một cách thể hiện riêng cho cùng bộ thành phần.",
         kind: "design-styles",
         jobs: [],
         actionLabel: "Thêm phong cách",

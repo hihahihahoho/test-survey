@@ -52,7 +52,7 @@ import { CREATE_MODES, DEFAULT_MODE, createIntent, type CreateIntent } from "../
  * (§4.1 bảng template), và nhãn nút chính đổi theo để user biết còn một bước nữa.
  */
 const schema = z.object({
-  name: z.string().trim().min(1, "Nhập tên project để dễ tìm lại sau này.").max(120, "Tên tối đa 120 ký tự."),
+  name: z.string().trim().min(1, "Nhập tên dự án để dễ tìm lại sau này.").max(120, "Tên tối đa 120 ký tự."),
   slug: z.string(),
   template: z.enum(["basic", "blank", "from-project", "import"]),
   mode: z.enum(CREATE_MODES),
@@ -129,8 +129,8 @@ export function CreateProjectDialog({
 
   const submitLabel =
     template === "import" ? "Tiếp: chọn nguồn nhập →"
-    : template === "from-project" ? "Tiếp: chọn project nguồn →"
-    : "Tạo project";
+    : template === "from-project" ? "Tiếp: chọn dự án nguồn →"
+    : "Tạo dự án";
 
   const onSubmit = async (v: FormValues) => {
     setFailure(null);
@@ -191,8 +191,8 @@ export function CreateProjectDialog({
         onPointerDownOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>Tạo project</DialogTitle>
-          <DialogDescription>Một project = một bộ kit cho một campaign.</DialogDescription>
+          <DialogTitle>Tạo dự án</DialogTitle>
+          <DialogDescription>Dự án là thư mục làm việc; các bộ kit được quản lý bên trong.</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -213,7 +213,7 @@ export function CreateProjectDialog({
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tên project</FormLabel>
+                    <FormLabel>Tên dự án</FormLabel>
                     <FormControl>
                       <Input placeholder="Tết 2026 — VietinBank iPay" autoFocus maxLength={120} {...field} />
                     </FormControl>
@@ -225,7 +225,7 @@ export function CreateProjectDialog({
               <div className="-mt-2 flex flex-wrap items-center gap-2">
                 <p className="text-caption text-fg-muted-raised">
                   {slug === "" ? (
-                    "Thư mục sẽ được đặt tên sau khi bạn gõ tên project."
+                    "Thư mục sẽ được đặt tên sau khi bạn gõ tên dự án."
                   ) : (
                     <>
                       Thư mục sẽ là <span className="font-mono text-fg">projects/{slug}-xxxx</span>

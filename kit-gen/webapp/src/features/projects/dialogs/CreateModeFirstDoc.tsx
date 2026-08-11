@@ -102,7 +102,7 @@ export function CreateModeFirstDoc({
 
         <DialogFooter>
           <Button type="button" variant="secondary" onClick={onSkip}>
-            {failed ? copy.fallbackLabel : "Bỏ qua, mở project"}
+            {failed ? copy.fallbackLabel : "Bỏ qua, mở dự án"}
           </Button>
           {failed && (
             <Button type="button" variant="primary" onClick={run.retry}>

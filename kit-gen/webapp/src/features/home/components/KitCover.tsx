@@ -69,7 +69,7 @@ export function KitCover({
       ) : (
         <img
           src={url}
-          alt={`Ảnh bìa của bộ kit ${kitName}`}
+          alt={`Ảnh bìa của dự án ${kitName}`}
           loading="lazy"
           decoding="async"
           onError={() => setFailed(true)}

@@ -1,7 +1,7 @@
 import { Check } from "lucide-react";
 import { useWorkflowStore, type StepId } from "../lib/model";
 
-const steps = ["Chủ thể & brief", "Phong cách", "Kitset UI", "Mascot", "Xem lại & vẽ", "Xem kết quả"] as const;
+const steps = ["Yêu cầu", "Phong cách", "Thành phần UI", "Nhân vật", "Xem lại", "Kết quả"] as const;
 
 /**
  * ══ P-SWEEP·15 · HAI HÌNH THÁI CHO HAI BỀ NGANG ═════════════════════════════

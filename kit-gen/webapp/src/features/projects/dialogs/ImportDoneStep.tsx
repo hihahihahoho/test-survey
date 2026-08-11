@@ -75,7 +75,7 @@ function buildReport(
   return [
     "kit-gen · BÁO CÁO NHẬP PROJECT",
     `Thời điểm: ${new Date().toISOString()}`,
-    `Project: ${project.name} (thư mục ${project.id})`,
+    `Dự án: ${project.name} (thư mục ${project.id})`,
     "",
     `Sheet: ${report?.sheets ?? 0}`,
     `Element: ${report?.components ?? 0}`,

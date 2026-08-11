@@ -126,7 +126,7 @@ export function ProjectHeader({
                 <Input
                   ref={inputRef}
                   value={draft}
-                  aria-label="Tên project"
+                  aria-label="Tên dự án"
                   aria-invalid={error !== null}
                   className="h-ctl-lg w-[min(28rem,80vw)] text-title"
                   onChange={(e) => {
@@ -179,7 +179,7 @@ export function ProjectHeader({
                     disabled={gate.readOnly}
                     aria-disabled={gate.readOnly || undefined}
                     onClick={startEdit}
-                    aria-label="Đổi tên project"
+                    aria-label="Đổi tên dự án"
                   >
                     <Pencil aria-hidden />
                   </Button>
@@ -196,7 +196,7 @@ export function ProjectHeader({
           )}
 
           <div className="flex flex-wrap items-center gap-2">
-            {(project.tags ?? []).map((t) => (
+            {(project.tags ?? []).filter((t) => !t.startsWith("kg-")).map((t) => (
               <Badge key={t} tone="outline">
                 {t}
               </Badge>

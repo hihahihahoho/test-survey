@@ -26,7 +26,7 @@ export function slugify(text: unknown, { max = 40 }: { max?: number } = {}): str
  */
 export function validateSlug(slug: string): string | null {
   const s = String(slug ?? "");
-  if (s === "") return "Chưa có tên thư mục. Gõ tên project để hệ thống tự đặt.";
+  if (s === "") return "Chưa có tên thư mục. Nhập tên dự án để hệ thống tự đặt.";
   if (s.length < 3) return "Tên thư mục cần ít nhất 3 ký tự.";
   if (s.length > 48) return "Tên thư mục tối đa 48 ký tự.";
   if (!/^[a-z0-9-]+$/.test(s)) return "Chỉ dùng chữ thường không dấu, số và dấu gạch ngang.";
@@ -38,7 +38,7 @@ export function validateSlug(slug: string): string | null {
 /** Tên hiển thị: chuỗi tự do nhưng phải có nội dung (agent giới hạn 120 ký tự). */
 export function validateName(name: string): string | null {
   const s = String(name ?? "").trim();
-  if (s === "") return "Nhập tên project để dễ tìm lại sau này.";
+  if (s === "") return "Nhập tên dự án để dễ tìm lại sau này.";
   if (s.length > 120) return "Tên tối đa 120 ký tự.";
   return null;
 }
@@ -70,7 +70,7 @@ export function duplicateNameWarning(
   let i = 2;
   while (taken.has(`${n} (${i})`.toLowerCase())) i += 1;
   return {
-    warn: `Đã có project tên «${n}». Vẫn tạo được — hai project sẽ khác nhau ở thư mục.`,
+    warn: `Đã có dự án tên «${n}». Bạn vẫn có thể tạo vì hai dự án nằm ở hai thư mục khác nhau.`,
     suggestion: `${n} (${i})`,
   };
 }

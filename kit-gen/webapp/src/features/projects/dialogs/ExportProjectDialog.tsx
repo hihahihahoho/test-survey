@@ -98,7 +98,7 @@ export function ExportProjectDialog({
         onPointerDownOutside={(e) => busy && e.preventDefault()}
         onInteractOutside={(e) => busy && e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>{many ? `Xuất ${projects.length} project` : `Xuất «${one.name}»`}</DialogTitle>
+          <DialogTitle>{many ? `Xuất ${projects.length} dự án` : `Xuất «${one.name}»`}</DialogTitle>
         </DialogHeader>
 
         <DialogBody className="flex flex-col gap-4">
@@ -147,7 +147,7 @@ export function ExportProjectDialog({
             ) : (
               <>
                 Tên file: <span className="font-mono text-fg">{exportFileName(one.slug ?? one.id)}</span>
-                {(inc.raw || inc.runs) && <> · project đang chiếm {bytes(one.stats?.diskBytes ?? 0)} nên file có thể lớn</>}
+                {(inc.raw || inc.runs) && <> · dự án đang chiếm {bytes(one.stats?.diskBytes ?? 0)} nên file có thể lớn</>}
               </>
             )}
           </p>

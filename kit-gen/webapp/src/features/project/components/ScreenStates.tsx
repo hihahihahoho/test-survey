@@ -53,7 +53,7 @@ export function ProjectMissing({ inTrash }: { inTrash: boolean }) {
   return (
     <EmptyState
       icon={PackageOpen}
-      title={inTrash ? "Project này đang ở trong Thùng rác" : "Không tìm thấy project này"}
+      title={inTrash ? "Dự án này đang ở trong Thùng rác" : "Không tìm thấy dự án này"}
       description={
         inTrash
           ? "Nó vẫn được giữ 30 ngày kể từ lúc xoá — phục hồi lại được."
@@ -62,7 +62,7 @@ export function ProjectMissing({ inTrash }: { inTrash: boolean }) {
       action={
         <div className="flex flex-wrap items-center justify-center gap-2">
           <Button variant="primary" asChild>
-            <Link to="/">Về danh sách project</Link>
+            <Link to="/">Về danh sách dự án</Link>
           </Button>
           <Button variant="secondary" asChild>
             <Link to="/settings" search={{ tab: "trash" }}>
@@ -124,7 +124,7 @@ export function ProjectError({
             loading={reveal.isPending}
             onClick={() =>
               reveal.mutate(undefined, {
-                onSuccess: () => toastSuccess("Đã mở thư mục project trên máy"),
+                onSuccess: () => toastSuccess("Đã mở thư mục dự án trên máy"),
                 onError: (e) => toastError(e),
               })
             }

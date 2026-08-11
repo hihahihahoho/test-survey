@@ -133,7 +133,7 @@ export const TITLE: Record<"H" | "N" | "W2" | "C1_EMPTY", SplitTitle> = {
      `<em>` dịch sang phải một từ. Repo đã có test khoá đúng luật này cho H1 anh em
      (`projects/__tests__/visual-debt-h1.test.tsx` — "nhấn đúng MỘT từ"); nay H1 đang
      CHẠY THẬT trên Home cũng theo cùng luật đó. */
-  H: { lead: "Bộ kit của", accent: "bạn" },
+  H: { lead: "Dự án của", accent: "bạn" },
   /** «Bạn muốn làm *kiểu* nào?» — accent nằm GIỮA, xem `TITLE_N_TAIL`. */
   N: { lead: "Bạn muốn làm", accent: "kiểu" },
   /** «Máy đang *vẽ*» */
@@ -147,7 +147,7 @@ export const TITLE_N_TAIL = "nào?";
 
 /** Tiêu đề dạng chuỗi phẳng — cho `document.title`, `aria-label`, và test. */
 export const TITLE_FLAT = {
-  H: "Bộ kit của bạn",
+  H: "Dự án của bạn",
   N: "Bạn muốn làm kiểu nào?",
   W2: "Máy đang vẽ",
   C2: "Chọn những thứ muốn đưa vào bộ kit",
@@ -162,7 +162,7 @@ export const TITLE_FLAT = {
 
 /** W3 và C1 lấy TÊN BỘ KIT làm tiêu đề (§5.2) — không có chuỗi cố định, cố ý. */
 export const SUBTITLE = {
-  H: "Mỗi file là một bộ kit hoàn chỉnh.",
+  H: "Mỗi dự án lưu yêu cầu, bản thiết kế và hình ảnh đã tạo.",
   N: "Đổi kiểu sau cũng được.",
 } as const;
 

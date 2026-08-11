@@ -50,9 +50,10 @@ describe("§W1-8 — mở bộ kit là vào ĐÚNG PHÒNG của nó", () => {
     expect(navigate).toHaveBeenCalledWith({ to: "/k/$projectId/canvas", params: { projectId: "kit-canvas" } });
   });
 
-  it("màn Home dùng `openKitWith`, không gọi thẳng `nav.open`", () => {
+  it("màn Home luôn mở tổng quan dự án", () => {
     const src = readFileSync(join(SRC, "features/projects/ProjectsScreen.tsx"), "utf8");
-    expect(src).toContain("openKitWith(nav, p)");
+    expect(src).toContain("nav.open(p.id)");
+    expect(src).not.toContain("openKitWith(nav, p)");
   });
 });
 

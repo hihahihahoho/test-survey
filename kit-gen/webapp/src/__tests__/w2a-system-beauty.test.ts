@@ -198,10 +198,10 @@ describe("W2A-6 · vòng focus một lớp + hai vỏ modal là MỘT", () => {
     }
   });
 
-  it("vỏ `alert-dialog` khớp `dialog`: cùng bo góc, cùng nền, cùng blur", () => {
+  it("vỏ `alert-dialog` khớp `dialog`: cùng bo góc và nền đặc", () => {
     const a = strip(read("src/components/ui/alert-dialog.tsx"));
     const d = strip(read("src/components/ui/dialog.tsx"));
-    const SHELL = "rounded-5 border border-line-subtle bg-overlay/90 backdrop-blur-xl shadow-3 duration-2";
+    const SHELL = "rounded-5 border border-line-subtle bg-overlay shadow-3 duration-2";
     expect(a).toContain(SHELL);
     expect(d).toContain(SHELL);
   });

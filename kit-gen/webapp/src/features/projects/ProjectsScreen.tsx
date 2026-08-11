@@ -3,10 +3,12 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useAgentStatus, useTrash } from "@/lib/hooks";
 import { useRecentStore } from "@/lib/store";
 import type { ScreenProps } from "@/components/layout";
+import { Input } from "@/components/ui/input";
+import { Clock3, LayoutGrid, Search, Settings, Trash2 } from "lucide-react";
 import type { Project } from "@/lib/types";
 
 import { gateOf, useNarrowViewport } from "./lib/gate";
-import { createNav, openKitWith } from "./lib/nav";
+import { createNav } from "./lib/nav";
 import { useCreateIntent } from "./lib/useCreateIntent";
 import { useGridKeys } from "./lib/useGridKeys";
 import { useProjectDialogs } from "./lib/useProjectDialogs";
@@ -14,8 +16,8 @@ import { ProjectDialogs } from "./ProjectDialogs";
 import { HomeSidebar, type HomeSection } from "@/features/home/components/HomeSidebar";
 
 import {
-  HomeAgentOffline, HomeEmpty, HomeError, HomeGrid, HomeHeader, HomeNoMatch, HomeSkeleton,
-  shouldShowSearch, useHomeData, type KitActions,
+  HomeEmpty, HomeError, HomeGrid, HomeHeader, HomeNoMatch, HomeSkeleton,
+  useHomeData, type KitActions,
 } from "@/features/home";
 
 /**
@@ -73,6 +75,7 @@ export function ProjectsScreen(_props: ScreenProps) {
   const narrow = useNarrowViewport();
   const gate = React.useMemo(() => gateOf(status, narrow), [status, narrow]);
   const touchRecent = useRecentStore((s) => s.touch);
+  const recentIds = useRecentStore((s) => s.projectIds);
 
   // Ô tìm: state cục bộ cho mượt, đẩy vào bộ lọc sau 120ms.
   const [typed, setTyped] = React.useState("");
@@ -88,17 +91,15 @@ export function ProjectsScreen(_props: ScreenProps) {
   const dialogs = useProjectDialogs(data.all);
   const searchRef = React.useRef<HTMLInputElement>(null);
 
-  const openKit = React.useCallback(
+  const openProject = React.useCallback(
     (p: Project) => {
-      // Bộ kit hỏng file mô tả KHÔNG mở được — mở tiếp chỉ làm hỏng thêm.
+      // Dự án hỏng file mô tả không mở được — mở tiếp chỉ làm hỏng thêm.
       if (p.broken) {
         dialogs.openDialog("broken", p);
         return;
       }
       touchRecent(p.id);
-      /* §W1-8: thẻ 🎨 phải mở BÀN LÀM VIỆC. `openKitWith` đọc hình thái từ tag
-         (`kg-canvas`), mặc định an toàn là workflow — xem `lib/nav.ts`. */
-      openKitWith(nav, p);
+      nav.open(p.id);
     },
     [dialogs, nav, touchRecent],
   );
@@ -113,13 +114,13 @@ export function ProjectsScreen(_props: ScreenProps) {
 
   const actions = React.useMemo<KitActions>(
     () => ({
-      open: openKit,
+      open: openProject,
       rename: (p) => dialogs.openDialog("rename", p),
       duplicate: (p) => dialogs.openDialog("duplicate", p),
       exportZip: (p) => dialogs.openForMany("export", [p]),
       remove: (p) => dialogs.openForMany("delete", [p]),
     }),
-    [dialogs, openKit],
+    [dialogs, openProject],
   );
 
   const byId = React.useCallback(
@@ -130,7 +131,7 @@ export function ProjectsScreen(_props: ScreenProps) {
   const grid = useGridKeys(ids, {
     onOpen: (id) => {
       const p = byId(id);
-      if (p) openKit(p);
+      if (p) openProject(p);
     },
     onDelete: (id) => {
       const p = byId(id);
@@ -153,7 +154,14 @@ export function ProjectsScreen(_props: ScreenProps) {
 
   const trashCount = trash.data?.items.length ?? 0;
   const hasKits = data.all.length > 0;
-  const showSearch = shouldShowSearch(data.all.length);
+  const visible = React.useMemo(() => {
+    if (section !== "recent" || recentIds.length === 0) return data.visible;
+    const order = new Map(recentIds.map((id, index) => [id, index]));
+    return data.visible
+      .filter((project) => order.has(project.id))
+      .sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99));
+  }, [data.visible, recentIds, section]);
+  const viewData = React.useMemo(() => ({ ...data, visible }), [data, visible]);
   const clearSearch = () => {
     setTyped("");
     setQuery("");
@@ -168,8 +176,8 @@ export function ProjectsScreen(_props: ScreenProps) {
      khe hở — không gợi được không gian, chỉ thêm nhiễu. Canvas
      (`design/components/SheetCanvas.tsx`) GIỮ NGUYÊN. */
   return (
-    <div className="relative flex min-h-[calc(100dvh-3.5rem)] bg-canvas">
-      <HomeSidebar section={section} workspace={status.workspaceLabel ?? undefined} trashCount={trashCount} onSection={setSection} onTrash={() => nav.openTrash()} onSettings={() => void navigate({ to: "/settings", search: { tab: "agent" } })} />
+    <div className="relative flex min-h-dvh bg-canvas">
+      <HomeSidebar section={section} workspace={status.workspaceLabel ?? undefined} trashCount={trashCount} query={typed} onQueryChange={setTyped} searchRef={searchRef} onSection={setSection} onTrash={() => nav.openTrash()} onSettings={() => void navigate({ to: "/settings", search: { tab: "agent" } })} />
       {/* §W2A-2 — TRƯỚC ĐÂY `max-w-[1600px] … lg:px-10` ⇒ H1 ở x=40 trong khi H1 của
           workflow ở x=144 và của Settings ở x=304. Nay dùng `.kg-page`, container
           DUY NHẤT của app. Chỉ còn nhịp dọc là việc riêng của màn này. */}
@@ -181,25 +189,53 @@ export function ProjectsScreen(_props: ScreenProps) {
           </div>
         )}
 
-        <HomeHeader
-          showSearch={showSearch}
-          query={typed}
-          onQueryChange={setTyped}
-          searchRef={searchRef}
-        />
+        <HomeHeader />
 
-        <div className="mt-8 flex items-center justify-between border-b border-line-subtle pb-3">
-          <h2 className="text-title text-fg-strong">{section === "recent" ? "Gần đây" : section === "starred" ? "Đã đánh dấu" : "Tất cả bộ kit"}</h2>
-          <span className="text-caption text-fg-muted">{data.visible.length} bộ kit</span>
+        <div className="relative mt-5 md:hidden">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden />
+          <Input
+            ref={searchRef}
+            type="search"
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            aria-label="Tìm dự án"
+            placeholder="Tìm dự án…"
+            className="h-10 rounded-2 bg-surface pl-9"
+          />
         </div>
 
-        {/* §6: banner DƯỚI header, TRÊN nội dung. Không overlay, không chặn màn. */}
-        {gate.readOnly && !narrow && (
-          <HomeAgentOffline hasCache={data.fromCache && hasKits} onRetry={refreshAll} />
-        )}
+        <nav aria-label="Điều hướng dự án trên màn hình nhỏ" className="mt-3 flex items-center gap-1 md:hidden">
+          <button
+            type="button"
+            onClick={() => setSection("recent")}
+            aria-current={section === "recent" ? "page" : undefined}
+            className={`flex h-9 items-center gap-2 rounded-2 px-3 text-label ${section === "recent" ? "bg-raised text-fg-strong" : "text-fg"}`}
+          >
+            <Clock3 className="size-4" aria-hidden />Gần đây
+          </button>
+          <button
+            type="button"
+            onClick={() => setSection("all")}
+            aria-current={section === "all" ? "page" : undefined}
+            className={`flex h-9 items-center gap-2 rounded-2 px-3 text-label ${section === "all" ? "bg-raised text-fg-strong" : "text-fg"}`}
+          >
+            <LayoutGrid className="size-4" aria-hidden />Tất cả
+          </button>
+          <button type="button" onClick={() => nav.openTrash()} className="ml-auto rounded-2 p-2 text-fg" aria-label="Thùng rác">
+            <Trash2 className="size-4" aria-hidden />
+          </button>
+          <button type="button" onClick={() => void navigate({ to: "/settings", search: { tab: "agent" } })} className="rounded-2 p-2 text-fg" aria-label="Cài đặt">
+            <Settings className="size-4" aria-hidden />
+          </button>
+        </nav>
+
+        <div className="mt-8 flex items-center justify-between border-b border-line-subtle pb-3">
+          <h2 className="text-title text-fg-strong">{section === "recent" ? "Gần đây" : "Tất cả dự án"}</h2>
+          <span className="text-caption tabular-nums text-fg-muted">{visible.length} dự án</span>
+        </div>
 
         <div className="mt-5"><HomeBody
-          data={data}
+          data={viewData}
           gate={gate}
           agentOff={gate.readOnly && !narrow}
           grid={grid}

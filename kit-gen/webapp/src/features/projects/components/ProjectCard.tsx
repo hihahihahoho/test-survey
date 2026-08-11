@@ -65,7 +65,7 @@ export function ProjectCard({
       data-project-id={project.id}
       role="listitem"
       tabIndex={tabIndex}
-      aria-label={`Project ${project.name}`}
+      aria-label={`Dự án ${project.name}`}
       onClick={() => actions.open(project)}
       onKeyDown={(e) => {
         // Space mở thẻ (Enter do lưới xử lý ở tầng trên để dùng chung một đường).
@@ -219,7 +219,7 @@ function BrokenCard({
       data-project-id={project.id}
       role="listitem"
       tabIndex={tabIndex}
-      aria-label={`Project lỗi: ${project.name}`}
+      aria-label={`Dự án lỗi: ${project.name}`}
       className={cn(
         "flex flex-col gap-3 rounded-3 border border-danger/60 bg-danger/[0.07] p-4",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas",

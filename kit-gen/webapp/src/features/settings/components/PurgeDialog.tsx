@@ -76,7 +76,7 @@ export function PurgeDialog({
       { trashId: item.trashId, code },
       {
         onSuccess: () => {
-          toastSuccess(`Đã xoá vĩnh viễn «${item.name ?? "project"}»`);
+          toastSuccess(`Đã xoá vĩnh viễn «${item.name ?? "Dự án"}»`);
           setCode("");
           onPurged();
         },
@@ -93,7 +93,7 @@ export function PurgeDialog({
     );
   };
 
-  const name = item?.name ?? item?.projectId ?? "project này";
+  const name = item?.name ?? item?.projectId ?? "dự án này";
 
   return (
     <Dialog

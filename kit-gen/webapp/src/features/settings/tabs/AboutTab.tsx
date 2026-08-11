@@ -1,5 +1,4 @@
-import { ExternalLink, ShieldCheck } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { APP_PROTOCOL, type ConnectionStatus } from "@/lib/api";
 
@@ -46,13 +45,12 @@ export function AboutTab({ status }: { status: ConnectionStatus }) {
         </CardHeader>
         <CardContent className="flex flex-col gap-3 text-body text-fg">
           <p className="max-w-[68ch]">
-            <strong className="text-fg-strong">Dữ liệu của bạn nằm trên máy bạn.</strong> Project,
-            ảnh AI và kit đã cắt đều là file trong thư mục làm việc; trang web chỉ đọc chúng qua
-            công cụ local đang chạy tại máy.
+            <strong className="text-fg-strong">File dự án nằm trên máy bạn.</strong> KitGen chỉ đọc
+            chúng qua công cụ local đang chạy trên máy.
           </p>
           <p className="max-w-[68ch]">
-            <strong className="text-fg-strong">Trang web không gửi gì lên server.</strong> Không có
-            thống kê, không có theo dõi hành vi, không tải nội dung project đi đâu cả.
+            <strong className="text-fg-strong">Không có thống kê hay theo dõi hành vi.</strong> Khi bạn
+            bấm tạo ảnh, công cụ local chỉ gửi prompt và dữ liệu đầu vào cần thiết tới dịch vụ tạo ảnh đã cấu hình.
           </p>
           <p className="max-w-[68ch]">
             <strong className="text-fg-strong">Không lưu thông tin đăng nhập.</strong> kit-gen chỉ
@@ -62,17 +60,6 @@ export function AboutTab({ status }: { status: ConnectionStatus }) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle>Tài liệu</CardTitle></CardHeader>
-        <CardContent>
-          <Button variant="secondary" size="sm" asChild>
-            <a href="https://github.com/" target="_blank" rel="noreferrer">
-              <ExternalLink aria-hidden />
-              Hướng dẫn sử dụng
-            </a>
-          </Button>
-        </CardContent>
-      </Card>
     </div>
   );
 }

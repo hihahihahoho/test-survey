@@ -48,14 +48,14 @@ export function TrashTab() {
       <EmptyState
         icon={Trash2}
         title="Thùng rác trống"
-        description="Project đã xoá sẽ nằm ở đây 30 ngày, phục hồi lại được bất cứ lúc nào trong thời gian đó."
+        description="Dự án đã xoá sẽ nằm ở đây 30 ngày và có thể phục hồi trong thời gian đó."
       />
     );
   }
 
   const onRestore = (it: TrashItem) => {
     restore.mutate(it.trashId, {
-      onSuccess: () => toastSuccess(`Đã phục hồi «${it.name ?? it.projectId ?? "project"}»`),
+      onSuccess: () => toastSuccess(`Đã phục hồi «${it.name ?? it.projectId ?? "Dự án"}»`),
       onError: (e: unknown) => toastError(e),
     });
   };
@@ -63,7 +63,7 @@ export function TrashTab() {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-caption text-fg-muted">
-        {items.length} bộ kit đang trong thùng rác.
+        {items.length} dự án đang trong thùng rác.
       </p>
 
       {items.map((it) => (
@@ -71,7 +71,7 @@ export function TrashTab() {
           <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
             <div className="flex min-w-0 flex-col gap-1">
               <p className="truncate text-subtitle text-fg-strong">
-                {it.name ?? it.projectId ?? "Project không rõ tên"}
+                {it.name ?? it.projectId ?? "Dự án không rõ tên"}
               </p>
               <p className="text-caption text-fg-muted">
                 {[

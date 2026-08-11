@@ -154,35 +154,35 @@ describe("`?file=` — id lạ rơi về mặc định, KHÔNG ném lỗi làm t
 describe("docPath — hình dạng URL của file con", () => {
   it("file canvas ⇒ đường chính mới", () => {
     expect(docPath({ projectId: PID, docId: "f-y-tuong", kind: "canvas" })).toBe(
-      `/k/${PID}`,
+      `/p/${PID}/f/f-y-tuong`,
     );
   });
 
   it("file workflow ⇒ `?file=` trên ĐÚNG màn đang mở", () => {
-    expect(docPath({ projectId: PID, docId: "f-main", kind: "workflow", currentPath: `/p/${PID}/design` })).toBe(`/k/${PID}`);
-    expect(docPath({ projectId: PID, docId: "f-main", kind: "workflow" })).toBe(`/k/${PID}`);
+    expect(docPath({ projectId: PID, docId: "f-main", kind: "workflow", currentPath: `/p/${PID}/design` })).toBe(`/p/${PID}/design?file=f-main`);
+    expect(docPath({ projectId: PID, docId: "f-main", kind: "workflow" })).toBe(`/p/${PID}?file=f-main`);
   });
 
-  it("đang ở URL cũ ⇒ file workflow về `/k/:id`", () => {
+  it("đang ở URL file canvas ⇒ file workflow về tổng quan dự án", () => {
     expect(
       docPath({
         projectId: PID, docId: "f-main", kind: "workflow", currentPath: `/p/${PID}/f/f-y-tuong`,
       }),
-    ).toBe(`/k/${PID}`);
+    ).toBe(`/p/${PID}?file=f-main`);
   });
 
   it("tab ảo «Tất cả sheet» KHÔNG vào URL — nó là mặc định", () => {
-    expect(docPath({ projectId: PID, docId: ALL_SHEETS_DOC_ID, kind: "workflow", currentPath: `/p/${PID}/kit`, virtualId: ALL_SHEETS_DOC_ID })).toBe(`/k/${PID}`);
+    expect(docPath({ projectId: PID, docId: ALL_SHEETS_DOC_ID, kind: "workflow", currentPath: `/p/${PID}/kit`, virtualId: ALL_SHEETS_DOC_ID })).toBe(`/p/${PID}/kit`);
   });
 
   it("id/projectId được encode — không sinh URL vỡ", () => {
     const url = docPath({ projectId: "a b", docId: "f-x y", kind: "canvas" });
-    expect(url).toBe("/k/a%20b");
+    expect(url).toBe("/p/a%20b/f/f-x%20y");
     expect(url.includes(" ")).toBe(false);
   });
 
   it("đường dẫn ngoài project (gõ tay/lỗi) ⇒ về `/p/:id`, không nối bừa", () => {
-    expect(docPath({ projectId: PID, docId: "f-main", kind: "workflow", currentPath: "/settings" })).toBe(`/k/${PID}`);
+    expect(docPath({ projectId: PID, docId: "f-main", kind: "workflow", currentPath: "/settings" })).toBe(`/p/${PID}?file=f-main`);
   });
 
   it("mọi URL sinh ra đều mở lại được bằng chính router (không phải chuỗi bịa)", () => {

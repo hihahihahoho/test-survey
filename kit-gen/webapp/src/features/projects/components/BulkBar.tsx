@@ -29,12 +29,12 @@ export function BulkBar({
   return (
     <div
       role="region"
-      aria-label="Hành động cho project đã chọn"
+      aria-label="Hành động cho dự án đã chọn"
       className="pointer-events-none fixed inset-x-0 bottom-6 z-floatbar flex justify-center px-4"
     >
       <div className="pointer-events-auto flex items-center gap-2 rounded-3 border border-line-subtle bg-overlay p-2 pl-4 shadow-3">
         <span aria-live="polite" className="text-body text-fg-strong">
-          {count(selectedCount, "project")} đã chọn
+          {count(selectedCount, "dự án")} đã chọn
         </span>
         <div className="mx-1 h-5 w-px bg-line-subtle" aria-hidden />
         <Button

@@ -68,9 +68,9 @@ export type ScreenId =
 /** Nhãn tiếng Việt (§1.3 từ vựng — không hiện thuật ngữ kỹ thuật). */
 export const SCREEN_LABEL: Record<ScreenId, string> = {
   setup: "Cài đặt lần đầu",
-  projects: "Danh sách project",
-  project: "Tổng quan project",
-  "project-settings": "Cài đặt project",
+  projects: "Danh sách dự án",
+  project: "Tổng quan dự án",
+  "project-settings": "Cài đặt dự án",
   design: "Bản thiết kế",
   runs: "Theo dõi sinh ảnh",
   "run-detail": "Chi tiết lượt chạy",

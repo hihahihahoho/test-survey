@@ -16,18 +16,18 @@ import type { Gate } from "@/features/projects/lib/gate";
 const STEPS = [
   {
     n: 1,
-    title: "Chọn element",
-    desc: "Mở bản thiết kế, thêm element từ thư viện vào các sheet.",
+    title: "Tạo bản thiết kế",
+    desc: "Chọn những thành phần cần có trong bộ kit.",
   },
   {
     n: 2,
     title: "Sinh ảnh",
-    desc: "AI vẽ từng sheet trên nền đơn sắc. Bước này tiêu quota tài khoản.",
-    blockedBy: "Cần ít nhất 1 sheet",
+    desc: "Tạo ảnh cho từng phần của bản thiết kế. Bước này dùng lượt tạo ảnh.",
+    blockedBy: "Cần có bản thiết kế",
   },
   {
     n: 3,
-    title: "Tải kit",
+    title: "Tải bộ kit",
     desc: "Sau khi cắt, tải bộ PNG trong suốt về máy.",
     blockedBy: "Cần ảnh đã cắt",
   },
@@ -41,7 +41,7 @@ export function OnboardingSteps({ projectId, gate }: { projectId: string; gate: 
           Bắt đầu từ đâu
         </h2>
         <p className="text-body text-fg">
-          Project này chưa có sheet nào. Ba bước dưới đây là toàn bộ quy trình.
+          Dự án này chưa có nội dung thiết kế. Bắt đầu theo ba bước dưới đây.
         </p>
       </div>
 
@@ -69,12 +69,12 @@ export function OnboardingSteps({ projectId, gate }: { projectId: string; gate: 
                       {gate.readOnly ? (
                         <>
                           <Pencil aria-hidden />
-                          Chọn element
+                          Tạo bản thiết kế
                         </>
                       ) : (
                         <Link to="/p/$projectId/design" params={{ projectId }} search={{ tab: "sheets" }}>
                           <Pencil aria-hidden />
-                          Chọn element
+                          Tạo bản thiết kế
                         </Link>
                       )}
                     </Button>
@@ -84,7 +84,7 @@ export function OnboardingSteps({ projectId, gate }: { projectId: string; gate: 
                   <div className="flex flex-col gap-1.5">
                     <Button variant="secondary" size="sm" disabled aria-disabled title={s.blockedBy}>
                       {s.n === 2 ? <Zap aria-hidden /> : <Download aria-hidden />}
-                      {s.n === 2 ? "Sinh ảnh" : "Tải kit"}
+                      {s.n === 2 ? "Sinh ảnh" : "Tải bộ kit"}
                     </Button>
                     <Reason text={s.blockedBy ?? ""} />
                   </div>

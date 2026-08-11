@@ -44,17 +44,17 @@ export function PrefsTab() {
     for (const s of stores) {
       try { indexedDB.deleteDatabase(s); } catch { /* không chặn được thì thôi */ }
     }
-    toastSuccess("Đã xoá dữ liệu ứng dụng trong trình duyệt này", "Project trên máy bạn KHÔNG bị đụng tới.");
+    toastSuccess("Đã xoá dữ liệu ứng dụng trong trình duyệt này", "Dự án trên máy bạn không bị ảnh hưởng.");
     setConfirmClear(false);
   };
 
   return (
     <div className="flex flex-col gap-5">
       <Card>
-        <CardHeader><CardTitle>Sinh ảnh</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Tạo ảnh</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-6">
           <div className="flex flex-col gap-3">
-            <Label htmlFor="maxJobs">Số lượt chạy song song: {prefs.maxJobs}</Label>
+            <Label htmlFor="maxJobs">Số tấm tạo cùng lúc: {prefs.maxJobs}</Label>
             <Slider
               id="maxJobs"
               min={1}
@@ -62,15 +62,15 @@ export function PrefsTab() {
               step={1}
               value={[prefs.maxJobs]}
               onValueChange={([v]) => prefs.setMaxJobs(v ?? 4)}
-              aria-label="Số lượt sinh ảnh chạy song song"
+              aria-label="Số tấm tạo cùng lúc"
             />
             <p className="text-caption text-fg-muted">
-              Càng cao càng nhanh, nhưng càng dễ chạm giới hạn của tài khoản tạo ảnh.
+              Tạo nhiều tấm cùng lúc có thể nhanh hơn, nhưng dễ chạm giới hạn của dịch vụ tạo ảnh.
             </p>
           </div>
           <SwitchRow
-            label="Tự động cắt sau khi sinh ảnh"
-            description="Sinh xong là cắt luôn thành từng PNG trong suốt. Cắt không tốn quota."
+            label="Tự tách ảnh sau khi tạo"
+            description="Khi tạo xong, tự tách từng thành phần thành ảnh PNG trong suốt."
             checked={prefs.autoSliceAfterGen}
             onChange={prefs.setAutoSlice}
           />
@@ -95,13 +95,13 @@ export function PrefsTab() {
           </div>
           <SwitchRow
             label="Luôn hỏi trước khi xoá"
-            description="Tắt đi thì các thao tác xoá nhẹ sẽ chạy ngay. Thao tác không hoàn tác được thì vẫn luôn hỏi."
+            description="Tắt để bỏ qua xác nhận với các mục có thể khôi phục. Dữ liệu không thể khôi phục vẫn luôn được hỏi."
             checked={prefs.confirmDestructive}
             onChange={prefs.setConfirmDestructive}
           />
           <SwitchRow
-            label="Hiện ô trống trên lưới thiết kế"
-            description="Ô trống là chỗ giữ chỗ trên sheet, không sinh ra ảnh nào."
+            label="Hiện ô trống trong bản thiết kế"
+            description="Ô trống chỉ giữ vị trí, không tạo ra hình ảnh."
             checked={prefs.showEmptyCells}
             onChange={prefs.setShowEmptyCells}
           />
@@ -109,23 +109,18 @@ export function PrefsTab() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Dữ liệu trong trình duyệt này</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Dữ liệu trình duyệt</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-4">
           <InlineBanner
             tone="info"
-            title="Project của bạn nằm trên máy, không nằm trong trình duyệt"
-            description="Xoá ở đây chỉ xoá tuỳ chọn giao diện, bộ nhớ đệm và bản nháp chưa lưu — không đụng tới file project."
+            title="File dự án không bị xoá"
+            description="Thao tác này chỉ xoá dữ liệu KitGen lưu trong trình duyệt hiện tại."
           />
-          <div className="flex flex-col gap-2 text-caption text-fg-muted">
-            <p className="text-fg">Sẽ xoá đúng {keys.length} mục lưu trữ và {stores.length} kho dữ liệu:</p>
-            <ul className="flex flex-wrap gap-x-3 gap-y-1 font-mono">
-              {[...keys, ...stores].map((k) => <li key={k}>{k}</li>)}
-            </ul>
-          </div>
+          <p className="text-body text-fg-muted">Xoá tuỳ chọn giao diện, bộ nhớ đệm và bản nháp chưa lưu trên trình duyệt này.</p>
           <div>
             <Button variant="danger" onClick={() => setConfirmClear(true)}>
               <Trash2 aria-hidden />
-              Xoá dữ liệu ứng dụng trong trình duyệt này
+              Xoá dữ liệu trình duyệt
             </Button>
           </div>
         </CardContent>
@@ -134,8 +129,8 @@ export function PrefsTab() {
       <ConfirmDestructive
         open={confirmClear}
         onOpenChange={setConfirmClear}
-        title="Xoá dữ liệu ứng dụng trong trình duyệt này?"
-        description={`Sẽ xoá ${keys.length} mục lưu trữ và ${stores.length} kho dữ liệu, gồm cả BẢN NHÁP CHƯA LƯU của trình soạn thiết kế. Project trên máy bạn không bị đụng tới.`}
+        title="Xoá dữ liệu trình duyệt?"
+        description="Tuỳ chọn giao diện, bộ nhớ đệm và bản nháp chưa lưu sẽ bị xoá. File dự án trên máy không bị ảnh hưởng."
         actionLabel="Xoá dữ liệu"
         onConfirm={clearAll}
       />

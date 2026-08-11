@@ -68,7 +68,7 @@ export function ProjectCover({
       ) : (
         <img
           src={url}
-          alt={`Ảnh bìa của project ${projectName}`}
+          alt={`Ảnh bìa của dự án ${projectName}`}
           loading="lazy"
           decoding="async"
           onError={() => setFailed(true)}

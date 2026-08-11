@@ -63,7 +63,7 @@ export function ResultStep() {
   const shown = sheets[Math.min(sheetIdx, Math.max(0, sheets.length - 1))] ?? null;
 
   return (
-    <Step title="Xem kết quả" copy="Xem khung xương của bộ kit, chỉnh setting cần thiết và lưu mỗi lần render thành một phiên bản.">
+    <Step title="Kết quả" copy="Xem bố cục bộ kit, chỉnh thiết lập và lưu mỗi lần tạo thành một phiên bản.">
       <div className="result-toolbar">
         <div className="w-64">
           <label className="field-label" htmlFor="version">Phiên bản</label>
@@ -82,15 +82,15 @@ export function ResultStep() {
           if (!sync) return;
           void (async () => {
             const saved = await sync.saveNow();
-            if (!saved) { toast.error("Chưa lưu được thay đổi nên chưa render lại."); return; }
+            if (!saved) { toast.error("Chưa lưu được thay đổi nên chưa thể tạo lại."); return; }
             try {
               const run = await generate.startContract(sync.contract);
               s.addVersion(s.stylePrompt, "rendering", run.runId);
-              toast.success("Đã bắt đầu render phiên bản mới.");
-            } catch { toast.error("Chưa render lại được. Kiểm tra công cụ tạo ảnh."); }
+              toast.success("Đã bắt đầu tạo phiên bản mới.");
+            } catch { toast.error("Chưa tạo lại được. Kiểm tra công cụ tạo ảnh."); }
           })();
-        }}><RefreshCw aria-hidden />{generate.isPending ? "Đang bắt đầu…" : "Render lại"}</Button>
-        <Button variant="ghost" onClick={copy}>{copied ? <><Check aria-hidden />Đã copy</> : <><Copy aria-hidden />Chép prompt</>}</Button>
+        }}><RefreshCw aria-hidden />{generate.isPending ? "Đang bắt đầu…" : "Tạo lại"}</Button>
+        <Button variant="ghost" onClick={copy}>{copied ? <><Check aria-hidden />Đã chép</> : <><Copy aria-hidden />Chép mô tả</>}</Button>
       </div>
 
       <div className="result-layout">

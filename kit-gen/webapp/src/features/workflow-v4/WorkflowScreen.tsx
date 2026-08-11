@@ -1,8 +1,8 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, Check, Sparkles, WifiOff } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { InlineBanner, LoadingState, ErrorState } from "@/components/common";
+import { LoadingState, ErrorState } from "@/components/common";
 import { useAgentStatus, useElementLib, useProject } from "@/lib/hooks";
 import { useGenerateRun } from "@/features/runs";
 import { toast } from "@/components/ui/sonner";
@@ -63,11 +63,11 @@ function WorkflowBody({ projectId }: { projectId: string }) {
   /* §W3-2 — dựng MỘT contract rồi phát xuống: bước ⑤ và ⑥ phải nói cùng một con số. */
   const sync = useContractSync(projectId, s, status, { ...(lib ? { lib } : {}), ...(kitsetRefs ? { refs: kitsetRefs } : {}) });
 
-  if (project.isLoading) return <LoadingState count={4} label="Đang mở workflow…" />;
+  if (project.isLoading) return <LoadingState count={4} label="Đang mở dự án…" />;
   if (project.error)
     return (
       <ErrorState
-        title="Chưa mở được bộ kit"
+        title="Chưa mở được dự án"
         description="Bản nháp trên máy vẫn được giữ. Thử lại khi công cụ local sẵn sàng."
         actions={<Button onClick={() => void project.refetch()}>Thử lại</Button>}
       />
@@ -92,11 +92,11 @@ function WorkflowBody({ projectId }: { projectId: string }) {
           chạy" — hỏi ở hero của mọi bước). Cắt tiêu đề, không cắt sự thật. */}
       <div className={`kg-page workflow-hero${s.step > 1 ? " workflow-hero-compact" : ""}`}>
         <div>
-          <p className="eyebrow">{project.data?.name ?? s.kitName} · một mạch</p>
+          <p className="eyebrow">{project.data?.name ?? s.kitName}</p>
           {s.step === 1 && (
             <>
-              <h1>Một mạch để <em>vẽ</em></h1>
-              <p>Chọn brief, phong cách, kitset và mascot. Mọi thứ ở cùng một workflow.</p>
+              <h1>Tạo <em>bộ kit</em></h1>
+              <p>Nhập yêu cầu, chọn phong cách và những thành phần cần tạo.</p>
             </>
           )}
         </div>
@@ -111,34 +111,6 @@ function WorkflowBody({ projectId }: { projectId: string }) {
           )}
         </div>
       </div>
-      {/* ══ P-SWEEP·1 · BÁO MỘT LẦN, KHÔNG ĐI THEO SUỐT 6 BƯỚC ═══════════════════
-          Bản thiết kế của người khác (nhập từ tệp cũ) ⇒ vẫn NÓI RA, không âm thầm
-          chỉ-đọc. Nhưng nói ở bước ① là đủ: từ bước ② trở đi `SyncBadge` ngay trên
-          đầu đã đứng ở trạng thái `foreign` với chữ "Chỉ đọc" và `title` mang đúng
-          câu giải thích (`sync.note`) — tức sự thật KHÔNG mất, chỉ thôi chiếm 78px
-          đầu trang ở cả 6 bước. Mô tả cũng bỏ: 13 chữ đầu của nó trùng khít tiêu đề. */}
-      {sync.state === "foreign" && s.step === 1 && (
-        <div className="kg-page">
-          <InlineBanner
-            tone="warn"
-            title="Đã có bản thiết kế riêng — các bước ở đây không ghi đè lên nó."
-            icon={WifiOff}
-          />
-        </div>
-      )}
-      {(!status.connected || status.readOnly) && (
-        /* Bọc `kg-page` thay vì đắp thẳng lên banner: `kg-page` mang padding
-           ngang của TRANG, còn banner tự có `p-5` của THẺ — đắp chung thì hai
-           padding chồng nhau và thẻ mất mép. */
-        <div className="kg-page">
-          <InlineBanner
-            tone="warn"
-            title="Công cụ local chưa chạy"
-            description="Bạn vẫn điền brief và xem khung xương. Lưu, upload và vẽ sẽ mở khi kết nối lại."
-            icon={WifiOff}
-          />
-        </div>
-      )}
       <WorkflowStepper />
       <div className="kg-page workflow-content">{content}</div>
       <WorkflowActions
@@ -147,7 +119,7 @@ function WorkflowBody({ projectId }: { projectId: string }) {
         onBack={s.back}
         onNext={s.next}
         onDraw={() => setDrawOpen(true)}
-        onDone={() => { sync.saveNow(); void navigate({ to: "/" }); }}
+        onDone={() => { sync.saveNow(); void navigate({ to: "/p/$projectId", params: { projectId } }); }}
         exits={<><DownloadKitButton projectId={projectId} /><CopyFigmaButton projectId={projectId} kitName={s.kitName} /></>}
       />
       <DrawConfirmDialog
@@ -165,7 +137,7 @@ function WorkflowBody({ projectId }: { projectId: string }) {
               const run = await startRun.startContract(sync.contract);
               s.addVersion(s.stylePrompt, "rendering", run.runId);
               setDrawOpen(false);
-              toast.success(`Đã bắt đầu lượt vẽ ${run.runId}.`);
+              toast.success("Đã bắt đầu vẽ.");
               void navigate({ to: "/k/$projectId/studio", params: { projectId } });
             } catch {
               toast.error("Chưa bắt đầu vẽ được. Kiểm tra công cụ tạo ảnh trong Môi trường.");
@@ -220,7 +192,7 @@ export function WorkflowActions({
               chưa có ảnh kit; điều kiện mở nay là `useKit` có file, không phải một cái cờ. */}
           {exits}
           <Button variant="primary" size="lg" onClick={onDone}>
-            <Check aria-hidden />Xong — về danh sách
+            <Check aria-hidden />Xong — về dự án
           </Button>
         </>
       )}

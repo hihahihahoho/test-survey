@@ -57,8 +57,8 @@ export function BrokenProjectDialog({
 
         <DialogBody className="flex flex-col gap-4">
           <p className="text-body text-fg">
-            Công cụ local đọc được thư mục nhưng không hiểu nội dung file mô tả project. Project vẫn nằm nguyên trên
-            máy bạn — không có gì bị xoá.
+            KitGen đọc được thư mục nhưng không hiểu tệp mô tả dự án. Dự án vẫn nằm nguyên trên máy bạn — không có
+            gì bị xoá.
           </p>
 
           <dl className="flex flex-col gap-1.5 rounded-2 border border-line-subtle bg-canvas p-3">

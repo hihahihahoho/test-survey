@@ -98,6 +98,7 @@ const SelectItem = React.forwardRef<
       // §W2A-6 · bỏ `focus:ring-1 focus:ring-inset focus:ring-accent` — nền tint đủ
       // nói "đang chọn"; xem chú thích đầy đủ ở `dropdown-menu.tsx`.
       "focus:bg-accent/[var(--kg-tint-a)] focus:text-fg-strong",
+      "data-[state=checked]:bg-raised data-[state=checked]:font-medium",
       "data-[disabled]:pointer-events-none data-[disabled]:text-fg-muted",
       className
     )}

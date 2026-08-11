@@ -82,28 +82,28 @@ export function ProjectSettingsScreen({ projectId = "" }: ScreenProps) {
     () => [
       {
         id: "project-settings.save",
-        label: "Lưu thay đổi cài đặt project",
+        label: "Lưu thay đổi cài đặt dự án",
         hint: ["mod", "S"],
         disabledReason: gate.readOnly ? gate.reason : dirty ? null : "Chưa có thay đổi nào để lưu",
         run: () => submitRef.current?.(),
       },
       {
         id: "project-settings.duplicate",
-        label: "Nhân bản project này…",
+        label: "Nhân bản dự án này…",
         icon: Copy,
         disabledReason: gate.readOnly ? gate.reason : null,
         run: () => project && dialogs.openDialog("duplicate", project),
       },
       {
         id: "project-settings.export",
-        label: "Xuất project ra file .zip…",
+        label: "Xuất dự án ra file .zip…",
         icon: Download,
         disabledReason: gate.readOnly ? gate.reason : null,
         run: () => project && dialogs.openDialog("export", project),
       },
       {
         id: "project-settings.delete",
-        label: "Xoá project này…",
+        label: "Xoá dự án này…",
         icon: Trash2,
         disabledReason: gate.readOnly ? gate.reason : null,
         run: () => project && dialogs.openDialog("delete", project),
@@ -113,7 +113,7 @@ export function ProjectSettingsScreen({ projectId = "" }: ScreenProps) {
   );
 
   if (data.isLoading && !project) {
-    return <ProjectLoading cards={3} label="Đang mở cài đặt project…" />;
+    return <ProjectLoading cards={3} label="Đang mở cài đặt dự án…" />;
   }
 
   if (!project) {
@@ -128,7 +128,7 @@ export function ProjectSettingsScreen({ projectId = "" }: ScreenProps) {
       <header className="flex flex-col gap-1">
         {/* W2B-1/5 — cỡ về `DISPLAY`; "project" là JARGON (2B-7) nên vừa đổi chữ vừa
             bỏ nhấn serif: "Cài đặt bộ kit" là 3 từ nhưng không từ nào đáng nhấn. */}
-        <h1 className={`${DISPLAY} text-fg-strong`}>Cài đặt bộ kit</h1>
+        <h1 className={`${DISPLAY} text-fg-strong`}>Cài đặt dự án</h1>
         <p className="text-body text-fg-muted">{project.name}</p>
       </header>
 
@@ -151,7 +151,7 @@ export function ProjectSettingsScreen({ projectId = "" }: ScreenProps) {
         </CardHeader>
         <CardContent className="flex flex-col divide-y divide-line-subtle">
           <DangerRow
-            title="Nhân bản project này"
+            title="Nhân bản dự án này"
             description="Tạo một bản sao. Chọn được giữ hay bỏ ảnh AI đã sinh."
             action={
               <Button
@@ -183,7 +183,7 @@ export function ProjectSettingsScreen({ projectId = "" }: ScreenProps) {
             }
           />
           <DangerRow
-            title="Chuyển project vào thùng rác"
+            title="Chuyển dự án vào thùng rác"
             description="Giữ 30 ngày và phục hồi lại được. Ngay sau khi xoá vẫn có 10 giây để hoàn tác."
             action={
               <Button

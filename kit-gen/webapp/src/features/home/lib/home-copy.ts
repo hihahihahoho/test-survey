@@ -13,21 +13,21 @@ import { BTN } from "@/features/kitfile";
 
 export const HOME_COPY = {
   /** UX-V3 §6 hàng H cột `error` — nguyên văn tài liệu. */
-  ERROR_TITLE: "Chưa lấy được danh sách bộ kit.",
+  ERROR_TITLE: "Chưa lấy được danh sách dự án.",
   /** Câu phụ nói VIỆC CẦN LÀM. Không chứa mã lỗi (§6 quy tắc chung). */
-  ERROR_BODY: "Danh sách bộ kit nằm trên máy bạn. Bấm Thử lại, hoặc kiểm tra công cụ trên máy.",
+  ERROR_BODY: "Danh sách dự án nằm trên máy bạn. Bấm Thử lại, hoặc kiểm tra công cụ trên máy.",
   /** Ca lọc rỗng: §5.3 chỉ định nghĩa cho W3; H mượn cùng lối nói, đổi danh từ. */
-  FILTER_EMPTY_TITLE: "Không có bộ kit nào khớp",
+  FILTER_EMPTY_TITLE: "Không có dự án nào khớp",
   FILTER_EMPTY_BODY: "Thử từ khoá ngắn hơn.",
   /** Ô tìm — nhãn cho screen reader, không phải nút/tiêu đề. */
-  SEARCH_LABEL: "Tìm bộ kit",
-  SEARCH_PLACEHOLDER: "Tìm theo tên…",
+  SEARCH_LABEL: "Tìm dự án",
+  SEARCH_PLACEHOLDER: "Tìm dự án…",
   /** Nhãn vùng lưới cho screen reader. */
-  GRID_LABEL: "Danh sách bộ kit",
+  GRID_LABEL: "Danh sách dự án",
   /** Chữ trên thẻ CTA đầu lưới — xuống dòng thủ công theo wireframe §1.1. */
-  CREATE_TILE_HINT: "Điền form cho máy làm, hoặc tự xếp trên bàn.",
+  CREATE_TILE_HINT: "Bắt đầu từ yêu cầu có sẵn hoặc một bản thiết kế trống.",
   /** Nhãn đọc lên khi lưới đang tải (§6 hàng H cột loading). */
-  LOADING_LABEL: "Đang tải danh sách bộ kit…",
+  LOADING_LABEL: "Đang tải danh sách dự án…",
 } as const;
 
 /** «Thùng rác (2)» — §1.3. Số THẬT, không hardcode; 0 thì màn tự ẩn nút. */

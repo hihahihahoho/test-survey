@@ -1,7 +1,6 @@
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FLORA, FOCUS } from "@/components/layout/flora";
-import { BTN } from "@/features/kitfile";
 import { HOME_COPY } from "../lib/home-copy";
 import type { Gate } from "@/features/projects/lib/gate";
 
@@ -74,7 +73,7 @@ export function CreateKitTile({
       </span>
       <span className="flex flex-col gap-1.5">
         <span className="text-title text-fg-strong">
-          {compact ? BTN.CREATE_FIRST_KIT : BTN.CREATE_KIT}
+          {compact ? "Tạo dự án đầu tiên" : "Tạo dự án mới"}
         </span>
         <span className={cn("max-w-[26ch] text-caption", FLORA.fgMuted)}>
           {ro ? gate.reason : HOME_COPY.CREATE_TILE_HINT}

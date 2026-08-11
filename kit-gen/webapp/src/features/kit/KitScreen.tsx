@@ -1,10 +1,10 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, RefreshCw, Scissors } from "lucide-react";
+import { RefreshCw, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { EmptyState, ErrorState, InlineBanner } from "@/components/common";
-import { DISPLAY, SERIF } from "@/components/layout/flora";
+import { DISPLAY } from "@/components/layout/flora";
 import type { ScreenProps } from "@/components/layout";
 import type { KitFile } from "@/lib/types";
 import { devDetails, presentError } from "@/lib/api";
@@ -52,9 +52,8 @@ export function KitScreen({ projectId = "" }: ScreenProps) {
   if (kitQuery.error && !missing) return <main className="p-6"><ErrorState title="Chưa mở được bộ kit." description="Thử lại. Ảnh trên máy vẫn được giữ nguyên." detail={devDetails(kitQuery.error)} actions={<Button onClick={() => void kitQuery.refetch()}><RefreshCw aria-hidden />{BTN.RETRY}</Button>} /></main>;
 
   return <main className="relative min-h-[calc(100vh-var(--kg-header))] px-6 pb-32 pt-6 lg:px-12">
-    <nav aria-label="Đường dẫn" className="mb-12 flex items-center gap-2 text-label text-fg-muted-raised"><Button variant="ghost" size="sm" onClick={() => void navigate({ to: "/" })}><ArrowLeft aria-hidden />Bộ kit của bạn</Button><span>/</span><span className="truncate text-fg-strong">{project?.name ?? "Bộ kit"}</span></nav>
     {gate.readOnly && <InlineBanner className="mb-6" tone="warn" title="Công cụ trên máy chưa chạy" description="Mở Terminal và chạy npm run agent, rồi bấm Thử lại. Bạn vẫn xem được ảnh đã lưu lần trước." />}
-    <header className="mb-12"><h1 className={DISPLAY}>{project?.name ?? "Bộ kit"} <span className={SERIF}>của bạn</span></h1><p className="mt-2 text-body text-fg-muted">{files.length} món{kitQuery.data?.cutAt ? " · đã vẽ xong" : ""}</p></header>
+    <header className="mb-12"><h1 className={DISPLAY}>Bộ kit</h1><p className="mt-2 text-body text-fg-muted">{project?.name ?? "Dự án"} · {files.length} món{kitQuery.data?.cutAt ? " · đã hoàn tất" : ""}</p></header>
     <Tabs value="result">
       <TabsContent value="result" className="mt-0">
         {loading ? <ResultSkeleton count={project?.stats?.kitsCut ?? 12} /> : missing || files.length === 0 ? hasRaw

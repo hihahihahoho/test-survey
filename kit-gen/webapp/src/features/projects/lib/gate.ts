@@ -66,7 +66,7 @@ export interface Gate {
 const REASONS: Record<string, { short: string; long: string }> = {
   "agent-not-running": {
     short: "Cần công cụ local đang chạy",
-    long: "Project nằm trên máy bạn. Mở Terminal chạy công cụ local rồi thử lại.",
+    long: "Dự án nằm trên máy bạn. Mở Terminal, chạy công cụ local rồi thử lại.",
   },
   "blocked-by-browser": {
     short: "Trình duyệt đang chặn kết nối",

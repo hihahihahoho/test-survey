@@ -13,6 +13,7 @@
   html {
     /* §A11: zoom 200% không mất nội dung — không khoá font-size gốc */
     -webkit-text-size-adjust: 100%;
+    scrollbar-gutter: stable;
   }
 
   body {

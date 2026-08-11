@@ -54,7 +54,6 @@ import { useSliceRun } from "./lib/useSliceRun";
  * MỘT NÚT PRIMARY DUY NHẤT trên màn (§5.4): [⚡ Sinh ảnh…] ở header. Mọi nút khác
  * là secondary/ghost.
  */
-/** @deprecated FE3-PLAN §3-E1: màn cũ chỉ còn qua mục Nâng cao hoặc deep link. */
 export function ProjectScreen({ projectId = "" }: ScreenProps) {
   const navigate = useNavigate();
   const nav = React.useMemo(() => createProjectNav(navigate, projectId), [navigate, projectId]);
@@ -154,7 +153,7 @@ export function ProjectScreen({ projectId = "" }: ScreenProps) {
       },
       {
         id: "s2.rename",
-        label: "Đổi tên project…",
+        label: "Đổi tên dự án…",
         icon: Pencil,
         hint: ["F2"],
         keywords: "doi ten rename",
@@ -171,7 +170,7 @@ export function ProjectScreen({ projectId = "" }: ScreenProps) {
       },
       {
         id: "s2.refresh",
-        label: "Làm mới tổng quan project",
+        label: "Làm mới tổng quan dự án",
         icon: RefreshCw,
         keywords: "reload refresh lam moi",
         run: data.refetch,
@@ -208,7 +207,7 @@ export function ProjectScreen({ projectId = "" }: ScreenProps) {
   if (data.isLoading) {
     return (
       <Shell>
-        <ProjectLoading cards={4} label="Đang tải tổng quan project…" />
+        <ProjectLoading cards={4} label="Đang tải tổng quan dự án…" />
       </Shell>
     );
   }

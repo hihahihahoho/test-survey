@@ -61,7 +61,7 @@ export function ReconcileTable({
       n: kitsN,
       note: "cắt lại được",
     },
-    { what: "Project đang có trên máy", act: "Không ghi đè", tone: "keep", n: 0, note: "luôn tạo project MỚI" },
+    { what: "Dự án đang có trên máy", act: "Không ghi đè", tone: "keep", n: 0, note: "luôn tạo dự án mới" },
   ];
 
   return (
@@ -165,7 +165,7 @@ export function ReconcileTable({
         </div>
       )}
 
-      <InfoNotice>File gốc của bạn KHÔNG bị thay đổi hay xoá. Nhập luôn tạo một project MỚI.</InfoNotice>
+      <InfoNotice>File gốc không bị thay đổi hay xoá. Mỗi lần nhập sẽ tạo một dự án mới.</InfoNotice>
     </div>
   );
 }

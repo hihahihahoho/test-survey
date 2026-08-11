@@ -38,7 +38,7 @@ const AlertDialogContent = React.forwardRef<
         // hẳn nhau: dialog thường `rounded-5 bg-overlay/90 backdrop-blur-xl`, còn
         // alert-dialog `rounded-3 bg-raised` KHÔNG blur. Cùng một app, mở hai modal
         // ra hai chất liệu — đó là lỗi hệ thống, không phải lựa chọn thiết kế.
-        "rounded-5 border border-line-subtle bg-overlay/90 backdrop-blur-xl shadow-3 duration-2 ease-out",
+        "rounded-5 border border-line-subtle bg-overlay shadow-3 duration-2 ease-out",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-1 data-[state=open]:duration-2",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         "data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",

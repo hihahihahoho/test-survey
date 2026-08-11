@@ -128,7 +128,7 @@ describe("trùng tên: CHO PHÉP + gợi ý (§4.1-2)", () => {
   it("cảnh báo và gợi ý (2)", () => {
     const w = duplicateNameWarning("Candy Lite", fixtures);
     expect(w?.suggestion).toBe("Candy Lite (2)");
-    expect(w?.warn).toContain("Vẫn tạo được");
+    expect(w?.warn).toContain("vẫn có thể tạo");
   });
   it("không trùng ⇒ không cảnh báo", () => {
     expect(duplicateNameWarning("Tên mới toanh", fixtures)).toBeNull();

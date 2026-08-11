@@ -56,8 +56,8 @@ export function DesignCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <div>
-          <StatRow label="Sheet" value={count(matrix.sheets.length, "sheet")} />
-          <StatRow label="Element" value={count(components, "element")} />
+          <StatRow label="Trang" value={count(matrix.sheets.length, "trang")} />
+          <StatRow label="Thành phần" value={count(components, "thành phần")} />
           <StatRow label="Phong cách" value={count(matrix.variants.length, "phong cách")} />
           <StatRow
             label="Phiên bản"
@@ -178,7 +178,7 @@ export function KitCard({
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-3 pb-2">
-        <CardTitle>Kit đã cắt</CardTitle>
+        <CardTitle>Bộ kit</CardTitle>
         <Button variant="ghost" size="sm" asChild>
           <Link
             to="/p/$projectId/kit"
@@ -224,14 +224,14 @@ export function StatsCard({ project, projectId }: { project: Project; projectId:
         <Button variant="ghost" size="sm" asChild>
           <Link to="/p/$projectId/settings" params={{ projectId }}>
             <Settings2 aria-hidden />
-            Cài đặt project
+            Cài đặt dự án
           </Link>
         </Button>
       </CardHeader>
       <CardContent>
         <StatRow label="Lượt sinh ảnh trong thiết kế" value={count(jobs, "lượt")} />
         <StatRow label="Đã có ảnh" value={`${rawPresent}/${jobs}`} />
-        <StatRow label="File kit đã cắt" value={count(Number(s?.kitsCut ?? 0), "file")} />
+        <StatRow label="Thành phần đã tách" value={count(Number(s?.kitsCut ?? 0), "file")} />
         <StatRow label="Dung lượng trên đĩa" value={bytes(s?.diskBytes ?? 0)} />
         <StatRow
           label="Lượt chạy cuối"

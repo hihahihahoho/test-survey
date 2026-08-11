@@ -1,10 +1,6 @@
-import * as React from "react";
-import { Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { DISPLAY, SERIF, FLORA } from "@/components/layout/flora";
 import { SUBTITLE, TITLE } from "@/features/kitfile";
-import { HOME_COPY } from "../lib/home-copy";
 
 /**
  * ĐẦU MÀN H (UX-V3 §1.1): tiêu đề + ĐÚNG MỘT dòng phụ. Hết.
@@ -23,17 +19,7 @@ import { HOME_COPY } from "../lib/home-copy";
  * Tiêu đề dùng công thức FLORA «nhấn ĐÚNG MỘT TỪ» (§5.2): *Bộ kit **của bạn***.
  * Chữ được nhấn lấy từ `TITLE.H` của S — màn không tự chọn từ nào được in nghiêng.
  */
-export function HomeHeader({
-  showSearch,
-  query,
-  onQueryChange,
-  searchRef,
-}: {
-  showSearch: boolean;
-  query: string;
-  onQueryChange: (v: string) => void;
-  searchRef: React.RefObject<HTMLInputElement>;
-}) {
+export function HomeHeader() {
   return (
     <div className="flex flex-wrap items-end justify-between gap-6">
       <div className="flex flex-col gap-2">
@@ -43,26 +29,6 @@ export function HomeHeader({
           <em className={cn(SERIF, "whitespace-nowrap text-fg-strong")}>{TITLE.H.accent}</em>
         </h1>
         <p className={cn("text-body", FLORA.fgMuted)}>{SUBTITLE.H}</p>
-      </div>
-
-      <div className="flex items-center gap-3">
-        {showSearch && (
-          <div className="relative">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted"
-              aria-hidden
-            />
-            <Input
-              ref={searchRef}
-              type="search"
-              value={query}
-              onChange={(e) => onQueryChange(e.target.value)}
-              aria-label={HOME_COPY.SEARCH_LABEL}
-              placeholder={HOME_COPY.SEARCH_PLACEHOLDER}
-              className="w-56 rounded-full pl-9"
-            />
-          </div>
-        )}
       </div>
 
     </div>

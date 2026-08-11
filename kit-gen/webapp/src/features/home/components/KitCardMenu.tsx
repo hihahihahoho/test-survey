@@ -93,7 +93,7 @@ export function KitCardMenu({
 
         <DropdownMenuItem disabled={ro || kit.broken} onSelect={() => actions.duplicate(kit)}>
           <Copy aria-hidden />
-          {label(BTN.DUPLICATE)}
+          {label("Nhân bản dự án")}
           <DropdownMenuShortcut>⌘D</DropdownMenuShortcut>
         </DropdownMenuItem>
 

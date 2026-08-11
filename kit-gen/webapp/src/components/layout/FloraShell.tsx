@@ -1,8 +1,5 @@
 import * as React from "react";
-import { Search, Moon, Sun, FolderOpen, Settings } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { KeyboardHint } from "@/components/common";
-import { useUiStore, applyTheme } from "@/lib/store";
+import { ArrowLeft } from "lucide-react";
 import type { AgentStatus } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { AgentPill } from "./AgentPill";
@@ -36,6 +33,8 @@ import { FLORA, FOCUS, FLOATBAR } from "./flora";
  *  · ô ⌘K là `<button>` thật, không phải input giả (A5).
  */
 export interface FloraShellProps {
+  /** Home tự có sidebar; các màn công việc chỉ cần đường về + trạng thái. */
+  home?: boolean;
   breadcrumb?: React.ReactNode;
   /**
    * FE-2·E1 — THANH TAB FILE CON, đặt ngay dưới header (và dưới banner) ở **mọi** màn
@@ -65,6 +64,7 @@ export interface FloraShellProps {
 }
 
 export function FloraShell({
+  home = false,
   breadcrumb,
   fileTabs,
   filePanel,
@@ -81,17 +81,11 @@ export function FloraShell({
   onHomeClick,
   children,
 }: FloraShellProps) {
-  /* Dùng store `@/lib/store` (persist có allowlist + chặn secret). Bản R0 của AppShell
-     đọc `@/stores/ui` — một store thứ hai, key localStorage khác ⇒ theme lệch nhau.
-     Đó là lỗi thật của tầng nền, đã báo ở NEEDS-rs2.md (N5). */
-  const theme = useUiStore((s) => s.theme);
-  const toggleTheme = useUiStore((s) => s.toggleTheme);
-
-  React.useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
-
-  const isDark = theme !== "light";
+  void breadcrumb;
+  void workspaceLabel;
+  void onWorkspaceClick;
+  void onSettingsClick;
+  void onCommandPaletteOpen;
 
   return (
     <div className={cn("flex min-h-dvh flex-col", FLORA.canvas)}>
@@ -104,111 +98,29 @@ export function FloraShell({
           header vào `.kg-page` để mép trái logo trùng mép trái mọi H1 bên dưới.
           Chỉ thêm `lg:px-10` cho header (như toa gốc) là KHÔNG đủ: ở 1440 nội
           dung trang nằm trong hộp 1280 đã căn giữa ⇒ logo x=40 mà H1 x=120. */}
-      <header className={cn("sticky top-0 z-sticky h-14 shrink-0 border-b", FLORA.canvas, FLORA.hair)}>
-        <div className="kg-page flex h-full items-center gap-3">
-        {/* Logo gọn: dấu vuông bo tròn + chữ. Không icon hộp to, không màu loè. */}
-        <button type="button" onClick={onHomeClick} aria-label="Về trang chủ" className={cn("flex shrink-0 items-center gap-2 rounded-2", FOCUS)}>
-          <span
-            aria-hidden
-            /* FE-2·E1 đóng nợ A1 (`NEEDS-fe2-a.md` #2): bo góc arbitrary 6px → `rounded-1`
-               (8px), bậc semantic nhỏ nhất của thang. Đây là ĐỔI HÌNH DÁNG THẬT 6→8px trên
-               một ô 18px — nhỏ, nhưng là đổi thật, nên nói ra chứ không lặng lẽ.
-               `size-[18px]` giữ nguyên: đó là kích thước, không phải bo góc, và thang
-               spacing không có bậc 18px.
-               (Không viết lại chuỗi class cũ trong comment — chính test ở
-               `__tests__/subfile-shell.test.tsx` đã bắt tôi vì điều đó, và nó ĐÚNG: một
-               cổng grep không thể phân biệt class thật với class trong lời kể.) */
-            className={cn("size-[18px] rounded-1 border", FLORA.accentBorder, "bg-accent/[var(--kg-tint-a)]")}
-          />
-          <span className="text-subtitle font-medium tracking-[-0.01em] text-fg-strong">kit-gen</span>
-        </button>
-
-        {breadcrumb ? (
-          <div className="min-w-0 flex-1 truncate">{breadcrumb}</div>
-        ) : (
-          <div className="flex-1" />
-        )}
-
-        {/* Ô tìm ⌘K — PILL viền hairline. Là <button> thật (A5), không input giả.
-            Viền dùng `ctlBorder` (3.94:1) vì đây là CONTROL, không phải khối trang trí. */}
-        <button
-          type="button"
-          onClick={onCommandPaletteOpen}
-          aria-label="Mở bảng lệnh"
-          className={cn(
-            "hidden h-9 items-center gap-2 border pl-3.5 pr-2 md:inline-flex",
-            FLORA.pill, FLORA.ctlBorder, FLORA.fgMuted, FOCUS,
-            "transition-colors duration-fast hover:border-line-strong hover:text-fg",
-          )}
-        >
-          <Search className="size-3.5 shrink-0" aria-hidden />
-          <span className="text-label">Tìm hoặc chạy lệnh</span>
-          <KeyboardHint keys={["mod", "K"]} className="ml-3" />
-        </button>
-        <button
-          type="button"
-          onClick={onCommandPaletteOpen}
-          aria-label="Mở bảng lệnh"
-          className={cn(
-            "inline-flex size-9 items-center justify-center border md:hidden",
-            FLORA.pill, FLORA.ctlBorder, FLORA.fgMuted, FOCUS,
-          )}
-        >
-          <Search className="size-4" aria-hidden />
-        </button>
-
-        {workspaceLabel && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={onWorkspaceClick}
-                className={cn(
-                  "hidden h-8 max-w-[200px] items-center gap-1.5 px-2 sm:inline-flex",
-                  FLORA.pill, FLORA.fgMuted, FOCUS,
-                  "transition-colors duration-fast hover:text-fg",
-                )}
-              >
-                <FolderOpen className="size-3.5 shrink-0" aria-hidden />
-                <span className="truncate text-label">{workspaceLabel}</span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Thư mục làm việc trên máy bạn</TooltipContent>
-          </Tooltip>
-        )}
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button type="button" onClick={onSettingsClick} aria-label="Mở cài đặt" className={cn("inline-flex size-8 items-center justify-center", FLORA.pill, FLORA.fgMuted, FOCUS)}>
-              <Settings className="size-4" aria-hidden />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>Cài đặt</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
+      {!home && (
+        <header className={cn("sticky top-0 z-sticky h-14 shrink-0 border-b", FLORA.canvas, FLORA.hair)}>
+          <div className="flex h-full items-center justify-between px-4 sm:px-6">
             <button
               type="button"
-              onClick={toggleTheme}
-              aria-label={isDark ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối"}
+              onClick={onHomeClick}
               className={cn(
-                "inline-flex size-8 shrink-0 items-center justify-center",
-                FLORA.pill, FLORA.fgMuted, FOCUS,
-                "transition-colors duration-fast hover:text-fg-strong",
+                "inline-flex h-9 items-center gap-2 rounded-2 px-2 text-label text-fg",
+                "transition-colors duration-fast hover:bg-raised hover:text-fg-strong",
+                FOCUS,
               )}
             >
-              {isDark ? <Moon className="size-4" aria-hidden /> : <Sun className="size-4" aria-hidden />}
+              <ArrowLeft className="size-4" aria-hidden />
+              <span>Dự án</span>
             </button>
-          </TooltipTrigger>
-          <TooltipContent>{isDark ? "Giao diện tối" : "Giao diện sáng"}</TooltipContent>
-        </Tooltip>
+            {connectionStatus && onRecheck
+              ? <RuntimeStatus status={connectionStatus} onRecheck={onRecheck} />
+              : <AgentPill status={agentStatus} onOpen={onAgentPillClick} />}
+          </div>
+        </header>
+      )}
 
-        {connectionStatus && onRecheck ? <RuntimeStatus status={connectionStatus} onRecheck={onRecheck} /> : <AgentPill status={agentStatus} onOpen={onAgentPillClick} />}
-        </div>
-      </header>
-
-      {banner && <div className="sticky top-14 z-sticky shrink-0">{banner}</div>}
+      {banner && <div className={cn("sticky z-sticky shrink-0", home ? "top-0" : "top-14")}>{banner}</div>}
 
       {/* Thanh tab file con — KHÔNG sticky. Sticky sẽ ăn thêm 40px chiều cao khả dụng
           trên laptop 13" ở màn S3 (editor 3 cột đã tính chiều cao theo header), và
@@ -227,13 +139,15 @@ export function FloraShell({
           trùng mép nội dung, và câu rút còn 4 chữ.
           Câu ĐẦY ĐỦ không mất — nó chuyển vào `title`, và mỗi control bị khoá vẫn tự
           nói lý do tại chỗ (`gate.reason`), đúng luật §6 "khoá thì phải kèm lý do". */}
-      <div
-        role="status"
-        title="Mọi thao tác sửa bị khoá cho tới khi bạn mở trên màn rộng hơn."
-        className={cn("shrink-0 border-b py-2 text-caption md:hidden", FLORA.hair, FLORA.canvas, FLORA.fgMuted)}
-      >
-        <div className="kg-page">Màn hình nhỏ — chỉ xem</div>
-      </div>
+      {!home && (
+        <div
+          role="status"
+          title="Mọi thao tác sửa bị khoá cho tới khi bạn mở trên màn rộng hơn."
+          className={cn("shrink-0 border-b py-2 text-caption md:hidden", FLORA.hair, FLORA.canvas, FLORA.fgMuted)}
+        >
+          <div className="kg-page">Màn hình nhỏ — chỉ xem</div>
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1">
         {rail && (

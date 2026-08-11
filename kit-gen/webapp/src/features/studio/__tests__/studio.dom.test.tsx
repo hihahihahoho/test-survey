@@ -38,21 +38,21 @@ async function mount() {
 afterEach(cleanup);
 
 describe("/k/:id production studio", () => {
-  it("có navigator phạm vi, visual chung, inspector và các hành động generate", async () => {
+  it("có điều hướng phạm vi, phong cách chung và các hành động tạo ảnh", async () => {
     await mount();
-    expect(screen.getByRole("navigation", { name: "Phạm vi studio" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Phạm vi bộ kit" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Tổng thể/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /UI kit/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Mascot/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Background/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Generate phần này" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Generate toàn bộ" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Giao diện/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Nhân vật/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Ảnh nền/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Tạo phần này" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Tạo toàn bộ" })).toBeTruthy();
   });
 
-  it("UI kit có ba chế độ xem và skeleton theo sheet", async () => {
+  it("phần giao diện có ba chế độ xem và khung theo từng tấm", async () => {
     const { fireEvent } = await import("@testing-library/react");
     await mount();
-    fireEvent.click(screen.getByRole("button", { name: /UI kit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Giao diện/ }));
     expect(screen.getByRole("radiogroup", { name: "Kết quả của main" })).toBeTruthy();
     expect(screen.getByRole("radio", { name: "Khung xương" })).toBeTruthy();
     expect(screen.getByRole("radio", { name: "Ảnh đã vẽ" })).toBeTruthy();

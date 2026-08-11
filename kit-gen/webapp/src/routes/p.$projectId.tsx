@@ -1,18 +1,19 @@
-import { createRoute, Navigate } from "@tanstack/react-router";
+import { createRoute } from "@tanstack/react-router";
 import { Route as rootRoute } from "./__root";
+import { AppLayout, LazyScreen } from "@/components/layout";
 import { requireSetup } from "./guards";
 import { parseProjectParams } from "./params";
 
-/** @deprecated FE3-PLAN §3-E1: tổng quan cũ rời đường chính; URL này chuyển sang bộ kit. */
+/** Tổng quan dự án. Bộ kit là một tài nguyên bên trong dự án, không phải dự án. */
 export const Route = createRoute({
   getParentRoute: () => rootRoute,
   path: "/p/$projectId",
   params: { parse: parseProjectParams },
   beforeLoad: ({ location }) => requireSetup(location.pathname),
-  component: ProjectRedirect,
+  component: ProjectRoute,
 });
 
-function ProjectRedirect() {
+function ProjectRoute() {
   const { projectId } = Route.useParams();
-  return <Navigate to="/k/$projectId" params={{ projectId }} replace />;
+  return <AppLayout screen="project" projectId={projectId}><LazyScreen screen="project" projectId={projectId} /></AppLayout>;
 }

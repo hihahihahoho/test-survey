@@ -72,13 +72,19 @@ export function docPath(input: {
   /** id tab ảo «Tất cả sheet» — truyền từ `features/docs/lib` để không chép chuỗi. */
   virtualId?: string;
 }): string {
-  const { projectId, docId, kind, virtualId } = input;
+  const { projectId, docId, kind, virtualId, currentPath } = input;
   const pid = encodeURIComponent(projectId);
-  if (kind === "canvas") return `/k/${pid}`;
+  const root = `/p/${pid}`;
+  if (kind === "canvas") return `${root}/f/${encodeURIComponent(docId)}`;
 
-  const base = `/k/${pid}`;
+  const isProjectScreen = currentPath === root
+    || currentPath?.startsWith(`${root}/design`) === true
+    || currentPath?.startsWith(`${root}/runs`) === true
+    || currentPath?.startsWith(`${root}/kit`) === true
+    || currentPath?.startsWith(`${root}/settings`) === true;
+  const base = isProjectScreen ? currentPath! : root;
   if (virtualId !== undefined && docId === virtualId) return base;
-  return base;
+  return `${base}?file=${encodeURIComponent(docId)}`;
 }
 
 /**

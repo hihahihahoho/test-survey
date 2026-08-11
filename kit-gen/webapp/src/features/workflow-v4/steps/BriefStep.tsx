@@ -43,19 +43,19 @@ export function BriefStep() {
   };
 
   return (
-    <Step title="Chủ thể & brief" copy="Nói ngắn gọn bộ kit này phục vụ trò chơi nào; bạn có thể dán brief để điền nhanh.">
+    <Step title="Brief" copy="Mô tả ngắn bộ kit cần tạo. Bạn cũng có thể dán brief để điền nhanh.">
       <div className="workflow-form-grid">
         <div>
           <Label htmlFor="kit-name">Tên bộ kit</Label>
           <Input id="kit-name" value={s.kitName} onChange={(e) => s.set({ kitName: e.target.value })} />
         </div>
         <div>
-          <Label htmlFor="campaign">Mục tiêu / campaign</Label>
+          <Label htmlFor="campaign">Mục tiêu hoặc chiến dịch</Label>
           <Input id="campaign" value={s.campaign} onChange={(e) => s.set({ campaign: e.target.value })} placeholder="Ví dụ: mini-game hè 2026" />
         </div>
       </div>
       <div className="brief-head">
-        <Label htmlFor="brief">Brief thô</Label>
+        <Label htmlFor="brief">Nội dung brief</Label>
         <Button variant="secondary" size="sm" onClick={() => setPasteOpen(true)}>
           <ClipboardPaste aria-hidden />Dán brief
         </Button>
@@ -74,8 +74,8 @@ export function BriefStep() {
           className={s.mascotEnabled ? "choice-card selected" : "choice-card"}
           onClick={() => s.set({ mascotEnabled: !s.mascotEnabled })}
         >
-          <strong>{s.mascotEnabled ? "Có mascot" : "Không có mascot"}</strong>
-          <span>Giữ lựa chọn này để mở bước nhân vật riêng.</span>
+          <strong>{s.mascotEnabled ? "Có nhân vật đại diện" : "Không cần nhân vật"}</strong>
+          <span>{s.mascotEnabled ? "Bạn sẽ mô tả nhân vật ở bước riêng." : "Bỏ qua bước tạo nhân vật."}</span>
         </button>
       </div>
       <BriefPasteDialog open={pasteOpen} onOpenChange={setPasteOpen} onApply={applyBrief} />

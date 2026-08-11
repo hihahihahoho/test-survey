@@ -157,7 +157,7 @@ export function ImportWizard({
   const primaryLabel =
     step === 1 ? "Tiếp: đối chiếu →"
     : step === 2 ? `Nhập ${count(report?.sheets ?? 0, "sheet")} vào project mới`
-    : "Mở project";
+    : "Mở dự án";
 
   const onPrimary = () => {
     if (step === 1) return void goPreview();
@@ -172,7 +172,7 @@ export function ImportWizard({
         onPointerDownOutside={(e) => busy && e.preventDefault()}
         onInteractOutside={(e) => busy && e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Nhập project</DialogTitle>
+          <DialogTitle>Nhập dự án</DialogTitle>
           <DialogDescription>{stepLabel}</DialogDescription>
         </DialogHeader>
 

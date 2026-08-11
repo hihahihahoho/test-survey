@@ -18,14 +18,14 @@ export const SOURCES: { id: ImportSource; label: string; hint: string; accept?: 
   },
   {
     id: "zip",
-    label: "File .zip của project",
+    label: "File .zip của dự án",
     hint: "Bản xuất từ kit-gen (tối đa 200 MB)",
     accept: ".zip,application/zip",
   },
   {
     id: "folder",
     label: "Thư mục có sẵn trong thư mục làm việc",
-    hint: "Công cụ local quét thấy project chưa có trong danh sách",
+    hint: "Công cụ local tìm thấy dự án chưa có trong danh sách",
   },
 ];
 
@@ -132,7 +132,7 @@ export function ImportSourceStep({
       )}
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="imp-name">Tên project sẽ tạo</Label>
+        <Label htmlFor="imp-name">Tên dự án sẽ tạo</Label>
         <Input
           id="imp-name"
           value={name}

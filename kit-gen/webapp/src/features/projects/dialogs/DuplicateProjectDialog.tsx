@@ -72,9 +72,9 @@ export function DuplicateProjectDialog({
       });
       onOpenChange(false);
       toastSuccess(
-        `Đã chép sang bộ mới: «${res.project.name}»`,
+        `Đã tạo bản sao: «${res.project.name}»`,
         "Đã chép bản thiết kế và ảnh mẫu. Ảnh đã vẽ thì không chép.",
-        { label: "Về bộ kit cũ", onClick: () => onBackToOld(project) },
+        { label: "Về dự án cũ", onClick: () => onBackToOld(project) },
       );
       onDone(res.project);
     } catch (e) {
@@ -88,7 +88,7 @@ export function DuplicateProjectDialog({
         onPointerDownOutside={(e) => dup.isPending && e.preventDefault()}
         onInteractOutside={(e) => dup.isPending && e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Tạo bộ kit từ «{project.name}»</DialogTitle>
+          <DialogTitle>Nhân bản dự án «{project.name}»</DialogTitle>
           <DialogDescription>Đặt tên cho bộ mới. Bản gốc vẫn giữ nguyên.</DialogDescription>
         </DialogHeader>
 
@@ -96,7 +96,7 @@ export function DuplicateProjectDialog({
           {gate.readOnly && <OfflineNotice text={gate.longReason} />}
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="dup-name">Tên bộ kit mới</Label>
+            <Label htmlFor="dup-name">Tên dự án mới</Label>
             <Input
               id="dup-name"
               value={name}
@@ -134,7 +134,7 @@ export function DuplicateProjectDialog({
             title={gate.readOnly ? gate.reason : undefined}
             onClick={() => void submit()}
           >
-            Tạo bộ kit
+            Tạo dự án
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -68,7 +68,7 @@ export function RunDetailScreen({ projectId = "", runId = "" }: ScreenProps) {
     <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-8 p-6 lg:p-8">
       <header className="flex flex-col gap-6">
         <div className="flex flex-wrap items-center gap-3">
-          <Button variant="ghost" size="icon-sm" asChild><Link to="/p/$projectId" params={{ projectId }} aria-label="Về bộ kit"><ArrowLeft aria-hidden /></Link></Button>
+          <Button variant="ghost" size="icon-sm" asChild><Link to="/p/$projectId" params={{ projectId }} aria-label="Về dự án"><ArrowLeft aria-hidden /></Link></Button>
           <div>
             <h1 className="text-display text-fg-strong">Máy đang <span className={SERIF}>vẽ</span></h1>
             <p className="text-caption text-fg-muted-raised">Bạn không cần bấm gì. Có thể rời màn này và quay lại sau.</p>

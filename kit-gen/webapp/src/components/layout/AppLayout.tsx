@@ -6,18 +6,12 @@ import { useAgentStatus, useProject } from "@/lib/hooks";
 import { useRecentStore } from "@/lib/store";
 import type { AgentStatus } from "@/lib/status";
 import { AgentBanner, AgentDiagnosticBody } from "./AgentBanner";
-import { AppBreadcrumb } from "./AppBreadcrumb";
-import { CommandPalette } from "./CommandPalette";
-import { ProjectJump } from "./ProjectJump";
-import { ShortcutsDialog } from "./ShortcutsDialog";
-import { useGlobalShortcuts } from "./shortcuts";
 import {
   ALL_SHEETS_DOC_ID, SCREEN_LABEL, ShellEnvProvider,
   contractSheetIdsOf, runningSheetIdsOf,
   type FileScope, type ScreenId,
 } from "./screen-contract";
 import { RUN_CMD } from "./agent-commands";
-import { api } from "@/lib/api";
 import { useDocsList } from "@/features/docs/hooks";
 import { buildTabs, resolveActiveId } from "@/features/docs/lib/subfile-model";
 import { useContract } from "@/lib/hooks";
@@ -49,9 +43,6 @@ export interface AppLayoutProps {
 
 export function AppLayout({ screen, projectId, fileId, children, simplified = false }: AppLayoutProps) {
   const navigate = useNavigate();
-  const [paletteOpen, setPaletteOpen] = React.useState(false);
-  const [jumpOpen, setJumpOpen] = React.useState(false);
-  const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
   const [agentSheetOpen, setAgentSheetOpen] = React.useState(false);
   const [probing, setProbing] = React.useState(false);
 
@@ -72,26 +63,6 @@ export function AppLayout({ screen, projectId, fileId, children, simplified = fa
     document.title = parts.join(" · ");
   }, [screen, project.data?.name]);
 
-  const goto = React.useCallback(
-    (key: string) => {
-      if (key === "p") return void navigate({ to: "/" });
-      if (!projectId) return;
-      const params = { projectId };
-      if (key === "d") return void navigate({ to: "/p/$projectId/design", params, search: { tab: "sheets" } });
-      if (key === "r") return void navigate({ to: "/p/$projectId/runs", params });
-      if (key === "k") return void navigate({ to: "/p/$projectId/kit", params, search: { tab: "assets" } });
-      if (key === "s") return void navigate({ to: "/p/$projectId/settings", params });
-    },
-    [navigate, projectId],
-  );
-
-  useGlobalShortcuts({
-    onCommandPalette: () => setPaletteOpen((v) => !v),
-    onJumpProject: () => setJumpOpen((v) => !v),
-    onShortcutsHelp: () => setShortcutsOpen(true),
-    onGoto: goto,
-  });
-
   const onBridgeProbe = React.useCallback(async () => {
     setProbing(true);
     try {
@@ -100,24 +71,6 @@ export function AppLayout({ screen, projectId, fileId, children, simplified = fa
       setProbing(false);
     }
   }, [runBridgeProbe]);
-
-  /**
-   * "Tạo project" / "Nhập project" gọi được từ ⌘K ở MỌI màn, nhưng modal thuộc
-   * S1 (chủ sở hữu: R1-P3). Shell KHÔNG dựng modal của màn khác — nó đưa user
-   * về S1 kèm Ý ĐỊNH.
-   *
-   * Ý định đi bằng ĐÚNG MỘT đường: search param `?action=create|import`. Nó nằm lại
-   * trên URL nên S1 đọc lúc nào cũng thấy, kể cả khi mount chậm (import động), F5 vẫn
-   * còn, và không phụ thuộc thứ tự gắn listener.
-   *
-   * (§W1-9) Đường thứ hai — `CustomEvent("kg:create-project")` — ĐÃ BỎ: trong suốt thời
-   * gian tồn tại nó **không có ai nghe**, nên nó không phải dự phòng mà là một lời hứa
-   * suông. Bên đọc param là `features/projects/lib/useCreateIntent.ts`.
-   */
-  const goCreateOrImport = React.useCallback(
-    (action: "create" | "import") => void navigate({ to: "/", search: { action } }),
-    [navigate],
-  );
 
   /* ══════════ ĐÔNG LẠNH: THANH TAB FILE CON + PROJECT RAIL ══════════
      (§W1-13 · chờ chủ dự án chốt hướng file con — xem UPGRADE-PLAN §Đ3)
@@ -141,23 +94,12 @@ export function AppLayout({ screen, projectId, fileId, children, simplified = fa
   const body = (
     <>
       <FloraShell
+        home={screen === "projects" || screen === "settings"}
         agentStatus={status.pill as AgentStatus}
         connectionStatus={status}
         onRecheck={recheck}
         onAgentPillClick={() => setAgentSheetOpen(true)}
-        workspaceLabel={status.workspaceLabel ?? undefined}
-        onWorkspaceClick={() => void api.system.revealWorkspace()}
-        onSettingsClick={() => void navigate({ to: "/settings", search: { tab: "agent" } })}
-        onCommandPaletteOpen={() => setPaletteOpen(true)}
         onHomeClick={() => void navigate({ to: "/" })}
-        breadcrumb={
-          <AppBreadcrumb
-            screen={screen}
-            projectId={projectId}
-            projectName={project.data?.name}
-            onJump={() => setJumpOpen(true)}
-          />
-        }
         banner={
           <AgentBanner
             status={status}
@@ -170,20 +112,6 @@ export function AppLayout({ screen, projectId, fileId, children, simplified = fa
       >
         {children}
       </FloraShell>
-
-      <CommandPalette
-        open={paletteOpen}
-        onOpenChange={setPaletteOpen}
-        {...(projectId ? { projectId } : {})}
-        readOnly={status.readOnly}
-        onJumpProject={() => setJumpOpen(true)}
-        onRecheckAgent={recheck}
-        onShortcutsHelp={() => setShortcutsOpen(true)}
-        onCreateProject={() => goCreateOrImport("create")}
-        onImportProject={() => goCreateOrImport("import")}
-      />
-      <ProjectJump open={jumpOpen} onOpenChange={setJumpOpen} />
-      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 
       {/* §2.1: bấm vào pill trạng thái mở Sheet "Trạng thái công cụ local" */}
       <Sheet open={agentSheetOpen} onOpenChange={setAgentSheetOpen}>

@@ -221,7 +221,7 @@ export function useKitsetContract(): ContractSync | null {
 const NOTE: Partial<Record<SyncState, string>> = {
   loading: "Đang mở bản thiết kế…",
   offline: "Chưa lưu được — công cụ local chưa chạy. Chữ của bạn vẫn còn trên máy này.",
-  foreign: "Bộ kit này đã có bản thiết kế riêng (nhập từ tệp cũ). Workflow sẽ không ghi đè lên nó.",
+  foreign: "Đang dùng bản thiết kế đã nhập. Form này chỉ để xem.",
   conflict: "Bản trên đĩa vừa đổi ở nơi khác. Chọn giữ bản nào.",
   error: "Lưu chưa được. Sẽ thử lại — chữ của bạn vẫn còn.",
   pending: "Đang chờ lưu…",

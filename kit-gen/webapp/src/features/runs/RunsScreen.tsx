@@ -79,7 +79,7 @@ export function RunsScreen({ projectId = "" }: ScreenProps) {
           </h1>
           <p className="text-caption text-fg-muted-raised">
             {items.length > 0
-              ? `${items.length} lượt chạy gần nhất của project này`
+              ? `${items.length} lượt chạy gần nhất của dự án này`
               : "Mỗi lượt sinh ảnh gọi AI một lần cho một sheet của một phong cách."}
           </p>
         </div>

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** Legacy IA regression coverage: every old file URL redirects to the new kit entry. */
+/** Project file routes remain canonical and mount the canvas entry directly. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -28,15 +28,15 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-describe("legacy subfile navigation", () => {
-  it.each(["f-main-kit", "f-y-tuong-tet", "f-khong-co-that"])("/p/:id/f/%s redirects to /k/:id", async (fileId) => {
+describe("project subfile navigation", () => {
+  it.each(["f-main-kit", "f-y-tuong-tet", "f-khong-co-that"])("/p/:id/f/%s keeps its canonical URL", async (fileId) => {
     const router = mount(`/p/${PID}/f/${fileId}`);
-    await waitFor(() => expect(router.state.location.pathname).toBe(`/k/${PID}`));
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/p/${PID}/f/${fileId}`));
   });
 
-  it("does not render the old file tab IA after redirect", async () => {
+  it("does not render the old file tab IA", async () => {
     const router = mount(`/p/${PID}/f/f-main-kit`);
-    await waitFor(() => expect(router.state.location.pathname).toBe(`/k/${PID}`));
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/p/${PID}/f/f-main-kit`));
     expect(document.querySelector('[role="tablist"]')).toBeNull();
   });
 

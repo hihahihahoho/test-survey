@@ -82,13 +82,13 @@ export function DeleteProjectDialog({
       }
       if (ok.length > 0) {
         toastSuccess(
-          ok.length === 1 ? `Đã phục hồi «${ok[0]!.name}»` : `Đã phục hồi ${ok.length} project`,
+          ok.length === 1 ? `Đã phục hồi «${ok[0]!.name}»` : `Đã phục hồi ${ok.length} dự án`,
         );
       }
       for (const b of bad) {
         // C-01: nói THẬT là chưa phục hồi được, và chỉ đúng chỗ dữ liệu đang nằm.
         toastError(b.error, {
-          titleOverride: "Không hoàn tác được — đã có bộ kit khác trùng chỗ.",
+          titleOverride: "Không hoàn tác được — đã có dự án khác trùng chỗ.",
           descriptionOverride: "Bộ cũ vẫn nằm trong thùng rác, vào đó khôi phục với tên khác.",
           action: { label: "Vào thùng rác", onClick: onOpenTrash },
         });
@@ -151,13 +151,13 @@ export function DeleteProjectDialog({
       open={open}
       onOpenChange={onOpenChange}
       pending={del.isPending}
-      title={many ? `Xoá ${projects.length} bộ kit?` : `Xoá bộ kit “${one.name}”?`}
+      title={many ? `Xoá ${projects.length} dự án?` : `Xoá dự án “${one.name}”?`}
       description={
         many
-          ? `Tất cả bộ kit và ảnh đã vẽ sẽ vào thùng rác. Tự dọn sau 30 ngày. Tổng ${bytes(totalBytes)}.`
-          : "Bộ kit và toàn bộ ảnh đã vẽ sẽ vào thùng rác. Tự dọn sau 30 ngày."
+          ? `Tất cả dữ liệu dự án, bộ kit và ảnh đã vẽ sẽ vào thùng rác. Tự dọn sau 30 ngày. Tổng ${bytes(totalBytes)}.`
+          : "Dự án, các bộ kit và toàn bộ ảnh đã vẽ sẽ vào thùng rác. Tự dọn sau 30 ngày."
       }
-      actionLabel={many ? `Cho ${projects.length} bộ kit vào thùng rác` : "Cho vào thùng rác"}
+      actionLabel={many ? `Cho ${projects.length} dự án vào thùng rác` : "Cho vào thùng rác"}
       onConfirm={() => void confirm()}
     >
       <div className="flex flex-col gap-3">

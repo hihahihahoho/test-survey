@@ -140,5 +140,5 @@ export const STATE_ROW: Record<ProjectState, { badge: JobStatus; text: string; a
   running: { badge: "running", text: "Đang sinh ảnh" },
   failed: { badge: "failed", text: "Có lượt sinh ảnh bị lỗi", action: "Xem lỗi" },
   empty: { badge: "never", text: "Chưa bắt đầu", action: "Chọn element" },
-  broken: { badge: "failed", text: "Không đọc được project" },
+  broken: { badge: "failed", text: "Không đọc được dự án" },
 };
