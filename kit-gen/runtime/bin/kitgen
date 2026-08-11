@@ -12,8 +12,9 @@ NODE="${KITGEN_NODE:-$(command -v node 2>/dev/null || true)}"
 CODEX_BIN="${KITGEN_CODEX_BIN:-$(command -v codex 2>/dev/null || true)}"
 agent_cmd() {
   [ -n "$NODE" ] || { echo "KitGen: Node runtime not found. Run install.sh again." >&2; exit 1; }
+  NODE_DIR="$(dirname "$NODE")"
   CODEX_DIR="$(dirname "$CODEX_BIN")"
-  exec env PATH="$WORKSPACE/.venv/bin:$CODEX_DIR:$PATH" \
+  exec env PATH="$WORKSPACE/.venv/bin:$NODE_DIR:$CODEX_DIR:$PATH" \
     NODE_PATH="${NODE_PATH:-$HOME_DIR/tools/node_modules}" \
     PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME_DIR/tools/playwright-browsers}" \
     "$NODE" "$SOURCE/agent/server.mjs" \

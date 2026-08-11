@@ -37,6 +37,7 @@ jobs:
       - run: npm ci
       - name: Verify installer service recovery
         run: |
+          bash ../test/kitgen-run-env.test.sh
           bash ../test/kitgen-launchd-start.test.sh
           bash ../test/install-launchd.test.sh
       # Full Vitest currently includes a few developer-only fixtures ignored by git.
