@@ -28,6 +28,6 @@ chmod +x "$STAGE/$PKG/install.sh" "$STAGE/$PKG/runtime/bin/kitgen" "$STAGE/$PKG/
 )
 mkdir -p "$OUT"
 tar -C "$STAGE" -czf "$OUT/$PKG.tar.gz" "$PKG"
-shasum -a 256 "$OUT/$PKG.tar.gz" > "$OUT/$PKG.tar.gz.sha256"
+(cd "$OUT" && shasum -a 256 "$PKG.tar.gz" > "$PKG.tar.gz.sha256")
 rm -rf "$STAGE"
 echo "$OUT/$PKG.tar.gz"
