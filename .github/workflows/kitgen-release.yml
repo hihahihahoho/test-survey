@@ -1,0 +1,90 @@
+name: KitGen release
+
+on:
+  push:
+    branches: [main, "feat/**"]
+    tags: ["kitgen-v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to package (for example 2.0.1)"
+        required: false
+        type: string
+
+# Default is read-only. Only the isolated publish job gets contents:write.
+permissions:
+  contents: read
+
+concurrency:
+  group: kitgen-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-and-package:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kit-gen/webapp
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: kit-gen/webapp/package-lock.json
+      - run: npm ci
+      - run: npm run verify
+      - name: Resolve package version
+        id: version
+        working-directory: .
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -eu
+          if [[ -n "$INPUT_VERSION" ]]; then version="$INPUT_VERSION"
+          elif [[ "$GITHUB_REF" == refs/tags/kitgen-v* ]]; then version="${GITHUB_REF#refs/tags/kitgen-v}"
+          else version="$(node -p "require('./kit-gen/webapp/package.json').version")-${GITHUB_SHA::7}"
+          fi
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || { echo "Invalid version: $version" >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Build source-free runtime
+        working-directory: .
+        run: bash kit-gen/scripts/build-runtime.sh '${{ steps.version.outputs.version }}' "$RUNNER_TEMP/release"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kitgen-runtime-${{ steps.version.outputs.version }}
+          path: |
+            ${{ runner.temp }}/release/*.tar.gz
+            ${{ runner.temp }}/release/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/kitgen-v')
+    needs: verify-and-package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    environment: kitgen-release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: kitgen-runtime-${{ needs.verify-and-package.outputs.version }}
+          path: release-output
+      - name: Check release payload
+        run: |
+          set -eu
+          shasum -a 256 -c release-output/*.tar.gz.sha256
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            release-output/*.tar.gz
+            release-output/*.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

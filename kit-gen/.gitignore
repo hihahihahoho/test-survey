@@ -9,3 +9,14 @@ styles.json
 styles.json.bak
 nohup.out
 skeleton/
+teams/
+dist/
+
+# Vệ sinh secret (architecture §4.4-6) — không bao giờ commit dữ liệu/credential máy cá nhân
+.kitgen/
+auth.json
+*.env
+.env
+.env.*
+config.toml
+KitGen/

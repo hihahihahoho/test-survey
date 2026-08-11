@@ -1,0 +1,238 @@
+/* ==========================================================================
+   base.css — reset + typography + focus-visible (UX-SPEC §5.2, §5.8)
+   Phụ thuộc: tokens.css (phải nạp trước).
+   Nguyên tắc: KHÔNG `outline: none` ở bất cứ đâu (A4). Sàn chữ 12px (I3).
+   ========================================================================== */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html {
+  /* Sàn 12px: không dùng font-size gốc <100% để tránh mọi rem tụt dưới sàn */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body,
+h1, h2, h3, h4, h5, h6,
+p, figure, blockquote, dl, dd, ul, ol, fieldset, legend { margin: 0; padding: 0; }
+
+ul[role="list"], ol[role="list"] { list-style: none; }
+
+body {
+  min-height: 100vh;
+  background: var(--bg-canvas);
+  color: var(--fg-strong);
+  font: var(--t-body);
+  /* A11 — zoom 200% / reflow 320px: không khoá kích thước, không overflow ngang */
+  overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 { font: var(--t-display); color: var(--fg-strong); }
+h2 { font: var(--t-title); color: var(--fg-strong); }
+h3 { font: var(--t-subtitle); color: var(--fg-strong); }
+h4, h5, h6 { font: var(--t-body); font-weight: 600; color: var(--fg-strong); }
+
+p { font: var(--t-body); color: var(--fg-default); }
+
+small { font: var(--t-caption); color: var(--fg-default); }
+
+code, kbd, pre, samp { font: var(--t-mono); font-family: var(--font-mono); }
+
+pre { margin: 0; }
+
+a {
+  color: var(--accent-text);
+  text-decoration: none;
+  border-radius: var(--r-1);
+}
+a:hover { text-decoration: underline; }
+
+img, svg, video, canvas { display: block; max-width: 100%; }
+img { height: auto; }
+
+button, input, select, textarea {
+  font: inherit;
+  font-family: inherit;
+  color: inherit;
+  margin: 0;
+}
+button { background: none; border: 0; cursor: pointer; }
+button:disabled, [aria-disabled="true"] { cursor: not-allowed; }
+
+textarea { resize: vertical; }
+
+table { border-collapse: collapse; border-spacing: 0; width: 100%; }
+
+fieldset { border: 0; }
+legend { padding: 0; }
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--line-subtle);
+  margin: var(--s-4) 0;
+}
+
+[hidden] { display: none !important; }
+
+/* --------------------------------------------------------------------------
+   §5.8-A4 · FOCUS VISIBLE — ring 2px --focus-ring + offset 2px, MỌI phần tử.
+   Dùng :focus-visible để chuột không nhấp nháy ring, nhưng bàn phím luôn thấy.
+   Trình duyệt không hỗ trợ :focus-visible thì rơi về :focus (khối cuối).
+   -------------------------------------------------------------------------- */
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  /* ring không bị cắt bởi overflow của cha */
+  border-radius: inherit;
+}
+/* Ô lưới / hàng bảng: ring nằm trong để không bị cha cuộn cắt mất */
+.kg-focus-inset:focus-visible { outline-offset: calc(-1 * var(--focus-ring-width)); }
+
+/* QA-UX TB-C · Nút NỀN ĐẶC (primary/danger): ring --focus-ring nằm sát nền nút cùng
+   gam màu ⇒ cạnh trong chỉ 1.27:1 (light) / 1.46:1 (dark). WCAG 2.4.11 đòi ≥3:1 với
+   CẢ vùng liền kề. Thêm vòng ĐỆM --focus-ring-gap ở giữa: ring ↔ đệm ≥3:1 và
+   đệm ↔ nút ≥3:1, bất kể nút màu gì. Không đổi kích thước hiển thị của nút. */
+.kg-btn--primary:focus-visible,
+.kg-btn--danger:focus-visible {
+  outline-color: transparent;
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring-gap),
+              0 0 0 calc(var(--focus-ring-width) * 2) var(--focus-ring);
+}
+
+@supports not selector(:focus-visible) {
+  a:focus, button:focus, input:focus, select:focus, textarea:focus, [tabindex]:focus {
+    outline: var(--focus-ring-width) solid var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Tiện ích dùng chung (giữ ít, chỉ những thứ mọi primitive cần)
+   -------------------------------------------------------------------------- */
+
+/* Chỉ đọc bằng screen reader — dùng cho nhãn ẩn, aria-live vùng, skip-link */
+.kg-sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* §5.8-A13 · skip-link "Tới nội dung chính" */
+.kg-skip-link {
+  position: absolute;
+  left: var(--s-2);
+  top: calc(-1 * var(--s-10));
+  z-index: var(--z-tooltip);
+  padding: var(--s-2) var(--s-3);
+  background: var(--bg-overlay);
+  color: var(--fg-strong);
+  border: 1px solid var(--line-default);
+  border-radius: var(--r-2);
+  font: var(--t-label);
+  transition: top var(--dur-fast) var(--ease-out);
+}
+.kg-skip-link:focus-visible { top: var(--s-2); }
+
+/* Thang chữ dạng class — để markup không tự đặt font-size (§5.2) */
+.kg-t-display  { font: var(--t-display); }
+.kg-t-title    { font: var(--t-title); }
+.kg-t-subtitle { font: var(--t-subtitle); }
+.kg-t-body     { font: var(--t-body); }
+.kg-t-label    { font: var(--t-label); }
+.kg-t-caption  { font: var(--t-caption); }
+.kg-t-mono     { font: var(--t-mono); }
+.kg-t-tablehead {
+  font: var(--t-label);
+  text-transform: uppercase;
+  letter-spacing: var(--t-label-tracking);
+  color: var(--fg-default);
+}
+
+.kg-fg-strong  { color: var(--fg-strong); }
+.kg-fg-default { color: var(--fg-default); }
+/* --fg-muted chỉ đạt 4.5:1 trên canvas/surface; trên raised/overlay dùng class -raised */
+.kg-fg-muted   { color: var(--fg-muted); }
+.kg-fg-muted-raised { color: var(--fg-muted-raised); }
+
+.kg-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kg-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Icon trong nhãn: luôn đi kèm CHỮ (§5.7). aria-hidden ở markup. */
+.kg-icon {
+  display: inline-block;
+  flex: none;
+  font-style: normal;
+  line-height: 1;
+}
+
+/* Vùng cuộn: thanh cuộn mảnh, vẫn thấy được.
+   Áp cho MỌI vùng cuộn thật của app (3 cột editor S3, panel nhật ký S4, drawer, bảng)
+   thay vì để class rời không ai gắn — lượt tích hợp thấy `.kg-scroll` là CSS chết. */
+.kg-scroll,
+.d-pane, .d-lib__list, .r-log, .kg-drawer__body, .kg-table-wrap {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-default) transparent;
+}
+.kg-scroll { overflow: auto; }
+.kg-scroll::-webkit-scrollbar,
+.d-pane::-webkit-scrollbar, .d-lib__list::-webkit-scrollbar, .r-log::-webkit-scrollbar,
+.kg-drawer__body::-webkit-scrollbar, .kg-table-wrap::-webkit-scrollbar { width: 10px; height: 10px; }
+.kg-scroll::-webkit-scrollbar-thumb,
+.d-pane::-webkit-scrollbar-thumb, .d-lib__list::-webkit-scrollbar-thumb,
+.r-log::-webkit-scrollbar-thumb, .kg-drawer__body::-webkit-scrollbar-thumb,
+.kg-table-wrap::-webkit-scrollbar-thumb {
+  background: var(--line-default);
+  border: 3px solid transparent;
+  border-radius: var(--r-full);
+  background-clip: content-box;
+}
+
+/* Khoá cuộn body khi modal/drawer mở (modal.js gắn class này) */
+.kg-no-scroll { overflow: hidden; }
+
+/* Nền checkerboard cho Thumb (§5.6) */
+.kg-checker {
+  background-image:
+    linear-gradient(45deg, var(--checker-b) 25%, transparent 25%, transparent 75%, var(--checker-b) 75%),
+    linear-gradient(45deg, var(--checker-b) 25%, transparent 25%, transparent 75%, var(--checker-b) 75%);
+  background-color: var(--checker-a);
+  background-size: calc(var(--checker-size) * 2) calc(var(--checker-size) * 2);
+  background-position: 0 0, var(--checker-size) var(--checker-size);
+}
+
+/* --------------------------------------------------------------------------
+   §5.8-A10 · prefers-reduced-motion: tắt pulse/shimmer/slide, GIỮ đổi màu
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Chế độ tương phản cao của HĐH: giữ viền, không dựa vào bóng */
+@media (forced-colors: active) {
+  .kg-badge, .kg-btn, .kg-card, .kg-input { border: 1px solid ButtonText; }
+  :focus-visible { outline: 2px solid Highlight; }
+}

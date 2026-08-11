@@ -1,0 +1,173 @@
+import * as React from "react";
+import { LoadingState } from "@/components/common";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { ScreenPlaceholder } from "./ScreenPlaceholder";
+import {
+  SCREEN_EXPORT, SCREEN_LABEL, SCREEN_PATH,
+  type ScreenComponent, type ScreenId, type ScreenProps,
+} from "./screen-contract";
+
+/**
+ * BỘ NẠP MÀN — trái tim của hợp đồng lazy-mount.
+ *
+ * VÌ SAO `import.meta.glob` CHỨ KHÔNG PHẢI `import("…")` TRỰC TIẾP:
+ * `import("../../features/kit/KitScreen")` là đường dẫn TĨNH. Rollup phân giải
+ * nó lúc build; file chưa tồn tại ⇒ **build gãy**, dù có bọc try/catch bao
+ * nhiêu lớp (try/catch chỉ bắt lỗi lúc chạy, không cứu được lúc build).
+ * `import.meta.glob` thì ngược lại: nó liệt kê những file CÓ THẬT khớp mẫu.
+ * Team chưa nộp file ⇒ key không có trong bảng ⇒ ta render placeholder.
+ * Team nộp file ⇒ key xuất hiện, màn tự lên, KHÔNG ai phải sửa route.
+ *
+ * MẪU GLOB HẸP CÓ CHỦ ĐÍCH — `features/<nhóm>/<Tên>Screen.tsx`, đúng một cấp.
+ * Bản đầu tôi để `features/**\/*.tsx` cho "an toàn", build xong đo lại thì mỗi
+ * component con của team khác (ProjectCard, BulkBar, StepInstall…) đều bị
+ * Rolldown cắt thành một chunk động riêng — 20+ file rời cho một màn. Mẫu hẹp
+ * chỉ nhận đúng 9 điểm vào; component con đi theo chunk của màn nó thuộc về.
+ */
+const MODULES = import.meta.glob("../../features/*/*Screen.tsx") as Record<
+  string,
+  () => Promise<unknown>
+>;
+
+/** `src/features/kit/KitScreen.tsx` → khoá glob `../../features/kit/KitScreen.tsx`. */
+function globKey(screen: ScreenId): string {
+  return SCREEN_PATH[screen].replace(/^src\//, "../../");
+}
+
+export function isScreenAvailable(screen: ScreenId): boolean {
+  return Object.hasOwn(MODULES, globKey(screen));
+}
+
+/** Danh sách màn đã có file thật — dùng cho panel dev / kiểm tra nhanh. */
+export function availableScreens(): ScreenId[] {
+  return (Object.keys(SCREEN_PATH) as ScreenId[]).filter(isScreenAvailable);
+}
+
+/**
+ * Lấy component của màn từ module đã nạp.
+ * Thứ tự dò: named export đúng tên hợp đồng → `default`.
+ * Không tìm thấy ⇒ ném lỗi CÓ NGHĨA (ErrorBoundary sẽ hiện, kèm chi tiết) —
+ * chứ không render `undefined` để React ném một lỗi khó hiểu.
+ */
+function pickComponent(mod: unknown, screen: ScreenId): ScreenComponent {
+  const m = mod as Record<string, unknown> | null;
+  const named = m?.[SCREEN_EXPORT[screen]];
+  const fallback = m?.default;
+  const chosen = typeof named === "function" ? named : fallback;
+  if (typeof chosen !== "function") {
+    throw new Error(
+      `${SCREEN_PATH[screen]} tồn tại nhưng không export "${SCREEN_EXPORT[screen]}" (cũng không có export default).`,
+    );
+  }
+  return chosen as ScreenComponent;
+}
+
+/** Cache để không tạo lại `React.lazy` mỗi lần render (sẽ remount vô tận). */
+const lazyCache = new Map<ScreenId, React.LazyExoticComponent<ScreenComponent>>();
+
+function lazyFor(screen: ScreenId): React.LazyExoticComponent<ScreenComponent> {
+  const hit = lazyCache.get(screen);
+  if (hit) return hit;
+  const loader = MODULES[globKey(screen)];
+  const comp = React.lazy(async () => {
+    // `loader` chắc chắn tồn tại ở nhánh này (đã kiểm `isScreenAvailable`),
+    // nhưng vẫn phòng hờ để không bao giờ gọi `undefined()`.
+    if (!loader) throw new Error(`Không tìm thấy ${SCREEN_PATH[screen]}`);
+    const mod = await loader();
+    return { default: pickComponent(mod, screen) };
+  });
+  lazyCache.set(screen, comp);
+  return comp;
+}
+
+/**
+ * Render một màn theo hợp đồng. Ba kết cục, không có kết cục thứ tư:
+ *   1. file chưa có     → <ScreenPlaceholder>  (build vẫn xanh)
+ *   2. file có, đang tải → skeleton (KHÔNG trắng trang)
+ *   3. file có, ném lỗi  → ErrorBoundary của chính màn đó; phần khung
+ *      (header, rail, bảng lệnh) VẪN sống, user vẫn đi màn khác được.
+ */
+export function LazyScreen({ screen, ...props }: { screen: ScreenId } & ScreenProps) {
+  if (!isScreenAvailable(screen)) return <ScreenPlaceholder screen={screen} />;
+  const Comp = lazyFor(screen);
+  const resetKey = `${screen}:${props.projectId ?? ""}:${props.runId ?? ""}`;
+
+  return (
+    <ErrorBoundary resetKey={resetKey} title={`Màn «${SCREEN_LABEL[screen]}» gặp trục trặc`}>
+      <React.Suspense
+        fallback={
+          <div className="p-6">
+            <LoadingState count={3} label={`Đang mở ${SCREEN_LABEL[screen]}…`} />
+          </div>
+        }
+      >
+        <Comp {...props} />
+      </React.Suspense>
+    </ErrorBoundary>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FE-2 · E1 — NẠP ENTRY CANVAS (`/p/:projectId/f/:fileId`)
+   ══════════════════════════════════════════════════════════════════════════
+
+   BÀI HỌC FE-1 ĐƯỢC TÔN TRỌNG NGUYÊN VĂN: ghi chú đầu file này đã ghi lại giá phải
+   trả khi để glob rộng (`features/**` ⇒ 20+ chunk rời cho một màn). FE2-PLAN §3-E1
+   vì thế yêu cầu *"mở rộng lazy glob CHỈ ĐÚNG entry canvas, hoặc import tĩnh vì
+   file đã tồn tại"*.
+
+   CHỌN `import()` TĨNH MỘT ĐIỂM, KHÔNG GLOB. Lý do đo được, không phải sở thích:
+     · `features/canvas/index.ts` **đã tồn tại** (D1 bàn giao) ⇒ đường dẫn tĩnh phân
+       giải được lúc build. Ca "build gãy vì team chưa nộp file" — thứ khiến
+       `import.meta.glob` là lựa chọn đúng ở FE-1 — không tồn tại ở đây.
+     · Một `import()` = **đúng một** điểm vào ⇒ Rolldown cắt đúng một chunk cho cả
+       nhánh canvas. Có test đọc `dist/` khoá điều đó (`routes/__tests__/subfile-route.test.ts`).
+     · Thêm một mẫu glob nữa sẽ **im lặng** khớp thêm file trùng mẫu về sau; đường
+       dẫn tĩnh thì đổi là thấy trên diff.
+
+   Bọc luôn `Suspense` + `ErrorBoundary` tại đây để route không bao giờ render
+   `undefined` và không bao giờ trắng trang — cùng luật ba-kết-cục của `LazyScreen`.
+*/
+const CanvasFileViewLazy = React.lazy(async () => {
+  const mod = await import("@/features/canvas");
+  return { default: mod.CanvasFileView };
+});
+
+export interface CanvasFileScreenProps {
+  projectId: string;
+  docId: string;
+  docName: string;
+  agentOffline?: boolean;
+  agentCommand?: string;
+  onOpenWorkflow?: () => void;
+  onPacked?: (ids: string[]) => void;
+}
+
+export function CanvasFileScreen(props: CanvasFileScreenProps) {
+  return (
+    <ErrorBoundary
+      resetKey={`canvas:${props.projectId}:${props.docId}`}
+      title="Bàn làm việc gặp trục trặc"
+    >
+      <React.Suspense
+        fallback={
+          <div className="p-6">
+            <LoadingState count={2} label="Đang mở bàn làm việc…" />
+          </div>
+        }
+      >
+        <CanvasFileViewLazy {...props} />
+      </React.Suspense>
+    </ErrorBoundary>
+  );
+}
+
+/* FE3 E1: form là entry mới duy nhất; canvas dùng lại entry hẹp FE-2. */
+const KitFormViewLazy = React.lazy(async () => {
+  const mod = await import("@/features/kit-form/KitFormScreen");
+  return { default: mod.KitFormScreen };
+});
+
+export function KitFormRouteScreen(props: { projectId: string; onExit: () => void; onContinue: () => void }) {
+  return <ErrorBoundary resetKey={`kit-form:${props.projectId}`} title="Form bộ kit gặp trục trặc"><React.Suspense fallback={<div className="p-6"><LoadingState count={3} label="Đang mở form…" /></div>}><KitFormViewLazy projectId={props.projectId} onExit={props.onExit} onContinue={props.onContinue} /></React.Suspense></ErrorBoundary>;
+}

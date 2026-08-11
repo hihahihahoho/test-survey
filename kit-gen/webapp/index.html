@@ -1,0 +1,53 @@
+<!doctype html>
+<!-- §5.8-A13: lang="vi". <title> đổi theo màn do router lo. -->
+<html lang="vi" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- §2.2: v1 THIẾU thẻ này (audit I5) — không được bỏ lần nữa -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="referrer" content="no-referrer" />
+    <!-- VÁ LỖI B2 (INTEGRATION.md §0): neo mọi đường dẫn tương đối về gốc bundle.
+         Phải chạy TRƯỚC thẻ <script> của Vite, và phải là script nội tuyến
+         (script ngoài thì chính nó đã bị phân giải sai rồi).
+         Đường gốc suy từ URL: ".../app/..." → "/app/", còn lại → "/".
+
+         ══ V7 · VÌ SAO KHỐI NÀY PHẢI ĐỨNG TRƯỚC HAI THẺ PRELOAD ═══════════════
+         Trước đây nó đứng SAU. `<base>` chỉ đổi cách phân giải của những phần tử
+         được PHÂN TÍCH SAU nó, nên hai thẻ preload — vốn bị `vite base:"./"` viết
+         lại thành `./fonts/…` lúc build — đã phân giải xong theo URL trang. Ở deep
+         link `/app/k/<id>` chúng ra `/app/k/fonts/…` ⇒ **404**, mỗi lần vào một
+         route lồng là 4 lỗi console (đúng 6 lỗi mà SUITE-RUN ghi ở case
+         `mobile/workflow-logs`). Mặt chữ không vỡ vì `@font-face` trong CSS dùng
+         `url(../fonts/…)` tính từ `/app/assets/` — nhưng preload thì mất sạch tác dụng.
+
+         Sửa hai vế cùng lúc: `<base>` lên trước, và hai thẻ preload nay do chính
+         script này dựng với href **TUYỆT ĐỐI** (`base + "fonts/…"`). Tuyệt đối thì
+         không còn phụ thuộc vào thứ tự phân tích của bất kỳ ai nữa, và vẫn đúng ở
+         cả hai đường vào: Pages gốc `/` và agent same-origin `/app/`. -->
+    <script>
+      (function () {
+        var p = location.pathname;
+        var i = p.indexOf("/app/");
+        var base = i !== -1 ? p.slice(0, i + 5) : p === "/app" ? "/app/" : "/";
+        var el = document.createElement("base");
+        el.setAttribute("href", base);
+        document.head.appendChild(el);
+        ["geist-latin.woff2", "playfair-latin.woff2"].forEach(function (f) {
+          var link = document.createElement("link");
+          link.rel = "preload";
+          link.as = "font";
+          link.type = "font/woff2";
+          link.crossOrigin = "anonymous";
+          link.href = base + "fonts/" + f;
+          document.head.appendChild(link);
+        });
+      })();
+    </script>
+    <title>kit-gen</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

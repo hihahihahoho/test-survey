@@ -1,0 +1,527 @@
+@import "./tokens.css";
+@import "./fonts.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-line-subtle;
+  }
+
+  html {
+    /* §A11: zoom 200% không mất nội dung — không khoá font-size gốc */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-canvas text-body text-fg font-sans antialiased;
+    /* §A11 reflow 320px */
+    min-width: 320px;
+  }
+
+  /* §5.8-A4: focus ring 2px trên phần tử tương tác THẬT.
+     Không có `outline: none` ở bất cứ đâu trong repo này (grep để kiểm) —
+     và W2A-6 TUYỆT ĐỐI không được bỏ ring, chỉ giảm LIỀU.
+
+     W2A-6 sửa hai thứ, cả hai đều đo được:
+     ① Selector cũ là `:focus-visible` TRẦN ⇒ áp lên MỌI phần tử, kể cả những
+        container mà Radix chủ động focus khi mở (`[role=menu]`, `DialogContent`,
+        `cmdk-list`). Đó là nguồn của "viền xanh quanh menu ngữ cảnh" (ảnh 05) và
+        "quanh ô tìm command palette" (ảnh 25) — không phải lỗi của component nào.
+        Thu về đúng bộ phần tử tương tác; container vẫn focus được (Radix cần thế
+        để bẫy phím) nhưng thôi tự vẽ vòng mint quanh mình.
+     ② `ring-offset-2` trên nền ĐEN tạo khe đen 2px rồi mới tới vòng mint ⇒ mắt
+        đọc ra HAI vòng. `ring-offset-0` cho vòng ÔM SÁT control. Giữ
+        `ring-offset-canvas` để nếu ai nâng offset lại thì màu khe vẫn đúng. */
+  :where(a, button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+    @apply outline-none ring-2 ring-focus-ring ring-offset-0 ring-offset-canvas;
+  }
+
+  /* §5.8-A10: prefers-reduced-motion tắt mọi chuyển động, GIỮ đổi màu tức thời */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  ::selection {
+    background: rgb(var(--kg-accent) / var(--kg-selection-alpha));
+    color: rgb(var(--kg-fg-strong));
+  }
+
+  /* Thanh cuộn hợp tông tối, không tự chế màu thô */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  /* FE-1·A1: TRƯỚC ĐÂY `--kg-line` ở alpha .4/.7 — sau khi composite lên nền đen
+     chỉ còn 1.59:1 / 2.54:1 (<3:1, WCAG 1.4.11). Dùng token ĐẶC, không alpha. */
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--kg-scroll-thumb));
+    border-radius: var(--kg-radius-pill);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: rgb(var(--kg-scroll-thumb-hover)); background-clip: content-box; }
+}
+
+@layer components {
+  /* ══ W2A-2 · MỘT LƯỚI CHO CẢ APP ════════════════════════════════════════
+     Đếm thật trước khi sửa: ÍT NHẤT 7 container trang khác nhau, và header
+     `FloraShell` không có max-width nào cả. Đo ở 1440 (đúng viewport của bộ
+     ảnh QA): Home x=40 · Workflow x=144 · Settings x=304 · logo header x=24.
+     Đi Home → Workflow → Settings thì H1 TRƯỢT NGANG 264px.
+
+     `.kg-page` là container DUY NHẤT. Dùng nó ở mọi trang VÀ ở ruột header —
+     bọc ruột header là bắt buộc, không phải làm thêm: chỉ thêm `lg:px-10` cho
+     header (như toa gốc) thì ở 1440 logo vẫn ở x=40 còn H1 ở x=120, vì H1 nằm
+     trong khối max-w-1280 đã bị căn giữa. Tiêu chí nghiệm thu của plan đòi H1
+     THẲNG HÀNG VỚI LOGO, nên hai bên phải dùng CÙNG một hộp. Hairline dưới
+     header vẫn full-bleed vì nó nằm trên thẻ <header> bọc ngoài. */
+  .kg-page {
+    @apply mx-auto w-full max-w-[1280px] px-4 sm:px-6 lg:px-10;
+  }
+
+  .kg-dotgrid {
+    background-color: rgb(var(--kg-canvas));
+    background-image: radial-gradient(
+      rgb(var(--kg-dot-color) / var(--kg-dot-alpha)) var(--kg-dot-size),
+      transparent var(--kg-dot-size)
+    );
+    background-size: var(--kg-dot-step) var(--kg-dot-step);
+    background-attachment: fixed;
+  }
+  /* THANH CÔNG CỤ NỔI (FLORA-REF §2 "thanh công cụ NỔI bo pill có backdrop blur").
+     FE-2·A1 đóng NEEDS-fe1-b2 N1: bản cũ đặt `bg-overlay/90` + `backdrop-blur-xl` VÔ
+     ĐIỀU KIỆN. Trình duyệt không hỗ trợ `backdrop-filter` sẽ thấy thanh trong suốt 10%
+     mà KHÔNG có gì làm mờ nền dưới ⇒ chữ chồng lên nội dung đang cuộn.
+     Ba tầng, đúng thứ tự tăng dần độ "xịn" — mỗi tầng tự nó đã đọc được:
+       ① mặc định: nền ĐẶC `bg-overlay`, không blur — an toàn tuyệt đối.
+       ② `@supports`: mới hạ xuống alpha + bật blur.
+       ③ `prefers-reduced-transparency: reduce`: quay lại nền đặc, tắt blur.
+     Đây CÙNG một chuẩn mà `components/common/FloatingToolbar.tsx` (provider FE-1) đã tự
+     khai bằng tay; nay `.kg-floatbar` ngang hàng nên TODO trong file đó có thể rút gọn
+     về tiện ích này. A1 KHÔNG sửa `FloatingToolbar.tsx` (ngoài glob). */
+  .kg-floatbar {
+    @apply rounded-full border border-line-subtle bg-overlay shadow-3;
+    @apply supports-[backdrop-filter:blur(0px)]:bg-overlay/90
+           supports-[backdrop-filter:blur(0px)]:backdrop-blur-xl;
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .kg-floatbar {
+      @apply bg-overlay backdrop-blur-none;
+    }
+  }
+  /* P-SWEEP·3 — nhãn nhỏ THÔI IN HOA. Tiếng Việt có dấu viết hoa toàn phần đọc
+     chậm hẳn ("ƯỚC LƯỢNG TRƯỚC KHI VẼ"), và khi MỌI nhãn đều hoa thì không nhãn
+     nào nổi — phân cấp mất luôn tác dụng. Cỡ nhỏ + `fg-muted` đã đủ nói "đây là
+     nhãn phụ". `tracking-label` (0.04em) đi cùng: giãn chữ chỉ hợp với chữ hoa. */
+  .kg-label-above {
+    @apply text-caption font-medium text-fg-muted;
+  }
+  /* Skip-link §5.8-A13 — hiện ra khi tab tới, ẩn khi không focus */
+  .kg-skip-link {
+    @apply absolute left-4 top-4 z-tooltip -translate-y-20 rounded-2 bg-accent px-4 py-2
+           text-label text-fg-on-accent transition-transform focus-visible:translate-y-0;
+  }
+
+  /* Nền checkerboard cho ảnh có alpha (§5.6 Thumb) — ô 8px */
+  .kg-checkerboard {
+    background-color: var(--kg-checker-b);
+    background-image:
+      linear-gradient(45deg, var(--kg-checker-a) 25%, transparent 25%),
+      linear-gradient(-45deg, var(--kg-checker-a) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, var(--kg-checker-a) 75%),
+      linear-gradient(-45deg, transparent 75%, var(--kg-checker-a) 75%);
+    background-size: var(--kg-checker-tile) var(--kg-checker-tile);
+    background-position:
+      0 0,
+      0 var(--kg-checker-cell),
+      var(--kg-checker-cell) calc(-1 * var(--kg-checker-cell)),
+      calc(-1 * var(--kg-checker-cell)) 0;
+  }
+
+  /* Nền tint cho badge: màu trạng thái ở alpha --kg-tint-a (16% dark / 12% light) */
+  .kg-tint-never   { background: rgb(var(--kg-never)   / var(--kg-tint-a)); }
+  .kg-tint-queued  { background: rgb(var(--kg-queued)  / var(--kg-tint-a)); }
+  .kg-tint-running { background: rgb(var(--kg-running) / var(--kg-tint-a)); }
+  .kg-tint-accent  { background: rgb(var(--kg-accent)  / var(--kg-tint-a)); }
+  .kg-tint-ok      { background: rgb(var(--kg-ok)      / var(--kg-tint-a)); }
+  .kg-tint-warn    { background: rgb(var(--kg-warn)    / var(--kg-tint-a)); }
+  .kg-tint-stale   { background: rgb(var(--kg-stale)   / var(--kg-tint-a)); }
+  .kg-tint-danger  { background: rgb(var(--kg-danger)  / var(--kg-tint-a)); }
+}
+
+@layer components {
+  /* W2A-2: `.workflow-page` bỏ TOÀN BỘ padding ngang (cũ: `px-4 sm:px-8 lg:px-16`).
+     Toa gốc chỉ bảo bỏ `sm:px-8 lg:px-16`, nhưng giữ lại `px-4` thì mép trái
+     workflow = 16 + 40 = 56px trong khi Home/Settings = 40px ⇒ vẫn ba mép trái,
+     vẫn trượt. Padding ngang nay do MỘT MÌNH `.kg-page` quyết. */
+  /* W2B-6 · DOT-GRID RỜI KHỎI TRANG FORM. Lưới chấm là ngôn ngữ của **bàn làm việc**
+     (canvas) — ở đó nó đúng và đẹp, và mục "phải giữ" #10 cấm đụng vào. Rải nó lên
+     một trang FORM thì nó nằm dưới 6 khối đặc (`workflow-panel` là `bg-surface`), nên
+     chỉ còn thấy ở rìa: không gợi được "không gian vô hạn", chỉ thêm nhiễu quanh mép.
+     Trang này nay là nền phẳng `bg-canvas`, đúng như Settings. */
+  .workflow-page { @apply min-h-[calc(100vh-var(--kg-header))] bg-canvas pb-32 pt-8; }
+  /* Bốn khối dưới đây TRƯỚC ĐÂY tự khai `mx-auto max-w-6xl` (1152px) — nay nhận
+     lưới từ `.kg-page` gắn kèm trong TSX. Chỉ còn giữ phần hình dạng riêng. */
+  .workflow-hero { @apply flex items-end justify-between gap-8 pb-8; }
+  /* W2B-1 — 36/52px gõ tay ⇒ `display-2/display-1`. Đây là H1 to nhất app trước đây
+     (52px, hơn Home 14px cho CÙNG một cấp); nay cả bốn màn cùng một cặp bậc.
+     `text-balance` chia dòng cho cân thay vì để một từ mồ côi (ảnh 29). */
+  .workflow-hero h1 { @apply mt-2 text-balance text-display-2 text-fg-strong sm:text-display-1; }
+  /* W2B-5 — `italic` TƯỜNG MINH. `fonts.css` chỉ nạp face italic của Playfair, không
+     có face đứng: bản cũ xin một face KHÔNG TỒN TẠI và chỉ nghiêng nhờ UA stylesheet
+     của `<em>`. Đúng trên màn nhưng mong manh — đổi `<em>` thành `<span>` là mất. */
+  .workflow-hero h1 em { @apply font-serif italic font-normal whitespace-nowrap; }
+  .workflow-hero p:not(.eyebrow) { @apply mt-3 max-w-xl text-body text-fg-muted; }
+  /* W2B-4 — từ bước ② trở đi hero chỉ còn eyebrow + nhãn trạng thái: ba tầng tiêu đề
+     (hero H1 · stepper · H2 của bước) rút còn một. Xem `WorkflowScreen.tsx`. */
+  .workflow-hero-compact { @apply items-center pb-6; }
+  /* W2B-6 — mobile: pill "2 phiên bản" từng vỡ BA DÒNG bên trong một viên thuốc. */
+  .workflow-project-pill { @apply shrink-0 whitespace-nowrap rounded-full border border-line-subtle bg-surface px-4 py-2 text-label text-fg-muted; }
+
+  /* ══ W2B-3 · STEPPER: hạ cấp từ "vật to nhất trang" xuống ĐIỀU HƯỚNG PHỤ ═══════
+     Bản cũ: `rounded-full border bg-surface/90 p-2 backdrop-blur-xl` — một
+     segmented-control nặng, viền đậm, nền riêng, to hơn H1 về diện tích và nặng hơn
+     cả nút primary. Nó là điều hướng phụ mà đang hét to nhất.
+
+     Kèm một lỗi hình dạng: container chiếm trọn bề ngang còn 6 pill dồn về trái ⇒
+     **~345px đuôi rỗng** nằm trong khung bo tròn. Bỏ khung thì cái đuôi đó biến mất
+     mà không cần đo lại gì.
+
+     KHÔNG dùng `w-fit` như toa gốc đề nghị: phần tử này đeo `.kg-page` (Stepper.tsx),
+     mà `.kg-page` có `mx-auto` — `w-fit` + `mx-auto` sẽ CĂN GIỮA hàng bước và phá
+     luật "một mép trái" mà W2A-2 vừa dựng (tiêu chí nghiệm thu #5 của plan). Bỏ vỏ
+     là đủ; không có vỏ thì không còn cái đuôi để nhìn thấy.
+
+     Khuôn lấy từ `features/setup/components/WizardStepper.tsx` — app ĐÃ CÓ bản đẹp
+     hơn: không khung bao, số nhỏ, nhãn chữ, active chỉ khác ở màu chữ.
+     KHÔNG làm sticky: sticky đòi nền đặc để nội dung không xuyên qua, tức là dán lại
+     đúng cái vỏ vừa gỡ. Nhẹ và sticky không cùng tồn tại ở đây. */
+  /* P-SWEEP·15 · MOBILE KHÔNG CÕNG NỔI 6 BƯỚC. Ở 375px hàng 6 nút tràn ngang và
+     mặt nạ cuộn cắt CỤT GIỮA CHỮ ("Kitset U" — ảnh 30): một nhãn bị xén nửa đọc
+     ra lỗi render chứ không đọc ra "còn nữa, cuộn đi". Dưới 640px thay bằng MỘT
+     dòng "Bước 6/6 · Xem kết quả" (`.workflow-step-now`) — nhìn là biết, và đi
+     tới/lui vẫn có hàng nút cuối trang lo. Từ 640px trở lên hàng bước quay lại
+     nguyên vẹn, không mất chức năng nhảy bước nào ở nơi có chỗ cho nó. */
+  .workflow-stepper { @apply mb-8 hidden gap-1 overflow-x-auto py-1 sm:flex; }
+  .workflow-step-now { @apply mb-6 block text-label text-fg-muted sm:hidden; }
+  .workflow-step-now strong { @apply font-medium text-fg-strong; }
+  .workflow-step { @apply flex min-w-max items-center gap-2 rounded-full px-3 py-1.5 text-label text-fg-muted transition-colors hover:text-fg-strong disabled:cursor-not-allowed disabled:text-fg-muted; }
+  .workflow-step.active { @apply text-fg-strong; }
+  .workflow-step-number { @apply flex size-5 shrink-0 items-center justify-center rounded-full border border-line-subtle text-caption; }
+  .workflow-step-number svg { @apply size-3; }
+  .workflow-step.active .workflow-step-number { @apply border-accent bg-accent text-fg-on-accent; }
+  /* P-SWEEP·15 — mặt nạ cuộn mobile ĐÃ BỎ cùng hàng bước mobile: không còn thứ để
+     bôi mờ, và chính nó là cái xén cụt chữ "Kitset U". */
+  .workflow-content { @apply block; }
+  .workflow-panel { @apply rounded-5 border border-line-subtle bg-surface p-5 shadow-2 sm:p-10; }
+  .workflow-heading { @apply mb-6 max-w-2xl; }
+  /* W2B-1 — 28px gõ tay ⇒ bậc `display-3`. W2B-4 — eyebrow "BƯỚC TRONG MỘT MẠCH"
+     đã bỏ khỏi `Step` (BriefStep.tsx), nên h2 nay là dòng ĐẦU của khối: bỏ `mt-2`. */
+  .workflow-heading h2 { @apply text-display-3 text-fg-strong; }
+  .workflow-heading p:last-child { @apply mt-2 text-body text-fg-muted; }
+  /* P-SWEEP·3 — xem chú thích ở `.kg-label-above`. Sửa MỘT dòng ở đây gỡ chữ IN
+     HOA khỏi 8 màn cùng lúc (workflow ①→⑥, recap, kho món, panel chỉnh sửa). */
+  .eyebrow { @apply text-caption font-medium text-fg-muted; }
+  .workflow-form-grid { @apply mb-5 grid gap-5 md:grid-cols-2; }
+  .workflow-panel label, .field-label { @apply mb-2 block text-label font-medium text-fg-strong; }
+  .workflow-panel .field-label { @apply mt-5; }
+  .segmented { @apply mb-6 flex flex-wrap gap-2; }
+  /* P-SWEEP·13 — hai khối cùng hàng phải THẲNG CẢ HAI MÉP. Grid đã kéo hai cột
+     bằng nhau, nhưng cột trái là `<div>` bọc [nhãn + `.dropfield`] và chỉ CÁI DIV
+     giãn — `.dropfield` (thứ nhìn thấy được) vẫn cao theo ruột nên mép dưới của nó
+     hụt ~15px so với `.ref-note` bên phải (ảnh 09). Cho cột thành flex-col rồi để
+     hộp nhìn thấy được nhận `flex-1` thì hai mép dưới trùng nhau thật. */
+  .upload-row { @apply mt-6 grid gap-5 md:grid-cols-[1.4fr_1fr]; }
+  .upload-row > * { @apply flex min-w-0 flex-col; }
+  .upload-row .dropfield { @apply flex-1; }
+  .style-axis-grid { @apply grid gap-6 rounded-4 border border-line-subtle bg-raised p-5 sm:grid-cols-2; }
+  .style-fields { @apply mt-6 grid gap-4 border-t border-line-subtle pt-5 sm:grid-cols-2; }
+  /* W2A-3 · `.color-swatch` TRƯỚC ĐÂY hardcode `bg-danger` ⇒ ô "Màu nền tách"
+     LUÔN ĐỎ dù chroma thật là magenta. Nay không mang màu: màu do component
+     truyền vào `style` theo `s.chroma`, đúng thứ nó đang mô tả. */
+  /* P-SWEEP·7 — MỘT ngôn ngữ swatch cho cả app. Trước đây cùng một vật có hai hình:
+     đĩa TRÒN ĐẶC 32px ở đây, còn `AdvancedTab` (ChromaChoice) dùng VUÔNG bo nhỏ.
+     Vuông thắng vì cả trang là hình chữ nhật + hairline; một cái đĩa magenta 32px
+     nằm lẻ giữa đó là vật chói nhất màn 09. `mb-3` cũng bỏ: nó đẩy swatch lệch
+     baseline so với chữ đứng cạnh — nay swatch nằm INLINE cùng dòng với nhãn màu. */
+  .color-swatch { @apply inline-block size-5 shrink-0 rounded-1 border border-line-subtle; }
+  /* Hàng "swatch + tên màu" của khối `.ref-note` — swatch đi cùng chữ, không đứng riêng. */
+  .swatch-row { @apply mt-2 flex items-center gap-2; }
+  /* W2A-3 · Ô màu: `<Input type="color">` đi qua `input.tsx` (`w-full h-ctl-md`)
+     nên biến thành THANH ĐỎ BÃO HOÀ rộng 525px + một thanh vàng bên cạnh — vật
+     ồn nhất trong 29 ảnh. Đổi hình thái: chấm tròn 36px + mã hex mono. */
+  .color-field { @apply mt-2 flex items-center gap-3; }
+  /* P-SWEEP·7 — ô chọn màu theo CÙNG hình với `.color-swatch`: vuông bo 8px.
+     `size-9` giữ nguyên (W2A-3 đã đo: đây là vùng bấm, hạ nữa thì khó trúng). */
+  .color-field input[type="color"] {
+    @apply size-9 shrink-0 cursor-pointer rounded-1 border border-line-subtle bg-transparent p-0;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .color-field input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  .color-field input[type="color"]::-webkit-color-swatch { @apply rounded-1 border-0; }
+  .color-field code { @apply font-mono text-mono uppercase text-fg-muted; }
+  /* ══ W2B-6 · CHIP ẢNH PHẢI NẰM TRONG VÙNG THẢ, KHÔNG TRÔI RA NGOÀI ═══════════
+     Bệnh (ảnh 09 hai lần, ảnh 12): `.dropzone` là một ô nét đứt, còn chip
+     `qa-ref.png` render Ở DƯỚI và NGOÀI ô đó ⇒ đọc ra "rác trôi" chứ không phải
+     "ảnh đã thêm vào đây".
+
+     Không thể nhét `<RefChips>` vào trong `.dropzone` như toa gốc đề nghị:
+     `.dropzone` LÀ một `<button>` (bấm để mở hộp chọn file), mà chip lại chứa nút
+     xoá — `<button>` lồng `<button>` là HTML không hợp lệ và Radix/React không cứu
+     được chuyện đó. Nên ranh giới nhìn thấy được chuyển RA NGOÀI: `.dropfield` là
+     cái hộp, `.dropzone` mất viền riêng và trở thành ruột của nó. Kết quả thị giác
+     đúng thứ toa muốn (chip nằm TRONG khung), HTML vẫn phẳng.
+
+     Bỏ luôn `border-dashed`: nét đứt là ngôn ngữ WIREFRAME. Hộp viền liền +
+     `bg-canvas` nói "thả vào đây" không kém, mà thôi trông như bản nháp. */
+  .dropfield { @apply flex flex-col gap-3 rounded-4 border border-line bg-canvas p-3 transition-colors; }
+  .dropfield:hover { @apply border-line-strong; }
+  .dropfield:focus-within { @apply border-accent; }
+  .dropzone { @apply flex min-h-24 w-full flex-col items-center justify-center rounded-3 p-4 text-body text-fg-strong; }
+  .dropzone span { @apply mt-2 text-center text-caption text-fg-muted; }
+  .file-chip { @apply inline-flex items-center gap-2 rounded-full border border-line-subtle bg-raised px-3 py-1 text-caption text-fg-muted; }
+  /* §W3-3 — chip ảnh ref nay ĐỌC TỪ ĐĨA và xoá được, nên cần chỗ cho nút xoá. */
+  .ref-chips { @apply flex flex-wrap gap-2; }
+  /* Nền tint dùng class `.kg-tint-*` (globals.css:145-153), KHÔNG phải utility `bg-tint-*`
+     — `tailwind.config.ts` không có thang màu `tint`. Bài học W2A-5: `bg-tint-warn` từng
+     chết âm thầm ở DeleteProjectDialog vì đúng nhầm lẫn này. */
+  .file-chip button { @apply -mr-1 grid size-5 place-items-center rounded-full text-fg-muted transition-colors hover:text-on-tint-danger; }
+  .file-chip button:hover { background: rgb(var(--kg-danger) / var(--kg-tint-a)); }
+  .file-chip button svg { @apply size-3; }
+  /* P-SWEEP·8 — `.segmented-note` ("(chọn 1 trong 2)") ĐÃ XOÁ cùng markup. Hai nút
+     đứng cạnh nhau, một cái đang sáng: hình đã nói "chọn 1 trong 2" rồi, câu chú
+     chỉ dạy lại thứ mắt vừa đọc — đúng họ hàng của "nấc 4 trên 7" mà chủ dự án bỏ. */
+  /* §W3-10 — nhãn "Brief thô" và nút [Dán brief] cùng một hàng. */
+  .brief-head { @apply flex items-end justify-between gap-3; }
+  /* §W3-2 — nhãn trạng thái lưu, đứng cạnh pill phiên bản ở hero. */
+  .workflow-hero-status { @apply flex shrink-0 flex-wrap items-center gap-2; }
+  .sync-badge { @apply inline-flex items-center gap-1.5 rounded-full border border-line-subtle bg-raised px-3 py-1 text-caption text-fg-muted; }
+  .sync-badge svg { @apply size-3.5; }
+  .sync-badge[data-state="saved"] { @apply text-on-tint-ok; }
+  .sync-badge[data-state="offline"], .sync-badge[data-state="foreign"] { @apply text-on-tint-warn; }
+  .sync-badge[data-state="conflict"], .sync-badge[data-state="error"] { @apply text-on-tint-danger; }
+  /* §W3-6 — chọn tấm để xem khung xương khi contract có nhiều sheet. */
+  .preview-sheets { @apply mt-3 flex flex-wrap gap-2; }
+  /* §W3-9a — khối theo dõi lượt chạy ở bước ⑥ (chỉ hiện khi bộ kit đã có lượt chạy). */
+  .run-panel { @apply mt-8 grid gap-4 rounded-4 border border-line-subtle bg-raised p-5; }
+  .ref-note { @apply rounded-4 bg-raised p-5; }
+  .ref-note p:last-child { @apply text-body text-fg-muted; }
+  /* ══ W2A-5 · BA CLASS MỒ CÔI — nay CÓ THÂN THẬT ════════════════════════
+     `workflow-choice` (BriefStep), `brand-ref` (StyleStep), `mascot-dropzone`
+     (MascotStep) có trong TSX nhưng KHÔNG có rule ở bất kỳ file CSS nào và cũng
+     không phải utility Tailwind ⇒ ba khối đó render TRẦN: không margin trên, dính
+     sát khối phía trên trong khi mọi khối anh em đều cách 24px. Đây chính là lý do
+     khối "Ảnh brand" (ảnh 09) và khối mascot (ảnh 12) trôi lệch so với anh em.
+
+     `mt-6` = 24px, khớp đúng nhịp dọc mà `.upload-row`/`.style-fields` đang dùng.
+     Chọn CẤP STYLE THẬT chứ không xoá khỏi TSX: cả ba đều là ranh giới khối có
+     nghĩa (một lựa chọn / một nhóm ref / một vùng thả ảnh), cần chỗ đứng riêng.
+     Cổng `check-dead-classes.mjs` nay bắt được loại lỗi này (luật ②). */
+  .workflow-choice { @apply mt-6; }
+  .brand-ref { @apply mt-6; }
+  .mascot-dropzone { @apply mt-6; }
+  .choice-card { @apply flex w-full flex-col gap-1 rounded-4 border border-line-subtle bg-raised p-5 text-left text-fg-muted transition-colors hover:border-line-strong; }
+  /* ══ W2B-2 · GIẢM LIỀU MINT — mint là NHẤN, không phải NỀN ══════════════════
+     TOA 2 đếm 4 ổ mint nặng nhất; W2A đã dọn 2 ổ ở tầng primitive (ray slider,
+     ring quanh item menu) và HOÃN 2 ổ này lại đúng theo plan, vì W3-5 sẽ dựng lại
+     thẻ element. W3 đã dựng xong ⇒ đến lượt.
+
+     Khối "Có mascot" (ảnh 08) là một HỘP MINT nguyên khối: viền đặc + nền tint.
+     Nay viền hạ xuống `line-strong` (token có sẵn cho "viền ô đang chọn", đã đo
+     ≥3:1 trên cả 4 lớp) và mint chỉ còn ở một vệt nền bậc A. Trạng thái vẫn đọc
+     được — `text-fg-strong` + nền tint đã đủ — mà không còn hét. */
+  .choice-card.selected { @apply border-line-strong text-fg-strong; background: rgb(var(--kg-accent) / var(--kg-tint-a)); }
+  .choice-card strong { @apply text-subtitle; }
+  .choice-card span { @apply text-body; }
+  .preset-banner { @apply mb-8 flex flex-wrap items-center justify-between gap-5 rounded-4 border border-line-subtle bg-raised p-5; }
+  .preset-banner h3, .column-heading h3 { @apply mt-1 text-subtitle text-fg-strong; }
+  .preset-banner p { @apply mt-1 text-body text-fg-muted; }
+  /* P-SWEEP·bảng-7 — cùng một kiểu badge với `Badge`, `sync-badge` và
+     `workflow-project-pill`: hairline + chữ mang tông, KHÔNG mảng nền.
+     `accent-text` trên `surface`/`raised` đã có phép đo sẵn trong §5.3 (8.43:1). */
+  .status-pill { @apply rounded-full border border-line-subtle px-3 py-1 text-label text-accent-text; }
+  .kitset-grid { @apply grid gap-8 lg:grid-cols-[1.6fr_0.8fr]; }
+  .column-heading { @apply mb-4 flex flex-wrap items-center justify-between gap-3; }
+  /* §W3-5 — ô tìm quay lại ĐÚNG LÚC kho lên 42 món. §W1-12 bỏ nó đi khi kho mới có
+     11 và ô còn là đồ trang trí (không `value`/`onChange`); nay nó lọc thật. */
+  .kitset-search { @apply relative w-56 shrink-0; }
+  .kitset-search svg { @apply pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted; }
+  .kitset-search input { @apply pl-9; }
+  .element-list { @apply mt-5 grid gap-3 sm:grid-cols-2; }
+  .element-card { @apply flex flex-col gap-3 rounded-4 border border-line-subtle bg-canvas p-3 transition-colors; }
+  /* W2B-2 · ổ mint thứ hai. Bước ③ nay hiện **42 thẻ** (W3-5 nâng từ 11) — với
+     `border-accent` đặc, một kitset 8 món biến lưới thành một mảng xanh loang
+     (ảnh 10/11). Bậc B (vệt rất nhạt) + viền `line-strong` nói "đã chọn" vừa đủ ở
+     mật độ 42 thẻ, và nút "Đã thêm" bên trong thẻ vẫn là primary mint — dấu hiệu
+     mạnh đó GIỮ NGUYÊN, nên trạng thái không hề khó thấy hơn. */
+  .element-card.selected { @apply border-line-strong; background: rgb(var(--kg-accent) / var(--kg-tint-b)); }
+  .element-art { @apply flex aspect-[1.7] items-center justify-center rounded-3 bg-raised; }
+  .skeleton-svg { @apply size-full max-h-24 fill-none stroke-current stroke-2 text-fg-muted; }
+  .element-meta { @apply min-h-16; }
+  /* P-SWEEP·4+13 — nút của thẻ món: ghim ĐÁY thẻ (`mt-auto`) nên hàng nút thẳng
+     dù thẻ này có thêm dòng "chưa có bản thiết kế" còn thẻ kia không; và KHÔNG
+     kéo full-width (`self-start`) — một thanh dài suốt thẻ là trọng lượng của
+     hành động chính, mà "Thêm/Đã thêm" chỉ là một cú tick. */
+  .element-card > button { @apply mt-auto self-start; }
+  .element-meta strong { @apply mt-1 block text-label text-fg-strong; }
+  .element-meta small { @apply mt-1 block text-caption text-warn; }
+  .kitset-summary { @apply self-start rounded-4 border border-line-subtle bg-raised p-5 lg:sticky lg:top-20; }
+  /* W2B-5 · luật Playfair điều ① — serif chỉ ở `<h1><em>`. Đây là `<h3>` và nội dung
+     là **một con số** ("8 element"): serif trang trí đè lên DỮ LIỆU, đọc ra như một
+     câu trích thơ giữa bảng số liệu (ảnh 10/11). `tabular-nums` để con số không nhảy
+     bề ngang mỗi lần thêm/bớt món. W2B-1 · 28px ⇒ bậc `display-3`. */
+  .kitset-summary h3 { @apply mt-2 font-sans text-display-3 tabular-nums text-fg-strong; }
+  /* W2B-6 · `last:border-b-0` — hàng cuối vẫn kẻ gạch, tạo một đường LƠ LỬNG ngay
+     trước đoạn văn bên dưới (ảnh 10/11). `.summary-row` là component florafauna nhất
+     app (mục "phải giữ" #3) nên chỉ thêm đúng một luật, không đụng gì khác. */
+  .summary-row { @apply flex justify-between border-b border-line-subtle py-3 text-label text-fg last:border-b-0; }
+  .muted { @apply text-body text-fg-muted; }
+  .pose-grid { @apply flex flex-wrap gap-2; }
+  /* P-SWEEP·13 — `items-start`: mặc định grid kéo mọi ô cao bằng ô cao nhất, nên
+     thẻ "Chủ thể" (2 dòng) bị giãn bằng thẻ "Phong cách" (4 dòng) và để lại 1/3
+     dưới RỖNG TRONG MỘT KHUNG CÓ VIỀN — mắt đọc ra "thiếu nội dung", không đọc ra
+     "cân bằng". Cao theo ruột, canh mép trên. */
+  .recap-grid { @apply grid items-start gap-3 md:grid-cols-2; }
+  .recap-card { @apply rounded-4 border border-line-subtle bg-raised p-5; }
+  .recap-card strong { @apply mt-2 block text-subtitle text-fg-strong; }
+  .recap-card p { @apply mt-2 text-body text-fg-muted; }
+  .review-estimate { @apply mt-8 flex flex-wrap items-center justify-between gap-4 rounded-4 border border-line-subtle bg-canvas p-5; }
+  .review-estimate strong { @apply mt-2 block text-subtitle text-fg-strong; }
+  .dialog-supporting { @apply text-body text-fg-muted; }
+  /* W2B-6 · mobile: dưới 640px thanh này xuống 2 dòng lởm chởm BÊN TRONG một khung
+     bo tròn (ảnh 29) — pill chỉ đúng khi nội dung nằm gọn một hàng. Dưới ngưỡng đó
+     nó là một THẺ (`rounded-4 p-4`), trên ngưỡng mới là pill. */
+  .result-toolbar { @apply mb-6 flex flex-wrap items-end gap-3 rounded-4 border border-line-subtle bg-raised p-4 sm:rounded-full sm:p-3; }
+  .result-toolbar .field-label { @apply mb-1; }
+  /* W2A-3 · ĐÃ XOÁ `.result-toolbar select`. Rule đó chỉ với tới đúng MỘT trong
+     hai `<select>` của bước ⑥; cái còn lại (`#result-chroma`, nằm trong
+     `.settings-card`) không có rule nào ⇒ render bằng chrome mặc định của macOS,
+     nền xám SÁNG — vật duy nhất trong toàn app có nền sáng. Cả hai nay dùng
+     `components/ui/select.tsx` (Radix), nên không còn `<select>` nào để style. */
+  .result-layout { @apply grid gap-6 lg:grid-cols-[1.5fr_0.7fr]; }
+  .result-preview, .settings-card { @apply rounded-4 border border-line-subtle bg-canvas p-5; }
+  .preview-art { @apply my-4 flex aspect-[16/9] flex-col items-center justify-center gap-5 rounded-4 bg-raised; }
+  /* W2B-5 · ĐÃ XOÁ `.preview-wheel` + `.preview-button`. `.preview-wheel` là chỗ thứ
+     ba Playfair bị đem đi dùng sai (80px làm NỘI DUNG GIẢ trong khung preview), và
+     W3-6 đã thay cả markup bằng `SkeletonPreview` dựng từ contract thật ⇒ hai rule
+     này không còn phần tử nào đeo. Cổng `deadclass` chỉ bắt chiều ngược lại (class
+     trong TSX không có CSS), nên rule CSS mồ côi phải dọn bằng tay — dọn luôn ở đây
+     thay vì để nó nằm chờ ai đó tưởng còn dùng. `.skeleton-shape` cùng cảnh. */
+  .settings-card textarea { @apply mt-2 min-h-32 w-full rounded-3 border border-line bg-raised p-3 text-body text-fg-strong; }
+  /* ══ W2B-7 · KHỐI "NÂNG CAO" — gập hai ô kỹ thuật khỏi đường chính ═══════════
+     "Ngưỡng tách ảnh" (số 1–255) và "Màu nền tách" là hai khái niệm của chroma-key,
+     không phải của người làm mini-game. Người dùng đích **không rành kỹ thuật**;
+     để hai ô đó nằm ngang hàng với "Tên nhân vật" là bắt họ đọc thứ họ không cần.
+     `<details>` chứ không phải một cái cờ React: nó nhớ trạng thái mở/đóng theo DOM,
+     đọc được bằng bàn phím sẵn, và `summary` đã nằm trong bộ selector focus-visible
+     của `@layer base` nên không cần thêm luật a11y nào. */
+  .advanced-fields { @apply mt-5 border-t border-line-subtle pt-4; }
+  .advanced-fields > summary { @apply cursor-pointer list-none text-label font-medium text-fg-muted transition-colors hover:text-fg-strong; }
+  .advanced-fields > summary::-webkit-details-marker { display: none; }
+  .advanced-fields > summary::after { content: "▾"; @apply ml-2 inline-block text-caption; }
+  .advanced-fields[open] > summary::after { content: "▴"; }
+  /* ══ N1 · HÀNG NÚT CỬA RA KHÔNG ĐƯỢC LÀM VỠ TRANG NGANG ════════════════════
+     Bước ⑥ có BỐN nút (Quay lại · Tải .zip · Copy sang Figma · Xong — về danh
+     sách). Ở 375px, bốn nút + gap 3×12px đo ra ~622px, mà `flex` mặc định là
+     `nowrap` và nút không co được (chữ `whitespace-nowrap`) ⇒ `document.
+     scrollWidth = 622` trên viewport 375: **cả trang cuộn ngang**, và cửa ra
+     cuối cùng của cả mạch 6 bước nằm ngoài màn.
+
+     Chữa ở HÀNG, không ở từng nút: dưới 640px hàng đổi trục thành cột và mọi
+     con full-width (`items-stretch`) — cùng hình thái mà 2B-13 đã chọn cho
+     thanh công cụ bước ⑥, nên hai khối cạnh nhau không nói hai thứ tiếng.
+     `.workflow-action-spacer` phải ẩn: `flex-1` trong cột là giãn theo CHIỀU
+     DỌC, tức một khoảng trống rỗng chen giữa các nút.
+     `flex-wrap` giữ ở mọi bề ngang làm lưới an toàn cho các bậc trung gian. */
+  .workflow-actions { @apply mt-6 flex flex-wrap items-center gap-3; }
+  .workflow-action-spacer { @apply flex-1; }
+  /* P-SWEEP·15 — bước ⑥ ở 375px từng là BỐN thanh full-width xếp chồng, ba trong
+     đó xám giống hệt nhau: không đọc ra cái nào là cửa ra. Nay lưới 2 cột cho các
+     nút PHỤ, và con CUỐI (nút chính — "Tiếp theo"/"Vẽ bộ kit này"/"Xong") chiếm
+     trọn hàng riêng. Vẫn không cuộn ngang (đúng lý do N1 ở trên), mà thứ bậc đọc
+     được ngay. `spacer` vẫn phải ẩn: `flex-1` trong lưới thành một ô trống thật. */
+  @media (max-width: 639px) {
+    .workflow-actions { @apply grid grid-cols-2 items-stretch; }
+    .workflow-actions > * { @apply w-full; }
+    .workflow-actions > *:last-child { @apply col-span-2; }
+    .workflow-actions > button { @apply justify-center; }
+    .workflow-action-spacer { @apply hidden; }
+  }
+}
+
+@layer components {
+  .kitset-mode-tabs { @apply mb-6 grid gap-3 rounded-4 border border-line-subtle bg-raised p-3 md:grid-cols-[1fr_1fr_auto]; }
+  .kitset-mode-tabs > button { @apply flex items-center gap-3 rounded-3 border border-transparent px-4 py-3 text-left text-fg-muted; }
+  .kitset-mode-tabs > button[aria-selected="true"] { @apply border-line-strong bg-canvas text-fg-strong; }
+  .kitset-mode-tabs button svg { @apply size-5 shrink-0; } .kitset-mode-tabs button span { @apply flex flex-col; }
+  .kitset-mode-tabs button strong { @apply text-label; } .kitset-mode-tabs button small { @apply text-caption text-fg-muted; }
+  .kitset-count { @apply self-center justify-self-end rounded-full border border-line-subtle px-3 py-1 text-label text-accent-text; }
+  .advanced-set-grid { @apply grid gap-4 md:grid-cols-2; }
+  .advanced-set-card { @apply flex flex-col gap-4 rounded-4 border border-line-subtle bg-canvas p-5; }
+  .advanced-set-card.selected { @apply border-line-strong; background: rgb(var(--kg-accent) / var(--kg-tint-a)); }
+  .advanced-set-card h3 { @apply mt-1 text-subtitle text-fg-strong; } .advanced-set-card p { @apply mt-1 text-body text-fg-muted; }
+  .set-preview { @apply flex flex-wrap gap-2; } .set-preview span { @apply rounded-full bg-raised px-2.5 py-1 text-caption text-fg; }
+  .advanced-set-card > button { @apply mt-auto self-start; }
+  .element-picker-layout { @apply grid gap-6 lg:grid-cols-[17rem_1fr]; }
+  .element-groups { @apply flex flex-col gap-1 rounded-4 border border-line-subtle bg-raised p-2; }
+  .element-groups button { @apply flex items-center justify-between gap-3 rounded-3 px-3 py-3 text-left text-fg-muted; }
+  .element-groups button.active { @apply bg-canvas text-fg-strong shadow-sm; } .element-groups button span { @apply flex flex-col; }
+  .element-groups strong { @apply text-label; } .element-groups small { @apply text-caption text-fg-muted; } .element-groups b { @apply text-caption tabular-nums; }
+  .compact-element-grid { @apply grid gap-2 sm:grid-cols-2 xl:grid-cols-3; }
+  .compact-element { @apply grid min-h-24 grid-cols-[4.5rem_1fr_auto] items-center gap-3 rounded-3 border border-line-subtle bg-canvas p-3 text-left; }
+  .compact-element.selected { @apply border-line-strong; background: rgb(var(--kg-accent) / var(--kg-tint-b)); }
+  .compact-element-art { @apply flex h-16 items-center justify-center rounded-2 bg-raised p-2; } .compact-element-art svg { @apply max-h-14; }
+  .compact-element > span:nth-child(2) { @apply flex min-w-0 flex-col; } .compact-element strong { @apply truncate text-label text-fg-strong; }
+  .compact-element small { @apply text-caption text-fg-muted; } .compact-element > svg { @apply size-4 text-accent-text; }
+  .mascot-pose-picker { @apply mt-6 rounded-4 border border-line-subtle bg-raised p-5; }
+  .pose-heading { @apply flex flex-wrap items-end justify-between gap-3; } .pose-heading strong { @apply block text-subtitle text-fg-strong; }
+  .pose-heading > p { @apply max-w-xl text-caption text-fg-muted; }
+  .pose-group-tabs { @apply my-4 flex gap-1 overflow-x-auto border-b border-line-subtle; }
+  .pose-group-tabs button { @apply flex shrink-0 items-center gap-2 border-b-2 border-transparent px-3 py-2 text-label text-fg-muted; }
+  .pose-group-tabs button.active { @apply border-accent text-fg-strong; } .pose-group-tabs small { @apply rounded-full bg-canvas px-1.5 tabular-nums; }
+  .pose-choice-grid { @apply grid gap-2 sm:grid-cols-2 lg:grid-cols-4; } .pose-choice-grid > * { @apply justify-start; }
+  .selected-poses { @apply mt-5 flex flex-wrap items-center gap-2 border-t border-line-subtle pt-4; }
+  .selected-poses button { @apply rounded-full border border-line-subtle bg-canvas px-3 py-1 text-caption text-fg; } .selected-poses button span { @apply ml-2 text-fg-muted; }
+}
+
+@layer components {
+  .image-upload-shell { @apply flex flex-col gap-2; }
+  .image-dropzone { @apply grid min-h-32 w-full grid-cols-[auto_1fr_auto] items-center gap-4 rounded-4 border border-dashed border-line bg-canvas p-4 text-left transition-all; }
+  .image-dropzone:hover { @apply border-line-strong bg-raised; } .image-dropzone.is-dragging { @apply border-accent bg-raised ring-2 ring-focus-ring; }
+  .image-dropzone.is-error { @apply border-danger; } .image-drop-icon { @apply flex size-11 items-center justify-center rounded-4 border border-line-subtle bg-raised text-fg-muted; }
+  .image-drop-icon svg { @apply size-5; } .image-drop-copy { @apply flex min-w-0 flex-col gap-0.5; } .image-drop-copy strong { @apply text-label text-fg-strong; }
+  .image-drop-copy span, .image-drop-copy small { @apply text-caption text-fg-muted; } .image-drop-action { @apply rounded-3 border border-line bg-raised px-3 py-2 text-label text-fg-strong shadow-sm; }
+  .image-upload-error { @apply flex items-center gap-2 text-caption text-danger; } .image-upload-error svg { @apply size-4; }
+  .image-picked-list { @apply grid gap-2 sm:grid-cols-2; } .image-picked-list > div { @apply flex min-w-0 items-center justify-between gap-2 rounded-3 border border-line-subtle bg-raised px-3 py-2; }
+  .image-picked-list span { @apply flex min-w-0 flex-col; } .image-picked-list strong { @apply truncate text-caption text-fg-strong; } .image-picked-list small { @apply text-caption text-fg-muted; }
+  .image-picked-list button { @apply flex size-7 shrink-0 items-center justify-center rounded-2 text-fg-muted hover:bg-canvas; } .image-picked-list svg { @apply size-4; }
+  @media (max-width: 640px) { .image-dropzone { @apply grid-cols-[auto_1fr]; } .image-drop-action { @apply col-span-2 justify-self-stretch text-center; } }
+}
+
+@layer components {
+  .studio-production-grid { @apply grid items-start gap-5 lg:grid-cols-[13rem_minmax(0,1fr)_17rem]; }
+  .studio-scope-nav, .studio-inspector { @apply sticky top-20 rounded-4 border border-line-subtle bg-raised p-3; }
+  .studio-scope-nav { @apply flex flex-col gap-1; } .studio-scope-nav > .eyebrow { @apply px-3 py-2; }
+  .studio-scope-nav > button { @apply grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-3 px-3 py-2.5 text-left text-label text-fg-muted; }
+  .studio-scope-nav > button.active { @apply bg-canvas text-fg-strong shadow-sm; } .studio-scope-nav svg { @apply size-4; } .studio-scope-nav small { @apply text-caption tabular-nums; }
+  .studio-nav-note { @apply mt-3 flex flex-col gap-2 border-t border-line-subtle px-3 pt-4; } .studio-nav-note strong { @apply text-label text-fg-strong; } .studio-nav-note span { @apply line-clamp-3 text-caption text-fg-muted; }
+  .studio-stage { @apply flex min-w-0 flex-col gap-5; } .studio-stage > section { @apply p-5; }
+  .studio-inspector { @apply flex flex-col gap-3; } .studio-inspector h2 { @apply text-subtitle text-fg-strong; } .studio-inspector p { @apply text-caption text-fg-muted; }
+  .studio-inspector-actions { @apply flex flex-col gap-2 border-y border-line-subtle py-4; } .studio-version-note { @apply flex flex-col gap-1; } .studio-version-note strong { @apply text-label text-fg-strong; } .studio-version-note span { @apply text-caption text-fg-muted; }
+  @media (max-width: 1023px) { .studio-production-grid { @apply grid-cols-1; } .studio-scope-nav { @apply static grid grid-cols-2; } .studio-scope-nav > .eyebrow, .studio-nav-note { @apply col-span-2; } .studio-inspector { @apply static; } }
+}
+@layer components {
+  .artifact-versions { @apply mt-3 flex flex-wrap items-center gap-2 border-t border-line-subtle pt-3; }
+  .artifact-versions > span { @apply mr-1 text-caption text-fg-muted; }
+  .artifact-versions button { @apply flex items-center gap-1 rounded-full border border-line-subtle bg-raised px-2.5 py-1 text-caption text-fg disabled:text-accent-text; }
+  .artifact-versions small { @apply text-fg-muted; }
+}

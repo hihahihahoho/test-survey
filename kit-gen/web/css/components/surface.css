@@ -1,0 +1,204 @@
+/* surface.css — Card · Table/List · Tabs · EmptyState · Spinner/Skeleton (§5.5, §5.6) */
+
+/* ---------------- CARD ---------------- */
+.kg-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--r-3);
+  min-width: 0;
+}
+.kg-card--interactive { transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
+.kg-card--interactive:hover { border-color: var(--line-strong); box-shadow: var(--shadow-1); }
+/* thẻ project lỗi: viền đỏ, KHÔNG biến mất im lặng (S1) */
+.kg-card--error { border-color: var(--danger); }
+/* thẻ vẽ từ cache (§2.5): xám bớt + có nhãn `cache` ở markup */
+/* QA-UX THẤP-B: `opacity: .72` kéo chữ phụ xuống 2.96:1/3.07:1. "Xám bớt" (§2.5-4)
+   nay làm bằng giảm bão hoà — không đụng tới độ tương phản của chữ. */
+.kg-card--cache { filter: saturate(0.45); }
+.kg-card__head { display: flex; align-items: flex-start; gap: var(--s-2); padding: var(--s-4); }
+.kg-card__title { font: var(--t-subtitle); color: var(--fg-strong); min-width: 0; }
+.kg-card__body { padding: 0 var(--s-4) var(--s-4); display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
+.kg-card__foot {
+  display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-2) var(--s-4);
+  border-top: 1px solid var(--line-subtle);
+  font: var(--t-caption);
+  color: var(--fg-default);
+}
+.kg-card__media { aspect-ratio: 16 / 10; border-radius: var(--r-3) var(--r-3) 0 0; overflow: hidden; position: relative; }
+.kg-card__media > img { width: 100%; height: 100%; object-fit: cover; }
+.kg-card__media-badge { position: absolute; top: var(--s-2); right: var(--s-2); }
+/* section có tiêu đề (thẻ "Việc tiếp theo", "Tiến độ…") */
+.kg-section__title {
+  font: var(--t-label);
+  text-transform: uppercase;
+  letter-spacing: var(--t-label-tracking);
+  color: var(--fg-default);
+  margin-bottom: var(--s-2);
+}
+
+/* ---------------- TABLE / LIST ---------------- */
+.kg-table-wrap { overflow-x: auto; border: 1px solid var(--line-subtle); border-radius: var(--r-3); }
+.kg-table { width: 100%; font: var(--t-body); }
+.kg-table th {
+  text-align: left;
+  font: var(--t-label);
+  text-transform: uppercase;
+  letter-spacing: var(--t-label-tracking);
+  color: var(--fg-default);
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--line-subtle);
+  background: var(--bg-surface);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+}
+/* QA-UX TB-B: đường chia hàng là dấu hiệu duy nhất phân tách hàng khi đọc chéo
+   (bảng S4 có 7 cột) ⇒ mang thông tin, cần ≥3:1. --line-subtle chỉ 1.20–1.21:1. */
+.kg-table td {
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--line-default);
+  height: var(--h-row);
+  color: var(--fg-strong);
+  vertical-align: middle;
+}
+.kg-table tbody tr:last-child td { border-bottom: 0; }
+.kg-table tbody tr:hover td { background: var(--bg-raised); }
+.kg-table tbody tr[aria-selected="true"] td { background: var(--accent-weak); }
+.kg-table td.kg-td--num { text-align: right; font-variant-numeric: tabular-nums; }
+/* sort: nút trong th, có aria-sort ở th */
+.kg-th-sort { display: inline-flex; align-items: center; gap: var(--s-1); color: inherit; font: inherit; }
+
+/* List (danh sách dòng, dùng cho runs, refs, history) */
+.kg-list { display: flex; flex-direction: column; border: 1px solid var(--line-subtle); border-radius: var(--r-3); overflow: hidden; }
+.kg-list__item {
+  display: flex; align-items: center; gap: var(--s-3);
+  min-height: var(--h-row);
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--line-subtle);
+  text-align: left;
+  width: 100%;
+  color: var(--fg-strong);
+  font: var(--t-body);
+}
+.kg-list__item:last-child { border-bottom: 0; }
+.kg-list__item:hover:not([aria-disabled="true"]) { background: var(--bg-raised); }
+/* QA-UX THẤP-D: ⌘K (command-palette.js) đặt aria-disabled trên mục bị chặn nhưng
+   .kg-list__item không có style cho nó ⇒ mục bị chặn trông y hệt mục chạy được.
+   Dùng token chữ bị chặn (không dùng opacity — xem CAO-B). */
+.kg-list__item[aria-disabled="true"] { color: var(--fg-disabled); cursor: not-allowed; }
+.kg-list__item[aria-current="true"] { background: var(--accent-weak); box-shadow: inset 2px 0 0 0 var(--accent); }
+.kg-list__main { min-width: 0; flex: 1 1 auto; }
+.kg-list__meta { flex: none; font: var(--t-caption); color: var(--fg-default); }
+
+/* ---------------- TABS ---------------- */
+.kg-tabs { display: flex; align-items: center; gap: var(--s-1); border-bottom: 1px solid var(--line-subtle); }
+.kg-tab {
+  display: inline-flex; align-items: center; gap: var(--s-2);
+  height: var(--h-ctl-lg);
+  padding: 0 var(--s-3);
+  color: var(--fg-default);
+  font: var(--t-label);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.kg-tab:hover { color: var(--fg-strong); background: var(--bg-raised); }
+/* chọn: đổi MÀU + VẠCH + chữ đậm (không chỉ màu — A3) */
+.kg-tab[aria-selected="true"] {
+  color: var(--fg-strong);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+.kg-tab:disabled { color: var(--fg-disabled); cursor: not-allowed; }   /* QA-UX CAO-B: bỏ opacity */
+.kg-tabpanel { padding-top: var(--s-4); }
+.kg-tabpanel:focus-visible { outline-offset: 0; }
+
+/* ---------------- EMPTY STATE (§5.6) ---------------- */
+.kg-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--s-2);
+  padding: var(--s-8) var(--s-5);
+}
+.kg-empty__icon { font-size: 40px; line-height: 1; color: var(--fg-default); }
+.kg-empty__title { font: var(--t-title); color: var(--fg-strong); }
+.kg-empty__desc { font: var(--t-body); color: var(--fg-default); max-width: 52ch; }
+.kg-empty__actions { display: flex; gap: var(--s-2); margin-top: var(--s-2); flex-wrap: wrap; justify-content: center; }
+.kg-empty__steps {
+  display: flex; flex-direction: column; gap: var(--s-1);
+  margin-top: var(--s-4);
+  font: var(--t-caption);
+  color: var(--fg-default);
+  text-align: left;
+}
+/* empty state NHỎ — dùng trong khung tab, không phá DOM cha (đóng D10) */
+.kg-empty--inline { padding: var(--s-5); }
+.kg-empty--inline .kg-empty__icon { font-size: 24px; }
+.kg-empty--inline .kg-empty__title { font: var(--t-subtitle); }
+
+/* ---------------- SPINNER + SKELETON (§5.6) ---------------- */
+.kg-spinner {
+  display: inline-block;
+  width: 16px; height: 16px;
+  /* QA-UX THẤP-C: cung (--accent) vs vòng (--line-default) chỉ 1.43:1 ⇒ không thấy
+     nó quay. --line-subtle làm vòng nền cho tương phản cung/vòng lên ~4.3:1. */
+  border: 2px solid var(--line-subtle);
+  border-top-color: var(--accent);
+  border-radius: var(--r-full);
+  animation: kg-spin 700ms linear infinite;
+}
+.kg-spinner--sm { width: 14px; height: 14px; }
+.kg-spinner--lg { width: 24px; height: 24px; border-width: 3px; }
+.kg-spinner-row { display: inline-flex; align-items: center; gap: var(--s-2); font: var(--t-label); color: var(--fg-default); }
+
+.kg-skel {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-raised);
+  border-radius: var(--r-1);
+  min-height: var(--t-body-lh);
+}
+.kg-skel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--bg-overlay) 80%, #FFF 20%), transparent);
+  transform: translateX(-100%);
+  animation: kg-shimmer var(--dur-shimmer) var(--ease-in-out) infinite;
+}
+@keyframes kg-shimmer { to { transform: translateX(100%); } }
+.kg-skel--text { height: var(--t-body-lh); }
+.kg-skel--title { height: var(--t-title-lh); }
+.kg-skel--block { min-height: var(--s-10); border-radius: var(--r-2); }
+.kg-skel--media { aspect-ratio: 16 / 10; border-radius: var(--r-3) var(--r-3) 0 0; }
+.kg-skel--circle { border-radius: var(--r-full); width: var(--s-5); height: var(--s-5); }
+/* đường progress 2px ở đỉnh khi làm mới từ cache (S1 loading có cache) */
+.kg-topbar-progress { height: 2px; background: var(--accent-weak); overflow: hidden; }
+.kg-topbar-progress > i { display: block; height: 100%; width: 40%; background: var(--accent); animation: kg-indet 1200ms var(--ease-in-out) infinite; }
+@keyframes kg-indet { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Thanh hành động nổi khi chọn nhiều (§3-S1 list, ma trận §3-S2).
+   Gộp ở lượt tích hợp: S1 và S2 mỗi bên tự đặt ~8 thuộc tính vào `style` inline
+   (đúng token nhưng lặp và dễ lệch). Ở đây khai một lần, JS chỉ gắn class.
+   `--fixed` = nổi giữa đáy viewport (S1) · `--sticky` = dính đáy vùng cuộn (ma trận S2).
+   ────────────────────────────────────────────────────────────────────────── */
+.kg-floatbar {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  background: var(--bg-overlay);
+  border: 1px solid var(--line-default);
+  border-radius: var(--r-full);
+  box-shadow: var(--shadow-2);
+  z-index: var(--z-floatbar);
+}
+.kg-floatbar--fixed {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: var(--s-5);
+  max-width: calc(100vw - var(--s-5));
+}
+.kg-floatbar--sticky { position: sticky; bottom: var(--s-4); }
+.kg-floatbar[hidden] { display: none; }

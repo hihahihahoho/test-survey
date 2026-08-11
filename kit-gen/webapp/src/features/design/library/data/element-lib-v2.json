@@ -1,0 +1,520 @@
+{
+  "_note": "Thư viện element cho studio — sheet UI dàn trang ĐỘNG từ selection. cell: landscape (ô 4:cột ngang 3:2) | portrait | full. group: các element phải liền kề (spec 'SAME as previous'). sheetHint: tên sheet ưu tiên khi cả chunk cùng group. Thứ tự trong file = thứ tự dàn trang (07 track và 08 fill cách xa nhau có chủ đích).",
+  "elements": [
+    {
+      "file": "01-btn-pill-red",
+      "vi": "Nút đỏ (CTA)",
+      "spec": "Wide capsule button at roughly 3:1 proportion, primary color role, domed top highlight with darker beveled rim and soft drop shadow, blank face, no text or icon",
+      "skel": {
+        "shape": "pill",
+        "w": 0.78,
+        "h": 0.4,
+        "slice9": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "02-btn-pill-blue",
+      "vi": "Nút xanh",
+      "spec": "Wide capsule button at the same 3:1 proportion, secondary color role, smooth top-to-bottom shading with rim light and beveled edge, blank face, no text or icon",
+      "skel": {
+        "shape": "pill",
+        "w": 0.78,
+        "h": 0.4,
+        "slice9": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "03-btn-pill-outline",
+      "vi": "Nút viền",
+      "spec": "Wide capsule outline button at the same 3:1 proportion, neutral color role, thick luminous stroke with soft outer glow, blank face without text, interior fully hollow and see-through",
+      "skel": {
+        "shape": "pill",
+        "w": 0.78,
+        "h": 0.4,
+        "slice9": true,
+        "matte": "glass"
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "16-fx-burst",
+      "vi": "Hiệu ứng nổ sáng",
+      "spec": "Radial starburst light effect at 1:1 proportion, primary accent color role, additive glow with four-point sparkles and even rays, no text or symbols, smooth grain-free falloff",
+      "skel": {
+        "shape": "burst",
+        "w": 0.45,
+        "h": 0.68,
+        "free": true,
+        "matte": "glow"
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "07-progress-track",
+      "vi": "Progress: máng",
+      "spec": "Horizontal capsule groove at roughly 5:1 proportion, neutral color role, dark inset well with thin lit outer rim, blank face without text or icon, interior empty and unfilled",
+      "skel": {
+        "shape": "bar",
+        "w": 0.79,
+        "h": 0.24,
+        "slice9": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "04-btn-circle",
+      "vi": "Nút tròn",
+      "spec": "Round button plate at 1:1 proportion, secondary color role, domed relief with top-left rim highlight, beveled edge and soft shadow, completely blank center, no text or icon",
+      "skel": {
+        "shape": "circle",
+        "w": 0.45,
+        "h": 0.68
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "11-digit-plate",
+      "vi": "Ô số đếm ngược",
+      "spec": "Small rounded-square countdown digit plate at 1:1 proportion, neutral color role, thick raised bevel with strong top highlight and recessed inner face, blank face, no digit or text",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.45,
+        "h": 0.68
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "10-popup-ribbon",
+      "vi": "Ruy băng tiêu đề",
+      "spec": "Ornate banner ribbon at roughly 3:1 proportion with slight upward arc, primary color role, raised bevel with bright outline, blank face, no text, stretchable middle between ornate end caps",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.79,
+        "h": 0.4,
+        "slice9": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "12-piece-active",
+      "vi": "Mảnh ghép sáng",
+      "spec": "Single jigsaw puzzle piece at 1:1 proportion with one tab and one socket, primary color role, saturated surface with bright rim light, blank face, no text or icon",
+      "skel": {
+        "shape": "puzzle",
+        "w": 0.45,
+        "h": 0.68
+      },
+      "cell": "landscape",
+      "group": "piece"
+    },
+    {
+      "file": "13-piece-locked",
+      "vi": "Mảnh ghép khoá",
+      "spec": "Jigsaw puzzle piece at identical 1:1 proportion and outline as the previous piece, neutral desaturated color role, flat unlit shading with faint inner edge, blank face, locked state",
+      "skel": {
+        "shape": "puzzle",
+        "w": 0.45,
+        "h": 0.68
+      },
+      "cell": "landscape",
+      "group": "piece"
+    },
+    {
+      "file": "05-tab-chip-idle",
+      "vi": "Tab thường",
+      "spec": "Rounded-square tab chip at 1:1 proportion, muted neutral color role, thin light border with flat low relief, blank face without text or icon, slightly recessed idle state",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.45,
+        "h": 0.68,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "chip"
+    },
+    {
+      "file": "06-tab-chip-active",
+      "vi": "Tab đang chọn",
+      "spec": "Tab chip at identical 1:1 proportion and shape as the previous chip, primary color role, luminous fill with bright border glow kept inside the outline, blank face, selected state",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.45,
+        "h": 0.68,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "chip"
+    },
+    {
+      "file": "08-progress-fill",
+      "vi": "Progress: thanh chạy",
+      "spec": "Inner progress bar fill only at 7:1 proportion, slightly shorter and thinner than the track groove, primary color role, gradient with specular streak, blank face, no frame or rim",
+      "skel": {
+        "shape": "bar",
+        "w": 0.74,
+        "h": 0.16,
+        "slice9": true,
+        "plain": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "14-reward-voucher",
+      "vi": "Quà voucher",
+      "spec": "Coupon voucher ticket at 2:1 proportion with perforated notches on both sides, secondary color role, beveled edge with soft drop shadow, upright and unrotated, blank face, no text",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.64,
+        "h": 0.48,
+        "free": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "15-reward-giftbox",
+      "vi": "Quà hộp",
+      "spec": "Closed wrapped gift box at 1:1 proportion with ribbon and bow, primary color role, three-quarter view with soft top light and shadow below, blank sides, no text",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.45,
+        "h": 0.68
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "09-popup-panel-short",
+      "vi": "Popup ngang (S/M)",
+      "spec": "Rounded rectangle modal panel at roughly 1.6:1 landscape proportion, neutral color role, decorative double border with subtle raised edge, blank even interior, no text, icon or dividers",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.72,
+        "h": 0.68,
+        "slice9": true
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "24-popup-panel-tall",
+      "vi": "Popup dọc (L)",
+      "spec": "Rounded rectangle modal panel at roughly 1:1.6 portrait proportion, neutral color role, decorative double border with subtle raised edge and soft inner vignette, blank interior, no text",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.7,
+        "h": 0.84,
+        "slice9": true
+      },
+      "cell": "portrait"
+    },
+    {
+      "file": "20-game-object-closed",
+      "vi": "Túi quà đóng",
+      "spec": "Sealed gift pouch standing upright at roughly 5:8 proportion, primary color role, crimped top and bottom edges with soft sheen, blank wrapper front, plain circular emblem, no text",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.62,
+        "h": 0.74
+      },
+      "cell": "portrait",
+      "group": "pouch"
+    },
+    {
+      "file": "21-game-object-open",
+      "vi": "Túi quà mở",
+      "spec": "Same pouch at identical outer width and height, 5:8 proportion, torn open at the top only, primary color role, solid bright light shapes inside the opening, blank wrapper, no text",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.62,
+        "h": 0.74
+      },
+      "cell": "portrait",
+      "group": "pouch"
+    },
+    {
+      "file": "22-board-panel",
+      "vi": "Khay đựng túi",
+      "spec": "Rounded-square tray panel at roughly 1:1.25 proportion, neutral color role, glowing border with bracket corners, blank interior without grid lines or text, hollow genuinely see-through interior",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.79,
+        "h": 0.74,
+        "slice9": true,
+        "matte": "glass"
+      },
+      "cell": "portrait"
+    },
+    {
+      "file": "35-input-field",
+      "vi": "Ô nhập liệu",
+      "spec": "Wide rounded input field at roughly 3.7:1 proportion, neutral color role, recessed inner well with subtle inner shadow and thin border, completely blank face, no text or icon",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.79,
+        "h": 0.32,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "form"
+    },
+    {
+      "file": "36-select-field",
+      "vi": "Ô chọn (select)",
+      "spec": "Same rounded input field at identical 3.7:1 proportion as a dropdown select, neutral color role, recessed well with thin border, blank face, no text, one chevron plate at right",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.79,
+        "h": 0.32,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "form"
+    },
+    {
+      "file": "37-checkbox-on",
+      "vi": "Checkbox bật",
+      "spec": "Small rounded-square checkbox at 1:1 proportion, primary color role, raised bevel with soft top highlight, face carrying only a bold tick mark and no text, checked state",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.28,
+        "h": 0.42
+      },
+      "cell": "landscape",
+      "group": "checkbox"
+    },
+    {
+      "file": "38-checkbox-off",
+      "vi": "Checkbox tắt",
+      "spec": "Same checkbox at identical 1:1 proportion, neutral color role, recessed inner well with faint edge shading, completely blank face without tick mark, text or icon, unchecked state",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.28,
+        "h": 0.42
+      },
+      "cell": "landscape",
+      "group": "checkbox"
+    },
+    {
+      "file": "39-toggle-on",
+      "vi": "Toggle bật",
+      "spec": "Pill toggle switch at 2:1 proportion, primary color role, bright filled track with raised round knob at right and soft shadow, blank surfaces, no text, on state",
+      "skel": {
+        "shape": "pill",
+        "w": 0.44,
+        "h": 0.33
+      },
+      "cell": "landscape",
+      "group": "toggle"
+    },
+    {
+      "file": "40-toggle-off",
+      "vi": "Toggle tắt",
+      "spec": "Same toggle switch at identical 2:1 proportion, muted neutral color role, dim track with raised round knob at left, blank surfaces, no text or icon, off state",
+      "skel": {
+        "shape": "pill",
+        "w": 0.44,
+        "h": 0.33
+      },
+      "cell": "landscape",
+      "group": "toggle"
+    },
+    {
+      "file": "41-btn-close",
+      "vi": "Nút đóng",
+      "spec": "Round close button at 1:1 proportion, secondary color role, domed relief with rim highlight and soft shadow, face carrying only a bold diagonal cross mark, no text",
+      "skel": {
+        "shape": "circle",
+        "w": 0.45,
+        "h": 0.68
+      },
+      "cell": "landscape",
+      "group": "smallbtn"
+    },
+    {
+      "file": "42-btn-back",
+      "vi": "Nút back",
+      "spec": "Same round button at identical 1:1 proportion as the previous, secondary color role, domed relief with rim highlight and soft shadow, face carrying only a bold left arrow, no text",
+      "skel": {
+        "shape": "circle",
+        "w": 0.45,
+        "h": 0.68
+      },
+      "cell": "landscape",
+      "group": "smallbtn"
+    },
+    {
+      "file": "43-btn-pill-pressed",
+      "vi": "Nút CTA nhấn",
+      "spec": "Wide capsule button at roughly 3:1 proportion, darkened primary color role, pushed-in inset relief with shortened highlight, blank face, no text or icon, pressed state",
+      "skel": {
+        "shape": "pill",
+        "w": 0.78,
+        "h": 0.4,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "btnstate"
+    },
+    {
+      "file": "44-btn-pill-disabled",
+      "vi": "Nút CTA disabled",
+      "spec": "Same capsule button at identical 3:1 proportion but in normal unpressed relief, flat desaturated neutral color role, no highlight or bevel, blank face, no text, disabled state",
+      "skel": {
+        "shape": "pill",
+        "w": 0.78,
+        "h": 0.4,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "btnstate"
+    },
+    {
+      "file": "45-rank-badge-1",
+      "vi": "Huy chương #1",
+      "spec": "Round rank medal badge at 1:1 proportion with laurel wreath, top-tier primary accent color role, brightest raised bevel and rim light, blank center face, no text",
+      "skel": {
+        "shape": "circle",
+        "w": 0.45,
+        "h": 0.68,
+        "free": true
+      },
+      "cell": "landscape",
+      "group": "medal"
+    },
+    {
+      "file": "46-rank-badge-2",
+      "vi": "Huy chương #2",
+      "spec": "Round rank medal badge at identical 1:1 proportion with laurel wreath for second place, lighter neutral accent color role, dimmer bevel and rim light, blank center face, no text",
+      "skel": {
+        "shape": "circle",
+        "w": 0.45,
+        "h": 0.68,
+        "free": true
+      },
+      "cell": "landscape",
+      "group": "medal"
+    },
+    {
+      "file": "47-rank-badge-3",
+      "vi": "Huy chương #3",
+      "spec": "Round rank medal badge at identical 1:1 proportion with laurel wreath for third place, darker secondary accent color role, softest bevel and dimmest rim light, blank center face, no text",
+      "skel": {
+        "shape": "circle",
+        "w": 0.45,
+        "h": 0.68,
+        "free": true
+      },
+      "cell": "landscape",
+      "group": "medal"
+    },
+    {
+      "file": "48-rank-row",
+      "vi": "Hàng BXH",
+      "spec": "Wide leaderboard row bar at roughly 3:1 proportion with a small circular avatar slot at the far left, neutral color role, even fill with raised edge, blank face, no text",
+      "skel": {
+        "shape": "bar",
+        "w": 0.79,
+        "h": 0.4,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "rankrow"
+    },
+    {
+      "file": "49-rank-row-self",
+      "vi": "Hàng BXH của mình",
+      "spec": "Same leaderboard row bar at identical 3:1 proportion, primary color role, brighter fill with bright border glow kept inside the bar outline, blank face, no text, highlighted state",
+      "skel": {
+        "shape": "bar",
+        "w": 0.79,
+        "h": 0.4,
+        "slice9": true
+      },
+      "cell": "landscape",
+      "group": "rankrow"
+    },
+    {
+      "file": "50-counter-pill",
+      "vi": "Counter lượt/xu",
+      "spec": "Small capsule counter chip at 3:1 proportion with circular icon slot at one end, secondary color role, raised bevel with top highlight, blank number area, no text",
+      "skel": {
+        "shape": "pill",
+        "w": 0.6,
+        "h": 0.3
+      },
+      "cell": "landscape"
+    },
+    {
+      "file": "51-reward-giftbox-open",
+      "vi": "Quà hộp MỞ",
+      "spec": "Opened wrapped gift box with lid tilted off, upright at roughly 5:8 proportion, primary color role, solid opaque ray and sparkle shapes rising from inside, blank sides, no text",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.62,
+        "h": 0.74
+      },
+      "cell": "portrait",
+      "group": "giftstate"
+    },
+    {
+      "file": "52-envelope-body",
+      "vi": "Lì xì: thân",
+      "spec": "Front body of a lucky-money envelope without its flap, upright at roughly 2:3 proportion, primary color role, raised ornate trim with soft edge light, blank face, no text",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.56,
+        "h": 0.62
+      },
+      "cell": "portrait",
+      "group": "envelope"
+    },
+    {
+      "file": "53-envelope-flap",
+      "vi": "Lì xì: nắp",
+      "spec": "Detached triangular top flap of the previous envelope at roughly 3:2 proportion, exactly its width and no wider, primary color role, matching raised trim, blank face, no text",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.56,
+        "h": 0.28
+      },
+      "cell": "portrait",
+      "group": "envelope"
+    },
+    {
+      "file": "54-trophy-cup",
+      "vi": "Cúp vô địch",
+      "spec": "Champion trophy cup with two handles on a small base, upright at roughly 5:8 proportion, primary accent color role, bright rim light and soft shadow, blank plaque, no text",
+      "skel": {
+        "shape": "rrect",
+        "w": 0.62,
+        "h": 0.74,
+        "free": true
+      },
+      "cell": "portrait"
+    },
+    {
+      "file": "25-bg-home",
+      "vi": "Nền màn HOME",
+      "spec": "Full-bleed home scene at 2:3 proportion filling every edge, primary palette role, layered depth lighting with lower podium area, no characters, UI widgets or text, empty upper title space",
+      "skel": {
+        "shape": "full",
+        "w": 1.0,
+        "h": 1.0
+      },
+      "cell": "full",
+      "sheetHint": "bg-home"
+    },
+    {
+      "file": "26-bg-play",
+      "vi": "Nền màn CHƠI",
+      "spec": "Full-bleed gameplay scene of the same world at 2:3 proportion filling every edge, matching palette role, softer flat lighting, large empty uncluttered middle, no characters, UI or text",
+      "skel": {
+        "shape": "full",
+        "w": 1.0,
+        "h": 1.0
+      },
+      "cell": "full",
+      "sheetHint": "bg-play"
+    }
+  ]
+}

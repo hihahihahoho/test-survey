@@ -1,0 +1,165 @@
+/* overlay.css — Modal · ConfirmDialog · Drawer · Tooltip · Toast (§5.5)
+   A11y: focus trap + Esc + trả focus về trigger (do JS lo), CSS lo lớp & bóng. */
+
+/* ---------------- scrim dùng chung cho modal & drawer ---------------- */
+.kg-scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-scrim);
+  z-index: var(--z-scrim);
+  animation: kg-fade-in var(--dur-2) var(--ease-out);
+}
+@keyframes kg-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------------- MODAL (§5.5) ---------------- */
+.kg-modal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-4);
+  /* để click ra ngoài panel bắt được ở lớp này */
+}
+.kg-modal__panel {
+  display: flex;
+  flex-direction: column;
+  width: var(--w-modal-md);
+  max-width: 100%;
+  max-height: var(--h-modal-max);
+  background: var(--bg-raised);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--r-3);
+  box-shadow: var(--shadow-3);
+  animation: kg-modal-in var(--dur-2) var(--ease-out);
+}
+@keyframes kg-modal-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.kg-modal--sm .kg-modal__panel { width: var(--w-modal-sm); }
+.kg-modal--md .kg-modal__panel { width: var(--w-modal-md); }
+.kg-modal--lg .kg-modal__panel { width: var(--w-modal-lg); }
+.kg-modal--xl .kg-modal__panel { width: var(--w-modal-xl); }
+
+/* header/footer DÍNH, body cuộn riêng (§5.5) */
+.kg-modal__head {
+  display: flex; align-items: flex-start; gap: var(--s-3);
+  padding: var(--s-4) var(--s-5);
+  border-bottom: 1px solid var(--line-subtle);
+  flex: none;
+}
+.kg-modal__title { font: var(--t-title); color: var(--fg-strong); min-width: 0; flex: 1 1 auto; }
+.kg-modal__desc { font: var(--t-body); color: var(--fg-default); margin-top: var(--s-1); }
+.kg-modal__close { flex: none; margin: calc(-1 * var(--s-1)) calc(-1 * var(--s-2)) 0 0; }
+.kg-modal__body { padding: var(--s-5); overflow: auto; min-height: 0; flex: 1 1 auto; }
+.kg-modal__foot {
+  display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-4) var(--s-5);
+  border-top: 1px solid var(--line-subtle);
+  flex: none;
+}
+/* Footer: nút xác nhận/phá huỷ BÊN PHẢI, Huỷ sát bên trái nó (§5.5) */
+.kg-modal__foot-spacer { flex: 1 1 auto; }
+
+/* Vùng nguy hiểm (S2b) */
+.kg-danger-zone { border: 1px solid var(--danger); border-radius: var(--r-3); padding: var(--s-4); }
+
+/* ---------------- DRAWER (§5.5) — trượt phải ---------------- */
+.kg-drawer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: var(--w-drawer);
+  max-width: 100%;
+  z-index: var(--z-drawer);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--line-subtle);
+  box-shadow: var(--shadow-3);
+  animation: kg-drawer-in var(--dur-2) var(--ease-out);
+}
+@keyframes kg-drawer-in { from { transform: translateX(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+.kg-drawer--wide { width: var(--w-drawer-wide); }
+.kg-drawer__head {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: var(--s-4);
+  border-bottom: 1px solid var(--line-subtle);
+  flex: none;
+}
+.kg-drawer__title { font: var(--t-subtitle); color: var(--fg-strong); min-width: 0; flex: 1 1 auto; }
+.kg-drawer__body { padding: var(--s-4); overflow: auto; min-height: 0; flex: 1 1 auto; }
+.kg-drawer__foot { padding: var(--s-4); border-top: 1px solid var(--line-subtle); flex: none; display: flex; gap: var(--s-2); }
+
+/* ---------------- TOOLTIP (§5.5) ---------------- */
+.kg-tooltip {
+  position: fixed;
+  z-index: var(--z-tooltip);
+  max-width: 260px;
+  padding: var(--s-1) var(--s-2);
+  background: var(--bg-overlay);
+  color: var(--fg-strong);
+  border: 1px solid var(--line-default);
+  border-radius: var(--r-1);
+  font: var(--t-caption);
+  box-shadow: var(--shadow-2);
+  pointer-events: none;   /* không bao giờ chặn chuột */
+}
+
+/* ---------------- TOAST (§5.5) — góc dưới-phải, 360px, tối đa 3 ---------------- */
+.kg-toasts {
+  position: fixed;
+  right: var(--s-4);
+  bottom: var(--s-4);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  width: var(--w-toast);
+  max-width: calc(100vw - var(--s-5));
+  pointer-events: none;   /* vùng chứa không chặn; từng toast bật lại */
+}
+.kg-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  background: var(--bg-overlay);
+  border: 1px solid var(--line-default);
+  border-left-width: 3px;
+  border-radius: var(--r-2);
+  box-shadow: var(--shadow-2);
+  animation: kg-toast-in var(--dur-2) var(--ease-out);
+}
+@keyframes kg-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.kg-toast--success { border-left-color: var(--ok); }
+.kg-toast--info    { border-left-color: var(--accent-text); }
+.kg-toast--warning { border-left-color: var(--warn); }
+.kg-toast--error   { border-left-color: var(--danger); }
+.kg-toast__icon { flex: none; margin-top: 1px; }
+.kg-toast--success .kg-toast__icon { color: var(--on-tint-ok); }
+.kg-toast--info .kg-toast__icon { color: var(--on-tint-accent); }
+.kg-toast--warning .kg-toast__icon { color: var(--on-tint-warn); }
+.kg-toast--error .kg-toast__icon { color: var(--on-tint-danger); }
+.kg-toast__main { min-width: 0; flex: 1 1 auto; }
+.kg-toast__title { font: var(--t-label); color: var(--fg-strong); }
+.kg-toast__desc { font: var(--t-caption); color: var(--fg-default); margin-top: 2px; }
+.kg-toast__actions { display: flex; gap: var(--s-2); margin-top: var(--s-2); }
+.kg-toast__close { flex: none; }
+/* thanh đếm thời gian còn lại (Hoàn tác 10s) — chỉ trang trí, có CHỮ đi kèm */
+.kg-toast__bar { height: 2px; background: var(--line-default); border-radius: var(--r-full); margin-top: var(--s-2); overflow: hidden; }
+.kg-toast__bar > i { display: block; height: 100%; background: var(--accent); animation: kg-countdown linear forwards; }
+@keyframes kg-countdown { from { width: 100%; } to { width: 0%; } }
+
+/* Inline banner (§5.5) — dải trong màn, icon + tiêu đề + ≤2 nút */
+.kg-banner {
+  display: flex; align-items: flex-start; gap: var(--s-2);
+  padding: var(--s-2) var(--s-4);
+  border-bottom: 1px solid var(--line-subtle);
+  font: var(--t-body);
+}
+.kg-banner--info { background: var(--accent-weak); color: var(--on-tint-accent); }
+.kg-banner--warning { background: var(--warn-weak); color: var(--on-tint-warn); }
+.kg-banner--error { background: var(--danger-weak); color: var(--on-tint-danger); }
+.kg-banner--success { background: var(--ok-weak); color: var(--on-tint-ok); }
+.kg-banner__main { flex: 1 1 auto; min-width: 0; }
+.kg-banner__actions { display: flex; gap: var(--s-2); flex: none; }

@@ -1,0 +1,70 @@
+/* ==========================================================================
+   runs.css — CSS của màn THEO DÕI SINH ẢNH (S4, §3-S4).
+   Chuyển từ `web/js/screens/design/css.js` sang file thật ở lượt tích hợp (xem
+   editor.css). Lớp `r-*` = màn Runs. Chỉ dùng token của tokens.css.
+   ========================================================================== */
+
+/* ── S4 · theo dõi sinh ảnh ────────────────────────────────────────────── */
+.r-screen { display: flex; flex-direction: column; gap: var(--s-4); min-height: 0; height: 100%; }
+.r-head { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.r-head__title { font: var(--t-title); color: var(--fg-strong); }
+.r-clock { font: var(--t-mono); color: var(--fg-default); font-variant-numeric: tabular-nums; }
+.r-progress { display: flex; flex-direction: column; gap: var(--s-1); }
+/* QA-UX TB-B: rãnh 0% không có dấu hiệu thay thế nào ⇒ viền của nó MANG THÔNG TIN
+   (WCAG 1.4.11 ≥3:1). --line-subtle chỉ đạt 1.29:1 ⇒ đổi sang --line-default (3.94:1). */
+.r-progress__track { height: var(--s-2); border-radius: var(--r-full); background: var(--bg-raised); overflow: hidden; border: 1px solid var(--line-default); }
+.r-progress__fill { height: 100%; background: var(--accent); border-radius: var(--r-full); transition: width var(--dur-1) var(--ease-out); }
+.r-progress__fill--ok { background: var(--ok); }
+.r-progress__fill--bad { background: var(--warn); }
+.r-progress__label { font: var(--t-caption); color: var(--fg-default); font-variant-numeric: tabular-nums; }
+.r-phases { display: flex; align-items: center; gap: var(--s-2); font: var(--t-caption); color: var(--fg-default); flex-wrap: wrap; }
+.r-phase { display: flex; align-items: center; gap: var(--s-1); padding: var(--s-1) var(--s-2); border-radius: var(--r-full); border: 1px solid var(--line-subtle); }
+.r-phase[aria-current="step"] { border-color: var(--accent); color: var(--fg-strong); background: var(--accent-weak); }
+.r-split { display: grid; grid-template-columns: minmax(280px, 2fr) minmax(0, 3fr); gap: var(--s-4); min-height: 0; flex: 1 1 auto; }
+.r-col { display: flex; flex-direction: column; gap: var(--s-2); min-height: 0; min-width: 0; }
+.r-col__head { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.r-col__title { font: var(--t-label); text-transform: uppercase; letter-spacing: var(--t-label-tracking); color: var(--fg-default); }
+.r-jobs { display: flex; flex-direction: column; gap: var(--s-1); overflow: auto; min-height: 0; }
+.r-job {
+  display: flex; align-items: center; gap: var(--s-2); width: 100%; text-align: left;
+  padding: var(--s-2); border: 1px solid var(--line-subtle); border-radius: var(--r-2);
+  font: var(--t-body); color: var(--fg-default); min-height: var(--h-row);
+}
+.r-job:hover { background: var(--bg-raised); color: var(--fg-strong); }
+.r-job[aria-current="true"] { background: var(--accent-weak); box-shadow: inset 2px 0 0 0 var(--accent); color: var(--fg-strong); }
+.r-job__name { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r-job__meta { font: var(--t-caption); color: var(--fg-muted-raised); flex: none; font-variant-numeric: tabular-nums; }
+.r-job__diag { font: var(--t-caption); color: var(--warn); }
+.r-job__acts { display: flex; gap: var(--s-1); flex: none; }
+
+/* LogView (§5.6) */
+.r-log {
+  flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--s-2);
+  background: var(--bg-canvas); border: 1px solid var(--line-subtle); border-radius: var(--r-2);
+  font: var(--t-mono); position: relative;
+}
+.r-log__line { display: flex; gap: var(--s-2); padding: 0 var(--s-1); white-space: pre-wrap; overflow-wrap: anywhere; }
+.r-log__line--error { background: var(--danger-tint); }
+.r-log__t { color: var(--fg-muted); flex: none; }
+.r-log__job { color: var(--accent-text); flex: none; }
+.r-log__msg { min-width: 0; color: var(--fg-default); }
+.r-log__msg--error { color: var(--danger); }
+.r-logwrap { position: relative; display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+.r-tobottom { position: absolute; right: var(--s-4); bottom: var(--s-4); z-index: var(--z-base); }
+.r-runlist { display: flex; flex-direction: column; gap: var(--s-2); }
+
+/* M1 · modal bắt đầu sinh ảnh */
+.m1-matrix { overflow: auto; }
+.m1-matrix table { border-collapse: collapse; font: var(--t-body); }
+.m1-matrix th, .m1-matrix td { padding: var(--s-1) var(--s-2); border-bottom: 1px solid var(--line-subtle); text-align: left; }
+.m1-matrix th { font: var(--t-label); color: var(--fg-default); white-space: nowrap; }
+.m1-cellbtn { display: flex; align-items: center; gap: var(--s-1); }
+.m1-sum { display: flex; flex-direction: column; gap: var(--s-2); }
+
+/* ── responsive: 3 mốc của §2.2 (phần của S4) ──────────────────────────── */
+@media (max-width: 1099px) {
+  .r-split { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .r-progress__fill { transition: none; }
+}

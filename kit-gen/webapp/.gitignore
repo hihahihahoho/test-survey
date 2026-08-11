@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# BẪY ĐÃ DÍNH MỘT LẦN — đừng để tái diễn:
+# `tsc -b` (không có --noEmit) sinh .js NGAY CẠNH file .tsx trong src/, và sinh
+# vite.config.js / tailwind.config.js ở gốc. Vite ưu tiên .js HƠN .ts nên bản
+# build sẽ âm thầm dùng config CŨ. Script build hiện dùng `tsc --noEmit` nên
+# không sinh nữa; các dòng dưới là lưới an toàn.
+/vite.config.js
+/tailwind.config.js
+src/**/*.js
+!src/**/*.config.js

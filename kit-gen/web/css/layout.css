@@ -1,0 +1,250 @@
+/* ==========================================================================
+   layout.css — khung app: header 40px, rail, vùng nội dung, grid responsive
+   Theo UX-SPEC §2.2 (nav chrome) + §5.1 (kích thước cố định).
+   3 mốc responsive (§2.2): ≥1440 thoải mái · 1100–1439 rail icon ·
+   768–1099 rail thành drawer + editor xếp dọc · <768 chỉ đọc.
+   ========================================================================== */
+
+/* --- Khung tổng: header dính trên, thân chiếm phần còn lại --- */
+.kg-app {
+  display: grid;
+  grid-template-rows: var(--h-header) auto 1fr;
+  grid-template-areas:
+    "header"
+    "banner"
+    "body";
+  min-height: 100vh;
+  background: var(--bg-canvas);
+}
+
+/* ================= HEADER (§2.2, cao 40px, sticky, luôn hiện) ============= */
+.kg-header {
+  grid-area: header;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  height: var(--h-header);
+  padding: 0 var(--s-3);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--line-subtle);
+}
+.kg-header__logo {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font: var(--t-label);
+  color: var(--fg-strong);
+  flex: none;
+}
+.kg-header__crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-width: 0;             /* cho phép ellipsis */
+  font: var(--t-label);
+  color: var(--fg-default);
+}
+.kg-header__crumbs > * { min-width: 0; }
+.kg-header__search { flex: 1 1 auto; min-width: 0; max-width: 420px; }
+.kg-header__right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex: none;
+}
+/* Nút mở rail dạng drawer — CHỈ tồn tại ở mốc ≤1099px (§2.2). Ở mốc rộng rail
+   nằm sẵn trong luồng nên nút này bị ẩn để không có 2 đường làm cùng một việc. */
+.kg-rail-toggle { display: none; flex: none; }
+
+/* Banner chỉ-đọc / cảnh báo dưới header (§2.5) + banner màn hình nhỏ (§2.2).
+   Cả hai nằm trong MỘT wrapper chiếm vùng "banner" của grid và xếp dọc — nếu để
+   hai phần tử cùng `grid-area: banner` thì chúng sẽ đè lên nhau. */
+.kg-banners {
+  grid-area: banner;
+  position: sticky;
+  top: var(--h-header);
+  z-index: calc(var(--z-sticky) - 1);
+  display: flex;
+  flex-direction: column;
+}
+.kg-banner-slot { min-width: 0; }
+
+/* ================= THÂN: rail + nội dung ================================= */
+.kg-body {
+  grid-area: body;
+  display: grid;
+  grid-template-columns: var(--w-rail) minmax(0, 1fr);
+  grid-template-areas: "rail main";
+  min-height: 0;
+}
+/* S1/S6 không có rail → full width (§2.2) */
+.kg-body--norail {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "main";
+}
+
+.kg-rail {
+  grid-area: rail;
+  z-index: var(--z-rail);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  padding: var(--s-3) var(--s-2);
+  background: var(--bg-surface);
+  border-right: 1px solid var(--line-subtle);
+  min-height: 0;
+}
+.kg-rail__item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--h-ctl-md);
+  padding: 0 var(--s-2);
+  border-radius: var(--r-2);
+  color: var(--fg-default);
+  font: var(--t-label);
+  text-align: left;
+  width: 100%;
+}
+.kg-rail__item:hover { background: var(--bg-raised); color: var(--fg-strong); }
+.kg-rail__item[aria-current="page"] {
+  background: var(--accent-weak);
+  color: var(--fg-strong);
+  /* không chỉ dựa vào màu: thêm vạch chỉ thị bên trái */
+  box-shadow: inset 2px 0 0 0 var(--accent);
+}
+.kg-rail__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* badge số (số run đang chạy) + dấu • (thay đổi chưa lưu) */
+.kg-rail__count { margin-left: auto; flex: none; }
+.kg-rail__dot {
+  margin-left: auto;
+  flex: none;
+  width: 6px; height: 6px;
+  border-radius: var(--r-full);
+  background: var(--warn);
+}
+
+.kg-main {
+  grid-area: main;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--s-5);
+}
+
+/* Tiêu đề màn */
+.kg-page-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-5);
+}
+.kg-page-head__text { min-width: 0; flex: 1 1 320px; }
+.kg-page-head__actions { display: flex; align-items: center; gap: var(--s-2); flex: none; }
+
+/* Toolbar (ô tìm + chip filter + sort + đổi view) */
+.kg-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-4);
+}
+.kg-toolbar__spacer { flex: 1 1 auto; }
+
+/* ================= GRID nội dung ========================================= */
+/* Lưới thẻ project (S1) — auto-fill để không phải viết media query riêng */
+.kg-grid {
+  display: grid;
+  gap: var(--s-4);
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.kg-grid--tight { gap: var(--s-3); grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+/* Lưới thumbnail kit (S5) */
+.kg-grid--thumbs { gap: var(--s-3); grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+
+/* Cụm thẻ tổng quan (S2) */
+.kg-stack { display: flex; flex-direction: column; gap: var(--s-5); }
+.kg-row { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.kg-row--tight { gap: var(--s-1); }
+
+/* Ba cột của trình soạn (S3) KHÔNG khai ở đây: màn S3 thi công bằng `.d-panes` /
+   `.d-pane` trong web/css/components/editor.css (cùng ý tưởng, cùng token --w-tree /
+   --w-props). Lượt tích hợp đã BỎ bản `.kg-editor` ở file này vì không nơi nào dùng —
+   để hai bản song song là mời gọi sửa một bên rồi tưởng đã sửa cả hai. */
+
+/* ================= 3 MỐC RESPONSIVE (§2.2) =============================== */
+
+/* ≥1440: thoải mái — nới padding vùng nội dung */
+@media (min-width: 1440px) {
+  .kg-main { padding: var(--s-5) var(--s-6); }
+}
+
+/* 1100–1439: rail thu về 48px chỉ icon */
+@media (max-width: 1439px) and (min-width: 1100px) {
+  .kg-body { grid-template-columns: var(--w-rail-collapsed) minmax(0, 1fr); }
+  .kg-rail__label,
+  .kg-rail__count { display: none; }
+  .kg-rail__item { justify-content: center; padding: 0; }
+}
+
+/* 768–1099: rail thành drawer (ẩn khỏi luồng, mở bằng nút) + editor xếp dọc */
+@media (max-width: 1099px) {
+  .kg-body,
+  .kg-body--norail {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "main";
+  }
+  /* Rail thành drawer: chỉ hiện khi app-shell/rail.js đặt data-open="true" */
+  .kg-rail-toggle { display: inline-flex; }
+  .kg-rail {
+    display: none;
+    position: fixed;
+    inset: var(--h-header) auto 0 0;
+    width: var(--w-rail);
+    z-index: var(--z-drawer);
+    box-shadow: var(--shadow-3);
+    animation: kg-rail-in var(--dur-2) var(--ease-out);
+  }
+  .kg-rail[data-open="true"] { display: flex; }
+  /* nền mờ sau rail-drawer: bấm ra ngoài để đóng (rail.js gắn listener) */
+  .kg-rail-scrim {
+    position: fixed;
+    inset: var(--h-header) 0 0 0;
+    background: var(--bg-scrim);
+    z-index: calc(var(--z-drawer) - 1);
+  }
+}
+@keyframes kg-rail-in { from { transform: translateX(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* mốc 768–1099 (phần còn lại, tách khỏi block trên vì có @keyframes ở giữa) */
+@media (max-width: 1099px) {
+  .kg-main { padding: var(--s-4); }
+  /* editor xếp dọc ở mốc này: xem `.d-panes` trong components/editor.css */
+}
+
+/* <768: chế độ chỉ đọc — banner cảnh báo, ẩn vùng chỉ dùng được bằng chuột lớn */
+@media (max-width: 767px) {
+  .kg-main { padding: var(--s-3); }
+  .kg-grid { grid-template-columns: minmax(0, 1fr); }
+  .kg-header { gap: var(--s-2); padding: 0 var(--s-2); }
+  /* nút tìm thu về icon-only (chữ mang class .kg-hide-sm) ⇒ không cần giãn */
+  .kg-header__search { flex: none; max-width: none; }
+  /* Đánh dấu: mọi thứ có class này bị ẩn ở màn nhỏ, PHẢI có đường thay thế */
+  .kg-hide-sm { display: none !important; }
+}
+
+/* A11 · reflow 320px CSS px: không cho khung cứng nào ép tràn ngang */
+@media (max-width: 400px) {
+  .kg-toolbar { gap: var(--s-1); }
+}
+
+/* In: bỏ chrome, giữ nội dung */
+@media print {
+  .kg-header, .kg-rail, .kg-banner-slot { display: none; }
+  .kg-app { display: block; }
+}

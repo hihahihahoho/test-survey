@@ -1,0 +1,10 @@
+[Unit]
+Description=KitGen local agent
+After=network.target
+[Service]
+Type=simple
+ExecStart=@KITGEN_BIN@ run
+Restart=on-failure
+RestartSec=2
+[Install]
+WantedBy=default.target

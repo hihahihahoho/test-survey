@@ -1,0 +1,307 @@
+/* ==========================================================================
+   kit-gen v2 · tokens.css — NGUỒN DUY NHẤT của mọi giá trị thiết kế
+   Hệ màu DARK viết lại theo teams/react/FLORA-REF.md §1 (đo từ florafauna.ai):
+   nền đen tuyệt đối · surface #131416 · hairline trắng mờ.
+   ACCENT KHÔNG theo FLORA: dùng XANH DƯƠNG VNPAY (#005BAA, hue 209°) theo yêu cầu
+   nhận diện thương hiệu — dark #4DA9FF (bậc sáng), light #004785 (bậc đậm).
+   Mint #71D083 của FLORA đã bị gỡ khỏi hệ nhấn (xem khối accent bên dưới).
+   Hai chỗ CỐ Ý lệch FLORA vì a11y (NEEDS-rs2.md N7, số đo thật):
+   - chữ phụ dùng #B4B4B4/#9A9A9A thay #7B7B7B (trượt 4.5:1 trên surface);
+   - viền control dùng ~trắng/0.42 quy về đặc (#777) thay hairline 0.1 (1.2:1).
+
+   LUẬT CHO TEAM MÀN:
+   - Cấm hex/rgb thô trong component. Dùng class semantic của Tailwind
+     (bg-surface, text-fg-strong, border-line, text-on-tint-ok…).
+   - Cấm px ngoài thang §5.1. Thang 4px trùng khớp thang mặc định Tailwind
+     (1=4 · 2=8 · 3=12 · 4=16 · 6=24 · 8=32 · 12=48 · 16=64).
+   - Dark là mặc định (:root). Light là lớp .light phủ lên — NICE, §7.2.
+   - Số tương phản kèm chú thích được ĐO LẠI bằng scripts/check-contrast.mjs
+     (script tự đọc chính file này, không hardcode).
+   ========================================================================== */
+
+:root,
+.dark {
+  color-scheme: dark;
+
+  /* --- font (FLORA-REF §4.2, tự chứa trong public/fonts/) --- */
+  --font-sans: "Geist", ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "Playfair Display", "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* --- khung: chiều cao header. QA-LEAD: biến này được 2 chỗ tính chiều cao dùng
+         (`DesignScreen`, `AppShell`) nhưng TRƯỚC ĐÂY CHƯA TỪNG ĐƯỢC KHAI ⇒ luôn rơi về
+         fallback 40px trong khi header thật cao 56px (FloraShell `h-14`). --- */
+  --kg-header: 56px;
+
+  /* --- hình học đặc thù không thuộc spacing utility (FLORA §1/§2.7) --- */
+  --kg-radius-pill: 999px;
+  /* BẪY CHO NGƯỜI SAU (đã dính một lần khi viết khối dưới): chú thích trong file này
+     TUYỆT ĐỐI không được viết `--kg-<tên>:` kèm dấu hai chấm. `ui-bugfix-b1-b5.test.tsx`
+     đọc token bằng `--kg-<tên>:\s*([^;]+);` trên CSS THÔ — không bóc chú thích — nên một
+     tên token có dấu hai chấm trong lời giải thích sẽ khớp TRƯỚC khai báo thật và nuốt
+     luôn tới dấu `;` kế tiếp ⇒ giá trị ra rác, phép đo tương phản ra NaN. Nhắc tên token
+     trong chú thích thì bỏ dấu hai chấm đi (viết «`--kg-canvas` = 0 0 0»).
+
+     ══ POLISH-RAIL-DOT · DOT-GRID PHẢI THẤY ĐƯỢC ═════════════════════════════
+     Chủ dự án nhìn app thật: «canvas thì đáng nhẽ nên có dot grid mờ nhẹ cho nó
+     phân biệt tí». Lưới ĐÃ có từ R0 nhưng ở `alpha .07` + `size 1px` trên nền
+     canvas đen tuyệt đối thì chấm ra #121212 — dưới ngưỡng thấy của phần lớn
+     màn hình văn phòng, nên vùng trống đọc ra ĐEN TUYỀN PHẲNG LÌ, không có mốc
+     nào cho mắt bám khi pan/zoom. Đây là lý do tồn tại của dot-grid, mà nó
+     đang không làm được.
+
+     Hai tầng chấm (chọn sau khi chụp và soi ảnh, xem POLISH-RAIL-DOT.md):
+     · `alpha` .07 → .13  — chấm phụ ra ≈#212121, thấy rõ mà chưa thành hạt nhiễu.
+     · `size`  1px → 1.15px — bán kính chấm; 1px ở DPR 1 là ĐÚNG một pixel cứng
+       nên nó nhấp nháy theo lưới pixel khi pan. 1.15px cho mép khử răng cưa ⇒
+       chấm "mềm" và trôi mượt thay vì giật.
+     · `-major-*` — mốc CHÍNH mỗi 5 bước (110px). Lưới một tầng đều tăm tắp thì
+       hoặc quá mờ để định vị, hoặc đủ đậm thì thành vải kẻ. Mốc chính đậm hơn
+       cho mắt điểm neo mà không phải nâng toàn bộ nền. */
+  --kg-dot-color: 255 255 255;
+  --kg-dot-alpha: 0.13;
+  --kg-dot-size: 1.15px;
+  --kg-dot-step: 22px;
+  --kg-dot-major-alpha: 0.2;
+  --kg-dot-major-size: 1.5px;
+  /* Bội số bước của mốc chính. Số THUẦN (không đơn vị) để `calc()` nhân được. */
+  --kg-dot-major-every: 5;
+  --kg-checker-tile: 16px;
+  --kg-checker-cell: 8px;
+  --kg-selection-alpha: 0.32;
+
+  /* --- nền (FLORA §1: tương phản khối bằng độ sáng bề mặt) --- */
+  --kg-canvas: 0 0 0;             /* #000000 ĐEN TUYỆT ĐỐI */
+  --kg-surface: 19 20 22;         /* #131416 thẻ, panel */
+  --kg-raised: 26 27 30;          /* #1A1B1E input, hàng hover */
+  /* W2A-1 · ĐẢO LỚP: overlay TRƯỚC ĐÂY là 25 25 25 (#191919) — TỐI HƠN cả `raised`
+     (#1A1B1E) nằm dưới nó. Menu/tooltip/dialog là lớp TRÊN CÙNG mà lại tối hơn lớp
+     input/hàng-hover ⇒ mắt không đọc ra thứ tự canvas → surface → raised → overlay.
+     #222326 giữ nguyên tính trung tính (đã khử ám lam ở B3) và vẫn PASS toàn bộ
+     phép đo — kể cả cặp chặt nhất `bg-accent/[0.18]` + fg-muted đo trên chính lớp
+     overlay này (xem scripts/check-contrast.mjs, nhóm ①). */
+  --kg-overlay: 34 35 38;         /* #222326 menu/tooltip — FLORA dùng ở alpha .9 + blur */
+  --kg-scrim: 0 0 0;              /* nền sau modal (dùng ở alpha .72) */
+  --kg-scrim-a: 0.72;
+
+  /* --- chữ: đơn sắc trắng/xám trên đen (FLORA §2.4) --- */
+  --kg-fg-strong: 255 255 255;    /* #FFFFFF 19.4:1 trên surface */
+  --kg-fg-default: 180 180 180;   /* #B4B4B4  8.89:1 trên surface */
+  /* FE-1·A1: 154 (#9A9A9A) PASS khi đo trên nền ĐẶC (6.55:1) nhưng FAIL sau khi
+     đè ALPHA: chữ phụ nằm trên ô chọn `bg-accent/[.16]` = 4.40:1 và
+     `bg-accent/[0.18]` = 4.18:1, và trong thẻ `opacity-80` = 4.41:1.
+     Nâng lên 168 (#A8A8A8): tint .18 = 4.94:1 · opacity-80 = 5.12:1 · surface = 7.75:1. */
+  --kg-fg-muted: 168 168 168;     /* #A8A8A8 */
+  --kg-fg-muted-raised: 168 168 168; /* #A8A8A8 */
+  /* Chữ ĐEN trên nút accent, không phải trắng — và đó là ràng buộc TOÁN HỌC chứ
+     không phải gu: `--kg-accent` còn bị đo như CHỮ trên `surface` (≥4.5:1) nên
+     nó buộc phải SÁNG (L ≥ 0.206); chữ trắng trên một nền sáng như thế chỉ đạt
+     ≥4.5:1 khi L ≤ 0.183 — hai điều kiện loại trừ nhau. Bậc đậm #005BAA + chữ
+     trắng là đúng cho theme SÁNG (xem khối `.light`), không dùng được ở dark. */
+  --kg-fg-on-accent: 0 0 0;       /* #000 chữ đen trên nút xanh VNPAY (8.43:1) */
+  --kg-fg-on-danger: 255 255 255; /* #FFFFFF chữ trên nút danger */
+
+  /* --- viền --- */
+  --kg-line-subtle: 42 43 45;     /* #2A2B2D ≈ hairline trắng/.1 trên surface — CHỈ gom khối */
+  --kg-line: 119 119 119;         /* #777777 ≈ trắng/.42 — viền CONTROL, ≥3:1 (WCAG 1.4.11) */
+  --kg-line-strong: 154 154 154;  /* #9A9A9A viền ô đang chọn */
+  /* FE-1·A1: thumb thanh cuộn TRƯỚC ĐÂY là `--kg-line` ở alpha .4/.7 ⇒ sau khi
+     composite chỉ còn 1.59:1 / 2.54:1 — dưới ngưỡng 3:1 của WCAG 1.4.11 (thumb
+     là điều khiển, không phải trang trí). Thay bằng hai token ĐẶC, không alpha. */
+  --kg-scroll-thumb: 130 130 130;       /* #828282 */
+  --kg-scroll-thumb-hover: 168 168 168; /* #A8A8A8 */
+
+  /* --- accent XANH DƯƠNG VNPAY + trạng thái (FLORA §1) ---------------------
+     ĐỔI HỆ (đợt VNPAY-RECOLOR): accent CŨ là mint #71D083. Chủ dự án đã yêu cầu
+     hai lần «dùng bộ màu XANH DƯƠNG của VNPAY»; các đợt trước đọc ngược thành
+     "diệt màu xanh dương sót lại" nên đã đẩy hệ về mint. Nay trả đúng ý:
+       · VNPAY primary #005BAA (hue 209°) — bậc ĐẬM, dùng cho theme SÁNG;
+       · trên nền #000 phải dùng bậc SÁNG cùng hue để chữ/icon đạt AA.
+     #4DA9FF là chính #005BAA nâng độ sáng, GIỮ NGUYÊN hue 209° — không phải
+     một màu xanh khác. Chọn bậc này bằng SỐ ĐO, không bằng gu: xem §Trần dưới. */
+  --kg-accent: 77 169 255;        /* #4DA9FF XANH VNPAY (bậc sáng) — CTA, dùng tiết chế */
+  /* QA-LEAD: hover/active của nút CHÍNH phải là MÀU ĐẶC, không phải `accent/90`,
+     `accent/80` — alpha trộn accent với nền và kéo tương phản chữ xuống.
+     Hai token dưới đây đi ĐẬM DẦN về phía #005BAA (đúng hướng cũ: hover/active
+     tối hơn base để nút không sáng lên khi rê chuột). Chữ đen trên chúng:
+     8.43 / 6.88 / 5.58:1 — tất cả ≥4.5. */
+  --kg-accent-hover: 61 151 240;  /* #3D97F0 */
+  --kg-accent-active: 46 134 222; /* #2E86DE */
+  --kg-accent-text: 77 169 255;   /* #4DA9FF chữ/icon accent: 8.43:1 trên #000, 6.31:1 trên overlay */
+  --kg-focus-ring: 77 169 255;    /* ring xanh VNPAY — 8.43:1 trên canvas */
+  --kg-ok: 92 224 174;            /* #5CE0AE */
+  --kg-warn: 255 194 77;          /* #FFC24D */
+  --kg-danger: 255 154 160;       /* #FF9AA0 CHỮ/viền lỗi */
+  --kg-danger-solid: 180 35 42;   /* #B4232A nền nút danger */
+  --kg-running: 199 125 255;      /* #C77DFF */
+  --kg-stale: 255 194 77;         /* = warn */
+  --kg-queued: 180 180 180;       /* = fg-default */
+  --kg-never: 154 154 154;        /* = fg-muted */
+
+  /* ══ THANG TINT — ĐÚNG HAI BẬC, KHÔNG CÓ BẬC THỨ BA ══════════════════════
+     W2A đếm được **13 mức alpha accent tự chế** rải khắp `features/*`
+     (`/5 /10 /15 /50 [.16] [0.06] [0.07] [0.08] [0.1] [0.12] [0.14] [0.18]`
+     + `[var(--kg-tint-a)]`). Mười ba mức cho đúng HAI ý nghĩa — "đang chọn"
+     và "một vệt nền báo trạng thái" — nên không mức nào đọc ra ý nghĩa gì.
+     W2B gom hết về hai biến dưới đây; ai cần mức thứ ba thì phải sửa file này
+     và trả lời `npm run contrast`, không được gõ thẳng số vào màn.
+
+     · `--kg-tint-a` — ĐẬM: ô/thẻ ĐANG CHỌN, hàng menu đang focus, badge §5.5.
+     · `--kg-tint-b` — NHẠT: vệt nền của banner/notice, thẻ được nhấn nhẹ.
+
+     Vì sao bậc B đúng bằng 0.08/0.06: đó là hai mức ĐÃ được đo và ĐÃ PASS ở
+     cả hai theme trước W2B (`InlineBanner` info/success). Bậc mới không mang
+     theo số mới, nên gom lại là **chỉ dọn**, không phải đổi thiết kế.
+
+     ⚠️ `--kg-tint-a` là TRẦN, không phải mức tuỳ ý: cặp chặt nhất toàn hệ là
+     chữ `fg-muted` trên tint accent phủ `overlay`. W2A đo `[0.18]` = 4.51/4.50
+     — dư đúng 0.01. Nâng bậc A (hoặc nâng `--kg-overlay`) là làm đỏ cổng.
+
+     ⚠️ VNPAY-RECOLOR — TRẦN ĐÃ DỊCH SANG NGƯỜI KHÁC, đọc kỹ trước khi sửa màu:
+     · `tint-a` · fg-muted (dark) đi từ 4.69 lên **5.03** — xanh VNPAY tối hơn
+       mint ở cùng alpha nên bậc A nay THOẢI hơn, không còn ghim `--kg-overlay`.
+     · Cặp chặt nhất của hệ accent nay là **`border-accent/60` trên `overlay`
+       theme SÁNG = 3.04, min 3.0 — dư 0.04**. Ai làm `--kg-accent` (light)
+       NHẠT đi dù một bậc sẽ làm đỏ cổng ngay; đó là lý do light dừng ở #004785
+       chứ không phải #005BAA. Bậc chặt nhì: cùng cặp đó ở dark = 3.15.
+     · Cặp chữ chặt nhất của accent: `tint-a` · accent-text (dark) = 4.80. */
+  --kg-tint-a: 0.16;
+  --kg-tint-b: 0.08;
+
+  /* --- CHỮ trên nền tint, đo ở trường hợp xấu nhất (tint phủ lên overlay).
+         BẮT BUỘC dùng bộ này cho badge/pill; KHÔNG dùng --kg-accent/--kg-running
+         trực tiếp làm chữ trên tint (sẽ trượt 4.5:1). --- */
+  /* ⚠️ ĐÍNH CHÍNH B3 — chỗ này từng ghi rằng "#8FBBFF trên ô lưới S3 chính là thứ
+     chủ dự án gọi là màu xanh VNPAY" rồi kết luận phải ĐUỔI xanh dương đi.
+     Đọc ngược ý: chủ dự án ĐANG YÊU CẦU dùng bộ màu xanh dương VNPAY, không phải
+     tố cáo nó. Bản gốc của lỗi này nằm ở đây, và đợt VNPAY-RECOLOR sửa nó.
+     Phần ĐÚNG của B3 vẫn giữ: `never`/`queued` từng là xám ÁM XANH (#A8B1C2/
+     #AEB6C6) — xám ám màu là bẩn, không phải nhận diện, nên vẫn về xám TRUNG
+     TÍNH thật. Chỉ `accent` quay lại hệ xanh dương.
+     Số đo (scripts/check-contrast.mjs, xấu nhất trong 4 lớp nền):
+     accent #A9D2FF = 7.57:1 · never/queued #C6C6C6 = 7.84 / 7.37:1. */
+  --kg-on-tint-never: 198 198 198;    /* #C6C6C6 */
+  --kg-on-tint-queued: 198 198 198;   /* #C6C6C6 */
+  --kg-on-tint-running: 214 160 255;  /* #D6A0FF */
+  --kg-on-tint-accent: 169 210 255;   /* #A9D2FF xanh VNPAY rất sáng — 7.60:1 ở lớp xấu nhất */
+  --kg-on-tint-ok: 92 224 174;        /* #5CE0AE */
+  --kg-on-tint-warn: 255 194 77;      /* #FFC24D */
+  --kg-on-tint-stale: 255 194 77;     /* #FFC24D */
+  --kg-on-tint-danger: 255 154 160;   /* #FF9AA0 */
+
+  /* --- checkerboard cho Thumb (§5.6) --- */
+  /* B3 quét cùng loại: hai ô checkerboard cũ ám xanh dương (#171C26/#10141C).
+     Đổi sang xám trung tính hợp nền #000 của FLORA. */
+  --kg-checker-a: #1F2022;
+  --kg-checker-b: #141517;
+
+  /* --- đổ bóng 3 bậc (§9.5-4) — W2A-1 VIẾT LẠI ---------------------------
+     Bản cũ là bóng ĐEN THUẦN `rgb(0 0 0 / α)`. Trên `--kg-canvas: 0 0 0` (đen
+     tuyệt đối) thì đen phủ lên đen KHÔNG đổi một pixel nào ⇒ cả 35 chỗ dùng
+     `shadow-1/2/3` (dialog, popover, toast, floatbar, thẻ hover) là hình chữ
+     nhật DÁN PHẲNG. `KitCard` còn viết `hover:-translate-y-1 hover:shadow-3`:
+     thẻ nhấc 4px mà không có bóng nào theo cùng ⇒ mắt đọc ra "giật".
+
+     Trên nền đen, độ sâu KHÔNG đến từ bóng đen mà từ ÁNH SÁNG BẮT VÀO MÉP.
+     Ba thành phần, mỗi bậc một liều:
+       ① bóng đen — vẫn giữ, nó làm việc khi vật nằm trên `surface`/`raised`;
+       ② ring 1px trắng mờ (`0 0 0 1px`) — vành ngoài, thay viền chết;
+       ③ inset gờ sáng 1px cạnh TRÊN — cạnh hứng sáng của vật nổi.
+     Đây là cách florafauna/Linear dựng elevation cho dark. Khối `.light` KHÔNG
+     đụng: ở đó bóng `rgb(21 21 22 / α)` trên nền trắng vốn đã hoạt động đúng.
+
+     Giữ MỖI BẬC TRÊN MỘT DÒNG: `scripts/check-contrast.mjs` parse tokens.css
+     theo từng dòng (`--kg-x: …;`), giá trị xuống dòng sẽ rơi khỏi bảng biến. */
+  --kg-shadow-1: 0 1px 2px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --kg-shadow-2: 0 8px 24px rgb(0 0 0 / 0.65), 0 0 0 1px rgb(255 255 255 / 0.06), inset 0 1px 0 rgb(255 255 255 / 0.05);
+  --kg-shadow-3: 0 24px 64px rgb(0 0 0 / 0.8), 0 0 0 1px rgb(255 255 255 / 0.08), inset 0 1px 0 rgb(255 255 255 / 0.07);
+}
+
+/* ==========================================================================
+   THEME LIGHT — NICE (§7.2). Giá trị port nguyên từ bản vanilla đã đo PASS
+   trên CẢ 4 lớp nền. Trạng thái trung thực: ĐO PASS bằng script, CHƯA soi mắt.
+   ========================================================================== */
+.light {
+  color-scheme: light;
+
+  /* B3 quét cùng loại: bộ trung tính của theme sáng TRƯỚC ĐÂY ám xanh dương
+     (#F6F7FA, #EDEFF4, #E2E5EC, #131722, #4A5265… — tất cả đều lệch kênh lam).
+     FLORA chỉ mint + TRUNG TÍNH ⇒ khử ám, giữ nguyên bậc sáng nên tương phản
+     không tụt (số đo mới ghi ngay cạnh, script tự đo lại). */
+  --kg-canvas: 255 255 255;       /* #FFFFFF */
+  --kg-surface: 246 246 247;      /* #F6F6F7 */
+  --kg-raised: 237 237 239;       /* #EDEDEF */
+  --kg-overlay: 227 227 229;      /* #E3E3E5 */
+  --kg-scrim: 21 21 22;           /* #151516 */
+  --kg-scrim-a: 0.44;
+
+  --kg-fg-strong: 21 21 22;       /* #151516 — 14.24:1 kể cả trên overlay */
+  /* FE-1·A1: hai bậc chữ phụ của theme sáng FAIL sau khi đè alpha (fg-muted
+     #5C5C5E trên `bg-accent/15` = 4.20:1; fg-default trong khối `opacity-80`
+     = 4.27:1). Đậm thêm một bậc, giữ nguyên tính trung tính. */
+  --kg-fg-default: 62 62 64;      /* #3E3E40 */
+  --kg-fg-muted: 70 70 72;        /* #464648 */
+  --kg-fg-muted-raised: 70 70 72;
+  --kg-fg-on-accent: 255 255 255; /* #FFFFFF */
+  --kg-fg-on-danger: 255 255 255;
+
+  --kg-line-subtle: 224 224 226;  /* #E0E0E2 */
+  --kg-line: 117 117 119;         /* #757577 — 3.59:1 trên overlay (≥3:1) */
+  --kg-line-strong: 94 94 96;     /* #5E5E60 */
+  --kg-scroll-thumb: 122 122 124;       /* #7A7A7C */
+  --kg-scroll-thumb-hover: 86 86 88;    /* #565658 */
+
+  /* POLISH-RAIL-DOT · LỖI THẬT, không phải chỉnh thẩm mỹ: `--kg-dot-color` chỉ
+     được khai một lần ở `:root` = TRẮNG, còn `.light` đổi `--kg-canvas` thành
+     TRẮNG mà quên đổi chấm ⇒ theme sáng vẽ chấm trắng trên nền trắng: dot-grid
+     TÀNG HÌNH hoàn toàn. Đảo sang mực tối, alpha thấp hơn dark vì mắt bắt
+     tương phản âm (tối/sáng) nhạy hơn tương phản dương. */
+  --kg-dot-color: 21 21 22;       /* #151516 */
+  --kg-dot-alpha: 0.1;
+  --kg-dot-major-alpha: 0.16;
+
+  /* VNPAY-RECOLOR — theme sáng dùng bậc ĐẬM của xanh VNPAY với CHỮ TRẮNG, đúng
+     như nhận diện gốc. Vì sao #004A8C chứ không phải đúng #005BAA:
+     `border-accent/60` (7 chỗ trong src) là viền mang thông tin ⇒ WCAG 1.4.11
+     đòi ≥3:1 với nền dưới, và lớp nền XẤU NHẤT là `overlay` #E3E3E5 (không phải
+     canvas trắng — chỗ này dễ đoán nhầm). Ba lần thử, số do CHÍNH cổng in ra:
+       · #005BAA (VNPAY primary nguyên bản) → #5B91C2 trên #E3E3E5 = 2.61 · TRƯỢT
+       · #004A8C                            → #5B87B0 trên #E3E3E5 = 2.96 · TRƯỢT (thiếu 0.04)
+       · #004785                            → #5B85AB trên #E3E3E5 = 3.04 · ĐẠT
+     Giữ hue 208° của VNPAY, chỉ hạ độ sáng đúng bậc cần để qua cổng. Đây là
+     chính cái bẫy mà FE-1·A1 đã ghi cho hệ lục cũ; nay lặp lại y hệt với hệ
+     xanh, nên chép lại lý do thay vì để người sau đo lại từ đầu. */
+  --kg-accent: 0 71 133;          /* #004785 — chữ trắng 9.38:1 */
+  /* hover/active phải ĐẬM HƠN base, nếu không nút sáng lên khi rê chuột. */
+  --kg-accent-hover: 0 58 110;    /* #003A6E — chữ trắng 11.47:1 */
+  --kg-accent-active: 0 43 82;    /* #002B52 — chữ trắng 14.31:1 */
+  --kg-accent-text: 0 71 133;     /* #004785 */
+  --kg-focus-ring: 0 71 133;      /* #004785 */
+  --kg-ok: 8 68 46;               /* #08442E */
+  --kg-warn: 86 56 0;             /* #563800 */
+  --kg-danger: 132 22 28;         /* #84161C */
+  --kg-danger-solid: 180 35 42;   /* #B4232A */
+  --kg-running: 97 44 158;        /* #612C9E */
+  --kg-stale: 86 56 0;
+  --kg-queued: 62 62 64;          /* = fg-default trung tính */
+  --kg-never: 70 70 72;           /* = fg-muted trung tính */
+
+  --kg-tint-a: 0.12;
+  --kg-tint-b: 0.06;
+
+  --kg-on-tint-never: 74 74 76;    /* #4A4A4C */
+  --kg-on-tint-queued: 74 74 76;   /* #4A4A4C */
+  --kg-on-tint-running: 79 36 130; /* #4F2482 */
+  --kg-on-tint-accent: 0 84 143;   /* #00548F — 5.06:1 ở lớp nền xấu nhất */
+  --kg-on-tint-ok: 9 87 57;        /* #095739 */
+  --kg-on-tint-warn: 102 67 0;     /* #664300 */
+  --kg-on-tint-stale: 102 67 0;    /* #664300 */
+  --kg-on-tint-danger: 142 26 32;  /* #8E1A20 */
+
+  --kg-checker-a: #FFFFFF;
+  --kg-checker-b: #ECECEE;
+
+  --kg-shadow-1: 0 1px 2px rgb(21 21 22 / 0.1);
+  --kg-shadow-2: 0 4px 12px rgb(21 21 22 / 0.14);
+  --kg-shadow-3: 0 16px 48px rgb(21 21 22 / 0.2);
+}

@@ -1,0 +1,264 @@
+/* ==========================================================================
+   kit-gen v2 · tokens.css — nguồn duy nhất của mọi giá trị thiết kế
+   Thi công theo UX-SPEC §5.1 (spacing) · §5.2 (type) · §5.3 (màu, đã đo tương phản)
+   Dark là mặc định (§5.3). Light chỉ là KHUNG SẴN (NICE, §7.2) — xem cuối file.
+   LUẬT: component CSS chỉ được dùng var() ở đây. Cấm số px/màu thô ngoài file này
+   (trừ hairline 1px/2px và các giá trị hình học nội bộ đã ghi chú).
+   ========================================================================== */
+
+:root {
+  /* --- §5.1 Thang khoảng cách (base 4px, đúng 9 bậc — cấm số ngoài thang) --- */
+  --s-0: 0px;
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-8: 48px;
+  --s-10: 64px;
+
+  /* --- §5.1 Kích thước cố định của khung --- */
+  --h-header: 40px;
+  --w-rail: 168px;
+  --w-rail-collapsed: 48px;
+  --w-tree: 260px;         /* cây thiết kế S3 vùng ① */
+  --w-props: 320px;        /* cột thuộc tính S3 vùng ③ */
+  --h-row: 36px;           /* hàng danh sách */
+  --h-ctl-sm: 28px;
+  --h-ctl-md: 32px;
+  --h-ctl-lg: 40px;
+  --w-modal-sm: 400px;
+  --w-modal-md: 520px;
+  --w-modal-lg: 720px;
+  --w-modal-xl: 960px;
+  --h-modal-max: min(90vh, 720px);
+  --w-drawer: 480px;
+  --w-drawer-wide: 640px;  /* drawer log */
+  --w-toast: 360px;
+
+  /* --- §5.1 Bán kính --- */
+  --r-1: 4px;              /* badge, input */
+  --r-2: 8px;              /* nút, thẻ nhỏ */
+  --r-3: 12px;             /* thẻ, modal */
+  --r-full: 999px;         /* pill */
+
+  /* --- §5.2 Font (font hệ thống, KHÔNG tải webfont) --- */
+  --font-sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* --- §5.2 Thang chữ, 7 bậc. SÀN TUYỆT ĐỐI 12px (đóng audit I3) ---
+     Mỗi bậc có 3 token lẻ + 1 shorthand dùng cho thuộc tính `font:`. */
+  --t-display-size: 24px;  --t-display-lh: 32px;  --t-display-weight: 650;
+  --t-title-size: 18px;    --t-title-lh: 26px;    --t-title-weight: 600;
+  --t-subtitle-size: 15px; --t-subtitle-lh: 22px; --t-subtitle-weight: 600;
+  --t-body-size: 14px;     --t-body-lh: 21px;     --t-body-weight: 400;
+  --t-label-size: 13px;    --t-label-lh: 18px;    --t-label-weight: 500;
+  --t-caption-size: 12px;  --t-caption-lh: 16px;  --t-caption-weight: 400;
+  --t-mono-size: 13px;     --t-mono-lh: 20px;     --t-mono-weight: 400;
+
+  --t-display: var(--t-display-weight) var(--t-display-size) / var(--t-display-lh) var(--font-sans);
+  --t-title: var(--t-title-weight) var(--t-title-size) / var(--t-title-lh) var(--font-sans);
+  --t-subtitle: var(--t-subtitle-weight) var(--t-subtitle-size) / var(--t-subtitle-lh) var(--font-sans);
+  --t-body: var(--t-body-weight) var(--t-body-size) / var(--t-body-lh) var(--font-sans);
+  --t-label: var(--t-label-weight) var(--t-label-size) / var(--t-label-lh) var(--font-sans);
+  --t-caption: var(--t-caption-weight) var(--t-caption-size) / var(--t-caption-lh) var(--font-sans);
+  --t-mono: var(--t-mono-weight) var(--t-mono-size) / var(--t-mono-lh) var(--font-mono);
+  --t-label-tracking: 0.04em;   /* header bảng: uppercase + letter-spacing .04em */
+
+  /* --- Z-index: một thang duy nhất, cấm z-index tự phát --- */
+  --z-base: 0;
+  --z-sticky: 100;        /* header, banner chỉ-đọc, thanh lưu */
+  --z-rail: 110;
+  --z-floatbar: 200;      /* thanh hành động nổi (chọn nhiều) */
+  --z-dropdown: 400;      /* menu ⋯, command palette */
+  --z-scrim: 500;
+  --z-modal: 510;
+  --z-drawer: 520;
+  --z-toast: 600;
+  --z-tooltip: 700;       /* tooltip luôn trên cùng */
+
+  /* --- Motion. Mọi animation phải tự tắt ở prefers-reduced-motion (§5.8-A10) --- */
+  --dur-instant: 80ms;
+  --dur-fast: 120ms;
+  --dur-1: 150ms;         /* đổi thẻ khi cache→live (§3.1-S1) */
+  --dur-2: 240ms;         /* modal/drawer vào-ra */
+  --dur-pulse: 1600ms;    /* StatusDot đang chạy (§5.6) */
+  --dur-shimmer: 1200ms;  /* SkeletonBlock (§5.6) */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* --- Focus ring: 2px + offset 2px, dùng ở MỌI phần tử tương tác (§5.8-A4) --- */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+
+  /* --- Đổ bóng: spec §9.5-4 để team design tự quyết trong khuôn §5.
+         Chọn bóng trung tính, đen thuần, không màu, dùng đúng 3 bậc. --- */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.32);                                  /* thẻ hover */
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.40);                                 /* menu, tooltip, toast */
+  --shadow-3: 0 16px 48px rgba(0, 0, 0, 0.52);                                /* modal, drawer */
+
+  /* Nền checkerboard cho Thumb (§5.6) — 8px ô */
+  --checker-size: 8px;
+}
+
+/* ==========================================================================
+   THEME DARK — mặc định (§5.3). Mọi giá trị §5.3 được giữ NGUYÊN VĂN.
+   ĐO LẠI (script tools/check-contrast.py): các số trong §5.3 đúng khi nền là
+   --bg-surface, nhưng tooltip/menu/modal nằm trên --bg-raised/--bg-overlay,
+   ở đó --fg-muted chỉ còn 4.12:1 / 3.49:1 → TRƯỢT A1. Vì vậy bổ sung
+   --fg-muted-raised (dùng khi nền là raised/overlay) và một bộ token chữ
+   riêng cho badge (chữ trên nền tint 16% sáng hơn nền gốc). Không token nào
+   của §5.3 bị đổi giá trị.
+   Số trong chú thích = tương phản trên --bg-surface (#12161F).
+   ========================================================================== */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* nền */
+  --bg-canvas: #0B0E14;
+  --bg-surface: #12161F;
+  --bg-raised: #1A1F2A;
+  --bg-overlay: #262C38;
+  --bg-scrim: rgba(6, 8, 12, 0.72);
+
+  /* chữ */
+  --fg-strong: #E8ECF4;        /* 15.29:1 */
+  --fg-default: #9AA4B8;       /*  7.22:1 */
+  --fg-muted: #767F95;         /*  4.52:1 — CHỈ dùng trên canvas/surface */
+  --fg-muted-raised: #99A1B3;  /*  6.98:1 surface · 5.40:1 overlay — dùng trên raised/overlay */
+  --fg-onAccent: #0B0E14;      /*  6.04:1 trên --accent */
+  --fg-onDanger: #FFFFFF;      /*  6.53:1 trên --danger-solid */
+
+  /* QA-UX CAO-B · trạng thái BỊ CHẶN (disabled).
+     Trước đây mọi selector disabled dùng `opacity: .45` — nó làm mờ CẢ chữ lẫn nền,
+     kéo tương phản thật xuống 1.89–2.45:1 (đo ở UX-VERDICT §2). §5.4 đòi "KHÔNG mất
+     chữ" nhưng chữ không đọc được thì trên thực tế là mất. Cặp token dưới đây được
+     CHỌN bằng phép đo: đạt ≥4.5:1 trên CẢ 4 lớp nền (canvas/surface/raised/overlay),
+     và ≥4.5:1 trên chính nền nút disabled. Dùng chúng THAY cho opacity ở mọi
+     trạng thái bị chặn — dấu hiệu "bị chặn" đến từ nền phẳng + con trỏ + aria, không
+     từ độ mờ. */
+  --fg-disabled: #8A93A6;      /*  6.26 canvas · 5.86 surface · 5.34 raised · 4.54 overlay */
+  --bg-disabled: #1F2530;      /*  nền phẳng cho nút/ô bị chặn (4.98:1 với --fg-disabled) */
+  --line-disabled: #333B4A;    /*  viền nút bị chặn — trang trí, không mang thông tin */
+
+  /* viền */
+  --line-subtle: #212734;      /* chia khối, KHÔNG mang thông tin */
+  --line-default: #6B7590;     /*  3.94:1 — viền input/ô lưới (WCAG 1.4.11; 3.05:1 trên overlay) */
+  --line-strong: #8B94A6;      /*  5.93:1 — viền ô đang chọn (v1 chỉ 2.72:1 → audit I1) */
+
+  /* accent + trạng thái */
+  --accent: #4C8DFF;           /*  5.65:1 surface — DÙNG CHO NỀN ĐẶC (nút primary), KHÔNG dùng làm chữ
+                                  trên --bg-overlay: ở đó chỉ còn 4.37:1 → TRƯỢT A1. */
+  --accent-text: #8FBBFF;      /*  9.24:1 surface · 7.15:1 overlay — CHỮ/ICON màu accent (link, log job,
+                                  dấu ✓ ô đã chọn). Đo bằng css/tools/contrast-audit.py. */
+  --accent-weak: rgba(76, 141, 255, 0.16);
+  --focus-ring: #7FB0FF;       /*  8.24:1 surface · 6.37:1 overlay */
+  /* QA-UX TB-C · vòng đệm giữa ring và nút NỀN ĐẶC. Phải ≥3:1 với ring VÀ với mọi
+     nền nút đặc. Đo: ring 9.56 · primary 6.56 · danger 3.21 (canvas #0B0E14 chỉ cho
+     danger 2.96 ⇒ không dùng được). */
+  --focus-ring-gap: #000000;
+  --ok: #5CE0AE;               /* 10.97:1 */
+  --warn: #FFC24D;             /* 11.27:1 */
+  --danger: #FF9AA0;           /*  8.95:1 — CHỮ/viền lỗi */
+  --danger-solid: #B4232A;     /* nền nút danger */
+  --running: #C77DFF;          /*  6.73:1 */
+  --stale: #FFC24D;            /* = warn */
+
+  /* nền badge = màu trạng thái ở 16% alpha (§5.5) */
+  --ok-weak: rgba(92, 224, 174, 0.16);
+  --warn-weak: rgba(255, 194, 77, 0.16);
+  --stale-weak: rgba(255, 194, 77, 0.16);
+  --danger-weak: rgba(255, 154, 160, 0.16);
+  --running-weak: rgba(199, 125, 255, 0.16);
+  --muted-weak: rgba(118, 127, 149, 0.16);
+  --default-weak: rgba(154, 164, 184, 0.16);
+  --danger-tint: rgba(255, 154, 160, 0.10);   /* dòng lỗi LogView = danger 10% (§5.6) */
+
+  /* CHỮ trên nền badge/tint — đo ở trường hợp xấu nhất (tint phủ lên overlay).
+     Dùng bộ này trong .kg-badge/.kg-pill, KHÔNG dùng --accent/--running trực tiếp. */
+  --on-tint-never: #A8B1C2;    /* worst 5.36:1 */
+  --on-tint-queued: #AEB6C6;   /* worst 5.18:1 */
+  --on-tint-running: #D6A0FF;  /* worst 5.31:1 */
+  --on-tint-accent: #8FBBFF;   /* worst 5.66:1 */
+  --on-tint-ok: #5CE0AE;       /* worst 5.85:1 */
+  --on-tint-warn: #FFC24D;     /* worst 6.02:1 */
+  --on-tint-stale: #FFC24D;    /* worst 6.02:1 */
+  --on-tint-danger: #FF9AA0;   /* worst 5.02:1 */
+
+  --checker-a: #171C26;
+  --checker-b: #10141C;
+}
+
+/* ==========================================================================
+   THEME LIGHT — KHUNG SẴN, không nằm trong MUST (§7.2 "Light theme: NICE").
+   §5.3 chỉ cho 6 giá trị gốc; các giá trị còn lại do file này chọn và ĐÃ ĐO
+   pass trên CẢ 4 lớp nền. Vài giá trị §5.3 gợi ý phải làm đậm thêm để pass
+   trên nền overlay: line-default #8A93A6 → #767F92 (2.45 → 3.19),
+   ok #0F7A54 → #0B6B48, danger #B4232A giữ cho nền nút, chữ danger #A81F26.
+   Trạng thái trung thực: ĐO PASS, CHƯA soi bằng mắt trên UI thật.
+   ========================================================================== */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-canvas: #FFFFFF;
+  --bg-surface: #F6F7FA;
+  --bg-raised: #EDEFF4;
+  --bg-overlay: #E2E5EC;
+  --bg-scrim: rgba(19, 23, 34, 0.44);
+
+  --fg-strong: #131722;
+  --fg-default: #4A5265;
+  --fg-muted: #5C6577;
+  --fg-muted-raised: #5C6577;
+  --fg-onAccent: #FFFFFF;
+  --fg-onDanger: #FFFFFF;
+
+  /* QA-UX CAO-B · xem chú thích ở theme dark. Đo: ≥4.5:1 trên cả 4 lớp nền light. */
+  --fg-disabled: #5C6577;      /*  5.86 canvas · 5.47 surface · 5.09 raised · 4.65 overlay */
+  --bg-disabled: #E2E5EC;      /*  4.65:1 với --fg-disabled */
+  --line-disabled: #C6CBD5;
+
+  --line-subtle: #DFE3EA;
+  --line-default: #767F92;
+  --line-strong: #5E6779;
+
+  --accent: #1955C2;
+  --accent-text: #1955C2;      /* light: 5.34:1 ngay cả trên overlay → không cần bản riêng */
+  --accent-weak: rgba(25, 85, 194, 0.12);
+  --focus-ring: #14489F;
+  /* QA-UX TB-C · đo: ring 8.55 · primary 6.73 · danger 6.53 */
+  --focus-ring-gap: #FFFFFF;
+  --ok: #0B6B48;
+  --warn: #7A5000;
+  --danger: #A81F26;
+  --danger-solid: #B4232A;
+  --running: #612C9E;
+  --stale: #7A5000;
+
+  --ok-weak: rgba(11, 107, 72, 0.12);
+  --warn-weak: rgba(122, 80, 0, 0.12);
+  --stale-weak: rgba(122, 80, 0, 0.12);
+  --danger-weak: rgba(168, 31, 38, 0.12);
+  --running-weak: rgba(97, 44, 158, 0.12);
+  --muted-weak: rgba(92, 101, 119, 0.12);
+  --default-weak: rgba(74, 82, 101, 0.12);
+  --danger-tint: rgba(168, 31, 38, 0.08);
+
+  --on-tint-never: #474F5E;
+  --on-tint-queued: #474F5E;
+  --on-tint-running: #4F2482;
+  --on-tint-accent: #14489F;
+  --on-tint-ok: #095739;
+  --on-tint-warn: #664300;
+  --on-tint-stale: #664300;
+  --on-tint-danger: #8E1A20;
+
+  --shadow-1: 0 1px 2px rgba(19, 23, 34, 0.10);
+  --shadow-2: 0 4px 12px rgba(19, 23, 34, 0.14);
+  --shadow-3: 0 16px 48px rgba(19, 23, 34, 0.20);
+
+  --checker-a: #FFFFFF;
+  --checker-b: #ECEEF3;
+}

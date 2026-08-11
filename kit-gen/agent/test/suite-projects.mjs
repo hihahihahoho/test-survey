@@ -1,0 +1,219 @@
+/* suite-projects.mjs — §6.2 B: CRUD project trọn vòng + thùng rác 30 ngày + phục hồi
+   + mã xác nhận 4 số ngoài băng (§3.4 lớp 8) + export .zip. */
+import { mkdir, writeFile, readFile, rm } from "node:fs/promises"
+import { join } from "node:path"
+import { describe, it, eq, ok, includes } from "./harness.mjs"
+import { readZip } from "../lib/zip.mjs"
+
+export async function run({ api, agent, wsRoot }) {
+  // ─────────────────────────────────────────── 3. PROJECT CRUD trọn vòng
+  describe("project CRUD")
+  let projectId = null
+  await it("danh sách rỗng lúc đầu, có ETag", async () => {
+    const r = await api("GET", "/api/projects")
+    eq(r.status, 200, "status")
+    eq(r.json.items.length, 0, "0 project")
+    ok(r.headers.etag, "có ETag")
+  })
+  await it("POST tạo project template basic → 201, slug bỏ dấu, 3 sheet 25 ô", async () => {
+    const r = await api("POST", "/api/projects", {
+      body: { name: "Tết 2026 — VietinBank iPay", template: "basic", firstVariant: { vi: "Tết đỏ", bg: "magenta" }, tags: ["tet", "banking"] },
+    })
+    eq(r.status, 201, "status")
+    projectId = r.json.project.id
+    ok(/^tet-2026-vietinbank-ipay-[0-9a-f]{4}$/.test(projectId), `id có hậu tố hex: ${projectId}`)
+    eq(r.json.project.stats.sheets, 3, "3 sheet")
+    eq(r.json.project.stats.components, 25, "25 ô")
+    eq(r.json.project.stats.variants, 1, "1 phong cách")
+    eq(r.json.project.name, "Tết 2026 — VietinBank iPay", "tên có dấu giữ nguyên")
+  })
+  await it("GET project trả state.jobs (nguồn của ma trận S2)", async () => {
+    const r = await api("GET", `/api/projects/${projectId}`)
+    eq(r.status, 200, "status")
+    eq(Object.keys(r.json.project.state.jobs).length, 3, "3 job (1 phong cách × 3 sheet)")
+    eq(r.json.project.state.jobs["tet-do-main"] ?? r.json.project.state.jobs[Object.keys(r.json.project.state.jobs)[0]], "never", "job chưa gen = never")
+    eq(r.json.project.state.stale, true, "project mới là stale")
+  })
+  await it("PATCH đổi tên/tag → thư mục KHÔNG đổi", async () => {
+    const r = await api("PATCH", `/api/projects/${projectId}`, { body: { name: "Tết 2026 (đã đổi)", tags: ["tet"] } })
+    eq(r.status, 200, "status")
+    eq(r.json.project.name, "Tết 2026 (đã đổi)", "tên mới")
+    eq(r.json.project.id, projectId, "id/thư mục không đổi")
+  })
+  await it("PATCH tên rỗng bị 400 INVALID_NAME", async () => {
+    const r = await api("PATCH", `/api/projects/${projectId}`, { body: { name: "   " } })
+    eq(r.status, 400, "status")
+    eq(r.json.error.code, "INVALID_NAME", "code")
+  })
+  await it("POST tạo project với slug trùng → 409 PROJECT_ID_TAKEN + gợi ý", async () => {
+    const r = await api("POST", "/api/projects", { body: { name: "Trùng", slug: projectId, template: "blank", firstVariant: { vi: "V1" } } })
+    eq(r.status, 409, "status")
+    eq(r.json.error.code, "PROJECT_ID_TAKEN", "code")
+    ok(r.json.error.details.suggestion, "có gợi ý")
+  })
+  await it("nhân bản project (contract+refs) → 201, project mới độc lập", async () => {
+    const r = await api("POST", `/api/projects/${projectId}/duplicate`, {
+      body: { name: "Tết 2026 (bản sao)", include: ["contract", "refs"], variants: "all" },
+    })
+    eq(r.status, 201, "status")
+    ok(r.json.project.id !== projectId, "id khác")
+    eq(r.json.project.stats.sheets, 3, "copy đủ 3 sheet")
+    const del = await api("DELETE", `/api/projects/${r.json.project.id}`)
+    eq(del.status, 200, "dọn bản sao")
+  })
+  await it("GET project không tồn tại → 404 PROJECT_NOT_FOUND", async () => {
+    const r = await api("GET", "/api/projects/khong-co-dau-a1b2")
+    eq(r.status, 404, "status")
+    eq(r.json.error.code, "PROJECT_NOT_FOUND", "code")
+  })
+  await it("project.json hỏng → thẻ broken, KHÔNG biến mất im lặng", async () => {
+    const badId = "hong-json-0001"
+    await mkdir(join(wsRoot, "projects", badId), { recursive: true })
+    await writeFile(join(wsRoot, "projects", badId, "project.json"), '{"name":"x",,}')
+    const list = await api("GET", "/api/projects")
+    const found = list.json.items.find(p => p.id === badId)
+    ok(found, "vẫn xuất hiện trong danh sách")
+    eq(found.broken, true, "broken=true")
+    eq(found.error.code, "PROJECT_BROKEN", "error.code")
+    const one = await api("GET", `/api/projects/${badId}`)
+    eq(one.status, 422, "GET một project hỏng = 422")
+    await rm(join(wsRoot, "projects", badId), { recursive: true, force: true })
+  })
+  await it("dọn cache dẫn xuất KHÔNG chạm contract.json", async () => {
+    const before = await api("GET", `/api/projects/${projectId}/contract`)
+    const r = await api("POST", `/api/projects/${projectId}/clean`, { body: { targets: ["skeleton", "prompts"] } })
+    eq(r.status, 200, "status")
+    const after = await api("GET", `/api/projects/${projectId}/contract`)
+    eq(after.json.version, before.json.version, "version contract không đổi")
+    eq(after.json.contract.sheets.length, 3, "contract còn nguyên")
+  })
+  await it("export .zip đọc lại được, chứa contract.json", async () => {
+    const r = await api("GET", `/api/projects/${projectId}/export.zip?include=contract,refs`)
+    eq(r.status, 200, "status")
+    includes(r.headers["content-disposition"], ".zip", "Content-Disposition")
+    const { readZip } = await import("../lib/zip.mjs")
+    const entries = await readZip(r.body)
+    ok(entries.some(e => e.name.endsWith("contract.json")), "có contract.json")
+    ok(entries.some(e => e.name.endsWith("project.json")), "có project.json")
+  })
+
+  await it("export .zip LỌC THEO PHONG CÁCH (?variant=) — kits/<v>/ và raw/<v>-*.png", async () => {
+    // NEEDS-d2p2 §4.2: tab Xuất của S5 cho chọn phong cách; trước đây zip luôn chứa mọi phong cách.
+    const g = await api("GET", `/api/projects/${projectId}/contract`)
+    const con = g.json.contract
+    if (!con.variants.some(v => v.id === "vang")) {
+      con.variants.push({ id: "vang", vi: "Vàng", bg: "magenta", style: "gold" })
+      for (const sh of con.sheets) sh.variants = con.variants.map(v => v.id)
+      const put = await api("PUT", `/api/projects/${projectId}/contract`,
+        { headers: { "if-match": String(g.json.version) }, body: { contract: con } })
+      eq(put.status, 200, "thêm phong cách thứ hai")
+    }
+    const v1 = con.variants[0].id
+    const dir = join(wsRoot, "projects", projectId)
+    const write = async (rel, data) => {
+      await mkdir(join(dir, rel, ".."), { recursive: true })
+      await writeFile(join(dir, rel), data)
+    }
+    await write(`kits/${v1}/01-btn.png`, "KIT-1")
+    await write("kits/vang/01-btn.png", "KIT-2")
+    await write("kits/manifest.json", "{}")
+    await write(`raw/${v1}-main.png`, "RAW-1")
+    await write("raw/vang-main.png", "RAW-2")
+
+    const all = await api("GET", `/api/projects/${projectId}/export.zip?include=contract,kits,raw`)
+    const allNames = (await readZip(all.body)).map(e => e.name)
+    ok(allNames.some(n => n.includes(`kits/${v1}/`)), "không lọc: có phong cách 1")
+    ok(allNames.some(n => n.includes("kits/vang/")), "không lọc: có phong cách 2")
+
+    const only = await api("GET", `/api/projects/${projectId}/export.zip?include=contract,kits,raw&variant=vang`)
+    eq(only.status, 200, "status")
+    includes(only.headers["content-disposition"], "-vang-", "tên file có phong cách")
+    const names = (await readZip(only.body)).map(e => e.name)
+    ok(names.some(n => n.includes("kits/vang/01-btn.png")), "giữ kit của phong cách đã chọn")
+    ok(!names.some(n => n.includes(`kits/${v1}/`)), `KHÔNG được chứa kits/${v1}/: ${names.join(", ")}`)
+    ok(names.some(n => n.endsWith("raw/vang-main.png")), "giữ raw của phong cách đã chọn")
+    ok(!names.some(n => n.endsWith(`raw/${v1}-main.png`)), "KHÔNG chứa raw của phong cách khác")
+    ok(names.some(n => n.endsWith("contract.json")), "vẫn có bản thiết kế")
+  })
+  await it("export .zip với phong cách KHÔNG có trong bản thiết kế → 422 UNKNOWN_VARIANT", async () => {
+    const r = await api("GET", `/api/projects/${projectId}/export.zip?include=kits&variant=khong-ton-tai`)
+    eq(r.status, 422, "status")
+    eq(r.json.error.code, "UNKNOWN_VARIANT", "code")
+    ok(Array.isArray(r.json.error.details.unknown), "nói rõ cái nào lạ")
+  })
+
+  // ─────────────────────────────────────────── 4. TRASH + restore
+  describe("thùng rác")
+  let trashId = null
+  await it("DELETE → chuyển vào .trash/ (KHÔNG rm thẳng), có hạn 30 ngày", async () => {
+    const r = await api("DELETE", `/api/projects/${projectId}`)
+    eq(r.status, 200, "status")
+    trashId = r.json.trashId
+    ok(/^\d{8}-\d{6}-/.test(trashId), `trashId có timestamp: ${trashId}`)
+    const days = (Date.parse(r.json.restoreBefore) - Date.now()) / 864e5
+    ok(days > 29 && days < 31, `hạn ~30 ngày, đang là ${days.toFixed(1)}`)
+    const stillOnDisk = await readFile(join(wsRoot, ".kitgen", "trash", trashId, "contract.json"), "utf8")
+    ok(stillOnDisk.includes("sheets"), "file thật vẫn nằm trong .trash/")
+    const list = await api("GET", "/api/projects")
+    ok(!list.json.items.some(p => p.id === projectId), "biến mất khỏi danh sách project")
+  })
+  await it("GET project đã xoá → 410 PROJECT_IN_TRASH", async () => {
+    const r = await api("GET", `/api/projects/${projectId}`)
+    eq(r.status, 410, "status")
+    eq(r.json.error.code, "PROJECT_IN_TRASH", "code")
+  })
+  await it("GET /api/trash liệt kê đúng bản đã xoá", async () => {
+    const r = await api("GET", "/api/trash")
+    eq(r.status, 200, "status")
+    const item = r.json.items.find(i => i.trashId === trashId)
+    ok(item, "có trong thùng rác")
+    eq(item.projectId, projectId, "projectId")
+    ok(item.bytes > 0, "có dung lượng")
+  })
+  await it("phục hồi từ thùng rác → project trở lại nguyên vẹn", async () => {
+    const r = await api("POST", `/api/trash/${trashId}/restore`)
+    eq(r.status, 200, "status")
+    eq(r.json.project.id, projectId, "cùng id")
+    eq(r.json.project.stats.sheets, 3, "còn đủ 3 sheet")
+    const c = await api("GET", `/api/projects/${projectId}/contract`)
+    eq(c.json.contract.sheets.length, 3, "contract nguyên vẹn")
+  })
+  await it("xoá vĩnh viễn thiếu mã → 412 CONFIRM_REQUIRED", async () => {
+    const d = await api("DELETE", `/api/projects/${projectId}`)
+    const tid = d.json.trashId
+    const r = await api("DELETE", `/api/trash/${tid}?purge=1`)
+    eq(r.status, 412, "status")
+    eq(r.json.error.code, "CONFIRM_REQUIRED", "code")
+    await api("POST", `/api/trash/${tid}/restore`)
+  })
+  await it("mã 4 số phát ra TERMINAL, response KHÔNG chứa mã; mã sai → 403", async () => {
+    const d = await api("DELETE", `/api/projects/${projectId}`)
+    const tid = d.json.trashId
+    let printed = null
+    agent.confirm.print = s => { printed = String(s) }
+    const issue = await api("POST", `/api/trash/${tid}/code`)
+    eq(issue.status, 202, "status")
+    ok(!/\b\d{4}\b/.test(JSON.stringify(issue.json)), `response KHÔNG được chứa mã: ${issue.text}`)
+    const code = /(\d{4})/.exec(printed ?? "")?.[1]
+    ok(code, "mã đã được in ra terminal")
+    const bad = await api("DELETE", `/api/trash/${tid}?purge=1`, { headers: { "x-kitgen-confirm": "0000" === code ? "1111" : "0000" } })
+    eq(bad.status, 403, "mã sai → 403")
+    eq(bad.json.error.code, "CONFIRM_INVALID", "code")
+    const good = await api("DELETE", `/api/trash/${tid}?purge=1`, { headers: { "x-kitgen-confirm": code } })
+    eq(good.status, 204, "mã đúng → 204")
+    const list = await api("GET", "/api/trash")
+    ok(!list.json.items.some(i => i.trashId === tid), "đã rời thùng rác")
+  })
+
+  // project mới cho các nhóm test sau
+  let pid = null
+  await it("tạo lại project để test contract/refs/run", async () => {
+    const r = await api("POST", "/api/projects", {
+      body: { name: "Kiểm thử hợp đồng", template: "basic", firstVariant: { id: "tet", vi: "Tết đỏ", bg: "magenta" } },
+    })
+    eq(r.status, 201, "status")
+    pid = r.json.project.id
+  })
+
+  return { pid }
+}

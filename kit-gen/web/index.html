@@ -1,0 +1,113 @@
+<!doctype html>
+<!--
+  index.html — ĐIỂM VÀO DUY NHẤT của web quản lý kit-gen v2 (project-base).
+  Thi công theo teams/p0-boctach/UX-SPEC.md §2.1 (sitemap) · §2.2 (nav chrome) · §5 (design system).
+
+  ╔══════════════════════════════════════════════════════════════════════════════════════╗
+  ║  ĐỌC TRƯỚC KHI SỬA — file này do engineer màn SETUP + DANH SÁCH PROJECT sở hữu.       ║
+  ║  Bạn KHÔNG cần sửa file này để thêm màn của mình. Xem "MOUNT POINT" bên dưới.         ║
+  ╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  ─────────────────────────────────────────────────────────────────────────────────────────
+  MOUNT POINT — CÁC MÀN CỦA TEAM KHÁC VÀO Ở ĐÂU?
+  ─────────────────────────────────────────────────────────────────────────────────────────
+  Cây DOM lúc chạy (do web/js/app-shell/shell.js dựng, KHÔNG viết tay ở đây):
+
+      <body>
+        └── <div id="app">                     ← gốc duy nhất trong file này
+              └── div.kg-app
+                    ├── header.kg-header       ← §2.2  (app-shell/chrome.js): logo, breadcrumb,
+                    │                             ô tìm ⌘K, workspace pill, AGENT PILL 6 trạng thái
+                    ├── div.kg-banner-slot     ← §2.5  banner chế độ chỉ-đọc / kết nối lại
+                    └── div.kg-body
+                          ├── nav.kg-rail      ← §2.2  rail 5 mục, chỉ hiện khi ở trong /p/:id
+                          └── main#main.kg-main ★★★ MOUNT POINT CỦA MỌI MÀN ★★★
+
+  ★ Màn của bạn được mount vào `main#main`. Cách làm, đúng 2 bước:
+
+    1) Tạo file theo đúng đường dẫn đã khai sẵn trong `web/js/app-shell/screen-registry.js`:
+         S2   /p/:id            → web/js/screens/project/index.js
+         S2b  /p/:id/settings   → web/js/screens/project/settings.js
+         S3   /p/:id/design     → web/js/screens/design/index.js
+         S4   /p/:id/runs       → web/js/screens/runs/index.js
+         S4d  /p/:id/runs/:runId→ web/js/screens/runs/index.js  (cùng module S4, phân biệt bằng params.runId)
+         S5   /p/:id/kit        → web/js/screens/kit/index.js
+         S6   /settings         → web/js/screens/settings/index.js
+       (S0 /setup và S1 / đã có: web/js/screens/setup/**, web/js/screens/projects/**)
+
+    2) Trong file đó export đúng hợp đồng:
+         export function mount(host, ctx) { …; return handle; }
+       · host = phần tử rỗng nằm trong main#main — bạn toàn quyền bên trong nó
+       · ctx  = { route, params, query, tab, status, navigate, go, shell }
+                `status` là trạng thái agent (§2.4/§2.5) — ĐỪNG tự probe lại
+       · handle = { destroy?, route?(ctx), status?(st), title?(), rail?() }
+                shell gọi `route(ctx)` khi chỉ đổi tab/param (giữ vị trí cuộn, đóng audit H3),
+                gọi `destroy()` khi rời màn, `status(st)` khi agent đổi trạng thái.
+
+    Chưa có file → shell tự vẽ khối "màn này chưa thi công" và APP VẪN CHẠY (§6.5-6).
+    Route/tab hợp lệ đã khai ở `web/js/core/routes.js` (của team core) — không thêm màn ngoài §2.1.
+
+    Ghi chú tương thích: nếu module của bạn đã dùng hợp đồng riêng
+    (`createDesignScreen`/`createRunsScreen` như S3/S4 hiện tại), `web/js/app-shell/screen-adapters.js`
+    tự bọc giúp — không phải sửa gì. Hợp đồng `mount()` ở trên là hợp đồng NÊN dùng cho màn mới.
+
+  ─────────────────────────────────────────────────────────────────────────────────────────
+  LUẬT CỨNG (vi phạm là fail)
+  ─────────────────────────────────────────────────────────────────────────────────────────
+  · Dùng lại primitive `web/js/ui/**` + token `web/css/tokens.css`. Không tự viết button/modal/toast,
+    không hard-code màu/khoảng cách. Xem mọi primitive ở web/preview-ui.html.
+  · Gọi agent CHỈ qua `web/js/core/agent.js` / `api.js`; hiện lỗi qua `web/js/core/errors.js`.
+    Không fetch trực tiếp, không đưa error.message kỹ thuật ra thân giao diện.
+  · Lưu state CHỈ qua `web/js/core/store.js` (+ `idb.js`). Không chạm localStorage/indexedDB trực tiếp.
+  · File này CỐ Ý không có logic: bài học studio.html 743 dòng. Đừng thêm <script> nội dung vào đây.
+-->
+<html lang="vi" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<!-- §2.2 responsive · đóng audit I5 (v1 thiếu thẻ này nên vỡ trên máy nhỏ) -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="kit-gen — quản lý project sinh kit ảnh bằng AI. Dữ liệu nằm trên máy bạn.">
+<!--
+  CSP: chỉ cho phép gọi vào loopback (agent local) + self. Không CDN, không domain thứ ba
+  (§8.2 checklist bảo mật; arch §7.1-R5). connect-src có cả http://localhost:* vì bản
+  chạy tại máy có thể mở bằng localhost. img-src có blob: cho thumbnail đọc từ IndexedDB.
+-->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://127.0.0.1:* http://localhost:* http://[::1]:*; connect-src 'self' http://127.0.0.1:* http://localhost:* http://[::1]:*; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+<title>kit-gen</title>
+<link rel="stylesheet" href="/css/app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%234C8DFF'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<!-- Gốc app. Toàn bộ giao diện do app-shell dựng vào đây (header · banner · rail · main#main). -->
+<div id="app">
+  <!-- Trạng thái trước khi JS chạy: nói rõ đang chờ gì, không để trang trắng (§1.1-6). -->
+  <noscript>
+    <p style="padding:var(--s-5)">
+      Giao diện kit-gen cần JavaScript để nói chuyện với công cụ local trên máy bạn.
+      Không có dữ liệu nào được gửi ra Internet.
+    </p>
+  </noscript>
+</div>
+
+<!--
+  Khởi động. `type="module"` ⇒ ES modules thuần, KHÔNG build step, KHÔNG npm, KHÔNG CDN.
+
+  VÌ SAO ĐƯỜNG DẪN GỐC (`/js/…`) CHỨ KHÔNG PHẢI TƯƠNG ĐỐI (`./js/…`):
+  trình duyệt phân giải subresource theo THƯ MỤC CỦA URL TÀI LIỆU. Với deep link
+  (mở trực tiếp hoặc F5 giữa màn) như `/p/tet26/design` hay `/app/p/tet26/runs/r-0032`,
+  `./js/boot.js` biến thành `/p/tet26/js/boot.js` — SPA fallback trả index.html cho URL đó
+  ⇒ thẻ <script> nhận về HTML ⇒ TRANG TRẮNG. Đã kiểm bằng curl thật, xem
+  teams/design/INTEGRATION.md §"kiểm mối nối".
+  Chỉ 2 đường dẫn này cần tuyệt đối; phần còn lại của đồ thị module phân giải theo
+  URL CỦA MODULE (không phải của tài liệu) nên `./` bên trong js/** vẫn đúng.
+  Bản mirror phục vụ tại `/app/` được agent tự viết lại `/js/` → `/app/js/`
+  (agent/routes/app.mjs `rewriteIndexBase`) ⇒ cùng một file chạy đúng ở CẢ HAI đường vào (§2.1):
+    · web tĩnh Cloudflare Pages   https://kitgen.pages.dev/
+    · bản chạy tại máy            http://127.0.0.1:8765/app/
+-->
+<script type="module" src="/js/boot.js"></script>
+</body>
+</html>

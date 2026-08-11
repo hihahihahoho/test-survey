@@ -1,0 +1,35 @@
+{
+  "_note": "Template 'basic' của UX-SPEC §4.1 — ĐỊNH NGHĨA BẰNG DANH SÁCH FILE CỤ THỂ để mọi lần tạo project ra kết quả GIỐNG NHAU (không phải '16 element đầu tiên'). Thứ tự giữ đúng thứ tự trong element-lib.json: element cùng group nằm liền kề, còn 07-progress-track và 08-progress-fill cố ý cách xa nhau. 3 sheet = 25 ô = 24 element + 1 nền.",
+  "version": 1,
+  "sheets": [
+    {
+      "id": "main",
+      "grid": { "cols": 4, "rows": 4 },
+      "orient": "landscape",
+      "cell_hint": "landscape 3:2 cell",
+      "components": [
+        "01-btn-pill-red", "02-btn-pill-blue", "03-btn-pill-outline", "16-fx-burst",
+        "07-progress-track", "04-btn-circle", "11-digit-plate", "10-popup-ribbon",
+        "12-piece-active", "13-piece-locked", "05-tab-chip-idle", "06-tab-chip-active",
+        "08-progress-fill", "14-reward-voucher", "15-reward-giftbox", "09-popup-panel-short"
+      ]
+    },
+    {
+      "id": "tall",
+      "grid": { "cols": 4, "rows": 2 },
+      "orient": "portrait",
+      "cell_hint": "portrait 2:3 cell",
+      "components": [
+        "24-popup-panel-tall", "20-game-object-closed", "21-game-object-open", "22-board-panel",
+        "51-reward-giftbox-open", "52-envelope-body", "53-envelope-flap", "54-trophy-cup"
+      ]
+    },
+    {
+      "id": "bg-home",
+      "grid": { "cols": 1, "rows": 1 },
+      "orient": "landscape",
+      "cell_hint": "full-bleed background",
+      "components": ["25-bg-home"]
+    }
+  ]
+}

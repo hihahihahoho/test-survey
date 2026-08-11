@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -eu
+HOME_DIR="${KITGEN_HOME:-$HOME/.kitgen}"
+CONFIG="$HOME_DIR/config.env"
+[ -f "$CONFIG" ] && . "$CONFIG"
+SOURCE="${KITGEN_SOURCE:-$HOME_DIR/current}"
+[ -d "$SOURCE" ] && SOURCE="$(CDPATH= cd -- "$SOURCE" && pwd -P)"
+WORKSPACE="${KITGEN_WORKSPACE:-$HOME/KitGen}"
+PORT="${KITGEN_PORT:-8765}"
+ORIGIN="${KITGEN_ORIGIN:-http://127.0.0.1:$PORT}"
+NODE="${KITGEN_NODE:-$(command -v node 2>/dev/null || true)}"
+agent_cmd() {
+  [ -n "$NODE" ] || { echo "KitGen: Node runtime not found. Run install.sh again." >&2; exit 1; }
+  exec env PATH="$WORKSPACE/.venv/bin:$PATH" "$NODE" "$SOURCE/agent/server.mjs" \
+    --workspace "$WORKSPACE" --port "$PORT" --origin "$ORIGIN" --app-root "$SOURCE/app"
+}
+health() {
+  curl -fsS -H 'X-KitGen-Client: 1' -H "Origin: $ORIGIN" "http://127.0.0.1:$PORT/health"
+}
+case "${1:-help}" in
+  run) agent_cmd ;;
+  start)
+    if [ "$(uname -s)" = Darwin ]; then launchctl kickstart -k "gui/$(id -u)/com.kitgen.agent"
+    elif command -v systemctl >/dev/null 2>&1; then systemctl --user start kitgen-agent
+    else nohup "$0" run >>"$HOME_DIR/agent.log" 2>&1 & fi ;;
+  stop)
+    if [ "$(uname -s)" = Darwin ]; then launchctl kill TERM "gui/$(id -u)/com.kitgen.agent" 2>/dev/null || true
+    elif command -v systemctl >/dev/null 2>&1; then systemctl --user stop kitgen-agent
+    else pkill -f "$SOURCE/agent/server.mjs" 2>/dev/null || true; fi ;;
+  restart) "$0" stop; sleep 1; "$0" start ;;
+  status) health || { echo; echo "KitGen agent is not responding on port $PORT" >&2; exit 1; } ;;
+  doctor) curl -fsS -H 'X-KitGen-Client: 1' -H "Origin: $ORIGIN" "http://127.0.0.1:$PORT/api/doctor?refresh=1" ;;
+  logs) tail -n "${2:-100}" "$HOME_DIR/agent.log" ;;
+  open) open "http://127.0.0.1:$PORT/app/" 2>/dev/null || xdg-open "http://127.0.0.1:$PORT/app/" ;;
+  update) shift; exec "$HOME_DIR/install.sh" --update "$@" ;;
+  help|*) echo "Usage: kitgen {start|stop|restart|status|doctor|logs [n]|open|update}" ;;
+esac

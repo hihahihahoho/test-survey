@@ -6,6 +6,14 @@ cd "$(dirname "$0")"
 ROOT="$(pwd)"
 mkdir -p raw logs prompts
 
+# Mặc định dùng cấu hình Codex hiện tại. IMG_HOME chỉ được đặt khi user chủ động
+# chọn profile riêng trong installer.
+IMG_HOME="${IMG_HOME:-}"
+MAXJOBS="${MAXJOBS:-4}"
+if [[ -n "$IMG_HOME" && ! -f "$IMG_HOME/auth.json" ]]; then
+  echo "FATAL: profile Codex riêng chưa đăng nhập. Chạy: CODEX_HOME=$IMG_HOME codex login"; exit 1
+fi
+
 # Khung xương layout (ảnh ref đính kèm codex) — deterministic từ styles.json.
 # Bản HTML/SVG (nét, đẹp); thiếu playwright thì rơi về bản PIL.
 node render-skeleton.mjs || python3 skeleton.py
@@ -153,7 +161,9 @@ $(cat "prompts/${job}.txt")
 
   # bash 3.2 + set -u: mảng rỗng nổ "unbound variable" nếu expand thẳng
   local t0=$(date +%s)
-  codex exec \
+  local codex_env=()
+  [[ -n "$IMG_HOME" ]] && codex_env=(env CODEX_HOME="$IMG_HOME")
+  "${codex_env[@]}" codex exec \
     -s workspace-write \
     -C "${ROOT}" \
     --skip-git-repo-check \
@@ -186,6 +196,9 @@ match() {
 echo "Bắt đầu $(date +%H:%M:%S) — chạy song song${FILTERS[*]:+ (lọc: ${FILTERS[*]})}"
 while read -r job; do
   match "$job" || continue
+  # Throttle: image-gen ăn quota ChatGPT gấp 3-5x lượt thường; bung cả 28 job dễ dính rate limit.
+  # bash 3.2 (macOS) không có `wait -n` → vòng đợi bằng sleep.
+  while (( $(jobs -pr | wc -l) >= MAXJOBS )); do sleep 2; done
   run_one "$job" &
 done < <(python3 -c "
 import json

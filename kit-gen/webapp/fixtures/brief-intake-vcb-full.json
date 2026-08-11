@@ -1,0 +1,593 @@
+{
+  "_about": "Bộ TRẢ LỜI ĐẦY ĐỦ (fixture): 72 field đều có giá trị. 50 field lấy nguyên từ prefill-vcb.json thật; 22 field vốn để trống được điền bằng câu trả lời GIẢ LẬP (source ghi rõ 'FIXTURE'). Dùng để test nhánh 'brief đã đủ'.",
+  "_form": "surveys/vcb-brief-intake-2026.json",
+  "_prefill_source": "kit-gen/teams/brief-intake/prefill-vcb.json (72 field)",
+  "_confidence_legend": {
+    "cao": "nguyên văn trong note, có nhãn rõ ràng",
+    "tb": "suy luận một bước, hoặc khách tự ghi 'gợi ý/dự kiến/nếu được'",
+    "thap": "suy từ pipeline hoặc từ hai nguồn mâu thuẫn",
+    "trong": "không có nguồn nào — để trống, bắt khách trả lời"
+  },
+  "formId": "vcb-brief-intake-2026",
+  "sections": {
+    "sec_meta": {
+      "project_name": {
+        "question": "Tên chiến dịch",
+        "value": "VCB Look back 2025 & Chợ Tết 2026",
+        "source": "tên thư mục brief",
+        "confidence": "cao"
+      },
+      "pic_client": {
+        "question": "Đầu mối phía khách hàng (tên + kênh liên hệ)",
+        "value": "Chị Lan — Phòng Marketing VCB (Zalo nhóm dự án)",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "devices": {
+        "question": "Thiết bị hiển thị",
+        "value": [
+          "Mobile app",
+          "Web responsive"
+        ],
+        "source": "MTCT cột GAME mục 11: 'Thiết bị hiển thị: mobile và web'",
+        "confidence": "cao"
+      },
+      "has_urd": {
+        "question": "Đã có tài liệu FE / URD chưa?",
+        "value": "Chưa có",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "urd_link": {
+        "question": "Link tài liệu FE / URD",
+        "value": "Chưa có",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "deliverable": {
+        "question": "Form này đang brief hạng mục nào?",
+        "value": "Cả hai",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      }
+    },
+    "sec_lb": {
+      "badge_list": {
+        "question": "Danh sách trophy / achievement đã chốt",
+        "value": "1. Giao dịch đầu tiên\n2. 10 giao dịch\n3. Chuyển tiền quốc tế\n4. Tiết kiệm online\n5. Thanh toán hoá đơn\n6. Nạp điện thoại\n7. Mở thẻ mới\n8. Đầu tư\n9. QR Pay\n10. Khách hàng thân thiết",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "badge_count": {
+        "question": "Tổng số trophy / achievement cần vẽ",
+        "value": 10,
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "has_storyline": {
+        "question": "Có storyline hay concept xuyên suốt không?",
+        "value": "Không — graphic chỉ minh hoạ, phụ hoạ cho nội dung insight",
+        "source": "MTCT cột LOOK BACK mục 2: 'sử dụng graphic là phong cách tranh cổ động, không có storyline. Hình vẽ miêu tả, phụ hoạ cho nội dung insights hiện cho khách hàng'",
+        "confidence": "cao"
+      },
+      "storyline_desc": {
+        "question": "Graphic gắn với nội dung từng màn như thế nào?",
+        "value": "Mỗi màn insight có 1 graphic cổ động minh hoạ đúng con số của màn đó, không nối thành truyện.",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "digibot_use": {
+        "question": "Có bắt buộc dùng VCB Digibot không?",
+        "value": "Không dùng Digibot",
+        "source": "MTCT cột LOOK BACK mục 3: 'không dùng Digibot'",
+        "confidence": "cao"
+      }
+    },
+    "sec_game": {
+      "game_display_name": {
+        "question": "Tên game hiển thị trên giao diện",
+        "value": "ĐI CHỢ TẾT CÙNG VCB DIGIBANK",
+        "source": "MTCT cột GAME mục 2: 'Tên game hiển thị trên giao diện: dự kiện là \"ĐI CHỢ TẾT CÙNG VCB DIGIBANK\"'",
+        "confidence": "tb",
+        "note": "Note ghi 'dự kiến' → cần khách xác nhận đã chốt"
+      },
+      "cta_label": {
+        "question": "Chữ trên nút bấm chính",
+        "value": "Đi chợ ngay",
+        "source": "GCT, dòng Action màn Home: button 'Đi chợ ngay'",
+        "confidence": "cao"
+      },
+      "flow_steps": {
+        "question": "Luồng người chơi",
+        "value": "1. Khách hàng giao dịch tài chính\n2. Có lượt chơi\n3. Vào game\n4. Bấm \"Đi chợ ngay\"\n5. Nhân vật random bốc một món trong gian hàng\n6. Kết quả: tiền / voucher VNPAY / câu chúc",
+        "source": "GCT — luồng 6 bước",
+        "confidence": "cao"
+      },
+      "randomness": {
+        "question": "Cơ chế bốc quà",
+        "value": "Random hoàn toàn",
+        "source": "GCT bước 5: 'Random chọn một món đồ'",
+        "confidence": "thap",
+        "note": "MÂU THUẪN #2 — mô tả Level 3 lại ghi 'Chọn vào bao lì xì'. Random vs tự chọn cần hai bộ màn hình khác nhau"
+      },
+      "result_types": {
+        "question": "Các loại kết quả",
+        "value": [
+          "Tiền mặt",
+          "Voucher VNPAY",
+          "Câu chúc"
+        ],
+        "source": "GCT bước 6",
+        "confidence": "cao"
+      },
+      "item_list": {
+        "question": "Các vật phẩm bày trên sạp chợ Tết",
+        "value": [
+          "Bao lì xì",
+          "Con gà",
+          "Cây đào",
+          "Cây mai",
+          "Cây quất",
+          "Bánh chưng",
+          "Bánh tét",
+          "Miếng thịt mỡ",
+          "Hành muối",
+          "Giò / chả",
+          "Cây hoa"
+        ],
+        "source": "HỢP của hai danh sách: GCT (cây hoa, cây đào, gà, bánh chưng, thịt, giò/chả, bao lì xì = 7 món) + MTCT cột GAME mục 3 (bao lì xì, con gà, cây đào, cây mai, miếng thịt mỡ, hành, cây quất, bánh chưng, bánh tét, '....')",
+        "confidence": "tb",
+        "note": "MÂU THUẪN #1 — hai note lệch nhau, danh sách MTCT còn kết thúc bằng '....' nên chưa chắc đã đủ. Bắt khách chốt"
+      },
+      "item_count": {
+        "question": "Tổng số vật phẩm cần vẽ",
+        "value": 11,
+        "source": "đếm theo item_list (hợp hai danh sách)",
+        "confidence": "tb"
+      },
+      "wish_count": {
+        "question": "Số câu chúc cần thiết kế đồ hoạ",
+        "value": 8,
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "voucher_count": {
+        "question": "Số mẫu frame voucher VNPAY",
+        "value": 3,
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "cash_tiers": {
+        "question": "Số mệnh giá tiền mặt",
+        "value": 4,
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "gift_weight": {
+        "question": "Trọng số kích thước các loại quà",
+        "value": "Tiền mặt: Rất lớn · Voucher: Vừa · Câu chúc: Nhỏ",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "special_date": {
+        "question": "Yêu cầu thiết kế cho ngày/giờ đặc biệt",
+        "value": "Có — Giao thừa và mùng 1",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      }
+    },
+    "sec_char": {
+      "need_mascot": {
+        "question": "Có dùng nhân vật đại diện (mascot) không?",
+        "value": "Có",
+        "source": "MTCT cột GAME mục 6: 'Có cần sử dụng nhân vật đại diện (mascot) nào không? có'",
+        "confidence": "cao"
+      },
+      "char_species": {
+        "question": "Loài / hình tượng nhân vật",
+        "value": "Con ngựa",
+        "source": "BM dòng 'Nhân vật': 'Con ngựa (prefer giới tính nam)'",
+        "confidence": "cao"
+      },
+      "char_gender": {
+        "question": "Giới tính thể hiện",
+        "value": "Nam",
+        "source": "BM dòng 'Nhân vật': 'prefer giới tính nam'",
+        "confidence": "cao"
+      },
+      "char_traits": {
+        "question": "Tính cách nhân vật",
+        "value": [
+          "Vui vẻ",
+          "Thân thiện",
+          "Gần gũi",
+          "Đáng tin cậy"
+        ],
+        "source": "BM dòng 'Tính cách': 'Vui vẻ, thân thiện, gần gũi, đáng tin cậy'",
+        "confidence": "cao"
+      },
+      "char_expression": {
+        "question": "Biểu cảm chủ đạo",
+        "value": "Tươi cười, thân thiện, phong thái hân hoan ngày Tết",
+        "source": "BM dòng 'Biểu cảm'",
+        "confidence": "cao"
+      },
+      "char_costume": {
+        "question": "Trang phục",
+        "value": "Trang phục Tết (áo dài nam)",
+        "source": "BM dòng 'Trang phục (gợi ý, không fixed)': 'Trang phục tết (áo dài nam?)'",
+        "confidence": "tb",
+        "note": "Note tự ghi 'gợi ý, không fixed' và có dấu hỏi → khách phải xác nhận"
+      },
+      "char_proportion": {
+        "question": "Tỷ lệ cơ thể nhân vật",
+        "value": "Chibi 3 đầu",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "char_pose_count": {
+        "question": "Cần bao nhiêu tư thế (pose)?",
+        "value": "16 pose",
+        "source": "suy từ pipeline kit-gen (sheet pose-* mặc định lưới 4×4), KHÔNG phải từ brief",
+        "confidence": "thap"
+      },
+      "char_pose_list": {
+        "question": "Các tư thế cần có",
+        "value": [
+          "Đứng chờ (idle)",
+          "Ăn mừng",
+          "Chỉ tay",
+          "Cầm quà",
+          "Trao quà"
+        ],
+        "source": "suy từ luồng 6 bước của GCT: đứng chờ → chỉ vào sạp → bốc/cầm món → trao quà → ăn mừng",
+        "confidence": "tb"
+      },
+      "char_ref_image": {
+        "question": "Đã có ảnh mascot chốt chưa?",
+        "value": "Chưa có, cần vẽ mới",
+        "source": "không thấy file mascot chốt nào trong bộ brief; BM mới dừng ở mô tả bằng chữ",
+        "confidence": "tb"
+      }
+    },
+    "sec_style": {
+      "sc_age": {
+        "question": "Chín chắn ↔ Trẻ trung",
+        "value": 6,
+        "source": "BM 'Dân gian, mộc mạc, dễ gần, đáng yêu' + RES nhóm image_1615143566_* (trẻ em chibi màu nước)",
+        "confidence": "tb",
+        "note": "Điểm số là SUY LUẬN của phân tích viên, khách chưa từng nói con số"
+      },
+      "sc_energy": {
+        "question": "Sống động, ồn ào ↔ Thư giãn, nhẹ nhàng",
+        "value": 2,
+        "source": "MTCT cột GAME mục 1 'vui vẻ, hài hước' + RES nhóm image_2024593067_* (poster chợ Tết nhiều chi tiết)",
+        "confidence": "tb"
+      },
+      "sc_lux": {
+        "question": "Sang trọng ↔ Bình dị, gần gũi",
+        "value": 6,
+        "source": "BM dòng 'Phong cách đồ hoạ': 'mộc mạc, dễ gần'",
+        "confidence": "tb"
+      },
+      "sc_era": {
+        "question": "Hiện đại ↔ Cổ điển",
+        "value": 5,
+        "source": "MTCT cột LOOK BACK mục 2&4 'tranh cổ động' kéo về cổ điển",
+        "confidence": "thap",
+        "note": "MÂU THUẪN #3 — PH2808: 'có thể không phản ánh được tinh thần số hoá mà VCB đang hướng tới 2025-2026'. Bắt khách chốt"
+      },
+      "sc_gender": {
+        "question": "Nam tính ↔ Nữ tính",
+        "value": 3,
+        "source": "BM: mascot 'prefer giới tính nam'",
+        "confidence": "tb"
+      },
+      "sc_detail": {
+        "question": "Nét phẳng ↔ Đổ khối dày",
+        "value": 3,
+        "source": "RES: ảnh nhóm 1 và 2 đều là màu nước / minh hoạ phẳng",
+        "confidence": "tb",
+        "note": "Thang do team design THÊM, không có trong sheet khách. Đây là biến quyết định rate 1.5 vs 3 md/màn"
+      },
+      "sc_outline": {
+        "question": "Không viền ↔ Viền đậm",
+        "value": 2,
+        "source": "RES nhóm image_2024593067_*: 'không outline đậm'",
+        "confidence": "tb"
+      },
+      "style_direction": {
+        "question": "Chọn MỘT hướng phong cách chính",
+        "value": "Dân gian chibi màu nước",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "ref_like_what": {
+        "question": "Thích gì ở mỗi nhóm ảnh tham khảo",
+        "value": "Nhóm 1: bảng màu và nét cọ. Nhóm 2: bố cục gian hàng. Nhóm 3: không lấy.",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "ref_links": {
+        "question": "Link ảnh / thư mục tham khảo",
+        "value": "https://drive.google.com/drive/folders/11GCH9bF2FVU6B4OJv5SCqaqas5wsu0yf (MTCT cột GAME mục 7) + Link 1, Link 2 (MTCT cột LOOK BACK mục 4) + 12 ảnh trong thư mục resources/",
+        "source": "MTCT cột GAME mục 7 và cột LOOK BACK mục 4",
+        "confidence": "cao",
+        "note": "Link 1 / Link 2 trong sheet là hyperlink chưa bóc được URL đích — cần khách dán lại"
+      },
+      "style_avoid": {
+        "question": "Điều KHÔNG muốn thấy",
+        "value": [
+          "Hoài cổ, khắc khổ"
+        ],
+        "source": "PH2808 — phản biện hướng tranh cổ động",
+        "confidence": "cao"
+      },
+      "color_primary": {
+        "question": "Màu chính (hex)",
+        "value": "#d42a1e",
+        "source": "BM 'đỏ' + MTCT cột GAME mục 4 'đỏ'; mã hex là mặc định sẵn có trong kit-gen/styles.json",
+        "confidence": "tb",
+        "note": "Khách mới cho TÊN màu tiếng Việt, chưa cho mã hex — hex này là đề xuất của design"
+      },
+      "color_secondary": {
+        "question": "Màu phụ (hex)",
+        "value": "#f5c64a",
+        "source": "BM 'vàng'; hex mặc định trong kit-gen/styles.json",
+        "confidence": "tb"
+      },
+      "color_palette": {
+        "question": "Các màu khác trong bảng màu",
+        "value": [
+          "Đỏ",
+          "Vàng",
+          "Cam",
+          "Hồng",
+          "Xanh lá bánh chưng"
+        ],
+        "source": "MTCT cột GAME mục 4: 'màu của tết (đỏ, cam, vàng, hồng, xanh lá bánh chưng)'; BM: 'đỏ, vàng, hồng, cam'",
+        "confidence": "cao"
+      },
+      "game_tone": {
+        "question": "Tông cảm xúc chung",
+        "value": [
+          "Vui vẻ",
+          "Hài hước",
+          "Dân gian",
+          "Gần gũi"
+        ],
+        "source": "MTCT cột GAME mục 1: 'Tính cách game: vui vẻ, hài hước, dân gian, gần gũi'",
+        "confidence": "cao"
+      }
+    },
+    "sec_scope": {
+      "screen_list": {
+        "question": "Liệt kê từng màn hình",
+        "value": "Màn Home — khung cảnh chợ Tết, các gian hàng, người dân mua sắm\nLevel 2 — nhân vật đứng trước sạp hàng bày đồ Tết\nLevel 3 — màn kết quả (câu chúc / voucher / tiền)",
+        "source": "GCT — bảng 3 màn hình",
+        "confidence": "cao",
+        "note": "Chỉ có cho hạng mục GAME. Với LOOK BACK thì hoàn toàn TRỐNG — đúng lỗ hổng #1"
+      },
+      "screen_count": {
+        "question": "Tổng số màn hình",
+        "value": 3,
+        "source": "đếm bảng màn hình của GCT",
+        "confidence": "cao",
+        "note": "Chỉ cho hạng mục Game. Lookback: 3 bản estimate 28.08 đếm 9 / 14 / 10 màn — chưa chốt"
+      },
+      "screen_bg_count": {
+        "question": "Số màn cần vẽ mới cả khung cảnh nền",
+        "value": 2,
+        "source": "GCT (Home + sạp hàng) khớp TLG mục 2 'Home + Gian hàng = 7 man-day'",
+        "confidence": "cao"
+      },
+      "ui_components": {
+        "question": "Thành phần giao diện cần có",
+        "value": [
+          "Nút bấm chính (kèm trạng thái nhấn và mờ)",
+          "Popup ngang",
+          "Popup dọc",
+          "Ruy băng tiêu đề",
+          "Bộ đếm lượt chơi",
+          "Khung voucher",
+          "Bao lì xì (thân + nắp)",
+          "Hiệu ứng nổ sáng khi trúng"
+        ],
+        "source": "suy từ luồng 6 bước GCT + element-lib.json sẵn có của kit-gen",
+        "confidence": "tb"
+      }
+    },
+    "sec_brand": {
+      "brand_must": {
+        "question": "Yếu tố BẮT BUỘC phải xuất hiện",
+        "value": [
+          "Tên game trên giao diện"
+        ],
+        "source": "MTCT cột GAME mục 5: 'Chi tiết/yếu tố bắt buộc phải đưa vào thiết kế: Tên game \"Đi chợ Tết cùng VCB Digibank\"'",
+        "confidence": "cao"
+      },
+      "brand_nice": {
+        "question": "Yếu tố nice-to-have",
+        "value": [
+          "Màu xanh VCB trên nhân vật"
+        ],
+        "source": "BM dòng 'Yếu tố thương hiệu (không bắt buộc, nice to have)': 'Nếu được, có yếu tố màu xanh VCB'",
+        "confidence": "cao"
+      },
+      "brand_forbid": {
+        "question": "ĐIỀU CẤM",
+        "value": [
+          "Cấm đưa logo VCB lên nhân vật",
+          "Cấm đưa chữ \"VCB\" lên nhân vật",
+          "Cấm dùng VCB Digibot",
+          "Cấm hình ảnh hoài cổ, khắc khổ"
+        ],
+        "source": "BM: 'Không đưa logo VCB, chữ VCB lên mascot'; MTCT cột LOOK BACK mục 3: 'không dùng Digibot'; PH2808 về cảm giác hoài cổ",
+        "confidence": "cao"
+      },
+      "brand_guideline": {
+        "question": "Link brand guideline VCB",
+        "value": "Chưa có bản dùng được, sẽ gửi sau",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "legal_note": {
+        "question": "Ràng buộc pháp lý / kiểm duyệt",
+        "value": "Không dùng quốc kỳ, không dùng khí tài quân sự",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      }
+    },
+    "sec_deliver": {
+      "need_motion": {
+        "question": "Có yêu cầu chuyển động không?",
+        "value": "Có",
+        "source": "MTCT cột LOOK BACK mục 6 'có motion khi hiển thị từng frame'; cột GAME mục 14 'có motion khi hiển thị kết quả'",
+        "confidence": "cao"
+      },
+      "motion_scope": {
+        "question": "Chuyển động xuất hiện ở đâu",
+        "value": [
+          "Hiện từng khung nội dung",
+          "Hiện kết quả trúng thưởng"
+        ],
+        "source": "MTCT cột LOOK BACK mục 6 + cột GAME mục 14",
+        "confidence": "cao"
+      },
+      "motion_format": {
+        "question": "Định dạng bàn giao motion",
+        "value": "Lottie (JSON)",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "need_sound": {
+        "question": "Âm thanh do bên nào lo?",
+        "value": "Bên khách tự lo",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "asset_format": {
+        "question": "Định dạng bàn giao đồ hoạ",
+        "value": [
+          "PNG tách nền",
+          "Sprite sheet"
+        ],
+        "source": "đầu ra native của kit-gen (gen.sh sinh sprite sheet, slice.py cắt PNG) — đề xuất của design, không phải khách nói",
+        "confidence": "tb"
+      }
+    },
+    "sec_time": {
+      "deadline_final": {
+        "question": "Hạn bàn giao cuối",
+        "value": "2026-01-30",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "milestone_list": {
+        "question": "Các mốc trung gian",
+        "value": "23/9 bàn giao 5 màn hình · 15/10 bàn giao 9 màn còn lại · 30/11 bàn giao bộ Game",
+        "source": "FIXTURE (giữ nguyên độ tin cậy thấp) — PH2808 có nhắc '23/9 bàn giao 5 MH, còn 9 MH'",
+        "confidence": "thap",
+        "note": "Có câu trả lời nhưng độ tin cậy vẫn THẤP ⇒ vẫn là note-only"
+      },
+      "est_sketch": {
+        "question": "Man-day phác thảo ý tưởng",
+        "value": 3,
+        "source": "TLG mục 1 'Phác thảo ý tưởng: 3'",
+        "confidence": "cao"
+      },
+      "rate_screen": {
+        "question": "Đơn giá mỗi màn hình",
+        "value": "1.5 man-day (nét đơn giản, mảng phẳng)",
+        "source": "PH2808 — bản B và C dùng 1.5 ngày/màn, bản A dùng 3 ngày/màn",
+        "confidence": "tb",
+        "note": "Quy tắc: sc_detail ≤ 3 → 1.5; sc_detail ≥ 5 → 3. Prefill 1.5 vì sc_detail đang gợi ý 3"
+      },
+      "rate_badge": {
+        "question": "Đơn giá mỗi badge",
+        "value": "0.5 man-day",
+        "source": "PH2808 — 2/3 bản dùng 0.5 ngày/badge",
+        "confidence": "tb"
+      },
+      "rate_gift": {
+        "question": "Đơn giá mỗi loại quà",
+        "value": "1 man-day",
+        "source": "TLG mục 3: 'MH quà tặng: 3 man-day — 1 ngày/quà'",
+        "confidence": "cao"
+      },
+      "buffer_days": {
+        "question": "Số ngày dự phòng",
+        "value": 3,
+        "source": "hằng số 3 ở cả 4 bảng estimate (PH2808 bản A/B/C + TLG)",
+        "confidence": "cao"
+      },
+      "review_rounds": {
+        "question": "Số vòng review dự kiến",
+        "value": 2,
+        "source": "thực tế trao đổi 28.08 đã tốn ≥2 vòng chỉ để làm rõ đầu bài",
+        "confidence": "thap"
+      },
+      "budget_cap": {
+        "question": "Trần man-day / ngân sách",
+        "value": 45,
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      },
+      "pic_design": {
+        "question": "Đầu mối phía design",
+        "value": "Anh Tùng — team design (email nội bộ)",
+        "source": "FIXTURE — câu trả lời GIẢ LẬP của khách trong form, không phải dữ liệu thật",
+        "confidence": "cao",
+        "note": "Giá trị bịa cho test bộ đủ; bản thiếu field là brief-intake-vcb-missing22.json"
+      }
+    }
+  },
+  "conflicts": [
+    {
+      "index": 1,
+      "text": "Danh sách vật phẩm chợ Tết ghi ở hai chỗ khác nhau: sheet “Game Chợ Tết” liệt kê 7 món, phần Concept game trong “Mô tả chi tiết yêu cầu design” liệt kê ~10 món và kết thúc bằng “…”.",
+      "source": "surveys/vcb-brief-intake-2026.json → item q0001 (khối NOTE đầu form)"
+    },
+    {
+      "index": 2,
+      "text": "Cơ chế bốc quà: một chỗ ghi “random chọn một món đồ”, chỗ khác ghi “chọn vào bao lì xì” — random hay người chơi tự chọn?",
+      "source": "surveys/vcb-brief-intake-2026.json → item q0001 (khối NOTE đầu form)"
+    },
+    {
+      "index": 3,
+      "text": "Hướng phong cách Look back: brief chọn “tranh cổ động”, nhưng phản hồi 28.08 cảnh báo hướng này có thể lệch tinh thần số hoá 2025–2026 của VCB.",
+      "source": "surveys/vcb-brief-intake-2026.json → item q0001 (khối NOTE đầu form)"
+    },
+    {
+      "index": 4,
+      "text": "Ba nhóm ảnh tham khảo đã gửi thuộc ba phong cách khác nhau (dân gian chibi màu nước / poster chợ Tết phẳng / tranh cổ động) — chưa rõ hướng nào là chính.",
+      "source": "surveys/vcb-brief-intake-2026.json → item q0001 (khối NOTE đầu form)"
+    },
+    {
+      "index": 5,
+      "text": "Thang thuộc tính visual trong sheet chưa được mark ô nào, cả phần Look back lẫn phần Game.",
+      "source": "surveys/vcb-brief-intake-2026.json → item q0001 (khối NOTE đầu form)"
+    }
+  ]
+}

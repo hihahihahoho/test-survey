@@ -1,0 +1,254 @@
+import * as React from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { useAgentStatus, useTrash } from "@/lib/hooks";
+import { useRecentStore, useUiStore } from "@/lib/store";
+import type { ScreenProps } from "@/components/layout";
+import type { Project } from "@/lib/types";
+
+import { ProjectsHeader } from "./components/ProjectsHeader";
+import { ProjectsToolbar } from "./components/ProjectsToolbar";
+import { ProjectsBody } from "./components/ProjectsBody";
+import { BulkBar } from "./components/BulkBar";
+import { ProjectDialogs } from "./ProjectDialogs";
+
+import { gateOf, useNarrowViewport } from "./lib/gate";
+import { createNav } from "./lib/nav";
+import { useProjectsData } from "./lib/useProjectsData";
+import { useProjectDialogs } from "./lib/useProjectDialogs";
+import { useGridKeys } from "./lib/useGridKeys";
+import { useProjectsCommands } from "./lib/useScreenCommands";
+import { useProjectsShortcuts } from "./lib/useScreenShortcuts";
+import type { ProjectActions } from "./components/ProjectMenu";
+import { DOTGRID } from "@/components/layout/flora";
+
+/**
+ * ══════════════════════════════════════════════════════════════════════════
+ * S1 · DANH SÁCH PROJECT (`/`) — UX-SPEC §3-S1 + §4 (CRUD trọn bộ)
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * File này CHỈ điều phối. Phần nặng đã tách:
+ *   lib/useProjectsData   nạp + cache §2.5 + lọc/sắp xếp
+ *   lib/useProjectDialogs vòng đời 8 overlay
+ *   lib/useGridKeys       ↑↓←→ · Enter · ⌫ · F2 · ⌘D trên lưới thẻ
+ *   lib/useScreenCommands khai lệnh vào ⌘K
+ *   components/ProjectsBody  chọn giữa 7 trạng thái hiển thị
+ *
+ * BANNER §2.5 VÀ AGENT PILL LÀ VIỆC CỦA KHUNG (AppLayout của R1-P1) — màn này
+ * KHÔNG vẽ lại, nếu không user thấy hai thông báo cho cùng một sự việc. Việc
+ * của màn là: khoá đúng những nút gây thay đổi + nói lý do ngay tại nút.
+ */
+export function ProjectsScreen(_props: ScreenProps) {
+  const navigate = useNavigate();
+  const nav = React.useMemo(() => createNav(navigate), [navigate]);
+  const { status, recheck } = useAgentStatus();
+  const narrow = useNarrowViewport();
+  const gate = React.useMemo(() => gateOf(status, narrow), [status, narrow]);
+
+  /* ── Tuỳ chọn view: sống trong `kitgen.ui.v1` ⇒ F5 không mất ─────────── */
+  const view = useUiStore((s) => s.projectsView);
+  const setView = useUiStore((s) => s.setProjectsView);
+  const sortBy = useUiStore((s) => s.sortBy);
+  const setSort = useUiStore((s) => s.setSort);
+  const chip = useUiStore((s) => s.filterChip);
+  const setChip = useUiStore((s) => s.setFilterChip);
+  const filterTags = useUiStore((s) => s.filterTags);
+  const toggleTag = useUiStore((s) => s.toggleFilterTag);
+  const storedQuery = useUiStore((s) => s.filterQuery);
+  const setStoredQuery = useUiStore((s) => s.setFilterQuery);
+  const clearFilters = useUiStore((s) => s.clearFilters);
+  const touchRecent = useRecentStore((s) => s.touch);
+
+  // Ô tìm: state cục bộ cho mượt, đẩy xuống store sau 120ms (§3-S1-1 debounce).
+  const [query, setQuery] = React.useState(storedQuery);
+  React.useEffect(() => {
+    const t = setTimeout(() => setStoredQuery(query), 120);
+    return () => clearTimeout(t);
+  }, [query, setStoredQuery]);
+
+  /* ── Dữ liệu ─────────────────────────────────────────────────────────── */
+  const viewOpts = React.useMemo(
+    () => ({ query: storedQuery, chip, tags: filterTags, sortBy, dir: "desc" as const }),
+    [storedQuery, chip, filterTags, sortBy],
+  );
+  const data = useProjectsData(status, viewOpts);
+  const trash = useTrash();
+
+  const [selected, setSelected] = React.useState<string[]>([]);
+  const dialogs = useProjectDialogs(data.all);
+  const searchRef = React.useRef<HTMLInputElement>(null);
+
+  // Bỏ chọn project đã biến mất (bị xoá hoặc bị lọc ra ngoài).
+  React.useEffect(() => {
+    setSelected((prev) => prev.filter((id) => data.visible.some((p) => p.id === id)));
+  }, [data.visible]);
+
+  /* ── Hành động (§4) ──────────────────────────────────────────────────── */
+  const openProject = React.useCallback(
+    (p: Project) => {
+      // Project hỏng KHÔNG mở được (§3-S1-4) — mở tiếp chỉ làm hỏng thêm.
+      if (p.broken) {
+        dialogs.openDialog("broken", p);
+        return;
+      }
+      touchRecent(p.id);
+      nav.open(p.id);
+    },
+    [dialogs, nav, touchRecent],
+  );
+
+  const actions = React.useMemo<ProjectActions>(
+    () => ({
+      open: openProject,
+      rename: (p) => dialogs.openDialog("rename", p),
+      duplicate: (p) => dialogs.openDialog("duplicate", p),
+      exportZip: (p) => dialogs.openForMany("export", [p]),
+      clean: (p) => dialogs.openDialog("clean", p),
+      remove: (p) => dialogs.openForMany("delete", [p]),
+    }),
+    [dialogs, openProject],
+  );
+
+  const byId = React.useCallback((id: string) => data.all.find((p) => p.id === id) ?? null, [data.all]);
+
+  /* ── Bàn phím ────────────────────────────────────────────────────────── */
+  const ids = React.useMemo(() => data.visible.map((p) => p.id), [data.visible]);
+  const grid = useGridKeys(ids, {
+    onOpen: (id) => {
+      const p = byId(id);
+      if (p) openProject(p);
+    },
+    onDelete: (id) => {
+      const p = byId(id);
+      if (p && !gate.readOnly) dialogs.openForMany("delete", [p]);
+    },
+    onRename: (id) => {
+      const p = byId(id);
+      if (p && !gate.readOnly) dialogs.openDialog("rename", p);
+    },
+    onDuplicate: (id) => {
+      const p = byId(id);
+      if (p && !gate.readOnly) dialogs.openDialog("duplicate", p);
+    },
+  });
+
+  const refreshAll = React.useCallback(() => {
+    data.refetch();
+    recheck();
+  }, [data, recheck]);
+
+  useProjectsShortcuts({
+    enabled: dialogs.open === null,
+    readOnly: gate.readOnly,
+    hasSelection: selected.length > 0,
+    onCreate: () => dialogs.openDialog("create"),
+    onFocusSearch: () => searchRef.current?.focus(),
+    onToggleView: () => setView(view === "grid" ? "list" : "grid"),
+    onClearSelection: () => setSelected([]),
+  });
+
+  const selectedProjects = React.useMemo(
+    () => selected.map(byId).filter((p): p is Project => Boolean(p)),
+    [selected, byId],
+  );
+
+  useProjectsCommands({
+    gate,
+    view,
+    setView,
+    selected: selectedProjects,
+    dialogs,
+    onRefresh: refreshAll,
+    onOpenTrash: () => nav.openTrash(),
+  });
+
+  /* ── Render ──────────────────────────────────────────────────────────── */
+  const hasFilter = storedQuery !== "" || chip !== "all" || filterTags.length > 0;
+  const showToolbar = data.all.length > 0 || hasFilter;
+
+  const clearAllFilters = () => {
+    clearFilters();
+    setQuery("");
+  };
+
+  return (
+    <div className={`${DOTGRID} relative min-h-[calc(100dvh-3.5rem)]`}>
+      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-8 px-4 py-10 sm:px-6 sm:py-14 lg:px-10">
+      {/* loading khi ĐÃ có dữ liệu: vạch 2px ở đỉnh, không che nội dung (§3-S1) */}
+      {data.isFetching && !data.isLoading && (
+        <div className="absolute inset-x-0 top-0 h-0.5 overflow-hidden" aria-hidden>
+          <div className="h-full w-1/3 animate-kg-shimmer bg-accent" />
+        </div>
+      )}
+
+      <ProjectsHeader
+        total={data.all.length}
+        shown={data.visible.length}
+        scannedAt={data.scannedAt}
+        fromCache={data.fromCache}
+        isFetching={data.isFetching}
+        trashCount={trash.data?.items.length ?? 0}
+        gate={gate}
+        onCreate={() => dialogs.openDialog("create")}
+        onImport={() => dialogs.openImport()}
+        onRefresh={refreshAll}
+        onOpenTrash={() => nav.openTrash()}
+      />
+
+      {showToolbar && (
+        <ProjectsToolbar
+          query={query}
+          onQueryChange={setQuery}
+          chip={chip}
+          onChipChange={setChip}
+          counts={data.counts}
+          tags={data.tags}
+          activeTags={filterTags}
+          onToggleTag={toggleTag}
+          sortBy={sortBy}
+          onSortChange={(s) => setSort(s)}
+          view={view}
+          onViewChange={setView}
+          onClearFilters={clearAllFilters}
+          searchRef={searchRef}
+        />
+      )}
+
+      <ProjectsBody
+        data={data}
+        gate={gate}
+        status={status}
+        view={view}
+        actions={actions}
+        grid={grid}
+        selected={selected}
+        onSelectedChange={setSelected}
+        query={storedQuery}
+        onClearFilters={clearAllFilters}
+        onRetry={refreshAll}
+        onCreate={() => dialogs.openDialog("create")}
+        onImport={() => dialogs.openImport()}
+        onNextStep={openProject}
+        onBrokenDetail={(p) => dialogs.openDialog("broken", p)}
+      />
+
+      <BulkBar
+        selectedCount={selected.length}
+        gate={gate}
+        onExport={() => dialogs.openForMany("export", selectedProjects)}
+        onDelete={() => dialogs.openForMany("delete", selectedProjects)}
+        onClear={() => setSelected([])}
+      />
+
+      <ProjectDialogs
+        dialogs={dialogs}
+        all={data.all}
+        gate={gate}
+        nav={nav}
+        onDeleted={(deletedIds) => setSelected((prev) => prev.filter((x) => !deletedIds.includes(x)))}
+      />
+      </div>
+    </div>
+  );
+}
+
+export default ProjectsScreen;
