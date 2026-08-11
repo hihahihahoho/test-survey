@@ -71,7 +71,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    environment: kitgen-release
     steps:
       - uses: actions/download-artifact@v4
         with:
