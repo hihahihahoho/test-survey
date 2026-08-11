@@ -1,19 +1,7 @@
-import { Settings2, Sparkles, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { CARD, FLORA, FOCUS } from "@/components/layout/flora";
-import { MODE_CARD, deriveStatus, readMode } from "@/features/kitfile";
-
-/**
- * P-SWEEP·11 — icon hình thái, CÙNG cặp mà `CreateModeDialog` (màn N, ảnh 06) đang
- * dùng. Để ở đây chứ không ở `copy.ts` vì `copy.ts` là từ điển CHỮ thuần (được test
- * quét chuỗi, chạy ở môi trường node) — nhét component React vào đó là đổi bản chất
- * của file.
- */
-const MODE_ICON: Readonly<Record<"workflow" | "canvas", LucideIcon>> = {
-  workflow: Settings2,
-  canvas: Sparkles,
-};
+import { deriveStatus, readMode } from "@/features/kitfile";
 import type { Project } from "@/lib/types";
 import { KitCover } from "./KitCover";
 import { KitCardMenu, type KitActions } from "./KitCardMenu";
@@ -62,8 +50,6 @@ export function KitCard({
   now?: number;
 }) {
   const mode = readMode(project);
-  const label = MODE_CARD[mode];
-  const ModeIcon = MODE_ICON[mode];
   const st = deriveStatus(project, now);
 
   return (
@@ -77,7 +63,7 @@ export function KitCard({
       data-kit-mode={mode}
       data-kit-status={st.status}
       tabIndex={tabIndex}
-      aria-label={`${project.name} — ${label.cardLabel} — ${st.label}`}
+      aria-label={`${project.name} — ${st.label}`}
       onClick={() => actions.open(project)}
       onKeyDown={(e) => {
         // Space mở thẻ. Enter do lưới xử lý ở tầng trên ⇒ một đường duy nhất.
@@ -112,12 +98,8 @@ export function KitCard({
               icon lucide `Settings2`/`Sparkles` — hai bề mặt nói hai thứ tiếng.
               Nay cả hai dùng chung `MODE_ICON`. Icon `aria-hidden`; nghĩa vẫn nằm ở
               CHỮ `cardLabel` ngay bên cạnh (§5.8-A3), y như luật cũ của emoji. */}
-          <p className="flex items-center gap-1.5 text-caption text-fg-muted">
-            <ModeIcon className="size-3.5 shrink-0" strokeWidth={1.5} aria-hidden />
-            <span className="truncate">{label.cardLabel}</span>
-          </p>
           {/* 3 — tên. `h2` vì h1 của màn là «Bộ kit của bạn»; nhảy h1→h3 làm đứt cây tiêu đề. */}
-          <h2 className="truncate text-title text-fg-strong" title={project.name}>
+          <h2 className="truncate text-subtitle text-fg-strong" title={project.name}>
             {project.name}
           </h2>
           {/* 4 — ĐÚNG MỘT dòng trạng thái. Màu lấy từ `tone` của S, màn không tự chọn.

@@ -4,7 +4,7 @@ import { useAgentStatus, useTrash } from "@/lib/hooks";
 import { useRecentStore } from "@/lib/store";
 import type { ScreenProps } from "@/components/layout";
 import { Input } from "@/components/ui/input";
-import { Clock3, LayoutGrid, Search, Settings, Trash2 } from "lucide-react";
+import { Clock3, Images, LayoutGrid, PanelsTopLeft, Search, Settings, Sparkles, Trash2 } from "lucide-react";
 import type { Project } from "@/lib/types";
 
 import { gateOf, useNarrowViewport } from "./lib/gate";
@@ -71,6 +71,8 @@ import {
 export function ProjectsScreen(_props: ScreenProps) {
   const navigate = useNavigate();
   const nav = React.useMemo(() => createNav(navigate), [navigate]);
+  const search = useSearch({ strict: false }) as Record<string, unknown>;
+  const initialQuery = typeof search.q === "string" ? search.q : "";
   const { status, recheck } = useAgentStatus();
   const narrow = useNarrowViewport();
   const gate = React.useMemo(() => gateOf(status, narrow), [status, narrow]);
@@ -78,13 +80,19 @@ export function ProjectsScreen(_props: ScreenProps) {
   const recentIds = useRecentStore((s) => s.projectIds);
 
   // Ô tìm: state cục bộ cho mượt, đẩy vào bộ lọc sau 120ms.
-  const [typed, setTyped] = React.useState("");
-  const [query, setQuery] = React.useState("");
-  const [section, setSection] = React.useState<HomeSection>("recent");
+  const [typed, setTyped] = React.useState(initialQuery);
+  const [query, setQuery] = React.useState(initialQuery);
+  const [section, setSection] = React.useState<HomeSection>("all");
   React.useEffect(() => {
-    const t = setTimeout(() => setQuery(typed), 120);
+    const t = setTimeout(() => {
+      setQuery(typed);
+      const q = typed.trim();
+      if ((typeof search.q === "string" ? search.q : "") !== q) {
+        void navigate({ to: "/", search: q ? { q } : {}, replace: true });
+      }
+    }, 120);
     return () => clearTimeout(t);
-  }, [typed]);
+  }, [navigate, search.q, typed]);
 
   const data = useHomeData(status, query);
   const trash = useTrash();
@@ -105,7 +113,6 @@ export function ProjectsScreen(_props: ScreenProps) {
   );
 
   /* §W1-9: ý định "tạo/nhập" mang từ wizard cài đặt hoặc ⌘K sang, nằm trên `?action=`. */
-  const search = useSearch({ strict: false }) as Record<string, unknown>;
   useCreateIntent(
     search,
     (intent) => (intent === "import" ? dialogs.openImport() : dialogs.openDialog("create")),
@@ -177,7 +184,20 @@ export function ProjectsScreen(_props: ScreenProps) {
      (`design/components/SheetCanvas.tsx`) GIỮ NGUYÊN. */
   return (
     <div className="relative flex min-h-dvh bg-canvas">
-      <HomeSidebar section={section} workspace={status.workspaceLabel ?? undefined} trashCount={trashCount} query={typed} onQueryChange={setTyped} searchRef={searchRef} onSection={setSection} onTrash={() => nav.openTrash()} onSettings={() => void navigate({ to: "/settings", search: { tab: "agent" } })} />
+      <HomeSidebar
+        active="projects"
+        section={section}
+        trashCount={trashCount}
+        query={typed}
+        onQueryChange={setTyped}
+        searchRef={searchRef}
+        onSection={setSection}
+        onUiLibrary={() => void navigate({ to: "/library/ui" })}
+        onMascotLibrary={() => void navigate({ to: "/library/mascot" })}
+        onReferences={() => void navigate({ to: "/references" })}
+        onTrash={() => nav.openTrash()}
+        onSettings={() => void navigate({ to: "/settings", search: { tab: "agent" } })}
+      />
       {/* §W2A-2 — TRƯỚC ĐÂY `max-w-[1600px] … lg:px-10` ⇒ H1 ở x=40 trong khi H1 của
           workflow ở x=144 và của Settings ở x=304. Nay dùng `.kg-page`, container
           DUY NHẤT của app. Chỉ còn nhịp dọc là việc riêng của màn này. */}
@@ -204,12 +224,12 @@ export function ProjectsScreen(_props: ScreenProps) {
           />
         </div>
 
-        <nav aria-label="Điều hướng dự án trên màn hình nhỏ" className="mt-3 flex items-center gap-1 md:hidden">
+        <nav aria-label="Điều hướng trên màn hình nhỏ" className="mt-3 flex items-center gap-1 overflow-x-auto pb-1 md:hidden">
           <button
             type="button"
             onClick={() => setSection("recent")}
             aria-current={section === "recent" ? "page" : undefined}
-            className={`flex h-9 items-center gap-2 rounded-2 px-3 text-label ${section === "recent" ? "bg-raised text-fg-strong" : "text-fg"}`}
+            className={`flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label ${section === "recent" ? "bg-raised text-fg-strong" : "text-fg"}`}
           >
             <Clock3 className="size-4" aria-hidden />Gần đây
           </button>
@@ -217,24 +237,28 @@ export function ProjectsScreen(_props: ScreenProps) {
             type="button"
             onClick={() => setSection("all")}
             aria-current={section === "all" ? "page" : undefined}
-            className={`flex h-9 items-center gap-2 rounded-2 px-3 text-label ${section === "all" ? "bg-raised text-fg-strong" : "text-fg"}`}
+            className={`flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label ${section === "all" ? "bg-raised text-fg-strong" : "text-fg"}`}
           >
             <LayoutGrid className="size-4" aria-hidden />Tất cả
           </button>
-          <button type="button" onClick={() => nav.openTrash()} className="ml-auto rounded-2 p-2 text-fg" aria-label="Thùng rác">
-            <Trash2 className="size-4" aria-hidden />
+          <button type="button" onClick={() => void navigate({ to: "/library/ui" })} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Bộ khung UI">
+            <PanelsTopLeft className="size-4" aria-hidden />UI
           </button>
-          <button type="button" onClick={() => void navigate({ to: "/settings", search: { tab: "agent" } })} className="rounded-2 p-2 text-fg" aria-label="Cài đặt">
-            <Settings className="size-4" aria-hidden />
+          <button type="button" onClick={() => void navigate({ to: "/library/mascot" })} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Bộ khung mascot">
+            <Sparkles className="size-4" aria-hidden />Mascot
+          </button>
+          <button type="button" onClick={() => void navigate({ to: "/references" })} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Ảnh tham chiếu">
+            <Images className="size-4" aria-hidden />Tham chiếu
+          </button>
+          <button type="button" onClick={() => nav.openTrash()} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Thùng rác">
+            <Trash2 className="size-4" aria-hidden />Thùng rác
+          </button>
+          <button type="button" onClick={() => void navigate({ to: "/settings", search: { tab: "agent" } })} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Cài đặt">
+            <Settings className="size-4" aria-hidden />Cài đặt
           </button>
         </nav>
 
-        <div className="mt-8 flex items-center justify-between border-b border-line-subtle pb-3">
-          <h2 className="text-title text-fg-strong">{section === "recent" ? "Gần đây" : "Tất cả dự án"}</h2>
-          <span className="text-caption tabular-nums text-fg-muted">{visible.length} dự án</span>
-        </div>
-
-        <div className="mt-5"><HomeBody
+        <div className="mt-7"><HomeBody
           data={viewData}
           gate={gate}
           agentOff={gate.readOnly && !narrow}

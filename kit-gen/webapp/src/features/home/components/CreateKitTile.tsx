@@ -57,7 +57,7 @@ export function CreateKitTile({
         "hover:-translate-y-1 hover:border-accent hover:shadow-3",
         "disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:border-line-subtle disabled:hover:shadow-none",
         FOCUS,
-        compact ? "min-h-[220px] w-full max-w-modal-sm" : "min-h-[260px]",
+        compact ? "min-h-[220px] w-full max-w-modal-sm" : "min-h-[220px]",
       )}
     >
       <span
@@ -72,8 +72,8 @@ export function CreateKitTile({
         <Plus strokeWidth={1.5} />
       </span>
       <span className="flex flex-col gap-1.5">
-        <span className="text-title text-fg-strong">
-          {compact ? "Tạo dự án đầu tiên" : "Tạo dự án mới"}
+        <span className="text-subtitle text-fg-strong">
+          {compact ? "Tạo dự án đầu tiên" : "Tạo dự án"}
         </span>
         <span className={cn("max-w-[26ch] text-caption", FLORA.fgMuted)}>
           {ro ? gate.reason : HOME_COPY.CREATE_TILE_HINT}

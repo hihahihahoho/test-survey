@@ -74,6 +74,20 @@ export const CHARACTER_ID = "nhan-vat";
 const MAX_CELLS_SQUARE = 16;
 const MAX_CELLS_TALL = 8;
 
+export interface SheetLimits {
+  background: number;
+  popup: number;
+  small: number;
+  mascot: number;
+}
+
+export const DEFAULT_SHEET_LIMITS: SheetLimits = {
+  background: 2,
+  popup: 4,
+  small: 16,
+  mascot: 4,
+};
+
 const HINT_LANDSCAPE = "landscape 3:2 cell";
 const HINT_PORTRAIT = "portrait 3:4 cell";
 const HINT_BG = "full-bleed portrait scene";
@@ -314,6 +328,18 @@ export interface BuildKitsetOptions {
    * bản nháp chỉ là tiếng vọng. Không truyền (test, offline) thì rơi về state.
    */
   refs?: { inspo: readonly string[]; brand: readonly string[]; character: string | null };
+  /** Giới hạn do thư viện dùng chung quản lý. Geometry vẫn kẹp theo sức chứa canvas. */
+  limits?: Partial<SheetLimits>;
+}
+
+function limitOf(value: number | undefined, fallback: number, ceiling: number): number {
+  return Number.isInteger(value) && Number(value) > 0
+    ? Math.min(Number(value), ceiling)
+    : fallback;
+}
+
+function isPopupElement(element: LibElement): boolean {
+  return /popup|modal|panel|ribbon/.test(`${element.file} ${element.group ?? ""}`.toLowerCase());
 }
 
 /** Mô tả phong cách gửi cho `gen.sh` = ô mô tả + 7 trục ngữ nghĩa + điều không muốn. */
@@ -333,43 +359,73 @@ export function buildKitsetContract(s: KitsetContractInput, opts: BuildKitsetOpt
   const lib = opts.lib ?? loadBundledV2().elements;
   const { drawable } = resolveKitset(s.elements, lib);
 
+  const limits = {
+    background: limitOf(opts.limits?.background, DEFAULT_SHEET_LIMITS.background, MAX_CELLS_TALL),
+    popup: limitOf(opts.limits?.popup, DEFAULT_SHEET_LIMITS.popup, MAX_CELLS_SQUARE),
+    small: limitOf(opts.limits?.small, DEFAULT_SHEET_LIMITS.small, MAX_CELLS_SQUARE),
+    mascot: limitOf(opts.limits?.mascot, DEFAULT_SHEET_LIMITS.mascot, MAX_CELLS_SQUARE),
+  };
+
   const backgrounds = drawable.filter((e) => e.skel.shape === "full");
   const rest = drawable.filter((e) => e.skel.shape !== "full");
-  const tall = rest.filter((e) => e.cell === "portrait");
-  const wide = rest.filter((e) => e.cell !== "portrait");
+  const popup = rest.filter(isPopupElement);
+  const small = rest.filter((e) => !isPopupElement(e));
+  const popupTall = popup.filter((e) => e.cell === "portrait");
+  const popupWide = popup.filter((e) => e.cell !== "portrait");
+  const smallTall = small.filter((e) => e.cell === "portrait");
+  const smallWide = small.filter((e) => e.cell !== "portrait");
 
   const sheets: Sheet[] = [];
 
-  /* ── a. Nền: mỗi cảnh MỘT sheet 1×1 dọc ─────────────────────────────────
-     Nền là ảnh full-bleed — nhét chung lưới với nút bấm thì mỗi cảnh chỉ còn
-     một ô con. `styles.json` cũng tách riêng `bg-home` / `bg-play`. */
-  backgrounds.forEach((el, i) => {
-    const hint = typeof el.sheetHint === "string" ? el.sheetHint : "";
-    const id = hint || seriesId("nen", i);
+  /* ── a. Nền: ô dọc 3:4, mặc định HOME + THÀNH CÔNG chung một sheet ─────── */
+  chunkKeepingGroups(backgrounds, limits.background).forEach((chunk, i) => {
+    const one = chunk.length === 1;
+    const grid = one ? { cols: 1, rows: 1 } : tallGrid(chunk.length);
     sheets.push({
-      id,
-      orient: "portrait",
-      grid: { cols: 1, rows: 1 },
+      id: seriesId("nen", i),
+      orient: one ? "portrait" : "landscape",
+      grid,
       cell_hint: HINT_BG,
-      components: [toComponent(el)],
+      components: padTo(chunk.map(toComponent), grid.cols * grid.rows),
     });
   });
 
-  /* ── b. Ô ngang → lưới vuông · ô dọc → lưới 2:1 ─────────────────────────── */
-  chunkKeepingGroups(wide, MAX_CELLS_SQUARE).forEach((chunk, i) => {
+  /* ── b. Popup tách khỏi UI nhỏ; mỗi nhóm giữ đúng tỷ lệ ô ───────────────── */
+  chunkKeepingGroups(popupWide, limits.popup).forEach((chunk, i) => {
     const grid = squareGrid(chunk.length);
     sheets.push({
-      id: seriesId("main", i),
+      id: seriesId("popup", i),
       orient: "landscape",
       grid,
       cell_hint: HINT_LANDSCAPE,
       components: padTo(chunk.map(toComponent), grid.cols * grid.rows),
     });
   });
-  chunkKeepingGroups(tall, MAX_CELLS_TALL).forEach((chunk, i) => {
+  chunkKeepingGroups(popupTall, Math.min(limits.popup, MAX_CELLS_TALL)).forEach((chunk, i) => {
     const grid = tallGrid(chunk.length);
     sheets.push({
-      id: seriesId("tall", i),
+      id: seriesId("popup-doc", i),
+      orient: "landscape",
+      grid,
+      cell_hint: HINT_PORTRAIT,
+      components: padTo(chunk.map(toComponent), grid.cols * grid.rows),
+    });
+  });
+
+  chunkKeepingGroups(smallWide, limits.small).forEach((chunk, i) => {
+    const grid = squareGrid(chunk.length);
+    sheets.push({
+      id: seriesId("ui", i),
+      orient: "landscape",
+      grid,
+      cell_hint: HINT_LANDSCAPE,
+      components: padTo(chunk.map(toComponent), grid.cols * grid.rows),
+    });
+  });
+  chunkKeepingGroups(smallTall, Math.min(limits.small, MAX_CELLS_TALL)).forEach((chunk, i) => {
+    const grid = tallGrid(chunk.length);
+    sheets.push({
+      id: seriesId("ui-doc", i),
       orient: "landscape",
       grid,
       cell_hint: HINT_PORTRAIT,
@@ -392,7 +448,7 @@ export function buildKitsetContract(s: KitsetContractInput, opts: BuildKitsetOpt
   const charName = s.mascotName.trim() || "Nhân vật";
 
   // Dáng KHÔNG có `group` (không phải cặp trạng thái) ⇒ cắt thuần theo trần ô.
-  chunkBySize(poses, MAX_CELLS_SQUARE).forEach((chunk, i) => {
+  chunkBySize(poses, limits.mascot).forEach((chunk, i) => {
     const grid = squareGrid(chunk.length);
     const cells: Component[] = chunk.map((pose, k) => ({
       /**
@@ -413,7 +469,7 @@ export function buildKitsetContract(s: KitsetContractInput, opts: BuildKitsetOpt
        * và `skel.pose` (slice.py:839). Tên file chỉ là tên ảnh xuất ra.
        * Đánh số chạy XUYÊN các tấm dáng để hai tấm không sinh ra hai `01-pose-*`.
        */
-      file: `${String(i * MAX_CELLS_SQUARE + k + 1).padStart(2, "0")}-pose-${pose}`,
+      file: `${String(i * limits.mascot + k + 1).padStart(2, "0")}-pose-${pose}`,
       vi: `${charName}: ${pose}`,
       spec: `${subject}, ${POSE_SPEC[pose] ?? pose}, full body`,
       // `w` hẹp: một người đứng chiếm ~1/3 bề ngang ô, cao gần trọn ô — số của

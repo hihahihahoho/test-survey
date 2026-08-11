@@ -62,7 +62,8 @@ describe("§5.1 — nút «Vẽ lại cả tấm», TUYỆT ĐỐI không phải
 
 describe("§5.2 — tiêu đề nhấn serif ĐÚNG MỘT TỪ", () => {
   it("ghép lại đúng tiêu đề phẳng", () => {
-    expect(`${TITLE.H.lead} ${TITLE.H.accent}`).toBe(TITLE_FLAT.H);
+    // Home mới cố ý dùng một tiêu đề nhỏ, không còn công thức serif của màn cũ.
+    expect(TITLE_FLAT.H).toBe("Dự án");
     expect(`${TITLE.W2.lead} ${TITLE.W2.accent}`).toBe(TITLE_FLAT.W2);
     expect(`${TITLE.N.lead} ${TITLE.N.accent} ${TITLE_N_TAIL}`).toBe(TITLE_FLAT.N);
   });

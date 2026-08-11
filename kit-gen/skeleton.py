@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """skeleton.py — vẽ ảnh KHUNG XƯƠNG layout cho từng sheet từ styles.json.
 
-Mỗi ô có KHUNG SAFE ZONE (viền chữ nhật) + silhouette xám lấp đầy khung:
-  · THÂN element phải lấp đầy khung safe zone — khung là HỢP ĐỒNG TOẠ ĐỘ,
-    engine/Figma luôn gán vị trí theo khung này (slice.py crop nguyên ô nên
-    khung nằm cố định trong canvas ra).
+Mỗi ô có silhouette xám mô tả hình học bắt buộc. Contract mới khai báo
+``contentSafe: true`` để chính silhouette xám là safe zone duy nhất:
+  · đây là vùng nội dung sạch (ví dụ mặt nút dành cho chữ), KHÔNG phải bbox để
+    scale artwork;
+  · engine/Figma gán frame theo vùng này, còn artwork vẫn giữ nguyên toạ độ;
   · Trang trí (hoa, đèn lồng, tua rua...) được TRÀN ra ngoài khung thoải mái,
     miễn nằm trong ô — vừa sáng tạo vừa trong khuôn khổ.
 
@@ -109,9 +110,10 @@ def main():
                 d.rounded_rectangle([ex, ey, ex + ew, ey + eh], radius=eh / 2, fill=FILL)
             else:
                 SHAPES[sk["shape"]](d, ex, ey, ex + ew, ey + eh)
-            # khung safe zone đè lên trên silhouette (element free: khung động
-            # theo art, không vẽ khung)
-            if not sk.get("free"):
+            # graySafe: toàn sheet chỉ dùng silhouette xám làm contract; không
+            # vẽ thêm rectangle/guide khiến ImageGen phải hiểu hai hình học.
+            # Sheet legacy vẫn giữ rectangle bao ngoài silhouette.
+            if not sh.get("graySafe") and not sk.get("contentSafe") and not sk.get("free"):
                 d.rectangle([ex, ey, ex + ew, ey + eh], outline=SAFE, width=4)
         # kẻ lưới sau cùng cho nét mảnh đè lên trên
         for c in range(1, cols):

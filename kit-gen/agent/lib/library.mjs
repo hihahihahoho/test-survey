@@ -1,0 +1,159 @@
+/* library.mjs — kho bộ khung và ảnh tham chiếu dùng chung của workspace.
+   Catalogue engine vẫn chỉ đọc; dữ liệu người dùng nằm riêng trong .kitgen/library. */
+import { randomBytes } from "node:crypto"
+import { join } from "node:path"
+import { ensureDir, exists, readJsonFile, removeTree, writeFileAtomic, writeJsonAtomic } from "./fsx.mjs"
+import { fail } from "./errors.mjs"
+import { imageSize, sniff } from "./multipart.mjs"
+
+const IMAGE_EXT = new Set(["png", "jpg", "webp"])
+const KINDS = new Set(["ui", "mascot", "reference"])
+const GROUPS = new Set(["background", "popup", "small", "mascot", "style", "mascot-reference"])
+const CELLS = new Set(["landscape", "portrait", "full"])
+const SHAPES = new Set(["pill", "bar", "rrect", "rect", "circle", "burst", "puzzle", "full"])
+export const LIBRARY_DEFAULTS = { background: 2, popup: 4, small: 16, mascot: 4 }
+
+function statePath(ws) { return join(ws.libraryDir, "library.json") }
+function assetsDir(ws) { return join(ws.libraryDir, "assets") }
+
+function defaultGeometry(group) {
+  if (group === "background") return { cell: "full", skel: { shape: "full", w: 1, h: 1 } }
+  if (group === "popup") return { cell: "landscape", skel: { shape: "rrect", w: 0.82, h: 0.62, slice9: true } }
+  return { cell: "landscape", skel: { shape: "pill", w: 0.78, h: 0.5, slice9: true } }
+}
+
+function cleanGeometry(group, cell, raw) {
+  const fallback = defaultGeometry(group)
+  const skel = raw && typeof raw === "object" ? raw : {}
+  const shape = SHAPES.has(skel.shape) ? skel.shape : fallback.skel.shape
+  const clamp = (value, otherwise) => {
+    const number = Number(value)
+    return Number.isFinite(number) && number >= 0.05 && number <= 1 ? number : otherwise
+  }
+  return {
+    cell: CELLS.has(cell) ? cell : fallback.cell,
+    skel: {
+      shape,
+      w: clamp(skel.w, fallback.skel.w),
+      h: clamp(skel.h, fallback.skel.h),
+      ...(skel.slice9 === true ? { slice9: true } : {}),
+      ...(skel.free === true ? { free: true } : {}),
+    },
+  }
+}
+
+function cleanState(raw) {
+  const items = Array.isArray(raw?.items)
+    ? raw.items
+      .filter(item => item && typeof item.id === "string")
+      .map(item => {
+        const geometry = item.kind === "ui" ? cleanGeometry(item.group, item.cell, item.skel) : {}
+        return {
+          ...item,
+          name: String(item.name ?? "Ảnh chưa đặt tên").trim().slice(0, 100) || "Ảnh chưa đặt tên",
+          description: String(item.description ?? "").trim().slice(0, 1000),
+          ...geometry,
+          poses: Array.isArray(item.poses)
+            ? [...new Set(item.poses.map(pose => String(pose).trim()).filter(Boolean))].slice(0, 32)
+            : [],
+        }
+      })
+    : []
+  return {
+    version: 1,
+    settings: { ...LIBRARY_DEFAULTS, ...(raw?.settings ?? {}) },
+    items,
+  }
+}
+
+export async function readLibrary(ws) {
+  await ensureDir(assetsDir(ws))
+  if (!(await exists(statePath(ws)))) return cleanState(null)
+  try { return cleanState(await readJsonFile(statePath(ws))) }
+  catch { fail("LIBRARY_INVALID", "library metadata is not valid JSON") }
+}
+
+async function saveLibrary(ws, state) {
+  await writeJsonAtomic(statePath(ws), cleanState(state))
+}
+
+export async function addLibraryItem(ws, { data, kind, group, name, description, cell, skel }) {
+  if (!KINDS.has(kind)) fail("BAD_REQUEST", "kind must be ui, mascot or reference")
+  if (!GROUPS.has(group)) fail("BAD_REQUEST", "unknown library group")
+  const type = sniff(data)
+  if (!type || !IMAGE_EXT.has(type.ext)) fail("BAD_TYPE", "file must be a PNG, JPG or WebP image")
+  const id = "asset_" + randomBytes(8).toString("hex")
+  const filename = `${id}.${type.ext}`
+  await writeFileAtomic(join(assetsDir(ws), filename), data)
+  const size = imageSize(data)
+  const state = await readLibrary(ws)
+  const geometry = kind === "ui" ? cleanGeometry(group, cell, skel) : {}
+  const item = {
+    id,
+    kind,
+    group,
+    name: String(name || "Ảnh chưa đặt tên").trim().slice(0, 100) || "Ảnh chưa đặt tên",
+    description: String(description || "").trim().slice(0, 1000),
+    ...geometry,
+    filename,
+    bytes: data.length,
+    w: size.w,
+    h: size.h,
+    poses: kind === "mascot" ? ["Đứng yên", "Vui", "Buồn", "Ăn mừng"] : [],
+    createdAt: new Date().toISOString(),
+  }
+  state.items.unshift(item)
+  await saveLibrary(ws, state)
+  return item
+}
+
+export async function patchLibraryItem(ws, id, patch) {
+  const state = await readLibrary(ws)
+  const item = state.items.find(row => row.id === id)
+  if (!item) fail("NOT_FOUND", `library item ${id} not found`)
+  if (patch.name !== undefined) item.name = String(patch.name).trim().slice(0, 100) || item.name
+  if (patch.description !== undefined) item.description = String(patch.description).trim().slice(0, 1000)
+  if (patch.group !== undefined) {
+    if (!GROUPS.has(patch.group)) fail("BAD_REQUEST", "unknown library group")
+    item.group = patch.group
+  }
+  if (item.kind === "ui" && (patch.cell !== undefined || patch.skel !== undefined || patch.group !== undefined)) {
+    Object.assign(item, cleanGeometry(item.group, patch.cell ?? item.cell, patch.skel ?? item.skel))
+  }
+  if (patch.poses !== undefined) {
+    if (!Array.isArray(patch.poses)) fail("BAD_REQUEST", "poses must be an array")
+    item.poses = [...new Set(patch.poses.map(pose => String(pose).trim()).filter(Boolean))].slice(0, 32)
+  }
+  await saveLibrary(ws, state)
+  return item
+}
+
+export async function removeLibraryItem(ws, id) {
+  const state = await readLibrary(ws)
+  const index = state.items.findIndex(row => row.id === id)
+  if (index < 0) fail("NOT_FOUND", `library item ${id} not found`)
+  const [item] = state.items.splice(index, 1)
+  await saveLibrary(ws, state)
+  await removeTree(join(assetsDir(ws), item.filename))
+}
+
+export async function patchLibrarySettings(ws, patch) {
+  const state = await readLibrary(ws)
+  for (const key of Object.keys(LIBRARY_DEFAULTS)) {
+    if (patch[key] === undefined) continue
+    const value = Number(patch[key])
+    if (!Number.isInteger(value) || value < 1 || value > 32) fail("BAD_REQUEST", `${key} must be an integer from 1 to 32`)
+    state.settings[key] = value
+  }
+  await saveLibrary(ws, state)
+  return state.settings
+}
+
+export async function libraryItemFile(ws, id) {
+  const state = await readLibrary(ws)
+  const item = state.items.find(row => row.id === id)
+  if (!item) fail("NOT_FOUND", `library item ${id} not found`)
+  const abs = join(assetsDir(ws), item.filename)
+  if (!(await exists(abs))) fail("NOT_FOUND", `file for ${id} not found`)
+  return abs
+}

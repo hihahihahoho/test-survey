@@ -1,388 +1,388 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Images, Pencil, RefreshCw, Scissors, Zap } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ErrorState } from "@/components/common";
-import { useRegisterCommands, type ScreenProps } from "@/components/layout";
-/* Import SÂU có chủ ý: `components/layout/index.ts` không nằm trong glob E (FE2-PLAN §1)
-   nên E1 không thêm export vào đó. Đề nghị gom vào barrel: `NEEDS-fe2-e.md` N8. */
-import { scopeSheetIds, useFileScope } from "@/components/layout/screen-contract";
-import { FileScopeNotice } from "@/components/layout/FloraShell";
-import { devDetails, presentError } from "@/lib/api";
-import { useAgentStatus } from "@/lib/hooks";
+import {
+  FileInput,
+  FileText,
+  Image,
+  LayoutGrid,
+  Palette,
+  Save,
+  Settings,
+  UserRound,
+  WandSparkles,
+  type LucideIcon,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "@/components/ui/sonner";
+import { ErrorState, LoadingState } from "@/components/common";
+import type { ScreenProps } from "@/components/layout";
+import { cn } from "@/lib/utils";
+import { useAgentStatus, useContract, useElementLib, usePatchProject, useProject, useUserLibrary } from "@/lib/hooks";
+import type { LibrarySettings } from "@/lib/types";
+import { fromAgentLib } from "@/features/design/library/lib/source";
+import { Route as ProjectRoute } from "@/routes/p.$projectId";
+import type { ProjectSection } from "@/routes/search-schemas";
+import { BriefStep } from "@/features/workflow-v4/steps/BriefStep";
+import { StyleStep } from "@/features/workflow-v4/steps/StyleStep";
+import { KitsetStep } from "@/features/workflow-v4/steps/KitsetStep";
+import { MascotStep } from "@/features/workflow-v4/steps/MascotStep";
+import { ResultStep } from "@/features/workflow-v4/steps/ResultStep";
+import { SyncBadge } from "@/features/workflow-v4/components/SyncBadge";
+import { ContractSyncProvider, useContractSync } from "@/features/workflow-v4/lib/contract-sync";
+import { importedElementsOf, workflowPatchFromContract } from "@/features/workflow-v4/lib/contract-import";
+import { toKitsetRefs, useWorkflowRefs } from "@/features/workflow-v4/lib/refs-sync";
+import {
+  WorkflowStoreProvider, useWorkflowStore,
+  type ProjectSheetLimits, type SheetLimitKey,
+} from "@/features/workflow-v4/lib/model";
 import { gateOf, useNarrowViewport } from "@/features/projects/lib/gate";
-import { GenerateDialog } from "@/features/runs";
-import { HistoryDrawer, useContractHistory } from "@/features/design/safety";
+import { mergeElements, userUiElements } from "@/features/workflow-v4/lib/user-library";
 
-import { NextActionsCard } from "./components/NextActionsCard";
-import { OnboardingSteps } from "./components/OnboardingSteps";
-import { DesignCard, KitCard, RunsCard, StatsCard } from "./components/OverviewCards";
-import { ProgressMatrix, MatrixLegend } from "./components/ProgressMatrix";
-import { ProjectHeader } from "./components/ProjectHeader";
-import { ProjectError, ProjectLoading, ProjectMissing } from "./components/ScreenStates";
-import { SelectionBar } from "./components/SelectionBar";
-import { StaleBanner } from "./components/StaleBanner";
-import { createProjectNav } from "./lib/nav";
-import { pendingGenJobs, singleSheetOf, uncutJobs, type MatrixCell } from "./lib/matrix";
-import { nextActions, staleWarning, type NextAction } from "./lib/next-actions";
-import { useProjectData } from "./lib/useProjectData";
-import { useSliceRun } from "./lib/useSliceRun";
+const SECTIONS: ReadonlyArray<{
+  id: ProjectSection;
+  label: string;
+  icon: LucideIcon;
+  disabled?: boolean;
+}> = [
+  { id: "requirements", label: "Yêu cầu", icon: FileText },
+  { id: "style", label: "Phong cách", icon: Palette },
+  { id: "ui", label: "Bộ khung UI", icon: LayoutGrid },
+  { id: "mascot", label: "Mascot", icon: UserRound },
+  { id: "images", label: "Ảnh đã tạo", icon: Image },
+  { id: "canvas", label: "Canvas", icon: WandSparkles, disabled: true },
+  { id: "settings", label: "Cài đặt dự án", icon: Settings },
+];
 
-/**
- * ══════════════════════════════════════════════════════════════════════════════
- * S2 · CHI TIẾT PROJECT — TỔNG QUAN (`/p/:id`) — UX-SPEC §3-S2
- * Đóng audit A7, C2, D1 · tiêu chí đo R24-(3),(5).
- * ══════════════════════════════════════════════════════════════════════════════
- *
- * MỤC ĐÍCH DUY NHẤT (§3-S2): trong 5 giây trả lời được *project này đang ở đâu,
- * việc tiếp theo là gì, bấm đâu để làm.* Bố cục vì thế xếp theo thứ tự câu hỏi:
- *   ① dải cảnh báo stale (nếu có)  — "có gì sai không?"
- *   ② thẻ VIỆC TIẾP THEO           — "làm gì bây giờ?" (mỗi dòng 1 nút đi thẳng)
- *   ③ MA TRẬN phong cách × sheet   — "cụ thể chỗ nào?" (bấm ô = tới đúng chỗ)
- *   ④ 4 thẻ số liệu + lối vào màn con
- *
- * ĐỦ 4 TRẠNG THÁI + CA AGENT CHƯA CHẠY:
- *   loading → skeleton đúng số thẻ, giữ khung (không trắng trang)
- *   empty   → 0 sheet: khối 3 bước, MA TRẬN KHÔNG HIỆN (§3-S2 bảng trạng thái)
- *   error   → copy từ bảng §3.9; `PROJECT_IN_TRASH`/`NOT_FOUND` có màn riêng;
- *             message kỹ thuật CHỈ trong panel "Chi tiết cho lập trình viên"
- *   success → ma trận + thẻ
- *   agent tắt → vẽ từ cache của S1, nhãn `dữ liệu đã lưu trên máy này`, mọi nút
- *             ghi bị khoá KÈM LÝ DO tại nút (§2.5-2 — KHÔNG ẩn nút). Banner chung
- *             là việc của khung (AppLayout), màn KHÔNG vẽ lại để tránh 2 thông báo.
- *
- * MỘT NÚT PRIMARY DUY NHẤT trên màn (§5.4): [⚡ Sinh ảnh…] ở header. Mọi nút khác
- * là secondary/ghost.
- */
 export function ProjectScreen({ projectId = "" }: ScreenProps) {
+  return (
+    <WorkflowStoreProvider projectId={projectId}>
+      <ProjectManager projectId={projectId} />
+    </WorkflowStoreProvider>
+  );
+}
+
+function ProjectManager({ projectId }: { projectId: string }) {
   const navigate = useNavigate();
-  const nav = React.useMemo(() => createProjectNav(navigate, projectId), [navigate, projectId]);
+  const { section } = ProjectRoute.useSearch();
+  const project = useProject(projectId);
   const { status } = useAgentStatus();
   const narrow = useNarrowViewport();
   const gate = React.useMemo(() => gateOf(status, narrow), [status, narrow]);
-
-  const data = useProjectData(projectId, status);
-  const { project } = data;
-
-  /* ══════════ FE-2·E1 — LỌC MA TRẬN THEO FILE CON ĐANG MỞ (§4.5) ══════════
-     `scope` là bộ lọc HIỂN THỊ, không phải dữ liệu: `data.matrix` vẫn được dựng từ
-     contract ĐẦY ĐỦ, ta chỉ bỏ bớt hàng sheet khi vẽ. Vì sao quan trọng: mọi số liệu
-     và mọi `job` dưới đây suy ra từ ma trận này, nên nếu lọc ở tầng dữ liệu thì
-     [Sinh ảnh] cũng lặng lẽ chỉ sinh phần đang thấy — đúng loại "làm thay người dùng"
-     mà §4.8 cấm. Lọc ở tầng vẽ thì nút vẫn nói đúng số thật.
-
-     Tab ảo «Tất cả sheet» / file canvas ⇒ `sheetIds === null` ⇒ `scopeSheetIds` trả
-     nguyên vẹn ⇒ màn hành xử y như trước lượt E1. */
-  const scope = useFileScope();
-  const matrix = React.useMemo(() => {
-    const sheets = scopeSheetIds(data.matrix.sheets, (sh) => sh.id, scope);
-    if (sheets.length === data.matrix.sheets.length) return data.matrix;
-    const keep = new Set(sheets.map((sh) => sh.id));
-    const cells = new Map([...data.matrix.cells].filter(([, c]) => keep.has(c.sheet.id)));
-    return { ...data.matrix, sheets, cells };
-  }, [data.matrix, scope]);
-  const hiddenSheets = data.matrix.sheets.length - matrix.sheets.length;
-
-  const [selected, setSelected] = React.useState<string[]>([]);
-  const [genOpen, setGenOpen] = React.useState(false);
-  /** Tập lượt tick sẵn khi mở modal M1 — `null` ⇒ để modal tự chọn "thứ cần sinh". */
-  const [genSheet, setGenSheet] = React.useState<string | null>(null);
-  const [historyOpen, setHistoryOpen] = React.useState(false);
-  const renameRef = React.useRef<(() => void) | null>(null);
-
-  const slice = useSliceRun(projectId, nav);
-  const history = useContractHistory(projectId, data.contractVersion ?? 0);
-
-  const actions = React.useMemo(() => nextActions(matrix), [matrix]);
-  const warning = React.useMemo(() => staleWarning(project, matrix), [project, matrix]);
-  const pending = React.useMemo(() => pendingGenJobs(matrix), [matrix]);
-  const designEmpty = matrix.sheets.length === 0;
-
-  // Bỏ chọn những ô đã biến mất (bản thiết kế đổi trong lúc màn đang mở).
-  React.useEffect(() => {
-    setSelected((prev) => prev.filter((job) => [...matrix.cells.values()].some((c) => c.applies && c.job === job)));
-  }, [matrix]);
-
-  /**
-   * Mở modal M1. `onlySheetId` là cách DUY NHẤT modal của R2-P2 nhận tập chọn sẵn
-   * (xem `GenerateDialog`: nó tick theo `onlySheetId`, còn lại tự tick "thứ cần
-   * sinh"). Nên: chọn nhiều ô cùng một sheet ⇒ tick đúng sheet đó; chọn lẫn nhiều
-   * sheet ⇒ để modal tự tick thứ cần sinh, và user vẫn thấy rõ mình đang tick gì
-   * trước khi bấm. Không tự ý chạy gen thay user.
-   * TODO(N2 của NEEDS-s2-project.md): đề nghị R2-P2 thêm prop `preselectJobs`.
-   */
-  const openGenerate = React.useCallback(
-    (jobs: readonly string[] | null) => {
-      setGenSheet(jobs && jobs.length > 0 ? singleSheetOf(matrix, jobs) : null);
-      setGenOpen(true);
-    },
-    [matrix],
+  const workflow = useWorkflowStore();
+  const libQuery = useElementLib();
+  const userLibrary = useUserLibrary();
+  const diskContract = useContract(projectId);
+  const refs = useWorkflowRefs(projectId);
+  const library = React.useMemo(() => {
+    const imported = importedElementsOf(diskContract.data?.contract);
+    const catalogue = libQuery.data ? fromAgentLib(libQuery.data).elements : [];
+    const custom = userUiElements(userLibrary.data?.items ?? []);
+    const merged = mergeElements(imported, custom, catalogue);
+    return merged.length ? merged : undefined;
+  }, [diskContract.data?.contract, libQuery.data, userLibrary.data?.items]);
+  const contractRefs = React.useMemo(
+    () => (refs.ready ? toKitsetRefs(refs.groups) : undefined),
+    [refs.groups, refs.ready],
   );
-
-  const onNextAction = (a: NextAction) => {
-    switch (a.kind) {
-      case "design-sheets": return nav.toDesign("sheets");
-      case "design-styles": return nav.toDesign("styles");
-      case "runs": return nav.toRuns();
-      case "slice": return slice.run(a.jobs);
-      case "gen": return openGenerate(a.jobs);
-    }
-  };
-
-  const onOpenCell = (cell: MatrixCell) => nav.toDesign("sheets", cell.sheet.id, cell.variant.id);
-
-  /* ── ⌘K: mọi hành động của màn phải gọi được từ bảng lệnh (§2.3) ─────── */
-  useRegisterCommands(
-    () => [
-      {
-        id: "s2.generate",
-        label: "Sinh ảnh…",
-        icon: Zap,
-        hint: ["mod", "enter"],
-        keywords: "gen sinh anh tao anh quota",
-        disabledReason: gate.readOnly ? gate.reason : designEmpty ? "Cần ít nhất 1 sheet" : null,
-        run: () => openGenerate(null),
-      },
-      {
-        id: "s2.slice-uncut",
-        label: "Cắt những lượt chưa cắt",
-        icon: Scissors,
-        keywords: "cat slice png trong suot",
-        disabledReason: gate.readOnly ? gate.reason : uncutJobs(matrix).length === 0 ? "Không có lượt nào cần cắt" : null,
-        run: () => slice.run(uncutJobs(matrix)),
-      },
-      {
-        id: "s2.rename",
-        label: "Đổi tên dự án…",
-        icon: Pencil,
-        hint: ["F2"],
-        keywords: "doi ten rename",
-        disabledReason: gate.readOnly ? gate.reason : null,
-        run: () => renameRef.current?.(),
-      },
-      {
-        id: "s2.history",
-        label: "Lịch sử bản thiết kế",
-        icon: Images,
-        keywords: "lich su ban luu phuc hoi history",
-        disabledReason: gate.readOnly ? gate.reason : null,
-        run: () => setHistoryOpen(true),
-      },
-      {
-        id: "s2.refresh",
-        label: "Làm mới tổng quan dự án",
-        icon: RefreshCw,
-        keywords: "reload refresh lam moi",
-        run: data.refetch,
-      },
-    ],
-    [gate.readOnly, gate.reason, designEmpty, matrix, slice, data.refetch, openGenerate],
-  );
-
-  /* ── Phím tắt của màn (§3-S2): ⌘Enter mở modal Sinh ảnh · F2 đổi tên ──
-     `e`/`r`/`k`/`s` là chuỗi `g`+phím của khung (§2.3) — màn KHÔNG giành phím đơn,
-     nếu không thì gõ "r" trong ô tìm nào đó cũng nhảy màn. */
-  React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      const typing =
-        t !== null &&
-        (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable === true);
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        e.preventDefault();
-        if (!gate.readOnly && !designEmpty) openGenerate(selected.length > 0 ? selected : null);
-        return;
-      }
-      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "F2") {
-        e.preventDefault();
-        renameRef.current?.();
-      }
+  const limits = React.useMemo(() => {
+    const shared = userLibrary.data?.settings;
+    const project = workflow.sheetLimits;
+    return {
+      background: project.background ?? shared?.background,
+      popup: project.popup ?? shared?.popup,
+      small: project.small ?? shared?.small,
+      mascot: project.mascot ?? shared?.mascot,
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [gate.readOnly, designEmpty, selected, openGenerate]);
+  }, [userLibrary.data?.settings, workflow.sheetLimits]);
+  const sync = useContractSync(projectId, workflow, status, {
+    ...(library ? { lib: library } : {}),
+    ...(contractRefs ? { refs: contractRefs } : {}),
+    limits,
+  });
 
-  /* ── Bốn trạng thái ───────────────────────────────────────────────────── */
-  if (data.isLoading) {
+  React.useEffect(() => {
+    const name = project.data?.name?.trim();
+    if (name && (workflow.kitName === "Dự án mới" || workflow.kitName === "Bộ quay may mắn")) {
+      workflow.set({ kitName: name });
+    }
+  }, [project.data?.name, workflow.kitName, workflow.set]);
+
+  const select = React.useCallback(
+    (next: ProjectSection) => {
+      if (next === "canvas") return;
+      void navigate({
+        to: "/p/$projectId",
+        params: { projectId },
+        search: { section: next },
+        replace: true,
+      });
+    },
+    [navigate, projectId],
+  );
+
+  if (project.isLoading) return <LoadingState count={4} label="Đang mở dự án…" />;
+  if (project.error || !project.data) {
     return (
-      <Shell>
-        <ProjectLoading cards={4} label="Đang tải tổng quan dự án…" />
-      </Shell>
-    );
-  }
-  if (data.notFound || data.inTrash) {
-    return (
-      <Shell>
-        <ProjectMissing inTrash={data.inTrash} />
-      </Shell>
-    );
-  }
-  if (project === null) {
-    return (
-      <Shell>
-        <ProjectError
-          projectId={projectId}
-          error={data.fatalError}
-          onRetry={data.refetch}
-          onOpenHistory={() => setHistoryOpen(true)}
-        />
-      </Shell>
-    );
-  }
-
-  const contractErrorView = data.contractError != null ? presentError(data.contractError) : null;
-
-  return (
-    <Shell>
-      <ProjectHeader
-        project={project}
-        gate={gate}
-        pendingJobCount={pending.length}
-        designEmpty={designEmpty}
-        fromCache={data.fromCache}
-        onGenerate={() => openGenerate(selected.length > 0 ? selected : null)}
-        renameRef={renameRef}
-      />
-
-      {/* ① Cảnh báo ảnh cũ hơn bản thiết kế — cũng hiện ở S2b (yêu cầu 3). */}
-      <StaleBanner
-        warning={warning}
-        gate={gate}
-        onGen={warning.staleJobs.length > 0 ? () => openGenerate(warning.staleJobs) : null}
-        onSlice={warning.uncutJobs.length > 0 ? () => slice.run(warning.uncutJobs) : null}
-        pending={slice.pending}
-      />
-
-      {/* Bản thiết kế không đọc được: ma trận sẽ thiếu ⇒ nói ra, đừng vẽ lưới rỗng
-          rồi để user tưởng project mình trống. */}
-      {contractErrorView && (
+      <div className="kg-page py-8">
         <ErrorState
-          variant="inline"
-          title="Chưa đọc được bản thiết kế"
-          description={`${contractErrorView.explain} Ma trận tiến độ và số liệu sheet có thể thiếu.`}
-          detail={devDetails(data.contractError)}
-          actions={
-            <button
-              type="button"
-              onClick={data.refetch}
-              className="rounded-1 text-label text-accent-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-            >
-              Thử lại
-            </button>
-          }
-        />
-      )}
-
-      {/* ② Việc tiếp theo */}
-      <NextActionsCard
-        actions={actions}
-        degraded={matrix.degraded && !designEmpty}
-        gate={gate}
-        pending={slice.pending}
-        onAction={onNextAction}
-        onOpenKit={() => nav.toKit(data.firstVariantId)}
-      />
-
-      {/* Đang lọc theo file con ⇒ NÓI RA + cho đường ra một bước (§4.5). */}
-      {scope && (
-        <FileScopeNotice
-          docName={scope.docName}
-          hiddenCount={hiddenSheets}
-          onShowAll={scope.openAllSheets}
-        />
-      )}
-
-      {/* ③ Ma trận — KHÔNG hiện khi project chưa có sheet (§3-S2 empty) */}
-      {designEmpty ? (
-        <OnboardingSteps projectId={projectId} gate={gate} />
-      ) : (
-        <Card>
-          <CardHeader className="flex-row items-center justify-between gap-3 pb-2">
-            <CardTitle>Tiến độ theo phong cách × sheet</CardTitle>
-            <MatrixLegend matrix={matrix} />
-          </CardHeader>
-          <CardContent>
-            <ProgressMatrix
-              matrix={matrix}
-              selected={new Set(selected)}
-              onSelectedChange={setSelected}
-              onOpenCell={onOpenCell}
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ④ Thẻ số liệu + lối vào màn con */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <DesignCard
-          projectId={projectId}
-          matrix={matrix}
-          contractVersion={data.contractVersion}
-          updatedAt={project.updatedAt}
-          gate={gate}
-          onOpenHistory={() => setHistoryOpen(true)}
-        />
-        <RunsCard
-          projectId={projectId}
-          runs={data.runs}
-          unavailable={data.fromCache}
-          onOpenRun={nav.toRun}
-        />
-        <StatsCard project={project} projectId={projectId} />
-        <KitCard
-          projectId={projectId}
-          kit={data.kit}
-          offline={data.fromCache || gate.readOnly}
-          variantId={data.firstVariantId}
+          title="Chưa mở được dự án"
+          description="Dữ liệu trên máy vẫn được giữ nguyên."
+          actions={<Button onClick={() => void project.refetch()}>Thử lại</Button>}
         />
       </div>
+    );
+  }
 
-      <SelectionBar
-        selectedCount={selected.length}
-        total={matrix.total}
-        gate={gate}
-        pending={slice.pending}
-        onGen={() => openGenerate(selected)}
-        onSlice={() => slice.run(selected)}
-        onClear={() => setSelected([])}
-      />
+  const projectReadOnly = gate.readOnly || sync.state === "foreign";
+  const showSaveState = sync.state === "pending" || sync.state === "saving"
+    || sync.state === "error" || sync.state === "conflict";
 
-      {/* Modal M1 — CỬA DUY NHẤT tiêu quota (§4.8). Màn này không tự gọi useStartRun
-          cho `kind:"gen"`; xem lib/useSliceRun.ts. */}
-      <GenerateDialog
-        open={genOpen}
-        onOpenChange={setGenOpen}
-        projectId={projectId}
-        contract={data.contract}
-        jobStates={project.state?.jobs ?? {}}
-        onlySheetId={genSheet}
-        readOnly={gate.readOnly}
-        readOnlyReason={gate.reason}
-      />
+  return (
+    <ContractSyncProvider value={sync}>
+      <div className="flex min-h-[calc(100dvh-3.5rem)] min-w-0 bg-canvas">
+        <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-56 shrink-0 flex-col overflow-y-auto border-r border-line-subtle bg-surface/50 p-3 md:flex">
+          <div className="mb-4 px-3 py-2">
+            <p className="truncate text-label text-fg-strong" title={project.data.name}>{project.data.name}</p>
+            <p className="mt-0.5 text-caption text-fg-muted">Dự án</p>
+          </div>
+          <nav aria-label="Quản lý dự án" className="space-y-1">
+            {SECTIONS.map(({ id, label, icon: Icon, disabled }) => (
+              <button
+                key={id}
+                type="button"
+                disabled={disabled}
+                aria-current={!disabled && section === id ? "page" : undefined}
+                onClick={() => select(id)}
+                className={cn(
+                  "flex min-h-10 w-full items-center gap-3 rounded-2 px-3 text-left text-label transition-colors",
+                  !disabled && section === id ? "bg-raised text-fg-strong" : "text-fg hover:bg-raised",
+                  disabled && "cursor-not-allowed bg-transparent text-fg-muted hover:bg-transparent",
+                )}
+              >
+                <Icon className="size-4 shrink-0" aria-hidden />
+                <span className="truncate">{label}</span>
+                {disabled && <span className="ml-auto text-caption text-fg-muted">Đang phát triển</span>}
+              </button>
+            ))}
+          </nav>
+        </aside>
 
-      {/* Drawer lịch sử bản thiết kế — overlay toàn cục §2.1, dùng lại của R2-P2.
-          Ở S2 không có editor nên không bao giờ "bẩn": dirty=false, dirtyCount=0. */}
-      <HistoryDrawer
-        open={historyOpen}
-        onOpenChange={setHistoryOpen}
-        history={history}
-        currentVersion={data.contractVersion ?? 0}
-        dirty={false}
-        dirtyCount={0}
-        onRestore={async (snapshot) => {
-          const res = await history.restore(snapshot);
-          if (res) data.refetch();
-          return res !== null;
-        }}
-      />
-    </Shell>
+        <div className="min-w-0 flex-1">
+          <nav aria-label="Quản lý dự án trên màn hình nhỏ" className="flex gap-1 overflow-x-auto border-b border-line-subtle px-4 py-3 md:hidden">
+              {SECTIONS.map(({ id, label, disabled }) => (
+                <button
+                  key={id}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => select(id)}
+                  className={cn(
+                    "shrink-0 rounded-2 border border-line-subtle px-3 py-1.5 text-caption",
+                    section === id && !disabled ? "border-accent text-fg-strong" : "text-fg",
+                    disabled && "cursor-not-allowed bg-raised text-fg-muted",
+                  )}
+                >
+                  {label}{disabled ? " · Sắp có" : ""}
+                </button>
+              ))}
+          </nav>
+
+          <div className="kg-page py-6 sm:py-8">
+            {showSaveState && (
+              <div className="mb-4 flex items-center justify-end gap-2">
+                <SyncBadge sync={sync} />
+                {(sync.state === "pending" || sync.state === "error") && (
+                  <Button size="sm" variant="secondary" onClick={() => void sync.saveNow()}>
+                    <Save aria-hidden />Lưu
+                  </Button>
+                )}
+              </div>
+            )}
+            {sync.state === "foreign" ? (
+              <ImportedDesignNotice
+                onConvert={() => {
+                  if (!sync.sourceContract) return;
+                  workflow.set(workflowPatchFromContract(sync.sourceContract, project.data.name));
+                  sync.adoptForeign();
+                  toast.success("Đã chuyển sang bản chỉnh sửa");
+                }}
+              />
+            ) : gate.readOnly && (
+              <p role="status" className="mb-4 rounded-2 border border-line-subtle bg-raised px-3 py-2 text-caption text-fg">
+                {gate.longReason}
+              </p>
+            )}
+            <fieldset disabled={projectReadOnly} className="min-w-0 border-0 p-0">
+              {section === "requirements" && <BriefStep />}
+              {section === "style" && <StyleStep />}
+              {section === "ui" && <KitsetStep />}
+              {section === "mascot" && <MascotStep />}
+              {section === "images" && <ResultStep />}
+              {section === "canvas" && (
+                <section className="workflow-panel">
+                  <header className="workflow-heading">
+                    <h2>Canvas</h2>
+                    <p>Đang phát triển.</p>
+                  </header>
+                </section>
+              )}
+              {section === "settings" && (
+                <ProjectSettingsPanel
+                  projectId={projectId}
+                  currentName={project.data.name}
+                  librarySettings={userLibrary.data?.settings}
+                  sheetLimits={workflow.sheetLimits}
+                  onSheetLimits={(next) => workflow.set({ sheetLimits: next })}
+                  onRenamed={(name) => workflow.set({ kitName: name })}
+                />
+              )}
+            </fieldset>
+          </div>
+        </div>
+      </div>
+    </ContractSyncProvider>
   );
 }
 
-/** Bọc chung: cùng chiều rộng + khoảng cách ở mọi trạng thái ⇒ đổi trạng thái không "nhảy" layout. */
-function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 p-6">{children}</div>;
+function ImportedDesignNotice({ onConvert }: { onConvert: () => void }) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <>
+      <div role="status" className="mb-4 flex flex-wrap items-center gap-3 rounded-2 border border-line-subtle bg-raised px-3 py-2 text-caption text-fg">
+        <FileInput className="size-4 shrink-0 text-fg-muted" aria-hidden />
+        <span className="min-w-0 flex-1">Dự án này được tạo bằng phiên bản cũ.</span>
+        <Button type="button" size="sm" variant="secondary" onClick={() => setOpen(true)}>Chỉnh sửa dự án</Button>
+      </div>
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Chuyển sang trình quản lý mới?</AlertDialogTitle>
+            <AlertDialogDescription>Dữ liệu hiện có sẽ được giữ lại để bạn tiếp tục chỉnh sửa và tạo ảnh.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Huỷ</AlertDialogCancel>
+            <AlertDialogAction onClick={onConvert}>Chuyển và chỉnh sửa</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
 }
 
-export default ProjectScreen;
+function ProjectSettingsPanel({
+  projectId,
+  currentName,
+  librarySettings,
+  sheetLimits,
+  onSheetLimits,
+  onRenamed,
+}: {
+  projectId: string;
+  currentName: string;
+  librarySettings?: LibrarySettings;
+  sheetLimits: ProjectSheetLimits;
+  onSheetLimits: (limits: ProjectSheetLimits) => void;
+  onRenamed: (name: string) => void;
+}) {
+  const patch = usePatchProject(projectId);
+  const [name, setName] = React.useState(currentName);
+  React.useEffect(() => setName(currentName), [currentName]);
+  const clean = name.trim();
+  const changed = clean.length > 0 && clean !== currentName;
+
+  return (
+    <section className="workflow-panel">
+      <header className="workflow-heading">
+        <h2>Cài đặt dự án</h2>
+      </header>
+      <div className="max-w-xl space-y-3">
+        <Label htmlFor="project-manager-name">Tên dự án</Label>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            id="project-manager-name"
+            value={name}
+            maxLength={100}
+            onChange={(event) => setName(event.target.value)}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!changed || patch.isPending}
+            onClick={() => patch.mutate({ name: clean }, {
+              onSuccess: () => {
+                onRenamed(clean);
+                toast.success("Đã đổi tên dự án");
+              },
+              onError: () => toast.error("Chưa đổi được tên dự án"),
+            })}
+          >
+            {patch.isPending ? "Đang lưu…" : "Lưu tên"}
+          </Button>
+        </div>
+      </div>
+      <div className="mt-8 border-t border-line-subtle pt-6">
+        <h3 className="text-label text-fg-strong">Tối đa trên một sheet</h3>
+        <p className="mt-1 text-caption text-fg-muted">Để trống để dùng cài đặt của thư viện.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {PROJECT_LIMITS.map(({ key, label, fallback }) => (
+            <ProjectLimitInput
+              key={key}
+              label={label}
+              value={sheetLimits[key]}
+              fallback={librarySettings?.[key] ?? fallback}
+              onChange={(value) => onSheetLimits({ ...sheetLimits, [key]: value })}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const PROJECT_LIMITS: ReadonlyArray<{ key: SheetLimitKey; label: string; fallback: number }> = [
+  { key: "background", label: "Nền", fallback: 2 },
+  { key: "popup", label: "Popup", fallback: 4 },
+  { key: "small", label: "UI nhỏ & đạo cụ", fallback: 16 },
+  { key: "mascot", label: "Dáng mascot", fallback: 4 },
+];
+
+function ProjectLimitInput({
+  label,
+  value,
+  fallback,
+  onChange,
+}: {
+  label: string;
+  value: number | null;
+  fallback: number;
+  onChange: (value: number | null) => void;
+}) {
+  const id = `project-limit-${label.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`;
+  return (
+    <div className="space-y-2 rounded-3 border border-line-subtle bg-raised p-3">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        type="number"
+        inputMode="numeric"
+        min={1}
+        max={32}
+        value={value ?? ""}
+        placeholder={String(fallback)}
+        onChange={(event) => {
+          if (event.target.value === "") {
+            onChange(null);
+            return;
+          }
+          onChange(Math.max(1, Math.min(32, Number(event.target.value) || 1)));
+        }}
+        aria-description={value === null ? `Đang dùng mặc định ${fallback}` : undefined}
+      />
+    </div>
+  );
+}

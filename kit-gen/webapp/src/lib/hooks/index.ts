@@ -5,3 +5,4 @@ export * from "./use-agent";
 export * from "./use-projects";
 export * from "./use-contract";
 export * from "./use-runs";
+export * from "./use-library";

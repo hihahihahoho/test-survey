@@ -74,7 +74,7 @@ export function HomeSkeleton({ count = 6 }: { count?: number }) {
       data-home-skeleton
       aria-busy="true"
       aria-live="polite"
-      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
     >
       <span className="sr-only">{HOME_COPY.LOADING_LABEL}</span>
       {Array.from({ length: count }).map((_, i) => (

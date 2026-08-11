@@ -24,9 +24,11 @@ import {
   projectDetailSchema, projectListSchema, projectSchema, rawHistorySchema, refListSchema,
   refUploadResultSchema, restoreContractResultSchema, runListSchema, runSchema,
   saveContractResultSchema, startRunResultSchema, trashListSchema, uploadResultSchema,
-  validationSchema, workspaceListSchema,
+  validationSchema, workspaceListSchema, userLibrarySchema, libraryItemResultSchema,
+  librarySettingsResultSchema,
   type CleanTarget, type CreateProjectInput, type DuplicateInput,
   type PatchProjectInput, type RefKind, type StartRunInput,
+  type LibrarySettings,
 } from "../types/api";
 import { normalizeContract, type Contract } from "../types/contract";
 import type { z } from "zod";
@@ -259,6 +261,40 @@ export const elementLibApi = {
   },
 };
 
+export const libraryApi = {
+  async get() {
+    return parse(userLibrarySchema, await httpGet("/api/library"), "kho dùng chung");
+  },
+  async add(input: { file: File; kind: "ui" | "mascot" | "reference"; group: string; name: string; description?: string; cell?: string; skel?: Record<string, unknown> }) {
+    if (input.file.size > LIMITS.refBytes) {
+      throw new AgentError({ code: "TOO_LARGE", status: 413, transport: "client", message: "Ảnh vượt quá 20 MB" });
+    }
+    const fd = new FormData();
+    fd.append("file", input.file);
+    fd.append("kind", input.kind);
+    fd.append("group", input.group);
+    fd.append("name", input.name);
+    if (input.description) fd.append("description", input.description);
+    if (input.cell) fd.append("cell", input.cell);
+    if (input.skel) fd.append("skel", JSON.stringify(input.skel));
+    return parse(libraryItemResultSchema, await httpUpload("/api/library/items", fd), "ảnh vừa thêm").item;
+  },
+  async patch(id: string, input: { name?: string; description?: string; group?: string; poses?: string[]; cell?: string; skel?: Record<string, unknown> }) {
+    return parse(libraryItemResultSchema, await httpPatch(`/api/library/items/${pid(id)}`, input), "ảnh vừa sửa").item;
+  },
+  async remove(id: string) {
+    await httpDelete(`/api/library/items/${pid(id)}`);
+    return { ok: true };
+  },
+  async patchSettings(input: Partial<LibrarySettings>) {
+    return parse(librarySettingsResultSchema, await httpPatch("/api/library/settings", input), "thiết lập kho").settings;
+  },
+  async blob(id: string) {
+    const response = await httpGet<Response>(`/api/library/items/${pid(id)}/file`, { raw: true });
+    return response.blob();
+  },
+};
+
 /* ═════════ D. Ảnh tham khảo (#29–#31) ═════════ */
 
 export const refsApi = {
@@ -363,6 +399,7 @@ export const api = {
   import: importApi,
   contract: contractApi,
   elementLib: elementLibApi,
+  library: libraryApi,
   refs: refsApi,
   runs: runsApi,
   files: filesApi,

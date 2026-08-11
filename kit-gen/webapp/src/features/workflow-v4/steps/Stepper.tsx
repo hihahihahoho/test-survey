@@ -1,7 +1,7 @@
 import { Check } from "lucide-react";
 import { useWorkflowStore, type StepId } from "../lib/model";
 
-const steps = ["Yêu cầu", "Phong cách", "Thành phần UI", "Nhân vật", "Xem lại", "Kết quả"] as const;
+const steps = ["Yêu cầu", "Phong cách", "Bộ khung UI", "Mascot", "Kiểm tra", "Kết quả"] as const;
 
 /**
  * ══ P-SWEEP·15 · HAI HÌNH THÁI CHO HAI BỀ NGANG ═════════════════════════════
@@ -24,7 +24,7 @@ export function WorkflowStepper() {
       <p className="kg-page workflow-step-now">
         Bước {step}/{steps.length} · <strong>{steps[step - 1]}</strong>
       </p>
-      <nav aria-label="Các bước tạo bộ kit" className="kg-page workflow-stepper">
+      <nav aria-label="Các bước tạo dự án" className="kg-page workflow-stepper">
         {steps.map((label, i) => {
           const n = (i + 1) as StepId;
           return (

@@ -1,6 +1,5 @@
-import { createRoute } from "@tanstack/react-router";
+import { createRoute, Navigate } from "@tanstack/react-router";
 import { Route as rootRoute } from "./__root";
-import { AppLayout, LazyScreen } from "@/components/layout";
 import { requireSetup } from "./guards";
 import { parseRunParams } from "./params";
 
@@ -13,6 +12,6 @@ export const Route = createRoute({
 });
 
 function RunDetailRoute() {
-  const { projectId, runId } = Route.useParams();
-  return <AppLayout screen="run-detail" projectId={projectId}><LazyScreen screen="run-detail" projectId={projectId} runId={runId} /></AppLayout>;
+  const { projectId } = Route.useParams();
+  return <Navigate to="/p/$projectId" params={{ projectId }} search={{ section: "images" }} replace />;
 }

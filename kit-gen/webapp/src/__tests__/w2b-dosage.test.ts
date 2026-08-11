@@ -82,13 +82,13 @@ describe("2B-1 · thang display + dọn `text-[Npx]`", () => {
 
   it("bốn H1 cấp trang đều đi qua `DISPLAY`, không màn nào tự khai cỡ", () => {
     for (const f of [
-      "src/features/home/components/HomeHeader.tsx",
       "src/features/setup/components/StepShell.tsx",
       "src/features/project/ProjectSettingsScreen.tsx",
     ]) {
       expect(read(f)).toContain("DISPLAY");
     }
-    expect(read("src/features/settings/SettingsScreen.tsx")).toContain("text-title text-fg-strong");
+    expect(read("src/features/home/components/HomeHeader.tsx")).toContain("text-subtitle text-fg-strong");
+    expect(read("src/features/home/components/HomeWorkspaceShell.tsx")).toContain("text-subtitle text-fg-strong");
   });
 });
 
@@ -318,9 +318,9 @@ describe("2B-7 · chữ của người dùng, không phải của lập trình v
     }
   });
 
-  it("nhãn ô tìm và thẻ recap nói 'món' — chữ mà người dùng đích hiểu", () => {
-    expect(read("src/features/workflow-v4/steps/KitsetStep.tsx")).toContain('aria-label="Tìm món"');
-    expect(read("src/features/workflow-v4/steps/ReviewStep.tsx")).toContain("${drawable.length} món");
+  it("nhãn ô tìm nói 'thành phần', thẻ recap dùng đơn vị ngắn", () => {
+    expect(read("src/features/workflow-v4/steps/KitsetStep.tsx")).toContain('placeholder="Tìm thành phần…"');
+    expect(read("src/features/workflow-v4/steps/ReviewStep.tsx")).toContain("${drawable.length} thành phần");
   });
 
   it("hai ô của chroma-key gập vào khối 'Nâng cao'", () => {

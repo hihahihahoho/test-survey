@@ -1,11 +1,9 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { FloraShell } from "./FloraShell";
-import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useAgentStatus, useProject } from "@/lib/hooks";
 import { useRecentStore } from "@/lib/store";
 import type { AgentStatus } from "@/lib/status";
-import { AgentBanner, AgentDiagnosticBody } from "./AgentBanner";
 import {
   ALL_SHEETS_DOC_ID, SCREEN_LABEL, ShellEnvProvider,
   contractSheetIdsOf, runningSheetIdsOf,
@@ -43,13 +41,11 @@ export interface AppLayoutProps {
 
 export function AppLayout({ screen, projectId, fileId, children, simplified = false }: AppLayoutProps) {
   const navigate = useNavigate();
-  const [agentSheetOpen, setAgentSheetOpen] = React.useState(false);
-  const [probing, setProbing] = React.useState(false);
 
   const project = useProject(projectId);
   const activeRuns = project.data?.state?.activeRun?.runId ? 1 : 0;
   // Nhịp probe nhanh hơn khi có lượt đang chạy (arch §5.3).
-  const { status, recheck, runBridgeProbe } = useAgentStatus({ hasActiveRun: activeRuns > 0 });
+  const { status, recheck } = useAgentStatus({ hasActiveRun: activeRuns > 0 });
 
   const touchRecent = useRecentStore((s) => s.touch);
   React.useEffect(() => {
@@ -62,15 +58,6 @@ export function AppLayout({ screen, projectId, fileId, children, simplified = fa
     const parts = [project.data?.name, SCREEN_LABEL[screen], "kit-gen"].filter(Boolean);
     document.title = parts.join(" · ");
   }, [screen, project.data?.name]);
-
-  const onBridgeProbe = React.useCallback(async () => {
-    setProbing(true);
-    try {
-      await runBridgeProbe();
-    } finally {
-      setProbing(false);
-    }
-  }, [runBridgeProbe]);
 
   /* ══════════ ĐÔNG LẠNH: THANH TAB FILE CON + PROJECT RAIL ══════════
      (§W1-13 · chờ chủ dự án chốt hướng file con — xem UPGRADE-PLAN §Đ3)
@@ -92,40 +79,15 @@ export function AppLayout({ screen, projectId, fileId, children, simplified = fa
   const shellEnv = React.useMemo(() => ({ agentOffline: !status.connected, agentCommand: RUN_CMD }), [status.connected]);
 
   const body = (
-    <>
-      <FloraShell
-        home={screen === "projects" || screen === "settings"}
-        agentStatus={status.pill as AgentStatus}
-        connectionStatus={status}
-        onRecheck={recheck}
-        onAgentPillClick={() => setAgentSheetOpen(true)}
-        onHomeClick={() => void navigate({ to: "/" })}
-        banner={
-          <AgentBanner
-            status={status}
-            onRecheck={recheck}
-            onBridgeProbe={() => void onBridgeProbe()}
-            probing={probing}
-            onOpenAgentSheet={() => setAgentSheetOpen(true)}
-          />
-        }
-      >
-        {children}
-      </FloraShell>
-
-      {/* §2.1: bấm vào pill trạng thái mở Sheet "Trạng thái công cụ local" */}
-      <Sheet open={agentSheetOpen} onOpenChange={setAgentSheetOpen}>
-        <SheetContent>
-          <SheetHeader>
-            <SheetTitle>Công cụ local</SheetTitle>
-            <SheetDescription>Chương trình chạy trên máy bạn để đọc file và gọi AI.</SheetDescription>
-          </SheetHeader>
-          <SheetBody>
-            <AgentDiagnosticBody status={status} />
-          </SheetBody>
-        </SheetContent>
-      </Sheet>
-    </>
+    <FloraShell
+      home={screen === "projects" || screen === "settings"}
+      agentStatus={status.pill as AgentStatus}
+      connectionStatus={status}
+      onRecheck={recheck}
+      onHomeClick={() => void navigate({ to: "/" })}
+    >
+      {children}
+    </FloraShell>
   );
 
   /* Không màn nào có thanh tab ⇒ KHÔNG bọc `FileScopeProvider`: mọi màn thấy

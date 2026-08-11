@@ -119,11 +119,18 @@ export function withoutFileParam(
 
 export const DESIGN_TABS = ["sheets", "styles", "advanced"] as const;
 export const KIT_TABS = ["assets", "matrix", "export"] as const;
-export const SETTINGS_TABS = ["agent", "env", "prefs", "trash", "about"] as const;
+export const SETTINGS_TABS = ["agent", "env", "prefs", "about"] as const;
+export const PROJECT_SECTIONS = ["requirements", "style", "ui", "mascot", "images", "canvas", "settings"] as const;
 
 export type DesignTab = (typeof DESIGN_TABS)[number];
 export type KitTab = (typeof KIT_TABS)[number];
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
+export type ProjectSection = (typeof PROJECT_SECTIONS)[number];
+
+export const projectSearchSchema = z.object({
+  section: z.enum(PROJECT_SECTIONS).default("requirements").catch("requirements"),
+  file: fileParam,
+});
 
 export const designSearchSchema = z.object({
   tab: z.enum(DESIGN_TABS).default("sheets").catch("sheets"),

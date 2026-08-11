@@ -147,7 +147,7 @@ export const TITLE_N_TAIL = "nào?";
 
 /** Tiêu đề dạng chuỗi phẳng — cho `document.title`, `aria-label`, và test. */
 export const TITLE_FLAT = {
-  H: "Dự án của bạn",
+  H: "Dự án",
   N: "Bạn muốn làm kiểu nào?",
   W2: "Máy đang vẽ",
   C2: "Chọn những thứ muốn đưa vào bộ kit",
@@ -162,7 +162,7 @@ export const TITLE_FLAT = {
 
 /** W3 và C1 lấy TÊN BỘ KIT làm tiêu đề (§5.2) — không có chuỗi cố định, cố ý. */
 export const SUBTITLE = {
-  H: "Mỗi dự án lưu yêu cầu, bản thiết kế và hình ảnh đã tạo.",
+  H: "",
   N: "Đổi kiểu sau cũng được.",
 } as const;
 
@@ -215,8 +215,8 @@ export const EMPTY: Readonly<Record<
   EmptyCopy
 >> = {
   home: {
-    title: "Chưa có bộ kit nào",
-    body: "Bắt đầu bằng một bộ kit. Bạn điền form cho máy làm, hoặc tự xếp trên bàn làm việc.",
+    title: "Chưa có dự án nào",
+    body: "Tạo dự án đầu tiên để bắt đầu.",
     action: BTN.CREATE_FIRST_KIT,
   },
   w3NotDrawn: {

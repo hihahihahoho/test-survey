@@ -104,11 +104,11 @@ export function ExportProjectDialog({
         <DialogBody className="flex flex-col gap-4">
           {gate.readOnly && <OfflineNotice text={gate.longReason} />}
 
-          <p className="text-body text-fg">Bản thiết kế luôn được xuất. Chọn thêm thứ bạn cần mang đi:</p>
+          <p className="text-body text-fg">Dữ liệu dự án luôn được xuất. Chọn thêm nội dung cần tải:</p>
 
           <fieldset className="flex flex-col gap-0.5">
             <legend className="sr-only">Nội dung file zip</legend>
-            <CheckRow id="exp-contract" checked locked label="Bản thiết kế" hint="luôn xuất" />
+            <CheckRow id="exp-contract" checked locked label="Dữ liệu dự án" hint="luôn xuất" />
             <CheckRow
               id="exp-refs"
               checked={inc.refs}
@@ -120,15 +120,15 @@ export function ExportProjectDialog({
               id="exp-raw"
               checked={inc.raw}
               onCheckedChange={(v) => setInc((p) => ({ ...p, raw: v }))}
-              label={many ? "Ảnh AI đã sinh" : `Ảnh AI đã sinh (${count(one.stats?.rawPresent ?? 0, "lượt")})`}
-              hint="nặng nhất, nhưng đỡ phải sinh lại"
+              label={many ? "Ảnh gốc đã tạo" : `Ảnh gốc đã tạo (${count(one.stats?.rawPresent ?? 0, "lượt")})`}
+              hint="dung lượng lớn"
             />
             <CheckRow
               id="exp-kits"
               checked={inc.kits}
               onCheckedChange={(v) => setInc((p) => ({ ...p, kits: v }))}
-              label={many ? "Kit đã cắt" : `Kit đã cắt (${count(one.stats?.kitsCut ?? 0, "file")})`}
-              hint="thứ giao cho lập trình viên / designer"
+              label={many ? "Ảnh đã tách" : `Ảnh đã tách (${count(one.stats?.kitsCut ?? 0, "file")})`}
+              hint="các file dùng riêng"
             />
             <CheckRow
               id="exp-runs"
@@ -153,7 +153,7 @@ export function ExportProjectDialog({
           </p>
 
           <InfoNotice>
-            Nội dung zip là đúng cây thư mục project — thả vào máy khác là chạy được.
+            File zip giữ nguyên cấu trúc thư mục để có thể chuyển sang máy khác.
           </InfoNotice>
 
           {busy && (

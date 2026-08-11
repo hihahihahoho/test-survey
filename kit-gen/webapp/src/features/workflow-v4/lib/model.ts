@@ -28,6 +28,9 @@ export { LEGACY_DRAFT_KEY, draftKey, trashedDraftKey, migrateLegacyDraft, dropWo
 export type StepId = 1 | 2 | 3 | 4 | 5 | 6;
 export type KitElement = { file: string; label: string; role: string; cell: string; mock?: boolean; selected: boolean };
 export type Chroma = "magenta" | "green";
+export type SheetLimitKey = "background" | "popup" | "small" | "mascot";
+/** `null` = dùng giới hạn của thư viện chung; số = ghi đè cho riêng dự án. */
+export type ProjectSheetLimits = Record<SheetLimitKey, number | null>;
 /**
  * Bộ trường một phiên bản chụp lại. **`stylePrompt` nằm trong đây** — nó là ô người
  * ta sửa nhiều nhất (textarea to nhất, đầu panel); thiếu nó thì badge "Cần render lại"
@@ -100,6 +103,7 @@ export type WorkflowState = {
   chroma: Chroma;
   kitsetSummary: string;
   sliceThreshold: number;
+  sheetLimits: ProjectSheetLimits;
   brandRefs: { name: string }[];
   mascotEnabled: boolean;
   mascotName: string;
@@ -200,8 +204,8 @@ export function versionLabel(v: KitVersion, prev?: KitVersion): string {
     if (changed.length === 1) parts.push(changed[0]!);
     else if (changed.length > 1) parts.push(`đổi ${changed.length} thứ`);
   }
-  if (v.status === "rendering") parts.push("đang vẽ…");
-  if (v.status === "ready") parts.push("đã vẽ");
+  if (v.status === "rendering") parts.push("đang tạo…");
+  if (v.status === "ready") parts.push("đã tạo");
   if (v.status === "failed") parts.push("hỏng");
   // "mock" is retained for old local drafts created before real generation was connected.
   if (v.status === "mock") parts.push("bản nháp");
@@ -258,7 +262,7 @@ function initialState(): Omit<WorkflowState, "set" | "next" | "back" | "go" | "t
   return {
     step: 1,
     unlocked: 1,
-    kitName: "Bộ quay may mắn",
+    kitName: "Dự án mới",
     campaign: "",
     brief: "",
     stylePrompt: "Vui tươi, 3D bóng nhẹ, màu xanh dương VNPAY và xanh cyan, sạch và dễ đọc trên màn hình game.",
@@ -269,8 +273,9 @@ function initialState(): Omit<WorkflowState, "set" | "next" | "back" | "go" | "t
     secondaryColor: "#00B0F0",
     styleAvoid: "",
     chroma: "magenta",
-    kitsetSummary: "Game quay số may mắn · kitset preset",
+    kitsetSummary: "Bộ khung UI đã chọn",
     sliceThreshold: 120,
+    sheetLimits: { background: null, popup: null, small: null, mascot: null },
     brandRefs: [],
     mascotEnabled: true,
     mascotName: "",
@@ -288,6 +293,7 @@ const partialize = (s: WorkflowState) => ({
   stylePrompt: s.stylePrompt, styleMode: s.styleMode, styleRefs: s.styleRefs, styleAxes: s.styleAxes,
   primaryColor: s.primaryColor, secondaryColor: s.secondaryColor, styleAvoid: s.styleAvoid,
   chroma: s.chroma, kitsetSummary: s.kitsetSummary, sliceThreshold: s.sliceThreshold,
+  sheetLimits: s.sheetLimits,
   brandRefs: s.brandRefs, mascotEnabled: s.mascotEnabled, mascotName: s.mascotName,
   mascotDescription: s.mascotDescription, mascotRef: s.mascotRef, mascotPoses: s.mascotPoses,
   elements: s.elements, versions: s.versions, activeVersion: s.activeVersion,

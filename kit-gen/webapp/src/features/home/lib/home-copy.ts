@@ -25,7 +25,7 @@ export const HOME_COPY = {
   /** Nhãn vùng lưới cho screen reader. */
   GRID_LABEL: "Danh sách dự án",
   /** Chữ trên thẻ CTA đầu lưới — xuống dòng thủ công theo wireframe §1.1. */
-  CREATE_TILE_HINT: "Bắt đầu từ yêu cầu có sẵn hoặc một bản thiết kế trống.",
+  CREATE_TILE_HINT: "Điền yêu cầu theo từng bước.",
   /** Nhãn đọc lên khi lưới đang tải (§6 hàng H cột loading). */
   LOADING_LABEL: "Đang tải danh sách dự án…",
 } as const;

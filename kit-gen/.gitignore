@@ -11,6 +11,11 @@ nohup.out
 skeleton/
 teams/
 dist/
+__pycache__/
+*.pyc
+figma-export/.captures/
+# Ảnh thử nghiệm được giữ cục bộ; chỉ force-add mốc đã chọn để làm tài liệu.
+experiments/
 
 # Vệ sinh secret (architecture §4.4-6) — không bao giờ commit dữ liệu/credential máy cá nhân
 .kitgen/

@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingState, ErrorState } from "@/components/common";
-import { useAgentStatus, useElementLib, useProject } from "@/lib/hooks";
+import { useAgentStatus, useElementLib, useProject, useUserLibrary } from "@/lib/hooks";
 import { useGenerateRun } from "@/features/runs";
 import { toast } from "@/components/ui/sonner";
 import { fromAgentLib } from "@/features/design/library/lib/source";
@@ -19,6 +19,7 @@ import { KitsetStep } from "./steps/KitsetStep";
 import { MascotStep } from "./steps/MascotStep";
 import { ReviewStep, DrawConfirmDialog, drawableOf } from "./steps/ReviewStep";
 import { ResultStep } from "./steps/ResultStep";
+import { mergeElements, userUiElements } from "./lib/user-library";
 
 /**
  * MÀN WORKFLOW — stepper 6 bước, một mạch.
@@ -51,17 +52,39 @@ function WorkflowBody({ projectId }: { projectId: string }) {
 
   /* §W3-5 — kho element THẬT của agent, bản đóng gói là đường lùi (đọc đĩa, 0 đồng). */
   const libQ = useElementLib();
+  const userLibrary = useUserLibrary();
   const lib = React.useMemo(() => {
     const agent = libQ.data ? fromAgentLib(libQ.data).elements : [];
-    return agent.length > 0 ? agent : undefined;
-  }, [libQ.data]);
+    const custom = userUiElements(userLibrary.data?.items ?? []);
+    const merged = mergeElements(custom, agent);
+    return merged.length > 0 ? merged : undefined;
+  }, [libQ.data, userLibrary.data?.items]);
 
   /* §W3-3 — ref có thật trên đĩa THẮNG bản nháp khi dựng contract. */
   const refs = useWorkflowRefs(projectId);
   const kitsetRefs = React.useMemo(() => (refs.ready ? toKitsetRefs(refs.groups) : undefined), [refs.ready, refs.groups]);
+  const limits = React.useMemo(() => {
+    const shared = userLibrary.data?.settings;
+    const project = s.sheetLimits;
+    return {
+      background: project.background ?? shared?.background,
+      popup: project.popup ?? shared?.popup,
+      small: project.small ?? shared?.small,
+      mascot: project.mascot ?? shared?.mascot,
+    };
+  }, [s.sheetLimits, userLibrary.data?.settings]);
 
   /* §W3-2 — dựng MỘT contract rồi phát xuống: bước ⑤ và ⑥ phải nói cùng một con số. */
-  const sync = useContractSync(projectId, s, status, { ...(lib ? { lib } : {}), ...(kitsetRefs ? { refs: kitsetRefs } : {}) });
+  const sync = useContractSync(projectId, s, status, {
+    ...(lib ? { lib } : {}),
+    ...(kitsetRefs ? { refs: kitsetRefs } : {}),
+    limits,
+  });
+
+  React.useEffect(() => {
+    const name = project.data?.name?.trim();
+    if (name && (s.kitName === "Dự án mới" || s.kitName === "Bộ quay may mắn")) s.set({ kitName: name });
+  }, [project.data?.name, s.kitName, s.set]);
 
   if (project.isLoading) return <LoadingState count={4} label="Đang mở dự án…" />;
   if (project.error)
@@ -95,20 +118,13 @@ function WorkflowBody({ projectId }: { projectId: string }) {
           <p className="eyebrow">{project.data?.name ?? s.kitName}</p>
           {s.step === 1 && (
             <>
-              <h1>Tạo <em>bộ kit</em></h1>
-              <p>Nhập yêu cầu, chọn phong cách và những thành phần cần tạo.</p>
+              <h1>Tạo <em>dự án</em></h1>
+              <p>Điền yêu cầu, chọn bộ khung rồi tạo ảnh.</p>
             </>
           )}
         </div>
         <div className="workflow-hero-status">
           <SyncBadge sync={sync} />
-          {/* P-SWEEP·2 — pill đếm phiên bản BIẾN MẤT ở bước ⑥. Ở đó màn đã có một
-              `<Select>` liệt kê từng phiên bản kèm giờ và ghi chú; cái pill "1 phiên
-              bản" bên trên chỉ nói lại con số mà select vừa nói bằng chữ đầy đủ.
-              Năm bước đầu KHÔNG có select nào ⇒ pill vẫn là nguồn duy nhất, giữ. */}
-          {s.step < 6 && (
-            <span className="workflow-project-pill">{s.versions.length ? `${s.versions.length} phiên bản` : "Bản nháp"}</span>
-          )}
         </div>
       </div>
       <WorkflowStepper />
@@ -130,17 +146,17 @@ function WorkflowBody({ projectId }: { projectId: string }) {
           void (async () => {
             const saved = await sync.saveNow();
             if (!saved) {
-              toast.error("Chưa lưu được bản thiết kế mới nhất nên chưa bắt đầu vẽ.");
+              toast.error("Chưa lưu được thay đổi nên chưa thể tạo ảnh.");
               return;
             }
             try {
               const run = await startRun.startContract(sync.contract);
               s.addVersion(s.stylePrompt, "rendering", run.runId);
               setDrawOpen(false);
-              toast.success("Đã bắt đầu vẽ.");
-              void navigate({ to: "/k/$projectId/studio", params: { projectId } });
+              s.next();
+              toast.success("Đã bắt đầu tạo ảnh.");
             } catch {
-              toast.error("Chưa bắt đầu vẽ được. Kiểm tra công cụ tạo ảnh trong Môi trường.");
+              toast.error("Chưa tạo ảnh được. Kiểm tra công cụ tạo ảnh trong Cài đặt.");
             }
           })();
         }}
@@ -182,7 +198,7 @@ export function WorkflowActions({
       )}
       {step === 5 && (
         <Button variant="primary" size="lg" disabled={drawable === 0} onClick={onDraw}>
-          <Sparkles aria-hidden />Vẽ bộ kit này
+          <Sparkles aria-hidden />Tạo ảnh
         </Button>
       )}
       {step === 6 && (

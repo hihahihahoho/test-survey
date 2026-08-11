@@ -65,7 +65,7 @@ export function ProjectMissing({ inTrash }: { inTrash: boolean }) {
             <Link to="/">Về danh sách dự án</Link>
           </Button>
           <Button variant="secondary" asChild>
-            <Link to="/settings" search={{ tab: "trash" }}>
+            <Link to="/trash">
               <Trash2 aria-hidden />
               Xem thùng rác
             </Link>

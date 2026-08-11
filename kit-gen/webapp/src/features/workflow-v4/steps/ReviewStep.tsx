@@ -34,9 +34,9 @@ const MAX_PARALLEL_JOBS = 4;
 export function estimateLine(jobCount: number | null, fallbackElements: number): string {
   if (jobCount === null) {
     // Không có contract (bước render cô lập) — nói theo thứ biết chắc, không bịa số job.
-    return `${fallbackElements} món · ước lượng, có thể lệch`;
+    return `${fallbackElements} thành phần · ước lượng, có thể lệch`;
   }
-  if (jobCount === 0) return "Chưa có món nào vẽ được · 0 lượt";
+  if (jobCount === 0) return "Chưa có thành phần nào · 0 lượt";
   const est = estimateRun(jobCount, MAX_PARALLEL_JOBS);
   return `${jobCount} lượt · ${rangeMinutes(est.seconds)} (ước lượng, có thể lệch)`;
 }
@@ -63,19 +63,19 @@ export function ReviewStep() {
   const styleDetail = `${axisDigest(s.styleAxes)} · Màu ${s.primaryColor} / ${s.secondaryColor}${s.styleAvoid ? ` · Tránh: ${s.styleAvoid}` : ""}`;
   const sheets = sync?.contract.sheets.length ?? null;
   return (
-    <Step title="Xem lại & vẽ" copy="Kiểm tra một lần trước khi dùng lượt sinh ảnh; sau khi bấm, ảnh cũ vẫn được giữ.">
+    <Step title="Kiểm tra" copy="Xem lại nội dung và số lượt trước khi tạo ảnh.">
       <div className="recap-grid">
-        <Recap title="Chủ thể" value={s.kitName} detail={s.campaign || s.brief || "Chưa có brief bổ sung"} />
+        <Recap title="Dự án" value={s.kitName} detail={s.campaign || s.brief || "Chưa có mô tả"} />
         <Recap title="Phong cách" value={s.stylePrompt || "Chưa mô tả"} detail={styleDetail} />
         <Recap
-          title="Kitset"
-          value={`${drawable.length} món`}
+          title="Bộ khung UI"
+          value={`${drawable.length} thành phần`}
           detail={[
-            sheets === null ? "Game quay số may mắn" : `Xếp thành ${sheets} tấm`,
-            skipped ? `${skipped} món chưa có thiết kế, bỏ qua khi vẽ` : null,
+            sheets === null ? "Chưa tính số sheet" : `${sheets} sheet`,
+            skipped ? `${skipped} thành phần chưa có bộ khung` : null,
           ].filter(Boolean).join(" · ")}
         />
-        <Recap title="Mascot" value={s.mascotEnabled ? (s.mascotName || "Đã bật") : "Không dùng"} detail={s.mascotRef?.name || "Chưa có ảnh ref"} />
+        <Recap title="Mascot" value={s.mascotEnabled ? (s.mascotName || "Đã bật") : "Không dùng"} detail={s.mascotRef?.name || "Chưa có ảnh mẫu"} />
       </div>
       {/* Nút chính KHÔNG ở đây — nó ở hàng nút cuối trang, đúng chỗ 4 bước trước đã dạy (§W1-10). */}
       <div className="review-estimate">
@@ -84,7 +84,7 @@ export function ReviewStep() {
               đã tự ghi "(ước lượng, có thể lệch)": nói chữ "ước lượng" HAI LẦN trong
               6cm. Dòng số là chỗ phải giữ nguyên văn (luật §5.5 chống nói dối, có
               cổng canh), nên nhãn là cái nhường chỗ. */}
-          <span className="eyebrow">Trước khi vẽ</span>
+          <span className="eyebrow">Lượt tạo ảnh</span>
           <strong>{estimateLine(sync?.jobCount ?? null, drawable.length)}</strong>
         </div>
       </div>
@@ -109,16 +109,16 @@ export function DrawConfirmDialog({ open, onOpenChange, onConfirm, pending = fal
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Vẽ bộ kit này?</DialogTitle>
-          <DialogDescription>Máy sẽ vẽ {drawable.length} món trong kitset · {estimateLine(sync?.jobCount ?? null, drawable.length)} · ảnh cũ vẫn được giữ lại.</DialogDescription>
-          <p className="dialog-supporting">Những tấm đã vẽ sẽ không bị mất. Bạn có thể chỉnh tiếp sau khi bắt đầu.</p>
+          <DialogTitle>Tạo ảnh?</DialogTitle>
+          <DialogDescription>{drawable.length} thành phần · {estimateLine(sync?.jobCount ?? null, drawable.length)}.</DialogDescription>
+          <p className="dialog-supporting">Ảnh cũ vẫn được giữ lại.</p>
         </DialogHeader>
         <DialogFooter>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
             <ArrowLeft aria-hidden />Xem lại
           </Button>
           <Button variant="primary" disabled={pending} onClick={onConfirm}>
-            <Sparkles aria-hidden />{pending ? "Đang bắt đầu…" : "Vẽ bộ kit"}
+            <Sparkles aria-hidden />{pending ? "Đang bắt đầu…" : "Tạo ảnh"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -31,6 +31,7 @@ import { run as runDocs } from "./test/suite-docs.mjs"
 import { run as runRefs } from "./test/suite-refs.mjs"
 import { run as runRuns } from "./test/suite-runs.mjs"
 import { run as runImport } from "./test/suite-import.mjs"
+import { run as runLibrary } from "./test/suite-library.mjs"
 
 const AGENT_DIR = dirname(fileURLToPath(import.meta.url))
 
@@ -59,6 +60,7 @@ await runContract({ ...base, pid })
 await runDocs({ ...base, pid })
 await runLimits({ ...base, pid })
 await runRefs({ ...base, pid })
+await runLibrary(base)
 await runRuns({ ...base, pid })
 await runImport({ ...base, pid })
 

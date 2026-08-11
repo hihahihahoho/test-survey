@@ -64,6 +64,10 @@ describe("W2A-1 · độ sâu của dark phải THẬT SỰ vẽ ra được gì
     expect(sum(rgbOf(DARK, "raised"))).toBeGreaterThan(sum(rgbOf(DARK, "surface")));
   });
 
+  it("light: dialog/menu không được tối hơn input phía dưới", () => {
+    expect(sum(rgbOf(LIGHT, "overlay"))).toBeGreaterThan(sum(rgbOf(LIGHT, "raised")));
+  });
+
   it("khối .light KHÔNG bị đụng — ở đó bóng vốn đã hoạt động đúng", () => {
     // bóng theme sáng vẫn là mực #151516, không có ring trắng nào
     expect(LIGHT).toContain("--kg-shadow-1: 0 1px 2px rgb(21 21 22 / 0.1)");
@@ -81,7 +85,7 @@ describe("W2A-2 · MỘT lưới cho cả app", () => {
   it("6 khối cấp trang đều đeo `.kg-page`", () => {
     const users: Array<[string, string]> = [
       ["src/features/projects/ProjectsScreen.tsx", "Home"],
-      ["src/features/settings/SettingsScreen.tsx", "Settings"],
+      ["src/features/home/components/HomeWorkspaceShell.tsx", "Settings và thư viện"],
       ["src/features/workflow-v4/WorkflowScreen.tsx", "Workflow"],
       ["src/features/workflow-v4/steps/Stepper.tsx", "Stepper workflow"],
       ["src/components/layout/FloraShell.tsx", "ruột header"],

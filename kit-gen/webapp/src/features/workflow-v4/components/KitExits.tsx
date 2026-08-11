@@ -31,7 +31,7 @@ export function DownloadKitButton({ projectId }: { projectId: string }) {
     try {
       const path = exportZipPath(projectId, ["kits"], MAIN_VARIANT_ID);
       const saved = await saveProjectFile(projectId, path);
-      toastSuccess("Đã tải bộ kit", `${saved.fileName} · ${Math.max(1, Math.round(saved.bytes / 1024))} KB`);
+      toastSuccess("Đã tải ảnh", `${saved.fileName} · ${Math.max(1, Math.round(saved.bytes / 1024))} KB`);
     } catch (err) {
       toastError(err, {});
     } finally {
@@ -43,7 +43,7 @@ export function DownloadKitButton({ projectId }: { projectId: string }) {
     <Button
       variant="secondary"
       disabled={!ready || busy}
-      title={ready ? `Tải ${files.length} ảnh đã cắt về máy` : "Mở khi bộ kit đã có ảnh đã cắt"}
+      title={ready ? `Tải ${files.length} ảnh đã cắt về máy` : "Mở sau khi dự án có ảnh đã cắt"}
       onClick={() => void onClick()}
     >
       {busy ? <Loader2 aria-hidden className="animate-spin" /> : <Download aria-hidden />}
@@ -106,7 +106,7 @@ export function CopyFigmaButton({ projectId, kitName }: { projectId: string; kit
     <Button
       variant="secondary"
       disabled={!ready || busy}
-      title={ready ? `Ghép ${files.length} ảnh thành một bảng rồi copy` : "Mở khi bộ kit đã có ảnh đã cắt"}
+      title={ready ? `Ghép ${files.length} ảnh thành một bảng rồi copy` : "Mở sau khi dự án có ảnh đã cắt"}
       onClick={() => void onClick()}
     >
       {busy ? <Loader2 aria-hidden className="animate-spin" /> : <Copy aria-hidden />}

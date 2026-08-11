@@ -10,6 +10,22 @@ const project = {
   state: { jobs: {} },
 };
 
+const createdProject = {
+  ...project,
+  id: "du-an-moi-b4c8",
+  name: "Dự án mới",
+  slug: "du-an-moi",
+  tags: ["kg-workflow"],
+  stats: { rawPresent: 0, kitsCut: 0 },
+};
+
+const blankContract = {
+  schemaVersion: 4,
+  characterPoses: [],
+  variants: [],
+  sheets: [],
+};
+
 const health = {
   ok: true,
   app: "kitgen-agent",
@@ -46,17 +62,94 @@ const contract = {
 };
 
 async function mockAgent(page: Page) {
+  let currentContract = contract;
+  let contractVersion = 1;
+  const createdRefs: Array<{ name: string; path: string; bytes: number; mtime: string; usedBy: [] }> = [];
+  const libraryItem = {
+    id: "asset_0123456789abcdef",
+    kind: "mascot" as const,
+    group: "mascot" as const,
+    name: "Mèo mẫu",
+    filename: "mascot.png",
+    poses: ["Đứng yên", "Vui"],
+  };
+  const uiLibraryItem = {
+    id: "asset_fedcba9876543210",
+    kind: "ui" as const,
+    group: "small" as const,
+    name: "Nút thưởng của tôi",
+    description: "Nút nhận quà có vùng nội dung sạch",
+    filename: "reward-button.png",
+    poses: [],
+    cell: "landscape" as const,
+    skel: { shape: "pill" as const, w: 0.78, h: 0.5, slice9: true },
+  };
+  const styleReferenceItem = {
+    id: "asset_1111222233334444",
+    kind: "reference" as const,
+    group: "style" as const,
+    name: "Phong cách lễ hội",
+    filename: "style-reference.png",
+    poses: [],
+  };
   await page.route("**/health", async (route: Route) => route.fulfill({ json: health }));
   await page.route("**/api/**", async (route: Route) => {
     const path = new URL(route.request().url()).pathname;
+    const method = route.request().method();
     // Vite serves modules from `/src/lib/api/**`; only intercept the agent API,
     // otherwise the app bootstraps from JSON instead of its source module.
     if (path.startsWith("/src/")) return route.continue();
+    if (path === "/api/projects" && method === "POST") return route.fulfill({ status: 201, json: { project: createdProject, warnings: [] } });
     if (path === "/api/projects") return route.fulfill({ json: { scannedAt: "2026-08-11T08:00:00.000Z", workspaceLabel: "~/KitGen", workspaceFingerprint: "sha256:e2e", items: [project] } });
+    if (path === "/api/projects/tet26-a7f3" && method === "PATCH") {
+      const patch = route.request().postDataJSON() as Partial<typeof project>;
+      Object.assign(project, patch);
+      return route.fulfill({ json: { project } });
+    }
     if (path === "/api/projects/tet26-a7f3") return route.fulfill({ json: { project } });
-    if (path === "/api/projects/tet26-a7f3/contract") return route.fulfill({ json: { version: 1, contract } });
+    if (path === "/api/projects/du-an-moi-b4c8") return route.fulfill({ json: { project: createdProject } });
+    if (path === "/api/projects/tet26-a7f3/contract" && method === "PUT") {
+      currentContract = (route.request().postDataJSON() as { contract: typeof contract }).contract;
+      contractVersion += 1;
+      return route.fulfill({ json: { version: contractVersion, hash: `e2e-${contractVersion}` } });
+    }
+    if (path === "/api/projects/tet26-a7f3/contract") return route.fulfill({ json: { version: contractVersion, contract: currentContract } });
+    if (path === "/api/projects/du-an-moi-b4c8/contract" && method === "PUT") return route.fulfill({ json: { version: 2, hash: "e2e-created" } });
+    if (path === "/api/projects/du-an-moi-b4c8/contract") return route.fulfill({ json: { version: 1, contract: blankContract } });
+    if (path === "/api/projects/tet26-a7f3/runs" && method === "POST") {
+      return route.fulfill({ status: 201, json: { runId: "run-regenerate-1", jobs: [{ job: "tet-main-ui", status: "queued" }] } });
+    }
     if (path === "/api/projects/tet26-a7f3/runs") return route.fulfill({ json: { items: [] } });
     if (path === "/api/trash") return route.fulfill({ json: { items: [] } });
+    if (path === `/api/library/items/${libraryItem.id}/file`
+      || path === `/api/library/items/${uiLibraryItem.id}/file`
+      || path === `/api/library/items/${styleReferenceItem.id}/file`) {
+      return route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64") });
+    }
+    if (path === `/api/library/items/${libraryItem.id}` && method === "PATCH") {
+      Object.assign(libraryItem, route.request().postDataJSON());
+      return route.fulfill({ json: { item: libraryItem } });
+    }
+    if (path === `/api/library/items/${libraryItem.id}` && method === "DELETE") {
+      return route.fulfill({ status: 204 });
+    }
+    if (path === "/api/library/settings" && method === "PATCH") {
+      return route.fulfill({ json: { settings: { background: 2, popup: 4, small: 16, mascot: 4, ...route.request().postDataJSON() } } });
+    }
+    if (path === "/api/library") return route.fulfill({ json: { version: 1, settings: { background: 2, popup: 4, small: 16, mascot: 4 }, items: [libraryItem, uiLibraryItem, styleReferenceItem] } });
+    if (path === "/api/projects/tet26-a7f3/refs" && method === "POST") return route.fulfill({ json: { name: "char-meo-mau.png", path: "refs/char-meo-mau.png" } });
+    if (path === "/api/projects/du-an-moi-b4c8/refs" && method === "POST") {
+      const item = {
+        name: "inspo-phong-cach-le-hoi.png",
+        path: "refs/inspo-phong-cach-le-hoi.png",
+        bytes: 68,
+        mtime: "2026-08-11T08:00:00.000Z",
+        usedBy: [] as [],
+      };
+      createdRefs.splice(0, createdRefs.length, item);
+      return route.fulfill({ json: item });
+    }
+    if (path === "/api/projects/du-an-moi-b4c8/refs") return route.fulfill({ json: { items: createdRefs } });
     if (path === "/api/workspaces") return route.fulfill({ json: { items: [{ id: "ws_e2e", label: "~/KitGen" }], activeId: "ws_e2e" } });
     if (path === "/api/system/update") return route.fulfill({ json: { currentVersion: "1.2.0", latestVersion: "1.2.0", available: false } });
     if (path === "/api/doctor") return route.fulfill({ json: { codex: { ok: true }, imageGen: { available: true, mode: "default" } } });
@@ -70,10 +163,12 @@ test.beforeEach(async ({ page }) => {
 
 test("@visual home uses the project sidebar instead of a horizontal header", async ({ page }, testInfo) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Dự án của bạn" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dự án", exact: true })).toBeVisible();
 
-  await expect(page.locator("header")).toHaveCount(0);
+  await expect(page.locator("header.sticky")).toHaveCount(0);
   await expect(page.getByRole("searchbox", { name: "Tìm dự án" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Bộ khung UI" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Bộ khung mascot" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Cài đặt" })).toBeVisible();
 
   await page.screenshot({ path: testInfo.outputPath("home-dark.png"), fullPage: true, animations: "disabled" });
@@ -88,31 +183,101 @@ test("@visual an internal page keeps only Back home and runtime status", async (
   await expect(header.getByRole("button", { name: /Trạng thái:/ })).toBeVisible();
   await expect(header.getByRole("button")).toHaveCount(2);
   await expect(page.getByRole("searchbox", { name: "Tìm dự án" })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Tết 2026" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Quản lý dự án" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Yêu cầu" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Canvas/ })).toBeDisabled();
+  await expect(page.getByRole("heading", { name: "Yêu cầu", exact: true })).toBeVisible();
 
   await page.screenshot({ path: testInfo.outputPath("project-internal-dark.png"), fullPage: true, animations: "disabled" });
 });
 
-test("@visual the kit studio keeps generated assets inside the project", async ({ page }, testInfo) => {
-  await page.goto("/k/tet26-a7f3/studio");
+test("an imported project can be converted, edited and given project sheet limits", async ({ page }) => {
+  await page.goto("/p/tet26-a7f3");
+  await expect(page.getByText("Dự án này được tạo bằng phiên bản cũ.")).toBeVisible();
+  await page.getByRole("button", { name: "Chỉnh sửa dự án" }).click();
+  await expect(page.getByRole("alertdialog", { name: "Chuyển sang trình quản lý mới?" })).toBeVisible();
+  const saved = page.waitForResponse((response) => response.url().includes("/api/projects/tet26-a7f3/contract")
+    && response.request().method() === "PUT");
+  await page.getByRole("button", { name: "Chuyển và chỉnh sửa" }).click();
+  await expect(page.getByText("Dự án này được tạo bằng phiên bản cũ.")).toHaveCount(0);
+  await saved;
 
-  await expect(page.getByRole("heading", { name: "Quản lý từng phần" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Phạm vi bộ kit" })).toBeVisible();
-  await page.getByRole("button", { name: /Giao diện/ }).click();
-  await expect(page.getByRole("radiogroup", { name: "Kết quả của main-ui" })).toBeVisible();
-  await expect(page.getByRole("radio", { name: "Khung xương" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Tạo phần này" })).toBeVisible();
+  await page.getByRole("button", { name: "Bộ khung UI" }).click();
+  await page.getByRole("button", { name: /^UI nhỏ & đạo cụ/ }).click();
+  const customFrame = page.getByRole("button", { name: /Nút thưởng của tôi/ });
+  await expect(customFrame).toBeVisible();
+  await customFrame.click();
+  await expect(customFrame).toHaveAttribute("aria-pressed", "true");
 
-  await page.screenshot({ path: testInfo.outputPath("kit-studio-dark.png"), fullPage: true, animations: "disabled" });
+  await page.getByRole("button", { name: "Cài đặt dự án" }).click();
+  const backgroundLimit = page.getByRole("spinbutton", { name: "Nền" });
+  await expect(backgroundLimit).toHaveAttribute("placeholder", "2");
+  await backgroundLimit.fill("1");
+  await expect(backgroundLimit).toHaveValue("1");
+
+  await page.getByRole("button", { name: "Ảnh đã tạo" }).click();
+  const started = page.waitForResponse((response) => response.url().includes("/api/projects/tet26-a7f3/runs")
+    && response.request().method() === "POST");
+  await page.getByRole("button", { name: "Tạo lại", exact: true }).click();
+  await started;
+  await expect(page.getByText("Đã bắt đầu tạo phiên bản mới.")).toBeVisible();
+});
+
+test("a reusable mascot can be selected with its image and poses", async ({ page }) => {
+  await page.goto("/k/tet26-a7f3");
+  await page.getByRole("button", { name: "Tiếp theo" }).click();
+  await page.getByRole("button", { name: "Tiếp theo" }).click();
+  await page.getByRole("button", { name: "Tiếp theo" }).click();
+  await page.getByRole("button", { name: "Chọn mascot có sẵn" }).click();
+  await page.getByRole("button", { name: /Mèo mẫu/ }).click();
+  await expect(page.getByRole("textbox", { name: "Tên nhân vật" })).toHaveValue("Mèo mẫu");
+  await expect(page.getByText("2 dáng đã chọn")).toBeVisible();
+});
+
+test("@visual a new project opens the step-by-step wizard", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Tạo dự án" }).click();
+  await page.getByRole("textbox", { name: "Tên dự án" }).fill("Dự án mới");
+  await page.getByRole("button", { name: "Tiếp tục" }).click();
+
+  await expect(page).toHaveURL(/\/k\/du-an-moi-b4c8$/);
+  await expect(page.getByRole("heading", { name: "Tạo dự án" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Các bước tạo dự án" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Yêu cầu", exact: true })).toBeVisible();
+  await expect(page.getByText("Dữ liệu đã nhập")).toHaveCount(0);
+
+  await page.screenshot({ path: testInfo.outputPath("project-wizard-dark.png"), fullPage: true, animations: "disabled" });
+});
+
+test("a shared style reference can be selected from the wizard", async ({ page }) => {
+  await page.goto("/k/du-an-moi-b4c8");
+  await page.getByRole("button", { name: "Tiếp theo" }).click();
+  await page.getByRole("button", { name: "Chọn từ thư viện" }).click();
+  await page.getByRole("button", { name: /Phong cách lễ hội/ }).click();
+  await expect(page.getByText("inspo-phong-cach-le-hoi.png")).toBeVisible();
+});
+
+test("creating from Home starts a blank wizard without imported-data badges", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Tạo dự án" }).click();
+  await page.getByRole("textbox", { name: "Tên dự án" }).fill("Dự án mới");
+  await page.getByRole("button", { name: "Tiếp tục" }).click();
+
+  await expect(page).toHaveURL(/\/k\/du-an-moi-b4c8$/);
+  await expect(page.getByRole("heading", { name: "Tạo dự án" })).toBeVisible();
+  await expect(page.getByText("Dữ liệu đã nhập")).toHaveCount(0);
+  await expect(page.getByText("Bản nháp", { exact: true })).toHaveCount(0);
 });
 
 test("@visual opening settings does not change the viewport width", async ({ page }, testInfo) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Dự án của bạn" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dự án", exact: true })).toBeVisible();
   const widthBefore = await page.evaluate(() => document.documentElement.clientWidth);
 
   await page.getByRole("button", { name: "Cài đặt" }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page).toHaveURL(/\/settings/);
+  await expect(page.getByRole("heading", { name: "Cài đặt", exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => document.documentElement.clientWidth)).toBe(widthBefore);
 
   await page.screenshot({ path: testInfo.outputPath("settings-dark.png"), fullPage: true, animations: "disabled" });
@@ -123,7 +288,8 @@ test("@visual light settings keeps selected and interactive surfaces distinct", 
     localStorage.setItem("kitgen.ui.v1", JSON.stringify({ state: { theme: "light" }, version: 1 }));
   });
   await page.goto("/settings?tab=prefs");
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Cài đặt", exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.locator("html")).toHaveClass(/light/);
 
   const activeSwitch = page.getByRole("switch", { name: "Tự tách ảnh sau khi tạo" });
@@ -151,6 +317,45 @@ test("@visual mobile Home keeps project search when the sidebar collapses", asyn
   await expect(page.getByRole("searchbox", { name: "Tìm dự án" })).toBeVisible();
   await expect(page.locator("aside")).toBeHidden();
   await page.screenshot({ path: testInfo.outputPath("home-mobile-dark.png"), fullPage: true, animations: "disabled" });
+});
+
+test("@visual trash and shared libraries are separate Home destinations", async ({ page }, testInfo) => {
+  await page.goto("/trash");
+  await expect(page.getByRole("heading", { name: "Thùng rác", exact: true })).toBeVisible();
+  await expect(page).not.toHaveURL(/settings/);
+
+  await page.getByRole("button", { name: "Bộ khung UI" }).click();
+  await expect(page).toHaveURL(/\/library\/ui/);
+  await expect(page.getByRole("heading", { name: "Bộ khung UI", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Nền" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Popup" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "UI nhỏ & đạo cụ" })).toBeVisible();
+  await page.getByRole("button", { name: "Thêm bộ khung" }).click();
+  await expect(page.getByRole("dialog", { name: "Thêm nền" })).toBeVisible();
+  await page.getByRole("button", { name: "Huỷ" }).click();
+
+  await page.screenshot({ path: testInfo.outputPath("ui-library-dark.png"), fullPage: true, animations: "disabled" });
+});
+
+test("the mascot library manages its reusable pose list", async ({ page }) => {
+  await page.goto("/library/mascot");
+  await expect(page.getByRole("heading", { name: "Bộ khung mascot" })).toBeVisible();
+  await expect(page.getByText("2 dáng")).toBeVisible();
+  await page.getByRole("button", { name: "Tuỳ chọn Mèo mẫu" }).click();
+  await page.getByRole("menuitem", { name: "Sửa mascot" }).click();
+  const poses = page.getByRole("textbox", { name: "Dáng" });
+  await poses.fill("Đứng yên\nVui\nĂn mừng");
+  await page.getByRole("button", { name: "Lưu", exact: true }).click();
+  await expect(page.getByText("3 dáng", { exact: true })).toBeVisible();
+});
+
+test("legacy project pages converge on the project manager", async ({ page }) => {
+  await page.goto("/p/tet26-a7f3/design");
+  await expect(page).toHaveURL(/\/p\/tet26-a7f3\?section=ui$/);
+  await page.goto("/k/tet26-a7f3/canvas");
+  await expect(page).toHaveURL(/\/p\/tet26-a7f3\?section=canvas$/);
+  await expect(page.getByRole("heading", { name: "Canvas" })).toBeVisible();
+  await expect(page.getByText("Đang phát triển.")).toBeVisible();
 });
 
 test("@visual toast uses the default viewport position and an in-card close button", async ({ page }, testInfo) => {
@@ -181,4 +386,15 @@ test("@visual toast uses the default viewport position and an in-card close butt
       && settledClose.y + settledClose.height <= settledToast.y + settledToast.height;
   }).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("toast-default-dark.png"), fullPage: true, animations: "disabled" });
+});
+
+test("active product routes do not expose legacy technical wording", async ({ page }) => {
+  const routes = ["/", "/library/ui", "/library/mascot", "/references", "/trash", "/settings", "/p/tet26-a7f3", "/k/du-an-moi-b4c8"];
+  const banned = /bộ kit|bản thiết kế|ảnh AI|Server Live|Codex check|kg-|contract|\bjob\b|\brender\b|\belement\b|\bproject\b/i;
+
+  for (const path of routes) {
+    await page.goto(path);
+    const text = await page.locator("body").innerText();
+    expect(text, `Copy cũ còn xuất hiện ở ${path}`).not.toMatch(banned);
+  }
 });

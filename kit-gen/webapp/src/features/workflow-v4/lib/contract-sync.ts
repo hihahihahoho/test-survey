@@ -31,7 +31,7 @@ import { useContract, useSaveContract } from "@/lib/hooks";
 import type { ConnectionStatus } from "@/lib/api/connection";
 import { contractJobs, type Contract } from "@/lib/types/contract";
 import type { LibElement } from "@/features/design/library/lib/types";
-import { MAIN_VARIANT_ID, buildKitsetContract, pickContractInput, type KitsetContractInput } from "./kitset-to-contract";
+import { MAIN_VARIANT_ID, buildKitsetContract, pickContractInput, type KitsetContractInput, type SheetLimits } from "./kitset-to-contract";
 
 /** Nhịp gom thay đổi trước khi ghi đĩa — đúng 2s của §W3-2. */
 export const AUTOSAVE_DELAY_MS = 2000;
@@ -64,6 +64,10 @@ export interface ContractSync {
   conflict: ReturnType<typeof useSaveContract>["conflict"];
   resolveConflict: ReturnType<typeof useSaveContract>["resolveConflict"];
   dismissConflict: () => void;
+  /** Contract cũ trên đĩa, chỉ dùng để chuyển có xác nhận sang trình quản lý mới. */
+  sourceContract: Contract | null;
+  /** Cho phép ghi bản workflow sau khi UI đã nạp và người dùng xác nhận chuyển đổi. */
+  adoptForeign: () => void;
   /** Ghi ngay, không chờ debounce (dùng khi rời màn / bấm nút rõ ràng). */
   saveNow: () => Promise<boolean>;
 }
@@ -88,6 +92,7 @@ export interface ContractSyncOptions {
   lib?: readonly LibElement[];
   /** Ref có thật trên đĩa (§W3-3) — thắng bản nháp khi được truyền. */
   refs?: { inspo: readonly string[]; brand: readonly string[]; character: string | null };
+  limits?: Partial<SheetLimits>;
   /** Tắt hẳn autosave — cho test và cho màn chỉ muốn dựng contract để xem. */
   autosave?: boolean;
 }
@@ -107,6 +112,7 @@ export function useContractSync(
   const disk = useContract(projectId);
   const saver = useSaveContract(projectId);
   const [savedAt, setSavedAt] = React.useState<Date | null>(null);
+  const [adoptingForeign, setAdoptingForeign] = React.useState(false);
 
   /** Bản đã ghi thành công gần nhất — mốc để biết "có gì mới không". */
   const savedRef = React.useRef<Contract | null>(null);
@@ -115,17 +121,20 @@ export function useContractSync(
 
   const lib = opts.lib;
   const refs = opts.refs;
+  const limits = opts.limits;
   /* Băm ĐÚNG phần state mà contract phụ thuộc: store trả object mới mỗi `set()`,
      và `WorkflowState` còn mang cả hàm — băm cả state thì memo không bao giờ trúng. */
   const inputKey = JSON.stringify(pickContractInput(state));
   const refsKey = JSON.stringify(refs ?? null);
+  const limitsKey = JSON.stringify(limits ?? null);
   const contract = React.useMemo(
-    () => buildKitsetContract(state, { ...(lib ? { lib } : {}), ...(refs ? { refs } : {}) }),
+    () => buildKitsetContract(state, { ...(lib ? { lib } : {}), ...(refs ? { refs } : {}), ...(limits ? { limits } : {}) }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [inputKey, lib, refsKey],
+    [inputKey, lib, refsKey, limitsKey],
   );
 
-  const foreign = isForeignContract(disk.data?.contract ?? null);
+  const foreignOnDisk = isForeignContract(disk.data?.contract ?? null);
+  const foreign = foreignOnDisk && !adoptingForeign;
   const canWrite = autosave && status.connected && !status.readOnly && !foreign && !disk.isLoading && Boolean(disk.data);
   const dirty = !sameContract(savedRef.current, contract);
 
@@ -157,6 +166,10 @@ export function useContractSync(
       versionRef.current = disk.data.version;
     }
   }, [disk.data]);
+
+  React.useEffect(() => {
+    if (!foreignOnDisk) setAdoptingForeign(false);
+  }, [foreignOnDisk]);
 
   const state_: SyncState = disk.isLoading
     ? "loading"
@@ -190,6 +203,8 @@ export function useContractSync(
     conflict: saver.conflict,
     resolveConflict: saver.resolveConflict,
     dismissConflict: saver.dismissConflict,
+    sourceContract: disk.data?.contract ?? null,
+    adoptForeign: () => setAdoptingForeign(true),
     saveNow,
   };
 }
@@ -219,9 +234,9 @@ export function useKitsetContract(): ContractSync | null {
 
 /** Câu hiện trên màn cho từng trạng thái — nói đúng thứ đang xảy ra, không hứa hão. */
 const NOTE: Partial<Record<SyncState, string>> = {
-  loading: "Đang mở bản thiết kế…",
+  loading: "Đang mở bộ khung…",
   offline: "Chưa lưu được — công cụ local chưa chạy. Chữ của bạn vẫn còn trên máy này.",
-  foreign: "Đang dùng bản thiết kế đã nhập. Form này chỉ để xem.",
+  foreign: "Dữ liệu đã nhập đang được giữ nguyên.",
   conflict: "Bản trên đĩa vừa đổi ở nơi khác. Chọn giữ bản nào.",
   error: "Lưu chưa được. Sẽ thử lại — chữ của bạn vẫn còn.",
   pending: "Đang chờ lưu…",

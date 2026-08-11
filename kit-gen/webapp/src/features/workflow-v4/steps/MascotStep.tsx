@@ -5,7 +5,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useWorkflowProjectId, useWorkflowStore } from "../lib/model";
 import { useWorkflowRefs } from "../lib/refs-sync";
 import { RefChips } from "../components/RefChips";
+import { SharedMascotPicker, SharedReferencePicker } from "../components/SharedReferencePicker";
 import { SegChoice } from "../components/SegChoice";
+import { normalizedPoseIds } from "../lib/user-library";
 import { Step } from "./BriefStep";
 
 /**
@@ -40,7 +42,7 @@ export function MascotStep() {
 
   if (!s.mascotEnabled) {
     return (
-      <Step title="Mascot" copy="Bạn có thể bỏ qua nhân vật; bộ kit sẽ chỉ sinh giao diện.">
+      <Step title="Mascot" copy="Bật lại khi dự án cần nhân vật.">
         <button type="button" className="choice-card selected" aria-pressed="false" onClick={() => s.set({ mascotEnabled: true })}>
           <strong>Không dùng mascot</strong>
           <span>Bật lại nếu cần nhân vật nhất quán ở nhiều dáng.</span>
@@ -57,7 +59,7 @@ export function MascotStep() {
   };
 
   return (
-    <Step title="Mascot" copy="Thêm nhân vật và ảnh ref để mọi pose giữ cùng khuôn mặt, màu và trang phục.">
+    <Step title="Mascot" copy="Thêm ảnh mẫu và chọn các dáng cần tạo.">
       <div className="workflow-form-grid">
         <div>
           <label className="field-label" htmlFor="mascot-name">Tên nhân vật</label>
@@ -69,8 +71,15 @@ export function MascotStep() {
         </div>
       </div>
       {/* §W2B-6 — chip ảnh vào TRONG khung vùng thả (xem StyleStep + globals.css). */}
+      <div className="mb-2 flex flex-wrap justify-end gap-2">
+        <SharedMascotPicker onPick={(file, item) => {
+          pickRef([file]);
+          s.set({ mascotName: item.name, mascotPoses: normalizedPoseIds(item.poses) });
+        }} />
+        <SharedReferencePicker group="mascot-reference" onPick={(file) => pickRef([file])} />
+      </div>
       <div className="dropfield mascot-dropzone">
-        <ImageDropzone label="Kéo ảnh nhân vật vào đây" description="Một ảnh rõ mặt, đủ trang phục để giữ nhận diện ở mọi pose" state={refs.pending ? "uploading" : refs.groups.character.length ? "done" : "idle"} onFiles={pickRef} />
+        <ImageDropzone label="Kéo ảnh nhân vật vào đây" description="Một ảnh rõ mặt, đủ trang phục để giữ nhận diện ở mọi dáng" state={refs.pending ? "uploading" : refs.groups.character.length ? "done" : "idle"} onFiles={pickRef} />
         <RefChips
           items={refs.groups.character}
           ready={refs.ready}
@@ -79,7 +88,7 @@ export function MascotStep() {
         />
       </div>
       <section className="mascot-pose-picker">
-        <div className="pose-heading"><div><p className="field-label">Bộ pose</p><strong>{s.mascotPoses.length} dáng đã chọn</strong></div><p>Chọn nhiều dáng trong cùng một bảng để giữ nhân vật nhất quán và tiết kiệm lượt.</p></div>
+        <div className="pose-heading"><div><p className="field-label">Bộ dáng</p><strong>{s.mascotPoses.length} dáng đã chọn</strong></div><p>Chọn nhiều dáng trong cùng một sheet để giữ nhân vật nhất quán.</p></div>
         <div className="pose-group-tabs">{[...new Set(POSES.map(p => p.group))].map(g => <button key={g} className={poseGroup === g ? "active" : ""} onClick={() => setPoseGroup(g)}>{g}<small>{POSES.filter(p => p.group === g).length}</small></button>)}</div>
         <div className="pose-choice-grid">{POSES.filter(p => p.group === poseGroup).map(p => { const on=s.mascotPoses.includes(p.id); return <SegChoice key={p.id} on={on} onClick={() => s.set({ mascotPoses: on ? s.mascotPoses.filter(x=>x!==p.id) : [...s.mascotPoses,p.id] })}>{p.label}</SegChoice>; })}</div>
         <div className="selected-poses"><span className="eyebrow">Sẽ vẽ</span>{s.mascotPoses.map(id=><button key={id} onClick={()=>s.set({mascotPoses:s.mascotPoses.filter(x=>x!==id)})}>{POSES.find(p=>p.id===id)?.label ?? id}<span aria-hidden>×</span></button>)}</div>

@@ -2,6 +2,10 @@ import { Route as rootRoute } from "./routes/__root";
 import { Route as setupRoute } from "./routes/setup";
 import { Route as indexRoute } from "./routes/index";
 import { Route as settingsRoute } from "./routes/settings";
+import { Route as uiLibraryRoute } from "./routes/library.ui";
+import { Route as mascotLibraryRoute } from "./routes/library.mascot";
+import { Route as referencesRoute } from "./routes/references";
+import { Route as trashRoute } from "./routes/trash";
 import { Route as projectRoute } from "./routes/p.$projectId";
 import { Route as kitMainRoute } from "./routes/k.$projectId";
 import { Route as kitStudioRoute } from "./routes/k.$projectId.studio";
@@ -42,6 +46,10 @@ export const routeTree = rootRoute.addChildren([
   /* S0 */ setupRoute,
   /* S1 */ indexRoute,
   /* S6 */ settingsRoute,
+  uiLibraryRoute,
+  mascotLibraryRoute,
+  referencesRoute,
+  trashRoute,
   /* W1 */ kitFormRoute,
   /* Studio */ kitStudioRoute,
   /* W3/C1 */ kitMainRoute,

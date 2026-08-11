@@ -73,7 +73,7 @@ export function DuplicateProjectDialog({
       onOpenChange(false);
       toastSuccess(
         `Đã tạo bản sao: «${res.project.name}»`,
-        "Đã chép bản thiết kế và ảnh mẫu. Ảnh đã vẽ thì không chép.",
+        "Đã chép bộ khung và ảnh tham chiếu. Ảnh đã tạo thì không chép.",
         { label: "Về dự án cũ", onClick: () => onBackToOld(project) },
       );
       onDone(res.project);
@@ -89,7 +89,7 @@ export function DuplicateProjectDialog({
         onInteractOutside={(e) => dup.isPending && e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Nhân bản dự án «{project.name}»</DialogTitle>
-          <DialogDescription>Đặt tên cho bộ mới. Bản gốc vẫn giữ nguyên.</DialogDescription>
+          <DialogDescription>Đặt tên cho dự án mới. Bản gốc vẫn giữ nguyên.</DialogDescription>
         </DialogHeader>
 
         <DialogBody className="flex flex-col gap-5">
@@ -116,7 +116,7 @@ export function DuplicateProjectDialog({
           </div>
 
           <InfoNotice>
-            Chỉ chép bản thiết kế và ảnh mẫu. Ảnh đã vẽ thì không chép.
+            Chỉ chép bộ khung và ảnh tham chiếu. Ảnh đã tạo thì không chép.
           </InfoNotice>
 
           {failure != null && <InlineError error={failure} detail={errorDetail(failure)} />}

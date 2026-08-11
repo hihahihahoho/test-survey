@@ -1,5 +1,7 @@
 # Game UI Kit PoC — 1 prompt contract → 5 style → asset đã cắt
 
+> Định hướng ứng dụng hiện tại: [Sitemap sản phẩm KitGen](docs/PRODUCT-SITEMAP.md).
+
 Proof-of-concept cho hướng tool #2 trong [analysis/ket-qua-dot-1.md](../analysis/ket-qua-dot-1.md):
 **bộ component cố định của mini-game campaign chỉ đổi style, không đổi nội dung**.
 

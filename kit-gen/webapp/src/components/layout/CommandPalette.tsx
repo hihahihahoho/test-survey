@@ -2,7 +2,7 @@ import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   BookOpen, Boxes, Compass, Images, Keyboard, LayoutGrid, Pencil, Plus,
-  RefreshCw, Settings, Terminal, Trash2, Upload, Wrench, Zap,
+  RefreshCw, Settings, Terminal, Trash2, Upload, Wrench,
 } from "lucide-react";
 import {
   CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
@@ -55,36 +55,30 @@ export function CommandPalette(props: CommandPaletteProps) {
     if (projectId) {
       const p = { projectId };
       list.push(
-        { id: "p.overview", group: "Bộ kit", icon: LayoutGrid, label: "Bộ kit: Tổng quan",
-          run: go(() => void navigate({ to: "/p/$projectId", params: p })) },
-        { id: "p.design", group: "Bộ kit", icon: Pencil, label: "Bộ kit: Bản thiết kế", hint: ["g", "d"], hintSequence: true,
-          run: go(() => void navigate({ to: "/p/$projectId/design", params: p, search: { tab: "sheets" } })) },
-        { id: "p.design.styles", group: "Bộ kit", icon: Pencil, label: "Bộ kit: Bản thiết kế · Phong cách",
-          run: go(() => void navigate({ to: "/p/$projectId/design", params: p, search: { tab: "styles" } })) },
-        { id: "p.design.advanced", group: "Bộ kit", icon: Pencil, label: "Bộ kit: Bản thiết kế · Nâng cao",
-          run: go(() => void navigate({ to: "/p/$projectId/design", params: p, search: { tab: "advanced" } })) },
-        { id: "p.runs", group: "Bộ kit", icon: Zap, label: "Bộ kit: Theo dõi sinh ảnh", hint: ["g", "r"], hintSequence: true,
-          run: go(() => void navigate({ to: "/p/$projectId/runs", params: p })) },
-        { id: "p.kit", group: "Bộ kit", icon: Images, label: "Bộ kit: Thư viện kit", hint: ["g", "k"], hintSequence: true,
-          run: go(() => void navigate({ to: "/p/$projectId/kit", params: p, search: { tab: "assets" } })) },
-        { id: "p.kit.matrix", group: "Bộ kit", icon: Images, label: "Project: Thư viện kit · Ma trận so sánh",
-          run: go(() => void navigate({ to: "/p/$projectId/kit", params: p, search: { tab: "matrix" } })) },
-        { id: "p.kit.export", group: "Bộ kit", icon: Images, label: "Project: Thư viện kit · Xuất",
-          run: go(() => void navigate({ to: "/p/$projectId/kit", params: p, search: { tab: "export" } })) },
-        { id: "p.settings", group: "Bộ kit", icon: Settings, label: "Bộ kit: Cài đặt", hint: ["g", "s"], hintSequence: true,
-          run: go(() => void navigate({ to: "/p/$projectId/settings", params: p })) },
+        { id: "p.requirements", group: "Dự án", icon: LayoutGrid, label: "Dự án: Yêu cầu",
+          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "requirements" } })) },
+        { id: "p.style", group: "Dự án", icon: Pencil, label: "Dự án: Phong cách", hint: ["g", "d"], hintSequence: true,
+          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "style" } })) },
+        { id: "p.ui", group: "Dự án", icon: LayoutGrid, label: "Dự án: Bộ khung UI",
+          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "ui" } })) },
+        { id: "p.mascot", group: "Dự án", icon: Images, label: "Dự án: Mascot",
+          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "mascot" } })) },
+        { id: "p.images", group: "Dự án", icon: Images, label: "Dự án: Ảnh đã tạo", hint: ["g", "r"], hintSequence: true,
+          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "images" } })) },
+        { id: "p.settings", group: "Dự án", icon: Settings, label: "Dự án: Cài đặt", hint: ["g", "s"], hintSequence: true,
+          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "settings" } })) },
       );
     }
 
     list.push(
-      { id: "project.create", group: "Bộ kit", icon: Plus, label: "Tạo bộ kit mới…", hint: ["n"],
+      { id: "project.create", group: "Dự án", icon: Plus, label: "Tạo dự án…", hint: ["n"],
         disabledReason: gate, run: onCreateProject },
-      { id: "project.import", group: "Bộ kit", icon: Upload, label: "Nhập bộ kit từ tệp cũ…",
+      { id: "project.import", group: "Dự án", icon: Upload, label: "Nhập dự án từ tệp cũ…",
         disabledReason: gate, run: onImportProject },
-      { id: "project.jump", group: "Bộ kit", icon: Compass, label: "Nhảy nhanh giữa bộ kit…", hint: ["mod", "P"],
+      { id: "project.jump", group: "Dự án", icon: Compass, label: "Chuyển nhanh giữa dự án…", hint: ["mod", "P"],
         run: onJumpProject },
 
-      { id: "nav.projects", group: "Điều hướng", icon: Boxes, label: "Về danh sách bộ kit", hint: ["g", "p"], hintSequence: true,
+      { id: "nav.projects", group: "Điều hướng", icon: Boxes, label: "Về danh sách dự án", hint: ["g", "p"], hintSequence: true,
         run: go(() => void navigate({ to: "/" })) },
       { id: "nav.settings.agent", group: "Điều hướng", icon: Terminal, label: "Cài đặt · Công cụ local & Thư mục làm việc",
         run: go(() => void navigate({ to: "/settings", search: { tab: "agent" } })) },
@@ -92,8 +86,8 @@ export function CommandPalette(props: CommandPaletteProps) {
         run: go(() => void navigate({ to: "/settings", search: { tab: "env" } })) },
       { id: "nav.settings.prefs", group: "Điều hướng", icon: Settings, label: "Cài đặt · Ưu tiên (song song, tự cắt, giao diện)",
         run: go(() => void navigate({ to: "/settings", search: { tab: "prefs" } })) },
-      { id: "nav.settings.trash", group: "Điều hướng", icon: Trash2, label: "Cài đặt · Thùng rác",
-        run: go(() => void navigate({ to: "/settings", search: { tab: "trash" } })) },
+      { id: "nav.trash", group: "Điều hướng", icon: Trash2, label: "Thùng rác",
+        run: go(() => void navigate({ to: "/trash" })) },
       { id: "nav.settings.about", group: "Điều hướng", icon: Settings, label: "Cài đặt · Phiên bản & quyền riêng tư",
         run: go(() => void navigate({ to: "/settings", search: { tab: "about" } })) },
 

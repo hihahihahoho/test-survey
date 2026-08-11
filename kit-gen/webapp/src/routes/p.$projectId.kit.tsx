@@ -1,6 +1,5 @@
-import { createRoute } from "@tanstack/react-router";
+import { createRoute, Navigate } from "@tanstack/react-router";
 import { Route as rootRoute } from "./__root";
-import { AppLayout, LazyScreen } from "@/components/layout";
 import { requireSetup } from "./guards";
 import { parseProjectParams } from "./params";
 import { kitSearchSchema } from "./search-schemas";
@@ -17,5 +16,5 @@ export const Route = createRoute({
 
 function ProjectKitRoute() {
   const { projectId } = Route.useParams();
-  return <AppLayout screen="kit" projectId={projectId}><LazyScreen screen="kit" projectId={projectId} /></AppLayout>;
+  return <Navigate to="/p/$projectId" params={{ projectId }} search={{ section: "images" }} replace />;
 }

@@ -43,10 +43,10 @@ export function BriefStep() {
   };
 
   return (
-    <Step title="Brief" copy="Mô tả ngắn bộ kit cần tạo. Bạn cũng có thể dán brief để điền nhanh.">
+    <Step title="Yêu cầu" copy="Mô tả nội dung cần tạo hoặc dán brief có sẵn.">
       <div className="workflow-form-grid">
         <div>
-          <Label htmlFor="kit-name">Tên bộ kit</Label>
+          <Label htmlFor="kit-name">Tên dự án</Label>
           <Input id="kit-name" value={s.kitName} onChange={(e) => s.set({ kitName: e.target.value })} />
         </div>
         <div>
@@ -65,7 +65,7 @@ export function BriefStep() {
         rows={7}
         value={s.brief}
         onChange={(e) => s.set({ brief: e.target.value })}
-        placeholder={"Ví dụ:\nTên bộ kit: Quay số may mắn\nCảm giác: vui, màu ấm\nMón cần có: vòng quay, nút quay, popup phần thưởng"}
+        placeholder={"Ví dụ:\nTên dự án: Quay số may mắn\nCảm giác: vui, màu ấm\nCần có: vòng quay, nút quay, popup phần thưởng"}
       />
       <div className="workflow-choice">
         <button

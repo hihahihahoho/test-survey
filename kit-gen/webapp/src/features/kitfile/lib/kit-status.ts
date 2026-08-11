@@ -93,7 +93,7 @@ export function deriveStatus(project: KitStatusInput | null | undefined, now: nu
     return {
       status: "ve-loi",
       label: "Không mở được",
-      long: "Không đọc được bộ kit này. Mở thư mục trên máy để xem.",
+      long: "Không đọc được dự án này. Mở thư mục trên máy để xem.",
       tone: "danger",
       needsAction: true,
       failedJobs,
@@ -121,7 +121,7 @@ export function deriveStatus(project: KitStatusInput | null | undefined, now: nu
     return {
       status: "chua-ve",
       label: "Chưa vẽ",
-      long: "Bộ kit này chưa vẽ gì. Bấm bắt đầu vẽ để máy chạy.",
+      long: "Dự án này chưa có ảnh. Bấm tạo ảnh để bắt đầu.",
       tone: "never",
       needsAction: true,
       failedJobs,

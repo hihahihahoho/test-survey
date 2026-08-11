@@ -1,6 +1,5 @@
-import { createRoute } from "@tanstack/react-router";
+import { createRoute, Navigate } from "@tanstack/react-router";
 import { Route as rootRoute } from "./__root";
-import { AppLayout, LazyScreen } from "@/components/layout";
 import { requireSetup } from "./guards";
 import { parseProjectParams } from "./params";
 
@@ -14,5 +13,5 @@ export const Route = createRoute({
 
 function ProjectSettingsRoute() {
   const { projectId } = Route.useParams();
-  return <AppLayout screen="project-settings" projectId={projectId}><LazyScreen screen="project-settings" projectId={projectId} /></AppLayout>;
+  return <Navigate to="/p/$projectId" params={{ projectId }} search={{ section: "settings" }} replace />;
 }

@@ -115,7 +115,7 @@ describe("đặt element trong ô — skeleton.py dòng 104–107", () => {
   });
 
   it("`free` KHÔNG vẽ khung safe — đúng `if not sk.get(\"free\")` của skeleton.py", () => {
-    expect(read("skeleton.py")).toMatch(/if not sk\.get\("free"\)/);
+    expect(read("skeleton.py")).toContain('not sk.get("free")');
     expect(elementBox({ shape: "burst", w: 0.6, h: 0.9, free: true }, 384, 256).hasSafeFrame).toBe(false);
     expect(elementBox({ shape: "burst", w: 0.6, h: 0.9 }, 384, 256).hasSafeFrame).toBe(true);
   });

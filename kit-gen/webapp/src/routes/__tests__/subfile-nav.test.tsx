@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** Project file routes remain canonical and mount the canvas entry directly. */
+/** Link canvas cũ đi về mục Canvas đang khoá của màn quản lý dự án. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -29,14 +29,15 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("project subfile navigation", () => {
-  it.each(["f-main-kit", "f-y-tuong-tet", "f-khong-co-that"])("/p/:id/f/%s keeps its canonical URL", async (fileId) => {
+  it.each(["f-main-kit", "f-y-tuong-tet", "f-khong-co-that"])("/p/:id/f/%s redirects to the disabled Canvas section", async (fileId) => {
     const router = mount(`/p/${PID}/f/${fileId}`);
-    await waitFor(() => expect(router.state.location.pathname).toBe(`/p/${PID}/f/${fileId}`));
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/p/${PID}`));
+    expect((router.state.location.search as { section?: string }).section).toBe("canvas");
   });
 
   it("does not render the old file tab IA", async () => {
     const router = mount(`/p/${PID}/f/f-main-kit`);
-    await waitFor(() => expect(router.state.location.pathname).toBe(`/p/${PID}/f/f-main-kit`));
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/p/${PID}`));
     expect(document.querySelector('[role="tablist"]')).toBeNull();
   });
 

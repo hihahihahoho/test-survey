@@ -20,7 +20,7 @@ export function RuntimeStatus({ status, onRecheck }: { status: ConnectionStatus;
     : status.pill === "checking" ? "Đang kiểm tra" : "Mất kết nối";
 
   const doInstall = async () => {
-    if (!window.confirm(`Cập nhật KitGen lên ${update.data?.latestVersion}? Server sẽ khởi động lại sau khi cài.`)) return;
+    if (!window.confirm(`Cập nhật KitGen lên ${update.data?.latestVersion}? Công cụ local sẽ khởi động lại sau khi cài.`)) return;
     await install.mutateAsync();
     window.setTimeout(() => window.location.reload(), 5000);
   };
@@ -37,12 +37,12 @@ export function RuntimeStatus({ status, onRecheck }: { status: ConnectionStatus;
       <div className="space-y-4">
         <div><p className="text-subtitle text-fg-strong">Trạng thái công cụ</p><p className="mt-1 text-caption text-fg-muted">Chi tiết kết nối và công cụ tạo ảnh trên máy này.</p></div>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-caption">
-          <dt className="text-fg-muted">Server</dt><dd className="text-fg-strong">{status.connected ? `Live · v${status.agentVersion ?? "—"}` : "Offline"}</dd>
-          <dt className="text-fg-muted">Codex</dt><dd className="text-fg-strong">{codexReady ? `Ready · ${doctor.data?.imageGen?.codexHomeLabel ?? "~/.codex"}` : doctor.data?.imageGen?.reason ?? "Chưa kiểm tra"}</dd>
-          <dt className="text-fg-muted">KitGen</dt><dd className="text-fg-strong">{update.data ? `${update.data.currentVersion} → ${update.data.latestVersion}` : "Chưa kiểm tra"}</dd>
+          <dt className="text-fg-muted">Công cụ local</dt><dd className="text-fg-strong">{status.connected ? `Đang chạy · v${status.agentVersion ?? "—"}` : "Mất kết nối"}</dd>
+          <dt className="text-fg-muted">Tạo ảnh</dt><dd className="text-fg-strong">{codexReady ? "Sẵn sàng" : doctor.data?.imageGen?.reason ?? "Chưa kiểm tra"}</dd>
+          <dt className="text-fg-muted">Phiên bản</dt><dd className="text-fg-strong">{update.data ? `${update.data.currentVersion} → ${update.data.latestVersion}` : "Chưa kiểm tra"}</dd>
         </dl>
         <div className="space-y-2">
-          <label className="text-caption text-fg-muted" htmlFor="kitgen-image-profile">Profile tạo ảnh</label>
+          <label className="text-caption text-fg-muted" htmlFor="kitgen-image-profile">Cấu hình tạo ảnh</label>
           <Select
             value={doctor.data?.imageGen?.mode === "img-home" ? "separate" : "default"}
             onValueChange={(value) => profile.mutate(value as "default" | "separate", { onSuccess: () => void doctor.refetch() })}
@@ -50,8 +50,8 @@ export function RuntimeStatus({ status, onRecheck }: { status: ConnectionStatus;
           >
             <SelectTrigger id="kitgen-image-profile"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="default">Codex mặc định (~/.codex)</SelectItem>
-              <SelectItem value="separate">Profile riêng (~/.codex-img)</SelectItem>
+              <SelectItem value="default">Mặc định (~/.codex)</SelectItem>
+              <SelectItem value="separate">Cấu hình riêng (~/.codex-img)</SelectItem>
             </SelectContent>
           </Select>
           {doctor.data?.imageGen?.mode === "img-home" && doctor.data?.imageGen?.authPresent === false && (

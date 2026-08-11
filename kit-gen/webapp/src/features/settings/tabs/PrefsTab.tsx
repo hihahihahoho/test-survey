@@ -100,7 +100,7 @@ export function PrefsTab() {
             onChange={prefs.setConfirmDestructive}
           />
           <SwitchRow
-            label="Hiện ô trống trong bản thiết kế"
+            label="Hiện ô trống trong bộ khung"
             description="Ô trống chỉ giữ vị trí, không tạo ra hình ảnh."
             checked={prefs.showEmptyCells}
             onChange={prefs.setShowEmptyCells}

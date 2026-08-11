@@ -1,8 +1,4 @@
-/**
- * FLOW-V3 replaced project -> first child document with one project-backed kit file.
- * These 14 DOM cases retain the old suite's intent at the new N boundary: a real
- * mount, both modes, one API write, honest failures, offline gating and a11y.
- */
+/** Dialog tạo mới chỉ lấy tên rồi mở wizard. Canvas chưa được chọn ở đây. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -17,7 +13,7 @@ import { CreateModeDialog } from "../dialogs/CreateModeDialog";
 
 const OK = gateOf({ ...checkingStatus(null), pill: "connected", connected: true, readOnly: false, case: "none" });
 const OFF = gateOf({ ...checkingStatus(null), pill: "not-found", connected: false, readOnly: true, case: "agent-not-running" });
-const project = projectSchema.parse({ id: "kit-a7f3", name: "Bộ kit chưa đặt tên" });
+const project = projectSchema.parse({ id: "kit-a7f3", name: "Dự án mới" });
 let calls: Array<{ method: string; body: Record<string, unknown> }>;
 
 function setup(gate = OK, response: Response | null = null) {
@@ -45,24 +41,53 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-async function choose(button: "Bắt đầu điền form" | "Mở bàn làm việc") {
-  fireEvent.click(screen.getByRole("button", { name: button }));
+async function createProject(name = "Tết 2027") {
+  fireEvent.change(screen.getByRole("textbox", { name: "Tên dự án" }), { target: { value: name } });
+  fireEvent.click(screen.getByRole("button", { name: "Tiếp tục" }));
   await waitFor(() => expect(calls).toHaveLength(1));
 }
 
-describe("N · tạo một file kit theo FLOW-V3", () => {
-  it("mount thật với tiêu đề lựa chọn mới", () => { setup(); expect(screen.getByRole("heading", { name: "Bạn muốn làm kiểu nào?" })).toBeTruthy(); });
-  it("dùng radiogroup thật có nhãn", () => { setup(); expect(screen.getByRole("radiogroup", { name: "Bạn muốn làm kiểu nào?" })).toBeTruthy(); });
-  it("workflow được chọn mặc định và nhận focus", () => { setup(); const r = screen.getByRole("radio", { name: /Điền form, máy làm/ }); expect(r.getAttribute("aria-checked")).toBe("true"); expect(document.activeElement).toBe(r); });
-  it("canvas có copy thân thiện, không dùng tên IA cũ", () => { setup(); expect(screen.getByRole("radio", { name: /Tự tay xếp trên bàn/ })).toBeTruthy(); expect(screen.queryByText(/Bàn làm việc tự do/)).toBeNull(); });
-  it("workflow tạo đúng một project nền", async () => { const { onCreated } = setup(); await choose("Bắt đầu điền form"); expect(onCreated).toHaveBeenCalledWith(project, "workflow"); expect(calls).toHaveLength(1); });
-  it("workflow dùng template basic và tag hình thái", async () => { setup(); await choose("Bắt đầu điền form"); expect(calls[0]!.body).toMatchObject({ template: "basic", tags: ["kg-workflow"] }); });
-  it("canvas tạo đúng một project nền", async () => { const { onCreated } = setup(); await choose("Mở bàn làm việc"); expect(onCreated).toHaveBeenCalledWith(project, "canvas"); expect(calls).toHaveLength(1); });
-  it("canvas dùng template blank và tag hình thái", async () => { setup(); await choose("Mở bàn làm việc"); expect(calls[0]!.body).toMatchObject({ template: "blank", tags: ["kg-canvas"] }); });
-  it("payload giữ hợp đồng #8, không có mode hay file con", async () => { setup(); await choose("Mở bàn làm việc"); expect(Object.keys(calls[0]!.body).sort()).toEqual(["firstVariant", "name", "tags", "template"]); });
-  it("không gọi contract/doc/run/kit phụ sau khi tạo", async () => { setup(); await choose("Bắt đầu điền form"); expect(calls).toHaveLength(1); expect(calls[0]!.method).toBe("POST"); });
-  it("Enter trên lựa chọn xác nhận mode đang chọn", async () => { const { onCreated } = setup(); fireEvent.keyDown(screen.getByRole("radio", { name: /Điền form, máy làm/ }), { key: "Enter" }); await waitFor(() => expect(onCreated).toHaveBeenCalledWith(project, "workflow")); });
-  it("lỗi tạo giữ dialog và hiện câu người dùng hiểu", async () => { const bad = new Response(JSON.stringify({ error: { code: "PROJECT_BROKEN", message: "stack secret" } }), { status: 500, headers: { "Content-Type": "application/json", "X-KitGen-Protocol": "1" } }); setup(OK, bad); fireEvent.click(screen.getByRole("button", { name: "Mở bàn làm việc" })); expect(await screen.findByRole("alert")).toBeTruthy(); expect(screen.getByRole("dialog")).toBeTruthy(); });
-  it("lỗi kỹ thuật chỉ nằm trong Chi tiết cho lập trình viên", async () => { const bad = new Response(JSON.stringify({ error: { code: "PROJECT_BROKEN", message: "stack secret" } }), { status: 500, headers: { "Content-Type": "application/json", "X-KitGen-Protocol": "1" } }); setup(OK, bad); fireEvent.click(screen.getByRole("button", { name: "Mở bàn làm việc" })); const alert = await screen.findByRole("alert"); const clone = alert.cloneNode(true) as HTMLElement; clone.querySelector("details")?.remove(); expect(clone.textContent).not.toContain("stack secret"); });
-  it("agent chưa chạy vẫn mount đủ hai mode nhưng khoá thao tác có lý do", () => { setup(OFF); expect(screen.getAllByRole("radio")).toHaveLength(2); const b = screen.getByRole("button", { name: "Bắt đầu điền form" }) as HTMLButtonElement; expect(b.disabled).toBe(true); expect(b.title).toBeTruthy(); });
+describe("tạo dự án rồi mở wizard", () => {
+  it("chỉ hỏi tên dự án và giải thích bước tiếp theo", () => {
+    setup();
+    expect(screen.getByRole("heading", { name: "Tạo dự án" })).toBeTruthy();
+    expect(screen.getByText("Wizard tạo dự án")).toBeTruthy();
+    expect(screen.queryByText(/Canvas|Bàn làm việc/)).toBeNull();
+  });
+
+  it("chưa có tên thì chưa cho tiếp tục", () => {
+    setup();
+    expect((screen.getByRole("button", { name: "Tiếp tục" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("tạo đúng một dự án trống rồi trả về chế độ wizard", async () => {
+    const { onCreated } = setup();
+    await createProject();
+    expect(onCreated).toHaveBeenCalledWith(project, "workflow");
+    expect(calls[0]!.body).toMatchObject({ name: "Tết 2027", template: "blank", tags: ["kg-workflow"] });
+    expect(Object.keys(calls[0]!.body).sort()).toEqual(["firstVariant", "name", "tags", "template"]);
+  });
+
+  it("Enter trong ô tên cũng tạo dự án", async () => {
+    const { onCreated } = setup();
+    const input = screen.getByRole("textbox", { name: "Tên dự án" });
+    fireEvent.change(input, { target: { value: "Tết 2027" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(project, "workflow"));
+  });
+
+  it("lỗi tạo giữ dialog và hiện lỗi tại chỗ", async () => {
+    const bad = new Response(JSON.stringify({ error: { code: "PROJECT_BROKEN", message: "stack secret" } }), { status: 500, headers: { "Content-Type": "application/json", "X-KitGen-Protocol": "1" } });
+    setup(OK, bad);
+    await createProject();
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("công cụ local chưa chạy thì nút bị khoá và có lý do", () => {
+    setup(OFF);
+    fireEvent.change(screen.getByRole("textbox", { name: "Tên dự án" }), { target: { value: "Tết 2027" } });
+    expect((screen.getByRole("button", { name: "Tiếp tục" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(OFF.longReason)).toBeTruthy();
+  });
 });

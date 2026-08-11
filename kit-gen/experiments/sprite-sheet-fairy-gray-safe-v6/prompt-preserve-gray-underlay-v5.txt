@@ -1,0 +1,36 @@
+Use case: precise-object-edit.
+Asset type: game UI sprite-sheet geometry test.
+
+IMAGE 1 is the edit target and immutable geometry contract. IMAGE 2 is style
+reference only.
+
+This must look like IMAGE 1 with a new ornament layer added behind and outside
+its gray shapes. Do not redraw or reinterpret IMAGE 1.
+
+PRESERVE FROM IMAGE 1 EXACTLY:
+- the complete canvas and 4x4 grid;
+- the off-white background and every grid line;
+- every gray-filled safe-zone shape and its dark-gray outline;
+- every gray shape's exact position, size, curve, angle, spacing, and cell
+  assignment.
+
+The gray safe zones are intentionally unfinished placeholders and MUST remain
+visibly gray in the final image. Keep every gray pixel and dark-outline pixel
+uncovered and visually unchanged. Do not recolor, repaint, texture, shade,
+resize, move, crop, replace, or beautify the gray regions. Do not add an inner
+surface or panel. Do not let any border or decoration overlap the gray fill or
+dark outline.
+
+ADD ONLY OUTSIDE THE GRAY OUTLINES:
+restrained fairy-fantasy ornaments inspired by IMAGE 2--thin polished-gold
+filigree, small pink-violet butterfly wings, tiny purple jewels, sparse flowers
+and leaves. Ornaments may sit just outside a dark-gray outline but must never
+cross it. Keep each cell independent and uncluttered.
+
+Critical compositing rule: IMAGE 1 must remain the visible underlay. Imagine
+adding a transparent ornament-only layer on top while protecting the complete
+gray shapes, outlines, grid, and background with an exact mask.
+
+No text, labels, numbers, watermark, cast shadow, gradients, extra panels, or
+new safe zones. Change only off-white pixels immediately outside the protected
+gray shapes.

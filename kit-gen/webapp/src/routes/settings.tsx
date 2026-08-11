@@ -4,18 +4,14 @@ import { AppLayout, LazyScreen } from "@/components/layout";
 import { settingsSearchSchema } from "./search-schemas";
 import { requireSetup } from "./guards";
 
-/**
- * S6 `/settings` là route-lớp-phủ: Home vẫn mount phía sau, Settings tự portal
- * thành modal. Tab lạ tự rơi về `agent` (xem search-schemas.ts).
- */
+/** Cài đặt là một trang trong khung Home; không mount Home thứ hai phía sau. */
 export const Route = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
   validateSearch: settingsSearchSchema,
   beforeLoad: ({ location }) => requireSetup(location.pathname),
   component: () => (
-    <AppLayout screen="projects">
-      <LazyScreen screen="projects" />
+    <AppLayout screen="settings">
       <LazyScreen screen="settings" />
     </AppLayout>
   ),

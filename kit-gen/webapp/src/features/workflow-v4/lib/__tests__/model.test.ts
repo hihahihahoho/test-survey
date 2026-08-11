@@ -31,7 +31,7 @@ describe("§W1-1 — mỗi bộ kit một bản nháp", () => {
     p1.getState().set({ kitName: "A" });
 
     const p2 = createWorkflowStore("kit-b");
-    expect(p2.getState().kitName).toBe("Bộ quay may mắn");
+    expect(p2.getState().kitName).toBe("Dự án mới");
     expect(p2.getState().kitName).not.toBe("A");
     p2.getState().set({ kitName: "B" });
 
@@ -60,7 +60,7 @@ describe("§W1-1 — mỗi bộ kit một bản nháp", () => {
     expect(localStorage.getItem(LEGACY_DRAFT_KEY)).toBeNull();
 
     const p2 = createWorkflowStore("kit-b");
-    expect(p2.getState().kitName).toBe("Bộ quay may mắn");
+    expect(p2.getState().kitName).toBe("Dự án mới");
   });
 
   it("DI TRÚ không đè lên bản nháp đã có của chính bộ kit đó", () => {
@@ -78,7 +78,7 @@ describe("§W1-1 — mỗi bộ kit một bản nháp", () => {
     dropWorkflowDraft("kit-a");
     expect(localStorage.getItem(draftKey("kit-a"))).toBeNull();
     expect(localStorage.getItem(trashedDraftKey("kit-a"))).not.toBeNull();
-    expect(createWorkflowStore("kit-a").getState().kitName).toBe("Bộ quay may mắn");
+    expect(createWorkflowStore("kit-a").getState().kitName).toBe("Dự án mới");
 
     resetWorkflowStores();
     restoreWorkflowDraft("kit-a");

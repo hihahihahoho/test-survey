@@ -1,4 +1,4 @@
-import { Check, CloudOff, Loader2, Lock, TriangleAlert } from "lucide-react";
+import { Check, CloudOff, FileInput, Loader2, TriangleAlert } from "lucide-react";
 import type { ContractSync } from "../lib/contract-sync";
 
 /**
@@ -11,7 +11,7 @@ import type { ContractSync } from "../lib/contract-sync";
  */
 const ICON = {
   loading: Loader2, saving: Loader2, pending: Loader2,
-  saved: Check, offline: CloudOff, foreign: Lock, conflict: TriangleAlert, error: TriangleAlert,
+  saved: Check, offline: CloudOff, foreign: FileInput, conflict: TriangleAlert, error: TriangleAlert,
 } as const;
 
 const SHORT: Record<ContractSync["state"], string> = {
@@ -20,7 +20,7 @@ const SHORT: Record<ContractSync["state"], string> = {
   saving: "Đang lưu…",
   saved: "Đã lưu",
   offline: "Chưa lưu được",
-  foreign: "Chỉ đọc",
+  foreign: "Dữ liệu đã nhập",
   conflict: "Cần chọn bản",
   error: "Lưu chưa được",
 };

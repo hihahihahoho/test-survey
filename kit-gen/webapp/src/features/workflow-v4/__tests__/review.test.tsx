@@ -12,7 +12,7 @@
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { contractJobs } from "@/lib/types/contract";
@@ -82,6 +82,7 @@ const mountWithContract = (ui: React.ReactNode) => {
   const sync = {
     state: "saved", contract, jobCount: contractJobs(contract).length, version: 1,
     savedAt: null, note: null, conflict: null,
+    sourceContract: contract, adoptForeign: () => {},
     resolveConflict: (async () => null) as ContractSync["resolveConflict"],
     dismissConflict: () => {}, saveNow: async () => true,
   } satisfies ContractSync;
@@ -102,14 +103,14 @@ describe("§W1-5 — dialog Vẽ không còn ô kẹp", () => {
 
   it("câu trấn an là <p class='dialog-supporting'> nằm NGAY DƯỚI description, cùng khối với title", () => {
     mount(<DrawConfirmDialog open onOpenChange={() => {}} />);
-    const supporting = screen.getByText("Những tấm đã vẽ sẽ không bị mất. Bạn có thể chỉnh tiếp sau khi bắt đầu.");
+    const supporting = screen.getByText("Ảnh cũ vẫn được giữ lại.");
     expect(supporting.tagName).toBe("P");
     expect(supporting.className).toContain("dialog-supporting");
     expect(supporting.className).not.toMatch(/border|divide|input|field/);
 
     const header = supporting.parentElement!;
-    expect(header).toBe(screen.getByText("Vẽ bộ kit này?").parentElement);
-    expect(supporting.previousElementSibling?.textContent).toContain("Máy sẽ vẽ");
+    expect(header).toBe(screen.getByText("Tạo ảnh?").parentElement);
+    expect(supporting.previousElementSibling?.textContent).toContain("thành phần");
   });
 
   it("dialog vẫn còn đủ hai nút và vẫn đóng được", () => {
@@ -117,7 +118,7 @@ describe("§W1-5 — dialog Vẽ không còn ô kẹp", () => {
     mount(<DrawConfirmDialog open onOpenChange={onOpenChange} />);
     fireEvent.click(screen.getByRole("button", { name: /Xem lại/ }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
-    expect(screen.getByRole("button", { name: /Vẽ bộ kit/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Tạo ảnh/ })).toBeTruthy();
   });
 
   it("primitive `dialog.tsx` không còn kẻ mặc định (chặn cái bẫy quay lại)", () => {
@@ -157,32 +158,32 @@ describe("§W3-4 — ước lượng theo JOB của contract, không theo số e
 
   it("dialog xác nhận báo CÙNG con số với thẻ ước lượng (một nguồn, hai chỗ hiện)", () => {
     mountWithContract(<DrawConfirmDialog open onOpenChange={() => {}} />);
-    const t = screen.getByText(/Máy sẽ vẽ/).textContent ?? "";
-    expect(t).toContain("7 món");          // số MÓN vẫn là 7 (đã trừ vòng quay mock)
+    const t = screen.getByText(/7 thành phần/).textContent ?? "";
+    expect(t).toContain("7 thành phần");  // số thành phần vẫn là 7 (đã trừ vòng quay mock)
     expect(t).toContain(`${JOBS} lượt`);   // số LƯỢT là số tấm — hai đại lượng khác nhau
   });
 
   it("thẻ recap Kitset hiện số đã trừ mock, nói ra chỗ bị trừ VÀ số tấm", () => {
     mountWithContract(<ReviewStep />);
-    expect(screen.getByText("7 món")).toBeTruthy();
-    expect(screen.getByText(/1 món chưa có thiết kế/)).toBeTruthy();
-    expect(screen.getByText(new RegExp(`Xếp thành ${JOBS} tấm`))).toBeTruthy();
+    expect(screen.getByText("7 thành phần")).toBeTruthy();
+    expect(screen.getByText(/1 thành phần chưa có bộ khung/)).toBeTruthy();
+    expect(screen.getByText(new RegExp(`${JOBS} sheet`))).toBeTruthy();
   });
 
   it("render CÔ LẬP (không có contract) thì KHÔNG bịa số lượt", () => {
     mount(<ReviewStep />);
-    expect(screen.getByText(/7 món · ước lượng/)).toBeTruthy();
+    expect(screen.getByText(/7 thành phần · ước lượng/)).toBeTruthy();
   });
 });
 
 describe("§W1-10 — nút chính ở hàng nút cuối, không nằm giữa thân trang", () => {
   it("thân bước 5 KHÔNG còn nút Vẽ và KHÔNG còn câu 'Cửa sổ xác nhận…'", () => {
     mount(<ReviewStep />);
-    expect(screen.queryByRole("button", { name: /Vẽ bộ kit này/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Tạo ảnh/ })).toBeNull();
     expect(screen.queryByText(/Cửa sổ xác nhận luôn hiện/)).toBeNull();
   });
 
-  it("cả màn chỉ có ĐÚNG MỘT nút 'Vẽ bộ kit này', và nó ở hàng nút cuối", () => {
+  it("cả màn chỉ có ĐÚNG MỘT nút 'Tạo ảnh', và nó ở hàng nút cuối", () => {
     const onDraw = vi.fn();
     mount(
       <>
@@ -190,7 +191,7 @@ describe("§W1-10 — nút chính ở hàng nút cuối, không nằm giữa th�
         <WorkflowActions step={5} drawable={7} onBack={() => {}} onNext={() => {}} onDraw={onDraw} onDone={() => {}} />
       </>,
     );
-    const nút = screen.getAllByRole("button", { name: /Vẽ bộ kit này/ });
+    const nút = screen.getAllByRole("button", { name: /Tạo ảnh/ });
     expect(nút).toHaveLength(1);
     expect(nút[0]!.closest(".workflow-actions")).toBeTruthy();
     fireEvent.click(nút[0]!);
@@ -199,7 +200,7 @@ describe("§W1-10 — nút chính ở hàng nút cuối, không nằm giữa th�
 
   it("không còn món nào vẽ được thì nút chính khoá, không phải biến mất", () => {
     render(<WorkflowActions step={5} drawable={0} onBack={() => {}} onNext={() => {}} onDraw={() => {}} onDone={() => {}} />);
-    expect(screen.getByRole("button", { name: /Vẽ bộ kit này/ }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: /Tạo ảnh/ }).hasAttribute("disabled")).toBe(true);
   });
 });
 
@@ -266,33 +267,31 @@ describe("§W1-2 — bước 6 có cửa ra", () => {
  * Giờ là lúc đó, nên ca test lật lại — nhưng phải đòi HƠN bản gốc: ô tìm phải LỌC THẬT,
  * không được là ô trang trí lần thứ hai.
  */
-describe("§W3-5 — chọn theo bộ mẫu hoặc theo nhóm element", () => {
-  it("mặc định hiện các bộ mẫu nâng cao thay vì đổ 42 card", () => {
+describe("§W3-5 — chọn bộ khung theo ba loại sản phẩm", () => {
+  it("hiện đúng ba nhóm Nền, Popup và UI nhỏ", () => {
     mount(<KitsetStep />);
-    expect(screen.getByRole("tab", { name: /Bộ mẫu nâng cao/ }).getAttribute("aria-selected")).toBe("true");
-    expect(screen.getByText("Vòng quay may mắn")).toBeTruthy();
-    expect(screen.getByText("Giỏ quà & mở hộp")).toBeTruthy();
-    expect(screen.getByText("Lì xì Tết")).toBeTruthy();
-    expect(screen.getByText("Bảng xếp hạng")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Nền · \d+$/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: /^Popup · \d+$/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^UI nhỏ & đạo cụ · \d+$/ })).toBeTruthy();
   });
 
-  it("chuyển sang tự chọn thì hiện nhóm và ô tìm lọc thật", () => {
+  it("đổi nhóm và lọc thành phần thật", () => {
     mount(<KitsetStep />);
-    fireEvent.click(screen.getByRole("tab", { name: /Tự chọn từng món/ }));
-    expect(screen.getByRole("navigation", { name: "Nhóm món giao diện" })).toBeTruthy();
-    const box = screen.getByLabelText("Tìm món") as HTMLInputElement;
+    fireEvent.click(screen.getByRole("button", { name: /UI nhỏ & đạo cụ/ }));
+    const box = screen.getByLabelText("Tìm trong UI nhỏ & đạo cụ") as HTMLInputElement;
     fireEvent.change(box, { target: { value: "nut do" } });
     expect(box.value).toBe("nut do");
     expect(screen.getByText("Nút đỏ (CTA)")).toBeTruthy();
   });
 
-  it("áp dụng bộ mẫu thay đúng danh sách element và tên bộ", () => {
+  it("bấm một thành phần cập nhật lựa chọn của dự án", () => {
     mount(<KitsetStep />);
-    const card = screen.getByText("Lì xì Tết").closest("article")!;
-    fireEvent.click(within(card).getByRole("button", { name: /Dùng bộ này/ }));
+    fireEvent.click(screen.getByRole("button", { name: /UI nhỏ & đạo cụ/ }));
+    const red = screen.getByRole("button", { name: /Nút đỏ \(CTA\)/ });
+    const before = red.getAttribute("aria-pressed") === "true";
+    fireEvent.click(red);
     const state = createWorkflowStore(PID).getState();
-    expect(state.kitsetSummary).toBe("Lì xì Tết");
-    expect(state.elements.some(e => e.file === "52-envelope-body" && e.selected)).toBe(true);
+    expect(state.elements.find((element) => element.file === "01-btn-pill-red")?.selected).toBe(!before);
   });
 });
 

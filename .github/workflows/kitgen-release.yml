@@ -40,10 +40,16 @@ jobs:
           bash ../test/kitgen-run-env.test.sh
           bash ../test/kitgen-launchd-start.test.sh
           bash ../test/install-launchd.test.sh
-      # Full Vitest currently includes a few developer-only fixtures ignored by git.
-      # Release gates only use checks whose inputs are committed and reproducible in CI.
-      - name: Verify committed production inputs
-        run: npm run nogen && npm run typecheck && npm run contrast && npm run deadclass && npm run build:only
+      - name: Verify web application
+        run: npm run verify
+      - name: Verify integration contracts
+        run: npm run test:integration
+      - name: Verify local agent
+        run: node ../agent/test-agent.mjs
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify browser flows
+        run: npm run test:e2e
       - name: Resolve package version
         id: version
         working-directory: .

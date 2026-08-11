@@ -89,7 +89,7 @@ export function DeleteProjectDialog({
         // C-01: nói THẬT là chưa phục hồi được, và chỉ đúng chỗ dữ liệu đang nằm.
         toastError(b.error, {
           titleOverride: "Không hoàn tác được — đã có dự án khác trùng chỗ.",
-          descriptionOverride: "Bộ cũ vẫn nằm trong thùng rác, vào đó khôi phục với tên khác.",
+          descriptionOverride: "Dự án cũ vẫn nằm trong thùng rác; vào đó khôi phục với tên khác.",
           action: { label: "Vào thùng rác", onClick: onOpenTrash },
         });
       }
@@ -138,11 +138,11 @@ export function DeleteProjectDialog({
   const consequences = many
     ? projects.map((p) => `${p.name} — ${bytes(p.stats?.diskBytes ?? 0)}`)
     : [
-        `Bản thiết kế (${count(one.stats?.sheets ?? 0, "sheet")} · ${count(one.stats?.components ?? 0, "element")}) — không tái tạo được`,
+        `Bộ khung (${count(one.stats?.sheets ?? 0, "sheet")} · ${count(one.stats?.components ?? 0, "thành phần")})`,
         ...((one.stats?.rawPresent ?? 0) > 0
-          ? [`${count(one.stats?.rawPresent, "ảnh AI đã sinh")} — sinh lại sẽ tốn quota`]
+          ? [`${count(one.stats?.rawPresent, "ảnh đã tạo")} — tạo lại sẽ tốn lượt`]
           : []),
-        ...((one.stats?.kitsCut ?? 0) > 0 ? [`${count(one.stats?.kitsCut, "file kit đã cắt")} — cắt lại được`] : []),
+        ...((one.stats?.kitsCut ?? 0) > 0 ? [`${count(one.stats?.kitsCut, "ảnh đã tách")} — có thể tách lại`] : []),
         `Tổng ${bytes(one.stats?.diskBytes ?? 0)}`,
       ];
 
@@ -154,8 +154,8 @@ export function DeleteProjectDialog({
       title={many ? `Xoá ${projects.length} dự án?` : `Xoá dự án “${one.name}”?`}
       description={
         many
-          ? `Tất cả dữ liệu dự án, bộ kit và ảnh đã vẽ sẽ vào thùng rác. Tự dọn sau 30 ngày. Tổng ${bytes(totalBytes)}.`
-          : "Dự án, các bộ kit và toàn bộ ảnh đã vẽ sẽ vào thùng rác. Tự dọn sau 30 ngày."
+          ? `Tất cả dữ liệu và ảnh của ${projects.length} dự án sẽ vào thùng rác. Tự dọn sau 30 ngày. Tổng ${bytes(totalBytes)}.`
+          : "Dự án và toàn bộ ảnh đã tạo sẽ vào thùng rác. Tự dọn sau 30 ngày."
       }
       actionLabel={many ? `Cho ${projects.length} dự án vào thùng rác` : "Cho vào thùng rác"}
       onConfirm={() => void confirm()}
@@ -181,7 +181,7 @@ export function DeleteProjectDialog({
             nút [Xem lượt đang chạy] để user tự dừng trước. INTEGRATION: nhận. */}
         {running.length > 0 && (
           <p role="alert" className="rounded-2 border border-line-subtle kg-tint-warn p-3 text-body text-on-tint-warn">
-            Bộ này đang vẽ dở. Xoá sẽ dừng luôn việc đang vẽ.
+            Dự án này đang tạo ảnh. Xoá sẽ dừng việc đang chạy.
           </p>
         )}
         {running.map((p) => (

@@ -59,7 +59,7 @@ export function RunPanel({ projectId }: { projectId: string }) {
            không phải chỗ này. `null` ẩn nút, đúng ý nghĩa mà JobList đã khai. */
         onRetry={null}
         readOnly
-        readOnlyReason="Vẽ lại từng tấm mở khi chủ dự án duyệt (xem CHỜ CHỦ DỰ ÁN CHỐT · C1)."
+        readOnlyReason="Tạo lại từng sheet đang được hoàn thiện."
         now={now}
       />
       <LogPanel log={log} runId={runId} jobs={run.data.jobs.map((j) => j.job)} />

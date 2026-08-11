@@ -11,7 +11,7 @@
  * hai luật, có lý do khác nhau.
  */
 import { z } from "zod";
-import { contractSchema, RE_JOB, RE_PROJECT_ID, RE_RUN_ID, RE_SLUG } from "./contract";
+import { contractSchema, RE_JOB, RE_PROJECT_ID, RE_RUN_ID, RE_SLUG, skelSchema } from "./contract";
 
 /* ═════════════ Enum dùng chung ═════════════ */
 
@@ -429,6 +429,39 @@ export const elementLibSchema = z.looseObject({
   elements: z.array(libElementSchema).default([]),
 });
 export type ElementLib = z.infer<typeof elementLibSchema>;
+
+/** Kho riêng do người dùng quản lý; không ghi đè catalogue engine chỉ-đọc. */
+export const libraryItemSchema = z.looseObject({
+  id: z.string(),
+  kind: z.enum(["ui", "mascot", "reference"]),
+  group: z.enum(["background", "popup", "small", "mascot", "style", "mascot-reference"]),
+  name: z.string(),
+  description: z.string().default(""),
+  filename: z.string(),
+  bytes: z.number().optional(),
+  w: z.number().nullish(),
+  h: z.number().nullish(),
+  poses: z.array(z.string()).default([]),
+  cell: z.enum(["landscape", "portrait", "full"]).optional(),
+  skel: skelSchema.optional(),
+  createdAt: z.string().optional(),
+});
+export type LibraryItem = z.infer<typeof libraryItemSchema>;
+export const librarySettingsSchema = z.object({
+  background: z.number().int().min(1).max(32).default(2),
+  popup: z.number().int().min(1).max(32).default(4),
+  small: z.number().int().min(1).max(32).default(16),
+  mascot: z.number().int().min(1).max(32).default(4),
+});
+export type LibrarySettings = z.infer<typeof librarySettingsSchema>;
+export const userLibrarySchema = z.looseObject({
+  version: z.number().default(1),
+  settings: librarySettingsSchema,
+  items: z.array(libraryItemSchema).default([]),
+});
+export type UserLibrary = z.infer<typeof userLibrarySchema>;
+export const libraryItemResultSchema = z.looseObject({ item: libraryItemSchema });
+export const librarySettingsResultSchema = z.looseObject({ settings: librarySettingsSchema });
 
 /* ═════════════ D. Ảnh tham khảo (#29–#31) ═════════════ */
 

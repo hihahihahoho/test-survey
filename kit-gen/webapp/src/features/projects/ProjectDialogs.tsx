@@ -67,9 +67,8 @@ export function ProjectDialogs({
         onOpenChange={dialogs.setOpen("create")}
         gate={gate}
         onCreated={(project, mode) => {
-          // W1 sẽ hỏi tên ở bước kế tiếp; bàn làm việc mở thẳng vào không gian mới.
-          if (mode === "workflow") nav.open(project.id);
-          else nav.navigateCanvas(project.id);
+          // Dự án mới luôn bắt đầu bằng wizard. Canvas chưa phát hành.
+          if (mode === "workflow") nav.openWizard(project.id);
         }}
       />
 

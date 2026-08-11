@@ -1,6 +1,5 @@
-import { createRoute } from "@tanstack/react-router";
+import { createRoute, Navigate } from "@tanstack/react-router";
 import { Route as rootRoute } from "./__root";
-import { AppLayout, CanvasFileScreen } from "@/components/layout";
 import { requireSetup } from "./guards";
 import { isProjectId } from "@/lib/types";
 import { RE_DOC_ID } from "@/features/docs/lib/types";
@@ -20,8 +19,8 @@ export const Route = createRoute({
 });
 
 function ProjectFileRoute() {
-  const { projectId, fileId } = Route.useParams();
-  return <AppLayout screen="project" projectId={projectId} fileId={fileId}><CanvasFileScreen projectId={projectId} docId={fileId} docName="Bàn làm việc" /></AppLayout>;
+  const { projectId } = Route.useParams();
+  return <Navigate to="/p/$projectId" params={{ projectId }} search={{ section: "canvas" }} replace />;
 }
 
 export default Route;

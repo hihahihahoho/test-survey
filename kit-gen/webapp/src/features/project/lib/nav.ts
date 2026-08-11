@@ -63,6 +63,6 @@ export function createProjectNav(navigate: Navigate, projectId: string): Project
         search: { tab: "assets", ...(variantId ? { variant: variantId } : {}) },
       }),
     toEnvSettings: () => void navigate({ to: "/settings", search: { tab: "env" } }),
-    toTrash: () => void navigate({ to: "/settings", search: { tab: "trash" } }),
+    toTrash: () => void navigate({ to: "/trash" }),
   };
 }

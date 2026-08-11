@@ -12,8 +12,8 @@ export KITGEN_WORKSPACE="$HOME/KitGen"
 export KITGEN_RELEASE_MANIFEST="unused-in-local-release-test"
 export KITGEN_TEST_STATE="$TEST_ROOT/state"
 FAKE_BIN="$TEST_ROOT/bin"
-RELEASE="$TEST_ROOT/kitgen-runtime-2.1.4"
-OLD_RELEASE="$KITGEN_HOME/releases/2.1.3"
+RELEASE="$TEST_ROOT/kitgen-runtime-2.1.5"
+OLD_RELEASE="$KITGEN_HOME/releases/2.1.4"
 
 mkdir -p \
   "$FAKE_BIN" \
@@ -28,7 +28,7 @@ mkdir -p \
   "$RELEASE/runtime/bin" \
   "$RELEASE/runtime/service"
 
-printf '%s\n' '2.1.4' > "$RELEASE/VERSION"
+printf '%s\n' '2.1.5' > "$RELEASE/VERSION"
 printf '%s\n' 'export const testAgent = true' > "$RELEASE/agent/server.mjs"
 printf '%s\n' '<!doctype html><title>KitGen test</title>' > "$RELEASE/app/index.html"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$RELEASE/engine/gen.sh"
@@ -119,7 +119,7 @@ cat > "$FAKE_BIN/curl" <<'EOF'
 #!/usr/bin/env bash
 set -eu
 current="$(readlink "$KITGEN_HOME/current" 2>/dev/null || true)"
-if [ "$current" = "$KITGEN_HOME/releases/2.1.3" ] && [ -f "$KITGEN_TEST_STATE/registered" ]; then
+if [ "$current" = "$KITGEN_HOME/releases/2.1.4" ] && [ -f "$KITGEN_TEST_STATE/registered" ]; then
   printf '%s\n' '{"ok":true}'
   exit 0
 fi
@@ -133,7 +133,7 @@ PATH="$FAKE_BIN:$PATH" "$RELEASE/install.sh" >"$OUTPUT" 2>&1
 status=$?
 set -e
 
-[ "$status" -ne 0 ] || { echo "expected failed 2.1.4 health check" >&2; exit 1; }
+[ "$status" -ne 0 ] || { echo "expected failed 2.1.5 health check" >&2; exit 1; }
 [ "$(readlink "$KITGEN_HOME/current")" = "$OLD_RELEASE" ] || {
   echo "installer did not restore the previous runtime symlink" >&2
   cat "$OUTPUT" >&2

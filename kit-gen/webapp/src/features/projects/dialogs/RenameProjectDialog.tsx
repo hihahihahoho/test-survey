@@ -107,7 +107,7 @@ export function RenameProjectDialog({
             )}
             <p id="rename-help" className="text-caption text-fg-muted-raised">
               Thư mục trên máy vẫn là <span className="font-mono text-fg">{project.id}</span>. Đổi tên file khi
-              xuất thì vào Cài đặt project.
+              xuất thì vào Cài đặt dự án.
             </p>
           </div>
 

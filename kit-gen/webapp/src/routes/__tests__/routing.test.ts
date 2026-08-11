@@ -57,7 +57,8 @@ describe("search schema — tab lạ rơi về tab đầu, KHÔNG ném lỗi là
 
   it("tab hợp lệ được giữ nguyên", () => {
     expect(designSearchSchema.parse({ tab: "styles" }).tab).toBe("styles");
-    expect(settingsSearchSchema.parse({ tab: "trash" }).tab).toBe("trash");
+    expect(settingsSearchSchema.parse({ tab: "prefs" }).tab).toBe("prefs");
+    expect(settingsSearchSchema.parse({ tab: "trash" }).tab).toBe("agent");
   });
 });
 

@@ -38,6 +38,7 @@ import { register as registerRuns } from "./routes/runs.mjs"
 import { register as registerFiles } from "./routes/files.mjs"
 import { register as registerDocs } from "./routes/docs.mjs"
 import { register as registerApp } from "./routes/app.mjs"
+import { register as registerLibrary } from "./routes/library.mjs"
 
 export const VERSION = "1.2.0"
 export const BUILD_ID = "agent-" + VERSION
@@ -111,6 +112,7 @@ export async function createAgent(opts = {}) {
   registerRuns(router)
   registerFiles(router)
   registerDocs(router)
+  registerLibrary(router)
   registerApp(router)
 
   const LIMITS = { ...DEFAULT_LIMITS, ...(opts.limits ?? {}) }

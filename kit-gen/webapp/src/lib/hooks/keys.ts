@@ -45,6 +45,7 @@ export const qk = {
   },
 
   elementLib: () => ["element-lib"] as const,
+  library: () => ["library"] as const,
 
   refs: {
     all: (projectId: string) => ["refs", projectId] as const,

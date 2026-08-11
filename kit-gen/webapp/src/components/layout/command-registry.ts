@@ -29,7 +29,7 @@ import type { LucideIcon } from "lucide-react";
 /** Nhóm hiển thị — thứ tự cố định để user học được vị trí. */
 export const COMMAND_GROUPS = [
   "Màn hình này",
-  "Bộ kit",
+  "Dự án",
   "Điều hướng",
   "Công cụ local",
   "Trợ giúp",

@@ -231,11 +231,14 @@
   --kg-canvas: 255 255 255;       /* #FFFFFF */
   --kg-surface: 246 246 247;      /* #F6F6F7 */
   --kg-raised: 237 237 239;       /* #EDEDEF */
-  --kg-overlay: 227 227 229;      /* #E3E3E5 */
+  /* Dialog/menu là lớp nổi trên cùng. Bản cũ #E3E3E5 tối hơn cả input
+     #EDEDEF nên lớp nổi trông như một vùng bị vô hiệu hoá. Nền trắng + viền và
+     bóng tạo đúng thứ tự thị giác mà không cần thêm một sắc xám mới. */
+  --kg-overlay: 255 255 255;      /* #FFFFFF */
   --kg-scrim: 21 21 22;           /* #151516 */
   --kg-scrim-a: 0.44;
 
-  --kg-fg-strong: 21 21 22;       /* #151516 — 14.24:1 kể cả trên overlay */
+  --kg-fg-strong: 21 21 22;       /* #151516 — 18.46:1 trên overlay */
   /* FE-1·A1: hai bậc chữ phụ của theme sáng FAIL sau khi đè alpha (fg-muted
      #5C5C5E trên `bg-accent/15` = 4.20:1; fg-default trong khối `opacity-80`
      = 4.27:1). Đậm thêm một bậc, giữ nguyên tính trung tính. */
@@ -246,7 +249,7 @@
   --kg-fg-on-danger: 255 255 255;
 
   --kg-line-subtle: 224 224 226;  /* #E0E0E2 */
-  --kg-line: 117 117 119;         /* #757577 — 3.59:1 trên overlay (≥3:1) */
+  --kg-line: 117 117 119;         /* #757577 — 4.59:1 trên overlay (≥3:1) */
   --kg-line-strong: 94 94 96;     /* #5E5E60 */
   --kg-scroll-thumb: 122 122 124;       /* #7A7A7C */
   --kg-scroll-thumb-hover: 86 86 88;    /* #565658 */

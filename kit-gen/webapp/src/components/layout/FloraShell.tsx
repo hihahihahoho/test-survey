@@ -152,7 +152,7 @@ export function FloraShell({
       <div className="flex min-h-0 flex-1">
         {rail && (
           <nav
-            aria-label="Điều hướng trong project"
+            aria-label="Điều hướng trong dự án"
             className={cn(
               "sticky top-14 z-rail hidden h-[calc(100dvh-3.5rem)] shrink-0 border-r md:block",
               FLORA.hair,

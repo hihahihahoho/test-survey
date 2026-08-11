@@ -55,7 +55,7 @@ export function HomeGrid({
       <section
         ref={grid.containerRef}
         aria-label={HOME_COPY.GRID_LABEL}
-        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
       >
         <CreateKitTile gate={gate} onCreate={onCreate} />
         {items.map((p, i) => (

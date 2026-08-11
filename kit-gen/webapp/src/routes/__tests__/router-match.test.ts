@@ -141,7 +141,7 @@ describe("search param — router thật validate đúng", () => {
   it("tab của S5 và S6 cũng vậy", () => {
     expect((matchAt("/p/tet26-a7f3/kit", { tab: "xx" }).at(-1)?.search as { tab?: string }).tab).toBe("assets");
     expect((matchAt("/settings", { tab: "xx" }).at(-1)?.search as { tab?: string }).tab).toBe("agent");
-    expect((matchAt("/settings", { tab: "trash" }).at(-1)?.search as { tab?: string }).tab).toBe("trash");
+    expect((matchAt("/settings", { tab: "trash" }).at(-1)?.search as { tab?: string }).tab).toBe("agent");
   });
 });
 

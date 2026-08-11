@@ -16,7 +16,7 @@ export const PATHS = {
   project: (id: string) => `/p/${pid(id)}`,
   design: (id: string, tab: "sheets" | "styles" | "advanced" = "sheets") => `/p/${pid(id)}/design?tab=${tab}`,
   runs: (id: string) => `/p/${pid(id)}/runs`,
-  settingsTrash: () => "/settings?tab=trash",
+  trash: () => "/trash",
   /** Đích thật của file bàn làm việc trong dự án. */
   file: (id: string, fileId: string) => `/p/${pid(id)}/f/${pid(fileId)}`,
 } as const;
@@ -24,6 +24,7 @@ export const PATHS = {
 export interface ProjectNav {
   /** Mở project (S2 tổng quan). */
   open: (id: string) => void;
+  openWizard: (id: string) => void;
   navigateCanvas: (id: string) => void;
   /** Sau khi tạo template `blank`: việc tiếp theo chắc chắn là chọn element (§4.1-4). */
   openDesign: (id: string, tab?: "sheets" | "styles" | "advanced") => void;
@@ -66,11 +67,12 @@ export function openKitWith(nav: ProjectNav, project: { id: string; tags?: unkno
 export function createNav(navigate: Navigate): ProjectNav {
   return {
     open: (id) => void navigate({ to: "/p/$projectId", params: { projectId: id } }),
+    openWizard: (id) => void navigate({ to: "/k/$projectId", params: { projectId: id } }),
     navigateCanvas: (id) => void navigate({ to: "/k/$projectId/canvas", params: { projectId: id } }),
     openDesign: (id, tab = "sheets") => void navigate({ to: "/p/$projectId/design", params: { projectId: id }, search: { tab } }),
     openStyles: (id) => void navigate({ to: "/p/$projectId/design", params: { projectId: id }, search: { tab: "styles" } }),
     openRuns: (id) => void navigate({ to: "/p/$projectId/runs", params: { projectId: id } }),
-    openTrash: () => void navigate({ to: "/settings", search: { tab: "trash" } }),
+    openTrash: () => void navigate({ to: "/trash" }),
     openFile: (projectId, fileId) => {
       void navigate({ to: "/p/$projectId/f/$fileId", params: { projectId, fileId } });
       return true;

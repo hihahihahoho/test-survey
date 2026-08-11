@@ -8,6 +8,7 @@ import { CHROMA_HEX } from "@/lib/types/contract";
 import { useWorkflowProjectId, useWorkflowStore } from "../lib/model";
 import { useWorkflowRefs } from "../lib/refs-sync";
 import { RefChips } from "../components/RefChips";
+import { SharedReferencePicker } from "../components/SharedReferencePicker";
 import { SegChoice } from "../components/SegChoice";
 import { Step } from "./BriefStep";
 
@@ -40,7 +41,7 @@ export function StyleStep() {
    * (`styleMode == "inspo" and inspo` ⇒ bỏ qua `style`), nên hiện cả hai là nói dối.
    */
   const byPrompt = s.styleMode === "prompt";
-  return <Step title="Phong cách" copy="Chọn cảm giác tổng thể bằng mô tả hoặc ảnh tham khảo; ảnh ref style sẽ được dùng cho các sheet.">
+  return <Step title="Phong cách" copy="Chọn bằng mô tả hoặc ảnh tham chiếu.">
     {/**
       * P-SWEEP·8 — câu "(chọn 1 trong 2)" đã xoá: có ĐÚNG hai nút cạnh nhau, một cái
       * đang sáng — hình đã nói xong, chữ chỉ dạy lại.
@@ -66,9 +67,9 @@ export function StyleStep() {
       * `.dropzone` được vì `.dropzone` là `<button>` còn chip mang nút xoá —
       * `<button>` lồng `<button>` là HTML hỏng. Xem khối chú thích ở globals.css.
       */}
-    <div className="upload-row"><div><p className="field-label">Ảnh ref style tổng{!byPrompt && " · đang dùng làm nguồn phong cách"}</p><div className="dropfield"><ImageDropzone multiple label="Kéo ảnh phong cách vào đây" description="Moodboard, chất liệu và cách render bạn muốn máy bám theo" state={refs.pending ? "uploading" : refs.groups.inspo.length ? "done" : "idle"} onFiles={(files) => addRefs(files, "style")} /><RefChips items={refs.groups.inspo} ready={refs.ready} fallback={s.styleRefs} onRemove={refs.remove} /></div></div><div className="ref-note"><p className="field-label">Màu nền tách</p>{/* P-SWEEP·7 — swatch VUÔNG đứng INLINE ngay trước tên màu. Bản cũ là đĩa tròn
+    <div className="upload-row"><div><div className="mb-2 flex items-center justify-between gap-3"><p className="field-label mb-0">Ảnh phong cách{!byPrompt && " · đang sử dụng"}</p><SharedReferencePicker group="style" onPick={(file) => addRefs([file], "style")} /></div><div className="dropfield"><ImageDropzone multiple label="Kéo ảnh phong cách vào đây" description="Moodboard, chất liệu và cách thể hiện." state={refs.pending ? "uploading" : refs.groups.inspo.length ? "done" : "idle"} onFiles={(files) => addRefs(files, "style")} /><RefChips items={refs.groups.inspo} ready={refs.ready} fallback={s.styleRefs} onRemove={refs.remove} /></div></div><div className="ref-note"><p className="field-label">Màu nền tách</p>{/* P-SWEEP·7 — swatch VUÔNG đứng INLINE ngay trước tên màu. Bản cũ là đĩa tròn
       32px có `mb-3`, nằm một mình trên một dòng riêng ⇒ lệch baseline với chữ bên
       cạnh và là hình tròn duy nhất giữa một trang toàn chữ nhật + hairline. */}<span className="swatch-row"><span className="color-swatch" style={{ background: CHROMA_HEX[s.chroma] }} aria-hidden /><span className="text-body text-fg-muted">{CHROMA_LABEL[s.chroma]} · có thể chỉnh ở bước Xem kết quả.</span></span></div></div>
-    <div className="brand-ref"><p className="field-label">Ảnh brand / key visual</p><div className="dropfield"><ImageDropzone multiple label="Kéo key visual vào đây" description="Logo, bảng màu và hình ảnh nhận diện của chiến dịch" state={refs.pending ? "uploading" : refs.groups.brand.length ? "done" : "idle"} onFiles={(files) => addRefs(files, "brand")} /><RefChips items={refs.groups.brand} ready={refs.ready} fallback={s.brandRefs} onRemove={refs.remove} /></div></div>
+    <div className="brand-ref"><p className="field-label">Ảnh thương hiệu</p><div className="dropfield"><ImageDropzone multiple label="Kéo ảnh thương hiệu vào đây" description="Logo, bảng màu hoặc hình ảnh nhận diện." state={refs.pending ? "uploading" : refs.groups.brand.length ? "done" : "idle"} onFiles={(files) => addRefs(files, "brand")} /><RefChips items={refs.groups.brand} ready={refs.ready} fallback={s.brandRefs} onRemove={refs.remove} /></div></div>
   </Step>;
 }

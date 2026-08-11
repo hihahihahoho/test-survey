@@ -19,6 +19,7 @@ afterEach(cleanup);
 
 const fakeNav = (): ProjectNav => ({
   open: vi.fn(),
+  openWizard: vi.fn(),
   navigateCanvas: vi.fn(),
   openDesign: vi.fn(),
   openStyles: vi.fn(),

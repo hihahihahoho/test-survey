@@ -63,7 +63,7 @@ export function ResultStep() {
   const shown = sheets[Math.min(sheetIdx, Math.max(0, sheets.length - 1))] ?? null;
 
   return (
-    <Step title="Kết quả" copy="Xem bố cục bộ kit, chỉnh thiết lập và lưu mỗi lần tạo thành một phiên bản.">
+    <Step title="Ảnh đã tạo" copy="Xem kết quả hoặc tạo lại sau khi chỉnh sửa.">
       <div className="result-toolbar">
         <div className="w-64">
           <label className="field-label" htmlFor="version">Phiên bản</label>
@@ -100,7 +100,7 @@ export function ResultStep() {
               · bản nháp" → eyebrow lặp y hệt chuỗi đó → câu chú cuối panel lặp lần
               thứ tư. `<Select>` là NGUỒN DUY NHẤT (nó vừa hiện vừa cho đổi); ba chỗ
               còn lại chỉ đọc lại nó. Ba chỗ kia đã gỡ, đây là chỗ thứ hai. */}
-          <span className="eyebrow">Khung xương</span>
+          <span className="eyebrow">Bộ khung</span>
           {shown ? (
             <>
               <div className="preview-art">
@@ -133,8 +133,8 @@ export function ResultStep() {
             </>
           ) : (
             <>
-              <div className="preview-art"><p className="muted">Chưa có món nào trong kitset.</p></div>
-              <p className="muted">Quay lại bước Kitset UI và thêm ít nhất một món.</p>
+              <div className="preview-art"><p className="muted">Chưa chọn thành phần UI nào.</p></div>
+              <p className="muted">Quay lại Bộ khung UI để chọn ít nhất một mục.</p>
             </>
           )}
         </div>
@@ -144,11 +144,11 @@ export function ResultStep() {
             {/* P-SWEEP·3 — chuỗi gõ HOA bằng tay: `.eyebrow` đã bỏ `uppercase`, nhưng
                 chữ hoa nằm trong chính literal thì CSS không cứu được. */}
             <span className="eyebrow">Chỉnh sửa</span>
-            {dirty && <span className="status-pill">Cần render lại</span>}
+            {dirty && <span className="status-pill">Cần tạo lại</span>}
           </div>
           <label className="field-label" htmlFor="result-prompt">Mô tả phong cách</label>
           <Textarea id="result-prompt" rows={4} value={s.stylePrompt} onChange={(e) => s.set({ stylePrompt: e.target.value })} />
-          <label className="field-label" htmlFor="result-kitset">Tóm tắt kitset</label>
+          <label className="field-label" htmlFor="result-kitset">Mô tả bộ khung</label>
           {/* §W2B-6 — `truncate`: ở mobile ô này từng cắt NGANG GIỮA CHỮ (ảnh 29). */}
           <Input id="result-kitset" className="truncate" value={s.kitsetSummary} onChange={(e) => s.set({ kitsetSummary: e.target.value })} />
           <label className="field-label" htmlFor="result-mascot">Mascot</label>
@@ -180,7 +180,7 @@ export function ResultStep() {
               variant="secondary"
               className="mt-3 w-full"
               disabled={rawPresent === 0 || slice.pending}
-              title={rawPresent === 0 ? "Mở khi bộ kit đã có ảnh đã vẽ" : "Cắt lại bằng ngưỡng hiện tại · không tiêu lượt"}
+              title={rawPresent === 0 ? "Mở sau khi dự án có ảnh" : "Cắt lại bằng ngưỡng hiện tại · không tiêu lượt"}
               onClick={() => slice.run()}
             >
               <Scissors aria-hidden />{slice.pending ? "Đang cắt…" : "Cắt lại"}

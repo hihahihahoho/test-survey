@@ -5,25 +5,24 @@ import { describe, expect, it } from "vitest";
 const ROOT = resolve(__dirname, "..", "..", "..", "..");
 const read = (path: string) => readFileSync(resolve(ROOT, path), "utf8");
 
-describe("Settings overlay", () => {
-  it("keeps Home mounted behind the settings route", () => {
+describe("Settings page", () => {
+  it("mounts one settings screen instead of a second Home behind a dialog", () => {
     const route = read("src/routes/settings.tsx");
-    expect(route).toContain('<AppLayout screen="projects">');
-    expect(route).toContain('<LazyScreen screen="projects" />');
+    expect(route).toContain('<AppLayout screen="settings">');
     expect(route).toContain('<LazyScreen screen="settings" />');
+    expect(route).not.toContain('<LazyScreen screen="projects" />');
   });
 
-  it("uses a compact modal and a title-scale heading", () => {
+  it("uses the shared Home workspace shell and no modal overlay", () => {
     const screen = read("src/features/settings/SettingsScreen.tsx");
-    expect(screen).toContain("<Dialog open");
-    expect(screen).toContain('data-testid="settings-dialog"');
-    expect(screen).toContain("text-title text-fg-strong");
-    expect(screen).not.toContain("DISPLAY");
+    const shell = read("src/features/home/components/HomeWorkspaceShell.tsx");
+    expect(screen).toContain('<HomeWorkspaceShell active="settings" title="Cài đặt">');
+    expect(shell).toContain("text-subtitle text-fg-strong");
+    expect(screen).not.toContain("<Dialog");
   });
 
-  it("does not turn tab clicks into a history trail, and leaves settings for Home", () => {
+  it("does not turn tab clicks into a history trail", () => {
     const screen = read("src/features/settings/SettingsScreen.tsx");
     expect(screen).toContain('to: "/settings", search: { tab: next }, replace: true');
-    expect(screen).toContain('to: "/", search: {}, replace: true');
   });
 });

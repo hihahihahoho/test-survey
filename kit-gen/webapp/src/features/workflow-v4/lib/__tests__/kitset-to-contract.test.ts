@@ -190,12 +190,12 @@ describe("§W3-1 — ô trống phải có tên riêng", () => {
 
   it("contract của ta có ô trống mang tên `_empty-N` và VẪN parse sạch", () => {
     // Kitset 5 món ngang ⇒ lưới 3×3 ⇒ 4 ô trống trong CÙNG một sheet.
-    const five = LIB.filter((e) => e.skel.shape !== "full" && e.cell !== "portrait").slice(0, 5);
+    const five = LIB.filter((e) => e.skel.shape !== "full" && e.cell !== "portrait" && !/popup|modal|panel|ribbon/.test(`${e.file} ${e.group ?? ""}`)).slice(0, 5);
     const c = build({
       elements: five.map((e) => ({ file: e.file, label: e.vi, role: "", cell: "ngang", selected: true })),
       mascotEnabled: false,
     });
-    const sheet = c.sheets.find((sh) => sh.id === "main");
+    const sheet = c.sheets.find((sh) => sh.id === "ui");
     expect(sheet?.grid).toEqual({ cols: 3, rows: 3 });
     const blanks = sheet!.components.filter((cp) => cp.skel.shape === "empty");
     expect(blanks.length).toBe(4);
@@ -210,15 +210,14 @@ describe("§W3-1 — ô trống phải có tên riêng", () => {
    ══════════════════════════════════════════════════════════════════════════ */
 
 describe("§W3-1 — hình dạng sheet", () => {
-  it("mỗi nền một sheet 1×1 DỌC, id lấy từ `sheetHint` của thư viện", () => {
+  it("hai nền mặc định nằm chung một sheet với hai ô dọc 3:4", () => {
     const c = build();
     const bg = c.sheets.filter((sh) => sh.components.some((cp) => cp.skel.shape === "full"));
-    expect(bg.map((sh) => sh.id).sort()).toEqual(["bg-home", "bg-play"]);
-    for (const sh of bg) {
-      expect(sh.grid).toEqual({ cols: 1, rows: 1 });
-      expect(sh.orient).toBe("portrait");
-      expect(sh.components.length).toBe(1);
-    }
+    expect(bg).toHaveLength(1);
+    expect(bg[0]!.id).toBe("nen");
+    expect(bg[0]!.grid).toEqual({ cols: 2, rows: 1 });
+    expect(bg[0]!.orient).toBe("landscape");
+    expect(bg[0]!.components.filter((cp) => cp.skel.shape === "full")).toHaveLength(2);
   });
 
   it("ô DỌC đi vào lưới cols = 2×rows (ô 3:4), KHÔNG vào lưới vuông", () => {
@@ -227,10 +226,25 @@ describe("§W3-1 — hình dạng sheet", () => {
       elements: tall.map((e) => ({ file: e.file, label: e.vi, role: "", cell: "dọc", selected: true })),
       mascotEnabled: false,
     });
-    const sheet = c.sheets.find((sh) => sh.id === "tall");
+    const sheet = c.sheets.find((sh) => sh.cell_hint === "portrait 3:4 cell");
     expect(sheet).toBeDefined();
     expect(sheet!.grid.cols).toBe(sheet!.grid.rows * 2);
     expect(sheet!.cell_hint).toBe("portrait 3:4 cell");
+  });
+
+  it("giới hạn thư viện chia thật thành nhiều sheet theo từng loại", () => {
+    const s = defaultState();
+    const c = buildKitsetContract(s, {
+      lib: LIB,
+      limits: { background: 1, popup: 1, small: 1, mascot: 2 },
+    });
+    const backgrounds = c.sheets.filter((sh) => sh.components.some((cp) => cp.skel.shape === "full"));
+    const mascot = c.sheets.filter((sh) => sh.components.some((cp) => cp.skel.shape === "pose"));
+    expect(backgrounds).toHaveLength(2);
+    expect(mascot).toHaveLength(Math.ceil(s.mascotPoses.length / 2));
+    for (const sh of c.sheets.filter((sh) => sh.id.startsWith("popup") || sh.id.startsWith("ui"))) {
+      expect(sh.components.filter((cp) => cp.skel.shape !== "empty")).toHaveLength(1);
+    }
   });
 
   it("món cùng `group` nằm CÙNG sheet và LIỀN NHAU (cặp trạng thái không được tách)", () => {

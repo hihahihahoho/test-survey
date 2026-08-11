@@ -475,7 +475,7 @@ def normalize_pose_side(canvas, want, tag):
     return canvas
 
 
-def measure_core(canvas):
+def measure_core(canvas, coverage=0.5):
     """Dò LÕI element: vùng phủ alpha dày ≥50% hàng/cột dày nhất — tua rua,
     đèn lồng, tia sáng mảnh không tính. Trả (l, t, r, b) hoặc None nếu rỗng."""
     W, H = canvas.size
@@ -485,9 +485,37 @@ def measure_core(canvas):
     if not any(row_cov):
         return None
     rmax, cmax = max(row_cov), max(col_cov)
-    rows = [y for y, c in enumerate(row_cov) if c >= rmax * 0.5]
-    cols = [x for x, c in enumerate(col_cov) if c >= cmax * 0.5]
+    rows = [y for y, c in enumerate(row_cov) if c >= rmax * coverage]
+    cols = [x for x, c in enumerate(col_cov) if c >= cmax * coverage]
     return min(cols), min(rows), max(cols) + 1, max(rows) + 1
+
+
+def align_content_safe(canvas, safe, tag=None):
+    """Chỉ TỊNH TIẾN lõi đặc vào giữa contentSafe, tuyệt đối không resize.
+
+    ImageGen thường giữ đúng hình nhưng đặt cả object lệch vài chục px trong ô.
+    coverage cao bỏ qua cánh/hoa/tua rua mảnh và bám vào mặt element liên tục.
+    Contract vẫn là tọa độ cố định; phép này chỉ sửa placement do model.
+    """
+    core = measure_core(canvas, coverage=0.9)
+    if core is None:
+        return canvas
+    sx, sy, sw, sh = safe
+    cl, ct, cr, cb = core
+    dx = round(sx + sw / 2 - (cl + cr) / 2)
+    dy = round(sy + sh / 2 - (ct + cb) / 2)
+    W, H = canvas.size
+    ab = canvas.getchannel("A").getbbox()
+    if ab:
+        dx = min(max(dx, -ab[0]), W - ab[2])
+        dy = min(max(dy, -ab[1]), H - ab[3])
+    if dx == 0 and dy == 0:
+        return canvas
+    if tag:
+        print(f"  → {tag}: contentSafe chỉ tịnh tiến ({dx:+d},{dy:+d})px, không resize")
+    out = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    out.paste(canvas, (dx, dy), canvas)
+    return out
 
 
 def snap_to_safe(canvas, sk, safe):
@@ -785,7 +813,13 @@ for style in cfg["styles"]:
 
         os.makedirs(out_dir, exist_ok=True)
         n_ok = 0
-        BX, BY = round(cell_w * BLEED), round(cell_h * BLEED)
+        # contentSafe cho phép decor nằm ngoài mặt element nên cần vành rộng
+        # hơn contract cũ. Chỉ áp dụng cho sheet có loại này để không đổi canvas
+        # của các sheet legacy.
+        bleed_ratio = max(BLEED, 0.24) if any(
+            c["skel"].get("contentSafe") for c in sh["components"]
+        ) else BLEED
+        BX, BY = round(cell_w * bleed_ratio), round(cell_h * bleed_ratio)
         CVW, CVH = CW + 2 * BX, CH + 2 * BY       # canvas = ô + vành bleed
         for idx, comp in enumerate(sh["components"]):
             if comp["skel"]["shape"] == "empty":
@@ -838,16 +872,35 @@ for style in cfg["styles"]:
             sk = comp["skel"]
             if sk["shape"] == "pose" and POSE_SIDE.get(sk.get("pose")):
                 canvas = normalize_pose_side(canvas, POSE_SIDE[sk["pose"]], f"{sid}/{comp['file']}")
-            sw, sh_ = round(CW * sk["w"]), round(CH * sk["h"])
-            sx = BX + (CW - sw) // 2
-            sy = BY + (CH - sh_ - round(CH * 0.04) if sk.get("anchor") == "bottom" else (CH - sh_) // 2)
+            content_safe = sk.get("contentSafe")
+            if content_safe:
+                # contentSafe là vùng chữ/hitbox sạch. Với contract mới, chính
+                # silhouette xám w/h là safe zone duy nhất. Nó nằm cố định giữa
+                # ô và tuyệt đối không được dùng làm target để resize artwork.
+                # Dạng boolean mới: chính skel w/h là safe zone xám duy nhất.
+                # Vẫn đọc được object đời thử nghiệm để không làm hỏng manifest cũ.
+                safe_spec = content_safe if isinstance(content_safe, dict) else sk
+                sw = round(CW * safe_spec["w"])
+                sh_ = round(CH * safe_spec["h"])
+                sx = BX + (CW - sw) // 2
+                sy = BY + (CH - sh_) // 2
+            else:
+                sw, sh_ = round(CW * sk["w"]), round(CH * sk["h"])
+                sx = BX + (CW - sw) // 2
+                sy = BY + (CH - sh_ - round(CH * 0.04) if sk.get("anchor") == "bottom" else (CH - sh_) // 2)
             # Audit chạm mép TRƯỚC snap: snap kéo content vào trong canvas nên vết
             # cụt (cắt ở biên vùng crop) sẽ "tàng hình" nếu đo sau
             pre = canvas.getchannel("A").getbbox()
             if pre and sk["shape"] != "full" and (
                     pre[0] == 0 or pre[1] == 0 or pre[2] == CVW or pre[3] == CVH):
                 print(f"  ⚠ {sid}/{comp['file']}: content chạm mép canvas — raw tràn quá vành bleed, bị cụt")
-            if sk.get("free"):
+            if content_safe:
+                # Giữ nguyên scale của pixels AI; chỉ dịch lõi đặc về tâm contract.
+                canvas = align_content_safe(
+                    canvas, (sx, sy, sw, sh_), f"{sid}/{comp['file']}"
+                )
+                safe_box = [sx, sy, sw, sh_]
+            elif sk.get("free"):
                 # KHUNG ĐỘNG: không nắn art — safe zone = LÕI ĐO ĐƯỢC của chính
                 # art này (padding tự sinh khi cắt, đúng ý "để AI vẽ tự do")
                 core = measure_core(canvas)
@@ -911,6 +964,8 @@ for style in cfg["styles"]:
                      "canvas": [CVW, CVH], "cell": [CW, CH], "bleed": [BX, BY],
                      "content": [pw, ph],
                      "content_at": [ox, oy], "safe": safe_box}
+            if content_safe:
+                asset["contentSafe"] = True
             if sk.get("free"):
                 asset["freeSafe"] = True     # safe = lõi đo từ art, không phải khung contract
             if sk.get("slice9"):
