@@ -116,9 +116,9 @@ NEW="$DEST.new"
 rm -rf "$NEW"
 mkdir -p "$NEW"
 cp -R "$CANDIDATE/." "$NEW/"
-NODE="$(command -v node 2>/dev/null || true)"
+NODE="$KITGEN_HOME/tools/node/bin/node"
 MAJOR=0
-[ -z "$NODE" ] || MAJOR="$($NODE -p 'Number(process.versions.node.split(".")[0])')"
+[ ! -x "$NODE" ] || MAJOR="$($NODE -p 'Number(process.versions.node.split(".")[0])')"
 if [ "$MAJOR" -lt 20 ]; then
   NODE_VERSION="20.19.5"
   case "$(uname -s)-$(uname -m)" in
@@ -157,14 +157,13 @@ VENV="$WORKSPACE/.venv"
 
 # Keep Codex inside KitGen's home when it is not already installed. This avoids
 # sudo/global npm permissions and leaves login as the only interactive step.
-if ! command -v codex >/dev/null 2>&1; then
+if [ ! -x "$KITGEN_HOME/tools/node_modules/.bin/codex" ]; then
   echo "Installing Codex CLI..."
   mkdir -p "$KITGEN_HOME/tools"
   "$KITGEN_HOME/tools/node/bin/npm" install --silent --prefix "$KITGEN_HOME/tools" @openai/codex 2>/dev/null || \
     "$(dirname "$NODE")/npm" install --silent --prefix "$KITGEN_HOME/tools" @openai/codex
 fi
-CODEX_BIN="$(command -v codex 2>/dev/null || true)"
-[ -n "$CODEX_BIN" ] || CODEX_BIN="$KITGEN_HOME/tools/node_modules/.bin/codex"
+CODEX_BIN="$KITGEN_HOME/tools/node_modules/.bin/codex"
 [ -x "$CODEX_BIN" ] || { echo "Codex CLI installation failed." >&2; exit 1; }
 
 # Playwright renders the HTML/SVG skeleton at full fidelity. Install it inside
@@ -238,8 +237,12 @@ if [ "$NO_START" -eq 0 ]; then
     sed "s|@KITGEN_BIN@|$BIN|g" "$DEST/runtime/service/kitgen-agent.service.in" > "$UNIT"
     systemctl --user daemon-reload; systemctl --user enable --now kitgen-agent
   else nohup "$BIN" run >>"$KITGEN_HOME/agent.log" 2>&1 & fi
-  sleep 1
-  if ! "$BIN" status >/dev/null 2>&1; then
+  HEALTHY=0
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if "$BIN" status >/dev/null 2>&1; then HEALTHY=1; break; fi
+    sleep 1
+  done
+  if [ "$HEALTHY" -ne 1 ]; then
     [ -n "$PREVIOUS" ] && ln -sfn "$PREVIOUS" "$KITGEN_HOME/current"
     "$BIN" restart 2>/dev/null || true
     echo "Update failed health check; previous runtime restored." >&2
