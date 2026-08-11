@@ -79,7 +79,8 @@ jobs:
       - name: Check release payload
         run: |
           set -eu
-          shasum -a 256 -c release-output/*.tar.gz.sha256
+          cd release-output
+          shasum -a 256 -c ./*.tar.gz.sha256
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
