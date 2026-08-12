@@ -63,6 +63,9 @@ append_install_log(){
     cat "$1"
   } >> "$KITGEN_HOME/install.log"
 }
+progress(){ printf '\n[%s] %s\n' "$1" "$2"; }
+check_ok(){ printf '  OK   %s\n' "$1"; }
+check_warn(){ printf '  WARN %s\n' "$1" >&2; }
 
 # Default installs always reuse the user's normal Codex profile. A separate
 # image profile can be selected later from the runtime status popover.
@@ -128,6 +131,8 @@ is_release "$CANDIDATE" || { echo "Invalid KitGen runtime archive." >&2; exit 1;
 VERSION="$(cat "$CANDIDATE/VERSION")"
 case "$VERSION" in *[!0-9A-Za-z._-]*|'') echo "Invalid runtime version." >&2; exit 1 ;; esac
 DEST="$KITGEN_HOME/releases/$VERSION"
+progress "1/6" "Kiểm tra gói cài đặt"
+check_ok "runtime $VERSION và checksum hợp lệ"
 NEW="$DEST.new"
 rm -rf "$NEW"
 mkdir -p "$NEW"
@@ -157,7 +162,10 @@ if [ "$MAJOR" -lt 20 ]; then
   tar -xzf "$TMP/$NODE_PKG" -C "$KITGEN_HOME/tools/node" --strip-components=1
   NODE="$KITGEN_HOME/tools/node/bin/node"
 fi
+progress "2/6" "Health check môi trường nền"
+check_ok "Node $($NODE --version 2>/dev/null || printf '>=20') · $NODE"
 command -v python3 >/dev/null 2>&1 || { echo "Python 3 is required." >&2; exit 1; }
+check_ok "$(python3 --version 2>&1) · $(command -v python3)"
 # Self-test before switching current; production artifacts intentionally omit tests.
 "$NODE" --check "$NEW/agent/server.mjs" >/dev/null
 rm -rf "$DEST"
@@ -171,16 +179,25 @@ VENV="$WORKSPACE/.venv"
   PIP_DISABLE_PIP_VERSION_CHECK=1 "$VENV/bin/python" -m pip install --quiet --upgrade pillow numpy scipy pymatting
 }
 
-# Keep Codex inside KitGen's home when it is not already installed. This avoids
-# sudo/global npm permissions and leaves login as the only interactive step.
-if [ ! -x "$KITGEN_HOME/tools/node_modules/.bin/codex" ]; then
+# Prefer an existing healthy Codex CLI. Persisting its absolute path means the
+# background service does not depend on launchd/systemd inheriting the shell PATH.
+progress "3/6" "Health check Codex CLI"
+SYSTEM_CODEX="$(command -v codex 2>/dev/null || true)"
+if [ -n "$SYSTEM_CODEX" ] && [ -x "$SYSTEM_CODEX" ] && "$SYSTEM_CODEX" --version >/dev/null 2>&1; then
+  CODEX_BIN="$SYSTEM_CODEX"
+  check_ok "dùng Codex đã có: $($CODEX_BIN --version 2>/dev/null | head -n1) · $CODEX_BIN"
+elif [ -x "$KITGEN_HOME/tools/node_modules/.bin/codex" ] && "$KITGEN_HOME/tools/node_modules/.bin/codex" --version >/dev/null 2>&1; then
+  CODEX_BIN="$KITGEN_HOME/tools/node_modules/.bin/codex"
+  check_ok "dùng Codex riêng của KitGen: $($CODEX_BIN --version 2>/dev/null | head -n1)"
+else
+  [ -z "$SYSTEM_CODEX" ] || check_warn "có lệnh Codex tại $SYSTEM_CODEX nhưng health check --version thất bại"
   echo "Installing Codex CLI..."
   mkdir -p "$KITGEN_HOME/tools"
   "$KITGEN_HOME/tools/node/bin/npm" install --silent --prefix "$KITGEN_HOME/tools" @openai/codex 2>/dev/null || \
     "$(dirname "$NODE")/npm" install --silent --prefix "$KITGEN_HOME/tools" @openai/codex
+  CODEX_BIN="$KITGEN_HOME/tools/node_modules/.bin/codex"
 fi
-CODEX_BIN="$KITGEN_HOME/tools/node_modules/.bin/codex"
-[ -x "$CODEX_BIN" ] || { echo "Codex CLI installation failed." >&2; exit 1; }
+[ -x "$CODEX_BIN" ] && "$CODEX_BIN" --version >/dev/null 2>&1 || { echo "Codex CLI health check failed after installation." >&2; exit 1; }
 
 # Playwright renders the HTML/SVG skeleton at full fidelity. Install it inside
 # KitGen's private tool prefix so users never need a global npm package.
@@ -188,8 +205,10 @@ if ! NODE_PATH="$KITGEN_HOME/tools/node_modules" "$NODE" -e "require.resolve('pl
   echo "Installing Playwright..."
   "$(dirname "$NODE")/npm" install --silent --prefix "$KITGEN_HOME/tools" playwright
 fi
+progress "4/6" "Health check trình dựng ảnh"
 PLAYWRIGHT_BROWSERS_PATH="$KITGEN_HOME/tools/playwright-browsers" \
   "$KITGEN_HOME/tools/node_modules/.bin/playwright" install chromium >/dev/null
+check_ok "Playwright và Chromium đã sẵn sàng"
 mkdir -p "$WORKSPACE/.kitgen/engine" "$WORKSPACE/projects"
 cp -R "$DEST/engine/." "$WORKSPACE/.kitgen/engine/"
 cp "$DEST/runtime/bin/kitgen" "$KITGEN_HOME/bin/kitgen"
@@ -231,6 +250,7 @@ KITGEN_CODEX_PROFILE='$CODEX_PROFILE'
 CFG
 chmod 600 "$KITGEN_HOME/config.env"
 BIN="$KITGEN_HOME/bin/kitgen"
+progress "5/6" "Đăng ký dịch vụ local"
 if [ "$NO_START" -eq 0 ]; then
   if [ "$(uname -s)" = Darwin ]; then
     PLIST="$HOME/Library/LaunchAgents/com.kitgen.agent.plist"
@@ -274,6 +294,10 @@ if [ "$NO_START" -eq 0 ]; then
     fi
     exit 1
   fi
+  progress "6/6" "Health check dịch vụ"
+  check_ok "agent phản hồi tại http://127.0.0.1:$PORT/health"
+else
+  progress "6/6" "Bỏ qua health check dịch vụ (--no-start)"
 fi
 echo "KitGen $VERSION installed: $DEST"
 echo "Command: $BIN"

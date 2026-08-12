@@ -2,6 +2,7 @@ import * as React from "react";
 import {
   Clock3,
   Images,
+  Palette,
   LayoutGrid,
   PanelsTopLeft,
   Search,
@@ -13,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export type HomeSection = "recent" | "all";
-export type HomeDestination = "projects" | "ui-library" | "mascot-library" | "references" | "trash" | "settings";
+export type HomeDestination = "projects" | "brands" | "ui-library" | "mascot-library" | "references" | "trash" | "settings";
 
 export interface HomeSidebarProps {
   section: HomeSection;
@@ -25,6 +26,7 @@ export interface HomeSidebarProps {
   onSection: (section: HomeSection) => void;
   onTrash: () => void;
   onSettings: () => void;
+  onBrands: () => void;
   onUiLibrary: () => void;
   onMascotLibrary: () => void;
   onReferences: () => void;
@@ -40,6 +42,7 @@ export function HomeSidebar({
   onSection,
   onTrash,
   onSettings,
+  onBrands,
   onUiLibrary,
   onMascotLibrary,
   onReferences,
@@ -113,9 +116,10 @@ export function HomeSidebar({
       </nav>
 
       <div className="my-4 border-t border-line-subtle" />
-      <nav aria-label="Thư viện" className="space-y-1">
+      <nav aria-label="Quản lý" className="space-y-1">
+        {destination("brands", "Nhận dạng thương hiệu", Palette, onBrands)}
         {destination("ui-library", "Bộ khung UI", PanelsTopLeft, onUiLibrary)}
-        {destination("mascot-library", "Bộ khung mascot", Sparkles, onMascotLibrary)}
+        {destination("mascot-library", "Mascot pose", Sparkles, onMascotLibrary)}
         {destination("references", "Ảnh tham chiếu", Images, onReferences)}
       </nav>
 

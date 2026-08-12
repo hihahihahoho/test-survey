@@ -390,7 +390,7 @@ export function MascotLibraryScreen() {
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const items = (library.data?.items ?? []).filter((item) => item.kind === "mascot");
   return (
-    <HomeWorkspaceShell active="mascot-library" title="Bộ khung mascot" action={<Button size="sm" onClick={() => setUploadOpen(true)}><Plus aria-hidden />Thêm mascot</Button>}>
+    <HomeWorkspaceShell active="mascot-library" title="Mascot pose" action={<Button size="sm" onClick={() => setUploadOpen(true)}><Plus aria-hidden />Thêm mascot</Button>}>
       <div className="flex items-center justify-between border-b border-line-subtle pb-4 text-caption text-fg-muted">
         <span>{items.length} bộ khung</span>
         <MaxPerSheet setting="mascot" fallback={4} />

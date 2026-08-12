@@ -126,11 +126,11 @@ describe("W2A-3 · không còn control thô của hệ điều hành", () => {
     }
   });
 
-  it("`ResultStep` dùng primitive Radix có sẵn", () => {
+  it("`ResultStep` ưu tiên thành phẩm, không đưa control kỹ thuật vào màn chính", () => {
     const s = strip(read("src/features/workflow-v4/steps/ResultStep.tsx"));
-    expect(s).toContain('from "@/components/ui/select"');
-    expect(s).toContain('<SelectTrigger id="version">');
-    expect(s).toContain('<SelectTrigger id="result-chroma">');
+    expect(s).toContain("<GeneratedResults");
+    expect(s).not.toContain('<select');
+    expect(s).not.toContain('result-chroma');
   });
 
   it("rule chồng style `.result-toolbar select` đã xoá", () => {

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Settings } from "lucide-react";
 import type { AgentStatus } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { AgentPill } from "./AgentPill";
@@ -84,7 +84,6 @@ export function FloraShell({
   void breadcrumb;
   void workspaceLabel;
   void onWorkspaceClick;
-  void onSettingsClick;
   void onCommandPaletteOpen;
 
   return (
@@ -113,9 +112,16 @@ export function FloraShell({
               <ArrowLeft className="size-4" aria-hidden />
               <span>Dự án</span>
             </button>
-            {connectionStatus && onRecheck
-              ? <RuntimeStatus status={connectionStatus} onRecheck={onRecheck} />
-              : <AgentPill status={agentStatus} onOpen={onAgentPillClick} />}
+            <div className="flex items-center gap-2">
+              {onSettingsClick && (
+                <button type="button" onClick={onSettingsClick} className={cn("inline-flex h-8 items-center gap-2 border px-3 text-caption", FLORA.pill, FLORA.hair, FOCUS)}>
+                  <Settings className="size-3.5" aria-hidden /> Cài đặt
+                </button>
+              )}
+              {connectionStatus && onRecheck
+                ? <RuntimeStatus status={connectionStatus} onRecheck={onRecheck} />
+                : <AgentPill status={agentStatus} onOpen={onAgentPillClick} />}
+            </div>
           </div>
         </header>
       )}

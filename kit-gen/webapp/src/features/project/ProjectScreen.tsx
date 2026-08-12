@@ -3,14 +3,13 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   FileInput,
   FileText,
-  Image,
+  Images,
   LayoutGrid,
   Palette,
-  Save,
   Settings,
   UserRound,
-  WandSparkles,
-  type LucideIcon,
+  ListChecks,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +17,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
 import { ErrorState, LoadingState } from "@/components/common";
@@ -27,13 +27,11 @@ import { useAgentStatus, useContract, useElementLib, usePatchProject, useProject
 import type { LibrarySettings } from "@/lib/types";
 import { fromAgentLib } from "@/features/design/library/lib/source";
 import { Route as ProjectRoute } from "@/routes/p.$projectId";
-import type { ProjectSection } from "@/routes/search-schemas";
 import { BriefStep } from "@/features/workflow-v4/steps/BriefStep";
 import { StyleStep } from "@/features/workflow-v4/steps/StyleStep";
 import { KitsetStep } from "@/features/workflow-v4/steps/KitsetStep";
 import { MascotStep } from "@/features/workflow-v4/steps/MascotStep";
 import { ResultStep } from "@/features/workflow-v4/steps/ResultStep";
-import { SyncBadge } from "@/features/workflow-v4/components/SyncBadge";
 import { ContractSyncProvider, useContractSync } from "@/features/workflow-v4/lib/contract-sync";
 import { importedElementsOf, workflowPatchFromContract } from "@/features/workflow-v4/lib/contract-import";
 import { toKitsetRefs, useWorkflowRefs } from "@/features/workflow-v4/lib/refs-sync";
@@ -44,20 +42,21 @@ import {
 import { gateOf, useNarrowViewport } from "@/features/projects/lib/gate";
 import { mergeElements, userUiElements } from "@/features/workflow-v4/lib/user-library";
 
-const SECTIONS: ReadonlyArray<{
-  id: ProjectSection;
-  label: string;
-  icon: LucideIcon;
-  disabled?: boolean;
-}> = [
+const MANAGEMENT = [
+  { id: "overview", label: "Tổng quan", icon: LayoutGrid, to: "/p/$projectId" },
+  { id: "design", label: "Thiết kế ảnh", icon: Images, to: "/p/$projectId/design" },
+  { id: "runs", label: "Lượt tạo", icon: Zap, to: "/p/$projectId/runs" },
+  { id: "library", label: "Thành phẩm", icon: ListChecks, to: "/p/$projectId/kit" },
+] as const;
+
+const SETTINGS_SECTIONS = [
   { id: "requirements", label: "Yêu cầu", icon: FileText },
   { id: "style", label: "Phong cách", icon: Palette },
+  { id: "mascot", label: "Mascot pose", icon: UserRound },
   { id: "ui", label: "Bộ khung UI", icon: LayoutGrid },
-  { id: "mascot", label: "Mascot", icon: UserRound },
-  { id: "images", label: "Ảnh đã tạo", icon: Image },
-  { id: "canvas", label: "Canvas", icon: WandSparkles, disabled: true },
-  { id: "settings", label: "Cài đặt dự án", icon: Settings },
-];
+  { id: "project", label: "Dự án", icon: Settings },
+] as const;
+type SettingsSection = (typeof SETTINGS_SECTIONS)[number]["id"];
 
 export function ProjectScreen({ projectId = "" }: ScreenProps) {
   return (
@@ -69,7 +68,7 @@ export function ProjectScreen({ projectId = "" }: ScreenProps) {
 
 function ProjectManager({ projectId }: { projectId: string }) {
   const navigate = useNavigate();
-  const { section } = ProjectRoute.useSearch();
+  const search = ProjectRoute.useSearch();
   const project = useProject(projectId);
   const { status } = useAgentStatus();
   const narrow = useNarrowViewport();
@@ -79,6 +78,16 @@ function ProjectManager({ projectId }: { projectId: string }) {
   const userLibrary = useUserLibrary();
   const diskContract = useContract(projectId);
   const refs = useWorkflowRefs(projectId);
+  const settingsOpen = search.section === "settings";
+  const setSettingsOpen = React.useCallback((open: boolean) => {
+    void navigate({
+      to: "/p/$projectId",
+      params: { projectId },
+      search: ((previous: Record<string, unknown>) => ({ ...previous, section: open ? "settings" : "overview" })) as never,
+      replace: !open,
+    });
+  }, [navigate, projectId]);
+  const [settingsSection, setSettingsSection] = React.useState<SettingsSection>("requirements");
   const library = React.useMemo(() => {
     const imported = importedElementsOf(diskContract.data?.contract);
     const catalogue = libQuery.data ? fromAgentLib(libQuery.data).elements : [];
@@ -113,18 +122,7 @@ function ProjectManager({ projectId }: { projectId: string }) {
     }
   }, [project.data?.name, workflow.kitName, workflow.set]);
 
-  const select = React.useCallback(
-    (next: ProjectSection) => {
-      if (next === "canvas") return;
-      void navigate({
-        to: "/p/$projectId",
-        params: { projectId },
-        search: { section: next },
-        replace: true,
-      });
-    },
-    [navigate, projectId],
-  );
+
 
   if (project.isLoading) return <LoadingState count={4} label="Đang mở dự án…" />;
   if (project.error || !project.data) {
@@ -140,111 +138,46 @@ function ProjectManager({ projectId }: { projectId: string }) {
   }
 
   const projectReadOnly = gate.readOnly || sync.state === "foreign";
-  const showSaveState = sync.state === "pending" || sync.state === "saving"
-    || sync.state === "error" || sync.state === "conflict";
-
   return (
     <ContractSyncProvider value={sync}>
       <div className="flex min-h-[calc(100dvh-3.5rem)] min-w-0 bg-canvas">
-        <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-56 shrink-0 flex-col overflow-y-auto border-r border-line-subtle bg-surface/50 p-3 md:flex">
-          <div className="mb-4 px-3 py-2">
-            <p className="truncate text-label text-fg-strong" title={project.data.name}>{project.data.name}</p>
-            <p className="mt-0.5 text-caption text-fg-muted">Dự án</p>
-          </div>
+        <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-56 shrink-0 flex-col border-r border-line-subtle bg-surface/50 p-3 md:flex">
+          <p className="px-3 py-3 text-caption font-medium uppercase tracking-wide text-fg-muted">Quản lý</p>
           <nav aria-label="Quản lý dự án" className="space-y-1">
-            {SECTIONS.map(({ id, label, icon: Icon, disabled }) => (
-              <button
-                key={id}
-                type="button"
-                disabled={disabled}
-                aria-current={!disabled && section === id ? "page" : undefined}
-                onClick={() => select(id)}
-                className={cn(
-                  "flex min-h-10 w-full items-center gap-3 rounded-2 px-3 text-left text-label transition-colors",
-                  !disabled && section === id ? "bg-raised text-fg-strong" : "text-fg hover:bg-raised",
-                  disabled && "cursor-not-allowed bg-transparent text-fg-muted hover:bg-transparent",
-                )}
-              >
-                <Icon className="size-4 shrink-0" aria-hidden />
-                <span className="truncate">{label}</span>
-                {disabled && <span className="ml-auto text-caption text-fg-muted">Đang phát triển</span>}
+            {MANAGEMENT.map(({ id, label, icon: Icon, to }) => (
+              <button key={id} type="button" aria-current={id === "overview" ? "page" : undefined}
+                onClick={() => id !== "overview" && void navigate({ to, params: { projectId } } as never)}
+                className={cn("flex min-h-10 w-full items-center gap-3 rounded-2 px-3 text-left text-label", id === "overview" ? "bg-raised text-fg-strong" : "text-fg hover:bg-raised")}>
+                <Icon className="size-4" aria-hidden /><span>{label}</span>
               </button>
             ))}
           </nav>
         </aside>
-
         <div className="min-w-0 flex-1">
-          <nav aria-label="Quản lý dự án trên màn hình nhỏ" className="flex gap-1 overflow-x-auto border-b border-line-subtle px-4 py-3 md:hidden">
-              {SECTIONS.map(({ id, label, disabled }) => (
-                <button
-                  key={id}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => select(id)}
-                  className={cn(
-                    "shrink-0 rounded-2 border border-line-subtle px-3 py-1.5 text-caption",
-                    section === id && !disabled ? "border-accent text-fg-strong" : "text-fg",
-                    disabled && "cursor-not-allowed bg-raised text-fg-muted",
-                  )}
-                >
-                  {label}{disabled ? " · Sắp có" : ""}
-                </button>
-              ))}
-          </nav>
-
           <div className="kg-page py-6 sm:py-8">
-            {showSaveState && (
-              <div className="mb-4 flex items-center justify-end gap-2">
-                <SyncBadge sync={sync} />
-                {(sync.state === "pending" || sync.state === "error") && (
-                  <Button size="sm" variant="secondary" onClick={() => void sync.saveNow()}>
-                    <Save aria-hidden />Lưu
-                  </Button>
-                )}
-              </div>
-            )}
-            {sync.state === "foreign" ? (
-              <ImportedDesignNotice
-                onConvert={() => {
-                  if (!sync.sourceContract) return;
-                  workflow.set(workflowPatchFromContract(sync.sourceContract, project.data.name));
-                  sync.adoptForeign();
-                  toast.success("Đã chuyển sang bản chỉnh sửa");
-                }}
-              />
-            ) : gate.readOnly && (
-              <p role="status" className="mb-4 rounded-2 border border-line-subtle bg-raised px-3 py-2 text-caption text-fg">
-                {gate.longReason}
-              </p>
-            )}
-            <fieldset disabled={projectReadOnly} className="min-w-0 border-0 p-0">
-              {section === "requirements" && <BriefStep />}
-              {section === "style" && <StyleStep />}
-              {section === "ui" && <KitsetStep />}
-              {section === "mascot" && <MascotStep />}
-              {section === "images" && <ResultStep />}
-              {section === "canvas" && (
-                <section className="workflow-panel">
-                  <header className="workflow-heading">
-                    <h2>Canvas</h2>
-                    <p>Đang phát triển.</p>
-                  </header>
-                </section>
-              )}
-              {section === "settings" && (
-                <ProjectSettingsPanel
-                  projectId={projectId}
-                  currentName={project.data.name}
-                  librarySettings={userLibrary.data?.settings}
-                  sheetLimits={workflow.sheetLimits}
-                  onSheetLimits={(next) => workflow.set({ sheetLimits: next })}
-                  onRenamed={(name) => workflow.set({ kitName: name })}
-                />
-              )}
-            </fieldset>
+            {sync.state === "foreign" ? <ImportedDesignNotice onConvert={() => { if (!sync.sourceContract) return; workflow.set(workflowPatchFromContract(sync.sourceContract, project.data.name)); sync.adoptForeign(); }} /> : null}
+            {gate.readOnly && <p role="status" className="mb-4 rounded-2 border border-line-subtle bg-raised px-3 py-2 text-caption text-fg">{gate.longReason}</p>}
+            <ResultStep />
           </div>
         </div>
       </div>
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent size="xl" className="h-[min(48rem,calc(100dvh-2rem))]">
+          <DialogHeader><DialogTitle>Cài đặt</DialogTitle><DialogDescription>Thông tin và cách tạo hình của dự án «{project.data.name}».</DialogDescription></DialogHeader>
+          <DialogBody className="grid min-h-0 gap-5 md:grid-cols-[12rem_minmax(0,1fr)]">
+            <nav aria-label="Các mục cài đặt dự án" className="flex gap-1 overflow-x-auto md:flex-col">
+              {SETTINGS_SECTIONS.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setSettingsSection(id)} aria-current={settingsSection === id ? "page" : undefined} className={cn("flex shrink-0 items-center gap-2 rounded-2 px-3 py-2 text-left text-label", settingsSection === id ? "bg-raised text-fg-strong" : "text-fg-muted hover:bg-raised")}><Icon className="size-4" aria-hidden />{label}</button>)}
+            </nav>
+            <fieldset disabled={projectReadOnly} className="min-w-0 overflow-y-auto border-0 p-0">
+              {settingsSection === "requirements" && <BriefStep />}
+              {settingsSection === "style" && <StyleStep />}
+              {settingsSection === "mascot" && <MascotStep />}
+              {settingsSection === "ui" && <KitsetStep />}
+              {settingsSection === "project" && <ProjectSettingsPanel projectId={projectId} currentName={project.data.name} librarySettings={userLibrary.data?.settings} sheetLimits={workflow.sheetLimits} onSheetLimits={(next) => workflow.set({ sheetLimits: next })} onRenamed={(name) => workflow.set({ kitName: name })} />}
+            </fieldset>
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
     </ContractSyncProvider>
   );
 }

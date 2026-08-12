@@ -34,7 +34,7 @@ import type { LibElement } from "@/features/design/library/lib/types";
 import { MAIN_VARIANT_ID, buildKitsetContract, pickContractInput, type KitsetContractInput, type SheetLimits } from "./kitset-to-contract";
 
 /** Nhịp gom thay đổi trước khi ghi đĩa — đúng 2s của §W3-2. */
-export const AUTOSAVE_DELAY_MS = 2000;
+export const AUTOSAVE_DELAY_MS = 700;
 
 export type SyncState =
   /** chưa đủ điều kiện làm gì (đang nạp contract, hoặc chưa có projectId) */

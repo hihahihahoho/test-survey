@@ -192,6 +192,7 @@ export function ProjectsScreen(_props: ScreenProps) {
         onQueryChange={setTyped}
         searchRef={searchRef}
         onSection={setSection}
+        onBrands={() => void navigate({ to: "/brands" })}
         onUiLibrary={() => void navigate({ to: "/library/ui" })}
         onMascotLibrary={() => void navigate({ to: "/library/mascot" })}
         onReferences={() => void navigate({ to: "/references" })}
@@ -244,8 +245,8 @@ export function ProjectsScreen(_props: ScreenProps) {
           <button type="button" onClick={() => void navigate({ to: "/library/ui" })} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Bộ khung UI">
             <PanelsTopLeft className="size-4" aria-hidden />UI
           </button>
-          <button type="button" onClick={() => void navigate({ to: "/library/mascot" })} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Bộ khung mascot">
-            <Sparkles className="size-4" aria-hidden />Mascot
+          <button type="button" onClick={() => void navigate({ to: "/library/mascot" })} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Mascot pose">
+            <Sparkles className="size-4" aria-hidden />Mascot pose
           </button>
           <button type="button" onClick={() => void navigate({ to: "/references" })} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Ảnh tham chiếu">
             <Images className="size-4" aria-hidden />Tham chiếu

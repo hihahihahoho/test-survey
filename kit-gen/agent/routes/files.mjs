@@ -10,7 +10,7 @@ import { normalizeWidth, thumbnail } from "../lib/thumbs.mjs"
 import { imageSize } from "../lib/multipart.mjs"
 
 /** Chỉ 6 thư mục dữ liệu được đọc; không bao giờ .history, không bao giờ file lạ ngoài whitelist. */
-const READABLE_TOP = new Set(["raw", "kits", "refs", "skeleton", "prompts", "export"])
+const READABLE_TOP = new Set(["raw", "kits", "refs", "skeleton", "prompts", "export", "runs"])
 const READABLE_FILES = new Set(["project.json", "contract.json", "styles.json"])
 
 export function register(r) {

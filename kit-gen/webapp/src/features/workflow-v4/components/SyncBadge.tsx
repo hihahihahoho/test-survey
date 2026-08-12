@@ -10,7 +10,7 @@ import type { ContractSync } from "../lib/contract-sync";
  * không gộp chung thành một chữ "lỗi".
  */
 const ICON = {
-  loading: Loader2, saving: Loader2, pending: Loader2,
+  loading: Loader2, saving: Loader2, pending: CloudOff,
   saved: Check, offline: CloudOff, foreign: FileInput, conflict: TriangleAlert, error: TriangleAlert,
 } as const;
 
@@ -27,7 +27,7 @@ const SHORT: Record<ContractSync["state"], string> = {
 
 export function SyncBadge({ sync }: { sync: ContractSync }) {
   const Icon = ICON[sync.state];
-  const spinning = sync.state === "saving" || sync.state === "loading" || sync.state === "pending";
+  const spinning = sync.state === "saving" || sync.state === "loading";
   const at = sync.savedAt;
   const label =
     sync.state === "saved" && at
@@ -36,7 +36,7 @@ export function SyncBadge({ sync }: { sync: ContractSync }) {
 
   return (
     <span className="sync-badge" data-state={sync.state} title={sync.note ?? label}>
-      <Icon aria-hidden className={spinning && sync.state !== "pending" ? "animate-spin" : undefined} />
+      <Icon aria-hidden className={spinning ? "animate-spin" : undefined} />
       {label}
     </span>
   );

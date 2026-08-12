@@ -323,21 +323,11 @@ describe("2B-7 · chữ của người dùng, không phải của lập trình v
     expect(read("src/features/workflow-v4/steps/ReviewStep.tsx")).toContain("${drawable.length} thành phần");
   });
 
-  it("hai ô của chroma-key gập vào khối 'Nâng cao'", () => {
+  it("màn thành phẩm không còn panel kỹ thuật cắt/chroma", () => {
     const src = read("src/features/workflow-v4/steps/ResultStep.tsx");
-    const open = src.indexOf('<details className="advanced-fields">');
-    const close = src.indexOf("</details>");
-    expect(open).toBeGreaterThan(-1);
-    for (const id of ["result-chroma", "result-threshold"]) {
-      const at = src.indexOf(id);
-      expect(at).toBeGreaterThan(open);
-      expect(at).toBeLessThan(close);
-    }
-  });
-
-  it("nút 'Cắt lại' vẫn đi CÙNG ô ngưỡng (W3-8 không bị gập mất)", () => {
-    const src = read("src/features/workflow-v4/steps/ResultStep.tsx");
-    expect(src.indexOf("Cắt lại")).toBeLessThan(src.indexOf("</details>"));
-    expect(src).toContain("slice.run()");
+    expect(src).toContain("GeneratedResults");
+    expect(src).not.toContain("result-chroma");
+    expect(src).not.toContain("Cắt lại");
+    expect(src).not.toContain("slice.run()");
   });
 });

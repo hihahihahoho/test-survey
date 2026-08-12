@@ -71,6 +71,7 @@ export function SettingsScreen(_props: ScreenProps) {
 
   return (
     <HomeWorkspaceShell active="settings" title="Cài đặt">
+      <div className="mx-auto w-full max-w-modal-xl rounded-5 border border-line-subtle bg-overlay p-5 shadow-3">
         <div className="grid min-h-0 gap-6 md:grid-cols-[190px_minmax(0,1fr)]">
           <aside>
             <nav aria-label="Các mục cài đặt" className="grid grid-cols-2 gap-1 md:block md:space-y-1">
@@ -98,6 +99,7 @@ export function SettingsScreen(_props: ScreenProps) {
             </Tabs>
           </div>
         </div>
+      </div>
     </HomeWorkspaceShell>
   );
 }

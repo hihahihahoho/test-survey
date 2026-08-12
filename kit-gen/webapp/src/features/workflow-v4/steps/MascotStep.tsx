@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { ImageDropzone } from "@/components/ui/image-dropzone";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,17 +41,6 @@ export function MascotStep() {
   const refs = useWorkflowRefs(projectId);
   const [poseGroup, setPoseGroup] = useState("Cơ bản");
 
-  if (!s.mascotEnabled) {
-    return (
-      <Step title="Mascot" copy="Bật lại khi dự án cần nhân vật.">
-        <button type="button" className="choice-card selected" aria-pressed="false" onClick={() => s.set({ mascotEnabled: true })}>
-          <strong>Không dùng mascot</strong>
-          <span>Bật lại nếu cần nhân vật nhất quán ở nhiều dáng.</span>
-        </button>
-      </Step>
-    );
-  }
-
   const pickRef = (files: FileList | File[] | null) => {
     const file = files?.[0];
     if (!file) return;
@@ -59,7 +49,12 @@ export function MascotStep() {
   };
 
   return (
-    <Step title="Mascot" copy="Thêm ảnh mẫu và chọn các dáng cần tạo.">
+    <Step title="Mascot pose" copy="Thêm ảnh mẫu và chọn các dáng cần tạo.">
+      <label className="flex cursor-pointer items-start gap-3 rounded-3 border border-line-subtle bg-raised p-4">
+        <Checkbox checked={s.mascotEnabled} onCheckedChange={(checked) => s.set({ mascotEnabled: checked === true })} />
+        <span><strong className="block text-label text-fg-strong">Có nhân vật đại diện</strong><span className="text-caption text-fg-muted">Bật khi dự án cần mascot nhất quán ở nhiều dáng.</span></span>
+      </label>
+      {s.mascotEnabled && <>
       <div className="workflow-form-grid">
         <div>
           <label className="field-label" htmlFor="mascot-name">Tên nhân vật</label>
@@ -88,11 +83,12 @@ export function MascotStep() {
         />
       </div>
       <section className="mascot-pose-picker">
-        <div className="pose-heading"><div><p className="field-label">Bộ dáng</p><strong>{s.mascotPoses.length} dáng đã chọn</strong></div><p>Chọn nhiều dáng trong cùng một sheet để giữ nhân vật nhất quán.</p></div>
+        <div className="pose-heading"><div><p className="field-label">Bộ dáng</p><strong>{s.mascotPoses.length} dáng đã chọn</strong></div><div className="flex gap-2"><button type="button" className="text-label text-accent" onClick={() => s.set({ mascotPoses: POSES.map((pose) => pose.id) })}>Chọn tất cả</button><button type="button" className="text-label text-fg-muted" onClick={() => s.set({ mascotPoses: [] })}>Bỏ chọn</button></div></div>
+        <div className="selected-poses"><span className="eyebrow">Sẽ vẽ</span>{s.mascotPoses.length ? s.mascotPoses.map(id=><button type="button" key={id} onClick={()=>s.set({mascotPoses:s.mascotPoses.filter(x=>x!==id)})}>{POSES.find(p=>p.id===id)?.label ?? id}<span aria-hidden>×</span></button>) : <span className="text-caption text-fg-muted">Chưa chọn dáng nào</span>}</div>
         <div className="pose-group-tabs">{[...new Set(POSES.map(p => p.group))].map(g => <button key={g} className={poseGroup === g ? "active" : ""} onClick={() => setPoseGroup(g)}>{g}<small>{POSES.filter(p => p.group === g).length}</small></button>)}</div>
-        <div className="pose-choice-grid">{POSES.filter(p => p.group === poseGroup).map(p => { const on=s.mascotPoses.includes(p.id); return <SegChoice key={p.id} on={on} onClick={() => s.set({ mascotPoses: on ? s.mascotPoses.filter(x=>x!==p.id) : [...s.mascotPoses,p.id] })}>{p.label}</SegChoice>; })}</div>
-        <div className="selected-poses"><span className="eyebrow">Sẽ vẽ</span>{s.mascotPoses.map(id=><button key={id} onClick={()=>s.set({mascotPoses:s.mascotPoses.filter(x=>x!==id)})}>{POSES.find(p=>p.id===id)?.label ?? id}<span aria-hidden>×</span></button>)}</div>
+        <div className="pose-choice-grid">{POSES.filter(p => p.group === poseGroup).map(p => { const on=s.mascotPoses.includes(p.id); return <SegChoice key={p.id} on={on} onClick={() => s.set({ mascotPoses: on ? s.mascotPoses.filter(x=>x!==p.id) : [...s.mascotPoses,p.id] })}><span className="mr-2 inline-flex size-8 items-center justify-center rounded-full bg-raised text-subtitle" aria-hidden>{p.id.includes("wave") ? "👋" : p.id.includes("cheer") ? "🎉" : p.id.includes("think") ? "💭" : "●"}</span>{p.label}</SegChoice>; })}</div>
       </section>
+      </>}
     </Step>
   );
 }

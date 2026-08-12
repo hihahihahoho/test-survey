@@ -5,6 +5,7 @@ skeleton.py
 skeleton.html
 silhouettes.js
 render-skeleton.mjs
+validate_output_geometry.py
 element-lib.json
 webapp/dist/
 runtime/

@@ -13,7 +13,7 @@
  *   · #2 doctor KHÔNG được poll (chỉ gọi theo hành động) — enforce ở tầng hook (staleTime 60s)
  */
 import {
-  AgentError, confirmHeader, etagOf, fileUrl, httpDelete, httpGet, httpPatch, httpPost,
+  AgentError, etagOf, fileUrl, httpDelete, httpGet, httpPatch, httpPost,
   httpPut, httpUpload, currentBase, streamRun, thumbUrl,
 } from "./client";
 import { LIMITS } from "./constants";
@@ -25,7 +25,7 @@ import {
   refUploadResultSchema, restoreContractResultSchema, runListSchema, runSchema,
   saveContractResultSchema, startRunResultSchema, trashListSchema, uploadResultSchema,
   validationSchema, workspaceListSchema, userLibrarySchema, libraryItemResultSchema,
-  librarySettingsResultSchema,
+  librarySettingsResultSchema, brandProfileResultSchema,
   type CleanTarget, type CreateProjectInput, type DuplicateInput,
   type PatchProjectInput, type RefKind, type StartRunInput,
   type LibrarySettings,
@@ -167,14 +167,10 @@ export const trashApi = {
     const wrapped = (data as { project?: unknown }).project;
     return parse(projectSchema, wrapped ?? data, "project phục hồi");
   },
-  /** #14 — xoá VĨNH VIỄN: cần mã 4 số in ở terminal, dùng 1 lần, KHÔNG persist. */
-  async purge(trashId: string, code: string) {
-    await httpDelete(`/api/trash/${pid(trashId)}?purge=1`, { headers: confirmHeader(code) });
+  /** #14 — xoá vĩnh viễn: xác nhận bằng cụm từ và đối chiếu đúng project trong thùng rác. */
+  async purge(trashId: string, projectId: string, confirm: string) {
+    await httpDelete(`/api/trash/${pid(trashId)}?purge=1`, { headers: { "X-KitGen-Confirm": confirm, "X-KitGen-Project": projectId } });
     return { ok: true };
-  },
-  /** #15 — yêu cầu agent in mã 4 số ra terminal. */
-  async requestCode(trashId: string) {
-    return (await httpPost(`/api/trash/${pid(trashId)}/code`)) as { expiresInMs?: number };
   },
 };
 
@@ -265,6 +261,13 @@ export const libraryApi = {
   async get() {
     return parse(userLibrarySchema, await httpGet("/api/library"), "kho dùng chung");
   },
+  async addBrand(input: { name: string; description?: string; colors?: string[]; assetIds?: string[] }) {
+    return parse(brandProfileResultSchema, await httpPost("/api/library/brands", input), "thương hiệu vừa tạo").brand;
+  },
+  async patchBrand(id: string, input: { name?: string; description?: string; colors?: string[]; assetIds?: string[] }) {
+    return parse(brandProfileResultSchema, await httpPatch(`/api/library/brands/${pid(id)}`, input), "thương hiệu vừa sửa").brand;
+  },
+  async removeBrand(id: string) { await httpDelete(`/api/library/brands/${pid(id)}`); return { ok: true }; },
   async add(input: { file: File; kind: "ui" | "mascot" | "reference"; group: string; name: string; description?: string; cell?: string; skel?: Record<string, unknown> }) {
     if (input.file.size > LIMITS.refBytes) {
       throw new AgentError({ code: "TOO_LARGE", status: 413, transport: "client", message: "Ảnh vượt quá 20 MB" });
@@ -326,6 +329,10 @@ export const refsApi = {
     fd.append("kind", kind);
     if (hintName) fd.append("hintName", hintName);
     return parse(refUploadResultSchema, await httpUpload(`/api/projects/${pid(id)}/refs`, fd), "thêm ảnh");
+  },
+  async blob(id: string, name: string) {
+    const response = await httpGet<Response>(`/api/projects/${pid(id)}/refs/${pid(name)}/file`, { raw: true });
+    return response.blob();
   },
   /** #31 — 409 REF_IN_USE kèm `usedBy` ⇒ UI hiện [Xem chỗ dùng] [Vẫn xoá] (V-08). */
   async remove(id: string, name: string, opts: { force?: boolean } = {}) {

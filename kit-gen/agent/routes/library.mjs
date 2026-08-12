@@ -1,11 +1,12 @@
 /* routes/library.mjs — CRUD kho bộ khung/reference riêng của người dùng. */
 import { parseMultipart } from "../lib/multipart.mjs"
 import {
-  addLibraryItem, libraryItemFile, patchLibraryItem, patchLibrarySettings,
-  readLibrary, removeLibraryItem,
+  addBrandProfile, addLibraryItem, libraryItemFile, patchBrandProfile, patchLibraryItem, patchLibrarySettings,
+  readLibrary, removeBrandProfile, removeLibraryItem,
 } from "../lib/library.mjs"
 import { fail } from "../lib/errors.mjs"
 
+const BRAND_ID = /^brand_[a-f0-9]{16}$/
 const ID = /^asset_[a-f0-9]{16}$/
 function assetId(value) {
   const id = String(value ?? "")
@@ -13,8 +14,18 @@ function assetId(value) {
   return id
 }
 
+function brandId(value) {
+  const id = String(value ?? "")
+  if (!BRAND_ID.test(id)) fail("BAD_REQUEST", "invalid brand id")
+  return id
+}
+
 export function register(r) {
   r.get("/api/library", async ctx => ({ status: 200, json: await readLibrary(ctx.registry.active) }))
+
+  r.post("/api/library/brands", async ctx => ({ status: 201, json: { brand: await addBrandProfile(ctx.registry.active, await ctx.json()) } }))
+  r.patch("/api/library/brands/:id", async ctx => ({ status: 200, json: { brand: await patchBrandProfile(ctx.registry.active, brandId(ctx.params.id), await ctx.json()) } }))
+  r.delete("/api/library/brands/:id", async ctx => { await removeBrandProfile(ctx.registry.active, brandId(ctx.params.id)); return { status: 204 } })
 
   r.post("/api/library/items", async ctx => {
     const parts = parseMultipart(await ctx.body(ctx.limits.refFile), ctx.req.headers["content-type"])

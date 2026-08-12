@@ -162,16 +162,11 @@ export function useRestoreProject() {
   });
 }
 
-/** #15 — xin agent in mã 4 số ra terminal. Mã KHÔNG BAO GIỜ được persist. */
-export function useRequestPurgeCode() {
-  return useMutation({ mutationFn: (trashId: string) => api.trash.requestCode(trashId) });
-}
-
-/** #14 — xoá VĨNH VIỄN. Không optimistic: thao tác không hoàn tác được thì phải chờ agent xác nhận. */
+/** #14 — xoá VĨNH VIỄN. Không optimistic; agent đối chiếu trashId với projectId. */
 export function usePurgeTrash() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ trashId, code }: { trashId: string; code: string }) => api.trash.purge(trashId, code),
+    mutationFn: ({ trashId, projectId, confirm }: { trashId: string; projectId: string; confirm: string }) => api.trash.purge(trashId, projectId, confirm),
     onSuccess: () => void qc.invalidateQueries({ queryKey: qk.trash.all() }),
   });
 }

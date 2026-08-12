@@ -69,3 +69,16 @@ export function useLibraryFile() {
     },
   });
 }
+
+export function useAddBrandProfile() {
+  const client = useQueryClient();
+  return useMutation({ mutationFn: api.library.addBrand, onSuccess: () => void client.invalidateQueries({ queryKey: qk.library() }) });
+}
+export function usePatchBrandProfile() {
+  const client = useQueryClient();
+  return useMutation({ mutationFn: ({ id, ...input }: { id: string; name?: string; description?: string; colors?: string[]; assetIds?: string[] }) => api.library.patchBrand(id, input), onSuccess: () => void client.invalidateQueries({ queryKey: qk.library() }) });
+}
+export function useRemoveBrandProfile() {
+  const client = useQueryClient();
+  return useMutation({ mutationFn: api.library.removeBrand, onSuccess: () => void client.invalidateQueries({ queryKey: qk.library() }) });
+}

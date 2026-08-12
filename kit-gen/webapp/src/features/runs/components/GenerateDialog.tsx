@@ -51,6 +51,7 @@ export function GenerateDialog({
   jobStates,
   /** Chỉ sinh cho một sheet (nút [⚡ Sinh sheet này…] của S3). */
   onlySheetId = null,
+  initialJobs = null,
   readOnly,
   readOnlyReason,
 }: {
@@ -61,6 +62,7 @@ export function GenerateDialog({
   /** `project.state.jobs` — map `job → 1 trong 7 trạng thái §5.7`. */
   jobStates: Record<string, JobStatusValue>;
   onlySheetId?: string | null;
+  initialJobs?: readonly string[] | null;
   readOnly: boolean;
   readOnlyReason: string;
 }) {
@@ -92,15 +94,18 @@ export function GenerateDialog({
     if (!open) return;
     setSubmitError(null);
     const next = new Set<string>();
+    const initial = initialJobs ? new Set(initialJobs) : null;
     for (const j of jobs) {
-      if (onlySheetId !== null) {
+      if (initial !== null) {
+        if (initial.has(j.job)) next.add(j.job);
+      } else if (onlySheetId !== null) {
         if (j.sheet === onlySheetId) next.add(j.job);
       } else if (needsGen(jobStates[j.job])) {
         next.add(j.job);
       }
     }
     setPicked(next);
-  }, [open, jobs, jobStates, onlySheetId]);
+  }, [open, jobs, jobStates, onlySheetId, initialJobs]);
 
   const est = estimateRun(picked.size, maxJobsPref);
   const imageGenBlocked = doctor.data?.imageGen?.available === false;

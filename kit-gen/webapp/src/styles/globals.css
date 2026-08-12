@@ -490,7 +490,7 @@
   .pose-group-tabs button { @apply flex shrink-0 items-center gap-2 border-b-2 border-transparent px-3 py-2 text-label text-fg-muted; }
   .pose-group-tabs button.active { @apply border-accent text-fg-strong; } .pose-group-tabs small { @apply rounded-full bg-canvas px-1.5 tabular-nums; }
   .pose-choice-grid { @apply grid gap-2 sm:grid-cols-2 lg:grid-cols-4; } .pose-choice-grid > * { @apply justify-start; }
-  .selected-poses { @apply mt-5 flex flex-wrap items-center gap-2 border-t border-line-subtle pt-4; }
+  .selected-poses { @apply mb-4 mt-3 flex min-h-12 flex-wrap items-center gap-2 rounded-3 border border-line-subtle bg-raised p-3; }
   .selected-poses button { @apply rounded-full border border-line-subtle bg-canvas px-3 py-1 text-caption text-fg; } .selected-poses button span { @apply ml-2 text-fg-muted; }
 }
 
@@ -502,7 +502,7 @@
   .image-drop-icon svg { @apply size-5; } .image-drop-copy { @apply flex min-w-0 flex-col gap-0.5; } .image-drop-copy strong { @apply text-label text-fg-strong; }
   .image-drop-copy span, .image-drop-copy small { @apply text-caption text-fg-muted; } .image-drop-action { @apply rounded-3 border border-line bg-raised px-3 py-2 text-label text-fg-strong shadow-sm; }
   .image-upload-error { @apply flex items-center gap-2 text-caption text-danger; } .image-upload-error svg { @apply size-4; }
-  .image-picked-list { @apply grid gap-2 sm:grid-cols-2; } .image-picked-list > div { @apply flex min-w-0 items-center justify-between gap-2 rounded-3 border border-line-subtle bg-raised px-3 py-2; }
+  .image-picked-list { @apply grid gap-2 sm:grid-cols-2; } .image-picked-list > div { @apply grid min-w-0 grid-cols-[4rem_minmax(0,1fr)_auto] items-center gap-3 rounded-3 bg-raised p-2; } .image-picked-list img { @apply size-16 rounded-2 bg-canvas object-contain; }
   .image-picked-list span { @apply flex min-w-0 flex-col; } .image-picked-list strong { @apply truncate text-caption text-fg-strong; } .image-picked-list small { @apply text-caption text-fg-muted; }
   .image-picked-list button { @apply flex size-7 shrink-0 items-center justify-center rounded-2 text-fg-muted hover:bg-canvas; } .image-picked-list svg { @apply size-4; }
   @media (max-width: 640px) { .image-dropzone { @apply grid-cols-[auto_1fr]; } .image-drop-action { @apply col-span-2 justify-self-stretch text-center; } }
@@ -526,3 +526,9 @@
   .artifact-versions button { @apply flex items-center gap-1 rounded-full border border-line-subtle bg-raised px-2.5 py-1 text-caption text-fg disabled:text-accent-text; }
   .artifact-versions small { @apply text-fg-muted; }
 }
+
+.ref-chips:has(.ref-preview-card) { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: .625rem; }
+.ref-preview-card { position: relative; display: grid; min-width: 0; gap: .375rem; padding: .5rem; border: 1px solid var(--line-subtle); border-radius: 1rem; background: var(--surface); }
+.ref-preview-card > img, .ref-preview-card > svg:first-child { width: 100%; height: 88px; border-radius: .7rem; object-fit: contain; background: var(--raised); }
+.ref-preview-card > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-caption); }
+.ref-preview-card > button { position: absolute; top: .75rem; right: .75rem; display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 999px; background: var(--surface); box-shadow: 0 1px 8px rgb(0 0 0 / .15); }

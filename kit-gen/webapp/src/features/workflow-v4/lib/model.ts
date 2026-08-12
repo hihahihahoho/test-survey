@@ -95,6 +95,7 @@ export type WorkflowState = {
   brief: string;
   stylePrompt: string;
   styleMode: "prompt" | "inspo";
+  brandProfileId: string | null;
   styleRefs: { name: string; kind: "style" | "brand" }[];
   styleAxes: StyleAxes;
   primaryColor: string;
@@ -267,6 +268,7 @@ function initialState(): Omit<WorkflowState, "set" | "next" | "back" | "go" | "t
     brief: "",
     stylePrompt: "Vui tươi, 3D bóng nhẹ, màu xanh dương VNPAY và xanh cyan, sạch và dễ đọc trên màn hình game.",
     styleMode: "prompt",
+    brandProfileId: null,
     styleRefs: [],
     styleAxes: Object.fromEntries(STYLE_AXIS_IDS.map((id) => [id, 4])) as StyleAxes,
     primaryColor: "#005BAA",
@@ -290,7 +292,7 @@ function initialState(): Omit<WorkflowState, "set" | "next" | "back" | "go" | "t
 
 const partialize = (s: WorkflowState) => ({
   step: s.step, unlocked: s.unlocked, kitName: s.kitName, campaign: s.campaign, brief: s.brief,
-  stylePrompt: s.stylePrompt, styleMode: s.styleMode, styleRefs: s.styleRefs, styleAxes: s.styleAxes,
+  stylePrompt: s.stylePrompt, styleMode: s.styleMode, brandProfileId: s.brandProfileId, styleRefs: s.styleRefs, styleAxes: s.styleAxes,
   primaryColor: s.primaryColor, secondaryColor: s.secondaryColor, styleAvoid: s.styleAvoid,
   chroma: s.chroma, kitsetSummary: s.kitsetSummary, sliceThreshold: s.sliceThreshold,
   sheetLimits: s.sheetLimits,

@@ -41,6 +41,16 @@ export function ImageDropzone({ label, description, multiple = false, maxFiles =
     </button>
     <input ref={input} className="sr-only" type="file" accept={ACCEPT.join(",")} multiple={multiple} disabled={disabled} onChange={e => { if(e.target.files) acceptFiles(e.target.files); e.currentTarget.value=""; }}/>
     {message && <p className="image-upload-error"><TriangleAlert aria-hidden/>{message}</p>}
-    {picked.length > 0 && <div className="image-picked-list">{picked.map(file => <div key={`${file.name}-${file.lastModified}`}><span><strong>{file.name}</strong><small>{size(file.size)}</small></span><button type="button" aria-label={`Bỏ ${file.name}`} onClick={() => setPicked(xs => xs.filter(x => x !== file))}><X/></button></div>)}</div>}
+    {picked.length > 0 && <div className="image-picked-list">{picked.map(file => <PickedImage key={`${file.name}-${file.lastModified}`} file={file} onRemove={() => setPicked(xs => xs.filter(x => x !== file))} />)}</div>}
   </div>;
+}
+
+function PickedImage({ file, onRemove }: { file: File; onRemove: () => void }) {
+  const [url, setUrl] = React.useState("");
+  React.useEffect(() => {
+    const next = URL.createObjectURL(file);
+    setUrl(next);
+    return () => URL.revokeObjectURL(next);
+  }, [file]);
+  return <div><img src={url} alt={`Xem trước ${file.name}`} /><span><strong>{file.name}</strong><small>{size(file.size)}</small></span><button type="button" aria-label={`Bỏ ${file.name}`} onClick={onRemove}><X /></button></div>;
 }

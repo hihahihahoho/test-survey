@@ -91,7 +91,17 @@ jobs:
         run: |
           set -eu
           cd release-output
-          shasum -a 256 -c ./*.tar.gz.sha256
+          count=0
+          for archive in ./*.tar.gz; do
+            [ -f "$archive" ] || continue
+            checksum="$archive.sha256"
+            [ -f "$checksum" ] || { echo "Missing checksum for $archive" >&2; exit 1; }
+            expected="$(awk 'NR == 1 { print $1 }' "$checksum")"
+            actual="$(shasum -a 256 "$archive" | awk '{ print $1 }')"
+            [ -n "$expected" ] && [ "$expected" = "$actual" ] || { echo "Checksum mismatch for $archive" >&2; exit 1; }
+            count=$((count + 1))
+          done
+          [ "$count" -eq 1 ] || { echo "Expected exactly one runtime archive, found $count" >&2; exit 1; }
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:

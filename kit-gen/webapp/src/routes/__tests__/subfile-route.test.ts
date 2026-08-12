@@ -232,9 +232,9 @@ describe("bàn làm việc lazy-load, KHÔNG kéo mọi component thành chunk r
       "utf8",
     );
     expect(src).not.toMatch(/^import .*from "@\/features\/canvas"/m);
-    /* Canvas chưa phát hành: deep link cũ quay về mục Canvas đang khoá của dự án. */
+    /* Canvas là lựa chọn ngoài dự án: deep link cũ quay về tổng quan dự án. */
     expect(src).toContain('<Navigate to="/p/$projectId"');
-    expect(src).toContain('search={{ section: "canvas" }}');
+    expect(src).toContain('search={{ section: "overview" }}');
   });
 
   it("chỉ có ĐÚNG MỘT `import(\"@/features/canvas\")` trong toàn bộ src/", () => {

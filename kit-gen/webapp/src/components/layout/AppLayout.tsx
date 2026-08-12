@@ -84,6 +84,11 @@ export function AppLayout({ screen, projectId, fileId, children, simplified = fa
       agentStatus={status.pill as AgentStatus}
       connectionStatus={status}
       onRecheck={recheck}
+      onSettingsClick={projectId ? () => void navigate({
+        to: "/p/$projectId",
+        params: { projectId },
+        search: ((previous: Record<string, unknown>) => ({ ...previous, section: "settings" })) as never,
+      }) : undefined}
       onHomeClick={() => void navigate({ to: "/" })}
     >
       {children}

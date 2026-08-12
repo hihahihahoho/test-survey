@@ -2,7 +2,7 @@
    Job PHÁN THEO SẢN PHẨM (mtime raw/<job>.png >= t0), KHÔNG theo exit code (gen.sh:167-176). */
 import { spawn } from "node:child_process"
 import { join } from "node:path"
-import { ensureDir, exists, writeJsonAtomic, mtimeOf, stat, readFile, writeFile } from "./fsx.mjs"
+import { ensureDir, exists, writeJsonAtomic, mtimeOf, stat, readFile, writeFile, copyFile } from "./fsx.mjs"
 import { fail } from "./errors.mjs"
 import { redactLine } from "./redact.mjs"
 import { projectDir } from "./projects-dir.mjs"
@@ -222,6 +222,21 @@ export class RunHandle {
     return Math.round((med * left) / Math.max(1, this.run.maxJobs) / 1000)
   }
 
+  async validateGeometry(pdir, png, job) {
+    const tool = join(pdir, "validate_output_geometry.py")
+    if (!(await exists(tool))) return null
+    const output = join(this.dir, "artifacts", `${job}.geometry.json`)
+    return new Promise(resolve => {
+      const child = spawn("python3", [tool, "--image", png, "--contract", join(pdir, "contract.json"), "--job", job, "--output", output], { cwd: pdir, stdio: ["ignore", "pipe", "pipe"] })
+      let text = ""
+      child.stdout.on("data", b => { text += String(b) })
+      child.on("error", () => resolve(null))
+      child.on("close", () => {
+        try { resolve(JSON.parse(text.trim())) } catch { resolve(null) }
+      })
+    })
+  }
+
   /** Phán cuối theo SẢN PHẨM: raw/<job>.png ghi mới trong run này = thành công. */
   async settleGenJobs() {
     const pdir = projectDir(this.ws, this.run.projectId)
@@ -231,7 +246,17 @@ export class RunHandle {
       const fresh = mt > 0 && Math.floor(mt / 1000) >= this.t0
       if (fresh) {
         const st = await stat(png).catch(() => null)
-        j.artifact = { path: `raw/${j.job}.png`, bytes: st?.size ?? 0, writtenAt: new Date(mt).toISOString() }
+        const artifactsDir = join(this.dir, "artifacts")
+        const snapshot = join(artifactsDir, `${j.job}.png`)
+        await ensureDir(artifactsDir)
+        await copyFile(png, snapshot)
+        const validation = await this.validateGeometry(pdir, png, j.job)
+        j.artifact = {
+          path: `runs/${this.id}/artifacts/${j.job}.png`,
+          bytes: st?.size ?? 0,
+          writtenAt: new Date(mt).toISOString(),
+          validation,
+        }
         if (j.status !== "ok") {
           if (j.status === "failed") this.run.progress.failed = Math.max(0, this.run.progress.failed - 1)
           j.status = "ok"

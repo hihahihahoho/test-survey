@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** Link canvas cũ đi về mục Canvas đang khoá của màn quản lý dự án. */
+/** Link canvas cũ hội tụ an toàn về tổng quan dự án. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -29,10 +29,10 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("project subfile navigation", () => {
-  it.each(["f-main-kit", "f-y-tuong-tet", "f-khong-co-that"])("/p/:id/f/%s redirects to the disabled Canvas section", async (fileId) => {
+  it.each(["f-main-kit", "f-y-tuong-tet", "f-khong-co-that"])("/p/:id/f/%s redirects to project overview", async (fileId) => {
     const router = mount(`/p/${PID}/f/${fileId}`);
     await waitFor(() => expect(router.state.location.pathname).toBe(`/p/${PID}`));
-    expect((router.state.location.search as { section?: string }).section).toBe("canvas");
+    expect((router.state.location.search as { section?: string }).section).toBe("overview");
   });
 
   it("does not render the old file tab IA", async () => {

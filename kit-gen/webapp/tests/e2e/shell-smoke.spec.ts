@@ -26,6 +26,8 @@ const blankContract = {
   sheets: [],
 };
 
+let generatedRunItems: Array<Record<string, unknown>> = [];
+
 const health = {
   ok: true,
   app: "kitgen-agent",
@@ -119,7 +121,10 @@ async function mockAgent(page: Page) {
     if (path === "/api/projects/tet26-a7f3/runs" && method === "POST") {
       return route.fulfill({ status: 201, json: { runId: "run-regenerate-1", jobs: [{ job: "tet-main-ui", status: "queued" }] } });
     }
-    if (path === "/api/projects/tet26-a7f3/runs") return route.fulfill({ json: { items: [] } });
+    if (path === "/api/projects/tet26-a7f3/runs") return route.fulfill({ json: { items: generatedRunItems } });
+    if (path.startsWith("/api/projects/tet26-a7f3/files/runs/")) {
+      return route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64") });
+    }
     if (path === "/api/trash") return route.fulfill({ json: { items: [] } });
     if (path === `/api/library/items/${libraryItem.id}/file`
       || path === `/api/library/items/${uiLibraryItem.id}/file`
@@ -158,6 +163,7 @@ async function mockAgent(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
+  generatedRunItems = [];
   await mockAgent(page);
 });
 
@@ -168,7 +174,7 @@ test("@visual home uses the project sidebar instead of a horizontal header", asy
   await expect(page.locator("header.sticky")).toHaveCount(0);
   await expect(page.getByRole("searchbox", { name: "Tìm dự án" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Bộ khung UI" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Bộ khung mascot" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Mascot pose" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Cài đặt" })).toBeVisible();
 
   await page.screenshot({ path: testInfo.outputPath("home-dark.png"), fullPage: true, animations: "disabled" });
@@ -181,12 +187,12 @@ test("@visual an internal page keeps only Back home and runtime status", async (
   await expect(header).toHaveCount(1);
   await expect(header.getByRole("button", { name: "Dự án" })).toBeVisible();
   await expect(header.getByRole("button", { name: /Trạng thái:/ })).toBeVisible();
-  await expect(header.getByRole("button")).toHaveCount(2);
+  await expect(header.getByRole("button")).toHaveCount(3);
   await expect(page.getByRole("searchbox", { name: "Tìm dự án" })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Quản lý dự án" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Yêu cầu" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Canvas/ })).toBeDisabled();
-  await expect(page.getByRole("heading", { name: "Yêu cầu", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Tổng quan" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Thành phẩm" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ảnh đã tạo", exact: true })).toBeVisible();
 
   await page.screenshot({ path: testInfo.outputPath("project-internal-dark.png"), fullPage: true, animations: "disabled" });
 });
@@ -202,25 +208,52 @@ test("an imported project can be converted, edited and given project sheet limit
   await expect(page.getByText("Dự án này được tạo bằng phiên bản cũ.")).toHaveCount(0);
   await saved;
 
+  await page.getByRole("button", { name: "Cài đặt" }).click();
   await page.getByRole("button", { name: "Bộ khung UI" }).click();
-  await page.getByRole("button", { name: /^UI nhỏ & đạo cụ/ }).click();
+  await page.getByRole("button", { name: /^UI nhỏ(?: · \d+)?$/ }).click();
   const customFrame = page.getByRole("button", { name: /Nút thưởng của tôi/ });
   await expect(customFrame).toBeVisible();
   await customFrame.click();
   await expect(customFrame).toHaveAttribute("aria-pressed", "true");
 
-  await page.getByRole("button", { name: "Cài đặt dự án" }).click();
+  await page.getByRole("button", { name: "Dự án", exact: true }).click();
   const backgroundLimit = page.getByRole("spinbutton", { name: "Nền" });
   await expect(backgroundLimit).toHaveAttribute("placeholder", "2");
   await backgroundLimit.fill("1");
   await expect(backgroundLimit).toHaveValue("1");
 
-  await page.getByRole("button", { name: "Ảnh đã tạo" }).click();
-  const started = page.waitForResponse((response) => response.url().includes("/api/projects/tet26-a7f3/runs")
-    && response.request().method() === "POST");
-  await page.getByRole("button", { name: "Tạo lại", exact: true }).click();
-  await started;
-  await expect(page.getByText("Đã bắt đầu tạo phiên bản mới.")).toBeVisible();
+  await page.getByRole("button", { name: "Đóng" }).click();
+  await expect(page.getByText("Chưa có ảnh nào")).toBeVisible();
+});
+
+test("generated images show immutable artifacts and retry only the selected sheet", async ({ page }) => {
+  generatedRunItems = [{
+    id: "run-generated-1", kind: "gen", status: "done-with-errors",
+    startedAt: "2026-08-12T08:00:00.000Z", finishedAt: "2026-08-12T08:01:00.000Z",
+    progress: { done: 1, total: 1, failed: 0, etaSeconds: null }, seq: 1,
+    jobs: [{
+      job: "chinh-pose-nhan-vat", variant: "chinh", sheet: "pose-nhan-vat", status: "ok",
+      startedAt: "2026-08-12T08:00:00.000Z", durationMs: 60_000, recovered: false, diagnosis: null,
+      artifact: {
+        path: "runs/run-generated-1/artifacts/chinh-pose-nhan-vat.png",
+        validation: { ok: false, cells: [{ file: "01-button", cell: 0, status: "regenerate", reasons: ["position"] }] },
+      },
+    }],
+  }];
+
+  await page.addInitScript(() => {
+    localStorage.setItem("kitgen.workflow-v4:tet26-a7f3", JSON.stringify({ state: { step: 6, unlocked: 6 }, version: 0 }));
+  });
+  await page.goto("/k/tet26-a7f3");
+  await expect(page.getByRole("heading", { name: "Ảnh đã tạo", exact: true })).toBeVisible();
+  await expect(page.getByText("Mascot pose", { exact: true })).toBeVisible();
+  await expect(page.getByText("1 ô lệch bộ khung · Cần tạo lại")).toBeVisible();
+  await page.getByRole("button", { name: "Tạo lại Mascot pose" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Sinh ảnh" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("checkbox", { name: /pose-nhan-vat/, checked: true })).toHaveCount(1);
+  await expect(dialog.getByText("Đã chọn 1 lượt", { exact: false })).toBeVisible();
 });
 
 test("a reusable mascot can be selected with its image and poses", async ({ page }) => {
@@ -339,7 +372,7 @@ test("@visual trash and shared libraries are separate Home destinations", async 
 
 test("the mascot library manages its reusable pose list", async ({ page }) => {
   await page.goto("/library/mascot");
-  await expect(page.getByRole("heading", { name: "Bộ khung mascot" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mascot pose" })).toBeVisible();
   await expect(page.getByText("2 dáng")).toBeVisible();
   await page.getByRole("button", { name: "Tuỳ chọn Mèo mẫu" }).click();
   await page.getByRole("menuitem", { name: "Sửa mascot" }).click();
@@ -353,9 +386,8 @@ test("legacy project pages converge on the project manager", async ({ page }) =>
   await page.goto("/p/tet26-a7f3/design");
   await expect(page).toHaveURL(/\/p\/tet26-a7f3\?section=ui$/);
   await page.goto("/k/tet26-a7f3/canvas");
-  await expect(page).toHaveURL(/\/p\/tet26-a7f3\?section=canvas$/);
-  await expect(page.getByRole("heading", { name: "Canvas" })).toBeVisible();
-  await expect(page.getByText("Đang phát triển.")).toBeVisible();
+  await expect(page).toHaveURL(/\/p\/tet26-a7f3\?section=overview$/);
+  await expect(page.getByRole("heading", { name: "Ảnh đã tạo", exact: true })).toBeVisible();
 });
 
 test("@visual toast uses the default viewport position and an in-card close button", async ({ page }, testInfo) => {

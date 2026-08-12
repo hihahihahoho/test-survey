@@ -327,7 +327,7 @@ Prompt và reference giúp AI bám hình học nhưng không đảm bảo pixel 
 - Background, lưới và chroma chỉ được loại bỏ bằng hậu xử lý deterministic sau khi AI trả kết quả. Không để AI vừa tái dựng sheet vừa tự xoá mốc hình học trong cùng một lượt.
 - Cách prompt theo từng pha giúp model bám edit target tốt hơn, nhưng kết quả vẫn phải qua validator; không xem việc model có bước “thinking” nội bộ là bảo đảm tọa độ.
 
-Các thử nghiệm đối chiếu hiện nằm tại `kit-gen/experiments/sprite-sheet-fairy-gray-safe-v6/`. Bản `prompt-preserve-gray-underlay-v6.txt` và `sheet-preserve-gray-underlay-v6.png` xác nhận rằng yêu cầu model giữ nguyên grid và vùng xám như một underlay được bảo vệ giúp geometry bám skeleton tốt hơn. Bản production sẽ giữ **grid xám trên nền chroma xanh**, rồi yêu cầu model fill từng vùng xám bằng bề mặt đúng với content/type của ô mà không đổi biên; decoration chỉ được mở rộng ra phía ngoài. Đây là cách nắn theo hành vi edit/tool-use của model, không phải cam kết pixel-perfect, nên validator deterministic vẫn là bước bắt buộc.
+Các thử nghiệm đối chiếu hiện nằm tại `kit-gen/experiments/sprite-sheet-fairy-gray-safe-v6/`. Bản gần nhất là `prompt-preserve-gray-underlay-v7.txt` và `sheet-preserve-gray-underlay-v7.png`; v6 được giữ làm mốc đối chiếu. Kết quả xác nhận rằng yêu cầu model giữ nguyên grid và vùng xám như một underlay được bảo vệ giúp geometry bám skeleton tốt hơn. Bản production sẽ giữ **grid xám trên nền chroma xanh**, rồi yêu cầu model fill từng vùng xám bằng bề mặt đúng với content/type của ô mà không đổi biên; decoration chỉ được mở rộng ra phía ngoài. Đây là cách nắn theo hành vi edit/tool-use của model, không phải cam kết pixel-perfect, nên validator deterministic vẫn là bước bắt buộc.
 
 ### Cấu trúc khi copy sang Figma
 
@@ -407,7 +407,17 @@ Quản lý dự án → Sửa ref/chọn lại thành phần/đổi giới hạn
 → Xem số sheet bị ảnh hưởng → Tạo lại → Ảnh đã tạo
 ```
 
-## 17. Tiêu chí nghiệm thu
+## 17. Trạng thái triển khai P0
+
+- Mỗi dự án có một bản nháp wizard riêng, tự lưu khi nhập và được khôi phục khi mở lại dự án.
+- Trong dự án, sidebar **Quản lý** chỉ dẫn tới Tổng quan, Thiết kế ảnh, Lượt tạo và Thành phẩm; chỉnh Yêu cầu/Phong cách/Mascot/Bộ khung UI nằm trong dialog Cài đặt trên topbar.
+
+- Mục **Ảnh đã tạo** đọc ảnh raw snapshot bất biến theo từng run, không dùng ảnh mới nhất để giả lịch sử.
+- Có thể tạo lại một sheet, một nhóm hoặc toàn bộ lần tạo; request chỉ gửi đúng danh sách job đã chọn.
+- Sau khi tạo ảnh, validator deterministic `validate_output_geometry.py` đo vị trí và kích thước lõi theo safe zone. Kết quả lưu cùng artifact của run và UI đánh dấu ô lệch là **Cần tạo lại**.
+- Validator không scale hoặc sửa artwork; nó chỉ báo đạt/chưa đạt.
+
+## 18. Tiêu chí nghiệm thu
 
 - Home chỉ có một sidebar, tiêu đề nhỏ “Dự án” và grid 5 cột ở desktop rộng.
 - Tạo dự án luôn mở wizard.
@@ -424,3 +434,13 @@ Quản lý dự án → Sửa ref/chọn lại thành phần/đổi giới hạn
 - Search chỉ tìm dự án.
 - Thùng rác không mở Cài đặt.
 - Không có chữ “bộ kit”, `kg-*`, contract hoặc job trong UI chính.
+
+## Cập nhật UX nhận dạng thương hiệu (2026-08-12)
+
+- `/brands` là khu vực **Quản lý nhận dạng thương hiệu** bên ngoài dự án. Mỗi hồ sơ lưu tên, ghi chú, bảng màu và danh sách logo/ảnh phong cách/mascot từ thư viện dùng chung; dữ liệu nằm trong `.kitgen/library/library.json`, không chỉ trong trình duyệt.
+- Wizard và dialog cài đặt dự án dùng cùng workflow state. Ở bước **Phong cách**, người dùng chọn `Tự tải lên` hoặc một thương hiệu có sẵn; lựa chọn thương hiệu điền màu và sao chép các ảnh đã chọn vào `projects/<id>/refs/`. Người dùng vẫn có thể tải thêm ảnh riêng sau đó.
+- **Ảnh thương hiệu** có chú thích rõ: logo, bảng màu hoặc hình ảnh nhận diện. Ảnh đã upload hiển thị preview và có nút xoá; endpoint đọc file ref xác thực project, segment tên file và safe-join trước khi trả nội dung.
+- **Mascot pose** chỉ hiện khi checkbox `Có nhân vật đại diện` được bật. Danh sách có `Chọn tất cả`, `Bỏ chọn`, và phần `Sẽ vẽ` nằm phía trên để không cần cuộn xuống mới biết các dáng đã chọn.
+- Bộ khung UI trong wizard tách phần trình bày thành `UI nhỏ` và `Đạo cụ`; contract hiện vẫn quy về giới hạn sheet `small` để tương thích engine.
+- Canvas không phải màn con trong dự án; route canvas cũ điều hướng về tổng quan. Cài đặt dự án mở bằng dialog từ topbar và deep-link `?section=settings`.
+- Xoá vĩnh viễn yêu cầu nhập đúng `xac-nhan`; agent đồng thời đối chiếu chính xác `projectId` trong request với mục đang xoá để tránh xoá nhầm dự án khác.

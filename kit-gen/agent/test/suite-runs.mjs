@@ -138,7 +138,8 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     const got = await a3("GET", `/api/runs/${rid}`)
     eq(got.json.status, "done-with-errors", "run.json trên đĩa khớp")
     const okJob = got.json.jobs.find(j => j.status === "ok")
-    ok(okJob.artifact?.path?.startsWith("raw/"), "job ok có artifact.path")
+    eq(okJob.artifact?.path, `runs/${rid}/artifacts/${okJob.job}.png`, "artifact của run là snapshot bất biến")
+    ok(await pathExists(join(wsRoot, "projects", gid, okJob.artifact.path)), "snapshot artifact tồn tại trên đĩa")
     ok(okJob.artifact.writtenAt, "có artifact.writtenAt — phán theo sản phẩm, không theo exit code")
     const badJob = got.json.jobs.find(j => j.status === "failed")
     ok(["QUOTA_SUSPECTED", "NOT_LOGGED_IN", "NO_ARTIFACT", "TIMEOUT", "UNKNOWN"].includes(badJob.diagnosis),

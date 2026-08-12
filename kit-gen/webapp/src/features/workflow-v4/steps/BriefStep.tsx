@@ -54,12 +54,7 @@ export function BriefStep() {
           <Input id="campaign" value={s.campaign} onChange={(e) => s.set({ campaign: e.target.value })} placeholder="Ví dụ: mini-game hè 2026" />
         </div>
       </div>
-      <div className="brief-head">
-        <Label htmlFor="brief">Nội dung brief</Label>
-        <Button variant="secondary" size="sm" onClick={() => setPasteOpen(true)}>
-          <ClipboardPaste aria-hidden />Dán brief
-        </Button>
-      </div>
+      <Label htmlFor="brief">Nội dung brief</Label>
       <Textarea
         id="brief"
         rows={7}
@@ -67,6 +62,11 @@ export function BriefStep() {
         onChange={(e) => s.set({ brief: e.target.value })}
         placeholder={"Ví dụ:\nTên dự án: Quay số may mắn\nCảm giác: vui, màu ấm\nCần có: vòng quay, nút quay, popup phần thưởng"}
       />
+      <div className="mt-3 flex justify-end">
+        <Button variant="secondary" size="sm" onClick={() => setPasteOpen(true)}>
+          <ClipboardPaste aria-hidden />Dán brief có cấu trúc
+        </Button>
+      </div>
       <div className="workflow-choice">
         <button
           type="button"

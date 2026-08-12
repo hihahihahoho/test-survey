@@ -58,6 +58,20 @@ export async function run({ api, wsRoot }) {
     eq(patched.json.item.skel, { shape: "rrect", w: 0.8, h: 0.6, slice9: true })
   })
 
+  let brandId = ""
+  await it("tạo, sửa và xoá hồ sơ nhận dạng thương hiệu", async () => {
+    const created = await api("POST", "/api/library/brands", { body: { name: "VCB", colors: ["#006b5b", "#ffffff"], assetIds: [id] } })
+    eq(created.status, 201)
+    brandId = created.json.brand.id
+    ok(/^brand_[a-f0-9]{16}$/.test(brandId), "brand id do agent sinh")
+    eq(created.json.brand.assetIds, [id])
+    const patched = await api("PATCH", `/api/library/brands/${brandId}`, { body: { description: "Nhận dạng chiến dịch", colors: ["#006b5b"] } })
+    eq(patched.status, 200)
+    eq(patched.json.brand.description, "Nhận dạng chiến dịch")
+    const listed = await api("GET", "/api/library")
+    eq(listed.json.brands[0].name, "VCB")
+  })
+
   await it("xoá cả metadata và file", async () => {
     const before = await api("GET", "/api/library")
     const filename = before.json.items[0].filename
@@ -66,5 +80,8 @@ export async function run({ api, wsRoot }) {
     ok(!(await pathExists(join(wsRoot, ".kitgen", "library", "assets", filename))))
     const after = await api("GET", "/api/library")
     eq(after.json.items, [])
+    eq(after.json.brands[0].assetIds, [])
+    const delBrand = await api("DELETE", `/api/library/brands/${brandId}`)
+    eq(delBrand.status, 204)
   })
 }

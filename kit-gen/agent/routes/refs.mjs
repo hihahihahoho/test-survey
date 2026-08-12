@@ -39,6 +39,15 @@ export function register(r) {
     return { status: 200, json: { items } }
   })
 
+  r.get("/api/projects/:id/refs/:name/file", async ctx => {
+    const ws = ctx.registry.active
+    await readProject(ws, ctx.params.id)
+    const name = safeSegment(ctx.params.name, "ref name")
+    const abs = safeJoin(join(projectDir(ws, ctx.params.id), "refs"), name, { allowRoot: false })
+    if (!(await exists(abs))) fail("REF_NOT_FOUND", `ref ${name} not found`)
+    return { status: 200, file: abs, headers: { "Cache-Control": "private, max-age=3600" } }
+  })
+
   // #30 POST refs (multipart, ≤20 MB) — agent đặt tên
   r.post("/api/projects/:id/refs", async ctx => {
     const ws = ctx.registry.active

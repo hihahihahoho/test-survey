@@ -1,9 +1,11 @@
 import { Input } from "@/components/ui/input";
 import { ImageDropzone } from "@/components/ui/image-dropzone";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { SemanticSlider } from "@/features/kit-form/components/SemanticSlider";
 import { STYLE_AXES } from "@/features/kit-form/lib/style-phrases";
+import { useLibraryFile, useUserLibrary } from "@/lib/hooks";
 import { CHROMA_HEX } from "@/lib/types/contract";
 import { useWorkflowProjectId, useWorkflowStore } from "../lib/model";
 import { useWorkflowRefs } from "../lib/refs-sync";
@@ -21,6 +23,8 @@ export function StyleStep() {
   const s = useWorkflowStore();
   const projectId = useWorkflowProjectId();
   const refs = useWorkflowRefs(projectId);
+  const library = useUserLibrary();
+  const libraryFile = useLibraryFile();
   /**
    * §W3-3 — Blob ĐI TỚI ĐĨA. Bản cũ `map(file => ({name: file.name}))` giữ mỗi cái tên
    * rồi vứt Blob, nên ảnh không bao giờ tới `gen.sh`. Bản nháp vẫn ghi tên (tiếng vọng
@@ -40,6 +44,17 @@ export function StyleStep() {
    * `studio.html` làm đúng: ẩn/hiện hẳn. `gen.sh:95,130` cũng chỉ dùng MỘT trong hai
    * (`styleMode == "inspo" and inspo` ⇒ bỏ qua `style`), nên hiện cả hai là nói dối.
    */
+  const chooseBrand = async (brandId: string) => {
+    const brand = library.data?.brands.find(item => item.id === brandId);
+    if (!brand) return;
+    s.set({ brandProfileId: brandId, primaryColor: brand.colors[0] ?? s.primaryColor, secondaryColor: brand.colors[1] ?? s.secondaryColor });
+    const assets = (library.data?.items ?? []).filter(item => brand.assetIds.includes(item.id));
+    for (const item of assets) {
+      const file = await libraryFile.mutateAsync(item);
+      if (item.kind === "mascot") refs.add([file], "character");
+      else refs.add([file], item.group === "brand-logo" ? "brand" : "inspo");
+    }
+  };
   const byPrompt = s.styleMode === "prompt";
   return <Step title="Phong cách" copy="Chọn bằng mô tả hoặc ảnh tham chiếu.">
     {/**
@@ -51,6 +66,7 @@ export function StyleStep() {
       * "một nút chính + một nút phụ" thay vì "hai lựa chọn, đang ở cái này".
       * `aria-pressed` mang nghĩa cho screen reader, không phụ thuộc màu (§5.8-A3).
       */}
+    <section className="rounded-3 border border-line-subtle bg-raised p-4"><p className="field-label">Nguồn nhận dạng</p><div className="grid gap-3 sm:grid-cols-2"><Select value={s.brandProfileId ?? "manual"} onValueChange={(value) => value === "manual" ? s.set({ brandProfileId: null }) : void chooseBrand(value)}><SelectTrigger aria-label="Chọn nguồn nhận dạng"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="manual">Tự tải lên</SelectItem>{(library.data?.brands ?? []).map(brand=><SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>)}</SelectContent></Select><p className="text-caption text-fg-muted">Chọn thương hiệu có sẵn để điền bảng màu, logo, ảnh phong cách và mascot. Sau đó vẫn có thể tải thêm ảnh riêng.</p></div></section>
     <div className="segmented"><SegChoice on={byPrompt} onClick={() => s.set({ styleMode: "prompt" })}>Gõ mô tả</SegChoice><SegChoice on={!byPrompt} onClick={() => s.set({ styleMode: "inspo" })}>Dùng ảnh tham khảo</SegChoice></div>
     {byPrompt && <div className="style-axis-grid">{STYLE_AXES.map((axis) => <SemanticSlider key={axis.id} axis={axis} value={s.styleAxes[axis.id]} onChange={(value) => s.set({ styleAxes: { ...s.styleAxes, [axis.id]: value } })} />)}</div>}
     {/**

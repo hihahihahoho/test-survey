@@ -35,6 +35,7 @@ const ENGINE_FILES = [
   { name: "silhouettes.js", required: false },
   { name: "render-skeleton.mjs", required: false },
   { name: "element-lib.json", required: false },
+  { name: "validate_output_geometry.py", required: false },
 ]
 
 /** Tìm engine: bản cài trong workspace (.kitgen/engine) trước, rồi bản repo (dev). */

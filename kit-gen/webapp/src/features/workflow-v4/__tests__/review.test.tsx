@@ -267,18 +267,19 @@ describe("§W1-2 — bước 6 có cửa ra", () => {
  * Giờ là lúc đó, nên ca test lật lại — nhưng phải đòi HƠN bản gốc: ô tìm phải LỌC THẬT,
  * không được là ô trang trí lần thứ hai.
  */
-describe("§W3-5 — chọn bộ khung theo ba loại sản phẩm", () => {
-  it("hiện đúng ba nhóm Nền, Popup và UI nhỏ", () => {
+describe("§W3-5 — chọn bộ khung theo bốn loại sản phẩm", () => {
+  it("hiện đủ nhóm Nền, Popup, UI nhỏ và Đạo cụ", () => {
     mount(<KitsetStep />);
     expect(screen.getByRole("button", { name: /^Nền · \d+$/ }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: /^Popup · \d+$/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /^UI nhỏ & đạo cụ · \d+$/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^UI nhỏ · \d+$/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Đạo cụ/ })).toBeTruthy();
   });
 
   it("đổi nhóm và lọc thành phần thật", () => {
     mount(<KitsetStep />);
-    fireEvent.click(screen.getByRole("button", { name: /UI nhỏ & đạo cụ/ }));
-    const box = screen.getByLabelText("Tìm trong UI nhỏ & đạo cụ") as HTMLInputElement;
+    fireEvent.click(screen.getByRole("button", { name: /UI nhỏ/ }));
+    const box = screen.getByLabelText("Tìm trong UI nhỏ") as HTMLInputElement;
     fireEvent.change(box, { target: { value: "nut do" } });
     expect(box.value).toBe("nut do");
     expect(screen.getByText("Nút đỏ (CTA)")).toBeTruthy();
@@ -286,7 +287,7 @@ describe("§W3-5 — chọn bộ khung theo ba loại sản phẩm", () => {
 
   it("bấm một thành phần cập nhật lựa chọn của dự án", () => {
     mount(<KitsetStep />);
-    fireEvent.click(screen.getByRole("button", { name: /UI nhỏ & đạo cụ/ }));
+    fireEvent.click(screen.getByRole("button", { name: /UI nhỏ/ }));
     const red = screen.getByRole("button", { name: /Nút đỏ \(CTA\)/ });
     const before = red.getAttribute("aria-pressed") === "true";
     fireEvent.click(red);

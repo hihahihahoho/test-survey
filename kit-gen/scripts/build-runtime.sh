@@ -8,13 +8,16 @@ STAGE="$OUT/.stage-$VERSION"
 PKG="kitgen-runtime-$VERSION"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/$PKG/engine" "$STAGE/$PKG/app" "$STAGE/$PKG/runtime"
+# A reused output directory must never leak an older archive/checksum into the
+# upload glob. CI uploads every matching file, so stale payloads break publish.
+find "$OUT" -maxdepth 1 -type f \( -name 'kitgen-runtime-*.tar.gz' -o -name 'kitgen-runtime-*.tar.gz.sha256' \) -delete
 
 if [ ! -f "$ROOT/webapp/dist/index.html" ]; then
   (cd "$ROOT/webapp" && npm run build)
 fi
 cp -R "$ROOT/agent" "$STAGE/$PKG/agent"
 rm -rf "$STAGE/$PKG/agent/test" "$STAGE/$PKG/agent/test-fixtures" "$STAGE/$PKG/agent/test-agent.mjs"
-for f in gen.sh slice.py skeleton.py skeleton.html silhouettes.js render-skeleton.mjs element-lib.json; do
+for f in gen.sh slice.py skeleton.py skeleton.html silhouettes.js render-skeleton.mjs element-lib.json validate_output_geometry.py; do
   [ -f "$ROOT/$f" ] && cp "$ROOT/$f" "$STAGE/$PKG/engine/$f"
 done
 cp -R "$ROOT/webapp/dist/." "$STAGE/$PKG/app/"

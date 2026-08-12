@@ -25,6 +25,7 @@ export function HomeWorkspaceShell({
     [navigate],
   );
   const go = {
+    brands: () => void navigate({ to: "/brands" }),
     ui: () => void navigate({ to: "/library/ui" }),
     mascot: () => void navigate({ to: "/library/mascot" }),
     references: () => void navigate({ to: "/references" }),
@@ -47,6 +48,7 @@ export function HomeWorkspaceShell({
         onQueryChange={searchProjects}
         searchRef={searchRef}
         onSection={goProjects}
+        onBrands={go.brands}
         onUiLibrary={go.ui}
         onMascotLibrary={go.mascot}
         onReferences={go.references}

@@ -190,17 +190,12 @@ describe("#32 — bắt đầu lượt chạy", () => {
   });
 });
 
-describe("#14/#15 — purge cần mã 4 số, mã KHÔNG được persist", () => {
-  it("gửi mã qua header X-KitGen-Confirm", async () => {
+describe("#14 — purge đối chiếu đúng project và cụm xác nhận", () => {
+  it("gửi projectId cùng xac-nhan trong body", async () => {
     const calls = mock([new Response(null, { status: 204, headers: { "X-KitGen-Protocol": "1" } })]);
-    await api.trash.purge("20260805-121003-tet26", "4821");
-    expect((calls[0]!.init.headers as Record<string, string>)["X-KitGen-Confirm"]).toBe("4821");
+    await api.trash.purge("20260805-121003-tet26", "tet26", "xac-nhan");
+    expect(calls[0]!.init.headers).toMatchObject({ "X-KitGen-Confirm": "xac-nhan", "X-KitGen-Project": "tet26" });
     expect(calls[0]!.url).toContain("purge=1");
-  });
-  it("mã sai định dạng ⇒ chặn ở client", async () => {
-    const calls = mock([json({})]);
-    await expect(api.trash.purge("t1", "12")).rejects.toMatchObject({ code: "CONFIRM_INVALID" });
-    expect(calls).toHaveLength(0);
   });
 });
 

@@ -7,7 +7,7 @@
 
    Nhóm ca:
      suite-system    health · doctor · workspaces · CORS/Host/preflight/loopback
-     suite-projects  CRUD trọn vòng · thùng rác 30 ngày · phục hồi · mã 4 số · export zip
+     suite-projects  CRUD trọn vòng · thùng rác 30 ngày · phục hồi · cụm xác nhận + đối chiếu project · export zip
      suite-paths     ../ · %2e%2e · symlink ra ngoài · whitelist thư mục đọc
      suite-contract  version + If-Match (412/409) · validate V-01..V-08 · lịch sử
      suite-limits    413 body (2 đường) · 429 rate limit

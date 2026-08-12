@@ -4,6 +4,7 @@ import { Route as indexRoute } from "./routes/index";
 import { Route as settingsRoute } from "./routes/settings";
 import { Route as uiLibraryRoute } from "./routes/library.ui";
 import { Route as mascotLibraryRoute } from "./routes/library.mascot";
+import { Route as brandsRoute } from "./routes/brands";
 import { Route as referencesRoute } from "./routes/references";
 import { Route as trashRoute } from "./routes/trash";
 import { Route as projectRoute } from "./routes/p.$projectId";
@@ -48,6 +49,7 @@ export const routeTree = rootRoute.addChildren([
   /* S6 */ settingsRoute,
   uiLibraryRoute,
   mascotLibraryRoute,
+  brandsRoute,
   referencesRoute,
   trashRoute,
   /* W1 */ kitFormRoute,

@@ -8,7 +8,7 @@ import { imageSize, sniff } from "./multipart.mjs"
 
 const IMAGE_EXT = new Set(["png", "jpg", "webp"])
 const KINDS = new Set(["ui", "mascot", "reference"])
-const GROUPS = new Set(["background", "popup", "small", "mascot", "style", "mascot-reference"])
+const GROUPS = new Set(["background", "popup", "small", "mascot", "style", "mascot-reference", "brand-logo", "brand-style", "brand-mascot"])
 const CELLS = new Set(["landscape", "portrait", "full"])
 const SHAPES = new Set(["pill", "bar", "rrect", "rect", "circle", "burst", "puzzle", "full"])
 export const LIBRARY_DEFAULTS = { background: 2, popup: 4, small: 16, mascot: 4 }
@@ -42,6 +42,20 @@ function cleanGeometry(group, cell, raw) {
   }
 }
 
+
+function cleanBrand(brand) {
+  const now = new Date().toISOString()
+  return {
+    id: String(brand.id),
+    name: String(brand.name ?? "Thương hiệu chưa đặt tên").trim().slice(0, 100) || "Thương hiệu chưa đặt tên",
+    description: String(brand.description ?? "").trim().slice(0, 1000),
+    colors: [...new Set((Array.isArray(brand.colors) ? brand.colors : []).map(String).filter(value => /^#[0-9a-f]{6}$/i.test(value)))].slice(0, 12),
+    assetIds: [...new Set((Array.isArray(brand.assetIds) ? brand.assetIds : []).map(String))].slice(0, 100),
+    createdAt: String(brand.createdAt ?? now),
+    updatedAt: String(brand.updatedAt ?? now),
+  }
+}
+
 function cleanState(raw) {
   const items = Array.isArray(raw?.items)
     ? raw.items
@@ -60,7 +74,8 @@ function cleanState(raw) {
       })
     : []
   return {
-    version: 1,
+    version: 2,
+    brands: Array.isArray(raw?.brands) ? raw.brands.filter(brand => brand && typeof brand.id === "string").map(cleanBrand) : [],
     settings: { ...LIBRARY_DEFAULTS, ...(raw?.settings ?? {}) },
     items,
   }
@@ -75,6 +90,37 @@ export async function readLibrary(ws) {
 
 async function saveLibrary(ws, state) {
   await writeJsonAtomic(statePath(ws), cleanState(state))
+}
+
+export async function addBrandProfile(ws, input) {
+  const state = await readLibrary(ws)
+  const now = new Date().toISOString()
+  const brand = cleanBrand({ ...input, id: "brand_" + randomBytes(8).toString("hex"), createdAt: now, updatedAt: now })
+  if (!String(input?.name ?? "").trim()) fail("BAD_REQUEST", "brand name is required")
+  brand.assetIds = brand.assetIds.filter(id => state.items.some(item => item.id === id))
+  state.brands.unshift(brand)
+  await saveLibrary(ws, state)
+  return brand
+}
+
+export async function patchBrandProfile(ws, id, patch) {
+  const state = await readLibrary(ws)
+  const index = state.brands.findIndex(brand => brand.id === id)
+  if (index < 0) fail("NOT_FOUND", `brand ${id} not found`)
+  const next = cleanBrand({ ...state.brands[index], ...patch, id, updatedAt: new Date().toISOString() })
+  if (!next.name) fail("BAD_REQUEST", "brand name is required")
+  next.assetIds = next.assetIds.filter(assetId => state.items.some(item => item.id === assetId))
+  state.brands[index] = next
+  await saveLibrary(ws, state)
+  return next
+}
+
+export async function removeBrandProfile(ws, id) {
+  const state = await readLibrary(ws)
+  const index = state.brands.findIndex(brand => brand.id === id)
+  if (index < 0) fail("NOT_FOUND", `brand ${id} not found`)
+  state.brands.splice(index, 1)
+  await saveLibrary(ws, state)
 }
 
 export async function addLibraryItem(ws, { data, kind, group, name, description, cell, skel }) {
@@ -133,6 +179,7 @@ export async function removeLibraryItem(ws, id) {
   const index = state.items.findIndex(row => row.id === id)
   if (index < 0) fail("NOT_FOUND", `library item ${id} not found`)
   const [item] = state.items.splice(index, 1)
+  for (const brand of state.brands) brand.assetIds = brand.assetIds.filter(assetId => assetId !== id)
   await saveLibrary(ws, state)
   await removeTree(join(assetsDir(ws), item.filename))
 }

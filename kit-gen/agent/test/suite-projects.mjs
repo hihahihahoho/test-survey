@@ -178,29 +178,16 @@ export async function run({ api, agent, wsRoot }) {
     const c = await api("GET", `/api/projects/${projectId}/contract`)
     eq(c.json.contract.sheets.length, 3, "contract nguyên vẹn")
   })
-  await it("xoá vĩnh viễn thiếu mã → 412 CONFIRM_REQUIRED", async () => {
+  await it("xoá vĩnh viễn cần đúng cụm xác nhận và đúng projectId", async () => {
     const d = await api("DELETE", `/api/projects/${projectId}`)
     const tid = d.json.trashId
-    const r = await api("DELETE", `/api/trash/${tid}?purge=1`)
-    eq(r.status, 412, "status")
-    eq(r.json.error.code, "CONFIRM_REQUIRED", "code")
-    await api("POST", `/api/trash/${tid}/restore`)
-  })
-  await it("mã 4 số phát ra TERMINAL, response KHÔNG chứa mã; mã sai → 403", async () => {
-    const d = await api("DELETE", `/api/projects/${projectId}`)
-    const tid = d.json.trashId
-    let printed = null
-    agent.confirm.print = s => { printed = String(s) }
-    const issue = await api("POST", `/api/trash/${tid}/code`)
-    eq(issue.status, 202, "status")
-    ok(!/\b\d{4}\b/.test(JSON.stringify(issue.json)), `response KHÔNG được chứa mã: ${issue.text}`)
-    const code = /(\d{4})/.exec(printed ?? "")?.[1]
-    ok(code, "mã đã được in ra terminal")
-    const bad = await api("DELETE", `/api/trash/${tid}?purge=1`, { headers: { "x-kitgen-confirm": "0000" === code ? "1111" : "0000" } })
-    eq(bad.status, 403, "mã sai → 403")
-    eq(bad.json.error.code, "CONFIRM_INVALID", "code")
-    const good = await api("DELETE", `/api/trash/${tid}?purge=1`, { headers: { "x-kitgen-confirm": code } })
-    eq(good.status, 204, "mã đúng → 204")
+    const missing = await api("DELETE", `/api/trash/${tid}?purge=1`, { headers: { "x-kitgen-project": projectId } })
+    eq(missing.status, 412, "thiếu xác nhận → 412")
+    const wrongProject = await api("DELETE", `/api/trash/${tid}?purge=1`, { headers: { "x-kitgen-project": "project-khac", "x-kitgen-confirm": "xac-nhan" } })
+    eq(wrongProject.status, 403, "sai project → 403")
+    eq(wrongProject.json.error.code, "CONFIRM_INVALID", "code")
+    const good = await api("DELETE", `/api/trash/${tid}?purge=1`, { headers: { "x-kitgen-project": projectId, "x-kitgen-confirm": "xac-nhan" } })
+    eq(good.status, 204, "đúng project và xác nhận → 204")
     const list = await api("GET", "/api/trash")
     ok(!list.json.items.some(i => i.trashId === tid), "đã rời thùng rác")
   })

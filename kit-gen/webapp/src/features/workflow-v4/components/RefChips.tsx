@@ -1,4 +1,7 @@
-import { X } from "lucide-react";
+import * as React from "react";
+import { X, ImageIcon } from "lucide-react";
+import { api } from "@/lib/api/endpoints";
+import { useWorkflowProjectId } from "../lib/model";
 import type { RefItem } from "@/lib/types/api";
 
 /**
@@ -11,6 +14,13 @@ import type { RefItem } from "@/lib/types/api";
  *
  * Nút xoá luôn có nhãn đọc được (`aria-label`), không phải một dấu × trơ.
  */
+function RefPreview({ name }: { name: string }) {
+  const projectId = useWorkflowProjectId();
+  const [src, setSrc] = React.useState<string | null>(null);
+  React.useEffect(() => { let alive = true; let url: string | null = null; api.refs.blob(projectId, name).then(blob => { if (alive) { url = URL.createObjectURL(blob); setSrc(url); } }).catch(() => setSrc(null)); return () => { alive = false; if (url) URL.revokeObjectURL(url); }; }, [projectId, name]);
+  return src ? <img src={src} alt="" /> : <ImageIcon aria-hidden />;
+}
+
 export function RefChips({
   items,
   ready,
@@ -42,8 +52,8 @@ export function RefChips({
   return (
     <div className="ref-chips">
       {items.map((r) => (
-        <span className="file-chip" key={r.name}>
-          {r.name}
+        <span className="file-chip ref-preview-card" key={r.name}>
+          <RefPreview name={r.name} /><span title={r.name}>{r.name}</span>
           <button type="button" aria-label={`Xoá ảnh ${r.name}`} onClick={() => onRemove(r.name)}>
             <X aria-hidden />
           </button>

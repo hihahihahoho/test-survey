@@ -9,7 +9,7 @@ import { cellLabel, useWorkflowStore } from "../lib/model";
 import { mergeElements, userUiElements } from "../lib/user-library";
 import { Step } from "./BriefStep";
 
-type GroupId = "background" | "popup" | "small";
+type GroupId = "background" | "popup" | "small-ui" | "props";
 
 const GROUPS: ReadonlyArray<{
   id: GroupId;
@@ -27,9 +27,14 @@ const GROUPS: ReadonlyArray<{
     match: (element) => element.skel.shape !== "full" && /popup|modal|panel|ribbon/.test(`${element.file} ${element.group ?? ""}`),
   },
   {
-    id: "small",
-    label: "UI nhỏ & đạo cụ",
-    match: (element) => element.skel.shape !== "full" && !/popup|modal|panel|ribbon/.test(`${element.file} ${element.group ?? ""}`),
+    id: "small-ui",
+    label: "UI nhỏ",
+    match: (element) => element.skel.shape !== "full" && !/popup|modal|panel|ribbon|prop|item|decor|gift|coin|mascot/.test(`${element.file} ${element.group ?? ""}`),
+  },
+  {
+    id: "props",
+    label: "Đạo cụ",
+    match: (element) => element.skel.shape !== "full" && /prop|item|decor|gift|coin|mascot/.test(`${element.file} ${element.group ?? ""}`),
   },
 ];
 
@@ -82,6 +87,8 @@ export function KitsetStep() {
         })}
         <span className="ml-auto text-caption tabular-nums text-fg-muted">{selected.size} đã chọn</span>
       </div>
+
+      {selected.size > 0 && <div className="mb-4 rounded-3 border border-line-subtle bg-raised p-3"><span className="eyebrow">Sẽ tạo</span><p className="mt-1 text-caption text-fg-muted">{selected.size} thành phần đã chọn trong bộ khung.</p></div>}
 
       <div className="relative mb-4 max-w-sm">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden />

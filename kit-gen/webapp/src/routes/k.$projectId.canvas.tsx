@@ -13,5 +13,5 @@ export const Route = createRoute({
 
 function CanvasProjectRoute() {
   const { projectId } = Route.useParams();
-  return <Navigate to="/p/$projectId" params={{ projectId }} search={{ section: "canvas" }} replace />;
+  return <Navigate to="/p/$projectId" params={{ projectId }} search={{ section: "overview" }} replace />;
 }

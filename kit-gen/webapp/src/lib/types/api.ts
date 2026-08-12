@@ -434,7 +434,7 @@ export type ElementLib = z.infer<typeof elementLibSchema>;
 export const libraryItemSchema = z.looseObject({
   id: z.string(),
   kind: z.enum(["ui", "mascot", "reference"]),
-  group: z.enum(["background", "popup", "small", "mascot", "style", "mascot-reference"]),
+  group: z.enum(["background", "popup", "small", "mascot", "style", "mascot-reference", "brand-logo", "brand-style", "brand-mascot"]),
   name: z.string(),
   description: z.string().default(""),
   filename: z.string(),
@@ -454,8 +454,16 @@ export const librarySettingsSchema = z.object({
   mascot: z.number().int().min(1).max(32).default(4),
 });
 export type LibrarySettings = z.infer<typeof librarySettingsSchema>;
+export const brandProfileSchema = z.looseObject({
+  id: z.string(), name: z.string(), description: z.string().default(""),
+  colors: z.array(z.string()).default([]), assetIds: z.array(z.string()).default([]),
+  createdAt: z.string().optional(), updatedAt: z.string().optional(),
+});
+export type BrandProfile = z.infer<typeof brandProfileSchema>;
+export const brandProfileResultSchema = z.looseObject({ brand: brandProfileSchema });
 export const userLibrarySchema = z.looseObject({
   version: z.number().default(1),
+  brands: z.array(brandProfileSchema).default([]),
   settings: librarySettingsSchema,
   items: z.array(libraryItemSchema).default([]),
 });
@@ -503,6 +511,17 @@ export const runJobSchema = z.looseObject({
     path: z.string(),
     bytes: z.number().optional(),
     writtenAt: z.string().optional(),
+    validation: z.looseObject({
+      ok: z.boolean(),
+      job: z.string().optional(),
+      sheet: z.string().optional(),
+      cells: z.array(z.looseObject({
+        file: z.string(),
+        cell: z.number().optional(),
+        status: z.enum(["ok", "regenerate"]),
+        reasons: z.array(z.string()).default([]),
+      })).default([]),
+    }).nullish(),
   }).nullish(),
   /** R20: ảnh được cứu từ thư mục tạm của codex → dòng lượt có nhãn `↩ đã cứu ảnh`. */
   recovered: z.boolean().default(false),

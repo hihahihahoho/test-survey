@@ -144,14 +144,17 @@ export function register(r) {
     status: 200, json: { project: await restoreFromTrash(ctx.registry.active, ctx.params.trashId) },
   }))
 
-  r.post("/api/trash/:trashId/code", async ctx => ({
-    status: 202, json: ctx.confirm.issue(`purge:${ctx.params.trashId}`),
-  }))
-
   r.delete("/api/trash/:trashId", async ctx => {
     if (ctx.url.searchParams.get("purge") !== "1")
       fail("BAD_REQUEST", "permanent delete requires ?purge=1")
-    ctx.confirm.check(`purge:${ctx.params.trashId}`, ctx.req.headers["x-kitgen-confirm"])
+    const confirm = ctx.req.headers["x-kitgen-confirm"]
+    const projectId = ctx.req.headers["x-kitgen-project"]
+    if (String(confirm ?? "").trim().toLowerCase() !== "xac-nhan")
+      fail("CONFIRM_REQUIRED", "permanent delete requires xac-nhan")
+    const items = await listTrash(ctx.registry.active)
+    const item = items.find(entry => entry.trashId === ctx.params.trashId)
+    if (!item || String(projectId ?? "") !== String(item.projectId ?? ""))
+      fail("CONFIRM_INVALID", "trash entry does not match requested project")
     await purgeFromTrash(ctx.registry.active, ctx.params.trashId)
     return { status: 204 }
   })
