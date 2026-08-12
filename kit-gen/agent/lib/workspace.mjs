@@ -15,8 +15,12 @@ export function workspaceFingerprint(absPath) {
   return "sha256:" + createHash("sha256").update(resolve(absPath)).digest("hex").slice(0, 12)
 }
 export function workspaceLabel(absPath) {
-  const s = shortenPath(resolve(absPath))
-  return s.length > 48 ? "…" + s.slice(-47) : s
+  const resolved = resolve(absPath)
+  const shortened = shortenPath(resolved)
+  // Ngoài thư mục home (ví dụ /tmp trên Linux CI), chỉ trả tên thư mục.
+  // Nhãn UI không được biến thành đường dẫn tuyệt đối hoặc lộ cấu trúc máy.
+  const label = shortened.startsWith("/") ? basename(resolved) : shortened
+  return label.length > 48 ? "…" + label.slice(-47) : label
 }
 
 const CONFIG_DEFAULT = { workspaceVersion: 1, maxJobs: 4, imageGen: { mode: "unknown" } }
