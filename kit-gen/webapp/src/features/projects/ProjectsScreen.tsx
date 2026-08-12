@@ -188,9 +188,6 @@ export function ProjectsScreen(_props: ScreenProps) {
         active="projects"
         section={section}
         trashCount={trashCount}
-        query={typed}
-        onQueryChange={setTyped}
-        searchRef={searchRef}
         onSection={setSection}
         onBrands={() => void navigate({ to: "/brands" })}
         onUiLibrary={() => void navigate({ to: "/library/ui" })}
@@ -210,19 +207,20 @@ export function ProjectsScreen(_props: ScreenProps) {
           </div>
         )}
 
-        <HomeHeader />
-
-        <div className="relative mt-5 md:hidden">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden />
-          <Input
-            ref={searchRef}
-            type="search"
-            value={typed}
-            onChange={(event) => setTyped(event.target.value)}
-            aria-label="Tìm dự án"
-            placeholder="Tìm dự án…"
-            className="h-10 rounded-2 bg-surface pl-9"
-          />
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <HomeHeader />
+          <div className="relative w-full sm:w-72">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden />
+            <Input
+              ref={searchRef}
+              type="search"
+              value={typed}
+              onChange={(event) => setTyped(event.target.value)}
+              aria-label="Tìm dự án"
+              placeholder="Tìm dự án…"
+              className="h-10 rounded-2 bg-surface pl-9"
+            />
+          </div>
         </div>
 
         <nav aria-label="Điều hướng trên màn hình nhỏ" className="mt-3 flex items-center gap-1 overflow-x-auto pb-1 md:hidden">

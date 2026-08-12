@@ -17,8 +17,6 @@ export function HomeWorkspaceShell({
 }) {
   const navigate = useNavigate();
   const trash = useTrash();
-  const searchRef = React.useRef<HTMLInputElement>(null);
-  const [query, setQuery] = React.useState("");
 
   const goProjects = React.useCallback(
     (_section: HomeSection = "all") => void navigate({ to: "/", search: {} }),
@@ -33,20 +31,12 @@ export function HomeWorkspaceShell({
     settings: () => void navigate({ to: "/settings", search: { tab: "agent" } }),
   };
 
-  const searchProjects = (value: string) => {
-    setQuery(value);
-    if (value.trim()) void navigate({ to: "/", search: { q: value.trim() } });
-  };
-
   return (
     <div className="relative flex min-h-dvh bg-canvas">
       <HomeSidebar
         active={active}
         section="all"
         trashCount={trash.data?.items.length ?? 0}
-        query={query}
-        onQueryChange={searchProjects}
-        searchRef={searchRef}
         onSection={goProjects}
         onBrands={go.brands}
         onUiLibrary={go.ui}

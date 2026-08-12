@@ -1,16 +1,13 @@
-import * as React from "react";
 import {
   Clock3,
   Images,
   Palette,
   LayoutGrid,
   PanelsTopLeft,
-  Search,
   Settings,
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export type HomeSection = "recent" | "all";
@@ -20,9 +17,6 @@ export interface HomeSidebarProps {
   section: HomeSection;
   active?: HomeDestination;
   trashCount: number;
-  query: string;
-  onQueryChange: (value: string) => void;
-  searchRef: React.RefObject<HTMLInputElement>;
   onSection: (section: HomeSection) => void;
   onTrash: () => void;
   onSettings: () => void;
@@ -36,9 +30,6 @@ export function HomeSidebar({
   section,
   active = "projects",
   trashCount,
-  query,
-  onQueryChange,
-  searchRef,
   onSection,
   onTrash,
   onSettings,
@@ -96,19 +87,6 @@ export function HomeSidebar({
         </span>
         <span>KitGen</span>
       </button>
-
-      {active === "projects" && <div className="relative mb-4">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden />
-        <Input
-          ref={searchRef}
-          type="search"
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          aria-label="Tìm dự án"
-          placeholder="Tìm dự án…"
-          className="h-9 rounded-2 bg-canvas pl-9"
-        />
-      </div>}
 
       <nav aria-label="Danh sách dự án" className="space-y-1">
         {item("recent", "Gần đây", Clock3)}

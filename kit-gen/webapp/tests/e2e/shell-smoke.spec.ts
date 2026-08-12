@@ -184,7 +184,9 @@ test("@visual home uses the project sidebar instead of a horizontal header", asy
   await expect(page.getByRole("heading", { name: "Dự án", exact: true })).toBeVisible();
 
   await expect(page.locator("header.sticky")).toHaveCount(0);
-  await expect(page.getByRole("searchbox", { name: "Tìm dự án" })).toBeVisible();
+  const projectSearch = page.getByRole("searchbox", { name: "Tìm dự án" });
+  await expect(projectSearch).toBeVisible();
+  await expect(projectSearch.locator("xpath=ancestor::aside")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Bộ khung UI" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Mascot" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Cài đặt" })).toBeVisible();

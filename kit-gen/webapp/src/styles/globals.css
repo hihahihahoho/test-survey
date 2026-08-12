@@ -292,7 +292,7 @@
   .file-chip { @apply inline-flex items-center gap-2 rounded-full border border-line-subtle bg-raised px-3 py-1 text-caption text-fg-muted; }
   /* §W3-3 — chip ảnh ref nay ĐỌC TỪ ĐĨA và xoá được, nên cần chỗ cho nút xoá. */
   .ref-chips { @apply flex flex-wrap gap-2; }
-  .reference-upload { @apply flex flex-col gap-3; }
+  .reference-upload { @apply flex flex-col gap-3 border-0 bg-transparent p-0; }
   .reference-upload .image-dropzone { @apply min-h-28; }
   .reference-upload .ref-chips { @apply grid grid-cols-3 gap-3 sm:grid-cols-4; }
   .ref-preview-card { @apply relative block aspect-square min-w-0 overflow-hidden rounded-3 border border-line-subtle bg-raised; }
