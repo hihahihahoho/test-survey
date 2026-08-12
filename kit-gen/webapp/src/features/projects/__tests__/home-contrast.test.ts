@@ -3,6 +3,9 @@
  * Chạy lại chính script `home-contrast.mjs` để số trong report và số trong CI là MỘT.
  */
 import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("§8.3 — tương phản của thẻ bộ kit trên màn H", () => {
@@ -16,16 +19,17 @@ describe("§8.3 — tương phản của thẻ bộ kit trên màn H", () => {
 
   it("script thật sự biết FAIL (chống cổng luôn xanh)", () => {
     // Đảo ngưỡng lên 21:1 — không cặp nào trên đời đạt được ⇒ phải thoát khác 0.
-    expect(() =>
-      execFileSync("node", ["-e", `
-        process.argv[1] = "x";
-        const s = require("node:fs").readFileSync("src/features/projects/__tests__/home-contrast.mjs","utf8")
-          .replaceAll("4.5]", "21]");
-        require("node:fs").writeFileSync(process.env.TMPDIR + "/h1-mutant.mjs", s);
-      `]),
-    ).not.toThrow();
-    expect(() =>
-      execFileSync("node", [`${process.env.TMPDIR}/h1-mutant.mjs`], { encoding: "utf8", stdio: "pipe" }),
-    ).toThrow();
+    const dir = mkdtempSync(join(tmpdir(), "kitgen-contrast-"));
+    const mutant = join(dir, "h1-mutant.mjs");
+    try {
+      const source = readFileSync("src/features/projects/__tests__/home-contrast.mjs", "utf8")
+        .replaceAll("4.5]", "21]");
+      writeFileSync(mutant, source);
+      expect(() =>
+        execFileSync("node", [mutant], { encoding: "utf8", stdio: "pipe" }),
+      ).toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
