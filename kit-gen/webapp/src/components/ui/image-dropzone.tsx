@@ -13,11 +13,12 @@ export interface ImageDropzoneProps {
   state?: UploadState;
   error?: string | null;
   onFiles: (files: File[]) => void;
+  showLocalPreview?: boolean;
 }
 const ACCEPT = ["image/png", "image/jpeg", "image/webp"];
 const size = (n: number) => n >= 1048576 ? `${Math.round(n / 104857.6) / 10} MB` : `${Math.ceil(n / 1024)} KB`;
 
-export function ImageDropzone({ label, description, multiple = false, maxFiles = 8, maxBytes = 20 * 1024 * 1024, disabled, state = "idle", error, onFiles }: ImageDropzoneProps) {
+export function ImageDropzone({ label, description, multiple = false, maxFiles = 8, maxBytes = 20 * 1024 * 1024, disabled, state = "idle", error, onFiles, showLocalPreview = true }: ImageDropzoneProps) {
   const input = React.useRef<HTMLInputElement>(null);
   const [drag, setDrag] = React.useState(false);
   const [picked, setPicked] = React.useState<File[]>([]);
@@ -41,7 +42,7 @@ export function ImageDropzone({ label, description, multiple = false, maxFiles =
     </button>
     <input ref={input} className="sr-only" type="file" accept={ACCEPT.join(",")} multiple={multiple} disabled={disabled} onChange={e => { if(e.target.files) acceptFiles(e.target.files); e.currentTarget.value=""; }}/>
     {message && <p className="image-upload-error"><TriangleAlert aria-hidden/>{message}</p>}
-    {picked.length > 0 && <div className="image-picked-list" aria-label={`${picked.length} ảnh đã chọn`}>{picked.map(file => <PickedImage key={`${file.name}-${file.lastModified}`} file={file} onRemove={() => setPicked(xs => xs.filter(x => x !== file))} />)}</div>}
+    {showLocalPreview && picked.length > 0 && <div className="image-picked-list" aria-label={`${picked.length} ảnh đã chọn`}>{picked.map(file => <PickedImage key={`${file.name}-${file.lastModified}`} file={file} onRemove={() => setPicked(xs => xs.filter(x => x !== file))} />)}</div>}
   </div>;
 }
 

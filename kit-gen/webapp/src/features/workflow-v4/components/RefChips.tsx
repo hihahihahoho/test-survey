@@ -52,8 +52,8 @@ export function RefChips({
   return (
     <div className="ref-chips">
       {items.map((r) => (
-        <span className="file-chip ref-preview-card" key={r.name}>
-          <RefPreview name={r.name} /><span title={r.name}>{r.name}</span>
+        <span className="ref-preview-card" key={r.name} title={r.name}>
+          <RefPreview name={r.name} />
           <button type="button" aria-label={`Xoá ảnh ${r.name}`} onClick={() => onRemove(r.name)}>
             <X aria-hidden />
           </button>

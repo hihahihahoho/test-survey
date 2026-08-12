@@ -301,7 +301,7 @@ test("a shared style reference can be selected from the wizard", async ({ page }
   await page.getByRole("button", { name: "Tiếp theo" }).click();
   await page.getByRole("button", { name: "Chọn từ thư viện" }).click();
   await page.getByRole("button", { name: /Phong cách lễ hội/ }).click();
-  await expect(page.getByText("inspo-phong-cach-le-hoi.png")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Xoá ảnh inspo-phong-cach-le-hoi.png" })).toBeVisible();
 });
 
 test("creating from Home starts a blank wizard without imported-data badges", async ({ page }) => {
@@ -391,8 +391,10 @@ test("the mascot library manages named mascots, tags and prototype poses", async
   await expect(page.getByRole("combobox", { name: "Lọc nhân vật theo nhãn" })).toBeVisible();
   await expect(page.getByText("Mèo mẫu", { exact: true })).toBeVisible();
   await expect(page.getByText("VCB", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sửa" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Xoá" })).toBeVisible();
+  await page.getByRole("button", { name: "Tuỳ chọn Mèo mẫu" }).click();
+  await expect(page.getByRole("menuitem", { name: "Sửa" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Xoá" })).toBeVisible();
+  await page.keyboard.press("Escape");
   await page.getByRole("tab", { name: "Quản lý khung pose" }).click();
   await expect(page.getByText("Đứng thẳng", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Thêm khung pose" })).toBeVisible();
