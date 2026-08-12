@@ -2,6 +2,7 @@ import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { RefreshCw, FolderCog, SlidersHorizontal, Info, Wrench, type LucideIcon } from "lucide-react";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useRegisterCommands, type ScreenProps } from "@/components/layout";
 import { HomeWorkspaceShell } from "@/features/home/components/HomeWorkspaceShell";
 import { Route as SettingsRoute } from "@/routes/settings";
@@ -70,8 +71,9 @@ export function SettingsScreen(_props: ScreenProps) {
   useRegisterCommands(() => [{ id: "settings.recheck", label: "Kiểm tra lại công cụ local", icon: RefreshCw, run: recheckAll }], [recheckAll]);
 
   return (
-    <HomeWorkspaceShell active="settings" title="Cài đặt">
-      <div className="mx-auto w-full max-w-modal-xl rounded-5 border border-line-subtle bg-overlay p-5 shadow-3">
+    <HomeWorkspaceShell active="settings" title="Dự án">
+      <Dialog open onOpenChange={(open) => { if (!open) void navigate({ to: "/", search: {} }); }}><DialogContent size="xl" className="h-[min(48rem,calc(100dvh-2rem))]"><DialogHeader><DialogTitle>Cài đặt</DialogTitle><DialogDescription>Công cụ local, tạo ảnh và giao diện.</DialogDescription></DialogHeader><DialogBody>
+      <div className="mx-auto w-full max-w-modal-xl">
         <div className="grid min-h-0 gap-6 md:grid-cols-[190px_minmax(0,1fr)]">
           <aside>
             <nav aria-label="Các mục cài đặt" className="grid grid-cols-2 gap-1 md:block md:space-y-1">
@@ -99,7 +101,7 @@ export function SettingsScreen(_props: ScreenProps) {
             </Tabs>
           </div>
         </div>
-      </div>
+      </div></DialogBody></DialogContent></Dialog>
     </HomeWorkspaceShell>
   );
 }

@@ -11,6 +11,7 @@ import { shortenPath } from "./redact.mjs"
 
 const CACHE_MS = 60_000
 let cache = { at: 0, data: null }
+const CODEX = process.env.KITGEN_CODEX_BIN || "codex"
 
 function run(cmd, args, { timeout = 6000, env = {} } = {}) {
   return new Promise(resolve => {
@@ -49,11 +50,11 @@ async function imageGenInfo(ws) {
     mode: "unknown", available: false, codexHomeLabel: null, authPresent: false,
     verifiedAt: new Date().toISOString(), reason: null, needsFallbackHome: false,
   }
-  const codex = await firstLineVersion("codex")
+  const codex = await firstLineVersion(CODEX)
   if (!codex.ok) { out.mode = "unavailable"; out.reason = "NO_CODEX"; return out }
 
   const count = async env => {
-    const r = await run("codex", ["debug", "prompt-input"], { timeout: 20000, env })
+    const r = await run(CODEX, ["debug", "prompt-input"], { timeout: 20000, env })
     if (!r.ok && !r.stdout) return -1
     // CHỈ đếm số lần xuất hiện — không bao giờ giữ/log nội dung output
     return (r.stdout.match(/image_gen/g) ?? []).length
@@ -108,7 +109,7 @@ export async function doctor(ws, { refresh = false } = {}) {
   const [node, py, codex, pw, img, wsInfo] = await Promise.all([
     firstLineVersion(process.execPath),
     pythonInfo(),
-    firstLineVersion("codex"),
+    firstLineVersion(CODEX),
     (async () => {
       const r = await run("node", ["-e", "try{require.resolve('playwright');console.log('1')}catch{console.log('0')}"])
       return { ok: r.stdout.trim() === "1", fallback: "skeleton.py (PIL)" }

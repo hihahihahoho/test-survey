@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ImageDropzone } from "@/components/ui/image-dropzone";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useAddBrandProfile, useLibraryImage, usePatchBrandProfile, useRemoveBrandProfile, useUserLibrary } from "@/lib/hooks";
+import { useAddBrandProfile, useAddLibraryItem, useLibraryImage, usePatchBrandProfile, useRemoveBrandProfile, useUserLibrary } from "@/lib/hooks";
 import type { BrandProfile, LibraryItem } from "@/lib/types";
 import { HomeWorkspaceShell } from "./components/HomeWorkspaceShell";
 
@@ -21,15 +22,19 @@ function AssetChoice({ item, checked, onChange }: { item: LibraryItem; checked: 
 
 function BrandDialog({ brand, open, onOpenChange }: { brand: BrandProfile | null; open: boolean; onOpenChange: (v: boolean) => void }) {
   const library = useUserLibrary(); const add = useAddBrandProfile(); const patch = usePatchBrandProfile();
+  const addAsset = useAddLibraryItem();
   const [name, setName] = React.useState(""); const [description, setDescription] = React.useState("");
   const [colors, setColors] = React.useState(["#005BAA", "#00B0F0"]); const [assetIds, setAssetIds] = React.useState<string[]>([]);
+  const [styleFiles, setStyleFiles] = React.useState<File[]>([]); const [mascotFiles, setMascotFiles] = React.useState<File[]>([]);
   React.useEffect(() => { if (!open) return; setName(brand?.name ?? ""); setDescription(brand?.description ?? ""); setColors(brand?.colors.length ? brand.colors : ["#005BAA", "#00B0F0"]); setAssetIds(brand?.assetIds ?? []); }, [brand, open]);
   const assets = (library.data?.items ?? []).filter(item => item.kind === "mascot" || item.kind === "reference");
-  const save = () => { const input = { name: name.trim(), description: description.trim(), colors, assetIds }; const options = { onSuccess: () => { toast.success(brand ? "Đã lưu thương hiệu" : "Đã tạo thương hiệu"); onOpenChange(false); }, onError: () => toast.error("Chưa lưu được thương hiệu") }; if (brand) patch.mutate({ id: brand.id, ...input }, options); else add.mutate(input, options); };
+  const save = () => { void (async () => { try { const uploaded: string[] = []; for (const file of styleFiles) uploaded.push((await addAsset.mutateAsync({ file, kind: "reference", group: "brand-style", name: file.name.replace(/\.[^.]+$/, "") })).id); for (const file of mascotFiles) uploaded.push((await addAsset.mutateAsync({ file, kind: "mascot", group: "brand-mascot", name: file.name.replace(/\.[^.]+$/, "") })).id); const input = { name: name.trim(), description: description.trim(), colors, assetIds: [...new Set([...assetIds, ...uploaded])] }; if (brand) await patch.mutateAsync({ id: brand.id, ...input }); else await add.mutateAsync(input); toast.success(brand ? "Đã lưu thương hiệu" : "Đã tạo thương hiệu"); onOpenChange(false); } catch { toast.error("Chưa lưu được thương hiệu"); } })(); };
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent size="lg"><DialogHeader><DialogTitle>{brand ? `Sửa ${brand.name}` : "Thêm nhận dạng thương hiệu"}</DialogTitle><DialogDescription>Gom logo, bảng màu, ảnh phong cách và nhiều mascot để tái sử dụng cho các dự án.</DialogDescription></DialogHeader><DialogBody className="space-y-5">
     <div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="brand-name">Tên thương hiệu</Label><Input id="brand-name" value={name} onChange={e=>setName(e.target.value)} placeholder="Ví dụ: Vietcombank" autoFocus /></div><div><Label htmlFor="brand-description">Ghi chú</Label><Textarea id="brand-description" rows={2} value={description} onChange={e=>setDescription(e.target.value)} /></div></div>
     <section><div className="mb-2 flex items-center justify-between"><Label>Bảng màu</Label><Button variant="secondary" size="sm" onClick={()=>setColors([...colors,"#FFFFFF"])}>Thêm màu</Button></div><div className="flex flex-wrap gap-2">{colors.map((color,i)=><label key={i} className="color-field"><Input type="color" value={color} onChange={e=>setColors(colors.map((v,j)=>j===i?e.target.value:v))}/><code>{color}</code></label>)}</div></section>
-    <section><Label>Logo, ảnh nhận diện, phong cách và mascot</Label><p className="mb-3 text-caption text-fg-muted">Chọn nhiều mascot hoặc ảnh đã có trong thư viện. Bạn vẫn có thể tải ảnh riêng trong wizard.</p>{assets.length ? <div className="grid max-h-64 grid-cols-2 gap-2 overflow-auto sm:grid-cols-4">{assets.map(item=><AssetChoice key={item.id} item={item} checked={assetIds.includes(item.id)} onChange={()=>setAssetIds(assetIds.includes(item.id)?assetIds.filter(id=>id!==item.id):[...assetIds,item.id])}/>)}</div> : <p className="rounded-3 border border-dashed border-line-subtle p-8 text-center text-caption text-fg-muted">Thêm mascot và ảnh tham chiếu vào thư viện trước, sau đó gắn chúng vào thương hiệu tại đây.</p>}</section>
+    <section><Label>Ảnh nhận diện và phong cách</Label><p className="mb-3 text-caption text-fg-muted">Logo, key visual, moodboard và ảnh tham chiếu phong cách.</p><ImageDropzone multiple label="Tải nhiều ảnh nhận diện" description="Kéo thả hoặc chọn nhiều ảnh" onFiles={(files)=>setStyleFiles(Array.from(files))}/></section>
+    <section><Label>Mascot</Label><p className="mb-3 text-caption text-fg-muted">Có thể tải nhiều nhân vật hoặc nhiều ảnh tham chiếu của cùng mascot.</p><ImageDropzone multiple label="Tải nhiều ảnh mascot" description="Kéo thả hoặc chọn nhiều ảnh" onFiles={(files)=>setMascotFiles(Array.from(files))}/></section>
+    {assets.length > 0 && <section><Label>Ảnh đã có</Label><p className="mb-3 text-caption text-fg-muted">Chọn thêm từ thư viện dùng chung.</p><div className="grid max-h-64 grid-cols-2 gap-2 overflow-auto sm:grid-cols-4">{assets.map(item=><AssetChoice key={item.id} item={item} checked={assetIds.includes(item.id)} onChange={()=>setAssetIds(assetIds.includes(item.id)?assetIds.filter(id=>id!==item.id):[...assetIds,item.id])}/>)}</div></section>}
   </DialogBody><DialogFooter><Button variant="secondary" onClick={()=>onOpenChange(false)}>Huỷ</Button><Button disabled={!name.trim() || add.isPending || patch.isPending} onClick={save}>Lưu thương hiệu</Button></DialogFooter></DialogContent></Dialog>;
 }
 

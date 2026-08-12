@@ -124,13 +124,9 @@ export function useWorkflowRefs(projectId: string): WorkflowRefsApi {
   const remove = React.useCallback(
     (name: string) => {
       removeRef.mutate(
-        { name },
+        { name, force: true },
         {
-          onError: (err) => {
-            // 409 REF_IN_USE: ảnh đang được contract dùng. `force` là lựa chọn của
-            // người dùng, không phải mặc định của máy — chỉ báo, không tự ép xoá.
-            toastError(err, {});
-          },
+          onError: (err) => toastError(err, {}),
         },
       );
     },

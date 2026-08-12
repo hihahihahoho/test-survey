@@ -13,12 +13,13 @@ describe("Settings page", () => {
     expect(route).not.toContain('<LazyScreen screen="projects" />');
   });
 
-  it("uses the shared Home workspace shell and no modal overlay", () => {
+  it("uses the shared Home workspace shell with route-backed dialog settings", () => {
     const screen = read("src/features/settings/SettingsScreen.tsx");
     const shell = read("src/features/home/components/HomeWorkspaceShell.tsx");
-    expect(screen).toContain('<HomeWorkspaceShell active="settings" title="Cài đặt">');
+    expect(screen).toContain('<HomeWorkspaceShell active="settings" title="Dự án">');
     expect(shell).toContain("text-subtitle text-fg-strong");
-    expect(screen).not.toContain("<Dialog");
+    expect(screen).toContain("<Dialog open");
+    expect(screen).toContain('navigate({ to: "/", search: {} })');
   });
 
   it("does not turn tab clicks into a history trail", () => {

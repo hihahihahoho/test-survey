@@ -9,6 +9,7 @@ import { RefChips } from "../components/RefChips";
 import { SharedMascotPicker, SharedReferencePicker } from "../components/SharedReferencePicker";
 import { SegChoice } from "../components/SegChoice";
 import { normalizedPoseIds } from "../lib/user-library";
+import { poseSvgMarkup } from "@/features/design/preview";
 import { Step } from "./BriefStep";
 
 /**
@@ -86,7 +87,7 @@ export function MascotStep() {
         <div className="pose-heading"><div><p className="field-label">Bộ dáng</p><strong>{s.mascotPoses.length} dáng đã chọn</strong></div><div className="flex gap-2"><button type="button" className="text-label text-accent" onClick={() => s.set({ mascotPoses: POSES.map((pose) => pose.id) })}>Chọn tất cả</button><button type="button" className="text-label text-fg-muted" onClick={() => s.set({ mascotPoses: [] })}>Bỏ chọn</button></div></div>
         <div className="selected-poses"><span className="eyebrow">Sẽ vẽ</span>{s.mascotPoses.length ? s.mascotPoses.map(id=><button type="button" key={id} onClick={()=>s.set({mascotPoses:s.mascotPoses.filter(x=>x!==id)})}>{POSES.find(p=>p.id===id)?.label ?? id}<span aria-hidden>×</span></button>) : <span className="text-caption text-fg-muted">Chưa chọn dáng nào</span>}</div>
         <div className="pose-group-tabs">{[...new Set(POSES.map(p => p.group))].map(g => <button key={g} className={poseGroup === g ? "active" : ""} onClick={() => setPoseGroup(g)}>{g}<small>{POSES.filter(p => p.group === g).length}</small></button>)}</div>
-        <div className="pose-choice-grid">{POSES.filter(p => p.group === poseGroup).map(p => { const on=s.mascotPoses.includes(p.id); return <SegChoice key={p.id} on={on} onClick={() => s.set({ mascotPoses: on ? s.mascotPoses.filter(x=>x!==p.id) : [...s.mascotPoses,p.id] })}><span className="mr-2 inline-flex size-8 items-center justify-center rounded-full bg-raised text-subtitle" aria-hidden>{p.id.includes("wave") ? "👋" : p.id.includes("cheer") ? "🎉" : p.id.includes("think") ? "💭" : "●"}</span>{p.label}</SegChoice>; })}</div>
+        <div className="pose-choice-grid">{POSES.filter(p => p.group === poseGroup).map(p => { const on=s.mascotPoses.includes(p.id); return <SegChoice key={p.id} on={on} onClick={() => s.set({ mascotPoses: on ? s.mascotPoses.filter(x=>x!==p.id) : [...s.mascotPoses,p.id] })}><span className="pose-prototype" aria-hidden dangerouslySetInnerHTML={{ __html: `<svg viewBox="0 0 60 84">${poseSvgMarkup(p.id, 60, 84)}</svg>` }} />{p.label}</SegChoice>; })}</div>
       </section>
       </>}
     </Step>

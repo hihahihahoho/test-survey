@@ -13,6 +13,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { ImageDropzone } from "@/components/ui/image-dropzone";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -128,7 +129,7 @@ function UploadDialog({ open, onOpenChange, kind, group, title }: {
   const add = useAddLibraryItem();
   const [name, setName] = React.useState("");
   const [description, setDescription] = React.useState("");
-  const [file, setFile] = React.useState<File | null>(null);
+  const [files, setFiles] = React.useState<File[]>([]);
   const [preset, setPreset] = React.useState<SafeZonePreset>(() => initialPreset(group));
 
   function close(next: boolean) {
@@ -136,7 +137,7 @@ function UploadDialog({ open, onOpenChange, kind, group, title }: {
     if (!next) {
       setName("");
       setDescription("");
-      setFile(null);
+      setFiles([]);
       setPreset(initialPreset(group));
     }
   }
@@ -146,17 +147,14 @@ function UploadDialog({ open, onOpenChange, kind, group, title }: {
       <DialogContent size="sm">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>Chọn một ảnh PNG, JPG hoặc WebP.</DialogDescription>
+          <DialogDescription>{kind === "reference" ? "Chọn nhiều ảnh PNG, JPG hoặc WebP." : "Chọn ảnh PNG, JPG hoặc WebP."}</DialogDescription>
         </DialogHeader>
         <DialogBody className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor={`library-name-${group}`}>Tên</Label>
             <Input id={`library-name-${group}`} value={name} onChange={(event) => setName(event.target.value)} placeholder="Ví dụ: Popup phần thưởng" autoFocus />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor={`library-file-${group}`}>Ảnh</Label>
-            <Input id={`library-file-${group}`} type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
-          </div>
+          <ImageDropzone multiple={kind === "reference"} label={kind === "reference" ? "Kéo các ảnh vào đây" : "Kéo ảnh vào đây"} description="PNG, JPG hoặc WebP · xem trước trước khi thêm" onFiles={(picked) => setFiles(Array.from(picked))} />
           {kind === "ui" && (
             <>
               <div className="space-y-2">
@@ -177,21 +175,14 @@ function UploadDialog({ open, onOpenChange, kind, group, title }: {
           <Button type="button" variant="secondary" onClick={() => close(false)}>Huỷ</Button>
           <Button
             type="button"
-            disabled={!file || !name.trim() || add.isPending}
-            onClick={() => {
-              if (!file) return;
+            disabled={!files.length || (kind !== "reference" && !name.trim()) || add.isPending}
+            onClick={() => { void (async () => {
               const geometry = SAFE_ZONE_PRESETS.find((item) => item.id === preset)!;
-              add.mutate({
-                file, kind, group, name: name.trim(),
-                ...(kind === "ui" ? { description: description.trim(), cell: geometry.cell, skel: geometry.skel } : {}),
-              }, {
-                onSuccess: () => {
-                  toast.success("Đã thêm vào thư viện");
-                  close(false);
-                },
-                onError: () => toast.error("Chưa thêm được ảnh"),
-              });
-            }}
+              try {
+                for (const file of files) await add.mutateAsync({ file, kind, group, name: kind === "reference" ? file.name.replace(/\.[^.]+$/, "") : name.trim(), ...(kind === "ui" ? { description: description.trim(), cell: geometry.cell, skel: geometry.skel } : {}) });
+                toast.success(`Đã thêm ${files.length} ảnh vào thư viện`); close(false);
+              } catch { toast.error("Chưa thêm được ảnh"); }
+            })(); }}
           >
             {add.isPending ? "Đang thêm…" : "Thêm"}
           </Button>
