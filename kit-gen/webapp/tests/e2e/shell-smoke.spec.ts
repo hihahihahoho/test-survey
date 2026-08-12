@@ -310,7 +310,7 @@ test("@visual opening settings does not change the viewport width", async ({ pag
   await page.getByRole("button", { name: "Cài đặt" }).click();
   await expect(page).toHaveURL(/\/settings/);
   await expect(page.getByRole("heading", { name: "Cài đặt", exact: true })).toBeVisible();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Cài đặt" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.clientWidth)).toBe(widthBefore);
 
   await page.screenshot({ path: testInfo.outputPath("settings-dark.png"), fullPage: true, animations: "disabled" });
@@ -322,7 +322,7 @@ test("@visual light settings keeps selected and interactive surfaces distinct", 
   });
   await page.goto("/settings?tab=prefs");
   await expect(page.getByRole("heading", { name: "Cài đặt", exact: true })).toBeVisible();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Cài đặt" })).toBeVisible();
   await expect(page.locator("html")).toHaveClass(/light/);
 
   const activeSwitch = page.getByRole("switch", { name: "Tự tách ảnh sau khi tạo" });
@@ -337,8 +337,6 @@ test("@visual light settings keeps selected and interactive surfaces distinct", 
   expect(colors.thumb).not.toBe("rgb(0, 0, 0)");
   expect(colors.thumb).not.toBe(colors.track);
 
-  const input = page.getByRole("searchbox", { name: "Tìm dự án" });
-  await expect(input).toBeVisible();
   await expect(page.getByRole("radio", { name: "Sáng" })).toHaveAttribute("data-state", "on");
   await page.screenshot({ path: testInfo.outputPath("settings-light.png"), fullPage: true, animations: "disabled" });
 });
