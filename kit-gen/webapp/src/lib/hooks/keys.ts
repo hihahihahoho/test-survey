@@ -30,6 +30,7 @@ export const qk = {
       ["projects", "list", { q: params.q ?? "", tag: params.tag ?? "", sort: params.sort ?? "" }] as const,
     details: () => ["projects", "detail"] as const,
     detail: (id: string) => ["projects", "detail", id] as const,
+    workflowDraft: (id: string) => ["projects", "detail", id, "workflow-draft"] as const,
   },
 
   trash: {

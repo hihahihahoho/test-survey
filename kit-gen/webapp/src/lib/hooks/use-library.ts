@@ -82,3 +82,18 @@ export function useRemoveBrandProfile() {
   const client = useQueryClient();
   return useMutation({ mutationFn: api.library.removeBrand, onSuccess: () => void client.invalidateQueries({ queryKey: qk.library() }) });
 }
+
+export function useAddPoseTemplate() {
+  const client = useQueryClient();
+  return useMutation({ mutationFn: api.library.addPose, onSuccess: () => void client.invalidateQueries({ queryKey: qk.library() }) });
+}
+
+export function usePatchPoseTemplate() {
+  const client = useQueryClient();
+  return useMutation({ mutationFn: ({ id, ...input }: { id: string; name?: string; description?: string; sourcePose?: string; enabled?: boolean }) => api.library.patchPose(id, input), onSuccess: () => void client.invalidateQueries({ queryKey: qk.library() }) });
+}
+
+export function useRemovePoseTemplate() {
+  const client = useQueryClient();
+  return useMutation({ mutationFn: api.library.removePose, onSuccess: () => void client.invalidateQueries({ queryKey: qk.library() }) });
+}

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { ImageDropzone } from "@/components/ui/image-dropzone";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useWorkflowProjectId, useWorkflowStore } from "../lib/model";
 import { useWorkflowRefs } from "../lib/refs-sync";
@@ -50,9 +50,9 @@ export function MascotStep() {
   };
 
   return (
-    <Step title="Mascot pose" copy="Thêm ảnh mẫu và chọn các dáng cần tạo.">
+    <Step title="Mascot" copy="Chọn nhân vật và các khung pose cần tạo.">
       <label className="flex cursor-pointer items-start gap-3 rounded-3 border border-line-subtle bg-raised p-4">
-        <Checkbox checked={s.mascotEnabled} onCheckedChange={(checked) => s.set({ mascotEnabled: checked === true })} />
+        <Switch className="mt-0.5" checked={s.mascotEnabled} onCheckedChange={(checked) => s.set({ mascotEnabled: checked })} aria-label="Có nhân vật đại diện" />
         <span><strong className="block text-label text-fg-strong">Có nhân vật đại diện</strong><span className="text-caption text-fg-muted">Bật khi dự án cần mascot nhất quán ở nhiều dáng.</span></span>
       </label>
       {s.mascotEnabled && <>

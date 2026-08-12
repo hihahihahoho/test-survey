@@ -33,6 +33,18 @@ export async function run({ api, agent, wsRoot }) {
     eq(Object.keys(r.json.project.state.jobs).length, 3, "3 job (1 phong cách × 3 sheet)")
     eq(r.json.project.state.jobs["tet-do-main"] ?? r.json.project.state.jobs[Object.keys(r.json.project.state.jobs)[0]], "never", "job chưa gen = never")
     eq(r.json.project.state.stale, true, "project mới là stale")
+    eq(r.json.project.workflow.completed, true, "project API cũ mặc định đã hoàn tất workflow")
+  })
+  await it("lưu và khôi phục wizard draft trong file của đúng project", async () => {
+    const saved = await api("PUT", `/api/projects/${projectId}/workflow-draft`, { body: { completed: false, draft: { step: 3, brief: "Tết xanh" } } })
+    eq(saved.status, 200)
+    eq(saved.json.completed, false)
+    const read = await api("GET", `/api/projects/${projectId}/workflow-draft`)
+    eq(read.json.draft, { step: 3, brief: "Tết xanh" })
+    const project = await api("GET", `/api/projects/${projectId}`)
+    eq(project.json.project.workflow.completed, false)
+    const done = await api("PUT", `/api/projects/${projectId}/workflow-draft`, { body: { completed: true, draft: read.json.draft } })
+    eq(done.json.completed, true)
   })
   await it("PATCH đổi tên/tag → thư mục KHÔNG đổi", async () => {
     const r = await api("PATCH", `/api/projects/${projectId}`, { body: { name: "Tết 2026 (đã đổi)", tags: ["tet"] } })

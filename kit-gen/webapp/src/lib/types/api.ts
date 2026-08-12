@@ -219,6 +219,7 @@ export const projectSchema = z.looseObject({
     hash: z.string().nullish(),
   }).optional(),
   cover: z.string().nullish(),
+  workflow: z.looseObject({ completed: z.boolean().default(true), updatedAt: z.string().nullish() }).optional(),
   stats: projectStatsSchema.optional(),
   state: projectStateSchema.optional(),
   broken: z.boolean().default(false),
@@ -230,6 +231,11 @@ export const projectSchema = z.looseObject({
   }).nullish(),
 });
 export type Project = z.infer<typeof projectSchema>;
+
+export const workflowDraftSchema = z.looseObject({
+  completed: z.boolean().default(false), draft: z.record(z.string(), z.unknown()).nullable().default(null), updatedAt: z.string().nullish(),
+});
+export type WorkflowDraft = z.infer<typeof workflowDraftSchema>;
 
 /** #7 `GET /api/projects` */
 export const projectListSchema = z.looseObject({
@@ -462,9 +468,17 @@ export const brandProfileSchema = z.looseObject({
 });
 export type BrandProfile = z.infer<typeof brandProfileSchema>;
 export const brandProfileResultSchema = z.looseObject({ brand: brandProfileSchema });
+export const poseTemplateSchema = z.looseObject({
+  id: z.string(), name: z.string(), description: z.string().default(""),
+  sourcePose: z.string(), enabled: z.boolean().default(true), builtIn: z.boolean().default(false),
+  createdAt: z.string().optional(), updatedAt: z.string().optional(),
+});
+export type PoseTemplate = z.infer<typeof poseTemplateSchema>;
+export const poseTemplateResultSchema = z.looseObject({ pose: poseTemplateSchema });
 export const userLibrarySchema = z.looseObject({
   version: z.number().default(1),
   brands: z.array(brandProfileSchema).default([]),
+  poseTemplates: z.array(poseTemplateSchema).default([]),
   settings: librarySettingsSchema,
   items: z.array(libraryItemSchema).default([]),
 });

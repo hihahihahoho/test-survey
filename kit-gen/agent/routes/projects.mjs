@@ -4,6 +4,7 @@ import {
   listProjects, readProject, computeState, applyActiveRun, createProjectDir, patchProject, trashProject,
   listTrash, restoreFromTrash, purgeFromTrash, cleanProject, slugify, newProjectId,
   idTaken, projectDir, copyTree,
+  readWorkflowDraft, saveWorkflowDraft,
 } from "../lib/projects.mjs"
 import { buildTemplateContract } from "../lib/templates.mjs"
 import { writeContract, readContract } from "../lib/contract.mjs"
@@ -121,6 +122,9 @@ export function register(r) {
     Object.assign(p, await computeState(ws, ctx.params.id, p))
     return { status: 200, json: { project: p } }
   })
+
+  r.get("/api/projects/:id/workflow-draft", async ctx => ({ status: 200, json: await readWorkflowDraft(ctx.registry.active, ctx.params.id) }))
+  r.put("/api/projects/:id/workflow-draft", async ctx => ({ status: 200, json: await saveWorkflowDraft(ctx.registry.active, ctx.params.id, await ctx.json()) }))
 
   // #11 DELETE /api/projects/:id → .trash/ (soft). KHÔNG rm thẳng.
   r.delete("/api/projects/:id", async ctx => {

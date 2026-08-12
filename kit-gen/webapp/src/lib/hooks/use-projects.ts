@@ -48,6 +48,15 @@ export function useProject(id: string | undefined | null): UseQueryResult<Projec
   });
 }
 
+export function useWorkflowDraft(id: string | undefined | null) {
+  return useQuery({ queryKey: qk.projects.workflowDraft(id ?? ""), queryFn: () => api.projects.workflowDraft(id!), enabled: Boolean(id), staleTime: 1_000 });
+}
+
+export function useSaveWorkflowDraft(id: string) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (input: { completed: boolean; draft: Record<string, unknown> }) => api.projects.saveWorkflowDraft(id, input), onSuccess: data => { qc.setQueryData(qk.projects.workflowDraft(id), data); void qc.invalidateQueries({ queryKey: qk.projects.detail(id) }); } });
+}
+
 /** #12 — thùng rác 30 ngày. */
 export function useTrash() {
   return useQuery({

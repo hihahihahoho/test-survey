@@ -3,11 +3,11 @@ import { useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingState, ErrorState } from "@/components/common";
-import { useAgentStatus, useElementLib, useProject, useUserLibrary } from "@/lib/hooks";
+import { useAgentStatus, useElementLib, useProject, useSaveWorkflowDraft, useUserLibrary, useWorkflowDraft } from "@/lib/hooks";
 import { useGenerateRun } from "@/features/runs";
 import { toast } from "@/components/ui/sonner";
 import { fromAgentLib } from "@/features/design/library/lib/source";
-import { useWorkflowStore, WorkflowStoreProvider } from "./lib/model";
+import { hydrateWorkflowStore, useWorkflowStore, useWorkflowStoreApi, workflowDraftOf, WorkflowStoreProvider } from "./lib/model";
 import { ContractSyncProvider, useContractSync } from "./lib/contract-sync";
 import { toKitsetRefs, useWorkflowRefs } from "./lib/refs-sync";
 import { DownloadKitButton, CopyFigmaButton } from "./components/KitExits";
@@ -47,8 +47,28 @@ function WorkflowBody({ projectId }: { projectId: string }) {
   const project = useProject(projectId);
   const { status } = useAgentStatus();
   const s = useWorkflowStore();
+  const store = useWorkflowStoreApi();
+  const diskDraft = useWorkflowDraft(projectId);
+  const saveDraft = useSaveWorkflowDraft(projectId);
+  const hydrated = React.useRef(false);
   const [drawOpen, setDrawOpen] = React.useState(false);
   const startRun = useGenerateRun(projectId);
+
+  React.useEffect(() => {
+    if (hydrated.current || !diskDraft.isSuccess) return;
+    hydrateWorkflowStore(store, diskDraft.data.draft);
+    hydrated.current = true;
+  }, [diskDraft.data?.draft, diskDraft.isSuccess, store]);
+
+  React.useEffect(() => {
+    if (!hydrated.current) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = store.subscribe(state => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => saveDraft.mutate({ completed: false, draft: workflowDraftOf(state) }), 600);
+    });
+    return () => { unsubscribe(); if (timer) clearTimeout(timer); };
+  }, [saveDraft, store]);
 
   /* §W3-5 — kho element THẬT của agent, bản đóng gói là đường lùi (đọc đĩa, 0 đồng). */
   const libQ = useElementLib();
@@ -86,7 +106,7 @@ function WorkflowBody({ projectId }: { projectId: string }) {
     if (name && (s.kitName === "Dự án mới" || s.kitName === "Bộ quay may mắn")) s.set({ kitName: name });
   }, [project.data?.name, s.kitName, s.set]);
 
-  if (project.isLoading) return <LoadingState count={4} label="Đang mở dự án…" />;
+  if (project.isLoading || diskDraft.isLoading || !hydrated.current) return <LoadingState count={4} label="Đang mở bản nháp dự án…" />;
   if (project.error)
     return (
       <ErrorState
@@ -135,7 +155,11 @@ function WorkflowBody({ projectId }: { projectId: string }) {
         onBack={s.back}
         onNext={s.next}
         onDraw={() => setDrawOpen(true)}
-        onDone={() => { sync.saveNow(); void navigate({ to: "/p/$projectId", params: { projectId } }); }}
+        onDone={() => { void (async () => {
+          await sync.saveNow();
+          await saveDraft.mutateAsync({ completed: true, draft: workflowDraftOf(store.getState()) });
+          void navigate({ to: "/p/$projectId", params: { projectId } });
+        })(); }}
         exits={<><DownloadKitButton projectId={projectId} /><CopyFigmaButton projectId={projectId} kitName={s.kitName} /></>}
       />
       <DrawConfirmDialog

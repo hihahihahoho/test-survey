@@ -24,8 +24,8 @@ import {
   projectDetailSchema, projectListSchema, projectSchema, rawHistorySchema, refListSchema,
   refUploadResultSchema, restoreContractResultSchema, runListSchema, runSchema,
   saveContractResultSchema, startRunResultSchema, trashListSchema, uploadResultSchema,
-  validationSchema, workspaceListSchema, userLibrarySchema, libraryItemResultSchema,
-  librarySettingsResultSchema, brandProfileResultSchema,
+  validationSchema, workspaceListSchema, workflowDraftSchema, userLibrarySchema, libraryItemResultSchema,
+  librarySettingsResultSchema, brandProfileResultSchema, poseTemplateResultSchema,
   type CleanTarget, type CreateProjectInput, type DuplicateInput,
   type PatchProjectInput, type RefKind, type StartRunInput,
   type LibrarySettings,
@@ -154,6 +154,12 @@ export const projectsApi = {
     await httpPost(`/api/projects/${pid(id)}/reveal`, path ? { path } : {});
     return { ok: true };
   },
+  async workflowDraft(id: string) {
+    return parse(workflowDraftSchema, await httpGet(`/api/projects/${pid(id)}/workflow-draft`), "bản nháp wizard");
+  },
+  async saveWorkflowDraft(id: string, input: { completed: boolean; draft: Record<string, unknown> }) {
+    return parse(workflowDraftSchema, await httpPut(`/api/projects/${pid(id)}/workflow-draft`, input), "bản nháp wizard vừa lưu");
+  },
 };
 
 export const trashApi = {
@@ -268,6 +274,13 @@ export const libraryApi = {
     return parse(brandProfileResultSchema, await httpPatch(`/api/library/brands/${pid(id)}`, input), "thương hiệu vừa sửa").brand;
   },
   async removeBrand(id: string) { await httpDelete(`/api/library/brands/${pid(id)}`); return { ok: true }; },
+  async addPose(input: { name: string; description?: string; sourcePose: string; enabled?: boolean }) {
+    return parse(poseTemplateResultSchema, await httpPost("/api/library/poses", input), "khung pose vừa tạo").pose;
+  },
+  async patchPose(id: string, input: { name?: string; description?: string; sourcePose?: string; enabled?: boolean }) {
+    return parse(poseTemplateResultSchema, await httpPatch(`/api/library/poses/${pid(id)}`, input), "khung pose vừa sửa").pose;
+  },
+  async removePose(id: string) { await httpDelete(`/api/library/poses/${pid(id)}`); return { ok: true }; },
   async add(input: { file: File; kind: "ui" | "mascot" | "reference"; group: string; name: string; description?: string; tags?: string[]; poses?: string[]; cell?: string; skel?: Record<string, unknown> }) {
     if (input.file.size > LIMITS.refBytes) {
       throw new AgentError({ code: "TOO_LARGE", status: 413, transport: "client", message: "Ảnh vượt quá 20 MB" });

@@ -9,6 +9,21 @@ export async function run({ api, wsRoot }) {
     eq(r.status, 200)
     eq(r.json.settings, { background: 2, popup: 4, small: 16, mascot: 4 })
     eq(r.json.items, [])
+    eq(r.json.poseTemplates.length, 19)
+    eq(r.json.poseTemplates[0].sourcePose, "idle")
+  })
+
+  let poseId = ""
+  await it("quản lý riêng khung pose skeleton", async () => {
+    const created = await api("POST", "/api/library/poses", { body: { name: "Chào chiến dịch", sourcePose: "wave", description: "Dùng cho CTA" } })
+    eq(created.status, 201)
+    poseId = created.json.pose.id
+    eq(created.json.pose.sourcePose, "wave")
+    eq(created.json.pose.enabled, true)
+    const patched = await api("PATCH", `/api/library/poses/${poseId}`, { body: { enabled: false, sourcePose: "present" } })
+    eq(patched.status, 200)
+    eq(patched.json.pose.enabled, false)
+    eq(patched.json.pose.sourcePose, "present")
   })
 
   let id = ""
@@ -104,5 +119,7 @@ export async function run({ api, wsRoot }) {
     eq(delBrand.status, 204)
     const delMascot = await api("DELETE", `/api/library/items/${mascotId}`)
     eq(delMascot.status, 204)
+    const delPose = await api("DELETE", `/api/library/poses/${poseId}`)
+    eq(delPose.status, 204)
   })
 }

@@ -8,6 +8,7 @@ const project = {
   updatedAt: "2026-08-11T08:00:00.000Z",
   stats: { rawPresent: 1, kitsCut: 0 },
   state: { jobs: {} },
+  workflow: { completed: true, updatedAt: "2026-08-11T08:00:00.000Z" },
 };
 
 const createdProject = {
@@ -17,6 +18,7 @@ const createdProject = {
   slug: "du-an-moi",
   tags: ["kg-workflow"],
   stats: { rawPresent: 0, kitsCut: 0 },
+  workflow: { completed: false, updatedAt: "2026-08-11T08:00:00.000Z" },
 };
 
 const blankContract = {
@@ -97,6 +99,10 @@ async function mockAgent(page: Page) {
     poses: [],
     tags: [],
   };
+  const poseTemplates = ["idle", "wave"].map((sourcePose, index) => ({
+    id: `pose_${sourcePose}`, name: index ? "Vẫy chào" : "Đứng thẳng",
+    description: "Khung prototype", sourcePose, enabled: true, builtIn: true,
+  }));
   await page.route("**/health", async (route: Route) => route.fulfill({ json: health }));
   await page.route("**/api/**", async (route: Route) => {
     const path = new URL(route.request().url()).pathname;
@@ -113,6 +119,9 @@ async function mockAgent(page: Page) {
     }
     if (path === "/api/projects/tet26-a7f3") return route.fulfill({ json: { project } });
     if (path === "/api/projects/du-an-moi-b4c8") return route.fulfill({ json: { project: createdProject } });
+    if (path.endsWith("/workflow-draft") && method === "PUT") return route.fulfill({ json: { ...route.request().postDataJSON(), updatedAt: "2026-08-12T08:00:00.000Z" } });
+    if (path === "/api/projects/tet26-a7f3/workflow-draft") return route.fulfill({ json: { completed: true, draft: null, updatedAt: null } });
+    if (path === "/api/projects/du-an-moi-b4c8/workflow-draft") return route.fulfill({ json: { completed: false, draft: null, updatedAt: null } });
     if (path === "/api/projects/tet26-a7f3/contract" && method === "PUT") {
       currentContract = (route.request().postDataJSON() as { contract: typeof contract }).contract;
       contractVersion += 1;
@@ -144,7 +153,7 @@ async function mockAgent(page: Page) {
     if (path === "/api/library/settings" && method === "PATCH") {
       return route.fulfill({ json: { settings: { background: 2, popup: 4, small: 16, mascot: 4, ...route.request().postDataJSON() } } });
     }
-    if (path === "/api/library") return route.fulfill({ json: { version: 1, settings: { background: 2, popup: 4, small: 16, mascot: 4 }, items: [libraryItem, uiLibraryItem, styleReferenceItem] } });
+    if (path === "/api/library") return route.fulfill({ json: { version: 3, settings: { background: 2, popup: 4, small: 16, mascot: 4 }, poseTemplates, items: [libraryItem, uiLibraryItem, styleReferenceItem] } });
     if (path === "/api/projects/tet26-a7f3/refs" && method === "POST") return route.fulfill({ json: { name: "char-meo-mau.png", path: "refs/char-meo-mau.png" } });
     if (path === "/api/projects/du-an-moi-b4c8/refs" && method === "POST") {
       const item = {
@@ -193,9 +202,11 @@ test("@visual an internal page keeps only Back home and runtime status", async (
   await expect(header.getByRole("button")).toHaveCount(3);
   await expect(page.getByRole("searchbox", { name: "Tìm dự án" })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Quản lý dự án" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Tổng quan" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Thành phẩm" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Ảnh đã tạo", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Tất cả thành phẩm" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Mascot" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tất cả thành phẩm", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Ảnh thật" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Skeleton" })).toBeVisible();
 
   await page.screenshot({ path: testInfo.outputPath("project-internal-dark.png"), fullPage: true, animations: "disabled" });
 });
@@ -374,11 +385,17 @@ test("@visual trash and shared libraries are separate Home destinations", async 
 test("the mascot library manages named mascots, tags and prototype poses", async ({ page }) => {
   await page.goto("/library/mascot");
   await expect(page.getByRole("heading", { name: "Mascot" })).toBeVisible();
-  await expect(page.getByRole("searchbox", { name: "Tìm mascot" })).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Lọc mascot theo nhãn" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Quản lý nhân vật" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Quản lý khung pose" })).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "Tìm nhân vật" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Lọc nhân vật theo nhãn" })).toBeVisible();
   await expect(page.getByText("Mèo mẫu", { exact: true })).toBeVisible();
   await expect(page.getByText("VCB", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("2 pose skeleton").locator("svg")).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Sửa" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Xoá" })).toBeVisible();
+  await page.getByRole("tab", { name: "Quản lý khung pose" }).click();
+  await expect(page.getByText("Đứng thẳng", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Thêm khung pose" })).toBeVisible();
 });
 
 test("legacy project pages converge on the project manager", async ({ page }) => {
@@ -386,7 +403,7 @@ test("legacy project pages converge on the project manager", async ({ page }) =>
   await expect(page).toHaveURL(/\/p\/tet26-a7f3\?section=ui$/);
   await page.goto("/k/tet26-a7f3/canvas");
   await expect(page).toHaveURL(/\/p\/tet26-a7f3\?section=overview$/);
-  await expect(page.getByRole("heading", { name: "Ảnh đã tạo", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tất cả thành phẩm", exact: true })).toBeVisible();
 });
 
 test("@visual toast uses the default viewport position and an in-card close button", async ({ page }, testInfo) => {

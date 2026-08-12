@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, ImagePlus, MoreHorizontal, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { ImagePlus, MoreHorizontal, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,15 +17,16 @@ import { ImageDropzone } from "@/components/ui/image-dropzone";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { poseOptions, poseSvgMarkup, Silhouette } from "@/features/design/preview";
 import { fromAgentLib, loadBundledV2, foldVi } from "@/features/design/library/lib/source";
 import type { LibElement } from "@/features/design/library/lib/types";
 import {
-  useAddLibraryItem, useElementLib, useLibraryImage, usePatchLibrarySettings,
-  usePatchLibraryItem, useRemoveLibraryItem, useUserLibrary,
+  useAddLibraryItem, useAddPoseTemplate, useElementLib, useLibraryImage, usePatchLibrarySettings,
+  usePatchLibraryItem, usePatchPoseTemplate, useRemoveLibraryItem, useRemovePoseTemplate, useUserLibrary,
 } from "@/lib/hooks";
-import type { LibraryItem, LibrarySettings } from "@/lib/types";
+import type { LibraryItem, LibrarySettings, PoseTemplate } from "@/lib/types";
 import { HomeWorkspaceShell } from "./components/HomeWorkspaceShell";
 
 type UiGroup = "background" | "popup" | "small";
@@ -114,7 +115,6 @@ function UploadDialog({ open, onOpenChange, kind, group, title }: {
   const [name, setName] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [tags, setTags] = React.useState("");
-  const [poses, setPoses] = React.useState<string[]>(["idle", "wave", "cheer", "sad"]);
   const [files, setFiles] = React.useState<File[]>([]);
   const [preset, setPreset] = React.useState<SafeZonePreset>(() => initialPreset(group));
 
@@ -124,7 +124,6 @@ function UploadDialog({ open, onOpenChange, kind, group, title }: {
       setName("");
       setDescription("");
       setTags("");
-      setPoses(["idle", "wave", "cheer", "sad"]);
       setFiles([]);
       setPreset(initialPreset(group));
     }
@@ -146,7 +145,7 @@ function UploadDialog({ open, onOpenChange, kind, group, title }: {
 
           {kind === "mascot" && <>
             <div className="space-y-2"><Label htmlFor="mascot-tags">Nhãn</Label><Input id="mascot-tags" value={tags} onChange={event => setTags(event.target.value)} placeholder="Ví dụ: VCB, ngân hàng, Tết" /><p className="text-caption text-fg-muted">Phân cách bằng dấu phẩy để tìm và lọc mascot.</p></div>
-            <div className="space-y-2"><Label>Pose skeleton mặc định</Label><div className="mascot-dialog-pose-grid">{poseOptions().map(pose => { const checked=poses.includes(pose.value); return <button type="button" key={pose.value} aria-pressed={checked} onClick={()=>setPoses(checked?poses.filter(id=>id!==pose.value):[...poses,pose.value])}><span dangerouslySetInnerHTML={{__html:`<svg viewBox="0 0 60 84">${poseSvgMarkup(pose.value,60,84)}</svg>`}} />{checked && <Check aria-hidden/>}<small>{pose.label}</small></button>; })}</div></div>
+            <p className="rounded-2 bg-raised px-3 py-2 text-caption text-fg-muted">Khung pose được quản lý riêng ở tab “Quản lý khung pose”.</p>
           </>}
           {kind === "ui" && (
             <>
@@ -172,7 +171,7 @@ function UploadDialog({ open, onOpenChange, kind, group, title }: {
             onClick={() => { void (async () => {
               const geometry = SAFE_ZONE_PRESETS.find((item) => item.id === preset)!;
               try {
-                for (const file of files) await add.mutateAsync({ file, kind, group, name: kind === "reference" ? file.name.replace(/\.[^.]+$/, "") : name.trim(), ...(kind === "mascot" ? { tags: tags.split(",").map(tag=>tag.trim()).filter(Boolean), poses } : {}), ...(kind === "ui" ? { description: description.trim(), cell: geometry.cell, skel: geometry.skel } : {}) });
+                for (const file of files) await add.mutateAsync({ file, kind, group, name: kind === "reference" ? file.name.replace(/\.[^.]+$/, "") : name.trim(), ...(kind === "mascot" ? { tags: tags.split(",").map(tag=>tag.trim()).filter(Boolean) } : {}), ...(kind === "ui" ? { description: description.trim(), cell: geometry.cell, skel: geometry.skel } : {}) });
                 toast.success(`Đã thêm ${files.length} ảnh vào thư viện`); close(false);
               } catch { toast.error("Chưa thêm được ảnh"); }
             })(); }}
@@ -189,29 +188,23 @@ function EditAssetDialog({ item, open, onOpenChange }: { item: LibraryItem; open
   const patch = usePatchLibraryItem();
   const [name, setName] = React.useState(item.name);
   const [description, setDescription] = React.useState(item.description);
-  const [poses, setPoses] = React.useState(item.poses.join("\n"));
+  const [tags, setTags] = React.useState(item.tags.join(", "));
   const [preset, setPreset] = React.useState<SafeZonePreset>(() => presetFor(item));
 
   React.useEffect(() => {
     if (!open) return;
     setName(item.name);
     setDescription(item.description);
-    setPoses(item.poses.join("\n"));
+    setTags(item.tags.join(", "));
     setPreset(presetFor(item));
   }, [item, open]);
-
-  const poseList = poses
-    .split("\n")
-    .map((pose) => pose.trim())
-    .filter((pose, index, all) => pose && all.indexOf(pose) === index)
-    .slice(0, 32);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="sm">
         <DialogHeader>
-          <DialogTitle>{item.kind === "mascot" ? "Sửa bộ khung mascot" : "Đổi tên"}</DialogTitle>
-          <DialogDescription>{item.kind === "mascot" ? "Mỗi dòng là một dáng của mascot." : "Tên này dùng khi chọn ảnh trong dự án."}</DialogDescription>
+          <DialogTitle>{item.kind === "mascot" ? "Sửa nhân vật" : "Đổi tên"}</DialogTitle>
+          <DialogDescription>{item.kind === "mascot" ? "Tên và nhãn giúp tìm đúng mascot khi tạo dự án." : "Tên này dùng khi chọn ảnh trong dự án."}</DialogDescription>
         </DialogHeader>
         <DialogBody className="space-y-4">
           <div className="space-y-2">
@@ -220,15 +213,9 @@ function EditAssetDialog({ item, open, onOpenChange }: { item: LibraryItem; open
           </div>
           {item.kind === "mascot" && (
             <div className="space-y-2">
-              <Label htmlFor={`edit-library-poses-${item.id}`}>Dáng</Label>
-              <Textarea
-                id={`edit-library-poses-${item.id}`}
-                value={poses}
-                onChange={(event) => setPoses(event.target.value)}
-                rows={6}
-                placeholder={"Đứng yên\nVui\nĂn mừng"}
-              />
-              <p className="text-caption text-fg-muted">{poseList.length} dáng · tối đa 32</p>
+              <Label htmlFor={`edit-library-tags-${item.id}`}>Nhãn</Label>
+              <Input id={`edit-library-tags-${item.id}`} value={tags} onChange={(event) => setTags(event.target.value)} placeholder="VCB, ngân hàng, Tết" />
+              <p className="text-caption text-fg-muted">Phân cách bằng dấu phẩy.</p>
             </div>
           )}
           {item.kind === "ui" && (
@@ -257,7 +244,7 @@ function EditAssetDialog({ item, open, onOpenChange }: { item: LibraryItem; open
               patch.mutate({
                 id: item.id,
                 name: name.trim(),
-                ...(item.kind === "mascot" ? { poses: poseList } : {}),
+                ...(item.kind === "mascot" ? { tags: tags.split(",").map(value => value.trim()).filter(Boolean) } : {}),
                 ...(item.kind === "ui" ? { description: description.trim(), cell: geometry.cell, skel: geometry.skel } : {}),
               }, {
               onSuccess: () => {
@@ -371,30 +358,81 @@ export function UiLibraryScreen() {
 
 export function MascotLibraryScreen() {
   const library = useUserLibrary();
-  const [uploadOpen, setUploadOpen] = React.useState(false);
+  const [tab, setTab] = React.useState<"characters" | "poses">("characters");
+  const [characterOpen, setCharacterOpen] = React.useState(false);
+  const [poseOpen, setPoseOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [tag, setTag] = React.useState("all");
+  const [poseStatus, setPoseStatus] = React.useState("all");
   const all = (library.data?.items ?? []).filter((item) => item.kind === "mascot");
   const tags = [...new Set(all.flatMap(item => item.tags))].sort((a,b)=>a.localeCompare(b,"vi"));
   const q = foldVi(query);
   const items = all.filter(item => (tag === "all" || item.tags.includes(tag)) && (!q || foldVi(`${item.name} ${item.description} ${item.tags.join(" ")}`).includes(q)));
+  const poses = (library.data?.poseTemplates ?? []).filter(pose => (poseStatus === "all" || (poseStatus === "on" ? pose.enabled : !pose.enabled)) && (!q || foldVi(`${pose.name} ${pose.description}`).includes(q)));
+  const addLabel = tab === "characters" ? "Thêm nhân vật" : "Thêm khung pose";
   return (
-    <HomeWorkspaceShell active="mascot-library" title="Mascot" action={<Button size="sm" onClick={() => setUploadOpen(true)}><Plus aria-hidden />Thêm mascot</Button>}>
-      <div className="flex flex-wrap items-center gap-2 border-b border-line-subtle pb-4">
-        <div className="relative min-w-56 flex-1 sm:max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden/><Input type="search" aria-label="Tìm mascot" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Tìm theo tên hoặc nhãn…" className="pl-9"/></div>
-        <Select value={tag} onValueChange={setTag}><SelectTrigger className="w-44" aria-label="Lọc mascot theo nhãn"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tất cả nhãn</SelectItem>{tags.map(value=><SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
-        <MaxPerSheet setting="mascot" fallback={4} />
+    <HomeWorkspaceShell active="mascot-library" title="Mascot" action={<Button size="sm" onClick={() => tab === "characters" ? setCharacterOpen(true) : setPoseOpen(true)}><Plus aria-hidden />{addLabel}</Button>}>
+      <Tabs value={tab} onValueChange={(value) => { setTab(value as typeof tab); setQuery(""); }}>
+        <TabsList aria-label="Quản lý mascot">
+          <TabsTrigger value="characters">Quản lý nhân vật</TabsTrigger>
+          <TabsTrigger value="poses">Quản lý khung pose</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      <div className="mt-5 flex flex-wrap items-center gap-2 rounded-3 bg-surface p-3">
+        <div className="relative min-w-56 flex-1 sm:max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden/><Input type="search" aria-label={tab === "characters" ? "Tìm nhân vật" : "Tìm khung pose"} value={query} onChange={event=>setQuery(event.target.value)} placeholder={tab === "characters" ? "Tìm theo tên hoặc nhãn…" : "Tìm khung pose…"} className="pl-9"/></div>
+        {tab === "characters" ? <>
+          <Select value={tag} onValueChange={setTag}><SelectTrigger className="w-44" aria-label="Lọc nhân vật theo nhãn"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tất cả nhãn</SelectItem>{tags.map(value=><SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
+          <MaxPerSheet setting="mascot" fallback={4} />
+        </> : <Select value={poseStatus} onValueChange={setPoseStatus}><SelectTrigger className="w-44" aria-label="Lọc trạng thái khung pose"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tất cả trạng thái</SelectItem><SelectItem value="on">Đang sử dụng</SelectItem><SelectItem value="off">Đã tắt</SelectItem></SelectContent></Select>}
       </div>
-      <p className="mt-4 text-caption text-fg-muted">{items.length} mascot · mỗi mascot có ảnh tham chiếu riêng và dùng chung bộ pose skeleton.</p>
-      {items.length ? <section className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">{items.map(item=><MascotCard key={item.id} item={item}/>)}</section> : <button type="button" onClick={()=>setUploadOpen(true)} className="mt-6 flex min-h-72 w-full flex-col items-center justify-center rounded-4 border border-dashed border-line-subtle bg-surface/40 text-center hover:border-line-strong"><ImagePlus className="size-7 text-fg-muted" aria-hidden/><span className="mt-3 text-label text-fg-strong">{all.length ? "Không tìm thấy mascot" : "Thêm mascot đầu tiên"}</span></button>}
-      <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} kind="mascot" group="mascot" title="Thêm mascot" />
+      {tab === "characters" ? <>
+        <p className="mt-4 text-caption text-fg-muted">{items.length} nhân vật · mỗi nhân vật có tên, ảnh tham chiếu và nhãn riêng.</p>
+        {items.length ? <section className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">{items.map(item=><MascotCard key={item.id} item={item}/>)}</section> : <button type="button" onClick={()=>setCharacterOpen(true)} className="mt-6 flex min-h-72 w-full flex-col items-center justify-center rounded-4 border border-dashed border-line-subtle bg-surface/40 text-center hover:border-line-strong"><ImagePlus className="size-7 text-fg-muted" aria-hidden/><span className="mt-3 text-label text-fg-strong">{all.length ? "Không tìm thấy nhân vật" : "Thêm nhân vật đầu tiên"}</span></button>}
+      </> : <>
+        <p className="mt-4 text-caption text-fg-muted">{poses.length} khung pose · skeleton được lấy trực tiếp từ prototype silhouettes.js.</p>
+        <section className="mt-4 space-y-2" aria-label="Danh sách khung pose">{poses.map(pose => <PoseTemplateRow key={pose.id} pose={pose} />)}</section>
+      </>}
+      <UploadDialog open={characterOpen} onOpenChange={setCharacterOpen} kind="mascot" group="mascot" title="Thêm nhân vật" />
+      <PoseTemplateDialog open={poseOpen} onOpenChange={setPoseOpen} pose={null} />
     </HomeWorkspaceShell>
   );
 }
 
 function MascotCard({ item }: { item: LibraryItem }) {
-  const image=useLibraryImage(item.id); const [editOpen,setEditOpen]=React.useState(false);
-  return <><article className="rounded-3 border border-line-subtle bg-surface p-3"><div className="aspect-square overflow-hidden rounded-2 bg-raised">{image?<img src={image} alt="" className="size-full object-contain"/>:<ImagePlus className="m-auto size-6 text-fg-muted"/>}</div><div className="mt-3 flex items-start justify-between gap-2"><div className="min-w-0"><h2 className="truncate text-label text-fg-strong">{item.name}</h2><div className="mt-2 flex flex-wrap gap-1">{item.tags.map(tag=><span key={tag} className="rounded-full bg-raised px-2 py-0.5 text-caption text-fg-muted">{tag}</span>)}</div></div><Button variant="ghost" size="sm" onClick={()=>setEditOpen(true)}><Pencil aria-hidden/><span className="sr-only">Sửa {item.name}</span></Button></div><div className="mt-3 grid grid-cols-4 gap-1" aria-label={`${item.poses.length} pose skeleton`}>{item.poses.slice(0,8).map(pose=><span key={pose} className="mascot-card-pose" title={pose} dangerouslySetInnerHTML={{__html:`<svg viewBox="0 0 60 84">${poseSvgMarkup(pose,60,84)}</svg>`}}/>)}</div></article><EditAssetDialog item={item} open={editOpen} onOpenChange={setEditOpen}/></>;
+  const image = useLibraryImage(item.id);
+  const remove = useRemoveLibraryItem();
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  return <><article className="rounded-3 border border-line-subtle bg-surface p-3"><div className="aspect-square overflow-hidden rounded-2 bg-raised">{image?<img src={image} alt="" className="size-full object-contain"/>:<ImagePlus className="m-auto size-6 text-fg-muted"/>}</div><div className="mt-3 min-w-0"><h2 className="truncate text-label text-fg-strong">{item.name}</h2><div className="mt-2 flex min-h-5 flex-wrap gap-1">{item.tags.map(tag=><span key={tag} className="rounded-full bg-raised px-2 py-0.5 text-caption text-fg-muted">{tag}</span>)}</div></div><div className="mt-3 grid grid-cols-2 gap-2 border-t border-line-subtle pt-3"><Button variant="secondary" size="sm" onClick={()=>setEditOpen(true)}><Pencil aria-hidden/>Sửa</Button><Button variant="ghost" size="sm" onClick={()=>setConfirmOpen(true)}><Trash2 aria-hidden/>Xoá</Button></div></article><EditAssetDialog item={item} open={editOpen} onOpenChange={setEditOpen}/><AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Xoá nhân vật “{item.name}”?</AlertDialogTitle><AlertDialogDescription>Chỉ nhân vật này bị xoá khỏi thư viện. Các project khác không bị xoá.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Huỷ</AlertDialogCancel><AlertDialogAction onClick={()=>remove.mutate(item.id,{onSuccess:()=>toast.success("Đã xoá nhân vật")})}>Xoá nhân vật</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></>;
+}
+
+function PoseTemplateRow({ pose }: { pose: PoseTemplate }) {
+  const patch = usePatchPoseTemplate();
+  const remove = useRemovePoseTemplate();
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  return <><article className="grid items-center gap-3 rounded-3 border border-line-subtle bg-surface p-3 sm:grid-cols-[4.5rem_minmax(0,1fr)_auto]">
+    <div className="flex h-20 items-center justify-center rounded-2 bg-raised p-2" aria-hidden dangerouslySetInnerHTML={{__html:`<svg viewBox="0 0 60 84" class="h-full w-auto">${poseSvgMarkup(pose.sourcePose,60,84)}</svg>`}} />
+    <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-label text-fg-strong">{pose.name}</h2>{pose.builtIn ? <span className="rounded-full bg-raised px-2 py-0.5 text-caption text-fg-muted">Prototype</span> : null}</div><p className="mt-1 line-clamp-2 text-caption text-fg-muted">{pose.description || "Khung skeleton tái sử dụng cho mascot."}</p></div>
+    <div className="flex items-center justify-end gap-2"><label className="flex items-center gap-2 text-caption text-fg-muted"><Switch checked={pose.enabled} onCheckedChange={enabled=>patch.mutate({id:pose.id,enabled})} aria-label={`${pose.enabled ? "Tắt" : "Bật"} ${pose.name}`}/><span className="hidden lg:inline">{pose.enabled ? "Đang dùng" : "Đã tắt"}</span></label><Button variant="ghost" size="icon-sm" onClick={()=>setEditOpen(true)} aria-label={`Sửa ${pose.name}`}><Pencil aria-hidden/></Button><Button variant="ghost" size="icon-sm" onClick={()=>setConfirmOpen(true)} aria-label={`Xoá ${pose.name}`}><Trash2 aria-hidden/></Button></div>
+  </article><PoseTemplateDialog open={editOpen} onOpenChange={setEditOpen} pose={pose}/><AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Xoá khung pose “{pose.name}”?</AlertDialogTitle><AlertDialogDescription>Chỉ khung skeleton này bị xoá; nhân vật và project không bị xoá.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Huỷ</AlertDialogCancel><AlertDialogAction onClick={()=>remove.mutate(pose.id,{onSuccess:()=>toast.success("Đã xoá khung pose")})}>Xoá khung pose</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></>;
+}
+
+function PoseTemplateDialog({ open, onOpenChange, pose }: { open: boolean; onOpenChange: (open: boolean) => void; pose: PoseTemplate | null }) {
+  const add = useAddPoseTemplate();
+  const patch = usePatchPoseTemplate();
+  const [name, setName] = React.useState("");
+  const [description, setDescription] = React.useState("");
+  const [sourcePose, setSourcePose] = React.useState("idle");
+  React.useEffect(()=>{if(!open)return;setName(pose?.name??"");setDescription(pose?.description??"");setSourcePose(pose?.sourcePose??"idle")},[open,pose]);
+  const selected = poseOptions().find(item=>item.value===sourcePose);
+  const save = () => {
+    const input = { name: name.trim(), description: description.trim(), sourcePose };
+    const options = { onSuccess: () => { toast.success(pose ? "Đã lưu khung pose" : "Đã thêm khung pose"); onOpenChange(false); }, onError: () => toast.error("Chưa lưu được khung pose") };
+    if (pose) patch.mutate({ id: pose.id, ...input }, options);
+    else add.mutate(input, options);
+  };
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent size="sm"><DialogHeader><DialogTitle>{pose?"Sửa khung pose":"Thêm khung pose"}</DialogTitle><DialogDescription>Chọn một skeleton chuẩn từ prototype và đặt tên theo cách đội của bạn sử dụng.</DialogDescription></DialogHeader><DialogBody className="space-y-4"><div className="grid gap-4 sm:grid-cols-[7rem_minmax(0,1fr)]"><div className="flex aspect-[3/4] items-center justify-center rounded-3 bg-raised p-3" aria-label={`Xem trước ${selected?.label??sourcePose}`} dangerouslySetInnerHTML={{__html:`<svg viewBox="0 0 60 84" class="h-full w-full">${poseSvgMarkup(sourcePose,60,84)}</svg>`}}/><div className="space-y-4"><div className="space-y-2"><Label htmlFor="pose-template-name">Tên khung pose</Label><Input id="pose-template-name" value={name} onChange={event=>setName(event.target.value)} placeholder="Ví dụ: Chào chiến dịch" autoFocus/></div><div className="space-y-2"><Label htmlFor="pose-template-source">Skeleton prototype</Label><Select value={sourcePose} onValueChange={setSourcePose}><SelectTrigger id="pose-template-source"><SelectValue/></SelectTrigger><SelectContent>{poseOptions().map(option=><SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select></div></div></div><div className="space-y-2"><Label htmlFor="pose-template-description">Ghi chú sử dụng</Label><Textarea id="pose-template-description" value={description} onChange={event=>setDescription(event.target.value)} rows={3} placeholder="Dùng ở CTA, màn chào…"/></div></DialogBody><DialogFooter><Button variant="secondary" onClick={()=>onOpenChange(false)}>Huỷ</Button><Button disabled={!name.trim()||add.isPending||patch.isPending} onClick={save}>{pose?"Lưu thay đổi":"Thêm khung pose"}</Button></DialogFooter></DialogContent></Dialog>;
 }
 
 export function ReferencesLibraryScreen() {

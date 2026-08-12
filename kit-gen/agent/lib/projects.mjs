@@ -57,6 +57,9 @@ export async function readProject(ws, id) {
   try {
     const p = await readJsonFile(file)
     p.id = id
+    p.workflow = p.workflow && typeof p.workflow === "object"
+      ? { completed: p.workflow.completed === true, updatedAt: p.workflow.updatedAt ?? null }
+      : { completed: true, updatedAt: null }
     p.broken = false
     p.error = null
     return p
@@ -199,9 +202,33 @@ export async function createProjectDir(ws, { id, name, slug, description = "", t
     description: String(description ?? ""), createdAt: now, updatedAt: now,
     contract: { file: "contract.json", version: 0, hash: null },
     cover: null, tags: Array.isArray(tags) ? tags.map(String).slice(0, 12) : [],
+    workflow: { completed: !Array.isArray(tags) || !tags.includes("kg-workflow"), updatedAt: now },
   }
   await writeJsonAtomic(join(dir, "project.json"), project)
   return { dir, project }
+}
+
+const WORKFLOW_DRAFT_FILE = "workflow-draft.json"
+
+export async function readWorkflowDraft(ws, id) {
+  const project = await readProject(ws, id)
+  if (project.broken) fail("PROJECT_BROKEN", "cannot read workflow draft for a broken project")
+  let draft = null
+  try { draft = await readJsonFile(join(projectDir(ws, id), WORKFLOW_DRAFT_FILE)) } catch { /* chưa có bản nháp */ }
+  return { completed: project.workflow?.completed === true, draft, updatedAt: project.workflow?.updatedAt ?? null }
+}
+
+export async function saveWorkflowDraft(ws, id, input) {
+  const project = await readProject(ws, id)
+  if (project.broken) fail("PROJECT_BROKEN", "cannot save workflow draft for a broken project")
+  const serialized = JSON.stringify(input?.draft ?? null)
+  if (serialized.length > 2_000_000) fail("TOO_LARGE", "workflow draft exceeds 2 MB")
+  const completed = input?.completed === true
+  const updatedAt = new Date().toISOString()
+  await writeJsonAtomic(join(projectDir(ws, id), WORKFLOW_DRAFT_FILE), input?.draft ?? null)
+  project.workflow = { completed, updatedAt }
+  await saveProject(ws, id, project)
+  return { completed, draft: input?.draft ?? null, updatedAt }
 }
 
 /** PATCH: chỉ name/slug/description/tags/cover. id và thư mục KHÔNG đổi (§4.2). */

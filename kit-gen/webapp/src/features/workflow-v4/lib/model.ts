@@ -290,7 +290,7 @@ function initialState(): Omit<WorkflowState, "set" | "next" | "back" | "go" | "t
   };
 }
 
-const partialize = (s: WorkflowState) => ({
+export const workflowDraftOf = (s: WorkflowState) => ({
   step: s.step, unlocked: s.unlocked, kitName: s.kitName, campaign: s.campaign, brief: s.brief,
   stylePrompt: s.stylePrompt, styleMode: s.styleMode, brandProfileId: s.brandProfileId, styleRefs: s.styleRefs, styleAxes: s.styleAxes,
   primaryColor: s.primaryColor, secondaryColor: s.secondaryColor, styleAvoid: s.styleAvoid,
@@ -300,6 +300,14 @@ const partialize = (s: WorkflowState) => ({
   mascotDescription: s.mascotDescription, mascotRef: s.mascotRef, mascotPoses: s.mascotPoses,
   elements: s.elements, versions: s.versions, activeVersion: s.activeVersion,
 });
+const partialize = workflowDraftOf;
+
+export function hydrateWorkflowStore(store: WorkflowStore, draft: Record<string, unknown> | null | undefined): void {
+  if (!draft) return;
+  const initial = initialState();
+  const safe = Object.fromEntries(Object.keys(initial).filter(key => draft[key] !== undefined).map(key => [key, draft[key]])) as Partial<WorkflowState>;
+  store.setState(safe);
+}
 
 /** Factory CÓ CACHE: mở lại cùng một bộ kit trong một phiên thì vẫn là một store. */
 export function createWorkflowStore(projectId: string): WorkflowStore {

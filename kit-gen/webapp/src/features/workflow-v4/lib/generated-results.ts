@@ -1,6 +1,6 @@
 import type { Run, RunJob } from "@/lib/types";
 
-export type ResultCategory = "background" | "popup" | "small" | "mascot" | "other";
+export type ResultCategory = "background" | "popup" | "ui" | "prop" | "mascot" | "other";
 export type ResultGroup = ResultCategory | "all";
 
 export interface GeneratedResultItem {
@@ -27,7 +27,8 @@ export function categoryOfSheet(sheet: string): ResultCategory {
   if (/^(bg|background)(-|$)/.test(value)) return "background";
   if (/^(popup|modal|panel)(-|$)/.test(value)) return "popup";
   if (/^(pose|mascot|character)(-|$)/.test(value)) return "mascot";
-  if (/^(small|ui|prop|item)(-|$)/.test(value)) return "small";
+  if (/^(prop|item|dao-cu)(-|$)/.test(value)) return "prop";
+  if (/^(small|ui)(-|$)/.test(value)) return "ui";
   return "other";
 }
 

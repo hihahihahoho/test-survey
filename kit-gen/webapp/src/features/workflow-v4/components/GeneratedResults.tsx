@@ -1,6 +1,7 @@
 import * as React from "react";
 import { AlertCircle, Check, Image as ImageIcon, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { KitImage } from "@/features/kit/components/KitImage";
 import { generatedRuns, jobsForGroup, sheetLabel, type ResultGroup } from "../lib/generated-results";
 import { GenerateDialog } from "@/features/runs";
@@ -8,13 +9,16 @@ import type { Contract, JobStatusValue } from "@/lib/types";
 import { useRuns } from "@/lib/hooks";
 
 const LABEL: Record<Exclude<ResultGroup, "all">, string> = {
-  background: "Nền", popup: "Popup", small: "UI nhỏ & đạo cụ", mascot: "Mascot", other: "Khác",
+  background: "Nền", popup: "Popup", ui: "UI kit", prop: "Đạo cụ", mascot: "Mascot", other: "Khác",
 };
 
-export function GeneratedResults({ projectId, contract, jobStates, readOnly = false }: { projectId: string; contract: Contract | null; jobStates: Record<string, JobStatusValue>; readOnly?: boolean }) {
+export function GeneratedResults({ projectId, contract, jobStates, category = "all", readOnly = false }: { projectId: string; contract: Contract | null; jobStates: Record<string, JobStatusValue>; category?: ResultGroup; readOnly?: boolean }) {
   const query = useRuns(projectId, 20);
   const groups = generatedRuns(query.data?.items ?? []);
+  const [versionId, setVersionId] = React.useState<string>("");
   const [selection, setSelection] = React.useState<{ jobs: string[]; label: string } | null>(null);
+  React.useEffect(() => { if (groups.length && !groups.some(group => group.id === versionId)) setVersionId(groups[0]!.id); }, [groups, versionId]);
+  const visibleRuns = groups.filter(group => group.id === (versionId || groups[0]?.id));
 
   const request = (jobs: string[], label: string) => {
     if (jobs.length) setSelection({ jobs, label });
@@ -30,9 +34,11 @@ export function GeneratedResults({ projectId, contract, jobStates, readOnly = fa
   );
 
   return (
-    <div className="space-y-8">
-      {groups.map((run, runIndex) => {
-        const categories = [...new Set(run.items.map((item) => item.category))];
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-3 bg-surface p-3"><div><p className="text-label text-fg-strong">Phiên bản ảnh</p><p className="text-caption text-fg-muted">Ảnh cũ vẫn được giữ để đối chiếu.</p></div><Select value={versionId || groups[0]?.id} onValueChange={setVersionId}><SelectTrigger aria-label="Phiên bản ảnh" className="w-64"><SelectValue /></SelectTrigger><SelectContent>{groups.map((group,index)=><SelectItem key={group.id} value={group.id}>{index===0?"Mới nhất":`Phiên bản ${groups.length-index}`} · {group.at?new Date(group.at).toLocaleString("vi-VN"):group.id}</SelectItem>)}</SelectContent></Select></div>
+      {visibleRuns.map((run, runIndex) => {
+        const categories = [...new Set(run.items.map((item) => item.category))].filter(value => category === "all" || value === category);
+        const visibleItems = run.items.filter(item => category === "all" || item.category === category);
         return (
           <section key={run.id} className="space-y-4" aria-label={`Lần tạo ${run.id}`}>
             <header className="flex flex-wrap items-center justify-between gap-3">
@@ -40,8 +46,8 @@ export function GeneratedResults({ projectId, contract, jobStates, readOnly = fa
                 <p className="eyebrow">{runIndex === 0 ? "Lần tạo gần nhất" : "Lần tạo trước"}</p>
                 <h3 className="text-subtitle text-fg-strong">{run.at ? new Date(run.at).toLocaleString("vi-VN") : run.id}</h3>
               </div>
-              <Button variant="secondary" size="sm" disabled={readOnly} onClick={() => request(run.items.map((item) => item.job), "toàn bộ lần tạo")}>
-                <RefreshCw aria-hidden />Tạo lại tất cả
+              <Button variant="secondary" size="sm" disabled={readOnly} onClick={() => request(visibleItems.map((item) => item.job), category === "all" ? "toàn bộ thành phẩm" : `nhóm ${LABEL[category as Exclude<ResultGroup,"all">]}`)}>
+                <RefreshCw aria-hidden />{category === "all" ? "Tạo lại toàn bộ" : "Tạo lại nhóm này"}
               </Button>
             </header>
             {categories.map((category) => {
