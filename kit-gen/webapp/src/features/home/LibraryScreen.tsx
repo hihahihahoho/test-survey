@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ImagePlus, MoreHorizontal, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Check, ImagePlus, MoreHorizontal, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +16,9 @@ import { Input } from "@/components/ui/input";
 import { ImageDropzone } from "@/components/ui/image-dropzone";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Silhouette } from "@/features/design/preview";
+import { poseOptions, poseSvgMarkup, Silhouette } from "@/features/design/preview";
 import { fromAgentLib, loadBundledV2, foldVi } from "@/features/design/library/lib/source";
 import type { LibElement } from "@/features/design/library/lib/types";
 import {
@@ -28,7 +29,6 @@ import type { LibraryItem, LibrarySettings } from "@/lib/types";
 import { HomeWorkspaceShell } from "./components/HomeWorkspaceShell";
 
 type UiGroup = "background" | "popup" | "small";
-type ReferenceGroup = "style" | "mascot-reference";
 
 const GROUPS: ReadonlyArray<{ id: UiGroup; label: string; max: number }> = [
   { id: "background", label: "Nền", max: 2 },
@@ -72,26 +72,10 @@ function groupOf(element: LibElement): UiGroup {
   return "small";
 }
 
-function Tabs<T extends string>({ items, value, onChange }: {
-  items: ReadonlyArray<{ id: T; label: string }>;
-  value: T;
-  onChange: (value: T) => void;
+function LibraryTabs<T extends string>({ items, value, onChange }: {
+  items: ReadonlyArray<{ id: T; label: string }>; value: T; onChange: (value: T) => void;
 }) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          aria-pressed={value === item.id}
-          onClick={() => onChange(item.id)}
-          className={`rounded-2 border px-3 py-2 text-label transition-colors ${value === item.id ? "border-accent bg-accent/[var(--kg-tint-a)] text-fg-strong" : "border-line-subtle text-fg hover:bg-raised"}`}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>
-  );
+  return <Tabs value={value} onValueChange={(next) => onChange(next as T)}><TabsList>{items.map(item => <TabsTrigger key={item.id} value={item.id}>{item.label}</TabsTrigger>)}</TabsList></Tabs>;
 }
 
 function MaxPerSheet({ setting, fallback }: { setting: keyof LibrarySettings; fallback: number }) {
@@ -123,12 +107,14 @@ function UploadDialog({ open, onOpenChange, kind, group, title }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   kind: "ui" | "mascot" | "reference";
-  group: UiGroup | "mascot" | ReferenceGroup;
+  group: UiGroup | "mascot" | "style";
   title: string;
 }) {
   const add = useAddLibraryItem();
   const [name, setName] = React.useState("");
   const [description, setDescription] = React.useState("");
+  const [tags, setTags] = React.useState("");
+  const [poses, setPoses] = React.useState<string[]>(["idle", "wave", "cheer", "sad"]);
   const [files, setFiles] = React.useState<File[]>([]);
   const [preset, setPreset] = React.useState<SafeZonePreset>(() => initialPreset(group));
 
@@ -137,6 +123,8 @@ function UploadDialog({ open, onOpenChange, kind, group, title }: {
     if (!next) {
       setName("");
       setDescription("");
+      setTags("");
+      setPoses(["idle", "wave", "cheer", "sad"]);
       setFiles([]);
       setPreset(initialPreset(group));
     }
@@ -152,9 +140,14 @@ function UploadDialog({ open, onOpenChange, kind, group, title }: {
         <DialogBody className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor={`library-name-${group}`}>Tên</Label>
-            <Input id={`library-name-${group}`} value={name} onChange={(event) => setName(event.target.value)} placeholder="Ví dụ: Popup phần thưởng" autoFocus />
+            <Input id={`library-name-${group}`} value={name} onChange={(event) => setName(event.target.value)} placeholder={kind === "mascot" ? "Ví dụ: Sóc VCB" : "Ví dụ: Popup phần thưởng"} autoFocus />
           </div>
           <ImageDropzone multiple={kind === "reference"} label={kind === "reference" ? "Kéo các ảnh vào đây" : "Kéo ảnh vào đây"} description="PNG, JPG hoặc WebP · xem trước trước khi thêm" onFiles={(picked) => setFiles(Array.from(picked))} />
+
+          {kind === "mascot" && <>
+            <div className="space-y-2"><Label htmlFor="mascot-tags">Nhãn</Label><Input id="mascot-tags" value={tags} onChange={event => setTags(event.target.value)} placeholder="Ví dụ: VCB, ngân hàng, Tết" /><p className="text-caption text-fg-muted">Phân cách bằng dấu phẩy để tìm và lọc mascot.</p></div>
+            <div className="space-y-2"><Label>Pose skeleton mặc định</Label><div className="mascot-dialog-pose-grid">{poseOptions().map(pose => { const checked=poses.includes(pose.value); return <button type="button" key={pose.value} aria-pressed={checked} onClick={()=>setPoses(checked?poses.filter(id=>id!==pose.value):[...poses,pose.value])}><span dangerouslySetInnerHTML={{__html:`<svg viewBox="0 0 60 84">${poseSvgMarkup(pose.value,60,84)}</svg>`}} />{checked && <Check aria-hidden/>}<small>{pose.label}</small></button>; })}</div></div>
+          </>}
           {kind === "ui" && (
             <>
               <div className="space-y-2">
@@ -179,7 +172,7 @@ function UploadDialog({ open, onOpenChange, kind, group, title }: {
             onClick={() => { void (async () => {
               const geometry = SAFE_ZONE_PRESETS.find((item) => item.id === preset)!;
               try {
-                for (const file of files) await add.mutateAsync({ file, kind, group, name: kind === "reference" ? file.name.replace(/\.[^.]+$/, "") : name.trim(), ...(kind === "ui" ? { description: description.trim(), cell: geometry.cell, skel: geometry.skel } : {}) });
+                for (const file of files) await add.mutateAsync({ file, kind, group, name: kind === "reference" ? file.name.replace(/\.[^.]+$/, "") : name.trim(), ...(kind === "mascot" ? { tags: tags.split(",").map(tag=>tag.trim()).filter(Boolean), poses } : {}), ...(kind === "ui" ? { description: description.trim(), cell: geometry.cell, skel: geometry.skel } : {}) });
                 toast.success(`Đã thêm ${files.length} ảnh vào thư viện`); close(false);
               } catch { toast.error("Chưa thêm được ảnh"); }
             })(); }}
@@ -347,7 +340,7 @@ export function UiLibraryScreen() {
   return (
     <HomeWorkspaceShell active="ui-library" title="Bộ khung UI" action={<Button size="sm" onClick={() => setUploadOpen(true)}><Plus aria-hidden />Thêm bộ khung</Button>}>
       <div className="flex flex-wrap items-center gap-2">
-        <Tabs items={GROUPS} value={group} onChange={setGroup} />
+        <LibraryTabs items={GROUPS} value={group} onChange={setGroup} />
         <div className="relative ml-auto w-full sm:w-56">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden />
           <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm bộ khung…" className="h-9 pl-9" />
@@ -379,47 +372,33 @@ export function UiLibraryScreen() {
 export function MascotLibraryScreen() {
   const library = useUserLibrary();
   const [uploadOpen, setUploadOpen] = React.useState(false);
-  const items = (library.data?.items ?? []).filter((item) => item.kind === "mascot");
+  const [query, setQuery] = React.useState("");
+  const [tag, setTag] = React.useState("all");
+  const all = (library.data?.items ?? []).filter((item) => item.kind === "mascot");
+  const tags = [...new Set(all.flatMap(item => item.tags))].sort((a,b)=>a.localeCompare(b,"vi"));
+  const q = foldVi(query);
+  const items = all.filter(item => (tag === "all" || item.tags.includes(tag)) && (!q || foldVi(`${item.name} ${item.description} ${item.tags.join(" ")}`).includes(q)));
   return (
-    <HomeWorkspaceShell active="mascot-library" title="Mascot pose" action={<Button size="sm" onClick={() => setUploadOpen(true)}><Plus aria-hidden />Thêm mascot</Button>}>
-      <div className="flex items-center justify-between border-b border-line-subtle pb-4 text-caption text-fg-muted">
-        <span>{items.length} bộ khung</span>
+    <HomeWorkspaceShell active="mascot-library" title="Mascot" action={<Button size="sm" onClick={() => setUploadOpen(true)}><Plus aria-hidden />Thêm mascot</Button>}>
+      <div className="flex flex-wrap items-center gap-2 border-b border-line-subtle pb-4">
+        <div className="relative min-w-56 flex-1 sm:max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden/><Input type="search" aria-label="Tìm mascot" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Tìm theo tên hoặc nhãn…" className="pl-9"/></div>
+        <Select value={tag} onValueChange={setTag}><SelectTrigger className="w-44" aria-label="Lọc mascot theo nhãn"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tất cả nhãn</SelectItem>{tags.map(value=><SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
         <MaxPerSheet setting="mascot" fallback={4} />
       </div>
-      {items.length ? (
-        <section className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">{items.map((item) => <UserAssetCard key={item.id} item={item} />)}</section>
-      ) : (
-        <button type="button" onClick={() => setUploadOpen(true)} className="mt-6 flex min-h-[320px] w-full flex-col items-center justify-center rounded-4 border border-dashed border-line-subtle bg-surface/40 text-center hover:border-line-strong">
-          <ImagePlus className="size-7 text-fg-muted" aria-hidden />
-          <span className="mt-3 text-label text-fg-strong">Thêm bộ khung mascot đầu tiên</span>
-        </button>
-      )}
-      <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} kind="mascot" group="mascot" title="Thêm bộ khung mascot" />
+      <p className="mt-4 text-caption text-fg-muted">{items.length} mascot · mỗi mascot có ảnh tham chiếu riêng và dùng chung bộ pose skeleton.</p>
+      {items.length ? <section className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">{items.map(item=><MascotCard key={item.id} item={item}/>)}</section> : <button type="button" onClick={()=>setUploadOpen(true)} className="mt-6 flex min-h-72 w-full flex-col items-center justify-center rounded-4 border border-dashed border-line-subtle bg-surface/40 text-center hover:border-line-strong"><ImagePlus className="size-7 text-fg-muted" aria-hidden/><span className="mt-3 text-label text-fg-strong">{all.length ? "Không tìm thấy mascot" : "Thêm mascot đầu tiên"}</span></button>}
+      <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} kind="mascot" group="mascot" title="Thêm mascot" />
     </HomeWorkspaceShell>
   );
 }
 
+function MascotCard({ item }: { item: LibraryItem }) {
+  const image=useLibraryImage(item.id); const [editOpen,setEditOpen]=React.useState(false);
+  return <><article className="rounded-3 border border-line-subtle bg-surface p-3"><div className="aspect-square overflow-hidden rounded-2 bg-raised">{image?<img src={image} alt="" className="size-full object-contain"/>:<ImagePlus className="m-auto size-6 text-fg-muted"/>}</div><div className="mt-3 flex items-start justify-between gap-2"><div className="min-w-0"><h2 className="truncate text-label text-fg-strong">{item.name}</h2><div className="mt-2 flex flex-wrap gap-1">{item.tags.map(tag=><span key={tag} className="rounded-full bg-raised px-2 py-0.5 text-caption text-fg-muted">{tag}</span>)}</div></div><Button variant="ghost" size="sm" onClick={()=>setEditOpen(true)}><Pencil aria-hidden/><span className="sr-only">Sửa {item.name}</span></Button></div><div className="mt-3 grid grid-cols-4 gap-1" aria-label={`${item.poses.length} pose skeleton`}>{item.poses.slice(0,8).map(pose=><span key={pose} className="mascot-card-pose" title={pose} dangerouslySetInnerHTML={{__html:`<svg viewBox="0 0 60 84">${poseSvgMarkup(pose,60,84)}</svg>`}}/>)}</div></article><EditAssetDialog item={item} open={editOpen} onOpenChange={setEditOpen}/></>;
+}
+
 export function ReferencesLibraryScreen() {
-  const library = useUserLibrary();
-  const [group, setGroup] = React.useState<ReferenceGroup>("style");
-  const [uploadOpen, setUploadOpen] = React.useState(false);
-  const items = (library.data?.items ?? []).filter((item) => item.kind === "reference" && item.group === group);
-  const tabs: ReadonlyArray<{ id: ReferenceGroup; label: string }> = [
-    { id: "style", label: "Phong cách" },
-    { id: "mascot-reference", label: "Mascot" },
-  ];
-  return (
-    <HomeWorkspaceShell active="references" title="Ảnh tham chiếu" action={<Button size="sm" onClick={() => setUploadOpen(true)}><Plus aria-hidden />Thêm ảnh</Button>}>
-      <Tabs items={tabs} value={group} onChange={setGroup} />
-      {items.length ? (
-        <section className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">{items.map((item) => <UserAssetCard key={item.id} item={item} />)}</section>
-      ) : (
-        <button type="button" onClick={() => setUploadOpen(true)} className="mt-6 flex min-h-[320px] w-full flex-col items-center justify-center rounded-4 border border-dashed border-line-subtle bg-surface/40 text-center hover:border-line-strong">
-          <ImagePlus className="size-7 text-fg-muted" aria-hidden />
-          <span className="mt-3 text-label text-fg-strong">Thêm ảnh {group === "style" ? "phong cách" : "mascot"}</span>
-        </button>
-      )}
-      <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} kind="reference" group={group} title={group === "style" ? "Thêm ảnh phong cách" : "Thêm ảnh mascot"} />
-    </HomeWorkspaceShell>
-  );
+  const library=useUserLibrary(); const [uploadOpen,setUploadOpen]=React.useState(false); const [query,setQuery]=React.useState("");
+  const q=foldVi(query); const items=(library.data?.items??[]).filter(item=>item.kind==="reference" && ["style","brand-style","brand-logo"].includes(item.group) && (!q || foldVi(`${item.name} ${item.description}`).includes(q)));
+  return <HomeWorkspaceShell active="references" title="Style reference" action={<Button size="sm" onClick={()=>setUploadOpen(true)}><Plus aria-hidden/>Thêm ảnh</Button>}><div className="relative max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden/><Input type="search" aria-label="Tìm style reference" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Tìm style reference…" className="pl-9"/></div>{items.length?<section className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">{items.map(item=><UserAssetCard key={item.id} item={item}/>)}</section>:<button type="button" onClick={()=>setUploadOpen(true)} className="mt-6 flex min-h-72 w-full flex-col items-center justify-center rounded-4 border border-dashed border-line-subtle bg-surface/40"><ImagePlus className="size-7 text-fg-muted"/><span className="mt-3 text-label text-fg-strong">Thêm style reference đầu tiên</span></button>}<UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} kind="reference" group="style" title="Thêm style reference"/></HomeWorkspaceShell>;
 }

@@ -20,7 +20,7 @@ export function useAddLibraryItem() {
 export function usePatchLibraryItem() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...input }: { id: string; name?: string; description?: string; group?: string; poses?: string[]; cell?: string; skel?: Record<string, unknown> }) => api.library.patch(id, input),
+    mutationFn: ({ id, ...input }: { id: string; name?: string; description?: string; tags?: string[]; group?: string; poses?: string[]; cell?: string; skel?: Record<string, unknown> }) => api.library.patch(id, input),
     onSuccess: () => void client.invalidateQueries({ queryKey: qk.library() }),
   });
 }

@@ -73,7 +73,8 @@ async function mockAgent(page: Page) {
     group: "mascot" as const,
     name: "Mèo mẫu",
     filename: "mascot.png",
-    poses: ["Đứng yên", "Vui"],
+    poses: ["idle", "cheer"],
+    tags: ["VCB"],
   };
   const uiLibraryItem = {
     id: "asset_fedcba9876543210",
@@ -83,6 +84,7 @@ async function mockAgent(page: Page) {
     description: "Nút nhận quà có vùng nội dung sạch",
     filename: "reward-button.png",
     poses: [],
+    tags: [],
     cell: "landscape" as const,
     skel: { shape: "pill" as const, w: 0.78, h: 0.5, slice9: true },
   };
@@ -93,6 +95,7 @@ async function mockAgent(page: Page) {
     name: "Phong cách lễ hội",
     filename: "style-reference.png",
     poses: [],
+    tags: [],
   };
   await page.route("**/health", async (route: Route) => route.fulfill({ json: health }));
   await page.route("**/api/**", async (route: Route) => {
@@ -174,7 +177,7 @@ test("@visual home uses the project sidebar instead of a horizontal header", asy
   await expect(page.locator("header.sticky")).toHaveCount(0);
   await expect(page.getByRole("searchbox", { name: "Tìm dự án" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Bộ khung UI" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Mascot pose" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Mascot" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Cài đặt" })).toBeVisible();
 
   await page.screenshot({ path: testInfo.outputPath("home-dark.png"), fullPage: true, animations: "disabled" });
@@ -358,9 +361,9 @@ test("@visual trash and shared libraries are separate Home destinations", async 
   await page.getByRole("button", { name: "Bộ khung UI" }).click();
   await expect(page).toHaveURL(/\/library\/ui/);
   await expect(page.getByRole("heading", { name: "Bộ khung UI", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Nền" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Popup" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "UI nhỏ & đạo cụ" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Nền" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Popup" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "UI nhỏ & đạo cụ" })).toBeVisible();
   await page.getByRole("button", { name: "Thêm bộ khung" }).click();
   await expect(page.getByRole("dialog", { name: "Thêm nền" })).toBeVisible();
   await page.getByRole("button", { name: "Huỷ" }).click();
@@ -368,16 +371,14 @@ test("@visual trash and shared libraries are separate Home destinations", async 
   await page.screenshot({ path: testInfo.outputPath("ui-library-dark.png"), fullPage: true, animations: "disabled" });
 });
 
-test("the mascot library manages its reusable pose list", async ({ page }) => {
+test("the mascot library manages named mascots, tags and prototype poses", async ({ page }) => {
   await page.goto("/library/mascot");
-  await expect(page.getByRole("heading", { name: "Mascot pose" })).toBeVisible();
-  await expect(page.getByText("2 dáng")).toBeVisible();
-  await page.getByRole("button", { name: "Tuỳ chọn Mèo mẫu" }).click();
-  await page.getByRole("menuitem", { name: "Sửa mascot" }).click();
-  const poses = page.getByRole("textbox", { name: "Dáng" });
-  await poses.fill("Đứng yên\nVui\nĂn mừng");
-  await page.getByRole("button", { name: "Lưu", exact: true }).click();
-  await expect(page.getByText("3 dáng", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mascot" })).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "Tìm mascot" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Lọc mascot theo nhãn" })).toBeVisible();
+  await expect(page.getByText("Mèo mẫu", { exact: true })).toBeVisible();
+  await expect(page.getByText("VCB", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("2 pose skeleton").locator("svg")).toHaveCount(2);
 });
 
 test("legacy project pages converge on the project manager", async ({ page }) => {

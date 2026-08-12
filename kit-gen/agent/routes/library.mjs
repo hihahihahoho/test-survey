@@ -37,12 +37,20 @@ export function register(r) {
       try { skel = JSON.parse(field("skel")) }
       catch { fail("BAD_REQUEST", "skel must be valid JSON") }
     }
+    let tags, poses
+    for (const key of ["tags", "poses"]) {
+      if (!field(key)) continue
+      try { if (key === "tags") tags = JSON.parse(field(key)); else poses = JSON.parse(field(key)) }
+      catch { fail("BAD_REQUEST", `${key} must be valid JSON`) }
+    }
     const item = await addLibraryItem(ctx.registry.active, {
       data: file.data,
       kind: field("kind"),
       group: field("group"),
       name: field("name") || file.filename,
       description: field("description"),
+      tags,
+      poses,
       cell: field("cell"),
       skel,
     })

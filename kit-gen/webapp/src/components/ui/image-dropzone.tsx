@@ -41,7 +41,7 @@ export function ImageDropzone({ label, description, multiple = false, maxFiles =
     </button>
     <input ref={input} className="sr-only" type="file" accept={ACCEPT.join(",")} multiple={multiple} disabled={disabled} onChange={e => { if(e.target.files) acceptFiles(e.target.files); e.currentTarget.value=""; }}/>
     {message && <p className="image-upload-error"><TriangleAlert aria-hidden/>{message}</p>}
-    {picked.length > 0 && <div className="image-picked-list">{picked.map(file => <PickedImage key={`${file.name}-${file.lastModified}`} file={file} onRemove={() => setPicked(xs => xs.filter(x => x !== file))} />)}</div>}
+    {picked.length > 0 && <div className="image-picked-list" aria-label={`${picked.length} ảnh đã chọn`}>{picked.map(file => <PickedImage key={`${file.name}-${file.lastModified}`} file={file} onRemove={() => setPicked(xs => xs.filter(x => x !== file))} />)}</div>}
   </div>;
 }
 
@@ -52,5 +52,5 @@ function PickedImage({ file, onRemove }: { file: File; onRemove: () => void }) {
     setUrl(next);
     return () => URL.revokeObjectURL(next);
   }, [file]);
-  return <div><img src={url} alt={`Xem trước ${file.name}`} /><span><strong>{file.name}</strong><small>{size(file.size)}</small></span><button type="button" aria-label={`Bỏ ${file.name}`} onClick={onRemove}><X /></button></div>;
+  return <div title={file.name}><img src={url} alt="" /><button type="button" aria-label={`Bỏ ảnh ${file.name}`} onClick={onRemove}><X /></button></div>;
 }

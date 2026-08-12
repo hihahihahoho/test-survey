@@ -489,7 +489,7 @@
   .pose-group-tabs { @apply my-4 flex gap-1 overflow-x-auto border-b border-line-subtle; }
   .pose-group-tabs button { @apply flex shrink-0 items-center gap-2 border-b-2 border-transparent px-3 py-2 text-label text-fg-muted; }
   .pose-group-tabs button.active { @apply border-accent text-fg-strong; } .pose-group-tabs small { @apply rounded-full bg-canvas px-1.5 tabular-nums; }
-  .pose-choice-grid { @apply grid gap-2 sm:grid-cols-2 lg:grid-cols-4; } .pose-choice-grid > * { @apply justify-start; }
+  .pose-choice-grid { @apply grid gap-2 sm:grid-cols-2 lg:grid-cols-4; } .pose-choice-grid > * { @apply min-h-20 justify-start rounded-3 bg-canvas px-3; }
   .selected-poses { @apply mb-4 mt-3 flex min-h-12 flex-wrap items-center gap-2 rounded-3 border border-line-subtle bg-raised p-3; }
   .selected-poses button { @apply rounded-full border border-line-subtle bg-canvas px-3 py-1 text-caption text-fg; } .selected-poses button span { @apply ml-2 text-fg-muted; }
 }
@@ -502,9 +502,12 @@
   .image-drop-icon svg { @apply size-5; } .image-drop-copy { @apply flex min-w-0 flex-col gap-0.5; } .image-drop-copy strong { @apply text-label text-fg-strong; }
   .image-drop-copy span, .image-drop-copy small { @apply text-caption text-fg-muted; } .image-drop-action { @apply rounded-3 border border-line bg-raised px-3 py-2 text-label text-fg-strong shadow-sm; }
   .image-upload-error { @apply flex items-center gap-2 text-caption text-danger; } .image-upload-error svg { @apply size-4; }
-  .image-picked-list { @apply grid gap-2 sm:grid-cols-2; } .image-picked-list > div { @apply grid min-w-0 grid-cols-[4rem_minmax(0,1fr)_auto] items-center gap-3 rounded-3 bg-raised p-2; } .image-picked-list img { @apply size-16 rounded-2 bg-canvas object-contain; }
-  .image-picked-list span { @apply flex min-w-0 flex-col; } .image-picked-list strong { @apply truncate text-caption text-fg-strong; } .image-picked-list small { @apply text-caption text-fg-muted; }
-  .image-picked-list button { @apply flex size-7 shrink-0 items-center justify-center rounded-2 text-fg-muted hover:bg-canvas; } .image-picked-list svg { @apply size-4; }
+  .image-picked-list { @apply grid grid-cols-3 gap-2 sm:grid-cols-4; } .image-picked-list > div { @apply relative aspect-square min-w-0 overflow-hidden rounded-3 border border-line-subtle bg-raised; } .image-picked-list img { @apply size-full object-contain; }
+  .image-picked-list button { @apply absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-overlay/90 text-fg hover:bg-overlay; } .image-picked-list svg { @apply size-4; }
+  .mascot-dialog-pose-grid { @apply grid max-h-72 grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4; }
+  .mascot-dialog-pose-grid button { @apply relative flex min-h-28 flex-col items-center justify-center rounded-3 border border-line-subtle bg-raised p-2 text-caption text-fg-muted; }
+  .mascot-dialog-pose-grid button[aria-pressed="true"] { @apply border-accent text-fg-strong; } .mascot-dialog-pose-grid button > span svg { @apply h-16 w-12; } .mascot-dialog-pose-grid button > svg { @apply absolute right-2 top-2 size-4 text-accent-text; }
+  .mascot-card-pose { @apply flex aspect-square items-center justify-center rounded-2 bg-raised p-1; } .mascot-card-pose svg { @apply h-full w-full; }
   @media (max-width: 640px) { .image-dropzone { @apply grid-cols-[auto_1fr]; } .image-drop-action { @apply col-span-2 justify-self-stretch text-center; } }
 }
 

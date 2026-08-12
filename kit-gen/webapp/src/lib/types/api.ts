@@ -437,6 +437,7 @@ export const libraryItemSchema = z.looseObject({
   group: z.enum(["background", "popup", "small", "mascot", "style", "mascot-reference", "brand-logo", "brand-style", "brand-mascot"]),
   name: z.string(),
   description: z.string().default(""),
+  tags: z.array(z.string()).default([]),
   filename: z.string(),
   bytes: z.number().optional(),
   w: z.number().nullish(),

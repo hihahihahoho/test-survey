@@ -2,7 +2,7 @@ import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { RefreshCw, FolderCog, SlidersHorizontal, Info, Wrench, type LucideIcon } from "lucide-react";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useRegisterCommands, type ScreenProps } from "@/components/layout";
 import { HomeWorkspaceShell } from "@/features/home/components/HomeWorkspaceShell";
 import { Route as SettingsRoute } from "@/routes/settings";
@@ -72,10 +72,14 @@ export function SettingsScreen(_props: ScreenProps) {
 
   return (
     <HomeWorkspaceShell active="settings" title="Dự án">
-      <Dialog open onOpenChange={(open) => { if (!open) void navigate({ to: "/", search: {} }); }}><DialogContent size="xl" className="h-[min(48rem,calc(100dvh-2rem))]"><DialogHeader><DialogTitle>Cài đặt</DialogTitle><DialogDescription>Công cụ local, tạo ảnh và giao diện.</DialogDescription></DialogHeader><DialogBody>
-      <div className="mx-auto w-full max-w-modal-xl">
-        <div className="grid min-h-0 gap-6 md:grid-cols-[190px_minmax(0,1fr)]">
-          <aside>
+      <Dialog open onOpenChange={(open) => { if (!open) void navigate({ to: "/", search: {} }); }}>
+        <DialogContent size="xl" className="h-[min(46rem,calc(100dvh-2rem))] overflow-hidden">
+          <DialogHeader className="border-b border-line-subtle px-6 pb-4 pt-5">
+            <DialogTitle>Cài đặt</DialogTitle>
+            <DialogDescription>Công cụ local, tạo ảnh và giao diện.</DialogDescription>
+          </DialogHeader>
+          <div className="grid min-h-0 flex-1 md:grid-cols-[13rem_minmax(0,1fr)]">
+          <aside className="shrink-0 border-b border-line-subtle bg-raised/40 p-3 md:border-b-0 md:border-r">
             <nav aria-label="Các mục cài đặt" className="grid grid-cols-2 gap-1 md:block md:space-y-1">
               {SETTINGS_NAV.map(({ id, label, icon: Icon }, index) => (
                 <button
@@ -83,7 +87,7 @@ export function SettingsScreen(_props: ScreenProps) {
                   type="button"
                   aria-current={tab === id ? "page" : undefined}
                   onClick={() => setTab(id)}
-                  className={`flex h-9 min-w-0 items-center gap-2 rounded-2 px-3 text-left text-label transition-colors ${tab === id ? "bg-raised text-fg-strong" : "text-fg hover:bg-raised"}`}
+                  className={`flex h-10 min-w-0 items-center gap-2 rounded-2 px-3 text-left text-label transition-colors ${tab === id ? "bg-canvas text-fg-strong shadow-sm" : "text-fg-muted hover:bg-canvas hover:text-fg"}`}
                 >
                   <Icon className="size-4 shrink-0" aria-hidden />
                   <span className="truncate">{label}</span>
@@ -92,7 +96,7 @@ export function SettingsScreen(_props: ScreenProps) {
               ))}
             </nav>
           </aside>
-          <div className="min-h-0">
+          <div className="min-h-0 overflow-y-auto px-5 py-5 md:px-7">
             <Tabs value={tab} onValueChange={(v) => setTab(v as SettingsTab)}>
               <TabsContent value="agent" className="mt-0"><AgentTab status={status} onRecheck={recheckAll} /></TabsContent>
               <TabsContent value="env" className="mt-0"><EnvTab doctor={doctor} status={status} /></TabsContent>
@@ -101,7 +105,8 @@ export function SettingsScreen(_props: ScreenProps) {
             </Tabs>
           </div>
         </div>
-      </div></DialogBody></DialogContent></Dialog>
+        </DialogContent>
+      </Dialog>
     </HomeWorkspaceShell>
   );
 }

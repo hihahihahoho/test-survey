@@ -10,6 +10,7 @@ const item = (patch: Partial<LibraryItem>): LibraryItem => ({
   description: "Nút game có vùng nội dung sạch",
   filename: "asset.png",
   poses: [],
+  tags: [],
   ...patch,
 });
 

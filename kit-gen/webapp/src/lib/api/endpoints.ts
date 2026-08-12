@@ -268,7 +268,7 @@ export const libraryApi = {
     return parse(brandProfileResultSchema, await httpPatch(`/api/library/brands/${pid(id)}`, input), "thương hiệu vừa sửa").brand;
   },
   async removeBrand(id: string) { await httpDelete(`/api/library/brands/${pid(id)}`); return { ok: true }; },
-  async add(input: { file: File; kind: "ui" | "mascot" | "reference"; group: string; name: string; description?: string; cell?: string; skel?: Record<string, unknown> }) {
+  async add(input: { file: File; kind: "ui" | "mascot" | "reference"; group: string; name: string; description?: string; tags?: string[]; poses?: string[]; cell?: string; skel?: Record<string, unknown> }) {
     if (input.file.size > LIMITS.refBytes) {
       throw new AgentError({ code: "TOO_LARGE", status: 413, transport: "client", message: "Ảnh vượt quá 20 MB" });
     }
@@ -278,11 +278,13 @@ export const libraryApi = {
     fd.append("group", input.group);
     fd.append("name", input.name);
     if (input.description) fd.append("description", input.description);
+    if (input.tags) fd.append("tags", JSON.stringify(input.tags));
+    if (input.poses) fd.append("poses", JSON.stringify(input.poses));
     if (input.cell) fd.append("cell", input.cell);
     if (input.skel) fd.append("skel", JSON.stringify(input.skel));
     return parse(libraryItemResultSchema, await httpUpload("/api/library/items", fd), "ảnh vừa thêm").item;
   },
-  async patch(id: string, input: { name?: string; description?: string; group?: string; poses?: string[]; cell?: string; skel?: Record<string, unknown> }) {
+  async patch(id: string, input: { name?: string; description?: string; tags?: string[]; group?: string; poses?: string[]; cell?: string; skel?: Record<string, unknown> }) {
     return parse(libraryItemResultSchema, await httpPatch(`/api/library/items/${pid(id)}`, input), "ảnh vừa sửa").item;
   },
   async remove(id: string) {

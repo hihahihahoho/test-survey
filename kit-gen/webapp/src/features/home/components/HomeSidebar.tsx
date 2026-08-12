@@ -97,7 +97,7 @@ export function HomeSidebar({
         <span>KitGen</span>
       </button>
 
-      <div className="relative mb-4">
+      {active === "projects" && <div className="relative mb-4">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden />
         <Input
           ref={searchRef}
@@ -108,7 +108,7 @@ export function HomeSidebar({
           placeholder="Tìm dự án…"
           className="h-9 rounded-2 bg-canvas pl-9"
         />
-      </div>
+      </div>}
 
       <nav aria-label="Danh sách dự án" className="space-y-1">
         {item("recent", "Gần đây", Clock3)}
@@ -119,8 +119,8 @@ export function HomeSidebar({
       <nav aria-label="Quản lý" className="space-y-1">
         {destination("brands", "Nhận dạng thương hiệu", Palette, onBrands)}
         {destination("ui-library", "Bộ khung UI", PanelsTopLeft, onUiLibrary)}
-        {destination("mascot-library", "Mascot pose", Sparkles, onMascotLibrary)}
-        {destination("references", "Ảnh tham chiếu", Images, onReferences)}
+        {destination("mascot-library", "Mascot", Sparkles, onMascotLibrary)}
+        {destination("references", "Style reference", Images, onReferences)}
       </nav>
 
       <div className="my-4 border-t border-line-subtle" />

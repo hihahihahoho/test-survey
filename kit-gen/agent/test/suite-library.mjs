@@ -33,6 +33,25 @@ export async function run({ api, wsRoot }) {
     ok(await pathExists(join(wsRoot, ".kitgen", "library", "assets", r.json.item.filename)))
   })
 
+  let mascotId = ""
+  await it("lưu tên, nhãn và pose skeleton cho từng mascot", async () => {
+    const form = multipart([
+      { name: "kind", data: "mascot" },
+      { name: "group", data: "mascot" },
+      { name: "name", data: "Sóc VCB" },
+      { name: "tags", data: JSON.stringify(["VCB", "ngân hàng"]) },
+      { name: "poses", data: JSON.stringify(["idle", "wave", "cheer"]) },
+      { name: "file", filename: "squirrel.png", contentType: "image/png", data: PNG_1x1 },
+    ])
+    const added = await api("POST", "/api/library/items", { headers: { "content-type": form.contentType }, body: form.body })
+    eq(added.status, 201)
+    mascotId = added.json.item.id
+    eq(added.json.item.tags, ["VCB", "ngân hàng"])
+    eq(added.json.item.poses, ["idle", "wave", "cheer"])
+    const patched = await api("PATCH", `/api/library/items/${mascotId}`, { body: { tags: ["VCB", "Tết"] } })
+    eq(patched.json.item.tags, ["VCB", "Tết"])
+  })
+
   await it("đọc file và lưu số lượng tối đa", async () => {
     const file = await api("GET", `/api/library/items/${id}/file`)
     eq(file.status, 200)
@@ -74,14 +93,16 @@ export async function run({ api, wsRoot }) {
 
   await it("xoá cả metadata và file", async () => {
     const before = await api("GET", "/api/library")
-    const filename = before.json.items[0].filename
+    const filename = before.json.items.find(item => item.id === id).filename
     const del = await api("DELETE", `/api/library/items/${id}`)
     eq(del.status, 204)
     ok(!(await pathExists(join(wsRoot, ".kitgen", "library", "assets", filename))))
     const after = await api("GET", "/api/library")
-    eq(after.json.items, [])
+    eq(after.json.items.map(item => item.id), [mascotId])
     eq(after.json.brands[0].assetIds, [])
     const delBrand = await api("DELETE", `/api/library/brands/${brandId}`)
     eq(delBrand.status, 204)
+    const delMascot = await api("DELETE", `/api/library/items/${mascotId}`)
+    eq(delMascot.status, 204)
   })
 }

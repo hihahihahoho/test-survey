@@ -444,3 +444,11 @@ Quản lý dự án → Sửa ref/chọn lại thành phần/đổi giới hạn
 - Bộ khung UI trong wizard tách phần trình bày thành `UI nhỏ` và `Đạo cụ`; contract hiện vẫn quy về giới hạn sheet `small` để tương thích engine.
 - Canvas không phải màn con trong dự án; route canvas cũ điều hướng về tổng quan. Cài đặt dự án mở bằng dialog từ topbar và deep-link `?section=settings`.
 - Xoá vĩnh viễn yêu cầu nhập đúng `xac-nhan`; agent đồng thời đối chiếu chính xác `projectId` trong request với mục đang xoá để tránh xoá nhầm dự án khác.
+
+### Chỉnh cấu trúc thư viện và dialog (2026-08-12)
+
+- **Mascot** là thư viện nhân vật, không phải thư viện pose. Mỗi mascot có tên, ảnh reference riêng, nhãn để tìm/lọc (ví dụ `VCB`, `ngân hàng`) và danh sách pose skeleton lấy trực tiếp từ prototype `silhouettes.js`.
+- **Style reference** chỉ quản lý moodboard, key visual, chất liệu và hình ảnh định hướng phong cách; không còn tab Mascot trong khu vực này.
+- Search ở sidebar Home chỉ tìm dự án. Các màn Bộ khung UI, Mascot và Style reference có search/filter riêng theo dữ liệu của màn.
+- Các nhóm Bộ khung UI dùng shared Tabs component. Preview upload là grid ảnh thuần, không hiện filename hoặc dung lượng; tên file chỉ còn trong accessible label/title phục vụ xoá và debug.
+- Dialog Cài đặt có header cố định, navigation trái cố định và chỉ cuộn vùng nội dung bên phải.

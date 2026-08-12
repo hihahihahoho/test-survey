@@ -66,6 +66,9 @@ function cleanState(raw) {
           ...item,
           name: String(item.name ?? "Ảnh chưa đặt tên").trim().slice(0, 100) || "Ảnh chưa đặt tên",
           description: String(item.description ?? "").trim().slice(0, 1000),
+          tags: Array.isArray(item.tags)
+            ? [...new Set(item.tags.map(tag => String(tag).trim()).filter(Boolean))].slice(0, 12)
+            : [],
           ...geometry,
           poses: Array.isArray(item.poses)
             ? [...new Set(item.poses.map(pose => String(pose).trim()).filter(Boolean))].slice(0, 32)
@@ -123,7 +126,7 @@ export async function removeBrandProfile(ws, id) {
   await saveLibrary(ws, state)
 }
 
-export async function addLibraryItem(ws, { data, kind, group, name, description, cell, skel }) {
+export async function addLibraryItem(ws, { data, kind, group, name, description, tags, poses, cell, skel }) {
   if (!KINDS.has(kind)) fail("BAD_REQUEST", "kind must be ui, mascot or reference")
   if (!GROUPS.has(group)) fail("BAD_REQUEST", "unknown library group")
   const type = sniff(data)
@@ -145,7 +148,10 @@ export async function addLibraryItem(ws, { data, kind, group, name, description,
     bytes: data.length,
     w: size.w,
     h: size.h,
-    poses: kind === "mascot" ? ["Đứng yên", "Vui", "Buồn", "Ăn mừng"] : [],
+    tags: Array.isArray(tags) ? [...new Set(tags.map(tag => String(tag).trim()).filter(Boolean))].slice(0, 12) : [],
+    poses: kind === "mascot" && Array.isArray(poses)
+      ? [...new Set(poses.map(pose => String(pose).trim()).filter(Boolean))].slice(0, 32)
+      : kind === "mascot" ? ["idle", "wave", "cheer", "sad"] : [],
     createdAt: new Date().toISOString(),
   }
   state.items.unshift(item)
@@ -159,6 +165,10 @@ export async function patchLibraryItem(ws, id, patch) {
   if (!item) fail("NOT_FOUND", `library item ${id} not found`)
   if (patch.name !== undefined) item.name = String(patch.name).trim().slice(0, 100) || item.name
   if (patch.description !== undefined) item.description = String(patch.description).trim().slice(0, 1000)
+  if (patch.tags !== undefined) {
+    if (!Array.isArray(patch.tags)) fail("BAD_REQUEST", "tags must be an array")
+    item.tags = [...new Set(patch.tags.map(tag => String(tag).trim()).filter(Boolean))].slice(0, 12)
+  }
   if (patch.group !== undefined) {
     if (!GROUPS.has(patch.group)) fail("BAD_REQUEST", "unknown library group")
     item.group = patch.group

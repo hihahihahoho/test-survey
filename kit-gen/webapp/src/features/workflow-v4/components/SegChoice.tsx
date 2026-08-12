@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -34,10 +35,10 @@ export function SegChoice({ on, className, children, ...props }: SegChoiceProps)
     <Button
       variant="secondary"
       aria-pressed={on}
-      className={cn(on && "border-accent text-fg-strong", className)}
+      className={cn("relative", on && "border-accent text-fg-strong", className)}
       {...props}
     >
-      {children}
+      {children}{on && <Check className="ml-auto size-4 text-accent-text" aria-hidden />}
     </Button>
   );
 }

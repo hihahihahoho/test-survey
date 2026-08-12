@@ -69,7 +69,7 @@ export function SharedMascotPicker({ onPick }: {
         <Button type="button" size="sm" variant="secondary"><Images aria-hidden />Chọn mascot có sẵn</Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 p-2">
-        <p className="px-2 pb-2 text-caption text-fg-muted">Mascot pose</p>
+        <p className="px-2 pb-2 text-caption text-fg-muted">Mascot</p>
         <div className="max-h-72 overflow-y-auto">
           {items.map((item) => (
             <LibraryRow key={item.id} item={item} onSelect={(selected) => {

@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { BriefPasteDialog } from "@/features/kit-form/components/BriefPasteDialog";
 import { briefToForm } from "@/features/kit-form/lib/form-model";
 import { toastSuccess } from "@/features/projects/lib/feedback";
@@ -67,17 +68,10 @@ export function BriefStep() {
           <ClipboardPaste aria-hidden />Dán brief có cấu trúc
         </Button>
       </div>
-      <div className="workflow-choice">
-        <button
-          type="button"
-          aria-pressed={s.mascotEnabled}
-          className={s.mascotEnabled ? "choice-card selected" : "choice-card"}
-          onClick={() => s.set({ mascotEnabled: !s.mascotEnabled })}
-        >
-          <strong>{s.mascotEnabled ? "Có nhân vật đại diện" : "Không cần nhân vật"}</strong>
-          <span>{s.mascotEnabled ? "Bạn sẽ mô tả nhân vật ở bước riêng." : "Bỏ qua bước tạo nhân vật."}</span>
-        </button>
-      </div>
+      <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-3 border border-line-subtle bg-raised p-4">
+        <Checkbox className="mt-0.5 size-5" checked={s.mascotEnabled} onCheckedChange={(checked) => s.set({ mascotEnabled: checked === true })} />
+        <span><strong className="block text-label text-fg-strong">Có nhân vật đại diện</strong><span className="text-caption text-fg-muted">Bật để thêm mascot và chọn pose ở bước riêng.</span></span>
+      </label>
       <BriefPasteDialog open={pasteOpen} onOpenChange={setPasteOpen} onApply={applyBrief} />
     </Step>
   );
