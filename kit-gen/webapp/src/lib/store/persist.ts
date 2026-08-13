@@ -4,8 +4,11 @@
  * Bốn lớp bảo vệ, xếp theo thứ tự chạy:
  *   L1 ALLOWLIST KHOÁ tường minh  → khoá ngoài bảng arch §4.1 ⇒ throw StoreKeyError
  *   L2 SCHEMA loại bỏ field lạ    → field không khai báo KHÔNG BAO GIỜ ra đĩa
- *   L3 BỘ DÒ SECRET               → trúng tên field HOẶC pattern giá trị ⇒ throw, KHÔNG ghi
+ *   L3 BỘ DÒ SECRET               → trúng tên field HOẶC pattern giá trị ⇒ KHÔNG ghi
  *   L4 baseUrl bị giới hạn        → chỉ loopback + cổng trong portCandidates (§6.5-3)
+ *
+ * L3/L4 chặn thì FAIL-SOFT: bỏ qua lần ghi + cảnh báo một dòng ĐÃ CHE giá trị, app đi
+ * tiếp. Chỉ L1 (lỗi lập trình) mới ném. Xem `storeSet` để biết vì sao.
  *
  * Vì sao ở đây khắt khe mà `lib/types/api.ts` khoan dung: hai hướng dữ liệu, hai mức tin
  * cậy. Dữ liệu TỪ agent phải khoan dung (agent mới thêm field thì UI cũ không được vỡ).
@@ -19,7 +22,7 @@
  * `z.object` mới là cái lược bỏ field lạ. Đã đổi sang `z.object` và giữ nguyên ca test.
  */
 import { z } from "zod";
-import { StoreKeyError, assertNoSecret } from "./secrets";
+import { SecretLeakError, StoreKeyError, assertNoSecret, warnSecretBlocked } from "./secrets";
 import { PORT_CANDIDATES } from "../api/constants";
 
 /** ALLOWLIST — danh sách ĐẦY ĐỦ, đúng bảng arch §4.1. Không có khoá nào ngoài bảng này. */
@@ -151,6 +154,37 @@ export const SCHEMAS = {
 
 export type StoreShape = { [K in LsKey]: z.infer<(typeof SCHEMAS)[K]> };
 
+/**
+ * FIELD CHỨA ID DO APP SINH — khai theo TỪNG KHOÁ, đi kèm schema ở ngay trên.
+ *
+ * Vì sao cần: project id của app là `<slug>-<4 hex>` (agent `newProjectId`), mà `slug`
+ * lấy từ tên dự án user đặt. Tên dài + tiếng Việt bỏ dấu ⇒ id ≥32 ký tự với entropy
+ * Shannon >4.0 ⇒ trúng luật V-ENTROPY của L3 dù đây là ID CÔNG KHAI của app (nó nằm trên
+ * URL, trên thẻ dự án), không phải secret. Lỗi thật ở bản 2.1.17: mở dự án thứ 4 ⇒
+ * `kitgen.recent.v1.projectIds[3]` bị chặn ⇒ văng SecretLeakError giữa luồng UI.
+ *
+ * Vì sao khai theo field chứ không nới ngưỡng entropy: nới ngưỡng làm YẾU luật cho MỌI
+ * field; khai theo field chỉ tha đúng chỗ mà ta biết bản chất dữ liệu, và vẫn còn hai
+ * điều kiện nữa mới được tha — giá trị phải khớp `APP_ID_RE`, và mọi pattern secret
+ * (V-SK, V-JWT, V-BEARER, V-ABSPATH…) vẫn chạy trước. Token thật vẫn bị chặn ở đây.
+ *
+ * Field không có trong bảng này ⇒ giữ nguyên luật cũ. Thêm field mới vào đây phải giải
+ * thích được vì sao giá trị của nó do APP sinh chứ không phải do user/agent dán vào.
+ */
+const ID_FIELDS: Partial<Record<LsKey, ReadonlySet<string>>> = {
+  /** `projectIds[]` và `lastOpenedId` đều là project id thuần. */
+  [LS_KEYS.recent]: new Set(["projectIds", "lastOpenedId"]),
+  /** `items[].id` là project id; `items[].slug` là cùng bộ ký tự, do agent slugify sinh. */
+  [LS_KEYS.projectsCache]: new Set(["id", "slug"]),
+  /** `workspaceId` = "ws_"+8 hex do agent sinh (agent/lib/workspace.mjs), không lộ path. */
+  [LS_KEYS.workspace]: new Set(["workspaceId"]),
+};
+
+function scanOptions(key: LsKey): { idFields?: ReadonlySet<string> } {
+  const idFields = ID_FIELDS[key];
+  return idFields ? { idFields } : {};
+}
+
 export function defaultsFor<K extends LsKey>(key: K): StoreShape[K] {
   return SCHEMAS[key].parse({}) as StoreShape[K];
 }
@@ -254,30 +288,67 @@ function rawRemove(key: string): void {
 /* ═════════════ API công khai ═════════════ */
 
 /**
+ * Một dòng cảnh báo DUY NHẤT khi guard chặn. Chỉ có khoá + luật + đường dẫn field —
+ * TUYỆT ĐỐI không có giá trị bị chặn (đó là cả lý do tồn tại của lớp này), và `path`
+ * do chính `SecretLeakError` dựng nên đã được che nếu bản thân tên field là secret.
+ * Ca secret dùng chung `warnSecretBlocked` với hai cửa IndexedDB — một định dạng log.
+ */
+function warnBlocked(key: string, e: SecretLeakError | StoreKeyError): void {
+  if (e instanceof SecretLeakError) {
+    warnSecretBlocked(key, e);
+    return;
+  }
+  console.warn(
+    `[kitgen/guard] Bỏ qua ghi "${key}": trúng luật allowlist tại ${e.key}. ` +
+      `Giá trị không được ghi và không được log.`,
+  );
+}
+
+/**
  * Ghi một khoá. Chạy đủ L1 → L2 → L3 → L4.
+ *
+ * FAIL-SOFT (bắt buộc): guard là lớp BẢO VỆ, không phải lớp làm vỡ app. Khi L3/L4 chặn,
+ * hàm này BỎ QUA lần ghi đó, cảnh báo một dòng đã che giá trị, rồi trả về giá trị đang
+ * nằm trên đĩa và ĐI TIẾP. Lý do: mọi call-site đều là luồng UI đồng bộ (zustand
+ * `persist` gọi `setItem` ngay trong subscriber của `set()`), nên một cú throw ở đây
+ * không dừng "một lần ghi" mà dừng cả lần render — đúng thứ đã xảy ra ở 2.1.17: mở dự
+ * án ⇒ `useRecentStore.touch()` ⇒ SecretLeakError không ai bắt ⇒ trắng màn hình. Mất một
+ * dòng "gần đây" là phiền; mất màn hình mới là hỏng. Dữ liệu KHÔNG rò ra đĩa trong cả
+ * hai cách xử lý — khác biệt chỉ là app còn sống hay không.
+ *
+ * Khoá lạ (L1) VẪN ném: đó là lỗi lập trình lúc build, không phải dữ liệu người dùng,
+ * và phải đỏ ngay ở test chứ không được chìm vào console.
  * @throws {StoreKeyError} khoá không có trong allowlist
- * @throws {SecretLeakError} value có mùi secret
  */
 export function storeSet<K extends LsKey>(key: K, value: unknown): StoreShape[K] {
   if (!isAllowedKey(key)) throw new StoreKeyError(String(key)); // L1
-  // L3 chạy TRƯỚC L2, trên dữ liệu THÔ. Nếu quét sau khi schema đã lược field lạ thì một
-  // secret nằm ở field lạ sẽ bị bỏ đi im lặng — không rò ra đĩa, nhưng người viết code
-  // không bao giờ biết mình vừa suýt làm gì. Brief yêu cầu "ném lỗi rõ khi bị chặn".
-  assertNoSecret(value, key);
-  const parsed = SCHEMAS[key].safeParse(value); // L2 — field lạ bị lược bỏ
-  if (!parsed.success) {
-    // Dữ liệu không khớp schema ⇒ dùng mặc định thay vì ghi rác. Không ném: một
-    // preference lệch không đáng làm cả app dừng.
-    const fallback = defaultsFor(key);
-    assertNoSecret(fallback, key); // L3
-    rawSet(key, JSON.stringify(fallback));
-    return fallback;
+  const opts = scanOptions(key);
+  try {
+    // L3 chạy TRƯỚC L2, trên dữ liệu THÔ. Nếu quét sau khi schema đã lược field lạ thì một
+    // secret nằm ở field lạ sẽ bị bỏ đi im lặng — không rò ra đĩa, nhưng người viết code
+    // không bao giờ biết mình vừa suýt làm gì. Vì vậy vẫn phải có cảnh báo rõ khi bị chặn.
+    assertNoSecret(value, key, opts);
+    const parsed = SCHEMAS[key].safeParse(value); // L2 — field lạ bị lược bỏ
+    if (!parsed.success) {
+      // Dữ liệu không khớp schema ⇒ dùng mặc định thay vì ghi rác. Không ném: một
+      // preference lệch không đáng làm cả app dừng.
+      const fallback = defaultsFor(key);
+      assertNoSecret(fallback, key, opts); // L3
+      rawSet(key, JSON.stringify(fallback));
+      return fallback;
+    }
+    const clean = parsed.data as StoreShape[K];
+    assertNoSecret(clean, key, opts); // L3 — chặn thì KHÔNG ghi
+    if (key === LS_KEYS.agent) assertBaseUrl(clean as StoreShape[typeof LS_KEYS.agent]); // L4
+    rawSet(key, JSON.stringify(clean));
+    return clean;
+  } catch (e) {
+    if (e instanceof SecretLeakError || e instanceof StoreKeyError) {
+      warnBlocked(key, e); // L3/L4 chặn ⇒ không ghi, không log giá trị, app đi tiếp
+      return storeGet(key); // giá trị cũ trên đĩa còn nguyên — thao tác bị chặn không phá dữ liệu
+    }
+    throw e; // lỗi lạ (bug thật) không được nuốt
   }
-  const clean = parsed.data as StoreShape[K];
-  assertNoSecret(clean, key); // L3 — ném SecretLeakError, KHÔNG ghi
-  if (key === LS_KEYS.agent) assertBaseUrl(clean as StoreShape[typeof LS_KEYS.agent]); // L4
-  rawSet(key, JSON.stringify(clean));
-  return clean;
 }
 
 function assertBaseUrl(value: StoreShape[typeof LS_KEYS.agent]): void {

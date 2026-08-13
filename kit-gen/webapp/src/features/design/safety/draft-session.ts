@@ -134,11 +134,21 @@ export function scheduleDraftWrite(
   s.timer = setTimeout(() => {
     s.timer = null;
     void (async () => {
-      const ok = await writeDraft(projectId, {
-        contract,
-        baseVersion,
-        dirtyFields: label ? [label] : [],
-      });
+      // Timer chạy NGOÀI mọi luồng React: không component nào await được nó, không có
+      // error boundary nào bắt được nó. Một promise reject ở đây là unhandled rejection
+      // thẳng ra console/`window.onunhandledrejection`. Ghi nháp KHÔNG BAO GIỜ đáng để
+      // làm chuyện đó — nháp hỏng thì lần gõ sau lại hẹn ghi tiếp, người dùng chỉ mất
+      // dấu "đã lưu lúc …". Vì vậy bọc catch ở đây, không để tầng dưới phải ném ra.
+      let ok = false;
+      try {
+        ok = await writeDraft(projectId, {
+          contract,
+          baseVersion,
+          dirtyFields: label ? [label] : [],
+        });
+      } catch {
+        ok = false; // cửa IDB đã tự cảnh báo (đã che giá trị); ở đây chỉ cần đừng vỡ
+      }
       if (!sessions.has(projectId)) return;
       if (ok) {
         s.lastWritten = contract;

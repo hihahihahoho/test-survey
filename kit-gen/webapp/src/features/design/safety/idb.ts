@@ -19,13 +19,15 @@
  *  1. Store lạ ⇒ throw. Không có đường ghi vào store ngoài allowlist.
  *  2. Mọi giá trị ghi vào `drafts`/`runlog` bị QUÉT SECRET (`assertNoSecret` của R0).
  *     Agent đã redact log rồi; đây là lớp phòng thủ THỨ HAI, vì log codex là nơi
- *     token dễ lọt nhất (arch §4.3-6).
+ *     token dễ lọt nhất (arch §4.3-6). Trúng luật ⇒ KHÔNG ghi + cảnh báo một dòng đã
+ *     che giá trị + trả `false` (fail-soft, xem `idbSet`) — bộ dò không được phép làm
+ *     vỡ luồng gọi nó.
  *  3. `QuotaExceededError` ⇒ dọn theo luật rồi thử LẠI MỘT LẦN; vẫn hỏng thì tắt
  *     cache và trả `false`. KHÔNG BAO GIỜ ném ra UI (arch §4.2 câu cuối).
  *  4. Không có IndexedDB (Safari private, tab bị chặn storage) ⇒ `available()` false,
  *     mọi hàm trả rỗng. App mất cache chứ không mất tính năng.
  */
-import { assertNoSecret } from "@/lib/store";
+import { SecretLeakError, assertNoSecret, warnSecretBlocked } from "@/lib/store";
 
 export const IDB_NAME = "kitgen";
 export const IDB_VERSION = 1;
@@ -140,13 +142,48 @@ export async function idbGet<T>(store: IdbStore, key: string): Promise<T | null>
 }
 
 /**
+ * FIELD CHỨA ID DO APP SINH — khai theo TỪNG STORE, cùng nguyên tắc với `ID_FIELDS`
+ * của `lib/store/persist.ts` (xem chú thích ở đó cho lý do đầy đủ).
+ *
+ * Vì sao cần ở đây: id của app là `<slug>-<hex>` lấy từ tên do user đặt, nên id dài
+ * ≥32 ký tự và nhiều ký tự khác nhau ⇒ entropy Shannon vượt ngưỡng 4.0 của luật
+ * V-ENTROPY dù đây là id CÔNG KHAI, không phải secret. Cụ thể ở hai store này:
+ *   · `runlog.projectId` — project id (≤48 ký tự, `agent/lib/paths.mjs RE_PROJECT_ID`);
+ *   · `drafts` → `contract.sheets[].id` / `variants[].id` / `characters[].id` — mã sheet
+ *     tới 32 ký tự (`RE_SHEET_ID`), cũng do slugify tên mà ra.
+ * Không khai thì một dự án tên dài làm hỏng nháp editor và cache log của chính nó.
+ *
+ * KHÔNG khai `lines`/`text` của runlog: log codex CHÍNH LÀ nơi token dễ lọt nhất
+ * (arch §4.3-6) ⇒ phần đó phải chịu đủ mọi luật, không có ngoại lệ nào.
+ */
+const ID_FIELDS: Partial<Record<IdbStore, ReadonlySet<string>>> = {
+  [IDB_STORES.drafts]: new Set(["id", "projectId"]),
+  [IDB_STORES.runlog]: new Set(["projectId"]),
+};
+
+/**
  * Ghi. Quét secret trước (trừ `thumbs` — Blob ảnh, quét vô nghĩa).
+ *
+ * FAIL-SOFT: trúng luật ⇒ KHÔNG ghi, cảnh báo một dòng đã che giá trị, trả `false` —
+ * ĐÚNG mã trả về của "hết chỗ / không ghi được" mà mọi chỗ gọi đã xử lý sẵn. Trước đây
+ * hàm này ném `SecretLeakError`; vì nó `async`, cú ném đó thành **unhandled rejection**
+ * ở những chỗ gọi kiểu `void (async () => …)()` (nháp editor tự lưu) — tức là bộ dò
+ * bảo vệ dữ liệu bằng cách làm hỏng luồng, đúng loại lỗi vừa vỡ ở bản 2.1.17. Dữ liệu
+ * KHÔNG rò ra đĩa ở cả hai cách; khác biệt chỉ là app còn chạy tiếp hay không.
  * @returns `true` nếu đã ghi được. Quota đầy ⇒ dọn + thử lại 1 lần.
- * @throws SecretLeakError — CỐ Ý ném: chỗ gọi phải biết mình vừa suýt ghi secret.
  */
 export async function idbSet(store: IdbStore, key: string, value: unknown): Promise<boolean> {
   assertStore(store);
-  if (store !== IDB_STORES.thumbs) assertNoSecret(value, `idb.${store}`);
+  if (store !== IDB_STORES.thumbs) {
+    const idFields = ID_FIELDS[store];
+    try {
+      assertNoSecret(value, `idb.${store}`, idFields ? { idFields } : {});
+    } catch (e) {
+      if (!(e instanceof SecretLeakError)) throw e;
+      warnSecretBlocked(`idb.${store}`, e);
+      return false;
+    }
+  }
   const db = await open();
   if (db === null) return false;
   try {

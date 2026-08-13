@@ -97,6 +97,39 @@ describe("bộ dò secret — chặn theo PATTERN GIÁ TRỊ (trục b)", () => 
   });
 });
 
+describe("miễn trừ ENTROPY cho field id do app sinh (regression 2.1.17)", () => {
+  /** `<slug>-<4 hex>` — đúng cách agent sinh project id; 37 ký tự, entropy > 4.0. */
+  const REAL_ID = "onboarding-illustration-set-2026-3b91";
+  const idFields = new Set(["projectIds", "lastOpenedId", "id", "slug"]);
+
+  it("không khai idFields ⇒ vẫn chặn (luật entropy KHÔNG bị nới cho mọi field)", () => {
+    expect(looksHighEntropy(REAL_ID)).toBe(true);
+    expect(() => assertNoSecret({ projectIds: [REAL_ID] })).toThrow(SecretLeakError);
+  });
+
+  it("khai idFields ⇒ id đi lọt, kể cả khi nằm trong mảng", () => {
+    expect(() => assertNoSecret({ projectIds: [REAL_ID, "kit-tet-2026-4f7c"] }, "$", { idFields })).not.toThrow();
+    expect(() => assertNoSecret({ lastOpenedId: REAL_ID }, "$", { idFields })).not.toThrow();
+    expect(() => assertNoSecret({ items: [{ id: REAL_ID, slug: "onboarding-illustration-set-2026" }] }, "$", { idFields }))
+      .not.toThrow();
+  });
+
+  it("miễn trừ KHÔNG lây sang field khác cùng object", () => {
+    expect(() => assertNoSecret({ projectIds: [REAL_ID], note: FAKE.openaiKey }, "$", { idFields })).toThrow(
+      SecretLeakError,
+    );
+    expect(() => assertNoSecret({ filterQuery: "Xk29fLp84QmZa71RtVbNw35YcJd06HsE" }, "$", { idFields })).toThrow(
+      SecretLeakError,
+    );
+  });
+
+  it("secret THẬT đặt đúng vào field id vẫn bị chặn (hình dạng id không khớp)", () => {
+    for (const s of [FAKE.openaiKey, FAKE.jwt, FAKE.bearer, FAKE.ghToken, "Xk29fLp84QmZa71RtVbNw35YcJd06HsE"]) {
+      expect(() => assertNoSecret({ projectIds: [s] }, "$", { idFields })).toThrow(SecretLeakError);
+    }
+  });
+});
+
 describe("thông điệp lỗi KHÔNG tự làm rò secret (bài học qa-security.md §2.2)", () => {
   it("che tên field khi chính TÊN FIELD là secret", () => {
     const obj: Record<string, unknown> = { [FAKE.openaiKey]: "giá trị vô hại" };

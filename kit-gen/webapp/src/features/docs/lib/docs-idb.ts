@@ -23,7 +23,7 @@
  *  4. Không có IndexedDB (Safari private, tab bị chặn) ⇒ `docsIdbAvailable()` false,
  *     mọi hàm trả rỗng. App mất chỗ lưu nháp chứ không trắng trang.
  */
-import { assertNoSecret } from "@/lib/store";
+import { SecretLeakError, assertNoSecret, warnSecretBlocked } from "@/lib/store";
 
 export const DOCS_IDB_NAME = "kitgen-docs";
 export const DOCS_IDB_VERSION = 1;
@@ -134,13 +134,39 @@ export async function docsIdbGet<T>(key: string): Promise<T | null> {
 }
 
 /**
+ * FIELD CHỨA ID DO APP SINH (cùng nguyên tắc với `ID_FIELDS` của `lib/store/persist.ts`).
+ *
+ * `doc.id` là `f-<slug>` cắt 34 ký tự (`agent/lib/docs.mjs newId`, khớp `RE_DOC_ID` ở
+ * `types.ts`), slug lấy từ TÊN FILE do user đặt. Một tên tiếng Việt đủ dài cho ra id kiểu
+ * `f-mau-6-nhan-vat-quy-4-2025-b7k3ws`: 34 ký tự, entropy 4.07 > ngưỡng 4.0 ⇒ trúng
+ * V-ENTROPY dù đây chỉ là mã file hiện ngay trên tab. `view.sheetIds`/`view.variantIds`
+ * là id sheet/phong cách của contract, cùng bản chất. `canvas.nodes[].id` và `bind.id`
+ * cũng do app sinh.
+ *
+ * KHÔNG khai `name`/`text`: đó là chữ NGƯỜI DÙNG gõ, phải chịu đủ mọi luật. Và như mọi
+ * chỗ khác, miễn trừ này chỉ bỏ qua luật entropy cho giá trị đúng hình dạng id — token
+ * thật đặt vào `doc.id` vẫn bị chặn bởi các pattern V-SK/V-JWT/V-BEARER/V-ABSPATH.
+ */
+const ID_FIELDS: ReadonlySet<string> = new Set(["id", "sheetIds", "variantIds"]);
+
+/**
  * Ghi. Quét secret TRƯỚC.
+ *
+ * FAIL-SOFT: trúng luật ⇒ KHÔNG ghi, cảnh báo một dòng đã che giá trị, trả `false` —
+ * cùng mã trả về với "hết chỗ", là thứ mọi chỗ gọi đã xử lý. Bản trước ném
+ * `SecretLeakError` từ một hàm `async` ⇒ unhandled rejection ở chỗ gọi không `catch`;
+ * bộ dò không được phép làm vỡ luồng nó đang bảo vệ (bài học 2.1.17).
  * @returns `true` nếu ghi được. Quota đầy ⇒ dọn + thử lại đúng 1 lần rồi `false`.
- * @throws SecretLeakError — CỐ Ý ném: chỗ gọi phải biết mình vừa suýt ghi secret.
  */
 export async function docsIdbSet(key: string, value: unknown): Promise<boolean> {
   assertStore(DOCS_STORE);
-  assertNoSecret(value, `idb.${DOCS_STORE}`);
+  try {
+    assertNoSecret(value, `idb.${DOCS_STORE}`, { idFields: ID_FIELDS });
+  } catch (e) {
+    if (!(e instanceof SecretLeakError)) throw e;
+    warnSecretBlocked(`idb.${DOCS_STORE}`, e);
+    return false;
+  }
   const db = await open();
   if (db === null) return false;
   try {

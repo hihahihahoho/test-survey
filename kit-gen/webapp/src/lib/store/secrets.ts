@@ -8,6 +8,9 @@
  *       entropy cao — bắt được ca tên field vô hại nhưng giá trị là secret
  *
  * Trúng ⇒ **throw** `SecretLeakError`, KHÔNG ghi. Thà mất một tuỳ chọn UI còn hơn rò secret.
+ * Nhưng "mất một tuỳ chọn" phải đúng nghĩa là mất tuỳ chọn, KHÔNG phải vỡ màn hình: file
+ * này chỉ là bộ dò (ném để chỗ gọi biết), còn `persist.ts` — cửa ghi — BẮT lỗi này và đi
+ * tiếp (fail-soft). Xem `storeSet`.
  *
  * File này KHÔNG import gì (test độc lập được) và TUYỆT ĐỐI không log giá trị bị chặn —
  * kể cả trong message của lỗi. Đó là lỗi mà `teams/qa-web/qa-security.md` §2.2 đã tìm ra ở
@@ -105,6 +108,35 @@ export function looksHighEntropy(value: unknown): boolean {
 const ENTROPY_EXCEPTION_RE = /^(sha256:|sha1:|[0-9a-f]{7,64}$)/i;
 
 /**
+ * ID/SLUG DO CHÍNH APP SINH — **không phải secret**, và đây là lý do chứ không phải nới tay:
+ * agent tạo project id bằng `newProjectId()` (agent/lib/projects.mjs) = `<slug>-<4 hex>`,
+ * trong đó `slug` là TÊN DỰ ÁN do user đặt, bỏ dấu tiếng Việt. Một tên như
+ * "Onboarding illustration set 2026" cho ra `onboarding-illustration-set-2026-3b91`:
+ * 37 ký tự, entropy Shannon 4.16 bit/ký tự — vượt ngưỡng 4.0 của V-ENTROPY. Entropy cao
+ * ở đây đến từ việc chuỗi có NHIỀU KÝ TỰ KHÁC NHAU (đặc trưng của một câu tiếng Việt bỏ
+ * dấu), KHÔNG phải vì nó ngẫu nhiên: id này do app hiển thị công khai trên URL và trong
+ * danh sách dự án, chặn nó là chặn nhầm. Lỗi thật đã gặp (bản 2.1.17): mở dự án ⇒
+ * `kitgen.recent.v1.projectIds[3]` trúng V-ENTROPY ⇒ vỡ UI.
+ *
+ * Hình dạng phải KHỚP CHÍNH XÁC `RE_PROJECT_ID` của agent (agent/lib/paths.mjs):
+ * chỉ chữ thường + số + gạch ngang, ≤48 ký tự. Không có hoa, `_`, `+`, `/`, `=`, `.` ⇒
+ * base64/JWT/khoá dạng `sk_live_…` KHÔNG lọt qua hình dạng này. Và dù có lọt hình dạng
+ * thì miễn trừ này chỉ MIỄN LUẬT ENTROPY: mọi pattern giá trị (V-SK, V-JWT, V-BEARER,
+ * V-ABSPATH, V-GHTOKEN…) vẫn chạy TRƯỚC và vẫn chặn.
+ */
+export const APP_ID_RE = /^[a-z0-9][a-z0-9-]{2,47}$/;
+
+export interface ScanOptions {
+  /**
+   * Tên các field — ĐÃ KHAI BÁO trong schema của khoá persist (xem `ID_FIELDS` ở
+   * persist.ts) — chứa id/slug do app sinh. Allowlist theo FIELD chứ không theo giá trị:
+   * một chuỗi entropy cao chỉ được tha khi nó vừa nằm đúng field id đã khai, vừa đúng
+   * hình dạng `APP_ID_RE`.
+   */
+  readonly idFields?: ReadonlySet<string>;
+}
+
+/**
  * Tên field có thể CHÍNH LÀ secret (vd map keyed by token). Khi đó `path` dùng để báo lỗi
  * sẽ chứa luôn giá trị nhạy cảm ⇒ phải che, nếu không chính thông điệp lỗi lại làm rò
  * thứ ta vừa chặn. (Đúng lỗi qa-security.md §2.2 đã bắt được và đã vá ở bản vanilla.)
@@ -122,27 +154,39 @@ function checkFieldName(name: string, path: string): void {
   }
 }
 
-function checkValue(value: unknown, path: string): void {
+/**
+ * @param isAppIdField giá trị này nằm trong field id đã khai của schema (xem `ScanOptions`).
+ *   CHỈ miễn luật entropy, và chỉ khi giá trị đúng hình dạng id của app.
+ */
+function checkValue(value: unknown, path: string, isAppIdField = false): void {
   if (typeof value !== "string") return;
   if (VALUE_EXCEPTION_RE.test(value)) return;
   for (const { rule, re } of FORBIDDEN_VALUE_PATTERNS) {
     if (re.test(value)) throw new SecretLeakError(path, rule, "value-pattern");
   }
+  // Đặt SAU vòng pattern là cố ý: token thật vẫn bị chặn kể cả khi nằm ở field id.
+  if (isAppIdField && APP_ID_RE.test(value)) return;
   if (looksHighEntropy(value) && !ENTROPY_EXCEPTION_RE.test(value)) {
     throw new SecretLeakError(path, "V-ENTROPY", "entropy");
   }
 }
 
 /** Quét đệ quy TRƯỚC khi serialize. Ném ở vi phạm ĐẦU TIÊN. */
-export function assertNoSecret(value: unknown, path = "$"): void {
-  scan(value, path, new WeakSet());
+export function assertNoSecret(value: unknown, path = "$", opts: ScanOptions = {}): void {
+  scan(value, path, new WeakSet(), opts, null);
 }
 
-function scan(value: unknown, path: string, seen: WeakSet<object>): void {
+/**
+ * @param field tên field OBJECT gần nhất bao quanh giá trị. Mảng KHÔNG đổi `field` —
+ *   `projectIds[3]` vẫn thuộc field `projectIds`, nếu không thì phần tử của một mảng id
+ *   sẽ mất ngữ cảnh và lại bị chặn nhầm (đúng ca lỗi 2.1.17).
+ */
+function scan(value: unknown, path: string, seen: WeakSet<object>, opts: ScanOptions, field: string | null): void {
   if (value === null || value === undefined) return;
+  const isAppIdField = field !== null && opts.idFields?.has(field) === true;
   const t = typeof value;
   if (t === "string") {
-    checkValue(value, path);
+    checkValue(value, path, isAppIdField);
     return;
   }
   if (t === "number" || t === "boolean") return;
@@ -154,7 +198,7 @@ function scan(value: unknown, path: string, seen: WeakSet<object>): void {
     if (seen.has(obj)) return;
     seen.add(obj);
     if (Array.isArray(value)) {
-      value.forEach((v, i) => scan(v, `${path}[${i}]`, seen));
+      value.forEach((v, i) => scan(v, `${path}[${i}]`, seen, opts, field));
       return;
     }
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
@@ -162,15 +206,36 @@ function scan(value: unknown, path: string, seen: WeakSet<object>): void {
       checkFieldName(k, p);
       // Tên field cũng có thể LÀ secret ⇒ báo lỗi bằng đường dẫn ĐÃ CHE.
       checkValue(k, `${path}.${maskPathSegment(k)}`);
-      scan(v, p, seen);
+      scan(v, p, seen, opts, k);
     }
   }
 }
 
+/**
+ * CẢNH BÁO CHUẨN khi một cửa ghi quyết định fail-soft — dùng chung cho localStorage
+ * (`store/persist.ts`) và IndexedDB (`design/safety/idb.ts`, `docs/lib/docs-idb.ts`) để
+ * ba cửa không trôi thành ba định dạng log khác nhau.
+ *
+ * Chỉ in scope + luật + kind + đường dẫn field. KHÔNG in giá trị — `SecretLeakError` đã
+ * được thiết kế để `path`/`rule`/`kind` không bao giờ chứa giá trị bị chặn (tên field
+ * nếu chính nó là secret thì đã qua `maskPathSegment`), nên in ba thứ này là an toàn,
+ * còn in `value` thì chính dòng log lại làm rò thứ ta vừa chặn.
+ */
+export function warnSecretBlocked(scope: string, e: SecretLeakError): void {
+  console.warn(
+    `[kitgen/guard] Bỏ qua ghi "${scope}": trúng luật ${e.rule} (${e.kind}) tại ${e.path}. ` +
+      `Giá trị không được ghi và không được log.`,
+  );
+}
+
 /** Kiểm không ném — `null` nếu sạch. */
-export function findSecret(value: unknown, path = "$"): { path: string; rule: string; kind: string } | null {
+export function findSecret(
+  value: unknown,
+  path = "$",
+  opts: ScanOptions = {},
+): { path: string; rule: string; kind: string } | null {
   try {
-    assertNoSecret(value, path);
+    assertNoSecret(value, path, opts);
     return null;
   } catch (e) {
     if (e instanceof SecretLeakError) return { path: e.path, rule: e.rule, kind: e.kind };
