@@ -15,6 +15,10 @@ EXPECTED_SHA=""
 NO_START=0
 IS_UPDATE=0
 CODEX_PROFILE="${KITGEN_CODEX_PROFILE:-default}"
+# Chỉ cờ --codex-* gõ tay mới được phép ĐÈ lựa chọn hồ sơ đã lưu trong workspace
+# config (người dùng đổi hồ sơ qua UI sau khi cài → env/config.env là giá trị cũ,
+# không phải ý muốn hiện tại; regression: mỗi lần update lại reset về default-home).
+CODEX_EXPLICIT=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --archive) ARCHIVE="$2"; shift ;;
@@ -25,8 +29,8 @@ while [ "$#" -gt 0 ]; do
     --origin) ORIGIN="$2"; shift ;;
     --port) PORT="$2"; [ "$ORIGIN" = "http://127.0.0.1:8765" ] && ORIGIN="http://127.0.0.1:$2"; shift ;;
     --no-start) NO_START=1 ;;
-    --codex-default) CODEX_PROFILE="default" ;;
-    --codex-img) CODEX_PROFILE="separate" ;;
+    --codex-default) CODEX_PROFILE="default"; CODEX_EXPLICIT=1 ;;
+    --codex-img) CODEX_PROFILE="separate"; CODEX_EXPLICIT=1 ;;
     --update) IS_UPDATE=1 ;;
     -h|--help)
       echo "Usage: install.sh [--archive runtime.tar.gz | --release-url URL] [--sha256 HASH]"
@@ -117,8 +121,13 @@ elif [ -n "$ARCHIVE" ] || [ -n "$RELEASE_URL" ]; then
 elif is_source "$SELF_DIR"; then
   # Developer checkout: assemble the exact release first, then install that artifact.
   ARCHIVE="$($SELF_DIR/scripts/build-runtime.sh)"
-  PROFILE_FLAG="--codex-default"; [ "$CODEX_PROFILE" = "separate" ] && PROFILE_FLAG="--codex-img"
-  exec "$0" --archive "$ARCHIVE" --workspace "$WORKSPACE" --origin "$ORIGIN" --port "$PORT" "$PROFILE_FLAG" $([ "$NO_START" -eq 1 ] && echo --no-start)
+  # Giữ tính "explicit": chỉ truyền lại cờ --codex-* nếu lượt gọi này thật sự nhận nó,
+  # để lần exec sau không tưởng nhầm giá trị mặc định là lựa chọn gõ tay.
+  PROFILE_FLAG=""
+  if [ "$CODEX_EXPLICIT" -eq 1 ]; then
+    PROFILE_FLAG="--codex-default"; [ "$CODEX_PROFILE" = "separate" ] && PROFILE_FLAG="--codex-img"
+  fi
+  exec "$0" --archive "$ARCHIVE" --workspace "$WORKSPACE" --origin "$ORIGIN" --port "$PORT" $PROFILE_FLAG $([ "$NO_START" -eq 1 ] && echo --no-start)
 else
   echo "No runtime supplied. Use --release-url URL or --archive FILE." >&2
   exit 2
@@ -218,16 +227,22 @@ if [ "$CODEX_PROFILE" = "separate" ]; then
 else
   CODEX_MODE="default-home"; CODEX_HOME_LABEL=""
 fi
-python3 - "$WORKSPACE/.kitgen/config.json" "$CODEX_MODE" "$CODEX_HOME_LABEL" <<'PY'
+python3 - "$WORKSPACE/.kitgen/config.json" "$CODEX_MODE" "$CODEX_HOME_LABEL" "$CODEX_EXPLICIT" <<'PY'
 import json, os, sys
-p, mode, home = sys.argv[1:]
+p, mode, home, explicit = sys.argv[1:]
 try:
     with open(p) as f: cfg = json.load(f)
 except Exception: cfg = {}
 cfg.setdefault("workspaceVersion", 1); cfg.setdefault("maxJobs", 4)
 img = {"mode": mode}
 if home: img["codexHome"] = home
-cfg["imageGen"] = img
+# Hồ sơ tạo ảnh là lựa chọn NGƯỜI DÙNG đổi được qua UI (PATCH /api/image-profile)
+# sau khi cài. Update chạy lại install.sh với giá trị cũ của lần cài đầu — nếu ghi
+# đè vô điều kiện thì mỗi lần update lại reset lựa chọn (mất thanh quota, gen về
+# nhầm hồ sơ). Chỉ ghi khi: cờ --codex-* gõ tay, hoặc config chưa có lựa chọn nào.
+existing = cfg.get("imageGen")
+if explicit == "1" or not (isinstance(existing, dict) and existing.get("mode")):
+    cfg["imageGen"] = img
 tmp = p + ".tmp"
 with open(tmp, "w") as f: json.dump(cfg, f, indent=2); f.write("\n")
 os.replace(tmp, p)
