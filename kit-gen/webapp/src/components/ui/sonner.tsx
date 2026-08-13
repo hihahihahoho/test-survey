@@ -7,6 +7,15 @@ import { Toaster as Sonner, toast } from "sonner";
  */
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
+/** Thời lượng chuẩn cho mọi call site. Mọi toast đều có đường tự thoát. */
+const KG_TOAST_DURATION = {
+  success: 4000,
+  successWithUndo: 10_000,
+  info: 5000,
+  warning: 8000,
+  error: 12_000,
+} as const;
+
 const Dot = ({ tone }: { tone: string }) => (
   <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${tone}`} />
 );
@@ -15,6 +24,7 @@ const Toaster = (props: ToasterProps) => (
   <Sonner
     visibleToasts={3}
     closeButton
+    duration={KG_TOAST_DURATION.info}
     style={{
       "--toast-close-button-start": "unset",
       "--toast-close-button-end": "0",
@@ -40,14 +50,5 @@ const Toaster = (props: ToasterProps) => (
     {...props}
   />
 );
-
-/** Thời lượng chuẩn cho mọi call site. */
-const KG_TOAST_DURATION = {
-  success: 4000,
-  successWithUndo: 10_000,
-  info: 5000,
-  warning: 8000,
-  error: Infinity,
-} as const;
 
 export { Toaster, toast, KG_TOAST_DURATION };

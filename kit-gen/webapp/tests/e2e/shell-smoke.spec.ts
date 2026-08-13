@@ -151,9 +151,9 @@ async function mockAgent(page: Page) {
       return route.fulfill({ status: 204 });
     }
     if (path === "/api/library/settings" && method === "PATCH") {
-      return route.fulfill({ json: { settings: { background: 2, popup: 4, small: 16, mascot: 4, ...route.request().postDataJSON() } } });
+      return route.fulfill({ json: { settings: { background: 2, popup: 4, small: 16, props: 16, mascot: 4, ...route.request().postDataJSON() } } });
     }
-    if (path === "/api/library") return route.fulfill({ json: { version: 3, settings: { background: 2, popup: 4, small: 16, mascot: 4 }, poseTemplates, items: [libraryItem, uiLibraryItem, styleReferenceItem] } });
+    if (path === "/api/library") return route.fulfill({ json: { version: 3, settings: { background: 2, popup: 4, small: 16, props: 16, mascot: 4 }, poseTemplates, items: [libraryItem, uiLibraryItem, styleReferenceItem] } });
     if (path === "/api/projects/tet26-a7f3/refs" && method === "POST") return route.fulfill({ json: { name: "char-meo-mau.png", path: "refs/char-meo-mau.png" } });
     if (path === "/api/projects/du-an-moi-b4c8/refs" && method === "POST") {
       const item = {
@@ -272,7 +272,7 @@ test("generated images show immutable artifacts and retry only the selected shee
   await expect(dialog.getByText("Đã chọn 1 lượt", { exact: false })).toBeVisible();
 });
 
-test("a reusable mascot can be selected with its image and poses", async ({ page }) => {
+test("@visual a reusable mascot can be selected and pose cards stay readable", async ({ page }, testInfo) => {
   await page.goto("/k/tet26-a7f3");
   await page.getByRole("button", { name: "Tiếp theo" }).click();
   await page.getByRole("button", { name: "Tiếp theo" }).click();
@@ -281,6 +281,32 @@ test("a reusable mascot can be selected with its image and poses", async ({ page
   await page.getByRole("button", { name: /Mèo mẫu/ }).click();
   await expect(page.getByRole("textbox", { name: "Tên nhân vật" })).toHaveValue("Mèo mẫu");
   await expect(page.getByText("2 dáng đã chọn")).toBeVisible();
+  const poseCard = page.locator(".pose-choice-grid button").filter({ hasText: "Đứng chờ" });
+  const cardBox = await poseCard.boundingBox();
+  const previewBox = await poseCard.locator(".pose-prototype").boundingBox();
+  const poseSvgBox = await poseCard.locator(".pose-prototype svg").boundingBox();
+  expect(cardBox).not.toBeNull();
+  expect(previewBox).not.toBeNull();
+  expect(poseSvgBox).not.toBeNull();
+  const poseStyle = await poseCard.evaluate((element) => ({
+    height: getComputedStyle(element).height,
+    width: getComputedStyle(element).width,
+    aspectRatio: getComputedStyle(element).aspectRatio,
+  }));
+  expect(Math.abs(cardBox!.width - cardBox!.height), JSON.stringify(poseStyle)).toBeLessThanOrEqual(2);
+  expect(previewBox!.width).toBeGreaterThanOrEqual(80);
+  expect(poseSvgBox!.width).toBeGreaterThanOrEqual(60);
+  await page.screenshot({ path: testInfo.outputPath("mascot-pose-dark.png"), fullPage: true, animations: "disabled" });
+});
+
+test("project management keeps UI nhỏ and Đạo cụ as separate destinations", async ({ page }) => {
+  await page.goto("/p/tet26-a7f3");
+  await page.getByRole("button", { name: "Đạo cụ", exact: true }).click();
+  await expect(page).toHaveURL(/section=props/);
+  await expect(page.getByRole("heading", { name: "Đạo cụ", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "UI nhỏ", exact: true }).click();
+  await expect(page).toHaveURL(/section=ui/);
+  await expect(page.getByRole("heading", { name: "UI nhỏ", exact: true })).toBeVisible();
 });
 
 test("@visual a new project opens the step-by-step wizard", async ({ page }, testInfo) => {
@@ -376,7 +402,8 @@ test("@visual trash and shared libraries are separate Home destinations", async 
   await expect(page.getByRole("heading", { name: "Bộ khung UI", exact: true })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Nền" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Popup" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "UI nhỏ & đạo cụ" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "UI nhỏ" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Đạo cụ" })).toBeVisible();
   await page.getByRole("button", { name: "Thêm bộ khung" }).click();
   await expect(page.getByRole("dialog", { name: "Thêm nền" })).toBeVisible();
   await page.getByRole("button", { name: "Huỷ" }).click();
@@ -438,6 +465,18 @@ test("@visual toast uses the default viewport position and an in-card close butt
       && settledClose.y + settledClose.height <= settledToast.y + settledToast.height;
   }).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("toast-default-dark.png"), fullPage: true, animations: "disabled" });
+});
+
+test("toast tự đóng theo thời lượng mặc định", async ({ page }) => {
+  await page.goto("/");
+  const durations = await page.evaluate(async () => {
+    const mod = await import("/src/components/ui/sonner.tsx");
+    mod.toast.info("Thông báo sẽ tự đóng");
+    return mod.KG_TOAST_DURATION;
+  });
+  expect(durations).toEqual({ success: 4000, successWithUndo: 10_000, info: 5000, warning: 8000, error: 12_000 });
+  await expect(page.getByText("Thông báo sẽ tự đóng", { exact: true })).toBeVisible();
+  await expect(page.getByText("Thông báo sẽ tự đóng", { exact: true })).toHaveCount(0, { timeout: 7000 });
 });
 
 test("active product routes do not expose legacy technical wording", async ({ page }) => {

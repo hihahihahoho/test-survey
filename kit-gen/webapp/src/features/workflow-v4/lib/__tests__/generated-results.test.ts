@@ -30,6 +30,7 @@ describe("generated results", () => {
     expect(categoryOfSheet("small-button-01")).toBe("ui");
     expect(categoryOfSheet("prop-lixi-01")).toBe("prop");
     expect(categoryOfSheet("item-coin-01")).toBe("prop");
+    expect(categoryOfSheet("dao-cu-01")).toBe("prop");
   });
 
   it("chọn đúng jobs khi tạo lại một nhóm", () => {

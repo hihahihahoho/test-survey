@@ -20,7 +20,7 @@ KitGen là ứng dụng đơn giản để:
 - Dự án mới mở wizard. Dự án đã tạo mở màn quản lý dự án.
 - Bộ khung là cấu trúc đầu vào để tạo ảnh, không phải một dự án khác.
 - UI và mascot là hai thư viện bộ khung độc lập.
-- Background, popup và UI nhỏ không trộn chung một sheet.
+- Background, popup, UI nhỏ và đạo cụ không trộn chung một sheet.
 - Ảnh tham chiếu, lựa chọn thành phần và giới hạn số phần tử trên sheet đều sửa được.
 - Tạo lại ảnh luôn là thao tác chủ động; sửa dữ liệu không tự tiêu quota.
 - Canvas hiện chưa phát hành. Nút được vô hiệu hoá và ghi rõ **Đang phát triển**.
@@ -41,7 +41,8 @@ KitGen
 │       ├── Bộ khung UI
 │       │   ├── Background
 │       │   ├── Popup / modal
-│       │   └── UI nhỏ & đạo cụ game
+│       │   ├── UI nhỏ
+│       │   └── Đạo cụ game
 │       ├── Mascot
 │       ├── Ảnh đã tạo
 │       ├── Canvas — Đang phát triển
@@ -49,7 +50,8 @@ KitGen
 ├── Thư viện bộ khung UI
 │   ├── Background
 │   ├── Popup / modal
-│   └── UI nhỏ & đạo cụ game
+│   ├── UI nhỏ
+│   └── Đạo cụ game
 ├── Thư viện bộ khung mascot
 │   ├── Mascot
 │   └── Pose
@@ -130,7 +132,8 @@ Chọn những nhóm cần dùng:
 
 - Background.
 - Popup / modal.
-- UI nhỏ & đạo cụ game.
+- UI nhỏ.
+- Đạo cụ game.
 
 Người dùng chọn từng thành phần cụ thể, không phải nhận toàn bộ thư viện.
 
@@ -220,18 +223,26 @@ Nếu dự án có nhiều nền hơn giới hạn, hệ thống tạo thêm she
 - Mỗi popup là một slot lớn.
 - Không xếp nút nhỏ, icon hoặc đạo cụ game vào sheet popup.
 
-### 8.3 UI nhỏ & đạo cụ game
+### 8.3 UI nhỏ
 
-Nhóm này chứa các thành phần nhỏ, độc lập và có thể tách thành file riêng:
+Nhóm này chứa các thành phần giao diện nhỏ, độc lập và có thể tách thành file riêng:
 
 - Nút, tab, progress, badge, icon.
+- Ô nhập liệu, checkbox, toggle và trạng thái tương tác.
+
+UI nhỏ được phép có nhiều sheet. Khi đầy, hệ thống tạo sheet kế tiếp thay vì ép nhỏ hoặc trộn sang nhóm khác.
+
+### 8.4 Đạo cụ game
+
+Đạo cụ là các object hoặc phần thưởng dùng độc lập trong game:
+
 - Mảnh ghép, voucher, token hoặc vật phẩm.
 - Hộp quà và các trạng thái/thành phần của hộp quà.
 - Hiệu ứng nhỏ dùng trong gameplay.
 
-Hộp quà thuộc **UI nhỏ & đạo cụ game**, không thuộc Popup. Nếu hộp quà có nhiều phần cần điều khiển riêng, mỗi phần là một slot độc lập, ví dụ thân hộp, nắp, trạng thái đóng, trạng thái mở và hiệu ứng sáng.
+Hộp quà thuộc **Đạo cụ**, không thuộc Popup hoặc UI nhỏ. Nếu hộp quà có nhiều phần cần điều khiển riêng, mỗi phần là một slot độc lập, ví dụ thân hộp, nắp, trạng thái đóng, trạng thái mở và hiệu ứng sáng.
 
-Nhóm UI nhỏ được phép có nhiều sheet. Khi đầy, hệ thống tạo sheet kế tiếp thay vì ép nhỏ hoặc trộn sang nhóm khác.
+Đạo cụ có giới hạn sheet riêng và không trộn vào sheet UI nhỏ.
 
 ## 9. Mô hình mascot
 
@@ -253,7 +264,8 @@ Mỗi loại có cài đặt **Tối đa trên một sheet**:
 |---|---:|---|
 | Background | 2 | Slot lớn, thường là Home + Thành công |
 | Popup / modal | 4 | Bốn khung lớn |
-| UI nhỏ & đạo cụ game | 16 | Lưới ô nhỏ; tự thêm sheet khi đầy |
+| UI nhỏ | 16 | Lưới ô nhỏ; tự thêm sheet khi đầy |
+| Đạo cụ game | 16 | Object độc lập; tự thêm sheet khi đầy |
 | Mascot pose | 4 | Các pose độc lập; tự thêm sheet khi đầy |
 
 Giá trị mặc định có thể chỉnh ở thư viện chung. Dự án được phép ghi đè giá trị cho riêng mình.
@@ -269,7 +281,7 @@ Khi thay đổi giới hạn:
 
 ### Bộ khung UI
 
-Quản lý ba nhóm Background, Popup / modal và UI nhỏ & đạo cụ game. Thao tác chính:
+Quản lý bốn nhóm Background, Popup / modal, UI nhỏ và Đạo cụ. Thao tác chính:
 
 - Thêm.
 - Sửa.
@@ -424,7 +436,7 @@ Quản lý dự án → Sửa ref/chọn lại thành phần/đổi giới hạn
 - Mở dự án đã có luôn mở màn quản lý có sidebar dự án.
 - UI, mascot và ảnh đã tạo là ba vùng rõ ràng.
 - Background mặc định 2 phần tử/sheet; popup mặc định 4 phần tử/sheet.
-- UI nhỏ có thể sinh nhiều sheet; hộp quà nằm trong nhóm này.
+- UI nhỏ và đạo cụ sinh sheet riêng; hộp quà nằm trong nhóm Đạo cụ.
 - Mascot pose có giới hạn phần tử/sheet riêng.
 - Người dùng sửa ref, chọn lại thành phần và tạo lại được.
 - Bộ khung quyết định geometry; reference phong cách và mascot chỉ quyết định phần đúng vai trò của chúng.
@@ -441,7 +453,7 @@ Quản lý dự án → Sửa ref/chọn lại thành phần/đổi giới hạn
 - Wizard và dialog cài đặt dự án dùng cùng workflow state. Ở bước **Phong cách**, người dùng chọn `Tự tải lên` hoặc một thương hiệu có sẵn; lựa chọn thương hiệu điền màu và sao chép các ảnh đã chọn vào `projects/<id>/refs/`. Người dùng vẫn có thể tải thêm ảnh riêng sau đó.
 - **Ảnh thương hiệu** có chú thích rõ: logo, bảng màu hoặc hình ảnh nhận diện. Ảnh đã upload hiển thị preview và có nút xoá; endpoint đọc file ref xác thực project, segment tên file và safe-join trước khi trả nội dung.
 - **Mascot pose** chỉ hiện khi checkbox `Có nhân vật đại diện` được bật. Danh sách có `Chọn tất cả`, `Bỏ chọn`, và phần `Sẽ vẽ` nằm phía trên để không cần cuộn xuống mới biết các dáng đã chọn.
-- Bộ khung UI trong wizard tách phần trình bày thành `UI nhỏ` và `Đạo cụ`; contract hiện vẫn quy về giới hạn sheet `small` để tương thích engine.
+- Bộ khung UI trong wizard, thư viện và contract tách `UI nhỏ` với `Đạo cụ`; mỗi nhóm có giới hạn và sheet riêng.
 - Canvas không phải màn con trong dự án; route canvas cũ điều hướng về tổng quan. Cài đặt dự án mở bằng dialog từ topbar và deep-link `?section=settings`.
 - Xoá vĩnh viễn yêu cầu nhập đúng `xac-nhan`; agent đồng thời đối chiếu chính xác `projectId` trong request với mục đang xoá để tránh xoá nhầm dự án khác.
 

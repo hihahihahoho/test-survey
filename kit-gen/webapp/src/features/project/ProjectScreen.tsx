@@ -52,7 +52,7 @@ const MANAGEMENT = [
   { id: "mascot", label: "Mascot", icon: UserRound, category: "mascot" },
   { id: "background", label: "Nền", icon: Images, category: "background" },
   { id: "popup", label: "Popup", icon: Box, category: "popup" },
-  { id: "ui", label: "UI kit", icon: Palette, category: "ui" },
+  { id: "ui", label: "UI nhỏ", icon: Palette, category: "ui" },
   { id: "props", label: "Đạo cụ", icon: Shapes, category: "prop" },
 ] as const;
 
@@ -122,6 +122,7 @@ function ProjectManager({ projectId }: { projectId: string }) {
       background: project.background ?? shared?.background,
       popup: project.popup ?? shared?.popup,
       small: project.small ?? shared?.small,
+      props: project.props ?? shared?.props,
       mascot: project.mascot ?? shared?.mascot,
     };
   }, [userLibrary.data?.settings, workflow.sheetLimits]);
@@ -338,7 +339,8 @@ function ProjectSettingsPanel({
 const PROJECT_LIMITS: ReadonlyArray<{ key: SheetLimitKey; label: string; fallback: number }> = [
   { key: "background", label: "Nền", fallback: 2 },
   { key: "popup", label: "Popup", fallback: 4 },
-  { key: "small", label: "UI nhỏ & đạo cụ", fallback: 16 },
+  { key: "small", label: "UI nhỏ", fallback: 16 },
+  { key: "props", label: "Đạo cụ", fallback: 16 },
   { key: "mascot", label: "Dáng mascot", fallback: 4 },
 ];
 

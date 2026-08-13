@@ -90,6 +90,7 @@ function WorkflowBody({ projectId }: { projectId: string }) {
       background: project.background ?? shared?.background,
       popup: project.popup ?? shared?.popup,
       small: project.small ?? shared?.small,
+      props: project.props ?? shared?.props,
       mascot: project.mascot ?? shared?.mascot,
     };
   }, [s.sheetLimits, userLibrary.data?.settings]);

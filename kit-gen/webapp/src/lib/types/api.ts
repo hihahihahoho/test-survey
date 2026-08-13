@@ -440,7 +440,7 @@ export type ElementLib = z.infer<typeof elementLibSchema>;
 export const libraryItemSchema = z.looseObject({
   id: z.string(),
   kind: z.enum(["ui", "mascot", "reference"]),
-  group: z.enum(["background", "popup", "small", "mascot", "style", "mascot-reference", "brand-logo", "brand-style", "brand-mascot"]),
+  group: z.enum(["background", "popup", "small", "props", "mascot", "style", "mascot-reference", "brand-logo", "brand-style", "brand-mascot"]),
   name: z.string(),
   description: z.string().default(""),
   tags: z.array(z.string()).default([]),
@@ -458,6 +458,7 @@ export const librarySettingsSchema = z.object({
   background: z.number().int().min(1).max(32).default(2),
   popup: z.number().int().min(1).max(32).default(4),
   small: z.number().int().min(1).max(32).default(16),
+  props: z.number().int().min(1).max(32).default(16),
   mascot: z.number().int().min(1).max(32).default(4),
 });
 export type LibrarySettings = z.infer<typeof librarySettingsSchema>;

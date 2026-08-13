@@ -140,7 +140,7 @@ export function DesignScreen({ projectId }: ScreenProps) {
       // §3-S3 "error (lưu thất bại khác)": KHÔNG xoá state, nói rõ dữ liệu còn nguyên.
       toast.error("Chưa lưu được — thay đổi của bạn vẫn còn trên máy này", {
         description: presentError(err).explain,
-        duration: Infinity,
+        duration: 12_000,
         action: { label: "Thử lại", onClick: () => void save() },
       });
       return false;

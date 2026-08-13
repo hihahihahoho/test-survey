@@ -246,7 +246,7 @@ export function ProjectsScreen(_props: ScreenProps) {
           <button type="button" onClick={() => void navigate({ to: "/library/mascot" })} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Mascot">
             <Sparkles className="size-4" aria-hidden />Mascot
           </button>
-          <button type="button" onClick={() => void navigate({ to: "/references" })} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Style reference">
+          <button type="button" onClick={() => void navigate({ to: "/references" })} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Ảnh phong cách">
             <Images className="size-4" aria-hidden />Tham chiếu
           </button>
           <button type="button" onClick={() => nav.openTrash()} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Thùng rác">

@@ -53,6 +53,7 @@ import { loadBundledV2 } from "@/features/design/library/lib/source";
 import type { LibElement } from "@/features/design/library/lib/types";
 import { buildStylePrompt } from "@/features/kit-form/lib/style-phrases";
 import type { WorkflowState } from "./model";
+import { isPropElement } from "./user-library";
 
 /* ══════════════════════════════════════════════════════════════════════════
    1. Hằng số — id ỔN ĐỊNH, không lấy từ chữ người dùng gõ
@@ -78,6 +79,7 @@ export interface SheetLimits {
   background: number;
   popup: number;
   small: number;
+  props: number;
   mascot: number;
 }
 
@@ -85,6 +87,7 @@ export const DEFAULT_SHEET_LIMITS: SheetLimits = {
   background: 2,
   popup: 4,
   small: 16,
+  props: 16,
   mascot: 4,
 };
 
@@ -363,17 +366,21 @@ export function buildKitsetContract(s: KitsetContractInput, opts: BuildKitsetOpt
     background: limitOf(opts.limits?.background, DEFAULT_SHEET_LIMITS.background, MAX_CELLS_TALL),
     popup: limitOf(opts.limits?.popup, DEFAULT_SHEET_LIMITS.popup, MAX_CELLS_SQUARE),
     small: limitOf(opts.limits?.small, DEFAULT_SHEET_LIMITS.small, MAX_CELLS_SQUARE),
+    props: limitOf(opts.limits?.props, DEFAULT_SHEET_LIMITS.props, MAX_CELLS_SQUARE),
     mascot: limitOf(opts.limits?.mascot, DEFAULT_SHEET_LIMITS.mascot, MAX_CELLS_SQUARE),
   };
 
   const backgrounds = drawable.filter((e) => e.skel.shape === "full");
   const rest = drawable.filter((e) => e.skel.shape !== "full");
   const popup = rest.filter(isPopupElement);
-  const small = rest.filter((e) => !isPopupElement(e));
+  const props = rest.filter((e) => !isPopupElement(e) && isPropElement(e));
+  const small = rest.filter((e) => !isPopupElement(e) && !isPropElement(e));
   const popupTall = popup.filter((e) => e.cell === "portrait");
   const popupWide = popup.filter((e) => e.cell !== "portrait");
   const smallTall = small.filter((e) => e.cell === "portrait");
   const smallWide = small.filter((e) => e.cell !== "portrait");
+  const propsTall = props.filter((e) => e.cell === "portrait");
+  const propsWide = props.filter((e) => e.cell !== "portrait");
 
   const sheets: Sheet[] = [];
 
@@ -426,6 +433,27 @@ export function buildKitsetContract(s: KitsetContractInput, opts: BuildKitsetOpt
     const grid = tallGrid(chunk.length);
     sheets.push({
       id: seriesId("ui-doc", i),
+      orient: "landscape",
+      grid,
+      cell_hint: HINT_PORTRAIT,
+      components: padTo(chunk.map(toComponent), grid.cols * grid.rows),
+    });
+  });
+
+  chunkKeepingGroups(propsWide, limits.props).forEach((chunk, i) => {
+    const grid = squareGrid(chunk.length);
+    sheets.push({
+      id: seriesId("dao-cu", i),
+      orient: "landscape",
+      grid,
+      cell_hint: HINT_LANDSCAPE,
+      components: padTo(chunk.map(toComponent), grid.cols * grid.rows),
+    });
+  });
+  chunkKeepingGroups(propsTall, Math.min(limits.props, MAX_CELLS_TALL)).forEach((chunk, i) => {
+    const grid = tallGrid(chunk.length);
+    sheets.push({
+      id: seriesId("dao-cu-doc", i),
       orient: "landscape",
       grid,
       cell_hint: HINT_PORTRAIT,

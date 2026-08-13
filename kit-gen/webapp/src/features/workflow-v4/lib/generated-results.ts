@@ -38,7 +38,8 @@ export function sheetLabel(sheet: string): string {
   const number = suffix ? ` ${Number(suffix)}` : "";
   if (/^(nen|bg|background)(-|$)/.test(value)) return `Nền${number}`;
   if (/^(popup-doc|popup|modal|panel)(-|$)/.test(value)) return `Popup${number}`;
-  if (/^(ui-doc|small|ui|prop|item)(-|$)/.test(value)) return `UI nhỏ & đạo cụ${number}`;
+  if (/^(dao-cu-doc|dao-cu|prop|item)(-|$)/.test(value)) return `Đạo cụ${number}`;
+  if (/^(ui-doc|small|ui)(-|$)/.test(value)) return `UI nhỏ${number}`;
   if (/^(pose-nhan-vat|pose|mascot|character)(-|$)/.test(value)) return `Mascot pose${number}`;
   return sheet.replaceAll("-", " ");
 }

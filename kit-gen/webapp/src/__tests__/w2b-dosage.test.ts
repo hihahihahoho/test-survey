@@ -273,11 +273,10 @@ describe("2B-6 · sạn nhỏ nhưng lộ ngay", () => {
     expect(GLOBALS).toMatch(/\.kg-dotgrid\s*\{/); // tiện ích còn nguyên
   });
 
-  /* TOA 10b bảo BỎ `closeButton`. Không làm — và đây là ca khoá lý do lại:
-     `error: Infinity` ⇒ toast lỗi không tự đóng, bỏ nút ✕ là nhốt nó trên màn. */
-  it("toast lỗi không tự đóng ⇒ nút ✕ PHẢI còn, chỉ đổi chỗ đứng", () => {
+  it("toast lỗi có đường tự thoát và vẫn giữ nút đóng thủ công", () => {
     const sonner = read("src/components/ui/sonner.tsx");
-    expect(sonner).toMatch(/error:\s*Infinity/);
+    expect(sonner).toMatch(/error:\s*12_000/);
+    expect(sonner).toMatch(/duration=\{KG_TOAST_DURATION\.info\}/);
     /* Phải khoá đúng PROP boolean `closeButton` trên `<Sonner>`, không phải chuỗi
        "closeButton" — chuỗi đó còn sống trong `classNames` kể cả khi prop đã bị gỡ,
        và bản đầu của ca này đã để lọt đúng mutation ấy. */

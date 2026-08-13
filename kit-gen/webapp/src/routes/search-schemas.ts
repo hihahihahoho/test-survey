@@ -120,7 +120,7 @@ export function withoutFileParam(
 export const DESIGN_TABS = ["sheets", "styles", "advanced"] as const;
 export const KIT_TABS = ["assets", "matrix", "export"] as const;
 export const SETTINGS_TABS = ["agent", "env", "prefs", "about"] as const;
-export const PROJECT_SECTIONS = ["overview", "background", "popup", "ui", "mascot", "requirements", "style", "images", "canvas", "settings"] as const;
+export const PROJECT_SECTIONS = ["overview", "background", "popup", "ui", "props", "mascot", "requirements", "style", "images", "canvas", "settings"] as const;
 
 export type DesignTab = (typeof DESIGN_TABS)[number];
 export type KitTab = (typeof KIT_TABS)[number];

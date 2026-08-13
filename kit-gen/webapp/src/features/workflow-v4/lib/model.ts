@@ -28,7 +28,7 @@ export { LEGACY_DRAFT_KEY, draftKey, trashedDraftKey, migrateLegacyDraft, dropWo
 export type StepId = 1 | 2 | 3 | 4 | 5 | 6;
 export type KitElement = { file: string; label: string; role: string; cell: string; mock?: boolean; selected: boolean };
 export type Chroma = "magenta" | "green";
-export type SheetLimitKey = "background" | "popup" | "small" | "mascot";
+export type SheetLimitKey = "background" | "popup" | "small" | "props" | "mascot";
 /** `null` = dùng giới hạn của thư viện chung; số = ghi đè cho riêng dự án. */
 export type ProjectSheetLimits = Record<SheetLimitKey, number | null>;
 /**
@@ -277,7 +277,7 @@ function initialState(): Omit<WorkflowState, "set" | "next" | "back" | "go" | "t
     chroma: "magenta",
     kitsetSummary: "Bộ khung UI đã chọn",
     sliceThreshold: 120,
-    sheetLimits: { background: null, popup: null, small: null, mascot: null },
+    sheetLimits: { background: null, popup: null, small: null, props: null, mascot: null },
     brandRefs: [],
     mascotEnabled: true,
     mascotName: "",

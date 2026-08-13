@@ -27,14 +27,16 @@ import {
   usePatchLibraryItem, usePatchPoseTemplate, useRemoveLibraryItem, useRemovePoseTemplate, useUserLibrary,
 } from "@/lib/hooks";
 import type { LibraryItem, LibrarySettings, PoseTemplate } from "@/lib/types";
+import { isPropElement } from "@/features/workflow-v4/lib/user-library";
 import { HomeWorkspaceShell } from "./components/HomeWorkspaceShell";
 
-type UiGroup = "background" | "popup" | "small";
+type UiGroup = "background" | "popup" | "small" | "props";
 
 const GROUPS: ReadonlyArray<{ id: UiGroup; label: string; max: number }> = [
   { id: "background", label: "Nền", max: 2 },
   { id: "popup", label: "Popup", max: 4 },
-  { id: "small", label: "UI nhỏ & đạo cụ", max: 16 },
+  { id: "small", label: "UI nhỏ", max: 16 },
+  { id: "props", label: "Đạo cụ", max: 16 },
 ];
 
 type SafeZonePreset = "button" | "wide" | "square" | "circle" | "full";
@@ -70,6 +72,7 @@ function groupOf(element: LibElement): UiGroup {
   const key = `${element.file} ${element.group ?? ""}`;
   if (/bg-|background/.test(key)) return "background";
   if (/popup|modal|panel|ribbon/.test(key)) return "popup";
+  if (isPropElement(element)) return "props";
   return "small";
 }
 
@@ -190,6 +193,7 @@ function EditAssetDialog({ item, open, onOpenChange }: { item: LibraryItem; open
   const [description, setDescription] = React.useState(item.description);
   const [tags, setTags] = React.useState(item.tags.join(", "));
   const [preset, setPreset] = React.useState<SafeZonePreset>(() => presetFor(item));
+  const [group, setGroup] = React.useState<UiGroup>(() => item.group === "props" ? "props" : item.group === "background" || item.group === "popup" ? item.group : "small");
 
   React.useEffect(() => {
     if (!open) return;
@@ -197,6 +201,7 @@ function EditAssetDialog({ item, open, onOpenChange }: { item: LibraryItem; open
     setDescription(item.description);
     setTags(item.tags.join(", "));
     setPreset(presetFor(item));
+    setGroup(item.group === "props" ? "props" : item.group === "background" || item.group === "popup" ? item.group : "small");
   }, [item, open]);
 
   return (
@@ -220,6 +225,13 @@ function EditAssetDialog({ item, open, onOpenChange }: { item: LibraryItem; open
           )}
           {item.kind === "ui" && (
             <>
+              <div className="space-y-2">
+                <Label htmlFor={`edit-library-group-${item.id}`}>Loại</Label>
+                <Select value={group} onValueChange={(value) => setGroup(value as UiGroup)}>
+                  <SelectTrigger id={`edit-library-group-${item.id}`}><SelectValue /></SelectTrigger>
+                  <SelectContent>{GROUPS.map((option) => <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor={`edit-library-description-${item.id}`}>Mô tả</Label>
                 <Textarea id={`edit-library-description-${item.id}`} value={description} onChange={(event) => setDescription(event.target.value)} rows={3} />
@@ -245,7 +257,7 @@ function EditAssetDialog({ item, open, onOpenChange }: { item: LibraryItem; open
                 id: item.id,
                 name: name.trim(),
                 ...(item.kind === "mascot" ? { tags: tags.split(",").map(value => value.trim()).filter(Boolean) } : {}),
-                ...(item.kind === "ui" ? { description: description.trim(), cell: geometry.cell, skel: geometry.skel } : {}),
+                ...(item.kind === "ui" ? { group, description: description.trim(), cell: geometry.cell, skel: geometry.skel } : {}),
               }, {
               onSuccess: () => {
                 toast.success("Đã lưu thay đổi");
@@ -442,5 +454,5 @@ function PoseTemplateDialog({ open, onOpenChange, pose }: { open: boolean; onOpe
 export function ReferencesLibraryScreen() {
   const library=useUserLibrary(); const [uploadOpen,setUploadOpen]=React.useState(false); const [query,setQuery]=React.useState("");
   const q=foldVi(query); const items=(library.data?.items??[]).filter(item=>item.kind==="reference" && ["style","brand-style","brand-logo"].includes(item.group) && (!q || foldVi(`${item.name} ${item.description}`).includes(q)));
-  return <HomeWorkspaceShell active="references" title="Style reference" action={<Button size="sm" onClick={()=>setUploadOpen(true)}><Plus aria-hidden/>Thêm ảnh</Button>}><div className="relative max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden/><Input type="search" aria-label="Tìm style reference" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Tìm style reference…" className="pl-9"/></div>{items.length?<section className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">{items.map(item=><UserAssetCard key={item.id} item={item}/>)}</section>:<button type="button" onClick={()=>setUploadOpen(true)} className="mt-6 flex min-h-72 w-full flex-col items-center justify-center rounded-4 border border-dashed border-line-subtle bg-surface/40"><ImagePlus className="size-7 text-fg-muted"/><span className="mt-3 text-label text-fg-strong">Thêm style reference đầu tiên</span></button>}<UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} kind="reference" group="style" title="Thêm style reference"/></HomeWorkspaceShell>;
+  return <HomeWorkspaceShell active="references" title="Ảnh phong cách" action={<Button size="sm" onClick={()=>setUploadOpen(true)}><Plus aria-hidden/>Thêm ảnh</Button>}><div className="relative max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden/><Input type="search" aria-label="Tìm ảnh phong cách" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Tìm ảnh phong cách…" className="pl-9"/></div>{items.length?<section className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">{items.map(item=><UserAssetCard key={item.id} item={item}/>)}</section>:<button type="button" onClick={()=>setUploadOpen(true)} className="mt-6 flex min-h-72 w-full flex-col items-center justify-center rounded-4 border border-dashed border-line-subtle bg-surface/40"><ImagePlus className="size-7 text-fg-muted"/><span className="mt-3 text-label text-fg-strong">Thêm ảnh phong cách đầu tiên</span></button>}<UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} kind="reference" group="style" title="Thêm ảnh phong cách"/></HomeWorkspaceShell>;
 }

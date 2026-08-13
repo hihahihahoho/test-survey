@@ -497,7 +497,9 @@
   .pose-group-tabs { @apply my-4 flex gap-1 overflow-x-auto border-b border-line-subtle; }
   .pose-group-tabs button { @apply flex shrink-0 items-center gap-2 border-b-2 border-transparent px-3 py-2 text-label text-fg-muted; }
   .pose-group-tabs button.active { @apply border-accent text-fg-strong; } .pose-group-tabs small { @apply rounded-full bg-canvas px-1.5 tabular-nums; }
-  .pose-choice-grid { @apply grid gap-2 sm:grid-cols-2 lg:grid-cols-4; } .pose-choice-grid > * { @apply min-h-20 justify-start rounded-3 bg-canvas px-3; }
+  .pose-choice-grid { @apply grid grid-cols-2 gap-3 lg:grid-cols-4; }
+  .pose-choice-grid > * { width: 100%; height: auto !important; @apply aspect-square min-h-0 flex-col justify-center gap-3 rounded-3 bg-canvas p-3 text-center; }
+  .pose-choice-grid > * > svg { @apply absolute right-3 top-3 m-0; }
   .selected-poses { @apply mb-4 mt-3 flex min-h-12 flex-wrap items-center gap-2 rounded-3 border border-line-subtle bg-raised p-3; }
   .selected-poses button { @apply rounded-full border border-line-subtle bg-canvas px-3 py-1 text-caption text-fg; } .selected-poses button span { @apply ml-2 text-fg-muted; }
 }
@@ -543,5 +545,5 @@
 .ref-preview-card > img, .ref-preview-card > svg:first-child { width: 100%; height: 88px; border-radius: .7rem; object-fit: contain; background: var(--raised); }
 .ref-preview-card > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-caption); }
 .ref-preview-card > button { position: absolute; top: .75rem; right: .75rem; display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 999px; background: var(--surface); box-shadow: 0 1px 8px rgb(0 0 0 / .15); }
-.pose-prototype { display: inline-flex; width: 2.5rem; height: 3.25rem; flex: none; align-items: center; justify-content: center; border-radius: .75rem; background: var(--surface); }
-.pose-prototype svg { width: 2rem; height: 2.8rem; }
+.pose-prototype { display: inline-flex; width: min(7rem, 62%); aspect-ratio: 1; flex: none; align-items: center; justify-content: center; border-radius: 1rem; background: var(--raised); padding: .6rem; }
+.pose-prototype svg { width: 100% !important; height: 100% !important; }

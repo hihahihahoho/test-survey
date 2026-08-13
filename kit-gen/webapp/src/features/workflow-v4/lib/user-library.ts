@@ -5,12 +5,19 @@ const DEFAULT_GEOMETRY = {
   background: { cell: "full", skel: { shape: "full", w: 1, h: 1 } },
   popup: { cell: "landscape", skel: { shape: "rrect", w: 0.82, h: 0.62, slice9: true } },
   small: { cell: "landscape", skel: { shape: "pill", w: 0.78, h: 0.5, slice9: true } },
+  props: { cell: "landscape", skel: { shape: "rrect", w: 0.58, h: 0.76 } },
 } as const;
 
 type UiLibraryGroup = keyof typeof DEFAULT_GEOMETRY;
 
 function isUiLibraryGroup(value: LibraryItem["group"]): value is UiLibraryGroup {
-  return value === "background" || value === "popup" || value === "small";
+  return value === "background" || value === "popup" || value === "small" || value === "props";
+}
+
+/** Đạo cụ là object game độc lập; không gom nút/form/chip vào cùng sheet. */
+export function isPropElement(element: Pick<LibElement, "file" | "group">): boolean {
+  const key = `${element.file} ${element.group ?? ""}`.toLowerCase();
+  return /(^|[-\s])(prop|item|decor|gift|coin|reward|voucher|game-object|board-panel|pouch|medal|envelope|trophy|piece|fx)([-\s]|$)/.test(key);
 }
 
 /** Bộ khung do người dùng thêm phải đi vào cùng pipeline với catalogue có sẵn. */

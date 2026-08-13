@@ -7,7 +7,7 @@ export async function run({ api, wsRoot }) {
   await it("khởi tạo thiết lập mặc định", async () => {
     const r = await api("GET", "/api/library")
     eq(r.status, 200)
-    eq(r.json.settings, { background: 2, popup: 4, small: 16, mascot: 4 })
+    eq(r.json.settings, { background: 2, popup: 4, small: 16, props: 16, mascot: 4 })
     eq(r.json.items, [])
     eq(r.json.poseTemplates.length, 19)
     eq(r.json.poseTemplates[0].sourcePose, "idle")

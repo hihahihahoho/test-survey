@@ -8,7 +8,7 @@ import { imageSize, sniff } from "./multipart.mjs"
 
 const IMAGE_EXT = new Set(["png", "jpg", "webp"])
 const KINDS = new Set(["ui", "mascot", "reference"])
-const GROUPS = new Set(["background", "popup", "small", "mascot", "style", "mascot-reference", "brand-logo", "brand-style", "brand-mascot"])
+const GROUPS = new Set(["background", "popup", "small", "props", "mascot", "style", "mascot-reference", "brand-logo", "brand-style", "brand-mascot"])
 const CELLS = new Set(["landscape", "portrait", "full"])
 const SHAPES = new Set(["pill", "bar", "rrect", "rect", "circle", "burst", "puzzle", "full"])
 const POSE_IDS = new Set([
@@ -23,7 +23,7 @@ const POSE_LABELS = {
   "hold-gift": "Ôm quà", bow: "Cúi chào", sit: "Ngồi", fly: "Bay",
   "view-34": "Góc ¾", "view-side": "Nhìn ngang", "view-back": "Nhìn lưng",
 }
-export const LIBRARY_DEFAULTS = { background: 2, popup: 4, small: 16, mascot: 4 }
+export const LIBRARY_DEFAULTS = { background: 2, popup: 4, small: 16, props: 16, mascot: 4 }
 
 function statePath(ws) { return join(ws.libraryDir, "library.json") }
 function assetsDir(ws) { return join(ws.libraryDir, "assets") }

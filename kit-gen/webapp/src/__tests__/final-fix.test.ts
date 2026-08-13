@@ -75,9 +75,9 @@ describe("V1 · tiêu đề toast chừa chỗ cho nút đóng", () => {
     expect(title).toMatch(/\bpr-\d/);
   });
 
-  it("nút ✕ vẫn còn (toast lỗi không tự đóng — bỏ nút là bẫy UX)", () => {
+  it("nút ✕ vẫn còn dù toast lỗi cũng tự đóng", () => {
     expect(SONNER).toMatch(/\bcloseButton\b/);
-    expect(SONNER).toMatch(/error:\s*Infinity/);
+    expect(SONNER).toMatch(/error:\s*12_000/);
   });
 });
 

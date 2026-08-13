@@ -98,7 +98,7 @@ export function HomeSidebar({
         {destination("brands", "Nhận dạng thương hiệu", Palette, onBrands)}
         {destination("ui-library", "Bộ khung UI", PanelsTopLeft, onUiLibrary)}
         {destination("mascot-library", "Mascot", Sparkles, onMascotLibrary)}
-        {destination("references", "Style reference", Images, onReferences)}
+        {destination("references", "Ảnh phong cách", Images, onReferences)}
       </nav>
 
       <div className="my-4 border-t border-line-subtle" />

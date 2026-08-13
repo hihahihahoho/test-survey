@@ -6,7 +6,7 @@ import { useElementLib, useUserLibrary } from "@/lib/hooks";
 import { foldVi, fromAgentLib, loadBundledV2 } from "@/features/design/library/lib/source";
 import type { LibElement } from "@/features/design/library/lib/types";
 import { cellLabel, useWorkflowStore } from "../lib/model";
-import { mergeElements, userUiElements } from "../lib/user-library";
+import { isPropElement, mergeElements, userUiElements } from "../lib/user-library";
 import { Step } from "./BriefStep";
 
 type GroupId = "background" | "popup" | "small-ui" | "props";
@@ -29,12 +29,12 @@ const GROUPS: ReadonlyArray<{
   {
     id: "small-ui",
     label: "UI nhỏ",
-    match: (element) => element.skel.shape !== "full" && !/popup|modal|panel|ribbon|prop|item|decor|gift|coin|mascot/.test(`${element.file} ${element.group ?? ""}`),
+    match: (element) => element.skel.shape !== "full" && !/popup|modal|panel|ribbon/.test(`${element.file} ${element.group ?? ""}`) && !isPropElement(element),
   },
   {
     id: "props",
     label: "Đạo cụ",
-    match: (element) => element.skel.shape !== "full" && /prop|item|decor|gift|coin|mascot/.test(`${element.file} ${element.group ?? ""}`),
+    match: (element) => element.skel.shape !== "full" && isPropElement(element),
   },
 ];
 

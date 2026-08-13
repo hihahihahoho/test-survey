@@ -13,6 +13,7 @@ import { contractJobs, contractSchema, normalizeContract, CHROMA_PRESETS } from 
 import { loadBundledV2 } from "@/features/design/library/lib/source";
 import type { LibElement } from "@/features/design/library/lib/types";
 import { createWorkflowStore, resetWorkflowStores, type WorkflowState } from "../model";
+import { isPropElement } from "../user-library";
 import {
   CHARACTER_ID,
   MAIN_VARIANT_ID,
@@ -190,7 +191,7 @@ describe("§W3-1 — ô trống phải có tên riêng", () => {
 
   it("contract của ta có ô trống mang tên `_empty-N` và VẪN parse sạch", () => {
     // Kitset 5 món ngang ⇒ lưới 3×3 ⇒ 4 ô trống trong CÙNG một sheet.
-    const five = LIB.filter((e) => e.skel.shape !== "full" && e.cell !== "portrait" && !/popup|modal|panel|ribbon/.test(`${e.file} ${e.group ?? ""}`)).slice(0, 5);
+    const five = LIB.filter((e) => e.skel.shape !== "full" && e.cell !== "portrait" && !/popup|modal|panel|ribbon/.test(`${e.file} ${e.group ?? ""}`) && !isPropElement(e)).slice(0, 5);
     const c = build({
       elements: five.map((e) => ({ file: e.file, label: e.vi, role: "", cell: "ngang", selected: true })),
       mascotEnabled: false,
@@ -236,15 +237,31 @@ describe("§W3-1 — hình dạng sheet", () => {
     const s = defaultState();
     const c = buildKitsetContract(s, {
       lib: LIB,
-      limits: { background: 1, popup: 1, small: 1, mascot: 2 },
+      limits: { background: 1, popup: 1, small: 1, props: 1, mascot: 2 },
     });
     const backgrounds = c.sheets.filter((sh) => sh.components.some((cp) => cp.skel.shape === "full"));
     const mascot = c.sheets.filter((sh) => sh.components.some((cp) => cp.skel.shape === "pose"));
     expect(backgrounds).toHaveLength(2);
     expect(mascot).toHaveLength(Math.ceil(s.mascotPoses.length / 2));
-    for (const sh of c.sheets.filter((sh) => sh.id.startsWith("popup") || sh.id.startsWith("ui"))) {
+    for (const sh of c.sheets.filter((sh) => sh.id.startsWith("popup") || sh.id.startsWith("ui") || sh.id.startsWith("dao-cu"))) {
       expect(sh.components.filter((cp) => cp.skel.shape !== "empty")).toHaveLength(1);
     }
+  });
+
+  it("không trộn đạo cụ vào sheet UI nhỏ", () => {
+    const propFiles = new Set(["14-reward-voucher", "15-reward-giftbox", "51-reward-giftbox-open", "52-envelope-body", "53-envelope-flap", "54-trophy-cup"]);
+    const prop = LIB.filter((element) => propFiles.has(element.file)).slice(0, 2);
+    const small = LIB.filter((element) => !isPropElement(element) && element.skel.shape !== "full" && !/popup|modal|panel|ribbon/.test(`${element.file} ${element.group ?? ""}`)).slice(0, 3);
+    const chosen = [...small, ...prop];
+    const c = build({
+      elements: chosen.map((element) => ({ file: element.file, label: element.vi, role: "", cell: element.cell ?? "landscape", selected: true })),
+      mascotEnabled: false,
+    });
+    const propSheets = c.sheets.filter((sheet) => sheet.id.startsWith("dao-cu"));
+    const uiSheets = c.sheets.filter((sheet) => sheet.id.startsWith("ui"));
+    expect(propSheets.length).toBeGreaterThan(0);
+    expect(propSheets.flatMap((sheet) => sheet.components).some((component) => propFiles.has(component.file))).toBe(true);
+    expect(uiSheets.flatMap((sheet) => sheet.components).some((component) => propFiles.has(component.file))).toBe(false);
   });
 
   it("món cùng `group` nằm CÙNG sheet và LIỀN NHAU (cặp trạng thái không được tách)", () => {
