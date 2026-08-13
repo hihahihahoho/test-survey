@@ -272,30 +272,71 @@ test("generated images show immutable artifacts and retry only the selected shee
   await expect(dialog.getByText("Đã chọn 1 lượt", { exact: false })).toBeVisible();
 });
 
+/**
+ * ⚠️ HỢP ĐỒNG ĐỔI Ở UI-FIX §3a/§3b — ghi rõ vì sao, không phải nới ca test cho xanh.
+ *
+ * Bước Mascot nay là **danh sách thẻ + modal** (cộng từng nhân vật một), và bộ dáng
+ * dùng chung khuôn `.compact-element` của bước "Bộ khung UI" thay vì ô vuông
+ * `.pose-choice-grid` + `.pose-prototype` riêng. Nên nút "Chọn mascot có sẵn" ĐỔI CHỖ
+ * (vào trong modal), KHÔNG mất.
+ *
+ * Ba điều ca test này khoá thì KHÔNG đổi một chữ:
+ *   ① mascot lấy từ thư viện mang đúng **tên** của nó;
+ *   ② nó mang theo đúng **bộ dáng đã lưu** (Mèo mẫu = 2 dáng), chứ không rơi về
+ *      mặc định "chọn hết 19" — đây là chỗ đã hồi quy một lần, nên phải có cổng canh;
+ *   ③ thẻ dáng **đọc được**: hình xem trước và chữ đều đủ to, không bị bóp.
+ */
 test("@visual a reusable mascot can be selected and pose cards stay readable", async ({ page }, testInfo) => {
   await page.goto("/k/tet26-a7f3");
   await page.getByRole("button", { name: "Tiếp theo" }).click();
   await page.getByRole("button", { name: "Tiếp theo" }).click();
   await page.getByRole("button", { name: "Tiếp theo" }).click();
-  await page.getByRole("button", { name: "Chọn mascot có sẵn" }).click();
+
+  // `exact` là bắt buộc: ô rỗng "Chưa có nhân vật nào — bấm để thêm nhân vật đầu tiên."
+  // cũng là một <button> và chứa cụm "thêm nhân vật".
+  await page.getByRole("button", { name: "Thêm nhân vật", exact: true }).click();
+  // Đặt tên rõ: popover "Chọn mascot có sẵn" của Radix cũng mang `role="dialog"`.
+  const dialog = page.getByRole("dialog", { name: "Thêm nhân vật" });
+  await expect(dialog).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Chọn mascot có sẵn" }).click();
   await page.getByRole("button", { name: /Mèo mẫu/ }).click();
-  await expect(page.getByRole("textbox", { name: "Tên nhân vật" })).toHaveValue("Mèo mẫu");
-  await expect(page.getByText("2 dáng đã chọn")).toBeVisible();
-  const poseCard = page.locator(".pose-choice-grid button").filter({ hasText: "Đứng chờ" });
+
+  // ① tên đi theo con vừa chọn.
+  await expect(dialog.getByRole("textbox", { name: "Tên nhân vật" })).toHaveValue("Mèo mẫu");
+  // Ảnh của nó cũng đi lên đĩa dự án và được gắn cho riêng nhân vật này.
+  await expect(dialog.getByText("char-meo-mau.png")).toBeVisible();
+  await dialog.getByRole("button", { name: "Thêm nhân vật", exact: true }).click();
+  await expect(dialog).toBeHidden();
+
+  // Con vừa thêm thành MỘT THẺ trong danh sách, có đường sửa và đường xoá.
+  await expect(page.getByRole("button", { name: "Sửa Mèo mẫu" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Xoá Mèo mẫu" })).toBeVisible();
+
+  // ② bộ dáng đã lưu của nó THẮNG mặc định "chọn hết 19".
+  await expect(page.getByText("2/19 dáng đã chọn")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Cơ bản · 1$/ })).toBeVisible();
+
+  // ③ thẻ dáng đọc được — và đang bật, đúng bộ dáng của Mèo mẫu (idle + cheer).
+  const poseCard = page.locator(".compact-element-grid button.compact-element").filter({ hasText: "Đứng chờ" });
+  await expect(poseCard).toHaveAttribute("aria-pressed", "true");
   const cardBox = await poseCard.boundingBox();
-  const previewBox = await poseCard.locator(".pose-prototype").boundingBox();
-  const poseSvgBox = await poseCard.locator(".pose-prototype svg").boundingBox();
+  const artBox = await poseCard.locator(".compact-element-art").boundingBox();
+  const poseSvgBox = await poseCard.locator(".compact-element-art svg").boundingBox();
   expect(cardBox).not.toBeNull();
-  expect(previewBox).not.toBeNull();
+  expect(artBox).not.toBeNull();
   expect(poseSvgBox).not.toBeNull();
-  const poseStyle = await poseCard.evaluate((element) => ({
-    height: getComputedStyle(element).height,
-    width: getComputedStyle(element).width,
-    aspectRatio: getComputedStyle(element).aspectRatio,
-  }));
-  expect(Math.abs(cardBox!.width - cardBox!.height), JSON.stringify(poseStyle)).toBeLessThanOrEqual(2);
-  expect(previewBox!.width).toBeGreaterThanOrEqual(80);
-  expect(poseSvgBox!.width).toBeGreaterThanOrEqual(60);
+  // Thẻ đủ cao để hai dòng chữ không chồng nhau, hình xem trước không bị bóp về 0.
+  expect(cardBox!.height).toBeGreaterThanOrEqual(96);
+  expect(artBox!.width).toBeGreaterThanOrEqual(56);
+  expect(poseSvgBox!.width).toBeGreaterThanOrEqual(32);
+  expect(poseSvgBox!.height).toBeGreaterThanOrEqual(40);
+  // Nhãn dáng phải hiện NGUYÊN chữ, không bị cắt cụt (`truncate` chỉ cắt khi hết chỗ).
+  const label = poseCard.locator("strong");
+  await expect(label).toHaveText("Đứng chờ");
+  const labelBox = await label.boundingBox();
+  expect(labelBox!.width).toBeGreaterThan(40);
+
   await page.screenshot({ path: testInfo.outputPath("mascot-pose-dark.png"), fullPage: true, animations: "disabled" });
 });
 

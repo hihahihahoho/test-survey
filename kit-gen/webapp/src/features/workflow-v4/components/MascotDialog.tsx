@@ -13,8 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api/endpoints";
+import type { LibraryItem } from "@/lib/types";
 import type { WorkflowMascot } from "../lib/model";
 import { useWorkflowProjectId } from "../lib/model";
+import { normalizedPoseIds } from "../lib/user-library";
 import { SharedMascotPicker, SharedReferencePicker } from "./SharedReferencePicker";
 
 /**
@@ -32,7 +34,7 @@ import { SharedMascotPicker, SharedReferencePicker } from "./SharedReferencePick
  * (Và theo lời dặn của chủ dự án: KHÔNG sửa file của feature brand.)
  */
 export function MascotDialog({
-  open, onOpenChange, mascot, onSave, uploadRef,
+  open, onOpenChange, mascot, onSave, uploadRef, onAdoptPoses,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -41,6 +43,12 @@ export function MascotDialog({
   onSave: (input: { name: string; description: string; ref: { name: string } | null }) => void;
   /** Đưa ảnh lên đĩa dự án và trả về TÊN agent đặt (`char-*.png`). */
   uploadRef: (file: File) => Promise<string | null>;
+  /**
+   * Áp BỘ DÁNG ĐÃ LƯU của một mascot lấy từ thư viện dùng chung.
+   *
+   * Chỉ được gọi khi mascot ấy THẬT SỰ có bộ dáng riêng — xem `pickFromLibrary`.
+   */
+  onAdoptPoses: (poses: string[]) => void;
 }) {
   const [name, setName] = React.useState("");
   const [description, setDescription] = React.useState("");
@@ -67,6 +75,29 @@ export function MascotDialog({
     });
   };
 
+  /**
+   * ══ MASCOT TÁI SỬ DỤNG — LẤY CẢ CON, KHÔNG CHỈ LẤY CÁI ẢNH ═════════════════
+   *
+   * Một mascot trong thư viện dùng chung mang theo BA thứ: tên, ảnh, và **bộ dáng
+   * đã lưu của nó**. Bản đầu của modal này chỉ lấy hai thứ đầu ⇒ chọn "Mèo mẫu"
+   * (2 dáng) xong vẫn đứng ở 19 dáng mặc định: app lặng lẽ đặt hàng 5 tấm dáng cho
+   * một con mà thư viện nói rõ chỉ cần 1. Đó là hồi quy, không phải đơn giản hoá.
+   *
+   * QUYẾT ĐỊNH khi bộ dáng của mascot đá nhau với mặc định "chọn hết 19" (UI-FIX §3a):
+   *   · mascot CÓ bộ dáng đã lưu ⇒ **bộ của nó THẮNG** (nó là dữ liệu cụ thể về đúng
+   *     con này; "chọn hết" chỉ là phỏng đoán khi chưa biết gì);
+   *   · mascot KHÔNG có bộ dáng nào ⇒ **giữ nguyên lựa chọn đang có**, tuyệt đối không
+   *     `set([])` — một mảng rỗng của thư viện không phải lời yêu cầu "xoá hết dáng".
+   * Cả hai đường đều để người dùng chỉnh tiếp ngay bên dưới, không khoá gì.
+   */
+  const pickFromLibrary = (file: File, item: LibraryItem) => {
+    setName(item.name);
+    setDescription((current) => current || item.description);
+    takeFile([file]);
+    const poses = normalizedPoseIds(item.poses ?? []);
+    if (poses.length > 0) onAdoptPoses(poses);
+  };
+
   const canSave = name.trim().length > 0 && !busy;
 
   return (
@@ -89,7 +120,7 @@ export function MascotDialog({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Label>Ảnh tham chiếu</Label>
               <div className="flex flex-wrap gap-2">
-                <SharedMascotPicker onPick={(file, item) => { setName((current) => current || item.name); takeFile([file]); }} />
+                <SharedMascotPicker onPick={pickFromLibrary} />
                 <SharedReferencePicker group="mascot-reference" onPick={(file) => takeFile([file])} />
               </div>
             </div>

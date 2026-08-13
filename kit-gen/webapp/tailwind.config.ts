@@ -155,10 +155,27 @@ export default {
         sticky: "100",
         rail: "110",
         floatbar: "200",
-        dropdown: "400",
         scrim: "500",
         modal: "510",
         drawer: "520",
+        /**
+         * ⚠️ `dropdown` PHẢI NẰM TRÊN `modal`/`drawer` — trước đây là `400`, tức DƯỚI
+         * cả scrim.
+         *
+         * Hệ quả đo được: mọi `Select` / `Popover` / `DropdownMenu` mở TỪ TRONG một
+         * `Dialog` đều vẽ SAU tấm modal ⇒ bấm vào mục trong danh sách thì trúng nội
+         * dung của dialog nằm đè lên. Playwright gọi đúng tên nó: *"dialog subtree
+         * intercepts pointer events"*. Đây không phải bệnh của riêng một màn: cùng lỗi
+         * có sẵn ở `<Select>` trong `EditAssetDialog` (thư viện) và ở nút "Chọn mascot
+         * có sẵn" trong modal Thêm nhân vật của wizard.
+         *
+         * Vì sao nâng lên là AN TOÀN chứ không phải nới bừa: một lớp nổi chỉ có thể
+         * được mở bằng cách bấm vào trigger của nó, mà `Dialog` khoá tiêu điểm — nên
+         * KHÔNG tồn tại tình huống "dropdown ở ngoài, modal ở trên": hai thứ này chỉ
+         * gặp nhau khi dropdown được mở TỪ TRONG modal, và khi đó nó bắt buộc ở trên.
+         * Giữ dưới `toast`/`tooltip` để hai lớp báo tin vẫn là lớp trên cùng.
+         */
+        dropdown: "530",
         toast: "600",
         tooltip: "700",
       },

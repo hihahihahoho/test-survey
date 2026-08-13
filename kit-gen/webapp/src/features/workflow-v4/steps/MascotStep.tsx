@@ -140,6 +140,7 @@ export function MascotStep() {
             onOpenChange={setDialogOpen}
             mascot={editing}
             uploadRef={(file) => refs.addOne(file, "character")}
+            onAdoptPoses={(poses) => s.set({ mascotPoses: poses })}
             onSave={(input) => {
               if (editing) s.patchMascot(editing.id, input);
               else s.addMascot(input);
