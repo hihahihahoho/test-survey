@@ -109,6 +109,7 @@ Mọi response có `X-KitGen-Protocol: 1`. Lỗi luôn theo envelope §6.1:
 |---|---|---|---|
 | 1 | GET | `/health` | Rẻ, là endpoint **duy nhất** nên poll định kỳ. Trả `protocol`, `version`, `instanceLabel`, `workspaceId/Label/Fingerprint`, `projects`, `activeRuns`, `updateCommand` |
 | 2 | GET | `/api/doctor` | `?refresh=1` bỏ cache 60s. **Chỉ enum + boolean + version** — xem §Doctor |
+| 2b | GET | `/api/usage` | Quota Codex **còn lại**. `?refresh=1` bỏ cache 5 phút. Chỉ số + enum — xem §Usage |
 | 3 | GET | `/api/workspaces` | Danh sách workspace agent BIẾT, mỗi cái một `id` đục (`ws_xxxxxxxx`), **không có path** |
 | 4 | POST | `/api/workspace/activate` | `{workspaceId}` → đổi workspace đang dùng. `404 WORKSPACE_UNKNOWN` / `423 WORKSPACE_UNWRITABLE` |
 | 5 | GET | `/bridge.html` | Cầu dò popup: điều hướng **top-level** nên không bị mixed-content chặn. `postMessage` **chỉ** tới origin trong allowlist |
@@ -276,6 +277,48 @@ Cách kiểm `image_gen` theo `teams/t3-auth/PLAN.md` §6.1 — **fallback, khô
 > `codex debug prompt-input` trong sandbox chết vì `Operation not permitted` (đúng như
 > `teams/t3-auth/PLAN.md §0` đã ghi). Phải chạy lại từ terminal thật của user.
 > Test tự động vì thế dùng **doctor giả tiêm vào** để không phụ thuộc máy.
+
+### 5b. Usage — quota Codex còn lại
+
+`GET /api/usage` (cache 5 phút, `?refresh=1` để bỏ cache). **Chỉ số + enum + ISO time.**
+
+```jsonc
+{ "ok": true,
+  "profile": "img-home",             // hồ sơ đang chọn (giống doctor.imageGen.profile)
+  "codexHomeLabel": "~/.codex-img",  // NHÃN rút gọn, không phải path tuyệt đối
+  "plan": "plus",                    // enum gói cước do server Codex trả
+  "primary":   {"usedPercent":2,"remainingPercent":98,
+                "windowMinutes":10080,"resetsAt":"2026-08-20T06:30:28.000Z"},
+  "secondary": null,                 // cửa sổ thứ hai (thường 5 giờ), null nếu không có
+  "observedAt": "2026-08-13T09:00:24.138Z",   // lượt chạy Codex nào cho ra con số này
+  "source": "codex-rollout", "checkedAt": "…" }
+```
+
+**Nguồn.** Codex CLI 0.147 **không có** lệnh `usage`/`quota`/`status`; `codex doctor --json`
+chỉ nói sức khoẻ cài đặt. Con số mà TUI Codex vẽ ("Weekly usage limit · 98% remaining ·
+Resets …") đến từ sự kiện `token_count` server trả mỗi lượt, và Codex **ghi lại** sự kiện
+đó vào file rollout của phiên:
+
+```
+$CODEX_HOME/sessions/<YYYY>/<MM>/<DD>/rollout-<ts>-<uuid>.jsonl
+{"type":"event_msg","payload":{"type":"token_count","rate_limits":{
+   "limit_id":"codex","plan_type":"plus",
+   "primary":{"used_percent":2.0,"window_minutes":10080,"resets_at":1787207428},
+   "secondary":null}}}
+```
+
+Agent đọc **ngược** vài file rollout mới nhất của `$CODEX_HOME` tương ứng hồ sơ đang chọn,
+lấy bản ghi cuối cùng có số. **Không spawn `codex`, không gọi mạng, không tốn quota.** Đổi
+lại, số liệu **cũ bằng lượt chạy Codex gần nhất** — `observedAt` nói đúng mốc đó và UI bắt
+buộc hiện ra chứ không giả vờ là thời gian thực.
+
+**Hợp đồng bảo mật** (giống doctor, arch §4.4-4): không đọc `auth.json`/`config.toml`;
+rollout có chứa nội dung hội thoại nên chỉ những dòng có chuỗi `"rate_limits"` mới được
+parse, và chỉ **số + enum** được giữ lại. Không log, không trả nguyên dòng, không path tuyệt đối.
+
+`ok:false` + `reason` (`NO_CODEX_HOME` | `NO_SESSIONS` | `NO_DATA`) = **chưa biết**, khác hẳn
+"còn 0%" ⇒ web ẩn hẳn thanh usage, không vẽ 0. `NO_DATA` cũng là ca của người dùng khai
+`model_provider` riêng (proxy tương thích OpenAI): server đó không trả `rate_limits`.
 
 ---
 

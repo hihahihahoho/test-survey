@@ -162,9 +162,20 @@ describe("H mount THẬT trong DOM — agent OK", () => {
     await waitFor(() => expect(btn.hasAttribute("disabled")).toBe(false));
   });
 
-  it("footer có link Thùng rác kèm số", async () => {
-    renderScreen();
-    expect(await screen.findByRole("button", { name: "Thùng rác (1)" })).toBeTruthy();
+  /* Thùng rác chuyển hẳn về SIDEBAR: nút chữ «Thùng rác» + số đếm là badge nằm cạnh
+     (không nhét vào tên nút, để screen reader không phải đọc "Thùng rác mở ngoặc 1").
+     Nút «Thùng rác (N)» ở góc dưới-phải vùng nội dung đã bỏ — hai lối vào cho cùng một
+     đích là thừa. Ca này khoá CẢ HAI vế: đích cũ biến mất, đích mới có kèm SỐ THẬT. */
+  it("Thùng rác nằm ở sidebar kèm SỐ THẬT; nút «Thùng rác (N)» cũ đã bỏ", async () => {
+    const { container } = renderScreen();
+    await waitFor(() => expect(screen.getByText("Candy Lite")).toBeTruthy());
+    /* Khoanh vùng sidebar: thanh điều hướng cho màn hẹp (`md:hidden`) cũng có nút
+       "Thùng rác" và jsdom không áp CSS nên nó vẫn nằm trong cây. */
+    const aside = container.querySelector("aside") as HTMLElement;
+    const trash = within(aside).getByRole("button", { name: "Thùng rác" });
+    // số đếm THẬT (fixture /api/trash trả 1 mục) nằm ngay cạnh nút, không hardcode
+    await waitFor(() => expect(within(trash.parentElement as HTMLElement).getByText("1")).toBeTruthy());
+    expect(screen.queryByRole("button", { name: /Thùng rác \(\d+\)/ })).toBeNull();
   });
 });
 

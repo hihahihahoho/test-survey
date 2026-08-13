@@ -1,7 +1,7 @@
 /* suite-system.mjs — §6.2 A (#1 /health, #2 /api/doctor, #3 /api/workspaces)
    + 9 lớp phòng thủ vận chuyển của architecture §3.4 (Host 421, Origin 403, ép preflight,
    không wildcard CORS, chỉ bind loopback). */
-import { readFileSync } from "node:fs"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, eq, ok, includes, stripComments, PAGES, CLIENT } from "./harness.mjs"
 import { VERSION } from "../server.mjs"
@@ -71,6 +71,68 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     eq(d2.imageGen.profile, "default-home", "profile sau khi về mặc định")
     eq(d2.imageGen.codexHomeLabel, "~/.codex", "nhãn rút gọn của home mặc định")
   })
+
+  // ─────────────────────────────────────────── 1c. QUOTA CÒN LẠI (/api/usage)
+  describe("usage / quota")
+  {
+    /* Fixture = một $CODEX_HOME giả với đúng hình dạng thật của rollout:
+       một dòng hội thoại (KHÔNG được lọt ra ngoài) + hai dòng `token_count`, dòng
+       sau mới là số đúng. `KITGEN_CODEX_HOME` chỉ tồn tại cho test. */
+    const fakeHome = join(tmp, "codex-home")
+    const day = join(fakeHome, "sessions", "2026", "08", "13")
+    mkdirSync(day, { recursive: true })
+    mkdirSync(join(fakeHome, "sessions", "2026", "08", "12"), { recursive: true })
+    const evt = (usedPercent, resetsAt) => JSON.stringify({
+      timestamp: "2026-08-13T09:00:24.138Z", type: "event_msg",
+      payload: {
+        type: "token_count",
+        rate_limits: {
+          limit_id: "codex", plan_type: "plus",
+          primary: { used_percent: usedPercent, window_minutes: 10080, resets_at: resetsAt },
+          secondary: null,
+        },
+      },
+    })
+    writeFileSync(join(day, "rollout-2026-08-13T16-19-42-aaa.jsonl"), [
+      JSON.stringify({ type: "response_item", payload: { type: "message", content: "MẬT KHẨU NGÂN HÀNG" } }),
+      evt(1, 1787207428),
+      evt(2, 1787207428),
+    ].join("\n") + "\n")
+
+    await it("GET /api/usage đọc rate_limits của lượt gần nhất, trả % CÒN LẠI", async () => {
+      process.env.KITGEN_CODEX_HOME = fakeHome
+      try {
+        const r = await api("GET", "/api/usage?refresh=1")
+        eq(r.status, 200, "status")
+        eq(r.json.ok, true, "ok")
+        eq(r.json.primary.usedPercent, 2, "lấy bản ghi CUỐI trong file, không phải bản đầu")
+        eq(r.json.primary.remainingPercent, 98, "% còn lại")
+        eq(r.json.primary.windowMinutes, 10080, "cửa sổ tuần")
+        eq(r.json.primary.resetsAt, new Date(1787207428 * 1000).toISOString(), "mốc reset dạng ISO")
+        eq(r.json.plan, "plus", "gói cước là enum của server")
+        ok(typeof r.json.observedAt === "string", "nói rõ số này quan sát lúc nào")
+      } finally { delete process.env.KITGEN_CODEX_HOME }
+    })
+    await it("GET /api/usage KHÔNG mang theo nội dung hội thoại hay đường dẫn tuyệt đối", async () => {
+      process.env.KITGEN_CODEX_HOME = fakeHome
+      try {
+        const r = await api("GET", "/api/usage?refresh=1")
+        ok(!r.text.includes("MẬT KHẨU"), "nội dung rollout KHÔNG được lọt ra client")
+        ok(!/\/Users\/|\/private\/|\/tmp\//.test(r.text), `không có path tuyệt đối: ${r.text}`)
+        ok(!/access_token|refresh_token|id_token|sk-/.test(r.text), "không có field auth nào")
+      } finally { delete process.env.KITGEN_CODEX_HOME }
+    })
+    await it("home không có số liệu ⇒ 200 + ok:false + reason enum (không 500, không bịa số)", async () => {
+      process.env.KITGEN_CODEX_HOME = join(tmp, "codex-home-empty")
+      try {
+        const r = await api("GET", "/api/usage?refresh=1")
+        eq(r.status, 200, "status")
+        eq(r.json.ok, false, "ok")
+        ok(["NO_CODEX_HOME", "NO_SESSIONS", "NO_DATA"].includes(r.json.reason), `reason là enum: ${r.json.reason}`)
+        eq(r.json.primary, null, "KHÔNG bịa số phần trăm")
+      } finally { delete process.env.KITGEN_CODEX_HOME }
+    })
+  }
 
   describe("health")
   await it("GET /api/workspaces trả id đục, không trả path", async () => {

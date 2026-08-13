@@ -1,5 +1,4 @@
 import {
-  Clock3,
   Images,
   Palette,
   LayoutGrid,
@@ -10,8 +9,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { UpdateSidebarButton } from "./UpdateSidebarButton";
+import { UsageMeter } from "./UsageMeter";
 
-export type HomeSection = "recent" | "all";
+/** Mục "Gần đây" đã bỏ theo yêu cầu chủ sản phẩm — chỉ còn một danh sách Dự án. */
+export type HomeSection = "all";
 export type HomeDestination = "projects" | "brands" | "ui-library" | "mascot-library" | "references" | "trash" | "settings";
 
 export interface HomeSidebarProps {
@@ -39,7 +40,7 @@ export function HomeSidebar({
   onMascotLibrary,
   onReferences,
 }: HomeSidebarProps) {
-  const item = (id: HomeSection, label: string, Icon: typeof Clock3) => (
+  const item = (id: HomeSection, label: string, Icon: typeof LayoutGrid) => (
     <button
       type="button"
       onClick={() => onSection(id)}
@@ -90,11 +91,12 @@ export function HomeSidebar({
       </button>
 
       <nav aria-label="Danh sách dự án" className="space-y-1">
-        {item("recent", "Gần đây", Clock3)}
         {item("all", "Dự án", LayoutGrid)}
       </nav>
 
       <div className="my-4 border-t border-line-subtle" />
+      {/* Title nhóm để người dùng phân biệt khu điều hướng (yêu cầu chủ sản phẩm). */}
+      <p className="mb-2 px-3 text-caption font-medium uppercase tracking-wide text-fg-muted">Quản lý</p>
       <nav aria-label="Quản lý" className="space-y-1">
         {destination("brands", "Nhận dạng thương hiệu", Palette, onBrands)}
         {destination("ui-library", "Bộ khung UI", PanelsTopLeft, onUiLibrary)}
@@ -113,6 +115,8 @@ export function HomeSidebar({
           `null` nếu không), nằm ngay trên "Cài đặt" — cùng nhóm "việc của app", không
           lẫn vào nhóm điều hướng nội dung ở trên. */}
       <div className="mt-auto space-y-1 pt-4">
+        {/* Quota Codex còn lại — tự trả `null` khi chưa có số, y như [Cập nhật]. */}
+        <UsageMeter />
         <UpdateSidebarButton />
         {destination("settings", "Cài đặt", Settings, onSettings)}
       </div>

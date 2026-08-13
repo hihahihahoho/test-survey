@@ -17,6 +17,10 @@ import { cn } from "@/lib/utils";
  *
  * Kiểm tra không thành công (`ok:false`, mất mạng) CŨNG ẩn nút: không có bằng chứng có
  * bản mới thì không được mời user cập nhật.
+ *
+ * Bấm xong, thứ user nhìn KHÔNG phải cái nút này đổi chữ mà là lớp phủ toàn trang
+ * (`UpdateOverlay`, gắn ở `App.tsx`). `pending` ở đây chỉ để nút không nhận cú bấm thứ hai
+ * trong khoảnh khắc trước khi lớp phủ hiện ra.
  */
 export function UpdateSidebarButton() {
   const update = useUpdateCheck();

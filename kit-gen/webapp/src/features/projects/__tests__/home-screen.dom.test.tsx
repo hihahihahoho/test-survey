@@ -71,6 +71,14 @@ const PROJECTS = {
   ],
 };
 
+/** `GET /api/usage` — quota Codex còn lại, hình dạng THẬT của agent (gói plus, cửa sổ tuần). */
+const USAGE = {
+  ok: true, codexHomeLabel: "~/.codex-img", profile: "img-home", plan: "plus",
+  primary: { usedPercent: 2, remainingPercent: 98, windowMinutes: 10080, resetsAt: "2026-08-20T06:30:28.000Z" },
+  secondary: null,
+  observedAt: "2026-08-13T09:00:24.138Z", checkedAt: "2026-08-13T09:33:08.309Z",
+};
+
 function fakeFetch(offline = false) {
   return vi.fn(async (input: RequestInfo | URL) => {
     const url = String(typeof input === "string" ? input : (input as Request).url ?? input);
@@ -82,6 +90,7 @@ function fakeFetch(offline = false) {
     if (url.includes("/health")) return json(HEALTH);
     if (url.includes("/api/projects?") || url.endsWith("/api/projects")) return json(PROJECTS);
     if (url.includes("/api/trash")) return json({ items: [{ trashId: "t1", name: "Cũ" }, { trashId: "t2", name: "Cũ 2" }] });
+    if (url.includes("/api/usage")) return json(USAGE);
     if (url.includes("/files/")) return new Response(new Blob(["x"]), { status: 200 });
     return json({ error: { code: "NOT_FOUND", message: url } }, 404);
   });
@@ -104,6 +113,11 @@ function renderHome() {
 }
 
 const card = (name: string) => screen.getByRole("article", { name: new RegExp(name) });
+
+/** Sidebar trái. Phải khoanh vùng: thanh điều hướng cho màn hẹp (`md:hidden`) có
+ *  những nút TRÙNG TÊN ("Thùng rác", "Cài đặt") và jsdom không áp CSS nên nó vẫn
+ *  nằm trong cây — truy vấn toàn màn sẽ dính hai kết quả. */
+const sidebar = (container: HTMLElement) => container.querySelector("aside") as HTMLElement;
 
 beforeEach(() => {
   _setBackend(memoryBackend());
@@ -220,9 +234,81 @@ describe("H · màn «Bộ kit của bạn» — agent OK", () => {
     await waitFor(() => expect(cta.disabled).toBe(false));
   });
 
-  it("§1.1 — thùng rác là nút chữ kèm SỐ THẬT", async () => {
+  /* §1.1 — thùng rác vẫn là NÚT CHỮ kèm SỐ THẬT, nhưng đã dời hẳn vào SIDEBAR:
+     tên nút gọn («Thùng rác»), số đếm là badge cạnh nút. Nút «Thùng rác (N)» ở góc
+     dưới-phải vùng lưới đã bỏ — sidebar đã có sẵn lối vào, nút thứ hai là thừa. */
+  it("§1.1 — thùng rác là nút chữ ở sidebar kèm SỐ THẬT", async () => {
+    const { container } = renderHome();
+    await waitFor(() => expect(screen.getByText("Candy Lite")).toBeTruthy());
+    const bar = within(sidebar(container));
+    const trash = bar.getByRole("button", { name: "Thùng rác" });
+    // số đếm THẬT (fixture /api/trash trả 2 mục), nằm cạnh nút chứ không nhét vào tên
+    await waitFor(() => expect(within(trash.parentElement as HTMLElement).getByText("2")).toBeTruthy());
+  });
+
+  it("nút «Thùng rác (N)» ở góc dưới-phải lưới đã BỎ (chỉ còn lối vào ở sidebar)", async () => {
     renderHome();
-    expect(await screen.findByRole("button", { name: /Thùng rác \(2\)/ })).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("Candy Lite")).toBeTruthy());
+    expect(screen.queryByRole("button", { name: /Thùng rác \(\d+\)/ })).toBeNull();
+  });
+
+  /* Sidebar sau đợt dọn: mục «Gần đây» bỏ hẳn (chỉ còn MỘT danh sách «Dự án»), và
+     nhóm điều hướng nội dung có TITLE «Quản lý» để phân biệt với nhóm dự án ở trên. */
+  it("sidebar: KHÔNG còn mục «Gần đây», chỉ còn một mục «Dự án»", async () => {
+    const { container } = renderHome();
+    await waitFor(() => expect(screen.getByText("Candy Lite")).toBeTruthy());
+    expect(container.textContent ?? "").not.toContain("Gần đây");
+    expect(within(sidebar(container)).getAllByRole("button", { name: "Dự án" })).toHaveLength(1);
+  });
+
+  /* Thanh quota Codex ở CHÂN sidebar — ngay trên "Cài đặt", cùng khối "việc của app"
+     với nút [Cập nhật]. Số phải là SỐ THẬT của agent và phải đọc được bằng CHỮ (A3:
+     thanh màu là trang trí, `aria-hidden`). */
+  it("sidebar: thanh quota Codex hiện % CÒN LẠI bằng chữ, ngay trên «Cài đặt»", async () => {
+    const { container } = renderHome();
+    await waitFor(() => expect(screen.getByText("Candy Lite")).toBeTruthy());
+    const bar = within(sidebar(container));
+    const meter = await bar.findByRole("status", { name: /Hạn mức tuần/ });
+    expect(meter.textContent).toContain("còn 98%");
+    // nhãn chi tiết nói ra mốc ĐẶT LẠI và mốc QUAN SÁT (số cũ bằng lượt chạy cuối)
+    const detail = meter.getAttribute("aria-label") ?? "";
+    expect(detail).toContain("đặt lại 20/08/2026");
+    expect(detail).toContain("số đọc lúc");
+    // đứng TRƯỚC "Cài đặt" trong cây DOM
+    const settings = bar.getByRole("button", { name: "Cài đặt" });
+    expect(meter.compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("sidebar: thanh quota ẨN HẲN khi agent chưa có số (không vẽ 0%)", async () => {
+    /* `/api/usage` 404 ⇒ hook im lặng ⇒ component trả null. Ca này canh đúng cái
+       ranh giới "chưa biết" ≠ "còn 0%". */
+    const f = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(typeof input === "string" ? input : (input as Request).url ?? input);
+      const json = (body: unknown, status = 200) =>
+        new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "X-KitGen-Protocol": "1" } });
+      if (url.includes("/api/usage")) return json({ error: { code: "NOT_FOUND", message: url } }, 404);
+      if (url.includes("/health")) return json(HEALTH);
+      if (url.includes("/api/projects?") || url.endsWith("/api/projects")) return json(PROJECTS);
+      if (url.includes("/api/trash")) return json({ items: [] });
+      if (url.includes("/files/")) return new Response(new Blob(["x"]), { status: 200 });
+      return json({ error: { code: "NOT_FOUND", message: url } }, 404);
+    });
+    vi.stubGlobal("fetch", f);
+    configureClient({ fetchImpl: f as never, base: "http://127.0.0.1:8765" });
+    const { container } = renderHome();
+    await waitFor(() => expect(screen.getByText("Candy Lite")).toBeTruthy());
+    expect(within(sidebar(container)).queryByRole("status", { name: /Hạn mức/ })).toBeNull();
+    expect(container.textContent ?? "").not.toContain("còn 0%");
+  });
+
+  it("sidebar: nhóm điều hướng có TITLE «Quản lý» hiện ra thành chữ", async () => {
+    const { container } = renderHome();
+    await waitFor(() => expect(screen.getByText("Candy Lite")).toBeTruthy());
+    const bar = within(sidebar(container));
+    const nav = bar.getByRole("navigation", { name: "Quản lý" });
+    // title là CHỮ THẬT trên màn (không chỉ là aria-label của <nav>) và đứng TRƯỚC nhóm
+    const title = bar.getByText("Quản lý", { selector: "p" });
+    expect(title.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("nút ⋯ có trên mọi thẻ và có tên đọc được", async () => {

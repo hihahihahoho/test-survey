@@ -1,6 +1,7 @@
 /* routes/system.mjs — §6.2 A: #1 /health, #2 /api/doctor, #3 /api/workspaces,
    #4 /api/workspace/activate, #5 /bridge.html. /health là endpoint DUY NHẤT được poll. */
 import { IMG_HOME_DEFAULT, invalidateDoctorCache } from "../lib/doctor.mjs"
+import { invalidateUsageCache, usage } from "../lib/usage.mjs"
 import { PROTOCOL } from "../lib/security.mjs"
 import { checkForUpdateSafe, readRuntimeVersion, scheduleUpdate } from "../lib/update.mjs"
 
@@ -57,6 +58,16 @@ export function register(r) {
         codexHomeLabel: profile === "img-home" ? IMG_HOME_DEFAULT : "~/.codex",
       },
     }
+  })
+
+  /** Quota còn lại của tài khoản Codex — đọc lại con số mà lượt chạy gần nhất đã nhận
+   *  (chi tiết nguồn + hợp đồng bảo mật ở đầu `lib/usage.mjs`). Rẻ: không spawn codex,
+   *  không gọi mạng, không tốn quota; cache 5 phút, `?refresh=1` để ép đọc lại.
+   *  LUÔN 200 — không có số thì `ok:false` + `reason` enum, UI tự ẩn thanh. */
+  r.get("/api/usage", async ctx => {
+    const refresh = ctx.url.searchParams.get("refresh") === "1"
+    if (refresh) invalidateUsageCache()
+    return { status: 200, json: await usage(ctx.registry.active, { refresh }) }
   })
 
   /** Kiểm tra bản mới. Luôn 200: mất mạng là `ok:false` + `reason`, không phải lỗi agent. */

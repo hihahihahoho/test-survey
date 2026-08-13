@@ -1,0 +1,185 @@
+/**
+ * webapp/src/lib/update/restart.ts — BIẾT LÚC NÀO AGENT ĐÃ SỐNG LẠI VỚI BẢN MỚI.
+ *
+ * Bản trước đặt `setTimeout(reload, 5000)` sau khi `POST /api/update` trả 202. Con số 5s
+ * đó không đo gì cả: cài xong nhanh hơn thì user ngồi chờ vô cớ, chậm hơn thì trang tải
+ * lại vào lúc agent đang chết ⇒ màn "mất kết nối" ngay sau khi bấm Cập nhật, và không ai
+ * biết bản mới đã vào hay chưa.
+ *
+ * Thay bằng ĐO THẬT: poll `/health` (endpoint DUY NHẤT được phép poll, §6.2) cho tới khi
+ * agent trả lời VÀ `version` khác bản cũ / đúng bản đích. Trong lúc agent thay mình,
+ * request sẽ hỏng (fetch reject, 503 STARTING) — đó là DẤU HIỆU BÌNH THƯỜNG, không phải
+ * lỗi để báo: nuốt im và thử lại.
+ *
+ * Ba kết cục, mỗi cái nói một câu khác nhau với user:
+ *   · `updated`   — có bản mới thật ⇒ tự tải lại trang.
+ *   · `unchanged` — agent đã tắt/bật lại nhưng version Y NGUYÊN ⇒ cài hỏng. Vẫn tải lại
+ *                   để app đọc lại trạng thái thật, rồi báo "chưa thành công" kèm lệnh tay.
+ *   · `timeout`   — quá hạn mà chưa kết luận được ⇒ KHÔNG tự tải lại (tải lại lúc này chỉ
+ *                   giấu mất vấn đề), mà mời user tải lại thủ công / xem Terminal.
+ */
+import { AgentError, fetchHealth } from "../api/client";
+
+/** 90s: dài hơn hẳn một lượt tải + cài của `kitgen update`, ngắn hơn sức chờ của con người. */
+export const RESTART_TIMEOUT_MS = 90_000;
+export const RESTART_INTERVAL_MS = 1500;
+/**
+ * Bao nhiêu lần thấy agent SỐNG với version CŨ (sau khi nó đã từng chết) thì kết luận
+ * "cài xong mà không đổi gì". >1 vì lần đầu vừa sống lại có thể là tiến trình cũ đang
+ * hấp hối chứ chưa phải bản mới.
+ */
+export const RESTART_STABLE_CHECKS = 4;
+
+export interface AgentProbe {
+  /** agent trả lời được (kể cả khi protocol lệch — vẫn là bằng chứng nó SỐNG). */
+  reachable: boolean;
+  version: string | null;
+  /**
+   * Protocol lệch sau khi cài ⇒ agent đã đổi thật, chỉ có bundle đang chạy là cũ.
+   * Đây là bằng chứng MẠNH của "đã cập nhật", và cũng là ca bắt buộc phải tải lại.
+   */
+  protocolChanged: boolean;
+}
+
+export type RestartOutcome = "updated" | "unchanged" | "timeout";
+
+export interface RestartResult {
+  outcome: RestartOutcome;
+  version: string | null;
+}
+
+/** So version kiểu `2.10.0` > `2.9.9` (số theo số, không theo chữ). Cùng luật với agent. */
+export function compareVersions(a: string, b: string): number {
+  const parts = (v: string) => String(v).split(/[.-]/).map((x) => (/^\d+$/.test(x) ? Number(x) : x));
+  const pa = parts(a);
+  const pb = parts(b);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
+    const x = pa[i] ?? 0;
+    const y = pb[i] ?? 0;
+    if (x === y) continue;
+    if (typeof x === "number" && typeof y === "number") return x < y ? -1 : 1;
+    return String(x).localeCompare(String(y), undefined, { numeric: true }) < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+/**
+ * "Đây có phải bản mới không?" — trả lời bằng bằng chứng, không bằng phỏng đoán:
+ *  · trùng bản đích ⇒ đúng, chắc chắn;
+ *  · lớn hơn bản cũ ⇒ đúng (ca `latestVersion` null vì lúc bấm mất mạng);
+ *  · còn lại ⇒ chưa, cứ chờ tiếp.
+ */
+export function isUpdatedVersion(
+  version: string | null,
+  opts: { targetVersion?: string | null; fromVersion?: string | null } = {},
+): boolean {
+  const { targetVersion = null, fromVersion = null } = opts;
+  if (!version) return false;
+  if (targetVersion && version === targetVersion) return true;
+  if (fromVersion && compareVersions(version, fromVersion) > 0) return true;
+  return false;
+}
+
+/** Một nhịp `/health`. KHÔNG BAO GIỜ ném: mọi lỗi đều là "chưa sống lại". */
+export async function probeAgentOnce(): Promise<AgentProbe> {
+  try {
+    const r = await fetchHealth();
+    const raw = (r.health as { version?: unknown } | null)?.version;
+    if (!r.ok) return { reachable: false, version: null, protocolChanged: false };
+    return {
+      reachable: true,
+      version: typeof raw === "string" ? raw : null,
+      protocolChanged: r.protocolIssue !== null,
+    };
+  } catch (e) {
+    const code = e instanceof AgentError ? e.code : "";
+    if (code === "AGENT_PROTOCOL_OLD" || code === "AGENT_PROTOCOL_NEW") {
+      return { reachable: true, version: null, protocolChanged: true };
+    }
+    return { reachable: false, version: null, protocolChanged: false };
+  }
+}
+
+const realSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+export interface WaitOptions {
+  targetVersion?: string | null;
+  fromVersion?: string | null;
+  timeoutMs?: number;
+  intervalMs?: number;
+  stableChecks?: number;
+  /** tiêm được để test không phải chạy mạng và không phải chờ thật. */
+  probe?: () => Promise<AgentProbe>;
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
+}
+
+/**
+ * Chờ agent sống lại với bản mới. Hàm này KHÔNG tự tải lại trang — nó chỉ trả sự thật;
+ * quyết định làm gì với sự thật đó là của `install-store`.
+ */
+export async function waitForUpdatedAgent(opts: WaitOptions = {}): Promise<RestartResult> {
+  const {
+    targetVersion = null,
+    fromVersion = null,
+    timeoutMs = RESTART_TIMEOUT_MS,
+    intervalMs = RESTART_INTERVAL_MS,
+    stableChecks = RESTART_STABLE_CHECKS,
+  } = opts;
+  const probe = opts.probe ?? probeAgentOnce;
+  const sleep = opts.sleep ?? realSleep;
+  const now = opts.now ?? (() => Date.now());
+
+  const knowsVersions = Boolean(targetVersion || fromVersion);
+  const startedAt = now();
+  let sawDown = false;
+  let sameVersionStreak = 0;
+  let lastVersion: string | null = null;
+
+  for (;;) {
+    const p = await probe();
+    if (p.version) lastVersion = p.version;
+
+    if (!p.reachable) {
+      // Agent đang tự thay mình — đúng như dự kiến. Im lặng, đếm lại từ đầu.
+      sawDown = true;
+      sameVersionStreak = 0;
+    } else if (p.protocolChanged) {
+      return { outcome: "updated", version: p.version };
+    } else if (knowsVersions ? isUpdatedVersion(p.version, { targetVersion, fromVersion }) : sawDown) {
+      // Không biết version nào cả ⇒ "đã chết rồi sống lại" là bằng chứng tốt nhất còn lại.
+      return { outcome: "updated", version: p.version };
+    } else if (sawDown) {
+      sameVersionStreak += 1;
+      if (sameVersionStreak >= stableChecks) return { outcome: "unchanged", version: p.version };
+    }
+
+    if (now() - startedAt >= timeoutMs) return { outcome: "timeout", version: lastVersion };
+    await sleep(intervalMs);
+  }
+}
+
+/**
+ * Sau khi trang đã tải lại: agent đang chạy bản nào? Nó có thể còn đang khởi động vài
+ * giây nữa, nên vẫn phải chờ — nhưng chờ NGẮN, vì đây chỉ để chọn câu thông báo.
+ * `null` = không hỏi được ⇒ tuyệt đối không được suy ra "cập nhật thất bại".
+ */
+export async function probeAgentVersion(opts: {
+  timeoutMs?: number;
+  intervalMs?: number;
+  probe?: () => Promise<AgentProbe>;
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
+} = {}): Promise<string | null> {
+  const { timeoutMs = 20_000, intervalMs = 1500 } = opts;
+  const probe = opts.probe ?? probeAgentOnce;
+  const sleep = opts.sleep ?? realSleep;
+  const now = opts.now ?? (() => Date.now());
+  const startedAt = now();
+  for (;;) {
+    const p = await probe();
+    if (p.reachable && p.version) return p.version;
+    if (now() - startedAt >= timeoutMs) return null;
+    await sleep(intervalMs);
+  }
+}

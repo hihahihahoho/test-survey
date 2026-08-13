@@ -77,7 +77,10 @@ export function RuntimeStatus({ status, onRecheck }: { status: ConnectionStatus;
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="secondary" onClick={() => { onRecheck(); void doctor.refetch(); void update.refetch(); }}><RefreshCw aria-hidden /> Kiểm tra lại</Button>
-          {update.data?.available && <Button size="sm" onClick={() => void install.start(update.data?.latestVersion)} loading={install.pending}>Cập nhật</Button>}
+          {/* Đóng popover TRƯỚC khi cài: lớp nổi của Radix ở `z-dropdown` (530) nằm TRÊN
+              lớp phủ cập nhật (`z-modal`, 510), nên để nguyên thì tấm popover sẽ trôi lơ
+              lửng trên màn hình đang chặn — và vẫn bấm được. */}
+          {update.data?.available && <Button size="sm" onClick={() => { setOpen(false); void install.start(update.data?.latestVersion); }} loading={install.pending}>Cập nhật</Button>}
           {update.data?.ok && !update.data.available && <span className="inline-flex items-center gap-1 text-caption text-fg-muted"><Check className="size-3" /> Mới nhất</span>}
         </div>
       </div>

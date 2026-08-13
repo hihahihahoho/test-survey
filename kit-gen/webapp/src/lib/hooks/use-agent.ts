@@ -11,6 +11,7 @@ import { api } from "../api/endpoints";
 import { bridgeProbe, checkingStatus, createProbeSchedule, diagnose, type BridgeResult, type ConnectionStatus } from "../api/connection";
 import { qk } from "./keys";
 import { STALE } from "./query-client";
+import { useUpdateInstall } from "../update/install-store";
 
 /**
  * Trạng thái kết nối + nhịp probe backoff 1.5→3→6→15s (arch §5.3).
@@ -135,26 +136,22 @@ export function useUpdateCheck(opts: { enabled?: boolean } = {}) {
   });
 }
 
-export function useInstallUpdate() {
-  return useMutation({ mutationFn: () => api.system.installUpdate() });
-}
-
 /**
  * Luồng cài bản mới, dùng CHUNG cho cả ba chỗ mời cập nhật (sidebar · popover trạng
- * thái · Cài đặt → Giới thiệu) để ba nơi không trôi khỏi nhau.
+ * thái · Cài đặt → Giới thiệu) để ba nơi không trôi khỏi nhau. Đây chỉ là cái CÔNG TẮC;
+ * toàn bộ máy trạng thái nằm ở `lib/update/install-store` vì nó phải sống lâu hơn
+ * component đã bấm nó (đóng popover = unmount, xem ghi chú trong file đó).
  *
- * Cập nhật làm công cụ local KHỞI ĐỘNG LẠI, tức là cắt ngang việc user đang làm ⇒ luôn
- * hỏi trước. Agent trả 202 rồi mới tự thay mình, nên trang chờ 5s rồi tải lại.
+ * Bấm xong, cái user thấy KHÔNG phải là nút này đổi chữ mà là lớp phủ toàn trang do
+ * `App.tsx` gắn — nên `pending` ở đây chỉ còn dùng để nút không nhận cú bấm thứ hai.
  */
-export function useInstallUpdateFlow() {
-  const install = useInstallUpdate();
-  const start = async (latestVersion?: string | null) => {
-    const target = latestVersion ? `lên ${latestVersion}` : "lên bản mới";
-    if (!window.confirm(`Cập nhật KitGen ${target}? Công cụ local sẽ khởi động lại sau khi cài.`)) return;
-    await install.mutateAsync();
-    window.setTimeout(() => window.location.reload(), 5000);
+export function useInstallUpdateFlow(): { pending: boolean; start: (latestVersion?: string | null) => Promise<void> } {
+  const phase = useUpdateInstall((s) => s.phase);
+  const start = useUpdateInstall((s) => s.start);
+  return {
+    pending: phase !== "idle",
+    start: (latestVersion?: string | null) => start(latestVersion),
   };
-  return { pending: install.isPending, start };
 }
 
 /**
@@ -171,6 +168,30 @@ export function useSetImageProfile() {
   return useMutation({
     mutationFn: (mode: "default" | "separate") => api.system.setImageProfile(mode),
     onSuccess: () => qc.removeQueries({ queryKey: qk.doctor(), type: "inactive" }),
+  });
+}
+
+/**
+ * Quota Codex còn lại. KHÔNG cùng loại với `/api/doctor`: endpoint này chỉ đọc file
+ * trạng thái local (không spawn `codex`, không gọi mạng, không tốn quota) nên gọi
+ * được lúc app mở mà không vi phạm §6.2.
+ *
+ * `staleTime` 5 phút khớp đúng cache phía agent — nạp dày hơn cũng chỉ nhận lại y
+ * hệt con số cũ, vì nguồn của nó là lượt chạy Codex gần nhất chứ không phải hiện tại.
+ *
+ * `retry:false` + im lặng: đây là số liệu THAM KHẢO. Agent tắt ⇒ `data` undefined ⇒
+ * thanh usage tự ẩn; không toast, không banner, không làm hỏng màn vì một thứ phụ.
+ */
+export function useUsage(opts: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: qk.usage(),
+    queryFn: () => api.system.usage(),
+    enabled: opts.enabled ?? true,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    retry: false,
   });
 }
 

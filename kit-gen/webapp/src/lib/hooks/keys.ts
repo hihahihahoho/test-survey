@@ -21,6 +21,8 @@ export const qk = {
   /** #2 — CẤM poll; staleTime 60s ở hook. */
   doctor: () => ["doctor"] as const,
   update: () => ["update"] as const,
+  /** quota Codex còn lại — đọc file local, rẻ, nhưng chỉ mới bằng lượt chạy cuối. */
+  usage: () => ["usage"] as const,
   workspaces: () => ["workspaces"] as const,
 
   projects: {

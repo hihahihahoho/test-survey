@@ -16,6 +16,8 @@ export { ProjectRail, type RailBadges } from "./ProjectRail";
 export { ShortcutsDialog } from "./ShortcutsDialog";
 export { ErrorBoundary, type ErrorBoundaryProps } from "./ErrorBoundary";
 export { ScreenPlaceholder } from "./ScreenPlaceholder";
+export { UpdateOverlay } from "./UpdateOverlay";
+export { UpdateResultNotice, announceUpdateResult } from "./UpdateResultNotice";
 export { LazyScreen, CanvasFileScreen, KitFormRouteScreen, isScreenAvailable, availableScreens } from "./lazy-screen";
 export {
   useRegisterCommands, useScreenCommands, COMMAND_GROUPS,

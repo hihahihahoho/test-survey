@@ -15,9 +15,12 @@ export { KitCardMenu, type KitActions } from "./components/KitCardMenu";
 export { CreateKitTile } from "./components/CreateKitTile";
 export { HomeGrid } from "./components/HomeGrid";
 export { HomeHeader } from "./components/HomeHeader";
+/** Thanh quota Codex. `variant="compact"` là chip cho topbar/header màn dự án. */
+export { UsageMeter } from "./components/UsageMeter";
+export { usageView, tightestWindow, type UsageView } from "./lib/usage-meter";
 export {
   HomeAgentOffline, HomeEmpty, HomeError, HomeNoMatch, HomeSkeleton,
 } from "./components/HomeStates";
 export { applyHomeView, haystackOf, shouldShowSearch, sortByRecent, SEARCH_THRESHOLD } from "./lib/home-view";
-export { HOME_COPY, trashLabel } from "./lib/home-copy";
+export { HOME_COPY } from "./lib/home-copy";
 export { useHomeData, type HomeData } from "./lib/useHomeData";

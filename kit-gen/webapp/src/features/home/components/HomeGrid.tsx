@@ -1,9 +1,7 @@
-import { Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import type { Project } from "@/lib/types";
 import type { Gate } from "@/features/projects/lib/gate";
 import type { GridKeysApi } from "@/features/projects/lib/useGridKeys";
-import { HOME_COPY, trashLabel } from "../lib/home-copy";
+import { HOME_COPY } from "../lib/home-copy";
 import { CreateKitTile } from "./CreateKitTile";
 import { KitCard } from "./KitCard";
 import type { KitActions } from "./KitCardMenu";
@@ -35,9 +33,7 @@ export function HomeGrid({
   gate,
   grid,
   fromCache,
-  trashCount,
   onCreate,
-  onOpenTrash,
   now,
 }: {
   items: readonly Project[];
@@ -45,9 +41,7 @@ export function HomeGrid({
   gate: Gate;
   grid: GridKeysApi;
   fromCache: boolean;
-  trashCount: number;
   onCreate: () => void;
-  onOpenTrash: () => void;
   now?: number;
 }) {
   return (
@@ -71,23 +65,8 @@ export function HomeGrid({
         ))}
       </section>
 
-      {trashCount > 0 && (
-        <div className="flex justify-end">
-          {/* P-SWEEP·bảng-6 — bậc "link" bỏ khỏi nút hành động: bảng bất nhất đếm được
-              BỐN kiểu nút phụ trên cùng một màn (outline pill · outline bo 8px · ghost
-              · link chữ nhỏ). Chốt còn HAI bậc — `secondary` và `ghost`. Đây là bậc
-              nhẹ nhất nên dùng `ghost`; vẫn ở góc dưới-phải và vẫn mờ, đúng §1.1. */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-caption text-fg-muted hover:text-fg-strong"
-            onClick={onOpenTrash}
-          >
-            <Trash2 className="size-3" aria-hidden />
-            {trashLabel(trashCount)}
-          </Button>
-        </div>
-      )}
+      {/* Nút "Thùng rác (N)" góc dưới-phải đã bỏ theo yêu cầu chủ sản phẩm:
+          Thùng rác đã có sẵn ở sidebar, nút thứ hai trong vùng nội dung là thừa. */}
     </div>
   );
 }

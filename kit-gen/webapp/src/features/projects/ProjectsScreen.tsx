@@ -4,7 +4,7 @@ import { useAgentStatus, useTrash } from "@/lib/hooks";
 import { useRecentStore } from "@/lib/store";
 import type { ScreenProps } from "@/components/layout";
 import { Input } from "@/components/ui/input";
-import { Clock3, Images, LayoutGrid, PanelsTopLeft, Search, Settings, Sparkles, Trash2 } from "lucide-react";
+import { Images, PanelsTopLeft, Search, Settings, Sparkles, Trash2 } from "lucide-react";
 import type { Project } from "@/lib/types";
 
 import { gateOf, useNarrowViewport } from "./lib/gate";
@@ -13,7 +13,7 @@ import { useCreateIntent } from "./lib/useCreateIntent";
 import { useGridKeys } from "./lib/useGridKeys";
 import { useProjectDialogs } from "./lib/useProjectDialogs";
 import { ProjectDialogs } from "./ProjectDialogs";
-import { HomeSidebar, type HomeSection } from "@/features/home/components/HomeSidebar";
+import { HomeSidebar } from "@/features/home/components/HomeSidebar";
 
 import {
   HomeEmpty, HomeError, HomeGrid, HomeHeader, HomeNoMatch, HomeSkeleton,
@@ -77,12 +77,10 @@ export function ProjectsScreen(_props: ScreenProps) {
   const narrow = useNarrowViewport();
   const gate = React.useMemo(() => gateOf(status, narrow), [status, narrow]);
   const touchRecent = useRecentStore((s) => s.touch);
-  const recentIds = useRecentStore((s) => s.projectIds);
 
   // Ô tìm: state cục bộ cho mượt, đẩy vào bộ lọc sau 120ms.
   const [typed, setTyped] = React.useState(initialQuery);
   const [query, setQuery] = React.useState(initialQuery);
-  const [section, setSection] = React.useState<HomeSection>("all");
   React.useEffect(() => {
     const t = setTimeout(() => {
       setQuery(typed);
@@ -161,14 +159,8 @@ export function ProjectsScreen(_props: ScreenProps) {
 
   const trashCount = trash.data?.items.length ?? 0;
   const hasKits = data.all.length > 0;
-  const visible = React.useMemo(() => {
-    if (section !== "recent" || recentIds.length === 0) return data.visible;
-    const order = new Map(recentIds.map((id, index) => [id, index]));
-    return data.visible
-      .filter((project) => order.has(project.id))
-      .sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99));
-  }, [data.visible, recentIds, section]);
-  const viewData = React.useMemo(() => ({ ...data, visible }), [data, visible]);
+  // Mục "Gần đây" đã bỏ — danh sách luôn là toàn bộ dự án (sau lọc tìm kiếm).
+  const viewData = data;
   const clearSearch = () => {
     setTyped("");
     setQuery("");
@@ -186,9 +178,9 @@ export function ProjectsScreen(_props: ScreenProps) {
     <div className="relative flex min-h-dvh bg-canvas">
       <HomeSidebar
         active="projects"
-        section={section}
+        section="all"
         trashCount={trashCount}
-        onSection={setSection}
+        onSection={() => {}}
         onBrands={() => void navigate({ to: "/brands" })}
         onUiLibrary={() => void navigate({ to: "/library/ui" })}
         onMascotLibrary={() => void navigate({ to: "/library/mascot" })}
@@ -224,22 +216,6 @@ export function ProjectsScreen(_props: ScreenProps) {
         </div>
 
         <nav aria-label="Điều hướng trên màn hình nhỏ" className="mt-3 flex items-center gap-1 overflow-x-auto pb-1 md:hidden">
-          <button
-            type="button"
-            onClick={() => setSection("recent")}
-            aria-current={section === "recent" ? "page" : undefined}
-            className={`flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label ${section === "recent" ? "bg-raised text-fg-strong" : "text-fg"}`}
-          >
-            <Clock3 className="size-4" aria-hidden />Gần đây
-          </button>
-          <button
-            type="button"
-            onClick={() => setSection("all")}
-            aria-current={section === "all" ? "page" : undefined}
-            className={`flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label ${section === "all" ? "bg-raised text-fg-strong" : "text-fg"}`}
-          >
-            <LayoutGrid className="size-4" aria-hidden />Tất cả
-          </button>
           <button type="button" onClick={() => void navigate({ to: "/library/ui" })} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Bộ khung UI">
             <PanelsTopLeft className="size-4" aria-hidden />UI
           </button>
@@ -263,11 +239,9 @@ export function ProjectsScreen(_props: ScreenProps) {
           agentOff={gate.readOnly && !narrow}
           grid={grid}
           actions={actions}
-          trashCount={trashCount}
           query={query}
           hasKits={hasKits}
           onCreate={openCreate}
-          onOpenTrash={() => nav.openTrash()}
           onRetry={refreshAll}
           onClearSearch={clearSearch}
         /></div>
@@ -291,11 +265,9 @@ function HomeBody({
   agentOff,
   grid,
   actions,
-  trashCount,
   query,
   hasKits,
   onCreate,
-  onOpenTrash,
   onRetry,
   onClearSearch,
 }: {
@@ -305,11 +277,9 @@ function HomeBody({
   agentOff: boolean;
   grid: ReturnType<typeof useGridKeys>;
   actions: KitActions;
-  trashCount: number;
   query: string;
   hasKits: boolean;
   onCreate: () => void;
-  onOpenTrash: () => void;
   onRetry: () => void;
   onClearSearch: () => void;
 }) {
@@ -336,9 +306,7 @@ function HomeBody({
       gate={gate}
       grid={grid}
       fromCache={data.fromCache}
-      trashCount={trashCount}
       onCreate={onCreate}
-      onOpenTrash={onOpenTrash}
     />
   );
 }

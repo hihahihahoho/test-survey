@@ -9,8 +9,6 @@
  * TODO(S): dời các chuỗi này vào `features/kitfile/lib/copy.ts` rồi xoá file này —
  *          đã ghi `teams/react/NEEDS-fe3-h.md` **N2**.
  */
-import { BTN } from "@/features/kitfile";
-
 export const HOME_COPY = {
   /** UX-V3 §6 hàng H cột `error` — nguyên văn tài liệu. */
   ERROR_TITLE: "Chưa lấy được danh sách dự án.",
@@ -30,8 +28,6 @@ export const HOME_COPY = {
   LOADING_LABEL: "Đang tải danh sách dự án…",
 } as const;
 
-/** «Thùng rác (2)» — §1.3. Số THẬT, không hardcode; 0 thì màn tự ẩn nút. */
-export function trashLabel(n: number): string {
-  const v = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
-  return `${BTN.TRASH} (${v})`;
-}
+/* `trashLabel(n)` («Thùng rác (2)») đã XOÁ cùng với nút thùng rác góc dưới-phải của
+   lưới: thùng rác nay chỉ có MỘT lối vào ở sidebar, nơi số đếm là badge riêng cạnh
+   nút chứ không nằm trong tên nút. Không còn nơi nào gọi hàm này. */

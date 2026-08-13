@@ -3,6 +3,7 @@ import { ArrowLeft, Settings } from "lucide-react";
 import type { AgentStatus } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { AgentPill } from "./AgentPill";
+import { UsageMeter } from "@/features/home";
 import type { ConnectionStatus } from "@/lib/api";
 import { RuntimeStatus } from "./RuntimeStatus";
 import { FLORA, FOCUS, FLOATBAR } from "./flora";
@@ -113,6 +114,10 @@ export function FloraShell({
               <span>Dự án</span>
             </button>
             <div className="flex items-center gap-2">
+              {/* Quota Codex còn lại — chip gọn NGAY CẠNH [Cài đặt], hover ra số chi tiết
+                  (đặt lại lúc nào, số đọc lúc nào). Tự trả `null` khi chưa có số, y như
+                  thanh cùng loại ở chân sidebar Home ⇒ không bao giờ chiếm chỗ vô ích. */}
+              <UsageMeter variant="compact" className="hidden sm:flex" />
               {onSettingsClick && (
                 <button type="button" onClick={onSettingsClick} className={cn("inline-flex h-8 items-center gap-2 border px-3 text-caption", FLORA.pill, FLORA.hair, FOCUS)}>
                   <Settings className="size-3.5" aria-hidden /> Cài đặt

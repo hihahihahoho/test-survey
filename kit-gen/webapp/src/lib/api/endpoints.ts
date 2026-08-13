@@ -23,7 +23,7 @@ import {
   elementLibSchema, historyListSchema, importPreviewSchema, jobPromptSchema, kitSchema,
   projectDetailSchema, projectListSchema, projectSchema, rawHistorySchema, refListSchema,
   refUploadResultSchema, restoreContractResultSchema, runListSchema, runSchema,
-  saveContractResultSchema, startRunResultSchema, trashListSchema, uploadResultSchema,
+  saveContractResultSchema, startRunResultSchema, trashListSchema, uploadResultSchema, usageSchema,
   validationSchema, workspaceListSchema, workflowDraftSchema, userLibrarySchema, libraryItemResultSchema,
   librarySettingsResultSchema, brandProfileResultSchema, poseTemplateResultSchema,
   type CleanTarget, type CreateProjectInput, type DuplicateInput,
@@ -106,6 +106,14 @@ export const systemApi = {
   async doctor(opts: { refresh?: boolean } = {}) {
     const data = await httpGet(`/api/doctor${opts.refresh ? "?refresh=1" : ""}`);
     return parse(doctorSchema, data, "doctor");
+  },
+  /**
+   * Quota còn lại của tài khoản Codex. RẺ (chỉ đọc file trạng thái local, không spawn
+   * codex, không gọi mạng, không tốn quota) — nhưng số liệu CŨ BẰNG lượt chạy cuối,
+   * nên hook cache dài và UI phải nói `observedAt` ra.
+   */
+  async usage(opts: { refresh?: boolean } = {}) {
+    return parse(usageSchema, await httpGet(`/api/usage${opts.refresh ? "?refresh=1" : ""}`), "usage");
   },
   /** #3 */
   async workspaces() {

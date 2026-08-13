@@ -5,7 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { queryClient } from "@/lib/query";
 import { useUiStore, applyTheme } from "@/lib/store";
-import { ErrorBoundary } from "@/components/layout";
+import { ErrorBoundary, UpdateOverlay, UpdateResultNotice } from "@/components/layout";
 import { routeTree } from "./routeTree";
 import { detectBaseHref, toRouterBasepath } from "@/lib/basepath";
 import { NotFoundScreen } from "./routes/-not-found";
@@ -53,6 +53,10 @@ declare module "@tanstack/react-router" {
  *   QueryClientProvider → TooltipProvider → RouterProvider.
  *   Toaster đặt NGOÀI router: toast "Đã xoá — [Hoàn tác 10s]" phải sống sót
  *     qua điều hướng, nếu không thì xoá project xong rời màn là mất đường lùi.
+ *   UpdateOverlay / UpdateResultNotice cũng NGOÀI router, và vì đúng lý do đó ở mức
+ *     gắt hơn: lượt cập nhật bắt đầu từ sidebar hoặc từ popover header (popover đóng =
+ *     unmount), chạy xuyên qua mọi điều hướng, rồi kết thúc bằng một lần tải lại trang.
+ *     Không có chỗ nào trong cây route sống đủ lâu để giữ nó.
  */
 export function App() {
   const theme = useUiStore((s) => s.theme);
@@ -65,6 +69,8 @@ export function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <RouterProvider router={router} />
+          <UpdateOverlay />
+          <UpdateResultNotice />
           <Toaster />
         </TooltipProvider>
       </QueryClientProvider>
