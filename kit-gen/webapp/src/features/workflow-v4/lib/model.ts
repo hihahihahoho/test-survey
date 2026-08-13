@@ -39,6 +39,31 @@ export type StepId = 1 | 2 | 3 | 4 | 5 | 6;
  */
 export const LAST_STEP = 5 satisfies StepId;
 
+/* ══════════════════════════════════════════════════════════════════════════
+   MẶC ĐỊNH TRUNG TÍNH CỦA BẢN NHÁP MỚI — §BUG-1 (blind-test 2.1.17)
+   ══════════════════════════════════════════════════════════════════════════
+   Bản nháp mới TRƯỚC ĐÂY khởi tạo với `stylePrompt` = "…màu xanh dương VNPAY và
+   xanh cyan…" và cặp màu `#005BAA`/`#00B0F0` — tức là nhận diện của MỘT thương
+   hiệu có thật, dán vào mọi dự án của mọi người dùng. Hai người kiểm thử mù đều
+   phải tự phát hiện ra rằng mình đang ghi đè lên chữ của người khác; ai không để
+   ý thì gen ra cả bộ kit lệch tông mà không hiểu vì sao.
+
+   LUẬT: giá trị khởi tạo của một trường THƯƠNG HIỆU chỉ được là (a) rỗng, hoặc
+   (b) màu trung tính của chính app. Dữ liệu của một brand cụ thể chỉ được vào
+   state qua ĐÚNG hai cửa người dùng bấm: dropdown "Điền từ thương hiệu đã lưu"
+   (`StyleStep.chooseBrand`) và nút "Dán brief" (`BriefStep.applyBrief`).
+
+   Hai màu dưới đây là mực/xám của bảng token (`styles/tokens.css`: `fg-strong`
+   sáng #151516 và `line-strong` tối #9A9A9A) — chúng không nói tên ai cả.
+   Bản nháp ĐÃ LƯU không bị đụng tới: `hydrateWorkflowStore` chỉ nhận trường có
+   thật trong bản nháp trên đĩa, nên dự án cũ giữ nguyên màu cũ. */
+export const NEUTRAL_PRIMARY_COLOR = "#151516";
+export const NEUTRAL_SECONDARY_COLOR = "#9A9A9A";
+
+/** Gợi ý CÁCH VIẾT, không phải một câu mẫu đã điền sẵn — xem khối trên. */
+export const STYLE_PROMPT_PLACEHOLDER =
+  "Ví dụ: vui tươi, 3D bóng nhẹ, hai màu chủ đạo, sạch và dễ đọc trên màn hình game.";
+
 /**
  * KÍCH THƯỚC RIÊNG CỦA DỰ ÁN cho một ô skeleton — phần trăm bề rộng/cao của Ô, đúng
  * đơn vị mà `LibElement.skel.w/h` và `Contract.components[].skel.w/h` đang dùng (0–1).
@@ -391,13 +416,16 @@ function initialState(): Omit<WorkflowState, WorkflowActionKey> {
     kitName: "Dự án mới",
     campaign: "",
     brief: "",
-    stylePrompt: "Vui tươi, 3D bóng nhẹ, màu xanh dương VNPAY và xanh cyan, sạch và dễ đọc trên màn hình game.",
+    /* §BUG-1 — TRỐNG, không phải câu mẫu của một brand có thật. Xem khối
+       "MẶC ĐỊNH TRUNG TÍNH" ở đầu file. Bỏ trống vẫn gen được: `buildVariantStyle`
+       lọc phần rỗng rồi ghép với câu dựng từ 7 thanh trượt. */
+    stylePrompt: "",
     styleMode: "prompt",
     brandProfileId: null,
     styleRefs: [],
     styleAxes: Object.fromEntries(STYLE_AXIS_IDS.map((id) => [id, 4])) as StyleAxes,
-    primaryColor: "#005BAA",
-    secondaryColor: "#00B0F0",
+    primaryColor: NEUTRAL_PRIMARY_COLOR,
+    secondaryColor: NEUTRAL_SECONDARY_COLOR,
     styleAvoid: "",
     chroma: "magenta",
     kitsetSummary: "Bộ khung UI đã chọn",
@@ -418,6 +446,26 @@ function initialState(): Omit<WorkflowState, WorkflowActionKey> {
     kitsetTouched: false,
     versions: [],
     activeVersion: "",
+  };
+}
+
+/**
+ * CỬA HỢP LỆ để màu của một thương hiệu cụ thể đi vào bản nháp — người dùng chọn
+ * thương hiệu đó trong dropdown "Điền từ thương hiệu đã lưu" (`StyleStep`).
+ *
+ * §BUG-1 gỡ brand khỏi `initialState()`; hàm này là chỗ duy nhất còn lại đưa brand
+ * vào, và nó là hàm THUẦN nên chứng minh được bằng test rằng luồng "chọn thương
+ * hiệu → điền từ brand" vẫn sống. Thương hiệu khai thiếu màu ⇒ GIỮ màu đang có,
+ * không hạ về trung tính: người dùng có thể đã tự chỉnh trước khi chọn.
+ */
+export function brandColorPatch(
+  brand: { id: string; colors: readonly string[] },
+  current: Pick<WorkflowState, "primaryColor" | "secondaryColor">,
+): Pick<WorkflowState, "brandProfileId" | "primaryColor" | "secondaryColor"> {
+  return {
+    brandProfileId: brand.id,
+    primaryColor: brand.colors[0] ?? current.primaryColor,
+    secondaryColor: brand.colors[1] ?? current.secondaryColor,
   };
 }
 

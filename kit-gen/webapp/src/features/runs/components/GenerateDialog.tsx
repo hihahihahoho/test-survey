@@ -42,6 +42,9 @@ import { JobPickMatrix } from "./JobPickMatrix";
  *
  * ⑤ Ô TICK LÀ CHECKBOX THẬT CÓ NHÃN (§5.8-A5, đóng I2/I4), trạng thái chọn có
  *    dấu ✓ + nền, không chỉ màu viền (đóng I1).
+ *
+ * ⑥ `beforeStart` — CHỐT GHI ĐĨA NẰM Ở NÚT XÁC NHẬN, không ở nút mở modal. Xem
+ *    khối chú thích của prop bên dưới; đây là §BUG-2 của blind-test 2.1.17.
  */
 export function GenerateDialog({
   open,
@@ -54,6 +57,7 @@ export function GenerateDialog({
   initialJobs = null,
   readOnly,
   readOnlyReason,
+  beforeStart = null,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -65,6 +69,18 @@ export function GenerateDialog({
   initialJobs?: readonly string[] | null;
   readOnly: boolean;
   readOnlyReason: string;
+  /**
+   * §BUG-2 — việc phải làm XONG ngay trước khi tiêu lượt đầu tiên, thường là "ghi
+   * bản thiết kế đang sửa xuống đĩa". Trả `false` ⇒ **không** chạy run (nơi gọi đã
+   * tự nói lý do).
+   *
+   * Vì sao nó ở đây chứ không ở nơi mở modal: mở modal KHÔNG phải là một sự đồng ý.
+   * Bản cũ để màn dự án lưu trước rồi mới bật modal, nên người dùng đóng modal lại
+   * vẫn bị ghi ngầm một thay đổi họ chưa hoàn tất — và vì đã ghi nên nút "Lưu và
+   * tạo lại ảnh" tắt luôn, không còn đường quay lại. Ở đây thì đúng một cú bấm
+   * [Sinh N lượt] mới ghi.
+   */
+  beforeStart?: (() => Promise<boolean>) | null;
 }) {
   const navigate = useNavigate();
   const maxJobsPref = usePrefsStore((s) => s.maxJobs);
@@ -78,6 +94,8 @@ export function GenerateDialog({
 
   const [picked, setPicked] = React.useState<Set<string>>(new Set());
   const [submitError, setSubmitError] = React.useState<unknown>(null);
+  /** Đang chạy `beforeStart` (ghi bản thiết kế) — chưa tiêu lượt nào, nhưng đã bấm. */
+  const [preparing, setPreparing] = React.useState(false);
 
   // §6.2: doctor CẤM poll — chỉ gọi khi modal mở (cache 60s ở tầng hook).
   const doctor = useDoctor({ enabled: open });
@@ -130,21 +148,31 @@ export function GenerateDialog({
       return;
     }
     setSubmitError(null);
-    startRun.mutate(
-      {
-        kind: "gen",
-        jobs: [...picked],
-        maxJobs: maxJobsPref,
-        autoSliceAfterGen: autoSlicePref,
-      },
-      {
-        onSuccess: (res) => {
-          if (res.runId) openRun(res.runId);
-          else onOpenChange(false);
+    void (async () => {
+      /* ⑥ Ghi bản thiết kế TRƯỚC lượt đầu tiên: run đọc contract trên ĐĨA, nên chạy
+         khi đĩa còn giữ bản cũ là sinh ảnh cho một thiết kế người dùng tưởng đã đổi. */
+      if (beforeStart) {
+        setPreparing(true);
+        let ok = false;
+        try { ok = await beforeStart(); } finally { setPreparing(false); }
+        if (!ok) return;
+      }
+      startRun.mutate(
+        {
+          kind: "gen",
+          jobs: [...picked],
+          maxJobs: maxJobsPref,
+          autoSliceAfterGen: autoSlicePref,
         },
-        onError: (err) => setSubmitError(err),
-      },
-    );
+        {
+          onSuccess: (res) => {
+            if (res.runId) openRun(res.runId);
+            else onOpenChange(false);
+          },
+          onError: (err) => setSubmitError(err),
+        },
+      );
+    })();
   };
 
   /* 409 RUN_CONFLICT trả kèm `details.runId` ⇒ dựng được nút [Xem lượt đó] (E5). */
@@ -155,11 +183,12 @@ export function GenerateDialog({
     return typeof d?.runId === "string" ? d.runId : null;
   }, [submitError]);
 
+  const busy = startRun.isPending || preparing;
   const canSubmit =
-    !readOnly && !startRun.isPending && picked.size > 0 && !imageGenBlocked && !doctorLoading;
+    !readOnly && !busy && picked.size > 0 && !imageGenBlocked && !doctorLoading;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !startRun.isPending && onOpenChange(v)}>
+    <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
       <DialogContent size="xl">
         <DialogHeader>
           <DialogTitle>Sinh ảnh</DialogTitle>
@@ -325,7 +354,7 @@ export function GenerateDialog({
         </DialogBody>
 
         <DialogFooter className="border-t border-line-subtle">
-          <Button variant="secondary" disabled={startRun.isPending} onClick={() => onOpenChange(false)}>
+          <Button variant="secondary" disabled={busy} onClick={() => onOpenChange(false)}>
             Huỷ
           </Button>
           {activeRun ? (
@@ -335,7 +364,7 @@ export function GenerateDialog({
           ) : (
             <Button
               variant="primary"
-              loading={startRun.isPending}
+              loading={busy}
               disabled={!canSubmit}
               aria-disabled={!canSubmit || undefined}
               title={readOnly ? readOnlyReason : imageGenBlocked ? "Cần khắc phục phần tạo ảnh trước" : undefined}

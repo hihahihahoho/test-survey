@@ -214,6 +214,14 @@ const NO_WARNING: StaleWarning = {
  * là im lặng để user gen ra kit lệch với thiết kế.
  *
  * `matrix` có thể là `null` ở S2b (màn đó không nạp bản thiết kế) — hàm vẫn chạy.
+ *
+ * ⚠️ CÓ MA TRẬN THẬT ⇒ MA TRẬN THẮNG, không OR với `staleReason`.
+ * `agent/lib/projects.mjs:computeState` đẩy `"contract>raw"` vào `staleReason` cho CẢ
+ * lượt **chưa sinh lần nào** (`if (!rawM) { jobs[job] = "never"; anyStale = true }`).
+ * Nếu cứ OR hai nguồn thì một dự án mới toanh — chưa có một tấm ảnh nào để mà lệch —
+ * cũng đeo dải "Bản thiết kế mới hơn ảnh đã sinh". Cảnh báo kêu ở mọi dự án là cảnh
+ * báo không ai đọc nữa, và nó sẽ nuốt luôn ca THẬT mà §BUG-2 cần nói ra. Khi ma trận
+ * không suy được (`degraded`) thì mới rơi về `staleReason` — thô nhưng còn hơn im.
  */
 export function staleWarning(
   project: Project | null | undefined,
@@ -223,18 +231,22 @@ export function staleWarning(
 
   const reasons = project.state?.staleReason ?? [];
   const promptsStale = reasons.includes("contract>prompts");
-  const staleJobs = matrix && !matrix.degraded ? cellsInStatus(matrix, "stale").map((c) => c.job) : [];
-  const uncut = matrix && !matrix.degraded ? cellsInStatus(matrix, "uncut").map((c) => c.job) : [];
+  const perJob = matrix !== null && !matrix.degraded;
+  const staleJobs = perJob ? cellsInStatus(matrix, "stale").map((c) => c.job) : [];
+  const uncut = perJob ? cellsInStatus(matrix, "uncut").map((c) => c.job) : [];
 
-  const contractNewer = reasons.includes("contract>raw") || staleJobs.length > 0;
-  const rawNewer = reasons.includes("raw>kits") || uncut.length > 0;
+  const contractNewer = perJob ? staleJobs.length > 0 : reasons.includes("contract>raw");
+  const rawNewer = perJob ? uncut.length > 0 : reasons.includes("raw>kits");
   if (!contractNewer && !rawNewer) return NO_WARNING;
 
-  // Ưu tiên nói về ca ĐẮT hơn trước (sinh lại tốn quota), rồi mới tới ca rẻ.
+  /* Ưu tiên nói về ca ĐẮT hơn trước (sinh lại tốn quota), rồi mới tới ca rẻ.
+     Câu của ca đắt mang đúng chữ "lệch cấu hình · Cần tạo lại" mà thẻ ảnh dùng
+     (`GeneratedResults.detailCopy`) — một trạng thái thì nói một câu (§7.5-U5),
+     để người dùng nối được dải cảnh báo của cả trang với nhãn của từng ô. */
   const message = contractNewer
     ? staleJobs.length > 0
-      ? `Bản thiết kế mới hơn ảnh đã sinh ở ${staleJobs.length} lượt.`
-      : "Bản thiết kế mới hơn ảnh đã sinh."
+      ? `${staleJobs.length} lượt đang lệch cấu hình mới · Cần tạo lại.`
+      : "Ảnh đã tạo đang lệch cấu hình mới · Cần tạo lại."
     : uncut.length > 0
       ? `${uncut.length} lượt có ảnh mới nhưng chưa cắt.`
       : "Có ảnh mới chưa được cắt.";

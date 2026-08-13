@@ -7,7 +7,7 @@ import { SemanticSlider } from "@/features/kit-form/components/SemanticSlider";
 import { STYLE_AXES } from "@/features/kit-form/lib/style-phrases";
 import { useLibraryFile, useUserLibrary } from "@/lib/hooks";
 import { CHROMA_HEX } from "@/lib/types/contract";
-import { useWorkflowProjectId, useWorkflowStore } from "../lib/model";
+import { STYLE_PROMPT_PLACEHOLDER, brandColorPatch, useWorkflowProjectId, useWorkflowStore } from "../lib/model";
 import { useWorkflowRefs } from "../lib/refs-sync";
 import { RefChips } from "../components/RefChips";
 import { SharedReferencePicker } from "../components/SharedReferencePicker";
@@ -46,7 +46,7 @@ export function StyleStep() {
   const chooseBrand = async (brandId: string) => {
     const brand = library.data?.brands.find(item => item.id === brandId);
     if (!brand) return;
-    s.set({ brandProfileId: brandId, primaryColor: brand.colors[0] ?? s.primaryColor, secondaryColor: brand.colors[1] ?? s.secondaryColor });
+    s.set(brandColorPatch(brand, s));
     const assets = (library.data?.items ?? []).filter(item => brand.assetIds.includes(item.id));
     for (const item of assets) {
       const file = await libraryFile.mutateAsync(item);
@@ -73,7 +73,14 @@ export function StyleStep() {
       * mono — cùng lượng thông tin, bằng 1/14 diện tích, và thôi hét màu.
       */}
     <div className="style-fields"><div><Label htmlFor="workflow-primary">Màu chính</Label><div className="color-field"><Input id="workflow-primary" type="color" value={s.primaryColor} onChange={(e) => s.set({ primaryColor: e.target.value })} /><code>{s.primaryColor}</code></div></div><div><Label htmlFor="workflow-secondary">Màu phụ</Label><div className="color-field"><Input id="workflow-secondary" type="color" value={s.secondaryColor} onChange={(e) => s.set({ secondaryColor: e.target.value })} /><code>{s.secondaryColor}</code></div></div><div className="sm:col-span-2"><Label htmlFor="workflow-avoid">Điều không muốn thấy</Label><Input id="workflow-avoid" value={s.styleAvoid} onChange={(e) => s.set({ styleAvoid: e.target.value })} placeholder="Chibi quá trẻ con, viền đen dày" /></div></div>
-    <><label className="field-label" htmlFor="style-prompt">Mô tả phong cách</label><Textarea id="style-prompt" rows={5} value={s.stylePrompt} onChange={(e) => s.set({ stylePrompt: e.target.value, styleMode: "prompt" })} /></>
+    {/**
+      * §BUG-1 — ô này TRỐNG với bản nháp mới, và gợi ý cách viết bằng `placeholder`.
+      * Trước đây nó khởi tạo bằng một câu tả nhận diện của một thương hiệu có thật;
+      * người dùng thấy chữ sẵn trong ô thì tưởng đó là mặc định hợp lệ của app và
+      * gen luôn. `placeholder` không bao giờ bị gửi đi — chỉ chữ người dùng gõ mới
+      * vào contract. Gốc của mặc định nằm ở `model.ts: initialState()`.
+      */}
+    <><label className="field-label" htmlFor="style-prompt">Mô tả phong cách</label><Textarea id="style-prompt" rows={5} value={s.stylePrompt} placeholder={STYLE_PROMPT_PLACEHOLDER} onChange={(e) => s.set({ stylePrompt: e.target.value, styleMode: "prompt" })} /></>
     {/**
       * §W2B-6 — `.dropfield` bọc NGOÀI: chip ảnh nay nằm TRONG khung của vùng thả
       * thay vì trôi ra dưới nó như rác (ảnh 09/12). Không nhét chip vào trong

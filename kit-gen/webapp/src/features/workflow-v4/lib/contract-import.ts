@@ -1,6 +1,9 @@
 import type { LibElement } from "@/features/design/library/lib/types";
 import { CHROMA_PRESETS, contractVariants, type Contract } from "@/lib/types/contract";
-import { newMascotId, type WorkflowMascot, type WorkflowState } from "./model";
+import {
+  NEUTRAL_PRIMARY_COLOR, NEUTRAL_SECONDARY_COLOR,
+  newMascotId, type WorkflowMascot, type WorkflowState,
+} from "./model";
 
 function fileName(path: string | null | undefined): string {
   if (!path) return "";
@@ -64,8 +67,10 @@ export function workflowPatchFromContract(
     styleMode: variant?.styleMode === "inspo" ? "inspo" : "prompt",
     styleRefs: inspo,
     brandRefs,
-    primaryColor: variant?.brand?.primary ?? "#005BAA",
-    secondaryColor: variant?.brand?.secondary ?? "#00B0F0",
+    /* §BUG-1 — contract nhập vào KHÔNG khai màu thương hiệu ⇒ rơi về màu trung tính
+       của app, không phải nhận diện của một brand có thật (xem `model.ts`). */
+    primaryColor: variant?.brand?.primary ?? NEUTRAL_PRIMARY_COLOR,
+    secondaryColor: variant?.brand?.secondary ?? NEUTRAL_SECONDARY_COLOR,
     chroma: variant?.bg === CHROMA_PRESETS.green || variant?.bg?.toLowerCase().includes("green") ? "green" : "magenta",
     sliceThreshold: contract.slice?.threshold ?? 120,
     kitsetSummary: "Bộ khung đã nhập",
