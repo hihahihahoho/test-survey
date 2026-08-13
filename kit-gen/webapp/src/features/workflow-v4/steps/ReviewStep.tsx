@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { estimateRun, rangeMinutes } from "@/features/runs/lib/estimate";
 import { STYLE_AXES } from "@/features/kit-form/lib/style-phrases";
-import { useWorkflowStore, type KitElement } from "../lib/model";
+import { useWorkflowStore, type KitElement, type WorkflowState } from "../lib/model";
 import { useKitsetContract } from "../lib/contract-sync";
 import { Step } from "./BriefStep";
 
@@ -54,6 +54,13 @@ export function axisDigest(axes: Record<string, number>): string {
   return moved.length === 0 ? "7 trục còn ở mặc định" : moved.join(" · ");
 }
 
+/** Dòng chính của thẻ recap Mascot. Tách ra để kiểm được mà không phải dựng cả bước 5. */
+export function mascotRecapValue(s: Pick<WorkflowState, "mascotEnabled" | "mascotName" | "mascots">): string {
+  if (!s.mascotEnabled) return "Không dùng";
+  if (s.mascots.length > 1) return `${s.mascots.length} nhân vật`;
+  return s.mascots[0]?.name.trim() || s.mascotName.trim() || "Đã bật";
+}
+
 export function ReviewStep() {
   const s = useWorkflowStore();
   const sync = useKitsetContract();
@@ -75,7 +82,13 @@ export function ReviewStep() {
             skipped ? `${skipped} thành phần chưa có bộ khung` : null,
           ].filter(Boolean).join(" · ")}
         />
-        <Recap title="Mascot" value={s.mascotEnabled ? (s.mascotName || "Đã bật") : "Không dùng"} detail={s.mascotRef?.name || "Chưa có ảnh mẫu"} />
+        {/* UI-FIX §3b — bước Mascot nay là DANH SÁCH, nên recap phải đếm được. Nói tên
+            khi có đúng một con (thông tin nhiều hơn), nói số khi có nhiều. */}
+        <Recap
+          title="Mascot"
+          value={mascotRecapValue(s)}
+          detail={s.mascotEnabled ? `${s.mascotPoses.length} dáng · ${s.mascots.filter((m) => m.ref).length}/${Math.max(s.mascots.length, 1)} có ảnh mẫu` : "Không có tấm dáng nào"}
+        />
       </div>
       {/* Nút chính KHÔNG ở đây — nó ở hàng nút cuối trang, đúng chỗ 4 bước trước đã dạy (§W1-10). */}
       <div className="review-estimate">

@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { CheckRow } from "../components/CheckRow";
 import { BriefPasteDialog } from "@/features/kit-form/components/BriefPasteDialog";
 import { briefToForm } from "@/features/kit-form/lib/form-model";
 import { toastSuccess } from "@/features/projects/lib/feedback";
@@ -68,10 +68,17 @@ export function BriefStep() {
           <ClipboardPaste aria-hidden />Dán brief có cấu trúc
         </Button>
       </div>
-      <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-3 border border-line-subtle bg-raised p-4">
-        <Switch className="mt-0.5" checked={s.mascotEnabled} onCheckedChange={(checked) => s.set({ mascotEnabled: checked })} aria-label="Có nhân vật đại diện" />
-        <span><strong className="block text-label text-fg-strong">Có nhân vật đại diện</strong><span className="text-caption text-fg-muted">Bật để thêm mascot và chọn pose ở bước riêng.</span></span>
-      </label>
+      {/* UI-FIX §1 — xem khối chú thích ở `components/CheckRow.tsx`: đây là chỗ hàng
+          control bị vỡ đôi (công tắc một dòng, nhãn một dòng) vì luật `.workflow-panel
+          label { display: block }`. Nay là checkbox + nhãn CÙNG HÀNG, bấm cả hàng. */}
+      <CheckRow
+        id="mascot-enabled-brief"
+        className="workflow-choice"
+        checked={s.mascotEnabled}
+        onCheckedChange={(checked) => s.set({ mascotEnabled: checked })}
+        label="Có nhân vật đại diện"
+        description="Bật để thêm mascot và chọn dáng ở bước riêng."
+      />
       <BriefPasteDialog open={pasteOpen} onOpenChange={setPasteOpen} onApply={applyBrief} />
     </Step>
   );

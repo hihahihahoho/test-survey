@@ -362,3 +362,69 @@ describe("§W3-1 — id ổn định và ref đúng đường", () => {
     expect(build({ brandRefs: [{ name: "brand-1.png" }] }).variants?.[0]?.brand?.mode).toBe("image");
   });
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+   7. UI-FIX §3b — bước Mascot cộng được NHIỀU con, contract phải theo kịp
+   ══════════════════════════════════════════════════════════════════════════ */
+
+describe("UI-FIX §3b — nhiều nhân vật, mỗi con một bộ tấm dáng", () => {
+  const two = [
+    { id: "m1", name: "Mèo bạc hà", description: "mèo xanh", ref: { name: "char-meo.png" } },
+    { id: "m2", name: "Sóc VCB", description: "sóc nâu", ref: { name: "char-soc.png" } },
+  ];
+
+  it("danh sách rỗng ⇒ HÀNH VI CŨ Y NGUYÊN (một nhân vật từ ba trường `mascot*`)", () => {
+    const c = build({ mascots: [], mascotName: "Mèo", mascotRef: { name: "char-meo.png" } });
+    expect(c.variants?.[0]?.characters).toHaveLength(1);
+    expect(c.variants?.[0]?.characters?.[0]?.id).toBe(CHARACTER_ID);
+    // Tên ô dáng KHÔNG đổi khi chỉ có một con — bản kit cũ vẫn tải lại được.
+    const cells = c.sheets.filter((sh) => sh.id.startsWith("pose-")).flatMap((sh) => sh.components);
+    expect(cells.some((cell) => cell.file === "01-pose-idle")).toBe(true);
+  });
+
+  it("hai nhân vật ⇒ hai id nhân vật, và MỖI con có tấm dáng riêng đính ảnh của nó", () => {
+    const c = build({ mascots: two, mascotName: "Mèo bạc hà", mascotRef: { name: "char-meo.png" } });
+    const chars = c.variants?.[0]?.characters ?? [];
+    expect(chars.map((x) => x.id)).toEqual([CHARACTER_ID, `${CHARACTER_ID}-2`]);
+    expect(chars.map((x) => x.ref)).toEqual(["refs/char-meo.png", "refs/char-soc.png"]);
+
+    const meo = c.sheets.filter((sh) => sh.id.startsWith(`pose-${CHARACTER_ID}-`) === false && sh.id.startsWith("pose-"));
+    const soc = c.sheets.filter((sh) => sh.id.startsWith(`pose-${CHARACTER_ID}-2`));
+    expect(meo.length).toBeGreaterThan(0);
+    expect(soc.length).toBeGreaterThan(0);
+    expect(meo.every((sh) => sh.ref === "refs/char-meo.png")).toBe(true);
+    expect(soc.every((sh) => sh.ref === "refs/char-soc.png")).toBe(true);
+  });
+
+  it("tên ô của hai con KHÔNG đè nhau (ảnh xuất ra `kits/` không mất con nào)", () => {
+    const c = build({ mascots: two });
+    const files = c.sheets
+      .filter((sh) => sh.id.startsWith("pose-"))
+      .flatMap((sh) => sh.components)
+      .filter((cell) => cell.skel.shape === "pose")
+      .map((cell) => cell.file);
+    expect(new Set(files).size).toBe(files.length);
+    // …và vẫn khớp `^[0-9]{2}-[a-z0-9-]+$` mà `agent/lib/validate.mjs` bắt.
+    expect(files.every((f) => /^[0-9]{2}-[a-z0-9-]+$/.test(f))).toBe(true);
+  });
+
+  it("ĐĨA THẮNG BẢN NHÁP: ảnh không còn trên đĩa ⇒ nhân vật đó coi như chưa có ảnh mẫu", () => {
+    const c = build(
+      { mascots: two },
+    );
+    expect(c.variants?.[0]?.characters?.[1]?.ref).toBe("refs/char-soc.png");
+
+    const withDisk = buildKitsetContract(
+      { ...defaultState(), mascots: two },
+      { lib: LIB, refs: { inspo: [], brand: [], character: "refs/char-meo.png", characters: ["refs/char-meo.png"] } },
+    );
+    expect(withDisk.variants?.[0]?.characters?.[0]?.ref).toBe("refs/char-meo.png");
+    expect(withDisk.variants?.[0]?.characters?.[1]?.ref).toBeNull();
+  });
+
+  it("tắt mascot ⇒ không nhân vật nào, không tấm dáng nào (dù danh sách còn con)", () => {
+    const c = build({ mascots: two, mascotEnabled: false });
+    expect(c.variants?.[0]?.characters).toEqual([]);
+    expect(c.sheets.some((sh) => sh.id.startsWith("pose-"))).toBe(false);
+  });
+});

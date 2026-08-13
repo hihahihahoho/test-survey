@@ -242,12 +242,20 @@ describe("2B-6 · sạn nhỏ nhưng lộ ngay", () => {
 
   it("chip ảnh nằm TRONG khung vùng thả, không trôi ra ngoài", () => {
     expect(GLOBALS).toMatch(/\.dropfield\s*\{/);
-    for (const f of ["src/features/workflow-v4/steps/StyleStep.tsx", "src/features/workflow-v4/steps/MascotStep.tsx"]) {
+    /* UI-FIX §3b — vùng thả ảnh nhân vật đã rời `steps/MascotStep.tsx` vào modal
+       "Thêm nhân vật" (bước Mascot nay là danh sách thẻ). Luật thì KHÔNG đổi: thứ
+       hiện ra sau khi thả phải nằm TRONG khung `.dropfield`, nên ca test chỉ đổi
+       địa chỉ và tên mảnh xem trước, không nới điều kiện. */
+    const cases: ReadonlyArray<[string, string]> = [
+      ["src/features/workflow-v4/steps/StyleStep.tsx", "<RefChips"],
+      ["src/features/workflow-v4/components/MascotDialog.tsx", "<MascotThumb"],
+    ];
+    for (const [f, preview] of cases) {
       const src = read(f);
       const i = src.indexOf('"dropfield');
-      expect(i).toBeGreaterThan(-1);
-      // `<RefChips>` phải nằm SAU khi mở `.dropfield` và trước khi đóng nó.
-      expect(src.indexOf("<RefChips", i)).toBeGreaterThan(i);
+      expect(i, f).toBeGreaterThan(-1);
+      // Mảnh xem trước phải nằm SAU khi mở `.dropfield` và trước khi đóng nó.
+      expect(src.indexOf(preview, i), f).toBeGreaterThan(i);
     }
   });
 

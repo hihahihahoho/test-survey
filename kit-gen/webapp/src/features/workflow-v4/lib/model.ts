@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware";
 import { STYLE_AXIS_IDS } from "@/features/kit-form/lib/form-model";
 import type { StyleAxisId } from "@/features/kit-form/lib/form-model";
 import { loadBundledV2 } from "@/features/design/library/lib/source";
+import { allPoseIds } from "./poses";
 import { draftKey, migrateLegacyDraft, onDraftForgotten } from "./draft-storage";
 
 export { LEGACY_DRAFT_KEY, draftKey, trashedDraftKey, migrateLegacyDraft, dropWorkflowDraft, restoreWorkflowDraft } from "./draft-storage";
@@ -39,6 +40,31 @@ export type ProjectSheetLimits = Record<SheetLimitKey, number | null>;
 export type VersionSettings = { chroma: Chroma; kitsetSummary: string; mascot: string; sliceThreshold: number; stylePrompt: string };
 export type KitVersion = { id: string; label: `v${number}`; createdAt: string; status: "mock" | "rendering" | "ready" | "failed"; runId?: string; prompt: string; settings: VersionSettings };
 export type StyleAxes = Record<StyleAxisId, number>;
+
+/**
+ * UI-FIX §3b — MỘT NHÂN VẬT TRONG DANH SÁCH.
+ *
+ * Bước Mascot trước đây là form inline cho **đúng một** con: [Tên] [Mô tả] [vùng thả ảnh].
+ * Thêm con thứ hai là chuyện không làm được, dù `Contract.variants[].characters` vốn là
+ * MẢNG. Nay bước này là danh sách thẻ + modal "Thêm nhân vật", đúng nhịp màn Nhận dạng
+ * thương hiệu / thư viện Mascot.
+ *
+ * `ref.name` là **tên agent đặt trên đĩa** (`char-*.png`, `agent/routes/refs.mjs:118`),
+ * không phải tên file gốc của người dùng — nhờ vậy mỗi nhân vật giữ đúng ảnh CỦA NÓ
+ * ngay cả khi có 3 con cùng nằm trong `refs/`.
+ */
+export type WorkflowMascot = {
+  id: string;
+  name: string;
+  description: string;
+  ref: { name: string } | null;
+};
+
+/** Id ổn định cho một nhân vật mới. `crypto.randomUUID` không có ở mọi runtime test. */
+export function newMascotId(): string {
+  const rnd = globalThis.crypto?.randomUUID?.();
+  return rnd ?? `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 /**
  * §W3-5 — MỘT DANH SÁCH ELEMENT DUY NHẤT.
@@ -86,6 +112,29 @@ export function presetKitset(): KitElement[] {
   return [...PRESET_MISSING_DESIGN.map((e) => ({ ...e })), ...picked];
 }
 
+/**
+ * UI-FIX §2 — **MẶC ĐỊNH CHỌN HẾT**.
+ *
+ * Bản cũ mở wizard ra là 7 món của preset "quay số may mắn" được tick, 35 món còn lại
+ * mang dấu `+`. Người dùng phải CỘNG THÊM từng món để có bộ khung của mình — mà việc
+ * họ thật sự làm là *bớt* những món không cần. Nay kitset khởi tạo là TOÀN BỘ thư viện,
+ * đã tick sẵn; `KitsetStep` còn nới tiếp cho kho của agent + bộ khung người dùng tự thêm
+ * (xem `kitsetTouched` bên dưới).
+ *
+ * `wheel-board` (mock) vẫn giữ: nó là món preset chưa có bản thiết kế và UI phải nói ra
+ * điều đó, không phải giấu đi (§C3).
+ */
+export function defaultKitset(): KitElement[] {
+  const all = loadBundledV2().elements.map((e): KitElement => ({
+    file: e.file,
+    label: e.vi,
+    role: e.group ? `Nhóm ${e.group}` : "Element giao diện",
+    cell: cellLabel(e.cell ?? "landscape"),
+    selected: true,
+  }));
+  return [...PRESET_MISSING_DESIGN.map((e) => ({ ...e })), ...all];
+}
+
 export type WorkflowState = {
   step: StepId;
   unlocked: StepId;
@@ -107,12 +156,30 @@ export type WorkflowState = {
   sheetLimits: ProjectSheetLimits;
   brandRefs: { name: string }[];
   mascotEnabled: boolean;
+  /**
+   * Ba trường `mascotName` / `mascotDescription` / `mascotRef` là **TIẾNG VỌNG của
+   * `mascots[0]`**, không phải nguồn sự thật. Chúng ở lại vì `contract-import.ts`,
+   * `versionSettingsOf` và các bản nháp đã ghi ra đĩa đều nói bằng chúng — xoá đi là
+   * làm mất bản nháp của người dùng. Mọi hành động mascot đi qua `syncPrimaryMascot`
+   * nên hai bên không thể lệch.
+   */
   mascotName: string;
   mascotDescription: string;
   mascotRef: { name: string } | null;
+  /** Danh sách nhân vật của dự án — nguồn sự thật của bước Mascot (UI-FIX §3b). */
+  mascots: WorkflowMascot[];
   /** LUÔN là id tiếng Anh (`idle|cheer|sad|present`) — nhãn tiếng Việt ở tầng UI (§W1-7). */
   mascotPoses: string[];
   elements: KitElement[];
+  /**
+   * UI-FIX §2 — người dùng ĐÃ tự tay chỉnh kitset chưa.
+   *
+   * Khi còn `false`, `KitsetStep` tick sẵn mọi món mới thấy trong kho (kho của agent và
+   * bộ khung người dùng tự thêm về SAU bản nháp, nên chỉ dựa vào `defaultKitset()` là
+   * thiếu). Vừa bấm một món là cờ bật, và app THÔI tự chọn thay người dùng — nếu không,
+   * món vừa bỏ tick sẽ được tick lại ở lần render sau.
+   */
+  kitsetTouched: boolean;
   versions: KitVersion[];
   activeVersion: string;
   set: (patch: Partial<WorkflowState>) => void;
@@ -126,6 +193,17 @@ export type WorkflowState = {
    * tự tra bản đóng gói.
    */
   toggleElement: (file: string, meta?: { label: string; role: string; cell: string }) => void;
+  /**
+   * UI-FIX §2 — tick sẵn mọi món của kho mà kitset chưa biết. KHÔNG bật `kitsetTouched`
+   * (đây là app tự làm, không phải người dùng), và KHÔNG đụng tới món đã có trong kitset
+   * — kể cả món người dùng vừa bỏ tick.
+   */
+  adoptCatalogue: (items: ReadonlyArray<{ file: string; label: string; role: string; cell: string }>) => void;
+  /** Chọn / bỏ chọn hàng loạt (nút "Chọn tất cả" · "Bỏ chọn" của bước Bộ khung UI). */
+  setElementsSelected: (files: readonly string[], selected: boolean) => void;
+  addMascot: (input: { name: string; description: string; ref?: { name: string } | null }) => string;
+  patchMascot: (id: string, patch: Partial<Omit<WorkflowMascot, "id">>) => void;
+  removeMascot: (id: string) => void;
   addVersion: (prompt: string, status?: KitVersion["status"], runId?: string) => string;
   /** §W3-9(c) — đường để C1 (nút Vẽ thật) lật `mock → rendering → ready/failed`. */
   markVersionStatus: (id: string, status: KitVersion["status"]) => void;
@@ -259,7 +337,12 @@ const stores = new Map<string, WorkflowStore>();
    nếu không lần mở sau sẽ dựng lại từ bộ nhớ và ghi đè chính cái vừa dọn. */
 onDraftForgotten((projectId) => void stores.delete(projectId));
 
-function initialState(): Omit<WorkflowState, "set" | "next" | "back" | "go" | "toggleElement" | "addVersion" | "markVersionStatus" | "restoreVersion"> {
+type WorkflowActionKey =
+  | "set" | "next" | "back" | "go" | "toggleElement" | "adoptCatalogue" | "setElementsSelected"
+  | "addMascot" | "patchMascot" | "removeMascot"
+  | "addVersion" | "markVersionStatus" | "restoreVersion";
+
+function initialState(): Omit<WorkflowState, WorkflowActionKey> {
   return {
     step: 1,
     unlocked: 1,
@@ -283,11 +366,44 @@ function initialState(): Omit<WorkflowState, "set" | "next" | "back" | "go" | "t
     mascotName: "",
     mascotDescription: "",
     mascotRef: null,
-    mascotPoses: ["idle", "cheer", "sad", "present"],
-    elements: presetKitset(),
+    mascots: [],
+    // UI-FIX §3a — mặc định chọn HẾT dáng, cùng nguyên tắc với bộ khung UI.
+    mascotPoses: allPoseIds(),
+    elements: defaultKitset(),
+    kitsetTouched: false,
     versions: [],
     activeVersion: "",
   };
+}
+
+/**
+ * `mascots` ⇄ ba trường cũ. Gọi sau MỌI thay đổi danh sách nhân vật.
+ *
+ * Nhân vật đầu là nhân vật CHÍNH của contract, nên nó là cái được chiếu xuống ba
+ * trường cũ. Danh sách rỗng ⇒ ba trường về rỗng, không giữ lại xác của con vừa xoá.
+ */
+function syncPrimaryMascot(mascots: readonly WorkflowMascot[]): Pick<WorkflowState, "mascots" | "mascotName" | "mascotDescription" | "mascotRef"> {
+  const first = mascots[0];
+  return {
+    mascots: [...mascots],
+    mascotName: first?.name ?? "",
+    mascotDescription: first?.description ?? "",
+    mascotRef: first?.ref ?? null,
+  };
+}
+
+/**
+ * Bản nháp cũ (một mascot, ba trường rời) → danh sách. Trả `null` khi không có gì để
+ * nâng cấp, để nơi gọi khỏi `set()` thừa một vòng.
+ *
+ * Idempotent: chạy lại trên state đã nâng cấp thì trả `null`.
+ */
+export function migrateMascots(s: Pick<WorkflowState, "mascots" | "mascotName" | "mascotDescription" | "mascotRef">): WorkflowMascot[] | null {
+  if (s.mascots.length > 0) return null;
+  const name = s.mascotName?.trim() ?? "";
+  const description = s.mascotDescription?.trim() ?? "";
+  if (!name && !description && !s.mascotRef) return null;
+  return [{ id: newMascotId(), name: s.mascotName, description: s.mascotDescription, ref: s.mascotRef }];
 }
 
 export const workflowDraftOf = (s: WorkflowState) => ({
@@ -297,8 +413,9 @@ export const workflowDraftOf = (s: WorkflowState) => ({
   chroma: s.chroma, kitsetSummary: s.kitsetSummary, sliceThreshold: s.sliceThreshold,
   sheetLimits: s.sheetLimits,
   brandRefs: s.brandRefs, mascotEnabled: s.mascotEnabled, mascotName: s.mascotName,
-  mascotDescription: s.mascotDescription, mascotRef: s.mascotRef, mascotPoses: s.mascotPoses,
-  elements: s.elements, versions: s.versions, activeVersion: s.activeVersion,
+  mascotDescription: s.mascotDescription, mascotRef: s.mascotRef, mascots: s.mascots,
+  mascotPoses: s.mascotPoses,
+  elements: s.elements, kitsetTouched: s.kitsetTouched, versions: s.versions, activeVersion: s.activeVersion,
 });
 const partialize = workflowDraftOf;
 
@@ -307,6 +424,10 @@ export function hydrateWorkflowStore(store: WorkflowStore, draft: Record<string,
   const initial = initialState();
   const safe = Object.fromEntries(Object.keys(initial).filter(key => draft[key] !== undefined).map(key => [key, draft[key]])) as Partial<WorkflowState>;
   store.setState(safe);
+  // Bản nháp ghi từ bản build CŨ chỉ có ba trường mascot rời — nâng lên danh sách NGAY
+  // ở đây, để bước Mascot không phải biết tới hai hình dạng dữ liệu.
+  const next = migrateMascots(store.getState());
+  if (next) store.setState(syncPrimaryMascot(next));
 }
 
 /** Factory CÓ CACHE: mở lại cùng một bộ kit trong một phiên thì vẫn là một store. */
@@ -324,11 +445,36 @@ export function createWorkflowStore(projectId: string): WorkflowStore {
         go: (step) => { if (step <= get().unlocked) set({ step }); },
         toggleElement: (file, meta) => set((s) => {
           if (s.elements.some((e) => e.file === file)) {
-            return { elements: s.elements.map((e) => (e.file === file ? { ...e, selected: !e.selected } : e)) };
+            return { kitsetTouched: true, elements: s.elements.map((e) => (e.file === file ? { ...e, selected: !e.selected } : e)) };
           }
           const info = meta ?? libMeta(file) ?? { label: file, role: "Element giao diện", cell: "ngang" };
-          return { elements: [...s.elements, { file, ...info, selected: true }] };
+          return { kitsetTouched: true, elements: [...s.elements, { file, ...info, selected: true }] };
         }),
+        adoptCatalogue: (items) => {
+          // Thoát TRƯỚC khi `set`: một `set({})` rỗng vẫn tạo state object mới ⇒ render
+          // thừa + một nhịp autosave ghi đĩa cho thứ không đổi.
+          const s = get();
+          const known = new Set(s.elements.map((e) => e.file));
+          const fresh = items.filter((it) => !known.has(it.file)).map((it): KitElement => ({ ...it, selected: true }));
+          if (fresh.length === 0) return;
+          set({ elements: [...s.elements, ...fresh] });
+        },
+        setElementsSelected: (files, selected) => set((s) => {
+          const want = new Set(files);
+          return {
+            kitsetTouched: true,
+            elements: s.elements.map((e) => (want.has(e.file) ? { ...e, selected } : e)),
+          };
+        }),
+        addMascot: ({ name, description, ref = null }) => {
+          const id = newMascotId();
+          set((s) => syncPrimaryMascot([...s.mascots, { id, name, description, ref }]));
+          return id;
+        },
+        patchMascot: (id, patch) => set((s) => syncPrimaryMascot(
+          s.mascots.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+        )),
+        removeMascot: (id) => set((s) => syncPrimaryMascot(s.mascots.filter((m) => m.id !== id))),
         /**
          * §W3-9(c) — TRẠNG THÁI PHIÊN BẢN THÔI NÓI DỐI.
          *
@@ -363,7 +509,14 @@ export function createWorkflowStore(projectId: string): WorkflowStore {
          */
         restoreVersion: (id) => set((s) => {
           const v = s.versions.find((x) => x.id === id);
-          return v ? { activeVersion: id, ...stateFromVersion(v) } : { activeVersion: id };
+          if (!v) return { activeVersion: id };
+          const patch = stateFromVersion(v);
+          // Snapshot chỉ chụp TÊN nhân vật chính (một chuỗi). Chiếu nó ngược vào
+          // `mascots[0]` để thẻ ở bước Mascot không nói khác thẻ recap ở bước Kiểm tra.
+          const mascots = typeof patch.mascotName === "string" && s.mascots.length > 0
+            ? s.mascots.map((m, i) => (i === 0 ? { ...m, name: patch.mascotName! } : m))
+            : s.mascots;
+          return { activeVersion: id, ...patch, mascots };
         }),
       }),
       { name: draftKey(projectId), partialize },

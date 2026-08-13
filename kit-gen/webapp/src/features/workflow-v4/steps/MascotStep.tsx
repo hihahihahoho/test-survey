@@ -1,95 +1,152 @@
-import { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { ImageDropzone } from "@/components/ui/image-dropzone";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
-import { useWorkflowProjectId, useWorkflowStore } from "../lib/model";
+import * as React from "react";
+import { Check, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useWorkflowProjectId, useWorkflowStore, useWorkflowStoreApi, migrateMascots, type WorkflowMascot } from "../lib/model";
 import { useWorkflowRefs } from "../lib/refs-sync";
-import { RefChips } from "../components/RefChips";
-import { SharedMascotPicker, SharedReferencePicker } from "../components/SharedReferencePicker";
-import { SegChoice } from "../components/SegChoice";
-import { normalizedPoseIds } from "../lib/user-library";
+import { CheckRow } from "../components/CheckRow";
+import { GroupChips } from "../components/GroupChips";
+import { MascotCard, MascotDialog, MascotEmpty } from "../components/MascotDialog";
+import { POSES, POSE_GROUPS, allPoseIds } from "../lib/poses";
 import { poseSvgMarkup } from "@/features/design/preview";
 import { Step } from "./BriefStep";
 
-/**
- * §W1-7 — DÁNG MASCOT: store giữ **id tiếng Anh**, UI hiện **nhãn tiếng Việt**.
- *
- * Bản cũ toggle bằng chính chuỗi nhãn và so `includes("đứng chờ")` với store chứa
- * `["idle","cheer","sad","present"]` ⇒ cả 4 nút hiện "chưa chọn" dù store nói đã chọn 4,
- * và bấm một nút làm mảng phồng lên 5 phần tử trộn hai hệ chữ. Đó là HỎNG DỮ LIỆU,
- * không phải lệch hiển thị.
- *
- * §W3-3 — ảnh ref nhân vật nay ĐI TỚI ĐĨA (`kind:"character"` ⇒ agent đặt tên `char-*.png`)
- * và được đính vào sheet dáng, nên 4 ô pose vẽ CÙNG một nhân vật thay vì bốn con khác nhau.
- */
-export const POSES = [
-  { id: "idle", label: "Đứng chờ", group: "Cơ bản" }, { id: "wave", label: "Vẫy tay", group: "Cơ bản" },
-  { id: "point", label: "Chỉ tay", group: "Cơ bản" }, { id: "present", label: "Giới thiệu", group: "Cơ bản" },
-  { id: "cheer", label: "Ăn mừng", group: "Cảm xúc" }, { id: "sad", label: "Buồn", group: "Cảm xúc" },
-  { id: "think", label: "Suy nghĩ", group: "Cảm xúc" }, { id: "thumbs-up", label: "Giơ ngón cái", group: "Cảm xúc" },
-  { id: "run", label: "Chạy", group: "Chuyển động" }, { id: "walk", label: "Đi bộ", group: "Chuyển động" },
-  { id: "jump", label: "Nhảy", group: "Chuyển động" }, { id: "dance", label: "Nhảy múa", group: "Chuyển động" },
-  { id: "hold-gift", label: "Ôm quà", group: "Chiến dịch" }, { id: "bow", label: "Cúi chào", group: "Chiến dịch" },
-  { id: "sit", label: "Ngồi", group: "Chiến dịch" }, { id: "fly", label: "Bay", group: "Chiến dịch" },
-  { id: "view-34", label: "Góc 3/4", group: "Góc nhìn" }, { id: "view-side", label: "Nhìn ngang", group: "Góc nhìn" },
-  { id: "view-back", label: "Nhìn sau", group: "Góc nhìn" },
-] as const;
+/** Danh mục dáng nay ở `lib/poses.ts`; re-export để nơi gọi cũ (và test) không gãy. */
+export { POSES } from "../lib/poses";
 
 export function MascotStep() {
   const s = useWorkflowStore();
+  const store = useWorkflowStoreApi();
   const projectId = useWorkflowProjectId();
   const refs = useWorkflowRefs(projectId);
-  const [poseGroup, setPoseGroup] = useState("Cơ bản");
+  const [poseGroup, setPoseGroup] = React.useState<string>(POSE_GROUPS[0]!);
+  const [editing, setEditing] = React.useState<WorkflowMascot | null>(null);
+  const [dialogOpen, setDialogOpen] = React.useState(false);
 
-  const pickRef = (files: FileList | File[] | null) => {
-    const file = files?.[0];
-    if (!file) return;
-    refs.add([file], "character");
-    s.set({ mascotRef: { name: file.name } });
-  };
+  /* Bản nháp ghi từ bản build cũ chỉ có ba trường `mascot*` rời. `hydrateWorkflowStore`
+     đã nâng cấp bản nháp trên ĐĨA; đây là vế còn lại — bản nháp trong `localStorage`
+     do `persist` nạp lại. Idempotent nên chạy lại không sinh con thứ hai. */
+  React.useEffect(() => {
+    const next = migrateMascots(store.getState());
+    if (next) store.setState({ mascots: next });
+  }, [store]);
+
+  const openAdd = () => { setEditing(null); setDialogOpen(true); };
+  const openEdit = (mascot: WorkflowMascot) => { setEditing(mascot); setDialogOpen(true); };
+
+  const poseCount = s.mascotPoses.length;
+  const shown = POSES.filter((pose) => pose.group === poseGroup);
+  const groupChips = POSE_GROUPS.map((group) => ({
+    id: group,
+    label: group,
+    count: POSES.filter((pose) => pose.group === group && s.mascotPoses.includes(pose.id)).length,
+  }));
 
   return (
-    <Step title="Mascot" copy="Chọn nhân vật và các khung pose cần tạo.">
-      <label className="flex cursor-pointer items-start gap-3 rounded-3 border border-line-subtle bg-raised p-4">
-        <Switch className="mt-0.5" checked={s.mascotEnabled} onCheckedChange={(checked) => s.set({ mascotEnabled: checked })} aria-label="Có nhân vật đại diện" />
-        <span><strong className="block text-label text-fg-strong">Có nhân vật đại diện</strong><span className="text-caption text-fg-muted">Bật khi dự án cần mascot nhất quán ở nhiều dáng.</span></span>
-      </label>
-      {s.mascotEnabled && <>
-      <div className="workflow-form-grid">
-        <div>
-          <label className="field-label" htmlFor="mascot-name">Tên nhân vật</label>
-          <Input id="mascot-name" value={s.mascotName} onChange={(e) => s.set({ mascotName: e.target.value })} placeholder="Ví dụ: Mèo bạc hà" />
-        </div>
-        <div>
-          <label className="field-label" htmlFor="mascot-description">Mô tả nhân vật</label>
-          <Textarea id="mascot-description" rows={3} value={s.mascotDescription} onChange={(e) => s.set({ mascotDescription: e.target.value })} placeholder="Khuôn mặt, màu, trang phục…" />
-        </div>
-      </div>
-      {/* §W2B-6 — chip ảnh vào TRONG khung vùng thả (xem StyleStep + globals.css). */}
-      <div className="mb-2 flex flex-wrap justify-end gap-2">
-        <SharedMascotPicker onPick={(file, item) => {
-          pickRef([file]);
-          s.set({ mascotName: item.name, mascotPoses: normalizedPoseIds(item.poses) });
-        }} />
-        <SharedReferencePicker group="mascot-reference" onPick={(file) => pickRef([file])} />
-      </div>
-      <div className="dropfield mascot-dropzone">
-        <ImageDropzone label="Kéo ảnh nhân vật vào đây" description="Một ảnh rõ mặt, đủ trang phục để giữ nhận diện ở mọi dáng" state={refs.pending ? "uploading" : refs.groups.character.length ? "done" : "idle"} onFiles={pickRef} />
-        <RefChips
-          items={refs.groups.character}
-          ready={refs.ready}
-          fallback={s.mascotRef ? [s.mascotRef] : []}
-          onRemove={refs.remove}
-        />
-      </div>
-      <section className="mascot-pose-picker">
-        <div className="pose-heading"><div><p className="field-label">Bộ dáng</p><strong>{s.mascotPoses.length} dáng đã chọn</strong></div><div className="flex gap-2"><button type="button" className="text-label text-accent" onClick={() => s.set({ mascotPoses: POSES.map((pose) => pose.id) })}>Chọn tất cả</button><button type="button" className="text-label text-fg-muted" onClick={() => s.set({ mascotPoses: [] })}>Bỏ chọn</button></div></div>
-        <div className="selected-poses"><span className="eyebrow">Sẽ vẽ</span>{s.mascotPoses.length ? s.mascotPoses.map(id=><button type="button" key={id} onClick={()=>s.set({mascotPoses:s.mascotPoses.filter(x=>x!==id)})}>{POSES.find(p=>p.id===id)?.label ?? id}<span aria-hidden>×</span></button>) : <span className="text-caption text-fg-muted">Chưa chọn dáng nào</span>}</div>
-        <div className="pose-group-tabs">{[...new Set(POSES.map(p => p.group))].map(g => <button key={g} className={poseGroup === g ? "active" : ""} onClick={() => setPoseGroup(g)}>{g}<small>{POSES.filter(p => p.group === g).length}</small></button>)}</div>
-        <div className="pose-choice-grid">{POSES.filter(p => p.group === poseGroup).map(p => { const on=s.mascotPoses.includes(p.id); return <SegChoice key={p.id} on={on} onClick={() => s.set({ mascotPoses: on ? s.mascotPoses.filter(x=>x!==p.id) : [...s.mascotPoses,p.id] })}><span className="pose-prototype" aria-hidden dangerouslySetInnerHTML={{ __html: `<svg viewBox="0 0 60 84">${poseSvgMarkup(p.id, 60, 84)}</svg>` }} />{p.label}</SegChoice>; })}</div>
-      </section>
-      </>}
+    <Step title="Mascot" copy="Thêm từng nhân vật và chọn các dáng cần vẽ.">
+      <CheckRow
+        id="mascot-enabled-step"
+        checked={s.mascotEnabled}
+        onCheckedChange={(checked) => s.set({ mascotEnabled: checked })}
+        label="Có nhân vật đại diện"
+        description="Bật khi dự án cần mascot nhất quán ở nhiều dáng."
+      />
+
+      {s.mascotEnabled && (
+        <>
+          <section className="picker-section" aria-label="Nhân vật của dự án">
+            <div className="picker-heading">
+              <div>
+                <p className="field-label">Nhân vật</p>
+                <strong>{s.mascots.length} nhân vật</strong>
+              </div>
+              <Button type="button" variant="secondary" size="sm" onClick={openAdd}>
+                <Plus aria-hidden />Thêm nhân vật
+              </Button>
+            </div>
+            {s.mascots.length > 0 ? (
+              <div className="mascot-card-grid">
+                {s.mascots.map((mascot, index) => (
+                  <MascotCard
+                    key={mascot.id}
+                    mascot={mascot}
+                    index={index}
+                    onEdit={() => openEdit(mascot)}
+                    onRemove={() => s.removeMascot(mascot.id)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <MascotEmpty onAdd={openAdd} />
+            )}
+          </section>
+
+          {/*
+            UI-FIX §3a — bộ dáng dùng ĐÚNG khuôn của bước "Bộ khung UI": hàng chip nhóm
+            + lưới thẻ có tick. Trước đây chỗ này là tab gạch chân + ô vuông + một dải
+            chip "Sẽ vẽ" — ba thứ trang trí cho một việc mà bước liền trước đã dạy xong.
+          */}
+          <section className="picker-section" aria-label="Bộ dáng mascot">
+            <div className="picker-heading">
+              <div>
+                <p className="field-label">Bộ dáng</p>
+                <strong>{poseCount}/{POSES.length} dáng đã chọn</strong>
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={() => s.set({ mascotPoses: allPoseIds() })}>Chọn tất cả</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => s.set({ mascotPoses: [] })}>Bỏ chọn</Button>
+              </div>
+            </div>
+
+            <GroupChips
+              groups={groupChips}
+              value={poseGroup}
+              onChange={setPoseGroup}
+              trailing={`${poseCount} đã chọn`}
+            />
+
+            <div aria-label={poseGroup} className="compact-element-grid">
+              {shown.map((pose) => {
+                const on = s.mascotPoses.includes(pose.id);
+                return (
+                  <button
+                    key={pose.id}
+                    type="button"
+                    className={on ? "compact-element selected" : "compact-element"}
+                    aria-pressed={on}
+                    onClick={() => s.set({
+                      mascotPoses: on
+                        ? s.mascotPoses.filter((id) => id !== pose.id)
+                        : [...s.mascotPoses, pose.id],
+                    })}
+                  >
+                    <span
+                      className="compact-element-art"
+                      aria-hidden
+                      dangerouslySetInnerHTML={{ __html: `<svg viewBox="0 0 60 84" width="40" height="56">${poseSvgMarkup(pose.id, 60, 84)}</svg>` }}
+                    />
+                    <span className="min-w-0">
+                      <strong className="block truncate">{pose.label}</strong>
+                      <small>{pose.group}</small>
+                    </span>
+                    {on ? <Check aria-hidden /> : <Plus aria-hidden />}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <MascotDialog
+            open={dialogOpen}
+            onOpenChange={setDialogOpen}
+            mascot={editing}
+            uploadRef={(file) => refs.addOne(file, "character")}
+            onSave={(input) => {
+              if (editing) s.patchMascot(editing.id, input);
+              else s.addMascot(input);
+            }}
+          />
+        </>
+      )}
     </Step>
   );
 }

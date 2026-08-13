@@ -15,6 +15,7 @@ import {
   presetKitset, resetWorkflowStores, restoreWorkflowDraft, settingsDirty, trashedDraftKey,
   versionSettingsOf,
 } from "../model";
+import { POSES, allPoseIds } from "../poses";
 
 beforeEach(() => {
   localStorage.clear();
@@ -184,10 +185,19 @@ describe("§W1-6 / §W1-7 — ô campaign và dáng mascot", () => {
     expect(createWorkflowStore("kit-a").getState().campaign).toBe("mini-game hè 2026");
   });
 
-  it("mascotPoses mặc định là ID tiếng Anh — không có chuỗi tiếng Việt nào trong store", () => {
+  /**
+   * ⚠️ HỢP ĐỒNG ĐỔI Ở UI-FIX §3a — **mặc định chọn HẾT dáng**, không còn 4 dáng.
+   *
+   * Bốn dáng mặc định là một lựa chọn thay người dùng mà chẳng ai xin: người ta vào
+   * bước Mascot để *bớt* dáng không cần, chứ không để cộng thêm 15 dáng còn lại từng
+   * cái một. Điều ca test này khoá vẫn là điều §W1-7 khoá — store giữ **id tiếng Anh**,
+   * không giữ nhãn tiếng Việt — chỉ tập mặc định là rộng hơn.
+   */
+  it("mascotPoses mặc định là TOÀN BỘ dáng, và toàn ID tiếng Anh (không nhãn tiếng Việt)", () => {
     const poses = createWorkflowStore("kit-a").getState().mascotPoses;
-    expect(poses).toEqual(["idle", "cheer", "sad", "present"]);
-    expect(poses.every((p) => /^[a-z]+$/.test(p))).toBe(true);
+    expect(poses).toEqual(allPoseIds());
+    expect(poses).toHaveLength(POSES.length);
+    expect(poses.every((p) => /^[a-z0-9-]+$/.test(p))).toBe(true);
   });
 });
 
@@ -227,15 +237,44 @@ describe("preset kitset — §W3-5 một danh sách duy nhất", () => {
     expect(src).toContain("PRESET_MISSING_DESIGN");
   });
 
-  it("bấm món CHƯA có trong kitset ⇒ THÊM vào (kho 42 ≠ kitset)", () => {
+  /**
+   * ⚠️ HỢP ĐỒNG ĐỔI Ở UI-FIX §2 — **KITSET KHỞI TẠO LÀ CẢ THƯ VIỆN, ĐÃ TICK SẴN**.
+   *
+   * §W3-5 đặt kitset khởi tạo = 7 món preset "quay số may mắn", nên 35 món còn lại mang
+   * dấu `+` và người dùng phải cộng từng cái. Việc họ thật sự làm là *bớt*. Nay
+   * `defaultKitset()` tick sẵn toàn bộ bản đóng gói; `presetKitset()` vẫn còn (ca trên
+   * vẫn kiểm nó) nhưng không còn là điểm khởi đầu của wizard.
+   */
+  it("kitset khởi tạo tick sẵn TOÀN BỘ thư viện đóng gói (mặc định chọn hết)", () => {
+    const s = createWorkflowStore("kit-a");
+    const lib = loadBundledV2().elements;
+    const kitset = s.getState().elements;
+    for (const element of lib) {
+      expect(kitset.find((item) => item.file === element.file)?.selected, element.file).toBe(true);
+    }
+    expect(kitset.filter((item) => item.selected)).toHaveLength(lib.length + 1); // +1 = wheel-board (mock)
+    expect(s.getState().kitsetTouched).toBe(false);
+  });
+
+  it("bấm món CHƯA có trong kitset (bộ khung người dùng tự thêm) ⇒ THÊM vào và bật cờ đã-đụng", () => {
     const s = createWorkflowStore("kit-a");
     const before = s.getState().elements.length;
-    expect(s.getState().elements.some((i) => i.file === "15-reward-giftbox")).toBe(false);
-    s.getState().toggleElement("15-reward-giftbox");
-    expect(s.getState().elements.find((item) => item.file === "15-reward-giftbox")?.selected).toBe(true);
+    expect(s.getState().elements.some((i) => i.file === "90-custom-abc")).toBe(false);
+    s.getState().toggleElement("90-custom-abc", { label: "Khung riêng", role: "Element giao diện", cell: "ngang" });
+    expect(s.getState().elements.find((item) => item.file === "90-custom-abc")?.selected).toBe(true);
     expect(s.getState().elements).toHaveLength(before + 1);
-    // Nhãn tự tra từ thư viện dù nơi gọi không truyền `meta`.
-    expect(s.getState().elements.find((i) => i.file === "15-reward-giftbox")?.label).toBe("Quà hộp");
+    expect(s.getState().kitsetTouched).toBe(true);
+  });
+
+  it("`adoptCatalogue` tick món kho mới, KHÔNG đụng món người dùng vừa bỏ tick", () => {
+    const s = createWorkflowStore("kit-a");
+    s.getState().toggleElement("01-btn-pill-red"); // người dùng bỏ tick
+    s.getState().adoptCatalogue([
+      { file: "01-btn-pill-red", label: "Nút đỏ (CTA)", role: "x", cell: "ngang" },
+      { file: "90-custom-xyz", label: "Khung riêng", role: "x", cell: "ngang" },
+    ]);
+    expect(s.getState().elements.find((i) => i.file === "01-btn-pill-red")?.selected).toBe(false);
+    expect(s.getState().elements.find((i) => i.file === "90-custom-xyz")?.selected).toBe(true);
   });
 
   it("bấm lại món ĐÃ có ⇒ lật cờ, không nhân đôi hàng", () => {

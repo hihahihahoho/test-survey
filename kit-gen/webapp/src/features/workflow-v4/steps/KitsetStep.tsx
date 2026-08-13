@@ -1,11 +1,13 @@
 import * as React from "react";
 import { Check, Plus, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Silhouette } from "@/features/design/preview";
 import { useElementLib, useUserLibrary } from "@/lib/hooks";
 import { foldVi, fromAgentLib, loadBundledV2 } from "@/features/design/library/lib/source";
 import type { LibElement } from "@/features/design/library/lib/types";
 import { cellLabel, useWorkflowStore } from "../lib/model";
+import { GroupChips } from "../components/GroupChips";
 import { isPropElement, mergeElements, userUiElements } from "../lib/user-library";
 import { Step } from "./BriefStep";
 
@@ -61,34 +63,56 @@ export function KitsetStep() {
     () => new Set(workflow.elements.filter((element) => element.selected).map((element) => element.file)),
     [workflow.elements],
   );
+
+  /**
+   * UI-FIX §2 — **MẶC ĐỊNH CHỌN HẾT**, kể cả món kho chỉ biết lúc chạy.
+   *
+   * `defaultKitset()` trong `model.ts` chỉ tick được 42 món của bản ĐÓNG GÓI. Kho thật
+   * ở đây là (bộ khung người dùng tự thêm) + (thư viện của agent), và cả hai chỉ về sau
+   * một vòng mạng — món nào mới thấy mà kitset chưa biết thì tick luôn.
+   *
+   * `kitsetTouched` là cái phanh: vừa bỏ tick một món xong mà effect này chạy lại thì
+   * món ấy sẽ được tick lại — đúng loại lỗi "app cãi người dùng". Cờ bật ngay ở cú bấm
+   * đầu tiên (`toggleElement` / `setElementsSelected`), nên chuyện đó không xảy ra.
+   */
+  const { kitsetTouched, adoptCatalogue } = workflow;
+  React.useEffect(() => {
+    if (kitsetTouched || catalogue.length === 0) return;
+    adoptCatalogue(catalogue.map((element) => ({ file: element.file, ...meta(element) })));
+  }, [catalogue, kitsetTouched, adoptCatalogue]);
+
   const current = GROUPS.find((item) => item.id === group)!;
   const shown = React.useMemo(() => {
     const folded = foldVi(query);
     return catalogue.filter((element) => current.match(element)
       && (!folded || foldVi(`${element.vi} ${element.file}`).includes(folded)));
   }, [catalogue, current, query]);
+  const shownFiles = React.useMemo(() => shown.map((element) => element.file), [shown]);
+  const allShownOn = shownFiles.length > 0 && shownFiles.every((file) => selected.has(file));
 
   return (
-    <Step title="Bộ khung UI" copy="Chọn các thành phần cần tạo.">
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        {GROUPS.map((item) => {
-          const count = catalogue.filter(item.match).filter((element) => selected.has(element.file)).length;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              aria-pressed={group === item.id}
-              onClick={() => setGroup(item.id)}
-              className={`rounded-2 border px-3 py-2 text-label transition-colors ${group === item.id ? "border-accent bg-accent/[var(--kg-tint-a)] text-fg-strong" : "border-line-subtle text-fg hover:bg-raised"}`}
-            >
-              {item.label}{count > 0 ? ` · ${count}` : ""}
-            </button>
-          );
-        })}
-        <span className="ml-auto text-caption tabular-nums text-fg-muted">{selected.size} đã chọn</span>
-      </div>
+    <Step title="Bộ khung UI" copy="Mặc định chọn hết — bỏ tick những thành phần dự án không cần.">
+      <GroupChips
+        groups={GROUPS.map((item) => ({
+          id: item.id,
+          label: item.label,
+          count: catalogue.filter(item.match).filter((element) => selected.has(element.file)).length,
+        }))}
+        value={group}
+        onChange={(id) => setGroup(id as GroupId)}
+        trailing={`${selected.size} đã chọn`}
+      />
 
-      {selected.size > 0 && <div className="mb-4 rounded-3 border border-line-subtle bg-raised p-3"><span className="eyebrow">Sẽ tạo</span><p className="mt-1 text-caption text-fg-muted">{selected.size} thành phần đã chọn trong bộ khung.</p></div>}
+      {/* Hai nút hàng loạt: bỏ cả nhóm rồi tick lại vài món là thao tác thật của người
+          dùng, và nó phải rẻ hơn 16 cú bấm. Chỉ tác động lên món ĐANG HIỆN (đã lọc). */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Button type="button" variant="ghost" size="sm" disabled={allShownOn} onClick={() => workflow.setElementsSelected(shownFiles, true)}>
+          Chọn tất cả trong {current.label}
+        </Button>
+        <Button type="button" variant="ghost" size="sm" disabled={!shownFiles.some((file) => selected.has(file))} onClick={() => workflow.setElementsSelected(shownFiles, false)}>
+          Bỏ chọn nhóm này
+        </Button>
+      </div>
 
       <div className="relative mb-4 max-w-sm">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden />

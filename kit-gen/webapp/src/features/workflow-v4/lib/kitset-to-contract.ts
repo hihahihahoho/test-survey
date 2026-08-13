@@ -52,7 +52,7 @@ import {
 import { loadBundledV2 } from "@/features/design/library/lib/source";
 import type { LibElement } from "@/features/design/library/lib/types";
 import { buildStylePrompt } from "@/features/kit-form/lib/style-phrases";
-import type { WorkflowState } from "./model";
+import type { WorkflowMascot, WorkflowState } from "./model";
 import { isPropElement } from "./user-library";
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -302,7 +302,10 @@ export type KitsetContractInput = Pick<
   | "primaryColor" | "secondaryColor" | "styleAvoid" | "chroma" | "sliceThreshold"
   | "elements" | "styleRefs" | "brandRefs"
   | "mascotEnabled" | "mascotName" | "mascotDescription" | "mascotRef" | "mascotPoses"
->;
+> & {
+  /** UI-FIX §3b — danh sách nhân vật. Thiếu (bản nháp cũ) ⇒ rơi về ba trường `mascot*`. */
+  mascots?: readonly WorkflowMascot[];
+};
 
 /**
  * Rút đúng phần state mà contract phụ thuộc.
@@ -320,6 +323,7 @@ export function pickContractInput(s: KitsetContractInput): KitsetContractInput {
     elements: s.elements, styleRefs: s.styleRefs, brandRefs: s.brandRefs,
     mascotEnabled: s.mascotEnabled, mascotName: s.mascotName, mascotDescription: s.mascotDescription,
     mascotRef: s.mascotRef, mascotPoses: s.mascotPoses,
+    ...(s.mascots ? { mascots: s.mascots } : {}),
   };
 }
 
@@ -330,7 +334,14 @@ export interface BuildKitsetOptions {
    * Ref ĐANG CÓ THẬT trên đĩa (§W3-3). Truyền vào thì **thắng** state: đĩa là sự thật,
    * bản nháp chỉ là tiếng vọng. Không truyền (test, offline) thì rơi về state.
    */
-  refs?: { inspo: readonly string[]; brand: readonly string[]; character: string | null };
+  refs?: {
+    inspo: readonly string[];
+    brand: readonly string[];
+    /** Ảnh nhân vật MỚI NHẤT — đường lùi cho bản nháp một-mascot. */
+    character: string | null;
+    /** MỌI ảnh `char-*` đang có trên đĩa. Dùng để đối chiếu ref của từng nhân vật. */
+    characters?: readonly string[];
+  };
   /** Giới hạn do thư viện dùng chung quản lý. Geometry vẫn kẹp theo sức chứa canvas. */
   limits?: Partial<SheetLimits>;
 }
@@ -343,6 +354,56 @@ function limitOf(value: number | undefined, fallback: number, ceiling: number): 
 
 function isPopupElement(element: LibElement): boolean {
   return /popup|modal|panel|ribbon/.test(`${element.file} ${element.group ?? ""}`.toLowerCase());
+}
+
+/** Một nhân vật đã giải xong ref + tên, sẵn sàng đổ vào contract. */
+export interface ContractCharacter {
+  /** Id HẰNG theo VỊ TRÍ (`nhan-vat`, `nhan-vat-2`…) — xem chú thích của `CHARACTER_ID`. */
+  id: string;
+  vi: string;
+  description: string;
+  /** `refs/<tên>` hoặc chuỗi rỗng khi không có ảnh mẫu. */
+  ref: string;
+}
+
+/**
+ * Danh sách nhân vật của contract, theo đúng thứ tự bước Mascot hiện ra.
+ *
+ * Ba lối vào, cùng một lối ra:
+ *  · `s.mascots` có mục  ⇒ mỗi mục một nhân vật, ref lấy theo TÊN NÓ TỰ GIỮ.
+ *  · rỗng nhưng bật mascot ⇒ đúng hành vi cũ: một nhân vật từ ba trường `mascot*`.
+ *  · tắt mascot          ⇒ nơi gọi không gọi hàm này.
+ *
+ * ĐĨA VẪN THẮNG (§W3-3): có `opts.refs` thì ảnh nào không nằm trên đĩa bị coi là
+ * không có — bản nháp chỉ là tiếng vọng, không phải bằng chứng.
+ */
+export function contractCast(
+  s: Pick<KitsetContractInput, "mascots" | "mascotName" | "mascotDescription" | "mascotRef">,
+  opts: Pick<BuildKitsetOptions, "refs"> = {},
+): ContractCharacter[] {
+  const onDisk = opts.refs
+    ? new Set(opts.refs.characters ?? (opts.refs.character ? [opts.refs.character] : []))
+    : null;
+  const resolve = (name: string | null | undefined): string => {
+    const path = name ? refPath(name) : "";
+    if (!path) return "";
+    if (onDisk && !onDisk.has(path)) return "";
+    return path;
+  };
+
+  const list = s.mascots ?? [];
+  if (list.length === 0) {
+    // Đường cũ, giữ NGUYÊN: bản nháp một-mascot không biết tên ref của agent nên
+    // `opts.refs.character` (ảnh `char-*` mới nhất) vẫn là nguồn đáng tin nhất.
+    const ref = opts.refs ? (opts.refs.character ?? "") : (s.mascotRef ? refPath(s.mascotRef.name) : "");
+    return [{ id: CHARACTER_ID, vi: s.mascotName.trim() || "Nhân vật", description: s.mascotDescription, ref }];
+  }
+  return list.map((m, i) => ({
+    id: i === 0 ? CHARACTER_ID : `${CHARACTER_ID}-${i + 1}`,
+    vi: m.name.trim() || (i === 0 ? "Nhân vật" : `Nhân vật ${i + 1}`),
+    description: m.description,
+    ref: resolve(m.ref?.name),
+  }));
 }
 
 /** Mô tả phong cách gửi cho `gen.sh` = ô mô tả + 7 trục ngữ nghĩa + điều không muốn. */
@@ -463,17 +524,27 @@ export function buildKitsetContract(s: KitsetContractInput, opts: BuildKitsetOpt
 
   /* ── c. Dáng nhân vật ───────────────────────────────────────────────────── */
   const poses = s.mascotEnabled ? s.mascotPoses.filter((p) => typeof p === "string" && p.length > 0) : [];
-  const charRef = !s.mascotEnabled
-    ? ""
-    : opts.refs
-      ? (opts.refs.character ?? "")
-      : s.mascotRef
-        ? refPath(s.mascotRef.name)
-        : "";
+  const cast = s.mascotEnabled ? contractCast(s, opts) : [];
+
+  /**
+   * UI-FIX §3b — MỖI NHÂN VẬT MỘT BỘ TẤM DÁNG.
+   *
+   * Bước Mascot nay cộng được nhiều con, nên nếu chỗ này vẫn chỉ dựng tấm cho con đầu
+   * thì app bán một thứ nó không vẽ — đúng loại nói dối mà `estimateLine` sinh ra để dọn.
+   * Cấu trúc contract vốn đã cho phép (`variants[].characters` là MẢNG); chỉ tầng dịch
+   * này là đang thắt cổ chai.
+   *
+   * Tên ô: một nhân vật ⇒ giữ nguyên `NN-pose-<id>` (không đổi gì so với trước).
+   * Nhiều nhân vật ⇒ chèn id nhân vật (`NN-pose-nhan-vat-2-idle`) để hai con không ghi
+   * đè ảnh của nhau khi `slice.py` xuất ra `kits/`.
+   */
+  cast.forEach((character) => {
+  const charRef = character.ref;
   const subject = charRef
     ? "the SAME character from the reference photo"
-    : s.mascotDescription.trim() || "the same original mascot character";
-  const charName = s.mascotName.trim() || "Nhân vật";
+    : character.description.trim() || "the same original mascot character";
+  const charName = character.vi;
+  const multi = cast.length > 1;
 
   // Dáng KHÔNG có `group` (không phải cặp trạng thái) ⇒ cắt thuần theo trần ô.
   chunkBySize(poses, limits.mascot).forEach((chunk, i) => {
@@ -497,7 +568,7 @@ export function buildKitsetContract(s: KitsetContractInput, opts: BuildKitsetOpt
        * và `skel.pose` (slice.py:839). Tên file chỉ là tên ảnh xuất ra.
        * Đánh số chạy XUYÊN các tấm dáng để hai tấm không sinh ra hai `01-pose-*`.
        */
-      file: `${String(i * limits.mascot + k + 1).padStart(2, "0")}-pose-${pose}`,
+      file: `${String(i * limits.mascot + k + 1).padStart(2, "0")}-pose-${multi ? `${character.id}-` : ""}${pose}`,
       vi: `${charName}: ${pose}`,
       spec: `${subject}, ${POSE_SPEC[pose] ?? pose}, full body`,
       // `w` hẹp: một người đứng chiếm ~1/3 bề ngang ô, cao gần trọn ô — số của
@@ -505,13 +576,14 @@ export function buildKitsetContract(s: KitsetContractInput, opts: BuildKitsetOpt
       skel: { shape: "pose" as const, pose, w: 0.3, h: 0.85 },
     }));
     sheets.push({
-      id: seriesId(`pose-${CHARACTER_ID}`, i),
+      id: seriesId(`pose-${character.id}`, i),
       orient: "landscape",
       grid,
       cell_hint: HINT_POSE,
       ...(charRef ? { ref: charRef, note: POSE_NOTE } : {}),
       components: padTo(cells, grid.cols * grid.rows),
     });
+  });
   });
 
   /* ── d. Phong cách (variant) ────────────────────────────────────────────── */
@@ -536,9 +608,7 @@ export function buildKitsetContract(s: KitsetContractInput, opts: BuildKitsetOpt
           secondary: s.secondaryColor,
           refs: brandRefs,
         },
-        characters: s.mascotEnabled
-          ? [{ id: CHARACTER_ID, vi: charName, ref: charRef || null, poses }]
-          : [],
+        characters: cast.map((c) => ({ id: c.id, vi: c.vi, ref: c.ref || null, poses })),
         inspo,
       },
     ],

@@ -12,7 +12,7 @@
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { contractJobs } from "@/lib/types/contract";
@@ -20,7 +20,7 @@ import { WorkflowStoreProvider, createWorkflowStore, resetWorkflowStores } from 
 import { buildKitsetContract } from "../lib/kitset-to-contract";
 import { ContractSyncProvider, type ContractSync } from "../lib/contract-sync";
 import { DownloadKitButton, CopyFigmaButton } from "../components/KitExits";
-import { DrawConfirmDialog, ReviewStep } from "../steps/ReviewStep";
+import { DrawConfirmDialog, ReviewStep, drawableOf, mascotRecapValue } from "../steps/ReviewStep";
 import { BriefStep } from "../steps/BriefStep";
 import { KitsetStep } from "../steps/KitsetStep";
 import { MascotStep, POSES } from "../steps/MascotStep";
@@ -75,6 +75,12 @@ const mount = (ui: React.ReactNode) => {
 const kitsetContract = () => buildKitsetContract(createWorkflowStore(PID).getState());
 /** Số lượt = số job của contract. Tính RA ĐÂY để ca test không hardcode "5". */
 const JOBS = contractJobs(kitsetContract()).length;
+/**
+ * Số thành phần SẼ VẼ THẬT của state mặc định. Trước UI-FIX §2 con số này là 7 (preset
+ * "quay số may mắn") và được gõ thẳng vào ca test; nay mặc định là CẢ THƯ VIỆN, nên nó
+ * phải được TÍNH RA — nếu không thì mỗi lần thư viện thêm một món là test đỏ vì hạ tầng.
+ */
+const DRAWABLE = drawableOf(createWorkflowStore(PID).getState().elements).length;
 
 /** Bọc thêm contract đã dựng, đúng như `WorkflowScreen` phát xuống lúc chạy thật. */
 const mountWithContract = (ui: React.ReactNode) => {
@@ -140,13 +146,14 @@ describe("§W1-5 — dialog Vẽ không còn ô kẹp", () => {
  * chỉ là sai ít hơn 8. Ca dưới đây đòi con số theo job, và đòi luôn rằng nó KHÁC số element.
  */
 describe("§W3-4 — ước lượng theo JOB của contract, không theo số element", () => {
-  it("dòng ước lượng đọc số TẤM (5), không phải số element (7 hay 8)", () => {
+  it("dòng ước lượng đọc số TẤM, không phải số element", () => {
     mountWithContract(<ReviewStep />);
     const dòng = screen.getByText(/lượt ·/);
     expect(dòng.textContent).toContain(`${JOBS} lượt`);
-    expect(JOBS).not.toBe(7);
-    expect(dòng.textContent).not.toContain("7 lượt");
-    expect(dòng.textContent).not.toContain("8 lượt");
+    // Điều ca này khoá: hai đại lượng KHÁC NHAU. Kho mặc định nay là cả thư viện, nên
+    // hằng số cũ (7/8) không còn nghĩa — phép so phải nói bằng chính hai con số ấy.
+    expect(JOBS).not.toBe(DRAWABLE);
+    expect(dòng.textContent).not.toContain(`${DRAWABLE} lượt`);
     expect(dòng.textContent).toContain("ước lượng, có thể lệch");
   });
 
@@ -158,21 +165,22 @@ describe("§W3-4 — ước lượng theo JOB của contract, không theo số e
 
   it("dialog xác nhận báo CÙNG con số với thẻ ước lượng (một nguồn, hai chỗ hiện)", () => {
     mountWithContract(<DrawConfirmDialog open onOpenChange={() => {}} />);
-    const t = screen.getByText(/7 thành phần/).textContent ?? "";
-    expect(t).toContain("7 thành phần");  // số thành phần vẫn là 7 (đã trừ vòng quay mock)
-    expect(t).toContain(`${JOBS} lượt`);   // số LƯỢT là số tấm — hai đại lượng khác nhau
+    const t = screen.getByText(new RegExp(`${DRAWABLE} thành phần`)).textContent ?? "";
+    expect(t).toContain(`${DRAWABLE} thành phần`); // số thành phần đã trừ vòng quay mock
+    expect(t).toContain(`${JOBS} lượt`);            // số LƯỢT là số tấm — hai đại lượng khác nhau
+    expect(DRAWABLE).not.toBe(JOBS);
   });
 
   it("thẻ recap Kitset hiện số đã trừ mock, nói ra chỗ bị trừ VÀ số tấm", () => {
     mountWithContract(<ReviewStep />);
-    expect(screen.getByText("7 thành phần")).toBeTruthy();
+    expect(screen.getByText(`${DRAWABLE} thành phần`)).toBeTruthy();
     expect(screen.getByText(/1 thành phần chưa có bộ khung/)).toBeTruthy();
     expect(screen.getByText(new RegExp(`${JOBS} sheet`))).toBeTruthy();
   });
 
   it("render CÔ LẬP (không có contract) thì KHÔNG bịa số lượt", () => {
     mount(<ReviewStep />);
-    expect(screen.getByText(/7 thành phần · ước lượng/)).toBeTruthy();
+    expect(screen.getByText(new RegExp(`${DRAWABLE} thành phần · ước lượng`))).toBeTruthy();
   });
 });
 
@@ -294,21 +302,146 @@ describe("§W3-5 — chọn bộ khung theo bốn loại sản phẩm", () => {
     const state = createWorkflowStore(PID).getState();
     expect(state.elements.find((element) => element.file === "01-btn-pill-red")?.selected).toBe(!before);
   });
+
+  /**
+   * UI-FIX §2 — MẶC ĐỊNH CHỌN HẾT. Kiểm ở tầng MÀN (không chỉ ở store) vì đúng chỗ
+   * người dùng nhìn: mọi thẻ đang hiện phải mang `aria-pressed="true"`, ở MỌI nhóm.
+   */
+  it("mới vào wizard thì MỌI thành phần của MỌI nhóm đều đã được tick", () => {
+    const { container } = mount(<KitsetStep />);
+    for (const group of ["Nền", "Popup", "UI nhỏ", "Đạo cụ"]) {
+      // Chip nhóm mang dạng "Nền · 2"; thẻ thành phần cũng có thể bắt đầu bằng "Nền",
+      // nên phải khoá cả hình dạng đuôi số.
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${group} · \\d+$`) }));
+      const cards = [...container.querySelectorAll(".compact-element")];
+      expect(cards.length, group).toBeGreaterThan(0);
+      expect(cards.every((card) => card.getAttribute("aria-pressed") === "true"), group).toBe(true);
+    }
+  });
+
+  it("nút 'Bỏ chọn nhóm này' bỏ đúng nhóm đang hiện, không đụng nhóm khác", () => {
+    mount(<KitsetStep />);
+    const before = createWorkflowStore(PID).getState().elements.filter((e) => e.selected).length;
+    fireEvent.click(screen.getByRole("button", { name: /^Nền · \d+$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Bỏ chọn nhóm này/ }));
+    const after = createWorkflowStore(PID).getState().elements.filter((e) => e.selected);
+    expect(after.length).toBeLessThan(before);
+    expect(after.some((e) => e.file === "01-btn-pill-red")).toBe(true);
+    expect(createWorkflowStore(PID).getState().kitsetTouched).toBe(true);
+  });
 });
 
 describe("§W1-7 — mascot có thư viện pose đầy đủ theo nhóm", () => {
-  it("giữ id kỹ thuật trong store và cho chọn pose mới", () => {
+  it("giữ id kỹ thuật trong store; bỏ tick một dáng thì store bớt đúng id đó", () => {
     mount(<MascotStep />);
-    const idle = screen.getAllByRole("button", { name: "Đứng chờ" }).find(b => b.hasAttribute("aria-pressed"))!;
+    const idle = screen.getAllByRole("button", { name: /Đứng chờ/ }).find(b => b.hasAttribute("aria-pressed"))!;
+    // UI-FIX §3a — mặc định chọn HẾT, nên dáng nào cũng đang bật khi mới vào.
     expect(idle.getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: /Chuyển động/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Chạy" }));
-    expect(createWorkflowStore(PID).getState().mascotPoses).toContain("run");
+    fireEvent.click(idle);
+    expect(createWorkflowStore(PID).getState().mascotPoses).not.toContain("idle");
+    fireEvent.click(idle);
+    expect(createWorkflowStore(PID).getState().mascotPoses).toContain("idle");
+  });
+
+  it("mặc định chọn HẾT 19 dáng (bỏ bớt, không phải cộng thêm)", () => {
+    expect(createWorkflowStore(PID).getState().mascotPoses).toHaveLength(POSES.length);
   });
 
   it("có đủ 19 pose của pipeline qua 5 nhóm", () => {
     expect(POSES).toHaveLength(19);
     expect(new Set(POSES.map(p => p.group)).size).toBe(5);
+  });
+
+  /**
+   * UI-FIX §3a — bộ dáng dùng ĐÚNG khuôn của bước "Bộ khung UI". Kiểm bằng HÌNH DẠNG
+   * DOM (class của thẻ + `aria-pressed`), không phải bằng "có gọi component X không":
+   * điều người dùng thấy là hai bước liền nhau trông như một, không phải cây import.
+   */
+  it("thẻ dáng dùng chung khuôn `.compact-element` với bước Bộ khung UI", () => {
+    const { container } = mount(<MascotStep />);
+    const cards = container.querySelectorAll(".compact-element-grid .compact-element");
+    expect(cards.length).toBeGreaterThan(0);
+    expect([...cards].every((card) => card.hasAttribute("aria-pressed"))).toBe(true);
+    // …và KHÔNG còn ngôn ngữ riêng của bản cũ.
+    expect(container.querySelector(".pose-group-tabs")).toBeNull();
+    expect(container.querySelector(".pose-choice-grid")).toBeNull();
+    expect(container.querySelector(".selected-poses")).toBeNull();
+  });
+});
+
+/**
+ * UI-FIX §1 — hai chỗ có hàng "Có nhân vật đại diện" phải là CHECKBOX nằm cùng hàng
+ * với nhãn, không phải công tắc trôi lên một dòng riêng.
+ *
+ * Ca test phát biểu ở dạng KIỂM ĐƯỢC BẰNG DOM: (a) control mang `role="checkbox"`,
+ * (b) nó nằm TRONG chính `<label>` chứa nhãn ⇒ bấm đâu trên hàng cũng đổi trạng thái.
+ */
+describe("UI-FIX §1 — 'Có nhân vật đại diện' là checkbox, nhãn cùng hàng", () => {
+  it.each([
+    ["bước Yêu cầu", () => <BriefStep />],
+    ["bước Mascot", () => <MascotStep />],
+  ])("%s: control là checkbox nằm trong cùng label với nhãn và mô tả", (_name, ui) => {
+    mount(ui());
+    const box = screen.getByRole("checkbox", { name: /Có nhân vật đại diện/ });
+    const row = box.closest("label")!;
+    expect(row).toBeTruthy();
+    expect(row.className).toContain("check-row");
+    expect(row.textContent).toContain("Có nhân vật đại diện");
+    expect(row.querySelector(".check-row-text")).toBeTruthy();
+    // KHÔNG còn công tắc ở hàng này.
+    expect(row.querySelector('[role="switch"]')).toBeNull();
+  });
+
+  it("bỏ tick thì store tắt mascot (và bước Mascot giấu phần nội dung)", () => {
+    mount(<MascotStep />);
+    fireEvent.click(screen.getByRole("checkbox", { name: /Có nhân vật đại diện/ }));
+    expect(createWorkflowStore(PID).getState().mascotEnabled).toBe(false);
+    expect(screen.queryByRole("button", { name: /Thêm nhân vật/ })).toBeNull();
+  });
+});
+
+/** UI-FIX §3b — nhân vật cộng TỪNG CON qua modal, mỗi con một thẻ có nút xoá. */
+describe("UI-FIX §3b — bước Mascot là danh sách thẻ + modal", () => {
+  it("mới vào thì danh sách rỗng và có nút '+ Thêm nhân vật'", () => {
+    mount(<MascotStep />);
+    expect(createWorkflowStore(PID).getState().mascots).toEqual([]);
+    expect(screen.getByRole("button", { name: /Thêm nhân vật/ })).toBeTruthy();
+    // Form inline một-con của bản cũ đã biến mất khỏi thân bước.
+    expect(screen.queryByLabelText("Tên nhân vật")).toBeNull();
+  });
+
+  it("bấm 'Thêm nhân vật' mở MODAL, lưu xong thành một thẻ trong danh sách", () => {
+    mount(<MascotStep />);
+    fireEvent.click(screen.getByRole("button", { name: /Thêm nhân vật/ }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(screen.getByLabelText("Tên nhân vật"), { target: { value: "Mèo bạc hà" } });
+    fireEvent.change(screen.getByLabelText("Mô tả nhân vật"), { target: { value: "Mèo xanh, khăn quàng" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Thêm nhân vật$/ }));
+
+    const mascots = createWorkflowStore(PID).getState().mascots;
+    expect(mascots).toHaveLength(1);
+    expect(mascots[0]!.name).toBe("Mèo bạc hà");
+    // Ba trường cũ là TIẾNG VỌNG của con đầu — contract và recap vẫn đọc được.
+    expect(createWorkflowStore(PID).getState().mascotName).toBe("Mèo bạc hà");
+    expect(createWorkflowStore(PID).getState().mascotDescription).toBe("Mèo xanh, khăn quàng");
+  });
+
+  it("mỗi thẻ có nút Sửa và nút Xoá; xoá thì con đó rời danh sách", () => {
+    createWorkflowStore(PID).getState().addMascot({ name: "Sóc VCB", description: "" });
+    mount(<MascotStep />);
+    expect(screen.getByRole("button", { name: "Sửa Sóc VCB" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Xoá Sóc VCB" }));
+    fireEvent.click(screen.getByRole("button", { name: /Xoá nhân vật/ }));
+    expect(createWorkflowStore(PID).getState().mascots).toEqual([]);
+    expect(createWorkflowStore(PID).getState().mascotName).toBe("");
+  });
+
+  it("recap bước Kiểm tra đếm được nhiều nhân vật, không chỉ nói tên con đầu", () => {
+    const s = createWorkflowStore(PID).getState();
+    s.addMascot({ name: "Sóc", description: "" });
+    expect(mascotRecapValue(createWorkflowStore(PID).getState())).toBe("Sóc");
+    createWorkflowStore(PID).getState().addMascot({ name: "Mèo", description: "" });
+    expect(mascotRecapValue(createWorkflowStore(PID).getState())).toBe("2 nhân vật");
   });
 });
 

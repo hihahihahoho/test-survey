@@ -1,6 +1,6 @@
 import type { LibElement } from "@/features/design/library/lib/types";
 import { CHROMA_PRESETS, contractVariants, type Contract } from "@/lib/types/contract";
-import type { WorkflowState } from "./model";
+import { newMascotId, type WorkflowMascot, type WorkflowState } from "./model";
 
 function fileName(path: string | null | undefined): string {
   if (!path) return "";
@@ -51,6 +51,12 @@ export function workflowPatchFromContract(
   const inspo = (variant?.inspo ?? []).map(fileName).filter(Boolean).map((name) => ({ name, kind: "style" as const }));
   const brandRefs = (variant?.brand?.refs ?? []).map(fileName).filter(Boolean).map((name) => ({ name }));
   const mascotRef = fileName(character?.ref);
+  /* Contract vốn giữ MẢNG nhân vật; bản cũ chỉ đọc con đầu rồi bỏ phần còn lại.
+     Nay nhập đủ — bước Mascot đã là danh sách nên không còn chỗ nào phải cắt bớt. */
+  const mascots: WorkflowMascot[] = (variant?.characters ?? []).map((c): WorkflowMascot => {
+    const ref = fileName(c.ref);
+    return { id: newMascotId(), name: c.vi ?? "", description: "", ref: ref ? { name: ref } : null };
+  });
 
   return {
     kitName: projectName,
@@ -70,9 +76,13 @@ export function workflowPatchFromContract(
       cell: element.cell === "portrait" ? "dọc" : element.skel.shape === "full" ? "tràn nền" : "ngang",
       selected: true,
     })),
+    /* Kitset nhập từ contract là một danh sách CÓ CHỦ Ý. Bật cờ để `KitsetStep` không
+       tick thêm 42 món của kho lên trên nó (UI-FIX §2). */
+    kitsetTouched: true,
     mascotEnabled: poses.length > 0 || Boolean(character),
     mascotName: character?.vi ?? "",
     mascotRef: mascotRef ? { name: mascotRef } : null,
+    mascots,
     mascotPoses: [...poses],
   };
 }

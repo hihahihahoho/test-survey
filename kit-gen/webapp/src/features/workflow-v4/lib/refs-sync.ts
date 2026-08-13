@@ -58,18 +58,22 @@ export interface KitsetRefs {
   inspo: string[];
   brand: string[];
   character: string | null;
+  /** MỌI ảnh `char-*` trên đĩa — mỗi nhân vật của bước Mascot tự nhận ảnh của nó. */
+  characters: string[];
 }
 
 export function toKitsetRefs(groups: RefGroups): KitsetRefs {
+  const characters = [...groups.character]
+    .sort((a, b) => String(b.mtime ?? "").localeCompare(String(a.mtime ?? "")))
+    .map((r) => refPath(r.name))
+    .filter(Boolean);
   return {
     inspo: groups.inspo.map((r) => refPath(r.name)).filter(Boolean),
     brand: groups.brand.map((r) => refPath(r.name)).filter(Boolean),
-    // Contract chỉ có MỘT `character.ref`. Upload thêm ảnh nhân vật = thay ảnh đang dùng,
-    // nên lấy bản mới nhất theo `mtime` (agent luôn trả `mtime`, `String()` so được ISO).
-    character:
-      groups.character.length > 0
-        ? refPath([...groups.character].sort((a, b) => String(b.mtime ?? "").localeCompare(String(a.mtime ?? "")))[0]!.name)
-        : null,
+    // Bản nháp MỘT mascot không ghi tên ref của agent, nên nó chỉ biết "ảnh nhân vật mới
+    // nhất" — giữ nguyên đường lùi ấy. Danh sách nhiều nhân vật dùng `characters`.
+    character: characters[0] ?? null,
+    characters,
   };
 }
 
@@ -79,6 +83,12 @@ export interface WorkflowRefsApi {
   ready: boolean;
   pending: boolean;
   add: (files: FileList | File[] | null, kind: WorkflowRefKind) => void;
+  /**
+   * Upload MỘT ảnh và trả về **tên agent đã đặt trên đĩa** (`char-meo.png`), hoặc `null`
+   * khi hỏng. Modal "Thêm nhân vật" cần đúng cái tên đó để gắn ảnh cho riêng con nó —
+   * `add()` chỉ bắn đi rồi quên, nên không dùng được cho việc này.
+   */
+  addOne: (file: File, kind: WorkflowRefKind) => Promise<string | null>;
   remove: (name: string) => void;
 }
 
@@ -121,6 +131,20 @@ export function useWorkflowRefs(projectId: string): WorkflowRefsApi {
     [addRef],
   );
 
+  const addOne = React.useCallback(
+    async (file: File, kind: WorkflowRefKind): Promise<string | null> => {
+      try {
+        const saved = await addRef.mutateAsync({ file, kind, hintName: file.name });
+        toastSuccess("Đã lưu 1 ảnh tham khảo");
+        return saved.name;
+      } catch (err) {
+        toastError(err, {});
+        return null;
+      }
+    },
+    [addRef],
+  );
+
   const remove = React.useCallback(
     (name: string) => {
       removeRef.mutate(
@@ -138,6 +162,7 @@ export function useWorkflowRefs(projectId: string): WorkflowRefsApi {
     ready: list.isSuccess,
     pending: addRef.isPending || removeRef.isPending,
     add,
+    addOne,
     remove,
   };
 }
