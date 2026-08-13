@@ -22,6 +22,10 @@ export function shortenPath(p) {
   // đường dẫn tuyệt đối của user khác / /private/var… → chỉ giữ 2 đoạn cuối
   s = s.replace(/(^|[\s"'(=])\/(?:Users|home)\/[^/\s"')]+((?:\/[^\s"')]+)*)/g,
     (_m, pre, rest) => pre + "~" + (rest || ""))
+  // gốc temp (/tmp, /private/…, /var/folders/…) không thuộc HOME nên nhánh trên
+  // bỏ sót → rút về «…/2 đoạn cuối» để không bao giờ trả path tuyệt đối ra client
+  s = s.replace(/(^|[\s"'(=])\/(?:tmp|private|var)((?:\/[^\s"')]+)+)/g,
+    (_m, pre, rest) => pre + "…/" + rest.split("/").filter(Boolean).slice(-2).join("/"))
   return s
 }
 
