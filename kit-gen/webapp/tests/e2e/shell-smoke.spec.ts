@@ -244,8 +244,14 @@ test("@visual an internal page keeps only Back home and runtime status", async (
   }
   await expect(page.getByRole("button", { name: "Tất cả thành phẩm" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Tất cả thành phẩm", exact: true })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Ảnh thật" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Skeleton" })).toBeVisible();
+  /* Thanh "Ảnh thật | Skeleton" bọc ngoài ĐÃ BỎ: nó trùng nhãn đầu với thanh
+     "Ảnh thật | Ảnh gốc" của thẻ kết quả ngay dưới (hai hàng giống hệt, cách nhau ~8px),
+     và Skeleton vốn đã có đích riêng trong sidebar. Dự án của fixture này chưa có lượt
+     tạo nào, nên trang giờ đi thẳng vào ô rỗng — không còn hàng tab giả nào ở trên.
+     Luật "đúng một thanh segmented" khoá ở `results-visible-and-reachable.spec.ts`,
+     nơi có dữ liệu ảnh thật để hàng tab kia hiện ra. */
+  await expect(page.getByRole("tab", { name: "Skeleton" })).toHaveCount(0);
+  await expect(page.getByText("Chưa có ảnh nào")).toBeVisible();
 
   await page.screenshot({ path: testInfo.outputPath("project-internal-dark.png"), fullPage: true, animations: "disabled" });
 });

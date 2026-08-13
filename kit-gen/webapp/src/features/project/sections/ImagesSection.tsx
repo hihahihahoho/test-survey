@@ -1,14 +1,16 @@
 import * as React from "react";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { contractJobs, type Contract, type JobStatusValue } from "@/lib/types";
-import { SkeletonPreview } from "@/features/design/preview";
+import { contractJobs, type Contract, type JobStatusValue, type Project } from "@/lib/types";
+import type { Gate } from "@/features/projects/lib/gate";
 import { GeneratedResults } from "@/features/workflow-v4/components/GeneratedResults";
 import { DownloadKitButton, CopyFigmaButton } from "@/features/workflow-v4/components/KitExits";
 import { GroupChips } from "@/features/workflow-v4/components/GroupChips";
 import { categoryOfSheet, type ResultGroup } from "@/features/workflow-v4/lib/generated-results";
 import type { ProjectImageGroup } from "@/routes/search-schemas";
+import { buildMatrix } from "../lib/matrix";
+import { staleWarning } from "../lib/next-actions";
+import { StaleBanner } from "../components/StaleBanner";
 
 /**
  * ẢNH ĐÃ TẠO — mục đầu tiên của sidebar dự án, và là nơi wizard đổ người dùng vào ngay
@@ -43,22 +45,38 @@ export function groupCategory(group: ProjectImageGroup): ResultGroup {
 }
 
 export function ImagesSection({
-  projectId, kitName, group, onGroupChange, contract, jobStates, readOnly, onGenerate,
+  projectId, kitName, group, onGroupChange, contract, project, gate, jobStates, readOnly, onGenerate,
 }: {
   projectId: string;
   kitName: string;
   group: ProjectImageGroup;
   onGroupChange: (group: ProjectImageGroup) => void;
   contract: Contract;
+  /** Dự án như agent thấy — nguồn của `state.jobs`, tức là của dải "cần tạo lại". */
+  project: Project;
+  gate: Gate;
   jobStates: Record<string, JobStatusValue>;
   readOnly: boolean;
   onGenerate: (jobs: string[]) => void;
 }) {
   const category = groupCategory(group);
   const title = groupLabel(group);
-  const sheets = React.useMemo(
-    () => contract.sheets.filter((sheet) => category === "all" || categoryOfSheet(sheet.id) === category),
-    [category, contract.sheets],
+  /**
+   * §BUG-2 — DẤU "CẦN TẠO LẠI" BỀN VỮNG.
+   *
+   * Lưu cài đặt xong mà chưa sinh lại ảnh là một trạng thái HỢP LỆ và có thể kéo dài
+   * nhiều ngày; trước đây nó không được nói ra ở đâu cả, nên người dùng tải về một bộ
+   * kit cắt từ contract mới nhưng ảnh của contract cũ. Agent đã tính sẵn điều này
+   * (`state.jobs[job] === "stale"`: contract mtime > raw mtime) — ở đây chỉ đọc.
+   *
+   * Nó BỀN vì nguồn là đĩa, không phải một biến trong RAM: F5, đóng tab, mở máy khác
+   * đều thấy cùng một dải, và nó chỉ tắt khi ảnh đã thật sự được sinh lại.
+   *
+   * `StaleBanner` + `staleWarning` vốn đã viết xong cho màn S2 cũ và chưa nơi nào gắn.
+   */
+  const warning = React.useMemo(
+    () => staleWarning(project, buildMatrix(contract, project)),
+    [contract, project],
   );
   const jobs = React.useMemo(
     () => contractJobs(contract)
@@ -73,7 +91,7 @@ export function ImagesSection({
         <div>
           <p className="eyebrow">Ảnh đã tạo</p>
           <h1 className="text-display text-fg-strong">{title}</h1>
-          <p className="mt-1 text-body text-fg-muted">Xem ảnh thật, kiểm tra skeleton và tạo lại đúng nhóm đang sửa.</p>
+          <p className="mt-1 text-body text-fg-muted">Xem ảnh đã cắt, đối chiếu sheet gốc và tạo lại đúng nhóm đang sửa.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* §W3-7 — hai cửa ra MANG PHẦN THƯỞNG. Nhà cũ của chúng là bước ⑥ của wizard,
@@ -87,39 +105,27 @@ export function ImagesSection({
         </div>
       </header>
 
+      <StaleBanner
+        warning={warning}
+        gate={gate}
+        onGen={() => onGenerate(warning.staleJobs)}
+        onSlice={null}
+      />
+
       <GroupChips
         groups={GROUPS.map((item) => ({ id: item.id, label: item.label, count: 0 }))}
         value={group}
         onChange={(id) => onGroupChange(id as ProjectImageGroup)}
       />
 
-      <Tabs defaultValue="images">
-        <TabsList>
-          <TabsTrigger value="images">Ảnh thật</TabsTrigger>
-          <TabsTrigger value="skeleton">Skeleton</TabsTrigger>
-        </TabsList>
-        <TabsContent value="images">
-          <GeneratedResults projectId={projectId} contract={contract} jobStates={jobStates} category={category} readOnly={readOnly} />
-        </TabsContent>
-        <TabsContent value="skeleton">
-          <div className="grid gap-4 lg:grid-cols-2">
-            {sheets.map((sheet) => (
-              <article key={sheet.id} className="overflow-hidden rounded-4 border border-line-subtle bg-surface">
-                <div className="border-b border-line-subtle px-4 py-3">
-                  <h2 className="text-label text-fg-strong">{sheet.id.replaceAll("-", " ")}</h2>
-                  <p className="text-caption text-fg-muted">
-                    {sheet.components.filter((component) => component.skel?.shape !== "empty").length} thành phần · {sheet.grid.cols} × {sheet.grid.rows}
-                  </p>
-                </div>
-                <div className="p-4"><SkeletonPreview sheet={sheet} showIndex showSafeFrame /></div>
-              </article>
-            ))}
-          </div>
-          {sheets.length === 0
-            ? <p className="rounded-4 border border-dashed border-line-subtle p-8 text-center text-body text-fg-muted">Nhóm này chưa có skeleton trong bản thiết kế.</p>
-            : null}
-        </TabsContent>
-      </Tabs>
+      {/* ══ MỘT THANH SEGMENTED, KHÔNG PHẢI HAI ═══════════════════════════════
+          Ở đây từng có thanh "Ảnh thật | Skeleton" bọc ngoài, đè ngay trên thanh
+          "Ảnh thật | Ảnh gốc" của `GeneratedResults`: hai hàng giống hệt nhau cách
+          nhau ~8px, cùng mở đầu bằng chữ "Ảnh thật". Skeleton đã có ĐÍCH RIÊNG trong
+          sidebar (`?section=skeleton`) nên thanh ngoài vừa rối vừa là lối vào thứ hai
+          cho cùng một thứ. Lưới xem bộ khung dọn sang trang Skeleton UI
+          (`SkeletonSheetGrid`); trang này chỉ còn nói về ẢNH. */}
+      <GeneratedResults projectId={projectId} contract={contract} jobStates={jobStates} category={category} readOnly={readOnly} />
     </section>
   );
 }

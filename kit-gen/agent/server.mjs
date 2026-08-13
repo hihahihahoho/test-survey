@@ -50,7 +50,12 @@ const DEFAULT_LIMITS = { json: 25 << 20, upload: 200 << 20, refFile: 20 << 20 }
  *  An toàn vì: (a) vẫn kiểm Host + rate limit; (b) các đường này KHÔNG trả CORS header nên
  *  trang khác origin không đọc được nội dung; (c) bridge.html chỉ postMessage tới allowlist. */
 const PUBLIC_PATHS = ["/bridge.html", "/app", "/favicon.ico"]
-const isPublicPath = p => PUBLIC_PATHS.some(x => p === x || p.startsWith(x + "/") || p.startsWith(x + "?"))
+/** Gốc site — KHỚP CHÍNH XÁC, không phải tiền tố. Nếu để "/" vào PUBLIC_PATHS ở trên thì
+ *  luật `startsWith(x + "/")` biến "//api/..." thành công khai; ở đây chỉ đúng một chuỗi
+ *  "/" được miễn, và thứ duy nhất nó phục vụ là 302 sang /app/ (routes/app.mjs). */
+const ROOT_PATHS = new Set(["/"])
+const isPublicPath = p =>
+  ROOT_PATHS.has(p) || PUBLIC_PATHS.some(x => p === x || p.startsWith(x + "/") || p.startsWith(x + "?"))
 
 const ADJ = ["gray", "quiet", "brave", "warm", "swift", "calm", "bright", "clever"]
 const ANIMAL = ["otter", "heron", "ibis", "lynx", "marten", "gecko", "sparrow", "tapir"]

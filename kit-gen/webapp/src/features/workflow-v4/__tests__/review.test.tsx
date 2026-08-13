@@ -262,9 +262,14 @@ describe("§W1-2 — mạch wizard kết thúc ở màn dự án, không ở m�
     const src = readFileSync(join(SRC, "features/workflow-v4/WorkflowScreen.tsx"), "utf8");
     // §W3-2: rời màn là mốc phải ghi đĩa — không được để nhịp debounce nuốt thay đổi cuối.
     expect(src).toContain("sync.saveNow()");
-    // `completed: true` phải ghi TRƯỚC khi điều hướng, nếu không màn dự án đá ngược về wizard.
-    const done = src.indexOf("completed: true");
-    const go = src.indexOf('navigate({ to: "/p/$projectId"');
+    /* Đối chiếu trong PHẠM VI hàm xác nhận vẽ, không phải cả file.
+       §B2 thêm nút "Xem ảnh đã tạo" ở hero — nó cũng `navigate({ to: "/p/$projectId"…})`
+       và đứng TRƯỚC trong file, nên so bằng `indexOf` trên cả file là bắt nhầm cái nút
+       đó rồi báo đỏ một thứ không hề sai. Thứ ca này thật sự bảo vệ là THỨ TỰ bên trong
+       `onConfirm`: đóng dấu `completed: true` xong mới rời wizard. */
+    const confirmBody = src.slice(src.indexOf("<DrawConfirmDialog"));
+    const done = confirmBody.indexOf("completed: true");
+    const go = confirmBody.indexOf('navigate({ to: "/p/$projectId"');
     expect(done).toBeGreaterThan(-1);
     expect(go).toBeGreaterThan(done);
     expect(src).toContain('search: { section: "images" }');

@@ -24,6 +24,8 @@ export const PATHS = {
 export interface ProjectNav {
   /** Mở project (S2 tổng quan). */
   open: (id: string) => void;
+  /** Mở THẲNG trang kết quả `?section=images` — đích của một dự án đã có ảnh. */
+  openImages: (id: string) => void;
   openWizard: (id: string) => void;
   navigateCanvas: (id: string) => void;
   /** Sau khi tạo template `blank`: việc tiếp theo chắc chắn là chọn element (§4.1-4). */
@@ -64,9 +66,57 @@ export function openKitWith(nav: ProjectNav, project: { id: string; tags?: unkno
   else nav.open(project.id);
 }
 
+/** Mảnh `Project` mà `hasGeneratedOutput` thật sự đọc — khai tường minh để test khỏi dựng cả object. */
+export interface GeneratedOutputInput {
+  stats?:
+    | {
+        rawPresent?: number | undefined;
+        kitsCut?: number | undefined;
+        lastRun?: { id?: string | undefined } | null | undefined;
+      }
+    | undefined;
+}
+
+/**
+ * DỰ ÁN NÀY ĐÃ CÓ THÀNH PHẨM CHƯA?
+ *
+ * Ba nguồn, gặp cái nào đúng là đủ (agent đời cũ có thể thiếu một trong ba):
+ *   · `kitsCut`     — số ô đã cắt, thứ tab "Ảnh thật" vẽ ra
+ *   · `rawPresent`  — số sheet thô đã có, thứ tab "Ảnh gốc" vẽ ra
+ *   · `lastRun`     — đã từng chạy một lượt tạo
+ *
+ * ⚠️ ĐÂY LÀ CÂU HỎI ĐÚNG, `workflow.completed` LÀ CÂU HỎI SAI. Cờ `completed` chỉ nói
+ * "bản nháp wizard đã đóng dấu hay chưa", và `WorkflowScreen` ghi `completed: false`
+ * mỗi lần store đổi (autosave 600ms) — nên chỉ cần mở lại wizard của một dự án đã gen
+ * xong là nó thành "chưa xong" vĩnh viễn. Lấy cờ đó làm cửa điều hướng chính là cách
+ * một dự án đầy ảnh bị đá về bước "Kiểm tra" như dự án trắng.
+ */
+export function hasGeneratedOutput(project: GeneratedOutputInput | null | undefined): boolean {
+  const s = project?.stats;
+  if (!s) return false;
+  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0);
+  return n(s.kitsCut) > 0 || n(s.rawPresent) > 0 || Boolean(s.lastRun);
+}
+
+/**
+ * MỞ MỘT DỰ ÁN TỪ MÀN HOME — vào phòng có đồ, không vào phòng trống.
+ *
+ * Dự án đã có ảnh ⇒ trang kết quả `?section=images` (thứ người dùng bấm thẻ để xem).
+ * Dự án chưa gen bao giờ ⇒ wizard, vì ở đó chưa có gì để xem cả.
+ */
+export function openProjectWith(
+  nav: ProjectNav,
+  project: { id: string; tags?: unknown } & GeneratedOutputInput,
+): void {
+  if (readMode(project) === "canvas") nav.navigateCanvas(project.id);
+  else if (hasGeneratedOutput(project)) nav.openImages(project.id);
+  else nav.open(project.id);
+}
+
 export function createNav(navigate: Navigate): ProjectNav {
   return {
     open: (id) => void navigate({ to: "/p/$projectId", params: { projectId: id } }),
+    openImages: (id) => void navigate({ to: "/p/$projectId", params: { projectId: id }, search: { section: "images" } }),
     openWizard: (id) => void navigate({ to: "/k/$projectId", params: { projectId: id } }),
     navigateCanvas: (id) => void navigate({ to: "/k/$projectId/canvas", params: { projectId: id } }),
     openDesign: (id, tab = "sheets") => void navigate({ to: "/p/$projectId/design", params: { projectId: id }, search: { tab } }),

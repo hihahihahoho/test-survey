@@ -1,12 +1,13 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Images, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingState, ErrorState } from "@/components/common";
 import { useAgentStatus, useElementLib, useProject, useSaveWorkflowDraft, useUserLibrary, useWorkflowDraft } from "@/lib/hooks";
 import { useGenerateRun } from "@/features/runs";
 import { toast } from "@/components/ui/sonner";
 import { fromAgentLib } from "@/features/design/library/lib/source";
+import { hasGeneratedOutput } from "@/features/projects/lib/nav";
 import { hydrateWorkflowStore, useWorkflowStore, useWorkflowStoreApi, workflowDraftOf, WorkflowStoreProvider } from "./lib/model";
 import { ContractSyncProvider, useContractSync } from "./lib/contract-sync";
 import { toKitsetRefs, useWorkflowRefs } from "./lib/refs-sync";
@@ -150,6 +151,20 @@ function WorkflowBody({ projectId }: { projectId: string }) {
           )}
         </div>
         <div className="workflow-hero-status">
+          {/* ══ §B2 — ĐƯỜNG VỀ VỚI ẢNH ĐÃ CÓ ═══════════════════════════════════
+              Wizard là màn "chưa có gì", nên nó chưa từng có một link nào trỏ sang
+              trang kết quả. Với dự án đã gen xong thì đó là lỗ hổng thật: mở
+              `/k/:id` (bookmark, nút Back, hay bị đá về) là mất hẳn đường tới
+              `/p/:id?section=images` — kết quả vẫn nằm nguyên trên đĩa mà không ai
+              vào xem được. Nút chỉ hiện khi ĐÃ CÓ ảnh; dự án trắng không thấy nó. */}
+          {hasGeneratedOutput(project.data) && (
+            <Button
+              variant="secondary"
+              onClick={() => void navigate({ to: "/p/$projectId", params: { projectId }, search: { section: "images" } })}
+            >
+              <Images aria-hidden />Xem ảnh đã tạo
+            </Button>
+          )}
           <SyncBadge sync={sync} />
         </div>
       </div>

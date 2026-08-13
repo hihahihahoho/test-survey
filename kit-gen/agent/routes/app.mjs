@@ -42,6 +42,21 @@ export function isHashedAsset(rel) {
 }
 
 export function register(r) {
+  /* ── GỐC "/" → /app/ ──────────────────────────────────────────────────────
+     Người dùng gõ `localhost:8765` vào thanh địa chỉ (thứ họ đọc được trong log cài
+     đặt) và nhận về một cục JSON `ORIGIN_NOT_ALLOWED` — trông y như app hỏng. Không
+     có route nào cho "/" nên request rơi thẳng vào lớp bảo mật rồi chết ở đó.
+
+     Redirect 302, CHỈ cho GET/HEAD. Contract bảo mật KHÔNG đổi một chữ nào:
+       · "/" nằm trong ROOT_PATHS của server.mjs ⇒ được miễn Origin/X-KitGen-Client
+         ĐÚNG như "/app" và "/bridge.html" đã được miễn, với cùng ba điều kiện của
+         `checkOrigin` (phương thức an toàn + Sec-Fetch-Site null/none/same-origin).
+         Trang khác origin nhúng nó làm iframe vẫn ăn 403 như trước.
+       · `/api/*` KHÔNG hề đụng tới: miễn trừ là so khớp CHÍNH XÁC "/", không phải
+         tiền tố; và thứ trả về là một Location trống rỗng, không phải dữ liệu.
+       · POST / vẫn 405 (router khớp path, sai method) chứ không được miễn gì. */
+  r.get("/", () => ({ status: 302, headers: { Location: "/app/" } }))
+
   // `/app` và `/app/` cho ra cùng danh sách segment nên phải phân biệt bằng pathname thật
   r.get("/app/*", async ctx => {
     if (ctx.url.pathname === "/app") return { status: 302, headers: { Location: "/app/" } }

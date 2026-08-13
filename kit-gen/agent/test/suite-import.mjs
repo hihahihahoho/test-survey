@@ -124,6 +124,42 @@ export async function run({ api, call, agentDir, wsRoot }) {
     eq(r.json.error.code, "BAD_HOST", "code")
   })
 
+  /* ── §B3 (blind-test 2.1.17) · GỐC "/" ĐƯA VÀO APP ────────────────────────
+     Người dùng gõ `localhost:8765` và nhận về JSON ORIGIN_NOT_ALLOWED — trông y như
+     app hỏng, dù app đang chạy ngon ở /app/. Ba ca dưới khoá cả hành vi MỚI lẫn
+     phần contract bảo mật KHÔNG được đổi theo. */
+  describe("§B3 · gốc / đưa vào /app/")
+
+  await it("gõ localhost:PORT vào thanh địa chỉ ⇒ 302 sang /app/, KHÔNG phải JSON lỗi", async () => {
+    // Điều hướng top-level thật của trình duyệt: không Origin, Sec-Fetch-Site: none.
+    const r = await call("GET", "/", {
+      headers: { host: CLIENT.host, "sec-fetch-site": "none", "sec-fetch-mode": "navigate" },
+    })
+    eq(r.status, 302, "phải 302 — 403 nghĩa là §B3 hồi quy")
+    eq(r.headers.location, "/app/", "Location")
+  })
+
+  await it("curl trần vào / cũng được đưa sang /app/ (không cần --allow-cli)", async () => {
+    const r = await call("GET", "/", { headers: { host: CLIENT.host } })
+    eq(r.status, 302, "status")
+    eq(r.headers.location, "/app/", "Location")
+  })
+
+  await it("miễn trừ của / KHÔNG lan sang /api/* — contract bảo mật giữ nguyên", async () => {
+    for (const p of ["/api/projects", "/health"]) {
+      const r = await call("GET", p, { headers: { host: CLIENT.host, "sec-fetch-site": "none" } })
+      eq(r.status, 403, `${p} vẫn phải 403`)
+      eq(r.json.error.code, "ORIGIN_NOT_ALLOWED", "code")
+    }
+  })
+
+  await it("/ chỉ mở cho phương thức an toàn và cho điều hướng, không cho trang khác nhúng", async () => {
+    const cross = await call("GET", "/", { headers: { host: CLIENT.host, "sec-fetch-site": "cross-site" } })
+    eq(cross.status, 403, "trang khác origin nhúng / vẫn bị chặn")
+    const post = await call("POST", "/", { headers: { host: CLIENT.host }, body: { x: 1 } })
+    eq(post.status, 403, "POST / không được miễn Origin")
+  })
+
   describe("bundle /app/ và bridge")
   await it("GET /app/ phục vụ được (same-origin, không cần header client)", async () => {
     const r = await call("GET", "/app/", { headers: { host: CLIENT.host, origin: `http://127.0.0.1:${PORT}` } })

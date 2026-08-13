@@ -8,7 +8,7 @@ import { Images, PanelsTopLeft, Search, Settings, Sparkles, Trash2 } from "lucid
 import type { Project } from "@/lib/types";
 
 import { gateOf, useNarrowViewport } from "./lib/gate";
-import { createNav } from "./lib/nav";
+import { createNav, openProjectWith } from "./lib/nav";
 import { useCreateIntent } from "./lib/useCreateIntent";
 import { useGridKeys } from "./lib/useGridKeys";
 import { useProjectDialogs } from "./lib/useProjectDialogs";
@@ -105,7 +105,10 @@ export function ProjectsScreen(_props: ScreenProps) {
         return;
       }
       touchRecent(p.id);
-      nav.open(p.id);
+      /* §B2 — dự án đã có ảnh thì thẻ ở Home mở THẲNG trang kết quả. Trước đây mọi thẻ
+         đều đi `/p/:id` rồi để màn dự án tự quyết theo cờ `workflow.completed`; cờ đó
+         bị autosave của wizard lật về `false` nên dự án đầy ảnh bị đá sang wizard. */
+      openProjectWith(nav, p);
     },
     [dialogs, nav, touchRecent],
   );

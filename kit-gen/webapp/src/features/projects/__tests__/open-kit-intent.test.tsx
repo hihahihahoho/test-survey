@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render } from "@testing-library/react";
-import { createNav, openKitWith, type ProjectNav } from "../lib/nav";
+import { createNav, hasGeneratedOutput, openKitWith, openProjectWith, type ProjectNav } from "../lib/nav";
 import { intentOf, useCreateIntent, type CreateIntent } from "../lib/useCreateIntent";
 
 const SRC = resolve(process.cwd(), "src");
@@ -19,6 +19,7 @@ afterEach(cleanup);
 
 const fakeNav = (): ProjectNav => ({
   open: vi.fn(),
+  openImages: vi.fn(),
   openWizard: vi.fn(),
   navigateCanvas: vi.fn(),
   openDesign: vi.fn(),
@@ -51,10 +52,66 @@ describe("§W1-8 — mở bộ kit là vào ĐÚNG PHÒNG của nó", () => {
     expect(navigate).toHaveBeenCalledWith({ to: "/k/$projectId/canvas", params: { projectId: "kit-canvas" } });
   });
 
-  it("màn Home luôn mở tổng quan dự án", () => {
+  /* §B2 — luật cũ "màn Home LUÔN mở tổng quan dự án" đã bị blind-test 2.1.17 bác bỏ:
+     `/p/:id` tự đá về wizard theo cờ `workflow.completed`, mà cờ đó bị autosave của
+     wizard lật về false ⇒ dự án đầy ảnh mở ra thành bước "Kiểm tra" trắng trơn. Home
+     nay tự chọn đích bằng thứ có thật trên đĩa. Ca ⚙️/🎨 của §W1-8 giữ nguyên. */
+  it("màn Home chọn đích bằng `openProjectWith`, không tự ghép đường dẫn", () => {
     const src = readFileSync(join(SRC, "features/projects/ProjectsScreen.tsx"), "utf8");
-    expect(src).toContain("nav.open(p.id)");
+    expect(src).toContain("openProjectWith(nav, p)");
     expect(src).not.toContain("openKitWith(nav, p)");
+  });
+});
+
+describe("§B2 — mở dự án ĐÃ CÓ ẢNH phải vào thẳng trang kết quả", () => {
+  it("`hasGeneratedOutput` đọc cả ba dấu vết trên đĩa", () => {
+    expect(hasGeneratedOutput({ stats: { kitsCut: 12 } })).toBe(true);
+    expect(hasGeneratedOutput({ stats: { rawPresent: 5 } })).toBe(true);
+    expect(hasGeneratedOutput({ stats: { lastRun: { id: "r-0002" } } })).toBe(true);
+    expect(hasGeneratedOutput({ stats: { kitsCut: 0, rawPresent: 0, lastRun: null } })).toBe(false);
+    expect(hasGeneratedOutput({})).toBe(false);
+    expect(hasGeneratedOutput(null)).toBe(false);
+    expect(hasGeneratedOutput(undefined)).toBe(false);
+  });
+
+  it("dự án đã gen xong ⇒ `openImages`, KHÔNG phải wizard", () => {
+    const nav = fakeNav();
+    openProjectWith(nav, { id: "kit-a", tags: ["kg-workflow"], stats: { kitsCut: 12 } });
+    expect(nav.openImages).toHaveBeenCalledWith("kit-a");
+    expect(nav.open).not.toHaveBeenCalled();
+  });
+
+  it("dự án chưa gen bao giờ ⇒ vẫn đi đường cũ `/p/:id`", () => {
+    const nav = fakeNav();
+    openProjectWith(nav, { id: "kit-moi", tags: [], stats: { kitsCut: 0, rawPresent: 0, lastRun: null } });
+    expect(nav.open).toHaveBeenCalledWith("kit-moi");
+    expect(nav.openImages).not.toHaveBeenCalled();
+  });
+
+  it("bộ kit 🎨 vẫn về bàn làm việc dù đã có ảnh (§W1-8 không bị đè)", () => {
+    const nav = fakeNav();
+    openProjectWith(nav, { id: "kit-canvas", tags: ["kg-canvas"], stats: { kitsCut: 12 } });
+    expect(nav.navigateCanvas).toHaveBeenCalledWith("kit-canvas");
+    expect(nav.openImages).not.toHaveBeenCalled();
+  });
+
+  it("`openImages` trỏ đúng `/p/:id?section=images`", () => {
+    const navigate = vi.fn();
+    createNav(navigate as never).openImages("kit-a");
+    expect(navigate).toHaveBeenCalledWith({
+      to: "/p/$projectId", params: { projectId: "kit-a" }, search: { section: "images" },
+    });
+  });
+
+  it("màn dự án CHỈ đá về wizard khi chưa có ảnh nào", () => {
+    const src = readFileSync(join(SRC, "features/project/ProjectScreen.tsx"), "utf8");
+    expect(src).toContain("!hasGeneratedOutput(project.data)");
+  });
+
+  it("wizard của dự án đã gen có đường sang trang kết quả", () => {
+    const src = readFileSync(join(SRC, "features/workflow-v4/WorkflowScreen.tsx"), "utf8");
+    expect(src).toContain("hasGeneratedOutput(project.data)");
+    expect(src).toContain("Xem ảnh đã tạo");
   });
 });
 

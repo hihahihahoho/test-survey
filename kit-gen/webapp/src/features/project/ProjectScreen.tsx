@@ -32,8 +32,10 @@ import {
   type ProjectSheetLimits, type SheetLimitKey,
 } from "@/features/workflow-v4/lib/model";
 import { gateOf, useNarrowViewport } from "@/features/projects/lib/gate";
+import { hasGeneratedOutput } from "@/features/projects/lib/nav";
 import { mergeElements, userUiElements } from "@/features/workflow-v4/lib/user-library";
 import { ImagesSection } from "./sections/ImagesSection";
+import { SkeletonSheetGrid } from "./sections/SkeletonSheetGrid";
 import { ProjectSettingsDialog } from "./components/ProjectSettingsDialog";
 import { SaveBar } from "./components/SaveBar";
 import { UnsavedGuardDialog } from "./components/UnsavedGuardDialog";
@@ -95,8 +97,23 @@ function ProjectManager({ projectId }: { projectId: string }) {
   const [generateJobs, setGenerateJobs] = React.useState<string[] | null>(null);
   /** Điều hướng đang bị chặn vì còn thay đổi chưa lưu. */
   const [pendingNav, setPendingNav] = React.useState<(() => void) | null>(null);
+  /** Tab Cài đặt phải mở LẠI nếu người dùng bỏ dở dialog sinh ảnh (§BUG-2). */
+  const [regenerateReturnTab, setRegenerateReturnTab] = React.useState<ProjectSettingsTab | null>(null);
 
-  const workflowIncomplete = draft.data?.completed === false;
+  /**
+   * ĐÁ NGƯỢC VỀ WIZARD — chỉ khi dự án THẬT SỰ chưa có gì để xem.
+   *
+   * ══ §B2 (blind-test 2.1.17) ══════════════════════════════════════════════
+   * Bản cũ chỉ đọc `draft.completed === false`. Nhưng `WorkflowScreen` ghi
+   * `completed: false` mỗi lần store wizard đổi (autosave 600ms), nên chỉ cần mở lại
+   * wizard của một dự án ĐÃ GEN XONG là cờ đó lật, và từ đó trang kết quả không còn
+   * vào được nữa: bấm thẻ ở Home → `/p/:id` → đá về `/k/:id` bước "Kiểm tra", y như
+   * một dự án trắng. Hai tester độc lập đều mất kết quả theo đúng đường này.
+   *
+   * Có ảnh trên đĩa là bằng chứng mạnh hơn một cái cờ nháp: đã có ảnh thì Ở LẠI trang
+   * kết quả, còn muốn sửa tiếp thì đã có đường sang wizard trong chính màn này.
+   */
+  const workflowIncomplete = draft.data?.completed === false && !hasGeneratedOutput(project.data);
   React.useEffect(() => {
     if (workflowIncomplete) void navigate({ to: "/k/$projectId", params: { projectId }, replace: true });
   }, [navigate, projectId, workflowIncomplete]);
@@ -207,24 +224,46 @@ function ProjectManager({ projectId }: { projectId: string }) {
     .map((job) => job.job), [sync.contract]);
 
   /**
-   * [Lưu và tạo lại ảnh] — LƯU TRƯỚC, mở dialog sinh ảnh SAU.
+   * [Lưu và tạo lại ảnh] — MỞ dialog xác nhận, KHÔNG ghi đĩa ở đây.
    *
-   * Thứ tự này là cả điểm của mục ④: dialog sinh ảnh đọc `sync.contract`, nên mở nó khi
-   * đĩa còn giữ bản cũ là tạo ảnh cho một bản thiết kế người dùng tưởng đã đổi. Lưu hỏng
-   * ⇒ dừng hẳn, `save()` đã nói lý do bằng toast.
+   * ══ §BUG-2 (blind-test 2.1.17) ═══════════════════════════════════════════
+   * Bản cũ làm ngược: `await buffer.save()` rồi mới bật dialog. Người dùng đóng dialog
+   * mà không bấm Sinh thì thay đổi ĐÃ nằm trên server — một hành động họ chưa hoàn tất
+   * — và vì `dirty` đã về false nên mở lại Cài đặt thấy cả ba nút tắt như chưa từng sửa
+   * gì. Không chỗ nào trong app nói "ảnh đang lệch cấu hình mới". Đó là autosave rò rỉ
+   * qua một cái cửa xác nhận.
+   *
+   * Nay giữ đúng luật của sitemap §"Sửa là buffer — lưu mới là lưu": việc ghi được
+   * NHƯỜNG cho `GenerateDialog.beforeStart`, tức là cho đúng cú bấm [Sinh N lượt].
+   * Huỷ dialog ⇒ không một byte nào xuống đĩa, buffer vẫn bẩn, ba nút vẫn sáng, và ta
+   * mở lại đúng tab Cài đặt vừa rời để người dùng thấy ngay điều đó.
+   *
+   * Dialog sinh ảnh vẫn đọc `sync.contract` — bản dựng từ store, tức là ĐÃ mang thay
+   * đổi chưa lưu — nên danh sách lượt và ước lượng vẫn nói đúng thứ sắp được tạo.
    */
   const saveAndRegenerate = React.useCallback((scope: RegenerateScope) => {
-    void (async () => {
-      const jobs = jobsOf(scope);
-      if (!(await buffer.save())) return;
-      if (jobs.length === 0) {
-        toast.info("Đã lưu — chưa có tấm nào để tạo lại.");
-        return;
-      }
-      setSettingsTab(null);
-      setGenerateJobs(jobs);
-    })();
-  }, [buffer, jobsOf, setSettingsTab]);
+    const jobs = jobsOf(scope);
+    if (jobs.length === 0) {
+      // Không có tấm nào để tạo lại ⇒ nút này thoái về nghĩa "Lưu", và nói ra.
+      void (async () => { if (await buffer.save()) toast.info("Đã lưu — chưa có tấm nào để tạo lại."); })();
+      return;
+    }
+    setRegenerateReturnTab(view.settingsTab);
+    setSettingsTab(null);
+    setGenerateJobs(jobs);
+  }, [buffer, jobsOf, setSettingsTab, view.settingsTab]);
+
+  /**
+   * Đóng dialog sinh ảnh. Còn thay đổi chưa lưu ⇒ người dùng đã BỎ giữa chừng chuỗi
+   * "Lưu và tạo lại": trả họ về đúng tab Cài đặt vừa rời, nơi ba nút vẫn đang sáng.
+   * Đã lưu (vì đã bấm Sinh) ⇒ `dirty` false ⇒ không lôi dialog cũ trở lại mặt họ.
+   */
+  const closeGenerate = React.useCallback(() => {
+    setGenerateJobs(null);
+    const back = regenerateReturnTab;
+    setRegenerateReturnTab(null);
+    if (back !== null && buffer.dirty) setSettingsTab(back);
+  }, [buffer.dirty, regenerateReturnTab, setSettingsTab]);
 
   const saveOnly = React.useCallback(() => {
     void (async () => { if (await buffer.save()) toast.success("Đã lưu cài đặt dự án"); })();
@@ -314,6 +353,8 @@ function ProjectManager({ projectId }: { projectId: string }) {
                 group={view.group}
                 onGroupChange={(group: ProjectImageGroup) => patchSearch({ group })}
                 contract={sync.contract}
+                project={project.data}
+                gate={gate}
                 jobStates={project.data.state?.jobs ?? {}}
                 readOnly={projectReadOnly}
                 onGenerate={setGenerateJobs}
@@ -329,6 +370,13 @@ function ProjectManager({ projectId }: { projectId: string }) {
                 saveBar={saveBar("ui", "Lưu", "Lưu + Gen lại")}
               >
                 <KitsetStep variant="manage" detailFooter={saveBar("ui", "Lưu", "Lưu + Gen lại", "w-full")} />
+                {/* Lưới xem bộ khung từng tấm — dọn về từ thanh tab "Skeleton" thừa của
+                    trang Ảnh đã tạo. Trang này là ĐÍCH DUY NHẤT của skeleton, nên nó
+                    phải vừa sửa được (KitsetStep) vừa xem được (lưới dưới đây). */}
+                <div className="mt-6 space-y-3">
+                  <h2 className="text-subtitle text-fg-strong">Bộ khung từng tấm</h2>
+                  <SkeletonSheetGrid sheets={sync.contract.sheets} />
+                </div>
               </ManageSection>
             )}
 
@@ -383,15 +431,20 @@ function ProjectManager({ projectId }: { projectId: string }) {
         }}
       />
 
+      {/* §BUG-2 — `beforeStart` là ĐƯỜNG GHI DUY NHẤT của chuỗi "Lưu và tạo lại": chỉ cú
+          bấm [Sinh N lượt] mới ghi contract xuống đĩa. Nó cũng đóng luôn một lỗ cũ của
+          nút [Tạo lại toàn bộ] ở trang Ảnh đã tạo — trước đây nút đó chạy run trên bản
+          contract CŨ khi buffer còn bẩn. `save()` không bẩn thì không ghi gì. */}
       <GenerateDialog
         open={generateJobs !== null}
-        onOpenChange={(open) => { if (!open) setGenerateJobs(null); }}
+        onOpenChange={(open) => { if (!open) closeGenerate(); }}
         projectId={projectId}
         contract={sync.contract}
         jobStates={project.data.state?.jobs ?? {}}
         initialJobs={generateJobs}
         readOnly={projectReadOnly}
         readOnlyReason={gate.reason}
+        beforeStart={buffer.save}
       />
     </ContractSyncProvider>
   );
