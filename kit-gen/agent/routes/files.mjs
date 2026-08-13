@@ -62,11 +62,35 @@ export function register(r) {
       const st = await stat(abs)
       let size = { w: null, h: null }
       try { const { readFile } = await import("node:fs/promises"); size = imageSize(await readFile(abs)) } catch { /* ignore */ }
-      const meta = (entry.assets ?? []).find(a => (a.file ?? a.name) === name.replace(/\.png$/, "") || a.path === name)
+      /* `slice.py:963` ghi `asset.file` KÈM đuôi (`"01-btn-pill-red.png"`), còn bản cũ
+         ở đây so khớp với tên ĐÃ CẮT đuôi ⇒ không bao giờ khớp ⇒ mọi file trả về
+         `sheet: null`, và web không xếp được ô đã cắt về đúng nhóm/sheet.
+         Cắt đuôi ở CẢ HAI VẾ. `tight/<file>.png` là bản ôm sát của cùng ô, nên nó dùng
+         chung meta với bản canvas — so khớp theo tên cơ sở, không theo đường dẫn. */
+      const bare = name.replace(/\.png$/, "")
+      const stem = bare.slice(bare.lastIndexOf("/") + 1)
+      const meta = (entry.assets ?? []).find(a =>
+        String(a.file ?? a.name ?? "").replace(/\.png$/, "") === stem || a.path === name)
       files.push({
-        file: name.replace(/\.png$/, ""), path: `kits/${variant}/${name}`,
+        file: bare, path: `kits/${variant}/${name}`,
         w: size.w, h: size.h, bytes: st.size,
-        sheet: meta?.sheet ?? null, cellIndex: meta?.cell ?? meta?.cellIndex ?? null,
+        sheet: meta?.sheet ?? null,
+        /* ⚠️ `meta.cell` của `slice.py` là KÍCH THƯỚC ô `[w, h]`, KHÔNG phải chỉ số ô.
+           Bản cũ viết `meta?.cell ?? meta?.cellIndex` nên khi meta đối chiếu được (sau
+           bản vá ở trên) `cellIndex` sẽ là một MẢNG — sai kiểu, và schema web
+           (`z.number()`) sẽ ném, giết luôn cả danh mục kit. Chỉ nhận số. */
+        cellIndex: typeof meta?.cellIndex === "number" ? meta.cellIndex : null,
+        /* HÌNH HỌC SAFE ZONE đi kèm file, không nằm lại trong manifest.
+           `figma-export/copy-sprite-images.mjs:41-48` dựng frame Figma bằng ĐÚNG bốn số
+           này: frame = `safe`, ảnh đặt lệch `content_at - safe` để decoration tràn ra
+           ngoài frame mà vẫn hiện (Clip content = off). Không trả ra đây thì webapp
+           không có cách nào copy sang Figma đúng chuẩn — nó chỉ còn bitmap phẳng. */
+        safe: meta?.safe ?? null,
+        contentAt: meta?.content_at ?? null,
+        content: meta?.content ?? null,
+        canvas: meta?.canvas ?? null,
+        cell: meta?.cell && Array.isArray(meta.cell) ? meta.cell : null,
+        bleed: meta?.bleed ?? null,
         empty: st.size === 0,
         mtime: new Date(st.mtimeMs).toISOString(),
       })

@@ -128,6 +128,40 @@ export const doctorSchema = z.looseObject({
 });
 export type Doctor = z.infer<typeof doctorSchema>;
 
+/**
+ * `GET /api/usage` — QUOTA CÒN LẠI của tài khoản Codex.
+ *
+ * Agent đọc lại con số mà lượt chạy gần nhất đã nhận từ server (chi tiết ở
+ * `agent/lib/usage.mjs`), nên nó CŨ BẰNG lượt chạy cuối — `observedAt` nói đúng
+ * mốc đó và UI phải hiện ra chứ không giả vờ là số thời gian thực.
+ *
+ * `ok:false` = CHƯA có số (chưa chạy lượt nào, hoặc provider tự cấu hình không trả
+ * rate limit), KHÁC hẳn với "còn 0%". UI ẩn hẳn thanh trong ca này, không vẽ 0.
+ */
+export const usageWindowSchema = z.looseObject({
+  usedPercent: z.number(),
+  remainingPercent: z.number(),
+  /** 10080 = tuần, 300 = 5 giờ. null khi server không nói. */
+  windowMinutes: z.number().nullish(),
+  /** ISO, hoặc null. */
+  resetsAt: z.string().nullish(),
+});
+export const usageSchema = z.looseObject({
+  ok: z.boolean(),
+  /** nhãn rút gọn `~/.codex-img`, KHÔNG phải path tuyệt đối. */
+  codexHomeLabel: z.string().nullish(),
+  profile: imageGenProfileSchema.catch("default-home").optional(),
+  /** enum gói cước do server Codex trả ("plus", "pro"…). */
+  plan: z.string().nullish(),
+  primary: usageWindowSchema.nullish(),
+  secondary: usageWindowSchema.nullish(),
+  observedAt: z.string().nullish(),
+  reason: z.string().nullish(),
+  checkedAt: z.string().nullish(),
+});
+export type Usage = z.infer<typeof usageSchema>;
+export type UsageWindow = z.infer<typeof usageWindowSchema>;
+
 /** #3 `GET /api/workspaces` — web chọn bằng **id đục**, không bao giờ gửi path (chốt X1). */
 export const workspaceItemSchema = z.looseObject({
   id: z.string(),
@@ -640,14 +674,45 @@ export type RunConflictDetails = z.infer<typeof runConflictDetailsSchema>;
 
 /* ═════════════ F. Đọc file sản phẩm (#41–#42) ═════════════ */
 
+/**
+ * ⚠️ `.nullish()` chứ KHÔNG phải `.optional()` — cùng lớp lỗi mà
+ * `__tests__/agent-null-shapes.test.ts` đã ghi, lần này ở #42 `GET …/kit`.
+ *
+ * `agent/routes/files.mjs` LUÔN gửi khoá với giá trị `null` khi chưa biết:
+ * `w/h` null khi không đọc được cỡ ảnh, `sheet`/`cellIndex` null khi không đối chiếu
+ * được với `kits/manifest.json`. `.optional()` của zod không nhận `null` ⇒ `parse()`
+ * ném ⇒ `AGENT_INTERNAL` ⇒ **toàn bộ đường "ảnh đã cắt" chết**: nút Tải .zip và Copy
+ * Figma vĩnh viễn khoá ("Mở sau khi dự án có ảnh đã cắt") và màn kết quả không bao giờ
+ * hiện được ô đã cắt, chỉ còn sheet thô nền chroma.
+ *
+ * `.transform(v => v ?? undefined)` giữ nguyên kiểu TS cũ (`number | undefined`) nên
+ * nơi dùng không phải đổi một dòng nào.
+ */
+const kitOptionalNumber = z.number().nullish().transform((v) => v ?? undefined);
+const kitOptionalString = z.string().nullish().transform((v) => v ?? undefined);
+/** `[x, y, w, h]` / `[w, h]` từ `kits/manifest.json`; thiếu ⇒ undefined, không phải 0. */
+const kitBox = z.array(z.number()).nullish().transform((v) => v ?? undefined);
+
 export const kitFileSchema = z.looseObject({
   file: z.string(),
   path: z.string(),
-  w: z.number().optional(),
-  h: z.number().optional(),
-  bytes: z.number().optional(),
-  sheet: z.string().optional(),
-  cellIndex: z.number().optional(),
+  w: kitOptionalNumber,
+  h: kitOptionalNumber,
+  bytes: kitOptionalNumber,
+  sheet: kitOptionalString,
+  cellIndex: kitOptionalNumber,
+  /**
+   * HÌNH HỌC SAFE ZONE của ô (đơn vị px trên canvas của ô, theo `slice.py`).
+   * `safe` = `[x, y, w, h]` khung hợp đồng; `contentAt` = vị trí ruột đã crop trong
+   * canvas ⇒ offset ảnh trong frame Figma là `contentAt - safe`
+   * (`figma-export/copy-sprite-images.mjs:41-48`).
+   */
+  safe: kitBox,
+  contentAt: kitBox,
+  content: kitBox,
+  canvas: kitBox,
+  cell: kitBox,
+  bleed: kitBox,
   /** `empty:true` ⇒ dải cảnh báo "N file trống" + [Xem sheet gốc] (S5). */
   empty: z.boolean().default(false),
 });

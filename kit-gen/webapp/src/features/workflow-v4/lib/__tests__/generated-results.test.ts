@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Run } from "@/lib/types";
-import { categoryOfSheet, generatedRuns, jobsForGroup } from "../generated-results";
+import {
+  categoryOfSheet, generatedRuns, groupLabel, jobsForGroup, resultProgress, resultStateOf,
+  sheetLabel, sheetSeries,
+} from "../generated-results";
 
 const run = (overrides: Partial<Run>): Run => ({
   id: "r-0001", kind: "g" + "en" as "gen", status: "done", startedAt: "2026-08-12T00:00:00Z",
@@ -36,5 +39,104 @@ describe("generated results", () => {
   it("chọn đúng jobs khi tạo lại một nhóm", () => {
     expect(jobsForGroup(run({}).jobs, "popup")).toEqual(["main-popup-01"]);
     expect(jobsForGroup(run({}).jobs, "all")).toEqual(["main-bg-01", "main-popup-01"]);
+  });
+});
+
+/**
+ * HỒI QUY BÁO TỪ BẢN CÀI THẬT: thẻ "Nền" và "ui2" nằm nhóm **Khác** ở trang tổng, còn
+ * trang nhóm "Nền" trong sidebar dự án thì RỖNG. Cả hai cùng một gốc: id sheet do
+ * `kitset-to-contract.ts` sinh ra là `nen` / `nen2` / `ui` / `ui2` (đánh số KHÔNG có
+ * gạch, đúng quy ước `styles.json`), còn `categoryOfSheet` chỉ khớp `^(small|ui)(-|$)`
+ * và không biết `nen` là gì.
+ */
+describe("nhóm sheet phải khớp 1-1 với nhóm cấu hình của wizard", () => {
+  it("id do wizard sinh ra (kể cả sheet thứ 2, 3…) vào đúng nhóm", () => {
+    expect(categoryOfSheet("nen")).toBe("background");
+    expect(categoryOfSheet("nen2")).toBe("background");
+    expect(categoryOfSheet("popup")).toBe("popup");
+    expect(categoryOfSheet("popup2")).toBe("popup");
+    expect(categoryOfSheet("popup-doc")).toBe("popup");
+    expect(categoryOfSheet("popup-doc2")).toBe("popup");
+    expect(categoryOfSheet("ui")).toBe("ui");
+    expect(categoryOfSheet("ui2")).toBe("ui");
+    expect(categoryOfSheet("ui-doc")).toBe("ui");
+    expect(categoryOfSheet("dao-cu")).toBe("prop");
+    expect(categoryOfSheet("dao-cu2")).toBe("prop");
+    expect(categoryOfSheet("dao-cu-doc2")).toBe("prop");
+    expect(categoryOfSheet("pose-nhan-vat")).toBe("mascot");
+    expect(categoryOfSheet("pose-nhan-vat2")).toBe("mascot");
+    expect(categoryOfSheet("pose-nhan-vat-2")).toBe("mascot");
+  });
+
+  it("id của styles.json đời cũ cũng không rơi vào Khác", () => {
+    expect(categoryOfSheet("bg-home")).toBe("background");
+    expect(categoryOfSheet("main")).toBe("ui");
+    expect(categoryOfSheet("main2")).toBe("ui");
+    expect(categoryOfSheet("tall")).toBe("ui");
+    expect(categoryOfSheet("pose-lan")).toBe("mascot");
+  });
+
+  it("chỉ id thật sự lạ mới là Khác", () => {
+    expect(categoryOfSheet("thu-gi-do")).toBe("other");
+    expect(groupLabel("other")).toBe("Khác");
+  });
+
+  it("tách được số thứ tự dãy dù có hay không dấu gạch", () => {
+    expect(sheetSeries("ui")).toEqual({ base: "ui", index: 1 });
+    expect(sheetSeries("ui2")).toEqual({ base: "ui", index: 2 });
+    expect(sheetSeries("ui-doc-01")).toEqual({ base: "ui-doc", index: 1 });
+    expect(sheetSeries("pose-nhan-vat3")).toEqual({ base: "pose-nhan-vat", index: 3 });
+  });
+
+  it("nhãn sheet nói đúng nhóm, đúng số và đúng hướng ô", () => {
+    expect(sheetLabel("nen")).toBe("Nền");
+    expect(sheetLabel("nen2")).toBe("Nền 2");
+    expect(sheetLabel("ui2")).toBe("UI nhỏ 2");
+    expect(sheetLabel("popup-doc")).toBe("Popup dọc");
+    expect(sheetLabel("pose-nhan-vat2")).toBe("Mascot pose 2");
+  });
+});
+
+/**
+ * HỒI QUY: vừa bấm "Tạo ảnh", mọi thẻ đã đỏ "Chưa tạo được ảnh". Trạng thái phải
+ * đọc từ vòng đời run, không từ "có file hay chưa".
+ */
+describe("trạng thái ô kết quả theo vòng đời lượt chạy", () => {
+  it("run đang chạy ⇒ job chưa tới lượt là ĐANG CHỜ, không phải lỗi", () => {
+    expect(resultStateOf("running", "queued")).toBe("queued");
+    expect(resultStateOf("queued", "queued")).toBe("queued");
+    expect(resultStateOf("running", "running")).toBe("running");
+  });
+
+  it("job xong/hỏng thì trạng thái của job thắng", () => {
+    expect(resultStateOf("running", "ok")).toBe("done");
+    expect(resultStateOf("running", "failed")).toBe("failed");
+    expect(resultStateOf("done-with-errors", "failed")).toBe("failed");
+  });
+
+  it("người dùng DỪNG ⇒ job dở là ĐÃ DỪNG, không phải lỗi (run-handle đưa về queued)", () => {
+    expect(resultStateOf("cancelled", "queued")).toBe("cancelled");
+    expect(resultStateOf("cancelled", "running")).toBe("cancelled");
+    expect(resultStateOf("cancelled", "ok")).toBe("done");
+  });
+
+  it("run kết thúc mà job vẫn treo ⇒ mới là lỗi", () => {
+    expect(resultStateOf("done", "queued")).toBe("failed");
+    expect(resultStateOf("env-failed", "queued")).toBe("failed");
+  });
+
+  it("generatedRuns gắn state + cờ live cho cả lượt", () => {
+    const live = generatedRuns([run({
+      status: "running", finishedAt: null,
+      jobs: [
+        { job: "a", sheet: "nen", status: "ok", startedAt: null, durationMs: null, artifact: { path: "raw/a.png" }, recovered: false, diagnosis: null },
+        { job: "b", sheet: "ui", status: "running", startedAt: null, durationMs: null, artifact: null, recovered: false, diagnosis: null },
+        { job: "c", sheet: "ui2", status: "queued", startedAt: null, durationMs: null, artifact: null, recovered: false, diagnosis: null },
+      ],
+    })])[0]!;
+    expect(live.live).toBe(true);
+    expect(live.items.map((i) => i.state)).toEqual(["done", "running", "queued"]);
+    expect(live.items.map((i) => i.category)).toEqual(["background", "ui", "ui"]);
+    expect(resultProgress(live.items)).toEqual({ done: 1, failed: 0, running: 1, total: 3 });
   });
 });

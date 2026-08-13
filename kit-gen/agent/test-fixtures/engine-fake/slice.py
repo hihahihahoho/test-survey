@@ -25,12 +25,25 @@ for style in cfg["styles"]:
             print(f"⚠ bỏ qua {job}: chưa có raw/{job}.png")
             continue
         n = 0
+        os.makedirs(os.path.join(out, "tight"), exist_ok=True)
         for i, c in enumerate(sh["components"]):
             if c["skel"].get("shape") == "empty":
                 entry["empty_cells"].append({"sheet": sh["id"], "cell": i})
                 continue
             open(os.path.join(out, c["file"] + ".png"), "wb").write(b"PNGFAKE")
-            entry["assets"].append({"file": c["file"], "sheet": sh["id"], "cell": i})
+            # bản ôm sát, đúng như slice.py:950-953 thật
+            open(os.path.join(out, "tight", c["file"] + ".png"), "wb").write(b"PNGFAKE")
+            # ⚠️ HÌNH DẠNG PHẢI GIỐNG slice.py THẬT (dòng 963-966), nếu không test
+            #    xanh mà sản phẩm đỏ — đúng chuyện đã xảy ra với `sheet: null`:
+            #      · `file` KÈM đuôi ".png"
+            #      · `cell` là KÍCH THƯỚC ô [w, h], KHÔNG phải chỉ số ô
+            #      · có `safe` / `content_at` cho đường copy sang Figma
+            entry["assets"].append({
+                "file": c["file"] + ".png", "sheet": sh["id"],
+                "canvas": [522, 348], "cell": [384, 256], "bleed": [69, 46],
+                "content": [248, 110], "content_at": [137, 120],
+                "safe": [111, 123, 300, 102],
+            })
             n += 1
         entry["sheets"][sh["id"]] = {"mode": "fake", "cut": n, "blobs": n}
         print(f"cắt {job}: {n} file")

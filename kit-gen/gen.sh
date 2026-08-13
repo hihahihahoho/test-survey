@@ -47,18 +47,42 @@ for s in cfg["styles"]:
             if sh["id"] != "bg" else
             "The two background scenes each fill their own half of the image completely, edge to edge, with a thin 24px gap between them.",
             "",
-            "The FIRST attached image is the layout skeleton of this exact sheet. In each cell,",
-            "the dark rectangular frame is the SAFE ZONE and the gray silhouette shows the",
-            "element's rough shape:",
-            "- the element's MAIN BODY must fill the safe-zone frame exactly (position and size);",
-            "- decorative details (flowers, ribbons, tassels, sparkles) MAY overflow outside",
-            "  the frame for a lively look, but must stay inside the cell and never cross",
-            "  into another cell.",
-            "Some cells have NO dark frame: there the gray silhouette itself is the",
-            "placement guide — draw the element centered on it at a similar size, in any",
-            "natural proportions, keeping generous empty padding inside the cell.",
-            "The skeleton is ONLY a placement guide: do NOT copy its gray color, frames,",
-            "grid lines or plain shapes into the artwork.",
+            # ── Khối neo hình học — theo prompt crop-safe v15 của spike safe-zone
+            #    (docs/SPRITESHEET-SAFE-ZONE-HANDOFF.md §5.3). Điểm khác bản trước:
+            #    nói RA HẬU QUẢ ("phần mềm sẽ crop đúng 4 toạ độ này") thay vì chỉ ra
+            #    lệnh "respect the frame", và cấm THẲNG hành vi hỏng phổ biến nhất mà
+            #    §8.1 đã đo: model co mặt nội dung lại để nhét viền vào trong.
+            "The FIRST attached image is the geometry contract and the edit target for this",
+            "exact sheet: it decides canvas, cell positions, sizes, proportions and centers.",
+            "In each cell the dark rectangular frame is the INNER CROP BOX and the gray",
+            "silhouette, centered inside it, is the exact required functional content.",
+            "",
+            "The inner crop box is a production SAFE ZONE: after generation, software crops",
+            "each asset using those exact four coordinates. Therefore:",
+            "- the finished functional surface must keep the EXACT center of the crop box;",
+            "- it must fill the gray silhouette exactly — same left, top, right and bottom",
+            "  extents, same footprint;",
+            "- NEVER shrink the functional surface to make room for a border or rim;",
+            "- never enlarge, stretch, move, offset or recenter it;",
+            "- a shifted or smaller functional surface is unusable and will be regenerated.",
+            "",
+            "Build each element in three layers, from the inside out:",
+            "1) one continuous, clean content surface replacing the gray silhouette, on the",
+            "   same footprint;",
+            "2) the rim/border immediately OUTSIDE that footprint — it must not consume or",
+            "   reduce the safe-zone surface;",
+            "3) flowers, ribbons, tassels, jewels, sparkles and filigree farther outside as",
+            "   overflow decoration; they may cross the frame but must stay inside their own",
+            "   cell and never cross into another cell.",
+            "Keep the crop-safe area clean: no decoration may cover the functional surface.",
+            "",
+            "Cells with NO dark frame: the gray silhouette itself is the placement guide —",
+            "draw the element centered on it at the same size, in natural proportions,",
+            "keeping generous empty padding inside the cell.",
+            "Keep the existing cell boundaries and guide positions; do not invent extra cells",
+            "or guides. Guide lines and gray fills are alignment references only, never",
+            "decoration: do NOT paint their gray color, frames, grid lines or plain shapes",
+            "into the artwork.",
             "",
             f"BACKGROUND of the sheet: one flat solid chroma-key color: {s['bg']}.",
             "This background rule OVERRIDES the art style and every reference image:",
@@ -66,8 +90,12 @@ for s in cfg["styles"]:
             "No gradient, no texture, NO checkerboard or transparency pattern, no grid lines.",
             "This exact background color — and any hue CLOSE to it — must NEVER appear inside any element; pick element colors far from it on the color wheel.",
             "",
-            "SIZING: every element is drawn at a CONSISTENT scale — each fills about 70-80% of its",
-            "cell's width (or height for tall elements), so all elements look uniform in size.",
+            # ⚠️ KHÔNG quay lại luật "mỗi element phủ 70-80% bề ngang ô". Đó là một chỉ
+            #    thị hình học THỨ HAI đá nhau với khối crop-safe ở trên, và nó đẩy model
+            #    đúng về phía lỗi mà handoff §8.1 đo được: co mặt nội dung vào trong.
+            #    Kích thước đã nằm trong skeleton (skel.w/h); prompt chỉ nói tính nhất quán.
+            "SIZING: the skeleton decides every size. Do not rescale anything to look tidy;",
+            "elements of the same kind simply share one consistent visual weight and finish.",
             "",
             "ABSOLUTELY NO TEXT: no letters, no digits, no words, no characters of any language",
             "anywhere in the image. All faces, banners, buttons, plates and screens are BLANK — text will",
@@ -93,7 +121,18 @@ for s in cfg["styles"]:
                 bl += f", gradient {b['gradient']}"
             lines += [bl + " — use these as the dominant UI colors.", ""]
         use_brand_refs = bmode == "image" and s.get("brand", {}).get("refs")
-        use_inspo = s.get("styleMode", "prompt") == "inspo" and s.get("inspo")
+        # ⚠️ ẢNH PHONG CÁCH ĐÃ TẢI LÊN THÌ PHẢI ĐƯỢC DÙNG.
+        # Bản cũ: `use_inspo = styleMode == "inspo" and inspo`. Nhưng wizard hiện tại
+        # KHÔNG còn chỗ nào đặt `styleMode = "inspo"` — `StyleStep.tsx:76` chỉ đặt
+        # "prompt" khi gõ mô tả, và `model.ts:395` mặc định cũng là "prompt" (nút
+        # segmented "Dùng ảnh tham khảo" đã bị bỏ ở đợt làm lại wizard). Hệ quả:
+        # `use_inspo` LUÔN sai ⇒ dòng 170 không đính ảnh phong cách vào `codex exec`
+        # ⇒ ảnh ra không bám ref, và mô tả vật liệu mặc định của từng ô ('glossy',
+        # 'candy', '3D'…) là thứ DUY NHẤT dẫn dắt style. Đúng triệu chứng người dùng báo.
+        # Nay: có ảnh phong cách = dùng ảnh phong cách. `styleMode` chỉ còn quyết định
+        # có GIỮ thêm câu mô tả của người dùng hay không (xem khối "Art style" bên dưới).
+        has_inspo = bool(s.get("inspo"))
+        use_inspo = has_inspo
         if use_brand_refs or use_inspo:
             lines += [
                 "Also attached: brand / inspiration reference images — match their color",
@@ -119,16 +158,23 @@ for s in cfg["styles"]:
                              " there is no light the cell stays pure black")
                 lines.append(f"{i + 1}) {spec}")
             lines.append("")
-        lines += [
-            ("Art style: faithfully match the attached inspiration reference image(s) — "
-             "same rendering technique, materials, palette and level of detail. "
-             "IMPORTANT: this reference OVERRIDES every material/finish word inside the "
-             "per-cell descriptions above ('glossy', '3D', 'plastic', 'candy', specific "
-             "color shades…) — those only describe the DEFAULT look. Re-imagine every "
-             "element in the reference's actual materials, textures and palette, keeping "
-             "only each cell's SHAPE, layout and color ROLE (primary vs secondary vs "
-             "neutral element)."
-             if use_inspo else f"Art style: {s['style']}."),
+        if use_inspo:
+            art = ["Art style: faithfully match the attached inspiration reference image(s) — "
+                   "same rendering technique, materials, palette and level of detail. "
+                   "IMPORTANT: this reference OVERRIDES every material/finish word inside the "
+                   "per-cell descriptions above ('glossy', '3D', 'plastic', 'candy', specific "
+                   "color shades…) — those only describe the DEFAULT look. Re-imagine every "
+                   "element in the reference's actual materials, textures and palette, keeping "
+                   "only each cell's SHAPE, layout and color ROLE (primary vs secondary vs "
+                   "neutral element)."]
+            # Mô tả người dùng gõ KHÔNG bị vứt đi nữa (bản cũ nhánh inspo bỏ hẳn `s['style']`,
+            # nên chọn ảnh ref = mất trắng câu mô tả). Nó ở đây với thứ hạng rõ ràng: SAU ảnh.
+            if s.get("style"):
+                art.append(f"Additional direction from the project (SECONDARY to the reference "
+                           f"image — never contradict it): {s['style']}.")
+        else:
+            art = [f"Art style: {s['style']}."]
+        lines += art + [
             f"All {n_real} elements share the exact same consistent style and belong to one coherent game. "
             "Game-ready UI asset quality, " + ("portrait 2:3." if portrait else "landscape 3:2.")
         ]

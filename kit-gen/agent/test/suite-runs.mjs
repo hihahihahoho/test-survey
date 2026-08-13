@@ -158,6 +158,19 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     ok(kit.json.files.length >= 20, `đã cắt ${kit.json.files.length} file`)
     ok(kit.json.files.every(f => f.path.startsWith("kits/tet/")), "path tương đối trong project")
     ok(kit.json.files.every(f => f.sheet !== null), "mỗi file biết sheet nguồn")
+    // HỒI QUY: manifest thật ghi `file` KÈM đuôi .png ⇒ đối chiếu phải cắt đuôi ở CẢ HAI
+    // vế. Sai chỗ này thì mọi file trả `sheet:null` và web xếp hết ô vào nhóm "Khác".
+    ok(kit.json.files.some(f => f.file.startsWith("tight/")), "bản ôm sát tight/ cũng có trong danh mục")
+    ok(kit.json.files.filter(f => f.file.startsWith("tight/")).every(f => f.sheet !== null),
+      "bản tight/ dùng chung meta của ô, vẫn biết sheet")
+    // Hình học safe zone phải ĐI TỚI web, nếu không đường copy sang Figma không dựng
+    // được frame đúng chuẩn (figma-export/copy-sprite-images.mjs:41-48).
+    const withSafe = kit.json.files.find(f => !f.file.startsWith("tight/"))
+    eq(JSON.stringify(withSafe.safe), "[111,123,300,102]", "safe zone của ô đi kèm file")
+    eq(JSON.stringify(withSafe.contentAt), "[137,120]", "offset ruột đi kèm file")
+    // `cell` của manifest là KÍCH THƯỚC [w,h] — không được nhét vào cellIndex (số)
+    ok(kit.json.files.every(f => f.cellIndex === null || typeof f.cellIndex === "number"),
+      "cellIndex chỉ nhận số, không nhận mảng kích thước ô")
 
     // trạng thái job theo bảng 7 trạng thái §5.7
     const st = (await a3("GET", `/api/projects/${gid}`)).json.project.state.jobs

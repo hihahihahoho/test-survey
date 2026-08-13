@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ImagePlus, Pencil, Trash2, User } from "lucide-react";
+import { ImagePlus, Pencil, RefreshCw, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -54,6 +54,8 @@ export function MascotDialog({
   const [description, setDescription] = React.useState("");
   const [ref, setRef] = React.useState<{ name: string } | null>(null);
   const [busy, setBusy] = React.useState(false);
+  /** Ô chọn file cho nút "Đổi ảnh" — hàng preview không có vùng thả để bấm vào. */
+  const replaceInput = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     if (!open) return;
@@ -124,21 +126,46 @@ export function MascotDialog({
                 <SharedReferencePicker group="mascot-reference" onPick={(file) => takeFile([file])} />
               </div>
             </div>
+            {/*
+              ══ MỘT HÀNG PREVIEW, KHÔNG PHẢI HAI ═══════════════════════════════
+              Bản cũ hiện ĐỒNG THỜI hai thứ nói cùng một điều: (a) thumbnail cục bộ
+              do `ImageDropzone` tự vẽ từ `File` vừa chọn (kèm nút ✕), và (b) một
+              thumbnail thứ hai + dòng "Đã gắn ảnh <tên>" ngay bên dưới. Hai ảnh
+              giống hệt nhau xếp chồng, và nút ✕ của (a) chỉ xoá bản nháp cục bộ
+              trong khi ảnh đã nằm trên đĩa dự án ⇒ nó nói dối.
+
+              Nay: có ảnh ⇒ CHỈ hàng preview (nguồn là TÊN AGENT ĐẶT, tức đĩa);
+              chưa có ảnh ⇒ CHỈ vùng thả. `showLocalPreview={false}` tắt hẳn bản
+              nháp cục bộ để không bao giờ có hai nguồn sự thật cùng lúc.
+            */}
             <div className="dropfield mascot-dropzone">
-              <ImageDropzone
-                label="Kéo ảnh nhân vật vào đây"
-                description="Một ảnh rõ mặt, đủ trang phục để giữ nhận diện ở mọi dáng"
-                state={busy ? "uploading" : ref ? "done" : "idle"}
-                onFiles={takeFile}
-              />
-              {/* §W2B-6 — thứ hiện ra sau khi thả nằm TRONG khung `.dropfield`, không
-                  trôi ra dưới nó như rác. Ở đây là ảnh vừa gắn cho riêng nhân vật này. */}
               {ref ? (
-                <span className="flex items-center gap-3 text-caption text-fg-muted">
+                <div className="flex items-center gap-3 rounded-3 border border-line-subtle bg-raised p-2">
                   <MascotThumb name={ref.name} />
-                  <span className="min-w-0 truncate">Đã gắn ảnh <code>{ref.name}</code></span>
-                </span>
-              ) : null}
+                  <span className="min-w-0 flex-1 truncate text-caption text-fg" title={ref.name}>{ref.name}</span>
+                  <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => replaceInput.current?.click()}>
+                    <RefreshCw aria-hidden />{busy ? "Đang tải…" : "Đổi ảnh"}
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon-sm" aria-label="Xoá ảnh tham chiếu" disabled={busy} onClick={() => setRef(null)}>
+                    <Trash2 aria-hidden />
+                  </Button>
+                </div>
+              ) : (
+                <ImageDropzone
+                  label="Kéo ảnh nhân vật vào đây"
+                  description="Một ảnh rõ mặt, đủ trang phục để giữ nhận diện ở mọi dáng"
+                  state={busy ? "uploading" : "idle"}
+                  showLocalPreview={false}
+                  onFiles={takeFile}
+                />
+              )}
+              <input
+                ref={replaceInput}
+                className="sr-only"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={(event) => { takeFile(event.target.files); event.currentTarget.value = ""; }}
+              />
             </div>
           </div>
         </DialogBody>
