@@ -1,13 +1,16 @@
 import * as React from "react";
-import { Check, Plus, Search } from "lucide-react";
+import { Check, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Silhouette } from "@/features/design/preview";
 import { useElementLib, useUserLibrary } from "@/lib/hooks";
 import { foldVi, fromAgentLib, loadBundledV2 } from "@/features/design/library/lib/source";
 import type { LibElement } from "@/features/design/library/lib/types";
-import { cellLabel, useWorkflowStore } from "../lib/model";
+import { cellLabel, useWorkflowStore, type KitElementSkel } from "../lib/model";
 import { GroupChips } from "../components/GroupChips";
+import { ItemDetailDialog, SkelSizeFields } from "../components/ItemDetail";
+import { useKitsetContract } from "../lib/contract-sync";
+import { itemPromptFor } from "../lib/item-prompt";
 import { isPropElement, mergeElements, userUiElements } from "../lib/user-library";
 import { Step } from "./BriefStep";
 
@@ -48,8 +51,28 @@ function meta(element: LibElement) {
   };
 }
 
-export function KitsetStep() {
+/**
+ * HAI HÌNH THÁI CHO CÙNG MỘT MÀN.
+ *
+ * · `wizard` — bước ③ lúc tạo dự án: chỉ chọn/bỏ chọn. Người ta chưa có ảnh nào để
+ *   so, nên đưa ô "Rộng %/Cao %" ra trước mặt là bắt quyết định thứ họ chưa hình dung.
+ * · `manage` — trang **Skeleton UI** trong dự án: mỗi món kèm hai ô kích thước và một
+ *   cửa "Chi tiết" (kích thước + prompt sẽ gửi đi). Đây là nơi người ta quay lại SAU
+ *   khi đã nhìn ảnh thật và biết ô nào cần to/nhỏ lại.
+ *
+ * Một component chứ không hai màn: hai bản sao của lưới 42 món là hai chỗ để luật
+ * "mặc định chọn hết" và bộ lọc nhóm lệch nhau.
+ */
+export type KitsetVariant = "wizard" | "manage";
+
+export function KitsetStep({ variant = "wizard", detailFooter }: {
+  variant?: KitsetVariant;
+  /** Hàng nút của panel chi tiết. Màn quản lý truyền `SaveBar`; wizard để trống. */
+  detailFooter?: React.ReactNode;
+} = {}) {
   const workflow = useWorkflowStore();
+  const sync = useKitsetContract();
+  const [detailFile, setDetailFile] = React.useState<string | null>(null);
   const libraryQuery = useElementLib();
   const userLibrary = useUserLibrary();
   const catalogue = React.useMemo(() => {
@@ -90,8 +113,19 @@ export function KitsetStep() {
   const shownFiles = React.useMemo(() => shown.map((element) => element.file), [shown]);
   const allShownOn = shownFiles.length > 0 && shownFiles.every((file) => selected.has(file));
 
+  const overrides = React.useMemo(() => {
+    const map = new Map<string, KitElementSkel>();
+    for (const element of workflow.elements) if (element.skel) map.set(element.file, element.skel);
+    return map;
+  }, [workflow.elements]);
+  const detail = detailFile ? catalogue.find((element) => element.file === detailFile) ?? null : null;
+
   return (
-    <Step title="Bộ khung UI" copy="Mặc định chọn hết — bỏ tick những thành phần dự án không cần.">
+    <Step
+      headless={variant === "manage"}
+      title="Skeleton UI"
+      copy="Mặc định chọn hết — bỏ tick những thành phần dự án không cần."
+    >
       <GroupChips
         groups={GROUPS.map((item) => ({
           id: item.id,
@@ -129,9 +163,12 @@ export function KitsetStep() {
       <section aria-label={current.label} className="compact-element-grid">
         {shown.map((element) => {
           const on = selected.has(element.file);
-          return (
+          const override = overrides.get(element.file);
+          /* Silhouette phải vẽ theo kích thước ĐANG ÁP DỤNG, không phải số của thư viện:
+             sửa "Rộng %" mà hình xem trước đứng yên là bảo người ta tin vào con số suông. */
+          const skel = override ? { ...element.skel, ...override } : element.skel;
+          const toggle = (
             <button
-              key={element.file}
               type="button"
               className={on ? "compact-element selected" : "compact-element"}
               aria-pressed={on}
@@ -139,7 +176,7 @@ export function KitsetStep() {
             >
               <span className="compact-element-art">
                 <Silhouette
-                  skel={element.skel}
+                  skel={skel}
                   orient={element.cell === "portrait" ? "portrait" : "landscape"}
                   uid={`pick-${element.file}`}
                 />
@@ -151,8 +188,59 @@ export function KitsetStep() {
               {on ? <Check aria-hidden /> : <Plus aria-hidden />}
             </button>
           );
+          if (variant === "wizard") return <React.Fragment key={element.file}>{toggle}</React.Fragment>;
+          return (
+            <div key={element.file} className="flex min-w-0 flex-col gap-2">
+              {toggle}
+              <div className="flex items-end gap-2 px-1">
+                <SkelSizeFields
+                  compact
+                  idPrefix={`skel-${element.file}`}
+                  itemLabel={element.vi}
+                  w={override?.w}
+                  h={override?.h}
+                  defaults={{ w: element.skel.w ?? 0.8, h: element.skel.h ?? 0.8 }}
+                  onChange={(patch) => workflow.setElementSkel(element.file, patch)}
+                />
+                <Button type="button" variant="ghost" size="sm" onClick={() => setDetailFile(element.file)}>
+                  <SlidersHorizontal aria-hidden />Chi tiết
+                </Button>
+              </div>
+            </div>
+          );
         })}
       </section>
+
+      {detail ? (
+        <ItemDetailDialog
+          open
+          onOpenChange={(open) => { if (!open) setDetailFile(null); }}
+          title={detail.vi}
+          description={`${detail.group ? `Nhóm ${detail.group} · ` : ""}ô ${cellLabel(detail.cell ?? "landscape")} · ${detail.file}`}
+          prompt={itemPromptFor(sync?.contract ?? null, detail.file)}
+          promptEmptyReason="Thành phần này đang không được chọn nên chưa có ô nào trong bản thiết kế. Tick chọn nó rồi mở lại để xem prompt."
+          footer={detailFooter ?? <Button type="button" variant="secondary" onClick={() => setDetailFile(null)}>Đóng</Button>}
+        >
+          <div className="space-y-4">
+            <div>
+              <p className="text-label text-fg-strong">Kích thước ô</p>
+              <p className="mt-1 text-caption text-fg-muted">Phần trăm bề rộng và bề cao của ô. Bỏ trống để dùng số của thư viện chung.</p>
+              <SkelSizeFields
+                className="mt-3 max-w-xs"
+                idPrefix={`detail-${detail.file}`}
+                w={overrides.get(detail.file)?.w}
+                h={overrides.get(detail.file)?.h}
+                defaults={{ w: detail.skel.w ?? 0.8, h: detail.skel.h ?? 0.8 }}
+                onChange={(patch) => workflow.setElementSkel(detail.file, patch)}
+              />
+            </div>
+            <div>
+              <p className="text-label text-fg-strong">Mô tả gửi cho máy vẽ</p>
+              <p className="mt-1 whitespace-pre-wrap text-body text-fg-muted">{detail.spec || "Thư viện chưa có mô tả cho thành phần này."}</p>
+            </div>
+          </div>
+        </ItemDetailDialog>
+      ) : null}
     </Step>
   );
 }

@@ -428,3 +428,45 @@ describe("UI-FIX §3b — nhiều nhân vật, mỗi con một bộ tấm dáng"
     expect(c.sheets.some((sh) => sh.id.startsWith("pose-"))).toBe(false);
   });
 });
+
+/**
+ * ══ MASCOT: MỘT LƯỢT GEN CHO MỘT SHEET, KHÔNG PHẢI MỘT LƯỢT CHO MỘT DÁNG ══════
+ *
+ * PRODUCT-SITEMAP §9 ("các pose được xếp vào một hoặc nhiều sheet mascot") + §10
+ * (mặc định 4 pose/sheet, đầy thì thêm sheet). `gen.sh` tính tiền theo (phong cách ×
+ * sheet), nên gen từng dáng một sẽ nhân quota lên đúng bằng số dáng.
+ *
+ * Bộ ca này khoá HỢP ĐỒNG đó lại: sinh mỗi dáng một sheet sẽ làm đỏ ngay ở đây.
+ */
+describe("§9-§10 — dáng mascot dồn vào sheet, mỗi sheet MỘT lượt gen", () => {
+  it("19 dáng mặc định · trần 4 ⇒ 5 sheet, không phải 19", () => {
+    const s = defaultState();
+    const c = buildKitsetContract(s, { lib: LIB, limits: { mascot: 4 } });
+    const poseSheets = c.sheets.filter((sh) => sh.components.some((cp) => cp.skel.shape === "pose"));
+    expect(s.mascotPoses.length).toBe(19);
+    expect(poseSheets).toHaveLength(Math.ceil(19 / 4));
+    // đầy đúng trần, sheet cuối mới lẻ
+    expect(poseSheets.slice(0, -1).every((sh) => sh.components.filter((cp) => cp.skel.shape === "pose").length === 4)).toBe(true);
+  });
+
+  it("số JOB mascot = số SHEET mascot (đây là con số tính quota)", () => {
+    const c = buildKitsetContract(defaultState(), { lib: LIB, limits: { mascot: 4 } });
+    const poseSheetIds = new Set(
+      c.sheets.filter((sh) => sh.components.some((cp) => cp.skel.shape === "pose")).map((sh) => sh.id),
+    );
+    const poseJobs = contractJobs(c).filter((j) => poseSheetIds.has(j.sheet));
+    expect(poseJobs).toHaveLength(poseSheetIds.size);
+    expect(poseJobs.length).toBeLessThan(19);
+  });
+
+  it("đổi trần ⇒ đổi số sheet, KHÔNG đổi số dáng được vẽ", () => {
+    const s = defaultState();
+    for (const limit of [2, 4, 8]) {
+      const c = buildKitsetContract(s, { lib: LIB, limits: { mascot: limit } });
+      const cells = c.sheets.flatMap((sh) => sh.components).filter((cp) => cp.skel.shape === "pose");
+      const sheets = c.sheets.filter((sh) => sh.components.some((cp) => cp.skel.shape === "pose"));
+      expect(cells, `trần ${limit}`).toHaveLength(s.mascotPoses.length);
+      expect(sheets, `trần ${limit}`).toHaveLength(Math.ceil(s.mascotPoses.length / limit));
+    }
+  });
+});

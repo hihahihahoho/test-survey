@@ -135,7 +135,15 @@ export function useContractSync(
 
   const foreignOnDisk = isForeignContract(disk.data?.contract ?? null);
   const foreign = foreignOnDisk && !adoptingForeign;
-  const canWrite = autosave && status.connected && !status.readOnly && !foreign && !disk.isLoading && Boolean(disk.data);
+  /**
+   * ⚠️ `canWrite` KHÔNG còn phụ thuộc `autosave`.
+   *
+   * `autosave` trả lời "có tự ghi sau mỗi phím gõ không"; `canWrite` trả lời "ghi được
+   * không" (có agent, không chỉ-đọc, không phải bản thiết kế của người khác). Trộn hai
+   * câu hỏi làm một thì màn quản lý dự án — nơi cố ý TẮT autosave để người dùng tự bấm
+   * [Lưu] — mất luôn cả `saveNow()`, tức là mất đường lưu duy nhất còn lại.
+   */
+  const canWrite = status.connected && !status.readOnly && !foreign && !disk.isLoading && Boolean(disk.data);
   const dirty = !sameContract(savedRef.current, contract);
 
   const write = React.useCallback(async (): Promise<boolean> => {
@@ -155,10 +163,10 @@ export function useContractSync(
   }, [contract]);
 
   React.useEffect(() => {
-    if (!canWrite || !dirty || saver.isPending) return;
+    if (!autosave || !canWrite || !dirty || saver.isPending) return;
     const t = setTimeout(() => void write(), AUTOSAVE_DELAY_MS);
     return () => clearTimeout(t);
-  }, [canWrite, dirty, saver.isPending, write]);
+  }, [autosave, canWrite, dirty, saver.isPending, write]);
 
   /* Đĩa được nạp lại (sau invalidate, hoặc sau khi giải quyết xung đột) ⇒ nhận version mới. */
   React.useEffect(() => {

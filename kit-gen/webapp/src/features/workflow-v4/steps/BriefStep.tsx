@@ -84,16 +84,28 @@ export function BriefStep() {
   );
 }
 
-export function Step({ title, copy, children }: { title: string; copy: string; children: React.ReactNode }) {
+export function Step({ title, copy, children, headless = false }: {
+  title: string;
+  copy: string;
+  children: React.ReactNode;
+  /**
+   * Bỏ hẳn phần tiêu đề. Dùng khi bước được mount làm NỘI DUNG của một trang đã có
+   * tiêu đề riêng (trang "Skeleton UI" / "Mascot" trong màn quản lý dự án): hai tiêu đề
+   * cùng chữ, chỉ khác cỡ, xếp chồng nhau đọc ra một lỗi render chứ không ra cấu trúc.
+   */
+  headless?: boolean;
+}) {
   return (
     <section className="workflow-panel">
       {/* §W2B-4 — eyebrow "BƯỚC TRONG MỘT MẠCH" đã bỏ: nó lặp lại đúng thứ hàng
           stepper ngay phía trên đang nói, bằng chữ nhỏ hơn và mờ hơn. Một dòng
           eyebrow trên MỖI bước là 6 lần nói cùng một câu. */}
-      <header className="workflow-heading">
-        <h2>{title}</h2>
-        <p>{copy}</p>
-      </header>
+      {headless ? null : (
+        <header className="workflow-heading">
+          <h2>{title}</h2>
+          <p>{copy}</p>
+        </header>
+      )}
       {children}
     </section>
   );

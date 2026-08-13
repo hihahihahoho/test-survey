@@ -174,7 +174,15 @@ export function resolveKitset(
       skipped.push({ file: e.file, label: e.label, reason: "unknown" });
       continue;
     }
-    drawable.push(hit);
+    /* KÍCH THƯỚC RIÊNG CỦA DỰ ÁN đè lên số của thư viện — trộn ở ĐÂY, một lần, để
+       contract, preview skeleton và bảng chi tiết không thể nói ba con số khác nhau.
+       Thư viện chung không bị đụng tới: `hit` được sao ra bản mới. */
+    const override = e.skel;
+    drawable.push(
+      override && (override.w !== undefined || override.h !== undefined)
+        ? { ...hit, skel: { ...hit.skel, ...(override.w !== undefined ? { w: override.w } : {}), ...(override.h !== undefined ? { h: override.h } : {}) } }
+        : hit,
+    );
   }
   return { drawable, skipped };
 }

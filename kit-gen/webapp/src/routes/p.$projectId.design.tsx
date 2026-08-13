@@ -15,5 +15,5 @@ export const Route = createRoute({
 
 function DesignRoute() {
   const { projectId } = Route.useParams();
-  return <Navigate to="/p/$projectId" params={{ projectId }} search={{ section: "ui" }} replace />;
+  return <Navigate to="/p/$projectId" params={{ projectId }} search={{ section: "skeleton" }} replace />;
 }

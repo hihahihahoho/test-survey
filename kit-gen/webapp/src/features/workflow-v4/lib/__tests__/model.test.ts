@@ -11,7 +11,7 @@ import { resolve } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadBundledV2 } from "@/features/design/library/lib/source";
 import {
-  LEGACY_DRAFT_KEY, LUCKY_PRESET_FILES, createWorkflowStore, draftKey, dropWorkflowDraft,
+  LAST_STEP, LEGACY_DRAFT_KEY, LUCKY_PRESET_FILES, createWorkflowStore, draftKey, dropWorkflowDraft,
   presetKitset, resetWorkflowStores, restoreWorkflowDraft, settingsDirty, trashedDraftKey,
   versionSettingsOf,
 } from "../model";
@@ -42,10 +42,12 @@ describe("§W1-1 — mỗi bộ kit một bản nháp", () => {
     expect(localStorage.getItem(LEGACY_DRAFT_KEY)).toBeNull();
   });
 
-  it("bộ kit thứ 2 mở ra ở BƯỚC 1, không nhảy vào bước 6 của bộ thứ 1", () => {
+  /* Bước "Kết quả" đã bỏ ⇒ `addVersion` dừng ở `LAST_STEP` (5). Hợp đồng của ca test
+     không đổi: bộ kit thứ 2 phải mở ở BƯỚC 1 chứ không thừa hưởng bước cuối của bộ 1. */
+  it("bộ kit thứ 2 mở ra ở BƯỚC 1, không nhảy vào bước cuối của bộ thứ 1", () => {
     const p1 = createWorkflowStore("kit-a");
     p1.getState().addVersion("xong");
-    expect(p1.getState().step).toBe(6);
+    expect(p1.getState().step).toBe(LAST_STEP);
 
     const p2 = createWorkflowStore("kit-b");
     expect(p2.getState().step).toBe(1);

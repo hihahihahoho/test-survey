@@ -1,11 +1,14 @@
 import * as React from "react";
-import { Check, Plus } from "lucide-react";
+import { Check, Plus, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWorkflowProjectId, useWorkflowStore, useWorkflowStoreApi, migrateMascots, type WorkflowMascot } from "../lib/model";
 import { useWorkflowRefs } from "../lib/refs-sync";
 import { CheckRow } from "../components/CheckRow";
 import { GroupChips } from "../components/GroupChips";
+import { ItemDetailDialog } from "../components/ItemDetail";
 import { MascotCard, MascotDialog, MascotEmpty } from "../components/MascotDialog";
+import { useKitsetContract } from "../lib/contract-sync";
+import { itemPromptFor, poseCellFile } from "../lib/item-prompt";
 import { POSES, POSE_GROUPS, allPoseIds } from "../lib/poses";
 import { poseSvgMarkup } from "@/features/design/preview";
 import { Step } from "./BriefStep";
@@ -13,14 +16,23 @@ import { Step } from "./BriefStep";
 /** Danh mục dáng nay ở `lib/poses.ts`; re-export để nơi gọi cũ (và test) không gãy. */
 export { POSES } from "../lib/poses";
 
-export function MascotStep() {
+/** Xem `KitsetStep` — cùng một luật hai hình thái cho wizard và trang quản lý. */
+export type MascotVariant = "wizard" | "manage";
+
+export function MascotStep({ variant = "wizard", detailFooter }: {
+  variant?: MascotVariant;
+  /** Hàng nút của panel chi tiết dáng. Màn quản lý truyền `SaveBar`. */
+  detailFooter?: React.ReactNode;
+} = {}) {
   const s = useWorkflowStore();
   const store = useWorkflowStoreApi();
   const projectId = useWorkflowProjectId();
   const refs = useWorkflowRefs(projectId);
+  const sync = useKitsetContract();
   const [poseGroup, setPoseGroup] = React.useState<string>(POSE_GROUPS[0]!);
   const [editing, setEditing] = React.useState<WorkflowMascot | null>(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [detailPose, setDetailPose] = React.useState<string | null>(null);
 
   /* Bản nháp ghi từ bản build cũ chỉ có ba trường `mascot*` rời. `hydrateWorkflowStore`
      đã nâng cấp bản nháp trên ĐĨA; đây là vế còn lại — bản nháp trong `localStorage`
@@ -33,6 +45,7 @@ export function MascotStep() {
   const openAdd = () => { setEditing(null); setDialogOpen(true); };
   const openEdit = (mascot: WorkflowMascot) => { setEditing(mascot); setDialogOpen(true); };
 
+  const detailPoseInfo = detailPose ? POSES.find((pose) => pose.id === detailPose) ?? null : null;
   const poseCount = s.mascotPoses.length;
   const shown = POSES.filter((pose) => pose.group === poseGroup);
   const groupChips = POSE_GROUPS.map((group) => ({
@@ -42,7 +55,7 @@ export function MascotStep() {
   }));
 
   return (
-    <Step title="Mascot" copy="Thêm từng nhân vật và chọn các dáng cần vẽ.">
+    <Step headless={variant === "manage"} title="Mascot" copy="Thêm từng nhân vật và chọn các dáng cần vẽ.">
       <CheckRow
         id="mascot-enabled-step"
         checked={s.mascotEnabled}
@@ -107,9 +120,8 @@ export function MascotStep() {
             <div aria-label={poseGroup} className="compact-element-grid">
               {shown.map((pose) => {
                 const on = s.mascotPoses.includes(pose.id);
-                return (
+                const toggle = (
                   <button
-                    key={pose.id}
                     type="button"
                     className={on ? "compact-element selected" : "compact-element"}
                     aria-pressed={on}
@@ -131,9 +143,52 @@ export function MascotStep() {
                     {on ? <Check aria-hidden /> : <Plus aria-hidden />}
                   </button>
                 );
+                if (variant === "wizard") return <React.Fragment key={pose.id}>{toggle}</React.Fragment>;
+                return (
+                  <div key={pose.id} className="flex min-w-0 flex-col gap-2">
+                    {toggle}
+                    <div className="px-1">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setDetailPose(pose.id)}>
+                        <SlidersHorizontal aria-hidden />Chi tiết
+                      </Button>
+                    </div>
+                  </div>
+                );
               })}
             </div>
           </section>
+
+          {detailPoseInfo ? (
+            <ItemDetailDialog
+              open
+              onOpenChange={(open) => { if (!open) setDetailPose(null); }}
+              title={`Dáng ${detailPoseInfo.label}`}
+              description={`Nhóm ${detailPoseInfo.group} · ${detailPoseInfo.id}`}
+              prompt={itemPromptFor(sync?.contract ?? null, poseCellFile(sync?.contract ?? null, detailPoseInfo.id) ?? "")}
+              promptEmptyReason="Dáng này chưa được chọn (hoặc dự án chưa có nhân vật nào) nên chưa có ô nào trong bản thiết kế."
+              footer={detailFooter ?? <Button type="button" variant="secondary" onClick={() => setDetailPose(null)}>Đóng</Button>}
+            >
+              <div className="space-y-4">
+                <CheckRow
+                  id={`pose-detail-${detailPoseInfo.id}`}
+                  checked={s.mascotPoses.includes(detailPoseInfo.id)}
+                  onCheckedChange={(checked) => s.set({
+                    mascotPoses: checked
+                      ? [...s.mascotPoses.filter((id) => id !== detailPoseInfo.id), detailPoseInfo.id]
+                      : s.mascotPoses.filter((id) => id !== detailPoseInfo.id),
+                  })}
+                  label="Vẽ dáng này"
+                  description="Bỏ tick để loại dáng khỏi tấm mascot của dự án."
+                />
+                {/* Ô dáng KHÔNG có kích thước riêng: `kitset-to-contract` khoá cứng
+                    `w .3 · h .85` cho mọi dáng để cả tấm là một turnaround đều nhau —
+                    một người cao 85% ô, rộng ~1/3. Nói ra thay vì đưa một ô nhập giả. */}
+                <p className="text-caption text-fg-muted">
+                  Kích thước ô dáng cố định 30% × 85% để cả tấm mascot cùng một tỷ lệ người.
+                </p>
+              </div>
+            </ItemDetailDialog>
+          ) : null}
 
           <MascotDialog
             open={dialogOpen}

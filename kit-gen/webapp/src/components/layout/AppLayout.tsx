@@ -78,6 +78,11 @@ export function AppLayout({ screen, projectId, fileId, children, simplified = fa
 
   const shellEnv = React.useMemo(() => ({ agentOffline: !status.connected, agentCommand: RUN_CMD }), [status.connected]);
 
+  /* ⚠️ MỞ CÀI ĐẶT KHÔNG ĐƯỢC ĐỘNG VÀO MÀN NỀN (lỗi #5 của đợt tái cấu trúc).
+     Bản cũ ghi `section: "settings"` — mà `section` CHÍNH LÀ tab nền đang mở, nên một cú
+     bấm vào nút Cài đặt là ném người ta khỏi mục họ đang đứng, và đóng dialog lại rơi tiếp
+     về "tất cả thành phẩm". Nay dialog có tham số RIÊNG (`settings`), còn `section`/`group`
+     được giữ nguyên nhờ hàm cập nhật search. */
   const body = (
     <FloraShell
       home={screen === "projects" || screen === "settings"}
@@ -87,7 +92,7 @@ export function AppLayout({ screen, projectId, fileId, children, simplified = fa
       onSettingsClick={projectId ? () => void navigate({
         to: "/p/$projectId",
         params: { projectId },
-        search: ((previous: Record<string, unknown>) => ({ ...previous, section: "settings" })) as never,
+        search: ((previous: Record<string, unknown>) => ({ ...previous, settings: "requirements" })) as never,
       }) : undefined}
       onHomeClick={() => void navigate({ to: "/" })}
     >

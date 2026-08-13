@@ -126,8 +126,10 @@ describe("W2A-3 · không còn control thô của hệ điều hành", () => {
     }
   });
 
-  it("`ResultStep` ưu tiên thành phẩm, không đưa control kỹ thuật vào màn chính", () => {
-    const s = strip(read("src/features/workflow-v4/steps/ResultStep.tsx"));
+  /* Bước ⑥ "Kết quả" đã bỏ; nhà mới của màn thành phẩm là tab "Ảnh đã tạo" của dự án.
+     Hợp đồng giữ nguyên chữ: ưu tiên thành phẩm, không nhét control kỹ thuật vào đó. */
+  it("màn thành phẩm ưu tiên thành phẩm, không đưa control kỹ thuật vào màn chính", () => {
+    const s = strip(read("src/features/project/sections/ImagesSection.tsx"));
     expect(s).toContain("<GeneratedResults");
     expect(s).not.toContain('<select');
     expect(s).not.toContain('result-chroma');

@@ -27,7 +27,44 @@ export { LEGACY_DRAFT_KEY, draftKey, trashedDraftKey, migrateLegacyDraft, dropWo
  */
 
 export type StepId = 1 | 2 | 3 | 4 | 5 | 6;
-export type KitElement = { file: string; label: string; role: string; cell: string; mock?: boolean; selected: boolean };
+
+/**
+ * BƯỚC CUỐI CỦA WIZARD — 5, không phải 6.
+ *
+ * Bước "Kết quả" cũ đã bỏ: bấm **Tạo ảnh** ở bước Kiểm tra là đi thẳng vào màn quản lý
+ * dự án, tab "Ảnh đã tạo" — nơi vốn đã có đủ phiên bản ảnh, tạo lại theo nhóm và lịch sử
+ * run. Đứng lại trong stepper để xem kết quả là một bản sao nghèo hơn của màn đó.
+ * `StepId` vẫn giữ số 6 vì bản nháp cũ trên đĩa có thể đang mang `step: 6`; mọi đường
+ * đi mới đều kẹp về `LAST_STEP`.
+ */
+export const LAST_STEP = 5 satisfies StepId;
+
+/**
+ * KÍCH THƯỚC RIÊNG CỦA DỰ ÁN cho một ô skeleton — phần trăm bề rộng/cao của Ô, đúng
+ * đơn vị mà `LibElement.skel.w/h` và `Contract.components[].skel.w/h` đang dùng (0–1).
+ *
+ * ⚠️ KHÔNG phải một nguồn sự thật thứ hai. Thư viện chung vẫn là mặc định; đây chỉ là
+ * lớp ĐÈ của riêng dự án, và nó được `resolveKitset()` trộn vào `skel` của thư viện
+ * TRƯỚC khi dựng contract. Bỏ trống ⇒ dùng số của thư viện (§7 sitemap: "sửa bộ khung
+ * trong dự án chỉ sửa bản của dự án đó").
+ */
+export type KitElementSkel = { w?: number; h?: number };
+export type KitElement = {
+  file: string;
+  label: string;
+  role: string;
+  cell: string;
+  mock?: boolean;
+  selected: boolean;
+  /** Ghi đè kích thước ô của riêng dự án. Vắng mặt ⇒ theo thư viện. */
+  skel?: KitElementSkel;
+};
+
+/** Kẹp một cạnh skeleton về khoảng dùng được. `null` ⇒ trả về thư viện. */
+export function clampSkelSide(value: number | null): number | null {
+  if (value === null || !Number.isFinite(value)) return null;
+  return Math.min(1, Math.max(0.05, Math.round(value * 100) / 100));
+}
 export type Chroma = "magenta" | "green";
 export type SheetLimitKey = "background" | "popup" | "small" | "props" | "mascot";
 /** `null` = dùng giới hạn của thư viện chung; số = ghi đè cho riêng dự án. */
@@ -199,8 +236,13 @@ export type WorkflowState = {
    * — kể cả món người dùng vừa bỏ tick.
    */
   adoptCatalogue: (items: ReadonlyArray<{ file: string; label: string; role: string; cell: string }>) => void;
-  /** Chọn / bỏ chọn hàng loạt (nút "Chọn tất cả" · "Bỏ chọn" của bước Bộ khung UI). */
+  /** Chọn / bỏ chọn hàng loạt (nút "Chọn tất cả" · "Bỏ chọn" của bước Skeleton UI). */
   setElementsSelected: (files: readonly string[], selected: boolean) => void;
+  /**
+   * Đè kích thước ô của MỘT thành phần. `null` cho một cạnh = trả cạnh đó về thư viện;
+   * cả hai cạnh `null` ⇒ xoá hẳn lớp đè để bản nháp không phình ra vì số trùng mặc định.
+   */
+  setElementSkel: (file: string, patch: { w?: number | null; h?: number | null }) => void;
   addMascot: (input: { name: string; description: string; ref?: { name: string } | null }) => string;
   patchMascot: (id: string, patch: Partial<Omit<WorkflowMascot, "id">>) => void;
   removeMascot: (id: string) => void;
@@ -338,7 +380,7 @@ const stores = new Map<string, WorkflowStore>();
 onDraftForgotten((projectId) => void stores.delete(projectId));
 
 type WorkflowActionKey =
-  | "set" | "next" | "back" | "go" | "toggleElement" | "adoptCatalogue" | "setElementsSelected"
+  | "set" | "next" | "back" | "go" | "toggleElement" | "adoptCatalogue" | "setElementsSelected" | "setElementSkel"
   | "addMascot" | "patchMascot" | "removeMascot"
   | "addVersion" | "markVersionStatus" | "restoreVersion";
 
@@ -440,7 +482,7 @@ export function createWorkflowStore(projectId: string): WorkflowStore {
       (set, get) => ({
         ...initialState(),
         set: (patch) => set(patch),
-        next: () => { const n = Math.min(6, get().step + 1) as StepId; set({ step: n, unlocked: Math.max(get().unlocked, n) as StepId }); },
+        next: () => { const n = Math.min(LAST_STEP, get().step + 1) as StepId; set({ step: n, unlocked: Math.max(get().unlocked, n) as StepId }); },
         back: () => set({ step: Math.max(1, get().step - 1) as StepId }),
         go: (step) => { if (step <= get().unlocked) set({ step }); },
         toggleElement: (file, meta) => set((s) => {
@@ -466,6 +508,23 @@ export function createWorkflowStore(projectId: string): WorkflowStore {
             elements: s.elements.map((e) => (want.has(e.file) ? { ...e, selected } : e)),
           };
         }),
+        setElementSkel: (file, patch) => set((s) => ({
+          kitsetTouched: true,
+          elements: s.elements.map((e) => {
+            if (e.file !== file) return e;
+            const next: KitElementSkel = { ...(e.skel ?? {}) };
+            if ("w" in patch) {
+              const w = clampSkelSide(patch.w ?? null);
+              if (w === null) delete next.w; else next.w = w;
+            }
+            if ("h" in patch) {
+              const h = clampSkelSide(patch.h ?? null);
+              if (h === null) delete next.h; else next.h = h;
+            }
+            const { skel: _drop, ...rest } = e;
+            return Object.keys(next).length > 0 ? { ...rest, skel: next } : rest;
+          }),
+        })),
         addMascot: ({ name, description, ref = null }) => {
           const id = newMascotId();
           set((s) => syncPrimaryMascot([...s.mascots, { id, name, description, ref }]));
@@ -496,7 +555,11 @@ export function createWorkflowStore(projectId: string): WorkflowStore {
             ...(runId ? { runId } : {}), prompt,
             settings: versionSettingsOf({ ...s, stylePrompt: prompt }),
           };
-          return { versions: [...s.versions, version], activeVersion: id, step: 6, unlocked: 6 };
+          /* Bước "Kết quả" trong stepper đã bị bỏ (bấm Tạo ảnh là vào thẳng màn quản lý
+             dự án, tab "Ảnh đã tạo"). Nên phiên bản mới KHÔNG còn đẩy wizard sang bước 6
+             — nó dừng ở bước cuối cùng còn tồn tại, để bản nháp cũ mở lại không rơi vào
+             một bước không có nội dung. */
+          return { versions: [...s.versions, version], activeVersion: id, step: LAST_STEP, unlocked: LAST_STEP };
           });
           return id;
         },

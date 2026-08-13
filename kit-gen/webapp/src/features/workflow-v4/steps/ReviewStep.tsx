@@ -75,7 +75,7 @@ export function ReviewStep() {
         <Recap title="Dự án" value={s.kitName} detail={s.campaign || s.brief || "Chưa có mô tả"} />
         <Recap title="Phong cách" value={s.stylePrompt || "Chưa mô tả"} detail={styleDetail} />
         <Recap
-          title="Bộ khung UI"
+          title="Skeleton UI"
           value={`${drawable.length} thành phần`}
           detail={[
             sheets === null ? "Chưa tính số sheet" : `${sheets} sheet`,

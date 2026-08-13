@@ -13,5 +13,5 @@ export const Route = createRoute({
 
 function ProjectSettingsRoute() {
   const { projectId } = Route.useParams();
-  return <Navigate to="/p/$projectId" params={{ projectId }} search={{ section: "settings" }} replace />;
+  return <Navigate to="/p/$projectId" params={{ projectId }} search={{ settings: "requirements" }} replace />;
 }

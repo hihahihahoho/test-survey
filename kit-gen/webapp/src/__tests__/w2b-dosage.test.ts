@@ -317,7 +317,7 @@ describe("2B-7 · chữ của người dùng, không phải của lập trình v
   const looksLikeClassList = (s: string) => /^[a-z][a-z0-9-]*( [a-z][a-z0-9-]*)*$/.test(s);
 
   it("màn workflow không còn nói 'element' với người dùng", () => {
-    for (const f of ["KitsetStep", "ReviewStep", "ResultStep", "BriefStep", "StyleStep", "MascotStep"]) {
+    for (const f of ["KitsetStep", "ReviewStep", "BriefStep", "StyleStep", "MascotStep"]) {
       const code = stripComments(read(`src/features/workflow-v4/steps/${f}.tsx`));
       const quoted = [...code.matchAll(/"([^"\n]*)"/g)].map((m) => m[1]!).filter((s) => !looksLikeClassList(s));
       const jsxText = [...code.matchAll(/>([^<>{}\n]+)</g)].map((m) => m[1]!);
@@ -331,7 +331,7 @@ describe("2B-7 · chữ của người dùng, không phải của lập trình v
   });
 
   it("màn thành phẩm không còn panel kỹ thuật cắt/chroma", () => {
-    const src = read("src/features/workflow-v4/steps/ResultStep.tsx");
+    const src = read("src/features/project/sections/ImagesSection.tsx");
     expect(src).toContain("GeneratedResults");
     expect(src).not.toContain("result-chroma");
     expect(src).not.toContain("Cắt lại");

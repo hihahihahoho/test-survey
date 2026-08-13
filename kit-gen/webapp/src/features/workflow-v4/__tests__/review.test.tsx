@@ -196,7 +196,7 @@ describe("§W1-10 — nút chính ở hàng nút cuối, không nằm giữa th�
     mount(
       <>
         <ReviewStep />
-        <WorkflowActions step={5} drawable={7} onBack={() => {}} onNext={() => {}} onDraw={onDraw} onDone={() => {}} />
+        <WorkflowActions step={5} drawable={7} onBack={() => {}} onNext={() => {}} onDraw={onDraw} />
       </>,
     );
     const nút = screen.getAllByRole("button", { name: /Tạo ảnh/ });
@@ -207,23 +207,26 @@ describe("§W1-10 — nút chính ở hàng nút cuối, không nằm giữa th�
   });
 
   it("không còn món nào vẽ được thì nút chính khoá, không phải biến mất", () => {
-    render(<WorkflowActions step={5} drawable={0} onBack={() => {}} onNext={() => {}} onDraw={() => {}} onDone={() => {}} />);
+    render(<WorkflowActions step={5} drawable={0} onBack={() => {}} onNext={() => {}} onDraw={() => {}} />);
     expect(screen.getByRole("button", { name: /Tạo ảnh/ }).hasAttribute("disabled")).toBe(true);
   });
 });
 
-describe("§W1-2 — bước 6 có cửa ra", () => {
-  it("hàng nút cuối ở bước 6 có ≥2 nút, trong đó có đường rời khỏi mạch", () => {
-    const onDone = vi.fn();
-    render(<WorkflowActions step={6} drawable={7} onBack={() => {}} onNext={() => {}} onDraw={() => {}} onDone={onDone} />);
-    const buttons = screen.getAllByRole("button");
-    expect(buttons.length).toBeGreaterThanOrEqual(2);
+/**
+ * §W1-2 ĐỔI NHÀ — **bước ⑥ "Kết quả" đã bỏ**, nhưng hợp đồng của nó thì không.
+ *
+ * Hợp đồng cũ: *"mạch wizard không được kết thúc bằng không gì cả"* và *"hai cửa ra
+ * mang phần thưởng phải khoá KÈM LÝ DO khi chưa có ảnh đã cắt"*. Cả hai vẫn được kiểm,
+ * chỉ đổi chỗ:
+ *   · mạch nay kết thúc bằng ĐIỀU HƯỚNG vào màn quản lý dự án, tab "Ảnh đã tạo";
+ *   · hai cửa ra chuyển sang `features/project/sections/ImagesSection.tsx`.
+ */
+describe("§W1-2 — mạch wizard kết thúc ở màn dự án, không ở một bước thứ sáu", () => {
+  it("hàng nút cuối KHÔNG còn bước 6 và KHÔNG còn nút 'Xong — về dự án'", () => {
+    render(<WorkflowActions step={5} drawable={7} onBack={() => {}} onNext={() => {}} onDraw={() => {}} />);
+    expect(screen.queryByRole("button", { name: /Xong — về dự án/ })).toBeNull();
     expect(screen.getByRole("button", { name: /Quay lại/ })).toBeTruthy();
-
-    const xong = screen.getByRole("button", { name: /Xong — về dự án/ });
-    expect(xong.hasAttribute("disabled")).toBe(false);
-    fireEvent.click(xong);
-    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: /Tạo ảnh/ })).toBeTruthy();
   });
 
   /**
@@ -237,10 +240,7 @@ describe("§W1-2 — bước 6 có cửa ra", () => {
     render(
       <QueryClientProvider client={qc}>
         <TooltipProvider>
-          <WorkflowActions
-            step={6} drawable={7} onBack={() => {}} onNext={() => {}} onDraw={() => {}} onDone={() => {}}
-            exits={<><DownloadKitButton projectId={PID} /><CopyFigmaButton projectId={PID} kitName="Bộ thử" /></>}
-          />
+          <DownloadKitButton projectId={PID} /><CopyFigmaButton projectId={PID} kitName="Bộ thử" />
         </TooltipProvider>
       </QueryClientProvider>,
     );
@@ -251,18 +251,22 @@ describe("§W1-2 — bước 6 có cửa ra", () => {
     }
   });
 
-  it("hàng nút KHÔNG tự dựng cửa ra — chúng do màn bơm vào (`exits`)", () => {
-    render(<WorkflowActions step={6} drawable={7} onBack={() => {}} onNext={() => {}} onDraw={() => {}} onDone={() => {}} />);
+  it("hàng nút KHÔNG tự dựng cửa ra — chúng thuộc màn dự án", () => {
+    render(<WorkflowActions step={5} drawable={7} onBack={() => {}} onNext={() => {}} onDraw={() => {}} />);
     expect(screen.queryByRole("button", { name: /Tải \.zip/ })).toBeNull();
-    expect(screen.getByRole("button", { name: /Xong — về dự án/ })).toBeTruthy();
+    expect(readFileSync(join(SRC, "features/project/sections/ImagesSection.tsx"), "utf8")).toContain("<DownloadKitButton");
   });
 
-  it("nút 'Xong' của màn thật LƯU rồi mới điều hướng về danh sách", () => {
+  it("bấm 'Tạo ảnh' ở màn thật: LƯU → đóng dấu hoàn tất → vào tab Ảnh đã tạo", () => {
     const src = readFileSync(join(SRC, "features/workflow-v4/WorkflowScreen.tsx"), "utf8");
-    // §W3-2: rời màn là mốc phải ghi đĩa — không được để nhịp debounce 2s nuốt
-    // thay đổi cuối cùng của người dùng.
+    // §W3-2: rời màn là mốc phải ghi đĩa — không được để nhịp debounce nuốt thay đổi cuối.
     expect(src).toContain("sync.saveNow()");
-    expect(src).toContain('navigate({ to: "/p/$projectId", params: { projectId } })');
+    // `completed: true` phải ghi TRƯỚC khi điều hướng, nếu không màn dự án đá ngược về wizard.
+    const done = src.indexOf("completed: true");
+    const go = src.indexOf('navigate({ to: "/p/$projectId"');
+    expect(done).toBeGreaterThan(-1);
+    expect(go).toBeGreaterThan(done);
+    expect(src).toContain('search: { section: "images" }');
   });
 });
 

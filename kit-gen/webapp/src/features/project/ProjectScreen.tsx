@@ -1,70 +1,73 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  FileInput,
-  FileText,
-  Images,
-  LayoutGrid,
-  Palette,
-  Settings,
-  UserRound,
-  Box,
-  Shapes,
-  RefreshCw,
-} from "lucide-react";
+import { FileInput, Images, LayoutGrid, Settings, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/sonner";
 import { ErrorState, LoadingState } from "@/components/common";
 import type { ScreenProps } from "@/components/layout";
 import { cn } from "@/lib/utils";
 import { useAgentStatus, useContract, useElementLib, usePatchProject, useProject, useUserLibrary, useWorkflowDraft } from "@/lib/hooks";
-import { contractJobs, type Contract, type JobStatusValue, type LibrarySettings } from "@/lib/types";
+import { contractJobs, type LibrarySettings } from "@/lib/types";
 import { fromAgentLib } from "@/features/design/library/lib/source";
 import { Route as ProjectRoute } from "@/routes/p.$projectId";
-import { BriefStep } from "@/features/workflow-v4/steps/BriefStep";
-import { StyleStep } from "@/features/workflow-v4/steps/StyleStep";
+import {
+  resolveProjectView,
+  type ProjectImageGroup, type ProjectSection, type ProjectSettingsTab,
+} from "@/routes/search-schemas";
 import { KitsetStep } from "@/features/workflow-v4/steps/KitsetStep";
 import { MascotStep } from "@/features/workflow-v4/steps/MascotStep";
-import { GeneratedResults } from "@/features/workflow-v4/components/GeneratedResults";
-import { SkeletonPreview } from "@/features/design/preview";
-import { categoryOfSheet, type ResultGroup } from "@/features/workflow-v4/lib/generated-results";
+import { categoryOfSheet } from "@/features/workflow-v4/lib/generated-results";
 import { GenerateDialog } from "@/features/runs";
 import { ContractSyncProvider, useContractSync } from "@/features/workflow-v4/lib/contract-sync";
 import { importedElementsOf, workflowPatchFromContract } from "@/features/workflow-v4/lib/contract-import";
 import { toKitsetRefs, useWorkflowRefs } from "@/features/workflow-v4/lib/refs-sync";
 import {
-  WorkflowStoreProvider, useWorkflowStore,
+  WorkflowStoreProvider, useWorkflowStore, useWorkflowStoreApi,
   type ProjectSheetLimits, type SheetLimitKey,
 } from "@/features/workflow-v4/lib/model";
 import { gateOf, useNarrowViewport } from "@/features/projects/lib/gate";
 import { mergeElements, userUiElements } from "@/features/workflow-v4/lib/user-library";
+import { ImagesSection } from "./sections/ImagesSection";
+import { ProjectSettingsDialog } from "./components/ProjectSettingsDialog";
+import { SaveBar } from "./components/SaveBar";
+import { UnsavedGuardDialog } from "./components/UnsavedGuardDialog";
+import { useProjectBuffer } from "./lib/useProjectBuffer";
 
-const MANAGEMENT = [
-  { id: "overview", label: "Tất cả thành phẩm", icon: LayoutGrid, category: "all" },
-  { id: "mascot", label: "Mascot", icon: UserRound, category: "mascot" },
-  { id: "background", label: "Nền", icon: Images, category: "background" },
-  { id: "popup", label: "Popup", icon: Box, category: "popup" },
-  { id: "ui", label: "UI nhỏ", icon: Palette, category: "ui" },
-  { id: "props", label: "Đạo cụ", icon: Shapes, category: "prop" },
-] as const;
+/**
+ * ══════════════════════════════════════════════════════════════════════════════
+ * MÀN QUẢN LÝ DỰ ÁN — bốn đích, một bản nháp, không autosave
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * ① **Sidebar bốn mục**: Ảnh đã tạo · Skeleton UI · Mascot · Cài đặt. Sáu mục cũ
+ *    (Tất cả thành phẩm / Mascot / Nền / Popup / UI nhỏ / Đạo cụ) đều là *bộ lọc của
+ *    một trang*, nên chúng xuống làm hàng chip trong trang "Ảnh đã tạo".
+ *
+ * ② **Sửa là buffer**. `useContractSync(..., { autosave: false })` ⇒ không có đường
+ *    nào ghi đĩa ngoài nút Lưu. Xem `lib/useProjectBuffer.ts` để biết vì sao autosave
+ *    là một cái bẫy ở màn này ("15 ô lệch bộ khung · Cần tạo lại" hiện ra khi người
+ *    dùng mới chỉ chạm thử một ô).
+ *
+ * ③ **Mở Cài đặt không được đụng màn nền** (lỗi #5). Dialog có tham số URL riêng
+ *    (`?settings=`), `?section=`/`?group=` giữ nguyên — xem `routes/search-schemas.ts`.
+ *
+ * RANH GIỚI: file này là KHUNG. Ruột của thẻ kết quả, trạng thái run, và form ảnh
+ * tham chiếu của mascot đều thuộc component khác; ở đây chỉ đổi chỗ mount của chúng.
+ */
 
-const SETTINGS_SECTIONS = [
-  { id: "requirements", label: "Yêu cầu", icon: FileText },
-  { id: "style", label: "Phong cách", icon: Palette },
+const SIDEBAR: ReadonlyArray<{ id: ProjectSection; label: string; icon: typeof Images }> = [
+  { id: "images", label: "Ảnh đã tạo", icon: Images },
+  { id: "skeleton", label: "Skeleton UI", icon: LayoutGrid },
   { id: "mascot", label: "Mascot", icon: UserRound },
-  { id: "ui", label: "Bộ khung UI", icon: LayoutGrid },
-  { id: "project", label: "Dự án", icon: Settings },
-] as const;
-type SettingsSection = (typeof SETTINGS_SECTIONS)[number]["id"];
-const SETTINGS_REGENERATE_GROUP: Partial<Record<SettingsSection, ResultGroup>> = { mascot: "mascot", ui: "ui" };
+];
+
+/** Nhóm job bị ảnh hưởng khi bấm "Lưu và tạo lại ảnh" ở từng nơi sửa. */
+type RegenerateScope = "all" | "ui" | "mascot";
 
 export function ProjectScreen({ projectId = "" }: ScreenProps) {
   return (
@@ -77,33 +80,27 @@ export function ProjectScreen({ projectId = "" }: ScreenProps) {
 function ProjectManager({ projectId }: { projectId: string }) {
   const navigate = useNavigate();
   const search = ProjectRoute.useSearch();
+  const view = resolveProjectView(search);
   const project = useProject(projectId);
   const draft = useWorkflowDraft(projectId);
   const { status } = useAgentStatus();
   const narrow = useNarrowViewport();
   const gate = React.useMemo(() => gateOf(status, narrow), [status, narrow]);
   const workflow = useWorkflowStore();
+  const store = useWorkflowStoreApi();
   const libQuery = useElementLib();
   const userLibrary = useUserLibrary();
   const diskContract = useContract(projectId);
   const refs = useWorkflowRefs(projectId);
-  const settingsOpen = search.section === "settings";
-  const activeSection = MANAGEMENT.some(item => item.id === search.section) ? search.section : "overview";
-  const activeManagement = MANAGEMENT.find(item => item.id === activeSection) ?? MANAGEMENT[0];
   const [generateJobs, setGenerateJobs] = React.useState<string[] | null>(null);
-  const setSettingsOpen = React.useCallback((open: boolean) => {
-    void navigate({
-      to: "/p/$projectId",
-      params: { projectId },
-      search: ((previous: Record<string, unknown>) => ({ ...previous, section: open ? "settings" : "overview" })) as never,
-      replace: !open,
-    });
-  }, [navigate, projectId]);
-  const [settingsSection, setSettingsSection] = React.useState<SettingsSection>("requirements");
+  /** Điều hướng đang bị chặn vì còn thay đổi chưa lưu. */
+  const [pendingNav, setPendingNav] = React.useState<(() => void) | null>(null);
+
   const workflowIncomplete = draft.data?.completed === false;
   React.useEffect(() => {
     if (workflowIncomplete) void navigate({ to: "/k/$projectId", params: { projectId }, replace: true });
   }, [navigate, projectId, workflowIncomplete]);
+
   const library = React.useMemo(() => {
     const imported = importedElementsOf(diskContract.data?.contract);
     const catalogue = libQuery.data ? fromAgentLib(libQuery.data).elements : [];
@@ -117,19 +114,30 @@ function ProjectManager({ projectId }: { projectId: string }) {
   );
   const limits = React.useMemo(() => {
     const shared = userLibrary.data?.settings;
-    const project = workflow.sheetLimits;
+    const own = workflow.sheetLimits;
     return {
-      background: project.background ?? shared?.background,
-      popup: project.popup ?? shared?.popup,
-      small: project.small ?? shared?.small,
-      props: project.props ?? shared?.props,
-      mascot: project.mascot ?? shared?.mascot,
+      background: own.background ?? shared?.background,
+      popup: own.popup ?? shared?.popup,
+      small: own.small ?? shared?.small,
+      props: own.props ?? shared?.props,
+      mascot: own.mascot ?? shared?.mascot,
     };
   }, [userLibrary.data?.settings, workflow.sheetLimits]);
+
+  /* ⚠️ `autosave: false` là CẢ MỤC ④ của đợt này. Đừng bật lại "cho tiện". */
   const sync = useContractSync(projectId, workflow, status, {
+    autosave: false,
     ...(library ? { lib: library } : {}),
     ...(contractRefs ? { refs: contractRefs } : {}),
     limits,
+  });
+
+  const buffer = useProjectBuffer({
+    projectId,
+    store,
+    state: workflow,
+    sync,
+    ready: !project.isLoading && !draft.isLoading && !diskContract.isLoading,
   });
 
   React.useEffect(() => {
@@ -139,7 +147,88 @@ function ProjectManager({ projectId }: { projectId: string }) {
     }
   }, [project.data?.name, workflow.kitName, workflow.set]);
 
+  /**
+   * NHẬN BẢN THIẾT KẾ CŨ ⇒ GHI NGAY, không chờ nút Lưu.
+   *
+   * "Chuyển và chỉnh sửa" là một xác nhận rõ ràng của người dùng, và cho tới khi bản
+   * workflow được ghi đè thì `sync` vẫn coi đĩa là `foreign` ⇒ mọi nút Lưu sau đó đều
+   * vô hiệu. Không ghi ở đây là để dự án kẹt ở trạng thái chỉ-đọc.
+   *
+   * Phải chờ một vòng render: `adoptForeign()` chỉ đặt cờ, `canWrite` mới thoát khỏi
+   * `foreign` ở lần render sau. `saveRef` để effect không phụ thuộc `buffer` (object mới
+   * mỗi render ⇒ effect chạy vô hạn).
+   */
+  const [adopting, setAdopting] = React.useState(false);
+  const saveRef = React.useRef(buffer.save);
+  saveRef.current = buffer.save;
+  React.useEffect(() => {
+    if (!adopting || sync.state === "foreign") return;
+    setAdopting(false);
+    void saveRef.current();
+  }, [adopting, sync.state]);
 
+  /** Ghi search mới, giữ nguyên mọi tham số khác. */
+  const patchSearch = React.useCallback((patch: Record<string, unknown>, replace = false) => {
+    void navigate({
+      to: "/p/$projectId",
+      params: { projectId },
+      search: ((previous: Record<string, unknown>) => ({ ...previous, ...patch })) as never,
+      replace,
+    });
+  }, [navigate, projectId]);
+
+  /**
+   * Đổi mục sidebar. Còn thay đổi chưa lưu ⇒ HỎI trước, và giữ lại ý định để làm nốt
+   * sau khi người dùng chọn lưu hay bỏ. Bộ lọc nhóm ảnh và tab dialog KHÔNG đi qua đây:
+   * chúng không rời khỏi bản nháp nên chặn chúng chỉ gây phiền.
+   */
+  const goSection = React.useCallback((section: ProjectSection) => {
+    const run = () => patchSearch({ section, settings: undefined });
+    if (buffer.dirty) { setPendingNav(() => run); return; }
+    run();
+  }, [buffer.dirty, patchSearch]);
+
+  const setSettingsTab = React.useCallback((tab: ProjectSettingsTab | null) => {
+    patchSearch({ settings: tab ?? undefined }, tab === null);
+  }, [patchSearch]);
+
+  const closeSettings = React.useCallback(() => {
+    const run = () => setSettingsTab(null);
+    if (buffer.dirty) { setPendingNav(() => run); return; }
+    run();
+  }, [buffer.dirty, setSettingsTab]);
+
+  const jobsOf = React.useCallback((scope: RegenerateScope): string[] => contractJobs(sync.contract)
+    .filter((job) => {
+      if (scope === "all") return true;
+      const category = categoryOfSheet(job.sheet);
+      return scope === "mascot" ? category === "mascot" : category !== "mascot";
+    })
+    .map((job) => job.job), [sync.contract]);
+
+  /**
+   * [Lưu và tạo lại ảnh] — LƯU TRƯỚC, mở dialog sinh ảnh SAU.
+   *
+   * Thứ tự này là cả điểm của mục ④: dialog sinh ảnh đọc `sync.contract`, nên mở nó khi
+   * đĩa còn giữ bản cũ là tạo ảnh cho một bản thiết kế người dùng tưởng đã đổi. Lưu hỏng
+   * ⇒ dừng hẳn, `save()` đã nói lý do bằng toast.
+   */
+  const saveAndRegenerate = React.useCallback((scope: RegenerateScope) => {
+    void (async () => {
+      const jobs = jobsOf(scope);
+      if (!(await buffer.save())) return;
+      if (jobs.length === 0) {
+        toast.info("Đã lưu — chưa có tấm nào để tạo lại.");
+        return;
+      }
+      setSettingsTab(null);
+      setGenerateJobs(jobs);
+    })();
+  }, [buffer, jobsOf, setSettingsTab]);
+
+  const saveOnly = React.useCallback(() => {
+    void (async () => { if (await buffer.save()) toast.success("Đã lưu cài đặt dự án"); })();
+  }, [buffer]);
 
   if (project.isLoading || draft.isLoading) return <LoadingState count={4} label="Đang mở dự án…" />;
   if (project.error || !project.data) {
@@ -156,89 +245,183 @@ function ProjectManager({ projectId }: { projectId: string }) {
   if (workflowIncomplete) return <LoadingState count={4} label="Đang mở lại wizard chưa hoàn tất…" />;
 
   const projectReadOnly = gate.readOnly || sync.state === "foreign";
+  const saveBar = (scope: RegenerateScope, saveLabel: string, regenerateLabel: string, className?: string) => (
+    <SaveBar
+      className={className}
+      dirty={buffer.dirty}
+      saving={buffer.saving}
+      saveLabel={saveLabel}
+      regenerateLabel={regenerateLabel}
+      canRegenerate={!projectReadOnly}
+      onSave={saveOnly}
+      onSaveAndRegenerate={() => saveAndRegenerate(scope)}
+      onRevert={buffer.revert}
+    />
+  );
+
   return (
     <ContractSyncProvider value={sync}>
       <div className="flex min-h-[calc(100dvh-3.5rem)] min-w-0 bg-canvas">
         <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-56 shrink-0 flex-col border-r border-line-subtle bg-surface/50 p-3 md:flex">
           <p className="px-3 py-3 text-caption font-medium uppercase tracking-wide text-fg-muted">Quản lý</p>
           <nav aria-label="Quản lý dự án" className="space-y-1">
-            {MANAGEMENT.map(({ id, label, icon: Icon }) => (
-              <button key={id} type="button" aria-current={id === activeSection ? "page" : undefined}
-                onClick={() => void navigate({ to: "/p/$projectId", params: { projectId }, search: { section: id } } as never)}
-                className={cn("flex min-h-10 w-full items-center gap-3 rounded-2 px-3 text-left text-label", id === activeSection ? "bg-raised text-fg-strong" : "text-fg hover:bg-raised")}>
+            {SIDEBAR.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                aria-current={id === view.section ? "page" : undefined}
+                onClick={() => goSection(id)}
+                className={cn(
+                  "flex min-h-10 w-full items-center gap-3 rounded-2 px-3 text-left text-label",
+                  id === view.section ? "bg-raised text-fg-strong" : "text-fg hover:bg-raised",
+                )}
+              >
                 <Icon className="size-4" aria-hidden /><span>{label}</span>
               </button>
             ))}
+            {/* Cài đặt là mục thứ tư của sidebar và mở DIALOG — cùng một cửa với nút Cài
+                đặt trên topbar, nên hai đường không thể lệch nội dung. */}
+            <button
+              type="button"
+              aria-current={view.settingsTab !== null ? "page" : undefined}
+              onClick={() => setSettingsTab("requirements")}
+              className={cn(
+                "flex min-h-10 w-full items-center gap-3 rounded-2 px-3 text-left text-label",
+                view.settingsTab !== null ? "bg-raised text-fg-strong" : "text-fg hover:bg-raised",
+              )}
+            >
+              <Settings className="size-4" aria-hidden /><span>Cài đặt</span>
+            </button>
           </nav>
         </aside>
+
         <div className="min-w-0 flex-1">
           <div className="kg-page py-6 sm:py-8">
-            {sync.state === "foreign" ? <ImportedDesignNotice onConvert={() => { if (!sync.sourceContract) return; workflow.set(workflowPatchFromContract(sync.sourceContract, project.data.name)); sync.adoptForeign(); }} /> : null}
+            {sync.state === "foreign"
+              ? <ImportedDesignNotice onConvert={() => {
+                  if (!sync.sourceContract) return;
+                  workflow.set(workflowPatchFromContract(sync.sourceContract, project.data.name));
+                  sync.adoptForeign();
+                  setAdopting(true);
+                }} />
+              : null}
             {gate.readOnly && <p role="status" className="mb-4 rounded-2 border border-line-subtle bg-raised px-3 py-2 text-caption text-fg">{gate.longReason}</p>}
-            <ProjectDeliverables projectId={projectId} category={activeManagement.category} title={activeManagement.label} contract={sync.contract} jobStates={project.data.state?.jobs ?? {}} readOnly={projectReadOnly} onGenerate={setGenerateJobs} />
+
+            {view.section === "images" && (
+              <ImagesSection
+                projectId={projectId}
+                kitName={workflow.kitName}
+                group={view.group}
+                onGroupChange={(group: ProjectImageGroup) => patchSearch({ group })}
+                contract={sync.contract}
+                jobStates={project.data.state?.jobs ?? {}}
+                readOnly={projectReadOnly}
+                onGenerate={setGenerateJobs}
+              />
+            )}
+
+            {view.section === "skeleton" && (
+              <ManageSection
+                eyebrow="Bộ khung của dự án"
+                title="Skeleton UI"
+                copy="Chọn thành phần, chỉnh kích thước ô và xem prompt sẽ gửi đi."
+                readOnly={projectReadOnly}
+                saveBar={saveBar("ui", "Lưu", "Lưu + Gen lại")}
+              >
+                <KitsetStep variant="manage" detailFooter={saveBar("ui", "Lưu", "Lưu + Gen lại", "w-full")} />
+              </ManageSection>
+            )}
+
+            {view.section === "mascot" && (
+              <ManageSection
+                eyebrow="Nhân vật của dự án"
+                title="Mascot"
+                copy="Quản lý nhân vật, bộ dáng và prompt của từng dáng."
+                readOnly={projectReadOnly}
+                saveBar={saveBar("mascot", "Lưu", "Lưu + Gen lại")}
+              >
+                <MascotStep variant="manage" detailFooter={saveBar("mascot", "Lưu", "Lưu + Gen lại", "w-full")} />
+              </ManageSection>
+            )}
           </div>
         </div>
       </div>
-      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent size="xl" className="h-[min(48rem,calc(100dvh-2rem))]">
-          <DialogHeader><DialogTitle>Cài đặt</DialogTitle><DialogDescription>Thông tin và cách tạo hình của dự án «{project.data.name}».</DialogDescription></DialogHeader>
-          <DialogBody className="grid min-h-0 gap-5 md:grid-cols-[12rem_minmax(0,1fr)]">
-            <nav aria-label="Các mục cài đặt dự án" className="flex gap-1 overflow-x-auto md:flex-col">
-              {SETTINGS_SECTIONS.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setSettingsSection(id)} aria-current={settingsSection === id ? "page" : undefined} className={cn("flex shrink-0 items-center gap-2 rounded-2 px-3 py-2 text-left text-label", settingsSection === id ? "bg-raised text-fg-strong" : "text-fg-muted hover:bg-raised")}><Icon className="size-4" aria-hidden />{label}</button>)}
-            </nav>
-            <fieldset disabled={projectReadOnly} className="min-w-0 overflow-y-auto border-0 p-0 pb-20">
-              {settingsSection === "requirements" && <BriefStep />}
-              {settingsSection === "style" && <StyleStep />}
-              {settingsSection === "mascot" && <MascotStep />}
-              {settingsSection === "ui" && <KitsetStep />}
-              {settingsSection === "project" && <ProjectSettingsPanel projectId={projectId} currentName={project.data.name} librarySettings={userLibrary.data?.settings} sheetLimits={workflow.sheetLimits} onSheetLimits={(next) => workflow.set({ sheetLimits: next })} onRenamed={(name) => workflow.set({ kitName: name })} />}
-              {settingsSection !== "project" ? <SettingsRegenerateBar section={settingsSection} contract={sync.contract} onGenerate={(jobs) => { setGenerateJobs(jobs); setSettingsOpen(false); }} /> : null}
-            </fieldset>
-          </DialogBody>
-        </DialogContent>
-      </Dialog>
-      <GenerateDialog open={generateJobs !== null} onOpenChange={open=>{if(!open)setGenerateJobs(null)}} projectId={projectId} contract={sync.contract} jobStates={project.data.state?.jobs ?? {}} initialJobs={generateJobs} readOnly={projectReadOnly} readOnlyReason={gate.reason} />
+
+      <ProjectSettingsDialog
+        open={view.settingsTab !== null}
+        onOpenChange={(open) => { if (!open) closeSettings(); }}
+        projectName={project.data.name}
+        tab={view.settingsTab ?? "requirements"}
+        onTabChange={setSettingsTab}
+        readOnly={projectReadOnly}
+        projectPanel={
+          <ProjectSettingsPanel
+            projectId={projectId}
+            currentName={project.data.name}
+            librarySettings={userLibrary.data?.settings}
+            sheetLimits={workflow.sheetLimits}
+            onSheetLimits={(next) => workflow.set({ sheetLimits: next })}
+            onRenamed={(name) => workflow.set({ kitName: name })}
+          />
+        }
+        footer={saveBar("all", "Lưu cài đặt", "Lưu và tạo lại ảnh", "w-full")}
+      />
+
+      <UnsavedGuardDialog
+        open={pendingNav !== null}
+        onOpenChange={(open) => { if (!open) setPendingNav(null); }}
+        saving={buffer.saving}
+        onSaveAndLeave={() => {
+          const run = pendingNav;
+          void (async () => { if (await buffer.save()) { setPendingNav(null); run?.(); } })();
+        }}
+        onDiscardAndLeave={() => {
+          const run = pendingNav;
+          buffer.revert();
+          setPendingNav(null);
+          run?.();
+        }}
+      />
+
+      <GenerateDialog
+        open={generateJobs !== null}
+        onOpenChange={(open) => { if (!open) setGenerateJobs(null); }}
+        projectId={projectId}
+        contract={sync.contract}
+        jobStates={project.data.state?.jobs ?? {}}
+        initialJobs={generateJobs}
+        readOnly={projectReadOnly}
+        readOnlyReason={gate.reason}
+      />
     </ContractSyncProvider>
   );
 }
 
-function SettingsRegenerateBar({ section, contract, onGenerate }: { section: SettingsSection; contract: Contract; onGenerate: (jobs: string[]) => void }) {
-  const group = SETTINGS_REGENERATE_GROUP[section];
-  const jobs = contractJobs(contract).filter(job => !group || categoryOfSheet(job.sheet) === group).map(job => job.job);
-  const label = group === "mascot" ? "Tạo lại mascot" : group === "ui" ? "Tạo lại UI kit" : "Tạo lại toàn bộ";
-  return (
-    <div className="sticky bottom-0 mt-6 flex items-center justify-between gap-3 border-t border-line-subtle bg-canvas/95 py-3 backdrop-blur">
-      <p className="text-caption text-fg-muted">Thay đổi được lưu tự động. Tạo lại để áp dụng vào ảnh.</p>
-      <Button type="button" disabled={jobs.length === 0} onClick={() => onGenerate(jobs)}><RefreshCw aria-hidden />{label}</Button>
-    </div>
-  );
-}
-
-function ProjectDeliverables({ projectId, category, title, contract, jobStates, readOnly, onGenerate }: {
-  projectId: string;
-  category: ResultGroup;
+/**
+ * Khung chung của hai trang sửa được (Skeleton UI · Mascot): tiêu đề + hàng nút Lưu ở
+ * TRÊN và DƯỚI nội dung. Trên vì lưới 42 món dài hơn một màn hình và người ta không nên
+ * phải cuộn xuống đáy mới thấy nút Lưu; dưới vì đó là nơi tay đang ở sau khi sửa xong.
+ */
+function ManageSection({ eyebrow, title, copy, readOnly, saveBar, children }: {
+  eyebrow: string;
   title: string;
-  contract: Contract;
-  jobStates: Record<string, JobStatusValue>;
+  copy: string;
   readOnly: boolean;
-  onGenerate: (jobs: string[]) => void;
+  saveBar: React.ReactNode;
+  children: React.ReactNode;
 }) {
-  const sheets = React.useMemo(
-    () => contract.sheets.filter(sheet => category === "all" || categoryOfSheet(sheet.id) === category),
-    [category, contract.sheets],
+  return (
+    <section className="space-y-5">
+      <header>
+        <p className="eyebrow">{eyebrow}</p>
+        <h1 className="text-display text-fg-strong">{title}</h1>
+        <p className="mt-1 text-body text-fg-muted">{copy}</p>
+      </header>
+      <div className="rounded-3 border border-line-subtle bg-surface p-3">{saveBar}</div>
+      <fieldset disabled={readOnly} className="min-w-0 border-0 p-0">{children}</fieldset>
+      <div className="rounded-3 border border-line-subtle bg-surface p-3">{saveBar}</div>
+    </section>
   );
-  const jobs = React.useMemo(
-    () => contractJobs(contract).filter(job => category === "all" || categoryOfSheet(job.sheet) === category).map(job => job.job),
-    [category, contract],
-  );
-  return <section className="space-y-5">
-    <header className="flex flex-wrap items-end justify-between gap-3"><div><p className="eyebrow">Quản lý thành phẩm</p><h1 className="text-display text-fg-strong">{title}</h1><p className="mt-1 text-body text-fg-muted">Xem ảnh thật, kiểm tra skeleton và tạo lại đúng nhóm đang sửa.</p></div><Button type="button" disabled={readOnly || jobs.length === 0} onClick={()=>onGenerate(jobs)}><RefreshCw aria-hidden/>{category === "all" ? "Tạo lại toàn bộ" : `Tạo lại ${title.toLowerCase()}`}</Button></header>
-    <Tabs defaultValue="images">
-      <TabsList><TabsTrigger value="images">Ảnh thật</TabsTrigger><TabsTrigger value="skeleton">Skeleton</TabsTrigger></TabsList>
-      <TabsContent value="images"><GeneratedResults projectId={projectId} contract={contract} jobStates={jobStates} category={category} readOnly={readOnly}/></TabsContent>
-      <TabsContent value="skeleton"><div className="grid gap-4 lg:grid-cols-2">{sheets.map(sheet=><article key={sheet.id} className="overflow-hidden rounded-4 border border-line-subtle bg-surface"><div className="border-b border-line-subtle px-4 py-3"><h2 className="text-label text-fg-strong">{sheet.id.replaceAll("-"," ")}</h2><p className="text-caption text-fg-muted">{sheet.components.filter(component=>component.skel?.shape!=="empty").length} thành phần · {sheet.grid.cols} × {sheet.grid.rows}</p></div><div className="p-4"><SkeletonPreview sheet={sheet} showIndex showSafeFrame /></div></article>)}</div>{sheets.length===0?<p className="rounded-4 border border-dashed border-line-subtle p-8 text-center text-body text-fg-muted">Nhóm này chưa có skeleton trong bản thiết kế.</p>:null}</TabsContent>
-    </Tabs>
-  </section>;
 }
 
 function ImportedDesignNotice({ onConvert }: { onConvert: () => void }) {
@@ -294,6 +477,9 @@ function ProjectSettingsPanel({
       </header>
       <div className="max-w-xl space-y-3">
         <Label htmlFor="project-manager-name">Tên dự án</Label>
+        {/* Đổi tên đi thẳng xuống agent (`PATCH /api/projects/:id`) chứ không qua bản
+            nháp: tên dự án là dữ liệu của agent, không nằm trong contract, nên nút Lưu
+            chung không có gì để ghi cho nó. */}
         <div className="flex flex-col gap-2 sm:flex-row">
           <Input
             id="project-manager-name"

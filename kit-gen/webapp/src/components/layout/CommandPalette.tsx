@@ -56,17 +56,17 @@ export function CommandPalette(props: CommandPaletteProps) {
       const p = { projectId };
       list.push(
         { id: "p.requirements", group: "Dự án", icon: LayoutGrid, label: "Dự án: Yêu cầu",
-          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "requirements" } })) },
+          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { settings: "requirements" } })) },
         { id: "p.style", group: "Dự án", icon: Pencil, label: "Dự án: Phong cách", hint: ["g", "d"], hintSequence: true,
-          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "style" } })) },
-        { id: "p.ui", group: "Dự án", icon: LayoutGrid, label: "Dự án: Bộ khung UI",
-          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "ui" } })) },
+          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { settings: "style" } })) },
+        { id: "p.ui", group: "Dự án", icon: LayoutGrid, label: "Dự án: Skeleton UI",
+          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "skeleton" } })) },
         { id: "p.mascot", group: "Dự án", icon: Images, label: "Dự án: Mascot",
           run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "mascot" } })) },
         { id: "p.images", group: "Dự án", icon: Images, label: "Dự án: Ảnh đã tạo", hint: ["g", "r"], hintSequence: true,
           run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "images" } })) },
         { id: "p.settings", group: "Dự án", icon: Settings, label: "Dự án: Cài đặt", hint: ["g", "s"], hintSequence: true,
-          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "settings" } })) },
+          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { settings: "requirements" } })) },
       );
     }
 

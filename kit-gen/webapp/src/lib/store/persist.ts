@@ -32,6 +32,13 @@ export const LS_KEYS = {
   prefs: "kitgen.prefs.v1",
   recent: "kitgen.recent.v1",
   hints: "kitgen.hints.v1",
+  /**
+   * Ý ĐỊNH CẬP NHẬT đang treo — ghi TRƯỚC khi trang tự tải lại, đọc SAU khi app mở lại
+   * để nói được "Đã cập nhật lên bản X" (hoặc "chưa thành công"). Không có khoá này thì
+   * lần reload sau khi cài xong là một cú nhảy im lặng, user không biết chuyện gì đã xảy ra.
+   * Nội dung chỉ là hai số version + mốc thời gian — không có gì của máy user.
+   */
+  update: "kitgen.update.v1",
 } as const;
 
 export type LsKey = (typeof LS_KEYS)[keyof typeof LS_KEYS];
@@ -123,6 +130,13 @@ const recentSchema = z.object({
 
 const hintsSchema = z.object({ dismissed: z.array(z.string()).default([]) });
 
+/** `targetVersion` rỗng = không biết bản đích (kiểm tra bản mới lỗi nhưng user vẫn cài). */
+const updateSchema = z.object({
+  targetVersion: z.string().default(""),
+  fromVersion: z.string().default(""),
+  startedAt: z.string().default(""),
+});
+
 export const SCHEMAS = {
   [LS_KEYS.setup]: setupSchema,
   [LS_KEYS.agent]: agentSchema,
@@ -132,6 +146,7 @@ export const SCHEMAS = {
   [LS_KEYS.prefs]: prefsSchema,
   [LS_KEYS.recent]: recentSchema,
   [LS_KEYS.hints]: hintsSchema,
+  [LS_KEYS.update]: updateSchema,
 } as const;
 
 export type StoreShape = { [K in LsKey]: z.infer<(typeof SCHEMAS)[K]> };

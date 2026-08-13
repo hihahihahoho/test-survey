@@ -120,17 +120,85 @@ export function withoutFileParam(
 export const DESIGN_TABS = ["sheets", "styles", "advanced"] as const;
 export const KIT_TABS = ["assets", "matrix", "export"] as const;
 export const SETTINGS_TABS = ["agent", "env", "prefs", "about"] as const;
-export const PROJECT_SECTIONS = ["overview", "background", "popup", "ui", "props", "mascot", "requirements", "style", "images", "canvas", "settings"] as const;
+/**
+ * ══ MÀN QUẢN LÝ DỰ ÁN — BA TRỤC ĐỘC LẬP TRÊN URL ═══════════════════════════
+ *
+ * Trước bản này chỉ có MỘT tham số `?section=` gánh cả ba việc: đích sidebar, nhóm
+ * ảnh đang lọc, và "dialog Cài đặt có đang mở không". Vì gánh chung nên bấm nút Cài
+ * đặt trên topbar (`section=settings`) **xoá mất** tab nền người dùng đang đứng, và
+ * đóng dialog lại ném họ về `overview` — đúng lỗi #5 của đợt này.
+ *
+ * Nay tách hẳn:
+ *   · `section`  — đích SIDEBAR: `images` · `skeleton` · `mascot`.
+ *   · `group`    — nhóm ảnh đang lọc bên trong "Ảnh đã tạo".
+ *   · `settings` — tab của DIALOG Cài đặt; vắng mặt ⇒ dialog đóng.
+ * Mở/đóng dialog chỉ thêm/bớt `settings`, hai trục kia không bị đụng tới.
+ *
+ * `LEGACY_PROJECT_SECTIONS` là các giá trị `?section=` cũ còn nằm trong bookmark,
+ * lịch sử trình duyệt và link cũ. Chúng KHÔNG bị `.catch` nuốt về mặc định — chúng
+ * được `resolveProjectView()` dịch sang bộ ba mới.
+ */
+export const PROJECT_SECTIONS = ["images", "skeleton", "mascot"] as const;
+export const LEGACY_PROJECT_SECTIONS = ["overview", "background", "popup", "ui", "props", "requirements", "style", "canvas", "settings"] as const;
+export const PROJECT_IMAGE_GROUPS = ["all", "background", "popup", "ui", "props", "mascot"] as const;
+export const PROJECT_SETTINGS_TABS = ["requirements", "style", "project"] as const;
 
 export type DesignTab = (typeof DESIGN_TABS)[number];
 export type KitTab = (typeof KIT_TABS)[number];
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 export type ProjectSection = (typeof PROJECT_SECTIONS)[number];
+export type ProjectImageGroup = (typeof PROJECT_IMAGE_GROUPS)[number];
+export type ProjectSettingsTab = (typeof PROJECT_SETTINGS_TABS)[number];
 
 export const projectSearchSchema = z.object({
-  section: z.enum(PROJECT_SECTIONS).default("overview").catch("overview"),
+  section: z.enum([...PROJECT_SECTIONS, ...LEGACY_PROJECT_SECTIONS]).default("images").catch("images"),
+  group: z.enum(PROJECT_IMAGE_GROUPS).optional().catch(undefined),
+  settings: z.enum(PROJECT_SETTINGS_TABS).optional().catch(undefined),
   file: fileParam,
 });
+
+/** Giá trị `?section=` cũ → nhóm ảnh tương ứng. Không có trong bảng ⇒ không lọc gì. */
+const LEGACY_SECTION_GROUP: Partial<Record<string, ProjectImageGroup>> = {
+  background: "background",
+  popup: "popup",
+  ui: "ui",
+  props: "props",
+};
+
+/** Giá trị `?section=` cũ mở thẳng một tab của dialog Cài đặt. */
+const LEGACY_SECTION_SETTINGS: Partial<Record<string, ProjectSettingsTab>> = {
+  settings: "requirements",
+  requirements: "requirements",
+  style: "style",
+};
+
+export interface ProjectView {
+  section: ProjectSection;
+  group: ProjectImageGroup;
+  /** `null` ⇒ dialog Cài đặt đóng. */
+  settingsTab: ProjectSettingsTab | null;
+}
+
+/**
+ * URL (mới HOẶC cũ) → trạng thái màn. Hàm THUẦN nên test được không cần router.
+ *
+ * Luật: tham số mới luôn thắng; giá trị cũ chỉ được dùng khi tham số mới vắng mặt.
+ * Nhờ vậy một link cũ `?section=props` vẫn mở đúng nhóm Đạo cụ, còn `?section=settings`
+ * vẫn mở dialog — nhưng nền phía sau đứng ở mục mặc định chứ không bị nhảy lung tung.
+ */
+export function resolveProjectView(search: {
+  section?: string | undefined;
+  group?: ProjectImageGroup | undefined;
+  settings?: ProjectSettingsTab | undefined;
+}): ProjectView {
+  const raw = search.section ?? "images";
+  const section = (PROJECT_SECTIONS as readonly string[]).includes(raw) ? (raw as ProjectSection) : "images";
+  return {
+    section,
+    group: search.group ?? LEGACY_SECTION_GROUP[raw] ?? "all",
+    settingsTab: search.settings ?? LEGACY_SECTION_SETTINGS[raw] ?? null,
+  };
+}
 
 export const designSearchSchema = z.object({
   tab: z.enum(DESIGN_TABS).default("sheets").catch("sheets"),

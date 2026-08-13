@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingState, ErrorState } from "@/components/common";
 import { useAgentStatus, useElementLib, useProject, useSaveWorkflowDraft, useUserLibrary, useWorkflowDraft } from "@/lib/hooks";
@@ -10,7 +10,6 @@ import { fromAgentLib } from "@/features/design/library/lib/source";
 import { hydrateWorkflowStore, useWorkflowStore, useWorkflowStoreApi, workflowDraftOf, WorkflowStoreProvider } from "./lib/model";
 import { ContractSyncProvider, useContractSync } from "./lib/contract-sync";
 import { toKitsetRefs, useWorkflowRefs } from "./lib/refs-sync";
-import { DownloadKitButton, CopyFigmaButton } from "./components/KitExits";
 import { SyncBadge } from "./components/SyncBadge";
 import { WorkflowStepper } from "./steps/Stepper";
 import { BriefStep } from "./steps/BriefStep";
@@ -18,18 +17,21 @@ import { StyleStep } from "./steps/StyleStep";
 import { KitsetStep } from "./steps/KitsetStep";
 import { MascotStep } from "./steps/MascotStep";
 import { ReviewStep, DrawConfirmDialog, drawableOf } from "./steps/ReviewStep";
-import { ResultStep } from "./steps/ResultStep";
 import { mergeElements, userUiElements } from "./lib/user-library";
 
 /**
- * MÀN WORKFLOW — stepper 6 bước, một mạch.
+ * MÀN WORKFLOW — stepper **5 bước**, một mạch, và mạch đó kết thúc bằng cách RỜI KHỎI
+ * wizard: bấm "Tạo ảnh" ở bước ⑤ là đóng dấu bản nháp hoàn tất rồi vào thẳng màn quản
+ * lý dự án, tab "Ảnh đã tạo".
  *
- * Hai luật của hàng nút cuối trang (`.workflow-actions`), cả hai đều từ UPGRADE-PLAN:
+ * Bước ⑥ "Kết quả" cũ đã bỏ. Nó là một bản nghèo hơn của tab "Ảnh đã tạo" (không
+ * sidebar, không nhóm, không đường sửa lại) và bắt người dùng bấm thêm một nút "Xong"
+ * để tới đúng nơi họ đằng nào cũng phải tới.
+ *
+ * Luật còn lại của hàng nút cuối trang (`.workflow-actions`) — từ UPGRADE-PLAN:
  *  · **§W1-10** — nút chính LUÔN ở góc dưới-phải. Bước 5 từng đặt ở đó một *câu xám*
  *    ("Cửa sổ xác nhận luôn hiện đủ số lượt…") còn nút thật thì nằm giữa thân trang.
- *    Câu đó đã xoá hẳn; nút "Vẽ bộ kit này" về đúng chỗ 4 bước trước đã dạy.
- *  · **§W1-2** — bước 6 phải có CỬA RA. Trước đây hàng nút cuối chỉ còn "Quay lại":
- *    cả mạch 6 bước kết thúc bằng không gì cả.
+ *    Câu đó đã xoá hẳn; nút "Tạo ảnh" về đúng chỗ 4 bước trước đã dạy.
  *
  * Bản nháp khoá theo `projectId` (§W1-1): provider bọc quanh nội dung, 6 file step
  * không biết gì về chuyện đó.
@@ -117,7 +119,10 @@ function WorkflowBody({ projectId }: { projectId: string }) {
       />
     );
 
-  const content = [<BriefStep />, <StyleStep />, <KitsetStep />, <MascotStep />, <ReviewStep />, <ResultStep />][s.step - 1];
+  const steps = [<BriefStep />, <StyleStep />, <KitsetStep />, <MascotStep />, <ReviewStep />];
+  /* Bản nháp cũ có thể mang `step: 6` (bước "Kết quả" đã bỏ) ⇒ kẹp về bước cuối còn
+     tồn tại thay vì render `undefined` và để lại một trang trắng. */
+  const content = steps[Math.min(s.step, steps.length) - 1];
 
   return (
     <ContractSyncProvider value={sync}>
@@ -151,17 +156,11 @@ function WorkflowBody({ projectId }: { projectId: string }) {
       <WorkflowStepper />
       <div className="kg-page workflow-content">{content}</div>
       <WorkflowActions
-        step={s.step}
+        step={Math.min(s.step, steps.length)}
         drawable={drawableOf(s.elements).length}
         onBack={s.back}
         onNext={s.next}
         onDraw={() => setDrawOpen(true)}
-        onDone={() => { void (async () => {
-          await sync.saveNow();
-          await saveDraft.mutateAsync({ completed: true, draft: workflowDraftOf(store.getState()) });
-          void navigate({ to: "/p/$projectId", params: { projectId } });
-        })(); }}
-        exits={<><DownloadKitButton projectId={projectId} /><CopyFigmaButton projectId={projectId} kitName={s.kitName} /></>}
       />
       <DrawConfirmDialog
         open={drawOpen}
@@ -178,8 +177,21 @@ function WorkflowBody({ projectId }: { projectId: string }) {
               const run = await startRun.startContract(sync.contract);
               s.addVersion(s.stylePrompt, "rendering", run.runId);
               setDrawOpen(false);
-              s.next();
-              toast.success("Đã bắt đầu tạo ảnh.");
+              /**
+               * ⚠️ WIZARD KẾT THÚC Ở ĐÂY (mục ① của đợt tái cấu trúc).
+               *
+               * Trước đây `s.next()` đẩy người dùng sang bước ⑥ "Kết quả" — một bản
+               * nghèo hơn của tab "Ảnh đã tạo" (không có sidebar, không có nhóm, không
+               * có đường sửa lại), rồi bắt họ bấm thêm "Xong — về dự án". Nay bản nháp
+               * được đóng dấu HOÀN TẤT và người dùng vào thẳng màn quản lý dự án.
+               *
+               * `completed: true` phải ghi TRƯỚC khi điều hướng: `ProjectScreen` thấy
+               * `completed === false` là đá ngược về `/k/:id`, nên vào sớm một nhịp là
+               * rơi vào vòng lặp wizard ⇄ dự án.
+               */
+              await saveDraft.mutateAsync({ completed: true, draft: workflowDraftOf(store.getState()) });
+              toast.success("Đã bắt đầu tạo ảnh.", { description: "Theo dõi trong mục Ảnh đã tạo của dự án." });
+              void navigate({ to: "/p/$projectId", params: { projectId }, search: { section: "images" } });
             } catch {
               toast.error("Chưa tạo ảnh được. Kiểm tra công cụ tạo ảnh trong Cài đặt.");
             }
@@ -195,18 +207,21 @@ function WorkflowBody({ projectId }: { projectId: string }) {
  * Hàng nút cuối trang — tách ra để kiểm được từng bước mà không phải dựng cả router
  * lẫn agent giả. `drawable` là số món SẼ ĐƯỢC VẼ THẬT (đã trừ món `mock`).
  */
+/**
+ * ⚠️ HAI CỬA RA (§W3-7 — `.zip` và Copy Figma) KHÔNG còn ở đây.
+ *
+ * Chúng từng nằm ở bước ⑥ "Kết quả". Bước đó đã bỏ, và ở bước ⑤ chúng luôn khoá vì
+ * chưa có một ảnh nào được cắt. Nhà mới của chúng là tab **Ảnh đã tạo** trong màn quản
+ * lý dự án (`features/project/sections/ImagesSection.tsx`) — nơi ảnh đã có thật.
+ */
 export function WorkflowActions({
-  step, drawable, onBack, onNext, onDraw, onDone, exits,
+  step, drawable, onBack, onNext, onDraw,
 }: {
   step: number;
   drawable: number;
   onBack: () => void;
   onNext: () => void;
   onDraw: () => void;
-  onDone: () => void;
-  /** §W3-7 — hai cửa ra mang phần thưởng. Truyền vào để hàng nút kiểm được mà không
-   *  cần dựng cả agent giả (chúng tự gọi `useKit`). */
-  exits?: React.ReactNode;
 }) {
   return (
     <div className="kg-page workflow-actions">
@@ -225,17 +240,6 @@ export function WorkflowActions({
         <Button variant="primary" size="lg" disabled={drawable === 0} onClick={onDraw}>
           <Sparkles aria-hidden />Tạo ảnh
         </Button>
-      )}
-      {step === 6 && (
-        <>
-          {/* §W3-7 — hai cửa ra MANG PHẦN THƯỞNG nay mở thật (cả hai 0 đồng: `.zip` là
-              đọc đĩa, Copy Figma là canvas + clipboard). W1 để chúng khoá kèm lý do vì
-              chưa có ảnh kit; điều kiện mở nay là `useKit` có file, không phải một cái cờ. */}
-          {exits}
-          <Button variant="primary" size="lg" onClick={onDone}>
-            <Check aria-hidden />Xong — về dự án
-          </Button>
-        </>
       )}
     </div>
   );

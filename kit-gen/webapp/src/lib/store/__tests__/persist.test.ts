@@ -15,11 +15,13 @@ beforeEach(() => {
 });
 
 describe("L1 — allowlist khoá", () => {
-  it("nhận đúng 8 khoá của arch §4.1, không hơn", () => {
+  it("nhận đúng 9 khoá của arch §4.1, không hơn", () => {
     expect(allowedKeys().sort()).toEqual(
       [
         "kitgen.agent.v1", "kitgen.hints.v1", "kitgen.prefs.v1", "kitgen.projects.cache.v1",
         "kitgen.recent.v1", "kitgen.setup.v1", "kitgen.ui.v1", "kitgen.workspace.v1",
+        // §cập-nhật: ý định cập nhật đang treo, sống đúng một nhịp reload.
+        "kitgen.update.v1",
       ].sort(),
     );
   });

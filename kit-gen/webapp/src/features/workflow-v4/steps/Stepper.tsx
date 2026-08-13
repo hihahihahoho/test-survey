@@ -1,7 +1,15 @@
 import { Check } from "lucide-react";
 import { useWorkflowStore, type StepId } from "../lib/model";
 
-const steps = ["Yêu cầu", "Phong cách", "Bộ khung UI", "Mascot", "Kiểm tra", "Kết quả"] as const;
+/**
+ * NĂM bước, không phải sáu.
+ *
+ * Bước "Kết quả" đã bỏ: bấm **Tạo ảnh** ở bước Kiểm tra là vào thẳng màn quản lý dự án,
+ * tab "Ảnh đã tạo". Nhãn bước ③ đổi theo tên đã chốt cho khái niệm này trong dự án —
+ * **Skeleton UI** — để stepper, sidebar dự án và dialog Cài đặt gọi cùng một tên.
+ */
+export const WIZARD_STEPS = ["Yêu cầu", "Phong cách", "Skeleton UI", "Mascot", "Kiểm tra"] as const;
+const steps = WIZARD_STEPS;
 
 /**
  * ══ P-SWEEP·15 · HAI HÌNH THÁI CHO HAI BỀ NGANG ═════════════════════════════
@@ -18,7 +26,11 @@ const steps = ["Yêu cầu", "Phong cách", "Bộ khung UI", "Mascot", "Kiểm t
  * `aria-label` của nav vẫn nói đủ; số bước hiện thành CHỮ nên screen reader đọc được.
  */
 export function WorkflowStepper() {
-  const { step, unlocked, go } = useWorkflowStore();
+  const { step: raw, unlocked: unlockedRaw, go } = useWorkflowStore();
+  /* Bản nháp ghi từ bản build cũ có thể mang `step: 6` (bước "Kết quả" đã bỏ). Kẹp lại
+     ở tầng hiển thị để không hiện "Bước 6/5" và không tra vào một ô không tồn tại. */
+  const step = Math.min(raw, steps.length);
+  const unlocked = Math.min(unlockedRaw, steps.length);
   return (
     <>
       <p className="kg-page workflow-step-now">

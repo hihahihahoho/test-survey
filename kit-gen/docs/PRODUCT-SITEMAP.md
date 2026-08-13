@@ -309,6 +309,8 @@ Người dùng có thể tải ảnh lên, đổi tên và xoá. Trong wizard ho
 
 Prototype kỹ thuật một trang tại `kit-gen/studio.html` là nguồn tham chiếu đúng cho cơ chế gen. Webapp mới có thể thay giao diện quản trị, nhưng không được thay pipeline này bằng một màn dashboard hoặc một luồng gen từng ảnh rời.
 
+> Handoff kỹ thuật mới nhất của spike safe-zone: [Spritesheet, safe zone và Figma](./SPRITESHEET-SAFE-ZONE-HANDOFF.md). Dùng tài liệu này cho trạng thái v15, lệnh chạy và các giới hạn đang mở.
+
 ### Ba đầu vào có vai trò tách biệt
 
 1. **Bộ khung spritesheet** khoá số ô, vị trí, kích thước và safe zone của từng thành phần.
@@ -464,3 +466,51 @@ Quản lý dự án → Sửa ref/chọn lại thành phần/đổi giới hạn
 - Search ở sidebar Home chỉ tìm dự án. Các màn Bộ khung UI, Mascot và Style reference có search/filter riêng theo dữ liệu của màn.
 - Các nhóm Bộ khung UI dùng shared Tabs component. Preview upload là grid ảnh thuần, không hiện filename hoặc dung lượng; tên file chỉ còn trong accessible label/title phục vụ xoá và debug.
 - Dialog Cài đặt có header cố định, navigation trái cố định và chỉ cuộn vùng nội dung bên phải.
+
+## Tái cấu trúc màn quản lý dự án (2026-08-13)
+
+Phần này **thay thế** mô tả “Bước 6 — Kết quả” của §6 và danh sách sidebar dự án của §7.
+
+### Tên gọi đã chốt
+
+- Khái niệm “cấu trúc ô/sheet của một dự án” gọi là **Skeleton UI** ở mọi nơi thuộc phạm vi dự án: mục sidebar dự án, bước ③ của wizard, và tiêu đề trang.
+- **Bộ khung UI** vẫn là tên của **thư viện dùng chung** (`/library/ui`) — đó là một đối tượng khác (kho dùng lại giữa các dự án), nên hai tên không đá nhau.
+- Tên kỹ thuật `skeleton` trong code và tên tấm `skeleton/<sheet>.png` không đổi.
+
+### Wizard còn 5 bước
+
+`Yêu cầu → Phong cách → Skeleton UI → Mascot → Kiểm tra`
+
+Bấm **Tạo ảnh** ở bước Kiểm tra: lưu contract → đóng dấu bản nháp `completed` → điều hướng thẳng vào `/p/<id>?section=images`. Không còn bước “Kết quả” và không còn nút “Xong — về dự án”.
+
+### Sidebar dự án — bốn đích
+
+1. **Ảnh đã tạo** (`?section=images`) — ảnh thật + skeleton của lần tạo. Sáu nhóm cũ (Tất cả · Mascot · Nền · Popup · UI nhỏ · Đạo cụ) nay là hàng chip trong trang, đi qua `?group=`.
+2. **Skeleton UI** (`?section=skeleton`) — bản chỉnh sửa đầy đủ: chọn thành phần, chỉnh `Rộng %`/`Cao %` từng ô, mở panel chi tiết.
+3. **Mascot** (`?section=mascot`) — nhân vật, bộ dáng, panel chi tiết từng dáng.
+4. **Cài đặt** — mở dialog, không phải một trang.
+
+Hai cửa ra `Tải .zip` và `Copy sang Figma` chuyển từ bước ⑥ cũ sang header của trang “Ảnh đã tạo”.
+
+### Dialog Cài đặt còn 3 tab
+
+`Yêu cầu · Phong cách · Dự án`. Hai tab cũ (Mascot, Bộ khung UI) đã thành hai trang sidebar.
+
+Dialog mở bằng tham số **riêng** `?settings=<tab>`; `?section=`/`?group=` không bị đụng tới, nên bấm nút Cài đặt trên topbar không còn kéo màn nền về “tất cả thành phẩm”. Link cũ `?section=settings`, `?section=requirements`, `?section=style` vẫn mở đúng tab.
+
+Hàng nút của dialog là `DialogFooter` thật (anh em của vùng cuộn), không còn thanh `sticky` nằm trong vùng cuộn đè lên nội dung.
+
+### Sửa là buffer — lưu mới là lưu
+
+- Màn dự án chạy `useContractSync(..., { autosave: false })`. Không có đường nào ghi contract xuống đĩa ngoài nút Lưu.
+- Dialog Cài đặt: **[Huỷ] [Lưu cài đặt] [Lưu và tạo lại ảnh]**. Trang Skeleton UI / Mascot: **[Huỷ] [Lưu] [Lưu + Gen lại]** (hàng nút hiện cả trên và dưới nội dung).
+- Việc đánh dấu “ô lệch bộ khung · Cần tạo lại” chỉ có thể xảy ra **sau** một cú bấm Lưu.
+- Rời mục sidebar khi còn thay đổi chưa lưu ⇒ hỏi lại, có cả *Bỏ thay đổi* lẫn *Lưu rồi đi*. Đóng tab/F5 ⇒ cảnh báo của trình duyệt.
+- Ngoại lệ có chủ ý: **tên dự án** vẫn lưu ngay bằng nút riêng (nó là dữ liệu của agent, không nằm trong contract).
+
+### Kích thước ô và prompt của từng item
+
+- Kích thước ô sửa được ở **hai** chỗ, cùng một nguồn: ô `Rộng %`/`Cao %` ngay trên thẻ trong trang Skeleton UI, và trong panel chi tiết của item.
+- Nguồn sự thật là `skel.w/h` của contract. Dự án lưu một **lớp đè** `KitElement.skel`; `resolveKitset()` trộn nó lên `skel` của thư viện chung khi dựng contract, nên thư viện chung không bị sửa.
+- Panel chi tiết hiện **prompt sẽ gửi đi** của đúng ô đó — chỉ đọc, có nút sao chép. Nội dung rút từ contract theo đúng những mảnh `gen.sh` chèn nguyên văn (dòng `N) <spec>`, hướng canvas, `cell_hint`, `Art style:`); không dựng lại một bản prompt song song.
+- Ô dáng mascot cố định `30% × 85%` để cả tấm là một turnaround đều nhau; panel nói ra điều đó thay vì đưa một ô nhập giả.
