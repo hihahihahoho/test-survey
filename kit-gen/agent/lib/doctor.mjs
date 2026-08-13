@@ -1,7 +1,8 @@
 /* doctor.mjs — kiểm môi trường. HỢP ĐỒNG: CHỈ trả enum + boolean + version string.
    TUYỆT ĐỐI KHÔNG đọc/trả nội dung auth.json, config.toml, hay biến môi trường bí mật
    (architecture §4.4-4 + §6.3). Kiểm tra image_gen theo teams/t3-auth/PLAN.md:
-   `codex debug prompt-input | grep -c image_gen` — chỉ ĐẾM, không in nội dung, không tốn quota. */
+   `codex debug prompt-input | grep -cE "image_?gen"` — chỉ ĐẾM, không in nội dung, không tốn quota.
+   Codex ≥0.147 đổi tên tool `image_gen` thành skill `imagegen` nên phải khớp cả hai dạng. */
 import { execFile } from "node:child_process"
 import { homedir, platform, arch, release } from "node:os"
 import { join } from "node:path"
@@ -57,7 +58,8 @@ async function imageGenInfo(ws) {
     const r = await run(CODEX, ["debug", "prompt-input"], { timeout: 20000, env })
     if (!r.ok && !r.stdout) return -1
     // CHỈ đếm số lần xuất hiện — không bao giờ giữ/log nội dung output
-    return (r.stdout.match(/image_gen/g) ?? []).length
+    // Codex ≥0.147: skill `imagegen`; bản cũ: tool `image_gen` — đếm cả hai dạng
+    return (r.stdout.match(/image_?gen/gi) ?? []).length
   }
 
   const configured = cfg.imageGen?.mode === "img-home" && cfg.imageGen?.codexHome

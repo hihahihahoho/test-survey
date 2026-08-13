@@ -44,7 +44,7 @@ describe('S0 · script .sh (§3-S0 bước 1)', () => {
     assert(scriptText().includes('node agent/server.mjs --workspace'));
   });
   it('lệnh đếm image_gen không sinh ảnh (chỉ debug prompt-input | grep -c)', () => {
-    assert(/codex debug prompt-input[^\n]*grep -c image_gen/.test(scriptText()));
+    assert(/codex debug prompt-input[^\n]*grep -cE 'image_\?gen'/.test(scriptText()));
   });
 });
 

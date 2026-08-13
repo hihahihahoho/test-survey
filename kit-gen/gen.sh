@@ -171,6 +171,21 @@ $(cat "prompts/${job}.txt")
     -o "logs/${job}.last.txt" \
     "${task}" >"logs/${job}.log" 2>&1
   local rc=$?
+  # VỚT ẢNH (codex ≥0.147): có khi model sinh ảnh xong nhưng KHÔNG tự copy về đích —
+  # tool báo cho model một đường dẫn generated_images không tồn tại trên máy (vd
+  # /root/.codex/... khi provider tuỳ biến chạy tool trong container của họ), hoặc model
+  # chỉ trả lời đường dẫn rồi thôi. Nếu log nhắc tới một file trong generated_images và
+  # file đó TỒN TẠI trong home đang dùng thì vớt về đích. Đường dẫn không tồn tại thật
+  # (container remote) thì không vớt được — để phán FAIL như cũ, không đoán mò ảnh khác.
+  if [[ $(stat -f %m "raw/${job}.png" 2>/dev/null || echo 0) -lt "$t0" ]]; then
+    local ghome="${IMG_HOME:-$HOME/.codex}/generated_images"
+    local rel
+    rel=$(grep -oE "generated_images/[^\"' ]*[.]png" "logs/${job}.log" 2>/dev/null | tail -1)
+    if [[ -n "$rel" && -f "${ghome}/${rel#generated_images/}" ]]; then
+      cp -f "${ghome}/${rel#generated_images/}" "raw/${job}.png" \
+        && echo "vớt ${rel} → raw/${job}.png (model không tự copy về đích)" >>"logs/${job}.log"
+    fi
+  fi
   # Phán theo SẢN PHẨM, không tin mã thoát: codex hay sập vì lỗi API transient
   # SAU khi đã lưu ảnh xong (đã dính: badge ❌ oan, auto-slice bị bỏ qua).
   # Ảnh được ghi mới trong lượt chạy này = job thành công.

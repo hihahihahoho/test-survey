@@ -49,7 +49,8 @@ export const INSTALL_CMD = {
  * đó là việc của người dùng trên máy họ. Web không chạy lệnh, không nhận kết quả đăng
  * nhập, không hiện và không lưu bất cứ thứ gì của phiên đăng nhập.
  *
- * Lệnh thứ hai chỉ ĐẾM số lần chuỗi `image_gen` xuất hiện — không sinh ảnh, không tốn quota.
+ * Lệnh thứ hai chỉ ĐẾM số lần chuỗi `image_gen`/`imagegen` xuất hiện — không sinh ảnh, không tốn quota.
+ * (Codex ≥0.147 đổi tên tool `image_gen` thành skill `imagegen` — khớp cả hai dạng.)
  */
 export const IMG_HOME_LOGIN_CMD = "codex login";
-export const IMG_HOME_CHECK_CMD = "codex debug prompt-input | grep -c image_gen";
+export const IMG_HOME_CHECK_CMD = 'codex debug prompt-input | grep -cE "image_?gen"';

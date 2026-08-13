@@ -257,7 +257,8 @@ secret nào để lộ**. Đây là đánh đổi có ý thức theo yêu cầu 
 
 Cách kiểm `image_gen` theo `teams/t3-auth/PLAN.md` §6.1 — **fallback, không phải mặc định**:
 
-1. Đếm ở **home mặc định** trước: `codex debug prompt-input | grep -c image_gen`.
+1. Đếm ở **home mặc định** trước: `codex debug prompt-input | grep -cE "image_?gen"`.
+   (Codex ≥0.147 đổi tên tool `image_gen` thành skill `imagegen` — regex khớp cả hai dạng.)
    Lệnh này **không sinh ảnh, không tốn quota**; agent chỉ lấy **số đếm**, không giữ/log nội dung output.
 2. `> 0` ⇒ `mode: "default-home"`, xong. (Đa số máy đã đủ — bắt tạo home thứ hai là thừa.)
 3. `= 0` ⇒ xét `~/.codex-img` (hoặc `config.imageGen.codexHome`):

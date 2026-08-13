@@ -617,7 +617,8 @@ fi
 # ═══ 8. Kiểm tra công cụ tạo ảnh (image_gen) ══════════════════════════════════
 # Theo teams/t3-auth/PLAN.md §A.1 bước 5 + architecture §6.1:
 #   `codex debug prompt-input` chỉ IN ĐẶC TẢ TOOL — KHÔNG sinh ảnh, KHÔNG tốn quota.
-#   Script chỉ lấy SỐ ĐẾM `grep -c image_gen`, không giữ, không in nội dung output.
+#   Script chỉ lấy SỐ ĐẾM `grep -ciE 'image_?gen'`, không giữ, không in nội dung output.
+#   (Codex ≥0.147 đổi tên tool `image_gen` thành skill `imagegen` — regex khớp cả hai dạng.)
 step "Công cụ tạo ảnh của codex (image_gen)"
 IMAGEGEN_MODE="unknown"
 IMAGEGEN_HOME_LABEL=""
@@ -636,7 +637,7 @@ count_image_gen() {
     run_limited 45 codex debug prompt-input >"$out" 2>/dev/null || rc=$?
   fi
   local n
-  n="$(grep -c 'image_gen' "$out" 2>/dev/null || true)"
+  n="$(grep -ciE 'image_?gen' "$out" 2>/dev/null || true)"
   # Không giữ output — nó có thể chứa nội dung prompt/cấu hình
   rm -f "$out"
   case "$n" in ''|*[!0-9]*) n=0 ;; esac
@@ -648,7 +649,7 @@ if [ "$CODEX_OK" -eq 0 ]; then
   IMAGEGEN_REASON="NO_CODEX"
   warn "bỏ qua vì chưa có codex CLI."
 elif [ "$DRY_RUN" -eq 1 ]; then
-  would "codex debug prompt-input | grep -c image_gen   (home mặc định — chỉ đếm, không tốn quota)"
+  would "codex debug prompt-input | grep -ciE 'image_?gen'   (home mặc định — chỉ đếm, không tốn quota)"
   would "nếu = 0: dựng home ảnh riêng $IMG_HOME_DEFAULT + config.toml tối giản, rồi IN hướng dẫn để BẠN tự chạy codex login"
   info "dry-run không chạy codex, nên chưa biết máy này có image_gen hay chưa."
 else
@@ -670,7 +671,7 @@ else
       warn "không chạy được \`codex debug prompt-input\` (lệnh lỗi, bị chặn, hoặc quá 45 giây)."
       info "Vì phép dò thất bại nên script KHÔNG kết luận gì và KHÔNG tạo home ảnh."
       info "Chạy tay lệnh này trong terminal của bạn, kỳ vọng ra số LỚN HƠN 0:"
-      cmdline "codex debug prompt-input | grep -c image_gen"
+      cmdline "codex debug prompt-input | grep -ciE 'image_?gen'"
       info "· Ra > 0  → xong, không cần làm gì thêm."
       info "· Ra 0    → chạy lại script này để nó dựng home ảnh dự phòng."
       info "· Báo lỗi → sửa codex trước (codex doctor), rồi chạy lại script."
@@ -755,7 +756,7 @@ else
         cmdline "CODEX_HOME=\"$IMG_HOME\" codex login"
         info "Đăng nhập bằng tài khoản ChatGPT có tạo ảnh (Plus/Pro/Business — Free không có)."
         info "Xong thì kiểm bằng lệnh sau, kỳ vọng ra một số LỚN HƠN 0:"
-        cmdline "CODEX_HOME=\"$IMG_HOME\" codex debug prompt-input | grep -c image_gen"
+        cmdline "CODEX_HOME=\"$IMG_HOME\" codex debug prompt-input | grep -ciE 'image_?gen'"
         info "Rồi chạy lại script này để nó ghi nhận trạng thái:"
         cmdline "bash setup.sh --workspace \"$WORKSPACE\" --yes"
       fi

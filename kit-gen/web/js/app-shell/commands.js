@@ -37,4 +37,4 @@ export const INSTALL_CMD = Object.freeze({
 
 /** §3-S0 bước 4: home riêng cho tạo ảnh — HƯỚNG DẪN, tuyệt đối KHÔNG tự động hoá. */
 export const IMG_HOME_LOGIN_CMD = 'CODEX_HOME=~/.codex-img codex login';
-export const IMG_HOME_CHECK_CMD = 'CODEX_HOME=~/.codex-img codex debug prompt-input | grep -c image_gen';
+export const IMG_HOME_CHECK_CMD = 'CODEX_HOME=~/.codex-img codex debug prompt-input | grep -cE "image_?gen"';

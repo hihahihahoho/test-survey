@@ -87,12 +87,12 @@ fi
 
 step '6/7 · Công cụ tạo ảnh của codex'
 if command -v codex >/dev/null 2>&1; then
-  N="$(codex debug prompt-input 2>/dev/null | grep -c image_gen || true)"
+  N="$(codex debug prompt-input 2>/dev/null | grep -cE 'image_?gen' || true)"
   if [ "\${N:-0}" -gt 0 ]; then ok 'tạo ảnh dùng được với cấu hình hiện tại'
   else
     warn 'Codex mặc định chưa có công cụ tạo ảnh. Chạy codex login rồi kiểm tra lại.'
     printf '         codex login\\n'
-    printf '         codex debug prompt-input | grep -c image_gen\\n'
+    printf '         codex debug prompt-input | grep -cE "image_?gen"\\n'
   fi
 else warn 'bỏ qua vì chưa có codex'; fi
 

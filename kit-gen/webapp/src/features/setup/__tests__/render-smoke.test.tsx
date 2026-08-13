@@ -257,7 +257,7 @@ describe("Bước 4 — môi trường & tạo ảnh", () => {
     expect(html).not.toContain("CODEX_HOME=~/.codex-img");
     expect(html).toContain("không tự chạy thay bạn");
     // lệnh kiểm chỉ ĐẾM, không in nội dung cấu hình
-    expect(html).toContain("grep -c image_gen");
+    expect(html).toContain("grep -cE");
     // dòng cam kết bắt buộc của §3-S0
     expect(html).toContain("không bao giờ đọc hay lưu thông tin đăng nhập");
   });
