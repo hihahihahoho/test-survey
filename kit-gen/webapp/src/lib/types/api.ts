@@ -40,6 +40,10 @@ export const imageGenModeSchema = z.enum([
 ]);
 export type ImageGenMode = z.infer<typeof imageGenModeSchema>;
 
+/** Hồ sơ Codex user CHỌN để tạo ảnh — chỉ 2 giá trị, khác `mode` (5 enum kết quả dò). */
+export const imageGenProfileSchema = z.enum(["default-home", "img-home"]);
+export type ImageGenProfile = z.infer<typeof imageGenProfileSchema>;
+
 /* ═════════════ Envelope lỗi (§6.1) ═════════════ */
 
 /**
@@ -98,6 +102,13 @@ export const doctorSchema = z.looseObject({
   codex: z.looseObject({ ok: z.boolean(), version: z.string().nullish() }).optional(),
   imageGen: z.looseObject({
     mode: imageGenModeSchema.catch("unknown"),
+    /**
+     * HỒ SƠ ĐÃ CHỌN (persist ở `<workspace>/.kitgen/config.json`), khác `mode` là KẾT QUẢ dò.
+     * Toggle chọn hồ sơ phải bám field này: chọn `img-home` mà chưa `codex login` thì
+     * `mode` = "unavailable", nếu bám `mode` thì toggle sẽ tự bật ngược về "mặc định".
+     * Agent cũ chưa có field ⇒ `optional`, UI suy ra từ `mode` như trước.
+     */
+    profile: imageGenProfileSchema.catch("default-home").optional(),
     available: z.boolean(),
     /** nhãn rút gọn `~/.codex-img`, KHÔNG phải path tuyệt đối. */
     codexHomeLabel: z.string().nullish(),

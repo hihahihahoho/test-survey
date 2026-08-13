@@ -5,8 +5,21 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useDoctor, useInstallUpdateFlow, useSetImageProfile, useUpdateCheck } from "@/lib/hooks";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ConnectionStatus, UpdateCheck } from "@/lib/api";
+import type { Doctor } from "@/lib/types/api";
 import { cn } from "@/lib/utils";
 import { FLORA, FOCUS } from "./flora";
+
+/**
+ * Hồ sơ Codex ĐANG ĐƯỢC CHỌN. Bản đầy đủ (kèm nhãn, trạng thái, lệnh đăng nhập) nằm ở
+ * `features/settings/lib/image-profile`; ở đây khai lại đúng một dòng vì `components/layout`
+ * là tầng DƯỚI features — import ngược lên sẽ tạo vòng (setup/lib/commands re-export
+ * chính `@/components/layout`).
+ */
+function selectedWire(doctor: Doctor | undefined): "default" | "separate" {
+  const ig = doctor?.imageGen;
+  const profile = ig?.profile ?? (ig?.mode === "img-home" ? "img-home" : "default-home");
+  return profile === "img-home" ? "separate" : "default";
+}
 
 /** "Chưa kiểm tra" ≠ "không kiểm tra được" — hai câu khác nhau, không gộp (§3.9). */
 function updateLabel(data: UpdateCheck | undefined): string {
@@ -44,9 +57,12 @@ export function RuntimeStatus({ status, onRecheck }: { status: ConnectionStatus;
         </dl>
         <div className="space-y-2">
           <label className="text-caption text-fg-muted" htmlFor="kitgen-image-profile">Cấu hình tạo ảnh</label>
+          {/* Bám `profile` (lựa chọn đã lưu) chứ KHÔNG bám `mode` (kết quả dò): chọn hồ sơ
+              riêng mà chưa đăng nhập thì `mode` = "unavailable", nếu bám `mode` thì ô chọn
+              tự nhảy ngược về "Mặc định" và user tưởng bấm trượt. */}
           <Select
-            value={doctor.data?.imageGen?.mode === "img-home" ? "separate" : "default"}
-            onValueChange={(value) => profile.mutate(value as "default" | "separate", { onSuccess: () => void doctor.refetch() })}
+            value={selectedWire(doctor.data)}
+            onValueChange={(value) => profile.mutate(value as "default" | "separate", { onSettled: () => void doctor.refetch() })}
             disabled={!status.connected || profile.isPending}
           >
             <SelectTrigger id="kitgen-image-profile"><SelectValue /></SelectTrigger>

@@ -43,12 +43,36 @@ async function pythonInfo() {
   return { ok: true, version: v.version, venv: venvProbe.stdout.trim() === "1", deps }
 }
 
+/** Home mặc định của hồ sơ ảnh riêng khi config chỉ khai `mode` mà quên `codexHome`. */
+export const IMG_HOME_DEFAULT = "~/.codex-img"
+
+/** Hồ sơ ĐANG ĐƯỢC CHỌN trong `.kitgen/config.json` — thuần đọc enum, không đọc secret. */
+export function configuredProfile(cfg) {
+  return cfg?.imageGen?.mode === "img-home" ? "img-home" : "default-home"
+}
+function codexHomeOf(cfg) {
+  const raw = cfg?.imageGen?.codexHome
+  return typeof raw === "string" && raw.trim() !== "" ? raw.trim() : IMG_HOME_DEFAULT
+}
+function expandHome(p) { return p.replace(/^~(?=$|\/)/, homedir()) }
+
 /** Kiểm đúng profile user đã chọn. Mặc định là Codex hiện tại; không tự chuyển sang
  * ~/.codex-img vì profile riêng chỉ thuộc về người chủ động bật nó. */
 async function imageGenInfo(ws) {
   const cfg = await ws.config()
+  const profile = configuredProfile(cfg)
+  const imgHome = profile === "img-home" ? expandHome(codexHomeOf(cfg)) : null
+  const home = imgHome ?? join(homedir(), ".codex")
   const out = {
-    mode: "unknown", available: false, codexHomeLabel: null, authPresent: false,
+    mode: "unknown",
+    /** Hồ sơ user ĐÃ CHỌN (persist ở `.kitgen/config.json`) — khác `mode` là KẾT QUẢ dò.
+     *  Toggle trên UI phải bám `profile`, nếu bám `mode` thì hồ sơ chọn xong mà chưa
+     *  đăng nhập sẽ tự nhảy về "mặc định" (mode = "unavailable"). */
+    profile,
+    available: false,
+    // Nhãn RÚT GỌN (~/…) — không bao giờ là path tuyệt đối (arch §4.3-5).
+    codexHomeLabel: shortenPath(home),
+    authPresent: false,
     verifiedAt: new Date().toISOString(), reason: null, needsFallbackHome: false,
   }
   const codex = await firstLineVersion(CODEX)
@@ -62,20 +86,14 @@ async function imageGenInfo(ws) {
     return (r.stdout.match(/image_?gen/gi) ?? []).length
   }
 
-  const configured = cfg.imageGen?.mode === "img-home" && cfg.imageGen?.codexHome
-  const imgHome = configured ? String(cfg.imageGen.codexHome).replace(/^~/, homedir()) : null
   const nDefault = await count(imgHome ? { CODEX_HOME: imgHome } : {})
+  out.authPresent = await exists(join(home, "auth.json"))
   if (nDefault > 0) {
     out.mode = imgHome ? "img-home" : "default-home"
     out.available = true
-    const home = imgHome ?? join(homedir(), ".codex")
-    out.codexHomeLabel = shortenPath(home)
-    out.authPresent = await exists(join(home, "auth.json"))
     return out
   }
   out.mode = "unavailable"
-  out.codexHomeLabel = shortenPath(imgHome ?? join(homedir(), ".codex"))
-  out.authPresent = await exists(join(imgHome ?? join(homedir(), ".codex"), "auth.json"))
   out.reason = nDefault < 0 ? "UNKNOWN" : (out.authPresent ? "FEATURE_OFF" : "NOT_LOGGED_IN")
   out.needsFallbackHome = false
   return out
@@ -93,6 +111,10 @@ const LITE = process.env.KITGEN_DOCTOR_LITE === "1"
 export async function doctor(ws, { refresh = false } = {}) {
   if (!refresh && cache.data && Date.now() - cache.at < CACHE_MS) return cache.data
   if (LITE) {
+    // LITE bỏ mọi spawn, nhưng hồ sơ ảnh là ĐỌC FILE config (không spawn) nên vẫn trả
+    // đúng lựa chọn của user — toggle không được "quên" mình đã chọn gì khi chạy test.
+    const liteCfg = await ws.config()
+    const liteProfile = configuredProfile(liteCfg)
     const data = {
       os: `${platform()}-${arch()}`, shell: "unknown", kernel: release(),
       node: { ok: true, version: process.versions.node },
@@ -100,7 +122,9 @@ export async function doctor(ws, { refresh = false } = {}) {
       playwright: { ok: false, fallback: "skeleton.py (PIL)" },
       codex: { ok: false, version: null },
       imageGen: {
-        mode: "unknown", available: false, codexHomeLabel: null, authPresent: false,
+        mode: "unknown", profile: liteProfile, available: false,
+        codexHomeLabel: shortenPath(expandHome(liteProfile === "img-home" ? codexHomeOf(liteCfg) : join(homedir(), ".codex"))),
+        authPresent: false,
         verifiedAt: new Date().toISOString(), reason: "UNKNOWN", needsFallbackHome: true,
       },
       workspace: await workspaceInfo(ws), checkedAt: new Date().toISOString(), lite: true,

@@ -1,6 +1,6 @@
 /* routes/system.mjs — §6.2 A: #1 /health, #2 /api/doctor, #3 /api/workspaces,
    #4 /api/workspace/activate, #5 /bridge.html. /health là endpoint DUY NHẤT được poll. */
-import { invalidateDoctorCache } from "../lib/doctor.mjs"
+import { IMG_HOME_DEFAULT, invalidateDoctorCache } from "../lib/doctor.mjs"
 import { PROTOCOL } from "../lib/security.mjs"
 import { checkForUpdateSafe, readRuntimeVersion, scheduleUpdate } from "../lib/update.mjs"
 
@@ -28,17 +28,35 @@ export function register(r) {
     return { status: 200, json: await ctx.doctor(ctx.registry.active, { refresh }) }
   })
 
+  /** Đổi HỒ SƠ CODEX dùng để tạo ảnh và LƯU BỀN vào `<workspace>/.kitgen/config.json`.
+   *  Thứ duy nhất được ghi là enum + nhãn `~/…`; agent KHÔNG đọc auth.json/config.toml
+   *  của codex, không log gì của hồ sơ đó (arch §4.4-4).
+   *  Chọn "default" thì XOÁ HẲN `codexHome` (patchConfig thay nguyên khối `imageGen`),
+   *  để không còn đường nào cho gen.sh nhận IMG_HOME cũ. */
   r.patch("/api/image-profile", async ctx => {
     const { mode } = await ctx.json()
-    if (mode !== "default" && mode !== "separate") {
+    const profile = mode === "separate" || mode === "img-home" ? "img-home"
+      : mode === "default" || mode === "default-home" ? "default-home"
+        : null
+    if (!profile) {
       return { status: 400, json: { error: { code: "BAD_REQUEST", message: "mode must be default or separate" } } }
     }
-    const imageGen = mode === "separate"
-      ? { mode: "img-home", codexHome: "~/.codex-img" }
+    const imageGen = profile === "img-home"
+      ? { mode: "img-home", codexHome: IMG_HOME_DEFAULT }
       : { mode: "default-home" }
     await ctx.registry.active.patchConfig({ imageGen })
+    // Doctor cache 60s giữ kết quả của hồ sơ CŨ ⇒ phải bỏ, nếu không UI vừa đổi xong
+    // vẫn đọc trạng thái cũ suốt một phút.
     invalidateDoctorCache()
-    return { status: 200, json: { ok: true, mode, codexHomeLabel: mode === "separate" ? "~/.codex-img" : "~/.codex" } }
+    return {
+      status: 200,
+      json: {
+        ok: true,
+        mode: profile === "img-home" ? "separate" : "default",
+        profile,
+        codexHomeLabel: profile === "img-home" ? IMG_HOME_DEFAULT : "~/.codex",
+      },
+    }
   })
 
   /** Kiểm tra bản mới. Luôn 200: mất mạng là `ok:false` + `reason`, không phải lỗi agent. */

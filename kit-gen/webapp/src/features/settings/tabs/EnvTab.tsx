@@ -6,6 +6,7 @@ import type { useDoctor } from "@/lib/hooks";
 import { DoctorChecklist } from "@/features/setup/steps/parts/DoctorChecklist";
 import { ImageGenCard } from "@/features/setup/steps/parts/ImageGenCard";
 import { ErrorDocsPanel } from "@/features/docs/components/ErrorDocsPanel";
+import { ImageProfileToggle } from "../components/ImageProfileToggle";
 import { codeFromLocationHash } from "@/features/docs/lib/anchors";
 
 /**
@@ -95,6 +96,9 @@ export function EnvTab({
   return (
     <div className="flex flex-col gap-5">
       <ImageGenCard doctor={doctor.data ?? null} />
+      {/* Thẻ trên chỉ NÓI trạng thái; thẻ này là chỗ ĐỔI hồ sơ Codex (~/.codex ↔ ~/.codex-img)
+          và lưu bền vào `<workspace>/.kitgen/config.json`. */}
+      <ImageProfileToggle doctor={doctor} status={status} />
       <DoctorChecklist doctor={doctor.data ?? null} />
       {docs}
     </div>

@@ -157,11 +157,20 @@ export function useInstallUpdateFlow() {
   return { pending: install.isPending, start };
 }
 
+/**
+ * Đổi hồ sơ Codex dùng để tạo ảnh. Agent ghi bền vào `<workspace>/.kitgen/config.json`
+ * và tự bỏ cache doctor 60s của nó, nên chỉ cần đọc lại doctor là ra trạng thái hồ sơ MỚI.
+ *
+ * `invalidateQueries` chỉ ĐÁNH DẤU cũ rồi để observer tự nạp — người gọi lại thường
+ * `refetch()` ngay sau đó để biết CHÍNH XÁC lúc nào xong (còn giữ nút ở trạng thái đang
+ * đổi). Hai đường cùng chạy là hai lượt `codex debug prompt-input` (~1s/lượt) cho một
+ * hành động ⇒ ở đây chỉ dọn cache, KHÔNG tự nạp lại; việc nạp là của màn đang mở.
+ */
 export function useSetImageProfile() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (mode: "default" | "separate") => api.system.setImageProfile(mode),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.doctor() }),
+    onSuccess: () => qc.removeQueries({ queryKey: qk.doctor(), type: "inactive" }),
   });
 }
 

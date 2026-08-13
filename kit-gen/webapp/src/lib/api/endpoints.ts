@@ -28,7 +28,7 @@ import {
   librarySettingsResultSchema, brandProfileResultSchema, poseTemplateResultSchema,
   type CleanTarget, type CreateProjectInput, type DuplicateInput,
   type PatchProjectInput, type RefKind, type StartRunInput,
-  type LibrarySettings,
+  type LibrarySettings, type ImageGenProfile,
 } from "../types/api";
 import { normalizeContract, type Contract } from "../types/contract";
 import type { z } from "zod";
@@ -89,8 +89,15 @@ export const systemApi = {
   async installUpdate() {
     return await httpPost("/api/update", {}) as { ok: boolean; previousVersion?: string; restartRequired?: boolean };
   },
+  /**
+   * Chọn hồ sơ Codex dùng để tạo ảnh. Agent GHI BỀN vào `<workspace>/.kitgen/config.json`
+   * rồi tự bỏ cache doctor ⇒ lần đọc doctor kế tiếp là trạng thái của hồ sơ MỚI.
+   * Web chỉ gửi enum, không bao giờ gửi/nhận path tuyệt đối hay bất cứ gì của phiên đăng nhập.
+   */
   async setImageProfile(mode: "default" | "separate") {
-    return await httpPatch("/api/image-profile", { mode }) as { ok: boolean; mode: "default" | "separate"; codexHomeLabel: string };
+    return await httpPatch("/api/image-profile", { mode }) as {
+      ok: boolean; mode: "default" | "separate"; profile?: ImageGenProfile; codexHomeLabel: string;
+    };
   },
   async revealWorkspace() {
     return await httpPost("/api/workspace/reveal", {}) as { ok: boolean };
