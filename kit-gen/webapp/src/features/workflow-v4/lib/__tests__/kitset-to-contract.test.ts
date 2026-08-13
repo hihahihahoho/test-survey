@@ -13,6 +13,7 @@ import { contractJobs, contractSchema, normalizeContract, CHROMA_PRESETS } from 
 import { loadBundledV2 } from "@/features/design/library/lib/source";
 import type { LibElement } from "@/features/design/library/lib/types";
 import { createWorkflowStore, resetWorkflowStores, type WorkflowState } from "../model";
+import { allPoseIds } from "../poses";
 import { isPropElement } from "../user-library";
 import {
   CHARACTER_ID,
@@ -248,6 +249,21 @@ describe("§W3-1 — hình dạng sheet", () => {
     }
   });
 
+  /**
+   * QUYẾT ĐỊNH SẢN PHẨM 2026-08: mặc định mascot chiếm TỐI ĐA ~3 sheet mỗi lần gen —
+   * trước là 5 (19 dáng), nhiều hơn cả phần UI. Khoá con số ở tầng contract vì số
+   * sheet = số lượt thật sự bị tiêu; và khoá luôn hợp đồng ô dáng 30%×85% để chắc
+   * rằng "bớt sheet" không bị hiểu nhầm thành "chuyển sang gen ảnh rời".
+   */
+  it("state mặc định sinh ĐÚNG 3 sheet dáng (12 dáng · 4 ô/sheet), ô dáng vẫn 30%×85%", () => {
+    const c = build();
+    const poseSheets = c.sheets.filter((sh) => sh.id.startsWith("pose-"));
+    expect(poseSheets).toHaveLength(3);
+    const poseCells = poseSheets.flatMap((sh) => sh.components).filter((cp) => cp.skel.shape === "pose");
+    expect(poseCells).toHaveLength(12);
+    for (const cp of poseCells) expect(cp.skel).toMatchObject({ shape: "pose", w: 0.3, h: 0.85 });
+  });
+
   it("không trộn đạo cụ vào sheet UI nhỏ", () => {
     const propFiles = new Set(["14-reward-voucher", "15-reward-giftbox", "51-reward-giftbox-open", "52-envelope-body", "53-envelope-flap", "54-trophy-cup"]);
     const prop = LIB.filter((element) => propFiles.has(element.file)).slice(0, 2);
@@ -439,8 +455,11 @@ describe("UI-FIX §3b — nhiều nhân vật, mỗi con một bộ tấm dáng"
  * Bộ ca này khoá HỢP ĐỒNG đó lại: sinh mỗi dáng một sheet sẽ làm đỏ ngay ở đây.
  */
 describe("§9-§10 — dáng mascot dồn vào sheet, mỗi sheet MỘT lượt gen", () => {
-  it("19 dáng mặc định · trần 4 ⇒ 5 sheet, không phải 19", () => {
-    const s = defaultState();
+  // 2026-08: mặc định chỉ còn 12 dáng (= 3 sheet, có ca riêng ở §"hình dạng sheet");
+  // ca này giữ nguyên ĐIỀU NÓ KHOÁ — dồn dáng vào sheet, sheet cuối lẻ — bằng cách
+  // CHỌN HẾT 19 dáng tường minh thay vì dựa vào mặc định.
+  it("chọn hết 19 dáng · trần 4 ⇒ 5 sheet, không phải 19", () => {
+    const s = { ...defaultState(), mascotPoses: allPoseIds() };
     const c = buildKitsetContract(s, { lib: LIB, limits: { mascot: 4 } });
     const poseSheets = c.sheets.filter((sh) => sh.components.some((cp) => cp.skel.shape === "pose"));
     expect(s.mascotPoses.length).toBe(19);

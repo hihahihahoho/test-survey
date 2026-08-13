@@ -4,7 +4,7 @@ import { persist } from "zustand/middleware";
 import { STYLE_AXIS_IDS } from "@/features/kit-form/lib/form-model";
 import type { StyleAxisId } from "@/features/kit-form/lib/form-model";
 import { loadBundledV2 } from "@/features/design/library/lib/source";
-import { allPoseIds } from "./poses";
+import { defaultPoseIds } from "./poses";
 import { draftKey, migrateLegacyDraft, onDraftForgotten } from "./draft-storage";
 
 export { LEGACY_DRAFT_KEY, draftKey, trashedDraftKey, migrateLegacyDraft, dropWorkflowDraft, restoreWorkflowDraft } from "./draft-storage";
@@ -409,8 +409,11 @@ function initialState(): Omit<WorkflowState, WorkflowActionKey> {
     mascotDescription: "",
     mascotRef: null,
     mascots: [],
-    // UI-FIX §3a — mặc định chọn HẾT dáng, cùng nguyên tắc với bộ khung UI.
-    mascotPoses: allPoseIds(),
+    // 2026-08 (đè UI-FIX §3a): mặc định KHÔNG chọn hết 19 dáng nữa — 19 dáng = 5 sheet
+    // mascot, nhiều hơn cả phần UI. Chủ sản phẩm chốt trần ~3 sheet ⇒ 12 dáng: trọn nhóm
+    // "Cơ bản" + dáng thông dụng theo thứ tự prototype (xem `defaultPoseIds`). Chỉ ảnh
+    // hưởng bản nháp MỚI; draft/contract đã lưu và pose adopt từ thư viện giữ nguyên.
+    mascotPoses: defaultPoseIds(),
     elements: defaultKitset(),
     kitsetTouched: false,
     versions: [],

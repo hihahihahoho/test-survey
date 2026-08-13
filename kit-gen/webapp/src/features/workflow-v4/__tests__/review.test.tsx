@@ -24,6 +24,7 @@ import { DrawConfirmDialog, ReviewStep, drawableOf, mascotRecapValue } from "../
 import { BriefStep } from "../steps/BriefStep";
 import { KitsetStep } from "../steps/KitsetStep";
 import { MascotStep, POSES } from "../steps/MascotStep";
+import { defaultPoseIds } from "../lib/poses";
 import { WorkflowActions } from "../WorkflowScreen";
 
 const PID = "kit-thu-nghiem";
@@ -339,7 +340,7 @@ describe("§W1-7 — mascot có thư viện pose đầy đủ theo nhóm", () =>
   it("giữ id kỹ thuật trong store; bỏ tick một dáng thì store bớt đúng id đó", () => {
     mount(<MascotStep />);
     const idle = screen.getAllByRole("button", { name: /Đứng chờ/ }).find(b => b.hasAttribute("aria-pressed"))!;
-    // UI-FIX §3a — mặc định chọn HẾT, nên dáng nào cũng đang bật khi mới vào.
+    // "Đứng chờ" thuộc nhóm Cơ bản ⇒ nằm trong 12 dáng mặc định (2026-08), đang bật khi mới vào.
     expect(idle.getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(idle);
     expect(createWorkflowStore(PID).getState().mascotPoses).not.toContain("idle");
@@ -347,8 +348,13 @@ describe("§W1-7 — mascot có thư viện pose đầy đủ theo nhóm", () =>
     expect(createWorkflowStore(PID).getState().mascotPoses).toContain("idle");
   });
 
-  it("mặc định chọn HẾT 19 dáng (bỏ bớt, không phải cộng thêm)", () => {
-    expect(createWorkflowStore(PID).getState().mascotPoses).toHaveLength(POSES.length);
+  // 2026-08 (đè UI-FIX §3a): mặc định là 12 dáng = 3 sheet — chủ sản phẩm chốt trần
+  // ~3 sheet mascot mỗi lần gen, thay vì 19 dáng = 5 sheet nhiều hơn cả phần UI.
+  it("mặc định chọn 12 dáng cơ bản + thông dụng (3 sheet), KHÔNG chọn hết 19", () => {
+    const poses = createWorkflowStore(PID).getState().mascotPoses;
+    expect(poses).toEqual(defaultPoseIds());
+    expect(poses).toHaveLength(12);
+    expect(poses.length).toBeLessThan(POSES.length);
   });
 
   it("có đủ 19 pose của pipeline qua 5 nhóm", () => {

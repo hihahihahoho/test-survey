@@ -30,7 +30,39 @@ export function poseLabel(id: string): string {
   return POSES.find((pose) => pose.id === id)?.label ?? id;
 }
 
-/** MẶC ĐỊNH CHỌN HẾT (UI-FIX §2/§3a): bỏ bớt dễ hơn cộng thêm từng cái. */
+/** TOÀN BỘ dáng — nay chỉ còn phục vụ nút "Chọn tất cả", không còn là mặc định. */
 export function allPoseIds(): string[] {
   return POSES.map((pose) => pose.id);
+}
+
+/**
+ * Thứ tự dáng của PROTOTYPE (`characterPoses` trong `styles.example.json`, cũng là thứ
+ * tự khai báo của `silhouettes.js`) — "dáng thông dụng đứng trước" theo đúng bản gốc.
+ */
+const PROTOTYPE_POSE_ORDER = [
+  "idle", "wave", "point", "hold-gift", "cheer", "sad", "run", "think", "sit", "jump",
+  "bow", "thumbs-up", "fly", "walk", "dance", "present", "view-34", "view-side", "view-back",
+];
+
+/** 3 sheet × 4 ô (= `DEFAULT_SHEET_LIMITS.mascot` của `kitset-to-contract.ts` — không
+ *  import được vì file đó import ngược `model.ts`). Đổi trần ô/sheet thì sửa cả hai. */
+const DEFAULT_POSE_CAP = 3 * 4;
+
+/**
+ * MẶC ĐỊNH CỦA BẢN NHÁP MỚI (2026-08, quyết định chủ sản phẩm): mascot chiếm TỐI ĐA
+ * ~3 sheet mỗi lần gen. Chọn hết 19 dáng = 5 sheet — mascot ăn nhiều lượt hơn cả phần
+ * UI, trong khi đa số dự án chỉ cần bộ cơ bản. Quy tắc: trọn nhóm "Cơ bản" trước, rồi
+ * cộng dáng thông dụng theo đúng thứ tự prototype cho tới trần 12 dáng = 3 sheet.
+ *
+ * Chỉ là GIÁ TRỊ KHỞI TẠO: người dùng vẫn "Chọn tất cả" / cộng từng dáng; bản nháp và
+ * contract đã lưu giữ nguyên selection của họ; mascot thư viện có bộ dáng riêng vẫn
+ * THẮNG mặc định này (MascotDialog `onAdoptPoses`).
+ */
+export function defaultPoseIds(): string[] {
+  const picked: string[] = POSES.filter((pose) => pose.group === "Cơ bản").map((pose) => pose.id);
+  for (const id of PROTOTYPE_POSE_ORDER) {
+    if (picked.length >= DEFAULT_POSE_CAP) break;
+    if (!picked.includes(id)) picked.push(id);
+  }
+  return picked.slice(0, DEFAULT_POSE_CAP);
 }

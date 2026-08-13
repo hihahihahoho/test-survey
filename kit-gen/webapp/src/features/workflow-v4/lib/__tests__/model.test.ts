@@ -15,7 +15,7 @@ import {
   presetKitset, resetWorkflowStores, restoreWorkflowDraft, settingsDirty, trashedDraftKey,
   versionSettingsOf,
 } from "../model";
-import { POSES, allPoseIds } from "../poses";
+import { POSES, allPoseIds, defaultPoseIds } from "../poses";
 
 beforeEach(() => {
   localStorage.clear();
@@ -188,18 +188,29 @@ describe("§W1-6 / §W1-7 — ô campaign và dáng mascot", () => {
   });
 
   /**
-   * ⚠️ HỢP ĐỒNG ĐỔI Ở UI-FIX §3a — **mặc định chọn HẾT dáng**, không còn 4 dáng.
+   * ⚠️ HỢP ĐỒNG ĐỔI LẦN HAI (2026-08, đè UI-FIX §3a) — **mặc định 12 dáng = 3 sheet**,
+   * không còn chọn hết 19.
    *
-   * Bốn dáng mặc định là một lựa chọn thay người dùng mà chẳng ai xin: người ta vào
-   * bước Mascot để *bớt* dáng không cần, chứ không để cộng thêm 15 dáng còn lại từng
-   * cái một. Điều ca test này khoá vẫn là điều §W1-7 khoá — store giữ **id tiếng Anh**,
-   * không giữ nhãn tiếng Việt — chỉ tập mặc định là rộng hơn.
+   * Chọn hết 19 dáng = 5 sheet mascot mỗi lần gen — nhiều hơn cả phần UI, và chủ sản
+   * phẩm chốt trần ~3 sheet cho mặc định. Quy tắc mới: trọn nhóm "Cơ bản" trước, rồi
+   * dáng thông dụng theo thứ tự prototype tới đúng 12 (= 3 sheet × 4 ô). Điều §W1-7
+   * khoá vẫn nguyên — store giữ **id tiếng Anh**, không giữ nhãn tiếng Việt. "Chọn
+   * tất cả" (`allPoseIds`) vẫn phải rộng hơn mặc định: mặc định là điểm bắt đầu,
+   * không phải trần của người dùng.
    */
-  it("mascotPoses mặc định là TOÀN BỘ dáng, và toàn ID tiếng Anh (không nhãn tiếng Việt)", () => {
+  it("mascotPoses mặc định là 12 dáng (3 sheet): trọn nhóm Cơ bản + dáng thông dụng, toàn ID tiếng Anh", () => {
     const poses = createWorkflowStore("kit-a").getState().mascotPoses;
-    expect(poses).toEqual(allPoseIds());
-    expect(poses).toHaveLength(POSES.length);
+    expect(poses).toEqual(defaultPoseIds());
+    expect(poses).toHaveLength(12); // = 3 sheet × 4 ô (DEFAULT_SHEET_LIMITS.mascot)
+    for (const pose of POSES.filter((p) => p.group === "Cơ bản")) {
+      expect(poses, `nhóm Cơ bản phải nằm trọn trong mặc định (thiếu ${pose.id})`).toContain(pose.id);
+    }
     expect(poses.every((p) => /^[a-z0-9-]+$/.test(p))).toBe(true);
+    // Không dáng nào là bịa: tất cả phải có trong danh mục, và không trùng nhau.
+    expect(poses.every((p) => allPoseIds().includes(p))).toBe(true);
+    expect(new Set(poses).size).toBe(poses.length);
+    // Mặc định KHÔNG phải toàn bộ — "Chọn tất cả" vẫn còn việc để làm.
+    expect(poses.length).toBeLessThan(allPoseIds().length);
   });
 });
 

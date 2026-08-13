@@ -496,7 +496,8 @@ test("đang tạo ảnh: có tiến trình tổng, trạng thái từng sheet v�
  * Ba điều ca test này khoá thì KHÔNG đổi một chữ:
  *   ① mascot lấy từ thư viện mang đúng **tên** của nó;
  *   ② nó mang theo đúng **bộ dáng đã lưu** (Mèo mẫu = 2 dáng), chứ không rơi về
- *      mặc định "chọn hết 19" — đây là chỗ đã hồi quy một lần, nên phải có cổng canh;
+ *      mặc định (nay là 12 dáng cơ bản + thông dụng, không còn chọn hết 19) — đây là
+ *      chỗ đã hồi quy một lần, nên phải có cổng canh;
  *   ③ thẻ dáng **đọc được**: hình xem trước và chữ đều đủ to, không bị bóp.
  */
 test("@visual a reusable mascot can be selected and pose cards stay readable", async ({ page }, testInfo) => {
@@ -526,7 +527,7 @@ test("@visual a reusable mascot can be selected and pose cards stay readable", a
   await expect(page.getByRole("button", { name: "Sửa Mèo mẫu" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Xoá Mèo mẫu" })).toBeVisible();
 
-  // ② bộ dáng đã lưu của nó THẮNG mặc định "chọn hết 19".
+  // ② bộ dáng đã lưu của nó THẮNG mặc định (12 dáng) — mẫu số 19 là cỡ DANH MỤC, không đổi.
   await expect(page.getByText("2/19 dáng đã chọn")).toBeVisible();
   await expect(page.getByRole("button", { name: /^Cơ bản · 1$/ })).toBeVisible();
 
