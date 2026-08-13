@@ -20,8 +20,43 @@ node render-skeleton.mjs || python3 skeleton.py
 
 # Build prompt cho từng (style, sheet) → prompts/<style>-<sheet>.txt
 python3 - <<'PY'
-import json
+import json, re
 cfg = json.load(open("styles.json"))
+
+# Từ vựng VẬT LIỆU / MÀU trong spec của thư viện element (element-lib.json).
+# CHỈ chứa từ nói về chất liệu, bề mặt và màu — TUYỆT ĐỐI không chứa từ nói về
+# hình dáng hay trạng thái (capsule, pill, outline, hollow, open, rounded, wide,
+# bar, plate, badge…): những từ đó là HỢP ĐỒNG hình học, không được hạ cấp.
+MATERIAL_WORDS = {
+    # bề mặt / chất liệu
+    "glossy", "gloss", "matte", "candy", "jelly", "gummy", "plastic", "3d", "metal",
+    "metallic", "chrome", "foil", "velvet", "satin", "silk", "wood", "wooden",
+    "paper", "papery", "glass", "glassy", "ceramic", "porcelain", "marble", "stone",
+    "enamel", "lacquer", "rubber", "gel", "frosted", "brushed", "polished",
+    "iridescent", "holographic", "pearlescent", "neon", "pastel", "shiny", "waxy",
+    "specular", "bevel", "beveled", "bevelled", "gradient", "sheen", "desaturated",
+    "muted", "vivid", "translucent", "creamy", "velvety",
+    # màu
+    "red", "orange", "coral", "gold", "golden", "silver", "bronze", "copper",
+    "blue", "green", "yellow", "purple", "violet", "pink", "white", "black",
+    "grey", "gray", "cream", "ivory", "teal", "cyan", "magenta", "brown", "beige",
+    "amber", "crimson", "scarlet", "turquoise", "lime", "navy", "maroon", "peach",
+    "mint", "lavender", "burgundy", "olive", "tan", "charcoal",
+}
+
+
+def preset_words(spec):
+    """Các từ VẬT LIỆU/MÀU có mặt trong spec — để nêu đích danh mà HẠ CẤP chúng.
+    Trả về theo thứ tự xuất hiện, giữ nguyên dạng gốc, không trùng lặp."""
+    hits, seen = [], set()
+    for tok in re.findall(r"[A-Za-z0-9][A-Za-z0-9-]*", spec):   # bắt cả "3D"
+        low = tok.lower()
+        if low in seen:
+            continue
+        if any(p in MATERIAL_WORDS for p in [low] + low.split("-")):
+            seen.add(low)
+            hits.append(tok)
+    return hits[:10]
 
 for s in cfg["styles"]:
     for sh in cfg["sheets"]:
@@ -30,22 +65,52 @@ for s in cfg["styles"]:
         cols, rows = sh["grid"]["cols"], sh["grid"]["rows"]
         comps = sh["components"]
         assert len(comps) == cols * rows, f'{sh["id"]}: {len(comps)} component ≠ lưới {cols}x{rows}'
-        n_real = sum(1 for c in comps if c["skel"].get("shape") != "empty")
+        real = [c for c in comps if c["skel"].get("shape") != "empty"]
+        n_real = len(real)
         portrait = sh.get("orient") == "portrait"
+        # ⚠️ SHEET FULL-BLEED NHẬN DIỆN THEO skel.shape, KHÔNG theo id sheet.
+        # Bản cũ: `if sh["id"] != "bg"`. Nhưng id sheet do NGƯỜI DÙNG/agent đặt —
+        # dự án thật đặt "nen", "background", "bg-scene"… nên nhánh full-bleed gần
+        # như KHÔNG BAO GIỜ chạy, và sheet nền lãnh đúng câu dành cho ô UI:
+        # "keeping at least 40px of empty background padding on every side of the
+        # element; … never touch the image edges". Model làm theo ⇒ cảnh nền bị
+        # vẽ THỤT VÀO, chừa nguyên khung chroma-key quanh 4 cạnh; slice.py cắt ô
+        # full-bleed KHÔNG key gì cả nên viền key đó đi thẳng vào asset (đã dính:
+        # viền magenta 40-55px quanh 25-bg-home ở lần gen thứ hai của BlindTest-B2).
+        # Ngay cả nhánh "bg" cũ cũng hỏng: toán tử ba ngôi chỉ buộc vào DÒNG CUỐI
+        # nên hai dòng "40px padding" vẫn được in ra trước câu "edge to edge".
+        full_bleed = n_real > 0 and all(c["skel"].get("shape") == "full" for c in real)
+        if full_bleed:
+            place = [
+                f"Each cell is a {sh.get('cell_hint', 'full-bleed scene')}.",
+                "Each scene FILLS ITS OWN CELL COMPLETELY, edge to edge, and bleeds off all four",
+                "sides of that cell: no border, no frame, no margin, no vignette band — and above",
+                "all NOT ONE PIXEL of the flat chroma-key background may show around a scene.",
+                ("The ONLY chroma-key allowed on this sheet is a thin 24px gap exactly on the cell"
+                 " boundaries between neighbouring scenes."
+                 if n_real > 1 else
+                 "No flat chroma-key background is used anywhere on this sheet."),
+                "A scene inset inside a key-coloured frame is unusable and will be regenerated.",
+            ]
+        else:
+            place = [
+                f"Each cell is a {sh.get('cell_hint', 'cell')}. Each element sits fully inside its own invisible cell,",
+                "centered, keeping at least 40px of empty background padding on every side of the element;",
+                "elements never touch each other and never touch the image edges.",
+            ]
         lines = [
             "Canvas orientation: " + ("PORTRAIT 1024x1536." if portrait else "LANDSCAPE 1536x1024."),
-            "A game UI kit sprite sheet for a mobile mini-game marketing campaign."
-            if len(comps) > 1 else
-            "A single full-bleed background scene for a mobile mini-game.",
+            (f"A sheet of {n_real} full-bleed background scenes for a mobile mini-game."
+             if full_bleed and n_real > 1 else
+             "A single full-bleed background scene for a mobile mini-game." if full_bleed else
+             "A game UI kit sprite sheet for a mobile mini-game marketing campaign."
+             if len(comps) > 1 else
+             "A single full-bleed background scene for a mobile mini-game."),
             f"Exactly {n_real} elements arranged in a STRICT grid of {cols} columns and {rows} rows, evenly spaced."
             + ("" if n_real == len(comps) else
                f" The LAST {len(comps) - n_real} cell(s) of the grid are INTENTIONALLY EMPTY:"
                " draw absolutely nothing there — pure flat background over the whole cell."),
-            f"Each cell is a {sh.get('cell_hint', 'cell')}. Each element sits fully inside its own invisible cell,",
-            "centered, keeping at least 40px of empty background padding on every side of the element;",
-            "elements never touch each other and never touch the image edges."
-            if sh["id"] != "bg" else
-            "The two background scenes each fill their own half of the image completely, edge to edge, with a thin 24px gap between them.",
+            *place,
             "",
             # ── Khối neo hình học — theo prompt crop-safe v15 của spike safe-zone
             #    (docs/SPRITESHEET-SAFE-ZONE-HANDOFF.md §5.3). Điểm khác bản trước:
@@ -142,8 +207,45 @@ for s in cfg["styles"]:
                 "NEVER reuse a reference background color, especially not for character cells.", ""]
         if sh.get("note"):
             lines += [sh["note"], ""]
+        # ⚠️ THỨ TỰ ƯU TIÊN PHẢI ĐƯỢC NÊU NGAY CẠNH DANH SÁCH Ô, KHÔNG PHẢI Ở CUỐI.
+        # Dòng `N) <spec>` là spec VẬT LIỆU CỨNG lấy nguyên văn từ thư viện element
+        # ("glossy 3D candy-red capsule button…", "vivid warm orange-to-coral
+        # gradient…"). Câu override đứng tận cuối prompt (khối "Art style") thua
+        # ngay: model đọc mô tả CỤ THỂ, SÁT NGỮ CẢNH của từng ô rồi vẽ preset đó
+        # (đã đo trên BlindTest-B2: sheet nền + mascot bám style sci-fi neon, còn
+        # 01-btn-pill-red và 08-progress-fill ra thẳng preset kẹo đỏ / cam-coral).
+        # Cách sửa: KHÔNG cắt xén spec (mất nghĩa hình dáng/trạng thái), mà đặt
+        # ngay TRƯỚC danh sách một khối phân vai — spec = hình dáng + chức năng +
+        # trạng thái, style = vật liệu + màu — và nói rõ ai thắng ai.
+        # Không đụng khối neo hình học phía trên: KHÔNG bắt model vẽ lại grid (§8.1).
+        style_override = use_inspo or bool(s.get("style"))
+        if style_override:
+            src = ("the attached inspiration reference image(s) and the ART STYLE block"
+                   if use_inspo else "the ART STYLE block")
+            lines += [
+                "HOW TO READ THE NUMBERED ELEMENT LIST BELOW — priority order, highest first:",
+                "1. GEOMETRY — the attached skeleton: canvas, cell, position, size, safe zone.",
+                f"2. ART STYLE — {src} at the end of this prompt. It alone decides",
+                "   MATERIAL, TEXTURE, FINISH, LIGHTING, PALETTE and every actual COLOR.",
+                "3. The numbered specs — they define ONLY what each element IS and DOES:",
+                "   its SHAPE, its LAYOUT and parts, and its STATE (filled / outline / hollow /",
+                "   open / closed / active / disabled).",
+                "Every material, finish and colour word inside a numbered spec ('glossy', '3D',",
+                "'candy-red', 'jelly', 'plastic', 'metal', 'gold rim', 'warm orange-to-coral",
+                "gradient', 'soft white highlight'…) is only the element library's DEFAULT preset.",
+                "It is OUTRANKED by the art style: do NOT paint it. Keep the spec's shape and its",
+                "COLOR ROLE (primary / secondary / neutral / accent / warning) and re-render that",
+                "role in the art style's own materials and palette.",
+                "Shape and state words (capsule, pill, wide, rounded caps, outline, hollow,",
+                "see-through, inner filling, no frame, blank face…) are REQUIREMENTS — always obey.",
+                "Result: all elements must look like they came from the SAME art style as the",
+                "backgrounds and characters of this project, never from a generic default UI kit.",
+                "",
+            ]
         for r in range(rows):
-            lines.append(f"Row {r + 1}, left to right:")
+            lines.append(f"Row {r + 1}, left to right:"
+                         if not style_override else
+                         f"Row {r + 1}, left to right (shape / function / state — materials and colors come from the ART STYLE):")
             for c in range(cols):
                 i = r * cols + c
                 spec = comps[i]["spec"]
@@ -156,6 +258,18 @@ for s in cfg["styles"]:
                              " cell borders (the chroma-key color does NOT apply inside this"
                              " cell); the light effect is drawn ADDITIVELY on black — where"
                              " there is no light the cell stays pure black")
+                # Hạ cấp NGAY TRÊN DÒNG CỦA Ô. Khối ưu tiên phía trên là luật chung;
+                # nhưng model bám mô tả cụ thể nhất ở cạnh nó, nên phải gọi ĐÍCH DANH
+                # những chữ vật liệu/màu có trong chính spec này (đo thật: chỉ có khối
+                # ưu tiên thôi thì 01-btn-pill-red vẫn ra đỏ kẹo bóng, chỉ thêm được
+                # viền neon). Từ hình dáng/trạng thái không nằm trong từ điển nên
+                # không bao giờ bị hạ cấp.
+                preset = preset_words(spec) if style_override else []
+                if preset:
+                    spec += (f" — [SHAPE, PARTS AND STATE ONLY. The words "
+                             f"{', '.join(preset)} are the element library's DEFAULT preset:"
+                             f" do NOT paint them. Render this element in the ART STYLE's own"
+                             f" materials, textures and palette, keeping only its colour ROLE.]")
                 lines.append(f"{i + 1}) {spec}")
             lines.append("")
         if use_inspo:
@@ -173,7 +287,16 @@ for s in cfg["styles"]:
                 art.append(f"Additional direction from the project (SECONDARY to the reference "
                            f"image — never contradict it): {s['style']}.")
         else:
-            art = [f"Art style: {s['style']}."]
+            # Người dùng chỉ GÕ mô tả, không có ảnh ref: bản cũ in trần một câu
+            # "Art style: …" — không một chữ nào nói nó thắng spec vật liệu của ô,
+            # nên nút/thanh vẫn ra preset thư viện. Nay cùng thứ hạng với nhánh ảnh.
+            art = [f"Art style: {s['style']}.",
+                   "This art style OVERRIDES every material, finish and colour word inside the "
+                   "per-cell descriptions above ('glossy', '3D', 'plastic', 'candy', 'gold', "
+                   "specific colour shades…) — those are only the element library's DEFAULT "
+                   "preset. Re-render every element in THIS style's materials, textures and "
+                   "palette, keeping only each cell's SHAPE, layout, state and colour ROLE "
+                   "(primary vs secondary vs neutral element)."]
         lines += art + [
             f"All {n_real} elements share the exact same consistent style and belong to one coherent game. "
             "Game-ready UI asset quality, " + ("portrait 2:3." if portrait else "landscape 3:2.")

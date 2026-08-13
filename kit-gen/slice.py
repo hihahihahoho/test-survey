@@ -591,38 +591,59 @@ def fill_mask_holes(msk):
     return msk
 
 
-def trim_flat_cell(cell_rgb):
+KEY_TRIM_DIST = 90       # tổng |ΔR|+|ΔG|+|ΔB| tới màu key để coi pixel là "nền key"
+KEY_TRIM_LIMIT = 3       # gọt viền key tối đa 1/3 ô mỗi phía (viền model chừa dày tuỳ hứng)
+
+
+def trim_flat_cell(cell_rgb, key=None):
     """Ô full-bleed: gọt các cột/hàng PHẲNG (một màu đều — dải gap màu key giữa
     hai nửa, hay mép key sót) ở 4 mép. Cột artwork thật luôn biến thiên dọc
-    (trời→đất) nên không bị gọt. Trả bbox (l, t, r, b)."""
+    (trời→đất) nên không bị gọt. Trả bbox (l, t, r, b).
+
+    `key` = màu chroma-key của sheet nếu dò được (bg[0] khi is_key_color). Có key
+    thì gọt thêm một lượt theo MÀU với hạn mức rộng hơn: model hay vẽ cảnh nền
+    THỤT VÀO và chừa nguyên khung key quanh 4 cạnh (đã dính: viền magenta 55px
+    quanh 25-bg-home). Ô full-bleed KHÔNG đi qua đường matte nên viền đó lọt
+    thẳng vào asset nếu không gọt ở đây. Artwork không bao giờ được mang màu key
+    (prompt cấm) nên lượt gọt này không ăn vào tranh."""
     W, H = cell_rgb.size
     px = cell_rgb.load()
 
-    def flat_col(x):
-        r0, g0, b0 = px[x, 0]
-        for i in range(1, 16):
-            r, g, b = px[x, (i * (H - 1)) // 15]
-            if abs(r - r0) > 14 or abs(g - g0) > 14 or abs(b - b0) > 14:
-                return False
-        return True
+    def col_pts(x): return [(x, (i * (H - 1)) // 15) for i in range(16)]
+    def row_pts(y): return [((i * (W - 1)) // 15, y) for i in range(16)]
 
-    def flat_row(y):
-        r0, g0, b0 = px[0, y]
-        for i in range(1, 16):
-            r, g, b = px[(i * (W - 1)) // 15, y]
-            if abs(r - r0) > 14 or abs(g - g0) > 14 or abs(b - b0) > 14:
-                return False
-        return True
+    def flat(pts):
+        # Mốc so là TRUNG VỊ của dòng, KHÔNG phải pixel ĐẦU dòng như bản cũ.
+        # Pixel ở góc ô hay bị tối/ám do nén của model: lấy nó làm mốc thì một
+        # cột key sạch cũng bị phán "không phẳng" và vòng gọt đứng ngay tại cột 0.
+        # Đo trên raw thật: px[0,0]=(232,16,221) vs px[0,1023]=(222,43,211) ⇒ Δg=27
+        # ⇒ flat_col(0)=False ⇒ mép trái/trên/dưới KHÔNG được gọt một pixel nào,
+        # chỉ mép phải (góc sạch) được gọt. Đúng viền magenta người dùng báo.
+        s = [px[x, y] for x, y in pts]
+        med = tuple(sorted(c[k] for c in s)[len(s) // 2] for k in range(3))
+        return all(abs(c[k] - med[k]) <= 18 for c in s for k in range(3))
+
+    def keyish(pts):
+        if key is None:
+            return False
+        n = sum(1 for x, y in pts
+                if sum(abs(px[x, y][k] - key[k]) for k in range(3)) <= KEY_TRIM_DIST)
+        return n >= 15          # 15/16 điểm là nền key (chừa 1 điểm nhiễu góc)
 
     lim_x, lim_y = W // 8, H // 8
+    kx, ky = W // KEY_TRIM_LIMIT, H // KEY_TRIM_LIMIT
     l = 0
-    while l < lim_x and flat_col(l): l += 1
+    while (l < lim_x and flat(col_pts(l))) or (l < kx and keyish(col_pts(l))): l += 1
     r = W
-    while r > W - lim_x and flat_col(r - 1): r -= 1
+    while (r > W - lim_x and flat(col_pts(r - 1))) or (r > W - kx and keyish(col_pts(r - 1))): r -= 1
     t = 0
-    while t < lim_y and flat_row(t): t += 1
+    while (t < lim_y and flat(row_pts(t))) or (t < ky and keyish(row_pts(t))): t += 1
     b = H
-    while b > H - lim_y and flat_row(b - 1): b -= 1
+    while (b > H - lim_y and flat(row_pts(b - 1))) or (b > H - ky and keyish(row_pts(b - 1))): b -= 1
+    # Ô toàn key (model bỏ trắng ô) → mọi mép đều bị gọt hết; trả nguyên ô để
+    # bước sau còn phát hiện được thay vì crash vì bbox rỗng.
+    if l >= r or t >= b:
+        return 0, 0, W, H
     return l, t, r, b
 
 
@@ -673,6 +694,7 @@ for style in cfg["styles"]:
     out_dir = os.path.join(HERE, "kits", sid)
     entry = {"sheets": {}, "assets": [], "empty_cells": []}
     atlas_items = []
+    done_sheets = set()          # sheet THỰC SỰ cắt lại lượt này (xem khối merge cuối)
 
     for sh in cfg["sheets"]:
         if sh.get("styles") and sid not in sh["styles"]:
@@ -832,7 +854,11 @@ for style in cfg["styles"]:
                 # còn ở dải gap → matte trên artwork là tự phá ảnh (đã dính: nền
                 # blur bị ăn sạch). Crop nguyên ô đục 100%, gọt dải gap phẳng ở mép.
                 cell_rgb = raw_img.convert("RGB").crop((cx0, cy0, cx0 + CW, cy0 + CH))
-                fl, ft, fr, fb = trim_flat_cell(cell_rgb)
+                fl, ft, fr, fb = trim_flat_cell(
+                    cell_rgb, key=bg[0] if (bg is not None and is_key_color(bg)) else None)
+                if (fl, ft, fr, fb) != (0, 0, CW, CH):
+                    print(f"  · {job}/{comp['file']}: gọt viền nền "
+                          f"L{fl} T{ft} R{CW - fr} B{CH - fb}px")
                 canvas.paste(cell_rgb.crop((fl, ft, fr, fb)).convert("RGBA"), (BX + fl, BY + ft))
             else:
                 box = cell_boxes[idx]
@@ -985,8 +1011,40 @@ for style in cfg["styles"]:
         entry["sheets"][sh["id"]] = {"mode": mode, "bg_detected": bg,
                                      "canvas": [CVW, CVH], "cell": [CW, CH], "bleed": [BX, BY],
                                      "size": [W, H], "blobs": len(blobs), "cut": n_ok}
+        done_sheets.add(sh["id"])
         print(f"✓ {job}: {n_ok}/{len(sh['components'])} (canvas {CVW}x{CVH} = ô {CW}x{CH} + bleed), "
               f"{len(blobs)} khối, {mode}")
+
+    # ── GEN LẠI MỘT NHÓM: giữ lại phần sheet KHÔNG chạy lượt này ────────────────
+    # Agent thu hẹp styles.json đúng tập job của lượt chạy (engine.mjs
+    # contractToStylesV1 + materializeStyles), nên khi người dùng bấm "Lưu và tạo
+    # lại" cho MỘT nhóm thì cfg["sheets"] chỉ còn sheet đó. Bản cũ ghi thẳng
+    # `manifest["styles"][sid] = entry` ⇒ mọi asset của các sheet KHÁC biến mất
+    # khỏi manifest và khỏi atlas, dù file PNG vẫn nằm trong kits/. Đường gen-toàn-
+    # bộ không bao giờ lộ ra vì lượt đó có đủ sheet. Đây là khác biệt THẬT giữa
+    # hai đường hậu kỳ — merge để cả hai ra cùng một manifest.
+    prev = manifest["styles"].get(sid) or {}
+    keep_sheets = [k for k in (prev.get("sheets") or {}) if k not in done_sheets]
+    if keep_sheets:
+        done_files = {c["file"] for sh in cfg["sheets"] if sh["id"] in done_sheets
+                      for c in sh["components"]}
+        for k in keep_sheets:
+            entry["sheets"][k] = prev["sheets"][k]
+        for a in (prev.get("assets") or []):
+            if a.get("sheet") not in keep_sheets or a.get("file", "")[:-4] in done_files:
+                continue
+            entry["assets"].append(a)
+            # Frame atlas của asset giữ lại: dựng lại từ tight/ đã có trên đĩa,
+            # kèm canvas/offset ghi trong manifest cũ → atlas không mất frame.
+            tp = os.path.join(out_dir, "tight", a["file"])
+            if os.path.exists(tp) and a.get("canvas") and a.get("content_at"):
+                atlas_items.append((a["file"][:-4], Image.open(tp).convert("RGBA"),
+                                    tuple(a["canvas"]), tuple(a["content_at"])))
+        for f in (prev.get("empty_cells") or []):
+            if f not in done_files and f not in entry["empty_cells"]:
+                entry["empty_cells"].append(f)
+        print(f"  ↺ {sid}: giữ nguyên {len(keep_sheets)} sheet không chạy lượt này "
+              f"({', '.join(keep_sheets)})")
 
     if atlas_items:
         atlas_img, atlas_json = pack_atlas(atlas_items)
@@ -1000,7 +1058,8 @@ for style in cfg["styles"]:
     total = len(entry["assets"])
     want = sum(sum(1 for c in sh["components"] if c["skel"]["shape"] != "empty")
                for sh in cfg["sheets"]
-               if not sh.get("styles") or sid in sh["styles"])
+               if sh["id"] in done_sheets) \
+        + sum(1 for a in entry["assets"] if a.get("sheet") not in done_sheets)
     print(f"— {sid}: {total}/{want} asset" +
           (f", Ô TRỐNG: {entry['empty_cells']}" if entry["empty_cells"] else ""))
 
