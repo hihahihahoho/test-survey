@@ -5,7 +5,7 @@
  * không phải câu marketing.
  */
 
-import { el, createButton, createBadge, icon } from '../../ui/index.js';
+import { el, createButton, createBadge, createCodeBlock, icon } from '../../ui/index.js';
 import { panel, statRow } from '../project/shared/screen.js';
 import { APP_PROTOCOL, LS_KEYS, IDB_STORES } from '../../core/constants.js';
 import * as store from '../../core/store.js';
@@ -35,6 +35,12 @@ const STORE_PURPOSE = Object.freeze({
  * @param {object} o.status
  * @param {object|null} o.doctor
  * @param {string|null} o.buildId
+ * @param {object|null} [o.update]        kết quả /api/update đã chuẩn hoá, null = chưa kiểm tra
+ * @param {boolean} [o.updateLoading]
+ * @param {object|null} [o.updateError]
+ * @param {boolean} [o.updateInstalling]
+ * @param {function} [o.onCheckUpdate]
+ * @param {function} [o.onInstallUpdate]
  */
 export function renderAboutTab(o) {
   const root = el('div', { class: 'kg-stack', style: { gap: 'var(--s-4)' } });
@@ -51,6 +57,8 @@ export function renderAboutTab(o) {
       o.doctor?.os ? statRow('Hệ điều hành', String(o.doctor.os)) : null,
     ].filter(Boolean),
   }));
+
+  root.appendChild(updatePanel(o));
 
   /* ── QUYỀN RIÊNG TƯ (YC#7) ── */
   const inventory = el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--s-3)' } });
@@ -111,6 +119,66 @@ export function renderAboutTab(o) {
   }));
 
   return root;
+}
+
+/**
+ * KHỐI CẬP NHẬT — nút [Kiểm tra cập nhật] hỏi công cụ local, công cụ local đọc
+ * `release.json` publish trên nhánh phát hành (cùng manifest mà installer dùng, nên
+ * "có bản mới" ở đây không bao giờ lệch với `kitgen update`).
+ *
+ * KHÔNG tự chạy khi mở tab: đây là lần DUY NHẤT app chạm Internet, phải do user bấm.
+ * Ba kết quả nói ba câu KHÁC nhau (§3.9 cấm gộp): chưa kiểm tra · không kiểm tra được
+ * (mất mạng) · đang mới nhất. Luôn kèm lệnh Terminal để user còn đường thủ công.
+ */
+function updatePanel(o) {
+  const u = o.update ?? null;
+  const connected = o.status?.connected === true;
+  const cmd = u?.updateCommand ?? '~/.kitgen/bin/kitgen update';
+  const showCmd = !!o.updateError || (u && (!u.ok || u.available));
+
+  const children = [
+    el('div', { class: 'kg-row kg-row--tight' }, [
+      createButton({
+        label: o.updateLoading ? 'Đang kiểm tra…' : 'Kiểm tra cập nhật',
+        variant: 'secondary', size: 'sm', icon: '↻',
+        disabled: !connected || o.updateLoading === true,
+        onClick: () => o.onCheckUpdate?.(),
+      }),
+      u && u.ok && u.available
+        ? createButton({
+          label: 'Cập nhật ngay', variant: 'primary', size: 'sm', icon: '↑',
+          disabled: o.updateInstalling === true,
+          onClick: () => o.onInstallUpdate?.(),
+        })
+        : null,
+    ].filter(Boolean)),
+    el('p', { class: 'kg-t-body kg-fg-default', role: 'status', 'aria-live': 'polite',
+      text: updateMessage(o, connected) }),
+  ];
+
+  if (u && u.ok) children.splice(1, 0, statRow('Bản phát hành mới nhất', u.latestVersion ?? 'không rõ'));
+  if (showCmd) {
+    children.push(el('div', { class: 'kg-t-caption kg-fg-default', text: 'Hoặc cập nhật thủ công trong Terminal:' }));
+    children.push(createCodeBlock({ code: cmd, ariaLabel: 'Lệnh cập nhật KitGen' }).el);
+  }
+
+  return panel({ title: 'Cập nhật', children });
+}
+
+/** Một câu duy nhất mô tả trạng thái kiểm tra — không có nhánh im lặng. */
+function updateMessage(o, connected) {
+  if (!connected) return 'Công cụ local chưa chạy nên chưa kiểm tra được bản mới.';
+  if (o.updateLoading) return 'Đang hỏi bản phát hành mới nhất…';
+  if (o.updateError) return 'Không hỏi được công cụ local. Thử [Kiểm tra lại] rồi bấm lại.';
+  const u = o.update;
+  if (!u) return 'Chưa kiểm tra lần nào. App không tự gọi ra Internet — chỉ khi bạn bấm.';
+  if (!u.ok) {
+    return u.reason === 'MANIFEST_UNREADABLE'
+      ? 'Danh sách bản phát hành đang lỗi định dạng. Dùng lệnh bên dưới để cập nhật thủ công.'
+      : 'Không đọc được danh sách bản phát hành — kiểm tra kết nối mạng rồi thử lại.';
+  }
+  if (u.available) return `Có bản ${u.latestVersion}. Bản đang chạy là ${u.currentVersion}.`;
+  return `Đang dùng bản mới nhất (${u.currentVersion}).`;
 }
 
 function li(text) { return el('li', { class: 'kg-t-body kg-fg-default', text }); }

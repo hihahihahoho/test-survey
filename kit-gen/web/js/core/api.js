@@ -26,6 +26,15 @@ export const system = {
   workspaces: () => agent.get('/api/workspaces'),
   /** #4 — web gửi id ĐỤC, không bao giờ gửi path (chốt X1). */
   activateWorkspace: (workspaceId) => agent.post('/api/workspace/activate', { workspaceId }),
+  /**
+   * Kiểm tra bản mới. Công cụ local đọc `release.json` HỘ trình duyệt — đó là cùng một
+   * manifest mà installer dùng, và raw.githubusercontent.com không trả CORS cho origin
+   * loopback nên trang này không thể tự gọi. Agent luôn trả 200; `ok:false` = chưa
+   * kiểm tra được (mất mạng), KHÁC với `available:false` = đang dùng bản mới nhất.
+   */
+  checkUpdate: () => agent.get('/api/update'),
+  /** Cài bản mới rồi khởi động lại công cụ local (202, agent tự restart sau ~1s). */
+  installUpdate: () => agent.post('/api/update', {}),
 };
 
 /* B. Project CRUD (#7–#21) */

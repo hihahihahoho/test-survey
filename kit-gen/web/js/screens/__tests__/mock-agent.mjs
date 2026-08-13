@@ -123,11 +123,25 @@ export const HEALTH = Object.freeze({
   updateCommand: 'npm i -g kitgen-agent',
 });
 
+/** GET /api/update — agent luôn 200; `ok:false` = chưa kiểm tra được (mất mạng). */
+export const UPDATE_LATEST = Object.freeze({
+  ok: true, currentVersion: '2.1.13', latestVersion: '2.1.13', tag: 'kitgen-v2.1.13',
+  available: false, updateCommand: '~/.kitgen/bin/kitgen update', checkedAt: '2026-08-13T02:00:00.000Z',
+});
+export const UPDATE_AVAILABLE = Object.freeze({
+  ...UPDATE_LATEST, latestVersion: '2.2.0', tag: 'kitgen-v2.2.0', available: true,
+});
+export const UPDATE_OFFLINE = Object.freeze({
+  ok: false, currentVersion: '2.1.13', latestVersion: null, tag: null, available: false,
+  reason: 'OFFLINE', updateCommand: '~/.kitgen/bin/kitgen update', checkedAt: '2026-08-13T02:00:00.000Z',
+});
+
 /** Bộ route mặc định: mọi endpoint mà 4 màn của team này dùng. */
-export function defaultRoutes({ doctor = DOCTOR_OK } = {}) {
+export function defaultRoutes({ doctor = DOCTOR_OK, update = UPDATE_LATEST } = {}) {
   return [
     ['/health', { status: 200, json: HEALTH }],
     ['/api/doctor', { status: 200, json: doctor }],
+    ['/api/update', { status: 200, json: update }],
     ['/api/workspaces', { status: 200, json: WORKSPACES }],
     ['/api/trash', { status: 200, json: TRASH }],
     [`/api/projects/${PROJECT.id}/contract`, { status: 200, json: { version: 37, contract: CONTRACT } }],

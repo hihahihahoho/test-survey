@@ -81,6 +81,28 @@ export async function loadWorkspaces() {
   };
 }
 
+/**
+ * GET /api/update — chỉ gọi khi user BẤM (nó là lần duy nhất app chạm Internet).
+ * Chuẩn hoá về đúng 7 field để tab Về không phải tự đoán field thiếu.
+ */
+export async function loadUpdate() {
+  const r = await attempt(() => api.system.checkUpdate());
+  if (!r.ok) return { ...r, data: null };
+  const d = r.data ?? {};
+  return {
+    ...r,
+    data: {
+      ok: d.ok === true,
+      currentVersion: typeof d.currentVersion === 'string' ? d.currentVersion : null,
+      latestVersion: typeof d.latestVersion === 'string' ? d.latestVersion : null,
+      available: d.available === true,
+      reason: typeof d.reason === 'string' ? d.reason : null,
+      updateCommand: typeof d.updateCommand === 'string' ? d.updateCommand : '~/.kitgen/bin/kitgen update',
+      checkedAt: typeof d.checkedAt === 'string' ? d.checkedAt : null,
+    },
+  };
+}
+
 /** #12 GET trash. */
 export async function loadTrash() {
   const r = await attempt(() => api.trash.list());

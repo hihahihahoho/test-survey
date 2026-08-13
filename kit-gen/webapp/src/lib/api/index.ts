@@ -6,6 +6,7 @@ export {
 } from "./endpoints";
 export { AgentError, detectEntry, mirrorUrl, bridgeUrl, configureClient, currentBase, fileUrl, thumbUrl } from "./client";
 export type { EntryInfo, TransportOutcome } from "./client";
+export type { UpdateCheck } from "./endpoints";
 export * from "./connection";
 export * from "./errors";
 export { LIMITS, PORT_CANDIDATES, APP_PROTOCOL, ENTRY, TIMEOUT, RETRY } from "./constants";

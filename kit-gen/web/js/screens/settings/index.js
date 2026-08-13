@@ -13,9 +13,10 @@
  * mọi nút ghi disabled + tooltip; tab prefs/about VẪN dùng được (chúng là local).
  */
 
-import { el, createTabs, createButton, toast } from '../../ui/index.js';
+import { el, createTabs, createButton, toast, confirmLight } from '../../ui/index.js';
 import { createShell, pageHead, panel } from '../project/shared/screen.js';
 import { fallbackStatus } from '../project/shared/agent-state.js';
+import * as api from '../../core/api.js';
 import * as data from '../project/shared/data.js';
 import * as nav from '../project/shared/nav.js';
 import { renderAgentTab } from './tab-agent.js';
@@ -41,6 +42,7 @@ export function mountSettings(container, opts = {}) {
     wsLoading: false, wsError: null, wsLoaded: false,
     doctor: null, doctorLoading: false, doctorError: null, doctorCheckedAt: null,
     trash: [], trashLoading: false, trashError: null, trashLoaded: false,
+    update: null, updateLoading: false, updateError: null, updateInstalling: false,
   };
 
   const shell = createShell(container, {
@@ -89,6 +91,41 @@ export function mountSettings(container, opts = {}) {
     render();
   }
 
+  /**
+   * [Kiểm tra cập nhật] — KHÔNG chạy khi mở tab. Gọi ra Internet là việc duy nhất trong
+   * app không nằm trên máy user, nên nó phải do user bấm, đúng kỷ luật của `/api/doctor`.
+   */
+  async function checkUpdate() {
+    if (m.updateLoading) return;
+    m.updateLoading = true; m.updateError = null; render();
+    const r = await data.loadUpdate();
+    if (disposed) return;
+    m.updateLoading = false;
+    if (r.ok) m.update = r.data; else { m.update = null; m.updateError = r.error; }
+    render();
+  }
+
+  /** [Cập nhật ngay] — agent trả 202 rồi tự khởi động lại; tải lại trang sau 5s. */
+  async function installUpdate() {
+    if (m.updateInstalling) return;
+    const yes = await confirmLight({
+      title: `Cập nhật lên ${m.update?.latestVersion ?? 'bản mới'}?`,
+      message: 'Công cụ local sẽ tải bản mới và khởi động lại. Dự án và ảnh trong thư mục làm việc không bị đụng tới.',
+      confirmLabel: 'Cập nhật ngay',
+    });
+    if (!yes || disposed) return;
+    m.updateInstalling = true; render();
+    const r = await data.attempt(() => api.system.installUpdate());
+    if (disposed) return;
+    if (!r.ok) {
+      m.updateInstalling = false; render();
+      toast.error({ title: 'Không bắt đầu cập nhật được', description: 'Chạy lệnh cập nhật trong Terminal rồi mở lại app.' });
+      return;
+    }
+    toast.success({ title: 'Đang cập nhật', description: 'Công cụ local sẽ khởi động lại. Trang sẽ tự tải lại sau ít giây.' });
+    setTimeout(() => { if (!disposed) location.reload(); }, 5000);
+  }
+
   /** [Kiểm tra lại] của cả màn: chỉ làm mới thứ thuộc tab đang mở. */
   async function recheck() {
     if (activeTab === 'agent') await ensureWorkspaces({ force: true });
@@ -128,7 +165,13 @@ export function mountSettings(container, opts = {}) {
         onReload: () => { void ensureTrash({ force: true }); },
       });
     }
-    return renderAboutTab({ status, doctor: m.doctor, buildId: status?.health?.buildId ?? null });
+    return renderAboutTab({
+      status, doctor: m.doctor, buildId: status?.health?.buildId ?? null,
+      update: m.update, updateLoading: m.updateLoading, updateError: m.updateError,
+      updateInstalling: m.updateInstalling,
+      onCheckUpdate: () => { void checkUpdate(); },
+      onInstallUpdate: () => { void installUpdate(); },
+    });
   }
 
   function render() {

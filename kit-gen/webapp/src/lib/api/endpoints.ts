@@ -63,9 +63,28 @@ function parse<S extends z.ZodType>(schema: S, data: unknown, what: string): z.i
 
 /* ═════════ A. Hệ thống & môi trường (#1–#6) ═════════ */
 
+/** Kết quả `GET /api/update`. `ok:false` ⇒ CHƯA kiểm tra được, KHÁC với "đang mới nhất". */
+export interface UpdateCheck {
+  ok: boolean;
+  currentVersion: string;
+  latestVersion: string | null;
+  tag: string | null;
+  available: boolean;
+  /** enum, chỉ có khi `ok:false` */
+  reason?: "OFFLINE" | "MANIFEST_UNREADABLE";
+  /** lệnh cập nhật thủ công, dạng nhãn rút gọn (~/…) */
+  updateCommand: string;
+  checkedAt: string;
+}
+
 export const systemApi = {
+  /**
+   * Kiểm tra bản mới. Agent fetch `release.json` HỘ trình duyệt (raw.githubusercontent.com
+   * không cho origin loopback gọi thẳng) và không bao giờ 500 vì mất mạng — khi đó
+   * `ok:false` + `reason`, `latestVersion` null.
+   */
   async checkUpdate() {
-    return await httpGet("/api/update") as { currentVersion: string; latestVersion: string; available: boolean; checkedAt: string };
+    return await httpGet("/api/update") as UpdateCheck;
   },
   async installUpdate() {
     return await httpPost("/api/update", {}) as { ok: boolean; previousVersion?: string; restartRequired?: boolean };

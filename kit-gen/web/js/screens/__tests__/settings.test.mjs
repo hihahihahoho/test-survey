@@ -2,7 +2,7 @@
    Test THẬT cho màn của team này: chạy mount() dưới minidom với agent giả,
    rồi kiểm DOM/ARIA/luồng dữ liệu. Báo pass/fail TỪNG CA (không tự nhận vống). */
 import { flush, mountPoint, textOf, storageMap } from './env.mjs';
-import { makeMockFetch, defaultRoutes, PROJECT, DOCTOR_NO_IMAGEGEN, TRASH as TRASH_JSON } from './mock-agent.mjs';
+import { makeMockFetch, defaultRoutes, PROJECT, DOCTOR_NO_IMAGEGEN, TRASH as TRASH_JSON, UPDATE_AVAILABLE, UPDATE_OFFLINE } from './mock-agent.mjs';
 
 import * as agent from '../../core/agent.js';
 import * as store from '../../core/store.js';
@@ -117,6 +117,69 @@ group('S6 · /settings — 5 tab');
   ok('about liệt kê đúng các khoá lưu ở browser', ta.includes('kitgen.prefs.v1') && ta.includes('kitgen/thumbs'));
 
   scr.destroy();
+}
+
+/* ═════════ S6 · tab Về — KIỂM TRA CẬP NHẬT (nút gọi /api/update) ═════════ */
+group('S6 · tab Về — Kiểm tra cập nhật');
+{
+  const findBtn = (root, text) => root.querySelectorAll('.kg-btn').find((b) => textOf(b).includes(text));
+
+  /* ── ca 1: đang mới nhất ── */
+  reqLog.length = 0;
+  useRoutes(defaultRoutes());
+  const { mountSettings } = await import('../settings/index.js');
+  const host = mountPoint();
+  const scr = mountSettings(host, { status: CONNECTED, tab: 'about' });
+  await flush();
+
+  ok('có nút [Kiểm tra cập nhật] ở tab Về', !!findBtn(host, 'Kiểm tra cập nhật'));
+  ok('KHÔNG tự gọi /api/update khi mở tab (chỉ khi user bấm)',
+    !reqLog.some((r) => String(r.url).includes('/api/update')), String(reqLog.length));
+  ok('trước khi bấm nói rõ chưa kiểm tra lần nào', textOf(host).includes('Chưa kiểm tra lần nào'));
+
+  findBtn(host, 'Kiểm tra cập nhật').click();
+  await flush(3);
+  ok('bấm nút thì GỌI GET /api/update', reqLog.some((r) => String(r.url).includes('/api/update')));
+  const tLatest = textOf(host);
+  ok('bản mới nhất → nói "Đang dùng bản mới nhất" kèm version', tLatest.includes('Đang dùng bản mới nhất') && tLatest.includes('2.1.13'));
+  ok('bản mới nhất → KHÔNG hiện nút [Cập nhật ngay]', !findBtn(host, 'Cập nhật ngay'));
+  scr.destroy();
+
+  /* ── ca 2: có bản mới ── */
+  reqLog.length = 0;
+  useRoutes(defaultRoutes({ update: UPDATE_AVAILABLE }));
+  const host2 = mountPoint();
+  const scr2 = mountSettings(host2, { status: CONNECTED, tab: 'about' });
+  await flush();
+  findBtn(host2, 'Kiểm tra cập nhật').click();
+  await flush(3);
+  const tNew = textOf(host2);
+  ok('có bản mới → nêu ĐÍCH DANH version mới và version đang chạy', tNew.includes('2.2.0') && tNew.includes('2.1.13'));
+  ok('có bản mới → hiện nút [Cập nhật ngay]', !!findBtn(host2, 'Cập nhật ngay'));
+  ok('có bản mới → vẫn cho đường thủ công bằng lệnh Terminal', tNew.includes('kitgen') && tNew.includes('update'));
+  ok('lệnh cập nhật là nhãn rút gọn, KHÔNG đường dẫn tuyệt đối', !tNew.includes('/Users/'));
+  scr2.destroy();
+
+  /* ── ca 3: mất mạng — KHÁC với "đang mới nhất" ── */
+  useRoutes(defaultRoutes({ update: UPDATE_OFFLINE }));
+  const host3 = mountPoint();
+  const scr3 = mountSettings(host3, { status: CONNECTED, tab: 'about' });
+  await flush();
+  findBtn(host3, 'Kiểm tra cập nhật').click();
+  await flush(3);
+  const tOff = textOf(host3);
+  ok('mất mạng → nói KHÔNG kiểm tra được, không đổ thành "đang mới nhất"',
+    tOff.includes('Không đọc được danh sách bản phát hành') && !tOff.includes('Đang dùng bản mới nhất'));
+  ok('mất mạng → vẫn hiện lệnh cập nhật thủ công', tOff.includes('update'));
+  scr3.destroy();
+
+  /* ── ca 4: agent chưa chạy → nút bị chặn, có lý do ── */
+  const host4 = mountPoint();
+  const scr4 = mountSettings(host4, { status: OFFLINE, tab: 'about' });
+  await flush();
+  ok('agent chưa chạy → nút [Kiểm tra cập nhật] bị chặn', findBtn(host4, 'Kiểm tra cập nhật')?.disabled === true);
+  ok('agent chưa chạy → nói rõ LÝ DO chưa kiểm tra được', textOf(host4).includes('Công cụ local chưa chạy'));
+  scr4.destroy();
 }
 
 console.log(`\n${'─'.repeat(70)}`);

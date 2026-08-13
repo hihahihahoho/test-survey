@@ -2,7 +2,7 @@
    #4 /api/workspace/activate, #5 /bridge.html. /health là endpoint DUY NHẤT được poll. */
 import { invalidateDoctorCache } from "../lib/doctor.mjs"
 import { PROTOCOL } from "../lib/security.mjs"
-import { checkForUpdate, readRuntimeVersion, scheduleUpdate } from "../lib/update.mjs"
+import { checkForUpdateSafe, readRuntimeVersion, scheduleUpdate } from "../lib/update.mjs"
 
 export function register(r) {
   r.get("/health", async ctx => {
@@ -41,7 +41,8 @@ export function register(r) {
     return { status: 200, json: { ok: true, mode, codexHomeLabel: mode === "separate" ? "~/.codex-img" : "~/.codex" } }
   })
 
-  r.get("/api/update", async () => ({ status: 200, json: await checkForUpdate() }))
+  /** Kiểm tra bản mới. Luôn 200: mất mạng là `ok:false` + `reason`, không phải lỗi agent. */
+  r.get("/api/update", async () => ({ status: 200, json: await checkForUpdateSafe() }))
 
   r.post("/api/update", async () => {
     const before = await readRuntimeVersion()

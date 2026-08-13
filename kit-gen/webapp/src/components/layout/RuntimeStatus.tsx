@@ -2,28 +2,29 @@ import * as React from "react";
 import { Check, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useDoctor, useInstallUpdate, useSetImageProfile, useUpdateCheck } from "@/lib/hooks";
+import { useDoctor, useInstallUpdateFlow, useSetImageProfile, useUpdateCheck } from "@/lib/hooks";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { ConnectionStatus } from "@/lib/api";
+import type { ConnectionStatus, UpdateCheck } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { FLORA, FOCUS } from "./flora";
+
+/** "Chưa kiểm tra" ≠ "không kiểm tra được" — hai câu khác nhau, không gộp (§3.9). */
+function updateLabel(data: UpdateCheck | undefined): string {
+  if (!data) return "Chưa kiểm tra";
+  if (!data.ok) return `${data.currentVersion} · chưa kiểm tra được`;
+  return `${data.currentVersion} → ${data.latestVersion}`;
+}
 
 export function RuntimeStatus({ status, onRecheck }: { status: ConnectionStatus; onRecheck: () => void }) {
   const [open, setOpen] = React.useState(false);
   const doctor = useDoctor({ enabled: open && status.connected });
   const update = useUpdateCheck({ enabled: status.connected });
-  const install = useInstallUpdate();
+  const install = useInstallUpdateFlow();
   const profile = useSetImageProfile();
   const codexReady = doctor.data?.codex?.ok === true && doctor.data?.imageGen?.available === true;
   const statusLabel = status.connected
     ? "Sẵn sàng"
     : status.pill === "checking" ? "Đang kiểm tra" : "Mất kết nối";
-
-  const doInstall = async () => {
-    if (!window.confirm(`Cập nhật KitGen lên ${update.data?.latestVersion}? Công cụ local sẽ khởi động lại sau khi cài.`)) return;
-    await install.mutateAsync();
-    window.setTimeout(() => window.location.reload(), 5000);
-  };
 
   return <Popover open={open} onOpenChange={setOpen}>
     <PopoverTrigger asChild>
@@ -39,7 +40,7 @@ export function RuntimeStatus({ status, onRecheck }: { status: ConnectionStatus;
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-caption">
           <dt className="text-fg-muted">Công cụ local</dt><dd className="text-fg-strong">{status.connected ? `Đang chạy · v${status.agentVersion ?? "—"}` : "Mất kết nối"}</dd>
           <dt className="text-fg-muted">Tạo ảnh</dt><dd className="text-fg-strong">{codexReady ? "Sẵn sàng" : doctor.data?.imageGen?.reason ?? "Chưa kiểm tra"}</dd>
-          <dt className="text-fg-muted">Phiên bản</dt><dd className="text-fg-strong">{update.data ? `${update.data.currentVersion} → ${update.data.latestVersion}` : "Chưa kiểm tra"}</dd>
+          <dt className="text-fg-muted">Phiên bản</dt><dd className="text-fg-strong">{updateLabel(update.data)}</dd>
         </dl>
         <div className="space-y-2">
           <label className="text-caption text-fg-muted" htmlFor="kitgen-image-profile">Cấu hình tạo ảnh</label>
@@ -60,8 +61,8 @@ export function RuntimeStatus({ status, onRecheck }: { status: ConnectionStatus;
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="secondary" onClick={() => { onRecheck(); void doctor.refetch(); void update.refetch(); }}><RefreshCw aria-hidden /> Kiểm tra lại</Button>
-          {update.data?.available && <Button size="sm" onClick={() => void doInstall()} loading={install.isPending}>Cập nhật</Button>}
-          {update.data && !update.data.available && <span className="inline-flex items-center gap-1 text-caption text-fg-muted"><Check className="size-3" /> Mới nhất</span>}
+          {update.data?.available && <Button size="sm" onClick={() => void install.start(update.data?.latestVersion)} loading={install.pending}>Cập nhật</Button>}
+          {update.data?.ok && !update.data.available && <span className="inline-flex items-center gap-1 text-caption text-fg-muted"><Check className="size-3" /> Mới nhất</span>}
         </div>
       </div>
     </PopoverContent>

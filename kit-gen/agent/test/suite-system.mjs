@@ -43,8 +43,36 @@ export async function run({ api, call, agentDir, tmp }) {
     try {
       const r = await api("GET", "/api/update")
       eq(r.status, 200, "status")
+      eq(r.json.ok, true, "ok")
       eq(r.json.latestVersion, "99.0.0", "latest version")
       eq(r.json.available, true, "update available")
+      eq(r.json.updateCommand, "~/.kitgen/bin/kitgen update", "lệnh cập nhật thủ công")
+      ok(!/\/Users\//.test(r.text), "không trả đường dẫn tuyệt đối")
+    } finally { globalThis.fetch = original }
+  })
+  await it("GET /api/update biết version ĐANG CHẠY, không mặc định 0.0.0", async () => {
+    const original = globalThis.fetch
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      version: "0.0.1", archive: "https://example.test/kitgen-runtime-0.0.1.tar.gz",
+    }), { status: 200, headers: { "content-type": "application/json" } })
+    try {
+      const r = await api("GET", "/api/update")
+      ok(/^\d+\.\d+\.\d+/.test(r.json.currentVersion), `currentVersion là semver: ${r.json.currentVersion}`)
+      ok(r.json.currentVersion !== "0.0.0", "KHÔNG lùi về 0.0.0 (nếu lùi thì lúc nào cũng báo có bản mới)")
+      eq(r.json.available, false, "manifest cũ hơn ⇒ không có bản mới")
+    } finally { globalThis.fetch = original }
+  })
+  await it("mất mạng KHÔNG thành lỗi 500 — trả ok:false + reason enum", async () => {
+    const original = globalThis.fetch
+    globalThis.fetch = async () => { throw new TypeError("fetch failed") }
+    try {
+      const r = await api("GET", "/api/update")
+      eq(r.status, 200, "status")
+      eq(r.json.ok, false, "ok")
+      eq(r.json.reason, "OFFLINE", "reason là enum")
+      eq(r.json.latestVersion, null, "không bịa version mới nhất")
+      eq(r.json.available, false, "không đổ oan là có bản mới")
+      ok(!/fetch failed/.test(r.text), "không lộ chuỗi lỗi thô của Node ra client")
     } finally { globalThis.fetch = original }
   })
 

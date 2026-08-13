@@ -9,6 +9,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { UpdateSidebarButton } from "./UpdateSidebarButton";
 
 export type HomeSection = "recent" | "all";
 export type HomeDestination = "projects" | "brands" | "ui-library" | "mascot-library" | "references" | "trash" | "settings";
@@ -108,7 +109,11 @@ export function HomeSidebar({
           {trashCount > 0 && <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 tabular-nums text-caption text-fg-muted">{trashCount}</span>}
         </div>
       </div>
-      <div className="mt-auto pt-4">
+      {/* Chân sidebar: [Cập nhật] chỉ mọc ra khi THẬT SỰ có bản mới (component tự trả
+          `null` nếu không), nằm ngay trên "Cài đặt" — cùng nhóm "việc của app", không
+          lẫn vào nhóm điều hướng nội dung ở trên. */}
+      <div className="mt-auto space-y-1 pt-4">
+        <UpdateSidebarButton />
         {destination("settings", "Cài đặt", Settings, onSettings)}
       </div>
     </aside>

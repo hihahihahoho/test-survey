@@ -108,19 +108,53 @@ export function useDoctor(opts: { enabled?: boolean; refresh?: boolean } = {}) {
   });
 }
 
+/**
+ * NGOẠI LỆ CÓ CHỦ ĐÍCH với kỷ luật "không tự gọi mạng ngoài": nút [Cập nhật] ở sidebar
+ * phải TỰ hiện khi có bản mới, nên lần kiểm tra đầu của phiên chạy im lặng lúc app mở.
+ * Chỉ endpoint NÀY được miễn; `/api/doctor` và mọi API khác giữ nguyên luật cũ.
+ *
+ * "Im lặng" là hợp đồng, không phải mô tả: `retry:false` ⇒ mất mạng KHÔNG thử lại,
+ * không toast, không banner — lỗi chỉ làm `data` undefined và nút vẫn ẩn.
+ *
+ * ĐÚNG MỘT LẦN MỖI PHIÊN: `staleTime` 12h giữ dữ liệu "còn tươi", `gcTime` 24h giữ nó
+ * sống qua lúc mọi component dùng hook unmount (đổi màn), và `refetchOnMount`/
+ * `refetchOnWindowFocus` tắt để quay lại tab không sinh request mới. Nút [Kiểm tra
+ * cập nhật] ở Cài đặt → Giới thiệu vẫn ép được bằng `refetch()`.
+ */
 export function useUpdateCheck(opts: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: qk.update(),
     queryFn: () => api.system.checkUpdate(),
     enabled: opts.enabled ?? true,
     staleTime: 12 * 60 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
     refetchInterval: false,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     retry: false,
   });
 }
 
 export function useInstallUpdate() {
   return useMutation({ mutationFn: () => api.system.installUpdate() });
+}
+
+/**
+ * Luồng cài bản mới, dùng CHUNG cho cả ba chỗ mời cập nhật (sidebar · popover trạng
+ * thái · Cài đặt → Giới thiệu) để ba nơi không trôi khỏi nhau.
+ *
+ * Cập nhật làm công cụ local KHỞI ĐỘNG LẠI, tức là cắt ngang việc user đang làm ⇒ luôn
+ * hỏi trước. Agent trả 202 rồi mới tự thay mình, nên trang chờ 5s rồi tải lại.
+ */
+export function useInstallUpdateFlow() {
+  const install = useInstallUpdate();
+  const start = async (latestVersion?: string | null) => {
+    const target = latestVersion ? `lên ${latestVersion}` : "lên bản mới";
+    if (!window.confirm(`Cập nhật KitGen ${target}? Công cụ local sẽ khởi động lại sau khi cài.`)) return;
+    await install.mutateAsync();
+    window.setTimeout(() => window.location.reload(), 5000);
+  };
+  return { pending: install.isPending, start };
 }
 
 export function useSetImageProfile() {
