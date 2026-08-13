@@ -32,6 +32,16 @@ export function ImageDropzone({ label, description, multiple = false, maxFiles =
     }
     setLocalError(null); setPicked(raw); onFiles(raw);
   }, [maxBytes, maxFiles, multiple, onFiles]);
+  /**
+   * Bỏ một ảnh khỏi lượt chọn phải BÁO NGƯỢC lên cha.
+   * Bản cũ chỉ `setPicked(...)`, tức là ô ảnh biến mất trên màn nhưng file vẫn nằm trong
+   * state của cha và vẫn được tải lên khi bấm Lưu — nút ✕ nói dối.
+   */
+  const removePicked = React.useCallback((file: File) => {
+    const next = picked.filter(item => item !== file);
+    setPicked(next);
+    onFiles(next);
+  }, [onFiles, picked]);
   const message = error ?? localError;
   return <div className="image-upload-shell">
     <button type="button" disabled={disabled || state === "uploading"} className={cn("image-dropzone", drag && "is-dragging", message && "is-error")}
@@ -42,7 +52,7 @@ export function ImageDropzone({ label, description, multiple = false, maxFiles =
     </button>
     <input ref={input} className="sr-only" type="file" accept={ACCEPT.join(",")} multiple={multiple} disabled={disabled} onChange={e => { if(e.target.files) acceptFiles(e.target.files); e.currentTarget.value=""; }}/>
     {message && <p className="image-upload-error"><TriangleAlert aria-hidden/>{message}</p>}
-    {showLocalPreview && picked.length > 0 && <div className="image-picked-list" aria-label={`${picked.length} ảnh đã chọn`}>{picked.map(file => <PickedImage key={`${file.name}-${file.lastModified}`} file={file} onRemove={() => setPicked(xs => xs.filter(x => x !== file))} />)}</div>}
+    {showLocalPreview && picked.length > 0 && <div className="image-picked-list" aria-label={`${picked.length} ảnh đã chọn`}>{picked.map(file => <PickedImage key={`${file.name}-${file.lastModified}`} file={file} onRemove={() => removePicked(file)} />)}</div>}
   </div>;
 }
 
