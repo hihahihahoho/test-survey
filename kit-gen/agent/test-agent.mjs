@@ -24,7 +24,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { createAgent } from "./server.mjs"
-import { apiFor, fakeDoctor, report, PAGES, PORT } from "./test/harness.mjs"
+import { apiFor, currentCase, fakeDoctor, report, PAGES, PORT } from "./test/harness.mjs"
 import { run as runSystem } from "./test/suite-system.mjs"
 import { run as runSettings } from "./test/suite-settings.mjs"
 import { run as runProjects } from "./test/suite-projects.mjs"
@@ -40,6 +40,27 @@ import { run as runImport } from "./test/suite-import.mjs"
 import { run as runLibrary } from "./test/suite-library.mjs"
 
 const AGENT_DIR = dirname(fileURLToPath(import.meta.url))
+
+/* ══ ĐỒNG HỒ CHẾT ═══════════════════════════════════════════════════════════════
+   Mỗi ca đã có trần 25s (harness), nhưng thứ nằm NGOÀI ca — dựng agent, dọn dẹp,
+   một handle không ai đóng — thì không có trần nào. Trên runner Windows lần đầu, bộ
+   ca đứng im 74 phút rồi bị huỷ tay: không một dòng log, không biết chết ở đâu, và
+   GitHub thì đợi tới 6 tiếng mới tự giết (run 31786773182).
+   Từ nay: quá ngân sách thì TỰ KHAI ra đang kẹt ở ca nào, còn những handle nào đang
+   sống (đây mới là câu trả lời thật cho "vì sao không thoát"), in báo cáo tới thời
+   điểm đó rồi thoát 1. Treo phải thành ĐỎ CÓ TÊN, không phải một khoảng lặng.
+   `unref()` để đồng hồ này không bao giờ tự nó giữ tiến trình sống thêm. */
+const BUDGET_MS = Number(process.env.KITGEN_TEST_BUDGET_MS ?? 10 * 60_000)
+const watchdog = setTimeout(() => {
+  const where = currentCase() ?? "(chưa vào ca nào — kẹt ở khâu dựng agent hoặc dọn dẹp)"
+  process.stdout.write(
+    `\n\n╳ QUÁ NGÂN SÁCH ${Math.round(BUDGET_MS / 1000)}s — BỘ CA ĐANG TREO\n` +
+    `  ca hiện tại : ${where}\n` +
+    `  handle sống : ${(process.getActiveResourcesInfo?.() ?? ["(node < 18.3)"]).join(", ")}\n`)
+  report()
+  process.exit(1)
+}, BUDGET_MS)
+watchdog.unref()
 
 const tmp = await mkdtemp(join(tmpdir(), "kitgen-test-"))
 const wsRoot = join(tmp, "KitGen")

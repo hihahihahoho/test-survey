@@ -19,19 +19,38 @@ export const CASE_TIMEOUT_MS = 25000
 const results = []
 let group = ""
 
+/* CHẠY TRÊN CI THÌ TƯỜNG THUẬT TRỰC TIẾP.
+   Bộ ca chỉ in đúng một lần lúc kết thúc (report()), nên khi nó treo trên runner Windows
+   thì log là MỘT TỜ GIẤY TRẮNG: 74 phút không một dòng, không biết chết ở ca nào
+   (run 31786773182). Ở chế độ CI, mỗi ca in nhãn NGAY TRƯỚC khi chạy và in kết quả
+   ngay sau — ca treo là ca có dòng cụt cuối log, đọc phát ra ngay.
+   Máy dev (không có biến CI) giữ nguyên hành vi cũ từng chữ. */
+const STREAM = Boolean(process.env.CI || process.env.KITGEN_TEST_STREAM)
+let current = null
+let index = 0
+
+export function currentCase() { return current }
+
 export function describe(name) { group = name }
 
 export async function it(name, fn) {
   const label = group ? `${group} › ${name}` : name
   let timer
+  const t0 = Date.now()
+  current = label
+  index++
+  if (STREAM) process.stdout.write(`[${String(index).padStart(3)}] ${label} … `)
   try {
     await Promise.race([
       fn(),
       new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(`hết ${CASE_TIMEOUT_MS}ms`)), CASE_TIMEOUT_MS) }),
     ])
     results.push({ label, ok: true })
-  } catch (e) { results.push({ label, ok: false, err: e }) }
-  finally { clearTimeout(timer) }
+    if (STREAM) process.stdout.write(`PASS ${Date.now() - t0}ms\n`)
+  } catch (e) {
+    results.push({ label, ok: false, err: e })
+    if (STREAM) process.stdout.write(`FAIL ${Date.now() - t0}ms — ${e?.message ?? e}\n`)
+  } finally { clearTimeout(timer); current = null }
 }
 
 export function eq(actual, expected, what = "value") {

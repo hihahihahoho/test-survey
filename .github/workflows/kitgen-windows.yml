@@ -20,6 +20,13 @@ name: KitGen Windows (EXPERIMENTAL)
 on:
   workflow_dispatch:
   push:
+    # `branches: '**'` = MỌI NHÁNH nhưng KHÔNG PHẢI TAG. Thiếu dòng này thì mỗi lượt
+    # `git push --tags` của pipeline release Mac lại đẻ thêm một lượt Windows y hệt lượt
+    # nhánh vừa chạy (đã thấy: tag kitgen-v2.1.24 → run 31789513981 trùng nội dung
+    # run nhánh 31788056826). Hai lượt song song trên cùng một commit = tốn 2 máy ảo
+    # và làm nhiễu việc đọc log, mà `concurrency` không gộp được vì khác `github.ref`.
+    branches:
+      - "**"
     paths:
       - "kit-gen/scripts/install.ps1"
       - "kit-gen/agent/**"
@@ -41,6 +48,7 @@ jobs:
   cu-phap:
     name: 1 · Cú pháp và phân tích tĩnh
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -200,6 +208,7 @@ jobs:
   dong-goi:
     name: 2 · Đóng gói runtime (Linux)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     outputs:
       version: ${{ steps.ver.outputs.version }}
     steps:
@@ -239,6 +248,7 @@ jobs:
     name: 3 · Cài đặt trên Windows
     needs: [cu-phap, dong-goi]
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -570,6 +580,11 @@ jobs:
     name: 4 · Agent trên Windows
     needs: [cu-phap]
     runs-on: windows-latest
+    # VONG 5: job nay TREO 74 PHUT roi phai huy tay (run 31786773182) - GitHub mac dinh
+    # de mot job chay toi 6 TIENG. Tran cua job la lop chan cuoi cung; lop that su huu ich
+    # la dong ho chet ben trong bo ca (KITGEN_TEST_BUDGET_MS o buoc duoi): no do TRUOC tran
+    # nay va con kip khai ra dang ket o ca nao.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -627,10 +642,40 @@ jobs:
           command -v python3
           python3 -c "import sys; print(sys.version.split()[0])"
 
+      # Defender quet THOI GIAN THUC tung file moi ghi va tung tien trinh moi spawn. Bo ca
+      # nay lam dung hai viec do vai nghin lan (moi ca dung mot workspace tam, nhieu ca
+      # spawn bash/python that), nen tren runner no la thue phi lon nhat va la nghi can so
+      # 1 cua vu treo 74 phut. Loai tru thu muc tam KHONG lam sai phep thu port: engine,
+      # spawn, taskkill, duong dan van chay y het. May that cua user van co Defender, va
+      # dieu do duoc ghi lai o WINDOWS-PORT muc 9.2 nhu mot ghi chu ve HIEU NANG, khong
+      # phai ve tinh dung dan. Khong co quyen thi bo qua, khong lam do job.
+      - name: Nới Defender cho thư mục tạm (chỉ để đo được thời gian)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          try {
+            Add-MpPreference -ExclusionPath $env:RUNNER_TEMP -ErrorAction Stop
+            Add-MpPreference -ExclusionPath $env:TEMP -ErrorAction Stop
+            Write-Host 'OK   da loai tru RUNNER_TEMP + TEMP khoi Defender'
+          } catch {
+            Write-Host ('WARN khong loai tru duoc Defender: {0}' -f $_.Exception.Message)
+          }
+          exit 0
+
       # PHEP THU THAT DAU TIEN cua platform.mjs. Do o day = loi port, phai sua that.
+      #
+      # CI=true la bien GitHub tu dat => harness bat che do TUONG THUAT TRUC TIEP: moi ca
+      # in nhan NGAY TRUOC khi chay va in PASS/FAIL kem so mili-giay ngay sau. Truoc vong
+      # nay bo ca chi in mot lan luc ket thuc, nen lan treo dau tien de lai MOT TO GIAY
+      # TRANG: 74 phut khong mot dong log, khong biet chet o dau (run 31786773182).
+      # KITGEN_TEST_BUDGET_MS = tran cho CA BO ca (dong ho chet trong test-agent.mjs).
+      # Dat 15 phut < timeout-minutes 25 cua job: het gio thi CHINH bo ca do va in ra
+      # "dang ket o ca nao + con handle nao song", thay vi de GitHub giet cau cam lang.
       - name: Bộ ca agent trên Windows
         shell: pwsh
         working-directory: kit-gen
+        env:
+          KITGEN_TEST_BUDGET_MS: "900000"
         run: |
           node agent/test-agent.mjs
           exit $LASTEXITCODE

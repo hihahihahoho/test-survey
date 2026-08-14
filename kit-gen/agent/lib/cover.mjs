@@ -35,7 +35,7 @@ import { projectDir } from "./projects-dir.mjs"
 import { readProject, saveProject } from "./projects.mjs"
 import { readContract } from "./contract.mjs"
 import { resolveEngine } from "./engine.mjs"
-import { bashCommand, winSpawnOpts } from "./platform.mjs"
+import { IS_WIN, bashCommand, winSpawnOpts } from "./platform.mjs"
 
 /** Thư mục + đường dẫn tương đối của ảnh bìa tự sinh. `files.mjs` mở đúng thư mục này. */
 export const COVER_DIR = "cover"
@@ -242,6 +242,9 @@ export async function buildCoverPrompt({ project, contract, hasFile }) {
 
 const STATUS_NONE = "none"
 
+/** Hạn chờ 'close' sau khi đã có 'exit' — CHỈ dùng trên win32 (xem chỗ spawn cover.sh). */
+const WIN_PIPE_GRACE_MS = 5000
+
 /** Đọc meta ảnh bìa trên đĩa (không có = chưa từng chạy). */
 export async function readCoverMeta(ws, id) {
   try { return await readJsonFile(join(projectDir(ws, id), COVER_META_REL)) }
@@ -387,6 +390,23 @@ export async function startCover(ws, id, { imgHome = null, wait = false, force =
       child.stderr.on("data", onData)
       child.on("error", () => resolve())
       child.on("close", () => resolve())
+      /* WINDOWS: 'close' đợi ống dẫn stdout/stderr đóng, mà trên Windows tiến trình CHÁU
+         (codex do cover.sh gọi) thừa kế đúng hai ống đó — bash chết rồi ống vẫn mở thì
+         'close' KHÔNG BAO GIỜ tới và job vẽ bìa treo vĩnh viễn ở "running" (ở đây còn
+         không có trần thời gian nào như slice). Chỉ vá cho win32: 'exit' đã tới mà quá
+         hạn vẫn chưa 'close' thì tự đóng ống rồi đi tiếp — phán vẫn THEO SẢN PHẨM
+         (file mới hơn t0) nên không đổi kết quả, chỉ đổi việc có thoát ra được hay không.
+         darwin/linux: khối này không tồn tại. */
+      if (IS_WIN) {
+        child.on("exit", () => {
+          const t = setTimeout(() => {
+            try { child.stdout?.destroy() } catch { /* đã đóng */ }
+            try { child.stderr?.destroy() } catch { /* đã đóng */ }
+            resolve()
+          }, WIN_PIPE_GRACE_MS)
+          t.unref?.()
+        })
+      }
     })
 
     /* PHÁN THEO SẢN PHẨM, y hệt lượt gen: file mới hơn t0 = xong. Mã thoát của codex

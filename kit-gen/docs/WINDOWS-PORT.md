@@ -559,6 +559,105 @@ khoá ⇒ installer không ghi đè được nó, và mọi thao tác xoá cây 
 chứng minh ca này thật sự bắt được lỗi bằng cách tạm bỏ dòng `closeSync` → ca đỏ
 (`149/150`), khôi phục → `150/150`.
 
+### 8.4 Vòng 5 (run 31786773182) — job 1+2 xanh, và hai kiểu hỏng MỚI
+
+Mọi bản vá vòng 4 đều ăn: `install.ps1` đi trọn `[1/8] → [4/8]` (PSModulePath, `Get-Sha256`,
+`Expand-Archive` đều ổn). Lộ ra hai thứ khác hẳn nhau.
+
+#### 8.4.1 🔴 `2>$null` KHÔNG phải `2>/dev/null` — nó biến stderr thành lỗi CHẤM DỨT
+
+Job 3 chết ở `[5/8] Moi truong Python`, ngay sau `tao virtualenv ...`. Dòng gây chết:
+
+```powershell
+& $venvPy -c 'import PIL,numpy,scipy,pymatting' 2>$null | Out-Null   # ← chết TẠI ĐÂY
+if ($LASTEXITCODE -ne 0) { … pip install … }                          # ← không bao giờ tới
+```
+
+Đây là **phép thử**, không phải phép kiểm: máy chưa cài thư viện là chuyện đương nhiên, và
+`Traceback` chính là câu trả lời "chưa có". Bản Mac viết đúng ý đó bằng `cmd || { … }` —
+bash chỉ nhìn **exit code**, kệ lệnh nói gì ra stderr.
+
+PowerShell thì không. Trong PS 5.1, hễ dòng lệnh có **chuyển hướng stderr** (`2>$null`,
+`2>&1`), mỗi dòng stderr của lệnh ngoài được gói thành một `ErrorRecord`
+(`NativeCommandError`) và đi qua **luồng lỗi** — mà `$ErrorActionPreference = 'Stop'`
+(đặt ở đầu installer) coi record đầu tiên là lỗi chấm dứt. Nghĩa là `2>$null` **không hề
+"cho qua"**: nó biến stderr từ vô hại thành chí mạng. Không viết `2>$null` thì stderr chỉ
+chảy thẳng ra console và chẳng ai chết cả — đúng ngược với trực giác của người viết bash.
+
+Bằng chứng trong log: `Traceback` **vẫn hiện ra** trong `install-1.err.log` mặc dù đã
+`2>$null`. Nếu chuyển hướng thật sự nuốt stderr thì đã không có dòng nào.
+
+Sửa: thêm `Invoke-ExeSoft` — hạ `$ErrorActionPreference` trong đúng lời gọi, nuốt (`-Quiet`)
+hoặc in stderr, và **trả về exit code** để người gọi tự phán như bash. Ba chỗ của `[5/8]`
+(tạo venv, phép thử import, `pip install`) đi qua nó; `Get-PyVersion` cũng vậy.
+
+> **Luật cho cả file**: mọi lệnh ngoài "được phép hỏng" phải gọi qua `Invoke-ExeSoft`.
+> Gọi thẳng kèm `2>$null`/`2>&1` = đặt mìn.
+
+#### 8.4.2 🟡 `py -3` là bản MỚI NHẤT — tức bản dễ thiếu wheel nhất
+
+Runner báo `Python 3.14 (py launcher)`. KitGen cần `pillow numpy scipy pymatting`; scipy/numpy
+chỉ có wheel cho một phiên bản Python sau khi bản đó ra được vài tháng, trước đó `pip` phải
+**biên dịch từ nguồn** — trên Windows nghĩa là cần MSVC + Fortran, tức là hỏng.
+
+`install.sh` không kẹp phiên bản, nhưng `python3` trên Mac là bản Homebrew/hệ thống **đã chín**.
+Trên Windows `py -3` lại luôn trỏ vào bản **mới nhất đang cài**. Port đúng *tinh thần* của
+install.sh (chọn một bản Python đã chín) chứ không phải copy nguyên chữ:
+
+* thử `py -3.13` → `py -3.12` → `py -3.11`, lấy bản đầu tiên chạy được;
+* không có bản nào thì lui về `py -3` **kèm cảnh báo** nêu đúng cách xử (cài thêm 3.13 rồi
+  chạy lại), chứ **không chặn cài** — phần không cần Python vẫn dùng được và `doctor` sẽ nói tiếp;
+* `pip install` hỏng cũng chỉ là `WARN` (có in nguyên văn dòng lỗi của pip), khác Mac (`set -eu`
+  ⇒ chết). Lý do khác: tới `[5/8]` thì runtime đã nằm trong `%LOCALAPPDATA%\KitGen` rồi, bỏ dở
+  giữa chừng chỉ để lại một cây cài dở **không có** thông điệp nào, còn đi tiếp thì người dùng
+  nhận đủ checklist ở cuối.
+
+**CI vẫn dùng đường của máy trắng** (`py` launcher), *không* dùng `actions/setup-python`: mục
+đích của job 3 là mô phỏng máy user, mà máy user thì không có ai cài sẵn Python 3.13 cho họ.
+Nếu runner chỉ có 3.14 thì đường "lui về `py -3` + cảnh báo" chính là đường mà user sẽ đi —
+CI kiểm đúng cái đó. Đánh đổi: `pip install` có thể hỏng thật trên CI; đó là **cảnh báo**, và
+log của bước đó là bằng chứng để quyết định có cần kẹp phiên bản chặt hơn không.
+
+#### 8.4.3 🔴 Job 4 treo 74 phút — và cái tệ hơn: **không một dòng log**
+
+`node agent/test-agent.mjs` bắt đầu 09:08:33 rồi **im lặng hoàn toàn** tới lúc huỷ tay ở phút
+thứ 74 (bộ ca chỉ in một lần lúc kết thúc). GitHub mặc định để job chạy tới **6 tiếng**.
+Log không nói được nó treo ở đâu, cũng không phân biệt nổi "kẹt cứng một chỗ" với "bò từng ca
+qua trần 25s" — 158 ca × 25s ≈ 66 phút, tức **cả hai giả thuyết đều khớp với 74 phút**.
+
+Việc đầu tiên vì thế không phải là đoán, mà là **làm cho lần sau tự khai**:
+
+| Lớp | Ở đâu | Làm gì |
+|---|---|---|
+| tường thuật trực tiếp | `test/harness.mjs` | có biến `CI` ⇒ mỗi ca in nhãn **trước** khi chạy, in `PASS/FAIL <ms>` ngay sau. Ca treo = dòng cụt cuối log. Máy dev (không có `CI`) giữ nguyên hành vi cũ từng chữ |
+| đồng hồ chết | `agent/test-agent.mjs` | `KITGEN_TEST_BUDGET_MS` (CI: 15 phút) — quá giờ thì in **ca hiện tại** + `process.getActiveResourcesInfo()` (câu trả lời thật cho "vì sao không thoát") + báo cáo tới thời điểm đó, rồi `exit 1` |
+| trần của job | workflow | `timeout-minutes` cho cả bốn job (job 4 = 25 phút) — lớp chặn cuối, đứng **sau** đồng hồ chết để cái đỏ luôn có tên |
+
+Đã thử ngay trên macOS: `KITGEN_TEST_BUDGET_MS=3000` ⇒ đồng hồ chết in đúng tên ca đang chạy
+và `PipeWrap ×4, ProcessWrap, Timeout` — tức handle của một tiến trình engine còn sống.
+
+**Nghi can đã vá sẵn (đọc mã, chưa có bằng chứng từ runner):** `child.on("close")` là đường
+**duy nhất** đóng sổ một pha chạy, mà `'close'` đợi **mọi ống stdio đóng**, không phải đợi
+tiến trình chết. Trên Windows handle được **thừa kế**: `bash.exe` gọi codex/python, hai đứa
+cháu giữ nguyên đầu ghi của ống, nên bash chết rồi mà `'close'` vẫn không tới ⇒ `phaseDone`
+không bao giờ settle ⇒ lượt chạy đứng ở "đang chạy" **vĩnh viễn** (một pha không có trần thời
+gian nào). POSIX gần như không dính vì engine không để lại tiến trình cháu sống sót.
+Vá **gate `win32`** ở cả ba chỗ spawn engine — `runPhase` và `sliceSheet` (`run-handle.mjs`),
+`drawOnce` (`cover.mjs`): `'exit'` đã tới mà 5s sau vẫn chưa `'close'` thì tự `destroy()` ống
+rồi đóng sổ, kèm một dòng log nói rõ vì sao. Trên darwin/linux khối này **không tồn tại**.
+
+**Nghi can thứ hai — Defender.** Bộ ca ghi vài nghìn file tạm và spawn hàng chục tiến trình;
+Defender quét thời gian thực cả hai. Job 4 nay loại trừ `RUNNER_TEMP`/`TEMP` khỏi Defender
+(`continue-on-error`, không có quyền thì bỏ qua) — chỉ để **đo được** thời gian thật.
+Đây là ghi chú về **hiệu năng**, không phải về tính đúng đắn: máy user thật vẫn có Defender,
+và nếu số mili-giây của lượt CI kế tiếp cho thấy bộ ca vốn dĩ bò chứ không kẹt, thì việc phải
+làm là **giảm số lần spawn trong bộ ca**, không phải nới trần thời gian.
+
+Ngoài ra: `push` thêm bộ lọc `branches: '**'` (mọi nhánh, **trừ tag**). Trước đó mỗi lượt
+`git push --tags` của release Mac lại đẻ thêm một lượt Windows trùng hệt lượt nhánh
+(tag `kitgen-v2.1.24` → run 31789513981 trùng run 31788056826), mà `concurrency` không gộp
+được vì khác `github.ref`.
+
 ---
 
 ## 9. Việc còn lại (backlog)
@@ -597,8 +696,11 @@ chứng minh ca này thật sự bắt được lỗi bằng cách tạm bỏ d�
 | c | `scripts/install.ps1` | Lỗi THẬT do vòng 1 của CI bắt được, không phải suy đoán — xem §8.2 | thêm BOM UTF-8 + ASCII hoá 13 dòng chuỗi/nội dung sinh ra + bước CI khẳng định BOM |
 | d | `scripts/install.ps1` (PSModulePath + `Get-Sha256`) | Vòng 3: `Get-FileHash` "not recognized" khi installer chạy từ trong PowerShell 7 — xem §8.3.1 | vá `PSModulePath` bằng `$PSHOME\Modules` + tính SHA-256 bằng .NET thuần; CI kiểm cả môi trường sạch lẫn bẩn |
 | e | `lib/update.mjs`, `lib/fsx.mjs`, `test-agent.mjs` | Vòng 3: `ENOTEMPTY` khi xoá thư mục vì fd của `update.log` không bao giờ được đóng — xem §8.3.2 | đóng fd sau `spawn`; `removeTree`/`moveTree` thêm retry gate win32; dọn thư mục tạm không được giết bộ ca |
+| f | `scripts/install.ps1` (`Invoke-ExeSoft`, `Get-PyVersion`, `[5/8]`) | Vòng 5: `2>$null` + `EAP='Stop'` biến `Traceback` của phép thử import thành lỗi chấm dứt, installer chết trước khi kịp `pip install` — xem §8.4.1 | mọi lệnh "được phép hỏng" đi qua `Invoke-ExeSoft`; chọn Python 3.13→3.12→3.11 rồi mới lui về `py -3` kèm cảnh báo (§8.4.2) |
+| g | `lib/run-handle.mjs`, `lib/cover.mjs` | Vòng 5: `'close'` đợi ống stdio đóng, mà trên Windows tiến trình **cháu** thừa kế ống ⇒ pha chạy/job bìa có thể không bao giờ đóng sổ — xem §8.4.3 | gate `win32`: có `'exit'` mà 5s sau chưa `'close'` thì `destroy()` ống rồi đóng sổ, có log nêu lý do |
+| h | `test/harness.mjs`, `test-agent.mjs`, workflow | Vòng 5: job 4 treo 74 phút **không một dòng log**; GitHub để job chạy tới 6 tiếng | tường thuật trực tiếp khi có `CI`; đồng hồ chết `KITGEN_TEST_BUDGET_MS` in ca đang kẹt + handle còn sống; `timeout-minutes` cho cả 4 job |
 
-Mọi bản vá phía agent (a, b, e) đã được đo lại trên macOS: `node agent/test-agent.mjs` → **150/150 PASS · 0 FAIL**.
+Mọi bản vá phía agent (a, b, e, g, h) đã được đo lại trên macOS: `node agent/test-agent.mjs` → **158/158 PASS · 0 FAIL**.
 
 ### 9.2 Điểm phải soi ở lượt CI kế tiếp (chưa có bằng chứng, đừng đoán)
 
@@ -617,3 +719,19 @@ Mọi bản vá phía agent (a, b, e) đã được đo lại trên macOS: `node
    §7 bước 12 trên máy thật cũng sẽ đỏ.
 4. **Đường `codex.cmd`.** CI chỉ chứng minh `winShellOpts()` được gọi đúng chỗ, **không**
    chứng minh Codex thật chạy được trên Windows (§6.4 vẫn là rủi ro số 1).
+
+*(Cập nhật sau vòng 5: điểm 1 và 3 **đã có câu trả lời** — runner tạo được symlink và
+Git-Bash thấy `python3` qua shim, job 4 chạy tới được bộ ca. Điểm 2 vẫn treo vì job 3 chưa
+đi hết. Bốn câu hỏi MỚI của vòng 6, đọc theo đúng thứ tự này:)*
+
+5. **Bộ ca kẹt hay bò?** Đọc số mili-giây của từng ca trong log job 4 (nay in trực tiếp).
+   *Kẹt* = một ca đứng hình rồi đồng hồ chết gọi tên nó ⇒ đọc dòng `handle sống` kèm theo.
+   *Bò* = mọi ca đều xong nhưng chậm gấp hàng chục lần macOS ⇒ vấn đề là **số lần spawn**,
+   không phải trần thời gian, và phải sửa ở bộ ca chứ không phải ở workflow.
+6. **`WIN_PIPE_GRACE_MS` có phải nổ không.** Dòng `tien trinh da thoat nhung ong dan … chua
+   dong` xuất hiện = đã bắt được đúng bệnh ống-dẫn-thừa-kế của §8.4.3. **Không** xuất hiện mà
+   bộ ca vẫn xanh = giả thuyết đó sai, đừng ghi công nhầm cho bản vá.
+7. **`pip install` trên Python của runner.** Bước `[5/8]` nay in nguyên văn lỗi pip. Hỏng vì
+   thiếu wheel ⇒ cân nhắc kẹp phiên bản chặt hơn (hoặc ghi vào §6 như một giới hạn đã biết).
+8. **Defender.** So thời gian job 4 lượt này với 74 phút của lượt trước để biết phần nào của
+   độ chậm là do quét thời gian thực — con số đó cũng chính là thứ **user Windows thật** phải chịu.

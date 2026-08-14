@@ -9,7 +9,7 @@ import { projectDir } from "./projects-dir.mjs"
 import { resolveEngine, prepareEngine, materializeStyles, buildCommand, diagnose, summarizeFailures } from "./engine.mjs"
 import { maybeAutoCover } from "./cover.mjs"
 import { thumbnail } from "./thumbs.mjs"
-import { pythonCommand, killTree, winSpawnOpts } from "./platform.mjs"
+import { IS_WIN, pythonCommand, killTree, winSpawnOpts } from "./platform.mjs"
 
 const HEARTBEAT_MS = 15000
 const MAX_BUFFER_EVENTS = 4000
@@ -28,6 +28,19 @@ const MAX_BUFFER_EVENTS = 4000
    mất phần của nhau. slice.py đã có ổ khoá hệ điều hành (lớp bảo vệ cuối), nhưng xếp
    hàng ở đây là lớp thứ nhất: rẻ hơn, và giữ CPU cho việc chính. */
 const SHEET_SLICE_TIMEOUT_MS = 15 * 60 * 1000
+
+/* ══ WINDOWS: 'close' CÓ THỂ KHÔNG BAO GIỜ TỚI ═══════════════════════════════
+   Node bắn 'exit' khi TIẾN TRÌNH CON chết, nhưng bắn 'close' khi MỌI ỐNG DẪN stdio
+   đã hết dữ liệu. Trên Windows handle được THỪA KẾ: bash.exe khởi động codex/python,
+   hai đứa cháu đó giữ nguyên đầu ghi của ống stdout/stderr, nên bash chết rồi mà ống
+   vẫn mở — 'close' không tới, `phaseDone` không bao giờ settle, và lượt chạy đứng
+   nguyên ở "đang chạy" VĨNH VIỄN (không có trần thời gian nào cho cả một pha).
+   POSIX gần như không dính vì engine không để lại tiến trình cháu sống sau khi thoát,
+   và mã cũ đã chạy thế nhiều tháng trên macOS ⇒ CHỈ vá cho win32, giữ nguyên từng chữ
+   hành vi darwin/linux (hợp đồng của platform.mjs).
+   Vá: 'exit' tới mà sau ngần này vẫn chưa có 'close' thì tự đóng ống và đóng sổ pha,
+   kèm một dòng log NÓI RÕ vì sao — im lặng là thứ đã tốn của lượt CI đầu 74 phút. */
+const WIN_PIPE_GRACE_MS = 5000
 /** Bề rộng thumbnail mà lưới của web luôn hỏng (`?w=256`, xem features/kit/lib/image-source.ts). */
 const THUMB_WIDTHS = [256]
 /** Cover chạy NGOÀI pool của gen.sh ⇒ tổng số lượt codex đồng thời là maxJobs+1.
@@ -230,7 +243,10 @@ export class RunHandle {
       /* KHÔNG await được từ bên ngoài ⇒ mọi lỗi ở đây là UNHANDLED REJECTION và giết
          cả tiến trình agent. Bọc try/finally: done() phải chạy trong MỌI trường hợp,
          nếu không thì cancel({waitMs}) đợi phaseDone sẽ treo tới hết trần thời gian. */
-      child.on("close", async code => {
+      let closed = false
+      const onClose = async code => {
+        if (closed) return          // trên POSIX chỉ có đúng một đường vào: 'close'
+        closed = true
         this.child = null
         try {
           this.emit({ type: "job.log", level: "info", line: `[${kind} exit ${code}]` })
@@ -245,7 +261,23 @@ export class RunHandle {
           if (e?.code !== "ENOENT" && e?.code !== "ENOTDIR")
             process.stderr.write(`[agent] run ${this.id}: ${redactLine(String(e?.message ?? e))}\n`)
         } finally { done() }
-      })
+      }
+      child.on("close", onClose)
+      /* Lưới an toàn CHỈ CHO WINDOWS (xem WIN_PIPE_GRACE_MS ở đầu file). Trên
+         darwin/linux khối này không tồn tại ⇒ đường chạy y hệt mã cũ. */
+      if (IS_WIN) {
+        child.on("exit", code => {
+          const t = setTimeout(() => {
+            if (closed) return
+            onLine(`[${kind}] tien trinh da thoat nhung ong dan stdout/stderr chua dong sau ` +
+              `${WIN_PIPE_GRACE_MS}ms - dong tay (tien trinh chau con giu handle?)`, "warn")
+            try { child.stdout?.destroy() } catch { /* đã đóng */ }
+            try { child.stderr?.destroy() } catch { /* đã đóng */ }
+            onClose(code)
+          }, WIN_PIPE_GRACE_MS)
+          t.unref?.()
+        })
+      }
     })
     return this.phaseDone
   }
@@ -412,6 +444,18 @@ export class RunHandle {
       lineReader(child.stderr, l => onLine(l, "warn"))
       child.on("error", e => { clearTimeout(timer); this.sideChildren.delete(child); resolve(`spawn: ${e.message}`) })
       child.on("close", c => { clearTimeout(timer); this.sideChildren.delete(child); resolve(c) })
+      // Cùng lưới an toàn win32 như runPhase: 'close' đợi ống dẫn, mà cháu trên Windows
+      // giữ ống. Mọi thao tác dưới đây đều idempotent nên nếu 'close' tới trước thì vô hại.
+      if (IS_WIN) {
+        child.on("exit", c => {
+          const t = setTimeout(() => {
+            try { child.stdout?.destroy() } catch { /* đã đóng */ }
+            try { child.stderr?.destroy() } catch { /* đã đóng */ }
+            clearTimeout(timer); this.sideChildren.delete(child); resolve(c)
+          }, WIN_PIPE_GRACE_MS)
+          t.unref?.()
+        })
+      }
     })
     return { ok: code === 0, code, durationMs: Date.now() - t0 }
   }

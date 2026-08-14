@@ -151,6 +151,46 @@ function Invoke-Exe([string] $exe, [string[]] $exeArgs, [string] $what) {
   if ($LASTEXITCODE -ne 0) { Die "$what that bai (exit $LASTEXITCODE): $exe $($exeArgs -join ' ')" }
 }
 
+# ── CÁI BẪY: lệnh ngoài ghi stderr + $ErrorActionPreference='Stop' = CHẾT SCRIPT ──
+# Trong PowerShell 5.1, khi dòng lệnh có CHUYỂN HƯỚNG stderr (`2>$null`, `2>&1`), mỗi
+# dòng stderr của lệnh ngoài được gói thành một ErrorRecord (NativeCommandError) rồi
+# ĐI QUA luồng lỗi — mà EAP='Stop' thì record đầu tiên là lỗi CHẤM DỨT. Nghĩa là
+# `2>$null` KHÔNG hề "cho qua" như trong bash: nó biến stderr từ vô hại thành chí mạng.
+# ĐÃ GẶP THẬT trên runner CI: bước [5/8] chạy phép thử `python -c 'import PIL,...'`
+# cốt để BIẾT thư viện đã có hay chưa (thiếu là chuyện bình thường, thiếu thì đi cài),
+# nhưng Traceback của Python làm cả installer chết ngay tại đó, không bao giờ tới được
+# dòng `pip install` ở ngay bên dưới. Bản Mac không dính vì `cmd || { ... }` của bash
+# chỉ nhìn EXIT CODE, không quan tâm lệnh có nói gì ra stderr.
+# Hàm này là cách gọi ĐÚNG cho mọi lệnh "được phép hỏng": hạ EAP trong đúng lời gọi,
+# nuốt/hoặc in stderr tuỳ ý, và trả về EXIT CODE để người gọi tự phán như bash.
+function Invoke-ExeSoft([string] $exe, [string[]] $exeArgs, [switch] $Quiet) {
+  $old = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    if ($Quiet) { & $exe @exeArgs 2>&1 | Out-Null }
+    else { & $exe @exeArgs 2>&1 | ForEach-Object { Write-Host "       $_" } }
+    return $LASTEXITCODE
+  } catch {
+    # Lệnh không tồn tại/không chạy được: cũng chỉ là "hỏng", không phải sập installer.
+    return 9009
+  } finally { $ErrorActionPreference = $old }
+}
+
+# Hỏi phiên bản một trình Python. Trả '' nếu trình đó không chạy được (alias rỗng của
+# Microsoft Store, launcher không có bản được yêu cầu, PATH trỏ vào file đã xoá…).
+function Get-PyVersion([string] $exe, [string[]] $pre) {
+  $old = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    $probe = @()
+    if ($pre.Count -gt 0) { $probe += $pre }
+    $probe += @('-c', "import sys;print('%d.%d' % sys.version_info[:2])")
+    $out = & $exe @probe 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $out) { return '' }
+    return ([string]($out | Select-Object -First 1)).Trim()
+  } catch { return '' } finally { $ErrorActionPreference = $old }
+}
+
 # ── 0. đường dẫn & tham số ─────────────────────────────────────────────────────
 if (-not $KitgenHome) { $KitgenHome = Join-Path $env:LOCALAPPDATA 'KitGen' }
 if (-not $Workspace)  { $Workspace  = Join-Path $env:USERPROFILE 'KitGen' }
@@ -200,20 +240,45 @@ if ($bashExe) {
 }
 
 # Python 3 — slice.py / skeleton.py / thumbnail / crop anh bia.
-# Uu tien launcher `py -3` (chuan cua python.org tren Windows), roi den `python`.
+# Uu tien launcher `py` (chuan cua python.org tren Windows), roi den `python`.
+#
+# VÌ SAO KHÔNG LẤY THẲNG `py -3`:
+#   `py -3` = bản MỚI NHẤT đang cài, mà bản mới nhất chính là bản dễ THIẾU WHEEL nhất.
+#   KitGen cần pillow + numpy + scipy + pymatting; scipy/numpy chỉ có wheel cho một
+#   phiên bản Python sau khi phiên bản đó ra được vài tháng, trước đó pip phải BIÊN DỊCH
+#   từ nguồn — trên Windows nghĩa là cần MSVC + Fortran, tức là hỏng. Runner CI (blank
+#   machine đúng nghĩa) có sẵn 3.14 và đó là bản `py -3` chọn.
+#   Bản Mac không dính vì `python3` ở đó là bản Homebrew/hệ thống đã chín, không phải
+#   bản mới nhất trên đời. Nên "port đúng logic install.sh" ở đây KHÔNG phải là copy
+#   `python3` mà là giữ ĐÚNG cái tinh thần: chọn một bản Python ĐÃ CHÍN.
+#   Thứ tự thử: 3.13 → 3.12 → 3.11 (bộ ba luôn có wheel sẵn), khong co thi lui ve `py -3`
+#   kem canh bao chi ro cach xu (chu KHONG chan cai dat: cai xong van dung duoc phan
+#   khong can Python, va doctor se bao tiep).
+$PY_PREFERRED = @('3.13', '3.12', '3.11')
 $pyLauncher = $null
 $pyCmd = Get-Command py.exe -ErrorAction SilentlyContinue
 if ($pyCmd) {
-  $v = & $pyCmd.Source -3 -c "import sys;print('%d.%d' % sys.version_info[:2])" 2>$null
-  if ($LASTEXITCODE -eq 0 -and $v) { $pyExe = $pyCmd.Source; $pyPre = @('-3'); $pyLauncher = $true; Write-Ok "Python $v (py launcher)" }
+  foreach ($want in $PY_PREFERRED) {
+    $v = Get-PyVersion $pyCmd.Source @("-$want")
+    if ($v) { $pyExe = $pyCmd.Source; $pyPre = @("-$want"); $pyLauncher = $true; Write-Ok "Python $v (py -$want)"; break }
+  }
+  if (-not $pyLauncher) {
+    $v = Get-PyVersion $pyCmd.Source @('-3')
+    if ($v) {
+      $pyExe = $pyCmd.Source; $pyPre = @('-3'); $pyLauncher = $true
+      Write-Ok "Python $v (py launcher)"
+      Write-Warn ("Python $v moi hon 3.13 - scipy/pymatting co the chua co wheel cho ban nay. " +
+        'Neu buoc [5/8] bao pip that bai: cai them Python 3.13 tu https://www.python.org/downloads/windows/ (TICK "py launcher") roi chay lai installer.')
+    }
+  }
 }
 if (-not $pyLauncher) {
   $pExe = Get-Command python.exe -ErrorAction SilentlyContinue
   # Windows 10/11 co "app execution alias" python.exe gia — no chi mo Microsoft Store
   # chu khong chay Python. Dau hieu: duong dan nam trong WindowsApps.
   if ($pExe -and $pExe.Source -notmatch 'WindowsApps') {
-    $v = & $pExe.Source -c "import sys;print('%d.%d' % sys.version_info[:2])" 2>$null
-    if ($LASTEXITCODE -eq 0 -and $v) { $pyExe = $pExe.Source; $pyPre = @(); $pyLauncher = $true; Write-Ok "Python $v · $($pExe.Source)" }
+    $v = Get-PyVersion $pExe.Source @()
+    if ($v) { $pyExe = $pExe.Source; $pyPre = @(); $pyLauncher = $true; Write-Ok "Python $v · $($pExe.Source)" }
   }
 }
 if (-not $pyLauncher) {
@@ -383,19 +448,29 @@ if ($pyLauncher) {
     $venvArgs = @()
     if ($pyPre.Count -gt 0) { $venvArgs += $pyPre }
     $venvArgs += @('-m', 'venv', $venv)
-    & $pyExe @venvArgs
-    if ($LASTEXITCODE -ne 0) { Write-Warn 'khong tao duoc venv - se dung Python he thong' }
+    if ((Invoke-ExeSoft $pyExe $venvArgs) -ne 0) { Write-Warn 'khong tao duoc venv - se dung Python he thong' }
   }
   if (Test-Path -LiteralPath $venvPy) { $pythonForAgent = $venvPy }
   else { $pythonForAgent = $pyExe }
 
   if ($pythonForAgent -eq $venvPy) {
-    & $venvPy -c 'import PIL,numpy,scipy,pymatting' 2>$null | Out-Null
-    if ($LASTEXITCODE -ne 0) {
+    # Phép THỬ, không phải phép kiểm: máy chưa cài thư viện là chuyện đương nhiên, và
+    # Traceback in ra ở đây là câu trả lời "chua co" chứ không phải lỗi. Bắt buộc gọi
+    # qua Invoke-ExeSoft -Quiet (xem chú thích của hàm): gọi thẳng kèm `2>$null` thì
+    # EAP='Stop' biến Traceback thành lỗi chấm dứt và installer chết TẠI ĐÂY, không
+    # bao giờ chạy tới dòng `pip install` ngay dưới. Đúng lỗi đã gặp trên runner CI.
+    $probe = Invoke-ExeSoft $venvPy @('-c', 'import PIL,numpy,scipy,pymatting') -Quiet
+    if ($probe -ne 0) {
       Write-Host '  cai thu vien xu ly anh (pillow numpy scipy pymatting) ...'
       $env:PIP_DISABLE_PIP_VERSION_CHECK = '1'
-      & $venvPy -m pip install --quiet --upgrade pillow numpy scipy pymatting
-      if ($LASTEXITCODE -ne 0) { Write-Warn 'pip install that bai - slice.py se khong chay duoc' }
+      # KHONG -Quiet: pip hong thi phai doc duoc vi sao (thieu wheel? khong co mang?).
+      if ((Invoke-ExeSoft $venvPy @('-m', 'pip', 'install', '--upgrade', 'pillow', 'numpy', 'scipy', 'pymatting')) -ne 0) {
+        $pv = Get-PyVersion $venvPy @()
+        Write-Warn ("pip install that bai (Python $pv) - slice.py chua chay duoc. Cach xu: " +
+          '1) xem dong loi ngay tren day; 2) neu la loi bien dich scipy/numpy thi cai Python 3.13 ' +
+          'tu https://www.python.org/downloads/windows/, xoa thu muc .venv trong workspace roi chay lai installer; ' +
+          '3) may khong co mang thi cai lai khi co mang.')
+      }
     }
     Write-Ok "venv $venv"
   }
