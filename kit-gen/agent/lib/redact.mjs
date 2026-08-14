@@ -26,6 +26,28 @@ export function shortenPath(p) {
   // bỏ sót → rút về «…/2 đoạn cuối» để không bao giờ trả path tuyệt đối ra client
   s = s.replace(/(^|[\s"'(=])\/(?:tmp|private|var)((?:\/[^\s"')]+)+)/g,
     (_m, pre, rest) => pre + "…/" + rest.split("/").filter(Boolean).slice(-2).join("/"))
+  /* ── win32 ─────────────────────────────────────────────────────────────────
+     Trên Windows KHÔNG một dòng nào ở trên bắt được gì: path là `C:\Users\…`, còn
+     `HOME` (homedir()) thường lệch với path thật vì %TEMP% dùng tên 8.3
+     (`C:\Users\RUNNER~1\AppData\Local\Temp`) nên cả `startsWith(HOME)` cũng trượt
+     ⇒ nhãn workspace và mọi dòng log lọt NGUYÊN đường dẫn tuyệt đối ra client
+     (WINDOWS-PORT §9.5). Bốn phép thay dưới đây là bản dịch ĐÚNG THỨ TỰ của ba dòng
+     POSIX ở trên, cộng một dòng cho path dạng MSYS (`/c/Users/…`) mà engine chạy
+     trong Git-Bash in ra. GATE win32: darwin/linux không chạm một ký tự nào. */
+  if (process.platform === "win32") {
+    // ① gốc temp — phải đi TRƯỚC vì %TEMP% nằm trong chính thư mục nhà
+    s = s.replace(/(^|[\s"'(=])[A-Za-z]:[\\/](?:[^\s"');]*?[\\/])?Temp[\\/]([^\s"');]+)/gi,
+      (_m, pre, rest) => pre + "…\\" + rest.split(/[\\/]+/).filter(Boolean).slice(-2).join("\\"))
+    // ② thư mục nhà của bất kỳ user nào → ~ (đối xứng với nhánh /Users|/home)
+    s = s.replace(/(^|[\s"'(=])[A-Za-z]:[\\/]Users[\\/][^\\/\s"');]+((?:[\\/][^\s"');]+)*)/gi,
+      (_m, pre, rest) => pre + "~" + (rest || ""))
+    // ③ path dạng MSYS do bash của Git for Windows in ra: /c/Users/<user>/…
+    s = s.replace(/(^|[\s"'(=])\/[A-Za-z]\/Users\/[^/\s"');]+((?:\/[^\s"');]+)*)/g,
+      (_m, pre, rest) => pre + "~" + (rest || ""))
+    // ④ path tuyệt đối còn sót (ổ đĩa khác, UNC) → chỉ giữ 2 đoạn cuối
+    s = s.replace(/(^|[\s"'(=])(?:[A-Za-z]:[\\/]|\\\\)([^\s"');]+)/g,
+      (_m, pre, rest) => pre + "…\\" + rest.split(/[\\/]+/).filter(Boolean).slice(-2).join("\\"))
+  }
   return s
 }
 

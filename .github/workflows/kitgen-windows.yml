@@ -1,0 +1,624 @@
+# ══════════════════════════════════════════════════════════════════════════════
+#  KitGen · Windows (EXPERIMENTAL) — máy ảo trắng thay cho máy Win thật
+#
+#  VÌ SAO CÓ FILE NÀY: bản port Windows (scripts/install.ps1 + agent/lib/platform.mjs)
+#  được viết TRÊN macOS và CHƯA TỪNG chạy trên một máy Windows nào (docs/WINDOWS-PORT.md
+#  §6.1). Runner `windows-latest` của GitHub có sẵn ĐÚNG bộ tiền đề mà installer đòi:
+#  Git for Windows (bash + coreutils ở <Git>\usr\bin), Python 3, tar.exe, Node.
+#  ⇒ mỗi lượt push là một máy Win sạch, lỗi báo về ngay, không phải chờ mượn máy thật.
+#
+#  KHÔNG gắn vào kitgen-release.yml: bản Mac không được chờ và không được đỏ vì bản
+#  Windows đang thử nghiệm.
+#
+#  KHÔNG chạy Codex thật, KHÔNG đăng nhập, KHÔNG tốn quota:
+#    · lần cài 1 để máy TRỐNG codex — kiểm chứng đúng hành vi in-checklist của installer;
+#    · lần cài 2 đặt một `codex.cmd` GIẢ trên PATH — installer đi nhánh "dung Codex da co"
+#      nên không npm-install gói thật; agent cũng không gọi codex vì bộ ca dùng engine giả.
+# ══════════════════════════════════════════════════════════════════════════════
+name: KitGen Windows (EXPERIMENTAL)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "kit-gen/scripts/install.ps1"
+      - "kit-gen/agent/**"
+      - "kit-gen/runtime/**"
+      - ".github/workflows/kitgen-windows.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kitgen-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  # 1. Cú pháp + phân tích tĩnh. Rẻ và nhanh ⇒ chặn trước, không để lỗi dấu ngoặc
+  #    đốt 15 phút của hai job Windows phía sau.
+  # ────────────────────────────────────────────────────────────────────────────
+  cu-phap:
+    name: 1 · Cú pháp và phân tích tĩnh
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # WINDOWS-PORT.md §8 ghi: install.ps1 CHƯA BAO GIỜ được kiểm cú pháp vì máy phát
+      # triển là macOS không có pwsh. Đây chính là phép kiểm đó, bằng Windows PowerShell
+      # 5.1 — đúng phiên bản mà `#Requires -Version 5.1` của script nhắm tới.
+      - name: Cú pháp install.ps1 (PowerShell 5.1)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = Join-Path $PWD 'kit-gen\scripts\install.ps1'
+          $tokens = $null; $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+          if ($errors -and $errors.Count -gt 0) {
+            foreach ($e in $errors) {
+              Write-Host ("::error file=kit-gen/scripts/install.ps1,line={0}::{1}" -f $e.Extent.StartLineNumber, $e.Message)
+            }
+            Write-Host ("LOI: {0} loi cu phap trong install.ps1" -f $errors.Count)
+            exit 1
+          }
+          Write-Host ("OK   Parser::ParseFile - {0} token, 0 loi cu phap" -f $tokens.Count)
+          # Phep kiem thu hai, dung cach WINDOWS-PORT.md muc 8 chi dinh. #Requires chi hop le
+          # o dau MOT FILE script; nem nguyen van vao [scriptblock]::Create thi loi bao ve
+          # chinh dong do chu khong phai ve cu phap => bo dong #Requires roi moi Create.
+          $src = (Get-Content -Raw -LiteralPath $path) -replace '(?m)^\s*#Requires.*$', ''
+          [void][scriptblock]::Create($src)
+          Write-Host 'OK   [scriptblock]::Create'
+          exit 0
+
+      # PSScriptAnalyzer CO SAN tren image windows-latest thi chay; KHONG tu cai tu
+      # PSGallery — lan chay khong duoc phu thuoc vao mang toi gallery.
+      - name: Phân tích tĩnh PSScriptAnalyzer (nếu runner có sẵn)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $mod = Get-Module -ListAvailable -Name PSScriptAnalyzer | Select-Object -First 1
+          if (-not $mod) {
+            Write-Host 'BO QUA: runner khong co san PSScriptAnalyzer.'
+            exit 0
+          }
+          Import-Module PSScriptAnalyzer
+          Write-Host ("PSScriptAnalyzer {0}" -f $mod.Version)
+          $res = @(Invoke-ScriptAnalyzer -Path 'kit-gen\scripts\install.ps1' -Severity Error, Warning)
+          if ($res.Count -eq 0) { Write-Host 'OK   khong co canh bao nao'; exit 0 }
+          foreach ($r in $res) {
+            Write-Host ("  [{0}] dong {1} · {2}: {3}" -f $r.Severity, $r.Line, $r.RuleName, $r.Message)
+          }
+          $hard = @($res | Where-Object { @('Error', 'ParseError') -contains [string]$_.Severity })
+          Write-Host ("Tong: {0} muc, trong do {1} nghiem trong" -f $res.Count, $hard.Count)
+          if ($hard.Count -gt 0) {
+            Write-Host '::error::PSScriptAnalyzer bao loi nghiem trong trong install.ps1'
+            exit 1
+          }
+          Write-Host 'OK   chi co canh bao (in o tren), khong co loi nghiem trong'
+          exit 0
+
+      # Chay bang bash cua Git for Windows — dung cai bash ma agent se spawn luc chay that.
+      - name: Cú pháp mã .mjs của agent
+        shell: bash
+        run: |
+          set -u
+          cd kit-gen
+          fail=0
+          for f in $(find agent -name '*.mjs' -not -path '*/node_modules/*' | sort); do
+            if ! node --check "$f"; then
+              echo "::error file=kit-gen/$f::node --check that bai"
+              fail=1
+            fi
+          done
+          echo "da kiem $(find agent -name '*.mjs' -not -path '*/node_modules/*' | wc -l) file .mjs"
+          exit $fail
+
+      - name: Cú pháp script shell của installer
+        shell: bash
+        run: |
+          set -eu
+          cd kit-gen
+          bash -n install.sh
+          bash -n scripts/build-runtime.sh
+          bash -n agent/test-fixtures/engine-fake/gen.sh
+          bash -n agent/test-fixtures/engine-fake/cover.sh
+          bash -n agent/test-fixtures/engine-slow/gen.sh
+          echo 'OK  bash -n sach'
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # 2. Đóng gói runtime.
+  #
+  #    QUYẾT ĐỊNH — tarball lấy từ đâu: DỰNG TỪ SOURCE NGAY TRONG LƯỢT CHẠY, trên
+  #    ubuntu-latest, rồi chuyển sang job Windows bằng artifact.
+  #      · Dựng từ source (thay vì tải release mới nhất) vì mục đích của pipeline là
+  #        kiểm CHÍNH commit vừa push. Cài một tarball 2.1.22 cũ thì mọi thay đổi trong
+  #        kit-gen/agent/** của lượt push này không được kiểm một dòng nào.
+  #      · Dựng trên Linux (thay vì trong Git-Bash của runner Windows) vì lệnh này ĐÃ
+  #        chạy hằng ngày ở kitgen-release.yml ⇒ không thêm một nguồn hỏng mới nào vào
+  #        đường đi chính. Việc "build-runtime.sh có chạy được trong Git-Bash không"
+  #        (WINDOWS-PORT §9.3) vẫn được kiểm, nhưng ở một bước RIÊNG của job 3 để nếu
+  #        nó đỏ thì biết ngay là đỏ vì đóng gói, không phải vì cài đặt.
+  # ────────────────────────────────────────────────────────────────────────────
+  dong-goi:
+    name: 2 · Đóng gói runtime (Linux)
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: kit-gen/webapp/package-lock.json
+      - name: Cài phụ thuộc webapp
+        working-directory: kit-gen/webapp
+        run: npm ci
+      - name: Chốt số hiệu bản thử
+        id: ver
+        run: |
+          set -eu
+          v="$(node -p "require('./kit-gen/webapp/package.json').version")-win.${GITHUB_SHA::7}"
+          # install.ps1 chi nhan ^[0-9A-Za-z._-]+$ cho VERSION
+          [[ "$v" =~ ^[0-9A-Za-z._-]+$ ]] || { echo "version xau: $v" >&2; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "version = $v"
+      - name: Dựng tarball runtime
+        run: bash kit-gen/scripts/build-runtime.sh '${{ steps.ver.outputs.version }}' "$RUNNER_TEMP/release"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kitgen-runtime-windows-test
+          path: |
+            ${{ runner.temp }}/release/*.tar.gz
+            ${{ runner.temp }}/release/*.sha256
+          if-no-files-found: error
+          retention-days: 5
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # 3. Cài THẬT trên máy Windows trắng.
+  # ────────────────────────────────────────────────────────────────────────────
+  cai-dat:
+    name: 3 · Cài đặt trên Windows
+    needs: [cu-phap, dong-goi]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: kitgen-runtime-windows-test
+          path: ${{ runner.temp }}/pkg
+
+      - name: Soi môi trường runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bad = @()
+          $bash = 'C:\Program Files\Git\bin\bash.exe'
+          if (Test-Path -LiteralPath $bash) {
+            Write-Host ("OK   bash   : {0}" -f $bash)
+            Write-Host ("     coreutils <Git>\usr\bin\grep.exe: {0}" -f (Test-Path 'C:\Program Files\Git\usr\bin\grep.exe'))
+          } else { $bad += 'bash.exe cua Git for Windows' }
+          foreach ($exe in 'tar.exe', 'python.exe', 'node.exe', 'git.exe') {
+            $c = Get-Command $exe -ErrorAction SilentlyContinue
+            if ($c) { Write-Host ("OK   {0,-10}: {1}" -f $exe, $c.Source) } else { $bad += $exe }
+          }
+          Write-Host ("     LOCALAPPDATA = {0}" -f $env:LOCALAPPDATA)
+          Write-Host ("     USERPROFILE  = {0}" -f $env:USERPROFILE)
+          Write-Host ("     codex tren PATH: {0}" -f [bool](Get-Command codex -ErrorAction SilentlyContinue))
+          # Quyen tao symlink: bo ca agent (suite-paths) can no. In ra de vong sau khong
+          # phai doan xem do la loi port hay loi moi truong.
+          try {
+            $t = Join-Path $env:RUNNER_TEMP ('lnk-' + [Guid]::NewGuid().ToString('N').Substring(0, 6))
+            [void](New-Item -ItemType SymbolicLink -Path $t -Target $env:RUNNER_TEMP -ErrorAction Stop)
+            Remove-Item -LiteralPath $t -Force
+            Write-Host 'OK   tao duoc symlink (suite-paths chay duoc)'
+          } catch {
+            Write-Host ("CANH BAO tao symlink that bai: {0}" -f $_.Exception.Message)
+          }
+          Get-ChildItem -LiteralPath "$env:RUNNER_TEMP\pkg" | ForEach-Object { Write-Host ("     goi: {0} ({1} byte)" -f $_.Name, $_.Length) }
+          if ($bad.Count -gt 0) {
+            Write-Host ("::error::runner thieu tien de: {0}" -f ($bad -join ', '))
+            exit 1
+          }
+          exit 0
+
+      # ── Lần cài 1: máy KHÔNG có Codex. Kiểm chứng ĐÚNG hành vi in-checklist. ──────
+      # npm bị trỏ về một cổng đóng ⇒ `npm install @openai/codex` và `@resvg/resvg-wasm`
+      # cùng hỏng ngay lập tức mà không tải một byte nào. Đây là mô phỏng máy công ty bị
+      # proxy chặn npm (đúng ca §7 bước 6 của checklist) và cũng là cách giữ lời hứa
+      # "KHONG cai codex that".
+      - name: Cài lần 1 — máy thiếu Codex CLI (kiểm checklist)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tar = @(Get-ChildItem -LiteralPath "$env:RUNNER_TEMP\pkg" -File | Where-Object { $_.Name -like 'kitgen-runtime-*.tar.gz' })[0]
+          if (-not $tar) { Write-Host '::error::khong thay tarball runtime trong artifact'; exit 1 }
+          $env:npm_config_registry = 'http://127.0.0.1:9'
+          $env:npm_config_fetch_retries = '0'
+          $env:npm_config_fetch_retry_maxtimeout = '2000'
+          $env:npm_config_audit = 'false'
+          $env:npm_config_fund = 'false'
+          $out = "$env:RUNNER_TEMP\install-1.out.log"
+          $err = "$env:RUNNER_TEMP\install-1.err.log"
+          $ps1 = Join-Path $PWD 'kit-gen\scripts\install.ps1'
+          $argline = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -Archive "{1}" -NoStart -CodexImg' -f $ps1, $tar.FullName
+          $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $argline -Wait -PassThru -NoNewWindow `
+                 -RedirectStandardOutput $out -RedirectStandardError $err
+          $text = [string](Get-Content -Raw -LiteralPath $out) + "`n" + [string](Get-Content -Raw -LiteralPath $err)
+          Write-Host '--------- stdout/stderr cua install.ps1 ---------'
+          Write-Host $text
+          Write-Host '------------------------------------------------'
+          if ($p.ExitCode -ne 0) {
+            Write-Host ("::error::install.ps1 thoat voi ma {0} (dang le thieu tien de van phai thoat 0 va in checklist)" -f $p.ExitCode)
+            exit 1
+          }
+          # Hop dong cua installer khi thieu tien de: KHONG khoi dong, IN CHECKLIST.
+          $need = @('[1/8]', '[8/8]', 'THIEU Codex CLI', 'BO QUA khoi dong', 'CHUA CHAY DUOC', 'npm i -g @openai/codex')
+          # .Contains() = so chuoi tho. KHONG dung -like: '[1/8]' la LOP KY TU cua wildcard,
+          # '*[1/8]*' se khop moi chuoi co '1' hoac '/' hoac '8' => ca kiem im lang mai mai.
+          $miss = @($need | Where-Object { -not $text.Contains($_) })
+          if ($miss.Count -gt 0) {
+            Write-Host ("::error::khong tim thay trong log: {0}" -f ($miss -join ' | '))
+            exit 1
+          }
+          Write-Host 'OK   thieu Codex ⇒ in checklist, khong khoi dong, thoat 0'
+          exit 0
+
+      # ── Lần cài 2: đủ tiền đề. Cũng là phép thử "cai xong thi chay lai" (§7 bước 2). ──
+      - name: Cài lần 2 — đủ tiền đề (Codex giả lập, không đăng nhập)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # codex.cmd GIA: chi de installer di nhanh "dung Codex da co" va KHONG npm-install
+          # goi that. No khong goi mang, khong doc credential, khong sinh anh.
+          $stub = "$env:RUNNER_TEMP\stub-bin"
+          New-Item -ItemType Directory -Force -Path $stub | Out-Null
+          Set-Content -LiteralPath "$stub\codex.cmd" -Encoding ascii -Value @(
+            '@echo off',
+            'if /I "%~1"=="--version" ( echo codex-cli 0.0.0-gia & exit /b 0 )',
+            'echo codex gia: khong lam gi ca',
+            'exit /b 0'
+          )
+          $env:PATH = "$stub;$env:PATH"
+          $tar = @(Get-ChildItem -LiteralPath "$env:RUNNER_TEMP\pkg" -File | Where-Object { $_.Name -like 'kitgen-runtime-*.tar.gz' })[0]
+          $out = "$env:RUNNER_TEMP\install-2.out.log"
+          $err = "$env:RUNNER_TEMP\install-2.err.log"
+          $ps1 = Join-Path $PWD 'kit-gen\scripts\install.ps1'
+          $argline = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -Archive "{1}" -NoStart -CodexImg' -f $ps1, $tar.FullName
+          $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $argline -Wait -PassThru -NoNewWindow `
+                 -RedirectStandardOutput $out -RedirectStandardError $err
+          $text = [string](Get-Content -Raw -LiteralPath $out) + "`n" + [string](Get-Content -Raw -LiteralPath $err)
+          Write-Host '--------- stdout/stderr cua install.ps1 ---------'
+          Write-Host $text
+          Write-Host '------------------------------------------------'
+          if ($p.ExitCode -ne 0) { Write-Host ("::error::install.ps1 thoat voi ma {0}" -f $p.ExitCode); exit 1 }
+          $need = @(
+            'manifest.sha256 hop le',
+            'OK   runtime',
+            'shim python3',
+            'dung Codex da co',
+            'Trinh render khung xuong',
+            'config.json',
+            'bo qua theo -NoStart'
+          )
+          # .Contains() = so chuoi tho. KHONG dung -like: '[1/8]' la LOP KY TU cua wildcard,
+          # '*[1/8]*' se khop moi chuoi co '1' hoac '/' hoac '8' => ca kiem im lang mai mai.
+          $miss = @($need | Where-Object { -not $text.Contains($_) })
+          if ($miss.Count -gt 0) {
+            Write-Host ("::error::khong tim thay trong log: {0}" -f ($miss -join ' | '))
+            exit 1
+          }
+          if ($text.Contains('CHUA CHAY DUOC')) {
+            Write-Host '::error::van con tien de thieu o lan cai thu hai (xem checklist trong log)'
+            exit 1
+          }
+          Write-Host 'OK   cai day du, -NoStart duoc ton trong, khong con blocker'
+          exit 0
+
+      - name: Kiểm cây thư mục %LOCALAPPDATA%\KitGen
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $home_ = Join-Path $env:LOCALAPPDATA 'KitGen'
+          $ws    = Join-Path $env:USERPROFILE 'KitGen'
+          Write-Host ("runtime   : {0}" -f $home_)
+          Write-Host ("workspace : {0}" -f $ws)
+          Get-ChildItem -LiteralPath $home_ -Recurse -Depth 1 -Force -ErrorAction SilentlyContinue |
+            ForEach-Object { Write-Host ('     ' + $_.FullName.Substring($home_.Length)) }
+          $ver = (Get-ChildItem -LiteralPath (Join-Path $home_ 'releases') -Directory | Select-Object -First 1).Name
+          if (-not $ver) { Write-Host '::error::khong co thu muc releases\<version>'; exit 1 }
+          Write-Host ("version cai duoc: {0}" -f $ver)
+          $must = @(
+            (Join-Path $home_ 'bin\kitgen.cmd'),
+            (Join-Path $home_ 'bin\kitgen-hidden.vbs'),
+            (Join-Path $home_ 'bin\python3'),
+            (Join-Path $home_ 'config.cmd'),
+            (Join-Path $home_ 'install.ps1'),
+            (Join-Path $home_ 'tools\node\node.exe'),
+            (Join-Path $home_ 'tools\node\npm.cmd'),
+            (Join-Path $home_ 'tools\node_modules\@resvg\resvg-wasm\index_bg.wasm'),
+            (Join-Path $home_ "releases\$ver\VERSION"),
+            (Join-Path $home_ "releases\$ver\agent\server.mjs"),
+            (Join-Path $home_ "releases\$ver\engine\gen.sh"),
+            (Join-Path $home_ "releases\$ver\engine\cover.sh"),
+            (Join-Path $home_ "releases\$ver\engine\slice.py"),
+            (Join-Path $home_ "releases\$ver\app\index.html"),
+            (Join-Path $home_ "releases\$ver\manifest.sha256"),
+            (Join-Path $ws '.kitgen\config.json'),
+            (Join-Path $ws '.kitgen\engine\gen.sh'),
+            (Join-Path $ws '.kitgen\engine\slice.py'),
+            (Join-Path $ws 'projects'),
+            (Join-Path $ws '.venv\Scripts\python.exe')
+          )
+          $miss = @($must | Where-Object { -not (Test-Path -LiteralPath $_) })
+          if ($miss.Count -gt 0) {
+            foreach ($m in $miss) { Write-Host ("::error::thieu {0}" -f $m) }
+            exit 1
+          }
+          # `current` la junction (NTFS, khong can quyen admin). Installer coi that bai la
+          # canh bao chu khong phai loi ⇒ o day cung chi canh bao, nhung PHAI noi ro.
+          $cur = Get-Item -LiteralPath (Join-Path $home_ 'current') -Force -ErrorAction SilentlyContinue
+          if ($cur -and $cur.LinkType) { Write-Host ("OK   current la {0} → {1}" -f $cur.LinkType, ($cur.Target -join ',')) }
+          else { Write-Host '::warning::khong tao duoc junction `current` — installer da lui ve duong dan co version' }
+          # agent/test khong duoc di theo goi phat hanh (build-runtime.sh xoa chung)
+          foreach ($x in 'agent\test', 'agent\test-agent.mjs', 'agent\test-fixtures') {
+            if (Test-Path -LiteralPath (Join-Path $home_ "releases\$ver\$x")) {
+              Write-Host ("::error::goi phat hanh con sot {0}" -f $x); exit 1
+            }
+          }
+          Write-Host 'OK   cay thu muc dung'
+          exit 0
+
+      - name: Kiểm config sinh ra
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $home_ = Join-Path $env:LOCALAPPDATA 'KitGen'
+          $ws    = Join-Path $env:USERPROFILE 'KitGen'
+          $fail  = 0
+
+          # ① .kitgen\config.json — -CodexImg phai ra ho so anh rieng
+          $cfgRaw = Get-Content -Raw -LiteralPath (Join-Path $ws '.kitgen\config.json')
+          Write-Host "config.json:`n$cfgRaw"
+          $cfg = $cfgRaw | ConvertFrom-Json
+          if ($cfg.workspaceVersion -ne 1)            { Write-Host '::error::config.json: workspaceVersion != 1'; $fail = 1 }
+          if ($cfg.maxJobs -ne 4)                     { Write-Host '::error::config.json: maxJobs != 4'; $fail = 1 }
+          if ($cfg.imageGen.mode -ne 'img-home')      { Write-Host '::error::config.json: imageGen.mode != img-home (-CodexImg)'; $fail = 1 }
+          if ($cfg.imageGen.codexHome -ne '~/.codex-img') { Write-Host '::error::config.json: codexHome != ~/.codex-img'; $fail = 1 }
+
+          # ② config.cmd — moi bien moi truong ma kitgen.cmd va agent dua vao
+          $cmdRaw = Get-Content -Raw -LiteralPath (Join-Path $home_ 'config.cmd')
+          Write-Host "config.cmd:`n$cmdRaw"
+          $vars = @{}
+          foreach ($line in ($cmdRaw -split "`r?`n")) {
+            $m = [regex]::Match($line, '^\s*set\s+"([^=]+)=(.*)"\s*$')
+            if ($m.Success) { $vars[$m.Groups[1].Value] = $m.Groups[2].Value }
+          }
+          foreach ($k in 'KITGEN_HOME', 'KITGEN_SOURCE', 'KITGEN_WORKSPACE', 'KITGEN_PORT', 'KITGEN_ORIGIN',
+                         'KITGEN_NODE', 'KITGEN_CODEX_BIN', 'KITGEN_PYTHON', 'KITGEN_BASH', 'NODE_PATH',
+                         'KITGEN_CODEX_PROFILE', 'KITGEN_RELEASE_MANIFEST') {
+            if (-not $vars.ContainsKey($k) -or -not $vars[$k]) { Write-Host ("::error::config.cmd thieu/rong {0}" -f $k); $fail = 1 }
+          }
+          if ($vars['KITGEN_CODEX_PROFILE'] -ne 'separate') { Write-Host '::error::config.cmd: KITGEN_CODEX_PROFILE != separate'; $fail = 1 }
+          if ($vars['KITGEN_PORT'] -ne '8765')              { Write-Host '::error::config.cmd: KITGEN_PORT != 8765'; $fail = 1 }
+          foreach ($k in 'KITGEN_BASH', 'KITGEN_PYTHON', 'KITGEN_NODE') {
+            if ($vars[$k] -and -not (Test-Path -LiteralPath $vars[$k])) {
+              Write-Host ("::error::config.cmd: {0} tro toi file khong ton tai: {1}" -f $k, $vars[$k]); $fail = 1
+            }
+          }
+
+          # ③ shim python3 — bash cua Git-Bash chi chay duoc khi KHONG BOM va xuong dong LF
+          $shim = Join-Path $home_ 'bin\python3'
+          $bytes = [IO.File]::ReadAllBytes($shim)
+          if ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+            Write-Host '::error::shim python3 co BOM — bash se bao "bad interpreter"'; $fail = 1
+          }
+          if ($bytes -contains 0x0D) { Write-Host '::error::shim python3 co CR (CRLF) — bash se bao "bad interpreter"'; $fail = 1 }
+          Write-Host ("shim python3:`n{0}" -f [Text.Encoding]::UTF8.GetString($bytes))
+          exit $fail
+
+      - name: Kiểm lệnh kitgen.cmd
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $kitgen = Join-Path $env:LOCALAPPDATA 'KitGen\bin\kitgen.cmd'
+          # Lenh ngoai duoi day CO Y thoat khac 0 => tat EAP=Stop cho khoi bi coi la loi.
+          $ErrorActionPreference = 'Continue'
+          # `status` khi agent chua chay: phai in dung cau bao va thoat khac 0.
+          $out = [string](& $kitgen status 2>&1 | Out-String)
+          $code = $LASTEXITCODE
+          Write-Host ("kitgen status -> exit {0}`n{1}" -f $code, $out)
+          if (-not $out.Contains('khong phan hoi tren cong 8765')) {
+            Write-Host '::error::kitgen.cmd status khong in duoc cau bao "agent khong phan hoi"'
+            exit 1
+          }
+          $out2 = [string](& $kitgen khong-co-lenh-nay 2>&1 | Out-String)
+          Write-Host $out2
+          if (-not $out2.Contains('Usage: kitgen')) { Write-Host '::error::kitgen.cmd khong in usage'; exit 1 }
+          Write-Host 'OK   kitgen.cmd nap duoc config.cmd va chay'
+          exit 0
+
+      # §7 buoc 12 cua checklist, chay tu dong: gen.sh goi `python3`, Windows khong co
+      # lenh do — shim + PATH cua Git-Bash phai bu duoc.
+      - name: Kiểm shim python3 chạy được trong Git-Bash
+        shell: bash
+        run: |
+          set -eu
+          home_="$(cygpath -u "$LOCALAPPDATA")/KitGen"
+          export PATH="$home_/bin:$PATH"
+          echo "PATH co: $home_/bin"
+          command -v python3
+          python3 -c "import sys; print('python3 shim OK ->', sys.version.split()[0])"
+          python3 - <<'PY'
+          import json
+          print("heredoc python3 OK ->", json.dumps({"ok": True}))
+          PY
+
+      # WINDOWS-PORT §9.3: "chua kiem build-runtime.sh co chay duoc trong Git-Bash khong".
+      # Kiem tai day. webapp/dist duoc khoi phuc tu chinh goi da dung o job 2 nen buoc nay
+      # KHONG phai chay npm/vite tren Windows (cham va khong lien quan den cau hoi).
+      - name: Đóng gói bằng Git-Bash (WINDOWS-PORT §9.3)
+        shell: bash
+        run: |
+          set -eu
+          tmp="$(cygpath -u "$RUNNER_TEMP")"
+          rm -rf "$tmp/restore" "$tmp/winbuild"
+          mkdir -p "$tmp/restore"
+          tar -xzf "$tmp"/pkg/kitgen-runtime-*.tar.gz -C "$tmp/restore"
+          src="$(ls -d "$tmp"/restore/kitgen-runtime-*)"
+          mkdir -p kit-gen/webapp/dist
+          cp -R "$src/app/." kit-gen/webapp/dist/
+          bash kit-gen/scripts/build-runtime.sh 0.0.0-gitbash "$tmp/winbuild"
+          ls -la "$tmp/winbuild"
+          test -f "$tmp/winbuild/kitgen-runtime-0.0.0-gitbash.tar.gz"
+          test -f "$tmp/winbuild/kitgen-runtime-0.0.0-gitbash.tar.gz.sha256"
+          tar -tzf "$tmp/winbuild/kitgen-runtime-0.0.0-gitbash.tar.gz" | head -20
+          echo 'OK  build-runtime.sh chay duoc trong Git-Bash'
+
+      - name: Nhật ký khi hỏng
+        if: failure()
+        shell: pwsh
+        run: |
+          foreach ($f in @("$env:RUNNER_TEMP\install-1.out.log", "$env:RUNNER_TEMP\install-1.err.log",
+                           "$env:RUNNER_TEMP\install-2.out.log", "$env:RUNNER_TEMP\install-2.err.log",
+                           "$env:LOCALAPPDATA\KitGen\agent.log")) {
+            Write-Host ("───────── {0} ─────────" -f $f)
+            if (Test-Path -LiteralPath $f) { Get-Content -LiteralPath $f -Tail 200 } else { Write-Host '(khong co file)' }
+          }
+          exit 0
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # 4. Agent chạy TRÊN Windows — phép thử thật đầu tiên của agent/lib/platform.mjs
+  #    (spawn bash.exe của Git-Bash, PATH coreutils, toBashPath, taskkill /T,
+  #    pathToFileURL cho isMainModule). Bộ ca dùng engine giả ⇒ không cần Codex.
+  # ────────────────────────────────────────────────────────────────────────────
+  agent:
+    name: 4 · Agent trên Windows
+    needs: [cu-phap]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Soi môi trường runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($exe in 'node.exe', 'python.exe', 'git.exe', 'taskkill.exe') {
+            $c = Get-Command $exe -ErrorAction SilentlyContinue
+            Write-Host ("{0,-14}: {1}" -f $exe, $(if ($c) { $c.Source } else { 'KHONG CO' }))
+          }
+          Write-Host ("bash.exe      : {0}" -f (Test-Path 'C:\Program Files\Git\bin\bash.exe'))
+          Write-Host ("coreutils     : {0}" -f (Test-Path 'C:\Program Files\Git\usr\bin\grep.exe'))
+          try {
+            $t = Join-Path $env:RUNNER_TEMP ('lnk-' + [Guid]::NewGuid().ToString('N').Substring(0, 6))
+            [void](New-Item -ItemType SymbolicLink -Path $t -Target $env:RUNNER_TEMP -ErrorAction Stop)
+            Remove-Item -LiteralPath $t -Force
+            Write-Host 'symlink       : tao duoc (suite-paths chay duoc)'
+          } catch {
+            Write-Host ("symlink       : KHONG tao duoc — {0}" -f $_.Exception.Message)
+            Write-Host '::warning::runner khong cho tao symlink; 2 ca cua suite-paths se do vi MOI TRUONG, khong phai vi port'
+          }
+          exit 0
+
+      # Bo ca spawn engine gia bang bash cua Git-Bash, va engine gia goi `python3` —
+      # lenh KHONG TON TAI tren Windows. May that duoc installer bu bang shim
+      # %LOCALAPPDATA%\KitGen\bin\python3; o day dung y het cach do (cung noi dung,
+      # cung LF/khong BOM) de bo ca chay dung dieu kien cua may da cai.
+      - name: Shim python3 cho Git-Bash (y hệt installer sinh ra)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $py = (Get-Command python.exe -ErrorAction Stop).Source
+          $dir = "$env:RUNNER_TEMP\kg-shim"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $lines = @(
+            '#!/usr/bin/env bash',
+            '# Ban sao shim ma install.ps1 sinh ra - Windows khong co lenh python3.',
+            ('exec "' + ($py -replace '\\', '/') + '" "$@"')
+          )
+          # KHONG BOM + xuong dong LF: BOM/CRLF trong shebang la bash bao "bad interpreter".
+          $enc = New-Object System.Text.UTF8Encoding($false)
+          [IO.File]::WriteAllText("$dir\python3", (($lines -join "`n") + "`n"), $enc)
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value $dir
+          Write-Host ("shim: {0}\python3 → {1}" -f $dir, $py)
+          exit 0
+
+      - name: Git-Bash thấy python3
+        shell: bash
+        run: |
+          set -eu
+          command -v python3
+          python3 -c "import sys; print(sys.version.split()[0])"
+
+      # PHEP THU THAT DAU TIEN cua platform.mjs. Do o day = loi port, phai sua that.
+      - name: Bộ ca agent trên Windows
+        shell: pwsh
+        working-directory: kit-gen
+        run: |
+          node agent/test-agent.mjs
+          exit $LASTEXITCODE
+
+      - name: Khởi động agent thật, gọi /health, rồi tắt sạch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $port   = 8899
+          $origin = "http://127.0.0.1:$port"
+          $ws     = "$env:RUNNER_TEMP\ws-agent"
+          $log    = "$env:RUNNER_TEMP\agent.out.log"
+          $elog   = "$env:RUNNER_TEMP\agent.err.log"
+          New-Item -ItemType Directory -Force -Path $ws | Out-Null
+          $node = (Get-Command node.exe).Source
+          $nodeArgs = @('agent\server.mjs', '--workspace', $ws, '--port', "$port", '--origin', $origin)
+          $p = Start-Process -FilePath $node -ArgumentList $nodeArgs -PassThru -WindowStyle Hidden `
+                 -WorkingDirectory (Join-Path $PWD 'kit-gen') -RedirectStandardOutput $log -RedirectStandardError $elog
+          Write-Host ("da spawn node pid={0}" -f $p.Id)
+          $body = $null
+          foreach ($i in 1..30) {
+            Start-Sleep -Seconds 1
+            try {
+              $r = Invoke-WebRequest -Uri "$origin/health" -Headers @{ 'X-KitGen-Client' = '1'; 'Origin' = $origin } -UseBasicParsing -TimeoutSec 3
+              if ($r.StatusCode -eq 200) { $body = $r.Content; break }
+            } catch { }
+          }
+          $ErrorActionPreference = 'Continue'   # taskkill co the thoat khac 0
+          if (-not $body) {
+            Write-Host '::error::agent khong phan hoi /health sau 30s'
+            Write-Host '----- stdout -----'; if (Test-Path $log)  { Get-Content $log }
+            Write-Host '----- stderr -----'; if (Test-Path $elog) { Get-Content $elog }
+            & taskkill /PID $p.Id /T /F 2>&1 | Out-Null
+            exit 1
+          }
+          Write-Host ("/health -> {0}" -f $body)
+          $h = $body | ConvertFrom-Json
+          $bad = 0
+          if ($h.app -ne 'kitgen-agent')        { Write-Host '::error::/health: app != kitgen-agent'; $bad = 1 }
+          if ($h.protocol -ne 1)                { Write-Host '::error::/health: protocol != 1'; $bad = 1 }
+          if (-not "$($h.workspaceId)".StartsWith('ws_')) { Write-Host '::error::/health: workspaceId khong opaque'; $bad = 1 }
+          # PII: nhan workspace KHONG duoc la duong dan tuyet doi (redact.mjs, WINDOWS-PORT §9.5).
+          # KHONG so voi $ws: realpath cua Windows tra ve ten DAI (C:\Users\runneradmin\...)
+          # con $ws o day la ten 8.3 (C:\Users\RUNNER~1\...) => so chuoi se bo lot. Bat thang
+          # dau hieu chung: bat ky "X:\" nao trong response cung la lot duong dan tuyet doi.
+          if ($body.Contains($ws) -or $body -match '[A-Za-z]:\\') {
+            Write-Host '::error::/health lo duong dan tuyet doi (nhan workspace chua qua shortenPath?)'
+            $bad = 1
+          }
+
+          # Tat theo dung duong Windows: taskkill /T (khong co process group POSIX).
+          & taskkill /PID $p.Id /T /F
+          Start-Sleep -Seconds 2
+          if (Get-Process -Id $p.Id -ErrorAction SilentlyContinue) {
+            Write-Host '::error::tien trinh agent van song sau taskkill /T /F'; $bad = 1
+          } else { Write-Host 'OK   taskkill /T /F da giet sach tien trinh agent' }
+          $stillUp = $false
+          try {
+            $r2 = Invoke-WebRequest -Uri "$origin/health" -Headers @{ 'X-KitGen-Client' = '1'; 'Origin' = $origin } -UseBasicParsing -TimeoutSec 3
+            if ($r2.StatusCode -eq 200) { $stillUp = $true }
+          } catch { }
+          if ($stillUp) { Write-Host '::error::cong 8899 van tra /health sau khi tat'; $bad = 1 }
+          Write-Host '----- stdout cua agent -----'; if (Test-Path $log)  { Get-Content $log }
+          Write-Host '----- stderr cua agent -----'; if (Test-Path $elog) { Get-Content $elog }
+          exit $bad

@@ -379,11 +379,33 @@ nếu là lỗi gen.
 
 | Kiểm | Lệnh | Kết quả |
 |---|---|---|
-| Agent không đổi hành vi trên darwin | `node agent/test-agent.mjs` | ✅ **127/127 PASS · 0 FAIL** (sau khi đã có đủ các nhánh `win32`) |
-| Cú pháp mọi file `.mjs` đã sửa | `node --check` trên 8 file | ✅ sạch |
+| Agent không đổi hành vi trên darwin | `node agent/test-agent.mjs` | ✅ **133/133 PASS · 0 FAIL** (đo lại 14/08 sau các bản vá §9.1; tổng số ca đang tăng vì bộ ca còn được bổ sung song song) |
+| Cú pháp mọi file `.mjs` đã sửa | `node --check` trên 57 file của `agent/` | ✅ sạch |
 | `install.sh` không hỏng | `bash -n install.sh` | ✅ sạch (**không sửa một dòng nào** của file này) |
-| `build-runtime.sh` | `bash -n scripts/build-runtime.sh` | ✅ sạch (chưa sửa) |
-| `install.ps1` | — | ❌ **CHƯA KIỂM ĐƯỢC CÚ PHÁP**: máy phát triển là macOS và **không có `pwsh`**. Chỉ kiểm được thủ công: here-string cân bằng, ngoặc nhọn/tròn cân bằng. **Bước đầu tiên trên máy Win phải là:** `powershell -NoProfile -Command "[void][scriptblock]::Create((Get-Content -Raw .\scripts\install.ps1))"` — không in gì = cú pháp hợp lệ |
+| `build-runtime.sh` | `bash -n scripts/build-runtime.sh` + chạy thật ra `.tar.gz` + `.sha256` | ✅ sạch (chưa sửa) |
+| `install.ps1` | — | ❌ **KHÔNG KIỂM ĐƯỢC TẠI CHỖ**: máy phát triển là macOS và **không có `pwsh`**. Nay việc này do CI làm — xem §8.1. |
+
+### 8.1 Máy ảo Windows trắng trong CI — `.github/workflows/kitgen-windows.yml`
+
+Thay cho việc chờ mượn một máy Windows thật, mỗi lượt push đụng `install.ps1`,
+`agent/**`, `runtime/**` (hoặc bấm tay `workflow_dispatch`) chạy 4 job trên
+`windows-latest` — runner này có sẵn **đúng** bộ tiền đề của §7 (Git for Windows kèm
+`usr\bin`, Python 3, `tar.exe`, Node). Workflow **tách hẳn** khỏi `kitgen-release.yml`
+để bản Mac không bao giờ bị chặn vì bản Windows thử nghiệm.
+
+| Job | Kiểm cái gì | Trả lời câu hỏi nào của tài liệu này |
+|---|---|---|
+| 1 · Cú pháp và phân tích tĩnh | `Parser::ParseFile` + `[scriptblock]::Create` bằng **PowerShell 5.1 thật**; PSScriptAnalyzer nếu image có sẵn (chỉ `Error` mới đỏ, `Warning` thì in); `node --check` toàn bộ `agent/`; `bash -n` các script shell | §8 dòng cuối — cú pháp `install.ps1` |
+| 2 · Đóng gói runtime (Linux) | `scripts/build-runtime.sh` trên ubuntu (đường đã chạy hằng ngày ở `kitgen-release.yml`) → artifact | nguồn tarball cho job 3 |
+| 3 · Cài đặt trên Windows | Cài **hai lần**: (a) máy trống Codex + npm bị chặn ⇒ phải **in checklist** và **không** khởi động, thoát 0; (b) có `codex.cmd` giả trên PATH ⇒ cài đủ, `-NoStart` được tôn trọng. Rồi soi cây `%LOCALAPPDATA%\KitGen`, `config.cmd`, `config.json`, `kitgen.cmd status`, shim `python3` (không BOM, không CRLF, chạy được trong Git-Bash). Bước cuối: chạy `build-runtime.sh` **trong Git-Bash** | §7 bước 1–7, bước 12, bước 19; §9.3 |
+| 4 · Agent trên Windows | `node agent/test-agent.mjs` chạy **trên Windows** (phép thử thật đầu tiên của `platform.mjs`: spawn `bash.exe`, PATH coreutils, `toBashPath`, `taskkill /T`, `pathToFileURL`); rồi khởi động `agent/server.mjs` thật, gọi `/health`, `taskkill /T /F` và xác nhận cổng đã tắt | §3.1 toàn bộ; §7 bước 20 |
+
+**Không tốn quota, không đăng nhập:** Codex thật không bao giờ được cài (job 3 dùng
+`codex.cmd` giả 4 dòng, job 4 dùng engine giả của bộ ca). Không job nào gọi tới API sinh ảnh.
+
+**Cái CI này KHÔNG thay được:** khởi động lại máy (§7 bước 21), Defender/SmartScreen
+(§6.7), cửa sổ console đen (§7 bước 22), Codex thật trên Windows (§6.4 — rủi ro số 1),
+và gen ảnh thật (§7 bước 13–17). Những mục đó vẫn phải làm trên máy người dùng thật.
 
 ---
 
@@ -391,12 +413,49 @@ nếu là lỗi gen.
 
 1. 🔴 **Áp §4.1 + §4.2 vào `gen.sh`/`cover.sh`** — không có thì bản Windows không ra ảnh.
 2. 🔴 Chạy đủ §7 trên máy Win sạch, sửa theo lỗi thật.
+   *Phần tự động hoá được đã chuyển vào CI (§8.1); còn lại là các bước cần máy thật:
+   khởi động lại máy, Defender, cửa sổ console, Codex thật, gen ảnh thật.*
 3. 🟡 `scripts/build-runtime.ps1` (hoặc xác nhận `build-runtime.sh` chạy được trong Git-Bash)
-   để đóng gói được release từ Windows.
+   để đóng gói được release từ Windows. *Đã có phép kiểm tự động: job 3 của §8.1 chạy
+   `build-runtime.sh` trong Git-Bash với `webapp/dist` lấy sẵn từ gói của job 2.*
 4. 🟡 Rollback tự động cho `install.ps1` (nhánh `PREVIOUS` như `install.sh`).
-5. 🟡 `shortenPath()` cần biết `%USERPROFILE%` để nhãn workspace trên Windows không lộ
-   đường dẫn tuyệt đối (§3.2).
+5. ✅ **ĐÃ SỬA (14/08)** — `shortenPath()` lọt đường dẫn tuyệt đối trên Windows.
+   `lib/redact.mjs` chỉ có ba phép thay cho path POSIX; trên Windows path là `C:\Users\…`
+   nên **không phép nào bắt được gì**, và cả `startsWith(homedir())` cũng trượt vì `%TEMP%`
+   dùng tên 8.3 (`C:\Users\RUNNER~1\AppData\Local\Temp`). Hậu quả: nhãn workspace trong
+   `/health` và mọi dòng log của engine đi ra client kèm nguyên đường dẫn tuyệt đối.
+   Bản vá thêm một khối **gate `win32`** (darwin/linux không chạm một ký tự nào) dịch
+   đúng thứ tự ba phép POSIX sang Windows, cộng một phép cho path dạng MSYS mà Git-Bash
+   in ra: `%TEMP%\…` → `…\2 đoạn cuối`; `C:\Users\<ai đó>\…` → `~\…`; `/c/Users/<ai đó>/…`
+   → `~/…`; path tuyệt đối còn sót (ổ khác, UNC) → `…\2 đoạn cuối`.
+   Ca kiểm khoá lại: `/health` của job 4 (§8.1) khẳng định response **không chứa** đường
+   dẫn workspace, và ca "GET /health … không lộ đường dẫn tuyệt đối" của `suite-system`
+   chạy trên chính runner Windows.
 6. 🟡 Siết ACL cho `config.cmd` (§5.5).
 7. 🟢 Chặn tên project trùng thiết bị DOS (`con`, `nul`, `com1`…) trong `RE_PROJECT_ID` (§3.2).
 8. 🟢 Audit `paths.mjs` với hệ thống file không phân biệt hoa-thường (§3.2).
 9. 🟢 Rà `slice.py` cho `encoding="utf-8"` (§4.4).
+
+### 9.1 Sửa sẵn trước lượt chạy CI đầu tiên (đọc mã, chưa có log runner)
+
+| # | Chỗ | Vì sao chắc chắn đỏ trên Windows | Đã làm gì |
+|---|---|---|---|
+| a | `lib/redact.mjs` | §9.5 ở trên | thêm khối gate `win32` |
+| b | `test/suite-system.mjs` (3 ca) | Ba ca ghim cứng `~/.kitgen/bin/kitgen update`, `… restart`, `~/.kitgen/update.log`, trong khi `lib/update.mjs` đã có nhánh `IS_WIN` trả `%LOCALAPPDATA%\KitGen\…`. Mã sản xuất **đúng**, ca kiểm mới là chỗ sai | ghim đúng chữ cho **cả hai** nền bằng hằng `CMD_UPDATE` / `CMD_RESTART` / `LOG_UPDATE`; **không** import hằng từ mã sản xuất (import vào thì ca kiểm chỉ còn tự nói với chính nó). Nhánh non-win giữ nguyên từng ký tự |
+
+Cả hai bản vá đã được đo lại trên macOS: `node agent/test-agent.mjs` → **133/133 PASS · 0 FAIL** (chạy 3 lượt).
+
+### 9.2 Điểm phải soi ở lượt CI đầu tiên (chưa có bằng chứng, đừng đoán)
+
+1. **Quyền tạo symlink của runner.** Hai ca của `suite-paths` gọi `fs.symlink`; Windows đòi
+   `SeCreateSymbolicLinkPrivilege`. Job 3 và job 4 đều in một dòng thăm dò
+   (`symlink: tao duoc` / `KHONG tao duoc`) **trước** khi chạy bộ ca — nếu hai ca đó đỏ,
+   đọc dòng này trước để biết đó là **giới hạn môi trường** hay lỗi port thật.
+2. **`shasum` trong Git-Bash** (`build-runtime.sh` dòng 42). Git for Windows có `usr\bin\shasum`
+   (bản Perl) nhưng đây là điều **chưa ai kiểm**; bước "Đóng gói bằng Git-Bash" của job 3 sẽ
+   trả lời dứt điểm.
+3. **`python3` trong Git-Bash.** Engine giả của bộ ca gọi `python3` qua heredoc — đúng cơ chế
+   mà máy thật dựa vào shim của installer. Job 4 dựng lại shim y hệt; nếu đỏ ở đây thì
+   §7 bước 12 trên máy thật cũng sẽ đỏ.
+4. **Đường `codex.cmd`.** CI chỉ chứng minh `winShellOpts()` được gọi đúng chỗ, **không**
+   chứng minh Codex thật chạy được trên Windows (§6.4 vẫn là rủi ro số 1).

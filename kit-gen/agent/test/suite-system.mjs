@@ -7,6 +7,16 @@ import { describe, it, eq, ok, includes, stripComments, PAGES, CLIENT } from "./
 import { PROTOCOL_VERSION } from "../server.mjs"
 import { readRuntimeVersion } from "../lib/update.mjs"
 
+/* Nhãn lệnh trả ra API ĐỔI THEO HỆ ĐIỀU HÀNH (lib/update.mjs: UPDATE_COMMAND /
+   RESTART_COMMAND / UPDATE_LOG_LABEL) — trên Windows không có `~/.kitgen`.
+   Ba hằng dưới đây ghim ĐÚNG CHỮ cho từng nền, KHÔNG import hằng của mã sản xuất
+   (import vào thì ca kiểm chỉ còn tự nói với chính nó). Nhánh non-win giữ nguyên
+   từng ký tự như trước. */
+const WIN = process.platform === "win32"
+const CMD_UPDATE  = WIN ? "%LOCALAPPDATA%\\KitGen\\bin\\kitgen.cmd update"  : "~/.kitgen/bin/kitgen update"
+const CMD_RESTART = WIN ? "%LOCALAPPDATA%\\KitGen\\bin\\kitgen.cmd restart" : "~/.kitgen/bin/kitgen restart"
+const LOG_UPDATE  = WIN ? "%LOCALAPPDATA%\\KitGen\\update.log"              : "~/.kitgen/update.log"
+
 export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
   // ─────────────────────────────────────────── 1. HEALTH
   describe("health")
@@ -167,7 +177,7 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
       eq(r.json.ok, true, "ok")
       eq(r.json.latestVersion, "99.0.0", "latest version")
       eq(r.json.available, true, "update available")
-      eq(r.json.updateCommand, "~/.kitgen/bin/kitgen update", "lệnh cập nhật thủ công")
+      eq(r.json.updateCommand, CMD_UPDATE, "lệnh cập nhật thủ công")
       ok(!/\/Users\//.test(r.text), "không trả đường dẫn tuyệt đối")
     } finally { globalThis.fetch = original }
   })
@@ -207,7 +217,7 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
       eq(r.json.currentVersion, "2.1.20", "version ĐANG CHẠY là của tiến trình, không phải của đĩa")
       eq(r.json.installedVersion, "9.9.9", "version ĐÃ CÀI đọc qua symlink current")
       eq(r.json.restartRequired, true, "trạng thái lỗi rõ, không im lặng nửa vời")
-      eq(r.json.restartCommand, "~/.kitgen/bin/kitgen restart", "lệnh chữa, dạng nhãn rút gọn")
+      eq(r.json.restartCommand, CMD_RESTART, "lệnh chữa, dạng nhãn rút gọn")
       ok(!/\/Users\/|kitgen-home-stale/.test(r.text), "không lộ đường dẫn tuyệt đối")
     } finally {
       globalThis.fetch = originalFetch
@@ -251,7 +261,7 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     eq(calls[0].opts.detached, true, "detached: installer phải sống sót khi launchd giết job")
     ok(Array.isArray(calls[0].opts.stdio), "stdio đi vào file, KHÔNG còn 'ignore'")
     ok(typeof calls[0].opts.stdio[1] === "number", "stdout là fd của update.log")
-    eq(out.logLabel, "~/.kitgen/update.log", "nhãn nhật ký rút gọn cho UI")
+    eq(out.logLabel, LOG_UPDATE, "nhãn nhật ký rút gọn cho UI")
     const log = readFileSync(join(fakeHome, "update.log"), "utf8")
     ok(/kitgen update/.test(log), `update.log có dòng mở đầu: ${log}`)
   })
