@@ -5,6 +5,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { KitImage } from "@/features/kit/components/KitImage";
+import { GLOW_FIGMA_HINT, isGlowAsset } from "@/features/kit/lib/blend";
 import { loadFull } from "@/features/kit/lib/image-source";
 import { buildFigmaBoard, BoardCancelled } from "@/features/kit/lib/figma-board";
 import { toastError, toastInfo, toastSuccess } from "@/features/projects/lib/feedback";
@@ -15,6 +16,7 @@ import {
   type ResultCategory, type ResultGroup,
 } from "../lib/generated-results";
 import { blobOfImage, copyImageBlob, cropCellBlob, locateComponent, rawSheetPath } from "../lib/result-copy";
+import { copyAssetAsFigmaNode } from "../lib/figma-node";
 
 /**
  * ══ TAB "ẢNH THẬT" — Ô ĐÃ CẮT, KHÔNG PHẢI SHEET THÔ ═════════════════════════
@@ -178,6 +180,21 @@ function CutAssetCard({ projectId, variant, asset, contract }: {
   const [busy, setBusy] = React.useState(false);
   const name = asset.name;
 
+  /**
+   * ⚠️ VẬT LIỆU PHÁT SÁNG KHÔNG QUA ĐƯỢC BỘ NHỚ TẠM.
+   *
+   * Manifest ghi `blend:"screen"` cho ô `matte:"glow"` (slice.py, P1-3) và web preview
+   * đọc được nó, nhưng payload clipboard của Figma thì KHÔNG mang blend mode: encoder
+   * `@/vendor/figma-h2d` chỉ dựng frame + image từ DOM (`figma-node.ts`), và đường lùi
+   * bitmap còn phẳng hơn nữa. Dán xong, layer nằm ở Normal ⇒ quầng sáng bị nền nuốt,
+   * đúng thứ mà cả P0-2 lẫn P1-3 vừa cứu về. Không tự sửa được thì phải NÓI —
+   * im lặng ở đây là để designer tự phát hiện bằng mắt, hoặc không phát hiện.
+   */
+  const remindGlowBlend = () => {
+    if (!isGlowAsset(asset.file)) return;
+    toastInfo("Asset phát sáng", GLOW_FIGMA_HINT);
+  };
+
   const run = async (label: string, make: () => Promise<Blob>) => {
     setBusy(true);
     try {
@@ -213,29 +230,55 @@ function CutAssetCard({ projectId, variant, asset, contract }: {
     return cropCellBlob(url, hit.sheet.grid, hit.index);
   });
 
+  /** Ô mascot xuất 1:1, còn lại 50% — cùng quy ước với `export-scale.ts`. */
+  const poseFiles = React.useMemo(
+    () => new Set(asset.category === "mascot" ? [asset.file.file] : []),
+    [asset.category, asset.file.file],
+  );
+
+  /** Đường lùi khi encoder hỏng: bảng một ô ⇒ MỘT bitmap phẳng, đúng như trước P3-14. */
+  const copyFigmaBitmap = async (why: string) => {
+    const res = await buildFigmaBoard({
+      projectId,
+      files: [asset.file],
+      poseFiles,
+      variantLabel: name,
+      onProgress: () => {},
+      signal: new AbortController().signal,
+    });
+    const tail = res.outcome === "clipboard"
+      ? "Đã copy một ẢNH BITMAP phẳng thay cho node — dán vẫn được, nhưng không có frame safe zone."
+      : `Đã tải ảnh về máy để bạn kéo vào Figma.${res.fallbackReason ? ` (${res.fallbackReason})` : ""}`;
+    toastInfo("Chưa dựng được node Figma", `${why} ${tail}`);
+    remindGlowBlend();
+  };
+
   /**
-   * Copy sang Figma cho MỘT ô. Dùng đúng `buildFigmaBoard` của `features/kit` — giới
-   * hạn của nó vẫn nguyên: kết quả dán vào Figma là MỘT image bitmap (kèm nhãn tên),
-   * chưa phải node `figh2d` nhiều lớp. Bảng một ô là cách dùng hợp lệ, không phải bản
-   * rút gọn tạm bợ.
+   * Copy sang Figma cho MỘT ô → **NODE FIGMA THẬT** (P3-14).
+   *
+   * `figma-node.ts` dựng frame đúng bằng safe zone, ảnh đặt lệch âm theo `contentAt`,
+   * clip tắt (handoff §3.3). Encoder là bundle bên thứ ba và clipboard cần quyền, nên
+   * MỌI lỗi đều rơi về bảng bitmap cũ — và toast phải NÓI RÕ là đang dùng đường lùi,
+   * không được báo "đã copy sang Figma" như thể node đã ra đúng.
    */
   const copyFigma = () => {
     setBusy(true);
-    const ac = new AbortController();
     void (async () => {
       try {
-        const res = await buildFigmaBoard({
-          projectId,
-          files: [asset.file],
-          poseFiles: new Set(asset.category === "mascot" ? [name] : []),
-          variantLabel: name,
-          onProgress: () => {},
-          signal: ac.signal,
-        });
-        if (res.outcome === "clipboard") toastSuccess("Đã copy sang Figma", `${name} · dán bằng Ctrl/Cmd+V.`);
-        else toastInfo("Trình duyệt không cho copy ảnh", `Đã tải ảnh về máy để bạn kéo vào Figma.${res.fallbackReason ? ` (${res.fallbackReason})` : ""}`);
+        const url = await loadFull(projectId, asset.file.path).promise;
+        const spec = await copyAssetAsFigmaNode(asset.file, url, { name, poseFiles });
+        toastSuccess(
+          "Đã copy sang Figma",
+          `${name} · frame ${Math.round(spec.frame.w)}×${Math.round(spec.frame.h)} theo safe zone, `
+          + "clip content tắt. Dán bằng Ctrl/Cmd+V.",
+        );
+        remindGlowBlend();
       } catch (err) {
-        if (!(err instanceof BoardCancelled)) toastError(err, {});
+        try {
+          await copyFigmaBitmap(err instanceof Error ? err.message : String(err));
+        } catch (fallbackErr) {
+          if (!(fallbackErr instanceof BoardCancelled)) toastError(fallbackErr, {});
+        }
       } finally {
         setBusy(false);
       }
@@ -249,6 +292,8 @@ function CutAssetCard({ projectId, variant, asset, contract }: {
         path={asset.file.path}
         alt={`${sheetLabel(asset.sheet)} · ${name}`}
         backdrop="checker"
+        /* Ô phát sáng tự đổi sang nền đo tối + `mix-blend-mode` — xem `lib/blend.ts`. */
+        blend={asset.file.blend}
         className="aspect-square rounded-none border-0"
       />
       <div className="flex items-center gap-2 p-3">

@@ -1,0 +1,351 @@
+{
+  "styles": {
+    "chinh": {
+      "sheets": {
+        "nen": {
+          "mode": "binary 2 màu nhạt (đường lùi), lấp 32857px",
+          "bg_detected": [
+            [
+              253,
+              177,
+              203
+            ],
+            [
+              252,
+              148,
+              169
+            ]
+          ],
+          "canvas": [
+            1392,
+            2088
+          ],
+          "cell": [
+            1024,
+            1536
+          ],
+          "bleed": [
+            184,
+            276
+          ],
+          "size": [
+            1024,
+            1536
+          ],
+          "blobs": 41,
+          "cut": 1
+        },
+        "popup": {
+          "mode": "matte closed-form PyMatting + despill, key (250, 6, 247)",
+          "bg_detected": [
+            [
+              250,
+              6,
+              247
+            ]
+          ],
+          "canvas": [
+            2088,
+            1392
+          ],
+          "cell": [
+            1536,
+            1024
+          ],
+          "bleed": [
+            276,
+            184
+          ],
+          "size": [
+            1536,
+            1024
+          ],
+          "blobs": 26,
+          "cut": 1
+        },
+        "dao-cu": {
+          "mode": "matte closed-form PyMatting + despill, key (251, 4, 240)",
+          "bg_detected": [
+            [
+              251,
+              4,
+              240
+            ]
+          ],
+          "canvas": [
+            2088,
+            1392
+          ],
+          "cell": [
+            1536,
+            1024
+          ],
+          "bleed": [
+            276,
+            184
+          ],
+          "size": [
+            1536,
+            1024
+          ],
+          "blobs": 17,
+          "cut": 1
+        },
+        "dao-cu-doc": {
+          "mode": "matte closed-form PyMatting + despill, key (252, 3, 249)",
+          "bg_detected": [
+            [
+              252,
+              3,
+              249
+            ]
+          ],
+          "canvas": [
+            1044,
+            1392
+          ],
+          "cell": [
+            768,
+            1024
+          ],
+          "bleed": [
+            138,
+            184
+          ],
+          "size": [
+            1536,
+            1024
+          ],
+          "blobs": 11,
+          "cut": 1
+        },
+        "pose-nhan-vat": {
+          "mode": "matte closed-form PyMatting + despill, key (245, 12, 248)",
+          "bg_detected": [
+            [
+              245,
+              12,
+              248
+            ]
+          ],
+          "canvas": [
+            1044,
+            696
+          ],
+          "cell": [
+            768,
+            512
+          ],
+          "bleed": [
+            138,
+            92
+          ],
+          "size": [
+            1536,
+            1024
+          ],
+          "blobs": 6,
+          "cut": 2
+        }
+      },
+      "assets": [
+        {
+          "file": "25-bg-home.png",
+          "sheet": "nen",
+          "canvas": [
+            1392,
+            2088
+          ],
+          "cell": [
+            1024,
+            1536
+          ],
+          "bleed": [
+            184,
+            276
+          ],
+          "content": [
+            1024,
+            1524
+          ],
+          "content_at": [
+            184,
+            288
+          ],
+          "safe": [
+            184,
+            276,
+            1024,
+            1536
+          ]
+        },
+        {
+          "file": "09-popup-panel-short.png",
+          "sheet": "popup",
+          "canvas": [
+            2088,
+            1392
+          ],
+          "cell": [
+            1536,
+            1024
+          ],
+          "bleed": [
+            276,
+            184
+          ],
+          "content": [
+            1310,
+            761
+          ],
+          "content_at": [
+            382,
+            313
+          ],
+          "safe": [
+            387,
+            318,
+            1300,
+            743
+          ],
+          "freeSafe": true,
+          "slice9": [
+            228,
+            228,
+            228,
+            228
+          ]
+        },
+        {
+          "file": "15-reward-giftbox.png",
+          "sheet": "dao-cu",
+          "canvas": [
+            2088,
+            1392
+          ],
+          "cell": [
+            1536,
+            1024
+          ],
+          "bleed": [
+            276,
+            184
+          ],
+          "content": [
+            787,
+            704
+          ],
+          "content_at": [
+            648,
+            341
+          ],
+          "safe": [
+            675,
+            348,
+            737,
+            696
+          ]
+        },
+        {
+          "file": "52-envelope-body.png",
+          "sheet": "dao-cu-doc",
+          "canvas": [
+            1044,
+            1392
+          ],
+          "cell": [
+            768,
+            1024
+          ],
+          "bleed": [
+            138,
+            184
+          ],
+          "content": [
+            439,
+            642
+          ],
+          "content_at": [
+            302,
+            381
+          ],
+          "safe": [
+            311,
+            378,
+            422,
+            635
+          ]
+        },
+        {
+          "file": "01-pose-idle.png",
+          "sheet": "pose-nhan-vat",
+          "canvas": [
+            1044,
+            696
+          ],
+          "cell": [
+            768,
+            512
+          ],
+          "bleed": [
+            138,
+            92
+          ],
+          "content": [
+            265,
+            451
+          ],
+          "content_at": [
+            393,
+            79
+          ],
+          "safe": [
+            407,
+            130,
+            230,
+            435
+          ]
+        },
+        {
+          "file": "02-pose-wave.png",
+          "sheet": "pose-nhan-vat",
+          "canvas": [
+            1044,
+            696
+          ],
+          "cell": [
+            768,
+            512
+          ],
+          "bleed": [
+            138,
+            92
+          ],
+          "content": [
+            309,
+            452
+          ],
+          "content_at": [
+            338,
+            83
+          ],
+          "safe": [
+            407,
+            130,
+            230,
+            435
+          ]
+        }
+      ],
+      "empty_cells": [],
+      "atlas": {
+        "image": "atlas.png",
+        "json": "atlas.json",
+        "size": [
+          2048,
+          2993
+        ]
+      }
+    }
+  }
+}

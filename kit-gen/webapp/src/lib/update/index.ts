@@ -2,3 +2,4 @@
 export * from "./restart";
 export * from "./pending";
 export * from "./install-store";
+export * from "./watch";

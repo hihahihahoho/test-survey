@@ -10,9 +10,12 @@
  *    một bản ghi rác của phiên bản cũ sẽ giết cả thanh tab, mất luôn những file còn tốt.
  *    (Cùng luật với `safety/drafts.ts`: "Parse hỏng ⇒ coi như không có nháp, KHÔNG ném ra màn".)
  *
- * 2. **Hết chỗ ⇒ `STORAGE_FULL`, KHÔNG im lặng.** `docsIdbSet` đã dọn + thử lại 1 lần rồi mới
- *    trả `false`. Nuốt lỗi ở đây = user gõ cả buổi rồi mất trắng mà không ai báo — đúng thứ
- *    mà bài học C-01 (qa-func) cấm: không được đoán hộ, phải đọc kết quả thật.
+ * 2. **Ghi hụt ⇒ báo ĐÚNG LÝ DO, KHÔNG im lặng và KHÔNG đoán.** `docsIdbSet` đã dọn + thử
+ *    lại 1 lần rồi mới trả về, và nay nó nói rõ vì sao (`DocsIdbWriteOutcome`): hết chỗ ⇒
+ *    `STORAGE_FULL`, bị lớp bảo mật chặn ⇒ `WRITE_BLOCKED`, không mở được kho ⇒
+ *    `STORAGE_UNAVAILABLE`. Nuốt lỗi ở đây = user gõ cả buổi rồi mất trắng mà không ai báo;
+ *    báo sai lý do thì tệ hơn một bậc — họ làm theo hướng dẫn sai và mất thêm dữ liệu. Đúng
+ *    thứ mà bài học C-01 (qa-func) cấm: không được đoán hộ, phải đọc kết quả thật.
  *
  * 3. **Xoá là XOÁ MỀM.** `remove` chỉ đặt `trashedAt` ⇒ có đường lùi cho "Hoàn tác 10s" và
  *    thùng rác 30 ngày (§4.4). Xoá file con **không bao giờ** đụng sheet/ảnh/kit: repo này
@@ -22,7 +25,7 @@
  *    không đè. Mock mà bỏ luật này thì FE-2/FE-3 sẽ viết UI không có nhánh xung đột, và khi
  *    nối backend thật sẽ phải sửa lại đúng chỗ khó nhất.
  */
-import { DocsRepoError } from "./docs-errors";
+import { DocsRepoError, type DocsErrorCode } from "./docs-errors";
 import {
   docKey,
   docsIdbAvailable,
@@ -31,6 +34,7 @@ import {
   docsIdbKeys,
   docsIdbSet,
   keyPrefix,
+  type DocsIdbWriteOutcome,
 } from "./docs-idb";
 import type { CreateDocInput, DocsRepo, LoadedCanvas, SaveResult } from "./docs-repo";
 import {
@@ -65,9 +69,21 @@ async function readRecord(projectId: string, docId: string): Promise<DocRecord |
   return parsed.success ? parsed.data : "broken";
 }
 
+/** Lý do của tầng lưu trữ → mã lỗi có câu chữ cho người dùng. Một chỗ duy nhất. */
+const WRITE_FAIL_CODE = {
+  blocked: "WRITE_BLOCKED",
+  full: "STORAGE_FULL",
+  unavailable: "STORAGE_UNAVAILABLE",
+} as const satisfies Record<Exclude<DocsIdbWriteOutcome, { ok: true }>["reason"], DocsErrorCode>;
+
 async function writeRecord(projectId: string, rec: DocRecord): Promise<void> {
-  const ok = await docsIdbSet(docKey(projectId, rec.doc.id), rec);
-  if (!ok) throw new DocsRepoError("STORAGE_FULL", "docsIdbSet trả false sau khi dọn + thử lại");
+  const res = await docsIdbSet(docKey(projectId, rec.doc.id), rec);
+  if (res.ok) return;
+  /* Quy tắc 2 nói "hết chỗ ⇒ STORAGE_FULL, không im lặng" — nhưng bản trước gán
+     STORAGE_FULL cho MỌI ca hụt, kể cả khi `assertNoSecret` chặn giá trị. Nói sai
+     nguyên nhân cũng là một kiểu nuốt lỗi: người dùng làm đúng việc được bảo (xoá bớt
+     file cũ), mất dữ liệu thật, và vẫn không lưu được. */
+  throw new DocsRepoError(WRITE_FAIL_CODE[res.reason], `docsIdbSet trả ${res.reason} sau khi dọn + thử lại`);
 }
 
 async function readAll(projectId: string): Promise<DocRecord[]> {

@@ -147,6 +147,21 @@
       calc(-1 * var(--kg-checker-cell)) 0;
   }
 
+  /* Ô ảnh PHÁT SÁNG — `blend:"screen"` trong `kits/manifest.json` (slice.py, P1-3).
+     Ba việc, cả ba đều bắt buộc thì ảnh mới đọc đúng:
+      · nền ĐO (tối, không lật theo theme) — `mix-blend-mode: screen` trên nền sáng
+        cho ra nền sáng, tức ô glow tàng hình ở theme Trắng;
+      · `background-image: none` đè ô vuông alpha của `.kg-checkerboard` — checker
+        sáng cộng vào ảnh thành mảng trắng, không còn đọc được gì;
+      · `isolation: isolate` — nhốt phép blend trong đúng ô này, để nó không ăn
+        xuống nền thẻ/khối bên dưới (mix-blend-mode trộn với cả stacking context).
+     Khai SAU `.kg-checkerboard` là cố ý: cùng độ đặc hiệu, class sau thắng. */
+  .kg-glow-ground {
+    background-color: var(--kg-glow-ground);
+    background-image: none;
+    isolation: isolate;
+  }
+
   /* Nền tint cho badge: màu trạng thái ở alpha --kg-tint-a (16% dark / 12% light) */
   .kg-tint-never   { background: rgb(var(--kg-never)   / var(--kg-tint-a)); }
   .kg-tint-queued  { background: rgb(var(--kg-queued)  / var(--kg-tint-a)); }
@@ -240,9 +255,23 @@
      giãn — `.dropfield` (thứ nhìn thấy được) vẫn cao theo ruột nên mép dưới của nó
      hụt ~15px so với `.ref-note` bên phải (ảnh 09). Cho cột thành flex-col rồi để
      hộp nhìn thấy được nhận `flex-1` thì hai mép dưới trùng nhau thật. */
-  .upload-row { @apply mt-6 grid gap-5 md:grid-cols-[1.4fr_1fr]; }
+  /* HAI KHỐI TẢI ẢNH NGANG HÀNG, KHÔNG CÒN CỘT PHỤ.
+     Bản trước chia `1.4fr_1fr` vì cột phải là card "Màu nền tách" — một card chiếm
+     nửa hàng cho đúng một dòng chữ. Card đó nay là một hàng `.swatch-row` bên dưới,
+     nên hai cột trả về BẰNG NHAU cho hai khối ảnh: chúng là cùng một component, thì
+     cũng phải cùng một bề ngang. */
+  .upload-row { @apply mt-6 grid gap-5 md:grid-cols-2; }
   .upload-row > * { @apply flex min-w-0 flex-col; }
   .upload-row .reference-upload { @apply flex-1; }
+  /* Một khối tải ảnh = [hàng đầu] + [lưới ảnh] + [câu chú]. Cột co giãn để hai khối
+     luôn cao bằng nhau dù một bên có nhiều ảnh hơn. */
+  .ref-upload { @apply flex min-w-0 flex-col; }
+  .ref-upload-head { @apply mb-2 flex items-center gap-3; }
+  /* Đếm ảnh đứng NGAY CẠNH nhãn (không dạt sang phải): "Ảnh phong cách 2/8" đọc
+     thành một cụm, còn nút phụ mới là thứ được đẩy về cuối hàng. */
+  .ref-upload-count { @apply rounded-full bg-raised px-2 py-0.5 text-caption tabular-nums text-fg-muted; }
+  .ref-upload-head > :last-child:not(.ref-upload-count) { @apply ml-auto; }
+  .ref-upload-hint { @apply mt-2 text-caption text-fg-muted; }
   .style-axis-grid { @apply grid gap-6 rounded-4 border border-line-subtle bg-raised p-5 sm:grid-cols-2; }
   .style-fields { @apply mt-6 grid gap-4 border-t border-line-subtle pt-5 sm:grid-cols-2; }
   /* W2A-3 · `.color-swatch` TRƯỚC ĐÂY hardcode `bg-danger` ⇒ ô "Màu nền tách"
@@ -292,9 +321,13 @@
   .file-chip { @apply inline-flex items-center gap-2 rounded-full border border-line-subtle bg-raised px-3 py-1 text-caption text-fg-muted; }
   /* §W3-3 — chip ảnh ref nay ĐỌC TỪ ĐĨA và xoá được, nên cần chỗ cho nút xoá. */
   .ref-chips { @apply flex flex-wrap gap-2; }
-  .reference-upload { @apply flex flex-col gap-3 border-0 bg-transparent p-0; }
-  .reference-upload .image-dropzone { @apply min-h-28; }
-  .reference-upload .ref-chips { @apply grid grid-cols-3 gap-3 sm:grid-cols-4; }
+  /* ══ VÙNG THẢ = LƯỚI ẢNH, Ô CUỐI LÀ "+ THÊM ẢNH" ═══════════════════════════
+     Bản trước: `.reference-upload` gỡ luôn `border-0 bg-transparent p-0` của
+     `.dropfield`, nên cái khung mà §W2B-6 dựng ra để "ảnh nằm TRONG vùng thả"
+     **không nhìn thấy được** — trên màn hình vẫn là một băng nét đứt cao lêu nghêu
+     rồi vài thumbnail rơi lửng lơ bên dưới nó, lệch trái. Nay khung được trả lại
+     viền + nền, và chính nó là lưới: mỗi ảnh một ô, ô cuối là nút thêm. */
+  .reference-upload { @apply grid gap-2 p-2; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); }
   .ref-preview-card { @apply relative block aspect-square min-w-0 overflow-hidden rounded-3 border border-line-subtle bg-raised; }
   .ref-preview-card > img { @apply size-full object-contain; }
   .ref-preview-card > svg { @apply absolute left-1/2 top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 text-fg-muted; }
@@ -322,8 +355,8 @@
   .preview-sheets { @apply mt-3 flex flex-wrap gap-2; }
   /* §W3-9a — khối theo dõi lượt chạy ở bước ⑥ (chỉ hiện khi bộ kit đã có lượt chạy). */
   .run-panel { @apply mt-8 grid gap-4 rounded-4 border border-line-subtle bg-raised p-5; }
-  .ref-note { @apply rounded-4 bg-raised p-5; }
-  .ref-note p:last-child { @apply text-body text-fg-muted; }
+  /* `.ref-note` ĐÃ XOÁ cùng markup: nó là cái card chiếm nửa hàng tải ảnh để chứa
+     đúng một dòng "Màu nền tách: …". Dòng đó nay là `.swatch-row` (xem StyleStep). */
   /* ══ W2A-5 · BA CLASS MỒ CÔI — nay CÓ THÂN THẬT ════════════════════════
      `workflow-choice` (BriefStep), `brand-ref` (StyleStep), `mascot-dropzone`
      (MascotStep) có trong TSX nhưng KHÔNG có rule ở bất kỳ file CSS nào và cũng
@@ -336,7 +369,9 @@
      nghĩa (một lựa chọn / một nhóm ref / một vùng thả ảnh), cần chỗ đứng riêng.
      Cổng `check-dead-classes.mjs` nay bắt được loại lỗi này (luật ②). */
   .workflow-choice { @apply mt-6; }
-  .brand-ref { @apply mt-6; }
+  /* Khối "Ảnh thương hiệu" nay là ô THỨ HAI của `.upload-row`, nên chỉ cần khoảng
+     cách khi lưới gãy về một cột (mobile); trên desktop hai khối phải thẳng mép trên. */
+  .brand-ref { @apply mt-6 md:mt-0; }
   .mascot-dropzone { @apply mt-6; }
   .choice-card { @apply flex w-full flex-col gap-1 rounded-4 border border-line-subtle bg-raised p-5 text-left text-fg-muted transition-colors hover:border-line-strong; }
   /* ══ W2B-2 · GIẢM LIỀU MINT — mint là NHẤN, không phải NỀN ══════════════════
@@ -525,7 +560,20 @@
   .image-upload-shell { @apply flex flex-col gap-2; }
   .image-dropzone { @apply grid min-h-32 w-full grid-cols-[auto_1fr_auto] items-center gap-4 rounded-4 border border-dashed border-line bg-canvas p-4 text-left transition-all; }
   .image-dropzone:hover { @apply border-line-strong bg-raised; } .image-dropzone.is-dragging { @apply border-accent bg-raised ring-2 ring-focus-ring; }
-  .image-dropzone.is-error { @apply border-danger; } .image-drop-icon { @apply flex size-11 items-center justify-center rounded-4 border border-line-subtle bg-raised text-fg-muted; }
+  .image-dropzone.is-error { @apply border-danger; }
+  /* Ô VUÔNG "+ Thêm ảnh" — hình thái thứ hai của cùng một dropzone (`variant="tile"`).
+     Nó đứng làm ô cuối của lưới ảnh nên phải cao đúng bằng một ô ảnh (`.ref-preview-card`
+     = ảnh 88px + padding 8px×2), và chỉ mang một dòng chữ. `disabled` khi đã đủ trần:
+     mờ đi tại chỗ, KHÔNG biến mất — chỗ trống biến mất là người dùng đi tìm nút.
+     Mờ bằng màu (viền nhạt + chữ muted + icon mất nền nổi), KHÔNG `opacity`:
+     cổng contrast luật ③ chặn mọi `opacity-*` trong component vì chữ trộn qua
+     opacity là tụt dưới chuẩn — idiom disabled của repo là đổi màu (xem
+     `.workflow-step`, `.artifact-versions`). */
+  .image-dropzone.is-tile { @apply min-h-0 grid-cols-1 justify-items-center gap-2 p-2 text-center; min-height: 6.5rem; }
+  .image-dropzone.is-tile .image-drop-copy { @apply items-center; }
+  .image-dropzone.is-tile:disabled { @apply cursor-not-allowed border-line-subtle text-fg-muted; }
+  .image-dropzone.is-tile:disabled .image-drop-icon { @apply border-line-subtle bg-canvas; }
+  .image-drop-icon { @apply flex size-11 items-center justify-center rounded-4 border border-line-subtle bg-raised text-fg-muted; }
   .image-drop-icon svg { @apply size-5; } .image-drop-copy { @apply flex min-w-0 flex-col gap-0.5; } .image-drop-copy strong { @apply text-label text-fg-strong; }
   .image-drop-copy span, .image-drop-copy small { @apply text-caption text-fg-muted; } .image-drop-action { @apply rounded-3 border border-line bg-raised px-3 py-2 text-label text-fg-strong shadow-sm; }
   .image-upload-error { @apply flex items-center gap-2 text-caption text-danger; } .image-upload-error svg { @apply size-4; }
@@ -562,5 +610,31 @@
 .ref-preview-card > img, .ref-preview-card > svg:first-child { width: 100%; height: 88px; border-radius: .7rem; object-fit: contain; background: var(--raised); }
 .ref-preview-card > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-caption); }
 .ref-preview-card > button { position: absolute; top: .75rem; right: .75rem; display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 999px; background: var(--surface); box-shadow: 0 1px 8px rgb(0 0 0 / .15); }
+
+/* ══ VÙNG THẢ ẢNH CỦA BƯỚC PHONG CÁCH — MỘT LƯỚI DUY NHẤT ══════════════════════
+   `.ref-chips` tự dựng lưới riêng của nó (dòng trên). Trong `.reference-upload` ta
+   KHÔNG muốn lưới-trong-lưới: `display: contents` bỏ cái hộp trung gian đi để mỗi
+   `.ref-preview-card` trở thành ô của chính lưới `.reference-upload` — nhờ vậy ô
+   "+ Thêm ảnh" mới đứng được ngay SAU ảnh cuối cùng thay vì xuống một hàng riêng.
+   Cùng lý do với `.image-upload-shell` (vỏ của `ImageDropzone`). */
+.reference-upload .ref-chips:has(.ref-preview-card) { display: contents; }
+.reference-upload .image-upload-shell { display: contents; }
+/* Chip "chưa lưu" (chưa đọc được đĩa) và câu lỗi là THÔNG BÁO, không phải ô ảnh —
+   cho chúng chiếm trọn hàng để không bị ép vào một ô vuông. */
+.reference-upload .ref-chips:not(:has(.ref-preview-card)),
+.reference-upload .image-upload-error { grid-column: 1 / -1; }
+/* Nút ✕ chỉ hiện khi trỏ vào ĐÚNG ảnh đó — mặc định hiện đủ 8 dấu ✕ thì lưới ảnh
+   đọc thành một bảng nút xoá. `:focus-within` giữ nguyên đường bàn phím: tab tới nút
+   là nó hiện ra, không phải một đích vô hình. */
+.ref-preview-card > button { opacity: 0; transition: opacity .12s ease; }
+.ref-preview-card:hover > button, .ref-preview-card:focus-within > button { opacity: 1; }
+@media (hover: none) { .ref-preview-card > button { opacity: 1; } }
 /* `.pose-prototype` đã xoá cùng `.pose-choice-grid` (UI-FIX §3a): thẻ dáng nay là
    `.compact-element`, nên phần hình dùng chung `.compact-element-art`. */
+
+/* ══ SÂN KHẤU COPY-FIGMA (figma-node.ts) ═══════════════════════════════════════
+   `.safe-frame` là frame tàng hình dựng tạm để encoder chụp: phần BẤT BIẾN nằm ở
+   đây, phần theo dữ liệu (width/height của hitbox) vẫn inline. `overflow: visible`
+   là hồn của safe-zone — encoder dịch nó thành "Clip content = off" nên phần ảnh
+   tràn ra ngoài hitbox (đổ bóng, trang trí) sống sót sau khi dán vào Figma. */
+.safe-frame { position: absolute; left: 0; top: 0; overflow: visible; background: transparent; }

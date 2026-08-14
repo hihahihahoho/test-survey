@@ -80,15 +80,36 @@ export function isUpdatedVersion(
   return false;
 }
 
+/**
+ * VERSION NÀO LÀ VERSION ĐỂ SO? — `runtimeVersion` trước, `version` sau.
+ *
+ * `/health` trả hai số khác nhau và chỉ một trong hai so được với bản đích:
+ *  · `runtimeVersion` — bản PHÁT HÀNH đang chạy (2.1.x), cùng thang với `latestVersion`;
+ *  · `version` — đời bộ khung agent, một hằng "1.2.0" chưa bao giờ được bump. Đọc nó là
+ *    nguồn gốc của bug "cập nhật thành công vẫn báo vẫn đang chạy bản 1.2.0" (P2-12).
+ *
+ * VẪN GIỮ FALLBACK về `version`: agent đời cũ (trước bản vá) không có `runtimeVersion`,
+ * và với agent đó thì "1.2.0" tuy vô nghĩa nhưng ổn định — luồng chờ vẫn kết luận được
+ * "đã chết rồi sống lại" nhờ `sawDown`. Đổi lại, LƯỢT UPDATE ĐẦU TIÊN SAU BẢN VÁ VẪN
+ * BÁO SAI MỘT LẦN CUỐI: bên đứng chờ là BUNDLE CŨ đang chạy trong trình duyệt (bundle
+ * mới chỉ vào sau khi reload), nên nó vẫn đọc `version`. Đây là cái giá bắt buộc của mọi
+ * bản vá phía client trong luồng tự-thay-mình — không có cách nào tránh, chỉ có cách nói
+ * trước.
+ */
+function healthVersion(health: unknown): string | null {
+  const h = health as { runtimeVersion?: unknown; version?: unknown } | null;
+  if (typeof h?.runtimeVersion === "string" && h.runtimeVersion) return h.runtimeVersion;
+  return typeof h?.version === "string" && h.version ? h.version : null;
+}
+
 /** Một nhịp `/health`. KHÔNG BAO GIỜ ném: mọi lỗi đều là "chưa sống lại". */
 export async function probeAgentOnce(): Promise<AgentProbe> {
   try {
     const r = await fetchHealth();
-    const raw = (r.health as { version?: unknown } | null)?.version;
     if (!r.ok) return { reachable: false, version: null, protocolChanged: false };
     return {
       reachable: true,
-      version: typeof raw === "string" ? raw : null,
+      version: healthVersion(r.health),
       protocolChanged: r.protocolIssue !== null,
     };
   } catch (e) {

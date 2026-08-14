@@ -13,11 +13,20 @@ import { ErrorState, LoadingState } from "@/components/common";
 import { errorDetail } from "@/features/projects/lib/feedback";
 import { useAddBrandProfile, useAddLibraryItem, useLibraryImage, usePatchBrandProfile, usePatchLibraryItem, useRemoveBrandProfile, useUserLibrary } from "@/lib/hooks";
 import type { BrandProfile, LibraryItem } from "@/lib/types";
+import { NEUTRAL_PRIMARY_COLOR, NEUTRAL_SECONDARY_COLOR } from "@/lib/types/contract";
 import { BRAND_ASSET_LABEL, brandAssetKind } from "./lib/brand-assets";
 import { BrandCard } from "./components/BrandCard";
 import { HomeWorkspaceShell } from "./components/HomeWorkspaceShell";
 
 type MascotDraft = { id: string; name: string; file: File | null; tags: string };
+
+/**
+ * §BUG-1 — hai ô màu của một hồ sơ thương hiệu MỚI bắt đầu bằng mực/xám trung tính của
+ * app. Trước đây là `#005BAA`/`#00B0F0`, tức là màu của VNPAY hiện sẵn khi người dùng
+ * đang tạo hồ sơ cho một thương hiệu khác — họ phải tự nhận ra để sửa. Nguồn hằng:
+ * `lib/types/contract.ts`.
+ */
+const NEW_BRAND_COLORS = [NEUTRAL_PRIMARY_COLOR, NEUTRAL_SECONDARY_COLOR];
 
 /** Màu mặc định khi bấm «Thêm màu» — lấy màu ĐẦU TIÊN chưa có trong bảng, vì agent gộp
  *  màu trùng khi lưu (`cleanBrand`) nên hai ô cùng mã sẽ âm thầm biến thành một. */
@@ -92,7 +101,7 @@ function BrandDialog({ brand, open, onOpenChange }: { brand: BrandProfile | null
   const addAsset = useAddLibraryItem();
   const [name, setName] = React.useState("");
   const [description, setDescription] = React.useState("");
-  const [colors, setColors] = React.useState(["#005BAA", "#00B0F0"]);
+  const [colors, setColors] = React.useState(NEW_BRAND_COLORS);
   const [assetIds, setAssetIds] = React.useState<string[]>([]);
   const [logoFiles, setLogoFiles] = React.useState<File[]>([]);
   const [styleFiles, setStyleFiles] = React.useState<File[]>([]);
@@ -103,7 +112,7 @@ function BrandDialog({ brand, open, onOpenChange }: { brand: BrandProfile | null
     if (!open) return;
     setName(brand?.name ?? "");
     setDescription(brand?.description ?? "");
-    setColors(brand?.colors.length ? brand.colors : ["#005BAA", "#00B0F0"]);
+    setColors(brand?.colors.length ? brand.colors : NEW_BRAND_COLORS);
     setAssetIds(brand?.assetIds ?? []);
     setLogoFiles([]);
     setStyleFiles([]);

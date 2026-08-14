@@ -31,21 +31,23 @@ const warnText = () => warn.mock.calls.map((c) => c.map(String).join(" ")).join(
 
 /**
  * CHẶN nhưng KHÔNG NÉM (hotfix 2.1.17): `docsIdbSet` là `async`, ném ở đây thành
- * unhandled rejection ở những chỗ gọi không `catch`. Trả `false` là mã "không ghi được"
- * mà tầng repo đã xử lý sẵn. Điều bắt buộc giữ: không ghi gì, không log giá trị.
+ * unhandled rejection ở những chỗ gọi không `catch`. Nó trả về một kết quả hỏng mà tầng
+ * repo đã xử lý sẵn — và kết quả đó phải mang LÝ DO `"blocked"`, chứ không phải `false`
+ * trần: `false` trần chính là thứ khiến repo báo nhầm "máy hết chỗ lưu" cho ca này
+ * (P2-8). Điều bắt buộc giữ: không ghi gì, không log giá trị.
  */
 describe("chặn secret ở cửa ghi", () => {
   it("giá trị hình dạng API key ⇒ chặn, KHÔNG ghi gì, KHÔNG ném", async () => {
-    await expect(docsIdbSet("p1/f-x", { note: "sk-abcdefghijklmnop0123456789" })).resolves.toBe(false);
+    await expect(docsIdbSet("p1/f-x", { note: "sk-abcdefghijklmnop0123456789" })).resolves.toEqual({ ok: false, reason: "blocked" });
     expect(idb._dump()).toEqual({});
     expect(warnText()).toContain("idb.docs");
   });
   it("TÊN field nghi secret cũng bị chặn", async () => {
-    await expect(docsIdbSet("p1/f-x", { access_token: "gì đó" })).resolves.toBe(false);
+    await expect(docsIdbSet("p1/f-x", { access_token: "gì đó" })).resolves.toEqual({ ok: false, reason: "blocked" });
     expect(idb._dump()).toEqual({});
   });
   it("đường dẫn tuyệt đối (PII) bị chặn — file con chỉ được giữ đường dẫn tương đối", async () => {
-    await expect(docsIdbSet("p1/f-x", { ref: "/Users/an/KitGen/refs/a.png" })).resolves.toBe(false);
+    await expect(docsIdbSet("p1/f-x", { ref: "/Users/an/KitGen/refs/a.png" })).resolves.toEqual({ ok: false, reason: "blocked" });
     expect(warnText()).toContain("V-ABSPATH");
   });
   it("dòng cảnh báo KHÔNG chứa chính giá trị bị chặn", async () => {
@@ -81,7 +83,7 @@ describe("mã file con do app sinh KHÔNG phải secret", () => {
   });
 
   it("ghi được bản ghi có docId dài + sheetIds/variantIds dài", async () => {
-    await expect(docsIdbSet(`${P}/${LONG_DOC_ID}`, record(LONG_DOC_ID))).resolves.toBe(true);
+    await expect(docsIdbSet(`${P}/${LONG_DOC_ID}`, record(LONG_DOC_ID))).resolves.toEqual({ ok: true });
     expect(Object.keys(idb._dump())).toHaveLength(1);
     expect(warn).not.toHaveBeenCalled();
   });
@@ -100,7 +102,7 @@ describe("mã file con do app sinh KHÔNG phải secret", () => {
       "Xk29fLp84QmZa71RtVbNw35YcJd06HsE",
     ]) {
       warn.mockClear();
-      await expect(docsIdbSet(`${P}/f-x`, record(s))).resolves.toBe(false);
+      await expect(docsIdbSet(`${P}/f-x`, record(s))).resolves.toEqual({ ok: false, reason: "blocked" });
       expect(warnText()).not.toContain(s);
     }
     expect(idb._dump()).toEqual({});
@@ -110,7 +112,7 @@ describe("mã file con do app sinh KHÔNG phải secret", () => {
     const rec = record(LONG_DOC_ID);
     await expect(
       docsIdbSet(`${P}/${LONG_DOC_ID}`, { ...rec, doc: { ...rec.doc, name: "sk-abcdefghijklmnop0123456789" } }),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ ok: false, reason: "blocked" });
     expect(warnText()).toContain("V-SK");
   });
 });

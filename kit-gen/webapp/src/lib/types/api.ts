@@ -70,7 +70,11 @@ export const healthSchema = z.looseObject({
   ok: z.boolean(),
   app: z.string().optional(),
   protocol: z.number(),
+  /** đời BỘ KHUNG agent ("1.2.0"), KHÔNG bump theo release — đừng so nó với bản đích. */
   version: z.string().optional(),
+  /** version BẢN PHÁT HÀNH đang chạy (2.1.x) — số duy nhất so được với `latestVersion`.
+   *  Vắng mặt ⇒ agent đời cũ (trước bản vá P2-12) hoặc đang chạy từ source. */
+  runtimeVersion: z.string().nullish(),
   buildId: z.string().optional(),
   instanceLabel: z.string().optional(),
   workspaceId: z.string().optional(),
@@ -713,6 +717,14 @@ export const kitFileSchema = z.looseObject({
   canvas: kitBox,
   cell: kitBox,
   bleed: kitBox,
+  /**
+   * CHỈ DẪN VẼ đi kèm asset — `slice.py` ghi `"screen"` cho ô `matte:"glow"`
+   * (backlog P1-3, đo trong `docs/research-glow-extraction-2026-08.md`).
+   * Vật liệu phát sáng là phép CỘNG nên không bake được vào một PNG dán thường;
+   * ô thường KHÔNG có khoá này (⇒ `undefined`, không phải `"normal"`).
+   * Nơi dùng: `features/kit/lib/blend.ts`.
+   */
+  blend: kitOptionalString,
   /** `empty:true` ⇒ dải cảnh báo "N file trống" + [Xem sheet gốc] (S5). */
   empty: z.boolean().default(false),
 });

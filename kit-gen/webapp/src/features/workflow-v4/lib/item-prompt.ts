@@ -12,6 +12,7 @@
  * │   · loại ô              →  `sheet.cell_hint`      (gen.sh:43)             │
  * │   · dòng phong cách     →  `f"Art style: {s['style']}."` (gen.sh:137)     │
  * │   · ghi chú tấm dáng    →  `sheet.note`           (gen.sh:106)            │
+ * │   · câu NỀN ĐEN của ô   →  `skel.matte == "glow"` (gen.sh:273-281)        │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
  * Vì thế UI hiện nó ở dạng **chỉ đọc + nút sao chép**: đây là bằng chứng, không phải
@@ -19,6 +20,7 @@
  */
 import type { Contract, Sheet } from "@/lib/types/contract";
 import { contractVariants } from "@/lib/types/contract";
+import { chromaKeyOf, type ChromaKeyId } from "./kitset-to-contract";
 
 export interface ItemPrompt {
   /** Tấm chứa ô này (`nen`, `popup2`, `pose-nhan-vat`…). */
@@ -36,6 +38,32 @@ export interface ItemPrompt {
 
 const orientLine = (orient: string) =>
   orient === "portrait" ? "Canvas orientation: PORTRAIT 1024x1536." : "Canvas orientation: LANDSCAPE 1536x1024.";
+
+/**
+ * CHÉP NGUYÊN VĂN đoạn `gen.sh` nối vào `spec` của ô `matte:"glow"` (khối
+ * `if comps[i]["skel"].get("matte") == "glow"`), kể cả chỗ `gen.sh` chèn TÊN MÀU KEY
+ * đang dùng — nên preview phải nối ở cùng chỗ, cùng chữ, cùng tên màu.
+ *
+ * Vì sao phải mirror (research-glow-extraction §4.2 "Lỗ 3"): bật "nền đen cho hiệu ứng
+ * phát sáng" là đổi HẲN câu lệnh gửi cho máy vẽ. Nếu panel "Prompt sẽ gửi đi" không đổi
+ * một chữ thì nó đang nói dối về chính thứ nó tự nhận là bằng chứng — và người dùng sẽ
+ * kết luận cái nút không có tác dụng gì.
+ *
+ * Đổi chữ ở `gen.sh` mà quên chỗ này ⇒ ca "khớp TỪNG CHỮ với gen.sh" trong
+ * `__tests__/cell-background.test.tsx` đỏ (nó đọc `gen.sh` thật, không đọc trí nhớ).
+ */
+/** @param key tên màu key (`magenta`/`green`/`cyan`/`blue`) — `gen.sh` chèn đúng chữ này. */
+export function glowCellPrompt(key: ChromaKeyId | string): string {
+  return " — SPECIAL CELL BACKGROUND: this ONE cell's background is PURE BLACK #000000 filling"
+    + ` the whole cell with a hard edge at the cell borders (the ${key} chroma-key does NOT apply inside`
+    + " this cell); the light effect is drawn ADDITIVELY on black — where there is no light"
+    + " the cell stays pure black";
+}
+
+/** `true` khi ô được vẽ trên nền đen thay vì nền chroma của tấm. */
+export function isGlowCell(skel: { matte?: unknown } | null | undefined): boolean {
+  return skel?.matte === "glow";
+}
 
 function findCell(contract: Contract, file: string): { sheet: Sheet; index: number } | null {
   for (const sheet of contract.sheets) {
@@ -56,8 +84,9 @@ export function itemPromptFor(contract: Contract | null | undefined, file: strin
   if (!hit) return null;
   const { sheet, index } = hit;
   const component = sheet.components[index]!;
-  const style = contractVariants(contract)[0]?.style ?? "";
-  const line = `${index + 1}) ${component.spec}`;
+  const variant = contractVariants(contract)[0];
+  const style = variant?.style ?? "";
+  const line = `${index + 1}) ${component.spec}${isGlowCell(component.skel) ? glowCellPrompt(chromaKeyOf(variant?.bg)) : ""}`;
   const text = [
     orientLine(sheet.orient ?? "landscape"),
     `Sheet ${sheet.id} · grid ${sheet.grid.cols}×${sheet.grid.rows} · each cell is a ${sheet.cell_hint ?? "cell"}.`,

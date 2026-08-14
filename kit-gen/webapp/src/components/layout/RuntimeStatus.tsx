@@ -1,6 +1,8 @@
 import * as React from "react";
 import { Check, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/sonner";
+import { markUpdateAnnounced, shouldAnnounceUpdate } from "@/lib/update";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useDoctor, useInstallUpdateFlow, useSetImageProfile, useUpdateCheck } from "@/lib/hooks";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,11 +30,47 @@ function updateLabel(data: UpdateCheck | undefined): string {
   return `${data.currentVersion} → ${data.latestVersion}`;
 }
 
+/**
+ * TIN "CÓ BẢN MỚI" TỰ TÌM ĐẾN NGƯỜI DÙNG.
+ *
+ * Chấm tròn trên nút trạng thái là tín hiệu ĐÚNG nhưng THỤ ĐỘNG: nó nằm ở góc phải trên,
+ * đường kính 6px, và chỉ ai đang nhìn vào đó mới thấy. Query bên dưới nay tự hỏi lại mỗi
+ * 30 phút (xem `lib/update/watch.ts`), nên thứ còn thiếu là một câu nói ra thành lời —
+ * kèm nút bấm đi thẳng vào luồng cài SẴN CÓ (`install-store`), không phải một luồng thứ hai.
+ *
+ * Gắn ở ĐÂY chứ không phải ở `App.tsx`: component này đã luôn có mặt trên header và đã
+ * là chủ sở hữu của `useUpdateCheck` + `useInstallUpdateFlow`. Thêm một component toàn
+ * cục nữa chỉ để đọc lại đúng hai hook đó là dựng thêm một nguồn sự thật thứ hai.
+ *
+ * Luật "mỗi bản nói một lần" nằm trong `shouldAnnounceUpdate` — hỏi lại mỗi 30 phút
+ * KHÔNG có nghĩa là nhắc lại mỗi 30 phút.
+ */
+function useUpdateAvailableToast(
+  data: UpdateCheck | undefined,
+  install: { pending: boolean; start: (v?: string | null) => Promise<void> },
+) {
+  const start = install.start;
+  const installing = install.pending;
+  React.useEffect(() => {
+    if (!shouldAnnounceUpdate(data, { installing })) return;
+    const version = data?.latestVersion ?? null;
+    // Đánh dấu TRƯỚC khi hiện: người dùng đóng toast hay để nó tự tắt đều là "đã nghe",
+    // và effect này có thể chạy lại (StrictMode) trước khi ai kịp bấm gì.
+    markUpdateAnnounced(version);
+    toast.info(`Có bản cập nhật ${version}`, {
+      description: "Cài xong công cụ local sẽ khởi động lại. Cứ chạy dở việc thì để lát nữa cũng được.",
+      duration: 10_000,
+      action: { label: "Cài ngay", onClick: () => { void start(version); } },
+    });
+  }, [data, installing, start]);
+}
+
 export function RuntimeStatus({ status, onRecheck }: { status: ConnectionStatus; onRecheck: () => void }) {
   const [open, setOpen] = React.useState(false);
   const doctor = useDoctor({ enabled: open && status.connected });
   const update = useUpdateCheck({ enabled: status.connected });
   const install = useInstallUpdateFlow();
+  useUpdateAvailableToast(update.data, install);
   const profile = useSetImageProfile();
   const codexReady = doctor.data?.codex?.ok === true && doctor.data?.imageGen?.available === true;
   const statusLabel = status.connected

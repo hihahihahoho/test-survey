@@ -137,3 +137,59 @@ describe("probe thật KHÔNG BAO GIỜ ném", () => {
     vi.unstubAllGlobals();
   });
 });
+
+/**
+ * P2-12 — bug đã cắn người dùng thật: `/health` trả `version: "1.2.0"` (đời BỘ KHUNG
+ * agent, hằng chưa bao giờ bump) còn bản đích là 2.1.x ⇒ so hai số khác thang, update
+ * thành công vẫn báo "vẫn đang chạy bản 1.2.0". Hai ca dưới khoá đúng thứ tự ưu tiên.
+ */
+describe("đọc version từ /health — runtimeVersion trước, version sau", () => {
+  const healthRes = (body: Record<string, unknown>) =>
+    vi.fn(() => Promise.resolve(new Response(JSON.stringify({ ok: true, protocol: 1, ...body }), {
+      status: 200,
+      headers: { "Content-Type": "application/json", "X-KitGen-Protocol": "1" },
+    })));
+
+  it("có runtimeVersion ⇒ lấy version BẢN PHÁT HÀNH, KHÔNG lấy 1.2.0 của bộ khung", async () => {
+    vi.stubGlobal("fetch", healthRes({ version: "1.2.0", runtimeVersion: "2.1.19" }));
+    const { probeAgentOnce } = await import("../restart");
+    const p = await probeAgentOnce();
+    expect(p).toEqual({ reachable: true, version: "2.1.19", protocolChanged: false });
+    vi.unstubAllGlobals();
+  });
+
+  it("agent đời cũ không có runtimeVersion ⇒ vẫn rơi về `version` chứ không mất tín hiệu", async () => {
+    vi.stubGlobal("fetch", healthRes({ version: "1.2.0" }));
+    const { probeAgentOnce } = await import("../restart");
+    expect((await probeAgentOnce()).version).toBe("1.2.0");
+    vi.unstubAllGlobals();
+  });
+
+  it("runtimeVersion null (chạy từ source) cũng rơi về `version`, không thành chuỗi 'null'", async () => {
+    vi.stubGlobal("fetch", healthRes({ version: "1.2.0", runtimeVersion: null }));
+    const { probeAgentOnce } = await import("../restart");
+    expect((await probeAgentOnce()).version).toBe("1.2.0");
+    vi.unstubAllGlobals();
+  });
+});
+
+/**
+ * Ca THẬT của lượt update sau bản vá, dựng bằng đúng hai con số của máy chủ SP:
+ * bấm cập nhật 2.1.18 → 2.1.19, agent sống lại và trả runtimeVersion đúng bản đích.
+ * Trước bản vá, probe trả "1.2.0" ⇒ vòng chờ kết luận `unchanged` và người dùng nhận
+ * câu "Cập nhật chưa thành công" dù mọi thứ đã chạy đúng.
+ */
+describe("lượt update 2.1.18 → 2.1.19", () => {
+  it("agent sống lại với runtimeVersion đúng bản đích ⇒ `updated`", async () => {
+    const clock = fakeClock();
+    const { probe } = scripted([up("2.1.18"), down(), up("2.1.19")]);
+    const r = await waitForUpdatedAgent({ targetVersion: "2.1.19", fromVersion: "2.1.18", probe, ...clock });
+    expect(r).toEqual({ outcome: "updated", version: "2.1.19" });
+  });
+
+  it("nếu probe vẫn đọc nhầm số của bộ khung ⇒ kết luận SAI thành `unchanged` (bug cũ)", () => {
+    // Không phải test hành vi mong muốn — là bằng chứng vì sao thứ tự ưu tiên ở trên
+    // quan trọng: "1.2.0" nhỏ hơn bản cũ nên không đời nào được coi là đã cập nhật.
+    expect(isUpdatedVersion("1.2.0", { targetVersion: "2.1.19", fromVersion: "2.1.18" })).toBe(false);
+  });
+});

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NEUTRAL_PRIMARY_COLOR, NEUTRAL_SECONDARY_COLOR } from "@/lib/types/contract";
 import { prefillValues, type BriefReadResult } from "@/features/docs/lib/brief-read";
 
 export const STYLE_AXIS_IDS = ["age", "energy", "lux", "era", "gender", "detail", "outline"] as const;
@@ -25,10 +26,11 @@ export const DEFAULT_VALUES: KitFormValues = {
   name: "", hasCharacter: false,
   character: { species: "", traits: "", costume: "" },
   style: { age: 4, energy: 4, lux: 4, era: 4, gender: 4, detail: 4, outline: 4 },
-  /* VNPAY-RECOLOR: cặp màu gợi ý mặc định của bộ kit đi theo nhận diện VNPAY
-     (primary #005BAA · cyan phụ trợ #00B0F0). Đây là DỮ LIỆU brand của kit, không
-     phải màu chrome của app — nên là hex thật, không phải token CSS. */
-  primary: "#005BAA", secondary: "#00B0F0", avoid: "", stylePrompt: "",
+  /* §BUG-1 — cặp màu khởi tạo của form là MỰC/XÁM TRUNG TÍNH của app, không phải nhận
+     diện của một thương hiệu có thật (trước đây là `#005BAA`/`#00B0F0` của VNPAY, dán
+     vào form của mọi người dùng). Vẫn là hex thật chứ không phải token CSS: đây là DỮ
+     LIỆU brand của bộ kit, nó đi vào contract. Xem `lib/types/contract.ts`. */
+  primary: NEUTRAL_PRIMARY_COLOR, secondary: NEUTRAL_SECONDARY_COLOR, avoid: "", stylePrompt: "",
   backgroundCount: 1, poseCount: 4, items: [], characterRefUploaded: false,
 };
 

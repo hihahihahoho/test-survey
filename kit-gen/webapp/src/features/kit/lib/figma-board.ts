@@ -15,10 +15,12 @@
  *
  * ╔══ TRUNG THỰC VỀ GIỚI HẠN — ĐỌC TRƯỚC KHI HỨA VỚI AI ══════════════════════╗
  * ║ ① Dán vào Figma ra MỘT ẢNH BITMAP của cả bảng, KHÔNG phải từng layer rời.  ║
- * ║   Muốn ra node thật (frame + image fill + text) thì phải encode định dạng   ║
- * ║   clipboard `figh2d`/`figmeta`; bộ encode đó là `figma-export/figma-h2d.    ║
- * ║   global.js` (49 KB, vendored) — NGOÀI quyền sở hữu của tôi và ngoài        ║
- * ║   `webapp/`. Tôi KHÔNG copy nó vào đây. Xem NEEDS-s5-kit.md N2.             ║
+ * ║   Điều đó VẪN ĐÚNG với file này và không định sửa: đây là đường "cả bảng   ║
+ * ║   một lần", và là ĐƯỜNG LÙI khi encoder hỏng.                              ║
+ * ║   Node Figma thật (frame safe zone + image fill, clip off) nay đã có, cho   ║
+ * ║   TỪNG Ô: `features/workflow-v4/lib/figma-node.ts` + encoder đã vendored    ║
+ * ║   ở `@/vendor/figma-h2d` (P3-14, 2026-08-14 — chủ sản phẩm duyệt; trước đó  ║
+ * ║   bundle nằm ngoài `webapp/` nên chỗ này từng ghi là không copy vào).       ║
  * ║ ② `navigator.clipboard.write` + `ClipboardItem` cần HTTPS/localhost và một  ║
  * ║   cử chỉ user; tôi KHÔNG kiểm chứng được ở môi trường này (không có trình   ║
  * ║   duyệt). Vì vậy code có ĐƯỜNG LÙI: clipboard hỏng ⇒ tải bảng thành file    ║

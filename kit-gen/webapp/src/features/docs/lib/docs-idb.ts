@@ -18,8 +18,8 @@
  * BỐN LUẬT (chép nguyên tinh thần `safety/idb.ts`, arch §4.2/§4.4):
  *  1. Store lạ ⇒ throw. Không có đường ghi ngoài allowlist.
  *  2. Mọi giá trị ghi bị quét secret bằng `assertNoSecret` của R0 (lớp phòng thủ thứ hai).
- *  3. `QuotaExceededError` ⇒ dọn theo luật rồi thử LẠI MỘT LẦN; vẫn hỏng ⇒ trả `false`,
- *     KHÔNG BAO GIỜ ném ra UI.
+ *  3. `QuotaExceededError` ⇒ dọn theo luật rồi thử LẠI MỘT LẦN; vẫn hỏng ⇒ trả kết quả
+ *     hỏng KÈM LÝ DO (`DocsIdbWriteOutcome`), KHÔNG BAO GIỜ ném ra UI.
  *  4. Không có IndexedDB (Safari private, tab bị chặn) ⇒ `docsIdbAvailable()` false,
  *     mọi hàm trả rỗng. App mất chỗ lưu nháp chứ không trắng trang.
  */
@@ -150,36 +150,56 @@ export async function docsIdbGet<T>(key: string): Promise<T | null> {
 const ID_FIELDS: ReadonlySet<string> = new Set(["id", "sheetIds", "variantIds"]);
 
 /**
+ * VÌ SAO KHÔNG CÒN LÀ `boolean`.
+ *
+ * `false` trần trả lời được "ghi hụt" nhưng KHÔNG trả lời được "vì sao", nên
+ * `docs-repo-local.ts` phải đoán — và nó đoán *hết chỗ lưu* cho mọi ca. Người dùng gõ
+ * một đường dẫn máy vào ghi chú rồi bị báo **"Máy đã hết chỗ lưu nháp. Xoá bớt file cũ
+ * rồi thử lại"** sẽ đi xoá file của chính mình, xong thử lại, xong vẫn hỏng.
+ *
+ * Ba lý do là ba việc khác hẳn nhau ở phía người dùng:
+ *  · `blocked` — giá trị trúng luật bảo mật ⇒ **sửa nội dung**, xoá bớt chẳng ích gì;
+ *  · `full`    — quota đầy sau khi đã dọn + thử lại ⇒ **xoá bớt**;
+ *  · `unavailable` — không mở được IndexedDB ⇒ **không có gì để làm**, chỉ cần biết là
+ *    nháp sẽ không được giữ.
+ */
+export type DocsIdbWriteOutcome =
+  | { ok: true }
+  | { ok: false; reason: "blocked" | "full" | "unavailable" };
+
+const WRITE_OK: DocsIdbWriteOutcome = { ok: true };
+
+/**
  * Ghi. Quét secret TRƯỚC.
  *
- * FAIL-SOFT: trúng luật ⇒ KHÔNG ghi, cảnh báo một dòng đã che giá trị, trả `false` —
- * cùng mã trả về với "hết chỗ", là thứ mọi chỗ gọi đã xử lý. Bản trước ném
- * `SecretLeakError` từ một hàm `async` ⇒ unhandled rejection ở chỗ gọi không `catch`;
- * bộ dò không được phép làm vỡ luồng nó đang bảo vệ (bài học 2.1.17).
- * @returns `true` nếu ghi được. Quota đầy ⇒ dọn + thử lại đúng 1 lần rồi `false`.
+ * FAIL-SOFT: trúng luật ⇒ KHÔNG ghi, cảnh báo một dòng đã che giá trị, trả kết quả hỏng
+ * — KHÔNG ném. Bản trước ném `SecretLeakError` từ một hàm `async` ⇒ unhandled rejection
+ * ở chỗ gọi không `catch`; bộ dò không được phép làm vỡ luồng nó đang bảo vệ (bài học
+ * 2.1.17).
+ * @returns `{ok:true}` nếu ghi được; quota đầy ⇒ dọn + thử lại đúng 1 lần rồi `full`.
  */
-export async function docsIdbSet(key: string, value: unknown): Promise<boolean> {
+export async function docsIdbSet(key: string, value: unknown): Promise<DocsIdbWriteOutcome> {
   assertStore(DOCS_STORE);
   try {
     assertNoSecret(value, `idb.${DOCS_STORE}`, { idFields: ID_FIELDS });
   } catch (e) {
     if (!(e instanceof SecretLeakError)) throw e;
     warnSecretBlocked(`idb.${DOCS_STORE}`, e);
-    return false;
+    return { ok: false, reason: "blocked" };
   }
   const db = await open();
-  if (db === null) return false;
+  if (db === null) return { ok: false, reason: "unavailable" };
   try {
     await runTx(db, "readwrite", (os) => os.put(value, key));
-    return true;
+    return WRITE_OK;
   } catch (e) {
-    if ((e as { name?: string })?.name !== "QuotaExceededError") return false;
+    if ((e as { name?: string })?.name !== "QuotaExceededError") return { ok: false, reason: "unavailable" };
     await docsIdbPrune(key);
     try {
       await runTx(db, "readwrite", (os) => os.put(value, key));
-      return true;
+      return WRITE_OK;
     } catch {
-      return false; // vẫn hết chỗ → mất chỗ lưu, KHÔNG vỡ UI
+      return { ok: false, reason: "full" }; // vẫn hết chỗ → mất chỗ lưu, KHÔNG vỡ UI
     }
   }
 }

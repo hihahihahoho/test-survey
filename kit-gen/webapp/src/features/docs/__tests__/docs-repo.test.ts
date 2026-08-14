@@ -2,7 +2,7 @@
  * Test bản `local` của `DocsRepo` — vòng đời đầy đủ + các ca hỏng mà FE-PLAN §3-C1 đòi:
  * quota đầy, schema hỏng, chỗ lưu bị chặn, xung đột version, chặn secret.
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeIdb, type FakeIdb } from "./fake-idb";
 import { configureDocsIdb, docKey, docsIdbAvailable } from "../lib/docs-idb";
 import { localDocsRepo as repo, TRASH_KEEP_DAYS } from "../lib/docs-repo-local";
@@ -160,6 +160,31 @@ describe("ca hỏng của chỗ lưu", () => {
     expect(err.message).toBe("Máy đã hết chỗ lưu nháp. Xoá bớt file cũ rồi thử lại.");
     expect(err.message).not.toMatch(/quota|idb|IndexedDB|Error/i);
     expect(err.detail).toMatch(/docsIdbSet/); // chi tiết chỉ nằm ở `detail`
+  });
+  /**
+   * P2-8 — HAI NGUYÊN NHÂN, HAI CÂU KHÁC NHAU.
+   *
+   * Bản trước map MỌI cú ghi hụt thành `STORAGE_FULL` ("Máy đã hết chỗ lưu nháp. Xoá
+   * bớt file cũ rồi thử lại"), kể cả khi thủ phạm là lớp bảo mật chặn giá trị. Người
+   * dùng làm đúng lời khuyên đó thì mất file thật mà vẫn không lưu được. Ca dưới đây
+   * khoá cả MÃ lẫn CÂU CHỮ, và khoá luôn việc câu chữ KHÔNG chép lại đoạn bị chặn.
+   */
+  it("GIÁ TRỊ BỊ CHẶN ⇒ WRITE_BLOCKED, không nói nhầm là hết chỗ", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const d = await repo.create(P, { name: "Ghi chú", kind: "canvas" });
+    const leak = "sk-abcdefghijklmnop0123456789";
+    const err = await repo
+      .save(P, d.id, { nodes: [{ id: "n1", type: "note", x: 0, y: 0, w: 1, h: 1, z: 0, text: leak, bind: null }], viewport: { x: 0, y: 0, k: 1 } }, 0)
+      .catch((e) => e);
+    warn.mockRestore();
+
+    expect(err).toBeInstanceOf(DocsRepoError);
+    expect(err.code).toBe("WRITE_BLOCKED");
+    expect(err.message).not.toMatch(/hết chỗ|Xoá bớt/i); // KHÔNG phải câu của STORAGE_FULL
+    expect(err.message).not.toContain(leak); // câu hiện ở thân UI ⇒ không chép giá trị
+    expect(err.message).toMatch(/không được lưu/);
+    // và nội dung cũ không bị đè bởi bản chứa secret
+    expect((await repo.load(P, d.id)).canvas.nodes).toHaveLength(0);
   });
   it("IndexedDB bị chặn ⇒ list rỗng (không trắng trang), ghi ⇒ STORAGE_UNAVAILABLE", async () => {
     idb._openFails(true);

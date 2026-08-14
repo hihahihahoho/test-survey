@@ -62,6 +62,7 @@ export const AssetCell = React.forwardRef<HTMLButtonElement, AssetCellProps>(fun
         path={file.path}
         alt={file.file}
         backdrop={backdrop}
+        blend={file.blend}
         empty={file.empty}
         offline={offline}
         className={cn(

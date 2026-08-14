@@ -17,9 +17,13 @@ import { allPoseIds } from "../poses";
 import { isPropElement } from "../user-library";
 import {
   CHARACTER_ID,
+  CHROMA_KEY_PRESETS,
   MAIN_VARIANT_ID,
+  chromaKeyOf,
   buildKitsetContract,
   chunkKeepingGroups,
+  mergeElementSkel,
+  pickChromaKey,
   refPath,
   resolveKitset,
 } from "../kitset-to-contract";
@@ -334,6 +338,153 @@ describe("§W3-1 — món không vẽ được", () => {
       LIB,
     );
     expect(skipped.find((x) => x.file === "99-khong-ton-tai")?.reason).toBe("unknown");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   5b. Lớp đè `skel` của dự án — CHỖ FIELD TỪNG RƠI IM LẶNG (P1-4)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * `resolveKitset()` là cửa DUY NHẤT mà lớp đè của dự án đi qua để tới contract, và
+ * bản trước nó chỉ chép `w`/`h`. Nghĩa là mọi trường mới thêm vào `KitElementSkel`
+ * đều biến mất **không một tiếng động**: UI hiện đúng, bản nháp lưu đúng, contract
+ * trống trơn. Bộ ca này khoá đúng cái cửa đó.
+ *
+ * Món dùng để đo lấy từ chính thư viện đóng gói, không bịa:
+ *  · `16-fx-burst` — thư viện ĐÃ khai `matte:"glow"` (ô hiệu ứng);
+ *  · `03-btn-pill-outline` — thư viện khai `matte:"glass"` (thuật toán tách, KHÔNG
+ *    phải nền đen) ⇒ chọn "chroma" ở popup không được phép xoá nó.
+ */
+describe("§P1-4 — nền của ô đi trọn đường từ lớp đè tới contract", () => {
+  const GLOW = "16-fx-burst";
+  const GLASS = "03-btn-pill-outline";
+  /** Ô ngang thường, thư viện KHÔNG khai `matte` — chọn nó để đo đúng chiều "bật lên". */
+  const PLAIN = LIB.find((e) => e.skel.matte === undefined && e.skel.shape !== "full" && e.cell !== "portrait")!.file;
+
+  const withSkel = (file: string, skel: { w?: number; h?: number; matte?: "glow" | "none" }) => {
+    const s = defaultState();
+    return { ...s, elements: s.elements.map((e) => (e.file === file ? { ...e, selected: true, skel } : e)) };
+  };
+  const cellOf = (contract: ReturnType<typeof build>, file: string) =>
+    contract.sheets.flatMap((sh) => sh.components).find((cp) => cp.file === file);
+
+  it("thư viện đã khai sẵn ⇒ `matte:\"glow\"` có mặt trong contract kể cả khi không đè", () => {
+    expect(cellOf(build(), GLOW)?.skel.matte).toBe("glow");
+  });
+
+  it("BẬT nền đen cho một ô thường ⇒ contract nhận `matte:\"glow\"` (bản cũ rơi mất)", () => {
+    const c = buildKitsetContract(withSkel(PLAIN, { matte: "glow" }), { lib: LIB });
+    expect(cellOf(c, PLAIN)?.skel.matte).toBe("glow");
+  });
+
+  it("kích thước vẫn đi cùng chuyến — thêm `matte` không được làm rơi `w`/`h`", () => {
+    const c = buildKitsetContract(withSkel(PLAIN, { w: 0.42, matte: "glow" }), { lib: LIB });
+    expect(cellOf(c, PLAIN)?.skel).toMatchObject({ w: 0.42, matte: "glow" });
+  });
+
+  it("TẮT ⇒ gỡ đúng `glow` của thư viện, ô về nền chroma của tấm", () => {
+    const c = buildKitsetContract(withSkel(GLOW, { matte: "none" }), { lib: LIB });
+    expect(cellOf(c, GLOW)?.skel.matte).toBeUndefined();
+  });
+
+  it("TẮT KHÔNG được xoá `matte:\"glass\"` — đó là thuật toán tách, không phải nền", () => {
+    const c = buildKitsetContract(withSkel(GLASS, { matte: "none" }), { lib: LIB });
+    expect(cellOf(c, GLASS)?.skel.matte).toBe("glass");
+  });
+
+  it("lớp đè KHÔNG chạm vào thư viện chung (bộ nhớ dùng lại giữa các dự án)", () => {
+    buildKitsetContract(withSkel(GLOW, { matte: "none" }), { lib: LIB });
+    buildKitsetContract(withSkel(PLAIN, { matte: "glow" }), { lib: LIB });
+    expect(LIB.find((e) => e.file === GLOW)!.skel.matte).toBe("glow");
+    expect(LIB.find((e) => e.file === PLAIN)!.skel.matte).toBeUndefined();
+  });
+
+  it("`mergeElementSkel` trả về CHÍNH object cũ khi không có gì để đè", () => {
+    const base = LIB.find((e) => e.file === PLAIN)!.skel;
+    expect(mergeElementSkel(base, {})).toBe(base);
+    expect(mergeElementSkel(base, { matte: "none" })).toBe(base); // vốn đã là chroma
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   5c. Màu nền tách chọn XA palette (P1-5)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Hợp đồng với engine chỉ là CHUỖI `variant.bg` — nên mọi ca dưới đây đo bằng chuỗi
+ * thật sẽ nằm trong contract, không đo qua một enum trung gian nào.
+ */
+describe("§P1-5 — key chroma tránh bảng màu của bộ kit", () => {
+  it("style mặc định (màu trung tính, chưa mô tả gì) ⇒ GIỮ magenta", () => {
+    expect(pickChromaKey(defaultState())).toBe("magenta");
+    expect(build().variants?.[0]?.bg).toBe(CHROMA_PRESETS.magenta);
+  });
+
+  it("style neon MAGENTA ⇒ đổi sang green, và chuỗi bg đi vào contract", () => {
+    const s = { ...defaultState(), stylePrompt: "neon arcade, magenta rực, viền sáng" };
+    expect(pickChromaKey(s)).toBe("green");
+    expect(buildKitsetContract(s, { lib: LIB }).variants?.[0]?.bg).toBe(CHROMA_KEY_PRESETS.green);
+  });
+
+  it("style XANH LÁ ⇒ magenta vốn đã cách 180°, không đổi gì cả", () => {
+    expect(pickChromaKey({ ...defaultState(), stylePrompt: "rừng nhiệt đới, xanh lá và nâu gỗ" })).toBe("magenta");
+  });
+
+  it("màu thương hiệu (hex) cũng tính, không chỉ chữ mô tả", () => {
+    // #FF2FD0 ≈ hue 310 — sát magenta ⇒ phải nhường chỗ.
+    expect(pickChromaKey({ ...defaultState(), primaryColor: "#FF2FD0" })).toBe("green");
+    // #00C2FF ≈ hue 194 — sát cyan, nhưng người dùng đang để magenta (cách 106°) ⇒ giữ.
+    expect(pickChromaKey({ ...defaultState(), primaryColor: "#00C2FF" })).toBe("magenta");
+  });
+
+  it("LỰA CHỌN THỦ CÔNG THẮNG khi nó không đá palette", () => {
+    const s = { ...defaultState(), chroma: "green" as const, stylePrompt: "đỏ cam rực rỡ" };
+    expect(pickChromaKey(s)).toBe("green");
+    expect(buildKitsetContract(s, { lib: LIB }).variants?.[0]?.bg).toBe(CHROMA_PRESETS.green);
+  });
+
+  it("…nhưng lựa chọn thủ công ĐÁ palette thì vẫn bị đổi (đó là điểm của việc này)", () => {
+    const s = { ...defaultState(), chroma: "green" as const, stylePrompt: "xanh lá non, mint, cỏ tươi" };
+    expect(pickChromaKey(s)).toBe("magenta");
+  });
+
+  it("MÀU XÁM/ĐEN/TRẮNG không được đẩy key đi đâu cả", () => {
+    const s = { ...defaultState(), primaryColor: "#000000", secondaryColor: "#FFFFFF", stylePrompt: "tối giản, đơn sắc" };
+    expect(pickChromaKey(s)).toBe("magenta");
+  });
+
+  it("`styleAvoid` KHÔNG được đọc — màu bị cấm thì chắc chắn vắng mặt", () => {
+    const s: WorkflowState = { ...defaultState(), styleAvoid: "magenta, hồng" };
+    expect(pickChromaKey(s)).toBe("magenta");
+  });
+
+  it("chữ chỉ khớp NGUYÊN TỪ — 'camera' không phải màu cam", () => {
+    expect(pickChromaKey({ ...defaultState(), stylePrompt: "ống kính camera, chất liệu kim loại" })).toBe("magenta");
+  });
+
+  /**
+   * `chromaKeyOf` là bản sao luật `gen.sh:key_of()`. Nó quyết định TÊN MÀU mà panel
+   * prompt nói ra, nên lệch một ca là preview nói khác máy vẽ.
+   */
+  it("đọc ngược tên key từ chuỗi `bg` — tên trước, hex sau, cuối cùng magenta", () => {
+    expect(chromaKeyOf(CHROMA_KEY_PRESETS.cyan)).toBe("cyan");
+    expect(chromaKeyOf(CHROMA_KEY_PRESETS.blue)).toBe("blue");
+    expect(chromaKeyOf("nền GREEN đậm")).toBe("green");
+    // hex lạ nhận theo TRỤC (kênh cao/thấp), đúng như `_axis()` của gen.sh
+    expect(chromaKeyOf("#EE00EE")).toBe("magenta");
+    expect(chromaKeyOf("#11EE11")).toBe("green");
+    // không tên, không hex ⇒ magenta, đúng hành vi cũ
+    expect(chromaKeyOf("")).toBe("magenta");
+    expect(chromaKeyOf(null)).toBe("magenta");
+    expect(chromaKeyOf("một màu gì đó rất lạ")).toBe("magenta");
+  });
+
+  it("mọi ứng viên đều là chuỗi mà `is_key_color()` nhận ra (bão hoà, có mã hex)", () => {
+    for (const value of Object.values(CHROMA_KEY_PRESETS)) expect(value).toMatch(/^pure vivid [a-z]+ #[0-9A-F]{6}$/);
+    // Hai key cũ phải TRÙNG TỪNG KÝ TỰ với preset cũ — dự án đã lưu đọc ngược bằng chuỗi.
+    expect(CHROMA_KEY_PRESETS.magenta).toBe(CHROMA_PRESETS.magenta);
+    expect(CHROMA_KEY_PRESETS.green).toBe(CHROMA_PRESETS.green);
   });
 });
 

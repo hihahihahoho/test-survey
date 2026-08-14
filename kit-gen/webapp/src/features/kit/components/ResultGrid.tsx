@@ -36,7 +36,7 @@ export function ResultGrid({ projectId, files, offline, filtered, onShowAll, onO
                 className="group flex min-w-0 flex-col gap-2 rounded-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
               >
                 <p className="truncate text-caption text-fg-muted-raised" title={file.file}>{file.file.replace(/\.[^.]+$/, "")}</p>
-                <KitImage projectId={projectId} path={file.path} alt={file.file} backdrop="checker" offline={offline} empty={file.empty} className="aspect-square w-full rounded-3 transition-colors group-hover:border-line-strong" />
+                <KitImage projectId={projectId} path={file.path} alt={file.file} backdrop="checker" blend={file.blend} offline={offline} empty={file.empty} className="aspect-square w-full rounded-3 transition-colors group-hover:border-line-strong" />
                 {file.empty && <span className="flex items-center gap-1 text-caption text-warn"><AlertTriangle aria-hidden className="size-3" /> Món này đang trống</span>}
               </button>
             ))}

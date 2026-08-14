@@ -43,8 +43,10 @@ export const docsKeys = {
 /** Trần thời gian chờ trước khi UI được phép gọi đây là hỏng (§0-N5). */
 export const DOCS_LOADING_TIMEOUT_MS = 20_000;
 
-/** Những mã lỗi mà thử lại chắc chắn vẫn hỏng ⇒ hỏng luôn cho nhanh. */
-const NO_RETRY = new Set(["STORAGE_UNAVAILABLE", "NOT_IMPLEMENTED", "DOC_READONLY", "DOC_NOT_FOUND"]);
+/** Những mã lỗi mà thử lại chắc chắn vẫn hỏng ⇒ hỏng luôn cho nhanh.
+ *  `WRITE_BLOCKED` nằm đây vì cùng một nội dung sẽ trúng cùng một luật ở lần thử thứ
+ *  hai — chỉ người dùng sửa chữ mới đổi được kết quả. */
+const NO_RETRY = new Set(["STORAGE_UNAVAILABLE", "NOT_IMPLEMENTED", "DOC_READONLY", "DOC_NOT_FOUND", "WRITE_BLOCKED"]);
 
 function retryFinite(failureCount: number, error: Error): boolean {
   if (isDocsRepoError(error) && NO_RETRY.has(error.code)) return false;

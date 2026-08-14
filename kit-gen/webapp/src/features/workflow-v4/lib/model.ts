@@ -1,6 +1,7 @@
 import * as React from "react";
 import { createStore, useStore, type StoreApi } from "zustand";
 import { persist } from "zustand/middleware";
+import { NEUTRAL_PRIMARY_COLOR, NEUTRAL_SECONDARY_COLOR } from "@/lib/types/contract";
 import { STYLE_AXIS_IDS } from "@/features/kit-form/lib/form-model";
 import type { StyleAxisId } from "@/features/kit-form/lib/form-model";
 import { loadBundledV2 } from "@/features/design/library/lib/source";
@@ -53,16 +54,32 @@ export const LAST_STEP = 5 satisfies StepId;
    state qua ĐÚNG hai cửa người dùng bấm: dropdown "Điền từ thương hiệu đã lưu"
    (`StyleStep.chooseBrand`) và nút "Dán brief" (`BriefStep.applyBrief`).
 
-   Hai màu dưới đây là mực/xám của bảng token (`styles/tokens.css`: `fg-strong`
-   sáng #151516 và `line-strong` tối #9A9A9A) — chúng không nói tên ai cả.
+   Hai màu ấy nay nằm ở `lib/types/contract.ts` (chỗ chung của cả bốn feature cần
+   chúng — xem khối chú thích tại đó, kèm lý do không để ở file này) và được XUẤT LẠI
+   ngay dưới đây để mọi chỗ gọi cũ không phải đổi.
    Bản nháp ĐÃ LƯU không bị đụng tới: `hydrateWorkflowStore` chỉ nhận trường có
    thật trong bản nháp trên đĩa, nên dự án cũ giữ nguyên màu cũ. */
-export const NEUTRAL_PRIMARY_COLOR = "#151516";
-export const NEUTRAL_SECONDARY_COLOR = "#9A9A9A";
+export { NEUTRAL_PRIMARY_COLOR, NEUTRAL_SECONDARY_COLOR };
 
 /** Gợi ý CÁCH VIẾT, không phải một câu mẫu đã điền sẵn — xem khối trên. */
 export const STYLE_PROMPT_PLACEHOLDER =
   "Ví dụ: vui tươi, 3D bóng nhẹ, hai màu chủ đạo, sạch và dễ đọc trên màn hình game.";
+
+/**
+ * NỀN CỦA MỘT Ô lúc vẽ — lớp đè của riêng dự án lên `skel.matte` của thư viện.
+ *
+ * Hai giá trị, đúng hai câu người dùng đọc được trong popup Chi tiết:
+ *  · `"glow"` — ô này vẽ trên **nền đen**, hiệu ứng sáng cộng thêm vào nền
+ *    (`gen.sh:273–281` chèn câu "SPECIAL CELL BACKGROUND … PURE BLACK #000000",
+ *    `slice.py:740–798` tách bằng nhánh riêng).
+ *  · `"none"` — ô này theo **nền chroma** của cả tấm, kể cả khi thư viện chung khai
+ *    `matte:"glow"`. Đây là lý do phải có một giá trị "không" TƯỜNG MINH: lớp đè trộn
+ *    bằng spread, mà vắng mặt thì không xoá được giá trị của thư viện.
+ *
+ * ⚠️ `"none"` KHÔNG xoá `matte:"glass"`/`"vitmatte"` của thư viện — xem `resolveKitset()`.
+ * Chúng là *thuật toán tách*, không phải *màu nền lúc gen*; popup chỉ hỏi về cái sau.
+ */
+export type SkelMatteChoice = "glow" | "none";
 
 /**
  * KÍCH THƯỚC RIÊNG CỦA DỰ ÁN cho một ô skeleton — phần trăm bề rộng/cao của Ô, đúng
@@ -73,7 +90,7 @@ export const STYLE_PROMPT_PLACEHOLDER =
  * TRƯỚC khi dựng contract. Bỏ trống ⇒ dùng số của thư viện (§7 sitemap: "sửa bộ khung
  * trong dự án chỉ sửa bản của dự án đó").
  */
-export type KitElementSkel = { w?: number; h?: number };
+export type KitElementSkel = { w?: number; h?: number; matte?: SkelMatteChoice };
 export type KitElement = {
   file: string;
   label: string;
@@ -81,7 +98,7 @@ export type KitElement = {
   cell: string;
   mock?: boolean;
   selected: boolean;
-  /** Ghi đè kích thước ô của riêng dự án. Vắng mặt ⇒ theo thư viện. */
+  /** Ghi đè kích thước ô + nền của ô cho riêng dự án. Vắng mặt ⇒ theo thư viện. */
   skel?: KitElementSkel;
 };
 
@@ -264,10 +281,11 @@ export type WorkflowState = {
   /** Chọn / bỏ chọn hàng loạt (nút "Chọn tất cả" · "Bỏ chọn" của bước Skeleton UI). */
   setElementsSelected: (files: readonly string[], selected: boolean) => void;
   /**
-   * Đè kích thước ô của MỘT thành phần. `null` cho một cạnh = trả cạnh đó về thư viện;
-   * cả hai cạnh `null` ⇒ xoá hẳn lớp đè để bản nháp không phình ra vì số trùng mặc định.
+   * Đè kích thước ô + nền của ô cho MỘT thành phần. `null` cho một trường = trả trường
+   * đó về thư viện; hết trường ⇒ xoá hẳn lớp đè để bản nháp không phình ra vì giá trị
+   * trùng mặc định.
    */
-  setElementSkel: (file: string, patch: { w?: number | null; h?: number | null }) => void;
+  setElementSkel: (file: string, patch: { w?: number | null; h?: number | null; matte?: SkelMatteChoice | null }) => void;
   addMascot: (input: { name: string; description: string; ref?: { name: string } | null }) => string;
   patchMascot: (id: string, patch: Partial<Omit<WorkflowMascot, "id">>) => void;
   removeMascot: (id: string) => void;
@@ -571,6 +589,11 @@ export function createWorkflowStore(projectId: string): WorkflowStore {
             if ("h" in patch) {
               const h = clampSkelSide(patch.h ?? null);
               if (h === null) delete next.h; else next.h = h;
+            }
+            if ("matte" in patch) {
+              const matte = patch.matte;
+              if (matte === "glow" || matte === "none") next.matte = matte;
+              else delete next.matte;
             }
             const { skel: _drop, ...rest } = e;
             return Object.keys(next).length > 0 ? { ...rest, skel: next } : rest;

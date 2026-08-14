@@ -132,12 +132,21 @@ describe("kiểm tra tự động khi mở app — im lặng, một lần mỗi 
     expect(code).not.toMatch(/\btoast\b/);
   });
 
-  it("đúng một lần mỗi phiên: giữ cache qua đổi màn, không refetch khi quay lại tab", () => {
+  /**
+   * ĐỔI HỢP ĐỒNG (14/08): trước đây là "đúng một lần mỗi phiên". App mở cả ngày ⇒ bản
+   * vá phát hành lúc 10h chỉ tới tay ai tình cờ bấm F5. Nay query tự hỏi lại theo nhịp
+   * và theo lần quay lại tab. Ba thứ dưới đây là cái giữ cho việc đó không thành spam.
+   */
+  it("tự hỏi lại theo nhịp + khi quay lại tab, nhưng KHÔNG hỏi lại khi chỉ đổi màn", () => {
     const block = updateCheckBlock;
     expect(block).toContain("gcTime");
+    // đổi màn / mở popover = remount ⇒ vẫn KHÔNG được sinh request
     expect(block).toContain("refetchOnMount: false");
-    expect(block).toContain("refetchOnWindowFocus: false");
-    expect(block).toContain("refetchInterval: false");
+    expect(block).toContain("refetchOnWindowFocus: true");
+    // hai con số + lý do nằm ở lib/update/watch.ts, không rải hằng số ở đây
+    expect(block).toContain("refetchInterval: UPDATE_POLL_INTERVAL_MS");
+    // staleTime CHÍNH LÀ sàn chống dội của refetch-on-focus
+    expect(block).toContain("staleTime: UPDATE_FOCUS_THROTTLE_MS");
   });
 
   it("một nguồn sự thật: sidebar, popover và Cài đặt cùng đi qua useUpdateCheck", () => {

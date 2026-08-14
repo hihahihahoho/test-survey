@@ -195,6 +195,14 @@
   --kg-checker-a: #1F2022;
   --kg-checker-b: #141517;
 
+  /* --- nền của ô ảnh PHÁT SÁNG (`blend:"screen"`, backlog P1-3) -------------
+     KHÔNG lật theo theme, và đó là chủ ý: đây không phải một mặt nền của giao
+     diện mà là NỀN ĐO — đúng tấm đen mà model đã vẽ glow lên và `slice.py` đã
+     tách ra (`α = max(RGB)`). `mix-blend-mode: screen` trên nền sáng cho ra
+     nền sáng, tức là ở theme Trắng ô glow sẽ TÀNG HÌNH nếu dùng `--kg-canvas`.
+     Không đen tuyệt đối để mép ô còn phân biệt được với ảnh. */
+  --kg-glow-ground: #0B0B0D;
+
   /* --- đổ bóng 3 bậc (§9.5-4) — W2A-1 VIẾT LẠI ---------------------------
      Bản cũ là bóng ĐEN THUẦN `rgb(0 0 0 / α)`. Trên `--kg-canvas: 0 0 0` (đen
      tuyệt đối) thì đen phủ lên đen KHÔNG đổi một pixel nào ⇒ cả 35 chỗ dùng

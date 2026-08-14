@@ -11,7 +11,10 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/common";
-import { contractVariants, slugify, type Contract, type Variant } from "@/lib/types/contract";
+import {
+  NEUTRAL_PRIMARY_COLOR, NEUTRAL_SECONDARY_COLOR,
+  contractVariants, slugify, type Contract, type Variant,
+} from "@/lib/types/contract";
 import { jobCountOfVariant } from "../lib/ops";
 import type { ValidationResult } from "../lib/validate";
 import { Field } from "./Field";
@@ -258,14 +261,14 @@ function VariantCard({
               <ColorField
                 id={`v-c1-${v.id}`}
                 label="Màu chính"
-                value={v.brand?.primary ?? "#005BAA"}
+                value={v.brand?.primary ?? NEUTRAL_PRIMARY_COLOR}
                 disabled={readOnly}
                 onChange={(hex) => onPatchBrand(v.id, { primary: hex }, `Đổi màu chính của «${v.id}»`)}
               />
               <ColorField
                 id={`v-c2-${v.id}`}
                 label="Màu phụ"
-                value={v.brand?.secondary ?? "#00B0F0"}
+                value={v.brand?.secondary ?? NEUTRAL_SECONDARY_COLOR}
                 disabled={readOnly}
                 onChange={(hex) => onPatchBrand(v.id, { secondary: hex }, `Đổi màu phụ của «${v.id}»`)}
               />

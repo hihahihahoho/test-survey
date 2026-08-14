@@ -50,6 +50,28 @@ export const DEFAULT_CHARACTER_POSES = [
   "bow", "thumbs-up", "fly", "walk", "dance", "present", "view-34", "view-side", "view-back",
 ] as const;
 
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║ MÀU THƯƠNG HIỆU MẶC ĐỊNH CỦA APP — TRUNG TÍNH, KHÔNG PHẢI CỦA AI CẢ      ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ * §BUG-1 (blind-test 2.1.17): mọi ô "Màu chính/Màu phụ" từng khởi tạo bằng cặp
+ * `#005BAA` / `#00B0F0` — nhận diện của MỘT thương hiệu có thật, dán vào dự án của
+ * mọi người dùng. LUẬT: giá trị khởi tạo của một trường THƯƠNG HIỆU chỉ được là (a)
+ * rỗng, hoặc (b) màu trung tính của chính app.
+ *
+ * Hai màu dưới đây là mực/xám của bảng token (`styles/tokens.css`: `fg-strong` sáng
+ * #151516 và `line-strong` tối #9A9A9A) — chúng không nói tên ai cả.
+ *
+ * ĐẶT Ở ĐÂY, KHÔNG Ở `workflow-v4/lib/model.ts`: bốn nơi cần chúng nằm ở bốn feature
+ * khác nhau (workflow, home/Brand, design/Styles, kit-form), và `kit-form/lib/form-model`
+ * ↔ `workflow-v4/lib/model` là một VÒNG import (model đọc `STYLE_AXIS_IDS` của
+ * form-model). `types/contract.ts` là lá — không import gì trong `src/` — nên nó là
+ * chỗ chung duy nhất không tạo vòng. `model.ts` xuất lại hai tên này để chỗ gọi cũ
+ * không phải đổi.
+ */
+export const NEUTRAL_PRIMARY_COLOR = "#151516";
+export const NEUTRAL_SECONDARY_COLOR = "#9A9A9A";
+
 /** Màu nền tách (chroma key) — UI gọi là "Màu nền tách" (§1.3). */
 export const CHROMA_PRESETS = { magenta: "pure vivid magenta #FF00FF", green: "pure vivid green #00FF00" } as const;
 /** Cùng hai màu đó ở dạng hex thuần — cho ô swatch VẼ RA đúng màu đang chọn (§W2A-3).

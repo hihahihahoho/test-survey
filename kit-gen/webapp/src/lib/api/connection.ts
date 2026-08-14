@@ -101,7 +101,10 @@ function baseStatus(o: Partial<ConnectionStatus> & { pill: AgentPill; entryInfo:
     base: o.base ?? null,
     health: o.health ?? null,
     workspaceLabel: o.workspaceLabel ?? o.health?.workspaceLabel ?? null,
-    agentVersion: o.agentVersion ?? o.health?.version ?? null,
+    /* `runtimeVersion` TRƯỚC: đó là version bản phát hành người dùng đối chiếu được.
+       `version` chỉ là đời bộ khung agent (hằng "1.2.0") — giữ làm fallback cho agent
+       đời cũ chưa trả field mới, chứ không phải số để khoe ra ở Cài đặt. */
+    agentVersion: o.agentVersion ?? o.health?.runtimeVersion ?? o.health?.version ?? null,
     instanceLabel: o.health?.instanceLabel ?? null,
     updateCommand: o.health?.updateCommand ?? null,
     needsBridgeProbe: o.needsBridgeProbe === true,

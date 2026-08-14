@@ -1,3 +1,5 @@
+import * as React from "react";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { ImageDropzone } from "@/components/ui/image-dropzone";
 import { Label } from "@/components/ui/label";
@@ -17,6 +19,73 @@ import { Step } from "./BriefStep";
  *  một thứ. Trước đây swatch hardcode `bg-danger` (đỏ) còn câu chú cứng "Magenta
  *  mặc định" — hai chỗ cùng nói sai khi người dùng đổi chroma sang xanh lá. */
 const CHROMA_LABEL = { magenta: "Magenta", green: "Xanh lá" } as const;
+
+/** Trần ảnh mỗi ô thả — cùng số mà `ImageDropzone` dùng để cắt một lượt chọn. */
+const MAX_REFS = 8;
+
+/**
+ * ══ MỘT KHỐI TẢI ẢNH, DÙNG HAI LẦN ═════════════════════════════════════════
+ *
+ * Chủ sản phẩm nhìn hai khối "Ảnh phong cách" / "Ảnh thương hiệu" và gọi đúng ba lỗi:
+ *  ① vùng thả là một băng nét đứt cao lêu nghêu, nút "Chọn ảnh" mỗi khối một chỗ;
+ *  ② ảnh đã tải nằm LƠ LỬNG bên ngoài vùng thả (khung `.dropfield` bị `border-0`);
+ *  ③ card "Màu nền tách" chiếm nửa hàng mà chỉ có một dòng chữ.
+ *
+ * Cách chữa gốc của ①: hai khối là MỘT component dùng hai lần. Chép markup ra hai
+ * chỗ chính là cách hai khối trôi lệch nhau lần trước — và một component thì không
+ * có đường nào lệch được.
+ *
+ * ② được chữa bằng LƯỚI: vùng thả chính là lưới ảnh, mỗi ảnh một ô, và ô CUỐI là
+ * "+ Thêm ảnh" (`ImageDropzone variant="tile"`). Không còn khái niệm "ảnh nằm dưới
+ * vùng thả" để mà trôi. Nút ✕ chỉ hiện khi trỏ/tab vào đúng ảnh đó.
+ *
+ * Logic tải lên KHÔNG đổi một dòng: vẫn `refs.add()` → `POST /api/projects/:id/refs`,
+ * vẫn `ImageDropzone` lọc định dạng/dung lượng, vẫn `RefChips` đọc từ đĩa.
+ */
+function RefUploadBlock({ label, hint, items, ready, fallback, onFiles, onRemove, pending, action, className }: {
+  label: string;
+  hint: string;
+  items: Parameters<typeof RefChips>[0]["items"];
+  ready: boolean;
+  fallback: readonly { name: string }[];
+  onFiles: (files: File[]) => void;
+  onRemove: (name: string) => void;
+  pending: boolean;
+  /** Nút phụ của khối (vd "Chọn từ thư viện"). Vắng ⇒ hàng đầu vẫn giữ nguyên hình. */
+  action?: React.ReactNode;
+  className?: string;
+}) {
+  /* Đĩa là sự thật; chưa đọc được đĩa thì đếm theo bản nháp để con số không nhảy về 0
+     trong lúc công cụ local chưa chạy (§W3-3). */
+  const count = ready ? items.length : fallback.length;
+  const full = count >= MAX_REFS;
+  return (
+    <div className={cn("ref-upload", className)}>
+      <div className="ref-upload-head">
+        <p className="field-label mb-0">{label}</p>
+        <span className="ref-upload-count" aria-label={`${count} trên ${MAX_REFS} ảnh`}>{count}/{MAX_REFS}</span>
+        {action}
+      </div>
+      <div className="dropfield reference-upload">
+        <RefChips items={items} ready={ready} fallback={fallback} onRemove={onRemove} />
+        {/* Đủ trần thì ô "+ Thêm ảnh" TẮT chứ không biến mất: chỗ trống biến mất là
+            người dùng đi tìm xem nút của mình đâu. */}
+        <ImageDropzone
+          multiple
+          variant="tile"
+          showLocalPreview={false}
+          maxFiles={MAX_REFS}
+          disabled={full}
+          label={full ? `Đủ ${MAX_REFS} ảnh` : "Thêm ảnh"}
+          description={hint}
+          state={pending ? "uploading" : "idle"}
+          onFiles={onFiles}
+        />
+      </div>
+      <p className="ref-upload-hint">{hint}</p>
+    </div>
+  );
+}
 
 export function StyleStep() {
   const s = useWorkflowStore();
@@ -82,14 +151,52 @@ export function StyleStep() {
       */}
     <><label className="field-label" htmlFor="style-prompt">Mô tả phong cách</label><Textarea id="style-prompt" rows={5} value={s.stylePrompt} placeholder={STYLE_PROMPT_PLACEHOLDER} onChange={(e) => s.set({ stylePrompt: e.target.value, styleMode: "prompt" })} /></>
     {/**
-      * §W2B-6 — `.dropfield` bọc NGOÀI: chip ảnh nay nằm TRONG khung của vùng thả
-      * thay vì trôi ra dưới nó như rác (ảnh 09/12). Không nhét chip vào trong
-      * `.dropzone` được vì `.dropzone` là `<button>` còn chip mang nút xoá —
-      * `<button>` lồng `<button>` là HTML hỏng. Xem khối chú thích ở globals.css.
+      * §W2B-6 (giữ nguyên luật, đổi hình thái) — thứ hiện ra sau khi thả phải nằm
+      * TRONG khung `.dropfield`, không trôi ra ngoài như rác. Bản trước giữ luật ấy
+      * bằng cách xếp [vùng thả] rồi [chip ảnh] theo chiều dọc trong cùng một khung —
+      * nhưng `.reference-upload` lại gỡ hẳn viền/nền của khung đó, nên trên màn hình
+      * chip vẫn đọc ra là "rác trôi dưới một băng nét đứt". Nay khung có viền thật và
+      * CHÍNH NÓ là lưới ảnh: mỗi ảnh một ô, ô cuối là "+ Thêm ảnh".
+      *
+      * `.dropzone` vẫn là `<button>` nên chip (có nút xoá) KHÔNG được nằm trong nó —
+      * ràng buộc HTML cũ không đổi, và đó là lý do lưới nằm ở lớp `.dropfield` bọc
+      * ngoài chứ không nằm trong chính cái nút.
       */}
-    <div className="upload-row"><div><div className="mb-2 flex items-center justify-between gap-3"><p className="field-label mb-0">Ảnh phong cách</p><SharedReferencePicker group="style" onPick={(file) => addRefs([file], "style")} /></div><div className="dropfield reference-upload"><ImageDropzone multiple showLocalPreview={false} label="Kéo ảnh phong cách vào đây" description="Moodboard, chất liệu và cách thể hiện." state={refs.pending ? "uploading" : refs.groups.inspo.length ? "done" : "idle"} onFiles={(files) => addRefs(files, "style")} /><RefChips items={refs.groups.inspo} ready={refs.ready} fallback={s.styleRefs} onRemove={refs.remove} /></div></div><div className="ref-note"><p className="field-label">Màu nền tách</p>{/* P-SWEEP·7 — swatch VUÔNG đứng INLINE ngay trước tên màu. Bản cũ là đĩa tròn
-      32px có `mb-3`, nằm một mình trên một dòng riêng ⇒ lệch baseline với chữ bên
-      cạnh và là hình tròn duy nhất giữa một trang toàn chữ nhật + hairline. */}<span className="swatch-row"><span className="color-swatch" style={{ background: CHROMA_HEX[s.chroma] }} aria-hidden /><span className="text-body text-fg-muted">{CHROMA_LABEL[s.chroma]} · có thể chỉnh ở bước Xem kết quả.</span></span></div></div>
-    <div className="brand-ref"><p className="field-label">Ảnh thương hiệu</p><div className="dropfield reference-upload"><ImageDropzone multiple showLocalPreview={false} label="Kéo ảnh thương hiệu vào đây" description="Logo, bảng màu hoặc hình ảnh nhận diện." state={refs.pending ? "uploading" : refs.groups.brand.length ? "done" : "idle"} onFiles={(files) => addRefs(files, "brand")} /><RefChips items={refs.groups.brand} ready={refs.ready} fallback={s.brandRefs} onRemove={refs.remove} /></div></div>
+    <div className="upload-row">
+      <RefUploadBlock
+        label="Ảnh phong cách"
+        hint="Moodboard, chất liệu và cách thể hiện."
+        items={refs.groups.inspo}
+        ready={refs.ready}
+        fallback={s.styleRefs}
+        pending={refs.pending}
+        onFiles={(files) => addRefs(files, "style")}
+        onRemove={refs.remove}
+        action={<SharedReferencePicker group="style" onPick={(file) => addRefs([file], "style")} />}
+      />
+      <RefUploadBlock
+        className="brand-ref"
+        label="Ảnh thương hiệu"
+        hint="Logo, bảng màu hoặc hình ảnh nhận diện."
+        items={refs.groups.brand}
+        ready={refs.ready}
+        fallback={s.brandRefs}
+        pending={refs.pending}
+        onFiles={(files) => addRefs(files, "brand")}
+        onRemove={refs.remove}
+      />
+    </div>
+    {/**
+      * MÀU NỀN TÁCH — MỘT HÀNG, KHÔNG PHẢI MỘT CARD.
+      *
+      * Trước đây đây là `.ref-note`: một card chiếm trọn cột phải của hàng tải ảnh để
+      * chứa đúng một dòng chữ đọc-mà-không-bấm-được — nửa màn hình cho một câu chú.
+      * Nay nó là một hàng `.swatch-row` (swatch vuông + chữ) nằm dưới hai khối tải ảnh,
+      * và cột phải trả lại cho khối "Ảnh thương hiệu" để hai khối đồng nhất.
+      *
+      * P-SWEEP·7 — swatch VUÔNG đứng INLINE ngay trước tên màu, không phải đĩa tròn
+      * 32px nằm một mình trên một dòng riêng.
+      */}
+    <p className="swatch-row"><span className="color-swatch" style={{ background: CHROMA_HEX[s.chroma] }} aria-hidden /><span className="text-body text-fg-muted">Màu nền tách: {CHROMA_LABEL[s.chroma]} · có thể chỉnh ở Cài đặt.</span></p>
   </Step>;
 }

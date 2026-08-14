@@ -11,8 +11,10 @@ import { cellLabel, useWorkflowStore, type KitElementSkel } from "../lib/model";
 import { CheckRow } from "../components/CheckRow";
 import { GroupChips } from "../components/GroupChips";
 import { ItemDetailDialog, SkelSizeFields } from "../components/ItemDetail";
+import { SegChoice } from "../components/SegChoice";
 import { useKitsetContract } from "../lib/contract-sync";
-import { itemPromptFor } from "../lib/item-prompt";
+import { isGlowCell, itemPromptFor } from "../lib/item-prompt";
+import { mergeElementSkel } from "../lib/kitset-to-contract";
 import { isPropElement, mergeElements, userUiElements } from "../lib/user-library";
 import { Step } from "./BriefStep";
 
@@ -129,6 +131,13 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
     return map;
   }, [workflow.elements]);
   const detail = detailFile ? catalogue.find((element) => element.file === detailFile) ?? null : null;
+  /* Nền của ô ĐANG ÁP DỤNG = thư viện + lớp đè, trộn bằng đúng hàm của contract. Đọc
+     thẳng `overrides.get(...)?.matte` thì ô nào thư viện đã khai `matte:"glow"` sẵn
+     (element-lib có 1 món) sẽ hiện sai là "Chroma thường" cho tới khi người dùng bấm. */
+  const detailOverride = detail ? overrides.get(detail.file) : undefined;
+  const glow = detail
+    ? isGlowCell(detailOverride ? mergeElementSkel(detail.skel, detailOverride) : detail.skel)
+    : false;
 
   return (
     <Step
@@ -175,8 +184,10 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
           const on = selected.has(element.file);
           const override = overrides.get(element.file);
           /* Silhouette phải vẽ theo kích thước ĐANG ÁP DỤNG, không phải số của thư viện:
-             sửa "Rộng %" mà hình xem trước đứng yên là bảo người ta tin vào con số suông. */
-          const skel = override ? { ...element.skel, ...override } : element.skel;
+             sửa "Rộng %" mà hình xem trước đứng yên là bảo người ta tin vào con số suông.
+             Trộn bằng ĐÚNG hàm mà `resolveKitset()` dùng — không spread tay một bản sao
+             của luật trộn (bản sao đó không biết `matte:"none"` nghĩa là gì). */
+          const skel = override ? mergeElementSkel(element.skel, override) : element.skel;
           const toggle = (
             <button
               type="button"
@@ -257,6 +268,35 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
                 defaults={{ w: detail.skel.w ?? 0.8, h: detail.skel.h ?? 0.8 }}
                 onChange={(patch) => workflow.setElementSkel(detail.file, patch)}
               />
+            </div>
+            {/* NỀN CỦA Ô — lựa chọn thứ hai của popup, ngay dưới kích thước ô.
+                Hai nút loại-trừ-nhau (`SegChoice`, đúng tín hiệu "đang chọn" của cả
+                app) chứ không phải dropdown "Kiểu tách nền / none-glow-glass" của màn
+                cũ (`ElementProps.tsx`): ở trang này người dùng đang chọn NỀN LÚC VẼ,
+                không phải thuật toán tách của slicer. */}
+            <div>
+              <p className="text-label text-fg-strong">Nền tách</p>
+              <p className="mt-1 text-caption text-fg-muted">
+                Ô phát sáng (lửa, tia, hào quang) vẽ trên nền đen thì tách được đúng ánh sáng; nền chroma làm quầng sáng bị xỉn.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Nền tách">
+                <SegChoice
+                  on={!glow}
+                  aria-label="Chroma thường"
+                  /* Thư viện vốn đã là chroma ⇒ XOÁ lớp đè thay vì ghi `"none"`: bản
+                     nháp không nên phình ra vì một giá trị trùng đúng mặc định. */
+                  onClick={() => workflow.setElementSkel(detail.file, { matte: detail.skel.matte === "glow" ? "none" : null })}
+                >
+                  Chroma thường
+                </SegChoice>
+                <SegChoice
+                  on={glow}
+                  aria-label="Đen cho hiệu ứng phát sáng"
+                  onClick={() => workflow.setElementSkel(detail.file, { matte: "glow" })}
+                >
+                  Đen cho hiệu ứng phát sáng
+                </SegChoice>
+              </div>
             </div>
             <div>
               <p className="text-label text-fg-strong">Mô tả gửi cho máy vẽ</p>

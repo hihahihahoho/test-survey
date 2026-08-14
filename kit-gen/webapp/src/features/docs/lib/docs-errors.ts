@@ -17,6 +17,15 @@ export const DOCS_ERROR_CODES = [
   "DOC_READONLY",
   "STORAGE_FULL",
   "STORAGE_UNAVAILABLE",
+  /**
+   * Nội dung bị lớp bảo mật CHẶN (`assertNoSecret`) nên không được ghi.
+   *
+   * Tách khỏi `STORAGE_FULL` vì hai mã này đòi người dùng làm hai việc trái ngược:
+   * "hết chỗ" bảo họ **xoá bớt file** (vô ích ở đây, và họ mất dữ liệu thật), còn mã
+   * này bảo họ **sửa nội dung vừa gõ**. Trước đây `docs-repo-local.ts` gộp cả hai vì
+   * `docsIdbSet` chỉ trả `false` trần — xem `DocsIdbWriteOutcome`.
+   */
+  "WRITE_BLOCKED",
   "NOT_IMPLEMENTED",
 ] as const;
 export type DocsErrorCode = (typeof DOCS_ERROR_CODES)[number];
@@ -31,6 +40,10 @@ const MESSAGES: Record<DocsErrorCode, string> = {
   DOC_READONLY: "Đây là file hệ thống nên không sửa hay xoá được.",
   STORAGE_FULL: "Máy đã hết chỗ lưu nháp. Xoá bớt file cũ rồi thử lại.",
   STORAGE_UNAVAILABLE: "Trình duyệt đang không cho lưu nháp trên máy này. Bạn vẫn xem được, nhưng thay đổi sẽ không được giữ.",
+  /* KHÔNG nêu tên luật, không trích lại đoạn đã chặn: câu này hiện ở thân UI, mà thứ bị
+     chặn thường CHÍNH LÀ giá trị nhạy cảm. Chỉ nói loại nội dung để người dùng tìm ra
+     chỗ cần sửa. */
+  WRITE_BLOCKED: "Nội dung có đoạn giống khoá bí mật hoặc đường dẫn trong máy nên không được lưu. Bỏ đoạn đó rồi lưu lại.",
   NOT_IMPLEMENTED: "Tính năng này chưa mở. Bản nháp của bạn vẫn nằm trên máy.",
 };
 

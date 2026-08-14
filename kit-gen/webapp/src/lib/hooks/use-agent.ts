@@ -12,6 +12,7 @@ import { bridgeProbe, checkingStatus, createProbeSchedule, diagnose, type Bridge
 import { qk } from "./keys";
 import { STALE } from "./query-client";
 import { useUpdateInstall } from "../update/install-store";
+import { UPDATE_FOCUS_THROTTLE_MS, UPDATE_POLL_INTERVAL_MS } from "../update/watch";
 
 /**
  * Trạng thái kết nối + nhịp probe backoff 1.5→3→6→15s (arch §5.3).
@@ -117,21 +118,31 @@ export function useDoctor(opts: { enabled?: boolean; refresh?: boolean } = {}) {
  * "Im lặng" là hợp đồng, không phải mô tả: `retry:false` ⇒ mất mạng KHÔNG thử lại,
  * không toast, không banner — lỗi chỉ làm `data` undefined và nút vẫn ẩn.
  *
- * ĐÚNG MỘT LẦN MỖI PHIÊN: `staleTime` 12h giữ dữ liệu "còn tươi", `gcTime` 24h giữ nó
- * sống qua lúc mọi component dùng hook unmount (đổi màn), và `refetchOnMount`/
- * `refetchOnWindowFocus` tắt để quay lại tab không sinh request mới. Nút [Kiểm tra
- * cập nhật] ở Cài đặt → Giới thiệu vẫn ép được bằng `refetch()`.
+ * KHÔNG CÒN "đúng một lần mỗi phiên": app này mở cả ngày, và bản vá phát hành lúc 10h
+ * mà chỉ tới tay người dùng khi họ tình cờ bấm F5 thì coi như không phát hành. Chính
+ * sách hỏi lại (nhịp 30 phút · sàn 5 phút cho lần quay lại tab) và lý do từng con số
+ * nằm ở `lib/update/watch.ts` — ở đây chỉ CẮM nó vào query.
+ *
+ * Ba thứ vẫn giữ nguyên vì chúng là cái giữ cho "im lặng" đúng là im lặng:
+ *  · `retry:false` — mất mạng KHÔNG thử lại, không toast, không banner;
+ *  · `refetchOnMount:false` — đổi màn/mở popover KHÔNG sinh request; freshness là việc
+ *    của nhịp + focus, không phải của việc điều hướng trong app;
+ *  · `refetchIntervalInBackground` để mặc định (false) — tab ẩn/máy ngủ thì nhịp không
+ *    tick, không có chuyện thức dậy nhận một tràng request dồn.
+ * Nút [Kiểm tra cập nhật] ở Cài đặt → Giới thiệu vẫn ép được bằng `refetch()`.
  */
 export function useUpdateCheck(opts: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: qk.update(),
     queryFn: () => api.system.checkUpdate(),
     enabled: opts.enabled ?? true,
-    staleTime: 12 * 60 * 60 * 1000,
+    /* staleTime CHÍNH LÀ sàn chống dội của refetch-on-focus: react-query chỉ hỏi lại khi
+       dữ liệu đã cũ, nên alt-tab qua lại liên tục cũng chỉ tốn 1 request mỗi 5 phút. */
+    staleTime: UPDATE_FOCUS_THROTTLE_MS,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchInterval: false,
+    refetchInterval: UPDATE_POLL_INTERVAL_MS,
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     retry: false,
   });
 }
