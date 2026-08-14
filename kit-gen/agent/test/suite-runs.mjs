@@ -7,6 +7,7 @@ import {
   makeClient, fakeDoctor, CLIENT, PAGES, PORT,
 } from "./harness.mjs"
 import { createAgent } from "../server.mjs"
+import { buildCommand } from "../lib/engine.mjs"
 
 export async function run({ api, wsRoot, agentDir, pid }) {
   // ─────────────────────────────────────────── 9. RUNS
@@ -197,6 +198,73 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     ok(!(await pathExists(join(FIXTURES, "engine-fake", "raw"))), "KHÔNG ghi raw/ vào engine gốc")
     ok(!(await pathExists(join(FIXTURES, "engine-fake", "kits"))), "KHÔNG ghi kits/ vào engine gốc")
     await a3("DELETE", `/api/projects/${gid}`)
+  })
+
+  /* ── CẮT LŨY TIẾN (15/08) ─────────────────────────────────────────────────
+     Chủ sản phẩm ngồi xem một lượt gen THẬT: 10 tấm, mỗi tấm vài phút, và KHÔNG có
+     gì hiện ra cho tới khi tấm cuối xong — vì cả ba việc hậu kỳ đều xếp sau lượt:
+     cắt (một lượt slice.py cho cả lượt), thumbnail (sinh lười lúc web hỏi), ảnh bìa
+     (sau `run.finished`). Tệ nhất là ô "Đã xong" trong tab Ảnh gốc lại là ô ĐEN:
+     web đọc `job.artifact.path`, mà ô đó chỉ được điền trong `settleGenJobs()` —
+     tức là sau khi CẢ pha gen đóng.
+     Ca này khoá lời hứa mới: mỗi tấm tự đi hết chu trình của nó, NGAY GIỮA LƯỢT. */
+  await it("[cắt lũy tiến] tấm xong sớm ra ngay: artifact + cắt + thumbnail GIỮA lượt, không đợi hết run", async () => {
+    /* argv của lượt cắt hẹp là HỢP ĐỒNG với slice.py thật (`parse_cli`): sai một chữ
+       ở cờ là engine cắt CẢ TẤM thay vì một tấm, mà test bằng engine giả sẽ không thấy. */
+    const narrow = buildCommand("slice", "/tmp/p", { variants: ["tet"], sheets: ["main"] })
+    eq(narrow.args.slice(-2), ["tet", "--sheet=main"], "argv cắt hẹp")
+    eq(buildCommand("slice", "/tmp/p", { variants: ["tet"] }).args.slice(-1), ["tet"],
+      "không truyền sheets ⇒ argv y hệt bản cũ (pha cắt tổng không đổi)")
+
+    const { api: a9 } = await agentWithEngine("engine-fake")
+    const created = await a9("POST", "/api/projects", {
+      body: { name: "Cat luy tien", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
+    })
+    const gid = created.json.project.id
+    const run = await a9("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", maxJobs: 2, autoSliceAfterGen: true } })
+    eq(run.status, 202, "run 202")
+    const rid = run.json.runId
+
+    /* ① BẰNG CHỨNG SỐNG: giữa lượt (run vẫn "running") đã có tấm mang artifact.
+       Đây chính là ô đen "Đã xong" của tab Ảnh gốc — nó đen vì `artifact` còn null. */
+    let midRun = null
+    await waitFor(async () => {
+      const r = (await a9("GET", `/api/runs/${rid}`)).json
+      const ready = r.jobs.find(j => j.status === "ok" && j.artifact?.path)
+      if (ready && (r.status === "running" || r.status === "queued")) {
+        midRun = { job: ready.job, path: ready.artifact.path, status: r.status }
+        return true
+      }
+      return false
+    }, 20000, "artifact xuất hiện GIỮA lượt chạy")
+    ok(midRun, "phải bắt được artifact giữa lượt")
+    // …và ảnh ĐỌC ĐƯỢC ngay lúc đó, cả bản đầy đủ lẫn bản thu nhỏ của lưới
+    const mid = await a9("GET", `/api/projects/${gid}/files/${midRun.path}`)
+    eq(mid.status, 200, "ảnh của tấm xong sớm đọc được ngay giữa lượt")
+
+    const stream = await a9("GET", `/api/runs/${rid}/stream?from=0`)      // đóng khi run.finished
+    const evs = stream.text.trim().split("\n").filter(Boolean).map(l => JSON.parse(l))
+    const ready = evs.filter(e => e.type === "sheet.ready")
+    eq(ready.length, 2, "mỗi tấm xong có đúng một sheet.ready (3 tấm, 1 tấm lỗi)")
+    ok(ready.every(e => e.job && e.variant && e.sheet), "sheet.ready nêu job/variant/sheet")
+    ok(ready.every(e => e.artifact?.path), "sheet.ready mang đường dẫn ảnh để web nạp thẳng")
+    ok(ready.every(e => e.sliced?.ok), `mỗi tấm được cắt ngay: ${JSON.stringify(ready.map(e => e.sliced))}`)
+
+    /* ② THỨ TỰ mới là thứ chứng minh "ra sớm": sheet.ready của tấm ĐẦU phải tới
+       TRƯỚC khi tấm CUỐI gen xong, và trước cả pha cắt tổng. */
+    const doneEvents = evs.filter(e => e.type === "job.done")
+    ok(ready[0].seq < doneEvents[doneEvents.length - 1].seq,
+      "tấm đầu phải xong chu trình TRƯỚC khi tấm cuối gen xong (nếu không thì vẫn là cắt cuối lượt)")
+    const slicePhase = evs.find(e => e.type === "phase.changed" && e.phase.name === "slice")
+    ok(slicePhase && ready.every(e => e.seq < slicePhase.seq), "sheet.ready phải tới trước pha cắt tổng")
+
+    /* ③ LƯỚI AN TOÀN cuối lượt KHÔNG được phá thứ đã cắt: manifest vẫn đủ cả hai tấm
+       (đây cũng là ca chống 'lượt cắt hẹp sau ghi đè mất phần của lượt trước'). */
+    const kit = await a9("GET", `/api/projects/${gid}/kit?variant=tet`)
+    eq(kit.status, 200, "kit 200")
+    const sheets = [...new Set(kit.json.files.map(f => f.sheet))].sort()
+    eq(sheets, ["main", "tall"], "manifest giữ đủ mọi tấm đã cắt, không tấm nào bị ghi đè mất")
+    await a9("DELETE", `/api/projects/${gid}`)
   })
 
   /* ── BACKLOG #22 ──────────────────────────────────────────────────────────

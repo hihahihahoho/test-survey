@@ -134,7 +134,7 @@ export async function materializeStyles(projectDirAbs, contract, onlyJobs = null
 }
 
 /** argv cho từng pha. Client chỉ gửi DANH TỪ; argv do agent dựng, không có chuỗi shell nào của client. */
-export function buildCommand(kind, projectDirAbs, { variants = [], maxJobs = 4, imgHome = null }) {
+export function buildCommand(kind, projectDirAbs, { variants = [], sheets = null, maxJobs = 4, imgHome = null }) {
   const env = {}
   if (kind === "gen") {
     env.MAXJOBS = String(maxJobs)
@@ -151,7 +151,11 @@ export function buildCommand(kind, projectDirAbs, { variants = [], maxJobs = 4, 
     return { cmd: b.cmd, args: b.args, env: { ...env, ...b.env } }
   }
   if (kind === "slice") {
-    const p = pythonCommand([join(projectDirAbs, "slice.py"), ...variants])
+    /* `--sheet=<id>` = CẮT LŨY TIẾN (slice.py: parse_cli). Không truyền `sheets` thì
+       argv giống hệt bản cũ ⇒ pha cắt tổng cuối lượt không đổi một chữ. Chỉ nhận
+       DANH TỪ có sẵn trong contract (caller là run-handle, không phải client). */
+    const only = Array.isArray(sheets) && sheets.length ? sheets.map(s => `--sheet=${s}`) : []
+    const p = pythonCommand([join(projectDirAbs, "slice.py"), ...variants, ...only])
     return { cmd: p.cmd, args: p.args, env }
   }
   if (kind === "skeleton") {

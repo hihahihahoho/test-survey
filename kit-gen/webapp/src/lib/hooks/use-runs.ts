@@ -210,6 +210,14 @@ export function useRunStream(runId: string | null, opts: { enabled?: boolean } =
         qc.setQueryData<Run>(qk.runs.detail(runId), (old) => (old ? applyEvent(old, ev) : old));
         return;
       }
+      if (ev.type === "sheet.ready") {
+        // Tấm này đã snapshot + cắt xong trên đĩa GIỮA lượt: gắn artifact vào job
+        // (ô "Đã xong" hiện ảnh ngay) và mời lại kho kit vì asset cắt đã đổi.
+        qc.setQueryData<Run>(qk.runs.detail(runId), (old) => (old ? applyEvent(old, ev) : old));
+        const projectId = qc.getQueryData<Run>(qk.runs.detail(runId))?.projectId;
+        if (projectId) void qc.invalidateQueries({ queryKey: qk.kit.all(projectId) });
+        return;
+      }
       if (ev.type === "run.finished") {
         void qc.invalidateQueries({ queryKey: qk.runs.detail(runId) });
         const projectId = qc.getQueryData<Run>(qk.runs.detail(runId))?.projectId;
@@ -312,6 +320,14 @@ export function applyEvent(run: Run, ev: StreamEvent): Run {
     case "phase.changed": {
       const e = ev as Extract<StreamEvent, { type: "phase.changed" }>;
       return { ...run, seq: ev.seq, phase: e.phase };
+    }
+    case "sheet.ready": {
+      const e = ev as Extract<StreamEvent, { type: "sheet.ready" }>;
+      return {
+        ...run,
+        seq: ev.seq,
+        jobs: run.jobs.map((j) => (j.job === e.job ? { ...j, artifact: e.artifact ?? j.artifact ?? null } : j)),
+      };
     }
     default:
       return run;

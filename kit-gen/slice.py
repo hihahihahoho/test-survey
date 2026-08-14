@@ -744,6 +744,17 @@ def asset_blend(skel):
 
 KEY_TRIM_DIST = 90       # tổng |ΔR|+|ΔG|+|ΔB| tới màu key để coi pixel là "nền key"
 KEY_TRIM_LIMIT = 3       # gọt viền key tối đa 1/3 ô mỗi phía (viền model chừa dày tuỳ hứng)
+KEY_TINT_SPILL = 40      # mức nhiễm key (min(kênh CAO) − max(kênh THẤP)) để coi là ÁM key
+KEY_TINT_MIN_PTS = 14    # 14/16 điểm ám key thì cả cột/hàng đó là mép răng cưa, không phải tranh
+
+
+def key_spill_px(px, key_ax):
+    """Mức nhiễm màu key của MỘT pixel: min(kênh CAO) − max(kênh THẤP) (xem key_axis).
+    Magenta → min(r,b) − g; green → g − max(r,b). Càng lớn càng ám key.
+    Bản cho pixel thuần Python — `key_spill()` ở trên là bản numpy cho cả mảng; hai
+    hàm CÙNG một công thức, tách tên để không hàm nào che hàm nào."""
+    hi, lo = key_ax
+    return min(px[i] for i in hi) - max(px[i] for i in lo)
 
 
 def trim_flat_cell(cell_rgb, key=None):
@@ -781,21 +792,84 @@ def trim_flat_cell(cell_rgb, key=None):
                 if sum(abs(px[x, y][k] - key[k]) for k in range(3)) <= KEY_TRIM_DIST)
         return n >= 15          # 15/16 điểm là nền key (chừa 1 điểm nhiễu góc)
 
+    def tinted(pts):
+        """MÉP RĂNG CƯA giữa dải key và tranh: pixel TRỘN nửa key nửa tranh.
+
+        Đo thật trên raw 15/08 (dự án hello, tấm `nen` ô 26-bg-play): sau khi `keyish`
+        gọt hết 6 cột magenta đặc, cột kế tiếp là (135,21,121) — cách key 277 đơn vị
+        nên `keyish` KHÔNG bắt, `flat` cũng không (nó biến thiên dọc), thế là nó ở lại
+        và thành ĐÚNG cái sọc tím người dùng nhìn thấy khi dán sang Figma.
+        Nó không phải tranh: tranh không bao giờ mang trục màu key (prompt cấm màu key
+        trong artwork), nên đo bằng `key_spill` — mức nhiễm key — chứ không đo khoảng
+        cách tới key. Cột tranh thật đo được spill ≤ 0; cột mép đo được ~100."""
+        if key_ax is None:
+            return False
+        n = sum(1 for x, y in pts if key_spill_px(px[x, y], key_ax) > KEY_TINT_SPILL)
+        return n >= KEY_TINT_MIN_PTS
+
+    key_ax = key_axis(key) if key else None
     lim_x, lim_y = W // 8, H // 8
     kx, ky = W // KEY_TRIM_LIMIT, H // KEY_TRIM_LIMIT
     l = 0
-    while (l < lim_x and flat(col_pts(l))) or (l < kx and keyish(col_pts(l))): l += 1
+    while (l < lim_x and flat(col_pts(l))) or (l < kx and (keyish(col_pts(l)) or tinted(col_pts(l)))): l += 1
     r = W
-    while (r > W - lim_x and flat(col_pts(r - 1))) or (r > W - kx and keyish(col_pts(r - 1))): r -= 1
+    while (r > W - lim_x and flat(col_pts(r - 1))) or (r > W - kx and (keyish(col_pts(r - 1)) or tinted(col_pts(r - 1)))): r -= 1
     t = 0
-    while (t < lim_y and flat(row_pts(t))) or (t < ky and keyish(row_pts(t))): t += 1
+    while (t < lim_y and flat(row_pts(t))) or (t < ky and (keyish(row_pts(t)) or tinted(row_pts(t)))): t += 1
     b = H
-    while (b > H - lim_y and flat(row_pts(b - 1))) or (b > H - ky and keyish(row_pts(b - 1))): b -= 1
+    while (b > H - lim_y and flat(row_pts(b - 1))) or (b > H - ky and (keyish(row_pts(b - 1)) or tinted(row_pts(b - 1)))): b -= 1
     # Ô toàn key (model bỏ trắng ô) → mọi mép đều bị gọt hết; trả nguyên ô để
     # bước sau còn phát hiện được thay vì crash vì bbox rỗng.
     if l >= r or t >= b:
         return 0, 0, W, H
     return l, t, r, b
+
+
+def erase_key_edge(rgba, key, spill=KEY_TINT_SPILL, limit=KEY_TRIM_LIMIT):
+    """Xoá vệt key CÒN SÓT ở mép ô full-bleed, loang vào từ 4 mép.
+
+    Vì sao còn sót sau `trim_flat_cell`: hàm đó gọt theo CỘT/HÀNG NGUYÊN. Ranh giới
+    giữa dải key và tranh do model vẽ ra thì RĂNG CƯA — cột ngoài cùng còn lại có thể
+    nửa trên là tranh, nửa dưới là key. Gọt thêm một cột nữa là ăn vào tranh; để
+    nguyên là còn sọc. Nên phần răng cưa phải xử lý theo PIXEL, không theo cột.
+
+    Loang từ mép vào và chỉ đi qua pixel ÁM KEY (`key_spill_px > spill`) ⇒ dừng ngay
+    ở tranh. Tranh không mang màu key (prompt cấm màu key trong artwork), nên phép
+    loang này không có đường ăn vào giữa ảnh; ngoài ra còn chặn cứng trong vành
+    1/`limit` ô mỗi phía — cùng hạn mức với lượt gọt theo màu.
+
+    Trả số pixel đã xoá."""
+    ax = key_axis(key) if key else None
+    if ax is None:
+        return 0
+    W, H = rgba.size
+    px = rgba.load()
+    bx, by = max(1, W // limit), max(1, H // limit)
+    seen = bytearray(W * H)
+    q = deque()
+
+    def push(x, y):
+        if 0 <= x < W and 0 <= y < H and not seen[y * W + x]:
+            if x >= bx and x < W - bx and y >= by and y < H - by:
+                return                      # ngoài vành mép: không đụng tới
+            seen[y * W + x] = 1
+            if px[x, y][3] and key_spill_px(px[x, y], ax) > spill:
+                q.append((x, y))
+
+    for x in range(W):
+        push(x, 0); push(x, H - 1)
+    for y in range(H):
+        push(0, y); push(W - 1, y)
+    n = 0
+    while q:
+        x, y = q.popleft()
+        r, g, b, a = px[x, y]
+        if not a:
+            continue
+        px[x, y] = (r, g, b, 0)
+        n += 1
+        push(x - 1, y); push(x + 1, y); push(x, y - 1); push(x, y + 1)
+    return n
 
 
 def pack_atlas(items, max_w=2048):
@@ -831,13 +905,107 @@ def pack_atlas(items, max_w=2048):
                    "meta": {"image": "atlas.png", "size": {"w": max_w, "h": atlas_h}, "scale": "1"}}
 
 
+# ── CLI: tham số + ổ khoá manifest ───────────────────────────────────────────
+# CẮT LŨY TIẾN (14/08 → 15/08). Trước: cả lượt gen xong 10 tấm mới cắt MỘT LẦN, người
+# dùng ngồi nhìn màn hình trống 15 phút. Nay agent gọi slice.py NGAY khi một tấm gen
+# xong, với đúng một style + đúng một sheet:
+#     python3 slice.py tet --sheet=main
+# Nên CLI có thêm `--sheet=<id>` (lặp được) / `--sheets=a,b`. Không truyền = cắt mọi
+# sheet như cũ (pha "lưới an toàn" cuối lượt vẫn chạy y nguyên).
+#
+# Vì sao KHÔNG thu hẹp bằng styles.json như agent vẫn làm với gen.sh: styles.json là
+# file DÙNG CHUNG của cả lượt (gen.sh đang đọc nó), viết đè nó giữa lượt để lọc sheet
+# là sửa hợp đồng dưới chân tiến trình khác. Lọc bằng argv thì không ai bị ảnh hưởng.
+
+
+def parse_cli(argv):
+    """Tách argv thành (tập style, tập sheet|None). Không có cờ = hành vi cũ y nguyên."""
+    styles, sheets = set(), set()
+    for a in argv:
+        if a.startswith("--sheet="):
+            sheets.add(a[len("--sheet="):].strip())
+        elif a.startswith("--sheets="):
+            sheets.update(s.strip() for s in a[len("--sheets="):].split(",") if s.strip())
+        elif a.startswith("-"):
+            raise SystemExit(f"slice.py: tham số lạ {a!r} (chỉ có --sheet= / --sheets=)")
+        else:
+            styles.add(a)
+    return styles, (sheets or None)
+
+
+# ── Ổ KHOÁ + GHI NGUYÊN TỬ cho kits/manifest.json ────────────────────────────
+# `manifest.json` được ĐỌC ở đầu lượt và GHI ở cuối lượt (khối merge). Với cắt lũy
+# tiến, hai tấm gen xong cách nhau vài giây sẽ chạy hai lượt slice CHỒNG NHAU, và
+# hai lượt đó cùng đọc–sửa–ghi một file: lượt về sau ghi đè mất phần của lượt trước
+# (lost update) — đúng cái mà khối merge sinh ra để tránh.
+# Hai lớp bảo vệ, cả hai đều cần:
+#   ① Ổ KHOÁ HỆ ĐIỀU HÀNH (flock/msvcrt) giữ từ TRƯỚC lúc đọc tới SAU lúc ghi ⇒
+#      đọc–sửa–ghi là một khối không chia cắt được. Khoá theo tiến trình: tiến trình
+#      chết là hệ điều hành tự nhả, không có khoá ma treo vĩnh viễn.
+#   ② GHI NGUYÊN TỬ (tmp + os.replace) ⇒ agent đọc manifest giữa chừng không bao giờ
+#      vớ phải file cụt (`GET /api/projects/:id/kit` đọc thẳng file này).
+MANIFEST_LOCK_TIMEOUT = 900.0
+
+try:
+    import fcntl as _fcntl
+except ImportError:                       # Windows
+    _fcntl = None
+try:
+    import msvcrt as _msvcrt
+except ImportError:                       # POSIX
+    _msvcrt = None
+
+
+def _try_lock(fd):
+    """True nếu giành được khoá độc quyền, False nếu tiến trình khác đang giữ."""
+    try:
+        if _fcntl is not None:
+            _fcntl.flock(fd, _fcntl.LOCK_EX | _fcntl.LOCK_NB)
+        elif _msvcrt is not None:
+            os.lseek(fd, 0, os.SEEK_SET)
+            _msvcrt.locking(fd, _msvcrt.LK_NBLCK, 1)
+        return True
+    except OSError:
+        return False
+
+
+def acquire_manifest_lock(kits_dir, timeout=MANIFEST_LOCK_TIMEOUT, poll=0.05):
+    """Giữ khoá tới khi tiến trình thoát (không cần nhả tay). Trả fd, hoặc None nếu
+    nền tảng không có cơ chế khoá nào (khi đó vẫn chạy — chỉ mất lớp bảo vệ ①)."""
+    import time
+    os.makedirs(kits_dir, exist_ok=True)
+    if _fcntl is None and _msvcrt is None:
+        return None
+    fd = os.open(os.path.join(kits_dir, ".manifest.lock"), os.O_RDWR | os.O_CREAT, 0o644)
+    deadline = time.monotonic() + timeout
+    while not _try_lock(fd):
+        if time.monotonic() >= deadline:
+            os.close(fd)
+            raise SystemExit("slice.py: chờ quá lâu ổ khoá kits/manifest.json — "
+                             "còn một lượt cắt khác đang chạy trong cùng thư mục")
+        time.sleep(poll)
+    return fd
+
+
+def dump_manifest(mpath, manifest):
+    """Ghi manifest NGUYÊN TỬ: người đọc thấy bản cũ trọn vẹn hoặc bản mới trọn vẹn."""
+    tmp = mpath + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, mpath)
+
+
 # ── CLI ──────────────────────────────────────────────────────────────────────
 # Thân script nằm dưới guard `__main__` để test (và mọi công cụ đo) IMPORT được
 # các hàm ở trên mà KHÔNG chạy cắt ghi đè kits/. Hành vi CLI không đổi.
 if __name__ == "__main__":
     # filter CLI: `python3 slice.py ipay tet` chỉ cắt các style đó (manifest merge, không mất style khác)
-    ONLY = set(sys.argv[1:])
+    ONLY, ONLY_SHEETS = parse_cli(sys.argv[1:])
     mpath = os.path.join(HERE, "kits", "manifest.json")
+    # Khoá TRƯỚC khi đọc: mọi lượt slice trong cùng project xếp hàng, không ai ghi đè ai.
+    _LOCK_FD = acquire_manifest_lock(os.path.join(HERE, "kits"))
     manifest = json.load(open(mpath)) if os.path.exists(mpath) else {"styles": {}}
     manifest.setdefault("styles", {})
     for style in cfg["styles"]:
@@ -858,6 +1026,8 @@ if __name__ == "__main__":
         for sh in cfg["sheets"]:
             if sh.get("styles") and sid not in sh["styles"]:
                 continue                     # sheet riêng của style khác (vd pose-<char>)
+            if ONLY_SHEETS and sh["id"] not in ONLY_SHEETS:
+                continue                     # cắt lũy tiến: chỉ tấm vừa gen xong
             job = f"{sid}-{sh['id']}"
             src_path = os.path.join(HERE, "raw", f"{job}.png")
             if not os.path.exists(src_path):
@@ -990,6 +1160,18 @@ if __name__ == "__main__":
             if dropped:
                 print(f"  · {job}: bỏ {dropped} đốm rơi vãi sát biên ô")
 
+            # ── MÀU KEY DÙNG ĐỂ GỌT MÉP Ô FULL-BLEED ───────────────────────────
+            # BUG 15/08 (chủ sản phẩm dán sang Figma thấy SỌC MAGENTA dọc mép trái ảnh
+            # nền): bản cũ chỉ truyền key cho `trim_flat_cell` khi `is_key_color(bg)`,
+            # mà `bg` là màu ĐO Ở VIỀN NGOÀI CẢ TẤM. Tấm `nen` toàn ô full-bleed nên
+            # viền ngoài là TRANH, không phải key ⇒ `is_key_color` False ⇒ key=None ⇒
+            # lượt gọt theo màu KHÔNG CHẠY MỘT LẦN NÀO, chỉ còn lượt gọt "phẳng", và
+            # nó dừng ngay ở cột magenta đầu tiên có biến thiên dọc (đo được: cột x=5
+            # của ô 26-bg-play, (231,8,238)→(226,33,217), Δg=27 > 18).
+            # Sự thật là màu key VẪN BIẾT: nó được KHAI BÁO trong styles.json (`bg`).
+            # Ưu tiên màu ĐO ĐƯỢC (đúng sắc độ model vẽ ra) rồi mới tới màu khai báo.
+            trim_key = (bg[0] if (bg is not None and is_key_color(bg))
+                        else (KEY_COLORS[want_key] if want_key else None))
             os.makedirs(out_dir, exist_ok=True)
             n_ok = 0
             # contentSafe cho phép decor nằm ngoài mặt element nên cần vành rộng
@@ -1011,12 +1193,16 @@ if __name__ == "__main__":
                     # còn ở dải gap → matte trên artwork là tự phá ảnh (đã dính: nền
                     # blur bị ăn sạch). Crop nguyên ô đục 100%, gọt dải gap phẳng ở mép.
                     cell_rgb = raw_img.convert("RGB").crop((cx0, cy0, cx0 + CW, cy0 + CH))
-                    fl, ft, fr, fb = trim_flat_cell(
-                        cell_rgb, key=bg[0] if (bg is not None and is_key_color(bg)) else None)
+                    fl, ft, fr, fb = trim_flat_cell(cell_rgb, key=trim_key)
                     if (fl, ft, fr, fb) != (0, 0, CW, CH):
                         print(f"  · {job}/{comp['file']}: gọt viền nền "
                               f"L{fl} T{ft} R{CW - fr} B{CH - fb}px")
-                    canvas.paste(cell_rgb.crop((fl, ft, fr, fb)).convert("RGBA"), (BX + fl, BY + ft))
+                    cell_crop = cell_rgb.crop((fl, ft, fr, fb)).convert("RGBA")
+                    # Răng cưa còn sót sau khi gọt theo cột/hàng → xoá theo PIXEL.
+                    n_key = erase_key_edge(cell_crop, trim_key)
+                    if n_key:
+                        print(f"  · {job}/{comp['file']}: xoá {n_key}px mép còn ám màu key")
+                    canvas.paste(cell_crop, (BX + fl, BY + ft))
                 else:
                     box = cell_boxes[idx]
                     if box is None:
@@ -1237,6 +1423,5 @@ if __name__ == "__main__":
         print(f"— {sid}: {total}/{want} asset" +
               (f", Ô TRỐNG: {entry['empty_cells']}" if entry["empty_cells"] else ""))
 
-    json.dump(manifest, open(os.path.join(HERE, "kits", "manifest.json"), "w"),
-              indent=2, ensure_ascii=False)
+    dump_manifest(mpath, manifest)
     print("→ kits/manifest.json")

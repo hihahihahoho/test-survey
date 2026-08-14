@@ -847,6 +847,13 @@ export const streamEventSchema = z.union([
     /** #22 — cùng câu gộp với `Run.failSummary`, để màn đang stream khỏi phải GET lại. */
     failSummary: z.string().nullish(),
   }),
+  z.looseObject({
+    /** Lũy tiến per-sheet: tấm này đã snapshot + cắt + thumbnail xong GIỮA lượt. */
+    ...evBase, type: z.literal("sheet.ready"), job: z.string(),
+    variant: z.string().optional(), sheet: z.string().optional(),
+    artifact: z.looseObject({ path: z.string(), bytes: z.number().optional() }).nullish(),
+    sliced: z.looseObject({ ok: z.boolean().optional(), code: z.number().nullish(), durationMs: z.number().optional() }).nullish(),
+  }),
   z.looseObject({ ...evBase, type: z.literal("heartbeat") }),
   /** nhánh cuối: event chưa biết — vẫn parse được `seq` để không mất con trỏ stream. */
   z.looseObject({ ...evBase, type: z.string() }),
@@ -854,7 +861,7 @@ export const streamEventSchema = z.union([
 export type StreamEvent = z.infer<typeof streamEventSchema>;
 
 export const STREAM_EVENT_TYPES = [
-  "run.started", "job.started", "job.log", "job.done",
+  "run.started", "job.started", "job.log", "job.done", "sheet.ready",
   "phase.changed", "progress", "workspace.changed", "run.finished", "heartbeat",
 ] as const;
 

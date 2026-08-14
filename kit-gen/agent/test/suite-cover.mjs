@@ -195,6 +195,37 @@ export async function run({ api, wsRoot, agentDir }) {
     await a("DELETE", `/api/projects/${id}`)
   })
 
+  /* 15/08 — BÌA VẼ SỚM. Trước: `finish()` mới kích, tức là bìa bắt đầu SAU khi cả lượt
+     gen (và pha cắt) đã xong — người dùng chờ 15 phút mới thấy thẻ dự án có ảnh. Nay
+     kích ngay khi có tấm ĐẦU TIÊN xong: đủ nguyên liệu nhận diện, và bìa là job PHỤ
+     chạy NGOÀI hàng đợi tạo ảnh nên nó không cướp suất của tấm nào.
+     QUOTA: vẫn ĐÚNG MỘT lượt codex cho cả run (`ALREADY_HAS_COVER`/`ALREADY_RUNNING`
+     chặn lượt thứ hai) — ca dưới đo bằng số lần cover.sh thật sự chạy. */
+  await it("bìa được kích NGAY KHI tấm đầu xong, không đợi hết lượt — và vẫn chỉ MỘT lượt vẽ", async () => {
+    const a = await agentWithEngine("engine-fake")
+    const created = await a("POST", "/api/projects", {
+      body: { name: "Bia som", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
+    })
+    const id = created.json.project.id
+    const run = await a("POST", `/api/projects/${id}/runs`, { body: { kind: "gen", maxJobs: 2, autoSliceAfterGen: false } })
+    eq(run.status, 202, "run 202")
+
+    let sawWhileRunning = false
+    await waitFor(async () => {
+      const c = (await a("GET", `/api/projects/${id}/cover`)).json.cover.status
+      const r = (await a("GET", `/api/runs/${run.json.runId}`)).json.status
+      if (c !== "none" && (r === "running" || r === "queued")) sawWhileRunning = true
+      return sawWhileRunning || c === "ok"
+    }, 20000, "bìa bắt đầu vẽ")
+    ok(sawWhileRunning, "bìa phải bắt đầu KHI LƯỢT CÒN ĐANG CHẠY, không phải sau khi kết thúc")
+
+    await a("GET", `/api/runs/${run.json.runId}/stream?from=0`)      // giữ tới run.finished
+    await waitFor(async () => (await a("GET", `/api/projects/${id}/cover`)).json.cover.status === "ok", 15000, "vẽ xong")
+    const meta = JSON.parse(await readFile(join(wsRoot, "projects", id, "cover", "cover.json"), "utf8"))
+    eq(meta.status, "ok", "một lượt vẽ duy nhất, kết thúc bằng ok")
+    await a("DELETE", `/api/projects/${id}`)
+  })
+
   await it("KHÔNG vẽ đè lên ảnh bìa user tự chọn, và KHÔNG vẽ lại khi đã có bìa", async () => {
     const a = await agentWithEngine("engine-fake")
     const created = await a("POST", "/api/projects", {

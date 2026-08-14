@@ -38,5 +38,11 @@ for j in $jobs; do
   esac
   printf 'PNGFAKE' > "raw/${j}.png"
   echo "OK  ${j}  8.0K"
+  # NHỊP GIỮA HAI TẤM. Engine thật mất hàng PHÚT cho mỗi tấm — cả giá trị của "cắt lũy
+  # tiến" nằm ở khoảng trống đó. Fixture chạy trong 5ms thì mọi thứ xảy ra "cùng lúc"
+  # và test không phân biệt nổi bản cắt-ngay với bản cắt-cuối-lượt. 0.4s là đủ để chu
+  # trình per-sheet (cắt + thumbnail + sheet.ready) của tấm trước xong TRƯỚC khi tấm
+  # sau gen xong, tức là đúng thứ tự mà bản thật sẽ có.
+  sleep 0.4
 done
 echo "Xong $(date +%H:%M:%S)"

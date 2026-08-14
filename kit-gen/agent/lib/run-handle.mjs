@@ -8,10 +8,32 @@ import { redactLine } from "./redact.mjs"
 import { projectDir } from "./projects-dir.mjs"
 import { resolveEngine, prepareEngine, materializeStyles, buildCommand, diagnose, summarizeFailures } from "./engine.mjs"
 import { maybeAutoCover } from "./cover.mjs"
+import { thumbnail } from "./thumbs.mjs"
 import { pythonCommand, killTree, winSpawnOpts } from "./platform.mjs"
 
 const HEARTBEAT_MS = 15000
 const MAX_BUFFER_EVENTS = 4000
+
+/* ══ CHU TRÌNH TỪNG TẤM (15/08) ═══════════════════════════════════════════════
+   TRƯỚC: gen đủ 10 tấm → mới cắt (một lượt slice.py cho cả lượt) → mới có thumbnail
+   (sinh lười lúc web hỏi) → chủ sản phẩm ngồi nhìn 15 phút không thấy gì, và tấm nào
+   xong sớm cũng không xem được.
+   NAY: tấm nào gen xong thì ĐI HẾT chu trình của riêng nó ngay:
+        ảnh → snapshot artifact → cắt hẹp (slice.py --sheet=) → thumbnail → `sheet.ready`.
+   Pha cắt tổng cuối lượt VẪN CHẠY như lưới an toàn (idempotent: cắt lại từ raw ra đúng
+   thứ đang nằm đó, và khối merge của slice.py giữ nguyên sheet không chạy lượt này).
+
+   XẾP HÀNG MỘT LÀN, KHÔNG SONG SONG. Ba tấm gen xong cách nhau vài giây sẽ đẻ ra ba
+   lượt slice.py chồng nhau; slice.py đọc–sửa–ghi `kits/manifest.json` nên chồng nhau =
+   mất phần của nhau. slice.py đã có ổ khoá hệ điều hành (lớp bảo vệ cuối), nhưng xếp
+   hàng ở đây là lớp thứ nhất: rẻ hơn, và giữ CPU cho việc chính. */
+const SHEET_SLICE_TIMEOUT_MS = 15 * 60 * 1000
+/** Bề rộng thumbnail mà lưới của web luôn hỏng (`?w=256`, xem features/kit/lib/image-source.ts). */
+const THUMB_WIDTHS = [256]
+/** Cover chạy NGOÀI pool của gen.sh ⇒ tổng số lượt codex đồng thời là maxJobs+1.
+ *  maxJobs=1 nghĩa là người dùng đã chọn "đừng chạy nhiều cùng lúc" — tôn trọng
+ *  lựa chọn đó: ở mức ấy ảnh bìa vẫn đợi tới cuối lượt như cũ. */
+const EARLY_COVER_MIN_MAXJOBS = 2
 
 /* BẰNG CHỨNG ĐI KÈM LỖI (BACKLOG #22).
    Trước bản này, một job lỗi chỉ mang đúng một enum `diagnosis`. Với NO_ARTIFACT enum
@@ -47,6 +69,13 @@ export class RunHandle {
        TRƯỚC khi caller (DELETE project) move thư mục đi. */
     this.phaseDone = null
     this.jobStart = new Map()
+    /* Hàng đợi MỘT LÀN cho chu trình per-sheet (xem ghi chú đầu file). Mọi tác vụ nối
+       đuôi vào đây; `drainSheetQueue()` đợi hàng cạn trước pha cắt tổng. */
+    this.sheetQueue = Promise.resolve()
+    /* Tiến trình con NGOÀI pha chính (slice hẹp). `this.child` là của pha đang chạy —
+       ghi đè nó sẽ làm cancel() giết nhầm/bỏ sót. Giữ riêng để cancel() giết đủ. */
+    this.sideChildren = new Set()
+    this.coverKicked = false
     /* Vòng nhớ stderr của CẢ LƯỢT — lưới hứng cuối cùng khi job không có log riêng
        (engine chết trước khi kịp tạo `logs/<job>.log`: đúng ca `rc=127`/`SyntaxError`). */
     this.stderrTail = []
@@ -142,6 +171,10 @@ export class RunHandle {
     await this.persist()
     this.emit({ type: "run.started", total: this.run.progress.total, maxJobs: this.run.maxJobs })
     await this.runPhase(this.run.kind, engineDir, pdir)
+    /* Chu trình per-sheet của những tấm cuối có thể còn đang chạy khi gen.sh đã đóng.
+       Đợi cho cạn TRƯỚC pha cắt tổng: hai lượt slice.py cùng lúc trên một manifest là
+       đúng cuộc đua mà cả bản vá này sinh ra để tránh. */
+    await this.drainSheetQueue()
     if (this.cancelled) return this.finish("cancelled")
     if (this.run.kind === "gen" && this.opts.autoSliceAfterGen) {
       const okJobs = this.run.jobs.filter(j => j.status === "ok")
@@ -236,6 +269,154 @@ export class RunHandle {
     })
     this.emit({ type: "progress", ...this.run.progress })
     this.persist().catch(() => {})
+    if (status === "ok" && this.run.kind === "gen") {
+      this.queueSheet(j)
+      this.maybeEarlyCover()
+    }
+  }
+
+  /* ══ CHU TRÌNH CỦA MỘT TẤM ══════════════════════════════════════════════════ */
+
+  /** Nối chu trình của một tấm vào hàng đợi một làn. KHÔNG await (đang trong luồng
+   *  đọc stdout của engine — chặn ở đây là chặn cả việc đọc tiến độ). */
+  queueSheet(j) {
+    this.sheetQueue = this.sheetQueue.then(() => this.finishSheet(j)).catch(e => {
+      if (e?.code !== "ENOENT" && e?.code !== "ENOTDIR")
+        process.stderr.write(`[agent] run ${this.id} sheet ${j.job}: ${redactLine(String(e?.message ?? e))}\n`)
+    })
+  }
+
+  /** Đợi hàng đợi cạn. Vòng lặp vì tác vụ mới có thể được nối vào GIỮA lúc đang đợi
+   *  (dòng `OK` cuối cùng của engine hoàn toàn có thể tới sau sự kiện 'close'). */
+  async drainSheetQueue() {
+    for (let i = 0; i < 200; i++) {
+      const tail = this.sheetQueue
+      await tail.catch(() => {})
+      if (tail === this.sheetQueue) return
+    }
+  }
+
+  /** gen xong MỘT tấm → snapshot artifact → cắt hẹp → thumbnail → `sheet.ready`. */
+  async finishSheet(j) {
+    if (this.detached || this.cancelled || this.finished) return
+    const pdir = projectDir(this.ws, this.run.projectId)
+    const png = join(pdir, "raw", `${j.job}.png`)
+    if (!(await exists(png))) return
+    await this.attachArtifact(pdir, j)
+    const sliced = (this.run.kind === "gen" && this.opts.autoSliceAfterGen)
+      ? await this.sliceSheet(pdir, j)
+      : null
+    const thumb = await this.warmThumbs(pdir, j)
+    if (this.detached || this.cancelled) return
+    await this.persist()
+    /* SỰ KIỆN CHO WEB (tương thích ngược: web hiện bỏ qua type lạ — xem
+       `webapp/src/lib/types/api.ts`, nhánh cuối của streamEventSchema).
+       Nó nói MỘT điều mà `job.done` không nói được: tấm này đã có ẢNH ĐỌC ĐƯỢC
+       (`artifact.path`) và đã CẮT xong, tức là màn "Ảnh gốc"/"Ảnh thật" có thể nạp
+       lại đúng phần của tấm này mà không phải đợi cả lượt. */
+    this.emit({
+      type: "sheet.ready", job: j.job, variant: j.variant, sheet: j.sheet,
+      artifact: j.artifact ? { path: j.artifact.path, bytes: j.artifact.bytes } : null,
+      sliced, thumbs: thumb,
+    })
+  }
+
+  /** Ảnh của lượt chạy = SNAPSHOT BẤT BIẾN trong runs/<id>/artifacts/ (+ kiểm hình học).
+   *  Trước bản này việc đó chỉ xảy ra ở `settleGenJobs()` — tức là SAU KHI CẢ LƯỢT gen
+   *  xong. Đó chính là lý do ô "Đã xong" trong tab Ảnh gốc là ô ĐEN giữa lượt: web đọc
+   *  `job.artifact.path`, mà ô đó còn `null` cho tới cuối lượt.
+   *  @returns {boolean} ảnh có phải do CHÍNH lượt này ghi ra không. */
+  async attachArtifact(pdir, j) {
+    const png = join(pdir, "raw", `${j.job}.png`)
+    const mt = await mtimeOf(png)
+    const fresh = mt > 0 && Math.floor(mt / 1000) >= this.t0
+    if (!fresh || j.artifact || this.detached) return fresh
+    const st = await stat(png).catch(() => null)
+    const artifactsDir = join(this.dir, "artifacts")
+    await ensureDir(artifactsDir)
+    await copyFile(png, join(artifactsDir, `${j.job}.png`))
+    const validation = await this.validateGeometry(pdir, png, j.job)
+    j.artifact = {
+      path: `runs/${this.id}/artifacts/${j.job}.png`,
+      bytes: st?.size ?? 0,
+      writtenAt: new Date(mt).toISOString(),
+      validation,
+    }
+    return true
+  }
+
+  /** Cắt HẸP đúng một tấm: `slice.py <variant> --sheet=<sheet>`.
+   *  Chạy NGOÀI `runPhase` vì pha chính (gen.sh) vẫn đang chạy — `this.child` và
+   *  `this.phaseDone` thuộc về nó, ghi đè là cancel() giết nhầm tiến trình. */
+  async sliceSheet(pdir, j) {
+    if (this.stopped() || this.detached) return null
+    const { cmd, args, env } = buildCommand("slice", pdir, { variants: [j.variant], sheets: [j.sheet] })
+    const t0 = Date.now()
+    const code = await new Promise(resolve => {
+      let child
+      try {
+        child = spawn(cmd, args, {
+          cwd: pdir, detached: true, stdio: ["ignore", "pipe", "pipe"],
+          env: { ...process.env, ...env, PATH: env.PATH ?? process.env.PATH },
+          ...winSpawnOpts(),
+        })
+      } catch (e) { return resolve(`spawn: ${e?.message ?? e}`) }
+      this.sideChildren.add(child)
+      const timer = setTimeout(() => killTree(child, "SIGKILL"), SHEET_SLICE_TIMEOUT_MS)
+      timer.unref?.()
+      const onLine = (line, level) => {
+        const s = line.trimEnd()
+        if (s) this.emit({ type: "job.log", job: j.job, level, line: s })
+      }
+      lineReader(child.stdout, l => onLine(l, "info"))
+      lineReader(child.stderr, l => onLine(l, "warn"))
+      child.on("error", e => { clearTimeout(timer); this.sideChildren.delete(child); resolve(`spawn: ${e.message}`) })
+      child.on("close", c => { clearTimeout(timer); this.sideChildren.delete(child); resolve(c) })
+    })
+    return { ok: code === 0, code, durationMs: Date.now() - t0 }
+  }
+
+  /** Sinh sẵn bản thu nhỏ (thumbs.mjs vốn sinh LƯỜI lúc web hỏi → ô trống chờ vài trăm ms
+   *  mỗi ảnh, và với 10 tấm là 10 lần chờ). Sinh sẵn ở đây = mở tab là ảnh có ngay.
+   *  Không có Pillow ⇒ thumbnail() trả về ảnh gốc; ở đây coi như "không hâm được", không lỗi. */
+  async warmThumbs(pdir, j) {
+    const out = []
+    const targets = [join(pdir, "raw", `${j.job}.png`)]
+    if (j.artifact) targets.push(join(this.dir, "artifacts", `${j.job}.png`))
+    for (const abs of targets) {
+      if (!(await exists(abs))) continue
+      for (const w of THUMB_WIDTHS) {
+        const t = await thumbnail(this.ws, abs, w).catch(() => null)
+        if (t?.resized) out.push(w)
+      }
+    }
+    return out.length ? [...new Set(out)] : null
+  }
+
+  /** ẢNH BÌA SỚM — kích ngay khi có tấm ĐẦU TIÊN xong, không đợi cả lượt (xem finish()).
+   *
+   *  ĐỦ NGUYÊN LIỆU CHƯA? `collectBranding()` (cover.mjs) lấy nhận diện theo thứ tự:
+   *  ảnh ref người dùng tải lên → ref của tấm dáng → TẤM DÁNG ĐÃ SINH (`raw/<v>-pose-*.png`).
+   *  Nếu lượt này CÓ tấm dáng mà nó chưa gen xong, kích ngay = vẽ bìa thiếu mascot —
+   *  đổi 15 phút chờ lấy một tấm bìa sai nhận diện thì không đáng. Nên: lượt có tấm dáng
+   *  thì đợi tấm dáng (vẫn sớm hơn hẳn cuối lượt), lượt không có thì kích ngay tấm đầu.
+   *
+   *  QUOTA: cover là ĐÚNG MỘT lượt codex cho cả run, chạy NGOÀI pool của gen.sh (cover.sh
+   *  là tiến trình riêng, không đi qua vòng MAXJOBS) ⇒ đỉnh đồng thời là maxJobs+1 trong
+   *  quãng vẽ bìa. Không "chờ slot rảnh" vì pool của gen.sh chỉ rảnh khi lượt SẮP XONG —
+   *  chờ thế thì đúng bằng hành vi cũ. Người dùng chọn maxJobs=1 (tín hiệu "đừng chạy
+   *  nhiều cùng lúc") thì giữ nguyên đường cũ: bìa vẽ sau khi lượt đóng sổ. */
+  maybeEarlyCover() {
+    if (this.coverKicked) return
+    if (this.run.kind !== "gen") return
+    if (this.cancelled || this.detached || this.finished) return
+    if (this.run.maxJobs < EARLY_COVER_MIN_MAXJOBS) return
+    const pose = this.run.jobs.filter(j => String(j.sheet ?? "").startsWith("pose-"))
+    const settled = pose.every(j => j.status === "ok" || j.status === "failed")
+    if (pose.length && !pose.some(j => j.status === "ok") && !settled) return
+    this.coverKicked = true
+    this.emit({ type: "job.log", level: "info", line: "vẽ ảnh bìa (job phụ, ngoài hàng đợi tạo ảnh)" })
+    maybeAutoCover(this.ws, this.run.projectId, { imgHome: this.opts.imgHome }).catch(() => {})
   }
 
   eta() {
@@ -298,22 +479,10 @@ export class RunHandle {
   async settleGenJobs() {
     const pdir = projectDir(this.ws, this.run.projectId)
     for (const j of this.run.jobs) {
-      const png = join(pdir, "raw", `${j.job}.png`)
-      const mt = await mtimeOf(png)
-      const fresh = mt > 0 && Math.floor(mt / 1000) >= this.t0
+      // Tấm đã đi qua chu trình per-sheet thì `j.artifact` có sẵn — attachArtifact()
+      // không chép/kiểm lại lần hai, chỉ trả lời "ảnh có phải của lượt này không".
+      const fresh = await this.attachArtifact(pdir, j)
       if (fresh) {
-        const st = await stat(png).catch(() => null)
-        const artifactsDir = join(this.dir, "artifacts")
-        const snapshot = join(artifactsDir, `${j.job}.png`)
-        await ensureDir(artifactsDir)
-        await copyFile(png, snapshot)
-        const validation = await this.validateGeometry(pdir, png, j.job)
-        j.artifact = {
-          path: `runs/${this.id}/artifacts/${j.job}.png`,
-          bytes: st?.size ?? 0,
-          writtenAt: new Date(mt).toISOString(),
-          validation,
-        }
         if (j.status !== "ok") {
           if (j.status === "failed") this.run.progress.failed = Math.max(0, this.run.progress.failed - 1)
           j.status = "ok"
@@ -361,6 +530,10 @@ export class RunHandle {
     // killTree: POSIX = ĐÚNG mã cũ (process.kill(-pid) rồi rơi về child.kill);
     // win32 = taskkill /T vì không có process group và codex là tiến trình CHÁU của bash.
     if (this.child?.pid) killTree(this.child, "SIGTERM")
+    // Lượt cắt hẹp của chu trình per-sheet chạy NGOÀI `this.child` — không giết ở đây
+    // thì nó sống tiếp sau khi người dùng đã bấm Dừng và còn ghi vào kits/ của project
+    // (đúng mẫu bug C-01: bút toán muộn vào thư mục sắp bị move đi).
+    for (const c of this.sideChildren) killTree(c, "SIGTERM")
     this.emit({ type: "job.log", level: "warn", line: "đã yêu cầu dừng lượt chạy" })
     if (!hadChild) {
       // Chưa spawn: launch() thấy stopped() sẽ tự rút, không dựng lại thư mục project.
@@ -371,7 +544,9 @@ export class RunHandle {
       // Đợi pha hiện tại đóng sổ. Có trần thời gian để DELETE không treo vô hạn nếu
       // engine phớt lờ SIGTERM; hết trần thì SIGKILL rồi đợi thêm một nhịp ngắn.
       const timeout = new Promise(r => { const t = setTimeout(r, waitMs); t.unref?.() })
-      await Promise.race([this.phaseDone ?? Promise.resolve(), timeout])
+      // Đợi CẢ chu trình per-sheet: nó cũng ghi xuống đĩa (artifact, kits/, run.json).
+      const settled = Promise.all([this.phaseDone ?? Promise.resolve(), this.drainSheetQueue()])
+      await Promise.race([settled, timeout])
       if (this.child?.pid) {
         killTree(this.child, "SIGKILL")
         const grace = new Promise(r => { const t = setTimeout(r, 300); t.unref?.() })

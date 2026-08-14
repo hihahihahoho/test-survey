@@ -167,6 +167,18 @@ describe("applyEvent — stream và poll phải cho CÙNG hình dạng dữ li�
     expect(r.phase).toEqual({ index: 2, total: 2, name: "slice" });
   });
 
+  it("sheet.ready gắn artifact vào job GIỮA lượt — ô 'Đã xong' hết đen", () => {
+    const ev = {
+      seq: 406, type: "sheet.ready", job: "vang-main2", variant: "vang", sheet: "main2",
+      artifact: { path: "raw/vang-main2.png", bytes: 12345 },
+      sliced: { ok: true, durationMs: 900 },
+    } as StreamEvent;
+    const r = applyEvent(base, ev);
+    expect(r.jobs[1]!.artifact).toEqual({ path: "raw/vang-main2.png", bytes: 12345 });
+    expect(r.jobs[0]!.artifact).toBe(base.jobs[0]!.artifact);
+    expect(r.seq).toBe(406);
+  });
+
   it("event LẠ không làm hỏng run đang có", () => {
     const r = applyEvent(base, { seq: 999, type: "chưa.biết" } as StreamEvent);
     expect(r).toEqual(base);

@@ -32,6 +32,7 @@ import { RunStore } from "./lib/runs.mjs"
 import { Uploads } from "./lib/uploads.mjs"
 import { ConfirmCodes } from "./lib/confirm.mjs"
 import { register as registerSystem } from "./routes/system.mjs"
+import { register as registerSettings } from "./routes/settings.mjs"
 import { register as registerProjects } from "./routes/projects.mjs"
 import { register as registerContract } from "./routes/contract.mjs"
 import { register as registerRefs } from "./routes/refs.mjs"
@@ -138,6 +139,7 @@ export async function createAgent(opts = {}) {
 
   const router = new Router()
   registerSystem(router)
+  registerSettings(router)
   registerProjects(router)
   registerContract(router)
   registerRefs(router)
