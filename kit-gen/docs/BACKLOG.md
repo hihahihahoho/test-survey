@@ -21,13 +21,14 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
 9. **Cover job chỉ sống trong bộ nhớ** — agent restart giữa lúc vẽ thì meta kẹt `running`/trả `none`; nhẹ vì có nút vẽ lại, nhưng nên dọn meta mồ côi lúc boot.
 10. **Bẫy cap `hits[:10]` trong gen.sh** — ô `08-progress-fill` đang đứng đúng 10/10 từ vật liệu bị hạ cấp; thêm 1 từ nữa vào spec là bị cắt âm thầm. Cân nhắc nới cap hoặc cảnh báo khi chạm.
 11. **Retention cho `~/.kitgen/releases/`** — 20 bản × ~2.6MB tích mãi; sau update thành công giữ bản đang chạy + 1-2 bản rollback, xoá cũ hơn (sửa `install.sh`, ~10 dòng).
-12. **E2e flake ở chế độ song song** — 2 ca `@visual` settings đỏ ngẫu nhiên khi `fullyParallel` (tái hiện cả trên baseline không patch); serial luôn xanh. Hoặc điều tra root cause, hoặc ép `--workers=1` trong CI cho ổn định.
+12. **Thông báo sau update báo sai "vẫn đang chạy bản 1.2.0"** — `/health` trả `version: VERSION` hardcode `1.2.0` (`agent/server.mjs:44`, version nội bộ chưa bao giờ bump), còn `restart.ts`/`UpdateResultNotice` so số đó với version release (2.1.x) → không bao giờ khớp, update thành công vẫn báo thất bại. Fix: health trả thêm version runtime thật (readRuntimeVersion của update.mjs) và luồng chờ ưu tiên trường đó; lưu ý bundle CŨ là bên đứng chờ nên lần update đầu sau fix vẫn hiện sai một lần cuối.
+13. **E2e flake ở chế độ song song** — 2 ca `@visual` settings đỏ ngẫu nhiên khi `fullyParallel` (tái hiện cả trên baseline không patch); serial luôn xanh. Hoặc điều tra root cause, hoặc ép `--workers=1` trong CI cho ổn định.
 
 ## P3 — Việc to, cần quyết trước khi làm
 
-13. **Vendor `figma-h2d` (~49KB) vào webapp** — để Copy Figma ra frame chuẩn safe-zone (frame đúng hitbox + ảnh offset âm + clip off) thay vì bitmap; dữ liệu safe/contentAt đã thông tới web từ 13/08. Chủ SP chưa chốt.
-14. **Thay Playwright bằng renderer nhẹ (resvg/sharp)** — bỏ được ~220MB (headless-shell 196MB + playwright-core); đổi lại phải đảm bảo render skeleton HTML/SVG tương đương từng pixel. Cần spike so sánh ảnh trước.
-15. **Grid xám/đen neo khung** — chỉ làm SAU khi (6) xong và có số liệu; §8.1 handoff đã đo "bắt vẽ lại grid" là fail, các biến thể (grid chỉ ở bleed, grid màu tách biệt xoá deterministic) chưa đo.
+14. **Vendor `figma-h2d` (~49KB) vào webapp** — để Copy Figma ra frame chuẩn safe-zone (frame đúng hitbox + ảnh offset âm + clip off) thay vì bitmap; dữ liệu safe/contentAt đã thông tới web từ 13/08. Chủ SP chưa chốt.
+15. **Thay Playwright bằng renderer nhẹ (resvg/sharp)** — bỏ được ~220MB (headless-shell 196MB + playwright-core); đổi lại phải đảm bảo render skeleton HTML/SVG tương đương từng pixel. Cần spike so sánh ảnh trước.
+16. **Grid xám/đen neo khung** — chỉ làm SAU khi (6) xong và có số liệu; §8.1 handoff đã đo "bắt vẽ lại grid" là fail, các biến thể (grid chỉ ở bleed, grid màu tách biệt xoá deterministic) chưa đo.
 
 ## Ghi chú vận hành cho lần update tới
 
