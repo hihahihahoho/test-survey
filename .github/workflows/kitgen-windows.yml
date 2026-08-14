@@ -44,6 +44,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # LƯỢT CI VÒNG 2 (run 31784079285) ĐỎ VÌ CHÍNH FILE NÀY, cùng một căn bệnh với §8.2:
+      # runner ghi mỗi khối `run:` ra một file tạm `D:\a\_temp\<guid>.ps1` **KHÔNG BOM**,
+      # nên `shell: powershell` (PS 5.1) đọc nó bằng Windows-1252 y hệt install.ps1. Một
+      # dấu `—` trong CHUỖI của script inline là đủ để cả step chết trước khi kịp chạy.
+      # Ta KHÔNG kiểm soát được file tạm đó ⇒ luật duy nhất còn lại: **mã và chuỗi trong
+      # mọi khối `run:` phải là ASCII**. Tiếng Việt chỉ được nằm ở dòng comment (`#` chạy
+      # tới hết dòng nên dấu nháy giả bên trong vô hại) và ở `name:` (chỉ để hiển thị).
+      # Bước này là bash nên miễn nhiễm, và đứng TRƯỚC mọi bước PowerShell.
+      - name: Chỉ ASCII trong mã của workflow này
+        shell: bash
+        run: |
+          set -u
+          f=.github/workflows/kitgen-windows.yml
+          # DUNG perl, KHONG dung `grep '[^[:print:]]'`: lop ky tu POSIX phu thuoc locale va
+          # ban grep — tren macOS no im lang khop 0 dong (da thu), tuc mot cai bay khong bao
+          # gio do. perl thi chac chan co trong Git-Bash (chinh `shasum` la perl).
+          bad="$(perl -ne 'next unless /[^\x00-\x7F]/; next if /^\s*#/; next if /^\s*(- )?name:/; print "$.:$_"' "$f")"
+          if [ -n "$bad" ]; then
+            printf '%s\n' "$bad" | while IFS= read -r l; do
+              n="${l%%:*}"
+              echo "::error file=$f,line=$n::dong MA/CHUOI co ky tu ngoai ASCII. Runner ghi khoi run: ra file tam KHONG BOM, PowerShell 5.1 doc bang Windows-1252 va bam nham dau nhay (xem WINDOWS-PORT muc 8.2). Chi dung ASCII o day; tieng Viet de o dong comment hoac o name:."
+              echo "   $l"
+            done
+            exit 1
+          fi
+          echo 'OK  moi dong ma/chuoi trong workflow deu la ASCII'
+
       # LƯỢT CI ĐẦU TIÊN (run 31783005598) ĐỎ VÌ ĐÚNG CHỖ NÀY: install.ps1 lưu UTF-8
       # KHÔNG BOM ⇒ Windows PowerShell 5.1 đọc nó bằng Windows-1252 ⇒ dấu `—` trong
       # chuỗi vỡ thành 3 ký tự CP1252 mà ký tự cuối là `"` (U+201D) — PowerShell coi đó
@@ -88,7 +115,7 @@ jobs:
             }
             Write-Host ("LOI: {0} loi cu phap trong install.ps1" -f $errors.Count)
             $b = [IO.File]::ReadAllBytes($path)
-            Write-Host ("     (3 byte dau cua file: {0} — BOM UTF-8 phai la EF BB BF)" -f (($b[0..2] | ForEach-Object { '{0:X2}' -f $_ }) -join ' '))
+            Write-Host ("     (3 byte dau cua file: {0} - BOM UTF-8 phai la EF BB BF)" -f (($b[0..2] | ForEach-Object { '{0:X2}' -f $_ }) -join ' '))
             exit 1
           }
           Write-Host ("OK   Parser::ParseFile - {0} token, 0 loi cu phap" -f $tokens.Count)
@@ -117,7 +144,7 @@ jobs:
           $res = @(Invoke-ScriptAnalyzer -Path 'kit-gen\scripts\install.ps1' -Severity Error, Warning)
           if ($res.Count -eq 0) { Write-Host 'OK   khong co canh bao nao'; exit 0 }
           foreach ($r in $res) {
-            Write-Host ("  [{0}] dong {1} · {2}: {3}" -f $r.Severity, $r.Line, $r.RuleName, $r.Message)
+            Write-Host ("  [{0}] dong {1} - {2}: {3}" -f $r.Severity, $r.Line, $r.RuleName, $r.Message)
           }
           $hard = @($res | Where-Object { @('Error', 'ParseError') -contains [string]$_.Severity })
           Write-Host ("Tong: {0} muc, trong do {1} nghiem trong" -f $res.Count, $hard.Count)
@@ -292,7 +319,7 @@ jobs:
             Write-Host ("::error::khong tim thay trong log: {0}" -f ($miss -join ' | '))
             exit 1
           }
-          Write-Host 'OK   thieu Codex ⇒ in checklist, khong khoi dong, thoat 0'
+          Write-Host 'OK   thieu Codex => in checklist, khong khoi dong, thoat 0'
           exit 0
 
       # ── Lần cài 2: đủ tiền đề. Cũng là phép thử "cai xong thi chay lai" (§7 bước 2). ──
@@ -389,8 +416,8 @@ jobs:
           # `current` la junction (NTFS, khong can quyen admin). Installer coi that bai la
           # canh bao chu khong phai loi ⇒ o day cung chi canh bao, nhung PHAI noi ro.
           $cur = Get-Item -LiteralPath (Join-Path $home_ 'current') -Force -ErrorAction SilentlyContinue
-          if ($cur -and $cur.LinkType) { Write-Host ("OK   current la {0} → {1}" -f $cur.LinkType, ($cur.Target -join ',')) }
-          else { Write-Host '::warning::khong tao duoc junction `current` — installer da lui ve duong dan co version' }
+          if ($cur -and $cur.LinkType) { Write-Host ("OK   current la {0} -> {1}" -f $cur.LinkType, ($cur.Target -join ',')) }
+          else { Write-Host '::warning::khong tao duoc junction `current` - installer da lui ve duong dan co version' }
           # agent/test khong duoc di theo goi phat hanh (build-runtime.sh xoa chung)
           foreach ($x in 'agent\test', 'agent\test-agent.mjs', 'agent\test-fixtures') {
             if (Test-Path -LiteralPath (Join-Path $home_ "releases\$ver\$x")) {
@@ -442,9 +469,9 @@ jobs:
           $shim = Join-Path $home_ 'bin\python3'
           $bytes = [IO.File]::ReadAllBytes($shim)
           if ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
-            Write-Host '::error::shim python3 co BOM — bash se bao "bad interpreter"'; $fail = 1
+            Write-Host '::error::shim python3 co BOM - bash se bao "bad interpreter"'; $fail = 1
           }
-          if ($bytes -contains 0x0D) { Write-Host '::error::shim python3 co CR (CRLF) — bash se bao "bad interpreter"'; $fail = 1 }
+          if ($bytes -contains 0x0D) { Write-Host '::error::shim python3 co CR (CRLF) - bash se bao "bad interpreter"'; $fail = 1 }
           Write-Host ("shim python3:`n{0}" -f [Text.Encoding]::UTF8.GetString($bytes))
           exit $fail
 
@@ -513,7 +540,7 @@ jobs:
           foreach ($f in @("$env:RUNNER_TEMP\install-1.out.log", "$env:RUNNER_TEMP\install-1.err.log",
                            "$env:RUNNER_TEMP\install-2.out.log", "$env:RUNNER_TEMP\install-2.err.log",
                            "$env:LOCALAPPDATA\KitGen\agent.log")) {
-            Write-Host ("───────── {0} ─────────" -f $f)
+            Write-Host ("--------- {0} ---------" -f $f)
             if (Test-Path -LiteralPath $f) { Get-Content -LiteralPath $f -Tail 200 } else { Write-Host '(khong co file)' }
           }
           exit 0
@@ -549,7 +576,7 @@ jobs:
             Remove-Item -LiteralPath $t -Force
             Write-Host 'symlink       : tao duoc (suite-paths chay duoc)'
           } catch {
-            Write-Host ("symlink       : KHONG tao duoc — {0}" -f $_.Exception.Message)
+            Write-Host ("symlink       : KHONG tao duoc - {0}" -f $_.Exception.Message)
             Write-Host '::warning::runner khong cho tao symlink; 2 ca cua suite-paths se do vi MOI TRUONG, khong phai vi port'
           }
           exit 0
@@ -574,7 +601,7 @@ jobs:
           $enc = New-Object System.Text.UTF8Encoding($false)
           [IO.File]::WriteAllText("$dir\python3", (($lines -join "`n") + "`n"), $enc)
           Add-Content -LiteralPath $env:GITHUB_PATH -Value $dir
-          Write-Host ("shim: {0}\python3 → {1}" -f $dir, $py)
+          Write-Host ("shim: {0}\python3 -> {1}" -f $dir, $py)
           exit 0
 
       - name: Git-Bash thấy python3

@@ -447,6 +447,40 @@ Kiểm bằng `pwsh` là kiểm sai môi trường. Máy phát triển là macOS
 đừng bao giờ đặt `— – → ⇒ “ ” ‘ ’` (hay bất kỳ ký tự nào có byte `0x91–0x94`) vào bên
 trong chuỗi — chỉ để trong comment.
 
+#### Vòng 2 (run 31784079285) — cùng căn bệnh, lần này ở **script inline trong workflow**
+
+Bản vá vòng 1 đúng, nhưng `install.ps1` **chưa kịp được parse**: lần này chết ở chính khối
+`run:` của step *"Cú pháp install.ps1 (PowerShell 5.1)"*. Lý do y hệt và đáng nhớ hơn:
+
+> Runner ghi **mỗi khối `run:`** ra một file tạm `D:\a\_temp\<guid>.ps1` **KHÔNG BOM**.
+> Ta không kiểm soát được file đó. Vậy nên `shell: powershell` đọc nó bằng Windows-1252
+> đúng như đọc `install.ps1`. Một dấu `—` trong **chuỗi** của script inline — cụ thể là câu
+> `"(3 byte dau cua file: {0} — BOM UTF-8 phai la EF BB BF)"` mà vòng 1 thêm vào để *giúp
+> chẩn đoán* — đủ để giết cả step trước khi nó kịp chấm `install.ps1`.
+
+Vì file tạm không thể có BOM, **luật duy nhất còn lại là ASCII**:
+
+> **Mã và chuỗi trong MỌI khối `run:` của workflow phải là ASCII.** Tiếng Việt chỉ được
+> nằm ở dòng comment (`#` chạy tới hết dòng nên dấu nháy giả bên trong vô hại — đã kiểm)
+> và ở `name:` (chỉ hiển thị, không chạy qua PowerShell).
+
+Đã ASCII hoá **10 dòng** trong 14 khối PowerShell inline (1 khối `powershell`, 13 khối
+`pwsh` — `pwsh` mặc định UTF-8 nên hôm nay chưa chết, nhưng sẽ chết ngay ngày ai đó đổi
+`pwsh` → `powershell`, nên áp cùng một luật), và thêm step **"Chỉ ASCII trong mã của
+workflow này"** chạy **trước mọi bước PowerShell**; step này viết bằng `bash` nên miễn nhiễm.
+
+**Vì sao vẫn để script inline chứ không tách ra file `.ps1` riêng có BOM:** tách file chỉ
+cứu được **một** khối (`shell: powershell`), lại đẻ thêm một file phải tự tuân luật BOM và
+phải truyền tham số qua `-File`. Luật ASCII cứu **cả 14** khối, kể cả các khối `pwsh`, và
+sai phạm bị chỉ mặt đúng số dòng ngay ở bước đầu. Đổi lại: trong workflow, tiếng Việt chỉ
+còn ở comment và `name:`.
+
+**Bẫy phụ, ghi lại kẻo dẫm lại:** bản đầu của step gác dùng
+`grep '[^[:print:][:space:]]'` — trên macOS lớp ký tự POSIX này khớp **0 dòng** kể cả với
+file đầy ký tự UTF-8, tức một cái gác **không bao giờ đỏ**. Đã đổi sang `perl -ne '… /[^\x00-\x7F]/ …'`
+(chắc chắn có trong Git-Bash — chính `shasum` là perl) và kiểm bằng cách chạy nó trên
+**bản cũ**: phải bắt đúng 10 dòng, trong đó có dòng 91 đã giết CI vòng 2.
+
 **Bốn here-string trong file đều KHÔNG có lỗi** (giả thuyết ban đầu là terminator bị thụt
 đầu dòng — đã kiểm và bác bỏ): cả bốn mở bằng `@"` đứng cuối dòng và đóng bằng `"@` ở
 **cột 0** (dòng 357→361 shim `python3`, 437→451 `config.cmd`, 458→511 `kitgen.cmd`,
