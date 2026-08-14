@@ -13,3 +13,6 @@ playwright-report/
 /tailwind.config.js
 src/**/*.js
 !src/**/*.config.js
+# vendor: bundle .js đóng gói sẵn (figma-h2d) là MÃ NGUỒN cần commit,
+# không phải sản phẩm biên dịch mà lưới an toàn ở trên nhắm tới.
+!src/vendor/**
