@@ -156,6 +156,32 @@ describe("bấm [Cập nhật]", () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     BACKLOG #23 — 14/08 14:28: `release.json` đã khai bản mới nhưng CI còn đang
+     đóng gói ⇒ installer chết ở BƯỚC TẢI (curl 404). Nhìn từ web giống hệt ca
+     "agent không chịu khởi động lại", nhưng lời khuyên ngược nhau: ở đây không có
+     gì để chạy lại, chỉ có thể đợi. Sai câu này = user cài lại vài lần vô ích.
+     ══════════════════════════════════════════════════════════════════════════ */
+  const packaging = { ...statusOf({ available: false }), reason: "ARCHIVE_PENDING" } as unknown as UpdateCheck;
+
+  it("installer chết vì gói chưa có trên server ⇒ nói 'đang đóng gói', không đổ tội restart", async () => {
+    const reload = vi.fn();
+    await useUpdateInstall.getState().start("2.2.0", {
+      confirm: () => true,
+      install: okInstall,
+      wait: async () => ({ outcome: "unchanged", version: "2.1.13" }),
+      status: async () => packaging,
+      reload,
+    });
+    const s = useUpdateInstall.getState();
+    expect(s.phase).toBe("archive-pending");
+    expect(s.message).toContain("2.2.0");
+    expect(s.message).toContain("đóng gói");
+    expect(s.restartCommand).toBeNull();
+    // Tải lại trang ở đây chỉ làm mất luôn câu giải thích vừa nói.
+    expect(reload).not.toHaveBeenCalled();
+  });
+
   it("agent không trả lời được câu hỏi 'đĩa có gì' ⇒ giữ nguyên câu quá hạn cũ", async () => {
     await useUpdateInstall.getState().start("2.2.0", {
       confirm: () => true,

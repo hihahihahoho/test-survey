@@ -87,25 +87,62 @@ export async function restartState({ currentVersion = null, kitgenHome = default
 }
 
 /**
+ * "CÓ BẢN MỚI" PHẢI KÈM "TẢI VỀ ĐƯỢC" — sự cố 14/08 14:28 (BACKLOG #23).
+ *
+ * `release.json` nằm TRONG REPO trên nhánh phát hành, còn tarball chỉ tồn tại sau khi
+ * workflow `kitgen-release.yml` chạy xong (~10-15 phút). Ai push nhánh trước khi CI xanh
+ * (hoặc push cùng lúc với tag) mở ra một cửa sổ mà manifest đã khai version mới còn
+ * GitHub Releases thì chưa có file: UI mời cập nhật → installer `curl` 404 → chết ở bước
+ * tải, người dùng đọc thành "cập nhật hỏng". Đúng cái đã xảy ra 14/08.
+ *
+ * Nên trước khi CHÀO một bản mới, hỏi thẳng chỗ sẽ tải về: file có đó không.
+ *
+ * FAIL-OPEN CÓ CHỦ ĐÍCH: chỉ 403/404/410 — bằng chứng DỨT KHOÁT là asset chưa tồn tại —
+ * mới chặn lời chào. Mọi thứ khác (5xx, 429, 405 vì proxy chặn HEAD, timeout, DNS) đều
+ * coi như "có" và vẫn chào: một proxy công ty ghét HEAD không được phép giấu bản vá của
+ * cả đội mãi mãi, và ở ca đó installer vẫn còn lớp 2 để báo lỗi cho tử tế.
+ */
+const ARCHIVE_MISSING = new Set([403, 404, 410])
+
+export async function archiveReady(url, { fetchImpl = fetch, timeoutMs = 8000 } = {}) {
+  try {
+    const res = await fetchImpl(url, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(timeoutMs) })
+    return !ARCHIVE_MISSING.has(res.status)
+  } catch {
+    return true
+  }
+}
+
+/**
  * So version đang chạy với `release.json` publish trên nhánh phát hành — CÙNG một
  * manifest mà `install.sh` đọc, nên "có bản mới" ở UI và `kitgen update` không bao
  * giờ lệch nhau. Fetch chạy ở AGENT chứ không ở trình duyệt: raw.githubusercontent.com
  * không trả CORS cho origin loopback, và trang tại `/app/` không được phép gọi ra ngoài.
  * Manifest chỉ chứa version/tag/archive — không có gì bí mật để lộ.
+ *
+ * Request HEAD kiểm tarball chỉ bắn khi manifest THẬT SỰ mới hơn bản đang chạy — tức là
+ * gần như không bao giờ trong nhịp poll 30 phút của webapp, và không thêm một đường gọi
+ * mạng nào từ trình duyệt (web vẫn chỉ biết mỗi `GET /api/update`).
+ *
+ * `reason: "ARCHIVE_PENDING"` đi kèm `ok:true` (KHÁC hai reason còn lại, vốn chỉ có ở
+ * `ok:false`): manifest đọc được và hợp lệ, chỉ là bản nó khai chưa tải về được.
  */
-export async function checkForUpdate({ currentVersion, fetchImpl = fetch, kitgenHome } = {}) {
+export async function checkForUpdate({ currentVersion, fetchImpl = fetch, kitgenHome, verifyArchive = archiveReady } = {}) {
   const current = currentVersion || await readRuntimeVersion() || "0.0.0"
   const restart = await restartState({ currentVersion: current, kitgenHome })
   const res = await fetchImpl(MANIFEST_URL, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) })
   if (!res.ok) throw new Error(`release manifest returned HTTP ${res.status}`)
   const manifest = await res.json()
   if (!manifest || typeof manifest.version !== "string" || typeof manifest.archive !== "string") throw new Error("invalid release manifest")
+  const newer = compareVersions(current, manifest.version) < 0
+  const ready = newer ? await verifyArchive(manifest.archive, { fetchImpl }) : true
   return {
     ok: true,
     currentVersion: current,
     latestVersion: manifest.version,
     tag: typeof manifest.tag === "string" ? manifest.tag : null,
-    available: compareVersions(current, manifest.version) < 0,
+    available: newer && ready,
+    ...(newer && !ready ? { reason: "ARCHIVE_PENDING" } : {}),
     updateCommand: UPDATE_COMMAND,
     ...restart,
     checkedAt: new Date().toISOString(),

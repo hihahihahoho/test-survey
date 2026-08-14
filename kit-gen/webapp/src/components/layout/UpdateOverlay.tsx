@@ -65,6 +65,9 @@ export function UpdateOverlayView({
   if (!open) return null;
 
   const needsRestart = phase === "needs-restart";
+  /* BACKLOG #23: bản mới có thật, chỉ là CI chưa đóng gói xong. Không có gì hỏng để sửa
+     và không có lệnh nào chạy ngay bây giờ ăn thua — nên màn này nói đúng một việc: đợi. */
+  const archivePending = phase === "archive-pending";
 
   const title = running
     ? targetVersion
@@ -72,17 +75,21 @@ export function UpdateOverlayView({
       : "Đang cập nhật lên bản mới…"
     : needsRestart
       ? "Đã cài xong — cần khởi động lại công cụ local"
-      : phase === "timeout"
-        ? "Chưa xác nhận được bản cập nhật"
-        : "Chưa gửi được yêu cầu cập nhật";
+      : archivePending
+        ? "Bản mới chưa tải về được"
+        : phase === "timeout"
+          ? "Chưa xác nhận được bản cập nhật"
+          : "Chưa gửi được yêu cầu cập nhật";
 
   const detail = running
     ? "Đừng đóng tab này. Công cụ local sẽ khởi động lại và trang tự tải lại khi xong."
     : `${message ?? ""} ${needsRestart
       ? "Chạy lệnh dưới đây trong Terminal rồi tải lại trang — KHÔNG cần cập nhật lại."
-      : phase === "timeout"
-        ? "Kiểm tra cửa sổ Terminal đang chạy công cụ local, hoặc cập nhật thủ công rồi tải lại trang."
-        : "Bản đang chạy chưa bị thay đổi gì."}`.trim();
+      : archivePending
+        ? "Thử lại sau ít phút. Bản đang chạy chưa bị thay đổi gì."
+        : phase === "timeout"
+          ? "Kiểm tra cửa sổ Terminal đang chạy công cụ local, hoặc cập nhật thủ công rồi tải lại trang."
+          : "Bản đang chạy chưa bị thay đổi gì."}`.trim();
 
   /**
    * Bẫy Tab trong tấm panel. Lúc đang cài panel KHÔNG có gì bấm được ⇒ Tab bị nuốt hẳn,
@@ -145,7 +152,11 @@ export function UpdateOverlayView({
           <>
             <div className="flex flex-col gap-2">
               <p className="text-caption text-fg-muted">
-                {needsRestart ? "Khởi động lại công cụ local trong Terminal:" : "Cập nhật thủ công trong Terminal:"}
+                {needsRestart
+                  ? "Khởi động lại công cụ local trong Terminal:"
+                  : archivePending
+                    ? "Lát nữa thử lại, ở đây hoặc trong Terminal:"
+                    : "Cập nhật thủ công trong Terminal:"}
               </p>
               {needsRestart
                 ? <CopyableCode value={restartCommand || MANUAL_RESTART_CMD} label="Lệnh khởi động lại KitGen" />

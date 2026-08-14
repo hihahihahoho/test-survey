@@ -20,6 +20,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # BACKLOG #23 — "release.json đã khai bản mới, file cài đặt thì chưa có".
+  #
+  # `kit-gen/release.json` là NGUỒN SỰ THẬT mà installer và agent đọc, nhưng nó nằm
+  # trong repo: push nhánh là cả đội thấy version mới NGAY, trong khi tarball chỉ tồn
+  # tại sau khi job `publish` dưới đây chạy xong (~10-15 phút). Ai push nhánh trước khi
+  # tag xanh là mở ra một cửa sổ mà UI mời cập nhật còn installer tải về 404 — đã cắn
+  # người dùng thật ngày 14/08 14:28.
+  #
+  # Thứ tự đúng đã ghi ở runbook §7.4 (push tag TRƯỚC, đợi release, RỒI mới push nhánh).
+  # Job này chỉ làm một việc: biến "quên thứ tự" từ một lỗi im lặng 15 phút của người
+  # dùng cuối thành một dấu X đỏ trong vòng nửa phút của người phát hành.
+  #
+  # KHÔNG chạy trên ref tag: lúc đó archive ĐANG được job `publish` tạo ra, chưa có là
+  # đương nhiên. Đây cũng KHÔNG phải điều kiện tiên quyết của `publish` — nó là chuông
+  # báo, không phải cái khoá.
+  # ═══════════════════════════════════════════════════════════════════════════
+  verify-release-manifest:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Release manifest must point at an archive that already exists
+        shell: bash
+        run: |
+          set -eu
+          version="$(node -p "require('./kit-gen/release.json').version")"
+          url="$(node -p "require('./kit-gen/release.json').archive")"
+          for asset in "$url" "$url.sha256"; do
+            code="$(curl -sSL --head --retry 3 -o /dev/null -w '%{http_code}' "$asset" || echo 000)"
+            [ "$code" = 200 ] || {
+              echo "::error file=kit-gen/release.json::release.json khai $version nhưng $asset trả HTTP $code." >&2
+              echo "Thứ tự phát hành đúng (runbook §7.4): push tag kitgen-v$version trước, đợi workflow tạo xong GitHub Release, RỒI mới push nhánh chứa release.json." >&2
+              echo "Đẩy trước là mở ra cửa sổ mà UI mời cập nhật còn installer tải 404 (BACKLOG #23)." >&2
+              exit 1
+            }
+          done
+          echo "release.json → $version · archive + checksum đều đã có trên GitHub Releases."
+
   verify-and-package:
     runs-on: ubuntu-latest
     defaults:
@@ -40,6 +79,7 @@ jobs:
           bash ../test/kitgen-run-env.test.sh
           bash ../test/kitgen-launchd-start.test.sh
           bash ../test/install-launchd.test.sh
+          bash ../test/install-download.test.sh
       - name: Verify web application
         run: npm run verify:release
       - name: Verify integration contracts

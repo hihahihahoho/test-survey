@@ -42,6 +42,12 @@ const LATEST: UpdateCheck = {
   available: false, updateCommand: "~/.kitgen/bin/kitgen update", checkedAt: "2026-08-13T02:00:00.000Z",
 };
 const AVAILABLE: UpdateCheck = { ...LATEST, latestVersion: "2.2.0", tag: "kitgen-v2.2.0", available: true };
+/** BACKLOG #23: bản mới CÓ THẬT nhưng CI chưa upload xong ⇒ chưa tải về được.
+ *  `reason` ép kiểu vì union trong `endpoints.ts` chưa liệt kê giá trị này (xem
+ *  `lib/update/watch.ts` · `isArchivePending`). */
+const PACKAGING = {
+  ...LATEST, latestVersion: "2.2.0", tag: "kitgen-v2.2.0", available: false, reason: "ARCHIVE_PENDING",
+} as unknown as UpdateCheck;
 const OFFLINE: UpdateCheck = {
   ok: false, currentVersion: "2.1.13", latestVersion: null, tag: null, available: false,
   reason: "OFFLINE", updateCommand: "~/.kitgen/bin/kitgen update", checkedAt: "2026-08-13T02:00:00.000Z",
@@ -94,6 +100,18 @@ describe("Cài đặt → Giới thiệu · Kiểm tra cập nhật", () => {
     expect(t).not.toContain("Cập nhật ngay");
     // vẫn còn đường thủ công
     expect(t).toContain("~/.kitgen/bin/kitgen update");
+  });
+
+  /* BACKLOG #23 — `release.json` lên cùng lúc gắn tag, tarball có sau ~15 phút. Trong
+     cửa sổ đó agent trả ok:true + available:false + reason ARCHIVE_PENDING. Nếu tab này
+     rơi vào nhánh "đang mới nhất" thì nó tự mâu thuẫn với chính dòng "Bản phát hành mới
+     nhất: 2.2.0" ngay phía trên. */
+  it("bản mới đang được CI đóng gói → nói ra sự thật, KHÔNG mời cập nhật, KHÔNG nói 'mới nhất'", () => {
+    const t = textOf(render(CONNECTED, PACKAGING));
+    expect(t).toContain("2.2.0");
+    expect(t).toContain("đang được đóng gói");
+    expect(t).not.toContain("Đang dùng bản mới nhất");
+    expect(t).not.toContain("Cập nhật ngay");
   });
 
   it("công cụ local chưa chạy → nút bị chặn và nói rõ lý do", () => {

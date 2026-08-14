@@ -194,6 +194,78 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     } finally { globalThis.fetch = original }
   })
   /* ══════════════════════════════════════════════════════════════════════════
+     BACKLOG #23 — CHÀO BẢN MỚI TRONG LÚC CI CÒN ĐANG ĐÓNG GÓI (máy thật 14/08 14:28).
+     `release.json` đi cùng commit/tag, tarball chỉ có sau ~15 phút. Cửa sổ ở giữa:
+     UI mời cập nhật → installer curl 404 → chết ở bước tải. "Có bản mới" từ nay phải
+     có nghĩa "tải về được", nên trước khi chào, agent hỏi thẳng chỗ sẽ tải.
+     ══════════════════════════════════════════════════════════════════════════ */
+  await it("manifest khai bản mới mà tarball chưa có ⇒ KHÔNG chào (reason ARCHIVE_PENDING)", async () => {
+    const original = globalThis.fetch
+    const seen = []
+    globalThis.fetch = async (url, init = {}) => {
+      seen.push({ url: String(url), method: init.method ?? "GET" })
+      if ((init.method ?? "GET") === "HEAD") return new Response(null, { status: 404 })
+      return new Response(JSON.stringify({
+        version: "99.0.0", archive: "https://example.test/kitgen-runtime-99.0.0.tar.gz",
+      }), { status: 200, headers: { "content-type": "application/json" } })
+    }
+    try {
+      const r = await api("GET", "/api/update")
+      eq(r.status, 200, "status")
+      eq(r.json.ok, true, "manifest vẫn đọc được — KHÁC với mất mạng")
+      eq(r.json.latestVersion, "99.0.0", "vẫn nói thật bản mới nhất là bản nào")
+      eq(r.json.available, false, "KHÔNG mời cập nhật thứ chưa tải về được")
+      eq(r.json.reason, "ARCHIVE_PENDING", "reason là enum, phân biệt được với mất mạng")
+      eq(seen.filter(s => s.method === "HEAD").length, 1, "đúng MỘT request HEAD, không tải cả file")
+      eq(seen.find(s => s.method === "HEAD").url, "https://example.test/kitgen-runtime-99.0.0.tar.gz",
+        "hỏi ĐÚNG cái URL mà installer sẽ tải")
+    } finally { globalThis.fetch = original }
+  })
+  await it("không có bản mới thì KHÔNG bắn thêm request nào ra ngoài", async () => {
+    const original = globalThis.fetch
+    const seen = []
+    globalThis.fetch = async (url, init = {}) => {
+      seen.push(init.method ?? "GET")
+      return new Response(JSON.stringify({
+        version: "0.0.1", archive: "https://example.test/kitgen-runtime-0.0.1.tar.gz",
+      }), { status: 200, headers: { "content-type": "application/json" } })
+    }
+    try {
+      const r = await api("GET", "/api/update")
+      eq(r.json.available, false, "manifest cũ hơn ⇒ không có bản mới")
+      eq(seen.filter(m => m === "HEAD").length, 0, "nhịp poll 30 phút không được đẻ thêm request")
+    } finally { globalThis.fetch = original }
+  })
+  await it("HEAD hỏng vì lý do KHÁC 404 ⇒ vẫn chào (không được giấu bản vá vì một cái proxy)", async () => {
+    const original = globalThis.fetch
+    globalThis.fetch = async (url, init = {}) => {
+      if ((init.method ?? "GET") === "HEAD") return new Response(null, { status: 405 })
+      return new Response(JSON.stringify({
+        version: "99.0.0", archive: "https://example.test/kitgen-runtime-99.0.0.tar.gz",
+      }), { status: 200, headers: { "content-type": "application/json" } })
+    }
+    try {
+      const r = await api("GET", "/api/update")
+      eq(r.json.available, true, "chỉ 403/404/410 mới là bằng chứng 'chưa có file'")
+      eq(r.json.reason, undefined, "không bịa ra lý do")
+    } finally { globalThis.fetch = original }
+  })
+  await it("HEAD ném lỗi (timeout/DNS) ⇒ vẫn chào, không kẹt cứng", async () => {
+    const original = globalThis.fetch
+    globalThis.fetch = async (url, init = {}) => {
+      if ((init.method ?? "GET") === "HEAD") throw new TypeError("fetch failed")
+      return new Response(JSON.stringify({
+        version: "99.0.0", archive: "https://example.test/kitgen-runtime-99.0.0.tar.gz",
+      }), { status: 200, headers: { "content-type": "application/json" } })
+    }
+    try {
+      const r = await api("GET", "/api/update")
+      eq(r.json.ok, true, "manifest đọc được thì lượt kiểm tra vẫn thành công")
+      eq(r.json.available, true, "fail-open có chủ đích")
+    } finally { globalThis.fetch = original }
+  })
+
+  /* ══════════════════════════════════════════════════════════════════════════
      BACKLOG #20 — CÀI XONG NHƯNG KHÔNG KHỞI ĐỘNG LẠI (máy chủ SP, 14/08).
      Symlink `current` đã trỏ bản mới, tiến trình agent vẫn là bản cũ. /health 200,
      /api/update vẫn "có bản mới" ⇒ user đọc thành "update hỏng", cài lại vô ích.

@@ -70,3 +70,23 @@ export function shouldAnnounceUpdate(
 export function markUpdateAnnounced(version: string | null | undefined): void {
   if (version) announced.add(version);
 }
+
+/**
+ * "ĐÃ CÔNG BỐ NHƯNG CHƯA TẢI VỀ ĐƯỢC" — BACKLOG #23.
+ *
+ * `release.json` nằm trong repo và lên cùng lúc gắn tag, còn file cài đặt chỉ có sau khi
+ * CI đóng gói xong (~10-15 phút). Trong cửa sổ đó, agent trả `ok:true` (manifest đọc được,
+ * số hiệu bản mới là thật) + `available:false` (chưa tải về được) + reason này. Nhờ
+ * `available:false`, `shouldAnnounceUpdate` ở trên đã im lặng đúng — hàm này chỉ để những
+ * chỗ CẦN nói ra sự thật (tab Giới thiệu, lớp phủ cập nhật) không phải nói câu "đang dùng
+ * bản mới nhất" trong khi ngay phía trên đang hiện một số hiệu cao hơn.
+ *
+ * Ép kiểu tại chỗ vì union `UpdateCheck["reason"]` trong `lib/api/endpoints.ts` chưa liệt
+ * kê giá trị này (file đó đang có việc khác sửa dở). Khi thêm được thì bỏ ép kiểu ở đây —
+ * hành vi không đổi.
+ */
+export const ARCHIVE_PENDING_REASON = "ARCHIVE_PENDING";
+
+export function isArchivePending(check: UpdateCheck | null | undefined): boolean {
+  return (check as { reason?: string } | null | undefined)?.reason === ARCHIVE_PENDING_REASON;
+}

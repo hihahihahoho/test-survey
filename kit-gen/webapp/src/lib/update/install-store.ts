@@ -16,6 +16,7 @@ import { api, type UpdateCheck } from "../api/endpoints";
 import { AgentError } from "../api/client";
 import { MANUAL_RESTART_CMD, markUpdatePending } from "./pending";
 import { waitForUpdatedAgent, type RestartResult, type WaitOptions } from "./restart";
+import { isArchivePending } from "./watch";
 
 export type UpdatePhase =
   /** không có gì đang diễn ra — lớp phủ KHÔNG tồn tại. */
@@ -26,6 +27,8 @@ export type UpdatePhase =
   | "waiting"
   /** bản mới ĐÃ nằm trên đĩa nhưng tiến trình cũ vẫn đang phục vụ ⇒ chỉ thiếu một lệnh. */
   | "needs-restart"
+  /** bản mới đã công bố nhưng CI chưa đóng gói xong ⇒ không có gì để tải, chỉ có thể đợi. */
+  | "archive-pending"
   /** quá hạn mà chưa thấy bản mới ⇒ nhường quyền quyết định lại cho user. */
   | "timeout"
   /** ngay cả yêu cầu cập nhật cũng không gửi được. */
@@ -96,6 +99,19 @@ async function classifyStall(
       phase: "needs-restart",
       message: `Bản ${installed} đã cài xong, nhưng công cụ local vẫn đang chạy bản ${s.currentVersion}.`,
       restartCommand: s.restartCommand || MANUAL_RESTART_CMD,
+    };
+  }
+  /* BACKLOG #23 — installer chết ở BƯỚC TẢI vì file cài đặt chưa có trên server (CI còn
+     đang đóng gói). Nhìn từ web ca này giống hệt ca "agent không chịu khởi động lại":
+     agent vẫn sống, version y nguyên. Lời khuyên thì ngược nhau — ở đây không có gì để
+     chạy lại, chỉ có thể ĐỢI. Agent phân biệt được (nó vừa HEAD thử cái URL đó), nên hỏi
+     rồi nói thẳng, thay vì đổ tội cho bước khởi động lại như lượt 14/08. */
+  if (isArchivePending(s)) {
+    const v = s?.latestVersion ?? "mới";
+    return {
+      phase: "archive-pending",
+      message: `Bản ${v} vừa được công bố nhưng file cài đặt đang được đóng gói trên CI (khoảng 10-15 phút).`,
+      restartCommand: null,
     };
   }
   if (outcome === "unchanged") return null; // như cũ: tải lại để app đọc lại sự thật

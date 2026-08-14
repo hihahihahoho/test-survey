@@ -112,8 +112,24 @@ describe("UpdateOverlay", () => {
     expect(t).toContain("~/.kitgen/bin/kitgen update");
   });
 
+  /* BACKLOG #23: bản mới có thật, chỉ là CI chưa đóng gói xong. "Chưa gửi được yêu cầu
+     cập nhật" (màn `failed`) sẽ sai — yêu cầu gửi đi rồi, thứ chưa có là cái file. */
+  it("gói chưa có trên server ⇒ nói là đang đóng gói và bảo đợi, KHÔNG bảo tải lại trang", () => {
+    const t = textOf(render({
+      phase: "archive-pending",
+      targetVersion: "2.2.0",
+      message: "Bản 2.2.0 vừa được công bố nhưng file cài đặt đang được đóng gói trên CI (khoảng 10-15 phút).",
+    }));
+    expect(t).toContain("Bản mới chưa tải về được");
+    expect(t).toContain("2.2.0");
+    expect(t).toContain("Thử lại sau ít phút");
+    expect(t).toContain("chưa bị thay đổi");
+    expect(t).not.toContain("Tải lại trang");
+    expect(t).toContain("Đóng");
+  });
+
   it("KHÔNG bao giờ hiện đường dẫn tuyệt đối của máy user", () => {
-    for (const phase of ["installing", "waiting", "needs-restart", "timeout", "failed"] as const) {
+    for (const phase of ["installing", "waiting", "needs-restart", "archive-pending", "timeout", "failed"] as const) {
       const t = textOf(render({ phase, targetVersion: "2.2.0", message: "x" }));
       expect(t).not.toMatch(/\/Users\/|\/home\//);
     }

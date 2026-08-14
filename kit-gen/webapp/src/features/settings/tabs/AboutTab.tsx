@@ -1,9 +1,10 @@
 import * as React from "react";
-import { ArrowUpCircle, Check, RefreshCw, ShieldCheck, WifiOff } from "lucide-react";
+import { ArrowUpCircle, Check, Clock, RefreshCw, ShieldCheck, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CopyableCode } from "@/components/common/CopyableCode";
 import { useInstallUpdateFlow, useUpdateCheck } from "@/lib/hooks";
+import { isArchivePending } from "@/lib/update";
 import { APP_PROTOCOL, type ConnectionStatus } from "@/lib/api";
 
 /**
@@ -86,7 +87,12 @@ export function AboutTab({ status }: { status: ConnectionStatus }) {
                         : "Danh sách bản phát hành đang lỗi định dạng. Dùng lệnh bên dưới để cập nhật thủ công."}</>
                     : update.data.available
                       ? <><ArrowUpCircle className="mt-0.5 size-3.5 shrink-0 text-accent-text" aria-hidden />Có bản {update.data.latestVersion}. Bản đang chạy là {update.data.currentVersion}.</>
-                      : <><Check className="mt-0.5 size-3.5 shrink-0 text-on-tint-ok" aria-hidden />Đang dùng bản mới nhất ({update.data.currentVersion}).</>}
+                      /* BACKLOG #23 — bản mới đã công bố nhưng CI chưa đóng gói xong. Câu
+                         "đang dùng bản mới nhất" ở đây là NÓI DỐI: ngay phía trên, dòng
+                         "Bản phát hành mới nhất" đang hiện một số hiệu cao hơn. */
+                      : isArchivePending(update.data)
+                        ? <><Clock className="mt-0.5 size-3.5 shrink-0" aria-hidden />Bản {update.data.latestVersion} vừa được công bố, gói cài đặt đang được đóng gói (khoảng 10-15 phút). Bấm kiểm tra lại sau ít phút.</>
+                        : <><Check className="mt-0.5 size-3.5 shrink-0 text-on-tint-ok" aria-hidden />Đang dùng bản mới nhất ({update.data.currentVersion}).</>}
           </p>
 
           {update.data && (!update.data.ok || update.data.available) && (

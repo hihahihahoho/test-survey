@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 # Install/update a prebuilt KitGen runtime. No sudo; credentials stay in Codex homes.
+#
+# MÃ THOÁT (ngoài 0 = xong, 2 = sai tham số):
+#   20  tải gói phát hành thất bại vì lý do khác (mạng, 5xx, checksum server hỏng);
+#   21  GÓI CHƯA CÓ TRÊN SERVER — `release.json` đã khai bản mới nhưng GitHub Releases
+#       chưa có file (CI còn đang đóng gói). Ca này KHÔNG phải lỗi máy người dùng và
+#       KHÔNG được để `curl` tự nói lời cuối bằng một dòng "404 Not Found". Xem
+#       `release_download_failed` và BACKLOG #23.
 set -eu
+EXIT_DOWNLOAD_FAILED=20
+EXIT_ARCHIVE_PENDING=21
 KITGEN_HOME="${KITGEN_HOME:-$HOME/.kitgen}"
 WORKSPACE="${KITGEN_WORKSPACE:-$HOME/KitGen}"
 PORT="${KITGEN_PORT:-8765}"
@@ -10,6 +19,9 @@ RELEASE_REPO="${KITGEN_RELEASE_REPO:-hihahihahoho/test-survey}"
 RELEASE_CHANNEL="${KITGEN_RELEASE_CHANNEL:-latest}"
 RELEASE_MANIFEST="${KITGEN_RELEASE_MANIFEST:-https://raw.githubusercontent.com/hihahihahoho/test-survey/feat/kitgen-local-runtime/kit-gen/release.json}"
 AUTO_RELEASE=0
+# Version mà manifest khai — chỉ để GỌI TÊN bản trong câu báo lỗi tải; nguồn sự thật về
+# version vẫn là file VERSION trong gói đã tải về.
+RELEASE_VERSION=""
 ARCHIVE=""
 EXPECTED_SHA=""
 NO_START=0
@@ -111,6 +123,68 @@ progress(){ printf '\n[%s] %s\n' "$1" "$2"; }
 check_ok(){ printf '  OK   %s\n' "$1"; }
 check_warn(){ printf '  WARN %s\n' "$1" >&2; }
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# TẢI GÓI PHÁT HÀNH — "404" KHÔNG PHẢI MỘT CÂU TRẢ LỜI (BACKLOG #23, máy thật 14/08).
+#
+# `release.json` nằm trong repo và được đẩy lên cùng lúc gắn tag, còn tarball chỉ xuất
+# hiện sau khi workflow phát hành chạy xong (~10-15 phút). Trong cửa sổ đó `kitgen update`
+# tải về một trang 404 và trước đây chết bằng đúng một dòng của curl:
+#     curl: (22) The requested URL returned error: 404
+# Người dùng đọc dòng đó thành "máy tôi hỏng" hoặc "bản cập nhật hỏng", trong khi thứ duy
+# nhất phải làm là ĐỢI VÀI PHÚT. Nên: tách "chưa có trên server" khỏi "tải hỏng", nói ra
+# bằng tiếng người, ghi lại trên đĩa, và thoát bằng mã riêng để mọi lớp trên phân biệt được.
+#
+# Nhật ký: stdout+stderr của lượt update do UI bấm ĐÃ đi thẳng vào ~/.kitgen/update.log
+# (agent mở file đó làm fd cho installer — lib/update.mjs `scheduleUpdate`), nên chỉ cần
+# in ra stderr là web đọc được. `tee` thêm vào install.log để lượt chạy tay trong Terminal
+# cũng để lại dấu vết.
+# ═══════════════════════════════════════════════════════════════════════════════
+DOWNLOAD_HTTP=""
+DOWNLOAD_CURL=""
+fetch_release_file(){
+  DOWNLOAD_HTTP=""; DOWNLOAD_CURL=""
+  _rc=0
+  # `-w %{http_code}` vẫn in ra dù `-f` đã làm curl thoát khác 0 ⇒ đọc được MÃ HTTP thật,
+  # thứ duy nhất phân biệt "chưa upload" (404) với "mạng hỏng" (000).
+  # Thêm `-sS` (im lặng nhưng vẫn in lỗi) so với `curl -fL` trước đây: stderr nay được gom
+  # vào file để đọc lại, mà thanh tiến trình rơi vào đó chỉ làm bẩn câu báo lỗi.
+  DOWNLOAD_HTTP="$(curl -fsSL --retry 3 -w '%{http_code}' -o "$2" "$1" 2>"$TMP/curl.err")" || _rc=$?
+  [ "$_rc" -eq 0 ] || { DOWNLOAD_CURL="$_rc"; return 1; }
+  return 0
+}
+release_download_failed(){
+  _what="$1"
+  _label="${RELEASE_VERSION:-}"
+  # --release-url gõ tay thì không có manifest để đọc version — moi ra từ chính tên file.
+  [ -n "$_label" ] || _label="$(printf '%s' "$RELEASE_URL" | sed -n 's|.*/kitgen-runtime-\(.*\)\.tar\.gz$|\1|p')"
+  [ -n "$_label" ] || _label="mới"
+  if [ "$IS_UPDATE" -eq 1 ]; then _retry="$KITGEN_HOME/bin/kitgen update"; else _retry="chạy lại lệnh cài đặt"; fi
+  case "$DOWNLOAD_HTTP" in
+    403|404|410)
+      {
+        printf '\n'
+        printf 'Bản %s ĐANG ĐƯỢC ĐÓNG GÓI trên CI — chưa tải về được.\n' "$_label"
+        printf 'Danh sách phát hành đã khai bản này, nhưng %s chưa có trên GitHub Releases (HTTP %s).\n' \
+          "$_what" "$DOWNLOAD_HTTP"
+        printf 'Việc đóng gói mất khoảng 10-15 phút. Thử lại sau ít phút:\n\n'
+        printf '  %s\n\n' "$_retry"
+        printf 'Bản đang chạy KHÔNG bị đụng tới.\n'
+      } | tee -a "$KITGEN_HOME/install.log" >&2
+      exit "$EXIT_ARCHIVE_PENDING" ;;
+    *)
+      {
+        printf '\n'
+        printf 'Không tải được %s của bản %s (HTTP %s, curl %s).\n' \
+          "$_what" "$_label" "${DOWNLOAD_HTTP:-000}" "${DOWNLOAD_CURL:-?}"
+        [ ! -s "$TMP/curl.err" ] || printf '%s\n' "$(sed -n '1p' "$TMP/curl.err")"
+        printf 'Kiểm tra kết nối mạng rồi thử lại:\n\n'
+        printf '  %s\n\n' "$_retry"
+        printf 'Bản đang chạy KHÔNG bị đụng tới.\n'
+      } | tee -a "$KITGEN_HOME/install.log" >&2
+      exit "$EXIT_DOWNLOAD_FAILED" ;;
+  esac
+}
+
 # Mỗi lượt cài để lại một bản đầy đủ (~2.6MB) trong $KITGEN_HOME/releases và KHÔNG ai
 # dọn — máy chủ SP đã tích 20 bản. Giữ bản ĐANG CHẠY + KEEP_ROLLBACKS bản gần nhất
 # trước đó (đủ để lùi tay khi bản mới hỏng), xoá phần còn lại.
@@ -209,7 +283,14 @@ if ! is_release "$SELF_DIR" && ! is_source "$SELF_DIR" && [ -z "$ARCHIVE" ] && [
   case "$RELEASE_REPO" in */*) ;; *) echo "Invalid GitHub repository: $RELEASE_REPO" >&2; exit 2 ;; esac
   META="$(curl -fsSL --retry 3 "$RELEASE_MANIFEST" 2>/dev/null || true)"
   if [ -n "$META" ]; then
-    RELEASE_URL="$(printf '%s' "$META" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("archive", ""))')"
+    # Lấy luôn `version` để câu báo lỗi gọi được TÊN BẢN ("bản 2.1.22 đang được đóng gói")
+    # thay vì một URL dài — xem `release_download_failed`.
+    META_FIELDS="$(printf '%s' "$META" | python3 -c 'import json,sys
+m = json.load(sys.stdin)
+print(m.get("archive", ""))
+print(m.get("version", ""))')"
+    RELEASE_URL="$(printf '%s\n' "$META_FIELDS" | sed -n '1p')"
+    RELEASE_VERSION="$(printf '%s\n' "$META_FIELDS" | sed -n '2p')"
   else
     echo "Cannot read the KitGen release manifest." >&2
     exit 1
@@ -222,9 +303,11 @@ elif [ -n "$ARCHIVE" ] || [ -n "$RELEASE_URL" ]; then
   if [ -n "$ARCHIVE" ]; then cp "$ARCHIVE" "$TMP/runtime.tar.gz"
   else
     command -v curl >/dev/null 2>&1 || { echo "curl is required." >&2; exit 1; }
-    curl -fL --retry 3 "$RELEASE_URL" -o "$TMP/runtime.tar.gz"
+    fetch_release_file "$RELEASE_URL" "$TMP/runtime.tar.gz" || release_download_failed "gói cài đặt"
     if [ -z "$EXPECTED_SHA" ]; then
-      curl -fL --retry 3 "$RELEASE_URL.sha256" -o "$TMP/runtime.sha256"
+      # Thiếu .sha256 trong khi .tar.gz đã có = bản phát hành mới upload được một nửa —
+      # cùng một nguyên nhân, cùng một lời khuyên: đợi CI xong rồi thử lại.
+      fetch_release_file "$RELEASE_URL.sha256" "$TMP/runtime.sha256" || release_download_failed "file checksum"
       EXPECTED_SHA="$(awk '{print $1}' "$TMP/runtime.sha256")"
     fi
   fi

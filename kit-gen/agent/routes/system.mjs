@@ -80,7 +80,9 @@ export function register(r) {
   /** Kiểm tra bản mới. Luôn 200: mất mạng là `ok:false` + `reason`, không phải lỗi agent.
    *  Kèm `installedVersion`/`restartRequired`: bản nằm trên đĩa có thể MỚI HƠN tiến trình
    *  đang trả lời request này (cài xong mà bước khởi động lại không xảy ra — BACKLOG #20).
-   *  Không có cặp field đó thì UI chỉ thấy "vẫn có bản mới" và đoán bừa là cài hỏng. */
+   *  Không có cặp field đó thì UI chỉ thấy "vẫn có bản mới" và đoán bừa là cài hỏng.
+   *  `available:true` còn có nghĩa "tarball ĐÃ tải về được": manifest khai bản mới mà CI
+   *  chưa upload xong ⇒ `available:false` + `reason:"ARCHIVE_PENDING"` (BACKLOG #23). */
   r.get("/api/update", async ctx => ({
     status: 200,
     json: await checkForUpdateSafe({ currentVersion: ctx.runtimeVersion ?? undefined }),
