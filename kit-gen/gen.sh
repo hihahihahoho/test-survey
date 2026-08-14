@@ -24,8 +24,18 @@ if [[ -n "$IMG_HOME" && ! -f "$IMG_HOME/auth.json" ]]; then
 fi
 
 # Khung xương layout (ảnh ref đính kèm codex) — deterministic từ styles.json.
-# Bản HTML/SVG (nét, đẹp); thiếu playwright thì rơi về bản PIL.
-node render-skeleton.mjs || python3 skeleton.py
+# MỘT renderer duy nhất: skeleton-svg.js dựng SVG, @resvg/resvg-wasm raster ra PNG.
+#
+# KHÔNG có đường lùi, và đó là chủ ý. Bản PIL cũ (skeleton.py) lệch 17,6% khối
+# lượng mực và vẽ sai hẳn dáng pose — nó đẻ ra ảnh ref SAI mà không ai biết, rồi
+# mọi ảnh gen sau đó lệch bố cục. Render hỏng thì DỪNG TO ở đây, đừng đốt quota
+# codex cho một lượt gen đã sai từ đầu vào.
+if ! node render-skeleton.mjs; then
+  echo "FATAL: không render được khung xương (render-skeleton.mjs)." >&2
+  echo "       Thường là thiếu @resvg/resvg-wasm. Cài lại:" >&2
+  echo "         npm install --prefix \"\$HOME/.kitgen/tools\" @resvg/resvg-wasm" >&2
+  exit 1
+fi
 
 # Build prompt cho từng (style, sheet) → prompts/<style>-<sheet>.txt
 python3 - <<'PY'

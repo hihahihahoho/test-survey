@@ -1,9 +1,10 @@
-/* engine.mjs — adapter mỏng sang engine v1. KHÔNG sửa gen.sh / slice.py / skeleton.py.
+/* engine.mjs — adapter mỏng sang engine v1. KHÔNG sửa gen.sh / slice.py.
  *
  * SỰ THẬT ĐÃ ĐỌC TỪ MÃ (không phải giả định):
  *   · gen.sh dòng 5:   `cd "$(dirname "$0")"` ; ROOT="$(pwd)"
  *   · slice.py dòng 60: HERE = dirname(abspath(__file__)) ; đọc HERE/styles.json, ghi HERE/kits
- *   · skeleton.py:      cùng kiểu HERE
+ *   · render-skeleton.mjs: HERE = dirname(fileURLToPath(import.meta.url)); đọc HERE/styles.json,
+ *     nạp HERE/silhouettes.js + HERE/skeleton-svg.js, ghi HERE/skeleton
  *   ⇒ engine neo mọi đường dẫn theo THƯ MỤC CHỨA SCRIPT, **không** theo cwd.
  *     Vì vậy chạy `bash <engine>/gen.sh` với cwd=<project> vẫn đọc styles.json của <engine>.
  *
@@ -31,8 +32,11 @@ const REPO_DIR = resolve(HERE, "..", "..")
 const ENGINE_FILES = [
   { name: "gen.sh", required: true, mode: 0o755 },
   { name: "slice.py", required: true },
-  { name: "skeleton.py", required: false },
+  // Khung xương: render-skeleton.mjs (Node + @resvg/resvg-wasm) gọi skeleton-svg.js,
+  // skeleton-svg.js gọi silhouettes.js. Cả ba phải đi cùng nhau — thiếu một cái là
+  // gen.sh dừng ở bước khung xương (cố ý, không còn bản PIL để rơi về).
   { name: "skeleton.html", required: false },
+  { name: "skeleton-svg.js", required: false },
   { name: "silhouettes.js", required: false },
   { name: "render-skeleton.mjs", required: false },
   { name: "element-lib.json", required: false },
@@ -69,9 +73,10 @@ export async function prepareEngine(engineDir, projectDirAbs) {
 
 /* CHUẨN HOÁ SHAPE Ở ĐÚNG MỐI NỐI agent → engine.
    Lý do (QA LEAD đã chạy để xác nhận, không phải suy đoán):
-     · skeleton.py:81 SHAPES KHÔNG có khoá "rect" ⇒ `python3 skeleton.py` ném
-       `KeyError: 'rect'` và pha skeleton chết hẳn.
-     · silhouettes.js:85-127 cũng không có nhánh "rect" ⇒ trả chuỗi rỗng = ô trống câm.
+     · silhouettes.js không có nhánh "rect" ⇒ trả chuỗi rỗng = ô trống câm, và
+       khung xương im lặng mất hẳn một element.
+     (Bản PIL skeleton.py trước đây còn ném `KeyError: 'rect'` — file đó đã xoá
+      cùng BACKLOG #15, nhưng lý do chuẩn hoá thì không đổi.)
    Mà "rect" lại là skel MẶC ĐỊNH mà agent tự gán cho element thiếu skel (importer/templates)
    ⇒ đây là ĐƯỜNG MẶC ĐỊNH của luồng nhập, không phải ca hiếm.
    Sửa ở đây thay vì sửa engine vì gen.sh/slice.py là file bị CẤM sửa, và vì contract cũ
@@ -150,8 +155,12 @@ export function buildCommand(kind, projectDirAbs, { variants = [], maxJobs = 4, 
     return { cmd: p.cmd, args: p.args, env }
   }
   if (kind === "skeleton") {
-    const p = pythonCommand([join(projectDirAbs, "skeleton.py")])
-    return { cmd: p.cmd, args: p.args, env }
+    /* TRƯỚC 14/08 dòng này chạy `python3 skeleton.py` — tức nút "vẽ lại khung xương"
+       của app luôn dùng bản PIL, bản đo được là lệch 17,6% khối lượng mực và vẽ sai
+       hẳn dáng pose, KHÁC với khung xương mà gen.sh thật sự dùng. Nay cả hai đường
+       gọi chung một renderer. `process.execPath` = đúng Node đang chạy agent (bền
+       hơn `node` trần: PATH của tiến trình con không chắc có node, nhất là Windows). */
+    return { cmd: process.execPath, args: [join(projectDirAbs, "render-skeleton.mjs")], env }
   }
   throw new Error(`unknown run kind ${kind}`)
 }

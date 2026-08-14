@@ -3,8 +3,13 @@
  *
  * Đây là phần user tin để quyết định "có tốn lượt gen hay không". Sai số ở đây =
  * user tưởng nút 300px hoá ra 102px, gen xong mới biết, mất 2–5 phút + quota.
- * Vì vậy mọi ca dưới đây đối chiếu với MÃ NGUỒN THẬT (`gen.sh`, `skeleton.py`,
+ * Vì vậy mọi ca dưới đây đối chiếu với MÃ NGUỒN THẬT (`gen.sh`, `skeleton-svg.js`,
  * `slice.py`) chứ không phải với số tôi tự đặt.
+ *
+ * NGUỒN ĐỔI 14/08 (BACKLOG #15): `skeleton.py` (PIL) đã bị XOÁ — nó lệch 17,6% khối
+ * lượng mực so với ảnh thật. Hình học skeleton nay có ĐÚNG MỘT nguồn sự thật là
+ * `skeleton-svg.js`, dùng chung bởi `render-skeleton.mjs` và `skeleton.html`. Các ca
+ * dưới đây đọc file đó — cùng những hằng số ấy, chỉ khác chỗ ở.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -24,11 +29,11 @@ const sheet = (cols: number, rows: number, orient?: "landscape" | "portrait") =>
   grid: { cols, rows },
 });
 
-describe("khổ ảnh sinh — đúng gen.sh dòng 35 và skeleton.py", () => {
+describe("khổ ảnh sinh — đúng gen.sh dòng 35 và skeleton-svg.js", () => {
   it("con số 1536×1024 / 1024×1536 có THẬT trong mã engine", () => {
     expect(read("gen.sh")).toContain("PORTRAIT 1024x1536");
     expect(read("gen.sh")).toContain("LANDSCAPE 1536x1024");
-    expect(read("skeleton.py")).toMatch(/SW,\s*SH\s*=\s*\(1024,\s*1536\)\s*if/);
+    expect(read("skeleton-svg.js")).toMatch(/"portrait"\s*\?\s*\[1024,\s*1536\]\s*:\s*\[1536,\s*1024\]/);
   });
 
   it("khớp hằng số trong code của tôi", () => {
@@ -40,9 +45,9 @@ describe("khổ ảnh sinh — đúng gen.sh dòng 35 và skeleton.py", () => {
   });
 });
 
-describe("chia ô — `cw, ch = SW/cols, SH/rows` (skeleton.py) = `W/COLS, H/ROWS` (slice.py)", () => {
+describe("chia ô — `cw, ch = W/cols, H/rows` (skeleton-svg.js) = `W/COLS, H/ROWS` (slice.py)", () => {
   it("hai công thức của engine giống nhau, và tôi dùng đúng nó", () => {
-    expect(read("skeleton.py")).toMatch(/cw,\s*ch\s*=\s*SW\s*\/\s*cols,\s*SH\s*\/\s*rows/);
+    expect(read("skeleton-svg.js")).toMatch(/cw\s*=\s*W\s*\/\s*cols,\s*ch\s*=\s*H\s*\/\s*rows/);
     expect(read("slice.py")).toMatch(/cell_w,\s*cell_h\s*=\s*W\s*\/\s*COLS,\s*H\s*\/\s*ROWS/);
     const m = cellMetrics(sheet(4, 4));
     expect(m.cellPx).toEqual({ w: 384, h: 256 });
@@ -87,11 +92,11 @@ describe("vành bleed — slice.py dòng 66 + 788–789", () => {
   });
 });
 
-describe("đặt element trong ô — skeleton.py dòng 104–107", () => {
-  it("công thức căn giữa + anchor bottom có thật trong skeleton.py", () => {
-    const src = read("skeleton.py");
-    expect(src).toMatch(/ew,\s*eh\s*=\s*cw\s*\*\s*sk\["w"\],\s*ch\s*\*\s*sk\["h"\]/);
-    expect(src).toMatch(/anchor"\)\s*==\s*"bottom"/);
+describe("đặt element trong ô — skeleton-svg.js", () => {
+  it("công thức căn giữa + anchor bottom có thật trong skeleton-svg.js", () => {
+    const src = read("skeleton-svg.js");
+    expect(src).toMatch(/ew\s*=\s*cw\s*\*\s*sk\.w,\s*eh\s*=\s*ch\s*\*\s*sk\.h/);
+    expect(src).toMatch(/sk\.anchor\s*===\s*"bottom"/);
   });
 
   it("căn giữa: nút pill 0.78×0.4 trong ô 4×4 ra 300×102 px", () => {
@@ -107,15 +112,15 @@ describe("đặt element trong ô — skeleton.py dòng 104–107", () => {
     expect(box.y).toBeCloseTo(256 - 256 * 0.8 - 256 * 0.04);
   });
 
-  it("`full` phủ KÍN ô và KHÔNG có khung safe (skeleton.py vẽ riêng, không kẻ khung)", () => {
+  it("`full` phủ KÍN ô và KHÔNG có khung safe (skeleton-svg.js vẽ riêng, không kẻ khung)", () => {
     const box = elementBox({ shape: "full" }, 384, 256);
     expect([box.x, box.y, box.w, box.h]).toEqual([0, 0, 384, 256]);
     expect(box.isFull).toBe(true);
     expect(box.hasSafeFrame).toBe(false);
   });
 
-  it("`free` KHÔNG vẽ khung safe — đúng `if not sk.get(\"free\")` của skeleton.py", () => {
-    expect(read("skeleton.py")).toContain('not sk.get("free")');
+  it("`free` KHÔNG vẽ khung safe — đúng `!(… || sk.free)` của skeleton-svg.js", () => {
+    expect(read("skeleton-svg.js")).toMatch(/if\s*\(!\(.*sk\.free\)\)/);
     expect(elementBox({ shape: "burst", w: 0.6, h: 0.9, free: true }, 384, 256).hasSafeFrame).toBe(false);
     expect(elementBox({ shape: "burst", w: 0.6, h: 0.9 }, 384, 256).hasSafeFrame).toBe(true);
   });

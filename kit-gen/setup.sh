@@ -297,7 +297,7 @@ else
 fi
 
 # ═══ 3. Python 3 + venv ══════════════════════════════════════════════════════
-step "Python 3 (dùng để cắt ảnh: slice.py, skeleton.py)"
+step "Python 3 (dùng để cắt ảnh: slice.py)"
 PY=""
 PY_OK=0
 if command -v python3 >/dev/null 2>&1; then
@@ -428,8 +428,8 @@ fi
 #        → cả BA phải có, thiếu một cái là HAS_PYMATTING=False và slice.py rơi về
 #          đường lùi Vlahos (mép glow xấu hơn). Đây là "nên có", không chặn.
 #   · dòng 42–43 `torch` + `transformers` (ViTMatte)      → TUỲ CHỌN, ~2–3 GB
-#   · skeleton.py chỉ cần PIL; render-skeleton.mjs cần playwright (tuỳ chọn,
-#     thiếu thì gen.sh tự rơi về skeleton.py — xem gen.sh dòng 18).
+#   · Khung xương KHÔNG còn dùng Python: render-skeleton.mjs chạy bằng Node +
+#     @resvg/resvg-wasm (xem bước "khung xương" bên dưới).
 step "Thư viện Python (đọc từ slice.py, không đoán)"
 VENV_DIR="$WORKSPACE/.venv"
 VENV_PY="$VENV_DIR/bin/python"
@@ -525,11 +525,44 @@ PYREP
   fi
 fi
 
-# playwright — chỉ để khung xương nét hơn; thiếu thì gen.sh tự dùng skeleton.py
-if node -e "require.resolve('playwright')" >/dev/null 2>&1; then
-  ok "playwright có — khung xương render bằng bản HTML (nét hơn)"
+# ═══ 5b. Trình render khung xương (@resvg/resvg-wasm) ════════════════════════
+# BẮT BUỘC, KHÔNG CÒN ĐƯỜNG LÙI. gen.sh dừng hẳn nếu render-skeleton.mjs hỏng —
+# xem lý do ở đầu render-skeleton.mjs (bản PIL cũ lệch 17,6% mực, vẽ sai dáng pose).
+#
+# Cài vào ĐÚNG prefix riêng mà installer dùng ($KITGEN_HOME/tools) để máy dev và
+# máy người dùng cùng một chỗ; render-skeleton.mjs dò chỗ này trước tiên.
+# Gói 2,4 MB, thuần JS + .wasm — không có file .node nào cho phần mềm diệt virus
+# chặn nhầm, và chạy chung một artefact trên mọi nền tảng.
+step "Trình render khung xương (@resvg/resvg-wasm — thay Playwright)"
+RESVG_PREFIX="$KITGEN_HOME/tools"
+has_resvg() {
+  NODE_PATH="$RESVG_PREFIX/node_modules" node -e "require.resolve('@resvg/resvg-wasm')" >/dev/null 2>&1
+}
+if [ "$NODE_OK" -eq 0 ]; then
+  warn "bỏ qua vì chưa có node (xem bước 2)."
+elif has_resvg; then
+  skip "@resvg/resvg-wasm đã có trong $RESVG_PREFIX"
+elif [ "$DRY_RUN" -eq 1 ]; then
+  would "npm install --prefix $RESVG_PREFIX @resvg/resvg-wasm   (~2,4 MB)"
+elif ! command -v npm >/dev/null 2>&1; then
+  bad "chưa có npm — không cài được @resvg/resvg-wasm, sẽ KHÔNG gen được ảnh."
+  fixit "Cài Node (kèm npm) rồi chạy lại script này." "$PKG_HINT nodejs npm"
 else
-  info "không có playwright (tuỳ chọn) — gen.sh tự dùng skeleton.py (PIL). Không cần làm gì."
+  printf '      đang cài @resvg/resvg-wasm (~2,4 MB)…\n'
+  mkdir -p "$RESVG_PREFIX" 2>/dev/null || true
+  if npm install --silent --prefix "$RESVG_PREFIX" @resvg/resvg-wasm >/dev/null 2>&1 && has_resvg; then
+    ok "đã cài @resvg/resvg-wasm vào $RESVG_PREFIX"
+  else
+    bad "không cài được @resvg/resvg-wasm — gen.sh sẽ dừng ở bước khung xương."
+    fixit "Khi có mạng, chạy lại lệnh này:" "npm install --prefix \"$RESVG_PREFIX\" @resvg/resvg-wasm"
+  fi
+fi
+# Rác của đời Playwright: 772,7 MB browser không còn ai dùng. KHÔNG tự xoá (máy dev
+# có thể đang trỏ PLAYWRIGHT_BROWSERS_PATH vào đây cho e2e của webapp) — chỉ nhắc.
+if [ -d "$KITGEN_HOME/tools/playwright-browsers" ]; then
+  PW_SIZE="$(du -sh "$KITGEN_HOME/tools/playwright-browsers" 2>/dev/null | awk '{print $1}')"
+  info "còn thư mục playwright-browsers cũ (${PW_SIZE:-?}) — engine không dùng nữa."
+  fixit "Xoá được nếu không chạy e2e của webapp bằng bộ browser này:" "rm -rf \"$KITGEN_HOME/tools/playwright-browsers\""
 fi
 
 # ═══ 6. Bản engine trong workspace ═══════════════════════════════════════════
@@ -542,7 +575,7 @@ fi
 step "Bản engine (gen.sh, cover.sh, slice.py, skeleton) trong workspace"
 ENGINE_SRC="$REPO_DIR"
 ENGINE_DST="$WORKSPACE/.kitgen/engine"
-ENGINE_FILES="gen.sh cover.sh slice.py skeleton.py skeleton.html silhouettes.js render-skeleton.mjs element-lib.json"
+ENGINE_FILES="gen.sh cover.sh slice.py skeleton.html skeleton-svg.js silhouettes.js render-skeleton.mjs element-lib.json"
 if [ ! -f "$ENGINE_SRC/gen.sh" ]; then
   warn "không thấy gen.sh trong $ENGINE_SRC — bỏ qua bước copy engine."
   info "Agent sẽ tự tìm engine trong thư mục mã nguồn khi chạy."

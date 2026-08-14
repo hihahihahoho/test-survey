@@ -2,65 +2,47 @@
 <meta charset="utf-8">
 <title>skeleton — khung xương layout từ styles.json</title>
 <!-- ============================================================================
-  Vẽ KHUNG XƯƠNG layout bằng HTML/SVG (nét hơn bản PIL cũ). Mỗi ô:
-    · khung SAFE ZONE (viền đậm) = hợp đồng toạ độ — thân element lấp đầy khung
-    · silhouette xám gợi hình khối; trang trí được tràn ra ngoài khung, trong ô
-  render-skeleton.mjs mở file này bằng playwright, gọi build(cfg) rồi chụp
-  từng #sheet-<id> ra skeleton/<id>.png (1536×1024 — đúng khổ ảnh gen).
-  Mở tay qua http cũng xem được (tự fetch styles.json).
+  KHUNG XEM, KHÔNG PHẢI BỘ DỰNG.
+
+  Toàn bộ hình học nằm ở skeleton-svg.js (`KITSKEL.sheetToSvg`). Trang này chỉ
+  nhúng NGUYÊN VĂN chuỗi SVG đó — đúng chuỗi mà render-skeleton.mjs đưa cho
+  @resvg/resvg-wasm để ghi skeleton/<id>.png. Trình duyệt và renderer ăn chung
+  một input nên không thể trôi khỏi nhau.
+
+  ⚠ ĐỪNG thêm luật CSS nào tác động lên nội dung sheet (kích thước, viền, vị trí,
+  chữ, bóng đổ, flex/grid…). resvg KHÔNG đọc CSS của trang; mọi thứ vẽ bằng CSS ở
+  đây sẽ có trên màn hình mà KHÔNG có trong ảnh gửi cho codex. Muốn đổi hình dạng
+  khung xương thì sửa skeleton-svg.js. tests/test_skeleton_svg.py khoá điều này.
+
+  Mở tay qua http để xem (tự fetch styles.json). Ảnh thật do
+  `node render-skeleton.mjs` sinh, không qua trang này.
 ============================================================================ -->
 <style>
+  /* Chỉ trang trí KHUNG XEM: nền trang, canh giữa, nhãn sheet. Không luật nào
+     chạm vào bên trong <svg>. */
   body { margin: 0; background: #fff; font-family: sans-serif }
-  .sheet { width: 1536px; height: 1024px; background: #f2f2f2;
-           position: relative; margin: 24px auto; overflow: hidden }
-  .cell { position: absolute; box-sizing: border-box; border: 1px solid #d9d9d9 }
-  .safe { position: absolute; border: 4px solid #464646; border-radius: 6px;
-          box-sizing: border-box }
-  .cell svg { position: absolute; overflow: visible }
-  h4 { width: 1536px; margin: 16px auto 0 }
+  .sheet { margin: 24px auto; width: max-content }
+  h4 { margin: 16px auto 0; width: max-content }
 </style>
 <div id="sheets"></div>
 <script src="silhouettes.js"></script>
+<script src="skeleton-svg.js"></script>
 <script>
-/* silhouette + pose OpenPose lấy từ silhouettes.js (dùng chung với studio) */
-const silhouette = (shape, w, h, uid, skel) => KITSIL.silhouette(shape, w, h, uid, skel);
-
 function build(cfg) {
   const root = document.getElementById("sheets");
   root.innerHTML = "";
-  let uid = 0;
   for (const sh of cfg.sheets) {
-    const { cols, rows } = sh.grid;
-    const [W, H] = sh.orient === "portrait" ? [1024, 1536] : [1536, 1024];
-    const cw = W / cols, ch = H / rows;
     const title = document.createElement("h4");
-    title.textContent = `${sh.id} — ${cols}×${rows}`;
+    title.textContent = `${sh.id} — ${sh.grid.cols}×${sh.grid.rows}`;
     root.appendChild(title);
     const div = document.createElement("div");
     div.className = "sheet";
-    div.style.width = W + "px";
-    div.style.height = H + "px";
     div.id = "sheet-" + sh.id;
-    sh.components.forEach((comp, i) => {
-      const r = (i / cols) | 0, c = i % cols;
-      const cell = document.createElement("div");
-      cell.className = "cell";
-      cell.style.cssText = `left:${c * cw}px;top:${r * ch}px;width:${cw}px;height:${ch}px`;
-      const sk = comp.skel, ew = cw * sk.w, eh = ch * sk.h;
-      const ex = (cw - ew) / 2;
-      const ey = sk.anchor === "bottom" ? ch - eh - ch * 0.04 : (ch - eh) / 2;
-      cell.innerHTML =
-        `<svg style="left:${ex}px;top:${ey}px" width="${ew}" height="${eh}">` +
-        silhouette(sk.shape, ew, eh, uid++, sk) + `</svg>` +
-        (sk.shape === "full" || sk.shape === "empty" || sk.free ? "" :
-          `<div class="safe" style="left:${ex}px;top:${ey}px;width:${ew}px;height:${eh}px"></div>`);
-      div.appendChild(cell);
-    });
+    div.innerHTML = KITSKEL.sheetToSvg(sh);   // NGUYÊN VĂN, không sửa gì thêm
     root.appendChild(div);
   }
 }
 
-/* mở tay qua http thì tự fetch; playwright thì gọi build(cfg) trực tiếp */
 if (location.protocol !== "file:")
   fetch("styles.json").then(r => r.json()).then(build).catch(() => {});
 window.__build = build;

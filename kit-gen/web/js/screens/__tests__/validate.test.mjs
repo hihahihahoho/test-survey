@@ -56,12 +56,15 @@ describe('shape whitelist ĐỌC TỪ NGUỒN THẬT (silhouettes.js + skeleton.
     const missing = found.filter((s) => !isKnownShape(s));
     eq(missing, [], `shape của silhouettes.js bị client từ chối: ${missing.join(',')}`);
   });
-  it('mọi shape SHAPES của skeleton.py đều nằm trong whitelist', () => {
-    const py = readFileSync(`${REPO}skeleton.py`, 'utf8');
-    const block = py.slice(py.indexOf('SHAPES = {'), py.indexOf('def main()'));
-    const found = [...block.matchAll(/"([a-z0-9]+)":/g)].map((m) => m[1]);
-    assert(found.length >= 6, `phải rút được shape từ skeleton.py, nhận ${found.length}`);
-    eq(found.filter((s) => !isKnownShape(s)), []);
+  /* skeleton.py (bản PIL) đã bị xoá cùng BACKLOG #15 — nay chỉ còn MỘT renderer.
+     Ca thay thế: bộ dựng SVG phải phủ đúng tập shape mà silhouettes.js vẽ được,
+     nghĩa là không có shape nào bị chính đường render thật bỏ rơi. */
+  it('bộ dựng SVG (skeleton-svg.js) đi qua silhouettes.js, không tự cắt shape nào', () => {
+    const src = readFileSync(`${REPO}skeleton-svg.js`, 'utf8');
+    assert(src.includes('KITSIL.silhouette('), 'skeleton-svg.js phải gọi KITSIL.silhouette');
+    const special = [...src.matchAll(/sk\.shape === "([a-z0-9]+)"/g)].map((m) => m[1]);
+    eq(special.filter((s) => !isKnownShape(s)), [],
+      `skeleton-svg.js xử lý riêng shape mà client không biết: ${special.join(',')}`);
   });
   it('trùng khớp tập SHAPES của agent/lib/validate.mjs (client không được hẹp hơn)', () => {
     const src = readFileSync(`${REPO}agent/lib/validate.mjs`, 'utf8');
