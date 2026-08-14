@@ -32,6 +32,9 @@ import {
   type LibrarySettings, type ImageGenProfile,
 } from "../types/api";
 import { normalizeContract, type Contract } from "../types/contract";
+/* Hình dạng của tuỳ chọn-trên-đĩa được LẤY RA TỪ schema localStorage (xem file đó để biết
+   vì sao), nên nó sống ở `lib/store` chứ không ở `lib/types/api.ts` như các schema khác. */
+import { diskSettingsSchema, type DiskSettingsPatch } from "../store/disk-settings";
 import type { z } from "zod";
 
 const pid = (id: string | number) => encodeURIComponent(String(id));
@@ -138,6 +141,21 @@ export const systemApi = {
   /** #4 — web gửi **id đục**, KHÔNG BAO GIỜ gửi path (chốt X1). */
   async activateWorkspace(workspaceId: string) {
     return parse(activateWorkspaceSchema, await httpPost("/api/workspace/activate", { workspaceId }), "workspace/activate");
+  },
+
+  /**
+   * Tuỳ chọn người dùng ĐỌC TỪ ĐĨA (`<workspace>/.kitgen/config.json`). Đây là nguồn sự
+   * thật; `localStorage` chỉ còn là bộ nhớ đệm khởi động — xem `lib/store/disk-settings.ts`.
+   * Chỉ enum · boolean · số · mã do app sinh đi qua đây; không path, không chữ tự do.
+   */
+  async settings() {
+    const data = await httpGet("/api/settings") as { settings?: unknown };
+    return parse(diskSettingsSchema, data.settings ?? {}, "tuỳ chọn người dùng");
+  },
+  /** Vá MỘT PHẦN (chỉ field vừa đổi) và nhận lại TOÀN BỘ bảng sau khi agent chuẩn hoá. */
+  async patchSettings(patch: DiskSettingsPatch) {
+    const data = await httpPatch("/api/settings", patch) as { settings?: unknown };
+    return parse(diskSettingsSchema, data.settings ?? {}, "tuỳ chọn vừa lưu");
   },
 };
 

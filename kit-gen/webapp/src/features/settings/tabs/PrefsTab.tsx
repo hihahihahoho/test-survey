@@ -113,10 +113,13 @@ export function PrefsTab() {
         <CardContent className="flex flex-col gap-4">
           <InlineBanner
             tone="info"
-            title="File dự án không bị xoá"
-            description="Thao tác này chỉ xoá dữ liệu KitGen lưu trong trình duyệt hiện tại."
+            title="File dự án và tuỳ chọn không bị xoá"
+            description="Thao tác này chỉ xoá dữ liệu KitGen lưu trong trình duyệt hiện tại. Tuỳ chọn nằm trong thư mục làm việc trên máy bạn."
           />
-          <p className="text-body text-fg-muted">Xoá tuỳ chọn giao diện, bộ nhớ đệm và bản nháp chưa lưu trên trình duyệt này.</p>
+          <p className="text-body text-fg-muted">
+            Xoá bộ nhớ đệm và bản nháp chưa lưu trên trình duyệt này. Tuỳ chọn ở trang này được lưu
+            trong thư mục làm việc nên sẽ tự trở lại sau khi tải lại trang.
+          </p>
           <div>
             <Button variant="danger" onClick={() => setConfirmClear(true)}>
               <Trash2 aria-hidden />
@@ -130,7 +133,7 @@ export function PrefsTab() {
         open={confirmClear}
         onOpenChange={setConfirmClear}
         title="Xoá dữ liệu trình duyệt?"
-        description="Tuỳ chọn giao diện, bộ nhớ đệm và bản nháp chưa lưu sẽ bị xoá. File dự án trên máy không bị ảnh hưởng."
+        description="Bộ nhớ đệm và bản nháp chưa lưu sẽ bị xoá. File dự án và tuỳ chọn trên máy không bị ảnh hưởng."
         actionLabel="Xoá dữ liệu"
         onConfirm={clearAll}
       />

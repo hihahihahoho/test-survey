@@ -7,6 +7,7 @@
 
    Nhóm ca:
      suite-system    health · doctor · workspaces · CORS/Host/preflight/loopback
+     suite-settings  tuỳ chọn người dùng trên đĩa · vá một phần · hợp đồng bảo mật của config.json
      suite-projects  CRUD trọn vòng · thùng rác 30 ngày · phục hồi · cụm xác nhận + đối chiếu project · export zip
      suite-paths     ../ · %2e%2e · symlink ra ngoài · whitelist thư mục đọc
      suite-contract  version + If-Match (412/409) · validate V-01..V-08 · lịch sử
@@ -24,6 +25,7 @@ import { fileURLToPath } from "node:url"
 import { createAgent } from "./server.mjs"
 import { apiFor, fakeDoctor, report, PAGES, PORT } from "./test/harness.mjs"
 import { run as runSystem } from "./test/suite-system.mjs"
+import { run as runSettings } from "./test/suite-settings.mjs"
 import { run as runProjects } from "./test/suite-projects.mjs"
 import { run as runPaths } from "./test/suite-paths.mjs"
 import { run as runContract } from "./test/suite-contract.mjs"
@@ -56,6 +58,7 @@ const { api, call } = apiFor(agent.server)
 const base = { api, call, agent, wsRoot, outsideRoot, tmp, agentDir: AGENT_DIR }
 
 await runSystem(base)
+await runSettings(base)
 const { pid } = await runProjects(base)
 await runPaths({ ...base, pid })
 await runContract({ ...base, pid })

@@ -2,6 +2,11 @@
  * webapp/src/lib/store/prefs.ts — ƯU TIÊN NGƯỜI DÙNG (`kitgen.prefs.v1`), tab S6?tab=prefs.
  * `maxJobs` và `autoSliceAfterGen` đi vào payload của #32 nên đây không chỉ là chuyện giao diện.
  * `autoSliceAfterGen` mặc định BẬT — chốt X9.
+ *
+ * ⚠ NGUỒN SỰ THẬT NẰM TRÊN ĐĨA: cả năm field ở đây được lưu vào
+ * `<workspace>/.kitgen/config.json` (`prefs`, và `maxJobs` còn được giữ đồng bộ ở gốc file
+ * cho tương thích ngược). localStorage chỉ còn là bộ nhớ đệm khởi động. Xem
+ * `./disk-settings.ts` + `./settings-sync.ts`.
  */
 import { create } from "zustand";
 import { persist } from "zustand/middleware";

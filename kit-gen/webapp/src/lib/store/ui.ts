@@ -5,6 +5,12 @@
  * Persist qua `createPersistStorage` nên mọi lần ghi đều đi qua allowlist khoá +
  * schema strict + bộ dò secret. `partialize` dùng allowlist FIELD tường minh: hàm
  * (action) và state tạm không bao giờ rời khỏi RAM.
+ *
+ * ⚠ localStorage KHÔNG CÒN LÀ NGUỒN SỰ THẬT. Gần hết store này sống trên đĩa tại
+ * `<workspace>/.kitgen/config.json`; localStorage tụt xuống làm bộ nhớ đệm khởi động và
+ * làm đường lùi khi agent chưa chạy. Danh sách field nào lên đĩa (và vì sao `filterQuery`
+ * / `filterTags` CỐ Ý ở lại) nằm ở `./disk-settings.ts`; cây cầu ở `./settings-sync.ts`.
+ * Thêm field mới vào đây thì cân nhắc thêm nó vào `DISK_UI_FIELDS` luôn.
  */
 import { create } from "zustand";
 import { persist } from "zustand/middleware";

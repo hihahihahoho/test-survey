@@ -24,6 +24,8 @@ export const qk = {
   /** quota Codex còn lại — đọc file local, rẻ, nhưng chỉ mới bằng lượt chạy cuối. */
   usage: () => ["usage"] as const,
   workspaces: () => ["workspaces"] as const,
+  /** Tuỳ chọn người dùng trên đĩa. Đổi workspace = đổi file cấu hình ⇒ key phải bị dọn cùng. */
+  settings: () => ["settings"] as const,
 
   projects: {
     all: () => ["projects"] as const,

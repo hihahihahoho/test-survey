@@ -5,6 +5,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { queryClient } from "@/lib/query";
 import { useUiStore, applyTheme } from "@/lib/store";
+/* Import THẲNG file, không qua cửa chung `@/lib/store` — lý do ở cuối `lib/store/index.ts`. */
+import { SettingsSync } from "@/lib/store/settings-sync";
 import { ErrorBoundary, UpdateOverlay, UpdateResultNotice } from "@/components/layout";
 import { routeTree } from "./routeTree";
 import { detectBaseHref, toRouterBasepath } from "@/lib/basepath";
@@ -53,6 +55,10 @@ declare module "@tanstack/react-router" {
  *   QueryClientProvider → TooltipProvider → RouterProvider.
  *   Toaster đặt NGOÀI router: toast "Đã xoá — [Hoàn tác 10s]" phải sống sót
  *     qua điều hướng, nếu không thì xoá project xong rời màn là mất đường lùi.
+ *   SettingsSync NGOÀI router và không vẽ gì: nó giữ cho tuỳ chọn người dùng khớp với
+ *     `<workspace>/.kitgen/config.json` theo cả hai chiều. Tuỳ chọn bị đổi từ khắp nơi
+ *     (công tắc chủ đề ở thanh bên, ô "số tấm cùng lúc" trong modal tạo ảnh, nút gập cây
+ *     thiết kế) nên treo nó vào một màn thì đóng màn đó là mất đường ghi.
  *   UpdateOverlay / UpdateResultNotice cũng NGOÀI router, và vì đúng lý do đó ở mức
  *     gắt hơn: lượt cập nhật bắt đầu từ sidebar hoặc từ popover header (popover đóng =
  *     unmount), chạy xuyên qua mọi điều hướng, rồi kết thúc bằng một lần tải lại trang.
@@ -67,6 +73,7 @@ export function App() {
   return (
     <ErrorBoundary title="Ứng dụng gặp trục trặc">
       <QueryClientProvider client={queryClient}>
+        <SettingsSync />
         <TooltipProvider>
           <RouterProvider router={router} />
           <UpdateOverlay />
