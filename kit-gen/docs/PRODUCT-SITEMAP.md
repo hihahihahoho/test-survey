@@ -471,6 +471,8 @@ Quản lý dự án → Sửa ref/chọn lại thành phần/đổi giới hạn
 
 Phần này **thay thế** mô tả “Bước 6 — Kết quả” của §6 và danh sách sidebar dự án của §7.
 
+> ⚠️ Bốn điểm của mục này đã bị mục **2026-08-14** (ngay bên dưới) đè lên: hàng chip nhóm của trang “Ảnh đã tạo”, hình dạng trang Skeleton UI / Mascot, chỗ đặt ô `Rộng %`/`Cao %`, và tên mục sidebar thứ tư. Phần còn lại (tên gọi, wizard 5 bước, luật buffer, nguồn của prompt) vẫn nguyên giá trị.
+
 ### Tên gọi đã chốt
 
 - Khái niệm “cấu trúc ô/sheet của một dự án” gọi là **Skeleton UI** ở mọi nơi thuộc phạm vi dự án: mục sidebar dự án, bước ③ của wizard, và tiêu đề trang.
@@ -514,3 +516,65 @@ Hàng nút của dialog là `DialogFooter` thật (anh em của vùng cuộn), k
 - Nguồn sự thật là `skel.w/h` của contract. Dự án lưu một **lớp đè** `KitElement.skel`; `resolveKitset()` trộn nó lên `skel` của thư viện chung khi dựng contract, nên thư viện chung không bị sửa.
 - Panel chi tiết hiện **prompt sẽ gửi đi** của đúng ô đó — chỉ đọc, có nút sao chép. Nội dung rút từ contract theo đúng những mảnh `gen.sh` chèn nguyên văn (dòng `N) <spec>`, hướng canvas, `cell_hint`, `Art style:`); không dựng lại một bản prompt song song.
 - Ô dáng mascot cố định `30% × 85%` để cả tấm là một turnaround đều nhau; panel nói ra điều đó thay vì đưa một ô nhập giả.
+
+## Sửa màn dự án theo góp ý chủ sản phẩm (2026-08-14)
+
+Mục này **đè lên** bốn điểm của mục 2026-08-13 ở trên. Nguyên nhân: bản 13/08 giữ đúng cấu trúc thông tin nhưng đưa quá nhiều control ra mặt tiền, và chủ sản phẩm bác thẳng — *“SETTING SAO NÓ THÔ THẾ NÀY, KIỂU ĐỂ HẾT TRONG 1 CÁI POPUP THÔI, ĐỪNG LỘ RA NGOÀI”*. Những gì không nhắc tới ở đây thì giữ nguyên bản 13/08.
+
+### ① Mọi control chỉnh nằm trong popup — thẻ thành phần sạch
+
+**Đổi so với 13/08**: bản cũ đặt hai ô `Rộng %`/`Cao %` cộng nút Chi tiết **ngay dưới từng thẻ** trong lưới thành phần. Với 42 món đó là 84 ô số + 42 nút, và người dùng đọc trang này như một bảng cấu hình chứ không như một bộ chọn.
+
+Nay:
+
+- Thẻ chỉ còn **ba** thứ: tên, hình silhouette, dấu tick chọn. Không một `input`/`select`/`textarea` nào nằm trần trong lưới (khoá bằng phép quét cả lưới trong test, không đếm tay).
+- Nút **Chi tiết** là một nút icon **đè lên góc phải của thẻ**; nó mở `ItemDetailDialog` — cửa DUY NHẤT để chỉnh.
+- Popup gom hết: tick *Vẽ thành phần này* · `Rộng %`/`Cao %` · mô tả gửi cho máy vẽ · **prompt sẽ gửi đi** (chỉ đọc, có nút sao chép) · hàng nút Lưu của trang.
+- Vì thế câu “kích thước ô sửa được ở **hai** chỗ” của 13/08 **không còn đúng**: nay chỉ còn **một** chỗ (popup). Nguồn sự thật vẫn là lớp đè `KitElement.skel` trộn vào `skel` thư viện chung lúc `resolveKitset()` — phần đó không đổi.
+- `SkelSizeFields` bỏ hẳn hai prop `compact`/`itemLabel` (chúng chỉ tồn tại để nhét ô số vào lưới), nên không có đường dựng lại bức tường control mà không phải sửa chính component đó.
+
+Lưới dáng mascot theo đúng luật này: thẻ sạch + nút Chi tiết trên thẻ + popup của dáng.
+
+### ② Skeleton UI và Mascot đều có ba tab
+
+`Ảnh thật · Ảnh gốc · Settings` — chủ sản phẩm: *“ITEM Ở SIDEBAR THỨ 2: SKELETON UI, TRONG ĐÓ SHOW ẢNH SKELETON ĐÃ GEN RA, CÓ 3 TAB: ẢNH THẬT, ẢNH GỐC, SETTINGS”*.
+
+| Tab | Trang **Skeleton UI** | Trang **Mascot** |
+| --- | --- | --- |
+| **Ảnh thật** (mặc định) | Bộ khung đã dựng của từng tấm (`SkeletonSheetGrid`), **trừ** tấm mascot | Bộ khung của **tấm dáng** mascot |
+| **Ảnh gốc** | Sheet thô `raw/` của lượt tạo, trừ nhóm mascot | Sheet thô của nhóm mascot |
+| **Settings** | Chọn/chỉnh thành phần (`KitsetStep variant="manage"`) | Nhân vật + bộ dáng (`MascotStep variant="manage"`) |
+
+- Trang mở ở tab **Ảnh thật**: câu hỏi đầu tiên khi vào mục này là “bộ khung hiện ra sao”, không phải “sửa gì”.
+- Hàng nút **[Huỷ] [Lưu] [Lưu + Gen lại]** chỉ có ở tab *Settings* (vẫn ở cả trên và dưới nội dung). Hai tab xem không có hàng nút — ở đó không có gì để lưu.
+- Tab *Ảnh gốc* dùng chung component `RawSheetsPanel`, tách ra từ `GeneratedResults`; ba trang (Ảnh đã tạo · Skeleton UI · Mascot) gọi cùng một khối nên trạng thái sheet không lệch nhau.
+- Trang Mascot: danh sách **nhân vật** và lưới **dáng** đều có hộp cuộn riêng (`max-h` + `overflow-y-auto`, không `h-` cố định) — *“MASCOT, CHO NÓ SHOW SCROLL ĐƯỢC”*. Ít món thì khối co lại; nhiều món thì mới sinh thanh cuộn, và hàng tab + hàng nút Lưu luôn còn trong tầm mắt.
+
+### ③ “Ảnh đã tạo” bỏ hàng pill, thành một dải cuộn dọc
+
+*“BỎ CÁI ĐOẠN BUTTON PILL Ở TẤT CẢ THÀNH PHẨM”*. Hàng chip `Tất cả thành phẩm / Mascot / Nền / Popup / UI nhỏ / Đạo cụ` đã xoá.
+
+- Trang là **một dải cuộn dọc**, mỗi nhóm một khối có tiêu đề nhỏ, thứ tự `Mascot · Nền · Popup · UI nhỏ · Đạo cụ · Khác` (`RESULT_GROUP_ORDER`). Nhóm không có ảnh **không** để lại khối rỗng.
+- Thanh `Ảnh thật | Ảnh gốc` giữ nguyên và vẫn là **thanh segmented duy nhất** của trang; các khối theo nhóm nằm **bên trong** từng tab.
+- Nhóm chỉ có một tấm thì tiêu đề tấm bị lược (tên nhóm đã nói xong) — `sheetLabel("pose-nhan-vat")` và `groupLabel("mascot")` đều là “Mascot pose”.
+- `?group=` **đổi nghĩa từ “lọc” sang “cuộn tới”** nhưng vẫn resolve: link cũ `?group=props` và cả `?section=props` đời trước đều cuộn tới đúng khối. Anchor là `groupAnchorId()` = `nhom-<nhóm>` — một hằng số, hai bên (nơi vẽ khối và nơi cuộn) đọc chung.
+- Tiêu đề trang cố định là **“Tất cả thành phẩm”** vì trang không còn lọc gì nữa.
+
+### ④ Sidebar dự án — thêm Preview tổng quan, đổi tên mục thứ tư
+
+Danh sách bốn đích của 13/08 giữ nguyên thứ tự, sửa mục thứ tư và thêm một khối chỉ-đọc:
+
+1. **Ảnh đã tạo** (`?section=images`) — một dải cuộn dọc chia khối theo nhóm (xem ③).
+2. **Skeleton UI** (`?section=skeleton`) — ba tab (xem ②).
+3. **Mascot** (`?section=mascot`) — ba tab (xem ②).
+4. **Cài đặt style** — mở dialog `?settings=<tab>`, icon **Palette** (bảng màu). Chủ sản phẩm: *“CÁI CÀI ĐẶT Ở SIDEBAR ĐỔI THÀNH CÀI ĐẶT STYLE — CÁI NÀY Ở TRÊN CÓ RỒI MÀ, ĐỔI ICON ĐI”*. Bánh răng ở topbar là cài đặt của **cả app**; mục này là yêu cầu + phong cách của **một dự án**, nên hai chỗ không dùng chung tên lẫn icon. Nội dung dialog không đổi (`Yêu cầu · Phong cách · Dự án`).
+
+Dưới `<nav>` là khối **Preview tổng quan** — *“TRONG DỰ ÁN, SIDEBAR TRÁI SẼ CÓ PHẦN PREVIEW TỔNG QUAN”*:
+
+- ảnh đại diện (ảnh bìa dự án → nếu chưa có thì ô đã cắt đầu tiên → nếu chưa có gì thì khung trống **có chữ**), số ô đã cắt **theo từng nhóm** và một dòng Tổng;
+- chỉ đọc: không nút tạo lại, không bộ lọc, không mở dialog. Bấm vào bất kỳ đâu trong khối ⇒ sang **Ảnh đã tạo**;
+- nằm **ngoài** `<nav aria-label="Quản lý dự án">` — nó là bản tóm tắt có lối tắt, không phải đích điều hướng thứ năm (sidebar vẫn đúng bốn nút).
+
+### Những gì KHÔNG đổi
+
+Luật buffer (`autosave: false`, chỉ nút Lưu mới ghi, hỏi lại khi rời mục còn thay đổi), ba tab của dialog Cài đặt, hai cửa ra `Tải .zip` / `Copy sang Figma` ở header trang “Ảnh đã tạo”, nguồn của prompt trong popup, và ô dáng mascot cố định `30% × 85%`.

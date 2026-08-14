@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { FileInput, Images, LayoutGrid, Settings, UserRound } from "lucide-react";
+import { FileInput, Images, LayoutGrid, Palette, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -18,7 +18,7 @@ import { fromAgentLib } from "@/features/design/library/lib/source";
 import { Route as ProjectRoute } from "@/routes/p.$projectId";
 import {
   resolveProjectView,
-  type ProjectImageGroup, type ProjectSection, type ProjectSettingsTab,
+  type ProjectSection, type ProjectSettingsTab,
 } from "@/routes/search-schemas";
 import { KitsetStep } from "@/features/workflow-v4/steps/KitsetStep";
 import { MascotStep } from "@/features/workflow-v4/steps/MascotStep";
@@ -34,8 +34,11 @@ import {
 import { gateOf, useNarrowViewport } from "@/features/projects/lib/gate";
 import { hasGeneratedOutput } from "@/features/projects/lib/nav";
 import { mergeElements, userUiElements } from "@/features/workflow-v4/lib/user-library";
+import { RawSheetsPanel } from "@/features/workflow-v4/components/RawSheetsPanel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ImagesSection } from "./sections/ImagesSection";
 import { SkeletonSheetGrid } from "./sections/SkeletonSheetGrid";
+import { PreviewOverview } from "./components/PreviewOverview";
 import { ProjectSettingsDialog } from "./components/ProjectSettingsDialog";
 import { SaveBar } from "./components/SaveBar";
 import { UnsavedGuardDialog } from "./components/UnsavedGuardDialog";
@@ -46,9 +49,16 @@ import { useProjectBuffer } from "./lib/useProjectBuffer";
  * MÀN QUẢN LÝ DỰ ÁN — bốn đích, một bản nháp, không autosave
  * ══════════════════════════════════════════════════════════════════════════════
  *
- * ① **Sidebar bốn mục**: Ảnh đã tạo · Skeleton UI · Mascot · Cài đặt. Sáu mục cũ
- *    (Tất cả thành phẩm / Mascot / Nền / Popup / UI nhỏ / Đạo cụ) đều là *bộ lọc của
- *    một trang*, nên chúng xuống làm hàng chip trong trang "Ảnh đã tạo".
+ * ① **Sidebar bốn mục**: Ảnh đã tạo · Skeleton UI · Mascot · Cài đặt style, cộng một
+ *    khối **Preview tổng quan** chỉ-đọc ở dưới. Sáu mục cũ (Tất cả thành phẩm / Mascot
+ *    / Nền / Popup / UI nhỏ / Đạo cụ) từng là bộ lọc trong trang "Ảnh đã tạo"; nay cả
+ *    hàng chip đó cũng bỏ, mỗi nhóm là một khối trong dải cuộn dọc của trang.
+ *
+ * ①b **Hai trang sửa được có BA TAB**: `Ảnh thật · Ảnh gốc · Settings` (chủ sản phẩm:
+ *    "TRONG ĐÓ SHOW ẢNH SKELETON ĐÃ GEN RA, CÓ 3 TAB"). Trang mở ở tab *Ảnh thật* vì
+ *    câu hỏi đầu tiên khi vào đây là "bộ khung hiện ra sao", còn *Settings* là nơi sửa.
+ *    Trang Mascot dùng đúng khuôn đó, chỉ khác dữ liệu — hai khuôn khác nhau cho hai
+ *    trang anh em là hai chỗ để lệch dần.
  *
  * ② **Sửa là buffer**. `useContractSync(..., { autosave: false })` ⇒ không có đường
  *    nào ghi đĩa ngoài nút Lưu. Xem `lib/useProjectBuffer.ts` để biết vì sao autosave
@@ -301,7 +311,7 @@ function ProjectManager({ projectId }: { projectId: string }) {
   return (
     <ContractSyncProvider value={sync}>
       <div className="flex min-h-[calc(100dvh-3.5rem)] min-w-0 bg-canvas">
-        <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-56 shrink-0 flex-col border-r border-line-subtle bg-surface/50 p-3 md:flex">
+        <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-56 shrink-0 flex-col overflow-y-auto border-r border-line-subtle bg-surface/50 p-3 md:flex">
           <p className="px-3 py-3 text-caption font-medium uppercase tracking-wide text-fg-muted">Quản lý</p>
           <nav aria-label="Quản lý dự án" className="space-y-1">
             {SIDEBAR.map(({ id, label, icon: Icon }) => (
@@ -318,8 +328,13 @@ function ProjectManager({ projectId }: { projectId: string }) {
                 <Icon className="size-4" aria-hidden /><span>{label}</span>
               </button>
             ))}
-            {/* Cài đặt là mục thứ tư của sidebar và mở DIALOG — cùng một cửa với nút Cài
-                đặt trên topbar, nên hai đường không thể lệch nội dung. */}
+            {/* Mục thứ tư mở DIALOG — cùng một cửa với nút Cài đặt trên topbar, nên hai
+                đường không thể lệch nội dung.
+
+                TÊN + ICON: chủ sản phẩm — "CÁI CÀI ĐẶT Ở SIDEBAR ĐỔI THÀNH CÀI ĐẶT
+                STYLE — CÁI NÀY Ở TRÊN CÓ RỒI MÀ, ĐỔI ICON ĐI, ĐỂ CÁI BẢNG MÀU VẼ ẤY".
+                Bánh răng ở topbar là cài đặt của CẢ APP; mục này mở yêu cầu và phong
+                cách của MỘT dự án, nên hai chỗ không được mang cùng tên và cùng icon. */}
             <button
               type="button"
               aria-current={view.settingsTab !== null ? "page" : undefined}
@@ -329,9 +344,18 @@ function ProjectManager({ projectId }: { projectId: string }) {
                 view.settingsTab !== null ? "bg-raised text-fg-strong" : "text-fg hover:bg-raised",
               )}
             >
-              <Settings className="size-4" aria-hidden /><span>Cài đặt</span>
+              <Palette className="size-4" aria-hidden /><span>Cài đặt style</span>
             </button>
           </nav>
+
+          {/* NGOÀI `<nav>`: khối này không phải một đích thứ năm, nó là bản tóm tắt có
+              một lối tắt. Để trong nav thì trình đọc màn hình đọc nó như mục điều hướng. */}
+          <PreviewOverview
+            projectId={projectId}
+            project={project.data}
+            contract={sync.contract}
+            onOpen={() => goSection("images")}
+          />
         </aside>
 
         <div className="min-w-0 flex-1">
@@ -351,7 +375,6 @@ function ProjectManager({ projectId }: { projectId: string }) {
                 projectId={projectId}
                 kitName={workflow.kitName}
                 group={view.group}
-                onGroupChange={(group: ProjectImageGroup) => patchSearch({ group })}
                 contract={sync.contract}
                 project={project.data}
                 gate={gate}
@@ -365,18 +388,25 @@ function ProjectManager({ projectId }: { projectId: string }) {
               <ManageSection
                 eyebrow="Bộ khung của dự án"
                 title="Skeleton UI"
-                copy="Chọn thành phần, chỉnh kích thước ô và xem prompt sẽ gửi đi."
+                copy="Xem bộ khung đã dựng, đối chiếu sheet gốc và chỉnh thành phần."
+                tabsLabel="Chế độ xem Skeleton UI"
                 readOnly={projectReadOnly}
                 saveBar={saveBar("ui", "Lưu", "Lưu + Gen lại")}
+                /* Bộ khung của phần UI = mọi tấm TRỪ tấm mascot; tấm mascot có trang riêng. */
+                real={<SkeletonSheetGrid sheets={sync.contract.sheets.filter((sheet) => categoryOfSheet(sheet.id) !== "mascot")} />}
+                raw={(
+                  <RawSheetsPanel
+                    projectId={projectId}
+                    contract={sync.contract}
+                    jobStates={project.data.state?.jobs ?? {}}
+                    category="all"
+                    exclude="mascot"
+                    readOnly={projectReadOnly}
+                    emptyCopy="Lượt tạo này chưa có tấm nào thuộc phần khung UI."
+                  />
+                )}
               >
                 <KitsetStep variant="manage" detailFooter={saveBar("ui", "Lưu", "Lưu + Gen lại", "w-full")} />
-                {/* Lưới xem bộ khung từng tấm — dọn về từ thanh tab "Skeleton" thừa của
-                    trang Ảnh đã tạo. Trang này là ĐÍCH DUY NHẤT của skeleton, nên nó
-                    phải vừa sửa được (KitsetStep) vừa xem được (lưới dưới đây). */}
-                <div className="mt-6 space-y-3">
-                  <h2 className="text-subtitle text-fg-strong">Bộ khung từng tấm</h2>
-                  <SkeletonSheetGrid sheets={sync.contract.sheets} />
-                </div>
               </ManageSection>
             )}
 
@@ -384,9 +414,21 @@ function ProjectManager({ projectId }: { projectId: string }) {
               <ManageSection
                 eyebrow="Nhân vật của dự án"
                 title="Mascot"
-                copy="Quản lý nhân vật, bộ dáng và prompt của từng dáng."
+                copy="Xem tấm dáng đã dựng, đối chiếu sheet gốc và quản lý nhân vật."
+                tabsLabel="Chế độ xem Mascot"
                 readOnly={projectReadOnly}
                 saveBar={saveBar("mascot", "Lưu", "Lưu + Gen lại")}
+                real={<SkeletonSheetGrid sheets={sync.contract.sheets.filter((sheet) => categoryOfSheet(sheet.id) === "mascot")} />}
+                raw={(
+                  <RawSheetsPanel
+                    projectId={projectId}
+                    contract={sync.contract}
+                    jobStates={project.data.state?.jobs ?? {}}
+                    category="mascot"
+                    readOnly={projectReadOnly}
+                    emptyCopy="Lượt tạo này chưa có tấm dáng mascot nào."
+                  />
+                )}
               >
                 <MascotStep variant="manage" detailFooter={saveBar("mascot", "Lưu", "Lưu + Gen lại", "w-full")} />
               </ManageSection>
@@ -451,16 +493,34 @@ function ProjectManager({ projectId }: { projectId: string }) {
 }
 
 /**
- * Khung chung của hai trang sửa được (Skeleton UI · Mascot): tiêu đề + hàng nút Lưu ở
- * TRÊN và DƯỚI nội dung. Trên vì lưới 42 món dài hơn một màn hình và người ta không nên
- * phải cuộn xuống đáy mới thấy nút Lưu; dưới vì đó là nơi tay đang ở sau khi sửa xong.
+ * ══ KHUNG CHUNG CỦA HAI TRANG SỬA ĐƯỢC (Skeleton UI · Mascot) ═══════════════
+ *
+ * BA TAB, đúng thứ tự câu hỏi người dùng mang tới trang:
+ *  ① **Ảnh thật** — bộ khung đã dựng của dự án (`SkeletonPreview` từng tấm). Đây là
+ *    tab MẶC ĐỊNH: chủ sản phẩm mô tả mục này là "TRONG ĐÓ SHOW ẢNH SKELETON ĐÃ GEN
+ *    RA", nên thứ đầu tiên hiện ra phải là ảnh, không phải một lưới 42 ô nhập.
+ *  ② **Ảnh gốc** — sheet thô tương ứng của lượt tạo, để đối chiếu khi ô cắt ra sai.
+ *  ③ **Settings** — nơi chọn/chỉnh thành phần, và là nơi DUY NHẤT có hàng nút Lưu.
+ *
+ * Hàng nút Lưu nằm ở TRÊN và DƯỚI phần nội dung của tab Settings: trên vì lưới 42 món
+ * dài hơn một màn hình và người ta không nên phải cuộn xuống đáy mới thấy nút Lưu;
+ * dưới vì đó là nơi tay đang ở sau khi sửa xong. Hai tab xem KHÔNG có hàng nút — ở đó
+ * không có gì để lưu, và một nút Lưu luôn tắt chỉ làm người ta nghi ngờ mình đã mất
+ * thay đổi.
  */
-function ManageSection({ eyebrow, title, copy, readOnly, saveBar, children }: {
+function ManageSection({ eyebrow, title, copy, tabsLabel, readOnly, saveBar, real, raw, children }: {
   eyebrow: string;
   title: string;
   copy: string;
+  /** `aria-label` của hàng tab — hai trang có hai nhãn riêng để không trùng nhau. */
+  tabsLabel: string;
   readOnly: boolean;
   saveBar: React.ReactNode;
+  /** Tab ① — bộ khung đã dựng. */
+  real: React.ReactNode;
+  /** Tab ② — sheet thô tương ứng. */
+  raw: React.ReactNode;
+  /** Tab ③ — phần chỉnh sửa. */
   children: React.ReactNode;
 }) {
   return (
@@ -470,9 +530,22 @@ function ManageSection({ eyebrow, title, copy, readOnly, saveBar, children }: {
         <h1 className="text-display text-fg-strong">{title}</h1>
         <p className="mt-1 text-body text-fg-muted">{copy}</p>
       </header>
-      <div className="rounded-3 border border-line-subtle bg-surface p-3">{saveBar}</div>
-      <fieldset disabled={readOnly} className="min-w-0 border-0 p-0">{children}</fieldset>
-      <div className="rounded-3 border border-line-subtle bg-surface p-3">{saveBar}</div>
+
+      <Tabs defaultValue="real">
+        <TabsList aria-label={tabsLabel}>
+          <TabsTrigger value="real">Ảnh thật</TabsTrigger>
+          <TabsTrigger value="raw">Ảnh gốc</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="real">{real}</TabsContent>
+        <TabsContent value="raw">{raw}</TabsContent>
+        <TabsContent value="settings" className="space-y-5">
+          <div className="rounded-3 border border-line-subtle bg-surface p-3">{saveBar}</div>
+          <fieldset disabled={readOnly} className="min-w-0 border-0 p-0">{children}</fieldset>
+          <div className="rounded-3 border border-line-subtle bg-surface p-3">{saveBar}</div>
+        </TabsContent>
+      </Tabs>
     </section>
   );
 }

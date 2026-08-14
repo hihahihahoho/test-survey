@@ -3,10 +3,12 @@ import { Check, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Silhouette } from "@/features/design/preview";
+import { cn } from "@/lib/utils";
 import { useElementLib, useUserLibrary } from "@/lib/hooks";
 import { foldVi, fromAgentLib, loadBundledV2 } from "@/features/design/library/lib/source";
 import type { LibElement } from "@/features/design/library/lib/types";
 import { cellLabel, useWorkflowStore, type KitElementSkel } from "../lib/model";
+import { CheckRow } from "../components/CheckRow";
 import { GroupChips } from "../components/GroupChips";
 import { ItemDetailDialog, SkelSizeFields } from "../components/ItemDetail";
 import { useKitsetContract } from "../lib/contract-sync";
@@ -56,9 +58,17 @@ function meta(element: LibElement) {
  *
  * · `wizard` — bước ③ lúc tạo dự án: chỉ chọn/bỏ chọn. Người ta chưa có ảnh nào để
  *   so, nên đưa ô "Rộng %/Cao %" ra trước mặt là bắt quyết định thứ họ chưa hình dung.
- * · `manage` — trang **Skeleton UI** trong dự án: mỗi món kèm hai ô kích thước và một
- *   cửa "Chi tiết" (kích thước + prompt sẽ gửi đi). Đây là nơi người ta quay lại SAU
- *   khi đã nhìn ảnh thật và biết ô nào cần to/nhỏ lại.
+ * · `manage` — tab **Settings** của trang Skeleton UI: cùng thẻ đó, cộng thêm MỘT nút
+ *   Chi tiết trên thẻ. Đây là nơi người ta quay lại SAU khi đã nhìn ảnh thật và biết ô
+ *   nào cần to/nhỏ lại.
+ *
+ * ══ MỌI Ô NHẬP NẰM TRONG POPUP, KHÔNG MỘT Ô NÀO TRẦN RA TRANG ═══════════════
+ * Bản trước đặt hai ô "Rộng %"/"Cao %" + nút Chi tiết NGAY DƯỚI từng thẻ. Với 42 món
+ * đó là 84 ô số xếp thành một bức tường, và chủ sản phẩm gọi đúng tên nó: "SETTING SAO
+ * NÓ THÔ THẾ NÀY, KIỂU ĐỂ HẾT TRONG 1 CÁI POPUP THÔI, ĐỪNG LỘ RA NGOÀI". Nay thẻ chỉ
+ * còn ba thứ — tên, hình silhouette, dấu tick — và TẤT CẢ control chỉnh (kích thước ô,
+ * tick chọn, mô tả, prompt sẽ gửi đi) gom vào `ItemDetailDialog` mở từ nút Chi tiết.
+ * Kích thước ô vì thế chỉ còn MỘT chỗ sửa, không phải hai chỗ phải giữ đồng bộ.
  *
  * Một component chứ không hai màn: hai bản sao của lưới 42 món là hai chỗ để luật
  * "mặc định chọn hết" và bộ lọc nhóm lệch nhau.
@@ -170,7 +180,12 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
           const toggle = (
             <button
               type="button"
-              className={on ? "compact-element selected" : "compact-element"}
+              className={cn(
+                on ? "compact-element selected" : "compact-element",
+                /* Chừa chỗ cho nút Chi tiết đè lên góc phải; không có `pr` này thì nút
+                   nằm chồng lên dấu tick của chính thẻ. */
+                variant === "manage" && "w-full pr-12",
+              )}
               aria-pressed={on}
               onClick={() => workflow.toggleElement(element.file, meta(element))}
             >
@@ -190,22 +205,21 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
           );
           if (variant === "wizard") return <React.Fragment key={element.file}>{toggle}</React.Fragment>;
           return (
-            <div key={element.file} className="flex min-w-0 flex-col gap-2">
+            <div key={element.file} className="relative min-w-0">
               {toggle}
-              <div className="flex items-end gap-2 px-1">
-                <SkelSizeFields
-                  compact
-                  idPrefix={`skel-${element.file}`}
-                  itemLabel={element.vi}
-                  w={override?.w}
-                  h={override?.h}
-                  defaults={{ w: element.skel.w ?? 0.8, h: element.skel.h ?? 0.8 }}
-                  onChange={(patch) => workflow.setElementSkel(element.file, patch)}
-                />
-                <Button type="button" variant="ghost" size="sm" onClick={() => setDetailFile(element.file)}>
-                  <SlidersHorizontal aria-hidden />Chi tiết
-                </Button>
-              </div>
+              {/* Nút Chi tiết ĐÈ lên thẻ chứ không nằm dưới thẻ: nằm dưới thì nó là một
+                  hàng control thứ hai của lưới, đúng thứ vừa bị dọn đi. */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="absolute right-2 top-1/2 z-10 -translate-y-1/2"
+                aria-label={`Chi tiết ${element.vi}`}
+                title={`Chi tiết ${element.vi}`}
+                onClick={() => setDetailFile(element.file)}
+              >
+                <SlidersHorizontal aria-hidden />
+              </Button>
             </div>
           );
         })}
@@ -222,6 +236,16 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
           footer={detailFooter ?? <Button type="button" variant="secondary" onClick={() => setDetailFile(null)}>Đóng</Button>}
         >
           <div className="space-y-4">
+            {/* Tick chọn có ở CẢ hai nơi cùng một nguồn: dấu tick trên thẻ (thao tác
+                nhanh) và hàng này (để sửa xong kích thước là bật/tắt được ngay, không
+                phải đóng popup đi tìm lại đúng thẻ trong 42 món). */}
+            <CheckRow
+              id={`kitset-detail-${detail.file}`}
+              checked={selected.has(detail.file)}
+              onCheckedChange={() => workflow.toggleElement(detail.file, meta(detail))}
+              label="Vẽ thành phần này"
+              description="Bỏ tick để loại thành phần khỏi bản thiết kế của dự án."
+            />
             <div>
               <p className="text-label text-fg-strong">Kích thước ô</p>
               <p className="mt-1 text-caption text-fg-muted">Phần trăm bề rộng và bề cao của ô. Bỏ trống để dùng số của thư viện chung.</p>

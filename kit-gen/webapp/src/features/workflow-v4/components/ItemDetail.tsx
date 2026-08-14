@@ -94,9 +94,14 @@ export function ItemPromptBlock({ prompt, emptyReason }: { prompt: ItemPrompt | 
  * Ô trống ⇒ dùng số của thư viện chung, và `placeholder` nói rõ số đó là bao nhiêu. Đây
  * là lý do không điền sẵn giá trị mặc định vào ô: điền sẵn thì không phân biệt được
  * "đang theo thư viện" với "đã chốt đúng bằng số của thư viện".
+ *
+ * NÓ CHỈ SỐNG TRONG POPUP. Bản trước còn một hình thái `compact` để nhét hai ô này
+ * xuống dưới từng thẻ của lưới 42 món; hình thái đó bị bỏ cùng với bức tường control mà
+ * chủ sản phẩm bác ("ĐỪNG LỘ RA NGOÀI"). Không còn `compact`/`itemLabel` nghĩa là không
+ * còn đường nào dựng lại bức tường ấy mà không phải sửa chính component này.
  */
 export function SkelSizeFields({
-  idPrefix, w, h, defaults, onChange, disabled = false, className, compact = false, itemLabel,
+  idPrefix, w, h, defaults, onChange, disabled = false, className,
 }: {
   idPrefix: string;
   w: number | undefined;
@@ -105,9 +110,6 @@ export function SkelSizeFields({
   onChange: (patch: { w?: number | null; h?: number | null }) => void;
   disabled?: boolean;
   className?: string;
-  compact?: boolean;
-  /** Tên món — ghép vào accessible name để 42 ô "Rộng %" trong lưới không trùng tên. */
-  itemLabel?: string;
 }) {
   const pct = (value: number | undefined) => (value === undefined ? "" : String(Math.round(value * 100)));
   const emit = (side: "w" | "h", raw: string) => {
@@ -120,9 +122,7 @@ export function SkelSizeFields({
     <div className={cn("flex items-end gap-2", className)}>
       {(["w", "h"] as const).map((side) => (
         <div key={side} className="min-w-0 flex-1">
-          <Label htmlFor={`${idPrefix}-${side}`} className={compact ? "text-caption" : undefined}>
-            {side === "w" ? "Rộng %" : "Cao %"}
-          </Label>
+          <Label htmlFor={`${idPrefix}-${side}`}>{side === "w" ? "Rộng %" : "Cao %"}</Label>
           <Input
             id={`${idPrefix}-${side}`}
             type="number"
@@ -134,7 +134,6 @@ export function SkelSizeFields({
             value={pct(side === "w" ? w : h)}
             placeholder={String(Math.round((side === "w" ? defaults.w : defaults.h) * 100))}
             onChange={(event) => emit(side, event.target.value)}
-            {...(itemLabel ? { "aria-label": `${side === "w" ? "Rộng" : "Cao"} % của ${itemLabel}` } : {})}
           />
         </div>
       ))}

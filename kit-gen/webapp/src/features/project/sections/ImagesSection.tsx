@@ -5,8 +5,7 @@ import { contractJobs, type Contract, type JobStatusValue, type Project } from "
 import type { Gate } from "@/features/projects/lib/gate";
 import { GeneratedResults } from "@/features/workflow-v4/components/GeneratedResults";
 import { DownloadKitButton, CopyFigmaButton } from "@/features/workflow-v4/components/KitExits";
-import { GroupChips } from "@/features/workflow-v4/components/GroupChips";
-import { categoryOfSheet, type ResultGroup } from "@/features/workflow-v4/lib/generated-results";
+import { groupAnchorId, type ResultGroup } from "@/features/workflow-v4/lib/generated-results";
 import type { ProjectImageGroup } from "@/routes/search-schemas";
 import { buildMatrix } from "../lib/matrix";
 import { staleWarning } from "../lib/next-actions";
@@ -16,16 +15,19 @@ import { StaleBanner } from "../components/StaleBanner";
  * ẢNH ĐÃ TẠO — mục đầu tiên của sidebar dự án, và là nơi wizard đổ người dùng vào ngay
  * sau khi bấm "Tạo ảnh".
  *
- * Sáu nhóm (Tất cả · Mascot · Nền · Popup · UI nhỏ · Đạo cụ) trước đây là SÁU MỤC
- * SIDEBAR. Chúng bị kéo xuống thành hàng chip trong chính trang này, vì sidebar nay phải
- * chứa bốn ĐÍCH ĐẾN khác nhau (Ảnh đã tạo · Skeleton UI · Mascot · Cài đặt) chứ không
- * phải sáu bộ lọc của cùng một trang. URL vẫn giữ nguyên khả năng deep-link: nhóm nằm ở
- * `?group=`, và link cũ dạng `?section=props` vẫn mở đúng nhóm Đạo cụ
- * (`resolveProjectView` trong `routes/search-schemas.ts`).
+ * ══ MỘT TRANG CUỘN DỌC, KHÔNG CÒN HÀNG CHIP ═════════════════════════════════
+ * Sáu nhóm (Tất cả · Mascot · Nền · Popup · UI nhỏ · Đạo cụ) từng là sáu MỤC SIDEBAR,
+ * rồi xuống làm hàng chip trong trang. Chủ sản phẩm bỏ luôn hàng chip đó ("BỎ CÁI ĐOẠN
+ * BUTTON PILL Ở TẤT CẢ THÀNH PHẨM"), và lý do đứng vững: một hàng sáu chip nghĩa là
+ * NĂM nhóm luôn bị giấu sau một cú bấm, trong khi tất cả chúng cộng lại vẫn vừa một dải
+ * cuộn. Nay trang là một dải cuộn dọc, mỗi nhóm một khối có tiêu đề riêng.
  *
- * ⚠️ RANH GIỚI: file này KHÔNG chạm vào ruột thẻ kết quả. `GeneratedResults` lo trạng
- * thái từng ô (đang chờ / đang tạo / lỗi), copy và tải ảnh; ở đây chỉ có khung, bộ lọc
- * và hai cửa ra của cả dự án.
+ * `?group=` KHÔNG bị bỏ: link cũ (và `?section=props` đời trước nữa) vẫn resolve, chỉ
+ * đổi nghĩa từ "lọc" sang "CUỘN TỚI khối đó" — xem `scrollToGroup` bên dưới. Không có
+ * đường nào làm gãy một bookmark cũ.
+ *
+ * ⚠️ RANH GIỚI: file này KHÔNG chạm vào ruột thẻ kết quả. `GeneratedResults` lo hàng
+ * tab, trạng thái từng ô và các khối theo nhóm; ở đây chỉ có khung và hai cửa ra.
  */
 const GROUPS: ReadonlyArray<{ id: ProjectImageGroup; label: string; category: ResultGroup }> = [
   { id: "all", label: "Tất cả thành phẩm", category: "all" },
@@ -44,13 +46,23 @@ export function groupCategory(group: ProjectImageGroup): ResultGroup {
   return GROUPS.find((item) => item.id === group)?.category ?? "all";
 }
 
+/**
+ * `?group=` → cuộn tới khối tương ứng.
+ *
+ * Khối chỉ tồn tại SAU khi `/api/projects/:id/kit` (hoặc `/runs`) về, nên một lần thử
+ * duy nhất lúc mount gần như luôn trượt. Thử lại theo vài nhịp ngắn rồi bỏ cuộc — thà
+ * người dùng đứng ở đầu trang (vẫn thấy đủ mọi nhóm khi cuộn) còn hơn một vòng lặp
+ * quan sát DOM sống mãi trong nền.
+ */
+const SCROLL_RETRIES = [0, 150, 400, 900, 1600] as const;
+
 export function ImagesSection({
-  projectId, kitName, group, onGroupChange, contract, project, gate, jobStates, readOnly, onGenerate,
+  projectId, kitName, group, contract, project, gate, jobStates, readOnly, onGenerate,
 }: {
   projectId: string;
   kitName: string;
+  /** Nhóm muốn CUỘN TỚI (từ `?group=` hoặc `?section=` đời cũ). `all` ⇒ đứng ở đầu. */
   group: ProjectImageGroup;
-  onGroupChange: (group: ProjectImageGroup) => void;
   contract: Contract;
   /** Dự án như agent thấy — nguồn của `state.jobs`, tức là của dải "cần tạo lại". */
   project: Project;
@@ -60,7 +72,15 @@ export function ImagesSection({
   onGenerate: (jobs: string[]) => void;
 }) {
   const category = groupCategory(group);
-  const title = groupLabel(group);
+
+  React.useEffect(() => {
+    if (category === "all") return;
+    const timers = SCROLL_RETRIES.map((delay) => window.setTimeout(() => {
+      document.getElementById(groupAnchorId(category))?.scrollIntoView({ block: "start", behavior: delay === 0 ? "auto" : "smooth" });
+    }, delay));
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [category]);
+
   /**
    * §BUG-2 — DẤU "CẦN TẠO LẠI" BỀN VỮNG.
    *
@@ -71,27 +91,20 @@ export function ImagesSection({
    *
    * Nó BỀN vì nguồn là đĩa, không phải một biến trong RAM: F5, đóng tab, mở máy khác
    * đều thấy cùng một dải, và nó chỉ tắt khi ảnh đã thật sự được sinh lại.
-   *
-   * `StaleBanner` + `staleWarning` vốn đã viết xong cho màn S2 cũ và chưa nơi nào gắn.
    */
   const warning = React.useMemo(
     () => staleWarning(project, buildMatrix(contract, project)),
     [contract, project],
   );
-  const jobs = React.useMemo(
-    () => contractJobs(contract)
-      .filter((job) => category === "all" || categoryOfSheet(job.sheet) === category)
-      .map((job) => job.job),
-    [category, contract],
-  );
+  const jobs = React.useMemo(() => contractJobs(contract).map((job) => job.job), [contract]);
 
   return (
     <section className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="eyebrow">Ảnh đã tạo</p>
-          <h1 className="text-display text-fg-strong">{title}</h1>
-          <p className="mt-1 text-body text-fg-muted">Xem ảnh đã cắt, đối chiếu sheet gốc và tạo lại đúng nhóm đang sửa.</p>
+          <h1 className="text-display text-fg-strong">Tất cả thành phẩm</h1>
+          <p className="mt-1 text-body text-fg-muted">Cuộn xuống để xem từng nhóm: mascot, nền, popup, UI nhỏ và đạo cụ.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* §W3-7 — hai cửa ra MANG PHẦN THƯỞNG. Nhà cũ của chúng là bước ⑥ của wizard,
@@ -100,7 +113,7 @@ export function ImagesSection({
           <DownloadKitButton projectId={projectId} />
           <CopyFigmaButton projectId={projectId} kitName={kitName} />
           <Button type="button" disabled={readOnly || jobs.length === 0} onClick={() => onGenerate(jobs)}>
-            <RefreshCw aria-hidden />{group === "all" ? "Tạo lại toàn bộ" : `Tạo lại ${title.toLowerCase()}`}
+            <RefreshCw aria-hidden />Tạo lại toàn bộ
           </Button>
         </div>
       </header>
@@ -112,20 +125,9 @@ export function ImagesSection({
         onSlice={null}
       />
 
-      <GroupChips
-        groups={GROUPS.map((item) => ({ id: item.id, label: item.label, count: 0 }))}
-        value={group}
-        onChange={(id) => onGroupChange(id as ProjectImageGroup)}
-      />
-
-      {/* ══ MỘT THANH SEGMENTED, KHÔNG PHẢI HAI ═══════════════════════════════
-          Ở đây từng có thanh "Ảnh thật | Skeleton" bọc ngoài, đè ngay trên thanh
-          "Ảnh thật | Ảnh gốc" của `GeneratedResults`: hai hàng giống hệt nhau cách
-          nhau ~8px, cùng mở đầu bằng chữ "Ảnh thật". Skeleton đã có ĐÍCH RIÊNG trong
-          sidebar (`?section=skeleton`) nên thanh ngoài vừa rối vừa là lối vào thứ hai
-          cho cùng một thứ. Lưới xem bộ khung dọn sang trang Skeleton UI
-          (`SkeletonSheetGrid`); trang này chỉ còn nói về ẢNH. */}
-      <GeneratedResults projectId={projectId} contract={contract} jobStates={jobStates} category={category} readOnly={readOnly} />
+      {/* MỘT thanh segmented cho cả trang ("Ảnh thật | Ảnh gốc"); các khối theo nhóm nằm
+          BÊN TRONG từng tab, nên không có hàng tab thứ hai nào lặp lại nhãn đầu. */}
+      <GeneratedResults projectId={projectId} contract={contract} jobStates={jobStates} sectioned readOnly={readOnly} />
     </section>
   );
 }

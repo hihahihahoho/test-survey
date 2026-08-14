@@ -85,6 +85,27 @@ export function groupLabel(group: Exclude<ResultGroup, "all">): string {
   return CATEGORY_LABEL[group];
 }
 
+/**
+ * THỨ TỰ CÁC KHỐI trên trang "Ảnh đã tạo" — một trang cuộn dọc, mỗi nhóm một khối.
+ *
+ * Hàng chip lọc nhóm đã bỏ (chủ sản phẩm: "BỎ CÁI ĐOẠN BUTTON PILL Ở TẤT CẢ THÀNH
+ * PHẨM"), nên thứ tự này là thứ tự người dùng CUỘN QUA, không còn là thứ tự chip.
+ * Mascot đứng đầu vì nó là thứ người ta soi kỹ nhất; "Khác" đứng cuối vì nó là rổ đựng
+ * sheet không nhận ra được.
+ */
+export const RESULT_GROUP_ORDER: readonly ResultCategory[] = [
+  "mascot", "background", "popup", "ui", "prop", "other",
+];
+
+/**
+ * `id` của khối một nhóm trong trang. Đây là chỗ DUY NHẤT biết hình dạng anchor đó,
+ * vì hai bên phải khớp nhau: nơi VẼ khối (lưới ô đã cắt, lưới sheet gốc) và nơi CUỘN
+ * TỚI khi URL còn mang `?group=` của bản cũ.
+ */
+export function groupAnchorId(group: Exclude<ResultGroup, "all">): string {
+  return `nhom-${group}`;
+}
+
 /** Tên tiếng Việt của một sheet: `nen2` → "Nền 2", `ui-doc` → "UI nhỏ dọc". */
 export function sheetLabel(sheet: string): string {
   const { base, index } = sheetSeries(sheet);

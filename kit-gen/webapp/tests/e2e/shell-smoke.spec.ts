@@ -235,14 +235,23 @@ test("@visual an internal page keeps only Back home and runtime status", async (
   await expect(header.getByRole("button", { name: /Trạng thái:/ })).toBeVisible();
   await expect(header.getByRole("button")).toHaveCount(3);
   await expect(page.getByRole("searchbox", { name: "Tìm dự án" })).toHaveCount(0);
-  // Sidebar dự án nay có ĐÚNG bốn đích; sáu nhóm ảnh cũ xuống làm hàng chip trong trang.
+  /* Sidebar dự án có ĐÚNG bốn đích điều hướng. Mục thứ tư nay tên "Cài đặt style" với
+     icon bảng màu: bánh răng trên topbar là cài đặt của cả app, mục này là style của
+     MỘT dự án — hai chỗ không được mang cùng tên. */
   const sidebar = page.getByRole("navigation", { name: "Quản lý dự án" });
   await expect(sidebar).toBeVisible();
   await expect(sidebar.getByRole("button")).toHaveCount(4);
-  for (const name of ["Ảnh đã tạo", "Skeleton UI", "Mascot", "Cài đặt"]) {
+  for (const name of ["Ảnh đã tạo", "Skeleton UI", "Mascot", "Cài đặt style"]) {
     await expect(sidebar.getByRole("button", { name, exact: true })).toBeVisible();
   }
-  await expect(page.getByRole("button", { name: "Tất cả thành phẩm" })).toBeVisible();
+  // Khối tóm tắt nằm NGOÀI `<nav>` — nó là bản tóm tắt có lối tắt, không phải đích thứ năm.
+  const preview = page.getByRole("region", { name: "Preview tổng quan" });
+  await expect(preview).toBeVisible();
+  await expect(preview.getByRole("button", { name: "Mở Ảnh đã tạo" })).toBeVisible();
+
+  /* Hàng chip nhóm ("Tất cả thành phẩm / Mascot / Nền / …") ĐÃ BỎ: trang là một dải
+     cuộn dọc chia khối theo nhóm. Chỉ còn tiêu đề trang. */
+  await expect(page.getByRole("button", { name: "Tất cả thành phẩm" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Tất cả thành phẩm", exact: true })).toBeVisible();
   /* Thanh "Ảnh thật | Skeleton" bọc ngoài ĐÃ BỎ: nó trùng nhãn đầu với thanh
      "Ảnh thật | Ảnh gốc" của thẻ kết quả ngay dưới (hai hàng giống hệt, cách nhau ~8px),
@@ -270,8 +279,10 @@ test("an imported project can be converted, edited and given project sheet limit
   // "Bộ khung UI" đã rời dialog Cài đặt và thành TRANG "Skeleton UI" trong sidebar.
   await page.getByRole("navigation", { name: "Quản lý dự án" }).getByRole("button", { name: "Skeleton UI" }).click();
   await expect(page).toHaveURL(/section=skeleton/);
+  // Trang mở ở tab xem; phần chọn thành phần nằm ở tab "Settings".
+  await page.getByRole("tab", { name: "Settings" }).click();
   await page.getByRole("button", { name: /^UI nhỏ(?: · \d+)?$/ }).click();
-  const customFrame = page.getByRole("button", { name: /Nút thưởng của tôi/ });
+  const customFrame = page.getByRole("button", { name: /^Nút thưởng của tôi/ });
   await expect(customFrame).toBeVisible();
   await customFrame.click();
   await expect(customFrame).toHaveAttribute("aria-pressed", "true");
@@ -280,7 +291,7 @@ test("an imported project can be converted, edited and given project sheet limit
   await expect(page.getByRole("button", { name: "Lưu", exact: true }).first()).toBeEnabled();
 
   const dialog = page.getByRole("dialog", { name: "Cài đặt" });
-  await page.getByRole("navigation", { name: "Quản lý dự án" }).getByRole("button", { name: "Cài đặt" }).click();
+  await page.getByRole("navigation", { name: "Quản lý dự án" }).getByRole("button", { name: "Cài đặt style" }).click();
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "Dự án", exact: true }).click();
   const backgroundLimit = page.getByRole("spinbutton", { name: "Nền" });
@@ -320,8 +331,9 @@ test("editing the project buffers changes until Lưu is pressed", async ({ page 
   await adopted;
 
   await page.getByRole("navigation", { name: "Quản lý dự án" }).getByRole("button", { name: "Skeleton UI" }).click();
+  await page.getByRole("tab", { name: "Settings" }).click();
   await page.getByRole("button", { name: /^UI nhỏ(?: · \d+)?$/ }).click();
-  const frame = page.getByRole("button", { name: /Nút thưởng của tôi/ });
+  const frame = page.getByRole("button", { name: /^Nút thưởng của tôi/ });
   await expect(frame).toBeVisible();
   writes.length = 0;
   const before = await frame.getAttribute("aria-pressed");
@@ -561,22 +573,27 @@ test("@visual a reusable mascot can be selected and pose cards stay readable", a
 });
 
 /**
- * HỢP ĐỒNG GIỮ NGUYÊN, ĐỔI HÌNH DẠNG URL: "UI nhỏ" và "Đạo cụ" vẫn là hai đích riêng
- * deep-link được, nhưng nay là hai NHÓM của trang "Ảnh đã tạo" (`?group=`) chứ không
- * còn là hai mục sidebar — sidebar chỉ còn bốn đích. Link cũ `?section=props` vẫn mở
- * đúng nhóm Đạo cụ (xem `resolveProjectView`).
+ * HÀNG CHIP NHÓM ĐÃ BỎ — VÀ LINK CŨ VẪN KHÔNG GÃY.
+ *
+ * "UI nhỏ" và "Đạo cụ" từng là hai mục sidebar, rồi thành hai chip của trang "Ảnh đã
+ * tạo". Chủ sản phẩm bỏ luôn hàng chip ("BỎ CÁI ĐOẠN BUTTON PILL Ở TẤT CẢ THÀNH PHẨM"),
+ * nên nay chúng là hai KHỐI trong một dải cuộn dọc. `?group=` đổi nghĩa từ "lọc" sang
+ * "cuộn tới", nhưng vẫn phải RESOLVE: một bookmark cũ không được rơi vào trang trắng
+ * hay bị đá về đâu khác. Ca này khoá đúng điều đó ở tầng URL — còn việc cuộn tới đúng
+ * khối cần dữ liệu ảnh thật, nên nó nằm ở `project-manage-tabs.spec.ts`.
  */
-test("project management keeps UI nhỏ and Đạo cụ as separate destinations", async ({ page }) => {
+test("the image group pills are gone and legacy group links still resolve", async ({ page }) => {
   await page.goto("/p/tet26-a7f3");
-  await page.getByRole("button", { name: "Đạo cụ", exact: true }).click();
-  await expect(page).toHaveURL(/group=props/);
-  await expect(page.getByRole("heading", { name: "Đạo cụ", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "UI nhỏ", exact: true }).click();
-  await expect(page).toHaveURL(/group=ui/);
-  await expect(page.getByRole("heading", { name: "UI nhỏ", exact: true })).toBeVisible();
+  for (const label of ["Tất cả thành phẩm", "Đạo cụ", "UI nhỏ", "Nền", "Popup"]) {
+    await expect(page.getByRole("button", { name: label, exact: true })).toHaveCount(0);
+  }
 
-  await page.goto("/p/tet26-a7f3?section=props");
-  await expect(page.getByRole("heading", { name: "Đạo cụ", exact: true })).toBeVisible();
+  for (const url of ["/p/tet26-a7f3?group=props", "/p/tet26-a7f3?group=ui", "/p/tet26-a7f3?section=props"]) {
+    await page.goto(url);
+    await expect(page.getByRole("heading", { name: "Tất cả thành phẩm", exact: true })).toBeVisible();
+    // Không bị đá sang mục sidebar khác: nền vẫn là trang "Ảnh đã tạo".
+    await expect(page).not.toHaveURL(/section=(skeleton|mascot)/);
+  }
 });
 
 test("@visual a new project opens the step-by-step wizard", async ({ page }, testInfo) => {

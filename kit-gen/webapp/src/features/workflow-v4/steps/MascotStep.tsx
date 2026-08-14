@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Check, Plus, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useWorkflowProjectId, useWorkflowStore, useWorkflowStoreApi, migrateMascots, type WorkflowMascot } from "../lib/model";
 import { useWorkflowRefs } from "../lib/refs-sync";
 import { CheckRow } from "../components/CheckRow";
@@ -18,6 +19,19 @@ export { POSES } from "../lib/poses";
 
 /** Xem `KitsetStep` — cùng một luật hai hình thái cho wizard và trang quản lý. */
 export type MascotVariant = "wizard" | "manage";
+
+/**
+ * KHỐI DANH SÁCH CUỘN ĐƯỢC — dùng cho cả danh sách nhân vật lẫn lưới dáng.
+ *
+ * Chủ sản phẩm: "MASCOT, CHO NÓ SHOW SCROLL ĐƯỢC". Trước đây hai danh sách này đổ
+ * thẳng ra trang, nên khi một dự án có nhiều nhân vật/nhiều dáng thì hàng nút Lưu và
+ * cả hàng tab bị đẩy ra ngoài tầm nhìn, còn muốn xem dáng cuối phải cuộn cả trang.
+ *
+ * `max-h` chứ KHÔNG `h`: chiều cao không bị bó cứng — ít món thì khối co lại vừa số
+ * món, nhiều món thì mới sinh thanh cuộn riêng. `pr-1` chừa chỗ cho thanh cuộn để nó
+ * không đè lên viền thẻ cuối hàng.
+ */
+const SCROLL_LIST = "max-h-[min(60vh,34rem)] overflow-y-auto overscroll-contain pr-1";
 
 export function MascotStep({ variant = "wizard", detailFooter }: {
   variant?: MascotVariant;
@@ -77,16 +91,21 @@ export function MascotStep({ variant = "wizard", detailFooter }: {
               </Button>
             </div>
             {s.mascots.length > 0 ? (
-              <div className="mascot-card-grid">
-                {s.mascots.map((mascot, index) => (
-                  <MascotCard
-                    key={mascot.id}
-                    mascot={mascot}
-                    index={index}
-                    onEdit={() => openEdit(mascot)}
-                    onRemove={() => s.removeMascot(mascot.id)}
-                  />
-                ))}
+              /* "MASCOT, CHO NÓ SHOW SCROLL ĐƯỢC" — danh sách nhân vật cuộn TRONG khối
+                 của nó. `max-h` chứ không `h`: bốn nhân vật thì khối cao bốn thẻ, không
+                 phải một hộp rỗng cao bằng màn hình. */
+              <div className={SCROLL_LIST}>
+                <div className="mascot-card-grid">
+                  {s.mascots.map((mascot, index) => (
+                    <MascotCard
+                      key={mascot.id}
+                      mascot={mascot}
+                      index={index}
+                      onEdit={() => openEdit(mascot)}
+                      onRemove={() => s.removeMascot(mascot.id)}
+                    />
+                  ))}
+                </div>
               </div>
             ) : (
               <MascotEmpty onAdd={openAdd} />
@@ -117,13 +136,16 @@ export function MascotStep({ variant = "wizard", detailFooter }: {
               trailing={`${poseCount} đã chọn`}
             />
 
-            <div aria-label={poseGroup} className="compact-element-grid">
+            <div aria-label={poseGroup} className={cn("compact-element-grid", SCROLL_LIST)}>
               {shown.map((pose) => {
                 const on = s.mascotPoses.includes(pose.id);
                 const toggle = (
                   <button
                     type="button"
-                    className={on ? "compact-element selected" : "compact-element"}
+                    className={cn(
+                      on ? "compact-element selected" : "compact-element",
+                      variant === "manage" && "w-full pr-12",
+                    )}
                     aria-pressed={on}
                     onClick={() => s.set({
                       mascotPoses: on
@@ -145,13 +167,20 @@ export function MascotStep({ variant = "wizard", detailFooter }: {
                 );
                 if (variant === "wizard") return <React.Fragment key={pose.id}>{toggle}</React.Fragment>;
                 return (
-                  <div key={pose.id} className="flex min-w-0 flex-col gap-2">
+                  <div key={pose.id} className="relative min-w-0">
                     {toggle}
-                    <div className="px-1">
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setDetailPose(pose.id)}>
-                        <SlidersHorizontal aria-hidden />Chi tiết
-                      </Button>
-                    </div>
+                    {/* Cùng luật với trang Skeleton UI: thẻ sạch, mọi control trong popup. */}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="absolute right-2 top-1/2 z-10 -translate-y-1/2"
+                      aria-label={`Chi tiết dáng ${pose.label}`}
+                      title={`Chi tiết dáng ${pose.label}`}
+                      onClick={() => setDetailPose(pose.id)}
+                    >
+                      <SlidersHorizontal aria-hidden />
+                    </Button>
                   </div>
                 );
               })}

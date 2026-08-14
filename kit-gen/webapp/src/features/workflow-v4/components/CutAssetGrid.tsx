@@ -11,7 +11,7 @@ import { toastError, toastInfo, toastSuccess } from "@/features/projects/lib/fee
 import type { Contract, KitFile } from "@/lib/types";
 import { useKit } from "@/lib/hooks";
 import {
-  categoryOfSheet, groupLabel, sheetLabel,
+  categoryOfSheet, groupAnchorId, groupLabel, sheetLabel, RESULT_GROUP_ORDER,
   type ResultCategory, type ResultGroup,
 } from "../lib/generated-results";
 import { blobOfImage, copyImageBlob, cropCellBlob, locateComponent, rawSheetPath } from "../lib/result-copy";
@@ -65,10 +65,27 @@ export function cutAssets(files: readonly KitFile[], contract: Contract | null):
     });
 }
 
-export function CutAssetGrid({ projectId, contract, category = "all" }: {
+/** Gom theo sheet, giữ nguyên thứ tự gặp — đây là đơn vị nhỏ nhất của lưới. */
+function bySheetOf(assets: readonly CutAsset[]): [string, CutAsset[]][] {
+  const map = new Map<string, CutAsset[]>();
+  for (const asset of assets) {
+    const bucket = map.get(asset.sheet);
+    if (bucket) bucket.push(asset);
+    else map.set(asset.sheet, [asset]);
+  }
+  return [...map.entries()];
+}
+
+export function CutAssetGrid({ projectId, contract, category = "all", sectioned = false }: {
   projectId: string;
   contract: Contract | null;
   category?: ResultGroup;
+  /**
+   * true ⇒ chia thêm một tầng KHỐI THEO NHÓM (Mascot · Nền · Popup · UI nhỏ · Đạo cụ),
+   * mỗi khối có tiêu đề và `id` để `?group=` cũ cuộn tới. Đây là hình dạng thay cho hàng
+   * chip lọc vừa bị bỏ: cuộn xuống là thấy hết, không nhóm nào bị giấu sau một cú bấm.
+   */
+  sectioned?: boolean;
 }) {
   const kit = useKit(projectId);
   const assets = React.useMemo(
@@ -77,15 +94,13 @@ export function CutAssetGrid({ projectId, contract, category = "all" }: {
   );
   const variant = kit.data?.variant ?? "";
 
-  const bySheet = React.useMemo(() => {
-    const map = new Map<string, CutAsset[]>();
-    for (const asset of assets) {
-      const bucket = map.get(asset.sheet);
-      if (bucket) bucket.push(asset);
-      else map.set(asset.sheet, [asset]);
-    }
-    return [...map.entries()];
-  }, [assets]);
+  /** Khối theo nhóm, đúng thứ tự cuộn; nhóm rỗng bị bỏ hẳn thay vì để lại ô trống. */
+  const byGroup = React.useMemo(
+    () => RESULT_GROUP_ORDER
+      .map((group) => [group, assets.filter((asset) => asset.category === group)] as const)
+      .filter(([, items]) => items.length > 0),
+    [assets],
+  );
 
   if (kit.isLoading) return <p className="text-body text-fg-muted">Đang mở ảnh đã cắt…</p>;
   if (assets.length === 0) {
@@ -100,14 +115,49 @@ export function CutAssetGrid({ projectId, contract, category = "all" }: {
     );
   }
 
+  if (!sectioned) return <SheetBlocks projectId={projectId} variant={variant} contract={contract} assets={assets} showHeading />;
+
   return (
-    <div className="space-y-4">
-      {bySheet.map(([sheet, items]) => (
-        <section key={sheet || "khac"} className="rounded-4 border border-line-subtle bg-surface p-4" aria-label={sheetLabel(sheet)}>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h4 className="text-label text-fg-strong">{sheet ? sheetLabel(sheet) : groupLabel("other")}</h4>
+    <div className="space-y-8">
+      {byGroup.map(([group, items]) => (
+        /* KHÔNG đặt `aria-label` ở đây: `groupLabel("mascot")` là "Mascot pose", trùng
+           đúng `sheetLabel` của tấm pose bên trong ⇒ hai landmark cùng tên lồng nhau.
+           Tiêu đề `<h3>` đã nói đủ, và `<section>` không tên thì không phải landmark. */
+        <section key={group} id={groupAnchorId(group)} className="scroll-mt-20 space-y-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line-subtle pb-2">
+            <h3 className="text-subtitle text-fg-strong">{groupLabel(group)}</h3>
             <span className="text-caption text-fg-muted">{items.length} ô</span>
           </div>
+          {/* Nhóm chỉ có MỘT tấm ⇒ bỏ tiêu đề tấm: `sheetLabel("pose-nhan-vat")` và
+              `groupLabel("mascot")` đều là "Mascot pose", nên giữ cả hai là in đúng một
+              chữ hai lần, cách nhau 12px. Tên tấm vẫn còn trong `aria-label` của vùng. */}
+          <SheetBlocks
+            projectId={projectId} variant={variant} contract={contract} assets={items}
+            showHeading={bySheetOf(items).length > 1}
+          />
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function SheetBlocks({ projectId, variant, contract, assets, showHeading }: {
+  projectId: string;
+  variant: string;
+  contract: Contract | null;
+  assets: readonly CutAsset[];
+  showHeading: boolean;
+}) {
+  return (
+    <div className="space-y-4">
+      {bySheetOf(assets).map(([sheet, items]) => (
+        <section key={sheet || "khac"} className="rounded-4 border border-line-subtle bg-surface p-4" aria-label={sheetLabel(sheet)}>
+          {showHeading ? (
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h4 className="text-label text-fg-strong">{sheet ? sheetLabel(sheet) : groupLabel("other")}</h4>
+              <span className="text-caption text-fg-muted">{items.length} ô</span>
+            </div>
+          ) : null}
           <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-4">
             {items.map((asset) => (
               <CutAssetCard key={asset.file.path} projectId={projectId} variant={variant} asset={asset} contract={contract} />
