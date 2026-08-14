@@ -509,7 +509,7 @@ while read -r job; do
   run_one "$job" &
 done < <(python3 -c "
 import json
-cfg = json.load(open('styles.json', encoding="utf-8"))
+cfg = json.load(open('styles.json', encoding='utf-8'))
 for s in cfg['styles']:
     for sh in cfg['sheets']:
         if sh.get('styles') and s['id'] not in sh['styles']:
