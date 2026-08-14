@@ -601,7 +601,25 @@ export const runJobSchema = z.looseObject({
       cells: z.array(z.looseObject({
         file: z.string(),
         cell: z.number().optional(),
-        status: z.enum(["ok", "regenerate"]),
+        /**
+         * ⚠️ BA GIÁ TRỊ, KHÔNG PHẢI HAI — và `catch` là phần bắt buộc của bản vá.
+         *
+         * `validate_output_geometry.py:118-120` trả `"empty"` cho ô CỐ Ý BỎ TRỐNG
+         * (`skel.shape === "empty"`): "báo 'empty' chứ KHÔNG phải 'regenerate', nếu
+         * không mọi sheet có ô đệm đều bị đếm là ô lệch". Schema web thiếu giá trị đó.
+         *
+         * Hậu quả đo được trên dự án thật (`hello-a262`, 5 raw + 56 ô đã cắt nằm sẵn
+         * trên đĩa): MỘT ô `"empty"` trong MỘT job làm `runListSchema` ném ⇒
+         * `useRuns()` vào trạng thái lỗi ⇒ `GeneratedResults` thấy `items = []` ⇒ cả
+         * màn "Ảnh đã tạo" hiện "Chưa có ảnh nào", tab "Ảnh gốc" trống, dải tiến trình
+         * và dải lỗi của lượt cũng biến mất. Đúng cảnh "reload xong không thấy gì".
+         *
+         * `.catch("ok")` để lần sau engine thêm một trạng thái ô mới thì màn hình
+         * KHÔNG chết theo (§6.5-6 — thứ lạ thì bỏ qua, đừng vỡ). Mặc định là "ok" vì
+         * chỉ `"regenerate"` mới được phép kêu "cần tạo lại": đoán bừa theo hướng
+         * báo động sẽ đẩy người dùng đi đốt quota cho một ô không có gì sai.
+         */
+        status: z.enum(["ok", "regenerate", "empty"]).catch("ok"),
         reasons: z.array(z.string()).default([]),
       })).default([]),
     }).nullish(),

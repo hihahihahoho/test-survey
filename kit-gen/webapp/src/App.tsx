@@ -3,7 +3,17 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
-import { queryClient } from "@/lib/query";
+/**
+ * MỘT query client DUY NHẤT — `lib/hooks/query-client.ts`.
+ *
+ * Trước 14/08 có HAI: `lib/query.ts` (client thật sự chạy) và
+ * `lib/hooks/query-client.ts` (nơi mọi hook lấy `STALE`/`GC`, nhưng `queryClient` của
+ * nó KHÔNG ai mount). Hậu quả không nhìn thấy được từ code review: toàn bộ tính toán
+ * `GC.*` cho lời hứa §2.5 "agent tắt vẫn vẽ được từ cache" nằm trong file không được
+ * dùng, và `retry` thông minh theo mã lỗi (`shouldRetry`) cũng vậy — client đang chạy
+ * retry cả 403/404 rồi mới chịu hiện banner.
+ */
+import { queryClient } from "@/lib/hooks/query-client";
 import { useUiStore, applyTheme } from "@/lib/store";
 /* Import THẲNG file, không qua cửa chung `@/lib/store` — lý do ở cuối `lib/store/index.ts`. */
 import { SettingsSync } from "@/lib/store/settings-sync";
