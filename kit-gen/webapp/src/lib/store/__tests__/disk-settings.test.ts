@@ -11,9 +11,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DISK_PREFS_FIELDS, DISK_UI_FIELDS, defaultDiskSettings, diffDiskSettings,
-  diskSettingsOf, diskSettingsSchema, type DiskSettings,
+  diskSettingsOf, diskSettingsResponseSchema, diskSettingsSchema, type DiskSettings,
 } from "../disk-settings";
-import { applyDiskSettings, currentDiskSettings } from "../settings-sync";
+import { applyDiskSettings, currentDiskSettings, settingsDirection } from "../settings-sync";
 import { LS_KEYS, _setBackend, defaultsFor, memoryBackend } from "../persist";
 import { useUiStore } from "../ui";
 import { usePrefsStore } from "../prefs";
@@ -101,6 +101,65 @@ describe("đĩa → RAM (khôi phục sau Cmd+F5)", () => {
     expect(parsed).toEqual(defaultDiskSettings());
     applyDiskSettings(parsed);
     for (const f of DISK_UI_FIELDS) expect(useUiStore.getState()[f]).toBeDefined();
+  });
+});
+
+/**
+ * HỒI QUY 2.1.23 — ca này chặn một lỗi ĐÃ XẢY RA THẬT, bắt được ở e2e
+ * `shell-smoke.spec.ts:683`: người dùng để chủ đề SÁNG, mở app sau khi cập nhật thì
+ * `<html>` nhảy về `dark`.
+ *
+ * Gốc: mọi workspace đang tồn tại đều chưa có khối `ui`/`prefs` trong config.json, nên
+ * `GET /api/settings` trả về MẶC ĐỊNH. Bản đầu coi đó là sự thật trên đĩa và áp thẳng
+ * xuống RAM ⇒ xoá sạch tuỳ chọn thật của người dùng. Đúng loại "tự nhiên mất settings"
+ * mà cả thay đổi này sinh ra để chặn — và nó sẽ xảy ra với MỌI người dùng, đúng một lần.
+ */
+describe("nhận nuôi lần đầu — đĩa chưa có gì thì KHÔNG được ghi đè lên người dùng", () => {
+  it("configured:false ⇒ giữ bản của người dùng (adopt), true ⇒ đĩa thắng (apply)", () => {
+    expect(settingsDirection(false)).toBe("adopt");
+    expect(settingsDirection(true)).toBe("apply");
+  });
+
+  it("agent CŨ không trả `configured` ⇒ ngả về phía AN TOÀN (giữ bản người dùng)", () => {
+    const parsed = diskSettingsResponseSchema.parse({ settings: { ui: { theme: "dark" } } });
+    expect(parsed.configured).toBe(false);
+    expect(settingsDirection(parsed.configured)).toBe("adopt");
+  });
+
+  it("chủ đề SÁNG của người dùng KHÔNG bị mặc định của đĩa nuốt mất", () => {
+    // localStorage của người dùng: sáng. Đĩa: chưa có gì ⇒ trả mặc định (tối).
+    useUiStore.setState({ theme: "light" });
+    const fromDisk = diskSettingsResponseSchema.parse({ configured: false });
+    expect(fromDisk.settings.ui.theme).toBe("dark");
+
+    // Nhánh nhận nuôi: KHÔNG áp gì xuống RAM…
+    expect(settingsDirection(fromDisk.configured)).toBe("adopt");
+    expect(useUiStore.getState().theme).toBe("light");
+
+    // …và đẩy NGƯỢC đúng phần người dùng đang khác mặc định lên đĩa.
+    expect(diffDiskSettings(fromDisk.settings, currentDiskSettings())).toEqual({ ui: { theme: "light" } });
+  });
+
+  it("đã cấu hình rồi thì đĩa THẮNG — không quay lại nuốt bản đĩa bằng bản RAM", () => {
+    useUiStore.setState({ theme: "light" });
+    const fromDisk = diskSettingsResponseSchema.parse({ configured: true, settings: { ui: { theme: "dark" } } });
+    expect(settingsDirection(fromDisk.configured)).toBe("apply");
+    applyDiskSettings(fromDisk.settings);
+    expect(useUiStore.getState().theme).toBe("dark");
+    expect(diffDiskSettings(fromDisk.settings, currentDiskSettings())).toBeNull();
+  });
+
+  it("người dùng đang đúng bằng mặc định ⇒ không có gì để cứu, không ghi thừa", () => {
+    const fromDisk = diskSettingsResponseSchema.parse({ configured: false });
+    expect(diffDiskSettings(fromDisk.settings, currentDiskSettings())).toBeNull();
+  });
+
+  it("`SettingsSync` thật sự rẽ nhánh theo `configured`, và chặn vòng lặp ghi↔nạp", async () => {
+    const src = await import("node:fs/promises").then((fs) =>
+      fs.readFile(new URL("../settings-sync.ts", import.meta.url), "utf8"));
+    const body = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(body).toContain('settingsDirection(q.data.configured) === "apply"');
+    expect(body).toContain("if (adoptedRef.current) return");
   });
 });
 

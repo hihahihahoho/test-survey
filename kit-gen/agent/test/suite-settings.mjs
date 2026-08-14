@@ -27,6 +27,36 @@ export async function run({ api, wsRoot }) {
     eq(s.prefs.autoSliceAfterGen, true, "prefs.autoSliceAfterGen")
   })
 
+  /* ════════ NHẬN NUÔI LẦN ĐẦU — chống xoá tuỳ chọn khi nâng cấp ════════
+     Mọi workspace đang tồn tại đều CHƯA có khối ui/prefs. Nếu API không nói ra điều đó,
+     web sẽ tưởng mặc định là sự thật và ghi đè lên tuỳ chọn thật của người dùng ngay lần
+     mở đầu tiên sau khi cập nhật. Ba ca dưới đây khoá đúng tín hiệu ấy lại. */
+
+  await it("workspace CHƯA từng lưu tuỳ chọn ⇒ configured:false (mặc định KHÔNG phải sự thật)", async () => {
+    const { writeFile } = await import("node:fs/promises")
+    await writeFile(CONFIG(wsRoot), '{"workspaceVersion": 1, "maxJobs": 4, "imageGen": {"mode": "unknown"}}\n')
+    const r = await api("GET", "/api/settings")
+    eq(r.json.configured, false, "configured")
+  })
+
+  await it("`maxJobs` ở gốc KHÔNG được tính là đã cấu hình", async () => {
+    // CONFIG_DEFAULT ghi `maxJobs` cho cả workspace mới toanh ⇒ lấy nó làm dấu hiệu thì
+    // workspace nào cũng hoá ra "đã cấu hình", và ca nhận nuôi sẽ không bao giờ chạy.
+    const { writeFile } = await import("node:fs/promises")
+    await writeFile(CONFIG(wsRoot), '{"workspaceVersion": 1, "maxJobs": 6, "imageGen": {"mode": "unknown"}}\n')
+    const r = await api("GET", "/api/settings")
+    eq(r.json.configured, false, "configured")
+    eq(r.json.settings.prefs.maxJobs, 6, "vẫn đọc được con số kiểu cũ")
+  })
+
+  await it("ghi một lần rồi thì configured:true — đĩa thành bên thắng", async () => {
+    const w = await api("PATCH", "/api/settings", { body: { ui: { theme: "light" } } })
+    eq(w.json.configured, true, "PATCH trả configured:true ngay")
+    const r = await api("GET", "/api/settings")
+    eq(r.json.configured, true, "GET sau đó cũng true")
+    eq(r.json.settings.ui.theme, "light", "và giá trị là của người dùng")
+  })
+
   await it("PATCH ghi xuống config.json và GET đọc lại đúng (sống qua reload)", async () => {
     const r = await api("PATCH", "/api/settings", {
       body: { ui: { theme: "light", projectsView: "list" }, prefs: { autoSliceAfterGen: false } },

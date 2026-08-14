@@ -16,13 +16,16 @@
 import { patchSettings, readSettings } from "../lib/settings.mjs"
 
 export function register(r) {
+  /* `configured:false` = đĩa CHƯA từng có tuỳ chọn ⇒ web phải GIỮ bản của nó và đẩy
+     ngược lên, không được nhận mặc định về. Xem `readSettings` để biết vì sao đây là
+     một đường mất dữ liệu chứ không phải một chi tiết nhỏ. */
   r.get("/api/settings", async ctx => ({
     status: 200,
-    json: { settings: await readSettings(ctx.registry.active) },
+    json: await readSettings(ctx.registry.active),
   }))
 
   r.patch("/api/settings", async ctx => ({
     status: 200,
-    json: { settings: await patchSettings(ctx.registry.active, await ctx.json()) },
+    json: await patchSettings(ctx.registry.active, await ctx.json()),
   }))
 }

@@ -167,10 +167,31 @@ export function pickPatch(raw) {
   return out
 }
 
+/**
+ * `configured` = file cấu hình ĐÃ TỪNG được ghi tuỳ chọn hay chưa. Đây KHÔNG phải một
+ * tiện ích nhỏ, nó là cái chặn một đường mất dữ liệu có thật:
+ *
+ * Mọi workspace đang tồn tại đều CHƯA có khối `ui`/`prefs` (chúng vừa được thêm). Nếu
+ * API cứ trả mặc định mà không nói rõ "đây là mặc định vì tôi chưa có gì", web sẽ coi
+ * đó là sự thật trên đĩa và ghi đè lên tuỳ chọn thật của người dùng đang nằm trong
+ * localStorage — chủ đề sáng thành tối, `maxJobs` về 4 — ngay lần mở đầu tiên sau khi
+ * cập nhật. Đúng loại "tự nhiên mất settings" mà cả thay đổi này sinh ra để chặn.
+ *
+ * `false` ⇒ web GIỮ giá trị của nó và đẩy NGƯỢC lên đĩa (nhận nuôi), chứ không nhận về.
+ *
+ * `maxJobs` ở gốc KHÔNG được tính là "đã cấu hình": `CONFIG_DEFAULT` ghi nó cho cả
+ * workspace mới toanh, nên lấy nó làm dấu hiệu thì workspace nào cũng hoá ra "đã cấu hình".
+ */
 export async function readSettings(ws) {
   const cfg = await ws.config()
-  return normalizeSettings({ ui: cfg.ui, prefs: cfg.prefs, ...legacyMaxJobs(cfg) })
+  const configured = isBlock(cfg.ui) || isBlock(cfg.prefs)
+  return {
+    settings: normalizeSettings({ ui: cfg.ui, prefs: cfg.prefs, ...legacyMaxJobs(cfg) }),
+    configured,
+  }
 }
+
+const isBlock = v => v !== null && typeof v === "object" && !Array.isArray(v)
 
 /**
  * `maxJobs` đã sống ở GỐC config.json từ trước bảng này (`CONFIG_DEFAULT` của
@@ -194,7 +215,7 @@ export async function patchSettings(ws, body) {
     fail("BAD_REQUEST", "settings patch must be an object")
   }
   const patch = pickPatch(body)
-  const current = await readSettings(ws)
+  const { settings: current } = await readSettings(ws)
   const next = defaultSettings()
   for (const group of SETTINGS_GROUPS) {
     next[group] = { ...current[group], ...(patch[group] ?? {}) }
@@ -202,5 +223,6 @@ export async function patchSettings(ws, body) {
   // `maxJobs` ở gốc được GIỮ ĐỒNG BỘ, không bỏ rơi: file config.json là thứ con người
   // cũng mở ra đọc, và hai con số khác nhau trong cùng một file là một cái bẫy.
   await ws.patchConfig({ ui: next.ui, prefs: next.prefs, maxJobs: next.prefs.maxJobs })
-  return next
+  // Ghi xong thì đĩa ĐÃ có tuỳ chọn ⇒ từ lần đọc sau, đĩa là bên thắng.
+  return { settings: next, configured: true }
 }

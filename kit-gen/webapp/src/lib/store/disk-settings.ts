@@ -58,6 +58,21 @@ export const diskSettingsSchema = z.object({
   prefs: prefsDiskSchema.default(prefsDiskSchema.parse({})),
 });
 
+/**
+ * Trả lời của `GET/PATCH /api/settings`.
+ *
+ * `configured` là field QUAN TRỌNG NHẤT ở đây: `false` nghĩa là trên đĩa CHƯA từng có
+ * tuỳ chọn nào, nên `settings` chỉ là mặc định chứ không phải sự thật. Mọi workspace
+ * đang tồn tại đều rơi vào ca này (khối `ui`/`prefs` vừa mới có mặt), và nhận mặc định
+ * về sẽ xoá sạch tuỳ chọn thật của người dùng đang nằm trong localStorage. Vắng field
+ * (agent CŨ chưa biết trả) ⇒ `false`, tức là ngả về phía AN TOÀN: giữ bản của người dùng.
+ */
+export const diskSettingsResponseSchema = z.object({
+  settings: diskSettingsSchema.default(diskSettingsSchema.parse({})),
+  configured: z.boolean().default(false),
+});
+
+export type DiskSettingsResponse = z.infer<typeof diskSettingsResponseSchema>;
 export type DiskSettings = z.infer<typeof diskSettingsSchema>;
 /** Vá một phần — mọi field đều có thể vắng mặt. */
 export type DiskSettingsPatch = { ui?: Partial<DiskSettings["ui"]>; prefs?: Partial<DiskSettings["prefs"]> };

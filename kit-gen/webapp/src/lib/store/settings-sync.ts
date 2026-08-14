@@ -3,9 +3,18 @@
  * `<workspace>/.kitgen/config.json`.
  *
  * ══ HAI CHIỀU, VÀ THỨ TỰ GIỮA CHÚNG LÀ CẢ VẤN ĐỀ ═════════════════════════════
- * ① ĐĨA → RAM (một lần mỗi lần đọc được đĩa). Nghe được đĩa thì đĩa THẮNG. Đây chính là
- *    thứ chữa sự cố Cmd+F5: mở lại trang là tuỳ chọn về đúng như cũ, kể cả khi
- *    localStorage trống trơn (trình duyệt khác, đường vào khác, vừa xoá dữ liệu duyệt web).
+ * ① ĐĨA → RAM (một lần mỗi lần đọc được đĩa), **CHỈ KHI `configured === true`**. Nghe
+ *    được đĩa thì đĩa THẮNG. Đây chính là thứ chữa sự cố Cmd+F5: mở lại trang là tuỳ
+ *    chọn về đúng như cũ, kể cả khi localStorage trống trơn (trình duyệt khác, đường vào
+ *    khác, vừa xoá dữ liệu duyệt web).
+ *
+ * ①′ NHẬN NUÔI (`configured === false`) — LẦN ĐẦU SAU KHI CẬP NHẬT. Đĩa chưa từng có
+ *    tuỳ chọn, nên thứ nó trả về chỉ là mặc định. Nhận về là xoá sạch tuỳ chọn thật của
+ *    người dùng đang nằm trong localStorage: chủ đề sáng thành tối, `maxJobs` về 4. Mọi
+ *    workspace đang tồn tại đều rơi vào ca này đúng một lần, nên đây không phải ca hiếm
+ *    — nó là ca mà MỌI người dùng sẽ gặp. Xử lý: KHÔNG áp gì xuống RAM, lấy mặc định
+ *    làm mốc so sánh rồi đẩy NGƯỢC bản của người dùng lên đĩa. Ghi xong agent trả
+ *    `configured:true`, và từ đó đĩa là bên thắng như bình thường.
  * ② RAM → ĐĨA (gom nhịp `SETTINGS_SAVE_DELAY_MS`). CHỈ chạy SAU khi ① đã xong ít nhất
  *    một lần — `serverRef` còn `null` nghĩa là "chưa biết trên đĩa đang có gì", và ghi đè
  *    lên một thứ mình chưa đọc là cách chắc chắn nhất để xoá tuỳ chọn của chính người
@@ -27,6 +36,17 @@ import { qk } from "../hooks/keys";
 import { usePrefsStore } from "./prefs";
 import { useUiStore } from "./ui";
 import { diffDiskSettings, diskSettingsOf, type DiskSettings, type DiskSettingsPatch } from "./disk-settings";
+
+/**
+ * Quyết định phải làm gì với thứ agent vừa trả về. Tách ra khỏi component để kiểm được
+ * bằng test thuần — đây là chỗ một lỗi sẽ âm thầm xoá tuỳ chọn của người dùng.
+ *
+ *   "adopt"  — đĩa chưa có gì: GIỮ bản trong RAM, đẩy ngược lên đĩa
+ *   "apply"  — đĩa có thật: RAM đi theo đĩa
+ */
+export function settingsDirection(configured: boolean): "adopt" | "apply" {
+  return configured ? "apply" : "adopt";
+}
 
 /**
  * 600ms — cùng bậc với nhịp autosave bản nháp workflow (600ms) và contract (700ms), nên
@@ -89,16 +109,35 @@ export function SettingsSync(): null {
 
   /** Bản trên ĐĨA mà ta đang tin. `null` = chưa đọc được lần nào ⇒ CẤM ghi (xem đầu file). */
   const serverRef = React.useRef<DiskSettings | null>(null);
+  /** Đã đẩy bản nhận nuôi lên đĩa chưa — chặn vòng lặp ghi ↔ nạp lại. */
+  const adoptedRef = React.useRef(false);
   const saveRef = React.useRef(save.mutate);
   saveRef.current = save.mutate;
 
-  /* ① ĐĨA → RAM. Băm nội dung làm dep: đổi workspace ⇒ `qc.clear()` ⇒ query nạp lại file
-     cấu hình của workspace MỚI, và nhánh này phải chạy lại chứ không chỉ chạy lần đầu. */
+  /* ① / ①′ ĐĨA → RAM, hoặc RAM → ĐĨA khi đĩa chưa có gì. Băm nội dung làm dep: đổi
+     workspace ⇒ `qc.clear()` ⇒ query nạp lại file cấu hình của workspace MỚI, và nhánh
+     này phải chạy lại chứ không chỉ chạy lần đầu. */
   const diskKey = q.data ? JSON.stringify(q.data) : "";
   React.useEffect(() => {
     if (!q.data) return;
-    serverRef.current = q.data;
-    applyDiskSettings(q.data);
+    /* Dù đi nhánh nào thì `serverRef` cũng là MỐC SO SÁNH, không phải "thứ đã áp": ở
+       nhánh nhận nuôi nó là mặc định của đĩa, nên `diffDiskSettings` bên dưới sinh ra
+       đúng phần người dùng đang khác mặc định — tức là thứ cần được cứu lên đĩa. */
+    serverRef.current = q.data.settings;
+
+    if (settingsDirection(q.data.configured) === "apply") {
+      adoptedRef.current = false; // đĩa đã có chủ; lần sau mất `configured` thì nhận nuôi lại
+      applyDiskSettings(q.data.settings);
+      return;
+    }
+
+    /* NHẬN NUÔI. Đẩy ngay một lần thay vì chờ người dùng chạm vào cái gì đó — nếu chờ,
+       tuỳ chọn của họ sẽ nằm mãi trong một localStorage có thể bị xoá bất cứ lúc nào. */
+    if (adoptedRef.current) return;
+    const patch = diffDiskSettings(q.data.settings, currentDiskSettings());
+    if (patch === null) return; // đang trùng mặc định ⇒ không có gì để cứu
+    adoptedRef.current = true;
+    saveRef.current(patch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [diskKey]);
 

@@ -34,7 +34,7 @@ import {
 import { normalizeContract, type Contract } from "../types/contract";
 /* Hình dạng của tuỳ chọn-trên-đĩa được LẤY RA TỪ schema localStorage (xem file đó để biết
    vì sao), nên nó sống ở `lib/store` chứ không ở `lib/types/api.ts` như các schema khác. */
-import { diskSettingsSchema, type DiskSettingsPatch } from "../store/disk-settings";
+import { diskSettingsResponseSchema, type DiskSettingsPatch } from "../store/disk-settings";
 import type { z } from "zod";
 
 const pid = (id: string | number) => encodeURIComponent(String(id));
@@ -149,13 +149,11 @@ export const systemApi = {
    * Chỉ enum · boolean · số · mã do app sinh đi qua đây; không path, không chữ tự do.
    */
   async settings() {
-    const data = await httpGet("/api/settings") as { settings?: unknown };
-    return parse(diskSettingsSchema, data.settings ?? {}, "tuỳ chọn người dùng");
+    return parse(diskSettingsResponseSchema, await httpGet("/api/settings"), "tuỳ chọn người dùng");
   },
   /** Vá MỘT PHẦN (chỉ field vừa đổi) và nhận lại TOÀN BỘ bảng sau khi agent chuẩn hoá. */
   async patchSettings(patch: DiskSettingsPatch) {
-    const data = await httpPatch("/api/settings", patch) as { settings?: unknown };
-    return parse(diskSettingsSchema, data.settings ?? {}, "tuỳ chọn vừa lưu");
+    return parse(diskSettingsResponseSchema, await httpPatch("/api/settings", patch), "tuỳ chọn vừa lưu");
   },
 };
 
