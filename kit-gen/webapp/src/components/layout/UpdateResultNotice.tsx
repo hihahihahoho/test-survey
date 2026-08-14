@@ -1,8 +1,9 @@
 import * as React from "react";
 import { toast } from "@/components/ui/sonner";
+import { api } from "@/lib/api/endpoints";
 import {
-  MANUAL_UPDATE_CMD, clearUpdatePending, probeAgentVersion, readUpdatePending, resolveUpdateResult,
-  type PendingUpdate,
+  MANUAL_RESTART_CMD, MANUAL_UPDATE_CMD, clearUpdatePending, probeAgentVersion, readUpdatePending,
+  resolveUpdateResult, type PendingUpdate,
 } from "@/lib/update";
 
 /**
@@ -27,10 +28,18 @@ export function _resetUpdateGreeting(): void {
   greeted = false;
 }
 
+/**
+ * `restart` là câu trả lời cho ca ĐÃ CÀI XONG MÀ TIẾN TRÌNH CŨ VẪN CHẠY: nhìn từ phía
+ * web, ca đó giống hệt ca cài hỏng (agent sống, version y nguyên) — và lời khuyên cho
+ * hai ca thì ngược nhau. "Cập nhật lại" ở ca này là bảo user tải lại 200MB để rồi hỏng
+ * y như cũ; thứ họ cần là một lệnh `restart`. Chỉ agent phân biệt được, nên phải HỎI
+ * (`GET /api/update` → `restartRequired`) thay vì đoán từ hai con số version.
+ */
 export function announceUpdateResult(
   pending: PendingUpdate,
   runningVersion: string | null,
   cmd: string = MANUAL_UPDATE_CMD,
+  restart?: { required?: boolean; command?: string; installedVersion?: string | null } | null,
 ): void {
   const r = resolveUpdateResult(pending, runningVersion);
   if (r.kind === "success") {
@@ -40,6 +49,12 @@ export function announceUpdateResult(
   if (r.kind === "unknown") {
     toast.warning("Chưa xác nhận được bản cập nhật", {
       description: "Công cụ local chưa trả lời. Mở lại nó rồi kiểm tra phiên bản ở Cài đặt → Giới thiệu.",
+    });
+    return;
+  }
+  if (restart?.required) {
+    toast.warning(`Đã cài bản ${restart.installedVersion ?? r.targetVersion} — cần khởi động lại`, {
+      description: `Công cụ local vẫn đang chạy bản ${r.runningVersion}. Chạy lệnh ${restart.command || MANUAL_RESTART_CMD} trong Terminal rồi tải lại trang.`,
     });
     return;
   }
@@ -63,7 +78,13 @@ export function UpdateResultNotice() {
          Chờ ngắn (20s) rồi mới kết luận — và `null` không bao giờ bị đọc thành "thất bại". */
       const version = await probeAgentVersion();
       clearUpdatePending();
-      announceUpdateResult(pending, version);
+      /* Chỉ hỏi thêm khi sắp phải nói "chưa thành công" — đường thành công (99% số lần)
+         vẫn không sinh thêm request nào. */
+      const failing = resolveUpdateResult(pending, version).kind === "failed";
+      const s = failing ? await api.system.checkUpdate().catch(() => null) : null;
+      announceUpdateResult(pending, version, MANUAL_UPDATE_CMD, s && {
+        required: s.restartRequired, command: s.restartCommand, installedVersion: s.installedVersion,
+      });
     })();
   }, []);
 

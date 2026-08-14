@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process"
+import { openSync, writeSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -10,6 +11,14 @@ const MANIFEST_URL = process.env.KITGEN_RELEASE_MANIFEST || "https://raw.githubu
 export const UPDATE_COMMAND = IS_WIN
   ? "%LOCALAPPDATA%\\KitGen\\bin\\kitgen.cmd update"
   : "~/.kitgen/bin/kitgen update"
+
+/** Lệnh khởi động lại thủ công — câu trả lời cho ca `restartRequired`. Cùng luật nhãn. */
+export const RESTART_COMMAND = IS_WIN
+  ? "%LOCALAPPDATA%\\KitGen\\bin\\kitgen.cmd restart"
+  : "~/.kitgen/bin/kitgen restart"
+
+/** Nhật ký của lượt update do UI bấm — nhãn rút gọn, để câu báo lỗi chỉ được đúng chỗ. */
+export const UPDATE_LOG_LABEL = IS_WIN ? "%LOCALAPPDATA%\\KitGen\\update.log" : "~/.kitgen/update.log"
 
 export function compareVersions(a, b) {
   const pa = String(a).split(/[.-]/).map(x => /^\d+$/.test(x) ? Number(x) : x)
@@ -43,14 +52,50 @@ export async function readRuntimeVersion() {
 }
 
 /**
+ * Version của bản ĐÃ CÀI trên đĩa — đi qua symlink `~/.kitgen/current`, KHÁC với bản
+ * đang chạy trong tiến trình này (`readRuntimeVersion` đọc VERSION cạnh chính module,
+ * tức bản mà tiến trình này được nạp lên từ đó).
+ *
+ * Hai số này chỉ lệch nhau trong ĐÚNG MỘT tình huống, và đó là tình huống đã cắn máy
+ * chủ SP ngày 14/08: installer đã đổi symlink nhưng bước khởi động lại không xảy ra.
+ */
+export async function readInstalledVersion({ kitgenHome = defaultKitgenHome() } = {}) {
+  try {
+    const v = (await readFile(join(kitgenHome, "current", "VERSION"), "utf8")).trim()
+    return v || null
+  } catch { return null }
+}
+
+/**
+ * "Bản mới đã nằm trên đĩa mà tiến trình này vẫn là bản cũ?" — trạng thái nửa vời mà
+ * trước đây KHÔNG AI phát hiện được: /health vẫn 200, /api/update vẫn báo "có bản mới",
+ * người dùng đọc thành "cập nhật hỏng" và cài lại vô ích.
+ *
+ * Lưu ý cho người chạy từ checkout source: `currentVersion` khi đó là version trong
+ * webapp/package.json, nên một máy dev có ~/.kitgen mới hơn repo sẽ thấy
+ * `restartRequired:true`. Vô hại (chỉ là một câu gợi ý) và đúng về mặt chữ nghĩa —
+ * bản đã cài đúng là mới hơn tiến trình đang phục vụ.
+ */
+export async function restartState({ currentVersion = null, kitgenHome = defaultKitgenHome() } = {}) {
+  const running = currentVersion || await readRuntimeVersion()
+  const installedVersion = await readInstalledVersion({ kitgenHome })
+  return {
+    installedVersion,
+    restartRequired: Boolean(running && installedVersion && compareVersions(installedVersion, running) > 0),
+    restartCommand: RESTART_COMMAND,
+  }
+}
+
+/**
  * So version đang chạy với `release.json` publish trên nhánh phát hành — CÙNG một
  * manifest mà `install.sh` đọc, nên "có bản mới" ở UI và `kitgen update` không bao
  * giờ lệch nhau. Fetch chạy ở AGENT chứ không ở trình duyệt: raw.githubusercontent.com
  * không trả CORS cho origin loopback, và trang tại `/app/` không được phép gọi ra ngoài.
  * Manifest chỉ chứa version/tag/archive — không có gì bí mật để lộ.
  */
-export async function checkForUpdate({ currentVersion, fetchImpl = fetch } = {}) {
+export async function checkForUpdate({ currentVersion, fetchImpl = fetch, kitgenHome } = {}) {
   const current = currentVersion || await readRuntimeVersion() || "0.0.0"
+  const restart = await restartState({ currentVersion: current, kitgenHome })
   const res = await fetchImpl(MANIFEST_URL, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) })
   if (!res.ok) throw new Error(`release manifest returned HTTP ${res.status}`)
   const manifest = await res.json()
@@ -62,6 +107,7 @@ export async function checkForUpdate({ currentVersion, fetchImpl = fetch } = {})
     tag: typeof manifest.tag === "string" ? manifest.tag : null,
     available: compareVersions(current, manifest.version) < 0,
     updateCommand: UPDATE_COMMAND,
+    ...restart,
     checkedAt: new Date().toISOString(),
   }
 }
@@ -77,34 +123,66 @@ export async function checkForUpdateSafe(opts = {}) {
     return await checkForUpdate(opts)
   } catch (err) {
     const offline = err?.name === "TimeoutError" || err?.name === "AbortError" || err?.name === "TypeError"
+    const current = opts.currentVersion || await readRuntimeVersion() || "0.0.0"
     return {
       ok: false,
-      currentVersion: opts.currentVersion || await readRuntimeVersion() || "0.0.0",
+      currentVersion: current,
       latestVersion: null,
       tag: null,
       available: false,
       reason: offline ? "OFFLINE" : "MANIFEST_UNREADABLE",
       updateCommand: UPDATE_COMMAND,
+      /* Mất mạng KHÔNG che được ca "cài xong chưa restart": số này đọc từ đĩa, không
+         phụ thuộc manifest. Đây đúng là lúc cần nó nhất — bản mới vừa cài xong thì
+         máy hay đang ở giữa lúc agent chưa lên lại. */
+      ...await restartState({ currentVersion: current, kitgenHome: opts.kitgenHome }),
       checkedAt: new Date().toISOString(),
     }
   }
 }
 
-/** Respond first, then let the service installer replace and restart this process. */
-export function scheduleUpdate({ kitgenHome = defaultKitgenHome() } = {}) {
-  if (IS_WIN) {
-    // Không có `sh` trên Windows. cmd.exe tách hẳn khỏi tiến trình agent (nó sắp bị
-    // installer thay và khởi động lại), `timeout` là bản Windows của `sleep 1`.
-    const cmd = join(kitgenHome, "bin", "kitgen.cmd")
-    const child = spawn(process.env.ComSpec || "cmd.exe",
-      ["/d", "/s", "/c", `timeout /t 1 /nobreak >nul & "${cmd}" update`],
-      { detached: true, stdio: "ignore", env: process.env, ...winSpawnOpts() })
-    child.unref()
-    return
-  }
-  const cmd = join(kitgenHome, "bin", "kitgen")
-  const child = spawn("sh", ["-c", "sleep 1; exec \"$1\" update", "kitgen-update", cmd], {
-    detached: true, stdio: "ignore", env: process.env,
+/**
+ * Trả lời trước, rồi để installer thay và khởi động lại chính tiến trình này.
+ *
+ * BA THỨ Ở ĐÂY KHÔNG ĐƯỢC ĐỘNG VÀO, MỖI THỨ MỘT LÝ DO ĐÃ TRẢ GIÁ:
+ *
+ *  ① `detached: true` — installer PHẢI ở một session khác. Nó sắp `launchctl bootout` /
+ *    `kickstart -k` chính cái job đang chứa tiến trình agent này; nếu nó còn nằm trong
+ *    session/process-group của job thì nó tự giết mình ngay giữa bước cài. `setsid` là
+ *    thứ duy nhất tách được. (Lớp phòng thủ thứ hai: plist có `KeepAlive=true`, nên kể
+ *    cả khi cả hai cùng chết, launchd vẫn kéo agent dậy — nhưng dậy với bản CŨ.)
+ *
+ *  ② `stdio` phải ĐI VÀO FILE. Trước 2.1.21 chỗ này là `stdio: "ignore"` và đó là lý do
+ *    sự cố 14/08 không để lại một dòng nào: installer chết ở giữa, output rơi vào
+ *    /dev/null, `agent.log` (stdout của launchd job) đương nhiên không có gì vì
+ *    installer đâu có ghi vào đó. "Không có dấu vết" bị đọc nhầm thành "không có ai
+ *    thử restart". Mở file bằng "w": thứ cần đọc luôn là lượt update GẦN NHẤT.
+ *
+ *  ③ Phải có listener `error`. spawn hỏng (thiếu `sh`, bin/kitgen không +x) phát ra
+ *    'error' bất đồng bộ; ChildProcess không ai nghe là ném lỗi không bắt được ⇒ agent
+ *    chết ngay sau khi vừa trả 202 "đang cập nhật".
+ */
+export function scheduleUpdate({ kitgenHome = defaultKitgenHome(), spawnImpl = spawn } = {}) {
+  const logFile = join(kitgenHome, "update.log")
+  let out = "ignore"
+  try {
+    const fd = openSync(logFile, "w")
+    writeSync(fd, `[${new Date().toISOString()}] kitgen update (do UI yêu cầu)\n`)
+    out = fd
+  } catch { /* ổ đĩa chỉ đọc / thiếu quyền: mất nhật ký chứ không được mất bản cập nhật */ }
+
+  const child = IS_WIN
+    // Không có `sh` trên Windows. cmd.exe tách hẳn khỏi tiến trình agent, `timeout` là
+    // bản Windows của `sleep 1`.
+    ? spawnImpl(process.env.ComSpec || "cmd.exe",
+      ["/d", "/s", "/c", `timeout /t 1 /nobreak >nul & "${join(kitgenHome, "bin", "kitgen.cmd")}" update`],
+      { detached: true, stdio: ["ignore", out, out], env: process.env, ...winSpawnOpts() })
+    : spawnImpl("sh", ["-c", "sleep 1; exec \"$1\" update", "kitgen-update", join(kitgenHome, "bin", "kitgen")],
+      { detached: true, stdio: ["ignore", out, out], env: process.env })
+
+  child.on?.("error", err => {
+    try { writeSync(typeof out === "number" ? out : 2, `không chạy được installer: ${err?.message ?? err}\n`) } catch { /* hết đường báo */ }
   })
-  child.unref()
+  child.unref?.()
+  return { logLabel: UPDATE_LOG_LABEL }
 }

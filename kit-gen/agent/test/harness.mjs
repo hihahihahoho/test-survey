@@ -114,7 +114,7 @@ export function fakeDoctor(imageGenAvailable) {
   return async ws => ({
     os: "test", node: { ok: true, version: process.versions.node },
     python: { ok: true, version: "3.12.0", venv: false, deps: { pillow: true, numpy: true, torch: false, transformers: false } },
-    playwright: { ok: false, fallback: "skeleton.py (PIL)" },
+    renderer: { ok: false, engine: "@resvg/resvg-wasm" },
     codex: { ok: true, version: "0.146.0" },
     imageGen: {
       mode: imageGenAvailable ? "img-home" : "unavailable", available: imageGenAvailable,

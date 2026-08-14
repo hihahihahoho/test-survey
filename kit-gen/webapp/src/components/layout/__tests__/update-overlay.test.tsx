@@ -10,7 +10,9 @@ import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToString } from "react-dom/server";
 import { LS_KEYS, _setBackend, memoryBackend, storeGet } from "@/lib/store/persist";
-import { MANUAL_UPDATE_CMD, markUpdatePending, readUpdatePending, type UpdatePhase } from "@/lib/update";
+import {
+  MANUAL_RESTART_CMD, MANUAL_UPDATE_CMD, markUpdatePending, readUpdatePending, type UpdatePhase,
+} from "@/lib/update";
 import { UpdateOverlayView } from "../UpdateOverlay";
 
 const toasts: { level: string; title: string; description?: string }[] = [];
@@ -34,13 +36,16 @@ beforeEach(async () => {
  * của `useSyncExternalStore`, mà zustand trả `getInitialState()` cho đường đó ⇒ mọi phase
  * đều ra `idle`. Hợp đồng vỏ ⇄ store được khoá ở `lib/update/__tests__/install-flow.test.ts`.
  */
-function render(o: { phase: UpdatePhase; targetVersion?: string | null; message?: string | null } ): string {
+function render(
+  o: { phase: UpdatePhase; targetVersion?: string | null; message?: string | null; restartCommand?: string | null },
+): string {
   return renderToString(
     <UpdateOverlayView
       phase={o.phase}
       targetVersion={o.targetVersion ?? null}
       message={o.message ?? null}
       updateCommand={MANUAL_UPDATE_CMD}
+      restartCommand={o.restartCommand ?? MANUAL_RESTART_CMD}
       onDismiss={() => {}}
     />,
   );
@@ -80,6 +85,24 @@ describe("UpdateOverlay", () => {
     expect(t).toContain("Đóng");
   });
 
+  /* BACKLOG #20: lượt 14/08 dừng ở đúng màn "Chưa xác nhận được bản cập nhật" + lệnh
+     `kitgen update`. Cả hai đều sai: bản mới ĐÃ nằm trên máy, cập nhật lại chỉ tải lại
+     200MB rồi hỏng y như cũ. Màn này tồn tại để câu trả lời là một lệnh làm được việc. */
+  it("cài xong mà chưa khởi động lại ⇒ đưa lệnh RESTART, KHÔNG phải lệnh update", () => {
+    const t = textOf(render({
+      phase: "needs-restart",
+      targetVersion: "2.1.20",
+      message: "Bản 2.1.20 đã cài xong, nhưng công cụ local vẫn đang chạy bản 2.1.19.",
+    }));
+    expect(t).toContain("Đã cài xong — cần khởi động lại");
+    expect(t).toContain("2.1.20");
+    expect(t).toContain("~/.kitgen/bin/kitgen restart");
+    expect(t).not.toContain("~/.kitgen/bin/kitgen update");
+    expect(t).toContain("KHÔNG cần cập nhật lại");
+    expect(t).toContain("Tải lại trang");
+    expect(t).toContain("Đóng");
+  });
+
   it("gửi lệnh hỏng ⇒ nói rõ chưa đụng gì tới bản đang chạy", () => {
     const t = textOf(render({
       phase: "failed", message: "Không gửi được yêu cầu cập nhật tới công cụ local — có vẻ nó vừa dừng.",
@@ -90,7 +113,7 @@ describe("UpdateOverlay", () => {
   });
 
   it("KHÔNG bao giờ hiện đường dẫn tuyệt đối của máy user", () => {
-    for (const phase of ["installing", "waiting", "timeout", "failed"] as const) {
+    for (const phase of ["installing", "waiting", "needs-restart", "timeout", "failed"] as const) {
       const t = textOf(render({ phase, targetVersion: "2.2.0", message: "x" }));
       expect(t).not.toMatch(/\/Users\/|\/home\//);
     }
@@ -112,6 +135,20 @@ describe("lời chào sau khi tải lại", () => {
     expect(toasts[0]?.level).toBe("error");
     expect(toasts[0]?.title).toContain("chưa thành công");
     expect(toasts[0]?.description).toContain("~/.kitgen/bin/kitgen update");
+  });
+
+  it("agent nói 'đã cài, chưa restart' ⇒ lời chào đổi hẳn lời khuyên", async () => {
+    const { announceUpdateResult } = await import("../UpdateResultNotice");
+    announceUpdateResult(
+      { targetVersion: "2.1.20", fromVersion: "2.1.19", startedAt: new Date().toISOString() },
+      "2.1.19",
+      MANUAL_UPDATE_CMD,
+      { required: true, command: MANUAL_RESTART_CMD, installedVersion: "2.1.20" },
+    );
+    expect(toasts[0]?.level).toBe("warning");
+    expect(toasts[0]?.title).toContain("Đã cài bản 2.1.20");
+    expect(toasts[0]?.description).toContain("~/.kitgen/bin/kitgen restart");
+    expect(toasts[0]?.description).not.toContain("kitgen update");
   });
 
   it("agent chưa trả lời ⇒ KHÔNG kết tội cập nhật hỏng", async () => {

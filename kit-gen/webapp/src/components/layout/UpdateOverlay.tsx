@@ -3,7 +3,9 @@ import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CopyableCode } from "@/components/common/CopyableCode";
 import { useUpdateCheck } from "@/lib/hooks";
-import { MANUAL_UPDATE_CMD, isUpdateBlocking, isUpdateRunning, useUpdateInstall, type UpdatePhase } from "@/lib/update";
+import {
+  MANUAL_RESTART_CMD, MANUAL_UPDATE_CMD, isUpdateBlocking, isUpdateRunning, useUpdateInstall, type UpdatePhase,
+} from "@/lib/update";
 
 /**
  * LỚP PHỦ TOÀN TRANG KHI ĐANG CẬP NHẬT.
@@ -17,9 +19,12 @@ import { MANUAL_UPDATE_CMD, isUpdateBlocking, isUpdateRunning, useUpdateInstall,
  * Gắn MỘT LẦN ở `App.tsx`, đọc `useUpdateInstall` — nên nó không phụ thuộc component nào
  * đã bấm nút (popover đóng lại thì lớp phủ vẫn đứng nguyên).
  *
- * Ba màn, ba câu khác nhau:
+ * Bốn màn, bốn câu khác nhau:
  *   · đang cài/đang chờ → spinner + "đừng đóng tab" (KHÔNG có nút thoát: thoát bằng cách
  *     nào cũng không dừng được việc agent đang tự thay mình);
+ *   · CÀI XONG, CHƯA KHỞI ĐỘNG LẠI → nói rõ bản mới đã nằm trên máy và đưa lệnh RESTART.
+ *     Đây là ca đã cắn máy chủ SP ngày 14/08 (BACKLOG #20): lượt đó UI mời "cập nhật" lần
+ *     nữa — lời khuyên sai, vì bản mới đã cài rồi, thứ thiếu chỉ là một cú khởi động lại;
  *   · quá hạn 90s      → có nút [Tải lại trang] + lệnh thủ công + đường lùi [Đóng];
  *   · gửi lệnh hỏng    → nói thẳng là chưa cài gì cả, kèm lệnh thủ công.
  *
@@ -33,12 +38,14 @@ export interface UpdateOverlayViewProps {
   targetVersion: string | null;
   message: string | null;
   updateCommand: string;
+  /** lệnh khởi động lại — chỉ có ở ca `needs-restart`. */
+  restartCommand?: string | null;
   onDismiss: () => void;
   onReload?: () => void;
 }
 
 export function UpdateOverlayView({
-  phase, targetVersion, message, updateCommand, onDismiss, onReload,
+  phase, targetVersion, message, updateCommand, restartCommand, onDismiss, onReload,
 }: UpdateOverlayViewProps) {
   const panelRef = React.useRef<HTMLDivElement>(null);
   const running = isUpdateRunning(phase);
@@ -57,19 +64,25 @@ export function UpdateOverlayView({
 
   if (!open) return null;
 
+  const needsRestart = phase === "needs-restart";
+
   const title = running
     ? targetVersion
       ? `Đang cập nhật lên bản ${targetVersion}…`
       : "Đang cập nhật lên bản mới…"
-    : phase === "timeout"
-      ? "Chưa xác nhận được bản cập nhật"
-      : "Chưa gửi được yêu cầu cập nhật";
+    : needsRestart
+      ? "Đã cài xong — cần khởi động lại công cụ local"
+      : phase === "timeout"
+        ? "Chưa xác nhận được bản cập nhật"
+        : "Chưa gửi được yêu cầu cập nhật";
 
   const detail = running
     ? "Đừng đóng tab này. Công cụ local sẽ khởi động lại và trang tự tải lại khi xong."
-    : `${message ?? ""} ${phase === "timeout"
-      ? "Kiểm tra cửa sổ Terminal đang chạy công cụ local, hoặc cập nhật thủ công rồi tải lại trang."
-      : "Bản đang chạy chưa bị thay đổi gì."}`.trim();
+    : `${message ?? ""} ${needsRestart
+      ? "Chạy lệnh dưới đây trong Terminal rồi tải lại trang — KHÔNG cần cập nhật lại."
+      : phase === "timeout"
+        ? "Kiểm tra cửa sổ Terminal đang chạy công cụ local, hoặc cập nhật thủ công rồi tải lại trang."
+        : "Bản đang chạy chưa bị thay đổi gì."}`.trim();
 
   /**
    * Bẫy Tab trong tấm panel. Lúc đang cài panel KHÔNG có gì bấm được ⇒ Tab bị nuốt hẳn,
@@ -131,12 +144,16 @@ export function UpdateOverlayView({
         {!running && (
           <>
             <div className="flex flex-col gap-2">
-              <p className="text-caption text-fg-muted">Cập nhật thủ công trong Terminal:</p>
-              <CopyableCode value={updateCommand} label="Lệnh cập nhật KitGen" />
+              <p className="text-caption text-fg-muted">
+                {needsRestart ? "Khởi động lại công cụ local trong Terminal:" : "Cập nhật thủ công trong Terminal:"}
+              </p>
+              {needsRestart
+                ? <CopyableCode value={restartCommand || MANUAL_RESTART_CMD} label="Lệnh khởi động lại KitGen" />
+                : <CopyableCode value={updateCommand} label="Lệnh cập nhật KitGen" />}
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               <Button size="sm" variant="secondary" onClick={onDismiss}>Đóng</Button>
-              {phase === "timeout" && (
+              {(phase === "timeout" || needsRestart) && (
                 <Button size="sm" variant="primary" onClick={onReload}>
                   <RefreshCw aria-hidden /> Tải lại trang
                 </Button>
@@ -153,6 +170,7 @@ export function UpdateOverlay() {
   const phase = useUpdateInstall((s) => s.phase);
   const targetVersion = useUpdateInstall((s) => s.targetVersion);
   const message = useUpdateInstall((s) => s.message);
+  const restartCommand = useUpdateInstall((s) => s.restartCommand);
   const dismiss = useUpdateInstall((s) => s.dismiss);
   /* Đọc GHÉ cache `["update"]` (enabled:false ⇒ không sinh request nào) chỉ để lấy đúng
      lệnh mà agent tự khai. Không có cache thì dùng lệnh mặc định. */
@@ -164,6 +182,7 @@ export function UpdateOverlay() {
       targetVersion={targetVersion}
       message={message}
       updateCommand={update.data?.updateCommand || MANUAL_UPDATE_CMD}
+      restartCommand={restartCommand || update.data?.restartCommand || MANUAL_RESTART_CMD}
       onDismiss={dismiss}
       onReload={() => window.location.reload()}
     />

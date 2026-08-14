@@ -5,7 +5,7 @@
  ⚠️  CHƯA TỪNG ĐƯỢC CHẠY THỬ TRÊN MÁY WINDOWS.
      Script này được viết trên macOS, hoàn toàn dựa trên tài liệu chính thức
      (nodejs.org/dist, docs.microsoft.com về tar.exe/Expand-Archive/junction,
-     Playwright CLI, npm bin trên Windows). Trước khi phát cho người dùng thật,
+     npm bin trên Windows). Trước khi phát cho người dùng thật,
      PHẢI chạy đủ checklist trong docs/WINDOWS-PORT.md §7 trên một máy Win sạch.
 
  Bản Windows là bản DỊCH của install.sh, giữ nguyên mọi quyết định của nó:
@@ -364,7 +364,7 @@ exec "$pyPosix"$pyShimArgs "`$@"
   Write-Warn 'bo qua venv va shim python3 vi chua co Python 3'
 }
 
-# ── 6. Codex CLI + Playwright ──────────────────────────────────────────────────
+# ── 6. Codex CLI + trình render khung xương ───────────────────────────────────
 Write-Step '6/8' 'Codex CLI va trinh dung anh'
 $toolsPrefix = Join-Path $KitgenHome 'tools'
 New-Dir $toolsPrefix
@@ -386,18 +386,21 @@ if (-not $codexBin) {
 }
 if (-not $codexBin) { Write-Block 'Codex CLI' 'Chay: npm i -g @openai/codex  (roi `codex login`). Khong co Codex thi KHONG gen duoc anh.' }
 
-$pwCli = Join-Path $toolsPrefix 'node_modules\.bin\playwright.cmd'
-if (-not (Test-Path -LiteralPath $pwCli)) {
-  Write-Host '  npm install playwright ...'
-  & $npmCmd install --silent --prefix $toolsPrefix playwright
-  if ($LASTEXITCODE -ne 0) { Write-Warn 'cai Playwright that bai — skeleton se rot ve ban PIL' }
+# Trinh render khung xuong: @resvg/resvg-wasm (2,4 MB, thuan JS + .wasm) thay cho
+# Playwright + Chromium (790,9 MB) — xem BACKLOG #15. BAT BUOC, khong con duong lui:
+# gen.sh dung han neu thieu (ban PIL cu lech 17,6% muc, da xoa). Goi nay khong co file
+# .node nao, nen ban Windows het hang binary bien dich san cho AV can nham.
+$resvgProbe = Join-Path $toolsPrefix 'node_modules\@resvg\resvg-wasm\index_bg.wasm'
+if (-not (Test-Path -LiteralPath $resvgProbe)) {
+  Write-Host '  npm install @resvg/resvg-wasm ...'
+  & $npmCmd install --silent --prefix $toolsPrefix '@resvg/resvg-wasm'
 }
-if (Test-Path -LiteralPath $pwCli) {
-  $env:PLAYWRIGHT_BROWSERS_PATH = Join-Path $toolsPrefix 'playwright-browsers'
-  # --only-shell: chi chromium_headless_shell (~196MB), du cho render skeleton headless.
-  & $pwCli install --only-shell | Out-Null
-  if ($LASTEXITCODE -eq 0) { Write-Ok 'Playwright + chromium headless shell' }
-  else { Write-Warn 'playwright install --only-shell that bai — skeleton se rot ve ban PIL' }
+if (Test-Path -LiteralPath $resvgProbe) { Write-Ok 'Trinh render khung xuong (@resvg/resvg-wasm)' }
+else { Write-Block 'Trinh render khung xuong' 'Chay: npm install --prefix <tools> @resvg/resvg-wasm. Thieu goi nay thi KHONG gen duoc anh.' }
+
+# Don rac doi Playwright (790,9 MB) o luot update. May sach khong co gi de xoa.
+foreach ($p in @('playwright-browsers', 'node_modules\playwright', 'node_modules\playwright-core')) {
+  Remove-Item -LiteralPath (Join-Path $toolsPrefix $p) -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 # ── 7. config + lệnh kitgen ────────────────────────────────────────────────────
@@ -431,7 +434,6 @@ $logFile = Join-Path $KitgenHome 'agent.log'
 
 # config.cmd — ban Windows cua config.env. kitgen.cmd nap no bang `call`.
 $nodeModules = Join-Path $toolsPrefix 'node_modules'
-$browsers    = Join-Path $toolsPrefix 'playwright-browsers'
 $configCmd = @"
 @rem Sinh boi install.ps1 — KHONG sua tay, chay lai installer neu can doi.
 set "KITGEN_HOME=$KitgenHome"
@@ -444,7 +446,6 @@ set "KITGEN_CODEX_BIN=$codexBin"
 set "KITGEN_PYTHON=$pythonForAgent"
 set "KITGEN_BASH=$bashExe"
 set "NODE_PATH=$nodeModules"
-set "PLAYWRIGHT_BROWSERS_PATH=$browsers"
 set "KITGEN_CODEX_PROFILE=$codexProfile"
 set "KITGEN_RELEASE_MANIFEST=$ReleaseManifest"
 "@

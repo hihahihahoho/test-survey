@@ -17,9 +17,9 @@
 | Thành phần | Bản macOS/Linux hiện tại |
 |---|---|
 | Installer | `install.sh` (bash) — tải runtime `.tar.gz` theo `release.json`, đối chiếu sha256, giải nén vào `~/.kitgen/releases/<version>`, symlink `~/.kitgen/current` |
-| Runtime riêng | Node 20.19.5 tải từ `nodejs.org/dist` vào `~/.kitgen/tools/node`, Playwright `--only-shell`, Codex CLI qua `npm --prefix ~/.kitgen/tools` |
+| Runtime riêng | Node 20.19.5 tải từ `nodejs.org/dist` vào `~/.kitgen/tools/node`, `@resvg/resvg-wasm` + Codex CLI qua `npm --prefix ~/.kitgen/tools` |
 | Workspace | `~/KitGen` — `projects/`, `.kitgen/engine`, `.kitgen/config.json`, `.venv` (pillow numpy scipy pymatting) |
-| Engine | `gen.sh` + `cover.sh` (bash, gọi `codex exec`), `slice.py` / `skeleton.py` / `validate_output_geometry.py` (python3) |
+| Engine | `gen.sh` + `cover.sh` (bash, gọi `codex exec`), `slice.py` / `validate_output_geometry.py` (python3) + `render-skeleton.mjs` / `skeleton-svg.js` (node) |
 | Agent | Node stdlib thuần, `agent/server.mjs`, bind 127.0.0.1 + [::1] cổng 8765 |
 | Dịch vụ nền | launchd (`com.kitgen.agent.plist`) trên macOS, systemd user unit trên Linux |
 | Lệnh | `~/.kitgen/bin/kitgen {start\|stop\|status\|doctor\|logs\|open\|update}` (bash) |
@@ -119,7 +119,7 @@ Trên darwin/linux mã chạy đúng từng ký tự như trước (chứng minh
 | `agent/lib/paths.mjs` — `isInside()` so prefix **phân biệt hoa thường** | NTFS không phân biệt hoa thường. Về lý thuyết một symlink/junction có khác biệt hoa-thường có thể qua mặt. Nhưng: (a) `safeJoin` đã chặn `..` theo từng đoạn và chặn path tuyệt đối trước đó; (b) `realpathSync` của Node trên Windows trả về đúng vỏ hoa-thường thật của file. Sửa hàm này là chạm vào lớp bảo mật cốt lõi mà **không kiểm thử được trên Windows** ⇒ rủi ro sửa > rủi ro để. **Ghi vào backlog, cần audit riêng khi có máy Win.** |
 | Tên project trùng **tên thiết bị DOS** (`con`, `prn`, `aux`, `nul`, `com1`…) | `RE_PROJECT_ID = /^[a-z0-9][a-z0-9-]{2,47}$/` cho phép `con`. Trên Windows `mkdir projects\con` sẽ lỗi. Xác suất rất thấp (id do slug tên dự án tiếng Việt sinh ra), và chặn thêm là đổi luật validate dùng chung với webapp. **Ghi backlog.** |
 | `agent/lib/workspace.mjs` — `workspaceLabel()` cắt theo `startsWith("/")` | Trên Windows nhãn sẽ là `C:\Users\…` rút gọn bởi `shortenPath()` — mà `shortenPath` chỉ biết `/Users`, `/home`, `/tmp`. Nghĩa là **nhãn workspace trên Windows có thể lộ đường dẫn tuyệt đối ra UI**. Không phải secret (UI chạy local, same-origin), nhưng lệch hợp đồng §4.3-5. **Ghi backlog — cần một nhánh `%USERPROFILE%` trong `shortenPath()`.** |
-| `agent/lib/doctor.mjs` — dò Playwright bằng `run("node", …)` | `node` phải có trong PATH. `kitgen.cmd` đã bơm `%KITGEN_HOME%\tools\node` vào PATH nên đúng trong đường chạy chuẩn; chỉ sai nếu ai đó chạy `server.mjs` tay. Đổi sang `process.execPath` là hợp lý nhưng động vào đường chạy darwin ⇒ để lại |
+| `agent/lib/doctor.mjs` — dò `@resvg/resvg-wasm` bằng `run("node", …)` | `node` phải có trong PATH. `kitgen.cmd` đã bơm `%KITGEN_HOME%\tools\node` vào PATH nên đúng trong đường chạy chuẩn; chỉ sai nếu ai đó chạy `server.mjs` tay. Đổi sang `process.execPath` là hợp lý nhưng động vào đường chạy darwin ⇒ để lại |
 | `webapp/` | Không đụng một dòng. Kiểm lại: webapp không bao giờ nhận/ghép đường dẫn hệ thống (UX-SPEC X1 — web chỉ gửi `workspaceId` đục). Đường dẫn tương đối trong API (`raw/x.png`, `runs/…`) luôn dùng `/`, và `safeJoin` chấp nhận cả hai loại gạch |
 
 ---
@@ -257,8 +257,9 @@ từng file trong `manifest.sha256`, chỉ khởi động khi mọi tiền đề
    `%USERPROFILE%\KitGen\.kitgen\engine`.
 5. **Python** — venv `.venv\Scripts\python.exe`, `pip install pillow numpy scipy pymatting`,
    và sinh **shim `bin\python3`** (LF, không BOM) cho Git-Bash.
-6. **Codex CLI + Playwright** — ưu tiên `codex` đã có trên PATH; nếu không thì
-   `npm --prefix <tools> install @openai/codex`; `playwright install --only-shell`.
+6. **Codex CLI + trình render khung xương** — ưu tiên `codex` đã có trên PATH; nếu không thì
+   `npm --prefix <tools> install @openai/codex`; rồi `npm --prefix <tools> install @resvg/resvg-wasm`
+   (2,4 MB, thuần JS + `.wasm` — KHÔNG còn tải browser).
 7. **Cấu hình + lệnh** — `config.cmd`, `bin\kitgen.cmd`, `bin\kitgen-hidden.vbs`, và
    `.kitgen\config.json` **giữ nguyên lựa chọn hồ sơ ảnh của người dùng khi update**
    (đúng lý lẽ đã ghi trong khối `python3 - "$WORKSPACE/.kitgen/config.json"` của `install.sh`:
@@ -343,7 +344,7 @@ lộ là đường dẫn máy, không phải khoá. Vẫn nên siết ACL ở b�
 | 3 | Quan sát khối **[2/8]** và **[3/8]** | `OK manifest.sha256 hop le (N file)`, `OK runtime <version>`, `OK Node v20.19.5` | `could not create SSL/TLS secure channel` ⇒ máy chặn TLS1.2, báo lại.<br>`checksum runtime khong khop` ⇒ tải hỏng, chạy lại |
 | 4 | Quan sát khối **[4/8]** | `OK current → releases\<version>` | `khong tao duoc junction` ⇒ chỉ là cảnh báo, vẫn chạy tiếp |
 | 5 | Quan sát khối **[5/8]** | `OK venv …`, `OK shim python3 (cho Git-Bash)` | `pip install that bai` ⇒ mạng công ty chặn PyPI. Ghi lại thông báo |
-| 6 | Quan sát khối **[6/8]** | `OK Codex …`, `OK Playwright + chromium headless shell` | `playwright install` tải ~200 MB, có thể lâu / bị proxy chặn |
+| 6 | Quan sát khối **[6/8]** | `OK Codex …`, `OK Trinh render khung xuong (@resvg/resvg-wasm)` | gói chỉ 2,4 MB; `THIEU` ⇒ npm bị proxy chặn, và **thiếu là KHÔNG gen được ảnh** (không còn bản dự phòng) |
 | 7 | Quan sát khối **[8/8]** | `OK dang ky chay khi dang nhap (Startup)` và `OK agent phan hoi tai http://127.0.0.1:8765/health` | `agent chua phan hoi sau 15s` ⇒ mở `%LOCALAPPDATA%\KitGen\agent.log`. **Nếu log RỖNG hoàn toàn ⇒ nghi ngay lỗi §3.1 dòng `import.meta.url`** |
 
 ### Kiểm chức năng
@@ -351,7 +352,7 @@ lộ là đường dẫn máy, không phải khoá. Vẫn nên siết ACL ở b�
 | # | Việc | Điểm quan sát | Lỗi có thể gặp |
 |---|---|---|---|
 | 8 | Mở trình duyệt: `http://127.0.0.1:8765/app/` | Giao diện KitGen hiện ra, **không** trắng trang | Trắng trang ⇒ bundle `app/` không được phục vụ, xem log |
-| 9 | Vào **Cài đặt → Giới thiệu / Doctor**, xem bảng môi trường | `python` phải `ok: true` + version; `playwright` `ok: true`; `codex` có version; `imageGen.mode` phải là `default-home` | ⚠️ **`imageGen.mode = "unavailable"` là rủi ro số 1** (§6.4). Chép lại đúng `reason` (`NO_CODEX` / `NOT_LOGGED_IN` / `FEATURE_OFF` / `UNKNOWN`) |
+| 9 | Vào **Cài đặt → Giới thiệu / Doctor**, xem bảng môi trường | `python` phải `ok: true` + version; `renderer` `ok: true` (`engine: "@resvg/resvg-wasm"`); `codex` có version; `imageGen.mode` phải là `default-home` | ⚠️ **`imageGen.mode = "unavailable"` là rủi ro số 1** (§6.4). Chép lại đúng `reason` (`NO_CODEX` / `NOT_LOGGED_IN` / `FEATURE_OFF` / `UNKNOWN`) |
 | 10 | Tạo một project mới từ template | Project hiện trong danh sách, thư mục `%USERPROFILE%\KitGen\projects\<id>` xuất hiện | |
 | 11 | Bấm **mở thư mục** (reveal) trên thẻ project | File Explorer mở đúng thư mục | Báo lỗi `NOT_SUPPORTED` ⇒ nhánh `explorer.exe` sai |
 | 12 | Mở Git Bash, `cd` vào thư mục project, chạy tay `bash gen.sh` | Phải in `prompt → prompts/…txt` cho từng job — chứng tỏ khối `python3 - <<'PY'` chạy được | `python3: command not found` ⇒ shim §2.1 không hoạt động (kiểm `%LOCALAPPDATA%\KitGen\bin\python3` có LF, không BOM, và PATH có chứa thư mục đó) |

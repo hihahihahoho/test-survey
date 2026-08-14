@@ -34,7 +34,6 @@ KITGEN_ORIGIN='http://127.0.0.1:8765'
 KITGEN_NODE='$NODE_DIR/node'
 KITGEN_CODEX_BIN='$CODEX_DIR/codex'
 NODE_PATH='$KITGEN_HOME/tools/node_modules'
-PLAYWRIGHT_BROWSERS_PATH='$KITGEN_HOME/tools/playwright-browsers'
 EOF
 
 PATH="/usr/bin:/bin:/usr/sbin:/sbin" "$ROOT/runtime/bin/kitgen" run
@@ -77,7 +76,6 @@ KITGEN_ORIGIN='http://127.0.0.1:8765'
 KITGEN_NODE='$NODE_DIR/node'
 KITGEN_CODEX_BIN='$PKG_DIR/codex.js'
 NODE_PATH='$KITGEN_HOME/tools/node_modules'
-PLAYWRIGHT_BROWSERS_PATH='$KITGEN_HOME/tools/playwright-browsers'
 EOF
 
 PATH="/usr/bin:/bin:/usr/sbin:/sbin" "$ROOT/runtime/bin/kitgen" run

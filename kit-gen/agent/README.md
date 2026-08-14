@@ -68,7 +68,7 @@ cho các cổng dò (8765–8767) — để đường vào (2) tự chạy. **Kh
 <workspace>/
 ├─ .kitgen/
 │  ├─ config.json                     # {maxJobs, imageGen:{mode,codexHome}} — KHÔNG có secret
-│  ├─ engine/                          # bản pipeline: gen.sh, slice.py, skeleton.py, element-lib.json…
+│  ├─ engine/                          # bản pipeline: gen.sh, slice.py, skeleton-svg.js, element-lib.json…
 │  ├─ app/                             # (tuỳ chọn) bundle giao diện phục vụ tại /app/
 │  ├─ cache/thumbs/                    # thumbnail cho ?w=256
 │  ├─ uploads/                         # staging của POST /api/uploads (TTL 1 giờ)
@@ -242,7 +242,7 @@ secret nào để lộ**. Đây là đánh đổi có ý thức theo yêu cầu 
   "node":   {"ok":true,"version":"24.13.0"},
   "python": {"ok":true,"version":"3.9.6","venv":false,
              "deps":{"pillow":true,"numpy":true,"torch":false,"transformers":false}},
-  "playwright": {"ok":false,"fallback":"skeleton.py (PIL)"},
+  "renderer": {"ok":true,"engine":"@resvg/resvg-wasm"},
   "codex":  {"ok":true,"version":"0.146.0"},
   "imageGen": {
     "mode":"default-home",        // default-home | img-home | profile-overlay | unavailable | unknown
@@ -383,4 +383,5 @@ agent/
 ```
 
 **Không sửa gì ngoài `agent/`.** `studio.html`, `studio-server.mjs`, `gen.sh`, `slice.py`, `styles.json`,
-`element-lib.json`, `silhouettes.js`, `skeleton.*` giữ nguyên để bản cũ còn chạy được mà đối chiếu.
+`element-lib.json`, `silhouettes.js`, `skeleton-svg.js`, `skeleton.html`, `render-skeleton.mjs` giữ nguyên
+để bản cũ còn chạy được mà đối chiếu.

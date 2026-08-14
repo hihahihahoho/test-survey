@@ -369,20 +369,55 @@ test("editing the project buffers changes until Lưu is pressed", async ({ page 
 });
 
 /**
- * LỖI #5 — mở dialog Cài đặt KHÔNG được điều hướng màn nền về "tất cả thành phẩm".
+ * LỖI #5 — mở dialog Cài đặt dự án KHÔNG được điều hướng màn nền về "tất cả thành phẩm".
+ *
+ * Lối vào là mục sidebar «Cài đặt style» (từ đợt này nó là lối vào duy nhất — bánh
+ * răng topbar đã chuyển sang cài đặt của cả app, xem test ngay dưới).
  */
 test("opening project settings keeps the background section untouched", async ({ page }) => {
   await page.goto("/p/tet26-a7f3?section=mascot");
   await expect(page.getByRole("heading", { name: "Mascot", exact: true, level: 1 })).toBeVisible();
 
-  await page.locator("header.sticky").getByRole("button", { name: "Cài đặt" }).click();
-  await expect(page.getByRole("dialog", { name: "Cài đặt" })).toBeVisible();
+  await page.getByRole("navigation", { name: "Quản lý dự án" })
+    .getByRole("button", { name: "Cài đặt style", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Cài đặt dự án" })).toBeVisible();
   await expect(page).toHaveURL(/section=mascot/);
   await expect(page).toHaveURL(/settings=requirements/);
 
   await page.getByRole("button", { name: "Đóng" }).click();
-  await expect(page.getByRole("dialog", { name: "Cài đặt" })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Cài đặt dự án" })).toHaveCount(0);
   await expect(page).toHaveURL(/section=mascot/);
+  await expect(page.getByRole("heading", { name: "Mascot", exact: true, level: 1 })).toBeVisible();
+});
+
+/**
+ * Chủ sản phẩm: *"cái nút cài đặt ở trong dự án topbar sẽ mở lên dialog giống cài đặt
+ * bên ngoài"*. Ba điều phải đúng cùng lúc, nên test phát biểu cả ba:
+ *  ① nội dung là CÀI ĐẶT CỦA APP (mục "Công cụ local" — thứ chỉ dialog ngoài mới có),
+ *    không phải cài đặt dự án ("Yêu cầu · Phong cách · Dự án");
+ *  ② KHÔNG rời dự án và KHÔNG đụng một tham số URL nào (người dùng đang làm dở);
+ *  ③ đóng lại là về đúng chỗ cũ.
+ */
+test("the in-project topbar gear opens the same app settings dialog as outside", async ({ page }) => {
+  await page.goto("/p/tet26-a7f3?section=mascot");
+  await expect(page.getByRole("heading", { name: "Mascot", exact: true, level: 1 })).toBeVisible();
+  const urlBefore = page.url();
+
+  await page.locator("header.sticky").getByRole("button", { name: "Cài đặt" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Cài đặt", exact: true });
+  await expect(dialog).toBeVisible();
+  // ① Đúng bộ mục của dialog ngoài — và KHÔNG phải bộ mục của cài đặt dự án.
+  for (const item of ["Công cụ local", "Tạo ảnh", "Giao diện", "Giới thiệu"]) {
+    await expect(dialog.getByRole("button", { name: item })).toBeVisible();
+  }
+  await expect(dialog.getByRole("button", { name: "Yêu cầu", exact: true })).toHaveCount(0);
+  // ② Vẫn ở trong dự án, URL không đổi một ký tự.
+  expect(page.url()).toBe(urlBefore);
+
+  await page.getByRole("button", { name: "Đóng" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(page.url()).toBe(urlBefore);
   await expect(page.getByRole("heading", { name: "Mascot", exact: true, level: 1 })).toBeVisible();
 });
 

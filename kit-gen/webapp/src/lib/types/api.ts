@@ -102,7 +102,13 @@ export const doctorSchema = z.looseObject({
     venv: z.boolean().optional(),
     deps: z.record(z.string(), z.boolean()).optional(),
   }).optional(),
-  playwright: z.looseObject({ ok: z.boolean(), fallback: z.string().optional() }).optional(),
+  /**
+   * TRÌNH RENDER KHUNG XƯƠNG — `@resvg/resvg-wasm` (BACKLOG #15, thay Playwright).
+   * KHÔNG có khoá `fallback` nữa: thiếu gói này là KHÔNG gen được ảnh, không phải
+   * "rơi về bản dự phòng". Agent cũ (≤2.1.20) còn gửi `playwright` — `looseObject`
+   * cho khoá lạ đi qua, và hàng doctor tự hiện "chưa rõ" khi `renderer` vắng mặt.
+   */
+  renderer: z.looseObject({ ok: z.boolean(), engine: z.string().optional() }).optional(),
   codex: z.looseObject({ ok: z.boolean(), version: z.string().nullish() }).optional(),
   imageGen: z.looseObject({
     mode: imageGenModeSchema.catch("unknown"),

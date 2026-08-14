@@ -90,7 +90,7 @@ export const DOCTOR_OK = Object.freeze({
   os: 'darwin-arm64',
   node: { ok: true, version: '24.13.0' },
   python: { ok: true, version: '3.12.4', venv: true, deps: { pillow: true, numpy: true, torch: false, transformers: false } },
-  playwright: { ok: false, fallback: 'skeleton.py (PIL)' },
+  renderer: { ok: false, engine: '@resvg/resvg-wasm' },
   codex: { ok: true, version: '0.146.0' },
   imageGen: { mode: 'default-home', available: true, codexHomeLabel: '~/.codex', authPresent: true, reason: null, needsFallbackHome: false },
   workspace: { label: '~/KitGen', writable: true, freeBytes: 128849018880 },

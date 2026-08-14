@@ -75,6 +75,16 @@ export interface UpdateCheck {
   reason?: "OFFLINE" | "MANIFEST_UNREADABLE";
   /** lệnh cập nhật thủ công, dạng nhãn rút gọn (~/…) */
   updateCommand: string;
+  /**
+   * Version nằm TRÊN ĐĨA (`~/.kitgen/current`) — có thể MỚI HƠN `currentVersion`, tức
+   * version của tiến trình đang trả lời. Hai số này chỉ lệch trong đúng một ca: cài xong
+   * mà bước khởi động lại không xảy ra (BACKLOG #20, đã xảy ra thật 14/08).
+   */
+  installedVersion?: string | null;
+  /** `true` ⇒ đừng mời cập nhật lại, hãy bảo user chạy `restartCommand`. */
+  restartRequired?: boolean;
+  /** lệnh khởi động lại thủ công, dạng nhãn rút gọn (~/…) */
+  restartCommand?: string;
   checkedAt: string;
 }
 
@@ -88,7 +98,12 @@ export const systemApi = {
     return await httpGet("/api/update") as UpdateCheck;
   },
   async installUpdate() {
-    return await httpPost("/api/update", {}) as { ok: boolean; previousVersion?: string; restartRequired?: boolean };
+    return await httpPost("/api/update", {}) as {
+      ok: boolean; previousVersion?: string; restarting?: boolean;
+      /** nhãn rút gọn của nhật ký lượt cài (~/.kitgen/update.log) — chỗ duy nhất còn lại
+       *  để đọc khi installer chết giữa chừng. */
+      logLabel?: string;
+    };
   },
   /**
    * Chọn hồ sơ Codex dùng để tạo ảnh. Agent GHI BỀN vào `<workspace>/.kitgen/config.json`

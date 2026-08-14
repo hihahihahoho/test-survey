@@ -65,7 +65,7 @@ group('S6 · /settings — 5 tab');
   await flush();
   const te = textOf(host);
   ok('tab env hiện mode image_gen dạng enum', te.includes('default-home'));
-  ok('tab env hiện từng phụ thuộc', te.includes('codex CLI') && te.includes('Python') && te.includes('Playwright'));
+  ok('tab env hiện từng phụ thuộc', te.includes('codex CLI') && te.includes('Python') && te.includes('Trình render khung xương'));
   ok('dòng thiếu có HỆ QUẢ tiếng Việt, không chỉ "missing"', te.includes('vẫn chạy được') || te.includes('bản dự phòng') || te.includes('tách nhanh'));
   ok('nói rõ không đọc thông tin đăng nhập (YC#7)', te.includes('không bao giờ đọc'));
   ok('KHÔNG hiện đường dẫn tuyệt đối kiểu /Users/', !te.includes('/Users/'));

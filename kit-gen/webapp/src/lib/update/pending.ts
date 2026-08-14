@@ -18,6 +18,8 @@ import { compareVersions } from "./restart";
 
 /** Lệnh cập nhật thủ công — chỉ dùng khi agent không nói cho ta biết lệnh của nó. */
 export const MANUAL_UPDATE_CMD = "~/.kitgen/bin/kitgen update";
+/** Lệnh khởi động lại — câu trả lời cho ca "đã cài xong mà tiến trình cũ vẫn chạy". */
+export const MANUAL_RESTART_CMD = "~/.kitgen/bin/kitgen restart";
 
 /** 30 phút: đủ cho một lượt cài chậm nhất, ngắn hơn một buổi làm việc. */
 export const PENDING_TTL_MS = 30 * 60 * 1000;

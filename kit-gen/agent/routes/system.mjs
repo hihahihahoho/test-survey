@@ -77,13 +77,19 @@ export function register(r) {
     return { status: 200, json: await usage(ctx.registry.active, { refresh }) }
   })
 
-  /** Kiểm tra bản mới. Luôn 200: mất mạng là `ok:false` + `reason`, không phải lỗi agent. */
-  r.get("/api/update", async () => ({ status: 200, json: await checkForUpdateSafe() }))
+  /** Kiểm tra bản mới. Luôn 200: mất mạng là `ok:false` + `reason`, không phải lỗi agent.
+   *  Kèm `installedVersion`/`restartRequired`: bản nằm trên đĩa có thể MỚI HƠN tiến trình
+   *  đang trả lời request này (cài xong mà bước khởi động lại không xảy ra — BACKLOG #20).
+   *  Không có cặp field đó thì UI chỉ thấy "vẫn có bản mới" và đoán bừa là cài hỏng. */
+  r.get("/api/update", async ctx => ({
+    status: 200,
+    json: await checkForUpdateSafe({ currentVersion: ctx.runtimeVersion ?? undefined }),
+  }))
 
-  r.post("/api/update", async () => {
-    const before = await readRuntimeVersion()
-    scheduleUpdate()
-    return { status: 202, json: { ok: true, previousVersion: before, restarting: true } }
+  r.post("/api/update", async ctx => {
+    const before = ctx.runtimeVersion ?? await readRuntimeVersion()
+    const { logLabel } = scheduleUpdate()
+    return { status: 202, json: { ok: true, previousVersion: before, restarting: true, logLabel } }
   })
 
   r.get("/api/workspaces", async ctx => ({

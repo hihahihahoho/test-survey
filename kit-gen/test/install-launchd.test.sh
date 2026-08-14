@@ -56,10 +56,6 @@ cat > "$KITGEN_HOME/tools/node_modules/.bin/codex" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
-cat > "$KITGEN_HOME/tools/node_modules/.bin/playwright" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
 cat > "$KITGEN_WORKSPACE/.venv/bin/python" <<'EOF'
 #!/usr/bin/env bash
 exit 0
@@ -67,7 +63,6 @@ EOF
 chmod +x \
   "$KITGEN_HOME/tools/node/bin/node" \
   "$KITGEN_HOME/tools/node_modules/.bin/codex" \
-  "$KITGEN_HOME/tools/node_modules/.bin/playwright" \
   "$KITGEN_WORKSPACE/.venv/bin/python"
 
 cat > "$FAKE_BIN/uname" <<'EOF'

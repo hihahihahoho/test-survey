@@ -146,15 +146,13 @@ export function checkRows(doctor: Doctor | null | undefined, workspaceFree?: str
       cmd: INSTALL_CMD.pyDeps,
     },
     {
-      key: "playwright",
-      ok: doctor?.playwright?.ok === true,
-      known: doctor?.playwright !== undefined,
-      label: "Playwright",
-      value: "",
-      consequence: `Chưa cài — khung xương dùng bản dự phòng (${
-        ver(doctor?.playwright?.fallback) || "skeleton.py"
-      }), vẫn chạy được.`,
-      cmd: INSTALL_CMD.playwright,
+      key: "renderer",
+      ok: doctor?.renderer?.ok === true,
+      known: doctor?.renderer !== undefined,
+      label: "Trình render khung xương",
+      value: ver(doctor?.renderer?.engine) || "@resvg/resvg-wasm",
+      consequence: "Thiếu — KHÔNG gen được ảnh (không còn bản dự phòng).",
+      cmd: INSTALL_CMD.resvg,
     },
     {
       key: "workspace",

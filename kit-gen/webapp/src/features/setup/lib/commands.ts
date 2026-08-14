@@ -38,7 +38,7 @@ export const INSTALL_CMD = {
   codex: "npm i -g @openai/codex",
   python: "python3 -m venv ~/KitGen/.venv && ~/KitGen/.venv/bin/pip install pillow numpy",
   pyDeps: "~/KitGen/.venv/bin/pip install pillow numpy",
-  playwright: "npm i -g playwright && npx playwright install chromium",
+  resvg: 'npm install --prefix "$HOME/.kitgen/tools" @resvg/resvg-wasm',
   node: "# Cài Node.js ≥ 20 từ https://nodejs.org rồi mở lại Terminal",
 } as const;
 

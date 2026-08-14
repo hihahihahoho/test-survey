@@ -149,7 +149,10 @@ export async function createAgent(opts = {}) {
   registerApp(router)
 
   const LIMITS = { ...DEFAULT_LIMITS, ...(opts.limits ?? {}) }
-  const state = { port: opts.port ?? 8765 }
+  /* `runtimeVersion` nằm trong `state` (chứ không phải một const đóng kín trong closure)
+     vì test phải giả lập được "tiến trình đang chạy bản X" — ca cài-xong-chưa-restart
+     không dựng lại được bằng cách nào khác trong một process duy nhất. */
+  const state = { port: opts.port ?? 8765, runtimeVersion }
   // Hai bucket: API (thao tác thật) và đọc tĩnh (/app/* + files/*). Xem makeRateLimiter.
   const rate = makeRateLimiter({
     limit: Number(opts.rateLimit ?? 20), windowMs: 1000,
@@ -187,7 +190,7 @@ export async function createAgent(opts = {}) {
 
       const ctx = {
         req, res, url, params: hit.params, registry, runs, uploads, confirm,
-        origins: originSet, limits: LIMITS, version: PROTOCOL_VERSION, runtimeVersion, buildId: BUILD_ID,
+        origins: originSet, limits: LIMITS, version: PROTOCOL_VERSION, runtimeVersion: state.runtimeVersion, buildId: BUILD_ID,
         instanceLabel: label, appRootOverride: opts.appRoot ?? null,
         doctor: opts.doctor ?? realDoctor,
         json: () => readJson(req, { limit: LIMITS.json }),
@@ -212,7 +215,7 @@ export async function createAgent(opts = {}) {
     try { socket.end("HTTP/1.1 400 Bad Request\r\n\r\n") } catch { /* socket đã chết */ }
   })
 
-  return { server, registry, state, confirm, limits: LIMITS, get runs() { return runs }, instanceLabel: label, origins, runtimeVersion }
+  return { server, registry, state, confirm, limits: LIMITS, get runs() { return runs }, instanceLabel: label, origins, get runtimeVersion() { return state.runtimeVersion } }
 }
 
 async function respond(res, out, headers, req) {

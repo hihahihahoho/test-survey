@@ -126,7 +126,7 @@ export async function doctor(ws, { refresh = false } = {}) {
       os: `${platform()}-${arch()}`, shell: "unknown", kernel: release(),
       node: { ok: true, version: process.versions.node },
       python: { ok: false, version: null, venv: false, deps: {} },
-      playwright: { ok: false, fallback: "skeleton.py (PIL)" },
+      renderer: { ok: false, engine: "@resvg/resvg-wasm" },
       codex: { ok: false, version: null },
       imageGen: {
         mode: "unknown", profile: liteProfile, available: false,
@@ -139,13 +139,15 @@ export async function doctor(ws, { refresh = false } = {}) {
     cache = { at: Date.now(), data }
     return data
   }
-  const [node, py, codex, pw, img, wsInfo] = await Promise.all([
+  const [node, py, codex, renderer, img, wsInfo] = await Promise.all([
     firstLineVersion(process.execPath),
     pythonInfo(),
     firstLineVersion(CODEX),
     (async () => {
-      const r = await run("node", ["-e", "try{require.resolve('playwright');console.log('1')}catch{console.log('0')}"])
-      return { ok: r.stdout.trim() === "1", fallback: "skeleton.py (PIL)" }
+      const r = await run("node", ["-e", "try{require.resolve('@resvg/resvg-wasm');console.log('1')}catch{console.log('0')}"])
+      // KHÔNG còn khoá `fallback`: cố ý. Thiếu gói này là KHÔNG gen được, không phải
+      // "chạy bản dự phòng" — báo sai chỗ này chính là lỗi mà BACKLOG #15 gỡ ra.
+      return { ok: r.stdout.trim() === "1", engine: "@resvg/resvg-wasm" }
     })(),
     imageGenInfo(ws),
     workspaceInfo(ws),
@@ -155,7 +157,7 @@ export async function doctor(ws, { refresh = false } = {}) {
     kernel: release(),
     node: { ok: true, version: process.versions.node },
     python: py,
-    playwright: pw,
+    renderer,
     codex: { ok: codex.ok, version: codex.version },
     imageGen: img,
     workspace: wsInfo,

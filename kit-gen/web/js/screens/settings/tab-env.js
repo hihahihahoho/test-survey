@@ -38,7 +38,7 @@ const DEP_INFO = Object.freeze({
   pillow: { label: 'Pillow', consequence: 'Không cắt ảnh và không tạo được thumbnail.', cmd: 'python3 -m pip install pillow' },
   numpy: { label: 'numpy', consequence: 'Không tách nền được.', cmd: 'python3 -m pip install numpy' },
   torch: { label: 'ViTMatte (torch)', consequence: 'Vẫn cắt được, nhưng dùng chế độ tách nhanh — mép ảnh kém mượt hơn.', cmd: 'python3 -m pip install torch transformers' },
-  playwright: { label: 'Playwright', consequence: 'Khung xương dùng bản dự phòng (vẫn chạy được).', cmd: 'python3 -m pip install playwright && python3 -m playwright install chromium' },
+  renderer: { label: 'Trình render khung xương', consequence: 'Thiếu — KHÔNG gen được ảnh (không còn bản dự phòng).', cmd: 'npm install --prefix "$HOME/.kitgen/tools" @resvg/resvg-wasm' },
 });
 
 /**
@@ -83,7 +83,7 @@ export function renderEnvTab(o) {
       // Agent chưa chạy: hiện `?` mọi dòng + [Thử lại] (§4.9 ma trận hành vi)
       el('p', { class: 'kg-t-body kg-fg-default', text: 'Chưa đọc được — công cụ local phải đang chạy mới kiểm tra được máy bạn.' }),
       el('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--s-1)' } },
-        ['codex CLI', 'Node', 'Python', 'ViTMatte', 'Playwright', 'Thư mục làm việc']
+        ['codex CLI', 'Node', 'Python', 'ViTMatte', 'Trình render khung xương', 'Thư mục làm việc']
           .map((n) => el('div', { class: 'kg-row kg-row--tight' }, [
             createBadge({ state: 'neutral', text: 'chưa biết', iconGlyph: '?' }),
             el('span', { class: 'kg-t-body kg-fg-default', text: n }),
@@ -174,7 +174,7 @@ function machinePanel(doc) {
   rows.push(depRow('pillow', deps.pillow === true));
   rows.push(depRow('numpy', deps.numpy === true));
   rows.push(depRow('torch', deps.torch === true && deps.transformers === true));
-  rows.push(depRow('playwright', doc.playwright?.ok === true));
+  rows.push(depRow('renderer', doc.renderer?.ok === true, doc.renderer?.engine));
 
   const ws = doc.workspace ?? {};
   const wsOk = ws.writable === true;

@@ -2,7 +2,7 @@
  * step-imagegen.js — S0 BƯỚC 4: XÁC NHẬN MÔI TRƯỜNG (doctor) + tạo ảnh AI.
  *
  * Bắt buộc theo spec (§3-S0 bước 4, yêu cầu #5, §3.9 IMAGEGEN_UNAVAILABLE):
- *  · Checklist từng dòng ✓/✗: node · python (+Pillow/numpy) · codex · playwright · thư mục làm việc
+ *  · Checklist từng dòng ✓/✗: node · python (+Pillow/numpy) · codex · trình render khung xương · thư mục làm việc
  *  · 3 kết cục: Sẵn sàng (cấu hình mặc định) / Sẵn sàng (home riêng ~/.codex-img) / Chưa tạo được ảnh
  *  · Thiếu image_gen ⇒ HƯỚNG DẪN fallback CODEX_HOME riêng + codex login,
  *    KHÔNG tự động hoá (web không được chạy lệnh), KHÔNG hiện secret
@@ -128,7 +128,7 @@ export function renderImageGenStep({ doctor, loading, error, onRecheck, onFinish
     line({ ok: py.ok === true, label: 'Python 3', value: py.version ? `${py.version}${py.venv ? ' (môi trường riêng)' : ''}` : '', consequence: 'Không có Python thì không cắt được sheet thành PNG.', cmd: INSTALL_CMD.python, onCopy: copy }),
     line({ ok: deps.pillow === true, label: 'Pillow', value: '', consequence: 'Thiếu Pillow: không cắt ảnh và không tạo được thumbnail.', cmd: INSTALL_CMD.pillow, onCopy: copy }),
     line({ ok: deps.numpy === true, label: 'numpy', value: '', consequence: 'Thiếu numpy: chế độ tách nền nhanh không chạy.', cmd: INSTALL_CMD.pillow, onCopy: copy }),
-    line({ ok: doctor?.playwright?.ok === true, label: 'Playwright', value: '', consequence: `Chưa cài — khung xương dùng bản dự phòng (${doctor?.playwright?.fallback ?? 'skeleton.py'}), vẫn chạy được.`, cmd: INSTALL_CMD.playwright, onCopy: copy }),
+    line({ ok: doctor?.renderer?.ok === true, label: 'Trình render khung xương', value: doctor?.renderer?.engine ?? '@resvg/resvg-wasm', consequence: 'Thiếu — KHÔNG gen được ảnh (không còn bản dự phòng).', cmd: INSTALL_CMD.resvg, onCopy: copy }),
     line({ ok: ws.writable === true, label: 'Thư mục làm việc', value: [ws.label, Number.isFinite(ws.freeBytes) ? `còn ${bytes(ws.freeBytes)}` : null].filter(Boolean).join(' · '), consequence: 'Không ghi được thì không tạo được project.', onCopy: copy }),
   ];
   box.appendChild(el('div', { class: 'kg-card', style: { padding: 'var(--s-4)', gap: 'var(--s-2)' } }, [

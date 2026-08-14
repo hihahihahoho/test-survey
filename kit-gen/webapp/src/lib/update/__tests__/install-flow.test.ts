@@ -14,6 +14,7 @@ import { LS_KEYS, _setBackend, memoryBackend, storeGet } from "../../store/persi
 import { useUpdateInstall } from "../install-store";
 import { markUpdatePending, readUpdatePending } from "../pending";
 import type { RestartResult } from "../restart";
+import type { UpdateCheck } from "../../api/endpoints";
 
 let mem: ReturnType<typeof memoryBackend>;
 beforeEach(() => {
@@ -25,6 +26,14 @@ beforeEach(() => {
 /** Ca "thuận buồm" dùng lại nhiều lần: cài xong, agent lên đúng bản đích. */
 const okInstall = () => Promise.resolve({ previousVersion: "2.1.13" });
 const updated: RestartResult = { outcome: "updated", version: "2.2.0" };
+
+/** `GET /api/update` mặc định: không có gì bất thường trên đĩa. */
+const statusOf = (extra: Partial<UpdateCheck> = {}): UpdateCheck => ({
+  ok: true, currentVersion: "2.1.13", latestVersion: "2.2.0", tag: null, available: true,
+  updateCommand: "~/.kitgen/bin/kitgen update", installedVersion: "2.1.13", restartRequired: false,
+  restartCommand: "~/.kitgen/bin/kitgen restart", checkedAt: new Date().toISOString(), ...extra,
+});
+const quietStatus = () => Promise.resolve(statusOf());
 
 describe("bấm [Cập nhật]", () => {
   it("huỷ ở hộp xác nhận ⇒ KHÔNG chặn app, không gọi agent", async () => {
@@ -86,6 +95,7 @@ describe("bấm [Cập nhật]", () => {
       confirm: () => true,
       install: okInstall,
       wait: async () => ({ outcome: "timeout", version: "2.1.13" }),
+      status: quietStatus,
       reload,
     });
     expect(reload).not.toHaveBeenCalled();
@@ -100,11 +110,71 @@ describe("bấm [Cập nhật]", () => {
       confirm: () => true,
       install: okInstall,
       wait: async () => ({ outcome: "unchanged", version: "2.1.13" }),
+      status: quietStatus,
       reload,
     });
     expect(reload).toHaveBeenCalledTimes(1);
     // bản ghi vẫn còn để sau reload nói "chưa thành công"
     expect(readUpdatePending()).toMatchObject({ targetVersion: "2.2.0" });
+  });
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     BACKLOG #20 — máy chủ SP, 14/08: cài xong, `current` đã trỏ bản mới, nhưng
+     tiến trình agent KHÔNG bị thay ⇒ /health im re với version cũ suốt 90s. Lượt
+     đó UI báo "chưa xác nhận được" + mời cập nhật LẠI; đúng ra phải bảo `restart`.
+     ══════════════════════════════════════════════════════════════════════════ */
+  const stalled = statusOf({ currentVersion: "2.1.19", installedVersion: "2.1.20", restartRequired: true });
+
+  it("cài xong mà agent chưa khởi động lại ⇒ đưa LỆNH RESTART, không mời cập nhật lại", async () => {
+    const reload = vi.fn();
+    await useUpdateInstall.getState().start("2.1.20", {
+      confirm: () => true,
+      install: () => Promise.resolve({ previousVersion: "2.1.19" }),
+      wait: async () => ({ outcome: "timeout", version: "2.1.19" }),
+      status: async () => stalled,
+      reload,
+    });
+    const s = useUpdateInstall.getState();
+    expect(s.phase).toBe("needs-restart");
+    expect(s.restartCommand).toBe("~/.kitgen/bin/kitgen restart");
+    expect(s.message).toContain("2.1.20");
+    expect(s.message).toContain("2.1.19");
+    // Tải lại trang lúc này chỉ đưa user về đúng bản cũ mà không nói gì thêm.
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("`unchanged` mà đĩa đã có bản mới cũng là ca cần restart, không phải cài hỏng", async () => {
+    const reload = vi.fn();
+    await useUpdateInstall.getState().start("2.1.20", {
+      confirm: () => true,
+      install: () => Promise.resolve({ previousVersion: "2.1.19" }),
+      wait: async () => ({ outcome: "unchanged", version: "2.1.19" }),
+      status: async () => stalled,
+      reload,
+    });
+    expect(useUpdateInstall.getState().phase).toBe("needs-restart");
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("agent không trả lời được câu hỏi 'đĩa có gì' ⇒ giữ nguyên câu quá hạn cũ", async () => {
+    await useUpdateInstall.getState().start("2.2.0", {
+      confirm: () => true,
+      install: okInstall,
+      wait: async () => ({ outcome: "timeout", version: "2.1.13" }),
+      status: () => Promise.reject(new TypeError("Failed to fetch")),
+      reload: vi.fn(),
+    });
+    const s = useUpdateInstall.getState();
+    expect(s.phase).toBe("timeout");
+    expect(s.restartCommand).toBeNull();
+  });
+
+  it("cập nhật trót lọt ⇒ KHÔNG hỏi thêm gì cả (đường thường không sinh request thừa)", async () => {
+    const status = vi.fn(quietStatus);
+    await useUpdateInstall.getState().start("2.2.0", {
+      confirm: () => true, install: okInstall, wait: async () => updated, status, reload: vi.fn(),
+    });
+    expect(status).not.toHaveBeenCalled();
   });
 
   it("gửi lệnh cập nhật hỏng ⇒ nói tiếng Việt, KHÔNG ghi ý định, KHÔNG tải lại", async () => {

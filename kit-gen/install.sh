@@ -45,7 +45,22 @@ done
 SELF_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 mkdir -p "$KITGEN_HOME/releases" "$KITGEN_HOME/bin" "$WORKSPACE"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/kitgen-install.XXXXXX")"
-cleanup(){ rm -rf "$TMP"; }
+# `current` đã được trỏ sang bản mới chưa. Xem khối "KÍCH HOẠT VÀO PHÚT CHÓT" dưới.
+ACTIVATED=0
+PREVIOUS=""
+cleanup(){
+  _status=$?
+  rm -rf "$TMP"
+  # THOÁT GIỮA CHỪNG SAU KHI ĐÃ ĐỔI SYMLINK là đúng cái trạng thái đã cắn máy chủ SP
+  # ngày 14/08 (BACKLOG #20): `current` trỏ bản mới, tiến trình cũ vẫn chạy, không ai
+  # báo gì. Nửa vời là trạng thái tệ nhất — thà trả về nguyên trạng và nói ra.
+  if [ "$_status" -ne 0 ] && [ "$ACTIVATED" -eq 1 ] && [ -n "$PREVIOUS" ]; then
+    ln -sfn "$PREVIOUS" "$KITGEN_HOME/current" 2>/dev/null || true
+    echo "" >&2
+    echo "Cài đặt dừng giữa chừng — đã trả $KITGEN_HOME/current về bản cũ." >&2
+    echo "Dịch vụ đang chạy KHÔNG bị đụng tới. Nhật ký: $KITGEN_HOME/update.log" >&2
+  fi
+}
 trap cleanup EXIT INT TERM
 
 # A release directory has these three roots. Running from source is supported for development.
@@ -58,6 +73,31 @@ wait_for_health(){
     attempts=$((attempts - 1))
     [ "$attempts" -eq 0 ] || sleep 1
   done
+  return 1
+}
+# ═══════════════════════════════════════════════════════════════════════════════
+# "CÓ AI TRẢ LỜI" ≠ "BẢN MỚI ĐANG CHẠY" — cái bẫy của sự cố 14/08 (BACKLOG #20).
+#
+# `wait_for_health` chỉ hỏi cổng $PORT có ai trả lời không. Tiến trình CŨ trả lời được,
+# nên nếu bước restart không xảy ra (hoặc xảy ra mà không ăn) thì installer vẫn in
+# "OK agent phản hồi" rồi thoát 0, còn UI thì vẫn thấy có bản mới. Từ đây phải hỏi
+# ĐÍCH DANH: ai đang trả lời? `runtimeVersion` của /health là bản phát hành đang chạy.
+#
+# Agent đời trước 2.1.20 không có field đó ⇒ đọc ra rỗng. Rỗng = KHÔNG KẾT LUẬN ĐƯỢC,
+# và ca đó chỉ xảy ra khi cài ĐÈ một archive đời cũ — không được biến nó thành lỗi.
+# ═══════════════════════════════════════════════════════════════════════════════
+running_runtime_version(){
+  "$BIN" status 2>/dev/null | sed -n 's/.*"runtimeVersion":"\([^"]*\)".*/\1/p' | head -n 1 || true
+}
+wait_for_runtime_version(){
+  want="$1"; attempts="${2:-15}"; seen=""
+  while [ "$attempts" -gt 0 ]; do
+    seen="$(running_runtime_version)"
+    if [ "$seen" = "$want" ]; then return 0; fi
+    attempts=$((attempts - 1))
+    if [ "$attempts" -gt 0 ]; then sleep 1; fi
+  done
+  [ -n "$seen" ] || return 2   # 2 = agent không khai version ⇒ không kết tội bước restart
   return 1
 }
 append_install_log(){
@@ -265,8 +305,20 @@ check_ok "$(python3 --version 2>&1) · $(command -v python3)"
 "$NODE" --check "$NEW/agent/server.mjs" >/dev/null
 rm -rf "$DEST"
 mv "$NEW" "$DEST"
+# ═══════════════════════════════════════════════════════════════════════════════
+# KÍCH HOẠT VÀO PHÚT CHÓT — vì sao `ln -sfn current` KHÔNG nằm ở đây nữa.
+#
+# Trước 2.1.21, symlink `current` được trỏ sang bản mới NGAY TẠI DÒNG NÀY, tức bước 2/7,
+# rồi script còn phải đi qua 4 bước hay hỏng nhất (venv+pip, cài/dò Codex, cài trình
+# render khung xương, ghi config) trước khi tới bước khởi động lại ở 5/7. Bất kỳ lỗi nào trong quãng
+# đó là `set -e` thoát ngay ⇒ để lại ĐÚNG hiện trường ngày 14/08: `current` đã trỏ 2.1.20,
+# tiến trình agent vẫn là 2.1.19, không có dòng log nào, UI vẫn mời cập nhật.
+#
+# Nay `current` chỉ đổi khi mọi thứ đã sẵn sàng và ngay trước khi khởi động lại (bước 5/7),
+# nên cửa sổ "cài dở" thu về vài mili-giây; phần còn lại được `cleanup` gác. Bản mới nằm
+# sẵn ở $DEST suốt quá trình — không ai đọc nó cho tới lúc đổi symlink.
+# ═══════════════════════════════════════════════════════════════════════════════
 PREVIOUS="$(readlink "$KITGEN_HOME/current" 2>/dev/null || true)"
-ln -sfn "$DEST" "$KITGEN_HOME/current"
 VENV="$WORKSPACE/.venv"
 [ -x "$VENV/bin/python" ] || python3 -m venv "$VENV"
 "$VENV/bin/python" -c 'import PIL,numpy,scipy,pymatting' >/dev/null 2>&1 || {
@@ -299,19 +351,27 @@ CODEX_BIN="$(resolve_codex_bin "$CODEX_BIN")"
 "$CODEX_BIN" --version >/dev/null 2>&1 || { echo "Resolved Codex path does not run: $CODEX_BIN" >&2; exit 1; }
 check_ok "đường dẫn Codex bền vững và đúng tên: $CODEX_BIN"
 
-# Playwright renders the HTML/SVG skeleton at full fidelity. Install it inside
-# KitGen's private tool prefix so users never need a global npm package.
-if ! NODE_PATH="$KITGEN_HOME/tools/node_modules" "$NODE" -e "require.resolve('playwright')" >/dev/null 2>&1; then
-  echo "Installing Playwright..."
-  "$(dirname "$NODE")/npm" install --silent --prefix "$KITGEN_HOME/tools" playwright
+# Trình render khung xương: @resvg/resvg-wasm (2,4 MB, thuần JS + .wasm).
+# Thay Playwright + Chromium (790,9 MB) — xem BACKLOG #15. BẮT BUỘC, không có
+# đường lùi: gen.sh dừng hẳn nếu thiếu (bản PIL cũ lệch 17,6% mực, đã xoá).
+if ! NODE_PATH="$KITGEN_HOME/tools/node_modules" "$NODE" -e "require.resolve('@resvg/resvg-wasm')" >/dev/null 2>&1; then
+  echo "Installing skeleton renderer (@resvg/resvg-wasm)..."
+  "$KITGEN_HOME/tools/node/bin/npm" install --silent --prefix "$KITGEN_HOME/tools" @resvg/resvg-wasm 2>/dev/null || \
+    "$(dirname "$NODE")/npm" install --silent --prefix "$KITGEN_HOME/tools" @resvg/resvg-wasm
 fi
 progress "4/7" "Health check trình dựng ảnh"
-PLAYWRIGHT_BROWSERS_PATH="$KITGEN_HOME/tools/playwright-browsers" \
-  "$KITGEN_HOME/tools/node_modules/.bin/playwright" install --only-shell >/dev/null
-# App chỉ render skeleton ở chế độ headless → chỉ cần chromium_headless_shell (~196MB).
-# Bản Chromium đầy đủ (~356MB) do installer đời cũ tải về là thừa — dọn để update nhẹ đi.
-rm -rf "$KITGEN_HOME/tools/playwright-browsers"/chromium-[0-9]* 2>/dev/null || true
-check_ok "Playwright và Chromium đã sẵn sàng"
+# `exit 1` chứ không `check_warn`: thiếu renderer là KHÔNG GEN ĐƯỢC ẢNH, không phải
+# suy giảm chất lượng — không còn đường lùi nào để rơi vào.
+NODE_PATH="$KITGEN_HOME/tools/node_modules" "$NODE" -e "require.resolve('@resvg/resvg-wasm')" >/dev/null 2>&1 \
+  || { echo "Skeleton renderer health check failed (@resvg/resvg-wasm)." >&2; exit 1; }
+check_ok "Trình render khung xương đã sẵn sàng (@resvg/resvg-wasm)"
+
+# Dọn rác đời Playwright ở LƯỢT UPDATE: 790,9 MB không còn ai dùng (browser 772,7 MB
+# + gói npm 18,1 MB). Máy sạch không có gì để xoá; đây chỉ là đường dọn cho máy đã trót
+# cài đời trước — kể cả bản 2.1.21 vừa tải thêm chromium/firefox/webkit.
+rm -rf "$KITGEN_HOME/tools/playwright-browsers" \
+       "$KITGEN_HOME/tools/node_modules/playwright" \
+       "$KITGEN_HOME/tools/node_modules/playwright-core" 2>/dev/null || true
 mkdir -p "$WORKSPACE/.kitgen/engine" "$WORKSPACE/projects"
 cp -R "$DEST/engine/." "$WORKSPACE/.kitgen/engine/"
 cp "$DEST/runtime/bin/kitgen" "$KITGEN_HOME/bin/kitgen"
@@ -351,7 +411,6 @@ KITGEN_ORIGIN='$ORIGIN'
 KITGEN_NODE='$NODE'
 KITGEN_CODEX_BIN='$CODEX_BIN'
 NODE_PATH='$KITGEN_HOME/tools/node_modules'
-PLAYWRIGHT_BROWSERS_PATH='$KITGEN_HOME/tools/playwright-browsers'
 KITGEN_RELEASE_URL='$([ "$AUTO_RELEASE" -eq 1 ] && printf '' || printf '%s' "$RELEASE_URL")'
 KITGEN_RELEASE_REPO='$RELEASE_REPO'
 KITGEN_RELEASE_CHANNEL='$RELEASE_CHANNEL'
@@ -360,6 +419,10 @@ CFG
 chmod 600 "$KITGEN_HOME/config.env"
 BIN="$KITGEN_HOME/bin/kitgen"
 progress "5/7" "Đăng ký dịch vụ local"
+# Đây là điểm KHÔNG QUAY ĐẦU: từ dòng này `current` là bản mới, và mọi đường thoát
+# phía dưới đều phải tự nói ra mình để lại máy ở trạng thái nào (xem `cleanup`).
+ACTIVATED=1
+ln -sfn "$DEST" "$KITGEN_HOME/current"
 if [ "$NO_START" -eq 0 ]; then
   if [ "$(uname -s)" = Darwin ]; then
     PLIST="$HOME/Library/LaunchAgents/com.kitgen.agent.plist"
@@ -375,7 +438,9 @@ if [ "$NO_START" -eq 0 ]; then
       sleep 1
     done
     if "$BIN" start 2>"$TMP/launchctl.err"; then
-      append_install_log "$TMP/launchctl.err" "LaunchAgent start recovered after retry"
+      # stderr của `kitgen start` chứa cả cảnh báo "vẫn đang chạy bản cũ" của bin/kitgen —
+      # đây là nơi DUY NHẤT nó được lưu lại khi installer đời cũ chạy lượt update.
+      append_install_log "$TMP/launchctl.err" "LaunchAgent start output"
     else
       append_install_log "$TMP/launchctl.err" "LaunchAgent start failed; using login-session fallback"
       echo "launchd is unavailable; starting KitGen for this login session instead." >&2
@@ -387,7 +452,9 @@ if [ "$NO_START" -eq 0 ]; then
     sed "s|@KITGEN_BIN@|$BIN|g" "$DEST/runtime/service/kitgen-agent.service.in" > "$UNIT"
     systemctl --user daemon-reload; systemctl --user enable --now kitgen-agent
   else nohup "$BIN" run >>"$KITGEN_HOME/agent.log" 2>&1 & fi
+  # ① KHÔNG AI TRẢ LỜI ⇒ bản mới không chạy được ⇒ lùi hẳn về bản cũ.
   if ! wait_for_health 10; then
+    ACTIVATED=0   # nhánh này TỰ xử lý symlink, `cleanup` không được làm thêm lần nữa
     if [ -n "$PREVIOUS" ]; then
       ln -sfn "$PREVIOUS" "$KITGEN_HOME/current"
       if ! "$BIN" restart 2>"$TMP/rollback-launchctl.err"; then
@@ -403,9 +470,37 @@ if [ "$NO_START" -eq 0 ]; then
     fi
     exit 1
   fi
+  # ② CÓ NGƯỜI TRẢ LỜI — NHƯNG LÀ AI? Tiến trình cũ trả lời được ⇒ ① không đủ (BACKLOG #20).
+  #    Không đúng bản thì thử DỪNG HẲN rồi bật lại đúng một lần (đây là lệnh đã chữa tay
+  #    được máy chủ SP ngày 14/08), rồi mới kết luận.
+  # `rc=1` là "đọc được version và nó SAI"; `rc=2` là "không đọc được" (agent đời cũ)
+  # — chỉ rc=1 mới là bằng chứng đủ để kết tội bước khởi động lại.
+  rc=0; wait_for_runtime_version "$VERSION" 15 || rc=$?
+  if [ "$rc" -eq 1 ]; then
+    check_warn "dịch vụ vẫn đang chạy bản cũ sau khi khởi động lại — thử dừng hẳn rồi bật lại"
+    "$BIN" restart >"$TMP/restart-retry.err" 2>&1 || true
+    append_install_log "$TMP/restart-retry.err" "Restart retry after stale runtime version"
+    rc=0; wait_for_runtime_version "$VERSION" 20 || rc=$?
+    if [ "$rc" -eq 1 ]; then
+      # KHÔNG lùi symlink: bản mới đã cài xong và lành lặn, chỉ thiếu mỗi cú khởi động
+      # lại. Lùi ở đây là vứt đi một lượt tải + cài, mà lần sau vẫn hỏng y như vậy — và
+      # `restartRequired` của /api/update chính là để UI nói được câu đúng. Thứ user cần
+      # là MỘT CÂU LỆNH, không phải một lời xin lỗi.
+      ACTIVATED=0
+      {
+        printf '\n'
+        printf 'KitGen %s ĐÃ CÀI XONG nhưng dịch vụ vẫn đang chạy bản cũ (%s).\n' \
+          "$VERSION" "$(running_runtime_version)"
+        printf 'Chạy lệnh này trong Terminal rồi tải lại trang:\n\n'
+        printf '  %s restart\n\n' "$BIN"
+      } | tee -a "$KITGEN_HOME/install.log" >&2
+      exit 1
+    fi
+  fi
   progress "6/7" "Health check dịch vụ"
-  check_ok "agent phản hồi tại http://127.0.0.1:$PORT/health"
+  check_ok "agent $VERSION phản hồi tại http://127.0.0.1:$PORT/health"
 else
+  ACTIVATED=0   # --no-start: cài xong, cố ý không chạy — không có gì để lùi
   progress "6/7" "Bỏ qua health check dịch vụ (--no-start)"
 fi
 progress "7/7" "Dọn bản cũ"

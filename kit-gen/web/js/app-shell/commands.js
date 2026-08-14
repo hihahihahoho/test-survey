@@ -32,7 +32,7 @@ export const INSTALL_CMD = Object.freeze({
   codex: 'npm i -g @openai/codex',
   python: 'python3 -m venv ~/KitGen/.venv && ~/KitGen/.venv/bin/pip install pillow numpy',
   pillow: '~/KitGen/.venv/bin/pip install pillow numpy',
-  playwright: 'npm i -g playwright && npx playwright install chromium',
+  resvg: 'npm install --prefix "$HOME/.kitgen/tools" @resvg/resvg-wasm',
 });
 
 /** §3-S0 bước 4: home riêng cho tạo ảnh — HƯỚNG DẪN, tuyệt đối KHÔNG tự động hoá. */

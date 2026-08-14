@@ -12,9 +12,9 @@
  * ⇒ test chạy được cả luồng mà không cần jsdom, không cần mạng, không cần chờ thật.
  */
 import { create } from "zustand";
-import { api } from "../api/endpoints";
+import { api, type UpdateCheck } from "../api/endpoints";
 import { AgentError } from "../api/client";
-import { markUpdatePending } from "./pending";
+import { MANUAL_RESTART_CMD, markUpdatePending } from "./pending";
 import { waitForUpdatedAgent, type RestartResult, type WaitOptions } from "./restart";
 
 export type UpdatePhase =
@@ -24,6 +24,8 @@ export type UpdatePhase =
   | "installing"
   /** agent đã nhận (202) và đang tự thay mình — ta đang poll `/health`. */
   | "waiting"
+  /** bản mới ĐÃ nằm trên đĩa nhưng tiến trình cũ vẫn đang phục vụ ⇒ chỉ thiếu một lệnh. */
+  | "needs-restart"
   /** quá hạn mà chưa thấy bản mới ⇒ nhường quyền quyết định lại cho user. */
   | "timeout"
   /** ngay cả yêu cầu cập nhật cũng không gửi được. */
@@ -33,6 +35,8 @@ export interface UpdateInstallDeps {
   confirm: (message: string) => boolean;
   install: () => Promise<{ previousVersion?: string | null }>;
   wait: (opts: WaitOptions) => Promise<RestartResult>;
+  /** hỏi agent "bản nào đang nằm trên đĩa" — chỉ gọi khi vòng chờ KHÔNG kết luận được. */
+  status: () => Promise<UpdateCheck>;
   mark: typeof markUpdatePending;
   reload: () => void;
 }
@@ -43,6 +47,8 @@ export interface UpdateInstallState {
   targetVersion: string | null;
   /** câu giải thích cho ca `failed`/`timeout` — tiếng Việt, không phải lỗi thô của Node. */
   message: string | null;
+  /** lệnh user phải gõ ở ca `needs-restart`; `null` ⇒ lớp phủ hiện lệnh cập nhật như cũ. */
+  restartCommand: string | null;
   start: (latestVersion?: string | null, deps?: Partial<UpdateInstallDeps>) => Promise<void>;
   /** user đóng lớp phủ ở ca hỏng — KHÔNG dùng được lúc đang cài (đó là cả mục đích). */
   dismiss: () => void;
@@ -54,6 +60,7 @@ const defaultDeps: UpdateInstallDeps = {
   confirm: (m) => (typeof window === "undefined" ? false : window.confirm(m)),
   install: () => api.system.installUpdate(),
   wait: waitForUpdatedAgent,
+  status: () => api.system.checkUpdate(),
   mark: markUpdatePending,
   reload: () => window.location.reload(),
 };
@@ -65,10 +72,45 @@ function reasonOf(e: unknown): string {
   return "Không gửi được yêu cầu cập nhật tới công cụ local — có vẻ nó vừa dừng.";
 }
 
+/**
+ * VÒNG CHỜ KHÔNG KẾT LUẬN ĐƯỢC THÌ ĐI HỎI, ĐỪNG ĐOÁN.
+ *
+ * `waitForUpdatedAgent` chỉ nhìn `/health`, nên nó phân biệt được "agent chết rồi sống
+ * lại" với "agent im" — nhưng KHÔNG phân biệt được hai thứ mà user cần phân biệt nhất:
+ *   · installer còn đang tải/cài (chờ tiếp là xong), và
+ *   · installer CÀI XONG RỒI mà tiến trình cũ vẫn ngồi đó (chờ thêm bao lâu cũng vô ích).
+ * Ca thứ hai đã xảy ra thật ngày 14/08 và lượt đó UI báo "chưa xác nhận được" + mời cập
+ * nhật lại — lời khuyên sai, user cài lại ba lần rồi mới phải hỏi.
+ *
+ * `GET /api/update` biết cả hai số (bản trên đĩa ‖ bản đang chạy), nên một request duy
+ * nhất ở cuối vòng chờ đổi được câu trả lời từ "không biết" thành một câu lệnh cụ thể.
+ */
+async function classifyStall(
+  d: UpdateInstallDeps,
+  outcome: RestartResult["outcome"],
+): Promise<Pick<UpdateInstallState, "phase" | "message" | "restartCommand"> | null> {
+  const s = await d.status().catch(() => null);
+  if (s?.restartRequired) {
+    const installed = s.installedVersion ?? "mới";
+    return {
+      phase: "needs-restart",
+      message: `Bản ${installed} đã cài xong, nhưng công cụ local vẫn đang chạy bản ${s.currentVersion}.`,
+      restartCommand: s.restartCommand || MANUAL_RESTART_CMD,
+    };
+  }
+  if (outcome === "unchanged") return null; // như cũ: tải lại để app đọc lại sự thật
+  return {
+    phase: "timeout",
+    message: "Công cụ local chưa khởi động lại sau 90 giây.",
+    restartCommand: null,
+  };
+}
+
 export const useUpdateInstall = create<UpdateInstallState>((set, get) => ({
   phase: "idle",
   targetVersion: null,
   message: null,
+  restartCommand: null,
 
   start: async (latestVersion, overrides) => {
     const d = { ...defaultDeps, ...overrides };
@@ -80,7 +122,7 @@ export const useUpdateInstall = create<UpdateInstallState>((set, get) => ({
     // Cập nhật làm công cụ local khởi động lại ⇒ cắt ngang việc user đang làm ⇒ luôn hỏi trước.
     if (!d.confirm(`Cập nhật KitGen ${label}? Công cụ local sẽ khởi động lại sau khi cài.`)) return;
 
-    set({ phase: "installing", targetVersion: target, message: null });
+    set({ phase: "installing", targetVersion: target, message: null, restartCommand: null });
 
     let previousVersion: string | null = null;
     try {
@@ -97,25 +139,26 @@ export const useUpdateInstall = create<UpdateInstallState>((set, get) => ({
     set({ phase: "waiting" });
 
     const r = await d.wait({ targetVersion: target, fromVersion: previousVersion });
-    if (r.outcome === "timeout") {
-      set({
-        phase: "timeout",
-        message: "Công cụ local chưa khởi động lại sau 90 giây.",
-      });
-      return;
+    if (r.outcome !== "updated") {
+      const stall = await classifyStall(d, r.outcome);
+      if (stall) {
+        set(stall);
+        return;
+      }
     }
-    /* `unchanged` (cài xong mà version y nguyên) VẪN tải lại: app phải đọc lại trạng thái
-       thật thay vì đoán, và bản ghi ý định ở trên sẽ biến thành câu "chưa thành công". */
+    /* `unchanged` (cài xong mà version y nguyên, và đĩa cũng không có gì mới) VẪN tải lại:
+       app phải đọc lại trạng thái thật thay vì đoán, và bản ghi ý định ở trên sẽ biến
+       thành câu "chưa thành công". */
     d.reload();
   },
 
   dismiss: () => {
     const phase = get().phase;
     if (phase === "installing" || phase === "waiting") return; // đang cài thì không có nút thoát
-    set({ phase: "idle", targetVersion: null, message: null });
+    set({ phase: "idle", targetVersion: null, message: null, restartCommand: null });
   },
 
-  _reset: () => set({ phase: "idle", targetVersion: null, message: null }),
+  _reset: () => set({ phase: "idle", targetVersion: null, message: null, restartCommand: null }),
 }));
 
 /** Lớp phủ chặn cả app khi phase là một trong bốn cái này. */

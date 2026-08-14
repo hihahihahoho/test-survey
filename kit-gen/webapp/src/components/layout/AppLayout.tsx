@@ -13,7 +13,19 @@ import { RUN_CMD } from "./agent-commands";
 import { useDocsList } from "@/features/docs/hooks";
 import { buildTabs, resolveActiveId } from "@/features/docs/lib/subfile-model";
 import { useContract } from "@/lib/hooks";
-import { docPath, withFileParam } from "@/routes/search-schemas";
+import { docPath, withFileParam, type SettingsTab } from "@/routes/search-schemas";
+
+/**
+ * ⚠️ LAZY, KHÔNG PHẢI IMPORT TĨNH — đã đo, không phải đề phòng suông.
+ *
+ * `AppLayout` nằm trong chunk `layout` mà MỌI route đều tải ngay từ lần vẽ đầu. Bản
+ * import tĩnh của dialog Cài đặt kéo cả 4 tab (agent/env/prefs/about) vào đó:
+ * `layout` phồng 46.19kB → 108.72kB (gzip 16.54 → 34.34) cho một cái dialog mà phần
+ * lớn phiên làm việc không ai mở. Lazy ⇒ chunk chỉ tải ở cú bấm đầu tiên vào bánh răng.
+ */
+const SettingsDialogLazy = React.lazy(async () => ({
+  default: (await import("@/features/settings/SettingsDialog")).SettingsDialog,
+}));
 
 /**
  * KHUNG ỨNG DỤNG dùng chung cho 8 màn (S0 tự vẽ khung riêng — wizard không có
@@ -78,22 +90,41 @@ export function AppLayout({ screen, projectId, fileId, children, simplified = fa
 
   const shellEnv = React.useMemo(() => ({ agentOffline: !status.connected, agentCommand: RUN_CMD }), [status.connected]);
 
-  /* ⚠️ MỞ CÀI ĐẶT KHÔNG ĐƯỢC ĐỘNG VÀO MÀN NỀN (lỗi #5 của đợt tái cấu trúc).
-     Bản cũ ghi `section: "settings"` — mà `section` CHÍNH LÀ tab nền đang mở, nên một cú
-     bấm vào nút Cài đặt là ném người ta khỏi mục họ đang đứng, và đóng dialog lại rơi tiếp
-     về "tất cả thành phẩm". Nay dialog có tham số RIÊNG (`settings`), còn `section`/`group`
-     được giữ nguyên nhờ hàm cập nhật search. */
+  /* ══════════ NÚT ⚙ TRÊN TOPBAR = CÀI ĐẶT CỦA CẢ APP ══════════
+     Chủ sản phẩm: *"cái nút cài đặt ở trong dự án topbar sẽ mở lên dialog giống cài đặt
+     bên ngoài"*. Nó nằm giữa thanh quota Codex và trạng thái runtime — cả hai đều là
+     việc của MÁY, không phải của một dự án — nên cái cửa nó mở cũng phải là cài đặt máy.
+
+     Bản cũ ghi `?settings=requirements` ⇒ mở **dialog cài đặt DỰ ÁN** (Yêu cầu · Phong
+     cách · Dự án). Đó là cửa của mục sidebar «Cài đặt style», không phải của bánh răng
+     này — đúng điều ghi ngay trong `ProjectScreen`: *"Bánh răng ở topbar là cài đặt của
+     CẢ APP"*. Nay bánh răng mở CHÍNH `SettingsDialog` mà `/settings` dùng.
+
+     VÌ SAO STATE CỤC BỘ CHỨ KHÔNG PHẢI URL — hai lý do, cùng một gốc "đừng đụng vào
+     chỗ người ta đang đứng":
+      · Người dùng đang làm việc dở trong dự án. Điều hướng sang `/settings` là ném họ
+        ra khỏi màn (và khỏi cả bộ nhớ chưa lưu của màn đó).
+      · Màn dự án đã có BA TRỤC URL độc lập (`section`/`group`/`settings`) và một lịch
+        sử lỗi vì gánh chung (lỗi #5). Thêm một trục thứ tư cho một cái dialog không
+        cần deep-link là mời lại đúng lớp lỗi đó. Đóng dialog ⇒ URL y nguyên, kể cả
+        khi màn nền là S3/S5 chứ không phải màn dự án. */
+  const [appSettingsTab, setAppSettingsTab] = React.useState<SettingsTab | null>(null);
+  /* Mở một lần rồi thì GIỮ MOUNT (chỉ `open` bật/tắt). Nếu tháo hẳn theo `appSettingsTab`
+     thì Radix mất luôn animation đóng — dialog biến mất khựng một nhịp. Cờ này cũng là
+     thứ hoãn `import()` tới cú bấm đầu tiên. */
+  const [settingsEverOpened, setSettingsEverOpened] = React.useState(false);
+  const openAppSettings = React.useCallback(() => {
+    setSettingsEverOpened(true);
+    setAppSettingsTab("agent");
+  }, []);
+
   const body = (
     <FloraShell
       home={screen === "projects" || screen === "settings"}
       agentStatus={status.pill as AgentStatus}
       connectionStatus={status}
       onRecheck={recheck}
-      onSettingsClick={projectId ? () => void navigate({
-        to: "/p/$projectId",
-        params: { projectId },
-        search: ((previous: Record<string, unknown>) => ({ ...previous, settings: "requirements" })) as never,
-      }) : undefined}
+      onSettingsClick={projectId ? openAppSettings : undefined}
       onHomeClick={() => void navigate({ to: "/" })}
     >
       {children}
@@ -103,7 +134,27 @@ export function AppLayout({ screen, projectId, fileId, children, simplified = fa
   /* Không màn nào có thanh tab ⇒ KHÔNG bọc `FileScopeProvider`: mọi màn thấy
      `useFileScope() === null`, tức là "xem tất cả sheet" — đúng hành vi đang chạy
      hôm nay, vì `showTabs` vốn đã luôn `false`. */
-  return <ShellEnvProvider value={shellEnv}>{body}</ShellEnvProvider>;
+  return (
+    <ShellEnvProvider value={shellEnv}>
+      {body}
+      {/* Dialog là ANH EM của khung, không phải con của `children`: nó phải sống qua mọi
+          lần màn bên trong render lại, và không được nằm trong `ErrorBoundary` của màn.
+          Chỉ dựng khi topbar THẬT SỰ có bánh răng (`projectId`) — ở `/settings` thì
+          chính `SettingsScreen` dựng dialog này, không được có bản thứ hai. */}
+      {projectId && settingsEverOpened && (
+        /* `fallback={null}`: khoảng chờ là một chunk ~50kB từ ĐĨA (agent chạy local),
+           nên nhấp nháy một skeleton ở đây ồn hơn là không vẽ gì. */
+        <React.Suspense fallback={null}>
+          <SettingsDialogLazy
+            open={appSettingsTab !== null}
+            onOpenChange={(open) => { if (!open) setAppSettingsTab(null); }}
+            tab={appSettingsTab ?? "agent"}
+            onTabChange={setAppSettingsTab}
+          />
+        </React.Suspense>
+      )}
+    </ShellEnvProvider>
+  );
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

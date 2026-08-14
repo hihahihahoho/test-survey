@@ -52,6 +52,64 @@ agent_cmd() {
 health() {
   curl -fsS -H 'X-KitGen-Client: 1' -H "Origin: $ORIGIN" "http://127.0.0.1:$PORT/health"
 }
+# Lấy một field CHUỖI của /health. Payload do JSON.stringify sinh ra (không khoảng trắng,
+# không xuống dòng) nên sed đủ dùng — và không kéo thêm python3 vào đường khởi động.
+# `"runtimeVersion":null` (agent chạy từ source) cố ý KHÔNG khớp ⇒ trả rỗng = "không biết".
+json_field() { sed -n 's/.*"'"$1"'":"\([^"]*\)".*/\1/p' | head -n 1; }
+running_runtime_version() { health 2>/dev/null | json_field runtimeVersion || true; }
+installed_runtime_version() { cat "$SOURCE/VERSION" 2>/dev/null || true; }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# "ĐÃ KHỞI ĐỘNG" PHẢI CÓ NGHĨA LÀ "ĐANG CHẠY BẢN VỪA CÀI" (BACKLOG #20).
+#
+# Sự cố 14/08 trên máy chủ SP: update cài xong, symlink `current` đã trỏ 2.1.20, nhưng
+# TIẾN TRÌNH agent vẫn là bản cũ (uptime không đổi). Mọi health check đời cũ chỉ hỏi
+# "có ai trả lời ở cổng $PORT không" — tiến trình CŨ trả lời được ⇒ cả installer lẫn UI
+# đều tưởng xong. Từ đây, câu hỏi đúng là "ai đang trả lời": so `runtimeVersion` của
+# /health với VERSION của bản mà `current` đang trỏ tới.
+#
+# HÀM NÀY CỐ Ý KHÔNG BAO GIỜ TRẢ MÃ LỖI. installer đời 2.1.20 hiểu `kitgen start` thất
+# bại là "launchd hỏng" và sẽ `nohup kitgen run` thêm MỘT agent thứ hai — hai agent
+# tranh nhau cổng còn tệ hơn một agent cũ. Thất bại ở đây nói bằng stderr (installer
+# đang chép stderr của lệnh này vào ~/.kitgen/install.log) chứ không bằng exit code.
+#
+# Ba ca "không kết luận được" đều PHẢI im lặng đi qua: không có curl, agent chưa kịp
+# lên, hoặc agent đời cũ không có field `runtimeVersion`.
+# ─────────────────────────────────────────────────────────────────────────────
+wait_runtime_version() {
+  want="$1"; attempts="${2:-15}"; seen=""
+  while [ "$attempts" -gt 0 ]; do
+    seen="$(running_runtime_version)"
+    if [ "$seen" = "$want" ]; then return 0; fi
+    attempts=$((attempts - 1))
+    if [ "$attempts" -gt 0 ]; then sleep 1; fi
+  done
+  [ -n "$seen" ] || return 2   # 2 = không đọc được version ⇒ không kết tội ai
+  return 1
+}
+verify_running_current() {
+  want="$(installed_runtime_version)"
+  [ -n "$want" ] || return 0
+  wait_runtime_version "$want" 15 && return 0
+  [ "$?" -eq 1 ] || return 0
+  echo "KitGen: dịch vụ vẫn đang chạy bản $(running_runtime_version) sau khi khởi động lại (đã cài $want) — thử dừng hẳn rồi bật lại." >&2
+  if [ "$(uname -s)" = Darwin ]; then
+    launchctl kill KILL "gui/$(id -u)/com.kitgen.agent" 2>/dev/null || true
+    sleep 1
+    macos_start >/dev/null 2>&1 || true
+  elif command -v systemctl >/dev/null 2>&1; then
+    systemctl --user restart kitgen-agent >/dev/null 2>&1 || true
+  else
+    pkill -f "$SOURCE/agent/server.mjs" 2>/dev/null || true
+    sleep 1
+    nohup "$0" run >>"$HOME_DIR/agent.log" 2>&1 &
+  fi
+  wait_runtime_version "$want" 20 && return 0
+  [ "$?" -eq 1 ] || return 0
+  echo "KitGen: KHÔNG khởi động lại được dịch vụ. Bản $want đã cài xong nhưng chưa chạy." >&2
+  echo "KitGen: chạy tay lệnh này rồi tải lại trang:  $HOME_DIR/bin/kitgen restart" >&2
+  return 0
+}
 macos_start() {
   domain="gui/$(id -u)"
   service="$domain/com.kitgen.agent"
@@ -74,7 +132,9 @@ case "${1:-help}" in
   start)
     if [ "$(uname -s)" = Darwin ]; then macos_start
     elif command -v systemctl >/dev/null 2>&1; then systemctl --user start kitgen-agent
-    else nohup "$0" run >>"$HOME_DIR/agent.log" 2>&1 & fi ;;
+    else nohup "$0" run >>"$HOME_DIR/agent.log" 2>&1 & fi
+    # Khởi động XONG chưa đủ: phải đúng bản đang cài (xem verify_running_current).
+    verify_running_current ;;
   stop)
     if [ "$(uname -s)" = Darwin ]; then launchctl kill TERM "gui/$(id -u)/com.kitgen.agent" 2>/dev/null || true
     elif command -v systemctl >/dev/null 2>&1; then systemctl --user stop kitgen-agent

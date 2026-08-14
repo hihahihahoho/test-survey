@@ -10,9 +10,9 @@ import { loadElementLib, DEFAULT_POSES } from "./templates.mjs"
 import { readZip } from "./zip.mjs"
 import { RE_SHEET_ID, RE_VARIANT_ID } from "./paths.mjs"
 
-/* "rrect" chứ KHÔNG phải "rect": skeleton.py:81 không có khoá "rect" (KeyError) và
-   silhouettes.js không vẽ được nó. Đây là skel MẶC ĐỊNH của luồng nhập nên phải là
-   shape mà cả 3 nơi (skeleton.py · silhouettes.js · shapes.js) đều dựng được. */
+/* "rrect" chứ KHÔNG phải "rect": silhouettes.js không vẽ được "rect" (trả chuỗi rỗng
+   = ô câm). Đây là skel MẶC ĐỊNH của luồng nhập nên phải là shape mà cả hai nơi
+   (silhouettes.js · shapes.js) đều dựng được. */
 const DEFAULT_SKEL = { shape: "rrect", w: 0.8, h: 0.6 }
 
 function slugId(s, fallback, re) {

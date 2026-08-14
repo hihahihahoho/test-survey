@@ -183,6 +183,79 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
       eq(r.json.available, false, "manifest cũ hơn ⇒ không có bản mới")
     } finally { globalThis.fetch = original }
   })
+  /* ══════════════════════════════════════════════════════════════════════════
+     BACKLOG #20 — CÀI XONG NHƯNG KHÔNG KHỞI ĐỘNG LẠI (máy chủ SP, 14/08).
+     Symlink `current` đã trỏ bản mới, tiến trình agent vẫn là bản cũ. /health 200,
+     /api/update vẫn "có bản mới" ⇒ user đọc thành "update hỏng", cài lại vô ích.
+     Dựng lại đúng hiện trường: đĩa có 9.9.9, tiến trình khai 2.1.20.
+     ══════════════════════════════════════════════════════════════════════════ */
+  await it("cài xong mà tiến trình vẫn bản cũ ⇒ restartRequired + lệnh khởi động lại", async () => {
+    const fakeHome = join(tmp, "kitgen-home-stale")
+    mkdirSync(join(fakeHome, "current"), { recursive: true })
+    writeFileSync(join(fakeHome, "current", "VERSION"), "9.9.9\n")
+    const originalHome = process.env.KITGEN_HOME
+    const originalVersion = agent.state.runtimeVersion
+    const originalFetch = globalThis.fetch
+    process.env.KITGEN_HOME = fakeHome
+    agent.state.runtimeVersion = "2.1.20"
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      version: "9.9.9", archive: "https://example.test/kitgen-runtime-9.9.9.tar.gz",
+    }), { status: 200, headers: { "content-type": "application/json" } })
+    try {
+      const r = await api("GET", "/api/update")
+      eq(r.status, 200, "status")
+      eq(r.json.currentVersion, "2.1.20", "version ĐANG CHẠY là của tiến trình, không phải của đĩa")
+      eq(r.json.installedVersion, "9.9.9", "version ĐÃ CÀI đọc qua symlink current")
+      eq(r.json.restartRequired, true, "trạng thái lỗi rõ, không im lặng nửa vời")
+      eq(r.json.restartCommand, "~/.kitgen/bin/kitgen restart", "lệnh chữa, dạng nhãn rút gọn")
+      ok(!/\/Users\/|kitgen-home-stale/.test(r.text), "không lộ đường dẫn tuyệt đối")
+    } finally {
+      globalThis.fetch = originalFetch
+      agent.state.runtimeVersion = originalVersion
+      if (originalHome === undefined) delete process.env.KITGEN_HOME; else process.env.KITGEN_HOME = originalHome
+    }
+  })
+  await it("restartRequired KHÔNG bật khi đĩa và tiến trình cùng một bản (99,9% số lần)", async () => {
+    const fakeHome = join(tmp, "kitgen-home-fresh")
+    mkdirSync(join(fakeHome, "current"), { recursive: true })
+    writeFileSync(join(fakeHome, "current", "VERSION"), "2.1.20\n")
+    const originalHome = process.env.KITGEN_HOME
+    const originalVersion = agent.state.runtimeVersion
+    const originalFetch = globalThis.fetch
+    process.env.KITGEN_HOME = fakeHome
+    agent.state.runtimeVersion = "2.1.20"
+    globalThis.fetch = async () => { throw new TypeError("fetch failed") }
+    try {
+      const r = await api("GET", "/api/update")
+      eq(r.json.ok, false, "mất mạng")
+      eq(r.json.restartRequired, false, "không đổ oan là phải khởi động lại")
+      // Mất mạng KHÔNG được che mất ca cài-xong-chưa-restart: số này đọc từ đĩa.
+      eq(r.json.installedVersion, "2.1.20", "vẫn đọc được bản đã cài dù manifest hỏng")
+    } finally {
+      globalThis.fetch = originalFetch
+      agent.state.runtimeVersion = originalVersion
+      if (originalHome === undefined) delete process.env.KITGEN_HOME; else process.env.KITGEN_HOME = originalHome
+    }
+  })
+  await it("POST /api/update ghi nhật ký ra file và tách hẳn session (không tự giết mình)", async () => {
+    const fakeHome = join(tmp, "kitgen-home-spawn")
+    mkdirSync(fakeHome, { recursive: true })
+    const calls = []
+    const fake = { on() {}, unref() {} }
+    const { scheduleUpdate } = await import("../lib/update.mjs")
+    const out = scheduleUpdate({
+      kitgenHome: fakeHome,
+      spawnImpl: (cmd, args, opts) => { calls.push({ cmd, args, opts }); return fake },
+    })
+    eq(calls.length, 1, "có spawn installer")
+    eq(calls[0].opts.detached, true, "detached: installer phải sống sót khi launchd giết job")
+    ok(Array.isArray(calls[0].opts.stdio), "stdio đi vào file, KHÔNG còn 'ignore'")
+    ok(typeof calls[0].opts.stdio[1] === "number", "stdout là fd của update.log")
+    eq(out.logLabel, "~/.kitgen/update.log", "nhãn nhật ký rút gọn cho UI")
+    const log = readFileSync(join(fakeHome, "update.log"), "utf8")
+    ok(/kitgen update/.test(log), `update.log có dòng mở đầu: ${log}`)
+  })
+
   await it("mất mạng KHÔNG thành lỗi 500 — trả ok:false + reason enum", async () => {
     const original = globalThis.fetch
     globalThis.fetch = async () => { throw new TypeError("fetch failed") }
