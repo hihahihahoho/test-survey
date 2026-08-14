@@ -94,7 +94,7 @@ một dòng), workspace đặt tại `~/KitGen` trong WSL, và người dùng m�
 
 Nguyên tắc bất di bất dịch của đợt này: **mọi nhánh mới đều gate `process.platform === "win32"`.**
 Trên darwin/linux mã chạy đúng từng ký tự như trước (chứng minh: `node agent/test-agent.mjs`
-127/127 PASS, xem §8).
+xanh 100% trên macOS — số ca mới nhất ở §8).
 
 ### 3.1 Đã sửa
 
@@ -379,11 +379,11 @@ nếu là lỗi gen.
 
 | Kiểm | Lệnh | Kết quả |
 |---|---|---|
-| Agent không đổi hành vi trên darwin | `node agent/test-agent.mjs` | ✅ **133/133 PASS · 0 FAIL** (đo lại 14/08 sau các bản vá §9.1; tổng số ca đang tăng vì bộ ca còn được bổ sung song song) |
+| Agent không đổi hành vi trên darwin | `node agent/test-agent.mjs` | ✅ **146/146 PASS · 0 FAIL** (đo lại 14/08 sau các bản vá §9.1; tổng số ca đang tăng vì bộ ca còn được bổ sung song song) |
 | Cú pháp mọi file `.mjs` đã sửa | `node --check` trên 57 file của `agent/` | ✅ sạch |
 | `install.sh` không hỏng | `bash -n install.sh` | ✅ sạch (**không sửa một dòng nào** của file này) |
 | `build-runtime.sh` | `bash -n scripts/build-runtime.sh` + chạy thật ra `.tar.gz` + `.sha256` | ✅ sạch (chưa sửa) |
-| `install.ps1` | — | ❌ **KHÔNG KIỂM ĐƯỢC TẠI CHỖ**: máy phát triển là macOS và **không có `pwsh`**. Nay việc này do CI làm — xem §8.1. |
+| `install.ps1` | — | ❌ **KHÔNG KIỂM ĐƯỢC TẠI CHỖ**: máy phát triển là macOS và **không có `pwsh`**. Nay việc này do CI làm — xem §8.1, và **lượt CI đầu tiên đã bắt được một lỗi chết người: §8.2**. |
 
 ### 8.1 Máy ảo Windows trắng trong CI — `.github/workflows/kitgen-windows.yml`
 
@@ -402,6 +402,58 @@ Thay cho việc chờ mượn một máy Windows thật, mỗi lượt push đ�
 
 **Không tốn quota, không đăng nhập:** Codex thật không bao giờ được cài (job 3 dùng
 `codex.cmd` giả 4 dòng, job 4 dùng engine giả của bộ ca). Không job nào gọi tới API sinh ảnh.
+
+### 8.2 🔴 BÀI HỌC VÒNG 1 — file `.ps1` không BOM thì PowerShell 5.1 đọc bằng Windows-1252
+
+Lượt CI đầu tiên (**run 31783005598**) đỏ ngay job 1: `Parser::ParseFile` trả **12 lỗi cú
+pháp** trong `install.ps1` — trong đó có những câu vô nghĩa như *"The '<' operator is
+reserved for future use"*, *"The splatting operator '@' cannot be used… '@resvg'"*,
+*"Unexpected token 'node.exe' -and `$_.CommandLine…"* (tức **ruột here-string sinh
+`kitgen.cmd` đang bị đọc như mã PowerShell**), *"Missing closing '}'"* ×5, *"The Try
+statement is missing its Catch or Finally block"*.
+
+**Không có lỗi cú pháp nào là thật.** Nguyên nhân duy nhất, đứng trước tất cả:
+
+> `install.ps1` được lưu **UTF-8 không BOM**. Windows PowerShell 5.1 đọc file `.ps1`
+> không BOM bằng **Windows-1252**, không phải UTF-8. Ký tự `—` (U+2014, UTF-8 = `E2 80
+> 94`) khi đó vỡ thành ba ký tự CP1252 mà ký tự cuối là **`"` (U+201D)** — và
+> **PowerShell coi U+201C/U+201D/U+201E là dấu nháy kép thật**. Chuỗi đầu tiên dính phải
+> là dòng `Write-Warn "… (coreutils) — engine se loi …"`: nó đứt làm đôi ngay giữa câu,
+> phần còn lại (`engine se loi o cac lenh date/grep/du" }`) bị parse như mã, parser lệch
+> nhịp một dấu nháy và **cả phần còn lại của file hỏng theo**.
+
+Chuỗi lỗi khớp chính xác: ba chuỗi vỡ ở dòng 144 / 314 / 548 (đều là chuỗi nháy kép có
+`—`) ⇒ hai khối `{` mở ở dòng 118 (`try`) và 141 không bao giờ đóng ⇒ `@resvg/resvg-wasm`
+và `<tools>` trong `Write-Block` (đang nằm trong chuỗi nháy đơn) bị đọc như toán tử.
+
+**Vì sao trước đó không ai thấy:** PS 7 (`pwsh`) mặc định UTF-8 nên **không tái hiện được**.
+Kiểm bằng `pwsh` là kiểm sai môi trường. Máy phát triển là macOS, không có PowerShell nào.
+
+**Đã sửa (hai lớp, xem khối cảnh báo ở đầu `install.ps1`):**
+
+1. **Thêm BOM UTF-8** (`EF BB BF`) cho `install.ps1` — đây là lớp thật, đúng khuyến nghị
+   của Microsoft cho script chạy trên Windows PowerShell 5.1. CI có bước **"BOM của mọi
+   file `.ps1`"** chạy **trước** bước parse: file `.ps1` nào có ký tự ngoài ASCII mà thiếu
+   BOM là đỏ ngay với một câu nói thẳng nguyên nhân, thay vì 12 câu đánh đố.
+   (PSScriptAnalyzer cũng có luật `PSUseBOMForUnicodeEncodedFile` cho đúng việc này.)
+2. **ASCII hoá 13 dòng**: mọi chuỗi được **in ra console** và mọi **nội dung file sinh ra**
+   (`config.cmd`, `kitgen.cmd`, `kitgen-hidden.vbs`, shim `python3`) không còn `—` / `→`.
+   Vừa là phòng thủ nếu BOM bị một editor nào đó gỡ mất, vừa đúng bản chất: `cmd.exe` và
+   console Windows đọc bằng OEM codepage chứ không phải UTF-8. **Văn tiếng Việt trong
+   comment giữ nguyên** — BOM lo phần đó. Dấu `·` dùng làm bullet là an toàn (UTF-8 `C2 B7`,
+   không byte nào rơi vào vùng `0x91–0x94`) nên giữ, và §7 bước 2 đang trích đúng chữ đó.
+
+**Luật rút ra cho mọi file `.ps1` về sau:** có ký tự ngoài ASCII ⇒ **phải có BOM**; và
+đừng bao giờ đặt `— – → ⇒ “ ” ‘ ’` (hay bất kỳ ký tự nào có byte `0x91–0x94`) vào bên
+trong chuỗi — chỉ để trong comment.
+
+**Bốn here-string trong file đều KHÔNG có lỗi** (giả thuyết ban đầu là terminator bị thụt
+đầu dòng — đã kiểm và bác bỏ): cả bốn mở bằng `@"` đứng cuối dòng và đóng bằng `"@` ở
+**cột 0** (dòng 357→361 shim `python3`, 437→451 `config.cmd`, 458→511 `kitgen.cmd`,
+517→522 `.vbs` — số dòng của bản trước khi thêm khối cảnh báo). Cả bốn **phải giữ dạng
+nháy kép** `@"…"@` vì đều cần nội suy biến (`$venvScripts`, `$logFile`, `$binDir`,
+`$pyPosix`); các dấu `` ` `` trong đó là cố ý, để sinh ra `$_` và `%…%` nguyên văn cho
+`cmd.exe`.
 
 **Cái CI này KHÔNG thay được:** khởi động lại máy (§7 bước 21), Defender/SmartScreen
 (§6.7), cửa sổ console đen (§7 bước 22), Codex thật trên Windows (§6.4 — rủi ro số 1),
@@ -436,16 +488,20 @@ và gen ảnh thật (§7 bước 13–17). Những mục đó vẫn phải làm
 8. 🟢 Audit `paths.mjs` với hệ thống file không phân biệt hoa-thường (§3.2).
 9. 🟢 Rà `slice.py` cho `encoding="utf-8"` (§4.4).
 
-### 9.1 Sửa sẵn trước lượt chạy CI đầu tiên (đọc mã, chưa có log runner)
+### 9.1 Đã sửa sẵn cho Windows (a–b: đọc mã trước lượt CI đầu; c: theo log runner thật)
 
 | # | Chỗ | Vì sao chắc chắn đỏ trên Windows | Đã làm gì |
 |---|---|---|---|
 | a | `lib/redact.mjs` | §9.5 ở trên | thêm khối gate `win32` |
 | b | `test/suite-system.mjs` (3 ca) | Ba ca ghim cứng `~/.kitgen/bin/kitgen update`, `… restart`, `~/.kitgen/update.log`, trong khi `lib/update.mjs` đã có nhánh `IS_WIN` trả `%LOCALAPPDATA%\KitGen\…`. Mã sản xuất **đúng**, ca kiểm mới là chỗ sai | ghim đúng chữ cho **cả hai** nền bằng hằng `CMD_UPDATE` / `CMD_RESTART` / `LOG_UPDATE`; **không** import hằng từ mã sản xuất (import vào thì ca kiểm chỉ còn tự nói với chính nó). Nhánh non-win giữ nguyên từng ký tự |
+| c | `scripts/install.ps1` | Lỗi THẬT do vòng 1 của CI bắt được, không phải suy đoán — xem §8.2 | thêm BOM UTF-8 + ASCII hoá 13 dòng chuỗi/nội dung sinh ra + bước CI khẳng định BOM |
 
-Cả hai bản vá đã được đo lại trên macOS: `node agent/test-agent.mjs` → **133/133 PASS · 0 FAIL** (chạy 3 lượt).
+Hai bản vá phía agent (a, b) đã được đo lại trên macOS: `node agent/test-agent.mjs` → **146/146 PASS · 0 FAIL**.
 
-### 9.2 Điểm phải soi ở lượt CI đầu tiên (chưa có bằng chứng, đừng đoán)
+### 9.2 Điểm phải soi ở lượt CI kế tiếp (chưa có bằng chứng, đừng đoán)
+
+> Lượt 1 (run 31783005598) chết ngay ở job 1 (§8.2) nên job 3 và job 4 **chưa từng chạy** —
+> cả bốn điểm dưới đây vẫn chưa có câu trả lời nào.
 
 1. **Quyền tạo symlink của runner.** Hai ca của `suite-paths` gọi `fs.symlink`; Windows đòi
    `SeCreateSymbolicLinkPrivilege`. Job 3 và job 4 đều in một dòng thăm dò

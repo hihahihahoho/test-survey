@@ -44,6 +44,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # LƯỢT CI ĐẦU TIÊN (run 31783005598) ĐỎ VÌ ĐÚNG CHỖ NÀY: install.ps1 lưu UTF-8
+      # KHÔNG BOM ⇒ Windows PowerShell 5.1 đọc nó bằng Windows-1252 ⇒ dấu `—` trong
+      # chuỗi vỡ thành 3 ký tự CP1252 mà ký tự cuối là `"` (U+201D) — PowerShell coi đó
+      # là DẤU NHÁY KÉP THẬT ⇒ chuỗi đứt đôi, parser lệch nhịp, ra 12 lỗi cú pháp giả.
+      # Bước này bắt lại đúng nguyên nhân gốc bằng một câu, TRƯỚC khi parser kịp nói
+      # những câu khó hiểu về `@resvg`, `<`, hay `}` thiếu.
+      - name: BOM của mọi file .ps1
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bad = @()
+          foreach ($f in Get-ChildItem -Path . -Recurse -Filter '*.ps1' -File |
+                         Where-Object { $_.FullName -notlike '*\node_modules\*' }) {
+            $b = [IO.File]::ReadAllBytes($f.FullName)
+            $hasBom = ($b.Length -ge 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF)
+            $nonAscii = @($b | Where-Object { $_ -gt 127 }).Count
+            $rel = Resolve-Path -Relative $f.FullName
+            Write-Host ("{0,-40} BOM={1,-5} byte>127={2}" -f $rel, $hasBom, $nonAscii)
+            if (-not $hasBom -and $nonAscii -gt 0) { $bad += $rel }
+          }
+          foreach ($f in $bad) {
+            Write-Host ("::error file={0}::file .ps1 co ky tu ngoai ASCII nhung KHONG co BOM. Windows PowerShell 5.1 se doc no bang Windows-1252 va bam nham dau nhay => hong ca file. Luu lai duoi dang UTF-8 co BOM." -f ($f -replace '^\.\\', '' -replace '\\', '/'))
+          }
+          if ($bad.Count -gt 0) { exit 1 }
+          Write-Host 'OK   moi file .ps1 co ky tu ngoai ASCII deu co BOM'
+          exit 0
+
       # WINDOWS-PORT.md §8 ghi: install.ps1 CHƯA BAO GIỜ được kiểm cú pháp vì máy phát
       # triển là macOS không có pwsh. Đây chính là phép kiểm đó, bằng Windows PowerShell
       # 5.1 — đúng phiên bản mà `#Requires -Version 5.1` của script nhắm tới.
@@ -57,8 +84,11 @@ jobs:
           if ($errors -and $errors.Count -gt 0) {
             foreach ($e in $errors) {
               Write-Host ("::error file=kit-gen/scripts/install.ps1,line={0}::{1}" -f $e.Extent.StartLineNumber, $e.Message)
+              Write-Host ("     dong {0}, cot {1}: {2}" -f $e.Extent.StartLineNumber, $e.Extent.StartColumnNumber, $e.Extent.Text)
             }
             Write-Host ("LOI: {0} loi cu phap trong install.ps1" -f $errors.Count)
+            $b = [IO.File]::ReadAllBytes($path)
+            Write-Host ("     (3 byte dau cua file: {0} — BOM UTF-8 phai la EF BB BF)" -f (($b[0..2] | ForEach-Object { '{0:X2}' -f $_ }) -join ' '))
             exit 1
           }
           Write-Host ("OK   Parser::ParseFile - {0} token, 0 loi cu phap" -f $tokens.Count)
@@ -66,6 +96,7 @@ jobs:
           # o dau MOT FILE script; nem nguyen van vao [scriptblock]::Create thi loi bao ve
           # chinh dong do chu khong phai ve cu phap => bo dong #Requires roi moi Create.
           $src = (Get-Content -Raw -LiteralPath $path) -replace '(?m)^\s*#Requires.*$', ''
+          $src = $src.TrimStart([char]0xFEFF)   # Get-Content da bo BOM, nhung khong trong cay them
           [void][scriptblock]::Create($src)
           Write-Host 'OK   [scriptblock]::Create'
           exit 0

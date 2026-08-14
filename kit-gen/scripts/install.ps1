@@ -1,4 +1,4 @@
-<#
+﻿<#
 ================================================================================
  install.ps1 — BẢN CÀI WINDOWS CỦA KITGEN  ***EXPERIMENTAL***
 
@@ -24,6 +24,31 @@
    powershell -ExecutionPolicy Bypass -File install.ps1
    powershell -ExecutionPolicy Bypass -File install.ps1 -Archive .\kitgen-runtime-2.1.19.tar.gz
    powershell -ExecutionPolicy Bypass -File install.ps1 -NoStart -CodexImg
+
+ ┌────────────────────────────────────────────────────────────────────────────┐
+ │ FILE NÀY PHẢI ĐƯỢC LƯU LÀ **UTF-8 CÓ BOM** (EF BB BF). ĐỪNG BỎ BOM ĐI.      │
+ │                                                                            │
+ │ Windows PowerShell 5.1 đọc file .ps1 KHÔNG có BOM bằng bảng mã Windows-1252,│
+ │ không phải UTF-8. Mọi ký tự tiếng Việt và mọi dấu — → ⇒ trong file này khi  │
+ │ đó vỡ thành 2–3 ký tự CP1252, và một số byte rơi đúng vào 0x91–0x94 =       │
+ │ ' ' " " — mà PowerShell coi ĐÓ LÀ DẤU NHÁY THẬT. Chuỗi đầu tiên dính phải   │
+ │ (dòng `Write-Warn "… (coreutils) — engine …"`) đứt làm đôi, từ đó parser     │
+ │ lệch nhịp và cả file hỏng theo: 12 lỗi cú pháp, ruột here-string sinh        │
+ │ kitgen.cmd bị đọc như mã PowerShell, `@resvg/resvg-wasm` thành toán tử.     │
+ │ Đây KHÔNG phải giả thuyết: đó đúng là kết quả lượt CI đầu tiên (run         │
+ │ 31783005598, job "Cú pháp install.ps1 (PowerShell 5.1)").                   │
+ │                                                                            │
+ │ PS 7 (pwsh) mặc định UTF-8 nên KHÔNG tái hiện được lỗi này — kiểm bằng      │
+ │ pwsh là kiểm sai môi trường. Hai lớp phòng thủ đang có:                     │
+ │   ① BOM (lớp thật) — CI khẳng định 3 byte đầu là EF BB BF;                  │
+ │   ② TRONG CHUỖI và trong NỘI DUNG FILE SINH RA (config.cmd, kitgen.cmd,     │
+ │      kitgen-hidden.vbs, shim python3) tuyệt đối không dùng — – → ⇒ … “ ” ‘ ’│
+ │      tức mọi ký tự mà UTF-8 của nó chứa byte 0x91–0x94; bốn here-string     │
+ │      hiện là ASCII 100% (cmd.exe cũng đọc bằng OEM codepage, không UTF-8).  │
+ │      Dấu chấm giữa `·` đang dùng làm bullet là AN TOÀN (C2 B7, không byte   │
+ │      nào rơi vào vùng dấu nháy) và checklist §7 đang trích đúng chữ đó.     │
+ │   Văn giải thích tiếng Việt trong comment thì GIỮ NGUYÊN, BOM lo phần đó.   │
+ └────────────────────────────────────────────────────────────────────────────┘
 ================================================================================
 #>
 #Requires -Version 5.1
@@ -141,7 +166,7 @@ foreach ($c in $bashCandidates) { if ($c -and (Test-Path -LiteralPath $c)) { $ba
 if ($bashExe) {
   $gitRoot = Split-Path -Parent (Split-Path -Parent $bashExe)
   if (Test-Path -LiteralPath (Join-Path $gitRoot 'usr\bin\grep.exe')) { Write-Ok "Git-Bash · $bashExe" }
-  else { Write-Warn "tim thay $bashExe nhung thieu <Git>\usr\bin (coreutils) — engine se loi o cac lenh date/grep/du" }
+  else { Write-Warn "tim thay $bashExe nhung thieu <Git>\usr\bin (coreutils) - engine se loi o cac lenh date/grep/du" }
 } else {
   Write-Block 'Git for Windows (bash.exe)' 'Cai tu https://git-scm.com/download/win (ban 64-bit, tuy chon mac dinh), roi chay lai install.ps1.'
 }
@@ -241,7 +266,7 @@ if (Test-Path -LiteralPath $manifest) {
   if ($bad -gt 0) { Die "$bad/$checked file trong goi runtime sai checksum" }
   Write-Ok "manifest.sha256 hop le ($checked file)"
 } else {
-  Write-Warn 'goi runtime khong co manifest.sha256 (ban dev?) — bo qua doi chieu tung file'
+  Write-Warn 'goi runtime khong co manifest.sha256 (ban dev?) - bo qua doi chieu tung file'
 }
 
 $version = (Get-Content -LiteralPath (Join-Path $candidate 'VERSION') -Raw).Trim()
@@ -309,15 +334,15 @@ try {
   }
   [void](New-Item -ItemType Junction -Path $current -Target $dest -ErrorAction Stop)
   $source = $current
-  Write-Ok "current → releases\$version"
+  Write-Ok "current -> releases\$version"
 } catch {
-  Write-Warn "khong tao duoc junction `"current`" — dung thang releases\$version"
+  Write-Warn "khong tao duoc junction `"current`" - dung thang releases\$version"
 }
 
 New-Dir (Join-Path $Workspace '.kitgen\engine')
 New-Dir (Join-Path $Workspace 'projects')
 Copy-Item -Path (Join-Path $dest 'engine\*') -Destination (Join-Path $Workspace '.kitgen\engine') -Recurse -Force
-Write-Ok "engine → $Workspace\.kitgen\engine"
+Write-Ok "engine -> $Workspace\.kitgen\engine"
 
 # ── 5. Python venv + shim `python3` ────────────────────────────────────────────
 Write-Step '5/8' 'Moi truong Python'
@@ -331,7 +356,7 @@ if ($pyLauncher) {
     if ($pyPre.Count -gt 0) { $venvArgs += $pyPre }
     $venvArgs += @('-m', 'venv', $venv)
     & $pyExe @venvArgs
-    if ($LASTEXITCODE -ne 0) { Write-Warn 'khong tao duoc venv — se dung Python he thong' }
+    if ($LASTEXITCODE -ne 0) { Write-Warn 'khong tao duoc venv - se dung Python he thong' }
   }
   if (Test-Path -LiteralPath $venvPy) { $pythonForAgent = $venvPy }
   else { $pythonForAgent = $pyExe }
@@ -342,7 +367,7 @@ if ($pyLauncher) {
       Write-Host '  cai thu vien xu ly anh (pillow numpy scipy pymatting) ...'
       $env:PIP_DISABLE_PIP_VERSION_CHECK = '1'
       & $venvPy -m pip install --quiet --upgrade pillow numpy scipy pymatting
-      if ($LASTEXITCODE -ne 0) { Write-Warn 'pip install that bai — slice.py se khong chay duoc' }
+      if ($LASTEXITCODE -ne 0) { Write-Warn 'pip install that bai - slice.py se khong chay duoc' }
     }
     Write-Ok "venv $venv"
   }
@@ -356,7 +381,7 @@ if ($pyLauncher) {
   if ($pythonForAgent -eq $pyExe -and $pyPre.Count -gt 0) { $pyShimArgs = ' ' + ($pyPre -join ' ') }
   Write-TextLf (Join-Path $KitgenHome 'bin\python3') @"
 #!/usr/bin/env bash
-# Sinh boi install.ps1 — Windows khong co lenh `python3`.
+# Sinh boi install.ps1 - Windows khong co lenh `python3`.
 exec "$pyPosix"$pyShimArgs "`$@"
 "@
   Write-Ok 'shim python3 (cho Git-Bash)'
@@ -435,7 +460,7 @@ $logFile = Join-Path $KitgenHome 'agent.log'
 # config.cmd — ban Windows cua config.env. kitgen.cmd nap no bang `call`.
 $nodeModules = Join-Path $toolsPrefix 'node_modules'
 $configCmd = @"
-@rem Sinh boi install.ps1 — KHONG sua tay, chay lai installer neu can doi.
+@rem Sinh boi install.ps1 - KHONG sua tay, chay lai installer neu can doi.
 set "KITGEN_HOME=$KitgenHome"
 set "KITGEN_SOURCE=$source"
 set "KITGEN_WORKSPACE=$Workspace"
@@ -515,7 +540,7 @@ Write-TextCrLf (Join-Path $binDir 'kitgen.cmd') $kitgenCmd
 # `start /b` van de lai mot cua so den. WScript.Shell Run voi tham so 0 la cach
 # duy nhat khong can cai them gi.
 $vbs = @"
-' Sinh boi install.ps1 — chay agent KitGen an, khong cua so console.
+' Sinh boi install.ps1 - chay agent KitGen an, khong cua so console.
 ' Tham so thu hai = 0 (vbHide), thu ba = False (khong doi ket thuc).
 Set sh = CreateObject("WScript.Shell")
 sh.Run """$binDir\kitgen.cmd"" run-logged", 0, False
@@ -545,7 +570,7 @@ if ($script:Blockers.Count -gt 0) {
     } catch { }
   }
   if ($healthy) { Write-Ok "agent phan hoi tai http://127.0.0.1:$Port/health" }
-  else { Write-Warn "agent chua phan hoi sau 15s — xem log: $logFile" }
+  else { Write-Warn "agent chua phan hoi sau 15s - xem log: $logFile" }
 }
 
 # ── tổng kết ───────────────────────────────────────────────────────────────────
@@ -555,10 +580,10 @@ Write-Host "Lenh   : $binDir\kitgen.cmd"
 Write-Host "Mo app : http://127.0.0.1:$Port/app/"
 if ($script:Blockers.Count -gt 0) {
   Write-Host ''
-  Write-Host 'CHUA CHAY DUOC — con thieu:' -ForegroundColor Red
+  Write-Host 'CHUA CHAY DUOC - con thieu:' -ForegroundColor Red
   foreach ($b in $script:Blockers) {
     Write-Host "  · $($b.What)"
-    Write-Host "    → $($b.How)"
+    Write-Host "    -> $($b.How)"
   }
   Write-Host ''
   Write-Host '  Cai xong thi chay lai chinh lenh nay, khong can go bo gi.'
