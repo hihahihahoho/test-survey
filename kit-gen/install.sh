@@ -251,6 +251,10 @@ with open(tmp, "w") as f: json.dump(cfg, f, indent=2); f.write("\n")
 os.replace(tmp, p)
 PY
 cp "$DEST/install.sh" "$KITGEN_HOME/install.sh"
+# `command -v codex` trong shell fnm trả về symlink tạm ~/.local/state/fnm_multishells/<pid>_<ts>/
+# — thư mục này chết theo phiên shell, ghi vào config.env là gen hỏng sau reboot.
+# Ghi realpath để đường dẫn sống bền qua các phiên.
+CODEX_BIN="$(python3 -c 'import os,sys;print(os.path.realpath(sys.argv[1]))' "$CODEX_BIN" 2>/dev/null || echo "$CODEX_BIN")"
 cat > "$KITGEN_HOME/config.env" <<CFG
 KITGEN_HOME='$KITGEN_HOME'
 KITGEN_SOURCE='$KITGEN_HOME/current'
