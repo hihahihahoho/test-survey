@@ -274,6 +274,41 @@ describe("§W1-2 — mạch wizard kết thúc ở màn dự án, không ở m�
     expect(go).toBeGreaterThan(done);
     expect(src).toContain('search: { section: "images" }');
   });
+
+  /**
+   * BLIND-TEST: bấm "Tạo ảnh" trong lúc dự án ĐANG CHẠY. Agent chống trùng run đúng
+   * (409 RUN_CONFLICT), nhưng UI vẫn mở dialog xác nhận, nút đổi thành "Đang bắt đầu…"
+   * rồi im, và câu duy nhất đọc được là "Kiểm tra công cụ tạo ảnh trong Cài đặt" — sai
+   * địa chỉ, nên người dùng tưởng mình vừa bấm hỏng cái gì.
+   *
+   * Hai lớp phải cùng nói một câu: biết trước từ `state` (không mở dialog), và 409 của
+   * agent (khe 5s staleTime của `useProject`). Kiểm ở tầng mã nguồn vì `WorkflowBody`
+   * cần cả router lẫn agent thật mới mount được — cùng lối ca ngay trên.
+   */
+  it("đang có lượt chạy: KHÔNG mở dialog xác nhận, nói rõ và đưa tới tiến trình", () => {
+    const src = readFileSync(join(SRC, "features/workflow-v4/WorkflowScreen.tsx"), "utf8");
+
+    // ① Lớp biết trước: `onDraw` hỏi `activeRunWarning` TRƯỚC khi `setDrawOpen(true)`.
+    const onDraw = src.slice(src.indexOf("onDraw={"), src.indexOf("<DrawConfirmDialog"));
+    const asked = onDraw.indexOf("activeRunWarning(project.data)");
+    const opened = onDraw.indexOf("setDrawOpen(true)");
+    expect(asked).toBeGreaterThan(-1);
+    expect(opened).toBeGreaterThan(asked);
+    expect(onDraw).toContain("hasActiveRun");
+
+    // ② Lớp trọng tài: 409 RUN_CONFLICT không rơi vào câu "công cụ tạo ảnh".
+    const confirmBody = src.slice(src.indexOf("<DrawConfirmDialog"));
+    const conflict = confirmBody.indexOf('v.code === "RUN_CONFLICT"');
+    const genericError = confirmBody.indexOf("Kiểm tra công cụ tạo ảnh");
+    expect(conflict).toBeGreaterThan(-1);
+    expect(genericError).toBeGreaterThan(conflict);
+
+    // ③ Cả hai đi qua ĐÚNG MỘT cửa ⇒ không thể lệch câu chữ.
+    expect(src).toContain("const showActiveRun =");
+    expect(src.match(/showActiveRun\(/g)?.length).toBe(2); // đúng hai nơi gọi, không có bản sao
+    expect(src).toContain("Dự án đang có lượt chạy — xem tiến trình");
+    expect(src).toContain('to: "/p/$projectId/runs/$runId"');
+  });
 });
 
 /**

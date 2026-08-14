@@ -71,6 +71,34 @@ export function exportZipPath(
   return `/api/projects/${encodeURIComponent(projectId)}/export.zip?${usp.toString()}`;
 }
 
+/**
+ * TẢI `.zip` XUẤT của một dự án — **cửa duy nhất** cho nút "Tải .zip".
+ *
+ * ╔══ VÌ SAO PHẢI CÓ HÀM NÀY, THAY VÌ ĐỂ NƠI GỌI TỰ GHÉP ═════════════════════╗
+ * ║ `exportZipPath` trả về một ĐƯỜNG DẪN API ĐẦY ĐỦ (`/api/projects/…/export   ║
+ * ║ .zip?include=…`), còn `saveProjectFile` nhận một đường dẫn TƯƠNG ĐỐI TRONG ║
+ * ║ DỰ ÁN rồi tự bọc thêm `/api/projects/<id>/files/…`. Ghép hai cái vào nhau  ║
+ * ║ cho ra                                                                     ║
+ * ║   /api/projects/p1/files/api/projects/p1/export.zip%3Finclude%3Dkits        ║
+ * ║ — query bị `encodeURIComponent` nhốt vào MỘT segment, cả đường API bị lồng  ║
+ * ║ dưới `/files/`. Agent trả **400 PATH_ESCAPE** (`routes/files.mjs`: chỉ      ║
+ * ║ raw/kits/refs/skeleton/prompts/export/runs/cover mới đọc được, `api` thì    ║
+ * ║ không), nên bấm nút KHÔNG có file nào rơi xuống — đúng thứ blind-test thấy. ║
+ * ║ Hai hàm đó không được phép nối tiếp nhau; đây là chỗ nối đúng.              ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * `variant = null` (mặc định) = MỌI phong cách. Đừng khoá cứng một id phong cách:
+ * agent đối chiếu với `contract.variants` và trả **422 UNKNOWN_VARIANT** cho id lạ,
+ * mà dự án không do wizard tạo thì không có phong cách `chinh` nào cả.
+ */
+export function saveExportZip(
+  projectId: string,
+  include: readonly string[],
+  variant: string | null = null,
+): Promise<SavedFile> {
+  return savePath(exportZipPath(projectId, include, variant), zipFallbackName(projectId));
+}
+
 /** Tên file zip mặc định nếu agent không gửi Content-Disposition: `kitgen-<slug>-<yyyymmdd>.zip`. */
 export function zipFallbackName(slug: string, now: Date = new Date()): string {
   const p = (x: number) => String(x).padStart(2, "0");

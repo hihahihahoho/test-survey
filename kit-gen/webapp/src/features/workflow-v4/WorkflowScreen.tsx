@@ -4,7 +4,8 @@ import { ArrowLeft, ArrowRight, Images, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingState, ErrorState } from "@/components/common";
 import { useAgentStatus, useElementLib, useProject, useSaveWorkflowDraft, useUserLibrary, useWorkflowDraft } from "@/lib/hooks";
-import { useGenerateRun } from "@/features/runs";
+import { activeRunWarning, useGenerateRun } from "@/features/runs";
+import { presentError } from "@/lib/api";
 import { toast } from "@/components/ui/sonner";
 import { fromAgentLib } from "@/features/design/library/lib/source";
 import { hasGeneratedOutput } from "@/features/projects/lib/nav";
@@ -56,6 +57,26 @@ function WorkflowBody({ projectId }: { projectId: string }) {
   const hydrated = React.useRef(false);
   const [drawOpen, setDrawOpen] = React.useState(false);
   const startRun = useGenerateRun(projectId);
+
+  /**
+   * MỘT CÂU DUY NHẤT cho ca "đang có lượt chạy", dùng cho CẢ HAI lớp (biết trước từ
+   * `state`, và 409 RUN_CONFLICT của agent) — hai lớp nói hai câu khác nhau là cách
+   * người dùng kết luận app đang đoán mò.
+   *
+   * Vừa BÁO vừa ĐƯA TỚI: người dùng bấm "Tạo ảnh" là để thấy ảnh chạy, nên câu trả lời
+   * đúng cho "đã có lượt đang chạy rồi" là mở thẳng tiến trình đó, không phải một dialog
+   * xác nhận thứ hai. Có `runId` thì vào đúng màn lượt chạy; chưa kịp có (run vừa khởi
+   * động, `activeRun` còn rỗng) thì về mục "Ảnh đã tạo" — nơi tiến trình cũng hiện.
+   */
+  const showActiveRun = React.useCallback((runId: string | null, done: number, total: number) => {
+    toast.info("Dự án đang có lượt chạy — xem tiến trình", {
+      description: total > 0
+        ? `Lượt hiện tại đã xong ${done}/${total}. Chờ xong hoặc dừng lượt đó rồi mới tạo lượt mới.`
+        : "Chờ lượt đó xong hoặc dừng nó, rồi mới tạo được lượt mới.",
+    });
+    if (runId) void navigate({ to: "/p/$projectId/runs/$runId", params: { projectId, runId } });
+    else void navigate({ to: "/p/$projectId", params: { projectId }, search: { section: "images" } });
+  }, [navigate, projectId]);
 
   React.useEffect(() => {
     if (hydrated.current || !diskDraft.isSuccess) return;
@@ -175,7 +196,23 @@ function WorkflowBody({ projectId }: { projectId: string }) {
         drawable={drawableOf(s.elements).length}
         onBack={s.back}
         onNext={s.next}
-        onDraw={() => setDrawOpen(true)}
+        onDraw={() => {
+          /* ĐANG CÓ LƯỢT CHẠY ⇒ NÓI THẲNG, ĐỪNG MỞ DIALOG XÁC NHẬN.
+             Blind-test: bấm "Tạo ảnh" lúc dự án đang chạy thì dialog vẫn mở, nút đổi
+             thành "Đang bắt đầu…" rồi im — agent trả 409 RUN_CONFLICT (đúng), nhưng
+             câu duy nhất người dùng đọc được là "Chưa tạo ảnh được. Kiểm tra công cụ
+             tạo ảnh trong Cài đặt." ⇒ họ tưởng mình vừa bấm hỏng cái gì đó.
+             Cùng cách `GenerateDialog` (§④) đã làm ở màn dự án: biết trước thì đừng
+             để user bấm rồi ăn 409. `activeRunWarning` là hàm CHUNG đã có sẵn cho
+             việc này, nhìn cả `state.activeRun` lẫn `state.jobs` (ca run vừa khởi
+             động, `activeRun` còn rỗng). */
+          const active = activeRunWarning(project.data);
+          if (active.hasActiveRun) {
+            showActiveRun(active.runId, active.done, active.total);
+            return;
+          }
+          setDrawOpen(true);
+        }}
       />
       <DrawConfirmDialog
         open={drawOpen}
@@ -207,7 +244,18 @@ function WorkflowBody({ projectId }: { projectId: string }) {
               await saveDraft.mutateAsync({ completed: true, draft: workflowDraftOf(store.getState()) });
               toast.success("Đã bắt đầu tạo ảnh.", { description: "Theo dõi trong mục Ảnh đã tạo của dự án." });
               void navigate({ to: "/p/$projectId", params: { projectId }, search: { section: "images" } });
-            } catch {
+            } catch (err) {
+              /* Lớp thứ hai của cùng một sự thật: agent mới là trọng tài. Cache của
+                 `useProject` có staleTime 5s nên vẫn có khe cho một run khởi động
+                 ngay trước cú bấm — 409 RUN_CONFLICT phải nói ĐÚNG câu như lớp trên,
+                 không rơi vào câu "kiểm tra công cụ tạo ảnh" (sai địa chỉ hoàn toàn). */
+              const v = presentError(err);
+              if (v.code === "RUN_CONFLICT") {
+                setDrawOpen(false);
+                const d = v.details as { runId?: string } | null;
+                showActiveRun(typeof d?.runId === "string" ? d.runId : null, 0, 0);
+                return;
+              }
               toast.error("Chưa tạo ảnh được. Kiểm tra công cụ tạo ảnh trong Cài đặt.");
             }
           })();

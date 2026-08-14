@@ -42,7 +42,28 @@ MATERIAL_WORDS = {
     "grey", "gray", "cream", "ivory", "teal", "cyan", "magenta", "brown", "beige",
     "amber", "crimson", "scarlet", "turquoise", "lime", "navy", "maroon", "peach",
     "mint", "lavender", "burgundy", "olive", "tan", "charcoal",
+    # NHIỆT ĐỘ MÀU / SẮC ĐỘ / ĐỘ BÃO HOÀ — bổ sung 2026-08-14.
+    # Vì sao phải có: `08-progress-fill` vẫn ra CAM KẸO dù khối ưu tiên + hạ cấp
+    # đã chạy. Đo bằng chính prompt dựng ra: 8 chữ được gọi đích danh (jelly,
+    # glossy, vivid, orange-to-coral, gradient, specular, metal, gold) nhưng
+    # "warm" và "bright" SỐNG SÓT ⇒ dòng ô vẫn còn nguyên câu "vivid warm …
+    # gradient, bright … streak", tức vẫn còn một mệnh lệnh màu ấm đứng sát ô.
+    # "warm" thậm chí được nêu làm ví dụ ngay trong khối ưu tiên phía dưới
+    # ('warm orange-to-coral gradient') mà lại thiếu trong chính từ điển này.
+    "warm", "cool", "dark", "deep", "pale", "bright", "saturated",
+    "colorful", "colourful",
 }
+# CỐ Ý KHÔNG THÊM — đã cân nhắc và loại, đừng "bổ sung cho đủ" ở đợt sau:
+#   · glow / glowing / luminous / bloom — với ô `-glow` thì phát sáng LÀ hợp đồng
+#     của ô (skel.matte == "glow", nền ô đen, slicer tách alpha theo kênh sáng).
+#     Bảo model "đừng vẽ glow" là xoá luôn thành phần đó.
+#   · smooth — spec ô glow-burst dùng nó làm YÊU CẦU CHẤT LƯỢNG
+#     ("the glow must be perfectly SMOOTH and CLEAN — no film grain"), không phải preset.
+#   · light — vừa là "thin light outer rim" (sắc độ) vừa là "the light effect is
+#     drawn ADDITIVELY" trong đoạn phụ của ô glow. Hạ cấp là đá nhầm vế thứ hai.
+#   · soft / flat / highlight / darker — dính hình dáng hoặc TRẠNG THÁI
+#     ("flat background color of the sheet must show through" là hợp đồng chroma-key;
+#     "but darker, pushed-in look" là trạng thái nhấn của nút).
 
 
 def preset_words(spec):

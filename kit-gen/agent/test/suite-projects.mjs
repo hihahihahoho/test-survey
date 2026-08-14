@@ -153,6 +153,32 @@ export async function run({ api, agent, wsRoot }) {
     eq(r.json.error.code, "UNKNOWN_VARIANT", "code")
     ok(Array.isArray(r.json.error.details.unknown), "nói rõ cái nào lạ")
   })
+  await it("nút 'Tải .zip': ĐÚNG một request `export.zip?include=kits` là ra file thật", async () => {
+    /* Blind-test bấm nút mà không có file nào rơi xuống. Nguyên nhân ở web (ghép nhầm
+       `export.zip` vào đường `/files/`), nhưng phía agent phải có ca khoá lại ĐÚNG cái
+       request mà nút gửi đi — không variant, chỉ `include=kits` — để đời sau đổi route
+       hay đổi mặc định `include` thì đỏ ở đây chứ không đỏ trong tay người dùng. */
+    const r = await api("GET", `/api/projects/${projectId}/export.zip?include=kits`)
+    eq(r.status, 200, "status")
+    eq(r.headers["content-type"], "application/zip", "Content-Type")
+    includes(r.headers["content-disposition"], "attachment;", "phải là attachment")
+    includes(r.headers["content-disposition"], ".zip", "tên file .zip")
+    ok(Number(r.headers["content-length"]) > 0, "Content-Length > 0")
+    ok(r.body.length > 0 && r.body[0] === 0x50 && r.body[1] === 0x4b, "byte đầu là magic 'PK'")
+    const names = (await readZip(r.body)).map(e => e.name)
+    ok(names.some(n => n.includes("kits/")), `có ảnh đã cắt: ${names.join(", ")}`)
+    ok(!names.some(n => n.startsWith(`${projectId}/raw/`)), "include=kits thì KHÔNG kèm raw")
+  })
+  await it("đường dẫn SAI mà web từng gửi (`/files/` bọc cả đường API) phải BÁO LỖI, không im lặng", async () => {
+    /* Hình dạng cũ: /api/projects/<id>/files/api/projects/<id>/export.zip%3Finclude%3Dkits
+       Nó trả 400 PATH_ESCAPE — tức bug là THẤY ĐƯỢC ở tầng agent; thứ đã nuốt nó là web.
+       Giữ ca này để không ai "nới" READABLE_TOP rồi biến 400 thành 200 zip rỗng. */
+    const bad = `/api/projects/${projectId}/files/` +
+      encodeURIComponent(`/api/projects/${projectId}/export.zip?include=kits`)
+    const r = await api("GET", bad)
+    ok(r.status >= 400, `phải lỗi, nhận ${r.status}`)
+    ok(r.json?.error?.code !== undefined, "có mã lỗi đọc được")
+  })
 
   // ─────────────────────────────────────────── 4. TRASH + restore
   describe("thùng rác")

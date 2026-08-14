@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { CARD, FLORA, FOCUS } from "@/components/layout/flora";
 import { deriveStatus, readMode } from "@/features/kitfile";
+import { hasGeneratedOutput } from "@/features/projects/lib/nav";
 import type { Project } from "@/lib/types";
 import { KitCover } from "./KitCover";
 import { KitCardMenu, type KitActions } from "./KitCardMenu";
@@ -86,6 +87,10 @@ export function KitCard({
         coverPath={project.cover}
         kitName={project.name}
         offline={gate.readOnly}
+        /* Chỉ dự án ĐÃ TỪNG chạy một lượt gen mới có thể đang được vẽ bìa ngầm: móc
+           `maybeAutoCover` của agent nằm ở `finish()` của lượt chạy. Dự án trắng thì
+           không có gì để chờ, nên nó KHÔNG gửi request nào — xem KitCover. */
+        watchCover={hasGeneratedOutput(project)}
       />
 
       <div className="flex min-w-0 items-start justify-between gap-2 px-1 pb-1">

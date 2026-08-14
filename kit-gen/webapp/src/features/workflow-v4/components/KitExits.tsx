@@ -2,10 +2,9 @@ import * as React from "react";
 import { Copy, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useKit } from "@/lib/hooks";
-import { saveProjectFile, exportZipPath } from "@/features/kit/lib/download";
+import { saveExportZip } from "@/features/kit/lib/download";
 import { buildFigmaBoard, BoardCancelled, type BoardProgress } from "@/features/kit/lib/figma-board";
 import { toastError, toastInfo, toastSuccess } from "@/features/projects/lib/feedback";
-import { MAIN_VARIANT_ID } from "../lib/kitset-to-contract";
 
 /**
  * HAI CỬA RA MANG PHẦN THƯỞNG Ở BƯỚC ⑥ (§W3-7) — cả hai **0 đồng**.
@@ -18,7 +17,13 @@ import { MAIN_VARIANT_ID } from "../lib/kitset-to-contract";
 /* ── Tải .zip ────────────────────────────────────────────────────────────────
    KHÔNG dùng `<a href download>`. `features/kit/lib/download.ts` đã đo và ghi lại:
    điều hướng trình duyệt không gắn được header `X-KitGen-Client: 1` ⇒ agent trả **403**.
-   Phải tải qua transport rồi dựng object URL — đúng việc `saveProjectFile` làm. */
+   Phải tải qua transport rồi dựng object URL — đúng việc `saveExportZip` làm.
+
+   ⚠️ ĐI QUA `saveExportZip`, KHÔNG TỰ GHÉP. Bản trước ghép `exportZipPath` — đường
+   dẫn API đầy đủ — vào `saveProjectFile`, vốn nhận đường dẫn tương đối trong dự án rồi
+   tự bọc `/files/…` ⇒ request đi ra là `/api/projects/<id>/files/api/projects/<id>/
+   export.zip%3Finclude%3Dkits`, agent trả 400 PATH_ESCAPE và bấm nút không ra file nào.
+   Có ca khoá ở `features/kit/__tests__/export-zip.test.ts`. */
 
 export function DownloadKitButton({ projectId }: { projectId: string }) {
   const kit = useKit(projectId);
@@ -29,8 +34,10 @@ export function DownloadKitButton({ projectId }: { projectId: string }) {
   const onClick = async () => {
     setBusy(true);
     try {
-      const path = exportZipPath(projectId, ["kits"], MAIN_VARIANT_ID);
-      const saved = await saveProjectFile(projectId, path);
+      // MỌI phong cách, không lọc `variant`: con số trên `title` của nút đến từ
+      // `useKit(projectId)` — cũng không lọc phong cách. Khoá cứng `variant=chinh`
+      // vừa nói dối con số đó, vừa ăn 422 UNKNOWN_VARIANT ở dự án không do wizard tạo.
+      const saved = await saveExportZip(projectId, ["kits"]);
       toastSuccess("Đã tải ảnh", `${saved.fileName} · ${Math.max(1, Math.round(saved.bytes / 1024))} KB`);
     } catch (err) {
       toastError(err, {});

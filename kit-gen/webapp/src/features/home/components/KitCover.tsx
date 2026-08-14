@@ -1,7 +1,14 @@
 import * as React from "react";
 import { ImageIcon } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { qk, useProjectCover } from "@/lib/hooks";
 import { loadThumb } from "@/features/projects/lib/agent-blob";
+import { isAutoCover, titleZoneStyle } from "../lib/cover-title";
+
+/** Tỉ lệ ô ảnh của thẻ. PHẢI khớp `aspect-[16/10]` bên dưới — `titleZoneStyle` dùng nó
+ *  để bù phần ảnh 16:9 bị `object-cover` cắt hai bên. */
+const BOX_ASPECT = 16 / 10;
 
 /**
  * ẢNH BÌA 16:10 của thẻ bộ kit (UX-V3 §1.1: «ảnh bo 16px, nền ô cờ»).
@@ -22,6 +29,7 @@ export function KitCover({
   coverPath,
   kitName,
   offline,
+  watchCover = false,
   className,
 }: {
   projectId: string;
@@ -29,25 +37,59 @@ export function KitCover({
   kitName: string;
   /** agent không sẵn sàng ⇒ đừng cả thử tải, hiện luôn khung «ảnh nằm trên máy bạn» */
   offline: boolean;
+  /**
+   * Dự án này CÓ THỂ đang được agent vẽ bìa ngầm ⇒ theo dõi cho tới khi xong.
+   * `KitCard` bật cờ này khi dự án đã từng chạy một lượt gen (xem chú thích bên dưới).
+   */
+  watchCover?: boolean;
   className?: string;
 }) {
+  const qc = useQueryClient();
   const [url, setUrl] = React.useState<string | null>(null);
   const [failed, setFailed] = React.useState(false);
 
+  /**
+   * ══ THẺ Ở HOME PHẢI TỰ HIỆN BÌA KHI AGENT VẼ XONG ═══════════════════════════
+   * Bìa là JOB PHỤ chạy NGẦM sau lượt gen (`agent/lib/run-handle.mjs` gọi
+   * `maybeAutoCover` ở `finish()`), mất vài chục giây và KHÔNG có event nào trong
+   * stream NDJSON của lượt chạy. Danh sách Home đã được invalidate lúc run xong —
+   * nhưng lúc đó bìa còn CHƯA CÓ, nên `project.cover` vẫn null và thẻ đứng nguyên ở
+   * ô «Chưa vẽ ảnh nào» cho tới khi người dùng tự F5. Trước đây chỉ `InfoForm` (màn
+   * cài đặt dự án) theo dõi việc này.
+   *
+   * VÌ SAO KHÔNG POLL CẢ TRANG: `useProjectCover` chỉ đặt `refetchInterval` khi
+   * `status === "running"` và tự tắt ngay khi xong. Cộng thêm ba cửa hẹp ở dưới,
+   * thẻ đã có bìa / dự án chưa từng gen / agent tắt đều KHÔNG gửi request nào; thẻ
+   * ứng viên gửi ĐÚNG MỘT request rồi thôi nếu bìa không ở trạng thái đang vẽ.
+   */
+  const watching = !coverPath && watchCover && !offline;
+  const cover = useProjectCover(watching ? projectId : null);
+  const livePath = cover.data?.status === "ok" ? (cover.data.path ?? null) : null;
+  /* Vẽ NGAY từ kết quả poll, không đợi vòng invalidate danh sách quay về — thứ người
+     dùng chờ là tấm ảnh, không phải một lần refetch. */
+  const shownPath = coverPath ?? livePath;
+
   React.useEffect(() => {
-    if (!coverPath || offline) return;
+    if (!watching || cover.data?.status !== "ok") return;
+    // Đồng bộ nguồn sự thật chung: `project.cover` nuôi cả `deriveStatus`, menu thẻ và
+    // mọi màn khác. Chạy MỘT lần cho mỗi lần bìa chuyển sang "ok" (query đã hết poll).
+    void qc.invalidateQueries({ queryKey: qk.projects.lists() });
+  }, [watching, cover.data?.status, qc]);
+
+  React.useEffect(() => {
+    if (!shownPath || offline) return;
     let alive = true;
     setFailed(false);
-    loadThumb(projectId, coverPath).then(
+    loadThumb(projectId, shownPath).then(
       (u) => alive && setUrl(u),
       () => alive && setFailed(true),
     );
     return () => {
       alive = false;
     };
-  }, [projectId, coverPath, offline]);
+  }, [projectId, shownPath, offline]);
 
-  const empty = !coverPath;
+  const empty = !shownPath;
   const showPlaceholder = empty || failed || offline || url === null;
 
   return (
@@ -67,14 +109,41 @@ export function KitCover({
           </span>
         </div>
       ) : (
-        <img
-          src={url}
-          alt={`Ảnh bìa của dự án ${kitName}`}
-          loading="lazy"
-          decoding="async"
-          onError={() => setFailed(true)}
-          className="size-full object-cover"
-        />
+        <>
+          <img
+            src={url}
+            alt={`Ảnh bìa của dự án ${kitName}`}
+            loading="lazy"
+            decoding="async"
+            onError={() => setFailed(true)}
+            className="size-full object-cover"
+          />
+          {/* ══ TÊN DỰ ÁN GHÉP LÊN ẢNH BÌA ═══════════════════════════════════════
+              CHỈ với ảnh bìa TỰ SINH: prompt của agent đã dặn model chừa trống đúng
+              hình chữ nhật này (`cover-title.ts` giữ toạ độ chung với agent). Ảnh bìa
+              do user tự chọn từ kit KHÔNG có chỗ chừa nào — đè chữ lên là che mất ô
+              họ chọn, nên `isAutoCover` là điều kiện bắt buộc.
+
+              Chữ nằm trên một CHIP NỀN ĐẶC (`bg-surface`) chứ không đặt thẳng lên ảnh:
+              đúng luật §8.3 và đúng lý lẽ ở KitCard ① — mọi lời hứa tương phản trên nền
+              một tấm ảnh bất kỳ đều là lời hứa không đo được. Với chip nền đặc thì cặp
+              màu là `surface`/`fg-strong`, đo tĩnh được như mọi chỗ khác trong app.
+
+              `aria-hidden`: tên dự án đã có ở `<h2>` của thẻ và ở `aria-label` — đọc
+              lần thứ ba là làm phiền người dùng trình đọc màn hình. */}
+          {isAutoCover(shownPath) && (
+            <div
+              data-cover-title
+              aria-hidden
+              style={titleZoneStyle(BOX_ASPECT)}
+              className="pointer-events-none absolute flex items-center overflow-hidden"
+            >
+              <span className="line-clamp-2 max-w-full rounded-2 bg-surface px-2 py-1 text-label text-fg-strong shadow-2">
+                {kitName}
+              </span>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
