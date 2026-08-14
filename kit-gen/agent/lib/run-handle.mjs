@@ -8,6 +8,7 @@ import { redactLine } from "./redact.mjs"
 import { projectDir } from "./projects-dir.mjs"
 import { resolveEngine, prepareEngine, materializeStyles, buildCommand, diagnose } from "./engine.mjs"
 import { maybeAutoCover } from "./cover.mjs"
+import { pythonCommand, killTree, winSpawnOpts } from "./platform.mjs"
 
 const HEARTBEAT_MS = 15000
 const MAX_BUFFER_EVENTS = 4000
@@ -149,7 +150,10 @@ export class RunHandle {
     this.phaseDone = new Promise(done => {
       const child = spawn(cmd, args, {
         cwd: pdir, detached: true, stdio: ["ignore", "pipe", "pipe"],
-        env: { ...process.env, ...env, PATH: process.env.PATH },
+        // `env.PATH` CHỈ tồn tại trên win32 (bashCommand thêm coreutils của Git-Bash).
+        // Trên darwin/linux buildCommand không bao giờ đặt PATH ⇒ biểu thức này = mã cũ.
+        env: { ...process.env, ...env, PATH: env.PATH ?? process.env.PATH },
+        ...winSpawnOpts(),
       })
       this.child = child
       const onLine = (raw, level) => {
@@ -227,8 +231,9 @@ export class RunHandle {
     const tool = join(pdir, "validate_output_geometry.py")
     if (!(await exists(tool))) return null
     const output = join(this.dir, "artifacts", `${job}.geometry.json`)
+    const py = pythonCommand([tool, "--image", png, "--contract", join(pdir, "contract.json"), "--job", job, "--output", output])
     return new Promise(resolve => {
-      const child = spawn("python3", [tool, "--image", png, "--contract", join(pdir, "contract.json"), "--job", job, "--output", output], { cwd: pdir, stdio: ["ignore", "pipe", "pipe"] })
+      const child = spawn(py.cmd, py.args, { cwd: pdir, stdio: ["ignore", "pipe", "pipe"], ...winSpawnOpts() })
       let text = ""
       child.stdout.on("data", b => { text += String(b) })
       child.on("error", () => resolve(null))
@@ -289,9 +294,9 @@ export class RunHandle {
     const killed = this.run.jobs.filter(j => j.status === "running").map(j => j.job)
     const kept = this.run.jobs.filter(j => j.status === "ok").length
     const hadChild = !!this.child
-    if (this.child?.pid) {
-      try { process.kill(-this.child.pid, "SIGTERM") } catch { try { this.child.kill("SIGTERM") } catch { /* đã chết */ } }
-    }
+    // killTree: POSIX = ĐÚNG mã cũ (process.kill(-pid) rồi rơi về child.kill);
+    // win32 = taskkill /T vì không có process group và codex là tiến trình CHÁU của bash.
+    if (this.child?.pid) killTree(this.child, "SIGTERM")
     this.emit({ type: "job.log", level: "warn", line: "đã yêu cầu dừng lượt chạy" })
     if (!hadChild) {
       // Chưa spawn: launch() thấy stopped() sẽ tự rút, không dựng lại thư mục project.
@@ -304,7 +309,7 @@ export class RunHandle {
       const timeout = new Promise(r => { const t = setTimeout(r, waitMs); t.unref?.() })
       await Promise.race([this.phaseDone ?? Promise.resolve(), timeout])
       if (this.child?.pid) {
-        try { process.kill(-this.child.pid, "SIGKILL") } catch { try { this.child.kill("SIGKILL") } catch { /* đã chết */ } }
+        killTree(this.child, "SIGKILL")
         const grace = new Promise(r => { const t = setTimeout(r, 300); t.unref?.() })
         await Promise.race([this.phaseDone ?? Promise.resolve(), grace])
       }

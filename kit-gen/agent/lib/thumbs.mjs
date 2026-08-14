@@ -6,13 +6,15 @@ import { execFile } from "node:child_process"
 import { createHash } from "node:crypto"
 import { join } from "node:path"
 import { ensureDir, exists, mtimeOf } from "./fsx.mjs"
+import { pythonCommand, winSpawnOpts } from "./platform.mjs"
 
 const ALLOWED_W = [128, 256, 512]
 let pillowOk = null
 
 function py(args, timeout = 15000) {
+  const c = pythonCommand(args)      // non-win: {cmd:"python3", args} — y hệt mã cũ
   return new Promise(resolve => {
-    execFile("python3", args, { timeout }, (err, stdout, stderr) =>
+    execFile(c.cmd, c.args, { timeout, ...winSpawnOpts() }, (err, stdout, stderr) =>
       resolve({ ok: !err, stdout: stdout ?? "", stderr: stderr ?? "" }))
   })
 }

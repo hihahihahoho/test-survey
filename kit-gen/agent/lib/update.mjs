@@ -2,11 +2,14 @@ import { spawn } from "node:child_process"
 import { readFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
+import { IS_WIN, defaultKitgenHome, winSpawnOpts } from "./platform.mjs"
 
 const MANIFEST_URL = process.env.KITGEN_RELEASE_MANIFEST || "https://raw.githubusercontent.com/hihahihahoho/test-survey/feat/kitgen-local-runtime/kit-gen/release.json"
 
 /** Lệnh cập nhật thủ công — nhãn rút gọn (KHÔNG bao giờ trả đường dẫn tuyệt đối ra web). */
-export const UPDATE_COMMAND = "~/.kitgen/bin/kitgen update"
+export const UPDATE_COMMAND = IS_WIN
+  ? "%LOCALAPPDATA%\\KitGen\\bin\\kitgen.cmd update"
+  : "~/.kitgen/bin/kitgen update"
 
 export function compareVersions(a, b) {
   const pa = String(a).split(/[.-]/).map(x => /^\d+$/.test(x) ? Number(x) : x)
@@ -88,7 +91,17 @@ export async function checkForUpdateSafe(opts = {}) {
 }
 
 /** Respond first, then let the service installer replace and restart this process. */
-export function scheduleUpdate({ kitgenHome = process.env.KITGEN_HOME || join(process.env.HOME || "", ".kitgen") } = {}) {
+export function scheduleUpdate({ kitgenHome = defaultKitgenHome() } = {}) {
+  if (IS_WIN) {
+    // Không có `sh` trên Windows. cmd.exe tách hẳn khỏi tiến trình agent (nó sắp bị
+    // installer thay và khởi động lại), `timeout` là bản Windows của `sleep 1`.
+    const cmd = join(kitgenHome, "bin", "kitgen.cmd")
+    const child = spawn(process.env.ComSpec || "cmd.exe",
+      ["/d", "/s", "/c", `timeout /t 1 /nobreak >nul & "${cmd}" update`],
+      { detached: true, stdio: "ignore", env: process.env, ...winSpawnOpts() })
+    child.unref()
+    return
+  }
   const cmd = join(kitgenHome, "bin", "kitgen")
   const child = spawn("sh", ["-c", "sleep 1; exec \"$1\" update", "kitgen-update", cmd], {
     detached: true, stdio: "ignore", env: process.env,

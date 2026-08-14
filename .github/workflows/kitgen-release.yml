@@ -48,8 +48,16 @@ jobs:
         run: node ../agent/test-agent.mjs
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+      # --workers=1 LÀ CỐ Ý, KHÔNG PHẢI "cho chắc".
+      # Hai ca @visual của trang Cài đặt đỏ NGẪU NHIÊN khi playwright chạy `fullyParallel`
+      # trên runner CI; chạy nối tiếp thì luôn xanh. Đã tái hiện trên baseline KHÔNG có
+      # patch nào ⇒ đây là flake của bộ e2e (nhiều tab cùng nói chuyện với một dev server
+      # vite duy nhất), không phải hồi quy của bản phát hành. Một lượt release đỏ vì flake
+      # tốn nhiều hơn vài phút chạy chậm.
+      # GỠ CỜ NÀY KHI: root cause của 2 ca @visual đã sửa và bộ e2e xanh 10 lượt liên tiếp
+      # ở chế độ song song (kiểm bằng `npx playwright test --repeat-each=10`).
       - name: Verify browser flows
-        run: npm run test:e2e
+        run: npm run test:e2e -- --workers=1
       - name: Resolve package version
         id: version
         working-directory: .

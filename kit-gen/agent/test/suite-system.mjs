@@ -4,7 +4,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, eq, ok, includes, stripComments, PAGES, CLIENT } from "./harness.mjs"
-import { VERSION } from "../server.mjs"
+import { PROTOCOL_VERSION } from "../server.mjs"
+import { readRuntimeVersion } from "../lib/update.mjs"
 
 export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
   // ─────────────────────────────────────────── 1. HEALTH
@@ -15,10 +16,23 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     eq(r.json.app, "kitgen-agent", "app")
     eq(r.json.protocol, 1, "protocol")
     eq(r.headers["x-kitgen-protocol"], "1", "X-KitGen-Protocol header")
-    eq(r.json.version, VERSION, "version")
+    eq(r.json.version, PROTOCOL_VERSION, "version")
     ok(r.json.workspaceId.startsWith("ws_"), "workspaceId opaque")
     ok(!r.text.includes(tmp), `KHÔNG được chứa đường dẫn tuyệt đối: ${r.json.workspaceLabel}`)
     ok(!/\/Users\//.test(r.text), "không chứa /Users/")
+  })
+
+  /* P2-12: field `version` là đời KHUNG agent, KHÔNG BAO GIỜ là version bản phát hành.
+     Luồng chờ sau update so version release ⇒ phải có field riêng nói đúng số đó,
+     nếu không "cập nhật thành công" mãi mãi bị đọc thành "vẫn đang chạy bản 1.2.0". */
+  await it("GET /health trả runtimeVersion = version BẢN PHÁT HÀNH, tách khỏi version khung", async () => {
+    const r = await api("GET", "/health")
+    const real = await readRuntimeVersion()
+    ok("runtimeVersion" in r.json, "health phải có field runtimeVersion")
+    eq(r.json.runtimeVersion, real, "runtimeVersion đúng bằng readRuntimeVersion()")
+    ok(r.json.runtimeVersion !== PROTOCOL_VERSION,
+      `runtimeVersion (${r.json.runtimeVersion}) KHÔNG được là version khung (${PROTOCOL_VERSION})`)
+    ok(/^\d+\.\d+\.\d+/.test(String(r.json.runtimeVersion)), "trông như một version phát hành")
   })
   await it("GET /api/doctor chỉ trả enum + boolean, không có nội dung auth", async () => {
     const r = await api("GET", "/api/doctor")

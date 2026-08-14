@@ -35,6 +35,7 @@ import { projectDir } from "./projects-dir.mjs"
 import { readProject, saveProject } from "./projects.mjs"
 import { readContract } from "./contract.mjs"
 import { resolveEngine } from "./engine.mjs"
+import { bashCommand, winSpawnOpts } from "./platform.mjs"
 
 /** Thư mục + đường dẫn tương đối của ảnh bìa tự sinh. `files.mjs` mở đúng thư mục này. */
 export const COVER_DIR = "cover"
@@ -373,10 +374,13 @@ export async function startCover(ws, id, { imgHome = null, wait = false, force =
     const env = { ...process.env, PATH: process.env.PATH }
     if (imgHome) env.IMG_HOME = String(imgHome)
     const lines = []
+    // darwin/linux: bashCommand trả đúng {cmd:"bash", args:[script, pdir], env:{}} như mã cũ.
+    // win32: bash.exe của Git for Windows, path đổi sang /c/… (cover.sh `cd "$1"`), PATH có coreutils.
+    const b = bashCommand([script, pdir])
     await new Promise(resolve => {
       let child
       try {
-        child = spawn("bash", [script, pdir], { cwd: pdir, stdio: ["ignore", "pipe", "pipe"], env })
+        child = spawn(b.cmd, b.args, { cwd: pdir, stdio: ["ignore", "pipe", "pipe"], env: { ...env, ...b.env }, ...winSpawnOpts() })
       } catch { return resolve() }
       const onData = buf => { lines.push(redactLine(String(buf))) }
       child.stdout.on("data", onData)
@@ -443,5 +447,44 @@ export async function maybeAutoCover(ws, id, { imgHome = null, wait = false } = 
 
 /** Dùng bởi DELETE project: quên job đang chạy để không ghi lại vào thư mục đã sang thùng rác. */
 export function forgetCover(ws, id) { running.delete(keyOf(ws, id)) }
+
+/**
+ * DỌN META MỒ CÔI LÚC BOOT — `cover.json` kẹt `"running"` mà không còn job nào chạy.
+ *
+ * Sổ `running` ở trên là Map trong BỘ NHỚ của một tiến trình. Agent bị thay giữa lúc vẽ
+ * (update, reboot, kill) thì `cover.json` nằm lại trên đĩa với `status:"running"` và
+ * KHÔNG BAO GIỜ có ai ghi tiếp — `coverStatus` sẽ trả "none" mãi mãi (vì chỉ `failed`
+ * mới được đọc từ meta), người dùng không thấy lỗi cũng không thấy ảnh.
+ *
+ * Chỉ gọi lúc KHỞI ĐỘNG, khi `running` chắc chắn rỗng: gọi lúc đang chạy sẽ giết meta
+ * của job thật đang vẽ. Vẫn kiểm `coverRunning()` cho từng project để lời hứa đó được
+ * ghi thành mã, không chỉ ghi thành lời.
+ *
+ * Đánh `failed` là ĐỦ và KHÔNG ghi đè ảnh đang có: `coverStatus` ưu tiên "có file ảnh"
+ * hơn meta, nên project đã vẽ xong từ lượt trước vẫn hiện "ok" như cũ.
+ *
+ * @returns {Promise<string[]>} id các project vừa được dọn.
+ */
+export async function sweepOrphanCovers(ws) {
+  const { readdir } = await import("node:fs/promises")
+  const ents = await readdir(ws.projectsDir, { withFileTypes: true }).catch(() => [])
+  const swept = []
+  for (const e of ents) {
+    if (!e.isDirectory()) continue
+    const id = e.name
+    if (coverRunning(ws, id)) continue
+    const meta = await readCoverMeta(ws, id)
+    if (meta?.status !== "running") continue
+    await writeCoverMeta(ws, id, {
+      ...meta,
+      status: "failed",
+      finishedAt: new Date().toISOString(),
+      updatedAt: null,
+      error: "INTERRUPTED",
+    }).catch(() => null)
+    swept.push(id)
+  }
+  return swept
+}
 
 export { coverSlotFree }

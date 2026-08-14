@@ -22,6 +22,7 @@ import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
 import { exists, writeJsonAtomic, ensureDir, copyFile } from "./fsx.mjs"
+import { IS_WIN, bashCommand, pythonCommand } from "./platform.mjs"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO_DIR = resolve(HERE, "..", "..")
@@ -58,7 +59,9 @@ export async function prepareEngine(engineDir, projectDirAbs) {
     }
     const dst = join(projectDirAbs, f.name)
     await copyFile(src, dst)
-    if (f.mode) { const { chmod } = await import("node:fs/promises"); await chmod(dst, f.mode) }
+    // Bit thực thi không tồn tại trên NTFS: Node chmod ở đó chỉ lật cờ read-only.
+    // Bỏ hẳn trên win32 để không có tác dụng phụ nào ngoài ý muốn (gate: darwin/linux giữ nguyên).
+    if (f.mode && !IS_WIN) { const { chmod } = await import("node:fs/promises"); await chmod(dst, f.mode) }
     placed.push(f.name)
   }
   return placed
@@ -137,10 +140,19 @@ export function buildCommand(kind, projectDirAbs, { variants = [], maxJobs = 4, 
       env.IMG_HOME = raw.startsWith("~") ? join(homedir(), raw.slice(1)) : raw
     }
     // KHÔNG truyền argv filter: styles.json đã thu hẹp đúng tập job (filter của gen.sh là substring)
-    return { cmd: "bash", args: [join(projectDirAbs, "gen.sh")], env }
+    // bashCommand(): darwin/linux trả ĐÚNG {cmd:"bash", args:[abs], env:{}} như trước;
+    // win32 trả bash.exe của Git for Windows + path dạng /c/… + PATH có coreutils.
+    const b = bashCommand([join(projectDirAbs, "gen.sh")])
+    return { cmd: b.cmd, args: b.args, env: { ...env, ...b.env } }
   }
-  if (kind === "slice") return { cmd: "python3", args: [join(projectDirAbs, "slice.py"), ...variants], env }
-  if (kind === "skeleton") return { cmd: "python3", args: [join(projectDirAbs, "skeleton.py")], env }
+  if (kind === "slice") {
+    const p = pythonCommand([join(projectDirAbs, "slice.py"), ...variants])
+    return { cmd: p.cmd, args: p.args, env }
+  }
+  if (kind === "skeleton") {
+    const p = pythonCommand([join(projectDirAbs, "skeleton.py")])
+    return { cmd: p.cmd, args: p.args, env }
+  }
   throw new Error(`unknown run kind ${kind}`)
 }
 

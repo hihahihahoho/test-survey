@@ -7,7 +7,7 @@
  *  ③ prompt nêu ĐÚNG TOẠ ĐỘ vùng tiêu đề và CẤM vẽ chữ;
  *  ④ ảnh bìa hỏng KHÔNG kéo lượt gen xuống thất bại, và không cướp ảnh bìa user tự chọn.
  */
-import { readFile, writeFile } from "node:fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import {
   describe, it, eq, ok, includes, waitFor, pathExists,
@@ -254,6 +254,52 @@ export async function run({ api, wsRoot, agentDir }) {
     eq(st.json.cover.error, "NO_ARTIFACT", "chẩn đoán")
     const p = await a("GET", `/api/projects/${id}`)
     eq(p.json.project.cover, null, "KHÔNG trỏ project.cover vào một ảnh không tồn tại")
+    await a("DELETE", `/api/projects/${id}`)
+  })
+
+  /* P2-9: job vẽ bìa chỉ sống trong Map bộ nhớ. Agent bị thay giữa lúc vẽ (update/reboot)
+     thì cover.json nằm lại "running" và KHÔNG ai ghi tiếp — coverStatus trả "none" mãi
+     mãi, người dùng không thấy lỗi cũng không thấy ảnh. Boot phải dọn. */
+  await it("meta mồ côi 'running' sau khi agent bị thay → boot đánh failed/INTERRUPTED", async () => {
+    const created = await api("POST", "/api/projects", {
+      body: { name: "Bia mo coi", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
+    })
+    const id = created.json.project.id
+    const metaPath = join(wsRoot, "projects", id, "cover", "cover.json")
+    await mkdir(join(wsRoot, "projects", id, "cover"), { recursive: true })
+    await writeFile(metaPath, JSON.stringify({
+      status: "running", startedAt: "2026-08-13T10:00:00.000Z",
+      finishedAt: null, updatedAt: null, error: null,
+    }))
+    // Trước khi có bản vá: "running" trên đĩa không được đọc ⇒ UI thấy "none" vĩnh viễn.
+    eq((await api("GET", `/api/projects/${id}/cover`)).json.cover.status, "none", "trạng thái kẹt trước khi boot lại")
+
+    // Tiến trình MỚI lên (chính là lúc chắc chắn không job nào của lượt trước còn sống).
+    const fresh = await agentWithEngine("engine-fake")
+    const st = await fresh("GET", `/api/projects/${id}/cover`)
+    eq(st.json.cover.status, "failed", "meta mồ côi được kết luận là hỏng")
+    eq(st.json.cover.error, "INTERRUPTED", "nói đúng lý do: bị cắt ngang")
+    ok(JSON.parse(await readFile(metaPath, "utf8")).finishedAt, "ghi luôn mốc kết thúc để không dọn lại lần sau")
+
+    // Boot lần nữa KHÔNG được đổi gì thêm (đã failed thì thôi).
+    const again = await agentWithEngine("engine-fake")
+    eq((await again("GET", `/api/projects/${id}/cover`)).json.cover.error, "INTERRUPTED", "boot lại vẫn giữ nguyên kết luận")
+    await api("DELETE", `/api/projects/${id}`)
+  })
+
+  await it("boot KHÔNG động vào project đã vẽ xong: meta 'ok' và ảnh thật giữ nguyên", async () => {
+    const a = await agentWithEngine("engine-fake")
+    const created = await a("POST", "/api/projects", {
+      body: { name: "Bia da xong", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
+    })
+    const id = created.json.project.id
+    await a("POST", `/api/projects/${id}/cover`)
+    await waitFor(async () => (await a("GET", `/api/projects/${id}/cover`)).json.cover.status === "ok", 15000, "vẽ xong")
+
+    const fresh = await agentWithEngine("engine-fake")
+    const st = await fresh("GET", `/api/projects/${id}/cover`)
+    eq(st.json.cover.status, "ok", "vẫn ok sau khi boot lại")
+    eq(st.json.cover.path, COVER_REL, "ảnh vẫn đó")
     await a("DELETE", `/api/projects/${id}`)
   })
 

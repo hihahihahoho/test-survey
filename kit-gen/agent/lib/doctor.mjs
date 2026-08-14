@@ -9,17 +9,24 @@ import { join } from "node:path"
 import { statfs } from "node:fs/promises"
 import { exists } from "./fsx.mjs"
 import { shortenPath } from "./redact.mjs"
+import { pythonCommand, winShellOpts, winSpawnOpts } from "./platform.mjs"
 
 const CACHE_MS = 60_000
 let cache = { at: 0, data: null }
 const CODEX = process.env.KITGEN_CODEX_BIN || "codex"
 
 function run(cmd, args, { timeout = 6000, env = {} } = {}) {
+  // winShellOpts/winSpawnOpts trả {} trên darwin/linux ⇒ options y hệt mã cũ.
+  // Trên win32, codex do npm cài là `codex.cmd` mà Node ≥18.20 chỉ chạy được khi shell:true.
+  const extra = { ...winSpawnOpts(), ...winShellOpts(cmd) }
   return new Promise(resolve => {
-    execFile(cmd, args, { timeout, env: { ...process.env, ...env }, maxBuffer: 4 << 20 },
+    execFile(cmd, args, { timeout, env: { ...process.env, ...env }, maxBuffer: 4 << 20, ...extra },
       (err, stdout, stderr) => resolve({ ok: !err, code: err?.code ?? 0, stdout: stdout ?? "", stderr: stderr ?? "" }))
   })
 }
+
+/** python3 trên Unix; python.exe của venv (KITGEN_PYTHON) trên Windows. */
+function runPy(args, opts) { const c = pythonCommand(args); return run(c.cmd, c.args, opts) }
 
 async function firstLineVersion(cmd, args = ["--version"]) {
   const r = await run(cmd, args, { timeout: 5000 })
@@ -30,16 +37,16 @@ async function firstLineVersion(cmd, args = ["--version"]) {
 }
 
 async function pythonInfo() {
-  const v = await firstLineVersion("python3")
+  const v = await firstLineVersion(pythonCommand().cmd)
   if (!v.ok) return { ok: false, version: null, venv: false, deps: {} }
-  const probe = await run("python3", ["-c",
+  const probe = await runPy(["-c",
     "import importlib.util as u,json;print(json.dumps({m:(u.find_spec(m) is not None) for m in ['PIL','numpy','torch','transformers']}))"])
   let deps = {}
   try {
     const raw = JSON.parse(probe.stdout.trim() || "{}")
     deps = { pillow: !!raw.PIL, numpy: !!raw.numpy, torch: !!raw.torch, transformers: !!raw.transformers }
   } catch { deps = { pillow: false, numpy: false, torch: false, transformers: false } }
-  const venvProbe = await run("python3", ["-c", "import sys;print('1' if sys.prefix!=sys.base_prefix else '0')"])
+  const venvProbe = await runPy(["-c", "import sys;print('1' if sys.prefix!=sys.base_prefix else '0')"])
   return { ok: true, version: v.version, venv: venvProbe.stdout.trim() === "1", deps }
 }
 

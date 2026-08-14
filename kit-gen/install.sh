@@ -71,6 +71,92 @@ progress(){ printf '\n[%s] %s\n' "$1" "$2"; }
 check_ok(){ printf '  OK   %s\n' "$1"; }
 check_warn(){ printf '  WARN %s\n' "$1" >&2; }
 
+# Mỗi lượt cài để lại một bản đầy đủ (~2.6MB) trong $KITGEN_HOME/releases và KHÔNG ai
+# dọn — máy chủ SP đã tích 20 bản. Giữ bản ĐANG CHẠY + KEEP_ROLLBACKS bản gần nhất
+# trước đó (đủ để lùi tay khi bản mới hỏng), xoá phần còn lại.
+#
+# Bản đang chạy được nhận diện qua ĐƯỜNG DẪN THẬT của symlink `current`, không qua
+# $VERSION: nếu health check hỏng và script đã trỏ `current` về bản cũ thì bản cũ đó
+# mới là bản phải giữ. (Đường rollback thoát bằng `exit 1` trước khi tới đây, nên đây
+# chỉ là lớp chắn thứ hai — nhưng xoá nhầm bản đang chạy là hỏng máy người dùng, không
+# phải phiền một chút.)
+# ═══════════════════════════════════════════════════════════════════════════════
+# ĐƯỜNG DẪN CODEX GHI VÀO config.env — hai cái bẫy đã cắn NGƯỜI DÙNG THẬT.
+#
+# Hợp đồng: giá trị ghi ra phải là một file TÊN ĐÚNG `codex`, nằm trong thư mục sống
+# lâu hơn phiên shell, và chạy được khi launchd không thừa kế PATH của shell.
+#
+#  ① `command -v codex` trong shell fnm trả shim EPHEMERAL
+#     ~/.local/state/fnm_multishells/<pid>_<ts>/bin/codex — thư mục chết theo phiên
+#     shell ⇒ gen hỏng sau reboot.
+#  ② Bản vá đầu tiên cho ① realpath THẲNG FILE, ra
+#     .../lib/node_modules/@openai/codex/bin/codex.js — đường dẫn bền nhưng SAI TÊN.
+#     `bin/kitgen` lấy `dirname` của nó prepend vào PATH, còn engine gọi `codex` TRẦN
+#     ⇒ thư mục đó không có file nào tên `codex` ⇒ rc=127 cho MỌI job, hiện ra UI
+#     thành "chạy xong nhưng ảnh không được ghi". Hỏng 100% lượt gen trên máy chủ chủ
+#     sản phẩm ngày 14/08. Bền ≠ dùng được: phải kiểm cả TÊN, không chỉ sự tồn tại.
+#
+# Nên: realpath THƯ MỤC chứa shim rồi ghép `/codex`. Với fnm multishell, thư mục đó
+# gỡ ra thành `<fnm>/node-versions/<v>/installation/bin` — ổn định, có sẵn symlink tên
+# `codex`, và có cả `node` nằm cạnh nên shebang `#!/usr/bin/env node` cũng chạy được.
+# Không đạt thì tự dựng shim tên `codex` trong $KITGEN_HOME/tools/bin (do KitGen sở
+# hữu, không phụ thuộc cách người dùng cài node).
+realpath_of(){ python3 -c 'import os,sys;print(os.path.realpath(sys.argv[1]))' "$1" 2>/dev/null || printf '%s' "$1"; }
+
+write_codex_shim(){
+  mkdir -p "$KITGEN_HOME/tools/bin"
+  _shim="$KITGEN_HOME/tools/bin/codex"
+  # File .js KHÔNG tự chạy được dưới launchd (shebang `env node` cần node trong PATH),
+  # nên shim gọi thẳng Node riêng của KitGen.
+  case "$1" in
+    *.js|*.mjs|*.cjs) printf '#!/bin/sh\nexec "%s" "%s" "$@"\n' "$NODE" "$1" > "$_shim" ;;
+    *)                printf '#!/bin/sh\nexec "%s" "$@"\n' "$1" > "$_shim" ;;
+  esac
+  chmod +x "$_shim"
+  printf '%s' "$_shim"
+}
+
+resolve_codex_bin(){
+  _raw="$1"
+  _dir="$(realpath_of "$(dirname "$_raw")")"
+  # realpath phải GỠ được lớp ephemeral; còn dấu vết fnm_multishells nghĩa là không gỡ
+  # được (thiếu python3 chẳng hạn) ⇒ tuyệt đối không ghi đường dẫn đó ra config.env.
+  case "$_dir" in *fnm_multishells*) _dir="" ;; esac
+  if [ -n "$_dir" ] && [ -x "$_dir/codex" ] && "$_dir/codex" --version >/dev/null 2>&1; then
+    printf '%s' "$_dir/codex"; return 0
+  fi
+  _target="$(realpath_of "$_raw")"
+  if [ "$(basename "$_target")" = codex ] && [ -x "$_target" ] && "$_target" --version >/dev/null 2>&1; then
+    printf '%s' "$_target"; return 0
+  fi
+  write_codex_shim "$_target"
+}
+# ═══════════════════════════════════════════════════════════════════════════════
+
+KEEP_ROLLBACKS=2
+prune_releases(){
+  [ -d "$KITGEN_HOME/releases" ] || return 0
+  CURRENT_REAL="$(CDPATH= cd -- "$KITGEN_HOME/current" 2>/dev/null && pwd -P || printf '')"
+  keep_left="$KEEP_ROLLBACKS"
+  removed=""
+  removed_n=0
+  # -t: mới nhất trước. Tên thư mục là VERSION đã được kiểm ký tự nên không có khoảng trắng.
+  for d in $(ls -1dt "$KITGEN_HOME"/releases/* 2>/dev/null || true); do
+    [ -d "$d" ] || continue
+    real="$(CDPATH= cd -- "$d" && pwd -P)"
+    [ "$real" != "$CURRENT_REAL" ] || continue
+    if [ "$keep_left" -gt 0 ]; then keep_left=$((keep_left - 1)); continue; fi
+    rm -rf "$d" || continue
+    removed="$removed $(basename "$d")"
+    removed_n=$((removed_n + 1))
+  done
+  if [ "$removed_n" -gt 0 ]; then
+    check_ok "dọn $removed_n bản cũ trong $KITGEN_HOME/releases:$removed"
+  else
+    check_ok "không có bản cũ nào cần dọn trong $KITGEN_HOME/releases"
+  fi
+}
+
 # Default installs always reuse the user's normal Codex profile. A separate
 # image profile can be selected later from the runtime status popover.
 case "$CODEX_PROFILE" in default|separate) ;; *) echo "Invalid Codex profile: $CODEX_PROFILE" >&2; exit 2 ;; esac
@@ -140,7 +226,7 @@ is_release "$CANDIDATE" || { echo "Invalid KitGen runtime archive." >&2; exit 1;
 VERSION="$(cat "$CANDIDATE/VERSION")"
 case "$VERSION" in *[!0-9A-Za-z._-]*|'') echo "Invalid runtime version." >&2; exit 1 ;; esac
 DEST="$KITGEN_HOME/releases/$VERSION"
-progress "1/6" "Kiểm tra gói cài đặt"
+progress "1/7" "Kiểm tra gói cài đặt"
 check_ok "runtime $VERSION và checksum hợp lệ"
 NEW="$DEST.new"
 rm -rf "$NEW"
@@ -171,7 +257,7 @@ if [ "$MAJOR" -lt 20 ]; then
   tar -xzf "$TMP/$NODE_PKG" -C "$KITGEN_HOME/tools/node" --strip-components=1
   NODE="$KITGEN_HOME/tools/node/bin/node"
 fi
-progress "2/6" "Health check môi trường nền"
+progress "2/7" "Health check môi trường nền"
 check_ok "Node $($NODE --version 2>/dev/null || printf '>=20') · $NODE"
 command -v python3 >/dev/null 2>&1 || { echo "Python 3 is required." >&2; exit 1; }
 check_ok "$(python3 --version 2>&1) · $(command -v python3)"
@@ -190,7 +276,7 @@ VENV="$WORKSPACE/.venv"
 
 # Prefer an existing healthy Codex CLI. Persisting its absolute path means the
 # background service does not depend on launchd/systemd inheriting the shell PATH.
-progress "3/6" "Health check Codex CLI"
+progress "3/7" "Health check Codex CLI"
 SYSTEM_CODEX="$(command -v codex 2>/dev/null || true)"
 if [ -n "$SYSTEM_CODEX" ] && [ -x "$SYSTEM_CODEX" ] && "$SYSTEM_CODEX" --version >/dev/null 2>&1; then
   CODEX_BIN="$SYSTEM_CODEX"
@@ -207,6 +293,11 @@ else
   CODEX_BIN="$KITGEN_HOME/tools/node_modules/.bin/codex"
 fi
 [ -x "$CODEX_BIN" ] && "$CODEX_BIN" --version >/dev/null 2>&1 || { echo "Codex CLI health check failed after installation." >&2; exit 1; }
+# Đường vừa dò được có thể là shim ephemeral của shell — quy về đường bền + ĐÚNG TÊN
+# trước khi bất cứ ai ghi nó ra đĩa (xem khối resolve_codex_bin ở đầu file).
+CODEX_BIN="$(resolve_codex_bin "$CODEX_BIN")"
+"$CODEX_BIN" --version >/dev/null 2>&1 || { echo "Resolved Codex path does not run: $CODEX_BIN" >&2; exit 1; }
+check_ok "đường dẫn Codex bền vững và đúng tên: $CODEX_BIN"
 
 # Playwright renders the HTML/SVG skeleton at full fidelity. Install it inside
 # KitGen's private tool prefix so users never need a global npm package.
@@ -214,7 +305,7 @@ if ! NODE_PATH="$KITGEN_HOME/tools/node_modules" "$NODE" -e "require.resolve('pl
   echo "Installing Playwright..."
   "$(dirname "$NODE")/npm" install --silent --prefix "$KITGEN_HOME/tools" playwright
 fi
-progress "4/6" "Health check trình dựng ảnh"
+progress "4/7" "Health check trình dựng ảnh"
 PLAYWRIGHT_BROWSERS_PATH="$KITGEN_HOME/tools/playwright-browsers" \
   "$KITGEN_HOME/tools/node_modules/.bin/playwright" install --only-shell >/dev/null
 # App chỉ render skeleton ở chế độ headless → chỉ cần chromium_headless_shell (~196MB).
@@ -251,10 +342,6 @@ with open(tmp, "w") as f: json.dump(cfg, f, indent=2); f.write("\n")
 os.replace(tmp, p)
 PY
 cp "$DEST/install.sh" "$KITGEN_HOME/install.sh"
-# `command -v codex` trong shell fnm trả về symlink tạm ~/.local/state/fnm_multishells/<pid>_<ts>/
-# — thư mục này chết theo phiên shell, ghi vào config.env là gen hỏng sau reboot.
-# Ghi realpath để đường dẫn sống bền qua các phiên.
-CODEX_BIN="$(python3 -c 'import os,sys;print(os.path.realpath(sys.argv[1]))' "$CODEX_BIN" 2>/dev/null || echo "$CODEX_BIN")"
 cat > "$KITGEN_HOME/config.env" <<CFG
 KITGEN_HOME='$KITGEN_HOME'
 KITGEN_SOURCE='$KITGEN_HOME/current'
@@ -272,7 +359,7 @@ KITGEN_CODEX_PROFILE='$CODEX_PROFILE'
 CFG
 chmod 600 "$KITGEN_HOME/config.env"
 BIN="$KITGEN_HOME/bin/kitgen"
-progress "5/6" "Đăng ký dịch vụ local"
+progress "5/7" "Đăng ký dịch vụ local"
 if [ "$NO_START" -eq 0 ]; then
   if [ "$(uname -s)" = Darwin ]; then
     PLIST="$HOME/Library/LaunchAgents/com.kitgen.agent.plist"
@@ -316,18 +403,35 @@ if [ "$NO_START" -eq 0 ]; then
     fi
     exit 1
   fi
-  progress "6/6" "Health check dịch vụ"
+  progress "6/7" "Health check dịch vụ"
   check_ok "agent phản hồi tại http://127.0.0.1:$PORT/health"
 else
-  progress "6/6" "Bỏ qua health check dịch vụ (--no-start)"
+  progress "6/7" "Bỏ qua health check dịch vụ (--no-start)"
 fi
-echo "KitGen $VERSION installed: $DEST"
-echo "Command: $BIN"
-echo "Open: http://127.0.0.1:$PORT/app/"
+progress "7/7" "Dọn bản cũ"
+prune_releases
+
+# TỔNG KẾT "MỌI THỨ NẰM ĐÂU".
+#
+# Script này KHÔNG cài vào thư mục đang đứng: nó cài vào $KITGEN_HOME và tạo dữ liệu ở
+# $WORKSPACE. Người tải file về một folder tạm rồi chạy sẽ thấy folder đó vẫn rỗng và
+# tưởng cài hỏng (đã xảy ra thật với chủ sản phẩm). Nói thẳng ra bốn đường dẫn + lệnh
+# cập nhật, ngay trước dòng nhắc đăng nhập, là rẻ hơn mọi lời giải thích sau đó.
+echo ""
+echo "  KitGen $VERSION đã cài xong."
+echo ""
+echo "  Ứng dụng      http://127.0.0.1:$PORT/app/   ← mở cái này"
+echo "  Dữ liệu       $WORKSPACE   (project, kit, ảnh — thứ cần sao lưu)"
+echo "  Bản chạy      $KITGEN_HOME   (runtime, log, Node/Codex/Chromium riêng)"
+echo "                 bản $VERSION: $DEST"
+echo "  Origin        $ORIGIN"
+echo "  Lệnh          $BIN {start|stop|restart|status|logs|open}"
+echo "  Cập nhật      $BIN update"
+echo ""
 if [ "$CODEX_PROFILE" = "separate" ] && [ ! -f "$HOME/.codex-img/auth.json" ]; then
-  echo "Login for the separate image profile: CODEX_HOME=$HOME/.codex-img codex login"
+  echo "  Còn một bước: CODEX_HOME=$HOME/.codex-img codex login"
 elif [ ! -f "$HOME/.codex/auth.json" ]; then
-  echo "One step remains: $CODEX_BIN login"
+  echo "  Còn một bước: $CODEX_BIN login"
 else
-  echo "Image profile: Codex default (~/.codex)"
+  echo "  Hồ sơ tạo ảnh: Codex mặc định (~/.codex)"
 fi

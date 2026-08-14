@@ -10,8 +10,36 @@ PORT="${KITGEN_PORT:-8765}"
 ORIGIN="${KITGEN_ORIGIN:-http://127.0.0.1:$PORT}"
 NODE="${KITGEN_NODE:-$(command -v node 2>/dev/null || true)}"
 CODEX_BIN="${KITGEN_CODEX_BIN:-$(command -v codex 2>/dev/null || true)}"
+# LỚP PHÒNG THỦ CHO config.env ĐỜI CŨ (sự cố 14/08, hỏng 100% lượt gen).
+#
+# PATH của agent được dựng bằng `dirname "$CODEX_BIN"`, còn engine gọi `codex` TRẦN.
+# Hợp đồng ngầm đó chỉ đúng khi CODEX_BIN có TÊN là `codex`. install.sh 2.1.19 ghi
+# `.../@openai/codex/bin/codex.js` ⇒ thư mục đưa vào PATH không có file nào tên `codex`
+# ⇒ rc=127 cho mọi job, UI báo "chạy xong nhưng ảnh không được ghi".
+#
+# install.sh mới đã ghi đúng, nhưng máy đang cài bản cũ chỉ nạp bin/kitgen mới sau khi
+# update — mà update thì lại cần gen chạy được để người dùng còn tin. Nên tự chữa ở đây:
+# ưu tiên file `codex` nằm cạnh, không có thì dựng shim của riêng KitGen. Im lặng khi
+# không ghi được (ổ đĩa chỉ đọc): tệ nhất là giữ nguyên hành vi cũ, không làm hỏng thêm.
+ensure_codex_name() {
+  [ -n "$CODEX_BIN" ] || return 0
+  [ "$(basename "$CODEX_BIN")" != codex ] || return 0
+  sibling="$(dirname "$CODEX_BIN")/codex"
+  if [ -x "$sibling" ]; then CODEX_BIN="$sibling"; return 0; fi
+  shim="$HOME_DIR/tools/bin/codex"
+  if [ ! -x "$shim" ] || ! grep -qsF -- "$CODEX_BIN" "$shim"; then
+    mkdir -p "$HOME_DIR/tools/bin" 2>/dev/null || return 0
+    case "$CODEX_BIN" in
+      *.js|*.mjs|*.cjs) printf '#!/bin/sh\nexec "%s" "%s" "$@"\n' "$NODE" "$CODEX_BIN" > "$shim" 2>/dev/null || return 0 ;;
+      *)                printf '#!/bin/sh\nexec "%s" "$@"\n' "$CODEX_BIN" > "$shim" 2>/dev/null || return 0 ;;
+    esac
+    chmod +x "$shim" 2>/dev/null || return 0
+  fi
+  CODEX_BIN="$shim"
+}
 agent_cmd() {
   [ -n "$NODE" ] || { echo "KitGen: Node runtime not found. Run install.sh again." >&2; exit 1; }
+  ensure_codex_name
   NODE_DIR="$(dirname "$NODE")"
   CODEX_DIR="$(dirname "$CODEX_BIN")"
   exec env PATH="$WORKSPACE/.venv/bin:$NODE_DIR:$CODEX_DIR:$PATH" \

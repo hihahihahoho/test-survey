@@ -16,6 +16,7 @@ import { execFile } from "node:child_process"
 import { randomBytes } from "node:crypto"
 import { platform } from "node:os"
 import { resolve } from "node:path"
+import { pathToFileURL } from "node:url"
 
 import { AgentError, toAgentError } from "./lib/errors.mjs"
 import { sendJson, sendText, sendEmpty, sendError, sendFile } from "./lib/http.mjs"
@@ -40,9 +41,22 @@ import { register as registerCover } from "./routes/cover.mjs"
 import { register as registerDocs } from "./routes/docs.mjs"
 import { register as registerApp } from "./routes/app.mjs"
 import { register as registerLibrary } from "./routes/library.mjs"
+import { sweepOrphanCovers } from "./lib/cover.mjs"
+import { readRuntimeVersion } from "./lib/update.mjs"
 
-export const VERSION = "1.2.0"
-export const BUILD_ID = "agent-" + VERSION
+/**
+ * VERSION NỘI BỘ CỦA BUNDLE AGENT — **KHÔNG PHẢI** version bản phát hành.
+ *
+ * Tên cũ của hằng này là `VERSION`, và cái tên đó đã tốn của người dùng một lượt cập
+ * nhật: `/health` trả nó ở field `version`, luồng chờ sau update lại so field đó với
+ * version RELEASE (2.1.x) ⇒ cài xong vẫn báo "vẫn đang chạy bản 1.2.0". Số này chưa
+ * bao giờ được bump và cũng KHÔNG nên bump theo release: nó chỉ đánh dấu đời của bộ
+ * khung agent. Version thật của runtime đọc bằng `readRuntimeVersion()` (file VERSION
+ * của bản đã cài → `webapp/package.json` khi chạy từ source) và đi ra `/health` ở field
+ * `runtimeVersion`. Đặt tên PROTOCOL_VERSION để đời sau không lặp lại nhầm lẫn đó.
+ */
+export const PROTOCOL_VERSION = "1.2.0"
+export const BUILD_ID = "agent-" + PROTOCOL_VERSION
 
 /** Trần kích thước body (§3.4 lớp 9). Vượt → 413 TOO_LARGE. */
 const DEFAULT_LIMITS = { json: 25 << 20, upload: 200 << 20, refFile: 20 << 20 }
@@ -83,7 +97,7 @@ export function parseArgs(argv) {
   return out
 }
 
-const HELP = `kitgen-agent ${VERSION}
+const HELP = `kitgen-agent ${PROTOCOL_VERSION}
 
   node agent/server.mjs [tuỳ chọn]
 
@@ -103,7 +117,19 @@ export async function createAgent(opts = {}) {
   const cliWorkspaces = opts.workspaces?.length ? opts.workspaces : []
   const activeRoot = cliWorkspaces[0] ?? defaultWorkspaceRoot()
   const registry = new WorkspaceRegistry(cliWorkspaces, activeRoot)
-  for (const w of registry.map.values()) await w.init()
+  for (const w of registry.map.values()) {
+    await w.init()
+    /* Job vẽ bìa chỉ sống trong Map bộ nhớ của tiến trình này (lib/cover.mjs). Tiến trình
+       TRƯỚC chết giữa lúc vẽ (update, reboot, kill) thì cover.json còn nguyên "running"
+       mà không còn ai chạy — UI quay vòng vĩnh viễn. Boot là chỗ DUY NHẤT biết chắc
+       "không job nào của lượt trước còn sống", nên dọn ở đây. KHÔNG được ném: một
+       workspace hỏng quyền đọc không đáng để agent không khởi động nổi. */
+    await sweepOrphanCovers(w).catch(() => {})
+  }
+
+  /* Đọc MỘT LẦN lúc boot, không đọc lại mỗi nhịp /health: file VERSION chỉ đổi khi bản
+     mới được cài, mà cài xong thì tiến trình này đã bị thay bằng tiến trình khác. */
+  const runtimeVersion = await readRuntimeVersion().catch(() => null)
 
   const label = instanceLabel()
   const confirm = new ConfirmCodes(opts.print ?? (s => process.stdout.write(String(s) + "\n")))
@@ -161,7 +187,7 @@ export async function createAgent(opts = {}) {
 
       const ctx = {
         req, res, url, params: hit.params, registry, runs, uploads, confirm,
-        origins: originSet, limits: LIMITS, version: VERSION, buildId: BUILD_ID,
+        origins: originSet, limits: LIMITS, version: PROTOCOL_VERSION, runtimeVersion, buildId: BUILD_ID,
         instanceLabel: label, appRootOverride: opts.appRoot ?? null,
         doctor: opts.doctor ?? realDoctor,
         json: () => readJson(req, { limit: LIMITS.json }),
@@ -186,7 +212,7 @@ export async function createAgent(opts = {}) {
     try { socket.end("HTTP/1.1 400 Bad Request\r\n\r\n") } catch { /* socket đã chết */ }
   })
 
-  return { server, registry, state, confirm, limits: LIMITS, get runs() { return runs }, instanceLabel: label, origins }
+  return { server, registry, state, confirm, limits: LIMITS, get runs() { return runs }, instanceLabel: label, origins, runtimeVersion }
 }
 
 async function respond(res, out, headers, req) {
@@ -250,6 +276,16 @@ async function replayFromDisk(dir, from) {
 }
 
 function revealInFinder(dir) {
+  // Windows: explorer.exe TRẢ EXIT CODE 1 kể cả khi mở thư mục thành công (hành vi có
+  // tài liệu từ lâu của shell Windows) ⇒ phán theo `err` là luôn báo NOT_SUPPORTED oan.
+  // Chỉ coi lỗi spawn (ENOENT) là thất bại.
+  if (platform() === "win32") {
+    return new Promise(ok => {
+      const child = execFile("explorer.exe", [dir], () => { /* mã thoát không đáng tin */ })
+      child.on("error", () => ok(false))
+      child.on("spawn", () => ok(true))
+    })
+  }
   const cmd = platform() === "darwin" ? "open" : platform() === "linux" ? "xdg-open" : null
   if (!cmd) return Promise.resolve(false)
   return new Promise(ok => execFile(cmd, [dir], err => ok(!err)))
@@ -290,7 +326,9 @@ async function main() {
   const ws = agent.registry.active
   process.stdout.write([
     ``,
-    `  kitgen-agent ${VERSION} · ${agent.instanceLabel}`,
+    // Dòng banner nói VERSION BẢN PHÁT HÀNH trước (thứ người dùng đối chiếu khi update),
+    // protocol chỉ là chú thích kỹ thuật đứng sau.
+    `  kitgen-agent ${agent.runtimeVersion ?? "(source)"} · protocol ${PROTOCOL_VERSION} · ${agent.instanceLabel}`,
     `  http://127.0.0.1:${port}          (API cho web tĩnh)`,
     `  http://127.0.0.1:${port}/app/     (bản chạy tại máy — same-origin)`,
     v6 ? `  http://[::1]:${port}              (IPv6 loopback)` : `  [::1] không bind được (chỉ IPv4)`,
@@ -315,7 +353,16 @@ export async function listenIpv6(mainServer, port) {
   })
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main().catch(e => {
+/* "Có phải file này đang được chạy trực tiếp không?"
+   `file://${argv[1]}` KHÔNG BAO GIỜ khớp trên Windows: import.meta.url ở đó là
+   `file:///C:/…` (ba gạch + ổ đĩa) còn argv[1] là `C:\…`. Hậu quả nếu bỏ qua:
+   `node server.mjs` chạy xong mà KHÔNG bao giờ gọi main() — agent im lặng không
+   lắng nghe cổng nào, không một dòng lỗi. Nhánh mới GATE win32 để so sánh trên
+   darwin/linux giữ nguyên từng ký tự. */
+const argv1 = process.argv[1] ?? ""
+const isMainModule = import.meta.url === `file://${argv1}` ||
+  (process.platform === "win32" && argv1 !== "" && import.meta.url === pathToFileURL(argv1).href)
+if (isMainModule) main().catch(e => {
   process.stderr.write(`[agent] không khởi động được: ${redactLine(String(e?.message ?? e))}\n`)
   process.exit(1)
 })

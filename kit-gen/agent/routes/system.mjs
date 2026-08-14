@@ -12,7 +12,14 @@ export function register(r) {
       status: 200,
       json: {
         ok: true, app: "kitgen-agent", protocol: PROTOCOL,
-        version: ctx.version, buildId: ctx.buildId, instanceLabel: ctx.instanceLabel,
+        /* HAI SỐ KHÁC NHAU, CỐ Ý KHÔNG GỘP:
+           · `version` — đời của bộ khung agent (PROTOCOL_VERSION, "1.2.0"), giữ nguyên
+             tên field vì bundle web CŨ đang đọc nó và bundle cũ chính là bên đứng chờ
+             trong lượt update kế tiếp;
+           · `runtimeVersion` — version BẢN PHÁT HÀNH đang chạy (2.1.x), thứ duy nhất
+             đối chiếu được với `latestVersion` của /api/update. `null` = chạy từ source. */
+        version: ctx.version, runtimeVersion: ctx.runtimeVersion ?? null,
+        buildId: ctx.buildId, instanceLabel: ctx.instanceLabel,
         workspaceId: ws.id, workspaceLabel: ws.label, workspaceFingerprint: ws.fingerprint,
         projects: await ws.countProjects(),
         activeRuns: [...ctx.runs.active.values()].filter(h => !h.finished).length,
