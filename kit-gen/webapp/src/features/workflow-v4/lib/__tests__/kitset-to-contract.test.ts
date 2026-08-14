@@ -17,11 +17,13 @@ import { allPoseIds } from "../poses";
 import { isPropElement } from "../user-library";
 import {
   CHARACTER_ID,
+  CHROMA_KEY_HEX,
   CHROMA_KEY_PRESETS,
   MAIN_VARIANT_ID,
   chromaKeyOf,
   buildKitsetContract,
   chunkKeepingGroups,
+  explainChromaKey,
   mergeElementSkel,
   pickChromaKey,
   refPath,
@@ -478,6 +480,54 @@ describe("§P1-5 — key chroma tránh bảng màu của bộ kit", () => {
     expect(chromaKeyOf("")).toBe("magenta");
     expect(chromaKeyOf(null)).toBe("magenta");
     expect(chromaKeyOf("một màu gì đó rất lạ")).toBe("magenta");
+  });
+
+  /**
+   * BACKLOG #18 — `explainChromaKey` là bản có LÝ DO của cùng một luật, và `pickChromaKey`
+   * uỷ thác xuống nó. Nếu ai đó tách đôi hai đường (chép luật sang UI) thì ca đầu đỏ —
+   * đó là cả lý do hàm `explain` tồn tại thay vì để `StyleStep` tự tính lại.
+   */
+  it("`pickChromaKey` và `explainChromaKey` KHÔNG BAO GIỜ lệch nhau", () => {
+    const samples: Array<Partial<WorkflowState>> = [
+      {},
+      { chroma: "green" },
+      { stylePrompt: "neon magenta cyberpunk" },
+      { chroma: "green", stylePrompt: "xanh lá non, mint, cỏ tươi" },
+      { primaryColor: "#FF2FD0" },
+      { primaryColor: "#00C2FF" },
+      { primaryColor: "#000000", secondaryColor: "#FFFFFF" },
+      { primaryColor: "#FF00FF", secondaryColor: "#00FF00", stylePrompt: "cyan and blue neon" },
+    ];
+    for (const patch of samples) {
+      const s = { ...defaultState(), ...patch };
+      expect(explainChromaKey(s).key).toBe(pickChromaKey(s));
+    }
+  });
+
+  it("`explainChromaKey` nói được BA điều mà một `ChromaKeyId` trần không chở nổi", () => {
+    // ① palette trung tính ⇒ không có gì để tránh: `gap` là null, không phải 0.
+    const neutral = explainChromaKey(defaultState());
+    expect(neutral).toMatchObject({ key: "magenta", chosen: "magenta", gap: null, allClose: false });
+
+    // ② key bị đổi ⇒ `chosen` vẫn giữ lựa chọn tay để UI nói được cả hai đầu.
+    const swapped = explainChromaKey({ ...defaultState(), stylePrompt: "neon magenta cyberpunk" });
+    expect(swapped.key).toBe("green");
+    expect(swapped.chosen).toBe("magenta");
+    expect(swapped.allClose).toBe(false);
+
+    // ③ palette phủ kín cả bốn phía ⇒ không còn ứng viên an toàn.
+    const cornered = explainChromaKey({
+      ...defaultState(), primaryColor: "#FF00FF", secondaryColor: "#00FF00", stylePrompt: "cyan and blue neon",
+    });
+    expect(cornered.allClose).toBe(true);
+    expect(cornered.gap).toBeLessThan(60);
+  });
+
+  /** Swatch tô bằng bảng này, nên nó phải khớp TỪNG KEY với chuỗi gửi cho engine. */
+  it("`CHROMA_KEY_HEX` dẫn xuất đúng hex nằm trong chuỗi preset", () => {
+    for (const id of Object.keys(CHROMA_KEY_PRESETS) as Array<keyof typeof CHROMA_KEY_PRESETS>) {
+      expect(CHROMA_KEY_PRESETS[id].toUpperCase()).toContain(CHROMA_KEY_HEX[id]);
+    }
   });
 
   it("mọi ứng viên đều là chuỗi mà `is_key_color()` nhận ra (bão hoà, có mã hex)", () => {

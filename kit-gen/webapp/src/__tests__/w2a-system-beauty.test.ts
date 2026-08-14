@@ -139,10 +139,20 @@ describe("W2A-3 · không còn control thô của hệ điều hành", () => {
     expect(GLOBALS).not.toMatch(/\.result-toolbar select\s*\{/);
   });
 
-  it("`.color-swatch` thôi hardcode đỏ; màu do component truyền theo chroma", () => {
+  /**
+   * BACKLOG #18 — phép kiểm này TRƯỚC ĐÂY khoá cứng `CHROMA_HEX[s.chroma]`, tức là nó
+   * khoá đúng CÁI SAI: `s.chroma` là lựa chọn TAY, còn màu engine dùng là kết quả
+   * auto-pick §5b (`explainChromaKey`) và hai thứ đó khác nhau khi key đá bảng màu.
+   * Ý ĐỊNH của phép kiểm không đổi — *swatch vẽ màu THẬT chứ không phải một màu chết* —
+   * chỉ có định nghĩa "màu thật" là được sửa cho đúng.
+   */
+  it("`.color-swatch` thôi hardcode đỏ; màu lấy từ key HIỆU LỰC, không phải key chọn tay", () => {
     const rule = GLOBALS.match(/\.color-swatch\s*\{([^}]*)\}/)![1];
     expect(rule).not.toContain("bg-danger");
-    expect(strip(read("src/features/workflow-v4/steps/StyleStep.tsx"))).toContain("CHROMA_HEX[s.chroma]");
+    const step = strip(read("src/features/workflow-v4/steps/StyleStep.tsx"));
+    expect(step).toContain("explainChromaKey(s)");
+    expect(step).toContain("CHROMA_KEY_HEX[chroma.key]");
+    expect(step).not.toContain("CHROMA_HEX[s.chroma]");
   });
 
   it("ô màu đổi hình thái: `.color-field` chấm tròn + hex mono", () => {

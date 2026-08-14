@@ -47,7 +47,11 @@ export function ProjectSettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="xl" className="h-[min(48rem,calc(100dvh-2rem))]">
         <DialogHeader>
-          <DialogTitle>Cài đặt</DialogTitle>
+          {/* "dự án" ở tiêu đề KHÔNG phải chữ thừa. Từ khi bánh răng topbar mở cài đặt
+              của CẢ APP (`SettingsDialog`, tiêu đề "Cài đặt"), hai cái cửa đó cùng với
+              tới được từ màn dự án — hai dialog trùng tên là hai thứ khác nhau nói cùng
+              một câu, và trình đọc màn hình không phân biệt nổi. */}
+          <DialogTitle>Cài đặt dự án</DialogTitle>
           <DialogDescription>Thông tin và cách tạo hình của dự án «{projectName}».</DialogDescription>
         </DialogHeader>
         <DialogBody className="grid min-h-0 gap-5 md:grid-cols-[12rem_minmax(0,1fr)]">

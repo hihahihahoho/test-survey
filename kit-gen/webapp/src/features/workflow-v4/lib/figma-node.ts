@@ -27,7 +27,7 @@
  * │ đặt ảnh ở (0,0) thì hitbox lệch đúng bằng phần thừa đó; nếu bật clip thì  │
  * │ decoration bị cắt cụt. Đặt lệch ÂM + clip OFF là cách duy nhất giữ được   │
  * │ CẢ HAI: layout theo hitbox, mà mắt vẫn thấy đủ hình.                      │
- * └──────────────────────────────────────────────────────────────────────────┘
+ * └───────────────────────────────────────────────────────────────────────────┘
  *
  * ┌── HAI BẢN PNG, HAI PHÉP OFFSET KHÁC NHAU ────────────────────────────────┐
  * │ `slice.py:950-953` ghi mỗi ô ra HAI file, và lưới kết quả ưu tiên `tight/`│
@@ -37,7 +37,7 @@
  * │ Đo lại trên đĩa (kit `blindtest-a`, 6 ô, cả hai bản): khớp 12/12. Dùng    │
  * │ nhầm công thức ⇒ ảnh lệch cả trăm px mà KHÔNG có gì báo lỗi. Vì vậy       │
  * │ `geometryOf` đối chiếu `file.w/h` thật với cả hai bộ số trước khi chọn.   │
- * └──────────────────────────────────────────────────────────────────────────┘
+ * └───────────────────────────────────────────────────────────────────────────┘
  *
  * KHÔNG hứa quá: encoder (`@/vendor/figma-h2d`) là bundle của bên thứ ba và
  * `navigator.clipboard.write` cần HTTPS/localhost + cử chỉ người dùng. Mọi lỗi ở
@@ -45,6 +45,7 @@
  * đang dùng đường lùi — không bao giờ báo "đã copy node" khi chưa copy được.
  */
 import type { KitFile } from "@/lib/types";
+import { BLEND_SCREEN, isGlowAsset } from "@/features/kit/lib/blend";
 import { scaleOf } from "@/features/kit/lib/export-scale";
 import { loadFigmaH2D, type H2DDocument, type H2DNode } from "@/vendor/figma-h2d";
 
@@ -72,6 +73,12 @@ export interface FigmaNodeSpec {
   image: { x: number; y: number; w: number; h: number };
   /** Luôn `false` — §3.3 "Clip content = off". Để kiểu literal cho test khỏi trôi. */
   clipsContent: false;
+  /**
+   * `"screen"` cho ô PHÁT SÁNG (`manifest.blend`, xem `features/kit/lib/blend.ts`),
+   * `null` cho phần còn lại. `renderSpec` dịch nó thành `mix-blend-mode` trên `<img>`
+   * — thứ mà encoder CÓ chở sang payload (đo 14/08, xem khối chú thích ở `renderSpec`).
+   */
+  blend: typeof BLEND_SCREEN | null;
   source: AssetSource;
   /** Tỉ lệ xuất đã áp cho CẢ frame lẫn ảnh (không bao giờ lệch trục). */
   scale: number;
@@ -201,6 +208,7 @@ export function buildFigmaNodeForAsset(asset: KitFile, kitMeta: KitMeta = {}): F
       h: geo.pixels.h * scale,
     },
     clipsContent: false,
+    blend: isGlowAsset(asset) ? BLEND_SCREEN : null,
     source: geo.source,
     scale,
   };
@@ -220,7 +228,7 @@ export const STAGE_ID = "kitgen-figma-h2d-stage";
  * styles ⇒ node dán ra Figma bị ẩn. `opacity:0` không di truyền thành computed style
  * của con nên an toàn, và `position:fixed` giữ sân khấu ngoài dòng chảy trang.
  */
-function mountStage(): HTMLDivElement {
+export function mountStage(): HTMLDivElement {
   document.getElementById(STAGE_ID)?.remove();
   const stage = document.createElement("div");
   stage.id = STAGE_ID;
@@ -237,6 +245,22 @@ function mountStage(): HTMLDivElement {
  * `copy-sprite-images.mjs:88-96` đã dán thử thành công — `aria-label` thành tên
  * frame, `overflow:visible` thành `Clip content = off`, `max-width:none` để ảnh
  * to hơn frame không bị co lại.
+ *
+ * ┌── `mix-blend-mode` CHO Ô PHÁT SÁNG — MỚI ĐO ĐƯỢC NỬA (backlog #19) ───────┐
+ * │ ĐO 14/08 bằng thí nghiệm cô lập, chạy chính bundle vendor trong Chromium: │
+ * │ `extractStyles` đọc `getComputedStyle` rồi giữ MỌI khoá trong             │
+ * │ `STYLE_DEFAULTS` có giá trị khác mặc định, mà `mixBlendMode:"normal"` nằm │
+ * │ trong bảng đó ⇒ IR mang theo; `serializeDocument` `JSON.stringify` cả cây │
+ * │ ⇒ khối base64 `figh2d` chứa đúng chữ `"mixBlendMode":"screen"`.           │
+ * │ Bằng chứng: `vendor/figma-h2d/README.md`, mục "Chở được gì".              │
+ * │                                                                           │
+ * │ NỬA CHƯA ĐO: bên NHẬN là trình phân tích H2D trong Figma desktop, không   │
+ * │ ai ở đây đọc được mã của nó — payload CHỞ không có nghĩa là Figma DỰNG    │
+ * │ layer ở Screen. Đặt thuộc tính này gần như miễn phí (không đổi hình học,  │
+ * │ không đổi ảnh, ô thường không bị chạm), NHƯNG toast nhắc chỉnh tay ở      │
+ * │ `CutAssetGrid` PHẢI GIỮ tới khi chủ sản phẩm dán thật một ô glow ra Figma │
+ * │ và xác nhận layer lên đúng blend mode.                                    │
+ * └───────────────────────────────────────────────────────────────────────────┘
  */
 export function renderSpec(spec: FigmaNodeSpec, imageUrl: string, stage: HTMLElement): HTMLElement {
   const frame = document.createElement("div");
@@ -249,7 +273,8 @@ export function renderSpec(spec: FigmaNodeSpec, imageUrl: string, stage: HTMLEle
   img.src = imageUrl;
   img.style.cssText =
     `position:absolute;left:${spec.image.x}px;top:${spec.image.y}px;`
-    + `width:${spec.image.w}px;height:${spec.image.h}px;display:block;max-width:none`;
+    + `width:${spec.image.w}px;height:${spec.image.h}px;display:block;max-width:none`
+    + (spec.blend === null ? "" : `;mix-blend-mode:${spec.blend}`);
 
   frame.appendChild(img);
   stage.appendChild(frame);

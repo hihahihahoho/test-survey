@@ -5,6 +5,7 @@ import { contractJobs, type Contract, type JobStatusValue, type Project } from "
 import type { Gate } from "@/features/projects/lib/gate";
 import { GeneratedResults } from "@/features/workflow-v4/components/GeneratedResults";
 import { DownloadKitButton, CopyFigmaButton } from "@/features/workflow-v4/components/KitExits";
+import { DemoScreenButton } from "@/features/demo";
 import { groupAnchorId, type ResultGroup } from "@/features/workflow-v4/lib/generated-results";
 import type { ProjectImageGroup } from "@/routes/search-schemas";
 import { buildMatrix } from "../lib/matrix";
@@ -112,6 +113,10 @@ export function ImagesSection({
               có nghĩa. Cả hai vẫn 0 đồng: `.zip` là đọc đĩa, Copy Figma là canvas + clipboard. */}
           <DownloadKitButton projectId={projectId} />
           <CopyFigmaButton projectId={projectId} kitName={kitName} />
+          {/* Cửa ra THỨ BA (#21): lắp thử một màn game từ chính những ảnh này rồi bắn
+              sang Figma. Cả tính năng nằm trong dialog của nó — không route mới, không
+              nút sidebar, đúng luật "để hết trong 1 cái popup". */}
+          <DemoScreenButton projectId={projectId} />
           <Button type="button" disabled={readOnly || jobs.length === 0} onClick={() => onGenerate(jobs)}>
             <RefreshCw aria-hidden />Tạo lại toàn bộ
           </Button>

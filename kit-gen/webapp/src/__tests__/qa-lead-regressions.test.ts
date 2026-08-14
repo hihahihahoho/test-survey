@@ -77,11 +77,21 @@ describe("V-4 · S3 xếp DỌC dưới 1024px", () => {
 
 describe("V-5 · Tabs phải có TabsContent (aria-controls không được trỏ hư không)", () => {
   it.each([
-    "src/features/settings/SettingsScreen.tsx",
+    /* Ruột của Cài đặt đã rời `SettingsScreen` sang `SettingsDialog` — cùng một dialog
+       cho `/settings` và cho bánh răng topbar trong dự án. `<Tabs>` đi theo ruột, nên
+       phép kiểm này phải soi đúng chỗ có `<Tabs>`, không phải chỗ có cái tên cũ. */
+    "src/features/settings/SettingsDialog.tsx",
     "src/features/kit/KitScreen.tsx",
     "src/features/design/DesignScreen.tsx",
   ])("%s có TabsContent", (f) => {
     expect(read(f)).toContain("<TabsContent");
+  });
+
+  /** Phủ định đi kèm: file nào KHÔNG còn `<Tabs>` thì cũng không được sót `<TabsList>`. */
+  it("SettingsScreen không còn giữ mảnh Tabs mồ côi", () => {
+    const screen = read("src/features/settings/SettingsScreen.tsx");
+    expect(screen).not.toContain("<Tabs");
+    expect(screen).not.toContain("<TabsContent");
   });
 });
 

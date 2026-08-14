@@ -328,13 +328,14 @@ function ProjectManager({ projectId }: { projectId: string }) {
                 <Icon className="size-4" aria-hidden /><span>{label}</span>
               </button>
             ))}
-            {/* Mục thứ tư mở DIALOG — cùng một cửa với nút Cài đặt trên topbar, nên hai
-                đường không thể lệch nội dung.
+            {/* Mục thứ tư mở DIALOG cài đặt của MỘT DỰ ÁN — và nay là lối vào DUY NHẤT
+                của nó (cạnh link cũ `/p/:id/settings` và ⌘K).
 
                 TÊN + ICON: chủ sản phẩm — "CÁI CÀI ĐẶT Ở SIDEBAR ĐỔI THÀNH CÀI ĐẶT
                 STYLE — CÁI NÀY Ở TRÊN CÓ RỒI MÀ, ĐỔI ICON ĐI, ĐỂ CÁI BẢNG MÀU VẼ ẤY".
-                Bánh răng ở topbar là cài đặt của CẢ APP; mục này mở yêu cầu và phong
-                cách của MỘT dự án, nên hai chỗ không được mang cùng tên và cùng icon. */}
+                Bánh răng ở topbar là cài đặt của CẢ APP — và từ đợt này nó mở ĐÚNG thứ
+                đó (`SettingsDialog`, cùng một component với `/settings`) thay vì mở
+                nhầm dialog dưới đây. Hai chỗ khác tên, khác icon, khác nội dung. */}
             <button
               type="button"
               aria-current={view.settingsTab !== null ? "page" : undefined}

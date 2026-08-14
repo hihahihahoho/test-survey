@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { SemanticSlider } from "@/features/kit-form/components/SemanticSlider";
 import { STYLE_AXES } from "@/features/kit-form/lib/style-phrases";
 import { useLibraryFile, useUserLibrary } from "@/lib/hooks";
-import { CHROMA_HEX } from "@/lib/types/contract";
+import { CHROMA_KEY_HEX, explainChromaKey, type ChromaKeyId } from "../lib/kitset-to-contract";
 import { STYLE_PROMPT_PLACEHOLDER, brandColorPatch, useWorkflowProjectId, useWorkflowStore } from "../lib/model";
 import { useWorkflowRefs } from "../lib/refs-sync";
 import { RefChips } from "../components/RefChips";
@@ -17,8 +17,14 @@ import { Step } from "./BriefStep";
 
 /** §W2A-3 — ô swatch phải VẼ RA màu đang chọn, và câu chú bên cạnh phải nói cùng
  *  một thứ. Trước đây swatch hardcode `bg-danger` (đỏ) còn câu chú cứng "Magenta
- *  mặc định" — hai chỗ cùng nói sai khi người dùng đổi chroma sang xanh lá. */
-const CHROMA_LABEL = { magenta: "Magenta", green: "Xanh lá" } as const;
+ *  mặc định" — hai chỗ cùng nói sai khi người dùng đổi chroma sang xanh lá.
+ *
+ *  BACKLOG #18 — bốn nhãn, không phải hai. Người dùng chỉ CHỌN được magenta/green,
+ *  nhưng §5b có quyền đổi sang cyan/blue; nếu bảng nhãn dừng ở hai thì swatch lại
+ *  không gọi nổi tên thứ nó đang vẽ. */
+const CHROMA_LABEL: Record<ChromaKeyId, string> = {
+  magenta: "Magenta", green: "Xanh lá", cyan: "Xanh lơ", blue: "Xanh dương",
+};
 
 /** Trần ảnh mỗi ô thả — cùng số mà `ImageDropzone` dùng để cắt một lượt chọn. */
 const MAX_REFS = 8;
@@ -89,6 +95,10 @@ function RefUploadBlock({ label, hint, items, ready, fallback, onFiles, onRemove
 
 export function StyleStep() {
   const s = useWorkflowStore();
+  /* Key HIỆU LỰC — tính lại mỗi lần render vì nó phụ thuộc cả `chroma`, hai màu thương
+     hiệu VÀ ô mô tả: gõ chữ "neon magenta" vào mô tả là swatch phải đổi ngay tại đó,
+     không đợi lưu. Hàm thuần, chỉ vài phép so hue ⇒ không cần memo hoá. */
+  const chroma = explainChromaKey(s);
   const projectId = useWorkflowProjectId();
   const refs = useWorkflowRefs(projectId);
   const library = useUserLibrary();
@@ -196,7 +206,34 @@ export function StyleStep() {
       *
       * P-SWEEP·7 — swatch VUÔNG đứng INLINE ngay trước tên màu, không phải đĩa tròn
       * 32px nằm một mình trên một dòng riêng.
+      *
+      * ══ BACKLOG #18 — SWATCH NÓI KEY **HIỆU LỰC**, KHÔNG PHẢI KEY CHỌN TAY ══
+      * Từ khi có auto-pick (§5b của `kitset-to-contract`), key ghi vào contract có thể
+      * KHÁC `s.chroma`: chọn Magenta nhưng style neon magenta ⇒ engine chạy Green. Bản
+      * cũ vẽ `CHROMA_HEX[s.chroma]` nên ô màu và câu chữ cùng nói sai — người dùng nhìn
+      * ô hồng rồi đi tìm xem vì sao ảnh ra viền xanh.
+      *
+      * Nay lấy thẳng `explainChromaKey(s)` — CHÍNH hàm mà contract gọi, không chép luật
+      * — và:
+      *  · swatch tô theo `key` (kết quả cuối);
+      *  · đổi key thì NÓI RA cả hai đầu «Magenta → Xanh lá» kèm lý do, chứ không lặng
+      *    lẽ thay tên: người dùng phải nhận ra được lựa chọn của mình vẫn được ghi nhận;
+      *  · `allClose` ⇒ không còn ứng viên nào an toàn, đổi key nữa cũng vô ích ⇒ phải
+      *    kêu lên và chỉ đúng chỗ sửa (bảng màu/mô tả), không phải một lời khuyên chung.
       */}
-    <p className="swatch-row"><span className="color-swatch" style={{ background: CHROMA_HEX[s.chroma] }} aria-hidden /><span className="text-body text-fg-muted">Màu nền tách: {CHROMA_LABEL[s.chroma]} · có thể chỉnh ở Cài đặt.</span></p>
+    <p className="swatch-row">
+      <span className="color-swatch" style={{ background: CHROMA_KEY_HEX[chroma.key] }} aria-hidden />
+      <span className="text-body text-fg-muted">
+        {"Màu nền tách: "}
+        {chroma.key === chroma.chosen
+          ? CHROMA_LABEL[chroma.key]
+          : <><s>{CHROMA_LABEL[chroma.chosen]}</s>{" → "}<span className="text-fg-strong">{CHROMA_LABEL[chroma.key]}</span>{" (tránh trùng palette)"}</>}
+        {" · có thể chỉnh ở Cài đặt."}
+      </span>
+    </p>
+    {chroma.allClose && <p role="status" className="mt-2 rounded-3 border border-warn/60 bg-warn/10 p-3 text-body text-fg">
+      Mọi màu nền tách đều nằm sát bảng màu của bộ kit — dù đổi sang key nào, bước tách nền
+      cũng sẽ ăn mất một phần chi tiết. Bớt màu thương hiệu hoặc bỏ tên màu trong ô mô tả.
+    </p>}
   </Step>;
 }

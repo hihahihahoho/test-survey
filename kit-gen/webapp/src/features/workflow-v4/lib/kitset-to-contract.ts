@@ -608,24 +608,71 @@ function paletteHues(
 export function pickChromaKey(
   s: Pick<KitsetContractInput, "chroma" | "stylePrompt" | "primaryColor" | "secondaryColor">,
 ): ChromaKeyId {
+  return explainChromaKey(s).key;
+}
+
+/**
+ * CÙNG MỘT LUẬT với `pickChromaKey`, nhưng trả cả **lý do**.
+ *
+ * Vì sao cần: ô swatch ở bước Phong cách trước đây vẽ theo `s.chroma` (lựa chọn TAY),
+ * nên từ khi có §5b nó nói dối — người dùng chọn Magenta, engine chạy Green, UI vẫn
+ * vẽ hồng. Swatch cần biết ba thứ mà `ChromaKeyId` trần không chở nổi: key HIỆU LỰC,
+ * key người dùng đã chọn, và "còn ứng viên nào an toàn không".
+ *
+ * `pickChromaKey` uỷ thác xuống đây thay vì chép lại vòng lặp: một bản luật, không có
+ * cửa cho UI và contract nói hai điều khác nhau. Kết quả `key` bất biến so với bản cũ.
+ */
+export interface ChromaKeyPick {
+  /** Key mà contract/engine SẼ dùng — kết quả cuối của §5b. */
+  key: ChromaKeyId;
+  /** Key người dùng chọn tay (đã chuẩn hoá về 2 giá trị chọn được ở UI). */
+  chosen: ChromaKeyId;
+  /** Khoảng hue nhỏ nhất giữa `key` và palette. `null` ⇒ palette không có màu nào đủ
+   *  bão hoà để tính, tức là chẳng có gì để tránh. */
+  gap: number | null;
+  /** `true` ⇒ **mọi** ứng viên đều dưới ngưỡng an toàn: đổi key nữa cũng không thoát,
+   *  phải sửa bảng màu. Đây là ca duy nhất UI cần kêu lên. */
+  allClose: boolean;
+}
+
+export function explainChromaKey(
+  s: Pick<KitsetContractInput, "chroma" | "stylePrompt" | "primaryColor" | "secondaryColor">,
+): ChromaKeyPick {
   const chosen: ChromaKeyId = s.chroma === "green" ? "green" : "magenta";
   const hues = paletteHues(s);
-  if (hues.length === 0) return chosen;
+  if (hues.length === 0) return { key: chosen, chosen, gap: null, allClose: false };
   const gapOf = (key: ChromaKeyId): number => {
     const hue = CHROMA_KEY_HUE.find(([id]) => id === key)![1];
     return Math.min(...hues.map((h) => hueGap(hue, h)));
   };
-  if (gapOf(chosen) >= SAFE_HUE_GAP) return chosen;
+  const chosenGap = gapOf(chosen);
+  if (chosenGap >= SAFE_HUE_GAP) return { key: chosen, chosen, gap: chosenGap, allClose: false };
   // ⚠️ `best` phải khai kiểu RỘNG: `chosen` đã bị TS thu hẹp về "magenta"|"green"
   // (đó là hai giá trị người dùng chọn được), nên `let best = chosen` sẽ không nhận
   // nổi `cyan`/`blue` — đúng hai ứng viên mới mà cả việc này sinh ra để dùng.
-  let best: ChromaKeyId = chosen, bestGap = gapOf(chosen);
+  let best: ChromaKeyId = chosen, bestGap = chosenGap;
   for (const [id] of CHROMA_KEY_HUE) {
     const gap = gapOf(id);
     if (gap > bestGap) { best = id; bestGap = gap; }
   }
-  return best;
+  return { key: best, chosen, gap: bestGap, allClose: bestGap < SAFE_HUE_GAP };
 }
+
+/**
+ * Hex thuần của từng key — cho ô swatch VẼ RA đúng màu engine sắp dùng.
+ *
+ * DẪN XUẤT từ `CHROMA_KEY_RGB` chứ không gõ tay lần nữa: `CHROMA_KEY_RGB` đã là bản
+ * sao (duy nhất) của `gen.sh:CHROMA_KEYS` / `slice.py:KEY_COLORS`, nên swatch không
+ * thể lệch khỏi màu thật kể cả khi ai đó thêm key thứ năm.
+ * `CHROMA_HEX` ở `lib/types/contract.ts` CHỈ có 2 khoá (magenta/green) — nó là bảng
+ * của *lựa chọn tay*, không phủ nổi 4 key của §5b.
+ */
+export const CHROMA_KEY_HEX: Record<ChromaKeyId, string> = Object.fromEntries(
+  (Object.keys(CHROMA_KEY_PRESETS) as ChromaKeyId[]).map((id) => [
+    id,
+    `#${CHROMA_KEY_RGB[id].map((c) => c.toString(16).padStart(2, "0")).join("").toUpperCase()}`,
+  ]),
+) as Record<ChromaKeyId, string>;
 
 /** Mô tả phong cách gửi cho `gen.sh` = ô mô tả + 7 trục ngữ nghĩa + điều không muốn. */
 export function buildVariantStyle(s: Pick<KitsetContractInput, "stylePrompt" | "styleAxes" | "styleAvoid">): string {

@@ -77,6 +77,28 @@ hàm thật sự được dùng, không mô tả lại toàn bộ IR.
 4. **`overflow: visible` trên frame** ⇒ Figma đặt `Clip content = off`, tức phần
    ảnh tràn ra ngoài frame (đổ bóng, hoa lá) vẫn hiện.
 
+## Chở được gì — `mix-blend-mode` (đo 14/08, backlog #19)
+
+Encoder đọc style bằng **`getComputedStyle`**, không đọc `style` inline và không có
+danh sách trắng riêng cho từng thẻ: `extractStyles()` duyệt `STYLE_DEFAULTS` (~150
+khoá) và giữ lại **mọi khoá có giá trị computed khác mặc định**. `mixBlendMode:
+"normal"` nằm trong bảng đó ⇒ đặt `mix-blend-mode: screen` lên `<img>` là giá trị
+vào thẳng `node.styles`, rồi `serializeDocument()` `JSON.stringify` cả cây vào khối
+base64 `figh2d`.
+
+Đo bằng thí nghiệm cô lập (bundle nạp như classic script trong Chromium, dựng đúng
+sân khấu của `renderSpec`, giải lại base64):
+
+```
+A · img thường                → payload KHÔNG có "mixBlendMode"
+B · img + mix-blend-mode:screen → "…,\"left\":\"-5px\",\"mixBlendMode\":\"screen\""
+C · thêm isolation:isolate trên frame → frame mang thêm "isolation":"isolate"
+```
+
+**Chưa đo được nửa còn lại:** Figma desktop có dịch `mixBlendMode` thành blend mode
+của layer khi dán hay không. Đó là mã của Figma, không đọc được từ đây — phải dán
+thật rồi nhìn. Vì vậy `CutAssetGrid` vẫn giữ toast nhắc chỉnh tay.
+
 ## Ai đang dùng
 
 - `src/features/workflow-v4/lib/figma-node.ts` — menu ⋯ → **Copy to Figma** của

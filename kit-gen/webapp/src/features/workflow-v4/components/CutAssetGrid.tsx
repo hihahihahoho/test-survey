@@ -181,14 +181,18 @@ function CutAssetCard({ projectId, variant, asset, contract }: {
   const name = asset.name;
 
   /**
-   * ⚠️ VẬT LIỆU PHÁT SÁNG KHÔNG QUA ĐƯỢC BỘ NHỚ TẠM.
+   * ⚠️ VẬT LIỆU PHÁT SÁNG: PAYLOAD ĐÃ CHỞ BLEND, NHƯNG CHƯA AI THẤY FIGMA NHẬN.
    *
    * Manifest ghi `blend:"screen"` cho ô `matte:"glow"` (slice.py, P1-3) và web preview
-   * đọc được nó, nhưng payload clipboard của Figma thì KHÔNG mang blend mode: encoder
-   * `@/vendor/figma-h2d` chỉ dựng frame + image từ DOM (`figma-node.ts`), và đường lùi
-   * bitmap còn phẳng hơn nữa. Dán xong, layer nằm ở Normal ⇒ quầng sáng bị nền nuốt,
-   * đúng thứ mà cả P0-2 lẫn P1-3 vừa cứu về. Không tự sửa được thì phải NÓI —
-   * im lặng ở đây là để designer tự phát hiện bằng mắt, hoặc không phát hiện.
+   * đọc được nó. Backlog #19 đã ĐO (14/08): `figma-node.ts` đặt `mix-blend-mode:screen`
+   * lên `<img>` sân khấu thì khối `figh2d` mang theo `"mixBlendMode":"screen"` — tức
+   * **bên GỬI đã làm hết phần mình**. Nhưng bên NHẬN là trình phân tích H2D trong Figma
+   * desktop; không ai đọc được mã của nó, và chưa ai dán thử một ô glow rồi soi layer.
+   *
+   * ⇒ TOAST NÀY Ở LẠI cho tới khi chủ sản phẩm dán thật và xác nhận layer lên đúng
+   * blend mode. Bỏ nhắc dựa trên suy đoán "chắc Figma đọc" là đúng kiểu hỏng mà P0-2
+   * và P1-3 vừa cứu về: quầng sáng bị nền nuốt, còn designer thì không được báo gì.
+   * Đường lùi bitmap thì chắc chắn phẳng, nên ở nhánh đó nhắc lại càng đúng.
    */
   const remindGlowBlend = () => {
     if (!isGlowAsset(asset.file)) return;
