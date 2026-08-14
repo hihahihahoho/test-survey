@@ -75,8 +75,9 @@ const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
 );
 SheetHeader.displayName = "SheetHeader";
 
+/** `overscroll-contain` — cùng luật với `DialogBody`: lớp nổi cuộn tới biên thì dừng. */
 const SheetBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("min-h-0 flex-1 overflow-y-auto p-4", className)} {...props} />
+  <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain p-4", className)} {...props} />
 );
 SheetBody.displayName = "SheetBody";
 

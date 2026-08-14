@@ -36,7 +36,9 @@ export function SharedReferencePicker({ group, onPick }: {
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 p-2">
         <p className="px-2 pb-2 text-caption text-fg-muted">Ảnh dùng chung</p>
-        <div className="max-h-72 overflow-y-auto">
+        {/* Popover là lớp NỔI ⇒ cuộn nội bộ hợp lệ, nhưng phải `overscroll-contain`:
+            chạm biên thì dừng, không hất cho trang phía sau trôi khỏi nút mở popover. */}
+        <div className="max-h-72 overflow-y-auto overscroll-contain">
           {items.map((item) => (
             <LibraryRow key={item.id} item={item} onSelect={(selected) => {
               file.mutate(selected, {
@@ -70,7 +72,9 @@ export function SharedMascotPicker({ onPick }: {
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 p-2">
         <p className="px-2 pb-2 text-caption text-fg-muted">Mascot</p>
-        <div className="max-h-72 overflow-y-auto">
+        {/* Popover là lớp NỔI ⇒ cuộn nội bộ hợp lệ, nhưng phải `overscroll-contain`:
+            chạm biên thì dừng, không hất cho trang phía sau trôi khỏi nút mở popover. */}
+        <div className="max-h-72 overflow-y-auto overscroll-contain">
           {items.map((item) => (
             <LibraryRow key={item.id} item={item} onSelect={(selected) => {
               file.mutate(selected, {

@@ -88,7 +88,9 @@ function LibrarySection({ title, description, items, assetIds, onSelect }: {
   if (items.length === 0) return null;
   return <section>
     <SectionTitle title={title} description={description} />
-    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+    {/* Không hộp cuộn riêng: khối này nằm trong `DialogBody`, và body mới là ổ cuộn
+        của dialog. Lồng thêm một tầng thì lăn chuột trên danh sách là dialog khựng. */}
+    <div className="space-y-2">
       {items.map(item => <AssetRow key={item.id} item={item} selected={assetIds.includes(item.id)} onSelected={selected => onSelect(item.id, selected)} />)}
     </div>
   </section>;

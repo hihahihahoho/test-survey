@@ -111,7 +111,10 @@ export function CoverPicker({
                     move(-1);
                   }
                 }}
-                className="grid max-h-80 grid-cols-3 gap-3 overflow-y-auto sm:grid-cols-4 md:grid-cols-6"
+                /* KHÔNG `max-h` + `overflow-y-auto` ở đây: lưới nằm trong `DialogBody`,
+                   mà body đã là ổ cuộn của dialog. Hai tầng cuộn lồng nhau thì lăn
+                   chuột trên lưới là dialog khựng — đúng lỗi đã sửa ở trang Mascot. */
+                className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6"
               >
                 {files.map((f, i) => (
                   <CoverOption

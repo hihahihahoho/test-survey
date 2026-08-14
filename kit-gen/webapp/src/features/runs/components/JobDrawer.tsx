@@ -84,7 +84,9 @@ export function JobDrawer({
                       Thông tin nhạy cảm đã được công cụ local che trước khi gửi ra đây.
                     </span>
                   </div>
-                  <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded-2 border border-line-subtle bg-canvas p-3 font-mono text-mono text-fg">
+                  {/* Nhật ký dài vô hạn ⇒ giữ khung cuộn riêng, thêm `overscroll-contain`
+                      để chạm đáy log là dừng chứ không hất cho thân drawer trôi theo. */}
+                  <pre className="min-h-0 flex-1 overflow-auto overscroll-contain whitespace-pre-wrap break-words rounded-2 border border-line-subtle bg-canvas p-3 font-mono text-mono text-fg">
                     {logQuery.data && logQuery.data.trim() !== ""
                       ? logQuery.data
                       : "Nhật ký của lượt này rỗng."}
@@ -104,7 +106,7 @@ export function JobDrawer({
                   <CopyableCode
                     label={`Nội dung gửi AI của lượt ${job ?? ""}`}
                     value={promptQuery.data?.prompt ?? ""}
-                    className="max-h-96 overflow-auto"
+                    className="max-h-96 overflow-auto overscroll-contain"
                   />
                   {(promptQuery.data?.attachments?.length ?? 0) > 0 && (
                     <div className="flex flex-col gap-1">

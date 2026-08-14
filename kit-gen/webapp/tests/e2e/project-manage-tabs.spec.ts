@@ -231,7 +231,7 @@ test("§1 — thẻ thành phần sạch; ô kích thước chỉ có trong popu
    §2b — trang Mascot cùng khuôn, danh sách cuộn được
    ══════════════════════════════════════════════════════════════════════════ */
 
-test("§2b — Mascot có ba tab, và lưới dáng cuộn trong khối của nó", async ({ page }) => {
+test("§2b — Mascot có ba tab, và lưới dáng KHÔNG cuộn riêng", async ({ page }) => {
   await page.goto(`/p/${PID}?section=mascot`);
   const modes = page.getByRole("tablist", { name: "Chế độ xem Mascot" });
   await expect(modes.getByRole("tab", { name: "Ảnh thật", selected: true })).toBeVisible();
@@ -245,19 +245,50 @@ test("§2b — Mascot có ba tab, và lưới dáng cuộn trong khối của n�
   const poses = page.locator(".compact-element-grid").first();
   await expect(poses.locator(".compact-element").first()).toBeVisible();
 
-  /* "CHO NÓ SHOW SCROLL ĐƯỢC": lưới có hộp cuộn RIÊNG và không bao giờ cao hơn màn
-     hình — nhờ vậy hàng tab và hàng nút Lưu luôn còn trong tầm mắt. Đo bằng hình dạng
-     đo được, không đo bằng "đã có thanh cuộn chưa" (số dáng là dữ liệu, không phải
-     hợp đồng: nhóm ít dáng thì khối co lại, đúng luật "không bó cứng chiều cao"). */
+  /* ĐỢT 2026-08-14b — ĐẢO LẠI yêu cầu cũ ("lưới có hộp cuộn RIÊNG"). Chủ sản phẩm báo
+     kèm ảnh: lăn chuột ngang qua khu "Bộ dáng" là trang khựng. Hộp cuộn ấy chính là thủ
+     phạm — `overflow-y-auto` biến khối thành scroll container ngay cả khi 3–4 thẻ không
+     hề tràn, rồi `overscroll-behavior: contain` nuốt luôn wheel event.
+     Đo bằng COMPUTED STYLE, không bằng class: class đúng mà CSS khác vẫn hỏng. */
   const measured = await poses.evaluate((el) => ({
-    overflow: getComputedStyle(el).overflowY,
+    overflowY: getComputedStyle(el).overflowY,
     maxHeight: getComputedStyle(el).maxHeight,
-    height: el.getBoundingClientRect().height,
-    viewport: window.innerHeight,
   }));
-  expect(measured.overflow).toBe("auto");
-  expect(measured.maxHeight).not.toBe("none");
-  expect(measured.height).toBeLessThanOrEqual(measured.viewport);
+  expect(measured.overflowY).toBe("visible");
+  expect(measured.maxHeight).toBe("none");
+});
+
+test("§2b′ — lăn chuột TRÊN khu «Bộ dáng» thì trang vẫn cuộn, không khựng", async ({ page }) => {
+  await page.goto(`/p/${PID}?section=mascot`);
+  await page.getByRole("tab", { name: "Settings" }).click();
+
+  const section = page.locator('[aria-label="Bộ dáng mascot"]');
+  await expect(section.locator(".compact-element").first()).toBeVisible();
+
+  /* Đây là phép đo ĐÚNG THỨ NGƯỜI DÙNG LÀM: đặt con trỏ giữa khu Bộ dáng rồi lăn.
+     Bản hỏng cho `scrollY === 0` (vùng con nuốt event); bản đúng thì trang đi tiếp. */
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const box = (await section.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + Math.min(60, box.height / 2));
+  await page.mouse.wheel(0, 240);
+  await expect.poll(() => page.evaluate(() => window.scrollY), { timeout: 5_000 }).toBeGreaterThan(0);
+});
+
+test("§2b″ — popup Chi tiết dáng VẪN cuộn nội bộ và chặn chaining ở biên", async ({ page }) => {
+  await page.goto(`/p/${PID}?section=mascot`);
+  await page.getByRole("tab", { name: "Settings" }).click();
+
+  const grid = page.locator(".compact-element-grid").first();
+  await grid.getByRole("button", { name: /^Chi tiết dáng / }).first().click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+
+  const body = page.getByTestId("dialog-body");
+  const measured = await body.evaluate((el) => ({
+    overflowY: getComputedStyle(el).overflowY,
+    overscrollY: getComputedStyle(el).overscrollBehaviorY,
+  }));
+  expect(measured.overflowY).toBe("auto");
+  expect(measured.overscrollY).toBe("contain");
 });
 
 /* ══════════════════════════════════════════════════════════════════════════

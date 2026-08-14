@@ -579,7 +579,11 @@
   .image-upload-error { @apply flex items-center gap-2 text-caption text-danger; } .image-upload-error svg { @apply size-4; }
   .image-picked-list { @apply grid grid-cols-3 gap-2 sm:grid-cols-4; } .image-picked-list > div { @apply relative aspect-square min-w-0 overflow-hidden rounded-3 border border-line-subtle bg-raised; } .image-picked-list img { @apply size-full object-contain; }
   .image-picked-list button { @apply absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-overlay/90 text-fg hover:bg-overlay; } .image-picked-list svg { @apply size-4; }
-  .mascot-dialog-pose-grid { @apply grid max-h-72 grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4; }
+  /* KHÔNG `max-h-72 overflow-y-auto` nữa: lưới này nằm trong `DialogBody`, mà body đã
+     là ổ cuộn DUY NHẤT của dialog (`components/ui/dialog.tsx`, có `overscroll-contain`).
+     Hai tầng cuộn lồng nhau thì lăn chuột trên lưới là dialog khựng — cùng một lỗi chủ
+     sản phẩm báo ở khu "Bộ dáng" trong trang. 19 dáng nay nở hết, body cuộn một mạch. */
+  .mascot-dialog-pose-grid { @apply grid grid-cols-3 gap-2 sm:grid-cols-4; }
   .mascot-dialog-pose-grid button { @apply relative flex min-h-28 flex-col items-center justify-center rounded-3 border border-line-subtle bg-raised p-2 text-caption text-fg-muted; }
   .mascot-dialog-pose-grid button[aria-pressed="true"] { @apply border-accent text-fg-strong; } .mascot-dialog-pose-grid button > span svg { @apply h-16 w-12; } .mascot-dialog-pose-grid button > svg { @apply absolute right-2 top-2 size-4 text-accent-text; }
   .mascot-card-pose { @apply flex aspect-square items-center justify-center rounded-2 bg-raised p-1; } .mascot-card-pose svg { @apply h-full w-full; }

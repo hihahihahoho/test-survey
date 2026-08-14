@@ -131,8 +131,11 @@ export function Lightbox(props: LightboxProps) {
         </DialogHeader>
 
         <DialogBody className="flex flex-col gap-3">
-          {/* Vùng xem: cuộn cả 2 chiều khi zoom lớn. */}
-          <div className="flex min-h-[280px] items-center justify-center overflow-auto rounded-2 border border-line-subtle bg-surface p-3">
+          {/* Vùng xem: cuộn cả 2 chiều khi zoom lớn — ca "thật sự phải giới hạn", vì
+              cuộn ở đây là ĐỂ NGẮM ảnh phóng to, không phải để đọc danh sách.
+              `overscroll-contain` để lăn tới mép ảnh thì dừng, không hất cho thân
+              dialog trôi mất khung xem đang zoom. */}
+          <div className="flex min-h-[280px] items-center justify-center overflow-auto overscroll-contain rounded-2 border border-line-subtle bg-surface p-3">
             <div style={{ width: `${zoom}%`, maxWidth: zoom <= 100 ? "100%" : "none" }}>
               <KitImage
                 projectId={props.projectId}

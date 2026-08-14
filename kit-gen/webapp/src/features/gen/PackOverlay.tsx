@@ -93,7 +93,9 @@ export function PackOverlay(props: PackOverlayProps) {
         </Button>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
+      {/* Overlay phủ kín khung ⇒ lớp nổi: cuộn nội bộ hợp lệ, `overscroll-contain`
+          để chạm biên thì dừng, không hất cho màn phía sau trôi. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-5 py-4">
         {agentOffline && (
           <InlineBanner
             tone="warning"

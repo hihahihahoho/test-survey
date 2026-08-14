@@ -81,7 +81,10 @@ export function ItemPromptBlock({ prompt, emptyReason }: { prompt: ItemPrompt | 
         </Button>
       </div>
       {prompt
-        ? <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-2 bg-canvas p-3 text-caption text-fg">{prompt.text}</pre>
+        /* Prompt có thể dài hàng chục dòng ⇒ đây là ca "thật sự phải giới hạn": để nó
+           nở hết thì hàng nút của popup bị đẩy đi. Giữ `max-h` + `overscroll-contain`
+           nên chạm đáy đoạn prompt là dừng, không hất tiếp cho thân dialog trôi theo. */
+        ? <pre className="max-h-56 overflow-auto overscroll-contain whitespace-pre-wrap break-words rounded-2 bg-canvas p-3 text-caption text-fg">{prompt.text}</pre>
         : <p className="text-body text-fg-muted">{emptyReason}</p>}
     </section>
   );

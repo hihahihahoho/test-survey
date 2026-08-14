@@ -345,7 +345,7 @@ export function GenerateDialog({
               )}
               <details className="text-caption">
                 <summary className="cursor-pointer text-fg-muted-raised">Chi tiết cho lập trình viên</summary>
-                <pre className="mt-1 overflow-auto whitespace-pre-wrap rounded-1 bg-canvas p-2 font-mono text-fg">
+                <pre className="mt-1 overflow-auto overscroll-contain whitespace-pre-wrap rounded-1 bg-canvas p-2 font-mono text-fg">
                   {devDetails(submitError)}
                 </pre>
               </details>

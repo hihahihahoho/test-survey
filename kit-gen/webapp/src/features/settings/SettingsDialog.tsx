@@ -124,7 +124,9 @@ function SettingsDialogBody({ tab, onTabChange }: Pick<SettingsDialogProps, "tab
             ))}
           </nav>
         </aside>
-        <div className="min-h-0 overflow-y-auto px-5 py-5 md:px-7">
+        {/* Cột phải là ổ cuộn của dialog (dialog này cao cố định, không dùng
+            `DialogBody`) ⇒ cùng luật lớp nổi: chạm biên thì dừng. */}
+        <div className="min-h-0 overflow-y-auto overscroll-contain px-5 py-5 md:px-7">
           <Tabs value={tab} onValueChange={(v) => onTabChange(v as SettingsTab)}>
             <TabsContent value="agent" className="mt-0"><AgentTab status={status} onRecheck={recheckAll} /></TabsContent>
             <TabsContent value="env" className="mt-0"><EnvTab doctor={doctor} status={status} /></TabsContent>

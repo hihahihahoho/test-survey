@@ -109,9 +109,15 @@ DialogHeader.displayName = "DialogHeader";
 /**
  * Body cuộn riêng. CHỈ dùng cho nội dung CẦN CUỘN — một dòng chữ thì đưa vào header.
  * `data-testid` để cổng kiểm phát biểu được ở dạng phủ định: *dialog ngắn KHÔNG có body*.
+ *
+ * `overscroll-contain`: đây là lớp NỔI, nên cuộn tới biên thì DỪNG, không hất tiếp cho
+ * trang phía sau trôi theo. Đặt ở ĐÂY (một chỗ) chứ không rắc vào từng dialog, và cũng
+ * là lý do các danh sách con bên trong body KHÔNG cần hộp cuộn riêng nữa — body là ổ
+ * cuộn DUY NHẤT của dialog. Ngược lại với khối trong-trang: ở đó `overflow-y-auto` +
+ * `overscroll-contain` làm trang khựng (xem chú thích đầu `steps/MascotStep.tsx`).
  */
 const DialogBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div data-testid="dialog-body" className={cn("min-h-0 flex-1 overflow-y-auto px-5 py-2", className)} {...props} />
+  <div data-testid="dialog-body" className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-2", className)} {...props} />
 );
 DialogBody.displayName = "DialogBody";
 

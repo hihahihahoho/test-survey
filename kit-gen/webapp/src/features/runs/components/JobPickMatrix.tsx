@@ -43,8 +43,11 @@ export function JobPickMatrix({
     );
   }
 
+  /* Bảng dài tuỳ số phong cách × số sheet ⇒ ca "thật sự phải giới hạn": nở hết thì hàng
+     nút của `GenerateDialog` bị đẩy khỏi tầm mắt. Giữ `max-h`, thêm `overscroll-contain`
+     để chạm biên bảng là dừng, không hất tiếp cho thân dialog trôi theo. */
   return (
-    <div className="max-h-64 overflow-auto rounded-2 border border-line-subtle">
+    <div className="max-h-64 overflow-auto overscroll-contain rounded-2 border border-line-subtle">
       <Table>
         <caption className="sr-only">
           Chọn lượt cần sinh: {variants.length} phong cách × {sheets.length} sheet

@@ -20,18 +20,29 @@ export { POSES } from "../lib/poses";
 /** Xem `KitsetStep` — cùng một luật hai hình thái cho wizard và trang quản lý. */
 export type MascotVariant = "wizard" | "manage";
 
-/**
- * KHỐI DANH SÁCH CUỘN ĐƯỢC — dùng cho cả danh sách nhân vật lẫn lưới dáng.
+/* KHÔNG CÓ HỘP CUỘN CON Ở BƯỚC NÀY — đọc trước khi định thêm lại `max-h` +
+ * `overflow-y-auto`. (Block comment thường, KHÔNG phải JSDoc của `MascotStep`: nó nói về
+ * cả file chứ không riêng component.)
  *
- * Chủ sản phẩm: "MASCOT, CHO NÓ SHOW SCROLL ĐƯỢC". Trước đây hai danh sách này đổ
- * thẳng ra trang, nên khi một dự án có nhiều nhân vật/nhiều dáng thì hàng nút Lưu và
- * cả hàng tab bị đẩy ra ngoài tầm nhìn, còn muốn xem dáng cuối phải cuộn cả trang.
+ * Bản trước gói cả danh sách nhân vật lẫn lưới dáng vào
+ * `max-h-[min(60vh,34rem)] overflow-y-auto overscroll-contain`, và đó chính là lỗi chủ
+ * sản phẩm báo: *lăn chuột ngang qua khu "Bộ dáng" là trang khựng lại*.
  *
- * `max-h` chứ KHÔNG `h`: chiều cao không bị bó cứng — ít món thì khối co lại vừa số
- * món, nhiều món thì mới sinh thanh cuộn riêng. `pr-1` chừa chỗ cho thanh cuộn để nó
- * không đè lên viền thẻ cuối hàng.
+ * Cơ chế, đã đo bằng Chromium chứ không suy đoán: `overflow-y-auto` biến khối thành
+ * scroll container NGAY CẢ KHI nội dung không tràn (một nhóm dáng chỉ có 3–4 thẻ ⇒ cao
+ * 200px, còn xa mức trần 540px). Thêm `overscroll-behavior-y: contain` thì container đó
+ * NUỐT luôn wheel event thay vì nhả cho trang: con trỏ nằm trên khối ⇒ `window.scrollY`
+ * đứng im ở 0. (Đo: contain+auto ⇒ scrollY 0 · auto trần ⇒ 200 · không overflow ⇒ 200.)
+ *
+ * Nên hai danh sách nay NỞ HẾT chiều cao tự nhiên và trang cuộn một mạch. Đó cũng đúng
+ * ý câu "MASCOT, CHO NÓ SHOW SCROLL ĐƯỢC" của chủ sản phẩm — nghĩa là XEM ĐƯỢC HẾT, chứ
+ * không phải dựng một hộp con có thanh cuộn riêng. Trang dài thêm là đúng thiết kế.
+ *
+ * Cuộn nội bộ chỉ hợp lệ trong lớp NỔI (dialog/popover/overlay), nơi nền sau đã bị khoá
+ * cuộn nên chặn chaining không cướp mất cú lăn nào: xem `DialogBody`
+ * (`components/ui/dialog.tsx`) — ổ cuộn DUY NHẤT của mọi dialog, đã mang
+ * `overscroll-contain`.
  */
-const SCROLL_LIST = "max-h-[min(60vh,34rem)] overflow-y-auto overscroll-contain pr-1";
 
 export function MascotStep({ variant = "wizard", detailFooter }: {
   variant?: MascotVariant;
@@ -91,21 +102,18 @@ export function MascotStep({ variant = "wizard", detailFooter }: {
               </Button>
             </div>
             {s.mascots.length > 0 ? (
-              /* "MASCOT, CHO NÓ SHOW SCROLL ĐƯỢC" — danh sách nhân vật cuộn TRONG khối
-                 của nó. `max-h` chứ không `h`: bốn nhân vật thì khối cao bốn thẻ, không
-                 phải một hộp rỗng cao bằng màn hình. */
-              <div className={SCROLL_LIST}>
-                <div className="mascot-card-grid">
-                  {s.mascots.map((mascot, index) => (
-                    <MascotCard
-                      key={mascot.id}
-                      mascot={mascot}
-                      index={index}
-                      onEdit={() => openEdit(mascot)}
-                      onRemove={() => s.removeMascot(mascot.id)}
-                    />
-                  ))}
-                </div>
+              /* Lưới đổ THẲNG ra trang — không bọc thêm một tầng cuộn nào. Xem chú
+                 thích đầu file: hộp cuộn con ở đây là thứ làm trang khựng. */
+              <div className="mascot-card-grid">
+                {s.mascots.map((mascot, index) => (
+                  <MascotCard
+                    key={mascot.id}
+                    mascot={mascot}
+                    index={index}
+                    onEdit={() => openEdit(mascot)}
+                    onRemove={() => s.removeMascot(mascot.id)}
+                  />
+                ))}
               </div>
             ) : (
               <MascotEmpty onAdd={openAdd} />
@@ -136,7 +144,7 @@ export function MascotStep({ variant = "wizard", detailFooter }: {
               trailing={`${poseCount} đã chọn`}
             />
 
-            <div aria-label={poseGroup} className={cn("compact-element-grid", SCROLL_LIST)}>
+            <div aria-label={poseGroup} className="compact-element-grid">
               {shown.map((pose) => {
                 const on = s.mascotPoses.includes(pose.id);
                 const toggle = (
