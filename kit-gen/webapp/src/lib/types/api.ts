@@ -705,7 +705,12 @@ export const cancelRunResultSchema = z.looseObject({
   cancelled: z.boolean().default(true),
   killed: z.array(z.string()).default([]),
   kept: z.number().default(0),
+  /** Tấm CHƯA CÓ ẢNH của lượt vừa dừng — nguồn của câu "còn N tấm chưa vẽ" ngay trong
+   *  toast. Agent cũ (≤ 15/08) không gửi field này ⇒ `default([])`, câu đó chỉ im đi
+   *  chứ không làm vỡ luồng dừng. */
+  missing: z.array(z.string()).default([]),
 });
+export type CancelRunResult = z.infer<typeof cancelRunResultSchema>;
 
 /** #38 `GET …/jobs/:job/prompt` (đóng §3.3 "prompt đã dùng"). */
 export const jobPromptSchema = z.looseObject({

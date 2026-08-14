@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Run } from "@/lib/types";
 import {
   categoryOfSheet, generatedRuns, groupLabel, jobsForGroup, resultProgress, resultStateOf,
-  sheetLabel, sheetSeries,
+  resumeInvite, sheetLabel, sheetSeries,
 } from "../generated-results";
 
 const run = (overrides: Partial<Run>): Run => ({
@@ -138,5 +138,38 @@ describe("trạng thái ô kết quả theo vòng đời lượt chạy", () => 
     expect(live.items.map((i) => i.state)).toEqual(["done", "running", "queued"]);
     expect(live.items.map((i) => i.category)).toEqual(["background", "ui", "ui"]);
     expect(resultProgress(live.items)).toEqual({ done: 1, failed: 0, running: 1, total: 3 });
+  });
+
+  /* ── DỪNG → CHẠY TIẾP PHẦN THIẾU (16/08) ─────────────────────────────────
+     Lời mời này là vế thứ hai của nút Dừng. Nó phải chọn ĐÚNG tập còn thiếu: thừa một
+     tấm là đốt lại quota của ảnh đã trả tiền, thiếu một tấm là người dùng tưởng xong
+     rồi mà bộ kit vẫn hụt. */
+  it("lượt bị dừng ⇒ mời chạy tiếp ĐÚNG số tấm chưa có ảnh", () => {
+    const group = generatedRuns([run({
+      status: "cancelled", finishedAt: "2026-08-16T00:01:00Z",
+      jobs: [
+        { job: "a", sheet: "nen", status: "ok", startedAt: null, durationMs: null, artifact: { path: "raw/a.png" }, recovered: false, diagnosis: null },
+        { job: "b", sheet: "ui", status: "queued", startedAt: null, durationMs: null, artifact: null, recovered: false, diagnosis: null },
+        { job: "c", sheet: "ui2", status: "queued", startedAt: null, durationMs: null, artifact: null, recovered: false, diagnosis: null },
+      ],
+    })])[0]!;
+    expect(resumeInvite(group)).toEqual({ jobs: ["b", "c"], done: 1, total: 3 });
+  });
+
+  it("không mời chạy tiếp khi lượt còn sống, đã xong, hay đang hỏng theo kiểu khác", () => {
+    const live = generatedRuns([run({ status: "running", finishedAt: null })])[0]!;
+    expect(resumeInvite(live)).toBeNull();
+    expect(resumeInvite(generatedRuns([run({})])[0]!)).toBeNull();
+    // lượt đỏ đã có dải RunFailBanner nói chuyện lỗi — không chồng thêm giọng thứ hai
+    expect(resumeInvite(generatedRuns([run({ status: "done-with-errors" })])[0]!)).toBeNull();
+    expect(resumeInvite(null)).toBeNull();
+  });
+
+  it("dừng mà tấm nào cũng kịp xong ⇒ không mời gì cả", () => {
+    const done = generatedRuns([run({
+      status: "cancelled",
+      jobs: [{ job: "a", sheet: "nen", status: "ok", startedAt: null, durationMs: null, artifact: { path: "raw/a.png" }, recovered: false, diagnosis: null }],
+    })])[0]!;
+    expect(resumeInvite(done)).toBeNull();
   });
 });

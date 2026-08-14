@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Image as ImageIcon, Loader2, StopCircle } from "lucide-react";
+import { Image as ImageIcon, Loader2, PlayCircle, StopCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -7,9 +7,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  generatedRuns, isRunLive, resultProgress,
+  generatedRuns, isRunLive, resultProgress, resumeInvite,
   type GeneratedRunGroup, type ResultGroup,
 } from "../lib/generated-results";
+import { GenerateDialog } from "@/features/runs";
 import { CutAssetGrid } from "./CutAssetGrid";
 import { RawSheetsPanel } from "./RawSheetsPanel";
 import type { Contract, JobStatusValue } from "@/lib/types";
@@ -72,7 +73,14 @@ export function GeneratedResults({ projectId, contract, jobStates, category = "a
 
   return (
     <div className="space-y-6">
-      {liveGroup ? <RunProgressBar projectId={projectId} group={liveGroup} readOnly={readOnly} /> : null}
+      {liveGroup
+        ? <RunProgressBar projectId={projectId} group={liveGroup} readOnly={readOnly} />
+        : (
+          <ResumeBar
+            projectId={projectId} contract={contract} jobStates={jobStates}
+            group={groups[0] ?? null} readOnly={readOnly}
+          />
+        )}
 
       <Tabs defaultValue="cut">
         {/* `aria-label` để phân biệt với hàng tab của trang Skeleton UI / Mascot, nơi
@@ -159,7 +167,15 @@ function RunProgressBar({ projectId, group, readOnly }: {
             <AlertDialogCancel>Tiếp tục tạo</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => cancel.mutate(group.id, {
-                onSuccess: () => toastInfo("Đã dừng lượt tạo ảnh", "Ảnh của sheet đã xong vẫn được giữ."),
+                /* Nói NGAY hai điều mà người dùng vừa mất quyền nhìn thấy: cái đã xong
+                   còn nguyên, và còn bao nhiêu tấm nợ lại — dải "Chạy tiếp N tấm còn
+                   thiếu" sẽ hiện ngay dưới đây khi run đóng sổ. */
+                onSuccess: (res) => toastInfo(
+                  "Đã dừng lượt tạo ảnh",
+                  res.missing.length
+                    ? `${res.kept} tấm đã xong được giữ và cắt xong · còn ${res.missing.length} tấm chưa vẽ, chạy tiếp lúc nào cũng được.`
+                    : "Ảnh của sheet đã xong vẫn được giữ.",
+                ),
                 onError: (err) => toastError(err, {}),
               })}
             >
@@ -168,6 +184,62 @@ function RunProgressBar({ projectId, group, readOnly }: {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </>
+  );
+}
+
+/**
+ * DẢI "ĐÃ DỪNG — CHẠY TIẾP PHẦN THIẾU".
+ *
+ * Đây là vế thứ hai của cặp Dừng/Chạy tiếp. Vế thứ nhất (nút Dừng) đã có từ lâu; vế
+ * này thì trước bản 16/08 KHÔNG tồn tại: dừng xong màn hình chỉ còn "Tạo lại toàn bộ",
+ * nên muốn vẽ nốt 4 tấm thiếu người dùng phải tự mở modal rồi tick bỏ 6 tấm đã xong —
+ * và tick sót một ô là **đốt lại quota của tấm đã trả tiền**. Nút ở đây mở đúng modal ấy
+ * nhưng đã chọn sẵn ĐÚNG tập còn thiếu (`resumeInvite`), nên đường mặc định là đường rẻ nhất.
+ *
+ * Vẫn đi qua `GenerateDialog` chứ không gọi thẳng API: §4.8 — "không có đường nào chạy
+ * gen mà không qua modal này". Ba con số (số lượt · thời gian · cảnh báo quota) phải
+ * được nhìn thấy trước khi tiêu lượt đầu tiên, kể cả khi lượt ấy là "chạy tiếp".
+ */
+function ResumeBar({ projectId, contract, jobStates, group, readOnly }: {
+  projectId: string;
+  contract: Contract | null;
+  jobStates: Record<string, JobStatusValue>;
+  group: GeneratedRunGroup | null;
+  readOnly: boolean;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const invite = resumeInvite(group);
+  if (!invite) return null;
+
+  return (
+    <>
+      <section
+        className="flex flex-wrap items-center justify-between gap-3 rounded-4 border border-line-subtle bg-surface p-4"
+        role="status"
+        aria-label="Lượt tạo ảnh đã dừng"
+      >
+        <div className="min-w-0">
+          <p className="text-label text-fg-strong">
+            Đã dừng giữa chừng · còn {invite.jobs.length}/{invite.total} tấm chưa vẽ
+          </p>
+          <p className="mt-1 text-caption text-fg-muted">
+            {invite.done > 0
+              ? `${invite.done} tấm đã xong được giữ nguyên và đã cắt — chạy tiếp sẽ KHÔNG vẽ lại chúng.`
+              : "Chưa tấm nào kịp xong, chạy tiếp sẽ vẽ lại từ đầu danh sách."}
+          </p>
+        </div>
+        <Button variant="primary" size="sm" disabled={readOnly} onClick={() => setOpen(true)}>
+          <PlayCircle aria-hidden />Chạy tiếp {invite.jobs.length} tấm còn thiếu
+        </Button>
+      </section>
+
+      <GenerateDialog
+        open={open} onOpenChange={setOpen}
+        projectId={projectId} contract={contract} jobStates={jobStates}
+        initialJobs={invite.jobs} readOnly={readOnly}
+        readOnlyReason="Công cụ local chưa sẵn sàng"
+      />
     </>
   );
 }

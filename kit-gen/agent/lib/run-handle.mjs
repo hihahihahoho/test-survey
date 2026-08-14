@@ -75,6 +75,13 @@ export class RunHandle {
     /* Tiến trình con NGOÀI pha chính (slice hẹp). `this.child` là của pha đang chạy —
        ghi đè nó sẽ làm cancel() giết nhầm/bỏ sót. Giữ riêng để cancel() giết đủ. */
     this.sideChildren = new Set()
+    /* Tấm đã CẮT XONG trong chu trình per-sheet. Lượt dọn sau khi Dừng đọc tập này để
+       biết tấm nào còn nợ một lượt cắt (xem settleCancelledSheets). */
+    this.slicedSheets = new Set()
+    /* Dừng XONG có được dọn nốt phần đã trả tiền không? Người dùng bấm Dừng: CÓ.
+       DELETE project: KHÔNG — thư mục sắp bị move sang thùng rác, mọi bút toán muộn
+       vào đó là "thư mục ma" của C-01 (xem cancelAllForProject). */
+    this.settleOnCancel = true
     this.coverKicked = false
     /* Vòng nhớ stderr của CẢ LƯỢT — lưới hứng cuối cùng khi job không có log riêng
        (engine chết trước khi kịp tạo `logs/<job>.log`: đúng ca `rc=127`/`SyntaxError`). */
@@ -175,7 +182,10 @@ export class RunHandle {
        Đợi cho cạn TRƯỚC pha cắt tổng: hai lượt slice.py cùng lúc trên một manifest là
        đúng cuộc đua mà cả bản vá này sinh ra để tránh. */
     await this.drainSheetQueue()
-    if (this.cancelled) return this.finish("cancelled")
+    if (this.cancelled) {
+      await this.settleCancelledSheets()
+      return this.finish("cancelled")
+    }
     if (this.run.kind === "gen" && this.opts.autoSliceAfterGen) {
       const okJobs = this.run.jobs.filter(j => j.status === "ok")
       if (okJobs.length) {
@@ -296,9 +306,16 @@ export class RunHandle {
     }
   }
 
-  /** gen xong MỘT tấm → snapshot artifact → cắt hẹp → thumbnail → `sheet.ready`. */
+  /** gen xong MỘT tấm → snapshot artifact → cắt hẹp → thumbnail → `sheet.ready`.
+   *
+   *  KHÔNG rút lui khi `cancelled` (bản 15/08 có, và đó là lỗi): ảnh của tấm này ĐÃ
+   *  TỐN QUOTA rồi. Bấm Dừng có nghĩa là "đừng vẽ thêm", không phải "vứt cái đã vẽ".
+   *  Đo được trên engine giả: dừng lúc 2/6 tấm xong ⇒ tấm thứ hai nằm lại `raw/` mà
+   *  KHÔNG BAO GIỜ được cắt — kể cả lượt "chạy tiếp phần thiếu" sau đó cũng không cứu,
+   *  vì `styles.json` của lượt ấy đã thu hẹp về đúng phần thiếu. Chốt chặn thật sự là
+   *  `detached` (thư mục đích không còn) và `finished` (lượt đã đóng sổ). */
   async finishSheet(j) {
-    if (this.detached || this.cancelled || this.finished) return
+    if (this.detached || this.finished) return
     const pdir = projectDir(this.ws, this.run.projectId)
     const png = join(pdir, "raw", `${j.job}.png`)
     if (!(await exists(png))) return
@@ -306,8 +323,9 @@ export class RunHandle {
     const sliced = (this.run.kind === "gen" && this.opts.autoSliceAfterGen)
       ? await this.sliceSheet(pdir, j)
       : null
+    if (sliced?.ok) this.slicedSheets.add(j.job)
     const thumb = await this.warmThumbs(pdir, j)
-    if (this.detached || this.cancelled) return
+    if (this.detached) return
     await this.persist()
     /* SỰ KIỆN CHO WEB (tương thích ngược: web hiện bỏ qua type lạ — xem
        `webapp/src/lib/types/api.ts`, nhánh cuối của streamEventSchema).
@@ -319,6 +337,28 @@ export class RunHandle {
       artifact: j.artifact ? { path: j.artifact.path, bytes: j.artifact.bytes } : null,
       sliced, thumbs: thumb,
     })
+  }
+
+  /** DỌN NỐT PHẦN ĐÃ TRẢ TIỀN sau khi người dùng bấm Dừng.
+   *
+   *  "Dừng" ở kit-gen KHÔNG treo tiến trình (không SIGSTOP): nó là **ngừng phát job
+   *  mới + giữ sạch những gì đã xong**. "Sạch" nghĩa là tấm đã có ảnh phải đi hết chu
+   *  trình của nó — cắt ra `kits/`, có thumbnail, phát `sheet.ready` — y như lượt chạy
+   *  bình thường. Tấm nào đã cắt trong lúc chạy thì bỏ qua (`slicedSheets`), nên đây
+   *  chỉ là phần đuôi: tấm vừa xong đúng lúc bấm Dừng, và tấm có lượt cắt bị SIGTERM
+   *  giết giữa chừng.
+   *
+   *  KHÔNG tốn một đơn vị quota nào: `slice.py` là PIL thuần, không gọi codex. */
+  async settleCancelledSheets() {
+    if (this.run.kind !== "gen" || !this.opts.autoSliceAfterGen) return
+    for (const j of this.run.jobs) {
+      if (!this.settleOnCancel || this.detached || this.finished) return
+      if (j.status !== "ok" || this.slicedSheets.has(j.job)) continue
+      await this.finishSheet(j).catch(e => {
+        if (e?.code !== "ENOENT" && e?.code !== "ENOTDIR")
+          process.stderr.write(`[agent] run ${this.id} dọn ${j.job}: ${redactLine(String(e?.message ?? e))}\n`)
+      })
+    }
   }
 
   /** Ảnh của lượt chạy = SNAPSHOT BẤT BIẾN trong runs/<id>/artifacts/ (+ kiểm hình học).
@@ -349,7 +389,7 @@ export class RunHandle {
    *  Chạy NGOÀI `runPhase` vì pha chính (gen.sh) vẫn đang chạy — `this.child` và
    *  `this.phaseDone` thuộc về nó, ghi đè là cancel() giết nhầm tiến trình. */
   async sliceSheet(pdir, j) {
-    if (this.stopped() || this.detached) return null
+    if (this.detached || this.finished) return null
     const { cmd, args, env } = buildCommand("slice", pdir, { variants: [j.variant], sheets: [j.sheet] })
     const t0 = Date.now()
     const code = await new Promise(resolve => {
@@ -489,7 +529,14 @@ export class RunHandle {
           this.run.progress.done += 1
         }
       } else if (j.status !== "failed") {
-        j.status = this.cancelled && j.status === "queued" ? "queued" : "failed"
+        /* NGƯỜI DÙNG DỪNG THÌ KHÔNG CÓ AI "HỎNG".
+           Bản trước chỉ tha cho job còn `queued`; job đang `running` lúc bấm Dừng bị
+           SIGTERM giết ⇒ không có ảnh ⇒ bị ghi là `failed` + `NO_ARTIFACT` + errorTail.
+           Trên màn hình đó là một thẻ ĐỎ "Chưa tạo được ảnh" cho việc mà chính người
+           dùng vừa yêu cầu — và `failSummary` còn đọc thành "1/6 job không ghi được
+           ảnh". Trong một run `cancelled`, `queued` đọc ra là "Đã dừng"
+           (generated-results.ts `resultStateOf`), đúng chuyện đã xảy ra. */
+        j.status = this.cancelled ? "queued" : "failed"
         if (j.status === "failed") {
           this.run.progress.failed += 1
           j.diagnosis = j.diagnosis ?? "NO_ARTIFACT"
@@ -515,17 +562,29 @@ export class RunHandle {
   }
 
   /** Dừng lượt chạy.
+   *
+   *  NGỮ NGHĨA (chốt 16/08, xem agent/README.md "Dừng & chạy tiếp"): dừng = **ngừng phát
+   *  job mới**, KHÔNG phải treo tiến trình. Lượt `codex exec` đang bay bị SIGTERM (nó
+   *  không có nút tạm dừng), phần đã xong được giữ NGUYÊN và được dọn cho sạch
+   *  (`settleCancelledSheets`). Chạy tiếp = một run MỚI với đúng danh sách job còn thiếu.
+   *
+   *  `settle = false`: chỉ dành cho DELETE project — sau khi cancel, thư mục project bị
+   *  move sang thùng rác, nên tuyệt đối không được spawn thêm `slice.py` ghi vào đó.
    *  `waitMs > 0`: ĐỢI child chết hẳn và mọi bút toán xuống đĩa kết thúc trước khi trả về.
    *  Người gọi là DELETE project PHẢI đợi, nếu không sẽ có cuộc đua:
    *    cancel() gửi SIGTERM → trả về ngay → trashProject() move thư mục đi
    *    → child 'close' bắn muộn → settleGenJobs()/persist()/emit() ghi vào đường dẫn cũ
    *    → writeJsonAtomic ensureDir DỰNG LẠI projects/<id>/runs/ = thư mục ma
    *    → POST /api/trash/:id/restore trả 409 PROJECT_ID_TAKEN (nút Hoàn tác chết). */
-  async cancel({ waitMs = 0 } = {}) {
+  async cancel({ waitMs = 0, settle = true } = {}) {
     if (this.finished) fail("RUN_FINISHED", `run ${this.id} already finished`)
     this.cancelled = true
+    if (!settle) this.settleOnCancel = false
     const killed = this.run.jobs.filter(j => j.status === "running").map(j => j.job)
     const kept = this.run.jobs.filter(j => j.status === "ok").length
+    /* Danh sách để UI mời "Chạy tiếp N tấm còn thiếu" ngay trong toast, không bắt người
+       dùng tự đối chiếu xem lượt vừa dừng còn nợ những tấm nào. */
+    const missing = this.run.jobs.filter(j => j.status !== "ok").map(j => j.job)
     const hadChild = !!this.child
     // killTree: POSIX = ĐÚNG mã cũ (process.kill(-pid) rồi rơi về child.kill);
     // win32 = taskkill /T vì không có process group và codex là tiến trình CHÁU của bash.
@@ -538,7 +597,7 @@ export class RunHandle {
     if (!hadChild) {
       // Chưa spawn: launch() thấy stopped() sẽ tự rút, không dựng lại thư mục project.
       await this.finish("cancelled")
-      return { runId: this.id, cancelled: true, killed, kept }
+      return { runId: this.id, cancelled: true, killed, kept, missing }
     }
     if (waitMs > 0) {
       // Đợi pha hiện tại đóng sổ. Có trần thời gian để DELETE không treo vô hạn nếu
@@ -554,7 +613,7 @@ export class RunHandle {
       }
       if (!this.finished) await this.finish("cancelled")
     }
-    return { runId: this.id, cancelled: true, killed, kept }
+    return { runId: this.id, cancelled: true, killed, kept, missing }
   }
 
   async failEnv(message) {

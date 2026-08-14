@@ -3,7 +3,7 @@
    Mỗi project tối đa 1 run → 409 RUN_CONFLICT kèm runId đang chạy (đóng E5).
    Job PHÁN THEO SẢN PHẨM (mtime raw/<job>.png >= t0), KHÔNG theo exit code (gen.sh:167-176). */
 import { join } from "node:path"
-import { ensureDir, exists, readJsonFile, writeJsonAtomic, readdir } from "./fsx.mjs"
+import { ensureDir, exists, readJsonFile, writeJsonAtomic, readdir, mtimeOf, stat, copyFile } from "./fsx.mjs"
 import { fail } from "./errors.mjs"
 import { RE_RUN_ID, RE_JOB, assertMatch } from "./paths.mjs"
 import { projectDir } from "./projects-dir.mjs"
@@ -27,6 +27,74 @@ export function sanitizeRun(run) {
     jobs: (run.jobs ?? []).map(j =>
       Array.isArray(j?.errorTail) ? { ...j, errorTail: j.errorTail.map(redactLine) } : j),
   }
+}
+
+/** QUÉT LƯỢT CHẠY MỒ CÔI LÚC KHỞI ĐỘNG.
+ *
+ *  `RunHandle` chỉ sống trong bộ nhớ của MỘT tiến trình agent. Tiến trình trước chết
+ *  giữa lượt (kill -9, máy ngủ rồi mất tiến trình, cài bản mới) thì `run.json` còn nguyên
+ *  `"running"` mà không còn ai chạy. Hậu quả đo được ở web: `isRunLive(status)` = true ⇒
+ *  dải "Đang tạo ảnh…" quay MÃI MÃI với một nút Dừng chỉ trả về `RUN_NOT_FOUND`/409, và
+ *  `state.activeRun` thì lại `null` (nó đọc handle trong RAM) — hai nguồn nói ngược nhau.
+ *
+ *  Boot là chỗ DUY NHẤT biết chắc "không job nào của lượt trước còn sống", nên dọn ở đây,
+ *  cùng chỗ với `sweepOrphanCovers`. Ba việc, không hơn:
+ *   ① NHẶT LẠI ẢNH ĐÃ TỐN QUOTA: `raw/<job>.png` ghi ra SAU khi lượt bắt đầu ⇒ job đó
+ *     thực sự đã xong, dù `run.json` chưa kịp ghi. Chép sang `runs/<id>/artifacts/` để nó
+ *     thành ảnh bất biến của lượt, đánh dấu `recovered` để không ai tưởng đây là bản gốc.
+ *   ② Job không có ảnh → `queued` trong một run `cancelled` = "đã dừng", đúng ngữ nghĩa
+ *     "chưa vẽ tới" (KHÔNG phải `failed`: agent chết không phải lỗi của bức ảnh).
+ *   ③ Đánh dấu run `cancelled` + `interrupted: true` để web mời "Chạy tiếp phần thiếu".
+ *  KHÔNG bao giờ xoá/ghi đè `raw/` — ảnh đã tốn quota là thứ đắt nhất trong thư mục này.
+ */
+export async function sweepOrphanRuns(ws) {
+  const ents = await readdir(ws.projectsDir, { withFileTypes: true }).catch(() => [])
+  const swept = []
+  for (const e of ents) {
+    if (!e.isDirectory()) continue
+    const pdir = join(ws.projectsDir, e.name)
+    const runsDir = join(pdir, "runs")
+    for (const name of (await readdir(runsDir).catch(() => []))) {
+      if (!RE_RUN_ID.test(name)) continue
+      const dir = join(runsDir, name)
+      let run = null
+      try { run = await readJsonFile(join(dir, "run.json")) } catch { continue }
+      if (run?.status !== "running" && run?.status !== "queued") continue
+      const t0 = Math.floor((Date.parse(run.startedAt ?? "") || 0) / 1000)
+      for (const j of run.jobs ?? []) {
+        if (j.status === "ok" && j.artifact) continue
+        const png = join(pdir, "raw", `${j.job}.png`)
+        const mt = await mtimeOf(png)
+        if (mt > 0 && Math.floor(mt / 1000) >= t0) {
+          if (!j.artifact) {
+            await ensureDir(join(dir, "artifacts"))
+            await copyFile(png, join(dir, "artifacts", `${j.job}.png`)).catch(() => null)
+            const st = await stat(png).catch(() => null)
+            j.artifact = {
+              path: `runs/${run.id}/artifacts/${j.job}.png`,
+              bytes: st?.size ?? 0, writtenAt: new Date(mt).toISOString(), validation: null,
+            }
+          }
+          j.status = "ok"
+          j.recovered = true
+        } else if (j.status !== "failed") {
+          j.status = "queued"
+        }
+      }
+      run.status = "cancelled"
+      run.interrupted = true
+      run.finishedAt = run.finishedAt ?? new Date().toISOString()
+      run.progress = {
+        ...(run.progress ?? {}),
+        done: (run.jobs ?? []).filter(j => j.status === "ok").length,
+        failed: (run.jobs ?? []).filter(j => j.status === "failed").length,
+        etaSeconds: null,
+      }
+      await writeJsonAtomic(join(dir, "run.json"), run).catch(() => null)
+      swept.push(`${e.name}/${run.id}`)
+    }
+  }
+  return swept
 }
 
 export class RunStore {
@@ -153,7 +221,10 @@ export class RunStore {
       h?.detach()
       return []
     }
-    const r = await h.cancel({ waitMs: 5000 })
+    /* `settle: false` — khác hẳn nút Dừng của người dùng. Ở đó ta còn cắt nốt tấm đã
+       tốn quota (settleCancelledSheets); ở đây thư mục project sắp bị move sang thùng
+       rác, nên spawn thêm một lượt slice.py ghi vào đó chính là "thư mục ma" của C-01. */
+    const r = await h.cancel({ waitMs: 5000, settle: false })
     h.detach()
     return [r.runId]
   }

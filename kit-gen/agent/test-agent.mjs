@@ -14,6 +14,7 @@
      suite-limits    413 body (2 đường) · 429 rate limit
      suite-refs      multipart · agent tự đặt tên · magic bytes · REF_IN_USE
      suite-runs      run-store trên đĩa · stream NDJSON + reconnect · dừng · gen→slice thật
+     suite-pause     dừng giữa chừng → chạy tiếp phần thiếu · run mồ côi sau khi agent chết
      suite-cover     ảnh bìa: prompt neo branding gốc · toạ độ vùng tiêu đề · job phụ không phá run
      suite-import    nhập một chiều có báo cáo · /app/ same-origin · /bridge.html · redact
    ========================================================================== */
@@ -33,6 +34,7 @@ import { run as runLimits } from "./test/suite-limits.mjs"
 import { run as runDocs } from "./test/suite-docs.mjs"
 import { run as runRefs } from "./test/suite-refs.mjs"
 import { run as runRuns } from "./test/suite-runs.mjs"
+import { run as runPause } from "./test/suite-pause.mjs"
 import { run as runCover } from "./test/suite-cover.mjs"
 import { run as runImport } from "./test/suite-import.mjs"
 import { run as runLibrary } from "./test/suite-library.mjs"
@@ -67,6 +69,7 @@ await runLimits({ ...base, pid })
 await runRefs({ ...base, pid })
 await runLibrary(base)
 await runRuns({ ...base, pid })
+await runPause({ ...base, pid })
 await runCover({ ...base, pid })
 await runImport({ ...base, pid })
 

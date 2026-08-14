@@ -163,7 +163,7 @@ Mọi response có `X-KitGen-Protocol: 1`. Lỗi luôn theo envelope §6.1:
 | 33 | GET | `/api/projects/:id/runs?limit=20` | Lịch sử run |
 | 34 | GET | `/api/runs/:runId` | Trạng thái đầy đủ (nguồn của fallback poll 2s) |
 | 35 | GET | `/api/runs/:runId/stream?from=<seq>` | **NDJSON** chunked, heartbeat 15s. Mất kết nối thì `?from=lastSeq+1` |
-| 36 | POST | `/api/runs/:runId/cancel` | Kill **process group**; `{cancelled, killed[], kept}`. Ảnh của lượt đã xong **được giữ** |
+| 36 | POST | `/api/runs/:runId/cancel` | Kill **process group**; `{cancelled, killed[], kept, missing[]}`. Ảnh của lượt đã xong **được giữ và cắt nốt** — xem "Dừng & chạy tiếp" |
 | 37 | GET | `/api/runs/:runId/jobs/:job/log?tail=2000` | `text/plain`, **đã redact** |
 | 38 | GET | `/api/runs/:runId/jobs/:job/prompt` | Prompt đã dùng + danh sách ảnh kèm |
 | 39 | GET | `/api/projects/:id/raw/:job/history` | 3 đời ảnh raw |
@@ -187,6 +187,9 @@ Mọi response có `X-KitGen-Protocol: 1`. Lỗi luôn theo envelope §6.1:
 {"seq":403,"t":"…","type":"job.log","job":null,"level":"info","line":"prompt → prompts/tet-main.txt"}
 {"seq":404,"t":"…","type":"job.done","job":"tet-main","status":"ok","durationMs":108000}
 {"seq":405,"t":"…","type":"progress","done":3,"total":8,"failed":1,"etaSeconds":132}
+{"seq":405,"t":"…","type":"sheet.ready","job":"tet-main","variant":"tet","sheet":"main",
+ "artifact":{"path":"runs/r-0007/artifacts/tet-main.png","bytes":3112044},
+ "sliced":{"ok":true,"code":0,"durationMs":8100},"thumbs":[256]}
 {"seq":406,"t":"…","type":"phase.changed","phase":{"index":2,"total":2,"name":"slice"}}
 {"seq":409,"t":"…","type":"run.finished","status":"done-with-errors","ok":7,"failed":1}
 {"seq":410,"t":"…","type":"heartbeat"}
@@ -196,6 +199,64 @@ Mọi response có `X-KitGen-Protocol: 1`. Lỗi luôn theo envelope §6.1:
 **replay được sau khi agent restart**. `status` của job phán theo **`artifact.writtenAt`**
 (mtime của `raw/<job>.png` ≥ t0), **không theo exit code** — giữ đúng triết lý `gen.sh:167-176`.
 Run có job lỗi → `done-with-errors`, **không bao giờ** là `done` trơn.
+
+#### `sheet.ready` — CHU TRÌNH TỪNG TẤM (15/08)
+
+`job.done` chỉ nói "tấm này gen xong". `sheet.ready` nói **tấm này đã DÙNG ĐƯỢC**: ảnh đã
+có snapshot bất biến trong `runs/<id>/artifacts/`, đã **cắt xong** (`slice.py <variant>
+--sheet=<sheet>`), đã có **thumbnail `?w=256`** nằm sẵn trong cache. Nó tới **giữa lượt**,
+ngay sau tấm đó — không phải sau khi cả lượt kết thúc.
+
+* Trước bản này, `job.artifact` chỉ được điền ở `settleGenJobs()` (sau khi **cả pha gen**
+  đóng) ⇒ ô "Đã xong" của tab *Ảnh gốc* là **ô đen** suốt lượt: web đọc `job.artifact.path`
+  và ô đó còn `null`.
+* Các lượt cắt hẹp **xếp hàng một làn** trong agent, và `slice.py` còn giữ **ổ khoá hệ điều
+  hành** quanh đọc–sửa–ghi `kits/manifest.json` (ghi qua `tmp + os.replace`) ⇒ hai lượt cắt
+  không ăn mất phần của nhau.
+* Pha **cắt tổng cuối lượt vẫn chạy** như lưới an toàn — nó idempotent, và khối merge của
+  `slice.py` giữ nguyên tấm không chạy lượt đó.
+* Field mới đều **tuỳ chọn**; client cũ bỏ qua type lạ (§6.5-6) nên không cần đổi gì.
+* **Ảnh bìa** cũng được kích ngay khi tấm đầu xong (job phụ, chạy ngoài hàng đợi tạo ảnh,
+  vẫn đúng một lượt codex cho cả run). `maxJobs = 1` = người dùng đã nói "đừng chạy nhiều
+  cùng lúc" ⇒ giữ đường cũ, bìa vẽ sau khi lượt đóng sổ.
+
+#### Dừng & chạy tiếp — NGỮ NGHĨA CHỐT (16/08)
+
+Câu hỏi của chủ sản phẩm giữa một lượt gen thật: *"pause resume có được không"*. Trả lời
+thẳng: **kit-gen không có pause đúng nghĩa và sẽ không có.** Một lượt `codex exec` đang bay
+không có nút tạm dừng; treo tiến trình kiểu `SIGSTOP` chỉ làm phía kia rớt phiên rồi vẫn
+mất lượt đó — tức là trả tiền cho một tấm không bao giờ về. Thứ có thật là một cặp:
+
+| | Làm gì | KHÔNG làm gì |
+|---|---|---|
+| **Dừng** (#36) | Ngừng phát tấm mới · `SIGTERM` cả process group của `gen.sh` (+ mọi lượt cắt hẹp đang chạy) · giữ nguyên ảnh đã có · **cắt nốt** tấm đã tốn quota mà chưa kịp cắt · `run.status = cancelled` | Không treo tiến trình · không xoá `raw/` · không gọi thêm một lượt codex nào (kể cả ảnh bìa) |
+| **Chạy tiếp** (#32) | Một run **MỚI** với `jobs: […]` = đúng tập tấm còn thiếu · agent thu hẹp `styles.json` về đúng tập ấy | Không phải "resume" cùng một run: run cũ đã đóng sổ, `runId` mới, `seq` mới |
+
+Ba luật hệ quả, đều có ca test khoá trong `agent/test/suite-pause.mjs`:
+
+* **Đã tốn quota thì phải sạch.** Tấm gen xong — kể cả tấm xong ĐÚNG LÚC bấm Dừng — vẫn đi
+  hết chu trình: snapshot `runs/<id>/artifacts/`, cắt ra `kits/`, thumbnail, `sheet.ready`
+  (`RunHandle.settleCancelledSheets`). Việc dọn này là `slice.py` thuần PIL, **không tốn
+  quota**. Ngoại lệ DUY NHẤT: `DELETE /api/projects/:id` gọi `cancel({settle:false})` — thư
+  mục sắp sang thùng rác, ghi thêm vào đó là dựng lại "thư mục ma" của C-01.
+* **Người dùng dừng thì không có ai "hỏng".** Tấm đang bay lúc bấm Dừng về `queued` trong
+  một run `cancelled` (web đọc ra "Đã dừng"), **không** phải `failed`/`NO_ARTIFACT` — nếu
+  không thì màn hình hiện thẻ đỏ "Chưa tạo được ảnh" cho đúng việc người dùng vừa yêu cầu.
+  Vì thế run bị dừng tay cũng **không** có `failSummary`.
+* **Phần thiếu là `status !== "ok"`.** #36 trả luôn `missing[]` để web mời *"Chạy tiếp N tấm
+  còn thiếu"* thay vì bắt người dùng tự tick — tick thừa một ô là vẽ lại ảnh đã trả tiền.
+
+**Agent chết giữa lượt** (kill -9, máy ngủ, cài bản mới): `RunHandle` chỉ sống trong RAM của
+một tiến trình, nên `run.json` kẹt lại `"running"` — web thấy `isRunLive` = true và quay vòng
+vĩnh viễn. Boot chạy `sweepOrphanRuns()` (cạnh `sweepOrphanCovers`): nhặt lại tấm nào đã có
+`raw/<job>.png` mới hơn `startedAt` (đánh dấu `recovered: true`, chép sang `artifacts/`), đưa
+phần còn lại về `queued`, đóng run thành `cancelled` + `interrupted: true`. **Không bao giờ
+động vào `raw/`.** Sau đó đường đi giống hệt ca bấm Dừng: web mời chạy tiếp phần thiếu.
+
+> Mép còn hở, cố ý không vá: tấm được `sweepOrphanRuns` nhặt lại có thể chưa kịp **cắt** (agent
+> chết đúng giữa gen xong và cắt xong). Lượt chạy tiếp chỉ cắt phần của chính nó, nên tấm ấy
+> nằm thô cho tới khi người dùng bấm **Cắt lại** (`kind:"slice"`, PIL thuần, không tốn quota).
+> Vá tự động nghĩa là mỗi lượt phải cắt lại TOÀN BỘ tấm cũ — đắt hơn nhiều lần cái nó cứu.
 
 ---
 
@@ -332,10 +393,13 @@ Workspace tạm trong `/tmp` (`mkdtemp`), **không dùng dữ liệu thật**, d
 Phủ: health/doctor/workspaces · CRUD trọn vòng · thùng rác + phục hồi + mã 4 số · `../` và `%2e%2e`
 và symlink ra ngoài · CORS origin lạ 403 · Host sai 421 · contract 409 khi version lệch · body quá lớn 413
 · rate limit 429 · multipart + magic bytes · run gen→auto-slice **spawn engine thật** · stream NDJSON
-+ reconnect · dừng run · nhập styles.json cũ không mất dữ liệu · `/app/` same-origin · redact.
++ reconnect · dừng run · **dừng giữa chừng rồi chạy tiếp phần thiếu** (`suite-pause`) · nhập
+styles.json cũ không mất dữ liệu · `/app/` same-origin · redact.
 
 Ca gen dùng **engine giả** ở `agent/test-fixtures/engine-fake/` — cùng giao diện với `gen.sh` thật
 (neo theo thư mục script, in `OK`/`FAIL`, ghi `raw/<job>.png`) nhưng **không gọi codex ⇒ không tốn quota**.
+Ba bản: `engine-fake` (xong tức thì, có 1 job đỏ cố ý), `engine-slow` (xong 1 job rồi treo),
+`engine-stepped` (mọi job đều xanh, cách nhau `KITGEN_FAKE_STEP` giây — để bấm Dừng ở GIỮA lượt).
 
 **Giới hạn trung thực của test:** môi trường phát triển này **chặn bind TCP**
 (`listen EPERM` cho cả `127.0.0.1` và unix socket — đã kiểm bằng lệnh thật). Test vì thế lái đúng

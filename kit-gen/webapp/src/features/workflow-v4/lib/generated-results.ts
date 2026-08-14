@@ -181,6 +181,36 @@ export function generatedRuns(runs: readonly Run[]): GeneratedRunGroup[] {
   }));
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   3. Dừng → chạy tiếp phần thiếu
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * LỜI MỜI "CHẠY TIẾP N TẤM CÒN THIẾU" — `null` nghĩa là không mời gì cả.
+ *
+ * kit-gen KHÔNG có pause thật và sẽ không có: một lượt `codex exec` đang bay không có
+ * nút tạm dừng, treo tiến trình (SIGSTOP) chỉ làm phía kia rớt phiên. "Dừng" ở đây là
+ * **ngừng phát tấm mới**; agent giữ nguyên tấm đã xong và cắt nốt cho sạch
+ * (`run-handle.mjs settleCancelledSheets`). Vế còn lại của cặp — **chạy tiếp** — trước
+ * bản này KHÔNG có trên màn hình: người dùng chỉ thấy "Tạo lại toàn bộ", nghĩa là muốn
+ * vẽ nốt 4 tấm thiếu thì phải tự đi tick bỏ 6 tấm đã xong, và tick nhầm là đốt lại
+ * quota của tấm đã trả tiền. Hàm này tính sẵn đúng tập đó.
+ *
+ * Chỉ mời với lượt `cancelled` — gồm cả lượt bị agent chết giữa chừng, vì `sweepOrphanRuns`
+ * quy nó về đúng trạng thái này. Lượt `done-with-errors` đã có dải đỏ riêng
+ * (`RunFailBanner`) nói chuyện lỗi, chồng thêm một lời mời nữa là hai giọng cùng lúc.
+ */
+export function resumeInvite(group: GeneratedRunGroup | null | undefined): {
+  jobs: string[];
+  done: number;
+  total: number;
+} | null {
+  if (!group || group.live || group.status !== "cancelled") return null;
+  const jobs = group.items.filter((item) => item.state !== "done").map((item) => item.job);
+  if (!jobs.length) return null;
+  return { jobs, done: group.items.length - jobs.length, total: group.items.length };
+}
+
 export function jobsForGroup(jobs: readonly Pick<RunJob, "job" | "sheet">[], group: ResultGroup): string[] {
   return jobs
     .filter((job) => group === "all" || categoryOfSheet(job.sheet ?? job.job) === group)

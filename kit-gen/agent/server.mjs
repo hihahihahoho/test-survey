@@ -28,7 +28,7 @@ import {
 import { Router } from "./lib/router.mjs"
 import { WorkspaceRegistry, defaultWorkspaceRoot } from "./lib/workspace.mjs"
 import { doctor as realDoctor } from "./lib/doctor.mjs"
-import { RunStore } from "./lib/runs.mjs"
+import { RunStore, sweepOrphanRuns } from "./lib/runs.mjs"
 import { Uploads } from "./lib/uploads.mjs"
 import { ConfirmCodes } from "./lib/confirm.mjs"
 import { register as registerSystem } from "./routes/system.mjs"
@@ -126,6 +126,9 @@ export async function createAgent(opts = {}) {
        "không job nào của lượt trước còn sống", nên dọn ở đây. KHÔNG được ném: một
        workspace hỏng quyền đọc không đáng để agent không khởi động nổi. */
     await sweepOrphanCovers(w).catch(() => {})
+    /* Cùng lý do, cho LƯỢT CHẠY: `run.json` còn "running" mà tiến trình chủ của nó đã
+       chết ⇒ web quay vòng vĩnh viễn. Quét dọn + nhặt lại ảnh đã tốn quota (lib/runs.mjs). */
+    await sweepOrphanRuns(w).catch(() => {})
   }
 
   /* Đọc MỘT LẦN lúc boot, không đọc lại mỗi nhịp /health: file VERSION chỉ đổi khi bản
