@@ -379,7 +379,7 @@ nếu là lỗi gen.
 
 | Kiểm | Lệnh | Kết quả |
 |---|---|---|
-| Agent không đổi hành vi trên darwin | `node agent/test-agent.mjs` | ✅ **146/146 PASS · 0 FAIL** (đo lại 14/08 sau các bản vá §9.1; tổng số ca đang tăng vì bộ ca còn được bổ sung song song) |
+| Agent không đổi hành vi trên darwin | `node agent/test-agent.mjs` | ✅ **150/150 PASS · 0 FAIL** (đo lại 14/08 sau các bản vá §9.1; tổng số ca đang tăng vì bộ ca còn được bổ sung song song) |
 | Cú pháp mọi file `.mjs` đã sửa | `node --check` trên 57 file của `agent/` | ✅ sạch |
 | `install.sh` không hỏng | `bash -n install.sh` | ✅ sạch (**không sửa một dòng nào** của file này) |
 | `build-runtime.sh` | `bash -n scripts/build-runtime.sh` + chạy thật ra `.tar.gz` + `.sha256` | ✅ sạch (chưa sửa) |
@@ -493,6 +493,72 @@ nháy kép** `@"…"@` vì đều cần nội suy biến (`$venvScripts`, `$logF
 (§6.7), cửa sổ console đen (§7 bước 22), Codex thật trên Windows (§6.4 — rủi ro số 1),
 và gen ảnh thật (§7 bước 13–17). Những mục đó vẫn phải làm trên máy người dùng thật.
 
+### 8.3 Vòng 3 (run 31784778492) — job 3 và 4 LẦN ĐẦU chạy thật, và bắt được hai lỗi port thật
+
+Job 1 và 2 xanh (`install.ps1` parse sạch, step gác ASCII hoạt động). Job 3 và 4 lần đầu
+tiên được chạy — cả hai đỏ, và **cả hai đều là lỗi thật của bản Windows**, không phải lỗi CI.
+
+#### 8.3.1 🔴 `Get-FileHash` "not recognized" — PSModulePath bẩn khi chạy installer từ PowerShell 7
+
+`install.ps1` chết ở `[2/8] Lay goi runtime`:
+`The term 'Get-FileHash' is not recognized as the name of a cmdlet`, thoát mã 1.
+
+Cơ chế: step CI chạy `shell: pwsh`, và **PS 7 ghi đè `PSModulePath`** bằng kho module của
+chính nó. `powershell.exe` (5.1) sinh ra từ đó **thừa kế** biến này nên mất đường tới
+`$PSHOME\Modules` của 5.1. Cmdlet biên dịch sẵn (`Write-Host`, `Copy-Item`, `Get-Content`)
+vẫn chạy vì nằm trong phiên mặc định — **đó là lý do lỗi trông vô lý**: mọi thứ chạy ngon
+tới đúng cái cmdlet phải auto-load theo đường module thì gãy. Installer dùng **hai** thứ
+như thế: `Get-FileHash` (Utility, bước [2/8]) và `Expand-Archive` (Archive, bước [3/8]) —
+tức sửa xong [2/8] mà không hiểu cơ chế thì [3/8] gãy tiếp.
+
+**Đây KHÔNG chỉ là chuyện của CI.** Người dùng thật dính y hệt khi gõ
+`powershell -ExecutionPolicy Bypass -File install.ps1` **từ trong PowerShell 7** hoặc từ
+terminal mặc định của VS Code — một tình huống ngày càng phổ biến. (Bấm file từ Explorer,
+gõ trong `cmd.exe`, hay `kitgen.cmd update` thì không dính, vì env sạch.)
+
+Đã sửa, hai lớp:
+1. **Vá `PSModulePath` ngay đầu `install.ps1`**: nếu `$PSHOME\Modules` không có trong biến
+   thì chèn vào đầu. `$PSHOME` luôn đúng với chính tiến trình đang chạy nên phép vá này
+   không thể sai. Đây là lớp thật — nó cứu cả `Expand-Archive`.
+2. **`Get-Sha256` bỏ hẳn `Get-FileHash`**, tính SHA-256 bằng `[Security.Cryptography.SHA256]`
+   thuần .NET — luôn có mặt kể cả khi đường module hỏng hoàn toàn. Bằng chứng cho phép làm
+   thế: `[Net.ServicePointManager]` (dòng 78) và `[Guid]::NewGuid()` (dòng 135) đã chạy
+   trót lọt trước khi lỗi xảy ra ⇒ máy **không** ở Constrained Language Mode.
+
+Và CI nay kiểm **cả hai môi trường** trong cùng một lượt, không tốn thêm phút nào:
+lần cài **1** đặt lại `PSModulePath` về mặc định của máy (đúng máy người dùng thật),
+lần cài **2** *cố ý* giữ `PSModulePath` bẩn thừa kế từ pwsh — nó chỉ xanh nếu phép vá ở
+trên thật sự chạy.
+
+#### 8.3.2 🔴 `ENOTEMPTY` khi dọn thư mục — fd rò trong `scheduleUpdate`
+
+`node agent/test-agent.mjs` chạy hết ~105s rồi **chết uncaught**:
+`ENOTEMPTY: directory not empty, rmdir '…\kitgen-test-xxxx\kitgen-home-spawn'`.
+
+Không phải antivirus, không phải tiến trình con: **`scheduleUpdate` mở `update.log` bằng
+`openSync` và KHÔNG BAO GIỜ đóng**. `spawn` đã nhân bản handle cho tiến trình con, nhưng
+bản của tiến trình cha thì mở suốt đời agent. POSIX cho unlink file đang mở nên macOS
+không bao giờ thấy; **Windows thì cấm**, nên thư mục chứa nó không xoá được.
+
+Hệ quả **trên máy người dùng Windows**, không chỉ trong test: `update.log` bị chính agent
+khoá ⇒ installer không ghi đè được nó, và mọi thao tác xoá cây thư mục chứa nó thất bại.
+
+Đã sửa ba chỗ:
+1. `lib/update.mjs` — đóng fd ngay sau `spawn` (④). Câu báo lỗi của listener `error` đổi
+   sang ghi bằng **đường dẫn** (`appendFileSync`) nên vẫn giữ nguyên cả ba lời hứa ①②③.
+2. `lib/fsx.mjs` — `removeTree`/`moveTree` thêm `maxRetries: 10, retryDelay: 100` **gate
+   win32**. Windows nhả handle chậm một nhịp (tiến trình con vừa `taskkill`, Defender vừa
+   quét file mới ghi). Đây là **chỗ duy nhất** trong agent xoá cây thư mục — thùng rác,
+   xoá hẳn project, dọn bản cài cũ đều đi qua đây.
+3. `agent/test-agent.mjs` — dọn thư mục tạm có `maxRetries` và bọc `try/catch`: kết quả
+   của 150 ca quan trọng hơn việc xoá được `/tmp`, và một lần dọn hụt **không được phép**
+   giết tiến trình trước khi in báo cáo. Không nuốt im — in cảnh báo rồi vẫn trả đúng mã thoát.
+
+**Ca kiểm mới khoá lại lỗi này NGAY TRÊN macOS** (không phải chờ CI Windows): sau
+`scheduleUpdate`, `fstatSync` lên chính fd đã truyền vào `stdio` phải ném `EBADF`. Đã
+chứng minh ca này thật sự bắt được lỗi bằng cách tạm bỏ dòng `closeSync` → ca đỏ
+(`149/150`), khôi phục → `150/150`.
+
 ---
 
 ## 9. Việc còn lại (backlog)
@@ -522,15 +588,17 @@ và gen ảnh thật (§7 bước 13–17). Những mục đó vẫn phải làm
 8. 🟢 Audit `paths.mjs` với hệ thống file không phân biệt hoa-thường (§3.2).
 9. 🟢 Rà `slice.py` cho `encoding="utf-8"` (§4.4).
 
-### 9.1 Đã sửa sẵn cho Windows (a–b: đọc mã trước lượt CI đầu; c: theo log runner thật)
+### 9.1 Đã sửa sẵn cho Windows (a–b: đọc mã trước lượt CI đầu; c–e: theo log runner thật)
 
 | # | Chỗ | Vì sao chắc chắn đỏ trên Windows | Đã làm gì |
 |---|---|---|---|
 | a | `lib/redact.mjs` | §9.5 ở trên | thêm khối gate `win32` |
 | b | `test/suite-system.mjs` (3 ca) | Ba ca ghim cứng `~/.kitgen/bin/kitgen update`, `… restart`, `~/.kitgen/update.log`, trong khi `lib/update.mjs` đã có nhánh `IS_WIN` trả `%LOCALAPPDATA%\KitGen\…`. Mã sản xuất **đúng**, ca kiểm mới là chỗ sai | ghim đúng chữ cho **cả hai** nền bằng hằng `CMD_UPDATE` / `CMD_RESTART` / `LOG_UPDATE`; **không** import hằng từ mã sản xuất (import vào thì ca kiểm chỉ còn tự nói với chính nó). Nhánh non-win giữ nguyên từng ký tự |
 | c | `scripts/install.ps1` | Lỗi THẬT do vòng 1 của CI bắt được, không phải suy đoán — xem §8.2 | thêm BOM UTF-8 + ASCII hoá 13 dòng chuỗi/nội dung sinh ra + bước CI khẳng định BOM |
+| d | `scripts/install.ps1` (PSModulePath + `Get-Sha256`) | Vòng 3: `Get-FileHash` "not recognized" khi installer chạy từ trong PowerShell 7 — xem §8.3.1 | vá `PSModulePath` bằng `$PSHOME\Modules` + tính SHA-256 bằng .NET thuần; CI kiểm cả môi trường sạch lẫn bẩn |
+| e | `lib/update.mjs`, `lib/fsx.mjs`, `test-agent.mjs` | Vòng 3: `ENOTEMPTY` khi xoá thư mục vì fd của `update.log` không bao giờ được đóng — xem §8.3.2 | đóng fd sau `spawn`; `removeTree`/`moveTree` thêm retry gate win32; dọn thư mục tạm không được giết bộ ca |
 
-Hai bản vá phía agent (a, b) đã được đo lại trên macOS: `node agent/test-agent.mjs` → **146/146 PASS · 0 FAIL**.
+Mọi bản vá phía agent (a, b, e) đã được đo lại trên macOS: `node agent/test-agent.mjs` → **150/150 PASS · 0 FAIL**.
 
 ### 9.2 Điểm phải soi ở lượt CI kế tiếp (chưa có bằng chứng, đừng đoán)
 

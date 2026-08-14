@@ -134,7 +134,18 @@ export async function sha256File(p) {
 
 export function sha256(str) { return "sha256:" + createHash("sha256").update(str).digest("hex") }
 
-export async function removeTree(p) { await rm(p, { recursive: true, force: true }) }
+/* Windows KHÔNG cho xoá thứ đang có handle mở, và handle đó thường được nhả CHẬM một
+   nhịp sau khi tiến trình con chết (hoặc do Defender vừa quét xong file mới ghi) ⇒
+   `rm` đệ quy trả `ENOTEMPTY`/`EPERM`/`EBUSY` ngẫu nhiên. Node có sẵn cơ chế thử lại
+   với backoff tuyến tính cho ĐÚNG bộ mã lỗi đó. Gate win32: trên darwin/linux tham số
+   truyền vào không đổi một chữ so với mã cũ (và các mã lỗi này cũng không xảy ra ở đó).
+   Đây là chỗ duy nhất trong agent xoá cây thư mục — thùng rác, xoá hẳn project, dọn
+   bản cài cũ đều đi qua đây, nên vá một chỗ là đủ cho cả sản phẩm. */
+const RM_OPTS = process.platform === "win32"
+  ? { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }
+  : { recursive: true, force: true }
+
+export async function removeTree(p) { await rm(p, RM_OPTS) }
 
 export async function moveTree(src, dst) {
   await ensureDir(dirname(dst))
@@ -142,7 +153,7 @@ export async function moveTree(src, dst) {
   catch (e) {
     if (e.code !== "EXDEV") throw e
     await cp(src, dst, { recursive: true, dereference: false })
-    await rm(src, { recursive: true, force: true })
+    await rm(src, RM_OPTS)
   }
 }
 

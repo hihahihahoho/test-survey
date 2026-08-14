@@ -70,5 +70,20 @@ await runRuns({ ...base, pid })
 await runCover({ ...base, pid })
 await runImport({ ...base, pid })
 
-await rm(tmp, { recursive: true, force: true })
+/* Dọn workspace tạm. Trên Windows bước này ĐÃ TỪNG giết cả bộ ca (run 31784778492):
+   `rmdir … ENOTEMPTY` ném ra ở top-level ⇒ unhandled rejection ⇒ tiến trình chết TRƯỚC
+   khi kịp in báo cáo, 146 ca xanh biến mất khỏi màn hình vì một cái handle chưa nhả.
+   Hai thay đổi, mỗi cái một lý do:
+     · `maxRetries` — Windows nhả handle chậm một nhịp (tiến trình con vừa bị taskkill,
+       Defender vừa quét file mới ghi). Nguyên nhân gốc của lần đó là fd rò ở
+       `scheduleUpdate` (đã vá, xem update.mjs ④), nhưng dọn dẹp thì vẫn phải chịu được
+       nhịp trễ của hệ điều hành.
+     · try/catch — KẾT QUẢ CHẠY CA quan trọng hơn việc xoá được thư mục tạm. Không nuốt
+       im: in cảnh báo rồi vẫn trả đúng mã thoát của bộ ca. */
+try {
+  await rm(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+} catch (e) {
+  process.stdout.write(`\n[cảnh báo] không dọn được thư mục tạm ${tmp}: ${e?.code ?? e}\n` +
+    "           (kết quả bộ ca bên dưới vẫn đúng; trên Windows đây là dấu hiệu còn handle mở)\n")
+}
 process.exit(report() ? 1 : 0)

@@ -1,7 +1,7 @@
 /* suite-system.mjs — §6.2 A (#1 /health, #2 /api/doctor, #3 /api/workspaces)
    + 9 lớp phòng thủ vận chuyển của architecture §3.4 (Host 421, Origin 403, ép preflight,
    không wildcard CORS, chỉ bind loopback). */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { fstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, eq, ok, includes, stripComments, PAGES, CLIENT } from "./harness.mjs"
 import { PROTOCOL_VERSION } from "../server.mjs"
@@ -336,6 +336,14 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     eq(out.logLabel, LOG_UPDATE, "nhãn nhật ký rút gọn cho UI")
     const log = readFileSync(join(fakeHome, "update.log"), "utf8")
     ok(/kitgen update/.test(log), `update.log có dòng mở đầu: ${log}`)
+    /* fd PHẢI ĐƯỢC ĐÓNG sau khi spawn (update.mjs ④). Bản trước để mở suốt đời tiến
+       trình: trên Windows đó là `update.log` bị chính agent khoá ⇒ installer không ghi
+       đè được, và xoá cây thư mục chứa nó trả ENOTEMPTY — đúng thứ đã giết bộ ca trên
+       runner Windows lần chạy đầu. Ca này bắt được lỗi đó TRÊN CẢ macOS: fstat một fd
+       đã đóng phải ném EBADF. */
+    let stillOpen = true
+    try { fstatSync(calls[0].opts.stdio[1]) } catch (e) { stillOpen = e.code !== "EBADF" ? true : false }
+    ok(!stillOpen, "fd của update.log đã đóng ở tiến trình cha (Windows: file còn bị khoá thì xoá được gì nữa)")
   })
 
   await it("mất mạng KHÔNG thành lỗi 500 — trả ok:false + reason enum", async () => {

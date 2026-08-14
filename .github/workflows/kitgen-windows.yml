@@ -291,6 +291,17 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $tar = @(Get-ChildItem -LiteralPath "$env:RUNNER_TEMP\pkg" -File | Where-Object { $_.Name -like 'kitgen-runtime-*.tar.gz' })[0]
           if (-not $tar) { Write-Host '::error::khong thay tarball runtime trong artifact'; exit 1 }
+          # MOI TRUONG = MAY NGUOI DUNG THAT. Step nay chay bang pwsh (PS 7), ma PS 7 ghi de
+          # PSModulePath bang kho module cua chinh no; `powershell.exe` con thua ke bien do
+          # va mat duong toi "$PSHOME\Modules" cua 5.1 => Get-FileHash / Expand-Archive
+          # "not recognized" (da xay ra that o run 31784778492). Nguoi dung THAT bam file
+          # .ps1 tu Explorer hoac go trong cmd.exe thi khong bao gio co bien ban do, nen
+          # lan cai 1 dung lai dung PSModulePath mac dinh cua may.
+          # (Lan cai 2 CO Y giu PSModulePath ban cua pwsh — xem step ke tiep.)
+          $machine = [Environment]::GetEnvironmentVariable('PSModulePath', 'Machine')
+          $user    = [Environment]::GetEnvironmentVariable('PSModulePath', 'User')
+          $env:PSModulePath = (@($user, $machine) | Where-Object { $_ }) -join ';'
+          Write-Host ("PSModulePath (nhu may nguoi dung): {0}" -f $env:PSModulePath)
           $env:npm_config_registry = 'http://127.0.0.1:9'
           $env:npm_config_fetch_retries = '0'
           $env:npm_config_fetch_retry_maxtimeout = '2000'
@@ -323,10 +334,15 @@ jobs:
           exit 0
 
       # ── Lần cài 2: đủ tiền đề. Cũng là phép thử "cai xong thi chay lai" (§7 bước 2). ──
+      # VÀ là phép thử môi trường BẨN: ở đây CỐ Ý **không** đụng vào PSModulePath, tức
+      # `powershell.exe` con thừa kế đường module của PS 7 — đúng cảnh người dùng gõ
+      # `powershell -File install.ps1` từ trong PowerShell 7 hoặc terminal VS Code.
+      # Lần cài này chỉ xanh được nếu phép vá PSModulePath trong install.ps1 thật sự chạy.
       - name: Cài lần 2 — đủ tiền đề (Codex giả lập, không đăng nhập)
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          Write-Host ("PSModulePath (ban, thua ke tu pwsh - CO Y): {0}" -f $env:PSModulePath)
           # codex.cmd GIA: chi de installer di nhanh "dung Codex da co" va KHONG npm-install
           # goi that. No khong goi mang, khong doc credential, khong sinh anh.
           $stub = "$env:RUNNER_TEMP\stub-bin"

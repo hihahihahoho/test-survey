@@ -79,6 +79,23 @@ $ErrorActionPreference = 'Stop'
 # Thanh tiến trình của Invoke-WebRequest làm tải file chậm đi hàng chục lần trên PS 5.1.
 $ProgressPreference = 'SilentlyContinue'
 
+# ── PSModulePath: vá lại đường tìm module của CHÍNH PS 5.1 ────────────────────────
+# Ai chạy installer TỪ BÊN TRONG PowerShell 7 (`powershell -File install.ps1` gõ trong
+# pwsh, hoặc terminal mặc định của VS Code, hoặc một CI dùng shell pwsh) thì tiến trình
+# PS 5.1 con THỪA KẾ biến PSModulePath mà PS 7 đã ghi đè — nó trỏ vào kho module của PS 7
+# và KHÔNG còn "$PSHOME\Modules" của 5.1. Cmdlet biên dịch sẵn (Write-Host, Copy-Item…)
+# vẫn chạy vì chúng nằm trong phiên mặc định, nhưng thứ phải AUTO-LOAD theo đường module
+# thì biến mất, và installer dùng đúng hai thứ như thế:
+#     · Get-FileHash    (Microsoft.PowerShell.Utility) — bước [2/8] đối chiếu checksum
+#     · Expand-Archive  (Microsoft.PowerShell.Archive) — bước [3/8] giải nén Node
+# Triệu chứng: "The term 'Get-FileHash' is not recognized as the name of a cmdlet",
+# installer thoát 1 giữa chừng. ĐÃ GẶP THẬT trên runner CI (run 31784778492).
+# $PSHOME luôn đúng với chính tiến trình đang chạy, nên đây là phép vá không thể sai.
+$psHomeModules = Join-Path $PSHOME 'Modules'
+if (($env:PSModulePath -split ';') -notcontains $psHomeModules) {
+  $env:PSModulePath = $psHomeModules + ';' + $env:PSModulePath
+}
+
 $NODE_VERSION = '20.19.5'
 
 # ── tiện ích in ────────────────────────────────────────────────────────────────
@@ -109,7 +126,18 @@ function Write-TextCrLf([string] $path, [string] $text) {
   [IO.File]::WriteAllText($path, (($text -replace "`r`n", "`n") -replace "`n", "`r`n"), $enc)
 }
 
-function Get-Sha256([string] $path) { (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() }
+# SHA-256 bang .NET thuan, KHONG qua Get-FileHash: Get-FileHash phai auto-load module
+# (xem khoi PSModulePath o tren), con kieu .NET thi luon co mat ke ca khi duong module
+# hong hoan toan. Cung mot con so, cung dinh dang hex thuong. Lop phong thu thu hai —
+# lop thu nhat la phep va PSModulePath, va no cung can cho Expand-Archive o buoc [3/8].
+function Get-Sha256([string] $path) {
+  $sha = [Security.Cryptography.SHA256]::Create()
+  try {
+    $fs = [IO.File]::OpenRead($path)
+    try { return ([BitConverter]::ToString($sha.ComputeHash($fs))).Replace('-', '').ToLowerInvariant() }
+    finally { $fs.Dispose() }
+  } finally { $sha.Dispose() }
+}
 
 function Invoke-Download([string] $url, [string] $dest) {
   try { Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing -TimeoutSec 300 }
@@ -202,7 +230,7 @@ function Test-ReleaseDir([string] $d) {
 }
 
 $candidate = $null
-$repoRoot  = Split-Path -Parent $SelfDir      # scripts\ → kit-gen\
+$repoRoot  = Split-Path -Parent $SelfDir      # scripts\ -> kit-gen\
 
 if (Test-ReleaseDir $SelfDir)      { $candidate = $SelfDir }
 elseif (Test-ReleaseDir $repoRoot) { $candidate = $repoRoot }

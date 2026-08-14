@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process"
-import { openSync, writeSync } from "node:fs"
+import { appendFileSync, closeSync, openSync, writeSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -198,6 +198,15 @@ export async function checkForUpdateSafe(opts = {}) {
  *  ③ Phải có listener `error`. spawn hỏng (thiếu `sh`, bin/kitgen không +x) phát ra
  *    'error' bất đồng bộ; ChildProcess không ai nghe là ném lỗi không bắt được ⇒ agent
  *    chết ngay sau khi vừa trả 202 "đang cập nhật".
+ *
+ *  ④ PHẢI ĐÓNG fd sau khi spawn — bản trước KHÔNG đóng, và trên Windows đó là lỗi thật:
+ *    `spawn` đã nhân bản handle cho tiến trình con, nhưng bản của tiến trình cha thì mở
+ *    mãi mãi. Windows KHÔNG cho xoá/đổi tên file đang có handle mở, nên `update.log` bị
+ *    chính agent khoá: installer không ghi đè được, và mọi lệnh xoá cây thư mục chứa nó
+ *    trả `ENOTEMPTY`. Đây đúng là thứ đã làm bộ ca chết trên runner Windows lần đầu
+ *    (`rmdir 'ạ…\kitgen-home-spawn'`, run 31784778492) — trên macOS thì unlink file đang
+ *    mở là chuyện thường nên không ai thấy. Câu báo lỗi ở ③ vì thế ghi bằng ĐƯỜNG DẪN
+ *    (`appendFileSync`) chứ không qua fd nữa, để vẫn giữ nguyên lời hứa của ②/③.
  */
 export function scheduleUpdate({ kitgenHome = defaultKitgenHome(), spawnImpl = spawn } = {}) {
   const logFile = join(kitgenHome, "update.log")
@@ -218,8 +227,15 @@ export function scheduleUpdate({ kitgenHome = defaultKitgenHome(), spawnImpl = s
       { detached: true, stdio: ["ignore", out, out], env: process.env })
 
   child.on?.("error", err => {
-    try { writeSync(typeof out === "number" ? out : 2, `không chạy được installer: ${err?.message ?? err}\n`) } catch { /* hết đường báo */ }
+    // Ghi bằng ĐƯỜNG DẪN, không qua fd: fd đã đóng ngay dưới đây (④). Tiến trình con giữ
+    // bản sao riêng nên nó vẫn ghi tiếp vào cùng file, hai đường không giẫm lên nhau.
+    try { appendFileSync(logFile, `không chạy được installer: ${err?.message ?? err}\n`) }
+    catch { try { writeSync(2, `không chạy được installer: ${err?.message ?? err}\n`) } catch { /* hết đường báo */ } }
   })
+  // ④ `spawn` là đồng bộ ở khâu tạo tiến trình: tới đây con đã có handle riêng, đóng bản
+  // của cha là an toàn trên cả POSIX lẫn Windows. Cả nhánh spawn hỏng cũng an toàn vì
+  // listener 'error' ở trên không còn dùng fd nữa.
+  if (typeof out === "number") { try { closeSync(out) } catch { /* đã đóng */ } }
   child.unref?.()
   return { logLabel: UPDATE_LOG_LABEL }
 }
