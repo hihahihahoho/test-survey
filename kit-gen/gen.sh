@@ -4,6 +4,15 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 ROOT="$(pwd)"
+# ĐƯỜNG DẪN ĐƯA VÀO NỘI DUNG PROMPT phải là dạng Windows khi chạy trên Git-Bash.
+# Đối số truyền cho binary Windows thì MSYS tự đổi `/c/…` → `C:\…`, nhưng đường
+# dẫn nằm BÊN TRONG chuỗi văn bản thì không — model nhận `/c/Users/…`, Windows
+# hiểu `/` là gốc ổ đĩa hiện tại ⇒ ảnh ghi vào `C:\c\Users\…` ⇒ job FAIL.
+# `cygpath` chỉ có trên MSYS/Cygwin nên macOS/Linux giữ nguyên ROOT_OUT == ROOT.
+# Dùng `-m` (C:/… gạch xuôi) chứ không `-w` (C:\…): gạch ngược trong prompt dễ
+# bị model/JSON hiểu thành ký tự escape.
+ROOT_OUT="$ROOT"
+command -v cygpath >/dev/null 2>&1 && ROOT_OUT="$(cygpath -m "$ROOT")"
 mkdir -p raw logs prompts
 
 # Mặc định dùng cấu hình Codex hiện tại. IMG_HOME chỉ được đặt khi user chủ động
@@ -20,8 +29,8 @@ node render-skeleton.mjs || python3 skeleton.py
 
 # Build prompt cho từng (style, sheet) → prompts/<style>-<sheet>.txt
 python3 - <<'PY'
-import json, re
-cfg = json.load(open("styles.json"))
+import json, re, sys
+cfg = json.load(open("styles.json", encoding="utf-8"))
 
 # Từ vựng VẬT LIỆU / MÀU trong spec của thư viện element (element-lib.json).
 # CHỈ chứa từ nói về chất liệu, bề mặt và màu — TUYỆT ĐỐI không chứa từ nói về
@@ -66,7 +75,62 @@ MATERIAL_WORDS = {
 #     "but darker, pushed-in look" là trạng thái nhấn của nút).
 
 
-def preset_words(spec):
+# CAP của danh sách từ được nêu đích danh. Bản cũ cắt cứng `hits[:10]` KHÔNG BÁO
+# GÌ — và `08-progress-fill` đang đứng đúng 10/10 (jelly, glossy, vivid, warm,
+# orange-to-coral, gradient, bright, specular, metal, gold), tức thêm một từ vật
+# liệu nữa vào spec là từ thứ 11 rơi âm thầm và ô lại ra màu preset. Đo trên
+# styles.json hiện tại: 122 component, đúng 1 ô chạm cap, dài nhất 86 ký tự.
+# Nới lên 24 từ / 320 ký tự (gấp ~4 lần chỗ đang dùng, vẫn chặn prompt phình) và
+# LUÔN kêu ra stderr khi phải cắt.
+PRESET_WORD_CAP = 24
+PRESET_CHAR_CAP = 320
+
+# ── MÀU CHROMA-KEY ────────────────────────────────────────────────────────────
+# Tập key mà slice.py tách được (slice.py: KEY_COLORS). Interface với webapp CHỈ
+# là chuỗi `bg` của style/variant trong styles.json — webapp chọn key xa palette
+# rồi ghi vào đó, gen.sh không cần biết gì thêm. Thiếu `bg` hoặc không nhận ra
+# tên/hex nào ⇒ magenta, đúng hành vi cũ.
+CHROMA_KEYS = {
+    "magenta": ((255, 0, 255), "pure vivid magenta #FF00FF"),
+    "green":   ((0, 255, 0),   "pure vivid green #00FF00"),
+    "cyan":    ((0, 255, 255), "pure vivid cyan #00FFFF"),
+    "blue":    ((0, 0, 255),   "pure vivid blue #0000FF"),
+}
+DEFAULT_KEY = "magenta"
+
+
+def _axis(rgb):
+    """(kênh CAO, kênh THẤP) — soi gương slice.py.key_axis(), để nhận ra hex lạ
+    thuộc về key nào."""
+    mid = (max(rgb) + min(rgb)) / 2.0
+    hi = tuple(i for i in range(3) if rgb[i] >= mid)
+    lo = tuple(i for i in range(3) if rgb[i] < mid)
+    return (hi, lo) if hi and lo else None
+
+
+def key_of(style):
+    """(tên key, mô tả đưa vào prompt) từ `bg` của style."""
+    bg = str(style.get("bg") or "").strip()
+    low = bg.lower()
+    for name in CHROMA_KEYS:
+        if re.search(r"\b%s\b" % name, low):
+            return name, bg
+    m = re.search(r"#([0-9a-f]{6})\b", low)
+    if m:
+        v = m.group(1)
+        rgb = tuple(int(v[i:i + 2], 16) for i in (0, 2, 4))
+        ax = _axis(rgb)
+        for name, (ref, _d) in CHROMA_KEYS.items():
+            if ax and _axis(ref) == ax:
+                return name, bg
+    if bg:
+        print(f"⚠ style {style.get('id')}: bg {bg!r} không thuộc tập key "
+              f"{sorted(CHROMA_KEYS)} — dùng {DEFAULT_KEY}. slice.py chỉ tách được "
+              f"các key đó.", file=sys.stderr)
+    return DEFAULT_KEY, CHROMA_KEYS[DEFAULT_KEY][1]
+
+
+def preset_words(spec, tag=""):
     """Các từ VẬT LIỆU/MÀU có mặt trong spec — để nêu đích danh mà HẠ CẤP chúng.
     Trả về theo thứ tự xuất hiện, giữ nguyên dạng gốc, không trùng lặp."""
     hits, seen = [], set()
@@ -77,9 +141,21 @@ def preset_words(spec):
         if any(p in MATERIAL_WORDS for p in [low] + low.split("-")):
             seen.add(low)
             hits.append(tok)
-    return hits[:10]
+    kept, used = [], 0
+    for w in hits:
+        if len(kept) >= PRESET_WORD_CAP or used + len(w) + 2 > PRESET_CHAR_CAP:
+            break
+        kept.append(w)
+        used += len(w) + 2
+    if len(kept) < len(hits):
+        print(f"⚠ {tag or 'spec'}: cắt {len(hits) - len(kept)}/{len(hits)} từ vật liệu "
+              f"khỏi câu hạ cấp (cap {PRESET_WORD_CAP} từ / {PRESET_CHAR_CAP} ký tự) — "
+              f"BỊ BỎ: {', '.join(hits[len(kept):])}. Những từ này KHÔNG được hạ cấp "
+              f"nên ô có thể ra màu/vật liệu preset thay vì art style.", file=sys.stderr)
+    return kept
 
 for s in cfg["styles"]:
+    key_name, key_desc = key_of(s)
     for sh in cfg["sheets"]:
         if sh.get("styles") and s["id"] not in sh["styles"]:
             continue                      # sheet riêng của style khác (vd pose-<char>)
@@ -170,11 +246,15 @@ for s in cfg["styles"]:
             "decoration: do NOT paint their gray color, frames, grid lines or plain shapes",
             "into the artwork.",
             "",
-            f"BACKGROUND of the sheet: one flat solid chroma-key color: {s['bg']}.",
+            f"BACKGROUND of the sheet: one flat solid chroma-key color: {key_desc}.",
             "This background rule OVERRIDES the art style and every reference image:",
             "never use a style-colored, scene or gradient background for the sheet.",
             "No gradient, no texture, NO checkerboard or transparency pattern, no grid lines.",
-            "This exact background color — and any hue CLOSE to it — must NEVER appear inside any element; pick element colors far from it on the color wheel.",
+            # Nêu ĐÍCH DANH tên màu key đang dùng: câu "this exact background color"
+            # trỏ ngược lên trên, còn tên màu thì model giữ được trong đầu suốt prompt.
+            f"The chroma-key of this sheet is {key_name.upper()}: this exact {key_name} — and any"
+            f" hue CLOSE to {key_name} — must NEVER appear inside any element; pick element colors"
+            " far from it on the color wheel.",
             "",
             # ⚠️ KHÔNG quay lại luật "mỗi element phủ 70-80% bề ngang ô". Đó là một chỉ
             #    thị hình học THỨ HAI đá nhau với khối crop-safe ở trên, và nó đẩy model
@@ -270,22 +350,31 @@ for s in cfg["styles"]:
             for c in range(cols):
                 i = r * cols + c
                 spec = comps[i]["spec"]
+                # ⚠️ QUÉT TỪ VẬT LIỆU TRÊN SPEC GỐC, TRƯỚC khi nối câu hợp đồng
+                # của engine. Bản cũ quét SAU nên ô glow bị chính engine tự bắn
+                # vào chân: câu "SPECIAL CELL BACKGROUND … PURE BLACK #000000"
+                # làm 'BLACK' lọt vào danh sách hạ cấp ⇒ prompt vừa bắt vẽ nền
+                # đen vừa bảo "do NOT paint black" (đã kiểm: prompt ipay-main ô 4
+                # liệt kê 'golden, BLACK'). Nêu tên màu key trong câu đó còn kéo
+                # thêm 'magenta' vào. Spec của thư viện mới là thứ được hạ cấp.
+                preset = (preset_words(spec, f"{s['id']}-{sh['id']} ô {i + 1} "
+                                             f"({comps[i]['file']})")
+                          if style_override else [])
                 if comps[i]["skel"].get("matte") == "glow":
                     # nền ô ĐEN cho hiệu ứng phát sáng: slicer tách alpha theo
                     # kênh sáng (C = α·F trên nền đen) — chính xác tuyệt đối,
                     # hết phụ thuộc model matting đoán vùng glow trộn key
                     spec += (" — SPECIAL CELL BACKGROUND: this ONE cell's background is PURE"
                              " BLACK #000000 filling the whole cell with a hard edge at the"
-                             " cell borders (the chroma-key color does NOT apply inside this"
-                             " cell); the light effect is drawn ADDITIVELY on black — where"
+                             f" cell borders (the {key_name} chroma-key does NOT apply inside"
+                             " this cell); the light effect is drawn ADDITIVELY on black — where"
                              " there is no light the cell stays pure black")
                 # Hạ cấp NGAY TRÊN DÒNG CỦA Ô. Khối ưu tiên phía trên là luật chung;
                 # nhưng model bám mô tả cụ thể nhất ở cạnh nó, nên phải gọi ĐÍCH DANH
                 # những chữ vật liệu/màu có trong chính spec này (đo thật: chỉ có khối
                 # ưu tiên thôi thì 01-btn-pill-red vẫn ra đỏ kẹo bóng, chỉ thêm được
                 # viền neon). Từ hình dáng/trạng thái không nằm trong từ điển nên
-                # không bao giờ bị hạ cấp.
-                preset = preset_words(spec) if style_override else []
+                # không bao giờ bị hạ cấp. (`preset` đã tính ở trên, trên spec GỐC.)
                 if preset:
                     spec += (f" — [SHAPE, PARTS AND STATE ONLY. The words "
                              f"{', '.join(preset)} are the element library's DEFAULT preset:"
@@ -338,7 +427,7 @@ PY
 run_one() {
   local job="$1"
   local task
-  task="Generate ONE image with your image generation tool, at the CANVAS ORIENTATION stated on the first line of the prompt (1536x1024 landscape or 1024x1536 portrait, if supported), using EXACTLY the prompt between the IMAGE PROMPT markers below. The attached images are, in order: the layout skeleton, then any character reference photo / inspiration images the prompt mentions. Then save/copy the generated PNG to exactly this path: ${ROOT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
+  task="Generate ONE image with your image generation tool, at the CANVAS ORIENTATION stated on the first line of the prompt (1536x1024 landscape or 1024x1536 portrait, if supported), using EXACTLY the prompt between the IMAGE PROMPT markers below. The attached images are, in order: the layout skeleton, then any character reference photo / inspiration images the prompt mentions. Then save/copy the generated PNG to exactly this path: ${ROOT_OUT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
 
 --- IMAGE PROMPT START ---
 $(cat "prompts/${job}.txt")
@@ -367,7 +456,10 @@ $(cat "prompts/${job}.txt")
   # chỉ trả lời đường dẫn rồi thôi. Nếu log nhắc tới một file trong generated_images và
   # file đó TỒN TẠI trong home đang dùng thì vớt về đích. Đường dẫn không tồn tại thật
   # (container remote) thì không vớt được — để phán FAIL như cũ, không đoán mò ảnh khác.
-  if [[ $(stat -f %m "raw/${job}.png" 2>/dev/null || echo 0) -lt "$t0" ]]; then
+  # `stat -f %m` là cú pháp BSD/macOS. `stat` của Git-Bash là GNU coreutils, ở đó
+  # `-f` = --file-system ⇒ lệnh lỗi ⇒ mt=0 ⇒ MỌI job in FAIL dù ảnh đã lưu xong.
+  # Fallback GNU `-c %Y` (chép y nguyên khuôn của cover.sh:77,86).
+  if [[ $(stat -f %m "raw/${job}.png" 2>/dev/null || stat -c %Y "raw/${job}.png" 2>/dev/null || echo 0) -lt "$t0" ]]; then
     local ghome="${IMG_HOME:-$HOME/.codex}/generated_images"
     local rel
     rel=$(grep -oE "generated_images/[^\"' ]*[.]png" "logs/${job}.log" 2>/dev/null | tail -1)
@@ -379,7 +471,7 @@ $(cat "prompts/${job}.txt")
   # Phán theo SẢN PHẨM, không tin mã thoát: codex hay sập vì lỗi API transient
   # SAU khi đã lưu ảnh xong (đã dính: badge ❌ oan, auto-slice bị bỏ qua).
   # Ảnh được ghi mới trong lượt chạy này = job thành công.
-  local mt=$(stat -f %m "raw/${job}.png" 2>/dev/null || echo 0)
+  local mt=$(stat -f %m "raw/${job}.png" 2>/dev/null || stat -c %Y "raw/${job}.png" 2>/dev/null || echo 0)
   if [[ "$mt" -ge "$t0" ]]; then
     if [[ $rc -eq 0 ]]; then
       echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)"
@@ -407,7 +499,7 @@ while read -r job; do
   run_one "$job" &
 done < <(python3 -c "
 import json
-cfg = json.load(open('styles.json'))
+cfg = json.load(open('styles.json', encoding="utf-8"))
 for s in cfg['styles']:
     for sh in cfg['sheets']:
         if sh.get('styles') and s['id'] not in sh['styles']:

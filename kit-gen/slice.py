@@ -25,7 +25,7 @@ chát + alpha ramp + un-mix là cách chuẩn của greenscreen.
 Tên file GIỐNG HỆT nhau giữa các style — đó là hợp đồng nội dung.
 Chạy:  python3 slice.py
 """
-import json, math, os, sys
+import json, math, os, re, sys
 from collections import deque
 from array import array
 from PIL import Image, ImageChops, ImageFilter, ImageOps
@@ -94,24 +94,112 @@ def border_colors(img, strip=8):
     return [c1]
 
 
-def is_key_color(bgs):
-    """Nền là màu key chát (bão hoà cao, 1 màu) → dùng matte mềm, bỏ lấp lỗ."""
+# ── TẬP MÀU CHROMA-KEY HỢP LỆ ────────────────────────────────────────────────
+# Contract: `bg` của mỗi variant/style trong styles.json là chuỗi TỰ DO mô tả màu
+# key ("pure vivid magenta #FF00FF"). Đây là interface DUY NHẤT với webapp —
+# webapp chọn key xa palette rồi ghi vào chuỗi đó, engine không cần biết gì thêm.
+# Thiếu `bg` → magenta (hành vi cũ, không đổi).
+KEY_COLORS = {
+    "magenta": (255, 0, 255),
+    "green":   (0, 255, 0),
+    "cyan":    (0, 255, 255),
+    "blue":    (0, 0, 255),
+}
+DEFAULT_KEY = "magenta"
+
+
+def key_axis(key):
+    """Trục của màu key: (kênh CAO, kênh THẤP) theo chỉ số 0=R 1=G 2=B.
+
+    Mọi phép đo chroma-key trong file này quy về đúng MỘT đại lượng:
+
+        spill = min(kênh CAO) − max(kênh THẤP)
+
+    Nó là "mức nhiễm màu key" của pixel. Với green (cao=G) ra `g − max(r,b)`,
+    với magenta (cao=R,B) ra `min(r,b) − g` — ĐÚNG hai công thức bản cũ hardcode,
+    nên tương thích ngược tuyệt đối; cyan (cao=G,B) và blue (cao=B) nay chạy được
+    mà không phải thêm nhánh `if`. Bản cũ `is_green = kg > max(kr, kb)` phân loại
+    SAI cyan (0,255,255): `255 > 255` là False ⇒ cyan bị coi là magenta ⇒ spill âm
+    toàn ảnh ⇒ không tách được gì.
+
+    Trả None nếu màu quá xám/không có trục rõ (không phải key hợp lệ)."""
+    mid = (max(key) + min(key)) / 2.0
+    hi = tuple(i for i in range(3) if key[i] >= mid)
+    lo = tuple(i for i in range(3) if key[i] < mid)
+    return (hi, lo) if hi and lo else None
+
+
+def key_spill_ref(key, axis):
+    """spill của CHÍNH màu key = mốc chuẩn hoá. Sàn 40 giữ từ bản cũ."""
+    hi, lo = axis
+    return max(40.0, min(key[i] for i in hi) - max(key[i] for i in lo))
+
+
+def key_spill(arr, axis):
+    """spill per-pixel trên mảng numpy (..., 3) float — cần numpy."""
+    hi, lo = axis
+    return (np.minimum.reduce([arr[..., i] for i in hi])
+            - np.maximum.reduce([arr[..., i] for i in lo]))
+
+
+def key_name_of(color):
+    """Tên key trong KEY_COLORS khớp trục của `color` (None nếu không khớp)."""
+    ax = key_axis(color)
+    if ax is None:
+        return None
+    for name, ref in KEY_COLORS.items():
+        if key_axis(ref) == ax:
+            return name
+    return None
+
+
+def declared_key(bg):
+    """Đọc tên màu key từ chuỗi `bg` khai báo trong styles.json.
+
+    Nhận cả tên ("pure vivid magenta #FF00FF" → magenta) lẫn mã hex đứng một
+    mình ("#00FFFF" → cyan, khớp theo trục màu). Không đọc được / thiếu hẳn →
+    None, và gọi ở trên sẽ giữ nguyên hành vi cũ."""
+    if not bg:
+        return None
+    s = str(bg).lower()
+    for name in KEY_COLORS:
+        if re.search(r"\b%s\b" % name, s):
+            return name
+    m = re.search(r"#([0-9a-f]{6})\b", s)
+    if m:
+        v = m.group(1)
+        return key_name_of(tuple(int(v[i:i + 2], 16) for i in (0, 2, 4)))
+    return None
+
+
+def is_key_color(bgs, expect=None):
+    """Nền là màu key chát (bão hoà cao, 1 màu) → dùng matte mềm, bỏ lấp lỗ.
+
+    `expect` = tên key ĐÃ KHAI BÁO (declared_key của styles.json). Chỉ dùng để
+    CẢNH BÁO khi nền model vẽ ra lệch khỏi thứ đã đặt hàng — không dùng để từ
+    chối, vì màu ĐO ĐƯỢC mới là màu phải un-mix khỏi viền."""
     if len(bgs) != 1:
         return False
-    r, g, b = bgs[0]
-    return max(r, g, b) - min(r, g, b) > 80
+    key = bgs[0]
+    if key_axis(key) is None or max(key) - min(key) <= 80:
+        return False
+    if expect and key_name_of(key) != expect:
+        print(f"  ⚠ nền đo được {key} không phải key '{expect}' đã khai báo "
+              f"(bg trong styles.json) — vẫn tách theo màu đo được")
+    return True
 
 
-def matte_chroma(sheet, key, noclamp=None):
+def matte_chroma(sheet, key, noclamp=None, axis=None):
     """Matte cho nền key chát: ViTMatte/closed-form nếu có lib, không thì
     đường lùi Vlahos per-pixel. noclamp: mask bool (H,W) — vùng ô của element
-    matte:"glow"/"glass" được MIỄN clamp vật lý (xem matte_pymatting)."""
+    matte:"glow"/"glass" được MIỄN clamp vật lý (xem matte_pymatting).
+    axis: trục key (key_axis) — mặc định suy từ chính màu `key`."""
     if HAS_PYMATTING:
-        return matte_pymatting(sheet, key, noclamp)
-    return matte_vlahos(sheet, key)
+        return matte_pymatting(sheet, key, noclamp, axis)
+    return matte_vlahos(sheet, key, axis)
 
 
-def matte_pymatting(sheet, key, noclamp=None):
+def matte_pymatting(sheet, key, noclamp=None, axis=None):
     """Closed-form matting với trimap TỰ SINH từ màu key đã biết.
 
     Vlahos đoán alpha ĐỘC LẬP từng pixel → bóng đổ/glow trộn nền cho alpha
@@ -126,12 +214,12 @@ def matte_pymatting(sheet, key, noclamp=None):
     un-premultiply). Hậu kỳ giữ từ đường cũ: ép đục ruột loang + despill
     magenta/green dư ở glow-bóng; BỎ blur 2 tầng — alpha solver đã mượt sẵn,
     blur chỉ làm bết sparkle."""
-    kr, kg, kb = key
-    is_green = kg > max(kr, kb)
+    axis = axis or key_axis(key)
+    khi, klo = axis
     arr = np.asarray(sheet, dtype=np.float64)
-    r, g, b = arr[..., 0], arr[..., 1], arr[..., 2]
-    spill = (g - np.maximum(r, b)) if is_green else (np.minimum(r, b) - g)
-    sref = max(40.0, (kg - max(kr, kb)) if is_green else (min(kr, kb) - kg))
+    spill = (np.minimum.reduce([arr[..., i] for i in khi])
+             - np.maximum.reduce([arr[..., i] for i in klo]))
+    sref = key_spill_ref(key, axis)
     fg_sure = Image.fromarray(((spill <= 0) * 255).astype(np.uint8))
     fg_sure = np.asarray(fg_sure.filter(ImageFilter.MinFilter(5))) > 128
     # nn = biên nền/nghi-vấn LÀM MƯỢT trước khi cắt: noise gpt-image trên vùng
@@ -192,15 +280,14 @@ def matte_pymatting(sheet, key, noclamp=None):
     # sập tối → viền chì mờ quanh element (đã dính) — giờ trừ xong scale lại
     # về đúng luminance ban đầu: chỉ đổi SẮC, không đổi SÁNG.
     R, G, B = fgc[..., 0], fgc[..., 1], fgc[..., 2]
-    ex = (G - np.maximum(R, B)) if is_green else (np.minimum(R, B) - G)
+    ex = (np.minimum.reduce([fgc[..., i] for i in khi])
+          - np.maximum.reduce([fgc[..., i] for i in klo]))
     lum = 0.3 * R + 0.59 * G + 0.11 * B
     m = (a8 > 0) & (ex > 0) & (~inn | (lum < 90))
     cut = np.where(m, ex * 0.7, 0)
-    if is_green:
-        G -= cut
-    else:
-        R -= cut
-        B -= cut
+    for i in khi:                 # trừ ở ĐÚNG các kênh cao của key
+        fgc[..., i] -= cut
+    R, G, B = fgc[..., 0], fgc[..., 1], fgc[..., 2]
     lum2 = 0.3 * R + 0.59 * G + 0.11 * B
     scale = np.clip(np.where(lum2 > 1, lum / np.maximum(lum2, 1), 1.0), 1.0, 1.8)
     fgc *= scale[..., None]
@@ -232,15 +319,17 @@ def matte_pymatting(sheet, key, noclamp=None):
     return out, strict
 
 
-def matte_vlahos(sheet, key):
-    """Chroma-key thực thụ theo Vlahos + DESPILL, cho nền key green/magenta.
+def matte_vlahos(sheet, key, axis=None):
+    """Chroma-key thực thụ theo Vlahos + DESPILL, cho nền key chát bất kỳ trong
+    KEY_COLORS (magenta / green / cyan / blue).
 
     Ramp theo khoảng-cách-màu là chưa đủ: glow bán trong suốt TRỘN với nền key
     cho ra pixel "đủ xa" màu key → được giữ đục nguyên màu trộn → viền ám xanh
     lá / hồng (đã dính). Vlahos đo thẳng mức "nhiễm key" của từng pixel:
 
-      green key:   spill = g - max(r, b)
-      magenta key: spill = min(r, b) - g
+      spill = min(kênh CAO của key) − max(kênh THẤP)   (xem key_axis)
+      green key:   g - max(r, b)   ·   magenta key: min(r, b) - g
+      cyan  key:   min(g, b) - r   ·   blue    key: b - max(r, g)
       alpha = 1 - spill / SREF      (SREF = spill của màu key thuần đo từ nền)
 
     Pixel key thuần → alpha 0 (kể cả ruột rỗng nằm kín — không cần thông ra
@@ -253,8 +342,9 @@ def matte_vlahos(sheet, key):
     nền magenta) sẽ bị mờ/xỉn — vì vậy prompt đã cấm dùng màu key trong element
     và key được chọn ngoài palette của style."""
     kr, kg, kb = key
-    is_green = kg > max(kr, kb)
-    sref = max(40, (kg - max(kr, kb)) if is_green else (min(kr, kb) - kg))
+    axis = axis or key_axis(key)
+    khi, klo = axis
+    sref = key_spill_ref(key, axis)
     w, h = sheet.size
     out = Image.new("RGBA", (w, h))
     strict = bytearray(w * h)
@@ -262,8 +352,9 @@ def matte_vlahos(sheet, key):
     for y in range(h):
         row = y * w
         for x in range(w):
-            r, g, b = src[x, y]
-            spill = (g - max(r, b)) if is_green else (min(r, b) - g)
+            p = src[x, y]
+            r, g, b = p
+            spill = min(p[i] for i in khi) - max(p[i] for i in klo)
             if spill <= 0:
                 dst[x, y] = (r, g, b, 255)
                 strict[row + x] = 1
@@ -305,25 +396,26 @@ def matte_vlahos(sheet, key):
     out.putalpha(Image.composite(ImageChops.lighter(hard, soft), glow, hi))
     # KHỬ ÁM MÀU KEY ở biên/bóng đổ (NGOÀI ruột đặc): bóng mềm trộn nền magenta
     # ra tím bùn mà distance-guard giữ gần-đục → un-premultiply gỡ không hết.
-    # Despill phần dư: magenta dư = min(r,b)−g; green dư = g−max(r,b). Chỉ áp
-    # ngoài ruột nên thân tím/xanh lá hợp lệ (đã đục) không bị xỉn.
+    # Despill phần dư = chính spill (min kênh CAO − max kênh THẤP), trừ ở đúng
+    # các kênh CAO của key. Chỉ áp ngoài ruột nên thân tím/xanh lá hợp lệ (đã
+    # đục) không bị xỉn.
     ap, ip, op = out.getchannel("A").load(), interior.load(), out.load()
     for y in range(h):
         for x in range(w):
             if not ap[x, y]:
                 continue
-            r, g, b, a4 = op[x, y]
+            px4 = op[x, y]
+            r, g, b, a4 = px4
             # trong ruột đặc chỉ khử ở pixel TỐI (bóng đổ); thân màu sáng giữ nguyên
             if ip[x, y] and 0.3 * r + 0.59 * g + 0.11 * b >= 90:
                 continue
-            if is_green:
-                ex = g - max(r, b)
-                if ex > 0:
-                    op[x, y] = (r, g - round(ex * 0.7), b, a4)
-            else:
-                ex = min(r, b) - g
-                if ex > 0:
-                    op[x, y] = (r - round(ex * 0.7), g, b - round(ex * 0.7), a4)
+            ex = min(px4[i] for i in khi) - max(px4[i] for i in klo)
+            if ex > 0:
+                cut = round(ex * 0.7)
+                ch = [r, g, b]
+                for i in khi:
+                    ch[i] -= cut
+                op[x, y] = (ch[0], ch[1], ch[2], a4)
     return out, strict
 
 
@@ -514,7 +606,12 @@ def align_content_safe(canvas, safe, tag=None):
     if tag:
         print(f"  → {tag}: contentSafe chỉ tịnh tiến ({dx:+d},{dy:+d})px, không resize")
     out = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    out.paste(canvas, (dx, dy), canvas)
+    # KHÔNG truyền mask: `paste(im, box, im)` tính out = out*(1−a) + im*a trên
+    # buffer straight-alpha TRONG SUỐT ⇒ alpha bị BÌNH PHƯƠNG (a²/255) và RGB bị
+    # premultiply nhầm — đúng nguồn gốc "rỗ rỗ" (lỗ li ti + mảng lộ nền + xỉn màu),
+    # đo được ở docs/research-hole-artifacts-2026-08.md §5. Đích là canvas vừa
+    # `Image.new` rỗng nên copy thẳng 4 kênh là đúng ngữ nghĩa và rẻ nhất.
+    out.paste(canvas, (dx, dy))
     return out
 
 
@@ -556,7 +653,7 @@ def snap_to_safe(canvas, sk, safe):
         if lo <= hi:
             dy = min(max(dy, lo), hi)
     out = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    out.paste(scaled, (dx, dy), scaled)
+    out.paste(scaled, (dx, dy))       # KHÔNG mask — xem align_content_safe
     return out
 
 
@@ -589,6 +686,60 @@ def fill_mask_holes(msk):
             if mp[x, y] == 0 and not seen[y * w + x]:
                 mp[x, y] = 255
     return msk
+
+
+# ── Ô matte:"glow" vẽ trên NỀN ĐEN ────────────────────────────────────────────
+GLOW_GATE_LO = 6.0       # dưới mức này (level 8-bit) coi là nhiễu tối → tắt hẳn
+GLOW_GATE_HI = 28.0      # trên mức này giữ NGUYÊN độ sáng, không trừ đi gì cả
+
+
+def glow_alpha(reg):
+    """Tách vật liệu PHÁT SÁNG khỏi nền đen. Trả (alpha 0..1 float, F 0..255).
+
+    Ánh sáng là phép CỘNG: trên nền đen ảnh quan sát chính là premultiplied
+    `C = α·F`, nên `α = max(R,G,B)` và `F = C/α` là đáp án đúng tuyệt đối —
+    không model nào phải đoán.
+
+    Vì sao KHÔNG dùng black-point cứng `(mx − BP)/(255 − BP)` như bản trước:
+    nó TRỪ đi độ sáng chứ không chỉ khử nhiễu, và vì `F` vẫn chia cho `mx` thô
+    nên `α·F ≠ C` — năng lượng sáng bốc hơi đúng ở quầng ngoài mềm, thứ làm glow
+    trông mượt. Đo trên glow tổng hợp (docs/research-glow-extraction-2026-08.md
+    §2.5): dải max(RGB) 0.08–0.15 mất **57.3%** độ sáng, dải 0.15–0.25 mất 32.4%.
+
+    SOFT-GATE thay cho trừ: nhân alpha với smoothstep(6, 28) — dưới 6 tắt hẳn
+    (nhiễu tối gpt-image), trên 28 nhân 1.0 (không mất gì), ở giữa chuyển mượt
+    nên không sinh contour. Số đo A/B cùng tài liệu:
+
+      | phương án                          | MAE add | nhiễu nền | mất sáng halo |
+      | (mx−18)/(255−18)  ← bản cũ         |  4.96   |  0.000    |    37.2%      |
+      | mx · smoothstep(6,28)  ← bản này   |  1.35   |  0.054    |     0.6%      |
+      | mx (không gate)                    |  0.00   |  2.143    |     0.0%      |
+    """
+    reg = np.asarray(reg, dtype=np.float64)
+    mx = reg.max(axis=2)
+    t = np.clip((mx - GLOW_GATE_LO) / (GLOW_GATE_HI - GLOW_GATE_LO), 0.0, 1.0)
+    a = np.clip(mx / 255.0, 0.0, 1.0) * (t * t * (3.0 - 2.0 * t))
+    F = np.clip(reg * 255.0 / np.maximum(mx, 1.0)[..., None], 0, 255)
+    return a, F
+
+
+# ── BLEND MODE ĐI KÈM ASSET, KHÔNG BAKE VÀO ALPHA ────────────────────────────
+# Vật liệu phát sáng KHÔNG diễn đạt được bằng một PNG straight-alpha dán thường:
+# ánh sáng là phép CỘNG, còn `source-over` là phép TRỘN — dán thường thì đúng phần
+# quầng ngoài mềm (thứ làm glow ra glow) bị nền nuốt mất. Đo trong
+# docs/research-glow-extraction-2026-08.md: RGBA(α = max(RGB)) dán bằng
+# `plus-lighter` cho ra ảnh GIỐNG HỆT TỪNG BIT với nền-đen + additive.
+#
+# Nên đường ra là SHIP KÈM CHỈ DẪN, không hy sinh alpha: manifest ghi `blend`,
+# webapp preview đặt `mix-blend-mode`, designer đặt Linear Dodge (Add)/Screen cho
+# layer trong Figma. Asset thường KHÔNG có khoá này (không phải `"normal"`) —
+# người đọc manifest cũ không phải đổi một dòng nào.
+MATTE_BLEND = {"glow": "screen"}
+
+
+def asset_blend(skel):
+    """Blend mode phải đặt cho asset này. None = vẽ thường (`source-over`)."""
+    return MATTE_BLEND.get((skel or {}).get("matte"))
 
 
 KEY_TRIM_DIST = 90       # tổng |ΔR|+|ΔG|+|ΔB| tới màu key để coi pixel là "nền key"
@@ -680,389 +831,412 @@ def pack_atlas(items, max_w=2048):
                    "meta": {"image": "atlas.png", "size": {"w": max_w, "h": atlas_h}, "scale": "1"}}
 
 
-# filter CLI: `python3 slice.py ipay tet` chỉ cắt các style đó (manifest merge, không mất style khác)
-ONLY = set(sys.argv[1:])
-mpath = os.path.join(HERE, "kits", "manifest.json")
-manifest = json.load(open(mpath)) if os.path.exists(mpath) else {"styles": {}}
-manifest.setdefault("styles", {})
-for style in cfg["styles"]:
-    sid = style["id"]
-    if ONLY and sid not in ONLY:
-        continue
-    threshold = style.get("threshold", DEFAULT_THRESHOLD)
-    strict_threshold = style.get("grow_threshold", threshold + GROW_OFFSET)
-    out_dir = os.path.join(HERE, "kits", sid)
-    entry = {"sheets": {}, "assets": [], "empty_cells": []}
-    atlas_items = []
-    done_sheets = set()          # sheet THỰC SỰ cắt lại lượt này (xem khối merge cuối)
-
-    for sh in cfg["sheets"]:
-        if sh.get("styles") and sid not in sh["styles"]:
-            continue                     # sheet riêng của style khác (vd pose-<char>)
-        job = f"{sid}-{sh['id']}"
-        src_path = os.path.join(HERE, "raw", f"{job}.png")
-        if not os.path.exists(src_path):
-            print(f"⚠ bỏ qua {job}: chưa có raw/{job}.png")
+# ── CLI ──────────────────────────────────────────────────────────────────────
+# Thân script nằm dưới guard `__main__` để test (và mọi công cụ đo) IMPORT được
+# các hàm ở trên mà KHÔNG chạy cắt ghi đè kits/. Hành vi CLI không đổi.
+if __name__ == "__main__":
+    # filter CLI: `python3 slice.py ipay tet` chỉ cắt các style đó (manifest merge, không mất style khác)
+    ONLY = set(sys.argv[1:])
+    mpath = os.path.join(HERE, "kits", "manifest.json")
+    manifest = json.load(open(mpath)) if os.path.exists(mpath) else {"styles": {}}
+    manifest.setdefault("styles", {})
+    for style in cfg["styles"]:
+        sid = style["id"]
+        if ONLY and sid not in ONLY:
             continue
+        threshold = style.get("threshold", DEFAULT_THRESHOLD)
+        strict_threshold = style.get("grow_threshold", threshold + GROW_OFFSET)
+        # Màu key ĐÃ KHAI BÁO (interface duy nhất với webapp: chuỗi `bg` trong
+        # styles.json). Thiếu/không đọc được → None ⇒ hành vi cũ: suy trục từ chính
+        # màu nền đo được, mà với sheet magenta/green cho ra đúng công thức cũ.
+        want_key = declared_key(style.get("bg"))
+        out_dir = os.path.join(HERE, "kits", sid)
+        entry = {"sheets": {}, "assets": [], "empty_cells": []}
+        atlas_items = []
+        done_sheets = set()          # sheet THỰC SỰ cắt lại lượt này (xem khối merge cuối)
 
-        COLS, ROWS = sh["grid"]["cols"], sh["grid"]["rows"]
-        raw_img = Image.open(src_path)
-        W, H = raw_img.size
-        cell_w, cell_h = W / COLS, H / ROWS
-        CW, CH = round(cell_w), round(cell_h)          # canvas chuẩn của sheet này
-
-        has_alpha = "A" in raw_img.getbands() and raw_img.getchannel("A").getextrema()[0] < 128
-        if has_alpha:
-            bg = None
-            keyed, strict = alpha_sheet(raw_img)
-            mode = "alpha thật"
-        else:
-            sheet_rgb = raw_img.convert("RGB")
-            bg = border_colors(sheet_rgb)
-            if is_key_color(bg):
-                noclamp = None
-                if HAS_PYMATTING and any(c["skel"].get("matte") in ("glow", "glass")
-                                         for c in sh["components"]):
-                    noclamp = np.zeros((H, W), dtype=bool)
-                    for _i, c in enumerate(sh["components"]):
-                        if c["skel"].get("matte") in ("glow", "glass"):
-                            _r, _c = divmod(_i, COLS)
-                            noclamp[round(_r * cell_h):round((_r + 1) * cell_h),
-                                    round(_c * cell_w):round((_c + 1) * cell_w)] = True
-                keyed, strict = matte_chroma(sheet_rgb, bg[0], noclamp)
-                mode = ((f"matte ViTMatte + despill, key {bg[0]}" if HAS_VITMATTE
-                         else f"matte closed-form PyMatting + despill, key {bg[0]}")
-                        if HAS_PYMATTING else f"matte Vlahos + despill, key {bg[0]}")
-            else:
-                keyed, strict = key_binary(sheet_rgb, bg, threshold, strict_threshold)
-                filled = fill_holes(keyed, sheet_rgb, W, H)
-                mode = f"binary {len(bg)} màu nhạt (đường lùi), lấp {filled}px"
-        # Ô matte:"glow" vẽ trên NỀN ĐEN (contract mới, gen.sh chèn lệnh riêng):
-        # tách kiểu "vật liệu phát sáng" của Photoshop — ánh sáng là phép CỘNG,
-        # trên nền đen C = α·F ⇒ α = max(R,G,B), F = C/α (un-premultiply).
-        # Chính xác tuyệt đối, không model nào phải đoán. Raw cũ (ô glow vẫn nền
-        # key) tự phát hiện qua góc ô chưa đen → giữ nguyên đường matte thường.
-        if bg is not None and is_key_color(bg) and HAS_PYMATTING:
-            kr_, kg_, kb_ = bg[0]
-            isg_ = kg_ > max(kr_, kb_)
-            sref_ = max(40.0, (kg_ - max(kr_, kb_)) if isg_ else (min(kr_, kb_) - kg_))
-            for idx, comp in enumerate(sh["components"]):
-                if comp["skel"].get("matte") != "glow":
-                    continue
-                row, col = divmod(idx, COLS)
-                x0, y0 = round(col * cell_w), round(row * cell_h)
-                x1, y1 = round((col + 1) * cell_w), round((row + 1) * cell_h)
-                reg = np.asarray(sheet_rgb.crop((x0, y0, x1, y1)), dtype=np.float64)
-                rr, gg, bb_ = reg[..., 0], reg[..., 1], reg[..., 2]
-                sp = (gg - np.maximum(rr, bb_)) if isg_ else (np.minimum(rr, bb_) - gg)
-                snc = np.clip(sp / sref_, 0, 1)
-                lumc = 0.3 * rr + 0.59 * gg + 0.11 * bb_
-                # tấm đen: model chừa mép key quanh ô nên KHÔNG dò ở góc —
-                # đếm tỷ lệ pixel vừa tối vừa sạch key trên cả ô
-                if ((lumc < 60) & (snc < 0.3)).mean() < 0.25:
-                    continue                  # ô chưa có tấm đen — raw đời cũ
-                mx = reg.max(axis=2)
-                BP = 18.0                     # black-point: nhiễu tối của gpt-image → 0
-                a = np.clip((mx - BP) / (255.0 - BP), 0, 1)
-                a[snc > 0.5] = 0.0            # mép key quanh tấm đen → trong suốt
-                F = np.clip(reg * 255.0 / np.maximum(mx, 1.0)[..., None], 0, 255)
-                a8_ = np.rint(a * 255).astype(np.uint8)
-                keyed.paste(Image.fromarray(
-                    np.dstack([F.astype(np.uint8), a8_[..., None]])), (x0, y0))
-                for oy in range(y1 - y0):
-                    base = (y0 + oy) * W + x0
-                    rowm = a8_[oy]
-                    for ox in range(x1 - x0):
-                        strict[base + ox] = 1 if rowm[ox] >= 242 else 0
-                # VÀNH ĐAI quanh ô: tấm đen hay TRÀN qua ranh ô vài px — phần
-                # tràn đi đường matte thường thành mảng ĐEN ĐỤC dính vào crop
-                # (đã dính: sọc đen mép burst). Trong vành, pixel gần-đen hoặc
-                # nhiễm key → trong suốt; art hàng xóm sáng màu không bị đụng.
-                M = round(min(cell_w, cell_h) * 0.2)
-                ex0, ey0 = max(0, x0 - M), max(0, y0 - M)
-                ex1, ey1 = min(W, x1 + M), min(H, y1 + M)
-                ring = np.asarray(sheet_rgb.crop((ex0, ey0, ex1, ey1)), dtype=np.float64)
-                rr2, gg2, bb2 = ring[..., 0], ring[..., 1], ring[..., 2]
-                sp2 = (gg2 - np.maximum(rr2, bb2)) if isg_ else (np.minimum(rr2, bb2) - gg2)
-                kill = (ring.max(axis=2) < 40) | (np.clip(sp2 / sref_, 0, 1) > 0.5)
-                kill[y0 - ey0:y1 - ey0, x0 - ex0:x1 - ex0] = False   # trong ô đã xử ở trên
-                ka = np.asarray(keyed.crop((ex0, ey0, ex1, ey1)))
-                ka = ka.copy()
-                ka[kill] = 0
-                keyed.paste(Image.fromarray(ka), (ex0, ey0))
-                for oy in range(ey1 - ey0):
-                    base = (ey0 + oy) * W + ex0
-                    krow = kill[oy]
-                    for ox in np.nonzero(krow)[0]:
-                        strict[base + ox] = 0
-                print(f"  ✦ {job}/{comp['file']}: ô glow nền đen → alpha theo kênh sáng")
-        blobs, labelmap = label_blobs(strict, W, H)
-
-        cell_blobs = [[] for _ in range(COLS * ROWS)]
-        for box, n, (cx, cy), lbl in blobs:
-            idx = min(ROWS - 1, int(cy // cell_h)) * COLS + min(COLS - 1, int(cx // cell_w))
-            cell_blobs[idx].append((box, n, lbl))
-
-        # Đốm tí hon dính sát BIÊN ô = rơi vãi từ ô hàng xóm (spec bắt element chừa
-        # ≥40px padding nên blob xịn không bám mép). Không lọc là nó kéo bbox union
-        # rộng tới mép, crop múc theo cả mảng bán-trong-suốt của hàng xóm (đã dính:
-        # đèn lồng của ribbon tết lạc vào 11-digit-plate). Sao/sparkle quanh burst
-        # nằm giữa ô và to hơn hẳn 1% nên không bị đụng.
-        edge = 0.06
-        cell_boxes = [None] * (COLS * ROWS)
-        cell_keep = [set() for _ in range(COLS * ROWS)]   # id các khối được giữ / ô
-        dropped = 0
-        for idx, blist in enumerate(cell_blobs):
-            if not blist:
+        for sh in cfg["sheets"]:
+            if sh.get("styles") and sid not in sh["styles"]:
+                continue                     # sheet riêng của style khác (vd pose-<char>)
+            job = f"{sid}-{sh['id']}"
+            src_path = os.path.join(HERE, "raw", f"{job}.png")
+            if not os.path.exists(src_path):
+                print(f"⚠ bỏ qua {job}: chưa có raw/{job}.png")
                 continue
-            main_n = max(n for _, n, _ in blist)
-            row, col = divmod(idx, COLS)
-            cl, ct = col * cell_w, row * cell_h
-            mx, my = cell_w * edge, cell_h * edge
-            for box, n, lbl in blist:
-                l, t, r, b = box
-                near_edge = (r <= cl + mx or l >= cl + cell_w - mx or
-                             b <= ct + my or t >= ct + cell_h - my)
-                if n < main_n * 0.01 and near_edge:
-                    dropped += 1
-                    continue
-                cell_keep[idx].add(lbl)
-                cur = cell_boxes[idx]
-                cell_boxes[idx] = box if cur is None else (
-                    min(cur[0], box[0]), min(cur[1], box[1]), max(cur[2], box[2]), max(cur[3], box[3]))
-        if dropped:
-            print(f"  · {job}: bỏ {dropped} đốm rơi vãi sát biên ô")
 
-        os.makedirs(out_dir, exist_ok=True)
-        n_ok = 0
-        # contentSafe cho phép decor nằm ngoài mặt element nên cần vành rộng
-        # hơn contract cũ. Chỉ áp dụng cho sheet có loại này để không đổi canvas
-        # của các sheet legacy.
-        bleed_ratio = max(BLEED, 0.24) if any(
-            c["skel"].get("contentSafe") for c in sh["components"]
-        ) else BLEED
-        BX, BY = round(cell_w * bleed_ratio), round(cell_h * bleed_ratio)
-        CVW, CVH = CW + 2 * BX, CH + 2 * BY       # canvas = ô + vành bleed
-        for idx, comp in enumerate(sh["components"]):
-            if comp["skel"]["shape"] == "empty":
-                continue                      # ô đệm cố ý bỏ trống — không cắt
-            row, col = divmod(idx, COLS)
-            cx0, cy0 = round(col * cell_w), round(row * cell_h)
-            canvas = Image.new("RGBA", (CVW, CVH), (0, 0, 0, 0))
-            if comp["skel"]["shape"] == "full":
-                # Ô full-bleed (bg): KHÔNG key gì cả — artwork phủ kín ô, key chỉ
-                # còn ở dải gap → matte trên artwork là tự phá ảnh (đã dính: nền
-                # blur bị ăn sạch). Crop nguyên ô đục 100%, gọt dải gap phẳng ở mép.
-                cell_rgb = raw_img.convert("RGB").crop((cx0, cy0, cx0 + CW, cy0 + CH))
-                fl, ft, fr, fb = trim_flat_cell(
-                    cell_rgb, key=bg[0] if (bg is not None and is_key_color(bg)) else None)
-                if (fl, ft, fr, fb) != (0, 0, CW, CH):
-                    print(f"  · {job}/{comp['file']}: gọt viền nền "
-                          f"L{fl} T{ft} R{CW - fr} B{CH - fb}px")
-                canvas.paste(cell_rgb.crop((fl, ft, fr, fb)).convert("RGBA"), (BX + fl, BY + ft))
+            COLS, ROWS = sh["grid"]["cols"], sh["grid"]["rows"]
+            raw_img = Image.open(src_path)
+            W, H = raw_img.size
+            cell_w, cell_h = W / COLS, H / ROWS
+            CW, CH = round(cell_w), round(cell_h)          # canvas chuẩn của sheet này
+
+            has_alpha = "A" in raw_img.getbands() and raw_img.getchannel("A").getextrema()[0] < 128
+            if has_alpha:
+                bg = None
+                keyed, strict = alpha_sheet(raw_img)
+                mode = "alpha thật"
             else:
-                box = cell_boxes[idx]
-                if box is None:
+                sheet_rgb = raw_img.convert("RGB")
+                bg = border_colors(sheet_rgb)
+                if is_key_color(bg, want_key):
+                    # Trục key lấy từ TÊN ĐÃ KHAI BÁO nếu có (khỏi đoán), không thì
+                    # suy từ màu đo được. Màu để un-mix vẫn luôn là màu ĐO ĐƯỢC.
+                    kaxis = key_axis(KEY_COLORS[want_key]) if want_key else key_axis(bg[0])
+                    noclamp = None
+                    if HAS_PYMATTING and any(c["skel"].get("matte") in ("glow", "glass")
+                                             for c in sh["components"]):
+                        noclamp = np.zeros((H, W), dtype=bool)
+                        for _i, c in enumerate(sh["components"]):
+                            if c["skel"].get("matte") in ("glow", "glass"):
+                                _r, _c = divmod(_i, COLS)
+                                noclamp[round(_r * cell_h):round((_r + 1) * cell_h),
+                                        round(_c * cell_w):round((_c + 1) * cell_w)] = True
+                    keyed, strict = matte_chroma(sheet_rgb, bg[0], noclamp, kaxis)
+                    kname = want_key or key_name_of(bg[0]) or "?"
+                    mode = ((f"matte ViTMatte + despill, key {kname} {bg[0]}" if HAS_VITMATTE
+                             else f"matte closed-form PyMatting + despill, key {kname} {bg[0]}")
+                            if HAS_PYMATTING else f"matte Vlahos + despill, key {kname} {bg[0]}")
+                else:
+                    keyed, strict = key_binary(sheet_rgb, bg, threshold, strict_threshold)
+                    filled = fill_holes(keyed, sheet_rgb, W, H)
+                    mode = f"binary {len(bg)} màu nhạt (đường lùi), lấp {filled}px"
+            # Ô matte:"glow" vẽ trên NỀN ĐEN (contract mới, gen.sh chèn lệnh riêng):
+            # tách kiểu "vật liệu phát sáng" của Photoshop — ánh sáng là phép CỘNG,
+            # trên nền đen C = α·F ⇒ α = max(R,G,B), F = C/α (un-premultiply).
+            # Chính xác tuyệt đối, không model nào phải đoán. Raw cũ (ô glow vẫn nền
+            # key) tự phát hiện qua góc ô chưa đen → giữ nguyên đường matte thường.
+            if bg is not None and is_key_color(bg) and HAS_PYMATTING:
+                ax_ = key_axis(KEY_COLORS[want_key]) if want_key else key_axis(bg[0])
+                sref_ = key_spill_ref(bg[0], ax_)
+                for idx, comp in enumerate(sh["components"]):
+                    if comp["skel"].get("matte") != "glow":
+                        continue
+                    row, col = divmod(idx, COLS)
+                    x0, y0 = round(col * cell_w), round(row * cell_h)
+                    x1, y1 = round((col + 1) * cell_w), round((row + 1) * cell_h)
+                    reg = np.asarray(sheet_rgb.crop((x0, y0, x1, y1)), dtype=np.float64)
+                    rr, gg, bb_ = reg[..., 0], reg[..., 1], reg[..., 2]
+                    snc = np.clip(key_spill(reg, ax_) / sref_, 0, 1)
+                    lumc = 0.3 * rr + 0.59 * gg + 0.11 * bb_
+                    # tấm đen: model chừa mép key quanh ô nên KHÔNG dò ở góc —
+                    # đếm tỷ lệ pixel vừa tối vừa sạch key trên cả ô
+                    if ((lumc < 60) & (snc < 0.3)).mean() < 0.25:
+                        continue                  # ô chưa có tấm đen — raw đời cũ
+                    a, F = glow_alpha(reg)        # soft-gate, xem glow_alpha()
+                    a[snc > 0.5] = 0.0            # mép key quanh tấm đen → trong suốt
+                    a8_ = np.rint(a * 255).astype(np.uint8)
+                    keyed.paste(Image.fromarray(
+                        np.dstack([F.astype(np.uint8), a8_[..., None]])), (x0, y0))
+                    for oy in range(y1 - y0):
+                        base = (y0 + oy) * W + x0
+                        rowm = a8_[oy]
+                        for ox in range(x1 - x0):
+                            strict[base + ox] = 1 if rowm[ox] >= 242 else 0
+                    # VÀNH ĐAI quanh ô: tấm đen hay TRÀN qua ranh ô vài px — phần
+                    # tràn đi đường matte thường thành mảng ĐEN ĐỤC dính vào crop
+                    # (đã dính: sọc đen mép burst). Trong vành, pixel gần-đen hoặc
+                    # nhiễm key → trong suốt; art hàng xóm sáng màu không bị đụng.
+                    M = round(min(cell_w, cell_h) * 0.2)
+                    ex0, ey0 = max(0, x0 - M), max(0, y0 - M)
+                    ex1, ey1 = min(W, x1 + M), min(H, y1 + M)
+                    ring = np.asarray(sheet_rgb.crop((ex0, ey0, ex1, ey1)), dtype=np.float64)
+                    kill = (ring.max(axis=2) < 40) | (
+                        np.clip(key_spill(ring, ax_) / sref_, 0, 1) > 0.5)
+                    kill[y0 - ey0:y1 - ey0, x0 - ex0:x1 - ex0] = False   # trong ô đã xử ở trên
+                    ka = np.asarray(keyed.crop((ex0, ey0, ex1, ey1)))
+                    ka = ka.copy()
+                    ka[kill] = 0
+                    keyed.paste(Image.fromarray(ka), (ex0, ey0))
+                    for oy in range(ey1 - ey0):
+                        base = (ey0 + oy) * W + ex0
+                        krow = kill[oy]
+                        for ox in np.nonzero(krow)[0]:
+                            strict[base + ox] = 0
+                    print(f"  ✦ {job}/{comp['file']}: ô glow nền đen → alpha theo kênh sáng")
+            blobs, labelmap = label_blobs(strict, W, H)
+
+            cell_blobs = [[] for _ in range(COLS * ROWS)]
+            for box, n, (cx, cy), lbl in blobs:
+                idx = min(ROWS - 1, int(cy // cell_h)) * COLS + min(COLS - 1, int(cx // cell_w))
+                cell_blobs[idx].append((box, n, lbl))
+
+            # Đốm tí hon dính sát BIÊN ô = rơi vãi từ ô hàng xóm (spec bắt element chừa
+            # ≥40px padding nên blob xịn không bám mép). Không lọc là nó kéo bbox union
+            # rộng tới mép, crop múc theo cả mảng bán-trong-suốt của hàng xóm (đã dính:
+            # đèn lồng của ribbon tết lạc vào 11-digit-plate). Sao/sparkle quanh burst
+            # nằm giữa ô và to hơn hẳn 1% nên không bị đụng.
+            edge = 0.06
+            cell_boxes = [None] * (COLS * ROWS)
+            cell_keep = [set() for _ in range(COLS * ROWS)]   # id các khối được giữ / ô
+            dropped = 0
+            for idx, blist in enumerate(cell_blobs):
+                if not blist:
+                    continue
+                main_n = max(n for _, n, _ in blist)
+                row, col = divmod(idx, COLS)
+                cl, ct = col * cell_w, row * cell_h
+                mx, my = cell_w * edge, cell_h * edge
+                for box, n, lbl in blist:
+                    l, t, r, b = box
+                    near_edge = (r <= cl + mx or l >= cl + cell_w - mx or
+                                 b <= ct + my or t >= ct + cell_h - my)
+                    if n < main_n * 0.01 and near_edge:
+                        dropped += 1
+                        continue
+                    cell_keep[idx].add(lbl)
+                    cur = cell_boxes[idx]
+                    cell_boxes[idx] = box if cur is None else (
+                        min(cur[0], box[0]), min(cur[1], box[1]), max(cur[2], box[2]), max(cur[3], box[3]))
+            if dropped:
+                print(f"  · {job}: bỏ {dropped} đốm rơi vãi sát biên ô")
+
+            os.makedirs(out_dir, exist_ok=True)
+            n_ok = 0
+            # contentSafe cho phép decor nằm ngoài mặt element nên cần vành rộng
+            # hơn contract cũ. Chỉ áp dụng cho sheet có loại này để không đổi canvas
+            # của các sheet legacy.
+            bleed_ratio = max(BLEED, 0.24) if any(
+                c["skel"].get("contentSafe") for c in sh["components"]
+            ) else BLEED
+            BX, BY = round(cell_w * bleed_ratio), round(cell_h * bleed_ratio)
+            CVW, CVH = CW + 2 * BX, CH + 2 * BY       # canvas = ô + vành bleed
+            for idx, comp in enumerate(sh["components"]):
+                if comp["skel"]["shape"] == "empty":
+                    continue                      # ô đệm cố ý bỏ trống — không cắt
+                row, col = divmod(idx, COLS)
+                cx0, cy0 = round(col * cell_w), round(row * cell_h)
+                canvas = Image.new("RGBA", (CVW, CVH), (0, 0, 0, 0))
+                if comp["skel"]["shape"] == "full":
+                    # Ô full-bleed (bg): KHÔNG key gì cả — artwork phủ kín ô, key chỉ
+                    # còn ở dải gap → matte trên artwork là tự phá ảnh (đã dính: nền
+                    # blur bị ăn sạch). Crop nguyên ô đục 100%, gọt dải gap phẳng ở mép.
+                    cell_rgb = raw_img.convert("RGB").crop((cx0, cy0, cx0 + CW, cy0 + CH))
+                    fl, ft, fr, fb = trim_flat_cell(
+                        cell_rgb, key=bg[0] if (bg is not None and is_key_color(bg)) else None)
+                    if (fl, ft, fr, fb) != (0, 0, CW, CH):
+                        print(f"  · {job}/{comp['file']}: gọt viền nền "
+                              f"L{fl} T{ft} R{CW - fr} B{CH - fb}px")
+                    canvas.paste(cell_rgb.crop((fl, ft, fr, fb)).convert("RGBA"), (BX + fl, BY + ft))
+                else:
+                    box = cell_boxes[idx]
+                    if box is None:
+                        entry["empty_cells"].append(comp["file"])
+                        continue
+                    # Canvas = NGUYÊN Ô, KHÔNG căn lại theo bbox nội dung: khung SAFE ZONE
+                    # của contract (skel trong styles.json) nằm cố định trong ô, nên toạ độ
+                    # ghép game/Figma luôn gán theo khung — trang trí tràn ngoài khung được
+                    # giữ nguyên chỗ, model vẽ bay bổng cỡ nào cũng không xô layout.
+                    # Chỉ dán vùng bbox (nới HALO) của blob THUỘC ô → junk hàng xóm không lọt.
+                    # Vùng crop ĐƯỢC với sang ô bên cạnh (tối đa hết vành bleed) để vớt
+                    # trang trí tràn ranh giới ô — mask sở hữu khối chặn đồ của hàng xóm.
+                    l, t, r, b = box
+                    L = max(0, cx0 - BX, l - HALO - PAD); T = max(0, cy0 - BY, t - HALO - PAD)
+                    R = min(W, cx0 + CW + BX, r + HALO + PAD); B = min(H, cy0 + CH + BY, b + HALO + PAD)
+                    region = keyed.crop((L, T, R, B))
+                    # Mask theo QUYỀN SỞ HỮU khối: pixel chỉ giữ nếu thuộc khối đã gán
+                    # cho ô này (nới MaxFilter ăn quầng glow mềm quanh khối). Không mask
+                    # là thân khối hàng xóm tràn vào vùng crop bị múc theo (đã dính:
+                    # nóc hộp quà ô dưới lọt vào đáy tab chip).
+                    keep = cell_keep[idx]
+                    msk = Image.new("L", (R - L, B - T), 0)
+                    mp = msk.load()
+                    for yy in range(T, B):
+                        base = yy * W
+                        for xx in range(L, R):
+                            if labelmap[base + xx] in keep:
+                                mp[xx - L, yy - T] = 255
+                    msk = fill_mask_holes(msk.filter(ImageFilter.MaxFilter(2 * HALO + 1)))
+                    # feather biên mask: cắt cứng làm mép glow lởm chởm hình blob
+                    # (đã dính ở fx-burst) — blur 6px cho vùng crop PHAI DẦN qua cả
+                    # những lump 10-20px của blob dò trên glow nhiễu
+                    msk = msk.filter(ImageFilter.GaussianBlur(6))
+                    region.putalpha(ImageChops.multiply(region.getchannel("A"), msk))
+                    # alpha_composite = phép CHỒNG LỚP đúng (idiom của nhà, xem
+                    # tools/safe_zone_asset.py:280). `paste(region, box, region)` là
+                    # bình phương alpha trên canvas trong suốt — xem align_content_safe.
+                    canvas.alpha_composite(region, (L - (cx0 - BX), T - (cy0 - BY)))
+                sk = comp["skel"]
+                if sk["shape"] == "pose" and POSE_SIDE.get(sk.get("pose")):
+                    canvas = normalize_pose_side(canvas, POSE_SIDE[sk["pose"]], f"{sid}/{comp['file']}")
+                content_safe = sk.get("contentSafe")
+                if content_safe:
+                    # contentSafe là vùng chữ/hitbox sạch. Với contract mới, chính
+                    # silhouette xám w/h là safe zone duy nhất. Nó nằm cố định giữa
+                    # ô và tuyệt đối không được dùng làm target để resize artwork.
+                    # Dạng boolean mới: chính skel w/h là safe zone xám duy nhất.
+                    # Vẫn đọc được object đời thử nghiệm để không làm hỏng manifest cũ.
+                    safe_spec = content_safe if isinstance(content_safe, dict) else sk
+                    sw = round(CW * safe_spec["w"])
+                    sh_ = round(CH * safe_spec["h"])
+                    sx = BX + (CW - sw) // 2
+                    sy = BY + (CH - sh_) // 2
+                else:
+                    sw, sh_ = round(CW * sk["w"]), round(CH * sk["h"])
+                    sx = BX + (CW - sw) // 2
+                    sy = BY + (CH - sh_ - round(CH * 0.04) if sk.get("anchor") == "bottom" else (CH - sh_) // 2)
+                # Audit chạm mép TRƯỚC snap: snap kéo content vào trong canvas nên vết
+                # cụt (cắt ở biên vùng crop) sẽ "tàng hình" nếu đo sau
+                pre = canvas.getchannel("A").getbbox()
+                if pre and sk["shape"] != "full" and (
+                        pre[0] == 0 or pre[1] == 0 or pre[2] == CVW or pre[3] == CVH):
+                    print(f"  ⚠ {sid}/{comp['file']}: content chạm mép canvas — raw tràn quá vành bleed, bị cụt")
+                if content_safe:
+                    # Giữ nguyên scale của pixels AI; chỉ dịch lõi đặc về tâm contract.
+                    canvas = align_content_safe(
+                        canvas, (sx, sy, sw, sh_), f"{sid}/{comp['file']}"
+                    )
+                    safe_box = [sx, sy, sw, sh_]
+                elif sk.get("free"):
+                    # KHUNG ĐỘNG: không nắn art — safe zone = LÕI ĐO ĐƯỢC của chính
+                    # art này (padding tự sinh khi cắt, đúng ý "để AI vẽ tự do")
+                    core = measure_core(canvas)
+                    safe_box = [core[0], core[1], core[2] - core[0], core[3] - core[1]] \
+                        if core else [sx, sy, sw, sh_]
+                else:
+                    canvas = snap_to_safe(canvas, sk, (sx, sy, sw, sh_))
+                    safe_box = [sx, sy, sw, sh_]
+                # DỌN ĐỐM MỒ CÔI — phải nằm SAU snap_to_safe: snap resample nội
+                # dung làm cầu alpha mờ nối đốm với thân MỎNG ĐI rồi đứt, tức đốm
+                # chỉ tách rời ở ảnh CUỐI (đã dính: dọn trước snap thấy n2=1 nên
+                # bỏ qua, ảnh lưu ra vẫn còn đốm). Đốm = cụm TỐI, NHỎ, tách khỏi
+                # thân ở ngưỡng α>60; sparkle sáng màu cố ý → giữ. Dọn cả quầng mờ
+                # quanh đốm (nới 4px), chừa lãnh thổ thân.
+                if HAS_PYMATTING and comp["skel"]["shape"] != "full":
+                    ca = np.asarray(canvas)
+                    aa = ca[..., 3]
+                    lb2, n2 = ndimage.label(aa > 60)
+                    if n2 > 1:
+                        sizes2 = ndimage.sum(aa > 60, lb2, range(1, n2 + 1))
+                        main_id = int(np.argmax(sizes2)) + 1
+                        main_sz = sizes2[main_id - 1]
+                        protect = ndimage.binary_dilation(lb2 == main_id, iterations=1)
+                        lum2 = 0.3 * ca[..., 0] + 0.59 * ca[..., 1] + 0.11 * ca[..., 2]
+                        kill = np.zeros(aa.shape, dtype=bool)
+                        for j in range(1, n2 + 1):
+                            sz = sizes2[j - 1]
+                            if j == main_id or sz > max(60, main_sz * 0.004):
+                                continue
+                            mk = lb2 == j
+                            if lum2[mk].mean() < 100:
+                                kill |= ndimage.binary_dilation(mk, iterations=4) & ~protect
+                        if kill.any():
+                            # quét nốt quầng mờ + cầu alpha thấp quanh vùng vừa diệt
+                            kill |= ndimage.binary_dilation(kill, iterations=8) & (aa < 60) & ~protect
+                            ca = ca.copy()
+                            ca[kill] = 0
+                            canvas = Image.fromarray(ca)
+                            print(f"  · {sid}/{comp['file']}: dọn {int(kill.sum())}px đốm tối mồ côi")
+                canvas.save(os.path.join(out_dir, f"{comp['file']}.png"))
+                abox = canvas.getchannel("A").getbbox()
+                if abox is None:
                     entry["empty_cells"].append(comp["file"])
                     continue
-                # Canvas = NGUYÊN Ô, KHÔNG căn lại theo bbox nội dung: khung SAFE ZONE
-                # của contract (skel trong styles.json) nằm cố định trong ô, nên toạ độ
-                # ghép game/Figma luôn gán theo khung — trang trí tràn ngoài khung được
-                # giữ nguyên chỗ, model vẽ bay bổng cỡ nào cũng không xô layout.
-                # Chỉ dán vùng bbox (nới HALO) của blob THUỘC ô → junk hàng xóm không lọt.
-                # Vùng crop ĐƯỢC với sang ô bên cạnh (tối đa hết vành bleed) để vớt
-                # trang trí tràn ranh giới ô — mask sở hữu khối chặn đồ của hàng xóm.
-                l, t, r, b = box
-                L = max(0, cx0 - BX, l - HALO - PAD); T = max(0, cy0 - BY, t - HALO - PAD)
-                R = min(W, cx0 + CW + BX, r + HALO + PAD); B = min(H, cy0 + CH + BY, b + HALO + PAD)
-                region = keyed.crop((L, T, R, B))
-                # Mask theo QUYỀN SỞ HỮU khối: pixel chỉ giữ nếu thuộc khối đã gán
-                # cho ô này (nới MaxFilter ăn quầng glow mềm quanh khối). Không mask
-                # là thân khối hàng xóm tràn vào vùng crop bị múc theo (đã dính:
-                # nóc hộp quà ô dưới lọt vào đáy tab chip).
-                keep = cell_keep[idx]
-                msk = Image.new("L", (R - L, B - T), 0)
-                mp = msk.load()
-                for yy in range(T, B):
-                    base = yy * W
-                    for xx in range(L, R):
-                        if labelmap[base + xx] in keep:
-                            mp[xx - L, yy - T] = 255
-                msk = fill_mask_holes(msk.filter(ImageFilter.MaxFilter(2 * HALO + 1)))
-                # feather biên mask: cắt cứng làm mép glow lởm chởm hình blob
-                # (đã dính ở fx-burst) — blur 6px cho vùng crop PHAI DẦN qua cả
-                # những lump 10-20px của blob dò trên glow nhiễu
-                msk = msk.filter(ImageFilter.GaussianBlur(6))
-                region.putalpha(ImageChops.multiply(region.getchannel("A"), msk))
-                canvas.paste(region, (L - (cx0 - BX), T - (cy0 - BY)), region)
-            sk = comp["skel"]
-            if sk["shape"] == "pose" and POSE_SIDE.get(sk.get("pose")):
-                canvas = normalize_pose_side(canvas, POSE_SIDE[sk["pose"]], f"{sid}/{comp['file']}")
-            content_safe = sk.get("contentSafe")
-            if content_safe:
-                # contentSafe là vùng chữ/hitbox sạch. Với contract mới, chính
-                # silhouette xám w/h là safe zone duy nhất. Nó nằm cố định giữa
-                # ô và tuyệt đối không được dùng làm target để resize artwork.
-                # Dạng boolean mới: chính skel w/h là safe zone xám duy nhất.
-                # Vẫn đọc được object đời thử nghiệm để không làm hỏng manifest cũ.
-                safe_spec = content_safe if isinstance(content_safe, dict) else sk
-                sw = round(CW * safe_spec["w"])
-                sh_ = round(CH * safe_spec["h"])
-                sx = BX + (CW - sw) // 2
-                sy = BY + (CH - sh_) // 2
-            else:
-                sw, sh_ = round(CW * sk["w"]), round(CH * sk["h"])
-                sx = BX + (CW - sw) // 2
-                sy = BY + (CH - sh_ - round(CH * 0.04) if sk.get("anchor") == "bottom" else (CH - sh_) // 2)
-            # Audit chạm mép TRƯỚC snap: snap kéo content vào trong canvas nên vết
-            # cụt (cắt ở biên vùng crop) sẽ "tàng hình" nếu đo sau
-            pre = canvas.getchannel("A").getbbox()
-            if pre and sk["shape"] != "full" and (
-                    pre[0] == 0 or pre[1] == 0 or pre[2] == CVW or pre[3] == CVH):
-                print(f"  ⚠ {sid}/{comp['file']}: content chạm mép canvas — raw tràn quá vành bleed, bị cụt")
-            if content_safe:
-                # Giữ nguyên scale của pixels AI; chỉ dịch lõi đặc về tâm contract.
-                canvas = align_content_safe(
-                    canvas, (sx, sy, sw, sh_), f"{sid}/{comp['file']}"
-                )
-                safe_box = [sx, sy, sw, sh_]
-            elif sk.get("free"):
-                # KHUNG ĐỘNG: không nắn art — safe zone = LÕI ĐO ĐƯỢC của chính
-                # art này (padding tự sinh khi cắt, đúng ý "để AI vẽ tự do")
-                core = measure_core(canvas)
-                safe_box = [core[0], core[1], core[2] - core[0], core[3] - core[1]] \
-                    if core else [sx, sy, sw, sh_]
-            else:
-                canvas = snap_to_safe(canvas, sk, (sx, sy, sw, sh_))
-                safe_box = [sx, sy, sw, sh_]
-            # DỌN ĐỐM MỒ CÔI — phải nằm SAU snap_to_safe: snap resample nội
-            # dung làm cầu alpha mờ nối đốm với thân MỎNG ĐI rồi đứt, tức đốm
-            # chỉ tách rời ở ảnh CUỐI (đã dính: dọn trước snap thấy n2=1 nên
-            # bỏ qua, ảnh lưu ra vẫn còn đốm). Đốm = cụm TỐI, NHỎ, tách khỏi
-            # thân ở ngưỡng α>60; sparkle sáng màu cố ý → giữ. Dọn cả quầng mờ
-            # quanh đốm (nới 4px), chừa lãnh thổ thân.
-            if HAS_PYMATTING and comp["skel"]["shape"] != "full":
-                ca = np.asarray(canvas)
-                aa = ca[..., 3]
-                lb2, n2 = ndimage.label(aa > 60)
-                if n2 > 1:
-                    sizes2 = ndimage.sum(aa > 60, lb2, range(1, n2 + 1))
-                    main_id = int(np.argmax(sizes2)) + 1
-                    main_sz = sizes2[main_id - 1]
-                    protect = ndimage.binary_dilation(lb2 == main_id, iterations=1)
-                    lum2 = 0.3 * ca[..., 0] + 0.59 * ca[..., 1] + 0.11 * ca[..., 2]
-                    kill = np.zeros(aa.shape, dtype=bool)
-                    for j in range(1, n2 + 1):
-                        sz = sizes2[j - 1]
-                        if j == main_id or sz > max(60, main_sz * 0.004):
-                            continue
-                        mk = lb2 == j
-                        if lum2[mk].mean() < 100:
-                            kill |= ndimage.binary_dilation(mk, iterations=4) & ~protect
-                    if kill.any():
-                        # quét nốt quầng mờ + cầu alpha thấp quanh vùng vừa diệt
-                        kill |= ndimage.binary_dilation(kill, iterations=8) & (aa < 60) & ~protect
-                        ca = ca.copy()
-                        ca[kill] = 0
-                        canvas = Image.fromarray(ca)
-                        print(f"  · {sid}/{comp['file']}: dọn {int(kill.sum())}px đốm tối mồ côi")
-            canvas.save(os.path.join(out_dir, f"{comp['file']}.png"))
-            abox = canvas.getchannel("A").getbbox()
-            if abox is None:
-                entry["empty_cells"].append(comp["file"])
-                continue
-            ox, oy = abox[0], abox[1]
-            pw, ph = abox[2] - abox[0], abox[3] - abox[1]
-            tight = canvas.crop(abox)
-            # tight/ = ruột crop chặt, không đệm canvas — cho Figma/designer lấy lẻ
-            os.makedirs(os.path.join(out_dir, "tight"), exist_ok=True)
-            tight.save(os.path.join(out_dir, "tight", f"{comp['file']}.png"))
-            # ruột lệch tâm khung safe nhiều = model vẽ sai chỗ → cảnh báo để đối
-            # chiếu raw/ (bbox gồm cả trang trí tràn nên lệch nhẹ là bình thường;
-            # element free có khung bám theo art nên không có khái niệm lệch)
-            if not sk.get("free"):
-                dev_x = (ox + pw / 2) - (sx + sw / 2)
-                dev_y = (oy + ph / 2) - (sy + sh_ / 2)
-                if abs(dev_x) > CW * 0.06 or abs(dev_y) > CH * 0.06:
-                    print(f"  ⚠ {sid}/{comp['file']}: ruột lệch khung safe ({dev_x:+.0f},{dev_y:+.0f})px")
-            atlas_items.append((comp["file"], tight, (CVW, CVH), (ox, oy)))
-            asset = {"file": comp["file"] + ".png", "sheet": sh["id"],
-                     "canvas": [CVW, CVH], "cell": [CW, CH], "bleed": [BX, BY],
-                     "content": [pw, ph],
-                     "content_at": [ox, oy], "safe": safe_box}
-            if content_safe:
-                asset["contentSafe"] = True
-            if sk.get("free"):
-                asset["freeSafe"] = True     # safe = lõi đo từ art, không phải khung contract
-            if sk.get("slice9"):
-                # inset 9-slice theo RUỘT (px trên tight/): pill góc tròn = h/2 nên
-                # inset ngang hơi quá bán kính; rrect theo bán kính min/6
-                if sk["shape"] in ("pill", "bar"):
-                    ins_x = min(round(ph * 0.52), (pw - 4) // 2)
-                    ins_y = min(round(ph * 0.4), (ph - 4) // 2)
-                else:
-                    m = round(min(pw, ph) * 0.3)
-                    ins_x = min(m, (pw - 4) // 2)
-                    ins_y = min(m, (ph - 4) // 2)
-                asset["slice9"] = [ins_x, ins_y, ins_x, ins_y]
-            entry["assets"].append(asset)
-            n_ok += 1
+                ox, oy = abox[0], abox[1]
+                pw, ph = abox[2] - abox[0], abox[3] - abox[1]
+                tight = canvas.crop(abox)
+                # tight/ = ruột crop chặt, không đệm canvas — cho Figma/designer lấy lẻ
+                os.makedirs(os.path.join(out_dir, "tight"), exist_ok=True)
+                tight.save(os.path.join(out_dir, "tight", f"{comp['file']}.png"))
+                # ruột lệch tâm khung safe nhiều = model vẽ sai chỗ → cảnh báo để đối
+                # chiếu raw/ (bbox gồm cả trang trí tràn nên lệch nhẹ là bình thường;
+                # element free có khung bám theo art nên không có khái niệm lệch)
+                if not sk.get("free"):
+                    dev_x = (ox + pw / 2) - (sx + sw / 2)
+                    dev_y = (oy + ph / 2) - (sy + sh_ / 2)
+                    if abs(dev_x) > CW * 0.06 or abs(dev_y) > CH * 0.06:
+                        print(f"  ⚠ {sid}/{comp['file']}: ruột lệch khung safe ({dev_x:+.0f},{dev_y:+.0f})px")
+                atlas_items.append((comp["file"], tight, (CVW, CVH), (ox, oy)))
+                asset = {"file": comp["file"] + ".png", "sheet": sh["id"],
+                         "canvas": [CVW, CVH], "cell": [CW, CH], "bleed": [BX, BY],
+                         "content": [pw, ph],
+                         "content_at": [ox, oy], "safe": safe_box}
+                blend = asset_blend(sk)
+                if blend:
+                    asset["blend"] = blend       # xem MATTE_BLEND: ô glow ship kèm blend
+                if content_safe:
+                    asset["contentSafe"] = True
+                if sk.get("free"):
+                    asset["freeSafe"] = True     # safe = lõi đo từ art, không phải khung contract
+                if sk.get("slice9"):
+                    # inset 9-slice theo RUỘT (px trên tight/): pill góc tròn = h/2 nên
+                    # inset ngang hơi quá bán kính; rrect theo bán kính min/6
+                    if sk["shape"] in ("pill", "bar"):
+                        ins_x = min(round(ph * 0.52), (pw - 4) // 2)
+                        ins_y = min(round(ph * 0.4), (ph - 4) // 2)
+                    else:
+                        m = round(min(pw, ph) * 0.3)
+                        ins_x = min(m, (pw - 4) // 2)
+                        ins_y = min(m, (ph - 4) // 2)
+                    asset["slice9"] = [ins_x, ins_y, ins_x, ins_y]
+                entry["assets"].append(asset)
+                n_ok += 1
 
-        entry["sheets"][sh["id"]] = {"mode": mode, "bg_detected": bg,
-                                     "canvas": [CVW, CVH], "cell": [CW, CH], "bleed": [BX, BY],
-                                     "size": [W, H], "blobs": len(blobs), "cut": n_ok}
-        done_sheets.add(sh["id"])
-        print(f"✓ {job}: {n_ok}/{len(sh['components'])} (canvas {CVW}x{CVH} = ô {CW}x{CH} + bleed), "
-              f"{len(blobs)} khối, {mode}")
+            entry["sheets"][sh["id"]] = {"mode": mode, "bg_detected": bg,
+                                         "canvas": [CVW, CVH], "cell": [CW, CH], "bleed": [BX, BY],
+                                         "size": [W, H], "blobs": len(blobs), "cut": n_ok}
+            done_sheets.add(sh["id"])
+            print(f"✓ {job}: {n_ok}/{len(sh['components'])} (canvas {CVW}x{CVH} = ô {CW}x{CH} + bleed), "
+                  f"{len(blobs)} khối, {mode}")
 
-    # ── GEN LẠI MỘT NHÓM: giữ lại phần sheet KHÔNG chạy lượt này ────────────────
-    # Agent thu hẹp styles.json đúng tập job của lượt chạy (engine.mjs
-    # contractToStylesV1 + materializeStyles), nên khi người dùng bấm "Lưu và tạo
-    # lại" cho MỘT nhóm thì cfg["sheets"] chỉ còn sheet đó. Bản cũ ghi thẳng
-    # `manifest["styles"][sid] = entry` ⇒ mọi asset của các sheet KHÁC biến mất
-    # khỏi manifest và khỏi atlas, dù file PNG vẫn nằm trong kits/. Đường gen-toàn-
-    # bộ không bao giờ lộ ra vì lượt đó có đủ sheet. Đây là khác biệt THẬT giữa
-    # hai đường hậu kỳ — merge để cả hai ra cùng một manifest.
-    prev = manifest["styles"].get(sid) or {}
-    keep_sheets = [k for k in (prev.get("sheets") or {}) if k not in done_sheets]
-    if keep_sheets:
-        done_files = {c["file"] for sh in cfg["sheets"] if sh["id"] in done_sheets
-                      for c in sh["components"]}
-        for k in keep_sheets:
-            entry["sheets"][k] = prev["sheets"][k]
-        for a in (prev.get("assets") or []):
-            if a.get("sheet") not in keep_sheets or a.get("file", "")[:-4] in done_files:
-                continue
-            entry["assets"].append(a)
-            # Frame atlas của asset giữ lại: dựng lại từ tight/ đã có trên đĩa,
-            # kèm canvas/offset ghi trong manifest cũ → atlas không mất frame.
-            tp = os.path.join(out_dir, "tight", a["file"])
-            if os.path.exists(tp) and a.get("canvas") and a.get("content_at"):
-                atlas_items.append((a["file"][:-4], Image.open(tp).convert("RGBA"),
-                                    tuple(a["canvas"]), tuple(a["content_at"])))
-        for f in (prev.get("empty_cells") or []):
-            if f not in done_files and f not in entry["empty_cells"]:
-                entry["empty_cells"].append(f)
-        print(f"  ↺ {sid}: giữ nguyên {len(keep_sheets)} sheet không chạy lượt này "
-              f"({', '.join(keep_sheets)})")
+        # ── GEN LẠI MỘT NHÓM: giữ lại phần sheet KHÔNG chạy lượt này ────────────────
+        # Agent thu hẹp styles.json đúng tập job của lượt chạy (engine.mjs
+        # contractToStylesV1 + materializeStyles), nên khi người dùng bấm "Lưu và tạo
+        # lại" cho MỘT nhóm thì cfg["sheets"] chỉ còn sheet đó. Bản cũ ghi thẳng
+        # `manifest["styles"][sid] = entry` ⇒ mọi asset của các sheet KHÁC biến mất
+        # khỏi manifest và khỏi atlas, dù file PNG vẫn nằm trong kits/. Đường gen-toàn-
+        # bộ không bao giờ lộ ra vì lượt đó có đủ sheet. Đây là khác biệt THẬT giữa
+        # hai đường hậu kỳ — merge để cả hai ra cùng một manifest.
+        prev = manifest["styles"].get(sid) or {}
+        keep_sheets = [k for k in (prev.get("sheets") or {}) if k not in done_sheets]
+        if keep_sheets:
+            done_files = {c["file"] for sh in cfg["sheets"] if sh["id"] in done_sheets
+                          for c in sh["components"]}
+            # Skel của các sheet GIỮ LẠI, khi lượt này còn nhìn thấy chúng trong
+            # styles.json (sheet có trong cfg nhưng thiếu raw/, hay lượt gen-toàn-bộ
+            # bị lọc bằng CLI). Dùng để BÙ khoá `blend` cho manifest do bản slice.py
+            # cũ ghi — asset giữ lại vốn được chép NGUYÊN VẸN nên bản mới không mất
+            # khoá, chỉ bản cũ là thiếu. Không xoá `blend` đang có: file PNG trên đĩa
+            # vẫn là bản cắt cũ, manifest phải tả đúng cái đang nằm đó.
+            keep_skel = {c["file"]: c["skel"] for sh in cfg["sheets"]
+                         if sh["id"] in keep_sheets for c in sh["components"]}
+            for k in keep_sheets:
+                entry["sheets"][k] = prev["sheets"][k]
+            for a in (prev.get("assets") or []):
+                if a.get("sheet") not in keep_sheets or a.get("file", "")[:-4] in done_files:
+                    continue
+                kblend = asset_blend(keep_skel.get(a.get("file", "")[:-4]))
+                if kblend and not a.get("blend"):
+                    a["blend"] = kblend
+                entry["assets"].append(a)
+                # Frame atlas của asset giữ lại: dựng lại từ tight/ đã có trên đĩa,
+                # kèm canvas/offset ghi trong manifest cũ → atlas không mất frame.
+                tp = os.path.join(out_dir, "tight", a["file"])
+                if os.path.exists(tp) and a.get("canvas") and a.get("content_at"):
+                    atlas_items.append((a["file"][:-4], Image.open(tp).convert("RGBA"),
+                                        tuple(a["canvas"]), tuple(a["content_at"])))
+            for f in (prev.get("empty_cells") or []):
+                if f not in done_files and f not in entry["empty_cells"]:
+                    entry["empty_cells"].append(f)
+            print(f"  ↺ {sid}: giữ nguyên {len(keep_sheets)} sheet không chạy lượt này "
+                  f"({', '.join(keep_sheets)})")
 
-    if atlas_items:
-        atlas_img, atlas_json = pack_atlas(atlas_items)
-        atlas_img.save(os.path.join(out_dir, "atlas.png"))
-        json.dump(atlas_json, open(os.path.join(out_dir, "atlas.json"), "w"), indent=1)
-        entry["atlas"] = {"image": "atlas.png", "json": "atlas.json",
-                          "size": [atlas_img.width, atlas_img.height]}
-        print(f"  atlas {sid}: {atlas_img.width}x{atlas_img.height}, {len(atlas_items)} frame")
+        if atlas_items:
+            atlas_img, atlas_json = pack_atlas(atlas_items)
+            atlas_img.save(os.path.join(out_dir, "atlas.png"))
+            json.dump(atlas_json, open(os.path.join(out_dir, "atlas.json"), "w"), indent=1)
+            entry["atlas"] = {"image": "atlas.png", "json": "atlas.json",
+                              "size": [atlas_img.width, atlas_img.height]}
+            print(f"  atlas {sid}: {atlas_img.width}x{atlas_img.height}, {len(atlas_items)} frame")
 
-    manifest["styles"][sid] = entry
-    total = len(entry["assets"])
-    want = sum(sum(1 for c in sh["components"] if c["skel"]["shape"] != "empty")
-               for sh in cfg["sheets"]
-               if sh["id"] in done_sheets) \
-        + sum(1 for a in entry["assets"] if a.get("sheet") not in done_sheets)
-    print(f"— {sid}: {total}/{want} asset" +
-          (f", Ô TRỐNG: {entry['empty_cells']}" if entry["empty_cells"] else ""))
+        manifest["styles"][sid] = entry
+        total = len(entry["assets"])
+        want = sum(sum(1 for c in sh["components"] if c["skel"]["shape"] != "empty")
+                   for sh in cfg["sheets"]
+                   if sh["id"] in done_sheets) \
+            + sum(1 for a in entry["assets"] if a.get("sheet") not in done_sheets)
+        print(f"— {sid}: {total}/{want} asset" +
+              (f", Ô TRỐNG: {entry['empty_cells']}" if entry["empty_cells"] else ""))
 
-json.dump(manifest, open(os.path.join(HERE, "kits", "manifest.json"), "w"),
-          indent=2, ensure_ascii=False)
-print("→ kits/manifest.json")
+    json.dump(manifest, open(os.path.join(HERE, "kits", "manifest.json"), "w"),
+              indent=2, ensure_ascii=False)
+    print("→ kits/manifest.json")
