@@ -11,6 +11,7 @@ import { fail } from "./errors.mjs"
 import { RE_PROJECT_ID, RE_SLUG, assertMatch, safeSegment } from "./paths.mjs"
 import { projectDir } from "./projects-dir.mjs"
 import { readContract, contractJobs } from "./contract.mjs"
+import { redactLine } from "./redact.mjs"
 
 export const DERIVED_DIRS = ["skeleton", "prompts", "kits", "export"]
 
@@ -147,13 +148,29 @@ export function applyActiveRun(project, handle) {
   return project
 }
 
+/* BACKLOG #22 — THẺ HOME PHẢI BIẾT LƯỢT GEN GẦN NHẤT ĐÃ CHẾT.
+   `stats.lastRun` trước đây chỉ có {id, at, ok, fail}. Ca đau nhất lại là ca 100% job
+   chết: `ok=0` ⇒ `rawPresent=0` ⇒ thẻ Home suy ra "Chưa vẽ" và im lặng hoàn toàn, y
+   như dự án chưa từng chạy. Thêm `status` + `failSummary` để phía web phân biệt được
+   "chưa bao giờ chạy" với "vừa chạy và chết sạch" mà KHÔNG phải gọi thêm API runs cho
+   từng thẻ (danh sách Home có thể vài chục dự án).
+   KHÔNG mang `errorTail` vào đây: bằng chứng là thứ của MỘT dự án đang mở, không phải
+   của danh sách — nó nằm ở `GET /api/runs/:id` mà banner trong project đã đọc. */
 async function readLastRun(dir) {
   try {
     const latest = await readJsonFile(join(dir, "runs", "latest.json"))
     const run = await readJsonFile(join(dir, "runs", latest.runId, "run.json"))
-    const ok = (run.jobs ?? []).filter(j => j.status === "ok").length
-    const fail_ = (run.jobs ?? []).filter(j => j.status === "failed").length
-    return { id: run.id, at: run.finishedAt ?? run.startedAt, ok, fail: fail_ }
+    const jobs = run.jobs ?? []
+    const ok = jobs.filter(j => j.status === "ok").length
+    const fail_ = jobs.filter(j => j.status === "failed").length
+    return {
+      id: run.id, at: run.finishedAt ?? run.startedAt, ok, fail: fail_,
+      kind: run.kind ?? null,
+      status: run.status ?? null,
+      total: jobs.length,
+      // Chuỗi sinh ở agent, nhưng run.json có thể do bản cũ/máy khác ghi ⇒ vẫn redact.
+      failSummary: run.failSummary ? redactLine(run.failSummary) : null,
+    }
   } catch { return null }
 }
 

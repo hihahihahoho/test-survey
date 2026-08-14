@@ -221,11 +221,23 @@ export const projectStatsSchema = z.looseObject({
   jobs: z.number().default(0),
   rawPresent: z.number().default(0),
   kitsCut: z.number().default(0),
+  /**
+   * Lượt chạy GẦN NHẤT của dự án, đọc thẳng từ `runs/<id>/run.json`.
+   *
+   * BACKLOG #22 thêm `status`/`total`/`failSummary`: thiếu chúng thì ca đau nhất —
+   * 100% job chết ⇒ `ok=0` ⇒ `rawPresent=0` — bị thẻ Home suy ra thành «Chưa vẽ», tức
+   * là một dự án vừa cháy rụi trông y hệt dự án chưa từng chạy. Có `status` thì thẻ
+   * phân biệt được, mà vẫn KHÔNG phải gọi thêm API runs cho từng thẻ trong lưới.
+   */
   lastRun: z.looseObject({
     id: z.string(),
     at: z.string().nullish(),
     ok: z.number().optional(),
     fail: z.number().optional(),
+    kind: runKindSchema.nullish(),
+    status: runStatusSchema.nullish(),
+    total: z.number().optional(),
+    failSummary: z.string().nullish(),
   }).nullish(),
   diskBytes: z.number().default(0),
   diskBreakdown: diskBreakdownSchema.optional(),
@@ -597,6 +609,21 @@ export const runJobSchema = z.looseObject({
   /** R20: ảnh được cứu từ thư mục tạm của codex → dòng lượt có nhãn `↩ đã cứu ảnh`. */
   recovered: z.boolean().default(false),
   diagnosis: diagnosisSchema.nullish(),
+  /**
+   * BACKLOG #22 — 2–3 DÒNG CUỐI log/stderr của chính lượt này, **agent đã redact**
+   * (che khoá + rút gọn đường dẫn tuyệt đối — xem `agent/lib/redact.mjs`).
+   *
+   * Vì sao cần dù đã có `diagnosis`: `NO_ARTIFACT` đọc là "chạy xong nhưng ảnh không
+   * được ghi" — đúng mà vô dụng, vì nó gộp chung `rc=127` (thiếu codex) với
+   * `SyntaxError` (engine chết). Hai ca ấy chữa bằng hai cách khác hẳn nhau.
+   *
+   * `nullish()` là CỐ Ý: agent bản cũ không gửi trường này, và một bộ kit mở từ máy
+   * khác vẫn phải xem được. Mọi nơi đọc phải chịu được `undefined`.
+   *
+   * ⚠️ Client KHÔNG redact lại (và cũng không thể — nó không biết HOME của máy chạy
+   * agent). Đây là chuỗi để HIỆN, không phải để parse.
+   */
+  errorTail: z.array(z.string()).nullish(),
 });
 export type RunJob = z.infer<typeof runJobSchema>;
 
@@ -621,6 +648,13 @@ export const runSchema = z.looseObject({
     etaSeconds: z.number().nullish(),
   }).default({ done: 0, total: 0, failed: 0 }),
   jobs: z.array(runJobSchema).default([]),
+  /**
+   * BACKLOG #22 — MỘT CÂU cho cả lượt: «10/10 job không ghi được ảnh».
+   * Agent gộp (`summarizeFailures`) chứ không phải web tự đếm: cùng một câu phải hiện
+   * y hệt ở banner trong dự án, ở thẻ Home và trong khối "Copy chẩn đoán".
+   * `null`/vắng ⇒ lượt không có job đỏ (hoặc agent bản cũ).
+   */
+  failSummary: z.string().nullish(),
   /** con trỏ stream hiện tại — client giữ để nối lại bằng `?from=seq+1` (§6.3). */
   seq: z.number().default(0),
 });
@@ -810,6 +844,8 @@ export const streamEventSchema = z.union([
     ...evBase, type: z.literal("run.finished"),
     status: runStatusSchema.catch("done-with-errors"),
     ok: z.number().optional(), failed: z.number().optional(), durationMs: z.number().optional(),
+    /** #22 — cùng câu gộp với `Run.failSummary`, để màn đang stream khỏi phải GET lại. */
+    failSummary: z.string().nullish(),
   }),
   z.looseObject({ ...evBase, type: z.literal("heartbeat") }),
   /** nhánh cuối: event chưa biết — vẫn parse được `seq` để không mất con trỏ stream. */

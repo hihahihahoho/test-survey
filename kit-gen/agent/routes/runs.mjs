@@ -6,6 +6,7 @@ import { exists, readFile, readdir, stat, mtimeOf, ensureDir, copyFile } from ".
 import { redactLine } from "../lib/redact.mjs"
 import { RE_JOB, RE_RUN_ID, assertMatch, safeSegment } from "../lib/paths.mjs"
 import { projectDir, readProject } from "../lib/projects.mjs"
+import { sanitizeRun } from "../lib/runs.mjs"
 import { readContract } from "../lib/contract.mjs"
 import { validateContract } from "../lib/validate.mjs"
 
@@ -56,13 +57,14 @@ export function register(r) {
   // #33 list runs của project
   r.get("/api/projects/:id/runs", async ctx => {
     const limit = Math.min(50, Math.max(1, Number(ctx.url.searchParams.get("limit") ?? 20) || 20))
-    return { status: 200, json: { items: await ctx.runs.list(ctx.params.id, limit) } }
+    const items = await ctx.runs.list(ctx.params.id, limit)
+    return { status: 200, json: { items: items.map(sanitizeRun) } }
   })
 
   // #34 GET run (nguồn của fallback poll 2s)
   r.get("/api/runs/:runId", async ctx => {
     const { run } = await ctx.runs.find(ctx.params.runId)
-    return { status: 200, json: run }
+    return { status: 200, json: sanitizeRun(run) }
   })
 
   // #35 stream NDJSON

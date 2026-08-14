@@ -8,9 +8,11 @@ import { DownloadKitButton, CopyFigmaButton } from "@/features/workflow-v4/compo
 import { DemoScreenButton } from "@/features/demo";
 import { groupAnchorId, type ResultGroup } from "@/features/workflow-v4/lib/generated-results";
 import type { ProjectImageGroup } from "@/routes/search-schemas";
+import { useRuns } from "@/lib/hooks";
 import { buildMatrix } from "../lib/matrix";
 import { staleWarning } from "../lib/next-actions";
 import { StaleBanner } from "../components/StaleBanner";
+import { RunFailBanner } from "../components/RunFailBanner";
 
 /**
  * ẢNH ĐÃ TẠO — mục đầu tiên của sidebar dự án, và là nơi wizard đổ người dùng vào ngay
@@ -99,6 +101,17 @@ export function ImagesSection({
   );
   const jobs = React.useMemo(() => contractJobs(contract).map((job) => job.job), [contract]);
 
+  /**
+   * §BACKLOG-22 — LƯỢT GEN CHẾT PHẢI NÓI RA Ở ĐẦU TRANG.
+   *
+   * Chỉ lấy MỘT lượt gần nhất (`limit=1`): dải cảnh báo nói về "lần vừa rồi", không
+   * phải về lịch sử — lịch sử đã có trang S4 riêng. Query này dùng chung `queryKey`
+   * với danh sách lượt chạy nên nó KHÔNG dựng thêm một nguồn sự thật thứ hai; sau khi
+   * bấm "Tạo lại toàn bộ", `useStartRun` invalidate đúng khoá đó và dải tự biến mất.
+   */
+  const runs = useRuns(projectId, 1);
+  const lastRun = runs.data?.items?.[0] ?? null;
+
   return (
     <section className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
@@ -122,6 +135,14 @@ export function ImagesSection({
           </Button>
         </div>
       </header>
+
+      {/* Dải LỖI đứng TRÊN dải "ảnh cũ hơn thiết kế": một lượt vừa chết thì việc ảnh cũ
+          là hệ quả, không phải nguyên nhân — nói ngược thứ tự là chỉ sai đường chữa. */}
+      <RunFailBanner
+        run={lastRun}
+        gate={readOnly ? { ...gate, readOnly: true, reason: gate.reason || "Dự án đang ở chế độ chỉ đọc" } : gate}
+        onRegenerate={() => onGenerate(jobs)}
+      />
 
       <StaleBanner
         warning={warning}

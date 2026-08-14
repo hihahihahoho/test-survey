@@ -59,4 +59,7 @@ export {
 } from "./lib/runlog";
 export type { LogLine, LogLevel, LogFilter, RunLogBuffer } from "./lib/runlog";
 export { downloadText } from "./lib/download";
+/** #22 — khối chẩn đoán để dán cho dev. CỤC BỘ: chỉ dựng chuỗi, không gửi đi đâu. */
+export { buildDiagnosticsText, osLabel, currentOsLabel } from "./lib/diagnostics";
+export type { DiagnosticsInput } from "./lib/diagnostics";
 export { useGenerateRun } from "./lib/useGenerateRun";

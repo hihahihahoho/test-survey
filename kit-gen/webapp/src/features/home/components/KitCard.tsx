@@ -7,6 +7,7 @@ import type { Project } from "@/lib/types";
 import { KitCover } from "./KitCover";
 import { KitCardMenu, type KitActions } from "./KitCardMenu";
 import type { Gate } from "@/features/projects/lib/gate";
+import { RUN_DOT_CLASS, runLineOf } from "../lib/run-line";
 
 /**
  * THẺ MỘT BỘ KIT — UX-V3 §1.1.
@@ -52,6 +53,10 @@ export function KitCard({
 }) {
   const mode = readMode(project);
   const st = deriveStatus(project, now);
+  /* §BACKLOG-22 — dòng phụ về LƯỢT GEN GẦN NHẤT. Nó THAY badge (không đứng cạnh) để
+     thẻ vẫn đúng luật «tối đa MỘT dòng trạng thái» của UX-V3 §1.3; `runLineOf` trả
+     `null` ở mọi ca mà badge cũ nói hay hơn. Xem `lib/run-line.ts`. */
+  const runLine = runLineOf(project, now);
 
   return (
     <article
@@ -64,7 +69,10 @@ export function KitCard({
       data-kit-mode={mode}
       data-kit-status={st.status}
       tabIndex={tabIndex}
-      aria-label={`${project.name} — ${st.label}`}
+      data-kit-run={runLine?.dot}
+      /* Trạng thái vẫn ĐỌC ĐƯỢC đầy đủ ở đây kể cả khi dòng phụ bị nuốt vì hẹp chỗ —
+         và khi có dòng lượt chạy thì screen reader phải nghe ĐÚNG câu đang hiện. */
+      aria-label={`${project.name} — ${runLine?.text ?? st.label}`}
       onClick={() => actions.open(project)}
       onKeyDown={(e) => {
         // Space mở thẻ. Enter do lưới xử lý ở tầng trên ⇒ một đường duy nhất.
@@ -116,13 +124,23 @@ export function KitCard({
               cần vẽ lại, vẽ lỗi… Đáy các thẻ nhờ đó thẳng hàng.
               Trạng thái vẫn ĐỌC ĐƯỢC đầy đủ ở `aria-label` của thẻ và ở
               `data-kit-status` — không mất gì cho screen reader (§5.8-A3). */}
-          {st.status !== "chua-ve" && (
+          {/* §BACKLOG-22 — DÒNG PHỤ CỦA LƯỢT GEN, ưu tiên hơn badge.
+              Một chấm màu + một câu, cỡ caption: đủ để phân biệt «đang chạy 3/10» với
+              «lỗi 10/10» khi lướt qua lưới, mà không biến thẻ thành bảng điều khiển.
+              Chấm `aria-hidden` — nghĩa nằm ở CHỮ ngay cạnh (§5.8-A3 «không chỗ nào
+              chỉ bằng màu»), đúng luật đã áp cho icon nhãn phía trên. */}
+          {runLine ? (
+            <p className="mt-0.5 flex min-w-0 items-center gap-2 text-caption text-fg-muted" title={runLine.long}>
+              <span className={cn("size-1.5 shrink-0 rounded-full", RUN_DOT_CLASS[runLine.dot])} aria-hidden />
+              <span className="truncate">{runLine.text}</span>
+            </p>
+          ) : st.status !== "chua-ve" ? (
             <p className="mt-0.5 flex min-w-0 items-center gap-2">
               <Badge tone={st.tone} title={st.long}>
                 <span className="truncate">{st.label}</span>
               </Badge>
             </p>
-          )}
+          ) : null}
         </div>
 
         {/* Nút ⋯ — hiện khi HOVER hoặc FOCUS (§1.1). Luôn hiện trên màn cảm ứng. */}

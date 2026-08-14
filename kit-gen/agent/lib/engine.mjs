@@ -175,4 +175,36 @@ export function diagnose(lines) {
   return "UNKNOWN"
 }
 
+/* MỘT CÂU cho CẢ LƯỢT CHẠY (BACKLOG #22).
+   Vì sao phải có ở TẦNG AGENT chứ không để web tự gộp: chủ sản phẩm đã hai lần gặp
+   "100% job chết mà nó chẳng báo gì cả" — mỗi ô tự nói lỗi của mình, không ai nói
+   tổng. Câu này đi kèm run.json nên nó CÒN SỐNG sau khi đóng tab, và mọi bề mặt
+   (banner project, thẻ Home, khối copy chẩn đoán) đọc CÙNG một chuỗi, không ai tự chế. */
+const DIAGNOSIS_VI = {
+  QUOTA_SUSPECTED: "nghi chạm giới hạn tạo ảnh",
+  NOT_LOGGED_IN: "công cụ tạo ảnh chưa đăng nhập",
+  NO_ARTIFACT: "không ghi được ảnh",
+  TIMEOUT: "quá thời gian chờ",
+  UNKNOWN: "lỗi chưa rõ nguyên nhân",
+}
+
+/** "10/10 job không ghi được ảnh" · "3/8 job: 2 không ghi được ảnh · 1 quá thời gian chờ". */
+export function summarizeFailures(jobs) {
+  const list = Array.isArray(jobs) ? jobs : []
+  const failed = list.filter(j => j?.status === "failed")
+  if (!failed.length) return null
+  const byDiag = new Map()
+  for (const j of failed) {
+    const d = DIAGNOSIS_VI[j.diagnosis] ? j.diagnosis : "UNKNOWN"
+    byDiag.set(d, (byDiag.get(d) ?? 0) + 1)
+  }
+  const head = `${failed.length}/${list.length} job`
+  // Một nguyên nhân duy nhất ⇒ nói thẳng, không bắt người đọc giải mã dấu chấm giữa.
+  if (byDiag.size === 1) return `${head} ${DIAGNOSIS_VI[[...byDiag.keys()][0]]}`
+  const parts = [...byDiag.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([d, n]) => `${n} ${DIAGNOSIS_VI[d]}`)
+  return `${head}: ${parts.join(" · ")}`
+}
+
 export { REPO_DIR }

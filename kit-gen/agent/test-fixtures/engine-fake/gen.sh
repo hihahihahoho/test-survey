@@ -24,7 +24,16 @@ for j in $jobs; do
   echo "fake log for ${j}" > "logs/${j}.log"
   case "$j" in
     *bg-home)
-      echo "FAIL ${j} (rc=1, ảnh không được ghi mới — xem logs/${j}.log)"
+      # BACKLOG #22 — job lỗi phải để lại BẰNG CHỨNG, đúng hình dạng ca thật đã gặp:
+      # `rc=127` (codex không có trên PATH) chứ không chỉ "ảnh không được ghi".
+      # Ba dòng này cố tình mang một khoá giả VÀ một đường dẫn tuyệt đối để test
+      # chứng minh `errorTail` đã đi qua redactLine (che khoá + rút gọn path).
+      {
+        echo "codex: command not found (PATH=${PWD}/bin)"
+        echo "api_key=sk-KITGENTESTKEY0123456789 rejected"
+        echo "rc=127 — ảnh không được ghi mới"
+      } | tee -a "logs/${j}.log" >&2
+      echo "FAIL ${j} (rc=127, ảnh không được ghi mới — xem logs/${j}.log)"
       continue ;;
   esac
   printf 'PNGFAKE' > "raw/${j}.png"

@@ -199,6 +199,61 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     await a3("DELETE", `/api/projects/${gid}`)
   })
 
+  /* ── BACKLOG #22 ──────────────────────────────────────────────────────────
+     "RUN FAIL MÀ KHÔNG AI THẤY". Chủ sản phẩm dính hai lần trong một ngày: 100% job
+     chết, app "chẳng báo gì cả", và nguyên nhân thật (`rc=127`, `SyntaxError`) chỉ
+     lòi ra khi có người đào `events.ndjson` bằng tay.
+     Ca này khoá cả hai nửa của bản vá phía agent:
+       ① mỗi job lỗi mang `errorTail` = 2–3 dòng cuối log/stderr CỦA CHÍNH NÓ;
+       ② cả lượt mang `failSummary` gộp, và `stats.lastRun` của project cũng biết.
+     Và khoá HỢP ĐỒNG BẢO MẬT: engine giả cố tình in ra một khoá `sk-…` và một đường
+     dẫn tuyệt đối; cả hai PHẢI biến mất trước khi ra khỏi API. */
+  await it("[#22] job lỗi mang errorTail đã redact + run có failSummary gộp", async () => {
+    const { api: a8 } = await agentWithEngine("engine-fake")
+    const created = await a8("POST", "/api/projects", {
+      body: { name: "Bang chung loi", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
+    })
+    const gid = created.json.project.id
+    const run = await a8("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", autoSliceAfterGen: false } })
+    eq(run.status, 202, "run 202")
+    const rid = run.json.runId
+    await a8("GET", `/api/runs/${rid}/stream?from=0`)      // stream đóng khi run.finished
+
+    const got = await a8("GET", `/api/runs/${rid}`)
+    eq(got.json.status, "done-with-errors", "1 job chết ⇒ done-with-errors")
+
+    // ① BẰNG CHỨNG THEO JOB
+    const bad = got.json.jobs.find(j => j.status === "failed")
+    ok(bad, "có job lỗi")
+    eq(bad.diagnosis, "NO_ARTIFACT", "chẩn đoán vẫn là NO_ARTIFACT")
+    ok(Array.isArray(bad.errorTail), `errorTail phải là mảng, thấy ${JSON.stringify(bad.errorTail)}`)
+    ok(bad.errorTail.length >= 1 && bad.errorTail.length <= 3, `2–3 dòng cuối, thấy ${bad.errorTail.length}`)
+    includes(bad.errorTail.join("\n"), "rc=127",
+      "nguyên nhân THẬT phải đi kèm — khỏi phải đào events.ndjson")
+    ok(got.json.jobs.filter(j => j.status === "ok").every(j => !j.errorTail?.length),
+      "job xong KHÔNG mang errorTail")
+
+    // ①b HỢP ĐỒNG BẢO MẬT — redact.mjs là cửa duy nhất
+    const tail = bad.errorTail.join("\n")
+    ok(!/sk-KITGENTESTKEY/.test(tail), `khoá bị lộ nguyên văn: ${tail}`)
+    ok(!tail.includes(wsRoot), `đường dẫn tuyệt đối của workspace bị lộ: ${tail}`)
+    ok(!/(^|\s)\/(Users|home|var|private|tmp)\//.test(tail), `còn path tuyệt đối: ${tail}`)
+
+    // ② TỔNG KẾT CẢ LƯỢT
+    eq(got.json.failSummary, "1/3 job không ghi được ảnh", "failSummary gộp theo chẩn đoán")
+    const list = await a8("GET", `/api/projects/${gid}/runs`)
+    eq(list.json.items.find(x => x.id === rid).failSummary, "1/3 job không ghi được ảnh",
+      "danh sách lượt chạy cũng mang failSummary")
+
+    // ③ THẺ HOME đọc được trạng thái lượt gần nhất mà KHÔNG phải gọi API runs
+    const proj = (await a8("GET", `/api/projects/${gid}`)).json.project
+    eq(proj.stats.lastRun.status, "done-with-errors", "stats.lastRun biết lượt vừa rồi hỏng")
+    eq(proj.stats.lastRun.fail, 1, "đếm đúng số job đỏ")
+    eq(proj.stats.lastRun.total, 3, "biết tổng số job của lượt")
+    eq(proj.stats.lastRun.failSummary, "1/3 job không ghi được ảnh", "thẻ Home dùng CÙNG một câu")
+    await a8("DELETE", `/api/projects/${gid}`)
+  })
+
   await it("styles.json sinh ra THU HẸP đúng tập lượt đã chọn (filter gen.sh là substring)", async () => {
     const { api: a5 } = await agentWithEngine("engine-fake")
     const created = await a5("POST", "/api/projects", {

@@ -6,12 +6,24 @@ import { ensureDir, exists, writeJsonAtomic, mtimeOf, stat, readFile, writeFile,
 import { fail } from "./errors.mjs"
 import { redactLine } from "./redact.mjs"
 import { projectDir } from "./projects-dir.mjs"
-import { resolveEngine, prepareEngine, materializeStyles, buildCommand, diagnose } from "./engine.mjs"
+import { resolveEngine, prepareEngine, materializeStyles, buildCommand, diagnose, summarizeFailures } from "./engine.mjs"
 import { maybeAutoCover } from "./cover.mjs"
 import { pythonCommand, killTree, winSpawnOpts } from "./platform.mjs"
 
 const HEARTBEAT_MS = 15000
 const MAX_BUFFER_EVENTS = 4000
+
+/* BẰNG CHỨNG ĐI KÈM LỖI (BACKLOG #22).
+   Trước bản này, một job lỗi chỉ mang đúng một enum `diagnosis`. Với NO_ARTIFACT enum
+   đó đọc là "chạy xong nhưng ảnh không được ghi" — ĐÚNG mà VÔ DỤNG: hai lần liên tiếp
+   chủ sản phẩm phải nhờ người khác đào `events.ndjson` mới biết thật ra là `rc=127`
+   (thiếu codex trên PATH) và `SyntaxError` (engine chết khi parse). Vài dòng cuối
+   stderr/log của chính job đó là thứ phân biệt được hai ca ấy.
+   BA TRẦN, cố ý nhỏ: đây là BẰNG CHỨNG, không phải nhật ký — nhật ký đầy đủ vẫn ở
+   `GET /api/runs/:id/jobs/:job/log`. */
+const ERROR_TAIL_LINES = 3          // "2-3 dòng cuối" của brief
+const ERROR_TAIL_MAX_CHARS = 240    // một dòng codex lỗi có thể dài hàng KB
+const STDERR_RING = 40              // đủ để lùi qua vài dòng rác cuối (progress bar…)
 
 export class RunHandle {
   constructor(store, run, dir, opts) {
@@ -35,6 +47,9 @@ export class RunHandle {
        TRƯỚC khi caller (DELETE project) move thư mục đi. */
     this.phaseDone = null
     this.jobStart = new Map()
+    /* Vòng nhớ stderr của CẢ LƯỢT — lưới hứng cuối cùng khi job không có log riêng
+       (engine chết trước khi kịp tạo `logs/<job>.log`: đúng ca `rc=127`/`SyntaxError`). */
+    this.stderrTail = []
     this.t0 = Math.floor(Date.now() / 1000)
     this.durations = []
     this.hb = setInterval(() => this.emit({ type: "heartbeat" }), HEARTBEAT_MS)
@@ -159,12 +174,16 @@ export class RunHandle {
       const onLine = (raw, level) => {
         const line = raw.trimEnd()
         if (!line) return
+        if (level !== "info") {
+          this.stderrTail.push(line)
+          if (this.stderrTail.length > STDERR_RING) this.stderrTail.shift()
+        }
         this.emit({ type: "job.log", job: null, level, line })
         if (kind === "gen") this.parseGenLine(line)
       }
       lineReader(child.stdout, l => onLine(l, "info"))
       lineReader(child.stderr, l => onLine(l, "warn"))
-      child.on("error", e => { this.emit({ type: "job.log", level: "error", line: `spawn failed: ${e.message}` }); done() })
+      child.on("error", e => { onLine(`spawn failed: ${e.message}`, "error"); done() })
       /* KHÔNG await được từ bên ngoài ⇒ mọi lỗi ở đây là UNHANDLED REJECTION và giết
          cả tiến trình agent. Bọc try/finally: done() phải chạy trong MỌI trường hợp,
          nếu không thì cancel({waitMs}) đợi phaseDone sẽ treo tới hết trần thời gian. */
@@ -227,6 +246,38 @@ export class RunHandle {
     return Math.round((med * left) / Math.max(1, this.run.maxJobs) / 1000)
   }
 
+  /* ══ BẰNG CHỨNG LỖI — HỢP ĐỒNG BẢO MẬT ĐI QUA ĐÚNG MỘT CỬA ═══════════════════
+     `tidyTail()` là cửa DUY NHẤT dựng `errorTail`, và nó luôn chạy `redactLine()`
+     (che secret + `shortenPath` đường dẫn tuyệt đối — architecture §4.3-5) rồi mới
+     cắt độ dài. Không có nhánh nào đi vòng qua nó: nếu thêm nguồn bằng chứng mới,
+     hãy đổ vào đây chứ đừng gán thẳng `j.errorTail`.
+     Cắt SAU khi redact là có chủ ý — cắt trước có thể xén đôi một token và làm
+     mẫu `sk-…` không còn khớp, tức là để lọt đúng thứ ta đang chặn. */
+  tidyTail(lines) {
+    const out = []
+    for (const raw of lines) {
+      const line = redactLine(String(raw ?? "")).trim()
+      if (!line) continue
+      out.push(line.length > ERROR_TAIL_MAX_CHARS ? line.slice(0, ERROR_TAIL_MAX_CHARS) + "…" : line)
+    }
+    return out.slice(-ERROR_TAIL_LINES)
+  }
+
+  /** Vài dòng cuối stderr của CẢ LƯỢT (lưới hứng khi job không có log riêng). */
+  runTail() { return this.tidyTail(this.stderrTail) }
+
+  /** Bằng chứng của MỘT job: ưu tiên log riêng của nó, rồi mới tới stderr của lượt. */
+  async errorTailFor(pdir, job) {
+    for (const abs of [join(this.dir, "logs", `${job}.log`), join(pdir, "logs", `${job}.log`)]) {
+      if (!(await exists(abs))) continue
+      // Log job của engine là file nhỏ (mỗi job một file); vẫn chỉ giữ đuôi.
+      const raw = await readFile(abs, "utf8").catch(() => "")
+      const tail = this.tidyTail(raw.split("\n").slice(-STDERR_RING))
+      if (tail.length) return tail
+    }
+    return this.runTail()
+  }
+
   async validateGeometry(pdir, png, job) {
     const tool = join(pdir, "validate_output_geometry.py")
     if (!(await exists(tool))) return null
@@ -276,8 +327,21 @@ export class RunHandle {
         }
       }
     }
+    /* Bằng chứng gắn ở ĐÂY vì đây là nơi NO_ARTIFACT ra đời: pha gen vừa đóng, log
+       của từng job đã ghi xong, mà thư mục project thì vẫn còn (chưa qua finish()). */
+    for (const j of this.run.jobs) {
+      if (j.status !== "failed" || j.errorTail?.length) continue
+      j.errorTail = await this.errorTailFor(pdir, j.job)
+      // Enum lấy từ chính bằng chứng: `FAIL <job>` chỉ nói "ảnh không được ghi",
+      // còn `rc=127` / `SyntaxError` nằm trong log riêng và mới là nguyên nhân thật.
+      if (!j.diagnosis || j.diagnosis === "NO_ARTIFACT") {
+        const better = diagnose(j.errorTail)
+        if (better !== "UNKNOWN") j.diagnosis = better
+      }
+    }
     this.run.progress.done = this.run.jobs.filter(j => j.status === "ok").length
     this.run.progress.failed = this.run.jobs.filter(j => j.status === "failed").length
+    this.run.failSummary = summarizeFailures(this.run.jobs)
     await this.persist()
   }
 
@@ -330,13 +394,23 @@ export class RunHandle {
     this.run.status = status
     this.run.finishedAt = new Date().toISOString()
     for (const j of this.run.jobs) if (j.status === "queued" || j.status === "running") j.status = status === "cancelled" ? "queued" : "failed"
+    /* LƯỚI HỨNG CUỐI. `settleGenJobs()` chỉ chạy cho pha gen chạy tới nơi; các đường
+       còn lại (env-failed vì thiếu gen.sh, engine chết ngay khi spawn, pha slice hỏng)
+       cũng phải mang bằng chứng — nếu không thì đúng lại cảnh "nó chẳng báo gì cả". */
+    const runTail = this.runTail()
+    for (const j of this.run.jobs) {
+      if (j.status !== "failed") continue
+      if (!j.errorTail?.length) j.errorTail = runTail
+      if (!j.diagnosis) j.diagnosis = diagnose(j.errorTail)
+    }
     const ok = this.run.jobs.filter(j => j.status === "ok").length
     const failed = this.run.jobs.filter(j => j.status === "failed").length
     this.run.progress.done = ok
     this.run.progress.failed = failed
+    this.run.failSummary = summarizeFailures(this.run.jobs)
     await this.persist()
     this.emit({
-      type: "run.finished", status, ok, failed,
+      type: "run.finished", status, ok, failed, failSummary: this.run.failSummary ?? undefined,
       durationMs: Date.parse(this.run.finishedAt) - Date.parse(this.run.startedAt),
     })
     for (const s of this.subs) { try { s(null) } catch { /* ignore */ } }

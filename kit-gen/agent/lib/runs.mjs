@@ -9,6 +9,25 @@ import { RE_RUN_ID, RE_JOB, assertMatch } from "./paths.mjs"
 import { projectDir } from "./projects-dir.mjs"
 import { readContract, contractJobs } from "./contract.mjs"
 import { RunHandle } from "./run-handle.mjs"
+import { redactLine } from "./redact.mjs"
+
+/* ĐAI AN TOÀN THỨ HAI cho `errorTail` (BACKLOG #22).
+ * `RunHandle.tidyTail()` đã redact TRƯỚC khi ghi xuống đĩa, nên về lý thuyết run.json
+ * đã sạch. Nhưng `run.json` là FILE TRÊN ĐĨA: nó có thể do một bản agent CŨ HƠN ghi
+ * ra, do người dùng chép từ máy khác sang, hoặc bị sửa tay. Đường ra API vì thế redact
+ * lần nữa — rẻ (vài dòng chữ) và biến hợp đồng "không lộ path tuyệt đối" thành thứ
+ * đúng theo CẤU TRÚC chứ không theo lịch sử của file.
+ * Trả BẢN SAO NÔNG: `run` của handle đang chạy là state sống trong RAM, redact tại chỗ
+ * sẽ ghi đè chính nó ở mỗi lần GET. */
+export function sanitizeRun(run) {
+  if (!run || typeof run !== "object") return run
+  return {
+    ...run,
+    failSummary: run.failSummary ? redactLine(run.failSummary) : (run.failSummary ?? null),
+    jobs: (run.jobs ?? []).map(j =>
+      Array.isArray(j?.errorTail) ? { ...j, errorTail: j.errorTail.map(redactLine) } : j),
+  }
+}
 
 export class RunStore {
   constructor(ws) {
@@ -70,7 +89,12 @@ export class RunStore {
       jobs: selected.map(j => ({
         job: j.job, variant: j.variant, sheet: j.sheet, status: "queued",
         startedAt: null, durationMs: null, artifact: null, recovered: false, diagnosis: null,
+        /* BACKLOG #22 — 2-3 dòng cuối stderr/log của job, ĐÃ redact. Khai sẵn `null`
+           để hình dạng run.json không đổi giữa chừng lượt chạy. */
+        errorTail: null,
       })),
+      /** Một câu gộp cho cả lượt ("10/10 job không ghi được ảnh"). Xem summarizeFailures. */
+      failSummary: null,
       seq: 0,
     }
     const handle = new RunHandle(this, run, dir, {
