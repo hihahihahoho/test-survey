@@ -211,6 +211,36 @@ export function useRevealProject(id: string) {
   return useMutation({ mutationFn: (path?: string) => api.projects.reveal(id, path) });
 }
 
+/**
+ * #43 — trạng thái ảnh bìa tự sinh.
+ *
+ * `refetchInterval` chỉ bật khi đang vẽ: ảnh bìa chạy nền và KHÔNG có stream NDJSON
+ * riêng (nó không phải một lượt chạy). Poll 4s trong lúc vẽ là đủ để nút đổi trạng
+ * thái, và tự tắt ngay khi xong — không có vòng poll vĩnh viễn nào ở đây.
+ */
+export function useProjectCover(id: string | null) {
+  return useQuery({
+    queryKey: qk.projects.cover(id ?? "__none__"),
+    queryFn: () => api.projects.cover(id as string),
+    enabled: Boolean(id),
+    staleTime: STALE.projects,
+    refetchInterval: (q) => (q.state.data?.status === "running" ? 4000 : false),
+  });
+}
+
+/** #44 — vẽ lại ảnh bìa. Thành công = agent ĐÃ NHẬN (202), ảnh về sau vài chục giây. */
+export function useRegenerateCover(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.projects.regenerateCover(id),
+    onSuccess: (cover) => {
+      qc.setQueryData(qk.projects.cover(id), cover);
+      void qc.invalidateQueries({ queryKey: qk.projects.detail(id) });
+      void qc.invalidateQueries({ queryKey: qk.projects.lists() });
+    },
+  });
+}
+
 /** Bỏ field `undefined` để merge optimistic không xoá mất giá trị đang có. */
 function stripUndefined<T extends object>(o: T): Partial<T> {
   const out: Partial<T> = {};

@@ -11,6 +11,7 @@ import { writeContract, readContract } from "../lib/contract.mjs"
 import { fail } from "../lib/errors.mjs"
 import { RE_SLUG, RE_VARIANT_ID, assertMatch } from "../lib/paths.mjs"
 import { exists, walkFiles, dirStats, writeFileAtomic, sha256 } from "../lib/fsx.mjs"
+import { forgetCover } from "../lib/cover.mjs"
 import { makeZip } from "../lib/zip.mjs"
 import { loadImportSource } from "../lib/importer.mjs"
 
@@ -131,6 +132,10 @@ export function register(r) {
     const ws = ctx.registry.active
     const id = ctx.params.id
     const cancelledRuns = await ctx.runs.cancelAllForProject(id)
+    /* Cùng lý do với C-01 ở run-handle.detach(): một job nền còn sống mà ghi lại vào
+       projects/<id>/ VỪA chuyển sang thùng rác sẽ dựng lại thư mục ma và giết nút
+       Hoàn tác. Job vẽ bìa cũng ghi xuống đúng thư mục đó ⇒ cũng phải bị quên đi. */
+    forgetCover(ws, id)
     const meta = await trashProject(ws, id)
     return {
       status: 200,

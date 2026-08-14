@@ -33,6 +33,7 @@ export const qk = {
     details: () => ["projects", "detail"] as const,
     detail: (id: string) => ["projects", "detail", id] as const,
     workflowDraft: (id: string) => ["projects", "detail", id, "workflow-draft"] as const,
+    cover: (id: string) => ["projects", "detail", id, "cover"] as const,
   },
 
   trash: {

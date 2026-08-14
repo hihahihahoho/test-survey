@@ -17,7 +17,9 @@ if [ ! -f "$ROOT/webapp/dist/index.html" ]; then
 fi
 cp -R "$ROOT/agent" "$STAGE/$PKG/agent"
 rm -rf "$STAGE/$PKG/agent/test" "$STAGE/$PKG/agent/test-fixtures" "$STAGE/$PKG/agent/test-agent.mjs"
-for f in gen.sh slice.py skeleton.py skeleton.html silhouettes.js render-skeleton.mjs element-lib.json validate_output_geometry.py; do
+# cover.sh đi CÙNG gen.sh: agent tìm nó cạnh gen.sh trong engine đã cài. Thiếu ⇒ ảnh bìa
+# trả 409 COVER_UNAVAILABLE trên máy người dùng dù test ở repo vẫn xanh.
+for f in gen.sh cover.sh slice.py skeleton.py skeleton.html silhouettes.js render-skeleton.mjs element-lib.json validate_output_geometry.py; do
   [ -f "$ROOT/$f" ] && cp "$ROOT/$f" "$STAGE/$PKG/engine/$f"
 done
 cp -R "$ROOT/webapp/dist/." "$STAGE/$PKG/app/"

@@ -28,16 +28,29 @@ export async function readJsonFile(p) {
   }
 }
 
-export async function writeJsonAtomic(p, obj) {
-  await ensureDir(dirname(p))
-  const tmp = `${p}.tmp-${process.pid}-${Date.now()}`
+/* TÊN FILE TẠM PHẢI DUY NHẤT CHO TỪNG LẦN GHI — `pid + Date.now()` là CHƯA đủ.
+   Hai lần ghi CÙNG một file trong CÙNG một mili-giây (thường gặp: `persist()` bắn-quên của
+   job.done chạy chồng lên `persist()` của finish()) sẽ dùng CHUNG một tên tmp: lần rename
+   đầu dọn file tmp đi, lần rename sau ném ENOENT — một lỗi GIẢ, file đích vẫn nguyên vẹn.
+   Ở run-handle.persist() ENOENT giả đó bị hiểu là "project đã sang thùng rác" và cắt luôn
+   đường ghi đĩa của cả lượt chạy (`detached = true`): run.json ngừng cập nhật và móc vẽ
+   ảnh bìa sau lượt gen im lặng không chạy. Vì vậy: thêm bộ đếm trong tiến trình. */
+let tmpSeq = 0
+const tmpPath = p => `${p}.tmp-${process.pid}-${Date.now()}-${(tmpSeq = (tmpSeq + 1) % 0xffffff).toString(36)}`
+
+export async function writeJsonAtomic(p, obj, { mkdirs = true } = {}) {
+  if (mkdirs) await ensureDir(dirname(p))
+  const tmp = tmpPath(p)
   await writeFile(tmp, JSON.stringify(obj, null, 2) + "\n", "utf8")
   await rename(tmp, p)
 }
 
-export async function writeFileAtomic(p, buf) {
-  await ensureDir(dirname(p))
-  const tmp = `${p}.tmp-${process.pid}-${Date.now()}`
+/** `mkdirs: false` = KHÔNG dựng thư mục cha. Dùng cho job nền ghi vào thư mục project có
+ *  thể vừa bị xoá: `ensureDir` đệ quy sẽ DỰNG LẠI projects/<id>/ đã sang thùng rác (thư mục
+ *  ma ⇒ nút Hoàn tác trả 409). Xem cover.mjs. */
+export async function writeFileAtomic(p, buf, { mkdirs = true } = {}) {
+  if (mkdirs) await ensureDir(dirname(p))
+  const tmp = tmpPath(p)
   await writeFile(tmp, buf)
   await rename(tmp, p)
 }

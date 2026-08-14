@@ -730,6 +730,27 @@ export const kitSchema = z.looseObject({
 });
 export type Kit = z.infer<typeof kitSchema>;
 
+/* ═════════════ Ảnh bìa tự sinh (#43/#44) ═════════════ */
+
+/**
+ * Trạng thái ảnh bìa. `titleZone` là toạ độ vùng agent đã dặn model chừa trống (tỉ lệ
+ * so với ảnh 16:9) — app ghép chữ thật vào đó, xem `features/home/lib/cover-title.ts`.
+ * `looseObject` như mọi schema khác: agent thêm khoá mới thì web cũ vẫn chạy (§6.5-6).
+ */
+export const coverStatusSchema = z.looseObject({
+  status: z.enum(["none", "running", "ok", "failed"]).default("none"),
+  path: z.string().nullish(),
+  updatedAt: z.string().nullish(),
+  startedAt: z.string().nullish(),
+  titleZone: z.looseObject({
+    x: z.number(), y: z.number(), w: z.number(), h: z.number(),
+  }).nullish(),
+  size: z.array(z.number()).nullish(),
+  error: z.string().nullish(),
+});
+export const coverResponseSchema = z.looseObject({ cover: coverStatusSchema });
+export type CoverStatus = z.infer<typeof coverStatusSchema>;
+
 /* ═════════════ §6.3 Stream NDJSON (#35) ═════════════ */
 
 /**

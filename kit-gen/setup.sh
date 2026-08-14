@@ -535,11 +535,14 @@ fi
 # ═══ 6. Bản engine trong workspace ═══════════════════════════════════════════
 # Agent tìm engine theo thứ tự <workspace>/.kitgen/engine → <repo>. Copy vào
 # workspace để workspace tự chứa, chạy được kể cả khi bạn di chuyển repo.
-# CHỈ COPY, KHÔNG SỬA: gen.sh, slice.py, skeleton.*, silhouettes.js, element-lib.json.
-step "Bản engine (gen.sh, slice.py, skeleton) trong workspace"
+# CHỈ COPY, KHÔNG SỬA: gen.sh, cover.sh, slice.py, skeleton.*, silhouettes.js, element-lib.json.
+# cover.sh (ảnh bìa dự án) PHẢI có ở đây: agent tìm nó cạnh gen.sh trong .kitgen/engine.
+# Thiếu file này thì mọi lượt vẽ bìa trả 409 COVER_UNAVAILABLE và móc tự vẽ sau lượt gen
+# im lặng bỏ qua — trong khi test vẫn xanh (test trỏ engine vào fixture).
+step "Bản engine (gen.sh, cover.sh, slice.py, skeleton) trong workspace"
 ENGINE_SRC="$REPO_DIR"
 ENGINE_DST="$WORKSPACE/.kitgen/engine"
-ENGINE_FILES="gen.sh slice.py skeleton.py skeleton.html silhouettes.js render-skeleton.mjs element-lib.json"
+ENGINE_FILES="gen.sh cover.sh slice.py skeleton.py skeleton.html silhouettes.js render-skeleton.mjs element-lib.json"
 if [ ! -f "$ENGINE_SRC/gen.sh" ]; then
   warn "không thấy gen.sh trong $ENGINE_SRC — bỏ qua bước copy engine."
   info "Agent sẽ tự tìm engine trong thư mục mã nguồn khi chạy."
@@ -559,6 +562,7 @@ else
     fi
   done
   [ "$DRY_RUN" -eq 0 ] && [ -f "$ENGINE_DST/gen.sh" ] && chmod 755 "$ENGINE_DST/gen.sh"
+  [ "$DRY_RUN" -eq 0 ] && [ -f "$ENGINE_DST/cover.sh" ] && chmod 755 "$ENGINE_DST/cover.sh"
   if [ "$DRY_RUN" -eq 1 ]; then :
   elif [ "$ENGINE_COPIED" -gt 0 ]; then ok "cập nhật $ENGINE_COPIED file engine (giữ $ENGINE_SKIPPED file đã mới)"
   else skip "engine đã mới nhất ($ENGINE_SKIPPED file)"

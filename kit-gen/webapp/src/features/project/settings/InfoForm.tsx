@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FolderOpen, ImageIcon, Save } from "lucide-react";
+import { FolderOpen, ImageIcon, Save, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import {
   Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { CheckerboardImage } from "@/components/common";
-import { usePatchProject, useRevealProject } from "@/lib/hooks";
+import { useProjectCover, usePatchProject, useRegenerateCover, useRevealProject } from "@/lib/hooks";
 import { presentError } from "@/lib/api";
 import { exportFileName } from "@/features/projects/lib/format";
 import { errorDetail, toastError, toastSuccess } from "@/features/projects/lib/feedback";
@@ -57,6 +57,8 @@ export function InfoForm({
 }) {
   const patch = usePatchProject(project.id);
   const reveal = useRevealProject(project.id);
+  const coverState = useProjectCover(gate.readOnly ? null : project.id);
+  const regenCover = useRegenerateCover(project.id);
   const [failure, setFailure] = React.useState<unknown>(null);
   const [suggestion, setSuggestion] = React.useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = React.useState(false);
@@ -224,6 +226,32 @@ export function InfoForm({
                         Về tự động
                       </Button>
                     )}
+                    {/* ẢNH BÌA TỰ VẼ — nút nhỏ, đứng đúng chỗ người dùng đang nghĩ về ảnh bìa
+                        (không thêm khối mới, không thêm màn mới). Agent tự vẽ một lần sau lượt
+                        gen đầu tiên; nút này là đường duy nhất để vẽ LẠI, vì mỗi lần vẽ đốt một
+                        lượt quota image-gen — không ai muốn nó tự chạy sau mỗi lần sửa kit. */}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      loading={regenCover.isPending || coverState.data?.status === "running"}
+                      disabled={ro || regenCover.isPending || coverState.data?.status === "running"}
+                      aria-disabled={ro || undefined}
+                      title={ro ? gate.reason : "Vẽ ảnh bìa mới từ màu thương hiệu và mascot của dự án"}
+                      onClick={() =>
+                        regenCover.mutate(undefined, {
+                          onSuccess: () =>
+                            toastSuccess(
+                              "Đang vẽ ảnh bìa mới",
+                              "Mất khoảng một phút. Ảnh hiện lên thẻ khi xong — bạn cứ làm việc khác.",
+                            ),
+                          onError: (e) => toastError(e, { titleOverride: "Chưa vẽ được ảnh bìa" }),
+                        })
+                      }
+                    >
+                      <Sparkles aria-hidden />
+                      {coverState.data?.status === "running" ? "Đang vẽ ảnh bìa…" : "Tạo lại ảnh bìa"}
+                    </Button>
                   </div>
                 </div>
               </div>

@@ -7,6 +7,7 @@ import { fail } from "./errors.mjs"
 import { redactLine } from "./redact.mjs"
 import { projectDir } from "./projects-dir.mjs"
 import { resolveEngine, prepareEngine, materializeStyles, buildCommand, diagnose } from "./engine.mjs"
+import { maybeAutoCover } from "./cover.mjs"
 
 const HEARTBEAT_MS = 15000
 const MAX_BUFFER_EVENTS = 4000
@@ -336,6 +337,22 @@ export class RunHandle {
     for (const s of this.subs) { try { s(null) } catch { /* ignore */ } }
     this.subs.clear()
     if (this.store.active.get(this.run.projectId) === this) this.store.active.delete(this.run.projectId)
+    this.drawCoverIfFirstTime(status)
+  }
+
+  /** ẢNH BÌA — job PHỤ, bắt đầu SAU KHI lượt chạy đã đóng sổ.
+   *
+   *  Đặt ở đây, sau `persist()` và sau `run.finished`, là có chủ ý: lượt chạy đã kết
+   *  thúc và đã được ghi xuống đĩa TRƯỚC khi việc vẽ bìa bắt đầu, nên dù việc vẽ bìa
+   *  hỏng, treo, hay thiếu cover.sh thì trạng thái lượt chạy cũng không đổi một chữ.
+   *  `maybeAutoCover` tự nuốt mọi lỗi (xem cover.mjs) — ở đây vẫn `catch` lần nữa vì
+   *  hàm này không được await: một promise reject lọt ra là giết cả tiến trình agent. */
+  drawCoverIfFirstTime(status) {
+    if (this.run.kind !== "gen") return
+    if (this.cancelled || this.detached) return
+    if (status !== "done" && status !== "done-with-errors") return
+    if (!this.run.jobs.some(j => j.status === "ok")) return
+    maybeAutoCover(this.ws, this.run.projectId, { imgHome: this.opts.imgHome }).catch(() => {})
   }
 }
 

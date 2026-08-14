@@ -9,8 +9,10 @@ import { projectDir, readProject } from "../lib/projects.mjs"
 import { normalizeWidth, thumbnail } from "../lib/thumbs.mjs"
 import { imageSize } from "../lib/multipart.mjs"
 
-/** Chỉ 6 thư mục dữ liệu được đọc; không bao giờ .history, không bao giờ file lạ ngoài whitelist. */
-const READABLE_TOP = new Set(["raw", "kits", "refs", "skeleton", "prompts", "export", "runs"])
+/** Chỉ các thư mục dữ liệu được đọc; không bao giờ .history, không bao giờ file lạ ngoài whitelist.
+ *  `cover` = ảnh bìa tự sinh (cover/cover.png + cover.json). Nhật ký thô của lượt vẽ bìa CỐ Ý
+ *  nằm ở `logs/` — thư mục KHÔNG đọc được từ web — vì log codex có đường dẫn tuyệt đối của máy. */
+const READABLE_TOP = new Set(["raw", "kits", "refs", "skeleton", "prompts", "export", "runs", "cover"])
 const READABLE_FILES = new Set(["project.json", "contract.json", "styles.json"])
 
 export function register(r) {

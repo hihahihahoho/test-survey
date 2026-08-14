@@ -19,6 +19,7 @@ import {
 import { LIMITS } from "./constants";
 import {
   activateWorkspaceSchema, cancelRunResultSchema, cleanResultSchema, contractResponseSchema,
+  coverResponseSchema,
   createProjectResultSchema, deleteProjectResultSchema, doctorSchema, duplicateResultSchema,
   elementLibSchema, historyListSchema, importPreviewSchema, jobPromptSchema, kitSchema,
   projectDetailSchema, projectListSchema, projectSchema, rawHistorySchema, refListSchema,
@@ -187,6 +188,18 @@ export const projectsApi = {
   async reveal(id: string, path?: string) {
     await httpPost(`/api/projects/${pid(id)}/reveal`, path ? { path } : {});
     return { ok: true };
+  },
+  /**
+   * #43 — trạng thái ảnh bìa tự sinh (none | running | ok | failed).
+   * BYTE của ảnh KHÔNG đi qua đây: ảnh đọc bằng `#41 files/cover/cover.png?w=256`
+   * như mọi ảnh khác của project (agent/routes/cover.mjs nói rõ vì sao).
+   */
+  async cover(id: string) {
+    return parse(coverResponseSchema, await httpGet(`/api/projects/${pid(id)}/cover`), "ảnh bìa").cover;
+  },
+  /** #44 — vẽ lại ảnh bìa. 202: agent chạy nền, KHÔNG phải một lượt chạy (không chiếm suất run). */
+  async regenerateCover(id: string) {
+    return parse(coverResponseSchema, await httpPost(`/api/projects/${pid(id)}/cover`, {}), "ảnh bìa").cover;
   },
   async workflowDraft(id: string) {
     return parse(workflowDraftSchema, await httpGet(`/api/projects/${pid(id)}/workflow-draft`), "bản nháp wizard");
