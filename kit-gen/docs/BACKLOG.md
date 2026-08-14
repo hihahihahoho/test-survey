@@ -1,37 +1,39 @@
-# BACKLOG — cập nhật 2026-08-14
+# BACKLOG — cập nhật 2026-08-14 (đợt fix tổng 2.1.20)
 
-Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, lỗ rỗ), báo cáo các agent fix, và các phát hiện vận hành. Mục nào có sẵn thiết kế/bằng chứng thì ghi kèm — làm là nhanh.
+Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, lỗ rỗ), báo cáo các agent fix, và các phát hiện vận hành. Đợt 14/08 đã xử **14/16** mục — dưới đây mục xong giữ một dòng chỉ chỗ, mục còn lại giữ nguyên chi tiết.
 
-## P0 — Fix đã được validate, chỉ việc làm
+## Đã xong 14/08 (ship trong 2.1.20)
 
-1. **Lỗ rỗ trong lòng element (alpha⁴)** — 3 dòng `paste()` trong `slice.py` (dòng ~517/559/897) dùng chính ảnh làm mask → alpha bị bình phương 2 lần. Fix = `alpha_composite` (như `tools/safe_zone_asset.py:280` đã làm đúng). Đã A/B trên dữ liệu thật: 36 lỗ → 0; ruy băng hộp quà hồi +16.8% độ đục. Chi tiết: `docs/research-hole-artifacts-2026-08.md` (kèm 8 items xếp ưu tiên trong đó, gồm cả: ngưỡng `sref` đo từ viền model vẽ là bom hẹn giờ với art gần màu key; `slice.py` chưa có test coverage nào).
-2. **Glow mất 57% độ sáng khi tách nền đen** — 1 dòng soft-gate trong `slice.py` (`a = mx·smoothstep(6,28)`): MAE 4.96→1.35, mất sáng 37%→0.6%. Chi tiết: `docs/research-glow-extraction-2026-08.md`.
+1. ~~**Lỗ rỗ alpha⁴**~~ — 3 chỗ `paste()`-làm-mask trong `slice.py` → `alpha_composite`/bỏ mask. A/B trùng khít research: nút đỏ 36 lỗ→0, ruy băng hộp quà +16.8% độ đục, pose-idle 54→6 (6 còn lại là art cố ý). **Ảnh đã cắt trước fix vẫn mang lỗ trong file PNG — bấm cắt lại (re-slice) là sạch, không cần gen lại.** Test: `tests/test_slice_alpha.py` (kiểm ngược: hoàn nguyên bug là test đỏ).
+2. ~~**Glow mất 57% sáng**~~ — `glow_alpha()` soft-gate `mx·smoothstep(6,28)`: mất sáng quầng yếu 41%→1.7%, nhiễu nền 0. Test: `tests/test_slice_glow.py`.
+3. ~~**Asset glow ship kèm blend mode**~~ — `slice.py` ghi `"blend":"screen"` cho `matte:"glow"` (re-slice hẹp giữ + bù khoá cho manifest đời cũ); agent chuyển tiếp ở `routes/files.mjs`; web vẽ `mix-blend-screen` trên nền đo `.kg-glow-ground` (không lật theme — screen trên nền sáng là ô trắng trơn); zip/atlas chép manifest nên mang khoá miễn phí. **Figma vẫn là việc tay**: clipboard figma-h2d không mang blendMode → toast nhắc "Linear Dodge (Add)/Screen" khi copy. Test: `tests/test_slice_blend.py` + `features/kit/__tests__/glow-blend.test.tsx`.
+4. ~~**Nền tách per-element ở Skeleton UI**~~ — `KitElementSkel.matte?: "glow"|"none"` (`"none"` tường minh để gỡ được khai báo thư viện), `mergeElementSkel` đóng bẫy chỉ-merge-w/h, popup Chi tiết có mục "Nền tách", `item-prompt` mirror câu nền đen và test so trực tiếp với `gen.sh` thật. Test: `__tests__/cell-background.test.tsx`.
+5. ~~**Chroma-key tự chọn xa palette**~~ — contract chọn key trong {magenta, green, cyan, blue} cách palette ≥60° hue (kitset-to-contract §5b); engine nhận mọi key qua `key_axis()` tổng quát (magenta/green chứng minh trùng công thức cũ; cyan trước đây bị xếp nhầm thành magenta), key lấy từ khai báo `bg` thay vì đoán. Test: `tests/test_slice_keycolor.py` + kitset-to-contract §P1-5.
+6. ~~**Validator hình học tê liệt**~~ — nguyên nhân thật: có đọc `bg` nhưng parse chuỗi mô tả hỏng → luôn rơi về `#00FF00`. Nay đo màu nền thật ở viền sheet + phân loại bằng `spill` cùng đại lượng với slice; ô `shape:"empty"` trả `status:"empty"` (hết bị đếm oan là ô lệch). **Grid (16) giờ mới có tiền đề — cần chạy đo lại trên vài run thật trước khi quyết.**
+7. ~~**Màu VNPAY sót 3 chỗ**~~ — về `NEUTRAL_*_COLOR`, hằng chuyển sang `lib/types/contract.ts` (module lá) vì kit-form ↔ workflow-v4 là vòng import; `grep 005BAA|00B0F0` trong src chỉ còn test + comment lịch sử.
+8. ~~**Copy sai khi guard chặn ghi docs**~~ — `docsIdbSet` trả `{ok, reason}` thay boolean; `WRITE_BLOCKED` tách khỏi `STORAGE_FULL`, copy mới không chép lại giá trị bị chặn, `use-docs` không retry.
+9. ~~**Cover meta mồ côi**~~ — `sweepOrphanCovers` lúc boot đánh `failed/INTERRUPTED`; project đã có ảnh không bị đụng (coverStatus ưu tiên file ảnh).
+10. ~~**Cap `hits[:10]`**~~ — nới 24 từ/320 ký tự + cảnh báo stderr nêu ô và từ bị bỏ. Kèm bug có sẵn được sửa: `preset_words` quét cả câu "PURE BLACK #000000" của ô glow → tự cấm "BLACK"; nay quét trên spec gốc.
+11. ~~**Retention releases**~~ — `prune_releases()` bước 7/7 của install.sh: giữ bản `current` (theo realpath symlink) + 2 bản mới nhất. Máy chủ SP còn 20 bản cũ, sẽ được dọn ở lần update tới.
+12. ~~**Báo sai "vẫn đang chạy bản 1.2.0"**~~ — `/health` thêm `runtimeVersion` (đọc một lần lúc boot), web ưu tiên nó (restart.ts, connection.ts, types); `VERSION` nội bộ đổi tên `PROTOCOL_VERSION`. Lượt update ĐẦU sau bản vá vẫn báo sai đúng một lần cuối (bên chờ là bundle cũ) — đã ghi trong comment.
+13. ~~**E2e flake song song**~~ — CI ép `--workers=1` kèm điều kiện gỡ ghi trong workflow.
+14. ~~**Vendor figma-h2d**~~ — `webapp/src/vendor/figma-h2d/` (nguyên vẹn + test băm 49 115 byte), `figma-node.ts` dựng frame=hitbox + ảnh offset âm + clip off; đối chiếu 6/6 số với node thật trong Figma qua MCP; hai bản PNG (tight/canvas) hai công thức offset, `file.w/h` làm trọng tài, lệch là ném thay vì dán sai. Fallback bitmap giữ nguyên.
 
-## P1 — Thiết kế đã chốt hướng, cần làm
+## P3 — Việc to còn lại, cần quyết trước khi làm
 
-3. **Asset glow ship kèm blend mode, không bake alpha** — RGBA(alpha=max) + `plus-lighter` giống hệt từng bit nền-đen+additive (đã đo); thêm `blend: "screen"` vào manifest cho asset `matte:"glow"`; webapp preview dùng CSS `mix-blend-mode`; Figma cần plugin set `LINEAR_DODGE` sau paste (clipboard figma-h2d hiện KHÔNG gắn được blendMode — grep 0 hit).
-4. **Setting chế độ nền per-element ở trang Skeleton UI** — mở rộng `matte:"glow"` có sẵn (KHÔNG dựng `bgMode` song song). Bẫy đã biết: `KitElementSkel` chỉ merge `w/h` tại `kitset-to-contract.ts` → field mới sẽ rơi im lặng nếu không sửa chỗ merge; `item-prompt.ts` phải mirror câu nền đen để preview không nói dối.
-5. **Chọn màu chroma-key tự động XA palette style** — key magenta đá style neon magenta (prompt cấm màu gần key = tự cấm style); đổi key kéo theo `is_key_color()` trong slice.py, không chỉ thêm preset.
-6. **Sửa vòng đo hình học trước, grid neo khung sau** — `validate_output_geometry.py` hardcode key xanh lá trong khi sheet magenta → 10/10 file `.geometry.json` vô giá trị. Chưa có số đo tin được thì chưa kết luận grid giúp hay hại (sai số thật đang 23–33px mean, pose tệ nhất, hai kiểu hỏng ngược chiều cùng tồn tại).
+15. **Thay Playwright bằng renderer nhẹ (resvg/sharp)** — bỏ được ~220MB (headless-shell 196MB + playwright-core); đổi lại phải đảm bảo render skeleton HTML/SVG tương đương từng pixel. Cần spike so sánh ảnh trước. Lưu ý: liên quan bản Windows (bớt 1 dependency phải cài).
+16. **Grid xám/đen neo khung** — validator đã sửa (mục 6) nhưng CHƯA có bộ số đo mới trên run thật; chạy đo vài run rồi mới kết luận grid giúp hay hại. §8.1 handoff đã đo "bắt vẽ lại grid" là fail; các biến thể (grid chỉ ở bleed, grid màu tách biệt xoá deterministic) chưa đo.
 
-## P2 — Bug/nợ nhỏ đã biết chỗ
+## Mới ghi nhận 14/08
 
-7. **Màu VNPAY còn sót 3 chỗ ngoài đường bug đã sửa**: `features/home/BrandScreen.tsx:95,106` · `features/design/components/StylesTab.tsx:261,268` · `features/kit-form/lib/form-model.ts:31`.
-8. **Copy sai khi guard chặn ghi docs**: `docs-repo-local.ts:69` map mọi `false` thành "Máy đã hết chỗ lưu nháp" (STORAGE_FULL) kể cả khi nguyên nhân là giá trị bị chặn — cần mã lỗi riêng + copy mới trong `docs-errors.ts`.
-9. **Cover job chỉ sống trong bộ nhớ** — agent restart giữa lúc vẽ thì meta kẹt `running`/trả `none`; nhẹ vì có nút vẽ lại, nhưng nên dọn meta mồ côi lúc boot.
-10. **Bẫy cap `hits[:10]` trong gen.sh** — ô `08-progress-fill` đang đứng đúng 10/10 từ vật liệu bị hạ cấp; thêm 1 từ nữa vào spec là bị cắt âm thầm. Cân nhắc nới cap hoặc cảnh báo khi chạm.
-11. **Retention cho `~/.kitgen/releases/`** — 20 bản × ~2.6MB tích mãi; sau update thành công giữ bản đang chạy + 1-2 bản rollback, xoá cũ hơn (sửa `install.sh`, ~10 dòng).
-12. **Thông báo sau update báo sai "vẫn đang chạy bản 1.2.0"** — `/health` trả `version: VERSION` hardcode `1.2.0` (`agent/server.mjs:44`, version nội bộ chưa bao giờ bump), còn `restart.ts`/`UpdateResultNotice` so số đó với version release (2.1.x) → không bao giờ khớp, update thành công vẫn báo thất bại. Fix: health trả thêm version runtime thật (readRuntimeVersion của update.mjs) và luồng chờ ưu tiên trường đó; lưu ý bundle CŨ là bên đứng chờ nên lần update đầu sau fix vẫn hiện sai một lần cuối.
-13. **E2e flake ở chế độ song song** — 2 ca `@visual` settings đỏ ngẫu nhiên khi `fullyParallel` (tái hiện cả trên baseline không patch); serial luôn xanh. Hoặc điều tra root cause, hoặc ép `--workers=1` trong CI cho ổn định.
-
-## P3 — Việc to, cần quyết trước khi làm
-
-14. **Vendor `figma-h2d` (~49KB) vào webapp** — để Copy Figma ra frame chuẩn safe-zone (frame đúng hitbox + ảnh offset âm + clip off) thay vì bitmap; dữ liệu safe/contentAt đã thông tới web từ 13/08. Chủ SP chưa chốt.
-15. **Thay Playwright bằng renderer nhẹ (resvg/sharp)** — bỏ được ~220MB (headless-shell 196MB + playwright-core); đổi lại phải đảm bảo render skeleton HTML/SVG tương đương từng pixel. Cần spike so sánh ảnh trước.
-16. **Grid xám/đen neo khung** — chỉ làm SAU khi (6) xong và có số liệu; §8.1 handoff đã đo "bắt vẽ lại grid" là fail, các biến thể (grid chỉ ở bleed, grid màu tách biệt xoá deterministic) chưa đo.
+17. **Windows: test trên máy thật** — port đã ship dạng EXPERIMENTAL (`scripts/install.ps1` + `agent/lib/platform.mjs` + `docs/WINDOWS-PORT.md`, checklist 22 bước ở §7). Chưa kiểm được trên máy Win nào; bước 1 là kiểm cú pháp install.ps1. Nợ §9 trong doc: rollback cho install.ps1, `build-runtime.ps1`, `shortenPath()` chưa biết `%USERPROFILE%`, `paths.mjs` so prefix phân biệt hoa-thường (cố ý chưa đụng — lớp bảo mật, phải test trên Win thật), và **chưa ai xác nhận codex CLI bản Windows có tool `imagegen`**.
+18. **Swatch bước Phong cách chưa nói ra key hiệu lực** — swatch vẫn vẽ theo `s.chroma` (chọn tay); khi auto-pick (mục 5) đổi key thì UI không hiển thị. Chưa sửa được vì `src/__tests__/w2a-system-beauty.test.ts:145` khoá cứng `CHROMA_HEX[s.chroma]`. Việc: hiện key hiệu lực + cảnh báo khi mọi ứng viên đều gần palette, sửa test đi kèm.
+19. **Figma tự set blendMode — đo thử một lần** — bundle figma-h2d có `mixBlendMode` trong `STYLE_DEFAULTS`, tức IR chở được giá trị nếu đặt `mix-blend-mode` lên `<img>` sân khấu; Figma có NHẬN không thì chưa ai đo. Nếu nhận → bỏ được toast nhắc tay của mục 3. Nếu không → cần plugin (LINEAR_DODGE).
 
 ## Ghi chú vận hành cho lần update tới
 
 - **2.1.18 → 2.1.19 sẽ reset hồ sơ codex đúng MỘT lần cuối** (update chạy install.sh của bản cũ; bản vá "không đè hồ sơ" nằm trong 2.1.19). Sau khi update: vào Cài đặt switch lại img-home (hoặc `PATCH /api/image-profile {"mode":"separate"}`). Từ 2.1.19 → sau: hết hẳn.
-- Tương tự, gọn Chromium (--only-shell + dọn bản béo) và realpath codex trong config.env có hiệu lực từ lần update **sau** 2.1.19. Máy chủ SP đã được dọn tay (1.0GB → ~420MB sau khi xoá `~/.kitgen/tools/node_modules/@openai`).
+- Tương tự, gọn Chromium (--only-shell + dọn bản béo) có hiệu lực từ lần update **sau** 2.1.19. Máy chủ SP đã được dọn tay (1.0GB → ~420MB sau khi xoá `~/.kitgen/tools/node_modules/@openai`).
+- **ĐÃ XẢY RA TRÊN MÁY THẬT 14/08 — realpath codex làm hỏng 100% lượt gen.** Bản vá "realpath codex" của 2.1.19 realpath THẲNG FILE: `command -v codex` (shim fnm multishell) → `.../lib/node_modules/@openai/codex/bin/codex.js`. Đường dẫn bền nhưng **sai tên**: `bin/kitgen` chỉ đưa `dirname "$CODEX_BIN"` vào PATH còn engine gọi `codex` TRẦN ⇒ thư mục đó không có file nào tên `codex` ⇒ **rc=127 cho mọi job**, hiện ra UI thành "chạy xong nhưng ảnh không được ghi". Máy chủ SP đã được chữa tay (config.env trỏ `<fnm>/node-versions/v24.13.0/installation/bin/codex`). Fix bền đã vào repo, **2 lớp**: (1) `install.sh` realpath THƯ MỤC bin rồi ghép `/codex`, kiểm dir không ephemeral + có file thực thi đúng tên + chạy được `--version`, không đạt thì dựng shim `$KITGEN_HOME/tools/bin/codex`; (2) `runtime/bin/kitgen` tự chữa khi `basename "$CODEX_BIN"` ≠ `codex` (máy đang cài bản cũ chỉ nhận bin mới SAU khi update). Hồi quy được khoá trong `test/kitgen-run-env.test.sh` bằng chính giá trị đã gây hỏng. **Bài học chung: "đường dẫn bền" ≠ "đường dẫn dùng được" — hợp đồng ngầm ở đây là TÊN FILE, phải kiểm cả tên.**
 - McAfee dò nhầm `rolldown-binding.darwin-arm64.node` (heuristic Artemis) và đã từng xoá file → cần thêm exclusion cho thư mục repo, không thì build hỏng ngẫu nhiên sau mỗi `npm install`.
+- Ảnh cắt trước 2.1.20 còn lỗ rỗ nướng trong PNG (mục 1) — người dùng chỉ cần **cắt lại** từ ảnh gốc, không cần gen lại.
