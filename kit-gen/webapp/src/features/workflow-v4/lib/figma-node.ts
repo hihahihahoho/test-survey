@@ -261,12 +261,29 @@ export function mountStage(): HTMLDivElement {
  * │ `CutAssetGrid` PHẢI GIỮ tới khi chủ sản phẩm dán thật một ô glow ra Figma │
  * │ và xác nhận layer lên đúng blend mode.                                    │
  * └───────────────────────────────────────────────────────────────────────────┘
+ *
+ * ┌── `at` — NHIỀU Ô TRÊN CÙNG MỘT SÂN KHẤU (P4-1, nút header) ───────────────┐
+ * │ Bản đầu chỉ dựng MỘT frame nên frame để `position:static` cũng chạy: ảnh   │
+ * │ `position:absolute` rơi về khối chứa gần nhất là **sân khấu** (`fixed`),   │
+ * │ mà sân khấu và frame đều ở (0,0) nên hai hệ toạ độ trùng nhau. Đặt hai ô   │
+ * │ trở lên là bẫy sập ngay: ô thứ hai nằm dưới trong dòng chảy, còn ảnh của   │
+ * │ nó vẫn neo vào sân khấu ⇒ hai ảnh chồng lên nhau. Vì thế frame nay LUÔN có │
+ * │ `position` (relative khi đứng một mình, absolute khi có `at`) — số đo của  │
+ * │ ca một-ô KHÔNG đổi một pixel, vì frame vẫn ở (0,0).                        │
+ * └───────────────────────────────────────────────────────────────────────────┘
  */
-export function renderSpec(spec: FigmaNodeSpec, imageUrl: string, stage: HTMLElement): HTMLElement {
+export function renderSpec(
+  spec: FigmaNodeSpec,
+  imageUrl: string,
+  stage: HTMLElement,
+  at?: { x: number; y: number },
+): HTMLElement {
   const frame = document.createElement("div");
   frame.className = "safe-frame";
   frame.setAttribute("aria-label", spec.name);
-  frame.style.cssText = `width:${spec.frame.w}px;height:${spec.frame.h}px`;
+  frame.style.cssText =
+    (at === undefined ? "position:relative;" : `position:absolute;left:${at.x}px;top:${at.y}px;`)
+    + `width:${spec.frame.w}px;height:${spec.frame.h}px`;
 
   const img = document.createElement("img");
   img.alt = `Image · ${spec.name}`;

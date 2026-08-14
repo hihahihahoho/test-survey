@@ -196,7 +196,10 @@ function SheetCard({ projectId, item, readOnly, onRegenerate }: {
   return (
     <article className="overflow-hidden rounded-3 border border-line-subtle bg-raised">
       {item.path ? (
-        <KitImage projectId={projectId} path={item.path} alt={label} backdrop="checker" eager className="aspect-[16/10] rounded-none border-0" />
+        /* `width={512}`: đây là NGUYÊN một sheet thô (1536×1024) trải hết bề ngang thẻ.
+           Bản 256px — mặc định đúng cho ô lưới nhỏ — ở đây là ảnh phóng to 2–3 lần trên
+           màn thường và 4–6 lần trên màn retina, tức đúng cái "bé tí / mờ" đã báo. */
+        <KitImage projectId={projectId} path={item.path} alt={label} backdrop="checker" eager width={512} className="aspect-[16/10] rounded-none border-0" />
       ) : (
         <div className="flex aspect-[16/10] items-center justify-center bg-canvas text-center">
           <span>

@@ -4,6 +4,11 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { FOCUS } from "@/components/layout/flora";
+import { cn } from "@/lib/utils";
 import { KitImage } from "@/features/kit/components/KitImage";
 import { GLOW_FIGMA_HINT, isGlowAsset } from "@/features/kit/lib/blend";
 import { loadFull } from "@/features/kit/lib/image-source";
@@ -178,6 +183,7 @@ function CutAssetCard({ projectId, variant, asset, contract }: {
   contract: Contract | null;
 }) {
   const [busy, setBusy] = React.useState(false);
+  const [zoom, setZoom] = React.useState(false);
   const name = asset.name;
 
   /**
@@ -291,14 +297,32 @@ function CutAssetCard({ projectId, variant, asset, contract }: {
 
   return (
     <article className="overflow-hidden rounded-3 border border-line-subtle bg-raised">
-      <KitImage
+      {/* Ô LƯỚI giữ nguyên bản `?w=256` (§6.5-5) — đúng cỡ cho một ô ~230px và là lý do
+          mở kit 500 ảnh không nuốt hết RAM. Cái THIẾU trước đây là đường tới ảnh GỐC:
+          `features/kit/components/Lightbox.tsx` có sẵn từ S5 nhưng KHÔNG được màn nào
+          gọi (`KitScreen` không nằm trong `routeTree`), nên trong app đang chạy không có
+          một chỗ nào xem ảnh ở độ nét thật. Bấm vào ô là đường đó. */}
+      <button
+        type="button"
+        onClick={() => setZoom(true)}
+        aria-label={`Xem ảnh gốc ${name}`}
+        className={cn("block w-full", FOCUS)}
+      >
+        <KitImage
+          projectId={projectId}
+          path={asset.file.path}
+          alt={`${sheetLabel(asset.sheet)} · ${name}`}
+          backdrop="checker"
+          /* Ô phát sáng tự đổi sang nền đo tối + `mix-blend-mode` — xem `lib/blend.ts`. */
+          blend={asset.file.blend}
+          className="aspect-square rounded-none border-0"
+        />
+      </button>
+      <AssetZoomDialog
+        open={zoom}
+        onOpenChange={setZoom}
         projectId={projectId}
-        path={asset.file.path}
-        alt={`${sheetLabel(asset.sheet)} · ${name}`}
-        backdrop="checker"
-        /* Ô phát sáng tự đổi sang nền đo tối + `mix-blend-mode` — xem `lib/blend.ts`. */
-        blend={asset.file.blend}
-        className="aspect-square rounded-none border-0"
+        asset={asset}
       />
       <div className="flex items-center gap-2 p-3">
         <div className="min-w-0 flex-1">
@@ -322,5 +346,58 @@ function CutAssetCard({ projectId, variant, asset, contract }: {
         </DropdownMenu>
       </div>
     </article>
+  );
+}
+
+/**
+ * XEM ẢNH GỐC — popup chi tiết cho một ô đã cắt.
+ *
+ * ╔══ VÌ SAO PHẢI CÓ, VÀ VÌ SAO PHẢI LÀ `full` ═══════════════════════════════╗
+ * ║ Mọi ô trong app đang chạy đều vẽ bằng bản `?w=256` (`KitImage` mặc định).   ║
+ * ║ Đúng cho lưới, nhưng KHÔNG có cửa nào ra ảnh thật: `Lightbox` của S5 chưa   ║
+ * ║ được màn nào gọi. Người dùng vì thế chỉ có một cỡ duy nhất để soi — đúng    ║
+ * ║ triệu chứng "ảnh preview trong app cũng bé tí".                            ║
+ * ║ `full` ⇒ `loadImage(…, null)` ⇒ URL KHÔNG kèm `?w=` ⇒ agent phục vụ file    ║
+ * ║ PNG gốc (`agent/routes/files.mjs:34-36` chỉ resize khi có `w`).             ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * `eager`: dialog chỉ tồn tại khi đã mở, nên chờ `IntersectionObserver` là chờ vô ích.
+ */
+function AssetZoomDialog({ open, onOpenChange, projectId, asset }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  projectId: string;
+  asset: CutAsset;
+}) {
+  const size = asset.file.w && asset.file.h ? `${asset.file.w}×${asset.file.h} pixel` : "chưa rõ cỡ";
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent size="xl" className="max-h-[92vh]">
+        <DialogHeader>
+          <DialogTitle className="font-mono text-subtitle">{asset.name}</DialogTitle>
+          <DialogDescription>
+            Ảnh gốc {size}
+            {asset.sheet ? ` · ${sheetLabel(asset.sheet)}` : ""}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <div className="flex items-center justify-center overflow-auto overscroll-contain rounded-2 border border-line-subtle bg-surface p-3">
+            {open && (
+              <KitImage
+                projectId={projectId}
+                path={asset.file.path}
+                alt={`${asset.name} — ảnh gốc`}
+                backdrop="checker"
+                blend={asset.file.blend}
+                full
+                eager
+                empty={asset.file.empty}
+                className="w-full border-0"
+              />
+            )}
+          </div>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
   );
 }

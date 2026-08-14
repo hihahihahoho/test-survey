@@ -3,7 +3,8 @@ import { ImageOff, Loader2, Ban, RotateCw } from "lucide-react";
 import { CheckerboardImage } from "@/components/common";
 import { FOCUS } from "@/components/layout/flora";
 import { cn } from "@/lib/utils";
-import { loadFull, loadThumb } from "../lib/image-source";
+import { loadImage } from "../lib/image-source";
+import { LIMITS } from "@/lib/api";
 import type { Backdrop } from "../lib/backdrop";
 import { backdropClass } from "../lib/backdrop";
 import { GLOW_GROUND_CLASS, blendImgClass } from "../lib/blend";
@@ -30,8 +31,21 @@ export interface KitImageProps {
   /** nhãn tiếng Việt có nghĩa (A9) */
   alt: string;
   backdrop: Backdrop;
-  /** true ⇒ ảnh GỐC (lightbox). false ⇒ thumbnail `?w=256` (§6.5-5). */
+  /** true ⇒ ảnh GỐC (lightbox / popup xem chi tiết). false ⇒ thumbnail (§6.5-5). */
   full?: boolean;
+  /**
+   * Bề rộng thumbnail khi `full` tắt. Mặc định 256 — đúng cho ô lưới ~230px.
+   *
+   * ⚠️ CHỈ CÓ BA GIÁ TRỊ. `agent/lib/thumbs.mjs` khai `ALLOWED_W = [128, 256, 512]`
+   * và `normalizeWidth` **nắn** mọi số khác về giá trị gần nhất trong đó — xin `?w=400`
+   * thì nhận về ảnh 512 mà không có gì báo, còn cache key phía web lại ghi "400" ⇒
+   * hai bên nói hai cỡ khác nhau. Kiểu literal ở đây chặn chuyện đó ngay lúc biên dịch.
+   *
+   * Dùng 512 khi KHUNG HIỂN THỊ TO: một sheet thô rộng cả thẻ (`RawSheetsPanel`) mà
+   * chỉ được 256px thì trên màn `devicePixelRatio: 2` là nửa độ nét — đúng triệu chứng
+   * "ảnh preview trong app bé tí" chủ sản phẩm báo.
+   */
+  width?: 128 | 256 | 512;
   /** true ⇒ tải ngay, không chờ vào khung nhìn (dùng ở lightbox). */
   eager?: boolean;
   /** file cắt ra rỗng — nói thật, không hiện ô trống bí ẩn */
@@ -71,6 +85,7 @@ export function KitImage({
   alt,
   backdrop,
   full = false,
+  width = LIMITS.thumbWidth,
   eager = false,
   empty = false,
   offline = false,
@@ -128,7 +143,7 @@ export function KitImage({
     if (offline || empty || !visible) return;
     let alive = true;
     setState({ kind: "loading" });
-    const handle = full ? loadFull(projectId, path) : loadThumb(projectId, path);
+    const handle = loadImage(projectId, path, full ? null : width);
     /* Vẫn để request chạy tiếp — nó có thể về muộn và tự lên `ready`. Cái đổi ở đây
        chỉ là NÓI THẬT với người dùng rằng chờ tiếp là vô ích, kèm một lối thoát. */
     const slowTimer = setTimeout(() => {
@@ -147,7 +162,7 @@ export function KitImage({
       clearTimeout(slowTimer);
       handle.cancel();
     };
-  }, [visible, offline, empty, full, projectId, path, attempt]);
+  }, [visible, offline, empty, full, width, projectId, path, attempt]);
 
   const shell = cn("relative overflow-hidden rounded-2 border border-line", className);
 

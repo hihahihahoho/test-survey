@@ -31,7 +31,9 @@ if (!Element.prototype.hasPointerCapture) {
 /** Ảnh về NGAY, không đi qua transport thật — ở đây đo class, không đo hàng đợi tải. */
 vi.mock("@/features/kit/lib/image-source", () => {
   const handle = () => ({ promise: Promise.resolve("blob:glow"), cancel: () => {} });
-  return { loadFull: handle, loadThumb: handle, filePath: () => "/x" };
+  // `loadImage` là cửa THẬT của `KitImage` từ P4-1 (nó tự chọn `null` hay `?w=`);
+  // `loadFull`/`loadThumb` vẫn còn cho `CutAssetGrid` và `figma-board`.
+  return { loadImage: handle, loadFull: handle, loadThumb: handle, filePath: () => "/x" };
 });
 vi.mock("@/features/projects/lib/feedback", () => ({
   toastSuccess: vi.fn(), toastInfo: vi.fn(), toastError: vi.fn(),
