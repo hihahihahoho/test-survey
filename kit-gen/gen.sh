@@ -506,7 +506,9 @@ while read -r job; do
   # Throttle: image-gen ăn quota ChatGPT gấp 3-5x lượt thường; bung cả 28 job dễ dính rate limit.
   # bash 3.2 (macOS) không có `wait -n` → vòng đợi bằng sleep.
   while (( $(jobs -pr | wc -l) >= MAXJOBS )); do sleep 2; done
-  run_one "$job" &
+  # </dev/null BẮT BUỘC: job nền thừa kế stdin = pipe liệt kê job; codex exec có thể
+  # đọc/nuốt stdin ⇒ các dòng job còn lại biến mất ⇒ run "xong" khi mới chạy một nửa.
+  run_one "$job" </dev/null &
 done < <(python3 -c "
 import json
 cfg = json.load(open('styles.json', encoding='utf-8'))

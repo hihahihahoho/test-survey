@@ -29,6 +29,18 @@ class GenEmbeddedPython(unittest.TestCase):
                     "Nhớ: trong khối -c nháy kép phải escape hoặc dùng nháy đơn."
                 )
 
+    def test_background_jobs_do_not_inherit_job_list_stdin(self):
+        """Sự cố 2026-08-14: run 5/10 job rồi "Xong" — codex exec chạy nền thừa kế
+        stdin = pipe liệt kê job của `while read ... done < <(python3 ...)` và nuốt
+        các dòng còn lại. Job nền BẮT BUỘC phải cắt stdin bằng </dev/null."""
+        src = GEN_SH.read_text(encoding="utf-8")
+        self.assertRegex(
+            src,
+            r'run_one "\$job" </dev/null &',
+            "run_one chạy nền phải kèm </dev/null — thiếu nó codex có thể "
+            "nuốt stdin (danh sách job) và run kết thúc khi mới chạy một nửa.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
