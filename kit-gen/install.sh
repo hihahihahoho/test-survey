@@ -216,7 +216,10 @@ if ! NODE_PATH="$KITGEN_HOME/tools/node_modules" "$NODE" -e "require.resolve('pl
 fi
 progress "4/6" "Health check trình dựng ảnh"
 PLAYWRIGHT_BROWSERS_PATH="$KITGEN_HOME/tools/playwright-browsers" \
-  "$KITGEN_HOME/tools/node_modules/.bin/playwright" install chromium >/dev/null
+  "$KITGEN_HOME/tools/node_modules/.bin/playwright" install --only-shell >/dev/null
+# App chỉ render skeleton ở chế độ headless → chỉ cần chromium_headless_shell (~196MB).
+# Bản Chromium đầy đủ (~356MB) do installer đời cũ tải về là thừa — dọn để update nhẹ đi.
+rm -rf "$KITGEN_HOME/tools/playwright-browsers"/chromium-[0-9]* 2>/dev/null || true
 check_ok "Playwright và Chromium đã sẵn sàng"
 mkdir -p "$WORKSPACE/.kitgen/engine" "$WORKSPACE/projects"
 cp -R "$DEST/engine/." "$WORKSPACE/.kitgen/engine/"
