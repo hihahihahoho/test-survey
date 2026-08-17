@@ -35,6 +35,19 @@ import { contractVariants, type Contract } from "@/lib/types/contract";
  */
 const BRAND_TRACES = [/VNPAY/i, /#005BAA/i, /#00B0F0/i, /VCB/i];
 
+/**
+ * NGÂN SÁCH THỜI GIAN — không phải để che một test chậm.
+ *
+ * Ca ④ (`ô mô tả TRỐNG…`) `await import("../../steps/StyleStep")` NGAY TRONG thân
+ * `it`, nên chi phí transform cả nhánh module bị tính vào mốc 5s mặc định. Chạy một
+ * mình: ~0.2s. Chạy chung 122 file song song trên máy đủ tải: thỉnh thoảng vượt 5s và
+ * đỏ — quan sát được 1 lần trong 18 lượt chạy full-suite. Mốc đó không khẳng định điều
+ * gì về sản phẩm; giữ nó chỉ mua một test đỏ ngẫu nhiên, mà suite đỏ ngẫu nhiên thì
+ * không ai còn đọc nữa. (Cùng lý do và cùng cách xử lý với hai file test của đường cắt
+ * lại: `features/design/__tests__/slice-wiring.test.tsx`.)
+ */
+vi.setConfig({ testTimeout: 20_000, hookTimeout: 20_000 });
+
 afterEach(() => {
   cleanup();
   localStorage.clear();

@@ -35,7 +35,17 @@ export interface SheetsWorkspaceProps {
   imageFor: (comp: { file: string }, index: number) => { src: string; alt: string } | null;
   onOpenLibrary: () => void;
   onOpenResize: (sheetId: string) => void;
+  /** SINH ẢNH sheet — đường TIÊU QUOTA, phải đi qua modal của features/runs. */
   onGenSheet: (sheetId: string) => void;
+  /**
+   * CẮT LẠI sheet — `kind:"slice"`, PIL thuần, KHÔNG tiêu quota (§1.2 "tái tạo rẻ").
+   *
+   * ⚠️ Đây là một prop RIÊNG chứ không phải bí danh của `onGenSheet`. Bản trước đấu
+   * `sliceSheet: props.onGenSheet`, nên nút [✂ Cắt sheet này] mở thẳng modal SINH ẢNH:
+   * người dùng bấm một nút ghi "không tốn lượt" rồi đứng trước một hộp thoại tiêu quota.
+   * Hai việc khác giá tiền thì phải là hai đường dây khác nhau, không dùng chung handler.
+   */
+  onSliceSheet: (sheetId: string) => void;
   onGoStyles: () => void;
   onOpenProjectSettings: () => void;
 }
@@ -201,7 +211,7 @@ export function SheetsWorkspace(props: SheetsWorkspaceProps) {
             resizeSheet: props.onOpenResize,
             deleteSheet: actions.deleteSheet,
             genSheet: props.onGenSheet,
-            sliceSheet: props.onGenSheet,
+            sliceSheet: props.onSliceSheet,
             patchCharacter: actions.patchCharacter,
             togglePose: actions.togglePose,
             pickCharacterRef: props.onOpenProjectSettings,

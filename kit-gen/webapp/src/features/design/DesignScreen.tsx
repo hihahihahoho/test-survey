@@ -10,8 +10,12 @@ import { useAgentStatus, useDoctor } from "@/lib/hooks";
 import { api as agentApi, devDetails, presentError } from "@/lib/api";
 import { useEditorStore, type EditorTab } from "@/lib/store";
 import { mergeJobStatus, type JobStatus } from "@/lib/status";
-import { contractVariants } from "@/lib/types/contract";
+import { contractJobs, contractVariants } from "@/lib/types/contract";
 import { toast } from "@/components/ui/sonner";
+/* Cắt lại KHÔNG tiêu quota ⇒ dùng hook chuyên dụng có `kind:"slice"` là HẰNG viết
+   thẳng trong mã (`scripts/check-no-gen.mjs` luật ③ canh đúng file này), chứ không
+   gọi `useStartRun` tại chỗ — nơi nào cầm được `kind` thì nơi đó gen được. */
+import { useSliceRun } from "@/features/runs/lib/useSliceRun";
 
 import { useDesignEditor } from "./lib/useDesignEditor";
 import { useDesignActions, type ConfirmRequest } from "./lib/useDesignActions";
@@ -231,6 +235,49 @@ export function DesignScreen({ projectId }: ScreenProps) {
     [api, navigate, pid, save],
   );
 
+  /**
+   * CẮT LẠI sheet này — đường RẺ, và nó phải KHÁC HẲN `goGen` ở trên.
+   *
+   * ══ VÌ SAO KHÔNG CÓ MODAL ════════════════════════════════════════════════════
+   * §1.1-2 "việc TỐN TIỀN phải xin phép rõ ràng"; cắt chạy `slice.py` (PIL thuần,
+   * không gọi mạng, không model) nên nó nằm ngoài luật đó. Thêm một hộp thoại xác
+   * nhận vào đây là ma sát vô nghĩa — phản hồi đúng cho việc rẻ là TOAST tức thì,
+   * và `useSliceRun` đã lo cả toast thành công lẫn ca 409 "đang có lượt khác chạy".
+   *
+   * ══ HAI CHỐT PHẢI TỰ LÀM Ở ĐÂY (hook không biết) ═════════════════════════════
+   * ① `jobs` rỗng có nghĩa "CẮT CẢ DỰ ÁN" với agent (`agent/lib/runs.mjs:49`). Nút
+   *    này nói *"sheet này"*, nên lọc ra rỗng thì phải DỪNG VÀ NÓI, tuyệt đối không
+   *    thả một mảng rỗng xuống — đó là cách một nút phạm vi hẹp âm thầm nở ra
+   *    thành thao tác toàn dự án.
+   * ② Chỉ cắt lượt ĐÃ CÓ ẢNH: `never` là chưa vẽ lần nào, cắt sẽ không có đầu vào.
+   */
+  const slice = useSliceRun(pid);
+  const goSlice = React.useCallback(
+    (sheetId: string) => {
+      const c = api.contract;
+      const jobs = c ? contractJobs(c).filter((j) => j.sheet === sheetId).map((j) => j.job) : [];
+      const drawn = jobs.filter((job) => (ed.projectState.jobs[job] ?? "never") !== "never");
+      if (drawn.length === 0) {
+        // §3.9 điều cấm 3: không làm được thì NÓI, không `return` im lặng.
+        toast.info("Sheet này chưa có ảnh để cắt", {
+          description: "Cắt là bước tách ảnh đã vẽ thành từng element rời. Hãy sinh ảnh cho sheet này trước.",
+        });
+        return;
+      }
+      const startSlice = () => slice.run(drawn);
+      if (api.dirty) {
+        // Cùng cái bẫy của `goGen`: engine đọc ĐĨA. Khác ở chữ — đây không phải "sinh".
+        toast.warning("Bản thiết kế còn thay đổi chưa lưu", {
+          description: "Engine cắt theo file trên đĩa. Lưu trước rồi cắt, nếu không kit sẽ cắt theo bản cũ.",
+          action: { label: "Lưu rồi cắt", onClick: () => void save().then((ok) => ok && startSlice()) },
+        });
+        return;
+      }
+      startSlice();
+    },
+    [api, ed.projectState.jobs, slice, save],
+  );
+
   /* ══════════════ loading / error ══════════════ */
 
   if (ed.phase === "loading") {
@@ -332,6 +379,7 @@ export function DesignScreen({ projectId }: ScreenProps) {
             onOpenLibrary={() => setLibOpen(true)}
             onOpenResize={setResizeSheetId}
             onGenSheet={goGen}
+            onSliceSheet={goSlice}
             onGoStyles={() => setTab("styles")}
             onOpenProjectSettings={() => void navigate({ to: "/p/$projectId/settings", params: { projectId: pid } })}
           />

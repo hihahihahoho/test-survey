@@ -36,6 +36,8 @@ import { hasGeneratedOutput } from "@/features/projects/lib/nav";
 import { mergeElements, userUiElements } from "@/features/workflow-v4/lib/user-library";
 import { RawSheetsPanel } from "@/features/workflow-v4/components/RawSheetsPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { createProjectNav } from "./lib/nav";
+import { useSliceRun } from "./lib/useSliceRun";
 import { ImagesSection } from "./sections/ImagesSection";
 import { SkeletonSheetGrid } from "./sections/SkeletonSheetGrid";
 import { PreviewOverview } from "./components/PreviewOverview";
@@ -105,6 +107,16 @@ function ProjectManager({ projectId }: { projectId: string }) {
   const diskContract = useContract(projectId);
   const refs = useWorkflowRefs(projectId);
   const [generateJobs, setGenerateJobs] = React.useState<string[] | null>(null);
+  /**
+   * CẮT — đường RẺ, và nó cố ý KHÔNG đi qua `generateJobs`/`GenerateDialog`.
+   *
+   * `GenerateDialog` là "cửa DUY NHẤT tiêu quota" (§4.8) với doctor gate, ước lượng và
+   * cảnh báo quota — bắt một thao tác PIL thuần chui qua đó vừa là ma sát vô nghĩa, vừa
+   * dạy người dùng bấm qua cảnh báo quota theo quán tính, đúng thứ làm cảnh báo mất giá.
+   * `useSliceRun` cố định `kind:"slice"` là HẰNG trong mã, không nhận `kind` từ đây.
+   */
+  const projectNav = React.useMemo(() => createProjectNav(navigate, projectId), [navigate, projectId]);
+  const slice = useSliceRun(projectId, projectNav);
   /** Điều hướng đang bị chặn vì còn thay đổi chưa lưu. */
   const [pendingNav, setPendingNav] = React.useState<(() => void) | null>(null);
   /** Tab Cài đặt phải mở LẠI nếu người dùng bỏ dở dialog sinh ảnh (§BUG-2). */
@@ -382,6 +394,7 @@ function ProjectManager({ projectId }: { projectId: string }) {
                 jobStates={project.data.state?.jobs ?? {}}
                 readOnly={projectReadOnly}
                 onGenerate={setGenerateJobs}
+                onSlice={slice.run}
               />
             )}
 

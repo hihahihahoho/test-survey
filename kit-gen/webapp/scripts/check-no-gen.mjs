@@ -44,7 +44,14 @@ const root = new URL("..", import.meta.url).pathname;
 const GUARDED = ["src/features/workflow-v4", "src/features/canvas", "src/features/gen"];
 
 /** Hook cắt: dù nằm ở đâu cũng phải giữ `kind` là hằng (luật ③). */
-const SLICE_HOOKS = ["src/features/runs/lib/useSliceRun.ts", "src/features/kit/lib/useKitData.ts"];
+const SLICE_HOOKS = [
+  "src/features/runs/lib/useSliceRun.ts",
+  "src/features/kit/lib/useKitData.ts",
+  // Hook cắt của màn dự án (S2). Nó ĐÃ tồn tại từ lâu nhưng mồ côi — không nơi nào
+  // import — nên chưa ai nghĩ tới việc soi. Nay nút [Cắt N lượt] đấu vào nó thật, và
+  // luật ③ phải phủ nó: một hook cắt LIVE mà `kind` lỏng là đúng cái lỗ cổng này canh.
+  "src/features/project/lib/useSliceRun.ts",
+];
 
 function walk(dir, acc = []) {
   if (!existsSync(dir)) return acc;

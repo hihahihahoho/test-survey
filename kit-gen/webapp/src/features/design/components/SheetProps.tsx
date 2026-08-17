@@ -177,7 +177,12 @@ export function SheetProps({
         )}
       </PanelSection>
 
-      <PanelSection title="Sinh ảnh sheet này">
+      {/* HAI NÚT, HAI GIÁ TIỀN — và nhãn phải nói ra điều đó.
+          Tiêu đề cũ ("Sinh ảnh sheet này") gộp cả hai dưới chữ "sinh", nên nút cắt đọc
+          như một biến thể của sinh ảnh. Chúng KHÔNG cùng loại: một cái gọi model (tốn
+          lượt, có modal xác nhận — dấu "…" báo trước điều đó), cái kia chỉ tách ảnh sẵn
+          có trên máy. Người dùng phải phân biệt được TRƯỚC khi bấm, không phải sau. */}
+      <PanelSection title="Ảnh của sheet này">
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" size="sm" className="gap-1.5" {...disProps} onClick={onGenSheet}>
             <Zap className="size-3.5" aria-hidden />
@@ -189,7 +194,11 @@ export function SheetProps({
           </Button>
         </div>
         <p className="text-caption text-fg-muted-raised">
-          Lưu bản thiết kế trước khi sinh — engine đọc file trên đĩa, không đọc màn hình.
+          <strong className="font-medium text-fg">Sinh</strong> vẽ lại ảnh bằng AI — tiêu lượt, nên có bước xác nhận.{" "}
+          <strong className="font-medium text-fg">Cắt</strong> chỉ tách ảnh đã vẽ thành từng element — chạy ngay, không tiêu lượt.
+        </p>
+        <p className="text-caption text-fg-muted-raised">
+          Lưu bản thiết kế trước — engine đọc file trên đĩa, không đọc màn hình.
         </p>
       </PanelSection>
 

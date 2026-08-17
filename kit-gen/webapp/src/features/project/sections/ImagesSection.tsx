@@ -60,7 +60,7 @@ export function groupCategory(group: ProjectImageGroup): ResultGroup {
 const SCROLL_RETRIES = [0, 150, 400, 900, 1600] as const;
 
 export function ImagesSection({
-  projectId, kitName, group, contract, project, gate, jobStates, readOnly, onGenerate,
+  projectId, kitName, group, contract, project, gate, jobStates, readOnly, onGenerate, onSlice,
 }: {
   projectId: string;
   kitName: string;
@@ -73,6 +73,15 @@ export function ImagesSection({
   jobStates: Record<string, JobStatusValue>;
   readOnly: boolean;
   onGenerate: (jobs: string[]) => void;
+  /**
+   * Chạy CẮT cho đúng tập lượt "có ảnh mới nhưng chưa cắt".
+   *
+   * Tách hẳn khỏi `onGenerate` vì hai việc KHÁC GIÁ TIỀN: `onGenerate` mở modal tiêu
+   * quota, còn đường này là PIL thuần trên máy — không modal, chỉ toast. Trước đây chỗ
+   * này bị đóng cứng `null` nên dải cảnh báo hiện đúng câu "chưa cắt" mà không đưa ra
+   * được nút nào để làm việc đó (`59e59e3` xoá handler ở màn cha, `2048593` mắc lại dải).
+   */
+  onSlice: (jobs: string[]) => void;
 }) {
   const category = groupCategory(group);
 
@@ -148,7 +157,7 @@ export function ImagesSection({
         warning={warning}
         gate={gate}
         onGen={() => onGenerate(warning.staleJobs)}
-        onSlice={null}
+        onSlice={() => onSlice(warning.uncutJobs)}
       />
 
       {/* MỘT thanh segmented cho cả trang ("Ảnh thật | Ảnh gốc"); các khối theo nhóm nằm
