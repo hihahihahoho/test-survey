@@ -58,6 +58,15 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 SELF_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+# macOS có shasum, Git Bash/Linux tối giản chỉ có sha256sum — dùng được cả hai.
+sha256_file(){
+  if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | awk '{print $1}'
+  else sha256sum "$1" | awk '{print $1}'; fi
+}
+sha256_check(){
+  if command -v shasum >/dev/null 2>&1; then shasum -a 256 -c "$1"
+  else sha256sum -c "$1"; fi
+}
 mkdir -p "$KITGEN_HOME/releases" "$KITGEN_HOME/bin" "$WORKSPACE"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/kitgen-install.XXXXXX")"
 # Agent đặt trước reservation + token; lệnh chạy tay tự tạo reservation. PID nằm trong
@@ -429,7 +438,7 @@ elif [ -n "$ARCHIVE" ] || [ -n "$RELEASE_URL" ]; then
     EXPECTED_SHA="$(awk '{print $1}' "$ARCHIVE.sha256")"
   fi
   if [ -n "$EXPECTED_SHA" ]; then
-    ACTUAL="$(shasum -a 256 "$TMP/runtime.tar.gz" | awk '{print $1}')"
+    ACTUAL="$(sha256_file "$TMP/runtime.tar.gz")"
     [ "$ACTUAL" = "$EXPECTED_SHA" ] || { echo "Runtime checksum mismatch." >&2; exit 1; }
   else
     echo "A checksum is required (--sha256 or an adjacent .sha256 file)." >&2
@@ -458,7 +467,7 @@ fi
 is_release "$CANDIDATE" || { echo "Invalid KitGen runtime archive." >&2; exit 1; }
 (
   cd "$CANDIDATE"
-  shasum -a 256 -c manifest.sha256 >/dev/null
+  sha256_check manifest.sha256 >/dev/null
 )
 VERSION="$(cat "$CANDIDATE/VERSION")"
 case "$VERSION" in *[!0-9A-Za-z._-]*|'') echo "Invalid runtime version." >&2; exit 1 ;; esac
@@ -487,7 +496,7 @@ if [ "$MAJOR" -lt 20 ]; then
   curl -fsSL --retry 3 "$NODE_BASE/$NODE_PKG" -o "$TMP/$NODE_PKG"
   curl -fsSL --retry 3 "$NODE_BASE/SHASUMS256.txt" -o "$TMP/node-shasums.txt"
   EXPECTED_NODE_SHA="$(awk -v f="$NODE_PKG" '$2 == f { print $1 }' "$TMP/node-shasums.txt")"
-  ACTUAL_NODE_SHA="$(shasum -a 256 "$TMP/$NODE_PKG" | awk '{print $1}')"
+  ACTUAL_NODE_SHA="$(sha256_file "$TMP/$NODE_PKG")"
   [ -n "$EXPECTED_NODE_SHA" ] && [ "$EXPECTED_NODE_SHA" = "$ACTUAL_NODE_SHA" ] || { echo "Node checksum mismatch." >&2; exit 1; }
   rm -rf "$KITGEN_HOME/tools/node"
   mkdir -p "$KITGEN_HOME/tools/node"
