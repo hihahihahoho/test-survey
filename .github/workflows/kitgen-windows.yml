@@ -31,6 +31,10 @@ on:
       - "kit-gen/scripts/install.ps1"
       - "kit-gen/agent/**"
       - "kit-gen/runtime/**"
+      # install.sh duoc suite-update-cure exec truc tiep trong job 4 — sua no
+      # ma khong chay CI Windows la lo hong (vong 14: fix shasum tron kiem tra)
+      - "kit-gen/install.sh"
+      - "kit-gen/scripts/build-runtime.sh"
       - ".github/workflows/kitgen-windows.yml"
 
 permissions:

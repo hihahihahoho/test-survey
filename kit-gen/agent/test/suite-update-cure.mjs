@@ -3,8 +3,8 @@
    giết installer sau activation, rồi chạy lượt kế tiếp để chứng minh journal rollback. */
 import { createHash } from "node:crypto"
 import { spawn } from "node:child_process"
-import { chmod, mkdir, readFile, readlink, symlink, writeFile } from "node:fs/promises"
-import { join, relative } from "node:path"
+import { chmod, mkdir, realpath, readFile, symlink, writeFile } from "node:fs/promises"
+import { delimiter, dirname, join, relative } from "node:path"
 import { describe, it, eq, ok } from "./harness.mjs"
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -31,7 +31,11 @@ async function makeRuntimeFixture(tmp, repoInstall) {
   await writeFile(join(root, "agent", "server.mjs"), "export {}\n")
   await writeFile(join(root, "engine", "gen.sh"), "#!/bin/sh\nexit 0\n")
   await writeFile(join(root, "app", "index.html"), "<!doctype html>\n")
-  await writeFile(join(root, "runtime", "service", "com.kitgen.agent.plist.in"), "@KITGEN_BIN@\n")
+  const sourceServiceDir = join(dirname(repoInstall), "runtime", "service")
+  await writeFile(join(root, "runtime", "service", "com.kitgen.agent.plist.in"),
+    await readFile(join(sourceServiceDir, "com.kitgen.agent.plist.in")))
+  await writeFile(join(root, "runtime", "service", "kitgen-agent.service.in"),
+    await readFile(join(sourceServiceDir, "kitgen-agent.service.in")))
   await writeFile(join(root, "install.sh"), await readFile(repoInstall))
   await writeFile(join(root, "runtime", "bin", "kitgen"), [
     "#!/bin/sh",
@@ -85,8 +89,10 @@ export async function run({ tmp, agentDir }) {
       "  *) exit 0 ;;",
       "esac",
     ].join("\n") + "\n")
+    await writeFile(join(fakeBin, "systemctl"), "#!/bin/sh\nexit 0\n")
     await chmod(join(fakeBin, "codex"), 0o755)
     await chmod(join(fakeBin, "launchctl"), 0o755)
+    await chmod(join(fakeBin, "systemctl"), 0o755)
     await symlink(oldRelease, join(home, "current"))
     const txn = join(home, ".update-transaction")
     await mkdir(txn, { recursive: true })
@@ -107,7 +113,7 @@ export async function run({ tmp, agentDir }) {
     const env = {
       ...process.env,
       HOME: join(tmp, "fake-home"),
-      PATH: `${fakeBin}:${process.env.PATH}`,
+      PATH: [fakeBin, process.env.PATH].filter(Boolean).join(delimiter),
       KITGEN_HOME: home,
       KITGEN_WORKSPACE: workspace,
       FAKE_LAUNCHCTL_STATE: launchState,
@@ -127,15 +133,30 @@ export async function run({ tmp, agentDir }) {
       await delay(20)
     }
     ok(activated, `installer phải ghi journal activated trước khi khởi động lại dịch vụ: ${output.slice(-1000)}`)
-    child.kill("SIGKILL")
-    await new Promise(resolve => child.once("close", resolve))
-    const currentAfterKill = await readlink(join(home, "current"))
-    eq(currentAfterKill, newRelease, "SIGKILL để lại đúng hiện trường symlink mới + journal")
+    const childClosed = new Promise(resolve => child.once("close", resolve))
+    if (process.platform === "win32") {
+      await new Promise(resolve => {
+        const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+          stdio: "ignore", windowsHide: true,
+        })
+        killer.once("error", () => {
+          try { child.kill("SIGKILL") } catch { /* installer đã chết */ }
+          resolve()
+        })
+        killer.once("close", resolve)
+      })
+    } else {
+      child.kill("SIGKILL")
+    }
+    await childClosed
+    eq(await realpath(join(home, "current")), await realpath(newRelease),
+      "SIGKILL để lại đúng hiện trường symlink mới + journal")
 
     const missing = join(tmp, "missing-runtime.tar.gz")
     const second = spawn("bash", [join(agentDir, "..", "install.sh"), "--archive", missing, "--workspace", workspace], { env, stdio: "ignore" })
     await new Promise(resolve => second.once("close", resolve))
-    eq(await readlink(join(home, "current")), oldRelease, "lượt sau thu hồi symlink mới chưa phục vụ")
+    eq(await realpath(join(home, "current")), await realpath(oldRelease),
+      "lượt sau thu hồi symlink mới chưa phục vụ")
     let journalLeft = true
     try { await readFile(join(txn, "state")); } catch { journalLeft = false }
     ok(!journalLeft, "journal đã được thu hồi sau rollback")
