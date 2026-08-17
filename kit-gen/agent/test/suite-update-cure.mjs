@@ -6,11 +6,91 @@ import { spawn } from "node:child_process"
 import { chmod, mkdir, realpath, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import { delimiter, dirname, join, relative } from "node:path"
 import { describe, it, eq, ok } from "./harness.mjs"
-import { toBashPath } from "../lib/platform.mjs"
+import { findBash, toBashPath } from "../lib/platform.mjs"
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
+const IS_WIN = process.platform === "win32"
 
 const CASE_167_BUDGET_MS = 20_000
+
+function msysPath(path) {
+  return IS_WIN ? toBashPath(path) : String(path)
+}
+
+function msysPathList(value, bashExe) {
+  if (!IS_WIN) return String(value ?? "")
+  const entries = String(value ?? "").split(delimiter).filter(Boolean)
+  if (bashExe && /^[A-Za-z]:[\\/]/.test(bashExe)) {
+    const gitRoot = dirname(dirname(bashExe))
+    const gitDirs = [join(gitRoot, "usr", "bin"), join(gitRoot, "mingw64", "bin"), join(gitRoot, "bin")]
+    entries.splice(entries.length ? 1 : 0, 0, ...gitDirs)
+  }
+  return entries.map(msysPath).join(":")
+}
+
+/* Node tạo fixture bằng đường dẫn Win32; Git Bash phải nhận toàn bộ path dạng
+   MSYS. Không dùng shell quoting để đổi path: truyền từng arg/env trực tiếp. */
+function bashEnv(env, bashExe) {
+  if (!IS_WIN) return env
+  const out = { ...env }
+  for (const key of [
+    "HOME", "KITGEN_HOME", "KITGEN_WORKSPACE", "KITGEN_UPDATE_LOCK", "KITGEN_UPDATE_TXN",
+    "FAKE_LAUNCHCTL_STATE", "TMPDIR", "TEMP", "TMP",
+  ]) {
+    if (out[key]) out[key] = msysPath(out[key])
+  }
+  out.PATH = msysPathList(out.PATH, bashExe)
+  out.MSYS = "winsymlinks:nativestrict"
+  return out
+}
+
+function bashForTest() {
+  return IS_WIN ? (findBash() || "bash") : "bash"
+}
+
+function installerArgs(script, args) {
+  if (!IS_WIN) return [script, ...args]
+  const out = [msysPath(script), ...args]
+  for (let i = 1; i < out.length; i++) {
+    if (out[i - 1] === "--archive" || out[i - 1] === "--workspace") out[i] = msysPath(out[i])
+  }
+  return out
+}
+
+function spawnInstaller(script, args, env) {
+  const bash = bashForTest()
+  return spawn(bash, installerArgs(script, args), {
+    env: bashEnv(env, bash),
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
+    ...(IS_WIN ? { windowsHide: true } : {}),
+  })
+}
+
+async function fixtureRealpath(path, env) {
+  if (!IS_WIN) return realpath(path)
+  const bash = bashForTest()
+  const child = spawn(bash, ["-lc", 'CDPATH= cd -- "$1" && pwd -P', "kitgen-test-realpath", msysPath(path)], {
+    env: bashEnv(env, bash),
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  })
+  let output = ""
+  let error = ""
+  child.stdout.on("data", b => { output += b.toString() })
+  child.stderr.on("data", b => { error += b.toString() })
+  const result = await childClose(child, 3_000, "bash realpath")
+  if (result.code !== 0) throw new Error(`bash realpath rc=${result.code}: ${error.trim()}`)
+  return msysPath(output.trim())
+}
+
+async function symlinkDir(target, link) {
+  await symlink(target, link, IS_WIN ? "dir" : undefined)
+}
+
+async function symlinkFile(target, link) {
+  await symlink(target, link, IS_WIN ? "file" : undefined)
+}
 
 function redacted(text, paths = []) {
   let out = String(text ?? "")
@@ -212,9 +292,9 @@ export async function run({ tmp, agentDir }) {
       await chmod(join(fakeBin, "codex"), 0o755)
       await chmod(join(fakeBin, "launchctl"), 0o755)
       await chmod(join(fakeBin, "systemctl"), 0o755)
-      await symlink(oldRelease, join(home, "current"))
       const txn = join(home, ".update-transaction")
       await mkdir(txn, { recursive: true })
+      await symlinkDir(oldRelease, join(home, "current"))
 
       const { archive, sha } = await makeRuntimeFixture(tmp, join(agentDir, "..", "install.sh"))
       mark("fixture xong", `archive=${redacted(archive, pathsToRedact)}`)
@@ -224,7 +304,7 @@ export async function run({ tmp, agentDir }) {
       await mkdir(nodeBin, { recursive: true })
       await mkdir(moduleDir, { recursive: true })
       await mkdir(venvBin, { recursive: true })
-      await symlink(process.execPath, join(nodeBin, "node"))
+      await symlinkFile(process.execPath, join(nodeBin, "node"))
       await writeFile(join(moduleDir, "package.json"), '{"name":"@resvg/resvg-wasm","main":"index.js"}\n')
       await writeFile(join(moduleDir, "index.js"), "module.exports = {}\n")
       await writeFile(join(venvBin, "python"), "#!/bin/sh\nexit 0\n")
@@ -236,23 +316,24 @@ export async function run({ tmp, agentDir }) {
         PATH: [fakeBin, process.env.PATH].filter(Boolean).join(delimiter),
         KITGEN_HOME: home,
         KITGEN_WORKSPACE: workspace,
+        KITGEN_UPDATE_LOCK: join(home, ".update-lock"),
+        KITGEN_UPDATE_TXN: txn,
         FAKE_LAUNCHCTL_STATE: launchState,
       }
-      if (process.platform === "win32") {
+      if (IS_WIN) {
         /* Git Bash có hai PID (MSYS và Win32); taskkill chỉ nhận PID Win32. Không
            giả vờ rằng ca này chứng minh được SIGKILL thật. Dựng đúng hiện trường
            sau activation trên đĩa, rồi kiểm recovery bằng installer thật. */
         mark("Git Bash: bỏ qua kill thật", "MSYS/Win32 PID semantics không mô phỏng an toàn")
         await rm(join(home, "current"), { force: true })
-        await symlink(newRelease, join(home, "current"))
+        await symlinkDir(newRelease, join(home, "current"))
         await writeFile(join(txn, "previous"), `${toBashPath(oldRelease)}\n`)
         await writeFile(join(txn, "dest"), `${toBashPath(newRelease)}\n`)
         await writeFile(join(txn, "state"), "activated\n")
         mark("dead-state dựng xong", "journal=activated, current=newRelease")
       } else {
-        firstChild = spawn("bash", [join(agentDir, "..", "install.sh"), "--archive", archive, "--sha256", sha, "--workspace", workspace], {
-          env, stdio: ["ignore", "pipe", "pipe"], detached: true,
-        })
+        firstChild = spawnInstaller(join(agentDir, "..", "install.sh"),
+          ["--archive", archive, "--sha256", sha, "--workspace", workspace], env)
         mark("installer spawn", `pid=${firstChild.pid}`)
         firstChild.stdout.on("data", b => observeOutput(b.toString(), 1))
         firstChild.stderr.on("data", b => observeOutput(b.toString(), 1))
@@ -271,15 +352,14 @@ export async function run({ tmp, agentDir }) {
         }
         ok(seenState === "activated", `installer phải ghi journal activated trước khi kill: ${redacted(firstOutput, pathsToRedact).slice(-1000)}`)
         ok(await stopChild(firstChild, mark, "lượt 1"), "installer lượt 1 phải đóng sau SIGKILL")
-        eq(await realpath(join(home, "current")), await realpath(newRelease),
+        eq(await fixtureRealpath(join(home, "current"), env), await fixtureRealpath(newRelease, env),
           "SIGKILL để lại đúng hiện trường symlink mới + journal")
         mark("hiện trường sau SIGKILL đúng", "current=newRelease")
       }
 
       const missing = join(tmp, "missing-runtime.tar.gz")
-      secondChild = spawn("bash", [join(agentDir, "..", "install.sh"), "--archive", missing, "--workspace", workspace], {
-        env, stdio: ["ignore", "pipe", "pipe"], detached: true,
-      })
+      secondChild = spawnInstaller(join(agentDir, "..", "install.sh"),
+        ["--archive", missing, "--workspace", workspace], env)
       mark("lượt 2 spawn", `pid=${secondChild.pid}`)
       secondChild.stdout.on("data", b => observeOutput(b.toString(), 2))
       secondChild.stderr.on("data", b => observeOutput(b.toString(), 2))
@@ -290,7 +370,7 @@ export async function run({ tmp, agentDir }) {
         await stopChild(secondChild, mark, "lượt 2")
         throw e
       }
-      eq(await realpath(join(home, "current")), await realpath(oldRelease),
+      eq(await fixtureRealpath(join(home, "current"), env), await fixtureRealpath(oldRelease, env),
         "lượt sau thu hồi symlink mới chưa phục vụ")
       mark("rollback symlink xong", "current=oldRelease")
       let journalLeft = true
