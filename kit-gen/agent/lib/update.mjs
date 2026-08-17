@@ -393,16 +393,24 @@ export function scheduleUpdate({ kitgenHome = defaultKitgenHome(), spawnImpl = s
     }
     const bashExe = process.env.KITGEN_BASH || findBash() || "bash.exe"
     const env = IS_WIN && !staged.powershell ? bashEnv(baseEnv, bashExe) : baseEnv
-    child = IS_WIN
-      // Không có `sh` trên Windows. cmd.exe tách hẳn khỏi tiến trình agent, `timeout` là
-      // bản Windows của `sleep 1`; install.ps1 cũng chạy từ inode tạm.
-      ? spawnImpl(process.env.ComSpec || "cmd.exe",
-        ["/d", "/s", "/c", staged.powershell
-          ? `timeout /t 1 /nobreak >nul & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${staged.path}" -Update -KitgenHome "${kitgenHome}"`
-          : `timeout /t 1 /nobreak >nul & "${bashExe}" "${toBashPath(staged.path)}" --update`],
+    if (IS_WIN && !staged.powershell) {
+      /* `bashEnv()` is a Git-Bash environment: PATH uses `:`, temp paths use
+         `/c/...`. Passing it to cmd.exe makes cmd resolve its own commands with
+         MSYS semantics. Spawn Bash directly, matching every other Windows Bash
+         helper; the one-second hand-off remains inside Bash. */
+      child = spawnImpl(bashExe,
+        ["-c", 'sleep 1; exec "$1" --update', "kitgen-update", toBashPath(staged.path)],
         { detached: true, stdio: ["ignore", out, out], env, ...winSpawnOpts() })
-      : spawnImpl("sh", ["-c", 'sleep 1; if [ -f "$1/config.env" ]; then . "$1/config.env"; fi; exec "$2" --update', "kitgen-update", kitgenHome, staged.path],
+    } else if (IS_WIN) {
+      /* PowerShell is not an executable script host. Keep the cmd.exe bridge for
+         install.ps1, whose environment intentionally remains Windows-native. */
+      child = spawnImpl(process.env.ComSpec || "cmd.exe",
+        ["/d", "/s", "/c", `timeout /t 1 /nobreak >nul & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${staged.path}" -Update -KitgenHome "${kitgenHome}"`],
+        { detached: true, stdio: ["ignore", out, out], env, ...winSpawnOpts() })
+    } else {
+      child = spawnImpl("sh", ["-c", 'sleep 1; if [ -f "$1/config.env" ]; then . "$1/config.env"; fi; exec "$2" --update', "kitgen-update", kitgenHome, staged.path],
         { detached: true, stdio: ["ignore", out, out], env })
+    }
   } catch {
     cleanupStaged()
     if (typeof out === "number") { try { closeSync(out) } catch { /* đã đóng */ } }

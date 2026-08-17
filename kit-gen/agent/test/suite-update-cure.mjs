@@ -73,7 +73,12 @@ function comparablePath(path) {
 
 function stagedSpawnPath(spawned) {
   if (!IS_WIN) return spawned?.args?.[4]
-  const command = String(spawned?.args?.[3] ?? "")
+  const args = Array.isArray(spawned?.args) ? spawned.args : []
+  const direct = args
+    .map(value => String(value ?? "").trim().replace(/^"|"$/g, ""))
+    .find(path => /[\\/]install\.(?:sh|ps1)$/i.test(path))
+  if (direct) return direct
+  const command = String(args[3] ?? "")
   return [...command.matchAll(/"([^"]+)"/g)]
     .map(match => match[1])
     .find(path => /[\\/]install\.(?:sh|ps1)$/i.test(path))
@@ -223,7 +228,8 @@ async function makeSelfClobberFixture(tmp, name) {
     `# offset filler ${String(i).padStart(3, "0")} ${"x".repeat(24)}`).join("\n")
   const prefix = [
     "#!/usr/bin/env bash",
-    "set -eu",
+    "PS4='+ self-clobber: '",
+    "set -eux",
     "home=\"${KITGEN_HOME:?}\"",
     `printf 'started\\n' >> \"$home/trace\"`,
     filler,
@@ -254,57 +260,143 @@ export async function run({ tmp, agentDir }) {
   describe("trị dứt điểm update lần 1/lần 2")
 
   await it("installer cũ tự clobber ⇒ chạy thẳng có thể rc=127, scheduler chạy bản tạm thì trọn lượt", async () => {
-    const directFixture = await makeSelfClobberFixture(tmp, "self-clobber-direct")
-    const directEnv = {
-      ...process.env,
-      KITGEN_HOME: directFixture.root,
-      PATH: process.env.PATH,
+    const startedAt = Date.now()
+    const milestones = []
+    const mark = (label, detail = "") => {
+      const m = { ms: Date.now() - startedAt, label, detail: String(detail) }
+      milestones.push(m)
+      process.stdout.write(`[167] mốc +${m.ms}ms — ${label}${detail ? ` — ${m.detail}` : ""}\n`)
     }
-    const direct = await runFixtureScript(join(directFixture.root, "install.sh"), directEnv)
-    /* Bash đọc lazy nên trên Darwin/Linux fixture này tái hiện đúng vùng offset:
-       bản mới dài hơn chèn lệnh tiếng Anh `inheriting` ngay sau cp tự-đè. Một số
-       shell đọc trước nhiều byte hơn; khi đó vẫn giữ ca cứu hộ phía dưới làm oracle. */
-    if (direct.code === 127) {
-      includes(direct.stderr, "inheriting: command not found", "hiện trường self-clobber")
-    } else {
-      ok(direct.code !== 0, `fixture cũ không được âm thầm thành công: rc=${direct.code}`)
-    }
-
-    const stagedFixture = await makeSelfClobberFixture(tmp, "self-clobber-staged")
-    const { scheduleUpdate, resetUpdateInstallLock } = await import("../lib/update.mjs")
+    const pathsToRedact = [tmp]
+    let directOutput = "", directError = ""
+    let stagedOutput = "", stagedError = ""
+    let stagedFixture = null
+    let directChild = null
     let spawned = null
     let child = null
-    const scheduled = scheduleUpdate({
-      kitgenHome: stagedFixture.root,
-      spawnImpl: (cmd, args, opts) => {
-        spawned = { cmd, args, opts }
-        child = spawn(cmd, args, opts)
-        return child
-      },
-    })
-    eq(scheduled.status, "started", "scheduler nhận lượt update")
-    ok(spawned, "scheduler phải spawn installer")
-    const stagedPath = stagedSpawnPath(spawned)
-    const stagedNodePath = fromBashPath(stagedPath)
-    ok(stagedPath && comparablePath(stagedPath) !== comparablePath(join(stagedFixture.root, "install.sh")),
-      "spawn dùng đường dẫn tạm, không dùng install.sh gốc")
-    const [sourceStat, stagedStat] = await Promise.all([
-      stat(join(stagedFixture.root, "install.sh")),
-      stat(stagedNodePath),
-    ])
-    ok(sourceStat.ino !== stagedStat.ino, "inode bản spawn tách khỏi inode gốc")
-    const stagedHash = createHash("sha256").update(await readFile(stagedNodePath)).digest("hex")
-    const sourceHash = createHash("sha256").update(await readFile(join(stagedFixture.root, "install.sh"))).digest("hex")
-    eq(stagedHash, sourceHash, "bản tạm là snapshot nguyên vẹn trước khi chạy")
-    const result = await childClose(child, 8_000, "scheduler installer")
-    eq(result.code, 0, `installer bản tạm phải sống trọn lượt: rc=${result.code}`)
-    includes(await readFile(join(stagedFixture.root, "trace"), "utf8"), "finished", "lượt tạm hoàn tất")
-    const finalHash = createHash("sha256").update(await readFile(join(stagedFixture.root, "install.sh"))).digest("hex")
-    ok(finalHash !== stagedHash, "installer cũ có thể thay file gốc nhưng không phá bản đang chạy")
-    let stagedGone = true
-    try { await stat(stagedNodePath); stagedGone = false } catch { /* cleanup đúng */ }
-    ok(stagedGone, "file tạm được dọn sau khi installer thoát")
-    resetUpdateInstallLock({ kitgenHome: stagedFixture.root })
+    let diagnosticsPrinted = false
+    const updateLog = () => stagedFixture && join(stagedFixture.root, "update.log")
+    const dumpDiagnostics = async reason => {
+      if (diagnosticsPrinted) return
+      diagnosticsPrinted = true
+      process.stdout.write(`\n[167] TIMEOUT/HIỆN TRƯỜNG — ${reason}\n`)
+      process.stdout.write("[167] toàn bộ mốc đã qua:\n")
+      for (const m of milestones) {
+        process.stdout.write(`  +${m.ms}ms — ${m.label}${m.detail ? ` — ${m.detail}` : ""}\n`)
+      }
+      process.stdout.write("[167] output direct stdout (đuôi, đã redact):\n")
+      process.stdout.write(`${redacted(directOutput, pathsToRedact).slice(-4000) || "(rỗng)"}\n`)
+      process.stdout.write("[167] output direct stderr (đuôi, đã redact):\n")
+      process.stdout.write(`${redacted(directError, pathsToRedact).slice(-4000) || "(rỗng)"}\n`)
+      /* scheduleUpdate cố ý nối stdout + stderr vào CÙNG fd update.log. Ghi cả hai
+         nhãn, dù cùng một đuôi, để ca không còn một "stdout/stderr rỗng" mơ hồ. */
+      process.stdout.write("[167] output scheduler stdout (cùng fd update.log, đuôi):\n")
+      process.stdout.write(`${redacted(stagedOutput, pathsToRedact).slice(-4000) || "(rỗng)"}\n`)
+      process.stdout.write("[167] output scheduler stderr (cùng fd update.log, đuôi):\n")
+      process.stdout.write(`${redacted(stagedError, pathsToRedact).slice(-4000) || "(rỗng)"}\n`)
+      process.stdout.write("[167] update.log fixture (đuôi, đã redact):\n")
+      process.stdout.write(`${await tailFile(updateLog(), 80, pathsToRedact)}\n`)
+      process.stdout.write("[167] install.log fixture (đuôi, đã redact):\n")
+      process.stdout.write(`${await tailFile(stagedFixture && join(stagedFixture.root, "install.log"), 80, pathsToRedact)}\n`)
+      process.stdout.write("[167] trace fixture (đuôi, đã redact):\n")
+      process.stdout.write(`${await tailFile(stagedFixture && join(stagedFixture.root, "trace"), 80, pathsToRedact)}\n`)
+      process.stdout.write("[167] lock owner fixture:\n")
+      process.stdout.write(`${await tailFile(stagedFixture && join(stagedFixture.root, ".update-lock", "owner"), 4, pathsToRedact)}\n`)
+    }
+
+    const scenario = async () => {
+      mark("ca bắt đầu")
+      mark("dựng fixture self-clobber trực tiếp")
+      const directFixture = await makeSelfClobberFixture(tmp, "self-clobber-direct")
+      const directEnv = {
+        ...process.env,
+        KITGEN_HOME: directFixture.root,
+        PATH: process.env.PATH,
+      }
+      mark("direct fixture xong", `root=${redacted(directFixture.root, pathsToRedact)}`)
+      directChild = spawnInstaller(join(directFixture.root, "install.sh"), [], directEnv)
+      mark("direct installer spawn", `pid=${directChild.pid}`)
+      directChild.stdout.on("data", b => { directOutput += b.toString() })
+      directChild.stderr.on("data", b => { directError += b.toString() })
+      const direct = await childClose(directChild, 8_000, "direct fixture installer")
+      mark("direct installer đóng", `rc=${direct.code ?? "?"} signal=${direct.signal ?? "-"}`)
+      /* Bash đọc lazy nên trên Darwin/Linux fixture này tái hiện đúng vùng offset:
+         bản mới dài hơn chèn lệnh tiếng Anh `inheriting` ngay sau cp tự-đè. Một số
+         shell đọc trước nhiều byte hơn; khi đó vẫn giữ ca cứu hộ phía dưới làm oracle. */
+      if (direct.code === 127) {
+        includes(directError, "inheriting: command not found", "hiện trường self-clobber")
+      } else {
+        ok(direct.code !== 0, `fixture cũ không được âm thầm thành công: rc=${direct.code}`)
+      }
+
+      mark("dựng fixture self-clobber scheduler")
+      stagedFixture = await makeSelfClobberFixture(tmp, "self-clobber-staged")
+      mark("scheduler fixture xong", `root=${redacted(stagedFixture.root, pathsToRedact)}`)
+      const { scheduleUpdate, resetUpdateInstallLock } = await import("../lib/update.mjs")
+      const scheduled = scheduleUpdate({
+        kitgenHome: stagedFixture.root,
+        spawnImpl: (cmd, args, opts) => {
+          spawned = { cmd, args, opts }
+          mark("scheduler spawn", `cmd=${cmd} args=${JSON.stringify(args)}`)
+          mark("scheduler env/cwd", `cwd=${opts.cwd ?? "(inherit)"} KITGEN_HOME=${opts.env?.KITGEN_HOME ?? "(unset)"} TMPDIR=${opts.env?.TMPDIR ?? "(unset)"} PATH=${String(opts.env?.PATH ?? "").slice(0, 240)}`)
+          child = spawn(cmd, args, opts)
+          return child
+        },
+      })
+      mark("scheduler trả lời", `status=${scheduled.status}`)
+      eq(scheduled.status, "started", "scheduler nhận lượt update")
+      ok(spawned, "scheduler phải spawn installer")
+      const stagedPath = stagedSpawnPath(spawned)
+      const stagedNodePath = fromBashPath(stagedPath)
+      mark("snapshot path nhận được", `bash=${stagedPath} node=${stagedNodePath}`)
+      ok(stagedPath && comparablePath(stagedPath) !== comparablePath(join(stagedFixture.root, "install.sh")),
+        "spawn dùng đường dẫn tạm, không dùng install.sh gốc")
+      const [sourceStat, stagedStat] = await Promise.all([
+        stat(join(stagedFixture.root, "install.sh")),
+        stat(stagedNodePath),
+      ])
+      ok(sourceStat.ino !== stagedStat.ino, "inode bản spawn tách khỏi inode gốc")
+      const stagedHash = createHash("sha256").update(await readFile(stagedNodePath)).digest("hex")
+      const sourceHash = createHash("sha256").update(await readFile(join(stagedFixture.root, "install.sh"))).digest("hex")
+      eq(stagedHash, sourceHash, "bản tạm là snapshot nguyên vẹn trước khi chạy")
+      mark("snapshot nguyên vẹn", `sha256=${stagedHash.slice(0, 12)}`)
+      const result = await childClose(child, 8_000, "scheduler installer")
+      mark("scheduler installer đóng", `rc=${result.code ?? "?"} signal=${result.signal ?? "-"}`)
+      stagedOutput = await readFile(updateLog(), "utf8").catch(() => "")
+      stagedError = stagedOutput
+      eq(result.code, 0, `installer bản tạm phải sống trọn lượt: rc=${result.code}`)
+      includes(await readFile(join(stagedFixture.root, "trace"), "utf8"), "finished", "lượt tạm hoàn tất")
+      mark("trace có finished")
+      const finalHash = createHash("sha256").update(await readFile(join(stagedFixture.root, "install.sh"))).digest("hex")
+      ok(finalHash !== stagedHash, "installer cũ có thể thay file gốc nhưng không phá bản đang chạy")
+      mark("install.sh gốc đã đổi inode", `sha256=${finalHash.slice(0, 12)}`)
+      let stagedGone = true
+      try { await stat(stagedNodePath); stagedGone = false } catch { /* cleanup đúng */ }
+      ok(stagedGone, "file tạm được dọn sau khi installer thoát")
+      mark("snapshot đã dọn")
+      resetUpdateInstallLock({ kitgenHome: stagedFixture.root })
+    }
+
+    let timer
+    try {
+      await Promise.race([
+        scenario(),
+        new Promise((_, reject) => {
+          timer = setTimeout(async () => {
+            await dumpDiagnostics(`vượt ngân sách nội bộ ${CASE_167_BUDGET_MS}ms`)
+            reject(new Error(`ca 167 vượt ngân sách nội bộ ${CASE_167_BUDGET_MS}ms`))
+          }, CASE_167_BUDGET_MS)
+        }),
+      ])
+    } catch (e) {
+      if (stagedFixture && !stagedOutput) stagedOutput = await readFile(updateLog(), "utf8").catch(() => "")
+      await dumpDiagnostics(e?.message ?? e)
+      throw e
+    } finally {
+      clearTimeout(timer)
+      if (directChild && directChild.exitCode === null && directChild.signalCode === null) await stopChild(directChild, mark, "dọn direct installer")
+      if (child && child.exitCode === null && child.signalCode === null) await stopChild(child, mark, "dọn scheduler installer")
+    }
   })
 
   await it("installer đã vá temp+mv ⇒ nâng lên runtime dài hơn vẫn hoàn tất 7/7", async () => {
