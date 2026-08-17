@@ -31,6 +31,25 @@ let index = 0
 
 export function currentCase() { return current }
 
+/* DỌN THƯ MỤC TẠM CỦA BỘ CA — luôn dùng hàm này, đừng gọi thẳng `rm(...)`.
+   Hai ca của suite-import ĐỎ TRÊN RUNNER (run 31793695016) chỉ vì dòng dọn dẹp cuối ca:
+     ENOTEMPTY: directory not empty, rmdir '…\kitgen-bundle-4rD8bV\js'
+   Mọi khẳng định trong ca đều đã xanh; thứ giết ca là cái chổi. Trên Windows, agent vừa
+   đọc file tĩnh trong thư mục đó xong thì handle chưa chắc đã nhả (Defender còn quét
+   file vừa đọc), mà Windows CẤM xoá thư mục còn handle mở — POSIX thì cho.
+   Hai điều khoản:
+     · thử lại 10 lần × 100ms (đủ cho một nhịp nhả handle của Windows);
+     · KHÔNG BAO GIỜ NÉM. Dọn dẹp không phải một khẳng định: một lần dọn hụt ở /tmp
+       không được phép biến ca đã xanh thành đỏ. Hụt thì in cảnh báo để còn thấy. */
+export async function rmTemp(dir) {
+  const { rm } = await import("node:fs/promises")
+  try {
+    await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  } catch (e) {
+    process.stdout.write(`  ⚠ khong don duoc thu muc tam ${dir}: ${e?.code ?? e?.message ?? e}\n`)
+  }
+}
+
 export function describe(name) { group = name }
 
 export async function it(name, fn) {

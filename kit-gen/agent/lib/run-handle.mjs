@@ -9,7 +9,7 @@ import { projectDir } from "./projects-dir.mjs"
 import { resolveEngine, prepareEngine, materializeStyles, buildCommand, diagnose, summarizeFailures } from "./engine.mjs"
 import { maybeAutoCover } from "./cover.mjs"
 import { thumbnail } from "./thumbs.mjs"
-import { IS_WIN, pythonCommand, killTree, winSpawnOpts } from "./platform.mjs"
+import { IS_WIN, pythonCommand, pythonSpawnOpts, killTree, winSpawnOpts } from "./platform.mjs"
 
 const HEARTBEAT_MS = 15000
 const MAX_BUFFER_EVENTS = 4000
@@ -549,7 +549,8 @@ export class RunHandle {
     const output = join(this.dir, "artifacts", `${job}.geometry.json`)
     const py = pythonCommand([tool, "--image", png, "--contract", join(pdir, "contract.json"), "--job", job, "--output", output])
     return new Promise(resolve => {
-      const child = spawn(py.cmd, py.args, { cwd: pdir, stdio: ["ignore", "pipe", "pipe"], ...winSpawnOpts() })
+      // pythonSpawnOpts(): công cụ này đọc contract.json (UTF-8, tiếng Việt) — xem platform.mjs.
+      const child = spawn(py.cmd, py.args, { cwd: pdir, stdio: ["ignore", "pipe", "pipe"], ...pythonSpawnOpts() })
       let text = ""
       child.stdout.on("data", b => { text += String(b) })
       child.on("error", () => resolve(null))

@@ -1,8 +1,8 @@
 /* suite-projects.mjs — §6.2 B: CRUD project trọn vòng + thùng rác 30 ngày + phục hồi
    + mã xác nhận 4 số ngoài băng (§3.4 lớp 8) + export .zip. */
-import { mkdir, writeFile, readFile, rm } from "node:fs/promises"
+import { mkdir, writeFile, readFile } from "node:fs/promises"
 import { join } from "node:path"
-import { describe, it, eq, ok, includes } from "./harness.mjs"
+import { describe, it, eq, ok, includes, rmTemp } from "./harness.mjs"
 import { readZip } from "../lib/zip.mjs"
 
 export async function run({ api, agent, wsRoot }) {
@@ -89,7 +89,7 @@ export async function run({ api, agent, wsRoot }) {
     eq(found.error.code, "PROJECT_BROKEN", "error.code")
     const one = await api("GET", `/api/projects/${badId}`)
     eq(one.status, 422, "GET một project hỏng = 422")
-    await rm(join(wsRoot, "projects", badId), { recursive: true, force: true })
+    await rmTemp(join(wsRoot, "projects", badId))
   })
   await it("dọn cache dẫn xuất KHÔNG chạm contract.json", async () => {
     const before = await api("GET", `/api/projects/${projectId}/contract`)

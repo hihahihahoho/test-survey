@@ -16,6 +16,11 @@ const WIN = process.platform === "win32"
 const CMD_UPDATE  = WIN ? "%LOCALAPPDATA%\\KitGen\\bin\\kitgen.cmd update"  : "~/.kitgen/bin/kitgen update"
 const CMD_RESTART = WIN ? "%LOCALAPPDATA%\\KitGen\\bin\\kitgen.cmd restart" : "~/.kitgen/bin/kitgen restart"
 const LOG_UPDATE  = WIN ? "%LOCALAPPDATA%\\KitGen\\update.log"              : "~/.kitgen/update.log"
+/* Nhãn home mặc định của Codex. Trên Windows `shortenPath` rút `C:\Users\<ai đó>\.codex`
+   thành `~\.codex` — dấu \ là ĐÚNG cho người dùng Windows, nên chỗ sai là ca kiểm ghim
+   cứng dấu /. (`~/.codex-img` ở ca trên KHÔNG đổi: nó là chuỗi người dùng tự nhập và
+   được lưu nguyên văn trong config, không đi qua phép rút gọn đường dẫn nào.) */
+const CODEX_HOME_DEFAULT = WIN ? "~\\.codex" : "~/.codex"
 
 export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
   // ─────────────────────────────────────────── 1. HEALTH
@@ -93,7 +98,7 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     await api("PATCH", "/api/image-profile", { body: { mode: "default" } })
     const d2 = await doctor(ws, { refresh: true })
     eq(d2.imageGen.profile, "default-home", "profile sau khi về mặc định")
-    eq(d2.imageGen.codexHomeLabel, "~/.codex", "nhãn rút gọn của home mặc định")
+    eq(d2.imageGen.codexHomeLabel, CODEX_HOME_DEFAULT, "nhãn rút gọn của home mặc định")
   })
 
   // ─────────────────────────────────────────── 1c. QUOTA CÒN LẠI (/api/usage)
@@ -346,6 +351,45 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     ok(!stillOpen, "fd của update.log đã đóng ở tiến trình cha (Windows: file còn bị khoá thì xoá được gì nữa)")
   })
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     LƯỢT SAU KHÔNG ĐƯỢC XOÁ VẾT CỦA LƯỢT TRƯỚC (máy chủ SP, 14/08).
+     Người dùng bấm [Cập nhật] hai lần: lượt 1 hỏng, lượt 2 xong. Đi tìm nguyên nhân
+     thì update.log chỉ còn ĐÚNG lượt 2 — `openSync(logFile, "w")` của chính lượt chữa
+     đã ghi đè bằng chứng của lượt hỏng. Nhật ký của một thao tác lặp lại được thì phải
+     cộng dồn; giữ kích thước là việc của `trimUpdateLog`.
+     ══════════════════════════════════════════════════════════════════════════ */
+  await it("hai lượt update ⇒ update.log GIỮ CẢ HAI, có vạch phân cách", async () => {
+    const fakeHome = join(tmp, "kitgen-home-twice")
+    mkdirSync(fakeHome, { recursive: true })
+    const { scheduleUpdate } = await import("../lib/update.mjs")
+    const spawnImpl = () => ({ on() {}, unref() {} })
+    scheduleUpdate({ kitgenHome: fakeHome, spawnImpl })
+    // Dấu vết của lượt 1 do CHÍNH INSTALLER ghi qua fd (ở đây giả lập bằng một dòng thật).
+    writeFileSync(join(fakeHome, "update.log"), "LƯỢT 1 CHẾT Ở BƯỚC TẢI\n", { flag: "a" })
+    scheduleUpdate({ kitgenHome: fakeHome, spawnImpl })
+
+    const log = readFileSync(join(fakeHome, "update.log"), "utf8")
+    ok(/LƯỢT 1 CHẾT Ở BƯỚC TẢI/.test(log), "vết của lượt hỏng vẫn còn sau khi lượt sau bắt đầu")
+    eq(log.match(/kitgen update \(do UI yêu cầu\)/g)?.length, 2, "đủ hai dòng mở đầu")
+    ok(/═{10}/.test(log), "có vạch phân cách giữa hai lượt")
+  })
+
+  await it("update.log không phình vô hạn — cắt phần ĐẦU, giữ phần gần nhất", async () => {
+    const fakeHome = join(tmp, "kitgen-home-trim")
+    mkdirSync(fakeHome, { recursive: true })
+    const logFile = join(fakeHome, "update.log")
+    const { trimUpdateLog } = await import("../lib/update.mjs")
+    writeFileSync(logFile, `RẤT CŨ\n${"x".repeat(40_000)}\nGẦN NHẤT\n`)
+
+    eq(trimUpdateLog(logFile, { maxBytes: 100_000 }), false, "dưới trần thì không đụng vào")
+    eq(trimUpdateLog(logFile, { maxBytes: 1000, keepBytes: 500 }), true, "vượt trần thì cắt")
+    const log = readFileSync(logFile, "utf8")
+    ok(/GẦN NHẤT/.test(log), "giữ phần CUỐI — lượt gần đây mới là lượt cần đọc")
+    ok(!/RẤT CŨ/.test(log), "phần đầu đã bị cắt")
+    ok(/đã cắt bớt/.test(log), "nói ra là đã cắt, không im lặng làm mất dữ liệu")
+    ok(log.length < 1000, `kích thước về dưới trần: ${log.length}`)
+  })
+
   await it("mất mạng KHÔNG thành lỗi 500 — trả ok:false + reason enum", async () => {
     const original = globalThis.fetch
     globalThis.fetch = async () => { throw new TypeError("fetch failed") }
@@ -361,6 +405,22 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
   })
 
   // ─────────────────────────────────────────── 2. CORS / HOST / preflight
+  describe("dừng lượt chạy")
+  /* HỢP ĐỒNG DỪNG LƯỢT CHẠY TRÊN WINDOWS. Chạy trên CẢ HAI nền vì đây là một quyết
+     định, không phải một hành vi phụ thuộc máy: `taskkill` thiếu /F chỉ gửi WM_CLOSE,
+     mà bash/python/codex là tiến trình console không có cửa sổ ⇒ không chết. Ba ca
+     dừng-run trên runner Windows đỏ vì đúng chỗ này (run 31793695016). */
+  await it("taskkill của Windows luôn mang /T và /F (Dừng phải THẬT SỰ dừng)", async () => {
+    const { taskkillArgs } = await import("../lib/platform.mjs")
+    for (const sig of ["SIGTERM", "SIGKILL"]) {
+      const a = taskkillArgs(4242, sig)
+      eq(a[0], "/PID", `${sig}: cờ đầu`)
+      eq(a[1], "4242", `${sig}: pid dạng chuỗi`)
+      ok(a.includes("/T"), `${sig}: /T — codex là tiến trình CHÁU của bash, thiếu /T là nó sống tiếp`)
+      ok(a.includes("/F"), `${sig}: /F — thiếu /F thì tiến trình console phớt lờ, Dừng chỉ là lời hứa suông`)
+    }
+  })
+
   describe("bảo mật vận chuyển")
   await it("Origin lạ bị 403 ORIGIN_NOT_ALLOWED (kể cả GET)", async () => {
     const r = await call("GET", "/health", { headers: { ...CLIENT, origin: "https://evil.example.com" } })

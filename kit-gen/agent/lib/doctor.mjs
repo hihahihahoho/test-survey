@@ -9,7 +9,7 @@ import { join } from "node:path"
 import { statfs } from "node:fs/promises"
 import { exists } from "./fsx.mjs"
 import { shortenPath } from "./redact.mjs"
-import { pythonCommand, winShellOpts, winSpawnOpts } from "./platform.mjs"
+import { pythonCommand, winShellOpts, winSpawnOpts, pythonEnv } from "./platform.mjs"
 
 const CACHE_MS = 60_000
 let cache = { at: 0, data: null }
@@ -26,7 +26,7 @@ function run(cmd, args, { timeout = 6000, env = {} } = {}) {
 }
 
 /** python3 trên Unix; python.exe của venv (KITGEN_PYTHON) trên Windows. */
-function runPy(args, opts) { const c = pythonCommand(args); return run(c.cmd, c.args, opts) }
+function runPy(args, opts) { const c = pythonCommand(args); return run(c.cmd, c.args, { ...opts, env: { ...(opts?.env ?? {}), ...pythonEnv() } }) }
 
 async function firstLineVersion(cmd, args = ["--version"]) {
   const r = await run(cmd, args, { timeout: 5000 })

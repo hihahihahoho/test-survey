@@ -35,7 +35,7 @@ import { projectDir } from "./projects-dir.mjs"
 import { readProject, saveProject } from "./projects.mjs"
 import { readContract } from "./contract.mjs"
 import { resolveEngine } from "./engine.mjs"
-import { IS_WIN, bashCommand, winSpawnOpts } from "./platform.mjs"
+import { IS_WIN, bashCommand, pythonEnv, winSpawnOpts } from "./platform.mjs"
 
 /** Thư mục + đường dẫn tương đối của ảnh bìa tự sinh. `files.mjs` mở đúng thư mục này. */
 export const COVER_DIR = "cover"
@@ -383,7 +383,8 @@ export async function startCover(ws, id, { imgHome = null, wait = false, force =
     await new Promise(resolve => {
       let child
       try {
-        child = spawn(b.cmd, b.args, { cwd: pdir, stdio: ["ignore", "pipe", "pipe"], env: { ...env, ...b.env }, ...winSpawnOpts() })
+        // pythonEnv(): cover.sh cũng gọi python3 (crop/ghép ảnh bìa) — xem platform.mjs.
+        child = spawn(b.cmd, b.args, { cwd: pdir, stdio: ["ignore", "pipe", "pipe"], env: { ...env, ...b.env, ...pythonEnv() }, ...winSpawnOpts() })
       } catch { return resolve() }
       const onData = buf => { lines.push(redactLine(String(buf))) }
       child.stdout.on("data", onData)

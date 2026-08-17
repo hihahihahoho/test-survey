@@ -2,7 +2,7 @@
    bundle /app/ same-origin (#6), cầu dò /bridge.html (#5), và kiểm KHÔNG rò secret. */
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
-import { describe, it, eq, ok, includes, pathExists, CLIENT, PAGES, PORT } from "./harness.mjs"
+import { describe, it, eq, ok, includes, pathExists, rmTemp, CLIENT, PAGES, PORT } from "./harness.mjs"
 
 export async function run({ api, call, agentDir, wsRoot }) {
   // ─────────────────────────────────────────── 10. IMPORT / bundle /app/ / redact
@@ -208,8 +208,7 @@ export async function run({ api, call, agentDir, wsRoot }) {
 
     const escape = await c("GET", "/app/js/../../../../etc/passwd", { headers: local })
     ok(!escape.text.includes("root:"), "không rò /etc/passwd qua /app/")
-    const { rm } = await import("node:fs/promises")
-    await rm(bundle, { recursive: true, force: true })
+    await rmTemp(bundle)
   })
 
   /* ── Bundle REACT build (Vite) tại /app/ ───────────────────────────────────
@@ -281,18 +280,18 @@ export async function run({ api, call, agentDir, wsRoot }) {
     })
     eq(health.status, 200, "bundle React gọi /health same-origin phải 200")
 
-    await rm(dist, { recursive: true, force: true })
+    await rmTemp(dist)
   })
 
   await it("BUNDLE VITE: dist thiếu index.html → rơi về bundle khác, KHÔNG trang trắng", async () => {
-    const { mkdtemp, rm } = await import("node:fs/promises")
+    const { mkdtemp } = await import("node:fs/promises")
     const { tmpdir } = await import("node:os")
     const empty = await mkdtemp(join(tmpdir(), "kitgen-empty-"))
     const { resolveBundleRoot } = await import("../routes/app.mjs")
     const ws = { kitgenDir: join(wsRoot, ".kitgen") }
     const picked = await resolveBundleRoot(ws, empty)
     ok(picked !== empty, "dist rỗng (không index.html) KHÔNG được chọn làm bundle")
-    await rm(empty, { recursive: true, force: true })
+    await rmTemp(empty)
   })
 
   await it("BUNDLE THẬT của web/: mọi tài nguyên index.html tham chiếu đều tải được (không 404, MIME đúng)", async () => {

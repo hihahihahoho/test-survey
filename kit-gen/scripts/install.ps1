@@ -147,7 +147,7 @@ function Invoke-Download([string] $url, [string] $dest) {
 # Chạy một lệnh ngoài và ném lỗi nếu exit code khác 0. `cmd @args` của PowerShell không
 # tự dừng khi lệnh ngoài lỗi (ErrorActionPreference không áp cho native command).
 function Invoke-Exe([string] $exe, [string[]] $exeArgs, [string] $what) {
-  & $exe @exeArgs
+  & $exe @exeArgs   # NATIVE-OK
   if ($LASTEXITCODE -ne 0) { Die "$what that bai (exit $LASTEXITCODE): $exe $($exeArgs -join ' ')" }
 }
 
@@ -167,8 +167,8 @@ function Invoke-ExeSoft([string] $exe, [string[]] $exeArgs, [switch] $Quiet) {
   $old = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
   try {
-    if ($Quiet) { & $exe @exeArgs 2>&1 | Out-Null }
-    else { & $exe @exeArgs 2>&1 | ForEach-Object { Write-Host "       $_" } }
+    if ($Quiet) { & $exe @exeArgs 2>&1 | Out-Null }   # NATIVE-OK
+    else { & $exe @exeArgs 2>&1 | ForEach-Object { Write-Host "       $_" } }   # NATIVE-OK
     return $LASTEXITCODE
   } catch {
     # Lệnh không tồn tại/không chạy được: cũng chỉ là "hỏng", không phải sập installer.
@@ -176,19 +176,26 @@ function Invoke-ExeSoft([string] $exe, [string[]] $exeArgs, [switch] $Quiet) {
   } finally { $ErrorActionPreference = $old }
 }
 
-# Hỏi phiên bản một trình Python. Trả '' nếu trình đó không chạy được (alias rỗng của
-# Microsoft Store, launcher không có bản được yêu cầu, PATH trỏ vào file đã xoá…).
-function Get-PyVersion([string] $exe, [string[]] $pre) {
+# Như Invoke-ExeSoft nhưng LẤY VỀ stdout. Trả @{ Code = <exit code>; Out = <stdout đã trim> }.
+function Invoke-ExeCapture([string] $exe, [string[]] $exeArgs) {
   $old = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
   try {
-    $probe = @()
-    if ($pre.Count -gt 0) { $probe += $pre }
-    $probe += @('-c', "import sys;print('%d.%d' % sys.version_info[:2])")
-    $out = & $exe @probe 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not $out) { return '' }
-    return ([string]($out | Select-Object -First 1)).Trim()
-  } catch { return '' } finally { $ErrorActionPreference = $old }
+    $out = & $exe @exeArgs 2>$null   # NATIVE-OK
+    return @{ Code = $LASTEXITCODE; Out = (($out | Out-String).Trim()) }
+  } catch { return @{ Code = 9009; Out = '' } } finally { $ErrorActionPreference = $old }
+}
+
+# Hỏi phiên bản một trình Python. Trả '' nếu trình đó không chạy được (alias rỗng của
+# Microsoft Store, launcher không có bản được yêu cầu, PATH trỏ vào file đã xoá…).
+function Get-PyVersion([string] $exe, [string[]] $pre) {
+  $probe = @()
+  if ($pre.Count -gt 0) { $probe += $pre }
+  # DẤU NHÁY: chuỗi Python này KHÔNG được chứa dấu nháy kép — xem chú thích ở [3/8].
+  $probe += @('-c', "import sys;print('%d.%d' % sys.version_info[:2])")
+  $r = Invoke-ExeCapture $exe $probe
+  if ($r.Code -ne 0 -or -not $r.Out) { return '' }
+  return ([string]($r.Out -split "`n" | Select-Object -First 1)).Trim()
 }
 
 # ── 0. đường dẫn & tham số ─────────────────────────────────────────────────────
@@ -373,8 +380,24 @@ $nodeExe  = Join-Path $nodeDir 'node.exe'
 $npmCmd   = Join-Path $nodeDir 'npm.cmd'
 $needNode = $true
 if (Test-Path -LiteralPath $nodeExe) {
-  $major = & $nodeExe -p 'Number(process.versions.node.split(".")[0])' 2>$null
-  if ($LASTEXITCODE -eq 0 -and [int]$major -ge 20) { $needNode = $false; Write-Ok "Node da co: $(& $nodeExe --version)" }
+  # ── HAI CÁI BẪY CÙNG NẰM TRÊN MỘT DÒNG (vòng 7 chết ở đây, install.ps1:376) ──
+  # ① DẤU NHÁY KÉP TRONG THAM SỐ. Bản cũ truyền cho node:
+  #        -p 'Number(process.versions.node.split(".")[0])'
+  #    PowerShell 5.1 dựng dòng lệnh cho tiến trình ngoài mà KHÔNG escape dấu " nằm
+  #    trong tham số ⇒ node nhận được `…split(.)[0]…`, tức là SyntaxError của chính
+  #    node, in ra `[eval]:1`. Cách chắc chắn nhất không phải là escape cho khéo mà là
+  #    ĐỪNG BAO GIỜ có dấu " trong tham số lệnh ngoài: hỏi node chuỗi phiên bản trần
+  #    rồi tự tách ở phía PowerShell.
+  # ② `2>$null` biến SyntaxError kia thành lỗi CHẤM DỨT (xem chú thích Invoke-ExeSoft),
+  #    nên installer chết luôn thay vì đi tiếp xuống nhánh tải Node mới.
+  # Vì sao vòng trước không thấy: khối này CHỈ chạy khi node.exe ĐÃ có sẵn, tức lần cài
+  # THỨ HAI trở đi. Lần cài đầu trên máy trắng không bao giờ đi vào đây.
+  $r = Invoke-ExeCapture $nodeExe @('-p', 'process.versions.node')
+  $nodeVer = $r.Out
+  if ($r.Code -eq 0 -and $nodeVer -match '^(\d+)\.') {
+    if ([int]$Matches[1] -ge 20) { $needNode = $false; Write-Ok "Node da co: v$nodeVer" }
+    else { Write-Host "  node.exe hien co la v$nodeVer (< 20) - tai lai" }
+  }
 }
 if ($needNode) {
   # Bo phan phoi Windows cua nodejs.org la ZIP co node.exe + npm.cmd NGAY THU MUC GOC
@@ -402,7 +425,7 @@ if ($needNode) {
   $inner = @(Get-ChildItem -LiteralPath $unz -Directory)[0]
   New-Dir (Split-Path -Parent $nodeDir)
   Move-Item -LiteralPath $inner.FullName -Destination $nodeDir
-  Write-Ok "Node $(& $nodeExe --version) · $nodeExe"
+  Write-Ok "Node v$((Invoke-ExeCapture $nodeExe @('-p', 'process.versions.node')).Out) · $nodeExe"
 }
 Invoke-Exe $nodeExe @('--check', (Join-Path $candidate 'agent\server.mjs')) 'kiem cu phap agent'
 
@@ -499,16 +522,20 @@ New-Dir $toolsPrefix
 $codexBin = $null
 $sysCodex = Get-Command codex -ErrorAction SilentlyContinue
 if ($sysCodex) {
-  & $sysCodex.Source --version 2>$null | Out-Null
-  if ($LASTEXITCODE -eq 0) { $codexBin = $sysCodex.Source; Write-Ok "dung Codex da co: $codexBin" }
+  # `codex --version` cua mot ban cai hong in ra stderr — voi `2>$null` + EAP='Stop'
+  # thi day la mot qua min nua y het [3/8]. Day la PHEP THU, hong la binh thuong.
+  if ((Invoke-ExeSoft $sysCodex.Source @('--version') -Quiet) -eq 0) { $codexBin = $sysCodex.Source; Write-Ok "dung Codex da co: $codexBin" }
   else { Write-Warn "co lenh codex tai $($sysCodex.Source) nhung --version that bai" }
 }
 if (-not $codexBin) {
   $localCodex = Join-Path $toolsPrefix 'node_modules\.bin\codex.cmd'
   if (-not (Test-Path -LiteralPath $localCodex)) {
     Write-Host '  npm install @openai/codex ...'
-    & $npmCmd install --silent --prefix $toolsPrefix '@openai/codex'
-    if ($LASTEXITCODE -ne 0) { Write-Warn 'cai Codex CLI that bai' }
+    # npm in warning/tien do ra stderr nhu com bua ⇒ bat buoc di qua Invoke-ExeSoft.
+    # KHONG -Quiet: npm hong thi phai doc duoc vi sao.
+    if ((Invoke-ExeSoft $npmCmd @('install', '--silent', '--prefix', $toolsPrefix, '@openai/codex')) -ne 0) {
+      Write-Warn 'cai Codex CLI that bai'
+    }
   }
   if (Test-Path -LiteralPath $localCodex) { $codexBin = $localCodex; Write-Ok "Codex rieng cua KitGen: $localCodex" }
 }
@@ -521,7 +548,7 @@ if (-not $codexBin) { Write-Block 'Codex CLI' 'Chay: npm i -g @openai/codex  (ro
 $resvgProbe = Join-Path $toolsPrefix 'node_modules\@resvg\resvg-wasm\index_bg.wasm'
 if (-not (Test-Path -LiteralPath $resvgProbe)) {
   Write-Host '  npm install @resvg/resvg-wasm ...'
-  & $npmCmd install --silent --prefix $toolsPrefix '@resvg/resvg-wasm'
+  [void](Invoke-ExeSoft $npmCmd @('install', '--silent', '--prefix', $toolsPrefix, '@resvg/resvg-wasm'))
 }
 if (Test-Path -LiteralPath $resvgProbe) { Write-Ok 'Trinh render khung xuong (@resvg/resvg-wasm)' }
 else { Write-Block 'Trinh render khung xuong' 'Chay: npm install --prefix <tools> @resvg/resvg-wasm. Thieu goi nay thi KHONG gen duoc anh.' }

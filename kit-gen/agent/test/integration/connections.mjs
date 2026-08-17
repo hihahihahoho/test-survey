@@ -219,5 +219,6 @@ hdr("5 · không rò thông tin nhạy cảm")
 }
 
 console.log(`\n${"═".repeat(78)}\nKẾT QUẢ MỐI NỐI: ${passes} pass · ${fails} FAIL\n${"═".repeat(78)}`)
-await rm(ws, { recursive: true, force: true })
+// maxRetries: Windows chua nha handle ngay sau khi tien trinh con chet (xem rmTemp).
+await rm(ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }).catch(() => {})
 process.exit(fails ? 1 : 0)

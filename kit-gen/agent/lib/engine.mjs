@@ -23,7 +23,7 @@ import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
 import { exists, writeJsonAtomic, ensureDir, copyFile } from "./fsx.mjs"
-import { IS_WIN, bashCommand, pythonCommand } from "./platform.mjs"
+import { IS_WIN, bashCommand, pythonCommand, pythonEnv } from "./platform.mjs"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO_DIR = resolve(HERE, "..", "..")
@@ -148,7 +148,9 @@ export function buildCommand(kind, projectDirAbs, { variants = [], sheets = null
     // bashCommand(): darwin/linux trả ĐÚNG {cmd:"bash", args:[abs], env:{}} như trước;
     // win32 trả bash.exe của Git for Windows + path dạng /c/… + PATH có coreutils.
     const b = bashCommand([join(projectDirAbs, "gen.sh")])
-    return { cmd: b.cmd, args: b.args, env: { ...env, ...b.env } }
+    // pythonEnv(): gen.sh có heredoc `python3 - <<PY` đọc styles.json (UTF-8, có tiếng
+    // Việt). Trên Windows thiếu biến này là engine chết ngay dòng đầu. Non-win trả {}.
+    return { cmd: b.cmd, args: b.args, env: { ...env, ...b.env, ...pythonEnv() } }
   }
   if (kind === "slice") {
     /* `--sheet=<id>` = CẮT LŨY TIẾN (slice.py: parse_cli). Không truyền `sheets` thì
@@ -156,7 +158,7 @@ export function buildCommand(kind, projectDirAbs, { variants = [], sheets = null
        DANH TỪ có sẵn trong contract (caller là run-handle, không phải client). */
     const only = Array.isArray(sheets) && sheets.length ? sheets.map(s => `--sheet=${s}`) : []
     const p = pythonCommand([join(projectDirAbs, "slice.py"), ...variants, ...only])
-    return { cmd: p.cmd, args: p.args, env }
+    return { cmd: p.cmd, args: p.args, env: { ...env, ...pythonEnv() } }
   }
   if (kind === "skeleton") {
     /* TRƯỚC 14/08 dòng này chạy `python3 skeleton.py` — tức nút "vẽ lại khung xương"

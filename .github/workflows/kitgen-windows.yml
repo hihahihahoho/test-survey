@@ -106,6 +106,47 @@ jobs:
           Write-Host 'OK   moi file .ps1 co ky tu ngoai ASCII deu co BOM'
           exit 0
 
+      # ── HAI LUẬT GỌI LỆNH NGOÀI, RÚT RA TỪ HAI LƯỢT CI ĐỎ (WINDOWS-PORT §8.4.1, §8.5) ──
+      # Cả hai đều là loại lỗi mà mắt người đọc mãi không thấy, nên phải để máy canh:
+      #   ① Mọi lệnh ngoài phải đi qua Invoke-Exe / Invoke-ExeSoft / Invoke-ExeCapture.
+      #      Gọi thẳng `& $exe … 2>$null` thì stderr thành ErrorRecord, mà EAP='Stop' coi
+      #      record đầu tiên là lỗi chấm dứt ⇒ một dòng Traceback vô hại giết cả installer.
+      #   ② Tham số của lệnh ngoài KHÔNG được chứa dấu nháy kép. PS 5.1 dựng dòng lệnh cho
+      #      tiến trình con mà không escape dấu " ⇒ tham số tới nơi đã mất dấu nháy
+      #      (node nhận `split(.)` → SyntaxError `[eval]:1`, đúng lỗi vòng 7).
+      # Ngoại lệ duy nhất: chính ba hàm bọc, đánh dấu bằng `# NATIVE-OK` ngay trên dòng đó.
+      - name: Luật gọi lệnh ngoài trong install.ps1
+        shell: bash
+        run: |
+          set -eu
+          f=kit-gen/scripts/install.ps1
+          rc=0
+          raw="$(perl -ne 'next if /NATIVE-OK/; next if /^\s*#/; next unless /&\s*[\$"'"'"']/; print "$.:$_"' "$f")"
+          if [ -n "$raw" ]; then
+            rc=1
+            echo "$raw" | while IFS= read -r l; do
+              n="${l%%:*}"
+              echo "::error file=$f,line=$n::goi lenh ngoai truc tiep. Dung Invoke-Exe (bat buoc xanh) / Invoke-ExeSoft (duoc phep hong) / Invoke-ExeCapture (can stdout)."
+            done
+          fi
+          q="$(perl -ne '
+            next if /^\s*#/;
+            my $p;
+            if (/-(?:c|e|p)."?\s*,\s*.([^\x27]*)\x27/) { $p = $1 }
+            elsif (/\s-(?:c|e|p)\s+\x27([^\x27]*)\x27/) { $p = $1 }
+            next unless defined $p;
+            next unless $p =~ /"/;
+            print "$.:$_"' "$f")"
+          if [ -n "$q" ]; then
+            rc=1
+            echo "$q" | while IFS= read -r l; do
+              n="${l%%:*}"
+              echo "::error file=$f,line=$n::tham so cua lenh ngoai co dau nhay kep. PS 5.1 khong escape no; doi sang nhay don, hoac hoi lenh mot chuoi tran roi tach o phia PowerShell."
+            done
+          fi
+          [ $rc -eq 0 ] && echo "OK   moi lenh ngoai deu di qua ham boc, khong tham so nao co dau nhay kep"
+          exit $rc
+
       # WINDOWS-PORT.md §8 ghi: install.ps1 CHƯA BAO GIỜ được kiểm cú pháp vì máy phát
       # triển là macOS không có pwsh. Đây chính là phép kiểm đó, bằng Windows PowerShell
       # 5.1 — đúng phiên bản mà `#Requires -Version 5.1` của script nhắm tới.

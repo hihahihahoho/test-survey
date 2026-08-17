@@ -203,13 +203,20 @@ trong prompt dễ bị model/JSON hiểu thành ký tự escape.
 `du -h` (dòng 385, 387) và `ls -la raw/` (dòng 418) có trong `<Git>\usr\bin` nên chạy
 được. Chỉ là **định dạng số** có thể khác. Không chặn. Không cần sửa.
 
-### 4.4 🟡 CẦN KIỂM — `slice.py` và các script Python
+### 4.4 🔴 ĐÃ XẢY RA THẬT (không còn là "cần kiểm") — `open()` của Python và bảng mã locale
+
+> **Vòng 7 đã trả lời câu hỏi này bằng máu**: `UnicodeDecodeError: 'charmap' codec can't decode
+> byte 0x8f` ngay dòng đầu của engine, kéo theo **10 ca đỏ** trong job 4 (§8.5.2).
+> Agent nay tiêm `PYTHONUTF8=1` + `PYTHONIOENCODING=utf-8` cho **mọi** tiến trình Python trên
+> Windows (`platform.mjs :: pythonEnv`), nên `slice.py` chạy **qua agent** đã an toàn.
+> Phần dưới vẫn còn nguyên giá trị cho người chạy `python slice.py` **bằng tay**.
 
 Chưa rà từng dòng (file đang có agent khác sửa). Cần kiểm ở §7 bước 7:
 
 - có mở file bằng `open(path)` **không** `encoding="utf-8"` không? Windows mặc định
   `cp1252`/`cp1258` ⇒ tên tiếng Việt trong `styles.json` sẽ vỡ. `json.load(open(...))`
-  trong `gen.sh` dòng 24 chính là ca này.
+  trong `gen.sh` dòng 24 chính là ca này. **← ĐÃ NỔ, xem §8.5.2.**
+  Chiều ngược lại cũng vậy: `print("→ …")` ra stdout CP1252 = `UnicodeEncodeError`.
 - có hard-code `/` trong đường dẫn ghi ra không (Python xử lý được `/` trên Windows nên
   thường vô hại).
 - có gọi `os.rename` đè lên file đang tồn tại không (`os.rename` trên Windows **ném lỗi**
@@ -636,7 +643,15 @@ Việc đầu tiên vì thế không phải là đoán, mà là **làm cho lần
 Đã thử ngay trên macOS: `KITGEN_TEST_BUDGET_MS=3000` ⇒ đồng hồ chết in đúng tên ca đang chạy
 và `PipeWrap ×4, ProcessWrap, Timeout` — tức handle của một tiến trình engine còn sống.
 
-**Nghi can đã vá sẵn (đọc mã, chưa có bằng chứng từ runner):** `child.on("close")` là đường
+> **VÒNG 7 ĐÃ TRẢ LỜI (đọc trước khi tin đoạn dưới).** Bộ ca chạy trọn 142/158 và **không
+> có một dòng `tien trinh da thoat nhung ong dan … chua dong` nào** trong log job 4 ⇒ lưới
+> an toàn ống-dẫn **CHƯA TỪNG NỔ**, và cái treo 74 phút của vòng 5 **không phải** do nó.
+> Nguyên nhân thật của lượt treo hoá ra là engine chết vì mã hoá (§8.5.2) làm mọi ca có
+> spawn phải chờ hết trần rồi mới bỏ, cộng độ chậm của Defender. Giữ lại bản vá vì lập luận
+> vẫn đúng (ống thừa kế là chuyện có thật trên Windows) và giá của nó bằng không, nhưng
+> **không được ghi công cho nó** — nó là bảo hiểm chưa dùng tới, không phải bản sửa lỗi.
+
+**Nghi can (đọc mã, đến vòng 8 vẫn CHƯA có bằng chứng từ runner):** `child.on("close")` là đường
 **duy nhất** đóng sổ một pha chạy, mà `'close'` đợi **mọi ống stdio đóng**, không phải đợi
 tiến trình chết. Trên Windows handle được **thừa kế**: `bash.exe` gọi codex/python, hai đứa
 cháu giữ nguyên đầu ghi của ống, nên bash chết rồi mà `'close'` vẫn không tới ⇒ `phaseDone`
@@ -657,6 +672,113 @@ Ngoài ra: `push` thêm bộ lọc `branches: '**'` (mọi nhánh, **trừ tag**
 `git push --tags` của release Mac lại đẻ thêm một lượt Windows trùng hệt lượt nhánh
 (tag `kitgen-v2.1.24` → run 31789513981 trùng run 31788056826), mà `concurrency` không gộp
 được vì khác `github.ref`.
+
+### 8.5 Vòng 7 (run 31793695016) — job 3 gần xong, và bộ ca **lần đầu chạy trọn**
+
+Job 1+2 xanh. Job 3 **"Cài lần 1" XANH TRỌN VẸN**: checklist máy-thiếu-Codex đúng, `py -3.13`
+được chọn đúng, `[5/8]` qua sạch. Job 4 hết treo — đồng hồ chết và tường thuật trực tiếp chạy
+đúng thiết kế: **142/158 PASS · 16 FAIL, mỗi ca có tên và có số mili-giây**. Từ chỗ "một tờ
+giấy trắng 74 phút" tới chỗ "16 câu hỏi cụ thể" chỉ mất một lượt.
+
+#### 8.5.1 🔴 Dấu nháy kép trong tham số lệnh ngoài — `[eval]:1`
+
+`install.ps1:376`, chỉ nổ ở **lần cài thứ hai** (khối này chỉ chạy khi `node.exe` đã có sẵn,
+nên máy trắng không bao giờ đi vào):
+
+```powershell
+$major = & $nodeExe -p 'Number(process.versions.node.split(".")[0])' 2>$null
+```
+
+Hai quả mìn chồng lên nhau:
+
+1. **PS 5.1 không escape dấu `"` khi dựng dòng lệnh cho tiến trình con.** Node nhận được
+   `…split(.)[0]…` ⇒ SyntaxError của chính node, in ra `[eval]:1`. Cách chắc chắn không phải
+   là escape cho khéo mà là **đừng bao giờ để dấu `"` trong tham số lệnh ngoài**: hỏi node
+   chuỗi phiên bản trần (`-p process.versions.node`) rồi tách ở phía PowerShell.
+2. `2>$null` biến SyntaxError kia thành **lỗi chấm dứt** — đúng căn bệnh §8.4.1, lần này
+   không phải do người viết bất cẩn mà do **cả file chưa có luật**.
+
+Nên vòng 8 đặt luật, và giao cho máy canh:
+
+* mọi lệnh ngoài đi qua `Invoke-Exe` (bắt buộc xanh) / `Invoke-ExeSoft` (được phép hỏng) /
+  `Invoke-ExeCapture` (cần stdout). Ngoại lệ duy nhất là ruột ba hàm đó, đánh dấu `# NATIVE-OK`;
+* bước CI **"Luật gọi lệnh ngoài trong install.ps1"** bắt cả hai luật (gọi thẳng, và dấu `"`
+  trong tham số). Đã thử ngược: dựng lại đúng hai dòng đã gây đỏ ở vòng 5 và vòng 7 thì bước
+  này đỏ đúng cả hai dòng, đúng số hiệu dòng.
+
+Cùng lượt quét ấy còn tìm ra **ba quả mìn chưa nổ**: `codex --version 2>$null` (bước `[6/8]`,
+sẽ chết đúng kiểu này với một bản Codex hỏng) và hai lời gọi `npm install` (npm in warning ra
+stderr như cơm bữa). Cả ba nay đi qua hàm bọc.
+
+#### 8.5.2 🔴 10/16 ca đỏ chỉ vì MỘT dòng: `open()` của Python không mặc định UTF-8
+
+Chứng cứ nằm trong `errorTail` của ca [110]:
+
+```
+UnicodeDecodeError: 'charmap' codec can't decode byte 0x8f in position 627
+    return codecs.charmap_decode(input, self.errors, decoding_table)[0]
+```
+
+`charmap` = bảng mã **CP1252 của locale Windows**. `open(path)` của Python **không** mặc định
+UTF-8, nó dùng bảng mã locale; mà `styles.json`, `contract.json`, `manifest.json` đều là UTF-8
+và đều có tiếng Việt ⇒ `json.load(open('styles.json'))` — dòng ĐẦU TIÊN của engine — nổ ngay.
+Chiều ngược lại cũng hỏng: `print("→ kits/manifest.json")` ra stdout CP1252 = `UnicodeEncodeError`.
+
+Engine chết ở dòng đầu ⇒ không job nào được liệt kê ⇒ **mọi ca có spawn engine đều đỏ**, mỗi ca
+theo một kiểu khác nhau ("có job.started", "expected [tet-main.png], got []", "hết 20000ms khi
+chờ: 2 tấm xong", "bìa bắt đầu vẽ"…). Đây cũng chính là lời giải thích cho **74 phút của vòng 5**:
+không phải kẹt, mà là mười mấy ca lần lượt chờ hết trần rồi mới chịu bỏ.
+
+Vá: `pythonEnv()` trong `platform.mjs` — `PYTHONUTF8=1` + `PYTHONIOENCODING=utf-8`, gate `win32`,
+gắn vào **mọi** chỗ spawn Python (gen.sh và cover.sh qua `buildCommand`/`drawOnce`, `slice.py`,
+công cụ đọc `contract.json`, `thumbs.mjs`, `doctor.mjs`). UTF-8 Mode đổi mặc định cho cả tiến
+trình nên vá được luôn `slice.py` thật mà không phải sửa từng lời gọi `open()`.
+
+**ĐÃ CHỨNG MINH TRÊN macOS bằng phép A/B**, không phải suy đoán — vì locale mới là thứ quyết
+định, không phải hệ điều hành:
+
+| | lệnh | kết quả |
+|---|---|---|
+| A | `LC_ALL=C PYTHONUTF8=0 node agent/test-agent.mjs` (vá vẫn gate win32) | **148/158 · 10 FAIL** — đúng 10 ca engine, đúng thông điệp (`ascii_decode` thay cho `charmap_decode`), đúng các dòng "hết 20000ms khi chờ" như runner |
+| B | y hệt A nhưng bỏ gate của `pythonEnv()` | **158/158 · 0 FAIL** |
+
+> `slice.py` thật vẫn nên ghi rõ `encoding="utf-8"` ở từng `open()` (§4.4) — cho người chạy tay
+> ngoài agent. Biến môi trường là lớp chắn, không phải lời bào chữa.
+> Fixture trong `agent/test-fixtures/` **cố ý giữ nguyên** `open()` trần: nó đang phản chiếu
+> đúng `slice.py` thật, sửa fixture cho đẹp là **giấu mất** lỗi của bản thật.
+
+#### 8.5.3 🔴 `taskkill` thiếu `/F` = nút Dừng chỉ là lời hứa
+
+Ba ca còn lại (`state.jobs khi đang chạy`, `dừng run đang chạy`, `[C-01] xoá project khi đang
+chạy`) hết giờ vì lượt chạy **không bao giờ chuyển sang `cancelled`**. Nguyên nhân nằm ở
+`killTree`: `taskkill /PID <pid> /T` **không kèm `/F`** chỉ POST `WM_CLOSE` tới **cửa sổ** của
+tiến trình. `bash.exe`, `python.exe`, `codex`, `sleep` là tiến trình **console không có cửa sổ**
+⇒ taskkill in "SUCCESS: Sent termination signal" rồi không có gì xảy ra cả.
+
+Hậu quả **trên máy người dùng**, không chỉ trong test: bấm Dừng, UI báo đã dừng, engine chạy
+tiếp và **vẫn đốt quota** — đúng cái mà `/T` sinh ra để tránh. Đường `DELETE project` còn tệ
+hơn nửa: nó `cancel({ waitMs: 5000 })` nên phải đợi hết 5s rồi mới leo thang `/F`.
+
+Thêm `/F` **không hề mạnh tay hơn mã cũ**: `child.kill("SIGTERM")` của Node trên Windows vốn
+đã gọi thẳng `TerminateProcess` — Windows không có tín hiệu để mà lịch sự. Bản thiếu `/F` mới
+là bản **yếu hơn** mã cũ, và đó chính là lỗi. Nay `taskkillArgs()` luôn trả `/T /F`.
+
+Khoá lại bằng ca chạy **trên cả hai nền** (`suite-system`, nhóm "dừng lượt chạy"): đây là một
+**quyết định**, không phải hành vi phụ thuộc máy. Đã chứng minh ca này bắt được lỗi: bỏ `/F` đi
+thì **158/159**, trả lại thì **159/159**.
+
+#### 8.5.4 🟡 Hai ca dọn dẹp và một nhãn đường dẫn
+
+* **`ENOTEMPTY` khi dọn thư mục tạm CỦA CHÍNH BỘ CA** (`kitgen-bundle-*/js`,
+  `kitgen-vite-*/assets`). Retry của `fsx.mjs` (§8.3.2) chỉ chữa **mã sản xuất**; các suite tự
+  gọi `rm()` trần thì không ai đỡ. Mọi khẳng định trong hai ca đó đều đã xanh — thứ giết ca là
+  **cái chổi**. Nay có `rmTemp()` dùng chung trong `harness.mjs`: retry 10×100ms và **không bao
+  giờ ném** (dọn dẹp không phải một khẳng định; hụt thì in cảnh báo).
+* **`~/.codex` vs `~\.codex`.** `shortenPath` rút `C:\Users\<ai đó>\.codex` thành `~\.codex` —
+  **đúng** cho người dùng Windows; chỗ sai là ca kiểm ghim cứng dấu `/`. Ghim đúng chữ cho cả
+  hai nền như §9.1-b. (`~/.codex-img` ở ca ngay trên **không** đổi: nó là chuỗi người dùng tự
+  nhập, lưu nguyên văn trong config, không đi qua phép rút gọn nào — khác biệt này chính là
+  thứ khẳng định chẩn đoán đúng.)
 
 ---
 
@@ -699,8 +821,13 @@ Ngoài ra: `push` thêm bộ lọc `branches: '**'` (mọi nhánh, **trừ tag**
 | f | `scripts/install.ps1` (`Invoke-ExeSoft`, `Get-PyVersion`, `[5/8]`) | Vòng 5: `2>$null` + `EAP='Stop'` biến `Traceback` của phép thử import thành lỗi chấm dứt, installer chết trước khi kịp `pip install` — xem §8.4.1 | mọi lệnh "được phép hỏng" đi qua `Invoke-ExeSoft`; chọn Python 3.13→3.12→3.11 rồi mới lui về `py -3` kèm cảnh báo (§8.4.2) |
 | g | `lib/run-handle.mjs`, `lib/cover.mjs` | Vòng 5: `'close'` đợi ống stdio đóng, mà trên Windows tiến trình **cháu** thừa kế ống ⇒ pha chạy/job bìa có thể không bao giờ đóng sổ — xem §8.4.3 | gate `win32`: có `'exit'` mà 5s sau chưa `'close'` thì `destroy()` ống rồi đóng sổ, có log nêu lý do |
 | h | `test/harness.mjs`, `test-agent.mjs`, workflow | Vòng 5: job 4 treo 74 phút **không một dòng log**; GitHub để job chạy tới 6 tiếng | tường thuật trực tiếp khi có `CI`; đồng hồ chết `KITGEN_TEST_BUDGET_MS` in ca đang kẹt + handle còn sống; `timeout-minutes` cho cả 4 job |
+| i | `scripts/install.ps1` + bước CI mới | Vòng 7: dấu `"` trong tham số lệnh ngoài ⇒ node báo `[eval]:1`; `2>$null` biến nó thành lỗi chết — xem §8.5.1 | ba hàm bọc `Invoke-Exe*` là đường **bắt buộc**; bỏ hết dấu `"` khỏi tham số; bước CI canh cả hai luật, đã thử ngược bằng chính hai dòng lịch sử |
+| j | `lib/platform.mjs` (`pythonEnv`, `pythonSpawnOpts`), `engine.mjs`, `cover.mjs`, `thumbs.mjs`, `doctor.mjs`, `run-handle.mjs` | Vòng 7: `open()` của Python dùng bảng mã locale ⇒ `UnicodeDecodeError: 'charmap'` ngay dòng đầu của engine, kéo theo 10/16 ca đỏ — xem §8.5.2 | `PYTHONUTF8=1` + `PYTHONIOENCODING=utf-8` gate `win32` ở **mọi** chỗ spawn Python; chứng minh bằng A/B trên macOS với locale thù địch |
+| k | `lib/platform.mjs` (`taskkillArgs`) | Vòng 7: `taskkill` thiếu `/F` không giết nổi tiến trình console ⇒ nút Dừng không dừng, quota vẫn cháy — xem §8.5.3 | luôn `/T /F`; ca kiểm chạy trên cả hai nền, đã chứng minh nó bắt được lỗi (158/159 khi bỏ `/F`) |
+| l | `test/harness.mjs` (`rmTemp`), `suite-import`, `suite-projects`, `integration/connections` | Vòng 7: `ENOTEMPTY` khi các suite tự dọn thư mục tạm — retry của `fsx.mjs` chỉ phủ mã sản xuất | một cái chổi dùng chung: retry 10×100ms và **không bao giờ ném** |
 
-Mọi bản vá phía agent (a, b, e, g, h) đã được đo lại trên macOS: `node agent/test-agent.mjs` → **158/158 PASS · 0 FAIL**.
+Mọi bản vá phía agent (a, b, e, g, h, j, k, l) đã được đo lại trên macOS:
+`node agent/test-agent.mjs` → **159/159 PASS · 0 FAIL** (158 ca cũ + ca `taskkill` mới).
 
 ### 9.2 Điểm phải soi ở lượt CI kế tiếp (chưa có bằng chứng, đừng đoán)
 
@@ -735,3 +862,19 @@ Git-Bash thấy `python3` qua shim, job 4 chạy tới được bộ ca. Điểm
    thiếu wheel ⇒ cân nhắc kẹp phiên bản chặt hơn (hoặc ghi vào §6 như một giới hạn đã biết).
 8. **Defender.** So thời gian job 4 lượt này với 74 phút của lượt trước để biết phần nào của
    độ chậm là do quét thời gian thực — con số đó cũng chính là thứ **user Windows thật** phải chịu.
+
+*(Cập nhật sau vòng 7 — bốn điểm trên đã trả lời xong: **5** = BÒ, không kẹt: engine chết ngay
+dòng đầu vì mã hoá (§8.5.2) nên các ca chờ hết trần rồi mới bỏ; **6** = **KHÔNG nổ**, giả thuyết
+ống-dẫn chưa được xác nhận, đã gỡ ghi công ở §8.4.3; **7** = `py -3.13` được chọn, `[5/8]` xanh
+trọn, chưa cần kẹp chặt hơn; **8** = chưa đo được vì lượt trước còn đỏ vì lý do khác. Ba câu hỏi
+của vòng 8:)*
+
+9. **16 ca đỏ có xanh hết không?** Bốn nhóm nguyên nhân của §8.5 đều đã vá; nhóm mã hoá đã
+   chứng minh bằng A/B trên macOS, nhóm `taskkill` thì **chỉ runner mới phán được** (ca kiểm
+   trên Mac chỉ khoá được *quyết định* `/T /F`, không chứng minh được taskkill giết thật).
+   Còn đỏ ⇒ đọc `errorTail` chứ đừng đọc tên ca: một dòng Traceback nói nhiều hơn mười cái tên.
+10. **`[6/8]` và `[7/8]` của "Cài lần 2"** lần đầu được chạy tới: `npm install @resvg/resvg-wasm`
+    thật, `codex.cmd` giả, `kitgen.cmd`/`kitgen-hidden.vbs` sinh ra. Ba lời gọi lệnh ngoài ở đó
+    vừa được bọc lại vòng này nhưng **chưa từng chạy lần nào**.
+11. **Thời gian job 4.** Nay có số mili-giây từng ca. Ca nào chậm hơn macOS hàng chục lần thì
+    đó là chỗ spawn tiến trình — dữ liệu để quyết định có phải giảm số lần spawn trong bộ ca không.

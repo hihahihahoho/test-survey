@@ -116,6 +116,39 @@ export function pythonCommand(args = []) {
   return { cmd: process.env.KITGEN_PYTHON || "python", args }
 }
 
+/**
+ * Biến môi trường BẮT BUỘC cho mọi tiến trình Python trên Windows. Rỗng trên non-win.
+ *
+ * `open(path)` của Python KHÔNG mặc định UTF-8: nó dùng bảng mã của locale, mà locale
+ * mặc định của Windows tiếng Việt/Anh là CP1252/CP1258. `styles.json`, `contract.json`,
+ * `manifest.json` đều là UTF-8 và đều có tiếng Việt ⇒ `json.load(open(...))` nổ ngay:
+ *     UnicodeDecodeError: 'charmap' codec can't decode byte 0x8f in position 627
+ * Chiều ngược lại cũng hỏng: `print("→ kits/manifest.json")` ra stdout CP1252 =
+ * UnicodeEncodeError. ĐÃ ĐO ĐƯỢC trên runner (run 31793695016, job 4): mọi ca có
+ * spawn engine đều đỏ chỉ vì dòng `json.load(open('styles.json'))` trong engine.
+ *
+ * `PYTHONUTF8=1` (UTF-8 Mode, Python 3.7+) đổi mặc định của `open()` VÀ của stdio sang
+ * UTF-8 cho CẢ tiến trình — vá được cả `slice.py`, `skeleton.py` lẫn mọi heredoc python
+ * trong gen.sh/cover.sh mà không phải sửa từng lời gọi `open()`. `PYTHONIOENCODING`
+ * chốt thêm phần stdio phòng khi UTF-8 Mode bị tắt bằng `-X utf8=0`.
+ *
+ * Đây là LỚP CHẮN, không phải lời bào chữa: `slice.py` vẫn nên ghi rõ `encoding="utf-8"`
+ * ở từng lời gọi `open()` (WINDOWS-PORT §4.4) cho người chạy tay ngoài agent.
+ */
+export function pythonEnv() {
+  return IS_WIN ? { PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" } : {}
+}
+
+/**
+ * Options cho `spawn` một tiến trình Python: winSpawnOpts + môi trường UTF-8.
+ * Trên darwin/linux trả `{}` — ĐÚNG thứ mà `...winSpawnOpts()` trả trước đây, nên chỗ
+ * gọi không đổi một chút hành vi nào ngoài win32.
+ */
+export function pythonSpawnOpts() {
+  if (!IS_WIN) return {}
+  return { ...winSpawnOpts(), env: { ...process.env, ...pythonEnv() } }
+}
+
 /* ── 4. spawn/exec options ───────────────────────────────────────────────── */
 
 /** Cửa sổ console đen nhấp nháy mỗi lần spawn là lỗi UX trên Windows. */
@@ -140,11 +173,31 @@ export function winShellOpts(cmd) {
  * Bắt buộc phải /T: codex là tiến trình CHÁU của bash, giết mỗi bash thì codex
  * vẫn chạy tiếp và vẫn đốt quota sau khi người dùng đã bấm Dừng.
  */
+/**
+ * Tham số cho `taskkill`. LUÔN có cả /T và /F, kể cả khi được xin SIGTERM "nhẹ nhàng".
+ *
+ * VÌ SAO KHÔNG CÓ BẢN NHẸ NHÀNG TRÊN WINDOWS: `taskkill` không kèm /F chỉ POST WM_CLOSE
+ * tới cửa sổ của tiến trình. Tiến trình CONSOLE (bash.exe, python.exe, codex, sleep)
+ * KHÔNG có cửa sổ và KHÔNG có vòng lặp thông điệp ⇒ taskkill in ra "SUCCESS: Sent
+ * termination signal" rồi… không có gì xảy ra cả. Người dùng bấm Dừng, agent báo đã
+ * dừng, mà engine vẫn chạy tiếp và vẫn đốt quota — đúng cái mà /T sinh ra để tránh.
+ * ĐÃ ĐO ĐƯỢC trên runner (run 31793695016): ba ca dừng-run/xoá-project-khi-đang-chạy
+ * đều hết giờ vì lượt chạy không bao giờ chuyển sang "cancelled".
+ *
+ * Thêm /F cũng KHÔNG hề mạnh tay hơn mã cũ: `child.kill("SIGTERM")` của Node trên
+ * Windows vốn đã gọi thẳng TerminateProcess — Windows không có tín hiệu để mà lịch sự.
+ * Bản không /F mới là bản YẾU HƠN mã cũ, và đó chính là lỗi.
+ * (`sig` giữ lại trong chữ ký cho khớp POSIX; trên Windows nó không đổi được gì.)
+ */
+export function taskkillArgs(pid, sig = "SIGTERM") {
+  void sig
+  return ["/PID", String(pid), "/T", "/F"]
+}
+
 export function killTree(child, sig = "SIGTERM") {
   if (!child?.pid) return
   if (IS_WIN) {
-    const args = ["/PID", String(child.pid), "/T"]
-    if (sig === "SIGKILL") args.push("/F")
+    const args = taskkillArgs(child.pid, sig)
     try {
       const t = spawn("taskkill", args, { stdio: "ignore", windowsHide: true })
       t.on("error", () => { try { child.kill() } catch { /* đã chết */ } })
