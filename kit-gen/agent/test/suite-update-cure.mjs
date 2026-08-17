@@ -6,42 +6,16 @@ import { spawn } from "node:child_process"
 import { chmod, mkdir, realpath, readFile, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { delimiter, dirname, join, relative } from "node:path"
 import { describe, it, eq, includes, ok } from "./harness.mjs"
-import { findBash, toBashPath } from "../lib/platform.mjs"
+import { bashEnv, findBash, toBashPath } from "../lib/platform.mjs"
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 const IS_WIN = process.platform === "win32"
 
 const CASE_167_BUDGET_MS = 20_000
+const BASH_REALPATH_TIMEOUT_MS = 10_000
 
 function msysPath(path) {
   return IS_WIN ? toBashPath(path) : String(path)
-}
-
-function msysPathList(value, bashExe) {
-  if (!IS_WIN) return String(value ?? "")
-  const entries = String(value ?? "").split(delimiter).filter(Boolean)
-  if (bashExe && /^[A-Za-z]:[\\/]/.test(bashExe)) {
-    const gitRoot = dirname(dirname(bashExe))
-    const gitDirs = [join(gitRoot, "usr", "bin"), join(gitRoot, "mingw64", "bin"), join(gitRoot, "bin")]
-    entries.splice(entries.length ? 1 : 0, 0, ...gitDirs)
-  }
-  return entries.map(msysPath).join(":")
-}
-
-/* Node tạo fixture bằng đường dẫn Win32; Git Bash phải nhận toàn bộ path dạng
-   MSYS. Không dùng shell quoting để đổi path: truyền từng arg/env trực tiếp. */
-function bashEnv(env, bashExe) {
-  if (!IS_WIN) return env
-  const out = { ...env }
-  for (const key of [
-    "HOME", "KITGEN_HOME", "KITGEN_WORKSPACE", "KITGEN_UPDATE_LOCK", "KITGEN_UPDATE_TXN",
-    "FAKE_LAUNCHCTL_STATE", "TMPDIR", "TEMP", "TMP",
-  ]) {
-    if (out[key]) out[key] = msysPath(out[key])
-  }
-  out.PATH = msysPathList(out.PATH, bashExe)
-  out.MSYS = "winsymlinks:nativestrict"
-  return out
 }
 
 function bashForTest() {
@@ -79,9 +53,30 @@ async function fixtureRealpath(path, env) {
   let error = ""
   child.stdout.on("data", b => { output += b.toString() })
   child.stderr.on("data", b => { error += b.toString() })
-  const result = await childClose(child, 3_000, "bash realpath")
+  const result = await childClose(child, BASH_REALPATH_TIMEOUT_MS, "bash realpath")
   if (result.code !== 0) throw new Error(`bash realpath rc=${result.code}: ${error.trim()}`)
   return msysPath(output.trim())
+}
+
+function fromBashPath(path) {
+  const value = String(path ?? "")
+  if (!IS_WIN) return value
+  const drive = /^\/([A-Za-z])\/(.*)$/.exec(value)
+  return drive ? `${drive[1].toUpperCase()}:\\${drive[2].replaceAll("/", "\\")}` : value
+}
+
+function comparablePath(path) {
+  const value = String(path ?? "").trim()
+  if (!value) return ""
+  return toBashPath(value).replace(/[\\/]+$/, "").toLowerCase()
+}
+
+function stagedSpawnPath(spawned) {
+  if (!IS_WIN) return spawned?.args?.[4]
+  const command = String(spawned?.args?.[3] ?? "")
+  return [...command.matchAll(/"([^"]+)"/g)]
+    .map(match => match[1])
+    .find(path => /[\\/]install\.(?:sh|ps1)$/i.test(path))
 }
 
 async function symlinkDir(target, link) {
@@ -289,16 +284,16 @@ export async function run({ tmp, agentDir }) {
     })
     eq(scheduled.status, "started", "scheduler nhận lượt update")
     ok(spawned, "scheduler phải spawn installer")
-    const stagedPath = IS_WIN
-      ? /-File\s+"([^"]+)"/i.exec(spawned.args[3])?.[1]
-      : spawned.args[4]
-    ok(stagedPath && stagedPath !== join(stagedFixture.root, "install.sh"), "spawn dùng đường dẫn tạm, không dùng install.sh gốc")
+    const stagedPath = stagedSpawnPath(spawned)
+    const stagedNodePath = fromBashPath(stagedPath)
+    ok(stagedPath && comparablePath(stagedPath) !== comparablePath(join(stagedFixture.root, "install.sh")),
+      "spawn dùng đường dẫn tạm, không dùng install.sh gốc")
     const [sourceStat, stagedStat] = await Promise.all([
       stat(join(stagedFixture.root, "install.sh")),
-      stat(stagedPath),
+      stat(stagedNodePath),
     ])
     ok(sourceStat.ino !== stagedStat.ino, "inode bản spawn tách khỏi inode gốc")
-    const stagedHash = createHash("sha256").update(await readFile(stagedPath)).digest("hex")
+    const stagedHash = createHash("sha256").update(await readFile(stagedNodePath)).digest("hex")
     const sourceHash = createHash("sha256").update(await readFile(join(stagedFixture.root, "install.sh"))).digest("hex")
     eq(stagedHash, sourceHash, "bản tạm là snapshot nguyên vẹn trước khi chạy")
     const result = await childClose(child, 8_000, "scheduler installer")
@@ -307,7 +302,7 @@ export async function run({ tmp, agentDir }) {
     const finalHash = createHash("sha256").update(await readFile(join(stagedFixture.root, "install.sh"))).digest("hex")
     ok(finalHash !== stagedHash, "installer cũ có thể thay file gốc nhưng không phá bản đang chạy")
     let stagedGone = true
-    try { await stat(stagedPath); stagedGone = false } catch { /* cleanup đúng */ }
+    try { await stat(stagedNodePath); stagedGone = false } catch { /* cleanup đúng */ }
     ok(stagedGone, "file tạm được dọn sau khi installer thoát")
     resetUpdateInstallLock({ kitgenHome: stagedFixture.root })
   })

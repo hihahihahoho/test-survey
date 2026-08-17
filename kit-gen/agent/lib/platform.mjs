@@ -16,6 +16,7 @@
    ════════════════════════════════════════════════════════════════════════════ */
 import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
 
 export const IS_WIN = process.platform === "win32"
@@ -35,6 +36,43 @@ export function toBashPath(p) {
   const m = /^([A-Za-z]):\//.exec(s)
   if (m) s = "/" + m[1].toLowerCase() + "/" + s.slice(m[0].length)
   return s
+}
+
+/* Bộ env duy nhất cho MỌI bash.exe trên Windows.
+   Git Bash không tự dựng /tmp khi được spawn từ Node/cmd với env thô. Temp path
+   phải là dạng MSYS; PATH cũng phải dùng ':' và có đủ coreutils của Git. */
+function msysPathList(value, bashExe) {
+  if (!IS_WIN) return String(value ?? "")
+  const entries = String(value ?? "").split(";").filter(Boolean)
+  if (bashExe && /^[A-Za-z]:[\\/]/.test(bashExe)) {
+    const gitRoot = dirname(dirname(bashExe))
+    const gitDirs = [join(gitRoot, "usr", "bin"), join(gitRoot, "mingw64", "bin"), join(gitRoot, "bin")]
+    entries.splice(entries.length ? 1 : 0, 0, ...gitDirs)
+  }
+  return entries.map(toBashPath).join(":")
+}
+
+export function bashEnv(env = {}, bashExe = null) {
+  if (!IS_WIN) return env
+  const out = { ...env }
+  for (const key of [
+    "HOME", "KITGEN_HOME", "KITGEN_WORKSPACE", "KITGEN_UPDATE_LOCK", "KITGEN_UPDATE_TXN",
+    "FAKE_LAUNCHCTL_STATE",
+  ]) {
+    if (out[key]) out[key] = toBashPath(out[key])
+  }
+  /* `/tmp` is not reliable in a bash.exe started by cmd.exe. Prefer an inherited
+     Windows temp dir; fall back to Node's known-valid temp dir. */
+  const rawTemp = [out.TEMP, out.TMP, out.TMPDIR]
+    .map(value => String(value ?? "").trim())
+    .find(value => value && !/^\/tmp(?:\/|$)/i.test(value)) || tmpdir()
+  const temp = toBashPath(rawTemp)
+  out.TMPDIR = temp
+  out.TMP = temp
+  out.TEMP = temp
+  out.PATH = msysPathList(out.PATH, bashExe)
+  out.MSYS = "winsymlinks:nativestrict"
+  return out
 }
 
 /* ── 2. Bash (Git for Windows) ───────────────────────────────────────────── */
@@ -102,7 +140,7 @@ export function bashCommand(paths) {
   if (!IS_WIN) return { cmd: "bash", args: paths, env: {} }
   const bash = findBash()
   if (!bash) return { cmd: "bash", args: paths, env: {} }
-  return { cmd: bash, args: paths.map(toBashPath), env: { PATH: bashEnvPath(bash) } }
+  return { cmd: bash, args: paths.map(toBashPath), env: bashEnv({ ...process.env, PATH: bashEnvPath(bash) }, bash) }
 }
 
 /* ── 3. Python ───────────────────────────────────────────────────────────── */

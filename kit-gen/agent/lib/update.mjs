@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { IS_WIN, defaultKitgenHome, toBashPath, winSpawnOpts } from "./platform.mjs"
+import { IS_WIN, bashEnv, defaultKitgenHome, findBash, toBashPath, winSpawnOpts } from "./platform.mjs"
 import { redactLine } from "./redact.mjs"
 
 const MANIFEST_URL = process.env.KITGEN_RELEASE_MANIFEST || "https://raw.githubusercontent.com/hihahihahoho/test-survey/feat/kitgen-local-runtime/kit-gen/release.json"
@@ -385,19 +385,21 @@ export function scheduleUpdate({ kitgenHome = defaultKitgenHome(), spawnImpl = s
 
   let child
   try {
-    const env = {
+    const baseEnv = {
       ...process.env,
       KITGEN_HOME: kitgenHome,
       KITGEN_UPDATE_LOCK: updateLockDir(kitgenHome),
       KITGEN_UPDATE_LOCK_TOKEN: token,
     }
+    const bashExe = process.env.KITGEN_BASH || findBash() || "bash.exe"
+    const env = IS_WIN && !staged.powershell ? bashEnv(baseEnv, bashExe) : baseEnv
     child = IS_WIN
       // Không có `sh` trên Windows. cmd.exe tách hẳn khỏi tiến trình agent, `timeout` là
       // bản Windows của `sleep 1`; install.ps1 cũng chạy từ inode tạm.
       ? spawnImpl(process.env.ComSpec || "cmd.exe",
         ["/d", "/s", "/c", staged.powershell
           ? `timeout /t 1 /nobreak >nul & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${staged.path}" -Update -KitgenHome "${kitgenHome}"`
-          : `timeout /t 1 /nobreak >nul & "${process.env.KITGEN_BASH || "bash.exe"}" "${toBashPath(staged.path)}" --update`],
+          : `timeout /t 1 /nobreak >nul & "${bashExe}" "${toBashPath(staged.path)}" --update`],
         { detached: true, stdio: ["ignore", out, out], env, ...winSpawnOpts() })
       : spawnImpl("sh", ["-c", 'sleep 1; if [ -f "$1/config.env" ]; then . "$1/config.env"; fi; exec "$2" --update', "kitgen-update", kitgenHome, staged.path],
         { detached: true, stdio: ["ignore", out, out], env })
