@@ -7,16 +7,21 @@
  *  ③ prompt nêu ĐÚNG TOẠ ĐỘ vùng tiêu đề và CẤM vẽ chữ;
  *  ④ ảnh bìa hỏng KHÔNG kéo lượt gen xuống thất bại, và không cướp ảnh bìa user tự chọn.
  */
-import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { execFile as execFileCb } from "node:child_process"
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises"
+import { homedir } from "node:os"
+import { promisify } from "node:util"
 import { join } from "node:path"
 import {
   describe, it, eq, ok, includes, waitFor, pathExists,
-  makeClient, fakeDoctor, CLIENT, PAGES, PORT,
+  makeClient, fakeDoctor, CLIENT, PAGES, PORT, rmTemp,
 } from "./harness.mjs"
 import { createAgent } from "../server.mjs"
 import {
-  TITLE_ZONE, COVER_REL, buildCoverPrompt, titleZonePixels, collectBranding,
+  TITLE_ZONE, COVER_REL, buildCoverPrompt, titleZonePixels, collectBranding, expandHomePath,
 } from "../lib/cover.mjs"
+
+const execFile = promisify(execFileCb)
 
 /** Contract nhỏ có đủ chất liệu nhận diện: màu thương hiệu, mascot, tấm dáng, style "bẫy". */
 const BRANDED = {
@@ -82,6 +87,47 @@ export async function run({ api, wsRoot, agentDir }) {
     includes(prompt, "no chroma-key colour", "nói rõ không dùng nền chroma-key")
     ok(!/STRICT grid/.test(prompt), "KHÔNG kéo theo luật lưới của sprite sheet")
     includes(prompt, "FULL-BLEED", "nền tràn viền")
+  })
+
+  await it("expandHomePath biến nhãn ~/.codex-img thành đường dẫn thật", async () => {
+    eq(expandHomePath("~/.codex-img"), join(homedir(), ".codex-img"), "mở rộng profile ảnh")
+    eq(expandHomePath("/tmp/.codex-img"), "/tmp/.codex-img", "không đụng đường dẫn tuyệt đối")
+  })
+
+  await it("cover.sh mở rộng IMG_HOME=~ trước auth check — shim codex, 0 quota", async () => {
+    const root = await mkdtemp(join(wsRoot, "cover-shim-"))
+    try {
+      const fakeHome = join(root, "home")
+      const fakeBin = join(root, "bin")
+      const project = join(root, "project")
+      await mkdir(join(fakeHome, ".codex-img"), { recursive: true })
+      await mkdir(join(fakeBin), { recursive: true })
+      await mkdir(join(project, "prompts"), { recursive: true })
+      await writeFile(join(fakeHome, ".codex-img", "auth.json"), "{}\n")
+      await writeFile(join(project, "prompts", "cover.txt"), "COVER_SHIM\n")
+      await writeFile(join(fakeBin, "codex"), [
+        "#!/usr/bin/env bash",
+        "set -eu",
+        "printf 'FAKE-CODEX' > cover/cover.raw.png",
+        "printf '%s\\n' \"$*\" > logs/fake-codex.args",
+        "exit 0",
+        "",
+      ].join("\n"), { mode: 0o755 })
+      const { stdout, stderr } = await execFile("bash", [join(agentDir, "..", "cover.sh"), project], {
+        env: {
+          ...process.env,
+          HOME: fakeHome,
+          IMG_HOME: "~/.codex-img",
+          PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+        },
+        maxBuffer: 1 << 20,
+      })
+      includes(`${stdout}\n${stderr}`, "OK  cover", "cover chạy qua auth check")
+      ok(await pathExists(join(project, "cover", "cover.raw.png")), "shim đã được gọi, có ảnh raw")
+      ok(await pathExists(join(project, "cover", "cover.png")), "cover.sh ghi ảnh đích")
+    } finally {
+      await rmTemp(root)
+    }
   })
 
   await it("mascot: ưu tiên ảnh thật, và tấm dáng ĐÃ SINH được dùng khi chưa có ảnh ref", async () => {
@@ -223,6 +269,30 @@ export async function run({ api, wsRoot, agentDir }) {
     await waitFor(async () => (await a("GET", `/api/projects/${id}/cover`)).json.cover.status === "ok", 15000, "vẽ xong")
     const meta = JSON.parse(await readFile(join(wsRoot, "projects", id, "cover", "cover.json"), "utf8"))
     eq(meta.status, "ok", "một lượt vẽ duy nhất, kết thúc bằng ok")
+    await a("DELETE", `/api/projects/${id}`)
+  })
+
+  await it("early-cover lỗi tức thì → finish KHÔNG spawn cover lần hai", async () => {
+    const a = await agentWithEngine("engine-fake")
+    const created = await a("POST", "/api/projects", {
+      body: { name: "Bia loi som", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
+    })
+    const id = created.json.project.id
+    const contract = structuredClone(BRANDED)
+    contract.variants[0].id = "tet"
+    contract.sheets[0].variants = ["tet"]
+    // Có ảnh pose thật nên cover prompt dùng nhánh attachment, không chép mascot spec.
+    // Đặt marker vào brand palette để fixture thật sự nhận được nó qua prompt.
+    contract.variants[0].brand.primary = "COVER_FIXTURE_COUNT COVER_FIXTURE_FAIL"
+    await writeFile(join(wsRoot, "projects", id, "contract.json"), JSON.stringify(contract))
+
+    const run = await a("POST", `/api/projects/${id}/runs`, { body: { kind: "gen", maxJobs: 2, autoSliceAfterGen: false } })
+    eq(run.status, 202, "run 202")
+    await a("GET", `/api/runs/${run.json.runId}/stream?from=0`)
+    await waitFor(async () => (await a("GET", `/api/projects/${id}/cover`)).json.cover.status === "failed",
+      15000, "early cover lỗi")
+    eq(await readFile(join(wsRoot, "projects", id, "cover", "fixture-count"), "utf8"), "1",
+      "cover lỗi nhanh vẫn chỉ một codex cover")
     await a("DELETE", `/api/projects/${id}`)
   })
 

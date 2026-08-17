@@ -40,6 +40,11 @@ if [[ ! -f "prompts/cover.txt" ]]; then
 fi
 
 IMG_HOME="${IMG_HOME:-}"
+if [[ "$IMG_HOME" == "~" ]]; then
+  IMG_HOME="$HOME"
+elif [[ "$IMG_HOME" == "~/"* ]]; then
+  IMG_HOME="$HOME/${IMG_HOME:2}"
+fi
 if [[ -n "$IMG_HOME" && ! -f "$IMG_HOME/auth.json" ]]; then
   echo "FAIL cover (profile Codex riêng chưa đăng nhập: CODEX_HOME=$IMG_HOME codex login)"
   exit 1

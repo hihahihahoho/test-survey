@@ -163,6 +163,8 @@ export class RunStore {
       })),
       /** Một câu gộp cho cả lượt ("10/10 job không ghi được ảnh"). Xem summarizeFailures. */
       failSummary: null,
+      /* QA đo-ký-sổ từ kits/manifest.json. Chỉ dữ liệu + cờ; không auto-regen. */
+      qa: null,
       seq: 0,
     }
     const handle = new RunHandle(this, run, dir, {
@@ -229,4 +231,3 @@ export class RunStore {
     return [r.runId]
   }
 }
-

@@ -190,6 +190,17 @@ describe("#32 — bắt đầu lượt chạy", () => {
   });
 });
 
+describe("#44 — vẽ lại ảnh bìa", () => {
+  it("POST đúng endpoint, body rỗng, parse trạng thái 202", async () => {
+    const calls = mock([json({ cover: { status: "running", startedAt: "2026-08-17T00:00:00.000Z" } }, { status: 202 })]);
+    const r = await api.projects.regenerateCover("p/1");
+    expect(calls[0]!.url).toContain("/api/projects/p%2F1/cover");
+    expect(calls[0]!.init.method).toBe("POST");
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({});
+    expect(r.status).toBe("running");
+  });
+});
+
 describe("#14 — purge đối chiếu đúng project và cụm xác nhận", () => {
   it("gửi projectId cùng xac-nhan trong body", async () => {
     const calls = mock([new Response(null, { status: 204, headers: { "X-KitGen-Protocol": "1" } })]);

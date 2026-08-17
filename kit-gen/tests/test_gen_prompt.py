@@ -4,7 +4,7 @@ gen.sh nhúng một khối Python heredoc. Test nạp ĐÚNG mã đang ship (c�
 trước vòng lặp dựng prompt) chứ không chép lại — chép lại là test xanh mà sản
 phẩm đỏ.
 """
-import contextlib, io, json, os, re, unittest
+import contextlib, io, json, os, re, tempfile, unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +22,22 @@ def load_gen_block():
     finally:
         os.chdir(cwd)
     return ns
+
+
+def render_prompt_files(cfg):
+    """Chạy đúng heredoc dựng prompt của gen.sh trong workspace tạm."""
+    src = (ROOT / "gen.sh").read_text(encoding="utf-8")
+    block = re.search(r"python3 - <<'PY'\n(.*?)\nPY\n", src, re.S).group(1)
+    with tempfile.TemporaryDirectory() as td:
+        Path(td, "styles.json").write_text(json.dumps(cfg), encoding="utf-8")
+        Path(td, "prompts").mkdir()
+        cwd = os.getcwd()
+        os.chdir(td)
+        try:
+            exec(compile(block, "gen.sh:PY", "exec"), {"__name__": "gen_prompt_test"})
+            return Path(td, "prompts", "demo-pose-demo.att").read_text(encoding="utf-8").splitlines()
+        finally:
+            os.chdir(cwd)
 
 
 gen = load_gen_block()
@@ -179,6 +195,27 @@ class PresetWordCapTest(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()):
             got = gen["preset_words"](spec, "x")
         self.assertLessEqual(sum(len(w) + 2 for w in got), gen["PRESET_CHAR_CAP"])
+
+
+class AttachmentListTest(unittest.TestCase):
+    def test_moi_anh_chi_duoc_dinh_kem_mot_lan_trong_mot_job(self):
+        shared = "refs/shared.png"
+        got = render_prompt_files({
+            "styles": [{
+                "id": "demo", "bg": "magenta", "style": "flat ink",
+                "brand": {"mode": "image", "refs": [shared, "refs/brand.png", shared]},
+                "inspo": [shared, "refs/inspo.png", "refs/inspo.png"],
+            }],
+            "sheets": [{
+                "id": "pose-demo", "grid": {"cols": 1, "rows": 1},
+                "components": [{"file": "01-thing", "spec": "blank button",
+                                "skel": {"shape": "rrect", "w": 0.8, "h": 0.6}}],
+                "ref": shared,
+            }],
+        })
+        self.assertEqual(got, [
+            "skeleton/pose-demo.png", shared, "refs/brand.png", "refs/inspo.png"
+        ])
 
 
 class ChromaKeyTest(unittest.TestCase):

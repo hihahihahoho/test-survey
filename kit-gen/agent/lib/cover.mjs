@@ -28,6 +28,7 @@
    ════════════════════════════════════════════════════════════════════════════ */
 import { spawn } from "node:child_process"
 import { mkdir } from "node:fs/promises"
+import { homedir } from "node:os"
 import { join } from "node:path"
 import { exists, mtimeOf, readJsonFile, writeFileAtomic, writeJsonAtomic } from "./fsx.mjs"
 import { redactLine } from "./redact.mjs"
@@ -45,6 +46,12 @@ export const COVER_META_REL = "cover/cover.json"
 export const COVER_SIZE = [1600, 900]
 /** Khổ model sinh ra (codex chỉ nhận 3:2 / 2:3 / 1:1) — cover.sh cắt dải giữa về 16:9. */
 export const GEN_CANVAS = [1536, 1024]
+
+/** Config lưu nhãn `~/.codex-img`; tiến trình con cần đường dẫn thật. */
+export function expandHomePath(value) {
+  const raw = String(value ?? "")
+  return raw.replace(/^~(?=$|\/)/, homedir())
+}
 
 /**
  * VÙNG TIÊU ĐỀ — theo TỈ LỆ của ảnh bìa 16:9 cuối cùng (không phải theo pixel canvas gen).
@@ -375,7 +382,7 @@ export async function startCover(ws, id, { imgHome = null, wait = false, force =
   async function drawOnce() {
     if (!(await stillThere(ws, id))) return false
     const env = { ...process.env, PATH: process.env.PATH }
-    if (imgHome) env.IMG_HOME = String(imgHome)
+    if (imgHome) env.IMG_HOME = expandHomePath(imgHome)
     const lines = []
     // darwin/linux: bashCommand trả đúng {cmd:"bash", args:[script, pdir], env:{}} như mã cũ.
     // win32: bash.exe của Git for Windows, path đổi sang /c/… (cover.sh `cd "$1"`), PATH có coreutils.

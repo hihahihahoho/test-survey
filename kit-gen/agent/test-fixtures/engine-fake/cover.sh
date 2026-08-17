@@ -14,6 +14,12 @@ if [[ ! -f "prompts/cover.txt" ]]; then
   exit 0
 fi
 echo "fake cover log" > logs/cover.log
+# Một vài ca cần chứng minh mỗi lượt chỉ kích cover một lần. Chỉ đếm khi prompt
+# mang marker test, không làm thay đổi các ca fake bình thường.
+if grep -q "COVER_FIXTURE_COUNT" prompts/cover.txt; then
+  n=$(cat cover/fixture-count 2>/dev/null || echo 0)
+  printf '%s' "$((n + 1))" > cover/fixture-count
+fi
 # Ca lỗi có kiểm được: prompt chứa dấu hiệu này thì KHÔNG ghi ảnh.
 if grep -q "COVER_FIXTURE_FAIL" prompts/cover.txt; then
   echo "FAIL cover (rc=1, ảnh không được ghi mới — xem logs/cover.log)"

@@ -584,14 +584,16 @@ for s in cfg["styles"]:
             "Game-ready UI asset quality, " + ("portrait 2:3." if portrait else "landscape 3:2.")
         ]
         open(f"prompts/{s['id']}-{sh['id']}.txt", "w").write("\n".join(lines))
-        # file đính kèm cho job: skeleton trước, ref nhân vật rồi inspo của style
-        att = [f"skeleton/{sh['id']}.png"]
-        if sh.get("ref"):
-            att.append(sh["ref"])
-        if use_brand_refs:
-            att += s["brand"]["refs"]
-        if use_inspo:
-            att += s["inspo"]
+        # file đính kèm cho job: skeleton trước, ref nhân vật rồi brand/inspo.
+        # Một ảnh có thể xuất hiện ở nhiều vai (vd sheet.ref cũng là brand ref).
+        # Codex tính token theo từng `-i`; khử trùng lặp ngay lúc dựng argv.
+        att = []
+        for p in ([f"skeleton/{sh['id']}.png"]
+                  + ([sh["ref"]] if sh.get("ref") else [])
+                  + (s["brand"]["refs"] if use_brand_refs else [])
+                  + (s["inspo"] if use_inspo else [])):
+            if p and p not in att:
+                att.append(p)
         open(f"prompts/{s['id']}-{sh['id']}.att", "w").write("\n".join(att) + "\n")
         print("prompt →", f"prompts/{s['id']}-{sh['id']}.txt", f"(+{len(att)} ảnh kèm)")
 PY
