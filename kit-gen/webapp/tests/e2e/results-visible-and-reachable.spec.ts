@@ -216,12 +216,12 @@ test("trang Ảnh đã tạo có ĐÚNG MỘT thanh segmented; Skeleton ở tran
   await expect(page.getByRole("tab", { name: "Skeleton" })).toHaveCount(0);
 
   /* Nội dung của thanh cũ không bị vứt đi — nó về đúng trang Skeleton UI, nay là tab
-     "Ảnh thật" của trang đó. Ba tab: Ảnh thật · Ảnh gốc · Settings. */
+     "Ảnh thật" của trang đó. Ba tab: Ảnh thật · Ảnh gốc · Cài đặt. */
   await page.getByRole("navigation", { name: "Quản lý dự án" }).getByRole("button", { name: "Skeleton UI" }).click();
   const modes = page.getByRole("tablist", { name: "Chế độ xem Skeleton UI" });
   await expect(modes.getByRole("tab", { name: "Ảnh thật", selected: true })).toBeVisible();
   await expect(modes.getByRole("tab", { name: "Ảnh gốc" })).toBeVisible();
-  await expect(modes.getByRole("tab", { name: "Settings" })).toBeVisible();
+  await expect(modes.getByRole("tab", { name: "Cài đặt" })).toBeVisible();
 });
 
 test("§B2 — wizard của dự án trắng KHÔNG mọc ra nút xem kết quả", async ({ page }) => {

@@ -1,10 +1,29 @@
 import * as React from "react";
-import { ImageIcon } from "lucide-react";
+import { ImageIcon, ImageOff } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { qk, useProjectCover } from "@/lib/hooks";
+import { Button } from "@/components/ui/button";
+import { qk, useProjectCover, useRegenerateCover } from "@/lib/hooks";
 import { loadThumb } from "@/features/projects/lib/agent-blob";
+import { toastError, toastSuccess } from "@/features/projects/lib/feedback";
 import { isAutoCover, titleZoneStyle } from "../lib/cover-title";
+
+/**
+ * `cover/cover.json` → MỘT MỆNH ĐỀ NGẮN người dùng hiểu. Đây là bốn mã mà
+ * `agent/lib/cover.mjs` thật sự ghi ra (`NOT_LOGGED_IN` · `NO_ARTIFACT` ·
+ * `INTERRUPTED`, và `UNKNOWN` khi meta không nói gì) — không đoán thêm mã nào
+ * agent chưa từng viết. Mã lạ rơi về `UNKNOWN` thay vì lộ chuỗi hoa gạch dưới.
+ */
+const COVER_FAIL_REASON: Record<string, string> = {
+  NOT_LOGGED_IN: "công cụ tạo ảnh chưa đăng nhập",
+  NO_ARTIFACT: "chạy xong nhưng không có ảnh",
+  INTERRUPTED: "bị cắt ngang giữa chừng",
+  UNKNOWN: "chưa rõ nguyên nhân",
+};
+
+export function coverFailReason(code: string | null | undefined): string {
+  return COVER_FAIL_REASON[String(code ?? "UNKNOWN")] ?? COVER_FAIL_REASON.UNKNOWN!;
+}
 
 /** Tỉ lệ ô ảnh của thẻ. PHẢI khớp `aspect-[16/10]` bên dưới — `titleZoneStyle` dùng nó
  *  để bù phần ảnh 16:9 bị `object-cover` cắt hai bên. */
@@ -17,6 +36,12 @@ const BOX_ASPECT = 16 / 10;
  *   · có ảnh            → thumbnail 256px (`#41 ?w=256`, BA-V3 §1.4)
  *   · chưa có ảnh bìa   → khung + CHỮ «Chưa vẽ ảnh nào»
  *   · agent tắt/ảnh hỏng→ khung + CHỮ «Ảnh nằm trên máy bạn»
+ *   · ĐÃ VẼ MÀ HỎNG     → khung + «Vẽ bìa lỗi: …» + nút [Vẽ lại]
+ *
+ * Ca thứ tư là bản vá: `cover/cover.json` có `status:"failed"` (thường là
+ * `NOT_LOGGED_IN` — chưa đăng nhập công cụ tạo ảnh) nhưng thẻ vẫn nói «Chưa vẽ ảnh
+ * nào». Hai câu đó dẫn tới hai hành động khác hẳn nhau: một câu bảo user cứ đợi, câu
+ * kia bảo user đi sửa. Nói câu sai ⇒ user đợi mãi một tấm ảnh sẽ không bao giờ tới.
  *
  * Vì sao không dùng `<img src>` thẳng tới agent: bị 403 ở CẢ HAI đường vào (FE-1 đo bằng
  * curl thật). `loadThumb` đi qua transport, có cache object URL — dùng lại nguyên vẹn,
@@ -89,6 +114,11 @@ export function KitCover({
     };
   }, [projectId, shownPath, offline]);
 
+  /* ĐÃ VẼ MÀ HỎNG — chỉ tin khi CHÍNH query này nói (`watching`), tức dự án đã từng
+     gen và chưa có ảnh. Dự án chưa gen bao giờ vẫn là «Chưa vẽ ảnh nào» như cũ. */
+  const drawFailed = watching && cover.data?.status === "failed";
+  const regen = useRegenerateCover(projectId);
+
   const empty = !shownPath;
   const showPlaceholder = empty || failed || offline || url === null;
 
@@ -102,11 +132,41 @@ export function KitCover({
       )}
     >
       {showPlaceholder ? (
-        <div className="flex size-full flex-col items-center justify-center gap-1.5">
-          <ImageIcon className="size-5 text-fg-muted" aria-hidden strokeWidth={1.5} />
-          <span className="text-caption text-fg-muted">
-            {empty ? "Chưa vẽ ảnh nào" : "Ảnh nằm trên máy bạn"}
-          </span>
+        <div className="flex size-full flex-col items-center justify-center gap-1.5 px-3 text-center">
+          {empty && drawFailed ? (
+            <>
+              <ImageOff className="size-5 text-fg-muted" aria-hidden strokeWidth={1.5} />
+              <span className="text-caption text-fg-muted">
+                Vẽ bìa lỗi: {coverFailReason(cover.data?.error)}
+              </span>
+              {/* Thẻ bao ngoài là một vùng BẤM ĐƯỢC (mở dự án) ⇒ nút này phải chặn nổi
+                  bọt, nếu không thì "Vẽ lại" cũng chỉ là một cách mở dự án. */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                loading={regen.isPending || cover.data?.status === "running"}
+                disabled={regen.isPending || cover.data?.status === "running"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  regen.mutate(undefined, {
+                    onSuccess: () =>
+                      toastSuccess("Đang vẽ lại ảnh bìa", "Mất khoảng một phút. Ảnh hiện lên thẻ khi xong."),
+                    onError: (err) => toastError(err, { titleOverride: "Chưa vẽ được ảnh bìa" }),
+                  });
+                }}
+              >
+                Vẽ lại
+              </Button>
+            </>
+          ) : (
+            <>
+              <ImageIcon className="size-5 text-fg-muted" aria-hidden strokeWidth={1.5} />
+              <span className="text-caption text-fg-muted">
+                {empty ? "Chưa vẽ ảnh nào" : "Ảnh nằm trên máy bạn"}
+              </span>
+            </>
+          )}
         </div>
       ) : (
         <>

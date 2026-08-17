@@ -44,7 +44,11 @@ export function CreateModeDialog({ open, onOpenChange, gate, onCreated }: {
         <div className="space-y-2"><Label htmlFor="new-project-name">Tên dự án</Label><Input ref={inputRef} id="new-project-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ví dụ: Chợ Tết 2027" maxLength={120} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void submit(); } }} /></div>
         <div className="flex items-start gap-3 rounded-3 border border-line-subtle bg-raised p-3.5">
           <LayoutTemplate className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <span><span className="block text-label text-fg-strong">Wizard tạo dự án</span><span className="mt-0.5 block text-caption text-fg-muted">Yêu cầu, phong cách, bộ khung UI, mascot và ảnh.</span></span>
+          {/* "Wizard" là chữ của lập trình viên, không phải của người dùng — và ở ngay
+              dưới tiêu đề "Tạo dự án" thì một cái nhãn "Trình tạo dự án" chỉ nói lại
+              đúng câu vừa đọc. Cái thẻ này liệt kê các bước sẽ đi qua, nên nó tự gọi
+              đúng tên mình là như vậy. */}
+          <span><span className="block text-label text-fg-strong">Các bước tiếp theo</span><span className="mt-0.5 block text-caption text-fg-muted">Yêu cầu, phong cách, bộ khung UI, mascot và ảnh.</span></span>
         </div>
         {failure != null && <InlineError error={failure} detail={errorDetail(failure)} />}
       </DialogBody>

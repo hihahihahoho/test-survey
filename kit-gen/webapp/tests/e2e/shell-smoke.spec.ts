@@ -279,8 +279,8 @@ test("an imported project can be converted, edited and given project sheet limit
   // "Bộ khung UI" đã rời dialog Cài đặt và thành TRANG "Skeleton UI" trong sidebar.
   await page.getByRole("navigation", { name: "Quản lý dự án" }).getByRole("button", { name: "Skeleton UI" }).click();
   await expect(page).toHaveURL(/section=skeleton/);
-  // Trang mở ở tab xem; phần chọn thành phần nằm ở tab "Settings".
-  await page.getByRole("tab", { name: "Settings" }).click();
+  // Trang mở ở tab xem; phần chọn thành phần nằm ở tab "Cài đặt".
+  await page.getByRole("tab", { name: "Cài đặt" }).click();
   await page.getByRole("button", { name: /^UI nhỏ(?: · \d+)?$/ }).click();
   const customFrame = page.getByRole("button", { name: /^Nút thưởng của tôi/ });
   await expect(customFrame).toBeVisible();
@@ -331,7 +331,7 @@ test("editing the project buffers changes until Lưu is pressed", async ({ page 
   await adopted;
 
   await page.getByRole("navigation", { name: "Quản lý dự án" }).getByRole("button", { name: "Skeleton UI" }).click();
-  await page.getByRole("tab", { name: "Settings" }).click();
+  await page.getByRole("tab", { name: "Cài đặt" }).click();
   await page.getByRole("button", { name: /^UI nhỏ(?: · \d+)?$/ }).click();
   const frame = page.getByRole("button", { name: /^Nút thưởng của tôi/ });
   await expect(frame).toBeVisible();

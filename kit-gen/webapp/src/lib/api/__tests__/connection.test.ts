@@ -9,7 +9,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { _resetClient, configureClient, type LocationLike } from "../client";
-import { diagnose } from "../connection";
+import { createProbeSchedule, diagnose } from "../connection";
 import { presentError } from "../errors";
 
 const MIRROR_LOC: LocationLike = {
@@ -221,5 +221,54 @@ describe("§3.9 — không bao giờ lộ message kỹ thuật ra thân UI", () 
     expect(view.known).toBe(false);
     expect(view.title).toBe("Có lỗi từ công cụ local");
     expect(view.actions.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * NHỊP PROBE — bug P2 do QA đo trên máy thật: `/health` bị gọi ~1 lần/giây suốt
+ * phiên, dù §6.2 chỉ cho nó là endpoint DUY NHẤT được poll định kỳ và arch §5.3
+ * hứa backoff 1.5→3→6→15s.
+ *
+ * Nguyên nhân: nhánh `if (connected) { step = 0; return 1500 }` đứng TRƯỚC thang,
+ * nên thang chỉ leo khi MẤT kết nối — tức backoff hoạt động ngược: tiết kiệm lúc
+ * không có ai nghe, dội lúc mọi thứ đang yên. Ca đầu tiên dưới đây là ca đỏ nếu
+ * ai đó đưa nhánh ấy trở lại.
+ */
+describe("nhịp probe /health", () => {
+  it("kết nối tốt + rảnh ⇒ THƯA DẦN 1.5→3→6→15 rồi giữ 15s, KHÔNG đóng đinh 1.5s", () => {
+    const s = createProbeSchedule();
+    const idle = { connected: true, hasActiveRun: false };
+    expect([s.next(idle), s.next(idle), s.next(idle), s.next(idle), s.next(idle), s.next(idle)])
+      .toEqual([1500, 3000, 6000, 15000, 15000, 15000]);
+  });
+
+  it("mất kết nối cũng thưa dần (đừng nện một cổng đã chết)", () => {
+    const s = createProbeSchedule();
+    const down = { connected: false, hasActiveRun: false };
+    expect([s.next(down), s.next(down), s.next(down), s.next(down)]).toEqual([1500, 3000, 6000, 15000]);
+  });
+
+  it("trạng thái vừa ĐỔI ⇒ về bậc thấp nhất — agent tắt/bật được bắt nhanh", () => {
+    const s = createProbeSchedule();
+    for (let i = 0; i < 5; i++) s.next({ connected: true });
+    expect(s.next({ connected: false })).toBe(1500);   // vừa mất kết nối
+    expect(s.next({ connected: false })).toBe(3000);   // rồi lại thưa dần
+    expect(s.next({ connected: true })).toBe(1500);    // vừa nối lại được
+  });
+
+  it("có run đang chạy ⇒ cố định 1.5s, và thang sẵn ở bậc thấp khi lượt xong", () => {
+    const s = createProbeSchedule();
+    for (let i = 0; i < 5; i++) s.next({ connected: true });
+    expect(s.next({ connected: true, hasActiveRun: true })).toBe(1500);
+    expect(s.next({ connected: true, hasActiveRun: true })).toBe(1500);
+    expect(s.next({ connected: true, hasActiveRun: false })).toBe(1500);
+    expect(s.next({ connected: true, hasActiveRun: false })).toBe(3000);
+  });
+
+  it("reset() (tab quay lại · nút Kiểm tra lại) đưa thang về đầu", () => {
+    const s = createProbeSchedule();
+    for (let i = 0; i < 5; i++) s.next({ connected: true });
+    s.reset();
+    expect(s.next({ connected: true })).toBe(1500);
   });
 });

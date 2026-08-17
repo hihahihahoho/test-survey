@@ -194,7 +194,7 @@ test("§2 — Skeleton UI có ba tab, mở ở «Ảnh thật»", async ({ page 
   const modes = page.getByRole("tablist", { name: "Chế độ xem Skeleton UI" });
   await expect(modes.getByRole("tab", { name: "Ảnh thật", selected: true })).toBeVisible();
   await expect(modes.getByRole("tab", { name: "Ảnh gốc" })).toBeVisible();
-  await expect(modes.getByRole("tab", { name: "Settings" })).toBeVisible();
+  await expect(modes.getByRole("tab", { name: "Cài đặt" })).toBeVisible();
 
   // ① Ảnh thật = bộ khung đã dựng, và KHÔNG kèm tấm mascot (tấm đó có trang riêng).
   await expect(page.getByRole("heading", { name: "ui", exact: true })).toBeVisible();
@@ -209,7 +209,7 @@ test("§2 — Skeleton UI có ba tab, mở ở «Ảnh thật»", async ({ page 
 
 test("§1 — thẻ thành phần sạch; ô kích thước chỉ có trong popup Chi tiết", async ({ page }) => {
   await page.goto(`/p/${PID}?section=skeleton`);
-  await page.getByRole("tab", { name: "Settings" }).click();
+  await page.getByRole("tab", { name: "Cài đặt" }).click();
 
   const grid = page.locator(".compact-element-grid").first();
   await expect(grid.locator(".compact-element").first()).toBeVisible();
@@ -241,7 +241,7 @@ test("§2b — Mascot có ba tab, và lưới dáng KHÔNG cuộn riêng", async
   await expect(page.getByRole("heading", { name: "pose nhan vat", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "ui", exact: true })).toHaveCount(0);
 
-  await modes.getByRole("tab", { name: "Settings" }).click();
+  await modes.getByRole("tab", { name: "Cài đặt" }).click();
   const poses = page.locator(".compact-element-grid").first();
   await expect(poses.locator(".compact-element").first()).toBeVisible();
 
@@ -260,7 +260,7 @@ test("§2b — Mascot có ba tab, và lưới dáng KHÔNG cuộn riêng", async
 
 test("§2b′ — lăn chuột TRÊN khu «Bộ dáng» thì trang vẫn cuộn, không khựng", async ({ page }) => {
   await page.goto(`/p/${PID}?section=mascot`);
-  await page.getByRole("tab", { name: "Settings" }).click();
+  await page.getByRole("tab", { name: "Cài đặt" }).click();
 
   const section = page.locator('[aria-label="Bộ dáng mascot"]');
   await expect(section.locator(".compact-element").first()).toBeVisible();
@@ -276,7 +276,7 @@ test("§2b′ — lăn chuột TRÊN khu «Bộ dáng» thì trang vẫn cuộn,
 
 test("§2b″ — popup Chi tiết dáng VẪN cuộn nội bộ và chặn chaining ở biên", async ({ page }) => {
   await page.goto(`/p/${PID}?section=mascot`);
-  await page.getByRole("tab", { name: "Settings" }).click();
+  await page.getByRole("tab", { name: "Cài đặt" }).click();
 
   const grid = page.locator(".compact-element-grid").first();
   await grid.getByRole("button", { name: /^Chi tiết dáng / }).first().click();

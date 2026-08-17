@@ -30,7 +30,7 @@
 import {
   AgentError, detectEntry, discoverAgent, type EntryInfo, type LocationLike,
 } from "./client";
-import { ENTRY, PORT_CANDIDATES, TIMEOUT, type Entry } from "./constants";
+import { ENTRY, PORT_CANDIDATES, PROBE_ACTIVE_RUN_MS, PROBE_BACKOFF_MS, TIMEOUT, type Entry } from "./constants";
 import { healthSchema, type Health } from "../types/api";
 
 /** 6 trạng thái agent pill §2.4 — khớp `AgentStatus` của lib/status.ts (P1). */
@@ -314,24 +314,46 @@ export function bridgeProbe(opts: {
   });
 }
 
-/** Nhịp probe: backoff 1.5→3→6→15s; có run đang chạy thì cố định 1.5s (arch §5.3). */
+/**
+ * Nhịp probe: backoff 1.5→3→6→15s; có run đang chạy thì cố định 1.5s (arch §5.3).
+ *
+ * ╔══ VÌ SAO VIẾT LẠI ════════════════════════════════════════════════════════╗
+ * ║ Bản cũ có nhánh `if (connected) { step = 0; return 1500 }` ĐỨNG TRƯỚC cái  ║
+ * ║ thang. Hệ quả: thang chỉ leo khi MẤT kết nối, còn trạng thái bình thường   ║
+ * ║ (kết nối tốt, không chạy gì) thì đóng đinh ở 1500ms mãi mãi. QA đo trên    ║
+ * ║ máy thật: `/health` bị gọi suốt phiên, ~1 lần/giây — đúng bằng 1.5s × mỗi  ║
+ * ║ vòng probe đang sống. Backoff bị lộn ngược: nó tiết kiệm đúng lúc không có ║
+ * ║ ai nghe, và dội đúng lúc mọi thứ đang yên.                                 ║
+ * ║                                                                           ║
+ * ║ Nay: thang leo trong CẢ HAI trạng thái, và chỉ đặt lại khi có tin mới thật ║
+ * ║ sự — trạng thái kết nối vừa ĐỔI (mất/khôi phục), `reset()` từ tab quay lại ║
+ * ║ hay từ nút [Kiểm tra lại], hoặc có run đang chạy. Nghĩa là: agent tắt vẫn  ║
+ * ║ bị phát hiện ở nhịp ≤15s rồi lập tức về 1.5s để bắt lúc nó sống lại.       ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
 export function createProbeSchedule(): {
   reset: () => void;
   next: (o?: { hasActiveRun?: boolean; connected?: boolean }) => number;
 } {
   let step = 0;
+  /** Kết nối ở lần probe TRƯỚC. `null` = chưa probe lần nào. */
+  let previous: boolean | null = null;
   return {
     reset() {
       step = 0;
+      previous = null;
     },
     next({ hasActiveRun = false, connected = false } = {}) {
-      if (hasActiveRun) return 1500;
-      if (connected) {
+      if (hasActiveRun) {
+        // Đang chạy thì user đang nhìn tiến độ: giữ nhịp dày, và để thang sẵn sàng
+        // ở bậc thấp nhất cho lúc lượt chạy kết thúc.
         step = 0;
-        return 1500;
+        previous = connected;
+        return PROBE_ACTIVE_RUN_MS;
       }
-      const table = [1500, 3000, 6000, 15000];
-      const ms = table[Math.min(step, table.length - 1)]!;
+      if (previous !== null && connected !== previous) step = 0;
+      previous = connected;
+      const ms = PROBE_BACKOFF_MS[Math.min(step, PROBE_BACKOFF_MS.length - 1)]!;
       step += 1;
       return ms;
     },

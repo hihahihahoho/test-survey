@@ -51,7 +51,9 @@ describe("tạo dự án rồi mở wizard", () => {
   it("chỉ hỏi tên dự án và giải thích bước tiếp theo", () => {
     setup();
     expect(screen.getByRole("heading", { name: "Tạo dự án" })).toBeTruthy();
-    expect(screen.getByText("Wizard tạo dự án")).toBeTruthy();
+    expect(screen.getByText("Các bước tiếp theo")).toBeTruthy();
+    // Chữ "Wizard" là tiếng của lập trình viên: không được lọt ra thân dialog.
+    expect(screen.queryByText(/Wizard/i)).toBeNull();
     expect(screen.queryByText(/Canvas|Bàn làm việc/)).toBeNull();
   });
 

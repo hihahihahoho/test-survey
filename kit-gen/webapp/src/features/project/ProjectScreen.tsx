@@ -536,7 +536,10 @@ function ManageSection({ eyebrow, title, copy, tabsLabel, readOnly, saveBar, rea
         <TabsList aria-label={tabsLabel}>
           <TabsTrigger value="real">Ảnh thật</TabsTrigger>
           <TabsTrigger value="raw">Ảnh gốc</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
+          {/* `ManageSection` dùng chung cho CẢ Skeleton UI và Mascot ⇒ một chữ ở đây là
+              hai tab trong app. Hai tab bên cạnh đã là tiếng Việt; "Settings" đứng giữa
+              chúng là chữ sót lại, không phải thuật ngữ. */}
+          <TabsTrigger value="settings">Cài đặt</TabsTrigger>
         </TabsList>
 
         <TabsContent value="real">{real}</TabsContent>
