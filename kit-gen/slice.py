@@ -30,19 +30,26 @@ from collections import deque
 from array import array
 from PIL import Image, ImageChops, ImageFilter, ImageOps
 
+# QA này chỉ là cổng dữ liệu. Không có nhánh nào gọi lại gen.sh khi bị cờ.
+# 15px đủ lớn hơn nhiễu thường đo được (~6px/mép), vẫn bắt sai lệch hình học
+# có ý nghĩa; không đặt thấp hơn sàn nhiễu, cũng không dùng 23px cực xấu làm
+# ngưỡng mặc định vì sẽ nuốt các ca lệch 16–22px mà người dùng cần thấy.
+SIZE_DEVIATION_THRESHOLD_PX = 15
+QA_SIZE_DEVIATION_THRESHOLD_PX = SIZE_DEVIATION_THRESHOLD_PX
+
 try:
     import numpy as np
     from pymatting import estimate_alpha_cf, estimate_foreground_ml
     from scipy import ndimage
     HAS_PYMATTING = True
-except ImportError:                       # máy thiếu lib → đường lùi Vlahos
+except (ImportError, RuntimeError):        # lib optional lỗi môi trường → Vlahos
     HAS_PYMATTING = False
 
 try:                                      # deep matting: alpha glow/bán-trong-suốt
     import torch                          # mượt hơn hẳn closed-form (so găng burst)
     from transformers import VitMatteImageProcessor, VitMatteForImageMatting
     HAS_VITMATTE = True
-except ImportError:
+except (ImportError, RuntimeError):
     HAS_VITMATTE = False
 _VITMATTE = None
 
@@ -679,6 +686,252 @@ def measure_core(canvas, coverage=0.5):
     return min(cols), min(rows), max(cols) + 1, max(rows) + 1
 
 
+# ── ĐO-KÝ-SỔ HÌNH HỌC SAU CÙNG ────────────────────────────────────────────────
+# `measure_core()` ở trên phục vụ snap placement, cố ý dùng projection hàng/cột.
+# Ledger cần phép đo khác: tách silhouette chính khỏi đồ trang trí rồi lấy core
+# là thành phần liên thông lớn nhất của lớp enamel. Thuật toán bám
+# experiments/sprite-sheet-fairy-gray-safe-v6/measure-core-alignment.py: màu tím
+# là enamel, viền màu khác dính core là face/enamel; fallback màu tổng quát dùng
+# phần lõi đã erosion để không phụ thuộc palette của một kit cụ thể.
+
+
+def _mask_bbox(mask, width, height):
+    points = [i for i, value in enumerate(mask) if value]
+    if not points:
+        return None
+    xs = [i % width for i in points]
+    ys = [i // width for i in points]
+    return min(xs), min(ys), max(xs) + 1, max(ys) + 1
+
+
+def _largest_component(mask, width, height):
+    """Trả mask thành phần 4-liên thông lớn nhất + số pixel."""
+    seen = bytearray(width * height)
+    best = bytearray(width * height)
+    best_size = 0
+    for start, present in enumerate(mask):
+        if not present or seen[start]:
+            continue
+        queue = deque([start])
+        seen[start] = 1
+        component = []
+        while queue:
+            index = queue.popleft()
+            component.append(index)
+            x, y = index % width, index // width
+            if x > 0 and mask[index - 1] and not seen[index - 1]:
+                seen[index - 1] = 1; queue.append(index - 1)
+            if x + 1 < width and mask[index + 1] and not seen[index + 1]:
+                seen[index + 1] = 1; queue.append(index + 1)
+            if y > 0 and mask[index - width] and not seen[index - width]:
+                seen[index - width] = 1; queue.append(index - width)
+            if y + 1 < height and mask[index + width] and not seen[index + width]:
+                seen[index + width] = 1; queue.append(index + width)
+        if len(component) > best_size:
+            best_size = len(component)
+            best = bytearray(width * height)
+            for index in component:
+                best[index] = 1
+    return best, best_size
+
+
+def _erode_mask(mask, width, height, iterations=1):
+    current = bytearray(mask)
+    for _ in range(max(0, iterations)):
+        nxt = bytearray(width * height)
+        for index, present in enumerate(current):
+            if not present:
+                continue
+            x, y = index % width, index // width
+            if (x == 0 or not current[index - 1] or x + 1 == width or not current[index + 1]
+                    or y == 0 or not current[index - width] or y + 1 == height
+                    or not current[index + width]):
+                continue
+            nxt[index] = 1
+        current = nxt
+    return current
+
+
+def _dilate_mask(mask, width, height, radius=1):
+    current = bytearray(mask)
+    for _ in range(max(0, radius)):
+        nxt = bytearray(current)
+        for index, present in enumerate(current):
+            if not present:
+                continue
+            x, y = index % width, index // width
+            if x > 0: nxt[index - 1] = 1
+            if x + 1 < width: nxt[index + 1] = 1
+            if y > 0: nxt[index - width] = 1
+            if y + 1 < height: nxt[index + width] = 1
+        current = nxt
+    return current
+
+
+def _median_rgb(pixels, indices, width):
+    if not indices:
+        return (0, 0, 0)
+    # Lấy mẫu đều trên ảnh rất lớn; ledger không cần giữ thêm bản sao bitmap.
+    sample = indices if len(indices) <= 12000 else indices[::max(1, len(indices) // 12000)]
+    return tuple(sorted(pixels[i % width, i // width][channel] for i in sample)[len(sample) // 2]
+                 for channel in range(3))
+
+
+def _core_mask_for_silhouette(canvas, silhouette, width, height):
+    """Dò core màu enamel, fallback về silhouette nếu không có lớp màu riêng.
+
+    Nhánh tím/vàng giữ đúng mask thí nghiệm. Nhánh tổng quát dùng màu trung vị
+    của phần sâu trong silhouette, nên synthetic red/blue + viền giả vẫn đo đúng;
+    vật thể đơn sắc không bị co giả vì bbox candidate trùng silhouette thì giữ
+    nguyên toàn bộ silhouette.
+    """
+    pixels = canvas.convert("RGBA").load()
+    main_indices = [i for i, value in enumerate(silhouette) if value]
+    main_size = len(main_indices)
+    if not main_indices:
+        return bytearray(width * height), 0
+
+    # Mask purple của measure-core-alignment.py: core enamel, không lấy viền vàng.
+    purple = bytearray(width * height)
+    for i in main_indices:
+        r, g, b, _ = pixels[i % width, i // width]
+        if b >= 60 and r >= 35 and g <= min(r * 0.72, b * 0.68):
+            purple[i] = 1
+    purple_core, purple_size = _largest_component(purple, width, height)
+    if purple_size >= max(16, int(main_size * 0.05)):
+        return purple_core, purple_size
+
+    depth = max(1, min(4, round(min(width, height) * 0.02)))
+    inner = _erode_mask(silhouette, width, height, depth)
+    inner_indices = [i for i, value in enumerate(inner) if value]
+    if not inner_indices:
+        return silhouette, main_size
+    median = _median_rgb(pixels, inner_indices, width)
+    # 72px là biên đủ rộng cho gradient nhẹ, nhưng vẫn tách viền màu giả.
+    candidate = bytearray(width * height)
+    for i in main_indices:
+        r, g, b, _ = pixels[i % width, i // width]
+        if math.dist((r, g, b), median) <= 72:
+            candidate[i] = 1
+    core, core_size = _largest_component(candidate, width, height)
+    main_box = _mask_bbox(silhouette, width, height)
+    core_box = _mask_bbox(core, width, height)
+    if not core_box or core_size < max(16, int(main_size * 0.05)):
+        return silhouette, main_size
+    # Không có viền màu riêng: candidate phủ gần hết thân → đây là chính thân.
+    if core_box == main_box or core_size >= int(main_size * 0.82):
+        return silhouette, main_size
+    if (core_box[2] - core_box[0] < max(3, round((main_box[2] - main_box[0]) * 0.2))
+            or core_box[3] - core_box[1] < max(3, round((main_box[3] - main_box[1]) * 0.2))):
+        return silhouette, main_size
+    return core, core_size
+
+
+def _enamel_mask_from_core(silhouette, core, width, height):
+    """Core + các lớp viền dính core; đồ trang trí rời bị loại khỏi enamel."""
+    core_size = sum(1 for value in core if value)
+    if not core_size:
+        return silhouette
+    if core_size == sum(1 for value in silhouette if value):
+        return silhouette
+    near = _dilate_mask(core, width, height, 3)
+    remainder = bytearray(width * height)
+    for i, value in enumerate(silhouette):
+        if value and not core[i]:
+            remainder[i] = 1
+    seen = bytearray(width * height)
+    enamel = bytearray(core)
+    for start, present in enumerate(remainder):
+        if not present or seen[start]:
+            continue
+        queue = deque([start])
+        seen[start] = 1
+        component = []
+        touches_core = False
+        while queue:
+            index = queue.popleft()
+            component.append(index)
+            if near[index]:
+                touches_core = True
+            x, y = index % width, index // width
+            if x > 0 and remainder[index - 1] and not seen[index - 1]:
+                seen[index - 1] = 1; queue.append(index - 1)
+            if x + 1 < width and remainder[index + 1] and not seen[index + 1]:
+                seen[index + 1] = 1; queue.append(index + 1)
+            if y > 0 and remainder[index - width] and not seen[index - width]:
+                seen[index - width] = 1; queue.append(index - width)
+            if y + 1 < height and remainder[index + width] and not seen[index + width]:
+                seen[index + width] = 1; queue.append(index + width)
+        if touches_core:
+            for index in component:
+                enamel[index] = 1
+    return enamel
+
+
+def _xywh_from_rect(rect):
+    if rect is None:
+        return None
+    return [rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]]
+
+
+def measure_asset_geometry(canvas, contract_safe=None, threshold=SIZE_DEVIATION_THRESHOLD_PX):
+    """Đo geometry THẬT của canvas sau mọi bước tách/nắn.
+
+    `contract_safe` là `[x, y, w, h]` của skeleton trong canvas; kết quả `core`
+    và `enamel` là bbox `[left, top, right, bottom]` theo pixel canvas. `safe`
+    dùng core đo được (fallback enamel/silhouette), để layout scale theo ảnh thật.
+    Không trả path, chỉ số đo và cờ QA.
+    """
+    rgba = canvas.convert("RGBA")
+    width, height = rgba.size
+    alpha = rgba.getchannel("A").load()
+    visible = bytearray(width * height)
+    for y in range(height):
+        for x in range(width):
+            if alpha[x, y] >= 128:
+                visible[y * width + x] = 1
+    silhouette, silhouette_size = _largest_component(visible, width, height)
+    core, core_size = _core_mask_for_silhouette(rgba, silhouette, width, height)
+    enamel = _enamel_mask_from_core(silhouette, core, width, height)
+    silhouette_box = _mask_bbox(silhouette, width, height)
+    core_box = _mask_bbox(core, width, height)
+    enamel_box = _mask_bbox(enamel, width, height)
+    safe_rect = core_box or enamel_box or silhouette_box
+    safe = _xywh_from_rect(safe_rect)
+
+    contract = list(contract_safe) if contract_safe is not None else None
+    edges = None
+    max_edge = None
+    if contract is not None and safe_rect is not None:
+        target = (contract[0], contract[1], contract[0] + contract[2], contract[1] + contract[3])
+        errors = tuple(safe_rect[i] - target[i] for i in range(4))
+        edges = {"left": errors[0], "top": errors[1], "right": errors[2], "bottom": errors[3]}
+        max_edge = max(abs(value) for value in errors)
+    threshold = int(threshold)
+    return {
+        "silhouette": list(silhouette_box) if silhouette_box else None,
+        "core": list(core_box) if core_box else None,
+        "enamel": list(enamel_box) if enamel_box else None,
+        "safe": safe,
+        "contractSafe": contract,
+        "deviation": {
+            "edgesPx": edges,
+            "maxEdgePx": max_edge,
+        },
+        "sizeDeviation": {
+            "maxEdgePx": max_edge,
+            "flagged": bool(max_edge is not None and max_edge > threshold),
+            "threshold": threshold,
+            "edgesPx": edges,
+        },
+        "measured": bool(silhouette_size),
+    }
+
+
+# Tên dễ đọc cho test/tool ngoài engine; giữ một API duy nhất.
+measure_core_enamel = measure_asset_geometry
+
+
 def align_content_safe(canvas, safe, tag=None):
     """Chỉ TỊNH TIẾN lõi đặc vào giữa contentSafe, tuyệt đối không resize.
 
@@ -1094,6 +1347,43 @@ def dump_manifest(mpath, manifest):
     os.replace(tmp, mpath)
 
 
+def summarize_size_deviation(assets, threshold=SIZE_DEVIATION_THRESHOLD_PX, style_id=None):
+    """Tổng hợp QA thuần dữ liệu; tuyệt đối không kích hoạt gen lại."""
+    measured = []
+    flagged_assets = []
+    worst = None
+    for asset in assets or []:
+        qa = asset.get("sizeDeviation") or {}
+        max_edge = qa.get("maxEdgePx")
+        if not isinstance(max_edge, (int, float)):
+            continue
+        measured.append(asset)
+        worst = max(abs(max_edge), worst or 0)
+        if qa.get("flagged"):
+            flagged_assets.append({
+                "style": style_id if style_id is not None else asset.get("_style"),
+                "file": asset.get("file"),
+                "maxEdgePx": max_edge,
+            })
+    return {
+        "threshold": int(threshold),
+        "measured": len(measured),
+        "flagged": bool(flagged_assets),
+        "flaggedCount": len(flagged_assets),
+        "maxEdgePx": worst,
+        "flaggedAssets": flagged_assets,
+    }
+
+
+def summarize_manifest_qa(manifest, threshold=SIZE_DEVIATION_THRESHOLD_PX):
+    """QA toàn manifest, chỉ chứa ID asset + số; không chứa đường dẫn máy."""
+    all_assets = []
+    for style_id, entry in (manifest.get("styles") or {}).items():
+        all_assets.extend({**asset, "_style": style_id} for asset in entry.get("assets") or [])
+    summary = summarize_size_deviation(all_assets, threshold)
+    return {"sizeDeviation": summary}
+
+
 # ── CLI ──────────────────────────────────────────────────────────────────────
 # Thân script nằm dưới guard `__main__` để test (và mọi công cụ đo) IMPORT được
 # các hàm ở trên mà KHÔNG chạy cắt ghi đè kits/. Hành vi CLI không đổi.
@@ -1104,6 +1394,7 @@ if __name__ == "__main__":
     # Khoá TRƯỚC khi đọc: mọi lượt slice trong cùng project xếp hàng, không ai ghi đè ai.
     _LOCK_FD = acquire_manifest_lock(os.path.join(HERE, "kits"))
     manifest = json.load(open(mpath)) if os.path.exists(mpath) else {"styles": {}}
+    manifest.setdefault("schemaVersion", 2)
     manifest.setdefault("styles", {})
     for style in cfg["styles"]:
         sid = style["id"]
@@ -1111,6 +1402,11 @@ if __name__ == "__main__":
             continue
         threshold = style.get("threshold", DEFAULT_THRESHOLD)
         strict_threshold = style.get("grow_threshold", threshold + GROW_OFFSET)
+        qa_threshold = style.get("sizeDeviationThreshold", SIZE_DEVIATION_THRESHOLD_PX)
+        try:
+            qa_threshold = int(qa_threshold)
+        except (TypeError, ValueError):
+            qa_threshold = SIZE_DEVIATION_THRESHOLD_PX
         # Màu key ĐÃ KHAI BÁO (interface duy nhất với webapp: chuỗi `bg` trong
         # styles.json). Thiếu/không đọc được → None ⇒ hành vi cũ: suy trục từ chính
         # màu nền đo được, mà với sheet magenta/green cho ra đúng công thức cũ.
@@ -1375,6 +1671,7 @@ if __name__ == "__main__":
                     sw, sh_ = round(CW * sk["w"]), round(CH * sk["h"])
                     sx = BX + (CW - sw) // 2
                     sy = BY + (CH - sh_ - round(CH * 0.04) if sk.get("anchor") == "bottom" else (CH - sh_) // 2)
+                contract_safe_box = [sx, sy, sw, sh_]
                 # Audit chạm mép TRƯỚC snap: snap kéo content vào trong canvas nên vết
                 # cụt (cắt ở biên vùng crop) sẽ "tàng hình" nếu đo sau
                 pre = canvas.getchannel("A").getbbox()
@@ -1386,7 +1683,7 @@ if __name__ == "__main__":
                     canvas = align_content_safe(
                         canvas, (sx, sy, sw, sh_), f"{sid}/{comp['file']}"
                     )
-                    safe_box = [sx, sy, sw, sh_]
+                    safe_box = contract_safe_box
                 elif sk.get("free"):
                     # KHUNG ĐỘNG: không nắn art — safe zone = LÕI ĐO ĐƯỢC của chính
                     # art này (padding tự sinh khi cắt, đúng ý "để AI vẽ tự do")
@@ -1395,7 +1692,7 @@ if __name__ == "__main__":
                         if core else [sx, sy, sw, sh_]
                 else:
                     canvas = snap_to_safe(canvas, sk, (sx, sy, sw, sh_))
-                    safe_box = [sx, sy, sw, sh_]
+                    safe_box = contract_safe_box
                 # DỌN ĐỐM MỒ CÔI — phải nằm SAU snap_to_safe: snap resample nội
                 # dung làm cầu alpha mờ nối đốm với thân MỎNG ĐI rồi đứt, tức đốm
                 # chỉ tách rời ở ảnh CUỐI (đã dính: dọn trước snap thấy n2=1 nên
@@ -1427,6 +1724,22 @@ if __name__ == "__main__":
                             ca[kill] = 0
                             canvas = Image.fromarray(ca)
                             print(f"  · {sid}/{comp['file']}: dọn {int(kill.sum())}px đốm tối mồ côi")
+                if sk["shape"] == "full":
+                    ledger = {
+                        "silhouette": None, "core": None, "enamel": None,
+                        "safe": contract_safe_box, "contractSafe": contract_safe_box,
+                        "deviation": {"edgesPx": None, "maxEdgePx": None},
+                        "sizeDeviation": {"maxEdgePx": None, "flagged": False,
+                                           "threshold": qa_threshold, "edgesPx": None},
+                        "measured": False,
+                    }
+                else:
+                    ledger = measure_asset_geometry(canvas, contract_safe_box, qa_threshold)
+                    safe_box = ledger["safe"] or contract_safe_box
+                    if ledger["sizeDeviation"]["flagged"]:
+                        print(f"  ⚠ QA {sid}/{comp['file']}: sizeDeviation "
+                              f"max {ledger['sizeDeviation']['maxEdgePx']}px > {qa_threshold}px "
+                              "(chỉ gắn cờ, không tự gen lại)")
                 canvas.save(os.path.join(out_dir, f"{comp['file']}.png"))
                 abox = canvas.getchannel("A").getbbox()
                 if abox is None:
@@ -1450,7 +1763,10 @@ if __name__ == "__main__":
                 asset = {"file": comp["file"] + ".png", "sheet": sh["id"],
                          "canvas": [CVW, CVH], "cell": [CW, CH], "bleed": [BX, BY],
                          "content": [pw, ph],
-                         "content_at": [ox, oy], "safe": safe_box}
+                         "content_at": [ox, oy], "safe": safe_box,
+                         "contractSafe": contract_safe_box,
+                         "core": ledger["core"], "enamel": ledger["enamel"],
+                         "sizeDeviation": ledger["sizeDeviation"]}
                 blend = asset_blend(sk)
                 if blend:
                     asset["blend"] = blend       # xem MATTE_BLEND: ô glow ship kèm blend
@@ -1529,6 +1845,8 @@ if __name__ == "__main__":
                               "size": [atlas_img.width, atlas_img.height]}
             print(f"  atlas {sid}: {atlas_img.width}x{atlas_img.height}, {len(atlas_items)} frame")
 
+        entry["qa"] = {"sizeDeviation": summarize_size_deviation(
+            entry["assets"], qa_threshold, sid)}
         manifest["styles"][sid] = entry
         total = len(entry["assets"])
         want = sum(sum(1 for c in sh["components"] if c["skel"]["shape"] != "empty")
@@ -1537,6 +1855,14 @@ if __name__ == "__main__":
             + sum(1 for a in entry["assets"] if a.get("sheet") not in done_sheets)
         print(f"— {sid}: {total}/{want} asset" +
               (f", Ô TRỐNG: {entry['empty_cells']}" if entry["empty_cells"] else ""))
+        if entry["qa"]["sizeDeviation"]["flagged"]:
+            q = entry["qa"]["sizeDeviation"]
+            print(f"  ⚠ QA summary {sid}: {q['flaggedCount']} ô vượt {q['threshold']}px "
+                  "(chỉ dữ liệu; người dùng tự quyết gen lại)")
 
+    manifest["qa"] = summarize_manifest_qa(manifest)
+    q = manifest["qa"]["sizeDeviation"]
+    print(f"— QA sizeDeviation: {q['flaggedCount']} flagged / {q['measured']} measured, "
+          f"threshold {q['threshold']}px (không auto-regen)")
     dump_manifest(mpath, manifest)
     print("→ kits/manifest.json")

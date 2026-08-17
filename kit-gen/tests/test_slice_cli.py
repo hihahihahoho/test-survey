@@ -115,6 +115,13 @@ class SliceCliTest(unittest.TestCase):
         files = {a["file"] for a in m["styles"]["v1"]["assets"]}
         self.assertIn("25-bg-home.png", files, "asset của tấm cắt trước biến mất khỏi manifest")
         self.assertIn("01-btn.png", files)
+        measured = next(a for a in m["styles"]["v1"]["assets"] if a["file"] == "01-btn.png")
+        self.assertIn("core", measured)
+        self.assertIn("enamel", measured)
+        self.assertIn("contractSafe", measured)
+        self.assertIn("sizeDeviation", measured)
+        self.assertEqual(m["qa"]["sizeDeviation"]["threshold"], 15)
+        self.assertIn("qa", m["styles"]["v1"])
 
         # ... và lượt cắt TỔNG cuối lượt (lưới an toàn) chạy lại được, không phá gì
         self.run_slice("v1")

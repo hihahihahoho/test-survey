@@ -97,6 +97,12 @@ export function register(r) {
            ngoài frame mà vẫn hiện (Clip content = off). Không trả ra đây thì webapp
            không có cách nào copy sang Figma đúng chuẩn — nó chỉ còn bitmap phẳng. */
         safe: meta?.safe ?? null,
+        /* Đo-ký-sổ sau slice: safe là core thật; contractSafe là rect skeleton
+           để người dùng đối chiếu, sizeDeviation chỉ gắn cờ QA. */
+        contractSafe: meta?.contractSafe ?? null,
+        core: meta?.core ?? null,
+        enamel: meta?.enamel ?? null,
+        sizeDeviation: meta?.sizeDeviation ?? null,
         contentAt: meta?.content_at ?? null,
         content: meta?.content ?? null,
         canvas: meta?.canvas ?? null,
@@ -113,6 +119,9 @@ export function register(r) {
     }
     files.sort((a, b) => a.file.localeCompare(b.file))
     const cutAt = files.reduce((m, f) => (f.mtime > m ? f.mtime : m), "")
-    return { status: 200, json: { variant, cutAt: cutAt || null, files, sheets: entry.sheets ?? {} } }
+    return {
+      status: 200,
+      json: { variant, cutAt: cutAt || null, files, sheets: entry.sheets ?? {}, qa: manifest.qa ?? entry.qa ?? null },
+    }
   })
 }

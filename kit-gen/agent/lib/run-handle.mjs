@@ -2,7 +2,7 @@
    Job PHÁN THEO SẢN PHẨM (mtime raw/<job>.png >= t0), KHÔNG theo exit code (gen.sh:167-176). */
 import { spawn } from "node:child_process"
 import { join } from "node:path"
-import { ensureDir, exists, writeJsonAtomic, mtimeOf, stat, readFile, writeFile, copyFile } from "./fsx.mjs"
+import { ensureDir, exists, writeJsonAtomic, mtimeOf, stat, readFile, readJsonFile, writeFile, copyFile } from "./fsx.mjs"
 import { fail } from "./errors.mjs"
 import { redactLine } from "./redact.mjs"
 import { projectDir } from "./projects-dir.mjs"
@@ -213,6 +213,7 @@ export class RunHandle {
         await this.runPhase("slice", engineDir, pdir, [...new Set(okJobs.map(j => j.variant))])
       }
     }
+    await this.refreshQa(pdir)
     const failed = this.run.jobs.filter(j => j.status === "failed").length
     this.finish(failed ? "done-with-errors" : "done")
   }
@@ -374,6 +375,7 @@ export class RunHandle {
       ? await this.sliceSheet(pdir, j)
       : null
     if (sliced?.ok) this.slicedSheets.add(j.job)
+    const qa = sliced?.ok ? await this.refreshQa(pdir, j.job) : null
     const thumb = await this.warmThumbs(pdir, j)
     if (this.detached) return
     await this.persist()
@@ -385,7 +387,7 @@ export class RunHandle {
     this.emit({
       type: "sheet.ready", job: j.job, variant: j.variant, sheet: j.sheet,
       artifact: j.artifact ? { path: j.artifact.path, bytes: j.artifact.bytes } : null,
-      sliced, thumbs: thumb,
+      sliced, thumbs: thumb, qa,
     })
   }
 
@@ -493,6 +495,22 @@ export class RunHandle {
       }
     }
     return out.length ? [...new Set(out)] : null
+  }
+
+  /** Đọc QA ledger do slice.py ghi. Đây là dữ liệu quan sát, không có hành động
+   * tự động nào khi có cờ; persist để summary còn sống trong run.json sau khi tab
+   * đóng, emit log để người dùng thấy ngay trong stream. */
+  async refreshQa(pdir, job = null) {
+    const manifest = await readJsonFile(join(pdir, "kits", "manifest.json")).catch(() => null)
+    const qa = manifest?.qa ?? null
+    if (!qa) return null
+    this.run.qa = qa
+    const size = qa.sizeDeviation ?? {}
+    const line = `QA sizeDeviation: ${size.flaggedCount ?? 0}/${size.measured ?? 0} ô vượt ` +
+      `${size.threshold ?? "?"}px; chỉ gắn cờ, không tự gen lại`
+    this.emit({ type: "job.log", job, level: size.flagged ? "warn" : "info", line })
+    await this.persist()
+    return qa
   }
 
   /** ẢNH BÌA SỚM — kích ngay khi có tấm ĐẦU TIÊN xong, không đợi cả lượt (xem finish()).
@@ -728,6 +746,9 @@ export class RunHandle {
     if (this.cancelled || this.detached) return
     if (status !== "done" && status !== "done-with-errors") return
     if (!this.run.jobs.some(j => j.status === "ok")) return
+    // Early-cover đã được kích trong lượt này. Dù nó thất bại, chỉ nút người dùng
+    // mới được phép vẽ lại; tự gọi lần hai sẽ đốt thêm một lượt codex ngoài ý muốn.
+    if (this.coverKicked) return
     maybeAutoCover(this.ws, this.run.projectId, { imgHome: this.opts.imgHome }).catch(() => {})
   }
 }
@@ -743,4 +764,3 @@ function lineReader(stream, onLine) {
   })
   stream.on("end", () => { if (buf.trim()) onLine(buf) })
 }
-
