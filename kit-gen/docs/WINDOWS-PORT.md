@@ -780,6 +780,86 @@ thì **158/159**, trả lại thì **159/159**.
   nhập, lưu nguyên văn trong config, không đi qua phép rút gọn nào — khác biệt này chính là
   thứ khẳng định chẩn đoán đúng.)
 
+### 8.6 Vòng 9 (run 31986200079) — installer chạy TRỌN 8 bước lần đầu tiên
+
+`PYTHONUTF8` quét sạch đúng 10 ca mã hoá mà phép A/B ở §8.5.2 đã dự đoán, `taskkill /F`
+gỡ nốt ba ca dừng-run. **Job 3 "Cài lần 1" VÀ "Cài lần 2" đều xanh** — `install.ps1` lần đầu
+đi hết `[1/8] → [8/8]` trên một máy Windows thật, kể cả `npm install @resvg/resvg-wasm` thật.
+Job 4: **154/161 · 7 FAIL**, và bộ ca chạy hết trong **108 giây** (so với 74 phút của vòng 5).
+Con số đó chôn luôn giả thuyết "Windows chậm gấp hàng chục lần": Windows **không** chậm; cái
+chậm của vòng 5 là hàng loạt ca ngồi chờ hết trần vì engine chết từ dòng đầu.
+
+#### 8.6.1 🔴 `shasum` KHÔNG có trong Git for Windows — câu hỏi §9.2-2 đã có đáp án
+
+Job 3 nay chỉ còn chết ở đúng bước cuối:
+
+```
+xargs: shasum: No such file or directory
+##[error]Process completed with exit code 127.
+```
+
+`shasum` là script Perl có trên macOS và hầu hết bản Linux; Git for Windows **không đóng gói
+nó**, chỉ có `sha256sum.exe`. `build-runtime.sh` gọi thẳng `shasum -a 256` ở hai chỗ (manifest
+từng file, và checksum của tarball) ⇒ **không đóng gói được bản phát hành từ máy Windows**.
+
+Vá: chọn công cụ theo máy — thử `shasum` TRƯỚC (macOS/Linux chạy đúng công cụ cũ, gói phát
+hành không đổi một byte), rồi `sha256sum`, không có cả hai thì báo lỗi rõ ràng. Hai công cụ in
+**cùng một định dạng** `<64 hex>␠␠<đường dẫn>` mà `install.sh`/`install.ps1` đang parse —
+**đừng bao giờ thêm cờ `-b`**, nó đổi dấu phân cách thành `␠*` và installer sẽ báo "manifest
+hỏng" trên máy người dùng chứ không phải ở CI. Bước CI nay khẳng định luôn cả hai điều đó: mọi
+dòng khớp `^[0-9a-f]{64}  \./`, và băm lại toàn bộ gói vừa dựng để đối chiếu.
+
+Đã đo trên macOS: gói dựng lại đúng **193 file**, mọi dòng đúng định dạng, `shasum -c` khớp 193/193.
+
+#### 8.6.2 🔴 5 ca đỏ cùng một câu: "engine chạy xong mà agent bảo không có ảnh"
+
+`[111]` thiếu pha 2, `[112]` không thấy artifact giữa lượt, `[113]` `failSummary` ra
+**`3/3 job không ghi được ảnh`**, `[118]` `0 tấm ok`, `[119]` `done-with-errors`.
+
+Hai điều mà log **đã** chứng minh, không phải đoán:
+
+* ca `[111]` **qua được** hai khẳng định đứng trước chỗ đỏ — `job.done ok` và `job.done failed`
+  đều có ⇒ agent **đọc và tách đúng** dòng `OK  tet-main  8.0K` của engine ⇒ **không có CR**
+  của CRLF trong tên job;
+* ca `[114]` (`styles.json thu hẹp`) **xanh**, mà nó khẳng định `raw/` chứa **đúng**
+  `["tet-main.png"]` ⇒ engine **có ghi file**, **đúng tên**.
+
+Còn lại đúng một mắt xích: `attachArtifact()`, nơi luật "phán theo SẢN PHẨM" so
+`mtime(raw/<job>.png)` với `Date.now()` lúc mở lượt. **Hai con số đó đến từ hai nguồn khác
+nhau** và chỉ trùng nhau trên máy hiền:
+
+| nền | mtime lấy từ đâu | rủi ro |
+|---|---|---|
+| macOS/Linux + APFS/ext4 | cùng đồng hồ với `Date.now()` | ~0 |
+| Windows + NTFS | đồng hồ hệ thống **được cache** (tick ~15,6ms), còn `Date.now()` của Node dùng `GetSystemTimePreciseAsFileTime` | lệch không có trần bảo đảm, nhất là trên máy ảo |
+| FAT32/exFAT (ổ USB — workspace của user hoàn toàn có thể nằm đó) | độ phân giải **2 GIÂY**, làm tròn xuống | luôn lệch tới 2s |
+
+Vá: lấy mốc bằng **chính hệ thống file** — chạm một file `.kitgen-t0` trong `runs/<id>/` rồi đọc
+`mtime` của nó, nên hai vế cùng nguồn, cùng độ phân giải; cộng 2s nhân nhượng cho FAT. Gate
+`win32`: darwin/linux vẫn so nguyên văn như cũ (`t0ms` ở đó không ai đọc, và cũng không sinh
+file mốc nào).
+
+> **NÓI THẲNG: đây là bản vá theo LẬP LUẬN, chưa có bằng chứng trực tiếp.** Log của bộ ca không
+> in ra con số `mtime` nào cả, nên "lệch đồng hồ" mới là *giả thuyết khớp nhất với ba dữ kiện
+> trên*, chứ chưa ai nhìn thấy nó. Vì vậy vòng này thêm bước CI **"Bàn mổ engine giả"** — chạy
+> engine giả bằng đúng phép spawn của `run-handle`, rồi in: tên file dưới dạng JSON (lộ ngay CR
+> nếu có), `mtime` từng file, và **phán quyết của CẢ HAI luật** (luật cũ theo `Date.now()`, luật
+> mới theo mốc hệ thống file). Bước này `continue-on-error`, không bao giờ làm đỏ job. Vòng sau
+> đọc bốn dòng đó là biết chắc, không phải suy luận thêm lần nào nữa.
+
+#### 8.6.3 🟡 Hai ca bundle: từ "đỏ vì ENOTEMPTY" thành "hết 25000ms" — cái chổi ăn hết ngân sách
+
+`rmTemp()` của vòng 8 dùng `maxRetries: 10, retryDelay: 100`. Nghe thì nhỏ, nhưng công thức
+giãn của Node là **`delay = lần_thử × retryDelay`** (đọc thẳng `internal/fs/rimraf`):
+`100+200+…+1000 = 5,5s` **cho mỗi thư mục còn kẹt handle**, và mỗi lần thử lại còn **đi lại
+toàn bộ cây**. Hai ca bundle vì thế đổi kiểu chết chứ không hết đỏ.
+
+Dọn dẹp không đáng một xu nào trong ngân sách của ca: nay `maxRetries: 3, retryDelay: 50`
+(≈300ms) **và** một trần cứng 3s bằng `Promise.race`. Hụt thì bỏ — thư mục tạm nằm ở `%TEMP%`,
+runner tự xoá. Thêm một dòng `⏱ dọn … mất Xms` khi vượt 500ms: đó là cách **duy nhất** để đọc
+log runner mà phân biệt được "ca chậm vì thân ca" với "ca chậm vì cái chổi" — nếu vòng sau hai
+ca này vẫn đỏ ở 25s mà không có dòng `⏱`, thì thủ phạm nằm trong thân ca và ta biết ngay.
+
 ---
 
 ## 9. Việc còn lại (backlog)
@@ -825,9 +905,14 @@ thì **158/159**, trả lại thì **159/159**.
 | j | `lib/platform.mjs` (`pythonEnv`, `pythonSpawnOpts`), `engine.mjs`, `cover.mjs`, `thumbs.mjs`, `doctor.mjs`, `run-handle.mjs` | Vòng 7: `open()` của Python dùng bảng mã locale ⇒ `UnicodeDecodeError: 'charmap'` ngay dòng đầu của engine, kéo theo 10/16 ca đỏ — xem §8.5.2 | `PYTHONUTF8=1` + `PYTHONIOENCODING=utf-8` gate `win32` ở **mọi** chỗ spawn Python; chứng minh bằng A/B trên macOS với locale thù địch |
 | k | `lib/platform.mjs` (`taskkillArgs`) | Vòng 7: `taskkill` thiếu `/F` không giết nổi tiến trình console ⇒ nút Dừng không dừng, quota vẫn cháy — xem §8.5.3 | luôn `/T /F`; ca kiểm chạy trên cả hai nền, đã chứng minh nó bắt được lỗi (158/159 khi bỏ `/F`) |
 | l | `test/harness.mjs` (`rmTemp`), `suite-import`, `suite-projects`, `integration/connections` | Vòng 7: `ENOTEMPTY` khi các suite tự dọn thư mục tạm — retry của `fsx.mjs` chỉ phủ mã sản xuất | một cái chổi dùng chung: retry 10×100ms và **không bao giờ ném** |
+| m | `scripts/build-runtime.sh` + bước CI | Vòng 9: `xargs: shasum: No such file or directory` (exit 127) — Git for Windows không có `shasum` ⇒ **không đóng gói được bản phát hành từ Windows** — xem §8.6.1 | chọn công cụ theo máy (`shasum` trước, rồi `sha256sum`); CI khẳng định định dạng manifest **và** băm lại toàn gói |
+| n | `lib/run-handle.mjs` (`stampT0`, `attachArtifact`) | Vòng 9: `3/3 job không ghi được ảnh` trong khi file nằm sờ sờ trong `raw/` — luật "phán theo sản phẩm" so đồng hồ JS với dấu thời gian của hệ thống file — xem §8.6.2 | mốc `.kitgen-t0` lấy từ **chính hệ thống file** + 2s nhân nhượng cho FAT, gate `win32`. **Kèm bước CI "Bàn mổ engine giả"** vì đây là bản vá theo lập luận, chưa có bằng chứng trực tiếp |
+| o | `test/harness.mjs` (`rmTemp`) | Vòng 9: hai ca bundle đổi từ `ENOTEMPTY` sang `hết 25000ms` — `fs.rm` giãn chờ theo `lần_thử × retryDelay` = 5,5s mỗi thư mục — xem §8.6.3 | `maxRetries: 3, retryDelay: 50` + trần cứng 3s; in `⏱` khi dọn quá 500ms |
 
-Mọi bản vá phía agent (a, b, e, g, h, j, k, l) đã được đo lại trên macOS:
-`node agent/test-agent.mjs` → **159/159 PASS · 0 FAIL** (158 ca cũ + ca `taskkill` mới).
+Mọi bản vá phía agent (a, b, e, g, h, j, k, l, n, o) đã được đo lại trên macOS:
+`node agent/test-agent.mjs` → **161/161 PASS · 0 FAIL** (số ca tăng dần vì các luồng việc khác
+cũng thêm ca; điều bất biến là **0 FAIL**). Bản vá `m` đo bằng cách dựng lại gói thật trên
+macOS: 193 file, mọi dòng manifest đúng định dạng, `shasum -c` khớp 193/193.
 
 ### 9.2 Điểm phải soi ở lượt CI kế tiếp (chưa có bằng chứng, đừng đoán)
 
@@ -878,3 +963,17 @@ của vòng 8:)*
     vừa được bọc lại vòng này nhưng **chưa từng chạy lần nào**.
 11. **Thời gian job 4.** Nay có số mili-giây từng ca. Ca nào chậm hơn macOS hàng chục lần thì
     đó là chỗ spawn tiến trình — dữ liệu để quyết định có phải giảm số lần spawn trong bộ ca không.
+
+*(Cập nhật sau vòng 9 — **điểm 2 đã có đáp án dứt điểm**: Git for Windows **không có** `shasum`,
+xem §8.6.1. Điểm 11 cũng xong: bộ ca chạy hết trong **108 giây** trên Windows, tức Windows
+**không** chậm bất thường — không cần giảm số lần spawn. Ba câu hỏi của vòng 10:)*
+
+12. **Đọc "Bàn mổ engine giả" TRƯỚC khi đọc bất cứ ca đỏ nào.** Bốn dòng nó in ra trả lời dứt
+    điểm: file có được ghi không, tên có sạch không, `mtime` lệch bao nhiêu, và **luật nào**
+    (cũ/mới) phán đúng. Nếu luật cũ đã `true` thì giả thuyết lệch đồng hồ ở §8.6.2 **sai** —
+    gỡ ghi công ngay như đã làm với lưới ống-dẫn ở §8.4.3, và đi tìm chỗ khác.
+13. **Hai ca bundle.** Còn đỏ mà **không** có dòng `⏱ dọn …` ⇒ thủ phạm nằm trong thân ca, không
+    phải cái chổi. Có dòng `⏱` mà vẫn 25s ⇒ trần 3s của `rmTemp` không ăn, đọc lại `Promise.race`.
+14. **`build-runtime.sh` trong Git-Bash** lần đầu chạy tới cuối: xem `sha256sum` có in đúng
+    `<hash>␠␠<path>` không (bước CI tự khẳng định), và tarball dựng từ Windows có giải nén +
+    cài lại được không — đó mới là điều kiện đủ để nói "phát hành được từ Windows".

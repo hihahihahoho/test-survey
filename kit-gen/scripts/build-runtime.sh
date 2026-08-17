@@ -6,6 +6,23 @@ VERSION="${1:-$(node -p "require('$ROOT/webapp/package.json').version" 2>/dev/nu
 OUT="${2:-$ROOT/release}"
 STAGE="$OUT/.stage-$VERSION"
 PKG="kitgen-runtime-$VERSION"
+
+# ── SHA-256: chọn công cụ theo MÁY, không giả định `shasum` ────────────────────
+# `shasum` là script Perl có sẵn trên macOS và hầu hết bản Linux, nhưng Git for
+# Windows KHÔNG có nó — chỉ có `sha256sum.exe` trong <Git>\usr\bin. Đã đo thật:
+#   xargs: shasum: No such file or directory   → exit 127
+# (run 31986200079, bước "Đóng gói bằng Git-Bash", câu hỏi §9.2-2 của WINDOWS-PORT).
+# Thứ tự thử đặt `shasum` TRƯỚC để macOS/Linux chạy đúng công cụ cũ, không đổi một
+# byte nào của gói phát hành. Cả hai in cùng một định dạng "<hash>␠␠<file>" mà
+# install.sh và install.ps1 đang parse — đừng đổi sang -b (nó in "<hash>␠*<file>").
+if command -v shasum >/dev/null 2>&1; then
+  SHA256="shasum -a 256"
+elif command -v sha256sum >/dev/null 2>&1; then
+  SHA256="sha256sum"
+else
+  echo "build-runtime.sh: thiếu cả shasum lẫn sha256sum" >&2
+  exit 1
+fi
 rm -rf "$STAGE"
 mkdir -p "$STAGE/$PKG/engine" "$STAGE/$PKG/app" "$STAGE/$PKG/runtime"
 # A reused output directory must never leak an older archive/checksum into the
@@ -39,10 +56,10 @@ cp "$ROOT/install.sh" "$STAGE/$PKG/install.sh"
 chmod +x "$STAGE/$PKG/install.sh" "$STAGE/$PKG/runtime/bin/kitgen" "$STAGE/$PKG/engine/gen.sh"
 (
   cd "$STAGE/$PKG"
-  find . -type f ! -name manifest.sha256 -print0 | sort -z | xargs -0 shasum -a 256 > manifest.sha256
+  find . -type f ! -name manifest.sha256 -print0 | sort -z | xargs -0 $SHA256 > manifest.sha256
 )
 mkdir -p "$OUT"
 tar -C "$STAGE" -czf "$OUT/$PKG.tar.gz" "$PKG"
-(cd "$OUT" && shasum -a 256 "$PKG.tar.gz" > "$PKG.tar.gz.sha256")
+(cd "$OUT" && $SHA256 "$PKG.tar.gz" > "$PKG.tar.gz.sha256")
 rm -rf "$STAGE"
 echo "$OUT/$PKG.tar.gz"

@@ -41,13 +41,30 @@ export function currentCase() { return current }
      · thử lại 10 lần × 100ms (đủ cho một nhịp nhả handle của Windows);
      · KHÔNG BAO GIỜ NÉM. Dọn dẹp không phải một khẳng định: một lần dọn hụt ở /tmp
        không được phép biến ca đã xanh thành đỏ. Hụt thì in cảnh báo để còn thấy. */
+const RM_TEMP_BUDGET_MS = 3000
 export async function rmTemp(dir) {
   const { rm } = await import("node:fs/promises")
+  /* TRẦN THỜI GIAN cho cái chổi. Bản đầu (vòng 8) dùng maxRetries:10 + retryDelay:100 —
+     nghe thì nhỏ, nhưng `fs.rm` giãn khoảng chờ theo LẦN THỬ (100+200+…+1000 ≈ 5,5s cho
+     MỖI thư mục con còn kẹt handle), và trên Windows hai ca bundle vì thế đi từ
+     "đỏ vì ENOTEMPTY" sang "hết 25000ms" (run 31986200079) — vẫn đỏ, chỉ đổi kiểu chết.
+     Dọn dẹp không đáng một xu nào trong ngân sách của ca: thử vừa đủ rồi BỎ. Thư mục tạm
+     còn sót nằm ở %TEMP%, runner tự xoá; ở máy dev thì `test-agent.mjs` dọn nốt lúc kết. */
+  const bail = new Promise(r => { const t = setTimeout(() => r("HET_GIO"), RM_TEMP_BUDGET_MS); t.unref?.() })
+  const t0 = Date.now()
   try {
-    await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+    const how = await Promise.race([
+      rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }),
+      bail,
+    ])
+    if (how === "HET_GIO") process.stdout.write(`  ⚠ bo dở việc dọn ${dir} sau ${RM_TEMP_BUDGET_MS}ms\n`)
   } catch (e) {
     process.stdout.write(`  ⚠ khong don duoc thu muc tam ${dir}: ${e?.code ?? e?.message ?? e}\n`)
   }
+  /* In ra khi cái chổi ăn mất thời gian đáng kể: đó là cách DUY NHẤT để phân biệt
+     "ca chậm vì thân ca" với "ca chậm vì dọn dẹp" khi đọc log runner. */
+  const ms = Date.now() - t0
+  if (ms > 500) process.stdout.write(`  ⏱ dọn ${dir} mất ${ms}ms\n`)
 }
 
 export function describe(name) { group = name }
