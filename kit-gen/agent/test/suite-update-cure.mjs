@@ -1,13 +1,89 @@
 /* suite-update-cure.mjs — hồi quy cho bệnh update lần 1/lần 2.
-   Ca installer ở đây không chạm máy thật: dựng một runtime tối giản trong tmp,
-   giết installer sau activation, rồi chạy lượt kế tiếp để chứng minh journal rollback. */
+   Darwin/Linux giết installer thật sau activation; Git Bash dựng dead-state trên đĩa
+   vì PID MSYS và PID Win32 không phải một hợp đồng có thể giả vờ kiểm bằng taskkill. */
 import { createHash } from "node:crypto"
 import { spawn } from "node:child_process"
-import { chmod, mkdir, realpath, readFile, symlink, writeFile } from "node:fs/promises"
+import { chmod, mkdir, realpath, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import { delimiter, dirname, join, relative } from "node:path"
 import { describe, it, eq, ok } from "./harness.mjs"
+import { toBashPath } from "../lib/platform.mjs"
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+const CASE_167_BUDGET_MS = 20_000
+
+function redacted(text, paths = []) {
+  let out = String(text ?? "")
+  for (const p of paths.filter(Boolean)) {
+    const variants = new Set([p, p.replaceAll("\\", "/"), p.replaceAll("/", "\\")])
+    for (const v of variants) if (v) out = out.split(v).join("<fixture>")
+  }
+  return out.replace(/(?:[A-Za-z]:[\\/]|\/)(?:Users|home|private|tmp|var[\\/]folders)[^\s\r\n]*/g, "<path>")
+}
+
+async function tailFile(path, lines = 80, paths = []) {
+  try {
+    const text = await readFile(path, "utf8")
+    const tail = text.replaceAll("\r\n", "\n").split("\n").slice(-lines).join("\n")
+    return redacted(tail, paths) || "(rỗng)"
+  } catch (e) {
+    return `(không có: ${e?.code ?? e?.message ?? e})`
+  }
+}
+
+async function childClose(child, timeoutMs, label) {
+  if (!child) return { code: null, signal: null }
+  let timer
+  const closed = new Promise((resolve, reject) => {
+    child.once("close", (code, signal) => resolve({ code, signal }))
+    child.once("error", reject)
+  })
+  try {
+    return await Promise.race([
+      closed,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} chưa đóng sau ${timeoutMs}ms`)), timeoutMs)
+      }),
+    ])
+  } finally { clearTimeout(timer) }
+}
+
+async function stopChild(child, mark, label) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return true
+  if (process.platform === "win32") {
+    mark(`${label}: taskkill bắt đầu`, `child.pid=${child.pid}`)
+    let killer
+    try {
+      killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+        stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
+      })
+      let output = ""
+      killer.stdout?.on("data", b => { output += b.toString() })
+      killer.stderr?.on("data", b => { output += b.toString() })
+      const result = await childClose(killer, 3_000, "taskkill")
+      mark(`${label}: taskkill xong`, `rc=${result.code ?? "?"} ${redacted(output).trim().slice(-240)}`)
+    } catch (e) {
+      mark(`${label}: taskkill lỗi`, e?.message ?? e)
+    }
+    if (child.exitCode === null && child.signalCode === null) {
+      mark(`${label}: fallback child.kill(SIGKILL)`)
+      try { child.kill("SIGKILL") } catch { /* đã chết */ }
+    }
+  } else {
+    mark(`${label}: SIGKILL thật`, `pid=${child.pid}`)
+    try { child.kill("SIGKILL") } catch { /* đã chết */ }
+  }
+  try {
+    const result = await childClose(child, 5_000, `${label}/child`)
+    mark(`${label}: child đóng`, `rc=${result.code ?? "?"} signal=${result.signal ?? "-"}`)
+    return true
+  } catch (e) {
+    mark(`${label}: child chưa đóng`, e?.message ?? e)
+    child.stdout?.destroy()
+    child.stderr?.destroy()
+    return false
+  }
+}
 
 async function filesUnder(root, dir = root) {
   const { readdir } = await import("node:fs/promises")
@@ -69,96 +145,178 @@ export async function run({ tmp, agentDir }) {
   describe("trị dứt điểm update lần 1/lần 2")
 
   await it("installer bị SIGKILL sau activation ⇒ lượt sau rollback journal, không giữ symlink nửa vời", async () => {
+    const startedAt = Date.now()
+    const milestones = []
+    const mark = (label, detail = "") => {
+      const m = { ms: Date.now() - startedAt, label, detail: String(detail) }
+      milestones.push(m)
+      process.stdout.write(`[167] mốc +${m.ms}ms — ${label}${detail ? ` — ${m.detail}` : ""}\n`)
+    }
     const home = join(tmp, "update-kill-home")
     const workspace = join(tmp, "update-kill-workspace")
     const fakeBin = join(tmp, "update-kill-bin")
     const oldRelease = join(home, "releases", "2.1.24")
     const newRelease = join(home, "releases", "2.1.25")
     const launchState = join(tmp, "fake-launchctl-state")
-    await mkdir(join(oldRelease, "agent"), { recursive: true })
-    await mkdir(join(newRelease, "agent"), { recursive: true })
-    await writeFile(join(oldRelease, "VERSION"), "2.1.24\n")
-    await writeFile(join(newRelease, "VERSION"), "2.1.25\n")
-    await mkdir(fakeBin, { recursive: true })
-    await writeFile(join(fakeBin, "codex"), "#!/bin/sh\necho codex-test\n")
-    await writeFile(join(fakeBin, "launchctl"), [
-      "#!/bin/sh",
-      "case \"${1:-}\" in",
-      "  print) exit 1 ;;",
-      "  bootout|unload|bootstrap|kickstart) exit 0 ;;",
-      "  *) exit 0 ;;",
-      "esac",
-    ].join("\n") + "\n")
-    await writeFile(join(fakeBin, "systemctl"), "#!/bin/sh\nexit 0\n")
-    await chmod(join(fakeBin, "codex"), 0o755)
-    await chmod(join(fakeBin, "launchctl"), 0o755)
-    await chmod(join(fakeBin, "systemctl"), 0o755)
-    await symlink(oldRelease, join(home, "current"))
-    const txn = join(home, ".update-transaction")
-    await mkdir(txn, { recursive: true })
-
-    const { archive, sha } = await makeRuntimeFixture(tmp, join(agentDir, "..", "install.sh"))
-    const nodeBin = join(home, "tools", "node", "bin")
-    const moduleDir = join(home, "tools", "node_modules", "@resvg", "resvg-wasm")
-    const venvBin = join(workspace, ".venv", "bin")
-    await mkdir(nodeBin, { recursive: true })
-    await mkdir(moduleDir, { recursive: true })
-    await mkdir(venvBin, { recursive: true })
-    await symlink(process.execPath, join(nodeBin, "node"))
-    await writeFile(join(moduleDir, "package.json"), '{"name":"@resvg/resvg-wasm","main":"index.js"}\n')
-    await writeFile(join(moduleDir, "index.js"), "module.exports = {}\n")
-    await writeFile(join(venvBin, "python"), "#!/bin/sh\nexit 0\n")
-    await chmod(join(venvBin, "python"), 0o755)
-
-    const env = {
-      ...process.env,
-      HOME: join(tmp, "fake-home"),
-      PATH: [fakeBin, process.env.PATH].filter(Boolean).join(delimiter),
-      KITGEN_HOME: home,
-      KITGEN_WORKSPACE: workspace,
-      FAKE_LAUNCHCTL_STATE: launchState,
+    const pathsToRedact = [tmp, home, workspace, fakeBin]
+    let firstChild = null
+    let secondChild = null
+    let firstOutput = ""
+    let secondOutput = ""
+    let diagnosticsPrinted = false
+    const dumpDiagnostics = async reason => {
+      if (diagnosticsPrinted) return
+      diagnosticsPrinted = true
+      process.stdout.write(`\n[167] TIMEOUT/HIỆN TRƯỜNG — ${reason}\n`)
+      process.stdout.write("[167] toàn bộ mốc đã qua:\n")
+      for (const m of milestones) {
+        process.stdout.write(`  +${m.ms}ms — ${m.label}${m.detail ? ` — ${m.detail}` : ""}\n`)
+      }
+      process.stdout.write("[167] output installer (đuôi, đã redact):\n")
+      process.stdout.write(`${redacted(firstOutput, pathsToRedact).slice(-4000) || "(rỗng)"}\n`)
+      process.stdout.write("[167] output lượt 2 (đuôi, đã redact):\n")
+      process.stdout.write(`${redacted(secondOutput, pathsToRedact).slice(-4000) || "(rỗng)"}\n`)
+      process.stdout.write("[167] update.log fixture (đuôi, đã redact):\n")
+      process.stdout.write(`${await tailFile(join(home, "update.log"), 80, pathsToRedact)}\n`)
+      process.stdout.write("[167] install.log fixture (đuôi, đã redact):\n")
+      process.stdout.write(`${await tailFile(join(home, "install.log"), 80, pathsToRedact)}\n`)
     }
-    const child = spawn("bash", [join(agentDir, "..", "install.sh"), "--archive", archive, "--sha256", sha, "--workspace", workspace], {
-      env, stdio: ["ignore", "pipe", "pipe"], detached: true,
-    })
-    let output = ""
-    child.stdout.on("data", b => { output += b.toString() })
-    child.stderr.on("data", b => { output += b.toString() })
-    let activated = false
-    for (let i = 0; i < 200; i++) {
-      try {
-        activated = (await readFile(join(txn, "state"), "utf8")).trim() === "activated"
-      } catch { /* chưa tới activation */ }
-      if (activated) break
-      await delay(20)
+
+    const observeOutput = (text, which) => {
+      const clean = String(text)
+      if (which === 1) firstOutput += clean
+      else secondOutput += clean
+      for (const m of clean.matchAll(/\[(\d+\/\d+)\]\s+([^\r\n]+)/g)) {
+        const stage = `${m[1]} ${m[2].trim()}`
+        if (!milestones.some(x => x.label === `installer ${stage}`)) mark(`installer ${stage}`)
+      }
     }
-    ok(activated, `installer phải ghi journal activated trước khi khởi động lại dịch vụ: ${output.slice(-1000)}`)
-    const childClosed = new Promise(resolve => child.once("close", resolve))
-    if (process.platform === "win32") {
-      await new Promise(resolve => {
-        const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
-          stdio: "ignore", windowsHide: true,
+
+    const scenario = async () => {
+      mark("fixture bắt đầu")
+      await mkdir(join(oldRelease, "agent"), { recursive: true })
+      await mkdir(join(newRelease, "agent"), { recursive: true })
+      await writeFile(join(oldRelease, "VERSION"), "2.1.24\n")
+      await writeFile(join(newRelease, "VERSION"), "2.1.25\n")
+      await mkdir(fakeBin, { recursive: true })
+      await writeFile(join(fakeBin, "codex"), "#!/bin/sh\necho codex-test\n")
+      await writeFile(join(fakeBin, "launchctl"), [
+        "#!/bin/sh",
+        "case \"${1:-}\" in",
+        "  print) exit 1 ;;",
+        "  bootout|unload|bootstrap|kickstart) exit 0 ;;",
+        "  *) exit 0 ;;",
+        "esac",
+      ].join("\n") + "\n")
+      await writeFile(join(fakeBin, "systemctl"), "#!/bin/sh\nexit 0\n")
+      await chmod(join(fakeBin, "codex"), 0o755)
+      await chmod(join(fakeBin, "launchctl"), 0o755)
+      await chmod(join(fakeBin, "systemctl"), 0o755)
+      await symlink(oldRelease, join(home, "current"))
+      const txn = join(home, ".update-transaction")
+      await mkdir(txn, { recursive: true })
+
+      const { archive, sha } = await makeRuntimeFixture(tmp, join(agentDir, "..", "install.sh"))
+      mark("fixture xong", `archive=${redacted(archive, pathsToRedact)}`)
+      const nodeBin = join(home, "tools", "node", "bin")
+      const moduleDir = join(home, "tools", "node_modules", "@resvg", "resvg-wasm")
+      const venvBin = join(workspace, ".venv", "bin")
+      await mkdir(nodeBin, { recursive: true })
+      await mkdir(moduleDir, { recursive: true })
+      await mkdir(venvBin, { recursive: true })
+      await symlink(process.execPath, join(nodeBin, "node"))
+      await writeFile(join(moduleDir, "package.json"), '{"name":"@resvg/resvg-wasm","main":"index.js"}\n')
+      await writeFile(join(moduleDir, "index.js"), "module.exports = {}\n")
+      await writeFile(join(venvBin, "python"), "#!/bin/sh\nexit 0\n")
+      await chmod(join(venvBin, "python"), 0o755)
+
+      const env = {
+        ...process.env,
+        HOME: join(tmp, "fake-home"),
+        PATH: [fakeBin, process.env.PATH].filter(Boolean).join(delimiter),
+        KITGEN_HOME: home,
+        KITGEN_WORKSPACE: workspace,
+        FAKE_LAUNCHCTL_STATE: launchState,
+      }
+      if (process.platform === "win32") {
+        /* Git Bash có hai PID (MSYS và Win32); taskkill chỉ nhận PID Win32. Không
+           giả vờ rằng ca này chứng minh được SIGKILL thật. Dựng đúng hiện trường
+           sau activation trên đĩa, rồi kiểm recovery bằng installer thật. */
+        mark("Git Bash: bỏ qua kill thật", "MSYS/Win32 PID semantics không mô phỏng an toàn")
+        await rm(join(home, "current"), { force: true })
+        await symlink(newRelease, join(home, "current"))
+        await writeFile(join(txn, "previous"), `${toBashPath(oldRelease)}\n`)
+        await writeFile(join(txn, "dest"), `${toBashPath(newRelease)}\n`)
+        await writeFile(join(txn, "state"), "activated\n")
+        mark("dead-state dựng xong", "journal=activated, current=newRelease")
+      } else {
+        firstChild = spawn("bash", [join(agentDir, "..", "install.sh"), "--archive", archive, "--sha256", sha, "--workspace", workspace], {
+          env, stdio: ["ignore", "pipe", "pipe"], detached: true,
         })
-        killer.once("error", () => {
-          try { child.kill("SIGKILL") } catch { /* installer đã chết */ }
-          resolve()
-        })
-        killer.once("close", resolve)
+        mark("installer spawn", `pid=${firstChild.pid}`)
+        firstChild.stdout.on("data", b => observeOutput(b.toString(), 1))
+        firstChild.stderr.on("data", b => observeOutput(b.toString(), 1))
+        let seenState = ""
+        const deadline = Date.now() + 8_000
+        for (;;) {
+          let state = ""
+          try { state = (await readFile(join(txn, "state"), "utf8")).trim() } catch { /* chưa tới journal */ }
+          if (state && state !== seenState) {
+            seenState = state
+            mark(`journal ${state}`)
+          }
+          if (state === "activated") break
+          if (Date.now() >= deadline) throw new Error("installer không ghi journal activated trong 8000ms")
+          await delay(20)
+        }
+        ok(seenState === "activated", `installer phải ghi journal activated trước khi kill: ${redacted(firstOutput, pathsToRedact).slice(-1000)}`)
+        ok(await stopChild(firstChild, mark, "lượt 1"), "installer lượt 1 phải đóng sau SIGKILL")
+        eq(await realpath(join(home, "current")), await realpath(newRelease),
+          "SIGKILL để lại đúng hiện trường symlink mới + journal")
+        mark("hiện trường sau SIGKILL đúng", "current=newRelease")
+      }
+
+      const missing = join(tmp, "missing-runtime.tar.gz")
+      secondChild = spawn("bash", [join(agentDir, "..", "install.sh"), "--archive", missing, "--workspace", workspace], {
+        env, stdio: ["ignore", "pipe", "pipe"], detached: true,
       })
-    } else {
-      child.kill("SIGKILL")
+      mark("lượt 2 spawn", `pid=${secondChild.pid}`)
+      secondChild.stdout.on("data", b => observeOutput(b.toString(), 2))
+      secondChild.stderr.on("data", b => observeOutput(b.toString(), 2))
+      try {
+        const result = await childClose(secondChild, 8_000, "lượt 2 installer")
+        mark("lượt 2 đóng", `rc=${result.code ?? "?"} signal=${result.signal ?? "-"}`)
+      } catch (e) {
+        await stopChild(secondChild, mark, "lượt 2")
+        throw e
+      }
+      eq(await realpath(join(home, "current")), await realpath(oldRelease),
+        "lượt sau thu hồi symlink mới chưa phục vụ")
+      mark("rollback symlink xong", "current=oldRelease")
+      let journalLeft = true
+      try { await readFile(join(txn, "state")); } catch { journalLeft = false }
+      ok(!journalLeft, "journal đã được thu hồi sau rollback")
+      mark("journal đã xóa", "rollback hoàn tất")
     }
-    await childClosed
-    eq(await realpath(join(home, "current")), await realpath(newRelease),
-      "SIGKILL để lại đúng hiện trường symlink mới + journal")
 
-    const missing = join(tmp, "missing-runtime.tar.gz")
-    const second = spawn("bash", [join(agentDir, "..", "install.sh"), "--archive", missing, "--workspace", workspace], { env, stdio: "ignore" })
-    await new Promise(resolve => second.once("close", resolve))
-    eq(await realpath(join(home, "current")), await realpath(oldRelease),
-      "lượt sau thu hồi symlink mới chưa phục vụ")
-    let journalLeft = true
-    try { await readFile(join(txn, "state")); } catch { journalLeft = false }
-    ok(!journalLeft, "journal đã được thu hồi sau rollback")
+    let timer
+    try {
+      await Promise.race([
+        scenario(),
+        new Promise((_, reject) => {
+          timer = setTimeout(async () => {
+            await dumpDiagnostics(`vượt ngân sách nội bộ ${CASE_167_BUDGET_MS}ms`)
+            reject(new Error(`ca 167 vượt ngân sách nội bộ ${CASE_167_BUDGET_MS}ms`))
+          }, CASE_167_BUDGET_MS)
+        }),
+      ])
+    } catch (e) {
+      await dumpDiagnostics(e?.message ?? e)
+      throw e
+    } finally {
+      clearTimeout(timer)
+      if (firstChild && firstChild.exitCode === null && firstChild.signalCode === null) await stopChild(firstChild, mark, "dọn lượt 1")
+      if (secondChild && secondChild.exitCode === null && secondChild.signalCode === null) await stopChild(secondChild, mark, "dọn lượt 2")
+    }
   })
 }
