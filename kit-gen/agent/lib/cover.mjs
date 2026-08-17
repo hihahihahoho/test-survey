@@ -50,7 +50,10 @@ export const GEN_CANVAS = [1536, 1024]
 /** Config lưu nhãn `~/.codex-img`; tiến trình con cần đường dẫn thật. */
 export function expandHomePath(value) {
   const raw = String(value ?? "")
-  return raw.replace(/^~(?=$|\/)/, homedir())
+  if (raw === "~") return homedir()
+  // join thay vì nối chuỗi: trên Windows homedir() dùng "\" — nối "/" tạo path trộn separator
+  if (raw.startsWith("~/")) return join(homedir(), raw.slice(2))
+  return raw
 }
 
 /**

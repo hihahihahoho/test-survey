@@ -25,6 +25,11 @@
 # ══════════════════════════════════════════════════════════════════════════════
 set -uo pipefail
 
+# mtime epoch đa nền. GNU PHẢI đứng trước: `stat -c` trên BSD fail sạch (chỉ stderr),
+# còn `stat -f %m` trên GNU coi %m là TÊN FILE ⇒ in khối verbose "File: ..." ra stdout
+# rồi mới exit lỗi ⇒ fallback nối thêm số vào sau ⇒ chuỗi nhiều dòng lọt vào [[ -lt ]].
+mtime_epoch(){ stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0; }
+
 PROJECT="${1:-}"
 if [[ -z "$PROJECT" || ! -d "$PROJECT" ]]; then
   echo "FAIL cover (thiếu thư mục project: cover.sh <project-dir>)"
@@ -79,7 +84,7 @@ codex_env=()
 rc=$?
 
 # VỚT ẢNH — y hệt gen.sh: codex ≥0.147 nhiều lần sinh xong nhưng không tự copy về đích.
-if [[ $(stat -f %m "$RAW" 2>/dev/null || stat -c %Y "$RAW" 2>/dev/null || echo 0) -lt "$t0" ]]; then
+if [[ $(mtime_epoch "$RAW") -lt "$t0" ]]; then
   ghome="${IMG_HOME:-$HOME/.codex}/generated_images"
   rel=$(grep -oE "generated_images/[^\"' ]*[.]png" "logs/cover.log" 2>/dev/null | tail -1)
   if [[ -n "$rel" && -f "${ghome}/${rel#generated_images/}" ]]; then
@@ -88,7 +93,7 @@ if [[ $(stat -f %m "$RAW" 2>/dev/null || stat -c %Y "$RAW" 2>/dev/null || echo 0
   fi
 fi
 
-mt=$(stat -f %m "$RAW" 2>/dev/null || stat -c %Y "$RAW" 2>/dev/null || echo 0)
+mt=$(mtime_epoch "$RAW")
 if [[ "$mt" -lt "$t0" ]]; then
   echo "FAIL cover (rc=${rc}, ảnh không được ghi mới — xem logs/cover.log)"
   exit 0    # thất bại của ảnh bìa KHÔNG BAO GIỜ là thất bại của lượt gen chính

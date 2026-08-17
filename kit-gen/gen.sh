@@ -2,6 +2,11 @@
 # Sinh sprite sheet UI kit bằng codex CLI image-gen: mỗi (style × sheet) một con codex,
 # tất cả chạy song song. Contract nằm trọn trong styles.json.
 set -uo pipefail
+
+# mtime epoch đa nền. GNU PHẢI đứng trước: `stat -c` trên BSD fail sạch (chỉ stderr),
+# còn `stat -f %m` trên GNU coi %m là TÊN FILE ⇒ in khối verbose "File: ..." ra stdout
+# rồi mới exit lỗi ⇒ fallback nối thêm số vào sau ⇒ chuỗi nhiều dòng lọt vào [[ -lt ]].
+mtime_epoch(){ stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0; }
 cd "$(dirname "$0")"
 ROOT="$(pwd)"
 # ĐƯỜNG DẪN ĐƯA VÀO NỘI DUNG PROMPT phải là dạng Windows khi chạy trên Git-Bash.
@@ -630,10 +635,7 @@ $(cat "prompts/${job}.txt")
   # chỉ trả lời đường dẫn rồi thôi. Nếu log nhắc tới một file trong generated_images và
   # file đó TỒN TẠI trong home đang dùng thì vớt về đích. Đường dẫn không tồn tại thật
   # (container remote) thì không vớt được — để phán FAIL như cũ, không đoán mò ảnh khác.
-  # `stat -f %m` là cú pháp BSD/macOS. `stat` của Git-Bash là GNU coreutils, ở đó
-  # `-f` = --file-system ⇒ lệnh lỗi ⇒ mt=0 ⇒ MỌI job in FAIL dù ảnh đã lưu xong.
-  # Fallback GNU `-c %Y` (chép y nguyên khuôn của cover.sh:77,86).
-  if [[ $(stat -f %m "raw/${job}.png" 2>/dev/null || stat -c %Y "raw/${job}.png" 2>/dev/null || echo 0) -lt "$t0" ]]; then
+  if [[ $(mtime_epoch "raw/${job}.png") -lt "$t0" ]]; then
     local ghome="${IMG_HOME:-$HOME/.codex}/generated_images"
     local rel
     rel=$(grep -oE "generated_images/[^\"' ]*[.]png" "logs/${job}.log" 2>/dev/null | tail -1)
@@ -645,7 +647,7 @@ $(cat "prompts/${job}.txt")
   # Phán theo SẢN PHẨM, không tin mã thoát: codex hay sập vì lỗi API transient
   # SAU khi đã lưu ảnh xong (đã dính: badge ❌ oan, auto-slice bị bỏ qua).
   # Ảnh được ghi mới trong lượt chạy này = job thành công.
-  local mt=$(stat -f %m "raw/${job}.png" 2>/dev/null || stat -c %Y "raw/${job}.png" 2>/dev/null || echo 0)
+  local mt=$(mtime_epoch "raw/${job}.png")
   if [[ "$mt" -ge "$t0" ]]; then
     if [[ $rc -eq 0 ]]; then
       echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)"
