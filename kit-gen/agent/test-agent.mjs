@@ -104,7 +104,13 @@ await runImport({ ...base, pid })
        nhịp trễ của hệ điều hành.
      · try/catch — KẾT QUẢ CHẠY CA quan trọng hơn việc xoá được thư mục tạm. Không nuốt
        im: in cảnh báo rồi vẫn trả đúng mã thoát của bộ ca. */
-try {
+/* KITGEN_TEST_KEEP_TMP=1: GIỮ workspace tạm lại để soi. Khi một ca đỏ vì "agent bảo
+   không có ảnh" thì thứ duy nhất phân xử được là ĐĨA — `raw/` có file không, tên có sạch
+   không, `run.json` ghi job ở trạng thái gì. Trên máy dev thì cứ đọc thẳng thư mục; trên
+   runner có một bước CI đổ nội dung đó ra log. In đường dẫn ở cả hai đường để khỏi mò. */
+if (process.env.KITGEN_TEST_KEEP_TMP) {
+  process.stdout.write(`\n[giữ lại] workspace tạm: ${tmp}\n`)
+} else try {
   await rm(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 } catch (e) {
   process.stdout.write(`\n[cảnh báo] không dọn được thư mục tạm ${tmp}: ${e?.code ?? e}\n` +

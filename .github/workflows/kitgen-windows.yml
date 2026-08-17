@@ -597,7 +597,14 @@ jobs:
           ls -la "$tmp/winbuild"
           test -f "$tmp/winbuild/kitgen-runtime-0.0.0-gitbash.tar.gz"
           test -f "$tmp/winbuild/kitgen-runtime-0.0.0-gitbash.tar.gz.sha256"
-          tar -tzf "$tmp/winbuild/kitgen-runtime-0.0.0-gitbash.tar.gz" | head -20
+          # KHONG viet `tar ... | head -20`: `head` dong ong sau 20 dong, `tar` an SIGPIPE
+          # va thoat 141; runner chay bash voi `-e -o pipefail` nen ca BUOC do vi mot lenh
+          # chi de NGO. Do that: vong 10 (run 31987956355) chet o dung dong nay, exit 141,
+          # ngay sau khi vong 9 vua chua xong loi thieu `shasum` (exit 127). Ghi ra file
+          # roi doc thi khong co ong dan nao de ma vo.
+          tar -tzf "$tmp/winbuild/kitgen-runtime-0.0.0-gitbash.tar.gz" > "$tmp/pkg-list.txt"
+          echo "goi co $(wc -l < "$tmp/pkg-list.txt") muc, 20 muc dau:"
+          head -20 "$tmp/pkg-list.txt"
 
           # ĐỊNH DẠNG manifest LÀ HỢP ĐỒNG với install.sh/install.ps1: "<64 hex><2 space><./path>".
           # Git-Bash không có `shasum` nên build-runtime.sh rơi sang `sha256sum` (vòng 9:
@@ -805,9 +812,70 @@ jobs:
         working-directory: kit-gen
         env:
           KITGEN_TEST_BUDGET_MS: "900000"
+          # Giu workspace tam lai cho buoc "Kham nghiem" ngay duoi doc.
+          KITGEN_TEST_KEEP_TMP: "1"
         run: |
           node agent/test-agent.mjs
           exit $LASTEXITCODE
+
+      # ── KHÁM NGHIỆM: đĩa nói gì, sau khi bộ ca đã nói xong ──────────────────────
+      # Nhóm 5 ca engine đỏ với thông điệp "agent bảo khong ghi duoc anh", trong khi
+      # "Ban mo engine gia" chung minh engine CO ghi file, ten sach, mtime tuoi. Hai
+      # dieu do khong the cung dung, va khong ai phan xu duoc bang suy luan them nua.
+      # Buoc nay in ra DIA: cay thu muc cua tung project (ten file duoi dang JSON nen
+      # \r hien ngay neu co) va tung `run.json` (job / status / diagnosis / artifact /
+      # errorTail). Chay ca khi bo ca xanh (`always()`) va khong bao gio lam do job.
+      - name: Khám nghiệm workspace tạm (chẩn đoán, không chặn)
+        if: always()
+        shell: bash
+        continue-on-error: true
+        working-directory: kit-gen
+        run: |
+          set -u
+          tmp="$(cygpath -u "$TEMP" 2>/dev/null || echo "$RUNNER_TEMP")"
+          cat > "$RUNNER_TEMP/postmortem.mjs" <<'PM'
+          import { readdirSync, readFileSync, statSync, existsSync } from "node:fs"
+          import { join } from "node:path"
+          const root = process.argv[2]
+          const wss = readdirSync(root).filter(n => n.startsWith("kitgen-test-"))
+          console.log("workspace tam tim thay:", wss.length)
+          for (const ws of wss) {
+            // workspace that nam o <tmp>/kitgen-test-XXXX/<ten-workspace>/projects
+            const goc = [join(root, ws), ...readdirSync(join(root, ws), { withFileTypes: true })
+              .filter(e => e.isDirectory()).map(e => join(root, ws, e.name))]
+            const pjs = goc.map(g => join(g, "projects")).filter(existsSync)
+            if (!pjs.length) continue
+            for (const pj of pjs) for (const pid of readdirSync(pj)) {
+              const pdir = join(pj, pid)
+              console.log("\n=== project", pid, "===")
+              for (const sub of ["raw", "prompts", "logs", "kits", "runs"]) {
+                const d = join(pdir, sub)
+                if (!existsSync(d)) { console.log("  " + sub + "/: (khong co)"); continue }
+                const names = readdirSync(d)
+                console.log("  " + sub + "/:", names.map(n => JSON.stringify(n)).join(" ") || "(rong)")
+              }
+              const rdir = join(pdir, "runs")
+              if (!existsSync(rdir)) continue
+              for (const rid of readdirSync(rdir)) {
+                const rj = join(rdir, rid, "run.json")
+                if (!existsSync(rj)) continue
+                const r = JSON.parse(readFileSync(rj, "utf8"))
+                console.log("  run", r.id, "status=" + r.status, "failSummary=" + JSON.stringify(r.failSummary ?? null))
+                for (const j of r.jobs ?? []) {
+                  const png = join(pdir, "raw", j.job + ".png")
+                  const co = existsSync(png)
+                  console.log("    job", JSON.stringify(j.job), "status=" + j.status,
+                    "diagnosis=" + (j.diagnosis ?? "-"),
+                    "artifact=" + (j.artifact ? "co" : "khong"),
+                    "| raw/<job>.png " + (co ? "TON TAI mtime=" + statSync(png).mtimeMs : "KHONG TON TAI"))
+                  if (j.errorTail?.length) console.log("      errorTail:", JSON.stringify(j.errorTail))
+                }
+              }
+            }
+          }
+          PM
+          node "$RUNNER_TEMP/postmortem.mjs" "$tmp" || true
+          exit 0
 
       - name: Khởi động agent thật, gọi /health, rồi tắt sạch
         shell: pwsh

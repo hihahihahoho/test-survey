@@ -8,7 +8,13 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 mkdir -p raw prompts logs kits
-jobs=$(python3 - <<'PY'
+# `tr -d '\r'`: KHONG PHAI trang tri. `print()` cua Python tren Windows dich "\n" thanh
+# "\r\n" KE CA khi stdout la pipe, nen ten job den tay bash dinh mot ky tu \r o duoi.
+# Do that tren runner (run 31987956355, buoc "Ban mo engine gia"): engine in ra
+# `OK  tet-main<CR>  8.0K` va `prompt -> prompts/tet-main<CR>.txt`. gen.sh THAT
+# (kit-gen/gen.sh dong 512) co Y HET cau truc nay va PHAI duoc va y het — xem
+# docs/WINDOWS-PORT.md muc 4.5. Fixture giu dung hinh dang cua ban that, ke ca ban va.
+jobs=$(python3 - <<'PY' | tr -d '\r'
 import json
 cfg = json.load(open('styles.json'))
 for s in cfg['styles']:

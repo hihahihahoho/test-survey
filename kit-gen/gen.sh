@@ -678,7 +678,7 @@ for s in cfg['styles']:
     for sh in cfg['sheets']:
         if sh.get('styles') and s['id'] not in sh['styles']:
             continue
-        print(f\"{s['id']}-{sh['id']}\")")
+        print(f\"{s['id']}-{sh['id']}\")" | tr -d '\r')
 wait
 echo "Xong $(date +%H:%M:%S)"
 ls -la raw/ 2>/dev/null

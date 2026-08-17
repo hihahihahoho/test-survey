@@ -421,6 +421,35 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     }
   })
 
+  /* HỢP ĐỒNG ĐỌC OUTPUT CỦA ENGINE. Chạy trên CẢ HAI nền vì đây cũng là một quyết định:
+     agent KHÔNG được tin rằng engine in ra dòng sạch. `gen.sh` lấy danh sách job bằng
+     `python3 -c "… print(…)"`, mà `print()` trên Windows dịch "\n" thành "\r\n" kể cả khi
+     stdout là pipe ⇒ tên job tới tay agent dính \r. Đo thật trên runner (run 31987956355):
+       prompt → prompts/tet-main<CR>.txt      OK  tet-main<CR>  8.0K
+     Mẫu cũ `(\S+)\.txt` KHÔNG khớp dòng đầu ⇒ job không bao giờ chuyển sang "running" ⇒
+     giao diện đứng im ở "đang chờ" suốt lượt gen. Engine cũng phải tự cắt \r
+     (WINDOWS-PORT §4.5) nhưng agent phải chịu được kể cả khi nó chưa cắt. */
+  await it("tên job dính \\r của Python-trên-Windows vẫn được đọc đúng", async () => {
+    const CR = String.fromCharCode(13)
+    const { RunStore } = await import("../lib/runs.mjs")
+    const store = new RunStore(agent.registry.active)
+    const jobs = ["tet-main", "tet-props"].map(job => ({ job, variant: "tet", sheet: job.split("-")[1], status: "queued" }))
+    const h = Object.create((await import("../lib/run-handle.mjs")).RunHandle.prototype)
+    Object.assign(h, {
+      run: { jobs, kind: "gen", progress: { done: 0, failed: 0, total: 2 } },
+      durations: [], store, events: [], subs: new Set(),
+      emit() {}, persist: async () => {}, eta: () => null, queueSheet() {}, maybeEarlyCover() {},
+    })
+    h.parseGenLine(`prompt → prompts/tet-main${CR}.txt (+1 ảnh kèm)`)
+    eq(jobs[0].status, "running", "job dính CR vẫn chuyển sang running (mẫu prompt chịu được \\r)")
+    h.parseGenLine("prompt → prompts/tet-props.txt (+1 ảnh kèm)")
+    eq(jobs[1].status, "running", "job sạch vẫn chạy như cũ")
+    h.parseGenLine(`OK  tet-main${CR}  8.0K`)
+    eq(jobs[0].status, "ok", "OK dính CR vẫn khớp đúng job")
+    h.parseGenLine("FAIL tet-props (rc=127)")
+    eq(jobs[1].status, "failed", "FAIL sạch vẫn như cũ")
+  })
+
   describe("bảo mật vận chuyển")
   await it("Origin lạ bị 403 ORIGIN_NOT_ALLOWED (kể cả GET)", async () => {
     const r = await call("GET", "/health", { headers: { ...CLIENT, origin: "https://evil.example.com" } })

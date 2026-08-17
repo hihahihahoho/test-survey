@@ -223,6 +223,56 @@ Chưa rà từng dòng (file đang có agent khác sửa). Cần kiểm ở §7 
   nếu đích tồn tại; phải là `os.replace`). Bản hiện tại của `cover.sh` và `thumbs.mjs`
   đều đã dùng `os.replace` — tốt.
 
+### 4.5 🔴 CHẶN CỨNG — `print()` của Python trên Windows đẻ ra `\r` trong TÊN JOB
+
+**Đây không phải suy đoán: đã đo trên runner** (run 31987956355, bước "Bàn mổ engine giả").
+`gen.sh` lấy danh sách job từ Python:
+
+```bash
+# gen.sh dòng 512 — nguyên văn hôm nay
+done < <(python3 -c "
+import json
+cfg = json.load(open('styles.json', encoding='utf-8'))
+...
+        print(f\"{s['id']}-{sh['id']}\")")
+```
+
+`print()` dịch `"\n"` thành `"\r\n"` trên Windows **kể cả khi stdout là pipe** (đó là mặc
+định `newline=None` của `TextIOWrapper`, không liên quan gì tới `PYTHONUTF8`). Bash đọc từng
+dòng, `\r` **ở lại cuối tên job**. Engine in ra:
+
+```
+prompt → prompts/tet-main<CR>.txt (+1 ảnh kèm)
+OK  tet-main<CR>  8.0K
+```
+
+Hậu quả **trên máy người dùng Windows**:
+
+* mọi so khớp tên job trong `gen.sh` (`match "$job"`, `case`…) **âm thầm trượt** — đúng kiểu
+  lỗi tệ nhất: không báo gì, chỉ làm sai;
+* `prompts/<job><CR>.txt`, `logs/<job><CR>.log`, `raw/<job><CR>.png` — tên file mang ký tự
+  điều khiển, mà Win32 **cấm** ký tự 0–31 trong tên file;
+* phía agent, mẫu `prompts/(\S+)\.txt` không khớp ⇒ job **không bao giờ** chuyển sang
+  "running" ⇒ giao diện đứng im ở "đang chờ" suốt cả lượt gen.
+
+**Bản vá cho engine — một từ:**
+
+```bash
+# gen.sh dòng 512: thêm  | tr -d '\r'  vào cuối lệnh python
+done < <(python3 -c "
+...
+        print(f\"{s['id']}-{sh['id']}\")" | tr -d '\r')
+```
+
+Áp cùng cách cho mọi chỗ khác đọc output của Python bằng bash (kiểm cả `cover.sh`).
+**Đã áp sẵn cho hai fixture** `agent/test-fixtures/engine-fake|engine-stepped/gen.sh` — fixture
+phải giữ đúng hình dạng của bản thật, kể cả bản vá.
+
+> Phía agent **không** ngồi đợi engine: `parseGenLine` nay chịu được `\r` (mẫu chấp nhận
+> `\r?` trước `.txt`, và mọi tên job bắt được đều đi qua `cleanJobName`). Có ca kiểm chạy
+> trên **cả hai nền** khoá lại điều đó — xem §8.7.2. Nhưng agent chỉ chữa được phần agent
+> đọc; những chỗ `gen.sh` tự so khớp tên job thì chỉ engine mới chữa được.
+
 ---
 
 ## 5. Installer Windows — `scripts/install.ps1`
@@ -839,13 +889,21 @@ Vá: lấy mốc bằng **chính hệ thống file** — chạm một file `.kit
 `win32`: darwin/linux vẫn so nguyên văn như cũ (`t0ms` ở đó không ai đọc, và cũng không sinh
 file mốc nào).
 
-> **NÓI THẲNG: đây là bản vá theo LẬP LUẬN, chưa có bằng chứng trực tiếp.** Log của bộ ca không
-> in ra con số `mtime` nào cả, nên "lệch đồng hồ" mới là *giả thuyết khớp nhất với ba dữ kiện
-> trên*, chứ chưa ai nhìn thấy nó. Vì vậy vòng này thêm bước CI **"Bàn mổ engine giả"** — chạy
-> engine giả bằng đúng phép spawn của `run-handle`, rồi in: tên file dưới dạng JSON (lộ ngay CR
-> nếu có), `mtime` từng file, và **phán quyết của CẢ HAI luật** (luật cũ theo `Date.now()`, luật
-> mới theo mốc hệ thống file). Bước này `continue-on-error`, không bao giờ làm đỏ job. Vòng sau
-> đọc bốn dòng đó là biết chắc, không phải suy luận thêm lần nào nữa.
+> **⛔ GIẢ THUYẾT NÀY ĐÃ CHẾT — VÒNG 10 ĐO ĐƯỢC SỐ THẬT, VÀ NÓ NÓI KHÔNG.**
+> Bước "Bàn mổ engine giả" chạy trên runner (run 31987956355) in ra:
+>
+> ```
+> t0 dong ho JS   : 1786933608039
+> t0 he thong file: 1786933608039.9346  lech(ms) = -0.9345703125
+>     "tet-main.png"  | LUAT CU floor(mt/1000)>=floor(t0/1000) -> true | mt-t0wall=331ms
+> ```
+>
+> Lệch **0,93 mili giây**, và **luật cũ đã `true`** cho cả ba file. Không có lệch đồng hồ nào
+> hết. Bản vá `stampT0`/`WIN_MTIME_GRACE_MS` **đã bị gỡ bỏ hoàn toàn** ở vòng 10 — không giữ
+> lại "cho chắc": mã chết là mã nói dối người đọc sau, và một khoản nhân nhượng 2 giây còn
+> có thể che mất một lỗi ôi thiu thật. Nguyên nhân thật ở §8.7.
+> *(Rủi ro FAT32/exFAT 2 giây trong bảng trên vẫn đúng về lý thuyết nhưng CHƯA ai gặp —
+> nếu có người dùng để workspace trên USB và báo lỗi, hãy quay lại đọc đúng đoạn này.)*
 
 #### 8.6.3 🟡 Hai ca bundle: từ "đỏ vì ENOTEMPTY" thành "hết 25000ms" — cái chổi ăn hết ngân sách
 
@@ -859,6 +917,89 @@ Dọn dẹp không đáng một xu nào trong ngân sách của ca: nay `maxRetr
 runner tự xoá. Thêm một dòng `⏱ dọn … mất Xms` khi vượt 500ms: đó là cách **duy nhất** để đọc
 log runner mà phân biệt được "ca chậm vì thân ca" với "ca chậm vì cái chổi" — nếu vòng sau hai
 ca này vẫn đỏ ở 25s mà không có dòng `⏱`, thì thủ phạm nằm trong thân ca và ta biết ngay.
+
+### 8.7 Vòng 10 (run 31987956355) — bàn mổ trả lời, và câu trả lời không phải cái tôi đoán
+
+Hai ca bundle **xanh** (trần 3s của cái chổi ăn — §8.6.3 đúng). Còn 5 ca engine. Và bước
+"Bàn mổ engine giả" đã làm đúng việc nó sinh ra để làm: **giết một giả thuyết sai của chính
+tôi trong một lượt**, thay vì để nó sống thêm ba vòng nữa.
+
+#### 8.7.1 🔴 SIGPIPE: `tar | head` giết cả bước, vì runner chạy bash với `-e -o pipefail`
+
+Job 3 đổi kiểu chết: `exit 127` (thiếu `shasum`, đã vá) → **`exit 141`**. 141 = 128+13 = SIGPIPE.
+Thủ phạm là một dòng **của chính tôi**, viết từ vòng 0 và **chưa bao giờ chạy tới** vì các
+vòng trước đã chết sớm hơn:
+
+```bash
+tar -tzf "$tmp/winbuild/....tar.gz" | head -20
+```
+
+`head` đóng ống sau 20 dòng → `tar` ăn SIGPIPE → thoát 141. Runner chạy `shell: bash` bằng
+`bash --noprofile --norc -e -o pipefail {0}`, mà `pipefail` lấy mã thoát **khác 0 cuối cùng
+trong ống**, nên cả BƯỚC đỏ vì một lệnh chỉ để *ngó*. Tái dựng được ngay trên macOS:
+
+```
+$ bash -c 'set -e -o pipefail; seq 1 5000000 | head -20 >/dev/null; echo khong chet'
+exit=141
+```
+
+*(Vì sao 193 dòng không nổ mà runner nổ: nếu output vừa trong bộ đệm ống 64KB thì `tar` viết
+xong trước khi `head` đóng — cái bẫy này **chỉ nổ khi output đủ dài**, tức là đúng loại bẫy
+nằm im tới ngày gói lớn lên.)*
+
+Vá: ghi danh sách ra file rồi `head` file — không còn ống dẫn nào để mà vỡ. Đã quét cả
+workflow: đây là chỗ **duy nhất** có `| head` / `| grep -q` trong các bước `shell: bash`.
+
+#### 8.7.2 🔴 Nguyên nhân thật của 5 ca: `\r` trong tên job (§4.5)
+
+Bàn mổ in ra nguyên văn:
+
+```
+stdout (JSON, thay CR neu co):
+    "prompt → prompts/tet-main\r.txt (+1 ảnh kèm)"
+    "OK  tet-main\r  8.0K"
+    "prompt → prompts/tet-bg-home\r.txt (+1 ảnh kèm)"
+    "OK  tet-bg-home\r  8.0K"
+    "prompt → prompts/tet-props.txt (+1 ảnh kèm)"     ← job CUỐI không dính \r
+```
+
+`print()` của Python dịch `\n` → `\r\n` trên Windows kể cả khi stdout là pipe. Chi tiết đầy
+đủ và bản vá cho engine: **§4.5** (đó là nơi engine owner đọc). Ba hệ quả đo được:
+
+1. mẫu `prompts/(\S+)\.txt` của `parseGenLine` **không khớp** dòng có `\r` ⇒ chỉ job cuối
+   cùng phát `job.started` ⇒ giao diện đứng im ở "đang chờ";
+2. trong fixture, `case "$j" in *bg-home)` **không khớp** `tet-bg-home\r` ⇒ job cố ý-lỗi lại
+   thành công ⇒ `failSummary` đếm sai — đúng triệu chứng `3/3` thay vì `1/3` của ca [113];
+3. tên file mang ký tự điều khiển, mà Win32 **cấm** ký tự 0–31 trong tên file.
+
+Vá ở **hai lớp, mỗi lớp một lý do**:
+
+* **engine** (`| tr -d '\r'`, đã áp cho hai fixture, còn `gen.sh` thật là món nợ §4.5) — vì chỉ
+  engine mới chữa được những chỗ chính nó so khớp tên job;
+* **agent** (`parseGenLine` chịu được `\r`, mọi tên job đi qua `cleanJobName`) — vì agent
+  **không được phép** tin rằng engine in ra dòng sạch. Khoá bằng ca kiểm chạy trên **cả hai
+  nền**; đã chứng minh nó bắt được lỗi: trả mẫu về bản cũ thì **161/162**, vá lại thì **162/162**.
+
+> **Tôi cố ý KHÔNG sửa fixture cho vừa lòng bộ ca.** Fixture là bản sao hình dạng của engine
+> thật; nếu chỉ sửa fixture thì bộ ca xanh còn sản phẩm vẫn hỏng — đúng cái bẫy đã ghi ở
+> §8.5.2. Vì thế bản vá fixture đi **kèm** §4.5 cho bản thật, và kèm lớp phòng thủ phía agent
+> có ca kiểm riêng.
+
+#### 8.7.3 Vẫn còn một khoảng tối — và lần này tôi đặt đèn thay vì đặt giả thuyết
+
+Với `\r`, ba dữ kiện dưới đây **không thể cùng đúng**, và tôi chưa có cách giải thích chúng
+bằng suy luận nữa:
+
+* bàn mổ: `raw/` có **3 file, tên SẠCH** (`"tet-main.png"`…), mtime tươi, luật cũ `true`;
+* bộ ca: `failSummary` = **`3/3 job không ghi được ảnh`**, tức `attachArtifact` không thấy file nào;
+* ca `[114]` (một job duy nhất, job cuối ⇒ không dính `\r`) thì **xanh**.
+
+Nên vòng này thêm bước **"Khám nghiệm workspace tạm"**: `KITGEN_TEST_KEEP_TMP=1` giữ workspace
+lại, rồi in ra **từ đĩa** — cây thư mục từng project với tên file dạng JSON (lộ ngay `\r` hay
+ký tự PUA nếu có), và từng `run.json` (job / status / diagnosis / artifact / errorTail) kèm câu
+trả lời `raw/<job>.png` **có tồn tại hay không**. Chạy `if: always()`, không bao giờ làm đỏ job.
+Nếu bản vá `\r` là đủ thì vòng sau 5 ca xanh và bước này chỉ để đọc cho vui; nếu chưa đủ, nó
+chỉ thẳng vào chỗ lệch mà không cần thêm một vòng đoán nào.
 
 ---
 
@@ -906,11 +1047,14 @@ ca này vẫn đỏ ở 25s mà không có dòng `⏱`, thì thủ phạm nằm 
 | k | `lib/platform.mjs` (`taskkillArgs`) | Vòng 7: `taskkill` thiếu `/F` không giết nổi tiến trình console ⇒ nút Dừng không dừng, quota vẫn cháy — xem §8.5.3 | luôn `/T /F`; ca kiểm chạy trên cả hai nền, đã chứng minh nó bắt được lỗi (158/159 khi bỏ `/F`) |
 | l | `test/harness.mjs` (`rmTemp`), `suite-import`, `suite-projects`, `integration/connections` | Vòng 7: `ENOTEMPTY` khi các suite tự dọn thư mục tạm — retry của `fsx.mjs` chỉ phủ mã sản xuất | một cái chổi dùng chung: retry 10×100ms và **không bao giờ ném** |
 | m | `scripts/build-runtime.sh` + bước CI | Vòng 9: `xargs: shasum: No such file or directory` (exit 127) — Git for Windows không có `shasum` ⇒ **không đóng gói được bản phát hành từ Windows** — xem §8.6.1 | chọn công cụ theo máy (`shasum` trước, rồi `sha256sum`); CI khẳng định định dạng manifest **và** băm lại toàn gói |
-| n | `lib/run-handle.mjs` (`stampT0`, `attachArtifact`) | Vòng 9: `3/3 job không ghi được ảnh` trong khi file nằm sờ sờ trong `raw/` — luật "phán theo sản phẩm" so đồng hồ JS với dấu thời gian của hệ thống file — xem §8.6.2 | mốc `.kitgen-t0` lấy từ **chính hệ thống file** + 2s nhân nhượng cho FAT, gate `win32`. **Kèm bước CI "Bàn mổ engine giả"** vì đây là bản vá theo lập luận, chưa có bằng chứng trực tiếp |
+| ~~n~~ | ~~`lib/run-handle.mjs` (`stampT0`)~~ | ⛔ **ĐÃ RÚT** — vòng 10 đo được `lệch = −0,93ms` và luật cũ đã `true`; giả thuyết lệch đồng hồ **sai**, xem §8.6.2 | mã đã **gỡ sạch** (37 dòng), `attachArtifact` trở lại đúng bản gốc. Cái duy nhất còn lại từ vòng đó là **bước CI "Bàn mổ engine giả"** — và chính nó là thứ giết giả thuyết |
 | o | `test/harness.mjs` (`rmTemp`) | Vòng 9: hai ca bundle đổi từ `ENOTEMPTY` sang `hết 25000ms` — `fs.rm` giãn chờ theo `lần_thử × retryDelay` = 5,5s mỗi thư mục — xem §8.6.3 | `maxRetries: 3, retryDelay: 50` + trần cứng 3s; in `⏱` khi dọn quá 500ms |
+| p | `.github/workflows/kitgen-windows.yml` (bước "Đóng gói bằng Git-Bash") | Vòng 10: `exit 141` = SIGPIPE — `tar -tzf … \| head -20` dưới `bash -e -o pipefail` của runner làm đỏ cả bước chỉ vì một lệnh để *ngó* — xem §8.7.1 | ghi danh sách ra file rồi `head` file; đã quét: không còn `\| head` / `\| grep -q` nào trong các bước `shell: bash` |
+| q | `lib/run-handle.mjs` (`cleanJobName`, `parseGenLine`), `test-fixtures/engine-fake/gen.sh`, `engine-stepped/gen.sh` | Vòng 10: `print()` của Python trên Windows dịch `\n` → `\r\n` **kể cả ra pipe** ⇒ tên job mang `\r` ⇒ `prompt →` không khớp, `case *bg-home)` không khớp, tên file chứa ký tự Win32 cấm — xem §8.7.2 và **§4.5** | hai lớp: engine `\| tr -d '\r'` (hai fixture; `gen.sh` thật là nợ §4.5), agent chịu được `\r` và lọc mọi tên job. Ca kiểm chạy **cả hai nền**, đã chứng minh bắt được lỗi (161/162 khi trả mẫu về bản cũ) |
+| r | `test-agent.mjs`, workflow (bước "Khám nghiệm workspace tạm") | Vòng 10: bàn mổ nói `raw/` có 3 file tên sạch, bộ ca nói `3/3 không ghi được ảnh` — **hai dữ kiện không thể cùng đúng**, và tôi hết cách suy luận — xem §8.7.3 | `KITGEN_TEST_KEEP_TMP=1` giữ workspace; bước `if: always()` in **từ đĩa** cây thư mục (tên dạng JSON) + mọi `run.json` kèm câu trả lời `raw/<job>.png` có tồn tại không |
 
-Mọi bản vá phía agent (a, b, e, g, h, j, k, l, n, o) đã được đo lại trên macOS:
-`node agent/test-agent.mjs` → **161/161 PASS · 0 FAIL** (số ca tăng dần vì các luồng việc khác
+Mọi bản vá phía agent (a, b, e, g, h, j, k, l, o, q, r) đã được đo lại trên macOS:
+`node agent/test-agent.mjs` → **162/162 PASS · 0 FAIL** (số ca tăng dần vì các luồng việc khác
 cũng thêm ca; điều bất biến là **0 FAIL**). Bản vá `m` đo bằng cách dựng lại gói thật trên
 macOS: 193 file, mọi dòng manifest đúng định dạng, `shasum -c` khớp 193/193.
 
@@ -977,3 +1121,18 @@ xem §8.6.1. Điểm 11 cũng xong: bộ ca chạy hết trong **108 giây** tr�
 14. **`build-runtime.sh` trong Git-Bash** lần đầu chạy tới cuối: xem `sha256sum` có in đúng
     `<hash>␠␠<path>` không (bước CI tự khẳng định), và tarball dựng từ Windows có giải nén +
     cài lại được không — đó mới là điều kiện đủ để nói "phát hành được từ Windows".
+
+*(Cập nhật sau vòng 10 — **điểm 12 đã trả lời, và câu trả lời là KHÔNG**: luật cũ `true`, lệch
+đồng hồ −0,93ms ⇒ giả thuyết chết, đã gỡ ghi công và gỡ luôn mã (§8.6.2, hàng `n`). **Điểm 13
+xong**: hai ca bundle xanh, trần 3s ăn. **Điểm 14 vẫn treo** vì bước đó chết vì SIGPIPE trước
+khi tới phần băm (§8.7.1). Ba câu hỏi của vòng 11:)*
+
+15. **Năm ca engine có xanh không sau bản vá `\r`?** Nếu xanh ⇒ §4.5 là **chặn cứng có thật cho
+    máy user**, và `gen.sh` dòng 512 phải được vá trước khi phát hành, không phải sau. Nếu vẫn
+    đỏ ⇒ đọc **"Khám nghiệm workspace tạm"** trước, đừng đoán thêm lần nữa: nó in `run.json` và
+    sự tồn tại của `raw/<job>.png` **từ đĩa**, tức là chỗ duy nhất còn có thể nói dối đã bị soi.
+16. **Tên file trong khám nghiệm có ký tự lạ không?** In dạng JSON nên `\r` hay ký tự PUA lộ ngay.
+    Có ⇒ ai đó vẫn tạo tên file từ chuỗi chưa lọc, tìm chỗ đó. Sạch mà `artifact` vẫn rỗng ⇒
+    lỗi nằm ở **so khớp tên**, không phải ở việc ghi file.
+17. **Bước "Đóng gói bằng Git-Bash"** lần này mới thật sự chạy tới đoạn băm — xem §9.2 điểm 14,
+    câu hỏi vẫn nguyên vẹn, chỉ là lần đầu có cơ hội được trả lời.

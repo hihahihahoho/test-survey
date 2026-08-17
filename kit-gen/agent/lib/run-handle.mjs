@@ -42,23 +42,10 @@ const SHEET_SLICE_TIMEOUT_MS = 15 * 60 * 1000
    kèm một dòng log NÓI RÕ vì sao — im lặng là thứ đã tốn của lượt CI đầu 74 phút. */
 const WIN_PIPE_GRACE_MS = 5000
 
-/* ══ WINDOWS: ĐỪNG SO ĐỒNG HỒ JS VỚI DẤU THỜI GIAN CỦA HỆ THỐNG FILE ═════════
-   Luật "phán theo SẢN PHẨM" so `mtime(raw/<job>.png)` với `Date.now()` lúc mở lượt.
-   Hai con số đó đến từ HAI NGUỒN KHÁC NHAU và chỉ trùng nhau trên máy hiền:
-     · macOS/Linux + APFS/ext4: mtime lấy từ cùng đồng hồ, sai số micro giây;
-     · Windows: dấu thời gian file lấy từ ĐỒNG HỒ HỆ THỐNG ĐƯỢC CACHE (tick ~15,6ms),
-       còn `Date.now()` của Node lấy từ GetSystemTimePreciseAsFileTime — chính xác hơn.
-       Trên máy ảo, chênh lệch đó không có trần nào bảo đảm;
-     · FAT32/exFAT (ổ USB, thẻ nhớ — workspace của user hoàn toàn có thể nằm đó):
-       độ phân giải mtime là HAI GIÂY và làm tròn XUỐNG.
-   Một lượt gen mà mtime bị đọc thành "cũ hơn lúc mở lượt" thì MỌI tấm đều bị phán là
-   "không ghi được ảnh" — đúng triệu chứng `3/3 job không ghi được ảnh` của runner
-   (run 31986200079) trong khi file nằm sờ sờ trong `raw/`.
-   Vá: mốc thời gian lấy bằng CHÍNH hệ thống file (chạm một file `.t0` trong project rồi
-   đọc mtime của nó) ⇒ hai vế cùng một nguồn, cùng một độ phân giải. Cộng thêm 2s nhân
-   nhượng cho FAT. `t0ms` chỉ được DÙNG trên win32; darwin/linux vẫn so nguyên như cũ. */
-const WIN_MTIME_GRACE_MS = 2000
-const T0_MARKER = ".kitgen-t0"
+/** Cắt ký tự điều khiển khỏi tên job do engine in ra (xem parseGenLine). Chuỗi sạch đi
+ *  qua đây KHÔNG đổi một ký tự nào ⇒ darwin/linux giữ nguyên hành vi. */
+const cleanJobName = s => String(s).replace(/[\u0000-\u001f]/g, "")
+
 /** Bề rộng thumbnail mà lưới của web luôn hỏng (`?w=256`, xem features/kit/lib/image-source.ts). */
 const THUMB_WIDTHS = [256]
 /** Cover chạy NGOÀI pool của gen.sh ⇒ tổng số lượt codex đồng thời là maxJobs+1.
@@ -204,7 +191,6 @@ export class RunHandle {
     const onlyJobs = this.run.jobs.map(j => ({ variant: j.variant, sheet: j.sheet }))
     await materializeStyles(pdir, this.opts.contract, onlyJobs.length ? onlyJobs : null)
     for (const d of ["raw", "logs", "prompts", "skeleton", "kits"]) await ensureDir(join(pdir, d))
-    await this.stampT0()
     if (this.stopped()) return
     this.run.status = "running"
     await this.persist()
@@ -301,14 +287,27 @@ export class RunHandle {
     return this.phaseDone
   }
 
-  /** gen.sh in "OK  <job> …" / "FAIL <job> (…)" → cập nhật tiến độ realtime. */
+  /** gen.sh in "OK  <job> …" / "FAIL <job> (…)" → cập nhật tiến độ realtime.
+   *
+   *  ⚠ TÊN JOB TỪ ENGINE CÓ THỂ DÍNH \\r. `gen.sh` lấy danh sách job bằng
+   *  `python3 -c "… print(…)"`, mà `print()` của Python trên Windows dịch "\\n" thành
+   *  "\\r\\n" — kể cả khi stdout là pipe. Bash đọc từng dòng thì ký tự \\r ở lại
+   *  CUỐI TÊN JOB, nên engine in ra `prompt → prompts/tet-main\\r.txt` và
+   *  `OK  tet-main\\r  8.0K`. ĐÃ ĐO THẬT trên runner (run 31987956355, bước "Bàn mổ
+   *  engine giả"): hai job đầu dính \\r, job cuối thì không.
+   *  Hệ quả nếu không chống ở đây: mẫu `(\\S+)\\.txt` KHÔNG khớp (vì sau tên job là
+   *  \\r chứ không phải dấu chấm) ⇒ job KHÔNG BAO GIỜ chuyển sang "running" ⇒ giao diện
+   *  đứng im ở "đang chờ" suốt cả lượt gen.
+   *  Chống hai lớp: mẫu chấp nhận \\r đứng trước ".txt", và mọi tên job bắt được đều đi
+   *  qua `cleanJobName`. Trên darwin/linux không có \\r nào để mà cắt ⇒ y hệt mã cũ. */
   parseGenLine(line) {
     let m = /^OK\s+(\S+)/.exec(line)
-    if (m) return this.markJob(m[1], "ok")
+    if (m) return this.markJob(cleanJobName(m[1]), "ok")
     m = /^FAIL\s+(\S+)/.exec(line)
-    if (m) return this.markJob(m[1], "failed", line)
-    m = /^prompt →\s+prompts\/(\S+)\.txt/.exec(line)
+    if (m) return this.markJob(cleanJobName(m[1]), "failed", line)
+    m = /^prompt →\s+prompts\/(\S+?)\r?\.txt/.exec(line)
     if (m) {
+      m[1] = cleanJobName(m[1])
       const j = this.run.jobs.find(x => x.job === m[1])
       if (j && j.status === "queued") { j.status = "running"; j.startedAt = new Date().toISOString(); this.emit({ type: "job.started", job: j.job }) }
     }
@@ -417,28 +416,10 @@ export class RunHandle {
    *  xong. Đó chính là lý do ô "Đã xong" trong tab Ảnh gốc là ô ĐEN giữa lượt: web đọc
    *  `job.artifact.path`, mà ô đó còn `null` cho tới cuối lượt.
    *  @returns {boolean} ảnh có phải do CHÍNH lượt này ghi ra không. */
-  /** Đóng dấu mốc thời gian BẰNG CHÍNH hệ thống file (xem WIN_MTIME_GRACE_MS).
-   *  Hỏng thì lui về đồng hồ JS — mất độ chính xác chứ không mất lượt chạy. */
-  async stampT0() {
-    this.t0ms = this.t0 * 1000
-    // Chỉ win32: darwin/linux không đọc `t0ms` ở đâu cả, đừng đẻ thêm file cho nó.
-    if (!IS_WIN || this.detached) return
-    try {
-      await ensureDir(this.dir)                     // runs/<id>/ — cùng ổ đĩa với raw/
-      const marker = join(this.dir, T0_MARKER)
-      await writeFile(marker, new Date().toISOString() + "\n")
-      const mt = await mtimeOf(marker)
-      if (mt > 0) this.t0ms = mt
-    } catch { /* chỉ là mốc; không có thì dùng đồng hồ JS */ }
-  }
-
   async attachArtifact(pdir, j) {
     const png = join(pdir, "raw", `${j.job}.png`)
     const mt = await mtimeOf(png)
-    /* darwin/linux: NGUYÊN VĂN mã cũ. win32: so với mốc lấy từ chính hệ thống file. */
-    const fresh = IS_WIN
-      ? mt > 0 && mt >= (this.t0ms ?? this.t0 * 1000) - WIN_MTIME_GRACE_MS
-      : mt > 0 && Math.floor(mt / 1000) >= this.t0
+    const fresh = mt > 0 && Math.floor(mt / 1000) >= this.t0
     if (!fresh || j.artifact || this.detached) return fresh
     const st = await stat(png).catch(() => null)
     const artifactsDir = join(this.dir, "artifacts")
