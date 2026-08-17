@@ -144,6 +144,25 @@ case "${1:-help}" in
   doctor) curl -fsS -H 'X-KitGen-Client: 1' -H "Origin: $ORIGIN" "http://127.0.0.1:$PORT/api/doctor?refresh=1" ;;
   logs) tail -n "${2:-100}" "$HOME_DIR/agent.log" ;;
   open) open "http://127.0.0.1:$PORT/app/" 2>/dev/null || xdg-open "http://127.0.0.1:$PORT/app/" ;;
-  update) shift; exec "$HOME_DIR/install.sh" --update "$@" ;;
+  update)
+    shift
+    # `install.sh` tự cài lại cả bin/kitgen. Đừng để shell này tiếp tục đọc inode
+    # bị installer cũ truncate; hand off sang wrapper trong thư mục tạm.
+    update_dir="$(mktemp -d "${TMPDIR:-/tmp}/kitgen-update.XXXXXX" 2>/dev/null || true)"
+    if [ -n "$update_dir" ] && cp "$HOME_DIR/install.sh" "$update_dir/install.sh" 2>/dev/null; then
+      chmod +x "$update_dir/install.sh" 2>/dev/null || true
+      cat > "$update_dir/run.sh" <<'RUNNER'
+#!/bin/sh
+set -u
+dir="$1"; shift
+trap 'rc=$?; rm -rf "$dir"; exit "$rc"' EXIT INT TERM
+"$dir/install.sh" --update "$@"
+RUNNER
+      chmod +x "$update_dir/run.sh"
+      exec "$update_dir/run.sh" "$update_dir" "$@"
+    fi
+    [ -z "$update_dir" ] || rm -rf "$update_dir"
+    exec "$HOME_DIR/install.sh" --update "$@"
+    ;;
   help|*) echo "Usage: kitgen {start|stop|restart|status|doctor|logs [n]|open|update}" ;;
 esac

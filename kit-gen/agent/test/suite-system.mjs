@@ -359,6 +359,7 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
   await it("POST /api/update ghi nhật ký ra file và tách hẳn session (không tự giết mình)", async () => {
     const fakeHome = join(tmp, "kitgen-home-spawn")
     mkdirSync(fakeHome, { recursive: true })
+    writeFileSync(join(fakeHome, "install.sh"), "#!/bin/sh\nexit 0\n", { mode: 0o700 })
     const calls = []
     const fake = { on() {}, unref() {} }
     const { scheduleUpdate, resetUpdateInstallLock } = await import("../lib/update.mjs")
@@ -394,6 +395,7 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
   await it("hai lượt update ⇒ update.log GIỮ CẢ HAI, có vạch phân cách", async () => {
     const fakeHome = join(tmp, "kitgen-home-twice")
     mkdirSync(fakeHome, { recursive: true })
+    writeFileSync(join(fakeHome, "install.sh"), "#!/bin/sh\nexit 0\n", { mode: 0o700 })
     const { scheduleUpdate, resetUpdateInstallLock } = await import("../lib/update.mjs")
     const calls = []
     const spawnImpl = () => { calls.push(1); return { on() {}, unref() {} } }

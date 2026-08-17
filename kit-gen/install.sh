@@ -69,6 +69,28 @@ sha256_check(){
 }
 mkdir -p "$KITGEN_HOME/releases" "$KITGEN_HOME/bin" "$WORKSPACE"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/kitgen-install.XXXXXX")"
+# Mọi file có thể đang được tiến trình khác đọc phải được dựng ngoài rồi rename vào.
+# `cp > đích` truncate inode đang sống; Bash/Node đọc lazy sẽ ăn nửa nội dung mới.
+ATOMIC_TMP=""
+atomic_copy_file(){
+  _src="$1"; _dst="$2"; _executable="${3:-0}"
+  _dst_dir="$(dirname "$_dst")"
+  mkdir -p "$_dst_dir"
+  ATOMIC_TMP="$(mktemp "$_dst_dir/.kitgen-atomic.XXXXXX")"
+  cp "$_src" "$ATOMIC_TMP"
+  [ "$_executable" -eq 1 ] && chmod +x "$ATOMIC_TMP"
+  mv -f "$ATOMIC_TMP" "$_dst"
+  ATOMIC_TMP=""
+}
+atomic_render_file(){
+  _dst="$1"; shift
+  _dst_dir="$(dirname "$_dst")"
+  mkdir -p "$_dst_dir"
+  ATOMIC_TMP="$(mktemp "$_dst_dir/.kitgen-atomic.XXXXXX")"
+  "$@" > "$ATOMIC_TMP"
+  mv -f "$ATOMIC_TMP" "$_dst"
+  ATOMIC_TMP=""
+}
 # Agent đặt trước reservation + token; lệnh chạy tay tự tạo reservation. PID nằm trong
 # file nội bộ, không bao giờ trả ra API. SIGKILL để lại PID chết; lượt sau sẽ thu hồi khóa.
 UPDATE_LOCK="${KITGEN_UPDATE_LOCK:-$KITGEN_HOME/.update-lock}"
@@ -86,6 +108,7 @@ ACTIVATED=0
 PREVIOUS=""
 cleanup(){
   _status=$?
+  [ -z "$ATOMIC_TMP" ] || rm -f "$ATOMIC_TMP" 2>/dev/null || true
   rm -rf "$TMP"
   # THOÁT GIỮA CHỪNG SAU KHI ĐÃ ĐỔI SYMLINK là đúng cái trạng thái đã cắn máy chủ SP
   # ngày 14/08 (BACKLOG #20): `current` trỏ bản mới, tiến trình cũ vẫn chạy, không ai
@@ -345,11 +368,14 @@ write_codex_shim(){
   _shim="$KITGEN_HOME/tools/bin/codex"
   # File .js KHÔNG tự chạy được dưới launchd (shebang `env node` cần node trong PATH),
   # nên shim gọi thẳng Node riêng của KitGen.
+  ATOMIC_TMP="$(mktemp "$KITGEN_HOME/tools/bin/.kitgen-codex.XXXXXX")"
   case "$1" in
-    *.js|*.mjs|*.cjs) printf '#!/bin/sh\nexec "%s" "%s" "$@"\n' "$NODE" "$1" > "$_shim" ;;
-    *)                printf '#!/bin/sh\nexec "%s" "$@"\n' "$1" > "$_shim" ;;
+    *.js|*.mjs|*.cjs) printf '#!/bin/sh\nexec "%s" "%s" "$@"\n' "$NODE" "$1" > "$ATOMIC_TMP" ;;
+    *)                printf '#!/bin/sh\nexec "%s" "$@"\n' "$1" > "$ATOMIC_TMP" ;;
   esac
-  chmod +x "$_shim"
+  chmod +x "$ATOMIC_TMP"
+  mv -f "$ATOMIC_TMP" "$_shim"
+  ATOMIC_TMP=""
   printf '%s' "$_shim"
 }
 
@@ -579,9 +605,19 @@ rm -rf "$KITGEN_HOME/tools/playwright-browsers" \
        "$KITGEN_HOME/tools/node_modules/playwright" \
        "$KITGEN_HOME/tools/node_modules/playwright-core" 2>/dev/null || true
 mkdir -p "$WORKSPACE/.kitgen/engine" "$WORKSPACE/projects"
-cp -R "$DEST/engine/." "$WORKSPACE/.kitgen/engine/"
-cp "$DEST/runtime/bin/kitgen" "$KITGEN_HOME/bin/kitgen"
-chmod +x "$KITGEN_HOME/bin/kitgen" "$WORKSPACE/.kitgen/engine/gen.sh"
+# Engine có thể đang được gen.sh/cover.sh đọc. Copy từng file qua inode tạm để lượt
+# đang chạy giữ nguyên byte cũ; lượt mới thấy toàn bộ file mới sau rename.
+while IFS= read -r -d '' _engine_src; do
+  _engine_rel="${_engine_src#"$DEST/engine/"}"
+  _engine_dst="$WORKSPACE/.kitgen/engine/$_engine_rel"
+  if [[ "$_engine_rel" == *.sh ]]; then
+    atomic_copy_file "$_engine_src" "$_engine_dst" 1
+  else
+    atomic_copy_file "$_engine_src" "$_engine_dst"
+  fi
+done < <(find "$DEST/engine" -type f -print0)
+# `bin/kitgen` cũng là shell script có thể đang được đọc bởi lệnh update/status.
+atomic_copy_file "$DEST/runtime/bin/kitgen" "$KITGEN_HOME/bin/kitgen" 1
 if [ "$CODEX_PROFILE" = "separate" ]; then
   CODEX_MODE="img-home"; CODEX_HOME_LABEL="~/.codex-img"
 else
@@ -607,8 +643,11 @@ tmp = p + ".tmp"
 with open(tmp, "w") as f: json.dump(cfg, f, indent=2); f.write("\n")
 os.replace(tmp, p)
 PY
-cp "$DEST/install.sh" "$KITGEN_HOME/install.sh"
-cat > "$KITGEN_HOME/config.env" <<CFG
+# Installer có thể đang chạy đúng từ `$KITGEN_HOME/install.sh`; rename inode mới để
+# Bash tiếp tục đọc bản cũ an toàn, kể cả khi bản phát hành mới dài hơn nhiều dòng.
+atomic_copy_file "$DEST/install.sh" "$KITGEN_HOME/install.sh" 1
+ATOMIC_TMP="$(mktemp "$KITGEN_HOME/.kitgen-config.XXXXXX")"
+cat > "$ATOMIC_TMP" <<CFG
 KITGEN_HOME='$KITGEN_HOME'
 KITGEN_SOURCE='$KITGEN_HOME/current'
 KITGEN_WORKSPACE='$WORKSPACE'
@@ -622,7 +661,9 @@ KITGEN_RELEASE_REPO='$RELEASE_REPO'
 KITGEN_RELEASE_CHANNEL='$RELEASE_CHANNEL'
 KITGEN_CODEX_PROFILE='$CODEX_PROFILE'
 CFG
-chmod 600 "$KITGEN_HOME/config.env"
+chmod 600 "$ATOMIC_TMP"
+mv -f "$ATOMIC_TMP" "$KITGEN_HOME/config.env"
+ATOMIC_TMP=""
 progress "5/7" "Đăng ký dịch vụ local"
 # Đây là điểm KHÔNG QUAY ĐẦU: từ dòng này `current` là bản mới, và mọi đường thoát
 # phía dưới đều phải tự nói ra mình để lại máy ở trạng thái nào (xem `cleanup`).
@@ -634,7 +675,7 @@ if [ "$NO_START" -eq 0 ]; then
   if [ "$(uname -s)" = Darwin ]; then
     PLIST="$HOME/Library/LaunchAgents/com.kitgen.agent.plist"
     mkdir -p "$(dirname "$PLIST")"
-    sed -e "s|@KITGEN_BIN@|$BIN|g" -e "s|@KITGEN_HOME@|$KITGEN_HOME|g" "$DEST/runtime/service/com.kitgen.agent.plist.in" > "$PLIST"
+    atomic_render_file "$PLIST" sed -e "s|@KITGEN_BIN@|$BIN|g" -e "s|@KITGEN_HOME@|$KITGEN_HOME|g" "$DEST/runtime/service/com.kitgen.agent.plist.in"
     DOMAIN="gui/$(id -u)"
     SERVICE="$DOMAIN/com.kitgen.agent"
     launchctl bootout "$DOMAIN/com.kitgen.agent" 2>/dev/null || \
@@ -656,7 +697,7 @@ if [ "$NO_START" -eq 0 ]; then
     fi
   elif command -v systemctl >/dev/null 2>&1; then
     UNIT="$HOME/.config/systemd/user/kitgen-agent.service"; mkdir -p "$(dirname "$UNIT")"
-    sed "s|@KITGEN_BIN@|$BIN|g" "$DEST/runtime/service/kitgen-agent.service.in" > "$UNIT"
+    atomic_render_file "$UNIT" sed "s|@KITGEN_BIN@|$BIN|g" "$DEST/runtime/service/kitgen-agent.service.in"
     systemctl --user daemon-reload; systemctl --user enable --now kitgen-agent
   else nohup "$BIN" run >>"$KITGEN_HOME/agent.log" 2>&1 & fi
   # ① KHÔNG AI TRẢ LỜI ⇒ bản mới không chạy được ⇒ lùi hẳn về bản cũ.

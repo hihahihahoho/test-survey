@@ -3,9 +3,9 @@
    vì PID MSYS và PID Win32 không phải một hợp đồng có thể giả vờ kiểm bằng taskkill. */
 import { createHash } from "node:crypto"
 import { spawn } from "node:child_process"
-import { chmod, mkdir, realpath, readFile, rm, symlink, writeFile } from "node:fs/promises"
+import { chmod, mkdir, realpath, readFile, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { delimiter, dirname, join, relative } from "node:path"
-import { describe, it, eq, ok } from "./harness.mjs"
+import { describe, it, eq, includes, ok } from "./harness.mjs"
 import { findBash, toBashPath } from "../lib/platform.mjs"
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -176,14 +176,14 @@ async function filesUnder(root, dir = root) {
   return out.sort()
 }
 
-async function makeRuntimeFixture(tmp, repoInstall) {
-  const root = join(tmp, "fixture", "kitgen-runtime-2.1.25")
+async function makeRuntimeFixture(tmp, repoInstall, { version = "2.1.25", installerSuffix = "" } = {}) {
+  const root = join(tmp, "fixture", `kitgen-runtime-${version}`)
   await mkdir(join(root, "agent"), { recursive: true })
   await mkdir(join(root, "engine"), { recursive: true })
   await mkdir(join(root, "app"), { recursive: true })
   await mkdir(join(root, "runtime", "bin"), { recursive: true })
   await mkdir(join(root, "runtime", "service"), { recursive: true })
-  await writeFile(join(root, "VERSION"), "2.1.25\n")
+  await writeFile(join(root, "VERSION"), `${version}\n`)
   await writeFile(join(root, "agent", "server.mjs"), "export {}\n")
   await writeFile(join(root, "engine", "gen.sh"), "#!/bin/sh\nexit 0\n")
   await writeFile(join(root, "app", "index.html"), "<!doctype html>\n")
@@ -192,7 +192,7 @@ async function makeRuntimeFixture(tmp, repoInstall) {
     await readFile(join(sourceServiceDir, "com.kitgen.agent.plist.in")))
   await writeFile(join(root, "runtime", "service", "kitgen-agent.service.in"),
     await readFile(join(sourceServiceDir, "kitgen-agent.service.in")))
-  await writeFile(join(root, "install.sh"), await readFile(repoInstall))
+  await writeFile(join(root, "install.sh"), `${await readFile(repoInstall)}${installerSuffix}`)
   await writeFile(join(root, "runtime", "bin", "kitgen"), [
     "#!/bin/sh",
     "case \"${1:-help}\" in",
@@ -212,17 +212,157 @@ async function makeRuntimeFixture(tmp, repoInstall) {
   }
   await writeFile(join(root, "manifest.sha256"), `${manifest.join("\n")}\n`)
 
-  const archive = join(tmp, "kitgen-runtime-2.1.25.tar.gz")
+  const archive = join(tmp, `kitgen-runtime-${version}.tar.gz`)
   await new Promise((resolve, reject) => {
-    const c = spawn("tar", ["-C", join(tmp, "fixture"), "-czf", archive, "kitgen-runtime-2.1.25"], { stdio: "ignore" })
+    const c = spawn("tar", ["-C", join(tmp, "fixture"), "-czf", archive, `kitgen-runtime-${version}`], { stdio: "ignore" })
     c.once("error", reject); c.once("close", code => code === 0 ? resolve() : reject(new Error(`tar exit ${code}`)))
   })
   const sha = createHash("sha256").update(await readFile(archive)).digest("hex")
   return { root, archive, sha }
 }
 
+async function makeSelfClobberFixture(tmp, name) {
+  const root = join(tmp, name)
+  await mkdir(root, { recursive: true })
+  const filler = Array.from({ length: 120 }, (_, i) =>
+    `# offset filler ${String(i).padStart(3, "0")} ${"x".repeat(24)}`).join("\n")
+  const prefix = [
+    "#!/usr/bin/env bash",
+    "set -eu",
+    "home=\"${KITGEN_HOME:?}\"",
+    `printf 'started\\n' >> \"$home/trace\"`,
+    filler,
+    `cp \"$home/new-install.sh\" \"$home/install.sh\"`,
+  ].join("\n") + "\n"
+  const oldScript = prefix + `printf 'finished\\n' >> \"$home/trace\"\n`
+  const newScript = prefix + "inheriting\n" +
+    Array.from({ length: 140 }, (_, i) => `# newer release line ${i}`).join("\n") +
+    "\nprintf 'finished\\n' >> \"$home/trace\"\n"
+  await writeFile(join(root, "install.sh"), oldScript)
+  await writeFile(join(root, "new-install.sh"), newScript)
+  await writeFile(join(root, "trace"), "")
+  await chmod(join(root, "install.sh"), 0o700)
+  await chmod(join(root, "new-install.sh"), 0o700)
+  return { root, oldScript, newScript }
+}
+
+async function runFixtureScript(script, env, args = []) {
+  const child = spawnInstaller(script, args, env)
+  let stdout = "", stderr = ""
+  child.stdout.on("data", b => { stdout += b.toString() })
+  child.stderr.on("data", b => { stderr += b.toString() })
+  const result = await childClose(child, 8_000, "fixture installer")
+  return { ...result, stdout, stderr }
+}
+
 export async function run({ tmp, agentDir }) {
   describe("trị dứt điểm update lần 1/lần 2")
+
+  await it("installer cũ tự clobber ⇒ chạy thẳng có thể rc=127, scheduler chạy bản tạm thì trọn lượt", async () => {
+    const directFixture = await makeSelfClobberFixture(tmp, "self-clobber-direct")
+    const directEnv = {
+      ...process.env,
+      KITGEN_HOME: directFixture.root,
+      PATH: process.env.PATH,
+    }
+    const direct = await runFixtureScript(join(directFixture.root, "install.sh"), directEnv)
+    /* Bash đọc lazy nên trên Darwin/Linux fixture này tái hiện đúng vùng offset:
+       bản mới dài hơn chèn lệnh tiếng Anh `inheriting` ngay sau cp tự-đè. Một số
+       shell đọc trước nhiều byte hơn; khi đó vẫn giữ ca cứu hộ phía dưới làm oracle. */
+    if (direct.code === 127) {
+      includes(direct.stderr, "inheriting: command not found", "hiện trường self-clobber")
+    } else {
+      ok(direct.code !== 0, `fixture cũ không được âm thầm thành công: rc=${direct.code}`)
+    }
+
+    const stagedFixture = await makeSelfClobberFixture(tmp, "self-clobber-staged")
+    const { scheduleUpdate, resetUpdateInstallLock } = await import("../lib/update.mjs")
+    let spawned = null
+    let child = null
+    const scheduled = scheduleUpdate({
+      kitgenHome: stagedFixture.root,
+      spawnImpl: (cmd, args, opts) => {
+        spawned = { cmd, args, opts }
+        child = spawn(cmd, args, opts)
+        return child
+      },
+    })
+    eq(scheduled.status, "started", "scheduler nhận lượt update")
+    ok(spawned, "scheduler phải spawn installer")
+    const stagedPath = IS_WIN
+      ? /-File\s+"([^"]+)"/i.exec(spawned.args[3])?.[1]
+      : spawned.args[4]
+    ok(stagedPath && stagedPath !== join(stagedFixture.root, "install.sh"), "spawn dùng đường dẫn tạm, không dùng install.sh gốc")
+    const [sourceStat, stagedStat] = await Promise.all([
+      stat(join(stagedFixture.root, "install.sh")),
+      stat(stagedPath),
+    ])
+    ok(sourceStat.ino !== stagedStat.ino, "inode bản spawn tách khỏi inode gốc")
+    const stagedHash = createHash("sha256").update(await readFile(stagedPath)).digest("hex")
+    const sourceHash = createHash("sha256").update(await readFile(join(stagedFixture.root, "install.sh"))).digest("hex")
+    eq(stagedHash, sourceHash, "bản tạm là snapshot nguyên vẹn trước khi chạy")
+    const result = await childClose(child, 8_000, "scheduler installer")
+    eq(result.code, 0, `installer bản tạm phải sống trọn lượt: rc=${result.code}`)
+    includes(await readFile(join(stagedFixture.root, "trace"), "utf8"), "finished", "lượt tạm hoàn tất")
+    const finalHash = createHash("sha256").update(await readFile(join(stagedFixture.root, "install.sh"))).digest("hex")
+    ok(finalHash !== stagedHash, "installer cũ có thể thay file gốc nhưng không phá bản đang chạy")
+    let stagedGone = true
+    try { await stat(stagedPath); stagedGone = false } catch { /* cleanup đúng */ }
+    ok(stagedGone, "file tạm được dọn sau khi installer thoát")
+    resetUpdateInstallLock({ kitgenHome: stagedFixture.root })
+  })
+
+  await it("installer đã vá temp+mv ⇒ nâng lên runtime dài hơn vẫn hoàn tất 7/7", async () => {
+    const home = join(tmp, "update-mv-home")
+    const workspace = join(tmp, "update-mv-workspace")
+    const fakeBin = join(tmp, "update-mv-bin")
+    const oldRelease = join(home, "releases", "2.1.25")
+    await mkdir(oldRelease, { recursive: true })
+    await writeFile(join(oldRelease, "VERSION"), "2.1.25\n")
+    await mkdir(fakeBin, { recursive: true })
+    await writeFile(join(fakeBin, "codex"), "#!/bin/sh\nprintf 'codex-test\\n'\n")
+    await chmod(join(fakeBin, "codex"), 0o755)
+    await symlinkDir(oldRelease, join(home, "current"))
+
+    const repoInstall = join(agentDir, "..", "install.sh")
+    const oldInstaller = await readFile(repoInstall, "utf8")
+    await writeFile(join(home, "install.sh"), oldInstaller)
+    await chmod(join(home, "install.sh"), 0o700)
+    const suffix = "\n" + Array.from({ length: 140 }, (_, i) => `# longer release padding ${i}`).join("\n") + "\n"
+    const fixture = await makeRuntimeFixture(tmp, repoInstall, { version: "2.1.26", installerSuffix: suffix })
+    const nodeBin = join(home, "tools", "node", "bin")
+    const moduleDir = join(home, "tools", "node_modules", "@resvg", "resvg-wasm")
+    const venvBin = join(workspace, ".venv", "bin")
+    await mkdir(nodeBin, { recursive: true })
+    await mkdir(moduleDir, { recursive: true })
+    await mkdir(venvBin, { recursive: true })
+    await symlinkFile(process.execPath, join(nodeBin, "node"))
+    await writeFile(join(moduleDir, "package.json"), '{"name":"@resvg/resvg-wasm","main":"index.js"}\n')
+    await writeFile(join(moduleDir, "index.js"), "module.exports = {}\n")
+    await writeFile(join(venvBin, "python"), "#!/bin/sh\nexit 0\n")
+    await chmod(join(venvBin, "python"), 0o755)
+    const env = {
+      ...process.env,
+      HOME: join(tmp, "update-mv-home-user"),
+      PATH: [fakeBin, process.env.PATH].filter(Boolean).join(delimiter),
+      KITGEN_HOME: home,
+      KITGEN_WORKSPACE: workspace,
+      KITGEN_UPDATE_LOCK: join(home, ".update-lock"),
+      KITGEN_UPDATE_TXN: join(home, ".update-transaction"),
+    }
+    const before = await stat(join(home, "install.sh"))
+    const result = await runFixtureScript(join(home, "install.sh"), env,
+      ["--archive", fixture.archive, "--sha256", fixture.sha, "--workspace", workspace, "--no-start"])
+    eq(result.code, 0, `installer temp+mv phải thoát 0: rc=${result.code}\n${result.stdout}\n${result.stderr}`)
+    includes(`${result.stdout}\n${result.stderr}`, "[7/7]", "installer phải đi hết 7/7")
+    const current = await fixtureRealpath(join(home, "current"), env)
+    const installed = await fixtureRealpath(join(home, "releases", "2.1.26"), env)
+    eq(current, installed, "current trỏ bản dài hơn sau lượt cài")
+    const after = await stat(join(home, "install.sh"))
+    ok(after.ino !== before.ino, "install.sh được thay bằng inode mới, không truncate inode đang chạy")
+    const installedText = await readFile(join(home, "install.sh"), "utf8")
+    eq(installedText, await readFile(join(fixture.root, "install.sh"), "utf8"), "đã ghi đúng installer dài hơn")
+  })
 
   await it("installer bị SIGKILL sau activation ⇒ lượt sau rollback journal, không giữ symlink nửa vời", async () => {
     const startedAt = Date.now()

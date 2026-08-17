@@ -1,10 +1,11 @@
 import { spawn } from "node:child_process"
 import { randomBytes } from "node:crypto"
-import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs"
+import { appendFileSync, chmodSync, closeSync, copyFileSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs"
 import { readFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { IS_WIN, defaultKitgenHome, winSpawnOpts } from "./platform.mjs"
+import { IS_WIN, defaultKitgenHome, toBashPath, winSpawnOpts } from "./platform.mjs"
 import { redactLine } from "./redact.mjs"
 
 const MANIFEST_URL = process.env.KITGEN_RELEASE_MANIFEST || "https://raw.githubusercontent.com/hihahihahoho/test-survey/feat/kitgen-local-runtime/kit-gen/release.json"
@@ -292,6 +293,31 @@ export function trimUpdateLog(logFile, { maxBytes = UPDATE_LOG_MAX_BYTES, keepBy
   } catch { return false }
 }
 
+/*
+ * Installer cũ tự `cp` đè `$KITGEN_HOME/install.sh` giữa lúc Bash còn đang đọc nó.
+ * Scheduler phải giữ một inode riêng cho cả chu kỳ update; nếu không, bản vá trong
+ * install.sh luôn đến muộn đúng một lượt. `mkdtemp` mặc định 0700, không đưa đường dẫn
+ * này ra API; chỉ shell con nhận nó qua argv nội bộ.
+ */
+function stageInstaller(kitgenHome) {
+  const names = IS_WIN ? ["install.ps1", "install.sh"] : ["install.sh"]
+  const source = names.map(name => join(kitgenHome, name)).find(path => {
+    try { return statSync(path).isFile() } catch { return false }
+  })
+  if (!source) throw new Error("installer source unavailable")
+  const dir = mkdtempSync(join(tmpdir(), "kitgen-update-"))
+  const name = source.endsWith(".ps1") ? "install.ps1" : "install.sh"
+  const path = join(dir, name)
+  try {
+    copyFileSync(source, path)
+    try { chmodSync(path, 0o700) } catch (err) { if (!IS_WIN) throw err }
+    return { dir, path, powershell: name.endsWith(".ps1") }
+  } catch (err) {
+    try { rmSync(dir, { recursive: true, force: true }) } catch { /* best effort */ }
+    throw err
+  }
+}
+
 /**
  * Trả lời trước, rồi để installer thay và khởi động lại chính tiến trình này.
  *
@@ -342,28 +368,53 @@ export function scheduleUpdate({ kitgenHome = defaultKitgenHome(), spawnImpl = s
     out = fd
   } catch { /* ổ đĩa chỉ đọc / thiếu quyền: mất nhật ký chứ không được mất bản cập nhật */ }
 
-  let child
+  let staged
   try {
-    const env = { ...process.env, KITGEN_UPDATE_LOCK: updateLockDir(kitgenHome), KITGEN_UPDATE_LOCK_TOKEN: token }
-    child = IS_WIN
-      // Không có `sh` trên Windows. cmd.exe tách hẳn khỏi tiến trình agent, `timeout` là
-      // bản Windows của `sleep 1`.
-      ? spawnImpl(process.env.ComSpec || "cmd.exe",
-        ["/d", "/s", "/c", `timeout /t 1 /nobreak >nul & "${join(kitgenHome, "bin", "kitgen.cmd")}" update`],
-        { detached: true, stdio: ["ignore", out, out], env, ...winSpawnOpts() })
-      : spawnImpl("sh", ["-c", "sleep 1; exec \"$1\" update", "kitgen-update", join(kitgenHome, "bin", "kitgen")],
-        { detached: true, stdio: ["ignore", out, out], env })
+    staged = stageInstaller(kitgenHome)
   } catch {
     if (typeof out === "number") { try { closeSync(out) } catch { /* đã đóng */ } }
     releaseUpdateInstall({ kitgenHome, token })
     return { status: "failed", logLabel: UPDATE_LOG_LABEL }
   }
+  let stagedLive = true
+  const cleanupStaged = () => {
+    if (!stagedLive) return
+    stagedLive = false
+    try { rmSync(staged.dir, { recursive: true, force: true }) } catch { /* best effort */ }
+  }
 
+  let child
+  try {
+    const env = {
+      ...process.env,
+      KITGEN_HOME: kitgenHome,
+      KITGEN_UPDATE_LOCK: updateLockDir(kitgenHome),
+      KITGEN_UPDATE_LOCK_TOKEN: token,
+    }
+    child = IS_WIN
+      // Không có `sh` trên Windows. cmd.exe tách hẳn khỏi tiến trình agent, `timeout` là
+      // bản Windows của `sleep 1`; install.ps1 cũng chạy từ inode tạm.
+      ? spawnImpl(process.env.ComSpec || "cmd.exe",
+        ["/d", "/s", "/c", staged.powershell
+          ? `timeout /t 1 /nobreak >nul & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${staged.path}" -Update -KitgenHome "${kitgenHome}"`
+          : `timeout /t 1 /nobreak >nul & "${process.env.KITGEN_BASH || "bash.exe"}" "${toBashPath(staged.path)}" --update`],
+        { detached: true, stdio: ["ignore", out, out], env, ...winSpawnOpts() })
+      : spawnImpl("sh", ["-c", 'sleep 1; if [ -f "$1/config.env" ]; then . "$1/config.env"; fi; exec "$2" --update', "kitgen-update", kitgenHome, staged.path],
+        { detached: true, stdio: ["ignore", out, out], env })
+  } catch {
+    cleanupStaged()
+    if (typeof out === "number") { try { closeSync(out) } catch { /* đã đóng */ } }
+    releaseUpdateInstall({ kitgenHome, token })
+    return { status: "failed", logLabel: UPDATE_LOG_LABEL }
+  }
+
+  child.on?.("close", cleanupStaged)
   child.on?.("error", err => {
     // Ghi bằng ĐƯỜNG DẪN, không qua fd: fd đã đóng ngay dưới đây (④). Tiến trình con giữ
     // bản sao riêng nên nó vẫn ghi tiếp vào cùng file, hai đường không giẫm lên nhau.
     try { appendFileSync(logFile, `không chạy được installer: ${redactLine(err?.message ?? err)}\n`) }
     catch { try { writeSync(2, `không chạy được installer: ${redactLine(err?.message ?? err)}\n`) } catch { /* hết đường báo */ } }
+    cleanupStaged()
     releaseUpdateInstall({ kitgenHome, token })
   })
   // ④ `spawn` là đồng bộ ở khâu tạo tiến trình: tới đây con đã có handle riêng, đóng bản
