@@ -81,12 +81,10 @@ export function markUpdateAnnounced(version: string | null | undefined): void {
  * chỗ CẦN nói ra sự thật (tab Giới thiệu, lớp phủ cập nhật) không phải nói câu "đang dùng
  * bản mới nhất" trong khi ngay phía trên đang hiện một số hiệu cao hơn.
  *
- * Ép kiểu tại chỗ vì union `UpdateCheck["reason"]` trong `lib/api/endpoints.ts` chưa liệt
- * kê giá trị này (file đó đang có việc khác sửa dở). Khi thêm được thì bỏ ép kiểu ở đây —
- * hành vi không đổi.
+ * `reason` là enum của API; không đọc text lỗi tự do.
  */
 export const ARCHIVE_PENDING_REASON = "ARCHIVE_PENDING";
 
 export function isArchivePending(check: UpdateCheck | null | undefined): boolean {
-  return (check as { reason?: string } | null | undefined)?.reason === ARCHIVE_PENDING_REASON;
+  return check?.reason === ARCHIVE_PENDING_REASON;
 }

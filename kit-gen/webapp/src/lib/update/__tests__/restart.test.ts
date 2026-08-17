@@ -52,6 +52,9 @@ describe("isUpdatedVersion", () => {
   it("trùng bản đích ⇒ xong", () => {
     expect(isUpdatedVersion("2.2.0", { targetVersion: "2.2.0", fromVersion: "2.1.13" })).toBe(true);
   });
+  it("bản đang chạy cao hơn đích ⇒ xong (manifest có thể tiến thêm trong lúc chờ)", () => {
+    expect(isUpdatedVersion("2.2.1", { targetVersion: "2.2.0", fromVersion: null })).toBe(true);
+  });
   it("không biết bản đích (lúc bấm mất mạng) vẫn kết luận được nhờ so với bản cũ", () => {
     expect(isUpdatedVersion("2.2.1", { targetVersion: null, fromVersion: "2.1.13" })).toBe(true);
     expect(isUpdatedVersion("2.1.13", { targetVersion: null, fromVersion: "2.1.13" })).toBe(false);

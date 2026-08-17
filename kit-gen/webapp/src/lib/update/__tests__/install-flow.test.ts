@@ -220,6 +220,46 @@ describe("bấm [Cập nhật]", () => {
     expect(readUpdatePending()).toBeNull();
   });
 
+  it("agent trả `status:failed` ⇒ dừng ngay, không bước vào vòng poll", async () => {
+    const wait = vi.fn(async () => updated);
+    const reload = vi.fn();
+    await useUpdateInstall.getState().start("2.2.0", {
+      confirm: () => true,
+      install: async () => ({ ok: false, accepted: false, status: "failed" as const }),
+      wait,
+      reload,
+    });
+    expect(wait).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+    expect(useUpdateInstall.getState().phase).toBe("failed");
+  });
+
+  it("vòng poll ném lỗi ⇒ không kẹt ở 'waiting', không tải lại mù", async () => {
+    const reload = vi.fn();
+    await useUpdateInstall.getState().start("2.2.0", {
+      confirm: () => true,
+      install: okInstall,
+      wait: async () => { throw new Error("probe crashed"); },
+      reload,
+    });
+    expect(reload).not.toHaveBeenCalled();
+    expect(useUpdateInstall.getState().phase).toBe("timeout");
+  });
+
+  it("hết thời gian trong khi installer vẫn chạy ⇒ giữ cảnh báo đang cài, không kết tội restart", async () => {
+    const reload = vi.fn();
+    await useUpdateInstall.getState().start("2.2.0", {
+      confirm: () => true,
+      install: okInstall,
+      wait: async () => ({ outcome: "timeout", version: "2.1.13" }),
+      status: async () => statusOf({ installState: "running" }),
+      reload,
+    });
+    expect(reload).not.toHaveBeenCalled();
+    expect(useUpdateInstall.getState().phase).toBe("timeout");
+    expect(useUpdateInstall.getState().message).toMatch(/vẫn đang cài/);
+  });
+
   it("bấm ở hai chỗ khác nhau KHÔNG thành hai lượt cài chồng nhau", async () => {
     const install = vi.fn(okInstall);
     let release: (() => void) | null = null;

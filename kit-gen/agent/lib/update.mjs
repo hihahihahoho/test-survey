@@ -1,9 +1,11 @@
 import { spawn } from "node:child_process"
-import { appendFileSync, closeSync, openSync, readFileSync, statSync, writeFileSync, writeSync } from "node:fs"
+import { randomBytes } from "node:crypto"
+import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { IS_WIN, defaultKitgenHome, winSpawnOpts } from "./platform.mjs"
+import { redactLine } from "./redact.mjs"
 
 const MANIFEST_URL = process.env.KITGEN_RELEASE_MANIFEST || "https://raw.githubusercontent.com/hihahihahoho/test-survey/feat/kitgen-local-runtime/kit-gen/release.json"
 
@@ -19,6 +21,87 @@ export const RESTART_COMMAND = IS_WIN
 
 /** Nhật ký của lượt update do UI bấm — nhãn rút gọn, để câu báo lỗi chỉ được đúng chỗ. */
 export const UPDATE_LOG_LABEL = IS_WIN ? "%LOCALAPPDATA%\\KitGen\\update.log" : "~/.kitgen/update.log"
+
+/**
+ * Khóa liên tiến trình cho `kitgen update`. UI có thể bị bấm lại sau khi một lượt còn
+ * đang tải; hai installer cùng sửa `current`, config và LaunchAgent là race phá máy.
+ * Khóa chỉ là trạng thái nội bộ, không bao giờ đi ra API.
+ */
+export const UPDATE_LOCK_GRACE_MS = 15_000
+const UPDATE_LOCK_DIR = ".update-lock"
+const updateReservations = new Map()
+
+function updateLockDir(kitgenHome) { return join(kitgenHome, UPDATE_LOCK_DIR) }
+function updateLockOwner(dir) {
+  try { return readFileSync(join(dir, "owner"), "utf8").trim() } catch { return "" }
+}
+function pidAlive(pid) {
+  if (!/^\d+$/.test(String(pid))) return false
+  try { process.kill(Number(pid), 0); return true }
+  catch (e) { return e?.code === "EPERM" }
+}
+function lockIsLive(dir) {
+  let st
+  try { st = statSync(dir) } catch { return false }
+  const owner = updateLockOwner(dir)
+  if (/^(?:pid:)?\d+$/.test(owner)) return pidAlive(owner.replace(/^pid:/, ""))
+  if (owner.startsWith("reserved:")) return Date.now() - st.mtimeMs <= UPDATE_LOCK_GRACE_MS
+  return Date.now() - st.mtimeMs <= UPDATE_LOCK_GRACE_MS
+}
+
+/** Trạng thái an toàn để route/API dùng: enum duy nhất, không lộ khóa hay đường dẫn. */
+export function updateInstallState({ kitgenHome = defaultKitgenHome() } = {}) {
+  const key = resolve(kitgenHome)
+  if (updateReservations.has(key)) return { state: "running" }
+  const dir = updateLockDir(kitgenHome)
+  if (lockIsLive(dir)) return { state: "running" }
+  try { rmSync(dir, { recursive: true, force: true }) } catch { return { state: "running" } }
+  return { state: "idle" }
+}
+
+function reserveUpdateInstall({ kitgenHome }) {
+  const key = resolve(kitgenHome)
+  if (updateInstallState({ kitgenHome }).state === "running") return null
+  const dir = updateLockDir(kitgenHome)
+  const token = randomBytes(16).toString("hex")
+  try {
+    mkdirSync(kitgenHome, { recursive: true, mode: 0o700 })
+    mkdirSync(dir)
+    writeFileSync(join(dir, "owner"), `reserved:${token}\n`, { mode: 0o600 })
+  } catch (e) {
+    if (e?.code === "EEXIST" && lockIsLive(dir)) return null
+    try { rmSync(dir, { recursive: true, force: true }); mkdirSync(dir); writeFileSync(join(dir, "owner"), `reserved:${token}\n`, { mode: 0o600 }) }
+    catch { return null }
+  }
+  updateReservations.set(key, { dir, token })
+  return token
+}
+
+/** Chỉ xóa đúng reservation do chính `scheduleUpdate` tạo ra. */
+export function releaseUpdateInstall({ kitgenHome = defaultKitgenHome(), token } = {}) {
+  const key = resolve(kitgenHome)
+  const held = updateReservations.get(key)
+  if (held && (!token || held.token === token)) {
+    try { rmSync(held.dir, { recursive: true, force: true }) } catch { /* installer tự dọn */ }
+    updateReservations.delete(key)
+    return true
+  }
+  /* Sau khi `spawn` trả về, reservation đã được bàn giao cho installer; map RAM bị
+     xoá để installer tự giải phóng được lượt kế tiếp. Nhánh lỗi bất đồng bộ vẫn được
+     phép thu hồi đúng token, không xoá nhầm khóa của lượt khác. */
+  if (token && updateLockOwner(updateLockDir(kitgenHome)) === `reserved:${token}`) {
+    try { rmSync(updateLockDir(kitgenHome), { recursive: true, force: true }) } catch { return false }
+    return true
+  }
+  return false
+}
+
+/** Chỉ dùng test để dựng lại lượt kế tiếp; không phải endpoint. */
+export function resetUpdateInstallLock({ kitgenHome = defaultKitgenHome() } = {}) {
+  const key = resolve(kitgenHome)
+  updateReservations.delete(key)
+  try { rmSync(updateLockDir(kitgenHome), { recursive: true, force: true }) } catch { /* absent */ }
+}
 
 export function compareVersions(a, b) {
   const pa = String(a).split(/[.-]/).map(x => /^\d+$/.test(x) ? Number(x) : x)
@@ -130,6 +213,7 @@ export async function archiveReady(url, { fetchImpl = fetch, timeoutMs = 8000 } 
 export async function checkForUpdate({ currentVersion, fetchImpl = fetch, kitgenHome, verifyArchive = archiveReady } = {}) {
   const current = currentVersion || await readRuntimeVersion() || "0.0.0"
   const restart = await restartState({ currentVersion: current, kitgenHome })
+  const install = updateInstallState({ kitgenHome })
   const res = await fetchImpl(MANIFEST_URL, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) })
   if (!res.ok) throw new Error(`release manifest returned HTTP ${res.status}`)
   const manifest = await res.json()
@@ -145,6 +229,7 @@ export async function checkForUpdate({ currentVersion, fetchImpl = fetch, kitgen
     ...(newer && !ready ? { reason: "ARCHIVE_PENDING" } : {}),
     updateCommand: UPDATE_COMMAND,
     ...restart,
+    installState: install.state,
     checkedAt: new Date().toISOString(),
   }
 }
@@ -173,6 +258,7 @@ export async function checkForUpdateSafe(opts = {}) {
          phụ thuộc manifest. Đây đúng là lúc cần nó nhất — bản mới vừa cài xong thì
          máy hay đang ở giữa lúc agent chưa lên lại. */
       ...await restartState({ currentVersion: current, kitgenHome: opts.kitgenHome }),
+      installState: updateInstallState({ kitgenHome: opts.kitgenHome }).state,
       checkedAt: new Date().toISOString(),
     }
   }
@@ -238,6 +324,9 @@ export function trimUpdateLog(logFile, { maxBytes = UPDATE_LOG_MAX_BYTES, keepBy
  *    (`appendFileSync`) chứ không qua fd nữa, để vẫn giữ nguyên lời hứa của ②/③.
  */
 export function scheduleUpdate({ kitgenHome = defaultKitgenHome(), spawnImpl = spawn } = {}) {
+  const token = reserveUpdateInstall({ kitgenHome })
+  if (!token) return { status: "running", logLabel: UPDATE_LOG_LABEL }
+
   const logFile = join(kitgenHome, "update.log")
   let out = "ignore"
   try {
@@ -253,25 +342,36 @@ export function scheduleUpdate({ kitgenHome = defaultKitgenHome(), spawnImpl = s
     out = fd
   } catch { /* ổ đĩa chỉ đọc / thiếu quyền: mất nhật ký chứ không được mất bản cập nhật */ }
 
-  const child = IS_WIN
-    // Không có `sh` trên Windows. cmd.exe tách hẳn khỏi tiến trình agent, `timeout` là
-    // bản Windows của `sleep 1`.
-    ? spawnImpl(process.env.ComSpec || "cmd.exe",
-      ["/d", "/s", "/c", `timeout /t 1 /nobreak >nul & "${join(kitgenHome, "bin", "kitgen.cmd")}" update`],
-      { detached: true, stdio: ["ignore", out, out], env: process.env, ...winSpawnOpts() })
-    : spawnImpl("sh", ["-c", "sleep 1; exec \"$1\" update", "kitgen-update", join(kitgenHome, "bin", "kitgen")],
-      { detached: true, stdio: ["ignore", out, out], env: process.env })
+  let child
+  try {
+    const env = { ...process.env, KITGEN_UPDATE_LOCK: updateLockDir(kitgenHome), KITGEN_UPDATE_LOCK_TOKEN: token }
+    child = IS_WIN
+      // Không có `sh` trên Windows. cmd.exe tách hẳn khỏi tiến trình agent, `timeout` là
+      // bản Windows của `sleep 1`.
+      ? spawnImpl(process.env.ComSpec || "cmd.exe",
+        ["/d", "/s", "/c", `timeout /t 1 /nobreak >nul & "${join(kitgenHome, "bin", "kitgen.cmd")}" update`],
+        { detached: true, stdio: ["ignore", out, out], env, ...winSpawnOpts() })
+      : spawnImpl("sh", ["-c", "sleep 1; exec \"$1\" update", "kitgen-update", join(kitgenHome, "bin", "kitgen")],
+        { detached: true, stdio: ["ignore", out, out], env })
+  } catch {
+    if (typeof out === "number") { try { closeSync(out) } catch { /* đã đóng */ } }
+    releaseUpdateInstall({ kitgenHome, token })
+    return { status: "failed", logLabel: UPDATE_LOG_LABEL }
+  }
 
   child.on?.("error", err => {
     // Ghi bằng ĐƯỜNG DẪN, không qua fd: fd đã đóng ngay dưới đây (④). Tiến trình con giữ
     // bản sao riêng nên nó vẫn ghi tiếp vào cùng file, hai đường không giẫm lên nhau.
-    try { appendFileSync(logFile, `không chạy được installer: ${err?.message ?? err}\n`) }
-    catch { try { writeSync(2, `không chạy được installer: ${err?.message ?? err}\n`) } catch { /* hết đường báo */ } }
+    try { appendFileSync(logFile, `không chạy được installer: ${redactLine(err?.message ?? err)}\n`) }
+    catch { try { writeSync(2, `không chạy được installer: ${redactLine(err?.message ?? err)}\n`) } catch { /* hết đường báo */ } }
+    releaseUpdateInstall({ kitgenHome, token })
   })
   // ④ `spawn` là đồng bộ ở khâu tạo tiến trình: tới đây con đã có handle riêng, đóng bản
   // của cha là an toàn trên cả POSIX lẫn Windows. Cả nhánh spawn hỏng cũng an toàn vì
   // listener 'error' ở trên không còn dùng fd nữa.
   if (typeof out === "number") { try { closeSync(out) } catch { /* đã đóng */ } }
+  /* Bàn giao cho installer: trạng thái liên tiến trình trên đĩa là nguồn sự thật từ đây. */
+  updateReservations.delete(resolve(kitgenHome))
   child.unref?.()
-  return { logLabel: UPDATE_LOG_LABEL }
+  return { status: "started", logLabel: UPDATE_LOG_LABEL }
 }

@@ -21,7 +21,8 @@ export function register(r) {
         version: ctx.version, runtimeVersion: ctx.runtimeVersion ?? null,
         buildId: ctx.buildId, instanceLabel: ctx.instanceLabel,
         workspaceId: ws.id, workspaceLabel: ws.label, workspaceFingerprint: ws.fingerprint,
-        projects: await ws.countProjects(),
+        /* Snapshot, KHÔNG await quét đĩa trong endpoint duy nhất được poll. */
+        projects: ctx.healthProjectCount ? ctx.healthProjectCount(ws) : await ws.countProjects(),
         activeRuns: [...ctx.runs.active.values()].filter(h => !h.finished).length,
         uptimeMs: Math.round(process.uptime() * 1000),
         updateCommand: "npm i -g kitgen-agent",
@@ -85,14 +86,30 @@ export function register(r) {
    *  chưa upload xong ⇒ `available:false` + `reason:"ARCHIVE_PENDING"` (BACKLOG #23). */
   r.get("/api/update", async ctx => ({
     status: 200,
-    json: await checkForUpdateSafe({ currentVersion: ctx.runtimeVersion ?? undefined }),
+    json: await checkForUpdateSafe({ currentVersion: ctx.runtimeVersion ?? undefined, kitgenHome: ctx.kitgenHome }),
   }))
 
-  r.post("/api/update", async ctx => {
+  const installUpdate = async ctx => {
     const before = ctx.runtimeVersion ?? await readRuntimeVersion()
-    const { logLabel } = scheduleUpdate()
-    return { status: 202, json: { ok: true, previousVersion: before, restarting: true, logLabel } }
-  })
+    const result = scheduleUpdate({ kitgenHome: ctx.kitgenHome })
+    const started = result.status === "started"
+    const accepted = started || result.status === "running"
+    return {
+      status: 202,
+      json: {
+        ok: result.status !== "failed",
+        status: result.status,
+        accepted,
+        previousVersion: before,
+        restarting: accepted,
+        logLabel: result.logLabel,
+      },
+    }
+  }
+  /* `/api/update` giữ tương thích với webapp cũ; tên đầy đủ giúp bundle mới phân biệt
+     rõ đây là lệnh cài, đồng thời cả hai đi chung khóa idempotent. */
+  r.post("/api/update", installUpdate)
+  r.post("/api/update/install", installUpdate)
 
   r.get("/api/workspaces", async ctx => ({
     status: 200,

@@ -7,9 +7,12 @@
 #       chưa có file (CI còn đang đóng gói). Ca này KHÔNG phải lỗi máy người dùng và
 #       KHÔNG được để `curl` tự nói lời cuối bằng một dòng "404 Not Found". Xem
 #       `release_download_failed` và BACKLOG #23.
+#   22  ĐÃ CÓ một lượt cập nhật khác đang chạy — không chạy chồng.
 set -eu
+INSTALLER_PID="${BASHPID:-$$}"
 EXIT_DOWNLOAD_FAILED=20
 EXIT_ARCHIVE_PENDING=21
+EXIT_UPDATE_RUNNING=22
 KITGEN_HOME="${KITGEN_HOME:-$HOME/.kitgen}"
 WORKSPACE="${KITGEN_WORKSPACE:-$HOME/KitGen}"
 PORT="${KITGEN_PORT:-8765}"
@@ -57,6 +60,18 @@ done
 SELF_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 mkdir -p "$KITGEN_HOME/releases" "$KITGEN_HOME/bin" "$WORKSPACE"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/kitgen-install.XXXXXX")"
+# Agent đặt trước reservation + token; lệnh chạy tay tự tạo reservation. PID nằm trong
+# file nội bộ, không bao giờ trả ra API. SIGKILL để lại PID chết; lượt sau sẽ thu hồi khóa.
+UPDATE_LOCK="${KITGEN_UPDATE_LOCK:-$KITGEN_HOME/.update-lock}"
+UPDATE_LOCK_TOKEN="${KITGEN_UPDATE_LOCK_TOKEN:-}"
+LOCK_OWNED=0
+# Journal giao dịch cho khe SIGKILL: trap không chạy được khi installer bị giết cứng.
+# Chỉ chứa trạng thái nội bộ + đích rollback; không đi ra API.
+UPDATE_TXN="${KITGEN_UPDATE_TXN:-$KITGEN_HOME/.update-transaction}"
+UPDATE_TXN_STATE="$UPDATE_TXN/state"
+UPDATE_TXN_PREVIOUS="$UPDATE_TXN/previous"
+UPDATE_TXN_DEST="$UPDATE_TXN/dest"
+BIN="$KITGEN_HOME/bin/kitgen"
 # `current` đã được trỏ sang bản mới chưa. Xem khối "KÍCH HOẠT VÀO PHÚT CHÓT" dưới.
 ACTIVATED=0
 PREVIOUS=""
@@ -72,6 +87,14 @@ cleanup(){
     echo "Cài đặt dừng giữa chừng — đã trả $KITGEN_HOME/current về bản cũ." >&2
     echo "Dịch vụ đang chạy KHÔNG bị đụng tới. Nhật ký: $KITGEN_HOME/update.log" >&2
   fi
+  if [ "$_status" -eq 0 ] || { [ "$_status" -ne 0 ] && [ "$ACTIVATED" -eq 1 ]; }; then
+    rm -rf "$UPDATE_TXN" 2>/dev/null || true
+  fi
+  # Chỉ nhả lock sau rollback/journal cleanup; lượt kế tiếp không được chen vào khe
+  # giữa lúc symlink còn đang được trả về bản cũ.
+  if [ "$LOCK_OWNED" -eq 1 ]; then
+    rm -rf "$UPDATE_LOCK" 2>/dev/null || true
+  fi
   # DẤU KẾT THÚC LƯỢT. update.log nay cộng dồn nhiều lượt (agent mở bằng "a" — xem
   # lib/update.mjs `trimUpdateLog`), nên mỗi lượt phải tự khai mình dừng ở đâu: không có
   # dòng này thì người đọc không phân biệt được "lượt còn đang chạy" với "lượt đã chết
@@ -79,6 +102,92 @@ cleanup(){
   printf '[%s] kitgen install/update kết thúc — mã thoát %s\n' "$(date '+%Y-%m-%d %H:%M:%S %z')" "$_status"
 }
 trap cleanup EXIT INT TERM
+
+claim_update_lock(){
+  if [ -d "$UPDATE_LOCK" ]; then
+    _owner="$(cat "$UPDATE_LOCK/owner" 2>/dev/null || true)"
+    case "$_owner" in
+      reserved:*)
+        # Chỉ child do agent vừa spawn biết token reservation. Một installer khác
+        # không được giành khóa trong khoảng child chưa kịp ghi PID.
+        if [ -n "$UPDATE_LOCK_TOKEN" ] && [ "$_owner" = "reserved:$UPDATE_LOCK_TOKEN" ]; then
+          printf 'pid:%s\n' "$INSTALLER_PID" > "$UPDATE_LOCK/owner"
+          LOCK_OWNED=1
+          return 0
+        fi
+        echo "KitGen update already running." >&2
+        exit "$EXIT_UPDATE_RUNNING"
+        ;;
+      pid:*|[0-9]*)
+        _pid="${_owner#pid:}"
+        if [ "$_pid" != "$INSTALLER_PID" ] && kill -0 "$_pid" 2>/dev/null; then
+          echo "KitGen update already running." >&2
+          exit "$EXIT_UPDATE_RUNNING"
+        fi
+        # PID đã chết: đây là khóa mồ côi do installer bị kill giữa chừng.
+        rm -rf "$UPDATE_LOCK"
+        ;;
+      *)
+        echo "KitGen update already running." >&2
+        exit "$EXIT_UPDATE_RUNNING"
+        ;;
+    esac
+  fi
+  mkdir "$UPDATE_LOCK"
+  printf 'pid:%s\n' "$INSTALLER_PID" > "$UPDATE_LOCK/owner"
+  LOCK_OWNED=1
+}
+claim_update_lock
+
+write_update_txn(){
+  _state="$1"
+  _previous="$2"
+  _dest="$3"
+  mkdir -p "$UPDATE_TXN"
+  printf '%s\n' "$_previous" > "$UPDATE_TXN_PREVIOUS.tmp"
+  printf '%s\n' "$_dest" > "$UPDATE_TXN_DEST.tmp"
+  printf '%s\n' "$_state" > "$UPDATE_TXN_STATE.tmp"
+  mv "$UPDATE_TXN_PREVIOUS.tmp" "$UPDATE_TXN_PREVIOUS"
+  mv "$UPDATE_TXN_DEST.tmp" "$UPDATE_TXN_DEST"
+  mv "$UPDATE_TXN_STATE.tmp" "$UPDATE_TXN_STATE"
+}
+clear_update_txn(){ rm -rf "$UPDATE_TXN" 2>/dev/null || true; }
+
+# Trap không thể chạy sau SIGKILL. Lượt kế tiếp thu hồi journal trước khi chạm bản mới:
+# nếu activation dở dang mà bản mới chưa phục vụ được, trả symlink về bản cũ; nếu bản mới
+# đã phục vụ đúng VERSION thì coi journal là commit bị bỏ sót và giữ nguyên.
+recover_update_txn(){
+  [ -f "$UPDATE_TXN_STATE" ] || return 0
+  _state="$(cat "$UPDATE_TXN_STATE" 2>/dev/null || true)"
+  _previous="$(cat "$UPDATE_TXN_PREVIOUS" 2>/dev/null || true)"
+  _dest="$(cat "$UPDATE_TXN_DEST" 2>/dev/null || true)"
+  case "$_state" in
+    prepared)
+      clear_update_txn
+      ;;
+    activated)
+      _current="$(CDPATH= cd -- "$KITGEN_HOME/current" 2>/dev/null && pwd -P || true)"
+      _dest_real="$(CDPATH= cd -- "$_dest" 2>/dev/null && pwd -P || true)"
+      _want="$(cat "$_dest/VERSION" 2>/dev/null || true)"
+      _running=""
+      if [ -x "$BIN" ] && [ -n "$_want" ]; then
+        _running="$($BIN status 2>/dev/null | sed -n 's/.*"runtimeVersion":"\([^"]*\)".*/\1/p' | head -n 1 || true)"
+      fi
+      if [ -n "$_want" ] && [ -n "$_dest_real" ] && [ "$_current" = "$_dest_real" ] && [ "$_running" = "$_want" ]; then
+        clear_update_txn
+      elif [ -n "$_previous" ] && [ -n "$_dest_real" ] && [ "$_current" = "$_dest_real" ]; then
+        ln -sfn "$_previous" "$KITGEN_HOME/current"
+        clear_update_txn
+      else
+        clear_update_txn
+      fi
+      ;;
+    *)
+      clear_update_txn
+      ;;
+  esac
+}
+recover_update_txn
 
 # A release directory has these three roots. Running from source is supported for development.
 is_release(){ [ -f "$1/agent/server.mjs" ] && [ -f "$1/engine/gen.sh" ] && [ -f "$1/app/index.html" ]; }
@@ -505,11 +614,12 @@ KITGEN_RELEASE_CHANNEL='$RELEASE_CHANNEL'
 KITGEN_CODEX_PROFILE='$CODEX_PROFILE'
 CFG
 chmod 600 "$KITGEN_HOME/config.env"
-BIN="$KITGEN_HOME/bin/kitgen"
 progress "5/7" "Đăng ký dịch vụ local"
 # Đây là điểm KHÔNG QUAY ĐẦU: từ dòng này `current` là bản mới, và mọi đường thoát
 # phía dưới đều phải tự nói ra mình để lại máy ở trạng thái nào (xem `cleanup`).
 ACTIVATED=1
+write_update_txn prepared "$PREVIOUS" "$DEST"
+write_update_txn activated "$PREVIOUS" "$DEST"
 ln -sfn "$DEST" "$KITGEN_HOME/current"
 if [ "$NO_START" -eq 0 ]; then
   if [ "$(uname -s)" = Darwin ]; then
@@ -542,7 +652,7 @@ if [ "$NO_START" -eq 0 ]; then
   else nohup "$BIN" run >>"$KITGEN_HOME/agent.log" 2>&1 & fi
   # ① KHÔNG AI TRẢ LỜI ⇒ bản mới không chạy được ⇒ lùi hẳn về bản cũ.
   if ! wait_for_health 10; then
-    ACTIVATED=0   # nhánh này TỰ xử lý symlink, `cleanup` không được làm thêm lần nữa
+      ACTIVATED=0   # nhánh này TỰ xử lý symlink, `cleanup` không được làm thêm lần nữa
     if [ -n "$PREVIOUS" ]; then
       ln -sfn "$PREVIOUS" "$KITGEN_HOME/current"
       if ! "$BIN" restart 2>"$TMP/rollback-launchctl.err"; then
@@ -555,8 +665,9 @@ if [ "$NO_START" -eq 0 ]; then
       fi
     else
       echo "Install failed health check; no previous runtime is available." >&2
-    fi
-    exit 1
+      fi
+      clear_update_txn
+      exit 1
   fi
   # ② CÓ NGƯỜI TRẢ LỜI — NHƯNG LÀ AI? Tiến trình cũ trả lời được ⇒ ① không đủ (BACKLOG #20).
   #    Không đúng bản thì thử DỪNG HẲN rồi bật lại đúng một lần (đây là lệnh đã chữa tay
@@ -582,6 +693,7 @@ if [ "$NO_START" -eq 0 ]; then
         printf 'Chạy lệnh này trong Terminal rồi tải lại trang:\n\n'
         printf '  %s restart\n\n' "$BIN"
       } | tee -a "$KITGEN_HOME/install.log" >&2
+      clear_update_txn
       exit 1
     fi
   fi
@@ -591,6 +703,7 @@ else
   ACTIVATED=0   # --no-start: cài xong, cố ý không chạy — không có gì để lùi
   progress "6/7" "Bỏ qua health check dịch vụ (--no-start)"
 fi
+clear_update_txn
 progress "7/7" "Dọn bản cũ"
 prune_releases
 

@@ -49,6 +49,38 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
       `runtimeVersion (${r.json.runtimeVersion}) KHÔNG được là version khung (${PROTOCOL_VERSION})`)
     ok(/^\d+\.\d+\.\d+/.test(String(r.json.runtimeVersion)), "trông như một version phát hành")
   })
+  await it("webapp cũ 2.1.24 poll lúc quét đĩa/install chậm ⇒ không miss health, rồi nhận bản mới", async () => {
+    const ws = agent.registry.active
+    const originalCount = ws.countProjects
+    const originalVersion = agent.state.runtimeVersion
+    try {
+      ws.countProjects = async () => {
+        await new Promise(resolve => setTimeout(resolve, 1500))
+        return 99
+      }
+      /* Ép một lượt refresh nền đang chậm; request /health chỉ đọc snapshot. */
+      agent.healthProjectCount(ws, true)
+      const oldPoll = []
+      for (let i = 0; i < 4; i++) {
+        const t0 = Date.now()
+        const r = await api("GET", "/health")
+        oldPoll.push({ reachable: r.status === 200, version: r.json.runtimeVersion, ms: Date.now() - t0 })
+      }
+      ok(oldPoll.every(p => p.reachable), "bốn nhịp của bundle cũ đều còn nhận được /health")
+      ok(oldPoll.every(p => p.ms < 1200), `health không được chạm timeout cũ 1200ms: ${JSON.stringify(oldPoll)}`)
+      ok(oldPoll.every(p => p.version === originalVersion), "trong lúc cài vẫn báo đúng bản đang chạy")
+
+      /* Mô phỏng đúng nhịp launchd thay agent: bundle cũ không cần thấy miss,
+         chỉ cần thấy runtimeVersion đổi là kết luận updated. */
+      agent.state.runtimeVersion = "2.1.25"
+      const after = await api("GET", "/health")
+      ok(after.status === 200 && after.json.runtimeVersion === "2.1.25",
+        "bundle cũ thấy bản mới ngay khi agent mới phục vụ")
+    } finally {
+      ws.countProjects = originalCount
+      agent.state.runtimeVersion = originalVersion
+    }
+  })
   await it("GET /api/doctor chỉ trả enum + boolean, không có nội dung auth", async () => {
     const r = await api("GET", "/api/doctor")
     eq(r.status, 200, "status")
@@ -329,7 +361,7 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     mkdirSync(fakeHome, { recursive: true })
     const calls = []
     const fake = { on() {}, unref() {} }
-    const { scheduleUpdate } = await import("../lib/update.mjs")
+    const { scheduleUpdate, resetUpdateInstallLock } = await import("../lib/update.mjs")
     const out = scheduleUpdate({
       kitgenHome: fakeHome,
       spawnImpl: (cmd, args, opts) => { calls.push({ cmd, args, opts }); return fake },
@@ -349,6 +381,7 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     let stillOpen = true
     try { fstatSync(calls[0].opts.stdio[1]) } catch (e) { stillOpen = e.code !== "EBADF" ? true : false }
     ok(!stillOpen, "fd của update.log đã đóng ở tiến trình cha (Windows: file còn bị khoá thì xoá được gì nữa)")
+    resetUpdateInstallLock({ kitgenHome: fakeHome })
   })
 
   /* ══════════════════════════════════════════════════════════════════════════
@@ -361,12 +394,19 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
   await it("hai lượt update ⇒ update.log GIỮ CẢ HAI, có vạch phân cách", async () => {
     const fakeHome = join(tmp, "kitgen-home-twice")
     mkdirSync(fakeHome, { recursive: true })
-    const { scheduleUpdate } = await import("../lib/update.mjs")
-    const spawnImpl = () => ({ on() {}, unref() {} })
-    scheduleUpdate({ kitgenHome: fakeHome, spawnImpl })
+    const { scheduleUpdate, resetUpdateInstallLock } = await import("../lib/update.mjs")
+    const calls = []
+    const spawnImpl = () => { calls.push(1); return { on() {}, unref() {} } }
+    const first = scheduleUpdate({ kitgenHome: fakeHome, spawnImpl })
+    eq(first.status, "started", "lượt đầu được nhận")
     // Dấu vết của lượt 1 do CHÍNH INSTALLER ghi qua fd (ở đây giả lập bằng một dòng thật).
     writeFileSync(join(fakeHome, "update.log"), "LƯỢT 1 CHẾT Ở BƯỚC TẢI\n", { flag: "a" })
+    const second = scheduleUpdate({ kitgenHome: fakeHome, spawnImpl })
+    eq(second.status, "running", "lượt hai không spawn installer chồng lên lượt đầu")
+    eq(calls.length, 1, "chỉ spawn một installer")
+    resetUpdateInstallLock({ kitgenHome: fakeHome })
     scheduleUpdate({ kitgenHome: fakeHome, spawnImpl })
+    eq(calls.length, 2, "lượt mới chỉ chạy sau khi khóa được giải phóng")
 
     const log = readFileSync(join(fakeHome, "update.log"), "utf8")
     ok(/LƯỢT 1 CHẾT Ở BƯỚC TẢI/.test(log), "vết của lượt hỏng vẫn còn sau khi lượt sau bắt đầu")

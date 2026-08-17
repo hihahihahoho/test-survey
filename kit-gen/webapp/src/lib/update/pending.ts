@@ -94,7 +94,7 @@ export interface UpdateResult {
 export function resolveUpdateResult(p: PendingUpdate, runningVersion: string | null): UpdateResult {
   const base = { runningVersion, targetVersion: p.targetVersion };
   if (!runningVersion) return { ...base, kind: "unknown" };
-  if (p.targetVersion && runningVersion === p.targetVersion) return { ...base, kind: "success" };
+  if (p.targetVersion && compareVersions(runningVersion, p.targetVersion) >= 0) return { ...base, kind: "success" };
   if (p.fromVersion && compareVersions(runningVersion, p.fromVersion) > 0) return { ...base, kind: "success" };
   if (!p.targetVersion && !p.fromVersion) return { ...base, kind: "unknown" };
   return { ...base, kind: "failed" };

@@ -38,6 +38,7 @@ import { run as runPause } from "./test/suite-pause.mjs"
 import { run as runCover } from "./test/suite-cover.mjs"
 import { run as runImport } from "./test/suite-import.mjs"
 import { run as runLibrary } from "./test/suite-library.mjs"
+import { run as runUpdateCure } from "./test/suite-update-cure.mjs"
 
 const AGENT_DIR = dirname(fileURLToPath(import.meta.url))
 
@@ -93,6 +94,7 @@ await runRuns({ ...base, pid })
 await runPause({ ...base, pid })
 await runCover({ ...base, pid })
 await runImport({ ...base, pid })
+await runUpdateCure({ ...base })
 
 /* Dọn workspace tạm. Trên Windows bước này ĐÃ TỪNG giết cả bộ ca (run 31784778492):
    `rmdir … ENOTEMPTY` ném ra ở top-level ⇒ unhandled rejection ⇒ tiến trình chết TRƯỚC

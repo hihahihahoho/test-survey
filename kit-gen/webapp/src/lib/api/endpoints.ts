@@ -75,7 +75,7 @@ export interface UpdateCheck {
   tag: string | null;
   available: boolean;
   /** enum, chỉ có khi `ok:false` */
-  reason?: "OFFLINE" | "MANIFEST_UNREADABLE";
+  reason?: "OFFLINE" | "MANIFEST_UNREADABLE" | "ARCHIVE_PENDING";
   /** lệnh cập nhật thủ công, dạng nhãn rút gọn (~/…) */
   updateCommand: string;
   /**
@@ -88,6 +88,8 @@ export interface UpdateCheck {
   restartRequired?: boolean;
   /** lệnh khởi động lại thủ công, dạng nhãn rút gọn (~/…) */
   restartCommand?: string;
+  /** enum: installer chưa chạy hoặc đang chạy; không chứa log/path. */
+  installState?: "idle" | "running";
   checkedAt: string;
 }
 
@@ -101,8 +103,9 @@ export const systemApi = {
     return await httpGet("/api/update") as UpdateCheck;
   },
   async installUpdate() {
-    return await httpPost("/api/update", {}) as {
-      ok: boolean; previousVersion?: string; restarting?: boolean;
+    return await httpPost("/api/update/install", {}) as {
+      ok: boolean; accepted?: boolean; status?: "started" | "running" | "failed";
+      previousVersion?: string | null; restarting?: boolean;
       /** nhãn rút gọn của nhật ký lượt cài (~/.kitgen/update.log) — chỗ duy nhất còn lại
        *  để đọc khi installer chết giữa chừng. */
       logLabel?: string;

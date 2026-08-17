@@ -90,7 +90,7 @@ export function compareVersions(a: string, b: string): number {
 
 /**
  * "Đây có phải bản mới không?" — trả lời bằng bằng chứng, không bằng phỏng đoán:
- *  · trùng bản đích ⇒ đúng, chắc chắn;
+ *  · bản đích hoặc cao hơn ⇒ đúng, chắc chắn (manifest có thể tiến thêm trong lúc chờ);
  *  · lớn hơn bản cũ ⇒ đúng (ca `latestVersion` null vì lúc bấm mất mạng);
  *  · còn lại ⇒ chưa, cứ chờ tiếp.
  */
@@ -100,7 +100,7 @@ export function isUpdatedVersion(
 ): boolean {
   const { targetVersion = null, fromVersion = null } = opts;
   if (!version) return false;
-  if (targetVersion && version === targetVersion) return true;
+  if (targetVersion && compareVersions(version, targetVersion) >= 0) return true;
   if (fromVersion && compareVersions(version, fromVersion) > 0) return true;
   return false;
 }

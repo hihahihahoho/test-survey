@@ -118,6 +118,13 @@ export async function createAgent(opts = {}) {
   const cliWorkspaces = opts.workspaces?.length ? opts.workspaces : []
   const activeRoot = cliWorkspaces[0] ?? defaultWorkspaceRoot()
   const registry = new WorkspaceRegistry(cliWorkspaces, activeRoot)
+  /* /health chạy định kỳ, kể cả trong lúc installer đang chép runtime. Không được
+     quét đĩa trong request này: một workspace lớn + I/O tranh chấp đủ làm client cũ
+     timeout 1,2s, rồi kết luận nhầm agent đã restart. Đếm project một lần lúc boot,
+     sau đó làm mới nền; health luôn trả snapshot gần nhất. */
+  const healthProjectCounts = new Map()
+  const healthProjectAt = new Map()
+  const healthProjectRefresh = new Map()
   for (const w of registry.map.values()) {
     await w.init()
     /* Job vẽ bìa chỉ sống trong Map bộ nhớ của tiến trình này (lib/cover.mjs). Tiến trình
@@ -129,6 +136,24 @@ export async function createAgent(opts = {}) {
     /* Cùng lý do, cho LƯỢT CHẠY: `run.json` còn "running" mà tiến trình chủ của nó đã
        chết ⇒ web quay vòng vĩnh viễn. Quét dọn + nhặt lại ảnh đã tốn quota (lib/runs.mjs). */
     await sweepOrphanRuns(w).catch(() => {})
+    healthProjectCounts.set(w.id, await w.countProjects().catch(() => 0))
+    healthProjectAt.set(w.id, Date.now())
+  }
+
+  const refreshHealthProjectCount = (ws, force = false) => {
+    const now = Date.now()
+    const at = healthProjectAt.get(ws.id) ?? 0
+    if (!force && (healthProjectRefresh.has(ws.id) || now - at < 5000)) return
+    healthProjectAt.set(ws.id, now)
+    const pending = ws.countProjects()
+      .then(n => healthProjectCounts.set(ws.id, n))
+      .catch(() => {})
+      .finally(() => healthProjectRefresh.delete(ws.id))
+    healthProjectRefresh.set(ws.id, pending)
+  }
+  const healthProjectCount = (ws, force = false) => {
+    refreshHealthProjectCount(ws, force)
+    return healthProjectCounts.get(ws.id) ?? 0
   }
 
   /* Đọc MỘT LẦN lúc boot, không đọc lại mỗi nhịp /health: file VERSION chỉ đổi khi bản
@@ -158,6 +183,7 @@ export async function createAgent(opts = {}) {
      vì test phải giả lập được "tiến trình đang chạy bản X" — ca cài-xong-chưa-restart
      không dựng lại được bằng cách nào khác trong một process duy nhất. */
   const state = { port: opts.port ?? 8765, runtimeVersion }
+  const kitgenHome = opts.kitgenHome
   // Hai bucket: API (thao tác thật) và đọc tĩnh (/app/* + files/*). Xem makeRateLimiter.
   const rate = makeRateLimiter({
     limit: Number(opts.rateLimit ?? 20), windowMs: 1000,
@@ -196,8 +222,10 @@ export async function createAgent(opts = {}) {
       const ctx = {
         req, res, url, params: hit.params, registry, runs, uploads, confirm,
         origins: originSet, limits: LIMITS, version: PROTOCOL_VERSION, runtimeVersion: state.runtimeVersion, buildId: BUILD_ID,
+        kitgenHome,
         instanceLabel: label, appRootOverride: opts.appRoot ?? null,
         doctor: opts.doctor ?? realDoctor,
+        healthProjectCount,
         json: () => readJson(req, { limit: LIMITS.json }),
         body: limit => readBody(req, { limit: limit ?? LIMITS.json }),
         reveal: revealInFinder,
@@ -220,7 +248,13 @@ export async function createAgent(opts = {}) {
     try { socket.end("HTTP/1.1 400 Bad Request\r\n\r\n") } catch { /* socket đã chết */ }
   })
 
-  return { server, registry, state, confirm, limits: LIMITS, get runs() { return runs }, instanceLabel: label, origins, get runtimeVersion() { return state.runtimeVersion } }
+  return {
+    server, registry, state, confirm, limits: LIMITS,
+    get runs() { return runs }, instanceLabel: label, origins,
+    /* Test hook nội bộ: dựng một lượt quét đĩa chậm mà không mở thêm API. */
+    healthProjectCount,
+    get runtimeVersion() { return state.runtimeVersion },
+  }
 }
 
 async function respond(res, out, headers, req) {

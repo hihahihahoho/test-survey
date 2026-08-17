@@ -36,7 +36,12 @@ export type UpdatePhase =
 
 export interface UpdateInstallDeps {
   confirm: (message: string) => boolean;
-  install: () => Promise<{ previousVersion?: string | null }>;
+  install: () => Promise<{
+    previousVersion?: string | null;
+    ok?: boolean;
+    accepted?: boolean;
+    status?: "started" | "running" | "failed";
+  }>;
   wait: (opts: WaitOptions) => Promise<RestartResult>;
   /** hỏi agent "bản nào đang nằm trên đĩa" — chỉ gọi khi vòng chờ KHÔNG kết luận được. */
   status: () => Promise<UpdateCheck>;
@@ -93,6 +98,13 @@ async function classifyStall(
   outcome: RestartResult["outcome"],
 ): Promise<Pick<UpdateInstallState, "phase" | "message" | "restartCommand"> | null> {
   const s = await d.status().catch(() => null);
+  if (s?.installState === "running") {
+    return {
+      phase: "timeout",
+      message: "Công cụ local vẫn đang cài bản mới. Giữ trang này mở rồi kiểm tra lại sau ít phút.",
+      restartCommand: null,
+    };
+  }
   if (s?.restartRequired) {
     const installed = s.installedVersion ?? "mới";
     return {
@@ -145,6 +157,10 @@ export const useUpdateInstall = create<UpdateInstallState>((set, get) => ({
     let previousVersion: string | null = null;
     try {
       const res = await d.install();
+      if (res?.ok === false || res?.accepted === false || res?.status === "failed") {
+        set({ phase: "failed", message: "Công cụ local đã nhận yêu cầu nhưng từ chối cài bản mới." });
+        return;
+      }
       previousVersion = typeof res?.previousVersion === "string" ? res.previousVersion : null;
     } catch (e) {
       set({ phase: "failed", message: reasonOf(e) });
@@ -156,7 +172,17 @@ export const useUpdateInstall = create<UpdateInstallState>((set, get) => ({
     d.mark({ targetVersion: target, fromVersion: previousVersion });
     set({ phase: "waiting" });
 
-    const r = await d.wait({ targetVersion: target, fromVersion: previousVersion });
+    let r: RestartResult;
+    try {
+      r = await d.wait({ targetVersion: target, fromVersion: previousVersion });
+    } catch {
+      set({
+        phase: "timeout",
+        message: `Công cụ local chưa xác nhận được việc khởi động lại sau ${Math.round(RESTART_TIMEOUT_MS / 1000)} giây.`,
+        restartCommand: null,
+      });
+      return;
+    }
     if (r.outcome !== "updated") {
       const stall = await classifyStall(d, r.outcome);
       if (stall) {
