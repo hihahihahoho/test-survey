@@ -74,17 +74,47 @@ for _sh in cfg["sheets"]:
     assert len(_sh["components"]) == _n, "sheet %s: component phải khớp lưới" % _sh["id"]
 
 
-def border_colors(img, strip=8):
-    """Màu nền từ viền ngoài sheet. 1 màu (key phẳng) hoặc 2 màu (caro kiểu cũ)."""
+def in_boxes(x, y, boxes):
+    """Điểm nằm trong một hộp `(l, t, r, b)` nào chưa (nửa mở bên phải/dưới)."""
+    return any(l <= x < r and t <= y < b for l, t, r, b in boxes)
+
+
+def border_colors(img, strip=8, ignore=()):
+    """Màu nền từ viền ngoài sheet. 1 màu (key phẳng) hoặc 2 màu (caro kiểu cũ).
+
+    ╔══ `ignore` — Ô NỀN ĐEN CỦA `matte:"glow"` KHÔNG PHẢI MÀU NỀN THỨ HAI ═════╗
+    ║ Ô `matte:"glow"` được gen.sh vẽ trên **nền ĐEN** có chủ ý (ánh sáng là     ║
+    ║ phép cộng, xem khối "Ô matte:glow vẽ trên NỀN ĐEN" ở vòng cắt). Ô đó nằm   ║
+    ║ chung sheet với ô nền key, và nếu nó chạm mép sheet thì mẫu viền có HAI    ║
+    ║ màu ⇒ `is_key_color` trả False ⇒ **cả sheet** rơi xuống `key_binary`, một  ║
+    ║ đường KHÔNG despill.                                                       ║
+    ║                                                                            ║
+    ║ ĐO TRÊN DỰ ÁN THẬT của chủ sản phẩm (`hello-368a`, agent 2.1.24):          ║
+    ║   sheet `dao-cu` lưới 3×3, ô 0 = `16-fx-burst` (glow, nền đen)             ║
+    ║     → border_colors = [(233,2,222), (1,0,0)] → is_key_color = False        ║
+    ║     → "binary 2 màu nhạt (đường lùi)" → 8 ô CÒN LẠI giữ nguyên magenta:    ║
+    ║       12 334 px tím bán trong suốt + 9 724 px tím đục (quầng tím quanh     ║
+    ║       hộp quà, mảnh ghép, phiếu thưởng, huy hiệu — đúng ảnh chủ SP gửi).   ║
+    ║   sheet `ui`/`popup-doc` (không có ô glow) → 1 màu → matte + despill →     ║
+    ║       0 px tím đục. Cùng một model, cùng một key: khác đúng cái ô đen.     ║
+    ╚═══════════════════════════════════════════════════════════════════════════╝
+
+    Vì vậy nơi gọi truyền vào hộp pixel của các ô glow; ở đây chỉ **không lấy mẫu**
+    trong đó. Không đoán "đen thì bỏ": nền caro/nhạt kiểu cũ vẫn phải ra 2 màu.
+    """
     w, h = img.size
     px = img.load()
     samples = []
     for x in range(0, w, 4):
         for y in list(range(strip)) + list(range(h - strip, h)):
-            samples.append(px[x, y])
+            if not in_boxes(x, y, ignore):
+                samples.append(px[x, y])
     for y in range(0, h, 4):
         for x in list(range(strip)) + list(range(w - strip, w)):
-            samples.append(px[x, y])
+            if not in_boxes(x, y, ignore):
+                samples.append(px[x, y])
+    if not samples:                       # cả viền bị che (sheet 1 ô glow) → như cũ
+        return border_colors(img, strip)
     samples.sort()
     c1 = samples[len(samples) // 2]
     far = [s for s in samples if math.dist(s, c1) > 30]
@@ -1047,7 +1077,17 @@ if __name__ == "__main__":
                 mode = "alpha thật"
             else:
                 sheet_rgb = raw_img.convert("RGB")
-                bg = border_colors(sheet_rgb)
+                # Ô `matte:"glow"` có nền ĐEN theo thiết kế ⇒ loại khỏi phép ĐO nền,
+                # nếu không cả sheet bị coi là "nền 2 màu" và rơi xuống đường lùi
+                # không despill (xem khối chú thích của `border_colors`).
+                glow_boxes = [
+                    (round(_c * cell_w), round(_r * cell_h),
+                     round((_c + 1) * cell_w), round((_r + 1) * cell_h))
+                    for _i, c in enumerate(sh["components"])
+                    for _r, _c in [divmod(_i, COLS)]
+                    if c["skel"].get("matte") == "glow"
+                ]
+                bg = border_colors(sheet_rgb, ignore=glow_boxes)
                 if is_key_color(bg, want_key):
                     # Trục key lấy từ TÊN ĐÃ KHAI BÁO nếu có (khỏi đoán), không thì
                     # suy từ màu đo được. Màu để un-mix vẫn luôn là màu ĐO ĐƯỢC.

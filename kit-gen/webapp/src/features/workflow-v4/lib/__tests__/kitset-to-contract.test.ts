@@ -218,14 +218,32 @@ describe("§W3-1 — ô trống phải có tên riêng", () => {
    ══════════════════════════════════════════════════════════════════════════ */
 
 describe("§W3-1 — hình dạng sheet", () => {
-  it("hai nền mặc định nằm chung một sheet với hai ô dọc 3:4", () => {
+  /**
+   * ĐỔI Ý CÓ CHỦ ĐÍCH (chủ SP báo "ảnh nền bé tí, cop ra figma bị vỡ").
+   * Bản cũ gộp 2 nền vào MỘT tấm ngang ⇒ mỗi ô 768×1024. Đo trên dự án thật
+   * `hello-368a`: `25-bg-home` ra 764×1024, trong khi 4 kit tham chiếu
+   * (candy/ipay/tet/rnd — 1 nền/tấm) ra 1024×1536. Xem `DEFAULT_SHEET_LIMITS`.
+   */
+  it("mỗi ảnh nền một tấm DỌC riêng — full-bleed không được chia đôi tấm", () => {
     const c = build();
     const bg = c.sheets.filter((sh) => sh.components.some((cp) => cp.skel.shape === "full"));
+    expect(bg).toHaveLength(2);
+    expect(bg.map((sh) => sh.id)).toEqual(["nen", "nen2"]);
+    for (const sh of bg) {
+      expect(sh.grid).toEqual({ cols: 1, rows: 1 });
+      expect(sh.orient).toBe("portrait");
+      expect(sh.components.filter((cp) => cp.skel.shape === "full")).toHaveLength(1);
+      // 1×1 ⇒ ô = CẢ tấm 1024×1536, không có ô `_empty` nào chen vào.
+      expect(sh.components).toHaveLength(1);
+    }
+  });
+
+  it("gộp lại được khi người dùng cố ý đặt `background: 2` (vẫn là lựa chọn)", () => {
+    const c = buildKitsetContract(defaultState(), { lib: LIB, limits: { background: 2 } });
+    const bg = c.sheets.filter((sh) => sh.components.some((cp) => cp.skel.shape === "full"));
     expect(bg).toHaveLength(1);
-    expect(bg[0]!.id).toBe("nen");
     expect(bg[0]!.grid).toEqual({ cols: 2, rows: 1 });
     expect(bg[0]!.orient).toBe("landscape");
-    expect(bg[0]!.components.filter((cp) => cp.skel.shape === "full")).toHaveLength(2);
   });
 
   it("ô DỌC đi vào lưới cols = 2×rows (ô 3:4), KHÔNG vào lưới vuông", () => {

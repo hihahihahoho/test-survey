@@ -83,8 +83,31 @@ export interface SheetLimits {
   mascot: number;
 }
 
+/**
+ * ╔══ VÌ SAO `background: 1` — MỖI ẢNH NỀN MỘT TẤM RIÊNG ═════════════════════╗
+ * ║ Trước là `2`, và đó chính là bệnh "ảnh nền bé tí / vỡ" chủ sản phẩm báo.   ║
+ * ║ Với 2 nền, `chunkKeepingGroups` gộp cả hai vào MỘT tấm ⇒ `one === false`   ║
+ * ║ ⇒ `orient:"landscape"` + `tallGrid(2)` = 2×1 ⇒ mỗi ô chỉ 768×1024.         ║
+ * ║                                                                            ║
+ * ║ ĐO TRÊN DỰ ÁN THẬT (`hello-368a` của chủ SP) so với 4 kit tham chiếu mà     ║
+ * ║ chủ SP vẫn dùng làm chuẩn (`kits/candy|ipay|tet|rnd`):                      ║
+ * ║                                                                            ║
+ * ║   ô nền        hello-368a (limit 2)   candy/ipay/tet (1 nền / tấm)         ║
+ * ║   25-bg-home        764×1024                1024×1536                      ║
+ * ║   26-bg-play        764×1024                1024×1536                      ║
+ * ║                                                                            ║
+ * ║ Tức **2.25× ít pixel hơn**, và còn sai tỷ lệ: ô 3:4 cho một cảnh full-bleed ║
+ * ║ vốn phải là 2:3. Dán sang Figma ở tỉ lệ xuất 0.5 ⇒ node 382×512 — đúng      ║
+ * ║ "cop ra figma ảnh cũng bé tí, bị vỡ".                                      ║
+ * ║                                                                            ║
+ * ║ ĐÁNH ĐỔI, NÓI THẲNG: mỗi nền một tấm = **thêm 1 lượt gen** cho kit 2 nền.   ║
+ * ║ Chấp nhận, vì nền là ô DUY NHẤT phủ kín màn hình — tiết kiệm đúng chỗ đó là ║
+ * ║ tiết kiệm sai chỗ, và 4 kit tham chiếu đều đã làm 1 nền/tấm. Ai muốn gộp    ║
+ * ║ lại vẫn chỉnh được: `sheetLimits.background` trong cài đặt dự án/thư viện.  ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
 export const DEFAULT_SHEET_LIMITS: SheetLimits = {
-  background: 2,
+  background: 1,
   popup: 4,
   small: 16,
   props: 16,
