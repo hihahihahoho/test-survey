@@ -26,7 +26,17 @@ async function hasPillow() {
   return pillowOk
 }
 
+/** `null` = KHÔNG có tham số `w` ⇒ phục vụ ẢNH GỐC. Số = bề rộng đã nắn về ALLOWED_W.
+ *
+ *  ⚠️ "KHÔNG có tham số" ≠ "có tham số nhưng giá trị lạ". Bản cũ chỉ có `Number.isFinite`,
+ *  mà `Number(null) === 0` là số HỮU HẠN ⇒ reduce chọn giá trị gần 0 nhất = 128 ⇒ mọi
+ *  request KHÔNG kèm `?w=` (tức mọi đường `loadFull()`: dialog Xem ảnh gốc, lightbox zoom,
+ *  nút Tải file, Copy ảnh, Copy sang Figma) nhận về thumbnail 128px thay cho file gốc —
+ *  đúng triệu chứng "copy ra Figma bé tí, bị vỡ". Vắng mặt phải trả `null`, dứt khoát.
+ *  Có mặt mà lạ (`?w=abc`, `?w=99999`) thì vẫn nắn về ALLOWED_W như cũ: caller ĐÃ xin
+ *  bản thu nhỏ, chỉ là xin sai số. */
 export function normalizeWidth(w) {
+  if (w === null || w === undefined) return null
   const n = Number(w)
   if (!Number.isFinite(n)) return null
   return ALLOWED_W.reduce((best, c) => (Math.abs(c - n) < Math.abs(best - n) ? c : best), ALLOWED_W[0])

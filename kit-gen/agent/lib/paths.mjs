@@ -14,6 +14,22 @@ export function isInside(base, target) {
   return t.startsWith(b.endsWith(sep) ? b : b + sep)
 }
 
+/**
+ * Đường dẫn TƯƠNG ĐỐI kiểu POSIX (`a/b.png`) của `abs` so với `base`.
+ *
+ * Vì sao cần: `walkFiles` trả đường dẫn của HỆ ĐIỀU HÀNH, nên trên Windows đoạn tương đối
+ * là `tight\01-btn.png`. Mọi thứ đi tiếp sau đó — khoá đối chiếu với `manifest.json`, chuỗi
+ * `path` trả cho web, tiền tố `tight/` — đều là quy ước POSIX của engine. Trộn hai loại dấu
+ * gạch vào nhau thì không có lỗi nào nổ ra: nó chỉ lặng lẽ không khớp (xem WINDOWS-PORT §8.8).
+ *
+ * `s` mặc định là `sep` của máy đang chạy, nên trên darwin/linux hàm này là `split("/")
+ * .join("/")` — ĐỒNG NHẤT TỪNG KÝ TỰ, kể cả với tên file có chứa dấu `\`. Tham số `s` tồn
+ * tại để ca kiểm ép được ngữ nghĩa Windows trên máy Mac, chứ không phải để người gọi chỉnh.
+ */
+export function relPosix(base, abs, s = sep) {
+  return abs.slice(base.length + 1).split(s).join("/")
+}
+
 /** realpath của tổ tiên tồn tại gần nhất + phần đuôi chưa tồn tại. */
 function realpathBestEffort(p) {
   let cur = resolve(p)

@@ -1001,6 +1001,96 @@ trả lời `raw/<job>.png` **có tồn tại hay không**. Chạy `if: always()
 Nếu bản vá `\r` là đủ thì vòng sau 5 ca xanh và bước này chỉ để đọc cho vui; nếu chưa đủ, nó
 chỉ thẳng vào chỗ lệch mà không cần thêm một vòng đoán nào.
 
+### 8.8 Vòng 11 (run trên b0487e6) — hai lỗi cuối, và cả hai đều là "im lặng"
+
+Bản vá `\r` ăn đúng ba ca ([118] dừng, [119][120] chạy tiếp **xanh trên Windows**), và bước
+**"Khám nghiệm workspace tạm"** — cái đèn đặt vòng trước — trả lời luôn khoảng tối §8.7.3
+ngay dòng đầu tiên nó in ra:
+
+```
+=== project chay-thu-engine-0e83 ===
+  raw/: "tet-main.png" "tet-tall.png"
+  kits/: "manifest.json" "tet"
+  run r-0001 status=done-with-errors failSummary="1/3 job không ghi được ảnh"
+    job "tet-main"    status=ok     artifact=co   | raw/<job>.png TON TAI
+    job "tet-tall"    status=ok     artifact=co   | raw/<job>.png TON TAI
+    job "tet-bg-home" status=failed artifact=khong| raw/<job>.png KHONG TON TAI
+      errorTail: ["codex: command not found (…)","rc=127 — ảnh không được ghi mới"]
+```
+
+`1/3` chứ không còn `3/3`; job cố-ý-lỗi lại lỗi đúng như thiết kế. **§8.7.2 đúng, và mâu
+thuẫn ba-dữ-kiện của §8.7.3 tan** — nó chỉ là hệ quả muộn của cùng một `\r`. Hai ca còn đỏ
+hoá ra là **lỗi khác hẳn**, trước giờ bị `\r` che mất.
+
+#### 8.8.1 🔴 `walkFiles` trả dấu `\`, cả thế giới phía sau nói `/`
+
+```
+[112] gen → auto-slice … FAIL — mỗi file biết sheet nguồn
+[113] cắt lũy tiến    … FAIL — expected ["main","tall"], got ["main",null,"tall"]
+```
+
+Cái `null` chen giữa hai tên sheet là toàn bộ manh mối. `routes/files.mjs` (#42, danh mục
+kit) lấy đoạn tương đối bằng `abs.slice(vdir.length + 1)` — mà `walkFiles` trả đường dẫn
+**của hệ điều hành**. Trên Windows, `kits/tet/tight/01-btn.png` ra thành `tight\01-btn.png`,
+rồi ba dòng ngay sau đó đều nói tiếng POSIX:
+
+| dòng | làm gì | trên Windows |
+|---|---|---|
+| `bare.lastIndexOf("/")` | cắt lấy tên cơ sở để đối chiếu `manifest.json` | trả `-1` ⇒ khoá là `tight\01-btn`, **không khớp** `01-btn` ⇒ `sheet: null` |
+| `` path: `kits/${variant}/${name}` `` | chuỗi trả cho web để nạp ảnh | `kits/tet/tight\01-btn.png` — nửa POSIX nửa Windows |
+| `f.file.startsWith("tight/")` (ca kiểm) | nhận ra bản ôm sát | sai |
+
+Chỉ file **trong thư mục con** dính; file nằm ngay trong `kits/<variant>/` không có dấu phân
+cách nào nên vẫn khớp — nên `sheets` ra `["main", null, "tall"]`: hai tên thật của lớp trên,
+một `null` gộp từ toàn bộ `tight/`. Với người dùng thật: **mọi ô bản ôm sát rơi hết vào nhóm
+"Khác"** trên lưới web, và đường copy sang Figma mất hình học của chúng. Không có lỗi nào nổ
+ra — đây đúng loại hỏng mà chỉ có bộ ca mới nhìn thấy.
+
+Vá bằng một hàm có tên gọi, `relPosix(base, abs, s = sep)` trong `lib/paths.mjs`, chứ không
+phải `.split("\\").join("/")` rải rác: `s` mặc định là `sep` của máy đang chạy, nên trên
+darwin/linux nó là `split("/").join("/")` — **đồng nhất từng ký tự, kể cả với tên file có
+chứa dấu `\`** (thứ mà idiom `split("\\")` sẽ âm thầm sửa hộ). Tham số `s` tồn tại để ca
+kiểm ép được ngữ nghĩa Windows ngay trên máy Mac; đã chứng minh nó bắt được lỗi: trả về
+`slice` trần thì **164/165**.
+
+> `lib/fsx.mjs:100` (`dirStatsByGroup`) đã dùng đúng `split(sep)` từ đầu — nên đây không phải
+> luật mới, chỉ là một chỗ sót. Đã quét cả bảy nơi gọi `walkFiles`: đó là chỗ **duy nhất** còn
+> lại đưa đoạn tương đối chưa chuẩn hoá ra khỏi agent.
+
+#### 8.8.2 🔴 `sha256sum` của Git-Bash đọc BINARY, nên nó in `*` chứ không phải hai dấu cách
+
+Job 3 lần đầu **dựng xong tarball trong Git-Bash** (206 mục, 963 KB) rồi chết ở phép thử
+định dạng — tức là chết ở chỗ tôi đặt bẫy sẵn, đúng như mong muốn:
+
+```
+##[error] manifest.sha256 sai dinh dang o 193 dong
+1fedc34dc7434ab810ea93890da0967f2da8ca1a36e921345733f4953c56de7c *./VERSION
+```
+
+Ký tự thứ 66 là dấu hiệu **chế độ đọc**: `*` = binary, `␠` = text. `shasum` trên macOS/Linux
+mặc định text nên in hai dấu cách; `sha256sum` của Git for Windows mặc định binary nên in
+`␠*`. Ghi chú tôi viết ở vòng 9 — *"cả hai in cùng một định dạng"* — **sai**, và may là bước
+CI này nghiêm khắc hơn ghi chú đó.
+
+Cả hai trình cài hiện tại **vẫn chạy được** với dạng `*` (`install.sh` dùng `shasum -c`, còn
+regex của `install.ps1` đã có sẵn `\*?`). Nhưng để yên thì gói dựng từ Windows và gói dựng từ
+Mac có manifest **khác byte cho cùng một cây file** — và ngày nào đó sẽ có kẻ parse bằng
+`cut -d' ' -f3`. Nên: chuẩn hoá về **một** dạng.
+
+Vá là `sha256_text()` — một `sed` neo vào `^<64 hex>␠\*`. Điều quan trọng là **cái gì KHÔNG
+bị đụng tới**: băm vẫn tính trên byte thô, vì cờ `-t` mới là thứ nguy hiểm (trên Cygwin nó có
+thể dịch CRLF và làm **sai băm của file nhị phân**). Ở đây chỉ đổi đúng một ký tự đánh dấu
+trong văn bản đầu ra. Trên POSIX — nơi `*` không bao giờ xuất hiện — `sed` là no-op; đã dựng
+lại gói thật trên macOS để chắc: 193 file, 0 dòng sai định dạng, `shasum -c` khớp 193/193.
+
+Còn một câu hỏi tôi **không trả lời được từ máy này**: `sha256sum -c` trên Git-Bash đọc dấu
+hai-dấu-cách là "text mode" — nếu MSYS thật sự dịch CRLF ở chế độ đó thì việc chuẩn hoá sẽ
+làm hỏng phép đối chiếu file nhị phân. Cygwin gắn ổ ở chế độ binary nên gần như chắc chắn hai
+chế độ trùng nhau, nhưng "gần như chắc chắn" không phải là đo. Nên bước CI nay in thẳng
+**16 ký tự đầu của băm ở chế độ binary và ở chế độ text** cho cùng một file `.tar.gz`. Bằng
+nhau ⇒ xong chuyện. Khác nhau ⇒ phải quay lại nới luật định dạng thay vì chuẩn hoá — và số
+đo sẽ nằm sẵn trong log, không cần thêm một vòng nào.
+
 ---
 
 ## 9. Việc còn lại (backlog)
@@ -1052,11 +1142,13 @@ chỉ thẳng vào chỗ lệch mà không cần thêm một vòng đoán nào.
 | p | `.github/workflows/kitgen-windows.yml` (bước "Đóng gói bằng Git-Bash") | Vòng 10: `exit 141` = SIGPIPE — `tar -tzf … \| head -20` dưới `bash -e -o pipefail` của runner làm đỏ cả bước chỉ vì một lệnh để *ngó* — xem §8.7.1 | ghi danh sách ra file rồi `head` file; đã quét: không còn `\| head` / `\| grep -q` nào trong các bước `shell: bash` |
 | q | `lib/run-handle.mjs` (`cleanJobName`, `parseGenLine`), `test-fixtures/engine-fake/gen.sh`, `engine-stepped/gen.sh` | Vòng 10: `print()` của Python trên Windows dịch `\n` → `\r\n` **kể cả ra pipe** ⇒ tên job mang `\r` ⇒ `prompt →` không khớp, `case *bg-home)` không khớp, tên file chứa ký tự Win32 cấm — xem §8.7.2 và **§4.5** | hai lớp: engine `\| tr -d '\r'` (hai fixture; `gen.sh` thật là nợ §4.5), agent chịu được `\r` và lọc mọi tên job. Ca kiểm chạy **cả hai nền**, đã chứng minh bắt được lỗi (161/162 khi trả mẫu về bản cũ) |
 | r | `test-agent.mjs`, workflow (bước "Khám nghiệm workspace tạm") | Vòng 10: bàn mổ nói `raw/` có 3 file tên sạch, bộ ca nói `3/3 không ghi được ảnh` — **hai dữ kiện không thể cùng đúng**, và tôi hết cách suy luận — xem §8.7.3 | `KITGEN_TEST_KEEP_TMP=1` giữ workspace; bước `if: always()` in **từ đĩa** cây thư mục (tên dạng JSON) + mọi `run.json` kèm câu trả lời `raw/<job>.png` có tồn tại không |
+| s | `lib/paths.mjs` (`relPosix`), `routes/files.mjs` (#42 danh mục kit) | Vòng 11: `walkFiles` trả đường dẫn của HĐH ⇒ trên Windows đoạn tương đối là `tight\01-btn.png` ⇒ khoá đối chiếu manifest không khớp ⇒ **mọi ô bản ôm sát trả `sheet: null`** và rơi vào nhóm "Khác" trên web — xem §8.8.1 | một hàm có tên gọi `relPosix(base, abs, s = sep)`; trên POSIX là `split("/").join("/")` ⇒ đồng nhất từng ký tự, kể cả tên file chứa `\`. Ca kiểm ép ngữ nghĩa Windows ngay trên Mac, đã chứng minh bắt được lỗi (164/165) |
+| t | `scripts/build-runtime.sh` (`sha256_text`) + bước CI | Vòng 11: `sha256sum` của Git-Bash mặc định đọc binary nên in `<hash>␠*<path>` — gói dựng từ Windows và từ Mac có manifest **khác byte cho cùng một cây file** — xem §8.8.2 | `sed` neo `^<64 hex>␠\*` đổi đúng một ký tự đánh dấu; **không** đụng chế độ đọc (`-t` có thể dịch CRLF ⇒ sai băm file nhị phân). CI in thêm băm binary-vs-text để đóng nốt câu hỏi còn lại |
 
-Mọi bản vá phía agent (a, b, e, g, h, j, k, l, o, q, r) đã được đo lại trên macOS:
-`node agent/test-agent.mjs` → **162/162 PASS · 0 FAIL** (số ca tăng dần vì các luồng việc khác
+Mọi bản vá phía agent (a, b, e, g, h, j, k, l, o, q, r, s) đã được đo lại trên macOS:
+`node agent/test-agent.mjs` → **165/165 PASS · 0 FAIL** (số ca tăng dần vì các luồng việc khác
 cũng thêm ca; điều bất biến là **0 FAIL**). Bản vá `m` đo bằng cách dựng lại gói thật trên
-macOS: 193 file, mọi dòng manifest đúng định dạng, `shasum -c` khớp 193/193.
+macOS: 193 file, mọi dòng manifest đúng định dạng, `shasum -c` khớp 193/193 (đo lại sau `t`: y nguyên).
 
 ### 9.2 Điểm phải soi ở lượt CI kế tiếp (chưa có bằng chứng, đừng đoán)
 
@@ -1136,3 +1228,18 @@ khi tới phần băm (§8.7.1). Ba câu hỏi của vòng 11:)*
     lỗi nằm ở **so khớp tên**, không phải ở việc ghi file.
 17. **Bước "Đóng gói bằng Git-Bash"** lần này mới thật sự chạy tới đoạn băm — xem §9.2 điểm 14,
     câu hỏi vẫn nguyên vẹn, chỉ là lần đầu có cơ hội được trả lời.
+
+*(Cập nhật sau vòng 11 — **cả ba đã trả lời**: **15** = bản vá `\r` ăn ba ca, hai ca còn đỏ
+là lỗi KHÁC HẲN (§8.8.1) mà `\r` che mất; **16** = tên file trên đĩa **sạch**, `failSummary`
+đã đúng `1/3` ⇒ mâu thuẫn §8.7.3 tan, và cái sai nằm ở **so khớp tên**, đúng như đèn chỉ;
+**17** = tarball dựng được trong Git-Bash, chết ở phép thử định dạng vì dấu `*` (§8.8.2), tức
+điểm 14 cũng đã có đáp án. Hai câu hỏi của vòng 12 — và nếu cả hai xanh thì **cả 4 job xanh**,
+khép được vòng đầu của pipeline Windows:)*
+
+18. **Hai ca [112][113].** Xanh ⇒ biên giới "đĩa → web" đã sạch. Còn đỏ mà thông điệp đổi sang
+    `tight/` hoặc `path` ⇒ còn một chỗ nữa cùng họ, tìm bằng chính `relPosix` (grep nơi nào
+    ghép chuỗi đường dẫn cho web mà không đi qua nó).
+19. **Hai dòng `che do doc BINARY/TEXT`** ở bước đóng gói. **Bằng nhau** ⇒ việc chuẩn hoá dấu
+    `*` an toàn tuyệt đối, đóng sổ §8.8.2. **Khác nhau** ⇒ lập tức đảo hướng: nới luật định dạng
+    của bước CI để chấp nhận cả `␠␠` lẫn `␠*`, và **gỡ** `sha256_text` — vì lúc đó chuẩn hoá sẽ
+    làm `sha256sum -c` bám nhầm chế độ và bám sai băm của file nhị phân.

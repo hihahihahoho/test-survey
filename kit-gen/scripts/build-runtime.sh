@@ -13,8 +13,8 @@ PKG="kitgen-runtime-$VERSION"
 #   xargs: shasum: No such file or directory   → exit 127
 # (run 31986200079, bước "Đóng gói bằng Git-Bash", câu hỏi §9.2-2 của WINDOWS-PORT).
 # Thứ tự thử đặt `shasum` TRƯỚC để macOS/Linux chạy đúng công cụ cũ, không đổi một
-# byte nào của gói phát hành. Cả hai in cùng một định dạng "<hash>␠␠<file>" mà
-# install.sh và install.ps1 đang parse — đừng đổi sang -b (nó in "<hash>␠*<file>").
+# byte nào của gói phát hành. ĐỪNG dùng -b: nó in "<hash>␠*<file>" — và hoá ra
+# `sha256sum` của Git-Bash tự làm thế sẵn, xem hàm `sha256_text` ngay dưới.
 if command -v shasum >/dev/null 2>&1; then
   SHA256="shasum -a 256"
 elif command -v sha256sum >/dev/null 2>&1; then
@@ -23,6 +23,19 @@ else
   echo "build-runtime.sh: thiếu cả shasum lẫn sha256sum" >&2
   exit 1
 fi
+
+# `sha256sum` của Git for Windows mặc định đọc BINARY nên nó in dấu hiệu chế độ là `*`:
+#     1fedc34…7c *./VERSION          ← đo thật, run 31989…, bước "Đóng gói bằng Git-Bash"
+# còn `shasum` trên macOS/Linux in hai dấu cách. Cùng một cây file, gói dựng từ Windows và
+# gói dựng từ Mac sẽ có manifest KHÁC BYTE — thứ không ai nhìn thấy cho tới khi có kẻ parse
+# bằng `cut -d' ' -f3`. Ta chuẩn hoá về MỘT dạng duy nhất: `<64 hex>␠␠<đường dẫn>`.
+#
+# Băm vẫn tính trên BYTE THÔ (không đụng vào chế độ đọc — `-t` thì mới nguy hiểm, nó có thể
+# dịch CRLF và làm sai băm của file nhị phân). Ở đây chỉ đổi đúng MỘT ký tự đánh dấu.
+# Mẫu neo vào 64 hex + đúng một dấu cách nên trên POSIX (không bao giờ có `*`) nó KHÔNG thay
+# một byte nào — kể cả với tên file có dấu `*`.
+sha256_text() { sed 's/^\([0-9a-fA-F]\{64\}\) \*/\1  /'; }
+
 rm -rf "$STAGE"
 mkdir -p "$STAGE/$PKG/engine" "$STAGE/$PKG/app" "$STAGE/$PKG/runtime"
 # A reused output directory must never leak an older archive/checksum into the
@@ -56,10 +69,10 @@ cp "$ROOT/install.sh" "$STAGE/$PKG/install.sh"
 chmod +x "$STAGE/$PKG/install.sh" "$STAGE/$PKG/runtime/bin/kitgen" "$STAGE/$PKG/engine/gen.sh"
 (
   cd "$STAGE/$PKG"
-  find . -type f ! -name manifest.sha256 -print0 | sort -z | xargs -0 $SHA256 > manifest.sha256
+  find . -type f ! -name manifest.sha256 -print0 | sort -z | xargs -0 $SHA256 | sha256_text > manifest.sha256
 )
 mkdir -p "$OUT"
 tar -C "$STAGE" -czf "$OUT/$PKG.tar.gz" "$PKG"
-(cd "$OUT" && $SHA256 "$PKG.tar.gz" > "$PKG.tar.gz.sha256")
+(cd "$OUT" && $SHA256 "$PKG.tar.gz" | sha256_text > "$PKG.tar.gz.sha256")
 rm -rf "$STAGE"
 echo "$OUT/$PKG.tar.gz"

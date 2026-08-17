@@ -450,6 +450,30 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     eq(jobs[1].status, "failed", "FAIL sạch vẫn như cũ")
   })
 
+  /* HỢP ĐỒNG BIÊN GIỚI "ĐĨA → WEB". Cũng chạy trên CẢ HAI nền vì cũng là một quyết định:
+     mọi đường dẫn tương đối rời agent đi ra web/manifest đều là POSIX, bất kể máy chủ.
+     `walkFiles` trả đường dẫn của HỆ ĐIỀU HÀNH; trên Windows đoạn tương đối của
+     `kits/tet/tight/01-btn.png` là `tight\01-btn.png`, nên `lastIndexOf("/")` trả -1 và
+     khoá đối chiếu manifest thành `tight\01-btn` — KHÔNG khớp `01-btn`. Không có lỗi nào
+     nổ: chỉ là `sheet: null` cho toàn bộ bản tight/ (run 31989…, hai ca [112][113] đỏ,
+     `["main", null, "tall"]`). Tham số `s` cho phép ép ngữ nghĩa Windows ngay trên Mac. */
+  await it("đường dẫn tương đối rời agent luôn là POSIX, kể cả khi đĩa dùng dấu \\", async () => {
+    const { relPosix } = await import("../lib/paths.mjs")
+    const { sep } = await import("node:path")
+    eq(relPosix("C:\\ws\\kits\\tet", "C:\\ws\\kits\\tet\\tight\\01-btn.png", "\\"), "tight/01-btn.png",
+      "ngữ nghĩa Windows: thư mục con phải ra dấu / thì manifest mới đối chiếu được")
+    eq(relPosix("C:\\ws\\kits\\tet", "C:\\ws\\kits\\tet\\atlas.png", "\\"), "atlas.png",
+      "ngữ nghĩa Windows: file ngay trong thư mục vẫn nguyên vẹn")
+    eq(relPosix("/ws/kits/tet", "/ws/kits/tet/tight/01-btn.png"), "tight/01-btn.png",
+      "ngữ nghĩa POSIX không đổi một ký tự")
+    // Trên darwin/linux `sep` là "/", nên hàm là split("/").join("/") — kể cả tên file có
+    // chứa dấu \ cũng KHÔNG bị đụng tới. Đây là điều khiến bản vá này an toàn tuyệt đối.
+    if (sep === "/") {
+      eq(relPosix("/ws", "/ws/ten\\la.png"), "ten\\la.png",
+        "tên file chứa dấu \\ trên POSIX phải giữ nguyên — không được 'sửa' hộ")
+    }
+  })
+
   describe("bảo mật vận chuyển")
   await it("Origin lạ bị 403 ORIGIN_NOT_ALLOWED (kể cả GET)", async () => {
     const r = await call("GET", "/health", { headers: { ...CLIENT, origin: "https://evil.example.com" } })

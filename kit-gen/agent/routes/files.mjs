@@ -4,7 +4,7 @@
 import { join } from "node:path"
 import { fail } from "../lib/errors.mjs"
 import { exists, readJsonFile, walkFiles, stat } from "../lib/fsx.mjs"
-import { safeJoin } from "../lib/paths.mjs"
+import { relPosix, safeJoin } from "../lib/paths.mjs"
 import { projectDir, readProject } from "../lib/projects.mjs"
 import { normalizeWidth, thumbnail } from "../lib/thumbs.mjs"
 import { imageSize } from "../lib/multipart.mjs"
@@ -31,7 +31,13 @@ export function register(r) {
     const st = await stat(abs)
     if (!st.isFile()) fail("NOT_FOUND", `${rel} is not a file`)
 
-    const w = normalizeWidth(ctx.url.searchParams.get("w"))
+    /* KHÔNG có `?w=` ⇒ caller xin ẢNH GỐC, đừng đưa gì cho thumbs.mjs quyết.
+       Hai tầng cùng khoá một điều (`searchParams.has` ở đây, `w == null` ở normalizeWidth)
+       vì cái giá của việc hụt là câm lặng: ảnh vẫn 200, vẫn hiện, chỉ là bé 128px — không
+       ai thấy cho tới lúc dán ra Figma. */
+    const w = ctx.url.searchParams.has("w")
+      ? normalizeWidth(ctx.url.searchParams.get("w"))
+      : null
     if (w) {
       const t = await thumbnail(ws, abs, w)
       return { status: 200, file: t.path, headers: t.resized ? {} : { "X-KitGen-Thumb": "unavailable" } }
@@ -59,7 +65,10 @@ export function register(r) {
     const files = []
     for (const abs of await walkFiles(vdir)) {
       if (!abs.endsWith(".png")) continue
-      const name = abs.slice(vdir.length + 1)
+      /* `relPosix`, KHÔNG phải `slice`: trên Windows đoạn tương đối là `tight\01-btn.png`,
+         và cả ba thứ dùng nó ngay dưới đây đều nói tiếng POSIX — khoá đối chiếu manifest
+         (`lastIndexOf("/")`), chuỗi `path` trả cho web, và tiền tố `tight/`. Xem §8.8. */
+      const name = relPosix(vdir, abs)
       if (name === "atlas.png") continue
       const st = await stat(abs)
       let size = { w: null, h: null }

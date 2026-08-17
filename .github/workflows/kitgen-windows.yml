@@ -606,11 +606,22 @@ jobs:
           echo "goi co $(wc -l < "$tmp/pkg-list.txt") muc, 20 muc dau:"
           head -20 "$tmp/pkg-list.txt"
 
+          # CHE DO DOC cua sha256sum tren may nay: cau hoi mo cua vong 11. Neu hai so
+          # duoi day KHAC nhau thi tren Cygwin/MSYS text-mode co dich CRLF, va viec
+          # chuan hoa dau `*` thanh 2 dau cach se lam `-c` bam lai SAI cho file nhi phan.
+          # Bang nhau => an toan tuyet doi. In ra de vong sau khong phai doan lan nua.
+          if command -v sha256sum >/dev/null 2>&1; then
+            probe="$tmp/winbuild/kitgen-runtime-0.0.0-gitbash.tar.gz"
+            echo "che do doc  BINARY: $(sha256sum -b "$probe" | cut -c1-16)"
+            echo "che do doc  TEXT  : $(sha256sum -t "$probe" | cut -c1-16)"
+          fi
+
           # ĐỊNH DẠNG manifest LÀ HỢP ĐỒNG với install.sh/install.ps1: "<64 hex><2 space><./path>".
           # Git-Bash không có `shasum` nên build-runtime.sh rơi sang `sha256sum` (vòng 9:
-          # `xargs: shasum: No such file or directory`, exit 127). Hai công cụ in cùng định
-          # dạng — nhưng nếu đời sau ai đó thêm cờ -b thì dấu phân cách thành " *" và
-          # installer sẽ báo "manifest hong" TRÊN MÁY NGƯỜI DÙNG chứ không phải ở đây.
+          # `xargs: shasum: No such file or directory`, exit 127). Và `sha256sum` cua
+          # Git-Bash mac dinh doc BINARY nen no in " *" thay vi hai dau cach (vong 11 do
+          # duoc, chinh buoc nay bat) => build-runtime.sh chuan hoa lai. Giu nguyen luat
+          # nghiem ngat o day: mot goi = mot dinh dang, du dung tren may nao.
           rm -rf "$tmp/verify" && mkdir -p "$tmp/verify"
           tar -xzf "$tmp/winbuild/kitgen-runtime-0.0.0-gitbash.tar.gz" -C "$tmp/verify"
           man="$tmp/verify/kitgen-runtime-0.0.0-gitbash/manifest.sha256"
