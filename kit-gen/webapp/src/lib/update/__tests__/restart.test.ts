@@ -11,8 +11,10 @@ import {
   compareVersions, isUpdatedVersion, probeAgentVersion, waitForUpdatedAgent, type AgentProbe,
 } from "../restart";
 
-const up = (version: string | null): AgentProbe => ({ reachable: true, version, protocolChanged: false });
-const down = (): AgentProbe => ({ reachable: false, version: null, protocolChanged: false });
+/** Agent trả lời. `uptimeMs` mặc định lớn dần theo thứ tự gọi ⇒ "vẫn tiến trình cũ". */
+const up = (version: string | null, uptimeMs: number | null = 3_600_000): AgentProbe =>
+  ({ reachable: true, version, protocolChanged: false, uptimeMs });
+const down = (): AgentProbe => ({ reachable: false, version: null, protocolChanged: false, uptimeMs: null });
 
 /** Đồng hồ giả: mỗi lần `sleep(ms)` là thời gian nhảy đúng `ms`. */
 function fakeClock() {
@@ -90,14 +92,56 @@ describe("waitForUpdatedAgent", () => {
     expect(clock.now()).toBeLessThan(92_000); // không chờ lố quá một nhịp
   });
 
-  it("khởi động lại xong mà version Y NGUYÊN ⇒ `unchanged`, không chờ hết 90s", async () => {
+  it("khởi động lại xong mà version Y NGUYÊN ⇒ `unchanged`, không chờ hết giờ", async () => {
     const clock = fakeClock();
-    const { probe } = scripted([down(), up("2.1.13")]);
+    // HAI nhịp im liên tiếp = agent thật sự đã chết (xem RESTART_MIN_DOWN_PROBES), rồi
+    // sống lại với uptime bé tí — hai bằng chứng độc lập của "tiến trình khác".
+    const { probe } = scripted([down(), down(), up("2.1.13", 900)]);
     const r = await waitForUpdatedAgent({
       targetVersion: "2.2.0", fromVersion: "2.1.13", stableChecks: 3, probe, ...clock,
     });
     expect(r).toEqual({ outcome: "unchanged", version: "2.1.13" });
     expect(clock.now()).toBeLessThan(20_000);
+  });
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     BUG 14/08 (máy chủ SP): "ấn Cập nhật lần đầu thì báo lỗi, lần sau lại ok".
+     `/health` có timeout 1200ms và KHÔNG retry (lib/api/constants.ts), trong khi
+     handler đó `readdir` + `exists()` từng project — lúc installer đang tải/giải
+     nén/`cp -R` thì một nhịp chậm quá hạn là chuyện thường. Bản trước coi ĐÚNG MỘT
+     nhịp hụt đó là "agent đã chết", 6 giây sau kết luận `unchanged` ⇒ TỰ TẢI LẠI
+     TRANG ⇒ "Cập nhật chưa thành công", trong khi installer vẫn đang chạy.
+     ══════════════════════════════════════════════════════════════════════════ */
+  it("MỘT nhịp /health chậm quá hạn KHÔNG phải là 'agent đã khởi động lại'", async () => {
+    const clock = fakeClock();
+    // Đúng hiện trường: agent sống suốt (uptime chỉ tăng), giữa chừng lỡ một nhịp.
+    const { probe } = scripted([
+      up("2.1.22", 4_000_000), down(), up("2.1.22", 4_003_000), up("2.1.22", 4_004_500),
+      up("2.1.22", 4_006_000), up("2.1.22", 4_007_500), up("2.1.22", 4_009_000),
+    ]);
+    const r = await waitForUpdatedAgent({
+      targetVersion: "2.1.24", fromVersion: "2.1.22", timeoutMs: 30_000, stableChecks: 3, probe, ...clock,
+    });
+    // `timeout` ⇒ lớp phủ đứng chờ; `unchanged` ⇒ tải lại trang + báo hỏng oan.
+    expect(r.outcome).toBe("timeout");
+  });
+
+  it("uptime TỤT ⇒ tiến trình mới, kết luận được ngay cả khi không lỡ nhịp nào", async () => {
+    const clock = fakeClock();
+    const { probe } = scripted([up("2.1.22", 4_000_000), up("2.1.22", 700), up("2.1.22", 2_200), up("2.1.22", 3_700)]);
+    const r = await waitForUpdatedAgent({
+      targetVersion: "2.1.24", fromVersion: "2.1.22", timeoutMs: 60_000, stableChecks: 3, probe, ...clock,
+    });
+    expect(r).toEqual({ outcome: "unchanged", version: "2.1.22" });
+  });
+
+  it("agent đời cũ (không khai uptime) vẫn kết luận được nhờ đếm nhịp im", async () => {
+    const clock = fakeClock();
+    const { probe } = scripted([up("2.1.22", null), down(), down(), up("2.1.22", null)]);
+    const r = await waitForUpdatedAgent({
+      targetVersion: "2.1.24", fromVersion: "2.1.22", timeoutMs: 60_000, stableChecks: 2, probe, ...clock,
+    });
+    expect(r.outcome).toBe("unchanged");
   });
 
   it("protocol lệch sau khi cài = bằng chứng agent ĐÃ đổi ⇒ `updated`", async () => {
@@ -109,7 +153,7 @@ describe("waitForUpdatedAgent", () => {
 
   it("không biết version nào cả ⇒ 'đã chết rồi sống lại' là bằng chứng tốt nhất còn lại", async () => {
     const clock = fakeClock();
-    const { probe } = scripted([down(), up(null)]);
+    const { probe } = scripted([down(), down(), up(null)]);
     const r = await waitForUpdatedAgent({ targetVersion: null, fromVersion: null, probe, ...clock });
     expect(r.outcome).toBe("updated");
   });
@@ -133,7 +177,9 @@ describe("probe thật KHÔNG BAO GIỜ ném", () => {
   it("fetch hỏng giữa lúc agent tự thay mình ⇒ chỉ là 'chưa sống lại'", async () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new TypeError("Failed to fetch"))));
     const { probeAgentOnce } = await import("../restart");
-    await expect(probeAgentOnce()).resolves.toEqual({ reachable: false, version: null, protocolChanged: false });
+    await expect(probeAgentOnce()).resolves.toEqual({
+      reachable: false, version: null, protocolChanged: false, uptimeMs: null,
+    });
     vi.unstubAllGlobals();
   });
 });
@@ -154,7 +200,7 @@ describe("đọc version từ /health — runtimeVersion trước, version sau",
     vi.stubGlobal("fetch", healthRes({ version: "1.2.0", runtimeVersion: "2.1.19" }));
     const { probeAgentOnce } = await import("../restart");
     const p = await probeAgentOnce();
-    expect(p).toEqual({ reachable: true, version: "2.1.19", protocolChanged: false });
+    expect(p).toMatchObject({ reachable: true, version: "2.1.19", protocolChanged: false });
     vi.unstubAllGlobals();
   });
 

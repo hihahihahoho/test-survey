@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process"
-import { appendFileSync, closeSync, openSync, writeSync } from "node:fs"
+import { appendFileSync, closeSync, openSync, readFileSync, statSync, writeFileSync, writeSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -178,6 +178,34 @@ export async function checkForUpdateSafe(opts = {}) {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════
+   TRẦN KÍCH THƯỚC CHO update.log — cái giá phải trả khi bỏ `open(w)`.
+
+   `open(w)` giữ file bé bằng cách xoá bằng chứng, và đó chính là thứ đã làm hỏng buổi
+   điều tra ngày 14/08 (lượt hỏng bị lượt chữa nó ghi đè). Nay cộng dồn, nên phải có
+   người dọn: giữ ~128KB CUỐI (vài chục lượt update — thừa sức cho mọi cuộc điều tra),
+   cắt phần đầu khi vượt 512KB. Cắt ở đầu chứ không cuối: lượt gần đây mới là lượt cần đọc.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+export const UPDATE_LOG_MAX_BYTES = 512 * 1024
+export const UPDATE_LOG_KEEP_BYTES = 128 * 1024
+
+/** `true` nếu đã cắt. Mọi lỗi đều nuốt: dọn nhật ký KHÔNG được phép chặn một lượt cập nhật. */
+export function trimUpdateLog(logFile, { maxBytes = UPDATE_LOG_MAX_BYTES, keepBytes = UPDATE_LOG_KEEP_BYTES } = {}) {
+  try {
+    if (statSync(logFile).size <= maxBytes) return false
+    const buf = readFileSync(logFile)
+    const tail = buf.subarray(Math.max(0, buf.length - keepBytes))
+    // Bỏ nốt nửa dòng bị cắt đôi ở đầu, để file luôn bắt đầu bằng một dòng nguyên vẹn.
+    const nl = tail.indexOf(0x0a)
+    const body = nl >= 0 ? tail.subarray(nl + 1) : tail
+    writeFileSync(logFile, Buffer.concat([
+      Buffer.from(`[đã cắt bớt phần đầu — giữ khoảng ${Math.round(keepBytes / 1024)}KB gần nhất]\n`),
+      body,
+    ]))
+    return true
+  } catch { return false }
+}
+
 /**
  * Trả lời trước, rồi để installer thay và khởi động lại chính tiến trình này.
  *
@@ -193,7 +221,8 @@ export async function checkForUpdateSafe(opts = {}) {
  *    sự cố 14/08 không để lại một dòng nào: installer chết ở giữa, output rơi vào
  *    /dev/null, `agent.log` (stdout của launchd job) đương nhiên không có gì vì
  *    installer đâu có ghi vào đó. "Không có dấu vết" bị đọc nhầm thành "không có ai
- *    thử restart". Mở file bằng "w": thứ cần đọc luôn là lượt update GẦN NHẤT.
+ *    thử restart". Mở bằng "a" (KHÔNG phải "w" như 2.1.21–2.1.24, xem `trimUpdateLog`):
+ *    lượt sau không được xoá vết của lượt trước.
  *
  *  ③ Phải có listener `error`. spawn hỏng (thiếu `sh`, bin/kitgen không +x) phát ra
  *    'error' bất đồng bộ; ChildProcess không ai nghe là ném lỗi không bắt được ⇒ agent
@@ -212,8 +241,15 @@ export function scheduleUpdate({ kitgenHome = defaultKitgenHome(), spawnImpl = s
   const logFile = join(kitgenHome, "update.log")
   let out = "ignore"
   try {
-    const fd = openSync(logFile, "w")
-    writeSync(fd, `[${new Date().toISOString()}] kitgen update (do UI yêu cầu)\n`)
+    trimUpdateLog(logFile)
+    /* "a" CHỨ KHÔNG PHẢI "w" — lượt sau KHÔNG được xoá vết của lượt trước.
+       Ngày 14/08 người dùng bấm [Cập nhật] hai lần: lượt 1 hỏng, lượt 2 xong. Khi đi tìm
+       nguyên nhân thì update.log chỉ còn ĐÚNG lượt 2 (thành công) — bằng chứng của lượt
+       hỏng bị chính lượt chữa nó xoá mất, và cả buổi điều tra phải đoán. Nhật ký của một
+       thao tác lặp lại được thì phải cộng dồn; giới hạn kích thước là việc của
+       `trimUpdateLog`, không phải của `open(w)`. */
+    const fd = openSync(logFile, "a")
+    writeSync(fd, `\n${"═".repeat(72)}\n[${new Date().toISOString()}] kitgen update (do UI yêu cầu)\n`)
     out = fd
   } catch { /* ổ đĩa chỉ đọc / thiếu quyền: mất nhật ký chứ không được mất bản cập nhật */ }
 

@@ -72,6 +72,11 @@ cleanup(){
     echo "Cài đặt dừng giữa chừng — đã trả $KITGEN_HOME/current về bản cũ." >&2
     echo "Dịch vụ đang chạy KHÔNG bị đụng tới. Nhật ký: $KITGEN_HOME/update.log" >&2
   fi
+  # DẤU KẾT THÚC LƯỢT. update.log nay cộng dồn nhiều lượt (agent mở bằng "a" — xem
+  # lib/update.mjs `trimUpdateLog`), nên mỗi lượt phải tự khai mình dừng ở đâu: không có
+  # dòng này thì người đọc không phân biệt được "lượt còn đang chạy" với "lượt đã chết
+  # giữa chừng" — đúng câu hỏi không trả lời được sáng 14/08.
+  printf '[%s] kitgen install/update kết thúc — mã thoát %s\n' "$(date '+%Y-%m-%d %H:%M:%S %z')" "$_status"
 }
 trap cleanup EXIT INT TERM
 

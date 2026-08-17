@@ -15,7 +15,7 @@ import { create } from "zustand";
 import { api, type UpdateCheck } from "../api/endpoints";
 import { AgentError } from "../api/client";
 import { MANUAL_RESTART_CMD, markUpdatePending } from "./pending";
-import { waitForUpdatedAgent, type RestartResult, type WaitOptions } from "./restart";
+import { RESTART_TIMEOUT_MS, waitForUpdatedAgent, type RestartResult, type WaitOptions } from "./restart";
 import { isArchivePending } from "./watch";
 
 export type UpdatePhase =
@@ -117,7 +117,9 @@ async function classifyStall(
   if (outcome === "unchanged") return null; // như cũ: tải lại để app đọc lại sự thật
   return {
     phase: "timeout",
-    message: "Công cụ local chưa khởi động lại sau 90 giây.",
+    // Số giây LẤY TỪ chính hằng của vòng chờ: hai chỗ lệch nhau là câu thông báo nói dối
+    // (đã từng: chú thích "90s" ở lại sau khi hằng đổi).
+    message: `Công cụ local chưa khởi động lại sau ${Math.round(RESTART_TIMEOUT_MS / 1000)} giây.`,
     restartCommand: null,
   };
 }

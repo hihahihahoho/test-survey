@@ -13,7 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LS_KEYS, _setBackend, memoryBackend, storeGet } from "../../store/persist";
 import { useUpdateInstall } from "../install-store";
 import { markUpdatePending, readUpdatePending } from "../pending";
-import type { RestartResult } from "../restart";
+import { RESTART_TIMEOUT_MS, type RestartResult } from "../restart";
 import type { UpdateCheck } from "../../api/endpoints";
 
 let mem: ReturnType<typeof memoryBackend>;
@@ -101,7 +101,9 @@ describe("bấm [Cập nhật]", () => {
     expect(reload).not.toHaveBeenCalled();
     const s = useUpdateInstall.getState();
     expect(s.phase).toBe("timeout");
-    expect(s.message).toContain("90 giây");
+    // Số giây đọc từ chính hằng của vòng chờ — test không được đóng đinh một con số
+    // mà code đã bỏ đi (90s cũ quá ngắn cho một lượt cài nguội, xem RESTART_TIMEOUT_MS).
+    expect(s.message).toContain(`${RESTART_TIMEOUT_MS / 1000} giây`);
   });
 
   it("cài xong mà version y nguyên ⇒ VẪN tải lại (để app đọc lại sự thật rồi báo hỏng)", async () => {
