@@ -373,8 +373,13 @@ describe("§W3-1 — món không vẽ được", () => {
  *
  * Món dùng để đo lấy từ chính thư viện đóng gói, không bịa:
  *  · `16-fx-burst` — thư viện ĐÃ khai `matte:"glow"` (ô hiệu ứng);
- *  · `03-btn-pill-outline` — thư viện khai `matte:"glass"` (thuật toán tách, KHÔNG
- *    phải nền đen) ⇒ chọn "chroma" ở popup không được phép xoá nó.
+ *  · `03-btn-pill-outline` — thư viện khai `matte:"glass"` (ô trong suốt).
+ *
+ * ⚠️ ĐỔI LUẬT 17/08: `"none"` giờ gỡ được CẢ `"glass"`. Trước đó `glass` bị coi là
+ * "thuật toán tách của slicer, popup không hỏi" nên phải giữ lại. Từ khi ô kính có
+ * câu prompt riêng (`gen.sh:382`) thì `glass` mang nghĩa ở CẢ hai đầu — prompt và
+ * slicer — và popup có nút cho nó, nên người dùng bấm "Chroma thường" phải tắt được
+ * cả hai đầu. `"vitmatte"` vẫn thuần thuật toán, vẫn không bị `"none"` chạm tới.
  */
 describe("§P1-4 — nền của ô đi trọn đường từ lớp đè tới contract", () => {
   const GLOW = "16-fx-burst";
@@ -382,7 +387,7 @@ describe("§P1-4 — nền của ô đi trọn đường từ lớp đè tới c
   /** Ô ngang thường, thư viện KHÔNG khai `matte` — chọn nó để đo đúng chiều "bật lên". */
   const PLAIN = LIB.find((e) => e.skel.matte === undefined && e.skel.shape !== "full" && e.cell !== "portrait")!.file;
 
-  const withSkel = (file: string, skel: { w?: number; h?: number; matte?: "glow" | "none" }) => {
+  const withSkel = (file: string, skel: { w?: number; h?: number; matte?: "glow" | "glass" | "none" }) => {
     const s = defaultState();
     return { ...s, elements: s.elements.map((e) => (e.file === file ? { ...e, selected: true, skel } : e)) };
   };
@@ -408,9 +413,23 @@ describe("§P1-4 — nền của ô đi trọn đường từ lớp đè tới c
     expect(cellOf(c, GLOW)?.skel.matte).toBeUndefined();
   });
 
-  it("TẮT KHÔNG được xoá `matte:\"glass\"` — đó là thuật toán tách, không phải nền", () => {
+  it("thư viện khai `glass` ⇒ contract giữ nguyên khi không đè gì", () => {
+    expect(cellOf(build(), GLASS)?.skel.matte).toBe("glass");
+  });
+
+  it("TẮT ⇒ gỡ được cả `glass` (nay là cờ người dùng chọn, không còn là nội bộ slicer)", () => {
     const c = buildKitsetContract(withSkel(GLASS, { matte: "none" }), { lib: LIB });
-    expect(cellOf(c, GLASS)?.skel.matte).toBe("glass");
+    expect(cellOf(c, GLASS)?.skel.matte).toBeUndefined();
+  });
+
+  it("BẬT trong suốt cho một ô thường ⇒ contract nhận `matte:\"glass\"`", () => {
+    const c = buildKitsetContract(withSkel(PLAIN, { matte: "glass" }), { lib: LIB });
+    expect(cellOf(c, PLAIN)?.skel.matte).toBe("glass");
+  });
+
+  it("`\"none\"` KHÔNG chạm `matte:\"vitmatte\"` — đó mới là thuật toán tách thuần tuý", () => {
+    const base = { shape: "rrect" as const, matte: "vitmatte" };
+    expect(mergeElementSkel(base, { matte: "none" })).toBe(base);
   });
 
   it("lớp đè KHÔNG chạm vào thư viện chung (bộ nhớ dùng lại giữa các dự án)", () => {

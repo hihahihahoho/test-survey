@@ -27,6 +27,109 @@ def load_gen_block():
 gen = load_gen_block()
 
 
+class StripFinishTest(unittest.TestCase):
+    """Nhiễm kết cấu 3D vào sheet element (dự án thật hello-368a).
+
+    Art style của dự án là ảnh ref UI kiếm hiệp MỰC HOẠ PHẲNG. Sheet `nen` và
+    `pose-*` (spec không có chữ vật liệu) ra đúng mực hoạ phẳng; sheet `ui` và
+    `dao-cu` ra NHỰA BÓNG 3D — nút viên nang đỏ kẹo vành bevel, nút tròn mái vòm,
+    mảnh ghép đùn khối. Khác nhau đúng ở chỗ dòng ô có chữ 'glossy 3D … bevel'
+    hay không. Câu "do NOT paint them" không gỡ được mồi ⇒ phải XOÁ chữ."""
+
+    def strip(self, spec):
+        return gen["strip_finish"](spec)[0]
+
+    def test_tu_be_mat_bien_mat_khoi_cau(self):
+        got = self.strip("glossy 3D candy-red capsule button, wide pill shape, "
+                         "soft white top highlight, darker red bevel rim, blank face")
+        for w in ("glossy", "3D", "candy", "bevel"):
+            self.assertNotIn(w.lower(), got.lower(), f"{w} vẫn còn trong spec")
+
+    def test_hinh_dang_va_trang_thai_con_nguyen(self):
+        got = self.strip("glossy 3D candy-red capsule button, wide pill shape, "
+                         "soft white top highlight, darker red bevel rim, blank face")
+        for w in ("capsule", "button", "wide pill shape", "rim", "blank face"):
+            self.assertIn(w, got, f"mất hợp đồng hình học: {w}")
+
+    def test_giu_vai_mau_trong_tu_ghep(self):
+        """'candy-red' → 'red': bỏ kết cấu, GIỮ vai màu để ô còn phân biệt được."""
+        self.assertIn("red", self.strip("glossy 3D candy-red capsule button"))
+
+    def test_khong_dung_vao_mau_phan_biet_o(self):
+        """45/46/47-rank-badge chỉ khác nhau ở GOLD/SILVER/BRONZE — xoá là mất ô."""
+        for w in ("GOLD", "SILVER", "BRONZE"):
+            spec = f"the SAME glossy 3D medal badge in {w} for this place"
+            self.assertIn(w, self.strip(spec))
+
+    def test_khong_lat_nguoc_menh_lenh_phu_dinh(self):
+        """'no gloss', 'NO metal or gold rim' — xoá danh từ sau `no` là lật nghĩa."""
+        got = self.strip("the SAME capsule button in DISABLED state: flat "
+                         "desaturated grey, matte, no gloss")
+        self.assertIn("no gloss", got)
+        got2 = self.strip("smooth glossy capsule — absolutely NO outer frame, "
+                          "NO metal or gold rim, NO border")
+        self.assertIn("NO metal or gold rim", got2)
+        self.assertNotIn("glossy", got2)
+
+    def test_khong_dung_vao_tu_trang_thai_va_kinh(self):
+        """matte/desaturated = trạng thái disabled; glass/frosted/translucent là
+        hợp đồng của nhánh matte kính trong slice.py."""
+        for w in ("matte", "desaturated", "muted", "translucent", "glass",
+                  "frosted", "vivid", "bright", "dark"):
+            self.assertNotIn(w, gen["FINISH_WORDS"], f"{w} không được phép xoá")
+
+    def test_menh_de_mat_het_nghia_thi_bo_tron(self):
+        """'gradient face, beveled edge, glossy top highlight' → rác nếu chỉ xoá
+        tính từ. Bỏ trọn mệnh đề, giữ nguyên mệnh đề còn nghĩa."""
+        got = self.strip("small rounded-square 3D plate for one countdown digit, "
+                         "gradient face, beveled edge, glossy top highlight, "
+                         "EMPTY center with no number")
+        self.assertEqual(got, "small rounded-square plate for one countdown digit, "
+                              "EMPTY center with no number")
+
+    def test_khong_xe_cau_trong_ngoac(self):
+        got = self.strip("smooth glossy capsule (the decorated track is a "
+                         "SEPARATE element)")
+        self.assertIn("(the decorated track is a SEPARATE element)", got)
+
+    def test_spec_khong_co_tu_be_mat_thi_khong_doi_mot_ky_tu(self):
+        cfg = json.loads((ROOT / "styles.json").read_text(encoding="utf-8"))
+        for sh in cfg["sheets"]:
+            for c in sh["components"]:
+                out, cut = gen["strip_finish"](c["spec"])
+                if not cut:
+                    self.assertEqual(out, c["spec"].strip(), c["file"])
+
+    def test_thu_vien_element_that_khong_con_tu_be_mat_nao(self):
+        """Chạy trên element-lib.json đang ship — thư viện thêm món mới mà lọt
+        chữ kết cấu thì test này đỏ ngay."""
+        lib = json.loads((ROOT / "element-lib.json").read_text(encoding="utf-8"))
+        bad = []
+        for el in lib["elements"]:
+            out, _ = gen["strip_finish"](el["spec"])
+            words = {w.lower() for w in re.findall(r"[A-Za-z0-9][A-Za-z0-9-]*", out)}
+            # 'gloss' của "no gloss" được cố ý giữ lại (mệnh lệnh phủ định)
+            leak = {w for w in words & gen["FINISH_WORDS"]
+                    if not re.search(r"\b(no|not|never|without|non)\s+%s\b" % w,
+                                     out, re.I)}
+            if leak:
+                bad.append((el["file"], sorted(leak)))
+        self.assertEqual(bad, [], "spec thư viện còn chữ kết cấu sau khi lọc")
+
+    def test_la_tap_con_cua_material_words(self):
+        self.assertTrue(gen["FINISH_WORDS"] <= gen["MATERIAL_WORDS"])
+
+    def test_cau_ha_cap_khong_duoc_nhac_lai_chu_da_xoa(self):
+        """Bẫy chí mạng: preset_words() chạy trên spec GỐC thì câu hạ cấp lại
+        đọc to đúng những chữ vừa xoá — mời chúng quay lại prompt."""
+        spec, _ = gen["strip_finish"]("glossy 3D candy-red capsule button, "
+                                      "darker red bevel rim")
+        named = [w.lower() for w in gen["preset_words"](spec)]
+        for w in ("glossy", "3d", "candy", "bevel"):
+            self.assertNotIn(w, named)
+        self.assertIn("red", named, "chữ màu vẫn phải được hạ cấp bằng cách nêu tên")
+
+
 class PresetWordCapTest(unittest.TestCase):
     """Bẫy `hits[:10]`: `08-progress-fill` đứng đúng 10/10, thêm một từ vật liệu
     nữa vào spec là từ thứ 11 rơi ÂM THẦM và ô lại ra màu preset."""

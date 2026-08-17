@@ -66,20 +66,22 @@ export const STYLE_PROMPT_PLACEHOLDER =
   "Ví dụ: vui tươi, 3D bóng nhẹ, hai màu chủ đạo, sạch và dễ đọc trên màn hình game.";
 
 /**
- * NỀN CỦA MỘT Ô lúc vẽ — lớp đè của riêng dự án lên `skel.matte` của thư viện.
+ * CÁCH TÁCH NỀN CỦA MỘT Ô — lớp đè của riêng dự án lên `skel.matte` của thư viện.
  *
- * Hai giá trị, đúng hai câu người dùng đọc được trong popup Chi tiết:
+ * Ba giá trị, đúng ba câu người dùng đọc được trong popup Chi tiết:
  *  · `"glow"` — ô này vẽ trên **nền đen**, hiệu ứng sáng cộng thêm vào nền
- *    (`gen.sh:273–281` chèn câu "SPECIAL CELL BACKGROUND … PURE BLACK #000000",
- *    `slice.py:740–798` tách bằng nhánh riêng).
- *  · `"none"` — ô này theo **nền chroma** của cả tấm, kể cả khi thư viện chung khai
- *    `matte:"glow"`. Đây là lý do phải có một giá trị "không" TƯỜNG MINH: lớp đè trộn
- *    bằng spread, mà vắng mặt thì không xoá được giá trị của thư viện.
+ *    (`gen.sh:480–488` chèn câu "SPECIAL CELL BACKGROUND … PURE BLACK #000000",
+ *    `slice.py` tách bằng nhánh `glow_alpha`).
+ *  · `"glass"` — ô **trong suốt**: vẫn nền chroma, nhưng `gen.sh:489–506` bắt model để
+ *    key lộ qua thân, và `slice.py` giải ngược `C = α·F + (1−α)·K` lấy alpha thật.
+ *  · `"none"` — ô này theo **nền chroma** thường, kể cả khi thư viện chung khai
+ *    `matte:"glow"`/`"glass"`. Đây là lý do phải có một giá trị "không" TƯỜNG MINH: lớp
+ *    đè trộn bằng spread, mà vắng mặt thì không xoá được giá trị của thư viện.
  *
- * ⚠️ `"none"` KHÔNG xoá `matte:"glass"`/`"vitmatte"` của thư viện — xem `resolveKitset()`.
- * Chúng là *thuật toán tách*, không phải *màu nền lúc gen*; popup chỉ hỏi về cái sau.
+ * ⚠️ `"none"` KHÔNG xoá `matte:"vitmatte"` của thư viện — xem `mergeElementSkel()`. Đó là
+ * *thuật toán tách* thuần tuý, không có mặt nào ở prompt; popup không hỏi về nó.
  */
-export type SkelMatteChoice = "glow" | "none";
+export type SkelMatteChoice = "glow" | "glass" | "none";
 
 /**
  * KÍCH THƯỚC RIÊNG CỦA DỰ ÁN cho một ô skeleton — phần trăm bề rộng/cao của Ô, đúng
@@ -592,7 +594,7 @@ export function createWorkflowStore(projectId: string): WorkflowStore {
             }
             if ("matte" in patch) {
               const matte = patch.matte;
-              if (matte === "glow" || matte === "none") next.matte = matte;
+              if (matte === "glow" || matte === "glass" || matte === "none") next.matte = matte;
               else delete next.matte;
             }
             const { skel: _drop, ...rest } = e;

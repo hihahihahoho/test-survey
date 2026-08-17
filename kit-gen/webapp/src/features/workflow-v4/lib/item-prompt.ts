@@ -12,7 +12,8 @@
  * │   · loại ô              →  `sheet.cell_hint`      (gen.sh:43)             │
  * │   · dòng phong cách     →  `f"Art style: {s['style']}."` (gen.sh:137)     │
  * │   · ghi chú tấm dáng    →  `sheet.note`           (gen.sh:106)            │
- * │   · câu NỀN ĐEN của ô   →  `skel.matte == "glow"` (gen.sh:273-281)        │
+ * │   · câu NỀN ĐEN của ô   →  `skel.matte == "glow"`  (gen.sh:480-488)       │
+ * │   · câu TRONG SUỐT của ô →  `skel.matte == "glass"` (gen.sh:489-506)      │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
  * Vì thế UI hiện nó ở dạng **chỉ đọc + nút sao chép**: đây là bằng chứng, không phải
@@ -60,9 +61,33 @@ export function glowCellPrompt(key: ChromaKeyId | string): string {
     + " the cell stays pure black";
 }
 
+/**
+ * CHÉP NGUYÊN VĂN đoạn `gen.sh` nối vào `spec` của ô `matte:"glass"` (nhánh `elif` ngay
+ * dưới nhánh glow, `gen.sh:489-506`), kể cả chỗ chèn TÊN MÀU KEY — cùng lý do mirror như
+ * `glowCellPrompt`, và cùng ca test đọc `gen.sh` thật để bắt lệch chữ.
+ *
+ * Khác glow ở CHỖ CĂN BẢN: ô glass **không** đổi nền. Nền key chính là thứ mang tín hiệu
+ * độ trong (`slice.py` giải ngược `C = α·F + (1−α)·K`), nên câu này không tuyên bố một
+ * nền khác mà ra HỢP ĐỒNG: phần nhìn xuyên qua phải để lộ key.
+ */
+export function glassCellPrompt(key: ChromaKeyId | string): string {
+  return " — SEE-THROUGH ELEMENT: this element is TRANSPARENT. Do NOT paint any opaque"
+    + " fill behind it or inside it: the"
+    + ` ${key} chroma-key background stays VISIBLE THROUGH the body of the element, covered`
+    + " only by the element's own thin tint. How much"
+    + ` flat ${key} still shows through IS the transparency — pure flat ${key} reads as fully`
+    + " clear, a heavy opaque wash reads as a solid panel. Frame, rim, bevel, specular"
+    + " highlights and anything sitting ON TOP of it stay fully opaque";
+}
+
 /** `true` khi ô được vẽ trên nền đen thay vì nền chroma của tấm. */
 export function isGlowCell(skel: { matte?: unknown } | null | undefined): boolean {
   return skel?.matte === "glow";
+}
+
+/** `true` khi ô là element TRONG SUỐT — vẫn nền chroma, nhưng slicer giải ngược alpha. */
+export function isGlassCell(skel: { matte?: unknown } | null | undefined): boolean {
+  return skel?.matte === "glass";
 }
 
 function findCell(contract: Contract, file: string): { sheet: Sheet; index: number } | null {
@@ -86,7 +111,12 @@ export function itemPromptFor(contract: Contract | null | undefined, file: strin
   const component = sheet.components[index]!;
   const variant = contractVariants(contract)[0];
   const style = variant?.style ?? "";
-  const line = `${index + 1}) ${component.spec}${isGlowCell(component.skel) ? glowCellPrompt(chromaKeyOf(variant?.bg)) : ""}`;
+  /* Cùng thứ tự if/elif của `gen.sh`: một ô chỉ nhận ĐÚNG MỘT câu phụ. */
+  const key = chromaKeyOf(variant?.bg);
+  const extra = isGlowCell(component.skel) ? glowCellPrompt(key)
+    : isGlassCell(component.skel) ? glassCellPrompt(key)
+      : "";
+  const line = `${index + 1}) ${component.spec}${extra}`;
   const text = [
     orientLine(sheet.orient ?? "landscape"),
     `Sheet ${sheet.id} · grid ${sheet.grid.cols}×${sheet.grid.rows} · each cell is a ${sheet.cell_hint ?? "cell"}.`,

@@ -21,13 +21,16 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { loadBundledV2 } from "@/features/design/library/lib/source";
 import { WorkflowStoreProvider, createWorkflowStore, resetWorkflowStores } from "../lib/model";
 import { buildKitsetContract } from "../lib/kitset-to-contract";
-import { glowCellPrompt, isGlowCell, itemPromptFor } from "../lib/item-prompt";
+import { glassCellPrompt, glowCellPrompt, isGlassCell, isGlowCell, itemPromptFor } from "../lib/item-prompt";
 import { KitsetStep } from "../steps/KitsetStep";
 
 const PID = "kit-nen-o";
 /** Ô hiệu ứng của thư viện đóng gói — thư viện ĐÃ khai `matte:"glow"` cho nó. */
 const GLOW_FILE = "16-fx-burst";
 const GLOW_LABEL = "Hiệu ứng nổ sáng";
+/** Ô KÍNH — chính món đã đo 325 626 px magenta đục ở dự án `hello-368a`. */
+const GLASS_FILE = "22-board-panel";
+const GLASS_LABEL = "Khay đựng túi";
 const LIB = loadBundledV2().elements;
 
 const mount = () => {
@@ -84,6 +87,31 @@ describe("① control «Nền tách» nằm trong popup Chi tiết, không trầ
     expect(skelOf(GLOW_FILE)?.matte).toBe("glow");
   });
 
+  it("ô KÍNH của thư viện mở ra đã ở «Trong suốt», và ba nút loại trừ nhau", () => {
+    const { container } = mount();
+    const dialog = openDetail(container, "Popup", GLASS_LABEL);
+    const pressed = ["Chroma thường", "Đen cho hiệu ứng phát sáng", "Trong suốt nhìn xuyên qua"]
+      .map((name) => within(dialog).getByRole("button", { name }).getAttribute("aria-pressed"));
+    expect(pressed).toEqual(["false", "false", "true"]);
+  });
+
+  it("chọn «Trong suốt» cho một ô thường ⇒ lớp đè ghi `glass`, bỏ ra thì xoá sạch", () => {
+    const plain = LIB.find((e) => e.skel.matte === undefined && !isPropOrBg(e.file))!;
+    const { container } = mount();
+    const dialog = openDetail(container, "UI nhỏ", plain.vi);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Trong suốt nhìn xuyên qua" }));
+    expect(skelOf(plain.file)?.matte).toBe("glass");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Chroma thường" }));
+    expect(skelOf(plain.file)).toBeUndefined();
+  });
+
+  it("ô vốn là KÍNH: chọn «Chroma thường» ghi `none` TƯỜNG MINH để đè được thư viện", () => {
+    const { container } = mount();
+    const dialog = openDetail(container, "Popup", GLASS_LABEL);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Chroma thường" }));
+    expect(skelOf(GLASS_FILE)?.matte).toBe("none");
+  });
+
   it("ô vốn là chroma: chọn «Chroma thường» XOÁ lớp đè thay vì ghi một giá trị thừa", () => {
     const plain = LIB.find((e) => e.skel.matte === undefined && !isPropOrBg(e.file))!;
     const { container } = mount();
@@ -101,7 +129,7 @@ function isPropOrBg(file: string): boolean {
 }
 
 describe("② + ③ contract nhận field, và prompt preview nói đúng sự thật", () => {
-  const contractWith = (file: string, matte: "glow" | "none") => {
+  const contractWith = (file: string, matte: "glow" | "glass" | "none") => {
     const s = state();
     return buildKitsetContract(
       { ...s, elements: s.elements.map((e) => (e.file === file ? { ...e, selected: true, skel: { matte } } : e)) },
@@ -133,21 +161,64 @@ describe("② + ③ contract nhận field, và prompt preview nói đúng sự t
     }
   });
 
-  it("câu mirror khớp TỪNG CHỮ với `gen.sh` (đọc file thật, không đọc trí nhớ)", async () => {
+  it("ô KÍNH ⇒ prompt có câu trong suốt, và KHÔNG có câu nền đen", () => {
+    const prompt = itemPromptFor(contractWith(GLASS_FILE, "glass"), GLASS_FILE)!;
+    expect(prompt.line).toContain(glassCellPrompt("magenta"));
+    expect(prompt.text).toContain("SEE-THROUGH ELEMENT");
+    expect(prompt.text).toContain("IS the transparency");
+    // Kính KHÔNG đổi nền ô — đây là điểm khác căn bản với glow, khoá lại kẻo ai đó
+    // "thống nhất" hai nhánh thành một rồi đẩy kính lên nền đen (docs §2).
+    expect(prompt.text).not.toContain("PURE BLACK");
+  });
+
+  it("TẮT trong suốt ⇒ câu đó biến mất, ô về chroma thường", () => {
+    const prompt = itemPromptFor(contractWith(GLASS_FILE, "none"), GLASS_FILE)!;
+    expect(prompt.line).not.toContain("SEE-THROUGH ELEMENT");
+  });
+
+  it("một ô chỉ nhận ĐÚNG MỘT câu phụ — glow thắng, đúng thứ tự if/elif của gen.sh", () => {
+    const prompt = itemPromptFor(contractWith(GLASS_FILE, "glow"), GLASS_FILE)!;
+    expect(prompt.line).toContain("PURE BLACK");
+    expect(prompt.line).not.toContain("SEE-THROUGH ELEMENT");
+  });
+
+  /* `gen.sh` nối chuỗi qua NHIỀU literal python xuống dòng, có cái mang tiền tố `f`
+     (`"…at the" f" cell borders…"`), nên giữa các mảnh còn `f`, dấu nháy và thụt lề.
+     Bỏ tiền tố `f`, rồi bỏ khoảng trắng + dấu nháy ở cả hai bên: cái phải khớp là
+     CHỮ, không phải cách xuống dòng của bash. */
+  const flat = (s: string) => s.replace(/\bf"/g, '"').replace(/["\s]+/g, "");
+  const genSh = async () => {
     const { readFileSync } = await import("node:fs");
     const { resolve } = await import("node:path");
-    const gen = readFileSync(resolve(process.cwd(), "..", "gen.sh"), "utf8");
-    /* `gen.sh` nối chuỗi qua NHIỀU literal python xuống dòng, có cái mang tiền tố `f`
-       (`"…at the" f" cell borders…"`), nên giữa các mảnh còn `f`, dấu nháy và thụt lề.
-       Bỏ tiền tố `f`, rồi bỏ khoảng trắng + dấu nháy ở cả hai bên: cái phải khớp là
-       CHỮ, không phải cách xuống dòng của bash. */
-    const flat = (s: string) => s.replace(/\bf"/g, '"').replace(/["\s]+/g, "");
-    /* `gen.sh` dựng câu này bằng f-string có `{key_name}` ⇒ so hai NỬA quanh chỗ chèn:
-       nửa nào lệch một chữ là preview đã nói khác thứ máy vẽ nhận. */
-    const [head, tail] = glowCellPrompt("§KEY§").replace(/^\s*—\s*/, "").split("§KEY§");
-    expect(flat(gen)).toContain(flat(head!));
-    expect(flat(gen)).toContain(flat(tail!));
+    return readFileSync(resolve(process.cwd(), "..", "gen.sh"), "utf8");
+  };
+  /* `gen.sh` dựng câu bằng f-string có `{key_name}` ⇒ so TỪNG MẢNH quanh mỗi chỗ chèn:
+     mảnh nào lệch một chữ là preview đã nói khác thứ máy vẽ nhận. */
+  const expectMirrored = (gen: string, sentence: string) => {
+    for (const piece of sentence.replace(/^\s*—\s*/, "").split("§KEY§")) {
+      if (piece.trim()) expect(flat(gen)).toContain(flat(piece));
+    }
+  };
+
+  it("câu NỀN ĐEN khớp TỪNG CHỮ với `gen.sh` (đọc file thật, không đọc trí nhớ)", async () => {
+    const gen = await genSh();
+    expectMirrored(gen, glowCellPrompt("§KEY§"));
     // …và chỗ chèn đúng là biến tên key của gen.sh, không phải một chữ cứng.
     expect(gen).toMatch(/cell borders \(the \{key_name\} chroma-key/);
+  });
+
+  it("câu TRONG SUỐT khớp TỪNG CHỮ với `gen.sh`", async () => {
+    const gen = await genSh();
+    expectMirrored(gen, glassCellPrompt("§KEY§"));
+    expect(gen).toMatch(/\{key_name\} chroma-key background stays VISIBLE THROUGH/);
+    // Nhánh của kính phải là `elif` sau nhánh glow — nếu ai đó đổi thành `if` rời thì
+    // một ô có thể ăn cả hai câu, và ca "đúng một câu phụ" ở trên sẽ không đủ để bắt.
+    expect(gen).toMatch(/elif comps\[i\]\["skel"\]\.get\("matte"\) == "glass":/);
+  });
+
+  it("`isGlassCell` đọc đúng `matte` của contract, không đoán theo tên file", () => {
+    const contract = contractWith(GLASS_FILE, "glass");
+    const cells = contract.sheets.flatMap((sh) => sh.components).filter((cp) => isGlassCell(cp.skel));
+    expect(cells.map((cp) => cp.file)).toContain(GLASS_FILE);
   });
 });

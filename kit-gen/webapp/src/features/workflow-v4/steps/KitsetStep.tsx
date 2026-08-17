@@ -13,7 +13,7 @@ import { GroupChips } from "../components/GroupChips";
 import { ItemDetailDialog, SkelSizeFields } from "../components/ItemDetail";
 import { SegChoice } from "../components/SegChoice";
 import { useKitsetContract } from "../lib/contract-sync";
-import { isGlowCell, itemPromptFor } from "../lib/item-prompt";
+import { isGlassCell, isGlowCell, itemPromptFor } from "../lib/item-prompt";
 import { mergeElementSkel } from "../lib/kitset-to-contract";
 import { isPropElement, mergeElements, userUiElements } from "../lib/user-library";
 import { Step } from "./BriefStep";
@@ -135,9 +135,9 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
      thẳng `overrides.get(...)?.matte` thì ô nào thư viện đã khai `matte:"glow"` sẵn
      (element-lib có 1 món) sẽ hiện sai là "Chroma thường" cho tới khi người dùng bấm. */
   const detailOverride = detail ? overrides.get(detail.file) : undefined;
-  const glow = detail
-    ? isGlowCell(detailOverride ? mergeElementSkel(detail.skel, detailOverride) : detail.skel)
-    : false;
+  const detailSkel = detail ? (detailOverride ? mergeElementSkel(detail.skel, detailOverride) : detail.skel) : null;
+  const glow = isGlowCell(detailSkel);
+  const glass = isGlassCell(detailSkel);
 
   return (
     <Step
@@ -270,22 +270,26 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
               />
             </div>
             {/* NỀN CỦA Ô — lựa chọn thứ hai của popup, ngay dưới kích thước ô.
-                Hai nút loại-trừ-nhau (`SegChoice`, đúng tín hiệu "đang chọn" của cả
+                Ba nút loại-trừ-nhau (`SegChoice`, đúng tín hiệu "đang chọn" của cả
                 app) chứ không phải dropdown "Kiểu tách nền / none-glow-glass" của màn
-                cũ (`ElementProps.tsx`): ở trang này người dùng đang chọn NỀN LÚC VẼ,
-                không phải thuật toán tách của slicer. */}
+                cũ (`ElementProps.tsx`): ở trang này người dùng chọn CÁCH TÁCH bằng câu
+                mô tả cái ô, không phải bằng tên thuật toán của slicer.
+                `"vitmatte"` KHÔNG có nút — nó thuần thuật toán, thư viện tự khai. */}
             <div>
               <p className="text-label text-fg-strong">Nền tách</p>
               <p className="mt-1 text-caption text-fg-muted">
                 Ô phát sáng (lửa, tia, hào quang) vẽ trên nền đen thì tách được đúng ánh sáng; nền chroma làm quầng sáng bị xỉn.
+                Ô trong suốt (kính, khay mờ) giữ nền chroma nhưng bắt màu nền lộ qua thân, để đo được đúng độ mờ.
               </p>
               <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Nền tách">
                 <SegChoice
-                  on={!glow}
+                  on={!glow && !glass}
                   aria-label="Chroma thường"
                   /* Thư viện vốn đã là chroma ⇒ XOÁ lớp đè thay vì ghi `"none"`: bản
                      nháp không nên phình ra vì một giá trị trùng đúng mặc định. */
-                  onClick={() => workflow.setElementSkel(detail.file, { matte: detail.skel.matte === "glow" ? "none" : null })}
+                  onClick={() => workflow.setElementSkel(detail.file, {
+                    matte: detail.skel.matte === "glow" || detail.skel.matte === "glass" ? "none" : null,
+                  })}
                 >
                   Chroma thường
                 </SegChoice>
@@ -295,6 +299,13 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
                   onClick={() => workflow.setElementSkel(detail.file, { matte: "glow" })}
                 >
                   Đen cho hiệu ứng phát sáng
+                </SegChoice>
+                <SegChoice
+                  on={glass}
+                  aria-label="Trong suốt nhìn xuyên qua"
+                  onClick={() => workflow.setElementSkel(detail.file, { matte: "glass" })}
+                >
+                  Trong suốt nhìn xuyên qua
                 </SegChoice>
               </div>
             </div>

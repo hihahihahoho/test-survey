@@ -219,21 +219,27 @@ export function resolveKitset(
  * contract sẽ nhận. Bản trước UI tự spread `{...lib.skel, ...override}` — một bản sao
  * của luật trộn, và bản sao đó không biết `matte:"none"` nghĩa là gì.
  *
- * Luật của `matte` — hai khái niệm KHÁC nhau đang dùng chung một khoá contract:
- *  · `"glow"` = **nền ô lúc gen là đen** (`gen.sh:273`). Người dùng chọn được.
- *  · `"glass"` / `"vitmatte"` = **thuật toán tách** của slicer, thư viện khai sẵn cho
- *    vài món trong suốt. Popup Chi tiết KHÔNG hỏi về nó.
- * Vì thế `"none"` chỉ gỡ đúng `"glow"`; chọn "nền chroma" cho một ô `glass` không được
- * âm thầm hạ chất lượng tách của ô đó.
+ * Luật của `matte` — CÁCH TÁCH của một ô. Người dùng chọn được hai giá trị, vì cả hai
+ * đều có mặt ở CẢ prompt lẫn slicer, nên phải cùng bật cùng tắt:
+ *  · `"glow"`  = nền ô lúc gen là ĐEN (`gen.sh:480`) + `slice.py` tách theo kênh sáng.
+ *  · `"glass"` = ô TRONG SUỐT: prompt bắt để key lộ qua thân (`gen.sh:489`) + `slice.py`
+ *    giải ngược `C = α·F + (1−α)·K`. Từ 08/2026 đây là MỘT cờ duy nhất, không tách thành
+ *    "transparent-panel" riêng: prompt và slicer là hai nửa của cùng một hợp đồng, tách
+ *    ra là mở đường cho hai nửa đó mâu thuẫn (xem docs/design-glass-transparent-panel).
+ *  · `"vitmatte"` = **thuần thuật toán tách**, không có mặt nào ở prompt. Thư viện khai
+ *    sẵn, popup KHÔNG hỏi ⇒ `"none"` không được âm thầm hạ chất lượng tách của nó.
  */
+const USER_MATTE = new Set(["glow", "glass"]);
+
 export function mergeElementSkel(base: LibElement["skel"], override: KitElementSkel): LibElement["skel"] {
   const patch: Partial<LibElement["skel"]> = {};
   if (override.w !== undefined) patch.w = override.w;
   if (override.h !== undefined) patch.h = override.h;
-  if (override.matte === "glow") patch.matte = "glow";
-  if (Object.keys(patch).length === 0 && !(override.matte === "none" && base.matte === "glow")) return base;
+  if (override.matte === "glow" || override.matte === "glass") patch.matte = override.matte;
+  const clears = override.matte === "none" && USER_MATTE.has(String(base.matte));
+  if (Object.keys(patch).length === 0 && !clears) return base;
   const next = { ...base, ...patch };
-  if (override.matte === "none" && next.matte === "glow") delete next.matte;
+  if (clears) delete next.matte;
   return next;
 }
 

@@ -219,17 +219,18 @@ def is_key_color(bgs, expect=None):
     return True
 
 
-def matte_chroma(sheet, key, noclamp=None, axis=None):
+def matte_chroma(sheet, key, noclamp=None, axis=None, glass=None):
     """Matte cho nền key chát: ViTMatte/closed-form nếu có lib, không thì
     đường lùi Vlahos per-pixel. noclamp: mask bool (H,W) — vùng ô của element
     matte:"glow"/"glass" được MIỄN clamp vật lý (xem matte_pymatting).
+    glass: mask bool (H,W) — ô matte:"glass", UNMIX foreground-over-key.
     axis: trục key (key_axis) — mặc định suy từ chính màu `key`."""
     if HAS_PYMATTING:
-        return matte_pymatting(sheet, key, noclamp, axis)
+        return matte_pymatting(sheet, key, noclamp, axis, glass)
     return matte_vlahos(sheet, key, axis)
 
 
-def matte_pymatting(sheet, key, noclamp=None, axis=None):
+def matte_pymatting(sheet, key, noclamp=None, axis=None, glass=None):
     """Closed-form matting với trimap TỰ SINH từ màu key đã biết.
 
     Vlahos đoán alpha ĐỘC LẬP từng pixel → bóng đổ/glow trộn nền cho alpha
@@ -284,6 +285,42 @@ def matte_pymatting(sheet, key, noclamp=None, axis=None):
         m &= ~noclamp
     alpha = np.where(m, vl, alpha)
     fgc = np.clip(estimate_foreground_ml(arr / 255.0, alpha) * 255, 0, 255)
+    # ══ Ô matte:"glass" — UNMIX FOREGROUND-OVER-KEY, KHÔNG PHẢI DESPILL ═══════
+    #
+    # Kính TRONG SUỐT vẽ trên nền key: cái mắt thấy là ảnh ĐÃ TRỘN
+    #     C = α·F + (1−α)·K
+    # Solver alpha nhìn thấy một mảng màu liền khối có biên rõ nên gọi nó là
+    # foreground (α≈1) — panel ra ĐỤC MÀU KEY. Đo trên `22-board-panel` của dự án
+    # thật `hello-368a`: 325 626 px magenta ĐỤC = 40% diện tích ô.
+    #
+    # Despill thường KHÔNG cứu được: nó chỉ trừ sắc key khỏi RGB, nên magenta đục
+    # thành HỒNG CÁ HỒI đục — vẫn không nhìn xuyên qua được. Phải giải ngược:
+    #
+    #   spill(C) = α·spill(F) + (1−α)·sref          (spill tuyến tính theo key_axis)
+    #   giả thiết Vlahos: kính không tự mang sắc key ⇒ spill(F) = 0
+    #   ⇒ α = 1 − spill(C)/sref = vl          ← ĐÚNG đại lượng CLAMP đã tính ở trên
+    #   ⇒ F = (C − (1−α)·K) / α                (un-mix, F ra spill = 0 theo dựng)
+    #
+    # Nghĩa là với ô glass, `vl` KHÔNG phải cận dưới của alpha — nó CHÍNH LÀ alpha.
+    # `noclamp` (miễn cận dưới) đúng cho `glow` (halo mềm hơn vật lý là chủ ý nghệ
+    # thuật) nhưng NGƯỢC dấu với glass: kính trong hơn thứ solver đoán, không đục hơn.
+    #
+    # KÍNH VẪN CÒN THÂN (yêu cầu của chủ sản phẩm): chỗ key lộ nguyên (sn=1) mới ra
+    # α=0; chỗ kính phủ màu lên key thì sn<1 ⇒ α>0. Khung viền đặc (sn≈0) giữ α=1.
+    # Đo lại chính ô đó: ruột trung bình RGB (231,75,165), sref 226 ⇒ sn 0.40
+    # ⇒ α≈0.60 — panel mờ 60%, không phải lỗ thủng.
+    #
+    # ĐÁNH ĐỔI, NÓI THẲNG: giả thiết spill(F)=0 nghĩa là trong ô glass, mọi sắc
+    # key còn lại đều bị coi là nền lộ qua. Element glass mà nghệ sĩ CỐ Ý tô đúng
+    # màu key sẽ bị làm trong. Đó là cái giá của việc khai `matte:"glass"`, và là
+    # lý do cờ này phải do thư viện element khai chứ không tự đoán.
+    if glass is not None and np.any(glass):
+        a_g = np.clip(vl, 0.0, 1.0)
+        alpha = np.where(glass, a_g, alpha)
+        kf = np.asarray(key, dtype=np.float64)
+        den = np.maximum(alpha, 1.0 / 255.0)[..., None]
+        unmix = np.clip((arr - (1.0 - alpha)[..., None] * kf) / den, 0, 255)
+        fgc = np.where(glass[..., None], unmix, fgc)
     a8 = np.rint(np.clip(alpha, 0, 1) * 255).astype(np.uint8)
     # VÁ LỖ NHỎ (thay vì ép đục cả ruột): cụm bán-trong-suốt < 400px nằm trong
     # thân đặc là "ruột loang" → ép 255; mảng semi LỚN liền khối là chủ ý nghệ
@@ -1093,15 +1130,23 @@ if __name__ == "__main__":
                     # suy từ màu đo được. Màu để un-mix vẫn luôn là màu ĐO ĐƯỢC.
                     kaxis = key_axis(KEY_COLORS[want_key]) if want_key else key_axis(bg[0])
                     noclamp = None
+                    glass_m = None
                     if HAS_PYMATTING and any(c["skel"].get("matte") in ("glow", "glass")
                                              for c in sh["components"]):
                         noclamp = np.zeros((H, W), dtype=bool)
+                        glass_m = np.zeros((H, W), dtype=bool)
                         for _i, c in enumerate(sh["components"]):
-                            if c["skel"].get("matte") in ("glow", "glass"):
+                            _m = c["skel"].get("matte")
+                            if _m in ("glow", "glass"):
                                 _r, _c = divmod(_i, COLS)
-                                noclamp[round(_r * cell_h):round((_r + 1) * cell_h),
-                                        round(_c * cell_w):round((_c + 1) * cell_w)] = True
-                    keyed, strict = matte_chroma(sheet_rgb, bg[0], noclamp, kaxis)
+                                _sl = (slice(round(_r * cell_h), round((_r + 1) * cell_h)),
+                                       slice(round(_c * cell_w), round((_c + 1) * cell_w)))
+                                noclamp[_sl] = True
+                                if _m == "glass":
+                                    glass_m[_sl] = True
+                        if not glass_m.any():
+                            glass_m = None
+                    keyed, strict = matte_chroma(sheet_rgb, bg[0], noclamp, kaxis, glass_m)
                     kname = want_key or key_name_of(bg[0]) or "?"
                     mode = ((f"matte ViTMatte + despill, key {kname} {bg[0]}" if HAS_VITMATTE
                              else f"matte closed-form PyMatting + despill, key {kname} {bg[0]}")

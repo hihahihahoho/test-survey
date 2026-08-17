@@ -164,6 +164,132 @@ def preset_words(spec, tag=""):
               f"nên ô có thể ra màu/vật liệu preset thay vì art style.", file=sys.stderr)
     return kept
 
+
+# ── TỪ TẢ KẾT CẤU BỀ MẶT / KHỐI: PHẢI XOÁ HẲN, KHÔNG "NÊU RỒI CẤM" ────────────
+# Đo trên dự án thật hello-368a (art style = ảnh ref UI kiếm hiệp MỰC HOẠ PHẲNG):
+#   · sheet `nen` và 3 sheet `pose-*` — spec KHÔNG có chữ vật liệu nào, 0 câu hạ
+#     cấp ⇒ ảnh ra ĐÚNG mực hoạ phẳng của ref.
+#   · sheet `ui` (11 câu hạ cấp) và `dao-cu` (8 câu) ⇒ ảnh ra NHỰA BÓNG 3D:
+#     nút viên nang đỏ kẹo có vành bevel, nút tròn mái vòm, mảnh ghép đùn khối,
+#     huy chương kim loại — tức đúng preset của thư viện element, không phải ref.
+# Cùng một prompt, cùng một ảnh ref đính kèm, khác nhau đúng ở chỗ dòng ô có hay
+# không có chữ 'glossy 3D … bevel'. Kết luận: câu "the words glossy, 3D … do NOT
+# paint them" KHÔNG gỡ được mồi — nhắc tên một kết cấu rồi phủ định vẫn là nhắc,
+# và nó đứng sát ô nên thắng cả khối ưu tiên lẫn khối Art style ở cuối.
+#
+# Nên: với từ chỉ nói BỀ MẶT / ĐỘ BÓNG / ĐỘ NỔI KHỐI — thứ không mang chút hợp
+# đồng hình học hay trạng thái nào — thì XOÁ khỏi câu spec trước khi ghép prompt.
+# Model không đọc thấy thì không có gì để bắt chước; hình dáng, bộ phận và trạng
+# thái vẫn còn nguyên trong câu.
+#
+# CỐ Ý KHÔNG XOÁ (vẫn hạ cấp bằng cách nêu tên như cũ):
+#   · MỌI TỪ MÀU (red, blue, gold, silver, bronze, grey…) — màu là VAI TRÒ và là
+#     thứ phân biệt ô với ô: 45/46/47-rank-badge chỉ khác nhau ở GOLD/SILVER/
+#     BRONZE, 44-btn-pill-disabled dựa vào 'desaturated grey' để ra trạng thái mờ.
+#     Xoá là mất nghĩa, đúng cái bẫy mà bản trước đã tránh.
+#   · matte / desaturated / muted / vivid / bright / dark… — sắc độ mang TRẠNG
+#     THÁI (locked, disabled, active).
+#   · glass / glassy / frosted / translucent / gel — 09-popup-panel là ô kính
+#     THẬT: slice.py có nhánh matte kính, xoá chữ là hỏng luôn khâu cắt.
+#   · metal / wood / stone / paper… — chất liệu định danh món đồ, và còn xuất
+#     hiện trong mệnh lệnh PHỦ ĐỊNH ("NO metal or gold rim" của 08-progress-fill).
+FINISH_WORDS = {
+    "3d", "glossy", "gloss", "candy", "jelly", "gummy", "plastic", "metallic",
+    "chrome", "foil", "enamel", "lacquer", "specular", "bevel", "beveled",
+    "bevelled", "gradient", "sheen", "shiny", "polished", "iridescent",
+    "holographic", "pearlescent", "waxy", "creamy", "velvety", "satin", "silk",
+    "velvet", "brushed", "porcelain", "ceramic", "marble",
+}
+assert FINISH_WORDS <= MATERIAL_WORDS, "FINISH_WORDS phải là tập con của MATERIAL_WORDS"
+
+# Từ phủ định đứng ngay trước: "no gloss", "NO metal or gold rim" — xoá danh từ
+# sau nó là lật ngược nghĩa câu (từ "đừng bóng" thành "bóng"). Giữ nguyên.
+_NEGATORS = {"no", "not", "never", "without", "non"}
+
+# Danh từ chỉ MẶT PHẲNG TRỪU TƯỢNG của element: một mình chúng không tả gì cả,
+# chúng chỉ tồn tại để đỡ cho tính từ vật liệu đứng trước ("gradient face",
+# "beveled edge", "glossy foil surface"). Bỏ tính từ đi thì cả mệnh đề thành rác
+# ("…plate for one countdown digit, face, edge, top highlight, EMPTY center…"),
+# nên mệnh đề nào MẤT CHỮ mà chỉ còn lại toàn nhóm này thì bỏ hẳn mệnh đề.
+# KHÔNG có "rim"/"border"/"outline"/"frame": chúng là hợp đồng hình học ("darker
+# red rim" vẫn phải còn cái vành), và mệnh đề chứa chúng thường còn từ khác.
+_FILLER_NOUNS = {"surface", "face", "finish", "texture", "edge", "highlight",
+                 "top", "shading", "look", "tone", "the", "a", "an", "its",
+                 "with", "and"}
+
+
+def _strip_clause(clause):
+    """Xoá FINISH_WORDS trong MỘT mệnh đề. Trả (mệnh đề mới, list đã bỏ).
+
+    Token có gạch nối chỉ bỏ ĐÚNG phần thuộc FINISH_WORDS: 'candy-red' → 'red'
+    (giữ vai màu), 'orange-to-coral' không đụng tới.
+    """
+    out, dropped, prev = [], [], ""
+    for tok in re.findall(r"\s+|[^\s]+", clause):
+        if tok.isspace():
+            out.append(tok)
+            continue
+        m = re.match(r"^([^A-Za-z0-9]*)([A-Za-z0-9][A-Za-z0-9-]*)([^A-Za-z0-9]*)$", tok)
+        if not m or prev in _NEGATORS:
+            out.append(tok)
+            prev = re.sub(r"[^a-z]", "", tok.lower())
+            continue
+        pre, word, post = m.groups()
+        parts = word.split("-")
+        keep = [p for p in parts if p.lower() not in FINISH_WORDS]
+        if len(keep) != len(parts):
+            dropped += [p for p in parts if p.lower() in FINISH_WORDS]
+            if keep:
+                out.append(pre + "-".join(keep) + post)
+            elif post.strip():
+                out.append(post.lstrip())       # giữ dấu câu, bỏ chữ
+            else:
+                if out and out[-1].isspace():
+                    out.pop()                   # nuốt luôn khoảng trắng đứng trước
+        else:
+            out.append(tok)
+        prev = word.lower()
+    return re.sub(r"\s{2,}", " ", "".join(out)).strip(), dropped
+
+
+def strip_finish(spec):
+    """Bỏ hẳn từ tả bề mặt/độ nổi khối khỏi spec. Trả (spec mới, list đã bỏ).
+
+    Cắt theo DẤU PHẨY để mệnh đề nào rỗng nghĩa sau khi xoá thì bỏ trọn — spec
+    của thư viện element viết theo lối liệt kê mệnh đề, nên đây là ranh giới an
+    toàn nhất. Chỉ tách ở dấu phẩy NGOÀI ngoặc để không xé câu "(the decorated
+    track is a SEPARATE element)".
+    """
+    clauses, buf, depth = [], "", 0
+    for ch in spec:
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth = max(0, depth - 1)
+        if ch == "," and depth == 0:
+            clauses.append(buf)
+            buf = ""
+        else:
+            buf += ch
+    clauses.append(buf)
+
+    kept, dropped = [], []
+    for cl in clauses:
+        new, cut = _strip_clause(cl)
+        dropped += cut
+        if cut and new:
+            words = [w.lower() for w in re.findall(r"[A-Za-z][A-Za-z-]*", new)]
+            if words and all(w in _FILLER_NOUNS for w in words):
+                continue                       # mệnh đề mất hết nghĩa ⇒ bỏ trọn
+        if new:
+            kept.append(new)
+    txt = ", ".join(kept)
+    # dấu câu mồ côi do xoá chữ: ", —" thành " —", ", :" thành ":"
+    txt = re.sub(r",\s*([—:;])", r" \1", txt)
+    txt = re.sub(r"\s{2,}", " ", txt).strip(" ,;")
+    return txt, dropped
+
+
 for s in cfg["styles"]:
     key_name, key_desc = key_of(s)
     for sh in cfg["sheets"]:
@@ -337,13 +463,20 @@ for s in cfg["styles"]:
                 "HOW TO READ THE NUMBERED ELEMENT LIST BELOW — priority order, highest first:",
                 "1. GEOMETRY — the attached skeleton: canvas, cell, position, size, safe zone.",
                 f"2. ART STYLE — {src} at the end of this prompt. It alone decides",
-                "   MATERIAL, TEXTURE, FINISH, LIGHTING, PALETTE and every actual COLOR.",
+                "   MATERIAL, TEXTURE, FINISH, LIGHTING, PALETTE, every actual COLOR — and the",
+                "   RENDERING TECHNIQUE, including how much DEPTH and VOLUME an element has.",
+                "   Buttons, chips, plates, panels and props are drawn with EXACTLY the same",
+                "   technique and the same amount of relief as the art style — never more, never",
+                "   less: add no depth, no volume and no surface effect the art style itself",
+                "   does not show, and flatten nothing that it does show.",
                 "3. The numbered specs — they define ONLY what each element IS and DOES:",
                 "   its SHAPE, its LAYOUT and parts, and its STATE (filled / outline / hollow /",
                 "   open / closed / active / disabled).",
-                "Every material, finish and colour word inside a numbered spec ('glossy', '3D',",
-                "'candy-red', 'jelly', 'plastic', 'metal', 'gold rim', 'warm orange-to-coral",
-                "gradient', 'soft white highlight'…) is only the element library's DEFAULT preset.",
+                # KHÔNG nêu ví dụ bằng chữ vật liệu THẬT ('glossy', '3D', 'plastic'…).
+                # Chính câu ví dụ đó bơm kết cấu vào MỌI prompt, kể cả sheet nền vốn
+                # sạch. Nói bằng TÊN LOẠI là đủ nghĩa mà không mồi một diện mạo nào.
+                "Any remaining material, finish, surface or colour word inside a numbered spec is",
+                "only the element library's DEFAULT preset, never a request.",
                 "It is OUTRANKED by the art style: do NOT paint it. Keep the spec's shape and its",
                 "COLOR ROLE (primary / secondary / neutral / accent / warning) and re-render that",
                 "role in the art style's own materials and palette.",
@@ -360,13 +493,20 @@ for s in cfg["styles"]:
             for c in range(cols):
                 i = r * cols + c
                 spec = comps[i]["spec"]
-                # ⚠️ QUÉT TỪ VẬT LIỆU TRÊN SPEC GỐC, TRƯỚC khi nối câu hợp đồng
-                # của engine. Bản cũ quét SAU nên ô glow bị chính engine tự bắn
-                # vào chân: câu "SPECIAL CELL BACKGROUND … PURE BLACK #000000"
-                # làm 'BLACK' lọt vào danh sách hạ cấp ⇒ prompt vừa bắt vẽ nền
-                # đen vừa bảo "do NOT paint black" (đã kiểm: prompt ipay-main ô 4
-                # liệt kê 'golden, BLACK'). Nêu tên màu key trong câu đó còn kéo
-                # thêm 'magenta' vào. Spec của thư viện mới là thứ được hạ cấp.
+                # ① XOÁ TỪ TẢ BỀ MẶT/ĐỘ NỔI KHỐI TRƯỚC ĐÃ (xem FINISH_WORDS).
+                # Chỉ khi có art style — không có style thì preset thư viện CHÍNH
+                # LÀ diện mạo mong muốn, xoá đi là làm nghèo spec.
+                if style_override:
+                    spec, _cut = strip_finish(spec)
+                # ⚠️ QUÉT TỪ VẬT LIỆU TRÊN SPEC CỦA THƯ VIỆN (đã xoá ở bước ①),
+                # TRƯỚC khi nối câu hợp đồng của engine. Bản cũ quét SAU nên ô
+                # glow bị chính engine tự bắn vào chân: câu "SPECIAL CELL
+                # BACKGROUND … PURE BLACK #000000" làm 'BLACK' lọt vào danh sách
+                # hạ cấp ⇒ prompt vừa bắt vẽ nền đen vừa bảo "do NOT paint black"
+                # (đã kiểm: prompt ipay-main ô 4 liệt kê 'golden, BLACK'). Nêu tên
+                # màu key trong câu đó còn kéo thêm 'magenta' vào.
+                # Quét SAU bước ① cũng là bắt buộc: câu hạ cấp NHẮC LẠI từng chữ
+                # nó liệt kê, nên liệt kê chữ vừa xoá là mời nó quay lại prompt.
                 preset = (preset_words(spec, f"{s['id']}-{sh['id']} ô {i + 1} "
                                              f"({comps[i]['file']})")
                           if style_override else [])
@@ -379,12 +519,32 @@ for s in cfg["styles"]:
                              f" cell borders (the {key_name} chroma-key does NOT apply inside"
                              " this cell); the light effect is drawn ADDITIVELY on black — where"
                              " there is no light the cell stays pure black")
+                elif comps[i]["skel"].get("matte") == "glass":
+                    # KHÔNG đổi nền ô. Với KÍNH thì nền key CHÍNH LÀ thứ tốt nhất:
+                    # slicer giải ngược C = α·F + (1−α)·K để lấy alpha (slice.py
+                    # `matte_chroma(..., glass=)`), nên lượng key còn lộ qua thân
+                    # kính chính là tín hiệu độ trong. Đổi sang nền ĐEN như ô glow
+                    # sẽ GIẾT tín hiệu đó: trên đen chỉ đọc được tích α·F, kính
+                    # xám 50% và kính trắng 25% cho ra y hệt nhau — xem
+                    # docs/design-glass-transparent-panel-2026-08.md §2.
+                    # Việc phải làm ở prompt là ra HỢP ĐỒNG cho model: phần nhìn
+                    # xuyên qua phải để lộ key, đừng tô đè một mảng đục.
+                    spec += (" — SEE-THROUGH ELEMENT: this element is TRANSPARENT. Do NOT paint"
+                             " any opaque fill behind it or inside it: the"
+                             f" {key_name} chroma-key background stays VISIBLE THROUGH the body of"
+                             " the element, covered only by the element's own thin tint. How much"
+                             f" flat {key_name} still shows through IS the transparency — pure flat"
+                             f" {key_name} reads as fully clear, a heavy opaque wash reads as a"
+                             " solid panel. Frame, rim, bevel, specular highlights and anything"
+                             " sitting ON TOP of it stay fully opaque")
                 # Hạ cấp NGAY TRÊN DÒNG CỦA Ô. Khối ưu tiên phía trên là luật chung;
                 # nhưng model bám mô tả cụ thể nhất ở cạnh nó, nên phải gọi ĐÍCH DANH
                 # những chữ vật liệu/màu có trong chính spec này (đo thật: chỉ có khối
                 # ưu tiên thôi thì 01-btn-pill-red vẫn ra đỏ kẹo bóng, chỉ thêm được
                 # viền neon). Từ hình dáng/trạng thái không nằm trong từ điển nên
-                # không bao giờ bị hạ cấp. (`preset` đã tính ở trên, trên spec GỐC.)
+                # không bao giờ bị hạ cấp. (`preset` đã tính ở trên, trên spec ĐÃ
+                # xoá từ bề mặt — nên câu này chỉ còn nhắc từ MÀU/SẮC ĐỘ, thứ buộc
+                # phải ở lại vì mang vai trò và trạng thái.)
                 if preset:
                     spec += (f" — [SHAPE, PARTS AND STATE ONLY. The words "
                              f"{', '.join(preset)} are the element library's DEFAULT preset:"
@@ -394,13 +554,14 @@ for s in cfg["styles"]:
             lines.append("")
         if use_inspo:
             art = ["Art style: faithfully match the attached inspiration reference image(s) — "
-                   "same rendering technique, materials, palette and level of detail. "
-                   "IMPORTANT: this reference OVERRIDES every material/finish word inside the "
-                   "per-cell descriptions above ('glossy', '3D', 'plastic', 'candy', specific "
-                   "color shades…) — those only describe the DEFAULT look. Re-imagine every "
-                   "element in the reference's actual materials, textures and palette, keeping "
-                   "only each cell's SHAPE, layout and color ROLE (primary vs secondary vs "
-                   "neutral element)."]
+                   "same rendering technique, same amount of depth and volume, same materials, "
+                   "palette and level of detail. Every UI element, prop and panel is drawn with "
+                   "the SAME technique as the reference: if the reference is flat, they are flat. "
+                   "IMPORTANT: this reference OVERRIDES every material, finish and colour word "
+                   "left in the per-cell descriptions above — those only describe the element "
+                   "library's DEFAULT look. Re-imagine every element in the reference's actual "
+                   "materials, textures and palette, keeping only each cell's SHAPE, layout and "
+                   "color ROLE (primary vs secondary vs neutral element)."]
             # Mô tả người dùng gõ KHÔNG bị vứt đi nữa (bản cũ nhánh inspo bỏ hẳn `s['style']`,
             # nên chọn ảnh ref = mất trắng câu mô tả). Nó ở đây với thứ hạng rõ ràng: SAU ảnh.
             if s.get("style"):
@@ -411,12 +572,13 @@ for s in cfg["styles"]:
             # "Art style: …" — không một chữ nào nói nó thắng spec vật liệu của ô,
             # nên nút/thanh vẫn ra preset thư viện. Nay cùng thứ hạng với nhánh ảnh.
             art = [f"Art style: {s['style']}.",
-                   "This art style OVERRIDES every material, finish and colour word inside the "
-                   "per-cell descriptions above ('glossy', '3D', 'plastic', 'candy', 'gold', "
-                   "specific colour shades…) — those are only the element library's DEFAULT "
-                   "preset. Re-render every element in THIS style's materials, textures and "
-                   "palette, keeping only each cell's SHAPE, layout, state and colour ROLE "
-                   "(primary vs secondary vs neutral element)."]
+                   "This art style OVERRIDES every material, finish and colour word left in the "
+                   "per-cell descriptions above — those are only the element library's DEFAULT "
+                   "preset. It also decides the rendering technique and how much depth and volume "
+                   "every element has: UI elements, props and panels carry exactly as much (or as "
+                   "little) dimensionality as this style, never more. Re-render every element in "
+                   "THIS style's materials, textures and palette, keeping only each cell's SHAPE, "
+                   "layout, state and colour ROLE (primary vs secondary vs neutral element)."]
         lines += art + [
             f"All {n_real} elements share the exact same consistent style and belong to one coherent game. "
             "Game-ready UI asset quality, " + ("portrait 2:3." if portrait else "landscape 3:2.")
