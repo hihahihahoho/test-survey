@@ -61,6 +61,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_THRESHOLD = 52   # tâm ramp: dưới lo → trong suốt, trên hi → đục hẳn
 GROW_OFFSET = 60         # mask nghiêm = threshold + 60 (style ghi đè bằng grow_threshold)
 MIN_BLOB = 12            # khối nhỏ hơn (px) coi là nhiễu
+PURE_KEY_SN = 0.98       # sn ≥ ngưỡng này ⇒ pixel coi như NỀN THUẦN, gán nhãn
+                         # "nền chắc" cho trimap kể cả khi cú làm mượt σ=2 đã
+                         # kéo nó xuống dưới 0.9 (khe hẹp — xem matte_pymatting)
 HALO = 14                # nới bbox giữ glow quanh element
 PAD = 6
 BLEED = 0.18             # vành canvas ngoài ô (mỗi phía, theo tỷ lệ ô): trang trí
@@ -258,13 +261,40 @@ def matte_pymatting(sheet, key, noclamp=None, axis=None, glass=None):
     sn = np.clip(spill / sref, 0, 1)
     sn_s = np.asarray(Image.fromarray(np.rint(sn * 255).astype(np.uint8))
                       .filter(ImageFilter.GaussianBlur(2))) / 255.0
+    # ══ NỀN THUẦN KHÔNG ĐƯỢC MẤT NHÃN VÌ CHÍNH CÚ LÀM MƯỢT ═══════════════════
+    #
+    # `sn_s` là `sn` đã bôi σ=2. Trong KHE HẸP nền lọt giữa hai mảng element
+    # (nách, kẽ tay, khe giữa hai chân — rộng 3–7px) cú bôi kéo `sn=0` của
+    # element hai bên vào giữa khe ⇒ `sn_s < 0.9` ⇒ khe MẤT nhãn "nền chắc" và
+    # rơi vào dải nghi vấn. Solver thấy một vùng nghi vấn bị foreground bao kín,
+    # không còn điểm tựa nền nào ⇒ tô alpha≈1 ⇒ ra MẢNG KEY ĐỤC nằm trong thân
+    # nhân vật. Despill không cứu: `m` của despill loại vùng ruột sáng (`~inn |
+    # lum < 90`) nên mảng đó giữ nguyên màu key.
+    #
+    # Đo trên `chinh-pose-nhan-vat.png` thật của dự án `hello-368a` (key
+    # (250,3,243), sref 240): pixel `sn ≥ 0.98` mà alpha ra ≥ 250 = **77 px, và
+    # 77/77 đều nằm trong tập THOÁT nhãn** (`sn ≥ 0.98` nhưng `sn_s < 0.9`);
+    # tập được gán nền chắc đúng cách cho **0 px** đục, alpha trung bình 0,26/255.
+    # Ra asset: 01-pose-idle 270px magenta đục, 04-pose-present 114, 12-pose-bow
+    # 42, 03-pose-point 22, 05-pose-hold-gift 27.
+    #
+    # SỬA: giữ nguyên `sn_s` cho ĐƯỜNG VIỀN 0.9 (nó có việc của nó — làm mượt
+    # contour, không thì alpha viền răng cưa), rồi HỢP THÊM nhãn nền cho pixel
+    # mà `sn` GỐC gần như bằng nền thuần. Chỉ nới tập "nền chắc" vào sâu phía
+    # trong nền, không đụng chỗ contour ⇒ không kéo lại bệnh răng cưa.
+    #
+    # ĐÁNH ĐỔI: pixel element nào nghệ sĩ tô ĐÚNG màu key (lệch < 2% trên trục
+    # key) sẽ thành trong suốt. Đây đúng là giả định nền móng của cả file — key
+    # được chọn XA palette (xem `pickChromaKey`), và đường lùi Vlahos/binary vốn
+    # đã xoá thẳng những pixel đó từ lâu.
+    bg_sure = (sn_s >= 0.9) | (sn >= PURE_KEY_SN)
     if HAS_VITMATTE:
         # ViTMatte (ViT-small, trimap-based SOTA): alpha vùng nghi vấn mượt và
         # đúng cấu trúc tia/glow hơn hẳn closed-form (bảng so găng burst)
         proc, mdl = vitmatte_model()
         tm8 = np.full(spill.shape, 128, dtype=np.uint8)
         tm8[fg_sure] = 255
-        tm8[sn_s >= 0.9] = 0
+        tm8[bg_sure] = 0
         inp = proc(images=sheet, trimaps=Image.fromarray(tm8), return_tensors="pt")
         with torch.no_grad():
             alpha = mdl(**inp).alphas[0, 0, :sheet.height, :sheet.width]
@@ -272,7 +302,7 @@ def matte_pymatting(sheet, key, noclamp=None, axis=None, glass=None):
     else:
         trimap = np.full(spill.shape, 0.5)
         trimap[fg_sure] = 1.0
-        trimap[sn_s >= 0.9] = 0.0
+        trimap[bg_sure] = 0.0
         alpha = estimate_alpha_cf(arr / 255.0, trimap)
     # CLAMP VẬT LÝ: trên nền key, alpha thật ≥ 1 − spill/sref (pixel ít nhiễm
     # key không thể bán trong suốt — nếu trong thì key phải lộ ra). Model thấy

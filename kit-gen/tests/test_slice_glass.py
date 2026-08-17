@@ -40,6 +40,7 @@ from slicelib import load
 
 slice_mod = load()
 slice_mod.HAS_VITMATTE = False        # test không được tải model ~8s / cần mạng
+PURE_KEY_SN_REAL = slice_mod.PURE_KEY_SN
 
 KEY = (255, 0, 255)
 SIZE = 160
@@ -96,7 +97,20 @@ class GlassUnmixTest(unittest.TestCase):
         return out
 
     def test_khong_bat_glass_thi_panel_ra_DUC_MAU_KEY(self):
-        """Đây là BỆNH — giữ ca này để bản vá không bị lặng lẽ gỡ đi."""
+        """Đây là BỆNH — giữ ca này để bản vá không bị lặng lẽ gỡ đi.
+
+        Phải hạ `PURE_KEY_SN` (nhãn nền cho khe hẹp — xem `test_slice_slit.py`)
+        về trạng thái CŨ thì fixture mới tái hiện được bệnh: tấm kính tổng hợp ở
+        đây là một hình chữ nhật MÀU PHẲNG, trimap mới neo nền chắc chắn tới mức
+        solver tự gọi nó là nền. Panel THẬT không dễ thế — đo trên `22-board-panel`
+        của `hello-368a` bằng chính thước của QA (`crop_audit`, dist<60, α≥250):
+            trimap cũ, không unmix : 4840 px magenta đục
+            trimap mới, không unmix: 4831 px   ← nhãn khe hẹp gần như không giúp gì
+            trimap mới + unmix     :    0 px
+        Tức bản vá glass VẪN LÀ thứ duy nhất chữa được ca này.
+        """
+        self.addCleanup(setattr, slice_mod, "PURE_KEY_SN", PURE_KEY_SN_REAL)
+        slice_mod.PURE_KEY_SN = 1.01
         p = probe(self.run_matte(None))
         self.assertEqual(p["glass"][3], 255, "test vô nghĩa nếu solver không ra alpha đục")
         spill = min(int(p["glass"][0]), int(p["glass"][2])) - int(p["glass"][1])
