@@ -9,7 +9,9 @@ styles.json
 styles.json.bak
 nohup.out
 skeleton/
-teams/
+teams/*
+!teams/easy-install/
+!teams/easy-install/**
 dist/
 __pycache__/
 *.pyc
