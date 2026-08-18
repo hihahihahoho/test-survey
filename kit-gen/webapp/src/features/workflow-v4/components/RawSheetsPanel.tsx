@@ -28,6 +28,9 @@ import {
  * Tạo ảnh mà mọi thẻ đã đỏ "Chưa tạo được ảnh" là lời nói dối, không phải trạng thái.
  */
 
+/** Một câu duy nhất cho MỌI nút vẽ lại của trang — không để ba chỗ nói ba kiểu. */
+const REGEN_HINT = "Vẽ lại ảnh bằng AI — tiêu lượt tạo. Có bước xác nhận trước khi chạy.";
+
 const STATE_UI = {
   queued: { icon: Clock, tone: "text-fg-muted", label: "Đang chờ" },
   running: { icon: Loader2, tone: "text-accent-text", label: "Đang tạo" },
@@ -95,6 +98,18 @@ export function RawSheetsPanel({ projectId, contract, jobStates, category = "all
         <div>
           <p className="text-label text-fg-strong">Sheet gốc theo phiên bản</p>
           <p className="text-caption text-fg-muted">Ảnh còn nguyên nền chroma, dùng để đối chiếu. Ảnh cũ vẫn được giữ.</p>
+          {/* ══ NÓI TRƯỚC NÚT NÀO TIÊU TIỀN ═════════════════════════════════════
+              Hai trong ba người test mù dừng tay ở đây và ghi đúng một câu: "không
+              phân biệt được nút nào tốn quota, nên tránh bấm cả nhóm". Trang này chỉ
+              có MỘT loại nút hành động và cả ba biến thể của nó đều tên "Tạo lại…" —
+              nhìn thì không có gì phân biệt với thao tác cắt (miễn phí) ở màn khác.
+              Câu dưới đây mượn nguyên cách nói đã có ở `design/components/SheetProps.tsx:197`
+              để hai màn dùng chung một thứ tiếng, và mỗi nút mang thêm `title` nói lại
+              đúng điều đó khi rê chuột. */}
+          <p className="mt-1 text-caption text-fg-muted">
+            <strong className="font-medium text-fg">Tạo lại</strong> vẽ lại ảnh bằng AI — <strong className="font-medium text-fg">tiêu lượt</strong>, nên luôn có bước xác nhận.
+            {" "}Xem ảnh, đổi phiên bản và cắt lại thì không tiêu lượt nào.
+          </p>
         </div>
         <Select value={versionId || groups[0]?.id} onValueChange={setVersionId}>
           <SelectTrigger aria-label="Phiên bản ảnh" className="w-64"><SelectValue /></SelectTrigger>
@@ -121,9 +136,10 @@ export function RawSheetsPanel({ projectId, contract, jobStates, category = "all
               </div>
               <Button
                 variant="secondary" size="sm" disabled={readOnly || run.live}
+                title={REGEN_HINT}
                 onClick={() => request(visibleItems.map((item) => item.job), scope.copy)}
               >
-                <RefreshCw aria-hidden />{scope.button}
+                <RefreshCw aria-hidden />{scope.button} · tiêu lượt
               </Button>
             </header>
             {visibleItems.length === 0
@@ -142,9 +158,10 @@ export function RawSheetsPanel({ projectId, contract, jobStates, category = "all
                       <h4 className="text-label text-fg-strong">{groupLabel(itemCategory)}</h4>
                       <Button
                         variant="ghost" size="sm" disabled={readOnly || run.live}
+                        title={REGEN_HINT}
                         onClick={() => request(jobsForGroup(run.items, itemCategory), `nhóm ${groupLabel(itemCategory)}`)}
                       >
-                        <RefreshCw aria-hidden />Tạo lại nhóm
+                        <RefreshCw aria-hidden />Tạo lại nhóm · tiêu lượt
                       </Button>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -215,7 +232,8 @@ function SheetCard({ projectId, item, readOnly, onRegenerate }: {
           <p className="truncate text-caption text-fg-muted">{detailCopy(item)}</p>
         </div>
         <Button
-          variant="ghost" size="icon-sm" aria-label={`Tạo lại ${label}`}
+          variant="ghost" size="icon-sm" aria-label={`Tạo lại ${label} — tiêu lượt`}
+          title={REGEN_HINT}
           disabled={readOnly || item.state === "running" || item.state === "queued"}
           onClick={onRegenerate}
         >

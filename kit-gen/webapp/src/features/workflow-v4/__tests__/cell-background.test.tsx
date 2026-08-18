@@ -87,9 +87,12 @@ describe("① control «Nền tách» nằm trong popup Chi tiết, không trầ
     expect(skelOf(GLOW_FILE)?.matte).toBe("glow");
   });
 
+  /* `22-board-panel` từng hiện ở CẢ "Popup" lẫn "Đạo cụ" (vị từ nhóm chồng lấn — xem
+     `KitsetStep.tsx`). Nay mỗi món đúng một nhóm và món này thuộc Đạo cụ, đúng chỗ
+     `isPropElement` đã cố ý xếp nó. Bài test này nói về nút «Nền tách», không về nhóm. */
   it("ô KÍNH của thư viện mở ra đã ở «Trong suốt», và ba nút loại trừ nhau", () => {
     const { container } = mount();
-    const dialog = openDetail(container, "Popup", GLASS_LABEL);
+    const dialog = openDetail(container, "Đạo cụ", GLASS_LABEL);
     const pressed = ["Chroma thường", "Đen cho hiệu ứng phát sáng", "Trong suốt nhìn xuyên qua"]
       .map((name) => within(dialog).getByRole("button", { name }).getAttribute("aria-pressed"));
     expect(pressed).toEqual(["false", "false", "true"]);
@@ -107,7 +110,7 @@ describe("① control «Nền tách» nằm trong popup Chi tiết, không trầ
 
   it("ô vốn là KÍNH: chọn «Chroma thường» ghi `none` TƯỜNG MINH để đè được thư viện", () => {
     const { container } = mount();
-    const dialog = openDetail(container, "Popup", GLASS_LABEL);
+    const dialog = openDetail(container, "Đạo cụ", GLASS_LABEL);
     fireEvent.click(within(dialog).getByRole("button", { name: "Chroma thường" }));
     expect(skelOf(GLASS_FILE)?.matte).toBe("none");
   });

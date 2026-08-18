@@ -760,6 +760,58 @@ const kitOptionalString = z.string().nullish().transform((v) => v ?? undefined);
 /** `[x, y, w, h]` / `[w, h]` từ `kits/manifest.json`; thiếu ⇒ undefined, không phải 0. */
 const kitBox = z.array(z.number()).nullish().transform((v) => v ?? undefined);
 
+/**
+ * ══ QA LỆCH KHUNG — SỔ ĐO CỦA `slice.py`, KHÔNG PHẢI MỘT CÁI CỜ SUÔNG ═══════
+ *
+ * `slice.py:920-925` ghi cho MỖI ô một `sizeDeviation`, và `slice.py:1350-1384`
+ * cộng lại thành `manifest.qa.sizeDeviation`. Agent chuyển tiếp cả hai
+ * (`agent/routes/files.mjs:105` cho ô, `:121` cho tổng). Web thì cho tới bản này
+ * **vứt cả hai ở tầng schema**: `looseObject` không ném khi gặp khoá lạ, nhưng cũng
+ * không giữ chúng trong kiểu ⇒ `CutAssetGrid` không có cách nào biết ô nào bị gắn cờ.
+ *
+ * Ba người test mù đều trúng đúng hậu quả đó: engine tự chấm `validation.ok:false`,
+ * lệch tới 70px trên ngưỡng 15, mà tab "Ảnh thật" — tab MẶC ĐỊNH, và là nguồn của
+ * [Tải .zip]/[Copy sang Figma] — không có một dấu hiệu nào.
+ *
+ * `.nullish()` ở mọi khoá vì đây là dữ liệu QUAN SÁT: ô `shape:"full"` không đo được
+ * thì `maxEdgePx` là `null` chứ không phải 0 (`slice.py:1732`), và kit cắt bằng bản
+ * `slice.py` cũ thì cả khối không tồn tại — kit cũ phải mở được như thường.
+ */
+const kitEdgesPx = z.looseObject({
+  left: kitOptionalNumber,
+  top: kitOptionalNumber,
+  right: kitOptionalNumber,
+  bottom: kitOptionalNumber,
+}).nullish().transform((v) => v ?? undefined);
+
+export const kitSizeDeviationSchema = z.looseObject({
+  /** Cạnh lệch nhiều nhất so với khung hợp đồng, px. `null` ⇒ ô không đo được. */
+  maxEdgePx: kitOptionalNumber,
+  /** `maxEdgePx > threshold`. Chỉ GẮN CỜ — engine không tự gen lại (`run-handle.mjs:503`). */
+  flagged: z.boolean().nullish().transform((v) => v ?? false),
+  threshold: kitOptionalNumber,
+  edgesPx: kitEdgesPx,
+});
+export type KitSizeDeviation = z.infer<typeof kitSizeDeviationSchema>;
+
+/** Tổng QA của cả manifest (`slice.py:1384`), agent trả ở khoá `qa` của #42. */
+export const kitQaSchema = z.looseObject({
+  sizeDeviation: z.looseObject({
+    threshold: kitOptionalNumber,
+    measured: kitOptionalNumber,
+    flagged: z.boolean().nullish().transform((v) => v ?? false),
+    flaggedCount: kitOptionalNumber,
+    maxEdgePx: kitOptionalNumber,
+    /** `file` ở đây KÈM đuôi `.png` (`slice.py:1765`), khác `KitFile.file` đã cắt đuôi. */
+    flaggedAssets: z.array(z.looseObject({
+      style: kitOptionalString,
+      file: kitOptionalString,
+      maxEdgePx: kitOptionalNumber,
+    })).nullish().transform((v) => v ?? []),
+  }).nullish().transform((v) => v ?? undefined),
+});
+export type KitQa = z.infer<typeof kitQaSchema>;
+
 export const kitFileSchema = z.looseObject({
   file: z.string(),
   path: z.string(),
@@ -788,6 +840,13 @@ export const kitFileSchema = z.looseObject({
    * Nơi dùng: `features/kit/lib/blend.ts`.
    */
   blend: kitOptionalString,
+  /**
+   * Khung hợp đồng mà ô ĐÁNG LẼ phải lấp (`[x, y, w, h]`), để đối chiếu với `safe`
+   * — tức thứ model vẽ ra thật. Chênh lệch giữa hai cái này chính là `sizeDeviation`.
+   */
+  contractSafe: kitBox,
+  /** Sổ đo QA của riêng ô này; thiếu ⇒ ô không đo được hoặc kit cắt bằng bản cũ. */
+  sizeDeviation: kitSizeDeviationSchema.nullish().transform((v) => v ?? undefined),
   /** `empty:true` ⇒ dải cảnh báo "N file trống" + [Xem sheet gốc] (S5). */
   empty: z.boolean().default(false),
 });
@@ -802,6 +861,8 @@ export const kitSchema = z.looseObject({
     cut: z.number().optional(),
     blobs: z.number().optional(),
   })).default({}),
+  /** Tổng QA của lượt cắt gần nhất — `agent/routes/files.mjs:121`. */
+  qa: kitQaSchema.nullish().transform((v) => v ?? undefined),
 });
 export type Kit = z.infer<typeof kitSchema>;
 

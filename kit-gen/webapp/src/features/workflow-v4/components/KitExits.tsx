@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Copy, Download, Loader2 } from "lucide-react";
+import { Check, Copy, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useKit } from "@/lib/hooks";
 import { saveExportZip } from "@/features/kit/lib/download";
@@ -18,6 +18,38 @@ import { toastError, toastInfo, toastSuccess } from "@/features/projects/lib/fee
  * mở là **có ảnh đã cắt** (`useKit`) chứ không phải một cái cờ nào đó.
  */
 
+/**
+ * ══ DẤU XÁC NHẬN TẠI CHỖ, KHÔNG CHỈ TOAST ═══════════════════════════════════
+ *
+ * Hai người test mù báo "bấm [Tải .zip] / [Copy sang Figma] im lặng, không biết có
+ * chạy không", trong khi một người trong số đó ĐÃ xác nhận qua network log rằng file
+ * 2.67 MB tải về thành công. Đo lại bằng trình duyệt thật (cả bản dev lẫn bản 2.1.29
+ * đang chạy): toast KHÔNG hỏng — nó hiện, `z-index` 999999999, không bị che, nằm trong
+ * khung nhìn ở mọi cỡ màn đã thử.
+ *
+ * Cái hỏng là KHOẢNG CÁCH: hai nút này ở góc trên-phải, toast nổi ở góc dưới-phải,
+ * cách nhau gần cả màn hình và chỉ sống 4 giây; nút thì nhấp nháy "Đang gói…" rồi trở
+ * lại y như chưa ai bấm. Người dùng nhìn vào nút, không nhìn vào góc đối diện.
+ *
+ * `feedback.ts:8-10` đã ra luật cho đúng ca này: "Toast KHÔNG BAO GIỜ là nơi DUY NHẤT
+ * báo… chỗ nào gây lỗi thì chỗ đó phải hiện inline". Hai nút này là hai chỗ cuối còn
+ * chỉ có toast. Dấu ✓ ở lại ngay trên nút vài giây là lớp báo thứ hai, đặt đúng nơi
+ * mắt đang nhìn — toast vẫn giữ nguyên vì nó chở chi tiết (tên file, dung lượng).
+ */
+const DONE_FLASH_MS = 5000;
+
+function useDoneFlash(): [boolean, () => void] {
+  const [done, setDone] = React.useState(false);
+  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const flash = React.useCallback(() => {
+    setDone(true);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setDone(false), DONE_FLASH_MS);
+  }, []);
+  return [done, flash];
+}
+
 /* ── Tải .zip ────────────────────────────────────────────────────────────────
    KHÔNG dùng `<a href download>`. `features/kit/lib/download.ts` đã đo và ghi lại:
    điều hướng trình duyệt không gắn được header `X-KitGen-Client: 1` ⇒ agent trả **403**.
@@ -32,6 +64,7 @@ import { toastError, toastInfo, toastSuccess } from "@/features/projects/lib/fee
 export function DownloadKitButton({ projectId }: { projectId: string }) {
   const kit = useKit(projectId);
   const [busy, setBusy] = React.useState(false);
+  const [done, flashDone] = useDoneFlash();
   const files = kit.data?.files ?? [];
   const ready = files.length > 0;
 
@@ -43,6 +76,7 @@ export function DownloadKitButton({ projectId }: { projectId: string }) {
       // vừa nói dối con số đó, vừa ăn 422 UNKNOWN_VARIANT ở dự án không do wizard tạo.
       const saved = await saveExportZip(projectId, ["kits"]);
       toastSuccess("Đã tải ảnh", `${saved.fileName} · ${Math.max(1, Math.round(saved.bytes / 1024))} KB`);
+      flashDone();
     } catch (err) {
       toastError(err, {});
     } finally {
@@ -54,11 +88,15 @@ export function DownloadKitButton({ projectId }: { projectId: string }) {
     <Button
       variant="secondary"
       disabled={!ready || busy}
-      title={ready ? `Tải ${files.length} ảnh đã cắt về máy` : "Mở sau khi dự án có ảnh đã cắt"}
+      title={ready
+        ? `Tải ${files.length} ảnh đã cắt về máy — không tiêu lượt tạo nào`
+        : "Mở sau khi dự án có ảnh đã cắt"}
       onClick={() => void onClick()}
     >
-      {busy ? <Loader2 aria-hidden className="animate-spin" /> : <Download aria-hidden />}
-      {busy ? "Đang gói…" : "Tải .zip"}
+      {busy ? <Loader2 aria-hidden className="animate-spin" />
+        : done ? <Check aria-hidden />
+          : <Download aria-hidden />}
+      {busy ? "Đang gói…" : done ? "Đã tải về máy" : "Tải .zip"}
     </Button>
   );
 }
@@ -93,6 +131,7 @@ const NODE_PHASE: Record<BoardProgress["phase"], string> = {
 export function CopyFigmaButton({ projectId, kitName }: { projectId: string; kitName: string }) {
   const kit = useKit(projectId);
   const [progress, setProgress] = React.useState<BoardProgress | null>(null);
+  const [done, flashDone] = useDoneFlash();
   const abortRef = React.useRef<AbortController | null>(null);
   /** Đợt kế tiếp khi kit phải chia nhiều lượt copy. Reset khi copy xong đợt cuối. */
   const [batchAt, setBatchAt] = React.useState(0);
@@ -165,6 +204,7 @@ export function CopyFigmaButton({ projectId, kitName }: { projectId: string; kit
         `${res.docs} node · ${Math.round(res.bytes / 1024 / 1024)} MB · ảnh giữ nguyên pixel gốc. Dán bằng Ctrl/Cmd+V`
         + (more ? `, rồi bấm lại nút này để lấy nhóm tiếp theo (${batches.length - batchAt - 1} đợt nữa).` : "."),
       );
+      flashDone();
     } catch (err) {
       if (err instanceof BoardCancelled || ac.signal.aborted) return;
       try {
@@ -187,12 +227,18 @@ export function CopyFigmaButton({ projectId, kitName }: { projectId: string; kit
       variant="secondary"
       disabled={!ready || busy}
       title={ready
-        ? `Copy ${files.length} ảnh thành node Figma (mỗi ô một frame safe zone, ảnh giữ pixel gốc)`
+        ? `Copy ${files.length} ảnh thành node Figma (mỗi ô một frame safe zone, ảnh giữ pixel gốc) — không tiêu lượt tạo nào`
         : "Mở sau khi dự án có ảnh đã cắt"}
       onClick={() => void onClick()}
     >
-      {busy ? <Loader2 aria-hidden className="animate-spin" /> : <Copy aria-hidden />}
-      {busy ? `${progress.label} ${progress.total ? `${progress.done}/${progress.total}` : ""}`.trim() : label}
+      {busy ? <Loader2 aria-hidden className="animate-spin" />
+        : done ? <Check aria-hidden />
+          : <Copy aria-hidden />}
+      {busy ? `${progress.label} ${progress.total ? `${progress.done}/${progress.total}` : ""}`.trim()
+        /* Còn đợt sau ⇒ KHÔNG nói "đã copy xong" trơn: nhãn `label` đang mời bấm tiếp,
+           và hai câu ngược nhau trên cùng một nút là cách chắc chắn nhất để mất đợt cuối. */
+        : done && batchAt === 0 ? "Đã copy · dán bằng Ctrl/Cmd+V"
+          : label}
     </Button>
   );
 }

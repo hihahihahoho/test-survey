@@ -610,10 +610,18 @@
 }
 
 .ref-chips:has(.ref-preview-card) { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: .625rem; }
-.ref-preview-card { position: relative; display: grid; min-width: 0; gap: .375rem; padding: .5rem; border: 1px solid var(--line-subtle); border-radius: 1rem; background: var(--surface); }
-.ref-preview-card > img, .ref-preview-card > svg:first-child { width: 100%; height: 88px; border-radius: .7rem; object-fit: contain; background: var(--raised); }
+/* ⚠️ TOKEN ĐÚNG TÊN LÀ `--kg-*`, ĐỌC QUA `rgb()`.
+   Ba dòng dưới đây từng viết `var(--line-subtle)` / `var(--surface)` / `var(--raised)`
+   — ba biến KHÔNG ĐƯỢC ĐỊNH NGHĨA ở đâu trong repo (bảng token là `--kg-…`, xem
+   `styles/tokens.css:75`). Biến không tồn tại làm cả khai báo "invalid at computed-value
+   time" ⇒ `border` về `none` và `background` về trong suốt. Vì khối này nằm NGOÀI
+   `@layer components`, nó thắng luôn bản Tailwind ở dòng 331 — nên thẻ ảnh tham chiếu
+   mất hẳn khung và nền, và ô hỏng trông như một icon trôi giữa trang thay vì một thẻ.
+   Đo được trong lúc truy ô xám câm của người test mù #2. */
+.ref-preview-card { position: relative; display: grid; min-width: 0; gap: .375rem; padding: .5rem; border: 1px solid rgb(var(--kg-line-subtle)); border-radius: 1rem; background: rgb(var(--kg-surface)); }
+.ref-preview-card > img, .ref-preview-card > svg:first-child { width: 100%; height: 88px; border-radius: .7rem; object-fit: contain; background: rgb(var(--kg-raised)); }
 .ref-preview-card > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-caption); }
-.ref-preview-card > button { position: absolute; top: .75rem; right: .75rem; display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 999px; background: var(--surface); box-shadow: 0 1px 8px rgb(0 0 0 / .15); }
+.ref-preview-card > button { position: absolute; top: .75rem; right: .75rem; display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 999px; background: rgb(var(--kg-surface)); box-shadow: 0 1px 8px rgb(0 0 0 / .15); }
 
 /* ══ VÙNG THẢ ẢNH CỦA BƯỚC PHONG CÁCH — MỘT LƯỚI DUY NHẤT ══════════════════════
    `.ref-chips` tự dựng lưới riêng của nó (dòng trên). Trong `.reference-upload` ta

@@ -37,6 +37,28 @@ describe("cache danh sách project (§2.5-4)", () => {
     expect(c?.items[0]?.name).toBe('Tết "26" <b>');
   });
 
+  /* HỒI QUY QA-BLIND §6 — dự án đã bị xoá không được sống tiếp trong cache.
+     Người test mù #1 thấy `GET /api/projects/hello-368a/cover` → 404 lặp cho một id
+     không còn tồn tại. Cache phải là ẢNH CHỤP của danh sách MỚI NHẤT, không phải một
+     đống bồi đắp: mỗi lượt ghi thay TRỌN danh sách, và danh sách rỗng ⇒ không còn thẻ. */
+  it("lượt ghi sau XOÁ hẳn project không còn trong danh sách thật", () => {
+    writeListCache(list("sha256:aaa"), null);
+    expect(readListCache("sha256:aaa")?.items.map((p) => p.id)).toEqual(["tet26", "broken1"]);
+
+    const shrunk = projectListSchema.parse({
+      workspaceFingerprint: "sha256:aaa",
+      items: [{ id: "tet26", name: "Tết" }],
+    });
+    writeListCache(shrunk, null);
+    expect(readListCache("sha256:aaa")?.items.map((p) => p.id)).toEqual(["tet26"]);
+  });
+
+  it("workspace đã xoá sạch project ⇒ cache không vẽ lại thẻ ma nào", () => {
+    writeListCache(list("sha256:aaa"), null);
+    writeListCache(projectListSchema.parse({ workspaceFingerprint: "sha256:aaa", items: [] }), null);
+    expect(readListCache("sha256:aaa")).toBeNull();
+  });
+
   it("giữ state.jobs + activeRun ⇒ thẻ vẽ từ cache VẪN có badge trạng thái đúng", () => {
     writeListCache(list("sha256:aaa"), null);
     const p = readListCache("sha256:aaa")?.items[0];

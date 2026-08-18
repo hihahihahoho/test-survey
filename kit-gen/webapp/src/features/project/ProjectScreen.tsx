@@ -351,7 +351,9 @@ function ProjectManager({ projectId }: { projectId: string }) {
             <button
               type="button"
               aria-current={view.settingsTab !== null ? "page" : undefined}
-              onClick={() => setSettingsTab("requirements")}
+              /* Nút tên "Cài đặt style" ⇒ mở tab "Phong cách", không phải "Yêu cầu".
+                 Người test mù #2 báo đúng chỗ này: nhãn hứa một thứ, dialog mở thứ khác. */
+              onClick={() => setSettingsTab("style")}
               className={cn(
                 "flex min-h-10 w-full items-center gap-3 rounded-2 px-3 text-left text-label",
                 view.settingsTab !== null ? "bg-raised text-fg-strong" : "text-fg hover:bg-raised",

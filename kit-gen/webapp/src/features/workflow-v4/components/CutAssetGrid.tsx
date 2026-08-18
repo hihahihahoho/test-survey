@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Copy, Image as ImageIcon, Layers, MoreHorizontal, Scissors } from "lucide-react";
+import { AlertTriangle, Copy, Image as ImageIcon, Layers, MoreHorizontal, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -72,6 +72,29 @@ export function cutAssets(files: readonly KitFile[], contract: Contract | null):
     });
 }
 
+/**
+ * ══ CỜ QA "LỆCH BỘ KHUNG" — ĐỌC Ở ĐÂY, KHÔNG PHẢI CHỈ Ở TAB PHỤ ═════════════
+ *
+ * `slice.py` đo từng ô rồi ghi `sizeDeviation.flagged` khi cạnh lệch quá ngưỡng
+ * (mặc định 15px); agent chuyển tiếp nguyên vẹn ở `#42 GET …/kit`. Trước bản này
+ * webapp **vứt số đo ở tầng schema**, nên tab "Ảnh thật" — tab MẶC ĐỊNH, và cũng là
+ * nguồn của [Tải .zip] / [Copy sang Figma] — im lặng hoàn toàn khi engine đã tự chấm
+ * `validation.ok:false`. Ba người test mù độc lập đều xuất ảnh lỗi mà không hay.
+ *
+ * Ở đây CHỈ báo, không thêm nút vẽ lại: đường tạo lại đã có đúng MỘT chỗ (tab "Ảnh
+ * gốc" → [Tạo lại nhóm]), và mở thêm một cửa nữa là mở thêm một đường đốt quota.
+ */
+export function deviationOf(asset: CutAsset): { maxEdgePx: number; threshold?: number } | null {
+  const dev = asset.file.sizeDeviation;
+  if (!dev?.flagged || typeof dev.maxEdgePx !== "number") return null;
+  return { maxEdgePx: Math.round(Math.abs(dev.maxEdgePx)), threshold: dev.threshold };
+}
+
+/** Ô bị gắn cờ trong tập ĐANG HIỆN — con số trên dải cảnh báo phải đếm đúng thứ mắt thấy. */
+export function flaggedAssets(assets: readonly CutAsset[]): CutAsset[] {
+  return assets.filter((asset) => deviationOf(asset) !== null);
+}
+
 /** Gom theo sheet, giữ nguyên thứ tự gặp — đây là đơn vị nhỏ nhất của lưới. */
 function bySheetOf(assets: readonly CutAsset[]): [string, CutAsset[]][] {
   const map = new Map<string, CutAsset[]>();
@@ -122,10 +145,21 @@ export function CutAssetGrid({ projectId, contract, category = "all", sectioned 
     );
   }
 
-  if (!sectioned) return <SheetBlocks projectId={projectId} variant={variant} contract={contract} assets={assets} showHeading />;
+  const flagged = flaggedAssets(assets);
+  /* Tổng của CẢ bộ kit (`manifest.qa`, agent trả ở `#42`). Khi khung nhìn đang lọc theo
+     nhóm, con số này lớn hơn số ô thấy được — và người dùng phải biết là còn ô khác. */
+  const kitQa = kit.data?.qa?.sizeDeviation;
+
+  if (!sectioned) return (
+    <div className="space-y-4">
+      <QaDeviationBanner assets={flagged} kitTotal={kitQa?.flaggedCount} />
+      <SheetBlocks projectId={projectId} variant={variant} contract={contract} assets={assets} showHeading />
+    </div>
+  );
 
   return (
     <div className="space-y-8">
+      <QaDeviationBanner assets={flagged} kitTotal={kitQa?.flaggedCount} />
       {byGroup.map(([group, items]) => (
         /* KHÔNG đặt `aria-label` ở đây: `groupLabel("mascot")` là "Mascot pose", trùng
            đúng `sheetLabel` của tấm pose bên trong ⇒ hai landmark cùng tên lồng nhau.
@@ -144,6 +178,42 @@ export function CutAssetGrid({ projectId, contract, category = "all", sectioned 
           />
         </section>
       ))}
+    </div>
+  );
+}
+
+/**
+ * DẢI CẢNH BÁO ĐẦU TAB "ẢNH THẬT".
+ *
+ * Nói ba thứ và dừng: bao nhiêu ô, lệch tới đâu, và đi đâu để vẽ lại. KHÔNG có nút
+ * ở đây — nút vẽ lại nằm ở tab "Ảnh gốc" và nó tiêu lượt, nên nó phải ở đúng một chỗ.
+ */
+function QaDeviationBanner({ assets, kitTotal }: {
+  assets: readonly CutAsset[];
+  /** `manifest.qa.sizeDeviation.flaggedCount` — số ô bị gắn cờ trên CẢ bộ kit. */
+  kitTotal?: number;
+}) {
+  if (assets.length === 0) return null;
+  const devs = assets.map(deviationOf).filter((d): d is { maxEdgePx: number; threshold?: number } => d !== null);
+  const worst = Math.max(...devs.map((d) => d.maxEdgePx));
+  const threshold = devs.find((d) => typeof d.threshold === "number")?.threshold;
+  const hidden = typeof kitTotal === "number" && kitTotal > assets.length ? kitTotal - assets.length : 0;
+  return (
+    <div role="status" className="flex gap-3 rounded-3 border border-warn/60 kg-tint-warn p-4 text-on-tint-warn">
+      <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <div className="min-w-0">
+        <p className="text-label">
+          {assets.length} ảnh lệch bộ khung
+          {/* Trang dự án lọc theo nhóm ⇒ ô bị gắn cờ ở nhóm khác không hiện ra đây.
+              Im lặng về chúng là để người dùng tin nhầm rằng đã xem hết chỗ hỏng. */}
+          {hidden > 0 ? ` ở đây · còn ${hidden} ô nữa ở nhóm khác` : ""}
+        </p>
+        <p className="mt-1 text-caption">
+          Máy đo được cạnh lệch tới {worst}px{typeof threshold === "number" ? ` (ngưỡng ${threshold}px)` : ""} so với ô trong bản thiết kế.
+          {" "}Ảnh vẫn tải và copy được, nhưng ghép vào bố cục sẽ không khớp ô.
+          {" "}Muốn vẽ lại thì sang tab «Ảnh gốc» — nút [Tạo lại nhóm] ở đó, và nó tiêu lượt tạo.
+        </p>
+      </div>
     </div>
   );
 }
@@ -295,8 +365,14 @@ function CutAssetCard({ projectId, variant, asset, contract }: {
     })();
   };
 
+  /* Cờ QA của ĐÚNG ô này — viền đổi màu để thấy từ xa, chi tiết nằm ở chân thẻ. */
+  const deviation = deviationOf(asset);
+
   return (
-    <article className="overflow-hidden rounded-3 border border-line-subtle bg-raised">
+    <article className={cn(
+      "overflow-hidden rounded-3 border bg-raised",
+      deviation ? "border-warn/60" : "border-line-subtle",
+    )}>
       {/* Ô LƯỚI giữ nguyên bản `?w=256` (§6.5-5) — đúng cỡ cho một ô ~230px và là lý do
           mở kit 500 ảnh không nuốt hết RAM. Cái THIẾU trước đây là đường tới ảnh GỐC:
           `features/kit/components/Lightbox.tsx` có sẵn từ S5 nhưng KHÔNG được màn nào
@@ -327,9 +403,23 @@ function CutAssetCard({ projectId, variant, asset, contract }: {
       <div className="flex items-center gap-2 p-3">
         <div className="min-w-0 flex-1">
           <p className="truncate text-label text-fg-strong" title={name}>{name}</p>
-          <p className="truncate text-caption text-fg-muted">
-            {asset.file.w && asset.file.h ? `${asset.file.w}×${asset.file.h}` : "Ô đã cắt"}
-          </p>
+          {deviation ? (
+            /* Chip trên nền ĐẶC của chân thẻ, không đè lên ảnh: nền ô là bàn cờ trong
+               suốt nên chữ đặt lên đó không giữ được độ tương phản ở mọi ảnh. */
+            <span
+              className="mt-1 inline-flex items-center gap-1 rounded-1 kg-tint-warn px-1.5 py-0.5 text-caption text-on-tint-warn"
+              title={`Cạnh lệch ${deviation.maxEdgePx}px so với ô trong bản thiết kế`
+                + (typeof deviation.threshold === "number" ? ` · ngưỡng ${deviation.threshold}px` : "")
+                + ". Xem tab «Ảnh gốc» để tạo lại."}
+            >
+              <AlertTriangle className="size-3 shrink-0" aria-hidden />
+              Lệch bộ khung {deviation.maxEdgePx}px
+            </span>
+          ) : (
+            <p className="truncate text-caption text-fg-muted">
+              {asset.file.w && asset.file.h ? `${asset.file.w}×${asset.file.h}` : "Ô đã cắt"}
+            </p>
+          )}
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

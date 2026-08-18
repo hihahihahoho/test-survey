@@ -97,8 +97,20 @@ export function KitCard({
         offline={gate.readOnly}
         /* Chỉ dự án ĐÃ TỪNG chạy một lượt gen mới có thể đang được vẽ bìa ngầm: móc
            `maybeAutoCover` của agent nằm ở `finish()` của lượt chạy. Dự án trắng thì
-           không có gì để chờ, nên nó KHÔNG gửi request nào — xem KitCover. */
-        watchCover={hasGeneratedOutput(project)}
+           không có gì để chờ, nên nó KHÔNG gửi request nào — xem KitCover.
+
+           `&& !fromCache` — THẺ CHỈ-CÓ-TRONG-CACHE KHÔNG ĐƯỢC HỎI SERVER.
+           `kitgen.projects.cache.v1` vẽ lưới ngay từ lần sơn đầu tiên (§2.5-4: «agent
+           chưa chạy không phải là màn hình trắng»), nhưng mục trong đó có thể là dự án
+           đã bị xoá khỏi đĩa từ phiên trước. Thẻ ma ấy mount `KitCover` ⇒
+           `GET /api/projects/<id>/cover` ⇒ 404 lặp — đúng thứ người test mù #1 bắt được
+           (`hello-368a`, một id không có trong cả danh sách lẫn thùng rác) ngay khi mở
+           app lần đầu với `/api/projects` trả `items: []`.
+           Thẻ cache là ẢNH CHỤP MÀN HÌNH CŨ, không phải một dự án đang sống: nó chỉ
+           được vẽ lại đúng những gì đã lưu. Khi `/api/projects` thật về, `fromCache`
+           tắt và thẻ nào còn tồn tại sẽ tự hỏi bìa như thường; thẻ đã bị xoá thì biến
+           mất luôn cùng lượt ghi đè cache của `writeListCache`. */
+        watchCover={hasGeneratedOutput(project) && !fromCache}
       />
 
       <div className="flex min-w-0 items-start justify-between gap-2 px-1 pb-1">

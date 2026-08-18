@@ -272,18 +272,42 @@ function buildHeaders(extra: Record<string, string | undefined> = {}, isFormData
 
 /**
  * Signal: hết hạn `ms` HOẶC caller huỷ. `ms = 0` (stream) ⇒ không đặt hạn.
- * Có đường lùi bằng AbortController khi môi trường thiếu `AbortSignal.any` —
+ * Có đường lùi bằng AbortController khi môi trường thiếu `AbortSignal` —
  * đúng lỗi B3 mà INTEGRATION.md §0 đã ghi: bản trước trả về signal của caller và
  * ĐÁNH RƠI hạn thời gian, làm request treo vô hạn.
+ *
+ * ══ VÌ SAO KHÔNG DÙNG `AbortSignal.timeout()` NỮA ═══════════════════════════
+ * Vì nó KHÔNG TẮT ĐƯỢC. Đồng hồ nằm trong signal, không ai cầm handle, nên hạn
+ * vẫn chạy sau khi request đã xong việc của nó — và với `raw: true` thì "xong việc"
+ * mới chỉ là NHẬN XONG HEADER: thân response còn nằm nguyên đó, do NƠI GỌI đọc
+ * (`refsApi.blob` → `response.blob()`).
+ *
+ * Hậu quả đo được (người test mù #2, tái hiện bằng throttle 40 KB/s): ảnh tham
+ * chiếu 700 KB trả về `200 image/png` với đúng `content-length`, nhưng `.blob()`
+ * ném `AbortError` ở giây thứ 8 (`TIMEOUT.get`) vì đồng hồ của REQUEST vẫn đang
+ * đếm trên thân ảnh. `RefChips` nuốt lỗi thành ô xám câm ⇒ "server 200 mà UI trống".
+ * Cùng vết ấy nằm ở mọi chỗ `raw: true`: file thư viện, log job, và `image-source.ts`
+ * — tức cả ảnh gốc mà [Copy sang Figma] tải về.
+ *
+ * Nay hàm trả kèm `done()` để `request()` TẮT đồng hồ ngay trước khi trao thân
+ * response cho nơi gọi. Đường không-raw giữ nguyên hạn cho tới lúc đọc xong JSON.
  */
-function timeoutSignal(ms: number, external?: AbortSignal): AbortSignal | undefined {
-  if (!ms) return external;
-  const hasTimeout = typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function";
-  if (hasTimeout && !external) return AbortSignal.timeout(ms);
-  if (hasTimeout && typeof AbortSignal.any === "function" && external) {
-    return AbortSignal.any([AbortSignal.timeout(ms), external]);
+interface TimeoutHandle {
+  signal: AbortSignal | undefined;
+  /** Tắt đồng hồ. Gọi nhiều lần vô hại. */
+  done: () => void;
+}
+
+const NO_TIMEOUT = (signal: AbortSignal | undefined): TimeoutHandle => ({ signal, done: () => {} });
+
+function timeoutSignal(ms: number, external?: AbortSignal): TimeoutHandle {
+  if (!ms) return NO_TIMEOUT(external);
+  // Không có AbortController ⇒ không dựng được đồng hồ tắt được. Giữ đường lùi cũ:
+  // thà có hạn không tắt được còn hơn không có hạn nào.
+  if (typeof AbortController === "undefined") {
+    const hasTimeout = typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function";
+    return NO_TIMEOUT(hasTimeout && !external ? AbortSignal.timeout(ms) : external);
   }
-  if (typeof AbortController === "undefined") return external;
   const ac = new AbortController();
   const fire = (reason?: unknown) => {
     if (!ac.signal.aborted) ac.abort(reason);
@@ -298,7 +322,7 @@ function timeoutSignal(ms: number, external?: AbortSignal): AbortSignal | undefi
     if (external.aborted) fire(external.reason);
     else external.addEventListener("abort", () => fire(external.reason), { once: true });
   }
-  return ac.signal;
+  return { signal: ac.signal, done: () => clearTimeout(timer) };
 }
 
 /**
@@ -403,6 +427,7 @@ export async function request<T = unknown>(path: string, opts: RequestOptions = 
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const isForm = typeof FormData !== "undefined" && body instanceof FormData;
+    const timeout = timeoutSignal(ms, signal);
     const init: RequestInit = {
       method,
       mode: "cors",
@@ -411,7 +436,7 @@ export async function request<T = unknown>(path: string, opts: RequestOptions = 
       redirect: "follow",
       referrerPolicy: "no-referrer",
       headers: buildHeaders(headers, isForm),
-      signal: timeoutSignal(ms, signal),
+      signal: timeout.signal,
     };
     if (body !== undefined && body !== null) {
       init.body = isForm ? (body as FormData) : typeof body === "string" ? body : JSON.stringify(body);
@@ -421,6 +446,7 @@ export async function request<T = unknown>(path: string, opts: RequestOptions = 
     try {
       res = await theFetch()(url, init);
     } catch (e) {
+      timeout.done();
       lastErr = transportError(e, method, url, entry);
       if (attempt < maxAttempts - 1) continue;
       throw lastErr;
@@ -460,7 +486,15 @@ export async function request<T = unknown>(path: string, opts: RequestOptions = 
       throw err;
     }
 
-    if (raw) return res as unknown as T;
+    /* THÂN RESPONSE ĐỔI CHỦ Ở ĐÂY. Từ dòng này nơi gọi mới là người đọc `.blob()`/
+       `.text()`, và nó có thể đọc chậm hoặc đọc muộn một cách hoàn toàn hợp lệ (ảnh
+       700 KB qua đường chậm, agent đang bận vì một lượt gen). Đồng hồ của REQUEST
+       không được đếm tiếp trên quãng đó — nếu không, thân ảnh bị cắt giữa chừng dù
+       header đã `200`. Ai muốn hạn cho phần đọc thì tự truyền `signal` của mình. */
+    if (raw) {
+      timeout.done();
+      return res as unknown as T;
+    }
     if (res.status === 204) return { ok: true } as T;
     const etag = res.headers?.get?.("ETag") ?? null;
     let data: unknown = null;

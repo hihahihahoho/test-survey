@@ -20,6 +20,34 @@ import { Step } from "./BriefStep";
 
 type GroupId = "background" | "popup" | "small-ui" | "props";
 
+/**
+ * ══ BỐN NHÓM, MỖI THÀNH PHẦN ĐÚNG MỘT NHÓM ══════════════════════════════════
+ *
+ * Bốn vị từ này trước đây **không loại trừ nhau**, và có đúng một nạn nhân:
+ * `22-board-panel` ("Khay đựng túi"). Vị từ `popup` bắt chữ "panel"; `isPropElement`
+ * (`lib/user-library.ts:19-21`) có `board-panel` trong danh sách trắng đạo cụ. Món ấy
+ * vì thế hiện ở CẢ hai tab, dùng CHUNG một ô tick — bấm "Bỏ chọn nhóm này" bên Popup
+ * thì số đếm Đạo cụ tự tụt 15→14 mà người dùng không đụng gì bên đó (cả ba người test
+ * mù đều báo). Tổng bốn nhóm khi ấy là 43 trên một thư viện 42 món.
+ *
+ * Hai lớp sửa, cố ý xếp chồng:
+ *  ① `groupOf` lấy **nhóm KHỚP ĐẦU TIÊN**. Đây là lớp cấu trúc: dù vị từ tương lai có
+ *    chồng lấn thế nào, một thành phần vẫn chỉ rơi vào một nhóm, và tổng bốn nhóm
+ *    luôn đúng bằng số món của catalogue.
+ *  ② `popup` loại thẳng đạo cụ. Đây là lớp NGỮ NGHĨA, và nó quyết định `22-board-panel`
+ *    về Đạo cụ chứ không về Popup: `board-panel` nằm trong danh sách trắng của
+ *    `isPropElement` là một lựa chọn CÓ CHỦ Ý của tác giả danh sách ấy ("đạo cụ là
+ *    object game độc lập"), còn `/panel/` chỉ là một mẩu regex quét tên. Cái cụ thể
+ *    thắng cái quét.
+ *
+ * Bốn vị từ phủ kín catalogue: `shape === "full"` ⇒ Nền; mọi shape khác chắc chắn rơi
+ * vào một trong ba nhóm còn lại (chúng chia nhau theo `isPropElement` và regex popup).
+ * Nhóm này CHỈ là bộ lọc hiển thị — không có gì trong `buildKitsetContract` đọc nó, nên
+ * đổi cách phân nhóm không đổi một byte nào của phạm vi gửi đi gen.
+ */
+const POPUP_RE = /popup|modal|panel|ribbon/;
+const nameKey = (element: LibElement) => `${element.file} ${element.group ?? ""}`;
+
 const GROUPS: ReadonlyArray<{
   id: GroupId;
   label: string;
@@ -28,17 +56,17 @@ const GROUPS: ReadonlyArray<{
   {
     id: "background",
     label: "Nền",
-    match: (element) => element.skel.shape === "full" || /(^|-)bg-?|background/.test(`${element.file} ${element.group ?? ""}`),
+    match: (element) => element.skel.shape === "full" || /(^|-)bg-?|background/.test(nameKey(element)),
   },
   {
     id: "popup",
     label: "Popup",
-    match: (element) => element.skel.shape !== "full" && /popup|modal|panel|ribbon/.test(`${element.file} ${element.group ?? ""}`),
+    match: (element) => element.skel.shape !== "full" && POPUP_RE.test(nameKey(element)) && !isPropElement(element),
   },
   {
     id: "small-ui",
     label: "UI nhỏ",
-    match: (element) => element.skel.shape !== "full" && !/popup|modal|panel|ribbon/.test(`${element.file} ${element.group ?? ""}`) && !isPropElement(element),
+    match: (element) => element.skel.shape !== "full" && !POPUP_RE.test(nameKey(element)) && !isPropElement(element),
   },
   {
     id: "props",
@@ -46,6 +74,11 @@ const GROUPS: ReadonlyArray<{
     match: (element) => element.skel.shape !== "full" && isPropElement(element),
   },
 ];
+
+/** Nhóm DUY NHẤT của một thành phần: khớp đầu tiên thắng. `null` = không nhóm nào nhận. */
+export function groupOf(element: LibElement): GroupId | null {
+  return GROUPS.find((item) => item.match(element))?.id ?? null;
+}
 
 function meta(element: LibElement) {
   return {
@@ -94,10 +127,36 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
   }, [libraryQuery.data, userLibrary.data?.items]);
   const [group, setGroup] = React.useState<GroupId>("background");
   const [query, setQuery] = React.useState("");
-  const selected = React.useMemo(
-    () => new Set(workflow.elements.filter((element) => element.selected).map((element) => element.file)),
-    [workflow.elements],
+  /** Mọi id ĐANG CÓ MẶT trong catalogue được vẽ ra — đây là vũ trụ của màn này. */
+  const catalogueFiles = React.useMemo(
+    () => new Set(catalogue.map((element) => element.file)),
+    [catalogue],
   );
+  /**
+   * §QA — CHỈ ĐẾM THỨ NGƯỜI DÙNG BẤM ĐƯỢC.
+   *
+   * Bản cũ đếm `workflow.elements` toàn store, mà store chứa cả thứ không có ô tick nào
+   * trên màn: `PRESET_MISSING_DESIGN` nhồi `wheel-board` vào kitset (`lib/model.ts:170`)
+   * còn `element-lib-v2.json` không có món ấy ⇒ dòng "N đã chọn" dư đúng +1 vĩnh viễn.
+   * Bỏ tick sạch cả bốn nhóm vẫn thấy "1 đã chọn", và cả ba người test mù đều dừng lại
+   * ở đó, lo bị tính tiền cho một thứ họ không tìm ra.
+   *
+   * Sửa ở tầng ĐẾM chứ không xoá `wheel-board` khỏi kitset, vì cùng một vết đau có
+   * nguồn thứ hai: bộ khung người dùng tự thêm rồi xoá khỏi thư viện vẫn nằm lại trong
+   * bản nháp đã lưu (`model.ts:531` persist `elements`) và cũng thành "ma" y hệt. Lọc
+   * theo catalogue chữa cả hai bằng một luật, và không đụng vào `wheel-board` — món này
+   * đang mang `mock:true`, `buildKitsetContract` đã loại nó khỏi contract kèm lý do
+   * (`kitset-to-contract.ts:191`) nên phạm vi gen vốn đã đúng và phải giữ nguyên như thế.
+   */
+  const selected = React.useMemo(
+    () => new Set(
+      workflow.elements
+        .filter((element) => element.selected && catalogueFiles.has(element.file))
+        .map((element) => element.file),
+    ),
+    [workflow.elements, catalogueFiles],
+  );
+  const allFiles = React.useMemo(() => catalogue.map((element) => element.file), [catalogue]);
 
   /**
    * UI-FIX §2 — **MẶC ĐỊNH CHỌN HẾT**, kể cả món kho chỉ biết lúc chạy.
@@ -119,7 +178,7 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
   const current = GROUPS.find((item) => item.id === group)!;
   const shown = React.useMemo(() => {
     const folded = foldVi(query);
-    return catalogue.filter((element) => current.match(element)
+    return catalogue.filter((element) => groupOf(element) === current.id
       && (!folded || foldVi(`${element.vi} ${element.file}`).includes(folded)));
   }, [catalogue, current, query]);
   const shownFiles = React.useMemo(() => shown.map((element) => element.file), [shown]);
@@ -149,16 +208,35 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
         groups={GROUPS.map((item) => ({
           id: item.id,
           label: item.label,
-          count: catalogue.filter(item.match).filter((element) => selected.has(element.file)).length,
+          count: catalogue.filter((element) => groupOf(element) === item.id)
+            .filter((element) => selected.has(element.file)).length,
         }))}
         value={group}
         onChange={(id) => setGroup(id as GroupId)}
-        trailing={`${selected.size} đã chọn`}
+        trailing={`${selected.size}/${allFiles.length} đã chọn`}
       />
 
-      {/* Hai nút hàng loạt: bỏ cả nhóm rồi tick lại vài món là thao tác thật của người
-          dùng, và nó phải rẻ hơn 16 cú bấm. Chỉ tác động lên món ĐANG HIỆN (đã lọc). */}
+      {/* Bốn nút hàng loạt, chia làm hai tầng rõ ràng — TOÀN BỘ trước, NHÓM sau.
+          Cả ba người test mù đều xin cùng một thứ: muốn thử nhanh 1–2 món thì phải bấm
+          "Bỏ chọn nhóm này" đủ bốn lần, vì mặc định là tick sẵn cả 42 món. Nút toàn cục
+          cắt bốn cú bấm ấy còn một. Hai nút dưới vẫn chỉ tác động lên món ĐANG HIỆN
+          (đã qua bộ lọc tìm kiếm) — đó là điểm khác nhau duy nhất, và nhãn nói ra nó. */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Button
+          type="button" variant="ghost" size="sm"
+          disabled={allFiles.length === 0 || selected.size === allFiles.length}
+          onClick={() => workflow.setElementsSelected(allFiles, true)}
+        >
+          Chọn tất cả {allFiles.length} thành phần
+        </Button>
+        <Button
+          type="button" variant="ghost" size="sm"
+          disabled={selected.size === 0}
+          onClick={() => workflow.setElementsSelected(allFiles, false)}
+        >
+          Bỏ chọn tất cả
+        </Button>
+        <span className="text-caption text-fg-muted" aria-hidden>·</span>
         <Button type="button" variant="ghost" size="sm" disabled={allShownOn} onClick={() => workflow.setElementsSelected(shownFiles, true)}>
           Chọn tất cả trong {current.label}
         </Button>
