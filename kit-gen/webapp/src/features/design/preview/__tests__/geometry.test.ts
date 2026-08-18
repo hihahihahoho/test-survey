@@ -95,7 +95,9 @@ describe("vành bleed — slice.py dòng 66 + 788–789", () => {
 describe("đặt element trong ô — skeleton-svg.js", () => {
   it("công thức căn giữa + anchor bottom có thật trong skeleton-svg.js", () => {
     const src = read("skeleton-svg.js");
-    expect(src).toMatch(/ew\s*=\s*cw\s*\*\s*sk\.w,\s*eh\s*=\s*ch\s*\*\s*sk\.h/);
+    // v16 dời công thức vào targetRect(): vẫn cell × tỉ lệ, thêm ưu tiên contentSafe.
+    expect(src).toMatch(/ew\s*=\s*cell\.width\s*\*\s*\(safe\.w\s*\?\?\s*sk\.w\s*\?\?\s*1\)/);
+    expect(src).toMatch(/eh\s*=\s*cell\.height\s*\*\s*\(safe\.h\s*\?\?\s*sk\.h\s*\?\?\s*1\)/);
     expect(src).toMatch(/sk\.anchor\s*===\s*"bottom"/);
   });
 
