@@ -228,10 +228,11 @@ export { ALL_SHEETS_DOC_ID };
 
    Hai thứ mà màn canvas cần nhưng KHÔNG được tự đi lấy:
 
-   ① `agentOffline` — `useAgentStatus()` mỗi lần gọi là dựng MỘT vòng probe riêng
-      (xem `lib/hooks/use-agent.ts`: mỗi instance có `setTimeout` + `AbortController`
-      của nó). `AppLayout` đã chạy một vòng; gọi thêm trong route là nhân đôi số
-      request `/health` và làm nhịp backoff của hai bên lệch nhau.
+   ① `agentOffline` — trạng thái agent là việc của KHUNG, không phải của từng màn.
+      (Trước đây đây còn là chuyện lưu lượng: `useAgentStatus()` mỗi lần gọi dựng một
+      vòng probe riêng ⇒ mỗi route mount thêm là nhân số request `/health`. Nay vòng
+      probe đã gộp về một, dùng chung — `lib/api/health-probe.ts` — nên gọi thêm không
+      còn tốn request; lý do tách vẫn còn nguyên: màn canvas không tự đi lấy môi trường.)
    ② `agentCommand` — lệnh chạy công cụ local phụ thuộc entry (`RUN_CMD` vs
       `RUN_CMD_REPO`), chỉ khung biết. Đây đúng là đề nghị N4 của `NEEDS-fe2-d.md`.
 

@@ -5,10 +5,11 @@
  * lần nó chạy `codex debug prompt-input` (~1s) — nên `useDoctor` mặc định `enabled:false`,
  * màn phải chủ động bật (mở S6, setup, bấm [Kiểm tra lại], trước khi mở modal M1).
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/endpoints";
-import { bridgeProbe, checkingStatus, createProbeSchedule, diagnose, type BridgeResult, type ConnectionStatus } from "../api/connection";
+import { diagnose, type BridgeResult, type ConnectionStatus } from "../api/connection";
+import { healthProbe } from "../api/health-probe";
 import { qk } from "./keys";
 import { STALE } from "./query-client";
 import { useUpdateInstall } from "../update/install-store";
@@ -17,67 +18,41 @@ import { UPDATE_FOCUS_THROTTLE_MS, UPDATE_POLL_INTERVAL_MS } from "../update/wat
 /**
  * Trạng thái kết nối + nhịp probe backoff 1.5→3→6→15s (arch §5.3).
  * Tab ẩn ⇒ DỪNG hẳn: probe khi user không nhìn chỉ tốn pin và log.
+ *
+ * ĐÂY CHỈ CÒN LÀ CỬA SỔ NHÌN VÀO MỘT VÒNG PROBE DÙNG CHUNG (`lib/api/health-probe.ts`).
+ * Bản cũ dựng vòng probe ngay trong `useEffect` này, nên mỗi component gọi hook là thêm
+ * một vòng `/health` song song — 9+ chỗ gọi ⇒ hàng trăm request lặp (QA blind). Nay gọi
+ * bao nhiêu lần cũng chỉ có MỘT vòng; hook không giữ timer, không giữ AbortController.
+ *
+ * Shape trả về KHÔNG ĐỔI: 9 chỗ gọi không phải sửa gì.
  */
 export function useAgentStatus(opts: { hasActiveRun?: boolean } = {}): {
   status: ConnectionStatus;
   recheck: () => void;
   runBridgeProbe: () => Promise<BridgeResult>;
 } {
-  const [status, setStatus] = useState<ConnectionStatus>(() => checkingStatus());
-  const [tick, setTick] = useState(0);
-  const bridgeRef = useRef<BridgeResult | null>(null);
-  const schedule = useRef(createProbeSchedule());
   const hasActiveRun = opts.hasActiveRun ?? false;
+  /* `getStatus` trả CÙNG một object giữa hai lượt probe ⇒ không render vô ích, và
+     `useSyncExternalStore` không kêu "getSnapshot should be cached". */
+  const status = useSyncExternalStore(healthProbe.subscribe, healthProbe.getStatus, healthProbe.getStatus);
 
+  /* Nhịp 1.5s là thuộc tính của CẢ APP, không của riêng màn nào: còn ≥1 màn khai "đang
+     có run chạy" thì vòng chung giữ nhịp dày. Giữ chỗ bằng effect riêng để việc
+     `hasActiveRun` đổi không kéo theo đăng ký/huỷ đăng ký cả subscriber. */
   useEffect(() => {
-    let cancelled = false;
-    const ac = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const run = async () => {
-      if (typeof document !== "undefined" && document.hidden) {
-        timer = setTimeout(run, 5000); // tab ẩn: chỉ ngó lại sau 5s, không probe
-        return;
-      }
-      try {
-        const s = await diagnose({ signal: ac.signal, bridgeResult: bridgeRef.current });
-        if (!cancelled) setStatus(s);
-        const wait = schedule.current.next({ hasActiveRun, connected: s.connected });
-        timer = setTimeout(run, wait);
-      } catch {
-        if (!cancelled) timer = setTimeout(run, 3000);
-      }
-    };
-    void run();
-
-    const onVisible = () => {
-      if (!document.hidden) {
-        schedule.current.reset();
-      }
-    };
-    document?.addEventListener?.("visibilitychange", onVisible);
-
-    return () => {
-      cancelled = true;
-      ac.abort();
-      if (timer !== null) clearTimeout(timer);
-      document?.removeEventListener?.("visibilitychange", onVisible);
-    };
-  }, [tick, hasActiveRun]);
+    if (!hasActiveRun) return;
+    return healthProbe.holdActiveRun();
+  }, [hasActiveRun]);
 
   return {
     status,
-    recheck: () => setTick((t) => t + 1),
+    recheck: healthProbe.recheck,
     /**
      * Cầu dò popup — CHỈ gọi từ cử chỉ user (nút bấm). Sau khi có kết quả thì probe lại
-     * để `diagnose()` dùng bằng chứng mới mà kết luận ca 3a → ca 3b hoặc ca 2.
+     * để `diagnose()` dùng bằng chứng mới mà kết luận ca 3a → ca 3b hoặc ca 2. Kết quả
+     * cầu dò là bằng chứng CHUNG: mọi màn cùng thoát khỏi trạng thái "chưa kết luận".
      */
-    runBridgeProbe: async () => {
-      const r = await bridgeProbe();
-      bridgeRef.current = r;
-      setTick((t) => t + 1);
-      return r;
-    },
+    runBridgeProbe: healthProbe.runBridgeProbe,
   };
 }
 

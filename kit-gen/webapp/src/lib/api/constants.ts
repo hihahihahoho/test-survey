@@ -46,9 +46,13 @@ export const RETRY = {
 
 export type RequestKind = keyof typeof TIMEOUT & keyof typeof RETRY;
 
-/** Backoff health-probe — arch §5.3. Tab ẩn thì dừng (hook tự xử). */
+/** Backoff health-probe — arch §5.3. Tab ẩn thì dừng (`lib/api/health-probe.ts` xử). */
 export const PROBE_BACKOFF_MS = [1500, 3000, 6000, 15000] as const;
 export const PROBE_ACTIVE_RUN_MS = 1500;
+/** Tab ẩn: KHÔNG probe, chỉ ngó lại xem user quay về chưa. */
+export const PROBE_HIDDEN_MS = 5000;
+/** `diagnose()` tự ném (hiếm — nó nuốt gần hết lỗi): thử lại ở nhịp cố định. */
+export const PROBE_ERROR_RETRY_MS = 3000;
 
 /** §6.3: heartbeat 15s; 40s im lặng ⇒ coi là đứt → chuyển poll 2s + badge "chế độ poll". */
 export const STREAM_STALL_MS = 40_000;

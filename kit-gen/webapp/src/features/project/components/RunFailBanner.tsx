@@ -43,8 +43,9 @@ export function RunFailBanner({
 }) {
   const { copy } = useCopy();
   /* Phiên bản công cụ local cho khối chẩn đoán. Dùng `useHealth` (Query, `refetchInterval:
-     false`) chứ KHÔNG `useAgentStatus`: hook kia mang cả một vòng probe backoff riêng, và
-     mount thêm một vòng nữa chỉ để đọc một chuỗi version là nhân đôi nhịp dò. */
+     false`) chứ KHÔNG `useAgentStatus`: vòng probe nay là MỘT cho cả app
+     (`lib/api/health-probe.ts`) nên gọi thêm cũng không sinh request lặp, nhưng banner này
+     chỉ cần một chuỗi version từ cache — không cần đăng ký nghe nhịp trạng thái. */
   const health = useHealth();
 
   const failed = React.useMemo(() => (run?.jobs ?? []).filter((j) => j.status === "failed"), [run]);
