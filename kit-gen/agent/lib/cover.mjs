@@ -10,11 +10,28 @@
       bỏ 15 phút và cả quota để có sprite sheet — không đời nào để một tấm ảnh trang
       trí kéo lượt đó xuống "done-with-errors".
 
-   ② NEO VÀO BRANDING GỐC, CỐ Ý KHÔNG NEO VÀO STYLE ĐANG CHỈNH.
+   ② NEO VÀO BRANDING GỐC, CỐ Ý KHÔNG NEO VÀO STYLE ĐANG CHỈNH —
+      NHƯNG KHÔNG BAO GIỜ ĐƯỢC RA MỘT ẢNH LẠ HOẮC.
       Prompt lấy màu thương hiệu + mascot của variant ĐẦU TIÊN (bản gốc của dự án) và
       KHÔNG lấy `variant.style` / `inspo` — thứ người dùng còn đang thử tới thử lui bên
       trong. Đổi phong cách bên trong 5 lần thì ảnh bìa vẫn là nhận diện của game đó,
       không phải ảnh chụp màn hình của lần thử gần nhất.
+
+      BẢN VÁ 18/08 — thứ tự chọn chất liệu có thêm bậc CUỐI: TÀI SẢN ĐÃ CẮT của chính
+      dự án. Lý do là một kết quả kiểm thử, không phải sở thích: 3/3 tester mù đều báo
+      cùng một chuyện — dự án của họ chỉ có vài nút bấm, KHÔNG có nhân vật nào, nên
+      nhánh cuối rơi thẳng vào "brand still life: badge, coin, gift, ribbon" và đẻ ra
+      một cảnh hộp quà + huy chương đen trắng. Cả ba người đều đọc nó thành "app lấy
+      NHẦM ảnh của dự án/khách hàng khác" (blind-qa-1 BUG-02 P1, blind-qa-2 UX#1,
+      blind-qa-3). Một ảnh bìa vô hại về mặt kỹ thuật mà làm người dùng nghi ngờ dữ
+      liệu của mình bị lẫn thì đắt hơn nhiều so với một ảnh bìa xấu.
+
+      Nên: hết mascot ⇒ đính kèm 1-2 asset ĐÃ CẮT đẹp nhất trong `kits/` và bảo model
+      dựng HERO SHOT tôn chính món đó. Đây KHÔNG phá quyết định ② ở trên: chất liệu vẫn
+      là sản phẩm của dự án, không phải `variant.style` đang thử.
+      Còn nguyên si nhánh still life, nhưng CHỈ cho dự án trắng trơn (chưa cắt được
+      asset nào) — và lúc đó meta trả cờ `placeholder:true` + `subject` enum để web nói
+      thẳng "đây là ảnh tạm", thay vì để người dùng tự đoán.
 
    ③ CHỮ DO APP VẼ, MODEL CHỈ CHỪA CHỖ.
       Prompt nêu ĐÚNG TOẠ ĐỘ vùng tiêu đề và giải thích HẬU QUẢ ("phần mềm sẽ ghép chữ
@@ -79,6 +96,24 @@ export function titleZonePixels() {
 
 /* ═════════════════ 1. Chất liệu: branding GỐC của dự án ═════════════════ */
 
+/**
+ * CHỦ THỂ của ảnh bìa — ENUM, và cố ý chỉ là enum: giá trị này đi thẳng ra API #43 nên
+ * nó phải tuân đúng hợp đồng bảo mật của agent (đáp án chỉ chứa enum / boolean / chuỗi
+ * phiên bản, KHÔNG chứa đường dẫn tuyệt đối hay tên file của máy người dùng).
+ * Web dùng nó để dán nhãn "ảnh tạm" cho đúng một trường hợp: `generic-placeholder`.
+ */
+export const SUBJECT_MASCOT_IMAGE = "mascot-image"
+export const SUBJECT_MASCOT_SPEC = "mascot-spec"
+export const SUBJECT_PROJECT_ASSETS = "project-assets"
+export const SUBJECT_PLACEHOLDER = "generic-placeholder"
+export const COVER_SUBJECTS = [
+  SUBJECT_MASCOT_IMAGE, SUBJECT_MASCOT_SPEC, SUBJECT_PROJECT_ASSETS, SUBJECT_PLACEHOLDER,
+]
+
+/** Nhiều nhất 2 asset đã cắt được đính kèm: 1 anh hùng + 1 kép phụ. Ba tấm thì model
+ *  bắt đầu xếp chúng thành lưới — mà lưới chính là thứ prompt đang cấm. */
+const KIT_ATTACH_MAX = 2
+
 /** Variant đầu tiên = bản gốc của dự án (§ quyết định ②). */
 function baseVariant(contract) {
   const v = contract?.variants
@@ -86,11 +121,61 @@ function baseVariant(contract) {
 }
 
 /**
+ * BẬC CUỐI của chất liệu nhận diện: 1-2 asset ĐÃ CẮT đẹp nhất của chính dự án.
+ *
+ * "Đẹp nhất" được xếp bằng thứ tự có sẵn trong `kits/manifest.json` do `slice.py` ghi,
+ * KHÔNG phải bằng cảm tính:
+ *  ① bỏ ô rỗng (`empty_cells` — slice không tìm thấy nội dung nào trong ô);
+ *  ② asset KHÔNG bị QA gắn cờ (`sizeDeviation.flagged`) đứng trước asset bị gắn cờ —
+ *     ưu tiên, KHÔNG phải điều kiện: dự án mà MỌI ô đều lệch khung vẫn phải có bìa
+ *     của chính nó, một tấm bìa hơi lệch còn hơn một tấm bìa của người lạ;
+ *  ③ trong cùng bậc, ô có vùng nội dung TO nhất thắng — nó là món model vẽ kỹ nhất và
+ *     là món người dùng nhận ra nhanh nhất trên thẻ dự án.
+ *
+ * Lấy bản `tight/` trước: đó là chính món hàng ôm sát mép, còn bản canvas cùng tên
+ * đệm thêm nền trong quanh nó — thu nhỏ về khổ ảnh tham chiếu thì món hàng bé lại và
+ * model bám kém đi.
+ */
+async function pickKitAssets(variantId, hasFile, readJson) {
+  const manifest = await readJson("kits/manifest.json")
+  const styles = manifest?.styles
+  if (!styles || typeof styles !== "object") return []
+  const sid = variantId && styles[variantId] ? variantId : Object.keys(styles)[0]
+  if (!sid) return []
+  const entry = styles[sid]
+  const empty = new Set((Array.isArray(entry?.empty_cells) ? entry.empty_cells : []).map(String))
+  const ranked = (Array.isArray(entry?.assets) ? entry.assets : [])
+    .filter(a => typeof a?.file === "string" && a.file.endsWith(".png"))
+    .map(a => ({
+      file: a.file,
+      flagged: a?.sizeDeviation?.flagged === true ? 1 : 0,
+      area: Array.isArray(a?.content) && Number.isFinite(Number(a.content[0])) && Number.isFinite(Number(a.content[1]))
+        ? Number(a.content[0]) * Number(a.content[1])
+        : 0,
+    }))
+    .filter(a => !empty.has(a.file.replace(/\.png$/, "")))
+    .sort((x, y) => x.flagged - y.flagged || y.area - x.area || x.file.localeCompare(y.file))
+
+  const out = []
+  for (const a of ranked) {
+    if (out.length >= KIT_ATTACH_MAX) break
+    const tight = `kits/${sid}/tight/${a.file}`
+    const flat = `kits/${sid}/${a.file}`
+    if (await hasFile(tight)) out.push(tight)
+    else if (await hasFile(flat)) out.push(flat)
+  }
+  return out
+}
+
+/**
  * Gom chất liệu nhận diện: màu thương hiệu + mô tả mascot + ảnh đính kèm.
  * @param hasFile async (relPath) => boolean — kiểm file có thật trong project.
  *        Tiêm vào để hàm này test được mà không cần ổ đĩa.
+ * @param readJson async (relPath) => object|null — đọc JSON trong project (chỉ dùng cho
+ *        `kits/manifest.json`). Cũng tiêm vào, cùng lý do; mặc định "không có gì cả" nên
+ *        người gọi cũ vẫn chạy y như trước.
  */
-export async function collectBranding(contract, hasFile) {
+export async function collectBranding(contract, hasFile, readJson = async () => null) {
   const v = baseVariant(contract)
   const brand = v?.brand ?? {}
   const characters = Array.isArray(v?.characters) ? v.characters : []
@@ -119,16 +204,36 @@ export async function collectBranding(contract, hasFile) {
   if (brand?.mode === "image") for (const p of brand.refs ?? []) await add(p)
 
   const poseSheet = (contract?.sheets ?? []).find(sh => String(sh?.id ?? "").startsWith("pose-"))
-  const mascotSpec = (poseSheet?.components ?? []).map(c => String(c?.spec ?? "")).find(s => s.length > 20) ?? ""
+  const mascotSpec = ((poseSheet?.components ?? []).map(c => String(c?.spec ?? "")).find(s => s.length > 20) ?? "")
+    .slice(0, 600)
+  const mascotName = characters[0]?.vi ? String(characters[0].vi) : null
+  const hasMascotImage = attachments.length > 0
+
+  /* ⑤ TÀI SẢN ĐÃ CẮT của chính dự án — chỉ khi KHÔNG còn chút mascot nào, kể cả mascot
+     mới chỉ tồn tại dưới dạng chữ. Nếu dự án có mô tả mascot mà tấm dáng chưa sinh xong,
+     nhánh SUBJECT sẽ tả mascot bằng lời; đính thêm ảnh cái nút bấm vào đó chỉ khiến model
+     vẽ một con vật đeo hình cái nút. Cấm hai nguồn chủ thể cùng lúc. */
+  let kitAssets = []
+  if (!hasMascotImage && !mascotName && !mascotSpec) {
+    kitAssets = await pickKitAssets(v?.id, hasFile, readJson)
+    for (const p of kitAssets) await add(p)
+  }
+
+  const subject = hasMascotImage ? SUBJECT_MASCOT_IMAGE
+    : mascotName || mascotSpec ? SUBJECT_MASCOT_SPEC
+      : attachments.length ? SUBJECT_PROJECT_ASSETS
+        : SUBJECT_PLACEHOLDER
 
   return {
     variantId: v?.id ?? null,
     primary: typeof brand.primary === "string" ? brand.primary : null,
     secondary: typeof brand.secondary === "string" ? brand.secondary : null,
     gradient: typeof brand.gradient === "string" ? brand.gradient : null,
-    mascotName: characters[0]?.vi ? String(characters[0].vi) : null,
-    mascotSpec: mascotSpec.slice(0, 600),
+    mascotName,
+    mascotSpec,
     attachments,
+    /** Enum, đi thẳng ra API #43. `generic-placeholder` = dự án trắng trơn, bìa là ảnh tạm. */
+    subject,
   }
 }
 
@@ -142,8 +247,8 @@ export async function collectBranding(contract, hasFile) {
  * nghĩa tốt hơn bám mệnh lệnh. Khác v15 ở chỗ cover KHÔNG có grid, KHÔNG có chroma-key
  * và KHÔNG tách nền: nền full-bleed, đục hoàn toàn.
  */
-export async function buildCoverPrompt({ project, contract, hasFile }) {
-  const b = await collectBranding(contract, hasFile)
+export async function buildCoverPrompt({ project, contract, hasFile, readJson }) {
+  const b = await collectBranding(contract, hasFile, readJson)
   const z = titleZonePixels()
   const [gw, gh] = GEN_CANVAS
   const L = []
@@ -170,6 +275,14 @@ export async function buildCoverPrompt({ project, contract, hasFile }) {
     L.push(`Brand palette: ${parts.join(", ")}.`)
     L.push("These brand colours dominate the whole picture: the background wash, the light, the")
     L.push("props and the rim light on the subject all come from them.")
+  } else if (b.subject === SUBJECT_PROJECT_ASSETS) {
+    /* Không có màu thương hiệu NHƯNG có hàng thật của dự án trong tay: màu của chính món
+       hàng đó LÀ nhận diện. Rơi về "low-saturation" ở đây là đúng cái đã đẻ ra tấm bìa
+       đen trắng mà 3/3 tester tưởng của dự án khác. */
+    L.push("No brand colours were given, so the ATTACHED ARTWORK is the palette: read the")
+    L.push("colours straight off it — its main colour becomes this cover's dominant colour, and")
+    L.push("the background wash, the light and the rim light on the subject all follow from it.")
+    L.push("Do not desaturate it and do not swap it for a colour of your own choosing.")
   } else {
     L.push("No brand colours were given: use one calm, friendly, low-saturation colour scheme")
     L.push("built from a single hue plus warm neutrals — no rainbow, no clashing accents.")
@@ -178,8 +291,8 @@ export async function buildCoverPrompt({ project, contract, hasFile }) {
   L.push("brand colours stay readable and the cover does not look noisy.")
   L.push("")
 
-  /* ── Chủ thể ── */
-  if (b.attachments.length) {
+  /* ── Chủ thể — bốn nhánh, xem `subject` ở collectBranding ── */
+  if (b.subject === SUBJECT_MASCOT_IMAGE) {
     L.push("SUBJECT — the attached image(s) are this project's OWN mascot / brand reference.")
     L.push("The cover's subject is EXACTLY that character: same species, face, colours, costume,")
     L.push("materials and proportions, re-drawn cleanly as one single full-body figure.")
@@ -187,15 +300,34 @@ export async function buildCoverPrompt({ project, contract, hasFile }) {
     L.push("flat key-coloured background, take ONLY the character's identity from it — draw ONE")
     L.push("character, in one new pose, on this cover's own background. Never copy the sheet's")
     L.push("layout, its cells or its background colour.")
-  } else if (b.mascotName || b.mascotSpec) {
+  } else if (b.subject === SUBJECT_MASCOT_SPEC) {
     L.push("SUBJECT — the project's mascot, described by the project itself:")
     if (b.mascotName) L.push(`Character: ${b.mascotName}.`)
     if (b.mascotSpec) L.push(b.mascotSpec)
     L.push("Draw ONE single full-body figure of this character.")
+  } else if (b.subject === SUBJECT_PROJECT_ASSETS) {
+    L.push("SUBJECT — this project has no mascot. The attached image(s) are FINISHED ARTWORK")
+    L.push("this very project just produced: its own game pieces, already cut out.")
+    L.push("Build the cover as a HERO SHOT of that artwork. Re-draw the attached piece large,")
+    L.push("as the single focal point of the cover, keeping its exact silhouette, colours,")
+    L.push("material, surface texture, edge treatment and lighting — the person who owns this")
+    L.push("project must recognise their own piece at a glance. Do not restyle it, do not")
+    L.push("modernise it, do not turn it into a different kind of object.")
+    L.push("If two pieces are attached, the FIRST one is the hero: draw it big and in front;")
+    L.push("let the second sit smaller, softer and slightly behind it, as supporting depth.")
+    L.push("Add nothing else: no characters, no faces, no mascot, no extra props, no invented")
+    L.push("badges, coins, gifts or ribbons — the attached pieces are the whole subject.")
+    L.push("The attachments arrive cut out on a transparent or checkerboard background. That")
+    L.push("background is NOT part of the artwork: drop it, and stand the piece on this cover's")
+    L.push("own opaque background instead.")
   } else {
-    L.push("SUBJECT — no mascot exists for this project yet. Instead build a simple brand still")
-    L.push("life: a few smooth, rounded game props (a soft badge, a coin, a gift, a ribbon) in")
-    L.push("the brand colours, grouped as one calm cluster. No characters, no faces.")
+    /* NHÁNH ẢNH TẠM — chỉ tới được khi dự án chưa cắt nổi một asset nào. Meta gắn cờ
+       `placeholder:true` để web nói thẳng ra, vì chính cảnh này (đọc rời khỏi ngữ cảnh)
+       bị 3/3 tester mù đọc thành "app lấy nhầm ảnh dự án khác". */
+    L.push("SUBJECT — this project has produced no artwork yet and has no mascot, so there is")
+    L.push("nothing of its own to show. Build a simple brand still life instead: a few smooth,")
+    L.push("rounded game props (a soft badge, a coin, a gift, a ribbon) in the brand colours,")
+    L.push("grouped as one calm cluster. No characters, no faces.")
   }
   L.push("")
 
@@ -307,14 +439,24 @@ export function coverRunning(ws, id) { return running.get(keyOf(ws, id)) ?? null
 
 /**
  * Trạng thái ảnh bìa cho endpoint #43.
+ *
+ * `subject` + `placeholder` là ENUM và BOOLEAN, không hơn — hợp đồng bảo mật của agent
+ * cấm đáp án #43 mang tên file hay đường dẫn của máy người dùng, nên ở đây KHÔNG bao giờ
+ * trả `meta.source.attachments` ra ngoài dù nó nằm ngay cạnh trên đĩa. Lọc qua
+ * `COVER_SUBJECTS`: `cover.json` là file trên đĩa, người dùng sửa tay được, và một chuỗi
+ * lạ lọt ra API là đúng thứ vừa bị cấm.
+ *
  * @returns {{status:"none"|"running"|"ok"|"failed", path:string|null, updatedAt:string|null,
- *            titleZone:object, error:string|null}}
+ *            titleZone:object, error:string|null,
+ *            subject:"mascot-image"|"mascot-spec"|"project-assets"|"generic-placeholder"|null,
+ *            placeholder:boolean}}
  */
 export async function coverStatus(ws, id) {
   const job = coverRunning(ws, id)
   const meta = await readCoverMeta(ws, id)
   const has = await exists(join(projectDir(ws, id), COVER_REL))
   const status = job ? "running" : has ? "ok" : meta?.status === "failed" ? "failed" : STATUS_NONE
+  const subject = COVER_SUBJECTS.includes(meta?.subject) ? meta.subject : null
   return {
     status,
     path: has ? COVER_REL : null,
@@ -323,6 +465,9 @@ export async function coverStatus(ws, id) {
     titleZone: { ...TITLE_ZONE },
     size: meta?.size ?? null,
     error: status === "failed" ? (meta?.error ?? "UNKNOWN") : null,
+    subject,
+    /** Bìa KHÔNG neo được vào bất cứ thứ gì của dự án — web nên dán nhãn "ảnh tạm". */
+    placeholder: subject === SUBJECT_PLACEHOLDER,
   }
 }
 
@@ -348,7 +493,10 @@ export async function startCover(ws, id, { imgHome = null, wait = false, force =
   const pdir = projectDir(ws, id)
   const { contract } = await readContract(ws, id).catch(() => ({ contract: null }))
   const hasFile = async rel => exists(join(pdir, rel))
-  const { prompt, attachments, branding } = await buildCoverPrompt({ project, contract, hasFile })
+  /* Chưa cắt lần nào ⇒ không có manifest ⇒ null, KHÔNG phải lỗi: đó chính là dự án
+     trắng trơn, và nhánh SUBJECT cuối đã có sẵn câu trả lời cho nó. */
+  const readJson = async rel => readJsonFile(join(pdir, rel)).catch(() => null)
+  const { prompt, attachments, branding } = await buildCoverPrompt({ project, contract, hasFile, readJson })
 
   if (!(await stillThere(ws, id))) return { status: "skipped", reason: "PROJECT_GONE", startedAt: null }
   try {
@@ -371,6 +519,7 @@ export async function startCover(ws, id, { imgHome = null, wait = false, force =
     status: "running", startedAt, updatedAt: null, finishedAt: null,
     size: null, titleZone: { ...TITLE_ZONE },
     source: { variantId: branding.variantId, primary: branding.primary, secondary: branding.secondary, attachments },
+    subject: branding.subject,
     prompt: "prompts/cover.txt", error: null, force: force === true,
   })
 
@@ -430,6 +579,7 @@ export async function startCover(ws, id, { imgHome = null, wait = false, force =
         status: "ok", startedAt, finishedAt, updatedAt: finishedAt,
         size: COVER_SIZE, titleZone: { ...TITLE_ZONE },
         source: { variantId: branding.variantId, primary: branding.primary, secondary: branding.secondary, attachments },
+        subject: branding.subject,
         prompt: "prompts/cover.txt", error: null,
       })
       const p = await readProject(ws, id).catch(() => null)
@@ -442,6 +592,7 @@ export async function startCover(ws, id, { imgHome = null, wait = false, force =
         status: "failed", startedAt, finishedAt, updatedAt: null,
         size: null, titleZone: { ...TITLE_ZONE },
         source: { variantId: branding.variantId, primary: branding.primary, secondary: branding.secondary, attachments },
+        subject: branding.subject,
         prompt: "prompts/cover.txt",
         error: lines.join("").includes("chưa đăng nhập") ? "NOT_LOGGED_IN" : "NO_ARTIFACT",
       })

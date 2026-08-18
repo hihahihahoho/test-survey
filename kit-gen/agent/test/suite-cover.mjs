@@ -19,6 +19,7 @@ import {
 import { createAgent } from "../server.mjs"
 import {
   TITLE_ZONE, COVER_REL, buildCoverPrompt, titleZonePixels, collectBranding, expandHomePath,
+  SUBJECT_MASCOT_IMAGE, SUBJECT_MASCOT_SPEC, SUBJECT_PROJECT_ASSETS, SUBJECT_PLACEHOLDER,
 } from "../lib/cover.mjs"
 
 const execFile = promisify(execFileCb)
@@ -48,6 +49,49 @@ const BRANDED = {
     }],
   }],
 }
+
+/* Dự án đúng như 3/3 tester mù dựng ra: KHÔNG nhân vật, KHÔNG tấm dáng, KHÔNG màu
+   thương hiệu — chỉ vài nút bấm. Trước bản vá 18/08 đây là ca rơi thẳng vào still life
+   "hộp quà + huy chương" và bị đọc thành "app lấy nhầm ảnh dự án khác". */
+const NO_MASCOT = {
+  schemaVersion: 4,
+  variants: [{
+    id: "chinh", vi: "Bản gốc",
+    style: "STYLE_DANG_THU_NGHIEM paper craft viền giấy cắt tay",
+    bg: "pure vivid magenta #FF00FF",
+    brand: { mode: "colors", refs: [] },
+    characters: [],
+    inspo: ["refs/inspo-1.png"],
+  }],
+  sheets: [{
+    id: "ui", grid: { cols: 2, rows: 2 }, orient: "landscape", variants: ["chinh"],
+    components: [{ file: "01-btn-pill-red", vi: "Nút đỏ (CTA)", skel: { shape: "rrect", w: 0.8, h: 0.3 } }],
+  }],
+}
+
+/** `kits/manifest.json` như `slice.py` ghi ra — đủ ba thứ dùng để xếp hạng:
+ *  `empty_cells` (ô rỗng), `sizeDeviation.flagged` (cờ QA), `content` (vùng nội dung). */
+const KIT_MANIFEST = {
+  schemaVersion: 4,
+  styles: {
+    chinh: {
+      empty_cells: ["03-o-rong"],
+      assets: [
+        { file: "01-btn-pill-red.png", sheet: "ui", content: [599, 219], sizeDeviation: { maxEdgePx: 24, flagged: true } },
+        { file: "02-btn-circle.png", sheet: "ui", content: [440, 438], sizeDeviation: { maxEdgePx: 4, flagged: false } },
+        { file: "03-o-rong.png", sheet: "ui", content: [900, 900], sizeDeviation: { maxEdgePx: 1, flagged: false } },
+        { file: "04-icon-nho.png", sheet: "ui", content: [120, 120], sizeDeviation: { maxEdgePx: 2, flagged: false } },
+      ],
+    },
+  },
+}
+
+/** Mọi file mà KIT_MANIFEST nhắc tới đều có thật trên đĩa, cả bản `tight/`. */
+const KIT_ON_DISK = new Set(
+  ["01-btn-pill-red", "02-btn-circle", "03-o-rong", "04-icon-nho"]
+    .flatMap(f => [`kits/chinh/${f}.png`, `kits/chinh/tight/${f}.png`]))
+
+const readKit = async rel => (rel === "kits/manifest.json" ? KIT_MANIFEST : null)
 
 export async function run({ api, wsRoot, agentDir }) {
   describe("ảnh bìa")
@@ -140,12 +184,94 @@ export async function run({ api, wsRoot, agentDir }) {
     const all = new Set(["refs/mascot.png", "raw/chinh-pose-nhan-vat.png"])
     const b2 = await collectBranding(withRef, async p => all.has(p))
     eq(b2.attachments[0], "refs/mascot.png", "ảnh nhân vật người dùng tải lên đứng trước")
+    eq(b2.subject, SUBJECT_MASCOT_IMAGE, "có ảnh mascot thật ⇒ nhánh chủ thể là mascot-image")
 
     const escape = await collectBranding(
       { variants: [{ id: "v", characters: [{ ref: "../../etc/passwd" }] }], sheets: [] },
       async () => true)
     eq(escape.attachments, [], "đường dẫn thoát ra ngoài bị loại thẳng")
   })
+
+  /* ── BUG-02 / UX#1: bìa phải là ẢNH CỦA CHÍNH DỰ ÁN NÀY ──
+     3/3 tester mù gen một dự án chỉ có nút bấm, nhận về cảnh "hộp quà + huy chương"
+     đen trắng, và cả ba đều đọc nó thành "app lấy nhầm ảnh của dự án khác". Ba ca dưới
+     khoá lại bậc chất liệu CUỐI (asset đã cắt) để lỗi đó không quay lại. */
+
+  await it("hết mascot → bìa vớt ASSET ĐÃ CẮT của chính dự án, xếp theo cờ QA rồi tới ô to nhất", async () => {
+    const b = await collectBranding(NO_MASCOT, async p => KIT_ON_DISK.has(p), readKit)
+    eq(b.attachments,
+      ["kits/chinh/tight/02-btn-circle.png", "kits/chinh/tight/04-icon-nho.png"],
+      "ô KHÔNG bị QA gắn cờ đứng trước, trong đó ô có vùng nội dung to hơn thắng")
+    eq(b.subject, SUBJECT_PROJECT_ASSETS, "chủ thể là hàng thật của dự án")
+    ok(!b.attachments.includes("kits/chinh/tight/03-o-rong.png"), "ô rỗng (empty_cells) không bao giờ được chọn")
+    ok(b.attachments.length <= 2, "nhiều nhất 2 tấm — 3 tấm thì model xếp thành lưới")
+
+    // Ưu tiên, KHÔNG phải điều kiện: mọi ô đều lệch khung thì vẫn lấy hàng của dự án.
+    const allFlagged = structuredClone(KIT_MANIFEST)
+    for (const a of allFlagged.styles.chinh.assets) a.sizeDeviation.flagged = true
+    const b2 = await collectBranding(NO_MASCOT, async p => KIT_ON_DISK.has(p),
+      async () => allFlagged)
+    eq(b2.attachments[0], "kits/chinh/tight/02-btn-circle.png",
+      "bìa hơi lệch của CHÍNH MÌNH vẫn hơn bìa của người lạ")
+
+    // Chưa có bản tight/ (kit cũ) thì rơi về bản canvas cùng tên, không bỏ trắng.
+    const flatOnly = new Set([...KIT_ON_DISK].filter(p => !p.includes("/tight/")))
+    const b3 = await collectBranding(NO_MASCOT, async p => flatOnly.has(p), readKit)
+    eq(b3.attachments[0], "kits/chinh/02-btn-circle.png", "không có tight/ thì dùng bản canvas")
+
+    // Có mascot (dù mới chỉ là chữ) thì TUYỆT ĐỐI không trộn thêm ảnh nút bấm vào.
+    const withMascot = await collectBranding(BRANDED, async () => false, readKit)
+    eq(withMascot.attachments, [], "mascot đang cầm trịch — không đính asset đã cắt")
+    eq(withMascot.subject, SUBJECT_MASCOT_SPEC, "vẫn là nhánh tả mascot bằng lời")
+  })
+
+  await it("có asset đã cắt → prompt là HERO SHOT tôn chính món đó, KHÔNG còn still life generic", async () => {
+    const { prompt, attachments, branding } = await buildCoverPrompt({
+      project: { name: "Nút đỏ paper craft" }, contract: NO_MASCOT,
+      hasFile: async p => KIT_ON_DISK.has(p), readJson: readKit,
+    })
+    eq(branding.subject, SUBJECT_PROJECT_ASSETS, "chủ thể")
+    eq(attachments.length, 2, "đính đúng 2 ảnh tham chiếu")
+    includes(prompt, "HERO SHOT", "bố cục bìa tôn asset đính kèm")
+    includes(prompt, "FINISHED ARTWORK", "nói rõ ảnh đính kèm là hàng dự án vừa làm ra")
+    includes(prompt, "recognise their own piece at a glance", "đúng thứ 3/3 tester đòi")
+    includes(prompt, "the FIRST one is the hero", "hai tấm thì phân vai rõ, không xếp lưới")
+    // Nền checkerboard của ảnh đã cắt KHÔNG được vẽ lại vào bìa (bìa phải đục hoàn toàn).
+    includes(prompt, "background is NOT part of the artwork", "dặn bỏ nền trong suốt")
+    ok(!prompt.includes("a soft badge, a coin, a gift, a ribbon"),
+      "KHÔNG được rơi về still life generic — chính câu này đẻ ra cảnh hộp quà + huy chương")
+    // Không màu thương hiệu: màu phải lấy từ hàng thật, KHÔNG rơi về low-saturation
+    // (đó là lý do tấm bìa cũ ra đen trắng dù dự án toàn màu đỏ).
+    includes(prompt, "ATTACHED ARTWORK is the palette", "màu lấy thẳng từ asset")
+    ok(!prompt.includes("low-saturation"), "không còn dìm bão hoà thành ảnh xám")
+    // Quyết định ② vẫn còn nguyên: chất liệu là SẢN PHẨM của dự án, không phải style đang thử.
+    ok(!prompt.includes("STYLE_DANG_THU_NGHIEM"), "vẫn KHÔNG kéo theo style đang chỉnh")
+    ok(!prompt.includes("inspo-1.png"), "vẫn KHÔNG đính ảnh inspo")
+    // Mọi luật khung hình cũ phải sống sót qua nhánh mới.
+    includes(prompt, "TITLE PLATE", "vùng tiêu đề vẫn được chừa")
+    includes(prompt, "ABSOLUTELY NO TEXT", "vẫn cấm vẽ chữ")
+  })
+
+  await it("dự án TRẮNG TRƠN (chưa cắt được asset nào) → vẫn still life, nhưng gắn cờ ảnh tạm", async () => {
+    const b = await collectBranding(NO_MASCOT, async () => false, async () => null)
+    eq(b.attachments, [], "không có gì để đính")
+    eq(b.subject, SUBJECT_PLACEHOLDER, "chỉ CA NÀY mới là ảnh tạm")
+
+    const { prompt } = await buildCoverPrompt({
+      project: { name: "Moi tinh" }, contract: NO_MASCOT, hasFile: async () => false,
+    })
+    includes(prompt, "a soft badge, a coin, a gift, a ribbon", "still life vẫn còn cho ca này")
+    includes(prompt, "nothing of its own to show", "prompt tự nói ra lý do")
+
+    // Manifest có thật nhưng rỗng ⇒ vẫn là trắng trơn, không được nổ.
+    const emptyKit = await collectBranding(NO_MASCOT, async () => true,
+      async () => ({ styles: { chinh: { assets: [], empty_cells: [] } } }))
+    eq(emptyKit.subject, SUBJECT_PLACEHOLDER, "manifest rỗng vẫn rơi về ảnh tạm")
+    // Manifest rác (người dùng sửa tay / kit hỏng) cũng chỉ được rơi về ảnh tạm.
+    const junk = await collectBranding(NO_MASCOT, async () => true, async () => ({ styles: "khong-phai-object" }))
+    eq(junk.attachments, [], "manifest rác không đẻ ra đường dẫn nào")
+  })
+
 
   await it("hai file toạ độ (agent ↔ webapp) KHÔNG được lệch nhau", async () => {
     // Chữ do webapp ghép vào; agent dặn model chừa chỗ. Lệch số = chữ đè lên mascot mà
@@ -415,6 +541,38 @@ export async function run({ api, wsRoot, agentDir }) {
     eq(r.json.error.code, "IMAGEGEN_UNAVAILABLE", "code")
     ok(r.json.error.details.reason, "nêu lý do")
     eq(await pathExists(join(wsRoot, "projects", id, "prompts", "cover.txt")), false, "chưa dựng prompt vì đã chặn từ đầu")
+    await a("DELETE", `/api/projects/${id}`)
+  })
+
+  /* BUG-02, vế "không hề gắn nhãn ảnh mẫu cho user biết": khi bìa KHÔNG neo được vào bất
+     cứ thứ gì của dự án, web phải nói thẳng ra. #43 là chỗ duy nhất web hỏi được. */
+  await it("#43 trả `subject` (enum) + `placeholder` (boolean) — và KHÔNG rò tên file ra web", async () => {
+    const a = await agentWithEngine("engine-fake")
+    const created = await a("POST", "/api/projects", {
+      body: { name: "Bia anh tam", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
+    })
+    const id = created.json.project.id
+    await a("POST", `/api/projects/${id}/cover`)
+    await waitFor(async () => (await a("GET", `/api/projects/${id}/cover`)).json.cover.status === "ok", 15000, "vẽ xong")
+
+    const st = (await a("GET", `/api/projects/${id}/cover`)).json.cover
+    eq(st.subject, SUBJECT_PLACEHOLDER, "dự án basic chưa cắt được gì → ảnh tạm")
+    eq(st.placeholder, true, "cờ boolean để web dán nhãn 'ảnh tạm'")
+    /* HỢP ĐỒNG BẢO MẬT: đáp án #43 chỉ mang enum / boolean / mốc thời gian. `cover.json`
+       trên đĩa có `source.attachments` (đường dẫn file) nằm ngay cạnh — KHÔNG được đi ra. */
+    ok(!("source" in st), "không rò `source` ra API")
+    ok(!JSON.stringify(st).includes("kits/"), "không có đường dẫn asset nào trong đáp án")
+    ok(!JSON.stringify(st).includes(wsRoot), "không có đường dẫn tuyệt đối của máy")
+
+    // `cover.json` là file trên đĩa, sửa tay được: chuỗi ngoài enum phải bị lọc về null.
+    const metaPath = join(wsRoot, "projects", id, "cover", "cover.json")
+    const meta = JSON.parse(await readFile(metaPath, "utf8"))
+    eq(meta.subject, SUBJECT_PLACEHOLDER, "meta trên đĩa cũng ghi đúng enum")
+    await writeFile(metaPath, JSON.stringify({ ...meta, subject: "/Users/ai-do/bi-mat.png" }))
+    const tampered = (await a("GET", `/api/projects/${id}/cover`)).json.cover
+    eq(tampered.subject, null, "giá trị ngoài enum bị lọc về null")
+    eq(tampered.placeholder, false, "và không được coi là ảnh tạm")
+
     await a("DELETE", `/api/projects/${id}`)
   })
 }
