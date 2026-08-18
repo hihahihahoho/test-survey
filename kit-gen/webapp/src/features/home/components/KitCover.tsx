@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { qk, useProjectCover, useRegenerateCover } from "@/lib/hooks";
 import { loadThumb } from "@/features/projects/lib/agent-blob";
 import { toastError, toastSuccess } from "@/features/projects/lib/feedback";
-import { isAutoCover, titleZoneStyle } from "../lib/cover-title";
+import { isAutoCover, shouldOverlayTitle, titleZoneStyle } from "../lib/cover-title";
 
 /**
  * `cover/cover.json` → MỘT MỆNH ĐỀ NGẮN người dùng hiểu. Đây là bốn mã mà
@@ -88,7 +88,25 @@ export function KitCover({
    * ứng viên gửi ĐÚNG MỘT request rồi thôi nếu bìa không ở trạng thái đang vẽ.
    */
   const watching = !coverPath && watchCover && !offline;
-  const cover = useProjectCover(watching ? projectId : null);
+  /**
+   * ══ CỬA THỨ HAI: ĐÃ CÓ BÌA RỒI VẪN PHẢI HỎI — MỘT LẦN ═══════════════════════
+   * Từ bản vá 18/08, tên dự án được KẺ THẲNG vào tấm bìa (agent § quyết định ③) và
+   * `#43` báo lại bằng cờ `titleEmbedded`. Không hỏi thì thẻ không có cách nào biết
+   * tấm ảnh trong tay mình thuộc loại nào ⇒ hoặc dán chữ đè lên chữ đã vẽ (chữ đúp),
+   * hoặc bỏ overlay và làm mất tên trên MỌI tấm bìa vẽ trước bản vá.
+   *
+   * Giá phải trả được giữ đúng một lần: cùng `queryKey` với `watching` nên hai cửa
+   * gộp thành MỘT query, `staleTime` chặn hỏi lại, và `refetchInterval` chỉ bật khi
+   * `status === "running"` — thẻ đã có bìa không bao giờ ở trạng thái đó, nên nó gửi
+   * đúng một request rồi thôi. Thẻ ảnh bìa user tự chọn / chưa có bìa: 0 request.
+   *
+   * `watchCover` vẫn là điều kiện bắt buộc — nó mang luôn nghĩa "dự án này CÓ THẬT
+   * trên đĩa, không phải thẻ dựng từ cache cục bộ" (xem KitCard). Bỏ nó ra khỏi đây
+   * là thẻ ma lại gõ cửa server, đúng lỗi mà `ghost-card-no-cover.test.tsx` khoá.
+   */
+  const needsTitleMeta = watchCover && !offline && isAutoCover(coverPath);
+  const asking = watching || needsTitleMeta;
+  const cover = useProjectCover(asking ? projectId : null);
   const livePath = cover.data?.status === "ok" ? (cover.data.path ?? null) : null;
   /* Vẽ NGAY từ kết quả poll, không đợi vòng invalidate danh sách quay về — thứ người
      dùng chờ là tấm ảnh, không phải một lần refetch. */
@@ -121,6 +139,13 @@ export function KitCover({
 
   const empty = !shownPath;
   const showPlaceholder = empty || failed || offline || url === null;
+
+  /* Chữ đã nằm trong tranh chưa? Quyết định gọn trong `shouldOverlayTitle` (cover-title.ts). */
+  const showTitleOverlay = shouldOverlayTitle({
+    coverPath: shownPath,
+    cover: cover.data,
+    metaPending: asking && cover.data === undefined && cover.isPending,
+  });
 
   return (
     <div
@@ -178,11 +203,14 @@ export function KitCover({
             onError={() => setFailed(true)}
             className="size-full object-cover"
           />
-          {/* ══ TÊN DỰ ÁN GHÉP LÊN ẢNH BÌA ═══════════════════════════════════════
-              CHỈ với ảnh bìa TỰ SINH: prompt của agent đã dặn model chừa trống đúng
-              hình chữ nhật này (`cover-title.ts` giữ toạ độ chung với agent). Ảnh bìa
-              do user tự chọn từ kit KHÔNG có chỗ chừa nào — đè chữ lên là che mất ô
-              họ chọn, nên `isAutoCover` là điều kiện bắt buộc.
+          {/* ══ TÊN DỰ ÁN GHÉP LÊN ẢNH BÌA — CHỈ KHI TRONG ẢNH CHƯA CÓ CHỮ ═══════
+              Từ bản vá 18/08 agent kẻ thẳng tên dự án vào tranh, nên overlay này KHÔNG
+              còn là đường đi mặc định: nó chỉ dành cho ảnh bìa vẽ trước bản vá và cho
+              dự án không có tên dùng được. Điều kiện đầy đủ nằm ở `shouldOverlayTitle`
+              — dán nhầm lên một tấm bìa đã có chữ là hai lần cùng một cái tên chồng lên
+              nhau, hỏng THẤY ĐƯỢC ngay trên màn hình đầu tiên của app.
+              Toạ độ vẫn là hình chữ nhật agent dùng chung (`cover-title.ts`), nên overlay
+              rơi đúng chỗ model đã chừa trống.
 
               Chữ nằm trên một CHIP NỀN ĐẶC (`bg-surface`) chứ không đặt thẳng lên ảnh:
               đúng luật §8.3 và đúng lý lẽ ở KitCard ① — mọi lời hứa tương phản trên nền
@@ -191,7 +219,7 @@ export function KitCover({
 
               `aria-hidden`: tên dự án đã có ở `<h2>` của thẻ và ở `aria-label` — đọc
               lần thứ ba là làm phiền người dùng trình đọc màn hình. */}
-          {isAutoCover(shownPath) && (
+          {showTitleOverlay && (
             <div
               data-cover-title
               aria-hidden

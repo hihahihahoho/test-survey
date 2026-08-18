@@ -33,15 +33,30 @@
       asset nào) — và lúc đó meta trả cờ `placeholder:true` + `subject` enum để web nói
       thẳng "đây là ảnh tạm", thay vì để người dùng tự đoán.
 
-   ③ CHỮ DO APP VẼ, MODEL CHỈ CHỪA CHỖ.
-      Prompt nêu ĐÚNG TOẠ ĐỘ vùng tiêu đề và giải thích HẬU QUẢ ("phần mềm sẽ ghép chữ
-      thật vào đúng hình chữ nhật này"), theo lối viết safe-zone của gen.sh v15
-      (docs/SPRITESHEET-SAFE-ZONE-HANDOFF.md §5.3: nói hậu quả, đừng ra lệnh suông).
-      Model vẽ chữ thì sai chính tả — tiếng Việt có dấu lại càng sai; mà đổi tên dự án
-      thì phải gen lại cả ảnh. Overlay CSS: đổi tên là chữ đổi theo, 0 quota.
-      Toạ độ nằm ở TITLE_ZONE dưới đây và được webapp dùng lại nguyên si
-      (webapp/src/features/home/lib/cover-title.ts) — suite-cover có ca đối chiếu hai
-      file để chúng không lệch nhau trong im lặng.
+   ③ TÊN DỰ ÁN LÀ MỘT PHẦN CỦA TRANH — MODEL VẼ CHỮ, KHÔNG PHẢI APP DÁN ĐÈ.
+      BẢN VÁ 18/08 — ĐẢO LẠI quyết định cũ, và lý do phải viết ra vì bản cũ có lý lẽ tốt.
+      Bản cũ: prompt CẤM mọi chữ, model chỉ chừa trống một hình chữ nhật, webapp dán một
+      chip nền đặc + tên dự án lên đó bằng CSS (đổi tên ⇒ 0 quota, không bao giờ sai dấu).
+      Cái giá của nó là thứ nhìn thấy được: mọi tấm bìa đều có một miếng nhãn chữ nhật
+      dán đè, trông như ảnh chưa xong chứ không như một tấm bìa. Chủ sản phẩm chốt: chữ
+      phải nằm TRONG artwork, typography ăn theo phong cách của tranh.
+
+      Nên bây giờ prompt ĐƯA THẲNG TÊN DỰ ÁN vào và bắt model chép ĐÚNG NGUYÊN VĂN. Rủi
+      ro cũ (model viết sai dấu tiếng Việt) là THẬT và không biến mất, nên nó được đánh
+      thẳng bằng một khối ràng buộc riêng: bọc tên trong « », nói rõ đây là tiếng Việt,
+      liệt kê đúng thứ hay bị đánh rơi (ă â ê ô ơ ư đ + dấu thanh), cấm đổi sang chữ
+      ASCII nhìn giống, và cho model một đường lui an toàn ("không kẻ nổi thì kẻ sans-serif
+      trơn") — chữ đúng mà xấu vẫn dùng được, chữ đẹp mà sai dấu thì vứt.
+
+      TITLE_ZONE KHÔNG BỊ BỎ. Nó đổi vai: từ "vùng cấm vẽ" thành "chỗ ĐẶT tiêu đề" — vẫn
+      là toạ độ đó, vẫn dùng chung với webapp (webapp/src/features/home/lib/cover-title.ts),
+      vì webapp CÒN CẦN nó cho hai ca: ảnh bìa cũ vẽ trước bản vá này, và dự án không có
+      tên dùng được. Suite-cover vẫn đối chiếu hằng số hai file.
+
+      HAI NHÁNH, KHÔNG PHẢI MỘT: tên dự án rỗng / toàn ký tự rác sau khi lọc ⇒ KHÔNG có
+      gì để kẻ, prompt rơi NGUYÊN VẸN về lối cũ (chừa trống + cấm chữ) và meta trả
+      `titleEmbedded:false` để webapp dán overlay như trước. Cờ boolean đó là toàn bộ hợp
+      đồng với web — API #43 KHÔNG BAO GIỜ trả chuỗi tên ra ngoài (xem `coverStatus`).
    ════════════════════════════════════════════════════════════════════════════ */
 import { spawn } from "node:child_process"
 import { mkdir } from "node:fs/promises"
@@ -75,7 +90,11 @@ export function expandHomePath(value) {
 
 /**
  * VÙNG TIÊU ĐỀ — theo TỈ LỆ của ảnh bìa 16:9 cuối cùng (không phải theo pixel canvas gen).
- * Dải trái, rộng 56%, cao 40%, canh giữa dọc. Webapp overlay chữ vào đúng đây.
+ * Dải trái, rộng 56%, cao 40%, canh giữa dọc.
+ *
+ * MỘT TOẠ ĐỘ, HAI VAI (§ quyết định ③): prompt bảo model KẺ tiêu đề vào đúng đây, còn
+ * webapp dán overlay vào đúng đây cho hai ca không kẻ được (ảnh bìa cũ · dự án không có
+ * tên dùng được). Chính vì cùng một hình chữ nhật mà đổi vai không làm chữ nhảy chỗ.
  */
 export const TITLE_ZONE = { x: 0.06, y: 0.3, w: 0.56, h: 0.4 }
 
@@ -92,6 +111,51 @@ export function titleZonePixels() {
     cutTop: top,
     cutBottom: gh - bandH - top,
   }
+}
+
+/**
+ * ĐỘ DÀI TỐI ĐA của tiêu đề đưa vào prompt (đếm theo KÝ TỰ THẬT, không phải mã UTF-16).
+ *
+ * `projects.mjs` cho tên dài tới 120 ký tự. Một dòng 120 ký tự kẻ vào dải trái 56% của
+ * ảnh bìa thì chữ nhỏ tới mức không đọc nổi ở khổ thumbnail 256px — mà đó là khổ duy
+ * nhất người dùng nhìn thấy nó. 48 là chỗ vừa đủ cho hai dòng đọc được.
+ */
+export const COVER_TITLE_MAX = 48
+
+/**
+ * TÊN DỰ ÁN → CHUỖI AN TOÀN ĐỂ NHÚNG VÀO PROMPT. Trả `null` = không có gì để kẻ.
+ *
+ * Tên dự án là dữ liệu NGƯỜI DÙNG GÕ và nó đi thẳng vào prompt của một model, nên đây
+ * là một mặt tiếp xúc, không phải một phép cắt chuỗi cho đẹp:
+ *  ① ký tự điều khiển + ký tự định dạng vô hình (`\p{Cc}`, `\p{Cf}`: xuống dòng, TAB,
+ *     và cả RLO/LRO đảo chiều hiển thị) bị thay bằng khoảng trắng — một cái `\n` trong
+ *     tên là đủ để phần còn lại của tên trông như một CHỈ THỊ MỚI trong prompt;
+ *  ② `«` `»` bị gỡ: đó là cặp dấu prompt dùng để nói "tên bắt đầu/kết thúc ở đây", để
+ *     nguyên thì người dùng tự đóng được cái ngoặc đó;
+ *  ③ gộp khoảng trắng, cắt về COVER_TITLE_MAX theo RANH GIỚI TỪ khi cắt được — cắt
+ *     giữa một từ tiếng Việt ra chữ cụt đọc còn khó hiểu hơn tên bị ngắn;
+ *  ④ KHÔNG thêm "…" vào chỗ cắt: model sẽ kẻ luôn ba chấm đó vào tranh.
+ *
+ * KHÔNG bỏ dấu, KHÔNG hạ dấu về ASCII: giữ đúng nguyên văn là toàn bộ mục đích ở đây.
+ * `NFC` để dấu đứng liền chữ thành một ký tự — chuỗi tổ hợp NFD trông y hệt nhưng dài
+ * gấp đôi khi đếm và hay bị model đọc lệch.
+ */
+export function sanitizeCoverTitle(name) {
+  const raw = String(name ?? "")
+    .normalize("NFC")
+    .replace(/[\p{Cc}\p{Cf}]/gu, " ")
+    .replace(/[«»]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (!raw) return null
+  const chars = [...raw]
+  if (chars.length <= COVER_TITLE_MAX) return raw
+  const cut = chars.slice(0, COVER_TITLE_MAX).join("")
+  const sp = cut.lastIndexOf(" ")
+  /* Chỉ lùi về ranh giới từ khi phần giữ lại vẫn còn ra hồn (≥60%); tên một từ rất dài
+     (hoặc tiếng không có khoảng trắng) thì cắt cứng còn hơn trả về hai chữ cái. */
+  const out = (sp >= Math.floor(COVER_TITLE_MAX * 0.6) ? cut.slice(0, sp) : cut).trim()
+  return out || null
 }
 
 /* ═════════════════ 1. Chất liệu: branding GỐC của dự án ═════════════════ */
@@ -240,17 +304,21 @@ export async function collectBranding(contract, hasFile, readJson = async () => 
 /* ═════════════════ 2. Prompt ═════════════════ */
 
 /**
- * Dựng prompt ảnh bìa. Trả `{ prompt, attachments, branding }`.
+ * Dựng prompt ảnh bìa. Trả `{ prompt, attachments, branding, title, titleEmbedded }`.
+ *
+ * `title` chỉ để người gọi ghi log/prompt trên ĐĨA; ra tới API #43 nó co lại còn đúng
+ * boolean `titleEmbedded` (§ quyết định ③ + `coverStatus`).
  *
  * Lối viết bám đúng triết lý crop-safe v15 (handoff §5.3): mỗi ràng buộc hình học đều
- * kèm HẬU QUẢ nếu làm sai ("phần mềm sẽ crop / sẽ ghép chữ vào đây"), vì model bám ý
- * nghĩa tốt hơn bám mệnh lệnh. Khác v15 ở chỗ cover KHÔNG có grid, KHÔNG có chroma-key
- * và KHÔNG tách nền: nền full-bleed, đục hoàn toàn.
+ * kèm HẬU QUẢ nếu làm sai ("phần mềm sẽ crop / bìa sẽ bị vứt đi"), vì model bám ý nghĩa
+ * tốt hơn bám mệnh lệnh. Khác v15 ở chỗ cover KHÔNG có grid, KHÔNG có chroma-key và
+ * KHÔNG tách nền: nền full-bleed, đục hoàn toàn.
  */
 export async function buildCoverPrompt({ project, contract, hasFile, readJson }) {
   const b = await collectBranding(contract, hasFile, readJson)
   const z = titleZonePixels()
   const [gw, gh] = GEN_CANVAS
+  const title = sanitizeCoverTitle(project?.name)
   const L = []
 
   L.push(`Canvas orientation: LANDSCAPE ${gw}x${gh}.`)
@@ -341,35 +409,80 @@ export async function buildCoverPrompt({ project, contract, hasFile, readJson })
   L.push("- soft, even lighting; a gentle drop shadow under the subject; no harsh spotlights.")
   L.push("")
 
-  /* ── Vùng tiêu đề: toạ độ + hậu quả ── */
-  L.push("THE TITLE PLATE IS RESERVED — THIS IS THE ONE RULE THAT DECIDES IF THE COVER IS USABLE.")
-  L.push(`On this ${gw}x${gh} canvas, the rectangle from x=${z.x0} to x=${z.x1} and from y=${z.y0} to y=${z.y1}`)
-  L.push("(the left band, about 56% of the width, vertically centred) is a production TITLE PLATE.")
-  L.push("After generation, software composites the project's REAL title text into exactly those")
-  L.push("four coordinates. Therefore:")
-  L.push("- keep that rectangle visually CALM and EMPTY: a smooth surface, a soft gradient wash")
-  L.push("  or a plain brand-coloured area, and nothing else;")
-  L.push("- no part of the subject, no props, no ornaments, no sparkles, no busy texture and no")
-  L.push("  high-contrast edges may fall inside it;")
-  L.push("- keep the tone inside it EVEN, so light text stays readable across the whole plate;")
-  L.push("- decoration may come close to the plate and may touch its outer edge, but must not")
-  L.push("  cross into it.")
-  L.push("A busy or cluttered title plate makes the composited title unreadable, and the cover")
-  L.push("will be thrown away and regenerated.")
-  L.push("")
-
-  /* ── Không chữ ── */
-  L.push("ABSOLUTELY NO TEXT: no letters, no digits, no words, no wordmark, no logo type, no")
-  L.push("watermark, no signature, no caption, in any language, anywhere in the image — not on")
-  L.push("the title plate, not on the subject, not on any prop.")
-  L.push("The real title is composited by software afterwards. Any text you draw would be")
-  L.push("misspelled, would be in the wrong language, and would collide with the real title.")
+  /* ── Tiêu đề. Hai nhánh, xem § quyết định ③: kẻ chữ THẬT, hoặc chừa trống như bản cũ ── */
+  if (title) {
+    L.push("THE TITLE IS PART OF THE ARTWORK — THIS IS THE ONE RULE THAT DECIDES IF THE COVER IS USABLE.")
+    L.push("Letter this project's own title INTO the picture, the way a book cover or a game key-art")
+    L.push("poster carries its title: the letters are designed with the scene — same palette, same")
+    L.push("light, same mood — not pasted on afterwards as a flat rectangular label or a sticker.")
+    L.push("")
+    L.push("Render EXACTLY this text, character for character, changing nothing:")
+    L.push(`«${title}»`)
+    L.push("The text is VIETNAMESE. It is a proper name, not a phrase to be understood, corrected,")
+    L.push("shortened or improved. Copy it GLYPH BY GLYPH from between the « » marks, INCLUDING")
+    L.push("EVERY DIACRITIC — the letter forms ă â ê ô ơ ư đ and the tone marks à á ả ã ạ are part of")
+    L.push("the spelling, and a word carrying the wrong mark is a different, wrong word.")
+    L.push("- do not translate it, do not transliterate it, do not re-spell it;")
+    L.push("- do not drop, add, move, merge or restyle a single accent, above or below a letter;")
+    L.push("- do not replace Vietnamese letters with plain ASCII look-alikes (ơ is not o, đ is not d,")
+    L.push("  ê is not e); do not change which letters are capital and which are small;")
+    /* "extra"/"of your own": tiêu đề thật hoàn toàn có thể đã chứa sẵn năm hoặc chữ số
+       ("… 2026"). Cấm trống "no year" là tự mâu thuẫn với dòng «…» ngay bên trên. */
+    L.push("- do not add a subtitle, a tagline, an extra year, a studio name, a slogan, or any")
+    L.push("  other word of your own;")
+    L.push("- do not draw the « » marks themselves: they only show where the title starts and ends.")
+    L.push("Give the accents room: generous line spacing and enough gap between a mark and the letter")
+    L.push("body, so nothing collides and every mark survives at small size.")
+    L.push("If you cannot letter it beautifully AND correctly, letter it in a plain clean sans-serif:")
+    L.push("a correct plain title is usable, a decorative misspelled one is thrown away.")
+    L.push("")
+    L.push(`TITLE PLACEMENT — on this ${gw}x${gh} canvas, set the title inside the rectangle from`)
+    L.push(`x=${z.x0} to x=${z.x1} and from y=${z.y0} to y=${z.y1} (the left band, about 56% of the width,`)
+    L.push("vertically centred):")
+    L.push("- one or two lines, left-aligned, filling that band comfortably and never touching or")
+    L.push("  crossing its edges; big enough to read when the cover is shown as a small thumbnail;")
+    L.push("- keep what sits BEHIND the letters calm and even — a smooth surface, a soft gradient")
+    L.push("  wash or a plain brand-coloured area — and keep strong contrast between the letters and")
+    L.push("  that background, so every mark stays readable;")
+    L.push("- the subject must not overlap the title and the title must not overlap the subject;")
+    L.push("- no props, ornaments, sparkles or busy texture inside that rectangle other than the title.")
+    L.push("A misspelled title, a title with wrong or missing Vietnamese accents, a title running off")
+    L.push("the canvas, or a title buried in clutter makes the whole cover unusable, and the cover")
+    L.push("will be thrown away and regenerated.")
+    L.push("")
+    L.push("NO OTHER TEXT ANYWHERE: the title above is the ONLY text in the whole image. Apart from")
+    L.push("it, draw no words, no digits, no wordmark, no logo type, no watermark, no signature, no")
+    L.push("caption and no label on any prop, in any language — not even small, blurred or")
+    L.push("decorative lettering.")
+  } else {
+    /* KHÔNG có tên dùng được ⇒ y NGUYÊN lối cũ: chừa trống, cấm chữ, web dán overlay. */
+    L.push("THE TITLE PLATE IS RESERVED — THIS IS THE ONE RULE THAT DECIDES IF THE COVER IS USABLE.")
+    L.push(`On this ${gw}x${gh} canvas, the rectangle from x=${z.x0} to x=${z.x1} and from y=${z.y0} to y=${z.y1}`)
+    L.push("(the left band, about 56% of the width, vertically centred) is a production TITLE PLATE.")
+    L.push("After generation, software composites the project's REAL title text into exactly those")
+    L.push("four coordinates. Therefore:")
+    L.push("- keep that rectangle visually CALM and EMPTY: a smooth surface, a soft gradient wash")
+    L.push("  or a plain brand-coloured area, and nothing else;")
+    L.push("- no part of the subject, no props, no ornaments, no sparkles, no busy texture and no")
+    L.push("  high-contrast edges may fall inside it;")
+    L.push("- keep the tone inside it EVEN, so light text stays readable across the whole plate;")
+    L.push("- decoration may come close to the plate and may touch its outer edge, but must not")
+    L.push("  cross into it.")
+    L.push("A busy or cluttered title plate makes the composited title unreadable, and the cover")
+    L.push("will be thrown away and regenerated.")
+    L.push("")
+    L.push("ABSOLUTELY NO TEXT: no letters, no digits, no words, no wordmark, no logo type, no")
+    L.push("watermark, no signature, no caption, in any language, anywhere in the image — not on")
+    L.push("the title plate, not on the subject, not on any prop.")
+    L.push("The real title is composited by software afterwards. Any text you draw would be")
+    L.push("misspelled, would be in the wrong language, and would collide with the real title.")
+  }
   L.push("")
 
   /* ── Hậu quả của việc cắt 16:9 ── */
   L.push("CROP CONSEQUENCE — the finished cover is the CENTRAL 16:9 BAND of this canvas:")
   L.push(`the top ${z.cutTop}px and the bottom ${z.cutBottom}px are cut away and never seen.`)
-  L.push("Keep everything essential — the subject's head and feet, the whole title plate —")
+  L.push(`Keep everything essential — the subject's head and feet, ${title ? "every letter of the title" : "the whole title plate"} —`)
   L.push("inside that central band; let only background bleed into the top and bottom strips.")
   L.push("")
 
@@ -377,7 +490,7 @@ export async function buildCoverPrompt({ project, contract, hasFile, readJson })
   L.push(`lighting, landscape ${gw}x${gh}.`)
 
   const prompt = L.join("\n")
-  return { prompt, attachments: b.attachments, branding: b }
+  return { prompt, attachments: b.attachments, branding: b, title, titleEmbedded: Boolean(title) }
 }
 
 /* ═════════════════ 3. Chạy job ═════════════════ */
@@ -446,10 +559,14 @@ export function coverRunning(ws, id) { return running.get(keyOf(ws, id)) ?? null
  * `COVER_SUBJECTS`: `cover.json` là file trên đĩa, người dùng sửa tay được, và một chuỗi
  * lạ lọt ra API là đúng thứ vừa bị cấm.
  *
+ * `titleEmbedded` cũng chỉ là BOOLEAN vì đúng lý do đó: web chỉ cần biết "chữ đã nằm
+ * trong ảnh chưa" để khỏi dán overlay lên lần thứ hai — nó KHÔNG cần, và không được
+ * nhận, chuỗi tên mà agent đã kẻ vào tranh. Tên dự án web vốn đã có sẵn từ #10.
+ *
  * @returns {{status:"none"|"running"|"ok"|"failed", path:string|null, updatedAt:string|null,
  *            titleZone:object, error:string|null,
  *            subject:"mascot-image"|"mascot-spec"|"project-assets"|"generic-placeholder"|null,
- *            placeholder:boolean}}
+ *            placeholder:boolean, titleEmbedded:boolean}}
  */
 export async function coverStatus(ws, id) {
   const job = coverRunning(ws, id)
@@ -468,6 +585,13 @@ export async function coverStatus(ws, id) {
     subject,
     /** Bìa KHÔNG neo được vào bất cứ thứ gì của dự án — web nên dán nhãn "ảnh tạm". */
     placeholder: subject === SUBJECT_PLACEHOLDER,
+    /**
+     * Tên dự án ĐÃ được kẻ vào chính tấm ảnh ⇒ web KHÔNG dán overlay tên lên nữa.
+     * `=== true` chứ không ép kiểu: ảnh bìa vẽ TRƯỚC bản vá 18/08 không có khoá này
+     * (và `cover.json` là file người dùng sửa tay được), thiếu/rác đều phải rơi về
+     * `false` — tức về đúng hành vi cũ, overlay CSS. Đoán nhầm chiều kia là chữ đúp.
+     */
+    titleEmbedded: meta?.titleEmbedded === true,
   }
 }
 
@@ -496,7 +620,7 @@ export async function startCover(ws, id, { imgHome = null, wait = false, force =
   /* Chưa cắt lần nào ⇒ không có manifest ⇒ null, KHÔNG phải lỗi: đó chính là dự án
      trắng trơn, và nhánh SUBJECT cuối đã có sẵn câu trả lời cho nó. */
   const readJson = async rel => readJsonFile(join(pdir, rel)).catch(() => null)
-  const { prompt, attachments, branding } = await buildCoverPrompt({ project, contract, hasFile, readJson })
+  const { prompt, attachments, branding, titleEmbedded } = await buildCoverPrompt({ project, contract, hasFile, readJson })
 
   if (!(await stillThere(ws, id))) return { status: "skipped", reason: "PROJECT_GONE", startedAt: null }
   try {
@@ -519,7 +643,7 @@ export async function startCover(ws, id, { imgHome = null, wait = false, force =
     status: "running", startedAt, updatedAt: null, finishedAt: null,
     size: null, titleZone: { ...TITLE_ZONE },
     source: { variantId: branding.variantId, primary: branding.primary, secondary: branding.secondary, attachments },
-    subject: branding.subject,
+    subject: branding.subject, titleEmbedded,
     prompt: "prompts/cover.txt", error: null, force: force === true,
   })
 
@@ -579,7 +703,7 @@ export async function startCover(ws, id, { imgHome = null, wait = false, force =
         status: "ok", startedAt, finishedAt, updatedAt: finishedAt,
         size: COVER_SIZE, titleZone: { ...TITLE_ZONE },
         source: { variantId: branding.variantId, primary: branding.primary, secondary: branding.secondary, attachments },
-        subject: branding.subject,
+        subject: branding.subject, titleEmbedded,
         prompt: "prompts/cover.txt", error: null,
       })
       const p = await readProject(ws, id).catch(() => null)
@@ -592,7 +716,7 @@ export async function startCover(ws, id, { imgHome = null, wait = false, force =
         status: "failed", startedAt, finishedAt, updatedAt: null,
         size: null, titleZone: { ...TITLE_ZONE },
         source: { variantId: branding.variantId, primary: branding.primary, secondary: branding.secondary, attachments },
-        subject: branding.subject,
+        subject: branding.subject, titleEmbedded,
         prompt: "prompts/cover.txt",
         error: lines.join("").includes("chưa đăng nhập") ? "NOT_LOGGED_IN" : "NO_ARTIFACT",
       })

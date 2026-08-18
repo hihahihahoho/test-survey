@@ -883,6 +883,15 @@ export const coverStatusSchema = z.looseObject({
   }).nullish(),
   size: z.array(z.number()).nullish(),
   error: z.string().nullish(),
+  /**
+   * Agent ĐÃ kẻ tên dự án vào chính tấm ảnh ⇒ app KHÔNG dán chữ đè lên nữa (chữ đúp).
+   *
+   * `optional`, KHÔNG `default(true)`: khoá này chỉ có từ agent 18/08 trở đi, và ảnh bìa
+   * vẽ trước đó nằm sẵn trên máy người dùng KHÔNG có chữ trong ảnh. Thiếu khoá phải đọc
+   * thành "chưa kẻ" — tức giữ nguyên overlay như cũ (§6.5-6: web mới + agent cũ vẫn chạy).
+   * Agent chỉ gửi BOOLEAN: tên dự án app đã có từ #10, #43 không việc gì phải trả lại.
+   */
+  titleEmbedded: z.boolean().optional(),
 });
 export const coverResponseSchema = z.looseObject({ cover: coverStatusSchema });
 export type CoverStatus = z.infer<typeof coverStatusSchema>;

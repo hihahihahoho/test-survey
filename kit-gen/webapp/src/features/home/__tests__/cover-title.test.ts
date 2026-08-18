@@ -15,7 +15,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  AUTO_COVER_PATH, COVER_ASPECT, TITLE_ZONE, isAutoCover, titleZoneStyle,
+  AUTO_COVER_PATH, COVER_ASPECT, TITLE_ZONE, isAutoCover, shouldOverlayTitle, titleZoneStyle,
 } from "../lib/cover-title";
 
 /** Tỉ lệ ô ảnh của thẻ — PHẢI khớp `aspect-[16/10]` trong `KitCover.tsx`. */
@@ -142,5 +142,51 @@ describe("isAutoCover — chỉ ảnh bìa TỰ SINH mới được overlay ch�
     expect(isAutoCover(null)).toBe(false);
     expect(isAutoCover(undefined)).toBe(false);
     expect(isAutoCover("")).toBe(false);
+  });
+});
+
+/**
+ * ══ CHỮ ĐÚP LÀ LỖI ĐẮT NHẤT Ở ĐÂY ═══════════════════════════════════════════
+ * Từ bản vá 18/08, agent kẻ TÊN DỰ ÁN thẳng vào tấm bìa (`agent/lib/cover.mjs` ③).
+ * Dán thêm chip tên lên đó = hai lần cùng một cái tên chồng lên nhau, ngay trên màn
+ * hình đầu tiên của app. Chiều ngược lại cũng có giá: tắt overlay nhầm trên một tấm
+ * bìa CŨ (trong ảnh không có chữ) là tên dự án biến mất khỏi tấm bìa.
+ * Nên hàm này bị khoá theo cả hai chiều, cộng ca "chưa biết".
+ */
+describe("shouldOverlayTitle — dán tên đè lên bìa hay không", () => {
+  const AUTO = AUTO_COVER_PATH;
+
+  it("bìa tự sinh CŨ (agent chưa gửi cờ) → vẫn dán, đúng hành vi trước bản vá", () => {
+    expect(shouldOverlayTitle({ coverPath: AUTO, cover: {}, metaPending: false })).toBe(true);
+    expect(shouldOverlayTitle({ coverPath: AUTO, cover: undefined, metaPending: false })).toBe(true);
+    expect(shouldOverlayTitle({ coverPath: AUTO, cover: null, metaPending: false })).toBe(true);
+  });
+
+  it("agent BÁO đã kẻ chữ vào tranh → KHÔNG dán nữa (không chữ đúp)", () => {
+    expect(shouldOverlayTitle({ coverPath: AUTO, cover: { titleEmbedded: true }, metaPending: false })).toBe(false);
+  });
+
+  it("agent báo CHƯA kẻ (dự án không có tên dùng được) → dán như cũ", () => {
+    expect(shouldOverlayTitle({ coverPath: AUTO, cover: { titleEmbedded: false }, metaPending: false })).toBe(true);
+  });
+
+  it("cờ không phải boolean `true` đều là 'chưa kẻ' — không suy diễn từ giá trị rác", () => {
+    for (const junk of ["true", 1, {}, [], "yes"]) {
+      const cover = { titleEmbedded: junk } as unknown as { titleEmbedded?: boolean };
+      expect(shouldOverlayTitle({ coverPath: AUTO, cover, metaPending: false })).toBe(true);
+    }
+  });
+
+  it("CHƯA BIẾT (query #43 còn đang bay) → chưa dán, để chip tên không nháy lên rồi biến mất", () => {
+    expect(shouldOverlayTitle({ coverPath: AUTO, cover: undefined, metaPending: true })).toBe(false);
+    // …và ngay khi câu trả lời về, ca bìa cũ dán lại như thường.
+    expect(shouldOverlayTitle({ coverPath: AUTO, cover: {}, metaPending: false })).toBe(true);
+  });
+
+  it("ảnh bìa user tự chọn / chưa có bìa: KHÔNG bao giờ dán, bất kể cờ nói gì", () => {
+    for (const p of ["kits/chinh/01-btn-pill-red.png", null, undefined, ""]) {
+      expect(shouldOverlayTitle({ coverPath: p, cover: { titleEmbedded: false }, metaPending: false })).toBe(false);
+      expect(shouldOverlayTitle({ coverPath: p, cover: undefined, metaPending: true })).toBe(false);
+    }
   });
 });

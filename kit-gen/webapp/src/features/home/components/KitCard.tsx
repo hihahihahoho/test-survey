@@ -98,6 +98,8 @@ export function KitCard({
         /* Chỉ dự án ĐÃ TỪNG chạy một lượt gen mới có thể đang được vẽ bìa ngầm: móc
            `maybeAutoCover` của agent nằm ở `finish()` của lượt chạy. Dự án trắng thì
            không có gì để chờ, nên nó KHÔNG gửi request nào — xem KitCover.
+           (Dự án ĐÃ có bìa tự sinh cũng hỏi `#43`, đúng MỘT lần, để biết tên dự án đã
+           được kẻ vào tranh hay chưa — lý do đầy đủ ở KitCover, khối `needsTitleMeta`.)
 
            `&& !fromCache` — THẺ CHỈ-CÓ-TRONG-CACHE KHÔNG ĐƯỢC HỎI SERVER.
            `kitgen.projects.cache.v1` vẽ lưới ngay từ lần sơn đầu tiên (§2.5-4: «agent
