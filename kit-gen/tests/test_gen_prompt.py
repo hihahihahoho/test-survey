@@ -218,6 +218,15 @@ class AttachmentListTest(unittest.TestCase):
         ])
 
 
+class SteeringPromptTest(unittest.TestCase):
+    def test_v16_no_bias_va_core_la_bien_ngoai(self):
+        prompt = (ROOT / "gen.sh").read_text(encoding="utf-8")
+        self.assertIn("OUTERMOST boundary of the functional CORE", prompt)
+        self.assertIn("fit the continuous core INSIDE it, never beyond", prompt)
+        self.assertIn("must match the gray silhouette exactly", prompt)
+        self.assertNotIn("deliberately expanded", prompt)
+
+
 class ChromaKeyTest(unittest.TestCase):
     def test_nhan_dien_ca_4_key_tu_chuoi_bg(self):
         for name in ("magenta", "green", "cyan", "blue"):

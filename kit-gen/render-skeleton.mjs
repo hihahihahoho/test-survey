@@ -83,8 +83,8 @@ const cfgPath = process.argv[2] ? resolve(process.argv[2]) : resolve(HERE, "styl
 const outDir = process.argv[3] ? resolve(process.argv[3]) : resolve(HERE, "skeleton")
 const cfg = JSON.parse(readFileSync(cfgPath, "utf8"))
 /* Production gen.sh bật v16 qua env để contract JSON vẫn giữ nguyên schema.
-   Test/legacy callers không đặt env thì renderer giữ hình học cũ; agent skeleton
-   cũng đặt cùng cờ trong buildCommand(). */
+   Callers không đặt env vẫn dùng cùng target geometry; chỉ không tự bật guide,
+   còn mọi guide được bật đều dùng bảng no-bias v16 trong skeleton-svg.js. */
 const productionGridGuide = process.env.KITGEN_GRID_GUIDE === "v16"
 
 const { mod, wasm } = loadResvg()

@@ -105,6 +105,37 @@ class MagentaSheetTest(unittest.TestCase):
         self.assertTrue(out['ok'])
         self.assertEqual(code, 0)
 
+    def test_validator_cham_core_khong_nuot_decoration(self):
+        im = Image.new('RGB', (300, 220), (0, 255, 0))
+        draw = ImageDraw.Draw(im)
+        draw.rectangle((70, 70, 229, 149), fill=(220, 20, 20))
+        # Decoration liên thông, tràn cả trái/phải/dưới.
+        draw.rectangle((40, 130, 99, 189), fill=(220, 20, 20))
+        draw.rectangle((180, 145, 199, 214), fill=(220, 20, 20))
+        data = contract('#00FF00', w=160 / 300, h=80 / 220)
+        code, out = run_tool(im, data)
+        cell = out['cells'][0]
+        self.assertEqual(code, 0)
+        self.assertEqual(cell['actual'], [70, 70, 160, 80])
+        self.assertEqual(cell['core'], [70, 70, 230, 150])
+        self.assertEqual(cell['decoration'], [40, 130, 200, 215])
+        self.assertEqual(cell['deviation']['maxEdgePx'], 0)
+        self.assertEqual(cell['status'], 'ok')
+
+    def test_validator_ghi_ca_decoration_roi(self):
+        im = Image.new('RGB', (300, 220), (0, 255, 0))
+        draw = ImageDraw.Draw(im)
+        draw.rectangle((70, 70, 229, 149), fill=(220, 20, 20))
+        draw.ellipse((40, 30, 55, 45), fill=(220, 20, 20))
+        data = contract('#00FF00', w=160 / 300, h=80 / 220)
+        code, out = run_tool(im, data)
+        cell = out['cells'][0]
+        self.assertEqual(code, 0)
+        self.assertEqual(cell['core'], [70, 70, 230, 150])
+        self.assertEqual(cell['silhouette'], [40, 30, 230, 150])
+        self.assertEqual(cell['decoration'], [40, 30, 56, 46])
+        self.assertEqual(cell['status'], 'ok')
+
 
 class KeyResolutionTest(unittest.TestCase):
     def test_doc_duoc_ca_4_ten_key(self):

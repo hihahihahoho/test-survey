@@ -44,7 +44,7 @@ def node_json(expression, payload):
 
 
 class GridBiasGeometryTest(unittest.TestCase):
-    def test_v16_bias_is_absolute_px_not_percentage(self):
+    def test_v16_bias_defaults_to_zero_without_style_signal(self):
         expression = (
             "[globalThis.KITSKEL.compensationFor(300, 100),"
             " globalThis.KITSKEL.compensationFor(900, 300),"
@@ -53,11 +53,29 @@ class GridBiasGeometryTest(unittest.TestCase):
         small, large, thin = node_json(expression, {})
         self.assertEqual(small["kind"], "rect")
         self.assertEqual(large["kind"], "rect")
-        self.assertEqual(small["edges"], [14, 6, 19, 8])
+        self.assertEqual(small["edges"], [0, 0, 0, 0])
         self.assertEqual(large["edges"], small["edges"])
-        self.assertNotEqual(14 / 300, 14 / 900)
+        self.assertEqual(small["left"], 0)
         self.assertEqual(thin["kind"], "bar")
-        self.assertEqual(thin["edges"], [14, 7, 18, 5])
+        self.assertEqual(thin["edges"], [0, 0, 0, 0])
+
+    def test_v16_guide_never_enlarges_target(self):
+        sheet = {
+            "id": "ui",
+            "grid": {"cols": 2, "rows": 1},
+            "gridGuide": True,
+            "components": [
+                {"skel": {"shape": "pill", "w": 0.78, "h": 0.4}},
+                {"skel": {"shape": "circle", "w": 0.55, "h": 0.82}},
+            ],
+        }
+        result = node_json(
+            "[0,1].map(i => globalThis.KITSKEL.guideGeometry(JSON.parse(process.env.PAYLOAD), JSON.parse(process.env.PAYLOAD).components[i], i))",
+            sheet,
+        )
+        for item in result:
+            self.assertEqual(item["applied"], [0, 0, 0, 0])
+            self.assertEqual(item["guide"], item["target"])
 
     def test_nine_element_layout_is_opt_in_by_contract_shape(self):
         nine = {

@@ -35,27 +35,26 @@
   const SAFE_BORDER = 4;            // .safe border-width
   const SAFE_RADIUS = 6;            // .safe border-radius
 
-  /* GRID / BIAS v16 — MỘT nguồn số học cho ảnh đính kèm.
-     Source: experiments/sprite-sheet-fairy-gray-safe-v6/
-     compensation-v16-final.json. v16 thắng ở metric intrusion một phía:
-       · gray silhouette + nested guides khóa lõi;
-       · bù bằng PX tuyệt đối, không dùng phần trăm;
-       · nở nhẹ khoảng 1.10× là sweet spot; nở mạnh làm model bỏ guide.
-     Trung vị d(L/T/R/B) đã calibrate ở v16-r1:
-       bar = [14, 7, 18, 5], rect = [14, 6, 19, 8],
-       square = [9, 23, 11, 16].
-     margin 8px giữ guide trong ô. Không đổi các số này thành %; hình mảnh/dày
-     phải nhận cùng một bù mép tuyệt đối theo family. */
+  /* GRID / BIAS v16 — MỘT nguồn hình học cho ảnh đính kèm.
+     Bản nghiệm thu 2.1.31 cho thấy bias dương đã làm model style men pastel
+     vẽ overshoot (rim + hoa + tua rua tràn khỏi core). Vì không có tín hiệu
+     style-level nào chứng minh cần nở, production mặc định KHÔNG bù mép:
+       · gray silhouette/local guide = BIÊN NGOÀI CÙNG của functional CORE;
+       · bias = 0 để model không bị yêu cầu vẽ lớn hơn contract;
+       · overflow core/decor vẫn giữ được trong bleed và crop, undershoot mới
+         là lỗi hình học.
+     Nếu một contract tương lai khai báo rim dày, bias phải là một override có
+     chủ ý ở contract đó — không áp cứng một bảng calibrate cho mọi style. */
   const GRID_GUIDE = Object.freeze({
     version: "v16",
     marginPx: 8,
-    sweetSpotScale: 1.10,
+    sweetSpotScale: 1,
     stroke: "#c8c8c8",
     width: 3,
     edgePx: Object.freeze({
-      bar: Object.freeze({ left: 14, top: 7, right: 18, bottom: 5 }),
-      rect: Object.freeze({ left: 14, top: 6, right: 19, bottom: 8 }),
-      square: Object.freeze({ left: 9, top: 23, right: 11, bottom: 16 }),
+      bar: Object.freeze({ left: 0, top: 0, right: 0, bottom: 0 }),
+      rect: Object.freeze({ left: 0, top: 0, right: 0, bottom: 0 }),
+      square: Object.freeze({ left: 0, top: 0, right: 0, bottom: 0 }),
     }),
     nineElement: Object.freeze({ columns: 3, rows: 3 }),
   });
@@ -118,7 +117,7 @@
     return { x: cell.x + CELL_BORDER + ex, y: cell.y + CELL_BORDER + ey, width: ew, height: eh };
   }
 
-  /* Nở guide theo px, không kéo target contract và không cho guide ra ngoài ô. */
+  /* Guide v16 trùng target; production không tự nở guide. */
   function guideGeometry(sh, comp, index) {
     const cell = cellRect(sh, index);
     const target = targetRect(sh, comp, index);
@@ -137,9 +136,8 @@
       right: cell.x + cell.width - margin,
       bottom: cell.y + cell.height - margin,
     };
-    /* Không dịch core khỏi contract: nếu ô chật, giảm phần nở ở mép chật.
-       Đây là nhánh production-safe cho manifest 4×4/2×2; v16 nine-element
-       nguyên bản có thể fit cả target + asked khi contract đã dành chỗ. */
+    /* Không dịch core khỏi contract; giữ guard clamp cho các contract cũ nếu
+       sau này có bias override. Với v16 production hiện tại, bias luôn bằng 0. */
     const applied = [
       Math.min(bias.left, Math.max(0, target.x - allowed.left)),
       Math.min(bias.top, Math.max(0, target.y - allowed.top)),

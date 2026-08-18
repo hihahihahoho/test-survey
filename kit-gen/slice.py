@@ -687,8 +687,9 @@ def measure_core(canvas, coverage=0.5):
 
 
 # ── ĐO-KÝ-SỔ HÌNH HỌC SAU CÙNG ────────────────────────────────────────────────
-# `measure_core()` ở trên phục vụ snap placement, cố ý dùng projection hàng/cột.
-# Ledger cần phép đo khác: tách silhouette chính khỏi đồ trang trí rồi lấy core
+# Projection helper cũ vẫn giữ cho callers ngoài engine.
+# Snap/ledger dùng chung phép đo core/decor bên dưới: tách silhouette chính khỏi đồ
+# trang trí rồi lấy core
 # là thành phần liên thông lớn nhất của lớp enamel. Thuật toán bám
 # experiments/sprite-sheet-fairy-gray-safe-v6/measure-core-alignment.py: màu tím
 # là enamel, viền màu khác dính core là face/enamel; fallback màu tổng quát dùng
@@ -768,6 +769,74 @@ def _dilate_mask(mask, width, height, radius=1):
     return current
 
 
+def _projection_core_mask(silhouette, width, height):
+    """Tách mặt liên tục khỏi tua/hoa cùng màu bằng erosion + projection.
+
+    Erosion làm rụng các nhánh mảnh trước khi lấy thành phần lớn nhất; projection
+    50% giữ phần plateau liên tục thay vì một decoration dày ở một phía. Bbox
+    được nới lại đúng bán kính erosion để không biến core thành ảnh nhỏ giả.
+    Đây là fallback cho asset không có màu enamel riêng (nhánh tím/median vẫn
+    được ưu tiên ở ``_core_mask_for_silhouette``).
+    """
+    main_box = _mask_bbox(silhouette, width, height)
+    main_size = sum(1 for value in silhouette if value)
+    if not main_box or not main_size:
+        return silhouette, main_size
+
+    radius = max(2, min(12, round(min(width, height) * 0.025)))
+    eroded = _erode_mask(silhouette, width, height, radius)
+    seed, seed_size = _largest_component(eroded, width, height)
+    if seed_size < max(16, int(main_size * 0.04)):
+        return silhouette, main_size
+
+    rows = [0] * height
+    cols = [0] * width
+    for index, value in enumerate(seed):
+        if not value:
+            continue
+        x, y = index % width, index // width
+        rows[y] += 1
+        cols[x] += 1
+    if not rows or not max(rows) or not max(cols):
+        return silhouette, main_size
+    row_floor = max(rows) * 0.5
+    col_floor = max(cols) * 0.5
+    ys = [y for y, count in enumerate(rows) if count >= row_floor]
+    xs = [x for x, count in enumerate(cols) if count >= col_floor]
+    if not xs or not ys:
+        return silhouette, main_size
+    box = (
+        max(main_box[0], min(xs) - radius),
+        max(main_box[1], min(ys) - radius),
+        min(main_box[2], max(xs) + 1 + radius),
+        min(main_box[3], max(ys) + 1 + radius),
+    )
+    if box == main_box:
+        return silhouette, main_size
+
+    candidate = bytearray(width * height)
+    candidate_size = 0
+    for index, value in enumerate(silhouette):
+        if not value:
+            continue
+        x, y = index % width, index // width
+        if box[0] <= x < box[2] and box[1] <= y < box[3]:
+            candidate[index] = 1
+            candidate_size += 1
+    if candidate_size < max(16, int(main_size * 0.05)):
+        return silhouette, main_size
+    return candidate, candidate_size
+
+
+def _difference_bbox(outer, inner, width, height):
+    """Bbox phần foreground không thuộc core; dùng để theo dõi overflow decor."""
+    remainder = bytearray(width * height)
+    for index, value in enumerate(outer):
+        if value and not inner[index]:
+            remainder[index] = 1
+    return _mask_bbox(remainder, width, height)
+
+
 def _median_rgb(pixels, indices, width):
     if not indices:
         return (0, 0, 0)
@@ -778,12 +847,12 @@ def _median_rgb(pixels, indices, width):
 
 
 def _core_mask_for_silhouette(canvas, silhouette, width, height):
-    """Dò core màu enamel, fallback về silhouette nếu không có lớp màu riêng.
+    """Dò core màu enamel, fallback morphology nếu không có lớp màu riêng.
 
     Nhánh tím/vàng giữ đúng mask thí nghiệm. Nhánh tổng quát dùng màu trung vị
     của phần sâu trong silhouette, nên synthetic red/blue + viền giả vẫn đo đúng;
-    vật thể đơn sắc không bị co giả vì bbox candidate trùng silhouette thì giữ
-    nguyên toàn bộ silhouette.
+    vật thể đơn sắc không bị co giả nếu morphology không chứng minh được plateau
+    riêng; khi có tua cùng màu, projection sau erosion tách phần liên tục chính.
     """
     pixels = canvas.convert("RGBA").load()
     main_indices = [i for i, value in enumerate(silhouette) if value]
@@ -805,7 +874,7 @@ def _core_mask_for_silhouette(canvas, silhouette, width, height):
     inner = _erode_mask(silhouette, width, height, depth)
     inner_indices = [i for i, value in enumerate(inner) if value]
     if not inner_indices:
-        return silhouette, main_size
+        return _projection_core_mask(silhouette, width, height)
     median = _median_rgb(pixels, inner_indices, width)
     # 72px là biên đủ rộng cho gradient nhẹ, nhưng vẫn tách viền màu giả.
     candidate = bytearray(width * height)
@@ -817,13 +886,13 @@ def _core_mask_for_silhouette(canvas, silhouette, width, height):
     main_box = _mask_bbox(silhouette, width, height)
     core_box = _mask_bbox(core, width, height)
     if not core_box or core_size < max(16, int(main_size * 0.05)):
-        return silhouette, main_size
+        return _projection_core_mask(silhouette, width, height)
     # Không có viền màu riêng: candidate phủ gần hết thân → đây là chính thân.
     if core_box == main_box or core_size >= int(main_size * 0.82):
-        return silhouette, main_size
+        return _projection_core_mask(silhouette, width, height)
     if (core_box[2] - core_box[0] < max(3, round((main_box[2] - main_box[0]) * 0.2))
             or core_box[3] - core_box[1] < max(3, round((main_box[3] - main_box[1]) * 0.2))):
-        return silhouette, main_size
+        return _projection_core_mask(silhouette, width, height)
     return core, core_size
 
 
@@ -874,13 +943,15 @@ def _xywh_from_rect(rect):
     return [rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]]
 
 
-def measure_asset_geometry(canvas, contract_safe=None, threshold=SIZE_DEVIATION_THRESHOLD_PX):
+def measure_asset_geometry(canvas, contract_safe=None, threshold=SIZE_DEVIATION_THRESHOLD_PX,
+                           shape=None):
     """Đo geometry THẬT của canvas sau mọi bước tách/nắn.
 
-    `contract_safe` là `[x, y, w, h]` của skeleton trong canvas; kết quả `core`
-    và `enamel` là bbox `[left, top, right, bottom]` theo pixel canvas. `safe`
-    dùng core đo được (fallback enamel/silhouette), để layout scale theo ảnh thật.
-    Không trả path, chỉ số đo và cờ QA.
+    `contract_safe` là `[x, y, w, h]` của skeleton trong canvas; kết quả `core`,
+    `enamel`, `silhouette`, `decoration` là bbox `[left, top, right, bottom]`
+    theo pixel canvas. `safe` dùng core đo được (fallback enamel/silhouette), để
+    snap/crop giữ đúng functional surface mà không để decoration điều khiển scale.
+    QA dùng ``core_undershoot`` một phía; overflow ghi riêng, không tự gen lại.
     """
     rgba = canvas.convert("RGBA")
     width, height = rgba.size
@@ -890,42 +961,75 @@ def measure_asset_geometry(canvas, contract_safe=None, threshold=SIZE_DEVIATION_
         for x in range(width):
             if alpha[x, y] >= 128:
                 visible[y * width + x] = 1
-    silhouette, silhouette_size = _largest_component(visible, width, height)
-    core, core_size = _core_mask_for_silhouette(rgba, silhouette, width, height)
-    enamel = _enamel_mask_from_core(silhouette, core, width, height)
-    silhouette_box = _mask_bbox(silhouette, width, height)
+    # Core tìm trên thân liên tục lớn nhất; silhouette giữ TOÀN BỘ foreground để
+    # decoration rời core vẫn xuất hiện trong ledger/crop tracking, không biến mất
+    # chỉ vì nó không nối 4-neighbor với mặt chính.
+    body, body_size = _largest_component(visible, width, height)
+    core, core_size = _core_mask_for_silhouette(rgba, body, width, height)
+    enamel = _enamel_mask_from_core(body, core, width, height)
+    silhouette_box = _mask_bbox(visible, width, height)
     core_box = _mask_bbox(core, width, height)
     enamel_box = _mask_bbox(enamel, width, height)
+    decoration_box = _difference_bbox(visible, core, width, height)
     safe_rect = core_box or enamel_box or silhouette_box
     safe = _xywh_from_rect(safe_rect)
 
     contract = list(contract_safe) if contract_safe is not None else None
     edges = None
     max_edge = None
+    undershoot = None
+    overflow = None
     if contract is not None and safe_rect is not None:
         target = (contract[0], contract[1], contract[0] + contract[2], contract[1] + contract[3])
         errors = tuple(safe_rect[i] - target[i] for i in range(4))
         edges = {"left": errors[0], "top": errors[1], "right": errors[2], "bottom": errors[3]}
-        max_edge = max(abs(value) for value in errors)
+        # Chỉ thiếu vào safe-zone là lỗi. Core/decor tràn ra ngoài còn cắt được.
+        undershoot = {
+            "left": max(0, errors[0]),
+            "top": max(0, errors[1]),
+            "right": max(0, -errors[2]),
+            "bottom": max(0, -errors[3]),
+        }
+        overflow = {
+            "left": max(0, -errors[0]),
+            "top": max(0, -errors[1]),
+            "right": max(0, errors[2]),
+            "bottom": max(0, errors[3]),
+        }
+        max_edge = max(undershoot.values())
     threshold = int(threshold)
     return {
         "silhouette": list(silhouette_box) if silhouette_box else None,
         "core": list(core_box) if core_box else None,
         "enamel": list(enamel_box) if enamel_box else None,
+        "decoration": list(decoration_box) if decoration_box else None,
         "safe": safe,
         "contractSafe": contract,
         "deviation": {
             "edgesPx": edges,
             "maxEdgePx": max_edge,
+            "undershootPx": undershoot,
+            "overflowPx": overflow,
+            "metric": "core_undershoot",
         },
         "sizeDeviation": {
             "maxEdgePx": max_edge,
             "flagged": bool(max_edge is not None and max_edge > threshold),
             "threshold": threshold,
             "edgesPx": edges,
+            "undershootPx": undershoot,
+            "overflowPx": overflow,
+            "metric": "core_undershoot",
         },
-        "measured": bool(silhouette_size),
+        "measured": bool(body_size),
     }
+
+
+def _measured_core_box(canvas):
+    """Core bbox duy nhất cho snap, free-safe và ledger; decor không điều khiển scale."""
+    measured = measure_asset_geometry(canvas)
+    box = measured.get("core")
+    return tuple(box) if box else None
 
 
 # Tên dễ đọc cho test/tool ngoài engine; giữ một API duy nhất.
@@ -939,7 +1043,7 @@ def align_content_safe(canvas, safe, tag=None):
     coverage cao bỏ qua cánh/hoa/tua rua mảnh và bám vào mặt element liên tục.
     Contract vẫn là tọa độ cố định; phép này chỉ sửa placement do model.
     """
-    core = measure_core(canvas, coverage=0.9)
+    core = _measured_core_box(canvas)
     if core is None:
         return canvas
     sx, sy, sw, sh = safe
@@ -976,7 +1080,7 @@ def snap_to_safe(canvas, sk, safe):
         return canvas
     W, H = canvas.size
     sx, sy, sw, sh = safe
-    core = measure_core(canvas)
+    core = _measured_core_box(canvas)
     if core is None:
         return canvas
     cl, ct, cr, cb = core
@@ -1687,7 +1791,7 @@ if __name__ == "__main__":
                 elif sk.get("free"):
                     # KHUNG ĐỘNG: không nắn art — safe zone = LÕI ĐO ĐƯỢC của chính
                     # art này (padding tự sinh khi cắt, đúng ý "để AI vẽ tự do")
-                    core = measure_core(canvas)
+                    core = _measured_core_box(canvas)
                     safe_box = [core[0], core[1], core[2] - core[0], core[3] - core[1]] \
                         if core else [sx, sy, sw, sh_]
                 else:
@@ -1726,15 +1830,21 @@ if __name__ == "__main__":
                             print(f"  · {sid}/{comp['file']}: dọn {int(kill.sum())}px đốm tối mồ côi")
                 if sk["shape"] == "full":
                     ledger = {
-                        "silhouette": None, "core": None, "enamel": None,
+                        "silhouette": None, "core": None, "enamel": None, "decoration": None,
                         "safe": contract_safe_box, "contractSafe": contract_safe_box,
-                        "deviation": {"edgesPx": None, "maxEdgePx": None},
+                        "deviation": {"edgesPx": None, "maxEdgePx": None,
+                                       "undershootPx": None, "overflowPx": None,
+                                       "metric": "core_undershoot"},
                         "sizeDeviation": {"maxEdgePx": None, "flagged": False,
-                                           "threshold": qa_threshold, "edgesPx": None},
+                                           "threshold": qa_threshold, "edgesPx": None,
+                                           "undershootPx": None, "overflowPx": None,
+                                           "metric": "core_undershoot"},
                         "measured": False,
                     }
                 else:
-                    ledger = measure_asset_geometry(canvas, contract_safe_box, qa_threshold)
+                    ledger = measure_asset_geometry(
+                        canvas, contract_safe_box, qa_threshold, shape=sk.get("shape")
+                    )
                     safe_box = ledger["safe"] or contract_safe_box
                     if ledger["sizeDeviation"]["flagged"]:
                         print(f"  ⚠ QA {sid}/{comp['file']}: sizeDeviation "
@@ -1766,6 +1876,8 @@ if __name__ == "__main__":
                          "content_at": [ox, oy], "safe": safe_box,
                          "contractSafe": contract_safe_box,
                          "core": ledger["core"], "enamel": ledger["enamel"],
+                         "decoration": ledger["decoration"],
+                         "deviation": ledger["deviation"],
                          "sizeDeviation": ledger["sizeDeviation"]}
                 blend = asset_blend(sk)
                 if blend:

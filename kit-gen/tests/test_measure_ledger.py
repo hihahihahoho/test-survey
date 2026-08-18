@@ -50,6 +50,36 @@ class MeasureLedgerTest(unittest.TestCase):
             {"left": 16, "top": 15, "right": 16, "bottom": 15},
         )
 
+    def test_core_tach_decoration_dinh_cung_mau_va_cham_mot_phia(self):
+        image = Image.new("RGBA", (300, 220), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(image)
+        # Core + hoa/mây/tua cùng màu, liên thông với core nên largest blob cũ
+        # nuốt cả decoration. Erosion + projection phải giữ mặt plateau.
+        draw.rounded_rectangle((70, 70, 230, 150), 20, fill=(240, 150, 170, 255))
+        draw.ellipse((40, 130, 100, 190), fill=(240, 150, 170, 255))
+        draw.rectangle((180, 145, 200, 215), fill=(240, 150, 170, 255))
+
+        result = slice_module.measure_asset_geometry(
+            image, [70, 70, 160, 80], threshold=15
+        )
+
+        self.assertEqual(result["core"], [70, 70, 224, 151])
+        self.assertEqual(result["silhouette"], [40, 70, 231, 216])
+        self.assertIsNotNone(result["decoration"])
+        self.assertEqual(result["sizeDeviation"]["metric"], "core_undershoot")
+        self.assertFalse(result["sizeDeviation"]["flagged"])
+
+    def test_core_overflow_khong_bi_cham_loi(self):
+        result = slice_module.measure_asset_geometry(
+            self.make_asset(), [40, 40, 50, 30], threshold=15
+        )
+        self.assertEqual(result["silhouette"], [4, 25, 135, 95])
+        self.assertEqual(result["decoration"], [4, 25, 135, 95])
+        self.assertEqual(result["sizeDeviation"]["maxEdgePx"], 0)
+        self.assertFalse(result["sizeDeviation"]["flagged"])
+        self.assertGreater(result["sizeDeviation"]["overflowPx"]["left"], 0)
+        self.assertGreater(result["sizeDeviation"]["overflowPx"]["bottom"], 0)
+
     def test_measurement_json_chi_co_so_va_so_do(self):
         result = slice_module.measure_asset_geometry(self.make_asset(), [35, 35, 90, 50])
         encoded = json.dumps(result, ensure_ascii=False)

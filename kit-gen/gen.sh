@@ -35,7 +35,7 @@ fi
 # lượng mực và vẽ sai hẳn dáng pose — nó đẻ ra ảnh ref SAI mà không ai biết, rồi
 # mọi ảnh gen sau đó lệch bố cục. Render hỏng thì DỪNG TO ở đây, đừng đốt quota
 # codex cho một lượt gen đã sai từ đầu vào.
-# v16: ảnh attachment có gray registration grid + nested safe guides + bias px.
+# v16: ảnh attachment có gray registration grid + nested safe guides; bias mặc định 0.
 # raw/output vẫn do model vẽ trên chroma-key sạch; slice.py không đọc ảnh skeleton.
 export KITGEN_GRID_GUIDE=v16
 if ! node render-skeleton.mjs; then
@@ -379,22 +379,22 @@ for s in cfg["styles"]:
             "The FIRST attached image is the geometry contract and the edit target for this",
             "exact sheet: it decides canvas, cell positions, sizes, proportions and centers.",
             "In each cell the dark rectangular frame is the INNER CROP BOX and the gray",
-            "silhouette, centered inside it, is the exact required functional content.",
+            "silhouette, centered inside it, is the exact required functional CORE.",
             "",
             "The inner crop box is a production SAFE ZONE: after generation, software crops",
             "each asset using those exact four coordinates. Therefore:",
-            "- the finished functional surface must keep the EXACT center of the crop box;",
-            "- it must fill the gray silhouette exactly — same left, top, right and bottom",
-            "  extents, same footprint;",
-            "- NEVER shrink the functional surface to make room for a border or rim;",
+            "- the finished functional CORE must keep the EXACT center of the crop box;",
+            "- its continuous CORE must match the gray silhouette exactly — same left, top,",
+            "  right and bottom extents, same footprint;",
+            "- NEVER shrink the CORE to make room for a border or rim;",
             "- never enlarge, stretch, move, offset or recenter it;",
-            "- a shifted or smaller functional surface is unusable and will be regenerated.",
+            "- a shifted or undersized CORE is unusable and will be regenerated.",
             "",
-            "V16 GUIDE COMPENSATION: the attached gray silhouette and local guide box are",
-            "deliberately expanded by a small, fixed ABSOLUTE pixel bias calibrated for",
-            "the element family (not by a percentage). This is the ~1.10x sweet spot;",
-            "do not undo the expansion, normalize it, or fit the artwork back to the old",
-            "unexpanded size. The guide is an input correction, not extra artwork.",
+            "V16 GUIDE CONTRACT: the attached gray silhouette and local guide box mark the",
+            "OUTERMOST boundary of the functional CORE for this style. The guide is not an",
+            "invitation to enlarge the artwork: fit the continuous core INSIDE it, never beyond",
+            "its left, top, right or bottom edge. If a rim or decoration needs more room, put it",
+            "outside the core and let it overflow; do not spend core pixels on the rim.",
             "",
             "Build each element in three layers, from the inside out:",
             "1) one continuous, clean content surface replacing the gray silhouette, on the",
