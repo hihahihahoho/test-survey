@@ -86,7 +86,16 @@ jobs:
         run: npm run test:integration
       - name: Verify local agent
         run: node ../agent/test-agent.mjs
+      # Cache ~/.cache/ms-playwright: khong cache thi MOI run tai ~150MB Chromium tu CDN
+      # Playwright — ngay 2026-08-18 CDN treo lam release 2.1.29 ket 40+ phut o step nay.
+      # timeout-minutes de CDN treo thi step FAIL nhanh cho rerun, khong ngoi cho vo han.
+      - name: Cache Chromium (Playwright)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('kit-gen/webapp/package-lock.json') }}
       - name: Install Chromium
+        timeout-minutes: 12
         run: npx playwright install --with-deps chromium
       # --workers=1 LÀ CỐ Ý, KHÔNG PHẢI "cho chắc".
       # Hai ca @visual của trang Cài đặt đỏ NGẪU NHIÊN khi playwright chạy `fullyParallel`
