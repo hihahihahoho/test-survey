@@ -318,7 +318,9 @@ test("§5 — mục sidebar tên «Cài đặt style» và mở đúng dialog C�
 
   await entry.click();
   await expect(page.getByRole("dialog", { name: "Cài đặt" })).toBeVisible();
-  await expect(page).toHaveURL(/settings=requirements/);
+  // Nút tên «Cài đặt style» thì phải mở đúng tab Phong cách — 2/3 blind tester
+  // đợt 2026-08-18 vấp cảnh mở ra lại là tab Yêu cầu.
+  await expect(page).toHaveURL(/settings=style/);
   // Mở dialog KHÔNG đụng mục nền (lỗi #5 của đợt trước vẫn phải đứng).
   await expect(page).toHaveURL(/section=images/);
 });

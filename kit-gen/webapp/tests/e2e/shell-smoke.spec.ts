@@ -382,7 +382,7 @@ test("opening project settings keeps the background section untouched", async ({
     .getByRole("button", { name: "Cài đặt style", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Cài đặt dự án" })).toBeVisible();
   await expect(page).toHaveURL(/section=mascot/);
-  await expect(page).toHaveURL(/settings=requirements/);
+  await expect(page).toHaveURL(/settings=style/);
 
   await page.getByRole("button", { name: "Đóng" }).click();
   await expect(page.getByRole("dialog", { name: "Cài đặt dự án" })).toHaveCount(0);
