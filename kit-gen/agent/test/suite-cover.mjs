@@ -20,7 +20,7 @@ import { createAgent } from "../server.mjs"
 import {
   TITLE_ZONE, COVER_REL, buildCoverPrompt, titleZonePixels, collectBranding, expandHomePath,
   SUBJECT_MASCOT_IMAGE, SUBJECT_MASCOT_SPEC, SUBJECT_PROJECT_ASSETS, SUBJECT_PLACEHOLDER,
-  COVER_TITLE_MAX, sanitizeCoverTitle,
+  COVER_TITLE_MAX, sanitizeCoverTitle, hasMascotCoverSource,
 } from "../lib/cover.mjs"
 
 const execFile = promisify(execFileCb)
@@ -124,6 +124,8 @@ export async function run({ api, wsRoot, agentDir }) {
     includes(prompt, `y=${z.y0} to y=${z.y1}`, "toạ độ dọc trong prompt")
     includes(prompt, "TITLE PLACEMENT", "gọi tên chỗ đặt tiêu đề")
     eq(titleEmbedded, true, "có tên dùng được ⇒ chữ nằm trong artwork")
+    includes(prompt, "MATERIAL INTEGRATION", "chữ phải hòa vào chất liệu cảnh")
+    includes(prompt, "flat UI text layer", "không tạo thêm tầng chữ phẳng")
     // Đúng lối viết safe-zone v15: NÓI HẬU QUẢ, không ra lệnh suông (handoff §5.3)
     includes(prompt, "will be thrown away and regenerated", "hậu quả nếu tiêu đề hỏng")
     includes(prompt, "CROP CONSEQUENCE", "báo trước việc cắt về 16:9")
@@ -265,6 +267,30 @@ export async function run({ api, wsRoot, agentDir }) {
       { variants: [{ id: "v", characters: [{ ref: "../../etc/passwd" }] }], sheets: [] },
       async () => true)
     eq(escape.attachments, [], "đường dẫn thoát ra ngoài bị loại thẳng")
+  })
+
+  await it("cặp màu neutral mặc định của app KHÔNG bị coi là brand colour", async () => {
+    const neutral = structuredClone(NO_MASCOT)
+    neutral.variants[0].brand = {
+      mode: "colors", primary: "#151516", secondary: "#9A9A9A", refs: [],
+    }
+    const { prompt, branding } = await buildCoverPrompt({
+      project: { name: "Màu mặc định" }, contract: neutral, hasFile: async () => false,
+    })
+    eq(branding.primary, null, "primary neutral bị bỏ")
+    eq(branding.secondary, null, "secondary neutral bị bỏ")
+    includes(prompt, "No brand colours were given", "rơi về nhánh không có brand")
+    ok(!prompt.includes("Brand palette: primary #151516"), "không ép palette xám mặc định vào prompt")
+  })
+
+  await it("contract không có mascot/ref/pose được nhận diện là nguồn asset sau manifest", async () => {
+    eq(hasMascotCoverSource(NO_MASCOT), false, "dự án chỉ có asset không giữ early-cover")
+    const withCharacter = structuredClone(NO_MASCOT)
+    withCharacter.variants[0].characters = [{ vi: "Sóc", ref: null }]
+    eq(hasMascotCoverSource(withCharacter), true, "tên mascot giữ early-cover")
+    const withPose = structuredClone(NO_MASCOT)
+    withPose.sheets[0].id = "pose-soc"
+    eq(hasMascotCoverSource(withPose), true, "pose sheet giữ early-cover")
   })
 
   /* ── BUG-02 / UX#1: bìa phải là ẢNH CỦA CHÍNH DỰ ÁN NÀY ──
@@ -459,6 +485,10 @@ export async function run({ api, wsRoot, agentDir }) {
       body: { name: "Bia som", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
     })
     const id = created.json.project.id
+    const contract = structuredClone(BRANDED)
+    contract.variants[0].id = "tet"
+    contract.sheets[0].variants = ["tet"]
+    await writeFile(join(wsRoot, "projects", id, "contract.json"), JSON.stringify(contract))
     const run = await a("POST", `/api/projects/${id}/runs`, { body: { kind: "gen", maxJobs: 2, autoSliceAfterGen: false } })
     eq(run.status, 202, "run 202")
 
@@ -475,6 +505,48 @@ export async function run({ api, wsRoot, agentDir }) {
     await waitFor(async () => (await a("GET", `/api/projects/${id}/cover`)).json.cover.status === "ok", 15000, "vẽ xong")
     const meta = JSON.parse(await readFile(join(wsRoot, "projects", id, "cover", "cover.json"), "utf8"))
     eq(meta.status, "ok", "một lượt vẽ duy nhất, kết thúc bằng ok")
+    await a("DELETE", `/api/projects/${id}`)
+  })
+
+  await it("không mascot → KHÔNG early-cover; finish() chỉ gọi sau khi manifest đã ghi", async () => {
+    const a = await agentWithEngine("engine-fake")
+    const created = await a("POST", "/api/projects", {
+      body: { name: "Bia asset sau manifest", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
+    })
+    const id = created.json.project.id
+    const contract = structuredClone(NO_MASCOT)
+    contract.variants[0].id = "tet"
+    contract.variants[0].brand = {
+      mode: "colors", primary: "COVER_FIXTURE_MANIFEST", secondary: null, refs: [],
+    }
+    contract.sheets[0].grid = { cols: 1, rows: 1 }
+    contract.sheets[0].variants = ["tet"]
+    await writeFile(join(wsRoot, "projects", id, "contract.json"), JSON.stringify(contract))
+
+    const run = await a("POST", `/api/projects/${id}/runs`, {
+      body: { kind: "gen", maxJobs: 2, autoSliceAfterGen: true },
+    })
+    eq(run.status, 202, "run 202")
+    let sawEarly = false
+    await waitFor(async () => {
+      const [r, c] = await Promise.all([
+        a("GET", `/api/runs/${run.json.runId}`),
+        a("GET", `/api/projects/${id}/cover`),
+      ])
+      const live = r.json.status === "queued" || r.json.status === "running"
+      if (live && c.json.cover.status !== "none") sawEarly = true
+      return !live
+    }, 20000, "run kết thúc")
+    ok(!sawEarly, "cover không được spawn trước finish khi nguồn duy nhất là asset")
+    await waitFor(async () => (await a("GET", `/api/projects/${id}/cover`)).json.cover.status === "ok",
+      15000, "cover sau manifest")
+    eq(await readFile(join(wsRoot, "projects", id, "cover", "manifest-at-start"), "utf8"), "yes",
+      "cover bắt đầu sau khi kits/manifest.json tồn tại")
+    ok(await pathExists(join(wsRoot, "projects", id, "kits", "manifest.json")), "manifest đã được ghi trước cover")
+    const coverMeta = JSON.parse(await readFile(join(wsRoot, "projects", id, "cover", "cover.json"), "utf8"))
+    eq(coverMeta.subject, SUBJECT_PROJECT_ASSETS, "cover đã chuyển sang nhánh asset thật")
+    ok((await readFile(join(wsRoot, "projects", id, "prompts", "cover.att"), "utf8")).trim(),
+      "cover prompt có attachment sau manifest")
     await a("DELETE", `/api/projects/${id}`)
   })
 
@@ -534,6 +606,17 @@ export async function run({ api, wsRoot, agentDir }) {
     const st = await b("GET", `/api/projects/${id}/cover`)
     eq(st.json.cover.status, "none", "không để lại job treo")
     await b("DELETE", `/api/projects/${id}`)
+  })
+
+  await it("titleEmbedded=true → pipeline không có tầng composite chữ sau gen", async () => {
+    const coverSh = await readFile(join(agentDir, "..", "cover.sh"), "utf8")
+    ok(!/\b(?:ImageDraw|draw\.text|alpha_composite)\b/.test(coverSh),
+      "cover.sh chỉ crop raw, không composite title lần hai")
+    const { prompt, titleEmbedded } = await buildCoverPrompt({
+      project: { name: "Chữ hòa cảnh" }, contract: NO_MASCOT, hasFile: async () => false,
+    })
+    eq(titleEmbedded, true, "AI là đường kẻ chữ duy nhất")
+    includes(prompt, "not pasted on afterwards as a flat rectangular label", "prompt cấm overlay phẳng")
   })
 
   await it("vẽ bìa thất bại (engine không ghi ảnh) → failed, KHÔNG đặt project.cover", async () => {

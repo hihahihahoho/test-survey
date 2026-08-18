@@ -174,6 +174,18 @@ export const COVER_SUBJECTS = [
   SUBJECT_MASCOT_IMAGE, SUBJECT_MASCOT_SPEC, SUBJECT_PROJECT_ASSETS, SUBJECT_PLACEHOLDER,
 ]
 
+/* Hai màu này chỉ là DEFAULT của app, không phải brand của project. Khai lại tại agent
+   để không import ngược webapp; nguồn chuẩn: `webapp/src/lib/types/contract.ts:72-73`
+   (`NEUTRAL_PRIMARY_COLOR` / `NEUTRAL_SECONDARY_COLOR`). */
+const NEUTRAL_PRIMARY_COLOR = "#151516"
+const NEUTRAL_SECONDARY_COLOR = "#9A9A9A"
+
+function isNeutralBrandPair(primary, secondary) {
+  return typeof primary === "string" && typeof secondary === "string" &&
+    primary.trim().toUpperCase() === NEUTRAL_PRIMARY_COLOR &&
+    secondary.trim().toUpperCase() === NEUTRAL_SECONDARY_COLOR
+}
+
 /** Nhiều nhất 2 asset đã cắt được đính kèm: 1 anh hùng + 1 kép phụ. Ba tấm thì model
  *  bắt đầu xếp chúng thành lưới — mà lưới chính là thứ prompt đang cấm. */
 const KIT_ATTACH_MAX = 2
@@ -182,6 +194,19 @@ const KIT_ATTACH_MAX = 2
 function baseVariant(contract) {
   const v = contract?.variants
   return Array.isArray(v) && v.length ? v[0] : null
+}
+
+/**
+ * Early-cover chỉ an toàn khi contract đã có nguồn mascot/pose. Dự án không có
+ * mascot/ref/pose lấy nhận diện duy nhất từ `kits/manifest.json`, vốn chỉ xuất hiện
+ * sau slice; kích cover ở job đầu tiên sẽ chụp đúng lúc manifest chưa tồn tại.
+ */
+export function hasMascotCoverSource(contract) {
+  const v = baseVariant(contract)
+  const characters = Array.isArray(v?.characters) ? v.characters : []
+  if (characters.some(c => String(c?.vi ?? "").trim() || String(c?.ref ?? "").trim())) return true
+  if ((contract?.sheets ?? []).some(sh => String(sh?.id ?? "").startsWith("pose-"))) return true
+  return v?.brand?.mode === "image" && Array.isArray(v?.brand?.refs) && v.brand.refs.length > 0
 }
 
 /**
@@ -288,10 +313,16 @@ export async function collectBranding(contract, hasFile, readJson = async () => 
       : attachments.length ? SUBJECT_PROJECT_ASSETS
         : SUBJECT_PLACEHOLDER
 
+  const primary = typeof brand.primary === "string" ? brand.primary : null
+  const secondary = typeof brand.secondary === "string" ? brand.secondary : null
+  const neutral = isNeutralBrandPair(primary, secondary)
+
   return {
     variantId: v?.id ?? null,
-    primary: typeof brand.primary === "string" ? brand.primary : null,
-    secondary: typeof brand.secondary === "string" ? brand.secondary : null,
+    /* Cặp mặc định của app không được nói với model như brand; để prompt lấy màu từ
+       asset, hoặc low-saturation khi asset cũng chưa có. */
+    primary: neutral ? null : primary,
+    secondary: neutral ? null : secondary,
     gradient: typeof brand.gradient === "string" ? brand.gradient : null,
     mascotName,
     mascotSpec,
@@ -415,6 +446,13 @@ export async function buildCoverPrompt({ project, contract, hasFile, readJson })
     L.push("Letter this project's own title INTO the picture, the way a book cover or a game key-art")
     L.push("poster carries its title: the letters are designed with the scene — same palette, same")
     L.push("light, same mood — not pasted on afterwards as a flat rectangular label or a sticker.")
+    L.push("MATERIAL INTEGRATION — treat the letters as physical parts of this scene, using the")
+    L.push("same surface family as the artwork and the same light: scene-matched texture, edge")
+    L.push("softness, highlights, contact shadow or shallow relief where the scene calls for it.")
+    L.push("Do not make a flat UI text layer; the title must receive and reflect the scene's")
+    L.push("light and colour as though it was painted, glazed, embossed or carved into the")
+    L.push("same world — choose the treatment from the attached artwork and scene, not a generic")
+    L.push("font effect.")
     L.push("")
     L.push("Render EXACTLY this text, character for character, changing nothing:")
     L.push(`«${title}»`)

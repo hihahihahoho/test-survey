@@ -7,7 +7,7 @@ import { fail } from "./errors.mjs"
 import { redactLine } from "./redact.mjs"
 import { projectDir } from "./projects-dir.mjs"
 import { resolveEngine, prepareEngine, materializeStyles, buildCommand, diagnose, summarizeFailures } from "./engine.mjs"
-import { maybeAutoCover } from "./cover.mjs"
+import { hasMascotCoverSource, maybeAutoCover } from "./cover.mjs"
 import { thumbnail } from "./thumbs.mjs"
 import { IS_WIN, pythonCommand, pythonSpawnOpts, killTree, winSpawnOpts } from "./platform.mjs"
 
@@ -519,7 +519,9 @@ export class RunHandle {
    *  ảnh ref người dùng tải lên → ref của tấm dáng → TẤM DÁNG ĐÃ SINH (`raw/<v>-pose-*.png`).
    *  Nếu lượt này CÓ tấm dáng mà nó chưa gen xong, kích ngay = vẽ bìa thiếu mascot —
    *  đổi 15 phút chờ lấy một tấm bìa sai nhận diện thì không đáng. Nên: lượt có tấm dáng
-   *  thì đợi tấm dáng (vẫn sớm hơn hẳn cuối lượt), lượt không có thì kích ngay tấm đầu.
+   *  thì đợi tấm dáng (vẫn sớm hơn hẳn cuối lượt). Dự án KHÔNG có mascot/ref/pose lấy
+   *  nhận diện duy nhất từ asset đã cắt; manifest chỉ xuất hiện sau slice, nên TUYỆT ĐỐI
+   *  không kích sớm nhánh này — `finish()` sẽ gọi cover sau khi manifest đã ghi.
    *
    *  QUOTA: cover là ĐÚNG MỘT lượt codex cho cả run, chạy NGOÀI pool của gen.sh (cover.sh
    *  là tiến trình riêng, không đi qua vòng MAXJOBS) ⇒ đỉnh đồng thời là maxJobs+1 trong
@@ -531,6 +533,7 @@ export class RunHandle {
     if (this.run.kind !== "gen") return
     if (this.cancelled || this.detached || this.finished) return
     if (this.run.maxJobs < EARLY_COVER_MIN_MAXJOBS) return
+    if (!hasMascotCoverSource(this.opts.contract)) return
     const pose = this.run.jobs.filter(j => String(j.sheet ?? "").startsWith("pose-"))
     const settled = pose.every(j => j.status === "ok" || j.status === "failed")
     if (pose.length && !pose.some(j => j.status === "ok") && !settled) return

@@ -14,6 +14,11 @@ if [[ ! -f "prompts/cover.txt" ]]; then
   exit 0
 fi
 echo "fake cover log" > logs/cover.log
+if grep -q "COVER_FIXTURE_MANIFEST" prompts/cover.txt; then
+  if [[ -f kits/manifest.json ]]; then printf 'yes' > cover/manifest-at-start
+  else printf 'no' > cover/manifest-at-start
+  fi
+fi
 # Một vài ca cần chứng minh mỗi lượt chỉ kích cover một lần. Chỉ đếm khi prompt
 # mang marker test, không làm thay đổi các ca fake bình thường.
 if grep -q "COVER_FIXTURE_COUNT" prompts/cover.txt; then
