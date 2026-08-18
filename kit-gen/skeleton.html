@@ -38,7 +38,12 @@ function build(cfg) {
     const div = document.createElement("div");
     div.className = "sheet";
     div.id = "sheet-" + sh.id;
-    div.innerHTML = KITSKEL.sheetToSvg(sh);   // NGUYÊN VĂN, không sửa gì thêm
+    /* Viewer phải nhìn đúng attachment production: bật cùng grid/safe/bias v16.
+       Contract không bị sửa; đây chỉ là option của renderer. */
+    div.innerHTML = KITSKEL.sheetToSvg({
+      ...sh,
+      gridGuide: { ...KITSKEL.GRID_GUIDE, enabled: true },
+    });
     root.appendChild(div);
   }
 }

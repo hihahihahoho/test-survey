@@ -82,13 +82,20 @@ function loadResvg() {
 const cfgPath = process.argv[2] ? resolve(process.argv[2]) : resolve(HERE, "styles.json")
 const outDir = process.argv[3] ? resolve(process.argv[3]) : resolve(HERE, "skeleton")
 const cfg = JSON.parse(readFileSync(cfgPath, "utf8"))
+/* Production gen.sh bật v16 qua env để contract JSON vẫn giữ nguyên schema.
+   Test/legacy callers không đặt env thì renderer giữ hình học cũ; agent skeleton
+   cũng đặt cùng cờ trong buildCommand(). */
+const productionGridGuide = process.env.KITGEN_GRID_GUIDE === "v16"
 
 const { mod, wasm } = loadResvg()
 await mod.initWasm(wasm)
 mkdirSync(outDir, { recursive: true })
 
 for (const sh of cfg.sheets) {
-  const svg = sheetToSvg(sh)
+  const renderSheet = productionGridGuide
+    ? { ...sh, gridGuide: { ...globalThis.KITSKEL.GRID_GUIDE, enabled: true } }
+    : sh
+  const svg = sheetToSvg(renderSheet)
   // fitTo "original" = giữ đúng width/height khai báo trong SVG, không co giãn
   const png = new mod.Resvg(svg, { fitTo: { mode: "original" } }).render().asPng()
   const out = join(outDir, `${sh.id}.png`)

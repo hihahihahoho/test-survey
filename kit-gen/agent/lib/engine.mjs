@@ -166,7 +166,11 @@ export function buildCommand(kind, projectDirAbs, { variants = [], sheets = null
        hẳn dáng pose, KHÁC với khung xương mà gen.sh thật sự dùng. Nay cả hai đường
        gọi chung một renderer. `process.execPath` = đúng Node đang chạy agent (bền
        hơn `node` trần: PATH của tiến trình con không chắc có node, nhất là Windows). */
-    return { cmd: process.execPath, args: [join(projectDirAbs, "render-skeleton.mjs")], env }
+    return {
+      cmd: process.execPath,
+      args: [join(projectDirAbs, "render-skeleton.mjs")],
+      env: { ...env, KITGEN_GRID_GUIDE: "v16" },
+    }
   }
   throw new Error(`unknown run kind ${kind}`)
 }

@@ -35,6 +35,9 @@ fi
 # lượng mực và vẽ sai hẳn dáng pose — nó đẻ ra ảnh ref SAI mà không ai biết, rồi
 # mọi ảnh gen sau đó lệch bố cục. Render hỏng thì DỪNG TO ở đây, đừng đốt quota
 # codex cho một lượt gen đã sai từ đầu vào.
+# v16: ảnh attachment có gray registration grid + nested safe guides + bias px.
+# raw/output vẫn do model vẽ trên chroma-key sạch; slice.py không đọc ảnh skeleton.
+export KITGEN_GRID_GUIDE=v16
 if ! node render-skeleton.mjs; then
   echo "FATAL: không render được khung xương (render-skeleton.mjs)." >&2
   echo "       Thường là thiếu @resvg/resvg-wasm. Cài lại:" >&2
@@ -318,6 +321,23 @@ for s in cfg["styles"]:
         # Ngay cả nhánh "bg" cũ cũng hỏng: toán tử ba ngôi chỉ buộc vào DÒNG CUỐI
         # nên hai dòng "40px padding" vẫn được in ra trước câu "edge to edge".
         full_bleed = n_real > 0 and all(c["skel"].get("shape") == "full" for c in real)
+        nine_element = (
+            cols == 3 and rows == 3 and len(comps) == 9
+            and all(c["skel"].get("shape") != "empty" for c in comps)
+        )
+        layout_note = (
+            [
+                "This is the v14+ NINE-ELEMENT production layout: exactly nine outer cells",
+                "in a locked 3-by-3 landscape sheet. Keep this density and cell order;",
+                "never repack the nine elements into another grid.",
+            ]
+            if nine_element else
+            [
+                "The contract grid is immutable for this sheet. Do not convert it to a",
+                "different density or repack elements; the nine-element v14+ layout applies",
+                "only when the contract itself declares a complete 3-by-3 nine-cell sheet.",
+            ]
+        )
         if full_bleed:
             place = [
                 f"Each cell is a {sh.get('cell_hint', 'full-bleed scene')}.",
@@ -348,6 +368,7 @@ for s in cfg["styles"]:
             + ("" if n_real == len(comps) else
                f" The LAST {len(comps) - n_real} cell(s) of the grid are INTENTIONALLY EMPTY:"
                " draw absolutely nothing there — pure flat background over the whole cell."),
+            *layout_note,
             *place,
             "",
             # ── Khối neo hình học — theo prompt crop-safe v15 của spike safe-zone
@@ -369,6 +390,12 @@ for s in cfg["styles"]:
             "- never enlarge, stretch, move, offset or recenter it;",
             "- a shifted or smaller functional surface is unusable and will be regenerated.",
             "",
+            "V16 GUIDE COMPENSATION: the attached gray silhouette and local guide box are",
+            "deliberately expanded by a small, fixed ABSOLUTE pixel bias calibrated for",
+            "the element family (not by a percentage). This is the ~1.10x sweet spot;",
+            "do not undo the expansion, normalize it, or fit the artwork back to the old",
+            "unexpanded size. The guide is an input correction, not extra artwork.",
+            "",
             "Build each element in three layers, from the inside out:",
             "1) one continuous, clean content surface replacing the gray silhouette, on the",
             "   same footprint;",
@@ -378,6 +405,10 @@ for s in cfg["styles"]:
             "   overflow decoration; they may cross the frame but must stay inside their own",
             "   cell and never cross into another cell.",
             "Keep the crop-safe area clean: no decoration may cover the functional surface.",
+            "The continuous enamel/content surface is the CORE and the only layer scored for",
+            "geometry. Measure intrusion one-sided: core missing inside the safe zone is a",
+            "failure; decoration or core extending outside the safe zone is harmless if it",
+            "stays in the element's own cell.",
             "",
             "Cells with NO dark frame: the gray silhouette itself is the placement guide —",
             "draw the element centered on it at the same size, in natural proportions,",
@@ -386,6 +417,9 @@ for s in cfg["styles"]:
             "or guides. Guide lines and gray fills are alignment references only, never",
             "decoration: do NOT paint their gray color, frames, grid lines or plain shapes",
             "into the artwork.",
+            "The gray registration grid and local guides exist ONLY in the first attached",
+            "skeleton reference. The generated OUTPUT must contain a clean flat chroma-key",
+            "background; never reproduce, redraw, or leave gray guides or grid lines in it.",
             "",
             f"BACKGROUND of the sheet: one flat solid chroma-key color: {key_desc}.",
             "This background rule OVERRIDES the art style and every reference image:",
