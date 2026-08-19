@@ -186,26 +186,31 @@ jobs:
           set -eu
           mkdir -p out
           cd out
+          # NEO ĐỘC LẬP: bảng băm do thượng nguồn phát hành. Nó chứng minh mình mirror
+          # đúng byte của bản gốc, chứ không phải tự băm cái mình vừa tải về (băm một
+          # file đã hỏng thì vẫn ra một con số trông rất đẹp).
+          # Thượng nguồn KHÔNG có sidecar .sha256 cho từng asset — đã thử, trả 404; chỉ
+          # có MỘT file SHA256SUMS chung cho cả 870 asset của bản build.
+          curl -fL --retry 3 --retry-all-errors -o UPSTREAM-SHA256SUMS "$UPSTREAM/$PY_BUILD/SHA256SUMS"
           for target in aarch64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-msvc; do
             asset="cpython-$PY_VERSION+$PY_BUILD-$target-install_only.tar.gz"
             echo "── $asset"
             curl -fL --retry 3 --retry-all-errors -o "$asset" "$UPSTREAM/$PY_BUILD/$asset"
-            # Thượng nguồn đính kèm sidecar `.sha256` cho từng asset. Đây là NEO ĐỘC LẬP:
-            # nó chứng minh mình mirror đúng byte của bản upstream, chứ không phải mình
-            # tự băm cái mình vừa tải (băm cái đã hỏng thì vẫn ra một con số đẹp).
-            curl -fL --retry 3 --retry-all-errors -o "$asset.upstream-sha256" "$UPSTREAM/$PY_BUILD/$asset.sha256"
-            want="$(awk '{ print $1 }' "$asset.upstream-sha256" | head -n1)"
+            # Neo vào TÊN ĐẦY ĐỦ ở cuối dòng: install_only_stripped cũng chứa chuỗi
+            # install_only, khớp lỏng là lấy nhầm băm của một gói khác.
+            want="$(awk -v a="$asset" '$2 == a { print $1 }' UPSTREAM-SHA256SUMS | head -n1)"
             got="$(sha256sum "$asset" | awk '{ print $1 }')"
-            [ -n "$want" ] || { echo "::error::sidecar checksum rỗng cho $asset" >&2; exit 1; }
+            [ -n "$want" ] || { echo "::error::không thấy $asset trong SHA256SUMS của thượng nguồn" >&2; exit 1; }
             [ "$want" = "$got" ] || {
               echo "::error::checksum thượng nguồn KHÔNG KHỚP cho $asset" >&2
               echo "  upstream: $want" >&2
               echo "  tải về  : $got" >&2
               exit 1
             }
-            rm -f "$asset.upstream-sha256"
             printf '   OK  %s  %s\n' "$got" "$(du -h "$asset" | awk '{ print $1 }')"
           done
+          # Bảng của thượng nguồn không được lẫn vào thư mục sắp đem đi phát hành.
+          rm -f UPSTREAM-SHA256SUMS
 
       - name: Gói có đúng ruột không
         shell: bash
