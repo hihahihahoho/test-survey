@@ -12,6 +12,8 @@ skeleton/
 teams/*
 !teams/easy-install/
 !teams/easy-install/**
+!teams/split-easy-install/
+!teams/split-easy-install/**
 dist/
 __pycache__/
 *.pyc
