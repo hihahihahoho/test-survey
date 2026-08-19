@@ -14,6 +14,8 @@ teams/*
 !teams/easy-install/**
 !teams/split-easy-install/
 !teams/split-easy-install/**
+!teams/easy-install-guide/
+!teams/easy-install-guide/**
 dist/
 __pycache__/
 *.pyc
