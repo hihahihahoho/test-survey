@@ -56,9 +56,30 @@ cat > "$KITGEN_HOME/tools/node_modules/.bin/codex" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
+# Python riêng của KitGen (GIẢ). Bộ test không được phụ thuộc phiên bản Python của máy
+# chạy nó: macOS mặc định là /usr/bin/python3 3.9 — ngoài dải có wheel — nên installer
+# thật sẽ đi TẢI bản riêng ~24 MB, mà test thì cấm ra mạng. Dựng sẵn bản riêng ở đây là
+# installer đi nhánh ① (dùng lại bản đã có) và không đụng tới mạng.
+mkdir -p "$KITGEN_HOME/tools/python/bin"
+cat > "$KITGEN_HOME/tools/python/bin/python3" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *"sys.version_info[:3]"*) printf '3.13.15\n' ;;
+  *"sys.version_info[:2]"*) printf '3.13\n' ;;
+  *"sys.base_prefix"*) printf '%s\n' "$KITGEN_HOME/tools/python" ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$KITGEN_HOME/tools/python/bin/python3"
+
 cat > "$KITGEN_WORKSPACE/.venv/bin/python" <<'EOF'
 #!/usr/bin/env bash
-exit 0
+# `sys.base_prefix` phải khớp bản Python riêng ở trên, nếu không installer coi venv này
+# là đồ thừa của một Python khác và dựng lại (đúng như thiết kế) — rồi chạy pip thật.
+case "$*" in
+  *"sys.base_prefix"*) printf '%s\n' "$KITGEN_HOME/tools/python" ;;
+  *) exit 0 ;;
+esac
 EOF
 chmod +x \
   "$KITGEN_HOME/tools/node/bin/node" \

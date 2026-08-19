@@ -49,7 +49,8 @@ printf '%s\n' '2.1.5' > "$RELEASE/VERSION"
 printf '%s\n' 'export const testAgent = true' > "$RELEASE/agent/server.mjs"
 printf '%s\n' '<!doctype html><title>KitGen test</title>' > "$RELEASE/app/index.html"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$RELEASE/engine/gen.sh"
-cp "$ROOT/install.sh" "$RELEASE/install.sh"
+INSTALLER_SOURCE="${KITGEN_INSTALL_SOURCE:-$ROOT/install.sh}"
+cp "$INSTALLER_SOURCE" "$RELEASE/install.sh"
 cp "$ROOT/runtime/bin/kitgen" "$RELEASE/runtime/bin/kitgen"
 cp "$ROOT/runtime/service/com.kitgen.agent.plist.in" "$RELEASE/runtime/service/com.kitgen.agent.plist.in"
 chmod +x "$RELEASE/install.sh" "$RELEASE/engine/gen.sh" "$RELEASE/runtime/bin/kitgen"
@@ -66,6 +67,11 @@ cat > "$KITGEN_HOME/tools/node/bin/node" <<'EOF'
 #!/usr/bin/env bash
 case "${1:-}" in
   -p) printf '%s\n' 20 ;;
+  */npm)
+    mkdir -p "$KITGEN_HOME/tools/node_modules/.bin"
+    printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$KITGEN_HOME/tools/node_modules/.bin/codex"
+    chmod +x "$KITGEN_HOME/tools/node_modules/.bin/codex"
+    ;;
   # `node -e "require.resolve('@resvg/resvg-wasm')"` là health check bước 4/7. Cờ
   # `resvg-fails` dựng lại ca "installer chết SAU khi đã tải xong bản mới".
   -e) [ ! -f "$KITGEN_TEST_STATE/resvg-fails" ] || exit 1 ;;
@@ -73,19 +79,40 @@ case "${1:-}" in
   *) exit 0 ;;
 esac
 EOF
-# npm giả BÁO THÀNH CÔNG mà không đặt gói nào lên đĩa — cố ý: installer không được tin
-# lời npm, nó phải tự dò lại bằng `require.resolve` rồi mới dám đi tiếp.
+# npm giả dùng đúng shebang npm thật (`env node`). Fake Node ở trên tạo shim Codex khi
+# npm được gọi, đủ để đo riêng lỗi PATH thiếu private Node.
 cat > "$KITGEN_HOME/tools/node/bin/npm" <<'EOF'
-#!/usr/bin/env bash
+#!/usr/bin/env node
 exit 0
 EOF
 cat > "$KITGEN_HOME/tools/node_modules/.bin/codex" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
+# Python riêng của KitGen (GIẢ). Bộ test không được phụ thuộc phiên bản Python của máy
+# chạy nó: macOS mặc định là /usr/bin/python3 3.9 — ngoài dải có wheel — nên installer
+# thật sẽ đi TẢI bản riêng ~24 MB, mà test thì cấm ra mạng. Dựng sẵn bản riêng ở đây là
+# installer đi nhánh ① (dùng lại bản đã có) và không đụng tới mạng.
+mkdir -p "$KITGEN_HOME/tools/python/bin"
+cat > "$KITGEN_HOME/tools/python/bin/python3" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  *"sys.version_info[:3]"*) printf '3.13.15\n' ;;
+  *"sys.version_info[:2]"*) printf '3.13\n' ;;
+  *"sys.base_prefix"*) printf '%s\n' "$KITGEN_HOME/tools/python" ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$KITGEN_HOME/tools/python/bin/python3"
+
 cat > "$KITGEN_WORKSPACE/.venv/bin/python" <<'EOF'
 #!/usr/bin/env bash
-exit 0
+# `sys.base_prefix` phải khớp bản Python riêng ở trên, nếu không installer coi venv này
+# là đồ thừa của một Python khác và dựng lại (đúng như thiết kế) — rồi chạy pip thật.
+case "$*" in
+  *"sys.base_prefix"*) printf '%s\n' "$KITGEN_HOME/tools/python" ;;
+  *) exit 0 ;;
+esac
 EOF
 chmod +x \
   "$KITGEN_HOME/tools/node/bin/node" \
@@ -138,7 +165,7 @@ printf '%s\n' '2.1.4' > "$KITGEN_TEST_STATE/reported-version"
 
 run_install(){
   set +e
-  PATH="$FAKE_BIN:$PATH" "$RELEASE/install.sh" --update >"$1" 2>&1
+  PATH="$FAKE_BIN:/usr/bin:/bin" "$RELEASE/install.sh" --update >"$1" 2>&1
   status=$?
   set -e
 }
@@ -226,4 +253,21 @@ grep -q 'ĐÃ CÀI XONG nhưng' "$OUT3" && {
   exit 1
 }
 
-echo "install-restart: cài dở không đổi gì · restart không ăn thì hỏng to kèm lệnh chữa · đường thuận xanh"
+# ── ④ P0-A1 hồi quy: npm thật là `#!/usr/bin/env node`, PATH không có Node hệ thống ──
+# Xoá Codex local để bắt buộc đi qua npm. Mã cũ chết 127 ở đây; mã mới phải qua
+# health check Codex nhờ PATH private Node được export trước npm.
+rm -f "$KITGEN_HOME/tools/node_modules/.bin/codex"
+OUT4="$TEST_ROOT/install-codex-private-node.out"
+run_install "$OUT4"
+[ "$status" -eq 0 ] || {
+  echo "Codex CLI regression: installer failed with private Node only" >&2
+  cat "$OUT4" >&2
+  exit 1
+}
+grep -q 'đường dẫn Codex bền vững' "$OUT4" || {
+  echo "Codex CLI regression: installer did not pass the Codex health gate" >&2
+  cat "$OUT4" >&2
+  exit 1
+}
+
+echo "install-restart: cài dở không đổi gì · restart không ăn thì hỏng to kèm lệnh chữa · đường thuận xanh · npm env-node qua PATH private"
