@@ -383,8 +383,15 @@ jobs:
           Write-Host '--------- stdout/stderr cua install.ps1 ---------'
           Write-Host $text
           Write-Host '------------------------------------------------'
-          if ($p.ExitCode -ne 0) {
-            Write-Host ("::error::install.ps1 thoat voi ma {0} (dang le thieu tien de van phai thoat 0 va in checklist)" -f $p.ExitCode)
+          # HOP DONG DOI 19/08: thieu tien de => thoat 2, khong con thoat 0.
+          # Ma 0 cu khien easy-install/install.bat di tiep sang health check; agent chua
+          # bao gio duoc khoi dong nen no in "agent did not pass the health check, check
+          # agent.log" - trong khi nguyen nhan that la thieu Codex CLI, va agent.log con
+          # chua ton tai. Nguoi dung that da bi dan sai huong vi dung cai thong diep do.
+          # Bang ma: 0 = cai xong va chay duoc; 2 = cai xong, con thieu tien de (checklist
+          # da in); moi ma khac = hong that.
+          if ($p.ExitCode -ne 2) {
+            Write-Host ("::error::install.ps1 thoat voi ma {0} (thieu tien de thi phai thoat 2 va in checklist)" -f $p.ExitCode)
             exit 1
           }
           # Hop dong cua installer khi thieu tien de: KHONG khoi dong, IN CHECKLIST.

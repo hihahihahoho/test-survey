@@ -11,6 +11,11 @@ if errorlevel 1 goto :download_failed
 powershell -NoProfile -ExecutionPolicy Bypass -File "%KITGEN_BOOTSTRAP%" -CodexDefault
 set "KITGEN_RC=%ERRORLEVEL%"
 del /q "%KITGEN_BOOTSTRAP%" >nul 2>&1
+rem Exit code 2 means: runtime installed, but user-side prerequisites are missing and
+rem the installer already printed a checklist. Do NOT fall through to the health check:
+rem the agent was never started, so it would report "agent did not answer" and point at
+rem an agent.log that does not exist yet - hiding the real cause.
+if "%KITGEN_RC%"=="2" goto :missing_prereqs
 if not "%KITGEN_RC%"=="0" goto :install_failed
 
 set "KITGEN_HOME=%LOCALAPPDATA%\KitGen"
@@ -30,6 +35,11 @@ goto :finish
 
 :install_failed
 echo KitGen installation failed.
+goto :finish
+
+:missing_prereqs
+echo KitGen was installed, but the prerequisites listed above are still missing.
+echo Install them, then run this file again. Nothing needs to be uninstalled.
 goto :finish
 
 :health_failed
