@@ -331,9 +331,14 @@ test("§B2 — wizard của dự án trắng KHÔNG mọc ra nút xem kết qu�
   await expect(page.getByRole("button", { name: "Xem ảnh đã tạo" })).toHaveCount(0);
 });
 
-test("preview ảnh dọc/ngang chỉ có một ổ cuộn và khóa trang nền", async ({ page }) => {
+test("preview ảnh dọc/ngang chỉ có một ổ cuộn và khóa trang nền", async ({ page }, testInfo) => {
   includePreviewFixtures = true;
-  const screenshotDir = "/Users/tungnt2/Documents/work/survey/kit-gen/teams/fix-modal-scroll";
+  /* Ảnh chụp đi vào thư mục đầu ra CỦA CHÍNH CA TEST. Trước đây chỗ này ghi cứng
+     đường tuyệt đối trên máy người viết (`/Users/…/teams/fix-modal-scroll`) — trên CI
+     là EACCES vì nằm ngoài workspace, và ca xanh dưới máy vẫn đỏ trên runner. Không
+     bao giờ ghi ra ngoài `testInfo.outputDir`: nó tồn tại trên mọi máy và được thu làm
+     hiện vật khi hỏng. */
+  const screenshotDir = testInfo.outputPath();
   mkdirSync(screenshotDir, { recursive: true });
 
   for (const height of [800, 600]) {
