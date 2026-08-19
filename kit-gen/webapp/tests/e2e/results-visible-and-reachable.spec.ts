@@ -1,4 +1,5 @@
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
+import { deflateSync } from "node:zlib";
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 /**
@@ -23,9 +24,53 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 
 const PNG_1x1 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
-/* Use repository fixtures with the exact dimensions claimed by the manifest. */
-const PORTRAIT_PNG = readFileSync(new URL("../../../kits/candy/tight/25-bg-home.png", import.meta.url));
-const LANDSCAPE_PNG = readFileSync(new URL("../../../skeleton/main.png", import.meta.url));
+/* Ảnh mẫu SINH TẠI CHỖ, đúng kích thước manifest khai — KHÔNG đọc từ `kits/` hay
+   `skeleton/`. Hai thư mục đó nằm trong .gitignore (kit-gen/.gitignore:3), nên chúng
+   chỉ có trên máy người viết test chứ KHÔNG BAO GIỜ có trên CI: `readFileSync` ném
+   ENOENT ở tầng module, làm sập cả file spec trước khi chạy nổi một ca nào. Đã xảy ra
+   thật ở 950cb72 — test xanh dưới máy, CI đỏ, không ai thấy vì lỗi nằm ngoài mọi ca.
+   Ảnh sinh ra là PNG hợp lệ và ĐÚNG kích thước, nên mọi khẳng định về tỉ lệ/khổ ảnh
+   vẫn giữ nguyên giá trị; thứ duy nhất mất đi là nội dung điểm ảnh, mà test này không
+   hề nhìn tới. */
+const CRC_TABLE = (() => {
+  const table = new Int32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c;
+  }
+  return table;
+})();
+const crc32 = (buf: Buffer) => {
+  let c = -1;
+  for (let i = 0; i < buf.length; i += 1) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ -1) >>> 0;
+};
+const pngChunk = (type: string, data: Buffer) => {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(body));
+  return Buffer.concat([len, body, crc]);
+};
+/** PNG xám 8-bit toàn điểm 0 — nhỏ sau khi nén, nhưng khai đúng w×h ở IHDR. */
+const makePng = (w: number, h: number) => {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 0; // colour type: grayscale
+  const scanlines = Buffer.alloc(h * (w + 1)); // mỗi hàng: 1 byte filter + w byte dữ liệu
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", deflateSync(scanlines)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+};
+const PORTRAIT_PNG = makePng(1024, 1536);
+const LANDSCAPE_PNG = makePng(1536, 1024);
 let includePreviewFixtures = false;
 
 /** Dự án ĐÃ gen xong — có ô đã cắt, có lượt chạy gần nhất. */
