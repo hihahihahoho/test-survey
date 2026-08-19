@@ -18,6 +18,36 @@ function msysPath(path) {
   return IS_WIN ? toBashPath(path) : String(path)
 }
 
+/* Python riêng của KitGen (GIẢ) + venv trỏ vào nó.
+
+   Từ bản "mang theo Python riêng", installer không dùng bừa `python3` của máy nữa: nó
+   chỉ chấp nhận phiên bản nằm trong dải chắc chắn có wheel (3.11-3.13) và tự TẢI bản
+   pin cứng nếu không có. Runner macOS mặc định là 3.9 ⇒ nếu không dựng sẵn bản riêng
+   ở đây thì test này sẽ ra mạng thật tải 24 MB (và hỏng khi không có mạng).
+
+   `sys.base_prefix` của venv phải khớp bản riêng, nếu không installer coi venv là đồ
+   thừa của một Python khác, dựng lại rồi chạy pip thật. */
+async function writeFakePython(home, workspace) {
+  const pyBin = join(home, "tools", "python", "bin")
+  const venvBin = join(workspace, ".venv", "bin")
+  const base = join(home, "tools", "python")
+  await mkdir(pyBin, { recursive: true })
+  await mkdir(venvBin, { recursive: true })
+  const answers = [
+    "#!/bin/sh",
+    "case \"$*\" in",
+    "  *'sys.version_info[:3]'*) printf '3.13.15\\n' ;;",
+    "  *'sys.version_info[:2]'*) printf '3.13\\n' ;;",
+    `  *sys.base_prefix*) printf '%s\\n' '${base}' ;;`,
+    "  *) exit 0 ;;",
+    "esac",
+  ].join("\n") + "\n"
+  await writeFile(join(pyBin, "python3"), answers)
+  await chmod(join(pyBin, "python3"), 0o755)
+  await writeFile(join(venvBin, "python"), answers)
+  await chmod(join(venvBin, "python"), 0o755)
+}
+
 function bashForTest() {
   return IS_WIN ? (findBash() || "bash") : "bash"
 }
@@ -419,15 +449,12 @@ export async function run({ tmp, agentDir }) {
     const fixture = await makeRuntimeFixture(tmp, repoInstall, { version: "2.1.26", installerSuffix: suffix })
     const nodeBin = join(home, "tools", "node", "bin")
     const moduleDir = join(home, "tools", "node_modules", "@resvg", "resvg-wasm")
-    const venvBin = join(workspace, ".venv", "bin")
     await mkdir(nodeBin, { recursive: true })
     await mkdir(moduleDir, { recursive: true })
-    await mkdir(venvBin, { recursive: true })
     await symlinkFile(process.execPath, join(nodeBin, "node"))
     await writeFile(join(moduleDir, "package.json"), '{"name":"@resvg/resvg-wasm","main":"index.js"}\n')
     await writeFile(join(moduleDir, "index.js"), "module.exports = {}\n")
-    await writeFile(join(venvBin, "python"), "#!/bin/sh\nexit 0\n")
-    await chmod(join(venvBin, "python"), 0o755)
+    await writeFakePython(home, workspace)
     const env = {
       ...process.env,
       HOME: join(tmp, "update-mv-home-user"),
@@ -527,15 +554,12 @@ export async function run({ tmp, agentDir }) {
       mark("fixture xong", `archive=${redacted(archive, pathsToRedact)}`)
       const nodeBin = join(home, "tools", "node", "bin")
       const moduleDir = join(home, "tools", "node_modules", "@resvg", "resvg-wasm")
-      const venvBin = join(workspace, ".venv", "bin")
       await mkdir(nodeBin, { recursive: true })
       await mkdir(moduleDir, { recursive: true })
-      await mkdir(venvBin, { recursive: true })
       await symlinkFile(process.execPath, join(nodeBin, "node"))
       await writeFile(join(moduleDir, "package.json"), '{"name":"@resvg/resvg-wasm","main":"index.js"}\n')
       await writeFile(join(moduleDir, "index.js"), "module.exports = {}\n")
-      await writeFile(join(venvBin, "python"), "#!/bin/sh\nexit 0\n")
-      await chmod(join(venvBin, "python"), 0o755)
+      await writeFakePython(home, workspace)
 
       const env = {
         ...process.env,

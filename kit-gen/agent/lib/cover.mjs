@@ -537,6 +537,7 @@ const STATUS_NONE = "none"
 
 /** Hạn chờ 'close' sau khi đã có 'exit' — CHỈ dùng trên win32 (xem chỗ spawn cover.sh). */
 const WIN_PIPE_GRACE_MS = 5000
+const MAX_COVER_LOG_BYTES = 64 * 1024
 
 /** Đọc meta ảnh bìa trên đĩa (không có = chưa từng chạy). */
 export async function readCoverMeta(ws, id) {
@@ -698,6 +699,15 @@ export async function startCover(ws, id, { imgHome = null, wait = false, force =
     const env = { ...process.env, PATH: process.env.PATH }
     if (imgHome) env.IMG_HOME = expandHomePath(imgHome)
     const lines = []
+    let logBytes = 0
+    const keepLog = value => {
+      const line = redactLine(String(value)).slice(0, 8192)
+      lines.push(line)
+      logBytes += Buffer.byteLength(line)
+      while (logBytes > MAX_COVER_LOG_BYTES && lines.length > 1) {
+        logBytes -= Buffer.byteLength(lines.shift())
+      }
+    }
     // darwin/linux: bashCommand trả đúng {cmd:"bash", args:[script, pdir], env:{}} như mã cũ.
     // win32: bash.exe của Git for Windows, path đổi sang /c/… (cover.sh `cd "$1"`), PATH có coreutils.
     const b = bashCommand([script, pdir])
@@ -707,7 +717,7 @@ export async function startCover(ws, id, { imgHome = null, wait = false, force =
         // pythonEnv(): cover.sh cũng gọi python3 (crop/ghép ảnh bìa) — xem platform.mjs.
         child = spawn(b.cmd, b.args, { cwd: pdir, stdio: ["ignore", "pipe", "pipe"], env: { ...env, ...b.env, ...pythonEnv() }, ...winSpawnOpts() })
       } catch { return resolve() }
-      const onData = buf => { lines.push(redactLine(String(buf))) }
+      const onData = buf => { keepLog(buf) }
       child.stdout.on("data", onData)
       child.stderr.on("data", onData)
       child.on("error", () => resolve())

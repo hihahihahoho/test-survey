@@ -1,7 +1,7 @@
 /* suite-system.mjs — §6.2 A (#1 /health, #2 /api/doctor, #3 /api/workspaces)
    + 9 lớp phòng thủ vận chuyển của architecture §3.4 (Host 421, Origin 403, ép preflight,
    không wildcard CORS, chỉ bind loopback). */
-import { fstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { fstatSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, eq, ok, includes, stripComments, PAGES, CLIENT } from "./harness.mjs"
 import { PROTOCOL_VERSION } from "../server.mjs"

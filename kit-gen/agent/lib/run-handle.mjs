@@ -2,7 +2,7 @@
    Job PHÁN THEO SẢN PHẨM (mtime raw/<job>.png >= t0), KHÔNG theo exit code (gen.sh:167-176). */
 import { spawn } from "node:child_process"
 import { join } from "node:path"
-import { ensureDir, exists, writeJsonAtomic, mtimeOf, stat, readFile, readJsonFile, writeFile, copyFile } from "./fsx.mjs"
+import { ensureDir, exists, writeJsonAtomic, mtimeOf, stat, readFile, readTailFile, readJsonFile, writeFile, copyFile } from "./fsx.mjs"
 import { fail } from "./errors.mjs"
 import { redactLine } from "./redact.mjs"
 import { projectDir } from "./projects-dir.mjs"
@@ -12,7 +12,13 @@ import { thumbnail } from "./thumbs.mjs"
 import { IS_WIN, pythonCommand, pythonSpawnOpts, killTree, winSpawnOpts } from "./platform.mjs"
 
 const HEARTBEAT_MS = 15000
-const MAX_BUFFER_EVENTS = 4000
+export const MAX_BUFFER_EVENTS = 4000
+export const MAX_EVENT_BYTES = 4 * 1024 * 1024
+export const MAX_EVENT_FILE_BYTES = 4 * 1024 * 1024
+const KEEP_EVENT_FILE_BYTES = 1 * 1024 * 1024
+export const MAX_EVENT_WRITE_QUEUE_BYTES = 512 * 1024
+export const MAX_CHILD_LINE_CHARS = 8192
+export const MAX_GEOMETRY_OUTPUT_BYTES = 1024 * 1024
 
 /* ══ CHU TRÌNH TỪNG TẤM (15/08) ═══════════════════════════════════════════════
    TRƯỚC: gen đủ 10 tấm → mới cắt (một lượt slice.py cho cả lượt) → mới có thumbnail
@@ -64,6 +70,7 @@ const EARLY_COVER_MIN_MAXJOBS = 2
 const ERROR_TAIL_LINES = 3          // "2-3 dòng cuối" của brief
 const ERROR_TAIL_MAX_CHARS = 240    // một dòng codex lỗi có thể dài hàng KB
 const STDERR_RING = 40              // đủ để lùi qua vài dòng rác cuối (progress bar…)
+const STDERR_RING_BYTES = 64 * 1024
 
 export class RunHandle {
   constructor(store, run, dir, opts) {
@@ -75,6 +82,12 @@ export class RunHandle {
     this.dir = dir
     this.opts = opts
     this.events = []
+    this.eventBytes = 0
+    this.eventWriteQueue = []
+    this.eventWritePendingBytes = 0
+    this.eventWriteActive = false
+    this.eventDrainPromise = null
+    this.eventWritesDropped = 0
     this.subs = new Set()
     this.child = null
     this.finished = false
@@ -104,6 +117,7 @@ export class RunHandle {
     /* Vòng nhớ stderr của CẢ LƯỢT — lưới hứng cuối cùng khi job không có log riêng
        (engine chết trước khi kịp tạo `logs/<job>.log`: đúng ca `rc=127`/`SyntaxError`). */
     this.stderrTail = []
+    this.stderrTailBytes = 0
     this.t0 = Math.floor(Date.now() / 1000)
     this.durations = []
     this.hb = setInterval(() => this.emit({ type: "heartbeat" }), HEARTBEAT_MS)
@@ -141,14 +155,71 @@ export class RunHandle {
   emit(ev) {
     this.run.seq += 1
     const line = { seq: this.run.seq, t: new Date().toISOString(), ...ev }
-    if (typeof line.line === "string") line.line = redactLine(line.line)
-    this.events.push(line)
-    if (this.events.length > MAX_BUFFER_EVENTS) this.events.splice(0, this.events.length - MAX_BUFFER_EVENTS)
+    if (typeof line.line === "string") {
+      line.line = redactLine(line.line)
+      if (line.line.length > MAX_CHILD_LINE_CHARS)
+        line.line = line.line.slice(0, MAX_CHILD_LINE_CHARS) + "… [truncated]"
+    }
     const text = JSON.stringify(line) + "\n"
+    const bytes = Buffer.byteLength(text)
+    this.events.push(line)
+    this.eventBytes += bytes
+    while (this.events.length > MAX_BUFFER_EVENTS || this.eventBytes > MAX_EVENT_BYTES) {
+      const old = this.events.shift()
+      this.eventBytes -= Buffer.byteLength(JSON.stringify(old) + "\n")
+    }
     // detached ⇒ thư mục đích không còn thuộc projects/; ghi tiếp sẽ tái tạo thư mục ma.
-    if (!this.detached) writeFile(join(this.dir, "events.ndjson"), text, { flag: "a" }).catch(() => {})
+    if (!this.detached) this.enqueueEventWrite(text)
     for (const s of this.subs) { try { s(line) } catch { /* subscriber chết */ } }
     return line
+  }
+
+  enqueueEventWrite(text) {
+    const bytes = Buffer.byteLength(text)
+    if (this.eventWritePendingBytes + bytes > MAX_EVENT_WRITE_QUEUE_BYTES) {
+      this.eventWritesDropped += 1
+      return
+    }
+    this.eventWriteQueue.push(text)
+    this.eventWritePendingBytes += bytes
+    this.drainEventWrites()
+  }
+
+  drainEventWrites() {
+    if (this.eventWriteActive) return this.eventDrainPromise
+    this.eventWriteActive = true
+    this.eventDrainPromise = (async () => {
+      const file = join(this.dir, "events.ndjson")
+      while (this.eventWriteQueue.length) {
+        const text = this.eventWriteQueue.shift()
+        this.eventWritePendingBytes -= Buffer.byteLength(text)
+        if (this.detached) continue
+        try {
+          const current = await stat(file).catch(() => null)
+          if (current && current.size + Buffer.byteLength(text) > MAX_EVENT_FILE_BYTES) {
+            const raw = Buffer.from(await readFile(file, "utf8").catch(() => ""))
+            const tail = raw.subarray(Math.max(0, raw.length - KEEP_EVENT_FILE_BYTES))
+            const nl = tail.indexOf(0x0a)
+            const kept = nl >= 0 ? tail.subarray(nl + 1) : tail
+            const marker = Buffer.from(`[event log rotated; keeping latest ${Math.round(KEEP_EVENT_FILE_BYTES / 1024)}KB]\n`)
+            await writeFile(file, Buffer.concat([marker, kept, Buffer.from(text)]), { flag: "w" })
+          } else {
+            await writeFile(file, text, { flag: "a" })
+          }
+        } catch { /* log persistence không được làm sập agent */ }
+      }
+    })().finally(() => {
+      this.eventWriteActive = false
+      this.eventDrainPromise = null
+      if (this.eventWriteQueue.length && !this.detached) this.drainEventWrites()
+    })
+    return this.eventDrainPromise
+  }
+
+  async flushEventWrites() {
+    while (this.eventWriteActive || this.eventWriteQueue.length) {
+      await (this.eventDrainPromise ?? this.drainEventWrites())
+    }
   }
 
   subscribe(fn, fromSeq = 0) {
@@ -162,7 +233,7 @@ export class RunHandle {
     if (this.events.length && this.events[0].seq <= fromSeq) return this.events.filter(e => e.seq >= fromSeq)
     const f = join(this.dir, "events.ndjson")
     if (!(await exists(f))) return []
-    const raw = await readFile(f, "utf8")
+    const raw = await readTailFile(f, MAX_EVENT_FILE_BYTES)
     const out = []
     for (const l of raw.split("\n")) {
       if (!l.trim()) continue
@@ -234,11 +305,14 @@ export class RunHandle {
       })
       this.child = child
       const onLine = (raw, level) => {
-        const line = raw.trimEnd()
+        const line = String(raw).trimEnd().slice(0, MAX_CHILD_LINE_CHARS)
         if (!line) return
         if (level !== "info") {
           this.stderrTail.push(line)
-          if (this.stderrTail.length > STDERR_RING) this.stderrTail.shift()
+          this.stderrTailBytes += Buffer.byteLength(line)
+          while (this.stderrTail.length > STDERR_RING || this.stderrTailBytes > STDERR_RING_BYTES) {
+            this.stderrTailBytes -= Buffer.byteLength(this.stderrTail.shift())
+          }
         }
         this.emit({ type: "job.log", job: null, level, line })
         if (kind === "gen") this.parseGenLine(line)
@@ -575,7 +649,7 @@ export class RunHandle {
     for (const abs of [join(this.dir, "logs", `${job}.log`), join(pdir, "logs", `${job}.log`)]) {
       if (!(await exists(abs))) continue
       // Log job của engine là file nhỏ (mỗi job một file); vẫn chỉ giữ đuôi.
-      const raw = await readFile(abs, "utf8").catch(() => "")
+      const raw = await readTailFile(abs, MAX_EVENT_FILE_BYTES).catch(() => "")
       const tail = this.tidyTail(raw.split("\n").slice(-STDERR_RING))
       if (tail.length) return tail
     }
@@ -591,7 +665,15 @@ export class RunHandle {
       // pythonSpawnOpts(): công cụ này đọc contract.json (UTF-8, tiếng Việt) — xem platform.mjs.
       const child = spawn(py.cmd, py.args, { cwd: pdir, stdio: ["ignore", "pipe", "pipe"], ...pythonSpawnOpts() })
       let text = ""
-      child.stdout.on("data", b => { text += String(b) })
+      let outputBytes = 0
+      child.stdout.on("data", b => {
+        if (outputBytes >= MAX_GEOMETRY_OUTPUT_BYTES) return
+        const room = MAX_GEOMETRY_OUTPUT_BYTES - outputBytes
+        const chunk = Buffer.isBuffer(b) ? b : Buffer.from(String(b))
+        const kept = chunk.subarray(0, room)
+        text += kept.toString("utf8")
+        outputBytes += kept.length
+      })
       child.on("error", () => resolve(null))
       child.on("close", () => {
         try { resolve(JSON.parse(text.trim())) } catch { resolve(null) }
@@ -731,6 +813,7 @@ export class RunHandle {
       type: "run.finished", status, ok, failed, failSummary: this.run.failSummary ?? undefined,
       durationMs: Date.parse(this.run.finishedAt) - Date.parse(this.run.startedAt),
     })
+    await this.flushEventWrites()
     for (const s of this.subs) { try { s(null) } catch { /* ignore */ } }
     this.subs.clear()
     if (this.store.active.get(this.run.projectId) === this) this.store.active.delete(this.run.projectId)
@@ -762,8 +845,14 @@ function lineReader(stream, onLine) {
   stream.on("data", chunk => {
     buf += chunk
     let i
-    while ((i = buf.indexOf("\n")) >= 0) { onLine(buf.slice(0, i)); buf = buf.slice(i + 1) }
-    if (buf.length > 8192) { onLine(buf); buf = "" }
+    while ((i = buf.indexOf("\n")) >= 0) {
+      onLine(buf.slice(0, i).slice(0, MAX_CHILD_LINE_CHARS))
+      buf = buf.slice(i + 1)
+    }
+    if (buf.length > MAX_CHILD_LINE_CHARS) {
+      onLine(buf.slice(0, MAX_CHILD_LINE_CHARS) + "… [truncated]")
+      buf = ""
+    }
   })
-  stream.on("end", () => { if (buf.trim()) onLine(buf) })
+  stream.on("end", () => { if (buf.trim()) onLine(buf.slice(0, MAX_CHILD_LINE_CHARS)) })
 }

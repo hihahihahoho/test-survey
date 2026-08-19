@@ -28,6 +28,18 @@ export async function readJsonFile(p) {
   }
 }
 
+/** Đọc tối đa đuôi file, không nạp nguyên log vào RAM. */
+export async function readTailFile(p, maxBytes = 1 << 20) {
+  const fh = await open(p, "r")
+  try {
+    const st = await fh.stat()
+    const bytes = Math.min(Math.max(0, Number(maxBytes) || 0), st.size)
+    const buf = Buffer.alloc(bytes)
+    if (bytes) await fh.read(buf, 0, bytes, st.size - bytes)
+    return buf.toString("utf8")
+  } finally { await fh.close().catch(() => {}) }
+}
+
 /* TÊN FILE TẠM PHẢI DUY NHẤT CHO TỪNG LẦN GHI — `pid + Date.now()` là CHƯA đủ.
    Hai lần ghi CÙNG một file trong CÙNG một mili-giây (thường gặp: `persist()` bắn-quên của
    job.done chạy chồng lên `persist()` của finish()) sẽ dùng CHUNG một tên tmp: lần rename
@@ -57,24 +69,28 @@ export async function writeFileAtomic(p, buf, { mkdirs = true } = {}) {
 
 export async function canWrite(p) { try { await access(p, constants.W_OK); return true } catch { return false } }
 
-/** Liệt kê đệ quy các FILE (bỏ symlink để không đi ra ngoài project). */
-export async function walkFiles(root, { skipDirs = [] } = {}) {
+/** Liệt kê đệ quy các FILE (bỏ symlink để không đi ra ngoài project).
+ * Luôn có trần độ sâu/số file: mọi caller chỉ quét một project/workspace con,
+ * không được biến một request stats thành quét vô hạn hoặc quét cả hồ sơ người dùng. */
+export async function walkFiles(root, { skipDirs = [], maxDepth = 12, maxFiles = 20_000 } = {}) {
   const out = []
-  async function rec(dir) {
+  async function rec(dir, depth) {
+    if (out.length >= maxFiles || depth > maxDepth) return
     let ents
     try { ents = await readdir(dir, { withFileTypes: true }) } catch { return }
     for (const e of ents) {
+      if (out.length >= maxFiles) return
       const abs = join(dir, e.name)
       if (e.isSymbolicLink()) continue
       if (e.isDirectory()) {
         if (skipDirs.includes(e.name)) continue
-        await rec(abs)
+        await rec(abs, depth + 1)
       } else if (e.isFile()) {
         out.push(abs)
       }
     }
   }
-  await rec(root)
+  await rec(root, 0)
   return out
 }
 

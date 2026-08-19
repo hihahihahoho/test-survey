@@ -2,7 +2,7 @@
    + log/prompt từng lượt + lịch sử ảnh raw 3 đời. */
 import { join } from "node:path"
 import { fail } from "../lib/errors.mjs"
-import { exists, readFile, readdir, stat, mtimeOf, ensureDir, copyFile } from "../lib/fsx.mjs"
+import { exists, readFile, readdir, stat, mtimeOf, ensureDir, copyFile, readTailFile } from "../lib/fsx.mjs"
 import { redactLine } from "../lib/redact.mjs"
 import { RE_JOB, RE_RUN_ID, assertMatch, safeSegment } from "../lib/paths.mjs"
 import { projectDir, readProject } from "../lib/projects.mjs"
@@ -11,6 +11,7 @@ import { readContract } from "../lib/contract.mjs"
 import { validateContract } from "../lib/validate.mjs"
 
 const QUOTA_PER_JOB = [3, 5]
+const MAX_LOG_READ_BYTES = 4 * 1024 * 1024
 
 export function register(r) {
   // #32 POST runs
@@ -92,7 +93,7 @@ export function register(r) {
     ]
     for (const abs of candidates) {
       if (!(await exists(abs))) continue
-      const raw = await readFile(abs, "utf8")
+      const raw = await readTailFile(abs, MAX_LOG_READ_BYTES)
       const lines = raw.split("\n")
       const text = lines.slice(Math.max(0, lines.length - tail)).map(redactLine).join("\n")
       return { status: 200, text, headers: { "Content-Type": "text/plain; charset=utf-8" } }

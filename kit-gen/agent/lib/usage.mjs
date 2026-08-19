@@ -22,7 +22,7 @@
    · Trả ra ngoài chỉ có: số phần trăm, số phút, mốc thời gian ISO, enum gói cước,
      nhãn home dạng `~/…`. Không path tuyệt đối. */
 import { createReadStream } from "node:fs"
-import { readdir, stat } from "node:fs/promises"
+import { opendir, readdir, stat } from "node:fs/promises"
 import { createInterface } from "node:readline"
 import { homedir } from "node:os"
 import { join } from "node:path"
@@ -39,6 +39,8 @@ const cache = new Map()
 const MAX_FILES = 12
 /** Bao nhiêu ngày gần nhất được ngó tới. */
 const MAX_DAYS = 14
+/** Không giữ danh sách tên vô hạn nếu một ngày có nhiều rollout. */
+const MAX_FILES_PER_DAY = MAX_FILES
 
 function expandHome(p) { return p.replace(/^~(?=$|\/)/, homedir()) }
 
@@ -55,13 +57,24 @@ async function recentRollouts(codexHome) {
   const root = join(codexHome, "sessions")
   if (!await exists(root)) return []
   const out = []
+  let daysSeen = 0
   for (const year of await sortedDirs(root)) {
     for (const month of await sortedDirs(join(root, year))) {
       for (const day of await sortedDirs(join(root, year, month))) {
+        if (daysSeen >= MAX_DAYS) return out.slice(0, MAX_FILES)
+        daysSeen += 1
         const dir = join(root, year, month, day)
-        let names = []
-        try { names = (await readdir(dir)).filter(n => n.startsWith("rollout-") && n.endsWith(".jsonl")) }
-        catch { continue }
+        const names = []
+        let handle
+        try { handle = await opendir(dir) } catch { continue }
+        try {
+          for await (const ent of handle) {
+            if (!ent.isFile() || !ent.name.startsWith("rollout-") || !ent.name.endsWith(".jsonl")) continue
+            names.push(ent.name)
+            if (names.length >= MAX_FILES_PER_DAY) break
+          }
+        } catch { /* file/day vừa biến mất */ }
+        finally { await handle.close().catch(() => {}) }
         const withTime = []
         for (const n of names) {
           try { withTime.push({ path: join(dir, n), at: (await stat(join(dir, n))).mtimeMs }) }
@@ -69,7 +82,7 @@ async function recentRollouts(codexHome) {
         }
         withTime.sort((a, b) => b.at - a.at)
         out.push(...withTime)
-        if (out.length >= MAX_FILES || out.length >= MAX_DAYS * 40) return out.slice(0, MAX_FILES)
+        if (out.length >= MAX_FILES) return out.slice(0, MAX_FILES)
       }
     }
   }

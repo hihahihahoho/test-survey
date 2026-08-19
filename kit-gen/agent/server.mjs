@@ -14,9 +14,10 @@
 import { createServer } from "node:http"
 import { execFile } from "node:child_process"
 import { randomBytes } from "node:crypto"
+import { realpathSync } from "node:fs"
 import { platform } from "node:os"
-import { resolve } from "node:path"
-import { pathToFileURL } from "node:url"
+import { basename, dirname, resolve } from "node:path"
+import { fileURLToPath, pathToFileURL } from "node:url"
 
 import { AgentError, toAgentError } from "./lib/errors.mjs"
 import { sendJson, sendText, sendEmpty, sendError, sendFile } from "./lib/http.mjs"
@@ -44,6 +45,8 @@ import { register as registerApp } from "./routes/app.mjs"
 import { register as registerLibrary } from "./routes/library.mjs"
 import { sweepOrphanCovers } from "./lib/cover.mjs"
 import { readRuntimeVersion } from "./lib/update.mjs"
+import { defaultKitgenHome } from "./lib/platform.mjs"
+import { acquireInstanceLock, releaseInstanceLock } from "./lib/instance-lock.mjs"
 
 /**
  * VERSION NỘI BỘ CỦA BUNDLE AGENT — **KHÔNG PHẢI** version bản phát hành.
@@ -61,6 +64,7 @@ export const BUILD_ID = "agent-" + PROTOCOL_VERSION
 
 /** Trần kích thước body (§3.4 lớp 9). Vượt → 413 TOO_LARGE. */
 const DEFAULT_LIMITS = { json: 25 << 20, upload: 200 << 20, refFile: 20 << 20 }
+const MAX_REPLAY_BYTES = 4 * 1024 * 1024
 /** Điều hướng TOP-LEVEL của trình duyệt (thanh địa chỉ, popup cầu dò, tải bundle /app/):
  *  không có header Origin và không thể thêm header tuỳ biến → miễn 2 lớp đó.
  *  An toàn vì: (a) vẫn kiểm Host + rate limit; (b) các đường này KHÔNG trả CORS header nên
@@ -103,7 +107,7 @@ const HELP = `kitgen-agent ${PROTOCOL_VERSION}
   node agent/server.mjs [tuỳ chọn]
 
   --workspace <path>   thư mục làm việc (lặp lại để khai nhiều workspace). Mặc định ~/KitGen
-  --port <n>           cổng bắt đầu dò. Mặc định 8765 (dò 8765→8766→8767…)
+  --port <n>           cổng loopback. Mặc định 8765; cổng bận thì thoát rõ lỗi
   --origin <url>       thêm origin vào allowlist CORS (lặp lại được)
   --allow-cli          cho phép request KHÔNG có header Origin (curl của chính bạn)
   --app-root <path>    thư mục bundle giao diện phục vụ tại /app/
@@ -305,12 +309,13 @@ async function streamNdjson(res, { found, from }, headers) {
 }
 
 async function replayFromDisk(dir, from) {
-  const { readFile, exists } = await import("./lib/fsx.mjs")
+  const { readTailFile, exists } = await import("./lib/fsx.mjs")
   const { join } = await import("node:path")
   const f = join(dir, "events.ndjson")
   if (!(await exists(f))) return []
   const out = []
-  for (const l of (await readFile(f, "utf8")).split("\n")) {
+  const raw = await readTailFile(f, MAX_REPLAY_BYTES)
+  for (const l of raw.split("\n")) {
     if (!l.trim()) continue
     try { const e = JSON.parse(l); if (e.seq >= from) out.push(e) } catch { /* dòng cụt */ }
   }
@@ -333,55 +338,68 @@ function revealInFinder(dir) {
   return new Promise(ok => execFile(cmd, [dir], err => ok(!err)))
 }
 
-/** Bind loopback IPv4 + IPv6, dò cổng lên nếu bận. KHÔNG BAO GIỜ 0.0.0.0. */
-export function listenLoopback(server, startPort, tries = 8) {
+/** Bind đúng một cổng loopback. Cổng bận là lỗi khởi động, KHÔNG dò cổng kế tiếp:
+ * dò cổng tạo nhiều agent cùng lúc sau update/startup, làm sai health check và tích
+ * luỹ RAM/handle. KHÔNG BAO GIỜ 0.0.0.0. */
+export function listenLoopback(server, startPort) {
   return new Promise((ok, err) => {
-    let port = startPort
-    let left = tries
-    const attempt = () => {
-      const onErr = e => {
-        server.removeListener("error", onErr)
-        if ((e.code === "EADDRINUSE" || e.code === "EACCES") && --left > 0) { port += 1; attempt() }
-        else err(e)
+    const onErr = e => {
+      server.removeListener("error", onErr)
+      if (e?.code === "EADDRINUSE" || e?.code === "EACCES") {
+        e.code = e.code === "EACCES" ? "KITGEN_PORT_UNAVAILABLE" : "KITGEN_PORT_IN_USE"
+        e.port = startPort
+        e.message = `KitGen agent khong khoi dong duoc: cong ${startPort} dang bi chiem. ` +
+          "Dung ban agent dang chay roi thu lai; khong tu dong doi sang cong khac."
       }
-      server.once("error", onErr)
-      server.listen({ host: "127.0.0.1", port, ipv6Only: false }, () => {
-        server.removeListener("error", onErr)
-        ok(port)
-      })
+      err(e)
     }
-    attempt()
+    server.once("error", onErr)
+    server.listen({ host: "127.0.0.1", port: startPort, ipv6Only: false }, () => {
+      server.removeListener("error", onErr)
+      ok(startPort)
+    })
   })
 }
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2))
   if (opts.help) { process.stdout.write(HELP); return }
-  const agent = await createAgent(opts)
-  const port = await listenLoopback(agent.server, opts.port ?? 8765)
-  agent.state.port = port
+  const instance = acquireInstanceLock({ kitgenHome: opts.kitgenHome ?? defaultKitgenHome() })
+  try {
+    const agent = await createAgent(opts)
+    const port = await listenLoopback(agent.server, opts.port ?? 8765)
+    agent.state.port = port
 
-  // Listener thứ hai cho [::1]: `localhost` trên nhiều máy phân giải ra ::1 TRƯỚC;
-  // không bind thì user gặp ECONNREFUSED khó hiểu (architecture §3.1). Cùng handler, cùng phòng thủ.
-  const v6 = await listenIpv6(agent.server, port)
+    // Listener thứ hai cho [::1]: `localhost` trên nhiều máy phân giải ra ::1 TRƯỚC;
+    // không bind thì user gặp ECONNREFUSED khó hiểu (architecture §3.1). Cùng handler, cùng phòng thủ.
+    const v6 = await listenIpv6(agent.server, port)
 
-  const ws = agent.registry.active
-  process.stdout.write([
-    ``,
-    // Dòng banner nói VERSION BẢN PHÁT HÀNH trước (thứ người dùng đối chiếu khi update),
-    // protocol chỉ là chú thích kỹ thuật đứng sau.
-    `  kitgen-agent ${agent.runtimeVersion ?? "(source)"} · protocol ${PROTOCOL_VERSION} · ${agent.instanceLabel}`,
-    `  http://127.0.0.1:${port}          (API cho web tĩnh)`,
-    `  http://127.0.0.1:${port}/app/     (bản chạy tại máy — same-origin)`,
-    v6 ? `  http://[::1]:${port}              (IPv6 loopback)` : `  [::1] không bind được (chỉ IPv4)`,
-    `  thư mục làm việc: ${ws.label}`,
-    `  origin cho phép : ${[...agent.origins()].filter(o => !o.startsWith("http://127")).join(", ") || "(chỉ loopback)"}`,
-    ``,
-  ].join("\n"))
+    const ws = agent.registry.active
+    process.stdout.write([
+      ``,
+      // Dòng banner nói VERSION BẢN PHÁT HÀNH trước (thứ người dùng đối chiếu khi update),
+      // protocol chỉ là chú thích kỹ thuật đứng sau.
+      `  kitgen-agent ${agent.runtimeVersion ?? "(source)"} · protocol ${PROTOCOL_VERSION} · ${agent.instanceLabel}`,
+      `  http://127.0.0.1:${port}          (API cho web tĩnh)`,
+      `  http://127.0.0.1:${port}/app/     (bản chạy tại máy — same-origin)`,
+      v6 ? `  http://[::1]:${port}              (IPv6 loopback)` : `  [::1] không bind được (chỉ IPv4)`,
+      `  thư mục làm việc: ${ws.label}`,
+      `  origin cho phép : ${[...agent.origins()].filter(o => !o.startsWith("http://127")).join(", ") || "(chỉ loopback)"}`,
+      ``,
+    ].join("\n"))
 
-  const bye = async () => { process.stdout.write("\n  đang dừng agent…\n"); process.exit(0) }
-  process.on("SIGINT", bye)
-  process.on("SIGTERM", bye)
+    const bye = async () => {
+      process.stdout.write("\n  đang dừng agent…\n")
+      releaseInstanceLock(instance)
+      process.exit(0)
+    }
+    process.on("SIGINT", bye)
+    process.on("SIGTERM", bye)
+    process.on("exit", () => releaseInstanceLock(instance))
+  } catch (e) {
+    releaseInstanceLock(instance)
+    throw e
+  }
 }
 
 /** Bind [::1] và đẩy request sang chính handler của server chính. */
@@ -402,8 +420,20 @@ export async function listenIpv6(mainServer, port) {
    lắng nghe cổng nào, không một dòng lỗi. Nhánh mới GATE win32 để so sánh trên
    darwin/linux giữ nguyên từng ký tự. */
 const argv1 = process.argv[1] ?? ""
-const isMainModule = import.meta.url === `file://${argv1}` ||
+const realpathOrNull = value => {
+  try { return realpathSync(value) } catch { return null }
+}
+const argvReal = realpathOrNull(argv1)
+const moduleReal = realpathOrNull(fileURLToPath(import.meta.url))
+const isMainByRealpath = Boolean(argvReal && moduleReal && argvReal === moduleReal)
+const isMainModule = isMainByRealpath || import.meta.url === `file://${argv1}` ||
   (process.platform === "win32" && argv1 !== "" && import.meta.url === pathToFileURL(argv1).href)
+const looksLikeAgentEntry = argv1 !== "" && basename(argv1) === basename(fileURLToPath(import.meta.url)) &&
+  basename(dirname(argv1)).toLowerCase() === "agent"
+if (!isMainModule && looksLikeAgentEntry) {
+  process.stderr.write(`[agent] entrypoint khong khop sau khi giai lien ket: ${argv1}; agent se khong chay\n`)
+  process.exit(1)
+}
 if (isMainModule) main().catch(e => {
   process.stderr.write(`[agent] không khởi động được: ${redactLine(String(e?.message ?? e))}\n`)
   process.exit(1)
