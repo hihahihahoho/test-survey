@@ -80,6 +80,12 @@ jobs:
           bash ../test/kitgen-launchd-start.test.sh
           bash ../test/install-launchd.test.sh
           bash ../test/install-download.test.sh
+          # Bộ ca này TỒN TẠI TỪ LÂU nhưng chưa lần nào được CI chạy — đúng kiểu lỗ hổng
+          # "có test mà không ai gọi". Nó canh vòng đời stop/start/restart của dịch vụ.
+          bash ../test/install-restart.test.sh
+          # pip TUYỆT ĐỐI KHÔNG ĐƯỢC BIÊN DỊCH (thiếu --only-binary là ninja ăn hết RAM
+          # và treo máy người dùng), và nhánh chọn/tải Python riêng phải đi đúng đường.
+          bash ../test/install-python-runtime.test.sh
       - name: Verify web application
         run: npm run verify:release
       - name: Verify integration contracts
@@ -186,6 +192,184 @@ jobs:
             ${{ runner.temp }}/release/kitgen-easy-install-windows.zip
           if-no-files-found: error
           retention-days: 14
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  CÀI THẬT TRÊN macOS VỚI PATH ĐÃ TƯỚC SẠCH — job này trước đây KHÔNG TỒN TẠI.
+  #
+  #  VÌ SAO: sự cố thật "install.sh thoát mã 127" chỉ xảy ra trên máy KHÔNG có Node
+  #  hệ thống. `npm` là symlink tới `npm-cli.js` mang shebang `#!/usr/bin/env node`;
+  #  Node riêng của KitGen nằm trong $KITGEN_HOME/tools/node/bin, KHÔNG có trong PATH
+  #  ⇒ `env: node: No such file or directory` ⇒ 127 ngay ở bước cài Codex CLI.
+  #  Máy nào có Node hệ thống thì thoát nạn — mà runner CI thì LUÔN có Node. Nên chừng
+  #  nào chưa tước PATH, ca này là ca không thể đỏ.
+  #
+  #  ĐÁNH ĐỔI ĐÃ CHỌN — Python: PATH tối thiểu vẫn còn /usr/bin/python3 (3.9 trên máy
+  #  Apple), tức NGOÀI dải có wheel, nên installer sẽ đi nhánh tải Python riêng ~24 MB
+  #  từ release `runtime-python-*`. Release đó do kitgen-runtime-python.yml sinh ra và
+  #  hiện chưa được chạy ⇒ job sẽ đỏ vì một lý do KHÔNG liên quan đến thứ đang cần test.
+  #  Vì vậy ta truyền KITGEN_PYTHON3 = một Python 3.13 hermetic (setup-python) để
+  #  installer đi nhánh "Python hệ thống trong dải có wheel". Đoạn đường ĐANG CẦN TEST
+  #  (Node riêng → PATH → npm → Codex CLI) KHÔNG bị né một bước nào; nhánh tải Python
+  #  riêng thì đã có bộ ca riêng của nó: kit-gen/test/install-python-runtime.test.sh.
+  #  KHI release runtime-python-* đã tồn tại: bỏ dòng KITGEN_PYTHON3 bên dưới để job
+  #  này đi luôn cả nhánh tải Python riêng.
+  # ═══════════════════════════════════════════════════════════════════════════
+  install-macos:
+    name: Cai dat tren macOS (PATH tuoc sach)
+    needs: verify-and-package
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: kitgen-runtime-${{ needs.verify-and-package.outputs.version }}
+          path: ${{ runner.temp }}/pkg
+      - uses: actions/setup-python@v5
+        id: py
+        with:
+          python-version: "3.13"
+
+      # Nếu runner lỡ có `node` ngay trong PATH tối thiểu thì cả job này vô nghĩa —
+      # phải ĐỎ ngay tại đây chứ không được xanh giả.
+      - name: PATH toi thieu phai that su trong node
+        shell: bash
+        run: |
+          set -u
+          env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/sh -c '
+            echo "PATH   = $PATH"
+            echo "node   = $(command -v node    || echo "(khong co)")"
+            echo "npm    = $(command -v npm     || echo "(khong co)")"
+            echo "python3= $(command -v python3 || echo "(khong co)")"
+            command -v python3 >/dev/null && python3 -V 2>&1 || true
+          '
+          if env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/sh -c 'command -v node >/dev/null 2>&1'; then
+            echo "::error::runner co san node NGAY TRONG PATH toi thieu - ca nay khong con la chan dung may nguoi dung, sua lai danh sach thu muc"
+            exit 1
+          fi
+          echo "OK  PATH toi thieu khong co node (dung chan dung may nguoi dung)"
+
+      # Cài THẬT, trong HOME tạm, PATH tối thiểu. `--no-start` để không đụng launchd
+      # của runner; mọi bước còn lại (Node riêng, venv, pip, npm Codex CLI, npm resvg)
+      # đều chạy đủ — đó mới là đoạn đường có bug.
+      - name: Cai dat trong PATH toi thieu (khong co node)
+        shell: bash
+        env:
+          PYBIN: ${{ steps.py.outputs.python-path }}
+        run: |
+          set -u
+          tar="$(ls "$RUNNER_TEMP"/pkg/kitgen-runtime-*.tar.gz | head -1)"
+          [ -f "$tar" ] || { echo "::error::khong thay tarball runtime trong artifact"; exit 1; }
+          echo "goi: $tar"
+          echo "python cho engine: $PYBIN ($("$PYBIN" -V 2>&1))"
+          H="$RUNNER_TEMP/fakehome"
+          mkdir -p "$H"
+          log="$RUNNER_TEMP/install-macos.log"
+          set +e
+          env -i \
+            HOME="$H" \
+            PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+            KITGEN_HOME="$H/.kitgen" \
+            KITGEN_PYTHON3="$PYBIN" \
+            bash kit-gen/install.sh \
+              --archive "$tar" --workspace "$H/KitGen" --port 8899 --no-start > "$log" 2>&1
+          code=$?
+          set -e
+          echo "--------- install.sh ---------"
+          cat "$log"
+          echo "------------------------------"
+          rc=0
+          if [ "$code" -ne 0 ]; then
+            echo "::error::install.sh thoat ma $code trong PATH khong co node (ma 127 = npm khong tim thay node: xem dong PATH=\$(dirname \$NODE):\$PATH trong kit-gen/install.sh)"
+            rc=1
+          fi
+          # Dau van tay CHINH XAC cua su co that. Bat rieng vi no noi thang nguyen nhan.
+          if grep -q 'env: node: No such file or directory' "$log"; then
+            echo "::error file=kit-gen/install.sh::npm chay bang shebang '#!/usr/bin/env node' ma Node rieng khong co trong PATH. Bo sung/giu dong PATH=\"\$(dirname \"\$NODE\"):\$PATH\" ngay sau khoi tai Node."
+            rc=1
+          fi
+          # Phai di QUA duoc buoc Codex CLI, khong duoc dung truoc do.
+          grep -q '\[3/7\]' "$log" || { echo "::error::log khong den buoc [3/7] Codex CLI"; rc=1; }
+          grep -q '\[7/7\]' "$log" || { echo "::error::log khong den buoc [7/7] - installer dung giua chung"; rc=1; }
+          for f in "$H/.kitgen/tools/node/bin/node" \
+                   "$H/.kitgen/tools/node_modules/.bin/codex" \
+                   "$H/.kitgen/current/agent/server.mjs" \
+                   "$H/.kitgen/bin/kitgen"; do
+            [ -e "$f" ] || { echo "::error::thieu $f"; rc=1; }
+          done
+          [ "$rc" -eq 0 ] && echo "OK  cai xong ma 0 trong PATH khong co node; Codex CLI cai duoc bang npm cua Node rieng"
+          exit $rc
+
+      # Ca hồi quy cho sự cố "agent thoát câm": chạy CHÍNH server.mjs qua symlink
+      # `current` bằng Node riêng. Bản chưa vá: Node giải symlink cho `import.meta.url`
+      # nhưng không giải cho `process.argv[1]` ⇒ hai vế khác chuỗi ⇒ main() không chạy
+      # ⇒ thoát MÃ 0, stdout 0 byte, không nghe cổng. Trên Windows triệu chứng y hệt
+      # (junction), nên ca này canh hộ cả hai nền tảng ở chỗ rẻ nhất.
+      - name: Agent chay qua symlink current phai lang nghe
+        shell: bash
+        run: |
+          set -u
+          H="$RUNNER_TEMP/fakehome"
+          KG="$H/.kitgen"
+          port=8899
+          origin="http://127.0.0.1:$port"
+          log="$RUNNER_TEMP/agent-symlink.log"
+          [ -L "$KG/current" ] || { echo "::error::$KG/current khong phai symlink - ca hoi quy nay mat y nghia"; exit 1; }
+          ls -l "$KG/current"
+          : > "$log"
+          env -i HOME="$H" PATH=/usr/bin:/bin KITGEN_HOME="$KG" \
+            "$KG/tools/node/bin/node" "$KG/current/agent/server.mjs" \
+            --workspace "$H/KitGen" --port "$port" --origin "$origin" > "$log" 2>&1 &
+          pid=$!
+          ok=0
+          alive=1
+          for i in $(seq 1 30); do
+            sleep 1
+            if ! kill -0 "$pid" 2>/dev/null; then alive=0; break; fi
+            if curl -fsS -m 3 -H 'X-KitGen-Client: 1' -H "Origin: $origin" \
+                 "$origin/health" -o "$RUNNER_TEMP/health.json" 2>/dev/null; then ok=1; break; fi
+          done
+          rc=0
+          if [ "$alive" -eq 0 ]; then
+            echo "::error file=kit-gen/agent/server.mjs::tien trinh agent THOAT thay vi lang nghe. Thoat ma 0 + stdout rong = bug isMainModule: so import.meta.url voi process.argv[1] bang chuoi, Node giai symlink cho ve dau chu khong giai cho ve sau."
+            rc=1
+          fi
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::/health khong tra loi khi chay server.mjs qua symlink current"
+            rc=1
+          else
+            echo "/health -> $(cat "$RUNNER_TEMP/health.json")"
+            grep -q '"app":"kitgen-agent"' "$RUNNER_TEMP/health.json" || { echo "::error::/health: app != kitgen-agent"; rc=1; }
+          fi
+          bytes="$(wc -c < "$log" | tr -d ' ')"
+          echo "stdout qua symlink: $bytes byte"
+          if [ "$bytes" -le 0 ]; then
+            echo "::error file=kit-gen/agent/server.mjs::stdout RONG - agent khong in noi mot dong banner (thoat cam) - xem isMainModule"
+            rc=1
+          else
+            echo "--------- stdout agent ---------"
+            cat "$log"
+            echo "-------------------------------"
+            grep -q 'kitgen-agent' "$log" || { echo "::error::stdout khong co dong banner 'kitgen-agent'"; rc=1; }
+            grep -q 'protocol' "$log"     || { echo "::error::stdout khong co chu 'protocol' trong banner"; rc=1; }
+          fi
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+          [ "$rc" -eq 0 ] && echo "OK  agent lang nghe that su khi chay qua symlink current"
+          exit $rc
+
+      - name: Nhat ky khi hong
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          for f in "$RUNNER_TEMP/install-macos.log" "$RUNNER_TEMP/agent-symlink.log"; do
+            echo "--------- $f ---------"
+            [ -f "$f" ] && tail -200 "$f" || echo "(khong co file)"
+          done
+          echo "--------- cay \$KITGEN_HOME ---------"
+          find "$RUNNER_TEMP/fakehome/.kitgen" -maxdepth 2 2>/dev/null | head -60
+          exit 0
 
   publish:
     if: startsWith(github.ref, 'refs/tags/kitgen-v')

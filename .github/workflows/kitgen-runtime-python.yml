@@ -1,0 +1,235 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# KitGen · dựng release runtime Python (chạy TAY, không tự chạy bao giờ)
+#
+# VÌ SAO CÓ FILE NÀY
+#   Installer của KitGen không còn để MÁY NGƯỜI DÙNG quyết định phiên bản Python.
+#   pillow/numpy/scipy/pymatting chỉ có wheel dựng sẵn cho một dải phiên bản; rơi ra
+#   ngoài dải đó thì pip đi BIÊN DỊCH scipy từ nguồn — ninja bung một tiến trình mỗi
+#   nhân CPU, mỗi tiến trình hơn 1 GB RAM — và đã ĐƠ TOÀN MÁY một người dùng thật.
+#   Nên KitGen mang theo Python y như đã mang theo Node từ lâu.
+#
+# VÌ SAO KHÔNG TẢI THẲNG TỪ astral-sh
+#   · không phụ thuộc một kho bên thứ ba còn sống hay không;
+#   · người dùng chỉ phải mở MỘT tên miền (máy công ty/ngân hàng lọc theo domain);
+#   · checksum do CI của mình sinh ra nên đáng tin, không phải tin lời kho khác.
+#   Workflow này kéo tarball gốc về, ĐỐI CHIẾU với checksum thượng nguồn, tự sinh
+#   `SHA256SUMS`, rồi tạo MỘT release SỐNG LÂU `runtime-python-<version>` và đính
+#   3 tarball + 1 file SHA256SUMS.
+#
+# BẢN PHÁT HÀNH KITGEN VẪN 3,1 MB
+#   Tarball Python KHÔNG BAO GIỜ được đính vào từng bản release KitGen. Release này
+#   đứng riêng, tạo một lần, dùng cho mọi bản KitGen tới khi đổi pin.
+#
+# AI ĐỌC RELEASE NÀY
+#   kit-gen/install.sh        → $PYTHON_VERSION / $PYTHON_BUILD / $PYTHON_RUNTIME_BASE
+#   kit-gen/scripts/install.ps1 → $PYTHON_VERSION / $PYTHON_BUILD / $PythonRuntimeBase
+#   Đổi pin thì phải sửa CẢ HAI file đó rồi mới chạy workflow này với version mới.
+#
+# CHỈ workflow_dispatch. KHÔNG push, KHÔNG tag, KHÔNG schedule: tạo release là việc
+# có chủ ý, không phải tác dụng phụ của một cú push.
+# ═══════════════════════════════════════════════════════════════════════════════
+name: KitGen runtime Python
+
+on:
+  workflow_dispatch:
+    inputs:
+      python_version:
+        description: "CPython version (phải khớp $PYTHON_VERSION trong install.sh và install.ps1)"
+        required: true
+        default: "3.13.15"
+        type: string
+      python_build:
+        description: "Ngày build của python-build-standalone (phải khớp $PYTHON_BUILD)"
+        required: true
+        default: "20260814"
+        type: string
+      publish:
+        description: "Tạo release thật. Bỏ tick = chỉ tải + kiểm + in SHA256SUMS rồi dừng."
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  build-runtime-python:
+    runs-on: ubuntu-latest
+    permissions:
+      # Chỉ job này được ghi, và chỉ để tạo release runtime.
+      contents: write
+    env:
+      PY_VERSION: ${{ inputs.python_version }}
+      PY_BUILD: ${{ inputs.python_build }}
+      # Kho thượng nguồn: tag của python-build-standalone CHÍNH LÀ ngày build.
+      UPSTREAM: https://github.com/astral-sh/python-build-standalone/releases/download
+    steps:
+      - name: Kiểm tra input
+        shell: bash
+        run: |
+          set -eu
+          case "$PY_VERSION" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::python_version phải dạng X.Y.Z, nhận được: $PY_VERSION" >&2; exit 1 ;;
+          esac
+          case "$PY_BUILD" in
+            [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;;
+            *) echo "::error::python_build phải là 8 chữ số (YYYYMMDD), nhận được: $PY_BUILD" >&2; exit 1 ;;
+          esac
+          echo "runtime-python-$PY_VERSION  ·  build $PY_BUILD"
+
+      - uses: actions/checkout@v4
+
+      # Pin trong installer và pin của workflow phải là MỘT. Lệch nhau nghĩa là
+      # installer sẽ đi tìm một asset không tồn tại trên release vừa tạo — đúng cái
+      # lỗi 404 im lặng mà BACKLOG #23 đã trả giá một lần rồi.
+      - name: Pin trong install.sh / install.ps1 phải khớp input
+        shell: bash
+        run: |
+          set -eu
+          fail=0
+          check() { # <file> <nhãn> <giá trị mong đợi> <regex lấy giá trị>
+            got="$(sed -n "$4" "$1" | head -n1)"
+            if [ "$got" != "$3" ]; then
+              echo "::error file=$1::$2 trong $1 là '$got', workflow đang dựng '$3'." >&2
+              fail=1
+            fi
+          }
+          check kit-gen/install.sh          PYTHON_VERSION "$PY_VERSION" 's/^PYTHON_VERSION="\([^"]*\)".*/\1/p'
+          check kit-gen/install.sh          PYTHON_BUILD   "$PY_BUILD"   's/^PYTHON_BUILD="\([^"]*\)".*/\1/p'
+          check kit-gen/scripts/install.ps1 PYTHON_VERSION "$PY_VERSION" "s/^\\\$PYTHON_VERSION *= *'\\([^']*\\)'.*/\\1/p"
+          check kit-gen/scripts/install.ps1 PYTHON_BUILD   "$PY_BUILD"   "s/^\\\$PYTHON_BUILD *= *'\\([^']*\\)'.*/\\1/p"
+          [ "$fail" -eq 0 ] || {
+            echo "Sửa pin trong CẢ HAI installer rồi chạy lại workflow." >&2
+            exit 1
+          }
+          echo "pin khớp: $PY_VERSION+$PY_BUILD"
+
+      - name: Release runtime-python-$PY_VERSION đã tồn tại chưa
+        if: ${{ inputs.publish }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -eu
+          tag="runtime-python-$PY_VERSION"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release $tag ĐÃ CÓ. Release runtime là bất biến — installer đã phát ra ngoài đang trỏ vào đúng những file đó." >&2
+            echo "Muốn đổi nội dung thì pin sang version/build khác rồi sửa cả hai installer, đừng ghi đè tag cũ." >&2
+            exit 1
+          fi
+          echo "$tag chưa tồn tại — được phép tạo."
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # BA asset, đúng những gì hai installer đi tìm:
+      #   install.sh  : aarch64-apple-darwin (24,1 MB) · x86_64-apple-darwin (23,9 MB)
+      #   install.ps1 : x86_64-pc-windows-msvc (44,9 MB)
+      # Biến thể `install_only`, KHÔNG dùng `freethreaded`.
+      #
+      # THÊM NỀN TẢNG (ví dụ Linux): thêm dòng vào danh sách dưới đây VÀ mở nhánh
+      # tương ứng trong `case "$(uname -s)-$(uname -m)"` của kit-gen/install.sh.
+      # Thiếu một trong hai thì hoặc là tải một file 404, hoặc là đính một file 45 MB
+      # không ai đọc. Cố ý chưa thêm Linux: install.sh chỉ chạy thật trên macOS.
+      # ─────────────────────────────────────────────────────────────────────────
+      - name: Tải tarball gốc và đối chiếu checksum thượng nguồn
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p out
+          cd out
+          for target in aarch64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-msvc; do
+            asset="cpython-$PY_VERSION+$PY_BUILD-$target-install_only.tar.gz"
+            echo "── $asset"
+            curl -fL --retry 3 --retry-all-errors -o "$asset" "$UPSTREAM/$PY_BUILD/$asset"
+            # Thượng nguồn đính kèm sidecar `.sha256` cho từng asset. Đây là NEO ĐỘC LẬP:
+            # nó chứng minh mình mirror đúng byte của bản upstream, chứ không phải mình
+            # tự băm cái mình vừa tải (băm cái đã hỏng thì vẫn ra một con số đẹp).
+            curl -fL --retry 3 --retry-all-errors -o "$asset.upstream-sha256" "$UPSTREAM/$PY_BUILD/$asset.sha256"
+            want="$(awk '{ print $1 }' "$asset.upstream-sha256" | head -n1)"
+            got="$(sha256sum "$asset" | awk '{ print $1 }')"
+            [ -n "$want" ] || { echo "::error::sidecar checksum rỗng cho $asset" >&2; exit 1; }
+            [ "$want" = "$got" ] || {
+              echo "::error::checksum thượng nguồn KHÔNG KHỚP cho $asset" >&2
+              echo "  upstream: $want" >&2
+              echo "  tải về  : $got" >&2
+              exit 1
+            }
+            rm -f "$asset.upstream-sha256"
+            printf '   OK  %s  %s\n' "$got" "$(du -h "$asset" | awk '{ print $1 }')"
+          done
+
+      - name: Gói có đúng ruột không
+        shell: bash
+        run: |
+          set -eu
+          cd out
+          for f in *-apple-darwin-install_only.tar.gz; do
+            tar -tzf "$f" | grep -qx 'python/bin/python3' || {
+              echo "::error::$f không có python/bin/python3" >&2; exit 1; }
+          done
+          for f in *-pc-windows-msvc-install_only.tar.gz; do
+            # install.ps1 giải nén với --strip-components=1 rồi gọi <pyHome>\python.exe.
+            tar -tzf "$f" | grep -qx 'python/python.exe' || {
+              echo "::error::$f không có python/python.exe" >&2; exit 1; }
+          done
+          echo "cả 3 gói đúng cấu trúc install_only."
+
+      # SHA256SUMS do CHÍNH CI này sinh — đây là thứ installer đối chiếu trước khi
+      # giải nén. Định dạng `<64 hex>␠␠<tên file>`: `sha256sum` của Git-Bash đọc nhị
+      # phân sẽ in `␠*`, cả hai installer đều nhận được cả hai dạng, nhưng file mình
+      # phát ra thì giữ đúng MỘT dạng.
+      - name: Sinh SHA256SUMS
+        shell: bash
+        run: |
+          set -eu
+          cd out
+          sha256sum *.tar.gz | sed 's/^\([0-9a-f]\{64\}\) \*/\1  /' > SHA256SUMS
+          cat SHA256SUMS
+          sha256sum -c SHA256SUMS
+          ls -l
+
+      - name: Tóm tắt
+        shell: bash
+        run: |
+          set -eu
+          {
+            echo "### runtime-python-$PY_VERSION (build $PY_BUILD)"
+            echo
+            echo '```'
+            cat out/SHA256SUMS
+            echo '```'
+            echo
+            du -h out/* | sed 's/^/    /'
+            if [ "${{ inputs.publish }}" != "true" ]; then
+              echo
+              echo '> Chạy thử (publish = false): KHÔNG tạo release nào.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Tạo GitHub Release runtime-python
+        if: ${{ inputs.publish }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: runtime-python-${{ inputs.python_version }}
+          name: CPython ${{ inputs.python_version }} runtime cho KitGen
+          # `make_latest: false` LÀ BẮT BUỘC. Release này không phải một bản KitGen;
+          # để nó thành "Latest" là mọi thứ đọc release mới nhất (kể cả người) sẽ nhìn
+          # nhầm một tarball Python thành bản phát hành sản phẩm.
+          make_latest: "false"
+          fail_on_unmatched_files: true
+          body: |
+            Bản CPython ${{ inputs.python_version }} (build ${{ inputs.python_build }}, biến thể `install_only`)
+            mà installer KitGen tải về khi máy người dùng không có sẵn Python trong dải có wheel.
+
+            Mirror của [astral-sh/python-build-standalone](https://github.com/astral-sh/python-build-standalone/releases/tag/${{ inputs.python_build }}).
+            `SHA256SUMS` do CI của KitGen sinh sau khi đã đối chiếu với checksum thượng nguồn.
+
+            **Release này là BẤT BIẾN.** Installer đã phát ra ngoài trỏ thẳng vào đúng
+            những file dưới đây và từ chối giải nén nếu checksum lệch. Đừng xoá, đừng
+            thay file, đừng đổi tag. Cần bản khác thì tạo tag `runtime-python-<version>` mới
+            và sửa `$PYTHON_VERSION` trong `kit-gen/install.sh` + `kit-gen/scripts/install.ps1`.
+          files: |
+            out/*.tar.gz
+            out/SHA256SUMS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

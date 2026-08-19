@@ -311,9 +311,20 @@ jobs:
             Write-Host ("OK   bash   : {0}" -f $bash)
             Write-Host ("     coreutils <Git>\usr\bin\grep.exe: {0}" -f (Test-Path 'C:\Program Files\Git\usr\bin\grep.exe'))
           } else { $bad += 'bash.exe cua Git for Windows' }
-          foreach ($exe in 'tar.exe', 'python.exe', 'node.exe', 'git.exe') {
+          # BẮT BUỘC = thứ CHÍNH WORKFLOW này cần để chạy (giải nén gói, checkout).
+          foreach ($exe in 'tar.exe', 'git.exe') {
             $c = Get-Command $exe -ErrorAction SilentlyContinue
             if ($c) { Write-Host ("OK   {0,-10}: {1}" -f $exe, $c.Source) } else { $bad += $exe }
+          }
+          # CHỈ GHI NHẬN, KHÔNG BẮT BUỘC — và đây là một sửa lỗi có chủ đích:
+          # trước đây job này BÁO LỖI NẾU RUNNER THIẾU node.exe/python.exe, tức là nó
+          # ĐÒI máy phải bẩn đúng chỗ mà máy người dùng thật thì trống trơn. Installer
+          # phải tự mang Node/Python riêng; nếu nó lỡ dựa vào bản của máy thì đó là BUG
+          # cần đỏ, không phải tiền đề cần khai. Cứ in ra để đọc log, nhưng không chặn.
+          foreach ($exe in 'python.exe', 'node.exe') {
+            $c = Get-Command $exe -ErrorAction SilentlyContinue
+            if ($c) { Write-Host ("ghi nhan {0,-10}: {1} (installer KHONG duoc phu thuoc)" -f $exe, $c.Source) }
+            else    { Write-Host ("ghi nhan {0,-10}: khong co tren PATH (giong may nguoi dung)" -f $exe) }
           }
           Write-Host ("     LOCALAPPDATA = {0}" -f $env:LOCALAPPDATA)
           Write-Host ("     USERPROFILE  = {0}" -f $env:USERPROFILE)
@@ -566,6 +577,171 @@ jobs:
           if (-not $out2.Contains('Usage: kitgen')) { Write-Host '::error::kitgen.cmd khong in usage'; exit 1 }
           Write-Host 'OK   kitgen.cmd nap duoc config.cmd va chay'
           exit 0
+
+      # ── CA TRUNG TÂM CỦA VÒNG NÀY — vì sao nó tồn tại ────────────────────────────
+      # Sự cố thật trên máy người dùng: cài xong, agent THOÁT CÂM — mã thoát 0, không
+      # nghe cổng nào, `agent.log` đúng 0 byte. CI cũ vẫn xanh vì nó chỉ spawn thẳng
+      # `node agent\server.mjs` từ thư mục MÃ NGUỒN (job 4, bước cuối) — đúng đoạn đường
+      # KHÔNG có bug. Bug nằm ở đoạn giữa trình cài và server.mjs: kitgen.cmd → config.cmd
+      # → Node riêng → junction `current`.
+      # Bước này đi TRỌN dây chuyền thật đó và khẳng định ba mệnh đề mà bản hỏng không
+      # thể nào thoả:
+      #   ① agent.log TỒN TẠI, KHÁC RỖNG, và có dòng banner (`kitgen-agent`, `protocol`);
+      #   ② /health trả 200 trên ĐÚNG cổng thật, gọi qua chính `kitgen.cmd` đã cài;
+      #   ③ có tiến trình THỰC SỰ lắng nghe cổng đó — không phải "thoát 0 rồi im".
+      # Chỉ mệnh đề ① thôi, nếu có từ đầu, đã bắt trọn sự cố ngay ngày đầu.
+      - name: Khởi động thật qua kitgen.cmd — agent.log phải khác rỗng
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $home_  = Join-Path $env:LOCALAPPDATA 'KitGen'
+          $kitgen = Join-Path $home_ 'bin\kitgen.cmd'
+          $log    = Join-Path $home_ 'agent.log'
+          $port   = 8765
+          $origin = 'http://127.0.0.1:8765'
+          # Xoa log cu de "khac rong" la bang chung cua LUOT NAY, khong phai cua lan truoc.
+          Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
+          $ErrorActionPreference = 'Continue'   # kitgen.cmd/taskkill co the thoat khac 0
+          & $kitgen start | Out-Null
+          $body = $null
+          foreach ($i in 1..30) {
+            Start-Sleep -Seconds 1
+            try {
+              $r = Invoke-WebRequest -Uri "$origin/health" -Headers @{ 'X-KitGen-Client' = '1'; 'Origin' = $origin } -UseBasicParsing -TimeoutSec 3
+              if ($r.StatusCode -eq 200) { $body = $r.Content; break }
+            } catch { }
+          }
+          $bad = 0
+
+          # (1) agent.log khac rong + co banner
+          $logLen = -1
+          if (Test-Path -LiteralPath $log) { $logLen = (Get-Item -LiteralPath $log).Length }
+          Write-Host ("agent.log: {0} ({1} byte)" -f $log, $logLen)
+          if ($logLen -le 0) {
+            Write-Host '::error::agent.log RONG hoac khong ton tai => agent thoat cam. Xem server.mjs isMainModule: no so import.meta.url voi process.argv[1] bang CHUOI, ma Node giai junction cho ve dau va KHONG giai cho ve sau => main() khong bao gio chay. Xem them log-run.mjs va KITGEN_SOURCE trong config.cmd.'
+            $bad = 1
+          } else {
+            $logText = [string](Get-Content -Raw -LiteralPath $log)
+            Write-Host '--------- agent.log ---------'
+            Write-Host $logText
+            Write-Host '-----------------------------'
+            foreach ($needle in 'kitgen-agent', 'protocol') {
+              if (-not $logText.Contains($needle)) {
+                Write-Host ("::error::agent.log khong co banner chua [{0}] => agent thoat cam - xem server.mjs isMainModule" -f $needle)
+                $bad = 1
+              }
+            }
+          }
+
+          # (2) /health tren CONG THAT, qua day chuyen da cai
+          if (-not $body) {
+            Write-Host '::error::/health khong tra loi tren cong 8765 sau 30s qua day chuyen that (kitgen.cmd -> config.cmd -> junction current -> Node rieng)'
+            $bad = 1
+          } else {
+            Write-Host ("/health -> {0}" -f $body)
+            $h = $body | ConvertFrom-Json
+            if ($h.app -ne 'kitgen-agent') { Write-Host '::error::/health: app != kitgen-agent'; $bad = 1 }
+            if ($h.protocol -ne 1)         { Write-Host '::error::/health: protocol != 1'; $bad = 1 }
+          }
+
+          # (3) that su LANG NGHE, khong phai thoat ma 0.
+          # Get-NetTCPConnection cho biet CA pid dang giu cong; netstat la duong lui neu
+          # module NetTCPIP khong nap duoc trong pwsh (khong de mot chi tiet moi truong
+          # bien thanh mot ca do gia).
+          $listenLines = @()
+          if (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue) {
+            foreach ($c in @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)) {
+              $pr = Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue
+              $nm = '?'
+              if ($pr) { $nm = $pr.ProcessName }
+              $listenLines += ("{0}:{1} <- pid {2} ({3})" -f $c.LocalAddress, $c.LocalPort, $c.OwningProcess, $nm)
+            }
+          } else {
+            $listenLines = @(& netstat -ano | Select-String -SimpleMatch (":{0} " -f $port) | Select-String -SimpleMatch 'LISTENING' | ForEach-Object { $_.Line.Trim() })
+          }
+          if ($listenLines.Count -eq 0) {
+            Write-Host '::error::khong co tien trinh nao LANG NGHE cong 8765 - agent da thoat thay vi phuc vu'
+            $bad = 1
+          } else {
+            foreach ($l in $listenLines) { Write-Host ("lang nghe {0}" -f $l) }
+          }
+
+          # (4) chinh lenh nguoi dung go: `kitgen status` nap config.cmd roi goi /health
+          $st = [string](& $kitgen status 2>&1 | Out-String)
+          Write-Host ("kitgen status ->`n{0}" -f $st)
+          if (-not $st.Contains('kitgen-agent')) {
+            Write-Host '::error::kitgen.cmd status khong lay duoc /health qua config.cmd'
+            $bad = 1
+          }
+
+          # (5) tat sach de buoc sau con cong 8765 va khoa instance
+          & $kitgen stop | Out-Null
+          Start-Sleep -Seconds 2
+          $still = $false
+          try {
+            $r2 = Invoke-WebRequest -Uri "$origin/health" -Headers @{ 'X-KitGen-Client' = '1'; 'Origin' = $origin } -UseBasicParsing -TimeoutSec 3
+            if ($r2.StatusCode -eq 200) { $still = $true }
+          } catch { }
+          if ($still) { Write-Host '::error::agent van tra /health sau `kitgen stop`'; $bad = 1 }
+          else { Write-Host 'OK   kitgen stop da tat sach' }
+          exit $bad
+
+      # ── CA HỒI QUY TRỰC TIẾP CHO BUG "THOÁT CÂM" ────────────────────────────────
+      # Chạy CHÍNH server.mjs qua junction `current` (không qua đường có số hiệu bản),
+      # bằng Node riêng đã cài. Bản chưa vá: Node giải junction cho `import.meta.url`
+      # nhưng KHÔNG giải cho `process.argv[1]` ⇒ hai vế khác chuỗi ⇒ main() không chạy
+      # ⇒ tiến trình thoát MÃ 0, stdout rỗng, không nghe cổng. Đã tái hiện được y hệt
+      # trên macOS qua symlink `current` (xem teams/fix-installer/REPORT.md, lượt 3).
+      - name: server.mjs chạy qua junction current phải lắng nghe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $home_ = Join-Path $env:LOCALAPPDATA 'KitGen'
+          $cur   = Get-Item -LiteralPath (Join-Path $home_ 'current') -Force -ErrorAction SilentlyContinue
+          if (-not $cur -or -not $cur.LinkType) {
+            Write-Host '::error::khong co junction current - ca hoi quy nay mat y nghia (xem buoc kiem cay thu muc)'
+            exit 1
+          }
+          Write-Host ("current la {0} -> {1}" -f $cur.LinkType, ($cur.Target -join ','))
+          $entry  = Join-Path $home_ 'current\agent\server.mjs'
+          $node   = Join-Path $home_ 'tools\node\node.exe'
+          $port   = 8901
+          $origin = 'http://127.0.0.1:8901'
+          $ws     = Join-Path $env:RUNNER_TEMP 'ws-junction'
+          $out    = Join-Path $env:RUNNER_TEMP 'junction.out.log'
+          $err    = Join-Path $env:RUNNER_TEMP 'junction.err.log'
+          New-Item -ItemType Directory -Force -Path $ws | Out-Null
+          Remove-Item -LiteralPath $out, $err -Force -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath $node -ArgumentList @($entry, '--workspace', $ws, '--port', "$port", '--origin', $origin) `
+                 -PassThru -WindowStyle Hidden -RedirectStandardOutput $out -RedirectStandardError $err
+          Write-Host ("da spawn node rieng qua junction, pid={0}" -f $p.Id)
+          $body = $null
+          foreach ($i in 1..30) {
+            Start-Sleep -Seconds 1
+            if ($p.HasExited) { break }
+            try {
+              $r = Invoke-WebRequest -Uri "$origin/health" -Headers @{ 'X-KitGen-Client' = '1'; 'Origin' = $origin } -UseBasicParsing -TimeoutSec 3
+              if ($r.StatusCode -eq 200) { $body = $r.Content; break }
+            } catch { }
+          }
+          $ErrorActionPreference = 'Continue'
+          $bad = 0
+          if ($p.HasExited) {
+            Write-Host ("::error::tien trinh agent da THOAT (ma {0}) thay vi lang nghe. Thoat ma 0 + stdout rong = dung trieu chung bug isMainModule: server.mjs so import.meta.url voi process.argv[1] bang chuoi; Node giai junction cho ve dau, khong giai cho ve sau." -f $p.ExitCode)
+            $bad = 1
+          }
+          if (-not $body) { Write-Host '::error::/health khong tra loi khi chay server.mjs qua junction current'; $bad = 1 }
+          $outLen = 0
+          if (Test-Path -LiteralPath $out) { $outLen = (Get-Item -LiteralPath $out).Length }
+          Write-Host ("stdout qua junction: {0} byte" -f $outLen)
+          if ($outLen -le 0) {
+            Write-Host '::error::stdout RONG - agent khong in noi mot dong banner (thoat cam) - xem server.mjs isMainModule'
+            $bad = 1
+          }
+          Write-Host '----- stdout -----'; if (Test-Path -LiteralPath $out) { Get-Content -LiteralPath $out }
+          Write-Host '----- stderr -----'; if (Test-Path -LiteralPath $err) { Get-Content -LiteralPath $err }
+          if (-not $p.HasExited) { & taskkill /PID $p.Id /T /F 2>&1 | Out-Null }
+          exit $bad
 
       # §7 buoc 12 cua checklist, chay tu dong: gen.sh goi `python3`, Windows khong co
       # lenh do — shim + PATH cua Git-Bash phai bu duoc.
