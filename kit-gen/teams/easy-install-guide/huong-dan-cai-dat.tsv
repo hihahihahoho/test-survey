@@ -8,7 +8,7 @@ Bước	macOS	Windows
 6. Bật / tắt lại	start-server.command / stop-server.command	start-server.bat / stop-server.bat
 7. Gỡ cài đặt	uninstall.command	uninstall.bat
 Ghi chú	Câu hỏi xoá dữ liệu mặc định là KHÔNG — cứ Enter là giữ nguyên dự án; chỉ gõ y khi muốn xoá sạch	
-Nếu link báo Not Found (bản cũ): tải bản gộp https://github.com/hihahihahoho/test-survey/releases/latest/download/kitgen-easy-install.zip		
+Không tải được? Mở trang Releases rồi lấy file trong mục Assets: https://github.com/hihahihahoho/test-survey/releases/latest		
 GẶP VẤN ĐỀ → XỬ LÝ		
 Vấn đề	Cách xử lý	
 Trang không mở được	Bấm đúp start-server (theo HĐH), chờ 10 giây rồi tải lại; vẫn trắng thì khởi động lại máy.	
