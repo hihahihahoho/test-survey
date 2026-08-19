@@ -771,24 +771,11 @@ if /I "%ACTION%"=="stop" (
   powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { `$_.Name -eq 'node.exe' -and `$_.CommandLine -like '*agent*server.mjs*' } | ForEach-Object { Stop-Process -Id `$_.ProcessId -Force -ErrorAction SilentlyContinue }; for (`$i = 0; `$i -lt 8; `$i++) { `$left = @(Get-CimInstance Win32_Process | Where-Object { `$_.Name -eq 'node.exe' -and `$_.CommandLine -like '*agent*server.mjs*' }); if (`$left.Count -eq 0) { break }; Start-Sleep -Milliseconds ([Math]::Min(100 * [Math]::Pow(2, `$i), 2000)) }"
   exit /b 0
 )
-if /I "%ACTION%"=="restart" (
-  set "RESTART_OK=0"
-  for /l %%A in (1,1,3) do (
-    if "!RESTART_OK!"=="0" (
-      call "%~f0" stop
-      if %%A gtr 1 (
-        set /a RESTART_BACKOFF=1 ^<< (%%A-1)
-        timeout /t !RESTART_BACKOFF! /nobreak >nul
-      )
-      call "%~f0" start
-      call "%~f0" status >nul 2>&1
-      if !errorlevel! equ 0 set "RESTART_OK=1"
-    )
-  )
-  if "!RESTART_OK!"=="1" exit /b 0
-  echo KitGen restart that bai sau 3 lan thu; dung tai day, xem log: %logFile%
-  exit /b 1
-)
+rem `restart` di qua NHAN, khong dung khoi ngoac. Ban cu long ba tang va tinh backoff
+rem bang toan tu dich bit: dau moc chi thoat duoc MOT dau nho hon, dau con lai van la
+rem toan tu chuyen huong, nen cmd.exe dem sai bien khoi va `kitgen status` roi thang
+rem vao cau bao that bai cua restart. CI run 32242960532, job "Kiem lenh kitgen.cmd".
+if /I "%ACTION%"=="restart" goto :do_restart
 if /I "%ACTION%"=="status" (
   powershell -NoProfile -ExecutionPolicy Bypass -Command "try { (Invoke-WebRequest -Uri ('http://127.0.0.1:' + `$env:KITGEN_PORT + '/health') -Headers @{'X-KitGen-Client'='1'; 'Origin'=`$env:KITGEN_ORIGIN} -UseBasicParsing -TimeoutSec 5).Content } catch { Write-Host ('KitGen agent khong phan hoi tren cong ' + `$env:KITGEN_PORT); exit 1 }"
   exit /b !errorlevel!
@@ -811,6 +798,21 @@ if /I "%ACTION%"=="update" (
 )
 echo Usage: kitgen {run^|start^|stop^|restart^|status^|doctor^|logs^|open^|update}
 exit /b 0
+
+:do_restart
+rem Ba lan thu, cho 0s / 2s / 4s. Con so viet thang: toan tu dich bit trong khoi ngoac
+rem chinh la cai bay da lam hong ca bang dieu phoi o tren.
+rem `if not errorlevel 1` la phep so DONG (khong phai bien), nen dung trong khoi `for`
+rem ma khong can delayed expansion — mot cai bay khac cua ban cu.
+for %%A in (0 2 4) do (
+  call "%~f0" stop
+  if not "%%A"=="0" timeout /t %%A /nobreak >nul
+  call "%~f0" start
+  call "%~f0" status >nul 2>&1
+  if not errorlevel 1 exit /b 0
+)
+echo KitGen restart that bai sau 3 lan thu; dung tai day, xem log: $logFile
+exit /b 1
 "@
 Write-TextCrLf (Join-Path $binDir 'kitgen.cmd') $kitgenCmd
 
