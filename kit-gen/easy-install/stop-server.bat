@@ -10,7 +10,7 @@ if not defined KITGEN_PORT set "KITGEN_PORT=8765"
 
 call "%KITGEN_BIN%" stop
 if errorlevel 1 goto :stop_failed
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$responding=$false;foreach($i in 1..15){try{$r=Invoke-WebRequest -UseBasicParsing -Uri ('http://127.0.0.1:' + $env:KITGEN_PORT + '/health') -Headers @{'X-KitGen-Client'='1';'Origin'=('http://127.0.0.1:' + $env:KITGEN_PORT)} -TimeoutSec 3;if($r.StatusCode -eq 200){$responding=$true}}catch{$responding=$false};if(-not $responding){exit 0};Start-Sleep -Seconds 1};Write-Error 'KitGen agent is still responding';exit 1"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$responding=$false;foreach($i in 1..15){try{$r=Invoke-WebRequest -UseBasicParsing -Uri ('http://127.0.0.1:' + $env:KITGEN_PORT + '/health') -Headers @{'X-KitGen-Client'='1';'Origin'=('http://127.0.0.1:' + $env:KITGEN_PORT)} -TimeoutSec 3;if($r.StatusCode -eq 200){$responding=$true}}catch{$responding=$false};if(-not $responding){exit 0};Start-Sleep -Seconds 1};[Console]::Error.WriteLine('KitGen agent is still responding');exit 1"
 if errorlevel 1 goto :health_failed
 echo KitGen is stopped.
 set "KITGEN_RC=0"
