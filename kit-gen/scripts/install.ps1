@@ -16,7 +16,8 @@
    · chỉ khởi động dịch vụ khi mọi tiền đề đã đủ, thiếu thì IN CHECKLIST.
 
  Khác biệt bắt buộc so với macOS (chi tiết ở docs/WINDOWS-PORT.md):
-   · engine là bash + python3 ⇒ máy phải có Git for Windows và Python 3;
+   · engine là bash + python3 ⇒ máy phải có Git for Windows (Python thì KitGen tự
+     mang theo, xem bước [5/8] — không còn là tiền đề của máy nữa);
    · runtime vào %LOCALAPPDATA%\KitGen (không phải ~/.kitgen);
    · không có launchd/systemd ⇒ chạy nền bằng shortcut Startup + wscript ẩn cửa sổ.
 
@@ -98,6 +99,29 @@ if (($env:PSModulePath -split ';') -notcontains $psHomeModules) {
 
 $NODE_VERSION = '20.19.5'
 
+# ── PYTHON RIENG CUA KITGEN: PIN CUNG, KHONG DE MAY NGUOI DUNG QUYET DINH ─────
+# Doi xung voi khoi Node ngay tren: tai -> doi chieu SHA-256 -> giai nen vao
+# $KitgenHome\tools -> dung ban do. Vi sao phai mang theo Python: pillow/numpy/scipy/
+# pymatting chi co wheel dung san cho MOT DAI phien ban Python. Roi ra ngoai dai do thi
+# pip BIEN DICH scipy tu nguon; tren Windows nghia la can MSVC + Fortran (hong ngay),
+# con tren may co du trinh bien dich thi ninja bung mot tien trinh moi nhan CPU, moi
+# tien trinh hon 1 GB RAM => DO TOAN MAY. Da xay ra voi nguoi dung that.
+# Runner CI (may trang dung nghia) co san 3.14 va do chinh la ban `py -3` chon.
+#
+# NGUON TAI = mot GitHub release SONG LAU cua CHINH kho KitGen (tag runtime-python-*),
+# KHONG phai kho astral-sh: khong phu thuoc kho ben thu ba, nguoi dung chi mo MOT ten
+# mien (may cong ty/ngan hang loc theo domain), checksum do CI cua minh sinh.
+# Xem .github/workflows/kitgen-runtime-python.yml.
+$PYTHON_VERSION  = '3.13.15'      # DONG BO TAY voi install.sh (PYTHON_VERSION)
+$PYTHON_BUILD    = '20260814'     # DONG BO TAY voi install.sh (PYTHON_BUILD)
+$RELEASE_REPO    = 'hihahihahoho/test-survey'
+$PythonRuntimeTag  = if ($env:KITGEN_PYTHON_RUNTIME_TAG) { $env:KITGEN_PYTHON_RUNTIME_TAG } else { "runtime-python-$PYTHON_VERSION" }
+$PythonRuntimeBase = if ($env:KITGEN_PYTHON_RUNTIME_BASE) { $env:KITGEN_PYTHON_RUNTIME_BASE } else { "https://github.com/$RELEASE_REPO/releases/download/$PythonRuntimeTag" }
+# Dai phien ban CHAC CHAN co wheel dung san cho ca 4 goi. Python he thong nam trong dai
+# nay thi dung luon cho do tai ~45 MB; ngoai dai thi tai ban rieng — KHONG thu pip roi
+# cau may, vi cai gia cua lan thu do la treo may.
+$PYTHON_WHEEL_OK = @('3.11', '3.12', '3.13')
+
 # ── tiện ích in ────────────────────────────────────────────────────────────────
 $script:Warnings = New-Object System.Collections.ArrayList
 $script:Blockers = New-Object System.Collections.ArrayList
@@ -112,6 +136,29 @@ function Write-Block([string] $text, [string] $how) {
 function Die([string] $text) { Write-Host ''; Write-Host "LOI: $text" -ForegroundColor Red; exit 1 }
 
 function New-Dir([string] $p) { if (-not (Test-Path -LiteralPath $p)) { [void](New-Item -ItemType Directory -Path $p -Force) } }
+
+# Copy directory contents without a wildcard. PowerShell wildcards omit hidden
+# entries such as `.gitignore` and `.foo`, leaving a runtime incomplete.
+function Copy-TreeContents([string] $from, [string] $to) {
+  New-Dir $to
+  foreach ($child in (Get-ChildItem -LiteralPath $from -Force)) {
+    Copy-Item -LiteralPath $child.FullName -Destination (Join-Path $to $child.Name) -Recurse -Force
+  }
+}
+
+# Remove a junction itself, never its target. `Remove-Item -Recurse` on Windows
+# PowerShell 5.1 can walk through the reparse point and delete the release.
+function Remove-ReparsePointSafe([string] $path) {
+  try {
+    [System.IO.Directory]::Delete($path, $false)
+    return
+  } catch {
+    $comspec = if ($env:ComSpec) { $env:ComSpec } else { 'cmd.exe' }
+    & $comspec /d /c "rmdir `"$path`"" 2>$null
+    if ($LASTEXITCODE -eq 0 -and -not (Test-Path -LiteralPath $path)) { return }
+    throw
+  }
+}
 
 # Ghi text KHÔNG BOM, xuống dòng LF cho file mà bash sẽ đọc (shim python3): BOM ở đầu
 # shebang là bash báo "bad interpreter", CRLF trong shebang cũng vậy.
@@ -142,6 +189,41 @@ function Get-Sha256([string] $path) {
 function Invoke-Download([string] $url, [string] $dest) {
   try { Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing -TimeoutSec 300 }
   catch { Die "khong tai duoc $url`n     $($_.Exception.Message)" }
+}
+
+# Tai file LON co bao tien do. KHONG bat lai $ProgressPreference='Continue': thanh tien
+# do cua Invoke-WebRequest lam PS 5.1 tai cham hang chuc lan (xem dau file). Thay vi the
+# doc stream thu cong roi tu in phan tram. Dung cho tarball Python 44,9 MB — de man hinh
+# dung im hai phut la nguoi dung tuong may treo va tat cua so giua chung.
+function Invoke-DownloadProgress([string] $url, [string] $dest, [string] $label) {
+  try {
+    $req = [Net.HttpWebRequest]::Create($url)
+    $req.UserAgent       = 'kitgen-installer'
+    $req.Timeout         = 300000
+    $req.ReadWriteTimeout = 300000
+    $res = $req.GetResponse()
+    $total = $res.ContentLength
+    $in    = $res.GetResponseStream()
+    $out   = [IO.File]::Create($dest)
+    try {
+      $buf     = New-Object byte[] 262144
+      $done    = 0L
+      $lastPct = -1
+      while (($n = $in.Read($buf, 0, $buf.Length)) -gt 0) {
+        $out.Write($buf, 0, $n)
+        $done += $n
+        if ($total -gt 0) {
+          $pct = [int](100 * $done / $total)
+          if ($pct -ge $lastPct + 10) {
+            $lastPct = $pct
+            Write-Host ("  {0} {1,3}%  ({2:N1}/{3:N1} MB)" -f $label, $pct, ($done / 1MB), ($total / 1MB))
+          }
+        }
+      }
+    } finally {
+      $out.Dispose(); $in.Dispose(); $res.Dispose()
+    }
+  } catch { Die "khong tai duoc $url`n     $($_.Exception.Message)" }
 }
 
 # Chạy một lệnh ngoài và ném lỗi nếu exit code khác 0. `cmd @args` của PowerShell không
@@ -247,50 +329,15 @@ if ($bashExe) {
 }
 
 # Python 3 — slice.py / skeleton.py / thumbnail / crop anh bia.
-# Uu tien launcher `py` (chuan cua python.org tren Windows), roi den `python`.
 #
-# VÌ SAO KHÔNG LẤY THẲNG `py -3`:
-#   `py -3` = bản MỚI NHẤT đang cài, mà bản mới nhất chính là bản dễ THIẾU WHEEL nhất.
-#   KitGen cần pillow + numpy + scipy + pymatting; scipy/numpy chỉ có wheel cho một
-#   phiên bản Python sau khi phiên bản đó ra được vài tháng, trước đó pip phải BIÊN DỊCH
-#   từ nguồn — trên Windows nghĩa là cần MSVC + Fortran, tức là hỏng. Runner CI (blank
-#   machine đúng nghĩa) có sẵn 3.14 và đó là bản `py -3` chọn.
-#   Bản Mac không dính vì `python3` ở đó là bản Homebrew/hệ thống đã chín, không phải
-#   bản mới nhất trên đời. Nên "port đúng logic install.sh" ở đây KHÔNG phải là copy
-#   `python3` mà là giữ ĐÚNG cái tinh thần: chọn một bản Python ĐÃ CHÍN.
-#   Thứ tự thử: 3.13 → 3.12 → 3.11 (bộ ba luôn có wheel sẵn), khong co thi lui ve `py -3`
-#   kem canh bao chi ro cach xu (chu KHONG chan cai dat: cai xong van dung duoc phan
-#   khong can Python, va doctor se bao tiep).
-$PY_PREFERRED = @('3.13', '3.12', '3.11')
-$pyLauncher = $null
-$pyCmd = Get-Command py.exe -ErrorAction SilentlyContinue
-if ($pyCmd) {
-  foreach ($want in $PY_PREFERRED) {
-    $v = Get-PyVersion $pyCmd.Source @("-$want")
-    if ($v) { $pyExe = $pyCmd.Source; $pyPre = @("-$want"); $pyLauncher = $true; Write-Ok "Python $v (py -$want)"; break }
-  }
-  if (-not $pyLauncher) {
-    $v = Get-PyVersion $pyCmd.Source @('-3')
-    if ($v) {
-      $pyExe = $pyCmd.Source; $pyPre = @('-3'); $pyLauncher = $true
-      Write-Ok "Python $v (py launcher)"
-      Write-Warn ("Python $v moi hon 3.13 - scipy/pymatting co the chua co wheel cho ban nay. " +
-        'Neu buoc [5/8] bao pip that bai: cai them Python 3.13 tu https://www.python.org/downloads/windows/ (TICK "py launcher") roi chay lai installer.')
-    }
-  }
-}
-if (-not $pyLauncher) {
-  $pExe = Get-Command python.exe -ErrorAction SilentlyContinue
-  # Windows 10/11 co "app execution alias" python.exe gia — no chi mo Microsoft Store
-  # chu khong chay Python. Dau hieu: duong dan nam trong WindowsApps.
-  if ($pExe -and $pExe.Source -notmatch 'WindowsApps') {
-    $v = Get-PyVersion $pExe.Source @()
-    if ($v) { $pyExe = $pExe.Source; $pyPre = @(); $pyLauncher = $true; Write-Ok "Python $v · $($pExe.Source)" }
-  }
-}
-if (-not $pyLauncher) {
-  Write-Block 'Python 3.10+' 'Cai tu https://www.python.org/downloads/windows/ va TICK "Add python.exe to PATH". (Ban Microsoft Store cung duoc nhung phai mo Store cai that, alias rong khong tinh.)'
-}
+# KHONG CON DO PYTHON O DAY, VA DAY KHONG PHAI TIEN DE NUA.
+# Ban truoc di do `py -3.13` -> `-3.12` -> `-3.11` -> `py -3`, khong thay thi Write-Block
+# 'Python 3.10+' va bao nguoi dung tu di cai roi chay lai. Hai cho sai:
+#   1) `py -3` = ban MOI NHAT dang cai, ma ban moi nhat chinh la ban de THIEU WHEEL nhat
+#      (runner CI co san 3.14) => pip di bien dich scipy => het RAM.
+#   2) "May user thi khong co ai cai san Python 3.13 cho ho" (docs/WINDOWS-PORT.md).
+# Nay KitGen TU MANG THEO Python nhu da tu mang theo Node — xem buoc [5/8]. May co san
+# Python trong dai $PYTHON_WHEEL_OK thi dung luon cho do tai; khong thi tai ban pin cung.
 
 # ── 2. lấy gói runtime ─────────────────────────────────────────────────────────
 Write-Step '2/8' 'Lay goi runtime'
@@ -435,85 +482,152 @@ $dest = Join-Path $KitgenHome "releases\$version"
 $new  = "$dest.new"
 if (Test-Path -LiteralPath $new)  { Remove-Item -LiteralPath $new -Recurse -Force }
 New-Dir $new
-Copy-Item -Path (Join-Path $candidate '*') -Destination $new -Recurse -Force
+Copy-TreeContents $candidate $new
 if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
 Move-Item -LiteralPath $new -Destination $dest
 
-# `current` la junction (NTFS, KHONG can quyen admin — khac symlink). Loi thi lui ve
-# ghi thang duong dan co version vao config, agent khong phu thuoc vao junction.
+# `current` la junction (NTFS, KHONG can quyen admin — khac symlink). Chỉ đổi ở cuối installer,
+# sau cac buoc bat buoc (Python, Codex, config), để lỗi giữa chừng không để máy nửa vời.
 $current = Join-Path $KitgenHome 'current'
 $source  = $dest
-try {
-  if (Test-Path -LiteralPath $current) {
-    $item = Get-Item -LiteralPath $current -Force
-    if ($item.LinkType) { Remove-Item -LiteralPath $current -Force } else { Remove-Item -LiteralPath $current -Recurse -Force }
-  }
-  [void](New-Item -ItemType Junction -Path $current -Target $dest -ErrorAction Stop)
-  $source = $current
-  Write-Ok "current -> releases\$version"
-} catch {
-  Write-Warn "khong tao duoc junction `"current`" - dung thang releases\$version"
-}
 
 New-Dir (Join-Path $Workspace '.kitgen\engine')
 New-Dir (Join-Path $Workspace 'projects')
-Copy-Item -Path (Join-Path $dest 'engine\*') -Destination (Join-Path $Workspace '.kitgen\engine') -Recurse -Force
+Copy-TreeContents (Join-Path $dest 'engine') (Join-Path $Workspace '.kitgen\engine')
 Write-Ok "engine -> $Workspace\.kitgen\engine"
 
-# ── 5. Python venv + shim `python3` ────────────────────────────────────────────
+# ── 5. Python rieng + venv + shim `python3` ───────────────────────────────────
 Write-Step '5/8' 'Moi truong Python'
+
+# ① Ban rieng da tai tu luot truoc.  ② Python he thong trong dai co wheel (do tai 45 MB).
+# ③ Tai ban pin cung, KIEM SHA-256 TRUOC KHI GIAI NEN.
+# KHONG co nhanh thu tu kieu "cai xong nhung chua gen duoc anh": toi day ma hong la hong
+# that, Die ngay kem cach chua — khong im lang ha chat luong, khong day viec sang user.
+$pyHome = Join-Path $KitgenHome 'tools\python'
+$pyExe  = $null
+$pyPre  = @()
+
+$privatePy = Join-Path $pyHome 'python.exe'
+if (Test-Path -LiteralPath $privatePy) {
+  $v = Get-PyVersion $privatePy @()
+  if ($PYTHON_WHEEL_OK -contains $v) { $pyExe = $privatePy; Write-Ok "Python rieng cua KitGen $v · $privatePy" }
+}
+
+if (-not $pyExe) {
+  # `py -<ver>` truoc, roi python.exe tran. Chi chap nhan phien ban trong $PYTHON_WHEEL_OK:
+  # ngoai dai do thi tai ban rieng chu KHONG thu pip roi cau may.
+  $pyCmd = Get-Command py.exe -ErrorAction SilentlyContinue
+  if ($pyCmd) {
+    foreach ($want in $PYTHON_WHEEL_OK) {
+      $v = Get-PyVersion $pyCmd.Source @("-$want")
+      if ($v -eq $want) { $pyExe = $pyCmd.Source; $pyPre = @("-$want"); Write-Ok "Python $v (py -$want)"; break }
+    }
+  }
+  if (-not $pyExe) {
+    $pExe = Get-Command python.exe -ErrorAction SilentlyContinue
+    # Windows 10/11 co "app execution alias" python.exe gia — no chi mo Microsoft Store
+    # chu khong chay Python. Dau hieu: duong dan nam trong WindowsApps.
+    if ($pExe -and $pExe.Source -notmatch 'WindowsApps') {
+      $v = Get-PyVersion $pExe.Source @()
+      if ($PYTHON_WHEEL_OK -contains $v) { $pyExe = $pExe.Source; $pyPre = @(); Write-Ok "Python $v · $($pExe.Source)" }
+      elseif ($v) { Write-Host "  python.exe he thong la $v - ngoai dai co wheel ($($PYTHON_WHEEL_OK -join ', ')), se tai ban rieng" }
+    }
+  }
+  # May da tu du => tra lai dia cho ban rieng hong/lac con sot tu luot truoc.
+  if ($pyExe -and (Test-Path -LiteralPath $pyHome)) { Remove-Item -LiteralPath $pyHome -Recurse -Force }
+}
+
+if (-not $pyExe) {
+  if (-not [Environment]::Is64BitOperatingSystem) {
+    Die 'KitGen chi co ban Python dung san cho Windows 64-bit.'
+  }
+  # python-build-standalone chi phat hanh x86_64-pc-windows-msvc trong bo asset ma CI
+  # cua minh mirror. Windows ARM64 chay file nay qua lop gia lap x64 — cham hon nhung
+  # chay duoc, va van hon la de pip di bien dich scipy.
+  $pyPkg = "cpython-$PYTHON_VERSION+$PYTHON_BUILD-x86_64-pc-windows-msvc-install_only.tar.gz"
+  Write-Host "  tai Python $PYTHON_VERSION rieng cua KitGen (~45 MB) ..."
+  $pyTar = Join-Path $Tmp $pyPkg
+  Invoke-DownloadProgress "$PythonRuntimeBase/$pyPkg" $pyTar 'python'
+  # BANG CHECKSUM LA BAT BUOC: khong tai duoc bang = khong kiem duoc goi = KHONG GIAI NEN.
+  $pySums = Join-Path $Tmp 'python-shasums.txt'
+  Invoke-Download "$PythonRuntimeBase/SHA256SUMS" $pySums
+  $wantSha = $null
+  foreach ($line in (Get-Content -LiteralPath $pySums)) {
+    $parts = $line.Trim() -split '\s+'
+    # `sha256sum` doc nhi phan in "<hash> *<file>"; `shasum` in hai dau cach. Nhan ca hai.
+    if ($parts.Count -ge 2 -and ($parts[1] -eq $pyPkg -or $parts[1] -eq ('*' + $pyPkg))) { $wantSha = $parts[0].ToLowerInvariant() }
+  }
+  if (-not $wantSha) { Die "SHA256SUMS khong co $pyPkg" }
+  if ((Get-Sha256 $pyTar) -ne $wantSha) { Die 'checksum Python khong khop' }
+  # Don ban Python cu y het cach don Node: MOT thu muc duy nhat, xoa sach truoc khi giai
+  # nen, nen $KitgenHome khong phinh them sau moi lan update.
+  if (Test-Path -LiteralPath $pyHome) { Remove-Item -LiteralPath $pyHome -Recurse -Force }
+  New-Dir $pyHome
+  # tar.exe (bsdtar) da la tien de bat buoc o buoc [1/8]. install_only co thu muc goc
+  # `python/` nen phai --strip-components=1.
+  Invoke-Exe 'tar.exe' @('-xzf', $pyTar, '-C', $pyHome, '--strip-components=1') 'giai nen Python'
+  $pyExe = $privatePy
+  $pyPre = @()
+  $v = Get-PyVersion $pyExe @()
+  if (-not ($PYTHON_WHEEL_OK -contains $v)) { Die "ban Python vua giai nen khong chay duoc: $pyExe" }
+  Write-Ok "Python rieng cua KitGen $PYTHON_VERSION · $pyExe"
+}
+
 $venv    = Join-Path $Workspace '.venv'
 $venvPy  = Join-Path $venv 'Scripts\python.exe'   # Windows: Scripts\, KHONG phai bin/
-$pythonForAgent = $null
-if ($pyLauncher) {
-  if (-not (Test-Path -LiteralPath $venvPy)) {
-    Write-Host '  tao virtualenv ...'
-    $venvArgs = @()
-    if ($pyPre.Count -gt 0) { $venvArgs += $pyPre }
-    $venvArgs += @('-m', 'venv', $venv)
-    if ((Invoke-ExeSoft $pyExe $venvArgs) -ne 0) { Write-Warn 'khong tao duoc venv - se dung Python he thong' }
-  }
-  if (Test-Path -LiteralPath $venvPy) { $pythonForAgent = $venvPy }
-  else { $pythonForAgent = $pyExe }
 
-  if ($pythonForAgent -eq $venvPy) {
-    # Phép THỬ, không phải phép kiểm: máy chưa cài thư viện là chuyện đương nhiên, và
-    # Traceback in ra ở đây là câu trả lời "chua co" chứ không phải lỗi. Bắt buộc gọi
-    # qua Invoke-ExeSoft -Quiet (xem chú thích của hàm): gọi thẳng kèm `2>$null` thì
-    # EAP='Stop' biến Traceback thành lỗi chấm dứt và installer chết TẠI ĐÂY, không
-    # bao giờ chạy tới dòng `pip install` ngay dưới. Đúng lỗi đã gặp trên runner CI.
-    $probe = Invoke-ExeSoft $venvPy @('-c', 'import PIL,numpy,scipy,pymatting') -Quiet
-    if ($probe -ne 0) {
-      Write-Host '  cai thu vien xu ly anh (pillow numpy scipy pymatting) ...'
-      $env:PIP_DISABLE_PIP_VERSION_CHECK = '1'
-      # KHONG -Quiet: pip hong thi phai doc duoc vi sao (thieu wheel? khong co mang?).
-      if ((Invoke-ExeSoft $venvPy @('-m', 'pip', 'install', '--upgrade', 'pillow', 'numpy', 'scipy', 'pymatting')) -ne 0) {
-        $pv = Get-PyVersion $venvPy @()
-        Write-Warn ("pip install that bai (Python $pv) - slice.py chua chay duoc. Cach xu: " +
-          '1) xem dong loi ngay tren day; 2) neu la loi bien dich scipy/numpy thi cai Python 3.13 ' +
-          'tu https://www.python.org/downloads/windows/, xoa thu muc .venv trong workspace roi chay lai installer; ' +
-          '3) may khong co mang thi cai lai khi co mang.')
-      }
-    }
-    Write-Ok "venv $venv"
-  }
+# venv PHAI duoc dung tu dung $pyExe. venv doi truoc tro vao Python khac (ban he thong
+# vua nang cap, ban rieng vua bi don) la cai bay kinh dien: pip lai di tim sdist.
+$engineBase = (Invoke-ExeCapture $pyExe ($pyPre + @('-c', 'import sys;print(sys.base_prefix)'))).Out
+$venvBase   = ''
+if (Test-Path -LiteralPath $venvPy) { $venvBase = (Invoke-ExeCapture $venvPy @('-c', 'import sys;print(sys.base_prefix)')).Out }
+if ((-not (Test-Path -LiteralPath $venvPy)) -or ($venvBase -ne $engineBase)) {
+  Write-Host '  tao virtualenv ...'
+  if (Test-Path -LiteralPath $venv) { Remove-Item -LiteralPath $venv -Recurse -Force }
+  if ((Invoke-ExeSoft $pyExe ($pyPre + @('-m', 'venv', $venv))) -ne 0) { Die "khong tao duoc venv tu $pyExe" }
+}
+if (-not (Test-Path -LiteralPath $venvPy)) { Die "venv thieu $venvPy" }
+$pythonForAgent = $venvPy
 
-  # SHIM `python3`: gen.sh goi `python3`, ma Windows KHONG CO lenh ten do (python.org
-  # cai python.exe + py.exe). Day la mot shell script KHONG DUOI FILE — bash cua
-  # Git-Bash chay duoc, va no nam trong PATH ma agent dung khi spawn bash.
-  $pyPosix = ($pythonForAgent -replace '\\', '/')
-  # Neu phai lui ve `py.exe` (venv hong) thi shim van can co `-3`.
-  $pyShimArgs = ''
-  if ($pythonForAgent -eq $pyExe -and $pyPre.Count -gt 0) { $pyShimArgs = ' ' + ($pyPre -join ' ') }
-  Write-TextLf (Join-Path $KitgenHome 'bin\python3') @"
+# Phep THU, khong phai phep kiem: may chua cai thu vien la chuyen duong nhien, va
+# Traceback in ra o day la cau tra loi "chua co" chu khong phai loi. Bat buoc goi qua
+# Invoke-ExeSoft -Quiet (xem chu thich cua ham): goi thang kem `2>$null` thi EAP='Stop'
+# bien Traceback thanh loi cham dut va installer chet TAI DAY, khong bao gio chay toi
+# dong `pip install` ngay duoi. Dung loi da gap tren runner CI.
+$probe = Invoke-ExeSoft $venvPy @('-c', 'import PIL,numpy,scipy,pymatting') -Quiet
+if ($probe -ne 0) {
+  Write-Host '  cai thu vien xu ly anh (pillow numpy scipy pymatting) ...'
+  $env:PIP_DISABLE_PIP_VERSION_CHECK = '1'
+  # ═════════════════════════════════════════════════════════════════════════════
+  # `--only-binary=:all:` KHONG phai tuy chon cho dep — DUNG BAO GIO BO NO.
+  # Thieu co nay, may nao khong co wheel se de pip BIEN DICH scipy tu nguon: ninja bung
+  # mot tien trinh moi nhan CPU, moi tien trinh hon 1 GB RAM. Nguoi dung that da bao may
+  # DO hoan toan — chuot con di duoc, bam gi cung khong an, phai giu nut nguon.
+  # Khong co wheel thi phai hong NGAY va RE, kem cach chua. install.sh cung vay.
+  # ═════════════════════════════════════════════════════════════════════════════
+  # KHONG -Quiet: pip hong thi phai doc duoc vi sao (thieu wheel? khong co mang?).
+  if ((Invoke-ExeSoft $venvPy @('-m', 'pip', 'install', '--upgrade', '--only-binary=:all:', 'pillow', 'numpy', 'scipy', 'pymatting')) -ne 0) {
+    $pv = Get-PyVersion $venvPy @()
+    Die ("cai pillow/numpy/scipy/pymatting that bai (Python $pv · $pyExe) - CHUA GEN DUOC ANH. " +
+      "Cach xu: 1) doc dong loi pip ngay tren day; 2) mat mang / proxy chan pypi.org thi cai lai khi co mang; " +
+      "3) xoa thu muc .venv trong workspace roi chay lai installer. " +
+      'Installer CO Y KHONG bien dich scipy tu nguon (--only-binary=:all:): viec do ngon hang GB RAM va da treo may nguoi dung.')
+  }
+}
+Write-Ok "venv $venv"
+
+# SHIM `python3`: gen.sh goi `python3`, ma Windows KHONG CO lenh ten do (python.org
+# cai python.exe + py.exe). Day la mot shell script KHONG DUOI FILE — bash cua
+# Git-Bash chay duoc, va no nam trong PATH ma agent dung khi spawn bash.
+# Luon tro thang vao python.exe cua venv: khong con duong lui ve `py.exe` nao ca.
+$pyPosix = ($pythonForAgent -replace '\\', '/')
+Write-TextLf (Join-Path $KitgenHome 'bin\python3') @"
 #!/usr/bin/env bash
 # Sinh boi install.ps1 - Windows khong co lenh `python3`.
-exec "$pyPosix"$pyShimArgs "`$@"
+exec "$pyPosix" "`$@"
 "@
-  Write-Ok 'shim python3 (cho Git-Bash)'
-} else {
-  Write-Warn 'bo qua venv va shim python3 vi chua co Python 3'
-}
+Write-Ok 'shim python3 (cho Git-Bash)'
+
 
 # ── 6. Codex CLI + trình render khung xương ───────────────────────────────────
 Write-Step '6/8' 'Codex CLI va trinh dung anh'
@@ -587,6 +701,25 @@ $binDir = Join-Path $KitgenHome 'bin'
 New-Dir $binDir
 $logFile = Join-Path $KitgenHome 'agent.log'
 
+# agent.log is stdout redirected by the Startup wrapper. Without a cap, every login
+# appends forever; a noisy child or crash loop can fill the disk and turn Windows into
+# swap/handle exhaustion. Keep the newest 1 MB before each launch, with a 5 MB hard
+# trigger. The helper is ASCII-only so Windows PowerShell 5.1 can parse it without BOM.
+$rotateLog = @'
+param([string]$Path, [int64]$MaxBytes = 5242880, [int64]$KeepBytes = 1048576)
+$ErrorActionPreference = 'SilentlyContinue'
+if (-not [IO.File]::Exists($Path)) { exit 0 }
+$text = [IO.File]::ReadAllText($Path)
+if ([Text.Encoding]::UTF8.GetByteCount($text) -le $MaxBytes) { exit 0 }
+$keepChars = [Math]::Min($text.Length, $KeepBytes)
+$tail = $text.Substring($text.Length - $keepChars)
+$nl = $tail.IndexOf("`n")
+if ($nl -ge 0) { $tail = $tail.Substring($nl + 1) }
+$marker = "[agent.log rotated; keeping newest output]`r`n"
+[IO.File]::WriteAllText($Path, $marker + $tail, (New-Object Text.UTF8Encoding($false)))
+'@
+Write-TextCrLf (Join-Path $KitgenHome 'rotate-log.ps1') $rotateLog
+
 # config.cmd — ban Windows cua config.env. kitgen.cmd nap no bang `call`.
 $nodeModules = Join-Path $toolsPrefix 'node_modules'
 $configCmd = @"
@@ -627,19 +760,32 @@ if /I "%ACTION%"=="start" (
   exit /b 0
 )
 if /I "%ACTION%"=="run-logged" (
-  call "%~f0" run >> "$logFile" 2>&1
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%KITGEN_HOME%\rotate-log.ps1" -Path "$logFile"
+  "%KITGEN_NODE%" "%KITGEN_SOURCE%\agent\log-run.mjs" --log "$logFile" -- "%KITGEN_NODE%" "%KITGEN_SOURCE%\agent\server.mjs" --workspace "%KITGEN_WORKSPACE%" --port "%KITGEN_PORT%" --origin "%KITGEN_ORIGIN%" --app-root "%KITGEN_SOURCE%\app"
   exit /b !errorlevel!
 )
 if /I "%ACTION%"=="stop" (
   rem Khong co PID file: tim dung tien trinh node dang chay agent/server.mjs.
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { `$_.Name -eq 'node.exe' -and `$_.CommandLine -like '*agent*server.mjs*' } | ForEach-Object { Stop-Process -Id `$_.ProcessId -Force -ErrorAction SilentlyContinue }"
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { `$_.Name -eq 'node.exe' -and `$_.CommandLine -like '*agent*server.mjs*' } | ForEach-Object { Stop-Process -Id `$_.ProcessId -Force -ErrorAction SilentlyContinue }; for (`$i = 0; `$i -lt 8; `$i++) { `$left = @(Get-CimInstance Win32_Process | Where-Object { `$_.Name -eq 'node.exe' -and `$_.CommandLine -like '*agent*server.mjs*' }); if (`$left.Count -eq 0) { break }; Start-Sleep -Milliseconds ([Math]::Min(100 * [Math]::Pow(2, `$i), 2000)) }"
   exit /b 0
 )
 if /I "%ACTION%"=="restart" (
-  call "%~f0" stop
-  timeout /t 1 /nobreak >nul
-  call "%~f0" start
-  exit /b 0
+  set "RESTART_OK=0"
+  for /l %%A in (1,1,3) do (
+    if "!RESTART_OK!"=="0" (
+      call "%~f0" stop
+      if %%A gtr 1 (
+        set /a RESTART_BACKOFF=1 ^<< (%%A-1)
+        timeout /t !RESTART_BACKOFF! /nobreak >nul
+      )
+      call "%~f0" start
+      call "%~f0" status >nul 2>&1
+      if !errorlevel! equ 0 set "RESTART_OK=1"
+    )
+  )
+  if "!RESTART_OK!"=="1" exit /b 0
+  echo KitGen restart that bai sau 3 lan thu; dung tai day, xem log: %logFile%
+  exit /b 1
 )
 if /I "%ACTION%"=="status" (
   powershell -NoProfile -ExecutionPolicy Bypass -Command "try { (Invoke-WebRequest -Uri ('http://127.0.0.1:' + `$env:KITGEN_PORT + '/health') -Headers @{'X-KitGen-Client'='1'; 'Origin'=`$env:KITGEN_ORIGIN} -UseBasicParsing -TimeoutSec 5).Content } catch { Write-Host ('KitGen agent khong phan hoi tren cong ' + `$env:KITGEN_PORT); exit 1 }"
@@ -671,7 +817,7 @@ Write-TextCrLf (Join-Path $binDir 'kitgen.cmd') $kitgenCmd
 # duy nhat khong can cai them gi.
 $vbs = @"
 ' Sinh boi install.ps1 - chay agent KitGen an, khong cua so console.
-' Tham so thu hai = 0 (vbHide), thu ba = False (khong doi ket thuc).
+' Startup khong tu restart vo han; agent tu bao ve single-instance va tu thoat khi loi.
 Set sh = CreateObject("WScript.Shell")
 sh.Run """$binDir\kitgen.cmd"" run-logged", 0, False
 "@
@@ -679,6 +825,23 @@ Write-TextCrLf (Join-Path $binDir 'kitgen-hidden.vbs') $vbs
 
 Copy-Item -LiteralPath $MyInvocation.MyCommand.Path -Destination (Join-Path $KitgenHome 'install.ps1') -Force
 Write-Ok "lenh: $binDir\kitgen.cmd"
+
+# Kích hoạt bản mới ở phút chót. Không dùng Remove-Item -Recurse trên junction:
+# Windows PowerShell 5.1 có thể đi xuyên reparse point và xoá release đích.
+if ($script:Blockers.Count -eq 0) {
+  try {
+    $currentItem = Get-Item -LiteralPath $current -Force -ErrorAction SilentlyContinue
+    if ($currentItem) {
+      $isReparse = $currentItem.LinkType -or (($currentItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)
+      if ($isReparse) { Remove-ReparsePointSafe $current }
+      else { Remove-Item -LiteralPath $current -Recurse -Force }
+    }
+    [void](New-Item -ItemType Junction -Path $current -Target $dest -ErrorAction Stop)
+    Write-Ok "current -> releases\$version"
+  } catch {
+    Write-Warn "khong tao duoc junction `"current`" - dung thang releases\$version"
+  }
+}
 
 # ── 8. khởi động ───────────────────────────────────────────────────────────────
 Write-Step '8/8' 'Khoi dong dich vu'
@@ -690,24 +853,43 @@ if ($script:Blockers.Count -gt 0) {
   $startup = [Environment]::GetFolderPath('Startup')
   Copy-Item -LiteralPath (Join-Path $binDir 'kitgen-hidden.vbs') -Destination (Join-Path $startup 'KitGen.vbs') -Force
   Write-Ok 'dang ky chay khi dang nhap (Startup)'
+  # Update/install có thể chạy khi agent cũ còn nghe 8765. Dừng đúng cây agent trước
+  # khi bật bản mới; nếu không, listenLoopback đời cũ tự nhảy sang 8766 và tạo bản thứ hai.
+  & (Join-Path $binDir 'kitgen.cmd') stop | Out-Null
+  Start-Sleep -Milliseconds 500
   & (Join-Path $binDir 'kitgen.cmd') start | Out-Null
   $healthy = $false
-  foreach ($i in 1..15) {
-    Start-Sleep -Seconds 1
+  $healthSeen = $null
+  $healthDelayMs = 250
+  foreach ($i in 1..6) {
+    Start-Sleep -Milliseconds $healthDelayMs
+    $healthDelayMs = [Math]::Min($healthDelayMs * 2, 4000)
     try {
       $r = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/health" -Headers @{ 'X-KitGen-Client' = '1'; 'Origin' = $Origin } -UseBasicParsing -TimeoutSec 3
-      if ($r.StatusCode -eq 200) { $healthy = $true; break }
+      if ($r.StatusCode -eq 200) {
+        try { $healthSeen = ($r.Content | ConvertFrom-Json).runtimeVersion } catch { $healthSeen = $null }
+        if ([string]$healthSeen -eq [string]$version) { $healthy = $true; break }
+      }
     } catch { }
   }
   if ($healthy) { Write-Ok "agent phan hoi tai http://127.0.0.1:$Port/health" }
-  else { Write-Warn "agent chua phan hoi sau 15s - xem log: $logFile" }
+  else {
+    $seen = if ($healthSeen) { "ban $healthSeen" } else { 'khong co phan hoi' }
+    Write-Warn "agent chua phan hoi dung ban $version sau 15s ($seen) - xem log: $logFile"
+  }
 }
 
 # ── tổng kết ───────────────────────────────────────────────────────────────────
 Write-Host ''
-Write-Host "KitGen $version da cai vao: $dest"
+if ($script:Blockers.Count -gt 0) {
+  Write-Host "KitGen $version moi chi tai runtime vao: $dest"
+  Write-Host 'Trang thai: CHUA KICH HOAT; chua the gen anh.' -ForegroundColor Red
+} else {
+  Write-Host "KitGen $version da cai vao: $dest"
+}
 Write-Host "Lenh   : $binDir\kitgen.cmd"
-Write-Host "Mo app : http://127.0.0.1:$Port/app/"
+if ($script:Blockers.Count -gt 0) { Write-Host 'Mo app : chua san sang' }
+else { Write-Host "Mo app : http://127.0.0.1:$Port/app/" }
 if ($script:Blockers.Count -gt 0) {
   Write-Host ''
   Write-Host 'CHUA CHAY DUOC - con thieu:' -ForegroundColor Red
@@ -730,6 +912,8 @@ Write-Host ''
 Write-Host 'BAN CAI WINDOWS DANG O TRANG THAI EXPERIMENTAL.' -ForegroundColor Yellow
 Write-Host 'Gap loi, chup man hinh + gui file log:' -ForegroundColor Yellow
 Write-Host "  $logFile"
+
+if ($script:Blockers.Count -gt 0) { exit 2 }
 
 } finally {
   if (Test-Path -LiteralPath $Tmp) { Remove-Item -LiteralPath $Tmp -Recurse -Force -ErrorAction SilentlyContinue }
