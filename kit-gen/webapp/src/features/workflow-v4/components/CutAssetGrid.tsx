@@ -462,7 +462,7 @@ function AssetZoomDialog({ open, onOpenChange, projectId, asset }: {
   const size = asset.file.w && asset.file.h ? `${asset.file.w}×${asset.file.h} pixel` : "chưa rõ cỡ";
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="xl" className="max-h-[92vh]">
+      <DialogContent size="xl" className="!max-h-[min(90dvh,720px)]">
         <DialogHeader>
           <DialogTitle className="font-mono text-subtitle">{asset.name}</DialogTitle>
           <DialogDescription>
@@ -471,7 +471,13 @@ function AssetZoomDialog({ open, onOpenChange, projectId, asset }: {
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
-          <div className="flex items-center justify-center overflow-auto overscroll-contain rounded-2 border border-line-subtle bg-surface p-3">
+          {/* `DialogBody` là ổ cuộn DUY NHẤT. Khung ảnh có chiều cao cố định theo
+              viewport để ảnh dọc/ngang dùng `object-contain` xem trọn mặc định; ở màn
+              cực thấp, chính body (đã được Radix khóa nền) là vùng cuộn duy nhất. */}
+          <div
+            data-testid="asset-preview-frame"
+            className="flex h-[min(70dvh,calc(100dvh-10rem))] w-full items-center justify-center rounded-2 border border-line-subtle bg-surface p-3"
+          >
             {open && (
               <KitImage
                 projectId={projectId}
@@ -482,7 +488,7 @@ function AssetZoomDialog({ open, onOpenChange, projectId, asset }: {
                 full
                 eager
                 empty={asset.file.empty}
-                className="w-full border-0"
+                className="h-full w-full border-0"
               />
             )}
           </div>

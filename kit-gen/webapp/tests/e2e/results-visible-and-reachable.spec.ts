@@ -1,3 +1,4 @@
+import { mkdirSync, readFileSync } from "node:fs";
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 /**
@@ -22,6 +23,10 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 
 const PNG_1x1 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+/* Use repository fixtures with the exact dimensions claimed by the manifest. */
+const PORTRAIT_PNG = readFileSync(new URL("../../../kits/candy/tight/25-bg-home.png", import.meta.url));
+const LANDSCAPE_PNG = readFileSync(new URL("../../../skeleton/main.png", import.meta.url));
+let includePreviewFixtures = false;
 
 /** Dự án ĐÃ gen xong — có ô đã cắt, có lượt chạy gần nhất. */
 const done = {
@@ -77,6 +82,11 @@ const kitCatalogue = {
   ],
 };
 
+const previewFiles = [
+  { file: "tight/25-bg-home", path: "kits/chinh/tight/25-bg-home.png", w: 1024, h: 1536, bytes: 90, sheet: "bg-home", cellIndex: null, empty: false },
+  { file: "tight/ui-sheet", path: "kits/chinh/tight/ui-sheet.png", w: 1536, h: 1024, bytes: 90, sheet: "ui", cellIndex: null, empty: false },
+];
+
 const runItem = {
   id: "r-0002",
   kind: "gen",
@@ -100,6 +110,43 @@ const health = {
 
 /** Số byte ảnh đã phục vụ — dùng để chứng minh app THẬT SỰ tải ảnh, không chỉ vẽ khung. */
 let served: string[] = [];
+
+async function captureLegacyPreviewScreenshot(
+  page: Page,
+  name: string,
+  orientation: "portrait" | "landscape",
+  bytes: Buffer,
+  height: number,
+  screenshotDir: string,
+) {
+  /* Comparator for the reported bug: old `DialogBody` + inner `overflow-auto`.
+     Kept in the E2E spec so the before image is produced by Playwright too. */
+  await page.setContent(`
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; background: #101114; color: #f6f7f9; font: 14px system-ui; }
+      body { overflow: hidden; }
+      .scrim { position: fixed; inset: 0; background: rgb(0 0 0 / .68); }
+      .dialog { position: fixed; inset: 50% auto auto 50%; width: min(960px, calc(100vw - 32px)); max-height: min(90dvh, 720px); transform: translate(-50%, -50%); display: flex; flex-direction: column; background: #1d1f24; border: 1px solid #4a4e58; border-radius: 16px; padding: 0 20px; }
+      .header { flex: 0 0 auto; padding: 20px 28px 12px 0; }
+      .body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 0; }
+      .frame { height: 800px; display: flex; align-items: center; justify-content: center; overflow: auto; border: 1px solid #4a4e58; border-radius: 8px; padding: 12px; }
+      img { display: block; width: 100%; height: auto; }
+      .close { position: absolute; right: 12px; top: 12px; color: #fff; }
+    </style>
+    <div class="scrim"></div>
+    <section class="dialog" role="dialog" aria-label="${name}">
+      <header class="header"><strong>${name}</strong><div>Ảnh gốc ${orientation === "portrait" ? "1024×1536" : "1536×1024"} pixel · ${orientation === "portrait" ? "Nền" : "UI nhỏ"}</div></header>
+      <div class="body"><div class="frame"><img alt="${name}" src="data:image/png;base64,${bytes.toString("base64")}"></div></div>
+      <button class="close" aria-label="Đóng">×</button>
+    </section>
+  `);
+  await expect(page.locator("img")).toHaveJSProperty("complete", true);
+  await page.screenshot({
+    path: `${screenshotDir}/before-${orientation}-1280x${height}.png`,
+    animations: "disabled",
+  });
+}
 
 async function mockAgent(page: Page) {
   served = [];
@@ -125,7 +172,9 @@ async function mockAgent(page: Page) {
     if (path === `/api/projects/${done.id}/contract`) return route.fulfill({ json: { version: 1, contract } });
     if (path === `/api/projects/${fresh.id}/contract`) return route.fulfill({ json: { version: 1, contract: { schemaVersion: 4, characterPoses: [], variants: [], sheets: [] } } });
 
-    if (path === `/api/projects/${done.id}/kit`) return route.fulfill({ json: kitCatalogue });
+    if (path === `/api/projects/${done.id}/kit`) {
+      return route.fulfill({ json: { ...kitCatalogue, files: includePreviewFixtures ? [...kitCatalogue.files, ...previewFiles] : kitCatalogue.files } });
+    }
     if (path.endsWith("/kit")) return route.fulfill({ json: { variant: "", cutAt: null, sheets: {}, files: [] } });
 
     if (path === `/api/projects/${done.id}/runs`) return route.fulfill({ json: { items: [runItem] } });
@@ -137,7 +186,12 @@ async function mockAgent(page: Page) {
        Ô vẫn quay mãi thì lỗi nằm ở component, không nằm ở agent. */
     if (path.includes("/files/")) {
       served.push(path);
-      return route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from(PNG_1x1, "base64") });
+      const body = path.includes("25-bg-home")
+        ? PORTRAIT_PNG
+        : path.includes("ui-sheet")
+          ? LANDSCAPE_PNG
+          : Buffer.from(PNG_1x1, "base64");
+      return route.fulfill({ status: 200, contentType: "image/png", body });
     }
 
     if (path === "/api/trash") return route.fulfill({ json: { items: [] } });
@@ -149,6 +203,7 @@ async function mockAgent(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
+  includePreviewFixtures = false;
   await mockAgent(page);
 });
 
@@ -229,4 +284,99 @@ test("§B2 — wizard của dự án trắng KHÔNG mọc ra nút xem kết qu�
   // Chờ wizard dựng xong (ô đầu tiên của bước ① đã có) rồi mới kết luận là KHÔNG có nút.
   await expect(page.getByRole("textbox", { name: /Tên dự án/i })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: "Xem ảnh đã tạo" })).toHaveCount(0);
+});
+
+test("preview ảnh dọc/ngang chỉ có một ổ cuộn và khóa trang nền", async ({ page }) => {
+  includePreviewFixtures = true;
+  const screenshotDir = "/Users/tungnt2/Documents/work/survey/kit-gen/teams/fix-modal-scroll";
+  mkdirSync(screenshotDir, { recursive: true });
+
+  for (const height of [800, 600]) {
+    await page.setViewportSize({ width: 1280, height });
+    for (const [name, orientation, bytes] of [
+      ["25-bg-home", "portrait", PORTRAIT_PNG],
+      ["ui-sheet", "landscape", LANDSCAPE_PNG],
+    ] as const) {
+      await captureLegacyPreviewScreenshot(page, name, orientation, bytes, height, screenshotDir);
+    }
+    await page.goto(`/p/${done.id}?section=images`);
+    for (const [name, orientation] of [["25-bg-home", "portrait"], ["ui-sheet", "landscape"]] as const) {
+      const trigger = page.getByRole("button", { name: `Xem ảnh gốc ${name}` });
+      await expect(trigger).toBeVisible({ timeout: 15_000 });
+      await trigger.click();
+
+      const dialog = page.getByRole("dialog", { name });
+      await expect(dialog).toBeVisible();
+      const image = dialog.getByRole("img", { name: new RegExp(name) });
+      await expect(image).toBeVisible({ timeout: 15_000 });
+      const stats = await dialog.evaluate((root) => {
+        const scrollables = [...root.querySelectorAll<HTMLElement>("*")]
+          .filter((node) => ["auto", "scroll"].includes(getComputedStyle(node).overflowY)
+            || ["auto", "scroll"].includes(getComputedStyle(node).overflowX));
+        const frame = root.querySelector<HTMLElement>("[data-testid=asset-preview-frame]")!;
+        const body = root.querySelector<HTMLElement>("[data-testid=dialog-body]")!;
+        const imageNode = root.querySelector<HTMLImageElement>("img")!;
+        const dialogBox = root.getBoundingClientRect();
+        const frameBox = frame.getBoundingClientRect();
+        const imageBox = imageNode.getBoundingClientRect();
+        const originalScrollTop = body.scrollTop;
+        body.scrollTop = body.scrollHeight;
+        const bodyAtBottomAfterScroll = body.scrollTop + body.clientHeight >= body.scrollHeight - 1;
+        body.scrollTop = originalScrollTop;
+        return {
+          scrollables: scrollables.map((node) => node.dataset.testid ?? ""),
+          bodyOverflow: getComputedStyle(document.body).overflow,
+          bodyLocked: document.body.hasAttribute("data-scroll-locked"),
+          naturalWidth: imageNode.naturalWidth,
+          naturalHeight: imageNode.naturalHeight,
+          dialogInsideViewport: dialogBox.top >= 0
+            && dialogBox.bottom <= window.innerHeight
+            && dialogBox.left >= 0
+            && dialogBox.right <= window.innerWidth,
+          dialogHasHorizontalOverflow: root.scrollWidth > root.clientWidth,
+          bodyAtBottomAfterScroll,
+          imageInsideFrame: imageBox.top >= frameBox.top
+            && imageBox.bottom <= frameBox.bottom
+            && imageBox.left >= frameBox.left
+            && imageBox.right <= frameBox.right,
+          frameHasHorizontalOverflow: frame.scrollWidth > frame.clientWidth,
+        };
+      });
+      expect(stats.scrollables).toEqual(["dialog-body"]);
+      expect(stats.bodyOverflow).toBe("hidden");
+      expect(stats.bodyLocked).toBe(true);
+      expect([stats.naturalWidth, stats.naturalHeight]).toEqual(
+        orientation === "portrait" ? [1024, 1536] : [1536, 1024],
+      );
+      expect(stats.dialogInsideViewport).toBe(true);
+      expect(stats.dialogHasHorizontalOverflow).toBe(false);
+      expect(stats.bodyAtBottomAfterScroll).toBe(true);
+      expect(stats.imageInsideFrame).toBe(true);
+      expect(stats.frameHasHorizontalOverflow).toBe(false);
+      await expect(dialog.getByRole("button", { name: "Đóng" })).toBeVisible();
+      await page.screenshot({
+        path: `${screenshotDir}/after-${orientation}-1280x${height}.png`,
+        animations: "disabled",
+      });
+      await dialog.getByRole("button", { name: "Đóng" }).click();
+      await expect(dialog).toHaveCount(0);
+    }
+  }
+
+  /* Cửa sổ hẹp/zoom lớn: content có thể cần cuộn trong `DialogBody`, nhưng modal và
+     nút X vẫn nằm trong viewport, không mọc scroll ngang. */
+  await page.setViewportSize({ width: 360, height: 320 });
+  await page.goto(`/p/${done.id}?section=images`);
+  await page.getByRole("button", { name: "Xem ảnh gốc 25-bg-home" }).click();
+  const narrowDialog = page.getByRole("dialog", { name: "25-bg-home" });
+  await expect(narrowDialog).toBeVisible();
+  const closeBox = await narrowDialog.getByRole("button", { name: "Đóng" }).boundingBox();
+  expect(closeBox).not.toBeNull();
+  expect(closeBox!.x).toBeGreaterThanOrEqual(0);
+  expect(closeBox!.y).toBeGreaterThanOrEqual(0);
+  expect(closeBox!.x + closeBox!.width).toBeLessThanOrEqual(360);
+  expect(closeBox!.y + closeBox!.height).toBeLessThanOrEqual(320);
+  await expect(narrowDialog.getByRole("img", { name: /25-bg-home/ })).toBeVisible({ timeout: 15_000 });
+  await expect(narrowDialog).toHaveAttribute("data-state", "open");
+  expect(await page.evaluate(() => document.body.hasAttribute("data-scroll-locked"))).toBe(true);
 });

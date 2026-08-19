@@ -129,3 +129,21 @@ describe("V-9 · sàn chữ 12px (audit I3) không được thủng", () => {
     expect(read("src/features/setup/components/WizardStepper.tsx")).not.toContain("text-[11px]");
   });
 });
+
+describe("V-10 · preview ảnh không lồng ổ cuộn", () => {
+  const source = () => read("src/features/workflow-v4/components/CutAssetGrid.tsx");
+  const preview = () => source().slice(source().indexOf("function AssetZoomDialog"));
+
+  it("chỉ DialogBody giữ overflow-y-auto; khung ảnh không tạo overflow riêng", () => {
+    expect(preview()).not.toMatch(/overflow-(?:x-)?auto|overflow-(?:x-)?scroll/);
+    expect(preview()).toContain("h-[min(70dvh,calc(100dvh-10rem))]");
+    expect(preview()).toContain("!max-h-[min(90dvh,720px)]");
+    expect(preview()).toContain("className=\"h-full w-full border-0\"");
+  });
+
+  it("DialogBody là vùng nổi có overscroll-contain để Radix khóa nền", () => {
+    const dialog = read("src/components/ui/dialog.tsx");
+    expect(dialog).toContain("overflow-y-auto overscroll-contain");
+    expect(dialog).toContain("DialogPrimitive.Content");
+  });
+});
