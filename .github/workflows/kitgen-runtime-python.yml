@@ -25,12 +25,23 @@
 #   kit-gen/scripts/install.ps1 → $PYTHON_VERSION / $PYTHON_BUILD / $PythonRuntimeBase
 #   Đổi pin thì phải sửa CẢ HAI file đó rồi mới chạy workflow này với version mới.
 #
-# CHỈ workflow_dispatch. KHÔNG push, KHÔNG tag, KHÔNG schedule: tạo release là việc
-# có chủ ý, không phải tác dụng phụ của một cú push.
+# KHÔNG schedule, KHÔNG chạy theo push nhánh: tạo release là việc có chủ ý. Cửa vào
+# là một tag runtime-python-* đẩy lên có chủ đích, hoặc nút chạy tay (nút này chỉ hiện
+# khi file có mặt trên nhánh mặc định — xem khối `on:` bên dưới).
 # ═══════════════════════════════════════════════════════════════════════════════
 name: KitGen runtime Python
 
 on:
+  # Cửa vào THẬT SỰ dùng được: đẩy tag. `workflow_dispatch` chỉ hiện ra khi file
+  # workflow có mặt trên NHÁNH MẶC ĐỊNH, mà toàn bộ CI dự án sống ở nhánh tính năng
+  # nên nút chạy tay không bao giờ hiện. Sự kiện `push` thì chạy ngay từ ref được đẩy.
+  # Đẩy một tag runtime-python-* KHÔNG phải tác dụng phụ của cú push thường ngày —
+  # nó là một hành động có chủ ý, đúng tinh thần ban đầu.
+  #   runtime-python-check-3.13.15  -> chạy thử: tải, đối chiếu, in SHA256SUMS, DỪNG
+  #   runtime-python-3.13.15        -> tạo release thật
+  push:
+    tags:
+      - 'runtime-python-*'
   workflow_dispatch:
     inputs:
       python_version:
@@ -59,11 +70,51 @@ jobs:
       # Chỉ job này được ghi, và chỉ để tạo release runtime.
       contents: write
     env:
+      # Chạy tay thì lấy từ input; đẩy tag thì để TRỐNG, bước "Chốt phiên bản và chế độ"
+      # đọc pin từ install.sh rồi ghi đè qua $GITHUB_ENV cho các bước sau.
       PY_VERSION: ${{ inputs.python_version }}
       PY_BUILD: ${{ inputs.python_build }}
+      PUBLISH: ''
       # Kho thượng nguồn: tag của python-build-standalone CHÍNH LÀ ngày build.
       UPSTREAM: https://github.com/astral-sh/python-build-standalone/releases/download
     steps:
+      - uses: actions/checkout@v4
+
+      # Nguồn sự thật của phiên bản là PIN TRONG INSTALLER, không phải người gõ tay.
+      # Chạy tay thì input phải khớp pin (bước kế tiếp bắt); đẩy tag thì lấy thẳng pin
+      # ra dùng, còn tên tag chỉ quyết định có tạo release hay không.
+      - name: Chốt phiên bản và chế độ
+        shell: bash
+        run: |
+          set -eu
+          ref="${GITHUB_REF#refs/tags/}"
+          if [ -z "${PY_VERSION:-}" ]; then
+            PY_VERSION="$(sed -n 's/^PYTHON_VERSION="\([^"]*\)".*/\1/p' kit-gen/install.sh | head -n1)"
+            PY_BUILD="$(sed -n 's/^PYTHON_BUILD="\([^"]*\)".*/\1/p' kit-gen/install.sh | head -n1)"
+          fi
+          case "$GITHUB_REF" in
+            refs/tags/runtime-python-check-*)
+              PUBLISH=false
+              want="${ref#runtime-python-check-}" ;;
+            refs/tags/runtime-python-*)
+              PUBLISH=true
+              want="${ref#runtime-python-}" ;;
+            *)
+              PUBLISH="${{ inputs.publish }}"
+              want="$PY_VERSION" ;;
+          esac
+          # Tag nói một đằng, installer pin một nẻo = asset sinh ra không ai tải được.
+          if [ "$want" != "$PY_VERSION" ]; then
+            echo "::error::tag đòi CPython '$want' nhưng installer đang pin '$PY_VERSION'." >&2
+            exit 1
+          fi
+          {
+            echo "PY_VERSION=$PY_VERSION"
+            echo "PY_BUILD=$PY_BUILD"
+            echo "PUBLISH=$PUBLISH"
+          } >> "$GITHUB_ENV"
+          echo "runtime-python-$PY_VERSION · build $PY_BUILD · publish=$PUBLISH"
+
       - name: Kiểm tra input
         shell: bash
         run: |
@@ -77,8 +128,6 @@ jobs:
             *) echo "::error::python_build phải là 8 chữ số (YYYYMMDD), nhận được: $PY_BUILD" >&2; exit 1 ;;
           esac
           echo "runtime-python-$PY_VERSION  ·  build $PY_BUILD"
-
-      - uses: actions/checkout@v4
 
       # Pin trong installer và pin của workflow phải là MỘT. Lệch nhau nghĩa là
       # installer sẽ đi tìm một asset không tồn tại trên release vừa tạo — đúng cái
@@ -106,7 +155,7 @@ jobs:
           echo "pin khớp: $PY_VERSION+$PY_BUILD"
 
       - name: Release runtime-python-$PY_VERSION đã tồn tại chưa
-        if: ${{ inputs.publish }}
+        if: env.PUBLISH == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
@@ -200,28 +249,28 @@ jobs:
             echo '```'
             echo
             du -h out/* | sed 's/^/    /'
-            if [ "${{ inputs.publish }}" != "true" ]; then
+            if [ "$PUBLISH" != "true" ]; then
               echo
               echo '> Chạy thử (publish = false): KHÔNG tạo release nào.'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Tạo GitHub Release runtime-python
-        if: ${{ inputs.publish }}
+        if: env.PUBLISH == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: runtime-python-${{ inputs.python_version }}
-          name: CPython ${{ inputs.python_version }} runtime cho KitGen
+          tag_name: runtime-python-${{ env.PY_VERSION }}
+          name: CPython ${{ env.PY_VERSION }} runtime cho KitGen
           # `make_latest: false` LÀ BẮT BUỘC. Release này không phải một bản KitGen;
           # để nó thành "Latest" là mọi thứ đọc release mới nhất (kể cả người) sẽ nhìn
           # nhầm một tarball Python thành bản phát hành sản phẩm.
           make_latest: "false"
           fail_on_unmatched_files: true
           body: |
-            Bản CPython ${{ inputs.python_version }} (build ${{ inputs.python_build }}, biến thể `install_only`)
+            Bản CPython ${{ env.PY_VERSION }} (build ${{ env.PY_BUILD }}, biến thể `install_only`)
             mà installer KitGen tải về khi máy người dùng không có sẵn Python trong dải có wheel.
 
-            Mirror của [astral-sh/python-build-standalone](https://github.com/astral-sh/python-build-standalone/releases/tag/${{ inputs.python_build }}).
+            Mirror của [astral-sh/python-build-standalone](https://github.com/astral-sh/python-build-standalone/releases/tag/${{ env.PY_BUILD }}).
             `SHA256SUMS` do CI của KitGen sinh sau khi đã đối chiếu với checksum thượng nguồn.
 
             **Release này là BẤT BIẾN.** Installer đã phát ra ngoài trỏ thẳng vào đúng
