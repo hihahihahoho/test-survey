@@ -217,15 +217,23 @@ jobs:
         run: |
           set -eu
           cd out
-          for f in *-apple-darwin-install_only.tar.gz; do
-            tar -tzf "$f" | grep -qx 'python/bin/python3' || {
-              echo "::error::$f không có python/bin/python3" >&2; exit 1; }
-          done
-          for f in *-pc-windows-msvc-install_only.tar.gz; do
-            # install.ps1 giải nén với --strip-components=1 rồi gọi <pyHome>\python.exe.
-            tar -tzf "$f" | grep -qx 'python/python.exe' || {
-              echo "::error::$f không có python/python.exe" >&2; exit 1; }
-          done
+          # KHÔNG nối `tar -tzf` thẳng vào `grep -q`: grep thoát ngay khi thấy dòng
+          # đầu khớp, tar ăn SIGPIPE, `-o pipefail` của runner biến CÁI ĐÚNG thành
+          # cái sai. Run 32246020874 đã báo "không có python/bin/python3" cho một gói
+          # thực ra có đủ. Liệt kê ra file trước, xong mới soi.
+          want() { # <tarball> <đường dẫn phải có>
+            tar -tzf "$1" > listing.txt
+            if ! grep -qx "$2" listing.txt; then
+              echo "::error::$1 không có $2" >&2
+              echo "── vài mục đầu trong gói:" >&2
+              head -n 20 listing.txt >&2
+              exit 1
+            fi
+          }
+          for f in *-apple-darwin-install_only.tar.gz; do want "$f" 'python/bin/python3'; done
+          # install.ps1 giải nén với --strip-components=1 rồi gọi <pyHome>\python.exe.
+          for f in *-pc-windows-msvc-install_only.tar.gz; do want "$f" 'python/python.exe'; done
+          rm -f listing.txt
           echo "cả 3 gói đúng cấu trúc install_only."
 
       # SHA256SUMS do CHÍNH CI này sinh — đây là thứ installer đối chiếu trước khi
