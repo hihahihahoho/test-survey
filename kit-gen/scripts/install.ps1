@@ -154,8 +154,10 @@ function Remove-ReparsePointSafe([string] $path) {
     return
   } catch {
     $comspec = if ($env:ComSpec) { $env:ComSpec } else { 'cmd.exe' }
-    & $comspec /d /c "rmdir `"$path`"" 2>$null
-    if ($LASTEXITCODE -eq 0 -and -not (Test-Path -LiteralPath $path)) { return }
+    # Qua ham boc: goi lenh ngoai truc tiep bi luat CI chan, va `2>$null` tren lenh
+    # ngoai trong PS 5.1 bien stderr thanh loi cham dut (xem chu thich o Invoke-ExeSoft).
+    $code = Invoke-ExeSoft $comspec @('/d', '/c', "rmdir `"$path`"") -Quiet
+    if ($code -eq 0 -and -not (Test-Path -LiteralPath $path)) { return }
     throw
   }
 }
