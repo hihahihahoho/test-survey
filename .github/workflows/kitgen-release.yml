@@ -86,6 +86,11 @@ jobs:
           # pip TUYỆT ĐỐI KHÔNG ĐƯỢC BIÊN DỊCH (thiếu --only-binary là ninja ăn hết RAM
           # và treo máy người dùng), và nhánh chọn/tải Python riêng phải đi đúng đường.
           bash ../test/install-python-runtime.test.sh
+          # gen.sh/cover.sh chưa lần nào được CI soi — chỉ có `bash -n` trên vài bản GIẢ.
+          # Sự cố 20/08/2026: expand mảng RỖNG dưới bash 3.2 của macOS + `set -u` giết
+          # 100% lượt gen của người dùng hồ sơ Codex mặc định, mà cả đội dev dùng hồ sơ
+          # riêng nên không ai thấy. Ca này soi văn bản engine thật, không phải bản giả.
+          bash ../test/engine-empty-array.test.sh
       - name: Verify web application
         run: npm run verify:release
       - name: Verify integration contracts

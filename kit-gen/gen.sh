@@ -651,11 +651,17 @@ $(cat "prompts/${job}.txt")
     [[ -n "$p" && -f "${ROOT}/${p}" ]] && att+=(-i "${ROOT}/${p}")
   done < "prompts/${job}.att"
 
-  # bash 3.2 + set -u: mảng rỗng nổ "unbound variable" nếu expand thẳng
+  # bash 3.2 + set -u: mảng RỖNG nổ "unbound variable" nếu expand thẳng — và bash của
+  # macOS LÀ 3.2.57. Dòng dưới từng viết "${codex_env[@]}" trần: với hồ sơ Codex mặc
+  # định thì IMG_HOME rỗng ⇒ mảng rỗng ⇒ gen.sh chết ngay tại đây, rc=127, codex chưa
+  # kịp chạy một lần nào. UI chỉ nói được "chạy xong nhưng ảnh không được ghi" nên nhìn
+  # y hệt ca thiếu codex trên PATH. Máy nào chọn hồ sơ riêng (~/.codex-img) thì mảng
+  # không rỗng nên không ai thấy — 100% người dùng hồ sơ mặc định dính, 0% người còn lại.
+  # Dùng ĐÚNG lối viết của dòng `att` ngay dưới: ${arr[@]+"${arr[@]}"}.
   local t0=$(date +%s)
   local codex_env=()
   [[ -n "$IMG_HOME" ]] && codex_env=(env CODEX_HOME="$IMG_HOME")
-  "${codex_env[@]}" codex exec \
+  ${codex_env[@]+"${codex_env[@]}"} codex exec \
     -s workspace-write \
     -C "${ROOT}" \
     --skip-git-repo-check \

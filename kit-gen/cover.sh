@@ -72,9 +72,12 @@ if [[ -f "prompts/cover.att" ]]; then
 fi
 
 t0=$(date +%s)
+# Cùng lỗi với gen.sh:658 (sự cố 20/08/2026): hồ sơ Codex mặc định ⇒ IMG_HOME rỗng ⇒
+# mảng rỗng ⇒ bash 3.2 của macOS + `set -u` nổ "unbound variable", ảnh bìa không bao
+# giờ được dựng. Bọc như dòng `att` ngay dưới. Xem test/engine-empty-array.test.sh.
 codex_env=()
 [[ -n "$IMG_HOME" ]] && codex_env=(env CODEX_HOME="$IMG_HOME")
-"${codex_env[@]}" codex exec \
+${codex_env[@]+"${codex_env[@]}"} codex exec \
   -s workspace-write \
   -C "${ROOT}" \
   --skip-git-repo-check \
