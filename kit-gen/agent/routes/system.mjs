@@ -4,6 +4,7 @@ import { IMG_HOME_DEFAULT, invalidateDoctorCache } from "../lib/doctor.mjs"
 import { invalidateUsageCache, usage } from "../lib/usage.mjs"
 import { PROTOCOL } from "../lib/security.mjs"
 import { checkForUpdateSafe, readRuntimeVersion, scheduleUpdate } from "../lib/update.mjs"
+import { cancelLogin, loginStatus, startLogin } from "../lib/codex-login.mjs"
 
 export function register(r) {
   r.get("/health", async ctx => {
@@ -67,6 +68,30 @@ export function register(r) {
       },
     }
   })
+
+  /* ── ĐĂNG NHẬP CODEX BẰNG MÃ THIẾT BỊ ──────────────────────────────────────
+     Ba endpoint dưới đây KHÔNG nới hợp đồng bảo mật, lý do đầy đủ ở đầu
+     `lib/codex-login.mjs`. Tóm tắt phần liên quan tới tầng HTTP:
+       · thứ duy nhất trả ra là link công khai của OpenAI + mã 8 ký tự sống 15 phút
+         + nhãn `~/…` + enum trạng thái. Không token, không path tuyệt đối;
+       · stdout/stderr của `codex login` KHÔNG được giữ ở bất kỳ đâu, nên cũng
+         không có `errorTail` để lọt ra ngoài;
+       · `userCode` chỉ đi kèm khi trạng thái là `waiting` và biến mất ngay sau đó
+         — nó không nằm trong agent.log, không nằm trong chẩn đoán. */
+  r.post("/api/codex/login", async ctx => {
+    const cfg = await ctx.registry.active.config()
+    return { status: 202, json: startLogin(cfg) }
+  })
+
+  r.get("/api/codex/login", async () => {
+    const s = loginStatus()
+    /* Vừa đăng nhập xong mà doctor còn giữ kết quả cũ 60s thì UI hiện "chưa đăng
+       nhập" thêm một phút nữa — đúng thứ khiến người dùng bấm nút lần hai. */
+    if (s.status === "done") invalidateDoctorCache()
+    return { status: 200, json: s }
+  })
+
+  r.delete("/api/codex/login", async () => ({ status: 200, json: cancelLogin() }))
 
   /** Quota còn lại của tài khoản Codex — đọc lại con số mà lượt chạy gần nhất đã nhận
    *  (chi tiết nguồn + hợp đồng bảo mật ở đầu `lib/usage.mjs`). Rẻ: không spawn codex,

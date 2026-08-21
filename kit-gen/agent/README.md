@@ -112,6 +112,7 @@ Mọi response có `X-KitGen-Protocol: 1`. Lỗi luôn theo envelope §6.1:
 | 2b | GET | `/api/usage` | Quota Codex **còn lại**. `?refresh=1` bỏ cache 5 phút. Chỉ số + enum — xem §Usage |
 | 3 | GET | `/api/workspaces` | Danh sách workspace agent BIẾT, mỗi cái một `id` đục (`ws_xxxxxxxx`), **không có path** |
 | 4 | POST | `/api/workspace/activate` | `{workspaceId}` → đổi workspace đang dùng. `404 WORKSPACE_UNKNOWN` / `423 WORKSPACE_UNWRITABLE` |
+| 2c | POST · GET · DELETE | `/api/codex/login` | Đăng nhập Codex bằng **mã thiết bị**. Trả **đúng hai thứ**: link công khai của OpenAI + mã dùng một lần (chỉ khi `status:"waiting"`), kèm enum trạng thái và nhãn `~/…`. stdout của `codex` **không được giữ lại ở bất kỳ đâu** — xem §Đăng nhập |
 | 5 | GET | `/bridge.html` | Cầu dò popup: điều hướng **top-level** nên không bị mixed-content chặn. `postMessage` **chỉ** tới origin trong allowlist |
 | 6 | GET | `/app/*` | Bundle giao diện, same-origin. SPA fallback về `index.html`; asset có hash → `immutable` |
 
@@ -291,6 +292,27 @@ secret nào để lộ**. Đây là đánh đổi có ý thức theo yêu cầu 
 - Không ghi/log/trả về API key, bearer token, JWT, `refresh_token`, `access_token`, `id_token`.
 - Không trả đường dẫn tuyệt đối; chỉ trả **nhãn rút gọn** (`~/KitGen`) và **id đục** (`ws_8f2c`).
 - Không nhận `path` do client gửi cho việc ghi file (upload) — agent tự đặt tên.
+
+### Đăng nhập Codex (`/api/codex/login`) — vì sao nó KHÔNG phá bốn gạch đầu dòng trên
+
+Bản đầu cố ý không có endpoint nào chạm `codex login`: web chỉ in lệnh cho user tự gõ trong
+Terminal. Thứ luật đó bảo vệ chưa bao giờ là cái Terminal, mà là **agent không được đứng giữa
+user và thông tin đăng nhập của họ**. `--device-auth` giữ nguyên ranh giới ấy:
+
+- **Không có mật khẩu nào đi qua agent**, không có callback localhost. User đăng nhập trên trang
+  của OpenAI, trong trình duyệt của chính họ.
+- **Token do chính `codex` ghi vào `auth.json`.** Agent không nhận, không đọc, không chuyển tiếp —
+  gạch đầu dòng "không đọc nội dung `auth.json`" ở trên vẫn đúng từng chữ.
+- **stdout/stderr của tiến trình con KHÔNG được giữ lại ở bất kỳ đâu.** Không `lines.push`, không
+  `agent.log`, không `errorTail`. Mỗi dòng chạy qua đúng hai biểu thức (URL thuộc host cho phép ·
+  mã dạng `XXXX-XXXX`) và **chỉ hai thứ khớp được đó mới sống sót**. Đây là lọc theo **danh sách
+  trắng**, không phải che theo danh sách đen — che thì phải đoán đúng mọi hình dạng của secret,
+  sai một dạng là lộ.
+- **Mã dùng một lần chỉ sống trong RAM**, chỉ khi `status:"waiting"`, và bị xoá ngay khi phiên rời
+  trạng thái đó. Không xuống đĩa, không vào log, không vào chẩn đoán.
+
+Hồi quy nằm ở `agent/test/suite-codex-login.mjs`; ca đắt nhất đổ nguyên một token vào stdout của
+`codex` giả rồi khẳng định không một byte nào của nó có mặt trong bất kỳ response nào.
 
 ---
 

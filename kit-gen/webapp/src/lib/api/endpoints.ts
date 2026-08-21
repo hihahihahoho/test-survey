@@ -93,6 +93,31 @@ export interface UpdateCheck {
   checkedAt: string;
 }
 
+/**
+ * Kết quả `POST|GET|DELETE /api/codex/login` — phiên đăng nhập bằng MÃ THIẾT BỊ.
+ *
+ * HÌNH DẠNG NÀY CỐ Ý NGHÈO. Không có trường nào cho tên tài khoản, email, token, hay
+ * bất cứ thứ gì mô tả người dùng — agent còn không nhìn thấy chúng (xem
+ * `agent/lib/codex-login.mjs`). Thêm một field kiểu đó vào đây là dấu hiệu ai đó vừa
+ * kéo agent vào giữa user và thông tin đăng nhập của họ.
+ *
+ * `verificationUrl` + `userCode` CHỈ có mặt khi `status === "waiting"`; agent tự xoá
+ * chúng ngay khi phiên rời trạng thái đó, nên UI không cần (và không được) tự giữ lại.
+ */
+export interface CodexLogin {
+  status: "idle" | "starting" | "waiting" | "done" | "failed" | "cancelled";
+  /** link công khai của OpenAI để người dùng mở trong trình duyệt của họ */
+  verificationUrl: string | null;
+  /** mã dùng một lần, sống 15 phút — DÙNG XONG BỎ, không lưu ở bất cứ đâu */
+  userCode: string | null;
+  /** nhãn rút gọn (~/…) của CODEX_HOME sẽ nhận phiên đăng nhập này */
+  codexHomeLabel: string | null;
+  startedAt: string | null;
+  expiresAt: string | null;
+  /** enum, chỉ có khi `status === "failed"` */
+  reason?: "NO_CODEX" | "NO_DEVICE_CODE" | "DECLINED" | "EXPIRED" | "SPAWN_FAILED" | null;
+}
+
 export const systemApi = {
   /**
    * Kiểm tra bản mới. Agent fetch `release.json` HỘ trình duyệt (raw.githubusercontent.com
@@ -120,6 +145,27 @@ export const systemApi = {
     return await httpPatch("/api/image-profile", { mode }) as {
       ok: boolean; mode: "default" | "separate"; profile?: ImageGenProfile; codexHomeLabel: string;
     };
+  },
+  /**
+   * ĐĂNG NHẬP CODEX BẰNG MÃ THIẾT BỊ — thay cho việc bắt người dùng mở Terminal.
+   *
+   * Ranh giới với thông tin đăng nhập KHÔNG đổi một ly so với lối cũ, chỉ đổi chỗ
+   * người dùng phải đứng: không có mật khẩu nào đi qua app, token do chính codex ghi
+   * thẳng vào `auth.json`. Thứ duy nhất web nhận là **link công khai của OpenAI + mã
+   * 8 ký tự sống 15 phút** — hai thứ người dùng sẽ tự tay dùng trong trình duyệt của
+   * họ, và chúng vô dụng nếu không có phiên đăng nhập của chính họ.
+   *
+   * `userCode` là thứ DÙNG XONG BỎ: chỉ có mặt khi `status === "waiting"`, và không
+   * bao giờ được đưa vào localStorage, log, hay báo cáo lỗi.
+   */
+  async startCodexLogin() {
+    return await httpPost("/api/codex/login", {}) as CodexLogin;
+  },
+  async codexLoginStatus() {
+    return await httpGet("/api/codex/login") as CodexLogin;
+  },
+  async cancelCodexLogin() {
+    return await httpDelete("/api/codex/login") as CodexLogin;
   },
   async revealWorkspace() {
     return await httpPost("/api/workspace/reveal", {}) as { ok: boolean };

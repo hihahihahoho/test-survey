@@ -16,6 +16,11 @@
 #      Việc kiểm đăng nhập chỉ dùng `[ -f auth.json ]` (đúng như gen.sh dòng 13).
 #   2. Không tự chạy `codex login`. OAuth cần trình duyệt + tương tác của chính bạn;
 #      script chỉ IN ra lệnh để bạn tự chạy.
+#      (Từ 2.1.38 app CÓ nút "Đăng nhập Codex" — nhưng nó chạy `codex login --device-auth`,
+#      tức bạn vẫn tự đăng nhập trên trang OpenAI trong trình duyệt của mình, app chỉ đưa
+#      lại link + mã dùng một lần. Điều khoản này KHÔNG bị nới: script cài đặt vẫn không
+#      chạy `codex login`, và không thứ gì của phiên đăng nhập đi qua nó. Xem
+#      `agent/README.md` §4 "Đăng nhập Codex".)
 #   3. Không sửa `~/.codex/config.toml`. Home codex mặc định của bạn giữ nguyên
 #      từng dòng. Nhánh ảnh (nếu cần) dùng home RIÊNG `~/.codex-img`.
 #   4. Không `curl | bash`, không tải nhị phân từ URL lạ, không sudo, không cài

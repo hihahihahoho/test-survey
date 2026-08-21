@@ -17,6 +17,7 @@
      suite-pause     dừng giữa chừng → chạy tiếp phần thiếu · run mồ côi sau khi agent chết
      suite-cover     ảnh bìa: prompt neo branding gốc · toạ độ vùng tiêu đề · job phụ không phá run
      suite-import    nhập một chiều có báo cáo · /app/ same-origin · /bridge.html · redact
+     suite-codex-login  nút đăng nhập device-auth: lọc theo danh sách trắng · mã dùng xong bỏ
    ========================================================================== */
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -39,6 +40,7 @@ import { run as runCover } from "./test/suite-cover.mjs"
 import { run as runImport } from "./test/suite-import.mjs"
 import { run as runLibrary } from "./test/suite-library.mjs"
 import { run as runUpdateCure } from "./test/suite-update-cure.mjs"
+import { run as runCodexLogin } from "./test/suite-codex-login.mjs"
 
 const AGENT_DIR = dirname(fileURLToPath(import.meta.url))
 
@@ -95,6 +97,7 @@ await runPause({ ...base, pid })
 await runCover({ ...base, pid })
 await runImport({ ...base, pid })
 await runUpdateCure({ ...base })
+await runCodexLogin({ ...base })
 
 /* Dọn workspace tạm. Trên Windows bước này ĐÃ TỪNG giết cả bộ ca (run 31784778492):
    `rmdir … ENOTEMPTY` ném ra ở top-level ⇒ unhandled rejection ⇒ tiến trình chết TRƯỚC

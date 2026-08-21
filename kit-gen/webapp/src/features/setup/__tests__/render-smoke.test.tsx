@@ -248,14 +248,20 @@ describe("Bước 4 — môi trường & tạo ảnh", () => {
     onRecheck: noop, onFinish: noop, onCreateFirst: noop, onImport: noop,
   };
 
-  it("thiếu image_gen ⇒ hướng dẫn Codex mặc định, không có nút tự chạy", () => {
+  it("thiếu image_gen ⇒ có NÚT đăng nhập, và lối Terminal cũ vẫn còn làm đường lui", () => {
     const doctor = {
       imageGen: { mode: "unavailable", available: false, reason: "NOT_LOGGED_IN" },
     } as Doctor;
     const html = wrap(<StepImageGen doctor={doctor} {...base} />);
+    /* Lối MỚI: bấm là xong, không bắt mở Terminal. Đây là thứ người dùng thật bị chặn
+       ở đúng bước này (người làm thiết kế, máy chưa từng mở shell). */
+    expect(html).toContain("Đăng nhập Codex");
+    expect(html).toContain("Không cần mở Terminal");
+    /* Lối CŨ KHÔNG BỊ GỠ, chỉ gấp vào <details>: nó là đường duy nhất khi máy chưa có
+       codex hoặc bản codex quá cũ không biết `--device-auth`. Mất nó là mất đường lui. */
     expect(html).toContain("codex login");
+    expect(html).toContain("Cách khác: tự chạy lệnh trong Terminal");
     expect(html).not.toContain("CODEX_HOME=~/.codex-img");
-    expect(html).toContain("không tự chạy thay bạn");
     // lệnh kiểm chỉ ĐẾM, không in nội dung cấu hình
     expect(html).toContain("grep -cE");
     // dòng cam kết bắt buộc của §3-S0

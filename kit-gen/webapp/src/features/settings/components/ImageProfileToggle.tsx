@@ -3,6 +3,7 @@ import { Lock, Loader2 } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { CopyableCode, StatusDot } from "@/components/common";
 import { StepCard } from "@/features/setup/components/StepShell";
+import { CodexLoginPanel } from "@/features/setup/steps/parts/CodexLoginPanel";
 import { useSetImageProfile, type useDoctor } from "@/lib/hooks";
 import { devDetails, presentError, type ConnectionStatus } from "@/lib/api";
 import { IMAGE_PROFILES, imageProfileView, type ImageProfileWire } from "../lib/image-profile";
@@ -105,13 +106,23 @@ export function ImageProfileToggle({
       </dl>
 
       {view.needsLogin && (
-        <div className="flex flex-col gap-2 rounded-2 border border-line-subtle bg-canvas p-3">
+        <div className="flex flex-col gap-2">
           <p className="text-body text-fg">
-            Hồ sơ này chưa đăng nhập. Chạy lệnh sau trong Terminal rồi bấm{" "}
-            <strong className="text-fg-strong">Kiểm tra lại</strong> — kit-gen cố ý không tự
-            chạy thay bạn.
+            Hồ sơ <span className="font-mono">{view.homeLabel}</span> chưa đăng nhập.
           </p>
-          <CopyableCode value={`CODEX_HOME=${view.homeLabel} codex login`} label="Lệnh đăng nhập cho hồ sơ này" />
+          {/* Agent tự đọc hồ sơ ĐANG CHỌN trong config để biết đăng nhập vào CODEX_HOME
+              nào — nên nút này luôn khớp với dòng "Cấu hình đang dùng" ngay phía trên,
+              kể cả khi user vừa gạt toggle xong. Đăng nhập nhầm home là kiểu hỏng tệ
+              nhất: mọi thứ báo thành công mà lượt gen vẫn kêu chưa đăng nhập. */}
+          <CodexLoginPanel />
+          <details className="rounded-2 border border-line-subtle bg-canvas p-3">
+            <summary className="cursor-pointer text-body text-fg">
+              Cách khác: tự chạy lệnh trong Terminal
+            </summary>
+            <div className="mt-3">
+              <CopyableCode value={`CODEX_HOME=${view.homeLabel} codex login`} label="Lệnh đăng nhập cho hồ sơ này" />
+            </div>
+          </details>
         </div>
       )}
 
