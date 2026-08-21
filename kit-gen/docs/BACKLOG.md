@@ -435,3 +435,68 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
     ô — cả hai đều là hợp đồng mức Ô, không phải mức tấm, nên hai thứ sống chung
     được trên một ảnh. Cách này giữ nguyên hai đường tách đã đo và đã tin được, mà
     vẫn lấy được cái lợi lớn nhất của alpha thật cho ~90% số ô còn lại.
+
+    **⑭ KHÔNG CÓ SKILL NÀO ĐÈ `imagegen`. NHƯNG SKILL BỊ ĐỌC MẤT MỘT PHẦN.**
+    Đã soi hết ba gốc skill mà chính codex khai trong prompt của phiên hỏng:
+    `r0 = ~/.agents/skills` (37 skill), `r1 = $CODEX_HOME/skills/.system` (6),
+    `r2 = ~/.codex-img/plugins/cache/openai-curated-remote` (2 plugin). **Chỉ có
+    đúng MỘT `imagegen`**, ở `r1`, và hai bản trong `~/.codex` với `~/.codex-img`
+    băm giống hệt nhau. Không trùng tên, không `AGENTS.md` cấp project, không skill
+    cấp thư mục trong `~/KitGen`. Vậy giả thuyết "bị đè skill" là **KHÔNG**.
+
+    Cái tìm được thay vào đó còn đáng lo hơn, vì nó lặp lại được:
+
+    · Codex **KHÔNG** được nhét sẵn nội dung SKILL.md vào prompt. Nó chỉ nhận một
+      DANH SÁCH 44 skill (name + description + đường dẫn) — khối developer message
+      24.502 ký tự. Muốn biết luật thì agent phải **tự đi mở file**.
+    · Phiên hỏng CÓ mở thật: `sed -n '1,240p' …/imagegen/SKILL.md`. Mà **SKILL.md
+      dài 315 dòng**. Nó cắt mất 75 dòng cuối — trong đó có đúng dòng 249:
+      *"CLI `gpt-image-2` does not support `background=transparent`"*.
+    · Và nó **không mở file `references/` nào** (`remove_chroma_key` = 0 lần xuất
+      hiện trong cả transcript). Skill có 12 file; agent đọc 1, đọc thiếu.
+
+    Diễn biến đầy đủ, trích thẳng từ rollout:
+
+    | # | codex nói / làm |
+    |---|---|
+    | 11 | *"I'm using the image generation skill…"* |
+    | 12 | `sed -n '1,240p' SKILL.md` — đọc thiếu 75 dòng cuối |
+    | 18 | `image_gen__imagegen(...)` → file RGB |
+    | 31 | *"its exported file **lacks an alpha channel**"* |
+    | 41 | *"the generator **painted a checkerboard** into the background"* |
+    | 42 | gen LẠI, `referenced_image_paths` = **chính tấm caro vừa hỏng** |
+    | 54,60 | đi tìm `magick` / `convert` / `ffmpeg` / `sips` |
+    | 67 | *"The second export still lacks alpha, so I'm applying **only the required format correction**"* |
+    | 68,74 | viết `make_alpha.swift`, `swiftc`, chạy |
+
+    Hai chỗ đáng ghi lại: (a) nó **tự chẩn đoán đúng** cả "thiếu alpha" lẫn "caro
+    vẽ tay" — thông tin mình cần đã có sẵn trong log, chỉ là `gen.sh` không đọc
+    (xem ⑬); (b) bước 42 **đưa chính tấm caro làm ảnh tham chiếu** cho lượt sửa —
+    đúng cái cơ chế thống trị-bởi-ref ở ⑨, nên lượt 2 hỏng y hệt lượt 1 là tất yếu.
+
+    **⑮ SKILL VẪN CÒN NGUYÊN ĐƯỜNG CHROMA-KEY — CHỈ LÀ NÓ KHÔNG NẰM TRONG SKILL.md.**
+    Đây là chỗ ⑬ nói hụt. `grep -c chroma SKILL.md` = **0**, nhưng skill 0.149 ship
+    kèm `scripts/remove_chroma_key.py` (13.836 byte), docstring:
+
+    > *"Remove a solid chroma-key background from an image. This helper supports the
+    > imagegen skill's **built-in-first transparent workflow: generate an image on a
+    > flat key color, then convert that key color to alpha**."*
+
+    và `references/image-api.md:71`:
+
+    > *"`gpt-image-2` does not currently support the Image API `background=transparent`
+    > parameter… keep `gpt-image-2` when **a flat chroma-key background plus local
+    > alpha extraction** with `remove_chroma_key.py` is acceptable."*
+
+    `image_gen.py:194`: *"transparent backgrounds are not supported in gpt-image-2,
+    the latest model."* `image-api.md:16` xếp `gpt-image-1.5` là *"True
+    transparent-background fallback"*.
+
+    Đã kiểm mốc thời gian để chắc đây không phải rác của 0.147: **cả 12 file trong
+    skill đều mtime 11:30:50**, cùng nhịp sync 0.149. Tức chroma-key là hướng dẫn
+    ĐANG HIỆU LỰC, không phải tàn dư.
+
+    ⇒ **Chroma-key mà `ad57396` vừa gỡ đi chính là quy trình mà OpenAI vẫn tài liệu
+    hoá cho đường built-in.** Ba mảnh khớp thành một: model kèm ảnh ref hay trả RGB
+    (⑬) · skill chính thức bảo cách xử là gen trên nền key phẳng rồi tách (⑮) ·
+    kit-gen từ đầu làm đúng thế. Không tag release nào trước khi chốt lại hướng này.
