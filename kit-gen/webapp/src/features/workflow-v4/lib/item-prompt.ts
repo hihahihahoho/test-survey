@@ -58,10 +58,14 @@ const orientLine = (orient: string) =>
  * `__tests__/cell-background.test.tsx` đỏ (nó đọc `gen.sh` thật, không đọc trí nhớ).
  */
 export function glowCellPrompt(): string {
-  return " — LIGHT EFFECT: this element is pure light. Paint ONLY the light itself; the faint"
-    + " outer halo fades out gradually until nothing is painted at all, never stopping at a hard"
-    + " edge. Around and behind the light, paint NOTHING — no black plate, no backing colour, and"
-    + " no grey-and-white squares";
+  return " — LIGHT EFFECT: for THIS cell, ignore the rule about replacing the gray silhouette"
+    + " with a continuous content surface: there is no surface here. The gray shape only marks"
+    + " HOW FAR the light reaches; it is not an area to fill. This element is pure light. The"
+    + " halo fades out by LOWERING ALPHA, not by painting paler pixels: at the outer edge the"
+    + " alpha reaches 0 while the colour stays the light's own colour, so the fade is gradual"
+    + " and never stops at a hard edge. There is NO plate of any kind behind the light — no"
+    + " black, no white, no pale grey, and above all no checkerboard squares. Every pixel that"
+    + " is not lit is simply unpainted";
 }
 
 /**
@@ -74,12 +78,13 @@ export function glowCellPrompt(): string {
  * THẲNG trong kênh α, nên câu này ra hợp đồng ngay trên α.
  */
 export function glassCellPrompt(): string {
-  return " — SEE-THROUGH ELEMENT: the body of this element is a thin sheet of tinted glass,"
-    + " painted at LOW OPACITY — around 25% for a clear pane, up to 50% for a strongly tinted"
-    + " one. Paint the tint and nothing else behind it: no opaque fill, no white or grey wash,"
-    + " and above all NO grey-and-white squares — do not draw what a transparent area looks like"
-    + " in an image editor, just paint less. Frame, rim, bevel and specular highlights stay"
-    + " fully opaque";
+  return " — SEE-THROUGH ELEMENT: the gray silhouette marks the pane, but 'replacing it with a"
+    + " continuous content surface' here means a SEE-THROUGH surface, not a solid one. The body"
+    + " of this element is a thin sheet of tinted glass. Draw it with a LOW ALPHA VALUE — about"
+    + " 64 out of 255 for a clear pane, up to 128 for a strongly tinted one — keeping the glass's"
+    + " own tint colour at that low alpha. Do NOT fake it with paint: no opaque fill, no white or"
+    + " pale grey wash, and above all no checkerboard squares. Lower alpha, not lighter paint."
+    + " Frame, rim, bevel and specular highlights stay fully opaque";
 }
 
 /** `true` khi ô là hiệu ứng phát sáng — quầng phải tan hết ra nền trong suốt. */

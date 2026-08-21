@@ -278,9 +278,13 @@ class TransparentBackgroundTest(unittest.TestCase):
         """Bẫy đã đo được (BACKLOG #24 ⑦): không tạo được trong suốt thì model
         KHÔNG báo lỗi — nó vẽ một tấm caro xám-trắng ở α=255, nhìn bằng mắt y hệt
         ảnh nền trong suốt. Prompt phải gọi tên đúng hành vi đó mà cấm."""
-        self.assertIn("checkerboard", self.prompt)
-        self.assertIn("picture", self.prompt.lower())
-        self.assertIn("Leave the pixels", self.prompt)
+        self.assertIn("NEVER DRAW A CHECKERBOARD", self.prompt)
+        # ② nói ra VÌ SAO nó sai, ③ và chỉ ra cách làm đúng thay thế — thiếu ③ thì
+        # model chỉ biết mình sai mà không biết đi đường nào (đo được: nó lấp bằng
+        # thứ khác thay vì thôi lấp).
+        self.assertIn("DISPLAYS empty pixels", self.prompt)
+        self.assertIn("Less", self.prompt)
+        self.assertIn("alpha, not lighter paint", self.prompt)
 
     def test_tu_vung_chroma_khong_duoc_quay_lai_prompt(self):
         for w in ("chroma", "flat solid", "#FF00FF", "#00FF00"):
@@ -293,12 +297,13 @@ class TransparentBackgroundTest(unittest.TestCase):
         p = render_prompt_text(_cfg(skel={"matte": "glow"}))
         self.assertNotIn("PURE BLACK", p)
         self.assertNotIn("#000000", p)
-        self.assertIn("no grey-and-white squares", p)
+        self.assertIn("no checkerboard squares", p)
+        self.assertIn("not an area to fill", p)
 
     def test_o_glass_do_trong_nam_trong_kenh_alpha(self):
         p = render_prompt_text(_cfg(skel={"matte": "glass"}))
-        self.assertIn("LOW OPACITY", p)
-        self.assertIn("NO grey-and-white squares", p)
+        self.assertIn("LOW ALPHA VALUE", p)
+        self.assertIn("no checkerboard squares", p)
         self.assertNotIn("chroma", p)
 
     def test_gen_sh_khong_con_may_moc_chroma_nhung_slice_py_VAN_CON(self):
