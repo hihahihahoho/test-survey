@@ -259,6 +259,46 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
       đế thì là rác, và nó ĐỤC nên đi thẳng vào asset. Đế đen cũ (`C = α·F`) chính xác
       tuyệt đối và không có chỗ nào để hỏng kiểu này.
 
+    **⑨ ĐÃ THỬ SỬA BẰNG PROMPT — 4 VÒNG, CÓ ĐO. GLASS XONG, GLOW KHÔNG.**
+    Chủ sản phẩm bảo cứ prompt cho ra nhẽ. Đã làm, mỗi vòng gen thật rồi đo kênh α
+    (ô 2×2: nút · xu · burst `glow` · khay `glass`; % là pixel xám-sáng ĐỤC trên
+    tổng pixel nhìn thấy của ô):
+
+    | vòng | thêm gì vào prompt | glow | glass | nút/xu |
+    |---|---|---|---|---|
+    | 2 | "nền trong suốt, đừng vẽ caro" | caro 8% | **caro 53%** | sạch |
+    | 3 | cấm caro nặng + nói cách làm đúng (hạ α) | caro 18% | caro 5% | sạch |
+    | 4 | **huỷ lệnh "lấp kín bóng silhouette"** cho 2 ô đó | caro 13% | **caro 0%** | sạch |
+    | 5 | "phông tưởng tượng đừng ghi vào file / sticker die-cut" | caro 10% | caro 1% | **THỦNG LỖ** |
+
+    **Vòng 4 là trạng thái tốt nhất và là cái đang ship.** Phát hiện của vòng 4: thủ
+    phạm cái đế caro KHÔNG phải câu tả nền, mà là khối *"Build each element in three
+    layers — one continuous, clean content surface replacing the gray silhouette"*.
+    Với ô ÁNH SÁNG thì lệnh đó vô nghĩa, nhưng model vẫn tuân: nó lấp kín đúng bóng
+    sao 8 cánh bằng thứ nó nghĩ là "trong suốt", tức caro. Huỷ lệnh đó cho riêng hai
+    ô ⇒ glass sạch hẳn.
+
+    **Vòng 5 là bài học ngược:** nói mạnh thêm nữa về "rỗng" thì caro chỉ nhích 13% →
+    10%, nhưng khâu cắt alpha hoá hung hãn — mép răng cưa lởm chởm, **thủng lỗ vào
+    giữa thân nút và thân xu**, quầng sáng bạc trắng hết. Đổi một lỗi nhìn thấy được
+    lấy một lỗi tệ hơn. Đã ghi cảnh báo "ĐÃ THỬ VÀ ĐÃ BỎ" ngay trong `gen.sh`.
+
+    **Còn hai thứ prompt KHÔNG với tới được:**
+    · **Đế caro của ô `glow`.** Soi ở mức pixel: nó là caro thật, α=255, nằm GỌN
+      TRONG bao hình của quầng — nên khâu cắt alpha (chỉ gọt được mép ngoài) không
+      đụng tới. Model đang vẽ *cái phông* mà nó tưởng ảnh nằm trên, rồi vẽ quầng đè
+      lên. 4/4 vòng đều thế, chỉ khác độ lớn.
+    · **α một phần gần như biến mất.** Vòng 1 (prompt nhẹ) còn 7,36% pixel ở dải
+      α 1..254; vòng 2-5 đều **0,00%** — alpha nhị phân, hết bóng đổ mềm, hết quầng
+      tan. Prompt càng gắt càng nhị phân.
+
+    ⇒ Hai thứ đó phải sửa ở MÃ, không sửa được bằng chữ. Hai đường:
+      · **Gỡ caro trong `slice.py`** — caro là hoa văn tuần hoàn, xám trung tính,
+        nhận diện được chắc chắn (`painted_checkerboard` đã làm được ở mức tấm);
+        gỡ ở mức Ô rồi cho α=0 thì ô glow ra quầng sạch trên nền trong.
+      · Hoặc **đế riêng cho hai ô** — xem đoạn ngay dưới. Đường này giữ nguyên hai
+        phép tách đã đo và đã tin được.
+
     **HƯỚNG ĐỀ XUẤT — TẤM TRONG SUỐT + ĐẾ RIÊNG CHO HAI Ô ĐÓ.** Nền tấm cứ trong
     suốt (đã chạy), còn `glow` giữ đế ĐEN và `glass` nhận một đế KEY phẳng của riêng
     ô — cả hai đều là hợp đồng mức Ô, không phải mức tấm, nên hai thứ sống chung
