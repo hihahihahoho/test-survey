@@ -10,7 +10,7 @@
 
    ── ÁNH XẠ TỪ 4 LUẬT CSS CŨ CỦA skeleton.html (đọc từ mã, không đoán) ──────
      .sheet   width/height W×H; background #f2f2f2; overflow hidden
-              → <svg W×H> + <rect fill="#f2f2f2"> phủ nền
+              → <svg W×H>, KHÔNG có rect nền — xem khối "NỀN" ngay dưới đây
      .cell    position:absolute; box-sizing:border-box; border:1px solid #d9d9d9
               → rect inset 0.5 (SVG vẽ nét quanh TÂM đường) + stroke-width 1
      .cell svg  position:absolute; overflow:visible
@@ -21,6 +21,29 @@
               box-sizing:border-box
               → rect inset 2 (tâm nét 4px) + rx = 6 − 2 = 4
 
+   ── NỀN SHEET: TRONG SUỐT, VÀ ĐỪNG ĐẮP LẠI ────────────────────────────────
+     Ảnh này là ẢNH THAM CHIẾU đính kèm cho model. Model **bắt chước nền của ảnh
+     tham chiếu**, không nghe lời prompt. Đo được, 4/4 lượt, cùng model cùng cách
+     đính (BACKLOG #24 ⑥):
+
+       skeleton nền ĐẶC  #dfdfdf → ảnh ra có α=0 chiếm  0,0%  · 0,0%
+       skeleton nền TRONG (α=0)  → ảnh ra có α=0 chiếm 60,3%  · 65,3%
+
+     Vòng đối chứng sạch (`skel-A`/`skel-B`) dùng prompt GIỐNG NHAU TỪNG BYTE —
+     `diff` chỉ ra đúng dòng đường dẫn file ra. Biến duy nhất là tấm ảnh này. Và
+     prompt đó đã mạnh hết cỡ: mở đầu bằng "TRANSPARENT BACKGROUND", có dòng "THE
+     MOST IMPORTANT REQUIREMENT: the output PNG must have a real alpha channel",
+     nói thẳng nền xám của skeleton không phải tranh. Vẫn 0,0%.
+
+     Tệ hơn: khi không tạo được trong suốt, model KHÔNG báo lỗi — nó **vẽ một tấm
+     caro giả**, ô `#FEFEFE` đan `#EEEEEE`, toàn bộ α=255. Nhìn bằng mắt y hệt ảnh
+     nền trong suốt. Đó là lý do `slice.py` phải soi kênh α thay vì tin con mắt.
+
+     ⇒ Nền sheet ở đây KHÔNG BAO GIỜ được vẽ lại. Muốn NHÌN thấy khung xương thì
+     đặt nền ở KHUNG XEM (skeleton.html trải caro dưới `.sheet`), không đặt vào
+     SVG — vì chính chuỗi SVG này là thứ đi vào ảnh gửi cho model.
+     `tests/test_skeleton_svg.py::test_svg_KHONG_CO_RECT_NEN` khoá điều này.
+
    ── CÁI BẪY DUY NHẤT, ĐÃ ĐO HAI CHIỀU: +1px ───────────────────────────────
      `.cell` là containing block và nó CÓ border ⇒ con `position:absolute` của nó
      neo theo PADDING BOX, tức đã trừ đi 1px border. Nên MỌI toạ độ con (silhouette
@@ -28,7 +51,6 @@
      Bỏ sót đúng 1px này làm sai khác so với ảnh Playwright nhảy 1,64% → 2,63%.
    ========================================================================== */
 (function (global) {
-  const BG_FILL = "#f2f2f2";        // .sheet background
   const GRID_STROKE = "#d9d9d9";    // .cell border-color
   const SAFE_STROKE = "#464646";    // .safe border-color
   const CELL_BORDER = 1;            // .cell border-width — xem khối "CÁI BẪY" ở trên
@@ -194,7 +216,10 @@
     const [W, H] = sheetSize(sh);
     const cw = W / cols, ch = H / rows;
     const guideEnabled = gridGuideEnabled(sh);
-    const parts = [`<rect x="0" y="0" width="${W}" height="${H}" fill="${BG_FILL}"/>`];
+    /* KHÔNG có rect nền: nền sheet phải TRONG SUỐT. Xem khối "NỀN SHEET" ở đầu
+       file — đây không phải thiếu sót, đây là điều kiện để ảnh model trả về có
+       alpha thật. */
+    const parts = [];
 
     sh.components.forEach((comp, i) => {
       const r = (i / cols) | 0, c = i % cols;
@@ -241,7 +266,7 @@
 
   global.KITSKEL = {
     sheetToSvg, sheetSize, buildAll,
-    BG_FILL, GRID_STROKE, SAFE_STROKE, CELL_BORDER, SAFE_BORDER, SAFE_RADIUS,
+    GRID_STROKE, SAFE_STROKE, CELL_BORDER, SAFE_BORDER, SAFE_RADIUS,
     GRID_GUIDE, compensationKind, compensationFor, isNineElementSheet,
     cellRect, targetRect, guideGeometry,
   };

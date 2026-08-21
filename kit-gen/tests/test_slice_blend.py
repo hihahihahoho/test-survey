@@ -33,7 +33,11 @@ from slicelib import ROOT, load
 
 slice_mod = load()
 
-CELL = 80                       # ô vuông nhỏ: test đo manifest, không đo hình học
+# KHỔ TẤM PHẢI LÀ 3:2 — `orientation_error` (sự cố 21/08/2026) bỏ qua mọi sheet
+# lệch quá 10% khỏi tỉ lệ đã khai. Ô ở đây do đó KHÔNG vuông; không sao, ca này đo
+# manifest chứ không đo hình học.
+SHEET_W, SHEET_H = 240, 160
+CELL = 80                       # chỉ còn dùng cho lề vẽ khối bên trong ô
 STYLE_ID = "kit"
 
 
@@ -65,13 +69,14 @@ def styles_json(sheet_ids=("main", "tall")):
 
 
 def raw_sheet(path, cols=2, rows=1):
-    """Sheet RGBA: mỗi ô một khối đặc ở giữa, quanh là trong suốt thật."""
-    img = Image.new("RGBA", (cols * CELL, rows * CELL), (0, 0, 0, 0))
+    """Sheet RGBA khổ 3:2: mỗi ô một khối đặc ở giữa, quanh là trong suốt thật."""
+    img = Image.new("RGBA", (SHEET_W, SHEET_H), (0, 0, 0, 0))
     px = img.load()
+    cw, ch = SHEET_W // cols, SHEET_H // rows
     for r in range(rows):
         for c in range(cols):
-            for y in range(r * CELL + 20, r * CELL + CELL - 20):
-                for x in range(c * CELL + 20, c * CELL + CELL - 20):
+            for y in range(r * ch + 20, r * ch + ch - 20):
+                for x in range(c * cw + 20, c * cw + cw - 20):
                     px[x, y] = (240, 200, 80, 255)
     img.save(path)
 

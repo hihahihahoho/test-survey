@@ -40,6 +40,22 @@ def render_prompt_files(cfg):
             os.chdir(cwd)
 
 
+def render_prompt_text(cfg, name="demo-pose-demo"):
+    """Chính văn prompt gửi model (không phải danh sách file đính kèm)."""
+    src = (ROOT / "gen.sh").read_text(encoding="utf-8")
+    block = re.search(r"python3 - <<'PY'\n(.*?)\nPY\n", src, re.S).group(1)
+    with tempfile.TemporaryDirectory() as td:
+        Path(td, "styles.json").write_text(json.dumps(cfg), encoding="utf-8")
+        Path(td, "prompts").mkdir()
+        cwd = os.getcwd()
+        os.chdir(td)
+        try:
+            exec(compile(block, "gen.sh:PY", "exec"), {"__name__": "gen_prompt_test"})
+            return Path(td, "prompts", f"{name}.txt").read_text(encoding="utf-8")
+        finally:
+            os.chdir(cwd)
+
+
 gen = load_gen_block()
 
 
@@ -227,50 +243,81 @@ class SteeringPromptTest(unittest.TestCase):
         self.assertNotIn("deliberately expanded", prompt)
 
 
-class ChromaKeyTest(unittest.TestCase):
-    def test_nhan_dien_ca_4_key_tu_chuoi_bg(self):
-        for name in ("magenta", "green", "cyan", "blue"):
-            got, desc = gen["key_of"]({"id": "s", "bg": f"pure vivid {name} #ABCDEF"})
-            self.assertEqual(got, name)
-            self.assertIn(name, desc)
+def _cfg(spec="blank button", skel=None, extra=None):
+    sk = {"shape": "rrect", "w": 0.8, "h": 0.6}
+    sk.update(skel or {})
+    st = {"id": "demo", "bg": "magenta", "style": "flat ink"}
+    st.update(extra or {})
+    return {"styles": [st], "sheets": [{
+        "id": "pose-demo", "grid": {"cols": 1, "rows": 1},
+        "components": [{"file": "01-thing", "spec": spec, "skel": sk}]}]}
 
-    def test_nhan_dien_qua_hex_khi_khong_co_ten(self):
-        self.assertEqual(gen["key_of"]({"id": "s", "bg": "#00FFFF"})[0], "cyan")
-        self.assertEqual(gen["key_of"]({"id": "s", "bg": "#0000FF"})[0], "blue")
 
-    def test_thieu_bg_giu_hanh_vi_cu_la_magenta(self):
-        """Hợp đồng tương thích ngược của backlog mục 5."""
-        with contextlib.redirect_stderr(io.StringIO()) as err:
-            for style in ({"id": "s"}, {"id": "s", "bg": None}, {"id": "s", "bg": ""}):
-                name, desc = gen["key_of"](style)
-                self.assertEqual(name, "magenta")
-                self.assertIn("#FF00FF", desc)
-        self.assertEqual(err.getvalue(), "", "thiếu bg là hợp lệ, không cảnh báo")
+class TransparentBackgroundTest(unittest.TestCase):
+    """NỀN SHEET LÀ ALPHA THẬT, KHÔNG CÒN CHROMA-KEY.
 
-    def test_bg_ngoai_tap_key_thi_canh_bao_va_lui_ve_magenta(self):
-        with contextlib.redirect_stderr(io.StringIO()) as err:
-            name, _ = gen["key_of"]({"id": "styleX", "bg": "soft beige linen"})
-        self.assertEqual(name, "magenta")
-        self.assertIn("styleX", err.getvalue())
+    Trước đây prompt bắt model tô một mảng màu phẳng (magenta/green/cyan/blue)
+    rồi slice.py tách theo màu. codex 0.149 trả về RGBA thật nên khâu giả đó bỏ
+    được — kèm luôn cái giá của nó: viền nhiễm màu key, quầng sáng cụt, kính phải
+    suy ngược C = α·F + (1−α)·K.
 
-    def test_moi_style_that_trong_styles_json_deu_ra_key_hop_le(self):
-        cfg = json.loads((ROOT / "styles.json").read_text(encoding="utf-8"))
-        with contextlib.redirect_stderr(io.StringIO()) as err:
-            names = {s["id"]: gen["key_of"](s)[0] for s in cfg["styles"]}
-        self.assertEqual(err.getvalue(), "")
-        self.assertTrue(set(names.values()) <= set(gen["CHROMA_KEYS"]))
-        self.assertEqual(names["ipay"], "magenta")
-        self.assertEqual(names["candy"], "green")
+    Lớp này thay cho ``ChromaKeyTest`` cũ (đã xoá cùng ``key_of``/``CHROMA_KEYS``
+    trong gen.sh). Nó khoá HAI CHIỀU: nền mới phải được nói ra, và từ vựng chroma
+    không được bò về prompt — bò về thì không ca nào khác đỏ, chỉ ảnh ra là hỏng.
+    """
 
-    def test_truc_key_khop_voi_slice_py(self):
-        """Hai file phải hiểu cùng một tập key, nếu không prompt và slicer lệch nhau."""
+    def setUp(self):
+        self.prompt = render_prompt_text(_cfg())
+
+    def test_prompt_doi_ALPHA_THAT_chu_khong_phai_mau_nen(self):
+        self.assertIn("BACKGROUND of the sheet: FULLY TRANSPARENT", self.prompt)
+        self.assertIn("real alpha", self.prompt)
+        self.assertIn("alpha = 0", self.prompt)
+
+    def test_prompt_CAM_DICH_DANH_viec_ve_caro_gia(self):
+        """Bẫy đã đo được (BACKLOG #24 ⑦): không tạo được trong suốt thì model
+        KHÔNG báo lỗi — nó vẽ một tấm caro xám-trắng ở α=255, nhìn bằng mắt y hệt
+        ảnh nền trong suốt. Prompt phải gọi tên đúng hành vi đó mà cấm."""
+        self.assertIn("checkerboard", self.prompt)
+        self.assertIn("picture", self.prompt.lower())
+        self.assertIn("Leave the pixels", self.prompt)
+
+    def test_tu_vung_chroma_khong_duoc_quay_lai_prompt(self):
+        for w in ("chroma", "flat solid", "#FF00FF", "#00FF00"):
+            self.assertNotIn(w, self.prompt, f"prompt còn nhắc {w!r}")
+
+    def test_o_glow_khong_con_bat_ve_NEN_DEN(self):
+        """Nền đen từng là cách duy nhất lấy quầng sáng (C = α·F trên đen). Alpha
+        thật mang sẵn cả dải mờ, nên giữ nền đen chỉ tổ nướng một mảng đen vào
+        asset."""
+        p = render_prompt_text(_cfg(skel={"matte": "glow"}))
+        self.assertNotIn("PURE BLACK", p)
+        self.assertNotIn("#000000", p)
+        self.assertIn("no grey-and-white squares", p)
+
+    def test_o_glass_do_trong_nam_trong_kenh_alpha(self):
+        p = render_prompt_text(_cfg(skel={"matte": "glass"}))
+        self.assertIn("LOW OPACITY", p)
+        self.assertIn("NO grey-and-white squares", p)
+        self.assertNotIn("chroma", p)
+
+    def test_gen_sh_khong_con_may_moc_chroma_nhung_slice_py_VAN_CON(self):
+        """Hai vế của cùng một quyết định.
+
+        gen.sh chỉ sinh sheet MỚI ⇒ bảng key ở đó là mã chết, xoá.
+        slice.py phải cắt lại được sheet CŨ (raw nền magenta đã nằm sẵn trong
+        project của người dùng) ⇒ đường chroma ở đó là tương thích ngược, giữ
+        nguyên. Ai dọn nhầm vế thứ hai thì ca này đỏ."""
+        g = (ROOT / "gen.sh").read_text(encoding="utf-8")
+        code = re.sub(r"(?m)^\s*#.*$", "", g)          # quét MÃ, không quét chú thích
+        for w in ("CHROMA_KEYS", "key_of(", "DEFAULT_KEY"):
+            self.assertNotIn(w, code, f"gen.sh còn máy móc chroma: {w}")
+
         import importlib.util
         spec = importlib.util.spec_from_file_location("kg_slice", ROOT / "slice.py")
         sl = importlib.util.module_from_spec(spec); spec.loader.exec_module(sl)
-        self.assertEqual(set(gen["CHROMA_KEYS"]), set(sl.KEY_COLORS))
-        for name, (rgb, _d) in gen["CHROMA_KEYS"].items():
-            self.assertEqual(rgb, sl.KEY_COLORS[name])
-            self.assertEqual(gen["_axis"](rgb), sl.key_axis(rgb))
+        self.assertEqual(set(sl.KEY_COLORS), {"magenta", "green", "cyan", "blue"},
+                         "slice.py mất đường cắt lại sheet cũ")
 
 
 if __name__ == "__main__":

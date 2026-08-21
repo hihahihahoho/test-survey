@@ -80,9 +80,11 @@ export const SkeletonPreview = React.memo(function SkeletonPreview({
       role="img"
       aria-label={label}
     >
-      {/* nền ảnh khung xương — engine dùng #f2f2f2, nhưng ĐÂY LÀ GIAO DIỆN nên
-          dùng token nền của app để không chói mắt ở dark mode. Hình khối bên trong
-          vẫn giữ nguyên màu thật của engine. */}
+      {/* nền của KHUNG XEM, không phải của ảnh. Ảnh khung xương thật (engine) nay
+          KHÔNG có nền: nó phải trong suốt thì model mới trả về alpha thật — xem
+          khối "NỀN SHEET" trong skeleton-svg.js. Ở đây vẫn tô một nền vì đây là
+          giao diện, và trong suốt trên nền app thì không nhìn ra hình. Hình khối
+          bên trong vẫn giữ nguyên màu thật của engine. */}
       <rect x={0} y={0} width={canvas.w} height={canvas.h} className="fill-surface" />
 
       <defs>

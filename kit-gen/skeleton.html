@@ -19,9 +19,23 @@
 ============================================================================ -->
 <style>
   /* Chỉ trang trí KHUNG XEM: nền trang, canh giữa, nhãn sheet. Không luật nào
-     chạm vào bên trong <svg>. */
+     chạm vào bên trong <svg>.
+
+     CARO Ở ĐÂY LÀ CỦA TRANG, KHÔNG PHẢI CỦA ẢNH. Sheet đã bỏ rect nền (nền phải
+     trong suốt thì model mới trả về alpha thật — xem khối "NỀN SHEET" trong
+     skeleton-svg.js). Trong suốt trên nền trắng thì không nhìn được gì, nên trang
+     trải caro DƯỚI tấm SVG. Caro nằm ở CSS ⇒ resvg không đọc ⇒ nó không thể lọt
+     vào ảnh gửi cho model. Đừng bao giờ chuyển nó vào SVG cho "tiện". */
   body { margin: 0; background: #fff; font-family: sans-serif }
-  .sheet { margin: 24px auto; width: max-content }
+  .sheet {
+    margin: 24px auto; width: max-content;
+    /* conic chứ không phải hai lớp linear: kiểu linear cần thuộc tính lệch ô
+       `background-…-offset`, mà tên đó chứa đúng chuỗi mà ViewerDriftTest cấm
+       (nó quét chữ, không parse CSS). Lệnh cấm ấy đúng — không nới nó ra chỉ vì
+       một cái caro trang trí, nên đổi cách vẽ caro. */
+    background-image: repeating-conic-gradient(#e4e4e4 0 25%, #ffffff 0 50%);
+    background-size: 16px 16px;
+  }
   h4 { margin: 16px auto 0; width: max-content }
 </style>
 <div id="sheets"></div>

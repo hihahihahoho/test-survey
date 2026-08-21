@@ -29,7 +29,12 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
-BG = 242          # nền sheet #f2f2f2
+# Sheet KHÔNG còn nền nướng sẵn (nền phải trong suốt thì model mới trả về alpha
+# thật — skeleton-svg.js, khối "NỀN SHEET"). MATTE là nền mà PHÉP ĐO này tự ghép
+# vào để đọc mực, đúng bằng màu nền cũ — nhờ vậy toàn bộ số học "mực" bên dưới
+# giữ nguyên ý nghĩa và ngưỡng hồi quy cũ vẫn so sánh được.
+MATTE = (242, 242, 242)
+BG = MATTE[0]
 FILL = 154        # silhouette #9a9a9a
 
 
@@ -78,9 +83,24 @@ class SvgBuilderTest(unittest.TestCase):
         port = self.svg(sheet(orient="portrait"))
         self.assertIn('width="1024" height="1536"', port)
 
-    def test_nen_sheet_la_rect_f2f2f2_phu_kin(self):
-        self.assertIn('<rect x="0" y="0" width="1536" height="1024" fill="#f2f2f2"/>',
-                      self.svg(sheet()))
+    def test_svg_KHONG_CO_RECT_NEN(self):
+        """Nền sheet phải TRONG SUỐT, và đây là ca giữ cho nó đừng bị đắp lại.
+
+        Model bắt chước nền của ảnh tham chiếu chứ không nghe prompt. Đo 4/4 lượt
+        (BACKLOG #24 ⑥): skeleton nền đặc ⇒ ảnh ra có α=0 chiếm 0,0%; skeleton nền
+        trong ⇒ 60,3% và 65,3%. Vòng đối chứng sạch dùng prompt giống nhau TỪNG
+        BYTE, biến duy nhất là tấm skeleton. Nên một dòng ``<rect fill="#xxx">``
+        đắp lại ở đây sẽ giết alpha của TOÀN BỘ kit — mà KHÔNG làm ca nào khác đỏ,
+        vì mọi ca còn lại chỉ đo hình học. Ca này tồn tại riêng cho chuyện đó.
+        """
+        for orient, W, H in ((None, 1536, 1024), ("portrait", 1024, 1536)):
+            sh = sheet(orient=orient) if orient else sheet()
+            s = self.svg(sh)
+            self.assertNotIn("#f2f2f2", s, "màu nền cũ đã quay lại")
+            # Bất kỳ rect nào phủ KÍN khổ ảnh và CÓ tô màu đều là một tấm nền.
+            self.assertNotRegex(
+                s, r'<rect x="0" y="0" width="%d" height="%d" fill="(?!none)' % (W, H),
+                "có rect tô kín cả khổ — nền sheet phải trong suốt")
 
     def test_vien_o_inset_nua_pixel_vi_svg_ve_quanh_tam_net(self):
         """.cell { border: 1px } — SVG vẽ nét quanh TÂM nên phải lùi vào 0.5."""
@@ -205,7 +225,7 @@ class RenderIntegrationTest(unittest.TestCase):
                 "npm install --prefix ~/.kitgen/tools @resvg/resvg-wasm")
 
     def render(self, contract):
-        """Chạy render-skeleton.mjs y như gen.sh gọi nó; trả {id: PIL.Image}."""
+        """Chạy render-skeleton.mjs y như gen.sh gọi nó; trả {id: RGBA THÔ}."""
         tmp = tempfile.mkdtemp(prefix="kitgen-skel-")
         for f in ("silhouettes.js", "skeleton-svg.js", "render-skeleton.mjs"):
             Path(tmp, f).write_bytes((ROOT / f).read_bytes())
@@ -213,8 +233,18 @@ class RenderIntegrationTest(unittest.TestCase):
         p = subprocess.run(["node", str(Path(tmp, "render-skeleton.mjs"))],
                            capture_output=True, text=True)
         self.assertEqual(p.returncode, 0, f"render lỗi: {p.stderr}")
-        return {f.stem: Image.open(f).convert("RGB")
+        return {f.stem: Image.open(f).convert("RGBA")
                 for f in sorted(Path(tmp, "skeleton").glob("*.png"))}
+
+    def render_matte(self, contract):
+        """Ảnh đã GHÉP lên nền #f2f2f2. Sheet không còn nền nướng sẵn, mà phép đo
+        'mực' bên dưới lại quy chiếu theo nền đó; ghép ở đây giữ cho toàn bộ số
+        học và ngưỡng hồi quy cũ vẫn so sánh được, thay vì phải hiệu chỉnh lại."""
+        out = {}
+        for k, im in self.render(contract).items():
+            bg = Image.new("RGBA", im.size, MATTE + (255,))
+            out[k] = Image.alpha_composite(bg, im).convert("RGB")
+        return out
 
     def ink_and_bbox(self, im):
         """Mực = độ phủ có trọng số (0..1 mỗi pixel), miễn nhiễm với răng cưa.
@@ -244,7 +274,7 @@ class RenderIntegrationTest(unittest.TestCase):
         """Một ô, một hình bo góc ĐẶC (plain ⇒ không viền, không khung safe, không
         lưới trong lòng hình): diện tích tính được bằng tay nên không cần ảnh vàng.
         """
-        im = self.render({"sheets": [one(
+        im = self.render_matte({"sheets": [one(
             {"shape": "rrect", "w": .5, "h": .5, "plain": True, "free": True}, id="solo")]})["solo"]
         ink, bbox = self.ink_and_bbox(im)
 
@@ -260,6 +290,21 @@ class RenderIntegrationTest(unittest.TestCase):
         # So KHỚP TUYỆT ĐỐI: mọi cạnh rơi đúng biên pixel nguyên nên không có
         # khoảng dung sai nào để một lỗi off-by-one lẩn vào.
         self.assertEqual(bbox, (385, 257, int(385 + ew), int(257 + eh)))
+
+    def test_PNG_dinh_kem_co_alpha_that_va_nen_trong_suot(self):
+        """Ca ĐẦU-CUỐI. Chuỗi SVG sạch chưa đủ: thứ đính kèm cho model là tấm PNG
+        do resvg ghi ra, nên phải đo chính nó. Nếu ai đó đắp nền lại — ở SVG, ở
+        resvg options, hay ở khâu ghi file — ca này đỏ."""
+        im = self.render({"sheets": [one({"shape": "rrect", "w": .5, "h": .5},
+                                         id="alpha")]})["alpha"]
+        self.assertEqual(im.mode, "RGBA")
+        # KHÔNG lấy mẫu ở góc (0,0): lưới ô vẫn được vẽ, nét 1px đặt ở x=0.5 nên nó
+        # phủ đúng cột pixel ngoài cùng ⇒ góc là MỰC LƯỚI (α=191), không phải nền.
+        # Grid ở lại là có chủ ý; chỉ nền bị bỏ.
+        self.assertEqual(im.getpixel((6, 6))[3], 0, "khoảng trống trong ô không trong suốt")
+        trong = im.getchannel("A").histogram()[0] / (im.size[0] * im.size[1])
+        # Ô 1536×1024 với một hình 0.5×0.5 ⇒ ~75% khổ ảnh là nền.
+        self.assertGreater(trong, 0.60, f"chỉ {trong:.1%} pixel trong suốt — nền bị đắp lại?")
 
     def test_render_lai_ra_dung_byte_cu(self):
         c = {"sheets": [one({"shape": "pose", "pose": "fly", "w": .6, "h": .9}, id="det")]}
