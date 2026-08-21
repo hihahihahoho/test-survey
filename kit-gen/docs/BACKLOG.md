@@ -163,6 +163,28 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
     skeleton đính kèm thì alpha còn sống không** (skeleton là ảnh đặc, model có thể
     bắt chước luôn cái nền của nó).
 
+    **④ PHÉP ĐO QUYẾT ĐỊNH — và nó tìm ra ĐÚNG chỗ sẽ làm hỏng lượt sửa.**
+    Đính `skeleton/main.png` thật vào (đúng hình dạng production của `gen.sh`) rồi
+    bảo model vẽ nền trong suốt:
+
+    | skeleton đính kèm | α=0 của ảnh ra | 4 góc |
+    |---|---|---|
+    | **ĐẶC** (nền `#DFDFDF`, như hiện nay) | **0,0%** — alpha CHẾT SẠCH | 255 |
+    | **TRONG SUỐT** (cùng hình, bỏ nền) | **60,3%** — alpha SỐNG | 0 |
+
+    Nền đặc thì model **chép luôn cả nền lẫn đường kẻ lưới** của skeleton vào tranh.
+    Nói "đừng chép nền" trong prompt **không cứu được** — bản ĐẶC ở trên đã có đúng
+    câu đó rồi. Ảnh tham chiếu thắng chữ.
+
+    Với skeleton trong suốt: **6/6 máng giữa ô sạch (0,00-0,56% đục)** ⇒ `slice.py`
+    cắt được; 16/16 ô có nội dung; 13/16 ô chừa lề ≥11px (3 ô sát mép là bệnh bố cục
+    cũ, không phải alpha).
+
+    ⇒ **Việc phải làm KHÔNG chỉ là sửa prompt.** Phải đổi **nền của chính ảnh
+    skeleton** (`skeleton-svg.js` / `render-skeleton.mjs`) sang trong suốt, nếu không
+    mọi thứ khác vô nghĩa. Kèm theo: `skeleton.html` và chỗ web xem skeleton phải có
+    nền caro, không thì người dùng nhìn vào một khung trắng trơn.
+
     **Còn một câu hỏi RIÊNG chưa đo:** ô `matte:"glow"` đang dựa vào **nền đen** +
     tách theo kênh sáng, không phải chroma. Alpha thật thay được nó hay không là việc
     khác, đừng gộp vào cùng một lượt sửa.
