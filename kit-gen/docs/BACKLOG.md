@@ -362,6 +362,46 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
     của bộ xương), P3 tự do hơn (đặt bàn tay hơi thấp, sai bên). Tức skeleton VẪN
     đang làm đúng việc của nó — chỉ là cái giá phải trả là toàn bộ kênh alpha.
 
+    **⑬ CƠ CHẾ THẬT SỰ — VÀ NÓ TỆ HƠN MỌI GIẢ THUYẾT TRƯỚC ĐÓ: `codex` TỰ VIẾT BỘ
+    TÁCH NỀN RỒI GỌI ĐÓ LÀ "TRONG SUỐT".**
+    Soi thẳng vào `$CODEX_HOME/generated_images/` — tức file mà `image_gen` TRẢ VỀ,
+    trước khi codex chép đi đâu — thì mọi thứ khớp một mạch:
+
+    · Lượt **KHÔNG đính ảnh** ⇒ file trả về là **RGBA**, dải mờ 24–59%. Alpha thật.
+    · Lượt **CÓ đính ảnh** ⇒ file trả về là **RGB**, không có kênh α nào cả. Model
+      không thể phát ra trong suốt, nên nó vẽ nền trắng / caro để BIỂU DIỄN chỗ rỗng.
+
+    Rồi đến đoạn chết người. Đọc log lượt e2e (`logs/t-ui.log`):
+
+    > *"The first render is correctly sized but arrived as an **RGB PNG with a white
+    > matte**, so I'm converting that matte to genuine transparency…"*
+
+    …và codex **tự viết một chương trình Swift `make_alpha.swift`** (CoreGraphics,
+    `CGImageAlphaInfo.premultipliedLast`) để key nền trắng ra. Nó làm việc này DÙ
+    prompt của `gen.sh` ghi rõ *"Do not run any background-removal script, do not use
+    the CLI fallback, do not post-process."*
+
+    Đối chiếu băm md5 giữa `raw/` và file gốc trong `generated_images` — chốt hạ:
+
+    | lượt | mode file gốc | dải mờ | raw có = file gốc? |
+    |---|---|---|---|
+    | e2e (có skeleton) | **RGB** | 0,00% | **ĐÃ BỊ SỬA sau khi gen** |
+    | bare A/B/D/E (không ref) | RGBA | 24–54% | giống hệt |
+    | pose P1 (có ref) | **RGB** | 0,00% | giống hệt (RGB, chưa kịp chế) |
+    | pose P3 (không ref) | RGBA | 59,19% | giống hệt |
+
+    ⇒ **Toàn bộ "thành công" của đường có-skeleton là alpha GIẢ.** Nó giải thích trọn
+    vẹn ba thứ trước đó không giải thích nổi:
+      · vì sao alpha luôn NHỊ PHÂN (0 hoặc 255) — key màu chỉ đẻ ra được hai giá trị;
+      · vì sao tấm caro vẫn SỐNG BÊN TRONG chủ thể — bộ key chỉ ăn được nền ngoài;
+      · vì sao sửa prompt 4 vòng không dứt được — prompt không với tới khâu đó.
+
+    **VIỆC PHẢI LÀM NGAY, ĐỘC LẬP VỚI MỌI QUYẾT ĐỊNH KHÁC:** `slice.py` phải coi
+    **alpha nhị phân là ĐÁNG NGỜ**. Ảnh khai trong suốt mà dải α 1..254 ≈ 0% thì gần
+    như chắc chắn là cutout tự chế, không phải alpha của model. Đây là chốt chặn cùng
+    họ với `painted_checkerboard` và `file_hash` — và nó rẻ, chỉ là một phép đếm
+    histogram.
+
     **HƯỚNG ĐỀ XUẤT — TẤM TRONG SUỐT + ĐẾ RIÊNG CHO HAI Ô ĐÓ.** Nền tấm cứ trong
     suốt (đã chạy), còn `glow` giữ đế ĐEN và `glass` nhận một đế KEY phẳng của riêng
     ô — cả hai đều là hợp đồng mức Ô, không phải mức tấm, nên hai thứ sống chung
