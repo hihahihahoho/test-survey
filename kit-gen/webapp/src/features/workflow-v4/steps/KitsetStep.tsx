@@ -17,6 +17,7 @@ import { isGlassCell, isGlowCell, itemPromptFor } from "../lib/item-prompt";
 import { mergeElementSkel } from "../lib/kitset-to-contract";
 import { isPropElement, mergeElements, userUiElements } from "../lib/user-library";
 import { Step } from "./BriefStep";
+import { UI_STEP_LABEL } from "./Stepper";
 
 type GroupId = "background" | "popup" | "small-ui" | "props";
 
@@ -201,7 +202,7 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
   return (
     <Step
       headless={variant === "manage"}
-      title="Skeleton UI"
+      title={UI_STEP_LABEL}
       copy="Mặc định chọn hết — bỏ tick những thành phần dự án không cần."
     >
       <GroupChips

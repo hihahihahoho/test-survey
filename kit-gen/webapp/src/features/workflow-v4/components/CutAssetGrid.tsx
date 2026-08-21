@@ -106,10 +106,17 @@ function bySheetOf(assets: readonly CutAsset[]): [string, CutAsset[]][] {
   return [...map.entries()];
 }
 
-export function CutAssetGrid({ projectId, contract, category = "all", sectioned = false }: {
+export function CutAssetGrid({ projectId, contract, category = "all", exclude, sectioned = false }: {
   projectId: string;
   contract: Contract | null;
   category?: ResultGroup;
+  /**
+   * Nhóm bị LOẠI khỏi khung nhìn — đối xứng với `exclude` của `RawSheetsPanel`, và có
+   * mặt vì cùng một lý do: trang **UI Elements** cần đúng "mọi thành phẩm TRỪ mascot",
+   * còn mascot đã có trang riêng. Không có prop này thì `category="all"` kéo cả mascot
+   * sang, tạo hai lối vào cho cùng một thứ.
+   */
+  exclude?: ResultCategory;
   /**
    * true ⇒ chia thêm một tầng KHỐI THEO NHÓM (Mascot · Nền · Popup · UI nhỏ · Đạo cụ),
    * mỗi khối có tiêu đề và `id` để `?group=` cũ cuộn tới. Đây là hình dạng thay cho hàng
@@ -119,8 +126,10 @@ export function CutAssetGrid({ projectId, contract, category = "all", sectioned 
 }) {
   const kit = useKit(projectId);
   const assets = React.useMemo(
-    () => cutAssets(kit.data?.files ?? [], contract).filter((a) => category === "all" || a.category === category),
-    [category, contract, kit.data?.files],
+    () => cutAssets(kit.data?.files ?? [], contract)
+      .filter((a) => category === "all" || a.category === category)
+      .filter((a) => a.category !== exclude),
+    [category, exclude, contract, kit.data?.files],
   );
   const variant = kit.data?.variant ?? "";
 

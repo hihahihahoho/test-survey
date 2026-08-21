@@ -17,7 +17,7 @@ import {
  *
  * Tách khỏi `GeneratedResults` vì nay nó có BA nơi gọi, không phải một:
  *  · tab "Ảnh gốc" của trang **Ảnh đã tạo** (cả sáu nhóm, xếp thành khối cuộn dọc);
- *  · tab "Ảnh gốc" của trang **Skeleton UI** (mọi nhóm TRỪ mascot);
+ *  · tab "Ảnh gốc" của trang **UI Elements** (mọi nhóm TRỪ mascot);
  *  · tab "Ảnh gốc" của trang **Mascot** (chỉ nhóm mascot).
  * Ba bản sao của cùng khối này là ba cơ hội để trạng thái sheet ("đang chờ / đang tạo /
  * đã dừng") lệch nhau giữa các trang, nên nó là MỘT component nhận `category`.
@@ -45,7 +45,7 @@ export function RawSheetsPanel({ projectId, contract, jobStates, category = "all
   jobStates: Record<string, JobStatusValue>;
   category?: ResultGroup;
   /**
-   * Nhóm bị LOẠI khỏi khung nhìn. Trang Skeleton UI cần đúng "mọi tấm trừ mascot" —
+   * Nhóm bị LOẠI khỏi khung nhìn. Trang UI Elements cần đúng "mọi tấm trừ mascot" —
    * tấm mascot đã có trang riêng, và để nó hiện ở cả hai trang là hai lối vào cho cùng
    * một thứ, đúng cái bẫy mà thanh "Ảnh thật | Skeleton" cũ đã mắc.
    */

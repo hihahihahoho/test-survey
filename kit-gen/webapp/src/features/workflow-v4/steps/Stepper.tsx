@@ -5,10 +5,24 @@ import { useWorkflowStore, type StepId } from "../lib/model";
  * NĂM bước, không phải sáu.
  *
  * Bước "Kết quả" đã bỏ: bấm **Tạo ảnh** ở bước Kiểm tra là vào thẳng màn quản lý dự án,
- * tab "Ảnh đã tạo". Nhãn bước ③ đổi theo tên đã chốt cho khái niệm này trong dự án —
- * **Skeleton UI** — để stepper, sidebar dự án và dialog Cài đặt gọi cùng một tên.
+ * tab "Ảnh đã tạo".
  */
-export const WIZARD_STEPS = ["Yêu cầu", "Phong cách", "Skeleton UI", "Mascot", "Kiểm tra"] as const;
+
+/**
+ * TÊN CỦA KHÁI NIỆM, MỘT CHỖ DUY NHẤT.
+ *
+ * Trước đây chuỗi "Skeleton UI" được gõ tay ở BẢY chỗ (stepper · sidebar dự án · tiêu đề
+ * trang · aria-label hàng tab · KitsetStep · ReviewStep · command palette) kèm một chú
+ * thích dặn "để cả ba nơi gọi cùng một tên" — tức luật chỉ sống bằng thiện chí. Đổi tên
+ * một lần là lộ ra ngay: sót một chỗ thì app tự mâu thuẫn với chính nó.
+ *
+ * "Skeleton UI" nói về THỨ TA DỰNG RA để gửi cho model, còn người dùng đọc nó ra "bộ
+ * khung xám" — trong khi trang đó là nơi họ quản lý CÁC THÀNH PHẦN giao diện của dự án.
+ * Chủ sản phẩm chốt lại tên: **UI Elements**.
+ */
+export const UI_STEP_LABEL = "UI Elements";
+
+export const WIZARD_STEPS = ["Yêu cầu", "Phong cách", UI_STEP_LABEL, "Mascot", "Kiểm tra"] as const;
 const steps = WIZARD_STEPS;
 
 /**

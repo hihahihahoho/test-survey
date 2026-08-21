@@ -34,6 +34,7 @@ import {
 import { gateOf, useNarrowViewport } from "@/features/projects/lib/gate";
 import { hasGeneratedOutput } from "@/features/projects/lib/nav";
 import { mergeElements, userUiElements } from "@/features/workflow-v4/lib/user-library";
+import { CutAssetGrid } from "@/features/workflow-v4/components/CutAssetGrid";
 import { RawSheetsPanel } from "@/features/workflow-v4/components/RawSheetsPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createProjectNav } from "./lib/nav";
@@ -45,20 +46,21 @@ import { ProjectSettingsDialog } from "./components/ProjectSettingsDialog";
 import { SaveBar } from "./components/SaveBar";
 import { UnsavedGuardDialog } from "./components/UnsavedGuardDialog";
 import { useProjectBuffer } from "./lib/useProjectBuffer";
+import { UI_STEP_LABEL } from "@/features/workflow-v4/steps/Stepper";
 
 /**
  * ══════════════════════════════════════════════════════════════════════════════
  * MÀN QUẢN LÝ DỰ ÁN — bốn đích, một bản nháp, không autosave
  * ══════════════════════════════════════════════════════════════════════════════
  *
- * ① **Sidebar bốn mục**: Ảnh đã tạo · Skeleton UI · Mascot · Cài đặt style, cộng một
+ * ① **Sidebar bốn mục**: Ảnh đã tạo · UI Elements · Mascot · Cài đặt style, cộng một
  *    khối **Preview tổng quan** chỉ-đọc ở dưới. Sáu mục cũ (Tất cả thành phẩm / Mascot
  *    / Nền / Popup / UI nhỏ / Đạo cụ) từng là bộ lọc trong trang "Ảnh đã tạo"; nay cả
  *    hàng chip đó cũng bỏ, mỗi nhóm là một khối trong dải cuộn dọc của trang.
  *
- * ①b **Hai trang sửa được có BA TAB**: `Ảnh thật · Ảnh gốc · Settings` (chủ sản phẩm:
- *    "TRONG ĐÓ SHOW ẢNH SKELETON ĐÃ GEN RA, CÓ 3 TAB"). Trang mở ở tab *Ảnh thật* vì
- *    câu hỏi đầu tiên khi vào đây là "bộ khung hiện ra sao", còn *Settings* là nơi sửa.
+ * ①b **Hai trang sửa được có BỐN TAB**: `Ảnh thật · Ảnh gốc · Bộ khung · Cài đặt`.
+ *    Trang mở ở tab *Ảnh thật* vì câu hỏi đầu tiên khi vào đây là "ảnh ra thế nào",
+ *    còn *Cài đặt* là nơi sửa.
  *    Trang Mascot dùng đúng khuôn đó, chỉ khác dữ liệu — hai khuôn khác nhau cho hai
  *    trang anh em là hai chỗ để lệch dần.
  *
@@ -76,7 +78,7 @@ import { useProjectBuffer } from "./lib/useProjectBuffer";
 
 const SIDEBAR: ReadonlyArray<{ id: ProjectSection; label: string; icon: typeof Images }> = [
   { id: "images", label: "Ảnh đã tạo", icon: Images },
-  { id: "skeleton", label: "Skeleton UI", icon: LayoutGrid },
+  { id: "skeleton", label: UI_STEP_LABEL, icon: LayoutGrid },
   { id: "mascot", label: "Mascot", icon: UserRound },
 ];
 
@@ -403,13 +405,14 @@ function ProjectManager({ projectId }: { projectId: string }) {
             {view.section === "skeleton" && (
               <ManageSection
                 eyebrow="Bộ khung của dự án"
-                title="Skeleton UI"
+                title={UI_STEP_LABEL}
                 copy="Xem bộ khung đã dựng, đối chiếu sheet gốc và chỉnh thành phần."
-                tabsLabel="Chế độ xem Skeleton UI"
+                tabsLabel={`Chế độ xem ${UI_STEP_LABEL}`}
                 readOnly={projectReadOnly}
                 saveBar={saveBar("ui", "Lưu", "Lưu + Gen lại")}
-                /* Bộ khung của phần UI = mọi tấm TRỪ tấm mascot; tấm mascot có trang riêng. */
-                real={<SkeletonSheetGrid sheets={sync.contract.sheets.filter((sheet) => categoryOfSheet(sheet.id) !== "mascot")} />}
+                /* Phần UI = mọi tấm TRỪ tấm mascot ở CẢ BA tab xem; tấm mascot có trang riêng. */
+                real={<CutAssetGrid projectId={projectId} contract={sync.contract} exclude="mascot" sectioned />}
+                skeleton={<SkeletonSheetGrid sheets={sync.contract.sheets.filter((sheet) => categoryOfSheet(sheet.id) !== "mascot")} />}
                 raw={(
                   <RawSheetsPanel
                     projectId={projectId}
@@ -434,7 +437,8 @@ function ProjectManager({ projectId }: { projectId: string }) {
                 tabsLabel="Chế độ xem Mascot"
                 readOnly={projectReadOnly}
                 saveBar={saveBar("mascot", "Lưu", "Lưu + Gen lại")}
-                real={<SkeletonSheetGrid sheets={sync.contract.sheets.filter((sheet) => categoryOfSheet(sheet.id) === "mascot")} />}
+                real={<CutAssetGrid projectId={projectId} contract={sync.contract} category="mascot" />}
+                skeleton={<SkeletonSheetGrid sheets={sync.contract.sheets.filter((sheet) => categoryOfSheet(sheet.id) === "mascot")} />}
                 raw={(
                   <RawSheetsPanel
                     projectId={projectId}
@@ -509,14 +513,21 @@ function ProjectManager({ projectId }: { projectId: string }) {
 }
 
 /**
- * ══ KHUNG CHUNG CỦA HAI TRANG SỬA ĐƯỢC (Skeleton UI · Mascot) ═══════════════
+ * ══ KHUNG CHUNG CỦA HAI TRANG SỬA ĐƯỢC (UI Elements · Mascot) ══════════════
  *
  * BA TAB, đúng thứ tự câu hỏi người dùng mang tới trang:
- *  ① **Ảnh thật** — bộ khung đã dựng của dự án (`SkeletonPreview` từng tấm). Đây là
- *    tab MẶC ĐỊNH: chủ sản phẩm mô tả mục này là "TRONG ĐÓ SHOW ẢNH SKELETON ĐÃ GEN
- *    RA", nên thứ đầu tiên hiện ra phải là ảnh, không phải một lưới 42 ô nhập.
+ *  ① **Ảnh thật** — THÀNH PHẨM đã cắt trong `kits/`. Tab MẶC ĐỊNH.
  *  ② **Ảnh gốc** — sheet thô tương ứng của lượt tạo, để đối chiếu khi ô cắt ra sai.
- *  ③ **Settings** — nơi chọn/chỉnh thành phần, và là nơi DUY NHẤT có hàng nút Lưu.
+ *  ③ **Bộ khung** — khung xám đã dựng (`SkeletonPreview` từng tấm).
+ *  ④ **Cài đặt** — nơi chọn/chỉnh thành phần, và là nơi DUY NHẤT có hàng nút Lưu.
+ *
+ * ══ VÌ SAO TỪ BA TAB THÀNH BỐN ══════════════════════════════════════════════
+ * Bản trước để tab ① vẽ BỘ KHUNG và vẫn gọi nó là "Ảnh thật" — trong khi cũng đúng
+ * chữ đó ở trang "Ảnh đã tạo" lại nghĩa là thành phẩm đã cắt. Hai nghĩa cho một nhãn,
+ * và `GeneratedResults.tsx` thậm chí đã phải ghi chú thích để phân biệt hai hàng tab.
+ * Chủ sản phẩm gặp đúng chỗ đó: gen xong, mở trang lên chỉ thấy khung xám, và kết luận
+ * "gen rồi mà không hiển thị thành phẩm ở các tab, chỉ hiện ở mỗi Ảnh đã tạo".
+ * Nay ① nói đúng nghĩa nó vẫn có ở trang kia, còn bộ khung được một tab tên thật.
  *
  * Hàng nút Lưu nằm ở TRÊN và DƯỚI phần nội dung của tab Settings: trên vì lưới 42 món
  * dài hơn một màn hình và người ta không nên phải cuộn xuống đáy mới thấy nút Lưu;
@@ -524,7 +535,7 @@ function ProjectManager({ projectId }: { projectId: string }) {
  * không có gì để lưu, và một nút Lưu luôn tắt chỉ làm người ta nghi ngờ mình đã mất
  * thay đổi.
  */
-function ManageSection({ eyebrow, title, copy, tabsLabel, readOnly, saveBar, real, raw, children }: {
+function ManageSection({ eyebrow, title, copy, tabsLabel, readOnly, saveBar, real, raw, skeleton, children }: {
   eyebrow: string;
   title: string;
   copy: string;
@@ -532,11 +543,13 @@ function ManageSection({ eyebrow, title, copy, tabsLabel, readOnly, saveBar, rea
   tabsLabel: string;
   readOnly: boolean;
   saveBar: React.ReactNode;
-  /** Tab ① — bộ khung đã dựng. */
+  /** Tab ① — THÀNH PHẨM đã cắt trong `kits/`. */
   real: React.ReactNode;
   /** Tab ② — sheet thô tương ứng. */
   raw: React.ReactNode;
-  /** Tab ③ — phần chỉnh sửa. */
+  /** Tab ③ — bộ khung xám đã dựng, để đối chiếu khi ô cắt ra sai. */
+  skeleton: React.ReactNode;
+  /** Tab ④ — phần chỉnh sửa. */
   children: React.ReactNode;
 }) {
   return (
@@ -551,14 +564,16 @@ function ManageSection({ eyebrow, title, copy, tabsLabel, readOnly, saveBar, rea
         <TabsList aria-label={tabsLabel}>
           <TabsTrigger value="real">Ảnh thật</TabsTrigger>
           <TabsTrigger value="raw">Ảnh gốc</TabsTrigger>
-          {/* `ManageSection` dùng chung cho CẢ Skeleton UI và Mascot ⇒ một chữ ở đây là
-              hai tab trong app. Hai tab bên cạnh đã là tiếng Việt; "Settings" đứng giữa
+          <TabsTrigger value="skeleton">Bộ khung</TabsTrigger>
+          {/* `ManageSection` dùng chung cho CẢ UI Elements và Mascot ⇒ một chữ ở đây là
+              hai tab trong app. Ba tab bên cạnh đã là tiếng Việt; "Settings" đứng giữa
               chúng là chữ sót lại, không phải thuật ngữ. */}
           <TabsTrigger value="settings">Cài đặt</TabsTrigger>
         </TabsList>
 
         <TabsContent value="real">{real}</TabsContent>
         <TabsContent value="raw">{raw}</TabsContent>
+        <TabsContent value="skeleton">{skeleton}</TabsContent>
         <TabsContent value="settings" className="space-y-5">
           <div className="rounded-3 border border-line-subtle bg-surface p-3">{saveBar}</div>
           <fieldset disabled={readOnly} className="min-w-0 border-0 p-0">{children}</fieldset>

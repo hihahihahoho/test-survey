@@ -10,6 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { KeyboardHint } from "@/components/common";
 import { COMMAND_GROUPS, useScreenCommands, type Command, type CommandGroup as Grp } from "./command-registry";
+import { UI_STEP_LABEL } from "@/features/workflow-v4/steps/Stepper";
 
 /**
  * ⌘K BẢNG LỆNH (§2.3 + §7.1 MUST).
@@ -59,7 +60,7 @@ export function CommandPalette(props: CommandPaletteProps) {
           run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { settings: "requirements" } })) },
         { id: "p.style", group: "Dự án", icon: Pencil, label: "Dự án: Phong cách", hint: ["g", "d"], hintSequence: true,
           run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { settings: "style" } })) },
-        { id: "p.ui", group: "Dự án", icon: LayoutGrid, label: "Dự án: Skeleton UI",
+        { id: "p.ui", group: "Dự án", icon: LayoutGrid, label: `Dự án: ${UI_STEP_LABEL}`,
           run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "skeleton" } })) },
         { id: "p.mascot", group: "Dự án", icon: Images, label: "Dự án: Mascot",
           run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "mascot" } })) },

@@ -6,6 +6,7 @@ import { STYLE_AXES } from "@/features/kit-form/lib/style-phrases";
 import { useWorkflowStore, type KitElement, type WorkflowState } from "../lib/model";
 import { useKitsetContract } from "../lib/contract-sync";
 import { Step } from "./BriefStep";
+import { UI_STEP_LABEL } from "./Stepper";
 
 /**
  * Món SẼ ĐƯỢC VẼ THẬT: đã chọn **và** không phải món `mock`.
@@ -75,7 +76,7 @@ export function ReviewStep() {
         <Recap title="Dự án" value={s.kitName} detail={s.campaign || s.brief || "Chưa có mô tả"} />
         <Recap title="Phong cách" value={s.stylePrompt || "Chưa mô tả"} detail={styleDetail} />
         <Recap
-          title="Skeleton UI"
+          title={UI_STEP_LABEL}
           value={`${drawable.length} thành phần`}
           detail={[
             sheets === null ? "Chưa tính số sheet" : `${sheets} sheet`,

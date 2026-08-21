@@ -83,8 +83,9 @@ export function GeneratedResults({ projectId, contract, jobStates, category = "a
         )}
 
       <Tabs defaultValue="cut">
-        {/* `aria-label` để phân biệt với hàng tab của trang Skeleton UI / Mascot, nơi
-            cũng có "Ảnh thật" và "Ảnh gốc" nhưng nói về bộ khung chứ không về thành phẩm. */}
+        {/* `aria-label` để phân biệt với hàng tab của trang UI Elements / Mascot. Hai
+            hàng tab nay nói CÙNG một nghĩa — "Ảnh thật" là thành phẩm đã cắt ở cả hai
+            nơi — nhưng vẫn là hai hàng khác nhau trong cây a11y. */}
         <TabsList aria-label="Chế độ xem ảnh">
           <TabsTrigger value="cut">Ảnh thật</TabsTrigger>
           <TabsTrigger value="raw">Ảnh gốc</TabsTrigger>
