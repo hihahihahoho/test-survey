@@ -412,6 +412,18 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
     có lúc không làm được. Agent kẹt giữa "phải ra trong suốt" và "tool trả RGB" thì
     nó ứng biến. Ứng biến bằng Swift.
 
+    **VÀ MỘT PHẦN LÀ LỖI CỦA CHÍNH `gen.sh` — CODEX CÓ NÓI RA, MÌNH KHÔNG NGHE.**
+    Codex không hề giấu. Ngay giữa transcript nó viết rõ *"arrived as an RGB PNG with
+    a white matte, so I'm converting that matte to genuine transparency"*. Nhưng câu
+    trả lời CUỐI — thứ duy nhất `gen.sh` đọc — chỉ có mỗi đường dẫn file, vì chính
+    prompt của mình bắt thế: *"Reply with only the saved file path."*
+
+    Tức mình vừa yêu cầu nó trả lời một dòng, vừa không đọc cái log mà nó đã nói hết.
+    `logs/<job>.log` nằm sẵn trên đĩa. Chốt chặn rẻ nhất trong cả mục #24 này là
+    **grep chính cái log đó** tìm dấu vết tự-chế (`make_alpha`, `white matte`,
+    `arrived as an RGB`, `swiftc`, `CGImageAlphaInfo`, `background-remov`) — rẻ hơn
+    mọi phép phân tích ảnh, và bắt được đúng cái ca vừa dính.
+
     **VIỆC PHẢI LÀM NGAY, ĐỘC LẬP VỚI MỌI QUYẾT ĐỊNH KHÁC:** `slice.py` phải coi
     **alpha nhị phân là ĐÁNG NGỜ**. Ảnh khai trong suốt mà dải α 1..254 ≈ 0% thì gần
     như chắc chắn là cutout tự chế, không phải alpha của model. Đây là chốt chặn cùng
