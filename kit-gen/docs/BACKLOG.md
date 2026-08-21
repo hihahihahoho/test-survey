@@ -111,3 +111,32 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
     - **Lớp 2 — installer nói tiếng người, thoát bằng mã riêng.** `install.sh`: `fetch_release_file` đọc `%{http_code}` thật; 403/404/410 ⇒ **thoát 21** + "Bản X ĐANG ĐƯỢC ĐÓNG GÓI trên CI… thử lại sau ít phút" + lệnh thử lại + "bản đang chạy KHÔNG bị đụng tới"; lỗi khác ⇒ **thoát 20**. Thiếu `.sha256` trong khi `.tar.gz` đã có (upload nửa chừng) cũng là ca 21. Ghi cả vào `install.log`; lượt do UI bấm thì stdout/stderr vốn đã đổ thẳng vào `update.log` (fd do `scheduleUpdate` mở). Web: phase mới `archive-pending` ⇒ lớp phủ nói "Bản mới chưa tải về được… thử lại sau ít phút" thay vì đổ tội bước khởi động lại.
     - **Lớp 0 — chuông báo ở CI.** Workflow không hề publish release.json hay tạo tag (người phát hành push cả hai), nên **không có step nào để đổi thứ tự**; thay vào đó job `verify-release-manifest` (mọi push nhánh, bỏ qua ref tag) HEAD `archive` + `.sha256` và đỏ ngay nếu manifest chạy trước CI. Thứ tự đúng vẫn là runbook §7.4.
     - Test: `suite-system` 4 ca (chưa upload ⇒ ARCHIVE_PENDING · không có bản mới ⇒ không HEAD · 405 và throw ⇒ vẫn chào), `test/install-download.test.sh` 4 mệnh đề trên server HTTP local (404⇒21 · mất mạng⇒20 · thiếu checksum⇒21 · tải được thì đi tiếp), `install-flow` + `update-overlay` + `update-check` mỗi bộ 1 ca.
+
+## Mới ghi nhận 21/08 (ship trong 2.1.39)
+
+24. **Native transparent — CHƯA đi được bằng đường KitGen đang dùng.** Thông báo
+    "GPT-Image-2 làm được ảnh trong suốt" là thật với **API**, không thật với đường
+    mà `gen.sh` đi. Đã dò TẬN NƠI, hai lần, trước và sau khi `codex update`
+    (0.147.0 → **0.149.0**) — skill `imagegen` cài kèm nói thẳng ba câu:
+    - built-in `image_gen` **không lộ công tắc nền trong suốt** ("does not expose a
+      true transparent-background control");
+    - **`gpt-image-2` không nhận `background=transparent`**;
+    - alpha thật chỉ có qua **CLI `scripts/image_gen.py` với `gpt-image-1.5
+      --background transparent --output-format png`**, và cái đó **đòi
+      `OPENAI_API_KEY`**. Bản 0.149 còn siết thêm: *"Never silently switch from
+      built-in `image_gen` or CLI `gpt-image-2` to CLI `gpt-image-1.5`."*
+
+    ⇒ **Giữ nguyên chroma-key + nền đen của ô glow.** Bỏ chúng lúc này là bỏ luôn
+    đường DUY NHẤT để có alpha: `slice.py` sẽ chẳng còn gì để tách. Đây không phải
+    lười — `alpha_sheet()` + nhánh `has_alpha` trong `slice.py` **đã có sẵn**, nên
+    ngày model trả về alpha thật thì engine tự dùng, không phải sửa một dòng nào.
+
+    Muốn có alpha thật ngay thì phải quyết một việc lớn hơn nhiều: đưa
+    `OPENAI_API_KEY` vào luồng — tức thêm một **thứ bí mật** vào sản phẩm mà xưa nay
+    cố ý không chạm tới (agent/README.md §4). Phải dựng lại ranh giới bảo mật cho nó
+    trước, không phải sửa prompt.
+
+    **Việc cần làm mỗi lần `codex update`:** đọc lại
+    `$CODEX_HOME/skills/.system/imagegen/SKILL.md`, tìm cụm
+    `does not expose a true transparent-background control`. Cụm đó biến mất = built-in
+    tool đã có công tắc ⇒ lúc đó mới gỡ chroma được.
