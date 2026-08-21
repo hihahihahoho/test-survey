@@ -6,6 +6,7 @@ import { AgentPill } from "./AgentPill";
 import { UsageMeter } from "@/features/home";
 import type { ConnectionStatus } from "@/lib/api";
 import { RuntimeStatus } from "./RuntimeStatus";
+import { UpdateHeaderButton } from "./UpdateHeaderButton";
 import { FLORA, FOCUS, FLOATBAR } from "./flora";
 
 /**
@@ -117,6 +118,11 @@ export function FloraShell({
               {/* Quota Codex còn lại — chip gọn NGAY CẠNH [Cài đặt], hover ra số chi tiết
                   (đặt lại lúc nào, số đọc lúc nào). Tự trả `null` khi chưa có số, y như
                   thanh cùng loại ở chân sidebar Home ⇒ không bao giờ chiếm chỗ vô ích. */}
+              {/* Lối cập nhật cho các màn KHÔNG phải Home. Sidebar (nơi ở của nút cập
+                  nhật cũ) chỉ có ở Home, nên đang làm trong một dự án thì phải thoát ra
+                  mới thấy — người dùng đã kêu đúng chuyện này. Tự trả `null` khi không
+                  có bản mới, nên 99% thời gian header không đổi một pixel. */}
+              <UpdateHeaderButton />
               <UsageMeter variant="compact" className="hidden sm:flex" />
               {onSettingsClick && (
                 <button type="button" onClick={onSettingsClick} className={cn("inline-flex h-8 items-center gap-2 border px-3 text-caption", FLORA.pill, FLORA.hair, FOCUS)}>
