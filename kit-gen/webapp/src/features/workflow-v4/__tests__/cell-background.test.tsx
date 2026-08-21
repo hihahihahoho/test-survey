@@ -144,7 +144,7 @@ describe("② + ③ contract nhận field, và prompt preview nói đúng sự t
     const prompt = itemPromptFor(contractWith(GLOW_FILE, "glow"), GLOW_FILE)!;
     expect(prompt.line).toContain(glowCellPrompt());
     expect(prompt.text).toContain("LIGHT EFFECT");
-    expect(prompt.text).toContain("no grey-and-white squares");
+    expect(prompt.text).toContain("no checkerboard squares");
   });
 
   /* NỀN ĐEN ĐÃ BỎ HẲN, và ca này là chốt giữ. Nó từng là cách duy nhất lấy quầng
@@ -183,7 +183,7 @@ describe("② + ③ contract nhận field, và prompt preview nói đúng sự t
     const prompt = itemPromptFor(contractWith(GLASS_FILE, "glass"), GLASS_FILE)!;
     expect(prompt.line).toContain(glassCellPrompt());
     expect(prompt.text).toContain("SEE-THROUGH ELEMENT");
-    expect(prompt.text).toContain("LOW OPACITY");
+    expect(prompt.text).toContain("LOW ALPHA VALUE");
     // Kính KHÔNG phải hiệu ứng ánh sáng — khoá lại kẻo ai đó "thống nhất" hai nhánh.
     expect(prompt.text).not.toContain("LIGHT EFFECT");
   });

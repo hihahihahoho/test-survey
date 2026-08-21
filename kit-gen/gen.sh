@@ -438,9 +438,36 @@ for s in cfg["styles"]:
             "channel; every pixel that is not part of a drawn element must have alpha = 0.",
             "This background rule OVERRIDES the art style and every reference image: never",
             "use a style-colored, scene, gradient or flat-colour background for the sheet.",
-            "Do NOT paint a checkerboard, a grey-and-white tile pattern, or any other picture",
-            "of transparency: that is a filled background, not transparency. Leave the pixels",
-            "empty instead. Do not flatten the alpha onto any colour.",
+            "",
+            # ── CẤM VẼ CARO — LỜI CẤM NẶNG NHẤT TRONG CẢ PROMPT ──────────────
+            # Đo được, nhiều lượt: model KHÔNG báo lỗi khi nó không tạo được trong
+            # suốt. Nó vẽ lại *cái hình ảnh tượng trưng cho trong suốt* — ô caro
+            # xám-trắng — rồi trả về ở α=255. Nói "hãy trong suốt" là chưa đủ, vì
+            # với model thì tấm caro TRÔNG cũng đúng như thế. Phải:
+            #   ① gọi tên đúng thứ bị cấm,
+            #   ② nói ra vì sao nó sai (caro là cách trình xem ảnh HIỂN THỊ chỗ
+            #      rỗng, không phải một thứ có trong tranh),
+            #   ③ và chỉ ra cách làm ĐÚNG thay thế (hạ α, đừng tô màu nhạt).
+            # Thiếu ③ là model chỉ biết mình sai mà không biết đi đường nào.
+            "NEVER DRAW A CHECKERBOARD. Grey-and-white squares are how an image editor",
+            "DISPLAYS empty pixels on screen; they are not part of any artwork, and painting",
+            "them is the single worst thing you can do to this sheet — it makes every asset",
+            "cut from it unusable. This applies everywhere, at any scale, at any opacity:",
+            "no checker tiles, no pale square grid, no 'transparency pattern' texture.",
+            #
+            # ĐÃ THỬ VÀ ĐÃ BỎ — đừng viết lại: một khối nữa nói "cái phông tưởng
+            # tượng không được ghi vào file / mỗi element là một sticker die-cut,
+            # ngoài mực là file rỗng". Đo lượt 5: nó KHÔNG bớt caro ở ô glow (13% →
+            # 10%) mà làm khâu cắt alpha hoá hung hãn — mép răng cưa lởm chởm, thủng
+            # lỗ đỏ vào giữa thân nút và thân xu, quầng sáng bạc trắng hết. Nói mạnh
+            # thêm về "rỗng" là đổi một lỗi nhìn thấy được lấy một lỗi tệ hơn.
+            "",
+            "WHENEVER SOMETHING SHOULD BE SEE-THROUGH — the background, the faint outer halo",
+            "of a light, the body of a glass panel — express it with the ALPHA CHANNEL: give",
+            "those pixels a LOW alpha value and keep their own colour. Do NOT simulate it with",
+            "paint: no white wash, no pale grey fill, no checker tiles at full alpha. Less",
+            "alpha, not lighter paint. If you cannot lower the alpha of a region, leave that",
+            "region completely unpainted rather than filling it with a stand-in pattern.",
             "",
             # ⚠️ KHÔNG quay lại luật "mỗi element phủ 70-80% bề ngang ô". Đó là một chỉ
             #    thị hình học THỨ HAI đá nhau với khối crop-safe ở trên, và nó đẩy model
@@ -573,11 +600,25 @@ for s in cfg["styles"]:
                     # dải mờ — đo trên ảnh mẫu chủ sản phẩm gửi: 12,96% pixel nằm
                     # ở dải α 1..191 (BACKLOG #24 ⑤). Giữ nền đen bây giờ chỉ tổ
                     # nướng một mảng đen vào asset.
-                    spec += (" — LIGHT EFFECT: this element is pure light. Paint ONLY the light"
-                             " itself; the faint outer halo fades out gradually until nothing is"
-                             " painted at all, never stopping at a hard edge. Around and behind"
-                             " the light, paint NOTHING — no black plate, no backing colour, and"
-                             " no grey-and-white squares")
+                    # THỦ PHẠM THẬT SỰ của cái đế caro: khối "Build each element in
+                    # three layers" ở trên ra lệnh "one continuous, clean content
+                    # surface replacing the gray silhouette, on the same footprint".
+                    # Với ô ÁNH SÁNG thì lệnh đó sai hẳn — không có mặt phẳng nào để
+                    # thay cả. Model vẫn tuân lệnh: nó lấp kín bóng silhouette (đúng
+                    # hình sao 8 cánh) bằng thứ nó nghĩ là "trong suốt", tức là caro.
+                    # Nên câu của ô phải HUỶ lệnh kia một cách nói thẳng, không chỉ
+                    # cấm caro — cấm mà không gỡ lệnh lấp thì nó lấp bằng thứ khác.
+                    spec += (" — LIGHT EFFECT: for THIS cell, ignore the rule about replacing the"
+                             " gray silhouette with a continuous content surface: there is no"
+                             " surface here. The gray shape only marks HOW FAR the light reaches;"
+                             " it is not an area to fill. This element is pure light. The halo"
+                             " fades out by"
+                             " LOWERING ALPHA, not by painting paler pixels: at the outer edge the"
+                             " alpha reaches 0 while the colour stays the light's own colour, so"
+                             " the fade is gradual and never stops at a hard edge. There is NO"
+                             " plate of any kind behind the light — no black, no white, no pale"
+                             " grey, and above all no checkerboard squares. Every pixel that is"
+                             " not lit is simply unpainted")
                 elif comps[i]["skel"].get("matte") == "glass":
                     # Trước đây độ trong của kính được ĐO GIÁN TIẾP: nền key lộ qua
                     # thân bao nhiêu thì trong bấy nhiêu, slicer giải ngược
@@ -585,13 +626,15 @@ for s in cfg["styles"]:
                     # docs/design-glass-transparent-panel-2026-08.md §2 — nó phụ
                     # thuộc hoàn toàn vào việc model chịu để key lộ ra. Alpha thật
                     # thì độ trong nằm THẲNG trong kênh α, không phải suy ngược.
-                    spec += (" — SEE-THROUGH ELEMENT: the body of this element is a thin sheet of"
-                             " tinted glass, painted at LOW OPACITY — around 25% for a clear pane,"
-                             " up to 50% for a strongly tinted one. Paint the tint and nothing"
-                             " else behind it: no opaque fill, no white or grey wash, and above"
-                             " all NO grey-and-white squares — do not draw what a transparent area"
-                             " looks like in an image editor, just paint less. Frame, rim, bevel"
-                             " and specular highlights stay fully opaque")
+                    spec += (" — SEE-THROUGH ELEMENT: the gray silhouette marks the pane, but"
+                             " 'replacing it with a continuous content surface' here means a"
+                             " SEE-THROUGH surface, not a solid one. The body of this element is a"
+                             " thin sheet of tinted glass. Draw it with a LOW ALPHA VALUE — about 64 out of 255"
+                             " for a clear pane, up to 128 for a strongly tinted one — keeping the"
+                             " glass's own tint colour at that low alpha. Do NOT fake it with"
+                             " paint: no opaque fill, no white or pale grey wash, and above all no"
+                             " checkerboard squares. Lower alpha, not lighter paint. Frame, rim,"
+                             " bevel and specular highlights stay fully opaque")
                 # Hạ cấp NGAY TRÊN DÒNG CỦA Ô. Khối ưu tiên phía trên là luật chung;
                 # nhưng model bám mô tả cụ thể nhất ở cạnh nó, nên phải gọi ĐÍCH DANH
                 # những chữ vật liệu/màu có trong chính spec này (đo thật: chỉ có khối
