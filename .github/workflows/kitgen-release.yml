@@ -91,6 +91,9 @@ jobs:
           # 100% lượt gen của người dùng hồ sơ Codex mặc định, mà cả đội dev dùng hồ sơ
           # riêng nên không ai thấy. Ca này soi văn bản engine thật, không phải bản giả.
           bash ../test/engine-empty-array.test.sh
+          # Truyền `-m <model>` là đặt cược vào provider của NGƯỜI DÙNG có phục vụ model
+          # đó không. Đoán sai thì hỏng cả lượt, nên nhánh hạ cấp phải có máy canh.
+          bash ../test/gen-model-fallback.test.sh
       - name: Verify web application
         run: npm run verify:release
       - name: Verify integration contracts

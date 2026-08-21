@@ -55,6 +55,17 @@ if [[ -n "$IMG_HOME" && ! -f "$IMG_HOME/auth.json" ]]; then
   exit 1
 fi
 
+# Model cho lượt sinh ảnh — cùng luật với gen.sh, xem chú thích đầy đủ ở đó.
+# Việc rất nhẹ (gọi tool, ghi file) nên mặc định model rẻ; phải đặt cả effort vì
+# `model_reasoning_effort` trong config.toml của người dùng áp lên MỌI model.
+GEN_MODEL="${KITGEN_GEN_MODEL-gpt-5.6-luna}"
+GEN_EFFORT="${KITGEN_GEN_EFFORT-medium}"
+MODEL_ARGS=()
+if [[ -n "$GEN_MODEL" ]] && codex debug models 2>/dev/null | grep -q "\"$GEN_MODEL\""; then
+  MODEL_ARGS=(-m "$GEN_MODEL")
+  [[ -n "$GEN_EFFORT" ]] && MODEL_ARGS+=(-c "model_reasoning_effort=\"$GEN_EFFORT\"")
+fi
+
 RAW="${ROOT}/cover/cover.raw.png"
 OUT="${ROOT}/cover/cover.png"
 
@@ -78,6 +89,7 @@ t0=$(date +%s)
 codex_env=()
 [[ -n "$IMG_HOME" ]] && codex_env=(env CODEX_HOME="$IMG_HOME")
 ${codex_env[@]+"${codex_env[@]}"} codex exec \
+  ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
   -s workspace-write \
   -C "${ROOT}" \
   --skip-git-repo-check \
@@ -85,6 +97,21 @@ ${codex_env[@]+"${codex_env[@]}"} codex exec \
   -o "logs/cover.last.txt" \
   "${task}" >"logs/cover.log" 2>&1
 rc=$?
+
+# Provider từ chối model thì hạ xuống model của hồ sơ, chạy lại ĐÚNG MỘT LẦN.
+# Chỉ thử lại khi chưa có ảnh mới — có ảnh rồi mà chạy lại là tốn thêm một lần sinh ảnh.
+if [[ ${#MODEL_ARGS[@]} -gt 0 && $rc -ne 0 && $(mtime_epoch "$RAW") -lt "$t0" ]] \
+   && grep -qiE "unknown model|model not (found|supported)|unsupported model|invalid model|does not (exist|support)|model_not_found" "logs/cover.log" 2>/dev/null; then
+  echo "model '$GEN_MODEL' bị provider từ chối — chạy lại bằng model mặc định của hồ sơ" >>"logs/cover.log"
+  ${codex_env[@]+"${codex_env[@]}"} codex exec \
+    -s workspace-write \
+    -C "${ROOT}" \
+    --skip-git-repo-check \
+    ${att[@]+"${att[@]}"} \
+    -o "logs/cover.last.txt" \
+    "${task}" >>"logs/cover.log" 2>&1
+  rc=$?
+fi
 
 # VỚT ẢNH — y hệt gen.sh: codex ≥0.147 nhiều lần sinh xong nhưng không tự copy về đích.
 if [[ $(mtime_epoch "$RAW") -lt "$t0" ]]; then

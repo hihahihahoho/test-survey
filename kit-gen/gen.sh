@@ -24,6 +24,34 @@ mkdir -p raw logs prompts
 # chọn profile riêng trong installer.
 IMG_HOME="${IMG_HOME:-}"
 MAXJOBS="${MAXJOBS:-4}"
+
+# ── MODEL CHO LƯỢT SINH ẢNH ───────────────────────────────────────────────────
+# Việc của model ở đây RẤT NHẸ: đọc prompt, gọi tool tạo ảnh, ghi file ra đúng chỗ.
+# Không có gì để suy luận sâu, nên mặc định đi model rẻ và nhanh: gpt-5.6-luna
+# ("Fast and affordable agentic coding model", reasoning mặc định medium).
+#
+# PHẢI ĐẶT CẢ EFFORT, không chỉ model: `model_reasoning_effort` trong config.toml của
+# người dùng vẫn áp lên bất kỳ model nào. Máy chủ sản phẩm đang để "xhigh" — nghĩ ở mức
+# cao nhất cho một việc mà nghĩ nhiều không làm ảnh đẹp hơn (ảnh do tool vẽ), tức là
+# đốt token không đổi lấy gì.
+#
+# Gõ rỗng để TẮT hẳn, trả về đúng hành vi cũ (dùng model/effort của hồ sơ):
+#   KITGEN_GEN_MODEL="" ./gen.sh
+GEN_MODEL="${KITGEN_GEN_MODEL-gpt-5.6-luna}"
+GEN_EFFORT="${KITGEN_GEN_EFFORT-medium}"
+MODEL_ARGS=()
+if [[ -n "$GEN_MODEL" ]]; then
+  # Catalog TĨNH, nằm sẵn trên máy (đo: 0,03 giây, không gọi mạng). Nó chỉ chứng minh
+  # bản codex này BIẾT tên model — KHÔNG chứng minh provider của người dùng chịu phục vụ
+  # model đó. Ai trỏ codex sang provider tuỳ biến thì tên có trong catalog mà gọi vẫn bị
+  # từ chối. Nên đây chỉ là cửa RẺ; cửa thật là nhánh tự chữa trong run_one.
+  if codex debug models 2>/dev/null | grep -q "\"$GEN_MODEL\""; then
+    MODEL_ARGS=(-m "$GEN_MODEL")
+    [[ -n "$GEN_EFFORT" ]] && MODEL_ARGS+=(-c "model_reasoning_effort=\"$GEN_EFFORT\"")
+  else
+    echo "codex không biết model '$GEN_MODEL' — dùng model mặc định của hồ sơ."
+  fi
+fi
 if [[ -n "$IMG_HOME" && ! -f "$IMG_HOME/auth.json" ]]; then
   echo "FATAL: profile Codex riêng chưa đăng nhập. Chạy: CODEX_HOME=$IMG_HOME codex login"; exit 1
 fi
@@ -662,6 +690,7 @@ $(cat "prompts/${job}.txt")
   local codex_env=()
   [[ -n "$IMG_HOME" ]] && codex_env=(env CODEX_HOME="$IMG_HOME")
   ${codex_env[@]+"${codex_env[@]}"} codex exec \
+    ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
     -s workspace-write \
     -C "${ROOT}" \
     --skip-git-repo-check \
@@ -669,6 +698,26 @@ $(cat "prompts/${job}.txt")
     -o "logs/${job}.last.txt" \
     "${task}" >"logs/${job}.log" 2>&1
   local rc=$?
+
+  # TỰ CHỮA KHI PROVIDER TỪ CHỐI MODEL.
+  # Catalog ở đầu file chỉ nói codex BIẾT tên model, không nói provider chịu phục vụ.
+  # Ai dùng provider tuỳ biến (key riêng) có thể bị từ chối — mà từ chối thì hỏng CẢ
+  # LƯỢT, đúng loại sự cố "10/10 job chết" vừa phải trả giá. Nên hạ xuống model của hồ
+  # sơ và chạy lại ĐÚNG MỘT LẦN.
+  # Chỉ thử lại khi CHƯA CÓ ẢNH MỚI: nếu ảnh đã ghi rồi thì lượt đó thành công, chạy lại
+  # là tốn thêm một lần sinh ảnh mà chẳng để làm gì.
+  if [[ ${#MODEL_ARGS[@]} -gt 0 && $rc -ne 0 && $(mtime_epoch "raw/${job}.png") -lt "$t0" ]] \
+     && grep -qiE "unknown model|model not (found|supported)|unsupported model|invalid model|does not (exist|support)|model_not_found" "logs/${job}.log" 2>/dev/null; then
+    echo "model '$GEN_MODEL' bị provider từ chối — chạy lại bằng model mặc định của hồ sơ" >>"logs/${job}.log"
+    ${codex_env[@]+"${codex_env[@]}"} codex exec \
+      -s workspace-write \
+      -C "${ROOT}" \
+      --skip-git-repo-check \
+      ${att[@]+"${att[@]}"} \
+      -o "logs/${job}.last.txt" \
+      "${task}" >>"logs/${job}.log" 2>&1
+    rc=$?
+  fi
   # VỚT ẢNH (codex ≥0.147): có khi model sinh ảnh xong nhưng KHÔNG tự copy về đích —
   # tool báo cho model một đường dẫn generated_images không tồn tại trên máy (vd
   # /root/.codex/... khi provider tuỳ biến chạy tool trong container của họ), hoặc model
