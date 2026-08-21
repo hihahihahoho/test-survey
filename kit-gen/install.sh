@@ -711,6 +711,50 @@ CODEX_BIN="$(resolve_codex_bin "$CODEX_BIN")"
 "$CODEX_BIN" --version >/dev/null 2>&1 || { echo "Resolved Codex path does not run: $CODEX_BIN" >&2; exit 1; }
 check_ok "đường dẫn Codex bền vững và đúng tên: $CODEX_BIN"
 
+# ── NÂNG CODEX LÊN BẢN MỚI ────────────────────────────────────────────────────
+# VÌ SAO: công cụ tạo ảnh KHÔNG nằm trong bản phát hành KitGen — nó là tool/skill đi
+# kèm gói `@openai/codex`. Trước bản này installer chỉ CÀI codex khi máy chưa có, không
+# bao giờ nâng: máy đã có codex thì bấm Cập nhật KitGen bao nhiêu lần cũng vẫn kẹt ở
+# bản cũ, và mọi tính năng ảnh mà OpenAI phát hành sau đó KHÔNG BAO GIỜ tới tay người
+# dùng. Họ phải tự biết đường gõ `codex update` — mà đó đúng là thứ không nên bắt người
+# dùng cuối phải biết.
+#
+# Dùng `codex update` (lệnh con chính thức) chứ KHÔNG `npm i -g`: codex tự biết nó được
+# cài bằng đường nào và tự nâng đúng đường ấy. `npm i -g` sẽ đặt thêm một bản thứ hai
+# cạnh bản cũ trên những máy cài bằng cách khác.
+#
+# BA RÀO, vì đây là công cụ DÙNG CHUNG của cả máy chứ không phải của riêng KitGen:
+#  ① Hỏng thì BỎ QUA, không bao giờ làm hỏng lượt cài. Codex cũ vẫn chạy được — mất
+#     mạng, thiếu quyền ghi, hay chính bản mới lỗi đều không được phép chặn người dùng.
+#  ② Có hạn giờ. `codex update` treo là treo cả lượt cài, mà người dùng chỉ thấy màn
+#     hình đứng im không biết vì sao.
+#  ③ Có đường tắt: KITGEN_SKIP_CODEX_UPDATE=1 để bỏ qua hẳn — cần cho ai đang ghim một
+#     bản codex cụ thể, và cần cho chính mình khi một bản codex mới ra lò bị lỗi.
+run_with_timeout(){ # <giây> <lệnh...> → 0 nếu xong đúng hạn, khác 0 nếu hỏng/quá giờ
+  _t="$1"; shift
+  "$@" & _p=$!
+  ( _i=0; while [ "$_i" -lt "$_t" ]; do sleep 1; kill -0 "$_p" 2>/dev/null || exit 0; _i=$((_i+1)); done
+    kill -TERM "$_p" 2>/dev/null ) & _w=$!
+  wait "$_p" 2>/dev/null; _rc=$?
+  kill "$_w" 2>/dev/null; wait "$_w" 2>/dev/null || true
+  return "$_rc"
+}
+
+CODEX_VER_BEFORE="$("$CODEX_BIN" --version 2>/dev/null | head -n1)"
+if [ -n "${KITGEN_SKIP_CODEX_UPDATE:-}" ]; then
+  check_ok "bỏ qua nâng Codex theo KITGEN_SKIP_CODEX_UPDATE — giữ $CODEX_VER_BEFORE"
+elif run_with_timeout 180 "$CODEX_BIN" update >/dev/null 2>&1; then
+  CODEX_VER_AFTER="$("$CODEX_BIN" --version 2>/dev/null | head -n1)"
+  if [ "$CODEX_VER_AFTER" != "$CODEX_VER_BEFORE" ]; then
+    check_ok "đã nâng Codex: $CODEX_VER_BEFORE → $CODEX_VER_AFTER"
+  else
+    check_ok "Codex đã là bản mới nhất: $CODEX_VER_BEFORE"
+  fi
+else
+  # Không phải lỗi của người dùng và không chặn được việc gì — nói một câu rồi đi tiếp.
+  check_warn "không nâng được Codex (mất mạng, hết giờ, hoặc thiếu quyền) — vẫn dùng $CODEX_VER_BEFORE"
+fi
+
 # Trình render khung xương: @resvg/resvg-wasm (2,4 MB, thuần JS + .wasm).
 # Thay Playwright + Chromium (790,9 MB) — xem BACKLOG #15. BẮT BUỘC, không có
 # đường lùi: gen.sh dừng hẳn nếu thiếu (bản PIL cũ lệch 17,6% mực, đã xoá).

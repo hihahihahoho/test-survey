@@ -657,6 +657,47 @@ if (-not $codexBin) {
 }
 if (-not $codexBin) { Write-Block 'Codex CLI' 'Chay: npm i -g @openai/codex  (roi `codex login`). Khong co Codex thi KHONG gen duoc anh.' }
 
+# ── NANG CODEX LEN BAN MOI (doi xung voi khoi cung ten trong install.sh) ──────
+# Cong cu tao anh KHONG nam trong ban phat hanh KitGen — no la tool/skill di kem goi
+# @openai/codex. Truoc ban nay installer chi CAI codex khi may chua co, khong bao gio
+# nang: may da co codex thi bam Cap nhat KitGen bao nhieu lan cung ket o ban cu, va moi
+# tinh nang anh OpenAI phat hanh sau do KHONG BAO GIO toi tay nguoi dung.
+#
+# Dung `codex update` (lenh con chinh thuc) chu KHONG `npm i -g`: codex tu biet no duoc
+# cai bang duong nao va tu nang dung duong ay.
+#
+# BA RAO, vi codex la cong cu DUNG CHUNG cua ca may:
+#  (1) Hong thi BO QUA — Invoke-ExeSoft khong nem, chi tra ma thoat. Codex cu van chay.
+#  (2) Co han gio: Start-Process + WaitForExit(ms) roi Kill. `codex update` treo la treo
+#      ca luot cai, ma nguoi dung chi thay man hinh dung im khong biet vi sao.
+#  (3) Co duong tat: KITGEN_SKIP_CODEX_UPDATE=1.
+if ($codexBin) {
+  $verBefore = (& { $ErrorActionPreference = 'Continue'; (& $codexBin '--version' 2>&1 | Select-Object -First 1) })   # NATIVE-OK
+  if ($env:KITGEN_SKIP_CODEX_UPDATE) {
+    Write-Ok "bo qua nang Codex theo KITGEN_SKIP_CODEX_UPDATE - giu $verBefore"
+  } else {
+    $updated = $false
+    try {
+      $psi = New-Object System.Diagnostics.ProcessStartInfo
+      $psi.FileName = $codexBin
+      $psi.Arguments = 'update'
+      $psi.UseShellExecute = $false
+      $psi.RedirectStandardOutput = $true
+      $psi.RedirectStandardError = $true
+      $proc = [System.Diagnostics.Process]::Start($psi)
+      if ($proc.WaitForExit(180000)) { $updated = ($proc.ExitCode -eq 0) }
+      else { try { $proc.Kill() } catch { } }
+    } catch { $updated = $false }
+    if ($updated) {
+      $verAfter = (& { $ErrorActionPreference = 'Continue'; (& $codexBin '--version' 2>&1 | Select-Object -First 1) })   # NATIVE-OK
+      if ("$verAfter" -ne "$verBefore") { Write-Ok "da nang Codex: $verBefore -> $verAfter" }
+      else { Write-Ok "Codex da la ban moi nhat: $verBefore" }
+    } else {
+      Write-Warn "khong nang duoc Codex (mat mang, het gio, hoac thieu quyen) - van dung $verBefore"
+    }
+  }
+}
+
 # Trinh render khung xuong: @resvg/resvg-wasm (2,4 MB, thuan JS + .wasm) thay cho
 # Playwright + Chromium (790,9 MB) — xem BACKLOG #15. BAT BUOC, khong con duong lui:
 # gen.sh dung han neu thieu (ban PIL cu lech 17,6% muc, da xoa). Goi nay khong co file
