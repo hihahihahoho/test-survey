@@ -238,3 +238,29 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
     (hoặc ảnh không có kênh α) là **FAIL kèm câu nói rõ "model vẽ caro giả"** — chứ
     không được đem đi cắt. Không có chốt này thì cả sheet caro nướng chín đi thẳng vào
     `kits/`, và không một khâu nào bằng mắt bắt được.
+
+    **⑧ ĐÃ LÀM (21/08) — NỀN SHEET CHẠY ĐƯỢC; Ô `glow`/`glass` THÌ CHƯA.**
+    Chạy thật `gen.sh` → `raw/` hai lượt trên sheet 2×2 (nút · xu · burst `glow` ·
+    khay `glass`), cùng style, đo kênh α:
+
+    | | nền α=0 | α 1..254 | ô glow | ô glass |
+    |---|---|---|---|---|
+    | lượt 1 | 61,70% | 7,36% | quầng mềm ĐẸP, có caro mờ quanh | **53% thân là caro vẽ** |
+    | lượt 2 | 64,14% | **0,00%** | **đế caro ĐỤC α=255 quanh sao** | hết caro, nhưng **đục hẳn** |
+
+    · **Nền: xong.** Hai lượt đều trong suốt thật, hết sạch magenta, hết viền nhiễm key.
+      Nút và xu ra sạch, sắc nét, đúng cả bóng đổ.
+    · **`glass`: chưa xong.** Câu cũ ("nền trong suốt lộ qua thân") mời model **vẽ**
+      ô caro vào thân khay. Sửa thành "vẽ ở ĐỘ ĐỤC THẤP ~25%" thì hết caro (53% → 3%)
+      nhưng model chuyển sang tô **đặc hoàn toàn** — mất luôn tính kính. Đường chroma
+      cũ giải ngược `C = α·F + (1−α)·K` cho kết quả TỐT HƠN hẳn ở món này.
+    · **`glow`: chưa xong.** Lượt 2 vẽ hẳn một **đế caro α=255 hình bát giác** quanh
+      ngôi sao (6 779 pixel xám-sáng đục, bbox 182,512→715,971). Ngôi sao thì đẹp; cái
+      đế thì là rác, và nó ĐỤC nên đi thẳng vào asset. Đế đen cũ (`C = α·F`) chính xác
+      tuyệt đối và không có chỗ nào để hỏng kiểu này.
+
+    **HƯỚNG ĐỀ XUẤT — TẤM TRONG SUỐT + ĐẾ RIÊNG CHO HAI Ô ĐÓ.** Nền tấm cứ trong
+    suốt (đã chạy), còn `glow` giữ đế ĐEN và `glass` nhận một đế KEY phẳng của riêng
+    ô — cả hai đều là hợp đồng mức Ô, không phải mức tấm, nên hai thứ sống chung
+    được trên một ảnh. Cách này giữ nguyên hai đường tách đã đo và đã tin được, mà
+    vẫn lấy được cái lợi lớn nhất của alpha thật cho ~90% số ô còn lại.

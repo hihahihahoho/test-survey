@@ -59,8 +59,12 @@ def make_bg_sheet(path, w=160, h=100):
     im.save(path)
 
 
-def make_ui_sheet(path, w=80, h=80):
-    """Tấm 1x1 nền nhạt (KHÔNG phải key) → đi đường binary, nhanh, không cần matting."""
+def make_ui_sheet(path, w=120, h=80):
+    """Tấm 1x1 nền nhạt (KHÔNG phải key) → đi đường binary, nhanh, không cần matting.
+
+    KHỔ PHẢI LÀ 3:2. `orientation_error` (sự cố 21/08/2026) bỏ qua mọi sheet lệch
+    quá 10% khỏi tỉ lệ đã khai — và ảnh VUÔNG lệch 33%. Tấm 80x80 cũ vì thế bị bỏ
+    qua lặng lẽ, manifest rỗng, hai ca merge đỏ mà không nói được vì sao."""
     im = Image.new("RGB", (w, h), (245, 245, 245))
     px = im.load()
     for y in range(25, 55):
