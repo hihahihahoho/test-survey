@@ -675,7 +675,21 @@ PY
 run_one() {
   local job="$1"
   local task
-  task="Generate ONE image with your image generation tool, at the CANVAS ORIENTATION stated on the first line of the prompt (1536x1024 landscape or 1024x1536 portrait, if supported), using EXACTLY the prompt between the IMAGE PROMPT markers below. The attached images are, in order: the layout skeleton, then any character reference photo / inspiration images the prompt mentions. Then save/copy the generated PNG to exactly this path: ${ROOT_OUT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
+
+  # KHỔ ẢNH LÀ CON SỐ, KHÔNG PHẢI LỜI ĐỀ NGHỊ.
+  #   Bản cũ bảo model "theo CANVAS ORIENTATION ghi ở dòng đầu prompt (…, if supported)".
+  #   Hai chỗ sai cùng lúc: (a) bắt model tự đi tìm một dòng trong khối chữ dài, (b) "if
+  #   supported" là một đường lui hợp lệ — model dùng đúng đường lui đó rồi trả về ảnh
+  #   dọc cho một sheet ngang. Cắt lưới trên khổ sai thì MỌI ô đều méo, và trước bản vá
+  #   `orientation_error` của slice.py thì nó méo LẶNG LẼ: ảnh vẫn ra, chỉ là sai tỉ lệ,
+  #   người dùng phát hiện lúc đã dán vào Figma.
+  #   Nay khổ được ĐỌC RA TỪ CHÍNH PROMPT rồi nhắc lại thành số ngay câu đầu của task.
+  local want_size="1536x1024" want_orient="landscape"
+  if head -n1 "prompts/${job}.txt" 2>/dev/null | grep -qi 'PORTRAIT'; then
+    want_size="1024x1536"; want_orient="portrait"
+  fi
+
+  task="Generate ONE image with your image generation tool. The output image MUST be exactly ${want_size} pixels (${want_orient}) — this is a hard requirement, not a preference; do not return any other aspect ratio. Use EXACTLY the prompt between the IMAGE PROMPT markers below. The attached images are, in order: the layout skeleton, then any character reference photo / inspiration images the prompt mentions. Then save/copy the generated PNG to exactly this path: ${ROOT_OUT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
 
 --- IMAGE PROMPT START ---
 $(cat "prompts/${job}.txt")

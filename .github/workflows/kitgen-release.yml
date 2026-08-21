@@ -100,6 +100,9 @@ jobs:
           bash ../test/gen-fake-ok.test.sh
           # Ảnh sai khổ mà đem cắt = mọi ô méo lặng lẽ, chỉ lộ ra sau khi đã tiêu tiền.
           python3 ../test/slice-orientation.test.py
+          # ...và chặn NGAY TỪ ĐẦU NGUỒN: khổ phải đi tới model dưới dạng số, không
+          # kèm đường lui "if supported" — chính chỗ hedge đó đẻ ra ảnh sai khổ.
+          bash ../test/gen-canvas-size.test.sh
       - name: Verify web application
         run: npm run verify:release
       - name: Verify integration contracts

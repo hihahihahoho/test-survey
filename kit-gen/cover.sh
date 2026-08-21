@@ -69,7 +69,12 @@ fi
 RAW="${ROOT}/cover/cover.raw.png"
 OUT="${ROOT}/cover/cover.png"
 
-task="Generate ONE image with your image generation tool, at the CANVAS ORIENTATION stated on the first line of the prompt (1536x1024 landscape, if supported), using EXACTLY the prompt between the IMAGE PROMPT markers below. The attached images, if any, are the project's own brand / mascot references named in the prompt. Then save/copy the generated PNG to exactly this path: ${RAW} (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
+# KHỔ ẢNH LÀ CON SỐ, KHÔNG PHẢI LỜI ĐỀ NGHỊ (cùng lý do với gen.sh — xem
+# test/gen-canvas-size.test.sh). Ảnh bìa còn nhạy hơn sheet: dòng 133 dưới đây cắt
+# DẢI GIỮA của khổ 3:2 để ra 16:9, nên model trả về khổ khác là ảnh bìa méo hoặc mất
+# đầu nhân vật — mà cover là job phụ, hỏng cũng không kéo run xuống "done-with-errors"
+# nên chẳng ai để ý.
+task="Generate ONE image with your image generation tool. The output image MUST be exactly 1536x1024 pixels (landscape) — this is a hard requirement, not a preference; do not return any other aspect ratio. Use EXACTLY the prompt between the IMAGE PROMPT markers below. The attached images, if any, are the project's own brand / mascot references named in the prompt. Then save/copy the generated PNG to exactly this path: ${RAW} (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
 
 --- IMAGE PROMPT START ---
 $(cat "prompts/cover.txt")
