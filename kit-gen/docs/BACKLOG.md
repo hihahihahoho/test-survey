@@ -340,6 +340,28 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
     toạ-độ-chữ, sheet nhân vật giữ skeleton (và chấp nhận alpha nhị phân, vốn cũng
     đủ cho nhân vật đặc).
 
+    **⑫ THỬ TRÊN SHEET POSE — VÀ BÁC BỎ LUÔN GIẢ THUYẾT "MODEL BẮT CHƯỚC KIỂU ALPHA
+    CỦA ẢNH REF".** Ba lượt, cùng một prompt nhân vật (cáo chibi vẫy tay), khổ dọc
+    1024×1536, chỉ đổi tấm đính kèm:
+
+    | lượt | đính kèm | α=0 | α 1..254 | xám đục | caro |
+    |---|---|---|---|---|---|
+    | P1 | skeleton pose (α nhị phân: 92,2% α=0, 0,98% dải mờ) | **0,00%** | 0,00% | 77% | **CÓ** |
+    | P2 | **CÙNG** skeleton, blur kênh α cho mềm (27% dải mờ) | **0,00%** | 0,00% | 70% | **CÓ** |
+    | P3 | KHÔNG đính gì, tả pose bằng chữ | 40,81% | **59,19%** | 1% | không |
+
+    P2 dựng ra để kiểm giả thuyết "model copy kiểu alpha của ảnh ref" — nếu đúng thì
+    ref có alpha mềm phải kéo theo output có alpha mềm. **Sai.** P1 và P2 chết y hệt
+    nhau. Không phải KIỂU alpha của ảnh ref, mà là **việc có đính ảnh hay không**.
+
+    Nhìn ảnh thì càng rõ: P1 vẽ con cáo đứng trên một tấm caro α=255 — ghép lên nền
+    đỏ vẫn thấy caro chứ không thấy đỏ. P3 thì trong suốt thật, viền lông tơi có
+    alpha mềm, bóng đổ mềm.
+
+    Đánh đổi lộ ra ở đây rất sắc: **P1 bám pose sát hơn hẳn** (tay phải giơ đúng góc
+    của bộ xương), P3 tự do hơn (đặt bàn tay hơi thấp, sai bên). Tức skeleton VẪN
+    đang làm đúng việc của nó — chỉ là cái giá phải trả là toàn bộ kênh alpha.
+
     **HƯỚNG ĐỀ XUẤT — TẤM TRONG SUỐT + ĐẾ RIÊNG CHO HAI Ô ĐÓ.** Nền tấm cứ trong
     suốt (đã chạy), còn `glow` giữ đế ĐEN và `glass` nhận một đế KEY phẳng của riêng
     ô — cả hai đều là hợp đồng mức Ô, không phải mức tấm, nên hai thứ sống chung
