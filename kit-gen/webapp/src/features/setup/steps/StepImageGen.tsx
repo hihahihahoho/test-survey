@@ -52,7 +52,7 @@ export function StepImageGen({
           title="Chưa hỏi được máy bạn vì công cụ local chưa chạy"
           description="Bạn vẫn vào app được — chỉ là ở chế độ chỉ xem cho tới khi công cụ local chạy."
           actions={
-            <Button variant="secondary" onClick={onRecheck}>
+            <Button variant="secondary" onClick={onRecheck} loading={refreshing}>
               <RefreshCw aria-hidden />
               Kiểm tra lại
             </Button>
@@ -86,7 +86,7 @@ export function StepImageGen({
           title={`Không kiểm tra được môi trường — ${v.title}`}
           description={v.explain}
           actions={
-            <Button variant="secondary" size="sm" onClick={onRecheck}>
+            <Button variant="secondary" size="sm" onClick={onRecheck} loading={refreshing}>
               <RefreshCw aria-hidden />
               Thử lại
             </Button>

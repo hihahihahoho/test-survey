@@ -121,6 +121,30 @@ describe("Nút đăng nhập Codex", () => {
     expect(retry.disabled).toBe(false);
   });
 
+  /* ── HÌNH DẠNG NÚT ────────────────────────────────────────────────────────
+     Hai ca dưới đây khoá lại đúng hai lỗi đã sửa. Chúng nhìn "chỉ là CSS" nhưng
+     đều là lỗi mức MÀN, và không ca nào khác bắt được:
+       · thẻ này nằm cùng màn với hàng nút kết thúc wizard (`FinishRow`), nên nút
+         `primary` ở đây là nút primary THỨ HAI — §5.4 cho tối đa một;
+       · nút tự chế spinner thì đổi cả chữ, làm nút nhảy width giữa lúc bấm. */
+  it("KHÔNG phải nút primary — màn này đã có nút primary của hàng kết thúc rồi", () => {
+    mount();
+    const btn = screen.getByRole("button", { name: /Đăng nhập Codex/ });
+    expect(btn.className).not.toContain("bg-accent");
+  });
+
+  it("đang mở phiên ⇒ nút khoá + aria-busy, NHÃN GIỮ NGUYÊN, câu 'đang chạy' nói ở ngoài nút", async () => {
+    // phiên treo mãi ⇒ giữ nguyên trạng thái "đang chạy" để soi
+    H.start.mockReturnValue(new Promise<CodexLogin>(() => {}));
+    mount();
+    await userEvent.click(screen.getByRole("button", { name: /Đăng nhập Codex/ }));
+
+    const btn = await screen.findByRole("button", { name: /Đăng nhập Codex/ });
+    expect((btn as HTMLButtonElement).disabled).toBe(true);
+    expect(btn.getAttribute("aria-busy")).toBe("true");
+    expect(document.body.textContent).toContain("Đang mở phiên đăng nhập…");
+  });
+
   it("mã đã quá hạn ⇒ nói rõ là quá hạn, không nói chung chung 'có lỗi'", async () => {
     H.start.mockResolvedValue(WAITING);
     H.status.mockResolvedValue(settled("failed", "EXPIRED"));

@@ -1,4 +1,4 @@
-import { ExternalLink, KeyRound, Loader2 } from "lucide-react";
+import { ExternalLink, KeyRound } from "lucide-react";
 import { CopyableCode } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { useCodexLogin } from "@/lib/hooks";
@@ -27,6 +27,22 @@ import { Note } from "../../components/StepShell";
  * MÃ HIỆN TO VÀ CÓ NÚT COPY, cố ý: người dùng phải chép nó sang một tab khác. Mã
  * hiện nhỏ như chữ thường là mời họ gõ nhầm rồi đổ cho "app hỏng". Nó cũng KHÔNG
  * được lưu ở đâu cả — hết phiên là biến mất khỏi cả agent lẫn tab này.
+ *
+ * HÌNH DẠNG NÚT — SỬA SAU KHI SOI CẢ BƯỚC 4 CHỨ KHÔNG SOI RIÊNG THẺ NÀY
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Thẻ này không đứng một mình: nó nằm trong `ImageGenCard`, mà `ImageGenCard` lại
+ * nằm cùng màn với hàng nút kết thúc wizard (`FinishRow`). Ba lỗi lộ ra khi nhìn
+ * cả màn thay vì nhìn từng khối:
+ *   · **hai nút `primary` cùng lúc** — nút ở đây và nút "Tạo kit đầu tiên" của
+ *     `FinishRow`. §5.4 (`components/ui/button.tsx`) ghi rõ mỗi màn TỐI ĐA MỘT.
+ *     Nút ở đây lùi về `secondary`: nó là việc SỬA bên trong một thẻ cảnh báo,
+ *     không phải việc chính của bước.
+ *   · **`size="sm"`** trong khi mọi nút hành động khác của wizard là `md`/`lg` —
+ *     nút quan trọng nhất của thẻ lại là nút nhỏ nhất màn.
+ *   · **spinner tự chế**: đổi cả icon LẪN chữ ("Đang mở phiên đăng nhập…") nên nút
+ *     nhảy width — đúng thứ §5.4 nói `loading` sinh ra để tránh. Nay dùng thẳng
+ *     `loading`, còn câu "đang chạy" chuyển xuống một dòng riêng dưới nút: bỏ hẳn
+ *     câu đó mới là mất mát, vì phiên device-auth mất vài giây.
  *
  * KHÔNG CÓ ĐƯỜNG NÀO ĐỂ HỎNG CÂM: mọi kết cục hỏng đều ra một câu tiếng Việt nói
  * đúng chuyện gì xảy ra, kèm lối lui về cách cũ (tự chạy lệnh trong Terminal) —
@@ -65,16 +81,16 @@ export function CodexLoginPanel() {
         </p>
         <CopyableCode value={userCode} label="Mã đăng nhập dùng một lần" />
         <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="primary" size="sm">
+          <Button asChild variant="secondary">
             {/* Điều hướng THẬT sang trang của OpenAI — không phải iframe, không phải
                 webview trong app: người dùng phải nhìn thấy thanh địa chỉ của chính
                 trình duyệt mình trước khi gõ mật khẩu vào đó. */}
             <a href={verificationUrl} target="_blank" rel="noreferrer">
-              <ExternalLink className="size-3.5" aria-hidden />
+              <ExternalLink aria-hidden />
               Mở trang đăng nhập
             </a>
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => void cancel()}>
+          <Button variant="ghost" onClick={() => void cancel()}>
             Huỷ
           </Button>
         </div>
@@ -87,6 +103,7 @@ export function CodexLoginPanel() {
   }
 
   const failed = status === "failed";
+  const busy = starting || active;
 
   return (
     <div className="flex flex-col gap-3 rounded-2 border border-line-subtle bg-canvas p-3">
@@ -97,22 +114,24 @@ export function CodexLoginPanel() {
       )}
       <div className="flex flex-wrap items-center gap-2">
         <Button
-          variant="primary"
-          size="sm"
-          disabled={starting || active}
+          variant="secondary"
+          loading={busy}
           onClick={() => { reset(); void start(); }}
         >
-          {starting || active
-            ? <Loader2 className="size-3.5 animate-spin" aria-hidden />
-            : <KeyRound className="size-3.5" aria-hidden />}
-          {starting || active ? "Đang mở phiên đăng nhập…" : failed ? "Thử lại" : "Đăng nhập Codex"}
+          {/* `loading` của Button đã thay icon bằng spinner (§5.4) — giữ thêm
+              KeyRound lúc đó là hai icon chồng nhau. */}
+          {!busy && <KeyRound aria-hidden />}
+          {failed ? "Thử lại" : "Đăng nhập Codex"}
         </Button>
         {active && (
-          <Button variant="ghost" size="sm" onClick={() => void cancel()}>
+          <Button variant="ghost" onClick={() => void cancel()}>
             Huỷ
           </Button>
         )}
       </div>
+      {/* Nhãn nút KHÔNG đổi khi bấm (đổi chữ = nút nhảy width, đúng thứ §5.4 cấm),
+          nên câu "đang chạy" nói ở NGOÀI nút — không phải bỏ đi. */}
+      {busy && <p className="text-body text-fg">Đang mở phiên đăng nhập…</p>}
       <Note>
         Bấm nút này, app sẽ đưa bạn một đường link và một mã dùng một lần
         {codexHomeLabel ? <> (cho hồ sơ <span className="font-mono">{codexHomeLabel}</span>)</> : null}. Không

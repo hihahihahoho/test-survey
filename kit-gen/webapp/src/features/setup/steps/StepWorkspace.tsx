@@ -78,7 +78,7 @@ export function StepWorkspace({
           title="Cần công cụ local đang chạy mới đọc được danh sách thư mục"
           description="Quay lại bước 2 để chạy nó, hoặc bấm kiểm tra lại nếu bạn vừa chạy xong."
           actions={
-            <Button variant="secondary" onClick={onRecheck}>
+            <Button variant="secondary" onClick={onRecheck} loading={doctorLoading}>
               <RefreshCw aria-hidden />
               Kiểm tra lại
             </Button>
@@ -139,7 +139,7 @@ export function StepWorkspace({
             title="Không ghi được vào thư mục này"
             description="Kiểm tra quyền của thư mục hoặc dung lượng ổ đĩa. Chưa sửa thì sẽ không tạo được project nào — bạn vẫn xem được phần còn lại."
             actions={
-              <Button variant="secondary" size="sm" onClick={onRecheck}>
+              <Button variant="secondary" size="sm" onClick={onRecheck} loading={doctorLoading}>
                 <RefreshCw aria-hidden />
                 Kiểm tra lại
               </Button>
