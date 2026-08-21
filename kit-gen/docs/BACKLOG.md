@@ -205,45 +205,36 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
     **`blend` — CHỦ SẢN PHẨM CHỐT: cứ ra raw bình thường.** Không đẻ thêm nhánh
     "sheet có alpha thì bỏ `blend`". Asset ra sao ship vậy.
 
-    **⑥ ĐỐI CHỨNG 2x2 — chốt hẳn: NỀN ẢNH SKELETON đúng là biến số.**
-    Chủ sản phẩm nghi skeleton không phải thủ phạm nên chạy lại có đối chứng. Cùng
-    model · cùng cách đính · **cùng một câu prompt** (task của B sinh ra từ task của A
-    bằng `sed`, chỉ đổi câu tả nền skeleton). Đổi đúng MỘT biến:
+    **⑥ ĐỐI CHỨNG — chốt hẳn: NỀN ẢNH SKELETON đúng là biến số.**
+    Chủ sản phẩm nghi skeleton không phải thủ phạm nên chạy lại có đối chứng, hai vòng.
 
-    | lượt | nền skeleton | α=0 của ảnh ra | 4 góc |
+    *Vòng 1* (`skel-probe` / `skel-probe2`) — đổi cả nền skeleton lẫn câu chữ, nên
+    **có nhiễu**: ĐẶC → α=0 chiếm **0,0%**; TRONG → **60,3%**.
+
+    *Vòng 2* (`skel-A` / `skel-B`) — **đối chứng sạch**. `task.txt` của hai lượt
+    **giống nhau từng byte**, chỉ khác đúng đường dẫn file ra (`diff` chỉ ra 1 dòng).
+    Biến duy nhất là **ảnh skeleton đính kèm**: A nền đặc `#dfdfdf`, B nền α=0 (71%).
+
+    | lượt | skeleton đính kèm | α=0 của ảnh ra | góc (0,0) |
     |---|---|---|---|
-    | #1 | ĐẶC | **0,0%** | 255 |
-    | #2 | ĐẶC (prompt để câu "TRANSPARENT BACKGROUND" **lên đầu**, nói đậm hơn hẳn) | **0,0%** | 255 |
-    | #3 | TRONG | **60,3%** | 0 |
-    | #4 | TRONG | **65,3%** | 0 |
+    | A | ĐẶC | **0,0%** | `(253,253,253,255)` |
+    | B | TRONG | **65,3%** | `(5,65,106,0)` |
 
-    2/2 so 2/2. Viết prompt mạnh hơn **không cứu được** — ảnh tham chiếu thắng chữ.
+    Và prompt của vòng 2 đã mạnh hết cỡ rồi — nó mở đầu bằng "TRANSPARENT
+    BACKGROUND", có hẳn dòng "THE MOST IMPORTANT REQUIREMENT: the output PNG must have
+    a real alpha channel", lại còn nói thẳng rằng nền xám của skeleton *không phải*
+    tranh và phải thành trong suốt. Vẫn 0,0%. ⇒ **Ảnh tham chiếu thắng chữ.** Không
+    có câu prompt nào cứu được một tấm skeleton nền đặc.
 
     **⑦ BẪY NGUY HIỂM NHẤT TÌM ĐƯỢC — MODEL VẼ CARO GIẢ.**
-    Lượt #2 nhìn bằng mắt thì *y như* ảnh nền trong suốt: có đủ ô caro xám-trắng. Đọc
-    pixel gốc mới lòi ra: nền là ô caro **#FEFEFE / #F3F3F3 đan nhau, toàn bộ α=255**.
-    Model không tạo được trong suốt nên nó **vẽ lại cái hình ảnh tượng trưng cho trong
-    suốt**. Ghép lên nền đỏ là lộ ngay: caro giả che kín, không thấy đỏ.
-
+    **Cả hai** lượt nền-đặc (`skel-probe`, `skel-A`) nhìn bằng mắt thì *y như* ảnh nền
+    trong suốt: có đủ ô caro xám-trắng. Đọc pixel gốc mới lòi ra caro đó là **màu vẽ
+    vào tranh, toàn bộ α=255** — `(254,254,254,255)` đan với `(238,238,238,255)` /
+    `(245,245,245,255)`. Model không tạo được trong suốt nên nó **vẽ lại cái hình ảnh
+    tượng trưng cho trong suốt**. Ghép lên nền đỏ là lộ ngay: caro giả che kín, không
+    thấy đỏ (`scratchpad/matrix.png`).
     ⇒ **Bắt buộc phải có chốt chặn**, cùng họ với `file_hash` chống "OK giả": lượt gen
     khai nền trong suốt thì sau khi có ảnh phải **đọc kênh α**, thấy `α=0` chiếm ~0%
     (hoặc ảnh không có kênh α) là **FAIL kèm câu nói rõ "model vẽ caro giả"** — chứ
     không được đem đi cắt. Không có chốt này thì cả sheet caro nướng chín đi thẳng vào
     `kits/`, và không một khâu nào bằng mắt bắt được.
-
-    **VIỆC PHẢI LÀM, theo đúng thứ tự phụ thuộc:**
-    1. `skeleton-svg.js:197` — nền skeleton `#f2f2f2` → **trong suốt**. Không có bước
-       này thì mọi bước sau vô nghĩa (đo ④). Kéo theo `tests/test_skeleton_svg.py`
-       (`BG = 242`, ca `test_nen_sheet_la_rect_f2f2f2_phu_kin`) và `skeleton.html`
-       (body trắng → nền caro, không thì skeleton trong suốt nhìn như trang trắng).
-    2. `gen.sh` — bỏ khối chroma-key (`key_axis`, `DEFAULT_KEY`, câu "flat solid
-       chroma-key background") và câu nền đen của ô glow; thay bằng "nền trong suốt".
-       **Giữ lưới** đúng như chủ sản phẩm chốt.
-    3. `slice.py` — `alpha_sheet()`/`has_alpha` đã có; chỉ cần: sheet có alpha thật ⇒
-       **không** gắn `blend:"screen"`.
-    4. Đường chroma **giữ nguyên làm nhánh chết** cho sheet cũ đã gen trước bản này —
-       cắt lại project cũ không được vỡ.
-
-    `alpha_sheet()` + nhánh `has_alpha` trong `slice.py` **đã có sẵn** ⇒ engine tự
-    dùng alpha thật khi sheet có, không cần sửa để BẮT ĐẦU thử.
-
