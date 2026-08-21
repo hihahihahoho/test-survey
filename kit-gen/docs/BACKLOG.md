@@ -185,9 +185,42 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
     mọi thứ khác vô nghĩa. Kèm theo: `skeleton.html` và chỗ web xem skeleton phải có
     nền caro, không thì người dùng nhìn vào một khung trắng trơn.
 
-    **Còn một câu hỏi RIÊNG chưa đo:** ô `matte:"glow"` đang dựa vào **nền đen** +
-    tách theo kênh sáng, không phải chroma. Alpha thật thay được nó hay không là việc
-    khác, đừng gộp vào cùng một lượt sửa.
+    **⑤ Ô `matte:"glow"` CŨNG KHÔNG CẦN NỀN ĐEN NỮA — đã đo, không phải suy đoán.**
+    Tôi định đề xuất giữ nền đen cho riêng ô glow; chủ sản phẩm bác, và đúng: quầng
+    sáng **nằm sẵn trong kênh alpha**. Đo vùng swirl vàng ở góc trái-dưới ảnh popup ②
+    (337x461 px):
+
+    | dải α | tỉ lệ vùng |
+    |---|---|
+    | 0 (trống) | 43,24% |
+    | **1-31 (đuôi quầng tan dần)** | **9,56%** |
+    | **32-95 (thân quầng)** | **1,81%** |
+    | 96-191 (lõi mờ) | 1,58% |
+    | 192-255 (nét đặc) | 43,80% |
+
+    **12,96% vùng đó là dải chuyển mượt** — nhìn kênh alpha ra đúng vệt sáng loe dần
+    và quầng nở quanh mấy đốm lấp lánh. Đây là thứ tách-nền-theo-kênh-sáng đang phải
+    dựng lại bằng tay từ nền đen; nay model trả thẳng.
+
+    **Một thay đổi HÀNH VI phải nói trước:** asset glow hiện ship kèm `blend:"screen"`
+    (cộng sáng). Alpha thật thì ghép bằng **normal**. Với người dùng đây là **đỡ đi**
+    một bước: mục 3 ở trên còn ghi "Figma vẫn là việc tay (toast nhắc Linear Dodge/
+    Screen khi copy)" — hết alpha giả thì hết luôn cái toast đó. Nhưng asset CŨ đã cắt
+    vẫn mang `blend:"screen"`, nên `slice.py` phải chỉ gắn khoá đó cho sheet KHÔNG có
+    alpha thật.
+
+    **VIỆC PHẢI LÀM, theo đúng thứ tự phụ thuộc:**
+    1. `skeleton-svg.js:197` — nền skeleton `#f2f2f2` → **trong suốt**. Không có bước
+       này thì mọi bước sau vô nghĩa (đo ④). Kéo theo `tests/test_skeleton_svg.py`
+       (`BG = 242`, ca `test_nen_sheet_la_rect_f2f2f2_phu_kin`) và `skeleton.html`
+       (body trắng → nền caro, không thì skeleton trong suốt nhìn như trang trắng).
+    2. `gen.sh` — bỏ khối chroma-key (`key_axis`, `DEFAULT_KEY`, câu "flat solid
+       chroma-key background") và câu nền đen của ô glow; thay bằng "nền trong suốt".
+       **Giữ lưới** đúng như chủ sản phẩm chốt.
+    3. `slice.py` — `alpha_sheet()`/`has_alpha` đã có; chỉ cần: sheet có alpha thật ⇒
+       **không** gắn `blend:"screen"`.
+    4. Đường chroma **giữ nguyên làm nhánh chết** cho sheet cũ đã gen trước bản này —
+       cắt lại project cũ không được vỡ.
 
     `alpha_sheet()` + nhánh `has_alpha` trong `slice.py` **đã có sẵn** ⇒ engine tự
     dùng alpha thật khi sheet có, không cần sửa để BẮT ĐẦU thử.
