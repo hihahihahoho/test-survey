@@ -112,31 +112,46 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
     - **Lớp 0 — chuông báo ở CI.** Workflow không hề publish release.json hay tạo tag (người phát hành push cả hai), nên **không có step nào để đổi thứ tự**; thay vào đó job `verify-release-manifest` (mọi push nhánh, bỏ qua ref tag) HEAD `archive` + `.sha256` và đỏ ngay nếu manifest chạy trước CI. Thứ tự đúng vẫn là runbook §7.4.
     - Test: `suite-system` 4 ca (chưa upload ⇒ ARCHIVE_PENDING · không có bản mới ⇒ không HEAD · 405 và throw ⇒ vẫn chào), `test/install-download.test.sh` 4 mệnh đề trên server HTTP local (404⇒21 · mất mạng⇒20 · thiếu checksum⇒21 · tải được thì đi tiếp), `install-flow` + `update-overlay` + `update-check` mỗi bộ 1 ca.
 
-## Mới ghi nhận 21/08 (ship trong 2.1.39)
+## Mới ghi nhận 21/08
 
-24. **Native transparent — CHƯA đi được bằng đường KitGen đang dùng.** Thông báo
-    "GPT-Image-2 làm được ảnh trong suốt" là thật với **API**, không thật với đường
-    mà `gen.sh` đi. Đã dò TẬN NƠI, hai lần, trước và sau khi `codex update`
-    (0.147.0 → **0.149.0**) — skill `imagegen` cài kèm nói thẳng ba câu:
-    - built-in `image_gen` **không lộ công tắc nền trong suốt** ("does not expose a
-      true transparent-background control");
-    - **`gpt-image-2` không nhận `background=transparent`**;
-    - alpha thật chỉ có qua **CLI `scripts/image_gen.py` với `gpt-image-1.5
-      --background transparent --output-format png`**, và cái đó **đòi
-      `OPENAI_API_KEY`**. Bản 0.149 còn siết thêm: *"Never silently switch from
-      built-in `image_gen` or CLI `gpt-image-2` to CLI `gpt-image-1.5`."*
+24. **Native transparent CÓ DÙNG ĐƯỢC — và mục này trước đó ghi SAI, lý do sai đáng nhớ hơn kết luận.**
 
-    ⇒ **Giữ nguyên chroma-key + nền đen của ô glow.** Bỏ chúng lúc này là bỏ luôn
-    đường DUY NHẤT để có alpha: `slice.py` sẽ chẳng còn gì để tách. Đây không phải
-    lười — `alpha_sheet()` + nhánh `has_alpha` trong `slice.py` **đã có sẵn**, nên
-    ngày model trả về alpha thật thì engine tự dùng, không phải sửa một dòng nào.
+    **Kết luận đúng:** từ **codex 0.149**, built-in `image_gen` trả về **alpha thật**.
+    Đã đo bằng pixel, không tin lời ai: một quả táo cartoon → PNG RGBA 1254x1254,
+    **56,0% nền α=0 · 42,4% chủ thể α≥250 · 1,6% rìa khử răng cưa thật**, bốn góc
+    α=0, **không có viền chroma** khi ghép lên nền magenta. Model chỉ `cp` file mà
+    built-in tool đẻ ra — không `remove_chroma_key.py`, không CLI, không hậu kỳ.
 
-    Muốn có alpha thật ngay thì phải quyết một việc lớn hơn nhiều: đưa
-    `OPENAI_API_KEY` vào luồng — tức thêm một **thứ bí mật** vào sản phẩm mà xưa nay
-    cố ý không chạm tới (agent/README.md §4). Phải dựng lại ranh giới bảo mật cho nó
-    trước, không phải sửa prompt.
+    **Vì sao mục này từng ghi ngược lại.** Bản đầu trích SKILL.md:
+    *"the built-in tool does not expose a true transparent-background control"* và
+    kết luận phải giữ chroma. Câu đó CÓ THẬT — trong bản **0.147**. Cái sai là ở
+    quy trình đọc:
 
-    **Việc cần làm mỗi lần `codex update`:** đọc lại
-    `$CODEX_HOME/skills/.system/imagegen/SKILL.md`, tìm cụm
-    `does not expose a true transparent-background control`. Cụm đó biến mất = built-in
-    tool đã có công tắc ⇒ lúc đó mới gỡ chroma được.
+    > `codex update` đổi **nhị phân** ngay, nhưng **KHÔNG viết lại**
+    > `$CODEX_HOME/skills/.system/imagegen/`. Thư mục skill chỉ được đồng bộ khi
+    > codex **CHẠY** lần kế tiếp.
+
+    Dòng thời gian đo được trên máy này: `codex update` xong ~11:28 → grep SKILL.md
+    (đọc trúng bản **cũ**, kết luận sai) → chạy `codex debug prompt-input` lúc ~11:30
+    → **mtime SKILL.md = 11:30:50**, file bị viết lại → nay câu kia còn **0 lần**, và
+    chữ "chroma" từ ~12 lần xuống **0 lần**. 0.149 nói thẳng: *"Ask built-in
+    `image_gen` for a genuinely transparent background and preserve its alpha."*
+
+    **LUẬT rút ra, áp cho mọi lần sau:** `codex update` xong thì **phải chạy codex
+    một lượt** (bất kỳ lệnh nào, `codex debug prompt-input` là rẻ nhất) **rồi mới
+    đọc** bất cứ thứ gì dưới `$CODEX_HOME/skills/`. Đọc trước lượt chạy đó là đọc
+    trạng thái của phiên bản đã bị thay. Đây đúng họ bug "vá nóng engine": tin một
+    file mà công cụ khác mới là chủ, ở đúng khoảnh khắc nó chưa kịp ghi.
+
+    **Còn phải đo trước khi gỡ chroma khỏi `gen.sh`** (một quả táo đơn lẻ KHÔNG đủ
+    kết luận cho ca thật của KitGen):
+    - sheet **nhiều ô** 4x2 1536x1024 — máng giữa các ô có α=0 không, `slice.py` có
+      cắt được không;
+    - **bán trong suốt Ở GIỮA chủ thể** (kính mờ trong lòng khung popup) — thứ mà
+      chroma-key **không bao giờ** làm được, và là lý do thật để đổi;
+    - ô `matte:"glow"` đang dựa vào **nền đen** + tách theo kênh sáng — cái này alpha
+      thật thay được hay không là một câu hỏi RIÊNG, chưa đo.
+
+    `alpha_sheet()` + nhánh `has_alpha` trong `slice.py` **đã có sẵn** ⇒ engine tự
+    dùng alpha thật khi sheet có, không cần sửa để BẮT ĐẦU thử.
+
