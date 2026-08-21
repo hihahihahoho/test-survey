@@ -89,6 +89,29 @@ def in_boxes(x, y, boxes):
     return any(l <= x < r and t <= y < b for l, t, r, b in boxes)
 
 
+def orientation_error(orient, W, H):
+    """Ảnh raw có đúng khổ mà sheet đã khai không? Trả câu lỗi, hoặc None nếu đúng.
+
+    VÌ SAO TÁCH RA: phép chia lưới ở cuối file lấy ĐẠI kích thước ảnh nhận được rồi
+    chia cho grid, không hỏi khổ có đúng không. Model trả sai hướng là mọi ô méo lặng
+    lẽ — sheet 4x2 landscape mong ô 384x512, nhận ảnh dọc thì ô thành 256x768. Cờ QA
+    chỉ báo SAU KHI đã cắt, tức là đã tiêu tiền sinh ảnh rồi mới biết. Sự cố 21/08/2026.
+
+    Ngưỡng 10%: đủ rộng cho vài pixel làm tròn của model, đủ chặt để bắt cả ảnh VUÔNG
+    (tỉ lệ 1.0 lệch 33% so với 1.5 và 50% so với 0.667) lẫn ảnh lộn hướng.
+    """
+    if not H:
+        return f"anh cao 0px ({W}x{H})"
+    want_portrait = orient == "portrait"
+    want_ratio = (2 / 3) if want_portrait else (3 / 2)
+    got_ratio = W / H
+    if want_ratio * 0.9 <= got_ratio <= want_ratio * 1.1:
+        return None
+    want_name = "portrait" if want_portrait else "landscape"
+    want_size = "1024x1536" if want_portrait else "1536x1024"
+    return f"sheet khai {want_name} ({want_size}) nhung anh la {W}x{H}"
+
+
 def border_colors(img, strip=8, ignore=()):
     """Màu nền từ viền ngoài sheet. 1 màu (key phẳng) hoặc 2 màu (caro kiểu cũ).
 
@@ -1534,6 +1557,21 @@ if __name__ == "__main__":
             COLS, ROWS = sh["grid"]["cols"], sh["grid"]["rows"]
             raw_img = Image.open(src_path)
             W, H = raw_img.size
+
+            # ── KHỔ SHEET PHẢI ĐÚNG HƯỚNG ĐÃ KHAI ────────────────────────────
+            # Phép chia dưới đây lấy ĐẠI kích thước ảnh nhận được rồi chia cho lưới,
+            # KHÔNG hỏi ảnh có đúng khổ không. Model trả sai hướng là mọi ô méo lặng lẽ:
+            #   sheet 4x2 landscape  → mong 1536x1024 → ô 384x512
+            #   model trả 1024x1536  →                  ô 256x768   (cao gấp rưỡi)
+            # Ảnh cắt ra trông "bị kéo cao", còn cờ QA thì chỉ báo lệch SAU KHI đã cắt —
+            # tức là đã tiêu tiền sinh ảnh và đã đẻ ra hàng chục file rác. Sự cố thật
+            # ngày 21/08/2026. Chặn ở đây: sai hướng thì BỎ QUA sheet, nói rõ phải làm gì.
+            orient_err = orientation_error(sh.get("orient"), W, H)
+            if orient_err:
+                print(f"⚠ bỏ qua {job}: {orient_err}. Cắt lưới {COLS}x{ROWS} trên khổ "
+                      f"sai sẽ ra ô méo — sinh lại sheet này thay vì dùng ảnh hiện có.")
+                continue
+
             cell_w, cell_h = W / COLS, H / ROWS
             CW, CH = round(cell_w), round(cell_h)          # canvas chuẩn của sheet này
 

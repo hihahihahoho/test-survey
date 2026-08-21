@@ -94,6 +94,12 @@ jobs:
           # Truyền `-m <model>` là đặt cược vào provider của NGƯỜI DÙNG có phục vụ model
           # đó không. Đoán sai thì hỏng cả lượt, nên nhánh hạ cấp phải có máy canh.
           bash ../test/gen-model-fallback.test.sh
+          # "OK" của engine từng có thể là OK GIẢ: model chép lại ảnh cũ vào đích rồi
+          # báo thành công, mtime mới tinh nên gen.sh gật đầu. 413.302 token cho hai
+          # lượt như vậy, không sinh ra ảnh nào.
+          bash ../test/gen-fake-ok.test.sh
+          # Ảnh sai khổ mà đem cắt = mọi ô méo lặng lẽ, chỉ lộ ra sau khi đã tiêu tiền.
+          python3 ../test/slice-orientation.test.py
       - name: Verify web application
         run: npm run verify:release
       - name: Verify integration contracts

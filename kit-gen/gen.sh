@@ -7,6 +7,13 @@ set -uo pipefail
 # còn `stat -f %m` trên GNU coi %m là TÊN FILE ⇒ in khối verbose "File: ..." ra stdout
 # rồi mới exit lỗi ⇒ fallback nối thêm số vào sau ⇒ chuỗi nhiều dòng lọt vào [[ -lt ]].
 mtime_epoch(){ stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0; }
+# Băm nội dung file. macOS có `shasum`, Linux/Git-Bash có `sha256sum` — thử cả hai, y
+# như lối phòng thân của mtime_epoch. File không tồn tại ⇒ chuỗi rỗng (KHÁC mọi băm
+# thật, nên "chưa có ảnh" không bao giờ bị nhầm là "ảnh không đổi").
+file_hash(){
+  [ -f "$1" ] || { printf ''; return 0; }
+  { shasum -a 256 "$1" 2>/dev/null || sha256sum "$1" 2>/dev/null; } | cut -d' ' -f1
+}
 cd "$(dirname "$0")"
 ROOT="$(pwd)"
 # ĐƯỜNG DẪN ĐƯA VÀO NỘI DUNG PROMPT phải là dạng Windows khi chạy trên Git-Bash.
@@ -687,6 +694,8 @@ $(cat "prompts/${job}.txt")
   # không rỗng nên không ai thấy — 100% người dùng hồ sơ mặc định dính, 0% người còn lại.
   # Dùng ĐÚNG lối viết của dòng `att` ngay dưới: ${arr[@]+"${arr[@]}"}.
   local t0=$(date +%s)
+  # Băm ảnh cũ TRƯỚC khi gọi codex — xem khối phán xử ở cuối hàm để biết vì sao.
+  local h0; h0="$(file_hash "raw/${job}.png")"
   local codex_env=()
   [[ -n "$IMG_HOME" ]] && codex_env=(env CODEX_HOME="$IMG_HOME")
   ${codex_env[@]+"${codex_env[@]}"} codex exec \
@@ -735,16 +744,29 @@ $(cat "prompts/${job}.txt")
   fi
   # Phán theo SẢN PHẨM, không tin mã thoát: codex hay sập vì lỗi API transient
   # SAU khi đã lưu ảnh xong (đã dính: badge ❌ oan, auto-slice bị bỏ qua).
-  # Ảnh được ghi mới trong lượt chạy này = job thành công.
-  local mt=$(mtime_epoch "raw/${job}.png")
-  if [[ "$mt" -ge "$t0" ]]; then
-    if [[ $rc -eq 0 ]]; then
-      echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)"
-    else
-      echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)  (codex rc=${rc} sau khi đã lưu ảnh — bỏ qua)"
-    fi
+  #
+  # NHƯNG "SẢN PHẨM" PHẢI LÀ ẢNH MỚI, KHÔNG PHẢI FILE MỚI ĐƯỢC SỜ VÀO.
+  # Đo bằng mtime thôi là bị lừa: khi tool tạo ảnh bị chặn, model đã có lần TỰ CHÉP
+  # ảnh cũ của lượt trước vào đúng đích rồi báo thành công — mtime mới tinh, engine
+  # gật đầu, người dùng nhận lại y nguyên ảnh cũ. Lần đo ngày 21/08/2026 mất 413.302
+  # token cho hai lượt "OK" kiểu đó mà không sinh ra một ảnh mới nào.
+  # Nên so BĂM NỘI DUNG: byte không đổi = không có ảnh mới, dù mtime có mới đến đâu.
+  # (Chưa có ảnh cũ ⇒ $h0 rỗng ⇒ mọi file đều là mới, đúng đường chạy lần đầu.)
+  # KHÔNG dùng mtime để phán nữa. `date +%s` chỉ tới GIÂY, nên hai lượt sát nhau có
+  # cùng dấu thời gian và engine đổ oan cho model là "chép file cũ" — chính ca test
+  # gen-fake-ok bắt được. Băm nội dung vừa chặt hơn vừa không có mốc thời gian để sai:
+  # byte đổi = có ảnh mới, byte không đổi = không có, bất kể file bị ghi lại mấy lần.
+  # (mtime vẫn dùng ở khối VỚT ẢNH và ở nhánh hạ cấp model — ở đó nó chỉ là phép ước
+  # lượng rẻ tiền để quyết định có nên thử thêm, không phải phép phán cuối.)
+  local h1; h1="$(file_hash "raw/${job}.png")"
+  if [[ -z "$h1" ]]; then
+    echo "FAIL ${job} (rc=${rc}, không có raw/${job}.png — xem logs/${job}.log)"
+  elif [[ "$h1" == "$h0" ]]; then
+    echo "FAIL ${job} (rc=${rc}, ảnh KHÔNG ĐỔI so với trước lượt chạy — model không sinh ảnh mới; có khi nó chép lại file cũ rồi báo thành công; xem logs/${job}.log)"
+  elif [[ $rc -eq 0 ]]; then
+    echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)"
   else
-    echo "FAIL ${job} (rc=${rc}, ảnh không được ghi mới — xem logs/${job}.log)"
+    echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)  (codex rc=${rc} sau khi đã lưu ảnh — bỏ qua)"
   fi
 }
 
