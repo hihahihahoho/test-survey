@@ -13,15 +13,30 @@ VÌ SAO CÓ CA NÀY
 
     Ảnh VUÔNG cũng phải bị bắt: nó không phải khổ nào trong hai khổ hợp lệ.
 """
-import importlib.util
+import ast
 import os
 import sys
 
+# TRÍCH ĐÚNG MỘT HÀM RA KHỎI slice.py, KHÔNG import cả module.
+#   Bản đầu dùng importlib rồi `exec_module` — và CI đỏ ngay lượt đầu tiên:
+#   `ModuleNotFoundError: No module named 'PIL'`. Runner không có Pillow, mà chẳng
+#   có lý do gì nó phải có: hàm đang kiểm là số học thuần trên (orient, W, H),
+#   không đụng một pixel nào. Bắt CI cài 30 MB thư viện ảnh để chạy một phép so tỉ
+#   lệ là trả giá sai chỗ — và là một lý do nữa để ca này bị bỏ qua khi nó chậm.
+#   Đây là bản dịch sang Python của mẹo `sed -n '/^func()/,/^}$/p'` mà mấy ca shell
+#   bên cạnh đã dùng, chỉ khác là cắt bằng AST nên không sợ thụt lề đánh lừa.
 HERE = os.path.dirname(os.path.abspath(__file__))
-spec = importlib.util.spec_from_file_location("slicemod", os.path.join(HERE, "..", "slice.py"))
-slicemod = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(slicemod)
-orientation_error = slicemod.orientation_error
+SRC = open(os.path.join(HERE, "..", "slice.py"), encoding="utf-8").read()
+_tree = ast.parse(SRC)
+_fn = next((n for n in _tree.body
+            if isinstance(n, ast.FunctionDef) and n.name == "orientation_error"), None)
+if _fn is None:
+    print("LOI  không tìm thấy orientation_error trong slice.py "
+          "(đổi tên hàm thì sửa cả ca này)", file=sys.stderr)
+    sys.exit(1)
+_ns = {}
+exec(compile(ast.Module(body=[_fn], type_ignores=[]), "slice.py", "exec"), _ns)
+orientation_error = _ns["orientation_error"]
 
 fails = []
 
