@@ -299,6 +299,47 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
       · Hoặc **đế riêng cho hai ô** — xem đoạn ngay dưới. Đường này giữ nguyên hai
         phép tách đã đo và đã tin được.
 
+    **⑩ TÁCH BIẾN — HOÁ RA THỦ PHẠM LÀ CHÍNH TẤM ẢNH ĐÍNH KÈM, KHÔNG PHẢI PROMPT.**
+    Chủ sản phẩm nghi prompt bị nhiễm ở đâu đó và bảo thử một lượt KHÔNG có ảnh ref.
+    Đúng, và còn hơn thế. Năm lượt, đổi từng biến một:
+
+    | lượt | ảnh ref | prompt | α=0 | **α 1..254** | caro |
+    |---|---|---|---|---|---|
+    | A | không | ngắn (chỉ burst) | 75,50% | **24,41%** | không |
+    | B | không | ngắn (chỉ khay kính) | 46,50% | **53,47%** | không |
+    | C | **skeleton** | ngắn | **0,00%** | **0,00%** | **CÓ** |
+    | D | không | **đầy đủ của gen.sh** (10 KB) | 55,93% | **44,07%** | không |
+    | E | không | đầy đủ + **toạ độ pixel từng ô** | 55,39% | **44,61%** | không |
+    | e2e | skeleton | đầy đủ | 61–67% | **0,00%** | có (ô glow) |
+
+    **Đính ảnh vào là mất alpha một phần. Không đính thì có ngay.** Lượt D dùng ĐÚNG
+    prompt production 10 KB — cùng từng chữ với lượt e2e — chỉ khác là không đính
+    skeleton, và nó cho 44% pixel ở dải α 1..254, quầng sáng tan mềm, thân kính nhìn
+    xuyên thấy nền đỏ. Lượt e2e cùng prompt đó mà có skeleton: **0,00%**. Lượt C còn
+    dữ hơn: skeleton + prompt ngắn ⇒ alpha chết hẳn và model vẽ caro giả.
+
+    ⇒ Prompt VÔ TỘI. Bốn vòng sửa chữ ở ⑨ vì thế mới chỉ nhích được vấn đề chứ không
+    dứt được: nó chữa triệu chứng của một nguyên nhân nằm chỗ khác. Đường `codex exec
+    -i <ảnh>` là đường SỬA ẢNH, và đường đó trả về matte nhị phân.
+
+    **⑪ ĐƯỜNG RA ĐÃ THỬ ĐƯỢC: BỎ ẢNH REF, ĐƯA HÌNH HỌC BẰNG TOẠ ĐỘ PIXEL (lượt E).**
+    Bỏ skeleton thì mất hợp đồng hình học — lượt D lệch tâm tới ±11% cạnh ô, nút cao
+    0,79 ô trong khi contract khai 0,36. Lượt E vá đúng chỗ đó: vẫn không đính ảnh,
+    nhưng prompt kèm một bảng ô nào ở hộp pixel nào (`01-btn-pill: core box x
+    108..660, y 164..348`). Kết quả:
+
+    · alpha: α 1..254 **44,61%**, không caro, xám-sáng đục chỉ 1%;
+    · hình học: lệch tâm **5–27 px** trên ô 768×512 (so với ±80 px của lượt D);
+      bề ngang sai dưới 10%; bề cao đo ra lớn hơn hộp vì bbox tính cả quầng/bóng/vành
+      — đúng như định nghĩa hộp là CORE.
+
+    Tức là đổi ảnh ref lấy toạ độ chữ thì **được alpha thật mà gần như không mất hình
+    học**. Còn một chỗ chưa trả lời: skeleton không chỉ chở vị trí, nó còn chở HÌNH
+    DÁNG (bộ xương OpenPose của mascot, mảnh ghép puzzle…) — thứ chữ không tả nổi.
+    Nên hướng nhiều khả năng là **theo từng sheet**: sheet UI/hiệu ứng đi đường
+    toạ-độ-chữ, sheet nhân vật giữ skeleton (và chấp nhận alpha nhị phân, vốn cũng
+    đủ cho nhân vật đặc).
+
     **HƯỚNG ĐỀ XUẤT — TẤM TRONG SUỐT + ĐẾ RIÊNG CHO HAI Ô ĐÓ.** Nền tấm cứ trong
     suốt (đã chạy), còn `glow` giữ đế ĐEN và `glass` nhận một đế KEY phẳng của riêng
     ô — cả hai đều là hợp đồng mức Ô, không phải mức tấm, nên hai thứ sống chung
