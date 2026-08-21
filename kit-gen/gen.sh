@@ -71,7 +71,10 @@ fi
 # mọi ảnh gen sau đó lệch bố cục. Render hỏng thì DỪNG TO ở đây, đừng đốt quota
 # codex cho một lượt gen đã sai từ đầu vào.
 # v16: ảnh attachment có gray registration grid + nested safe guides; bias mặc định 0.
-# raw/output vẫn do model vẽ trên chroma-key sạch; slice.py không đọc ảnh skeleton.
+# NỀN ẢNH ATTACHMENT TRONG SUỐT, và đó là ràng buộc chứ không phải thẩm mỹ: model
+# bắt chước nền của ảnh tham chiếu chứ không nghe prompt (đo 4/4 lượt, BACKLOG #24 ⑥
+# — nền ref đặc ⇒ ảnh ra 0,0% pixel trong suốt, kể cả khi prompt hô transparent thật
+# to). Xem khối "NỀN SHEET" trong skeleton-svg.js. slice.py không đọc ảnh skeleton.
 export KITGEN_GRID_GUIDE=v16
 if ! node render-skeleton.mjs; then
   echo "FATAL: không render được khung xương (render-skeleton.mjs)." >&2
@@ -138,49 +141,17 @@ MATERIAL_WORDS = {
 PRESET_WORD_CAP = 24
 PRESET_CHAR_CAP = 320
 
-# ── MÀU CHROMA-KEY ────────────────────────────────────────────────────────────
-# Tập key mà slice.py tách được (slice.py: KEY_COLORS). Interface với webapp CHỈ
-# là chuỗi `bg` của style/variant trong styles.json — webapp chọn key xa palette
-# rồi ghi vào đó, gen.sh không cần biết gì thêm. Thiếu `bg` hoặc không nhận ra
-# tên/hex nào ⇒ magenta, đúng hành vi cũ.
-CHROMA_KEYS = {
-    "magenta": ((255, 0, 255), "pure vivid magenta #FF00FF"),
-    "green":   ((0, 255, 0),   "pure vivid green #00FF00"),
-    "cyan":    ((0, 255, 255), "pure vivid cyan #00FFFF"),
-    "blue":    ((0, 0, 255),   "pure vivid blue #0000FF"),
-}
-DEFAULT_KEY = "magenta"
-
-
-def _axis(rgb):
-    """(kênh CAO, kênh THẤP) — soi gương slice.py.key_axis(), để nhận ra hex lạ
-    thuộc về key nào."""
-    mid = (max(rgb) + min(rgb)) / 2.0
-    hi = tuple(i for i in range(3) if rgb[i] >= mid)
-    lo = tuple(i for i in range(3) if rgb[i] < mid)
-    return (hi, lo) if hi and lo else None
-
-
-def key_of(style):
-    """(tên key, mô tả đưa vào prompt) từ `bg` của style."""
-    bg = str(style.get("bg") or "").strip()
-    low = bg.lower()
-    for name in CHROMA_KEYS:
-        if re.search(r"\b%s\b" % name, low):
-            return name, bg
-    m = re.search(r"#([0-9a-f]{6})\b", low)
-    if m:
-        v = m.group(1)
-        rgb = tuple(int(v[i:i + 2], 16) for i in (0, 2, 4))
-        ax = _axis(rgb)
-        for name, (ref, _d) in CHROMA_KEYS.items():
-            if ax and _axis(ref) == ax:
-                return name, bg
-    if bg:
-        print(f"⚠ style {style.get('id')}: bg {bg!r} không thuộc tập key "
-              f"{sorted(CHROMA_KEYS)} — dùng {DEFAULT_KEY}. slice.py chỉ tách được "
-              f"các key đó.", file=sys.stderr)
-    return DEFAULT_KEY, CHROMA_KEYS[DEFAULT_KEY][1]
+# ── VÌ SAO Ở ĐÂY KHÔNG CÒN BẢNG MÀU CHROMA-KEY ────────────────────────────────
+# Từng có `CHROMA_KEYS` / `key_of()` ở đúng chỗ này để chọn màu nền giả-trong-suốt
+# (magenta / green / cyan / blue) rồi nhét tên màu vào prompt. Bỏ vì image_gen của
+# codex 0.149 trả về RGBA thật: prompt nay xin thẳng nền trong suốt, không xin màu.
+#
+# `slice.py` VẪN GIỮ `KEY_COLORS` và toàn bộ đường tách chroma — không phải mã
+# chết: project cũ có sheet raw nền magenta, cắt lại phải ra đúng như trước. Nó
+# tự nhận đường đi bằng cách soi kênh α của ảnh raw, không cần gen.sh mách nước.
+#
+# `bg` trong styles.json vì thế không còn ý nghĩa với lượt gen MỚI. Cứ để đó:
+# webapp vẫn ghi, slice.py vẫn đọc khi cắt lại sheet cũ.
 
 
 def preset_words(spec, tag=""):
@@ -334,7 +305,6 @@ def strip_finish(spec):
 
 
 for s in cfg["styles"]:
-    key_name, key_desc = key_of(s)
     for sh in cfg["sheets"]:
         if sh.get("styles") and s["id"] not in sh["styles"]:
             continue                      # sheet riêng của style khác (vd pose-<char>)
@@ -378,12 +348,12 @@ for s in cfg["styles"]:
                 f"Each cell is a {sh.get('cell_hint', 'full-bleed scene')}.",
                 "Each scene FILLS ITS OWN CELL COMPLETELY, edge to edge, and bleeds off all four",
                 "sides of that cell: no border, no frame, no margin, no vignette band — and above",
-                "all NOT ONE PIXEL of the flat chroma-key background may show around a scene.",
-                ("The ONLY chroma-key allowed on this sheet is a thin 24px gap exactly on the cell"
-                 " boundaries between neighbouring scenes."
+                "all NOT ONE PIXEL of empty transparent background may show around a scene.",
+                ("The ONLY transparent gap allowed on this sheet is a thin 24px line exactly on"
+                 " the cell boundaries between neighbouring scenes."
                  if n_real > 1 else
-                 "No flat chroma-key background is used anywhere on this sheet."),
-                "A scene inset inside a key-coloured frame is unusable and will be regenerated.",
+                 "This sheet has no empty background anywhere: the scene covers every pixel."),
+                "A scene inset inside an empty transparent frame is unusable and will be regenerated.",
             ]
         else:
             place = [
@@ -402,7 +372,7 @@ for s in cfg["styles"]:
             f"Exactly {n_real} elements arranged in a STRICT grid of {cols} columns and {rows} rows, evenly spaced."
             + ("" if n_real == len(comps) else
                f" The LAST {len(comps) - n_real} cell(s) of the grid are INTENTIONALLY EMPTY:"
-               " draw absolutely nothing there — pure flat background over the whole cell."),
+               " draw absolutely nothing there — the whole cell stays fully transparent."),
             *layout_note,
             *place,
             "",
@@ -452,19 +422,25 @@ for s in cfg["styles"]:
             "or guides. Guide lines and gray fills are alignment references only, never",
             "decoration: do NOT paint their gray color, frames, grid lines or plain shapes",
             "into the artwork.",
-            "The gray registration grid and local guides exist ONLY in the first attached",
-            "skeleton reference. The generated OUTPUT must contain a clean flat chroma-key",
-            "background; never reproduce, redraw, or leave gray guides or grid lines in it.",
+            "The grid lines and local guides exist ONLY in the first attached skeleton",
+            "reference. They are alignment marks, not artwork: never reproduce, redraw, or",
+            "leave any guide or grid line in the generated output.",
             "",
-            f"BACKGROUND of the sheet: one flat solid chroma-key color: {key_desc}.",
-            "This background rule OVERRIDES the art style and every reference image:",
-            "never use a style-colored, scene or gradient background for the sheet.",
-            "No gradient, no texture, NO checkerboard or transparency pattern, no grid lines.",
-            # Nêu ĐÍCH DANH tên màu key đang dùng: câu "this exact background color"
-            # trỏ ngược lên trên, còn tên màu thì model giữ được trong đầu suốt prompt.
-            f"The chroma-key of this sheet is {key_name.upper()}: this exact {key_name} — and any"
-            f" hue CLOSE to {key_name} — must NEVER appear inside any element; pick element colors"
-            " far from it on the color wheel.",
+            # ── NỀN: ALPHA THẬT, KHÔNG CÒN CHROMA-KEY ────────────────────────
+            # Vì sao đổi: image_gen của codex 0.149 trả về RGBA thật. Chroma-key
+            # là cách CŨ để giả trong suốt khi công cụ không có alpha — và nó phải
+            # trả giá: viền nhiễm màu key, quầng sáng mất, kính phải giải ngược
+            # C = α·F + (1−α)·K. Có alpha thật thì mọi thứ đó biến mất.
+            # BẪY: khi không tạo được trong suốt, model KHÔNG báo lỗi mà VẼ MỘT
+            # TẤM CARO GIẢ ở α=255 (đo được, BACKLOG #24 ⑦). Nên câu dưới cấm
+            # đích danh việc vẽ caro, và slice.py còn soi kênh α để chặn lần nữa.
+            "BACKGROUND of the sheet: FULLY TRANSPARENT. Save a PNG with a real alpha",
+            "channel; every pixel that is not part of a drawn element must have alpha = 0.",
+            "This background rule OVERRIDES the art style and every reference image: never",
+            "use a style-colored, scene, gradient or flat-colour background for the sheet.",
+            "Do NOT paint a checkerboard, a grey-and-white tile pattern, or any other picture",
+            "of transparency: that is a filled background, not transparency. Leave the pixels",
+            "empty instead. Do not flatten the alpha onto any colour.",
             "",
             # ⚠️ KHÔNG quay lại luật "mỗi element phủ 70-80% bề ngang ô". Đó là một chỉ
             #    thị hình học THỨ HAI đá nhau với khối crop-safe ở trên, và nó đẩy model
@@ -476,8 +452,14 @@ for s in cfg["styles"]:
             "ABSOLUTELY NO TEXT: no letters, no digits, no words, no characters of any language",
             "anywhere in the image. All faces, banners, buttons, plates and screens are BLANK — text will",
             "be composited later in the game engine.",
-            "Every element is FULLY OPAQUE with solid fills — never leave an element interior hollow,",
-            "semi-transparent, or showing the background through it (except where a spec explicitly says hollow).",
+            # Câu này nói về THÂN ELEMENT, không phải về nền sheet — và từ khi nền
+            # sheet là alpha thật thì hai thứ đó dễ bị đọc lẫn. Nêu rõ ngoại lệ:
+            # ô `matte:"glass"` cố ý mang alpha một phần, ô `matte:"glow"` cố ý tan
+            # dần ra nền. Không trừ ra thì hai dòng đá nhau ngay trong một prompt.
+            "Every element is FULLY OPAQUE with solid fills (alpha 255) — never leave an element",
+            "interior hollow, semi-transparent, or showing the background through it. This is about",
+            "the BODY of an element, not the sheet background, and it does not apply where a spec",
+            "explicitly says the element is hollow, see-through or made of light.",
             ""
         ]
         if sh.get("ref"):
@@ -514,7 +496,7 @@ for s in cfg["styles"]:
                 "Also attached: brand / inspiration reference images — match their color",
                 "mood, material finish and overall vibe (do NOT copy their layout).",
                 "IMPORTANT: even though the reference images have their own backgrounds,",
-                "the sheet background MUST still be the exact flat chroma-key color above —",
+                "the sheet background MUST still be fully transparent as stated above —",
                 "NEVER reuse a reference background color, especially not for character cells.", ""]
         if sh.get("note"):
             lines += [sh["note"], ""]
@@ -585,32 +567,31 @@ for s in cfg["styles"]:
                                              f"({comps[i]['file']})")
                           if style_override else [])
                 if comps[i]["skel"].get("matte") == "glow":
-                    # nền ô ĐEN cho hiệu ứng phát sáng: slicer tách alpha theo
-                    # kênh sáng (C = α·F trên nền đen) — chính xác tuyệt đối,
-                    # hết phụ thuộc model matting đoán vùng glow trộn key
-                    spec += (" — SPECIAL CELL BACKGROUND: this ONE cell's background is PURE"
-                             " BLACK #000000 filling the whole cell with a hard edge at the"
-                             f" cell borders (the {key_name} chroma-key does NOT apply inside"
-                             " this cell); the light effect is drawn ADDITIVELY on black — where"
-                             " there is no light the cell stays pure black")
+                    # NỀN ĐEN ĐÃ BỎ. Nó từng là cách duy nhất lấy được quầng sáng:
+                    # vẽ cộng sáng trên đen ⇒ C = α·F ⇒ slicer đọc alpha ra từ độ
+                    # sáng. Có alpha thật thì quầng nằm SẴN trong kênh α, đủ cả
+                    # dải mờ — đo trên ảnh mẫu chủ sản phẩm gửi: 12,96% pixel nằm
+                    # ở dải α 1..191 (BACKLOG #24 ⑤). Giữ nền đen bây giờ chỉ tổ
+                    # nướng một mảng đen vào asset.
+                    spec += (" — LIGHT EFFECT: this element is pure light. Paint ONLY the light"
+                             " itself; the faint outer halo fades out gradually until nothing is"
+                             " painted at all, never stopping at a hard edge. Around and behind"
+                             " the light, paint NOTHING — no black plate, no backing colour, and"
+                             " no grey-and-white squares")
                 elif comps[i]["skel"].get("matte") == "glass":
-                    # KHÔNG đổi nền ô. Với KÍNH thì nền key CHÍNH LÀ thứ tốt nhất:
-                    # slicer giải ngược C = α·F + (1−α)·K để lấy alpha (slice.py
-                    # `matte_chroma(..., glass=)`), nên lượng key còn lộ qua thân
-                    # kính chính là tín hiệu độ trong. Đổi sang nền ĐEN như ô glow
-                    # sẽ GIẾT tín hiệu đó: trên đen chỉ đọc được tích α·F, kính
-                    # xám 50% và kính trắng 25% cho ra y hệt nhau — xem
-                    # docs/design-glass-transparent-panel-2026-08.md §2.
-                    # Việc phải làm ở prompt là ra HỢP ĐỒNG cho model: phần nhìn
-                    # xuyên qua phải để lộ key, đừng tô đè một mảng đục.
-                    spec += (" — SEE-THROUGH ELEMENT: this element is TRANSPARENT. Do NOT paint"
-                             " any opaque fill behind it or inside it: the"
-                             f" {key_name} chroma-key background stays VISIBLE THROUGH the body of"
-                             " the element, covered only by the element's own thin tint. How much"
-                             f" flat {key_name} still shows through IS the transparency — pure flat"
-                             f" {key_name} reads as fully clear, a heavy opaque wash reads as a"
-                             " solid panel. Frame, rim, bevel, specular highlights and anything"
-                             " sitting ON TOP of it stay fully opaque")
+                    # Trước đây độ trong của kính được ĐO GIÁN TIẾP: nền key lộ qua
+                    # thân bao nhiêu thì trong bấy nhiêu, slicer giải ngược
+                    # C = α·F + (1−α)·K. Cách đó có một điểm yếu đã ghi ở
+                    # docs/design-glass-transparent-panel-2026-08.md §2 — nó phụ
+                    # thuộc hoàn toàn vào việc model chịu để key lộ ra. Alpha thật
+                    # thì độ trong nằm THẲNG trong kênh α, không phải suy ngược.
+                    spec += (" — SEE-THROUGH ELEMENT: the body of this element is a thin sheet of"
+                             " tinted glass, painted at LOW OPACITY — around 25% for a clear pane,"
+                             " up to 50% for a strongly tinted one. Paint the tint and nothing"
+                             " else behind it: no opaque fill, no white or grey wash, and above"
+                             " all NO grey-and-white squares — do not draw what a transparent area"
+                             " looks like in an image editor, just paint less. Frame, rim, bevel"
+                             " and specular highlights stay fully opaque")
                 # Hạ cấp NGAY TRÊN DÒNG CỦA Ô. Khối ưu tiên phía trên là luật chung;
                 # nhưng model bám mô tả cụ thể nhất ở cạnh nó, nên phải gọi ĐÍCH DANH
                 # những chữ vật liệu/màu có trong chính spec này (đo thật: chỉ có khối

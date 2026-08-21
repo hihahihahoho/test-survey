@@ -578,6 +578,85 @@ def alpha_sheet(img):
     return rgba, strict
 
 
+def painted_checkerboard(img, sample_rows=24):
+    """Bắt tấm CARO GIẢ — bẫy nguy hiểm nhất của đường alpha thật.
+
+    Khi model KHÔNG tạo được nền trong suốt, nó không báo lỗi. Nó vẽ lại **cái
+    hình ảnh tượng trưng cho trong suốt**: ô caro xám-trắng đan nhau, toàn bộ
+    α=255. Đo được trên CẢ HAI lượt nền-đặc của đối chứng (BACKLOG #24 ⑦):
+    `(254,254,254)` đan `(245,245,245)`, và `(254,254,254)` đan `(238,238,238)`.
+
+    Nhìn bằng mắt thì **y hệt** một ảnh nền trong suốt — người kiểm cũng gật đầu.
+    Không chặn ở đây thì cả sheet caro nướng chín đi thẳng vào `kits/` và không
+    khâu nào bắt được nữa. Cùng một họ với `file_hash` chống "OK giả": không tin
+    lời khai, đọc thẳng byte.
+
+    Trả `(mức tối, mức sáng)` nếu thấy caro, `None` nếu không.
+
+    NHẬN DIỆN HẸP CÓ CHỦ Ý — sheet raw ĐỜI CŨ (nền magenta/green/cyan/blue) và
+    nền phẳng nhạt phải đi lọt, vì cả hai vẫn cắt được:
+      · nền phải chiếm phần lớn ảnh và phải SÁNG + TRUNG TÍNH;
+      · phải có ĐÚNG HAI mức xám cách nhau vừa phải (caro thật), không phải một;
+      · và mức phải ĐỔI ĐỀU ĐẶN theo cả hàng LẪN cột — nền phẳng cho 0 lần đổi,
+        chuyển sắc mềm cho 1-2 lần, chỉ caro mới cho hàng chục.
+    Đọc PIXEL GỐC, không thu nhỏ: thu nhỏ là trộn hai mức caro thành một mức
+    phẳng, tự tay xoá mất thứ đang đi tìm.
+    """
+    W, H = img.size
+    if W < 64 or H < 64:
+        return None
+    rgb = img.convert("RGB")
+
+    def nhat(c):
+        r, g, b = c
+        return min(r, g, b) >= 180 and max(r, g, b) - min(r, g, b) <= 12
+
+    bang = rgb.getcolors(maxcolors=1 << 21)     # histogram ở tầng C, không quét Python
+    if not bang:
+        return None
+    muc, sang = {}, 0
+    for cnt, c in bang:
+        if nhat(c):
+            sang += cnt
+            v = sum(c) // 3
+            muc[v] = muc.get(v, 0) + cnt
+    if sang < W * H * 0.25 or len(muc) < 2:
+        return None                              # nền không phải xám sáng
+
+    thu_tu = sorted(muc.items(), key=lambda kv: -kv[1])
+    v1 = thu_tu[0][0]
+    v2 = next((v for v, _ in thu_tu if 3 <= abs(v - v1) <= 60), None)
+    if v2 is None:
+        return None                              # chỉ một mức ⇒ nền phẳng, không phải caro
+    # mức thứ hai phải thực sự là một nửa bàn cờ, không phải vệt răng cưa
+    if sum(c for v, c in muc.items() if abs(v - v2) <= 2) < sang * 0.15:
+        return None
+    lo, hi = min(v1, v2), max(v1, v2)
+    mid = (lo + hi) / 2
+
+    px = rgb.load()
+
+    def doi_muc(lay):
+        """Số lần đổi mức dọc một tuyến, CHỈ tính trên pixel thuộc nền."""
+        truoc, dem = None, 0
+        for c in lay:
+            if not nhat(c):
+                continue                         # gặp hình vẽ thì bỏ qua, không cắt tuyến
+            b = sum(c) / 3 > mid
+            if truoc is not None and b != truoc:
+                dem += 1
+            truoc = b
+        return dem
+
+    hang = sum(1 for k in range(sample_rows)
+               if doi_muc(px[x, H * (k + 1) // (sample_rows + 1)] for x in range(W)) >= 3)
+    cot = sum(1 for k in range(sample_rows)
+              if doi_muc(px[W * (k + 1) // (sample_rows + 1), y] for y in range(H)) >= 3)
+    if hang < sample_rows * 0.5 or cot < sample_rows * 0.5:
+        return None                              # sọc một chiều / nhiễu — chưa phải caro
+    return lo, hi
+
+
 def fill_holes(keyed, sheet_rgb, W, H):
     """Chỉ dùng ở đường lùi nền nhạt: lấp vùng trong suốt nằm kín trong element
     (ruột trắng bị key nhầm vì trắng ≈ nền). Nền key chát KHÔNG cần — và không
@@ -1582,6 +1661,18 @@ if __name__ == "__main__":
                 mode = "alpha thật"
             else:
                 sheet_rgb = raw_img.convert("RGB")
+                # ── CHỐT CHẶN CARO GIẢ ──────────────────────────────────────
+                # Tới nhánh này nghĩa là ảnh KHÔNG có alpha. Hai khả năng: raw đời
+                # cũ (nền chroma — hợp lệ, đi tiếp), hoặc model vừa vẽ một tấm caro
+                # giả thay cho nền trong suốt. Cái thứ hai phải chết ồn ào: nó nhìn
+                # y như ảnh đúng, nên nếu để lọt thì không ai bắt được nữa.
+                gia = painted_checkerboard(sheet_rgb)
+                if gia:
+                    print(f"⚠ bỏ qua {job}: nền là CARO VẼ TAY, không phải trong suốt "
+                          f"(xám {gia[0]}/{gia[1]}, alpha=255 khắp ảnh). Model không tạo "
+                          f"được nền trong suốt nên nó vẽ lại hình ảnh tượng trưng cho "
+                          f"trong suốt. Sinh lại sheet này; đừng cắt ảnh hiện có.")
+                    continue
                 # Ô `matte:"glow"` có nền ĐEN theo thiết kế ⇒ loại khỏi phép ĐO nền,
                 # nếu không cả sheet bị coi là "nền 2 màu" và rơi xuống đường lùi
                 # không despill (xem khối chú thích của `border_colors`).

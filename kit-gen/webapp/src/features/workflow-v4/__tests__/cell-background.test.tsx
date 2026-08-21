@@ -140,38 +140,52 @@ describe("② + ③ contract nhận field, và prompt preview nói đúng sự t
     );
   };
 
-  it("ô nền đen ⇒ prompt của ô CÓ câu nền đen, chép nguyên văn gen.sh", () => {
+  it("ô hiệu ứng ⇒ prompt của ô CÓ câu ánh sáng, chép nguyên văn gen.sh", () => {
     const prompt = itemPromptFor(contractWith(GLOW_FILE, "glow"), GLOW_FILE)!;
-    expect(prompt.line).toContain(glowCellPrompt("magenta"));
-    expect(prompt.text).toContain("PURE BLACK #000000");
-    expect(prompt.text).toContain("drawn ADDITIVELY on black");
+    expect(prompt.line).toContain(glowCellPrompt());
+    expect(prompt.text).toContain("LIGHT EFFECT");
+    expect(prompt.text).toContain("no grey-and-white squares");
   });
 
-  it("TẮT nền đen ⇒ câu đó BIẾN MẤT khỏi prompt (preview không được kẹt ở trạng thái cũ)", () => {
+  /* NỀN ĐEN ĐÃ BỎ HẲN, và ca này là chốt giữ. Nó từng là cách duy nhất lấy quầng
+     sáng (vẽ cộng sáng trên đen ⇒ C = α·F ⇒ đọc alpha ra từ độ sáng). Nền sheet nay
+     là alpha thật nên quầng nằm sẵn trong kênh α — giữ nền đen chỉ tổ nướng một mảng
+     đen vào asset. Chữ đó bò về prompt là hỏng lặng lẽ: ảnh vẫn ra, chỉ là có tấm
+     đen phía sau. */
+  it("KHÔNG còn câu NỀN ĐEN ở bất cứ ô nào", () => {
+    for (const matte of ["glow", "glass", "none"] as const) {
+      const file = matte === "glass" ? GLASS_FILE : GLOW_FILE;
+      const prompt = itemPromptFor(contractWith(file, matte), file)!;
+      expect(prompt.text).not.toContain("PURE BLACK");
+      expect(prompt.text).not.toContain("SPECIAL CELL BACKGROUND");
+      expect(prompt.text).not.toContain("chroma");
+    }
+  });
+
+  it("TẮT hiệu ứng ⇒ câu đó BIẾN MẤT khỏi prompt (preview không được kẹt ở trạng thái cũ)", () => {
     const prompt = itemPromptFor(contractWith(GLOW_FILE, "none"), GLOW_FILE)!;
-    expect(prompt.line).not.toContain("SPECIAL CELL BACKGROUND");
-    expect(prompt.text).not.toContain("PURE BLACK");
+    expect(prompt.line).not.toContain("LIGHT EFFECT");
+    expect(prompt.text).not.toContain("LIGHT EFFECT");
   });
 
-  it("ô thường không bị dính câu nền đen của hàng xóm", () => {
+  it("ô thường không bị dính câu ánh sáng của hàng xóm", () => {
     const contract = contractWith(GLOW_FILE, "glow");
     const others = contract.sheets
       .flatMap((sh) => sh.components)
       .filter((cp) => cp.file !== GLOW_FILE && cp.skel.shape !== "empty" && !isGlowCell(cp.skel));
     expect(others.length).toBeGreaterThan(0);
     for (const cp of others) {
-      expect(itemPromptFor(contract, cp.file)?.line ?? "").not.toContain("SPECIAL CELL BACKGROUND");
+      expect(itemPromptFor(contract, cp.file)?.line ?? "").not.toContain("LIGHT EFFECT");
     }
   });
 
   it("ô KÍNH ⇒ prompt có câu trong suốt, và KHÔNG có câu nền đen", () => {
     const prompt = itemPromptFor(contractWith(GLASS_FILE, "glass"), GLASS_FILE)!;
-    expect(prompt.line).toContain(glassCellPrompt("magenta"));
+    expect(prompt.line).toContain(glassCellPrompt());
     expect(prompt.text).toContain("SEE-THROUGH ELEMENT");
-    expect(prompt.text).toContain("IS the transparency");
-    // Kính KHÔNG đổi nền ô — đây là điểm khác căn bản với glow, khoá lại kẻo ai đó
-    // "thống nhất" hai nhánh thành một rồi đẩy kính lên nền đen (docs §2).
-    expect(prompt.text).not.toContain("PURE BLACK");
+    expect(prompt.text).toContain("LOW OPACITY");
+    // Kính KHÔNG phải hiệu ứng ánh sáng — khoá lại kẻo ai đó "thống nhất" hai nhánh.
+    expect(prompt.text).not.toContain("LIGHT EFFECT");
   });
 
   it("TẮT trong suốt ⇒ câu đó biến mất, ô về chroma thường", () => {
@@ -181,7 +195,7 @@ describe("② + ③ contract nhận field, và prompt preview nói đúng sự t
 
   it("một ô chỉ nhận ĐÚNG MỘT câu phụ — glow thắng, đúng thứ tự if/elif của gen.sh", () => {
     const prompt = itemPromptFor(contractWith(GLASS_FILE, "glow"), GLASS_FILE)!;
-    expect(prompt.line).toContain("PURE BLACK");
+    expect(prompt.line).toContain("LIGHT EFFECT");
     expect(prompt.line).not.toContain("SEE-THROUGH ELEMENT");
   });
 
@@ -203,17 +217,14 @@ describe("② + ③ contract nhận field, và prompt preview nói đúng sự t
     }
   };
 
-  it("câu NỀN ĐEN khớp TỪNG CHỮ với `gen.sh` (đọc file thật, không đọc trí nhớ)", async () => {
+  it("câu ÁNH SÁNG khớp TỪNG CHỮ với `gen.sh` (đọc file thật, không đọc trí nhớ)", async () => {
     const gen = await genSh();
-    expectMirrored(gen, glowCellPrompt("§KEY§"));
-    // …và chỗ chèn đúng là biến tên key của gen.sh, không phải một chữ cứng.
-    expect(gen).toMatch(/cell borders \(the \{key_name\} chroma-key/);
+    expectMirrored(gen, glowCellPrompt());
   });
 
   it("câu TRONG SUỐT khớp TỪNG CHỮ với `gen.sh`", async () => {
     const gen = await genSh();
-    expectMirrored(gen, glassCellPrompt("§KEY§"));
-    expect(gen).toMatch(/\{key_name\} chroma-key background stays VISIBLE THROUGH/);
+    expectMirrored(gen, glassCellPrompt());
     // Nhánh của kính phải là `elif` sau nhánh glow — nếu ai đó đổi thành `if` rời thì
     // một ô có thể ăn cả hai câu, và ca "đúng một câu phụ" ở trên sẽ không đủ để bắt.
     expect(gen).toMatch(/elif comps\[i\]\["skel"\]\.get\("matte"\) == "glass":/);

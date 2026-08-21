@@ -21,7 +21,7 @@
  */
 import type { Contract, Sheet } from "@/lib/types/contract";
 import { contractVariants } from "@/lib/types/contract";
-import { chromaKeyOf, type ChromaKeyId } from "./kitset-to-contract";
+
 
 export interface ItemPrompt {
   /** Tấm chứa ô này (`nen`, `popup2`, `pose-nhan-vat`…). */
@@ -42,8 +42,12 @@ const orientLine = (orient: string) =>
 
 /**
  * CHÉP NGUYÊN VĂN đoạn `gen.sh` nối vào `spec` của ô `matte:"glow"` (khối
- * `if comps[i]["skel"].get("matte") == "glow"`), kể cả chỗ `gen.sh` chèn TÊN MÀU KEY
- * đang dùng — nên preview phải nối ở cùng chỗ, cùng chữ, cùng tên màu.
+ * `if comps[i]["skel"].get("matte") == "glow"`) — preview phải nối ở cùng chỗ,
+ * cùng chữ.
+ *
+ * KHÔNG CÒN THAM SỐ MÀU KEY. Nền sheet nay là alpha thật, nên ô glow không được
+ * vẽ trên tấm đen nữa: quầng sáng nằm sẵn trong kênh α, đủ cả dải mờ. Câu này vì
+ * thế chỉ còn ra hợp đồng về ĐỘ TAN — sáng phải nhoè hết ra nền trong suốt.
  *
  * Vì sao phải mirror (research-glow-extraction §4.2 "Lỗ 3"): bật "nền đen cho hiệu ứng
  * phát sáng" là đổi HẲN câu lệnh gửi cho máy vẽ. Nếu panel "Prompt sẽ gửi đi" không đổi
@@ -53,12 +57,11 @@ const orientLine = (orient: string) =>
  * Đổi chữ ở `gen.sh` mà quên chỗ này ⇒ ca "khớp TỪNG CHỮ với gen.sh" trong
  * `__tests__/cell-background.test.tsx` đỏ (nó đọc `gen.sh` thật, không đọc trí nhớ).
  */
-/** @param key tên màu key (`magenta`/`green`/`cyan`/`blue`) — `gen.sh` chèn đúng chữ này. */
-export function glowCellPrompt(key: ChromaKeyId | string): string {
-  return " — SPECIAL CELL BACKGROUND: this ONE cell's background is PURE BLACK #000000 filling"
-    + ` the whole cell with a hard edge at the cell borders (the ${key} chroma-key does NOT apply inside`
-    + " this cell); the light effect is drawn ADDITIVELY on black — where there is no light"
-    + " the cell stays pure black";
+export function glowCellPrompt(): string {
+  return " — LIGHT EFFECT: this element is pure light. Paint ONLY the light itself; the faint"
+    + " outer halo fades out gradually until nothing is painted at all, never stopping at a hard"
+    + " edge. Around and behind the light, paint NOTHING — no black plate, no backing colour, and"
+    + " no grey-and-white squares";
 }
 
 /**
@@ -66,26 +69,25 @@ export function glowCellPrompt(key: ChromaKeyId | string): string {
  * dưới nhánh glow, `gen.sh:489-506`), kể cả chỗ chèn TÊN MÀU KEY — cùng lý do mirror như
  * `glowCellPrompt`, và cùng ca test đọc `gen.sh` thật để bắt lệch chữ.
  *
- * Khác glow ở CHỖ CĂN BẢN: ô glass **không** đổi nền. Nền key chính là thứ mang tín hiệu
- * độ trong (`slice.py` giải ngược `C = α·F + (1−α)·K`), nên câu này không tuyên bố một
- * nền khác mà ra HỢP ĐỒNG: phần nhìn xuyên qua phải để lộ key.
+ * Độ trong của kính trước đây đo GIÁN TIẾP — nền key lộ qua thân bao nhiêu thì trong
+ * bấy nhiêu, `slice.py` giải ngược `C = α·F + (1−α)·K`. Với alpha thật, độ trong nằm
+ * THẲNG trong kênh α, nên câu này ra hợp đồng ngay trên α.
  */
-export function glassCellPrompt(key: ChromaKeyId | string): string {
-  return " — SEE-THROUGH ELEMENT: this element is TRANSPARENT. Do NOT paint any opaque"
-    + " fill behind it or inside it: the"
-    + ` ${key} chroma-key background stays VISIBLE THROUGH the body of the element, covered`
-    + " only by the element's own thin tint. How much"
-    + ` flat ${key} still shows through IS the transparency — pure flat ${key} reads as fully`
-    + " clear, a heavy opaque wash reads as a solid panel. Frame, rim, bevel, specular"
-    + " highlights and anything sitting ON TOP of it stay fully opaque";
+export function glassCellPrompt(): string {
+  return " — SEE-THROUGH ELEMENT: the body of this element is a thin sheet of tinted glass,"
+    + " painted at LOW OPACITY — around 25% for a clear pane, up to 50% for a strongly tinted"
+    + " one. Paint the tint and nothing else behind it: no opaque fill, no white or grey wash,"
+    + " and above all NO grey-and-white squares — do not draw what a transparent area looks like"
+    + " in an image editor, just paint less. Frame, rim, bevel and specular highlights stay"
+    + " fully opaque";
 }
 
-/** `true` khi ô được vẽ trên nền đen thay vì nền chroma của tấm. */
+/** `true` khi ô là hiệu ứng phát sáng — quầng phải tan hết ra nền trong suốt. */
 export function isGlowCell(skel: { matte?: unknown } | null | undefined): boolean {
   return skel?.matte === "glow";
 }
 
-/** `true` khi ô là element TRONG SUỐT — vẫn nền chroma, nhưng slicer giải ngược alpha. */
+/** `true` khi ô là element TRONG SUỐT — thân mang alpha một phần, không đục. */
 export function isGlassCell(skel: { matte?: unknown } | null | undefined): boolean {
   return skel?.matte === "glass";
 }
@@ -112,9 +114,8 @@ export function itemPromptFor(contract: Contract | null | undefined, file: strin
   const variant = contractVariants(contract)[0];
   const style = variant?.style ?? "";
   /* Cùng thứ tự if/elif của `gen.sh`: một ô chỉ nhận ĐÚNG MỘT câu phụ. */
-  const key = chromaKeyOf(variant?.bg);
-  const extra = isGlowCell(component.skel) ? glowCellPrompt(key)
-    : isGlassCell(component.skel) ? glassCellPrompt(key)
+  const extra = isGlowCell(component.skel) ? glowCellPrompt()
+    : isGlassCell(component.skel) ? glassCellPrompt()
       : "";
   const line = `${index + 1}) ${component.spec}${extra}`;
   const text = [
