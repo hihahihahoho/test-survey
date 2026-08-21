@@ -202,12 +202,34 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
     và quầng nở quanh mấy đốm lấp lánh. Đây là thứ tách-nền-theo-kênh-sáng đang phải
     dựng lại bằng tay từ nền đen; nay model trả thẳng.
 
-    **Một thay đổi HÀNH VI phải nói trước:** asset glow hiện ship kèm `blend:"screen"`
-    (cộng sáng). Alpha thật thì ghép bằng **normal**. Với người dùng đây là **đỡ đi**
-    một bước: mục 3 ở trên còn ghi "Figma vẫn là việc tay (toast nhắc Linear Dodge/
-    Screen khi copy)" — hết alpha giả thì hết luôn cái toast đó. Nhưng asset CŨ đã cắt
-    vẫn mang `blend:"screen"`, nên `slice.py` phải chỉ gắn khoá đó cho sheet KHÔNG có
-    alpha thật.
+    **`blend` — CHỦ SẢN PHẨM CHỐT: cứ ra raw bình thường.** Không đẻ thêm nhánh
+    "sheet có alpha thì bỏ `blend`". Asset ra sao ship vậy.
+
+    **⑥ ĐỐI CHỨNG 2x2 — chốt hẳn: NỀN ẢNH SKELETON đúng là biến số.**
+    Chủ sản phẩm nghi skeleton không phải thủ phạm nên chạy lại có đối chứng. Cùng
+    model · cùng cách đính · **cùng một câu prompt** (task của B sinh ra từ task của A
+    bằng `sed`, chỉ đổi câu tả nền skeleton). Đổi đúng MỘT biến:
+
+    | lượt | nền skeleton | α=0 của ảnh ra | 4 góc |
+    |---|---|---|---|
+    | #1 | ĐẶC | **0,0%** | 255 |
+    | #2 | ĐẶC (prompt để câu "TRANSPARENT BACKGROUND" **lên đầu**, nói đậm hơn hẳn) | **0,0%** | 255 |
+    | #3 | TRONG | **60,3%** | 0 |
+    | #4 | TRONG | **65,3%** | 0 |
+
+    2/2 so 2/2. Viết prompt mạnh hơn **không cứu được** — ảnh tham chiếu thắng chữ.
+
+    **⑦ BẪY NGUY HIỂM NHẤT TÌM ĐƯỢC — MODEL VẼ CARO GIẢ.**
+    Lượt #2 nhìn bằng mắt thì *y như* ảnh nền trong suốt: có đủ ô caro xám-trắng. Đọc
+    pixel gốc mới lòi ra: nền là ô caro **#FEFEFE / #F3F3F3 đan nhau, toàn bộ α=255**.
+    Model không tạo được trong suốt nên nó **vẽ lại cái hình ảnh tượng trưng cho trong
+    suốt**. Ghép lên nền đỏ là lộ ngay: caro giả che kín, không thấy đỏ.
+
+    ⇒ **Bắt buộc phải có chốt chặn**, cùng họ với `file_hash` chống "OK giả": lượt gen
+    khai nền trong suốt thì sau khi có ảnh phải **đọc kênh α**, thấy `α=0` chiếm ~0%
+    (hoặc ảnh không có kênh α) là **FAIL kèm câu nói rõ "model vẽ caro giả"** — chứ
+    không được đem đi cắt. Không có chốt này thì cả sheet caro nướng chín đi thẳng vào
+    `kits/`, và không một khâu nào bằng mắt bắt được.
 
     **VIỆC PHẢI LÀM, theo đúng thứ tự phụ thuộc:**
     1. `skeleton-svg.js:197` — nền skeleton `#f2f2f2` → **trong suốt**. Không có bước
