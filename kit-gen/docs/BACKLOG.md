@@ -143,14 +143,29 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
     trạng thái của phiên bản đã bị thay. Đây đúng họ bug "vá nóng engine": tin một
     file mà công cụ khác mới là chủ, ở đúng khoảnh khắc nó chưa kịp ghi.
 
-    **Còn phải đo trước khi gỡ chroma khỏi `gen.sh`** (một quả táo đơn lẻ KHÔNG đủ
-    kết luận cho ca thật của KitGen):
-    - sheet **nhiều ô** 4x2 1536x1024 — máng giữa các ô có α=0 không, `slice.py` có
-      cắt được không;
-    - **bán trong suốt Ở GIỮA chủ thể** (kính mờ trong lòng khung popup) — thứ mà
-      chroma-key **không bao giờ** làm được, và là lý do thật để đổi;
-    - ô `matte:"glow"` đang dựa vào **nền đen** + tách theo kênh sáng — cái này alpha
-      thật thay được hay không là một câu hỏi RIÊNG, chưa đo.
+    **BA PHÉP ĐO ĐÃ CHẠY** (luna `gpt-5.6-luna` medium, qua `~/.codex-img`, built-in
+    tool, không hậu kỳ — mỗi lần model chỉ `cp` file tool đẻ ra):
+
+    | ca | kết quả |
+    |---|---|
+    | ① táo đơn lẻ 1254x1254 | 56,0% α=0 · 42,4% α≥250 · 1,6% rìa AA · 4 góc α=0 · **không viền chroma trên nền magenta** |
+    | ② popup khung + **kính mờ** 1536x1024 | 28,3% α=0 · **20,2% α 64-191** · riêng lòng khung **56,8% bán trong suốt**, α trung bình 74,8/255, **0% đặc và 0% thủng** |
+    | ③ **sheet 4x2** 8 icon 1536x1024 | 65,0% α=0 · 4 góc α=0 · matte sạch, **giữ được LỖ ở quai chìa khoá** |
+
+    Ca ② là ca quyết định: **chroma-key không bao giờ tạo được tầng α giữa**. Tách nền
+    theo màu chỉ ra 0 hoặc 255 ⇒ tấm kính bán trong suốt sẽ thành đặc hoặc thủng hẳn.
+    Có tầng giữa = alpha thật, không phải cutout. Ca ③ giữ được lỗ ở quai chìa khoá
+    cũng vậy — đó là topology thật, không phải cắt theo bao lồi.
+
+    **Cái ③ KHÔNG chứng minh**: bố cục. 4/8 ô tràn qua đường chia lưới 384px vì prompt
+    trần không ghim được lưới. Đây KHÔNG phải bệnh alpha và cũng không phải bệnh mới —
+    đúng lý do `gen.sh` đính **ảnh skeleton** vào mỗi lượt. Phép đo còn thiếu là: **có
+    skeleton đính kèm thì alpha còn sống không** (skeleton là ảnh đặc, model có thể
+    bắt chước luôn cái nền của nó).
+
+    **Còn một câu hỏi RIÊNG chưa đo:** ô `matte:"glow"` đang dựa vào **nền đen** +
+    tách theo kênh sáng, không phải chroma. Alpha thật thay được nó hay không là việc
+    khác, đừng gộp vào cùng một lượt sửa.
 
     `alpha_sheet()` + nhánh `has_alpha` trong `slice.py` **đã có sẵn** ⇒ engine tự
     dùng alpha thật khi sheet có, không cần sửa để BẮT ĐẦU thử.
