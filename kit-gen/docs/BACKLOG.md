@@ -367,9 +367,13 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
     Soi thẳng vào `$CODEX_HOME/generated_images/` — tức file mà `image_gen` TRẢ VỀ,
     trước khi codex chép đi đâu — thì mọi thứ khớp một mạch:
 
-    · Lượt **KHÔNG đính ảnh** ⇒ file trả về là **RGBA**, dải mờ 24–59%. Alpha thật.
-    · Lượt **CÓ đính ảnh** ⇒ file trả về là **RGB**, không có kênh α nào cả. Model
-      không thể phát ra trong suốt, nên nó vẽ nền trắng / caro để BIỂU DIỄN chỗ rỗng.
+    · Lượt **KHÔNG đính ảnh**: **5/5** file trả về là **RGBA**, dải mờ 24–59%. Alpha
+      thật, không lượt nào trượt.
+    · Lượt **CÓ đính ảnh**: phần lớn trả về **RGB — không có kênh α nào cả**. Model
+      không phát ra được trong suốt, nên nó vẽ nền trắng / caro để BIỂU DIỄN chỗ rỗng.
+      **Nhưng không phải luôn luôn**: 2 lượt (`skel-B`, `skel-probe2`) trả về RGBA
+      thật, dải mờ 34,7% / 39,3%. Tức đường có-đính-ảnh **hên xui**, không phải cấm
+      tuyệt đối — và hên xui còn khó sống hơn cấm tuyệt đối, vì không dự đoán được.
 
     Rồi đến đoạn chết người. Đọc log lượt e2e (`logs/t-ui.log`):
 
@@ -395,6 +399,18 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
       · vì sao alpha luôn NHỊ PHÂN (0 hoặc 255) — key màu chỉ đẻ ra được hai giá trị;
       · vì sao tấm caro vẫn SỐNG BÊN TRONG chủ thể — bộ key chỉ ăn được nền ngoài;
       · vì sao sửa prompt 4 vòng không dứt được — prompt không với tới khâu đó.
+
+    **SKILL.md 0.149 KHÔNG HỀ NÓI GÌ VỀ CHUYỆN NÀY — VÀ ĐÓ CHÍNH LÀ CÁI LỖ.**
+    Cả mục "Transparent image requests" vỏn vẹn MỘT câu: *"Ask built-in `image_gen`
+    for a genuinely transparent background and preserve its alpha."* Giới hạn duy
+    nhất được thừa nhận trong cả file nằm ở đường CLI dự phòng: *"CLI `gpt-image-2`
+    does not support `background=transparent`"*. Về đường built-in kèm ảnh đầu vào:
+    không một dòng. Không nói nó có thể trả RGB, không nói phải làm gì khi trả RGB,
+    và **không cấm tự chế bộ tách nền**. Skill còn liệt kê `background-extraction —
+    transparent background / clean cutout` như một ca dùng hợp lệ và bảo "ask
+    built-in `image_gen` for actual transparency" — tức nó GIAO một việc mà đường đó
+    có lúc không làm được. Agent kẹt giữa "phải ra trong suốt" và "tool trả RGB" thì
+    nó ứng biến. Ứng biến bằng Swift.
 
     **VIỆC PHẢI LÀM NGAY, ĐỘC LẬP VỚI MỌI QUYẾT ĐỊNH KHÁC:** `slice.py` phải coi
     **alpha nhị phân là ĐÁNG NGỜ**. Ảnh khai trong suốt mà dải α 1..254 ≈ 0% thì gần
