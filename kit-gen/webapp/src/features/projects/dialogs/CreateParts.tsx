@@ -137,33 +137,6 @@ export function TagInput({
   );
 }
 
-/** Chọn màu nền tách cho phong cách đầu tiên (§3-S3.6). */
-export function BgPicker({
-  value,
-  onChange,
-}: {
-  value: "magenta" | "green";
-  onChange: (v: "magenta" | "green") => void;
-}) {
-  return (
-    <RadioGroup value={value} onValueChange={(v) => onChange(v as "magenta" | "green")} className="flex gap-2 pt-1">
-      {(["magenta", "green"] as const).map((bg) => (
-        <Label
-          key={bg}
-          htmlFor={`bg-${bg}`}
-          className={cn(
-            "flex flex-1 cursor-pointer items-center gap-2 rounded-2 border p-2.5",
-            value === bg ? "border-accent bg-accent/[var(--kg-tint-a)]" : "border-line-subtle bg-raised hover:bg-overlay",
-          )}
-        >
-          <RadioGroupItem id={`bg-${bg}`} value={bg} />
-          <span className="text-body text-fg-strong">{bg === "magenta" ? "Magenta" : "Green"}</span>
-        </Label>
-      ))}
-    </RadioGroup>
-  );
-}
-
 /**
  * §4.1-2 TRÙNG TÊN HIỂN THỊ: cho phép, chỉ cảnh báo + gợi ý "(2)".
  * Tách khỏi `CreateProjectDialog` (FE-2·B1) để file dialog ở dưới trần 400 dòng
@@ -199,18 +172,21 @@ export function DuplicateNameWarning({
  * di chuyển JSX; test payload `firstVariant` hiện có là cổng kiểm chuyện đó.
  *
  * Generic theo kiểu form của chỗ gọi (KHÔNG `as any`, KHÔNG ép kiểu): `tsc` vẫn kiểm
- * rằng form thật sự có hai field `variantVi`/`bg`.
+ * rằng form thật sự có field `variantVi`.
+ *
+ * Ô "Màu nền tách" ĐÃ BỎ (nền sheet nay là alpha thật). `bg` vẫn nằm trong form và
+ * vẫn đi vào `firstVariant` ở giá trị mặc định — `slice.py` cần nó khi cắt lại sheet
+ * raw đời cũ — nhưng người dùng không còn phải trả lời một câu hỏi vô nghĩa.
  */
-export function FirstVariantFields<T extends FieldValues & { variantVi: string; bg: "magenta" | "green" }>({
+export function FirstVariantFields<T extends FieldValues & { variantVi: string }>({
   control,
 }: {
   control: Control<T>;
 }) {
   const c = control;
   const nVariant = "variantVi" as Path<T>;
-  const nBg = "bg" as Path<T>;
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid gap-4">
       <FormField
         control={c}
         name={nVariant}
@@ -222,22 +198,6 @@ export function FirstVariantFields<T extends FieldValues & { variantVi: string; 
             </FormControl>
             <FormDescription>Cùng bộ element, khác art style / màu brand.</FormDescription>
             <FormMessage />
-          </FormItem>
-        )}
-      />
-      <FormField
-        control={c}
-        name={nBg}
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Màu nền tách</FormLabel>
-            <FormControl>
-              <BgPicker
-                value={field.value as "magenta" | "green"}
-                onChange={(v) => field.onChange(v)}
-              />
-            </FormControl>
-            <FormDescription>Nền đơn sắc để máy tách trong suốt.</FormDescription>
           </FormItem>
         )}
       />

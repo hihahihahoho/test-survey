@@ -193,7 +193,7 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
   const detail = detailFile ? catalogue.find((element) => element.file === detailFile) ?? null : null;
   /* Nền của ô ĐANG ÁP DỤNG = thư viện + lớp đè, trộn bằng đúng hàm của contract. Đọc
      thẳng `overrides.get(...)?.matte` thì ô nào thư viện đã khai `matte:"glow"` sẵn
-     (element-lib có 1 món) sẽ hiện sai là "Chroma thường" cho tới khi người dùng bấm. */
+     (element-lib có 1 món) sẽ hiện sai là "Nền thường" cho tới khi người dùng bấm. */
   const detailOverride = detail ? overrides.get(detail.file) : undefined;
   const detailSkel = detail ? (detailOverride ? mergeElementSkel(detail.skel, detailOverride) : detail.skel) : null;
   const glow = isGlowCell(detailSkel);
@@ -357,27 +357,27 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
             <div>
               <p className="text-label text-fg-strong">Nền tách</p>
               <p className="mt-1 text-caption text-fg-muted">
-                Ô phát sáng (lửa, tia, hào quang) vẽ trên nền đen thì tách được đúng ánh sáng; nền chroma làm quầng sáng bị xỉn.
-                Ô trong suốt (kính, khay mờ) giữ nền chroma nhưng bắt màu nền lộ qua thân, để đo được đúng độ mờ.
+                Ô phát sáng (lửa, tia, hào quang): quầng sáng tan dần bằng cách hạ alpha về 0 mà vẫn giữ màu của chính ánh sáng — không có tấm nền nào phía sau.
+                Ô trong suốt (kính, khay mờ): thân vẽ ở alpha thấp, độ trong nằm thẳng trong kênh alpha chứ không đo gián tiếp qua màu nền.
               </p>
               <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Nền tách">
                 <SegChoice
                   on={!glow && !glass}
-                  aria-label="Chroma thường"
-                  /* Thư viện vốn đã là chroma ⇒ XOÁ lớp đè thay vì ghi `"none"`: bản
-                     nháp không nên phình ra vì một giá trị trùng đúng mặc định. */
+                  aria-label="Nền thường"
+                  /* Thư viện vốn đã là nền thường ⇒ XOÁ lớp đè thay vì ghi `"none"`:
+                     bản nháp không nên phình ra vì một giá trị trùng đúng mặc định. */
                   onClick={() => workflow.setElementSkel(detail.file, {
                     matte: detail.skel.matte === "glow" || detail.skel.matte === "glass" ? "none" : null,
                   })}
                 >
-                  Chroma thường
+                  Nền thường
                 </SegChoice>
                 <SegChoice
                   on={glow}
-                  aria-label="Đen cho hiệu ứng phát sáng"
+                  aria-label="Hiệu ứng phát sáng"
                   onClick={() => workflow.setElementSkel(detail.file, { matte: "glow" })}
                 >
-                  Đen cho hiệu ứng phát sáng
+                  Hiệu ứng phát sáng
                 </SegChoice>
                 <SegChoice
                   on={glass}

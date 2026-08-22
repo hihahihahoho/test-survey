@@ -15,7 +15,7 @@ export type Backdrop = KitBackdrop;
 export const BACKDROPS: readonly { value: Backdrop; label: string; hint: string }[] = [
   { value: "checker", label: "Ô vuông", hint: "Thấy rõ vùng trong suốt" },
   { value: "dark", label: "Đen", hint: "Thấy phần bị ăn mất ở viền" },
-  { value: "light", label: "Trắng", hint: "Thấy màu nền tách còn sót" },
+  { value: "light", label: "Trắng", hint: "Thấy viền sáng còn sót" },
 ];
 
 /**

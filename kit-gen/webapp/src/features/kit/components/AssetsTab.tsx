@@ -219,7 +219,7 @@ export function AssetsTab(p: AssetsTabProps) {
           tone="warn"
           icon={Ban}
           title={`${totals.emptyFiles} file cắt ra rỗng`}
-          description="Thường là ô trên sheet bị trống, hoặc màu nền tách bị lẫn vào element. Mở bản thiết kế để xem ô đó có nội dung chưa."
+          description="Thường là ô trên sheet bị trống, hoặc element bị vẽ trong suốt nên khâu cắt không thấy gì. Mở bản thiết kế để xem ô đó có nội dung chưa."
           actions={
             <Button variant="secondary" size="sm" onClick={() => p.onOpenDesign(null)}>
               Mở bản thiết kế

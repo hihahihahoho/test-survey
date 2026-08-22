@@ -1,12 +1,10 @@
-import { AlertTriangle, Info, RotateCcw } from "lucide-react";
+import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CHROMA_PRESETS, contractVariants, type Contract } from "@/lib/types/contract";
+import { contractVariants, type Contract } from "@/lib/types/contract";
 import { SLICE_CONST } from "../lib/shapes";
 import { Field } from "./Field";
 
@@ -36,7 +34,6 @@ export interface AdvancedTabProps {
   readOnlyReason: string;
   /** doctor.python.deps — cho biết máy có ViTMatte/PyMatting hay không. `null` = chưa hỏi. */
   deps?: Record<string, boolean> | null;
-  onSetChroma: (key: "magenta" | "green") => void;
   onPatchSlice: (patch: { threshold?: number; grow_threshold?: number; bleed?: number; quality?: "fast" | "high" }) => void;
   onCheckMachine: () => void;
 }
@@ -48,15 +45,11 @@ const DEFAULTS = {
 };
 
 export function AdvancedTab({
-  contract, readOnly, readOnlyReason, deps, onSetChroma, onPatchSlice, onCheckMachine,
+  contract, readOnly, readOnlyReason, deps, onPatchSlice, onCheckMachine,
 }: AdvancedTabProps) {
   const disProps = readOnly ? { disabled: true, title: readOnlyReason } : {};
   const variants = contractVariants(contract);
   const slice = contract.slice ?? {};
-
-  const isGreen = (bg: unknown) => /green|00ff00/i.test(String(bg ?? ""));
-  const allGreen = variants.length > 0 && variants.every((v) => isGreen(v.bg));
-  const mixed = new Set(variants.map((v) => (isGreen(v.bg) ? "g" : "m"))).size > 1;
 
   const threshold = num(slice.threshold, num((variants[0] as { threshold?: number } | undefined)?.threshold, DEFAULTS.threshold));
   const grow = num(slice.grow_threshold, num((variants[0] as { grow_threshold?: number } | undefined)?.grow_threshold, threshold + DEFAULTS.growOffset));
@@ -66,51 +59,6 @@ export function AdvancedTab({
 
   return (
     <div className="flex max-w-3xl flex-col gap-4 p-4">
-      {/* ── Màu nền tách ── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Màu nền tách
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label="Vì sao màu nền tách quan trọng">
-                  <Info aria-hidden />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80 text-caption">
-                Máy tách nền theo khoảng cách màu tới màu nền. Element có màu gần màu nền sẽ bị ăn mất một phần.
-                Chọn màu xa nhất với bảng màu của bộ kit: đồ ấm (đỏ/vàng) dùng magenta, đồ tím/hồng dùng green.
-              </PopoverContent>
-            </Popover>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <fieldset disabled={readOnly || variants.length === 0}>
-            <legend className="sr-only">Chọn màu nền tách cho mọi phong cách</legend>
-            <RadioGroup
-              value={allGreen ? "green" : "magenta"}
-              onValueChange={(v) => onSetChroma(v as "magenta" | "green")}
-              className="flex gap-4"
-            >
-              <ChromaChoice id="chroma-m" value="magenta" label="Magenta #FF00FF" swatch="#FF00FF" />
-              <ChromaChoice id="chroma-g" value="green" label="Green #00FF00" swatch="#00FF00" />
-            </RadioGroup>
-          </fieldset>
-
-          {mixed && (
-            <p className="flex items-start gap-2 rounded-2 kg-tint-warn p-3 text-caption text-on-tint-warn">
-              <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
-              Các phong cách đang dùng màu nền KHÁC NHAU. Chọn ở đây sẽ đặt lại cho tất cả.
-            </p>
-          )}
-          <p className="text-caption text-fg-muted-raised">
-            Đây là màu nền đơn sắc để máy tách trong suốt. Đổi màu nền thì <strong>phải sinh ảnh lại</strong> —
-            ảnh cũ vẫn giữ nền cũ. Hiện tại: {variants.length === 0 ? "chưa có phong cách nào" : `${variants.length} phong cách`}
-            {variants.length > 0 && ` · ${allGreen ? CHROMA_PRESETS.green : CHROMA_PRESETS.magenta}`}.
-          </p>
-        </CardContent>
-      </Card>
-
       {/* ── Tham số cắt ── */}
       <Card>
         <CardHeader>
@@ -238,18 +186,6 @@ export function AdvancedTab({
           </Button>
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-function ChromaChoice({ id, value, label, swatch }: { id: string; value: string; label: string; swatch: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <RadioGroupItem value={value} id={id} />
-      <Label htmlFor={id} className="flex cursor-pointer items-center gap-2">
-        <span className="size-3.5 rounded-1 border border-line" style={{ background: swatch }} aria-hidden />
-        {label}
-      </Label>
     </div>
   );
 }

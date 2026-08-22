@@ -320,7 +320,7 @@ export function PreviewPage() {
                 <Label htmlFor="pv-sw">Hiện panel dev</Label>
               </div>
               <RadioGroup defaultValue="magenta" className="gap-2">
-                <span className="text-label text-fg-strong">Màu nền tách</span>
+                <span className="text-label text-fg-strong">Nhóm lựa chọn</span>
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="magenta" id="pv-r1" />
                   <Label htmlFor="pv-r1">Magenta</Label>

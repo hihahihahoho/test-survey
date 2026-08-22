@@ -471,237 +471,24 @@ export function contractCast(
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   5b. Màu nền tách (chroma key) — CHỌN XA PALETTE, KHÔNG MẶC ĐỊNH MÙ
+   5b. Màu nền tách — DI SẢN, KHÔNG CÒN ĐI VÀO PROMPT
+   ══════════════════════════════════════════════════════════════════════════
+
+   Ở đây từng có cả một cỗ máy chọn key: `CHROMA_KEY_PRESETS` (4 màu),
+   `pickChromaKey`, `explainChromaKey`, `CHROMA_KEY_HEX` và phép đo hue để tránh
+   key trùng bảng màu — vì `gen.sh` viết thẳng tên màu vào prompt (*"BACKGROUND of
+   the sheet: one flat solid chroma-key color: {bg}"*) và một style neon magenta
+   trên key magenta thì bị `matte_vlahos` ăn mất độ bão hoà.
+
+   Prompt đó KHÔNG CÒN. `image_gen` của codex 0.149 trả về RGBA thật, nên gen.sh
+   xin thẳng nền trong suốt và không nhắc tới màu nào nữa. Không có tên màu trong
+   prompt thì cũng không có gì để đá bảng màu ⇒ toàn bộ phép tránh-va-chạm mất
+   nghĩa, và một ô swatch "Màu nền tách" chỉ còn là lời hứa suông với người dùng.
+
+   `bg` thì Ở LẠI, đúng như người dùng chọn: `slice.py` vẫn cần nó để cắt lại
+   những sheet raw ĐỜI CŨ (nền magenta/green) của project cũ. Nó chỉ không còn
+   ảnh hưởng tới lượt gen mới nữa.
    ══════════════════════════════════════════════════════════════════════════ */
-
-/**
- * ╔══════════════════════════════════════════════════════════════════════════╗
- * ║ VÌ SAO KHÔNG ĐỂ NGUYÊN "LUÔN LUÔN MAGENTA"                               ║
- * ╚══════════════════════════════════════════════════════════════════════════╝
- * `gen.sh:152` viết thẳng chuỗi này vào prompt: *"BACKGROUND of the sheet: one flat
- * solid chroma-key color: {bg}"*, kèm luật ngầm "đừng dùng màu gần màu nền cho
- * element". Với một style neon **magenta** mà key cũng magenta thì câu đó thành
- * *"đừng vẽ đúng phong cách của bạn"*, và những gì lọt qua sẽ bị `matte_vlahos` ăn mất
- * độ bão hoà — đây chính là gốc của "key magenta đá style magenta"
- * (`docs/research-glow-extraction-2026-08.md` §4.4).
- *
- * GIAO DIỆN VỚI ENGINE CHỈ LÀ CHUỖI `variant.bg`. Không có field mới, không có version
- * bump: `slice.py` tự dò key từ viền ảnh, còn `gen.sh` chỉ đọc `s['bg']`. Tập key được
- * giữ đúng 4 màu bão hoà mà `is_key_color()` (`slice.py:97`, đòi `max−min > 80`) nhận
- * ra chắc chắn.
- */
-export const CHROMA_KEY_PRESETS = {
-  // Hai màu này PHẢI dùng lại chuỗi của `CHROMA_PRESETS`: dự án cũ đã lưu contract với
-  // đúng chữ đó, và `contract-import.ts:74` so chuỗi để đọc ngược ra lựa chọn thủ công.
-  magenta: CHROMA_PRESETS.magenta,
-  green: CHROMA_PRESETS.green,
-  cyan: "pure vivid cyan #00FFFF",
-  blue: "pure vivid blue #0000FF",
-} as const;
-export type ChromaKeyId = keyof typeof CHROMA_KEY_PRESETS;
-
-/** Góc hue của từng key. Thứ tự mảng cũng là thứ tự phá hoà: hoà thì magenta thắng —
- *  giữ nguyên hành vi cũ cho những style không có màu nào đủ bão hoà để tính. */
-const CHROMA_KEY_HUE: ReadonlyArray<readonly [ChromaKeyId, number]> = [
-  ["magenta", 300], ["green", 120], ["cyan", 180], ["blue", 240],
-];
-
-/** RGB thuần của từng key — đúng `CHROMA_KEYS` của `gen.sh` và `KEY_COLORS` của `slice.py`. */
-const CHROMA_KEY_RGB: Record<ChromaKeyId, readonly [number, number, number]> = {
-  magenta: [255, 0, 255], green: [0, 255, 0], cyan: [0, 255, 255], blue: [0, 0, 255],
-};
-
-/** Trục của một màu key: (kênh CAO, kênh THẤP). Soi gương `gen.sh:_axis` / `slice.py:key_axis`. */
-function keyAxis(rgb: readonly [number, number, number]): string | null {
-  const mid = (Math.max(...rgb) + Math.min(...rgb)) / 2;
-  const hi = [0, 1, 2].filter((i) => rgb[i]! >= mid);
-  const lo = [0, 1, 2].filter((i) => rgb[i]! < mid);
-  return hi.length && lo.length ? `${hi.join("")}|${lo.join("")}` : null;
-}
-
-/**
- * Đọc NGƯỢC tên key từ chuỗi `bg` của contract — bản sao đúng luật `gen.sh:key_of()`:
- * dò tên màu trước, rồi tới mã hex (theo TRỤC, nên `#EE00EE` vẫn ra magenta), cuối cùng
- * rơi về magenta.
- *
- * Cần bản đọc ngược vì `bg` là chuỗi TỰ DO: contract cũ, contract nhập từ ngoài, hay
- * người dùng gõ tay đều có thể không khớp preset nào. Panel prompt phải nói đúng tên
- * màu mà `gen.sh` sẽ nói, chứ không phải tên màu webapp mong nó nói.
- */
-export function chromaKeyOf(bg: string | null | undefined): ChromaKeyId {
-  const low = String(bg ?? "").trim().toLowerCase();
-  for (const id of Object.keys(CHROMA_KEY_PRESETS) as ChromaKeyId[]) {
-    if (new RegExp(`\\b${id}\\b`).test(low)) return id;
-  }
-  const hex = /#([0-9a-f]{6})\b/.exec(low);
-  if (hex) {
-    const v = hex[1]!;
-    const rgb = [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16)) as unknown as [number, number, number];
-    const axis = keyAxis(rgb);
-    if (axis) {
-      for (const id of Object.keys(CHROMA_KEY_PRESETS) as ChromaKeyId[]) {
-        if (keyAxis(CHROMA_KEY_RGB[id]) === axis) return id;
-      }
-    }
-  }
-  return "magenta";
-}
-
-/** Dưới ngưỡng này coi như key ĐANG ĐÁ palette và phải đổi. 60° = một nan quạt của bánh
- *  xe 6 màu; hai màu cách nhau ít hơn thế thì `matte_vlahos` bắt đầu ăn vào element. */
-const SAFE_HUE_GAP = 60;
-
-/** Khoảng cách hue trên vòng tròn — 350° và 10° cách nhau 20°, không phải 340°. */
-function hueGap(a: number, b: number): number {
-  const d = Math.abs(a - b) % 360;
-  return d > 180 ? 360 - d : d;
-}
-
-/**
- * Hue của một mã hex, chỉ khi màu đó THẬT SỰ có màu. Xám/đen/trắng trả `null`: cặp màu
- * trung tính mặc định của app (`#151516` / `#9A9A9A`, xem `model.ts`) không được phép
- * đẩy key đi đâu cả.
- */
-function hueOfHex(hex: string): number | null {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return null;
-  const n = parseInt(m[1]!, 16);
-  const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b), span = max - min;
-  const light = (max + min) / 2;
-  if (span < 0.2 || light < 0.12 || light > 0.92) return null; // xám, gần đen, gần trắng
-  const h = max === r ? ((g - b) / span) % 6 : max === g ? (b - r) / span + 2 : (r - g) / span + 4;
-  return ((h * 60) % 360 + 360) % 360;
-}
-
-/**
- * Từ màu → hue, cho phần MÔ TẢ phong cách (chỗ duy nhất nói "neon magenta" bằng chữ).
- * Tiếng Việt để nguyên dấu và chỉ nhận cụm rõ nghĩa: "xanh" trơ trọi vừa là lá vừa là
- * dương, đoán bừa còn tệ hơn không đoán.
- */
-const COLOR_WORD_HUE: ReadonlyArray<readonly [string, number]> = [
-  ["magenta", 300], ["fuchsia", 300], ["hồng sen", 300], ["hồng cánh sen", 300],
-  ["pink", 330], ["hồng", 330],
-  ["purple", 285], ["violet", 275], ["tím", 280],
-  ["indigo", 260], ["chàm", 260],
-  ["blue", 240], ["xanh dương", 240], ["xanh biển", 240], ["navy", 240],
-  ["azure", 205], ["xanh da trời", 205],
-  ["cyan", 180], ["teal", 175], ["turquoise", 175], ["xanh lơ", 180], ["xanh ngọc", 175],
-  ["mint", 155], ["green", 120], ["xanh lá", 120], ["lục", 120], ["emerald", 145],
-  ["lime", 90], ["chartreuse", 90],
-  ["yellow", 55], ["vàng", 50], ["gold", 45],
-  ["orange", 30], ["cam", 30], ["coral", 15],
-  ["red", 0], ["đỏ", 0], ["crimson", 350], ["scarlet", 5],
-];
-
-/** Chặn khớp giữa từ ("cam" trong "camera", "lime" trong "sublime"). */
-function mentions(text: string, word: string): boolean {
-  const at = text.indexOf(word);
-  if (at < 0) return false;
-  const before = text[at - 1] ?? " ", after = text[at + word.length] ?? " ";
-  return !/[\p{L}\p{N}]/u.test(before) && !/[\p{L}\p{N}]/u.test(after);
-}
-
-/**
- * Hue của những màu mà BỘ KIT sẽ mang trên mình.
- *
- * `styleAvoid` cố tình KHÔNG được đọc: đó là danh sách màu người dùng **không muốn
- * thấy**, nên nó không đe doạ key — đọc nó vào đây là đẩy key ra xa đúng thứ chắc chắn
- * vắng mặt.
- */
-function paletteHues(
-  s: Pick<KitsetContractInput, "stylePrompt" | "primaryColor" | "secondaryColor">,
-): number[] {
-  const out: number[] = [];
-  for (const hex of [s.primaryColor, s.secondaryColor]) {
-    const h = hueOfHex(hex ?? "");
-    if (h !== null) out.push(h);
-  }
-  const text = (s.stylePrompt ?? "").toLowerCase();
-  if (text) for (const [word, hue] of COLOR_WORD_HUE) if (mentions(text, word)) out.push(hue);
-  return out;
-}
-
-/**
- * Màu nền tách sẽ được khai trong contract.
- *
- * LUẬT: **lựa chọn của người dùng thắng, trừ khi nó đá chính bảng màu của bộ kit.**
- *  · palette không có màu nào đủ bão hoà (style mặc định, màu trung tính) ⇒ giữ nguyên
- *    lựa chọn — không có gì để tránh thì không có lý do đổi;
- *  · lựa chọn đó cách mọi màu palette ≥ 60° ⇒ giữ nguyên;
- *  · ngược lại ⇒ đổi sang ứng viên XA palette nhất (hoà thì theo thứ tự
- *    magenta → green → cyan → blue).
- * Ví dụ đo được: style "neon magenta" ⇒ `green`; style xanh lá ⇒ `magenta` (magenta
- * vốn đã cách 180°, nên chẳng phải đổi gì).
- */
-export function pickChromaKey(
-  s: Pick<KitsetContractInput, "chroma" | "stylePrompt" | "primaryColor" | "secondaryColor">,
-): ChromaKeyId {
-  return explainChromaKey(s).key;
-}
-
-/**
- * CÙNG MỘT LUẬT với `pickChromaKey`, nhưng trả cả **lý do**.
- *
- * Vì sao cần: ô swatch ở bước Phong cách trước đây vẽ theo `s.chroma` (lựa chọn TAY),
- * nên từ khi có §5b nó nói dối — người dùng chọn Magenta, engine chạy Green, UI vẫn
- * vẽ hồng. Swatch cần biết ba thứ mà `ChromaKeyId` trần không chở nổi: key HIỆU LỰC,
- * key người dùng đã chọn, và "còn ứng viên nào an toàn không".
- *
- * `pickChromaKey` uỷ thác xuống đây thay vì chép lại vòng lặp: một bản luật, không có
- * cửa cho UI và contract nói hai điều khác nhau. Kết quả `key` bất biến so với bản cũ.
- */
-export interface ChromaKeyPick {
-  /** Key mà contract/engine SẼ dùng — kết quả cuối của §5b. */
-  key: ChromaKeyId;
-  /** Key người dùng chọn tay (đã chuẩn hoá về 2 giá trị chọn được ở UI). */
-  chosen: ChromaKeyId;
-  /** Khoảng hue nhỏ nhất giữa `key` và palette. `null` ⇒ palette không có màu nào đủ
-   *  bão hoà để tính, tức là chẳng có gì để tránh. */
-  gap: number | null;
-  /** `true` ⇒ **mọi** ứng viên đều dưới ngưỡng an toàn: đổi key nữa cũng không thoát,
-   *  phải sửa bảng màu. Đây là ca duy nhất UI cần kêu lên. */
-  allClose: boolean;
-}
-
-export function explainChromaKey(
-  s: Pick<KitsetContractInput, "chroma" | "stylePrompt" | "primaryColor" | "secondaryColor">,
-): ChromaKeyPick {
-  const chosen: ChromaKeyId = s.chroma === "green" ? "green" : "magenta";
-  const hues = paletteHues(s);
-  if (hues.length === 0) return { key: chosen, chosen, gap: null, allClose: false };
-  const gapOf = (key: ChromaKeyId): number => {
-    const hue = CHROMA_KEY_HUE.find(([id]) => id === key)![1];
-    return Math.min(...hues.map((h) => hueGap(hue, h)));
-  };
-  const chosenGap = gapOf(chosen);
-  if (chosenGap >= SAFE_HUE_GAP) return { key: chosen, chosen, gap: chosenGap, allClose: false };
-  // ⚠️ `best` phải khai kiểu RỘNG: `chosen` đã bị TS thu hẹp về "magenta"|"green"
-  // (đó là hai giá trị người dùng chọn được), nên `let best = chosen` sẽ không nhận
-  // nổi `cyan`/`blue` — đúng hai ứng viên mới mà cả việc này sinh ra để dùng.
-  let best: ChromaKeyId = chosen, bestGap = chosenGap;
-  for (const [id] of CHROMA_KEY_HUE) {
-    const gap = gapOf(id);
-    if (gap > bestGap) { best = id; bestGap = gap; }
-  }
-  return { key: best, chosen, gap: bestGap, allClose: bestGap < SAFE_HUE_GAP };
-}
-
-/**
- * Hex thuần của từng key — cho ô swatch VẼ RA đúng màu engine sắp dùng.
- *
- * DẪN XUẤT từ `CHROMA_KEY_RGB` chứ không gõ tay lần nữa: `CHROMA_KEY_RGB` đã là bản
- * sao (duy nhất) của `gen.sh:CHROMA_KEYS` / `slice.py:KEY_COLORS`, nên swatch không
- * thể lệch khỏi màu thật kể cả khi ai đó thêm key thứ năm.
- * `CHROMA_HEX` ở `lib/types/contract.ts` CHỈ có 2 khoá (magenta/green) — nó là bảng
- * của *lựa chọn tay*, không phủ nổi 4 key của §5b.
- */
-export const CHROMA_KEY_HEX: Record<ChromaKeyId, string> = Object.fromEntries(
-  (Object.keys(CHROMA_KEY_PRESETS) as ChromaKeyId[]).map((id) => [
-    id,
-    `#${CHROMA_KEY_RGB[id].map((c) => c.toString(16).padStart(2, "0")).join("").toUpperCase()}`,
-  ]),
-) as Record<ChromaKeyId, string>;
 
 /** Mô tả phong cách gửi cho `gen.sh` = ô mô tả + 7 trục ngữ nghĩa + điều không muốn. */
 export function buildVariantStyle(s: Pick<KitsetContractInput, "stylePrompt" | "styleAxes" | "styleAvoid">): string {
@@ -896,9 +683,8 @@ export function buildKitsetContract(s: KitsetContractInput, opts: BuildKitsetOpt
         vi: s.kitName.trim() || "Phong cách chính",
         style: buildVariantStyle(s),
         styleMode: s.styleMode,
-        // Không phải `CHROMA_PRESETS[s.chroma]` nữa — xem §5b: lựa chọn thủ công vẫn
-        // thắng, chỉ bị đổi khi chính nó đá bảng màu của bộ kit.
-        bg: CHROMA_KEY_PRESETS[pickChromaKey(s)],
+        // Chỉ còn ý nghĩa khi cắt lại sheet raw đời cũ — xem §5b.
+        bg: CHROMA_PRESETS[s.chroma],
         brand: {
           // `gen.sh:87-94`: mode "colors" ⇒ chèn dòng palette; mode "image" ⇒ đính ảnh brand.
           // Có ảnh thì ảnh thắng, nhưng vẫn giữ hex để không mất dữ liệu người dùng đã chọn.

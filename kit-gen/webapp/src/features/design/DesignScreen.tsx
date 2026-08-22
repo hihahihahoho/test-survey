@@ -411,7 +411,6 @@ export function DesignScreen({ projectId }: ScreenProps) {
               readOnly={api.readOnly}
               readOnlyReason={api.readOnlyReason}
               deps={doctor.data?.python?.deps ?? null}
-              onSetChroma={actions.setChroma}
               onPatchSlice={actions.patchSlice}
               onCheckMachine={() => void doctor.refetch()}
             />

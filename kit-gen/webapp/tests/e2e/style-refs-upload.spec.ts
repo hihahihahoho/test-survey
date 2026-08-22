@@ -6,7 +6,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
  * Chủ sản phẩm gửi ảnh chụp màn và chê thẳng. Ba lỗi đọc được từ chính ảnh đó:
  *  ① vùng thả là một băng nét đứt cao lêu nghêu, nút "Chọn ảnh" mỗi khối một chỗ;
  *  ② ảnh đã tải nằm LƠ LỬNG bên ngoài vùng thả, lệch trái, dấu ✕ đè góc ảnh;
- *  ③ card "Màu nền tách" chiếm nửa hàng mà bên trong chỉ có một dòng chữ.
+ *  ③ card "Màu nền tách" chiếm nửa hàng mà bên trong chỉ có một dòng chữ (ô đó nay đã bỏ hẳn).
  *
  * File riêng chứ không nối vào `shell-smoke.spec.ts`: các ca dưới đây cần một dự án
  * ĐÃ CÓ SẴN ảnh ref trên đĩa (để lưới có ảnh mà xếp), còn fixture của smoke là dự án
@@ -141,15 +141,23 @@ test("dấu ✕ chỉ hiện khi trỏ vào đúng ảnh đó", async ({ page })
   await expect.poll(async () => remove.evaluate((n) => getComputedStyle(n).opacity)).toBe("1");
 });
 
-test("@visual «Màu nền tách» là một hàng nhỏ, không phải card chiếm nửa hàng", async ({ page }, testInfo) => {
+/**
+ * Ca này TRƯỚC ĐÂY đo kích thước hàng "Màu nền tách:" — một hàng chữ nhỏ thay cho
+ * cái card nửa hàng của bản cũ (③ ở đầu file). Nay cả hàng đó cũng đã bỏ: nền sheet
+ * là alpha thật, `gen.sh` không nhắc màu key nào, nên hỏi người dùng chọn màu nền
+ * tách là hứa suông.
+ *
+ * Đổi thành phép PHỦ ĐỊNH thay vì xoá — nó canh đúng cái bẫy cũ: ô này từng mọc lại
+ * hai lần dưới hai hình (card, rồi hàng). Và đo luôn rằng bước Phong cách vẫn còn
+ * nguyên hai khối tải ảnh, để "bỏ ô nền tách" không lỡ tay cắt mất hàng xóm.
+ */
+test("@visual bước Phong cách KHÔNG còn ô «Màu nền tách»", async ({ page }, testInfo) => {
   await openStyleStep(page);
 
-  const row = page.getByText(/^Màu nền tách:/);
-  await expect(row).toBeVisible();
-  const box = (await row.boundingBox())!;
-  const page_ = (await page.locator("main").first().boundingBox())!;
-  expect(box.height).toBeLessThanOrEqual(48);          // một hàng chữ, không phải một khối
-  expect(box.width).toBeLessThanOrEqual(page_.width * 0.6);
+  await expect(page.getByText(/Màu nền tách/)).toHaveCount(0);
+  await expect(page.getByText(/Magenta|Xanh lá/)).toHaveCount(0);
+  await expect(page.getByText("Ảnh phong cách", { exact: true })).toBeVisible();
+  await expect(page.getByText("Ảnh thương hiệu", { exact: true })).toBeVisible();
 
   await page.screenshot({ path: testInfo.outputPath("style-step-uploads.png"), fullPage: true, animations: "disabled" });
 });

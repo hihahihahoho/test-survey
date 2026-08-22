@@ -17,15 +17,10 @@ import { allPoseIds } from "../poses";
 import { isPropElement } from "../user-library";
 import {
   CHARACTER_ID,
-  CHROMA_KEY_HEX,
-  CHROMA_KEY_PRESETS,
   MAIN_VARIANT_ID,
-  chromaKeyOf,
   buildKitsetContract,
   chunkKeepingGroups,
-  explainChromaKey,
   mergeElementSkel,
-  pickChromaKey,
   refPath,
   resolveKitset,
 } from "../kitset-to-contract";
@@ -378,7 +373,7 @@ describe("§W3-1 — món không vẽ được", () => {
  * ⚠️ ĐỔI LUẬT 17/08: `"none"` giờ gỡ được CẢ `"glass"`. Trước đó `glass` bị coi là
  * "thuật toán tách của slicer, popup không hỏi" nên phải giữ lại. Từ khi ô kính có
  * câu prompt riêng (`gen.sh:382`) thì `glass` mang nghĩa ở CẢ hai đầu — prompt và
- * slicer — và popup có nút cho nó, nên người dùng bấm "Chroma thường" phải tắt được
+ * slicer — và popup có nút cho nó, nên người dùng bấm "Nền thường" phải tắt được
  * cả hai đầu. `"vitmatte"` vẫn thuần thuật toán, vẫn không bị `"none"` chạm tới.
  */
 describe("§P1-4 — nền của ô đi trọn đường từ lớp đè tới contract", () => {
@@ -447,131 +442,33 @@ describe("§P1-4 — nền của ô đi trọn đường từ lớp đè tới c
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
-   5c. Màu nền tách chọn XA palette (P1-5)
+   5c. `bg` — DI SẢN, ĐI THẲNG TỪ LỰA CHỌN CỦA NGƯỜI DÙNG
    ══════════════════════════════════════════════════════════════════════════ */
 
 /**
- * Hợp đồng với engine chỉ là CHUỖI `variant.bg` — nên mọi ca dưới đây đo bằng chuỗi
- * thật sẽ nằm trong contract, không đo qua một enum trung gian nào.
+ * Ở đây từng có 12 ca đo cỗ máy tránh-va-chạm của §5b (`pickChromaKey`,
+ * `explainChromaKey`, `chromaKeyOf`, `CHROMA_KEY_HEX`). Cỗ máy đó chỉ tồn tại vì
+ * `gen.sh` viết TÊN MÀU KEY vào prompt; prompt ấy không còn (nền nay là alpha
+ * thật), nên không còn gì để tránh, và code lẫn test đều đã bị xoá.
+ *
+ * Cái CÒN phải khoá: `bg` vẫn đi thẳng từ lựa chọn của người dùng vào contract,
+ * không bị hàm nào bẻ lái nữa — `slice.py` cần đúng chuỗi đó để cắt lại sheet raw
+ * đời cũ, nên một phép "tự đổi cho lành" ở đây sẽ làm hỏng đúng những project mà
+ * `bg` còn có nghĩa.
  */
-describe("§P1-5 — key chroma tránh bảng màu của bộ kit", () => {
-  it("style mặc định (màu trung tính, chưa mô tả gì) ⇒ GIỮ magenta", () => {
-    expect(pickChromaKey(defaultState())).toBe("magenta");
+describe("§P1-5 — `bg` không còn bị tự đổi", () => {
+  it("mặc định ⇒ magenta, đúng chuỗi mà slice.py dò", () => {
     expect(build().variants?.[0]?.bg).toBe(CHROMA_PRESETS.magenta);
   });
 
-  it("style neon MAGENTA ⇒ đổi sang green, và chuỗi bg đi vào contract", () => {
-    const s = { ...defaultState(), stylePrompt: "neon arcade, magenta rực, viền sáng" };
-    expect(pickChromaKey(s)).toBe("green");
-    expect(buildKitsetContract(s, { lib: LIB }).variants?.[0]?.bg).toBe(CHROMA_KEY_PRESETS.green);
-  });
-
-  it("style XANH LÁ ⇒ magenta vốn đã cách 180°, không đổi gì cả", () => {
-    expect(pickChromaKey({ ...defaultState(), stylePrompt: "rừng nhiệt đới, xanh lá và nâu gỗ" })).toBe("magenta");
-  });
-
-  it("màu thương hiệu (hex) cũng tính, không chỉ chữ mô tả", () => {
-    // #FF2FD0 ≈ hue 310 — sát magenta ⇒ phải nhường chỗ.
-    expect(pickChromaKey({ ...defaultState(), primaryColor: "#FF2FD0" })).toBe("green");
-    // #00C2FF ≈ hue 194 — sát cyan, nhưng người dùng đang để magenta (cách 106°) ⇒ giữ.
-    expect(pickChromaKey({ ...defaultState(), primaryColor: "#00C2FF" })).toBe("magenta");
-  });
-
-  it("LỰA CHỌN THỦ CÔNG THẮNG khi nó không đá palette", () => {
-    const s = { ...defaultState(), chroma: "green" as const, stylePrompt: "đỏ cam rực rỡ" };
-    expect(pickChromaKey(s)).toBe("green");
+  it("chọn green ⇒ contract ghi GREEN, kể cả khi bảng màu cũng xanh lá", () => {
+    const s = { ...defaultState(), chroma: "green" as const, primaryColor: "#12B733" };
     expect(buildKitsetContract(s, { lib: LIB }).variants?.[0]?.bg).toBe(CHROMA_PRESETS.green);
   });
 
-  it("…nhưng lựa chọn thủ công ĐÁ palette thì vẫn bị đổi (đó là điểm của việc này)", () => {
-    const s = { ...defaultState(), chroma: "green" as const, stylePrompt: "xanh lá non, mint, cỏ tươi" };
-    expect(pickChromaKey(s)).toBe("magenta");
-  });
-
-  it("MÀU XÁM/ĐEN/TRẮNG không được đẩy key đi đâu cả", () => {
-    const s = { ...defaultState(), primaryColor: "#000000", secondaryColor: "#FFFFFF", stylePrompt: "tối giản, đơn sắc" };
-    expect(pickChromaKey(s)).toBe("magenta");
-  });
-
-  it("`styleAvoid` KHÔNG được đọc — màu bị cấm thì chắc chắn vắng mặt", () => {
-    const s: WorkflowState = { ...defaultState(), styleAvoid: "magenta, hồng" };
-    expect(pickChromaKey(s)).toBe("magenta");
-  });
-
-  it("chữ chỉ khớp NGUYÊN TỪ — 'camera' không phải màu cam", () => {
-    expect(pickChromaKey({ ...defaultState(), stylePrompt: "ống kính camera, chất liệu kim loại" })).toBe("magenta");
-  });
-
-  /**
-   * `chromaKeyOf` là bản sao luật `gen.sh:key_of()`. Nó quyết định TÊN MÀU mà panel
-   * prompt nói ra, nên lệch một ca là preview nói khác máy vẽ.
-   */
-  it("đọc ngược tên key từ chuỗi `bg` — tên trước, hex sau, cuối cùng magenta", () => {
-    expect(chromaKeyOf(CHROMA_KEY_PRESETS.cyan)).toBe("cyan");
-    expect(chromaKeyOf(CHROMA_KEY_PRESETS.blue)).toBe("blue");
-    expect(chromaKeyOf("nền GREEN đậm")).toBe("green");
-    // hex lạ nhận theo TRỤC (kênh cao/thấp), đúng như `_axis()` của gen.sh
-    expect(chromaKeyOf("#EE00EE")).toBe("magenta");
-    expect(chromaKeyOf("#11EE11")).toBe("green");
-    // không tên, không hex ⇒ magenta, đúng hành vi cũ
-    expect(chromaKeyOf("")).toBe("magenta");
-    expect(chromaKeyOf(null)).toBe("magenta");
-    expect(chromaKeyOf("một màu gì đó rất lạ")).toBe("magenta");
-  });
-
-  /**
-   * BACKLOG #18 — `explainChromaKey` là bản có LÝ DO của cùng một luật, và `pickChromaKey`
-   * uỷ thác xuống nó. Nếu ai đó tách đôi hai đường (chép luật sang UI) thì ca đầu đỏ —
-   * đó là cả lý do hàm `explain` tồn tại thay vì để `StyleStep` tự tính lại.
-   */
-  it("`pickChromaKey` và `explainChromaKey` KHÔNG BAO GIỜ lệch nhau", () => {
-    const samples: Array<Partial<WorkflowState>> = [
-      {},
-      { chroma: "green" },
-      { stylePrompt: "neon magenta cyberpunk" },
-      { chroma: "green", stylePrompt: "xanh lá non, mint, cỏ tươi" },
-      { primaryColor: "#FF2FD0" },
-      { primaryColor: "#00C2FF" },
-      { primaryColor: "#000000", secondaryColor: "#FFFFFF" },
-      { primaryColor: "#FF00FF", secondaryColor: "#00FF00", stylePrompt: "cyan and blue neon" },
-    ];
-    for (const patch of samples) {
-      const s = { ...defaultState(), ...patch };
-      expect(explainChromaKey(s).key).toBe(pickChromaKey(s));
-    }
-  });
-
-  it("`explainChromaKey` nói được BA điều mà một `ChromaKeyId` trần không chở nổi", () => {
-    // ① palette trung tính ⇒ không có gì để tránh: `gap` là null, không phải 0.
-    const neutral = explainChromaKey(defaultState());
-    expect(neutral).toMatchObject({ key: "magenta", chosen: "magenta", gap: null, allClose: false });
-
-    // ② key bị đổi ⇒ `chosen` vẫn giữ lựa chọn tay để UI nói được cả hai đầu.
-    const swapped = explainChromaKey({ ...defaultState(), stylePrompt: "neon magenta cyberpunk" });
-    expect(swapped.key).toBe("green");
-    expect(swapped.chosen).toBe("magenta");
-    expect(swapped.allClose).toBe(false);
-
-    // ③ palette phủ kín cả bốn phía ⇒ không còn ứng viên an toàn.
-    const cornered = explainChromaKey({
-      ...defaultState(), primaryColor: "#FF00FF", secondaryColor: "#00FF00", stylePrompt: "cyan and blue neon",
-    });
-    expect(cornered.allClose).toBe(true);
-    expect(cornered.gap).toBeLessThan(60);
-  });
-
-  /** Swatch tô bằng bảng này, nên nó phải khớp TỪNG KEY với chuỗi gửi cho engine. */
-  it("`CHROMA_KEY_HEX` dẫn xuất đúng hex nằm trong chuỗi preset", () => {
-    for (const id of Object.keys(CHROMA_KEY_PRESETS) as Array<keyof typeof CHROMA_KEY_PRESETS>) {
-      expect(CHROMA_KEY_PRESETS[id].toUpperCase()).toContain(CHROMA_KEY_HEX[id]);
-    }
-  });
-
-  it("mọi ứng viên đều là chuỗi mà `is_key_color()` nhận ra (bão hoà, có mã hex)", () => {
-    for (const value of Object.values(CHROMA_KEY_PRESETS)) expect(value).toMatch(/^pure vivid [a-z]+ #[0-9A-F]{6}$/);
-    // Hai key cũ phải TRÙNG TỪNG KÝ TỰ với preset cũ — dự án đã lưu đọc ngược bằng chuỗi.
-    expect(CHROMA_KEY_PRESETS.magenta).toBe(CHROMA_PRESETS.magenta);
-    expect(CHROMA_KEY_PRESETS.green).toBe(CHROMA_PRESETS.green);
+  it("style neon magenta KHÔNG còn bị bẻ sang green — luật tránh palette đã chết", () => {
+    const s = { ...defaultState(), stylePrompt: "neon magenta cyberpunk" };
+    expect(buildKitsetContract(s, { lib: LIB }).variants?.[0]?.bg).toBe(CHROMA_PRESETS.magenta);
   });
 });
 

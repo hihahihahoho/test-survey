@@ -64,8 +64,8 @@ describe("① control «Nền tách» nằm trong popup Chi tiết, không trầ
   it("popup có đúng hai lựa chọn, và ô hiệu ứng mở ra đã ở «nền đen» theo thư viện", () => {
     const { container } = mount();
     const dialog = openDetail(container, "Đạo cụ", GLOW_LABEL);
-    const chroma = within(dialog).getByRole("button", { name: "Chroma thường" });
-    const black = within(dialog).getByRole("button", { name: "Đen cho hiệu ứng phát sáng" });
+    const chroma = within(dialog).getByRole("button", { name: "Nền thường" });
+    const black = within(dialog).getByRole("button", { name: "Hiệu ứng phát sáng" });
     // Nghĩa nằm ở `aria-pressed`, không ở màu (§5.8-A3).
     expect(black.getAttribute("aria-pressed")).toBe("true");
     expect(chroma.getAttribute("aria-pressed")).toBe("false");
@@ -81,9 +81,9 @@ describe("① control «Nền tách» nằm trong popup Chi tiết, không trầ
   it("bấm hai nút ⇒ lớp đè của dự án đổi theo, và bấm lại về đúng chỗ cũ", () => {
     const { container } = mount();
     const dialog = openDetail(container, "Đạo cụ", GLOW_LABEL);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Chroma thường" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Nền thường" }));
     expect(skelOf(GLOW_FILE)?.matte).toBe("none");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Đen cho hiệu ứng phát sáng" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hiệu ứng phát sáng" }));
     expect(skelOf(GLOW_FILE)?.matte).toBe("glow");
   });
 
@@ -93,7 +93,7 @@ describe("① control «Nền tách» nằm trong popup Chi tiết, không trầ
   it("ô KÍNH của thư viện mở ra đã ở «Trong suốt», và ba nút loại trừ nhau", () => {
     const { container } = mount();
     const dialog = openDetail(container, "Đạo cụ", GLASS_LABEL);
-    const pressed = ["Chroma thường", "Đen cho hiệu ứng phát sáng", "Trong suốt nhìn xuyên qua"]
+    const pressed = ["Nền thường", "Hiệu ứng phát sáng", "Trong suốt nhìn xuyên qua"]
       .map((name) => within(dialog).getByRole("button", { name }).getAttribute("aria-pressed"));
     expect(pressed).toEqual(["false", "false", "true"]);
   });
@@ -104,24 +104,24 @@ describe("① control «Nền tách» nằm trong popup Chi tiết, không trầ
     const dialog = openDetail(container, "UI nhỏ", plain.vi);
     fireEvent.click(within(dialog).getByRole("button", { name: "Trong suốt nhìn xuyên qua" }));
     expect(skelOf(plain.file)?.matte).toBe("glass");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Chroma thường" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Nền thường" }));
     expect(skelOf(plain.file)).toBeUndefined();
   });
 
-  it("ô vốn là KÍNH: chọn «Chroma thường» ghi `none` TƯỜNG MINH để đè được thư viện", () => {
+  it("ô vốn là KÍNH: chọn «Nền thường» ghi `none` TƯỜNG MINH để đè được thư viện", () => {
     const { container } = mount();
     const dialog = openDetail(container, "Đạo cụ", GLASS_LABEL);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Chroma thường" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Nền thường" }));
     expect(skelOf(GLASS_FILE)?.matte).toBe("none");
   });
 
-  it("ô vốn là chroma: chọn «Chroma thường» XOÁ lớp đè thay vì ghi một giá trị thừa", () => {
+  it("ô vốn là nền thường: chọn «Nền thường» XOÁ lớp đè thay vì ghi một giá trị thừa", () => {
     const plain = LIB.find((e) => e.skel.matte === undefined && !isPropOrBg(e.file))!;
     const { container } = mount();
     const dialog = openDetail(container, "UI nhỏ", plain.vi);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Đen cho hiệu ứng phát sáng" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hiệu ứng phát sáng" }));
     expect(skelOf(plain.file)?.matte).toBe("glow");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Chroma thường" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Nền thường" }));
     expect(skelOf(plain.file)).toBeUndefined(); // không còn lớp đè nào cả
   });
 });
@@ -188,7 +188,7 @@ describe("② + ③ contract nhận field, và prompt preview nói đúng sự t
     expect(prompt.text).not.toContain("LIGHT EFFECT");
   });
 
-  it("TẮT trong suốt ⇒ câu đó biến mất, ô về chroma thường", () => {
+  it("TẮT trong suốt ⇒ câu đó biến mất, ô về nền thường", () => {
     const prompt = itemPromptFor(contractWith(GLASS_FILE, "none"), GLASS_FILE)!;
     expect(prompt.line).not.toContain("SEE-THROUGH ELEMENT");
   });

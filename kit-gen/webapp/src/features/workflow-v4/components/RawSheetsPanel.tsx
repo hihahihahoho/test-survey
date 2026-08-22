@@ -22,7 +22,7 @@ import {
  * Ba bản sao của cùng khối này là ba cơ hội để trạng thái sheet ("đang chờ / đang tạo /
  * đã dừng") lệch nhau giữa các trang, nên nó là MỘT component nhận `category`.
  *
- * Ảnh ở đây còn nguyên nền chroma: đó là ảnh TRUNG GIAN của pipeline, dùng để đối
+ * Ảnh ở đây là cả tấm sheet chưa cắt: ảnh TRUNG GIAN của pipeline, dùng để đối
  * chiếu khi ô cắt ra trông sai — không phải sản phẩm. Trạng thái từng sheet đọc theo
  * VÒNG ĐỜI THẬT của run (`resultStateOf`), không đọc theo "có file hay không": vừa bấm
  * Tạo ảnh mà mọi thẻ đã đỏ "Chưa tạo được ảnh" là lời nói dối, không phải trạng thái.
@@ -97,7 +97,7 @@ export function RawSheetsPanel({ projectId, contract, jobStates, category = "all
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-3 bg-surface p-3">
         <div>
           <p className="text-label text-fg-strong">Sheet gốc theo phiên bản</p>
-          <p className="text-caption text-fg-muted">Ảnh còn nguyên nền chroma, dùng để đối chiếu. Ảnh cũ vẫn được giữ.</p>
+          <p className="text-caption text-fg-muted">Ảnh nguyên tấm chưa cắt, dùng để đối chiếu. Ảnh cũ vẫn được giữ.</p>
           {/* ══ NÓI TRƯỚC NÚT NÀO TIÊU TIỀN ═════════════════════════════════════
               Hai trong ba người test mù dừng tay ở đây và ghi đúng một câu: "không
               phân biệt được nút nào tốn quota, nên tránh bấm cả nhóm". Trang này chỉ
@@ -200,7 +200,7 @@ function RawEmpty({ copy }: { copy: string }) {
   );
 }
 
-/** Một sheet THÔ của một lần tạo — ảnh còn nền chroma, trạng thái theo vòng đời run. */
+/** Một sheet THÔ của một lần tạo — cả tấm chưa cắt, trạng thái theo vòng đời run. */
 function SheetCard({ projectId, item, readOnly, onRegenerate }: {
   projectId: string;
   item: GeneratedResultItem;

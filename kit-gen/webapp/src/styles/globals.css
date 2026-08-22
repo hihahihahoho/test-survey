@@ -274,17 +274,9 @@
   .ref-upload-hint { @apply mt-2 text-caption text-fg-muted; }
   .style-axis-grid { @apply grid gap-6 rounded-4 border border-line-subtle bg-raised p-5 sm:grid-cols-2; }
   .style-fields { @apply mt-6 grid gap-4 border-t border-line-subtle pt-5 sm:grid-cols-2; }
-  /* W2A-3 · `.color-swatch` TRƯỚC ĐÂY hardcode `bg-danger` ⇒ ô "Màu nền tách"
-     LUÔN ĐỎ dù chroma thật là magenta. Nay không mang màu: màu do component
-     truyền vào `style` theo `s.chroma`, đúng thứ nó đang mô tả. */
-  /* P-SWEEP·7 — MỘT ngôn ngữ swatch cho cả app. Trước đây cùng một vật có hai hình:
-     đĩa TRÒN ĐẶC 32px ở đây, còn `AdvancedTab` (ChromaChoice) dùng VUÔNG bo nhỏ.
-     Vuông thắng vì cả trang là hình chữ nhật + hairline; một cái đĩa magenta 32px
-     nằm lẻ giữa đó là vật chói nhất màn 09. `mb-3` cũng bỏ: nó đẩy swatch lệch
-     baseline so với chữ đứng cạnh — nay swatch nằm INLINE cùng dòng với nhãn màu. */
-  .color-swatch { @apply inline-block size-5 shrink-0 rounded-1 border border-line-subtle; }
-  /* Hàng "swatch + tên màu" của khối `.ref-note` — swatch đi cùng chữ, không đứng riêng. */
-  .swatch-row { @apply mt-2 flex items-center gap-2; }
+  /* `.color-swatch` / `.swatch-row` ĐÃ XOÁ cùng ô "Màu nền tách" ở bước Phong
+     cách: nền sheet nay là alpha thật, không còn màu key nào để vẽ ra. Giữ lại
+     một class không ai dùng chỉ mời người sau vẽ lại đúng ô đã bỏ. */
   /* W2A-3 · Ô màu: `<Input type="color">` đi qua `input.tsx` (`w-full h-ctl-md`)
      nên biến thành THANH ĐỎ BÃO HOÀ rộng 525px + một thanh vàng bên cạnh — vật
      ồn nhất trong 29 ảnh. Đổi hình thái: chấm tròn 36px + mã hex mono. */

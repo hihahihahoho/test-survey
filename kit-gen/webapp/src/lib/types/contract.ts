@@ -72,11 +72,18 @@ export const DEFAULT_CHARACTER_POSES = [
 export const NEUTRAL_PRIMARY_COLOR = "#151516";
 export const NEUTRAL_SECONDARY_COLOR = "#9A9A9A";
 
-/** Màu nền tách (chroma key) — UI gọi là "Màu nền tách" (§1.3). */
+/**
+ * Màu nền tách (chroma key) — DI SẢN.
+ *
+ * Lượt gen MỚI không dùng tới: nền sheet nay là alpha thật và `gen.sh` không nhắc
+ * tên màu nào trong prompt. Nhưng `slice.py` vẫn cần đúng hai chuỗi này để cắt lại
+ * sheet raw ĐỜI CŨ (nền magenta/green) của project cũ, nên chúng ở lại — và
+ * `bg` vẫn có mặt trong contract với mặc định magenta.
+ *
+ * `CHROMA_HEX` (bản hex thuần) đã xoá cùng ô swatch "Màu nền tách": không còn ô nào
+ * vẽ màu key ra màn hình nữa.
+ */
 export const CHROMA_PRESETS = { magenta: "pure vivid magenta #FF00FF", green: "pure vivid green #00FF00" } as const;
-/** Cùng hai màu đó ở dạng hex thuần — cho ô swatch VẼ RA đúng màu đang chọn (§W2A-3).
- *  Trước đây `.color-swatch` hardcode `bg-danger` ⇒ ô "Màu nền tách" LUÔN ĐỎ. */
-export const CHROMA_HEX = { magenta: "#FF00FF", green: "#00FF00" } as const;
 
 /**
  * `skel` — khung xương. `w`/`h` ∈ (0,1] là **V-06**.

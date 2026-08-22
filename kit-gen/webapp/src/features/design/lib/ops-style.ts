@@ -209,12 +209,6 @@ export function toggleCharacterPose(c: Contract, variantId: string, characterId:
  * Màu nền tách cho MỌI phong cách. Đổi màu nền ⇒ ảnh cũ vẫn nền cũ — UI phải nói
  * điều đó ra, đây chỉ lo phần dữ liệu.
  */
-export function setAllChromaKey(c: Contract, key: "magenta" | "green"): Op {
-  const list = clone(contractVariants(c)).map((v) => ({ ...v, bg: CHROMA_PRESETS[key] }));
-  if (list.length === 0) return noop(c);
-  return { contract: writeVariants(c, list), label: `Đổi màu nền tách sang ${key}` };
-}
-
 export type SliceScope = "project" | "variant";
 
 /**

@@ -311,11 +311,6 @@ function VariantCard({
             </ul>
           )}
         </div>
-
-        <p className="flex items-start gap-2 text-caption text-fg-muted-raised">
-          <Info className="mt-px size-3 shrink-0" aria-hidden />
-          Màu nền tách của phong cách này: <code className="text-fg">{v.bg}</code>. Đổi ở tab «Nâng cao».
-        </p>
       </CardContent>
     </Card>
   );

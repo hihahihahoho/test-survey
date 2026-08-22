@@ -103,7 +103,6 @@ describe("tab Nâng cao — TRUNG THỰC về M4", () => {
           readOnly={false}
           readOnlyReason=""
           deps={null}
-          onSetChroma={noop}
           onPatchSlice={noop}
           onCheckMachine={noop}
           {...over}

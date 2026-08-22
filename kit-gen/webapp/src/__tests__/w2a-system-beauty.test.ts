@@ -140,19 +140,21 @@ describe("W2A-3 · không còn control thô của hệ điều hành", () => {
   });
 
   /**
-   * BACKLOG #18 — phép kiểm này TRƯỚC ĐÂY khoá cứng `CHROMA_HEX[s.chroma]`, tức là nó
-   * khoá đúng CÁI SAI: `s.chroma` là lựa chọn TAY, còn màu engine dùng là kết quả
-   * auto-pick §5b (`explainChromaKey`) và hai thứ đó khác nhau khi key đá bảng màu.
-   * Ý ĐỊNH của phép kiểm không đổi — *swatch vẽ màu THẬT chứ không phải một màu chết* —
-   * chỉ có định nghĩa "màu thật" là được sửa cho đúng.
+   * BACKLOG #18 từng khoá phép kiểm này vào `explainChromaKey` — swatch phải vẽ key
+   * HIỆU LỰC chứ không phải key chọn tay. Nay không còn key nào cả: nền sheet là
+   * alpha thật, `gen.sh` không nhắc tên màu, nên ô "Màu nền tách" ở bước Phong cách
+   * đã bị bỏ cùng cả cỗ máy §5b.
+   *
+   * Phép kiểm ĐỔI CHIỀU thay vì bị xoá: một ô swatch mọc lại ở đây nghĩa là ai đó
+   * vừa dựng lại lời hứa suông với người dùng — chọn màu nền tách mà chẳng đi tới
+   * đâu. Khoá bằng PHỦ ĐỊNH ở cả CSS lẫn component để không sót đường nào.
    */
-  it("`.color-swatch` thôi hardcode đỏ; màu lấy từ key HIỆU LỰC, không phải key chọn tay", () => {
-    const rule = GLOBALS.match(/\.color-swatch\s*\{([^}]*)\}/)![1];
-    expect(rule).not.toContain("bg-danger");
+  it("ô «Màu nền tách» đã bỏ hẳn — không class chết, không swatch mọc lại", () => {
+    expect(GLOBALS).not.toMatch(/\.color-swatch\s*\{/);
+    expect(GLOBALS).not.toMatch(/\.swatch-row\s*\{/);
     const step = strip(read("src/features/workflow-v4/steps/StyleStep.tsx"));
-    expect(step).toContain("explainChromaKey(s)");
-    expect(step).toContain("CHROMA_KEY_HEX[chroma.key]");
-    expect(step).not.toContain("CHROMA_HEX[s.chroma]");
+    expect(step).not.toContain("Màu nền tách");
+    expect(step).not.toContain("chroma");
   });
 
   it("ô màu đổi hình thái: `.color-field` chấm tròn + hex mono", () => {

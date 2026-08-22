@@ -52,7 +52,6 @@ export interface DesignActions {
   togglePose: (variantId: string, characterId: string, pose: string) => void;
   deleteCharacter: (variantId: string, characterId: string) => void;
   /* nâng cao */
-  setChroma: (key: "magenta" | "green") => void;
   patchSlice: (patch: { threshold?: number; grow_threshold?: number; bleed?: number; quality?: "fast" | "high" }) => void;
   /* thanh validate */
   quickFix: (f: Finding) => void;
@@ -208,7 +207,6 @@ export function useDesignActions(
         });
       }),
 
-      setChroma: guard((key) => api.apply(style.setAllChromaKey(draft(), key))),
       patchSlice: guard((patch) => api.apply(style.patchSliceParams(draft(), patch))),
 
       quickFix: guard((f) => {
