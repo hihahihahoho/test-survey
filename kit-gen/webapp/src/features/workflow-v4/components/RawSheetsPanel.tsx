@@ -1,8 +1,13 @@
 import * as React from "react";
 import { AlertCircle, Check, Clock, Image as ImageIcon, Loader2, RefreshCw, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { KitImage } from "@/features/kit/components/KitImage";
+import { cn } from "@/lib/utils";
+import { FOCUS } from "@/components/layout/flora";
 import { diagnosisText } from "@/features/runs/lib/format";
 import { GenerateDialog } from "@/features/runs";
 import type { Contract, JobStatusValue } from "@/lib/types";
@@ -210,13 +215,25 @@ function SheetCard({ projectId, item, readOnly, onRegenerate }: {
   const ui = STATE_UI[item.state];
   const Icon = ui.icon;
   const label = sheetLabel(item.sheet);
+  const [zoom, setZoom] = React.useState(false);
   return (
     <article className="overflow-hidden rounded-3 border border-line-subtle bg-raised">
       {item.path ? (
-        /* `width={512}`: đây là NGUYÊN một sheet thô (1536×1024) trải hết bề ngang thẻ.
-           Bản 256px — mặc định đúng cho ô lưới nhỏ — ở đây là ảnh phóng to 2–3 lần trên
-           màn thường và 4–6 lần trên màn retina, tức đúng cái "bé tí / mờ" đã báo. */
-        <KitImage projectId={projectId} path={item.path} alt={label} backdrop="checker" eager width={512} className="aspect-[16/10] rounded-none border-0" />
+        /* HAI CỠ, VÀ PHẢI CÓ CẢ HAI.
+           `width={512}` là bản cho THẺ: một sheet thô 1536×1024 trải hết bề ngang thẻ,
+           bản 256px mặc định ở đây bị phóng 2–3 lần (4–6 lần trên retina) nên mờ.
+           Nhưng 512 vẫn là bản THU NHỎ GẤP BA của ảnh thật, và trước bản này tab "Ảnh
+           gốc" KHÔNG có một cửa nào ra ảnh thật cả — thẻ không bấm được, không popup.
+           Tên tab là "Ảnh gốc" mà thứ xem được lại không phải ảnh gốc.
+           Lưới ô đã cắt có `AssetZoomDialog` từ lâu; đây là cùng đường đó cho sheet thô. */
+        <button
+          type="button"
+          onClick={() => setZoom(true)}
+          aria-label={`Xem ảnh gốc ${label}`}
+          className={cn("block w-full", FOCUS)}
+        >
+          <KitImage projectId={projectId} path={item.path} alt={label} backdrop="checker" eager width={512} className="aspect-[16/10] rounded-none border-0" />
+        </button>
       ) : (
         <div className="flex aspect-[16/10] items-center justify-center bg-canvas text-center">
           <span>
@@ -224,6 +241,9 @@ function SheetCard({ projectId, item, readOnly, onRegenerate }: {
             <span className="mt-2 block text-caption text-fg-muted">{stateCopy(item)}</span>
           </span>
         </div>
+      )}
+      {item.path && (
+        <SheetZoomDialog open={zoom} onOpenChange={setZoom} projectId={projectId} path={item.path} label={label} />
       )}
       <div className="flex items-center gap-2 p-3">
         <Icon className={`size-4 shrink-0 ${ui.tone}${item.state === "running" ? " animate-spin" : ""}`} aria-hidden />
@@ -241,6 +261,54 @@ function SheetCard({ projectId, item, readOnly, onRegenerate }: {
         </Button>
       </div>
     </article>
+  );
+}
+
+/**
+ * XEM SHEET THÔ Ở ĐỘ NÉT THẬT.
+ *
+ * `full` ⇒ `loadImage(…, null)` ⇒ URL KHÔNG kèm `?w=` ⇒ agent phục vụ đúng file PNG
+ * trên đĩa (`agent/routes/files.mjs` chỉ resize khi có `w`). Đo trên agent đang chạy:
+ * không `?w` → 1536×1024 · 1504 KB;  `?w=512` → 512×341 · 136 KB.
+ *
+ * Đây là chỗ để SOI: cả tấm 1536px là nơi nhìn ra model có vẽ đúng lưới ô không, có
+ * chừa đúng khe không, nền có thật sự trong suốt không. Xem qua bản 512 thì mọi lỗi
+ * cỡ vài pixel đều bị phép thu nhỏ xoá mất.
+ */
+function SheetZoomDialog({ open, onOpenChange, projectId, path, label }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  projectId: string;
+  path: string;
+  label: string;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent size="xl" className="!max-h-[min(90dvh,720px)]">
+        <DialogHeader>
+          <DialogTitle className="text-subtitle">{label}</DialogTitle>
+          <DialogDescription>Sheet thô ở độ nét gốc — chưa cắt, chưa xử lý gì.</DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <div
+            data-testid="sheet-preview-frame"
+            className="flex h-[min(70dvh,calc(100dvh-10rem))] w-full items-center justify-center rounded-2 border border-line-subtle bg-surface p-3"
+          >
+            {open && (
+              <KitImage
+                projectId={projectId}
+                path={path}
+                alt={`${label} — ảnh gốc`}
+                backdrop="checker"
+                full
+                eager
+                className="h-full w-full border-0"
+              />
+            )}
+          </div>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
   );
 }
 
