@@ -197,10 +197,14 @@ test("§2 — UI Elements có bốn tab, mở ở «Ảnh thật»", async ({ pa
   await expect(modes.getByRole("tab", { name: "Bộ khung" })).toBeVisible();
   await expect(modes.getByRole("tab", { name: "Cài đặt" })).toBeVisible();
 
-  /* ① Ảnh thật = THÀNH PHẨM đã cắt. Dự án fixture chưa chạy bước cắt nào, nên thứ
-     đúng phải hiện ra là câu "chưa có ô nào" — KHÔNG phải bộ khung xám. Đây chính là
-     chỗ bản cũ nói dối: nhãn "Ảnh thật" mà vẽ bộ khung. */
-  await expect(page.getByText("Chưa có ô nào được cắt")).toBeVisible();
+  /* ① Ảnh thật = THÀNH PHẨM đã cắt, KHÔNG phải bộ khung xám — đây đúng chỗ bản cũ
+     nói dối: nhãn "Ảnh thật" mà vẽ bộ khung.
+     Khẳng định bằng phép PHỦ ĐỊNH, không bám vào câu "Chưa có ô nào được cắt": fixture
+     có kit hay chưa là chuyện của fixture (bản đầu ca này xanh ở máy, ĐỎ trên CI đúng
+     vì thế), còn thứ phải đúng ở MỌI trạng thái là "tab này không vẽ bộ khung". Tiêu đề
+     `ui` là tiêu đề SHEET, chỉ bộ khung mới có — lưới thành phẩm gom theo nhóm và đặt
+     tiêu đề khác hẳn ("UI nhỏ", "Nền", "Mascot pose"). */
+  await expect(page.getByRole("heading", { name: "ui", exact: true })).toHaveCount(0);
 
   // ② Bộ khung = khung đã dựng, và KHÔNG kèm tấm mascot (tấm đó có trang riêng).
   await modes.getByRole("tab", { name: "Bộ khung" }).click();
