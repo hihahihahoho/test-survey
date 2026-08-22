@@ -1,24 +1,27 @@
 /* @vitest-environment jsdom */
 /**
- * TAB TÊN LÀ "ẢNH GỐC" THÌ PHẢI XEM ĐƯỢC ẢNH GỐC.
+ * TAB TÊN LÀ "ẢNH GỐC" THÌ PHẢI XEM ĐƯỢC ẢNH GỐC — CẢ TRONG LƯỚI LẪN KHI PHÓNG TO.
  *
- * Chủ sản phẩm mở tab đó soi sheet vừa gen và báo "ảnh gốc nó bé tí". Đúng, và
- * không phải chuyện file trên đĩa — file vẫn 1536×1024. Chuyện nằm ở đường phục vụ:
+ * Chủ sản phẩm mở tab đó soi sheet vừa gen và báo "ảnh gốc nó bé tí", rồi dán thẳng
+ * cái blob đang xem: **512×341**. File trên đĩa vẫn 1536×1024 — chỗ mất pixel nằm ở
+ * đường phục vụ, và ĐÓ LÀ AGENT THU NHỎ THẬT chứ không phải CSS thu nhỏ:
  *
- *   thẻ sheet  → <KitImage width={512}>  → GET …/files/raw/x.png?w=512 → 512×341
- *   ảnh thật   → (không có ?w)           → GET …/files/raw/x.png      → 1536×1024
+ *   có `?w=512` → `agent/lib/thumbs.mjs` ghi ra PNG 512×341 (136 KB) rồi trả file đó
+ *   không `?w`  → trả thẳng file gốc 1536×1024 (1504 KB)
  *
- * Đo trên agent đang chạy: 136 KB so với 1504 KB. Và trước bản này tab "Ảnh gốc"
- * KHÔNG có cửa nào ra bản thứ hai — thẻ không bấm được, không popup, không nút.
- * Lưới ô ĐÃ CẮT có `AssetZoomDialog` từ lâu; sheet thô thì bị bỏ quên.
+ * Vì sao chuyện này đáng một file test riêng: sheet thô 1536px là nơi DUY NHẤT soi ra
+ * được model vẽ đúng lưới chưa, chừa đúng khe chưa, nền có trong suốt thật không. Xem
+ * qua bản thu nhỏ gấp ba thì mọi lỗi cỡ vài pixel đều bị phép resize xoá mất — và ô đã
+ * cắt thì trông mờ ĐÚNG NHƯ file thật bị hỏng. Hai bệnh khác hẳn nhau mà nhìn giống
+ * hệt nhau, nên người xem không thể phân biệt được.
  *
- * Vì sao đáng một file test riêng: sheet thô 1536px là nơi DUY NHẤT soi ra được model
- * vẽ đúng lưới chưa, chừa đúng khe chưa, nền có thật sự trong suốt không. Xem qua bản
- * thu nhỏ gấp ba thì mọi lỗi cỡ vài pixel đều bị phép resize xoá mất — tức là mất
- * đúng công dụng của tab này.
+ * Nên nay `KitImage` phục vụ ảnh GỐC mặc định (`full = true`) — ca ① khoá điều đó ở
+ * đúng chỗ nó từng hỏng. Trần RAM chuyển sang `image-source.ts` (lazy-load +
+ * cache theo BYTE), không còn dựa vào phép thu nhỏ nữa.
  *
- * Ca ③ là ca đắt nhất: `full` phải nằm trên `KitImage` TRONG dialog. Thiếu nó thì
- * popup vẫn mở ra, vẫn có ảnh, chỉ là vẫn 512px — hỏng y hệt mà nhìn thì như đã sửa.
+ * Ca ③ vẫn là ca đắt nhất: popup phóng to là thứ trước bản vá KHÔNG TỒN TẠI — thẻ
+ * sheet là một khối chữ nhật chết, không bấm được, trong khi lưới ô ĐÃ CẮT đã có
+ * `AssetZoomDialog` từ lâu.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -80,9 +83,12 @@ beforeEach(() => { mounted.length = 0; });
 afterEach(cleanup);
 
 describe("tab «Ảnh gốc» — đường tới ảnh ở độ nét thật", () => {
-  it("thẻ trong lưới vẫn dùng bản thu nhỏ 512 — mở kit lớn không nuốt hết RAM", () => {
+  it("thẻ trong lưới KHÔNG xin bản thu nhỏ — không `?w`, tức đúng 1536×1024", () => {
     mount();
-    expect(mounted.some((m) => m.width === 512 && !m.full)).toBe(true);
+    expect(mounted.length).toBeGreaterThan(0);
+    /* `full === false` hay có `width` đều dẫn tới `?w=` ⇒ agent thu nhỏ thật.
+       Đây chính là dòng từng cho ra cái blob 512×341 mà chủ sản phẩm dán lại. */
+    expect(mounted.every((m) => m.full !== false && m.width === undefined)).toBe(true);
   });
 
   it("thẻ sheet BẤM ĐƯỢC — trước bản này nó là một khối chữ nhật chết", () => {
@@ -90,17 +96,19 @@ describe("tab «Ảnh gốc» — đường tới ảnh ở độ nét thật", 
     expect(screen.getByRole("button", { name: /Xem ảnh gốc/ })).toBeTruthy();
   });
 
-  it("bấm vào ⇒ popup dựng `KitImage` có `full` (KHÔNG kèm ?w) — đây mới là bản vá", () => {
+  it("bấm vào ⇒ popup dựng thêm một `KitImage` cho ĐÚNG sheet đó, vẫn không `?w`", () => {
     mount();
+    const truoc = mounted.length;
     fireEvent.click(screen.getByRole("button", { name: /Xem ảnh gốc/ }));
-    const full = mounted.filter((m) => m.full === true);
-    expect(full.length).toBeGreaterThan(0);
-    expect(full[0]?.path).toBe("raw/chinh-ui.png");
-    expect(full[0]?.width).toBeUndefined();
+    expect(mounted.length).toBeGreaterThan(truoc);
+    const trongPopup = mounted[mounted.length - 1];
+    expect(trongPopup?.path).toBe("raw/chinh-ui.png");
+    expect(trongPopup?.width).toBeUndefined();
+    expect(trongPopup?.full).not.toBe(false);
   });
 
-  it("chưa bấm thì KHÔNG tải ảnh gốc — 1,5 MB mỗi sheet, không nạp sẵn", () => {
+  it("chưa bấm thì popup CHƯA dựng — khung xem lớn không nằm sẵn trong DOM", () => {
     mount();
-    expect(mounted.some((m) => m.full === true)).toBe(false);
+    expect(screen.queryByTestId("sheet-preview-frame")).toBeNull();
   });
 });

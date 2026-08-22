@@ -32,8 +32,24 @@ import { LIMITS } from "@/lib/api";
 
 /** Song song tối đa. 6 = đúng trần kết nối HTTP/1.1 của trình duyệt cho một origin. */
 const MAX_INFLIGHT = 6;
-/** Trần cache. Mỗi thumbnail ≤256px ≈ 20–80 KB ⇒ 400 mục ≈ 8–32 MB, chấp nhận được. */
+/**
+ * Trần cache theo SỐ MỤC.
+ *
+ * ⚠️ Từ khi lưới phục vụ ẢNH GỐC (xem `KitImage`), con số này một mình KHÔNG còn
+ * đủ: 400 mục thumbnail ≈ 8–32 MB, nhưng 400 mục ảnh gốc có thể là 400 × 1,5 MB
+ * = 600 MB blob giữ sống vì object URL chỉ được `revoke` lúc bị đẩy ra. Nên có
+ * thêm trần theo BYTE ở dưới, và mục nào cũng nhớ kích thước thật của nó.
+ */
 const MAX_CACHED = 400;
+/**
+ * Trần cache theo BYTE — đây mới là trần thật.
+ *
+ * 128 MB chọn theo số đo của một dự án thật (10 sheet thô 14,6 MB + 52 ô đã cắt
+ * 10,1 MB = 25 MB): cả dự án nằm gọn trong cache, còn kit rất lớn thì bị đẩy dần
+ * chứ không nuốt hết RAM. Bị đẩy ra chỉ có nghĩa là tải lại từ agent trên
+ * localhost — rẻ, và không mất một pixel nào.
+ */
+const MAX_CACHED_BYTES = 128 * 1024 * 1024;
 
 type Key = string;
 
@@ -46,7 +62,12 @@ interface Task {
   cancelled: boolean;
 }
 
-const cache = new Map<Key, string>();
+/** Mục cache: object URL + số byte thật của blob (để tính trần theo byte). */
+interface Cached { url: string; bytes: number }
+
+const cache = new Map<Key, Cached>();
+/** Tổng byte đang giữ trong `cache` — cộng/trừ theo từng mục, không quét lại. */
+let cachedBytes = 0;
 const pending = new Map<Key, Promise<string>>();
 const queue: Task[] = [];
 let inflight = 0;
@@ -82,7 +103,7 @@ function pump(): void {
         const res = await httpGet<Response>(task.url, { raw: true, kind: "get" });
         const blob = await res.blob();
         const objectUrl = URL.createObjectURL(blob);
-        remember(task.key, objectUrl);
+        remember(task.key, objectUrl, blob.size);
         task.resolve(objectUrl);
       } catch (e) {
         pending.delete(task.key);
@@ -95,16 +116,27 @@ function pump(): void {
   }
 }
 
-function remember(key: Key, objectUrl: string): void {
-  cache.set(key, objectUrl);
+function remember(key: Key, objectUrl: string, bytes: number): void {
+  cache.set(key, { url: objectUrl, bytes });
+  cachedBytes += bytes;
   pending.delete(key);
-  while (cache.size > MAX_CACHED) {
+  /* Đẩy mục CŨ NHẤT ra cho tới khi lọt cả hai trần. Luôn giữ lại ít nhất một mục:
+     ảnh vừa tải mà một mình đã vượt trần byte thì đẩy nó ra là vô nghĩa — ô đang
+     hiện cần đúng nó, và vòng lặp sẽ quay lại tải rồi đẩy mãi. */
+  while (cache.size > 1 && (cache.size > MAX_CACHED || cachedBytes > MAX_CACHED_BYTES)) {
     const oldest = cache.keys().next();
     if (oldest.done) break;
-    const url = cache.get(oldest.value);
-    cache.delete(oldest.value);
-    if (url) URL.revokeObjectURL(url);
+    evict(oldest.value);
   }
+}
+
+/** Bỏ một mục khỏi cache: trừ byte, `revoke` object URL. */
+function evict(key: Key): void {
+  const entry = cache.get(key);
+  if (entry === undefined) return;
+  cache.delete(key);
+  cachedBytes -= entry.bytes;
+  URL.revokeObjectURL(entry.url);
 }
 
 export interface LoadHandle {
@@ -125,7 +157,7 @@ export function loadImage(projectId: string, relPath: string, width: number | nu
     // Chạm lại để LRU coi là mới dùng.
     cache.delete(key);
     cache.set(key, hit);
-    return { promise: Promise.resolve(hit), cancel: () => {} };
+    return { promise: Promise.resolve(hit.url), cancel: () => {} };
   }
 
   const inFlight = pending.get(key);
@@ -166,11 +198,7 @@ export function loadFull(projectId: string, relPath: string): LoadHandle {
  */
 export function forgetProject(projectId: string): void {
   for (const key of [...cache.keys()]) {
-    if (key.startsWith(`${projectId}|`)) {
-      const url = cache.get(key);
-      cache.delete(key);
-      if (url) URL.revokeObjectURL(url);
-    }
+    if (key.startsWith(`${projectId}|`)) evict(key);
   }
 }
 

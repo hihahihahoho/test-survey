@@ -232,7 +232,7 @@ function SheetCard({ projectId, item, readOnly, onRegenerate }: {
           aria-label={`Xem ảnh gốc ${label}`}
           className={cn("block w-full", FOCUS)}
         >
-          <KitImage projectId={projectId} path={item.path} alt={label} backdrop="checker" eager width={512} className="aspect-[16/10] rounded-none border-0" />
+          <KitImage projectId={projectId} path={item.path} alt={label} backdrop="checker" eager className="aspect-[16/10] rounded-none border-0" />
         </button>
       ) : (
         <div className="flex aspect-[16/10] items-center justify-center bg-canvas text-center">

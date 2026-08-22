@@ -205,7 +205,10 @@ export function DesignScreen({ projectId }: ScreenProps) {
   const imageFor = React.useCallback(
     (comp: { file: string }) => {
       if (canvasLayer !== "kit" || !previewVariantId || !comp.file) return null;
-      return { src: agentApi.files.thumbUrl(pid, `kits/${previewVariantId}/${comp.file}.png`), alt: comp.file };
+      /* `fullUrl` chứ KHÔNG phải `thumbUrl`: ô canvas là nơi designer soi element vừa
+         cắt: `?w=256` biến một ô 522×348 thành 256×171 rồi CSS phóng ngược lên — nhìn
+         y hệt ca file thật bị hỏng. Xem `KitImage` để biết vì sao mặc định đổi. */
+      return { src: agentApi.files.fullUrl(pid, `kits/${previewVariantId}/${comp.file}.png`), alt: comp.file };
     },
     [canvasLayer, previewVariantId, pid],
   );

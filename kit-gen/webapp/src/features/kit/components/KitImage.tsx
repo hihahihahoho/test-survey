@@ -31,19 +31,32 @@ export interface KitImageProps {
   /** nhãn tiếng Việt có nghĩa (A9) */
   alt: string;
   backdrop: Backdrop;
-  /** true ⇒ ảnh GỐC (lightbox / popup xem chi tiết). false ⇒ thumbnail (§6.5-5). */
+  /**
+   * ẢNH GỐC — **mặc định BẬT**. Tắt đi thì mới xin bản thu nhỏ `?w=<width>`.
+   *
+   * ╔══ VÌ SAO ĐỔI MẶC ĐỊNH (chủ sản phẩm báo, đo trên agent đang chạy) ═══════╗
+   * ║ Trước bản này mọi ô đều `?w=256`, thẻ sheet thô `?w=512`. Nghĩa là ảnh    ║
+   * ║ 1536×1024 tới trình duyệt đã là 512×341 — **agent thu nhỏ ở phía server**, ║
+   * ║ không phải CSS thu nhỏ. Mọi lỗi cỡ vài pixel (mép còn nền, lệch lưới, răng ║
+   * ║ cưa) bị phép resize xoá sạch trước khi người xem nhìn thấy, và ô đã cắt    ║
+   * ║ thì trông mờ đúng như file thật bị hỏng — hai triệu chứng khác nhau mà     ║
+   * ║ nhìn giống hệt nhau.                                                      ║
+   * ║                                                                           ║
+   * ║ Trần cũ sinh ra từ H4 "v1 nạp PNG 3.1 MB vào lưới" — nhưng v1 chưa có      ║
+   * ║ lazy-load. Nay `IntersectionObserver` chỉ tải ô sắp vào khung nhìn, và     ║
+   * ║ `image-source.ts` có trần cache theo BYTE. Số đo một dự án thật: 10 sheet  ║
+   * ║ thô = 14,6 MB, 52 ô đã cắt = 10,1 MB, tất cả qua localhost.                ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
   full?: boolean;
   /**
-   * Bề rộng thumbnail khi `full` tắt. Mặc định 256 — đúng cho ô lưới ~230px.
+   * Bề rộng bản thu nhỏ — CHỈ có tác dụng khi `full={false}`, tức khi nơi gọi
+   * cố ý xin bản nhẹ (danh sách rất dài, ảnh bìa…). Mặc định 256.
    *
    * ⚠️ CHỈ CÓ BA GIÁ TRỊ. `agent/lib/thumbs.mjs` khai `ALLOWED_W = [128, 256, 512]`
    * và `normalizeWidth` **nắn** mọi số khác về giá trị gần nhất trong đó — xin `?w=400`
    * thì nhận về ảnh 512 mà không có gì báo, còn cache key phía web lại ghi "400" ⇒
    * hai bên nói hai cỡ khác nhau. Kiểu literal ở đây chặn chuyện đó ngay lúc biên dịch.
-   *
-   * Dùng 512 khi KHUNG HIỂN THỊ TO: một sheet thô rộng cả thẻ (`RawSheetsPanel`) mà
-   * chỉ được 256px thì trên màn `devicePixelRatio: 2` là nửa độ nét — đúng triệu chứng
-   * "ảnh preview trong app bé tí" chủ sản phẩm báo.
    */
   width?: 128 | 256 | 512;
   /** true ⇒ tải ngay, không chờ vào khung nhìn (dùng ở lightbox). */
@@ -84,7 +97,7 @@ export function KitImage({
   path,
   alt,
   backdrop,
-  full = false,
+  full = true,
   width = LIMITS.thumbWidth,
   eager = false,
   empty = false,
