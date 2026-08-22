@@ -538,5 +538,52 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
       · **CLI `gpt-image-1.5 --background transparent`** — đường DUY NHẤT được tài liệu
         công nhận là "true transparent", nhưng cần `OPENAI_API_KEY` và phải hỏi người
         dùng trước, tức phá mô hình "local-first, dùng phiên codex sẵn có".
-    Chốt tạm cho 2.1.4x: **giữ chroma-key**, vì nó là đường duy nhất vừa đo được vừa
-    không đòi thêm khoá API. Ghi lại đây để lần sau không ai lật lại bằng trí nhớ.
+    Chốt tạm lúc đó: giữ chroma-key. **⑰ dưới đây lật lại chốt này bằng số đo.**
+
+    **⑰ BUILT-IN CÓ TRONG SUỐT THẬT. CÁI CHẶN NÓ LÀ ẢNH THAM CHIẾU CỦA CHÍNH KIT-GEN.**
+    Chủ sản phẩm bác cả ba đường ở ⑯ ("built in CÓ RỒI thì bỏ hết mấy code thừa của
+    mình chứ"), và đúng. Vòng đối chứng `skel-A` / `skel-B` tách được biến thật:
+
+    | | ảnh tham chiếu đính kèm | ảnh model trả về |
+    |---|---|---|
+    | `skel-A` | RGBA nhưng **ĐỤC** — α=255 khắp ảnh | **RGB, không có kênh α** (2/2 lượt) |
+    | `skel-B` | RGBA **TRONG** — α=0 chiếm 71,0% | **RGBA** — α=0: 65,3% · dải mờ 1..254: **34,68%** |
+    | `skel-probe` | đục | RGB, không α |
+    | `skel-probe2` | trong (α=0: 71,0%) | RGBA — α=0: 60,3% · dải mờ: **39,71%** |
+
+    Hai prompt A/B **giống nhau từng byte** (`diff` chỉ ra đúng dòng đường dẫn file
+    ra), và cả hai đều đã xin trong suốt hết cỡ. Biến DUY NHẤT là kênh α của tấm ảnh
+    đính kèm.
+
+    Ba mối nối đã kiểm để số trên không phải tự huyễn hoặc:
+     · `shasum -a256` của `out.png` **trùng khít** file gốc trong
+       `~/.codex-img/generated_images/…` ⇒ không qua tay hậu kỳ nào;
+     · `stream.log` không có một lệnh shell nào, và grep `make_alpha|remove_chroma|
+       magick|putalpha|background-remov|swiftc` chỉ khớp đúng câu CẤM trong prompt;
+     · α cao nhất trong ảnh là **254**, đỉnh nằm ở 251–254 — dải liên tục. Chroma-key
+       chỉ đẻ ra {0,255}; **34,68% pixel nằm giữa là thứ chroma-key không làm nổi.**
+
+    ⇒ Không phải "đính ảnh thì mất alpha" (giả thuyết ⑬). Là **model bắt chước nền của
+    ảnh tham chiếu, không nghe prompt**. Mà `skeleton-svg.js` từ đầu vẽ
+    `<rect fill="#f2f2f2">` phủ kín trang — kit-gen tự đính vào đúng cái điều kiện
+    `skel-A`, rồi kết luận công cụ không có trong suốt. Cái chặn là của mình.
+
+    ⇒ Xoá dòng "chốt tạm giữ chroma-key" ở trên. Đường đi là `ad57396`: bỏ nền khỏi
+    ảnh skeleton, xin alpha thẳng trong prompt.
+
+    **⑱ ĐÃ BỎ NHỮNG GÌ, VÀ CÒN GIỮ LẠI GÌ.**
+    Bỏ khỏi đường gen: `CHROMA_KEYS`/`key_of` của `gen.sh`, `BG_FILL` của
+    `skeleton-svg.js`, và toàn bộ ô "Màu nền tách" trong app (bước Phong cách · tab
+    Nâng cao · hộp Tạo dự án) cùng cỗ máy §5b `pickChromaKey`/`explainChromaKey`/
+    `chromaKeyOf`/`CHROMA_KEY_HEX` — thứ sinh ra chỉ để tránh key trùng bảng màu, mà
+    prompt nay không nhắc màu nào nữa.
+
+    GIỮ có chủ ý — **`slice.py` vẫn còn nguyên `KEY_COLORS` và cả đường matting
+    chroma**, cùng `bg` trong contract: project cũ có sheet raw nền magenta trên đĩa,
+    cắt lại phải ra đúng như trước. `slice.py` tự rẽ đường bằng cách soi kênh α của
+    ảnh raw (`has_alpha`), không cần ai mách. Đây là mã TƯƠNG THÍCH NGƯỢC, không phải
+    mã chết — đừng dọn nốt.
+
+    Và giữ `painted_checkerboard()`: khi không tạo được trong suốt, model **không báo
+    lỗi** mà vẽ một tấm caro giả (`#FEFEFE` đan `#EEEEEE`, α=255 khắp ảnh) trông y hệt
+    ảnh nền trong suốt. Không soi α thì cả sheet caro nướng chín đi thẳng vào `kits/`.
