@@ -567,14 +567,33 @@ def key_binary(sheet, bgs, threshold, strict_threshold):
     return out, strict
 
 
+SOLID_ALPHA = 240      # từ mức này trở lên coi là ĐỤC HẲN — xem alpha_sheet
+
+
 def alpha_sheet(img):
-    """Sheet có alpha thật từ model — dùng thẳng."""
+    """Sheet có alpha thật từ model — dùng thẳng, chỉ nắn phần "đục hẳn" cho tròn.
+
+    ĐO ĐƯỢC trên ảnh model trả về (đối chứng skel-B, BACKLOG #24 ⑰): thân đặc KHÔNG
+    nằm ở α=255 mà ở **251–254**, và α cao nhất trong cả ảnh là 254 — không một pixel
+    nào đục hoàn toàn. Model vẽ alpha bằng cọ, nên nó "gần đục" chứ không đục.
+
+    Chênh 3/255 mắt không thấy, nhưng nó đi thẳng vào file giao cho người dùng: mọi
+    sprite xuất ra đều mờ 1,2%, xếp chồng trong game engine là thấy đường ghép, và
+    designer soi ô thì đọc ra "98,8% opacity" cho một cái nút lẽ ra đặc.
+
+    Nên: α ≥ SOLID_ALPHA ⇒ kéo về 255. KHÔNG đụng gì bên dưới ngưỡng — ô `glass` cố
+    ý nằm ở α≈64–128 và quầng `glow` tan dần từ 0 lên, cả hai đều cách 240 rất xa.
+    Dùng lại đúng con số đã làm mốc `strict` để cả file chỉ có MỘT định nghĩa "đục".
+    """
     rgba = img.convert("RGBA")
     a = rgba.getchannel("A").tobytes()
     strict = bytearray(len(a))
     for i, v in enumerate(a):
-        if v >= 240:
+        if v >= SOLID_ALPHA:
             strict[i] = 1
+    if any(SOLID_ALPHA <= v < 255 for v in a):
+        rgba.putalpha(rgba.getchannel("A").point(
+            lambda v: 255 if v >= SOLID_ALPHA else v))
     return rgba, strict
 
 
