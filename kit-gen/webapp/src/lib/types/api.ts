@@ -127,6 +127,22 @@ export const doctorSchema = z.looseObject({
     verifiedAt: z.string().optional(),
     reason: z.string().nullish(),
     needsFallbackHome: z.boolean().optional(),
+    /**
+     * MODEL SẼ ĐƯỢC DÙNG ĐỂ TẠO ẢNH — agent đọc thẳng ra từ `gen.sh` của engine đang
+     * chạy, không chép lại (xem `lib/doctor.mjs`). `optional` vì agent ≤2.1.40 chưa có
+     * field này: bản cũ ⇒ màn Cài đặt im lặng, không bịa ra một cái tên.
+     *
+     * `requested` null = engine CỐ Ý không ép model (`KITGEN_GEN_MODEL=""`), tức để
+     * hồ sơ Codex tự chọn — khác hẳn "không đọc được", trạng thái đó là `source:"unknown"`.
+     * `known` là cổng `codex debug models` của gen.sh: false ⇒ engine sẽ rơi về model
+     * của hồ sơ. null = chưa kiểm được.
+     */
+    model: z.looseObject({
+      requested: z.string().nullish(),
+      effort: z.string().nullish(),
+      known: z.boolean().nullish(),
+      source: z.enum(["engine", "env", "unknown"]).catch("unknown"),
+    }).optional(),
   }).optional(),
   workspace: z.looseObject({
     label: z.string().optional(),

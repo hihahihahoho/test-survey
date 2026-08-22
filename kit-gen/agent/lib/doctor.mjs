@@ -6,8 +6,9 @@
 import { execFile } from "node:child_process"
 import { homedir, platform, arch, release } from "node:os"
 import { join } from "node:path"
-import { statfs } from "node:fs/promises"
+import { statfs, readFile } from "node:fs/promises"
 import { exists } from "./fsx.mjs"
+import { resolveEngine } from "./engine.mjs"
 import { shortenPath } from "./redact.mjs"
 import { pythonCommand, winShellOpts, winSpawnOpts, pythonEnv } from "./platform.mjs"
 
@@ -81,6 +82,9 @@ async function imageGenInfo(ws) {
     codexHomeLabel: shortenPath(home),
     authPresent: false,
     verifiedAt: new Date().toISOString(), reason: null, needsFallbackHome: false,
+    /* Gắn TRƯỚC mọi lối thoát sớm bên dưới: máy chưa có codex thì càng cần nói ra
+       "sẽ chạy bằng model nào", chứ không phải im lặng. */
+    model: await genModelInfo(ws),
   }
   const codex = await firstLineVersion(CODEX)
   if (!codex.ok) { out.mode = "unavailable"; out.reason = "NO_CODEX"; return out }
@@ -103,6 +107,65 @@ async function imageGenInfo(ws) {
   out.mode = "unavailable"
   out.reason = nDefault < 0 ? "UNKNOWN" : (out.authPresent ? "FEATURE_OFF" : "NOT_LOGGED_IN")
   out.needsFallbackHome = false
+  return out
+}
+
+/* ══ MODEL DÙNG ĐỂ TẠO ẢNH — ĐỌC RA TỪ ENGINE, KHÔNG CHÉP LẠI ═══════════════════
+ *
+ * `gen.sh` mới là nơi quyết định model/effort:
+ *     GEN_MODEL="${KITGEN_GEN_MODEL-gpt-5.6-luna}"
+ *     GEN_EFFORT="${KITGEN_GEN_EFFORT-medium}"
+ * Chép hai giá trị đó sang JS là tạo ra một bản sao thứ hai để lệch dần — đúng họ bug
+ * mà `item-prompt.ts` đã phải dựng một test đọc gen.sh từ đĩa để canh. Nên ở đây ĐỌC
+ * THẲNG file engine đang thật sự được chạy: sửa gen.sh là màn Cài đặt đổi theo, không
+ * ai phải nhớ sửa hai chỗ.
+ *
+ * Đọc gen.sh KHÔNG vi phạm hợp đồng §4.4-4: nó là script của chính sản phẩm, không
+ * phải `auth.json` / `config.toml`. Thứ trả ra vẫn chỉ là tên model + một enum effort.
+ *
+ * `-` chứ không `:-` trong bash: đặt `KITGEN_GEN_MODEL=""` là CỐ Ý TẮT (trả engine về
+ * model của hồ sơ), khác hẳn với không đặt gì. JS phải phân biệt đúng như vậy, nên
+ * dùng `!== undefined` chứ không dùng `||`.
+ */
+const MODEL_LINE = /^GEN_MODEL="\$\{KITGEN_GEN_MODEL-([^}"]*)\}"/m
+const EFFORT_LINE = /^GEN_EFFORT="\$\{KITGEN_GEN_EFFORT-([^}"]*)\}"/m
+
+/** Giá trị hiệu lực của một biến: env của agent (gen.sh là tiến trình con) hoặc mặc định của engine. */
+function envOr(name, fallback) {
+  const raw = process.env[name]
+  return raw !== undefined ? raw : fallback
+}
+
+async function genModelInfo(ws, { probe = true } = {}) {
+  const out = { requested: null, effort: null, known: null, source: "unknown" }
+  let text = null
+  try {
+    const dir = await resolveEngine(ws)
+    if (dir) text = await readFile(join(dir, "gen.sh"), "utf8")
+  } catch { /* không đọc được engine ⇒ nói "chưa rõ", không đoán bừa */ }
+  if (text === null) return out
+
+  const defModel = text.match(MODEL_LINE)?.[1] ?? null
+  const defEffort = text.match(EFFORT_LINE)?.[1] ?? null
+  if (defModel === null) return out
+
+  const model = envOr("KITGEN_GEN_MODEL", defModel)
+  const effort = envOr("KITGEN_GEN_EFFORT", defEffort ?? "")
+  out.source = process.env.KITGEN_GEN_MODEL !== undefined ? "env" : "engine"
+  out.requested = model === "" ? null : model
+  out.effort = effort === "" ? null : effort
+  if (out.requested === null || !probe) return out
+
+  /* CỔNG CỦA gen.sh, chạy y nguyên: catalog TĨNH nằm sẵn trên máy (~0,03s, không gọi
+     mạng). Nó chỉ chứng minh bản codex này BIẾT tên model — không chứng minh provider
+     chịu phục vụ; gen.sh còn một nhánh tự chữa nữa khi provider từ chối, và nhánh đó
+     chỉ lộ ra trong log của lượt chạy. Vì vậy UI phải nói "sẽ yêu cầu", không nói
+     "chắc chắn chạy bằng".
+     KHÔNG đặt CODEX_HOME ở đây — gen.sh dòng 55 cũng không đặt, nên cổng này luôn xét
+     theo home mặc định kể cả khi ảnh được gen bằng hồ sơ riêng. Soi cho giống, không
+     soi cho đúng-hơn: lệch một chút là màn Cài đặt nói khác thứ engine làm. */
+  const r = await run(CODEX, ["debug", "models"], { timeout: 8000 })
+  out.known = r.ok || r.stdout ? r.stdout.includes(`"${out.requested}"`) : null
   return out
 }
 
@@ -133,6 +196,9 @@ export async function doctor(ws, { refresh = false } = {}) {
         codexHomeLabel: shortenPath(expandHome(liteProfile === "img-home" ? codexHomeOf(liteCfg) : join(homedir(), ".codex"))),
         authPresent: false,
         verifiedAt: new Date().toISOString(), reason: "UNKNOWN", needsFallbackHome: true,
+        /* LITE cấm spawn ⇒ không hỏi catalog được. Vẫn ĐỌC được gen.sh (thuần I/O file)
+           nên tên model là thật; `known` để null đúng nghĩa "chưa kiểm". */
+        model: await genModelInfo(ws, { probe: false }),
       },
       workspace: await workspaceInfo(ws), checkedAt: new Date().toISOString(), lite: true,
     }

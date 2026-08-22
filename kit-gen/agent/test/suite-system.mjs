@@ -133,6 +133,59 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     eq(d2.imageGen.codexHomeLabel, CODEX_HOME_DEFAULT, "nhãn rút gọn của home mặc định")
   })
 
+  /* ── MODEL TẠO ẢNH: ĐỌC RA TỪ gen.sh, KHÔNG PHẢI CHÉP LẠI ────────────────────
+     Màn Cài đặt nói "sẽ tạo ảnh bằng model X, mức nghĩ Y". Nếu con số đó là bản sao
+     gõ tay trong JS thì đổi gen.sh một lần là màn Cài đặt bắt đầu nói dối, mà không
+     ca nào đỏ. Nên ca này đối chiếu THẲNG với chuỗi trong gen.sh của engine đang chạy
+     — cùng một mẹo mà `item-prompt` đã phải dùng, vì cùng một lý do. */
+  await it("doctor đọc model + effort RA TỪ gen.sh, không chép lại", async () => {
+    const { doctor } = await import("../lib/doctor.mjs")
+    const { resolveEngine } = await import("../lib/engine.mjs")
+    const ws = agent.registry.active
+    const dir = await resolveEngine(ws)
+    ok(dir, "phải tìm được engine để đối chiếu")
+    const gen = readFileSync(join(dir, "gen.sh"), "utf8")
+    const model = gen.match(/^GEN_MODEL="\$\{KITGEN_GEN_MODEL-([^}"]*)\}"/m)?.[1] ?? null
+    const effort = gen.match(/^GEN_EFFORT="\$\{KITGEN_GEN_EFFORT-([^}"]*)\}"/m)?.[1] ?? null
+    ok(model, "gen.sh phải khai GEN_MODEL — nếu dòng này đổi hình, sửa CẢ doctor.mjs")
+
+    const d = await doctor(ws, { refresh: true })
+    eq(d.imageGen.model.requested, model, "tên model khớp gen.sh")
+    eq(d.imageGen.model.effort, effort, "mức nghĩ khớp gen.sh")
+    eq(d.imageGen.model.source, "engine", "không có env ghi đè ⇒ nguồn là engine")
+  })
+
+  await it('KITGEN_GEN_MODEL="" là CỐ Ý TẮT, không phải "chưa đặt"', async () => {
+    const { doctor } = await import("../lib/doctor.mjs")
+    const ws = agent.registry.active
+    const before = process.env.KITGEN_GEN_MODEL
+    process.env.KITGEN_GEN_MODEL = ""
+    try {
+      const d = await doctor(ws, { refresh: true })
+      eq(d.imageGen.model.requested, null, "chuỗi rỗng ⇒ trả engine về model của hồ sơ")
+      eq(d.imageGen.model.source, "env", "nguồn là biến môi trường")
+      eq(d.imageGen.model.known, null, "không có model nào để tra catalog")
+    } finally {
+      if (before === undefined) delete process.env.KITGEN_GEN_MODEL
+      else process.env.KITGEN_GEN_MODEL = before
+    }
+  })
+
+  await it("KITGEN_GEN_MODEL đặt tay ⇒ doctor nói đúng cái sẽ chạy, không nói mặc định", async () => {
+    const { doctor } = await import("../lib/doctor.mjs")
+    const ws = agent.registry.active
+    const before = process.env.KITGEN_GEN_MODEL
+    process.env.KITGEN_GEN_MODEL = "gpt-model-khong-co-that"
+    try {
+      const d = await doctor(ws, { refresh: true })
+      eq(d.imageGen.model.requested, "gpt-model-khong-co-that", "lấy theo env")
+      eq(d.imageGen.model.source, "env", "nguồn là biến môi trường")
+    } finally {
+      if (before === undefined) delete process.env.KITGEN_GEN_MODEL
+      else process.env.KITGEN_GEN_MODEL = before
+    }
+  })
+
   // ─────────────────────────────────────────── 1c. QUOTA CÒN LẠI (/api/usage)
   describe("usage / quota")
   {

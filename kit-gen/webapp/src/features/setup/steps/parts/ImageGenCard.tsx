@@ -36,6 +36,66 @@ const PRIVACY_LINE =
   "kit-gen không bao giờ đọc hay lưu thông tin đăng nhập của bạn — nó chỉ hỏi công cụ local " +
   '"có tạo được ảnh hay không".';
 
+/**
+ * "ẢNH SẼ ĐƯỢC TẠO BẰNG MODEL NÀO" — CÂU HỎI CÓ THẬT, VÀ TRƯỚC ĐÂY KHÔNG CÓ CHỖ TRẢ LỜI.
+ *
+ * `gen.sh` ép model rẻ + mức nghĩ vừa (`-m` + `model_reasoning_effort`) vì việc của
+ * model ở đây rất nhẹ: đọc prompt, gọi tool vẽ, ghi file. Nhưng cả app không hiện chỗ
+ * nào cho biết điều đó có thật sự đang xảy ra hay không, nên câu hỏi "sao tốn token
+ * thế" không có cách nào tự trả lời — phải đi đọc rollout của codex mới biết.
+ *
+ * BA TRẠNG THÁI, VÀ KHÔNG TRẠNG THÁI NÀO ĐƯỢC PHÉP NÓI QUÁ:
+ *  · `known === false` — codex trên máy KHÔNG biết tên model này ⇒ chính cổng của
+ *    gen.sh sẽ bỏ `-m` và chạy bằng model của hồ sơ. Phải cảnh báo, vì đây đúng là ca
+ *    "tưởng đang chạy model rẻ mà không phải".
+ *  · `requested === null` — engine CỐ Ý không ép (`KITGEN_GEN_MODEL=""`).
+ *  · `source === "unknown"` — không đọc được gen.sh. Im lặng còn hơn bịa một cái tên.
+ *
+ * Chữ dùng là **"sẽ yêu cầu"**, không phải "đang chạy bằng": catalog chỉ chứng minh
+ * codex BIẾT tên model, không chứng minh provider chịu phục vụ — gen.sh còn một nhánh
+ * tự chữa hạ xuống model hồ sơ khi bị từ chối, và nhánh đó chỉ lộ ra trong log lượt chạy.
+ */
+type GenModel = NonNullable<NonNullable<Doctor["imageGen"]>["model"]>;
+
+function GenModelRow({ model }: { model: GenModel | undefined }) {
+  if (!model || model.source === "unknown") return null;
+
+  if (!model.requested) {
+    return (
+      <Note>
+        Engine không ép model — ảnh sẽ được tạo bằng model mặc định của hồ sơ Codex.
+      </Note>
+    );
+  }
+
+  const gated = model.known === false;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-caption text-fg-muted">Sẽ yêu cầu</span>
+        <Badge tone={gated ? "warn" : "outline"}>
+          <span className="font-mono">{model.requested}</span>
+        </Badge>
+        {model.effort && (
+          <>
+            <span className="text-caption text-fg-muted">mức nghĩ</span>
+            <Badge tone={gated ? "warn" : "outline"}><span className="font-mono">{model.effort}</span></Badge>
+          </>
+        )}
+        {model.source === "env" && (
+          <span className="text-caption text-fg-muted">(đặt bằng <span className="font-mono">KITGEN_GEN_MODEL</span>)</span>
+        )}
+      </div>
+      {gated && (
+        <Note>
+          Bản Codex trên máy không có tên model này trong danh mục, nên engine sẽ bỏ qua và
+          chạy bằng model mặc định của hồ sơ — có thể nghĩ sâu hơn và tốn token hơn.
+        </Note>
+      )}
+    </div>
+  );
+}
+
 const MODE_LABEL: Record<string, string> = {
   "default-home": "cấu hình mặc định",
   "img-home": "home riêng cho tạo ảnh",
@@ -56,6 +116,8 @@ export function ImageGenCard({ doctor }: { doctor: Doctor | null }) {
         </Badge>
       </div>
       {out.detail && <p className="text-body text-fg">{out.detail}</p>}
+
+      <GenModelRow model={doctor?.imageGen?.model} />
 
       {out.needsFallback && (
         <>
