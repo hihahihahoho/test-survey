@@ -26,7 +26,6 @@ export function validateContract(contract) {
     if (!RE_VARIANT_ID.test(String(v?.id ?? ""))) E("V-05", `${path}.id`, "variant id must match ^[a-z0-9-]{2,24}$")
     else if (variantIds.has(v.id)) E("V-05", `${path}.id`, `duplicate variant id ${v.id}`)
     else variantIds.add(v.id)
-    if (v?.bg !== undefined && typeof v.bg !== "string") E("SCHEMA", `${path}.bg`, "bg must be a string")
   })
 
   const sheetIds = new Set()

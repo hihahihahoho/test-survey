@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { contractJobs, contractSchema, normalizeContract, CHROMA_PRESETS } from "@/lib/types/contract";
+import { contractJobs, contractSchema, normalizeContract } from "@/lib/types/contract";
 import { loadBundledV2 } from "@/features/design/library/lib/source";
 import type { LibElement } from "@/features/design/library/lib/types";
 import { createWorkflowStore, resetWorkflowStores, type WorkflowState } from "../model";
@@ -124,13 +124,6 @@ describe("§W3-1 — contract sinh ra phải sống sót qua gen.sh", () => {
 describe("§W3-1 — round-trip với styles.example.json", () => {
   it("chính styles.example.json parse sạch bằng contractSchema", () => {
     expect(() => contractSchema.parse(stylesExample)).not.toThrow();
-  });
-
-  it("`bg` sinh ra TRÙNG TỪNG KÝ TỰ với `bg` của bản mẫu (magenta)", () => {
-    const built = contractSchema.parse(build());
-    const mine = (built.variants ?? [])[0];
-    expect(mine?.bg).toBe(stylesExample.styles[0]?.bg);
-    expect(mine?.bg).toBe(CHROMA_PRESETS.magenta);
   });
 
   it("mọi dáng sinh ra đều nằm trong 19 `characterPoses` của bản mẫu", () => {
@@ -403,7 +396,7 @@ describe("§P1-4 — nền của ô đi trọn đường từ lớp đè tới c
     expect(cellOf(c, PLAIN)?.skel).toMatchObject({ w: 0.42, matte: "glow" });
   });
 
-  it("TẮT ⇒ gỡ đúng `glow` của thư viện, ô về nền chroma của tấm", () => {
+  it("TẮT ⇒ gỡ đúng `glow` của thư viện, ô về nền thường của tấm", () => {
     const c = buildKitsetContract(withSkel(GLOW, { matte: "none" }), { lib: LIB });
     expect(cellOf(c, GLOW)?.skel.matte).toBeUndefined();
   });
@@ -437,38 +430,40 @@ describe("§P1-4 — nền của ô đi trọn đường từ lớp đè tới c
   it("`mergeElementSkel` trả về CHÍNH object cũ khi không có gì để đè", () => {
     const base = LIB.find((e) => e.file === PLAIN)!.skel;
     expect(mergeElementSkel(base, {})).toBe(base);
-    expect(mergeElementSkel(base, { matte: "none" })).toBe(base); // vốn đã là chroma
+    expect(mergeElementSkel(base, { matte: "none" })).toBe(base); // vốn đã là nền thường
   });
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
-   5c. `bg` — DI SẢN, ĐI THẲNG TỪ LỰA CHỌN CỦA NGƯỜI DÙNG
+   5c. `bg` KHÔNG CÒN TỒN TẠI
    ══════════════════════════════════════════════════════════════════════════ */
 
 /**
- * Ở đây từng có 12 ca đo cỗ máy tránh-va-chạm của §5b (`pickChromaKey`,
- * `explainChromaKey`, `chromaKeyOf`, `CHROMA_KEY_HEX`). Cỗ máy đó chỉ tồn tại vì
- * `gen.sh` viết TÊN MÀU KEY vào prompt; prompt ấy không còn (nền nay là alpha
- * thật), nên không còn gì để tránh, và code lẫn test đều đã bị xoá.
+ * Ở đây từng có 12 ca đo cỗ máy tránh-va-chạm §5b, rồi 3 ca đo `bg` đi thẳng từ
+ * lựa chọn người dùng. Cả hai lớp đều đã chết: chủ sản phẩm chốt bỏ HẲN chroma,
+ * kể cả đường cắt lại sheet cũ trong `slice.py`. Không còn ai đọc `bg` nữa.
  *
- * Cái CÒN phải khoá: `bg` vẫn đi thẳng từ lựa chọn của người dùng vào contract,
- * không bị hàm nào bẻ lái nữa — `slice.py` cần đúng chuỗi đó để cắt lại sheet raw
- * đời cũ, nên một phép "tự đổi cho lành" ở đây sẽ làm hỏng đúng những project mà
- * `bg` còn có nghĩa.
+ * Ca còn lại là PHỦ ĐỊNH, và nó đáng giữ: một `bg` lặng lẽ mọc lại trong contract
+ * nghĩa là có người đang dựng lại chroma ở đâu đó dưới engine.
  */
-describe("§P1-5 — `bg` không còn bị tự đổi", () => {
-  it("mặc định ⇒ magenta, đúng chuỗi mà slice.py dò", () => {
-    expect(build().variants?.[0]?.bg).toBe(CHROMA_PRESETS.magenta);
+describe("§P1-5 — contract KHÔNG còn khai màu nền tách", () => {
+  it("variant sinh ra không có field `bg`", () => {
+    const v = build().variants?.[0] as Record<string, unknown> | undefined;
+    expect(v).toBeTruthy();
+    expect(v).not.toHaveProperty("bg");
   });
 
-  it("chọn green ⇒ contract ghi GREEN, kể cả khi bảng màu cũng xanh lá", () => {
-    const s = { ...defaultState(), chroma: "green" as const, primaryColor: "#12B733" };
-    expect(buildKitsetContract(s, { lib: LIB }).variants?.[0]?.bg).toBe(CHROMA_PRESETS.green);
-  });
-
-  it("style neon magenta KHÔNG còn bị bẻ sang green — luật tránh palette đã chết", () => {
-    const s = { ...defaultState(), stylePrompt: "neon magenta cyberpunk" };
-    expect(buildKitsetContract(s, { lib: LIB }).variants?.[0]?.bg).toBe(CHROMA_PRESETS.magenta);
+  /* Schema variant là `looseObject` (§6.5-6): field lạ được GIỮ NGUYÊN chứ không
+     bị vứt. Đúng cho ca này — contract cũ trên đĩa của người dùng không bị sửa
+     trộm, `bg` chỉ đơn giản là không còn ai đọc. */
+  it("contract cũ CÓ `bg` vẫn nạp được, và `bg` cũ không bị xoá trộm", () => {
+    const old = contractSchema.parse({
+      schemaVersion: 4,
+      variants: [{ id: "chinh", vi: "Cũ", style: "x", bg: "pure vivid magenta #FF00FF" }],
+      sheets: [],
+    });
+    expect(old.variants?.[0]?.id).toBe("chinh");
+    expect((old.variants?.[0] as Record<string, unknown>).bg).toBe("pure vivid magenta #FF00FF");
   });
 });
 

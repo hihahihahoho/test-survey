@@ -95,16 +95,15 @@ describe("§W1-1 — mỗi bộ kit một bản nháp", () => {
 });
 
 describe("§W1-3 — restoreVersion nạp settings thật, không chỉ đổi nhãn", () => {
-  it("khôi phục v1 thì chroma và stylePrompt quay về đúng của v1", () => {
+  it("khôi phục v1 thì stylePrompt quay về đúng của v1", () => {
     const s = createWorkflowStore("kit-a");
     s.getState().set({ stylePrompt: "A" });
     s.getState().addVersion("A");
-    s.getState().set({ chroma: "green", stylePrompt: "B" });
+    s.getState().set({ stylePrompt: "B" });
     s.getState().addVersion("B");
 
     s.getState().restoreVersion("v1");
     expect(s.getState().activeVersion).toBe("v1");
-    expect(s.getState().chroma).toBe("magenta");
     expect(s.getState().stylePrompt).toBe("A");
   });
 
@@ -137,7 +136,7 @@ describe("§W1-3 — restoreVersion nạp settings thật, không chỉ đổi n
   it("version thiếu settings KHÔNG ghi undefined đè state (không làm sập màn)", () => {
     const s = createWorkflowStore("kit-a");
     s.getState().set({
-      chroma: "green", kitsetSummary: "tóm tắt thật", sliceThreshold: 99,
+      kitsetSummary: "tóm tắt thật", sliceThreshold: 99,
       mascotEnabled: true, mascotName: "Mèo",
     });
     // đúng thứ nằm trong localStorage của bản build cũ: settings rỗng, không label
@@ -148,11 +147,10 @@ describe("§W1-3 — restoreVersion nạp settings thật, không chỉ đổi n
     expect(st.activeVersion).toBe("v1");
     expect(st.stylePrompt).toBe("P");            // rơi về `v.prompt`
     for (const [k, v] of Object.entries({
-      chroma: st.chroma, kitsetSummary: st.kitsetSummary,
+      kitsetSummary: st.kitsetSummary,
       sliceThreshold: st.sliceThreshold, mascotName: st.mascotName,
     })) expect(v, `${k} không được là undefined`).not.toBeUndefined();
     expect(st.mascotName).toBe("Mèo");           // mascot giữ nguyên, không đoán bừa
-    expect(st.chroma).toBe("green");
   });
 });
 

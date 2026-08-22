@@ -64,7 +64,7 @@ export function stylesJsonToContract(src) {
     seenVar.add(id)
     return {
       id, vi: v.vi ?? v.name ?? id, styleMode: v.styleMode ?? (v.inspo?.length ? "inspo" : "prompt"),
-      style: v.style ?? "", inspo: v.inspo ?? [], bg: v.bg ?? "pure vivid magenta #FF00FF",
+      style: v.style ?? "", inspo: v.inspo ?? [],
       brand: v.brand ?? { mode: "colors", primary: "#d42a1e", secondary: "#f5c64a", refs: [] },
       characters: v.characters ?? [],
       ...(v.threshold !== undefined ? { threshold: v.threshold } : {}),

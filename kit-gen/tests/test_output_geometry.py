@@ -1,3 +1,23 @@
+"""VALIDATOR HÌNH HỌC ĐO THEO ALPHA, KHÔNG CÒN ĐI TÌM MÀU NỀN.
+
+VÌ SAO FILE NÀY NGẮN ĐI MỘT NỬA
+─────────────────────────────────────────────────────────────────────────────────
+Bản cũ có hẳn một lớp ca (`MagentaSheetTest`, `KeyResolutionTest`) chỉ để canh việc
+ĐOÁN MÀU NỀN: đọc tên/hex key từ `variant.bg`, đo màu viền ngoài vì model vẽ key
+lệch tới ~50 level, chọn giữa "màu khai báo" và "màu đo được", rồi phân loại pixel
+theo `spill`. Cả lớp đó sinh ra từ một sự cố thật — `bg` là chuỗi MÔ TẢ ("pure vivid
+magenta #FF00FF") chứ không phải hex trần, nên bản trước nữa rơi về mặc định
+`#00FF00`, MỌI pixel thành foreground, và 10/10 file `.geometry.json` vô giá trị
+(research-glow-extraction §3.3).
+
+Nền nay là alpha thật ⇒ "pixel này có phải nền không" là `alpha < ngưỡng`. Không
+đoán, không đo viền, không có ca lệch trục. Nên phần test tương ứng cũng biến mất —
+giữ lại chỉ là canh một cỗ máy không còn quay.
+
+CÁI PHẢI CANH TIẾP, VÀ NÓ KHÔNG ĐỔI: validator vẫn phải phân biệt được **core** với
+**decoration**, vẫn phải cho ô `shape:"empty"` đi qua, và vẫn phải bắt thân lệch.
+Đó là lý do nó tồn tại, và ba chuyện đó không dính gì tới nền.
+"""
 import importlib.util, json, subprocess, sys, tempfile, unittest
 from pathlib import Path
 from PIL import Image, ImageDraw
@@ -8,16 +28,24 @@ _spec = importlib.util.spec_from_file_location("validate_output_geometry", TOOL)
 tool = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(tool)
 
-# Màu key ĐO ĐƯỢC trên sheet magenta thật (manifest BlindTest-B2), không phải
-# #FF00FF: model vẽ lệch tới ~50 level. Đây chính là ca làm chết validator cũ.
-MAGENTA_DRIFT = (238, 15, 211)
+INK = (220, 20, 20, 255)
+TRONG = (0, 0, 0, 0)
 
 
-def contract(bg, w=.5, h=.5, cols=1, rows=1, comps=None):
-    return {"variants": [{"id": "main", "bg": bg}],
+def contract(w=.5, h=.5, cols=1, rows=1, comps=None):
+    return {"variants": [{"id": "main"}],
             "sheets": [{"id": "main", "grid": {"cols": cols, "rows": rows},
                         "components": comps or [{"file": "button",
                                                  "skel": {"shape": "rrect", "w": w, "h": h}}]}]}
+
+
+def sheet(size, *boxes, fill=INK):
+    """Sheet nền TRONG SUỐT + các khối mực đặc — hình dạng của mọi sheet mới."""
+    im = Image.new("RGBA", size, TRONG)
+    draw = ImageDraw.Draw(im)
+    for box in boxes:
+        draw.rectangle(box, fill=fill)
+    return im
 
 
 def run_tool(image, data):
@@ -31,44 +59,37 @@ def run_tool(image, data):
 
 
 class GeometryValidatorTest(unittest.TestCase):
-    """Bộ cũ: sheet key XANH LÁ, bg khai báo đúng dạng hex."""
-
     def run_case(self, box):
-        im = Image.new('RGB', (200, 100), (0, 255, 0))
-        ImageDraw.Draw(im).rectangle(box, fill=(220, 20, 20))
-        return run_tool(im, contract("#00FF00"))
+        return run_tool(sheet((200, 100), box), contract())
 
-    def test_centered_body_passes(self):
-        code, out = self.run_case((50, 25, 150, 75)); self.assertEqual(code, 0); self.assertTrue(out['ok'])
+    def test_than_dung_tam_thi_qua(self):
+        code, out = self.run_case((50, 25, 150, 75))
+        self.assertEqual(code, 0)
+        self.assertTrue(out['ok'])
 
-    def test_shifted_body_requires_regeneration(self):
-        code, out = self.run_case((0, 0, 80, 40)); self.assertEqual(code, 2); self.assertFalse(out['ok']); self.assertEqual(out['cells'][0]['status'], 'regenerate')
+    def test_than_lech_thi_doi_sinh_lai(self):
+        code, out = self.run_case((0, 0, 80, 40))
+        self.assertEqual(code, 2)
+        self.assertFalse(out['ok'])
+        self.assertEqual(out['cells'][0]['status'], 'regenerate')
 
 
-class MagentaSheetTest(unittest.TestCase):
-    """Ca đã làm 10/10 file `.geometry.json` vô giá trị.
+class AlphaDoDacTest(unittest.TestCase):
+    """Phép đo phải KHỚP TỪNG PIXEL — đây là thứ bản đoán-màu không bao giờ đạt."""
 
-    `bg` trong contract là chuỗi MÔ TẢ ("pure vivid magenta #FF00FF"), không phải
-    hex trần, nên `rgb()` bản cũ rơi về mặc định `#00FF00`; cộng thêm key thật
-    lệch màu ⇒ MỌI pixel tính là foreground ⇒ `actual` = nguyên ô.
-    """
+    def test_bbox_dung_bang_khoi_muc_khong_hon_khong_kem(self):
+        im = sheet((400, 200), (100, 50, 299, 149))          # inclusive ⇒ 200x100
+        self.assertEqual(tool.bbox_foreground(im), (100, 50, 300, 150))
 
-    def sheet(self, box, size=(400, 200), key=MAGENTA_DRIFT):
-        im = Image.new('RGB', size, key)
-        ImageDraw.Draw(im).rectangle(box, fill=(30, 180, 90))   # thân xanh lá
-        return im
-
-    def test_do_duoc_bbox_that_tren_sheet_magenta(self):
-        box = (100, 50, 299, 149)                                # đúng tâm, 200x100
-        code, out = run_tool(self.sheet(box), contract("pure vivid magenta #FF00FF"))
-        self.assertEqual(out['key_mode'], 'spill')
+    def test_do_duoc_bbox_that_qua_CLI(self):
+        code, out = run_tool(sheet((400, 200), (100, 50, 299, 149)), contract())
+        self.assertEqual(out['bg_mode'], 'alpha')
         self.assertEqual(out['cells'][0]['actual'], [100, 50, 200, 100])
         self.assertEqual(code, 0)
         self.assertTrue(out['ok'])
 
     def test_bat_duoc_sai_so_that_khi_than_lech_va_nho(self):
-        box = (40, 20, 189, 119)                                 # lệch + nhỏ hơn khung
-        code, out = run_tool(self.sheet(box), contract("pure vivid magenta #FF00FF"))
+        code, out = run_tool(sheet((400, 200), (40, 20, 189, 119)), contract())
         cell = out['cells'][0]
         self.assertEqual(cell['actual'], [40, 20, 150, 100])
         self.assertEqual(cell['status'], 'regenerate')
@@ -76,44 +97,22 @@ class MagentaSheetTest(unittest.TestCase):
         self.assertIn('size', cell['reasons'])
         self.assertEqual(code, 2)
 
-    def test_ban_cu_do_ra_nguyen_o_tren_cung_anh(self):
-        """Bằng chứng hồi quy: key xanh lá + khoảng cách RGB ⇒ actual = nguyên ô."""
-        im = self.sheet((100, 50, 299, 149))
-        old = tool.bbox_foreground(im, (0, 255, 0), axis=None, threshold=42)
-        self.assertEqual(old, (0, 0, im.width, im.height),
-                         "ca hỏng không tái lập được — test mất ý nghĩa")
-        new = tool.bbox_foreground(im, *tool.resolve_key(im, tool.parse_key("pure vivid magenta #FF00FF")))
-        self.assertEqual(new, (100, 50, 300, 150))  # bbox nửa mở: 200x100 px
+    def test_mep_khu_rang_cua_van_tinh_la_muc(self):
+        """Ngưỡng `ALPHA_FG` thấp có chủ ý: quầng glow tan tới α rất nhỏ vẫn là mực.
+        Kéo ngưỡng lên cho 'sạch' là gặm mất rìa mềm rồi báo thân nhỏ hơn thật."""
+        im = sheet((200, 100), (80, 40, 119, 59))
+        px = im.load()
+        for y in range(40, 60):
+            px[79, y] = (220, 20, 20, 30)                    # rìa mờ, dưới nửa alpha
+        self.assertEqual(tool.bbox_foreground(im)[0], 79, "rìa mờ bị coi là nền")
 
-    def test_chiu_duoc_key_lech_mau_va_nhieu(self):
-        """Key model vẽ ra lệch dần: vẫn phải đo đúng thân, không nuốt cả ô."""
-        for key in [(255, 0, 255), (238, 15, 211), (243, 9, 219), (250, 60, 240)]:
-            with self.subTest(key=key):
-                im = self.sheet((100, 50, 299, 149), key=key)
-                _, out = run_tool(im, contract("pure vivid magenta #FF00FF"))
-                self.assertEqual(out['key_mode'], 'spill')
-                self.assertEqual(out['cells'][0]['actual'], [100, 50, 200, 100])
 
-    def test_o_trong_co_y_khong_bi_tinh_la_can_tao_lai(self):
-        data = contract("pure vivid magenta #FF00FF", cols=2, rows=1, comps=[
-            {"file": "button", "skel": {"shape": "rrect", "w": .5, "h": .5}},
-            {"file": "_empty-1", "skel": {"shape": "empty"}}])
-        im = Image.new('RGB', (400, 200), MAGENTA_DRIFT)
-        ImageDraw.Draw(im).rectangle((50, 50, 149, 149), fill=(30, 180, 90))
-        code, out = run_tool(im, data)
-        self.assertEqual([c['status'] for c in out['cells']], ['ok', 'empty'])
-        self.assertTrue(out['ok'])
-        self.assertEqual(code, 0)
+class CoreVaDecorationTest(unittest.TestCase):
+    """Core = mặt chức năng; decoration = phần tràn ra. Không dính gì tới nền."""
 
-    def test_validator_cham_core_khong_nuot_decoration(self):
-        im = Image.new('RGB', (300, 220), (0, 255, 0))
-        draw = ImageDraw.Draw(im)
-        draw.rectangle((70, 70, 229, 149), fill=(220, 20, 20))
-        # Decoration liên thông, tràn cả trái/phải/dưới.
-        draw.rectangle((40, 130, 99, 189), fill=(220, 20, 20))
-        draw.rectangle((180, 145, 199, 214), fill=(220, 20, 20))
-        data = contract('#00FF00', w=160 / 300, h=80 / 220)
-        code, out = run_tool(im, data)
+    def test_cham_core_khong_nuot_decoration(self):
+        im = sheet((300, 220), (70, 70, 229, 149), (40, 130, 99, 189), (180, 145, 199, 214))
+        code, out = run_tool(im, contract(w=160 / 300, h=80 / 220))
         cell = out['cells'][0]
         self.assertEqual(code, 0)
         self.assertEqual(cell['actual'], [70, 70, 160, 80])
@@ -122,13 +121,12 @@ class MagentaSheetTest(unittest.TestCase):
         self.assertEqual(cell['deviation']['maxEdgePx'], 0)
         self.assertEqual(cell['status'], 'ok')
 
-    def test_validator_ghi_ca_decoration_roi(self):
-        im = Image.new('RGB', (300, 220), (0, 255, 0))
+    def test_ghi_ca_decoration_roi(self):
+        im = Image.new("RGBA", (300, 220), TRONG)
         draw = ImageDraw.Draw(im)
-        draw.rectangle((70, 70, 229, 149), fill=(220, 20, 20))
-        draw.ellipse((40, 30, 55, 45), fill=(220, 20, 20))
-        data = contract('#00FF00', w=160 / 300, h=80 / 220)
-        code, out = run_tool(im, data)
+        draw.rectangle((70, 70, 229, 149), fill=INK)
+        draw.ellipse((40, 30, 55, 45), fill=INK)
+        code, out = run_tool(im, contract(w=160 / 300, h=80 / 220))
         cell = out['cells'][0]
         self.assertEqual(code, 0)
         self.assertEqual(cell['core'], [70, 70, 230, 150])
@@ -136,27 +134,14 @@ class MagentaSheetTest(unittest.TestCase):
         self.assertEqual(cell['decoration'], [40, 30, 56, 46])
         self.assertEqual(cell['status'], 'ok')
 
-
-class KeyResolutionTest(unittest.TestCase):
-    def test_doc_duoc_ca_4_ten_key(self):
-        for name, rgb in tool.KEY_COLORS.items():
-            self.assertEqual(tool.parse_key(f"one flat solid {name} background"), rgb)
-
-    def test_doc_duoc_hex_tran(self):
-        self.assertEqual(tool.parse_key("#00FFFF"), (0, 255, 255))
-        self.assertEqual(tool.parse_key("00ff00"), (0, 255, 0))
-        self.assertIsNone(tool.parse_key(""))
-        self.assertIsNone(tool.parse_key("một màu nền lạ"))
-
-    def test_ten_thang_hex_khi_ca_hai_cung_xuat_hien(self):
-        self.assertEqual(tool.parse_key("pure vivid magenta #FF00FF"), (255, 0, 255))
-
-    def test_khong_ro_key_thi_lui_ve_khoang_cach_mau(self):
-        im = Image.new('RGB', (60, 60), (130, 128, 126))          # nền xám, không phải key
-        ImageDraw.Draw(im).rectangle((10, 10, 40, 40), fill=(10, 200, 10))  # inclusive
-        key, axis = tool.resolve_key(im, None)
-        self.assertIsNone(axis)
-        self.assertEqual(tool.bbox_foreground(im, key, axis), (10, 10, 41, 41))
+    def test_o_trong_co_y_khong_bi_tinh_la_can_tao_lai(self):
+        data = contract(cols=2, rows=1, comps=[
+            {"file": "button", "skel": {"shape": "rrect", "w": .5, "h": .5}},
+            {"file": "_empty-1", "skel": {"shape": "empty"}}])
+        code, out = run_tool(sheet((400, 200), (50, 50, 149, 149)), data)
+        self.assertEqual([c['status'] for c in out['cells']], ['ok', 'empty'])
+        self.assertTrue(out['ok'])
+        self.assertEqual(code, 0)
 
 
 if __name__ == '__main__':

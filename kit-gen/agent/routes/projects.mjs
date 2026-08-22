@@ -68,7 +68,6 @@ export function register(r) {
     const firstVariant = {
       id: fv.id ? assertMatch(RE_VARIANT_ID, fv.id, "BAD_REQUEST", "firstVariant.id") : (slugify(fv.vi ?? "phong-cach-1").slice(0, 24) || "v1"),
       vi: String(fv.vi ?? "Phong cách 1"),
-      bg: fv.bg === "green" ? "green" : "magenta",
       style: fv.style ?? "",
     }
 
@@ -208,7 +207,6 @@ export function register(r) {
         id: body.newVariant.id ? assertMatch(RE_VARIANT_ID, body.newVariant.id, "BAD_REQUEST", "newVariant.id")
           : (slugify(body.newVariant.vi).slice(0, 24) || "v1"),
         vi: String(body.newVariant.vi), styleMode: "prompt", style: "", inspo: [],
-        bg: "pure vivid magenta #FF00FF",
         brand: { mode: "colors", primary: "#d42a1e", secondary: "#f5c64a", refs: [] }, characters: [],
       }
       next.variants.push(nv)

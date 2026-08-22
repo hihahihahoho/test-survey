@@ -1,5 +1,5 @@
 import type { LibElement } from "@/features/design/library/lib/types";
-import { CHROMA_PRESETS, contractVariants, type Contract } from "@/lib/types/contract";
+import { contractVariants, type Contract } from "@/lib/types/contract";
 import {
   NEUTRAL_PRIMARY_COLOR, NEUTRAL_SECONDARY_COLOR,
   newMascotId, type WorkflowMascot, type WorkflowState,
@@ -71,7 +71,6 @@ export function workflowPatchFromContract(
        của app, không phải nhận diện của một brand có thật (xem `model.ts`). */
     primaryColor: variant?.brand?.primary ?? NEUTRAL_PRIMARY_COLOR,
     secondaryColor: variant?.brand?.secondary ?? NEUTRAL_SECONDARY_COLOR,
-    chroma: variant?.bg === CHROMA_PRESETS.green || variant?.bg?.toLowerCase().includes("green") ? "green" : "magenta",
     sliceThreshold: contract.slice?.threshold ?? 120,
     kitsetSummary: "Bộ khung đã nhập",
     elements: imported.map((element) => ({

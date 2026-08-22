@@ -42,7 +42,6 @@
  *   · trần 16 ô/sheet    : sheet lớn nhất của `styles.json` là 4×4.
  */
 import {
-  CHROMA_PRESETS,
   contractSchema,
   slugify,
   type Component,
@@ -363,7 +362,7 @@ const refPaths = (items: readonly { name: string }[]): string[] =>
 export type KitsetContractInput = Pick<
   WorkflowState,
   | "kitName" | "campaign" | "stylePrompt" | "styleMode" | "styleAxes"
-  | "primaryColor" | "secondaryColor" | "styleAvoid" | "chroma" | "sliceThreshold"
+  | "primaryColor" | "secondaryColor" | "styleAvoid" | "sliceThreshold"
   | "elements" | "styleRefs" | "brandRefs"
   | "mascotEnabled" | "mascotName" | "mascotDescription" | "mascotRef" | "mascotPoses"
 > & {
@@ -383,7 +382,7 @@ export function pickContractInput(s: KitsetContractInput): KitsetContractInput {
   return {
     kitName: s.kitName, campaign: s.campaign, stylePrompt: s.stylePrompt, styleMode: s.styleMode,
     styleAxes: s.styleAxes, primaryColor: s.primaryColor, secondaryColor: s.secondaryColor,
-    styleAvoid: s.styleAvoid, chroma: s.chroma, sliceThreshold: s.sliceThreshold,
+    styleAvoid: s.styleAvoid, sliceThreshold: s.sliceThreshold,
     elements: s.elements, styleRefs: s.styleRefs, brandRefs: s.brandRefs,
     mascotEnabled: s.mascotEnabled, mascotName: s.mascotName, mascotDescription: s.mascotDescription,
     mascotRef: s.mascotRef, mascotPoses: s.mascotPoses,
@@ -683,8 +682,6 @@ export function buildKitsetContract(s: KitsetContractInput, opts: BuildKitsetOpt
         vi: s.kitName.trim() || "Phong cách chính",
         style: buildVariantStyle(s),
         styleMode: s.styleMode,
-        // Chỉ còn ý nghĩa khi cắt lại sheet raw đời cũ — xem §5b.
-        bg: CHROMA_PRESETS[s.chroma],
         brand: {
           // `gen.sh:87-94`: mode "colors" ⇒ chèn dòng palette; mode "image" ⇒ đính ảnh brand.
           // Có ảnh thì ảnh thắng, nhưng vẫn giữ hex để không mất dữ liệu người dùng đã chọn.

@@ -72,18 +72,6 @@ export const DEFAULT_CHARACTER_POSES = [
 export const NEUTRAL_PRIMARY_COLOR = "#151516";
 export const NEUTRAL_SECONDARY_COLOR = "#9A9A9A";
 
-/**
- * Màu nền tách (chroma key) — DI SẢN.
- *
- * Lượt gen MỚI không dùng tới: nền sheet nay là alpha thật và `gen.sh` không nhắc
- * tên màu nào trong prompt. Nhưng `slice.py` vẫn cần đúng hai chuỗi này để cắt lại
- * sheet raw ĐỜI CŨ (nền magenta/green) của project cũ, nên chúng ở lại — và
- * `bg` vẫn có mặt trong contract với mặc định magenta.
- *
- * `CHROMA_HEX` (bản hex thuần) đã xoá cùng ô swatch "Màu nền tách": không còn ô nào
- * vẽ màu key ra màn hình nữa.
- */
-export const CHROMA_PRESETS = { magenta: "pure vivid magenta #FF00FF", green: "pure vivid green #00FF00" } as const;
 
 /**
  * `skel` — khung xương. `w`/`h` ∈ (0,1] là **V-06**.
@@ -259,7 +247,6 @@ export const variantSchema = z.looseObject({
   vi: z.string().default(""),
   style: z.string().default(""),
   styleMode: z.enum(["prompt", "inspo"]).optional(),
-  bg: z.string().default(CHROMA_PRESETS.magenta),
   brand: brandSchema.nullish(),
   /** `styles.json` có variant `candy` với `characters: null` ⇒ phải nhận nullish. */
   characters: z.array(characterSchema).nullish(),

@@ -11,7 +11,8 @@ vì đợi cả lượt. Nghĩa là nhiều lượt slice.py chạy CHỒNG NHAU
   ③ manifest ghi NGUYÊN TỬ — người đọc (`GET /api/projects/:id/kit`) không bao giờ
      vớ phải file cụt.
 
-Ca ①/③ chạy CLI thật trong thư mục tạm. `torch`/`transformers` bị chặn bằng stub để
+Ca ①/③ chạy CLI thật trong thư mục tạm. `torch`/`transformers` không còn được
+slice.py nạp nữa (đường matting chroma đã bỏ), nên stub chặn import cũng bỏ theo.
 lượt chạy không nạp ViTMatte (~8s): đường full-bleed không dùng matting, và tấm còn
 lại trong ca này cố ý KHÔNG dùng nền key, nên chặn stub không che giấu đường nào.
 """
@@ -30,46 +31,38 @@ from slicelib import load, ROOT
 
 s = load()
 
-KEY = (255, 0, 255)
-
-
-def write_stub_modules(d):
-    """`import torch` phải NGÃ để slice.py đi nhánh không-ViTMatte."""
-    d.mkdir(parents=True, exist_ok=True)
-    for name in ("torch", "transformers"):
-        (d / f"{name}.py").write_text('raise ImportError("stub cho test")\n')
-
-
 def cell_component(file, shape, **skel):
     return {"file": file, "vi": file, "spec": file, "skel": dict(shape=shape, w=0.8, h=0.6, **skel)}
 
 
 def make_bg_sheet(path, w=160, h=100):
-    """Tấm nền 2x1 toàn ô full-bleed: viền ngoài cả tấm là TRANH (đúng ca đã sinh ra
-    bug sọc magenta), dải key nằm GIỮA hai ô với ranh giới răng cưa."""
-    im = Image.new("RGB", (w, h))
+    """Tấm nền 2x1 toàn ô full-bleed: tranh phủ kín, dải model CHỪA (alpha = 0) nằm
+    GIỮA hai ô với ranh giới răng cưa — đúng ca từng sinh ra bug sọc magenta, nay
+    phần chừa là trong suốt chứ không phải một màu."""
+    im = Image.new("RGBA", (w, h))
     px = im.load()
     for y in range(h):
         for x in range(w):
-            px[x, y] = (30 + y // 2, 60 + (x * 7) % 50, 20 + y // 4)
+            px[x, y] = (30 + y // 2, 60 + (x * 7) % 50, 20 + y // 4, 255)
     mid = w // 2
     for y in range(h):
         for x in range(mid - 6 - (y % 3), mid + 6 + (y % 3)):
-            px[x, y] = KEY
+            px[x, y] = (0, 0, 0, 0)
     im.save(path)
 
 
 def make_ui_sheet(path, w=120, h=80):
-    """Tấm 1x1 nền nhạt (KHÔNG phải key) → đi đường binary, nhanh, không cần matting.
+    """Tấm 1x1 nền TRONG SUỐT với một khối đặc ở giữa — hình dạng mà mọi sheet mới
+    đều có.
 
     KHỔ PHẢI LÀ 3:2. `orientation_error` (sự cố 21/08/2026) bỏ qua mọi sheet lệch
     quá 10% khỏi tỉ lệ đã khai — và ảnh VUÔNG lệch 33%. Tấm 80x80 cũ vì thế bị bỏ
     qua lặng lẽ, manifest rỗng, hai ca merge đỏ mà không nói được vì sao."""
-    im = Image.new("RGB", (w, h), (245, 245, 245))
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     px = im.load()
     for y in range(25, 55):
         for x in range(25, 55):
-            px[x, y] = (200, 40, 40)
+            px[x, y] = (200, 40, 40, 255)
     im.save(path)
 
 
@@ -90,14 +83,12 @@ class SliceCliTest(unittest.TestCase):
             ],
         }
         (self.tmp / "styles.json").write_text(json.dumps(styles), encoding="utf-8")
-        self.stub = self.tmp / "stub"
-        write_stub_modules(self.stub)
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def run_slice(self, *args):
-        env = dict(os.environ, PYTHONPATH=str(self.stub))
+        env = dict(os.environ)
         p = subprocess.run([sys.executable, str(self.tmp / "slice.py"), *args],
                            capture_output=True, text=True, env=env, timeout=300)
         self.assertEqual(p.returncode, 0, f"slice.py {args} chết:\n{p.stdout}\n{p.stderr}")
@@ -134,18 +125,17 @@ class SliceCliTest(unittest.TestCase):
         for f in ("25-bg-home.png", "26-bg-play.png", "01-btn.png"):
             self.assertTrue((self.tmp / "kits" / "v1" / f).exists(), f"{f} biến mất sau lượt cắt tổng")
 
-    def test_o_full_bleed_khong_con_mep_am_mau_key(self):
-        """Tấm nền có viền ngoài là TRANH ⇒ `is_key_color(bg)` False. Trước bản vá,
-        key khai báo trong styles.json bị bỏ qua ở đây và asset ra lò còn sọc magenta."""
+    def test_o_full_bleed_giu_nguyen_phan_model_chua_lam_TRONG_SUOT(self):
+        """Bug sọc magenta 15/08 ở dạng mới. Model chừa mép thì phần chừa phải đi
+        vào asset dưới dạng ALPHA = 0. Nếu ai đó lỡ đưa nhánh full-bleed về
+        `convert("RGB")` như bản chroma từng làm, phần chừa hoá ĐEN ĐẶC — vẫn là
+        một cái viền đi thẳng sang Figma, chỉ đổi màu."""
         self.run_slice("v1", "--sheet=nen")
-        ax = s.key_axis(KEY)
         for name in ("25-bg-home.png", "26-bg-play.png"):
             im = Image.open(self.tmp / "kits" / "v1" / name).convert("RGBA")
-            w, h = im.size
-            px = im.load()
-            bad = [(x, y, px[x, y]) for y in range(h) for x in range(w)
-                   if px[x, y][3] and s.key_spill_px(px[x, y], ax) > s.KEY_TINT_SPILL]
-            self.assertEqual(bad[:5], [], f"{name} còn {len(bad)} pixel ám màu key")
+            lo, hi = im.getchannel("A").getextrema()
+            self.assertEqual(hi, 255, f"{name}: mất phần tranh đục")
+            self.assertEqual(lo, 0, f"{name}: phần model chừa bị tô đặc thay vì trong suốt")
 
     def test_ghi_manifest_nguyen_tu(self):
         self.run_slice("v1", "--sheet=ui")

@@ -109,7 +109,6 @@ export function clampSkelSide(value: number | null): number | null {
   if (value === null || !Number.isFinite(value)) return null;
   return Math.min(1, Math.max(0.05, Math.round(value * 100) / 100));
 }
-export type Chroma = "magenta" | "green";
 export type SheetLimitKey = "background" | "popup" | "small" | "props" | "mascot";
 /** `null` = dùng giới hạn của thư viện chung; số = ghi đè cho riêng dự án. */
 export type ProjectSheetLimits = Record<SheetLimitKey, number | null>;
@@ -118,7 +117,7 @@ export type ProjectSheetLimits = Record<SheetLimitKey, number | null>;
  * ta sửa nhiều nhất (textarea to nhất, đầu panel); thiếu nó thì badge "Cần render lại"
  * không bao giờ hiện và `restoreVersion` không có gì để khôi phục (§W1-3, §W1-4).
  */
-export type VersionSettings = { chroma: Chroma; kitsetSummary: string; mascot: string; sliceThreshold: number; stylePrompt: string };
+export type VersionSettings = { kitsetSummary: string; mascot: string; sliceThreshold: number; stylePrompt: string };
 export type KitVersion = { id: string; label: `v${number}`; createdAt: string; status: "mock" | "rendering" | "ready" | "failed"; runId?: string; prompt: string; settings: VersionSettings };
 export type StyleAxes = Record<StyleAxisId, number>;
 
@@ -231,7 +230,6 @@ export type WorkflowState = {
   primaryColor: string;
   secondaryColor: string;
   styleAvoid: string;
-  chroma: Chroma;
   kitsetSummary: string;
   sliceThreshold: number;
   sheetLimits: ProjectSheetLimits;
@@ -314,10 +312,9 @@ function mascotStateOf(label: string): Pick<WorkflowState, "mascotEnabled" | "ma
  * (đúng chỗ bản cũ sai: `dirty` so 4 trường, snapshot ghi 4 trường khác).
  */
 export function versionSettingsOf(
-  s: Pick<WorkflowState, "chroma" | "kitsetSummary" | "mascotEnabled" | "mascotName" | "sliceThreshold" | "stylePrompt">,
+  s: Pick<WorkflowState, "kitsetSummary" | "mascotEnabled" | "mascotName" | "sliceThreshold" | "stylePrompt">,
 ): VersionSettings {
   return {
-    chroma: s.chroma,
     kitsetSummary: s.kitsetSummary,
     mascot: mascotLabelOf(s),
     sliceThreshold: s.sliceThreshold,
@@ -347,7 +344,6 @@ export function settingsDirty(
  */
 const SETTING_VI: Record<keyof VersionSettings, string> = {
   stylePrompt: "đổi mô tả phong cách",
-  chroma: "đổi màu nền tách",
   kitsetSummary: "đổi tóm tắt kitset",
   mascot: "đổi mascot",
   sliceThreshold: "đổi ngưỡng tách",
@@ -398,7 +394,6 @@ export function versionLabel(v: KitVersion, prev?: KitVersion): string {
 export function stateFromVersion(v: KitVersion): Partial<WorkflowState> {
   const raw = (v.settings ?? {}) as Partial<VersionSettings>;
   const out: Partial<WorkflowState> = {
-    chroma: raw.chroma,
     kitsetSummary: raw.kitsetSummary,
     sliceThreshold: raw.sliceThreshold,
     stylePrompt: raw.stylePrompt ?? v.prompt,
@@ -447,8 +442,7 @@ function initialState(): Omit<WorkflowState, WorkflowActionKey> {
     primaryColor: NEUTRAL_PRIMARY_COLOR,
     secondaryColor: NEUTRAL_SECONDARY_COLOR,
     styleAvoid: "",
-    chroma: "magenta",
-    kitsetSummary: "Bộ khung UI đã chọn",
+      kitsetSummary: "Bộ khung UI đã chọn",
     sliceThreshold: 120,
     sheetLimits: { background: null, popup: null, small: null, props: null, mascot: null },
     brandRefs: [],
@@ -523,7 +517,7 @@ export const workflowDraftOf = (s: WorkflowState) => ({
   step: s.step, unlocked: s.unlocked, kitName: s.kitName, campaign: s.campaign, brief: s.brief,
   stylePrompt: s.stylePrompt, styleMode: s.styleMode, brandProfileId: s.brandProfileId, styleRefs: s.styleRefs, styleAxes: s.styleAxes,
   primaryColor: s.primaryColor, secondaryColor: s.secondaryColor, styleAvoid: s.styleAvoid,
-  chroma: s.chroma, kitsetSummary: s.kitsetSummary, sliceThreshold: s.sliceThreshold,
+  kitsetSummary: s.kitsetSummary, sliceThreshold: s.sliceThreshold,
   sheetLimits: s.sheetLimits,
   brandRefs: s.brandRefs, mascotEnabled: s.mascotEnabled, mascotName: s.mascotName,
   mascotDescription: s.mascotDescription, mascotRef: s.mascotRef, mascots: s.mascots,

@@ -53,7 +53,6 @@ export async function buildTemplateContract(ws, template, firstVariant) {
     id: firstVariant.id, vi: firstVariant.vi, styleMode: "prompt",
     style: firstVariant.style ?? "",
     inspo: [],
-    bg: firstVariant.bg === "green" ? "pure vivid green #00FF00" : "pure vivid magenta #FF00FF",
     brand: { mode: "colors", primary: "#d42a1e", secondary: "#f5c64a", refs: [] },
     characters: [],
   }

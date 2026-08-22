@@ -57,7 +57,6 @@ const schema = z.object({
   template: z.enum(["basic", "blank", "from-project", "import"]),
   mode: z.enum(CREATE_MODES),
   variantVi: z.string().trim().min(1, "Đặt tên cho phong cách đầu tiên."),
-  bg: z.enum(["magenta", "green"]),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -67,7 +66,6 @@ const DEFAULTS: FormValues = {
   template: "basic",
   mode: DEFAULT_MODE,
   variantVi: "Phong cách 1",
-  bg: "magenta",
 };
 
 /** @deprecated FE3-PLAN §3-E1: màn cũ chỉ còn qua mục Nâng cao hoặc deep link. */
@@ -159,7 +157,7 @@ export function CreateProjectDialog({
       const res = await create.mutateAsync({
         name: v.name.trim(),
         template: v.template,
-        firstVariant: { id: variantId(v.variantVi), vi: v.variantVi.trim(), bg: v.bg },
+        firstVariant: { id: variantId(v.variantVi), vi: v.variantVi.trim() },
         tags,
         ...(slugEdited ? { slug: v.slug } : {}),
       });

@@ -136,7 +136,7 @@ export function ImportWizard({
       const res = await create.mutateAsync({
         name: name.trim(),
         template: "import",
-        firstVariant: { vi: "Phong cách 1", bg: "magenta" },
+        firstVariant: { vi: "Phong cách 1" },
         tags: preset?.tags ?? [],
         import: sourcePayload(),
       });

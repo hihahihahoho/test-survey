@@ -37,40 +37,25 @@ from PIL import Image, ImageChops, ImageFilter, ImageOps
 SIZE_DEVIATION_THRESHOLD_PX = 15
 QA_SIZE_DEVIATION_THRESHOLD_PX = SIZE_DEVIATION_THRESHOLD_PX
 
+# ── THƯ VIỆN TÍNH TOÁN: CHỈ CÒN numpy + scipy ────────────────────────────────
+# Bản chroma phải nạp cả `pymatting` (closed-form alpha) và `torch`+`transformers`
+# (ViTMatte) để giải ngược C = α·F + (1−α)·K — bài toán chỉ tồn tại khi nền là MÀU.
+# Nền nay là alpha thật: α đọc thẳng từ file, không phải giải gì cả. Hai thư viện
+# đó đã bỏ khỏi mã lẫn khỏi bộ cài (ViTMatte kéo theo ~2 GB torch + checkpoint).
+#
+# `scipy.ndimage` thì Ở LẠI: nó không dính gì tới tách nền, nó lo phần hình học —
+# dán nhãn khối liên thông để dọn đốm mồ côi sau `snap_to_safe`.
 try:
     import numpy as np
-    from pymatting import estimate_alpha_cf, estimate_foreground_ml
     from scipy import ndimage
-    HAS_PYMATTING = True
-except (ImportError, RuntimeError):        # lib optional lỗi môi trường → Vlahos
-    HAS_PYMATTING = False
-
-try:                                      # deep matting: alpha glow/bán-trong-suốt
-    import torch                          # mượt hơn hẳn closed-form (so găng burst)
-    from transformers import VitMatteImageProcessor, VitMatteForImageMatting
-    HAS_VITMATTE = True
-except (ImportError, RuntimeError):
-    HAS_VITMATTE = False
-_VITMATTE = None
-
-
-def vitmatte_model():
-    """Nạp lười 1 lần (~8s): chỉ trả giá khi có sheet key cần matte."""
-    global _VITMATTE
-    if _VITMATTE is None:
-        p = VitMatteImageProcessor.from_pretrained("hustvl/vitmatte-small-composition-1k")
-        m = VitMatteForImageMatting.from_pretrained("hustvl/vitmatte-small-composition-1k")
-        m.eval()
-        _VITMATTE = (p, m)
-    return _VITMATTE
+    HAS_NDIMAGE = True
+except (ImportError, RuntimeError):        # thiếu lib ⇒ bỏ bước dọn đốm, không chết
+    HAS_NDIMAGE = False
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_THRESHOLD = 52   # tâm ramp: dưới lo → trong suốt, trên hi → đục hẳn
 GROW_OFFSET = 60         # mask nghiêm = threshold + 60 (style ghi đè bằng grow_threshold)
 MIN_BLOB = 12            # khối nhỏ hơn (px) coi là nhiễu
-PURE_KEY_SN = 0.98       # sn ≥ ngưỡng này ⇒ pixel coi như NỀN THUẦN, gán nhãn
-                         # "nền chắc" cho trimap kể cả khi cú làm mượt σ=2 đã
-                         # kéo nó xuống dưới 0.9 (khe hẹp — xem matte_pymatting)
 HALO = 14                # nới bbox giữ glow quanh element
 PAD = 6
 BLEED = 0.18             # vành canvas ngoài ô (mỗi phía, theo tỷ lệ ô): trang trí
@@ -110,461 +95,6 @@ def orientation_error(orient, W, H):
     want_name = "portrait" if want_portrait else "landscape"
     want_size = "1024x1536" if want_portrait else "1536x1024"
     return f"sheet khai {want_name} ({want_size}) nhung anh la {W}x{H}"
-
-
-def border_colors(img, strip=8, ignore=()):
-    """Màu nền từ viền ngoài sheet. 1 màu (key phẳng) hoặc 2 màu (caro kiểu cũ).
-
-    ╔══ `ignore` — Ô NỀN ĐEN CỦA `matte:"glow"` KHÔNG PHẢI MÀU NỀN THỨ HAI ═════╗
-    ║ Ô `matte:"glow"` được gen.sh vẽ trên **nền ĐEN** có chủ ý (ánh sáng là     ║
-    ║ phép cộng, xem khối "Ô matte:glow vẽ trên NỀN ĐEN" ở vòng cắt). Ô đó nằm   ║
-    ║ chung sheet với ô nền key, và nếu nó chạm mép sheet thì mẫu viền có HAI    ║
-    ║ màu ⇒ `is_key_color` trả False ⇒ **cả sheet** rơi xuống `key_binary`, một  ║
-    ║ đường KHÔNG despill.                                                       ║
-    ║                                                                            ║
-    ║ ĐO TRÊN DỰ ÁN THẬT của chủ sản phẩm (`hello-368a`, agent 2.1.24):          ║
-    ║   sheet `dao-cu` lưới 3×3, ô 0 = `16-fx-burst` (glow, nền đen)             ║
-    ║     → border_colors = [(233,2,222), (1,0,0)] → is_key_color = False        ║
-    ║     → "binary 2 màu nhạt (đường lùi)" → 8 ô CÒN LẠI giữ nguyên magenta:    ║
-    ║       12 334 px tím bán trong suốt + 9 724 px tím đục (quầng tím quanh     ║
-    ║       hộp quà, mảnh ghép, phiếu thưởng, huy hiệu — đúng ảnh chủ SP gửi).   ║
-    ║   sheet `ui`/`popup-doc` (không có ô glow) → 1 màu → matte + despill →     ║
-    ║       0 px tím đục. Cùng một model, cùng một key: khác đúng cái ô đen.     ║
-    ╚═══════════════════════════════════════════════════════════════════════════╝
-
-    Vì vậy nơi gọi truyền vào hộp pixel của các ô glow; ở đây chỉ **không lấy mẫu**
-    trong đó. Không đoán "đen thì bỏ": nền caro/nhạt kiểu cũ vẫn phải ra 2 màu.
-    """
-    w, h = img.size
-    px = img.load()
-    samples = []
-    for x in range(0, w, 4):
-        for y in list(range(strip)) + list(range(h - strip, h)):
-            if not in_boxes(x, y, ignore):
-                samples.append(px[x, y])
-    for y in range(0, h, 4):
-        for x in list(range(strip)) + list(range(w - strip, w)):
-            if not in_boxes(x, y, ignore):
-                samples.append(px[x, y])
-    if not samples:                       # cả viền bị che (sheet 1 ô glow) → như cũ
-        return border_colors(img, strip)
-    samples.sort()
-    c1 = samples[len(samples) // 2]
-    far = [s for s in samples if math.dist(s, c1) > 30]
-    if len(far) > len(samples) * 0.05:
-        far.sort()
-        return [c1, far[len(far) // 2]]
-    return [c1]
-
-
-# ── TẬP MÀU CHROMA-KEY HỢP LỆ ────────────────────────────────────────────────
-# Contract: `bg` của mỗi variant/style trong styles.json là chuỗi TỰ DO mô tả màu
-# key ("pure vivid magenta #FF00FF"). Đây là interface DUY NHẤT với webapp —
-# webapp chọn key xa palette rồi ghi vào chuỗi đó, engine không cần biết gì thêm.
-# Thiếu `bg` → magenta (hành vi cũ, không đổi).
-KEY_COLORS = {
-    "magenta": (255, 0, 255),
-    "green":   (0, 255, 0),
-    "cyan":    (0, 255, 255),
-    "blue":    (0, 0, 255),
-}
-DEFAULT_KEY = "magenta"
-
-
-def key_axis(key):
-    """Trục của màu key: (kênh CAO, kênh THẤP) theo chỉ số 0=R 1=G 2=B.
-
-    Mọi phép đo chroma-key trong file này quy về đúng MỘT đại lượng:
-
-        spill = min(kênh CAO) − max(kênh THẤP)
-
-    Nó là "mức nhiễm màu key" của pixel. Với green (cao=G) ra `g − max(r,b)`,
-    với magenta (cao=R,B) ra `min(r,b) − g` — ĐÚNG hai công thức bản cũ hardcode,
-    nên tương thích ngược tuyệt đối; cyan (cao=G,B) và blue (cao=B) nay chạy được
-    mà không phải thêm nhánh `if`. Bản cũ `is_green = kg > max(kr, kb)` phân loại
-    SAI cyan (0,255,255): `255 > 255` là False ⇒ cyan bị coi là magenta ⇒ spill âm
-    toàn ảnh ⇒ không tách được gì.
-
-    Trả None nếu màu quá xám/không có trục rõ (không phải key hợp lệ)."""
-    mid = (max(key) + min(key)) / 2.0
-    hi = tuple(i for i in range(3) if key[i] >= mid)
-    lo = tuple(i for i in range(3) if key[i] < mid)
-    return (hi, lo) if hi and lo else None
-
-
-def key_spill_ref(key, axis):
-    """spill của CHÍNH màu key = mốc chuẩn hoá. Sàn 40 giữ từ bản cũ."""
-    hi, lo = axis
-    return max(40.0, min(key[i] for i in hi) - max(key[i] for i in lo))
-
-
-def key_spill(arr, axis):
-    """spill per-pixel trên mảng numpy (..., 3) float — cần numpy."""
-    hi, lo = axis
-    return (np.minimum.reduce([arr[..., i] for i in hi])
-            - np.maximum.reduce([arr[..., i] for i in lo]))
-
-
-def key_name_of(color):
-    """Tên key trong KEY_COLORS khớp trục của `color` (None nếu không khớp)."""
-    ax = key_axis(color)
-    if ax is None:
-        return None
-    for name, ref in KEY_COLORS.items():
-        if key_axis(ref) == ax:
-            return name
-    return None
-
-
-def declared_key(bg):
-    """Đọc tên màu key từ chuỗi `bg` khai báo trong styles.json.
-
-    Nhận cả tên ("pure vivid magenta #FF00FF" → magenta) lẫn mã hex đứng một
-    mình ("#00FFFF" → cyan, khớp theo trục màu). Không đọc được / thiếu hẳn →
-    None, và gọi ở trên sẽ giữ nguyên hành vi cũ."""
-    if not bg:
-        return None
-    s = str(bg).lower()
-    for name in KEY_COLORS:
-        if re.search(r"\b%s\b" % name, s):
-            return name
-    m = re.search(r"#([0-9a-f]{6})\b", s)
-    if m:
-        v = m.group(1)
-        return key_name_of(tuple(int(v[i:i + 2], 16) for i in (0, 2, 4)))
-    return None
-
-
-def is_key_color(bgs, expect=None):
-    """Nền là màu key chát (bão hoà cao, 1 màu) → dùng matte mềm, bỏ lấp lỗ.
-
-    `expect` = tên key ĐÃ KHAI BÁO (declared_key của styles.json). Chỉ dùng để
-    CẢNH BÁO khi nền model vẽ ra lệch khỏi thứ đã đặt hàng — không dùng để từ
-    chối, vì màu ĐO ĐƯỢC mới là màu phải un-mix khỏi viền."""
-    if len(bgs) != 1:
-        return False
-    key = bgs[0]
-    if key_axis(key) is None or max(key) - min(key) <= 80:
-        return False
-    if expect and key_name_of(key) != expect:
-        print(f"  ⚠ nền đo được {key} không phải key '{expect}' đã khai báo "
-              f"(bg trong styles.json) — vẫn tách theo màu đo được")
-    return True
-
-
-def matte_chroma(sheet, key, noclamp=None, axis=None, glass=None):
-    """Matte cho nền key chát: ViTMatte/closed-form nếu có lib, không thì
-    đường lùi Vlahos per-pixel. noclamp: mask bool (H,W) — vùng ô của element
-    matte:"glow"/"glass" được MIỄN clamp vật lý (xem matte_pymatting).
-    glass: mask bool (H,W) — ô matte:"glass", UNMIX foreground-over-key.
-    axis: trục key (key_axis) — mặc định suy từ chính màu `key`."""
-    if HAS_PYMATTING:
-        return matte_pymatting(sheet, key, noclamp, axis, glass)
-    return matte_vlahos(sheet, key, axis)
-
-
-def matte_pymatting(sheet, key, noclamp=None, axis=None, glass=None):
-    """Closed-form matting với trimap TỰ SINH từ màu key đã biết.
-
-    Vlahos đoán alpha ĐỘC LẬP từng pixel → bóng đổ/glow trộn nền cho alpha
-    nhiễu, phải vá bằng blur + despill mà vẫn sót (dải tím đáy toggle, burst
-    loang lổ — đã dính). Closed-form matting (Levin et al. — cùng loại toán
-    trong Refine Edge của Photoshop) giải alpha TOÀN CỤC theo mô hình
-    color-line, chỉ cần chia sẵn 3 vùng nhờ màu key cố định:
-      • nền chắc chắn:  nhiễm key ≥ 90%                → alpha 0
-      • element chắc:   không nhiễm key, co 2px        → alpha 1
-      • dải nghi vấn:   mép / bóng đổ / glow           → solver quyết, mượt
-    estimate_foreground_ml gỡ màu nền đã trộn vào pixel biên (thay
-    un-premultiply). Hậu kỳ giữ từ đường cũ: ép đục ruột loang + despill
-    magenta/green dư ở glow-bóng; BỎ blur 2 tầng — alpha solver đã mượt sẵn,
-    blur chỉ làm bết sparkle."""
-    axis = axis or key_axis(key)
-    khi, klo = axis
-    arr = np.asarray(sheet, dtype=np.float64)
-    spill = (np.minimum.reduce([arr[..., i] for i in khi])
-             - np.maximum.reduce([arr[..., i] for i in klo]))
-    sref = key_spill_ref(key, axis)
-    fg_sure = Image.fromarray(((spill <= 0) * 255).astype(np.uint8))
-    fg_sure = np.asarray(fg_sure.filter(ImageFilter.MinFilter(5))) > 128
-    # nn = biên nền/nghi-vấn LÀM MƯỢT trước khi cắt: noise gpt-image trên vùng
-    # glow-trộn-key làm contour sn=0.9 lởm chởm → alpha viền răng cưa (đã dính)
-    sn = np.clip(spill / sref, 0, 1)
-    sn_s = np.asarray(Image.fromarray(np.rint(sn * 255).astype(np.uint8))
-                      .filter(ImageFilter.GaussianBlur(2))) / 255.0
-    # ══ NỀN THUẦN KHÔNG ĐƯỢC MẤT NHÃN VÌ CHÍNH CÚ LÀM MƯỢT ═══════════════════
-    #
-    # `sn_s` là `sn` đã bôi σ=2. Trong KHE HẸP nền lọt giữa hai mảng element
-    # (nách, kẽ tay, khe giữa hai chân — rộng 3–7px) cú bôi kéo `sn=0` của
-    # element hai bên vào giữa khe ⇒ `sn_s < 0.9` ⇒ khe MẤT nhãn "nền chắc" và
-    # rơi vào dải nghi vấn. Solver thấy một vùng nghi vấn bị foreground bao kín,
-    # không còn điểm tựa nền nào ⇒ tô alpha≈1 ⇒ ra MẢNG KEY ĐỤC nằm trong thân
-    # nhân vật. Despill không cứu: `m` của despill loại vùng ruột sáng (`~inn |
-    # lum < 90`) nên mảng đó giữ nguyên màu key.
-    #
-    # Đo trên `chinh-pose-nhan-vat.png` thật của dự án `hello-368a` (key
-    # (250,3,243), sref 240): pixel `sn ≥ 0.98` mà alpha ra ≥ 250 = **77 px, và
-    # 77/77 đều nằm trong tập THOÁT nhãn** (`sn ≥ 0.98` nhưng `sn_s < 0.9`);
-    # tập được gán nền chắc đúng cách cho **0 px** đục, alpha trung bình 0,26/255.
-    # Ra asset: 01-pose-idle 270px magenta đục, 04-pose-present 114, 12-pose-bow
-    # 42, 03-pose-point 22, 05-pose-hold-gift 27.
-    #
-    # SỬA: giữ nguyên `sn_s` cho ĐƯỜNG VIỀN 0.9 (nó có việc của nó — làm mượt
-    # contour, không thì alpha viền răng cưa), rồi HỢP THÊM nhãn nền cho pixel
-    # mà `sn` GỐC gần như bằng nền thuần. Chỉ nới tập "nền chắc" vào sâu phía
-    # trong nền, không đụng chỗ contour ⇒ không kéo lại bệnh răng cưa.
-    #
-    # ĐÁNH ĐỔI: pixel element nào nghệ sĩ tô ĐÚNG màu key (lệch < 2% trên trục
-    # key) sẽ thành trong suốt. Đây đúng là giả định nền móng của cả file — key
-    # được chọn XA palette (xem `pickChromaKey`), và đường lùi Vlahos/binary vốn
-    # đã xoá thẳng những pixel đó từ lâu.
-    bg_sure = (sn_s >= 0.9) | (sn >= PURE_KEY_SN)
-    if HAS_VITMATTE:
-        # ViTMatte (ViT-small, trimap-based SOTA): alpha vùng nghi vấn mượt và
-        # đúng cấu trúc tia/glow hơn hẳn closed-form (bảng so găng burst)
-        proc, mdl = vitmatte_model()
-        tm8 = np.full(spill.shape, 128, dtype=np.uint8)
-        tm8[fg_sure] = 255
-        tm8[bg_sure] = 0
-        inp = proc(images=sheet, trimaps=Image.fromarray(tm8), return_tensors="pt")
-        with torch.no_grad():
-            alpha = mdl(**inp).alphas[0, 0, :sheet.height, :sheet.width]
-        alpha = alpha.numpy().astype(np.float64)
-    else:
-        trimap = np.full(spill.shape, 0.5)
-        trimap[fg_sure] = 1.0
-        trimap[bg_sure] = 0.0
-        alpha = estimate_alpha_cf(arr / 255.0, trimap)
-    # CLAMP VẬT LÝ: trên nền key, alpha thật ≥ 1 − spill/sref (pixel ít nhiễm
-    # key không thể bán trong suốt — nếu trong thì key phải lộ ra). Model thấy
-    # "trông giống glow" là hạ alpha bừa → khoang hộp quà thủng lỗ (đã dính).
-    # Element matte:"glow"/"glass" (cờ trong contract) được MIỄN: halo pháo
-    # sáng đẹp là nhờ model làm mềm quá mức vật lý — đó là chủ ý nghệ thuật.
-    vl = 1.0 - sn
-    m = (alpha > 0.04) & (vl > alpha)
-    if noclamp is not None:
-        m &= ~noclamp
-    alpha = np.where(m, vl, alpha)
-    fgc = np.clip(estimate_foreground_ml(arr / 255.0, alpha) * 255, 0, 255)
-    # ══ Ô matte:"glass" — UNMIX FOREGROUND-OVER-KEY, KHÔNG PHẢI DESPILL ═══════
-    #
-    # Kính TRONG SUỐT vẽ trên nền key: cái mắt thấy là ảnh ĐÃ TRỘN
-    #     C = α·F + (1−α)·K
-    # Solver alpha nhìn thấy một mảng màu liền khối có biên rõ nên gọi nó là
-    # foreground (α≈1) — panel ra ĐỤC MÀU KEY. Đo trên `22-board-panel` của dự án
-    # thật `hello-368a`: 325 626 px magenta ĐỤC = 40% diện tích ô.
-    #
-    # Despill thường KHÔNG cứu được: nó chỉ trừ sắc key khỏi RGB, nên magenta đục
-    # thành HỒNG CÁ HỒI đục — vẫn không nhìn xuyên qua được. Phải giải ngược:
-    #
-    #   spill(C) = α·spill(F) + (1−α)·sref          (spill tuyến tính theo key_axis)
-    #   giả thiết Vlahos: kính không tự mang sắc key ⇒ spill(F) = 0
-    #   ⇒ α = 1 − spill(C)/sref = vl          ← ĐÚNG đại lượng CLAMP đã tính ở trên
-    #   ⇒ F = (C − (1−α)·K) / α                (un-mix, F ra spill = 0 theo dựng)
-    #
-    # Nghĩa là với ô glass, `vl` KHÔNG phải cận dưới của alpha — nó CHÍNH LÀ alpha.
-    # `noclamp` (miễn cận dưới) đúng cho `glow` (halo mềm hơn vật lý là chủ ý nghệ
-    # thuật) nhưng NGƯỢC dấu với glass: kính trong hơn thứ solver đoán, không đục hơn.
-    #
-    # KÍNH VẪN CÒN THÂN (yêu cầu của chủ sản phẩm): chỗ key lộ nguyên (sn=1) mới ra
-    # α=0; chỗ kính phủ màu lên key thì sn<1 ⇒ α>0. Khung viền đặc (sn≈0) giữ α=1.
-    # Đo lại chính ô đó: ruột trung bình RGB (231,75,165), sref 226 ⇒ sn 0.40
-    # ⇒ α≈0.60 — panel mờ 60%, không phải lỗ thủng.
-    #
-    # ĐÁNH ĐỔI, NÓI THẲNG: giả thiết spill(F)=0 nghĩa là trong ô glass, mọi sắc
-    # key còn lại đều bị coi là nền lộ qua. Element glass mà nghệ sĩ CỐ Ý tô đúng
-    # màu key sẽ bị làm trong. Đó là cái giá của việc khai `matte:"glass"`, và là
-    # lý do cờ này phải do thư viện element khai chứ không tự đoán.
-    if glass is not None and np.any(glass):
-        a_g = np.clip(vl, 0.0, 1.0)
-        alpha = np.where(glass, a_g, alpha)
-        kf = np.asarray(key, dtype=np.float64)
-        den = np.maximum(alpha, 1.0 / 255.0)[..., None]
-        unmix = np.clip((arr - (1.0 - alpha)[..., None] * kf) / den, 0, 255)
-        fgc = np.where(glass[..., None], unmix, fgc)
-    a8 = np.rint(np.clip(alpha, 0, 1) * 255).astype(np.uint8)
-    # VÁ LỖ NHỎ (thay vì ép đục cả ruột): cụm bán-trong-suốt < 400px nằm trong
-    # thân đặc là "ruột loang" → ép 255; mảng semi LỚN liền khối là chủ ý nghệ
-    # thuật (gradient glow của burst, ruột kính board-panel) — ép là san phẳng
-    # alpha thành slab đục viền lởm chởm (đã dính). Ruột RỖNG CỐ Ý (α≈0) không
-    # nằm trong dải 90–242 nên vô can.
-    aimg = Image.fromarray(a8)
-    interior = aimg.point(lambda v: 255 if v > 128 else 0).filter(ImageFilter.MinFilter(5))
-    inn = np.asarray(interior) > 0
-    semi_m = (a8 > 90) & (a8 < 242) & inn
-    lbl, nlb = ndimage.label(semi_m)
-    if nlb:
-        sizes = ndimage.sum(semi_m, lbl, range(1, nlb + 1))
-        a8[np.isin(lbl, np.nonzero(sizes < 400)[0] + 1)] = 255
-    # KHỬ RĂNG CƯA mép đặc: soften alpha 0.7px toàn cục (sub-pixel AA như
-    # Photoshop) — mép silhouette hết bậc thang mà thân không mỏng đi
-    a8 = np.asarray(Image.fromarray(a8).filter(ImageFilter.GaussianBlur(0.7)))
-    # FEATHER vùng alpha thấp: mép ngoài glow phai dần thay vì đứt gãy; mép đặc
-    # (α>128) giữ nguyên độ nét
-    lo = np.asarray(Image.fromarray(a8).filter(ImageFilter.GaussianBlur(3)))
-    a8 = np.where(a8 > 128, a8, lo).astype(np.uint8)
-    # DESPILL phần key dư ở biên/bóng (ngoài ruột đặc, hoặc ruột TỐI = bóng đổ),
-    # BẢO TOÀN ĐỘ SÁNG: bản cũ trừ thẳng kênh R/B làm pixel biên trắng-pha-key
-    # sập tối → viền chì mờ quanh element (đã dính) — giờ trừ xong scale lại
-    # về đúng luminance ban đầu: chỉ đổi SẮC, không đổi SÁNG.
-    R, G, B = fgc[..., 0], fgc[..., 1], fgc[..., 2]
-    ex = (np.minimum.reduce([fgc[..., i] for i in khi])
-          - np.maximum.reduce([fgc[..., i] for i in klo]))
-    lum = 0.3 * R + 0.59 * G + 0.11 * B
-    m = (a8 > 0) & (ex > 0) & (~inn | (lum < 90))
-    cut = np.where(m, ex * 0.7, 0)
-    for i in khi:                 # trừ ở ĐÚNG các kênh cao của key
-        fgc[..., i] -= cut
-    R, G, B = fgc[..., 0], fgc[..., 1], fgc[..., 2]
-    lum2 = 0.3 * R + 0.59 * G + 0.11 * B
-    scale = np.clip(np.where(lum2 > 1, lum / np.maximum(lum2, 1), 1.0), 1.0, 1.8)
-    fgc *= scale[..., None]
-    # DEFRINGE kiểu Photoshop (decontamination như Photoroom): ViTMatte ôm rộng
-    # hơn silhouette vài px → vành pixel MÀU-TRỘN-NỀN alpha cao, despill xong
-    # thành vành XÁM quanh element (đã dính, sâu 4-6px chứ không chỉ sát mép).
-    # Nguồn màu phải là RUỘT THẬT (α≥245, cách mép >6px) — bản đầu lấy cả pixel
-    # α≥200 làm nguồn nên vành xám tự sơn lại chính nó. Chỉ thay pixel TRUNG
-    # TÍNH (sat<45): vành nhiễm key sau despill là xám không sắc, còn bevel/
-    # viền vàng nghệ sĩ vẽ chủ ý có sắc rõ → không bị phá.
-    outer = a8 < 8
-    near = ndimage.binary_dilation(outer, iterations=6)
-    band = near & ~outer & (a8 >= 8)
-    known = (a8 >= 245) & ~near
-    filled = known.copy()
-    Fp = fgc.copy()
-    for _ in range(8):
-        w_ = ndimage.uniform_filter(filled.astype(np.float64), 3)
-        Fs = np.dstack([ndimage.uniform_filter(Fp[..., c] * filled, 3) for c in range(3)])
-        upd = (~filled) & (w_ > 1e-6)
-        Fp[upd] = Fs[upd] / w_[upd, None]
-        filled |= upd
-    sat = fgc.max(axis=2) - fgc.min(axis=2)
-    take = band & filled & ~known & (sat < 45)
-    fgc = np.where(take[..., None], Fp, fgc)
-    out = Image.fromarray(
-        np.dstack([np.clip(fgc, 0, 255).astype(np.uint8), a8[..., None]]))
-    strict = bytearray((a8 >= 242).astype(np.uint8).tobytes())
-    return out, strict
-
-
-def matte_vlahos(sheet, key, axis=None):
-    """Chroma-key thực thụ theo Vlahos + DESPILL, cho nền key chát bất kỳ trong
-    KEY_COLORS (magenta / green / cyan / blue).
-
-    Ramp theo khoảng-cách-màu là chưa đủ: glow bán trong suốt TRỘN với nền key
-    cho ra pixel "đủ xa" màu key → được giữ đục nguyên màu trộn → viền ám xanh
-    lá / hồng (đã dính). Vlahos đo thẳng mức "nhiễm key" của từng pixel:
-
-      spill = min(kênh CAO của key) − max(kênh THẤP)   (xem key_axis)
-      green key:   g - max(r, b)   ·   magenta key: min(r, b) - g
-      cyan  key:   min(g, b) - r   ·   blue    key: b - max(r, g)
-      alpha = 1 - spill / SREF      (SREF = spill của màu key thuần đo từ nền)
-
-    Pixel key thuần → alpha 0 (kể cả ruột rỗng nằm kín — không cần thông ra
-    rìa). Pixel trộn → alpha đúng độ trong suốt thật. Rồi UN-PREMULTIPLY theo
-    màu key: quan sát C = α·F + (1−α)·K ⇒ màu thật F = (C − (1−α)·K)/α.
-    (Despill kiểu cắt kênh cũ làm mép SẠM ĐEN và ruột bán trong suốt lem —
-    trừ sáng thay vì gỡ nền; un-premultiply gỡ đúng phần nền trộn vào.)
-
-    Đánh đổi ghi rõ: element CÓ MÀU GẦN KEY (xanh lá trên nền green, tím trên
-    nền magenta) sẽ bị mờ/xỉn — vì vậy prompt đã cấm dùng màu key trong element
-    và key được chọn ngoài palette của style."""
-    kr, kg, kb = key
-    axis = axis or key_axis(key)
-    khi, klo = axis
-    sref = key_spill_ref(key, axis)
-    w, h = sheet.size
-    out = Image.new("RGBA", (w, h))
-    strict = bytearray(w * h)
-    src, dst = sheet.load(), out.load()
-    for y in range(h):
-        row = y * w
-        for x in range(w):
-            p = src[x, y]
-            r, g, b = p
-            spill = min(p[i] for i in khi) - max(p[i] for i in klo)
-            if spill <= 0:
-                dst[x, y] = (r, g, b, 255)
-                strict[row + x] = 1
-                continue
-            a = 1 - spill / sref
-            # Phao theo KHOẢNG CÁCH MÀU: màu thật của element nếu bị pha với key
-            # luôn bị kéo VỀ GẦN key — pixel xa key mà vẫn dính spill (tím than
-            # trên nền magenta) là màu ruột element, không phải nền trộn. Lấy
-            # max hai ước lượng: chỉ cứu thêm, không cắt bớt (glow vẫn nhờ Vlahos).
-            d2 = (r - kr) ** 2 + (g - kg) ** 2 + (b - kb) ** 2
-            a = max(a, min(1.0, d2 ** 0.5 / 200))
-            if a <= 0.04:
-                continue                          # nền / gần nền → trong suốt
-            # un-premultiply: gỡ phần nền key đã trộn vào, trả màu thật
-            inv = 1 - a
-            r = min(255, max(0, round((r - inv * kr) / a)))
-            g = min(255, max(0, round((g - inv * kg) / a)))
-            b = min(255, max(0, round((b - inv * kb) / a)))
-            dst[x, y] = (r, g, b, round(a * 255))
-            if a >= 0.95:
-                strict[row + x] = 1
-    # LÀM CỨNG RUỘT: màu gần key (đỏ sậm/viền bóng trên nền magenta) cho alpha
-    # lửng lơ NGAY TRONG THÂN khối → composite lên nền tối bị loang lổ vết thủng.
-    # Vùng đặc (fill kín lỗ, co 2px chừa mép anti-alias) ∩ pixel VỐN ĐÃ khá đục
-    # (α > 0.35) → ép alpha = 255. Giao với "vốn đã khá đục" là bắt buộc: ruột
-    # RỖNG CỐ Ý (nút outline, khối hollow) có α≈0 nằm kín trong viền — lấp mù
-    # quáng là hoá mảng đen đặc (đã dính). Tia/glow mảnh không qua phép co.
-    alpha = out.getchannel("A")
-    solid = fill_mask_holes(alpha.point(lambda v: 255 if v > 128 else 0))
-    interior = solid.filter(ImageFilter.MinFilter(5))
-    semi = alpha.point(lambda v: 255 if v > 90 else 0)
-    hard = ImageChops.darker(interior, semi)          # ruột loang → ép đục
-    # MÉP MƯỢT hai tầng: mép đặc blur nhẹ 0.7px (khử răng cưa AA-trên-nền-key,
-    # thân không mỏng đi vì ruột đã ép đục); vùng GLOW alpha thấp blur nặng 3.5px
-    # — alpha glow nhiễu hạt (noise gpt-image trộn nền key) làm viền lởm chởm
-    soft = alpha.filter(ImageFilter.GaussianBlur(0.7))
-    glow = alpha.filter(ImageFilter.GaussianBlur(3.5))
-    hi = alpha.point(lambda v: 255 if v > 128 else 0)
-    out.putalpha(Image.composite(ImageChops.lighter(hard, soft), glow, hi))
-    # KHỬ ÁM MÀU KEY ở biên/bóng đổ (NGOÀI ruột đặc): bóng mềm trộn nền magenta
-    # ra tím bùn mà distance-guard giữ gần-đục → un-premultiply gỡ không hết.
-    # Despill phần dư = chính spill (min kênh CAO − max kênh THẤP), trừ ở đúng
-    # các kênh CAO của key. Chỉ áp ngoài ruột nên thân tím/xanh lá hợp lệ (đã
-    # đục) không bị xỉn.
-    ap, ip, op = out.getchannel("A").load(), interior.load(), out.load()
-    for y in range(h):
-        for x in range(w):
-            if not ap[x, y]:
-                continue
-            px4 = op[x, y]
-            r, g, b, a4 = px4
-            # trong ruột đặc chỉ khử ở pixel TỐI (bóng đổ); thân màu sáng giữ nguyên
-            if ip[x, y] and 0.3 * r + 0.59 * g + 0.11 * b >= 90:
-                continue
-            ex = min(px4[i] for i in khi) - max(px4[i] for i in klo)
-            if ex > 0:
-                cut = round(ex * 0.7)
-                ch = [r, g, b]
-                for i in khi:
-                    ch[i] -= cut
-                op[x, y] = (ch[0], ch[1], ch[2], a4)
-    return out, strict
-
-
-def key_binary(sheet, bgs, threshold, strict_threshold):
-    """Đường lùi cho nền nhạt/caro (sheet cũ): binary key 1–2 màu nền."""
-    w, h = sheet.size
-    out = Image.new("RGBA", (w, h))
-    strict = bytearray(w * h)
-    src, dst = sheet.load(), out.load()
-    for y in range(h):
-        row = y * w
-        for x in range(w):
-            p = src[x, y]
-            d = min(math.dist(p, bg) for bg in bgs)
-            r, g, b = p
-            if d < threshold:
-                dst[x, y] = (r, g, b, 0)
-            else:
-                dst[x, y] = (r, g, b, 255)
-                if d >= strict_threshold:
-                    strict[row + x] = 1
-    return out, strict
 
 
 SOLID_ALPHA = 240      # từ mức này trở lên coi là ĐỤC HẲN — xem alpha_sheet
@@ -674,47 +204,6 @@ def painted_checkerboard(img, sample_rows=24):
     if hang < sample_rows * 0.5 or cot < sample_rows * 0.5:
         return None                              # sọc một chiều / nhiễu — chưa phải caro
     return lo, hi
-
-
-def fill_holes(keyed, sheet_rgb, W, H):
-    """Chỉ dùng ở đường lùi nền nhạt: lấp vùng trong suốt nằm kín trong element
-    (ruột trắng bị key nhầm vì trắng ≈ nền). Nền key chát KHÔNG cần — và không
-    được dùng, vì nó sẽ lấp cả ruột rỗng có chủ đích (nút outline)."""
-    dst = keyed.load()
-    src = sheet_rgb.load()
-    transparent = bytearray(W * H)
-    for y in range(H):
-        row = y * W
-        for x in range(W):
-            if dst[x, y][3] == 0:
-                transparent[row + x] = 1
-    outside = bytearray(W * H)
-    q = deque()
-    for x in range(W):
-        for y in (0, H - 1):
-            i = y * W + x
-            if transparent[i] and not outside[i]:
-                outside[i] = 1; q.append(i)
-    for y in range(H):
-        for x in (0, W - 1):
-            i = y * W + x
-            if transparent[i] and not outside[i]:
-                outside[i] = 1; q.append(i)
-    while q:
-        i = q.popleft()
-        x, y = i % W, i // W
-        if x > 0 and transparent[i - 1] and not outside[i - 1]: outside[i - 1] = 1; q.append(i - 1)
-        if x < W - 1 and transparent[i + 1] and not outside[i + 1]: outside[i + 1] = 1; q.append(i + 1)
-        if y > 0 and transparent[i - W] and not outside[i - W]: outside[i - W] = 1; q.append(i - W)
-        if y < H - 1 and transparent[i + W] and not outside[i + W]: outside[i + W] = 1; q.append(i + W)
-    filled = 0
-    for i in range(W * H):
-        if transparent[i] and not outside[i]:
-            x, y = i % W, i // W
-            r, g, b = src[x, y]
-            dst[x, y] = (r, g, b, 255)
-            filled += 1
-    return filled
 
 
 def label_blobs(strict, W, H):
@@ -1264,187 +753,12 @@ def fill_mask_holes(msk):
 
 
 # ── Ô matte:"glow" vẽ trên NỀN ĐEN ────────────────────────────────────────────
-GLOW_GATE_LO = 6.0       # dưới mức này (level 8-bit) coi là nhiễu tối → tắt hẳn
-GLOW_GATE_HI = 28.0      # trên mức này giữ NGUYÊN độ sáng, không trừ đi gì cả
-
-
-def glow_alpha(reg):
-    """Tách vật liệu PHÁT SÁNG khỏi nền đen. Trả (alpha 0..1 float, F 0..255).
-
-    Ánh sáng là phép CỘNG: trên nền đen ảnh quan sát chính là premultiplied
-    `C = α·F`, nên `α = max(R,G,B)` và `F = C/α` là đáp án đúng tuyệt đối —
-    không model nào phải đoán.
-
-    Vì sao KHÔNG dùng black-point cứng `(mx − BP)/(255 − BP)` như bản trước:
-    nó TRỪ đi độ sáng chứ không chỉ khử nhiễu, và vì `F` vẫn chia cho `mx` thô
-    nên `α·F ≠ C` — năng lượng sáng bốc hơi đúng ở quầng ngoài mềm, thứ làm glow
-    trông mượt. Đo trên glow tổng hợp (docs/research-glow-extraction-2026-08.md
-    §2.5): dải max(RGB) 0.08–0.15 mất **57.3%** độ sáng, dải 0.15–0.25 mất 32.4%.
-
-    SOFT-GATE thay cho trừ: nhân alpha với smoothstep(6, 28) — dưới 6 tắt hẳn
-    (nhiễu tối gpt-image), trên 28 nhân 1.0 (không mất gì), ở giữa chuyển mượt
-    nên không sinh contour. Số đo A/B cùng tài liệu:
-
-      | phương án                          | MAE add | nhiễu nền | mất sáng halo |
-      | (mx−18)/(255−18)  ← bản cũ         |  4.96   |  0.000    |    37.2%      |
-      | mx · smoothstep(6,28)  ← bản này   |  1.35   |  0.054    |     0.6%      |
-      | mx (không gate)                    |  0.00   |  2.143    |     0.0%      |
-    """
-    reg = np.asarray(reg, dtype=np.float64)
-    mx = reg.max(axis=2)
-    t = np.clip((mx - GLOW_GATE_LO) / (GLOW_GATE_HI - GLOW_GATE_LO), 0.0, 1.0)
-    a = np.clip(mx / 255.0, 0.0, 1.0) * (t * t * (3.0 - 2.0 * t))
-    F = np.clip(reg * 255.0 / np.maximum(mx, 1.0)[..., None], 0, 255)
-    return a, F
-
-
-# ── BLEND MODE ĐI KÈM ASSET, KHÔNG BAKE VÀO ALPHA ────────────────────────────
-# Vật liệu phát sáng KHÔNG diễn đạt được bằng một PNG straight-alpha dán thường:
-# ánh sáng là phép CỘNG, còn `source-over` là phép TRỘN — dán thường thì đúng phần
-# quầng ngoài mềm (thứ làm glow ra glow) bị nền nuốt mất. Đo trong
-# docs/research-glow-extraction-2026-08.md: RGBA(α = max(RGB)) dán bằng
-# `plus-lighter` cho ra ảnh GIỐNG HỆT TỪNG BIT với nền-đen + additive.
-#
-# Nên đường ra là SHIP KÈM CHỈ DẪN, không hy sinh alpha: manifest ghi `blend`,
-# webapp preview đặt `mix-blend-mode`, designer đặt Linear Dodge (Add)/Screen cho
-# layer trong Figma. Asset thường KHÔNG có khoá này (không phải `"normal"`) —
-# người đọc manifest cũ không phải đổi một dòng nào.
 MATTE_BLEND = {"glow": "screen"}
 
 
 def asset_blend(skel):
     """Blend mode phải đặt cho asset này. None = vẽ thường (`source-over`)."""
     return MATTE_BLEND.get((skel or {}).get("matte"))
-
-
-KEY_TRIM_DIST = 90       # tổng |ΔR|+|ΔG|+|ΔB| tới màu key để coi pixel là "nền key"
-KEY_TRIM_LIMIT = 3       # gọt viền key tối đa 1/3 ô mỗi phía (viền model chừa dày tuỳ hứng)
-KEY_TINT_SPILL = 40      # mức nhiễm key (min(kênh CAO) − max(kênh THẤP)) để coi là ÁM key
-KEY_TINT_MIN_PTS = 14    # 14/16 điểm ám key thì cả cột/hàng đó là mép răng cưa, không phải tranh
-
-
-def key_spill_px(px, key_ax):
-    """Mức nhiễm màu key của MỘT pixel: min(kênh CAO) − max(kênh THẤP) (xem key_axis).
-    Magenta → min(r,b) − g; green → g − max(r,b). Càng lớn càng ám key.
-    Bản cho pixel thuần Python — `key_spill()` ở trên là bản numpy cho cả mảng; hai
-    hàm CÙNG một công thức, tách tên để không hàm nào che hàm nào."""
-    hi, lo = key_ax
-    return min(px[i] for i in hi) - max(px[i] for i in lo)
-
-
-def trim_flat_cell(cell_rgb, key=None):
-    """Ô full-bleed: gọt các cột/hàng PHẲNG (một màu đều — dải gap màu key giữa
-    hai nửa, hay mép key sót) ở 4 mép. Cột artwork thật luôn biến thiên dọc
-    (trời→đất) nên không bị gọt. Trả bbox (l, t, r, b).
-
-    `key` = màu chroma-key của sheet nếu dò được (bg[0] khi is_key_color). Có key
-    thì gọt thêm một lượt theo MÀU với hạn mức rộng hơn: model hay vẽ cảnh nền
-    THỤT VÀO và chừa nguyên khung key quanh 4 cạnh (đã dính: viền magenta 55px
-    quanh 25-bg-home). Ô full-bleed KHÔNG đi qua đường matte nên viền đó lọt
-    thẳng vào asset nếu không gọt ở đây. Artwork không bao giờ được mang màu key
-    (prompt cấm) nên lượt gọt này không ăn vào tranh."""
-    W, H = cell_rgb.size
-    px = cell_rgb.load()
-
-    def col_pts(x): return [(x, (i * (H - 1)) // 15) for i in range(16)]
-    def row_pts(y): return [((i * (W - 1)) // 15, y) for i in range(16)]
-
-    def flat(pts):
-        # Mốc so là TRUNG VỊ của dòng, KHÔNG phải pixel ĐẦU dòng như bản cũ.
-        # Pixel ở góc ô hay bị tối/ám do nén của model: lấy nó làm mốc thì một
-        # cột key sạch cũng bị phán "không phẳng" và vòng gọt đứng ngay tại cột 0.
-        # Đo trên raw thật: px[0,0]=(232,16,221) vs px[0,1023]=(222,43,211) ⇒ Δg=27
-        # ⇒ flat_col(0)=False ⇒ mép trái/trên/dưới KHÔNG được gọt một pixel nào,
-        # chỉ mép phải (góc sạch) được gọt. Đúng viền magenta người dùng báo.
-        s = [px[x, y] for x, y in pts]
-        med = tuple(sorted(c[k] for c in s)[len(s) // 2] for k in range(3))
-        return all(abs(c[k] - med[k]) <= 18 for c in s for k in range(3))
-
-    def keyish(pts):
-        if key is None:
-            return False
-        n = sum(1 for x, y in pts
-                if sum(abs(px[x, y][k] - key[k]) for k in range(3)) <= KEY_TRIM_DIST)
-        return n >= 15          # 15/16 điểm là nền key (chừa 1 điểm nhiễu góc)
-
-    def tinted(pts):
-        """MÉP RĂNG CƯA giữa dải key và tranh: pixel TRỘN nửa key nửa tranh.
-
-        Đo thật trên raw 15/08 (dự án hello, tấm `nen` ô 26-bg-play): sau khi `keyish`
-        gọt hết 6 cột magenta đặc, cột kế tiếp là (135,21,121) — cách key 277 đơn vị
-        nên `keyish` KHÔNG bắt, `flat` cũng không (nó biến thiên dọc), thế là nó ở lại
-        và thành ĐÚNG cái sọc tím người dùng nhìn thấy khi dán sang Figma.
-        Nó không phải tranh: tranh không bao giờ mang trục màu key (prompt cấm màu key
-        trong artwork), nên đo bằng `key_spill` — mức nhiễm key — chứ không đo khoảng
-        cách tới key. Cột tranh thật đo được spill ≤ 0; cột mép đo được ~100."""
-        if key_ax is None:
-            return False
-        n = sum(1 for x, y in pts if key_spill_px(px[x, y], key_ax) > KEY_TINT_SPILL)
-        return n >= KEY_TINT_MIN_PTS
-
-    key_ax = key_axis(key) if key else None
-    lim_x, lim_y = W // 8, H // 8
-    kx, ky = W // KEY_TRIM_LIMIT, H // KEY_TRIM_LIMIT
-    l = 0
-    while (l < lim_x and flat(col_pts(l))) or (l < kx and (keyish(col_pts(l)) or tinted(col_pts(l)))): l += 1
-    r = W
-    while (r > W - lim_x and flat(col_pts(r - 1))) or (r > W - kx and (keyish(col_pts(r - 1)) or tinted(col_pts(r - 1)))): r -= 1
-    t = 0
-    while (t < lim_y and flat(row_pts(t))) or (t < ky and (keyish(row_pts(t)) or tinted(row_pts(t)))): t += 1
-    b = H
-    while (b > H - lim_y and flat(row_pts(b - 1))) or (b > H - ky and (keyish(row_pts(b - 1)) or tinted(row_pts(b - 1)))): b -= 1
-    # Ô toàn key (model bỏ trắng ô) → mọi mép đều bị gọt hết; trả nguyên ô để
-    # bước sau còn phát hiện được thay vì crash vì bbox rỗng.
-    if l >= r or t >= b:
-        return 0, 0, W, H
-    return l, t, r, b
-
-
-def erase_key_edge(rgba, key, spill=KEY_TINT_SPILL, limit=KEY_TRIM_LIMIT):
-    """Xoá vệt key CÒN SÓT ở mép ô full-bleed, loang vào từ 4 mép.
-
-    Vì sao còn sót sau `trim_flat_cell`: hàm đó gọt theo CỘT/HÀNG NGUYÊN. Ranh giới
-    giữa dải key và tranh do model vẽ ra thì RĂNG CƯA — cột ngoài cùng còn lại có thể
-    nửa trên là tranh, nửa dưới là key. Gọt thêm một cột nữa là ăn vào tranh; để
-    nguyên là còn sọc. Nên phần răng cưa phải xử lý theo PIXEL, không theo cột.
-
-    Loang từ mép vào và chỉ đi qua pixel ÁM KEY (`key_spill_px > spill`) ⇒ dừng ngay
-    ở tranh. Tranh không mang màu key (prompt cấm màu key trong artwork), nên phép
-    loang này không có đường ăn vào giữa ảnh; ngoài ra còn chặn cứng trong vành
-    1/`limit` ô mỗi phía — cùng hạn mức với lượt gọt theo màu.
-
-    Trả số pixel đã xoá."""
-    ax = key_axis(key) if key else None
-    if ax is None:
-        return 0
-    W, H = rgba.size
-    px = rgba.load()
-    bx, by = max(1, W // limit), max(1, H // limit)
-    seen = bytearray(W * H)
-    q = deque()
-
-    def push(x, y):
-        if 0 <= x < W and 0 <= y < H and not seen[y * W + x]:
-            if x >= bx and x < W - bx and y >= by and y < H - by:
-                return                      # ngoài vành mép: không đụng tới
-            seen[y * W + x] = 1
-            if px[x, y][3] and key_spill_px(px[x, y], ax) > spill:
-                q.append((x, y))
-
-    for x in range(W):
-        push(x, 0); push(x, H - 1)
-    for y in range(H):
-        push(0, y); push(W - 1, y)
-    n = 0
-    while q:
-        x, y = q.popleft()
-        r, g, b, a = px[x, y]
-        if not a:
-            continue
-        px[x, y] = (r, g, b, 0)
-        n += 1
-        push(x - 1, y); push(x + 1, y); push(x, y - 1); push(x, y + 1)
-    return n
 
 
 def pack_atlas(items, max_w=2048):
@@ -1632,10 +946,6 @@ if __name__ == "__main__":
             qa_threshold = int(qa_threshold)
         except (TypeError, ValueError):
             qa_threshold = SIZE_DEVIATION_THRESHOLD_PX
-        # Màu key ĐÃ KHAI BÁO (interface duy nhất với webapp: chuỗi `bg` trong
-        # styles.json). Thiếu/không đọc được → None ⇒ hành vi cũ: suy trục từ chính
-        # màu nền đo được, mà với sheet magenta/green cho ra đúng công thức cũ.
-        want_key = declared_key(style.get("bg"))
         out_dir = os.path.join(HERE, "kits", sid)
         entry = {"sheets": {}, "assets": [], "empty_cells": []}
         atlas_items = []
@@ -1673,119 +983,39 @@ if __name__ == "__main__":
             cell_w, cell_h = W / COLS, H / ROWS
             CW, CH = round(cell_w), round(cell_h)          # canvas chuẩn của sheet này
 
-            has_alpha = "A" in raw_img.getbands() and raw_img.getchannel("A").getextrema()[0] < 128
-            if has_alpha:
-                bg = None
-                keyed, strict = alpha_sheet(raw_img)
-                mode = "alpha thật"
-            else:
-                sheet_rgb = raw_img.convert("RGB")
-                # ── CHỐT CHẶN CARO GIẢ ──────────────────────────────────────
-                # Tới nhánh này nghĩa là ảnh KHÔNG có alpha. Hai khả năng: raw đời
-                # cũ (nền chroma — hợp lệ, đi tiếp), hoặc model vừa vẽ một tấm caro
-                # giả thay cho nền trong suốt. Cái thứ hai phải chết ồn ào: nó nhìn
-                # y như ảnh đúng, nên nếu để lọt thì không ai bắt được nữa.
-                gia = painted_checkerboard(sheet_rgb)
+            # ── MỘT ĐƯỜNG DUY NHẤT: ALPHA THẬT ────────────────────────────
+            # Trước bản này ở đây có HAI nhánh: ảnh có alpha thì dùng thẳng, ảnh
+            # KHÔNG alpha thì coi là raw đời cũ nền chroma và đi qua cả bộ matting
+            # (ViTMatte / PyMatting closed-form / Vlahos + despill + lấp lỗ). Cả
+            # nhánh chroma đã bị BỎ HẲN theo quyết định của chủ sản phẩm: từ khi
+            # `image_gen` trả RGBA thật, mọi sheet sinh ra đều có alpha, và giữ một
+            # đường thứ hai chỉ để cứu ảnh cũ là giữ 800 dòng cho một ca hiếm.
+            #
+            # HỆ QUẢ, ĐÃ BIẾT VÀ ĐÃ CHẤP NHẬN: sheet raw ĐỜI CŨ (nền magenta/green)
+            # nằm sẵn trên đĩa KHÔNG cắt lại được nữa — phải sinh lại. Vì vậy lời
+            # báo dưới đây phải nói ĐÚNG lý do, không được chỉ kêu "ảnh sai".
+            if "A" not in raw_img.getbands() or raw_img.getchannel("A").getextrema()[0] >= 128:
+                # Ba lý do khác nhau, ba câu khác nhau — người đọc phải biết mình
+                # đang ở ca nào thì mới biết làm gì tiếp.
+                gia = painted_checkerboard(raw_img.convert("RGB"))
                 if gia:
                     print(f"⚠ bỏ qua {job}: nền là CARO VẼ TAY, không phải trong suốt "
                           f"(xám {gia[0]}/{gia[1]}, alpha=255 khắp ảnh). Model không tạo "
                           f"được nền trong suốt nên nó vẽ lại hình ảnh tượng trưng cho "
                           f"trong suốt. Sinh lại sheet này; đừng cắt ảnh hiện có.")
-                    continue
-                # Ô `matte:"glow"` có nền ĐEN theo thiết kế ⇒ loại khỏi phép ĐO nền,
-                # nếu không cả sheet bị coi là "nền 2 màu" và rơi xuống đường lùi
-                # không despill (xem khối chú thích của `border_colors`).
-                glow_boxes = [
-                    (round(_c * cell_w), round(_r * cell_h),
-                     round((_c + 1) * cell_w), round((_r + 1) * cell_h))
-                    for _i, c in enumerate(sh["components"])
-                    for _r, _c in [divmod(_i, COLS)]
-                    if c["skel"].get("matte") == "glow"
-                ]
-                bg = border_colors(sheet_rgb, ignore=glow_boxes)
-                if is_key_color(bg, want_key):
-                    # Trục key lấy từ TÊN ĐÃ KHAI BÁO nếu có (khỏi đoán), không thì
-                    # suy từ màu đo được. Màu để un-mix vẫn luôn là màu ĐO ĐƯỢC.
-                    kaxis = key_axis(KEY_COLORS[want_key]) if want_key else key_axis(bg[0])
-                    noclamp = None
-                    glass_m = None
-                    if HAS_PYMATTING and any(c["skel"].get("matte") in ("glow", "glass")
-                                             for c in sh["components"]):
-                        noclamp = np.zeros((H, W), dtype=bool)
-                        glass_m = np.zeros((H, W), dtype=bool)
-                        for _i, c in enumerate(sh["components"]):
-                            _m = c["skel"].get("matte")
-                            if _m in ("glow", "glass"):
-                                _r, _c = divmod(_i, COLS)
-                                _sl = (slice(round(_r * cell_h), round((_r + 1) * cell_h)),
-                                       slice(round(_c * cell_w), round((_c + 1) * cell_w)))
-                                noclamp[_sl] = True
-                                if _m == "glass":
-                                    glass_m[_sl] = True
-                        if not glass_m.any():
-                            glass_m = None
-                    keyed, strict = matte_chroma(sheet_rgb, bg[0], noclamp, kaxis, glass_m)
-                    kname = want_key or key_name_of(bg[0]) or "?"
-                    mode = ((f"matte ViTMatte + despill, key {kname} {bg[0]}" if HAS_VITMATTE
-                             else f"matte closed-form PyMatting + despill, key {kname} {bg[0]}")
-                            if HAS_PYMATTING else f"matte Vlahos + despill, key {kname} {bg[0]}")
+                elif "A" not in raw_img.getbands():
+                    print(f"⚠ bỏ qua {job}: ảnh KHÔNG có kênh alpha. Bản này chỉ cắt được "
+                          f"sheet nền trong suốt — đường tách nền chroma (magenta/green) "
+                          f"đã bỏ. Nếu đây là sheet cũ thì phải SINH LẠI, không cắt lại "
+                          f"được nữa.")
                 else:
-                    keyed, strict = key_binary(sheet_rgb, bg, threshold, strict_threshold)
-                    filled = fill_holes(keyed, sheet_rgb, W, H)
-                    mode = f"binary {len(bg)} màu nhạt (đường lùi), lấp {filled}px"
-            # Ô matte:"glow" vẽ trên NỀN ĐEN (contract mới, gen.sh chèn lệnh riêng):
-            # tách kiểu "vật liệu phát sáng" của Photoshop — ánh sáng là phép CỘNG,
-            # trên nền đen C = α·F ⇒ α = max(R,G,B), F = C/α (un-premultiply).
-            # Chính xác tuyệt đối, không model nào phải đoán. Raw cũ (ô glow vẫn nền
-            # key) tự phát hiện qua góc ô chưa đen → giữ nguyên đường matte thường.
-            if bg is not None and is_key_color(bg) and HAS_PYMATTING:
-                ax_ = key_axis(KEY_COLORS[want_key]) if want_key else key_axis(bg[0])
-                sref_ = key_spill_ref(bg[0], ax_)
-                for idx, comp in enumerate(sh["components"]):
-                    if comp["skel"].get("matte") != "glow":
-                        continue
-                    row, col = divmod(idx, COLS)
-                    x0, y0 = round(col * cell_w), round(row * cell_h)
-                    x1, y1 = round((col + 1) * cell_w), round((row + 1) * cell_h)
-                    reg = np.asarray(sheet_rgb.crop((x0, y0, x1, y1)), dtype=np.float64)
-                    rr, gg, bb_ = reg[..., 0], reg[..., 1], reg[..., 2]
-                    snc = np.clip(key_spill(reg, ax_) / sref_, 0, 1)
-                    lumc = 0.3 * rr + 0.59 * gg + 0.11 * bb_
-                    # tấm đen: model chừa mép key quanh ô nên KHÔNG dò ở góc —
-                    # đếm tỷ lệ pixel vừa tối vừa sạch key trên cả ô
-                    if ((lumc < 60) & (snc < 0.3)).mean() < 0.25:
-                        continue                  # ô chưa có tấm đen — raw đời cũ
-                    a, F = glow_alpha(reg)        # soft-gate, xem glow_alpha()
-                    a[snc > 0.5] = 0.0            # mép key quanh tấm đen → trong suốt
-                    a8_ = np.rint(a * 255).astype(np.uint8)
-                    keyed.paste(Image.fromarray(
-                        np.dstack([F.astype(np.uint8), a8_[..., None]])), (x0, y0))
-                    for oy in range(y1 - y0):
-                        base = (y0 + oy) * W + x0
-                        rowm = a8_[oy]
-                        for ox in range(x1 - x0):
-                            strict[base + ox] = 1 if rowm[ox] >= 242 else 0
-                    # VÀNH ĐAI quanh ô: tấm đen hay TRÀN qua ranh ô vài px — phần
-                    # tràn đi đường matte thường thành mảng ĐEN ĐỤC dính vào crop
-                    # (đã dính: sọc đen mép burst). Trong vành, pixel gần-đen hoặc
-                    # nhiễm key → trong suốt; art hàng xóm sáng màu không bị đụng.
-                    M = round(min(cell_w, cell_h) * 0.2)
-                    ex0, ey0 = max(0, x0 - M), max(0, y0 - M)
-                    ex1, ey1 = min(W, x1 + M), min(H, y1 + M)
-                    ring = np.asarray(sheet_rgb.crop((ex0, ey0, ex1, ey1)), dtype=np.float64)
-                    kill = (ring.max(axis=2) < 40) | (
-                        np.clip(key_spill(ring, ax_) / sref_, 0, 1) > 0.5)
-                    kill[y0 - ey0:y1 - ey0, x0 - ex0:x1 - ex0] = False   # trong ô đã xử ở trên
-                    ka = np.asarray(keyed.crop((ex0, ey0, ex1, ey1)))
-                    ka = ka.copy()
-                    ka[kill] = 0
-                    keyed.paste(Image.fromarray(ka), (ex0, ey0))
-                    for oy in range(ey1 - ey0):
-                        base = (ey0 + oy) * W + ex0
-                        krow = kill[oy]
-                        for ox in np.nonzero(krow)[0]:
-                            strict[base + ox] = 0
-                    print(f"  ✦ {job}/{comp['file']}: ô glow nền đen → alpha theo kênh sáng")
+                    print(f"⚠ bỏ qua {job}: có kênh alpha nhưng KHÔNG chỗ nào trong suốt "
+                          f"(alpha thấp nhất = {raw_img.getchannel('A').getextrema()[0]}). "
+                          f"Model vẽ đè kín nền. Sinh lại sheet này.")
+                continue
+            keyed, strict = alpha_sheet(raw_img)
+            mode = "alpha thật"
+
             blobs, labelmap = label_blobs(strict, W, H)
 
             cell_blobs = [[] for _ in range(COLS * ROWS)]
@@ -1823,18 +1053,6 @@ if __name__ == "__main__":
             if dropped:
                 print(f"  · {job}: bỏ {dropped} đốm rơi vãi sát biên ô")
 
-            # ── MÀU KEY DÙNG ĐỂ GỌT MÉP Ô FULL-BLEED ───────────────────────────
-            # BUG 15/08 (chủ sản phẩm dán sang Figma thấy SỌC MAGENTA dọc mép trái ảnh
-            # nền): bản cũ chỉ truyền key cho `trim_flat_cell` khi `is_key_color(bg)`,
-            # mà `bg` là màu ĐO Ở VIỀN NGOÀI CẢ TẤM. Tấm `nen` toàn ô full-bleed nên
-            # viền ngoài là TRANH, không phải key ⇒ `is_key_color` False ⇒ key=None ⇒
-            # lượt gọt theo màu KHÔNG CHẠY MỘT LẦN NÀO, chỉ còn lượt gọt "phẳng", và
-            # nó dừng ngay ở cột magenta đầu tiên có biến thiên dọc (đo được: cột x=5
-            # của ô 26-bg-play, (231,8,238)→(226,33,217), Δg=27 > 18).
-            # Sự thật là màu key VẪN BIẾT: nó được KHAI BÁO trong styles.json (`bg`).
-            # Ưu tiên màu ĐO ĐƯỢC (đúng sắc độ model vẽ ra) rồi mới tới màu khai báo.
-            trim_key = (bg[0] if (bg is not None and is_key_color(bg))
-                        else (KEY_COLORS[want_key] if want_key else None))
             os.makedirs(out_dir, exist_ok=True)
             n_ok = 0
             # contentSafe cho phép decor nằm ngoài mặt element nên cần vành rộng
@@ -1852,20 +1070,16 @@ if __name__ == "__main__":
                 cx0, cy0 = round(col * cell_w), round(row * cell_h)
                 canvas = Image.new("RGBA", (CVW, CVH), (0, 0, 0, 0))
                 if comp["skel"]["shape"] == "full":
-                    # Ô full-bleed (bg): KHÔNG key gì cả — artwork phủ kín ô, key chỉ
-                    # còn ở dải gap → matte trên artwork là tự phá ảnh (đã dính: nền
-                    # blur bị ăn sạch). Crop nguyên ô đục 100%, gọt dải gap phẳng ở mép.
-                    cell_rgb = raw_img.convert("RGB").crop((cx0, cy0, cx0 + CW, cy0 + CH))
-                    fl, ft, fr, fb = trim_flat_cell(cell_rgb, key=trim_key)
-                    if (fl, ft, fr, fb) != (0, 0, CW, CH):
-                        print(f"  · {job}/{comp['file']}: gọt viền nền "
-                              f"L{fl} T{ft} R{CW - fr} B{CH - fb}px")
-                    cell_crop = cell_rgb.crop((fl, ft, fr, fb)).convert("RGBA")
-                    # Răng cưa còn sót sau khi gọt theo cột/hàng → xoá theo PIXEL.
-                    n_key = erase_key_edge(cell_crop, trim_key)
-                    if n_key:
-                        print(f"  · {job}/{comp['file']}: xoá {n_key}px mép còn ám màu key")
-                    canvas.paste(cell_crop, (BX + fl, BY + ft))
+                    # Ô full-bleed (nền): artwork phủ kín ô, không có gì để tách —
+                    # cắt NGUYÊN ô ra khỏi sheet alpha và dán thẳng.
+                    #
+                    # Bản chroma ở đây phải làm thêm hai lượt gọt (`trim_flat_cell`
+                    # theo cột/hàng, rồi `erase_key_edge` theo pixel) vì model hay vẽ
+                    # THỤT VÀO và chừa nguyên khung magenta quanh 4 cạnh — sọc magenta
+                    # 40–55px quanh 25-bg-home là bug thật ngày 15/08. Với alpha thật
+                    # phần chừa đó là TRONG SUỐT, không phải màu: nó không đi vào ảnh,
+                    # nên không còn gì để gọt và cũng không còn răng cưa ám màu.
+                    canvas.paste(keyed.crop((cx0, cy0, cx0 + CW, cy0 + CH)), (BX, BY))
                 else:
                     box = cell_boxes[idx]
                     if box is None:
@@ -1951,7 +1165,7 @@ if __name__ == "__main__":
                 # bỏ qua, ảnh lưu ra vẫn còn đốm). Đốm = cụm TỐI, NHỎ, tách khỏi
                 # thân ở ngưỡng α>60; sparkle sáng màu cố ý → giữ. Dọn cả quầng mờ
                 # quanh đốm (nới 4px), chừa lãnh thổ thân.
-                if HAS_PYMATTING and comp["skel"]["shape"] != "full":
+                if HAS_NDIMAGE and comp["skel"]["shape"] != "full":
                     ca = np.asarray(canvas)
                     aa = ca[..., 3]
                     lb2, n2 = ndimage.label(aa > 60)
@@ -2048,7 +1262,9 @@ if __name__ == "__main__":
                 entry["assets"].append(asset)
                 n_ok += 1
 
-            entry["sheets"][sh["id"]] = {"mode": mode, "bg_detected": bg,
+            # `bg_detected` (màu nền đo được ở viền) đã bỏ cùng đường chroma —
+            # không ai đọc nó, và với sheet alpha thì "màu nền" không tồn tại.
+            entry["sheets"][sh["id"]] = {"mode": mode,
                                          "canvas": [CVW, CVH], "cell": [CW, CH], "bleed": [BX, BY],
                                          "size": [W, H], "blobs": len(blobs), "cut": n_ok}
             done_sheets.add(sh["id"])

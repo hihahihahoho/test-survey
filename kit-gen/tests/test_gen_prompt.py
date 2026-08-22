@@ -306,23 +306,46 @@ class TransparentBackgroundTest(unittest.TestCase):
         self.assertIn("no checkerboard squares", p)
         self.assertNotIn("chroma", p)
 
-    def test_gen_sh_khong_con_may_moc_chroma_nhung_slice_py_VAN_CON(self):
-        """Hai vế của cùng một quyết định.
+    def test_KHONG_MOT_MANH_CHROMA_NAO_CON_SONG(self):
+        """Quyết định của chủ sản phẩm 22/08: bỏ HẲN, cả hai vế.
 
-        gen.sh chỉ sinh sheet MỚI ⇒ bảng key ở đó là mã chết, xoá.
-        slice.py phải cắt lại được sheet CŨ (raw nền magenta đã nằm sẵn trong
-        project của người dùng) ⇒ đường chroma ở đó là tương thích ngược, giữ
-        nguyên. Ai dọn nhầm vế thứ hai thì ca này đỏ."""
-        g = (ROOT / "gen.sh").read_text(encoding="utf-8")
-        code = re.sub(r"(?m)^\s*#.*$", "", g)          # quét MÃ, không quét chú thích
-        for w in ("CHROMA_KEYS", "key_of(", "DEFAULT_KEY"):
-            self.assertNotIn(w, code, f"gen.sh còn máy móc chroma: {w}")
+        Bản trước ca này chỉ đòi `gen.sh` sạch, còn cố tình để `slice.py` giữ
+        `KEY_COLORS` cho tương thích ngược với sheet raw đời cũ. Chủ sản phẩm chốt
+        bỏ luôn vế đó — và hệ quả đã biết: sheet raw nền magenta nằm sẵn trên đĩa
+        KHÔNG cắt lại được nữa, phải sinh lại.
 
+        Ca này canh việc mã CHẾT không lặng lẽ mọc lại. Nó quét MÃ, không quét chú
+        thích, vì các file đó cố ý kể lại lịch sử bằng chữ."""
         import importlib.util
+
+        def code_of(path):
+            return re.sub(r"(?m)^\s*#.*$", "", path.read_text(encoding="utf-8"))
+
+        chet = ("CHROMA_KEYS", "key_of(", "DEFAULT_KEY", "KEY_COLORS", "matte_chroma",
+                "matte_vlahos", "matte_pymatting", "is_key_color", "key_binary",
+                "border_colors", "erase_key_edge", "key_spill")
+        for f in ("gen.sh", "slice.py", "validate_output_geometry.py"):
+            code = code_of(ROOT / f)
+            for w in chet:
+                self.assertNotIn(w, code, f"{f} còn máy móc chroma: {w}")
+
         spec = importlib.util.spec_from_file_location("kg_slice", ROOT / "slice.py")
         sl = importlib.util.module_from_spec(spec); spec.loader.exec_module(sl)
-        self.assertEqual(set(sl.KEY_COLORS), {"magenta", "green", "cyan", "blue"},
-                         "slice.py mất đường cắt lại sheet cũ")
+        for name in ("KEY_COLORS", "matte_chroma", "is_key_color", "border_colors"):
+            self.assertFalse(hasattr(sl, name), f"slice.py còn export `{name}`")
+        # Và thứ PHẢI ở lại: chốt chặn caro giả + đường alpha.
+        self.assertTrue(hasattr(sl, "painted_checkerboard"))
+        self.assertTrue(hasattr(sl, "alpha_sheet"))
+
+    def test_KHONG_CON_NAP_torch_hay_pymatting(self):
+        """Bỏ matting chroma là bỏ luôn lý do tồn tại của ViTMatte/PyMatting.
+
+        Đây không phải chuyện gọn mã: `torch` + checkpoint ViTMatte là ~2 GB trong
+        bộ cài. Nếu ai đó nạp lại chúng thì hoặc là đường chroma sống dậy, hoặc là
+        bộ cài phình lên vì một import không ai dùng."""
+        code = re.sub(r"(?m)^\s*#.*$", "", (ROOT / "slice.py").read_text(encoding="utf-8"))
+        for w in ("import torch", "transformers", "pymatting", "VitMatte"):
+            self.assertNotIn(w, code, f"slice.py nạp lại `{w}`")
 
 
 if __name__ == "__main__":

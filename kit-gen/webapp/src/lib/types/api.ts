@@ -337,7 +337,6 @@ export const createProjectInputSchema = z.object({
   firstVariant: z.object({
     id: z.string().optional(),
     vi: z.string().min(1, "Đặt tên cho phong cách đầu tiên."),
-    bg: z.enum(["magenta", "green"]).default("magenta"),
   }),
   tags: z.array(z.string()).default([]),
   import: z.object({

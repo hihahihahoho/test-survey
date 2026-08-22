@@ -11,7 +11,7 @@
  * đúng khoá mà contract đang dùng và xoá khoá kia đi.
  */
 import {
-  CHROMA_PRESETS, contractVariants, slugify,
+  contractVariants, slugify,
   type Brand, type Character, type Contract, type Variant,
 } from "@/lib/types/contract";
 import type { Op } from "./ops";
@@ -44,7 +44,6 @@ export function addVariant(c: Contract, input: { vi?: string; id?: string } = {}
     vi,
     style: "",
     styleMode: "prompt",
-    bg: CHROMA_PRESETS.magenta,
     brand: { mode: "colors" },
     characters: [],
     inspo: [],

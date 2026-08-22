@@ -30,7 +30,7 @@ export function CreateModeDialog({ open, onOpenChange, gate, onCreated }: {
         // Wizard là nơi người dùng chọn bộ khung đầu tiên. Khởi tạo bằng template
         // mẫu sẽ khiến dữ liệu mẫu bị hiểu nhầm là một thiết kế nhập từ bên ngoài.
         name: name.trim(), template: "blank",
-        firstVariant: { id: "phong-cach-1", vi: "Phong cách 1", bg: "magenta" }, tags: modeTags("workflow"),
+        firstVariant: { id: "phong-cach-1", vi: "Phong cách 1" }, tags: modeTags("workflow"),
       });
       onOpenChange(false); onCreated(result.project, "workflow");
     } catch (error) { setFailure(error); }
