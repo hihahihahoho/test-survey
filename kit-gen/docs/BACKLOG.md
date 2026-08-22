@@ -500,3 +500,43 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
     hoá cho đường built-in.** Ba mảnh khớp thành một: model kèm ảnh ref hay trả RGB
     (⑬) · skill chính thức bảo cách xử là gen trên nền key phẳng rồi tách (⑮) ·
     kit-gen từ đầu làm đúng thế. Không tag release nào trước khi chốt lại hướng này.
+
+    **⑯ ⑮ SAI. UPSTREAM ĐÃ CỐ Ý GIẾT ĐƯỜNG CHROMA CHO BUILT-IN — TỪ 10/08.**
+    Chủ sản phẩm tìm ra commit, và tra `gh api` thì hết đường cãi:
+
+    > `8cabf5a` — *"Use native transparency in the imagegen skill (#37788)"*, 2026-08-10
+    > · *"Direct the built-in `image_gen` path to request transparent backgrounds and
+    >   **preserve the generated alpha channel**."*
+    > · *"**Remove** the built-in chroma-key generation and local background-removal
+    >   workflow from the skill guidance and examples."*
+
+    `gh api repos/openai/codex/compare/rust-v0.149.0...8cabf5a` → `status=behind,
+    ahead=0, behind=519`, tức commit này là **tổ tiên của 0.149.0** — bản đang cài trên
+    máy. Không phải "chưa tới", không phải "phải update skill": nó đã ở trong tay từ
+    đầu. (`codex --version` = 0.149.0; `npm view @openai/codex version` = 0.149.0;
+    0.150.0-alpha.* mới chỉ là prerelease.) Chính vì vậy `grep -c chroma SKILL.md` = 0.
+
+    Vậy hai thứ tôi trưng ra ở ⑮ là **tàn dư, không phải hướng dẫn đang sống**: commit
+    sửa đúng 5 file (SKILL.md + 4 file `references/`), **không đụng `scripts/`** — nên
+    `remove_chroma_key.py` còn nằm đó với docstring cũ nói "built-in-first transparent
+    workflow", và `image-api.md:71,73` còn nhắc chroma nhưng đã bị **thu hẹp vào đường
+    CLI fallback tường minh** ("In explicit CLI/API fallback mode…"), không còn là lời
+    khuyên cho đường built-in nữa. Tôi đọc docstring của một file bị bỏ quên rồi suy ra
+    ý định của cả sản phẩm — đúng lại cái bẫy của [[kitgen-native-transparency-blocked]]:
+    tin chữ trong file thay vì tra xem chữ đó còn hiệu lực không.
+
+    **NHƯNG BÀI TOÁN KHÔNG VÌ THẾ MÀ DỄ ĐI — NÓ ĐỔI SANG DẠNG KHÓ HƠN.**
+    Trước: "ta đi ngược tài liệu". Nay: "tài liệu bảo đường built-in ra alpha thật, mà
+    ĐO ĐƯỢC nó không ra khi có ảnh đính kèm" (⑬: kèm ref ⇒ phần lớn trả RGB; codex bịt
+    bằng `make_alpha.swift`). Upstream vừa **rút đi cái phao được phép dùng** trong khi
+    lỗ thủng vẫn còn. Ba đường còn lại, không đường nào miễn phí:
+      · **bỏ ảnh đính kèm** — alpha thật về đều (5/5 lượt), nhưng mất hợp đồng hình học;
+        phải dựng lại bằng toạ độ pixel tường minh (probe E: sai số tâm 5–27px).
+      · **giữ chroma-key của riêng kit-gen** — `slice.py` tự tách, không nhờ skill. Vẫn
+        chạy được vì nó không phụ thuộc `remove_chroma_key.py`; chỉ là ta đi một đường
+        mà upstream không còn đỡ lưng.
+      · **CLI `gpt-image-1.5 --background transparent`** — đường DUY NHẤT được tài liệu
+        công nhận là "true transparent", nhưng cần `OPENAI_API_KEY` và phải hỏi người
+        dùng trước, tức phá mô hình "local-first, dùng phiên codex sẵn có".
+    Chốt tạm cho 2.1.4x: **giữ chroma-key**, vì nó là đường duy nhất vừa đo được vừa
+    không đòi thêm khoá API. Ghi lại đây để lần sau không ai lật lại bằng trí nhớ.

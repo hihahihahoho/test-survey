@@ -241,7 +241,7 @@ test("@visual an internal page keeps only Back home and runtime status", async (
   const sidebar = page.getByRole("navigation", { name: "Quản lý dự án" });
   await expect(sidebar).toBeVisible();
   await expect(sidebar.getByRole("button")).toHaveCount(4);
-  for (const name of ["Ảnh đã tạo", "Skeleton UI", "Mascot", "Cài đặt style"]) {
+  for (const name of ["Ảnh đã tạo", "UI Elements", "Mascot", "Cài đặt style"]) {
     await expect(sidebar.getByRole("button", { name, exact: true })).toBeVisible();
   }
   // Khối tóm tắt nằm NGOÀI `<nav>` — nó là bản tóm tắt có lối tắt, không phải đích thứ năm.
@@ -276,8 +276,8 @@ test("an imported project can be converted, edited and given project sheet limit
   await expect(page.getByText("Dự án này được tạo bằng phiên bản cũ.")).toHaveCount(0);
   await saved;
 
-  // "Bộ khung UI" đã rời dialog Cài đặt và thành TRANG "Skeleton UI" trong sidebar.
-  await page.getByRole("navigation", { name: "Quản lý dự án" }).getByRole("button", { name: "Skeleton UI" }).click();
+  // "Bộ khung UI" đã rời dialog Cài đặt và thành TRANG "UI Elements" trong sidebar.
+  await page.getByRole("navigation", { name: "Quản lý dự án" }).getByRole("button", { name: "UI Elements" }).click();
   await expect(page).toHaveURL(/section=skeleton/);
   // Trang mở ở tab xem; phần chọn thành phần nằm ở tab "Cài đặt".
   await page.getByRole("tab", { name: "Cài đặt" }).click();
@@ -312,7 +312,7 @@ test("an imported project can be converted, edited and given project sheet limit
 /**
  * MỤC ④ — SỬA LÀ BUFFER, LƯU MỚI LÀ LƯU.
  *
- * Hợp đồng: chạm vào một ô trong "Skeleton UI" KHÔNG được ghi contract xuống đĩa; chỉ
+ * Hợp đồng: chạm vào một ô trong "UI Elements" KHÔNG được ghi contract xuống đĩa; chỉ
  * nút [Lưu] mới ghi. Và [Huỷ] phải trả bản nháp về đúng trạng thái đã lưu.
  */
 test("editing the project buffers changes until Lưu is pressed", async ({ page }) => {
@@ -330,7 +330,7 @@ test("editing the project buffers changes until Lưu is pressed", async ({ page 
   await page.getByRole("button", { name: "Chuyển và chỉnh sửa" }).click();
   await adopted;
 
-  await page.getByRole("navigation", { name: "Quản lý dự án" }).getByRole("button", { name: "Skeleton UI" }).click();
+  await page.getByRole("navigation", { name: "Quản lý dự án" }).getByRole("button", { name: "UI Elements" }).click();
   await page.getByRole("tab", { name: "Cài đặt" }).click();
   await page.getByRole("button", { name: /^UI nhỏ(?: · \d+)?$/ }).click();
   const frame = page.getByRole("button", { name: /^Nút thưởng của tôi/ });
@@ -752,10 +752,10 @@ test("the mascot library manages named mascots, tags and prototype poses", async
 });
 
 test("legacy project pages converge on the project manager", async ({ page }) => {
-  // `/design` là trình soạn bộ khung cũ ⇒ nhà mới của nó là trang "Skeleton UI".
+  // `/design` là trình soạn bộ khung cũ ⇒ nhà mới của nó là trang "UI Elements".
   await page.goto("/p/tet26-a7f3/design");
   await expect(page).toHaveURL(/\/p\/tet26-a7f3\?section=skeleton$/);
-  await expect(page.getByRole("heading", { name: "Skeleton UI", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "UI Elements", exact: true })).toBeVisible();
   await page.goto("/k/tet26-a7f3/canvas");
   await expect(page).toHaveURL(/\/p\/tet26-a7f3\?section=images$/);
   await expect(page.getByRole("heading", { name: "Tất cả thành phẩm", exact: true })).toBeVisible();

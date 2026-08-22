@@ -315,12 +315,13 @@ test("trang Ảnh đã tạo có ĐÚNG MỘT thanh segmented; Skeleton ở tran
   await expect(page.getByRole("tab", { name: "Ảnh gốc" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Skeleton" })).toHaveCount(0);
 
-  /* Nội dung của thanh cũ không bị vứt đi — nó về đúng trang Skeleton UI, nay là tab
-     "Ảnh thật" của trang đó. Ba tab: Ảnh thật · Ảnh gốc · Cài đặt. */
-  await page.getByRole("navigation", { name: "Quản lý dự án" }).getByRole("button", { name: "Skeleton UI" }).click();
-  const modes = page.getByRole("tablist", { name: "Chế độ xem Skeleton UI" });
+  /* Nội dung của thanh cũ không bị vứt đi — nó về đúng trang UI Elements, nay là tab
+     "Bộ khung" của trang đó. Bốn tab: Ảnh thật · Ảnh gốc · Bộ khung · Cài đặt. */
+  await page.getByRole("navigation", { name: "Quản lý dự án" }).getByRole("button", { name: "UI Elements" }).click();
+  const modes = page.getByRole("tablist", { name: "Chế độ xem UI Elements" });
   await expect(modes.getByRole("tab", { name: "Ảnh thật", selected: true })).toBeVisible();
   await expect(modes.getByRole("tab", { name: "Ảnh gốc" })).toBeVisible();
+  await expect(modes.getByRole("tab", { name: "Bộ khung" })).toBeVisible();
   await expect(modes.getByRole("tab", { name: "Cài đặt" })).toBeVisible();
 });
 

@@ -31,7 +31,7 @@ const UI_CELLS = Array.from({ length: 8 }, (_, i) => `${String(i + 1).padStart(2
  *
  * `ProjectScreen` dựng thư viện từ (ô của contract trên đĩa) + (thư viện agent) + (bộ
  * khung người dùng thêm), rồi `resolveKitset` chỉ vẽ những món kitset BIẾT. Đặt tên bịa
- * ở đây thì contract dựng lại rỗng phần UI và trang Skeleton UI báo "chưa có tấm nào" —
+ * ở đây thì contract dựng lại rỗng phần UI và trang UI Elements báo "chưa có tấm nào" —
  * hỏng vì fixture, không phải vì mã.
  */
 const LIB_FILES = ["01-btn-pill-red", "02-btn-pill-blue", "03-btn-pill-outline"];
@@ -186,21 +186,28 @@ test("§3 — link cũ `?group=` CUỘN TỚI đúng khối thay vì lọc", asy
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
-   §1 + §2 — Skeleton UI: ba tab, và mọi control trong popup
+   §1 + §2 — UI Elements: bốn tab, và mọi control trong popup
    ══════════════════════════════════════════════════════════════════════════ */
 
-test("§2 — Skeleton UI có ba tab, mở ở «Ảnh thật»", async ({ page }) => {
+test("§2 — UI Elements có bốn tab, mở ở «Ảnh thật»", async ({ page }) => {
   await page.goto(`/p/${PID}?section=skeleton`);
-  const modes = page.getByRole("tablist", { name: "Chế độ xem Skeleton UI" });
+  const modes = page.getByRole("tablist", { name: "Chế độ xem UI Elements" });
   await expect(modes.getByRole("tab", { name: "Ảnh thật", selected: true })).toBeVisible();
   await expect(modes.getByRole("tab", { name: "Ảnh gốc" })).toBeVisible();
+  await expect(modes.getByRole("tab", { name: "Bộ khung" })).toBeVisible();
   await expect(modes.getByRole("tab", { name: "Cài đặt" })).toBeVisible();
 
-  // ① Ảnh thật = bộ khung đã dựng, và KHÔNG kèm tấm mascot (tấm đó có trang riêng).
+  /* ① Ảnh thật = THÀNH PHẨM đã cắt. Dự án fixture chưa chạy bước cắt nào, nên thứ
+     đúng phải hiện ra là câu "chưa có ô nào" — KHÔNG phải bộ khung xám. Đây chính là
+     chỗ bản cũ nói dối: nhãn "Ảnh thật" mà vẽ bộ khung. */
+  await expect(page.getByText("Chưa có ô nào được cắt")).toBeVisible();
+
+  // ② Bộ khung = khung đã dựng, và KHÔNG kèm tấm mascot (tấm đó có trang riêng).
+  await modes.getByRole("tab", { name: "Bộ khung" }).click();
   await expect(page.getByRole("heading", { name: "ui", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "pose nhan vat", exact: true })).toHaveCount(0);
 
-  // ② Ảnh gốc = sheet thô tương ứng.
+  // ③ Ảnh gốc = sheet thô tương ứng.
   await modes.getByRole("tab", { name: "Ảnh gốc" }).click();
   await expect(page.getByText("Sheet gốc theo phiên bản")).toBeVisible();
   await expect(page.getByRole("heading", { name: "UI nhỏ", exact: true })).toBeVisible();
@@ -231,13 +238,15 @@ test("§1 — thẻ thành phần sạch; ô kích thước chỉ có trong popu
    §2b — trang Mascot cùng khuôn, danh sách cuộn được
    ══════════════════════════════════════════════════════════════════════════ */
 
-test("§2b — Mascot có ba tab, và lưới dáng KHÔNG cuộn riêng", async ({ page }) => {
+test("§2b — Mascot có bốn tab, và lưới dáng KHÔNG cuộn riêng", async ({ page }) => {
   await page.goto(`/p/${PID}?section=mascot`);
   const modes = page.getByRole("tablist", { name: "Chế độ xem Mascot" });
   await expect(modes.getByRole("tab", { name: "Ảnh thật", selected: true })).toBeVisible();
   await expect(modes.getByRole("tab", { name: "Ảnh gốc" })).toBeVisible();
+  await expect(modes.getByRole("tab", { name: "Bộ khung" })).toBeVisible();
 
-  // Tab "Ảnh thật" của trang này là bộ khung của tấm dáng, không phải của phần UI.
+  // Tab "Bộ khung" của trang này là khung của tấm dáng, không phải của phần UI.
+  await modes.getByRole("tab", { name: "Bộ khung" }).click();
   await expect(page.getByRole("heading", { name: "pose nhan vat", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "ui", exact: true })).toHaveCount(0);
 
