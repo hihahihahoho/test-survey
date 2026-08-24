@@ -106,5 +106,45 @@ class AlphaGateTest(unittest.TestCase):
             self.assertTrue(r.stdout.strip().startswith("skip"), r.stdout)
 
 
+class DinhTuyenSkillTest(unittest.TestCase):
+    """CÂU LỆNH GỬI CHO CODEX PHẢI GỌI ĐÍCH DANH SKILL — không nói chung chung.
+
+    Codex CLI KHÔNG nạp nội dung skill vào system prompt; `codex debug prompt-input`
+    chỉ chèn DANH SÁCH tên + mô tả bị cắt + đường dẫn. Luật giữ alpha nằm trong
+    SKILL.md và model phải tự mở ra đọc. Đo trên cùng máy, cùng model gpt-5.6-luna:
+    prompt ngắn tự nhiên ⇒ model tự đọc SKILL.md ⇒ alpha thật (dải mờ 35,9%); còn
+    câu cũ "your image generation tool" chôn dưới ~900 dòng layout ⇒ không đọc ⇒
+    tự viết công cụ cắt nền. Ca kiểm này ghim cả hai nửa: GỌI TÊN, và CẤM tự chế.
+    """
+
+    TASK = re.search(r'^  task="(.*?)^--- IMAGE PROMPT START ---',
+                     (ROOT / "gen.sh").read_text(encoding="utf-8"), re.S | re.M)
+
+    def setUp(self):
+        self.assertIsNotNone(self.TASK, "không tách được câu task khỏi gen.sh")
+        self.task = self.TASK.group(1)
+
+    def test_goi_dich_danh_skill_va_tool(self):
+        for ten in ("imagegen", "image_gen", "SKILL.md"):
+            self.assertIn(ten, self.task,
+                          f"task phải gọi đích danh {ten} — nói chung chung là model không đọc skill")
+
+    def test_cam_tu_che_cong_cu_tach_nen(self):
+        """Cấm phải NÊU TÊN thứ đã thật sự bị lạm dụng, không cấm chung chung."""
+        t = self.task.lower()
+        for tu in ("swift", "python", "ffmpeg", "imagemagick", "chroma", "remove_chroma_key"):
+            self.assertIn(tu, t, f"lệnh cấm phải nêu đích danh {tu}")
+        self.assertIn("must not", t, "phải là lệnh cấm dứt khoát")
+
+    def test_cam_dat_TRUOC_khoi_layout(self):
+        """Chữ ở gần thắng chữ ở xa: cấm phải nằm trước ~900 dòng đặc tả layout."""
+        self.assertLess(self.task.index("HARD BAN"), self.task.index("Generate ONE image"),
+                        "lệnh cấm phải đứng trước phần mô tả ảnh")
+
+    def test_KHONG_cam_nham_viec_chep_file(self):
+        """Model vẫn phải copy PNG về raw/. Cấm quá tay là tự tay làm hỏng lượt gen."""
+        self.assertIn("Copying or moving the resulting file", self.task)
+
+
 if __name__ == "__main__":
     unittest.main()

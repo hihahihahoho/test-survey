@@ -899,7 +899,34 @@ run_one() {
     want_size="1024x1536"; want_orient="portrait"
   fi
 
-  task="Generate ONE image with your image generation tool. The output image MUST be exactly ${want_size} pixels (${want_orient}) — this is a hard requirement, not a preference; do not return any other aspect ratio. Use EXACTLY the prompt between the IMAGE PROMPT markers below. The attached images are, in order: the layout skeleton, then any character reference photo / inspiration images the prompt mentions. Then save/copy the generated PNG to exactly this path: ${ROOT_OUT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
+  # ╔══ VÌ SAO CÂU ĐẦU PHẢI GỌI ĐÍCH DANH SKILL ════════════════════════════════╗
+  # ║ Codex CLI KHÔNG nạp nội dung skill vào system prompt. Đọc thẳng từ         ║
+  # ║ `codex debug prompt-input`: nó chỉ chèn một DANH SÁCH gồm tên + mô tả BỊ   ║
+  # ║ CẮT GIỮA CHỪNG + đường dẫn file. Luật quan trọng nhất của skill imagegen — ║
+  # ║   "For transparent images, ask built-in image_gen for a transparent        ║
+  # ║    background and preserve the generated alpha."                          ║
+  # ║ — nằm trong SKILL.md và model PHẢI TỰ MỞ RA ĐỌC mới biết.                  ║
+  # ║                                                                            ║
+  # ║ Đo được cả hai chiều trên cùng một máy, cùng model gpt-5.6-luna:            ║
+  # ║   · prompt ngắn tự nhiên ("tạo ảnh cốc thuỷ tinh transparent alpha")       ║
+  # ║     ⇒ model tự đọc SKILL.md ⇒ alpha THẬT, dải mờ 35,9%.                    ║
+  # ║   · task cũ ("Generate ONE image with your image generation tool") chôn    ║
+  # ║     dưới ~900 dòng đặc tả layout ⇒ KHÔNG bao giờ mở SKILL.md ⇒ ảnh ra đục  ║
+  # ║     ⇒ model tự viết công cụ cắt nền (vụ .tmp_remove_checker.swift với      ║
+  # ║     setBlendMode(.clear), 9/10 sheet dải mờ 0,00% + viền trắng răng cưa).  ║
+  # ║                                                                            ║
+  # ║ Nên câu đầu GỌI ĐÍCH DANH `imagegen` + `image_gen`, và CẤM THẲNG việc tự   ║
+  # ║ chế công cụ tách nền. Cấm phải đặt ở ĐẦU: chữ ở gần thắng chữ ở xa, và     ║
+  # ║ ngay trong thư mục skill có sẵn scripts/remove_chroma_key.py nằm chờ như   ║
+  # ║ thể được cấp phép (SKILL.md không hề nhắc nó trong reference map).         ║
+  # ║ alpha_verdict ở đầu file chỉ BẮT được triệu chứng sau khi đã tốn một lượt  ║
+  # ║ gen; chặn từ gốc là ở đây.                                                 ║
+  # ╚════════════════════════════════════════════════════════════════════════════╝
+  task="Use the imagegen skill and its built-in image_gen tool for this. If you have not read that skill yet, read its SKILL.md first and follow its transparent-image rule: ask image_gen for a genuinely transparent background and preserve the alpha channel it gives back.
+
+HARD BAN — this is the single most important rule here: you must NOT write, compile or run any program, script or tool of your own that removes, keys out, erases or otherwise alters the background or the alpha channel of the image. No Python, no Swift, no ffmpeg, no ImageMagick, no chroma key, no remove_chroma_key.py, no CLI fallback via scripts/image_gen.py. The transparency must be produced by image_gen itself. Copying or moving the resulting file is of course fine. If image_gen hands you an opaque image, say so plainly and stop — a background you cut out yourself is a FAILED result, it gets detected and rejected, and it wastes the whole run.
+
+Generate ONE image with the built-in image_gen tool. The output image MUST be exactly ${want_size} pixels (${want_orient}) — this is a hard requirement, not a preference; do not return any other aspect ratio. Use EXACTLY the prompt between the IMAGE PROMPT markers below. The attached images are, in order: the layout skeleton, then any character reference photo / inspiration images the prompt mentions. Then save/copy the generated PNG to exactly this path: ${ROOT_OUT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
 
 --- IMAGE PROMPT START ---
 $(cat "prompts/${job}.txt")
