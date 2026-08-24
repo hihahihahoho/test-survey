@@ -1,7 +1,7 @@
 import { ExternalLink, KeyRound } from "lucide-react";
 import { CopyableCode } from "@/components/common";
 import { Button } from "@/components/ui/button";
-import { useCodexLogin } from "@/lib/hooks";
+import { useCodexAccount, useCodexLogin } from "@/lib/hooks";
 import { Note } from "../../components/StepShell";
 
 /**
@@ -59,11 +59,16 @@ const REASON_TEXT: Record<string, string> = {
 export function CodexLoginPanel() {
   const { session, starting, active, start, cancel, reset } = useCodexLogin();
   const { status, verificationUrl, userCode, codexHomeLabel } = session;
+  /* Chỉ để điền EMAIL vào câu "đã xong" — hook tự invalidate key này khi phiên done,
+     nên đọc ở đây là luôn tươi. Không đăng nhập thì query trả loggedIn:false, vô hại. */
+  const account = useCodexAccount({ enabled: status === "done" }).data;
 
   if (status === "done") {
     return (
       <div className="flex flex-col gap-2 rounded-2 border border-line-subtle bg-canvas p-3">
-        <p className="text-body text-fg-strong">Đã đăng nhập xong ✓</p>
+        <p className="text-body text-fg-strong">
+          Đã đăng nhập xong ✓{account?.email ? <> — <span className="font-mono">{account.email}</span></> : null}
+        </p>
         <Note>
           Bấm <strong className="text-fg-strong">Kiểm tra lại</strong> để app đọc lại trạng thái công
           cụ tạo ảnh.

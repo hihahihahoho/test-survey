@@ -16,10 +16,16 @@ import { cleanup, render } from "@testing-library/react";
 import type { Doctor } from "@/lib/types/api";
 import { ImageGenCard } from "../steps/parts/ImageGenCard";
 
-vi.mock("@/lib/hooks", () => ({ useCodexLogin: () => ({
-  session: { status: "idle", verificationUrl: null, userCode: null, codexHomeLabel: null, reason: null },
-  starting: false, active: false, start: vi.fn(), cancel: vi.fn(), reset: vi.fn(),
-}) }));
+vi.mock("@/lib/hooks", () => ({
+  useCodexLogin: () => ({
+    session: { status: "idle", verificationUrl: null, userCode: null, codexHomeLabel: null, reason: null },
+    starting: false, active: false, start: vi.fn(), cancel: vi.fn(), reset: vi.fn(),
+  }),
+  // ImageGenCard nay chứa CodexAccountRow — mock "chưa đăng nhập" để hàng tự ẩn,
+  // test này chỉ soi GenModelRow.
+  useCodexAccount: () => ({ data: undefined }),
+  useCodexLogout: () => ({ mutate: vi.fn(), isPending: false }),
+}));
 
 type GenModel = NonNullable<NonNullable<Doctor["imageGen"]>["model"]>;
 

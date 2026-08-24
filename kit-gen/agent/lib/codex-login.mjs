@@ -41,6 +41,7 @@
    sẽ hiện hai mã khác nhau và người dùng chắc chắn gõ nhầm một trong hai.
    ════════════════════════════════════════════════════════════════════════════ */
 import { spawn } from "node:child_process"
+import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { shortenPath } from "./redact.mjs"
@@ -89,6 +90,31 @@ export function loginCodexHome(cfg) {
     return expandHome(home)
   }
   return join(homedir(), ".codex")
+}
+
+/* HỒ SƠ ẢNH RIÊNG PHẢI CÓ config.toml TRƯỚC LƯỢT ĐĂNG NHẬP ĐẦU TIÊN.
+   Thiếu `cli_auth_credentials_store = "file"`, codex cất credential vào keychain
+   của hệ điều hành thay vì `auth.json` — mà gen.sh và doctor đều kiểm ĐÚNG file
+   auth.json, nên người dùng "đăng nhập thành công" mãi mãi mà gen vẫn kêu chưa
+   đăng nhập (bug thực địa: nút login xanh, 0 ảnh). Trước đây chỉ setup.sh cũ ghi
+   khối này; đường cài trong app thì không — nay ghi ở đây, NGAY trước spawn.
+   CHỈ đụng vào home của hồ sơ ảnh riêng và CHỈ khi config.toml chưa tồn tại —
+   `~/.codex` mặc định là của người dùng, không sửa. */
+const IMG_HOME_CONFIG = `# Sinh boi KitGen truoc luot dang nhap dau tien — ho so Codex RIENG cho viec tao anh.
+model_provider = "openai"
+cli_auth_credentials_store = "file"
+
+[features]
+image_generation = true
+`
+
+function ensureImgHomeConfig(cfg, home) {
+  if (cfg?.imageGen?.mode !== "img-home") return
+  try {
+    mkdirSync(home, { recursive: true })
+    const path = join(home, "config.toml")
+    if (!existsSync(path)) writeFileSync(path, IMG_HOME_CONFIG, "utf8")
+  } catch { /* login vẫn chạy; doctor sẽ nói thật nếu auth.json không xuất hiện */ }
 }
 
 /** Chỉ giữ URL nằm trong host cho phép. Trả `null` nếu dòng không có cái nào. */
@@ -157,6 +183,7 @@ export function startLogin(cfg) {
     return snapshot(session)
   }
   const home = loginCodexHome(cfg)
+  ensureImgHomeConfig(cfg, home)
   const s = {
     status: "starting",
     verificationUrl: null,

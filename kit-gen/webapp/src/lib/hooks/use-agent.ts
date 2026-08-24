@@ -181,6 +181,39 @@ export function useUsage(opts: { enabled?: boolean } = {}) {
   });
 }
 
+/**
+ * Tài khoản Codex đang đăng nhập ở hồ sơ tạo ảnh. Cùng "hạng cân" với `useUsage`:
+ * agent chỉ đọc một file local, không spawn codex — gọi lúc mở màn là được, nhưng
+ * vẫn là số liệu phụ nên `retry:false` và im lặng khi agent tắt.
+ */
+export function useCodexAccount(opts: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: qk.codexAccount(),
+    queryFn: () => api.system.codexAccount(),
+    enabled: opts.enabled ?? true,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+}
+
+/**
+ * Đăng xuất Codex (`codex logout` trên đúng hồ sơ đang chọn). Sau khi xong:
+ * doctor cũ nói "đã đăng nhập" thành rác ⇒ dọn; account + usage đọc lại ngay
+ * vì hai thẻ đó đang hiển thị và phải đổi tức thì theo cú bấm.
+ */
+export function useCodexLogout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.system.codexLogout(),
+    onSuccess: () => {
+      qc.removeQueries({ queryKey: qk.doctor() });
+      void qc.invalidateQueries({ queryKey: qk.codexAccount() });
+      void qc.invalidateQueries({ queryKey: qk.usage() });
+    },
+  });
+}
+
 /** #3 */
 export function useWorkspaces(opts: { enabled?: boolean } = {}) {
   return useQuery({

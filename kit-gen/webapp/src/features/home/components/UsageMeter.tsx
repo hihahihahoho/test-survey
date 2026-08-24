@@ -1,5 +1,5 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useUsage } from "@/lib/hooks";
+import { useCodexAccount, useUsage } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 import { usageView } from "../lib/usage-meter";
 
@@ -29,8 +29,33 @@ export function UsageMeter({ variant = "sidebar", className }: {
   className?: string;
 }) {
   const usage = useUsage();
+  const account = useCodexAccount();
   const view = usageView(usage.data);
-  if (!view) return null;
+
+  /* "LÚC HIỆN LÚC KHÔNG" LÀ MỘT BUG UX CÓ THẬT (báo cáo 24/08): nguồn số là lượt
+     chạy Codex GẦN NHẤT, nên máy mới cài / vừa đổi hồ sơ / chưa gen lần nào thì
+     thanh biến mất không một lời — người dùng Windows tưởng app hỏng. Nay: đã
+     ĐĂNG NHẬP mà chưa có số ⇒ vẫn hiện dòng "chưa có số liệu" nói rõ vì sao
+     (sidebar thôi; chip topbar chật chỗ, giữ luật ẩn cũ). Luật 1 của
+     `usage-meter.ts` không bị phá: vẫn không bịa số, không vẽ 0%. */
+  if (!view) {
+    if (variant !== "sidebar" || !account.data?.loggedIn) return null;
+    const explain =
+      "Số quota đọc từ lượt chạy Codex gần nhất trên máy (không gọi mạng). Chạy một lượt tạo ảnh là có số.";
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div role="status" aria-label={explain} className={cn("cursor-default rounded-2 px-3 py-2", className)}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="truncate text-caption text-fg-muted">Hạn mức Codex</span>
+              <span className="shrink-0 text-caption text-fg-muted">chưa có số liệu</span>
+            </div>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>{explain}</TooltipContent>
+      </Tooltip>
+    );
+  }
 
   const barTone =
     view.tone === "danger" ? "bg-danger"

@@ -84,7 +84,13 @@ export function useCodexLogin(): CodexLoginFlow {
           /* Đăng nhập xong ⇒ doctor cũ (còn nói "chưa đăng nhập") thành rác ngay
              lập tức. Chỉ DỌN, không tự nạp: `codex debug prompt-input` tốn ~1s và
              màn đang mở sẽ tự đọc lại — cùng một luật với `useSetImageProfile`. */
-          if (s.status === "done") qc.removeQueries({ queryKey: qk.doctor() });
+          if (s.status === "done") {
+            qc.removeQueries({ queryKey: qk.doctor() });
+            /* Tài khoản + quota là hai thẻ đang NHÌN THẤY — đọc lại ngay để dòng
+               "Đang đăng nhập là ai" đổi tức thì theo cú đăng nhập vừa xong. */
+            void qc.invalidateQueries({ queryKey: qk.codexAccount() });
+            void qc.invalidateQueries({ queryKey: qk.usage() });
+          }
         } catch { /* mất kết nối một nhịp — lần sau hỏi lại */ }
       })();
     }, POLL_MS);

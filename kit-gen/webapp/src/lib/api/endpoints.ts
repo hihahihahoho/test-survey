@@ -118,6 +118,26 @@ export interface CodexLogin {
   reason?: "NO_CODEX" | "NO_DEVICE_CODE" | "DECLINED" | "EXPIRED" | "SPAWN_FAILED" | null;
 }
 
+/**
+ * `GET /api/codex/account` — AI đang đăng nhập ở hồ sơ mà lượt gen sẽ dùng.
+ *
+ * Đây là phần NỚI CÓ CHỦ ĐÍCH của hợp đồng "hình dạng cố ý nghèo" phía trên
+ * (quyết định của chủ sản phẩm 24/08/2026: hiện tên tài khoản + nút đăng xuất).
+ * Ranh giới THẬT vẫn nguyên: token không có đường ra — agent giải mã cục bộ phần
+ * hiển thị của id_token và chỉ trả về email · tên · enum gói cước · nhãn `~/…`
+ * (xem `agent/lib/codex-account.mjs`). Web không lưu gì trong localStorage.
+ */
+export interface CodexAccount {
+  loggedIn: boolean;
+  email: string | null;
+  name: string | null;
+  /** enum gói cước ChatGPT ("plus" | "pro" | …) — chỉ để hiển thị */
+  planType: string | null;
+  authMode: string | null;
+  codexHomeLabel: string | null;
+  checkedAt: string;
+}
+
 export const systemApi = {
   /**
    * Kiểm tra bản mới. Agent fetch `release.json` HỘ trình duyệt (raw.githubusercontent.com
@@ -166,6 +186,14 @@ export const systemApi = {
   },
   async cancelCodexLogin() {
     return await httpDelete("/api/codex/login") as CodexLogin;
+  },
+  /** Tài khoản đang đăng nhập ở hồ sơ tạo ảnh — xem chú thích `CodexAccount`. Rẻ: agent chỉ đọc một file local. */
+  async codexAccount() {
+    return await httpGet("/api/codex/account") as CodexAccount;
+  },
+  /** `codex logout` trên đúng hồ sơ đang chọn; `account` trong kết quả là trạng thái THẬT sau khi xong. */
+  async codexLogout() {
+    return await httpPost("/api/codex/logout", {}) as { ok: boolean; ran: boolean; account: CodexAccount };
   },
   async revealWorkspace() {
     return await httpPost("/api/workspace/reveal", {}) as { ok: boolean };

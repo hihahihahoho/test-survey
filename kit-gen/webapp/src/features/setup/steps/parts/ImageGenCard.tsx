@@ -5,6 +5,7 @@ import type { Doctor } from "@/lib/types/api";
 import { StepCard, Note } from "../../components/StepShell";
 import { codexPathFixCmd, imgHomeCheckCmd, imgHomeLoginCmd } from "../../lib/commands";
 import { imageGenOutcome } from "../../lib/doctor-view";
+import { CodexAccountRow } from "./CodexAccountRow";
 import { CodexLoginPanel } from "./CodexLoginPanel";
 
 /**
@@ -122,6 +123,9 @@ export function ImageGenCard({ doctor }: { doctor: Doctor | null }) {
         </Badge>
       </div>
       {out.detail && <p className="text-body text-fg">{out.detail}</p>}
+
+      {/* Ai đang đăng nhập + nút đăng xuất — tự ẩn khi chưa đăng nhập. */}
+      <CodexAccountRow />
 
       <GenModelRow model={doctor?.imageGen?.model} />
 

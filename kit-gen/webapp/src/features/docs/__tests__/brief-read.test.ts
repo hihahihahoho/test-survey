@@ -124,8 +124,10 @@ describe("② `thap`/`trong` là note-only — không có đường ra dạng m�
 
 describe("③ 5 điểm mâu thuẫn giữ nguyên văn + nguồn", () => {
   const res = readBrief(missing22);
-  /** Nguyên văn lấy từ form thật `surveys/vcb-brief-intake-2026.json` item q0001. */
-  const FORM = join(WEBAPP, "../../surveys/vcb-brief-intake-2026.json");
+  /** Nguyên văn form thật, item q0001. Trước đây đọc `surveys/vcb-brief-intake-2026.json`
+   *  ở NGOÀI kit-gen — repo dọn survey đi (nhánh app sạch 24/08) là test nổ ENOENT.
+   *  Form được chép nguyên byte vào fixtures để test tự đứng được một mình. */
+  const FORM = join(FIX, "brief-intake-vcb-form.json");
 
   it("đúng 5 điểm, đánh số 1..5, mỗi điểm có nguồn", () => {
     expect(res.conflicts.map((c) => c.index)).toEqual([1, 2, 3, 4, 5]);

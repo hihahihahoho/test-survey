@@ -23,6 +23,8 @@ export const qk = {
   update: () => ["update"] as const,
   /** quota Codex còn lại — đọc file local, rẻ, nhưng chỉ mới bằng lượt chạy cuối. */
   usage: () => ["usage"] as const,
+  /** tài khoản Codex đang đăng nhập (email/gói cước) — agent đọc một file local, không token. */
+  codexAccount: () => ["codex-account"] as const,
   workspaces: () => ["workspaces"] as const,
   /** Tuỳ chọn người dùng trên đĩa. Đổi workspace = đổi file cấu hình ⇒ key phải bị dọn cùng. */
   settings: () => ["settings"] as const,

@@ -5,6 +5,7 @@ import { invalidateUsageCache, usage } from "../lib/usage.mjs"
 import { PROTOCOL } from "../lib/security.mjs"
 import { checkForUpdateSafe, readRuntimeVersion, scheduleUpdate } from "../lib/update.mjs"
 import { cancelLogin, loginStatus, startLogin } from "../lib/codex-login.mjs"
+import { codexAccount, codexLogout } from "../lib/codex-account.mjs"
 
 export function register(r) {
   r.get("/health", async ctx => {
@@ -87,11 +88,31 @@ export function register(r) {
     const s = loginStatus()
     /* Vừa đăng nhập xong mà doctor còn giữ kết quả cũ 60s thì UI hiện "chưa đăng
        nhập" thêm một phút nữa — đúng thứ khiến người dùng bấm nút lần hai. */
-    if (s.status === "done") invalidateDoctorCache()
+    if (s.status === "done") { invalidateDoctorCache(); invalidateUsageCache() }
     return { status: 200, json: s }
   })
 
   r.delete("/api/codex/login", async () => ({ status: 200, json: cancelLogin() }))
+
+  /* ── TÀI KHOẢN & ĐĂNG XUẤT ─────────────────────────────────────────────────
+     Hợp đồng hiển thị của `lib/codex-account.mjs`: chỉ email · tên · enum gói
+     cước · enum auth_mode · nhãn `~/…` · boolean. Token không có đường ra. */
+  r.get("/api/codex/account", async ctx => {
+    const cfg = await ctx.registry.active.config()
+    return { status: 200, json: await codexAccount(cfg) }
+  })
+
+  r.post("/api/codex/logout", async ctx => {
+    const cfg = await ctx.registry.active.config()
+    const result = await codexLogout(cfg)
+    invalidateDoctorCache()
+    invalidateUsageCache()
+    /* Câu trả lời cuối cùng là trạng thái THẬT sau khi codex làm xong việc của nó
+       — không phải mã thoát: `codex logout` lúc vốn chưa đăng nhập thoát khác 0
+       mà kết cục thì vẫn là "đã đăng xuất". */
+    const account = await codexAccount(cfg)
+    return { status: 200, json: { ok: !account.loggedIn, ran: result.ran !== false, account } }
+  })
 
   /** Quota còn lại của tài khoản Codex — đọc lại con số mà lượt chạy gần nhất đã nhận
    *  (chi tiết nguồn + hợp đồng bảo mật ở đầu `lib/usage.mjs`). Rẻ: không spawn codex,

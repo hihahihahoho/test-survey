@@ -3,6 +3,7 @@ import { Lock, Loader2 } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { CopyableCode, StatusDot } from "@/components/common";
 import { StepCard } from "@/features/setup/components/StepShell";
+import { CodexAccountRow } from "@/features/setup/steps/parts/CodexAccountRow";
 import { CodexLoginPanel } from "@/features/setup/steps/parts/CodexLoginPanel";
 import { useSetImageProfile, type useDoctor } from "@/lib/hooks";
 import { devDetails, presentError, type ConnectionStatus } from "@/lib/api";
@@ -104,6 +105,9 @@ export function ImageProfileToggle({
         <dt className="text-fg-muted">Cấu hình đang dùng</dt>
         <dd className="font-mono text-fg-strong">{view.homeLabel}</dd>
       </dl>
+
+      {/* Ai đang đăng nhập ở hồ sơ này + nút đăng xuất — tự ẩn khi chưa đăng nhập. */}
+      <CodexAccountRow />
 
       {view.needsLogin && (
         <div className="flex flex-col gap-2">

@@ -103,9 +103,11 @@ describe("canvas-200nodes.json", () => {
 describe("vệ sinh fixture", () => {
   const names = readdirSync(FIX).filter((n) => n.endsWith(".json"));
 
-  // C1 đẻ 3 fixture file-con; C2 thêm 2 fixture brief intake ⇒ danh sách chốt là 5.
-  it("có đủ 5 fixture", () => {
+  // C1 đẻ 3 fixture file-con; C2 thêm 2 fixture brief intake; nhánh app sạch 24/08
+  // chép thêm form VCB nguyên bản vào đây (test brief-read hết đọc ra ngoài repo) ⇒ 6.
+  it("có đủ 6 fixture", () => {
     expect(names.sort()).toEqual([
+      "brief-intake-vcb-form.json",
       "brief-intake-vcb-full.json",
       "brief-intake-vcb-missing22.json",
       "canvas-200nodes.json",
