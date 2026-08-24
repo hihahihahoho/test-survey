@@ -56,6 +56,13 @@ cat > "$KITGEN_HOME/tools/node_modules/.bin/codex" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
+# Codex "chính thức" GIẢ ở ~/.local/bin — chỗ installer OpenAI đặt. PHẢI có: từ
+# 24/08/2026 install.sh không còn đường npm; máy chạy test không có codex trên PATH
+# (runner Linux) mà thiếu file này thì installer đi TẢI THẬT từ chatgpt.com — test
+# cấm ra mạng, và kết quả phụ thuộc mạng của runner (đúng ca đỏ run 32715156469).
+mkdir -p "$HOME/.local/bin"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$HOME/.local/bin/codex"
+chmod +x "$HOME/.local/bin/codex"
 # Python riêng của KitGen (GIẢ). Bộ test không được phụ thuộc phiên bản Python của máy
 # chạy nó: macOS mặc định là /usr/bin/python3 3.9 — ngoài dải có wheel — nên installer
 # thật sẽ đi TẢI bản riêng ~24 MB, mà test thì cấm ra mạng. Dựng sẵn bản riêng ở đây là
