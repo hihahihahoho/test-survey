@@ -694,7 +694,10 @@ else
   # bại (mất mạng một phần, proxy chặn releases.openai.com).
   echo "Installing Codex CLI (official installer)..."
   OFFICIAL_CODEX="$HOME/.local/bin/codex"
-  if curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh \
+  # KITGEN_SKIP_CODEX_INSTALL: đường tắt cho CI/test — mô phỏng "không tải được" mà
+  # không chạm mạng thật (đối xứng với KITGEN_SKIP_CODEX_UPDATE ở khối nâng cấp).
+  if [ -z "${KITGEN_SKIP_CODEX_INSTALL:-}" ] \
+     && curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh \
      && [ -x "$OFFICIAL_CODEX" ] && "$OFFICIAL_CODEX" --version >/dev/null 2>&1; then
     CODEX_BIN="$OFFICIAL_CODEX"
     check_ok "cài Codex chính thức: $($CODEX_BIN --version 2>/dev/null | head -n1) · $CODEX_BIN"

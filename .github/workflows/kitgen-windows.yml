@@ -373,6 +373,10 @@ jobs:
           $env:npm_config_fetch_retry_maxtimeout = '2000'
           $env:npm_config_audit = 'false'
           $env:npm_config_fund = 'false'
+          # Tu 24/08/2026 installer uu tien tai codex CHINH THUC tu OpenAI truoc khi lui
+          # ve npm; ca nay mo phong "may khong co codex va khong tai duoc" nen phai chan
+          # ca duong tai chinh thuc, khong chi registry npm.
+          $env:KITGEN_SKIP_CODEX_INSTALL = '1'
           $out = "$env:RUNNER_TEMP\install-1.out.log"
           $err = "$env:RUNNER_TEMP\install-1.err.log"
           $ps1 = Join-Path $PWD 'kit-gen\scripts\install.ps1'

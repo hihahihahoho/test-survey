@@ -491,7 +491,11 @@ Copy-TreeContents $candidate $new
 if (Test-Path -LiteralPath $dest) {
   $oldCmd = Join-Path $KitgenHome 'bin\kitgen.cmd'
   if (Test-Path -LiteralPath $oldCmd) {
-    try { & $oldCmd stop | Out-Null } catch { }
+    # Dung Invoke-ExeSoft (khong -Quiet cung duoc nhung stop hong la binh thuong):
+    # goi truc tiep `&` bi cong tinh CI cam — stderr cua lenh ngoai + EAP='Stop'
+    # trong PS 5.1 se bien canh bao thanh loi chet giua chung.
+    $comspec = if ($env:ComSpec) { $env:ComSpec } else { 'cmd.exe' }
+    [void](Invoke-ExeSoft $comspec @('/d', '/c', "call `"$oldCmd`" stop") -Quiet)
     Start-Sleep -Milliseconds 500
   }
   Get-Process node, codex, python -ErrorAction SilentlyContinue |
@@ -669,7 +673,11 @@ if (-not $codexBin) {
     $codexBin = $officialCodex; Write-Ok "dung Codex chinh thuc da co: $officialCodex"
   }
 }
-if (-not $codexBin) {
+if ((-not $codexBin) -and $env:KITGEN_SKIP_CODEX_INSTALL) {
+  # Duong tat cho CI/test: mo phong "may khong tai duoc codex" ma khong cham mang that
+  # (doi xung voi KITGEN_SKIP_CODEX_UPDATE o khoi nang cap ben duoi).
+  Write-Warn 'bo qua tai Codex chinh thuc theo KITGEN_SKIP_CODEX_INSTALL'
+} elseif (-not $codexBin) {
   Write-Host '  Codex CLI (installer chinh thuc cua OpenAI) ...'
   try {
     $env:CODEX_INSTALL_DIR = $codexInstallDir
