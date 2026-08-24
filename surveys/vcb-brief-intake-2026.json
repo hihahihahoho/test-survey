@@ -1,0 +1,2471 @@
+{
+  "info": {
+    "title": "Đầu bài design — VCB Look back 2025 & Game Chợ Tết 2026",
+    "documentTitle": "VCB Design Brief Intake 2026",
+    "description": "FORM NÀY DÙNG ĐỂ LÀM GÌ\nThu đủ dữ kiện của một đầu bài design để team design (1) báo được man-day ngay trong ngày, (2) bắt tay vẽ mà không phải hỏi lại vòng vo.\n\nVÌ SAO KHÔNG NHẬN BRIEF DẠNG NOTE NHƯ TRƯỚC\nTrong phản hồi ngày 28.08 về tính năng Look back, cùng MỘT tính năng đã ra ba bản estimate khác nhau: 52 / 33.5 / 30 man-day. Chênh lệch không đến từ việc làm nhiều hay ít, mà đến từ hai thứ brief chưa nói rõ: SỐ LƯỢNG (bao nhiêu màn hình, bao nhiêu trophy) và ĐỘ CHI TIẾT của nét vẽ (1.5 ngày/màn hay 3 ngày/màn). Form này khoá đúng hai biến đó.\n\nCÁCH ĐIỀN\n· Phần lớn câu đã có sẵn GỢI Ý rút từ chính note anh/chị đã gửi (Brief Mascot, Game Chợ Tết, Mô tả chi tiết yêu cầu design, Timeline). Gợi ý nằm ngay dưới câu hỏi, kèm nguồn. Nếu đúng thì chọn theo, sai thì sửa — không phải viết lại từ đầu.\n· Câu nào KHÔNG có gợi ý nghĩa là note hiện chưa nói tới. Đó chính là các câu đang chặn estimate, mong anh/chị ưu tiên trả lời.\n· Mỗi hạng mục nên điền một lần cho gọn. Nếu brief cả hai cùng lúc thì chọn “Cả hai”.\n\nTHỜI GIAN\nKhoảng 12–15 phút nếu chỉ xác nhận các gợi ý có sẵn."
+  },
+  "items": [
+    {
+      "itemId": "sec_meta",
+      "title": "Phần 0 · Hạng mục đang brief",
+      "pageBreakItem": {},
+      "description": "Vài thông tin khung trước khi vào phần nội dung."
+    },
+    {
+      "itemId": "q0001",
+      "title": "⚠ 5 điểm trong note hiện đang mâu thuẫn hoặc bỏ trống — form sẽ hỏi lại từng điểm",
+      "textItem": {},
+      "description": "1. Danh sách vật phẩm chợ Tết ghi ở hai chỗ khác nhau: sheet “Game Chợ Tết” liệt kê 7 món, phần Concept game trong “Mô tả chi tiết yêu cầu design” liệt kê ~10 món và kết thúc bằng “…”.\n2. Cơ chế bốc quà: một chỗ ghi “random chọn một món đồ”, chỗ khác ghi “chọn vào bao lì xì” — random hay người chơi tự chọn?\n3. Hướng phong cách Look back: brief chọn “tranh cổ động”, nhưng phản hồi 28.08 cảnh báo hướng này có thể lệch tinh thần số hoá 2025–2026 của VCB.\n4. Ba nhóm ảnh tham khảo đã gửi thuộc ba phong cách khác nhau (dân gian chibi màu nước / poster chợ Tết phẳng / tranh cổ động) — chưa rõ hướng nào là chính.\n5. Thang thuộc tính visual trong sheet chưa được mark ô nào, cả phần Look back lẫn phần Game."
+    },
+    {
+      "itemId": "q0002",
+      "title": "Tên chiến dịch",
+      "description": "Gợi ý: “VCB Look back 2025 & Chợ Tết 2026”. · mã field: project_name · →adm",
+      "questionItem": {
+        "question": {
+          "questionId": "q0003",
+          "required": true,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0004",
+      "title": "Đầu mối phía khách hàng (tên + kênh liên hệ)",
+      "description": "Cần một người chốt được nội dung, để mỗi lần vướng chỉ hỏi một đầu mối thay vì hỏi cả nhóm. · mã field: pic_client · →adm",
+      "questionItem": {
+        "question": {
+          "questionId": "q0005",
+          "required": true,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0006",
+      "title": "Thiết bị hiển thị",
+      "description": "Quyết định tỷ lệ khung vẽ (dọc 2:3 cho mobile, ngang cho web) — vẽ sai tỷ lệ là vẽ lại từ đầu.\nGợi ý từ note: Mobile app + Web responsive (nguồn: Mô tả chi tiết yêu cầu design, cột GAME mục 11 “Thiết bị hiển thị: mobile và web”). · mã field: devices · →kit, →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q0007",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Mobile app"
+              },
+              {
+                "value": "Web responsive"
+              },
+              {
+                "value": "Tablet"
+              },
+              {
+                "value": "Màn hình LED / TVC"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0008",
+      "title": "Đã có tài liệu FE / URD chưa?",
+      "description": "Không có URD thì design không biết ràng buộc kỹ thuật (safe area, tỷ lệ, giới hạn dung lượng) và phải đoán.\nNote hiện KHÔNG có gợi ý: cả mục “Tài liệu FE/URD” của Look back và của Game đều đang để trống. · mã field: has_urd · →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q0009",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có, đã xong (dán link ở câu dưới)"
+              },
+              {
+                "value": "Đang soạn, sẽ gửi sau"
+              },
+              {
+                "value": "Chưa có"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q000a",
+      "title": "Link tài liệu FE / URD",
+      "description": "Bỏ trống nếu chưa có. · mã field: urd_link · →adm",
+      "questionItem": {
+        "question": {
+          "questionId": "q000b",
+          "required": false,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q000c",
+      "title": "Form này đang brief hạng mục nào?",
+      "description": "Hai hạng mục có bộ câu hỏi riêng nên form sẽ tự bỏ qua phần không liên quan.\nNote KHÔNG có gợi ý cho câu này: hai hạng mục là hai đầu bài khác nhau, không được gộp làm một. · mã field: deliverable · →adm",
+      "questionItem": {
+        "question": {
+          "questionId": "q000d",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Look back 2025"
+              },
+              {
+                "value": "Game Đi chợ Tết cùng VCB Digibank",
+                "goToSectionId": "sec_game"
+              },
+              {
+                "value": "Cả hai (Look back + Game)"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_lb",
+      "title": "Phần 1 · Riêng Look back 2025",
+      "pageBreakItem": {},
+      "description": "Phần này là nơi ba bản estimate 52 / 33.5 / 30 man-day lệch nhau. Bốn câu đầu quyết định gần như toàn bộ con số."
+    },
+    {
+      "itemId": "q000e",
+      "title": "Danh sách trophy / achievement đã chốt (mỗi dòng một cái)",
+      "description": "Đây đúng là thứ phản hồi 28.08 xin: “nhờ team MKT hỗ trợ gửi lại nội dung các màn hình (bao gồm danh sách các trophy/achievement đã chốt) để team design estimate được sát nhất”.\nNote hiện KHÔNG có danh sách này. Chênh 10 hay 13 badge = chênh 5 đến 13 man-day. · mã field: badge_list · →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q000f",
+          "required": false,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q000g",
+      "title": "Tổng số trophy / achievement cần vẽ",
+      "description": "Nhân tử trực tiếp trong công thức: n_badges × rate_badge. Chọn “Chưa chốt” cũng được, nhưng khi đó estimate sẽ phải báo dạng khoảng. · mã field: badge_count · →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q000h",
+          "required": true,
+          "choiceQuestion": {
+            "type": "DROP_DOWN",
+            "options": [
+              {
+                "value": "Chưa chốt"
+              },
+              {
+                "value": "0"
+              },
+              {
+                "value": "1"
+              },
+              {
+                "value": "2"
+              },
+              {
+                "value": "3"
+              },
+              {
+                "value": "4"
+              },
+              {
+                "value": "5"
+              },
+              {
+                "value": "6"
+              },
+              {
+                "value": "7"
+              },
+              {
+                "value": "8"
+              },
+              {
+                "value": "9"
+              },
+              {
+                "value": "10"
+              },
+              {
+                "value": "11"
+              },
+              {
+                "value": "12"
+              },
+              {
+                "value": "13"
+              },
+              {
+                "value": "14"
+              },
+              {
+                "value": "15"
+              },
+              {
+                "value": "16"
+              },
+              {
+                "value": "17"
+              },
+              {
+                "value": "18"
+              },
+              {
+                "value": "19"
+              },
+              {
+                "value": "20"
+              },
+              {
+                "value": "21"
+              },
+              {
+                "value": "22"
+              },
+              {
+                "value": "23"
+              },
+              {
+                "value": "24"
+              },
+              {
+                "value": "25"
+              },
+              {
+                "value": "26"
+              },
+              {
+                "value": "27"
+              },
+              {
+                "value": "28"
+              },
+              {
+                "value": "29"
+              },
+              {
+                "value": "30"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q000i",
+      "title": "Có storyline hay concept xuyên suốt không?",
+      "description": "Có storyline thì phần phác thảo ý tưởng dài hơn; không storyline thì mỗi màn vẽ độc lập, rẻ hơn nhưng cần chú thích từng màn.\nGợi ý từ note: “Không — graphic chỉ minh hoạ…” (nguồn: Mô tả chi tiết yêu cầu design, cột LOOK BACK mục 2: “sử dụng graphic là phong cách tranh cổ động, không có storyline. Hình vẽ miêu tả, phụ hoạ cho nội dung insights”). · mã field: has_storyline · →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q000j",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có, có storyline (mô tả ở câu dưới)"
+              },
+              {
+                "value": "Không — graphic chỉ minh hoạ, phụ hoạ cho nội dung insight"
+              },
+              {
+                "value": "Chưa rõ"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q000k",
+      "title": "Graphic gắn với nội dung từng màn như thế nào?",
+      "description": "Câu này để gỡ đúng chỗ đang tắc. Phản hồi 28.08 ghi: “Team design VNPAY vẫn chưa hình dung được rõ về việc kết hợp tranh cổ động vào các content”. Mô tả giúp 1–2 màn ví dụ là đủ để phác thảo chạy tiếp. · mã field: storyline_desc · →est, →kit (ghi chú sheet)",
+      "questionItem": {
+        "question": {
+          "questionId": "q000l",
+          "required": false,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q000m",
+      "title": "Có bắt buộc dùng VCB Digibot không?",
+      "description": "Gợi ý từ note: “Không dùng Digibot” (nguồn: Mô tả chi tiết yêu cầu design, cột LOOK BACK mục 3). · mã field: digibot_use · →kit (điều cấm)",
+      "questionItem": {
+        "question": {
+          "questionId": "q000n",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Bắt buộc dùng"
+              },
+              {
+                "value": "Không dùng Digibot"
+              },
+              {
+                "value": "Tuỳ design đề xuất"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q000o",
+      "title": "Brief lần này có kèm luôn phần Game Đi chợ Tết không?",
+      "description": "Chọn “Có” thì phần tiếp theo là bộ câu hỏi riêng của Game Chợ Tết. · →adm",
+      "questionItem": {
+        "question": {
+          "questionId": "q000p",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có, brief cả hai hạng mục trong lần này"
+              },
+              {
+                "value": "Không, lần này chỉ brief Look back 2025",
+                "goToSectionId": "sec_char"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_game",
+      "title": "Phần 2 · Riêng Game Đi chợ Tết",
+      "pageBreakItem": {},
+      "description": "Phần này ép ra các con số mà Timeline Game đang nhân lên thành man-day (“MH quà tặng: 3 ngày = 3 loại quà × 1 ngày/quà”)."
+    },
+    {
+      "itemId": "q000q",
+      "title": "Tên game hiển thị trên giao diện",
+      "description": "Design phải chừa chỗ đúng độ dài của tên, nên cần bản chữ cuối cùng chứ không phải bản tạm.\nGợi ý từ note: “ĐI CHỢ TẾT CÙNG VCB DIGIBANK” (nguồn: Mô tả chi tiết yêu cầu design, cột GAME mục 2 — note ghi “dự kiến”, mong anh/chị xác nhận đã chốt chưa). · mã field: game_display_name · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q000r",
+          "required": true,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q000s",
+      "title": "Chữ trên nút bấm chính",
+      "description": "Gợi ý từ note: “Đi chợ ngay” (nguồn: sheet Game Chợ Tết, dòng Action của màn Home). · mã field: cta_label · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q000t",
+          "required": true,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q000u",
+      "title": "Luồng người chơi (mỗi dòng một bước)",
+      "description": "Gợi ý từ note (sheet Game Chợ Tết, 6 bước) — xác nhận hoặc sửa:\n1. Khách hàng giao dịch tài chính → 2. Có lượt chơi → 3. Vào game → 4. Bấm “Đi chợ ngay” → 5. Nhân vật random bốc một món trong gian hàng → 6. Kết quả: tiền / voucher VNPAY / câu chúc.\nMỗi bước là một trạng thái màn hình phải vẽ. · mã field: flow_steps · →kit, →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q000v",
+          "required": false,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q000w",
+      "title": "Cơ chế bốc quà",
+      "description": "⚠ Hai chỗ trong note đang ghi khác nhau: bước 5 ghi “Random chọn một món đồ”, phần mô tả Level 3 lại ghi “Chọn vào bao lì xì”. Random và tự chọn cần hai bộ màn hình khác nhau (tự chọn phải vẽ thêm trạng thái hover/được chọn cho từng món). · mã field: randomness · →kit, →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q000x",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Random hoàn toàn"
+              },
+              {
+                "value": "Người chơi tự chọn món trên sạp"
+              },
+              {
+                "value": "Random nhưng có cấu hình tỷ lệ"
+              },
+              {
+                "value": "Chưa chốt"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q000y",
+      "title": "Các loại kết quả người chơi có thể nhận",
+      "description": "Mỗi loại kết quả là một biến thể popup phải vẽ riêng.\nGợi ý từ note: Tiền mặt + Voucher VNPAY + Câu chúc (nguồn: sheet Game Chợ Tết, bước 6). · mã field: result_types · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q000z",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Tiền mặt"
+              },
+              {
+                "value": "Voucher VNPAY"
+              },
+              {
+                "value": "Câu chúc"
+              },
+              {
+                "value": "Lượt chơi thêm"
+              },
+              {
+                "value": "Không trúng gì"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0010",
+      "title": "Các vật phẩm bày trên sạp chợ Tết",
+      "description": "⚠ Hai note đang lệch nhau: sheet “Game Chợ Tết” liệt kê 7 món (cây hoa, cây đào, gà, bánh chưng, thịt, giò/chả, bao lì xì); phần Concept game liệt kê thêm cây mai, cây quất, bánh tét, hành và kết thúc bằng “…”. Danh sách gợi ý dưới đây là HỢP của hai danh sách — mong anh/chị bỏ bớt món không cần. Mỗi món là một hình phải vẽ riêng. · mã field: item_list · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q0011",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Bao lì xì"
+              },
+              {
+                "value": "Con gà"
+              },
+              {
+                "value": "Cây đào"
+              },
+              {
+                "value": "Cây mai"
+              },
+              {
+                "value": "Cây quất"
+              },
+              {
+                "value": "Bánh chưng"
+              },
+              {
+                "value": "Bánh tét"
+              },
+              {
+                "value": "Miếng thịt mỡ"
+              },
+              {
+                "value": "Hành muối"
+              },
+              {
+                "value": "Giò / chả"
+              },
+              {
+                "value": "Cây hoa"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0012",
+      "title": "Tổng số vật phẩm cần vẽ",
+      "description": "Gợi ý: 11 (đếm theo danh sách hợp ở câu trên). Timeline Game đang tính 1 ngày/quà. · mã field: item_count · →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q0013",
+          "required": true,
+          "choiceQuestion": {
+            "type": "DROP_DOWN",
+            "options": [
+              {
+                "value": "1"
+              },
+              {
+                "value": "2"
+              },
+              {
+                "value": "3"
+              },
+              {
+                "value": "4"
+              },
+              {
+                "value": "5"
+              },
+              {
+                "value": "6"
+              },
+              {
+                "value": "7"
+              },
+              {
+                "value": "8"
+              },
+              {
+                "value": "9"
+              },
+              {
+                "value": "10"
+              },
+              {
+                "value": "11"
+              },
+              {
+                "value": "12"
+              },
+              {
+                "value": "13"
+              },
+              {
+                "value": "14"
+              },
+              {
+                "value": "15"
+              },
+              {
+                "value": "16"
+              },
+              {
+                "value": "17"
+              },
+              {
+                "value": "18"
+              },
+              {
+                "value": "19"
+              },
+              {
+                "value": "20"
+              },
+              {
+                "value": "21"
+              },
+              {
+                "value": "22"
+              },
+              {
+                "value": "23"
+              },
+              {
+                "value": "24"
+              },
+              {
+                "value": "25"
+              },
+              {
+                "value": "26"
+              },
+              {
+                "value": "27"
+              },
+              {
+                "value": "28"
+              },
+              {
+                "value": "29"
+              },
+              {
+                "value": "30"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0014",
+      "title": "Số câu chúc cần thiết kế đồ hoạ",
+      "description": "Note ghi “sẽ cần thiết kế đồ hoạ cho từng loại món ăn + lời chúc” nhưng KHÔNG có con số. Không có số thì không nhân ra được man-day cho phần này. · mã field: wish_count · →est, →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q0015",
+          "required": true,
+          "choiceQuestion": {
+            "type": "DROP_DOWN",
+            "options": [
+              {
+                "value": "Chưa chốt"
+              },
+              {
+                "value": "0"
+              },
+              {
+                "value": "1"
+              },
+              {
+                "value": "2"
+              },
+              {
+                "value": "3"
+              },
+              {
+                "value": "4"
+              },
+              {
+                "value": "5"
+              },
+              {
+                "value": "6"
+              },
+              {
+                "value": "7"
+              },
+              {
+                "value": "8"
+              },
+              {
+                "value": "9"
+              },
+              {
+                "value": "10"
+              },
+              {
+                "value": "11"
+              },
+              {
+                "value": "12"
+              },
+              {
+                "value": "13"
+              },
+              {
+                "value": "14"
+              },
+              {
+                "value": "15"
+              },
+              {
+                "value": "16"
+              },
+              {
+                "value": "17"
+              },
+              {
+                "value": "18"
+              },
+              {
+                "value": "19"
+              },
+              {
+                "value": "20"
+              },
+              {
+                "value": "21"
+              },
+              {
+                "value": "22"
+              },
+              {
+                "value": "23"
+              },
+              {
+                "value": "24"
+              },
+              {
+                "value": "25"
+              },
+              {
+                "value": "26"
+              },
+              {
+                "value": "27"
+              },
+              {
+                "value": "28"
+              },
+              {
+                "value": "29"
+              },
+              {
+                "value": "30"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0016",
+      "title": "Số mẫu frame voucher VNPAY",
+      "description": "Note ghi “cần thiết kế frame cho từng loại voucher VNPAY” nhưng KHÔNG có con số. Mỗi mẫu frame là một biến thể hình phải vẽ. · mã field: voucher_count · →est, →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q0017",
+          "required": true,
+          "choiceQuestion": {
+            "type": "DROP_DOWN",
+            "options": [
+              {
+                "value": "Chưa chốt"
+              },
+              {
+                "value": "0"
+              },
+              {
+                "value": "1"
+              },
+              {
+                "value": "2"
+              },
+              {
+                "value": "3"
+              },
+              {
+                "value": "4"
+              },
+              {
+                "value": "5"
+              },
+              {
+                "value": "6"
+              },
+              {
+                "value": "7"
+              },
+              {
+                "value": "8"
+              },
+              {
+                "value": "9"
+              },
+              {
+                "value": "10"
+              },
+              {
+                "value": "11"
+              },
+              {
+                "value": "12"
+              },
+              {
+                "value": "13"
+              },
+              {
+                "value": "14"
+              },
+              {
+                "value": "15"
+              },
+              {
+                "value": "16"
+              },
+              {
+                "value": "17"
+              },
+              {
+                "value": "18"
+              },
+              {
+                "value": "19"
+              },
+              {
+                "value": "20"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0018",
+      "title": "Số mệnh giá tiền mặt",
+      "description": "Nếu mỗi mệnh giá hiện bằng một hình riêng thì đây cũng là số hình phải vẽ. · mã field: cash_tiers · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q0019",
+          "required": false,
+          "choiceQuestion": {
+            "type": "DROP_DOWN",
+            "options": [
+              {
+                "value": "Chưa chốt"
+              },
+              {
+                "value": "0"
+              },
+              {
+                "value": "1"
+              },
+              {
+                "value": "2"
+              },
+              {
+                "value": "3"
+              },
+              {
+                "value": "4"
+              },
+              {
+                "value": "5"
+              },
+              {
+                "value": "6"
+              },
+              {
+                "value": "7"
+              },
+              {
+                "value": "8"
+              },
+              {
+                "value": "9"
+              },
+              {
+                "value": "10"
+              },
+              {
+                "value": "11"
+              },
+              {
+                "value": "12"
+              },
+              {
+                "value": "13"
+              },
+              {
+                "value": "14"
+              },
+              {
+                "value": "15"
+              },
+              {
+                "value": "16"
+              },
+              {
+                "value": "17"
+              },
+              {
+                "value": "18"
+              },
+              {
+                "value": "19"
+              },
+              {
+                "value": "20"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001a",
+      "title": "Trọng số kích thước các loại quà khi hiện trên màn hình",
+      "description": "Mục 10 trong note đang để trống. Quà nào to hơn thì được vẽ chi tiết hơn và chiếm bố cục trung tâm — chốt sớm thì không phải dựng lại layout. · mã field: gift_weight · →kit",
+      "questionGroupItem": {
+        "questions": [
+          {
+            "questionId": "q001b",
+            "required": false,
+            "rowQuestion": {
+              "title": "Tiền mặt"
+            }
+          },
+          {
+            "questionId": "q001c",
+            "required": false,
+            "rowQuestion": {
+              "title": "Voucher VNPAY"
+            }
+          },
+          {
+            "questionId": "q001d",
+            "required": false,
+            "rowQuestion": {
+              "title": "Câu chúc"
+            }
+          }
+        ],
+        "grid": {
+          "columns": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Rất lớn"
+              },
+              {
+                "value": "Lớn"
+              },
+              {
+                "value": "Vừa"
+              },
+              {
+                "value": "Nhỏ"
+              },
+              {
+                "value": "Chưa quyết"
+              }
+            ]
+          },
+          "shuffleQuestions": false
+        }
+      }
+    },
+    {
+      "itemId": "q001e",
+      "title": "Có yêu cầu thiết kế cho ngày/giờ đặc biệt không?",
+      "description": "Mục 13 trong note để trống. Nếu có, mỗi mốc đặc biệt thường phát sinh thêm một biến thể màn hình, tức là nhân thẳng vào số màn. · mã field: special_date · →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q001f",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Không"
+              },
+              {
+                "value": "Có (giao thừa, mùng 1… — mô tả ở phần ghi chú cuối form)"
+              },
+              {
+                "value": "Chưa rõ"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_char",
+      "title": "Phần 3 · Nhân vật đại diện",
+      "pageBreakItem": {},
+      "description": "Bám theo sheet “Brief Mascot” — mảnh đầy đủ nhất trong bộ note. Ba câu cuối phần này là ba thứ sheet chưa nói mà không có thì không dựng được bộ pose."
+    },
+    {
+      "itemId": "q001g",
+      "title": "Có dùng nhân vật đại diện (mascot) không?",
+      "description": "Gợi ý từ note: “Có” (nguồn: Mô tả chi tiết yêu cầu design, cột GAME mục 6). · mã field: need_mascot · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q001h",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có"
+              },
+              {
+                "value": "Không"
+              },
+              {
+                "value": "Chưa quyết"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001i",
+      "title": "Loài / hình tượng nhân vật",
+      "description": "Gợi ý từ note: “Con ngựa” (nguồn: Brief Mascot, dòng “Nhân vật”). · mã field: char_species · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q001j",
+          "required": true,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001k",
+      "title": "Giới tính thể hiện",
+      "description": "Gợi ý từ note: “Nam” (nguồn: Brief Mascot: “Con ngựa (prefer giới tính nam)”). · mã field: char_gender · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q001l",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Nam"
+              },
+              {
+                "value": "Nữ"
+              },
+              {
+                "value": "Trung tính"
+              },
+              {
+                "value": "Không quan trọng"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001m",
+      "title": "Tính cách nhân vật",
+      "description": "Gợi ý từ note: Vui vẻ + Thân thiện + Gần gũi + Đáng tin cậy (nguồn: Brief Mascot, dòng “Tính cách”). · mã field: char_traits · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q001n",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Vui vẻ"
+              },
+              {
+                "value": "Thân thiện"
+              },
+              {
+                "value": "Gần gũi"
+              },
+              {
+                "value": "Đáng tin cậy"
+              },
+              {
+                "value": "Hài hước"
+              },
+              {
+                "value": "Tinh nghịch"
+              },
+              {
+                "value": "Điềm đạm"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001o",
+      "title": "Biểu cảm chủ đạo",
+      "description": "Gợi ý từ note: “Tươi cười, thân thiện, phong thái hân hoan ngày Tết” (nguồn: Brief Mascot, dòng “Biểu cảm”). · mã field: char_expression · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q001p",
+          "required": false,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001q",
+      "title": "Trang phục",
+      "description": "Gợi ý từ note: “Trang phục Tết (áo dài nam)” — note tự ghi là “gợi ý, không fixed” và có dấu hỏi, nên mong anh/chị xác nhận đã chốt chưa. · mã field: char_costume · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q001r",
+          "required": false,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001s",
+      "title": "Tỷ lệ cơ thể nhân vật",
+      "description": "Note KHÔNG nói tỷ lệ, mà đây là thứ quyết định nhân vật trông ra sao hơn cả màu sắc. Chọn sai tỷ lệ là vẽ lại toàn bộ pose. · mã field: char_proportion · →kit, →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q001t",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Chibi 2 đầu (đầu rất to, thân nhỏ)"
+              },
+              {
+                "value": "Chibi 3 đầu"
+              },
+              {
+                "value": "Cách điệu 4–5 đầu"
+              },
+              {
+                "value": "Tả thực 7–8 đầu"
+              },
+              {
+                "value": "Để design đề xuất"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001u",
+      "title": "Cần bao nhiêu tư thế (pose) của nhân vật?",
+      "description": "Bộ pose được dựng theo lưới: 4 pose = lưới 2×2, 16 pose = lưới 4×4. Gợi ý 16 nếu nhân vật xuất hiện xuyên suốt game. · mã field: char_pose_count · →kit, →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q001v",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "4 pose"
+              },
+              {
+                "value": "8 pose"
+              },
+              {
+                "value": "16 pose"
+              },
+              {
+                "value": "Chưa rõ, để design đề xuất"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001w",
+      "title": "Các tư thế cần có",
+      "description": "Gợi ý suy từ luồng chơi: Đứng chờ + Ăn mừng + Chỉ tay + Cầm quà + Trao quà. Chọn đủ số pose đã khai ở câu trên. · mã field: char_pose_list · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q001x",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Đứng chờ (idle)"
+              },
+              {
+                "value": "Vẫy tay"
+              },
+              {
+                "value": "Chỉ tay"
+              },
+              {
+                "value": "Cầm quà"
+              },
+              {
+                "value": "Ăn mừng"
+              },
+              {
+                "value": "Buồn / tiếc"
+              },
+              {
+                "value": "Chạy"
+              },
+              {
+                "value": "Suy nghĩ"
+              },
+              {
+                "value": "Ngồi"
+              },
+              {
+                "value": "Nhảy"
+              },
+              {
+                "value": "Cúi chào"
+              },
+              {
+                "value": "Giơ ngón cái"
+              },
+              {
+                "value": "Trao quà"
+              },
+              {
+                "value": "Góc 3/4"
+              },
+              {
+                "value": "Góc nghiêng"
+              },
+              {
+                "value": "Góc lưng"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q001y",
+      "title": "Đã có ảnh mascot chốt chưa?",
+      "description": "Có ảnh chốt thì bỏ được vòng thiết kế nhân vật; chưa có thì phải chạy một vòng duyệt tạo hình trước khi vẽ pose. · mã field: char_ref_image · →kit, →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q001z",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Đã có, sẽ gửi file"
+              },
+              {
+                "value": "Chưa có, cần vẽ mới"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_style",
+      "title": "Phần 4 · Phong cách thị giác",
+      "pageBreakItem": {},
+      "description": "Phần này thay cho bảng thanh trượt vẽ tay trong sheet — bảng đó hiện chưa mark ô nào.\nMỗi thang là một câu, kéo từ 1 (cực trái) đến 7 (cực phải); 4 là ở giữa."
+    },
+    {
+      "itemId": "q0020",
+      "title": "Kéo thang là kéo cả chi phí — nói trước cho minh bạch",
+      "textItem": {},
+      "description": "Thang càng lệch về phía “vẽ chi tiết, tả thực, nhiều chi tiết” thì man-day mỗi màn càng cao. Theo đúng ba bản estimate ngày 28.08: nét đơn giản ≈ 1.5 ngày/màn, nét chi tiết ≈ 3 ngày/màn. Với 10 màn, chênh lệch là 15 man-day."
+    },
+    {
+      "itemId": "q0021",
+      "title": "Chín chắn ↔ Trẻ trung",
+      "description": "Gợi ý 6 — suy từ “dân gian, mộc mạc, dễ gần, đáng yêu” (Brief Mascot) và nhóm ảnh tham khảo vẽ trẻ em chibi màu nước. Đây là suy luận của team design, không phải câu anh/chị đã nói — mong xác nhận. · mã field: sc_age · →kit, →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q0022",
+          "required": true,
+          "scaleQuestion": {
+            "low": 1,
+            "high": 7,
+            "lowLabel": "1 · Chín chắn (tả thực, nhiều chi tiết)",
+            "highLabel": "7 · Trẻ trung (chibi)"
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0023",
+      "title": "Sống động, ồn ào ↔ Thư giãn, nhẹ nhàng",
+      "description": "Gợi ý 2 — chợ Tết đông vui, tông “vui vẻ, hài hước”, ảnh tham khảo poster chợ Tết rất nhiều chi tiết. Lưu ý: lệch về trái làm tăng man-day mỗi màn. · mã field: sc_energy · →kit, →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q0024",
+          "required": true,
+          "scaleQuestion": {
+            "low": 1,
+            "high": 7,
+            "lowLabel": "1 · Sống động, ồn ào (nhiều chi tiết & màu)",
+            "highLabel": "7 · Thư giãn, nhẹ nhàng (đơn giản)"
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0025",
+      "title": "Sang trọng ↔ Bình dị, gần gũi",
+      "description": "Gợi ý 6 — “mộc mạc, dễ gần” (Brief Mascot, dòng Phong cách đồ hoạ). · mã field: sc_lux · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q0026",
+          "required": true,
+          "scaleQuestion": {
+            "low": 1,
+            "high": 7,
+            "lowLabel": "1 · Sang trọng",
+            "highLabel": "7 · Bình dị, gần gũi"
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0027",
+      "title": "Hiện đại ↔ Cổ điển",
+      "description": "⚠ Đây là điểm đang mâu thuẫn, mong anh/chị chốt giúp: note chọn “tranh cổ động” (nghiêng cổ điển), nhưng phản hồi 28.08 lo hướng này “có thể không phản ánh được tinh thần số hoá mà VCB đang hướng tới 2025–2026”. Con số anh/chị kéo ở đây là câu trả lời cuối cùng cho tranh luận đó. · mã field: sc_era · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q0028",
+          "required": true,
+          "scaleQuestion": {
+            "low": 1,
+            "high": 7,
+            "lowLabel": "1 · Hiện đại",
+            "highLabel": "7 · Cổ điển"
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0029",
+      "title": "Nam tính ↔ Nữ tính",
+      "description": "Gợi ý 3 — mascot “prefer giới tính nam” (Brief Mascot). · mã field: sc_gender · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q002a",
+          "required": true,
+          "scaleQuestion": {
+            "low": 1,
+            "high": 7,
+            "lowLabel": "1 · Nam tính",
+            "highLabel": "7 · Nữ tính"
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002b",
+      "title": "Nét phẳng ↔ Đổ khối dày",
+      "description": "Thang này KHÔNG có trong sheet của anh/chị, team design thêm vào vì nó là thứ quyết định trực tiếp rate 1.5 hay 3 ngày/màn. Gợi ý 3 — các ảnh tham khảo đều là màu nước / minh hoạ phẳng. · mã field: sc_detail · →kit, →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q002c",
+          "required": true,
+          "scaleQuestion": {
+            "low": 1,
+            "high": 7,
+            "lowLabel": "1 · Nét mảnh, mảng phẳng (flat)",
+            "highLabel": "7 · Đổ khối, chất liệu dày (3D)"
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002d",
+      "title": "Không viền ↔ Viền đậm",
+      "description": "Gợi ý 2 — ảnh tham khảo poster chợ Tết không dùng outline đậm. · mã field: sc_outline · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q002e",
+          "required": false,
+          "scaleQuestion": {
+            "low": 1,
+            "high": 7,
+            "lowLabel": "1 · Không viền",
+            "highLabel": "7 · Viền đậm rõ"
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002f",
+      "title": "Chọn MỘT hướng phong cách chính",
+      "description": "Ba nhóm ảnh anh/chị gửi thuộc ba phong cách khác nhau, và đây chính là chỗ đã tốn một vòng trao đổi hồi 28.08. Chốt một hướng chính thì phác thảo chỉ vẽ một lần. Note KHÔNG có gợi ý cho câu này — mong anh/chị chọn. · mã field: style_direction · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q002g",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "A. Dân gian chibi vẽ tay màu nước (nhóm ảnh trẻ em múa lân, chọi gà)"
+              },
+              {
+                "value": "B. Minh hoạ phẳng kiểu poster chợ Tết nhìn từ trên"
+              },
+              {
+                "value": "C. Tranh cổ động hiện đại hoá (màu tươi, không khắc khổ)"
+              },
+              {
+                "value": "D. Hướng khác (mô tả ở câu ghi chú)"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002h",
+      "title": "Ở mỗi nhóm ảnh tham khảo, anh/chị thích cái gì?",
+      "description": "Gửi ảnh mà không nói thích gì ở ảnh thì design phải đoán, và thường đoán trúng phần anh/chị không quan tâm. Một dòng có thể tick nhiều ô. · mã field: ref_like_what · →kit",
+      "questionGroupItem": {
+        "questions": [
+          {
+            "questionId": "q002i",
+            "required": true,
+            "rowQuestion": {
+              "title": "Nhóm A · dân gian chibi màu nước"
+            }
+          },
+          {
+            "questionId": "q002j",
+            "required": true,
+            "rowQuestion": {
+              "title": "Nhóm B · poster chợ Tết phẳng"
+            }
+          },
+          {
+            "questionId": "q002k",
+            "required": true,
+            "rowQuestion": {
+              "title": "Nhóm C · tranh cổ động"
+            }
+          }
+        ],
+        "grid": {
+          "columns": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Bảng màu"
+              },
+              {
+                "value": "Nét vẽ"
+              },
+              {
+                "value": "Bố cục"
+              },
+              {
+                "value": "Nhân vật"
+              },
+              {
+                "value": "Không dùng nhóm này"
+              }
+            ]
+          },
+          "shuffleQuestions": false
+        }
+      }
+    },
+    {
+      "itemId": "q002l",
+      "title": "Link ảnh / thư mục tham khảo",
+      "description": "Gợi ý từ note: link Google Drive ở mục 7 phần Game, cùng Link 1 và Link 2 ở mục 4 phần Look back, và 12 ảnh trong thư mục resources đã gửi kèm. Dán lại đầy đủ để chắc không thiếu bản nào. · mã field: ref_links · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q002m",
+          "required": true,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002n",
+      "title": "Điều KHÔNG muốn thấy trong bản vẽ",
+      "description": "Gợi ý từ note: “Hoài cổ, khắc khổ” (nguồn: phản hồi 28.08 về hướng tranh cổ động). Câu này dùng làm danh sách cấm khi dựng ảnh. · mã field: style_avoid · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q002o",
+          "required": false,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Hoài cổ, khắc khổ"
+              },
+              {
+                "value": "Quá trẻ con"
+              },
+              {
+                "value": "Quá sang chảnh, xa cách"
+              },
+              {
+                "value": "Quá 3D bóng bẩy"
+              },
+              {
+                "value": "Màu quá chói"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002p",
+      "title": "Màu chính (mã hex)",
+      "description": "Note mới có tên màu tiếng Việt (“đỏ”), chưa có mã. Không có mã hex thì mỗi người vẽ ra một sắc đỏ khác nhau. Gợi ý: #d42a1e (đỏ Tết). · mã field: color_primary · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q002q",
+          "required": true,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002r",
+      "title": "Màu phụ (mã hex)",
+      "description": "Gợi ý: #f5c64a (vàng). · mã field: color_secondary · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q002s",
+          "required": true,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002t",
+      "title": "Các màu khác trong bảng màu",
+      "description": "Gợi ý từ note: Đỏ + Vàng + Cam + Hồng + Xanh lá bánh chưng (nguồn: Mô tả chi tiết yêu cầu design, cột GAME mục 4 “màu của tết (đỏ, cam, vàng, hồng, xanh lá bánh chưng)”; Brief Mascot ghi đỏ, vàng, hồng, cam). · mã field: color_palette · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q002u",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Đỏ"
+              },
+              {
+                "value": "Vàng"
+              },
+              {
+                "value": "Cam"
+              },
+              {
+                "value": "Hồng"
+              },
+              {
+                "value": "Xanh lá bánh chưng"
+              },
+              {
+                "value": "Xanh VCB"
+              },
+              {
+                "value": "Nâu đất"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002v",
+      "title": "Tông cảm xúc chung của sản phẩm",
+      "description": "Gợi ý từ note: Vui vẻ + Hài hước + Dân gian + Gần gũi (nguồn: Mô tả chi tiết yêu cầu design, cột GAME mục 1 “Tính cách game”). · mã field: game_tone · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q002w",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Vui vẻ"
+              },
+              {
+                "value": "Hài hước"
+              },
+              {
+                "value": "Dân gian"
+              },
+              {
+                "value": "Gần gũi"
+              },
+              {
+                "value": "Sang trọng"
+              },
+              {
+                "value": "Kịch tính"
+              },
+              {
+                "value": "Ấm áp"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_scope",
+      "title": "Phần 5 · Phạm vi màn hình & thành phần giao diện",
+      "pageBreakItem": {},
+      "description": "Đây là phần nặng nhất của estimate: số màn nhân với đơn giá mỗi màn."
+    },
+    {
+      "itemId": "q002x",
+      "title": "Liệt kê từng màn hình, mỗi dòng một màn",
+      "description": "Câu quan trọng nhất form này. Phản hồi 28.08 xin đúng thứ này: “nhờ team MKT hỗ trợ gửi lại nội dung các màn hình… để team design đánh giá chi tiết và estimate được sát nhất”. Ba bản estimate lệch nhau (9 màn / 14 màn / 10 màn) chỉ vì mỗi bản đếm một kiểu.\nGợi ý từ note cho phần Game (sheet Game Chợ Tết): Màn Home — khung cảnh chợ Tết, các gian hàng, người dân mua sắm / Level 2 — nhân vật đứng trước sạp hàng bày đồ Tết / Level 3 — màn kết quả (câu chúc, voucher, tiền). · mã field: screen_list · →kit, →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q002y",
+          "required": true,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q002z",
+      "title": "Tổng số màn hình",
+      "description": "Đếm đúng số dòng ở câu trên. Gợi ý cho phần Game: 3. · mã field: screen_count · →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q0030",
+          "required": true,
+          "choiceQuestion": {
+            "type": "DROP_DOWN",
+            "options": [
+              {
+                "value": "1"
+              },
+              {
+                "value": "2"
+              },
+              {
+                "value": "3"
+              },
+              {
+                "value": "4"
+              },
+              {
+                "value": "5"
+              },
+              {
+                "value": "6"
+              },
+              {
+                "value": "7"
+              },
+              {
+                "value": "8"
+              },
+              {
+                "value": "9"
+              },
+              {
+                "value": "10"
+              },
+              {
+                "value": "11"
+              },
+              {
+                "value": "12"
+              },
+              {
+                "value": "13"
+              },
+              {
+                "value": "14"
+              },
+              {
+                "value": "15"
+              },
+              {
+                "value": "16"
+              },
+              {
+                "value": "17"
+              },
+              {
+                "value": "18"
+              },
+              {
+                "value": "19"
+              },
+              {
+                "value": "20"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0031",
+      "title": "Trong đó, bao nhiêu màn cần vẽ mới cả khung cảnh nền?",
+      "description": "Nền vẽ mới đắt hơn nhiều so với popup dùng lại khung. Timeline Game đang tính “Home + Gian hàng = 7 man-day” cho 2 nền, tức khoảng 3.5 ngày một nền.\nGợi ý cho phần Game: 2. · mã field: screen_bg_count · →est, →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q0032",
+          "required": true,
+          "choiceQuestion": {
+            "type": "DROP_DOWN",
+            "options": [
+              {
+                "value": "0"
+              },
+              {
+                "value": "1"
+              },
+              {
+                "value": "2"
+              },
+              {
+                "value": "3"
+              },
+              {
+                "value": "4"
+              },
+              {
+                "value": "5"
+              },
+              {
+                "value": "6"
+              },
+              {
+                "value": "7"
+              },
+              {
+                "value": "8"
+              },
+              {
+                "value": "9"
+              },
+              {
+                "value": "10"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0033",
+      "title": "Thành phần giao diện cần có trong bộ kit",
+      "description": "Đây là danh sách vẽ ra file rời cho bên lập trình. Thiếu một thành phần thì đến lúc ráp mới phát hiện và phải vẽ bổ sung gấp.\nGợi ý suy từ luồng 6 bước: nút bấm chính, popup ngang, popup dọc, ruy băng, bộ đếm lượt, khung voucher, bao lì xì, hiệu ứng nổ sáng. · mã field: ui_components · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q0034",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Nút bấm chính (kèm trạng thái nhấn và mờ)"
+              },
+              {
+                "value": "Nút đóng / quay lại"
+              },
+              {
+                "value": "Popup ngang"
+              },
+              {
+                "value": "Popup dọc"
+              },
+              {
+                "value": "Ruy băng tiêu đề"
+              },
+              {
+                "value": "Bộ đếm lượt chơi"
+              },
+              {
+                "value": "Thanh tiến độ"
+              },
+              {
+                "value": "Khung voucher"
+              },
+              {
+                "value": "Hộp quà"
+              },
+              {
+                "value": "Bao lì xì (thân + nắp)"
+              },
+              {
+                "value": "Hiệu ứng nổ sáng khi trúng"
+              },
+              {
+                "value": "Bảng xếp hạng"
+              },
+              {
+                "value": "Khung thể lệ"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_brand",
+      "title": "Phần 6 · Thương hiệu và điều cấm",
+      "pageBreakItem": {},
+      "description": "Phần ngắn nhưng đắt nhất nếu bỏ sót: vi phạm một điều cấm là vẽ lại."
+    },
+    {
+      "itemId": "q0035",
+      "title": "Yếu tố BẮT BUỘC phải xuất hiện",
+      "description": "Gợi ý từ note: “Tên game trên giao diện” (nguồn: Mô tả chi tiết yêu cầu design, cột GAME mục 5: yếu tố bắt buộc là tên game “Đi chợ Tết cùng VCB Digibank”). · mã field: brand_must · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q0036",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Tên game trên giao diện"
+              },
+              {
+                "value": "Logo VCB trên giao diện"
+              },
+              {
+                "value": "Logo VNPAY"
+              },
+              {
+                "value": "Màu xanh VCB"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0037",
+      "title": "Yếu tố có thì tốt, không có cũng được",
+      "description": "Gợi ý từ note: “Màu xanh VCB trên nhân vật” (nguồn: Brief Mascot, dòng Yếu tố thương hiệu: “Nếu được, có yếu tố màu xanh VCB” — note ghi rõ là nice to have). · mã field: brand_nice · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q0038",
+          "required": false,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Màu xanh VCB trên nhân vật"
+              },
+              {
+                "value": "Hoạ tiết nhận diện VCB"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0039",
+      "title": "ĐIỀU CẤM — những thứ tuyệt đối không được xuất hiện",
+      "description": "Loại thông tin hiếm và quý — ít brief nào ghi, mà sai thì phải vẽ lại từ đầu.\nGợi ý từ note: cả bốn mục (nguồn: Brief Mascot “Không đưa logo VCB, chữ VCB lên mascot”; Mô tả chi tiết yêu cầu design cột LOOK BACK mục 3 “không dùng Digibot”; phản hồi 28.08 về cảm giác hoài cổ). · mã field: brand_forbid · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q003a",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Cấm đưa logo VCB lên nhân vật"
+              },
+              {
+                "value": "Cấm đưa chữ “VCB” lên nhân vật"
+              },
+              {
+                "value": "Cấm dùng VCB Digibot"
+              },
+              {
+                "value": "Cấm hình ảnh hoài cổ, khắc khổ"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003b",
+      "title": "Link brand guideline VCB",
+      "description": "Có guideline thì đỡ được vòng chỉnh màu và font. · mã field: brand_guideline · →adm",
+      "questionItem": {
+        "question": {
+          "questionId": "q003c",
+          "required": false,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003d",
+      "title": "Ràng buộc pháp lý hoặc kiểm duyệt cần lưu ý",
+      "description": "Hỏi vì một nhóm ảnh tham khảo anh/chị gửi có quốc kỳ và khí tài quân sự. Dùng loại hình ảnh này trong chương trình khuyến mại thường phải qua bước duyệt riêng, nên cần biết trước thay vì phát hiện lúc sắp lên sóng. · mã field: legal_note · →adm",
+      "questionItem": {
+        "question": {
+          "questionId": "q003e",
+          "required": false,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_deliver",
+      "title": "Phần 7 · Chuyển động, âm thanh và định dạng bàn giao",
+      "pageBreakItem": {}
+    },
+    {
+      "itemId": "q003f",
+      "title": "Có yêu cầu chuyển động (motion) không?",
+      "description": "Gợi ý từ note: “Có” (nguồn: Mô tả chi tiết yêu cầu design — cột LOOK BACK mục 6 “có motion khi hiển thị từng frame”, cột GAME mục 14 “có motion khi hiển thị kết quả”). · mã field: need_motion · →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q003g",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Có"
+              },
+              {
+                "value": "Không"
+              },
+              {
+                "value": "Chưa rõ"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003h",
+      "title": "Chuyển động xuất hiện ở đâu?",
+      "description": "Gợi ý từ note: “Hiện từng khung nội dung” (Look back) + “Hiện kết quả trúng thưởng” (Game). · mã field: motion_scope · →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q003i",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Chuyển màn"
+              },
+              {
+                "value": "Hiện từng khung nội dung"
+              },
+              {
+                "value": "Hiện kết quả trúng thưởng"
+              },
+              {
+                "value": "Nhân vật đứng chờ"
+              },
+              {
+                "value": "Hiệu ứng nhận quà"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003j",
+      "title": "Định dạng bàn giao phần chuyển động",
+      "description": "Note KHÔNG nói định dạng, trong khi Timeline đang để “Animation: 3 man-day”. Lottie và chuỗi ảnh PNG chênh nhau rất nhiều công, nên con số 3 ngày hiện chưa có căn cứ. · mã field: motion_format · →est, →adm",
+      "questionItem": {
+        "question": {
+          "questionId": "q003k",
+          "required": true,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "Lottie JSON"
+              },
+              {
+                "value": "Chuỗi ảnh PNG"
+              },
+              {
+                "value": "MP4"
+              },
+              {
+                "value": "GIF"
+              },
+              {
+                "value": "File nguồn After Effects"
+              },
+              {
+                "value": "Để design đề xuất"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003l",
+      "title": "Âm thanh (sound effect) do bên nào lo?",
+      "description": "Note có ghi “có sound effects” ở cả hai hạng mục nhưng chưa nói ai làm — phần này chưa nằm trong bảng man-day nào. · mã field: need_sound · →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q003m",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "Design lo trọn gói"
+              },
+              {
+                "value": "Bên khác lo, design chỉ ghi chú điểm phát"
+              },
+              {
+                "value": "Chưa phân công"
+              },
+              {
+                "value": "Không cần âm thanh"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003n",
+      "title": "Định dạng bàn giao phần đồ hoạ",
+      "description": "Gợi ý: PNG tách nền + Sprite sheet — đây là đầu ra sẵn có của pipeline dựng kit hiện tại, chọn đúng định dạng này thì bàn giao được ngay, không phải xuất tay. · mã field: asset_format · →kit",
+      "questionItem": {
+        "question": {
+          "questionId": "q003o",
+          "required": false,
+          "choiceQuestion": {
+            "type": "CHECKBOX",
+            "options": [
+              {
+                "value": "PNG tách nền"
+              },
+              {
+                "value": "Sprite sheet"
+              },
+              {
+                "value": "File Figma"
+              },
+              {
+                "value": "SVG"
+              },
+              {
+                "value": "Ảnh cắt sẵn theo 9 ô (9-slice)"
+              },
+              {
+                "isOther": true
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "sec_time",
+      "title": "Phần 8 · Thời hạn và đơn giá quy đổi",
+      "pageBreakItem": {},
+      "description": "Phần này để hai bên nhìn chung một công thức, thay vì mỗi bên tính một kiểu như hồi 28.08.\n\nCông thức đang dùng:\nman-day = phác thảo + (số màn × đơn giá mỗi màn) + (số badge × đơn giá mỗi badge) + (số loại quà × đơn giá mỗi quà) + dự phòng"
+    },
+    {
+      "itemId": "q003p",
+      "title": "Hạn bàn giao cuối (ngày/tháng/năm)",
+      "description": "Chiến dịch Tết có ngày lên sóng cố định nên lịch phải tính ngược từ đó. · mã field: deadline_final · →adm",
+      "questionItem": {
+        "question": {
+          "questionId": "q003q",
+          "required": true,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003r",
+      "title": "Các mốc trung gian cần bàn giao trước",
+      "description": "Ví dụ trong note cũ: “23/9 bàn giao 5 màn hình”. Có mốc trung gian thì phần dự phòng chia được theo đợt. · mã field: milestone_list · →adm",
+      "questionItem": {
+        "question": {
+          "questionId": "q003s",
+          "required": false,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003t",
+      "title": "Man-day cho giai đoạn phác thảo ý tưởng",
+      "description": "Gợi ý: 3 (nguồn: sheet Timeline Game, mục “Phác thảo ý tưởng”). · mã field: est_sketch · →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q003u",
+          "required": false,
+          "choiceQuestion": {
+            "type": "DROP_DOWN",
+            "options": [
+              {
+                "value": "0"
+              },
+              {
+                "value": "1"
+              },
+              {
+                "value": "2"
+              },
+              {
+                "value": "3"
+              },
+              {
+                "value": "4"
+              },
+              {
+                "value": "5"
+              },
+              {
+                "value": "6"
+              },
+              {
+                "value": "7"
+              },
+              {
+                "value": "8"
+              },
+              {
+                "value": "9"
+              },
+              {
+                "value": "10"
+              },
+              {
+                "value": "11"
+              },
+              {
+                "value": "12"
+              },
+              {
+                "value": "13"
+              },
+              {
+                "value": "14"
+              },
+              {
+                "value": "15"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003v",
+      "title": "Đơn giá mỗi màn hình",
+      "description": "Hai mức này lấy nguyên từ ba bản estimate ngày 28.08. Chọn mức nào phải khớp với thang “Nét phẳng ↔ Đổ khối dày” ở phần 4 — kéo thang về phía chi tiết thì không thể chọn 1.5. · mã field: rate_screen · →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q003w",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "1.5 man-day (nét đơn giản, mảng phẳng)"
+              },
+              {
+                "value": "3 man-day (nét chi tiết, tả thực)"
+              },
+              {
+                "value": "Khác (ghi chú ở cuối form)"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003x",
+      "title": "Đơn giá mỗi badge / trophy",
+      "description": "Gợi ý: 0.5 (hai trong ba bản estimate 28.08 dùng mức này). · mã field: rate_badge · →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q003y",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "0.5 man-day"
+              },
+              {
+                "value": "1 man-day"
+              },
+              {
+                "value": "Không có hạng mục này"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q003z",
+      "title": "Đơn giá mỗi loại quà",
+      "description": "Gợi ý: 1 (nguồn: sheet Timeline Game, mục “MH quà tặng: 3 man-day = 1 ngày/quà”). · mã field: rate_gift · →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q0040",
+          "required": true,
+          "choiceQuestion": {
+            "type": "RADIO",
+            "options": [
+              {
+                "value": "0.5 man-day"
+              },
+              {
+                "value": "1 man-day"
+              },
+              {
+                "value": "Khác (ghi chú ở cuối form)"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0041",
+      "title": "Số ngày dự phòng",
+      "description": "Gợi ý: 3 — cả bốn bảng estimate đã trao đổi đều để đúng 3 ngày dự phòng. · mã field: buffer_days · →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q0042",
+          "required": true,
+          "choiceQuestion": {
+            "type": "DROP_DOWN",
+            "options": [
+              {
+                "value": "0"
+              },
+              {
+                "value": "1"
+              },
+              {
+                "value": "2"
+              },
+              {
+                "value": "3"
+              },
+              {
+                "value": "4"
+              },
+              {
+                "value": "5"
+              },
+              {
+                "value": "6"
+              },
+              {
+                "value": "7"
+              },
+              {
+                "value": "8"
+              },
+              {
+                "value": "9"
+              },
+              {
+                "value": "10"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0043",
+      "title": "Số vòng review dự kiến",
+      "description": "Gợi ý: 2. Riêng vòng trao đổi hồi 28.08 đã tốn ít nhất 2 vòng chỉ để làm rõ đầu bài. · mã field: review_rounds · →est",
+      "questionItem": {
+        "question": {
+          "questionId": "q0044",
+          "required": false,
+          "choiceQuestion": {
+            "type": "DROP_DOWN",
+            "options": [
+              {
+                "value": "1"
+              },
+              {
+                "value": "2"
+              },
+              {
+                "value": "3"
+              },
+              {
+                "value": "4"
+              },
+              {
+                "value": "5"
+              }
+            ],
+            "shuffle": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0045",
+      "title": "Trần man-day hoặc ngân sách (nếu có)",
+      "description": "Biết trần từ đầu thì design cân được phạm vi ngay, thay vì báo một con số rồi cắt ngược. · mã field: budget_cap · →adm",
+      "questionItem": {
+        "question": {
+          "questionId": "q0046",
+          "required": false,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0047",
+      "title": "Đầu mối phía design",
+      "description": "· mã field: pic_design · →adm",
+      "questionItem": {
+        "question": {
+          "questionId": "q0048",
+          "required": true,
+          "textQuestion": {
+            "paragraph": false
+          }
+        }
+      }
+    },
+    {
+      "itemId": "q0049",
+      "title": "Sau khi anh/chị gửi form",
+      "textItem": {},
+      "description": "Team design sẽ gửi lại trong vòng một ngày làm việc: (1) bảng man-day tính theo đúng công thức ở đầu phần 8, có ghi rõ con số nào lấy từ câu trả lời nào; (2) danh sách những câu còn để trống và ảnh hưởng của từng câu lên con số đó."
+    },
+    {
+      "itemId": "q004a",
+      "title": "Ghi chú thêm",
+      "description": "Chỗ để viết những gì các câu trên chưa hỏi tới. · mã field: extra_note · →adm",
+      "questionItem": {
+        "question": {
+          "questionId": "q004b",
+          "required": false,
+          "textQuestion": {
+            "paragraph": true
+          }
+        }
+      }
+    }
+  ]
+}

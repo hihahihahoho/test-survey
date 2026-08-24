@@ -423,6 +423,17 @@ Installer đọc `release.json` trực tiếp từ nhánh `feat/kitgen-local-run
 push branch trước, manifest có thể trỏ tới archive chưa được GitHub Actions tạo.
 Trong cửa sổ đó, user update sẽ lỗi tải archive.
 
+> **Đã xảy ra thật (14/08 14:28 — BACKLOG #23).** Ba lớp lưới đã dựng sau lượt đó, nhưng
+> KHÔNG lớp nào thay được thứ tự push dưới đây:
+> - **CI** — job `verify-release-manifest` (chạy trên mọi push nhánh, bỏ qua ref tag) HEAD
+>   thử `archive` + `.sha256` trong `release.json`; push sai thứ tự là workflow đỏ trong
+>   ~30 giây thay vì hỏng im lặng 15 phút ở máy người dùng.
+> - **Agent** — `GET /api/update` chỉ trả `available:true` khi tarball THẬT SỰ tải được
+>   (một request HEAD, chỉ bắn khi manifest mới hơn bản đang chạy); còn lại là
+>   `available:false` + `reason:"ARCHIVE_PENDING"` ⇒ UI im lặng, không mời cập nhật.
+> - **Installer** — `install.sh` phân biệt "chưa có trên server" (thoát **21**, kèm câu
+>   "Bản X ĐANG ĐƯỢC ĐÓNG GÓI… thử lại sau ít phút") với "tải hỏng" (thoát **20**).
+
 Thứ tự khuyên dùng:
 
 1. Push **tag trước** để workflow build/publish release.

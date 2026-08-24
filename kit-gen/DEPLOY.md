@@ -1,5 +1,9 @@
 # Phát hành KitGen local
 
+> Bản đồ source/prototype và quy trình release đầy đủ hiện tại nằm tại
+> [Development & Release Runbook](docs/DEVELOPMENT-AND-RELEASE-RUNBOOK.md).
+> Khi nội dung mâu thuẫn, ưu tiên workflow, installer và runbook mới.
+
 KitGen là ứng dụng local-first. GitHub Actions build React một lần, đóng bundle tĩnh cùng agent và
 engine vào GitHub Release. Máy người dùng không build React và sản phẩm không gọi từ Cloudflare vào
 localhost.

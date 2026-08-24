@@ -22,14 +22,20 @@ if (!process.argv[2] || !existsSync(manifestPath)) {
 
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"))
 const styleId = process.argv[3] ?? Object.keys(manifest.styles ?? {})[0]
-const assets = manifest.styles?.[styleId]?.assets ?? []
+const style = manifest.styles?.[styleId]
+const assets = style?.assets ?? []
 if (!assets.length) throw new Error(`Manifest không có asset cho style: ${styleId}`)
+const scale = Number(style?.figmaScale ?? manifest.figmaScale ?? 0.5)
+if (!(scale > 0)) throw new Error(`figmaScale không hợp lệ: ${scale}`)
+const layoutColumns = Number(style?.layout?.columns ?? Math.ceil(Math.sqrt(assets.length)))
+if (!Number.isInteger(layoutColumns) || layoutColumns < 1) {
+  throw new Error(`layout.columns không hợp lệ: ${layoutColumns}`)
+}
 
 const tightRoot = resolve(dirname(manifestPath), "assets/tight")
 const items = assets.map((asset, index) => {
   const path = resolve(tightRoot, asset.file)
   if (!existsSync(path)) throw new Error(`Không thấy asset: ${path}`)
-  const scale = 0.5
   const [contentWidth, contentHeight] = asset.content
   const [contentX, contentY] = asset.content_at
   const [safeX, safeY, safeWidth, safeHeight] = asset.safe
@@ -42,8 +48,8 @@ const items = assets.map((asset, index) => {
     imageY: (contentY - safeY) * scale,
     imageWidth: contentWidth * scale,
     imageHeight: contentHeight * scale,
-    row: Math.floor(index / 4),
-    col: index % 4,
+    row: Math.floor(index / layoutColumns),
+    col: index % layoutColumns,
   }
 })
 
@@ -77,6 +83,7 @@ function clipboardHtml(htmlFile) {
 const cellWidth = 260
 const cellHeight = 190
 const pad = 32
+const layoutRows = Math.ceil(items.length / layoutColumns)
 const htmlItems = items.map((item) => {
   const left = pad + item.col * cellWidth + (cellWidth - item.frameWidth) / 2
   const top = pad + item.row * cellHeight + (cellHeight - item.frameHeight) / 2
@@ -92,20 +99,23 @@ const htmlItems = items.map((item) => {
 const { chromium } = requirePlaywright()
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage({
-  viewport: { width: pad * 2 + cellWidth * 4, height: pad * 2 + cellHeight * 4 },
+  viewport: {
+    width: pad * 2 + cellWidth * layoutColumns,
+    height: pad * 2 + cellHeight * layoutRows,
+  },
   deviceScaleFactor: 1,
 })
 
 try {
   await page.setContent(`<!doctype html><meta charset="utf-8"><style>
     html,body{margin:0;background:white}
-    #sprite-board{position:relative;width:${pad * 2 + cellWidth * 4}px;
-      height:${pad * 2 + cellHeight * 4}px;background:transparent}
+    #sprite-board{position:relative;width:${pad * 2 + cellWidth * layoutColumns}px;
+      height:${pad * 2 + cellHeight * layoutRows}px;background:transparent}
   </style><div id="sprite-board" aria-label="Sprite sheet · ${styleId}">${htmlItems}</div>`)
   await page.locator("img").evaluateAll((nodes) => Promise.all(nodes.map((node) => node.decode())))
   await page.addScriptTag({ content: readFileSync(resolve(HERE, "figma-h2d.global.js"), "utf8") })
 
-  const result = await page.evaluate(async () => {
+  const result = await page.evaluate(async (expectedCount) => {
     const frames = [...document.querySelectorAll(".safe-frame")]
     const docs = []
     for (const frame of frames) docs.push(await figmaH2D.captureElement(frame))
@@ -113,7 +123,9 @@ try {
       frame: doc.root,
       image: doc.root.childNodes?.find((node) => node?.tag === "IMG"),
     }))
-    if (structures.length !== 16) throw new Error(`Payload chỉ có ${structures.length}/16 frame`)
+    if (structures.length !== expectedCount) {
+      throw new Error(`Payload chỉ có ${structures.length}/${expectedCount} frame`)
+    }
     if (structures.some(({ frame }) => frame?.tag !== "DIV")) {
       throw new Error("Có document root không phải DIV safe frame")
     }
@@ -126,7 +138,7 @@ try {
         image: { tag: image.tag, rect: image.rect },
       })),
     }
-  })
+  }, items.length)
 
   const out = resolve(HERE, ".captures")
   mkdirSync(out, { recursive: true })

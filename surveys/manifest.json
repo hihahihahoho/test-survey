@@ -15,6 +15,14 @@
       "note": "Đo bộ screen & component tối thiểu, định dạng bàn giao cần thiết, và mức tự động hoá mong muốn cho pipeline ý tưởng → UI kit.",
       "questions": 33,
       "minutes": 13
+    },
+    {
+      "id": "vcb-brief-intake-2026",
+      "file": "vcb-brief-intake-2026.json",
+      "name": "Đầu bài design — VCB Look back 2025 & Chợ Tết 2026",
+      "note": "Form intake đầu bài design: khách xác nhận thay vì viết tự do. Đầu ra đủ để estimate man-day và bơm thẳng vào pipeline sinh UI kit.",
+      "questions": 74,
+      "minutes": 19
     }
   ]
 }
