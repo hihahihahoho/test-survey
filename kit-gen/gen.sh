@@ -14,6 +14,57 @@ file_hash(){
   [ -f "$1" ] || { printf ''; return 0; }
   { shasum -a 256 "$1" 2>/dev/null || sha256sum "$1" 2>/dev/null; } | cut -d' ' -f1
 }
+
+# ── ẢNH VỪA SINH PHẢI LÀ RGBA VỚI ALPHA THẬT — KIỂM NGAY, KHÔNG ĐỢI TỚI LÚC CẮT ──
+#
+# ╔══ VÌ SAO PHẢI KIỂM Ở ĐÂY ═════════════════════════════════════════════════════╗
+# ║ Từ khi bỏ HẲN đường tách nền, hợp đồng chỉ còn đúng một câu: `image_gen` trả  ║
+# ║ về PNG RGBA có nền trong suốt thật. Prompt đã XIN điều đó — nhưng xin không   ║
+# ║ phải là kiểm. Trước bản này lời phán duy nhất ở đây là "file có đổi byte       ║
+# ║ không", nên một sheet đục hoàn toàn vẫn được đóng dấu OK, và chỗ duy nhất phát ║
+# ║ hiện ra là `slice.py` — tức SAU khi đã tiêu xong quota của cả lượt.            ║
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
+#
+# BA PHÉP, phép thứ ba mới là phép đắt giá:
+#   ① có kênh alpha không (mode phải là RGBA/LA — không thì hợp đồng đã vỡ);
+#   ② có chỗ nào alpha = 0 thật không (model vẽ đè kín nền là ca đã gặp);
+#   ③ DẢI MỜ — tỷ lệ pixel có 0 < alpha < 255. Đây là DẤU VÂN TAY:
+#        · alpha do image_gen vẽ ra  → dải mờ liên tục, đo thật: 29–35%
+#        · alpha do một script tách  → CHỈ CÓ 0 và 255, dải mờ 0,00%
+#      Ngày 22/08/2026 đo 10 sheet raw của một lượt thật: 9/10 có dải mờ 0,00% và
+#      viền trắng răng cưa — vì model KHÔNG tạo nổi nền trong suốt nên nó tự viết
+#      rồi biên dịch một công cụ riêng (`.tmp_remove_checker.swift`, CoreGraphics
+#      `setBlendMode(.clear)`) để xoá nền hộ. Đúng thứ vừa bị bỏ khỏi kit-gen, quay
+#      lại bằng cửa sau. Ngưỡng 0,5% để rất xa cả hai đầu.
+#
+# KHÔNG DÒ ĐƯỢC THÌ KHÔNG PHÁN. Thiếu Pillow ⇒ in cảnh báo rồi cho qua: chặn một
+# lượt gen vì phép kiểm không chạy nổi là đổi một lỗi thật lấy một lỗi tự gây.
+PY_CHECK="${KITGEN_PYTHON:-python3}"
+alpha_verdict(){
+  "$PY_CHECK" - "$1" <<'PYA' 2>/dev/null || echo "skip không chạy được phép kiểm alpha"
+import sys
+try:
+    from PIL import Image
+except Exception:
+    print("skip thiếu Pillow — bỏ qua phép kiểm alpha"); raise SystemExit
+im = Image.open(sys.argv[1])
+if "A" not in im.getbands():
+    print("bad KHÔNG có kênh alpha (mode=%s). image_gen phải trả PNG RGBA — "
+          "đường tách nền đã bỏ nên không có gì cứu được ảnh này." % im.mode); raise SystemExit
+h = Image.open(sys.argv[1]).convert("RGBA").getchannel("A").histogram()
+n = float(sum(h)) or 1.0
+trong, mo = h[0] / n, sum(h[1:255]) / n
+if trong < 0.02:
+    print("bad có kênh alpha nhưng gần như không chỗ nào trong suốt "
+          "(alpha=0 chỉ %.2f%%) — model vẽ đè kín nền." % (trong * 100)); raise SystemExit
+if mo < 0.005:
+    print("bad alpha CHỈ CÓ 0 và 255 (dải mờ %.3f%%). Đó là dấu vân tay của một phép "
+          "TÁCH NỀN bằng script, không phải alpha do image_gen vẽ — nhiều khả năng "
+          "model đã tự viết công cụ xoá nền. Sinh lại." % (mo * 100)); raise SystemExit
+print("ok trong suốt %.0f%%, dải mờ %.0f%%" % (trong * 100, mo * 100))
+PYA
+}
+
 cd "$(dirname "$0")"
 ROOT="$(pwd)"
 # ĐƯỜNG DẪN ĐƯA VÀO NỘI DUNG PROMPT phải là dạng Windows khi chạy trên Git-Bash.
@@ -146,12 +197,14 @@ PRESET_CHAR_CAP = 320
 # (magenta / green / cyan / blue) rồi nhét tên màu vào prompt. Bỏ vì image_gen của
 # codex 0.149 trả về RGBA thật: prompt nay xin thẳng nền trong suốt, không xin màu.
 #
-# `slice.py` VẪN GIỮ `KEY_COLORS` và toàn bộ đường tách chroma — không phải mã
-# chết: project cũ có sheet raw nền magenta, cắt lại phải ra đúng như trước. Nó
-# tự nhận đường đi bằng cách soi kênh α của ảnh raw, không cần gen.sh mách nước.
+# `slice.py` cũng KHÔNG còn `KEY_COLORS` lẫn đường tách chroma. Đoạn trên từng ghi
+# là "vẫn giữ để cắt lại sheet cũ" — không còn đúng: chủ sản phẩm đã chốt bỏ HẲN,
+# và hệ quả đã biết là sheet raw ĐỜI CŨ (nền magenta/green) không cắt lại được nữa,
+# phải sinh lại. Nay chỉ còn ĐÚNG MỘT đường trong cả engine: alpha thật.
 #
-# `bg` trong styles.json vì thế không còn ý nghĩa với lượt gen MỚI. Cứ để đó:
-# webapp vẫn ghi, slice.py vẫn đọc khi cắt lại sheet cũ.
+# Và vì chỉ còn một đường nên nó phải được KIỂM, không chỉ được XIN: xem
+# `alpha_verdict` ở đầu file — RGBA, có chỗ alpha = 0, và có dải mờ liên tục (dải mờ
+# 0% là dấu vân tay của một phép tách bằng script, không phải alpha do model vẽ).
 
 
 def preset_words(spec, tag=""):
@@ -934,10 +987,16 @@ $(cat "prompts/${job}.txt")
     echo "FAIL ${job} (rc=${rc}, không có raw/${job}.png — xem logs/${job}.log)"
   elif [[ "$h1" == "$h0" ]]; then
     echo "FAIL ${job} (rc=${rc}, ảnh KHÔNG ĐỔI so với trước lượt chạy — model không sinh ảnh mới; có khi nó chép lại file cũ rồi báo thành công; xem logs/${job}.log)"
-  elif [[ $rc -eq 0 ]]; then
-    echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)"
   else
-    echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)  (codex rc=${rc} sau khi đã lưu ảnh — bỏ qua)"
+    # Có ảnh MỚI — nhưng "mới" chưa phải "đúng hợp đồng". Kiểm alpha trước khi
+    # đóng dấu OK: đây là chỗ rẻ nhất để bắt, mọi chỗ sau đều đã tiêu quota.
+    local av; av="$(alpha_verdict "raw/${job}.png")"
+    local tail=""; [[ $rc -ne 0 ]] && tail="  (codex rc=${rc} sau khi đã lưu ảnh — bỏ qua)"
+    case "$av" in
+      bad*) echo "FAIL ${job} (nền KHÔNG trong suốt thật: ${av#bad } — xem logs/${job}.log)" ;;
+      skip*) echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)${tail}  [${av#skip }]" ;;
+      *)    echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)  ${av#ok }${tail}" ;;
+    esac
   fi
 }
 
