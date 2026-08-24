@@ -23,7 +23,9 @@ export function workspaceLabel(absPath) {
   return label.length > 48 ? "…" + label.slice(-47) : label
 }
 
-const CONFIG_DEFAULT = { workspaceVersion: 1, maxJobs: 4, imageGen: { mode: "unknown" } }
+/* `imageGen` không còn trong default (hồ sơ ảnh riêng bỏ 24/08/2026); khối sót lại
+   trong config.json cũ được giữ nguyên trên đĩa nhưng không ai đọc nữa. */
+const CONFIG_DEFAULT = { workspaceVersion: 1, maxJobs: 4 }
 
 export class Workspace {
   constructor(root) {

@@ -73,7 +73,7 @@ const PROJECTS = {
 
 /** `GET /api/usage` — quota Codex còn lại, hình dạng THẬT của agent (gói plus, cửa sổ tuần). */
 const USAGE = {
-  ok: true, codexHomeLabel: "~/.codex-img", profile: "img-home", plan: "plus",
+  ok: true, codexHomeLabel: "~/.codex", profile: "default-home", plan: "plus",
   primary: { usedPercent: 2, remainingPercent: 98, windowMinutes: 10080, resetsAt: "2026-08-20T06:30:28.000Z" },
   secondary: null,
   observedAt: "2026-08-13T09:00:24.138Z", checkedAt: "2026-08-13T09:33:08.309Z",

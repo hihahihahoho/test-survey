@@ -3,16 +3,15 @@ import { CopyableCode, StatusDot } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import type { Doctor } from "@/lib/types/api";
 import { StepCard, Note } from "../../components/StepShell";
-import { codexPathFixCmd, imgHomeCheckCmd, imgHomeLoginCmd } from "../../lib/commands";
+import { codexLoginCmd, codexPathFixCmd, imagegenCheckCmd } from "../../lib/commands";
 import { imageGenOutcome } from "../../lib/doctor-view";
 import { CodexAccountRow } from "./CodexAccountRow";
 import { CodexLoginPanel } from "./CodexLoginPanel";
 
 /**
- * Khối "Tạo ảnh AI" của bước 4 — 3 KẾT CỤC đúng §3-S0:
- *   ✅ Sẵn sàng (dùng cấu hình mặc định)
- *   ✅ Sẵn sàng (dùng home riêng ~/.codex-img)
- *   ⚠️ Chưa tạo được ảnh  → thẻ khắc phục (§3.9 IMAGEGEN_UNAVAILABLE, 7 enum lý do)
+ * Khối "Tạo ảnh AI" của bước 4 — 2 KẾT CỤC (hồ sơ ảnh riêng đã bỏ 24/08/2026):
+ *   ✅ Sẵn sàng (cấu hình Codex mặc định ~/.codex)
+ *   ⚠️ Chưa tạo được ảnh  → thẻ khắc phục (§3.9 IMAGEGEN_UNAVAILABLE, enum lý do)
  *
  * ĐIỀU QUAN TRỌNG NHẤT Ở FILE NÀY — ranh giới với thông tin đăng nhập:
  *  · web KHÔNG BAO GIỜ hỏi mật khẩu và không đứng giữa user và tài khoản của họ. Có hai
@@ -149,8 +148,8 @@ export function ImageGenCard({ doctor }: { doctor: Doctor | null }) {
                   {pathDir && " Muốn gõ ngắn gọn từ lần sau thì thêm dòng PATH ở cuối vào ~/.zshrc."}
                 </Note>
               )}
-              <CopyableCode value={imgHomeLoginCmd(codex)} label="Lệnh đăng nhập Codex" />
-              <CopyableCode value={imgHomeCheckCmd(codex)} label="Lệnh kiểm tra công cụ tạo ảnh" />
+              <CopyableCode value={codexLoginCmd(codex)} label="Lệnh đăng nhập Codex" />
+              <CopyableCode value={imagegenCheckCmd(codex)} label="Lệnh kiểm tra công cụ tạo ảnh" />
               {shellBlind && pathDir && (
                 <CopyableCode value={codexPathFixCmd(pathDir)} label="Thêm codex vào PATH (dán vào ~/.zshrc)" />
               )}

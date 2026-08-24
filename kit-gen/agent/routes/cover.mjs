@@ -39,9 +39,9 @@ export function register(r) {
       fail("IMAGEGEN_UNAVAILABLE", `image generation is not available (${d.imageGen.reason ?? "unknown"})`,
         { details: { reason: d.imageGen.reason ?? "UNKNOWN", mode: d.imageGen.mode, needsFallbackHome: d.imageGen.needsFallbackHome } })
 
-    const cfg = await ws.config()
     const started = await startCover(ws, id, {
-      imgHome: cfg.imageGen?.mode === "img-home" ? cfg.imageGen.codexHome : null,
+      /* Hồ sơ ảnh riêng đã bỏ (24/08/2026) — chỉ còn cửa thoát dev/test. */
+      imgHome: process.env.KITGEN_CODEX_HOME ?? null,
       force: true,
     })
     if (started.status === "skipped")

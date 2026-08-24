@@ -399,17 +399,26 @@ export async function run({ api, call, agentDir, wsRoot }) {
     }
   })
   await it("mọi response của phiên test không chứa /Users/ hay chuỗi secret", async () => {
-    const probes = ["/health", "/api/doctor", "/api/workspaces", "/api/projects", "/api/trash", "/api/element-lib"]
+    const probes = ["/health", "/api/doctor", "/api/workspaces", "/api/projects", "/api/trash", "/api/element-lib", "/api/codex/account", "/api/usage"]
     for (const p of probes) {
       const r = await api("GET", p)
       ok(!/\/Users\/[a-z]/i.test(r.text), `${p} rò đường dẫn tuyệt đối`)
       ok(!/sk-[A-Za-z0-9_-]{16,}|eyJ[A-Za-z0-9_-]{8,}\./.test(r.text), `${p} rò secret`)
     }
   })
-  await it("mã nguồn agent không đọc nội dung auth.json (chỉ existsSync)", async () => {
+  await it("doctor không đọc auth.json — đăng nhập hỏi chính codex; nơi DUY NHẤT được đọc là codex-account.mjs", async () => {
+    /* Hợp đồng mới 24/08/2026: doctor xác định đăng nhập bằng mã thoát của
+       `codex login status` (kể cả ca credential nằm keychain), tuyệt không mở file.
+       codex-account.mjs là NGOẠI LỆ CÓ CHỦ ĐÍCH (quyết định chủ sản phẩm: hiện
+       email/gói cước) — và ngoại lệ đó bị khoá bởi probe HTTP ở ca trên: response
+       của /api/codex/account không được chứa token. */
     const src = await readFile(join(agentDir, "lib", "doctor.mjs"), "utf8")
-    ok(!/readFile[^\n]*auth\.json|readFileSync[^\n]*auth\.json/.test(src), "không đọc nội dung auth.json")
-    includes(src, "exists(join(", "chỉ kiểm tồn tại")
+    ok(!/readFile[^\n]*auth\.json|readFileSync[^\n]*auth\.json/.test(src), "doctor không đọc nội dung auth.json")
+    includes(src, '"login", "status"', "đăng nhập hỏi chính codex, không đoán qua file")
+    for (const f of ["doctor.mjs", "usage.mjs", "codex-login.mjs"]) {
+      const s = await readFile(join(agentDir, "lib", f), "utf8")
+      ok(!/readFile[^\n]*auth\.json/.test(s), `${f} không đọc auth.json`)
+    }
   })
 
 }

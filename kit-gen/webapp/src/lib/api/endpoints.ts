@@ -29,7 +29,7 @@ import {
   librarySettingsResultSchema, brandProfileResultSchema, poseTemplateResultSchema,
   type CleanTarget, type CreateProjectInput, type DuplicateInput,
   type PatchProjectInput, type RefKind, type StartRunInput,
-  type LibrarySettings, type ImageGenProfile,
+  type LibrarySettings,
 } from "../types/api";
 import { normalizeContract, type Contract } from "../types/contract";
 /* Hình dạng của tuỳ chọn-trên-đĩa được LẤY RA TỪ schema localStorage (xem file đó để biết
@@ -154,16 +154,6 @@ export const systemApi = {
       /** nhãn rút gọn của nhật ký lượt cài (~/.kitgen/update.log) — chỗ duy nhất còn lại
        *  để đọc khi installer chết giữa chừng. */
       logLabel?: string;
-    };
-  },
-  /**
-   * Chọn hồ sơ Codex dùng để tạo ảnh. Agent GHI BỀN vào `<workspace>/.kitgen/config.json`
-   * rồi tự bỏ cache doctor ⇒ lần đọc doctor kế tiếp là trạng thái của hồ sơ MỚI.
-   * Web chỉ gửi enum, không bao giờ gửi/nhận path tuyệt đối hay bất cứ gì của phiên đăng nhập.
-   */
-  async setImageProfile(mode: "default" | "separate") {
-    return await httpPatch("/api/image-profile", { mode }) as {
-      ok: boolean; mode: "default" | "separate"; profile?: ImageGenProfile; codexHomeLabel: string;
     };
   },
   /**

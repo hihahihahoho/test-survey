@@ -81,12 +81,17 @@ export async function run({ api, wsRoot }) {
 
   /* ── B. ĐĂNG NHẬP ĐÚNG CÁI HOME MÀ LƯỢT GEN SẼ DÙNG ───────────────────── */
 
-  await it("hồ sơ riêng ⇒ CODEX_HOME của hồ sơ đó; mặc định ⇒ ~/.codex", async () => {
-    eq(loginCodexHome({ imageGen: { mode: "img-home" } }), join(homedir(), ".codex-img"), "img-home mặc định")
+  await it("chỉ còn MỘT home: mọi config đều ⇒ ~/.codex; KITGEN_CODEX_HOME là cửa thoát dev/test", async () => {
+    /* Hồ sơ ảnh riêng đã bỏ (24/08/2026): config kiểu cũ (img-home) cũng phải về ~/.codex,
+       để không còn đường nào đăng nhập vào một home mà lượt gen không dùng. */
     eq(loginCodexHome({ imageGen: { mode: "img-home", codexHome: "~/.codex-alt" } }),
-      join(homedir(), ".codex-alt"), "img-home có khai codexHome")
+      join(homedir(), ".codex"), "config img-home sót lại vẫn về home mặc định")
     eq(loginCodexHome({ imageGen: { mode: "default-home" } }), join(homedir(), ".codex"), "mặc định")
     eq(loginCodexHome(null), join(homedir(), ".codex"), "không có config")
+    const prev = process.env.KITGEN_CODEX_HOME
+    process.env.KITGEN_CODEX_HOME = "~/.codex-dev"
+    try { eq(loginCodexHome(null), join(homedir(), ".codex-dev"), "cửa thoát dev/test") }
+    finally { prev === undefined ? delete process.env.KITGEN_CODEX_HOME : process.env.KITGEN_CODEX_HOME = prev }
   })
 
   /* ── C. HỢP ĐỒNG HTTP ─────────────────────────────────────────────────── */

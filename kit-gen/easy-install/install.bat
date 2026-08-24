@@ -8,7 +8,7 @@ echo Downloading KitGen installer...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri '%KITGEN_RAW_INSTALL%' -OutFile $env:KITGEN_BOOTSTRAP"
 if errorlevel 1 goto :download_failed
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%KITGEN_BOOTSTRAP%" -CodexDefault
+powershell -NoProfile -ExecutionPolicy Bypass -File "%KITGEN_BOOTSTRAP%"
 set "KITGEN_RC=%ERRORLEVEL%"
 del /q "%KITGEN_BOOTSTRAP%" >nul 2>&1
 rem Exit code 2 means: runtime installed, but user-side prerequisites are missing and

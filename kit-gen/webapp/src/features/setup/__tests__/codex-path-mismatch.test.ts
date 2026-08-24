@@ -21,7 +21,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { checkRows } from "../lib/doctor-view";
-import { codexCmdName, codexPathFixCmd, imgHomeCheckCmd, imgHomeLoginCmd } from "../lib/commands";
+import { codexCmdName, codexPathFixCmd, imagegenCheckCmd, codexLoginCmd } from "../lib/commands";
 import type { Doctor } from "@/lib/types/api";
 
 const doctorWith = (codex: Record<string, unknown>) => ({ codex } as unknown as Doctor);
@@ -37,17 +37,17 @@ describe("lệnh Terminal phải là lệnh KHÁCH gõ được", () => {
     /* `binLabel` có thể là shim theo phiên (fnm dựng ~/.local/state/fnm_multishells/
        <pid>_<ts>/bin/codex, chết khi phiên đóng) ⇒ dán ra còn tệ hơn chữ `codex`. */
     expect(codexCmdName(BINH_THUONG)).toBe("codex");
-    expect(imgHomeLoginCmd(BINH_THUONG)).toBe("codex login");
+    expect(codexLoginCmd(BINH_THUONG)).toBe("codex login");
   });
 
   it("Terminal KHÔNG thấy ⇒ lệnh mang đường đầy đủ — đây là bản vá", () => {
-    expect(imgHomeLoginCmd(LECH)).toBe("~/.local/bin/codex login");
-    expect(imgHomeCheckCmd(LECH)).toContain("~/.local/bin/codex debug prompt-input");
+    expect(codexLoginCmd(LECH)).toBe("~/.local/bin/codex login");
+    expect(imagegenCheckCmd(LECH)).toContain("~/.local/bin/codex debug prompt-input");
   });
 
   it("không dò được ⇒ giữ nguyên hành vi cũ, không đoán", () => {
-    expect(imgHomeLoginCmd(KHONG_DO_DUOC)).toBe("codex login");
-    expect(imgHomeLoginCmd(null)).toBe("codex login");
+    expect(codexLoginCmd(KHONG_DO_DUOC)).toBe("codex login");
+    expect(codexLoginCmd(null)).toBe("codex login");
   });
 
   it("dòng PATH là dòng dán được vào ~/.zshrc, không phải câu văn", () => {

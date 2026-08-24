@@ -4,24 +4,10 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { markUpdateAnnounced, shouldAnnounceUpdate } from "@/lib/update";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useDoctor, useInstallUpdateFlow, useSetImageProfile, useUpdateCheck } from "@/lib/hooks";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useDoctor, useInstallUpdateFlow, useUpdateCheck } from "@/lib/hooks";
 import type { ConnectionStatus, UpdateCheck } from "@/lib/api";
-import type { Doctor } from "@/lib/types/api";
 import { cn } from "@/lib/utils";
 import { FLORA, FOCUS } from "./flora";
-
-/**
- * Hồ sơ Codex ĐANG ĐƯỢC CHỌN. Bản đầy đủ (kèm nhãn, trạng thái, lệnh đăng nhập) nằm ở
- * `features/settings/lib/image-profile`; ở đây khai lại đúng một dòng vì `components/layout`
- * là tầng DƯỚI features — import ngược lên sẽ tạo vòng (setup/lib/commands re-export
- * chính `@/components/layout`).
- */
-function selectedWire(doctor: Doctor | undefined): "default" | "separate" {
-  const ig = doctor?.imageGen;
-  const profile = ig?.profile ?? (ig?.mode === "img-home" ? "img-home" : "default-home");
-  return profile === "img-home" ? "separate" : "default";
-}
 
 /** "Chưa kiểm tra" ≠ "không kiểm tra được" — hai câu khác nhau, không gộp (§3.9). */
 function updateLabel(data: UpdateCheck | undefined): string {
@@ -71,7 +57,6 @@ export function RuntimeStatus({ status, onRecheck }: { status: ConnectionStatus;
   const update = useUpdateCheck({ enabled: status.connected });
   const install = useInstallUpdateFlow();
   useUpdateAvailableToast(update.data, install);
-  const profile = useSetImageProfile();
   const codexReady = doctor.data?.codex?.ok === true && doctor.data?.imageGen?.available === true;
   const statusLabel = status.connected
     ? "Sẵn sàng"
@@ -93,26 +78,6 @@ export function RuntimeStatus({ status, onRecheck }: { status: ConnectionStatus;
           <dt className="text-fg-muted">Tạo ảnh</dt><dd className="text-fg-strong">{codexReady ? "Sẵn sàng" : doctor.data?.imageGen?.reason ?? "Chưa kiểm tra"}</dd>
           <dt className="text-fg-muted">Phiên bản</dt><dd className="text-fg-strong">{updateLabel(update.data)}</dd>
         </dl>
-        <div className="space-y-2">
-          <label className="text-caption text-fg-muted" htmlFor="kitgen-image-profile">Cấu hình tạo ảnh</label>
-          {/* Bám `profile` (lựa chọn đã lưu) chứ KHÔNG bám `mode` (kết quả dò): chọn hồ sơ
-              riêng mà chưa đăng nhập thì `mode` = "unavailable", nếu bám `mode` thì ô chọn
-              tự nhảy ngược về "Mặc định" và user tưởng bấm trượt. */}
-          <Select
-            value={selectedWire(doctor.data)}
-            onValueChange={(value) => profile.mutate(value as "default" | "separate", { onSettled: () => void doctor.refetch() })}
-            disabled={!status.connected || profile.isPending}
-          >
-            <SelectTrigger id="kitgen-image-profile"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="default">Mặc định (~/.codex)</SelectItem>
-              <SelectItem value="separate">Cấu hình riêng (~/.codex-img)</SelectItem>
-            </SelectContent>
-          </Select>
-          {doctor.data?.imageGen?.mode === "img-home" && doctor.data?.imageGen?.authPresent === false && (
-            <code className="block rounded-2 bg-raised px-3 py-2 text-caption text-fg">CODEX_HOME=~/.codex-img codex login</code>
-          )}
-        </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="secondary" onClick={() => { onRecheck(); void doctor.refetch(); void update.refetch(); }}><RefreshCw aria-hidden /> Kiểm tra lại</Button>
           {/* Đóng popover TRƯỚC khi cài: lớp nổi của Radix ở `z-dropdown` (530) nằm TRÊN

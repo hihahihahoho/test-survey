@@ -296,8 +296,14 @@ export class RunHandle {
       { variants: vs, maxJobs: this.run.maxJobs, imgHome: this.opts.imgHome })
     // Giữ promise để cancel() đợi được child chết + settleGenJobs()/persist() ghi xong.
     this.phaseDone = new Promise(done => {
+      /* `detached: !IS_WIN` — hai lý do KHÁC NHAU trên hai hệ:
+         · POSIX cần detached để killTree giết cả nhóm (`kill(-pid)`).
+         · Windows: DETACHED_PROCESS vô hiệu CREATE_NO_WINDOW (windowsHide) — con của
+           bash/python tự mở cửa sổ console MỚI nhấp nháy liên tục suốt lượt gen (lỗi
+           hiện trường 24/08/2026). killTree trên Windows dùng `taskkill /T` nên không
+           cần process group ⇒ bỏ detached là mất đúng cái popup, không mất gì khác. */
       const child = spawn(cmd, args, {
-        cwd: pdir, detached: true, stdio: ["ignore", "pipe", "pipe"],
+        cwd: pdir, detached: !IS_WIN, stdio: ["ignore", "pipe", "pipe"],
         // `env.PATH` CHỈ tồn tại trên win32 (bashCommand thêm coreutils của Git-Bash).
         // Trên darwin/linux buildCommand không bao giờ đặt PATH ⇒ biểu thức này = mã cũ.
         env: { ...process.env, ...env, PATH: env.PATH ?? process.env.PATH },
@@ -521,8 +527,9 @@ export class RunHandle {
     const code = await new Promise(resolve => {
       let child
       try {
+        // `detached: !IS_WIN` — cùng lý do với runPhase: Windows cần windowsHide sống.
         child = spawn(cmd, args, {
-          cwd: pdir, detached: true, stdio: ["ignore", "pipe", "pipe"],
+          cwd: pdir, detached: !IS_WIN, stdio: ["ignore", "pipe", "pipe"],
           env: { ...process.env, ...env, PATH: env.PATH ?? process.env.PATH },
           ...winSpawnOpts(),
         })

@@ -83,7 +83,7 @@ export function useCodexLogin(): CodexLoginFlow {
           setSession(s);
           /* Đăng nhập xong ⇒ doctor cũ (còn nói "chưa đăng nhập") thành rác ngay
              lập tức. Chỉ DỌN, không tự nạp: `codex debug prompt-input` tốn ~1s và
-             màn đang mở sẽ tự đọc lại — cùng một luật với `useSetImageProfile`. */
+             màn đang mở sẽ tự đọc lại — chỉ dọn cache, không tự nạp. */
           if (s.status === "done") {
             qc.removeQueries({ queryKey: qk.doctor() });
             /* Tài khoản + quota là hai thẻ đang NHÌN THẤY — đọc lại ngay để dòng

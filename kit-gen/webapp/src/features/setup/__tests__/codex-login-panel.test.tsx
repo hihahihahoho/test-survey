@@ -43,7 +43,7 @@ const WAITING: CodexLogin = {
   status: "waiting",
   verificationUrl: "https://auth.openai.com/codex/device",
   userCode: "3P0N-7GY2Q",
-  codexHomeLabel: "~/.codex-img",
+  codexHomeLabel: "~/.codex",
   startedAt: "2026-08-21T02:00:00.000Z",
   expiresAt: "2026-08-21T02:15:00.000Z",
   reason: null,

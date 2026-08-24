@@ -141,8 +141,6 @@ export class RunStore {
       selected = want.map(j => known.get(j))
     }
 
-    // CODEX_HOME riêng cho job ảnh là FALLBACK, chỉ dùng khi doctor báo mode img-home
-    const cfg = await this.ws.config()
     const runId = await this.nextRunId(projectId)
     const dir = join(projectDir(this.ws, projectId), "runs", runId)
     await ensureDir(join(dir, "logs"))
@@ -169,7 +167,9 @@ export class RunStore {
     }
     const handle = new RunHandle(this, run, dir, {
       autoSliceAfterGen, contract,
-      imgHome: imgHome ?? (cfg.imageGen?.mode === "img-home" ? cfg.imageGen.codexHome : null),
+      /* Hồ sơ ảnh riêng đã bỏ (24/08/2026): gen chạy home mặc định của codex.
+         KITGEN_CODEX_HOME là cửa thoát dev/test duy nhất — engine tự đọc nó. */
+      imgHome: imgHome ?? null,
     })
     this.active.set(projectId, handle)
     this.byId.set(runId, handle)

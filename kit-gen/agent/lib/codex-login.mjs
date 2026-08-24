@@ -42,10 +42,10 @@
    ════════════════════════════════════════════════════════════════════════════ */
 import { spawn } from "node:child_process"
 import { existsSync, mkdirSync, writeFileSync } from "node:fs"
-import { homedir } from "node:os"
 import { join } from "node:path"
 import { shortenPath } from "./redact.mjs"
 import { killTree, winSpawnOpts, winShellOpts } from "./platform.mjs"
+import { resolveCodexHome } from "./doctor.mjs"
 
 /* ĐỌC MUỘN, không phải hằng số lúc nạp module: bộ ca dựng agent trong CÙNG tiến trình,
    nên một `const` ở đây sẽ chốt cứng "codex" trước khi ca kịp trỏ sang shim, và mọi ca
@@ -78,29 +78,20 @@ const CODE_RE = /\b([A-Z0-9]{4,8}-[A-Z0-9]{4,8})\b/
 /** Trạng thái: idle · starting · waiting · done · failed · cancelled */
 let session = null
 
-function expandHome(p) { return String(p).replace(/^~(?=$|[/\\])/, homedir()) }
-
-/** CODEX_HOME của hồ sơ ảnh đang chọn — cùng một phép giải như doctor/gen, để nút
- *  này đăng nhập vào ĐÚNG cái home mà lượt gen sẽ dùng. Đăng nhập nhầm home là
- *  kiểu hỏng tệ nhất: mọi thứ báo thành công mà gen vẫn kêu chưa đăng nhập. */
-export function loginCodexHome(cfg) {
-  const raw = cfg?.imageGen?.codexHome
-  if (cfg?.imageGen?.mode === "img-home") {
-    const home = typeof raw === "string" && raw.trim() !== "" ? raw.trim() : "~/.codex-img"
-    return expandHome(home)
-  }
-  return join(homedir(), ".codex")
+/** CODEX_HOME duy nhất — cùng một phép giải như doctor/gen (`resolveCodexHome`),
+ *  để nút này đăng nhập vào ĐÚNG cái home mà lượt gen sẽ dùng. Hồ sơ ảnh riêng đã
+ *  bị bỏ (24/08/2026); tham số cfg giữ lại cho tương thích chữ ký, không đọc nữa. */
+export function loginCodexHome(_cfg) {
+  return resolveCodexHome()
 }
 
-/* HỒ SƠ ẢNH RIÊNG PHẢI CÓ config.toml TRƯỚC LƯỢT ĐĂNG NHẬP ĐẦU TIÊN.
-   Thiếu `cli_auth_credentials_store = "file"`, codex cất credential vào keychain
-   của hệ điều hành thay vì `auth.json` — mà gen.sh và doctor đều kiểm ĐÚNG file
-   auth.json, nên người dùng "đăng nhập thành công" mãi mãi mà gen vẫn kêu chưa
-   đăng nhập (bug thực địa: nút login xanh, 0 ảnh). Trước đây chỉ setup.sh cũ ghi
-   khối này; đường cài trong app thì không — nay ghi ở đây, NGAY trước spawn.
-   CHỈ đụng vào home của hồ sơ ảnh riêng và CHỈ khi config.toml chưa tồn tại —
-   `~/.codex` mặc định là của người dùng, không sửa. */
-const IMG_HOME_CONFIG = `# Sinh boi KitGen truoc luot dang nhap dau tien — ho so Codex RIENG cho viec tao anh.
+/* HOME MỚI TINH thì ghi config.toml TRƯỚC LƯỢT ĐĂNG NHẬP ĐẦU TIÊN.
+   `cli_auth_credentials_store = "file"` để credential ra `auth.json` (thay vì
+   keychain) — nhờ đó thẻ "tài khoản đang đăng nhập" đọc được email. Doctor thì
+   không phụ thuộc file này nữa (nó hỏi thẳng `codex login status`).
+   CHỈ khi config.toml CHƯA TỒN TẠI: máy đã có codex từ trước là của người dùng,
+   một byte cũng không sửa. */
+const FRESH_HOME_CONFIG = `# Sinh boi KitGen truoc luot dang nhap dau tien.
 model_provider = "openai"
 cli_auth_credentials_store = "file"
 
@@ -108,13 +99,12 @@ cli_auth_credentials_store = "file"
 image_generation = true
 `
 
-function ensureImgHomeConfig(cfg, home) {
-  if (cfg?.imageGen?.mode !== "img-home") return
+function ensureCodexHomeConfig(home) {
   try {
     mkdirSync(home, { recursive: true })
     const path = join(home, "config.toml")
-    if (!existsSync(path)) writeFileSync(path, IMG_HOME_CONFIG, "utf8")
-  } catch { /* login vẫn chạy; doctor sẽ nói thật nếu auth.json không xuất hiện */ }
+    if (!existsSync(path)) writeFileSync(path, FRESH_HOME_CONFIG, "utf8")
+  } catch { /* login vẫn chạy; doctor sẽ nói thật nếu đăng nhập không thành */ }
 }
 
 /** Chỉ giữ URL nằm trong host cho phép. Trả `null` nếu dòng không có cái nào. */
@@ -183,7 +173,7 @@ export function startLogin(cfg) {
     return snapshot(session)
   }
   const home = loginCodexHome(cfg)
-  ensureImgHomeConfig(cfg, home)
+  ensureCodexHomeConfig(home)
   const s = {
     status: "starting",
     verificationUrl: null,

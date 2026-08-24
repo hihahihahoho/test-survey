@@ -138,10 +138,12 @@ export function buildCommand(kind, projectDirAbs, { variants = [], sheets = null
   const env = {}
   if (kind === "gen") {
     env.MAXJOBS = String(maxJobs)
-    // Không đặt IMG_HOME = Codex dùng cấu hình mặc định. Chỉ truyền khi user chủ động
-    // chọn profile riêng; đây là path, không phải credential.
-    if (imgHome) {
-      const raw = String(imgHome)
+    // Không đặt IMG_HOME = Codex dùng home mặc định (~/.codex) — đường của MỌI người
+    // dùng từ 24/08/2026 (hồ sơ ảnh riêng đã bỏ). KITGEN_CODEX_HOME là cửa thoát
+    // dev/test duy nhất; đây là path, không phải credential.
+    const homeOverride = imgHome ?? process.env.KITGEN_CODEX_HOME
+    if (homeOverride) {
+      const raw = String(homeOverride)
       env.IMG_HOME = raw.startsWith("~") ? join(homedir(), raw.slice(1)) : raw
     }
     // KHÔNG truyền argv filter: styles.json đã thu hẹp đúng tập job (filter của gen.sh là substring)

@@ -96,43 +96,26 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
   const configPath = join(wsRoot, ".kitgen", "config.json")
   const readConfig = () => JSON.parse(readFileSync(configPath, "utf8"))
 
-  await it("PATCH /api/image-profile separate ghi bền imageGen vào .kitgen/config.json", async () => {
-    const r = await api("PATCH", "/api/image-profile", { body: { mode: "separate" } })
-    eq(r.status, 200, "status")
-    eq(r.json.profile, "img-home", "profile")
-    eq(r.json.mode, "separate", "mode")
-    eq(r.json.codexHomeLabel, "~/.codex-img", "nhãn rút gọn, không phải path tuyệt đối")
-    const cfg = readConfig()
-    eq(cfg.imageGen, { mode: "img-home", codexHome: "~/.codex-img" }, "config đã lưu")
-    ok(!/\/Users\//.test(r.text), "không trả đường dẫn tuyệt đối")
+  /* Hồ sơ ảnh riêng đã bị BỎ (24/08/2026) — /api/image-profile chỉ còn là SHIM
+     cho bundle web cũ đứng chờ update: 200, hình dạng cũ, KHÔNG ghi config. */
+  await it("PATCH /api/image-profile là shim: mọi mode ⇒ 200 default-home, KHÔNG đụng config", async () => {
+    const before = JSON.stringify(readConfig())
+    for (const mode of ["separate", "default", "~/.evil-home"]) {
+      const r = await api("PATCH", "/api/image-profile", { body: { mode } })
+      eq(r.status, 200, `status (${mode})`)
+      eq(r.json.profile, "default-home", `profile (${mode})`)
+      eq(r.json.mode, "default", `mode (${mode})`)
+      eq(r.json.codexHomeLabel, "~/.codex", "nhãn rút gọn, không phải path tuyệt đối")
+      ok(!/\/Users\//.test(r.text), "không trả đường dẫn tuyệt đối")
+    }
+    eq(JSON.stringify(readConfig()), before, "config không bị ghi — kể cả imageGen sót lại")
   })
-  await it("PATCH /api/image-profile default XOÁ HẲN codexHome (không để sót IMG_HOME cũ)", async () => {
-    const r = await api("PATCH", "/api/image-profile", { body: { mode: "default" } })
-    eq(r.status, 200, "status")
-    eq(r.json.profile, "default-home", "profile")
-    const cfg = readConfig()
-    eq(cfg.imageGen, { mode: "default-home" }, "config chỉ còn mode")
-    ok(!("codexHome" in cfg.imageGen), "codexHome đã biến mất")
-  })
-  await it("PATCH /api/image-profile mode lạ bị 400, KHÔNG đụng vào config", async () => {
-    await api("PATCH", "/api/image-profile", { body: { mode: "separate" } })
-    const r = await api("PATCH", "/api/image-profile", { body: { mode: "~/.evil-home" } })
-    eq(r.status, 400, "status")
-    eq(r.json.error.code, "BAD_REQUEST", "code")
-    eq(readConfig().imageGen.mode, "img-home", "config giữ nguyên giá trị hợp lệ trước đó")
-    await api("PATCH", "/api/image-profile", { body: { mode: "default" } })
-  })
-  await it("doctor trả imageGen.profile theo lựa chọn đã lưu (enum, không phải path)", async () => {
+  await it("doctor chỉ còn MỘT hồ sơ: profile default-home, nhãn ~/.codex", async () => {
     const { doctor } = await import("../lib/doctor.mjs")
     const ws = agent.registry.active
-    await api("PATCH", "/api/image-profile", { body: { mode: "separate" } })
-    const d1 = await doctor(ws, { refresh: true })
-    eq(d1.imageGen.profile, "img-home", "profile sau khi chọn hồ sơ riêng")
-    eq(d1.imageGen.codexHomeLabel, "~/.codex-img", "nhãn rút gọn")
-    await api("PATCH", "/api/image-profile", { body: { mode: "default" } })
-    const d2 = await doctor(ws, { refresh: true })
-    eq(d2.imageGen.profile, "default-home", "profile sau khi về mặc định")
-    eq(d2.imageGen.codexHomeLabel, CODEX_HOME_DEFAULT, "nhãn rút gọn của home mặc định")
+    const d = await doctor(ws, { refresh: true })
+    eq(d.imageGen.profile, "default-home", "profile duy nhất")
+    eq(d.imageGen.codexHomeLabel, CODEX_HOME_DEFAULT, "nhãn rút gọn của home mặc định")
   })
 
   /* ── MODEL TẠO ẢNH: ĐỌC RA TỪ gen.sh, KHÔNG PHẢI CHÉP LẠI ────────────────────

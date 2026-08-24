@@ -398,15 +398,22 @@ export function scheduleUpdate({ kitgenHome = defaultKitgenHome(), spawnImpl = s
          `/c/...`. Passing it to cmd.exe makes cmd resolve its own commands with
          MSYS semantics. Spawn Bash directly, matching every other Windows Bash
          helper; the one-second hand-off remains inside Bash. */
+      /* `detached: false` TRÊN WINDOWS (khác ①, vốn là chuyện launchctl của macOS):
+         DETACHED_PROCESS vô hiệu CREATE_NO_WINDOW ⇒ cửa sổ console của installer bật
+         lên giữa màn hình người dùng. Windows không cần detached để installer sống sót
+         khi agent bị giết — tiến trình con trên Windows không chết theo cha. */
       child = spawnImpl(bashExe,
         ["-c", 'sleep 1; exec "$1" --update', "kitgen-update", toBashPath(staged.path)],
-        { detached: true, stdio: ["ignore", out, out], env, ...winSpawnOpts() })
+        { detached: false, stdio: ["ignore", out, out], env, ...winSpawnOpts() })
     } else if (IS_WIN) {
       /* PowerShell is not an executable script host. Keep the cmd.exe bridge for
          install.ps1, whose environment intentionally remains Windows-native. */
       child = spawnImpl(process.env.ComSpec || "cmd.exe",
-        ["/d", "/s", "/c", `timeout /t 1 /nobreak >nul & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${staged.path}" -Update -KitgenHome "${kitgenHome}"`],
-        { detached: true, stdio: ["ignore", out, out], env, ...winSpawnOpts() })
+        /* `ping -n 2` thay cho `timeout /t 1`: timeout.exe đòi console input — trong tiến
+           trình không console (stdin=NUL) nó chết ngay "Input redirection is not supported"
+           và bước nhường 1 giây biến mất. ping không cần console và chờ đúng ~1s. */
+        ["/d", "/s", "/c", `ping -n 2 127.0.0.1 >nul & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${staged.path}" -Update -KitgenHome "${kitgenHome}"`],
+        { detached: false, stdio: ["ignore", out, out], env, ...winSpawnOpts() })
     } else {
       child = spawnImpl("sh", ["-c", 'sleep 1; if [ -f "$1/config.env" ]; then . "$1/config.env"; fi; exec "$2" --update', "kitgen-update", kitgenHome, staged.path],
         { detached: true, stdio: ["ignore", out, out], env })

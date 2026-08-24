@@ -103,7 +103,11 @@ if [[ -n "$GEN_MODEL" ]]; then
   # bản codex này BIẾT tên model — KHÔNG chứng minh provider của người dùng chịu phục vụ
   # model đó. Ai trỏ codex sang provider tuỳ biến thì tên có trong catalog mà gọi vẫn bị
   # từ chối. Nên đây chỉ là cửa RẺ; cửa thật là nhánh tự chữa trong run_one.
-  if codex debug models 2>/dev/null | grep -q "\"$GEN_MODEL\""; then
+  # SOI ĐÚNG HOME sẽ gen (bug cũ: IMG_HOME đặt mà cổng này vẫn hỏi home mặc định
+  # ⇒ MODEL_ARGS rỗng ⇒ âm thầm rơi về model/mức nghĩ của hồ sơ).
+  model_gate_env=()
+  [[ -n "$IMG_HOME" ]] && model_gate_env=(env CODEX_HOME="$IMG_HOME")
+  if ${model_gate_env[@]+"${model_gate_env[@]}"} codex debug models 2>/dev/null | grep -q "\"$GEN_MODEL\""; then
     MODEL_ARGS=(-m "$GEN_MODEL")
     [[ -n "$GEN_EFFORT" ]] && MODEL_ARGS+=(-c "model_reasoning_effort=\"$GEN_EFFORT\"")
   else
@@ -867,7 +871,12 @@ for s in cfg["styles"]:
             f"All {n_real} elements share the exact same consistent style and belong to one coherent game. "
             "Game-ready UI asset quality, " + ("portrait 2:3." if portrait else "landscape 3:2.")
         ]
-        open(f"prompts/{s['id']}-{sh['id']}.txt", "w").write("\n".join(lines))
+        # newline="\n" BẮT BUỘC: trên Windows chế độ text ghi \r\n, và `read -r` của bash
+        # giữ nguyên \r cuối dòng — tên file trong .att thành "xxx.png\r", test `-f` fail
+        # LẶNG LẼ ⇒ mọi ảnh đính kèm bị rơi hết (lỗi hiện trường: mascot sai nhân vật,
+        # codex trả lời "Please reattach the two reference images"). encoding cũng phải
+        # đóng đinh utf-8: prompt có tiếng Việt, locale mặc định Windows là cp1252.
+        open(f"prompts/{s['id']}-{sh['id']}.txt", "w", encoding="utf-8", newline="\n").write("\n".join(lines))
         # file đính kèm cho job: skeleton trước, ref nhân vật rồi brand/inspo.
         # Một ảnh có thể xuất hiện ở nhiều vai (vd sheet.ref cũng là brand ref).
         # Codex tính token theo từng `-i`; khử trùng lặp ngay lúc dựng argv.
@@ -878,7 +887,7 @@ for s in cfg["styles"]:
                   + (s["inspo"] if use_inspo else [])):
             if p and p not in att:
                 att.append(p)
-        open(f"prompts/{s['id']}-{sh['id']}.att", "w").write("\n".join(att) + "\n")
+        open(f"prompts/{s['id']}-{sh['id']}.att", "w", encoding="utf-8", newline="\n").write("\n".join(att) + "\n")
         print("prompt →", f"prompts/{s['id']}-{sh['id']}.txt", f"(+{len(att)} ảnh kèm)")
 PY
 
@@ -897,6 +906,39 @@ run_one() {
   local want_size="1536x1024" want_orient="landscape"
   if head -n1 "prompts/${job}.txt" 2>/dev/null | grep -qi 'PORTRAIT'; then
     want_size="1024x1536"; want_orient="portrait"
+  fi
+
+  # Đọc .att TRƯỚC khi dựng task: đường dẫn ảnh phải được NÓI RA trong task (khối
+  # REFERENCE IMAGES bên dưới) chứ không chỉ đính `-i` — xem chú thích ở khối att_note.
+  local att=() att_paths=""
+  local p
+  while IFS= read -r p || [[ -n "$p" ]]; do
+    # Gọt \r phòng thủ: file .att sinh bởi bản engine cũ (Windows, text mode) còn CRLF;
+    # thiếu dòng này thì `-f` fail lặng lẽ và mọi ảnh đính kèm rơi hết.
+    p="${p%$'\r'}"
+    if [[ -n "$p" && -f "${ROOT}/${p}" ]]; then
+      att+=(-i "${ROOT}/${p}")
+      att_paths+="${ROOT}/${p}"$'\n'
+    fi
+  done < "prompts/${job}.att"
+
+  # ╔══ VÌ SAO PHẢI LIỆT KÊ ĐƯỜNG DẪN TRONG TASK ═══════════════════════════════╗
+  # ║ `-i` chỉ đính ảnh vào CUỘC HỘI THOẠI — tool image_gen KHÔNG tự thấy chúng. ║
+  # ║ Muốn ảnh tham chiếu tới tay tool, model phải gọi image_gen với tham số     ║
+  # ║ `referenced_image_paths` trỏ vào file trên đĩa. Bản cũ không nói gì về     ║
+  # ║ điều đó ⇒ model gọi tool tay không, tool trả câu kịch bản "Please reattach ║
+  # ║ the two reference images … they weren't available to the image-generation  ║
+  # ║ tool" (đúng nguyên văn log hiện trường r-0001), job fail hoặc — tệ hơn —   ║
+  # ║ model vẽ mascot theo TRÍ NHỚ mô tả chữ, ra sai nhân vật.                   ║
+  # ╚════════════════════════════════════════════════════════════════════════════╝
+  local att_note=""
+  if [[ ${#att[@]} -gt 0 ]]; then
+    att_note="The reference images are attached to this conversation AND exist on disk at the exact paths listed below (in order: the layout skeleton first, then any character reference / brand / inspiration images the prompt mentions). When you call image_gen you MUST pass ALL of these paths, in this exact order, in its referenced_image_paths parameter. Never call it without them, and never claim the images are unavailable — they are right here:
+
+--- REFERENCE IMAGES START ---
+${att_paths}--- REFERENCE IMAGES END ---
+
+"
   fi
 
   # ╔══ VÌ SAO CÂU ĐẦU PHẢI GỌI ĐÍCH DANH SKILL ════════════════════════════════╗
@@ -926,16 +968,11 @@ run_one() {
 
 HARD BAN — this is the single most important rule here: you must NOT write, compile or run any program, script or tool of your own that removes, keys out, erases or otherwise alters the background or the alpha channel of the image. No Python, no Swift, no ffmpeg, no ImageMagick, no chroma key, no remove_chroma_key.py, no CLI fallback via scripts/image_gen.py. The transparency must be produced by image_gen itself. Copying or moving the resulting file is of course fine. If image_gen hands you an opaque image, say so plainly and stop — a background you cut out yourself is a FAILED result, it gets detected and rejected, and it wastes the whole run.
 
-Generate ONE image with the built-in image_gen tool. The output image MUST be exactly ${want_size} pixels (${want_orient}) — this is a hard requirement, not a preference; do not return any other aspect ratio. Use EXACTLY the prompt between the IMAGE PROMPT markers below. The attached images are, in order: the layout skeleton, then any character reference photo / inspiration images the prompt mentions. Then save/copy the generated PNG to exactly this path: ${ROOT_OUT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
+${att_note}Generate ONE image with the built-in image_gen tool. The output image MUST be exactly ${want_size} pixels (${want_orient}) — this is a hard requirement, not a preference; do not return any other aspect ratio. Use EXACTLY the prompt between the IMAGE PROMPT markers below. Then save/copy the generated PNG to exactly this path: ${ROOT_OUT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
 
 --- IMAGE PROMPT START ---
 $(cat "prompts/${job}.txt")
 --- IMAGE PROMPT END ---"
-
-  local att=()
-  while IFS= read -r p || [[ -n "$p" ]]; do
-    [[ -n "$p" && -f "${ROOT}/${p}" ]] && att+=(-i "${ROOT}/${p}")
-  done < "prompts/${job}.att"
 
   # bash 3.2 + set -u: mảng RỖNG nổ "unbound variable" nếu expand thẳng — và bash của
   # macOS LÀ 3.2.57. Dòng dưới từng viết "${codex_env[@]}" trần: với hồ sơ Codex mặc

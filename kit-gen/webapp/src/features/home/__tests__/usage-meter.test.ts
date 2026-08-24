@@ -13,8 +13,8 @@ import type { Usage } from "@/lib/types/api";
 /** Hình dạng THẬT của `GET /api/usage` khi tài khoản gói plus, cửa sổ tuần. */
 const WEEKLY: Usage = {
   ok: true,
-  codexHomeLabel: "~/.codex-img",
-  profile: "img-home",
+  codexHomeLabel: "~/.codex",
+  profile: "default-home",
   plan: "plus",
   primary: { usedPercent: 2, remainingPercent: 98, windowMinutes: 10080, resetsAt: "2026-08-20T06:30:28.000Z" },
   secondary: null,

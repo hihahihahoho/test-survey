@@ -13,7 +13,7 @@ import {
 import { checkRows, imageGenOutcome, persistableMode, safeHomeLabel } from "../lib/doctor-view";
 import { bytes, count, hhmm } from "../lib/format";
 import { SEVEN_THINGS, SCRIPT_NAME, scriptBytes, scriptText } from "../lib/installer-script";
-import { IMG_HOME_CHECK_CMD, IMG_HOME_LOGIN_CMD, bashCmd, shasumCmd, updateCmd } from "../lib/commands";
+import { CODEX_LOGIN_CMD, IMAGEGEN_CHECK_CMD, bashCmd, shasumCmd, updateCmd } from "../lib/commands";
 import type { Doctor } from "@/lib/types/api";
 
 describe("steps — 4 bước và cầu nối với enum đã persist", () => {
@@ -106,12 +106,12 @@ describe("bảo mật — không để PII/secret lọt vào UI hay localStorage
   });
 
   it("lệnh hiện cho user không chứa path tuyệt đối và không in secret", () => {
-    const all = [IMG_HOME_CHECK_CMD, IMG_HOME_LOGIN_CMD, bashCmd(SCRIPT_NAME), shasumCmd(SCRIPT_NAME), updateCmd(null)];
+    const all = [IMAGEGEN_CHECK_CMD, CODEX_LOGIN_CMD, bashCmd(SCRIPT_NAME), shasumCmd(SCRIPT_NAME), updateCmd(null)];
     for (const c of all) {
       expect(c).not.toMatch(/\/Users\/|\/home\/[a-z]/i);
     }
     // lệnh kiểm image_gen chỉ ĐẾM, không in nội dung cấu hình
-    expect(IMG_HOME_CHECK_CMD).toContain("grep -c");
+    expect(IMAGEGEN_CHECK_CMD).toContain("grep -c");
   });
 });
 

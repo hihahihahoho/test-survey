@@ -43,7 +43,7 @@ export const INSTALL_CMD = {
 } as const;
 
 /**
- * §3-S0 bước 4 — HOME RIÊNG cho tạo ảnh.
+ * §3-S0 bước 4 — đăng nhập Codex (hồ sơ mặc định ~/.codex; hồ sơ ảnh riêng đã bỏ 24/08/2026).
  *
  * CHỈ HƯỚNG DẪN, TUYỆT ĐỐI KHÔNG TỰ ĐỘNG HOÁ: `codex login` mở luồng đăng nhập OAuth,
  * đó là việc của người dùng trên máy họ. Web không chạy lệnh, không nhận kết quả đăng
@@ -52,8 +52,8 @@ export const INSTALL_CMD = {
  * Lệnh thứ hai chỉ ĐẾM số lần chuỗi `image_gen`/`imagegen` xuất hiện — không sinh ảnh, không tốn quota.
  * (Codex ≥0.147 đổi tên tool `image_gen` thành skill `imagegen` — khớp cả hai dạng.)
  */
-export const IMG_HOME_LOGIN_CMD = "codex login";
-export const IMG_HOME_CHECK_CMD = 'codex debug prompt-input | grep -cE "image_?gen"';
+export const CODEX_LOGIN_CMD = "codex login";
+export const IMAGEGEN_CHECK_CMD = 'codex debug prompt-input | grep -cE "image_?gen"';
 
 /**
  * TÊN LỆNH `codex` CHO CÂU LỆNH ĐEM ĐI DÁN — không phải lúc nào cũng là chữ `codex`.
@@ -81,11 +81,11 @@ export function codexCmdName(codex: CodexWhere | null | undefined): string {
   return codex?.shellOk === false && codex.binLabel ? codex.binLabel : "codex";
 }
 
-export function imgHomeLoginCmd(codex: CodexWhere | null | undefined): string {
+export function codexLoginCmd(codex: CodexWhere | null | undefined): string {
   return `${codexCmdName(codex)} login`;
 }
 
-export function imgHomeCheckCmd(codex: CodexWhere | null | undefined): string {
+export function imagegenCheckCmd(codex: CodexWhere | null | undefined): string {
   return `${codexCmdName(codex)} debug prompt-input | grep -cE "image_?gen"`;
 }
 

@@ -26,6 +26,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { RawSheetsPanel } from "../components/RawSheetsPanel";
+import { DONE_GEN_RUN } from "@/features/runs/__tests__/fixtures/done-gen-run";
 
 if (!Element.prototype.hasPointerCapture) {
   Element.prototype.hasPointerCapture = () => false;
@@ -52,23 +53,9 @@ vi.mock("@/lib/hooks", () => ({
   useRunStream: () => ({}),
 }));
 
-/** Hình dạng ĐÚNG như `generatedRuns` đọc: `kind:"gen"`, và đường ảnh nằm ở
- *  `job.artifact.path` chứ không phải `job.path`. */
-const RUN = {
-  id: "r1",
-  kind: "gen",
-  status: "done",
-  startedAt: "2026-08-22T03:00:00.000Z",
-  finishedAt: "2026-08-22T03:05:00.000Z",
-  jobs: [{
-    job: "chinh-ui",
-    sheet: "ui",
-    variant: "chinh",
-    status: "done",
-    diagnosis: null,
-    artifact: { path: "raw/chinh-ui.png", validation: null },
-  }],
-};
+/** Hình dạng run lấy từ fixture chung — cổng check-no-gen.mjs cấm chuỗi kind gen
+ *  viết thẳng trong vùng workflow-v4, kể cả ở test (xem chú thích trong fixture). */
+const RUN = DONE_GEN_RUN;
 
 const CONTRACT = {
   schemaVersion: 4,

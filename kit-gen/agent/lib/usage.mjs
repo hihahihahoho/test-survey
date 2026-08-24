@@ -28,7 +28,7 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { exists } from "./fsx.mjs"
 import { shortenPath } from "./redact.mjs"
-import { configuredProfile, IMG_HOME_DEFAULT } from "./doctor.mjs"
+import { resolveCodexHome } from "./doctor.mjs"
 
 const CACHE_MS = 5 * 60_000
 /** Cache theo TỪNG home: đổi hồ sơ ảnh không được đọc trúng số của hồ sơ cũ. */
@@ -134,17 +134,10 @@ async function lastRateLimits(path) {
   return found
 }
 
-/** Home của hồ sơ Codex ĐANG ĐƯỢC CHỌN cho việc tạo ảnh (giống doctor.mjs).
- *  `KITGEN_CODEX_HOME` chỉ để TEST trỏ vào fixture — cùng lối với `KITGEN_CODEX_BIN`
- *  của doctor.mjs; máy thật không đặt biến này. */
-export function homeOf(cfg) {
-  const profile = configuredProfile(cfg)
-  const override = process.env.KITGEN_CODEX_HOME
-  if (override) return { profile, home: expandHome(override) }
-  if (profile !== "img-home") return { profile, home: join(homedir(), ".codex") }
-  const raw = cfg?.imageGen?.codexHome
-  const label = typeof raw === "string" && raw.trim() !== "" ? raw.trim() : IMG_HOME_DEFAULT
-  return { profile, home: expandHome(label) }
+/** MỘT home duy nhất, cùng phép giải với doctor/gen (`resolveCodexHome`): ~/.codex,
+ *  hoặc `KITGEN_CODEX_HOME` cho dev/test. Hồ sơ ảnh riêng đã bị bỏ (24/08/2026). */
+export function homeOf() {
+  return { profile: "default-home", home: resolveCodexHome() }
 }
 
 /**
@@ -155,8 +148,7 @@ export function homeOf(cfg) {
  * ẩn thanh usage đi chứ không hiện lỗi đỏ vì một thứ chỉ-để-tham-khảo.
  */
 export async function usage(ws, { refresh = false } = {}) {
-  const cfg = await ws.config()
-  const { profile, home } = homeOf(cfg)
+  const { profile, home } = homeOf()
   const hit = cache.get(home)
   if (!refresh && hit && Date.now() - hit.at < CACHE_MS) return hit.data
 

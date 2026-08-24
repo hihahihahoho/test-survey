@@ -29,11 +29,6 @@ ARCHIVE=""
 EXPECTED_SHA=""
 NO_START=0
 IS_UPDATE=0
-CODEX_PROFILE="${KITGEN_CODEX_PROFILE:-default}"
-# Chỉ cờ --codex-* gõ tay mới được phép ĐÈ lựa chọn hồ sơ đã lưu trong workspace
-# config (người dùng đổi hồ sơ qua UI sau khi cài → env/config.env là giá trị cũ,
-# không phải ý muốn hiện tại; regression: mỗi lần update lại reset về default-home).
-CODEX_EXPLICIT=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --archive) ARCHIVE="$2"; shift ;;
@@ -44,14 +39,15 @@ while [ "$#" -gt 0 ]; do
     --origin) ORIGIN="$2"; shift ;;
     --port) PORT="$2"; [ "$ORIGIN" = "http://127.0.0.1:8765" ] && ORIGIN="http://127.0.0.1:$2"; shift ;;
     --no-start) NO_START=1 ;;
-    --codex-default) CODEX_PROFILE="default"; CODEX_EXPLICIT=1 ;;
-    --codex-img) CODEX_PROFILE="separate"; CODEX_EXPLICIT=1 ;;
+    # Hồ sơ ảnh riêng (~/.codex-img) đã bỏ 24/08/2026 — mọi bản cài dùng thẳng
+    # ~/.codex của người dùng. Cờ cũ giữ lại làm no-op để `kitgen update` từ bản
+    # cũ (config.env còn truyền cờ) không chết vì "Unknown option".
+    --codex-default|--codex-img) echo "Cảnh báo: $1 đã bỏ — KitGen luôn dùng Codex mặc định (~/.codex)." >&2 ;;
     --update) IS_UPDATE=1 ;;
     -h|--help)
       echo "Usage: install.sh [--archive runtime.tar.gz | --release-url URL] [--sha256 HASH]"
       echo "                  [--repo OWNER/REPO]"
       echo "                  [--workspace PATH] [--origin URL] [--port N] [--no-start]"
-      echo "                  [--codex-default | --codex-img]"
       exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
@@ -468,10 +464,6 @@ prune_releases(){
   fi
 }
 
-# Default installs always reuse the user's normal Codex profile. A separate
-# image profile can be selected later from the runtime status popover.
-case "$CODEX_PROFILE" in default|separate) ;; *) echo "Invalid Codex profile: $CODEX_PROFILE" >&2; exit 2 ;; esac
-
 # Normal installs and `kitgen update` resolve the newest immutable GitHub asset.
 # An explicit URL remains available for mirrors and pinned/offline deployments.
 if ! is_release "$SELF_DIR" && ! is_source "$SELF_DIR" && [ -z "$ARCHIVE" ] && [ -z "$RELEASE_URL" ]; then
@@ -527,13 +519,7 @@ elif [ -n "$ARCHIVE" ] || [ -n "$RELEASE_URL" ]; then
 elif is_source "$SELF_DIR"; then
   # Developer checkout: assemble the exact release first, then install that artifact.
   ARCHIVE="$("$SELF_DIR/scripts/build-runtime.sh")"
-  # Giữ tính "explicit": chỉ truyền lại cờ --codex-* nếu lượt gọi này thật sự nhận nó,
-  # để lần exec sau không tưởng nhầm giá trị mặc định là lựa chọn gõ tay.
-  PROFILE_FLAG=""
-  if [ "$CODEX_EXPLICIT" -eq 1 ]; then
-    PROFILE_FLAG="--codex-default"; [ "$CODEX_PROFILE" = "separate" ] && PROFILE_FLAG="--codex-img"
-  fi
-  exec "$0" --archive "$ARCHIVE" --workspace "$WORKSPACE" --origin "$ORIGIN" --port "$PORT" $PROFILE_FLAG $([ "$NO_START" -eq 1 ] && echo --no-start)
+  exec "$0" --archive "$ARCHIVE" --workspace "$WORKSPACE" --origin "$ORIGIN" --port "$PORT" $([ "$NO_START" -eq 1 ] && echo --no-start)
 else
   echo "No runtime supplied. Use --release-url URL or --archive FILE." >&2
   exit 2
@@ -693,16 +679,35 @@ SYSTEM_CODEX="$(command -v codex 2>/dev/null || true)"
 if [ -n "$SYSTEM_CODEX" ] && [ -x "$SYSTEM_CODEX" ] && "$SYSTEM_CODEX" --version >/dev/null 2>&1; then
   CODEX_BIN="$SYSTEM_CODEX"
   check_ok "dùng Codex đã có: $($CODEX_BIN --version 2>/dev/null | head -n1) · $CODEX_BIN"
-elif [ -x "$KITGEN_HOME/tools/node_modules/.bin/codex" ] && "$KITGEN_HOME/tools/node_modules/.bin/codex" --version >/dev/null 2>&1; then
-  CODEX_BIN="$KITGEN_HOME/tools/node_modules/.bin/codex"
-  check_ok "dùng Codex riêng của KitGen: $($CODEX_BIN --version 2>/dev/null | head -n1)"
+elif [ -x "$HOME/.local/bin/codex" ] && "$HOME/.local/bin/codex" --version >/dev/null 2>&1; then
+  # Bản chính thức đã cài từ lượt trước (installer OpenAI đặt ở ~/.local/bin — thư mục
+  # này thường KHÔNG nằm trong PATH của launchd nên `command -v` ở trên không thấy).
+  # Không dò chỗ này thì mỗi lần update lại đi tải installer một lần nữa.
+  CODEX_BIN="$HOME/.local/bin/codex"
+  check_ok "dùng Codex chính thức đã có: $($CODEX_BIN --version 2>/dev/null | head -n1) · $CODEX_BIN"
 else
   [ -z "$SYSTEM_CODEX" ] || check_warn "có lệnh Codex tại $SYSTEM_CODEX nhưng health check --version thất bại"
-  echo "Installing Codex CLI..."
-  mkdir -p "$KITGEN_HOME/tools"
-  "$KITGEN_HOME/tools/node/bin/npm" install --silent --prefix "$KITGEN_HOME/tools" @openai/codex || \
-    "$(dirname "$NODE")/npm" install --silent --prefix "$KITGEN_HOME/tools" @openai/codex
-  CODEX_BIN="$KITGEN_HOME/tools/node_modules/.bin/codex"
+  # Cài bằng installer CHÍNH THỨC của OpenAI (binary native → ~/.local/bin/codex).
+  # BẰNG CHỨNG HIỆN TRƯỜNG 24/08/2026: bản codex cài qua npm KHÔNG gen được ảnh trên
+  # máy khách; cài lại bằng installer chính thức thì gen được ngay. Vì thế bản npm cũ
+  # trong tools/ của KitGen bị HẠ CẤP: chỉ còn là đường lùi khi curl/installer thất
+  # bại (mất mạng một phần, proxy chặn releases.openai.com).
+  echo "Installing Codex CLI (official installer)..."
+  OFFICIAL_CODEX="$HOME/.local/bin/codex"
+  if curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh \
+     && [ -x "$OFFICIAL_CODEX" ] && "$OFFICIAL_CODEX" --version >/dev/null 2>&1; then
+    CODEX_BIN="$OFFICIAL_CODEX"
+    check_ok "cài Codex chính thức: $($CODEX_BIN --version 2>/dev/null | head -n1) · $CODEX_BIN"
+  elif [ -x "$KITGEN_HOME/tools/node_modules/.bin/codex" ] && "$KITGEN_HOME/tools/node_modules/.bin/codex" --version >/dev/null 2>&1; then
+    CODEX_BIN="$KITGEN_HOME/tools/node_modules/.bin/codex"
+    check_warn "installer chính thức thất bại — dùng lại bản npm sẵn có của KitGen (có thể thiếu tính năng ảnh mới)"
+  else
+    check_warn "installer chính thức thất bại — lùi về cài npm (có thể thiếu tính năng ảnh mới)"
+    mkdir -p "$KITGEN_HOME/tools"
+    "$KITGEN_HOME/tools/node/bin/npm" install --silent --prefix "$KITGEN_HOME/tools" @openai/codex || \
+      "$(dirname "$NODE")/npm" install --silent --prefix "$KITGEN_HOME/tools" @openai/codex
+    CODEX_BIN="$KITGEN_HOME/tools/node_modules/.bin/codex"
+  fi
 fi
 # Đường vừa dò được có thể là shim ephemeral của shell — quy về đường bền + ĐÚNG TÊN
 # trước khi bất cứ ai ghi nó ra đĩa (xem khối resolve_codex_bin ở đầu file).
@@ -759,10 +764,7 @@ fi
 # — thư mục skill chỉ được đồng bộ khi codex CHẠY lần kế tiếp (BACKLOG #24 ⑬). Không chạy
 # hộ thì lượt gen ĐẦU TIÊN sau update vẫn dùng SKILL.md đời cũ — đúng ca ảnh đục đã cắn
 # người dùng thật. `debug prompt-input` rẻ: không mạng, không quota, chỉ liệt kê skill.
-for _skill_home in "$HOME/.codex" "$HOME/.codex-img"; do
-  [ -d "$_skill_home" ] || continue
-  run_with_timeout 60 env CODEX_HOME="$_skill_home" "$CODEX_BIN" debug prompt-input >/dev/null 2>&1 || true
-done
+run_with_timeout 60 env CODEX_HOME="$HOME/.codex" "$CODEX_BIN" debug prompt-input >/dev/null 2>&1 || true
 
 # Trình render khung xương: @resvg/resvg-wasm (2,4 MB, thuần JS + .wasm).
 # Thay Playwright + Chromium (790,9 MB) — xem BACKLOG #15. BẮT BUỘC, không có
@@ -799,27 +801,16 @@ while IFS= read -r -d '' _engine_src; do
 done < <(find "$DEST/engine" -type f -print0)
 # `bin/kitgen` cũng là shell script có thể đang được đọc bởi lệnh update/status.
 atomic_copy_file "$DEST/runtime/bin/kitgen" "$KITGEN_HOME/bin/kitgen" 1
-if [ "$CODEX_PROFILE" = "separate" ]; then
-  CODEX_MODE="img-home"; CODEX_HOME_LABEL="~/.codex-img"
-else
-  CODEX_MODE="default-home"; CODEX_HOME_LABEL=""
-fi
-"$PYTHON3" - "$WORKSPACE/.kitgen/config.json" "$CODEX_MODE" "$CODEX_HOME_LABEL" "$CODEX_EXPLICIT" <<'PY'
+"$PYTHON3" - "$WORKSPACE/.kitgen/config.json" <<'PY'
 import json, os, sys
-p, mode, home, explicit = sys.argv[1:]
+p = sys.argv[1]
 try:
     with open(p) as f: cfg = json.load(f)
 except Exception: cfg = {}
 cfg.setdefault("workspaceVersion", 1); cfg.setdefault("maxJobs", 4)
-img = {"mode": mode}
-if home: img["codexHome"] = home
-# Hồ sơ tạo ảnh là lựa chọn NGƯỜI DÙNG đổi được qua UI (PATCH /api/image-profile)
-# sau khi cài. Update chạy lại install.sh với giá trị cũ của lần cài đầu — nếu ghi
-# đè vô điều kiện thì mỗi lần update lại reset lựa chọn (mất thanh quota, gen về
-# nhầm hồ sơ). Chỉ ghi khi: cờ --codex-* gõ tay, hoặc config chưa có lựa chọn nào.
-existing = cfg.get("imageGen")
-if explicit == "1" or not (isinstance(existing, dict) and existing.get("mode")):
-    cfg["imageGen"] = img
+# Hồ sơ ảnh riêng đã bỏ 24/08/2026: mọi máy dùng thẳng ~/.codex. Xoá khối `imageGen`
+# sót lại từ bản cũ để không ai (kể cả engine cũ chưa update xong) đọc nhầm nó nữa.
+cfg.pop("imageGen", None)
 tmp = p + ".tmp"
 with open(tmp, "w") as f: json.dump(cfg, f, indent=2); f.write("\n")
 os.replace(tmp, p)
@@ -840,7 +831,6 @@ NODE_PATH='$KITGEN_HOME/tools/node_modules'
 KITGEN_RELEASE_URL='$([ "$AUTO_RELEASE" -eq 1 ] && printf '' || printf '%s' "$RELEASE_URL")'
 KITGEN_RELEASE_REPO='$RELEASE_REPO'
 KITGEN_RELEASE_CHANNEL='$RELEASE_CHANNEL'
-KITGEN_CODEX_PROFILE='$CODEX_PROFILE'
 CFG
 chmod 600 "$ATOMIC_TMP"
 mv -f "$ATOMIC_TMP" "$KITGEN_HOME/config.env"
@@ -955,10 +945,8 @@ echo "  Origin        $ORIGIN"
 echo "  Lệnh          $BIN {start|stop|restart|status|logs|open}"
 echo "  Cập nhật      $BIN update"
 echo ""
-if [ "$CODEX_PROFILE" = "separate" ] && [ ! -f "$HOME/.codex-img/auth.json" ]; then
-  echo "  Còn một bước: CODEX_HOME=$HOME/.codex-img codex login"
-elif [ ! -f "$HOME/.codex/auth.json" ]; then
-  echo "  Còn một bước: $CODEX_BIN login"
+if [ ! -f "$HOME/.codex/auth.json" ]; then
+  echo "  Còn một bước: đăng nhập Codex — gõ \`$CODEX_BIN login\` hoặc bấm nút Đăng nhập trong app"
 else
-  echo "  Hồ sơ tạo ảnh: Codex mặc định (~/.codex)"
+  echo "  Tài khoản Codex: đã đăng nhập (~/.codex)"
 fi

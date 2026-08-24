@@ -9,7 +9,6 @@ import { homedir, platform, arch, release } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { statfs, readFile } from "node:fs/promises"
-import { exists } from "./fsx.mjs"
 import { resolveEngine } from "./engine.mjs"
 import { shortenPath } from "./redact.mjs"
 import { pythonCommand, winShellOpts, winSpawnOpts, pythonEnv } from "./platform.mjs"
@@ -155,32 +154,31 @@ async function pythonInfo() {
   return { ok: true, version: v.version, venv: venvProbe.stdout.trim() === "1", deps }
 }
 
-/** Home mặc định của hồ sơ ảnh riêng khi config chỉ khai `mode` mà quên `codexHome`. */
-export const IMG_HOME_DEFAULT = "~/.codex-img"
-
-/** Hồ sơ ĐANG ĐƯỢC CHỌN trong `.kitgen/config.json` — thuần đọc enum, không đọc secret. */
-export function configuredProfile(cfg) {
-  return cfg?.imageGen?.mode === "img-home" ? "img-home" : "default-home"
-}
-function codexHomeOf(cfg) {
-  const raw = cfg?.imageGen?.codexHome
-  return typeof raw === "string" && raw.trim() !== "" ? raw.trim() : IMG_HOME_DEFAULT
-}
 function expandHome(p) { return p.replace(/^~(?=$|\/)/, homedir()) }
 
-/** Kiểm đúng profile user đã chọn. Mặc định là Codex hiện tại; không tự chuyển sang
- * ~/.codex-img vì profile riêng chỉ thuộc về người chủ động bật nó. */
+/* ── MỘT CODEX, MỘT HOME ──────────────────────────────────────────────────────
+   Quyết định của chủ sản phẩm 24/08/2026: BỎ HẲN "hồ sơ ảnh riêng" (~/.codex-img).
+   Người dùng dùng codex như một công cụ bình thường: cài, `codex login` vào
+   ~/.codex, xong. Hai-home từng là nguồn của cả họ lỗi "đèn xanh mà 0 ảnh":
+   đăng nhập nhầm home, doctor soi home này gen chạy home kia, dev toàn dùng
+   img-home nên nhánh mặc định chỉ nổ trên máy người dùng.
+
+   `KITGEN_CODEX_HOME` là CỬA THOÁT DUY NHẤT còn lại — cho máy dev có ~/.codex
+   trỏ provider không trả ảnh về máy, và cho test trỏ fixture. Người dùng thường
+   không bao giờ đặt biến này. */
+export function resolveCodexHome() {
+  const override = process.env.KITGEN_CODEX_HOME
+  if (typeof override === "string" && override.trim() !== "") return expandHome(override.trim())
+  return join(homedir(), ".codex")
+}
+
+/** Kiểm ĐÚNG home mà lượt gen sẽ dùng — cùng một phép giải `resolveCodexHome`. */
 async function imageGenInfo(ws) {
-  const cfg = await ws.config()
-  const profile = configuredProfile(cfg)
-  const imgHome = profile === "img-home" ? expandHome(codexHomeOf(cfg)) : null
-  const home = imgHome ?? join(homedir(), ".codex")
+  const home = resolveCodexHome()
   const out = {
     mode: "unknown",
-    /** Hồ sơ user ĐÃ CHỌN (persist ở `.kitgen/config.json`) — khác `mode` là KẾT QUẢ dò.
-     *  Toggle trên UI phải bám `profile`, nếu bám `mode` thì hồ sơ chọn xong mà chưa
-     *  đăng nhập sẽ tự nhảy về "mặc định" (mode = "unavailable"). */
-    profile,
+    /** Chỉ còn một hồ sơ; field giữ nguyên cho bundle web cũ đang đứng chờ update. */
+    profile: "default-home",
     available: false,
     // Nhãn RÚT GỌN (~/…) — không bao giờ là path tuyệt đối (arch §4.3-5).
     codexHomeLabel: shortenPath(home),
@@ -193,24 +191,27 @@ async function imageGenInfo(ws) {
   const codex = await firstLineVersion(CODEX)
   if (!codex.ok) { out.mode = "unavailable"; out.reason = "NO_CODEX"; return out }
 
-  const count = async env => {
-    const r = await run(CODEX, ["debug", "prompt-input"], { timeout: 20000, env })
-    if (!r.ok && !r.stdout) return -1
-    // CHỈ đếm số lần xuất hiện — không bao giờ giữ/log nội dung output
-    // Codex ≥0.147: skill `imagegen`; bản cũ: tool `image_gen` — đếm cả hai dạng
-    return (r.stdout.match(/image_?gen/gi) ?? []).length
-  }
+  /* ĐĂNG NHẬP THẬT — hỏi chính codex, không đoán qua auth.json: credential có thể
+     nằm trong keychain (codex user tự cài từ trước), khi đó auth.json không tồn tại
+     mà đăng nhập vẫn là thật. Chỉ đọc MÃ THOÁT, không giữ output. Bug cũ: doctor
+     tính `authPresent` xong… vứt đi, đèn vẫn xanh khi chưa đăng nhập. */
+  const login = await run(CODEX, ["login", "status"], { timeout: 10000, env: { CODEX_HOME: home } })
+  out.authPresent = login.ok
 
-  const nDefault = await count(imgHome ? { CODEX_HOME: imgHome } : {})
-  out.authPresent = await exists(join(home, "auth.json"))
-  if (nDefault > 0) {
-    out.mode = imgHome ? "img-home" : "default-home"
+  /* CHỈ đếm số lần xuất hiện — không bao giờ giữ/log nội dung output.
+     Codex ≥0.147: skill `imagegen`; bản cũ: tool `image_gen` — đếm cả hai dạng.
+     CODEX_HOME đặt TƯỜNG MINH: để hở là probe trả lời theo env thừa kế của tiến
+     trình agent (máy dev export CODEX_HOME) — đúng ca "dev xanh, user nổ". */
+  const r = await run(CODEX, ["debug", "prompt-input"], { timeout: 20000, env: { CODEX_HOME: home } })
+  const n = !r.ok && !r.stdout ? -1 : (r.stdout.match(/image_?gen/gi) ?? []).length
+
+  if (n > 0 && out.authPresent) {
+    out.mode = "default-home"
     out.available = true
     return out
   }
   out.mode = "unavailable"
-  out.reason = nDefault < 0 ? "UNKNOWN" : (out.authPresent ? "FEATURE_OFF" : "NOT_LOGGED_IN")
-  out.needsFallbackHome = false
+  out.reason = n < 0 ? "UNKNOWN" : (!out.authPresent ? "NOT_LOGGED_IN" : "FEATURE_OFF")
   return out
 }
 
@@ -265,10 +266,10 @@ async function genModelInfo(ws, { probe = true } = {}) {
      chịu phục vụ; gen.sh còn một nhánh tự chữa nữa khi provider từ chối, và nhánh đó
      chỉ lộ ra trong log của lượt chạy. Vì vậy UI phải nói "sẽ yêu cầu", không nói
      "chắc chắn chạy bằng".
-     KHÔNG đặt CODEX_HOME ở đây — gen.sh dòng 55 cũng không đặt, nên cổng này luôn xét
-     theo home mặc định kể cả khi ảnh được gen bằng hồ sơ riêng. Soi cho giống, không
-     soi cho đúng-hơn: lệch một chút là màn Cài đặt nói khác thứ engine làm. */
-  const r = await run(CODEX, ["debug", "models"], { timeout: 8000 })
+     CODEX_HOME đặt TƯỜNG MINH theo `resolveCodexHome` — cùng home mà gen dùng.
+     Bug cũ (một-home-hai-hồ-sơ): cổng này soi home mặc định trong khi ảnh gen
+     bằng hồ sơ riêng ⇒ MODEL_ARGS rỗng, gen âm thầm rơi về model của profile. */
+  const r = await run(CODEX, ["debug", "models"], { timeout: 8000, env: { CODEX_HOME: resolveCodexHome() } })
   out.known = r.ok || r.stdout ? r.stdout.includes(`"${out.requested}"`) : null
   return out
 }
@@ -285,10 +286,6 @@ const LITE = process.env.KITGEN_DOCTOR_LITE === "1"
 export async function doctor(ws, { refresh = false } = {}) {
   if (!refresh && cache.data && Date.now() - cache.at < CACHE_MS) return cache.data
   if (LITE) {
-    // LITE bỏ mọi spawn, nhưng hồ sơ ảnh là ĐỌC FILE config (không spawn) nên vẫn trả
-    // đúng lựa chọn của user — toggle không được "quên" mình đã chọn gì khi chạy test.
-    const liteCfg = await ws.config()
-    const liteProfile = configuredProfile(liteCfg)
     const data = {
       os: `${platform()}-${arch()}`, shell: "unknown", kernel: release(),
       node: { ok: true, version: process.versions.node },
@@ -296,8 +293,8 @@ export async function doctor(ws, { refresh = false } = {}) {
       renderer: { ok: false, engine: "@resvg/resvg-wasm" },
       codex: { ok: false, version: null, binLabel: null, shellOk: null, shellDirLabel: null },
       imageGen: {
-        mode: "unknown", profile: liteProfile, available: false,
-        codexHomeLabel: shortenPath(expandHome(liteProfile === "img-home" ? codexHomeOf(liteCfg) : join(homedir(), ".codex"))),
+        mode: "unknown", profile: "default-home", available: false,
+        codexHomeLabel: shortenPath(resolveCodexHome()),
         authPresent: false,
         verifiedAt: new Date().toISOString(), reason: "UNKNOWN", needsFallbackHome: true,
         /* LITE cấm spawn ⇒ không hỏi catalog được. Vẫn ĐỌC được gen.sh (thuần I/O file)

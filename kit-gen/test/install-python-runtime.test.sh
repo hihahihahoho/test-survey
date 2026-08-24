@@ -176,6 +176,12 @@ esac
 EOF
 printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$KITGEN_HOME/tools/node/bin/npm"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$KITGEN_HOME/tools/node_modules/.bin/codex"
+# Codex "chính thức" đã có ở ~/.local/bin (nơi installer OpenAI đặt): installer phải
+# DÙNG LẠI nó chứ không đi tải — nếu thiếu file này, nhánh tải codex sẽ làm bẩn curl.log
+# và ca ⑤ ("không tải gì") sẽ fail vì một lý do chẳng liên quan tới Python.
+mkdir -p "$HOME/.local/bin"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$HOME/.local/bin/codex"
+chmod +x "$HOME/.local/bin/codex"
 cat > "$FAKE_BIN/uname" <<'EOF'
 #!/usr/bin/env bash
 case "${1:-}" in

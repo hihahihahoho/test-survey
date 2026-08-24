@@ -24,7 +24,7 @@
  Dùng:
    powershell -ExecutionPolicy Bypass -File install.ps1
    powershell -ExecutionPolicy Bypass -File install.ps1 -Archive .\kitgen-runtime-2.1.19.tar.gz
-   powershell -ExecutionPolicy Bypass -File install.ps1 -NoStart -CodexImg
+   powershell -ExecutionPolicy Bypass -File install.ps1 -NoStart
 
  ┌────────────────────────────────────────────────────────────────────────────┐
  │ FILE NÀY PHẢI ĐƯỢC LƯU LÀ **UTF-8 CÓ BOM** (EF BB BF). ĐỪNG BỎ BOM ĐI.      │
@@ -63,6 +63,8 @@ param(
   [int]    $Port = 8765,
   [string] $Origin,
   [switch] $NoStart,
+  # Ho so anh rieng (~/.codex-img) da bo 24/08/2026 — hai switch nay chi con la no-op
+  # de install.bat doi cu (van truyen -CodexDefault) khong chet vi tham so la.
   [switch] $CodexDefault,
   [switch] $CodexImg,
   [switch] $Update,
@@ -286,9 +288,7 @@ function Get-PyVersion([string] $exe, [string[]] $pre) {
 if (-not $KitgenHome) { $KitgenHome = Join-Path $env:LOCALAPPDATA 'KitGen' }
 if (-not $Workspace)  { $Workspace  = Join-Path $env:USERPROFILE 'KitGen' }
 if (-not $Origin)     { $Origin     = "http://127.0.0.1:$Port" }
-if ($CodexDefault -and $CodexImg) { Die 'chi duoc chon mot trong -CodexDefault / -CodexImg' }
-$codexExplicit = ($CodexDefault -or $CodexImg)
-$codexProfile  = if ($CodexImg) { 'separate' } else { 'default' }
+if ($CodexImg) { Write-Warn 'tham so -CodexImg da bo — KitGen luon dung Codex mac dinh (~/.codex)' }
 
 $SelfDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Tmp     = Join-Path ([IO.Path]::GetTempPath()) ("kitgen-install-" + [Guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -658,16 +658,45 @@ if ($sysCodex) {
   else { Write-Warn "co lenh codex tai $($sysCodex.Source) nhung --version that bai" }
 }
 if (-not $codexBin) {
+  # Cai bang installer CHINH THUC cua OpenAI (binary native). BANG CHUNG HIEN TRUONG
+  # 24/08/2026: ban codex cai qua npm KHONG gen duoc anh tren may khach; cai lai bang
+  # installer chinh thuc thi gen duoc ngay. npm chi con la duong lui khi tai that bai.
+  $codexInstallDir = Join-Path $env:USERPROFILE '.local\bin'
+  $officialCodex = Join-Path $codexInstallDir 'codex.exe'
+  # Ban chinh thuc da cai tu luot truoc (thu muc nay co the chua vao PATH) ⇒ dung lai,
+  # khong tai lai installer moi lan update.
+  if ((Test-Path -LiteralPath $officialCodex) -and ((Invoke-ExeSoft $officialCodex @('--version') -Quiet) -eq 0)) {
+    $codexBin = $officialCodex; Write-Ok "dung Codex chinh thuc da co: $officialCodex"
+  }
+}
+if (-not $codexBin) {
+  Write-Host '  Codex CLI (installer chinh thuc cua OpenAI) ...'
+  try {
+    $env:CODEX_INSTALL_DIR = $codexInstallDir
+    $env:CODEX_NON_INTERACTIVE = '1'
+    $codexInstallScript = (Invoke-WebRequest -UseBasicParsing -Uri 'https://chatgpt.com/codex/install.ps1').Content
+    # Chay trong scope con de bien/ham cua script installer khong tran vao script nay.
+    & ([scriptblock]::Create($codexInstallScript)) | Out-Null
+  } catch { }
+  finally {
+    Remove-Item Env:CODEX_INSTALL_DIR -ErrorAction SilentlyContinue
+    Remove-Item Env:CODEX_NON_INTERACTIVE -ErrorAction SilentlyContinue
+  }
+  if ((Test-Path -LiteralPath $officialCodex) -and ((Invoke-ExeSoft $officialCodex @('--version') -Quiet) -eq 0)) {
+    $codexBin = $officialCodex; Write-Ok "cai Codex chinh thuc: $officialCodex"
+  }
+}
+if (-not $codexBin) {
   $localCodex = Join-Path $toolsPrefix 'node_modules\.bin\codex.cmd'
   if (-not (Test-Path -LiteralPath $localCodex)) {
-    Write-Host '  npm install @openai/codex ...'
+    Write-Host '  npm install @openai/codex ...  (duong lui — installer chinh thuc that bai)'
     # npm in warning/tien do ra stderr nhu com bua ⇒ bat buoc di qua Invoke-ExeSoft.
     # KHONG -Quiet: npm hong thi phai doc duoc vi sao.
     if ((Invoke-ExeSoft $npmCmd @('install', '--silent', '--prefix', $toolsPrefix, '@openai/codex')) -ne 0) {
       Write-Warn 'cai Codex CLI that bai'
     }
   }
-  if (Test-Path -LiteralPath $localCodex) { $codexBin = $localCodex; Write-Ok "Codex rieng cua KitGen: $localCodex" }
+  if (Test-Path -LiteralPath $localCodex) { $codexBin = $localCodex; Write-Warn "dung ban npm cua KitGen (co the thieu tinh nang anh moi): $localCodex" }
 }
 if (-not $codexBin) { Write-Block 'Codex CLI' 'Chay: npm i -g @openai/codex  (roi `codex login`). Khong co Codex thi KHONG gen duoc anh.' }
 
@@ -715,7 +744,7 @@ if ($codexBin) {
   # — thu muc skill chi dong bo khi codex CHAY lan ke tiep (BACKLOG #24 (13)). Khong chay ho
   # thi luot gen DAU TIEN sau update van dung SKILL.md doi cu — dung ca anh duc da can nguoi
   # dung that. `debug prompt-input` re: khong mang, khong quota, chi liet ke skill.
-  foreach ($skillHome in @((Join-Path $env:USERPROFILE '.codex'), (Join-Path $env:USERPROFILE '.codex-img'))) {
+  foreach ($skillHome in @((Join-Path $env:USERPROFILE '.codex'))) {
     if (-not (Test-Path -LiteralPath $skillHome)) { continue }
     try {
       $psi2 = New-Object System.Diagnostics.ProcessStartInfo
@@ -751,8 +780,8 @@ foreach ($p in @('playwright-browsers', 'node_modules\playwright', 'node_modules
 # ── 7. config + lệnh kitgen ────────────────────────────────────────────────────
 Write-Step '7/8' 'Cau hinh va lenh kitgen'
 
-# .kitgen\config.json — GIU NGUYEN lua chon ho so anh cua nguoi dung khi update
-# (dung ly le nhu install.sh: user doi ho so qua UI, update khong duoc reset).
+# .kitgen\config.json — chi con workspaceVersion/maxJobs; khoi `imageGen` cu bi xoa
+# (ho so anh rieng da bo 24/08/2026, doi xung voi khoi cung ten trong install.sh).
 $cfgPath = Join-Path $Workspace '.kitgen\config.json'
 $cfg = $null
 if (Test-Path -LiteralPath $cfgPath) {
@@ -765,13 +794,11 @@ function Set-Prop($obj, $name, $value) {
 }
 if ($cfg.PSObject.Properties.Name -notcontains 'workspaceVersion') { Set-Prop $cfg 'workspaceVersion' 1 }
 if ($cfg.PSObject.Properties.Name -notcontains 'maxJobs')          { Set-Prop $cfg 'maxJobs' 4 }
-$hasImg = ($cfg.PSObject.Properties.Name -contains 'imageGen') -and $cfg.imageGen -and $cfg.imageGen.mode
-if ($codexExplicit -or -not $hasImg) {
-  if ($codexProfile -eq 'separate') { Set-Prop $cfg 'imageGen' ([PSCustomObject]@{ mode = 'img-home'; codexHome = '~/.codex-img' }) }
-  else                              { Set-Prop $cfg 'imageGen' ([PSCustomObject]@{ mode = 'default-home' }) }
-}
+# Ho so anh rieng da bo 24/08/2026: moi may dung thang ~/.codex. Xoa khoi `imageGen`
+# sot lai tu ban cu de khong ai doc nham no nua.
+if ($cfg.PSObject.Properties.Name -contains 'imageGen') { $cfg.PSObject.Properties.Remove('imageGen') }
 Write-TextCrLf $cfgPath (($cfg | ConvertTo-Json -Depth 8))
-Write-Ok "config.json ($(if ($codexProfile -eq 'separate') { 'ho so anh rieng ~/.codex-img' } else { 'Codex mac dinh' }))"
+Write-Ok 'config.json (Codex mac dinh ~/.codex)'
 
 $binDir = Join-Path $KitgenHome 'bin'
 New-Dir $binDir
@@ -810,7 +837,6 @@ set "KITGEN_CODEX_BIN=$codexBin"
 set "KITGEN_PYTHON=$pythonForAgent"
 set "KITGEN_BASH=$bashExe"
 set "NODE_PATH=$nodeModules"
-set "KITGEN_CODEX_PROFILE=$codexProfile"
 set "KITGEN_RELEASE_MANIFEST=$ReleaseManifest"
 "@
 Write-TextCrLf (Join-Path $KitgenHome 'config.cmd') $configCmd
@@ -993,8 +1019,7 @@ if ($script:Warnings.Count -gt 0) {
   foreach ($w in $script:Warnings) { Write-Host "  · $w" }
 }
 Write-Host ''
-Write-Host 'Buoc cuoi: dang nhap Codex neu chua ->  codex login'
-Write-Host '(ho so anh rieng:  set CODEX_HOME=%USERPROFILE%\.codex-img  &&  codex login)'
+Write-Host 'Buoc cuoi: dang nhap Codex neu chua -> go `codex login` hoac bam nut Dang nhap trong app'
 Write-Host ''
 Write-Host 'BAN CAI WINDOWS DANG O TRANG THAI EXPERIMENTAL.' -ForegroundColor Yellow
 Write-Host 'Gap loi, chup man hinh + gui file log:' -ForegroundColor Yellow
