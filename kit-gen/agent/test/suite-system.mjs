@@ -478,7 +478,12 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
       spawnImpl: (cmd, args, opts) => { calls.push({ cmd, args, opts }); return fake },
     })
     eq(calls.length, 1, "có spawn installer")
-    eq(calls[0].opts.detached, true, "detached: installer phải sống sót khi launchd giết job")
+    /* POSIX: detached BẮT BUỘC — installer sắp `launchctl bootout` chính job chứa agent,
+       không tách session là nó tự giết mình. Windows: NGƯỢC LẠI phải false — DETACHED_PROCESS
+       vô hiệu windowsHide (cửa sổ console bật giữa màn hình), và tiến trình con Windows
+       vốn không chết theo cha nên không cần detached để sống sót. */
+    eq(calls[0].opts.detached, process.platform !== "win32",
+      "detached: POSIX tách session để sống sót launchctl; Windows tắt để giữ windowsHide")
     ok(Array.isArray(calls[0].opts.stdio), "stdio đi vào file, KHÔNG còn 'ignore'")
     ok(typeof calls[0].opts.stdio[1] === "number", "stdout là fd của update.log")
     eq(out.logLabel, LOG_UPDATE, "nhãn nhật ký rút gọn cho UI")

@@ -380,7 +380,7 @@ jobs:
           $out = "$env:RUNNER_TEMP\install-1.out.log"
           $err = "$env:RUNNER_TEMP\install-1.err.log"
           $ps1 = Join-Path $PWD 'kit-gen\scripts\install.ps1'
-          $argline = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -Archive "{1}" -NoStart -CodexImg' -f $ps1, $tar.FullName
+          $argline = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -Archive "{1}" -NoStart' -f $ps1, $tar.FullName
           $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $argline -Wait -PassThru -NoNewWindow `
                  -RedirectStandardOutput $out -RedirectStandardError $err
           $text = [string](Get-Content -Raw -LiteralPath $out) + "`n" + [string](Get-Content -Raw -LiteralPath $err)
@@ -399,7 +399,7 @@ jobs:
             exit 1
           }
           # Hop dong cua installer khi thieu tien de: KHONG khoi dong, IN CHECKLIST.
-          $need = @('[1/8]', '[8/8]', 'THIEU Codex CLI', 'BO QUA khoi dong', 'CHUA CHAY DUOC', 'npm i -g @openai/codex')
+          $need = @('[1/8]', '[8/8]', 'THIEU Codex CLI', 'BO QUA khoi dong', 'CHUA CHAY DUOC', 'chatgpt.com/codex/install.ps1')
           # .Contains() = so chuoi tho. KHONG dung -like: '[1/8]' la LOP KY TU cua wildcard,
           # '*[1/8]*' se khop moi chuoi co '1' hoac '/' hoac '8' => ca kiem im lang mai mai.
           $miss = @($need | Where-Object { -not $text.Contains($_) })
@@ -435,7 +435,7 @@ jobs:
           $out = "$env:RUNNER_TEMP\install-2.out.log"
           $err = "$env:RUNNER_TEMP\install-2.err.log"
           $ps1 = Join-Path $PWD 'kit-gen\scripts\install.ps1'
-          $argline = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -Archive "{1}" -NoStart -CodexImg' -f $ps1, $tar.FullName
+          $argline = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -Archive "{1}" -NoStart' -f $ps1, $tar.FullName
           $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $argline -Wait -PassThru -NoNewWindow `
                  -RedirectStandardOutput $out -RedirectStandardError $err
           $text = [string](Get-Content -Raw -LiteralPath $out) + "`n" + [string](Get-Content -Raw -LiteralPath $err)
@@ -528,14 +528,13 @@ jobs:
           $ws    = Join-Path $env:USERPROFILE 'KitGen'
           $fail  = 0
 
-          # ① .kitgen\config.json — -CodexImg phai ra ho so anh rieng
+          # ① .kitgen\config.json — ho so anh rieng da bo 24/08/2026: KHONG con khoi imageGen
           $cfgRaw = Get-Content -Raw -LiteralPath (Join-Path $ws '.kitgen\config.json')
           Write-Host "config.json:`n$cfgRaw"
           $cfg = $cfgRaw | ConvertFrom-Json
           if ($cfg.workspaceVersion -ne 1)            { Write-Host '::error::config.json: workspaceVersion != 1'; $fail = 1 }
           if ($cfg.maxJobs -ne 4)                     { Write-Host '::error::config.json: maxJobs != 4'; $fail = 1 }
-          if ($cfg.imageGen.mode -ne 'img-home')      { Write-Host '::error::config.json: imageGen.mode != img-home (-CodexImg)'; $fail = 1 }
-          if ($cfg.imageGen.codexHome -ne '~/.codex-img') { Write-Host '::error::config.json: codexHome != ~/.codex-img'; $fail = 1 }
+          if ($cfg.PSObject.Properties.Name -contains 'imageGen') { Write-Host '::error::config.json: van con khoi imageGen (da bo 24/08/2026)'; $fail = 1 }
 
           # ② config.cmd — moi bien moi truong ma kitgen.cmd va agent dua vao
           $cmdRaw = Get-Content -Raw -LiteralPath (Join-Path $home_ 'config.cmd')
@@ -547,10 +546,10 @@ jobs:
           }
           foreach ($k in 'KITGEN_HOME', 'KITGEN_SOURCE', 'KITGEN_WORKSPACE', 'KITGEN_PORT', 'KITGEN_ORIGIN',
                          'KITGEN_NODE', 'KITGEN_CODEX_BIN', 'KITGEN_PYTHON', 'KITGEN_BASH', 'NODE_PATH',
-                         'KITGEN_CODEX_PROFILE', 'KITGEN_RELEASE_MANIFEST') {
+                         'KITGEN_RELEASE_MANIFEST') {
             if (-not $vars.ContainsKey($k) -or -not $vars[$k]) { Write-Host ("::error::config.cmd thieu/rong {0}" -f $k); $fail = 1 }
           }
-          if ($vars['KITGEN_CODEX_PROFILE'] -ne 'separate') { Write-Host '::error::config.cmd: KITGEN_CODEX_PROFILE != separate'; $fail = 1 }
+          if ($vars.ContainsKey('KITGEN_CODEX_PROFILE')) { Write-Host '::error::config.cmd: van con KITGEN_CODEX_PROFILE (ho so anh rieng da bo)'; $fail = 1 }
           if ($vars['KITGEN_PORT'] -ne '8765')              { Write-Host '::error::config.cmd: KITGEN_PORT != 8765'; $fail = 1 }
           foreach ($k in 'KITGEN_BASH', 'KITGEN_PYTHON', 'KITGEN_NODE') {
             if ($vars[$k] -and -not (Test-Path -LiteralPath $vars[$k])) {

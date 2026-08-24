@@ -35,7 +35,10 @@ export function bashCmd(fileName: string): string {
 
 /** Lệnh cài từng phụ thuộc — hiện ở dòng ✗ của doctor (§3.9 CODEX_MISSING/PY_DEPS_MISSING). */
 export const INSTALL_CMD = {
-  codex: "npm i -g @openai/codex",
+  /* Đường npm đã bỏ 24/08/2026 — bản npm gen hỏng ngoài hiện trường. Chỉ còn installer
+     chính thức của OpenAI; luật ③ của file này cấm `curl … | bash` nên đưa link, không
+     đưa lệnh pipe (cùng kiểu với INSTALL_CMD.node). */
+  codex: "# Cài Codex CLI: chạy lại bộ cài KitGen, hoặc installer chính thức tại https://chatgpt.com/codex",
   python: "python3 -m venv ~/KitGen/.venv && ~/KitGen/.venv/bin/pip install pillow numpy",
   pyDeps: "~/KitGen/.venv/bin/pip install pillow numpy",
   resvg: 'npm install --prefix "$HOME/.kitgen/tools" @resvg/resvg-wasm',

@@ -72,18 +72,18 @@ describe("dòng checklist «codex CLI» nói thật", () => {
     const row = codexRowOf(doctorWith(BINH_THUONG));
     expect(row.value).toBe("0.149.0");
     expect(row.consequence).toContain("Không có codex thì không sinh được ảnh AI");
-    expect(row.cmd).toContain("@openai/codex");
+    expect(row.cmd).toContain("chatgpt.com/codex");
   });
 
   it("không dò được cũng KHÔNG được báo lệch", () => {
     const row = codexRowOf(doctorWith(KHONG_DO_DUOC));
     expect(row.value).toBe("0.149.0");
-    expect(row.cmd).toContain("@openai/codex");
+    expect(row.cmd).toContain("chatgpt.com/codex");
   });
 
   it("máy chưa cài codex: vẫn là ✗ và vẫn chỉ lệnh cài", () => {
     const row = codexRowOf(doctorWith({ ok: false, version: null, shellOk: null }));
     expect(row.ok).toBe(false);
-    expect(row.cmd).toContain("@openai/codex");
+    expect(row.cmd).toContain("chatgpt.com/codex");
   });
 });

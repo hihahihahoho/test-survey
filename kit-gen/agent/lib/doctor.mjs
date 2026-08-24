@@ -154,7 +154,12 @@ async function pythonInfo() {
   return { ok: true, version: v.version, venv: venvProbe.stdout.trim() === "1", deps }
 }
 
-function expandHome(p) { return p.replace(/^~(?=$|\/)/, homedir()) }
+/* join() chứ không replace chuỗi: trên Windows homedir() dùng backslash, ghép "~/x"
+   bằng replace sẽ ra "C:\Users\a/x" — path lai hai kiểu ngăn cách, so sánh/label sai. */
+function expandHome(p) {
+  if (p === "~") return homedir()
+  return p.startsWith("~/") ? join(homedir(), p.slice(2)) : p
+}
 
 /* ── MỘT CODEX, MỘT HOME ──────────────────────────────────────────────────────
    Quyết định của chủ sản phẩm 24/08/2026: BỎ HẲN "hồ sơ ảnh riêng" (~/.codex-img).

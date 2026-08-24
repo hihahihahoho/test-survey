@@ -694,19 +694,18 @@ if ((-not $codexBin) -and $env:KITGEN_SKIP_CODEX_INSTALL) {
     $codexBin = $officialCodex; Write-Ok "cai Codex chinh thuc: $officialCodex"
   }
 }
-if (-not $codexBin) {
-  $localCodex = Join-Path $toolsPrefix 'node_modules\.bin\codex.cmd'
-  if (-not (Test-Path -LiteralPath $localCodex)) {
-    Write-Host '  npm install @openai/codex ...  (duong lui — installer chinh thuc that bai)'
-    # npm in warning/tien do ra stderr nhu com bua ⇒ bat buoc di qua Invoke-ExeSoft.
-    # KHONG -Quiet: npm hong thi phai doc duoc vi sao.
-    if ((Invoke-ExeSoft $npmCmd @('install', '--silent', '--prefix', $toolsPrefix, '@openai/codex')) -ne 0) {
-      Write-Warn 'cai Codex CLI that bai'
-    }
-  }
-  if (Test-Path -LiteralPath $localCodex) { $codexBin = $localCodex; Write-Warn "dung ban npm cua KitGen (co the thieu tinh nang anh moi): $localCodex" }
+# KHONG lui ve npm: ban npm la dung ban da gen hong ngoai hien truong — cai no vao la
+# den xanh ma khong ra anh. Mot duong cai duy nhat = mot duong update duy nhat.
+if (-not $codexBin) { Write-Block 'Codex CLI' 'Chay trong PowerShell:  irm https://chatgpt.com/codex/install.ps1 | iex  (roi `codex login`). Khong co Codex thi KHONG gen duoc anh.' }
+# Don ban codex npm cu trong tools\ (duong cai da bo 24/08/2026): de nguyen thi may
+# update tu ban cu van con HAI ban codex va ban npm khong bao gio duoc nang nua.
+$oldNpmCodex = Join-Path $toolsPrefix 'node_modules\@openai\codex'
+if ((Test-Path -LiteralPath $oldNpmCodex) -and ($codexBin -ne (Join-Path $toolsPrefix 'node_modules\.bin\codex.cmd'))) {
+  Remove-Item -LiteralPath $oldNpmCodex -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath (Join-Path $toolsPrefix 'node_modules\.bin\codex.cmd') -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath (Join-Path $toolsPrefix 'node_modules\.bin\codex') -Force -ErrorAction SilentlyContinue
+  Write-Ok 'da don ban Codex npm cu trong tools\ (chi con mot duong cai chinh thuc)'
 }
-if (-not $codexBin) { Write-Block 'Codex CLI' 'Chay: npm i -g @openai/codex  (roi `codex login`). Khong co Codex thi KHONG gen duoc anh.' }
 
 # ── NANG CODEX LEN BAN MOI (doi xung voi khoi cung ten trong install.sh) ──────
 # Cong cu tao anh KHONG nam trong ban phat hanh KitGen — no la tool/skill di kem goi

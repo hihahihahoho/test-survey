@@ -701,16 +701,23 @@ else
      && [ -x "$OFFICIAL_CODEX" ] && "$OFFICIAL_CODEX" --version >/dev/null 2>&1; then
     CODEX_BIN="$OFFICIAL_CODEX"
     check_ok "cài Codex chính thức: $($CODEX_BIN --version 2>/dev/null | head -n1) · $CODEX_BIN"
-  elif [ -x "$KITGEN_HOME/tools/node_modules/.bin/codex" ] && "$KITGEN_HOME/tools/node_modules/.bin/codex" --version >/dev/null 2>&1; then
-    CODEX_BIN="$KITGEN_HOME/tools/node_modules/.bin/codex"
-    check_warn "installer chính thức thất bại — dùng lại bản npm sẵn có của KitGen (có thể thiếu tính năng ảnh mới)"
   else
-    check_warn "installer chính thức thất bại — lùi về cài npm (có thể thiếu tính năng ảnh mới)"
-    mkdir -p "$KITGEN_HOME/tools"
-    "$KITGEN_HOME/tools/node/bin/npm" install --silent --prefix "$KITGEN_HOME/tools" @openai/codex || \
-      "$(dirname "$NODE")/npm" install --silent --prefix "$KITGEN_HOME/tools" @openai/codex
-    CODEX_BIN="$KITGEN_HOME/tools/node_modules/.bin/codex"
+    # KHÔNG lùi về npm: bản npm là đúng bản đã gen hỏng ngoài hiện trường — cài nó vào
+    # là đèn xanh mà không ra ảnh, tệ hơn dừng lại nói thẳng. Một đường cài duy nhất
+    # cũng là một đường update duy nhất — không maintain hai bản codex song song.
+    echo "Cài đặt KitGen dừng — KHÔNG cài được Codex CLI chính thức." >&2
+    echo "Cách xử: 1) kiểm tra mạng/proxy tới chatgpt.com; 2) tự chạy:" >&2
+    echo "     curl -fsSL https://chatgpt.com/codex/install.sh | sh" >&2
+    echo "   rồi chạy lại installer này." >&2
+    exit 1
   fi
+fi
+# Dọn bản codex npm cũ trong tools/ (đường cài đã bỏ 24/08/2026): để nguyên thì trên
+# máy update từ bản cũ vẫn còn HAI bản codex, và bản npm không bao giờ được nâng nữa.
+if [ -e "$KITGEN_HOME/tools/node_modules/@openai/codex" ] \
+   && [ "$CODEX_BIN" != "$KITGEN_HOME/tools/node_modules/.bin/codex" ]; then
+  rm -rf "$KITGEN_HOME/tools/node_modules/@openai/codex" "$KITGEN_HOME/tools/node_modules/.bin/codex" 2>/dev/null || true
+  check_ok "đã dọn bản Codex npm cũ trong tools/ (chỉ còn một đường cài chính thức)"
 fi
 # Đường vừa dò được có thể là shim ephemeral của shell — quy về đường bền + ĐÚNG TÊN
 # trước khi bất cứ ai ghi nó ra đĩa (xem khối resolve_codex_bin ở đầu file).

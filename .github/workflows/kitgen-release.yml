@@ -313,15 +313,10 @@ jobs:
                    "$H/.kitgen/bin/kitgen"; do
             [ -e "$f" ] || { echo "::error::thieu $f"; rc=1; }
           done
-          # Codex: tu 24/08/2026 installer uu tien ban CHINH THUC cua OpenAI
-          # (~/.local/bin/codex); npm vao tools/ chi con la duong lui khi tai hong.
-          # Chap nhan mot trong hai — mien la co mot binary codex chay duoc.
-          if [ -x "$H/.local/bin/codex" ] || [ -e "$H/.kitgen/tools/node_modules/.bin/codex" ]; then
-            :
-          else
-            echo "::error::khong co codex nao: ca $H/.local/bin/codex (chinh thuc) lan tools/node_modules/.bin/codex (npm fallback) deu vang"; rc=1
-          fi
-          [ "$rc" -eq 0 ] && echo "OK  cai xong ma 0 trong PATH khong co node; Codex CLI cai duoc (chinh thuc hoac npm fallback)"
+          # Codex: tu 24/08/2026 chi con MOT duong cai — installer CHINH THUC cua
+          # OpenAI (~/.local/bin/codex); duong npm da bo han (ban npm gen hong).
+          [ -x "$H/.local/bin/codex" ] || { echo "::error::thieu $H/.local/bin/codex (codex chinh thuc)"; rc=1; }
+          [ "$rc" -eq 0 ] && echo "OK  cai xong ma 0 trong PATH khong co node; Codex CLI chinh thuc da vao ~/.local/bin"
           exit $rc
 
       # Ca hồi quy cho sự cố "agent thoát câm": chạy CHÍNH server.mjs qua symlink

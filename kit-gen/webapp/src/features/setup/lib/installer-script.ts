@@ -82,7 +82,7 @@ if command -v codex >/dev/null 2>&1; then
   if [ -f "$CODEX_HOME_DIR/auth.json" ]; then ok 'đã đăng nhập (chỉ kiểm tra file có tồn tại, KHÔNG đọc nội dung)'
   else warn "chưa đăng nhập — chạy: codex login"; fi
 else
-  bad 'chưa có codex CLI — cài: npm i -g @openai/codex'; MISSING=1
+  bad 'chưa có codex CLI — cài bằng installer chính thức của OpenAI: https://chatgpt.com/codex'; MISSING=1
 fi
 
 step '6/7 · Công cụ tạo ảnh của codex'

@@ -154,6 +154,18 @@ EOF
 cat > "$FAKE_BIN/curl" <<'EOF'
 #!/usr/bin/env bash
 set -eu
+# Hai vai: ① health check agent (mặc định); ② "mạng" cho installer codex chính thức —
+# in ra MỘT SCRIPT mà install.sh sẽ pipe vào sh, script đó đặt codex giả vào đúng chỗ
+# installer thật của OpenAI đặt (~/.local/bin/codex). Không byte nào ra mạng thật.
+for a in "$@"; do
+  case "$a" in
+    *chatgpt.com/codex/install.sh*)
+      printf '%s\n' 'mkdir -p "$HOME/.local/bin"' \
+        'printf '\''#!/usr/bin/env bash\nexit 0\n'\'' > "$HOME/.local/bin/codex"' \
+        'chmod +x "$HOME/.local/bin/codex"'
+      exit 0 ;;
+  esac
+done
 [ -f "$KITGEN_TEST_STATE/registered" ] || exit 7
 printf '{"ok":true,"app":"kitgen-agent","runtimeVersion":"%s","uptimeMs":4440000}\n' \
   "$(cat "$KITGEN_TEST_STATE/reported-version")"
@@ -253,9 +265,9 @@ grep -q 'ĐÃ CÀI XONG nhưng' "$OUT3" && {
   exit 1
 }
 
-# ── ④ P0-A1 hồi quy: npm thật là `#!/usr/bin/env node`, PATH không có Node hệ thống ──
-# Xoá Codex local để bắt buộc đi qua npm. Mã cũ chết 127 ở đây; mã mới phải qua
-# health check Codex nhờ PATH private Node được export trước npm.
+# ── ④ Máy không có codex nào ⇒ đi đường installer CHÍNH THỨC (fake curl in ra script
+# đặt codex giả vào ~/.local/bin — xem fake curl ở trên). Đường npm đã bỏ 24/08/2026;
+# ca này giữ lại để khẳng định: thiếu codex thì installer TỰ CÀI được và qua health gate.
 rm -f "$KITGEN_HOME/tools/node_modules/.bin/codex"
 OUT4="$TEST_ROOT/install-codex-private-node.out"
 run_install "$OUT4"
