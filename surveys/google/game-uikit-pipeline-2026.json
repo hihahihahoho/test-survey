@@ -501,8 +501,7 @@
                 "value": "Empty state (chưa có quà, chưa có ai trên bảng xếp hạng)"
               },
               {
-                "value": "Không bị thiếu, luôn đủ từ đầu",
-                "_exclusive": true
+                "value": "Không bị thiếu, luôn đủ từ đầu"
               }
             ],
             "shuffle": false
@@ -985,8 +984,7 @@
                 "value": "Tỉ lệ trúng & cơ chế quà"
               },
               {
-                "value": "Không cần PDF hay slide",
-                "_exclusive": true
+                "value": "Không cần PDF hay slide"
               }
             ],
             "shuffle": false
@@ -1289,8 +1287,7 @@
                 "value": "Kiểm tra pháp lý & điều khoản"
               },
               {
-                "value": "Không có phần nào — tự động được hết thì càng tốt",
-                "_exclusive": true
+                "value": "Không có phần nào — tự động được hết thì càng tốt"
               }
             ],
             "shuffle": false
@@ -1344,8 +1341,7 @@
                 "value": "Asset nặng, game tải chậm"
               },
               {
-                "value": "Không vướng gì đáng kể",
-                "_exclusive": true
+                "value": "Không vướng gì đáng kể"
               }
             ],
             "shuffle": false

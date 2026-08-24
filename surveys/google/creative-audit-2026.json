@@ -800,8 +800,7 @@
                 "value": "Freepik AI"
               },
               {
-                "value": "Không dùng AI tạo ảnh",
-                "_exclusive": true
+                "value": "Không dùng AI tạo ảnh"
               },
               {
                 "isOther": true
@@ -934,8 +933,7 @@
                 "value": "Rive state machine"
               },
               {
-                "value": "Không dùng cái nào",
-                "_exclusive": true
+                "value": "Không dùng cái nào"
               }
             ],
             "shuffle": false
@@ -1093,8 +1091,7 @@
                 "value": "Canva"
               },
               {
-                "value": "Không làm phần này",
-                "_exclusive": true
+                "value": "Không làm phần này"
               },
               {
                 "isOther": true
@@ -1143,8 +1140,7 @@
                 "value": "Magnific / Krea upscale"
               },
               {
-                "value": "Không làm phần này",
-                "_exclusive": true
+                "value": "Không làm phần này"
               },
               {
                 "isOther": true
@@ -1276,8 +1272,7 @@
                 "value": "Spec để dev tự code (CSS, Compose, SwiftUI)"
               },
               {
-                "value": "Không làm phần này",
-                "_exclusive": true
+                "value": "Không làm phần này"
               },
               {
                 "isOther": true
@@ -1323,8 +1318,7 @@
                 "value": "Wan / Hunyuan (chạy local)"
               },
               {
-                "value": "Không dùng",
-                "_exclusive": true
+                "value": "Không dùng"
               },
               {
                 "isOther": true
@@ -1450,8 +1444,7 @@
                 "value": "Luma / Genie"
               },
               {
-                "value": "Không dùng",
-                "_exclusive": true
+                "value": "Không dùng"
               },
               {
                 "isOther": true
@@ -1604,8 +1597,7 @@
                 "value": "Policy không cho dùng AI tool bên ngoài"
               },
               {
-                "value": "Không có hạn chế đáng kể",
-                "_exclusive": true
+                "value": "Không có hạn chế đáng kể"
               }
             ],
             "shuffle": false
@@ -1747,12 +1739,10 @@
                 "value": "Thêm grain, shadow, ánh sáng"
               },
               {
-                "value": "Gần như không phải sửa",
-                "_exclusive": true
+                "value": "Gần như không phải sửa"
               },
               {
-                "value": "Không dùng AI",
-                "_exclusive": true
+                "value": "Không dùng AI"
               }
             ],
             "shuffle": false
@@ -1832,8 +1822,7 @@
                 "value": "Quy trình công ty chưa cho phép"
               },
               {
-                "value": "Không có rào cản đáng kể",
-                "_exclusive": true
+                "value": "Không có rào cản đáng kể"
               }
             ],
             "shuffle": false
@@ -2134,8 +2123,7 @@
                 "value": "Phải tự dựng PDF / slide trình bày mỗi lần bàn giao"
               },
               {
-                "value": "Không gặp vấn đề đáng kể",
-                "_exclusive": true
+                "value": "Không gặp vấn đề đáng kể"
               }
             ],
             "shuffle": false

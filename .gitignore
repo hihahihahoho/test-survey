@@ -1,11 +1,7 @@
-# Thư mục deploy — Cloudflare Pages tự sinh lại bằng `npm run build`
-dist/
-
-# surveys/google/* là bản dẫn xuất, sinh lại được bằng `node build.mjs --google`
-surveys/google/
-
 node_modules/
 .DS_Store
 *.log
 logs/
+dist/
+__pycache__/
 kit-gen/figma-export/.captures/
