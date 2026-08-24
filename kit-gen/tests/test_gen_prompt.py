@@ -83,15 +83,38 @@ class StripFinishTest(unittest.TestCase):
         for w in ("capsule", "button", "wide pill shape", "rim", "blank face"):
             self.assertIn(w, got, f"mất hợp đồng hình học: {w}")
 
-    def test_giu_vai_mau_trong_tu_ghep(self):
-        """'candy-red' → 'red': bỏ kết cấu, GIỮ vai màu để ô còn phân biệt được."""
-        self.assertIn("red", self.strip("glossy 3D candy-red capsule button"))
+    def test_tu_ghep_rung_CA_HAI_nua(self):
+        """'candy-red' rụng trọn: candy là bề mặt, red là màu — cả hai đều là style.
 
-    def test_khong_dung_vao_mau_phan_biet_o(self):
-        """45/46/47-rank-badge chỉ khác nhau ở GOLD/SILVER/BRONZE — xoá là mất ô."""
+        Bản trước giữ lại 'red' với lý lẽ "màu là vai trò". Đo được nửa sai của lý
+        lẽ đó: từ màu literal đứng SÁT Ô, đúng vị trí vừa chứng minh là thắng cả
+        khối ưu tiên lẫn khối Art style ⇒ `01-btn-pill-red` ra ĐỎ bất kể bảng màu
+        thương hiệu là gì. Không thể vừa để mệnh lệnh màu cạnh ô vừa mong bảng màu
+        thắng. Spec của element nay chỉ nói NÓ LÀ CÁI GÌ."""
+        got = self.strip("glossy 3D candy-red capsule button")
+        self.assertNotIn("candy", got.lower())
+        self.assertNotIn("red", got.lower())
+        self.assertIn("capsule button", got, "mất luôn danh tính element là hỏng khác")
+
+    def test_thu_hang_SONG_SOT_duoi_dang_VAI_TRO(self):
+        """Nửa ĐÚNG của lý lẽ cũ: 45/46/47-rank-badge chỉ khác nhau ở GOLD/SILVER/
+        BRONZE. Xoá trần là ba huy chương thành y hệt nhau — nên từ màu mang THỨ
+        HẠNG không biến mất, nó được DỊCH sang vai trò rồi phát thành tag riêng."""
+        roles = {}
         for w in ("GOLD", "SILVER", "BRONZE"):
-            spec = f"the SAME glossy 3D medal badge in {w} for this place"
-            self.assertIn(w, self.strip(spec))
+            spec, cut = gen["strip_finish"](f"the SAME glossy 3D medal badge in {w} for this place")
+            self.assertNotIn(w.lower(), spec.lower(), "màu literal vẫn phải biến mất")
+            roles[w] = gen["colour_roles"](cut)
+            self.assertTrue(roles[w], f"{w} mất cả vai trò lẫn màu ⇒ ba ô thành một")
+        self.assertEqual(len({tuple(v) for v in roles.values()}), 3,
+                         f"ba hạng phải ra ba vai trò KHÁC nhau, được: {roles}")
+
+    def test_gioi_tu_mo_coi_bi_don_theo(self):
+        """"badge in GOLD for this place" bỏ mỗi GOLD thì còn "badge in for this
+        place" — câu cụt, và câu cụt là thứ model tự bịa nghĩa để lấp."""
+        got = self.strip("the SAME medal badge in GOLD for this place")
+        self.assertNotIn(" in for ", got)
+        self.assertIn("medal badge", got)
 
     def test_khong_lat_nguoc_menh_lenh_phu_dinh(self):
         """'no gloss', 'NO metal or gold rim' — xoá danh từ sau `no` là lật nghĩa."""
@@ -159,7 +182,9 @@ class StripFinishTest(unittest.TestCase):
         named = [w.lower() for w in gen["preset_words"](spec)]
         for w in ("glossy", "3d", "candy", "bevel"):
             self.assertNotIn(w, named)
-        self.assertIn("red", named, "chữ màu vẫn phải được hạ cấp bằng cách nêu tên")
+        # Từ MÀU nay cũng đã bị xoá ở bước ① ⇒ không còn gì để nêu tên. Danh sách
+        # rỗng chính là đích: câu hạ cấp chỉ tồn tại cho chữ LỌT LƯỚI từ điển.
+        self.assertNotIn("red", named, "chữ màu đã xoá mà câu hạ cấp còn đọc to là mời nó quay lại")
 
 
 class PresetWordCapTest(unittest.TestCase):
@@ -350,3 +375,67 @@ class TransparentBackgroundTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MauThuongHieuTest(unittest.TestCase):
+    """MÀU NHẬN DIỆN THƯƠNG HIỆU PHẢI ĐI CÙNG ẢNH REF, KHÔNG LOẠI TRỪ NHAU.
+
+    ╔══ BỆNH ĐÃ ĐO ═════════════════════════════════════════════════════════════╗
+    ║ `kitset-to-contract.ts` đặt `mode = brandRefs.length > 0 ? "image"         ║
+    ║ : "colors"`, còn gen.sh chỉ in dòng palette khi `mode == "colors"` và chỉ  ║
+    ║ đính ảnh brand khi `mode == "image"`. Hệ quả: **tải logo lên là mất trắng  ║
+    ║ dòng màu thương hiệu** — ảnh được đính, nhưng câu "dùng #xxxxxx làm màu    ║
+    ║ chủ đạo" biến mất khỏi prompt. Đúng triệu chứng chủ sản phẩm báo.          ║
+    ╚═══════════════════════════════════════════════════════════════════════════╝
+    Hai thứ trả lời hai câu khác nhau (MÀU NÀO / VẼ THEO LỐI NÀO) nên phải cùng có
+    mặt, và phải có một khối phân xử nói ai bảo ai.
+    """
+
+    CFG = {
+        "styles": [{
+            "id": "demo", "bg": "magenta", "style": "flat ink",
+            "brand": {"mode": "image", "primary": "#0A5C36", "secondary": "#F2C230",
+                      "refs": ["refs/logo.png"]},
+        }],
+        "sheets": [{
+            "id": "pose-demo", "grid": {"cols": 1, "rows": 1},
+            "components": [{"file": "01-thing", "spec": "glossy 3D candy-red capsule button",
+                            "skel": {"shape": "rrect", "w": 0.8, "h": 0.6}}],
+        }],
+    }
+
+    def test_co_logo_van_PHAI_con_dong_bang_mau(self):
+        txt = render_prompt_text(self.CFG)
+        self.assertIn("#0A5C36", txt, "tải logo lên là mất dòng màu thương hiệu")
+        self.assertIn("#F2C230", txt)
+
+    def test_va_logo_van_duoc_dinh_kem(self):
+        self.assertIn("refs/logo.png", render_prompt_files(self.CFG))
+
+    def test_co_khoi_phan_xu_mau_va_no_dat_bang_mau_len_dau(self):
+        txt = render_prompt_text(self.CFG)
+        self.assertIn("COLOUR AUTHORITY", txt)
+        i = txt.index("COLOUR AUTHORITY")
+        self.assertIn("BRAND PALETTE above is the source of every colour", txt[i:])
+        self.assertIn("They do NOT decide hue", txt[i:],
+                      "ảnh ref phải quyết lối vẽ, không quyết màu")
+
+    def test_dong_o_khong_con_mot_chu_mau_nao(self):
+        """Đây là điều chủ sản phẩm yêu cầu: spec của element chỉ tả ĐẶC TÍNH."""
+        txt = render_prompt_text(self.CFG)
+        # Lấy dòng ô THẬT: nó là dòng ngay sau tiêu đề hàng, không phải mọi "1) "
+        # trong prompt (khối neo hình học cũng đánh số kiểu đó).
+        lines = txt.splitlines()
+        head = next(i for i, l in enumerate(lines) if l.startswith("Row 1, left to right"))
+        dong_o = lines[head + 1]
+        for w in ("red", "candy", "glossy", "3D"):
+            self.assertNotIn(w.lower(), dong_o.lower(), f"dòng ô còn chữ style: {w}")
+        self.assertIn("capsule button", dong_o, "mất luôn danh tính element là hỏng khác")
+
+    def test_khong_co_brand_thi_khong_bia_ra_dong_mau(self):
+        cfg = json.loads(json.dumps(self.CFG))
+        cfg["styles"][0]["brand"] = {"refs": ["refs/logo.png"]}
+        txt = render_prompt_text(cfg)
+        self.assertNotIn("Brand palette:", txt)
+        i = txt.index("COLOUR AUTHORITY")
+        self.assertIn("decide both the rendering AND the palette", txt[i:])

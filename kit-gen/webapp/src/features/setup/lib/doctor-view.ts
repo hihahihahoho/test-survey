@@ -13,7 +13,7 @@
  */
 import { imageGenReasonText } from "@/lib/api";
 import type { Doctor, ImageGenMode } from "@/lib/types/api";
-import { INSTALL_CMD } from "./commands";
+import { INSTALL_CMD, codexPathFixCmd } from "./commands";
 
 /** Nhãn rút gọn mới được hiện. Path tuyệt đối ⇒ bỏ (arch §4.3-5). */
 export function safeHomeLabel(label: unknown): string | null {
@@ -91,6 +91,42 @@ function ver(v: unknown): string {
 }
 
 /**
+ * DÒNG "codex CLI" — VÀ VÌ SAO NÓ KHÔNG CÒN CHỈ CÓ ✓/✗.
+ *
+ * ╔══ SỰ CỐ CÓ THẬT, ĐÃ PHẢI LÊN TẬN MÁY KHÁCH ═══════════════════════════════╗
+ * ║ Dòng này báo ✓ "đã cài codex CLI". Khách mở Terminal gõ `codex` ⇒          ║
+ * ║ **command not found**. Không mâu thuẫn: `ok` đo AGENT chạy được (nó kế     ║
+ * ║ thừa PATH của phiên shell đã khởi động nó), còn khách gõ trong một shell   ║
+ * ║ KHÁC. Standalone installer để binary ở `~/.local/bin` — thư mục không nằm  ║
+ * ║ trong PATH mặc định của macOS — nên hai câu đó tách nhau rất dễ.           ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * `ok` GIỮ NGUYÊN nghĩa cũ (agent chạy được ⇒ sinh ảnh được ⇒ không chặn wizard).
+ * Cái thêm vào là NÓI THẬT phần còn lại: `value` ghi rõ Terminal chưa thấy, và
+ * `cmd` đổi từ "cài lại codex" — vô ích, vì đã cài rồi — thành đúng dòng PATH cần
+ * thêm. `shellOk == null` (Windows, shell treo) thì không đổi một chữ nào: im lặng
+ * còn hơn báo Terminal hỏng dựa trên một phép dò thất bại.
+ */
+function codexRow(doctor: Doctor | null | undefined): CheckRow {
+  const codex = doctor?.codex;
+  const version = ver(codex?.version);
+  const mismatch = codex?.ok === true && codex.shellOk === false;
+  const dir = safeHomeLabel(codex?.shellDirLabel);
+  return {
+    key: "codex",
+    ok: codex?.ok === true,
+    known: codex !== undefined,
+    label: "codex CLI",
+    value: mismatch ? [version, "Terminal của bạn chưa thấy"].filter(Boolean).join(" · ") : version,
+    consequence: mismatch
+      ? "App sinh ảnh được, nhưng lệnh `codex` bạn gõ trong Terminal sẽ báo command not found — "
+        + "thư mục chứa nó chưa nằm trong PATH."
+      : "Không có codex thì không sinh được ảnh AI (phần còn lại vẫn dùng được).",
+    cmd: mismatch && dir ? codexPathFixCmd(dir) : INSTALL_CMD.codex,
+  };
+}
+
+/**
  * Checklist từng dòng ✓/✗ (§3-S0 bảng trạng thái `CODEX_MISSING` / `PY_DEPS_MISSING`).
  * Mỗi dòng thiếu đều có LỆNH SỬA — không có dòng nào chỉ báo lỗi rồi bỏ đó.
  */
@@ -100,15 +136,7 @@ export function checkRows(doctor: Doctor | null | undefined, workspaceFree?: str
   const ws = doctor?.workspace;
 
   return [
-    {
-      key: "codex",
-      ok: doctor?.codex?.ok === true,
-      known: doctor?.codex !== undefined,
-      label: "codex CLI",
-      value: ver(doctor?.codex?.version),
-      consequence: "Không có codex thì không sinh được ảnh AI (phần còn lại vẫn dùng được).",
-      cmd: INSTALL_CMD.codex,
-    },
+    codexRow(doctor),
     {
       key: "node",
       ok: doctor?.node?.ok === true,

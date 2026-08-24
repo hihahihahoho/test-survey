@@ -109,7 +109,20 @@ export const doctorSchema = z.looseObject({
    * cho khoá lạ đi qua, và hàng doctor tự hiện "chưa rõ" khi `renderer` vắng mặt.
    */
   renderer: z.looseObject({ ok: z.boolean(), engine: z.string().optional() }).optional(),
-  codex: z.looseObject({ ok: z.boolean(), version: z.string().nullish() }).optional(),
+  codex: z.looseObject({
+    ok: z.boolean(),
+    version: z.string().nullish(),
+    /** nhãn RÚT GỌN (`~/…`) của binary agent thật sự chạy — không bao giờ path tuyệt đối. */
+    binLabel: z.string().nullish(),
+    /**
+     * TERMINAL CỦA NGƯỜI DÙNG có gõ được `codex` không — KHÁC `ok` (agent chạy được).
+     * `null` = không dò được (Windows / shell treo); im lặng chứ không báo hỏng.
+     * Xem `agent/lib/doctor.mjs:codexWhere` để biết vì sao hai câu này phải tách.
+     */
+    shellOk: z.boolean().nullish(),
+    /** thư mục cần thêm vào PATH, chỉ có khi `shellOk === false`. */
+    shellDirLabel: z.string().nullish(),
+  }).optional(),
   imageGen: z.looseObject({
     mode: imageGenModeSchema.catch("unknown"),
     /**

@@ -216,9 +216,52 @@ FINISH_WORDS = {
 }
 assert FINISH_WORDS <= MATERIAL_WORDS, "FINISH_WORDS phải là tập con của MATERIAL_WORDS"
 
+# ── TỪ MÀU: CŨNG XOÁ HẲN — SPEC CỦA Ô CHỈ CÒN NÓI *NÓ LÀ CÁI GÌ* ─────────────
+# Bản trước CỐ Ý GIỮ mọi từ màu, lý lẽ là "màu là VAI TRÒ và là thứ phân biệt ô
+# với ô". Lý lẽ đó đúng một nửa, và nửa sai đã đo được: từ màu literal đứng SÁT Ô
+# — đúng vị trí mà chính khối trên vừa chứng minh là thắng cả khối ưu tiên lẫn
+# khối Art style — nên `01-btn-pill-red` ra ĐỎ bất kể bảng màu thương hiệu là gì.
+# Chủ sản phẩm báo đúng triệu chứng đó: "màu nhận diện thương hiệu không được
+# respect". Không thể vừa để một mệnh lệnh màu cạnh ô vừa mong bảng màu thắng.
+#
+# Nên: spec của element chỉ còn tả NÓ LÀ CÁI GÌ và Ở TRẠNG THÁI NÀO (nút, popup,
+# checkbox bật/tắt, thẻ hạng). Màu do bảng màu thương hiệu + ảnh ref quyết định.
+#
+# NỬA ĐÚNG CỦA LÝ LẼ CŨ VẪN PHẢI GIỮ, và đây là phần dễ làm hỏng: 45/46/47-rank-
+# badge chỉ khác nhau ở GOLD/SILVER/BRONZE, `44-btn-pill-disabled` dựa vào
+# 'desaturated grey' để ra trạng thái mờ. Xoá trần là ba cái huy chương thành y
+# hệt nhau. Nên từ màu nào MANG THỨ HẠNG/TRẠNG THÁI thì không biến mất — nó được
+# DỊCH sang vai trò (`COLOUR_ROLE`) rồi phát lại thành một tag riêng, tức giữ
+# nguyên sự phân biệt mà không ra lệnh một màu cụ thể nào.
+COLOUR_ROLE = {
+    "gold": "highest tier / rank 1", "golden": "highest tier / rank 1",
+    "silver": "second tier / rank 2",
+    "bronze": "third tier / rank 3", "copper": "third tier / rank 3",
+    "desaturated": "inactive / disabled", "muted": "inactive / disabled",
+    "grey": "neutral", "gray": "neutral", "charcoal": "neutral",
+}
+COLOUR_WORDS = {
+    "red", "orange", "coral", "gold", "golden", "silver", "bronze", "copper",
+    "blue", "green", "yellow", "purple", "violet", "pink", "white", "black",
+    "grey", "gray", "cream", "ivory", "teal", "cyan", "magenta", "brown", "beige",
+    "amber", "crimson", "scarlet", "turquoise", "lime", "navy", "maroon", "peach",
+    "mint", "lavender", "burgundy", "olive", "tan", "charcoal",
+    "desaturated", "muted", "vivid", "warm", "cool", "bright", "dark", "pale",
+    "neon", "pastel",
+}
+assert COLOUR_WORDS <= MATERIAL_WORDS, "COLOUR_WORDS phải là tập con của MATERIAL_WORDS"
+# CỐ Ý KHÔNG NẰM TRONG ĐÂY: glass/glassy/frosted/translucent/gel (slice.py có
+# nhánh matte kính, xoá chữ là hỏng khâu CẮT chứ không chỉ khâu vẽ) và
+# metal/wood/stone/paper (chất liệu định danh món đồ, không phải phong cách).
+STRIP_WORDS = FINISH_WORDS | COLOUR_WORDS
+
 # Từ phủ định đứng ngay trước: "no gloss", "NO metal or gold rim" — xoá danh từ
 # sau nó là lật ngược nghĩa câu (từ "đừng bóng" thành "bóng"). Giữ nguyên.
 _NEGATORS = {"no", "not", "never", "without", "non"}
+
+# Giới từ chỉ dẫn vào MỘT TỪ MÀU ("badge in GOLD", "rim of silver"). Bỏ từ màu mà
+# để giới từ ở lại là đẻ ra câu cụt. KHÔNG có "with"/"and": chúng nối mệnh đề thật.
+_COLOUR_PREPS = {"in", "of"}
 
 # Danh từ chỉ MẶT PHẲNG TRỪU TƯỢNG của element: một mình chúng không tả gì cả,
 # chúng chỉ tồn tại để đỡ cho tính từ vật liệu đứng trước ("gradient face",
@@ -233,26 +276,39 @@ _FILLER_NOUNS = {"surface", "face", "finish", "texture", "edge", "highlight",
 
 
 def _strip_clause(clause):
-    """Xoá FINISH_WORDS trong MỘT mệnh đề. Trả (mệnh đề mới, list đã bỏ).
+    """Xoá STRIP_WORDS (bề mặt + màu) trong MỘT mệnh đề. Trả (mệnh đề mới, đã bỏ).
 
-    Token có gạch nối chỉ bỏ ĐÚNG phần thuộc FINISH_WORDS: 'candy-red' → 'red'
-    (giữ vai màu), 'orange-to-coral' không đụng tới.
+    Token có gạch nối chỉ bỏ ĐÚNG phần thuộc STRIP_WORDS: 'candy-red' rụng cả hai
+    nửa (candy = bề mặt, red = màu), còn 'pill-shaped' không đụng tới.
+
+    MỆNH ĐỀ PHỦ ĐỊNH THÌ MIỄN TRỪ TRỌN VẸN, không chỉ token ngay sau từ phủ định.
+    Bản trước chỉ nhìn ĐÚNG MỘT token phía trước, nên "NO metal or gold rim" vẫn
+    mất chữ `gold` (token trước nó là "or", không phải "no") — tức lệnh cấm bị gặm
+    mất một nửa vế. Nay hễ mệnh đề có từ phủ định thì phần còn lại giữ nguyên: một
+    mệnh đề cấm là HỢP ĐỒNG, không phải preset để hạ cấp.
     """
-    out, dropped, prev = [], [], ""
+    out, dropped, prev, neg = [], [], "", False
     for tok in re.findall(r"\s+|[^\s]+", clause):
         if tok.isspace():
             out.append(tok)
             continue
         m = re.match(r"^([^A-Za-z0-9]*)([A-Za-z0-9][A-Za-z0-9-]*)([^A-Za-z0-9]*)$", tok)
-        if not m or prev in _NEGATORS:
+        if not m or prev in _NEGATORS or neg:
             out.append(tok)
             prev = re.sub(r"[^a-z]", "", tok.lower())
+            if prev in _NEGATORS:
+                neg = True
             continue
         pre, word, post = m.groups()
+        if word.lower() in _NEGATORS:
+            neg = True
+            out.append(tok)
+            prev = word.lower()
+            continue
         parts = word.split("-")
-        keep = [p for p in parts if p.lower() not in FINISH_WORDS]
+        keep = [p for p in parts if p.lower() not in STRIP_WORDS]
         if len(keep) != len(parts):
-            dropped += [p for p in parts if p.lower() in FINISH_WORDS]
+            dropped += [p for p in parts if p.lower() in STRIP_WORDS]
             if keep:
                 out.append(pre + "-".join(keep) + post)
             elif post.strip():
@@ -260,14 +316,38 @@ def _strip_clause(clause):
             else:
                 if out and out[-1].isspace():
                     out.pop()                   # nuốt luôn khoảng trắng đứng trước
+                # GIỚI TỪ MỒ CÔI: "medal badge in GOLD for this place" mà chỉ bỏ
+                # chữ GOLD thì còn "…badge in for this place" — câu hỏng, và câu
+                # hỏng là thứ model tự bịa nghĩa để lấp. Giới từ đó tồn tại CHỈ để
+                # dẫn vào từ màu vừa bỏ, nên bỏ theo.
+                if out and re.sub(r"[^a-z]", "", (out[-1] if out else "").lower()) in _COLOUR_PREPS:
+                    out.pop()
+                    if out and out[-1].isspace():
+                        out.pop()
         else:
             out.append(tok)
         prev = word.lower()
     return re.sub(r"\s{2,}", " ", "".join(out)).strip(), dropped
 
 
+def colour_roles(dropped):
+    """Vai trò rút ra từ những TỪ MÀU vừa bị xoá — thứ duy nhất của màu được giữ.
+
+    Ba huy chương chỉ khác nhau ở gold/silver/bronze; xoá trần là chúng thành y
+    hệt nhau. `COLOUR_ROLE` dịch đúng những từ MANG THỨ HẠNG/TRẠNG THÁI sang lời
+    nói về vai trò, nên sự phân biệt còn nguyên mà không ô nào bị ra lệnh một màu
+    cụ thể. Từ màu thuần tuý (red, blue…) không có trong bảng ⇒ mất hẳn, đúng ý.
+    """
+    seen = []
+    for w in dropped:
+        role = COLOUR_ROLE.get(w.lower())
+        if role and role not in seen:
+            seen.append(role)
+    return seen
+
+
 def strip_finish(spec):
-    """Bỏ hẳn từ tả bề mặt/độ nổi khối khỏi spec. Trả (spec mới, list đã bỏ).
+    """Bỏ hẳn từ tả bề mặt/độ nổi khối VÀ từ màu khỏi spec. Trả (spec mới, đã bỏ).
 
     Cắt theo DẤU PHẨY để mệnh đề nào rỗng nghĩa sau khi xoá thì bỏ trọn — spec
     của thư viện element viết theo lối liệt kê mệnh đề, nên đây là ranh giới an
@@ -498,14 +578,23 @@ for s in cfg["styles"]:
                 "reference image mentions or shows a DIFFERENT mascot/character, IGNORE that one",
                 "completely — the reference photo is the ONLY source of the character's identity.", ""]
         # Branding: mode "colors" → dòng palette; mode "image" → ảnh brand đính kèm
-        bmode = s.get("brand", {}).get("mode", "colors")
-        if s.get("brand") and bmode == "colors" and s["brand"].get("primary"):
-            b = s["brand"]
+        # ⚠️ BẢNG MÀU VÀ ẢNH BRAND KHÔNG CÒN LOẠI TRỪ NHAU.
+        # Bản cũ: dòng palette chỉ in khi `bmode == "colors"`, còn ảnh brand chỉ
+        # đính khi `bmode == "image"`. Mà `kitset-to-contract.ts` đặt
+        # `mode = brandRefs.length > 0 ? "image" : "colors"` ⇒ **tải logo lên là
+        # MẤT TRẮNG dòng màu thương hiệu**: ảnh được đính, nhưng câu "dùng
+        # #xxxxxx làm màu chủ đạo" biến mất khỏi prompt. Đúng triệu chứng chủ sản
+        # phẩm báo: "màu nhận diện thương hiệu và logo không được respect".
+        # Hai thứ đó không mâu thuẫn — chúng trả lời hai câu hỏi khác nhau (màu
+        # nào / vẽ theo lối nào), nên nay CÓ GÌ DÙNG NẤY, và thứ hạng nói rõ ở
+        # khối "COLOUR AUTHORITY" bên dưới.
+        b = s.get("brand") or {}
+        if b.get("primary"):
             bl = f"Brand palette: primary {b.get('primary')}, secondary {b.get('secondary')}"
             if b.get("gradient"):
                 bl += f", gradient {b['gradient']}"
             lines += [bl + " — use these as the dominant UI colors.", ""]
-        use_brand_refs = bmode == "image" and s.get("brand", {}).get("refs")
+        use_brand_refs = bool(b.get("refs"))
         # ⚠️ ẢNH PHONG CÁCH ĐÃ TẢI LÊN THÌ PHẢI ĐƯỢC DÙNG.
         # Bản cũ: `use_inspo = styleMode == "inspo" and inspo`. Nhưng wizard hiện tại
         # KHÔNG còn chỗ nào đặt `styleMode = "inspo"` — `StyleStep.tsx:76` chỉ đặt
@@ -569,6 +658,38 @@ for s in cfg["styles"]:
                 "backgrounds and characters of this project, never from a generic default UI kit.",
                 "",
             ]
+            # ── AI QUYẾT MÀU: một trọng tài, nói ngay cạnh danh sách ô ──────────
+            # Trước bản này có tới BA nguồn màu mà không ai phân xử: dòng bảng màu
+            # thương hiệu (ở xa), ảnh ref (ở xa), và TỪ MÀU LITERAL nằm ngay trong
+            # spec của ô (sát nhất ⇒ luôn thắng). Nay từ màu đã bị xoá khỏi spec
+            # (COLOUR_WORDS) nên chỗ này chỉ còn phải nói ai bảo ai, và nói ở đúng
+            # vị trí mà mọi phép đo đều cho thấy là vị trí có trọng lượng nhất.
+            authority = ["COLOUR AUTHORITY — read this before choosing any colour:"]
+            if b.get("primary"):
+                authority += [
+                    "1. The BRAND PALETTE above is the source of every colour in this sheet.",
+                    "   Its primary is the dominant colour of primary actions and key surfaces;",
+                    "   its secondary carries secondary actions; neutrals are derived from them.",
+                ]
+                if use_brand_refs or use_inspo:
+                    authority += [
+                        "2. The attached reference image(s) decide the RENDERING — technique,",
+                        "   material, texture, lighting, amount of depth. They do NOT decide hue:",
+                        "   re-tint whatever they show into the brand palette above.",
+                    ]
+            elif use_brand_refs or use_inspo:
+                authority += [
+                    "1. The attached reference image(s) decide both the rendering AND the palette.",
+                ]
+            authority += [
+                "The numbered specs below name NO colour at all — that is deliberate, not an",
+                "omission. Where two cells must differ (rank 1 / 2 / 3, on / off, active /",
+                "locked / disabled), a [COLOUR ROLE ONLY: …] tag says which role each one holds;",
+                "express that difference with shades of the palette above, keeping the order",
+                "readable, and never by inventing a colour the palette does not contain.",
+                "",
+            ]
+            lines += authority
         for r in range(rows):
             lines.append(f"Row {r + 1}, left to right:"
                          if not style_override else
@@ -579,8 +700,10 @@ for s in cfg["styles"]:
                 # ① XOÁ TỪ TẢ BỀ MẶT/ĐỘ NỔI KHỐI TRƯỚC ĐÃ (xem FINISH_WORDS).
                 # Chỉ khi có art style — không có style thì preset thư viện CHÍNH
                 # LÀ diện mạo mong muốn, xoá đi là làm nghèo spec.
+                roles = []
                 if style_override:
                     spec, _cut = strip_finish(spec)
+                    roles = colour_roles(_cut)
                 # ⚠️ QUÉT TỪ VẬT LIỆU TRÊN SPEC CỦA THƯ VIỆN (đã xoá ở bước ①),
                 # TRƯỚC khi nối câu hợp đồng của engine. Bản cũ quét SAU nên ô
                 # glow bị chính engine tự bắn vào chân: câu "SPECIAL CELL
@@ -643,11 +766,21 @@ for s in cfg["styles"]:
                 # không bao giờ bị hạ cấp. (`preset` đã tính ở trên, trên spec ĐÃ
                 # xoá từ bề mặt — nên câu này chỉ còn nhắc từ MÀU/SẮC ĐỘ, thứ buộc
                 # phải ở lại vì mang vai trò và trạng thái.)
+                # Sau bước ① thì spec CHỈ CÒN nói ô này là cái gì và ở trạng thái
+                # nào — không còn chữ màu/bề mặt nào để mà hạ cấp. `preset` vì thế
+                # thường rỗng; nó ở lại cho những chữ lọt lưới từ điển (và để câu
+                # cảnh báo cap vẫn có tác dụng).
                 if preset:
                     spec += (f" — [SHAPE, PARTS AND STATE ONLY. The words "
                              f"{', '.join(preset)} are the element library's DEFAULT preset:"
                              f" do NOT paint them. Render this element in the ART STYLE's own"
                              f" materials, textures and palette, keeping only its colour ROLE.]")
+                # VAI TRÒ MÀU thay cho MỆNH LỆNH MÀU. Chỉ phát khi ô đó thật sự
+                # mất một từ màu mang thứ hạng/trạng thái — ô thường không có tag
+                # này, và đó là chủ ý: im lặng ⇒ màu hoàn toàn do bảng màu quyết.
+                if roles:
+                    spec += (f" — [COLOUR ROLE ONLY: {'; '.join(roles)}. Take the actual colour"
+                             f" from the brand palette / reference; this cell names no colour.]")
                 lines.append(f"{i + 1}) {spec}")
             lines.append("")
         if use_inspo:

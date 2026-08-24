@@ -54,3 +54,42 @@ export const INSTALL_CMD = {
  */
 export const IMG_HOME_LOGIN_CMD = "codex login";
 export const IMG_HOME_CHECK_CMD = 'codex debug prompt-input | grep -cE "image_?gen"';
+
+/**
+ * TÊN LỆNH `codex` CHO CÂU LỆNH ĐEM ĐI DÁN — không phải lúc nào cũng là chữ `codex`.
+ *
+ * ╔══ SỰ CỐ CÓ THẬT ══════════════════════════════════════════════════════════╗
+ * ║ Khách cài bằng standalone installer ⇒ binary ở `~/.local/bin/codex`, thư   ║
+ * ║ mục KHÔNG nằm trong PATH mặc định của macOS. Agent (chạy từ phiên shell mà ║
+ * ║ installer vừa export PATH) thấy ⇒ UI báo "đã cài ✓". Khách mở Terminal mới ║
+ * ║ dán `codex login` ⇒ **command not found**, và phải gọi người lên máy.      ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Nên tên lệnh phải bám `shellOk` — thứ đo ĐÚNG cái Terminal của khách:
+ *  · `true`  → chữ `codex` trần. Ngắn, và bền: `binLabel` có thể là shim theo phiên
+ *              (fnm/nvm dựng `~/.local/state/fnm_multishells/<pid>_<ts>/bin/codex`,
+ *              chết ngay khi phiên đó đóng) — dán đường đó ra còn tệ hơn.
+ *  · `false` → đường đầy đủ, vì chữ `codex` chắc chắn hỏng trong tay họ.
+ *  · `null`  → không dò được ⇒ giữ nguyên như cũ, không đoán.
+ */
+export interface CodexWhere {
+  binLabel?: string | null;
+  shellOk?: boolean | null;
+}
+
+export function codexCmdName(codex: CodexWhere | null | undefined): string {
+  return codex?.shellOk === false && codex.binLabel ? codex.binLabel : "codex";
+}
+
+export function imgHomeLoginCmd(codex: CodexWhere | null | undefined): string {
+  return `${codexCmdName(codex)} login`;
+}
+
+export function imgHomeCheckCmd(codex: CodexWhere | null | undefined): string {
+  return `${codexCmdName(codex)} debug prompt-input | grep -cE "image_?gen"`;
+}
+
+/** Dòng khách phải thêm vào file rc để Terminal thấy `codex` từ lần sau. */
+export function codexPathFixCmd(dirLabel: string): string {
+  return `export PATH="${dirLabel}:$PATH"`;
+}
