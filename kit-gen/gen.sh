@@ -969,7 +969,18 @@ $(cat "prompts/${job}.txt")
   if [[ ${#MODEL_ARGS[@]} -gt 0 && $rc -ne 0 && $(mtime_epoch "raw/${job}.png") -lt "$t0" ]] \
      && grep -qiE "unknown model|model not (found|supported)|unsupported model|invalid model|does not (exist|support)|model_not_found" "logs/${job}.log" 2>/dev/null; then
     echo "model '$GEN_MODEL' bị provider từ chối — chạy lại bằng model mặc định của hồ sơ" >>"logs/${job}.log"
+    # BỎ `-m`, GIỮ `-c model_reasoning_effort`. Thứ bị từ chối là TÊN MODEL, không phải
+    # mức nghĩ — mà mức nghĩ thì độc lập với model và luôn hợp lệ. Bản cũ bỏ cả cụm
+    # MODEL_ARGS nên lượt chạy lại rơi về effort của hồ sơ; codex có mức "fast"
+    # ("Fast responses with lighter reasoning") và có thể đang là mặc định của hồ sơ
+    # (cờ `[notice] fast_default_opt_out` trong config.toml chính là chỗ opt-out).
+    # Việc ở đây là gọi tool vẽ ảnh — nghĩ ít hơn không làm ảnh xấu hơn, nhưng nghĩ
+    # NHIỀU hơn thì đốt token, còn "fast" thì bỏ bước đọc SKILL.md — đúng thứ vừa
+    # phải trả giá. Nên ghim mức nghĩ ở CẢ hai lượt, không thả nổi.
+    local retry_effort=()
+    [[ -n "$GEN_EFFORT" ]] && retry_effort=(-c "model_reasoning_effort=\"$GEN_EFFORT\"")
     ${codex_env[@]+"${codex_env[@]}"} codex exec \
+      ${retry_effort[@]+"${retry_effort[@]}"} \
       -s workspace-write \
       -C "${ROOT}" \
       --skip-git-repo-check \

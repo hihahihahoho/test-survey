@@ -146,5 +146,28 @@ class DinhTuyenSkillTest(unittest.TestCase):
         self.assertIn("Copying or moving the resulting file", self.task)
 
 
+class MucNghiTest(unittest.TestCase):
+    """MỨC NGHĨ PHẢI ĐƯỢC GHIM Ở CẢ HAI LƯỢT — kể cả lượt chạy lại.
+
+    codex có mức "fast" ("Fast responses with lighter reasoning"). Thả nổi mức nghĩ
+    là để hồ sơ của người dùng quyết định, mà "fast" thì cắt đúng bước model tự đi
+    đọc SKILL.md — bước quyết định ảnh có alpha thật hay không.
+    """
+
+    SRC = (ROOT / "gen.sh").read_text(encoding="utf-8")
+
+    def test_mac_dinh_la_medium_khong_phai_fast(self):
+        self.assertIn('GEN_EFFORT="${KITGEN_GEN_EFFORT-medium}"', self.SRC)
+
+    def test_luot_chay_lai_VAN_ghim_muc_nghi(self):
+        """Lượt lại bỏ `-m` vì tên model bị từ chối — nhưng mức nghĩ thì độc lập với
+        model, bỏ theo là tự thả về mặc định của hồ sơ."""
+        khoi = self.SRC[self.SRC.index("bị provider từ chối"):]
+        khoi = khoi[:khoi.index("rc=$?")]
+        self.assertIn("model_reasoning_effort", khoi,
+                      "lượt chạy lại phải giữ mức nghĩ, không thả về hồ sơ")
+        self.assertNotIn(" -m ", khoi, "lượt chạy lại KHÔNG được ép lại model đã bị từ chối")
+
+
 if __name__ == "__main__":
     unittest.main()
