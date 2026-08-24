@@ -37,6 +37,62 @@ async function firstLineVersion(cmd, args = ["--version"]) {
   return { ok: true, version: m ? m[1] : null }
 }
 
+/**
+ * ĐƯỜNG THẬT của `codex`, VÀ TERMINAL CỦA NGƯỜI DÙNG CÓ GÕ ĐƯỢC NÓ KHÔNG.
+ *
+ * ╔══ SỰ CỐ CÓ THẬT, ĐÃ PHẢI LÊN TẬN MÁY KHÁCH ═══════════════════════════════╗
+ * ║ Khách cài codex bằng standalone installer (chatgpt.com/codex/install.sh)   ║
+ * ║ ⇒ binary nằm ở `~/.local/bin/codex`, mà thư mục đó KHÔNG có trong PATH mặc ║
+ * ║ định của macOS. Installer chỉ export cho phiên shell đang chạy rồi ghi thêm║
+ * ║ một dòng vào file rc.                                                      ║
+ * ║                                                                            ║
+ * ║ Agent được khởi động từ ĐÚNG phiên đó ⇒ `execFile("codex")` chạy được ⇒ UI ║
+ * ║ báo "đã cài Codex CLI ✓". Khách mở cửa sổ Terminal MỚI, gõ `codex` ⇒        ║
+ * ║ **command not found**. Và app còn đưa cho họ lệnh `codex login` chữ trần để ║
+ * ║ copy — dán vào là hỏng y hệt.                                              ║
+ * ║                                                                            ║
+ * ║ Tức "đã cài" của agent và "gõ được" của khách là HAI CÂU KHÁC NHAU. Trước   ║
+ * ║ bản này doctor chỉ trả câu thứ nhất, còn màn hình thì nói như thể cả hai.   ║
+ * ╚════════════════════════════════════════════════════════════════════════════╝
+ *
+ * Trả về nhãn RÚT GỌN (`~/…`) qua `shortenPath` — hợp đồng §4.3-5 cấm path tuyệt
+ * đối ra client, và nhãn `~/…` là lối đã được duyệt (xem `codexHomeLabel`).
+ *
+ * `shellOk` có BA giá trị, và cái thứ ba là quan trọng nhất:
+ *   true  — login shell tìm thấy codex ⇒ lệnh Terminal copy ra dùng được
+ *   false — login shell KHÔNG thấy ⇒ đúng ca của khách, phải nói ra
+ *   null  — KHÔNG DÒ ĐƯỢC (Windows, không có $SHELL, shell treo quá 8s). Im lặng
+ *           còn hơn báo "Terminal của bạn hỏng" dựa trên một phép dò thất bại —
+ *           đó đúng là kiểu kết luận mà `PROBE_FAILED` của setup.sh đã tránh.
+ */
+async function codexWhere() {
+  /* Test/CI trỏ thẳng binary ⇒ không có chuyện PATH, và cũng không được spawn shell. */
+  if (process.env.KITGEN_CODEX_BIN) {
+    return { binLabel: shortenPath(process.env.KITGEN_CODEX_BIN), shellOk: null, shellDirLabel: null }
+  }
+  const win = platform() === "win32"
+  const look = win ? await run("where", ["codex"], { timeout: 5000 })
+                   : await run("/usr/bin/which", ["codex"], { timeout: 5000 })
+  const abs = look.ok ? (look.stdout.split("\n").map(l => l.trim()).find(Boolean) ?? null) : null
+
+  let shellOk = null
+  if (!win && process.env.SHELL) {
+    /* `-lic`: login + interactive = đúng thứ Terminal.app mở ra, nên nó đọc cả
+       `.zprofile` lẫn `.zshrc`. `|| echo __NONE__` để phân biệt "shell chạy và
+       KHÔNG thấy" với "shell không chạy nổi" — thiếu nó thì cả hai đều là exit≠0. */
+    const probe = await run(process.env.SHELL, ["-lic", "command -v codex || echo __NONE__"], { timeout: 8000 })
+    const out = probe.stdout.trim()
+    if (out.includes("__NONE__")) shellOk = false
+    else if (out !== "") shellOk = true
+  }
+  return {
+    binLabel: abs ? shortenPath(abs) : null,
+    shellOk,
+    /* Thư mục cần thêm vào PATH — chỉ có nghĩa khi agent thấy mà shell không thấy. */
+    shellDirLabel: abs && shellOk === false ? shortenPath(abs.slice(0, abs.lastIndexOf("/"))) : null,
+  }
+}
+
 async function pythonInfo() {
   const v = await firstLineVersion(pythonCommand().cmd)
   if (!v.ok) return { ok: false, version: null, venv: false, deps: {} }
@@ -190,7 +246,7 @@ export async function doctor(ws, { refresh = false } = {}) {
       node: { ok: true, version: process.versions.node },
       python: { ok: false, version: null, venv: false, deps: {} },
       renderer: { ok: false, engine: "@resvg/resvg-wasm" },
-      codex: { ok: false, version: null },
+      codex: { ok: false, version: null, binLabel: null, shellOk: null, shellDirLabel: null },
       imageGen: {
         mode: "unknown", profile: liteProfile, available: false,
         codexHomeLabel: shortenPath(expandHome(liteProfile === "img-home" ? codexHomeOf(liteCfg) : join(homedir(), ".codex"))),
@@ -205,10 +261,11 @@ export async function doctor(ws, { refresh = false } = {}) {
     cache = { at: Date.now(), data }
     return data
   }
-  const [node, py, codex, renderer, img, wsInfo] = await Promise.all([
+  const [node, py, codex, where, renderer, img, wsInfo] = await Promise.all([
     firstLineVersion(process.execPath),
     pythonInfo(),
     firstLineVersion(CODEX),
+    codexWhere(),
     (async () => {
       const r = await run("node", ["-e", "try{require.resolve('@resvg/resvg-wasm');console.log('1')}catch{console.log('0')}"])
       // KHÔNG còn khoá `fallback`: cố ý. Thiếu gói này là KHÔNG gen được, không phải
@@ -224,7 +281,10 @@ export async function doctor(ws, { refresh = false } = {}) {
     node: { ok: true, version: process.versions.node },
     python: py,
     renderer,
-    codex: { ok: codex.ok, version: codex.version },
+    /* `ok` = AGENT chạy được. `shellOk` = TERMINAL CỦA KHÁCH gõ được. Hai câu khác
+       nhau — xem `codexWhere`; gộp chúng lại chính là con bug đã tốn một chuyến
+       lên máy khách. */
+    codex: { ok: codex.ok, version: codex.version, ...where },
     imageGen: img,
     workspace: wsInfo,
     checkedAt: new Date().toISOString(),

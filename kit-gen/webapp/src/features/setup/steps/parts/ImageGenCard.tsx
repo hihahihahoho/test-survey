@@ -3,7 +3,7 @@ import { CopyableCode, StatusDot } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import type { Doctor } from "@/lib/types/api";
 import { StepCard, Note } from "../../components/StepShell";
-import { IMG_HOME_CHECK_CMD, IMG_HOME_LOGIN_CMD } from "../../lib/commands";
+import { codexPathFixCmd, imgHomeCheckCmd, imgHomeLoginCmd } from "../../lib/commands";
 import { imageGenOutcome } from "../../lib/doctor-view";
 import { CodexLoginPanel } from "./CodexLoginPanel";
 
@@ -106,6 +106,12 @@ const MODE_LABEL: Record<string, string> = {
 
 export function ImageGenCard({ doctor }: { doctor: Doctor | null }) {
   const out = imageGenOutcome(doctor);
+  /* Agent chạy được `codex` KHÔNG có nghĩa Terminal của user gõ được — xem
+     `agent/lib/doctor.mjs:codexWhere`. Hai lệnh copy bên dưới đi thẳng vào tay
+     user nên phải bám cái thứ hai, nếu không là `command not found`. */
+  const codex = doctor?.codex;
+  const shellBlind = codex?.ok === true && codex.shellOk === false;
+  const pathDir = typeof codex?.shellDirLabel === "string" ? codex.shellDirLabel : null;
 
   return (
     <StepCard title="Tạo ảnh AI">
@@ -131,10 +137,21 @@ export function ImageGenCard({ doctor }: { doctor: Doctor | null }) {
               Cách khác: tự chạy lệnh trong Terminal
             </summary>
             <div className="mt-3 flex flex-col gap-3">
-              <CopyableCode value={IMG_HOME_LOGIN_CMD} label="Lệnh đăng nhập Codex" />
-              <CopyableCode value={IMG_HOME_CHECK_CMD} label="Lệnh kiểm tra công cụ tạo ảnh" />
+              {shellBlind && (
+                <Note>
+                  Máy đã cài codex nhưng <strong>Terminal của bạn chưa thấy nó</strong> — gõ{" "}
+                  <span className="font-mono">codex</span> sẽ ra <span className="font-mono">command not found</span>.
+                  Hai lệnh dưới đây đã được viết bằng đường đầy đủ nên dán vào là chạy được.
+                  {pathDir && " Muốn gõ ngắn gọn từ lần sau thì thêm dòng PATH ở cuối vào ~/.zshrc."}
+                </Note>
+              )}
+              <CopyableCode value={imgHomeLoginCmd(codex)} label="Lệnh đăng nhập Codex" />
+              <CopyableCode value={imgHomeCheckCmd(codex)} label="Lệnh kiểm tra công cụ tạo ảnh" />
+              {shellBlind && pathDir && (
+                <CopyableCode value={codexPathFixCmd(pathDir)} label="Thêm codex vào PATH (dán vào ~/.zshrc)" />
+              )}
               <Note>
-                Lệnh thứ hai chỉ ĐẾM xem có công cụ tạo ảnh hay không — không sinh ảnh, không tốn
+                Lệnh kiểm tra chỉ ĐẾM xem có công cụ tạo ảnh hay không — không sinh ảnh, không tốn
                 quota. Chạy xong thì bấm Kiểm tra lại.
               </Note>
             </div>
