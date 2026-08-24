@@ -4,14 +4,62 @@
    `codex debug prompt-input | grep -cE "image_?gen"` — chỉ ĐẾM, không in nội dung, không tốn quota.
    Codex ≥0.147 đổi tên tool `image_gen` thành skill `imagegen` nên phải khớp cả hai dạng. */
 import { execFile } from "node:child_process"
+import { createRequire } from "node:module"
 import { homedir, platform, arch, release } from "node:os"
-import { join } from "node:path"
+import { dirname, join, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import { statfs, readFile } from "node:fs/promises"
 import { exists } from "./fsx.mjs"
 import { resolveEngine } from "./engine.mjs"
 import { shortenPath } from "./redact.mjs"
 import { pythonCommand, winShellOpts, winSpawnOpts, pythonEnv } from "./platform.mjs"
 
+/* ── Trình render khung xương: @resvg/resvg-wasm ──────────────────────────────
+   PHẢI hỏi ĐÚNG CÂU mà render-skeleton.mjs hỏi. Bản trước hỏi câu khác:
+
+     node -e "require.resolve('@resvg/resvg-wasm')"
+
+   `require.resolve` trần neo theo THƯ MỤC LÀM VIỆC của tiến trình agent, mà gói
+   này KHÔNG bao giờ nằm ở đó — installer cài vào prefix riêng
+   (`npm install --prefix "$KITGEN_HOME/tools"`, install.sh:769). Bản cài chính
+   quy sống sót chỉ nhờ launcher có đặt sẵn NODE_PATH (install.sh:830); mọi cách
+   khởi động KHÔNG qua launcher (dev chạy `node agent/server.mjs`, hoặc launcher
+   bị sửa) đều bị báo **"Thiếu — KHÔNG gen được ảnh"** trong khi gói vẫn nằm yên ở
+   `~/.kitgen/tools` và gen THẬT SỰ chạy được. Báo thiếu oan ⇒ khách đi cài lại.
+
+   Nên ở đây dò ĐÚNG danh sách neo của render-skeleton.mjs::resvgAnchors, và làm
+   trong tiến trình (createRequire) thay vì spawn: nhanh hơn, và vẫn tôn trọng
+   NODE_PATH vì Node gắn Module.globalPaths vào mọi require không tương đối.
+   suite-system có ca kiểm ĐỌC render-skeleton.mjs để chặn hai danh sách lệch nhau. */
+export function resvgAnchorDirs() {
+  const home = process.env.KITGEN_HOME
+    || (platform() === "win32"
+      ? join(process.env.LOCALAPPDATA || process.env.USERPROFILE || "", "KitGen")
+      : join(homedir(), ".kitgen"))
+  return [
+    process.env.KITGEN_RESVG_DIR,      // thư mục CHỨA node_modules, không phải gói
+    join(home, "tools"),
+    join(homedir(), ".kitgen", "tools"),
+    REPO_DIR,                          // dev: node_modules cạnh repo (≈ HERE của engine)
+  ].filter(Boolean)
+}
+
+function rendererInfo() {
+  // KHÔNG còn khoá `fallback`: cố ý. Thiếu gói này là KHÔNG gen được, không phải
+  // "chạy bản dự phòng" — báo sai chỗ này chính là lỗi mà BACKLOG #15 gỡ ra.
+  for (const dir of resvgAnchorDirs()) {
+    try {
+      const req = createRequire(join(dir, "package.json"))
+      req.resolve("@resvg/resvg-wasm")
+      // render-skeleton.mjs còn ĐỌC file .wasm; gói cài dở phải tính là thiếu.
+      req.resolve("@resvg/resvg-wasm/index_bg.wasm")
+      return { ok: true, engine: "@resvg/resvg-wasm" }
+    } catch { /* thử neo kế tiếp */ }
+  }
+  return { ok: false, engine: "@resvg/resvg-wasm" }
+}
+
+const REPO_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
 const CACHE_MS = 60_000
 let cache = { at: 0, data: null }
 const CODEX = process.env.KITGEN_CODEX_BIN || "codex"
@@ -266,12 +314,7 @@ export async function doctor(ws, { refresh = false } = {}) {
     pythonInfo(),
     firstLineVersion(CODEX),
     codexWhere(),
-    (async () => {
-      const r = await run("node", ["-e", "try{require.resolve('@resvg/resvg-wasm');console.log('1')}catch{console.log('0')}"])
-      // KHÔNG còn khoá `fallback`: cố ý. Thiếu gói này là KHÔNG gen được, không phải
-      // "chạy bản dự phòng" — báo sai chỗ này chính là lỗi mà BACKLOG #15 gỡ ra.
-      return { ok: r.stdout.trim() === "1", engine: "@resvg/resvg-wasm" }
-    })(),
+    rendererInfo(),
     imageGenInfo(ws),
     workspaceInfo(ws),
   ])

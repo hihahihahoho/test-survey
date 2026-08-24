@@ -3,6 +3,8 @@
    không wildcard CORS, chỉ bind loopback). */
 import { fstatSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import { homedir } from "node:os"
+import { createRequire } from "node:module"
 import { describe, it, eq, ok, includes, stripComments, PAGES, CLIENT } from "./harness.mjs"
 import { PROTOCOL_VERSION } from "../server.mjs"
 import { readRuntimeVersion } from "../lib/update.mjs"
@@ -183,6 +185,78 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     } finally {
       if (before === undefined) delete process.env.KITGEN_GEN_MODEL
       else process.env.KITGEN_GEN_MODEL = before
+    }
+  })
+
+  /* ── Trình render khung xương ────────────────────────────────────────────────
+     SỰ CỐ THẬT: checklist báo "@resvg/resvg-wasm — Thiếu — KHÔNG gen được ảnh"
+     trong khi gói vẫn nằm ở `~/.kitgen/tools/node_modules`. Phép dò cũ là
+     `node -e "require.resolve(...)"` — neo theo THƯ MỤC LÀM VIỆC của agent, nơi
+     gói không bao giờ được cài. Nó chỉ đúng nhờ NODE_PATH mà launcher đặt hộ, nên
+     mọi cách khởi động khác đều báo thiếu oan. Hai ca dưới ghim: (a) dò theo NEO
+     chứ không theo cwd/NODE_PATH, (b) danh sách neo KHÔNG được lệch với engine. */
+  await it("doctor tìm @resvg/resvg-wasm theo NEO, không theo thư mục làm việc", async () => {
+    const { doctor } = await import("../lib/doctor.mjs")
+    const ws = agent.registry.active
+    // Gói giả, đặt ở một prefix mà cwd của tiến trình test không hề nhìn thấy.
+    const prefix = join(tmp, "resvg-prefix")
+    const pkg = join(prefix, "node_modules", "@resvg", "resvg-wasm")
+    mkdirSync(pkg, { recursive: true })
+    writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@resvg/resvg-wasm", version: "0.0.0-test", main: "index.js" }))
+    writeFileSync(join(pkg, "index.js"), "module.exports = {}\n")
+    writeFileSync(join(pkg, "index_bg.wasm"), "\0asm")
+    const before = process.env.KITGEN_RESVG_DIR
+    process.env.KITGEN_RESVG_DIR = prefix
+    try {
+      const d = await doctor(ws, { refresh: true })
+      eq(d.renderer.ok, true, "gói có trong prefix ⇒ phải là CÓ, dù cwd không thấy")
+      eq(d.renderer.engine, "@resvg/resvg-wasm", "tên engine")
+    } finally {
+      if (before === undefined) delete process.env.KITGEN_RESVG_DIR
+      else process.env.KITGEN_RESVG_DIR = before
+    }
+  })
+
+  await it("gói cài DỞ (thiếu index_bg.wasm) phải tính là THIẾU, không phải có", async () => {
+    const { resvgAnchorDirs } = await import("../lib/doctor.mjs")
+    const prefix = join(tmp, "resvg-nua-voi")
+    const pkg = join(prefix, "node_modules", "@resvg", "resvg-wasm")
+    mkdirSync(pkg, { recursive: true })
+    writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@resvg/resvg-wasm", version: "0.0.0-test", main: "index.js" }))
+    writeFileSync(join(pkg, "index.js"), "module.exports = {}\n")   // KHÔNG có index_bg.wasm
+    const before = process.env.KITGEN_RESVG_DIR
+    process.env.KITGEN_RESVG_DIR = prefix
+    try {
+      eq(resvgAnchorDirs()[0], prefix, "KITGEN_RESVG_DIR là neo ĐẦU TIÊN, y như engine")
+      // render-skeleton.mjs readFileSync(index_bg.wasm) ⇒ thiếu file này là gen chết.
+      // Không khẳng định renderer.ok=false ở đây: máy dev có thể có gói THẬT ở neo sau.
+      const req = createRequire(join(prefix, "package.json"))
+      let threw = false
+      try { req.resolve("@resvg/resvg-wasm/index_bg.wasm") } catch { threw = true }
+      eq(threw, true, "prefix nửa vời phải KHÔNG giải được file wasm")
+    } finally {
+      if (before === undefined) delete process.env.KITGEN_RESVG_DIR
+      else process.env.KITGEN_RESVG_DIR = before
+    }
+  })
+
+  await it("danh sách neo của doctor KHÔNG được lệch với render-skeleton.mjs", async () => {
+    const { resvgAnchorDirs } = await import("../lib/doctor.mjs")
+    const engineDir = join(agentDir, "..")
+    const src = readFileSync(join(engineDir, "render-skeleton.mjs"), "utf8")
+    // Engine khai neo ở resvgAnchors(); mọi nguồn nó dùng, doctor phải dùng.
+    for (const needle of ["KITGEN_RESVG_DIR", 'KITGEN_HOME', '"tools"', '".kitgen"']) {
+      ok(src.includes(needle), `render-skeleton.mjs phải còn khai ${needle} — nếu engine đổi, sửa CẢ doctor.mjs`)
+    }
+    const before = process.env.KITGEN_HOME
+    process.env.KITGEN_HOME = join(tmp, "kitgen-home-gia")
+    try {
+      const dirs = resvgAnchorDirs()
+      ok(dirs.includes(join(tmp, "kitgen-home-gia", "tools")), "phải dò <KITGEN_HOME>/tools — chỗ installer cài thật")
+      ok(dirs.includes(join(homedir(), ".kitgen", "tools")), "phải dò ~/.kitgen/tools — neo dự phòng của engine")
+    } finally {
+      if (before === undefined) delete process.env.KITGEN_HOME
+      else process.env.KITGEN_HOME = before
     }
   })
 
