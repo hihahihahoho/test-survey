@@ -485,7 +485,21 @@ $new  = "$dest.new"
 if (Test-Path -LiteralPath $new)  { Remove-Item -LiteralPath $new -Recurse -Force }
 New-Dir $new
 Copy-TreeContents $candidate $new
-if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
+# Cai de khi agent cu dang chay: node.exe giu khoa file trong releases\<ver>,
+# Remove-Item se chet giua chung va ban cai cu da bi pha truoc khi ban moi vao.
+# Phai dung server TRUOC khi xoa (buoc 8 se tu start lai).
+if (Test-Path -LiteralPath $dest) {
+  $oldCmd = Join-Path $KitgenHome 'bin\kitgen.cmd'
+  if (Test-Path -LiteralPath $oldCmd) {
+    try { & $oldCmd stop | Out-Null } catch { }
+    Start-Sleep -Milliseconds 500
+  }
+  Get-Process node, codex, python -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -and $_.Path.StartsWith($KitgenHome, [StringComparison]::OrdinalIgnoreCase) } |
+    Stop-Process -Force -ErrorAction SilentlyContinue
+  Start-Sleep -Milliseconds 500
+  Remove-Item -LiteralPath $dest -Recurse -Force
+}
 Move-Item -LiteralPath $new -Destination $dest
 
 # `current` la junction (NTFS, KHONG can quyen admin — khac symlink). Chỉ đổi ở cuối installer,

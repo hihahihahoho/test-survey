@@ -30,6 +30,11 @@ for script in "$ROOT"/easy-install/*.bat; do
     fail "non-ASCII byte in Windows wrapper: $script"
   fi
   grep -q 'powershell -NoProfile -ExecutionPolicy Bypass' "$script" || fail "missing PowerShell bypass: $script"
+  # $home/$host/... la bien tu dong read-only cua PowerShell: gan vao la vo
+  # ngay khi chay ($ErrorActionPreference='Stop'), da can nguoi dung that 24/08.
+  if LC_ALL=C grep -qiE '\$(home|host|pid|error|input|profile|pwd|args|myinvocation|psscriptroot|pscommandpath|shellid|executioncontext) *=[^=]' "$script"; then
+    fail "assignment to reserved PowerShell automatic variable in: $script"
+  fi
   [ "$(xxd -p -l 3 "$script")" != 'efbbbf' ] || fail "BOM in Windows wrapper: $script"
 done
 

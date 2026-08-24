@@ -54,6 +54,10 @@ finish() {
 
 trap 'finish "$?"' EXIT
 
+# Gatekeeper cach ly TUNG file: duyet install.command khong duyet cac file canh ben.
+# Go co quarantine cho ca bo wrapper de sau nay bam dup uninstall/stop chay duoc ngay.
+xattr -d com.apple.quarantine "$SELF_DIR"/*.command >/dev/null 2>&1 || true
+
 command -v curl >/dev/null 2>&1 || { echo "Khong tim thay curl." >&2; exit 1; }
 INSTALLER="$(mktemp "${TMPDIR:-/tmp}/kitgen-install.XXXXXX")"
 echo "Dang tai bo cai dat KitGen..."
