@@ -755,6 +755,15 @@ else
   check_warn "không nâng được Codex (mất mạng, hết giờ, hoặc thiếu quyền) — vẫn dùng $CODEX_VER_BEFORE"
 fi
 
+# `codex update` đổi NHỊ PHÂN ngay nhưng KHÔNG viết lại $CODEX_HOME/skills/.system/imagegen/
+# — thư mục skill chỉ được đồng bộ khi codex CHẠY lần kế tiếp (BACKLOG #24 ⑬). Không chạy
+# hộ thì lượt gen ĐẦU TIÊN sau update vẫn dùng SKILL.md đời cũ — đúng ca ảnh đục đã cắn
+# người dùng thật. `debug prompt-input` rẻ: không mạng, không quota, chỉ liệt kê skill.
+for _skill_home in "$HOME/.codex" "$HOME/.codex-img"; do
+  [ -d "$_skill_home" ] || continue
+  run_with_timeout 60 env CODEX_HOME="$_skill_home" "$CODEX_BIN" debug prompt-input >/dev/null 2>&1 || true
+done
+
 # Trình render khung xương: @resvg/resvg-wasm (2,4 MB, thuần JS + .wasm).
 # Thay Playwright + Chromium (790,9 MB) — xem BACKLOG #15. BẮT BUỘC, không có
 # đường lùi: gen.sh dừng hẳn nếu thiếu (bản PIL cũ lệch 17,6% mực, đã xoá).

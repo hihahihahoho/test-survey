@@ -66,6 +66,21 @@ cp -R "$ROOT/webapp/dist/." "$STAGE/$PKG/app/"
 cp -R "$ROOT/runtime/bin" "$ROOT/runtime/service" "$STAGE/$PKG/runtime/"
 printf '%s\n' "$VERSION" > "$STAGE/$PKG/VERSION"
 cp "$ROOT/install.sh" "$STAGE/$PKG/install.sh"
+# install.ps1 PHẢI đi trong gói — cùng lý do install.sh ở trên. Trước bản này gói chỉ có
+# install.sh: máy Windows update xong vẫn chạy installer ĐỜI ĐẦU (install.ps1:871 tự
+# copy chính nó), nên mọi bản vá Windows (kể cả bước `codex update`) không bao giờ tới
+# được máy user cũ — gốc rễ ca "Windows không update nổi" 24/08.
+if [ ! -f "$ROOT/scripts/install.ps1" ]; then
+  echo "build-runtime: thiếu scripts/install.ps1 — gói Windows sẽ đông cứng installer đời cũ" >&2
+  exit 1
+fi
+cp "$ROOT/scripts/install.ps1" "$STAGE/$PKG/install.ps1"
+# PS 5.1 đọc .ps1 không BOM bằng Windows-1252 ⇒ chữ Việt thành lỗi cú pháp (đã cắn
+# 2.1.20–2.1.22). Gói mà chứa bản không BOM là hỏng đúng chỗ vừa sửa — chặn tại build.
+if [ "$(head -c 3 "$ROOT/scripts/install.ps1" | od -An -tx1 | tr -d ' \n')" != "efbbbf" ]; then
+  echo "build-runtime: scripts/install.ps1 mất BOM UTF-8 — PS 5.1 sẽ parse hỏng" >&2
+  exit 1
+fi
 chmod +x "$STAGE/$PKG/install.sh" "$STAGE/$PKG/runtime/bin/kitgen" "$STAGE/$PKG/engine/gen.sh"
 (
   cd "$STAGE/$PKG"

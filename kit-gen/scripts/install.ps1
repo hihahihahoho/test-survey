@@ -710,6 +710,25 @@ if ($codexBin) {
       Write-Warn "khong nang duoc Codex (mat mang, het gio, hoac thieu quyen) - van dung $verBefore"
     }
   }
+
+  # `codex update` doi NHI PHAN ngay nhung KHONG viet lai $CODEX_HOME\skills\.system\imagegen\
+  # — thu muc skill chi dong bo khi codex CHAY lan ke tiep (BACKLOG #24 (13)). Khong chay ho
+  # thi luot gen DAU TIEN sau update van dung SKILL.md doi cu — dung ca anh duc da can nguoi
+  # dung that. `debug prompt-input` re: khong mang, khong quota, chi liet ke skill.
+  foreach ($skillHome in @((Join-Path $env:USERPROFILE '.codex'), (Join-Path $env:USERPROFILE '.codex-img'))) {
+    if (-not (Test-Path -LiteralPath $skillHome)) { continue }
+    try {
+      $psi2 = New-Object System.Diagnostics.ProcessStartInfo
+      $psi2.FileName = $codexBin
+      $psi2.Arguments = 'debug prompt-input'
+      $psi2.UseShellExecute = $false
+      $psi2.RedirectStandardOutput = $true
+      $psi2.RedirectStandardError = $true
+      $psi2.EnvironmentVariables['CODEX_HOME'] = $skillHome
+      $proc2 = [System.Diagnostics.Process]::Start($psi2)
+      if (-not $proc2.WaitForExit(60000)) { try { $proc2.Kill() } catch { } }
+    } catch { }
+  }
 }
 
 # Trinh render khung xuong: @resvg/resvg-wasm (2,4 MB, thuan JS + .wasm) thay cho
@@ -882,7 +901,16 @@ sh.Run """$binDir\kitgen.cmd"" run-logged", 0, False
 "@
 Write-TextCrLf (Join-Path $binDir 'kitgen-hidden.vbs') $vbs
 
-Copy-Item -LiteralPath $MyInvocation.MyCommand.Path -Destination (Join-Path $KitgenHome 'install.ps1') -Force
+# Installer cho LUOT SAU lay tu GOI MOI, khong phai tu chinh file dang chay:
+# tu-copy-chinh-minh la co che lam installer doi dau dong cung vinh vien tren may
+# user — moi ban va Windows (ke ca buoc `codex update`) khong bao gio toi noi.
+# Goi cu chua co install.ps1 (truoc 24/08) thi moi roi ve self-copy.
+$pkgInstaller = Join-Path $candidate 'install.ps1'
+if (Test-Path -LiteralPath $pkgInstaller) {
+  Copy-Item -LiteralPath $pkgInstaller -Destination (Join-Path $KitgenHome 'install.ps1') -Force
+} else {
+  Copy-Item -LiteralPath $MyInvocation.MyCommand.Path -Destination (Join-Path $KitgenHome 'install.ps1') -Force
+}
 Write-Ok "lenh: $binDir\kitgen.cmd"
 
 # Kích hoạt bản mới ở phút chót. Không dùng Remove-Item -Recurse trên junction:
