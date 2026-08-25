@@ -26,8 +26,20 @@ PY
 )
 for j in $jobs; do
   echo "prompt → prompts/${j}.txt (+1 ảnh kèm)"
-  echo "fake prompt for ${j}" > "prompts/${j}.txt"
+  # Prompt giả CỐ Ý mang một đường dẫn tuyệt đối + một dòng khổ giấy như bản thật:
+  # cửa /prompt-preview phải redact được path (đối xứng với khoá giả nhét vào log ở
+  # nhánh *bg-home bên dưới), và phải trả về đúng phần chữ chứ không phải tên file.
+  {
+    echo "Canvas orientation: LANDSCAPE 1536x1024."
+    echo "fake prompt for ${j}"
+    echo "duong dan tuyet doi cua engine gia: ${PWD}/raw/${j}.png"
+  } > "prompts/${j}.txt"
+  echo "skeleton/${j#*-}.png" > "prompts/${j}.att"
   echo "fake log for ${j}" > "logs/${j}.log"
+  # ĐÚNG CHỖ DỪNG CỦA BẢN THẬT: gen.sh thoát ngay sau khi dựng xong prompt/.att, TRƯỚC
+  # vòng gọi codex. Fixture phải dừng ở đúng đó thì ca prompt-preview mới chứng minh
+  # được là agent không hề đợi một lượt vẽ nào.
+  [ -n "${KITGEN_PROMPTS_ONLY:-}" ] && continue
   case "$j" in
     *bg-home)
       # BACKLOG #22 — job lỗi phải để lại BẰNG CHỨNG, đúng hình dạng ca thật đã gặp:

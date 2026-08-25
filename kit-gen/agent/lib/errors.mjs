@@ -16,6 +16,10 @@ export const STATUS = {
   // trash
   TRASH_NOT_FOUND: 404, CONFIRM_REQUIRED: 412, CONFIRM_INVALID: 403, CONFIRM_LOCKED: 429,
   // contract
+  /* PROMPT_PREVIEW_FAILED = engine chạy được nhưng KHÔNG ra prompt nào (contract lắp
+     không nổi, thiếu engine, hết giờ). 422 chứ không 500: thứ hỏng là dữ liệu/môi
+     trường của lượt xem trước, không phải agent. */
+  PROMPT_PREVIEW_FAILED: 422,
   CONTRACT_BROKEN: 422, DOC_NOT_FOUND: 404, DOC_NAME_TAKEN: 409, DOC_CONFLICT: 409, DOC_BROKEN: 422, DOC_READONLY: 423, IF_MATCH_REQUIRED: 412, CONTRACT_CONFLICT: 409, CONTRACT_INVALID: 422,
   // refs
   REF_IN_USE: 409, REF_NOT_FOUND: 404,

@@ -478,6 +478,39 @@ export const validationSchema = z.looseObject({
 });
 export type Validation = z.infer<typeof validationSchema>;
 
+/**
+ * #29 `POST /api/projects/:id/prompt-preview` — PROMPT STUDIO.
+ *
+ * Một job = một tấm × một phong cách, đúng thứ tự `contractJobs`. `prompt` là NGUYÊN VĂN
+ * chuỗi engine sẽ gửi đi (agent đã redact path tuyệt đối trước khi trả), `attachments`
+ * là nhãn TƯƠNG ĐỐI của ảnh đính kèm (`skeleton/main.png`, `refs/mascot.png`).
+ *
+ * `missing` = tấm mà engine không dựng nổi prompt. Có mặt trong hợp đồng để màn nói
+ * được "tấm này chưa xem trước được" thay vì lặng lẽ hiện thiếu một tấm.
+ */
+export const promptPreviewJobSchema = z.looseObject({
+  job: z.string(),
+  variant: z.string().default(""),
+  sheet: z.string().default(""),
+  prompt: z.string().default(""),
+  attachments: z.array(z.string()).default([]),
+});
+export type PromptPreviewJob = z.infer<typeof promptPreviewJobSchema>;
+
+export const promptPreviewSchema = z.looseObject({
+  jobs: z.array(promptPreviewJobSchema).default([]),
+  missing: z.array(z.string()).default([]),
+});
+export type PromptPreview = z.infer<typeof promptPreviewSchema>;
+
+/** `details` của 422 PROMPT_PREVIEW_FAILED — ba enum lý do + bằng chứng ĐÃ redact. */
+export const promptPreviewFailedDetailsSchema = z.looseObject({
+  reason: z.enum(["ENGINE_MISSING", "TIMEOUT", "ENGINE_FAILED"]).optional(),
+  exitCode: z.number().nullish(),
+  output: z.string().optional(),
+});
+export type PromptPreviewFailedDetails = z.infer<typeof promptPreviewFailedDetailsSchema>;
+
 /** #23 `PUT` — If-Match BẮT BUỘC (§6.5-4). */
 export const saveContractResultSchema = z.looseObject({
   version: z.number(),

@@ -1,0 +1,186 @@
+import { NODE, type ImageRef } from "./schema";
+import { INHERIT, phraseOf, type PillKind } from "./pill-registry";
+import { getPresets, type PresetBundle } from "./presets-store";
+
+/**
+ * serialize.ts — MỘT TÀI LIỆU TIPTAP → một dòng chữ.
+ *
+ * Tầng dưới cùng: chỉ biết đọc JSON của MỘT block. Việc ghép cả màn thành prompt
+ * nằm ở `serialize-composer.ts`. Tách hai tầng vì chúng hỏng theo hai kiểu khác
+ * nhau — tầng này hỏng thì một pill ra sai chữ, tầng kia hỏng thì cả một block
+ * biến mất khỏi prompt.
+ *
+ * Hàm THUẦN trên JSON: không chạm `Editor`, không chạm DOM ⇒ test được ở môi
+ * trường `node`, và panel "xem trước" với nút "copy" dùng CHUNG một hàm nên
+ * không có đường nào để cái nhìn thấy khác cái copy được.
+ */
+
+/**
+ * Hình dạng TỐI THIỂU của một node JSON. Cố ý KHÔNG dùng `JSONContent` của
+ * `@tiptap/core` ở tham số: hàm này phải gọi được từ test thuần logic mà không
+ * kéo cả ProseMirror vào. `JSONContent` thật khớp cấu trúc nên truyền thẳng vẫn
+ * đúng kiểu.
+ */
+export interface PromptDocNode {
+  type?: string;
+  text?: string;
+  attrs?: Record<string, unknown> | null;
+  content?: PromptDocNode[];
+}
+
+/**
+ * NGỮ CẢNH CHUNG mà pill để trống sẽ kế thừa.
+ *
+ * Truyền vào chứ không đọc biến toàn cục: một block không tự biết theme/phong
+ * cách tổng là gì, và cái duy nhất biết là màn hình. Truyền tường minh thì test
+ * dựng được mọi tổ hợp mà không phải giả lập store.
+ */
+export interface SerializeContext {
+  /** Cụm EN của phong cách chung — thay cho pill `style` để trống. */
+  styleEN: string;
+  /** Cụm EN của theme chung — thay cho pill `outfit` để trống. */
+  themeEN: string;
+  presets: PresetBundle;
+  /** Bộ đếm ảnh, dùng CHUNG cho cả prompt để đánh số liên tục qua mọi block. */
+  imageCounter: { count: number };
+}
+
+export function makeContext(partial: Partial<SerializeContext> = {}): SerializeContext {
+  return {
+    styleEN: partial.styleEN ?? "",
+    themeEN: partial.themeEN ?? "",
+    presets: partial.presets ?? getPresets(),
+    imageCounter: partial.imageCounter ?? { count: 0 },
+  };
+}
+
+function readRefs(attrs: Record<string, unknown> | null | undefined): ImageRef[] {
+  const raw = attrs?.["refs"];
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (item): item is ImageRef => typeof item === "object" && item !== null && typeof (item as ImageRef).url === "string",
+  );
+}
+
+function readAttr(attrs: Record<string, unknown> | null | undefined, key: string): string {
+  const raw = attrs?.[key];
+  return typeof raw === "string" ? raw : "";
+}
+
+/** Cụm EN của một pill, đã tính cả luật "để trống = kế thừa". */
+function pillText(node: PromptDocNode, ctx: SerializeContext): string {
+  const kind = readAttr(node.attrs, "kind") as PillKind;
+  const value = readAttr(node.attrs, "value");
+  if (value === INHERIT) {
+    if (kind === "style") return ctx.styleEN;
+    if (kind === "outfit") return ctx.themeEN;
+    /* Các kind khác để trống là THẬT SỰ trống — không bịa gì vào prompt. */
+    return "";
+  }
+  return phraseOf(kind, value, ctx.presets);
+}
+
+/** Cái móc đánh số cho một pill ảnh. Ảnh không đi vào chữ được — xem chú thích. */
+function imageText(node: PromptDocNode, ctx: SerializeContext): string {
+  /* ChatGPT nhận ảnh qua ô đính kèm chứ không qua chữ. Nên chỗ này để lại một
+     CÁI MÓC CÓ SỐ để câu prompt còn trỏ được: "…tham chiếu [ảnh tham chiếu 1,
+     2]". Người dùng kéo đúng số ảnh đó vào khung chat là khớp. */
+  const refs = readRefs(node.attrs);
+  if (refs.length === 0) return "[ảnh tham chiếu]";
+  const numbers = refs.map(() => String((ctx.imageCounter.count += 1)));
+  return `[ảnh tham chiếu ${numbers.join(", ")}]`;
+}
+
+function walkInline(nodes: PromptDocNode[] | undefined, ctx: SerializeContext): string {
+  if (!nodes) return "";
+  let out = "";
+  for (const node of nodes) {
+    switch (node.type) {
+      case "text":
+        out += node.text ?? "";
+        break;
+      case NODE.optionPill:
+        out += pillText(node, ctx);
+        break;
+      case NODE.imagePill:
+        out += imageText(node, ctx);
+        break;
+      case "hardBreak":
+        out += " ";
+        break;
+      default:
+        /* Node lạ (mark bọc, node đời sau) — vẫn đi vào ruột nó. Im lặng bỏ qua
+           một nhánh là cách nhanh nhất để prompt thiếu chữ mà không ai thấy. */
+        out += walkInline(node.content, ctx);
+        break;
+    }
+  }
+  return out;
+}
+
+/**
+ * Dọn khoảng trắng của một dòng.
+ *
+ * Cần thật, không phải cho đẹp: bỏ trống một pill giữa câu để lại hai dấu cách
+ * dính nhau, và "không khí  , tham chiếu" là chữ mà model đọc y như ta thấy.
+ * Cũng vá dấu cách thừa TRƯỚC dấu câu và dấu câu dính chùm khi ô cuối bỏ trống.
+ */
+export function tidy(line: string): string {
+  return line
+    .replace(/\s+/g, " ")
+    .replace(/\s+([,.;:!?)])/g, "$1")
+    .replace(/([(])\s+/g, "$1")
+    .replace(/([,;:])(?=[,.;:])/g, "")
+    .trim();
+}
+
+/** Tài liệu của MỘT block → một dòng chữ đã dọn. */
+export function serializeDoc(doc: PromptDocNode | null | undefined, ctx: SerializeContext): string {
+  if (!doc) return "";
+  return (doc.content ?? [])
+    .map((block) => tidy(walkInline(block.content, ctx)))
+    .filter(Boolean)
+    .join(" ");
+}
+
+/** Toàn bộ chữ TRẦN của một tài liệu (không đổi pill thành EN) — xem `freeText`. */
+export function plainText(doc: PromptDocNode | null | undefined): string {
+  if (!doc) return "";
+  let out = "";
+  const walk = (node: PromptDocNode): void => {
+    if (node.type === "text") out += node.text ?? "";
+    for (const child of node.content ?? []) walk(child);
+  };
+  walk(doc);
+  return out;
+}
+
+/**
+ * Chữ NGƯỜI DÙNG viết thêm, sau khi trừ đi phần khung của template.
+ *
+ * Dùng cho badge "tự do ✎" và cho việc hỏi trước khi quay về template. Cách đo:
+ * trừ MỘT LẦN mỗi mẩu scaffolding khỏi chuỗi chữ trần. Nói thẳng giới hạn: nếu
+ * người dùng sửa ĐÚNG GIỮA một mẩu khung ("Vẽ cảnh nền" → "Vẽ nền") thì mẩu đó
+ * không trừ được và phần còn lại bị tính là chữ thêm — tức là ta HỎI THỪA chứ
+ * không bao giờ ÂM THẦM XOÁ. Sai về phía an toàn là cố ý.
+ */
+export function freeText(doc: PromptDocNode | null | undefined, scaffold: readonly string[]): string {
+  let rest = plainText(doc);
+  for (const piece of scaffold) {
+    const at = rest.indexOf(piece);
+    if (at !== -1) rest = rest.slice(0, at) + rest.slice(at + piece.length);
+  }
+  return rest.trim();
+}
+
+/** Số ảnh tham chiếu trong một tài liệu — thanh dưới nhắc "nhớ đính kèm N ảnh". */
+export function countImageRefs(doc: PromptDocNode | null | undefined): number {
+  if (!doc) return 0;
+  let total = 0;
+  const walk = (node: PromptDocNode): void => {
+    if (node.type === NODE.imagePill) total += readRefs(node.attrs).length;
+    for (const child of node.content ?? []) walk(child);
+  };
+  walk(doc);
+  return total;
+}

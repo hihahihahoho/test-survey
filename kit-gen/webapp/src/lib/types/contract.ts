@@ -174,6 +174,16 @@ export const sheetSchema = z
     cell_hint: z.string().optional(),
     orient: z.enum(["landscape", "portrait"]).optional(),
     note: z.string().optional(),
+    /* PROMPT STUDIO — hai trường CHỮ mà `gen.sh` đọc thẳng từ `styles.json`:
+       `directive` (gen.sh:760 — chèn một dòng chỉ đạo ngay sau `note`) và
+       `promptOverride` (gen.sh:973 — thay TRỌN prompt của tấm, chỉ giữ dòng
+       `Canvas orientation:` đầu tiên). Khai TƯỜNG MINH dù `looseObject` vốn đã cho
+       khoá lạ đi qua: khai ra thì `Sheet` có type cho chúng, còn thứ tự khoá của
+       object sau `parse` là thứ tự SCHEMA — để hai trường này nằm sau `note` (đúng
+       chỗ chúng đứng trong prompt) chứ không trôi xuống cuối theo thứ tự input.
+       Agent kiểm cùng một luật ở `agent/lib/validate.mjs:42`: có thì phải là chuỗi. */
+    directive: z.string().optional(),
+    promptOverride: z.string().optional(),
     /* QA-FUNC: agent GỬI `ref: null` cho MỌI sheet (templates.mjs:80, importer.mjs:54).
        `.optional()` không nhận null ⇒ zod ném ⇒ endpoints.ts biến thành AGENT_INTERNAL
        ⇒ MÀN S3 THIẾT KẾ KHÔNG MỞ ĐƯỢC với bất kỳ project nào. Dùng `.nullish()`. */

@@ -51,7 +51,8 @@ import {
 import { loadBundledV2 } from "@/features/design/library/lib/source";
 import type { LibElement } from "@/features/design/library/lib/types";
 import { buildStylePrompt } from "@/features/kit-form/lib/style-phrases";
-import type { KitElementSkel, WorkflowMascot, WorkflowState } from "./model";
+import type { GlassLevel, KitElementSkel, SheetPromptTweak, WorkflowMascot, WorkflowState } from "./model";
+import { materialPhrase } from "./materials";
 import { isPropElement } from "./user-library";
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -127,7 +128,7 @@ const POSE_NOTE =
 
 /** 19 dáng của `styles.example.json` → mô tả tiếng Anh cho `spec`.
  *  Dáng lạ vẫn chạy được (rơi về chính id), không ném. */
-const POSE_SPEC: Record<string, string> = {
+export const POSE_SPEC: Record<string, string> = {
   idle: "standing still in a neutral relaxed idle pose, facing the viewer",
   wave: "waving one hand high in greeting",
   point: "pointing forward with one arm extended",
@@ -148,6 +149,114 @@ const POSE_SPEC: Record<string, string> = {
   "view-side": "standing in full side profile",
   "view-back": "standing seen from behind, back to the viewer",
 };
+
+/**
+ * NÉT MẶT ĐI VÀO ĐÚNG MỘT CHỖ TRONG CÂU DÁNG.
+ *
+ * Vài dáng ĐÃ tự khai nét mặt trong `POSE_SPEC` (`sad` = "…, sad expression"). Nối
+ * thêm "a big bright smile" vào sau câu ấy là gửi cho máy vẽ HAI mệnh lệnh đá nhau
+ * trong cùng một dòng, và kết quả là một khuôn mặt nửa nọ nửa kia. Nên: có mệnh đề
+ * nét mặt sẵn thì **THAY**, chưa có thì **NỐI THÊM**.
+ *
+ * Regex chỉ bắt mệnh đề nét mặt đứng sau dấu phẩy và kết thúc bằng chữ `expression`
+ * — đúng hình dạng của dữ liệu thật, và hẹp đủ để không ăn nhầm "arms swinging".
+ */
+const FACE_CLAUSE_RE = /,\s*[a-z]+(?:\s+[a-z]+)*\s+expression\b/;
+
+/**
+ * Câu dáng cuối cùng cho `spec` của ô.
+ *
+ * ⚠️ KHÔNG có nét mặt ⇒ trả về **NGUYÊN VĂN** câu cũ. Đây là điều kiện bắt buộc, không
+ * phải tối ưu: mọi dự án đang chạy đều chưa chọn biểu cảm, và một chữ khác trong `spec`
+ * là một lượt gen ra ảnh khác — người dùng không xin điều đó.
+ */
+export function poseSpecFor(pose: string, expression?: string | null): string {
+  const base = POSE_SPEC[pose] ?? pose;
+  const face = (expression ?? "").trim();
+  if (!face) return base;
+  return FACE_CLAUSE_RE.test(base) ? base.replace(FACE_CLAUSE_RE, `, ${face}`) : `${base}, ${face}`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   1b. CHẤT LIỆU + ĐỘ TRONG CỦA MỘT Ô — thực thi bằng CHỮ, không bằng field mới
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Ba mức kính → câu tiếng Anh nối vào `spec`.
+ *
+ * Con số alpha trong câu KHÔNG phải tôi ước: `gen.sh` (nhánh `matte == "glass"`, mirror
+ * ở `item-prompt.ts:glassCellPrompt`) đã ra hợp đồng *"about 64 out of 255 for a clear
+ * pane, up to 128 for a strongly tinted one"*. Ba mức này chỉ ĐỊNH VỊ ô trong dải ấy,
+ * nên chúng không thể mâu thuẫn với câu kính chung — đó là lý do không cần đụng `gen.sh`.
+ */
+export const GLASS_LEVEL_SPEC: Record<GlassLevel, string> = {
+  clear: "a clear pane: barely tinted see-through glass, alpha about 64 of 255",
+  frosted: "strongly frosted glass: milky diffused surface, alpha about 96 of 255",
+  tinted: "strongly tinted glass: deep saturated tint, alpha about 128 of 255",
+};
+
+/** Nhãn tiếng Việt của ba mức — UI đọc chỗ này để không tự chế bộ chữ thứ hai. */
+export const GLASS_LEVEL_VI: Record<GlassLevel, string> = {
+  clear: "Kính trong",
+  frosted: "Kính mờ",
+  tinted: "Kính đậm",
+};
+
+export const GLASS_LEVELS: readonly GlassLevel[] = ["clear", "frosted", "tinted"];
+
+/**
+ * Từ khoá "ô này nghe như là kính" — nguồn của DÒNG GỢI Ý cạnh ba nút Nền tách.
+ *
+ * Đây là đường BỊ ĐỘNG (ý kiến 4): app **không tự bấm hộ**, chỉ nói ra chỗ có vẻ lệch.
+ * Tự bấm hộ là đúng loại việc mà một mô tả nhắc tới "cửa sổ kính" (bối cảnh, không phải
+ * chất liệu của chính ô) sẽ làm hỏng — và người dùng không hiểu vì sao ô của mình đột
+ * nhiên trong suốt.
+ */
+const GLASSY_WORDS = /\b(glass|crystal|transparent|see-?through|translucent)\b|kinh|thuy tinh|pha le|trong suot/;
+
+/** Bỏ dấu tiếng Việt để "kính"/"kinh" cùng khớp — cùng phép gấp mà ô tìm kiếm đang dùng. */
+function foldForMatch(text: string): string {
+  return String(text ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .toLowerCase();
+}
+
+/** `true` khi mô tả (thư viện HOẶC bản người dùng sửa) nghe như một vật trong suốt. */
+export function looksLikeGlass(spec: string | null | undefined): boolean {
+  return GLASSY_WORDS.test(foldForMatch(spec ?? ""));
+}
+
+/**
+ * MÔ TẢ CUỐI CÙNG CỦA MỘT Ô = [mô tả] + [chất liệu] + [mức kính].
+ *
+ * ┌── BA NGUỒN, MỘT DÒNG ────────────────────────────────────────────────────┐
+ * │ ① mô tả  : lớp đè của dự án nếu có, không thì `spec` của thư viện;        │
+ * │ ② chất liệu: cụm tiếng Anh của preset (hoặc chữ người dùng tự gõ);        │
+ * │ ③ mức kính: chỉ nối khi ô THẬT SỰ đang là kính sau khi trộn `matte`.      │
+ * └──────────────────────────────────────────────────────────────────────────┘
+ *
+ * Điều kiện ③ không phải chuyện vặt: người dùng chọn "Kính đậm" rồi đổi Nền tách về
+ * "Nền thường" thì `glassLevel` vẫn còn nằm trong bản nháp. Nối nó vào lúc ấy là dặn
+ * máy vẽ hạ alpha xuống 128 trong khi slicer đang cắt ô như một mảng đặc — ảnh ra mờ
+ * và không ai hiểu tại sao. Giá trị được GIỮ (đổi ý lần nữa là có lại) nhưng KHÔNG nói.
+ */
+export function resolveElementSpec(base: Pick<LibElement, "spec" | "skel">, override?: KitElementSkel): string {
+  const parts: string[] = [];
+  const own = override?.spec?.trim();
+  const text = own || base.spec;
+  if (text) parts.push(text);
+
+  const material = materialPhrase(override?.material);
+  if (material) parts.push(material);
+
+  if (override?.glassLevel) {
+    const matte = override ? mergeElementSkel(base.skel, override).matte : base.skel.matte;
+    if (matte === "glass") parts.push(GLASS_LEVEL_SPEC[override.glassLevel]);
+  }
+  return parts.join(", ");
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    2. Bước 1 — kitset của workflow ⇄ element THẬT của thư viện
@@ -203,9 +312,17 @@ export function resolveKitset(
        ⚠️ ĐÂY LÀ CHỖ FIELD LẶNG LẼ RƠI (research-glow-extraction §4.2 "Lỗ 2"). Bản
        trước chỉ trộn `w`/`h`, nên bất cứ trường nào thêm vào `KitElementSkel` mà quên
        chỗ này thì người dùng chọn xong, UI hiện đúng, còn contract KHÔNG có gì —
-       không lỗi, không cảnh báo. Thêm trường mới ⇒ thêm một nhánh ở đây. */
+       không lỗi, không cảnh báo. Thêm trường mới ⇒ thêm một nhánh ở đây.
+
+       Từ 08/2026 lớp đè mang thêm CHỮ (`spec` sửa tay · `material` · `glassLevel`), và
+       chữ KHÔNG đi vào `skel` — nó đi vào `spec` của component. Hai đích khác nhau nên
+       phải trộn bằng hai hàm khác nhau; gộp lại là đẩy `material` vào `skel` của
+       contract, nơi `skelSchema` (looseObject) sẽ vui vẻ ghi nó ra đĩa cho không ai đọc. */
     const override = e.skel;
-    drawable.push(override ? { ...hit, skel: mergeElementSkel(hit.skel, override) } : hit);
+    if (!override) { drawable.push(hit); continue; }
+    const skel = mergeElementSkel(hit.skel, override);
+    const spec = resolveElementSpec(hit, override);
+    drawable.push(skel === hit.skel && spec === hit.spec ? hit : { ...hit, spec, skel });
   }
   return { drawable, skipped };
 }
@@ -368,6 +485,19 @@ export type KitsetContractInput = Pick<
 > & {
   /** UI-FIX §3b — danh sách nhân vật. Thiếu (bản nháp cũ) ⇒ rơi về ba trường `mascot*`. */
   mascots?: readonly WorkflowMascot[];
+  /**
+   * Chủ đề trang phục của cả bộ. **OPTIONAL có chủ ý**: bản nháp và contract đã lưu từ
+   * trước không có trường này, và thiếu nó phải nghĩa là "không nói gì về trang phục" —
+   * không phải một `undefined` rơi vào chuỗi prompt.
+   */
+  outfitTheme?: string;
+  /**
+   * PROMPT STUDIO — chỉ đạo / prompt tự soạn theo từng tấm, khoá là `sheet.id`.
+   * **OPTIONAL có chủ ý**, cùng lý do với `outfitTheme`: bản nháp và contract đã lưu từ
+   * trước không có nó, và thiếu nó phải nghĩa là "không can thiệp gì" — tức sheet của
+   * contract KHÔNG mọc thêm một khoá nào.
+   */
+  sheetPrompts?: Readonly<Record<string, SheetPromptTweak>>;
 };
 
 /**
@@ -387,6 +517,15 @@ export function pickContractInput(s: KitsetContractInput): KitsetContractInput {
     mascotEnabled: s.mascotEnabled, mascotName: s.mascotName, mascotDescription: s.mascotDescription,
     mascotRef: s.mascotRef, mascotPoses: s.mascotPoses,
     ...(s.mascots ? { mascots: s.mascots } : {}),
+    /* PHẢI có mặt ở đây, nếu không `useContractSync` băm khoá memo thiếu nó ⇒ đổi chủ đề
+       trang phục xong contract đứng im, và người dùng kết luận cái select không chạy.
+       Đây đúng là chỗ mọi trường mới của contract hay bị quên. */
+    ...(s.outfitTheme ? { outfitTheme: s.outfitTheme } : {}),
+    /* CÙNG BẪY, KHÁC TRƯỜNG: quên dòng này thì gõ chỉ đạo cho một tấm xong contract
+       đứng im ⇒ "Xem prompt sẽ gửi" trả về đúng prompt cũ, và người dùng kết luận
+       Prompt Studio không chạy. Chỉ đưa vào khi map CÓ mục: một `{}` trong khoá memo
+       làm chữ ký của mọi dự án cũ đổi mà không có gì đổi thật. */
+    ...(s.sheetPrompts && Object.keys(s.sheetPrompts).length > 0 ? { sheetPrompts: s.sheetPrompts } : {}),
   };
 }
 
@@ -427,6 +566,10 @@ export interface ContractCharacter {
   description: string;
   /** `refs/<tên>` hoặc chuỗi rỗng khi không có ảnh mẫu. */
   ref: string;
+  /** Cụm tiếng Anh của trang phục ĐÃ GIẢI (riêng con này, không thì của cả bộ). Rỗng = không nói. */
+  outfit: string;
+  /** Nét mặt theo từng dáng của RIÊNG con này. Dáng vắng mặt ⇒ giữ nguyên văn `POSE_SPEC`. */
+  poseExpressions: Record<string, string>;
 }
 
 /**
@@ -441,9 +584,13 @@ export interface ContractCharacter {
  * không có — bản nháp chỉ là tiếng vọng, không phải bằng chứng.
  */
 export function contractCast(
-  s: Pick<KitsetContractInput, "mascots" | "mascotName" | "mascotDescription" | "mascotRef">,
+  s: Pick<KitsetContractInput, "mascots" | "mascotName" | "mascotDescription" | "mascotRef" | "outfitTheme">,
   opts: Pick<BuildKitsetOptions, "refs"> = {},
 ): ContractCharacter[] {
+  /* Chủ đề chung là ĐƯỜNG LÙI, không phải giá trị mặc định ghi đè: con nào tự khai
+     trang phục riêng thì bản của nó thắng, con nào để trống thì mặc theo cả bộ. */
+  const shared = (s.outfitTheme ?? "").trim();
+  const outfitOf = (own: string | undefined): string => (own ?? "").trim() || shared;
   const onDisk = opts.refs
     ? new Set(opts.refs.characters ?? (opts.refs.character ? [opts.refs.character] : []))
     : null;
@@ -459,13 +606,24 @@ export function contractCast(
     // Đường cũ, giữ NGUYÊN: bản nháp một-mascot không biết tên ref của agent nên
     // `opts.refs.character` (ảnh `char-*` mới nhất) vẫn là nguồn đáng tin nhất.
     const ref = opts.refs ? (opts.refs.character ?? "") : (s.mascotRef ? refPath(s.mascotRef.name) : "");
-    return [{ id: CHARACTER_ID, vi: s.mascotName.trim() || "Nhân vật", description: s.mascotDescription, ref }];
+    return [{
+      id: CHARACTER_ID,
+      vi: s.mascotName.trim() || "Nhân vật",
+      description: s.mascotDescription,
+      ref,
+      // Bản nháp một-mascot không có chỗ khai trang phục riêng ⇒ theo cả bộ, và không
+      // có chỗ khai nét mặt ⇒ mọi dáng giữ NGUYÊN VĂN câu cũ.
+      outfit: shared,
+      poseExpressions: {},
+    }];
   }
   return list.map((m, i) => ({
     id: i === 0 ? CHARACTER_ID : `${CHARACTER_ID}-${i + 1}`,
     vi: m.name.trim() || (i === 0 ? "Nhân vật" : `Nhân vật ${i + 1}`),
     description: m.description,
     ref: resolve(m.ref?.name),
+    outfit: outfitOf(m.outfitTheme),
+    poseExpressions: m.poseExpressions ?? {},
   }));
 }
 
@@ -495,6 +653,37 @@ export function buildVariantStyle(s: Pick<KitsetContractInput, "stylePrompt" | "
   const avoid = s.styleAvoid.trim();
   if (avoid) parts.push(`avoid: ${avoid}`);
   return parts.join(", ");
+}
+
+/**
+ * PROMPT STUDIO — gắn `directive` / `promptOverride` vào ĐÚNG tấm mang id ấy.
+ *
+ * MỘT LUẬT DUY NHẤT, và cả bộ test khoá nó: tấm không có mục trong map phải đi ra
+ * **CHÍNH NÓ** (`sh` chứ không phải `{...sh}`), không thêm một khoá `undefined` nào.
+ * Contract là thứ được so bằng `JSON.stringify` để quyết định "có gì đổi không"
+ * (`contract-sync.ts:sameContract`) rồi mới ghi đĩa; một khoá thừa ở đây là một lượt
+ * ghi `styles.json` + một bản `.history` cho mỗi dự án cũ mở lên, mà không ai sửa gì.
+ *
+ * Khoá lạ (tấm đã bị xoá khỏi kitset) được BỎ QUA im lặng, không dựng sheet ma: map là
+ * ghi chú của người dùng, còn danh sách tấm là do kitset quyết.
+ */
+function withSheetPrompts(
+  sheets: readonly Sheet[],
+  tweaks: Readonly<Record<string, SheetPromptTweak>> | undefined,
+): Sheet[] {
+  if (!tweaks) return [...sheets];
+  return sheets.map((sh) => {
+    const t = tweaks[sh.id];
+    if (!t) return sh;
+    const directive = (t.directive ?? "").trim();
+    const promptOverride = (t.promptOverride ?? "").trim();
+    if (!directive && !promptOverride) return sh;
+    return {
+      ...sh,
+      ...(directive ? { directive } : {}),
+      ...(promptOverride ? { promptOverride } : {}),
+    };
+  });
 }
 
 /**
@@ -623,9 +812,13 @@ export function buildKitsetContract(s: KitsetContractInput, opts: BuildKitsetOpt
    */
   cast.forEach((character) => {
   const charRef = character.ref;
-  const subject = charRef
+  const base = charRef
     ? "the SAME character from the reference photo"
     : character.description.trim() || "the same original mascot character";
+  /* TRANG PHỤC NẰM Ở SUBJECT, không ở mệnh đề dáng — nó tả CON NGƯỜI ấy, không tả cử
+     động. Đặt nhầm chỗ (nối vào cuối câu dáng) thì với dáng `run` ta được "…arms
+     swinging, wearing a football kit", và máy vẽ đọc ra "bộ đồ đang vung tay". */
+  const subject = character.outfit ? `${base} wearing ${character.outfit}` : base;
   const charName = character.vi;
   const multi = cast.length > 1;
 
@@ -653,7 +846,7 @@ export function buildKitsetContract(s: KitsetContractInput, opts: BuildKitsetOpt
        */
       file: `${String(i * limits.mascot + k + 1).padStart(2, "0")}-pose-${multi ? `${character.id}-` : ""}${pose}`,
       vi: `${charName}: ${pose}`,
-      spec: `${subject}, ${POSE_SPEC[pose] ?? pose}, full body`,
+      spec: `${subject}, ${poseSpecFor(pose, character.poseExpressions[pose])}, full body`,
       // `w` hẹp: một người đứng chiếm ~1/3 bề ngang ô, cao gần trọn ô — số của
       // `styles.json` (`w .3 · h .85`), không phải số tôi ước.
       skel: { shape: "pose" as const, pose, w: 0.3, h: 0.85 },
@@ -675,7 +868,7 @@ export function buildKitsetContract(s: KitsetContractInput, opts: BuildKitsetOpt
 
   return contractSchema.parse({
     schemaVersion: 4,
-    sheets,
+    sheets: withSheetPrompts(sheets, s.sheetPrompts),
     variants: [
       {
         id: MAIN_VARIANT_ID,

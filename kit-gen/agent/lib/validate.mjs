@@ -36,6 +36,14 @@ export function validateContract(contract) {
     else if (sheetIds.has(sh.id)) E("V-03", `${path}.id`, `duplicate sheet id ${sh.id}`)
     else sheetIds.add(sh.id)
 
+    /* Hai field CHỮ của Prompt Studio. KHÔNG chặn sự tồn tại của chúng — chặn SAI KIỂU:
+       gen.sh nối thẳng cả hai vào prompt, nên một object/số lọt xuống đó sẽ đi vào lệnh
+       gửi cho model dưới dạng rác mà không ai báo gì. `null` = "không có", vẫn hợp lệ. */
+    for (const k of ["directive", "promptOverride"]) {
+      if (sh?.[k] !== undefined && sh[k] !== null && typeof sh[k] !== "string")
+        E("SCHEMA", `${path}.${k}`, `${k} must be a string`)
+    }
+
     const cols = Number(sh?.grid?.cols), rows = Number(sh?.grid?.rows)
     if (!Number.isInteger(cols) || cols < 1 || cols > 8) E("SCHEMA", `${path}.grid.cols`, "cols must be 1..8")
     if (!Number.isInteger(rows) || rows < 1 || rows > 8) E("SCHEMA", `${path}.grid.rows`, "rows must be 1..8")

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { ErrorState, LoadingState } from "@/components/common";
+import { ErrorState, HexColorField, LoadingState } from "@/components/common";
 import { errorDetail } from "@/features/projects/lib/feedback";
 import { useAddBrandProfile, useAddLibraryItem, useLibraryImage, usePatchBrandProfile, usePatchLibraryItem, useRemoveBrandProfile, useUserLibrary } from "@/lib/hooks";
 import type { BrandProfile, LibraryItem } from "@/lib/types";
@@ -170,9 +170,18 @@ function BrandDialog({ brand, open, onOpenChange }: { brand: BrandProfile | null
       />
       {colors.length === 0
         ? <p className="rounded-2 border border-dashed border-line-subtle p-3 text-caption text-fg-muted">Chưa có màu nào. Bấm «Thêm màu» để bắt đầu.</p>
-        : <div className="space-y-2">{colors.map((color, index) => <div key={`${index}-${color}`} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-2 bg-raised p-2">
-            <Input aria-label={`Màu ${index + 1}`} type="color" value={color} className="h-9 w-12 p-1" onChange={event => setColors(current => current.map((value, itemIndex) => itemIndex === index ? event.target.value : value))} />
-            <code className="text-caption text-fg-strong">{color.toUpperCase()}</code>
+        /* Feedback team 24/08 §2b — mã hex GÕ/DÁN ĐƯỢC. Đây đúng là chỗ đau nhất của
+           bệnh cũ: hồ sơ thương hiệu là nơi người ta chép nguyên bảng màu từ brand
+           guideline sang, mà ô cũ chỉ có swatch + một `<code>` đọc chơi. Cùng một
+           `HexColorField` với bước Phong cách nên hai chỗ không thể lệch cách hiểu
+           một chuỗi hex (`#F53` là màu hợp lệ ở cả hai, hay không ở đâu cả). */
+        : <div className="space-y-2">{colors.map((color, index) => <div key={`${index}-${color}`} className="flex items-center gap-3 rounded-2 bg-raised p-2">
+            <HexColorField
+              className="mt-0 min-w-0 flex-1"
+              label={`Màu ${index + 1}`}
+              value={color}
+              onChange={hex => setColors(current => current.map((value, itemIndex) => itemIndex === index ? hex : value))}
+            />
             <Button type="button" variant="ghost" size="icon-sm" aria-label={`Xoá màu ${color}`} onClick={() => setColors(current => current.filter((_, itemIndex) => itemIndex !== index))}><Trash2 aria-hidden /></Button>
           </div>)}</div>}
     </section>

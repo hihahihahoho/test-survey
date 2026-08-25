@@ -290,7 +290,10 @@
   }
   .color-field input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
   .color-field input[type="color"]::-webkit-color-swatch { @apply rounded-1 border-0; }
-  .color-field code { @apply font-mono text-mono uppercase text-fg-muted; }
+  /* `.color-field code` ĐÃ XOÁ cùng cái `<code>` chỉ-để-đọc: mã hex nay là một
+     `<input>` gõ/dán được (`components/common/HexColorField`), và nó tự mang
+     `font-mono` qua utility. Giữ lại rule cho một thẻ không ai render nữa chỉ mời
+     người sau dựng lại đúng ô hex không copy/paste được vừa bỏ. */
   /* ══ W2B-6 · CHIP ẢNH PHẢI NẰM TRONG VÙNG THẢ, KHÔNG TRÔI RA NGOÀI ═══════════
      Bệnh (ảnh 09 hai lần, ảnh 12): `.dropzone` là một ô nét đứt, còn chip
      `qa-ref.png` render Ở DƯỚI và NGOÀI ô đó ⇒ đọc ra "rác trôi" chứ không phải
@@ -432,6 +435,32 @@
   .recap-card p { @apply mt-2 text-body text-fg-muted; }
   .review-estimate { @apply mt-8 flex flex-wrap items-center justify-between gap-4 rounded-4 border border-line-subtle bg-canvas p-5; }
   .review-estimate strong { @apply mt-2 block text-subtitle text-fg-strong; }
+  /* ══ PROMPT STUDIO (bước ⑤) ═══════════════════════════════════════════════
+     Cùng ngôn ngữ với `.review-estimate` ngay trên nó — cũng là một khối "nói thêm"
+     đứng sau lưới recap, nên cùng bo góc, cùng hairline, cùng nền canvas. Khác đúng
+     một điểm: đây là khối CÓ RUỘT MỞ RA ĐƯỢC, nên các hàng bên trong dùng nền `raised`
+     để tầng thứ hai đọc được là tầng thứ hai. */
+  .prompt-studio { @apply mt-4 rounded-4 border border-line-subtle bg-canvas p-5; }
+  .prompt-studio-head { @apply flex flex-wrap items-start justify-between gap-4; }
+  .prompt-studio-head strong { @apply mt-2 block text-subtitle text-fg-strong; }
+  .prompt-studio-head p { @apply mt-1 text-body text-fg-muted; }
+  .prompt-studio-error { @apply mt-4 flex items-start gap-2 rounded-3 border border-danger/60 bg-danger/10 p-3; }
+  /* Nền tint viết thẳng (không `@apply .kg-tint-warn`): `.kg-tint-*` là class thật của
+     `@layer base`, `@apply` một class không-utility là đường vỡ build. Cùng cách
+     `.element-card.selected` ngay trên đã làm. */
+  .prompt-studio-missing { @apply mt-3 rounded-3 px-3 py-2 text-caption text-on-tint-warn; background: rgb(var(--kg-warn) / var(--kg-tint-a)); }
+  .prompt-studio-list { @apply mt-4 flex flex-col gap-2; }
+  .prompt-studio-card { @apply rounded-3 border border-line-subtle bg-raised; }
+  /* Cả hàng là nút mở/gập — vùng bấm to bằng hàng, không phải một mũi tên 12px. */
+  .prompt-studio-row { @apply flex w-full items-center justify-between gap-3 p-3 text-left; }
+  .prompt-studio-row strong { @apply block text-label text-fg-strong; }
+  .prompt-studio-row small { @apply mt-0.5 block text-caption text-fg-muted; }
+  .prompt-studio-row code { @apply font-mono; }
+  .prompt-studio-body { @apply flex flex-col gap-3 border-t border-line-subtle p-3; }
+  .prompt-studio-atts { @apply flex flex-wrap items-center gap-2; }
+  .prompt-studio-chip { @apply rounded-full bg-canvas px-2.5 py-1 font-mono text-caption text-fg; }
+  .prompt-studio-field { @apply flex flex-col gap-1.5; }
+  .prompt-studio-warn { @apply mt-2 flex items-start gap-2 rounded-3 px-3 py-2 text-caption text-on-tint-warn; background: rgb(var(--kg-warn) / var(--kg-tint-a)); }
   .dialog-supporting { @apply text-body text-fg-muted; }
   /* W2B-6 · mobile: dưới 640px thanh này xuống 2 dòng lởm chởm BÊN TRONG một khung
      bo tròn (ảnh 29) — pill chỉ đúng khi nội dung nằm gọn một hàng. Dưới ngưỡng đó

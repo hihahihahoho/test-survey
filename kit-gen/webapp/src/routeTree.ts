@@ -19,6 +19,9 @@ import { Route as runDetailRoute } from "./routes/p.$projectId.runs.$runId";
 import { Route as kitRoute } from "./routes/p.$projectId.kit";
 import { Route as projectSettingsRoute } from "./routes/p.$projectId.settings";
 import { Route as previewRoute } from "./routes/__preview.route";
+import { Route as promptComposerLabRoute } from "./routes/lab.prompt-composer";
+import { Route as promptComposerPresetsRoute } from "./routes/lab.prompt-composer.presets";
+import { Route as poseEditorLabRoute } from "./routes/lab.pose-editor";
 
 /**
  * CÂY ROUTE — khai báo TAY, đúng sitemap §2.1. Không dùng file-based codegen.
@@ -64,4 +67,12 @@ export const routeTree = rootRoute.addChildren([
   /* legacy */ fileRoute,
   /* S2 */ projectRoute,
   previewRoute,
+  /* lab — cùng hạng với `previewRoute`: trang công cụ cho người làm, KHÔNG có
+     link nào trong UI trỏ tới, chỉ vào bằng URL. Xem đầu file route để biết vì
+     sao nó không đụng vào "đúng 8 màn" của §2.1.
+     Trang preset đứng TRƯỚC màn composer — route cụ thể trước route tổng, cùng
+     luật với `runDetailRoute` / `runsRoute` ở trên. */
+  promptComposerPresetsRoute,
+  promptComposerLabRoute,
+  poseEditorLabRoute,
 ]);

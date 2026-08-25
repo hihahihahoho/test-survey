@@ -1,20 +1,28 @@
 import * as React from "react";
-import { Check, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { Check, ImagePlus, Plus, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { ImageDropzone } from "@/components/ui/image-dropzone";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Silhouette } from "@/features/design/preview";
 import { cn } from "@/lib/utils";
 import { useElementLib, useUserLibrary } from "@/lib/hooks";
 import { foldVi, fromAgentLib, loadBundledV2 } from "@/features/design/library/lib/source";
 import type { LibElement } from "@/features/design/library/lib/types";
-import { cellLabel, useWorkflowStore, type KitElementSkel } from "../lib/model";
+import { cellLabel, useWorkflowProjectId, useWorkflowStore, type KitElementSkel } from "../lib/model";
 import { CheckRow } from "../components/CheckRow";
 import { GroupChips } from "../components/GroupChips";
 import { ItemDetailDialog, SkelSizeFields } from "../components/ItemDetail";
 import { SegChoice } from "../components/SegChoice";
 import { useKitsetContract } from "../lib/contract-sync";
 import { isGlassCell, isGlowCell, itemPromptFor } from "../lib/item-prompt";
-import { mergeElementSkel } from "../lib/kitset-to-contract";
+import { GLASS_LEVELS, GLASS_LEVEL_VI, looksLikeGlass, mergeElementSkel } from "../lib/kitset-to-contract";
+import { MATERIAL_PRESETS, materialPreset } from "../lib/materials";
+import { useWorkflowRefs } from "../lib/refs-sync";
 import { isPropElement, mergeElements, userUiElements } from "../lib/user-library";
 import { Step } from "./BriefStep";
 import { UI_STEP_LABEL } from "./Stepper";
@@ -90,6 +98,121 @@ function meta(element: LibElement) {
 }
 
 /**
+ * ══ NẠP TỪ MOCKUP — ĐỢT 1, THỦ CÔNG VÀ NÓI THẲNG LÀ THỦ CÔNG ═══════════════
+ *
+ * Ý kiến 6 của team: "nạp từ mockup ra UI". Đợt này KHÔNG có nhận dạng tự động, và
+ * dialog nói ra điều đó bằng chính hình dạng của nó: người dùng thả ảnh, rồi tự tick
+ * những gì họ thấy trong ảnh. Đổi lại, cả hai nửa đều là đường ĐÃ CHẠY THẬT —
+ *  · ảnh đi vào `refs.add(files,"inspo")`, tức ĐÚNG ống mà ô "Ảnh phong cách" của bước
+ *    Phong cách đang dùng, nên ảnh hiện ra ở đó như một ảnh tham chiếu thường và đi
+ *    tới `gen.sh` qua `variants[].inspo`;
+ *  · tick đi vào `setElementsSelected`, tức đúng hành động của lưới chính.
+ * Không có đường ống thứ hai nào được dựng cho tính năng này ⇒ đợt 2 (auto-detect) chỉ
+ * cần thay phần "ai tick" bằng "máy tick", không phải viết lại chỗ nào khác.
+ *
+ * CỘNG THÊM, KHÔNG THAY THẾ: bấm Xong chỉ TICK những món đã chọn, không bỏ tick phần
+ * còn lại. Một mockup là một màn hình, không phải toàn bộ bộ kit — hiểu nó là "chỉ giữ
+ * bấy nhiêu" sẽ âm thầm vứt phần người dùng đã chọn ở lưới chính.
+ */
+function MockupImportDialog({ open, onOpenChange, catalogue, onPick }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  catalogue: readonly LibElement[];
+  onPick: (files: readonly string[]) => void;
+}) {
+  const projectId = useWorkflowProjectId();
+  const refs = useWorkflowRefs(projectId);
+  const workflow = useWorkflowStore();
+  const [picked, setPicked] = React.useState<ReadonlySet<string>>(new Set());
+  const [added, setAdded] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!open) return;
+    setPicked(new Set());
+    setAdded(0);
+  }, [open]);
+
+  /* Chép ĐÚNG luật của bước Phong cách: Blob đi tới đĩa, còn bản nháp chỉ giữ tên để
+     offline vẫn thấy có gì đó (§W3-3). Hai chỗ cùng gọi một hook nên không thể lệch. */
+  const takeFiles = (files: File[]) => {
+    if (files.length === 0) return;
+    refs.add(files, "inspo");
+    workflow.set({
+      styleRefs: [...workflow.styleRefs, ...files.map((file) => ({ name: file.name, kind: "style" as const }))],
+    });
+    setAdded((n) => n + files.length);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent size="lg" className="max-h-[min(46rem,calc(100dvh-2rem))]">
+        <DialogHeader>
+          <DialogTitle>Nạp từ mockup</DialogTitle>
+          <DialogDescription>
+            Thả ảnh màn hình mẫu, rồi tick những thứ bạn thấy trong ảnh. Đợt này bạn tự tick — bản sau sẽ tự nhận dạng.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody className="space-y-6">
+          <div>
+            <p className="text-label text-fg-strong">Ảnh mockup</p>
+            <p className="mt-1 text-caption text-fg-muted">
+              Tối đa 3 ảnh. Ảnh được lưu vào bộ ảnh phong cách của dự án, xem lại ở bước Phong cách.
+            </p>
+            <div className="dropfield mt-2">
+              <ImageDropzone
+                multiple
+                maxFiles={3}
+                showLocalPreview={false}
+                label="Kéo ảnh mockup vào đây"
+                description="Ảnh chụp màn hình hoặc bản thiết kế mẫu"
+                state={refs.pending ? "uploading" : added > 0 ? "done" : "idle"}
+                onFiles={takeFiles}
+              />
+            </div>
+            {added > 0 ? <p className="mt-2 text-caption text-fg-muted">Đã gửi {added} ảnh vào bộ ảnh phong cách.</p> : null}
+          </div>
+
+          {GROUPS.map((group) => {
+            const items = catalogue.filter((item) => groupOf(item) === group.id);
+            if (items.length === 0) return null;
+            return (
+              <div key={group.id}>
+                <p className="text-label text-fg-strong">{group.label}</p>
+                <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={`Chọn trong ${group.label}`}>
+                  {items.map((item) => (
+                    <SegChoice
+                      key={item.file}
+                      size="sm"
+                      on={picked.has(item.file)}
+                      onClick={() => setPicked((current) => {
+                        const next = new Set(current);
+                        if (next.has(item.file)) next.delete(item.file); else next.add(item.file);
+                        return next;
+                      })}
+                    >
+                      {item.vi}
+                    </SegChoice>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </DialogBody>
+        <DialogFooter className="border-t border-line-subtle">
+          <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Huỷ</Button>
+          <Button
+            type="button"
+            onClick={() => { onPick([...picked]); onOpenChange(false); }}
+          >
+            {picked.size > 0 ? `Xong — thêm ${picked.size} mục` : "Xong"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
  * HAI HÌNH THÁI CHO CÙNG MỘT MÀN.
  *
  * · `wizard` — bước ③ lúc tạo dự án: chỉ chọn/bỏ chọn. Người ta chưa có ảnh nào để
@@ -119,6 +242,7 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
   const workflow = useWorkflowStore();
   const sync = useKitsetContract();
   const [detailFile, setDetailFile] = React.useState<string | null>(null);
+  const [mockupOpen, setMockupOpen] = React.useState(false);
   const libraryQuery = useElementLib();
   const userLibrary = useUserLibrary();
   const catalogue = React.useMemo(() => {
@@ -198,6 +322,16 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
   const detailSkel = detail ? (detailOverride ? mergeElementSkel(detail.skel, detailOverride) : detail.skel) : null;
   const glow = isGlowCell(detailSkel);
   const glass = isGlassCell(detailSkel);
+  /* Chữ ĐANG NẰM TRONG Ô NHẬP = lớp đè nếu có, không thì bản của thư viện. Prefill bằng
+     bản thư viện (chứ không để trống) là cố ý: người ta sửa một câu đã có dễ hơn nhiều
+     so với viết lại từ đầu, và họ thấy ngay mình đang thay thế cái gì. */
+  const detailText = detailOverride?.spec ?? detail?.spec ?? "";
+  const detailEdited = detailOverride?.spec !== undefined;
+  /* Gợi ý CHẤT LIỆU đọc chữ NGƯỜI DÙNG ĐANG THẤY, không đọc bản thư viện: sửa mô tả
+     thành "khay kính mờ" mà dòng gợi ý vẫn im thì nó vô dụng đúng lúc cần nhất. */
+  const suggestGlass = Boolean(detail) && !glow && !glass && looksLikeGlass(detailText);
+  const material = detailOverride?.material ?? "";
+  const materialIsPreset = materialPreset(material) !== null;
 
   return (
     <Step
@@ -205,6 +339,20 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
       title={UI_STEP_LABEL}
       copy="Mặc định chọn hết — bỏ tick những thành phần dự án không cần."
     >
+      {/* Đứng TRÊN hàng chip nhóm: đây là cửa vào của cả màn ("tôi có ảnh mẫu, bắt đầu
+          từ nó") chứ không phải một thao tác trên danh sách đang lọc. */}
+      <div className="mb-4">
+        <Button type="button" variant="secondary" size="sm" onClick={() => setMockupOpen(true)}>
+          <ImagePlus aria-hidden />Nạp từ mockup
+        </Button>
+      </div>
+      <MockupImportDialog
+        open={mockupOpen}
+        onOpenChange={setMockupOpen}
+        catalogue={catalogue}
+        onPick={(files) => { if (files.length > 0) workflow.setElementsSelected(files, true); }}
+      />
+
       <GroupChips
         groups={GROUPS.map((item) => ({
           id: item.id,
@@ -387,10 +535,126 @@ export function KitsetStep({ variant = "wizard", detailFooter }: {
                   Trong suốt nhìn xuyên qua
                 </SegChoice>
               </div>
+              {/* ĐƯỜNG BỊ ĐỘNG của ý kiến 4: mô tả đã nói "kính" mà cách tách vẫn là nền
+                  thường ⇒ ô sẽ ra một mảng ĐỤC. App NÓI RA chỗ lệch và đưa sẵn nút, chứ
+                  KHÔNG tự bấm hộ — một mô tả nhắc tới "cửa sổ kính" của bối cảnh không
+                  có nghĩa chính cái ô ấy trong suốt. */}
+              {suggestGlass ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-2 border border-line-subtle bg-raised p-2">
+                  <p className="min-w-0 flex-1 text-caption text-fg-muted">
+                    Chất liệu nghe như là kính — nên chọn Trong suốt để giữ được độ trong thật.
+                  </p>
+                  <Button
+                    type="button" variant="secondary" size="sm"
+                    onClick={() => workflow.setElementSkel(detail.file, { matte: "glass" })}
+                  >
+                    Áp Trong suốt
+                  </Button>
+                </div>
+              ) : null}
+              {/* Ba mức chỉ hiện khi ô ĐANG là kính: chọn "kính đậm" cho một ô nền thường
+                  là một lựa chọn không đi tới đâu (xem `resolveElementSpec`). Bấm lại
+                  đúng mức đang chọn ⇒ bỏ mức, ô về câu kính chung của `gen.sh`. */}
+              {glass ? (
+                <div className="mt-3">
+                  <p className="text-caption text-fg-muted">Độ trong của kính</p>
+                  <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Độ trong của kính">
+                    {GLASS_LEVELS.map((level) => {
+                      const on = detailOverride?.glassLevel === level;
+                      return (
+                        <SegChoice
+                          key={level}
+                          on={on}
+                          aria-label={GLASS_LEVEL_VI[level]}
+                          onClick={() => workflow.setElementSkel(detail.file, { glassLevel: on ? null : level })}
+                        >
+                          {GLASS_LEVEL_VI[level]}
+                        </SegChoice>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </div>
+            {/* CHẤT LIỆU — đường CHỦ ĐỘNG của ý kiến 4, đặt ngay cạnh Nền tách vì hai thứ
+                đi đôi: chọn "Kính" là vừa nối chữ vào mô tả, vừa áp cách tách tương ứng.
+                Chips chứ không dropdown: 10 lựa chọn ngắn, và chips dùng chung đúng tín
+                hiệu "đang chọn" của cả app (`SegChoice`). */}
             <div>
-              <p className="text-label text-fg-strong">Mô tả gửi cho máy vẽ</p>
-              <p className="mt-1 whitespace-pre-wrap text-body text-fg-muted">{detail.spec || "Thư viện chưa có mô tả cho thành phần này."}</p>
+              <p className="text-label text-fg-strong">Chất liệu</p>
+              <p className="mt-1 text-caption text-fg-muted">
+                Nối một câu chất liệu vào mô tả gửi đi, và áp sẵn cách tách hợp với nó. Bạn vẫn đổi lại cách tách bằng ba nút phía trên.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Chất liệu">
+                <SegChoice
+                  on={material === ""}
+                  aria-label="Theo mô tả"
+                  onClick={() => workflow.setElementSkel(detail.file, { material: null })}
+                >
+                  Theo mô tả
+                </SegChoice>
+                {MATERIAL_PRESETS.map((preset) => (
+                  <SegChoice
+                    key={preset.id}
+                    on={material === preset.id}
+                    aria-label={preset.vi}
+                    /* Áp `suggestedMatte` NGAY tại cú bấm, không phải lúc dựng contract:
+                       ba nút Nền tách phải hiện đúng thứ vừa xảy ra, và người dùng phải
+                       đổi lại được. Áp ngầm ở tầng contract là lấy mất quyền đổi ấy. */
+                    onClick={() => workflow.setElementSkel(detail.file, {
+                      material: preset.id,
+                      matte: preset.suggestedMatte === "none"
+                        ? (detail.skel.matte === "glow" || detail.skel.matte === "glass" ? "none" : null)
+                        : preset.suggestedMatte,
+                    })}
+                  >
+                    {preset.vi}
+                  </SegChoice>
+                ))}
+              </div>
+              <div className="mt-3 max-w-sm">
+                <Label htmlFor={`detail-${detail.file}-material`}>Hoặc tự gõ chất liệu (tiếng Anh)</Label>
+                <Input
+                  id={`detail-${detail.file}-material`}
+                  value={materialIsPreset ? "" : material}
+                  placeholder="brushed copper with soft patina"
+                  onChange={(event) => workflow.setElementSkel(detail.file, { material: event.target.value })}
+                />
+              </div>
+            </div>
+            {/* MÔ TẢ — ô mạnh nhất của popup, nên nó đứng cuối, ngay trên khối "Prompt sẽ
+                gửi đi" mà nó quyết định. `gen.sh` chèn đúng chuỗi này vào dòng `N) {spec}`,
+                nên sửa ở đây là sửa THẲNG câu lệnh gửi cho máy vẽ — kể cả với hai ô nền
+                (`25-bg-home`/`26-bg-play`), thứ trước đây không có đường nào sửa. */}
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-label text-fg-strong">
+                  Mô tả gửi cho máy vẽ
+                  {detailEdited ? <span className="ml-2 text-caption text-accent-text">✎ đã chỉnh</span> : null}
+                </p>
+                <Button
+                  type="button" variant="ghost" size="sm"
+                  disabled={!detailEdited}
+                  onClick={() => workflow.setElementSkel(detail.file, { spec: null })}
+                >
+                  <RotateCcw aria-hidden />Khôi phục mặc định
+                </Button>
+              </div>
+              <p className="mt-1 text-caption text-fg-muted">
+                Chữ của thư viện chung được điền sẵn. Sửa ở đây chỉ đổi bản của dự án này; xoá hết chữ là quay về mặc định.
+              </p>
+              <Textarea
+                className="mt-2"
+                aria-label="Mô tả gửi cho máy vẽ"
+                rows={4}
+                value={detailText}
+                placeholder={detail.spec || "Thư viện chưa có mô tả cho thành phần này."}
+                /* Gõ lại ĐÚNG chữ của thư viện ⇒ xoá lớp đè, không giữ một bản sao trùng
+                   mặc định. Nhờ vậy badge "đã chỉnh" không bao giờ nói dối. */
+                onChange={(event) => workflow.setElementSkel(detail.file, {
+                  spec: event.target.value === detail.spec ? null : event.target.value,
+                })}
+              />
             </div>
           </div>
         </ItemDetailDialog>

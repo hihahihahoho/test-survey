@@ -11,13 +11,79 @@ import {
 import { ImageDropzone } from "@/components/ui/image-dropzone";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api/endpoints";
 import type { LibraryItem } from "@/lib/types";
 import type { WorkflowMascot } from "../lib/model";
 import { useWorkflowProjectId } from "../lib/model";
+import { EXPRESSIONS, OUTFIT_THEMES, isPresetPhrase, poseLabel, type PhraseOption } from "../lib/poses";
 import { normalizedPoseIds } from "../lib/user-library";
 import { SharedMascotPicker, SharedReferencePicker } from "./SharedReferencePicker";
+
+/**
+ * ══ MỘT Ô "CHỌN PRESET HOẶC TỰ GÕ", DÙNG BA CHỖ ═════════════════════════════
+ *
+ * Biểu cảm của từng dáng · trang phục riêng của một con · trang phục chung của cả bộ —
+ * ba chỗ, cùng một hình dạng dữ liệu (một cụm TIẾNG ANH đi thẳng vào prompt, chọn sẵn
+ * hoặc tự viết). Chép ra ba bản là ba chỗ để luật "rỗng nghĩa là gì" trôi lệch nhau.
+ *
+ * Vì sao có `__custom__` mà không phải chỉ một ô nhập tự do: 90% lượt dùng là một trong
+ * mấy preset, và bắt người Việt tự nghĩ ra "a determined confident expression" thì họ sẽ
+ * gõ tiếng Việt — thứ máy vẽ đọc kém hơn hẳn. Ô tự gõ vẫn còn nguyên cho 10% còn lại.
+ *
+ * ⚠️ Radix `SelectItem` KHÔNG nhận `value=""` (nó ném) — nên "không đặt" phải mang một
+ * sentinel `__none__`, và sentinel đó KHÔNG BAO GIỜ được rò ra ngoài: `onChange` chỉ
+ * phát ra chuỗi rỗng hoặc chính cụm tiếng Anh.
+ */
+const NONE = "__none__";
+const CUSTOM = "__custom__";
+
+export function PhraseSelect({ id, label, options, value, emptyLabel, placeholder, onChange }: {
+  id: string;
+  label: string;
+  options: readonly PhraseOption[];
+  /** Cụm tiếng Anh đang lưu. Rỗng = chưa đặt. */
+  value: string;
+  /** Câu cho lựa chọn "chưa đặt" — mỗi chỗ gọi nói một nghĩa khác nhau. */
+  emptyLabel: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
+  const preset = isPresetPhrase(options, value);
+  /* Người dùng vừa bấm "Tự gõ…" nhưng chưa gõ chữ nào ⇒ giá trị vẫn rỗng, mà ô nhập
+     phải hiện ra. Không có cờ này thì cú bấm ấy trông như không có tác dụng gì. */
+  const [typing, setTyping] = React.useState(false);
+  const custom = typing || (value.trim() !== "" && !preset);
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Select
+        value={custom ? CUSTOM : value.trim() === "" ? NONE : value}
+        onValueChange={(next) => {
+          if (next === CUSTOM) { setTyping(true); return; }
+          setTyping(false);
+          onChange(next === NONE ? "" : next);
+        }}
+      >
+        <SelectTrigger id={id} aria-label={label}><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NONE}>{emptyLabel}</SelectItem>
+          {options.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+          <SelectItem value={CUSTOM}>Tự gõ…</SelectItem>
+        </SelectContent>
+      </Select>
+      {custom ? (
+        <Input
+          aria-label={`${label} — tự gõ`}
+          value={preset ? "" : value}
+          placeholder={placeholder}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 /**
  * ══ UI-FIX §3b · CỘNG TỪNG NHÂN VẬT MỘT ═════════════════════════════════════
@@ -34,13 +100,15 @@ import { SharedMascotPicker, SharedReferencePicker } from "./SharedReferencePick
  * (Và theo lời dặn của chủ dự án: KHÔNG sửa file của feature brand.)
  */
 export function MascotDialog({
-  open, onOpenChange, mascot, onSave, uploadRef, onAdoptPoses,
+  open, onOpenChange, mascot, poses, onSave, uploadRef, onAdoptPoses,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** `null` = thêm mới. */
   mascot: WorkflowMascot | null;
-  onSave: (input: { name: string; description: string; ref: { name: string } | null }) => void;
+  /** Dáng ĐANG ĐƯỢC CHỌN của dự án — mỗi dáng một hàng biểu cảm. */
+  poses: readonly string[];
+  onSave: (input: Omit<WorkflowMascot, "id">) => void;
   /** Đưa ảnh lên đĩa dự án và trả về TÊN agent đặt (`char-*.png`). */
   uploadRef: (file: File) => Promise<string | null>;
   /**
@@ -53,6 +121,8 @@ export function MascotDialog({
   const [name, setName] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [ref, setRef] = React.useState<{ name: string } | null>(null);
+  const [outfitTheme, setOutfitTheme] = React.useState("");
+  const [poseExpressions, setPoseExpressions] = React.useState<Record<string, string>>({});
   const [busy, setBusy] = React.useState(false);
   /** Ô chọn file cho nút "Đổi ảnh" — hàng preview không có vùng thả để bấm vào. */
   const replaceInput = React.useRef<HTMLInputElement>(null);
@@ -62,6 +132,11 @@ export function MascotDialog({
     setName(mascot?.name ?? "");
     setDescription(mascot?.description ?? "");
     setRef(mascot?.ref ?? null);
+    /* Bản nháp ghi từ build cũ KHÔNG có hai trường này — nhận mặc định "chưa đặt" thay
+       vì `undefined` chạy tiếp vào ô nhập (React sẽ đổi input từ controlled sang không,
+       và cảnh báo ấy là dấu hiệu của một trường sắp rơi mất). */
+    setOutfitTheme(mascot?.outfitTheme ?? "");
+    setPoseExpressions({ ...(mascot?.poseExpressions ?? {}) });
     setBusy(false);
   }, [open, mascot]);
 
@@ -114,10 +189,52 @@ export function MascotDialog({
             <Label htmlFor="wizard-mascot-name">Tên nhân vật</Label>
             <Input id="wizard-mascot-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Ví dụ: Mèo bạc hà" autoFocus />
           </div>
+          {/* Ô mô tả GIỮ NGUYÊN vai trò của nó — nhận dạng cố định của con vật: loài,
+              khuôn mặt, màu, tỉ lệ. Hai thứ THAY ĐỔI theo ngữ cảnh thì tách ra thành ô
+              riêng ngay dưới đây: trang phục đổi theo chiến dịch, nét mặt đổi theo dáng.
+              Trộn cả ba vào một ô là lý do bản cũ không có cách nào nói "vẫn con này, mặc
+              đồ Tết, dáng buồn thì mặt buồn". */}
           <div className="space-y-2">
             <Label htmlFor="wizard-mascot-description">Mô tả nhân vật</Label>
-            <Textarea id="wizard-mascot-description" rows={3} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Khuôn mặt, màu, trang phục…" />
+            <Textarea id="wizard-mascot-description" rows={3} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Loài, khuôn mặt, màu, tỉ lệ…" />
           </div>
+          <PhraseSelect
+            id="wizard-mascot-outfit"
+            label="Trang phục riêng"
+            options={OUTFIT_THEMES}
+            value={outfitTheme}
+            emptyLabel="— dùng chủ đề chung —"
+            placeholder="a red bomber jacket with a gold zipper"
+            onChange={setOutfitTheme}
+          />
+          {/* Chỉ những dáng ĐANG ĐƯỢC CHỌN mới có hàng — dựng đủ 19 hàng là bắt người
+              dùng cuộn qua 7 dáng họ đã bỏ tick để tới dáng thứ 8. */}
+          {poses.length > 0 ? (
+            <div className="space-y-2">
+              <p className="field-label mb-0">Biểu cảm theo dáng</p>
+              <p className="text-caption text-fg-muted">
+                Bỏ trống là giữ nguyên câu mặc định của dáng đó — dự án cũ không đổi gì.
+              </p>
+              <div className="space-y-3">
+                {poses.map((pose) => (
+                  <PhraseSelect
+                    key={pose}
+                    id={`wizard-mascot-face-${pose}`}
+                    label={poseLabel(pose)}
+                    options={EXPRESSIONS}
+                    value={poseExpressions[pose] ?? ""}
+                    emptyLabel="— mặc định —"
+                    placeholder="a sleepy half-closed-eyes look"
+                    onChange={(next) => setPoseExpressions((current) => {
+                      const draft = { ...current };
+                      if (next.trim()) draft[pose] = next; else delete draft[pose];
+                      return draft;
+                    })}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Label>Ảnh tham chiếu</Label>
@@ -175,7 +292,13 @@ export function MascotDialog({
             type="button"
             disabled={!canSave}
             onClick={() => {
-              onSave({ name: name.trim(), description: description.trim(), ref });
+              onSave({
+                name: name.trim(),
+                description: description.trim(),
+                ref,
+                outfitTheme: outfitTheme.trim(),
+                poseExpressions,
+              });
               onOpenChange(false);
             }}
           >

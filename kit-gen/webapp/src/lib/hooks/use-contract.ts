@@ -158,6 +158,23 @@ export function useValidateContract(projectId: string) {
   return useMutation({ mutationFn: (contract: Contract) => api.contract.validate(projectId, contract) });
 }
 
+/**
+ * #29 — PROMPT STUDIO: xem nguyên văn prompt engine sẽ gửi.
+ *
+ * `useMutation` chứ KHÔNG phải `useQuery`, và đó là lựa chọn về hành vi chứ không về
+ * gõ code: mỗi lần xem là agent chạy engine thật (vài giây) và **ghi đè `prompts/` của
+ * project**. Query thì tự chạy lại khi component mount lại / cửa sổ lấy lại focus —
+ * tức là một tác dụng phụ trên đĩa xảy ra sau lưng người dùng. Ở đây chỉ chạy khi có
+ * người bấm nút.
+ *
+ * KHÔNG `invalidate` gì cả: bản xem trước không đổi contract, không đổi run, không
+ * đổi kit. Lỗi (409 RUN_ACTIVE, 422 CONTRACT_INVALID / PROMPT_PREVIEW_FAILED) để
+ * nguyên `AgentError` cho màn dịch — xem `features/workflow-v4/lib/prompt-studio.ts`.
+ */
+export function usePromptPreview(projectId: string) {
+  return useMutation({ mutationFn: (contract: Contract) => api.contract.promptPreview(projectId, contract) });
+}
+
 /** #28 — catalogue chỉ đọc, cache 1 giờ. */
 export function useElementLib() {
   return useQuery({

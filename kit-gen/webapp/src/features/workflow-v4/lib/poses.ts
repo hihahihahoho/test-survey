@@ -44,6 +44,71 @@ const PROTOTYPE_POSE_ORDER = [
   "bow", "thumbs-up", "fly", "walk", "dance", "present", "view-34", "view-side", "view-back",
 ];
 
+/* ══════════════════════════════════════════════════════════════════════════
+   BIỂU CẢM + CHỦ ĐỀ TRANG PHỤC — hai danh mục "nhãn VI ⇄ cụm tiếng Anh"
+   ══════════════════════════════════════════════════════════════════════════
+
+   Cùng một luật với §W1-7 của dáng, chỉ khác chỗ chứa: **giá trị lưu là cụm
+   TIẾNG ANH đi thẳng vào prompt**, nhãn tiếng Việt chỉ để người dùng đọc. Vì sao
+   không lưu id rồi tra bảng như dáng: hai ô này có **đường tự gõ**. Người dùng gõ
+   "đội mũ cối" thì không có id nào để đặt, mà chuỗi họ gõ vẫn phải tới được máy
+   vẽ — nên chỗ chứa buộc phải là chính cụm chữ. Preset chỉ là phím tắt để không
+   phải nghĩ bằng tiếng Anh.
+
+   Hệ quả phải nhớ: **nhãn VI tra NGƯỢC từ giá trị** (`phraseLabel`), và giá trị lạ
+   (tự gõ) rơi về chính nó thay vì biến mất. */
+export interface PhraseOption {
+  /** Cụm tiếng Anh ĐI VÀO PROMPT — đây là thứ được lưu vào bản nháp. */
+  value: string;
+  /** Nhãn tiếng Việt hiện trên UI. */
+  label: string;
+}
+
+/**
+ * Nét mặt của MỘT dáng. Ý kiến 2c của team: "biểu cảm nhân vật kèm prompt cho đỡ cứng".
+ *
+ * Cụm chữ viết sao cho đọc được ở CẢ HAI đường ghép trong `poseSpecFor()`: thay thế
+ * mệnh đề nét mặt sẵn có ("…, sad expression") và nối thêm vào cuối dáng chưa nói gì
+ * về mặt ("standing still…, a big bright smile").
+ */
+export const EXPRESSIONS: readonly PhraseOption[] = [
+  { value: "a big bright smile", label: "Cười tươi" },
+  { value: "an excited thrilled expression, eyes wide open", label: "Phấn khích" },
+  { value: "a puzzled hesitant expression, one eyebrow raised", label: "Băn khoăn" },
+  { value: "a sad downcast expression", label: "Buồn" },
+  { value: "a surprised expression, mouth open", label: "Ngạc nhiên" },
+  { value: "a determined confident expression", label: "Quyết tâm" },
+  { value: "winking one eye with a playful grin", label: "Nháy mắt" },
+];
+
+/**
+ * Chủ đề trang phục theo mùa/chiến dịch — ý kiến 5 của team ("checkbox outfit theo
+ * chủ đề game: đông, hè, bóng đá…").
+ *
+ * Cụm chữ được nối vào SUBJECT của ô dáng dưới dạng `"… wearing {outfit}"`, nên nó
+ * phải là một cụm danh từ đọc xuôi sau chữ "wearing" — không phải một câu.
+ */
+export const OUTFIT_THEMES: readonly PhraseOption[] = [
+  { value: "a Vietnamese Tết festive outfit with red and gold", label: "Tết" },
+  { value: "a Christmas outfit with a red santa hat and white fur trim", label: "Giáng sinh" },
+  { value: "a light summer outfit with short sleeves and sunglasses", label: "Hè" },
+  { value: "a warm winter outfit with a thick knitted scarf and coat", label: "Đông" },
+  { value: "a football kit with a team jersey, shorts and long socks", label: "Bóng đá" },
+  { value: "a Halloween costume with a pumpkin motif and a dark cape", label: "Halloween" },
+];
+
+/** Nhãn VI của một cụm đã lưu. Cụm TỰ GÕ không có trong danh mục ⇒ hiện nguyên văn. */
+export function phraseLabel(options: readonly PhraseOption[], value: string): string {
+  const raw = (value ?? "").trim();
+  if (!raw) return "";
+  return options.find((option) => option.value === raw)?.label ?? raw;
+}
+
+/** `true` khi cụm này là một preset (⇒ dropdown chọn được nó, không cần ô tự gõ). */
+export function isPresetPhrase(options: readonly PhraseOption[], value: string): boolean {
+  return options.some((option) => option.value === (value ?? "").trim());
+}
+
 /** 3 sheet × 4 ô (= `DEFAULT_SHEET_LIMITS.mascot` của `kitset-to-contract.ts` — không
  *  import được vì file đó import ngược `model.ts`). Đổi trần ô/sheet thì sửa cả hai. */
 const DEFAULT_POSE_CAP = 3 * 4;

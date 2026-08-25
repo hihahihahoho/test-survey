@@ -5,6 +5,7 @@ import { estimateRun, rangeMinutes } from "@/features/runs/lib/estimate";
 import { STYLE_AXES } from "@/features/kit-form/lib/style-phrases";
 import { useWorkflowStore, type KitElement, type WorkflowState } from "../lib/model";
 import { useKitsetContract } from "../lib/contract-sync";
+import { PromptStudio } from "../components/PromptStudio";
 import { Step } from "./BriefStep";
 import { UI_STEP_LABEL } from "./Stepper";
 
@@ -52,7 +53,9 @@ export function axisDigest(axes: Record<string, number>): string {
     const v = axes[a.id]!;
     return `${v < 4 ? a.left : a.right} ${v}/7`;
   });
-  return moved.length === 0 ? "7 trục còn ở mặc định" : moved.join(" · ");
+  // Số trục đọc TỪ BẢNG, không gõ tay: thêm trục thứ 8 (`ornament`, 24/08) mà câu này
+  // vẫn nói "7 trục" là recap nói dối ngay ở bước Kiểm tra.
+  return moved.length === 0 ? `${STYLE_AXES.length} trục còn ở mặc định` : moved.join(" · ");
 }
 
 /** Dòng chính của thẻ recap Mascot. Tách ra để kiểm được mà không phải dựng cả bước 5. */
@@ -102,6 +105,10 @@ export function ReviewStep() {
           <strong>{estimateLine(sync?.jobCount ?? null, drawable.length)}</strong>
         </div>
       </div>
+      {/* Đặt NGAY DƯỚI dòng ước lượng, không phải trên nó: thứ tự đọc của bước ⑤ là
+          "bao nhiêu lượt / bao lâu" trước, rồi mới tới "chữ gửi đi là gì". Panel tự
+          ẩn khi chưa có contract (render cô lập) — xem `PromptStudio`. */}
+      <PromptStudio />
     </Step>
   );
 }

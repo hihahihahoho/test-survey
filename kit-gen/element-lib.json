@@ -40,7 +40,7 @@
     {
       "file": "16-fx-burst",
       "vi": "Hiệu ứng nổ sáng",
-      "spec": "radial light burst with four-point sparkles and soft golden rays, centered explosion; the glow must be perfectly SMOOTH and CLEAN — no film grain, no noise texture, no patchy haze: every ray and the halo fade evenly into the flat background color, and the whole burst stays inside the cell",
+      "spec": "radial light burst with four-point sparkles and soft golden rays, centered explosion; the glow must be perfectly SMOOTH and CLEAN — no film grain, no noise texture, no patchy haze: every ray and the halo fade evenly to FULL TRANSPARENCY (alpha 0) at their outer edge, keeping the light's own colour while the alpha drops, and the whole burst stays inside the cell",
       "skel": {
         "shape": "burst",
         "w": 0.6,
@@ -237,7 +237,7 @@
     {
       "file": "22-board-panel",
       "vi": "Khay đựng túi",
-      "spec": "rounded-square translucent glass tray panel, glowing border with bracket corners, frosted interior, completely empty, no grid lines; the glass is GENUINELY see-through: the flat background color of the sheet must show through the frosted interior (never paint the interior opaque white)",
+      "spec": "rounded-square translucent glass tray panel, glowing border with bracket corners, frosted interior, completely empty, no grid lines; the glass is GENUINELY see-through: draw the frosted interior with a LOW ALPHA value so the transparent sheet background shows through it (never paint the interior opaque white, never fake it with a pale wash)",
       "skel": {
         "shape": "rrect",
         "w": 0.8,

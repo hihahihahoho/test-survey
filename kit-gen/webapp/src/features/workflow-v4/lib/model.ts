@@ -92,7 +92,42 @@ export type SkelMatteChoice = "glow" | "glass" | "none";
  * TRƯỚC khi dựng contract. Bỏ trống ⇒ dùng số của thư viện (§7 sitemap: "sửa bộ khung
  * trong dự án chỉ sửa bản của dự án đó").
  */
-export type KitElementSkel = { w?: number; h?: number; matte?: SkelMatteChoice };
+/**
+ * ĐỘ TRONG CỦA MỘT Ô KÍNH — chỉ có nghĩa khi `matte === "glass"`.
+ *
+ * Ba mức, và cả ba được thực thi bằng **CHỮ NỐI VÀO `spec`**, không phải bằng một cờ
+ * mới cho engine. Đó là quyết định có chủ ý: `gen.sh` đã có sẵn hợp đồng alpha cho ô
+ * kính ("about 64 out of 255 for a clear pane, up to 128 for a strongly tinted one"),
+ * nên thứ còn thiếu chỉ là NÓI cho máy vẽ biết ô này nằm ở đâu trong dải ấy. Thêm một
+ * field vào contract là bắt `gen.sh` + `slice.py` + `validate.mjs` cùng học một khái
+ * niệm mới cho một việc mà một câu tiếng Anh làm xong.
+ */
+export type GlassLevel = "clear" | "frosted" | "tinted";
+
+export type KitElementSkel = {
+  w?: number;
+  h?: number;
+  matte?: SkelMatteChoice;
+  /** Mức trong của ô kính. Chỉ được nối vào prompt khi ô THẬT SỰ đang là kính. */
+  glassLevel?: GlassLevel;
+  /**
+   * CHẤT LIỆU của ô — id preset (`materials.ts`) hoặc chính cụm tiếng Anh người dùng
+   * tự gõ. Nối vào `spec` khi dựng contract; xem `resolveElementSpec()`.
+   */
+  material?: string;
+  /**
+   * MÔ TẢ GỬI MÁY VẼ của riêng dự án — đè `spec` của thư viện chung.
+   *
+   * Đây là câu trả lời cho ý kiến số 1 của team ("phải sửa được mô tả cảnh nền"). Mô
+   * tả nền không có đường riêng nào cả: `25-bg-home`/`26-bg-play` là element như mọi
+   * element khác, nên sửa được `spec` của một ô là sửa được cả nền — một luật, không
+   * phải một ngoại lệ.
+   *
+   * Vắng mặt ⇒ dùng `spec` của thư viện. Chuỗi rỗng KHÔNG được lưu (xem `setElementSkel`):
+   * "xoá hết chữ" nghĩa là *trả về mặc định*, không phải *gửi đi một mô tả rỗng*.
+   */
+  spec?: string;
+};
 export type KitElement = {
   file: string;
   label: string;
@@ -121,6 +156,33 @@ export type VersionSettings = { kitsetSummary: string; mascot: string; sliceThre
 export type KitVersion = { id: string; label: `v${number}`; createdAt: string; status: "mock" | "rendering" | "ready" | "failed"; runId?: string; prompt: string; settings: VersionSettings };
 export type StyleAxes = Record<StyleAxisId, number>;
 
+/** Nấc giữa của một trục — cùng số với `DEFAULT_VALUES.style` của `kit-form`. */
+export const STYLE_AXIS_MID = 4;
+
+/**
+ * BẢN NHÁP CŨ THIẾU TRỤC MỚI ⇒ NHẬN MẶC ĐỊNH, KHÔNG PHẢI `undefined`.
+ *
+ * `styleAxes` là MỘT OBJECT trong bản nháp, mà `persist` của zustand trộn NÔNG: object
+ * trên đĩa THAY THẾ nguyên cục object khởi tạo. Nên bản nháp ghi từ build 7 trục, mở lại
+ * bằng build 8 trục, sẽ có `styleAxes.ornament === undefined` — và từ đó:
+ *   · `SemanticSlider` nhận `value={undefined}` ⇒ thanh trống, bấm mới hiện;
+ *   · `buildStylePrompt` đọc `phrases[undefined - 1]` ⇒ `phrases[NaN]` ⇒ `undefined`
+ *     rơi vào `join(", ")` ⇒ prompt gửi cho `gen.sh` có một mẩu "undefined".
+ * Cùng họ với bug `stateFromVersion` phía dưới: dữ liệu tới từ `localStorage` LUÔN có
+ * thể là hình dạng của một bản build cũ hơn, kiểu TypeScript không cứu được.
+ *
+ * Hàm nhận `unknown` vì đó đúng là thứ đọc từ đĩa; trục lạ (đã bỏ khỏi app) bị rơi,
+ * trục sai kiểu/ngoài 1–7 về nấc giữa.
+ */
+export function normalizeStyleAxes(raw: unknown): StyleAxes {
+  const src = (raw ?? {}) as Record<string, unknown>;
+  return Object.fromEntries(STYLE_AXIS_IDS.map((id) => {
+    const v = src[id];
+    const ok = typeof v === "number" && Number.isFinite(v) && v >= 1 && v <= 7;
+    return [id, ok ? Math.round(v) : STYLE_AXIS_MID];
+  })) as StyleAxes;
+}
+
 /**
  * UI-FIX §3b — MỘT NHÂN VẬT TRONG DANH SÁCH.
  *
@@ -138,6 +200,48 @@ export type WorkflowMascot = {
   name: string;
   description: string;
   ref: { name: string } | null;
+  /**
+   * CHỦ ĐỀ TRANG PHỤC RIÊNG của con này — cụm tiếng Anh (xem `OUTFIT_THEMES`).
+   *
+   * Vắng mặt / rỗng ⇒ **dùng chủ đề chung của cả bộ** (`WorkflowState.outfitTheme`).
+   * Đây là lý do giá trị "dùng chủ đề chung" là CHUỖI RỖNG chứ không phải một id
+   * riêng: một dự án Tết mà thêm con thứ ba thì con ấy phải mặc Tết theo, không phải
+   * đứng trần cho tới khi ai đó nhớ ra.
+   */
+  outfitTheme?: string;
+  /**
+   * NÉT MẶT THEO TỪNG DÁNG — `{ [poseId]: "a big bright smile" }`.
+   *
+   * Vì sao gắn vào NHÂN VẬT chứ không vào `mascotPoses` (một mảng id dùng chung): hai
+   * con trong cùng dự án chia nhau một bộ dáng, nhưng "dáng buồn" của con A và của
+   * con B là hai ô ảnh KHÁC NHAU trong contract (`kitset-to-contract` dựng một bộ tấm
+   * cho mỗi nhân vật). Nhét nét mặt vào danh sách dáng là ép hai con cùng một khuôn mặt.
+   *
+   * Dáng không có khoá ở đây ⇒ giữ NGUYÊN VĂN câu cũ của `POSE_SPEC` (dự án cũ không
+   * đổi một chữ nào — xem `poseSpecFor()`).
+   */
+  poseExpressions?: Record<string, string>;
+};
+
+/**
+ * PROMPT STUDIO — lời người dùng nói thêm cho MỘT tấm (sheet) của contract.
+ *
+ * Hai trường, hai mức can thiệp khác hẳn nhau, và `gen.sh` đọc thẳng cả hai:
+ *  · `directive`      — MỘT CÂU chỉ đạo, engine chèn thành dòng riêng ngay sau `note`
+ *                       (`gen.sh:760`). Mọi thiết lập style/element của tấm VẪN CHẠY.
+ *  · `promptOverride` — người dùng tự soạn TRỌN prompt của tấm (`gen.sh:973`). Engine
+ *                       chỉ giữ lại dòng `Canvas orientation:` đầu tiên (ngoại lệ KỸ
+ *                       THUẬT: `run_one` đọc ngược khổ giấy từ dòng đó). Nghĩa là mọi
+ *                       thứ bước ①–④ dựng nên đều bị bỏ qua cho riêng tấm này.
+ *
+ * VẮNG MẶT KHÁC RỖNG: field không có mặt ⇒ sheet của contract KHÔNG mọc thêm khoá nào,
+ * tức contract của dự án cũ giữ nguyên từng byte. Vì thế `setSheetPrompt` XOÁ khoá khi
+ * chuỗi trim ra rỗng thay vì lưu `""` — một `""` lưu lại là một khoá thừa trong
+ * `styles.json`, và là một dấu "✎ đã chỉnh" nói dối trên màn.
+ */
+export type SheetPromptTweak = {
+  directive?: string;
+  promptOverride?: string;
 };
 
 /** Id ổn định cho một nhân vật mới. `crypto.randomUUID` không có ở mọi runtime test. */
@@ -249,6 +353,23 @@ export type WorkflowState = {
   mascots: WorkflowMascot[];
   /** LUÔN là id tiếng Anh (`idle|cheer|sad|present`) — nhãn tiếng Việt ở tầng UI (§W1-7). */
   mascotPoses: string[];
+  /**
+   * CHỦ ĐỀ TRANG PHỤC CỦA CẢ BỘ — cụm tiếng Anh (`OUTFIT_THEMES`), rỗng = không nói gì.
+   *
+   * Ở cấp BỘ chứ không cấp nhân vật, vì đây là thứ thay đổi theo CHIẾN DỊCH ("bộ kit
+   * Tết", "bộ kit World Cup"): đổi một lần là cả dàn nhân vật đổi theo. Con nào cần
+   * khác thì tự khai `WorkflowMascot.outfitTheme`.
+   */
+  outfitTheme: string;
+  /**
+   * PROMPT STUDIO — chỉ đạo / prompt tự soạn, THEO TỪNG TẤM. Khoá là `sheet.id` mà
+   * `buildKitsetContract` đặt (`nen`, `ui2`, `dao-cu-doc`, `pose-nhan-vat`…), tức cùng
+   * một khoá mà contract, `gen.sh` và thư mục `prompts/` đều dùng — không phải một id
+   * riêng của UI, để bản nháp không tự đẻ ra một hệ tên thứ hai.
+   *
+   * Tấm chưa ai đụng thì KHÔNG có khoá ở đây (xem `SheetPromptTweak`).
+   */
+  sheetPrompts: Record<string, SheetPromptTweak>;
   elements: KitElement[];
   /**
    * UI-FIX §2 — người dùng ĐÃ tự tay chỉnh kitset chưa.
@@ -285,8 +406,23 @@ export type WorkflowState = {
    * đó về thư viện; hết trường ⇒ xoá hẳn lớp đè để bản nháp không phình ra vì giá trị
    * trùng mặc định.
    */
-  setElementSkel: (file: string, patch: { w?: number | null; h?: number | null; matte?: SkelMatteChoice | null }) => void;
-  addMascot: (input: { name: string; description: string; ref?: { name: string } | null }) => string;
+  setElementSkel: (file: string, patch: {
+    w?: number | null;
+    h?: number | null;
+    matte?: SkelMatteChoice | null;
+    glassLevel?: GlassLevel | null;
+    material?: string | null;
+    spec?: string | null;
+  }) => void;
+  /**
+   * Ghi chỉ đạo / prompt tự soạn cho MỘT tấm. Patch từng trường: khoá không có trong
+   * `patch` thì giữ nguyên, khoá có mà trim ra rỗng thì BỊ XOÁ (đó là nút "khôi phục").
+   * Tấm không còn trường nào ⇒ rời hẳn map, để contract không mọc thêm khoá rỗng.
+   */
+  setSheetPrompt: (sheetId: string, patch: SheetPromptTweak) => void;
+  /** Bỏ mọi can thiệp của một tấm — đưa nó về đúng prompt engine tự dựng. */
+  clearSheetPrompt: (sheetId: string) => void;
+  addMascot: (input: Omit<WorkflowMascot, "id" | "ref"> & { ref?: { name: string } | null }) => string;
   patchMascot: (id: string, patch: Partial<Omit<WorkflowMascot, "id">>) => void;
   removeMascot: (id: string) => void;
   addVersion: (prompt: string, status?: KitVersion["status"], runId?: string) => string;
@@ -421,6 +557,7 @@ onDraftForgotten((projectId) => void stores.delete(projectId));
 
 type WorkflowActionKey =
   | "set" | "next" | "back" | "go" | "toggleElement" | "adoptCatalogue" | "setElementsSelected" | "setElementSkel"
+  | "setSheetPrompt" | "clearSheetPrompt"
   | "addMascot" | "patchMascot" | "removeMascot"
   | "addVersion" | "markVersionStatus" | "restoreVersion";
 
@@ -438,7 +575,7 @@ function initialState(): Omit<WorkflowState, WorkflowActionKey> {
     styleMode: "prompt",
     brandProfileId: null,
     styleRefs: [],
-    styleAxes: Object.fromEntries(STYLE_AXIS_IDS.map((id) => [id, 4])) as StyleAxes,
+    styleAxes: normalizeStyleAxes(null),
     primaryColor: NEUTRAL_PRIMARY_COLOR,
     secondaryColor: NEUTRAL_SECONDARY_COLOR,
     styleAvoid: "",
@@ -456,6 +593,13 @@ function initialState(): Omit<WorkflowState, WorkflowActionKey> {
     // "Cơ bản" + dáng thông dụng theo thứ tự prototype (xem `defaultPoseIds`). Chỉ ảnh
     // hưởng bản nháp MỚI; draft/contract đã lưu và pose adopt từ thư viện giữ nguyên.
     mascotPoses: defaultPoseIds(),
+    /* TRỐNG, đúng luật "MẶC ĐỊNH TRUNG TÍNH" ở đầu file: không dự án nào mặc định là
+       dự án Tết. Rỗng ⇒ subject của ô dáng KHÔNG có mệnh đề `wearing …` nào cả, tức
+       contract của dự án cũ không đổi một chữ. */
+    outfitTheme: "",
+    /* RỖNG = engine tự dựng trọn prompt cho mọi tấm, đúng hành vi từ trước tới nay.
+       Prompt Studio là cửa MỞ THÊM, không phải một lớp mặc định nào cả. */
+    sheetPrompts: {},
     elements: defaultKitset(),
     kitsetTouched: false,
     versions: [],
@@ -521,7 +665,11 @@ export const workflowDraftOf = (s: WorkflowState) => ({
   sheetLimits: s.sheetLimits,
   brandRefs: s.brandRefs, mascotEnabled: s.mascotEnabled, mascotName: s.mascotName,
   mascotDescription: s.mascotDescription, mascotRef: s.mascotRef, mascots: s.mascots,
-  mascotPoses: s.mascotPoses,
+  mascotPoses: s.mascotPoses, outfitTheme: s.outfitTheme,
+  /* Chỉ đạo từng tấm là CHỮ NGƯỜI DÙNG GÕ — thiếu ở đây thì đổi bước một cái là mất,
+     đúng bệnh §W1-6 của ô campaign. Bản nháp cũ không có khoá này ⇒ `hydrate`/`merge`
+     giữ `{}` của `initialState()`, không vỡ. */
+  sheetPrompts: s.sheetPrompts,
   elements: s.elements, kitsetTouched: s.kitsetTouched, versions: s.versions, activeVersion: s.activeVersion,
 });
 const partialize = workflowDraftOf;
@@ -530,6 +678,8 @@ export function hydrateWorkflowStore(store: WorkflowStore, draft: Record<string,
   if (!draft) return;
   const initial = initialState();
   const safe = Object.fromEntries(Object.keys(initial).filter(key => draft[key] !== undefined).map(key => [key, draft[key]])) as Partial<WorkflowState>;
+  // Bản nháp cũ có `styleAxes` 7 trục; chèn thẳng vào state là mất trục thứ 8.
+  if (safe.styleAxes !== undefined) safe.styleAxes = normalizeStyleAxes(safe.styleAxes);
   store.setState(safe);
   // Bản nháp ghi từ bản build CŨ chỉ có ba trường mascot rời — nâng lên danh sách NGAY
   // ở đây, để bước Mascot không phải biết tới hai hình dạng dữ liệu.
@@ -591,13 +741,54 @@ export function createWorkflowStore(projectId: string): WorkflowStore {
               if (matte === "glow" || matte === "glass" || matte === "none") next.matte = matte;
               else delete next.matte;
             }
+            if ("glassLevel" in patch) {
+              const level = patch.glassLevel;
+              if (level === "clear" || level === "frosted" || level === "tinted") next.glassLevel = level;
+              else delete next.glassLevel;
+            }
+            /* CHẤT LIỆU và MÔ TẢ đều là CHỮ, nên luật của chúng giống nhau và giống luật
+               của `w`/`h`: rỗng (sau khi bỏ khoảng trắng) = *trả về mặc định*, không phải
+               *ghi một giá trị rỗng*. Lưu chuỗi THÔ (chưa trim) để người dùng còn gõ được
+               dấu cách ở cuối câu — chỗ đọc (`resolveElementSpec`) mới trim. */
+            if ("material" in patch) {
+              const material = typeof patch.material === "string" ? patch.material : "";
+              if (material.trim()) next.material = material; else delete next.material;
+            }
+            if ("spec" in patch) {
+              const spec = typeof patch.spec === "string" ? patch.spec : "";
+              if (spec.trim()) next.spec = spec; else delete next.spec;
+            }
             const { skel: _drop, ...rest } = e;
             return Object.keys(next).length > 0 ? { ...rest, skel: next } : rest;
           }),
         })),
-        addMascot: ({ name, description, ref = null }) => {
+        setSheetPrompt: (sheetId, patch) => set((s) => {
+          const next: SheetPromptTweak = { ...(s.sheetPrompts[sheetId] ?? {}) };
+          /* Lưu chuỗi THÔ (chưa trim) nhưng QUYẾT ĐỊNH theo bản đã trim — cùng luật với
+             `setElementSkel` cho `material`/`spec`: người dùng còn gõ được dấu cách cuối
+             câu, mà một ô chỉ có khoảng trắng thì vẫn là "không nói gì". */
+          for (const key of ["directive", "promptOverride"] as const) {
+            if (!(key in patch)) continue;
+            const raw = patch[key];
+            if (typeof raw === "string" && raw.trim()) next[key] = raw;
+            else delete next[key];
+          }
+          const map = { ...s.sheetPrompts };
+          if (Object.keys(next).length > 0) map[sheetId] = next; else delete map[sheetId];
+          return { sheetPrompts: map };
+        }),
+        clearSheetPrompt: (sheetId) => {
+          // Thoát TRƯỚC khi `set` — cùng lý do `adoptCatalogue` làm vậy: một `set` rỗng
+          // vẫn tạo state mới ⇒ render thừa + một nhịp autosave ghi đĩa cho thứ không đổi.
+          const s = get();
+          if (!s.sheetPrompts[sheetId]) return;
+          const map = { ...s.sheetPrompts };
+          delete map[sheetId];
+          set({ sheetPrompts: map });
+        },
+        addMascot: ({ ref = null, ...rest }) => {
           const id = newMascotId();
-          set((s) => syncPrimaryMascot([...s.mascots, { id, name, description, ref }]));
+          set((s) => syncPrimaryMascot([...s.mascots, { id, ...rest, ref }]));
           return id;
         },
         patchMascot: (id, patch) => set((s) => syncPrimaryMascot(
@@ -652,7 +843,18 @@ export function createWorkflowStore(projectId: string): WorkflowStore {
           return { activeVersion: id, ...patch, mascots };
         }),
       }),
-      { name: draftKey(projectId), partialize },
+      {
+        name: draftKey(projectId),
+        partialize,
+        /* `merge` mặc định của persist là `{...current, ...persisted}` — trộn NÔNG, nên
+           `styleAxes` của bản nháp cũ (7 trục) thay thế nguyên cục object 8 trục. Đây là
+           chỗ DUY NHẤT bản nháp trên đĩa đi vào store lúc khởi tạo, nên vá ở đây là vá
+           mọi bộ kit; `hydrateWorkflowStore` vá đường nạp thủ công. */
+        merge: (persisted, current) => {
+          const draft = (persisted ?? {}) as Partial<WorkflowState>;
+          return { ...current, ...draft, styleAxes: normalizeStyleAxes(draft.styleAxes) };
+        },
+      },
     ),
   );
   stores.set(projectId, store);

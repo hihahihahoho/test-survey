@@ -157,10 +157,15 @@ describe("W2A-3 · không còn control thô của hệ điều hành", () => {
     expect(step).not.toContain("chroma");
   });
 
+  /* Hình thái `.color-field` KHÔNG đổi (chấm vuông 36px + mã hex mono); chỗ ở của nó
+     thì đổi: bước Phong cách nay dùng `HexColorField` dùng chung — cùng hình, nhưng mã
+     hex gõ/dán được (feedback team 24/08 §2b). Nên phép kiểm bám vào COMPONENT, không
+     bám vào chuỗi `className` từng nằm thẳng trong StyleStep. */
   it("ô màu đổi hình thái: `.color-field` chấm tròn + hex mono", () => {
     expect(GLOBALS).toMatch(/\.color-field\s*\{/);
     expect(GLOBALS).toMatch(/\.color-field input\[type="color"\]\s*\{[^}]*size-9/);
-    expect(strip(read("src/features/workflow-v4/steps/StyleStep.tsx"))).toContain('className="color-field"');
+    expect(strip(read("src/components/common/HexColorField.tsx"))).toContain('cn("color-field"');
+    expect(strip(read("src/features/workflow-v4/steps/StyleStep.tsx"))).toContain("<HexColorField");
   });
 });
 

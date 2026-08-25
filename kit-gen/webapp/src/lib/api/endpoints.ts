@@ -22,7 +22,7 @@ import {
   coverResponseSchema,
   createProjectResultSchema, deleteProjectResultSchema, doctorSchema, duplicateResultSchema,
   elementLibSchema, historyListSchema, importPreviewSchema, jobPromptSchema, kitSchema,
-  projectDetailSchema, projectListSchema, projectSchema, rawHistorySchema, refListSchema,
+  projectDetailSchema, projectListSchema, projectSchema, promptPreviewSchema, rawHistorySchema, refListSchema,
   refUploadResultSchema, restoreContractResultSchema, runListSchema, runSchema,
   saveContractResultSchema, startRunResultSchema, trashListSchema, uploadResultSchema, usageSchema,
   validationSchema, workspaceListSchema, workflowDraftSchema, userLibrarySchema, libraryItemResultSchema,
@@ -398,6 +398,21 @@ export const contractApi = {
   async validate(id: string, contract: Contract) {
     const data = await httpPost(`/api/projects/${pid(id)}/contract/validate`, { contract: normalizeContract(contract) });
     return parse(validationSchema, data, "kiểm bản thiết kế");
+  },
+  /**
+   * #29 — PROMPT STUDIO: nguyên văn prompt engine SẼ gửi, **trước khi tiêu một lượt nào**.
+   *
+   * LUÔN GỬI CONTRACT ĐANG DỰNG Ở CLIENT, không để agent tự đọc bản trên đĩa (body
+   * `contract` là optional ở phía agent). Lý do: người dùng vừa gõ một câu chỉ đạo và
+   * bấm "Xem prompt sẽ gửi" thì nhịp autosave 700ms có thể chưa chạy — xem trước một
+   * bản CŨ mà trông y như thật là đúng kiểu nói dối màn này sinh ra để dọn.
+   *
+   * Đây vẫn là I/O đĩa: agent chạy `renderPromptsOnly`, dừng TRƯỚC vòng gọi `codex exec`.
+   * Không có `kind` nào, không lượt AI nào — xem `scripts/check-no-gen.mjs`.
+   */
+  async promptPreview(id: string, contract: Contract) {
+    const data = await httpPost(`/api/projects/${pid(id)}/prompt-preview`, { contract: normalizeContract(contract) });
+    return parse(promptPreviewSchema, data, "bản xem trước prompt");
   },
 };
 

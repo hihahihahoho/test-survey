@@ -7,7 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { SemanticSlider } from "@/features/kit-form/components/SemanticSlider";
 import { STYLE_AXES } from "@/features/kit-form/lib/style-phrases";
+import { ConfirmDestructive, HexColorField } from "@/components/common";
 import { useLibraryFile, useUserLibrary } from "@/lib/hooks";
+import { GENRE_PRESETS, applyGenrePreset, genrePresetOverwrites, matchesGenrePreset, type GenrePreset } from "../lib/genre-presets";
 import { STYLE_PROMPT_PLACEHOLDER, brandColorPatch, useWorkflowProjectId, useWorkflowStore } from "../lib/model";
 import { useWorkflowRefs } from "../lib/refs-sync";
 import { RefChips } from "../components/RefChips";
@@ -81,6 +83,56 @@ function RefUploadBlock({ label, hint, items, ready, fallback, onFiles, onRemove
   );
 }
 
+/**
+ * HÀNG CHIP THỂ LOẠI — phím tắt điền form, đặt TRƯỚC 8 thanh trượt.
+ *
+ * Vì sao đứng đầu bước: nó là câu hỏi dễ nhất trong cả bước này ("game của bạn thuộc thể
+ * loại gì?") và trả lời nó điền hộ phần khó nhất (8 nấc + một đoạn brief tiếng Anh).
+ * Ai không nhận ra thể loại của mình trong bảy chip thì bỏ qua, xuống thẳng thanh trượt
+ * như trước — không có gì bị khoá lại.
+ *
+ * Hỏi trước khi đè, và CHỈ khi có gì để mất (`genrePresetOverwrites`): mở bước ra bấm
+ * chip đầu tiên mà đã phải bấm qua một modal thì modal ấy chỉ dạy người dùng bấm "Đồng ý"
+ * không đọc. Ma sát phải đúng với hậu quả — cùng luật của `ConfirmDestructive` (§0.2 X6).
+ */
+function GenreChips() {
+  const s = useWorkflowStore();
+  const [pending, setPending] = React.useState<GenrePreset | null>(null);
+  const fill = (preset: GenrePreset) => s.set(applyGenrePreset(preset));
+  const pick = (preset: GenrePreset) => {
+    if (genrePresetOverwrites(s)) setPending(preset);
+    else fill(preset);
+  };
+  return <section className="rounded-3 border border-line-subtle bg-raised p-4">
+    <p className="field-label">Bắt đầu từ thể loại game</p>
+    <p className="mb-3 text-caption text-fg-muted">Điền sẵn mô tả và 8 thanh trượt bên dưới. Chọn xong vẫn sửa được từng thứ.</p>
+    <div className="flex flex-wrap items-center gap-2">
+      {GENRE_PRESETS.map((preset) => {
+        const on = matchesGenrePreset(preset, s);
+        return <button
+          key={preset.id}
+          type="button"
+          data-genre={preset.id}
+          aria-pressed={on}
+          onClick={() => pick(preset)}
+          /* Cùng ngôn ngữ "đang chọn" với `GroupChips` và hai nút segmented của bước này:
+             viền accent + chữ `fg-strong`, KHÔNG phải một chip nền đặc (P-SWEEP·bảng-5). */
+          className={`rounded-2 border px-3 py-2 text-label transition-colors ${on ? "border-accent bg-accent/[var(--kg-tint-a)] text-fg-strong" : "border-line-subtle text-fg hover:bg-surface"}`}
+        >{preset.vi}</button>;
+      })}
+    </div>
+    <ConfirmDestructive
+      open={pending !== null}
+      onOpenChange={(next) => { if (!next) setPending(null); }}
+      title={pending ? `Điền theo «${pending.vi}»?` : ""}
+      description="Mô tả phong cách bạn đang viết và cả 8 thanh trượt sẽ bị thay bằng bộ của thể loại này. Ảnh tham chiếu, màu và điều không muốn thấy giữ nguyên."
+      actionLabel="Điền đè"
+      cancelLabel="Giữ nguyên"
+      onConfirm={() => { if (pending) fill(pending); setPending(null); }}
+    />
+  </section>;
+}
+
 export function StyleStep() {
   const s = useWorkflowStore();
   const projectId = useWorkflowProjectId();
@@ -118,6 +170,7 @@ export function StyleStep() {
     }
   };
   return <Step title="Phong cách" copy="Chọn bằng mô tả hoặc ảnh tham chiếu.">
+    <GenreChips />
     {/**
       * P-SWEEP·8 — câu "(chọn 1 trong 2)" đã xoá: có ĐÚNG hai nút cạnh nhau, một cái
       * đang sáng — hình đã nói xong, chữ chỉ dạy lại.
@@ -134,8 +187,14 @@ export function StyleStep() {
       * thành một THANH ĐỎ BÃO HOÀ rộng 525px + một thanh vàng bên cạnh: vật xấu nhất
       * trong 29 ảnh (ảnh 09). `.color-field` đổi hình thái sang chấm tròn 36px + mã hex
       * mono — cùng lượng thông tin, bằng 1/14 diện tích, và thôi hét màu.
+      *
+      * 24/08 (feedback team §2b) — HÌNH THÁI GIỮ NGUYÊN, mã hex thôi chỉ-để-đọc: cái
+      * `<code>` cũ in ra `#00B0F0` nhưng không cho gõ hay dán vào, nên người thiết kế
+      * cầm sẵn mã màu của thương hiệu vẫn phải mò trong bảng màu hệ điều hành. Nay là
+      * `HexColorField` dùng chung (`components/common`) — cùng ô vuông + mã mono, nhưng
+      * mã ấy là `<input>` nhận `#RGB`/`RRGGBB`/hoa thường và tự chuẩn về `#rrggbb`.
       */}
-    <div className="style-fields"><div><Label htmlFor="workflow-primary">Màu chính</Label><div className="color-field"><Input id="workflow-primary" type="color" value={s.primaryColor} onChange={(e) => s.set({ primaryColor: e.target.value })} /><code>{s.primaryColor}</code></div></div><div><Label htmlFor="workflow-secondary">Màu phụ</Label><div className="color-field"><Input id="workflow-secondary" type="color" value={s.secondaryColor} onChange={(e) => s.set({ secondaryColor: e.target.value })} /><code>{s.secondaryColor}</code></div></div><div className="sm:col-span-2"><Label htmlFor="workflow-avoid">Điều không muốn thấy</Label><Input id="workflow-avoid" value={s.styleAvoid} onChange={(e) => s.set({ styleAvoid: e.target.value })} placeholder="Chibi quá trẻ con, viền đen dày" /></div></div>
+    <div className="style-fields"><div><Label htmlFor="workflow-primary">Màu chính</Label><HexColorField id="workflow-primary" label="Màu chính" value={s.primaryColor} onChange={(hex) => s.set({ primaryColor: hex })} /></div><div><Label htmlFor="workflow-secondary">Màu phụ</Label><HexColorField id="workflow-secondary" label="Màu phụ" value={s.secondaryColor} onChange={(hex) => s.set({ secondaryColor: hex })} /></div><div className="sm:col-span-2"><Label htmlFor="workflow-avoid">Điều không muốn thấy</Label><Input id="workflow-avoid" value={s.styleAvoid} onChange={(e) => s.set({ styleAvoid: e.target.value })} placeholder="Chibi quá trẻ con, viền đen dày" /></div></div>
     {/**
       * §BUG-1 — ô này TRỐNG với bản nháp mới, và gợi ý cách viết bằng `placeholder`.
       * Trước đây nó khởi tạo bằng một câu tả nhận diện của một thương hiệu có thật;

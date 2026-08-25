@@ -1,0 +1,57 @@
+/*
+ * prompt-lab.css — CSS của riêng màn lab.
+ *
+ * ┌── VÌ SAO CÓ FILE CSS RIÊNG MÀ KHÔNG DÙNG HẾT TAILWIND ───────────────────┐
+ * │ Những thứ dưới đây KHÔNG viết được bằng utility trên JSX, vì phần tử mang │
+ * │ chúng do ProseMirror tự sinh ra, không đi qua React:                      │
+ * │   ① `.ProseMirror` — vùng contenteditable thật;                           │
+ * │   ② `.is-empty::before` — chữ mờ của extension Placeholder;               │
+ * │   ③ `.ProseMirror-selectednode` — pill đang được chọn bằng bàn phím.      │
+ * │                                                                          │
+ * │ Mọi selector ở đây bám vào **data-attribute**, KHÔNG đặt tên class mới.  │
+ * │ Có lý do đo được: `npm run deadclass` (luật ②) quét mọi chuỗi trong      │
+ * │ `className=…` có gạch nối và đòi phải có rule `.tên` trong CSS đã BIÊN   │
+ * │ DỊCH từ `styles/globals.css`. File này nạp rời (import trong .tsx) nên   │
+ * │ không nằm trong bản biên dịch đó ⇒ mỗi class tự chế sẽ thành một báo lỗi │
+ * │ "class mồ côi". Dùng `data-*` thì không đụng luật nào, và cũng đúng hơn: │
+ * │ đây là móc kỹ thuật, không phải một token thiết kế.                      │
+ * └──────────────────────────────────────────────────────────────────────────┘
+ */
+
+/* ── Vùng soạn thảo ───────────────────────────────────────────────────────────
+   KHÔNG có `outline: none` ở đây, dù mọi ví dụ TipTap trên mạng đều bắt đầu bằng
+   dòng đó. Luật của repo (`styles/globals.css` §5.8-A4) là không tắt vòng focus
+   ở bất cứ đâu, và có cổng test canh chuyện này. Một vùng soạn thảo mất vòng
+   focus là người dùng bàn phím không biết mình đang gõ vào đâu. */
+[data-prompt-lab] .ProseMirror {
+  /* ProseMirror cần hai dòng này để xuống dòng đúng; không có chúng thì một
+     đoạn dài tràn ngang thay vì wrap. Bình thường đến từ `prosemirror.css` của
+     prosemirror-view — ta chỉ lấy đúng phần cần, không nạp cả file. */
+  white-space: pre-wrap;
+  word-wrap: break-word;
+
+  /* Giãn dòng RỘNG hơn bậc `display` mặc định (24/32px). Pill trong câu cao hơn
+     chữ trần vì có viền + padding dọc; ở 32px chúng chạm nhau giữa hai dòng và
+     cả đoạn trông như bị dính. 1.8 là con số nhỏ nhất còn thở được với pill có
+     thumbnail ảnh 28px bên trong. */
+  line-height: 1.8;
+}
+
+/* Chữ mờ của @tiptap/extension-placeholder: nó gắn `data-placeholder` + class
+   `is-empty` lên node rỗng, phần vẽ ra là việc của CSS. */
+[data-prompt-lab] .ProseMirror .is-empty::before {
+  content: attr(data-placeholder);
+  color: rgb(var(--kg-fg-muted));
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Atom (pill) đang được CHỌN bằng bàn phím — ProseMirror gắn class này. Không có
+   phản hồi ở đây thì bấm mũi tên qua một pill trông như không có gì xảy ra, và
+   người dùng không biết Backspace sắp xoá cái gì. */
+[data-prompt-lab] .ProseMirror .ProseMirror-selectednode {
+  outline: 2px solid rgb(var(--kg-focus-ring));
+  outline-offset: 2px;
+  border-radius: 999px;
+}

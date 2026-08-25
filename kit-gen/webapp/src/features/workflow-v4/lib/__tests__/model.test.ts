@@ -10,10 +10,12 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadBundledV2 } from "@/features/design/library/lib/source";
+import { STYLE_AXIS_IDS } from "@/features/kit-form/lib/form-model";
+import { buildStylePrompt } from "@/features/kit-form/lib/style-phrases";
 import {
-  LAST_STEP, LEGACY_DRAFT_KEY, LUCKY_PRESET_FILES, createWorkflowStore, draftKey, dropWorkflowDraft,
-  presetKitset, resetWorkflowStores, restoreWorkflowDraft, settingsDirty, trashedDraftKey,
-  versionSettingsOf,
+  LAST_STEP, LEGACY_DRAFT_KEY, LUCKY_PRESET_FILES, STYLE_AXIS_MID, createWorkflowStore, draftKey, dropWorkflowDraft,
+  hydrateWorkflowStore, normalizeStyleAxes, presetKitset, resetWorkflowStores, restoreWorkflowDraft, settingsDirty,
+  trashedDraftKey, versionSettingsOf,
 } from "../model";
 import { POSES, allPoseIds, defaultPoseIds } from "../poses";
 
@@ -304,5 +306,55 @@ describe("preset kitset — §W3-5 một danh sách duy nhất", () => {
     expect(versions).toHaveLength(2);
     expect(versions.at(-1)?.label).toBe("v2");
     expect(versions.at(-2)?.prompt).toBe("v1 prompt");
+  });
+});
+
+/**
+ * TRỤC THỨ 8 (`ornament`, 24/08) — BẢN NHÁP CŨ KHÔNG ĐƯỢC THỦNG MỘT LỖ.
+ *
+ * `styleAxes` là một OBJECT trong bản nháp, mà `persist` trộn NÔNG: object 7 trục trên
+ * đĩa thay thế nguyên cục object 8 trục của `initialState()`. Nên mọi bộ kit đã lưu
+ * trước hôm nay sẽ mở lại với `ornament === undefined` — thanh trượt trống, và
+ * `buildStylePrompt` nhét chuỗi "undefined" vào prompt gửi `gen.sh`. Cùng họ bug với
+ * `stateFromVersion` ở §W1-3: dữ liệu từ `localStorage` LUÔN có thể mang hình dạng của
+ * một bản build cũ hơn, và kiểu TypeScript không chặn được gì cả.
+ */
+describe("trục phong cách mới — bản nháp cũ nhận mặc định, không nhận `undefined`", () => {
+  const OLD_AXES = { age: 6, energy: 2, lux: 3, era: 4, gender: 5, detail: 7, outline: 1 };
+
+  it("bản nháp 7 trục mở bằng build 8 trục: giữ 7 nấc cũ, trục mới về nấc giữa", () => {
+    seed(draftKey("kit-cu"), { kitName: "Bộ kit cũ", styleAxes: OLD_AXES });
+    const axes = createWorkflowStore("kit-cu").getState().styleAxes;
+
+    expect(axes.ornament).toBe(STYLE_AXIS_MID);
+    expect(axes.ornament).not.toBeUndefined();
+    for (const [id, value] of Object.entries(OLD_AXES)) expect(axes[id as keyof typeof axes], id).toBe(value);
+    // Và prompt gửi máy vẽ đủ 8 mệnh đề, không mẩu "undefined" nào.
+    const prompt = buildStylePrompt(axes);
+    expect(prompt.split(", ")).toHaveLength(STYLE_AXIS_IDS.length);
+    expect(prompt).not.toContain("undefined");
+  });
+
+  it("`hydrateWorkflowStore` (đường nạp thủ công) vá cùng một lỗ", () => {
+    const store = createWorkflowStore("kit-hydrate");
+    hydrateWorkflowStore(store, { kitName: "Nạp tay", styleAxes: OLD_AXES });
+    expect(store.getState().styleAxes.ornament).toBe(STYLE_AXIS_MID);
+    expect(store.getState().styleAxes.age).toBe(6);
+  });
+
+  it("`normalizeStyleAxes` dọn cả rác thật: nấc ngoài dải, sai kiểu, trục đã bỏ", () => {
+    const axes = normalizeStyleAxes({ ...OLD_AXES, age: 99, energy: "3", lux: null, mau_cu: 5 });
+    expect(axes.age).toBe(STYLE_AXIS_MID);
+    expect(axes.energy).toBe(STYLE_AXIS_MID);
+    expect(axes.lux).toBe(STYLE_AXIS_MID);
+    expect(axes.detail).toBe(7);
+    expect(Object.keys(axes).sort()).toEqual([...STYLE_AXIS_IDS].sort());
+  });
+
+  it("bản nháp KHÔNG có `styleAxes` (bộ kit tạo trước cả bước Phong cách) vẫn ra đủ 8 trục", () => {
+    seed(draftKey("kit-trong"), { kitName: "Không có trục nào" });
+    const axes = createWorkflowStore("kit-trong").getState().styleAxes;
+    expect(Object.keys(axes).sort()).toEqual([...STYLE_AXIS_IDS].sort());
+    expect(Object.values(axes).every((v) => v === STYLE_AXIS_MID)).toBe(true);
   });
 });

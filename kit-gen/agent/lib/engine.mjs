@@ -19,11 +19,12 @@
  * **thu hẹp đúng tập job đã chọn** (đóng E7). Pha slice thì dùng argv vì slice.py so khớp
  * TẬP CHÍNH XÁC (`sid not in ONLY`).
  */
+import { spawn } from "node:child_process"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
 import { exists, writeJsonAtomic, ensureDir, copyFile } from "./fsx.mjs"
-import { IS_WIN, bashCommand, pythonCommand, pythonEnv } from "./platform.mjs"
+import { IS_WIN, bashCommand, pythonCommand, pythonEnv, killTree, winSpawnOpts } from "./platform.mjs"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO_DIR = resolve(HERE, "..", "..")
@@ -111,6 +112,12 @@ export function contractToStylesV1(contract, onlyJobs = null) {
     schemaVersion: contract.schemaVersion ?? 4,
     characterPoses: contract.characterPoses ?? [],
     sheets: sheets.map(sh => {
+      /* CHÉP NGUYÊN TẤM rồi mới gọt, KHÔNG liệt kê từng field. Đây là chủ ý, không
+         phải lười: `note`, `orient`, `ref`, `cell_hint`, `grid`, và nay `directive` /
+         `promptOverride` đều là thứ gen.sh đọc thẳng từ styles.json. Một danh sách
+         trắng ở đây thì mỗi field mới của Prompt Studio sẽ rơi ÂM THẦM — contract
+         lưu đúng, UI hiện đúng, prompt thì không có gì, và không ai biết mất ở đâu.
+         Chỉ `components` bị lọc (bên dưới) vì engine v1 chỉ hiểu 4 khoá của nó. */
       const out = { ...sh }
       delete out.variants
       const only = perSheet?.get(sh.id)
@@ -131,6 +138,48 @@ export async function materializeStyles(projectDirAbs, contract, onlyJobs = null
   await ensureDir(projectDirAbs)
   await writeJsonAtomic(join(projectDirAbs, "styles.json"), contractToStylesV1(contract, onlyJobs))
   return "styles.json"
+}
+
+/* ══ XEM TRƯỚC PROMPT (KITGEN_PROMPTS_ONLY) ═══════════════════════════════════
+   MỘT NGUỒN SỰ THẬT DUY NHẤT. Prompt được lắp trong gen.sh, nên bất kỳ bản "dựng
+   lại prompt bằng JS" nào ở agent cũng là bản SAO CHÉP — và bản sao thì trôi khỏi
+   bản gốc trong im lặng, đúng lúc người dùng đang tin nó để sửa câu chữ. Vì vậy
+   xem trước = CHẠY THẬT gen.sh, chỉ chặn nó lại trước vòng gọi codex.
+   Rẻ và tất định: chỉ có khung xương + văn bản, không mạng, không quota.
+
+   TRẦN THỜI GIAN là bắt buộc: đây là đường ĐỒNG BỘ của một request HTTP, không
+   phải run-store có nút Dừng. Hết giờ thì giết cả cây tiến trình (gen.sh đẻ node
+   + python) rồi vẫn TRẢ VỀ những gì đã kịp ghi — caller tự quyết. */
+export const PROMPTS_ONLY_TIMEOUT_MS = 60_000
+
+/** Chạy gen.sh ở chế độ chỉ-dựng-prompt. Không ném: trả về phán quyết để caller xử. */
+export async function renderPromptsOnly(engineDir, projectDirAbs, contract, { timeoutMs = PROMPTS_ONLY_TIMEOUT_MS } = {}) {
+  await prepareEngine(engineDir, projectDirAbs)
+  await materializeStyles(projectDirAbs, contract)
+  for (const d of ["prompts", "skeleton", "logs"]) await ensureDir(join(projectDirAbs, d))
+  const { cmd, args, env } = buildCommand("gen", projectDirAbs, { maxJobs: 1 })
+  return new Promise(done => {
+    let child
+    try {
+      child = spawn(cmd, args, {
+        cwd: projectDirAbs, detached: !IS_WIN, stdio: ["ignore", "pipe", "pipe"],
+        // KITGEN_PROMPTS_ONLY là CÔNG TẮC DUY NHẤT khác với một lượt gen thật —
+        // mọi thứ còn lại (bash của Git-Bash, PATH coreutils, PYTHONUTF8) phải y hệt,
+        // không thì "xem trước" lại xem một thứ khác với thứ sẽ chạy.
+        env: { ...process.env, ...env, KITGEN_PROMPTS_ONLY: "1", PATH: env.PATH ?? process.env.PATH },
+        ...winSpawnOpts(),
+      })
+    } catch (e) { return done({ code: -1, timedOut: false, output: `spawn failed: ${e?.message ?? e}` }) }
+    let output = ""
+    const cap = c => { if (output.length < 64 * 1024) output += String(c) }
+    child.stdout?.on("data", cap)
+    child.stderr?.on("data", cap)
+    let timedOut = false
+    const timer = setTimeout(() => { timedOut = true; killTree(child, "SIGKILL") }, timeoutMs)
+    const settle = (code, extra = "") => { clearTimeout(timer); done({ code, timedOut, output: output + extra }) }
+    child.on("error", e => settle(-1, `spawn failed: ${e?.message ?? e}`))
+    child.on("close", code => settle(code ?? -1))
+  })
 }
 
 /** argv cho từng pha. Client chỉ gửi DANH TỪ; argv do agent dựng, không có chuỗi shell nào của client. */

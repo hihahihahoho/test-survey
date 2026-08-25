@@ -2,7 +2,10 @@ import { z } from "zod";
 import { NEUTRAL_PRIMARY_COLOR, NEUTRAL_SECONDARY_COLOR } from "@/lib/types/contract";
 import { prefillValues, type BriefReadResult } from "@/features/docs/lib/brief-read";
 
-export const STYLE_AXIS_IDS = ["age", "energy", "lux", "era", "gender", "detail", "outline"] as const;
+/* THỨ TỰ Ở ĐÂY = thứ tự câu trong `buildStylePrompt`. Thêm trục thì thêm vào CUỐI:
+   trục mới chèn giữa sẽ đổi câu prompt của mọi bản nháp cũ mà không ai đụng vào chúng.
+   `ornament` (trang trí) là trục thứ 8, thêm 24/08 — xem `style-phrases.ts`. */
+export const STYLE_AXIS_IDS = ["age", "energy", "lux", "era", "gender", "detail", "outline", "ornament"] as const;
 export type StyleAxisId = (typeof STYLE_AXIS_IDS)[number];
 
 const slider = z.number().int().min(1).max(7);
@@ -10,7 +13,7 @@ export const kitFormSchema = z.object({
   name: z.string().trim().min(2, "Nhập tên bộ kit để tiếp tục.").max(80),
   hasCharacter: z.boolean(),
   character: z.object({ species: z.string().max(120), traits: z.string().max(180), costume: z.string().max(180) }),
-  style: z.object({ age: slider, energy: slider, lux: slider, era: slider, gender: slider, detail: slider, outline: slider }),
+  style: z.object({ age: slider, energy: slider, lux: slider, era: slider, gender: slider, detail: slider, outline: slider, ornament: slider }),
   primary: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Nhập màu dạng #RRGGBB."),
   secondary: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Nhập màu dạng #RRGGBB."),
   avoid: z.string().max(300),
@@ -25,7 +28,7 @@ export type KitFormValues = z.infer<typeof kitFormSchema>;
 export const DEFAULT_VALUES: KitFormValues = {
   name: "", hasCharacter: false,
   character: { species: "", traits: "", costume: "" },
-  style: { age: 4, energy: 4, lux: 4, era: 4, gender: 4, detail: 4, outline: 4 },
+  style: { age: 4, energy: 4, lux: 4, era: 4, gender: 4, detail: 4, outline: 4, ornament: 4 },
   /* §BUG-1 — cặp màu khởi tạo của form là MỰC/XÁM TRUNG TÍNH của app, không phải nhận
      diện của một thương hiệu có thật (trước đây là `#005BAA`/`#00B0F0` của VNPAY, dán
      vào form của mọi người dùng). Vẫn là hex thật chứ không phải token CSS: đây là DỮ

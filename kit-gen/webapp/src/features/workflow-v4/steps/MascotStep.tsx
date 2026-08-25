@@ -7,10 +7,10 @@ import { useWorkflowRefs } from "../lib/refs-sync";
 import { CheckRow } from "../components/CheckRow";
 import { GroupChips } from "../components/GroupChips";
 import { ItemDetailDialog } from "../components/ItemDetail";
-import { MascotCard, MascotDialog, MascotEmpty } from "../components/MascotDialog";
+import { MascotCard, MascotDialog, MascotEmpty, PhraseSelect } from "../components/MascotDialog";
 import { useKitsetContract } from "../lib/contract-sync";
 import { itemPromptFor, poseCellFile } from "../lib/item-prompt";
-import { POSES, POSE_GROUPS, allPoseIds } from "../lib/poses";
+import { OUTFIT_THEMES, POSES, POSE_GROUPS, allPoseIds } from "../lib/poses";
 import { poseSvgMarkup } from "@/features/design/preview";
 import { Step } from "./BriefStep";
 
@@ -91,6 +91,26 @@ export function MascotStep({ variant = "wizard", detailFooter }: {
 
       {s.mascotEnabled && (
         <>
+          {/* CHỦ ĐỀ CẢ BỘ đứng TRƯỚC danh sách nhân vật: nó là quyết định của chiến dịch
+              ("bộ kit Tết"), và mọi con thêm sau đều mặc theo nó trừ khi tự khai khác.
+              Đặt sau danh sách thì nó đọc ra như một thuộc tính của con cuối cùng. */}
+          <section className="picker-section" aria-label="Chủ đề trang phục">
+            <div className="max-w-sm">
+              <PhraseSelect
+                id="mascot-outfit-theme"
+                label="Chủ đề trang phục cả bộ"
+                options={OUTFIT_THEMES}
+                value={s.outfitTheme}
+                emptyLabel="— không đặt —"
+                placeholder="a school uniform with a navy blazer"
+                onChange={(value) => s.set({ outfitTheme: value })}
+              />
+              <p className="mt-2 text-caption text-fg-muted">
+                Áp cho mọi nhân vật chưa tự chọn trang phục riêng. Bỏ trống là không nhắc gì về trang phục.
+              </p>
+            </div>
+          </section>
+
           <section className="picker-section" aria-label="Nhân vật của dự án">
             <div className="picker-heading">
               <div>
@@ -231,6 +251,7 @@ export function MascotStep({ variant = "wizard", detailFooter }: {
             open={dialogOpen}
             onOpenChange={setDialogOpen}
             mascot={editing}
+            poses={s.mascotPoses}
             uploadRef={(file) => refs.addOne(file, "character")}
             onAdoptPoses={(poses) => s.set({ mascotPoses: poses })}
             onSave={(input) => {

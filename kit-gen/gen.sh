@@ -39,21 +39,49 @@ file_hash(){
 #
 # KHÔNG DÒ ĐƯỢC THÌ KHÔNG PHÁN. Thiếu Pillow ⇒ in cảnh báo rồi cho qua: chặn một
 # lượt gen vì phép kiểm không chạy nổi là đổi một lỗi thật lấy một lỗi tự gây.
+#
+# ⚠️ BA PHÉP TRÊN CHỈ ĐÚNG VỚI SHEET CÓ NỀN. Với sheet FULL-BLEED thì chính prompt
+# ra lệnh ngược lại: dòng 488 viết "NOT ONE PIXEL of empty transparent background
+# may show around a scene". Model làm ĐÚNG hợp đồng ⇒ alpha=0 chiếm 0,00% ⇒ phép ②
+# đóng dấu FAIL "model vẽ đè kín nền", và phép ③ cũng FAIL vì cảnh đục kín thì
+# không có dải mờ nào. Tức engine tự phạt chính thứ nó vừa yêu cầu — mọi sheet nền
+# đều đỏ oan, và người dùng đọc được một lời buộc tội sai hẳn nguyên nhân.
+# Nên tham số thứ hai ("1" = job full-bleed, do khối python đánh dấu bằng file
+# `prompts/<job>.fullbleed`) LẬT NGƯỢC phép kiểm: full-bleed mà TRONG SUỐT NHIỀU
+# mới là hỏng (cảnh bị vẽ thụt vào, chừa khung rỗng quanh 4 cạnh — đúng triệu
+# chứng viền key 40-55px của BlindTest-B2), còn 0% trong suốt là ĐẠT.
 PY_CHECK="${KITGEN_PYTHON:-python3}"
 alpha_verdict(){
-  "$PY_CHECK" - "$1" <<'PYA' 2>/dev/null || echo "skip không chạy được phép kiểm alpha"
+  "$PY_CHECK" - "$1" "${2:-0}" <<'PYA' 2>/dev/null || echo "skip không chạy được phép kiểm alpha"
 import sys
 try:
     from PIL import Image
 except Exception:
     print("skip thiếu Pillow — bỏ qua phép kiểm alpha"); raise SystemExit
+full_bleed = len(sys.argv) > 2 and sys.argv[2] == "1"
+# Ngưỡng của nhánh full-bleed. Không lấy 0% làm chuẩn: khe 24px giữa các cảnh kề
+# nhau là hợp lệ (prompt cho phép), và một sheet 3 cảnh có khe như thế mới chỉ
+# quanh 1-2%. 10% thì chỉ có thể là cảnh bị thu nhỏ, chừa khung rỗng.
+FULL_BLEED_MAX_TRONG = 0.10
 im = Image.open(sys.argv[1])
 if "A" not in im.getbands():
-    print("bad KHÔNG có kênh alpha (mode=%s). image_gen phải trả PNG RGBA — "
-          "đường tách nền đã bỏ nên không có gì cứu được ảnh này." % im.mode); raise SystemExit
+    if full_bleed:
+        # Sheet phủ kín thì kênh alpha chẳng để làm gì — RGB đục là đúng hợp đồng.
+        print("ok full-bleed, ảnh đục hoàn toàn (mode=%s) — đúng yêu cầu phủ kín" % im.mode)
+    else:
+        print("bad KHÔNG có kênh alpha (mode=%s). image_gen phải trả PNG RGBA — "
+              "đường tách nền đã bỏ nên không có gì cứu được ảnh này." % im.mode)
+    raise SystemExit
 h = Image.open(sys.argv[1]).convert("RGBA").getchannel("A").histogram()
 n = float(sum(h)) or 1.0
 trong, mo = h[0] / n, sum(h[1:255]) / n
+if full_bleed:
+    if trong > FULL_BLEED_MAX_TRONG:
+        print("bad sheet nền phải phủ KÍN ô mà %.0f%% pixel lại trong suốt — cảnh bị vẽ "
+              "thụt vào, chừa khung rỗng quanh cạnh. Sinh lại." % (trong * 100))
+    else:
+        print("ok full-bleed, trong suốt %.0f%% (phủ kín, đúng hợp đồng)" % (trong * 100))
+    raise SystemExit
 if trong < 0.02:
     print("bad có kênh alpha nhưng gần như không chỗ nào trong suốt "
           "(alpha=0 chỉ %.2f%%) — model vẽ đè kín nền." % (trong * 100)); raise SystemExit
@@ -83,6 +111,15 @@ mkdir -p raw logs prompts
 IMG_HOME="${IMG_HOME:-}"
 MAXJOBS="${MAXJOBS:-4}"
 
+# ── XEM PROMPT MÀ KHÔNG VẼ (KITGEN_PROMPTS_ONLY=1) ────────────────────────────
+# Prompt gửi cho model được LẮP TRONG CHÍNH FILE NÀY, nên trước bản này cách duy
+# nhất để đọc nó là… chạy một lượt gen thật và trả tiền cho nó. Đúng thứ tự ngược:
+# người ta muốn soi câu chữ TRƯỚC khi tiêu quota, nhất là khi vừa sửa mô tả sheet.
+# Chế độ này chạy đủ hai bước rẻ và tất định — khung xương + khối python lắp prompt —
+# rồi DỪNG ngay trước vòng gọi codex. Không mạng, không quota, không đụng raw/.
+# Nó cũng là đường mà agent dùng cho `POST /api/projects/:id/prompt-preview`.
+PROMPTS_ONLY="${KITGEN_PROMPTS_ONLY:-}"
+
 # ── MODEL CHO LƯỢT SINH ẢNH ───────────────────────────────────────────────────
 # Việc của model ở đây RẤT NHẸ: đọc prompt, gọi tool tạo ảnh, ghi file ra đúng chỗ.
 # Không có gì để suy luận sâu, nên mặc định đi model rẻ và nhanh: gpt-5.6-luna
@@ -95,10 +132,19 @@ MAXJOBS="${MAXJOBS:-4}"
 #
 # Gõ rỗng để TẮT hẳn, trả về đúng hành vi cũ (dùng model/effort của hồ sơ):
 #   KITGEN_GEN_MODEL="" ./gen.sh
+# ⚠️ KHỐI DƯỚI (từ `GEN_MODEL=` tới `fi`) ĐƯỢC TRÍCH NGUYÊN VĂN ra chạy độc lập bởi
+# test/gen-fake-ok.test.sh và test/gen-canvas-size.test.sh (`sed` theo đúng hai mốc
+# đó). Vì vậy nó KHÔNG được phụ thuộc vào biến nào mà chính nó không đặt — dạng
+# `${TÊN:-}` là bắt buộc, không thì snippet chết ngay vì `set -u`, và ca test chết
+# theo với một lời báo lỗi chẳng liên quan gì tới thứ nó đang đo.
+#
+# Cổng model và cổng đăng nhập ngay dưới đều HỎI CODEX. Ở chế độ xem trước prompt thì
+# codex không được gọi lần nào — máy chưa cài/chưa đăng nhập vẫn phải xem được prompt,
+# nếu không thì đúng lúc cần chẩn đoán nhất lại là lúc không xem được gì.
 GEN_MODEL="${KITGEN_GEN_MODEL-gpt-5.6-luna}"
 GEN_EFFORT="${KITGEN_GEN_EFFORT-medium}"
 MODEL_ARGS=()
-if [[ -n "$GEN_MODEL" ]]; then
+if [[ -z "${PROMPTS_ONLY:-}" && -n "$GEN_MODEL" ]]; then
   # Catalog TĨNH, nằm sẵn trên máy (đo: 0,03 giây, không gọi mạng). Nó chỉ chứng minh
   # bản codex này BIẾT tên model — KHÔNG chứng minh provider của người dùng chịu phục vụ
   # model đó. Ai trỏ codex sang provider tuỳ biến thì tên có trong catalog mà gọi vẫn bị
@@ -114,7 +160,7 @@ if [[ -n "$GEN_MODEL" ]]; then
     echo "codex không biết model '$GEN_MODEL' — dùng model mặc định của hồ sơ."
   fi
 fi
-if [[ -n "$IMG_HOME" && ! -f "$IMG_HOME/auth.json" ]]; then
+if [[ -z "$PROMPTS_ONLY" && -n "$IMG_HOME" && ! -f "$IMG_HOME/auth.json" ]]; then
   echo "FATAL: profile Codex riêng chưa đăng nhập. Chạy: CODEX_HOME=$IMG_HOME codex login"; exit 1
 fi
 
@@ -140,7 +186,7 @@ fi
 
 # Build prompt cho từng (style, sheet) → prompts/<style>-<sheet>.txt
 python3 - <<'PY'
-import json, re, sys
+import json, os, re, sys
 cfg = json.load(open("styles.json", encoding="utf-8"))
 
 # Từ vựng VẬT LIỆU / MÀU trong spec của thư viện element (element-lib.json).
@@ -182,8 +228,12 @@ MATERIAL_WORDS = {
 #   · light — vừa là "thin light outer rim" (sắc độ) vừa là "the light effect is
 #     drawn ADDITIVELY" trong đoạn phụ của ô glow. Hạ cấp là đá nhầm vế thứ hai.
 #   · soft / flat / highlight / darker — dính hình dáng hoặc TRẠNG THÁI
-#     ("flat background color of the sheet must show through" là hợp đồng chroma-key;
-#     "but darker, pushed-in look" là trạng thái nhấn của nút).
+#     ("flat cap", "flat face" là hình dáng; "but darker, pushed-in look" là trạng
+#     thái nhấn của nút). Ví dụ cũ ở đây trích câu "flat background color of the
+#     sheet must show through" của `22-board-panel` — câu đó là DI CHỨNG CHROMA-KEY
+#     và đã bị xoá khỏi element-lib.json (24/08/2026, nay là "LOW ALPHA … the
+#     transparent sheet background shows through"). Từ `flat` vẫn ở ngoài từ điển,
+#     nhưng vì lý do hình dáng, không vì một hợp đồng nền không còn tồn tại.
 
 
 # CAP của danh sách từ được nêu đích danh. Bản cũ cắt cứng `hits[:10]` KHÔNG BÁO
@@ -498,6 +548,40 @@ for s in cfg["styles"]:
                 "centered, keeping at least 40px of empty background padding on every side of the element;",
                 "elements never touch each other and never touch the image edges.",
             ]
+        # ⚠️ KHỐI "BA LỚP" ĐƯỢC VIẾT CHO NÚT BẤM, KHÔNG PHẢI CHO NHÂN VẬT.
+        # Nó ra lệnh: một MẶT PHẲNG liền lạc thay chỗ bóng xám, viền/rim ngay bên
+        # ngoài mặt phẳng đó, trang trí đẩy ra xa hơn. Với nút, khay, thanh thì đó
+        # đúng là cấu tạo. Với sheet mascot thì không có "mặt phẳng" nào cả — và
+        # model vẫn tuân lệnh: nó vẽ con vật như một cái huy hiệu có viền, dáng cứng
+        # đơ, tóc/tai/đuôi bị ép vào trong "footprint". Đúng loại lệnh đã từng phá ô
+        # ánh sáng (xem câu huỷ lệnh trong nhánh matte == "glow" bên dưới), chỉ khác
+        # là ở đây nó phá cả tấm.
+        # Sheet mascot nhận diện bằng `sh["ref"]` — CÓ ẢNH THAM CHIẾU NHÂN VẬT thì cả
+        # tấm là nhân vật (đúng vị từ mà khối "SECOND attached image" dùng ở dưới).
+        # Bỏ khối ba lớp/rim, GIỮ nguyên mọi thứ khác: safe zone, nền trong suốt,
+        # cấm chữ, cấm caro. Chỉ giữ lại một câu — ràng buộc THẬT SỰ cần của lớp 3:
+        # trang trí tràn ra ngoài guide thì được, tràn sang ô hàng xóm thì không.
+        mascot_sheet = bool(sh.get("ref"))
+        layer_block = (
+            [
+                "Draw the character as ONE natural figure, not as a rim around a flat plate:",
+                "no forced border, no badge frame, no plaque. Hair, ears, tails, ribbons, props",
+                "and sparkles may overflow outside the guide, but must stay inside this",
+                "character's own cell and never cross into another cell.",
+            ]
+            if mascot_sheet else
+            [
+                "Build each element in three layers, from the inside out:",
+                "1) one continuous, clean content surface replacing the gray silhouette, on the",
+                "   same footprint;",
+                "2) the rim/border immediately OUTSIDE that footprint — it must not consume or",
+                "   reduce the safe-zone surface;",
+                "3) flowers, ribbons, tassels, jewels, sparkles and filigree farther outside as",
+                "   overflow decoration; they may cross the frame but must stay inside their own",
+                "   cell and never cross into another cell.",
+                "Keep the crop-safe area clean: no decoration may cover the functional surface.",
+            ]
+        )
         lines = [
             "Canvas orientation: " + ("PORTRAIT 1024x1536." if portrait else "LANDSCAPE 1536x1024."),
             (f"A sheet of {n_real} full-bleed background scenes for a mobile mini-game."
@@ -538,15 +622,7 @@ for s in cfg["styles"]:
             "its left, top, right or bottom edge. If a rim or decoration needs more room, put it",
             "outside the core and let it overflow; do not spend core pixels on the rim.",
             "",
-            "Build each element in three layers, from the inside out:",
-            "1) one continuous, clean content surface replacing the gray silhouette, on the",
-            "   same footprint;",
-            "2) the rim/border immediately OUTSIDE that footprint — it must not consume or",
-            "   reduce the safe-zone surface;",
-            "3) flowers, ribbons, tassels, jewels, sparkles and filigree farther outside as",
-            "   overflow decoration; they may cross the frame but must stay inside their own",
-            "   cell and never cross into another cell.",
-            "Keep the crop-safe area clean: no decoration may cover the functional surface.",
+            *layer_block,
             "The continuous enamel/content surface is the CORE and the only layer scored for",
             "geometry. Measure intrusion one-sided: core missing inside the safe zone is a",
             "failure; decoration or core extending outside the safe zone is harmless if it",
@@ -673,6 +749,17 @@ for s in cfg["styles"]:
                 "NEVER reuse a reference background color, especially not for character cells.", ""]
         if sh.get("note"):
             lines += [sh["note"], ""]
+        # CHỈ ĐẠO RIÊNG CỦA TẤM — một câu người thiết kế gõ ở Prompt Studio.
+        # Khác `note` ở CHỖ ĐỨNG TRONG HỢP ĐỒNG, không ở hình thức: `note` là mô tả
+        # tấm do template/thư viện sinh ra, còn dòng này là lời người dùng nói thêm
+        # cho ĐÚNG tấm này ở ĐÚNG lượt này. Đặt ngay sau `note` vì cả hai cùng nói về
+        # tấm, và đặt TRƯỚC danh sách ô để nó còn kịp áp lên từng ô (chữ ở xa thua
+        # chữ ở gần — bài học của cả khối "thứ tự ưu tiên" bên dưới).
+        # Nói RA NGUỒN ("from the designer") có chủ ý: model phân biệt được đây là
+        # yêu cầu của người, không phải một câu preset của thư viện có thể hạ cấp.
+        directive = str(sh.get("directive") or "").strip()
+        if directive:
+            lines += [f"Extra direction for this sheet (from the designer): {directive}", ""]
         # ⚠️ THỨ TỰ ƯU TIÊN PHẢI ĐƯỢC NÊU NGAY CẠNH DANH SÁCH Ô, KHÔNG PHẢI Ở CUỐI.
         # Dòng `N) <spec>` là spec VẬT LIỆU CỨNG lấy nguyên văn từ thư viện element
         # ("glossy 3D candy-red capsule button…", "vivid warm orange-to-coral
@@ -871,6 +958,32 @@ for s in cfg["styles"]:
             f"All {n_real} elements share the exact same consistent style and belong to one coherent game. "
             "Game-ready UI asset quality, " + ("portrait 2:3." if portrait else "landscape 3:2.")
         ]
+        # ── NGƯỜI DÙNG TỰ SOẠN TRỌN PROMPT CỦA TẤM ────────────────────────────
+        # Toàn bộ khối trên là lời của engine. `promptOverride` là chỗ người dùng nói
+        # "để tôi tự viết" — và khi đã nói thế thì phải được viết THẬT: không nối
+        # thêm, không nhắc khéo một câu nào. Nửa vời còn tệ hơn không cho, vì họ sẽ
+        # sửa câu chữ của mình mãi mà không hiểu vì sao ảnh vẫn ra kiểu cũ.
+        #
+        # NGOẠI LỆ DUY NHẤT — và nó là ngoại lệ KỸ THUẬT, không phải cãi lời:
+        # `run_one` đọc ngược khổ giấy bằng `head -n1 … | grep -qi PORTRAIT` (xem hàm
+        # ngay dưới khối python này). Mất dòng đầu là mọi sheet dọc bị gửi đi với
+        # 1536x1024 ⇒ ảnh về sai tỉ lệ, cắt lưới méo hết — đúng sự cố mà
+        # test/gen-canvas-size.test.sh sinh ra để chặn. Nên dòng khổ giấy ở lại, và
+        # nó cũng là thông tin người viết prompt cần biết chứ không phải rác.
+        override = str(sh.get("promptOverride") or "").strip()
+        if override:
+            lines = [lines[0], "", override]
+        # DẤU FULL-BLEED CHO TẦNG BASH. `full_bleed` tính được ở đây (skel.shape của
+        # mọi ô là "full") nhưng `alpha_verdict` lại chạy ở bash, sau khi codex trả
+        # ảnh — hai tầng không nói chuyện được với nhau ngoài đĩa. Một file rỗng cạnh
+        # prompt là mối nối rẻ nhất và cùng vòng đời với prompt.
+        # XOÁ dấu cũ khi tấm KHÔNG còn full-bleed: prompts/ sống qua nhiều lượt, một
+        # dấu mồ côi sẽ tắt phép kiểm alpha của đúng tấm cần nó nhất.
+        fb_marker = f"prompts/{s['id']}-{sh['id']}.fullbleed"
+        if full_bleed:
+            open(fb_marker, "w", encoding="utf-8", newline="\n").write("1\n")
+        elif os.path.exists(fb_marker):
+            os.remove(fb_marker)
         # newline="\n" BẮT BUỘC: trên Windows chế độ text ghi \r\n, và `read -r` của bash
         # giữ nguyên \r cuối dòng — tên file trong .att thành "xxx.png\r", test `-f` fail
         # LẶNG LẼ ⇒ mọi ảnh đính kèm bị rơi hết (lỗi hiện trường: mascot sai nhân vật,
@@ -890,6 +1003,19 @@ for s in cfg["styles"]:
         open(f"prompts/{s['id']}-{sh['id']}.att", "w", encoding="utf-8", newline="\n").write("\n".join(att) + "\n")
         print("prompt →", f"prompts/{s['id']}-{sh['id']}.txt", f"(+{len(att)} ảnh kèm)")
 PY
+py_rc=$?
+
+# ── DỪNG Ở ĐÂY KHI CHỈ XIN XEM PROMPT ─────────────────────────────────────────
+# Mọi thứ đắt tiền nằm PHÍA SAU dòng này: vòng lặp gọi `codex exec`, hạn mức ảnh,
+# ghi đè raw/. Phía trước chỉ có khung xương và văn bản — chạy lại bao nhiêu lần
+# cũng ra đúng một kết quả và không tốn gì.
+# Thoát PHẢI mang mã của khối python: contract sai lưới thì `assert` của nó chết,
+# và "xem trước" mà báo thành công với một thư mục prompts/ cũ mới là lời nói dối
+# nguy hiểm nhất ở chế độ này.
+if [[ -n "$PROMPTS_ONLY" ]]; then
+  echo "KITGEN_PROMPTS_ONLY: đã dựng xong prompt trong prompts/ — KHÔNG gọi codex, KHÔNG đụng raw/."
+  exit "$py_rc"
+fi
 
 run_one() {
   local job="$1"
@@ -1065,7 +1191,11 @@ $(cat "prompts/${job}.txt")
   else
     # Có ảnh MỚI — nhưng "mới" chưa phải "đúng hợp đồng". Kiểm alpha trước khi
     # đóng dấu OK: đây là chỗ rẻ nhất để bắt, mọi chỗ sau đều đã tiêu quota.
-    local av; av="$(alpha_verdict "raw/${job}.png")"
+    # Dấu do khối python để lại (xem `fb_marker`): tấm này là nền full-bleed, tức
+    # hợp đồng của nó là PHỦ KÍN — phép kiểm alpha phải lật ngược, không thì tấm nào
+    # làm đúng cũng bị đóng dấu FAIL.
+    local fb=0; [[ -f "prompts/${job}.fullbleed" ]] && fb=1
+    local av; av="$(alpha_verdict "raw/${job}.png" "$fb")"
     local tail=""; [[ $rc -ne 0 ]] && tail="  (codex rc=${rc} sau khi đã lưu ảnh — bỏ qua)"
     case "$av" in
       bad*) echo "FAIL ${job} (nền KHÔNG trong suốt thật: ${av#bad } — xem logs/${job}.log)" ;;
