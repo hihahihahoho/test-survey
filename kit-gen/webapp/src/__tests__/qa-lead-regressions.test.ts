@@ -131,14 +131,17 @@ describe("V-9 · sàn chữ 12px (audit I3) không được thủng", () => {
 });
 
 describe("V-10 · preview ảnh không lồng ổ cuộn", () => {
-  const source = () => read("src/features/kit-core/components/CutAssetGrid.tsx");
-  const preview = () => source().slice(source().indexOf("function AssetZoomDialog"));
+  /* ĐỔI ĐỊA CHỈ, KHÔNG ĐỔI LUẬT. Popup xem ảnh ở độ nét thật từng là
+     `AssetZoomDialog` trong `kit-core/components/CutAssetGrid.tsx`; component đó đã bị
+     xoá cùng IA prompt-first. Popup tương đương nay nằm ở cuối `SheetResultPanel`
+     (tab «Ảnh gốc» → bấm vào ảnh), và bệnh cần chặn vẫn y nguyên: hai ổ cuộn lồng
+     nhau thì bánh xe chuột lăn trong cái trong, người dùng tưởng trang đơ. */
+  const source = () => read("src/features/prompt-canvas/components/result/SheetResultPanel.tsx");
+  const preview = () => source().slice(source().indexOf("<Dialog open={zoom}"));
 
   it("chỉ DialogBody giữ overflow-y-auto; khung ảnh không tạo overflow riêng", () => {
     expect(preview()).not.toMatch(/overflow-(?:x-)?auto|overflow-(?:x-)?scroll/);
-    expect(preview()).toContain("h-[min(70dvh,calc(100dvh-10rem))]");
     expect(preview()).toContain("!max-h-[min(90dvh,720px)]");
-    expect(preview()).toContain("className=\"h-full w-full border-0\"");
   });
 
   it("DialogBody là vùng nổi có overscroll-contain để Radix khóa nền", () => {

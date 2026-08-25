@@ -174,3 +174,48 @@ describe("local-first routes skip obsolete onboarding", () => {
     expect((thrown as { options: { to?: string } }).options.to).toBe("/");
   });
 });
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   IA PROMPT-FIRST — HAI CĂN PHÒNG THẬT, và một mớ URL cũ vẫn phải mở được
+
+   Sau đợt này chỉ còn HAI đích có màn riêng cho một dự án: `/k/:id` (SOẠN) và
+   `/p/:id` (XEM + XUẤT). Sáu đường còn lại (`/design`, `/runs`, `/kit`,
+   `/settings`, `/k/:id/canvas`, `/k/:id/studio`) là STUB chuyển hướng — chúng
+   vẫn phải KHỚP route, vì rơi vào 404 nghĩa là mọi bookmark cũ của người dùng
+   thành lỗi 404 chỉ vì bên trong app đổi cách làm việc.
+   ══════════════════════════════════════════════════════════════════════════════ */
+describe("smoke — hai căn phòng của một dự án + stub chuyển hướng đời cũ", () => {
+  it.each([
+    ["khu soạn", "/k/tet26-a7f3", "/k/$projectId"],
+    ["kết quả & xuất kit", "/p/tet26-a7f3", "/p/$projectId"],
+  ])("%s: %s → %s", (_label, path, expected) => {
+    expect(leaf(path)).toBe(expected);
+  });
+
+  it.each([
+    "/p/tet26-a7f3/design",
+    "/p/tet26-a7f3/kit",
+    "/p/tet26-a7f3/settings",
+    "/p/tet26-a7f3/runs",
+    "/k/tet26-a7f3/canvas",
+    "/k/tet26-a7f3/studio",
+  ])("link cũ %s vẫn khớp trọn một route (không 404)", (path) => {
+    const { foundRoute, routeParams } = makeRouter().getMatchedRoutes(path);
+    expect(foundRoute, `${path} phải khớp một route`).toBeDefined();
+    expect(routeParams["**"] ?? "", `${path} không được còn đuôi thừa`).toBe("");
+  });
+
+  /* `?settings=` nay chỉ mang nghĩa "dialog Cài đặt đang mở"; ba giá trị cũ vẫn
+     hợp lệ để link đời trước không rơi vào hư không (xem `search-schemas.ts`). */
+  it.each(["project", "requirements", "style"])("`?settings=%s` mở dialog, không làm trắng màn", (v) => {
+    const m = matchAt("/p/tet26-a7f3", { settings: v }).at(-1);
+    expect(m?.routeId).toBe("/p/$projectId");
+    expect((m?.search as { settings?: string }).settings).toBe(v);
+  });
+
+  it("giá trị `?settings=` lạ rơi về «đóng», KHÔNG ném lỗi", () => {
+    const m = matchAt("/p/tet26-a7f3", { settings: "bịa-ra" }).at(-1);
+    expect(m?.routeId).toBe("/p/$projectId");
+    expect((m?.search as { settings?: string }).settings).toBeUndefined();
+  });
+});

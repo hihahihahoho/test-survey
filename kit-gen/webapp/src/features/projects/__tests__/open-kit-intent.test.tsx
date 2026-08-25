@@ -103,9 +103,26 @@ describe("§B2 — mở dự án ĐÃ CÓ ẢNH phải vào thẳng trang kết 
     });
   });
 
-  it("màn dự án CHỈ đá về wizard khi chưa có ảnh nào", () => {
+  /**
+   * ĐẢO CHIỀU SAU IA PROMPT-FIRST — và đây mới là bảo đảm mạnh hơn.
+   *
+   * Bản trước canh rằng `/p/:id` chỉ đá người dùng về wizard KHI dự án chưa có ảnh.
+   * Cái đá ngược ấy tồn tại vì `/p` từng vừa là nơi xem vừa là nơi sửa, nên một dự án
+   * trắng mở ra là một màn rỗng không lối đi. Nay hai vai đã tách hẳn: `/p` là màn XEM
+   * + XUẤT, `/k` là khu SOẠN, và dự án trắng ở `/p` hiện một khối rỗng có nút [Mở khu
+   * soạn] chứ KHÔNG bị điều hướng ngầm.
+   *
+   * Vì thế ca này chuyển sang canh PHỦ ĐỊNH: không một `navigate` tự động nào rời khỏi
+   * `/p`. Tự-điều-hướng là đúng cái bệnh §B2 đã tốn hai người test mù để tìm ra (cờ
+   * `completed` lật ⇒ dự án đầy ảnh bị đá về bước "Kiểm tra"), nên luật giá trị nhất
+   * rút ra từ đó là: màn kết quả không tự đi đâu cả.
+   */
+  it("màn dự án KHÔNG tự điều hướng đi đâu — vào /p là ở lại /p", () => {
     const src = readFileSync(join(SRC, "features/project/ProjectScreen.tsx"), "utf8");
-    expect(src).toContain("!hasGeneratedOutput(project.data)");
+    expect(src).not.toContain("hasGeneratedOutput");
+    expect(src).not.toMatch(/React\.useEffect\([^)]*navigate/);
+    // Đường sang khu soạn phải là một CÚ BẤM của người dùng, không phải một effect.
+    expect(src).toContain("nav.openWizard(projectId)");
   });
 
   /* Ca "wizard của dự án đã gen có đường sang trang kết quả" đã rút (Wave 4·B):

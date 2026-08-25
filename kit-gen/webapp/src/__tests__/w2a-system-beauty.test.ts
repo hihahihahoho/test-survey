@@ -129,11 +129,13 @@ describe("W2A-3 · không còn control thô của hệ điều hành", () => {
     }
   });
 
-  /* Bước ⑥ "Kết quả" đã bỏ; nhà mới của màn thành phẩm là tab "Ảnh đã tạo" của dự án.
-     Hợp đồng giữ nguyên chữ: ưu tiên thành phẩm, không nhét control kỹ thuật vào đó. */
+  /* Nhà của "màn thành phẩm" đã đổi hai lần: bước ⑥ của wizard → tab "Ảnh đã tạo" của
+     trình quản lý dự án → nay là chính màn `/p/:id` («Kết quả & xuất kit», IA
+     prompt-first). Hợp đồng giữ nguyên chữ: ưu tiên thành phẩm, không nhét control
+     kỹ thuật vào đó — chỉ đổi tên component chở thành phẩm. */
   it("màn thành phẩm ưu tiên thành phẩm, không đưa control kỹ thuật vào màn chính", () => {
-    const s = strip(read("src/features/project/sections/ImagesSection.tsx"));
-    expect(s).toContain("<GeneratedResults");
+    const s = strip(read("src/features/project/ProjectScreen.tsx"));
+    expect(s).toContain("<SheetResultPanel");
     expect(s).not.toContain('<select');
     expect(s).not.toContain('result-chroma');
   });
@@ -155,9 +157,13 @@ describe("W2A-3 · không còn control thô của hệ điều hành", () => {
   it("ô «Màu nền tách» đã bỏ hẳn — không class chết, không swatch mọc lại", () => {
     expect(GLOBALS).not.toMatch(/\.color-swatch\s*\{/);
     expect(GLOBALS).not.toMatch(/\.swatch-row\s*\{/);
-    const step = strip(read("src/features/kit-core/steps/StyleStep.tsx"));
-    expect(step).not.toContain("Màu nền tách");
-    expect(step).not.toContain("chroma");
+    /* `steps/StyleStep.tsx` — chỗ ô swatch từng mọc — đã bị xoá cùng IA prompt-first.
+       Phép kiểm vì thế quét CẢ src/ thay vì một file: nếu ai đó dựng lại lời hứa suông
+       ấy, nó sẽ mọc ở khu soạn chứ không mọc lại ở một file không còn tồn tại. */
+    for (const f of walkSrc(join(ROOT, "src"))) {
+      const code = strip(readFileSync(f, "utf8"));
+      expect(code, f).not.toContain("Màu nền tách");
+    }
   });
 
   /* Hình thái `.color-field` KHÔNG đổi (chấm vuông 36px + mã hex mono); chỗ ở của nó
@@ -168,7 +174,9 @@ describe("W2A-3 · không còn control thô của hệ điều hành", () => {
     expect(GLOBALS).toMatch(/\.color-field\s*\{/);
     expect(GLOBALS).toMatch(/\.color-field input\[type="color"\]\s*\{[^}]*size-9/);
     expect(strip(read("src/components/common/HexColorField.tsx"))).toContain('cn("color-field"');
-    expect(strip(read("src/features/kit-core/steps/StyleStep.tsx"))).toContain("<HexColorField");
+    /* Người dùng CUỐI của ô màu đổi từ bước Phong cách (đã xoá) sang pill màu thương
+       hiệu của khu soạn — cùng một component dùng chung, nên luật vẫn có chỗ đứng. */
+    expect(strip(read("src/features/prompt-lab/components/BrandColorPills.tsx"))).toContain("<HexColorField");
   });
 });
 

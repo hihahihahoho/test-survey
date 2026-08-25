@@ -124,7 +124,7 @@ describe("KitExits — nút chỉ được đi qua cửa saveExportZip", () => {
   it("KHÔNG bọc đường dẫn export.zip vào saveProjectFile/filePath nữa", async () => {
     const { readFileSync } = await import("node:fs");
     const src = readFileSync(
-      new URL("../../kit-core/components/KitExits.tsx", import.meta.url),
+      new URL("../components/KitExits.tsx", import.meta.url),
       "utf8",
     );
     // Kiểm LỜI GỌI, không kiểm chữ: chú thích của file có nhắc tên hai hàm cũ để kể

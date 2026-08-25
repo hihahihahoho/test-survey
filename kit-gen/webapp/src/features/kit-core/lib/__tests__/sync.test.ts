@@ -1,15 +1,13 @@
 /**
- * WAVE 3 §W3-2 + §W3-3 — bằng chứng cho hai cây cầu nối workflow ra đĩa thật.
+ * WAVE 3 §W3-3 — cây cầu nối ảnh tham chiếu trên đĩa vào bản thiết kế.
  *
- * Bộ này kiểm phần **thuần khiết** (không React, không mạng): luật "không ghi đè bản
- * thiết kế của người khác", và luật "đọc ngược `kind` từ tên agent đặt". Phần cần
- * agent sống nằm ở `agent-contract.integration.test.ts`.
+ * Bộ này kiểm phần **thuần khiết** (không React, không mạng): luật "đọc ngược `kind`
+ * từ tên agent đặt". Phần cần agent sống nằm ở `agent-contract.integration.test.ts`.
+ * (§W3-2 đã rời khỏi file này — xem ghi chú ngay trên nhóm ca bên dưới.)
  */
 import { describe, expect, it } from "vitest";
-import { contractSchema } from "@/lib/types/contract";
 import { createWorkflowStore, resetWorkflowStores } from "../model";
-import { buildKitsetContract, MAIN_VARIANT_ID } from "../kitset-to-contract";
-import { isForeignContract } from "../contract-sync";
+import { buildKitsetContract } from "../kitset-to-contract";
 import { groupRefs, refKindOf, toKitsetRefs } from "../refs-sync";
 
 const state = () => {
@@ -19,49 +17,16 @@ const state = () => {
 
 const ref = (name: string) => ({ name, usedBy: [] });
 
-/* ══════════════════════════════════════════════════════════════════════════
-   §W3-2 — CỬA MẤT DỮ LIỆU: không ghi đè contract của người khác
-   ══════════════════════════════════════════════════════════════════════════ */
-
-describe("§W3-2 — nhận diện bản thiết kế KHÔNG do workflow viết", () => {
-  it("project mới toanh (0 sheet) KHÔNG bị coi là của người khác — phải ghi được", () => {
-    expect(isForeignContract(contractSchema.parse({ sheets: [], variants: [], characterPoses: [] }))).toBe(false);
-  });
-
-  it("contract do CHÍNH workflow sinh ra thì không phải của người khác", () => {
-    expect(isForeignContract(buildKitsetContract(state()))).toBe(false);
-  });
-
-  it("contract NHẬP TỪ TỆP CŨ (có sheet, không có phong cách `chinh`) ⇒ CHỈ ĐỌC", () => {
-    // Hình dạng của `styles.json` thật: nhiều sheet, phong cách id riêng (`ipay`, `tet`…).
-    const imported = contractSchema.parse({
-      sheets: [{
-        id: "main", grid: { cols: 1, rows: 1 },
-        components: [{ file: "01-btn-pill-red", vi: "", spec: "", skel: { shape: "pill", w: 0.7, h: 0.4 } }],
-      }],
-      styles: [{ id: "ipay", vi: "Fintech xanh 3D", style: "", bg: "pure vivid magenta #FF00FF" }],
-      characterPoses: [],
-    });
-    expect(isForeignContract(imported)).toBe(true);
-  });
-
-  it("chỉ cần MỘT phong cách mang id `chinh` là nhận lại quyền ghi", () => {
-    const mixed = contractSchema.parse({
-      sheets: [{
-        id: "main", grid: { cols: 1, rows: 1 },
-        components: [{ file: "01-btn-pill-red", vi: "", spec: "", skel: { shape: "pill", w: 0.7, h: 0.4 } }],
-      }],
-      variants: [{ id: "ipay", vi: "", style: "", bg: "x" }, { id: MAIN_VARIANT_ID, vi: "", style: "", bg: "x" }],
-      characterPoses: [],
-    });
-    expect(isForeignContract(mixed)).toBe(false);
-  });
-
-  it("`null`/`undefined` (chưa nạp xong) KHÔNG được coi là của người khác — nếu không, banner nháy oan", () => {
-    expect(isForeignContract(null)).toBe(false);
-    expect(isForeignContract(undefined)).toBe(false);
-  });
-});
+/* ĐÃ GỠ: cả nhóm §W3-2 («không ghi đè bản thiết kế của người khác»).
+   Luật đó sống trong `lib/contract-sync.ts:isForeignContract`, và cửa nó canh là
+   đường workflow-wizard ghi đè `contract.json` của một dự án nhập từ tệp cũ. Đợt IA
+   prompt-first đã xoá cả cửa ấy: `/k/:id` là khu soạn prompt, nguồn sự thật là TÀI
+   LIỆU COMPOSER và nó ghi contract theo luật riêng đã ghi rõ ở
+   `PromptCanvasScreen.putContract` (xung đột thì ghi đè, bản cũ vẫn nằm trong
+   `.history/contract/` của agent). Không còn ai gọi `isForeignContract` ⇒ file bị
+   xoá, và ca của nó không thể xanh cho một thứ không tồn tại.
+   Nhóm §W3-3 dưới đây (`refs-sync`) KHÔNG đổi: nó vẫn là luật đọc ngược `kind` từ
+   tên file mà agent đặt, và `agent-contract.integration.test.ts` còn dùng. */
 
 /* ══════════════════════════════════════════════════════════════════════════
    §W3-3 — đọc ngược `kind` từ tên agent đặt (đây là thứ làm chip sống sót qua F5)

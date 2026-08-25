@@ -2,48 +2,64 @@
 
 ## Thư mục này là gì
 
-Mô hình dữ liệu, các phép biến đổi và các panel dùng chung cho **mọi** màn đụng
-tới một bộ kit: contract, danh mục dáng/chất liệu/thể loại, dựng prompt cho từng
-ô, đọc kết quả từ run, và cửa ra Figma.
+Mô hình dữ liệu và các phép biến đổi dùng chung cho **mọi** màn đụng tới một bộ
+kit: contract, danh mục dáng/chất liệu/thể loại, dựng prompt cho từng ô, đọc kết
+quả từ run, và cửa ra Figma.
 
-Nó **không còn là một màn**. Không có `Screen` nào ở đây, và không nên có.
+Nó **không còn là một màn**, và từ đợt IA prompt-first thì cũng **không còn một
+component React nào** — chỉ `lib/`. Không có `Screen` nào ở đây, và không nên có.
 
-## Nó từ đâu ra (Wave 4·B, 2026-08-25)
+## Nó từ đâu ra (Wave 4·B → IA prompt-first, 2026-08-25)
 
 Trước Wave 4, thư mục này tên `features/workflow-v4` và chứa **trình thuật sĩ 6
 bước** — cửa chính cũ của `/k/:projectId`. Wave 1-3 thay cửa chính đó bằng màn
-soạn prompt (`features/prompt-canvas`), và Wave 4·B dọn nốt phần còn lại.
+soạn prompt (`features/prompt-canvas`); Wave 4·B xoá phần chỉ-wizard
+(`WorkflowScreen`, `steps/Stepper`, `steps/ReviewStep`,
+`components/{PromptStudio,SyncBadge,RunPanel}`) và ĐỔI TÊN thư mục cho đúng vai.
 
-Khảo sát trước khi cắt cho ra một kết quả **khác với dự đoán ban đầu**: phần lớn
-`workflow-v4` không phải là wizard, mà là ruột chung mà bốn feature khác đang
-dùng hằng ngày. Cụ thể `features/project` (màn `/p/:projectId`, vẫn LIVE) render
-`steps/KitsetStep` + `steps/MascotStep`, `features/project/components/ProjectSettingsDialog`
-render `steps/BriefStep` + `steps/StyleStep`, còn `lib/model` · `lib/contract-sync` ·
-`lib/contract-import` là xương sống của `useProjectBuffer`.
+Wave 4·B để lại bốn panel (`steps/{Kitset,Mascot,Brief,Style}Step`) cùng
+`lib/{model,contract-sync,contract-import}` **vì một lý do duy nhất**: màn
+`/p/:projectId` khi đó vẫn render chúng. Đợt IA prompt-first đóng nốt lý do ấy —
+`/p` được viết lại thành màn **«Kết quả & xuất kit»** chỉ-xem, và lối soạn duy
+nhất là `/k/:projectId`. Không còn ai render chúng ⇒ chúng bị xoá:
 
-Nên việc đã làm là **đổi tên thư mục cho đúng vai trò** rồi xoá đúng phần chết,
-chứ không phải xoá cả thư mục:
+| Đã XOÁ ở đợt IA prompt-first        | Người dùng cuối của nó                     |
+| ----------------------------------- | ------------------------------------------ |
+| `steps/{Kitset,Mascot}Step.tsx`     | hai trang sửa được của `/p` (đã bỏ)        |
+| `steps/{Brief,Style}Step.tsx`       | hai tab của `ProjectSettingsDialog` (đã bỏ) |
+| `components/{CutAssetGrid,RawSheetsPanel,GeneratedResults}.tsx` | trang "Ảnh đã tạo" của `/p` (đã bỏ) |
+| `components/{ItemDetail,GroupChips,CheckRow,SegChoice,MascotDialog,SharedReferencePicker,RefChips}.tsx` | chỉ bốn `steps/` trên dùng |
+| `lib/contract-sync.ts`              | `useProjectBuffer` của `/p` (đã bỏ)        |
+| `lib/contract-import.ts`            | dải "chuyển bản thiết kế cũ" của `/p` (đã bỏ) |
+| `lib/labels.ts`                     | nhãn "UI Elements" của sidebar `/p` (đã bỏ) |
 
-| Đã XOÁ (chỉ wizard dùng)          | Vì sao chết                                  |
-| --------------------------------- | -------------------------------------------- |
-| `WorkflowScreen.tsx`              | cửa chính cũ, không route nào trỏ tới nữa    |
-| `steps/Stepper.tsx`               | hàng 6 bước; chỉ `WorkflowScreen` render      |
-| `steps/ReviewStep.tsx`            | bước "Kiểm tra" của wizard                    |
-| `components/PromptStudio.tsx`     | chỉ `ReviewStep` dùng                         |
-| `components/SyncBadge.tsx`        | chỉ `WorkflowScreen` dùng                     |
-| `components/RunPanel.tsx`         | mồ côi từ trước, không ai import              |
+`components/KitExits.tsx` KHÔNG bị xoá mà **đổi nhà** sang
+`features/kit/components/` — bốn thứ nó gọi đều là của `features/kit`, và người
+dùng nó nay là màn kết quả. Xem khối chú thích đầu file đó.
 
-Hằng `UI_STEP_LABEL` là thứ DUY NHẤT của `steps/Stepper.tsx` còn sống; nó dọn
-sang `lib/labels.ts` — một module lá, để `ProjectScreen` import mà không kéo theo
-`lib/model`.
+## Còn lại đúng những gì, và ai đang dùng
 
-## Vì sao `steps/` vẫn tên là `steps/`
+Thư mục này nay **chỉ còn `lib/`** — không một component React nào.
 
-Bốn file trong đó không còn là "bước" nữa — chúng là các panel mà màn dự án và
-hộp thoại cài đặt render. Tên thư mục giữ nguyên **có chủ ý**: đổi tên chúng
-trong cùng một lượt với việc đổi tên feature sẽ trộn hai thay đổi vào một diff và
-làm việc review "cái gì thật sự bị xoá" trở nên không đọc được. Đổi tên `steps/`
-là một lượt dọn riêng, rẻ, và làm được bất cứ lúc nào.
+| Module | Ai dùng |
+| ------ | ------- |
+| `kitset-to-contract.ts` | `prompt-canvas/lib/composer-to-contract`, `block-jobs`, `pill-image` |
+| `model.ts` | kiểu `WorkflowState`/`StyleAxes` mà `kitset-to-contract` và `composer-to-contract` khai theo |
+| `draft-storage.ts` | `lib/hooks/use-projects` (xoá/hoàn tác dự án phải dọn bản nháp) |
+| `figma-node.ts` | `prompt-canvas/.../SheetCellGrid`, `kit/lib/figma-kit-doc`, `demo/lib/*` |
+| `generated-results.ts` | `prompt-canvas/lib/gen-queue`, `kit/lib/figma-kit-doc` |
+| `prompt-studio.ts` | `prompt-canvas/lib/block-prompt` |
+| `genre-presets.ts` · `poses.ts` · `materials.ts` | `prompt-lab/lib/{presets-store,pill-registry}` |
+| `user-library.ts` | `kitset-to-contract`, `home/LibraryScreen` |
+| `item-prompt.ts` | `__tests__/cell-background` (gương soi với `gen.sh`) |
+| `refs-sync.ts` | `lib/__tests__/{sync,agent-contract.integration}` |
+| `result-copy.ts` | `lib/__tests__/result-copy` |
+
+Ba dòng cuối nói thẳng: chúng **chưa có người dùng trong app**, chỉ còn test. Giữ
+lại vì cả ba là hàm THUẦN mô tả luật của engine (`refs/<name>`, toạ độ ô, câu
+prompt của `gen.sh`) — luật đó không chết theo màn, và dựng lại nó tốn hơn nhiều
+so với việc để một file 160 dòng nằm yên. Nếu đợt sau vẫn không ai gọi tới, xoá
+là quyết định đúng.
 
 ## Cổng đang canh thư mục này
 
@@ -52,4 +68,6 @@ là một lượt dọn riêng, rẻ, và làm được bất cứ lúc nào.
   vì đó là cửa chính mới, và bắt cổng **đỏ** nếu một vùng cấm không tồn tại — để
   lần đổi tên sau không làm cổng xanh vì mù.
 - `__tests__/cell-background.test.tsx` — đọc `kit-gen/gen.sh` và so từng byte với
-  `lib/item-prompt.ts`. Hai file này **phải khớp**; đừng sửa một bên.
+  `lib/item-prompt.ts`. Hai file này **phải khớp**; đừng sửa một bên. (Nhóm ca ①
+  của nó — đi qua UI của `steps/KitsetStep` — đã rút cùng lúc component bị xoá;
+  lý do ghi ngay đầu file.)

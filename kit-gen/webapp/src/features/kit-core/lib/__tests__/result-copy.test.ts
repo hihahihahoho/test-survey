@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Contract, KitFile } from "@/lib/types";
+import type { Contract } from "@/lib/types";
 import { cellRect, locateComponent, rawSheetPath } from "../result-copy";
-import { cutAssets } from "../../components/CutAssetGrid";
 import { kitFileSchema } from "@/lib/types/api";
 
 const sheet = (id: string, files: string[], cols: number, rows: number) => ({
@@ -64,34 +63,11 @@ describe("schema kit phải nhận hình dạng null của agent thật", () => 
   });
 });
 
-const kf = (file: string, sheetId?: string | null): KitFile =>
-  kitFileSchema.parse({ file, path: `kits/chinh/${file}.png`, sheet: sheetId ?? null, w: null, h: null });
-
-describe("lưới ô đã cắt", () => {
-  it("ưu tiên bản tight/ và KHÔNG hiện ô hai lần", () => {
-    const list = cutAssets([kf("01-btn"), kf("tight/01-btn"), kf("02-tab"), kf("tight/02-tab")], contract);
-    expect(list.map((a) => a.name)).toEqual(["01-btn", "02-tab"]);
-    expect(list.map((a) => a.file.path)).toEqual(["kits/chinh/tight/01-btn.png", "kits/chinh/tight/02-tab.png"]);
-  });
-
-  it("ô nào chưa có bản tight vẫn hiện bằng bản canvas", () => {
-    expect(cutAssets([kf("03-chip")], contract).map((a) => a.name)).toEqual(["03-chip"]);
-  });
-
-  it("bỏ ô trống và ô `_empty-*` (chúng không phải thành phẩm)", () => {
-    const list = cutAssets(
-      [kf("_empty-1"), kf("tight/_empty-2"), kitFileSchema.parse({ file: "04-icon", path: "p", empty: true })],
-      contract,
-    );
-    expect(list).toEqual([]);
-  });
-
-  it("agent đời cũ trả sheet null ⇒ contract vẫn xếp được ô về đúng nhóm", () => {
-    const list = cutAssets([kf("tight/01-bg-home"), kf("tight/02-tab")], contract);
-    expect(list.map((a) => [a.sheet, a.category])).toEqual([["nen", "background"], ["ui", "ui"]]);
-  });
-
-  it("sheet do agent trả được dùng thẳng, không cần contract", () => {
-    expect(cutAssets([kf("tight/xx", "dao-cu2")], null)).toMatchObject([{ sheet: "dao-cu2", category: "prop" }]);
-  });
-});
+/* ĐÃ GỠ: nhóm ca của `cutAssets`.
+   Hàm đó là ruột của `kit-core/components/CutAssetGrid` — lưới ô đã cắt của trang
+   "Ảnh đã tạo" đời wizard. Cả trang lẫn component đã bị xoá trong đợt IA prompt-first;
+   lưới ô đã cắt nay là `SheetCellGrid`, và nó lọc/khử trùng bằng
+   `prompt-canvas/lib/result/sheet-files.ts:cellsOfSheet` — đã có bộ ca riêng ở
+   `lib/result/__tests__`. Giữ lại ca cho một hàm không còn tồn tại là để test xanh
+   canh một thứ người dùng không gặp nữa. Ba hàm THUẦN của `result-copy.ts`
+   (`cellRect`/`locateComponent`/`rawSheetPath`) vẫn được khoá nguyên ở trên. */

@@ -121,22 +121,22 @@ export const DESIGN_TABS = ["sheets", "styles", "advanced"] as const;
 export const KIT_TABS = ["assets", "matrix", "export"] as const;
 export const SETTINGS_TABS = ["agent", "env", "prefs", "about"] as const;
 /**
- * ══ MÀN QUẢN LÝ DỰ ÁN — BA TRỤC ĐỘC LẬP TRÊN URL ═══════════════════════════
+ * ══ `/p/:projectId` — TỪ BA TRỤC XUỐNG CÒN MỘT ═════════════════════════════
  *
- * Trước bản này chỉ có MỘT tham số `?section=` gánh cả ba việc: đích sidebar, nhóm
- * ảnh đang lọc, và "dialog Cài đặt có đang mở không". Vì gánh chung nên bấm nút Cài
- * đặt trên topbar (`section=settings`) **xoá mất** tab nền người dùng đang đứng, và
- * đóng dialog lại ném họ về `overview` — đúng lỗi #5 của đợt này.
+ * Màn `/p` nay là «Kết quả & xuất kit»: một trang cuộn dọc, không sidebar, không
+ * bộ lọc nhóm. Nên trong ba tham số cũ chỉ còn MỘT cái mang nghĩa:
+ *   · `settings` — dialog Cài đặt dự án đang mở hay không. Vắng mặt ⇒ đóng.
+ *   · `section` / `group` — CHỈ CÒN LÀ TỪ VỰNG CŨ CỦA URL, không màn nào đọc.
  *
- * Nay tách hẳn:
- *   · `section`  — đích SIDEBAR: `images` · `skeleton` · `mascot`.
- *   · `group`    — nhóm ảnh đang lọc bên trong "Ảnh đã tạo".
- *   · `settings` — tab của DIALOG Cài đặt; vắng mặt ⇒ dialog đóng.
- * Mở/đóng dialog chỉ thêm/bớt `settings`, hai trục kia không bị đụng tới.
+ * VÌ SAO KHÔNG XOÁ HẲN HAI CÁI SAU: tám route chuyển hướng đời cũ (`/p/:id/kit`,
+ * `/p/:id/design`, `/p/:id/runs`, `/k/:id/canvas`…) vẫn ném người dùng về đây kèm
+ * `?section=…`, và bookmark của họ cũng vậy. Bỏ hai giá trị đó khỏi schema là biến
+ * mọi link cũ thành một lần `.catch` — vô hại, nhưng cũng vô ích, trong khi việc
+ * giữ chúng ở đây tốn đúng hai dòng và giữ cho tám file route kia không phải sửa.
  *
- * `LEGACY_PROJECT_SECTIONS` là các giá trị `?section=` cũ còn nằm trong bookmark,
- * lịch sử trình duyệt và link cũ. Chúng KHÔNG bị `.catch` nuốt về mặc định — chúng
- * được `resolveProjectView()` dịch sang bộ ba mới.
+ * `settings` cũng vậy: ba giá trị cũ (`requirements`/`style`/`project`) từng là ba
+ * TAB, nay dialog chỉ còn một khối meta. Giá trị nào cũng mở đúng cái cửa còn lại —
+ * xem `ProjectScreen`, nơi đọc nó bằng «có mặt hay không» chứ không bằng tên.
  */
 export const PROJECT_SECTIONS = ["images", "skeleton", "mascot"] as const;
 export const LEGACY_PROJECT_SECTIONS = ["overview", "background", "popup", "ui", "props", "requirements", "style", "canvas", "settings"] as const;
@@ -146,9 +146,10 @@ export const PROJECT_SETTINGS_TABS = ["requirements", "style", "project"] as con
 export type DesignTab = (typeof DESIGN_TABS)[number];
 export type KitTab = (typeof KIT_TABS)[number];
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
-export type ProjectSection = (typeof PROJECT_SECTIONS)[number];
-export type ProjectImageGroup = (typeof PROJECT_IMAGE_GROUPS)[number];
-export type ProjectSettingsTab = (typeof PROJECT_SETTINGS_TABS)[number];
+/* Ba alias `ProjectSection` / `ProjectImageGroup` / `ProjectSettingsTab` ĐÃ XOÁ: sau
+   khi `/p` thành màn chỉ-xem thì không component nào còn nhận chúng làm prop hay state.
+   Ba mảng hằng ở trên Ở LẠI vì `projectSearchSchema` vẫn cần chúng để NHẬN link cũ —
+   một alias không ai gõ thì khác hẳn một giá trị URL vẫn có người mở. */
 
 export const projectSearchSchema = z.object({
   section: z.enum([...PROJECT_SECTIONS, ...LEGACY_PROJECT_SECTIONS]).default("images").catch("images"),
@@ -156,49 +157,6 @@ export const projectSearchSchema = z.object({
   settings: z.enum(PROJECT_SETTINGS_TABS).optional().catch(undefined),
   file: fileParam,
 });
-
-/** Giá trị `?section=` cũ → nhóm ảnh tương ứng. Không có trong bảng ⇒ không lọc gì. */
-const LEGACY_SECTION_GROUP: Partial<Record<string, ProjectImageGroup>> = {
-  background: "background",
-  popup: "popup",
-  ui: "ui",
-  props: "props",
-};
-
-/** Giá trị `?section=` cũ mở thẳng một tab của dialog Cài đặt. */
-const LEGACY_SECTION_SETTINGS: Partial<Record<string, ProjectSettingsTab>> = {
-  settings: "requirements",
-  requirements: "requirements",
-  style: "style",
-};
-
-export interface ProjectView {
-  section: ProjectSection;
-  group: ProjectImageGroup;
-  /** `null` ⇒ dialog Cài đặt đóng. */
-  settingsTab: ProjectSettingsTab | null;
-}
-
-/**
- * URL (mới HOẶC cũ) → trạng thái màn. Hàm THUẦN nên test được không cần router.
- *
- * Luật: tham số mới luôn thắng; giá trị cũ chỉ được dùng khi tham số mới vắng mặt.
- * Nhờ vậy một link cũ `?section=props` vẫn mở đúng nhóm Đạo cụ, còn `?section=settings`
- * vẫn mở dialog — nhưng nền phía sau đứng ở mục mặc định chứ không bị nhảy lung tung.
- */
-export function resolveProjectView(search: {
-  section?: string | undefined;
-  group?: ProjectImageGroup | undefined;
-  settings?: ProjectSettingsTab | undefined;
-}): ProjectView {
-  const raw = search.section ?? "images";
-  const section = (PROJECT_SECTIONS as readonly string[]).includes(raw) ? (raw as ProjectSection) : "images";
-  return {
-    section,
-    group: search.group ?? LEGACY_SECTION_GROUP[raw] ?? "all",
-    settingsTab: search.settings ?? LEGACY_SECTION_SETTINGS[raw] ?? null,
-  };
-}
 
 export const designSearchSchema = z.object({
   tab: z.enum(DESIGN_TABS).default("sheets").catch("sheets"),

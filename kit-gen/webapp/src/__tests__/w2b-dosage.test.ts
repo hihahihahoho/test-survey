@@ -158,13 +158,18 @@ describe("2B-2 · thang tint hai bậc, giảm liều mint", () => {
 /* ══════════════════════════════════════════════════════════════════════════════
    2B-4 · BA TẦNG TIÊU ĐỀ CÒN MỘT
 
-   Hai ca đầu ("hero đầy đủ CHỈ ở bước ①", "nhãn trạng thái lưu ở MỌI bước") đọc
-   thẳng `WorkflowScreen.tsx` — file đã xoá. Ca thứ ba đo `steps/BriefStep.tsx`,
-   file VẪN SỐNG (`ProjectSettingsDialog` render nó), nên nó ở lại nguyên văn.
+   Cả ba ca gốc đọc thẳng file của wizard (`WorkflowScreen.tsx`, rồi `steps/BriefStep.tsx`
+   ở đợt kit-core) — cả ba file nay đã bị xoá cùng IA prompt-first. Nhưng cái LUẬT thì
+   không chết theo cái màn: eyebrow "Bước trong một mạch" là dấu vết của lối trình bày
+   "bạn đang ở bước N", và nếu ai đó dựng lại nó ở khu soạn thì tầng tiêu đề lại chồng
+   lên nhau y như cũ. Nên ca này ĐỔI CHIỀU: quét CẢ `src/`, không đọc một file cụ thể —
+   mạnh hơn bản gốc, và không còn neo vào một đường dẫn có thể biến mất.
    ══════════════════════════════════════════════════════════════════════════════ */
 describe("2B-4 · cắt tầng tiêu đề", () => {
-  it("eyebrow 'Bước trong một mạch' đã bỏ khỏi mọi bước", () => {
-    expect(stripComments(read("src/features/kit-core/steps/BriefStep.tsx"))).not.toContain("Bước trong một mạch");
+  it("eyebrow 'Bước trong một mạch' không mọc lại ở bất cứ đâu trong src/", () => {
+    for (const { path, code } of SRC) {
+      expect(code, path).not.toContain("Bước trong một mạch");
+    }
   });
 });
 
@@ -216,24 +221,13 @@ describe("2B-6 · sạn nhỏ nhưng lộ ngay", () => {
     expect(/\.summary-row\s*\{([^}]*)\}/.exec(GLOBALS)![1]!).toContain("last:border-b-0");
   });
 
-  it("chip ảnh nằm TRONG khung vùng thả, không trôi ra ngoài", () => {
-    expect(GLOBALS).toMatch(/\.dropfield\s*\{/);
-    /* UI-FIX §3b — vùng thả ảnh nhân vật đã rời `steps/MascotStep.tsx` vào modal
-       "Thêm nhân vật" (bước Mascot nay là danh sách thẻ). Luật thì KHÔNG đổi: thứ
-       hiện ra sau khi thả phải nằm TRONG khung `.dropfield`, nên ca test chỉ đổi
-       địa chỉ và tên mảnh xem trước, không nới điều kiện. */
-    const cases: ReadonlyArray<[string, string]> = [
-      ["src/features/kit-core/steps/StyleStep.tsx", "<RefChips"],
-      ["src/features/kit-core/components/MascotDialog.tsx", "<MascotThumb"],
-    ];
-    for (const [f, preview] of cases) {
-      const src = read(f);
-      const i = src.indexOf('"dropfield');
-      expect(i, f).toBeGreaterThan(-1);
-      // Mảnh xem trước phải nằm SAU khi mở `.dropfield` và trước khi đóng nó.
-      expect(src.indexOf(preview, i), f).toBeGreaterThan(i);
-    }
-  });
+  /* ĐÃ GỠ: ca "chip ảnh nằm TRONG khung vùng thả".
+     Hai vùng thả mà nó đo (`steps/StyleStep.tsx` và `components/MascotDialog.tsx`) đã
+     bị xoá cùng IA prompt-first — ảnh tham chiếu nay đi vào câu prompt bằng pill ảnh
+     (`prompt-lab/extensions/ImagePill.tsx`), không còn khung thả nào để chip trôi ra
+     ngoài. Class `.dropfield` cũng đã rời `globals.css` theo. Giữ lại ca này là canh
+     một cái khung không tồn tại; ca "nét đứt kiểu wireframe" bên dưới đo `.dropzone`
+     — class KHÁC, vẫn còn dùng — nên nó ở lại nguyên văn. */
 
   it("nét đứt kiểu wireframe đã bỏ khỏi vùng thả", () => {
     expect(/\.dropzone\s*\{([^}]*)\}/.exec(GLOBALS)![1]!).not.toContain("border-dashed");
@@ -292,27 +286,28 @@ describe("2B-7 · chữ của người dùng, không phải của lập trình v
      nối + khoảng trắng); mọi câu tiếng Việt đều có dấu hoặc chữ hoa nên vẫn lọt lưới. */
   const looksLikeClassList = (s: string) => /^[a-z][a-z0-9-]*( [a-z][a-z0-9-]*)*$/.test(s);
 
-  /* `ReviewStep` đã rời danh sách vì file bị xoá cùng wizard (Wave 4·B). Bốn màn
-     còn lại vẫn LIVE — chúng là ruột của `ProjectScreen` và `ProjectSettingsDialog`
-     — nên luật "không nói 'element' với người dùng" vẫn có đủ chỗ để canh. */
-  it("màn workflow không còn nói 'element' với người dùng", () => {
-    for (const f of ["KitsetStep", "BriefStep", "StyleStep", "MascotStep"]) {
-      const code = stripComments(read(`src/features/kit-core/steps/${f}.tsx`));
+  /* ĐỔI ĐỊA CHỈ, KHÔNG ĐỔI LUẬT. Bốn bước của wizard (`KitsetStep`/`BriefStep`/
+     `StyleStep`/`MascotStep`) đã bị xoá cùng IA prompt-first. Nơi người dùng SOẠN bây
+     giờ là khu soạn prompt, nên luật "không nói 'element' với người dùng" chuyển sang
+     canh đúng hai file dựng màn đó. (`features/prompt-lab/**` KHÔNG nằm trong danh
+     sách: đó là bàn thí nghiệm nội bộ + màn preset của đội, không phải màn sản phẩm —
+     và nó vẫn đang cố tình dùng chữ kỹ thuật.) */
+  it("khu soạn không còn nói 'element' với người dùng", () => {
+    for (const f of ["PromptCanvasScreen.tsx", "components/CanvasBlock.tsx"]) {
+      const code = stripComments(read(`src/features/prompt-canvas/${f}`));
       const quoted = [...code.matchAll(/"([^"\n]*)"/g)].map((m) => m[1]!).filter((s) => !looksLikeClassList(s));
       const jsxText = [...code.matchAll(/>([^<>{}\n]+)</g)].map((m) => m[1]!);
       expect([...quoted, ...jsxText].filter((s) => /\belement\b/i.test(s))).toEqual([]);
     }
   });
 
-  /* Nửa sau của ca này đo `steps/ReviewStep.tsx` (thẻ recap "N thành phần") —
-     màn Kiểm tra của wizard, đã xoá. Nửa còn lại vẫn đo được và vẫn đáng đo. */
-  it("nhãn ô tìm nói 'thành phần'", () => {
-    expect(read("src/features/kit-core/steps/KitsetStep.tsx")).toContain('placeholder="Tìm thành phần…"');
-  });
+  /* ĐÃ GỠ: ca 'nhãn ô tìm nói "thành phần"'. Ô tìm đó nằm trong lưới 42 món của
+     `steps/KitsetStep.tsx` — lưới ấy đã bị xoá, và khu soạn không có ô tìm nào tương
+     đương (người dùng GÕ TÊN món chứ không lọc một danh mục có sẵn). */
 
-  it("màn thành phẩm không còn panel kỹ thuật cắt/chroma", () => {
-    const src = read("src/features/project/sections/ImagesSection.tsx");
-    expect(src).toContain("GeneratedResults");
+  it("màn kết quả không còn panel kỹ thuật cắt/chroma", () => {
+    const src = read("src/features/project/ProjectScreen.tsx");
+    expect(src).toContain("SheetResultPanel");
     expect(src).not.toContain("result-chroma");
     expect(src).not.toContain("Cắt lại");
     expect(src).not.toContain("slice.run()");

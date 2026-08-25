@@ -2,16 +2,22 @@ import * as React from "react";
 import { Check, Copy, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useKit } from "@/lib/hooks";
-import { saveExportZip } from "@/features/kit/lib/download";
-import { buildFigmaBoard, BoardCancelled, type BoardProgress } from "@/features/kit/lib/figma-board";
+import { saveExportZip } from "../lib/download";
+import { buildFigmaBoard, BoardCancelled, type BoardProgress } from "../lib/figma-board";
 import {
   batchGroups, cellsOf, copyKitDoc, packKitDoc, type KitDocGroup,
-} from "@/features/kit/lib/figma-kit-doc";
-import { loadFull } from "@/features/kit/lib/image-source";
+} from "../lib/figma-kit-doc";
+import { loadFull } from "../lib/image-source";
 import { toastError, toastInfo, toastSuccess } from "@/features/projects/lib/feedback";
 
 /**
- * HAI CỬA RA MANG PHẦN THƯỞNG Ở BƯỚC ⑥ (§W3-7) — cả hai **0 đồng**.
+ * HAI CỬA RA MANG PHẦN THƯỞNG (§W3-7) — cả hai **0 đồng**.
+ *
+ * ⚠️ ĐÃ DỌN NHÀ: file này từng ở `features/kit-core/components/`, nhà cũ của wizard.
+ * Cả bốn thứ nó gọi (`lib/download`, `lib/figma-board`, `lib/figma-kit-doc`,
+ * `lib/image-source`) đều là của `features/kit`, và người dùng nó nay là màn
+ * «Kết quả & xuất kit» — không còn một sợi dây nào nối về wizard. Để nó nằm lại
+ * kit-core là giữ một thư mục sống chỉ vì một file trọ nhờ.
  *
  * W1 đã dựng hai nút này ở trạng thái khoá kèm lý do ("Mở khi bộ kit đã có ảnh thật"),
  * đúng chủ ý: bật bừa thì tải về một file `.zip` rỗng. Nay chúng mở thật, và điều kiện

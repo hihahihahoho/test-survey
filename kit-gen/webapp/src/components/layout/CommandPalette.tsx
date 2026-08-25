@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
-  BookOpen, Boxes, Compass, Images, Keyboard, LayoutGrid, Pencil, Plus,
+  BookOpen, Boxes, Compass, Images, Keyboard, Pencil, Plus,
   RefreshCw, Settings, Terminal, Trash2, Upload, Wrench,
 } from "lucide-react";
 import {
@@ -55,23 +55,19 @@ export function CommandPalette(props: CommandPaletteProps) {
     if (projectId) {
       const p = { projectId };
       list.push(
-        { id: "p.requirements", group: "Dự án", icon: LayoutGrid, label: "Dự án: Yêu cầu",
-          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { settings: "requirements" } })) },
-        { id: "p.style", group: "Dự án", icon: Pencil, label: "Dự án: Phong cách", hint: ["g", "d"], hintSequence: true,
-          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { settings: "style" } })) },
-        /* ĐÃ GỠ: mục trỏ tới bước «UI Elements» của trình thuật sĩ.
-           Bảng lệnh là danh sách ĐIỂM ĐẾN, và wizard 6 bước không còn là một điểm
-           đến kể từ khi `/k/:projectId` mở thẳng màn soạn prompt. Giữ lại thì nó
-           là một cái tên mượn từ `steps/Stepper` cho một hành trình người dùng
-           không còn đi — và cái import ấy là sợi dây neo cuối cùng của bảng lệnh
-           vào wizard. Wave 4·B đã xoá hẳn `steps/Stepper.tsx`, nên dây đó nay
-           không thể nối lại được kể cả khi ai đó muốn. Mọi mục khác giữ nguyên. */
-        { id: "p.mascot", group: "Dự án", icon: Images, label: "Dự án: Mascot",
-          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "mascot" } })) },
-        { id: "p.images", group: "Dự án", icon: Images, label: "Dự án: Ảnh đã tạo", hint: ["g", "r"], hintSequence: true,
-          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "images" } })) },
+        /* BA MỤC, ĐÚNG BA CĂN PHÒNG CÒN TỒN TẠI.
+           Bảng lệnh là danh sách ĐIỂM ĐẾN — mục nào trỏ tới một nơi không còn thì
+           nó tệ hơn là không có mục, vì người dùng gõ đúng tên mình nhớ và được đưa
+           tới một trang khác hẳn mà không ai giải thích. Năm mục cũ («Yêu cầu»,
+           «Phong cách», «Mascot», «Ảnh đã tạo», «Cài đặt») đều là tên các mục
+           sidebar/tab của trình quản lý dự án đời wizard; sidebar đó đã bị gỡ cùng
+           đợt IA prompt-first. Hai điểm đến thật bây giờ là KHU SOẠN và KẾT QUẢ. */
+        { id: "p.results", group: "Dự án", icon: Images, label: "Dự án: Kết quả & xuất kit", hint: ["g", "r"], hintSequence: true,
+          run: go(() => void navigate({ to: "/p/$projectId", params: p })) },
+        { id: "p.compose", group: "Dự án", icon: Pencil, label: "Dự án: Mở khu soạn", hint: ["g", "d"], hintSequence: true,
+          run: go(() => void navigate({ to: "/k/$projectId", params: p })) },
         { id: "p.settings", group: "Dự án", icon: Settings, label: "Dự án: Cài đặt", hint: ["g", "s"], hintSequence: true,
-          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { settings: "requirements" } })) },
+          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { settings: "project" } })) },
       );
     }
 

@@ -21,11 +21,18 @@ const hits = scanBannedWords("src/features");
  *
  *   · S1 (2026-08-07): **300** chỗ trúng / 89 file — trần đầu tiên.
  *   · Wave 4·B (2026-08-25): **289** chỗ trúng / 108 file — hạ trần.
+ *   · IA prompt-first, làm lại `/p` (2026-08-25): **248** chỗ trúng / 94 file — hạ trần.
  *
- * Số giảm vì wizard `workflow-v4` bị khai tử: `WorkflowScreen` · `steps/Stepper` ·
- * `steps/ReviewStep` · `components/{PromptStudio,SyncBadge,RunPanel}` bị xoá, mang
- * theo phần chữ kỹ thuật của chúng. Số FILE tăng (89 → 108) là chuyện khác và không
- * mâu thuẫn: repo có thêm file kể từ S1, chỉ là chúng gánh ít từ cấm hơn.
+ * Số giảm ở đợt Wave 4·B vì wizard `workflow-v4` bị khai tử: `WorkflowScreen` ·
+ * `steps/Stepper` · `steps/ReviewStep` · `components/{PromptStudio,SyncBadge,RunPanel}`
+ * bị xoá, mang theo phần chữ kỹ thuật của chúng. Số FILE tăng (89 → 108) là chuyện khác
+ * và không mâu thuẫn: repo có thêm file kể từ S1, chỉ là chúng gánh ít từ cấm hơn.
+ *
+ * Đợt này (−41 chỗ, −14 file) là phần CÒN LẠI của cùng cái wizard đó: `/p/:projectId`
+ * viết lại thành màn «Kết quả & xuất kit» chỉ-xem, nên bốn bước cuối
+ * (`steps/{Kitset,Mascot,Brief,Style}Step`), lưới ô cắt (`CutAssetGrid`), bảng sheet thô
+ * (`RawSheetsPanel`) và các mảnh phụ của chúng bị xoá — chúng là nơi chứa dày đặc chữ
+ * «element», «chroma», «slice», «matte», «variant» nói thẳng vào mặt người dùng.
  *
  * HẠ TRẦN LÀ BẮT BUỘC, không phải lịch sự. Để nguyên 300 sau khi xoá 11 chỗ nghĩa là
  * tặng cho nhánh sau một hạn mức 11 từ cấm mới mà không ai quyết định cả — bánh cóc
@@ -35,7 +42,7 @@ const hits = scanBannedWords("src/features");
  * tự so với chính nó và KHÔNG BAO GIỜ đỏ được, tức là một cổng giả.
  * Ai kéo số xuống thì HẠ luôn trần này (và ghi vào report của mình).
  */
-const BASELINE_TOTAL = 289;
+const BASELINE_TOTAL = 248;
 
 describe("§5.4 — vùng S1 sở hữu: 0 từ cấm, không ngoại lệ", () => {
   it("features/kitfile/** hoàn toàn sạch", () => {

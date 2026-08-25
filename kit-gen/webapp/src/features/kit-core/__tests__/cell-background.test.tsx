@@ -1,135 +1,44 @@
-/* @vitest-environment jsdom */
 /**
- * P1-4 — «NỀN TÁCH» CỦA TỪNG Ô, TỪ CÚ BẤM TỚI PROMPT.
+ * P1-4 — «NỀN TÁCH» CỦA TỪNG Ô: từ lớp đè của dự án tới câu prompt.
  *
  * Cơ chế `skel.matte:"glow"` vốn đã đi hết đường ống engine (`gen.sh:273–281` in câu
- * nền đen cho đúng ô đó, `slice.py:740–798` tách bằng nhánh riêng); thứ thiếu là ba
- * mắt xích ở phía webapp, và mỗi mắt xích hỏng theo một kiểu IM LẶNG khác nhau:
+ * ánh sáng cho đúng ô đó, `slice.py:740–798` tách bằng nhánh riêng); thứ dễ hỏng nằm ở
+ * phía webapp, và nó hỏng IM LẶNG:
  *
- *  ① trang Skeleton UI không có chỗ nào chọn ⇒ tính năng coi như không tồn tại;
  *  ② lớp đè của dự án chỉ chép `w`/`h` ⇒ chọn xong, UI hiện đúng, contract TRỐNG;
- *  ③ `item-prompt.ts` không dựng lại câu nền đen ⇒ panel "Prompt sẽ gửi đi" nói dối
- *     đúng vào lúc người dùng đang tìm bằng chứng rằng cái nút có tác dụng.
+ *  ③ `item-prompt.ts` không dựng lại câu ánh sáng ⇒ panel "Prompt sẽ gửi đi" nói dối
+ *     đúng vào lúc người dùng đang tìm bằng chứng rằng lựa chọn có tác dụng.
  *
- * Ba mắt xích ⇒ ba nhóm ca. Đường merge (②) được khoá kỹ hơn ở
- * `lib/__tests__/kitset-to-contract.test.ts` §P1-4; ở đây khoá đường ĐI QUA UI thật.
+ * ══ NHÓM ① ĐÃ RỜI ĐI CÙNG MÀN CỦA NÓ (đợt IA prompt-first) ═════════════════
+ * Nhóm ① từng đi qua UI thật: mở popup «Chi tiết» của một món trong lưới thành phần
+ * của `steps/KitsetStep`, bấm ba nút «Nền thường / Hiệu ứng phát sáng / Trong suốt»,
+ * rồi đọc lớp đè trong store. Cả `KitsetStep` lẫn trang chứa nó (trình quản lý dự án
+ * đời wizard) đã bị XOÁ: `/p/:id` nay là màn «Kết quả & xuất kit» chỉ-xem, còn nơi
+ * soạn duy nhất là khu soạn prompt. Không còn cái nút nào để bấm ⇒ không còn ca nào
+ * để chạy; giữ lại là để test xanh canh một màn không tồn tại.
+ *
+ * HAI MẮT XÍCH DƯỚI ĐÂY KHÔNG ĐỔI MỘT CHỮ, và chúng mới là phần đắt: `buildKitsetContract`
+ * phải chở `matte` ra contract, `itemPromptFor` phải dựng lại ĐÚNG câu của `gen.sh`
+ * (so từng chữ với file thật, không so với trí nhớ). Đường merge (②) còn được khoá kỹ
+ * hơn ở `lib/__tests__/kitset-to-contract.test.ts` §P1-4.
  */
-import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { describe, expect, it } from "vitest";
 import { loadBundledV2 } from "@/features/design/library/lib/source";
-import { WorkflowStoreProvider, createWorkflowStore, resetWorkflowStores } from "../lib/model";
+import { createWorkflowStore, resetWorkflowStores } from "../lib/model";
 import { buildKitsetContract } from "../lib/kitset-to-contract";
 import { glassCellPrompt, glowCellPrompt, isGlassCell, isGlowCell, itemPromptFor } from "../lib/item-prompt";
-import { KitsetStep } from "../steps/KitsetStep";
 
 const PID = "kit-nen-o";
 /** Ô hiệu ứng của thư viện đóng gói — thư viện ĐÃ khai `matte:"glow"` cho nó. */
 const GLOW_FILE = "16-fx-burst";
-const GLOW_LABEL = "Hiệu ứng nổ sáng";
 /** Ô KÍNH — chính món đã đo 325 626 px magenta đục ở dự án `hello-368a`. */
 const GLASS_FILE = "22-board-panel";
-const GLASS_LABEL = "Khay đựng túi";
 const LIB = loadBundledV2().elements;
 
-const mount = () => {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <TooltipProvider><WorkflowStoreProvider projectId={PID}><KitsetStep variant="manage" /></WorkflowStoreProvider></TooltipProvider>
-    </QueryClientProvider>,
-  );
-};
-
-afterEach(() => {
-  cleanup();
-  localStorage.clear();
+const state = () => {
   resetWorkflowStores();
-});
-
-/** Mở popup Chi tiết của MỘT món: đổi nhóm → tìm theo tên → bấm nút trên thẻ. */
-function openDetail(container: HTMLElement, group: string, label: string): HTMLElement {
-  fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${group}`) }));
-  fireEvent.change(screen.getByRole("searchbox"), { target: { value: label } });
-  const grid = container.querySelector(".compact-element-grid") as HTMLElement;
-  fireEvent.click(within(grid).getByRole("button", { name: `Chi tiết ${label}` }));
-  return screen.getByRole("dialog");
-}
-
-const state = () => createWorkflowStore(PID).getState();
-const skelOf = (file: string) => state().elements.find((e) => e.file === file)?.skel;
-
-describe("① control «Nền tách» nằm trong popup Chi tiết, không trần ra lưới", () => {
-  it("popup có đúng hai lựa chọn, và ô hiệu ứng mở ra đã ở «nền đen» theo thư viện", () => {
-    const { container } = mount();
-    const dialog = openDetail(container, "Đạo cụ", GLOW_LABEL);
-    const chroma = within(dialog).getByRole("button", { name: "Nền thường" });
-    const black = within(dialog).getByRole("button", { name: "Hiệu ứng phát sáng" });
-    // Nghĩa nằm ở `aria-pressed`, không ở màu (§5.8-A3).
-    expect(black.getAttribute("aria-pressed")).toBe("true");
-    expect(chroma.getAttribute("aria-pressed")).toBe("false");
-  });
-
-  it("lưới thành phần KHÔNG mọc thêm control nào vì tính năng này", () => {
-    const { container } = mount();
-    const grid = container.querySelector(".compact-element-grid")!;
-    expect(grid.querySelectorAll("input, select, textarea")).toHaveLength(0);
-    expect(within(grid as HTMLElement).queryByRole("button", { name: /Nền tách|phát sáng/ })).toBeNull();
-  });
-
-  it("bấm hai nút ⇒ lớp đè của dự án đổi theo, và bấm lại về đúng chỗ cũ", () => {
-    const { container } = mount();
-    const dialog = openDetail(container, "Đạo cụ", GLOW_LABEL);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Nền thường" }));
-    expect(skelOf(GLOW_FILE)?.matte).toBe("none");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Hiệu ứng phát sáng" }));
-    expect(skelOf(GLOW_FILE)?.matte).toBe("glow");
-  });
-
-  /* `22-board-panel` từng hiện ở CẢ "Popup" lẫn "Đạo cụ" (vị từ nhóm chồng lấn — xem
-     `KitsetStep.tsx`). Nay mỗi món đúng một nhóm và món này thuộc Đạo cụ, đúng chỗ
-     `isPropElement` đã cố ý xếp nó. Bài test này nói về nút «Nền tách», không về nhóm. */
-  it("ô KÍNH của thư viện mở ra đã ở «Trong suốt», và ba nút loại trừ nhau", () => {
-    const { container } = mount();
-    const dialog = openDetail(container, "Đạo cụ", GLASS_LABEL);
-    const pressed = ["Nền thường", "Hiệu ứng phát sáng", "Trong suốt nhìn xuyên qua"]
-      .map((name) => within(dialog).getByRole("button", { name }).getAttribute("aria-pressed"));
-    expect(pressed).toEqual(["false", "false", "true"]);
-  });
-
-  it("chọn «Trong suốt» cho một ô thường ⇒ lớp đè ghi `glass`, bỏ ra thì xoá sạch", () => {
-    const plain = LIB.find((e) => e.skel.matte === undefined && !isPropOrBg(e.file))!;
-    const { container } = mount();
-    const dialog = openDetail(container, "UI nhỏ", plain.vi);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Trong suốt nhìn xuyên qua" }));
-    expect(skelOf(plain.file)?.matte).toBe("glass");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Nền thường" }));
-    expect(skelOf(plain.file)).toBeUndefined();
-  });
-
-  it("ô vốn là KÍNH: chọn «Nền thường» ghi `none` TƯỜNG MINH để đè được thư viện", () => {
-    const { container } = mount();
-    const dialog = openDetail(container, "Đạo cụ", GLASS_LABEL);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Nền thường" }));
-    expect(skelOf(GLASS_FILE)?.matte).toBe("none");
-  });
-
-  it("ô vốn là nền thường: chọn «Nền thường» XOÁ lớp đè thay vì ghi một giá trị thừa", () => {
-    const plain = LIB.find((e) => e.skel.matte === undefined && !isPropOrBg(e.file))!;
-    const { container } = mount();
-    const dialog = openDetail(container, "UI nhỏ", plain.vi);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Hiệu ứng phát sáng" }));
-    expect(skelOf(plain.file)?.matte).toBe("glow");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Nền thường" }));
-    expect(skelOf(plain.file)).toBeUndefined(); // không còn lớp đè nào cả
-  });
-});
-
-/** Món chắc chắn KHÔNG rơi vào nhóm "Đạo cụ"/"Nền" — để mở đúng thẻ trong nhóm "UI nhỏ". */
-function isPropOrBg(file: string): boolean {
-  return /(^|[-\s])(prop|item|decor|gift|coin|reward|voucher|game-object|board-panel|pouch|medal|envelope|trophy|piece|fx)([-\s]|$)|bg|popup|modal|panel|ribbon/.test(file);
-}
+  return createWorkflowStore(PID).getState();
+};
 
 describe("② + ③ contract nhận field, và prompt preview nói đúng sự thật", () => {
   const contractWith = (file: string, matte: "glow" | "glass" | "none") => {

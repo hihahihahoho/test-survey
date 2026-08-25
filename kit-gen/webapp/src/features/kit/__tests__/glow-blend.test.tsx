@@ -16,17 +16,21 @@
  * Ba mắt xích ⇒ ba nhóm ca. Phía Python có `tests/test_slice_blend.py` khoá đầu kia.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { kitFileSchema, type KitFile } from "@/lib/types";
 import { BLEND_SCREEN_CLASS, GLOW_GROUND_CLASS, GLOW_FIGMA_HINT, isGlowAsset } from "../lib/blend";
 import { KitImage } from "../components/KitImage";
-import { CutAssetGrid } from "@/features/kit-core/components/CutAssetGrid";
+import { SheetCellGrid } from "@/features/prompt-canvas/components/result";
 
-/* Radix DropdownMenu gọi API con trỏ mà jsdom chưa có (cùng vá như
-   `features/docs/__tests__/subfile-a11y.dom.test.tsx`). */
-if (!Element.prototype.hasPointerCapture) {
-  Element.prototype.hasPointerCapture = () => false;
-}
+/**
+ * ⚠️ ĐÃ ĐỔI NHÀ, KHÔNG ĐỔI LUẬT (đợt IA prompt-first).
+ *
+ * Lưới ô đã cắt của nhóm ② và ③ trước đây là `kit-core/components/CutAssetGrid` —
+ * ruột của trang "Ảnh đã tạo" trong trình quản lý dự án đời wizard. Trang đó và cả
+ * component đó đã bị xoá; lưới ô đã cắt nay là `SheetCellGrid` (tab «Đã crop» của
+ * `SheetResultPanel`, dùng ở CẢ khu soạn lẫn màn «Kết quả & xuất kit»).
+ * Ba mắt xích được khoá ở đây KHÔNG đổi một chữ nào — chỉ đổi chỗ đo.
+ */
 
 /** Ảnh về NGAY, không đi qua transport thật — ở đây đo class, không đo hàng đợi tải. */
 vi.mock("@/features/kit/lib/image-source", () => {
@@ -116,26 +120,23 @@ describe("② preview vẽ bằng phép CỘNG, trên nền đo tối", () => {
     expect(el.parentElement?.className).toContain("kg-checkerboard");
   });
 
-  it("lưới kết quả (và «Tất cả thành phẩm», cùng component) truyền `blend` xuống từng ô", async () => {
-    render(<CutAssetGrid projectId={PID} contract={null} />);
-    const burst = await screen.findByAltText(/16-fx-burst$/);
-    const btn = await screen.findByAltText(/01-btn-pill-red$/);
+  it("lưới ô đã cắt truyền `blend` xuống từng ô", async () => {
+    render(<SheetCellGrid projectId={PID} cells={[GLOW, PLAIN]} />);
+    const burst = await screen.findByAltText("16-fx-burst");
+    const btn = await screen.findByAltText("01-btn-pill-red");
     expect(burst.className).toContain(BLEND_SCREEN_CLASS);
     expect(btn.className).not.toContain(BLEND_SCREEN_CLASS);
   });
 });
 
 describe("③ copy sang Figma phải NÓI rằng blend không đi theo", () => {
-  /** Mở menu ⋯ của một ô rồi chọn một mục. Radix mở bằng bàn phím trong jsdom. */
-  async function pickMenuItem(assetName: string, item: string) {
-    const trigger = await screen.findByRole("button", { name: `Thao tác khác cho ${assetName}` });
-    fireEvent.keyDown(trigger, { key: "Enter" });
-    fireEvent.click(await screen.findByRole("menuitem", { name: item }));
-  }
+  const copyCell = async (name: string) => {
+    render(<SheetCellGrid projectId={PID} cells={[GLOW, PLAIN]} />);
+    (await screen.findByRole("button", { name: `Copy ${name} sang Figma` })).click();
+  };
 
   it("ô glow: sau khi copy node, hiện nhắc chỉnh Linear Dodge (Add)/Screen", async () => {
-    render(<CutAssetGrid projectId={PID} contract={null} />);
-    await pickMenuItem("16-fx-burst", "Copy to Figma");
+    await copyCell("16-fx-burst");
     await waitFor(() => expect(copyAssetAsFigmaNode).toHaveBeenCalled());
     await waitFor(() => expect(toastInfo).toHaveBeenCalledWith("Asset phát sáng", GLOW_FIGMA_HINT));
     /* Nhắc là LỚP PHỤ, không thay lời báo copy thành công. */
@@ -143,8 +144,7 @@ describe("③ copy sang Figma phải NÓI rằng blend không đi theo", () => {
   });
 
   it("ô thường: không nhắc gì cả — cảnh báo vô cớ là nhiễu", async () => {
-    render(<CutAssetGrid projectId={PID} contract={null} />);
-    await pickMenuItem("01-btn-pill-red", "Copy to Figma");
+    await copyCell("01-btn-pill-red");
     await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
     expect(toastInfo).not.toHaveBeenCalled();
   });
