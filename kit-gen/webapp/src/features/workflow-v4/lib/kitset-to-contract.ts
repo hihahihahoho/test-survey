@@ -114,14 +114,18 @@ export const DEFAULT_SHEET_LIMITS: SheetLimits = {
   mascot: 4,
 };
 
-const HINT_LANDSCAPE = "landscape 3:2 cell";
-const HINT_PORTRAIT = "portrait 3:4 cell";
-const HINT_BG = "full-bleed portrait scene";
-const HINT_POSE = "cell containing ONE full-body character";
+/* EXPORT (08/2026): bộ dịch của Prompt Canvas (`prompt-canvas/lib/composer-to-contract.ts`)
+   dựng cùng loại sheet nên phải ghi CÙNG một `cell_hint`. Chép lại bốn chuỗi này sang
+   feature khác là tạo bản sao thứ hai của một hằng số mà `gen.sh` đọc thẳng — sửa một
+   nơi, nơi kia lặng lẽ nói khác. Chỉ thêm từ khoá `export`, không đổi giá trị. */
+export const HINT_LANDSCAPE = "landscape 3:2 cell";
+export const HINT_PORTRAIT = "portrait 3:4 cell";
+export const HINT_BG = "full-bleed portrait scene";
+export const HINT_POSE = "cell containing ONE full-body character";
 
 /** Chép nguyên `note` của sheet dáng trong `styles.json` — đây là prompt engineering
  *  đã chạy thật, không phải văn tôi viết. Chỉ dùng khi CÓ ảnh ref nhân vật. */
-const POSE_NOTE =
+export const POSE_NOTE =
   "All cells show THE SAME character as in the attached REFERENCE PHOTO: match its " +
   "species, face, colors, costume, materials and proportions exactly — only the pose " +
   "and viewing angle change per cell, like one character turnaround sheet.";

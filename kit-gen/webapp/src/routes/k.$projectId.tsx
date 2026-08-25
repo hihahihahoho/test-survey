@@ -1,11 +1,19 @@
 import { createRoute } from "@tanstack/react-router";
 import { Route as rootRoute } from "./__root";
 import { AppLayout } from "@/components/layout";
-import { WorkflowScreen } from "@/features/workflow-v4/WorkflowScreen";
+import { PromptCanvasScreen } from "@/features/prompt-canvas";
 import { requireSetup } from "./guards";
 import { parseProjectParams } from "./params";
 
-/** FE3 E1: đường chính mới, một project agent được trình bày như một bộ kit. */
+/**
+ * FE3 E1: đường chính mới, một project agent được trình bày như một bộ kit.
+ *
+ * ══ ĐIỂM ĐẾN ĐÃ ĐỔI: WIZARD 6 BƯỚC → MÀN SOẠN PROMPT ══════════════════════
+ * URL giữ nguyên có chủ ý — mọi link, mọi bookmark, mọi thẻ ở trang danh sách
+ * đều trỏ về đây, và người dùng không phải học một địa chỉ mới chỉ vì bên trong
+ * đổi cách làm việc. `WorkflowScreen` vẫn còn trong mã cho các màn con của dự án;
+ * thứ đổi là CỬA CHÍNH.
+ */
 export const Route = createRoute({
   getParentRoute: () => rootRoute,
   path: "/k/$projectId",
@@ -24,5 +32,5 @@ function KitRoute() {
 }
 
 function KitEntry({ projectId }: { projectId: string }) {
-  return <WorkflowScreen projectId={projectId} />;
+  return <PromptCanvasScreen projectId={projectId} />;
 }

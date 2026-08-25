@@ -52,8 +52,28 @@ const WIN_PIPE_GRACE_MS = 5000
  *  qua đây KHÔNG đổi một ký tự nào ⇒ darwin/linux giữ nguyên hành vi. */
 const cleanJobName = s => String(s).replace(/[\u0000-\u001f]/g, "")
 
-/** Bề rộng thumbnail mà lưới của web luôn hỏng (`?w=256`, xem features/kit/lib/image-source.ts). */
-const THUMB_WIDTHS = [256]
+/** Bề rộng thumbnail mà lưới của web luôn hỏng.
+ *  · 256 — lưới ô đã cắt (`features/kit/lib/image-source.ts`).
+ *  · 512 — thẻ sheet thô của tab "Ảnh gốc" (RawSheetsPanel). Trước bản này thẻ đó xin
+ *    ẢNH GỐC 1536×1024 (~1–3 MB mỗi tấm, 10 tấm một lượt) chỉ để vẽ vào một ô rộng
+ *    ~400px ⇒ lưới "lác lác": ô nào tải xong trước thì hiện trước. Hâm sẵn 512 ở đây
+ *    để lúc web hỏi là có ngay, không phải đợi Pillow co ảnh giữa lượt. */
+const THUMB_WIDTHS = [256, 512]
+
+/* ══ VALIDATE GEOMETRY PHẢI CÓ TRẦN THỜI GIAN ═══════════════════════════════
+   `validate_output_geometry.py` là tiến trình con KHÔNG do ta viết trần: nó đọc ảnh
+   bằng Pillow và contract.json. Một lần nó treo (Pillow kẹt trên PNG hỏng, python bị
+   antivirus giữ, contract.json khổng lồ) là `close` không bao giờ tới ⇒ promise không
+   bao giờ settle. Trước bản này nó nằm NGAY TRƯỚC chỗ gán `j.artifact`, nên treo ở đây
+   = ẢNH KHÔNG BAO GIỜ HIỆN, dù file PNG đã nằm sẵn trên đĩa từ lâu.
+   Nay: kiểm hình học chạy SAU khi ảnh đã tới web (xem emitSheetImage), và có trần.
+   30s là trần RỘNG có chủ ý: Pillow mở một PNG 1536×1024 mất chưa tới một giây, nên
+   chạm trần nghĩa là hỏng thật chứ không phải máy chậm. */
+export const GEOMETRY_TIMEOUT_MS = 30 * 1000
+/** CỬA THOÁT CHO TEST (cùng kiểu với `KITGEN_CODEX_HOME`): không thể ngồi đợi 30s trong
+ *  một ca test có trần 25s. Đọc trong constructor chứ không phải lúc nạp module, vì bộ ca
+ *  đặt biến sau khi đã import. Người dùng không bao giờ đặt biến này. */
+const geometryTimeoutMs = () => Number(process.env.KITGEN_GEOMETRY_TIMEOUT_MS) || GEOMETRY_TIMEOUT_MS
 /** Cover chạy NGOÀI pool của gen.sh ⇒ tổng số lượt codex đồng thời là maxJobs+1.
  *  maxJobs=1 nghĩa là người dùng đã chọn "đừng chạy nhiều cùng lúc" — tôn trọng
  *  lựa chọn đó: ở mức ấy ảnh bìa vẫn đợi tới cuối lượt như cũ. */
@@ -109,6 +129,11 @@ export class RunHandle {
     /* Tấm đã CẮT XONG trong chu trình per-sheet. Lượt dọn sau khi Dừng đọc tập này để
        biết tấm nào còn nợ một lượt cắt (xem settleCancelledSheets). */
     this.slicedSheets = new Set()
+    /* Tấm đã chạy `validate_output_geometry.py` rồi. Kiểm hình học nay tách khỏi
+       attachArtifact (xem GEOMETRY_TIMEOUT_MS) nên phải tự nhớ để không spawn python
+       hai lần cho cùng một tấm (chu trình per-sheet + lưới an toàn settleGenJobs). */
+    this.geometryChecked = new Set()
+    this.geometryTimeoutMs = geometryTimeoutMs()
     /* Dừng XONG có được dọn nốt phần đã trả tiền không? Người dùng bấm Dừng: CÓ.
        DELETE project: KHÔNG — thư mục sắp bị move sang thùng rác, mọi bút toán muộn
        vào đó là "thư mục ma" của C-01 (xem cancelAllForProject). */
@@ -411,19 +436,48 @@ export class RunHandle {
     this.emit({ type: "progress", ...this.run.progress })
     this.persist().catch(() => {})
     if (status === "ok" && this.run.kind === "gen") {
-      this.queueSheet(j)
+      /* HAI NHỊP, KHÔNG MỘT (xem ghi chú "CHU TRÌNH CỦA MỘT TẤM"). Nhịp 1 chạy NGAY,
+         ngoài hàng đợi: ảnh phải tới web trong vài trăm ms sau khi engine ghi xong. */
+      const imaged = this.runSheetStep(j, "ảnh", () => this.emitSheetImage(j))
+      this.queueSheet(j, imaged)
       this.maybeEarlyCover()
     }
   }
 
-  /* ══ CHU TRÌNH CỦA MỘT TẤM ══════════════════════════════════════════════════ */
+  /* ══ CHU TRÌNH CỦA MỘT TẤM — HAI NHỊP ═══════════════════════════════════════
+     NHỊP 1 (`emitSheetImage`): NGAY khi engine ghi xong `raw/<job>.png` — chép snapshot
+       vào `runs/<id>/artifacts/`, gán `j.artifact`, persist, phát `sheet.image`.
+       KHÔNG qua hàng đợi, KHÔNG spawn tiến trình nào. Đây là thứ chủ sản phẩm đo bằng
+       mắt: "gen xong thì phải THẤY".
+     NHỊP 2 (`finishSheet`): kiểm hình học → cắt hẹp → QA → hâm thumbnail → `sheet.ready`.
+       VẪN xếp hàng một làn vì `slice.py` đọc–sửa–ghi `kits/manifest.json` chung.
 
-  /** Nối chu trình của một tấm vào hàng đợi một làn. KHÔNG await (đang trong luồng
-   *  đọc stdout của engine — chặn ở đây là chặn cả việc đọc tiến độ). */
-  queueSheet(j) {
-    this.sheetQueue = this.sheetQueue.then(() => this.finishSheet(j)).catch(e => {
+     VÌ SAO PHẢI TÁCH: trước bản này cả sáu việc nằm trong MỘT hàm tuần tự, và `j.artifact`
+     chỉ được gán ở giữa — sau một lượt spawn python không trần thời gian, trước một lượt
+     `slice.py` có thể chạy hàng chục giây. Với hàng đợi một làn, tấm thứ 5 phải đợi bốn
+     lượt cắt của bốn tấm trước mới tới lượt được GÁN ẢNH. Đó là "gen xong 1 lúc lâu mới
+     load", và là "lưới lác lác" (tấm nào lọt qua hàng đợi trước thì hiện trước).
+
+     TƯƠNG THÍCH NGƯỢC: `sheet.image` là type MỚI. Web cũ có nhánh cuối bắt mọi type lạ
+     (`streamEventSchema`) nên chỉ bỏ qua, không vỡ. `sheet.ready` giữ nguyên từng chữ. */
+
+  /** Nối nhịp 2 của một tấm vào hàng đợi một làn. KHÔNG await (đang trong luồng đọc
+   *  stdout của engine — chặn ở đây là chặn cả việc đọc tiến độ).
+   *  `after` = nhịp 1 của CHÍNH tấm này: hai nhịp cùng gọi `attachArtifact`, để chúng
+   *  chồng nhau là hai lượt copyFile song song trên cùng một file đích. */
+  queueSheet(j, after = null) {
+    this.sheetQueue = this.sheetQueue
+      .then(() => after)
+      .catch(() => {})
+      .then(() => this.runSheetStep(j, "chu trình", () => this.finishSheet(j)))
+  }
+
+  /** Chạy một bước của chu trình per-sheet, nuốt lỗi đúng cách. Tách ra vì cả hai nhịp
+   *  đều là promise KHÔNG ai await từ ngoài ⇒ một reject lọt ra là giết cả tiến trình. */
+  runSheetStep(j, what, fn) {
+    return Promise.resolve().then(fn).catch(e => {
       if (e?.code !== "ENOENT" && e?.code !== "ENOTDIR")
-        process.stderr.write(`[agent] run ${this.id} sheet ${j.job}: ${redactLine(String(e?.message ?? e))}\n`)
+        process.stderr.write(`[agent] run ${this.id} sheet ${j.job} (${what}): ${redactLine(String(e?.message ?? e))}\n`)
     })
   }
 
@@ -450,7 +504,13 @@ export class RunHandle {
     const pdir = projectDir(this.ws, this.run.projectId)
     const png = join(pdir, "raw", `${j.job}.png`)
     if (!(await exists(png))) return
+    // Nhịp 1 thường đã làm việc này rồi ⇒ no-op. Vẫn gọi vì settleCancelledSheets có thể
+    // vào thẳng đây cho tấm chưa kịp đi qua nhịp 1.
     await this.attachArtifact(pdir, j)
+    /* Kiểm hình học ĐI SAU khi ảnh đã tới web: nó spawn python, và python treo thì trước
+       bản này ảnh không bao giờ hiện (xem GEOMETRY_TIMEOUT_MS). Nay xấu nhất là tấm mất
+       phần `validation` — ảnh vẫn hiện đúng giờ. */
+    await this.validateArtifact(pdir, j)
     const sliced = (this.run.kind === "gen" && this.opts.autoSliceAfterGen)
       ? await this.sliceSheet(pdir, j)
       : null
@@ -468,6 +528,30 @@ export class RunHandle {
       type: "sheet.ready", job: j.job, variant: j.variant, sheet: j.sheet,
       artifact: j.artifact ? { path: j.artifact.path, bytes: j.artifact.bytes } : null,
       sliced, thumbs: thumb, qa,
+    })
+  }
+
+  /** NHỊP 1 — "ẢNH ĐÃ CÓ, CẦM LẤY MÀ VẼ".
+   *
+   *  Chỉ ba việc, tất cả đều là I/O đĩa thuần và tính bằng mili-giây: chép snapshot,
+   *  gán `j.artifact`, ghi `run.json`. KHÔNG spawn tiến trình, KHÔNG đợi hàng đợi —
+   *  vì mọi thứ chậm trong chu trình cũ (python kiểm hình học, `slice.py`, Pillow hâm
+   *  thumbnail) đều nằm SAU chỗ gán artifact, tức là chúng giữ ảnh làm con tin.
+   *
+   *  `sheet.image` nói ĐÚNG MỘT điều, hẹp hơn `sheet.ready`: tấm này đã có ảnh đọc được
+   *  ở `artifact.path`. Nó KHÔNG hứa gì về `kits/` — web không được mời lại kho kit ở
+   *  event này (chưa cắt thì mời lại chỉ tổ nhấp nháy lưới cho một kho không đổi).
+   *  `sheet.ready` mới là mốc "đã cắt xong", và nó vẫn phát y như cũ. */
+  async emitSheetImage(j) {
+    if (this.detached || this.finished) return null
+    const pdir = projectDir(this.ws, this.run.projectId)
+    if (!(await exists(join(pdir, "raw", `${j.job}.png`)))) return null
+    await this.attachArtifact(pdir, j)
+    if (!j.artifact || this.detached) return null
+    await this.persist()
+    return this.emit({
+      type: "sheet.image", job: j.job, variant: j.variant, sheet: j.sheet,
+      artifact: { path: j.artifact.path, bytes: j.artifact.bytes },
     })
   }
 
@@ -507,14 +591,31 @@ export class RunHandle {
     const artifactsDir = join(this.dir, "artifacts")
     await ensureDir(artifactsDir)
     await copyFile(png, join(artifactsDir, `${j.job}.png`))
-    const validation = await this.validateGeometry(pdir, png, j.job)
+    /* `validation: null` là CHỖ ĐỂ DÀNH, không phải kết luận. Kiểm hình học đã bị tách
+       ra `validateArtifact()` và chạy SAU khi ảnh tới web (xem GEOMETRY_TIMEOUT_MS):
+       trước bản này nó nằm đúng ở đây, giữa `copyFile` và phép gán dưới, nên một lượt
+       python treo là `j.artifact` mãi mãi `null` — ảnh có trên đĩa mà web không thấy. */
     j.artifact = {
       path: `runs/${this.id}/artifacts/${j.job}.png`,
       bytes: st?.size ?? 0,
       writtenAt: new Date(mt).toISOString(),
-      validation,
+      validation: null,
     }
     return true
+  }
+
+  /** Kiểm hình học của một tấm ĐÃ có artifact, rồi vá kết quả vào `j.artifact.validation`.
+   *  Idempotent: mỗi tấm đúng một lượt python (`geometryChecked`), vì cả chu trình
+   *  per-sheet lẫn lưới an toàn `settleGenJobs()` đều gọi tới. */
+  async validateArtifact(pdir, j) {
+    if (!j.artifact || this.detached) return null
+    if (this.geometryChecked.has(j.job)) return j.artifact.validation ?? null
+    this.geometryChecked.add(j.job)
+    const validation = await this.validateGeometry(pdir, join(pdir, "raw", `${j.job}.png`), j.job)
+    if (validation == null || this.detached) return validation
+    j.artifact.validation = validation
+    await this.persist()
+    return validation
   }
 
   /** Cắt HẸP đúng một tấm: `slice.py <variant> --sheet=<sheet>`.
@@ -670,7 +771,39 @@ export class RunHandle {
     const py = pythonCommand([tool, "--image", png, "--contract", join(pdir, "contract.json"), "--job", job, "--output", output])
     return new Promise(resolve => {
       // pythonSpawnOpts(): công cụ này đọc contract.json (UTF-8, tiếng Việt) — xem platform.mjs.
-      const child = spawn(py.cmd, py.args, { cwd: pdir, stdio: ["ignore", "pipe", "pipe"], ...pythonSpawnOpts() })
+      let child
+      try {
+        /* `detached: !IS_WIN` — CÙNG LÝ DO với runPhase/sliceSheet, và nay nó là điều
+           kiện để killTree đúng: trên POSIX killTree gọi `process.kill(-pid)`, mà -pid
+           chỉ trỏ đúng nhóm khi tiến trình con LÀ trưởng nhóm. Không detached thì lệnh
+           đó hoặc trượt hoặc trỏ nhầm nhóm khác. Trên Windows KHÔNG detached (giữ
+           windowsHide, tránh popup console) — ở đó killTree dùng `taskkill /T`. */
+        child = spawn(py.cmd, py.args, {
+          cwd: pdir, detached: !IS_WIN, stdio: ["ignore", "pipe", "pipe"], ...pythonSpawnOpts(),
+        })
+      } catch { return resolve(null) }
+      this.sideChildren.add(child)
+      let settled = false
+      const done = v => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        this.sideChildren.delete(child)
+        resolve(v)
+      }
+      /* TRẦN THỜI GIAN + KILLTREE. `python` ở đây có thể là launcher (`py -3` trên
+         Windows) nên tiến trình thật là CHÁU — `child.kill()` giết vỏ mà để lại ruột;
+         killTree là đường duy nhất giết đủ. Hết giờ thì coi như "không kiểm được",
+         KHÔNG phải lỗi của lượt chạy: ảnh đã tới web từ nhịp 1 và vẫn dùng được. */
+      const timer = setTimeout(() => {
+        this.emit({
+          type: "job.log", job, level: "warn",
+          line: `kiểm hình học quá ${this.geometryTimeoutMs}ms — bỏ qua (ảnh KHÔNG bị ảnh hưởng)`,
+        })
+        killTree(child, "SIGKILL")
+        done(null)
+      }, this.geometryTimeoutMs)
+      timer.unref?.()
       let text = ""
       let outputBytes = 0
       child.stdout.on("data", b => {
@@ -681,9 +814,9 @@ export class RunHandle {
         text += kept.toString("utf8")
         outputBytes += kept.length
       })
-      child.on("error", () => resolve(null))
+      child.on("error", () => done(null))
       child.on("close", () => {
-        try { resolve(JSON.parse(text.trim())) } catch { resolve(null) }
+        try { done(JSON.parse(text.trim())) } catch { done(null) }
       })
     })
   }
@@ -695,6 +828,10 @@ export class RunHandle {
       // Tấm đã đi qua chu trình per-sheet thì `j.artifact` có sẵn — attachArtifact()
       // không chép/kiểm lại lần hai, chỉ trả lời "ảnh có phải của lượt này không".
       const fresh = await this.attachArtifact(pdir, j)
+      /* LƯỚI AN TOÀN cho kiểm hình học: tấm nào không đi qua chu trình per-sheet (engine
+         không in `OK`, nhưng ảnh vẫn nằm đó) thì đây là chỗ duy nhất còn kiểm được.
+         Tấm đã kiểm rồi thì `geometryChecked` chặn, không spawn python lần hai. */
+      if (fresh) await this.validateArtifact(pdir, j)
       if (fresh) {
         if (j.status !== "ok") {
           if (j.status === "failed") this.run.progress.failed = Math.max(0, this.run.progress.failed - 1)

@@ -23,21 +23,25 @@ export const NODE = {
    * Danh sách nằm ở `pill-registry.ts`, tra theo `kind`.
    */
   optionPill: "optionPill",
-  /** Pill ảnh tham chiếu, inline atom. attrs: `{ refs }`. */
+  /** Pill ảnh tham chiếu, inline atom. attrs: `{ refName, path }` — xem `PillImage`. */
   imagePill: "imagePill",
 } as const;
 
 /**
- * Một ảnh tham chiếu người dùng thả vào pill.
+ * Ảnh tham chiếu của một pill = MỘT tấm đã nằm trên đĩa project.
  *
- * `url` là **object URL** (`URL.createObjectURL`) — chỉ sống trong RAM của tab
- * này. Cố ý: đây là lab, không có backend, và không được để một prototype âm
- * thầm ghi ảnh của người dùng xuống đâu cả. Hệ quả phải nói thẳng: tải lại
- * trang là mất, và JSON của tài liệu chứa một `blob:` không ai mở lại được.
- * Bản làm thật phải thay `url` bằng id tài sản trong workspace KitGen.
+ * ══ MÓN NỢ `blob:` ĐÃ ĐƯỢC TRẢ (08/2026) ═══════════════════════════════════
+ * Bản lab giữ `refs: [{ id, name, url }]` với `url` là object URL — file này tự
+ * khai luôn hai hệ quả: F5 là mất sạch ảnh, và JSON tài liệu chứa một `blob:`
+ * chết. Khi composer thành khu làm việc thật thì cả hai đều chặn đường: tài liệu
+ * nay được LƯU BỀN theo dự án, và ảnh phải đi vào `sheet.ref` của contract dưới
+ * dạng đường dẫn tương đối để `gen.sh` đính kèm được.
+ *
+ * Nên attr của node nay là `{ refName, path }` — đúng thứ agent trả về sau khi
+ * ghi ảnh vào `refs/`. HÌNH DẠNG THẬT nằm ở `prompt-canvas/lib/pill-image.ts`
+ * (cùng chỗ với hàm tải lên), đây chỉ xuất lại để chỗ gọi cũ không phải biết.
+ *
+ * MỘT ẢNH MỖI PILL, không còn mảng: một pill = một chỗ trong câu = một `sheet.ref`.
+ * Mảng cũ hứa nhiều ảnh cho một chỗ mà contract không có chỗ nhận.
  */
-export interface ImageRef {
-  id: string;
-  name: string;
-  url: string;
-}
+export type { PillImage } from "@/features/prompt-canvas/lib/pill-image";

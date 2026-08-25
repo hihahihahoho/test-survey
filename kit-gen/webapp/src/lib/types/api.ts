@@ -1002,7 +1002,17 @@ export const streamEventSchema = z.union([
     failSummary: z.string().nullish(),
   }),
   z.looseObject({
-    /** Lũy tiến per-sheet: tấm này đã snapshot + cắt + thumbnail xong GIỮA lượt. */
+    /** NHỊP 1 của chu trình per-sheet: engine vừa ghi xong ảnh, agent đã chép snapshot
+     *  vào `runs/<id>/artifacts/` — ẢNH XEM ĐƯỢC NGAY, chưa cắt gì cả.
+     *  Tới sớm hơn `sheet.ready` đúng bằng thời gian cắt + kiểm hình học (vài giây tới
+     *  vài chục giây, và tấm sau còn phải xếp hàng sau tấm trước).
+     *  KHÔNG hứa gì về `kits/` ⇒ nơi nhận TUYỆT ĐỐI không mời lại kho kit ở event này. */
+    ...evBase, type: z.literal("sheet.image"), job: z.string(),
+    variant: z.string().optional(), sheet: z.string().optional(),
+    artifact: z.looseObject({ path: z.string(), bytes: z.number().optional() }).nullish(),
+  }),
+  z.looseObject({
+    /** NHỊP 2: tấm này đã snapshot + cắt + thumbnail xong GIỮA lượt (`kits/` đã đổi). */
     ...evBase, type: z.literal("sheet.ready"), job: z.string(),
     variant: z.string().optional(), sheet: z.string().optional(),
     artifact: z.looseObject({ path: z.string(), bytes: z.number().optional() }).nullish(),
@@ -1015,7 +1025,7 @@ export const streamEventSchema = z.union([
 export type StreamEvent = z.infer<typeof streamEventSchema>;
 
 export const STREAM_EVENT_TYPES = [
-  "run.started", "job.started", "job.log", "job.done", "sheet.ready",
+  "run.started", "job.started", "job.log", "job.done", "sheet.image", "sheet.ready",
   "phase.changed", "progress", "workspace.changed", "run.finished", "heartbeat",
 ] as const;
 

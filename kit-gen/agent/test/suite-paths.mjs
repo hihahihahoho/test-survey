@@ -152,4 +152,34 @@ export async function run({ api, wsRoot, outsideRoot, pid }) {
     await rm(abs, { force: true })
   })
 
+  /* ── DANH MỤC KIT KHÔNG ĐƯỢC NUỐT CẢ THƯ VIỆN ẢNH VÀO RAM ──────────────────
+     `GET /api/projects/:id/kit` trả `w`/`h` cho TỪNG file đã cắt, và bản cũ lấy hai số
+     đó bằng `imageSize(await readFile(abs))` — nạp NGUYÊN tấm PNG chỉ để đọc 8 byte ở
+     offset 16. Một project thật có hàng trăm ô, và web hỏi lại danh mục sau MỖI lần cắt
+     xong một tấm ⇒ hàng trăm MB đọc-rồi-vứt, đúng giữa lúc agent đang bận gen.
+     `readHeadFile` đọc 64KB đầu. Ca này khoá CẢ HAI vế: vẫn ra đúng số, và vẫn đúng
+     ngay cả khi phần đọc được BÉ HƠN file (tức là quả thật không đọc hết). */
+  await it("kích thước ảnh lấy từ HEADER, không nạp cả file (đường của danh mục kit)", async () => {
+    const { readHeadFile } = await import("../lib/fsx.mjs")
+    const abs = join(wsRoot, "projects", pid, "raw", "header-probe.png")
+    await mkdir(join(wsRoot, "projects", pid, "raw"), { recursive: true })
+    const big = noisyPng(320, 320)
+    await writeFile(abs, big)
+    ok(big.length > 4096, `ảnh mẫu phải to hơn mẩu đọc thử, thấy ${big.length}B`)
+
+    eq(imageSize(await readHeadFile(abs, 64 * 1024)), { w: 320, h: 320 }, "64KB đầu là đủ")
+    // Mẩu bé hơn hẳn file: nếu ai đó lỡ đổi lại thành readFile thì ca trên vẫn xanh,
+    // còn ca này chứng minh phép đọc THẬT SỰ hẹp mà vẫn đủ dữ liệu.
+    const nho = await readHeadFile(abs, 4096)
+    ok(nho.length < big.length, `mẩu ${nho.length}B phải nhỏ hơn file ${big.length}B`)
+    eq(imageSize(nho), { w: 320, h: 320 }, "vẫn ra đúng kích thước từ mẩu đầu")
+    // File ngắn hơn mẩu xin ⇒ trả đúng phần có thật, KHÔNG đệm số 0 (đệm sẽ làm
+    // `imageSize` đọc rác ra thành một kích thước bịa).
+    const cut = join(wsRoot, "projects", pid, "raw", "header-probe.txt")
+    await writeFile(cut, "abc")
+    eq((await readHeadFile(cut, 64 * 1024)).length, 3, "file 3 byte ⇒ mẩu 3 byte")
+    await rm(abs, { force: true })
+    await rm(cut, { force: true })
+  })
+
 }

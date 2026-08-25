@@ -24,7 +24,9 @@ const pill = (kind: PillKind, value: string): JSONContent => ({
   attrs: { kind, value },
 });
 
-const imagePill = (): JSONContent => ({ type: NODE.imagePill, attrs: { refs: [] } });
+/* Pill ảnh RỖNG: chưa có ảnh nào trên đĩa. Hai trường rỗng chứ không phải
+   `null` — đúng giá trị mặc định của attr, xem `EMPTY_PILL_IMAGE`. */
+const imagePill = (): JSONContent => ({ type: NODE.imagePill, attrs: { refName: "", path: "" } });
 
 /* ── Block BACKGROUND ─────────────────────────────────────────────────────── */
 

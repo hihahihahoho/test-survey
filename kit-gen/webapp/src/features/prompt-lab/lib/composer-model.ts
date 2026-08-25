@@ -49,6 +49,25 @@ export interface DocBlock {
   kind: "background" | "mascot";
   mode: BlockMode;
   doc: JSONContent;
+  /**
+   * GÓC MÁY của ảnh dáng — chỉ có nghĩa với block Nhân vật. Rỗng/thiếu = góc mặc
+   * định của pose-lab (`DEFAULT_VIEW`).
+   *
+   * Vì sao KHÔNG là một pill trong `doc` như [dáng]: góc máy không đi vào prompt
+   * một chữ nào. Nó chỉ quyết định tấm ảnh manơcanh chụp ra trông thế nào, rồi
+   * chính TẤM ẢNH mới đi tới máy vẽ. Nhét nó vào câu là hứa với người đọc rằng
+   * câu prompt có nhắc tới góc máy — mà không.
+   */
+  poseView?: string;
+  /**
+   * ẢNH DÁNG ĐÃ CHỤP, khoá theo cặp `"<dáng>|<góc>"` → đường dẫn `refs/<tên>`.
+   *
+   * Đây là bộ nhớ đệm, và nó nằm TRONG TÀI LIỆU (chứ không trong RAM của tab) vì
+   * cái đắt không phải phép render 10ms mà là VÒNG TẢI LÊN: mỗi lần chụp lại là
+   * một tệp mới trong `refs/` của dự án. Đổi dáng rồi đổi lại là hai tệp y hệt
+   * nhau nằm trên đĩa mãi mãi nếu không có bảng này.
+   */
+  poseRefs?: Record<string, string>;
 }
 
 /** Một ô của lưới spritesheet. */

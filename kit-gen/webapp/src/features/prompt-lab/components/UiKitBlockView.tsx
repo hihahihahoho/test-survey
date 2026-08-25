@@ -91,28 +91,35 @@ function CellRow({
   );
 }
 
-export function UiKitBlockView({
+/** Nhãn chung của block UI kit — vỏ nào bọc nó cũng phải gọi đúng một tên. */
+export const UI_KIT_BLOCK_TITLE = "Bộ UI (spritesheet)";
+
+/** Badge đếm ô — dùng chung cho vỏ lab và vỏ của màn thật. */
+export function UiKitBlockBadge({ block }: { block: UiKitBlock }) {
+  return (
+    <span className="rounded-full border border-line-subtle px-2 py-0.5 text-caption text-fg-muted">
+      {block.cells.length} element · hệ thống tự xếp lưới
+    </span>
+  );
+}
+
+/**
+ * RUỘT của block UI kit, không có vỏ.
+ *
+ * Tách ra cùng lý do với `DocBlockBody` — xem khối chú thích ở `DocBlockView.tsx`.
+ */
+export function UiKitBlockBody({
   block,
   onChange,
-  onDelete,
 }: {
   block: UiKitBlock;
   /** Nhận HÀM cập nhật, không nhận giá trị — xem `updateBlock` trong PromptComposerScreen. */
   onChange: (updater: (prev: UiKitBlock) => UiKitBlock) => void;
-  onDelete: () => void;
 }) {
   const presets = usePresets();
 
   return (
-    <BlockCard
-      title="Bộ UI (spritesheet)"
-      badge={
-        <span className="rounded-full border border-line-subtle px-2 py-0.5 text-caption text-fg-muted">
-          {block.cells.length} element · hệ thống tự xếp lưới
-        </span>
-      }
-      onDelete={onDelete}
-    >
+    <>
       <div className="flex flex-col">
         {block.cells.map((cell, index) => (
           <CellRow
@@ -145,6 +152,23 @@ export function UiKitBlockView({
           </button>
         ))}
       </div>
+    </>
+  );
+}
+
+/** Ruột + vỏ `BlockCard` — hình dạng mà route lab `/lab/prompt-composer` dùng. */
+export function UiKitBlockView({
+  block,
+  onChange,
+  onDelete,
+}: {
+  block: UiKitBlock;
+  onChange: (updater: (prev: UiKitBlock) => UiKitBlock) => void;
+  onDelete: () => void;
+}) {
+  return (
+    <BlockCard title={UI_KIT_BLOCK_TITLE} badge={<UiKitBlockBadge block={block} />} onDelete={onDelete}>
+      <UiKitBlockBody block={block} onChange={onChange} />
     </BlockCard>
   );
 }

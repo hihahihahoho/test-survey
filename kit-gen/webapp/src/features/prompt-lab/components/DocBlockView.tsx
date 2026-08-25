@@ -12,12 +12,24 @@ import { BlockEditor } from "./BlockEditor";
  *
  * Chỗ duy nhất trong lab quản chuyện ĐỔI CHẾ ĐỘ, vì đó là chỗ duy nhất có thể
  * làm mất công sức của người dùng.
+ *
+ * ╔══ VÌ SAO TÁCH RUỘT (`DocBlockBody`) RA KHỎI VỎ (`BlockCard`) ═════════════╗
+ * ║ Màn THẬT (`prompt-canvas`) cần đúng cái ruột này — công tắc chế độ, lời    ║
+ * ║ hỏi trước khi reset, một instance TipTap — nhưng nằm trong một cái vỏ KHÁC:║
+ * ║ vỏ đó còn phải đeo hai tab "Soạn | Prompt", nút Gen, trạng thái hàng đợi   ║
+ * ║ và ô ảnh kết quả. Nhét cả bốn thứ ấy vào `BlockCard` là bắt route lab gánh ║
+ * ║ một cái vỏ nó không dùng; chép ruột sang bên kia là hai bản luật đổi chế   ║
+ * ║ độ — và luật ấy CHÍNH LÀ chỗ có thể xoá chữ của người dùng.                ║
+ * ║ Nên: ruột ở đây, ai cần vỏ nào thì tự bọc. Lab vẫn bọc `BlockCard`.        ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 
-const TITLE: Record<DocBlock["kind"], string> = {
+export const DOC_BLOCK_TITLE: Record<DocBlock["kind"], string> = {
   background: "Cảnh nền",
   mascot: "Nhân vật",
 };
+
+const TITLE = DOC_BLOCK_TITLE;
 
 const PLACEHOLDER: Record<DocBlock["kind"], string> = {
   background: "Mô tả cảnh nền… (gõ / để chèn pill)",
@@ -29,15 +41,23 @@ const FRESH_DOC: Record<DocBlock["kind"], () => JSONContent> = {
   mascot: mascotDoc,
 };
 
-export function DocBlockView({
+export function DocBlockBody({
   block,
   onChange,
-  onDelete,
+  reloadSignal = 0,
 }: {
   block: DocBlock;
   /** Nhận HÀM cập nhật, không nhận giá trị — xem `updateBlock` trong PromptComposerScreen. */
   onChange: (updater: (prev: DocBlock) => DocBlock) => void;
-  onDelete: () => void;
+  /**
+   * Tín hiệu NẠP LẠI đến từ BÊN NGOÀI — cộng thẳng vào `resetToken` nội bộ.
+   *
+   * Ai cần: màn thật sửa `block.doc` mà KHÔNG qua editor (bấm pill [dáng] trên
+   * thanh công cụ của thẻ, dán đường dẫn ảnh pose vừa chụp). Không có tín hiệu
+   * này thì state đã đổi mà chữ trong ô soạn vẫn là chữ cũ — hai nguồn sự thật
+   * lệch nhau ngay trước mắt người dùng.
+   */
+  reloadSignal?: number;
 }) {
   /* Tăng lên là ra hiệu cho `BlockEditor` nạp lại nội dung. Xem chú thích
      `resetToken` bên đó để biết vì sao không so sánh `doc`. */
@@ -75,7 +95,7 @@ export function DocBlockView({
   };
 
   return (
-    <BlockCard title={TITLE[block.kind]} badge={<ModeBadge mode={block.mode} />} onDelete={onDelete}>
+    <>
       <div className="mb-3">
         <ModeToggle mode={block.mode} onPick={pick} />
       </div>
@@ -98,11 +118,28 @@ export function DocBlockView({
         <BlockEditor
           doc={block.doc}
           mode={block.mode}
-          resetToken={resetToken}
+          resetToken={resetToken + reloadSignal}
           placeholder={PLACEHOLDER[block.kind]}
           onChange={(doc) => onChange((prev) => ({ ...prev, doc }))}
         />
       </div>
+    </>
+  );
+}
+
+/** Ruột + vỏ `BlockCard` — hình dạng mà route lab `/lab/prompt-composer` dùng. */
+export function DocBlockView({
+  block,
+  onChange,
+  onDelete,
+}: {
+  block: DocBlock;
+  onChange: (updater: (prev: DocBlock) => DocBlock) => void;
+  onDelete: () => void;
+}) {
+  return (
+    <BlockCard title={TITLE[block.kind]} badge={<ModeBadge mode={block.mode} />} onDelete={onDelete}>
+      <DocBlockBody block={block} onChange={onChange} />
     </BlockCard>
   );
 }

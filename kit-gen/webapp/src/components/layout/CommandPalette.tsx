@@ -10,7 +10,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { KeyboardHint } from "@/components/common";
 import { COMMAND_GROUPS, useScreenCommands, type Command, type CommandGroup as Grp } from "./command-registry";
-import { UI_STEP_LABEL } from "@/features/workflow-v4/steps/Stepper";
 
 /**
  * ⌘K BẢNG LỆNH (§2.3 + §7.1 MUST).
@@ -60,8 +59,12 @@ export function CommandPalette(props: CommandPaletteProps) {
           run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { settings: "requirements" } })) },
         { id: "p.style", group: "Dự án", icon: Pencil, label: "Dự án: Phong cách", hint: ["g", "d"], hintSequence: true,
           run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { settings: "style" } })) },
-        { id: "p.ui", group: "Dự án", icon: LayoutGrid, label: `Dự án: ${UI_STEP_LABEL}`,
-          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "skeleton" } })) },
+        /* ĐÃ GỠ: mục trỏ tới bước «UI Elements» của trình thuật sĩ.
+           Bảng lệnh là danh sách ĐIỂM ĐẾN, và wizard 6 bước không còn là một điểm
+           đến kể từ khi `/k/:projectId` mở thẳng màn soạn prompt. Giữ lại thì nó
+           là một cái tên mượn từ `workflow-v4/steps/Stepper` cho một hành trình
+           người dùng không còn đi — và cái import ấy là sợi dây neo cuối cùng của
+           bảng lệnh vào wizard. Mọi mục khác của bảng giữ nguyên. */
         { id: "p.mascot", group: "Dự án", icon: Images, label: "Dự án: Mascot",
           run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "mascot" } })) },
         { id: "p.images", group: "Dự án", icon: Images, label: "Dự án: Ảnh đã tạo", hint: ["g", "r"], hintSequence: true,

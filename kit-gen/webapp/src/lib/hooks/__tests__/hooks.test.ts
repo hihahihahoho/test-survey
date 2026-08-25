@@ -179,6 +179,49 @@ describe("applyEvent — stream và poll phải cho CÙNG hình dạng dữ li�
     expect(r.seq).toBe(406);
   });
 
+  /* NHỊP 1 CỦA CHU TRÌNH PER-SHEET (25/08).
+     `sheet.image` tới NGAY khi engine ghi xong ảnh; `sheet.ready` chỉ tới sau khi tấm đó
+     đã được cắt — và tấm sau còn phải xếp hàng sau tấm trước. Đo trên lượt thật: khoảng
+     cách giữa hai nhịp là vài giây tới vài chục giây, và trước bản này TOÀN BỘ quãng đó
+     là ô đen "Đã xong" (web đọc `job.artifact.path`, mà ô đó chỉ được điền ở nhịp 2).
+     Ba ca dưới khoá: nhịp 1 đủ để hiện ảnh, nhịp 2 áp lên không xoá gì, và nhịp 2 thiếu
+     artifact cũng không được làm ô đang có ảnh đen lại. */
+  it("sheet.image gắn artifact NGAY — không đợi cắt xong", () => {
+    const ev = {
+      seq: 410, type: "sheet.image", job: "vang-main2", variant: "vang", sheet: "main2",
+      artifact: { path: "runs/r1/artifacts/vang-main2.png", bytes: 999 },
+    } as StreamEvent;
+    const r = applyEvent(base, ev);
+    expect(r.jobs[1]!.artifact).toEqual({ path: "runs/r1/artifacts/vang-main2.png", bytes: 999 });
+    expect(r.jobs[0]!.artifact).toBe(base.jobs[0]!.artifact);
+    expect(r.seq).toBe(410);
+    // thuần khiết y như mọi nhánh khác — React cần tham chiếu mới
+    expect(r).not.toBe(base);
+    expect(base.jobs[1]!.artifact ?? null).toBe(null);
+  });
+
+  it("sheet.ready đi sau sheet.image là phép gán TRÙNG, không lật ngược gì", () => {
+    const path = "runs/r1/artifacts/vang-main2.png";
+    const a = applyEvent(base, {
+      seq: 410, type: "sheet.image", job: "vang-main2", artifact: { path, bytes: 999 },
+    } as StreamEvent);
+    const b = applyEvent(a, {
+      seq: 411, type: "sheet.ready", job: "vang-main2", artifact: { path, bytes: 999 },
+      sliced: { ok: true, durationMs: 900 },
+    } as StreamEvent);
+    expect(b.jobs[1]!.artifact).toEqual({ path, bytes: 999 });
+    expect(b.seq).toBe(411);
+  });
+
+  it("nhịp 2 KHÔNG mang artifact ⇒ giữ ảnh nhịp 1, không để ô đang có ảnh đen lại", () => {
+    const path = "runs/r1/artifacts/vang-main2.png";
+    const a = applyEvent(base, {
+      seq: 410, type: "sheet.image", job: "vang-main2", artifact: { path, bytes: 999 },
+    } as StreamEvent);
+    const b = applyEvent(a, { seq: 412, type: "sheet.ready", job: "vang-main2" } as StreamEvent);
+    expect(b.jobs[1]!.artifact).toEqual({ path, bytes: 999 });
+  });
+
   it("event LẠ không làm hỏng run đang có", () => {
     const r = applyEvent(base, { seq: 999, type: "chưa.biết" } as StreamEvent);
     expect(r).toEqual(base);

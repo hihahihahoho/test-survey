@@ -267,6 +267,110 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     await a9("DELETE", `/api/projects/${gid}`)
   })
 
+  /* ── HAI NHỊP CỦA CHU TRÌNH PER-SHEET (25/08) ─────────────────────────────
+     BÁO LỖI: "gen ảnh xong 1 lúc lâu mới load", lưới "lác lác".
+     NGUYÊN NHÂN ĐÃ ĐO: bản cắt-lũy-tiến ở trên vẫn gói SÁU việc vào MỘT hàm tuần tự
+     (`finishSheet`), và `j.artifact` — thứ DUY NHẤT web đọc để biết có ảnh — được gán ở
+     GIỮA, sau một lượt python kiểm hình học KHÔNG CÓ TRẦN và trước một lượt `slice.py`.
+     Thêm nữa mọi tấm nối chung MỘT hàng đợi, nên tấm thứ n phải đợi hậu kỳ của n−1 tấm
+     trước mới tới lượt được gán ảnh. Hậu quả đúng như lời than: ảnh nằm sẵn trên đĩa
+     hàng chục giây trước khi web thấy, và tấm nào lọt hàng đợi trước thì hiện trước.
+     LỜI HỨA MỚI: nhịp 1 (`sheet.image`) phát NGAY khi engine ghi xong ảnh — ngoài hàng
+     đợi, không spawn tiến trình nào; nhịp 2 (`sheet.ready`) giữ nguyên hợp đồng cũ.
+     Fixture `engine-slowpost` làm hậu kỳ chậm CÓ CHỦ Ý; không có khoảng trống đó thì ca
+     này xanh cả với bản cũ lẫn bản mới, tức là không chứng minh được gì. */
+  await it("[hai nhịp] sheet.image tới TRƯỚC khi cắt xong; artifact xuống đĩa ngay nhịp 1", async () => {
+    const SLICE_MS = 1200
+    const prevSlice = process.env.KITGEN_TEST_SLICE_DELAY_MS
+    const prevGeo = process.env.KITGEN_GEOMETRY_TIMEOUT_MS
+    process.env.KITGEN_TEST_SLICE_DELAY_MS = String(SLICE_MS)
+    /* Kiểm hình học của fixture này TREO VĨNH VIỄN. Trần thật là 30s — không ngồi đợi
+       được trong một ca có trần 25s, nên hạ bằng cửa thoát dev/test. Thứ ca đo là HÀNH
+       VI khi chạm trần, không phải con số 30. */
+    process.env.KITGEN_GEOMETRY_TIMEOUT_MS = "600"
+    try {
+      const { api: aS } = await agentWithEngine("engine-slowpost")
+      const created = await aS("POST", "/api/projects", {
+        body: { name: "Hai nhip", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
+      })
+      const gid = created.json.project.id
+      const run = await aS("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", maxJobs: 2, autoSliceAfterGen: true } })
+      eq(run.status, 202, "run 202")
+      const rid = run.json.runId
+
+      /* ① ARTIFACT XUỐNG ĐĨA Ở NHỊP 1, KHÔNG PHẢI TRONG RAM.
+         Đọc THẲNG `run.json` chứ không qua API: nếu nhịp 1 chỉ `emit()` mà quên
+         `persist()`, thì người mở lại app (hoặc agent khởi động lại) mất sạch — mà đó
+         đúng là cách chủ sản phẩm gặp lỗi này. Và tại đúng khoảnh khắc ấy `kits/` phải
+         CÒN TRỐNG: đó là bằng chứng ảnh không hề đợi lượt cắt nào. */
+      const runJson = join(wsRoot, "projects", gid, "runs", rid, "run.json")
+      let luc1 = null
+      await waitFor(async () => {
+        const r = JSON.parse(await readFile(runJson, "utf8").catch(() => "{}"))
+        const co = (r.jobs ?? []).find(j => j.artifact?.path)
+        if (!co) return false
+        luc1 = { job: co.job, path: co.artifact.path, kitCoChua: await pathExists(join(wsRoot, "projects", gid, "kits", "manifest.json")) }
+        return true
+      }, 15000, "artifact xuất hiện trong run.json")
+      ok(luc1, "phải bắt được artifact trên đĩa")
+      eq(luc1.kitCoChua, false, "lúc ảnh đã có trên đĩa thì lượt cắt CHƯA xong — ảnh không đợi cắt")
+      // …và đọc được ngay qua API, đúng cái mà thẻ sheet sẽ xin
+      const anh1 = await aS("GET", `/api/projects/${gid}/files/${luc1.path}`)
+      eq(anh1.status, 200, "ảnh nhịp 1 đọc được ngay")
+      /* CACHE: `runs/<id>/artifacts/` là SNAPSHOT bất biến (tạo lại ⇒ runId mới ⇒ URL mới)
+         ⇒ trình duyệt được giữ mãi, và đó là thứ chặn lưới nhấp nháy mỗi lần refetch.
+         `raw/` thì NGƯỢC LẠI: file sống, lượt gen sau ghi đè ngay tại chỗ — giữ cache ở
+         đó là hiện ảnh CŨ sau khi người dùng vừa bấm "Tạo lại". */
+      includes(anh1.headers["cache-control"], "immutable", "ảnh của lượt chạy là bất biến")
+      const anhRaw = await aS("GET", `/api/projects/${gid}/files/raw/${luc1.job}.png`)
+      eq(anhRaw.headers["cache-control"], "no-cache", "raw/ là file SỐNG ⇒ không được cache")
+
+      const stream = await aS("GET", `/api/runs/${rid}/stream?from=0`)   // đóng khi run.finished
+      const evs = stream.text.trim().split("\n").filter(Boolean).map(l => JSON.parse(l))
+      const images = evs.filter(e => e.type === "sheet.image")
+      const readys = evs.filter(e => e.type === "sheet.ready")
+      ok(images.length >= 2, `phải có sheet.image cho từng tấm, thấy ${images.length}`)
+      ok(images.every(e => e.artifact?.path && e.variant && e.sheet),
+        "sheet.image mang đủ artifact.path + variant + sheet để web vẽ ngay")
+
+      /* ② THỨ TỰ VÀ KHOẢNG CÁCH — đây mới là phần chứng minh.
+         Cùng một tấm: nhịp 1 phải tới trước nhịp 2, và cách nhau ÍT NHẤT bằng thời gian
+         cắt. Bản cũ (một nhịp) không có sheet.image nào, và nếu ai đó "thêm cho có" bằng
+         cách phát nó ở cuối finishSheet thì khoảng cách này sẽ là ~0 và ca đỏ. */
+      for (const im of images) {
+        const rd = readys.find(e => e.job === im.job)
+        ok(rd, `tấm ${im.job} phải có cả hai nhịp`)
+        ok(im.seq < rd.seq, `${im.job}: sheet.image (seq ${im.seq}) phải tới trước sheet.ready (seq ${rd.seq})`)
+        const cach = Date.parse(rd.t) - Date.parse(im.t)
+        ok(cach >= SLICE_MS * 0.5,
+          `${im.job}: ảnh phải tới sớm hơn hẳn lúc cắt xong, thấy cách ${cach}ms (cắt tốn ${SLICE_MS}ms)`)
+      }
+      /* Tấm ĐẦU phải có ảnh trước khi tấm CUỐI gen xong — nếu không thì người xem vẫn
+         ngồi đợi cả lượt, đúng thứ đang phải chữa. */
+      const jobDone = evs.filter(e => e.type === "job.done")
+      ok(images[0].seq < jobDone[jobDone.length - 1].seq, "ảnh tấm đầu tới trước khi tấm cuối gen xong")
+
+      /* ③ KIỂM HÌNH HỌC TREO KHÔNG ĐƯỢC GIẾT LƯỢT CHẠY.
+         Trước bản vá, công cụ này nằm ngay trước phép gán artifact và không có trần:
+         nó treo = ảnh không bao giờ hiện VÀ run không bao giờ đóng sổ. */
+      const fin = evs.find(e => e.type === "run.finished")
+      ok(fin, "run vẫn đóng sổ dù kiểm hình học treo")
+      eq(fin.status, "done", "mọi tấm đều ok — kiểm hình học hỏng KHÔNG làm tấm nào thành lỗi")
+      ok(evs.some(e => e.type === "job.log" && /kiểm hình học quá/.test(e.line ?? "")),
+        "phải NÓI RA là đã bỏ qua kiểm hình học — im lặng là thứ tốn cả buổi để đào")
+      const got = await aS("GET", `/api/runs/${rid}`)
+      ok(got.json.jobs.every(j => j.artifact?.path), "mọi tấm vẫn giữ đủ artifact")
+      ok(got.json.jobs.every(j => j.artifact?.validation === null),
+        "hết giờ ⇒ validation null (không kiểm được), KHÔNG phải một kết luận giả")
+      await aS("DELETE", `/api/projects/${gid}`)
+    } finally {
+      if (prevSlice === undefined) delete process.env.KITGEN_TEST_SLICE_DELAY_MS
+      else process.env.KITGEN_TEST_SLICE_DELAY_MS = prevSlice
+      if (prevGeo === undefined) delete process.env.KITGEN_GEOMETRY_TIMEOUT_MS
+      else process.env.KITGEN_GEOMETRY_TIMEOUT_MS = prevGeo
+    }
+  })
+
   /* ── BACKLOG #22 ──────────────────────────────────────────────────────────
      "RUN FAIL MÀ KHÔNG AI THẤY". Chủ sản phẩm dính hai lần trong một ngày: 100% job
      chết, app "chẳng báo gì cả", và nguyên nhân thật (`rc=127`, `SyntaxError`) chỉ

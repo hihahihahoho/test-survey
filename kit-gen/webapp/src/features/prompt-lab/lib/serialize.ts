@@ -1,4 +1,5 @@
-import { NODE, type ImageRef } from "./schema";
+import { NODE } from "./schema";
+import { readPillImage } from "@/features/prompt-canvas/lib/pill-image";
 import { INHERIT, phraseOf, type PillKind } from "./pill-registry";
 import { getPresets, type PresetBundle } from "./presets-store";
 
@@ -54,14 +55,6 @@ export function makeContext(partial: Partial<SerializeContext> = {}): SerializeC
   };
 }
 
-function readRefs(attrs: Record<string, unknown> | null | undefined): ImageRef[] {
-  const raw = attrs?.["refs"];
-  if (!Array.isArray(raw)) return [];
-  return raw.filter(
-    (item): item is ImageRef => typeof item === "object" && item !== null && typeof (item as ImageRef).url === "string",
-  );
-}
-
 function readAttr(attrs: Record<string, unknown> | null | undefined, key: string): string {
   const raw = attrs?.[key];
   return typeof raw === "string" ? raw : "";
@@ -83,12 +76,15 @@ function pillText(node: PromptDocNode, ctx: SerializeContext): string {
 /** Cái móc đánh số cho một pill ảnh. Ảnh không đi vào chữ được — xem chú thích. */
 function imageText(node: PromptDocNode, ctx: SerializeContext): string {
   /* ChatGPT nhận ảnh qua ô đính kèm chứ không qua chữ. Nên chỗ này để lại một
-     CÁI MÓC CÓ SỐ để câu prompt còn trỏ được: "…tham chiếu [ảnh tham chiếu 1,
-     2]". Người dùng kéo đúng số ảnh đó vào khung chat là khớp. */
-  const refs = readRefs(node.attrs);
-  if (refs.length === 0) return "[ảnh tham chiếu]";
-  const numbers = refs.map(() => String((ctx.imageCounter.count += 1)));
-  return `[ảnh tham chiếu ${numbers.join(", ")}]`;
+     CÁI MÓC CÓ SỐ để câu prompt còn trỏ được: "…tham chiếu [ảnh tham chiếu 1]".
+     Người dùng kéo đúng số ảnh đó vào khung chat là khớp.
+
+     Pill CHƯA có ảnh (hoặc ảnh đời `blob:` cũ đã chết) ra cái móc KHÔNG SỐ: đánh
+     số cho một tấm không tồn tại là bảo người dùng đi tìm tấm thứ ba trong một
+     danh sách hai tấm. */
+  const image = readPillImage(node.attrs);
+  if (!image.path) return "[ảnh tham chiếu]";
+  return `[ảnh tham chiếu ${(ctx.imageCounter.count += 1)}]`;
 }
 
 function walkInline(nodes: PromptDocNode[] | undefined, ctx: SerializeContext): string {
@@ -178,7 +174,9 @@ export function countImageRefs(doc: PromptDocNode | null | undefined): number {
   if (!doc) return 0;
   let total = 0;
   const walk = (node: PromptDocNode): void => {
-    if (node.type === NODE.imagePill) total += readRefs(node.attrs).length;
+    /* Đếm ảnh CÓ THẬT trên đĩa, không đếm pill: một pill trống là một chỗ người
+       dùng chưa chọn ảnh, không phải một tấm phải nhớ đính kèm. */
+    if (node.type === NODE.imagePill && readPillImage(node.attrs).path) total += 1;
     for (const child of node.content ?? []) walk(child);
   };
   walk(doc);

@@ -67,7 +67,7 @@ export const SLASH_ITEMS: readonly SlashItem[] = [
     title: "Ảnh tham chiếu",
     hint: "Pill ảnh — bấm vào để chọn ảnh từ máy",
     keywords: "image anh ref reference",
-    content: () => ({ type: NODE.imagePill, attrs: { refs: [] } }),
+    content: () => ({ type: NODE.imagePill, attrs: { refName: "", path: "" } }),
   },
 ];
 

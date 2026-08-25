@@ -15,9 +15,17 @@
  * cắt thì trông mờ ĐÚNG NHƯ file thật bị hỏng. Hai bệnh khác hẳn nhau mà nhìn giống
  * hệt nhau, nên người xem không thể phân biệt được.
  *
- * Nên nay `KitImage` phục vụ ảnh GỐC mặc định (`full = true`) — ca ① khoá điều đó ở
- * đúng chỗ nó từng hỏng. Trần RAM chuyển sang `image-source.ts` (lazy-load +
- * cache theo BYTE), không còn dựa vào phép thu nhỏ nữa.
+ * ══ SỬA LẠI 25/08: "XEM ĐƯỢC ẢNH GỐC" ≠ "MỌI Ô ĐỀU TẢI ẢNH GỐC" ═══════════════════
+ * Bản trước đóng đinh `full` cho CẢ HAI chỗ, và cái giá lộ ra ở lượt gen thật: mười thẻ
+ * cùng kéo mười file 1–3 MB qua đúng cái agent đang bận vẽ tấm thứ mười một ⇒ thẻ nào về
+ * trước hiện trước ("lưới lác lác"), và thẻ cuối đợi hàng chục giây sau khi ảnh đã nằm
+ * sẵn trên đĩa. Mà thẻ chỉ rộng ~400px: mọi pixel vượt quá đó bị vứt ngay ở khâu vẽ.
+ * Nên chia đúng theo chỗ dùng — và ĐÓ MỚI LÀ Ý ĐỊNH GỐC (xem chú thích "HAI CỠ, VÀ PHẢI
+ * CÓ CẢ HAI" trong RawSheetsPanel, vốn đã tả đúng thế trong khi mã thì không):
+ *   · THẺ trong lưới → `?w=512` (ô ~400px, chỉ để nhận ra tấm nào là tấm nào);
+ *   · POPUP phóng to → ảnh GỐC 1536×1024, không `?w` — chỗ soi lưới/khe/alpha.
+ * Lời hứa của bài báo lỗi cũ ("bé tí") KHÔNG mất: nó được giữ ở popup, và popup thì bản
+ * đó chưa có — nay có. Ca ① và ca ③ khoá HAI NỬA ấy, đừng sửa nửa nào mà bỏ nửa kia.
  *
  * Ca ③ vẫn là ca đắt nhất: popup phóng to là thứ trước bản vá KHÔNG TỒN TẠI — thẻ
  * sheet là một khối chữ nhật chết, không bấm được, trong khi lưới ô ĐÃ CẮT đã có
@@ -70,12 +78,13 @@ beforeEach(() => { mounted.length = 0; });
 afterEach(cleanup);
 
 describe("tab «Ảnh gốc» — đường tới ảnh ở độ nét thật", () => {
-  it("thẻ trong lưới KHÔNG xin bản thu nhỏ — không `?w`, tức đúng 1536×1024", () => {
+  it("thẻ trong lưới xin ĐÚNG bản 512 — không kéo 1–3 MB vào một ô rộng 400px", () => {
     mount();
     expect(mounted.length).toBeGreaterThan(0);
-    /* `full === false` hay có `width` đều dẫn tới `?w=` ⇒ agent thu nhỏ thật.
-       Đây chính là dòng từng cho ra cái blob 512×341 mà chủ sản phẩm dán lại. */
-    expect(mounted.every((m) => m.full !== false && m.width === undefined)).toBe(true);
+    /* `full === false` + `width` ⇒ URL có `?w=512` ⇒ agent trả bản đã co (≈136 KB).
+       Đây là thứ chặn "lưới lác lác": mười thẻ × 1–3 MB đi qua agent đang bận gen thì
+       ô nào về trước hiện trước. Ảnh thật vẫn tới được — bằng popup ở ca ③. */
+    expect(mounted.every((m) => m.full === false && m.width === 512)).toBe(true);
   });
 
   it("thẻ sheet BẤM ĐƯỢC — trước bản này nó là một khối chữ nhật chết", () => {

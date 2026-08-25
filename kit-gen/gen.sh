@@ -1217,7 +1217,11 @@ while read -r job; do
   match "$job" || continue
   # Throttle: image-gen ăn quota ChatGPT gấp 3-5x lượt thường; bung cả 28 job dễ dính rate limit.
   # bash 3.2 (macOS) không có `wait -n` → vòng đợi bằng sleep.
-  while (( $(jobs -pr | wc -l) >= MAXJOBS )); do sleep 2; done
+  # 0.5 chứ không phải 2: đây là ĐỘ TRỄ TRUNG BÌNH giữa lúc một tấm vẽ xong và lúc tấm
+  # kế được phát đi — với MAXJOBS nhỏ, cả lượt cộng lại là hàng chục giây chờ suông, và
+  # người ngồi xem đọc nó ra là "gen xong một lúc lâu mới thấy tấm sau". Vòng lặp chỉ
+  # đếm `jobs -pr`, rẻ hơn nhiều lần so với thứ nó đang chờ (một lượt codex vài phút).
+  while (( $(jobs -pr | wc -l) >= MAXJOBS )); do sleep 0.5; done
   # </dev/null BẮT BUỘC: job nền thừa kế stdin = pipe liệt kê job; codex exec có thể
   # đọc/nuốt stdin ⇒ các dòng job còn lại biến mất ⇒ run "xong" khi mới chạy một nửa.
   run_one "$job" </dev/null &

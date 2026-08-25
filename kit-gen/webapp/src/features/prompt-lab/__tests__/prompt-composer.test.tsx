@@ -227,21 +227,31 @@ describe("serialize cả màn — mỗi block một đoạn, ảnh đánh số l
     expect(out).not.toMatch(/hàng \d+ cột \d+/i);
   });
 
+  /**
+   * MỘT ẢNH MỖI PILL (08/2026) — trước đây một pill giữ MẢNG `refs` với `url`
+   * là `blob:`. Nay pill giữ `{ refName, path }` của một tấm đã nằm trên đĩa
+   * project, vì đó là thứ duy nhất `sheet.ref` của contract nhận được. Số thứ tự
+   * vẫn phải chạy LIÊN TỤC qua các block: người dùng kéo đúng ngần ấy tấm vào
+   * khung chat theo đúng thứ tự đó.
+   */
   it("ảnh đánh số LIÊN TỤC qua nhiều block", () => {
-    const ref = (id: string) => ({ id, name: `${id}.png`, url: `blob:${id}` });
-    const withImages = (refs: ReturnType<typeof ref>[]): JSONContent => ({
+    const imagePill = (name: string): JSONContent => ({
+      type: NODE.imagePill,
+      attrs: { refName: `${name}.png`, path: `refs/${name}.png` },
+    });
+    const withImages = (names: string[]): JSONContent => ({
       type: "doc",
-      content: [{ type: "paragraph", content: [{ type: NODE.imagePill, attrs: { refs } }] }],
+      content: [{ type: "paragraph", content: names.map(imagePill) }],
     });
     const s = state({
       blocks: [
-        { id: "b1", kind: "background", mode: "template", doc: withImages([ref("a"), ref("b")]) },
-        { id: "b2", kind: "mascot", mode: "template", doc: withImages([ref("c")]) },
+        { id: "b1", kind: "background", mode: "template", doc: withImages(["a", "b"]) },
+        { id: "b2", kind: "mascot", mode: "template", doc: withImages(["c"]) },
       ],
     });
 
     const out = serializeComposer(s, PRESETS);
-    expect(out).toContain("[ảnh tham chiếu 1, 2]");
+    expect(out).toContain("[ảnh tham chiếu 1][ảnh tham chiếu 2]");
     expect(out).toContain("[ảnh tham chiếu 3]");
     expect(countComposerImages(s)).toBe(3);
   });

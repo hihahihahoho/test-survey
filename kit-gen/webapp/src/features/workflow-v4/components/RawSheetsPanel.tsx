@@ -232,7 +232,14 @@ function SheetCard({ projectId, item, readOnly, onRegenerate }: {
           aria-label={`Xem ảnh gốc ${label}`}
           className={cn("block w-full", FOCUS)}
         >
-          <KitImage projectId={projectId} path={item.path} alt={label} backdrop="checker" eager className="aspect-[16/10] rounded-none border-0" />
+          {/* `full={false} width={512}` — CHÚ THÍCH TRÊN TẢ ĐÚNG THỨ MÃ KHÔNG LÀM.
+              Thiếu hai prop này, mặc định của KitImage là `full=true` ⇒ thẻ tải NGUYÊN
+              sheet 1536×1024 (1–3 MB) để vẽ vào một ô rộng ~400px. Mười tấm một lượt là
+              10–30 MB đi qua đúng cái agent đang bận gen — ô nào về trước hiện trước,
+              đó là "lưới lác lác". Ảnh thật vẫn xem được: SheetZoomDialog ngay dưới.
+              BỎ `eager`: nó tắt IntersectionObserver, nên MỌI thẻ (kể cả thẻ nằm ngoài
+              màn hình) cùng xin ảnh một lúc. Có IO thì chỉ thẻ đang nhìn thấy mới tải. */}
+          <KitImage projectId={projectId} path={item.path} alt={label} backdrop="checker" full={false} width={512} className="aspect-[16/10] rounded-none border-0" />
         </button>
       ) : (
         <div className="flex aspect-[16/10] items-center justify-center bg-canvas text-center">

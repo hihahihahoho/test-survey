@@ -40,6 +40,21 @@ export async function readTailFile(p, maxBytes = 1 << 20) {
   } finally { await fh.close().catch(() => {}) }
 }
 
+/** Đọc tối đa `maxBytes` ĐẦU file.
+ *  Có để phục vụ đúng một nhu cầu: lấy KÍCH THƯỚC ảnh (`imageSize`) — thứ nằm gọn trong
+ *  header vài chục byte đầu. Bản cũ `imageSize(await readFile(abs))` nạp NGUYÊN file vào
+ *  RAM cho MỖI ảnh; danh mục kit của một project thật có hàng trăm PNG, tức là hàng trăm
+ *  MB đọc-rồi-vứt cho mỗi lần web hỏi `GET /kit`. Đó là một phần của "bấm xong đợi lâu". */
+export async function readHeadFile(p, maxBytes = 64 * 1024) {
+  const fh = await open(p, "r")
+  try {
+    const bytes = Math.max(0, Number(maxBytes) || 0)
+    const buf = Buffer.alloc(bytes)
+    const { bytesRead } = bytes ? await fh.read(buf, 0, bytes, 0) : { bytesRead: 0 }
+    return buf.subarray(0, bytesRead)
+  } finally { await fh.close().catch(() => {}) }
+}
+
 /* TÊN FILE TẠM PHẢI DUY NHẤT CHO TỪNG LẦN GHI — `pid + Date.now()` là CHƯA đủ.
    Hai lần ghi CÙNG một file trong CÙNG một mili-giây (thường gặp: `persist()` bắn-quên của
    job.done chạy chồng lên `persist()` của finish()) sẽ dùng CHUNG một tên tmp: lần rename

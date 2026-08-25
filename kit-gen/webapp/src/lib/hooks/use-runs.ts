@@ -210,6 +210,15 @@ export function useRunStream(runId: string | null, opts: { enabled?: boolean } =
         qc.setQueryData<Run>(qk.runs.detail(runId), (old) => (old ? applyEvent(old, ev) : old));
         return;
       }
+      if (ev.type === "sheet.image") {
+        /* NHỊP 1 — ẢNH VỪA CÓ. Gắn `artifact` vào job là đủ để thẻ sheet hiện ảnh
+           (RawSheetsPanel đọc `job.artifact.path`), và đó là toàn bộ việc ở đây.
+           CỐ Ý KHÔNG `invalidateQueries(kit)`: tấm này CHƯA cắt, kho kit chưa đổi một
+           file nào — mời lại chỉ làm lưới ô đã cắt tháo ra dựng lại (đúng cái "lác
+           lác" đang phải chữa) để lấy về y hệt dữ liệu cũ. Kho kit đợi `sheet.ready`. */
+        qc.setQueryData<Run>(qk.runs.detail(runId), (old) => (old ? applyEvent(old, ev) : old));
+        return;
+      }
       if (ev.type === "sheet.ready") {
         // Tấm này đã snapshot + cắt xong trên đĩa GIỮA lượt: gắn artifact vào job
         // (ô "Đã xong" hiện ảnh ngay) và mời lại kho kit vì asset cắt đã đổi.
@@ -321,8 +330,14 @@ export function applyEvent(run: Run, ev: StreamEvent): Run {
       const e = ev as Extract<StreamEvent, { type: "phase.changed" }>;
       return { ...run, seq: ev.seq, phase: e.phase };
     }
+    /* Hai nhịp, MỘT phép áp: cả hai đều chỉ nói "job này đã có ảnh ở đường dẫn kia".
+       `sheet.image` tới trước (ngay khi engine ghi xong), `sheet.ready` tới sau khi đã
+       cắt — và mang lại ĐÚNG artifact đó, nên áp lần hai là phép gán trùng, vô hại.
+       `?? j.artifact` giữ ảnh cũ nếu event sau vì lý do nào đó không mang artifact:
+       thà giữ ảnh đang hiện còn hơn cho ô đang có ảnh tự đen lại. */
+    case "sheet.image":
     case "sheet.ready": {
-      const e = ev as Extract<StreamEvent, { type: "sheet.ready" }>;
+      const e = ev as Extract<StreamEvent, { type: "sheet.image" | "sheet.ready" }>;
       return {
         ...run,
         seq: ev.seq,

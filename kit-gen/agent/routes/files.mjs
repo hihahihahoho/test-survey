@@ -3,7 +3,7 @@
    Ở đây: chỉ trong `projects/<id>/`, chỉ file, chống traversal + symlink bằng safeJoin. */
 import { join } from "node:path"
 import { fail } from "../lib/errors.mjs"
-import { exists, readJsonFile, walkFiles, stat } from "../lib/fsx.mjs"
+import { exists, readJsonFile, walkFiles, stat, readHeadFile } from "../lib/fsx.mjs"
 import { relPosix, safeJoin } from "../lib/paths.mjs"
 import { projectDir, readProject } from "../lib/projects.mjs"
 import { normalizeWidth, thumbnail } from "../lib/thumbs.mjs"
@@ -14,6 +14,20 @@ import { imageSize } from "../lib/multipart.mjs"
  *  nằm ở `logs/` — thư mục KHÔNG đọc được từ web — vì log codex có đường dẫn tuyệt đối của máy. */
 const READABLE_TOP = new Set(["raw", "kits", "refs", "skeleton", "prompts", "export", "runs", "cover"])
 const READABLE_FILES = new Set(["project.json", "contract.json", "styles.json"])
+
+/** Đủ cho header của mọi định dạng ta đọc kích thước (PNG/WebP/JPEG) — xem readHeadFile. */
+const IMAGE_HEADER_BYTES = 64 * 1024
+
+/** ẢNH CỦA MỘT LƯỢT CHẠY LÀ BẤT BIẾN.
+ *  `runs/<runId>/artifacts/<job>.png` là SNAPSHOT: agent chép nó một lần rồi không bao
+ *  giờ ghi đè — tạo lại một tấm sinh ra `runId` MỚI, tức là một URL MỚI. Vì vậy trình
+ *  duyệt được phép giữ mãi, và đó là thứ chặn "lưới nhấp nháy": mỗi lần React Query mời
+ *  lại danh sách, ảnh cũ hiện lại NGAY từ cache thay vì đi một vòng mạng nữa.
+ *  `private` vì agent chạy trên máy người dùng — không proxy chung nào được giữ hộ.
+ *  CỐ Ý KHÔNG áp cho `raw/`, `kits/`, `cover/`: những đường đó TRỎ VÀO FILE SỐNG, lượt
+ *  gen/cắt sau ghi đè ngay tại chỗ ⇒ giữ `no-cache` mặc định của sendFile. */
+const IMMUTABLE_CACHE = "private, immutable, max-age=31536000"
+const isRunArtifact = rel => /^runs\/[^/]+\/artifacts\//.test(rel)
 
 export function register(r) {
   // #41 GET /api/projects/:id/files/*  (?w=256 bắt buộc cho lưới — đóng H4)
@@ -38,11 +52,14 @@ export function register(r) {
     const w = ctx.url.searchParams.has("w")
       ? normalizeWidth(ctx.url.searchParams.get("w"))
       : null
+    // Bất biến ⇒ cho trình duyệt giữ luôn; file sống ⇒ để `sendFile` dùng no-cache mặc định.
+    // Bản thu nhỏ thừa hưởng tính bất biến của ảnh gốc (cùng nguồn, cùng bề rộng ⇒ cùng bytes).
+    const cache = isRunArtifact(rel) ? { "Cache-Control": IMMUTABLE_CACHE } : {}
     if (w) {
       const t = await thumbnail(ws, abs, w)
-      return { status: 200, file: t.path, headers: t.resized ? {} : { "X-KitGen-Thumb": "unavailable" } }
+      return { status: 200, file: t.path, headers: { ...cache, ...(t.resized ? {} : { "X-KitGen-Thumb": "unavailable" }) } }
     }
-    return { status: 200, file: abs }
+    return { status: 200, file: abs, headers: cache }
   })
 
   // #42 GET kit — danh mục file đã cắt (từ kits/manifest.json của slice.py)
@@ -72,7 +89,11 @@ export function register(r) {
       if (name === "atlas.png") continue
       const st = await stat(abs)
       let size = { w: null, h: null }
-      try { const { readFile } = await import("node:fs/promises"); size = imageSize(await readFile(abs)) } catch { /* ignore */ }
+      /* CHỈ 64KB ĐẦU, không nguyên file: `imageSize` chỉ đọc header (PNG là byte 16..24).
+         Bản cũ nạp cả tấm PNG vào RAM cho từng file trong danh mục — với một project
+         thật (hàng trăm ô đã cắt) đó là hàng trăm MB đọc-rồi-vứt MỖI lần web hỏi kit,
+         và web hỏi lại kit sau MỖI `sheet.ready`. */
+      try { size = imageSize(await readHeadFile(abs, IMAGE_HEADER_BYTES)) } catch { /* ignore */ }
       /* `slice.py:963` ghi `asset.file` KÈM đuôi (`"01-btn-pill-red.png"`), còn bản cũ
          ở đây so khớp với tên ĐÃ CẮT đuôi ⇒ không bao giờ khớp ⇒ mọi file trả về
          `sheet: null`, và web không xếp được ô đã cắt về đúng nhóm/sheet.
