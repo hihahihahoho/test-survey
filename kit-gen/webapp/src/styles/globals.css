@@ -202,41 +202,16 @@
   /* W2B-6 — mobile: pill "2 phiên bản" từng vỡ BA DÒNG bên trong một viên thuốc. */
   .workflow-project-pill { @apply shrink-0 whitespace-nowrap rounded-full border border-line-subtle bg-surface px-4 py-2 text-label text-fg-muted; }
 
-  /* ══ W2B-3 · STEPPER: hạ cấp từ "vật to nhất trang" xuống ĐIỀU HƯỚNG PHỤ ═══════
-     Bản cũ: `rounded-full border bg-surface/90 p-2 backdrop-blur-xl` — một
-     segmented-control nặng, viền đậm, nền riêng, to hơn H1 về diện tích và nặng hơn
-     cả nút primary. Nó là điều hướng phụ mà đang hét to nhất.
+  /* ══ HÀNG 6 BƯỚC ĐÃ ĐI CÙNG WIZARD (Wave 4·B) ═══════════════════════════════
+     `.workflow-stepper` / `.workflow-step*` / `.workflow-content` chỉ có MỘT nơi
+     dùng là `WorkflowScreen` + `steps/Stepper` — cả hai đã bị xoá khi cửa chính
+     đổi sang màn soạn prompt. Xoá luôn CSS thay vì để lại: một class không ai
+     đeo là một lời mời sai cho người sau ("chắc còn dùng ở đâu đó"), và cổng
+     `npm run deadclass` canh đúng thứ này.
 
-     Kèm một lỗi hình dạng: container chiếm trọn bề ngang còn 6 pill dồn về trái ⇒
-     **~345px đuôi rỗng** nằm trong khung bo tròn. Bỏ khung thì cái đuôi đó biến mất
-     mà không cần đo lại gì.
-
-     KHÔNG dùng `w-fit` như toa gốc đề nghị: phần tử này đeo `.kg-page` (Stepper.tsx),
-     mà `.kg-page` có `mx-auto` — `w-fit` + `mx-auto` sẽ CĂN GIỮA hàng bước và phá
-     luật "một mép trái" mà W2A-2 vừa dựng (tiêu chí nghiệm thu #5 của plan). Bỏ vỏ
-     là đủ; không có vỏ thì không còn cái đuôi để nhìn thấy.
-
-     Khuôn lấy từ `features/setup/components/WizardStepper.tsx` — app ĐÃ CÓ bản đẹp
-     hơn: không khung bao, số nhỏ, nhãn chữ, active chỉ khác ở màu chữ.
-     KHÔNG làm sticky: sticky đòi nền đặc để nội dung không xuyên qua, tức là dán lại
-     đúng cái vỏ vừa gỡ. Nhẹ và sticky không cùng tồn tại ở đây. */
-  /* P-SWEEP·15 · MOBILE KHÔNG CÕNG NỔI 6 BƯỚC. Ở 375px hàng 6 nút tràn ngang và
-     mặt nạ cuộn cắt CỤT GIỮA CHỮ ("Kitset U" — ảnh 30): một nhãn bị xén nửa đọc
-     ra lỗi render chứ không đọc ra "còn nữa, cuộn đi". Dưới 640px thay bằng MỘT
-     dòng "Bước 6/6 · Xem kết quả" (`.workflow-step-now`) — nhìn là biết, và đi
-     tới/lui vẫn có hàng nút cuối trang lo. Từ 640px trở lên hàng bước quay lại
-     nguyên vẹn, không mất chức năng nhảy bước nào ở nơi có chỗ cho nó. */
-  .workflow-stepper { @apply mb-8 hidden gap-1 overflow-x-auto py-1 sm:flex; }
-  .workflow-step-now { @apply mb-6 block text-label text-fg-muted sm:hidden; }
-  .workflow-step-now strong { @apply font-medium text-fg-strong; }
-  .workflow-step { @apply flex min-w-max items-center gap-2 rounded-full px-3 py-1.5 text-label text-fg-muted transition-colors hover:text-fg-strong disabled:cursor-not-allowed disabled:text-fg-muted; }
-  .workflow-step.active { @apply text-fg-strong; }
-  .workflow-step-number { @apply flex size-5 shrink-0 items-center justify-center rounded-full border border-line-subtle text-caption; }
-  .workflow-step-number svg { @apply size-3; }
-  .workflow-step.active .workflow-step-number { @apply border-accent bg-accent text-fg-on-accent; }
-  /* P-SWEEP·15 — mặt nạ cuộn mobile ĐÃ BỎ cùng hàng bước mobile: không còn thứ để
-     bôi mờ, và chính nó là cái xén cụt chữ "Kitset U". */
-  .workflow-content { @apply block; }
+     `.workflow-panel` Ở LẠI có lý do đo được: `steps/BriefStep` và
+     `ProjectScreen` vẫn đeo nó, và `components/CheckRow` phụ thuộc vào độ đặc
+     hiệu của selector `.workflow-panel label` (xem chú thích trong file đó). */
   .workflow-panel { @apply rounded-5 border border-line-subtle bg-surface p-5 shadow-2 sm:p-10; }
   .workflow-heading { @apply mb-6 max-w-2xl; }
   /* W2B-1 — 28px gõ tay ⇒ bậc `display-3`. W2B-4 — eyebrow "BƯỚC TRONG MỘT MẠCH"

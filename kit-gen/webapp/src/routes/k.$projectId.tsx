@@ -11,8 +11,14 @@ import { parseProjectParams } from "./params";
  * ══ ĐIỂM ĐẾN ĐÃ ĐỔI: WIZARD 6 BƯỚC → MÀN SOẠN PROMPT ══════════════════════
  * URL giữ nguyên có chủ ý — mọi link, mọi bookmark, mọi thẻ ở trang danh sách
  * đều trỏ về đây, và người dùng không phải học một địa chỉ mới chỉ vì bên trong
- * đổi cách làm việc. `WorkflowScreen` vẫn còn trong mã cho các màn con của dự án;
- * thứ đổi là CỬA CHÍNH.
+ * đổi cách làm việc.
+ *
+ * Wave 4·B đóng nốt vế sau: `WorkflowScreen` và cả hàng 6 bước đã bị XOÁ, không
+ * còn "vẫn còn trong mã cho các màn con" nữa. Những mảnh của wizard mà màn dự án
+ * thật sự dùng (`steps/KitsetStep`, `steps/MascotStep`, `steps/BriefStep`,
+ * `steps/StyleStep`, `lib/model`, `lib/contract-sync`…) đã dọn sang
+ * `features/kit-core` — chúng sống tiếp như THÀNH PHẦN của màn dự án, không như
+ * bước của một trình thuật sĩ.
  */
 export const Route = createRoute({
   getParentRoute: () => rootRoute,

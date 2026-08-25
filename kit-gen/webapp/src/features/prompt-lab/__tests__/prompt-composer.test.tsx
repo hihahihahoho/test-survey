@@ -2,13 +2,13 @@ import * as React from "react";
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import { RouterContextProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { JSONContent } from "@tiptap/react";
 
 import { routeTree } from "@/routeTree";
-import { MATERIAL_PRESETS } from "@/features/workflow-v4/lib/materials";
-import { GENRE_PRESETS } from "@/features/workflow-v4/lib/genre-presets";
-import { EXPRESSIONS, OUTFIT_THEMES, POSES } from "@/features/workflow-v4/lib/poses";
+import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
+import { GENRE_PRESETS } from "@/features/kit-core/lib/genre-presets";
+import { EXPRESSIONS, OUTFIT_THEMES, POSES } from "@/features/kit-core/lib/poses";
 
 import { PromptComposerScreen } from "../PromptComposerScreen";
 import { PresetsScreen } from "../PresetsScreen";
@@ -26,7 +26,7 @@ import { NODE } from "../lib/schema";
  * Test của một PROTOTYPE — phạm vi cố ý hẹp, và nói rõ hẹp ở đâu.
  *
  * Thứ được khoá: bộ SERIALIZE (màn → prompt) và các dây nối dễ đứt CÂM (route,
- * danh mục lấy từ workflow-v4, luật "để trống = kế thừa"). Đó là phần sẽ sống
+ * danh mục lấy từ kit-core, luật "để trống = kế thừa"). Đó là phần sẽ sống
  * tiếp nếu ý tưởng được chốt, và cũng là phần hỏng KHÔNG BÁO — gõ lệch một tên
  * node thì prompt chỉ thiếu một mảnh, không ai thấy.
  *
@@ -273,7 +273,7 @@ describe("lưới hiển thị suy ra từ SỐ Ô, không phải một trườn
   });
 });
 
-describe("danh mục — lab đi bằng dữ liệu THẬT của workflow-v4, không chép", () => {
+describe("danh mục — lab đi bằng dữ liệu THẬT của kit-core, không chép", () => {
   it("hạt giống phong cách lấy đủ 7 genre preset, nguyên văn cụm EN", () => {
     expect(PRESETS.styles).toHaveLength(GENRE_PRESETS.length);
     for (const preset of GENRE_PRESETS) {
@@ -337,13 +337,22 @@ describe("dây nối route + hai màn render được", () => {
    * trong khi link thật có thể trỏ vào một path không tồn tại.
    */
   const withRouter = (node: React.ReactNode) => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const router = createRouter({
       routeTree,
       history: createMemoryHistory({ initialEntries: ["/lab/prompt-composer"] }),
       notFoundMode: "root",
-      context: { queryClient: new QueryClient() },
+      context: { queryClient },
     });
-    return renderToString(<RouterContextProvider router={router}>{node}</RouterContextProvider>);
+    /* `QueryClientProvider` là dây MỚI từ Wave 4·A: danh mục preset đã rời
+       localStorage sang `GET /api/library`, nên `usePresets()` gọi `useQueryClient()`.
+       Router context có sẵn một `queryClient` nhưng đó là context của ROUTER —
+       react-query đọc context RIÊNG của nó, hai thứ khác nhau. */
+    return renderToString(
+      <QueryClientProvider client={queryClient}>
+        <RouterContextProvider router={router}>{node}</RouterContextProvider>
+      </QueryClientProvider>,
+    );
   };
 
   it("smoke: Composer render không ném, và nói rõ mình là lab", () => {
@@ -356,9 +365,13 @@ describe("dây nối route + hai màn render được", () => {
     expect(html).toContain("Thêm block");
   });
 
-  it("smoke: trang preset render và nói rõ giới hạn localStorage", () => {
+  it("smoke: trang preset render và nói ĐÚNG nơi danh mục được lưu", () => {
     const html = withRouter(<PresetsScreen />);
     expect(html).toContain("Preset của lab");
-    expect(html).toContain("trình duyệt này");
+    /* Wave 4·A: kho đã rời localStorage. Câu trên màn phải đổi theo — một màn nói
+       "lưu trong trình duyệt này" trong khi dữ liệu nằm ở workspace là một lời
+       nói dối, và người dùng sẽ dựa vào nó để quyết định có sao lưu hay không. */
+    expect(html).toContain("workspace KitGen");
+    expect(html).not.toContain("trình duyệt này");
   });
 });

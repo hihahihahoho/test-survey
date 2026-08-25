@@ -178,7 +178,7 @@ describe("B3② · hệ ACCENT phải là XANH DƯƠNG VNPAY (đảo chiều b�
       "components/ui/button.tsx",
       "features/home/components/CreateKitTile.tsx",
       "features/kit-form/lib/form-model.ts",
-      "features/workflow-v4/lib/model.ts",
+      "features/kit-core/lib/model.ts",
     ]) {
       const code = read(f).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
       expect(code, f).not.toMatch(/#71D083/i);

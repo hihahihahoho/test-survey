@@ -1,14 +1,16 @@
 /* routes/library.mjs — CRUD kho bộ khung/reference riêng của người dùng. */
 import { parseMultipart } from "../lib/multipart.mjs"
 import {
-  addBrandProfile, addLibraryItem, addPoseTemplate, libraryItemFile, patchBrandProfile, patchLibraryItem,
-  patchLibrarySettings, patchPoseTemplate, readLibrary, removeBrandProfile, removeLibraryItem, removePoseTemplate,
+  addBrandProfile, addLibraryItem, addLibraryPreset, addPoseTemplate, libraryItemFile, patchBrandProfile,
+  patchLibraryItem, patchLibraryPreset, patchLibrarySettings, patchPoseTemplate, readLibrary, removeBrandProfile,
+  removeLibraryItem, removeLibraryPreset, removePoseTemplate,
 } from "../lib/library.mjs"
 import { fail } from "../lib/errors.mjs"
 
 const BRAND_ID = /^brand_[a-f0-9]{16}$/
 const ID = /^asset_[a-f0-9]{16}$/
 const POSE_ID = /^pose_(?:[a-z0-9][a-z0-9-]{1,40}|[a-f0-9]{16})$/
+const PRESET_ID = /^preset_[a-f0-9]{16}$/
 function assetId(value) {
   const id = String(value ?? "")
   if (!ID.test(id)) fail("BAD_REQUEST", "invalid library item id")
@@ -27,6 +29,12 @@ function poseId(value) {
   return id
 }
 
+function presetId(value) {
+  const id = String(value ?? "")
+  if (!PRESET_ID.test(id)) fail("BAD_REQUEST", "invalid preset id")
+  return id
+}
+
 export function register(r) {
   r.get("/api/library", async ctx => ({ status: 200, json: await readLibrary(ctx.registry.active) }))
 
@@ -37,6 +45,13 @@ export function register(r) {
   r.post("/api/library/poses", async ctx => ({ status: 201, json: { pose: await addPoseTemplate(ctx.registry.active, await ctx.json()) } }))
   r.patch("/api/library/poses/:id", async ctx => ({ status: 200, json: { pose: await patchPoseTemplate(ctx.registry.active, poseId(ctx.params.id), await ctx.json()) } }))
   r.delete("/api/library/poses/:id", async ctx => { await removePoseTemplate(ctx.registry.active, poseId(ctx.params.id)); return { status: 204 } })
+
+  /* Preset — danh mục người dùng tự sửa. `GET /api/library` đã trả kèm mảng
+     `presets`, nên ở đây chỉ cần ba cửa ghi; không có route đọc riêng để web
+     không phải giữ hai nguồn sự thật cho cùng một kho. */
+  r.post("/api/library/presets", async ctx => ({ status: 201, json: { preset: await addLibraryPreset(ctx.registry.active, await ctx.json()) } }))
+  r.patch("/api/library/presets/:id", async ctx => ({ status: 200, json: { preset: await patchLibraryPreset(ctx.registry.active, presetId(ctx.params.id), await ctx.json()) } }))
+  r.delete("/api/library/presets/:id", async ctx => { await removeLibraryPreset(ctx.registry.active, presetId(ctx.params.id)); return { status: 204 } })
 
   r.post("/api/library/items", async ctx => {
     const parts = parseMultipart(await ctx.body(ctx.limits.refFile), ctx.req.headers["content-type"])

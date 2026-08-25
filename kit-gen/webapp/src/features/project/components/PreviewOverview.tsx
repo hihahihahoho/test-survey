@@ -1,7 +1,7 @@
 import * as React from "react";
 import { ProjectCover } from "@/features/projects/components/ProjectCover";
-import { cutAssets } from "@/features/workflow-v4/components/CutAssetGrid";
-import { groupLabel, RESULT_GROUP_ORDER } from "@/features/workflow-v4/lib/generated-results";
+import { cutAssets } from "@/features/kit-core/components/CutAssetGrid";
+import { groupLabel, RESULT_GROUP_ORDER } from "@/features/kit-core/lib/generated-results";
 import { useKit } from "@/lib/hooks";
 import type { Contract, Project } from "@/lib/types";
 

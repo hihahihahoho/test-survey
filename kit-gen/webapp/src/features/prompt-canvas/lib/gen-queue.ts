@@ -3,7 +3,7 @@ import { AgentError } from "@/lib/api/client";
 import { presentError } from "@/lib/api/errors";
 import { useRun, useRunStream } from "@/lib/hooks";
 import { useGenerateRun } from "@/features/runs";
-import { isRunLive } from "@/features/workflow-v4/lib/generated-results";
+import { isRunLive } from "@/features/kit-core/lib/generated-results";
 
 /**
  * gen-queue.ts — HÀNG ĐỢI VẼ PHÍA WEB, vì agent chỉ cho MỘT lượt mỗi dự án.

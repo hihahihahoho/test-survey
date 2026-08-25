@@ -169,7 +169,7 @@ export function useValidateContract(projectId: string) {
  *
  * KHÔNG `invalidate` gì cả: bản xem trước không đổi contract, không đổi run, không
  * đổi kit. Lỗi (409 RUN_ACTIVE, 422 CONTRACT_INVALID / PROMPT_PREVIEW_FAILED) để
- * nguyên `AgentError` cho màn dịch — xem `features/workflow-v4/lib/prompt-studio.ts`.
+ * nguyên `AgentError` cho màn dịch — xem `features/kit-core/lib/prompt-studio.ts`.
  */
 export function usePromptPreview(projectId: string) {
   return useMutation({ mutationFn: (contract: Contract) => api.contract.promptPreview(projectId, contract) });

@@ -1,12 +1,12 @@
 /**
- * features/workflow-v4/lib/draft-storage.ts — CHỖ CHỨA BẢN NHÁP WORKFLOW.
+ * features/kit-core/lib/draft-storage.ts — CHỖ CHỨA BẢN NHÁP WORKFLOW.
  *
  * Tách khỏi `model.ts` có chủ đích: màn Home (`lib/hooks/use-projects.ts`) phải dọn được
  * nhánh persist khi xoá bộ kit, mà nó KHÔNG được kéo cả zustand store + `kit-form` vào
  * chunk dùng chung chỉ để gọi `localStorage.removeItem`. File này **không import gì**.
  *
  * Ba luật:
- *  1. Mỗi bộ kit một key: `kitgen.workflow-v4:<projectId>` (§W1-1).
+ *  1. Mỗi bộ kit một key: `kitgen.kit-core:<projectId>` (§W1-1).
  *  2. Key CŨ không có projectId chỉ còn để DI TRÚ, và chỉ bị xoá khi đã nhận xong.
  *  3. Xoá bộ kit ⇒ key sống bị dọn NGAY, nhưng một bản nằm lại ở "bia mộ" vì thao tác
  *     xoá ở Home **hoàn tác được trong 10s**. Wave này sinh ra để chặn mất dữ liệu,
@@ -14,7 +14,7 @@
  */
 
 /** Key CŨ — một key cho cả trình duyệt. Chỉ còn tồn tại để di trú. */
-export const LEGACY_DRAFT_KEY = "kitgen.workflow-v4";
+export const LEGACY_DRAFT_KEY = "kitgen.kit-core";
 export const draftKey = (projectId: string) => `${LEGACY_DRAFT_KEY}:${projectId}`;
 export const trashedDraftKey = (projectId: string) => `${LEGACY_DRAFT_KEY}:trashed:${projectId}`;
 

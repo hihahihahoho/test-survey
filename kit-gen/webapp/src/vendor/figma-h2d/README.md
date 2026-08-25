@@ -101,7 +101,7 @@ thật rồi nhìn. Vì vậy `CutAssetGrid` vẫn giữ toast nhắc chỉnh ta
 
 ## Ai đang dùng
 
-- `src/features/workflow-v4/lib/figma-node.ts` — menu ⋯ → **Copy to Figma** của
+- `src/features/kit-core/lib/figma-node.ts` — menu ⋯ → **Copy to Figma** của
   từng ô đã cắt.
 
 Đường bitmap cũ (`features/kit/lib/figma-board.ts`) **vẫn giữ**, làm đường lùi khi

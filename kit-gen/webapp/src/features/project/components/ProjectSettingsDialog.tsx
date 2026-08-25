@@ -4,8 +4,8 @@ import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { BriefStep } from "@/features/workflow-v4/steps/BriefStep";
-import { StyleStep } from "@/features/workflow-v4/steps/StyleStep";
+import { BriefStep } from "@/features/kit-core/steps/BriefStep";
+import { StyleStep } from "@/features/kit-core/steps/StyleStep";
 import type { ProjectSettingsTab } from "@/routes/search-schemas";
 
 const TABS: ReadonlyArray<{ id: ProjectSettingsTab; label: string; icon: typeof FileText }> = [

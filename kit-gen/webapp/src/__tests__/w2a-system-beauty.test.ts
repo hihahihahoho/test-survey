@@ -82,12 +82,15 @@ describe("W2A-2 · MỘT lưới cho cả app", () => {
     expect(GLOBALS).toMatch(/\.kg-page\s*\{[^}]*mx-auto/);
   });
 
-  it("6 khối cấp trang đều đeo `.kg-page`", () => {
+  /* Wave 4·B: hai dòng `WorkflowScreen` + `steps/Stepper` đã rút khỏi danh sách
+     vì hai FILE đó không còn tồn tại — wizard bị khai tử khi cửa chính đổi sang
+     màn soạn prompt. LUẬT KHÔNG NỚI: mọi khối cấp trang CÒN SỐNG vẫn phải đeo
+     `.kg-page`, và đó vẫn là container duy nhất. Danh sách ngắn đi vì số trang
+     ít đi, không phải vì tiêu chuẩn hạ xuống. */
+  it("mọi khối cấp trang còn sống đều đeo `.kg-page`", () => {
     const users: Array<[string, string]> = [
       ["src/features/projects/ProjectsScreen.tsx", "Home"],
       ["src/features/home/components/HomeWorkspaceShell.tsx", "Settings và thư viện"],
-      ["src/features/workflow-v4/WorkflowScreen.tsx", "Workflow"],
-      ["src/features/workflow-v4/steps/Stepper.tsx", "Stepper workflow"],
       ["src/components/layout/FloraShell.tsx", "ruột header"],
       ["src/features/kit-form/KitFormScreen.tsx", "KitForm"],
     ];
@@ -120,8 +123,8 @@ describe("W2A-2 · MỘT lưới cho cả app", () => {
 });
 
 describe("W2A-3 · không còn control thô của hệ điều hành", () => {
-  it("6 file step của workflow-v4 KHÔNG còn thẻ `<select>` nào", () => {
-    for (const f of walkSrc(join(ROOT, "src/features/workflow-v4"))) {
+  it("không file nào của kit-core còn thẻ `<select>`", () => {
+    for (const f of walkSrc(join(ROOT, "src/features/kit-core"))) {
       expect(strip(readFileSync(f, "utf8")), f).not.toMatch(/<select[\s>]/);
     }
   });
@@ -152,7 +155,7 @@ describe("W2A-3 · không còn control thô của hệ điều hành", () => {
   it("ô «Màu nền tách» đã bỏ hẳn — không class chết, không swatch mọc lại", () => {
     expect(GLOBALS).not.toMatch(/\.color-swatch\s*\{/);
     expect(GLOBALS).not.toMatch(/\.swatch-row\s*\{/);
-    const step = strip(read("src/features/workflow-v4/steps/StyleStep.tsx"));
+    const step = strip(read("src/features/kit-core/steps/StyleStep.tsx"));
     expect(step).not.toContain("Màu nền tách");
     expect(step).not.toContain("chroma");
   });
@@ -165,7 +168,7 @@ describe("W2A-3 · không còn control thô của hệ điều hành", () => {
     expect(GLOBALS).toMatch(/\.color-field\s*\{/);
     expect(GLOBALS).toMatch(/\.color-field input\[type="color"\]\s*\{[^}]*size-9/);
     expect(strip(read("src/components/common/HexColorField.tsx"))).toContain('cn("color-field"');
-    expect(strip(read("src/features/workflow-v4/steps/StyleStep.tsx"))).toContain("<HexColorField");
+    expect(strip(read("src/features/kit-core/steps/StyleStep.tsx"))).toContain("<HexColorField");
   });
 });
 

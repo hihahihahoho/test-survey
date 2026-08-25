@@ -40,8 +40,28 @@ import { join, relative } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname;
 
-/** Ba vùng cấm — đúng danh sách của plan §W3-0. */
-const GUARDED = ["src/features/workflow-v4", "src/features/canvas", "src/features/gen"];
+/**
+ * Vùng cấm.
+ *
+ * Plan §W3-0 khai ba vùng: `workflow-v4` · `canvas` · `gen`. Wave 4·B sửa danh
+ * sách này vì ĐỊA HÌNH đổi, không phải vì luật đổi:
+ *
+ *  · `src/features/workflow-v4` → `src/features/kit-core`. Wizard bị khai tử; các
+ *    lib/panel còn sống dọn sang `kit-core`. Nếu để tên cũ thì `walk()` gặp thư
+ *    mục không tồn tại và LẶNG LẼ soi 0 file — cổng vẫn in "KẾT QUẢ: 0 lời gọi
+ *    tiêu tiền" trong khi thật ra nó không soi gì cả. Đó là kiểu hỏng tệ nhất của
+ *    một cổng: xanh vì mù.
+ *  · THÊM `src/features/prompt-canvas`. Đây là CỬA CHÍNH MỚI (`/k/:id`) — chỗ mà
+ *    một nút "Vẽ" sẽ mọc ra nếu ai đó lỡ tay, đúng vai trò mà `workflow-v4` giữ
+ *    khi plan §W3-0 được viết. Vùng cấm phải theo nơi người ta đang gõ code, chứ
+ *    không theo tên thư mục lịch sử.
+ */
+const GUARDED = [
+  "src/features/kit-core",
+  "src/features/prompt-canvas",
+  "src/features/canvas",
+  "src/features/gen",
+];
 
 /** Hook cắt: dù nằm ở đâu cũng phải giữ `kind` là hằng (luật ③). */
 const SLICE_HOOKS = [
@@ -98,8 +118,18 @@ const RE_KIND_DYNAMIC = /kind\s*:\s*(?!["'`])[A-Za-z_$]/;
 
 const failures = [];
 
-/* ── Luật ① + ② — ba vùng cấm ───────────────────────────────────────────── */
+/* ── Luật ① + ② — các vùng cấm ──────────────────────────────────────────── */
 for (const dir of GUARDED) {
+  /* MỘT VÙNG CẤM KHÔNG TỒN TẠI LÀ MỘT LỖI, KHÔNG PHẢI MỘT KHOẢNG TRỐNG.
+     Wave 4·B đổi tên `workflow-v4` → `kit-core`; nếu quên sửa danh sách trên thì
+     `walk()` trả mảng rỗng và cổng in "0 lời gọi tiêu tiền" — xanh vì MÙ, không
+     phải xanh vì sạch. Bắt đỏ ngay tại đây để lần đổi tên sau không đi qua im
+     lặng. Vùng cấm được xoá thật thì người xoá phải rút nó khỏi `GUARDED`, và đó
+     là một quyết định phải viết ra chứ không phải một hệ quả phụ. */
+  if (!existsSync(join(root, dir))) {
+    failures.push(`${dir}  — vùng cấm KHÔNG TỒN TẠI: cổng đang soi 0 file. Sửa GUARDED hoặc khôi phục thư mục.`);
+    continue;
+  }
   for (const file of walk(join(root, dir))) {
     const clean = stripComments(readFileSync(file, "utf8"));
     const rel = relative(root, file);

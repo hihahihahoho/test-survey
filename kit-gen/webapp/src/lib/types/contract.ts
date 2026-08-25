@@ -62,9 +62,9 @@ export const DEFAULT_CHARACTER_POSES = [
  * Hai màu dưới đây là mực/xám của bảng token (`styles/tokens.css`: `fg-strong` sáng
  * #151516 và `line-strong` tối #9A9A9A) — chúng không nói tên ai cả.
  *
- * ĐẶT Ở ĐÂY, KHÔNG Ở `workflow-v4/lib/model.ts`: bốn nơi cần chúng nằm ở bốn feature
+ * ĐẶT Ở ĐÂY, KHÔNG Ở `kit-core/lib/model.ts`: bốn nơi cần chúng nằm ở bốn feature
  * khác nhau (workflow, home/Brand, design/Styles, kit-form), và `kit-form/lib/form-model`
- * ↔ `workflow-v4/lib/model` là một VÒNG import (model đọc `STYLE_AXIS_IDS` của
+ * ↔ `kit-core/lib/model` là một VÒNG import (model đọc `STYLE_AXIS_IDS` của
  * form-model). `types/contract.ts` là lá — không import gì trong `src/` — nên nó là
  * chỗ chung duy nhất không tạo vòng. `model.ts` xuất lại hai tên này để chỗ gọi cũ
  * không phải đổi.

@@ -1,5 +1,5 @@
 import type { RefKind } from "@/lib/types/api";
-import { refPath } from "@/features/workflow-v4/lib/kitset-to-contract";
+import { refPath } from "@/features/kit-core/lib/kitset-to-contract";
 
 /**
  * pill-image.ts — ẢNH CỦA MỘT PILL SỐNG Ở ĐÂU, VÀ ĐI VÀO CONTRACT BẰNG GÌ.

@@ -20,22 +20,22 @@ import {
   resolveProjectView,
   type ProjectSection, type ProjectSettingsTab,
 } from "@/routes/search-schemas";
-import { KitsetStep } from "@/features/workflow-v4/steps/KitsetStep";
-import { MascotStep } from "@/features/workflow-v4/steps/MascotStep";
-import { categoryOfSheet } from "@/features/workflow-v4/lib/generated-results";
+import { KitsetStep } from "@/features/kit-core/steps/KitsetStep";
+import { MascotStep } from "@/features/kit-core/steps/MascotStep";
+import { categoryOfSheet } from "@/features/kit-core/lib/generated-results";
 import { GenerateDialog } from "@/features/runs";
-import { ContractSyncProvider, useContractSync } from "@/features/workflow-v4/lib/contract-sync";
-import { importedElementsOf, workflowPatchFromContract } from "@/features/workflow-v4/lib/contract-import";
-import { toKitsetRefs, useWorkflowRefs } from "@/features/workflow-v4/lib/refs-sync";
+import { ContractSyncProvider, useContractSync } from "@/features/kit-core/lib/contract-sync";
+import { importedElementsOf, workflowPatchFromContract } from "@/features/kit-core/lib/contract-import";
+import { toKitsetRefs, useWorkflowRefs } from "@/features/kit-core/lib/refs-sync";
 import {
   WorkflowStoreProvider, useWorkflowStore, useWorkflowStoreApi,
   type ProjectSheetLimits, type SheetLimitKey,
-} from "@/features/workflow-v4/lib/model";
+} from "@/features/kit-core/lib/model";
 import { gateOf, useNarrowViewport } from "@/features/projects/lib/gate";
 import { hasGeneratedOutput } from "@/features/projects/lib/nav";
-import { mergeElements, userUiElements } from "@/features/workflow-v4/lib/user-library";
-import { CutAssetGrid } from "@/features/workflow-v4/components/CutAssetGrid";
-import { RawSheetsPanel } from "@/features/workflow-v4/components/RawSheetsPanel";
+import { mergeElements, userUiElements } from "@/features/kit-core/lib/user-library";
+import { CutAssetGrid } from "@/features/kit-core/components/CutAssetGrid";
+import { RawSheetsPanel } from "@/features/kit-core/components/RawSheetsPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createProjectNav } from "./lib/nav";
 import { useSliceRun } from "./lib/useSliceRun";
@@ -46,7 +46,7 @@ import { ProjectSettingsDialog } from "./components/ProjectSettingsDialog";
 import { SaveBar } from "./components/SaveBar";
 import { UnsavedGuardDialog } from "./components/UnsavedGuardDialog";
 import { useProjectBuffer } from "./lib/useProjectBuffer";
-import { UI_STEP_LABEL } from "@/features/workflow-v4/steps/Stepper";
+import { UI_STEP_LABEL } from "@/features/kit-core/lib/labels";
 
 /**
  * ══════════════════════════════════════════════════════════════════════════════

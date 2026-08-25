@@ -1,4 +1,4 @@
-import { MAIN_VARIANT_ID } from "@/features/workflow-v4/lib/kitset-to-contract";
+import { MAIN_VARIANT_ID } from "@/features/kit-core/lib/kitset-to-contract";
 import type { Sheet } from "@/lib/types/contract";
 
 /**

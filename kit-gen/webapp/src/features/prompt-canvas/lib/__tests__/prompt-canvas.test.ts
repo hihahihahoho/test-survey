@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { JSONContent } from "@tiptap/react";
 
 import { contractJobs, contractSchema } from "@/lib/types/contract";
-import { MAIN_VARIANT_ID } from "@/features/workflow-v4/lib/kitset-to-contract";
-import { MATERIAL_PRESETS } from "@/features/workflow-v4/lib/materials";
-import { EXPRESSIONS, OUTFIT_THEMES } from "@/features/workflow-v4/lib/poses";
+import { MAIN_VARIANT_ID } from "@/features/kit-core/lib/kitset-to-contract";
+import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
+import { EXPRESSIONS, OUTFIT_THEMES } from "@/features/kit-core/lib/poses";
 
 import { seedPresets } from "@/features/prompt-lab/lib/presets-store";
 import { backgroundDoc, mascotDoc } from "@/features/prompt-lab/lib/doc-templates";
@@ -67,7 +67,7 @@ function withImage(doc: JSONContent, refName: string): JSONContent {
 
 describe("migrateComposerDoc — thiếu docVersion thì KHÔNG cố dịch", () => {
   it("bản nháp wizard cũ trong workflow-draft.json ⇒ tài liệu RỖNG, không ném", () => {
-    /* Hình dạng thật của `draft` mà `useSaveWorkflowDraft` của workflow-v4 ghi. */
+    /* Hình dạng thật của `draft` mà `useSaveWorkflowDraft` của wizard đời cũ ghi. */
     const wizard = {
       kitName: "Kit Tết",
       styleAxes: { age: 3, energy: 5 },

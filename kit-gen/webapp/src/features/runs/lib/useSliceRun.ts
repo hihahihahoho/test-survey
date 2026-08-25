@@ -12,10 +12,10 @@
  * không nhận `kind` từ nơi gọi** — để không ai dùng nó làm đường tắt chạy gen mà bỏ
  * qua cảnh báo quota. `scripts/check-no-gen.mjs` luật ③ canh chính điều đó bằng máy.
  *
- * ══ VÌ SAO NẰM Ở `features/runs/` chứ không phải `features/workflow-v4/lib/` ══
- * Plan §W3-8 viết "bốc sang `features/workflow-v4/lib/`". Tôi để ở đây, và đây là
+ * ══ VÌ SAO NẰM Ở `features/runs/` chứ không phải `features/kit-core/lib/` ══
+ * Plan §W3-8 viết "bốc sang `features/kit-core/lib/`". Tôi để ở đây, và đây là
  * một lệch có chủ ý — vì làm đúng chữ của plan sẽ **tự bắn vào chân cổng W3-0**:
- * cổng đó FAIL nếu chuỗi `useStartRun` xuất hiện trong `src/features/workflow-v4/**`,
+ * cổng đó FAIL nếu chuỗi `useStartRun` xuất hiện trong `src/features/kit-core/**`,
  * mà hook cắt buộc phải gọi `useStartRun`. Hai câu của plan đá nhau; tôi giữ câu
  * quan trọng hơn (cổng chặn tiêu tiền phải chặt) và chuyển hook sang `features/runs/`
  * — nơi plan đã tuyên "CẤM XOÁ" và là nhà đúng nghĩa của mọi thứ liên quan tới run.

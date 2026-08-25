@@ -3,7 +3,7 @@
  * ────────────────────────────────────────────────────────────────────────────
  * COPY **CẢ TẤM** SANG FIGMA — node thật, không phải bitmap trần.
  *
- * ╔══ VÌ SAO LÀ FILE MỚI, KHÔNG SỬA `workflow-v4/lib/figma-node.ts` ══════════╗
+ * ╔══ VÌ SAO LÀ FILE MỚI, KHÔNG SỬA `kit-core/lib/figma-node.ts` ══════════╗
  * ║ `figma-node.ts` + `vendor/figma-h2d/` đang bị BỐN bộ test khoá             ║
  * ║ (`vendor-integrity`, `figma-node`, `generated-results`, `result-copy`),    ║
  * ║ trong đó `vendor-integrity` khoá theo HASH file. Encoder là thứ đã dán thử ║
@@ -28,7 +28,7 @@
 import { BLEND_SCREEN } from "@/features/kit/lib/blend";
 import {
   FigmaNodeUnsupported, encodeFigmaNode, type FigmaNodeSpec,
-} from "@/features/workflow-v4/lib/figma-node";
+} from "@/features/kit-core/lib/figma-node";
 
 export interface SheetFigmaOptions {
   /**

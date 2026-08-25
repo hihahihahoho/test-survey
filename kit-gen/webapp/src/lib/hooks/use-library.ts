@@ -2,7 +2,7 @@ import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/endpoints";
 import type { LibrarySettings } from "../types/api";
-import type { LibraryItem } from "../types/api";
+import type { LibraryItem, LibraryPreset } from "../types/api";
 import { qk } from "./keys";
 
 export function useUserLibrary() {
@@ -96,4 +96,28 @@ export function usePatchPoseTemplate() {
 export function useRemovePoseTemplate() {
   const client = useQueryClient();
   return useMutation({ mutationFn: api.library.removePose, onSuccess: () => void client.invalidateQueries({ queryKey: qk.library() }) });
+}
+
+/* ══ PRESET — danh mục người dùng tự sửa ════════════════════════════════════
+   Ba hook này đi đúng khuôn brand/pose ở trên. Chúng KHÔNG phải cửa duy nhất:
+   `features/prompt-lab/lib/presets-store.ts` gọi thẳng `api.library.*` cho một
+   hàng đợi ghi gộp (xem file đó để biết vì sao một màn sửa-theo-từng-phím không
+   thể mỗi phím một mutation). Hook ở đây dành cho mọi nơi CHỈ sửa một bản ghi
+   theo một hành động rõ ràng — nơi khuôn TanStack là đúng và rẻ. */
+export function useAddLibraryPreset() {
+  const client = useQueryClient();
+  return useMutation({ mutationFn: api.library.addPreset, onSuccess: () => void client.invalidateQueries({ queryKey: qk.library() }) });
+}
+
+export function usePatchLibraryPreset() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: { id: string; kind?: LibraryPreset["kind"]; name?: string; data?: Record<string, unknown> }) => api.library.patchPreset(id, input),
+    onSuccess: () => void client.invalidateQueries({ queryKey: qk.library() }),
+  });
+}
+
+export function useRemoveLibraryPreset() {
+  const client = useQueryClient();
+  return useMutation({ mutationFn: api.library.removePreset, onSuccess: () => void client.invalidateQueries({ queryKey: qk.library() }) });
 }

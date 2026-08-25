@@ -1,3 +1,4 @@
+import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { describe, eq, includes, it, multipart, ok, pathExists, PNG_1x1 } from "./harness.mjs"
 
@@ -11,6 +12,10 @@ export async function run({ api, wsRoot }) {
     eq(r.json.items, [])
     eq(r.json.poseTemplates.length, 19)
     eq(r.json.poseTemplates[0].sourcePose, "idle")
+    /* v4: kho mở ra là có sẵn ô cho danh mục người dùng tự sửa. Rỗng, không phải
+       thiếu — web phân biệt hai thứ đó để biết có cần gieo hạt giống hay không. */
+    eq(r.json.version, 4)
+    eq(r.json.presets, [])
   })
 
   let poseId = ""
@@ -106,6 +111,46 @@ export async function run({ api, wsRoot }) {
     eq(listed.json.brands[0].name, "VCB")
   })
 
+  await it("preset: tạo, sửa, xoá — và `data` là JSON tự do do web định nghĩa", async () => {
+    const created = await api("POST", "/api/library/presets", {
+      body: { kind: "element", name: "Nút bấm", data: { vi: "Nút bấm", en: "a primary action button", decor: 4, materialId: "" } },
+    })
+    eq(created.status, 201)
+    const presetId = created.json.preset.id
+    ok(/^preset_[a-f0-9]{16}$/.test(presetId), "preset id do agent sinh")
+    eq(created.json.preset.kind, "element")
+    eq(created.json.preset.data.decor, 4)
+
+    /* `data` thay CẢ CỤM, không trộn nông: gửi thiếu `materialId` là nó biến mất. */
+    const patched = await api("PATCH", `/api/library/presets/${presetId}`, {
+      body: { name: "Nút chính", data: { vi: "Nút chính", en: "a primary action button", decor: 6 } },
+    })
+    eq(patched.status, 200)
+    eq(patched.json.preset.name, "Nút chính")
+    eq(patched.json.preset.data, { vi: "Nút chính", en: "a primary action button", decor: 6 })
+    eq(patched.json.preset.kind, "element", "không gửi kind thì kind giữ nguyên")
+
+    const listed = await api("GET", "/api/library")
+    eq(listed.json.presets.length, 1)
+    eq(listed.json.presets[0].id, presetId)
+
+    const del = await api("DELETE", `/api/library/presets/${presetId}`)
+    eq(del.status, 204)
+    eq((await api("GET", "/api/library")).json.presets, [])
+  })
+
+  await it("preset: từ chối kind lạ, tên rỗng, data không phải object và id sai dạng", async () => {
+    eq((await api("POST", "/api/library/presets", { body: { kind: "khong-co", name: "X", data: {} } })).status, 400)
+    eq((await api("POST", "/api/library/presets", { body: { kind: "style", name: "   ", data: {} } })).status, 400)
+    eq((await api("POST", "/api/library/presets", { body: { kind: "style", name: "X", data: [1, 2] } })).status, 400)
+    eq((await api("POST", "/api/library/presets", { body: { kind: "style", name: "X", data: "chuoi" } })).status, 400)
+    /* Trần 8000 byte JSON — chặn một bản ghi khổng lồ nuốt cả file state. */
+    eq((await api("POST", "/api/library/presets", { body: { kind: "style", name: "X", data: { en: "x".repeat(9000) } } })).status, 400)
+    eq((await api("PATCH", "/api/library/presets/preset_khongphaihex", { body: { name: "X" } })).status, 400)
+    eq((await api("PATCH", "/api/library/presets/preset_00112233445566ff", { body: { name: "X" } })).status, 404)
+    eq((await api("DELETE", "/api/library/presets/preset_00112233445566ff")).status, 404)
+  })
+
   await it("xoá cả metadata và file", async () => {
     const before = await api("GET", "/api/library")
     const filename = before.json.items.find(item => item.id === id).filename
@@ -121,5 +166,44 @@ export async function run({ api, wsRoot }) {
     eq(delMascot.status, 204)
     const delPose = await api("DELETE", `/api/library/poses/${poseId}`)
     eq(delPose.status, 204)
+  })
+
+  /* ĐẶT CUỐI CÙNG CÓ CHỦ Ý: ca này GHI ĐÈ file state trên đĩa, nên nó phải chạy
+     sau khi mọi ca trên đã dùng xong kho. */
+  await it("di trú v3 → v4: đọc file đời cũ không mất một trường nào", async () => {
+    const libDir = join(wsRoot, ".kitgen", "library")
+    await mkdir(libDir, { recursive: true })
+    /* Một file ĐÚNG như đời v3 ghi ra: không có khoá `presets` nào cả. */
+    const v3 = {
+      version: 3,
+      brands: [{ id: "brand_00112233445566aa", name: "VCB cũ", description: "Hồ sơ đời v3", colors: ["#006b5b"], assetIds: [], createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" }],
+      poseTemplates: [{ id: "pose_idle", name: "Đứng thẳng", description: "", sourcePose: "idle", enabled: true, builtIn: true, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" }],
+      settings: { background: 5, popup: 4, small: 16, props: 16, mascot: 4 },
+      items: [{ id: "asset_00112233445566bb", kind: "reference", group: "style", name: "Ảnh đời v3", description: "", tags: ["cũ"], filename: "asset_00112233445566bb.png", bytes: 70, w: 1, h: 1, poses: [], createdAt: "2026-01-01T00:00:00.000Z" }],
+    }
+    await writeFile(join(libDir, "library.json"), JSON.stringify(v3), "utf8")
+
+    const r = await api("GET", "/api/library")
+    eq(r.status, 200)
+    eq(r.json.version, 4, "số phiên bản đã lên 4")
+    eq(r.json.presets, [], "thiếu `presets` ⇒ mảng rỗng, KHÔNG phải lỗi")
+    /* Bốn mảng cũ phải đi qua nguyên vẹn — đây mới là điều "không mất gì" nghĩa là gì. */
+    eq(r.json.brands.length, 1)
+    eq(r.json.brands[0].name, "VCB cũ")
+    eq(r.json.brands[0].colors, ["#006b5b"])
+    eq(r.json.poseTemplates.map(pose => pose.id), ["pose_idle"])
+    eq(r.json.settings, { background: 5, popup: 4, small: 16, props: 16, mascot: 4 })
+    eq(r.json.items.map(item => item.id), ["asset_00112233445566bb"])
+    eq(r.json.items[0].tags, ["cũ"])
+
+    /* Và một lần ghi bất kỳ sau đó phải ĐÓNG DẤU v4 xuống đĩa, không để file
+       lửng lơ ở v3 rồi lần sau lại phải di trú lại. */
+    const created = await api("POST", "/api/library/presets", { body: { kind: "style", name: "Sau di trú", data: { en: "cozy" } } })
+    eq(created.status, 201)
+    const again = await api("GET", "/api/library")
+    eq(again.json.version, 4)
+    eq(again.json.presets.map(preset => preset.name), ["Sau di trú"])
+    eq(again.json.brands[0].name, "VCB cũ", "ghi preset không đụng vào phần dữ liệu cũ")
+    eq((await api("DELETE", `/api/library/presets/${created.json.preset.id}`)).status, 204)
   })
 }

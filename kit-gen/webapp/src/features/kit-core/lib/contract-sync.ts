@@ -1,7 +1,7 @@
 /**
  * contract-sync.ts — WAVE 3 §W3-2: contract THẬT theo project.
  *
- * Trước wave này `workflow-v4` là một hòn đảo: mọi thứ người dùng điền chỉ nằm trong
+ * Trước wave này `kit-core` là một hòn đảo: mọi thứ người dùng điền chỉ nằm trong
  * `localStorage`. Hook này là cây cầu — và toàn bộ nó **0 đồng**: `agent/routes/contract.mjs`
  * chỉ đọc/ghi JSON + snapshot vào `.history/contract/`, không một dòng nào gọi model.
  *

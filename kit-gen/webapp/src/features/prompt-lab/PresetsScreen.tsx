@@ -4,13 +4,14 @@ import { Link } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
-import { MATERIAL_PRESETS } from "@/features/workflow-v4/lib/materials";
+import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
 
 import {
   DECOR_LEVELS,
   resetPresets,
   setPresets,
   usePresets,
+  usePresetSyncError,
   type ElementPreset,
   type MascotPreset,
   type PresetBundle,
@@ -19,7 +20,7 @@ import {
 import { newId } from "./lib/composer-model";
 
 /**
- * PresetsScreen — CRUD danh mục của lab, lưu trong localStorage.
+ * PresetsScreen — CRUD danh mục, lưu TRONG WORKSPACE KitGen.
  *
  * ╔══ VÌ SAO MÀN NÀY TỒN TẠI ════════════════════════════════════════════════╗
  * ║ Phần đắt nhất của ý tưởng Prompt Composer không phải cái editor — mà là   ║
@@ -29,8 +30,12 @@ import { newId } from "./lib/composer-model";
  * ║ không" — mà đó mới là thứ cần biết trước khi làm thật.                    ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * Giới hạn của localStorage (một máy · một trình duyệt · mất khi xoá dữ liệu
- * duyệt web) được nói thẳng ngay trên màn, không giấu trong comment.
+ * Kho đã rời localStorage sang `/api/library/presets` (Wave 4·A). Vì thế màn này
+ * không còn hứa "một máy · một trình duyệt" nữa — nhưng nó có một nghĩa vụ MỚI:
+ * ghi lên server CÓ THỂ HỎNG (agent tắt, workspace chỉ-đọc). Bản localStorage
+ * hỏng thì cùng lắm mất lúc mở lại; bản này hỏng mà im lặng thì người dùng tưởng
+ * đã lưu. Nên `usePresetSyncError()` được hiện thành một dòng cảnh báo ngay dưới
+ * tiêu đề, không giấu trong console.
  */
 
 /** Ô nhập dùng lại — form ở đây toàn là "sửa một chuỗi tại chỗ". */
@@ -108,6 +113,7 @@ function Section({
 
 export function PresetsScreen() {
   const presets = usePresets();
+  const syncError = usePresetSyncError();
 
   /* Ghi thẳng vào kho sau mỗi phím gõ, không có nút "Lưu".
      Cân nhắc có thật: một nút Lưu thì phải có state nháp, phải cảnh báo khi rời
@@ -150,13 +156,20 @@ export function PresetsScreen() {
           </Button>
         </div>
 
-        <header>
+        <header className="flex flex-col gap-2">
           <h1 className="text-display-2 text-fg-strong">Preset của lab</h1>
           <p className="text-body text-fg-muted">
-            Danh mục mà Composer đọc. Lưu trong <strong className="text-fg-strong">trình duyệt này</strong> — không
-            đồng bộ sang máy khác, và mất nếu bạn xoá dữ liệu duyệt web. Bản làm thật sẽ để chúng nằm trong workspace
-            KitGen cạnh contract.
+            Danh mục mà Composer đọc. Lưu trong <strong className="text-fg-strong">workspace KitGen</strong> — cạnh
+            contract, nên nó theo cả đội chứ không theo một trình duyệt. Sửa là ghi ngay, không có nút Lưu.
           </p>
+          {/* Ghi lên server hỏng thì PHẢI nói ra: người dùng không có nút Lưu để
+              thử lại, nên "tưởng đã lưu mà chưa" là hỏng tệ nhất ở màn này. */}
+          {syncError ? (
+            <p role="alert" className="rounded-2 border border-danger/60 bg-danger/10 px-3 py-2 text-caption text-danger">
+              Chưa ghi được danh mục lên workspace: {syncError}. Bản đang hiện vẫn đúng thứ bạn vừa gõ; sửa tiếp một
+              lần nữa sẽ thử ghi lại.
+            </p>
+          ) : null}
         </header>
 
         <Section

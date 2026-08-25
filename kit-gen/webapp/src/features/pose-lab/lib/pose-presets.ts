@@ -1,7 +1,7 @@
 /**
  * pose-presets.ts — 8 DÁNG GỐC để người dùng nắn tiếp, không phải nắn từ tượng gỗ.
  *
- * ╔══ VÌ SAO ID LẤY TỪ `workflow-v4/lib/poses.ts` ════════════════════════════╗
+ * ╔══ VÌ SAO ID LẤY TỪ `kit-core/lib/poses.ts` ════════════════════════════╗
  * ║ KitGen đã có danh mục 19 dáng và nó là thứ đi vào prompt thật. Nếu lab tự  ║
  * ║ đặt tên dáng của mình thì ảnh chụp ra không biết đính vào dáng nào của kit ║
  * ║ — đúng cái mối nối mà demo này muốn chứng minh là có thể nối được. Nên id  ║
@@ -15,11 +15,11 @@
  * MỌI SỐ Ở ĐÂY LÀ ĐỘ, và dấu tuân theo quy ước ghi ở đầu `skeleton.ts`. Sửa số mà
  * không đọc quy ước thì tay sẽ gập ngược ra sau lưng — đã xảy ra khi dựng bảng này.
  */
-import { poseLabel } from "@/features/workflow-v4/lib/poses";
+import { poseLabel } from "@/features/kit-core/lib/poses";
 import type { PoseData } from "./pose-state";
 
 export interface PosePreset {
-  /** Id THẬT trong danh mục dáng của KitGen (`workflow-v4/lib/poses.ts`). */
+  /** Id THẬT trong danh mục dáng của KitGen (`kit-core/lib/poses.ts`). */
   id: string;
   /** Một câu nói dáng này để làm gì — hiện dưới dropdown. */
   note: string;

@@ -108,11 +108,11 @@ describe("§B2 — mở dự án ĐÃ CÓ ẢNH phải vào thẳng trang kết 
     expect(src).toContain("!hasGeneratedOutput(project.data)");
   });
 
-  it("wizard của dự án đã gen có đường sang trang kết quả", () => {
-    const src = readFileSync(join(SRC, "features/workflow-v4/WorkflowScreen.tsx"), "utf8");
-    expect(src).toContain("hasGeneratedOutput(project.data)");
-    expect(src).toContain("Xem ảnh đã tạo");
-  });
+  /* Ca "wizard của dự án đã gen có đường sang trang kết quả" đã rút (Wave 4·B):
+     nó đọc `WorkflowScreen.tsx`, và wizard không còn tồn tại. Ý định mà nó bảo vệ
+     — "mở một dự án ĐÃ CÓ ẢNH thì đừng bắt đi lại từ đầu" — vẫn được canh ở ca
+     ngay trên, chỗ `ProjectScreen` chỉ đá về khi `!hasGeneratedOutput`. Đó mới là
+     nhánh quyết định thật; ca cũ chỉ canh cái lối thoát ở màn đích. */
 });
 
 /** Harness bé nhất có thể để chạy hook thật trong DOM thật. */

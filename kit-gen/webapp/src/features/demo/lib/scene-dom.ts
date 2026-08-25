@@ -26,7 +26,7 @@
  * khoá `name` truyền vào `captureElement` thì bị bỏ qua hoàn toàn (`:1172-1177`) —
  * đúng chỗ prototype `screens.html:259` đã làm hụt.
  */
-import { mountStage } from "@/features/workflow-v4/lib/figma-node";
+import { mountStage } from "@/features/kit-core/lib/figma-node";
 import type { ResolvedScene, SceneLayer } from "./resolve-scene";
 import type { ScreenTextSpec } from "./screen-spec";
 

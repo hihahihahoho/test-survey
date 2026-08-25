@@ -64,7 +64,7 @@ export interface CapturePoseRefOptions {
 /**
  * Dựng ảnh pose reference cho MỘT dáng ở MỘT góc máy.
  *
- * @param poseId  id dáng THẬT của KitGen (`workflow-v4/lib/poses.ts`) — id lạ rơi
+ * @param poseId  id dáng THẬT của KitGen (`kit-core/lib/poses.ts`) — id lạ rơi
  *                về dáng đầu thay vì ném, vì một bản nháp cũ mang id đã bỏ không
  *                đáng làm hỏng cả lượt gen.
  * @param view    id góc máy trong `CAMERA_VIEWS` — id lạ rơi về "chính diện".

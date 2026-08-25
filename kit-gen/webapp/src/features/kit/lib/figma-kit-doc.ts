@@ -38,10 +38,10 @@ import type { KitFile } from "@/lib/types";
 import {
   FigmaNodeUnsupported, assertDocShape, assetName, buildFigmaNodeForAsset, mountStage, renderSpec,
   type FigmaNodeSpec,
-} from "@/features/workflow-v4/lib/figma-node";
+} from "@/features/kit-core/lib/figma-node";
 import {
   RESULT_GROUP_ORDER, categoryOfSheet, groupLabel, type ResultCategory,
-} from "@/features/workflow-v4/lib/generated-results";
+} from "@/features/kit-core/lib/generated-results";
 import { loadFigmaH2D, type H2DDocument } from "@/vendor/figma-h2d";
 
 /** Nguồn ghi vào metadata payload — soi lại lượt dán nào đến từ nút header. */

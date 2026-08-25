@@ -20,8 +20,8 @@
 import * as React from "react";
 import { useSaveWorkflowDraft } from "@/lib/hooks";
 import { toast } from "@/components/ui/sonner";
-import { workflowDraftOf, type WorkflowState, type WorkflowStore } from "@/features/workflow-v4/lib/model";
-import type { ContractSync } from "@/features/workflow-v4/lib/contract-sync";
+import { workflowDraftOf, type WorkflowState, type WorkflowStore } from "@/features/kit-core/lib/model";
+import type { ContractSync } from "@/features/kit-core/lib/contract-sync";
 
 /**
  * Phần state được coi là "nội dung dự án". `step`/`unlocked` bị loại: chúng là vị trí

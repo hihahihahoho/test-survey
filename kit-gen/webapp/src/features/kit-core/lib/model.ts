@@ -13,7 +13,7 @@ export { LEGACY_DRAFT_KEY, draftKey, trashedDraftKey, migrateLegacyDraft, dropWo
 /**
  * BẢN NHÁP WORKFLOW — **MỘT BẢN NHÁP CHO MỖI BỘ KIT** (UPGRADE-PLAN §W1-1).
  *
- * Bản cũ dùng đúng một key `kitgen.workflow-v4` cho cả trình duyệt ⇒ mở bộ kit B
+ * Bản cũ dùng đúng một key `kitgen.kit-core` cho cả trình duyệt ⇒ mở bộ kit B
  * ra brief của bộ kit A, và nhảy thẳng vào bước 6 của A. Đó là **mất dữ liệu**,
  * không phải khó chịu.
  *

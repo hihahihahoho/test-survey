@@ -604,12 +604,36 @@ export const poseTemplateSchema = z.looseObject({
 });
 export type PoseTemplate = z.infer<typeof poseTemplateSchema>;
 export const poseTemplateResultSchema = z.looseObject({ pose: poseTemplateSchema });
+/**
+ * Preset — danh mục người dùng tự sửa (phong cách, loại element, nhân vật mẫu…).
+ *
+ * `data` CỐ Ý là `unknown`-ish (`z.record`): hình dạng của nó do WEB định nghĩa
+ * theo từng `kind` và còn đang đổi, agent chỉ giữ hộ. Ép một schema chặt ở đây
+ * nghĩa là mỗi lần web thêm một trường thì bản web mới không đọc nổi dữ liệu bản
+ * web cũ vừa ghi (và ngược lại) — đúng loại lỗi im lặng khó truy nhất. Nơi hiểu
+ * `data` là `features/prompt-lab/lib/presets-store.ts`, và nó đọc phòng thủ.
+ *
+ * ⚠️ `default([])` ở `presets` không phải trang trí: agent đời v3 KHÔNG trả khoá
+ * này. Thiếu default thì một workspace chưa kịp di trú làm hỏng cả `GET /api/library`.
+ */
+export const libraryPresetSchema = z.looseObject({
+  id: z.string(),
+  kind: z.enum(["style", "element", "mascot", "material", "outfit"]),
+  name: z.string(),
+  data: z.record(z.string(), z.unknown()).default({}),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+});
+export type LibraryPreset = z.infer<typeof libraryPresetSchema>;
+export type LibraryPresetKind = LibraryPreset["kind"];
+export const libraryPresetResultSchema = z.looseObject({ preset: libraryPresetSchema });
 export const userLibrarySchema = z.looseObject({
   version: z.number().default(1),
   brands: z.array(brandProfileSchema).default([]),
   poseTemplates: z.array(poseTemplateSchema).default([]),
   settings: librarySettingsSchema,
   items: z.array(libraryItemSchema).default([]),
+  presets: z.array(libraryPresetSchema).default([]),
 });
 export type UserLibrary = z.infer<typeof userLibrarySchema>;
 export const libraryItemResultSchema = z.looseObject({ item: libraryItemSchema });

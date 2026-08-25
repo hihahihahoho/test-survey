@@ -15,10 +15,10 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { resolveProjectView } from "@/routes/search-schemas";
 import { projectBufferOf } from "../lib/useProjectBuffer";
 import { SaveBar } from "../components/SaveBar";
-import { createWorkflowStore, resetWorkflowStores } from "@/features/workflow-v4/lib/model";
-import { buildKitsetContract, resolveKitset } from "@/features/workflow-v4/lib/kitset-to-contract";
+import { createWorkflowStore, resetWorkflowStores } from "@/features/kit-core/lib/model";
+import { buildKitsetContract, resolveKitset } from "@/features/kit-core/lib/kitset-to-contract";
 import { loadBundledV2 } from "@/features/design/library/lib/source";
-import { itemPromptFor, poseCellFile } from "@/features/workflow-v4/lib/item-prompt";
+import { itemPromptFor, poseCellFile } from "@/features/kit-core/lib/item-prompt";
 
 afterEach(() => {
   cleanup();

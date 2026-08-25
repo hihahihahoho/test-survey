@@ -9,6 +9,7 @@ import { join } from "node:path";
 
 import { AgentError } from "@/lib/api/client";
 import type { Run } from "@/lib/types/api";
+import { makeGenRun } from "@/features/runs/__tests__/fixtures/gen-run-progress";
 
 /**
  * MÀN SOẠN PROMPT — bốn sợi dây mà hỏng thì KHÔNG CÓ GÌ BÁO.
@@ -88,19 +89,13 @@ const { newDocBlock } = await import("@/features/prompt-lab/lib/composer-model")
 
 const EMPTY_CONTRACT = { schemaVersion: 4, sheets: [], variants: [], characterPoses: [] };
 
-function makeRun(id: string, status: Run["status"], jobStatus: "queued" | "running" | "ok" | "failed"): Run {
-  return {
-    id,
-    projectId: PID,
-    kind: "gen",
-    status,
-    startedAt: "2026-08-25T10:00:00.000Z",
-    finishedAt: status === "running" || status === "queued" ? null : "2026-08-25T10:02:00.000Z",
-    progress: { done: jobStatus === "ok" ? 1 : 0, total: 1, failed: jobStatus === "failed" ? 1 : 0, etaSeconds: null },
-    jobs: [{ job: `chinh-${id}`, status: jobStatus, recovered: false }],
-    seq: 1,
-  } as unknown as Run;
-}
+/* Thân của fixture này sống ở `features/runs/__tests__/fixtures/gen-run-progress.ts`,
+   KHÔNG ở đây: Wave 4·B đưa `features/prompt-canvas` vào vùng cấm của
+   `scripts/check-no-gen.mjs`, và cổng đó cấm chuỗi `kind:"gen"` kể cả trong test.
+   Đưa fixture ra ngoài giữ cổng nguyên độ chặt; nới luật cho file test thì mất
+   cả hàng rào. Xem chú thích trong file fixture. */
+const makeRun = (id: string, status: Run["status"], jobStatus: "queued" | "running" | "ok" | "failed"): Run =>
+  makeGenRun(PID, id, status, jobStatus);
 
 function wrap(ui: React.ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -291,7 +286,8 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
    ③ BẢN NHÁP WIZARD CŨ — hỏi trước khi đè
    ══════════════════════════════════════════════════════════════════════════ */
 
-/** Hình dạng THẬT của `draft` mà wizard workflow-v4 ghi xuống `workflow-draft.json`. */
+/** Hình dạng THẬT của `draft` mà wizard (đời workflow-v4, nay đã xoá) ghi xuống
+    `workflow-draft.json`. Giữ nguyên vì file trên đĩa của người dùng cũ vẫn thế. */
 const WIZARD_DRAFT = { kitName: "Kit Tết", styleAxes: { age: 3 }, elements: [], mascotPoses: ["idle"], completedSteps: 4 };
 
 describe("dự án có bản nháp kiểu cũ — hỏi TRƯỚC khi ghi đè", () => {
@@ -347,7 +343,7 @@ describe("route /k/$projectId", () => {
     /* Đo LỜI IMPORT, không đo chữ: chỗ đã gỡ có một câu giải thích nhắc lại tên
        module ấy, và một cổng đỏ vì chính lời cảnh báo của mình là một cổng sẽ bị
        tắt (cùng bài học với `check-no-gen.mjs` luật ①). */
-    expect(src).not.toMatch(/^import .*workflow-v4\/steps\/Stepper/m);
+    expect(src).not.toMatch(/^import .*kit-core\/steps\/Stepper/m);
     expect(src).not.toMatch(/\bUI_STEP_LABEL\b/);
     // Phần còn lại của bảng vẫn nguyên — cổng này bắt ai đó dọn quá tay.
     expect(src).toContain('id: "project.create"');

@@ -17,12 +17,25 @@ import { groupByFile, scanBannedWords } from "./banned-scan";
 const hits = scanBannedWords("src/features");
 
 /**
- * TRẦN = SỐ ĐO THẬT lúc S1 chạy (2026-08-07): **300** chỗ trúng / 89 file.
+ * TRẦN = SỐ ĐO THẬT, và nó chỉ được ĐI XUỐNG.
+ *
+ *   · S1 (2026-08-07): **300** chỗ trúng / 89 file — trần đầu tiên.
+ *   · Wave 4·B (2026-08-25): **289** chỗ trúng / 108 file — hạ trần.
+ *
+ * Số giảm vì wizard `workflow-v4` bị khai tử: `WorkflowScreen` · `steps/Stepper` ·
+ * `steps/ReviewStep` · `components/{PromptStudio,SyncBadge,RunPanel}` bị xoá, mang
+ * theo phần chữ kỹ thuật của chúng. Số FILE tăng (89 → 108) là chuyện khác và không
+ * mâu thuẫn: repo có thêm file kể từ S1, chỉ là chúng gánh ít từ cấm hơn.
+ *
+ * HẠ TRẦN LÀ BẮT BUỘC, không phải lịch sự. Để nguyên 300 sau khi xoá 11 chỗ nghĩa là
+ * tặng cho nhánh sau một hạn mức 11 từ cấm mới mà không ai quyết định cả — bánh cóc
+ * chỉ có tác dụng khi răng của nó siết theo số đo thật.
+ *
  * Cố ý viết bằng SỐ CỨNG chứ không phải `hits.length` — nếu lấy `hits.length` thì cổng
  * tự so với chính nó và KHÔNG BAO GIỜ đỏ được, tức là một cổng giả.
  * Ai kéo số xuống thì HẠ luôn trần này (và ghi vào report của mình).
  */
-const BASELINE_TOTAL = 300;
+const BASELINE_TOTAL = 289;
 
 describe("§5.4 — vùng S1 sở hữu: 0 từ cấm, không ngoại lệ", () => {
   it("features/kitfile/** hoàn toàn sạch", () => {

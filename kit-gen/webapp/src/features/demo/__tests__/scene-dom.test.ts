@@ -15,7 +15,7 @@
 import { describe, expect, it } from "vitest";
 import { kitFileSchema } from "@/lib/types/api";
 import type { KitFile } from "@/lib/types";
-import { STAGE_ID } from "@/features/workflow-v4/lib/figma-node";
+import { STAGE_ID } from "@/features/kit-core/lib/figma-node";
 import { screenSpecById } from "../data/screens.default";
 import { resolveScene, type ResolvedScene } from "../lib/resolve-scene";
 import {

@@ -54,8 +54,8 @@ vi.mock("@/components/ui/sonner", () => ({
 }));
 /* Lưới kết quả + ba cửa ra kéo theo canvas, clipboard và cả màn demo — không phải thứ
    đang kiểm, và để nguyên thì một test về dây nối biến thành test tích hợp toàn trang. */
-vi.mock("@/features/workflow-v4/components/GeneratedResults", () => ({ GeneratedResults: () => null }));
-vi.mock("@/features/workflow-v4/components/KitExits", () => ({
+vi.mock("@/features/kit-core/components/GeneratedResults", () => ({ GeneratedResults: () => null }));
+vi.mock("@/features/kit-core/components/KitExits", () => ({
   DownloadKitButton: () => null,
   CopyFigmaButton: () => null,
 }));

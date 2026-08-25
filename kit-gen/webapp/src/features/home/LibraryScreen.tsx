@@ -27,7 +27,7 @@ import {
   usePatchLibraryItem, usePatchPoseTemplate, useRemoveLibraryItem, useRemovePoseTemplate, useUserLibrary,
 } from "@/lib/hooks";
 import type { LibraryItem, LibrarySettings, PoseTemplate } from "@/lib/types";
-import { isPropElement } from "@/features/workflow-v4/lib/user-library";
+import { isPropElement } from "@/features/kit-core/lib/user-library";
 import { HomeWorkspaceShell } from "./components/HomeWorkspaceShell";
 
 type UiGroup = "background" | "popup" | "small" | "props";

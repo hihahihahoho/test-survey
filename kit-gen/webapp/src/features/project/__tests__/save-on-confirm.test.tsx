@@ -131,11 +131,11 @@ describe("② đúng cú bấm xác nhận mới ghi", () => {
 
 describe("③ chưa lưu ⇒ buffer vẫn bẩn ⇒ ba nút vẫn SÁNG", () => {
   const saveNow = vi.fn(async () => true);
-  const noopSync = { saveNow } as unknown as import("@/features/workflow-v4/lib/contract-sync").ContractSync;
+  const noopSync = { saveNow } as unknown as import("@/features/kit-core/lib/contract-sync").ContractSync;
 
   it("`useProjectBuffer`: bỏ dở chuỗi 'Lưu và tạo lại' thì `dirty` không tự về false", async () => {
     const { useProjectBuffer } = await import("../lib/useProjectBuffer");
-    const { createWorkflowStore, resetWorkflowStores } = await import("@/features/workflow-v4/lib/model");
+    const { createWorkflowStore, resetWorkflowStores } = await import("@/features/kit-core/lib/model");
     resetWorkflowStores();
     localStorage.clear();
     const store = createWorkflowStore("bug2-buffer");

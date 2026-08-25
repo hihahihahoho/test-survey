@@ -1,9 +1,13 @@
 import * as React from "react";
-import { GENRE_PRESETS } from "@/features/workflow-v4/lib/genre-presets";
-import { EXPRESSIONS, POSES } from "@/features/workflow-v4/lib/poses";
+import { useQueryClient } from "@tanstack/react-query";
+import { GENRE_PRESETS } from "@/features/kit-core/lib/genre-presets";
+import { EXPRESSIONS, POSES } from "@/features/kit-core/lib/poses";
+import { api } from "@/lib/api/endpoints";
+import { qk, useUserLibrary } from "@/lib/hooks";
+import type { LibraryPreset } from "@/lib/types/api";
 
 /**
- * presets-store.ts — DANH MỤC NGƯỜI DÙNG TỰ SỬA, lưu trong localStorage.
+ * presets-store.ts — DANH MỤC NGƯỜI DÙNG TỰ SỬA, lưu TRONG WORKSPACE KitGen.
  *
  * ╔══ VÌ SAO LAB LẠI CÓ MỘT KHO DỮ LIỆU ═════════════════════════════════════╗
  * ║ Vì phần đắt nhất của ý tưởng này không phải cái editor — mà là câu hỏi    ║
@@ -14,16 +18,33 @@ import { EXPRESSIONS, POSES } from "@/features/workflow-v4/lib/poses";
  * ║ cho đội tôi không" — mà đó mới là thứ cần biết trước khi làm thật.        ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * ══ localStorage, KHÔNG phải backend — và giới hạn của nó ═══════════════════
- * Lab không được gọi API nào. localStorage đổi lại ba nhược điểm phải nói rõ:
- * chỉ có trên MỘT máy + MỘT trình duyệt; ẩn danh (không biết ai sửa gì); và
- * người dùng xoá dữ liệu duyệt web là mất. Bản làm thật phải để preset nằm
- * trong workspace KitGen cạnh contract, không nằm trong trình duyệt.
+ * ══ ĐÃ RỜI localStorage → `GET/POST/PATCH/DELETE /api/library/presets` ══════
+ * Bản trước lưu trong localStorage và tự ghi ba nhược điểm của nó ngay tại đây:
+ * một máy · một trình duyệt; ẩn danh; mất khi người dùng xoá dữ liệu duyệt web.
+ * Cả ba đã hết: preset nay nằm trong `.kitgen/library/library.json` của
+ * workspace, cạnh contract — đúng chỗ mà chú thích cũ nói "bản làm thật phải để".
  *
- * ══ HẠT GIỐNG lấy từ dữ liệu THẬT của workflow-v4 (chỉ đọc) ════════════════
- * Kho rỗng là một demo không dùng được: người mở lần đầu phải tự nghĩ ra 7 phong
- * cách trước khi thấy được gì. Seed từ `genre-presets` / `materials` / `poses`
- * ⇒ mở phát là chạy, và người ta sửa từ một thứ có sẵn thay vì từ trang trắng.
+ * ══ BA THỨ PHẢI GIỮ NGUYÊN, VÀ CHÚNG ĐỊNH HÌNH CẢ FILE NÀY ═════════════════
+ * 1. `getPresets()` PHẢI ĐỒNG BỘ. Chục hàm THUẦN dùng nó làm đối số mặc định
+ *    (`composer-model`, `pill-registry`, `serialize*`, `composer-doc`,
+ *    `composer-to-contract`). Biến chúng thành async là sửa cả một tầng — và
+ *    làm mất tính thuần khiến chúng hết test được. Nên: TanStack Query giữ dữ
+ *    liệu gốc, còn ở đây có một BẢN SAO trong RAM để đọc đồng bộ. Bản sao chỉ
+ *    được ghi từ đúng hai nguồn: hydrate từ server, và `setPresets` của người dùng.
+ * 2. `id` trong bundle KHÔNG phải id của server. Id bundle đi thẳng vào tài liệu
+ *    đã lưu (`elementId` của mỗi ô, giá trị của pill phong cách). Nếu nó là id
+ *    server sinh ngẫu nhiên thì mọi tài liệu cũ trỏ vào hư không sau lần đầu đồng
+ *    bộ. Nên id bundle được giữ nguyên trong `data.key`, và id server chỉ là địa
+ *    chỉ vận chuyển — được tra qua bảng `serverIdOf`.
+ * 3. Màn preset sửa THEO TỪNG PHÍM (không có nút Lưu — xem `PresetsScreen`).
+ *    Mỗi phím một PATCH là hàng trăm request và một cuộc đua ghi đè. Nên bản sao
+ *    trong RAM đổi NGAY (UI không giật), còn việc ghi lên server được GỘP lại và
+ *    hoãn `FLUSH_DELAY_MS`.
+ *
+ * ══ HẠT GIỐNG lấy từ dữ liệu THẬT của kit-core (chỉ đọc) ════════════════
+ * Kho rỗng là một màn không dùng được: người mở lần đầu phải tự nghĩ ra 7 phong
+ * cách trước khi thấy được gì. Seed từ `genre-presets` / `poses` ⇒ mở phát là
+ * chạy, và người ta sửa từ một thứ có sẵn thay vì từ trang trắng.
  */
 
 export interface StylePreset {
@@ -62,13 +83,12 @@ export interface PresetBundle {
 /**
  * ẢNH TRONG PRESET — cố ý chỉ lưu TÊN, không lưu ảnh.
  *
- * Ảnh trong lab là `blob:` sống trong RAM một tab (xem `schema.ts`). Nhét chúng
- * vào localStorage thì hoặc là lưu một URL chết, hoặc là base64 hoá vài MB vào
- * một kho có hạn mức ~5MB rồi vỡ im lặng ở tấm thứ ba. Preset mascot vì thế chỉ
- * mang TÊN ảnh như một lời nhắc; ảnh thật vẫn chọn ở pill trong block.
+ * Ảnh trong lab là `blob:` sống trong RAM một tab (xem `schema.ts`). Ngay cả khi
+ * kho đã lên server, nhét ảnh vào preset là nhét nhị phân vào một file JSON
+ * metadata — trong khi workspace ĐÃ CÓ chỗ đúng cho ảnh (`/api/library/items`,
+ * có sniff định dạng, có giới hạn dung lượng, có route đọc file). Preset mascot
+ * vì thế chỉ mang TÊN ảnh như một lời nhắc; ảnh thật vẫn chọn ở pill trong block.
  */
-
-const STORAGE_KEY = "kg-prompt-lab-presets-v1";
 
 /** Bảy mức trang trí — thang của pill `decor`, dùng lại ở seed element. */
 export const DECOR_LEVELS: readonly { value: string; vi: string; en: string }[] = [
@@ -81,13 +101,13 @@ export const DECOR_LEVELS: readonly { value: string; vi: string; en: string }[] 
   { value: "7", vi: "7 · Lộng lẫy", en: "a heavily ornamented frame with gems, filigree and gold trim" },
 ];
 
-/** Hạt giống — đọc từ danh mục THẬT của workflow-v4, không chép tay. */
+/** Hạt giống — đọc từ danh mục THẬT của kit-core, không chép tay. */
 export function seedPresets(): PresetBundle {
   return {
     styles: GENRE_PRESETS.map((preset) => ({ id: preset.id, vi: preset.vi, en: preset.stylePrompt })),
 
     /* Danh mục element: repo CHƯA có danh mục tương đương để mượn (contract của
-       workflow-v4 mô tả từng ô bằng chữ tự do, không bằng loại). Nên đây là danh
+       kit-core mô tả từng ô bằng chữ tự do, không bằng loại). Nên đây là danh
        mục MỚI của lab — và chính vì nó là mới nên nó phải sửa được, không được
        đóng cứng. Đúng thứ trang preset sinh ra để trả lời. */
     elements: [
@@ -121,51 +141,107 @@ export function seedPresets(): PresetBundle {
   };
 }
 
-/* ══ KHO TRONG BỘ NHỚ + ĐỒNG BỘ localStorage ════════════════════════════════
-   Tự viết một store 20 dòng thay vì kéo zustand vào: cả lab chỉ có ĐÚNG một
-   mẩu state chia sẻ giữa hai màn (composer ↔ trang preset). `useSyncExternalStore`
-   là API React chuẩn cho đúng việc này và không thêm phụ thuộc nào. */
+/* ══ DỊCH GIỮA HAI HÌNH DẠNG ════════════════════════════════════════════════
+   Server: `{id, kind, name, data}` — `data` là JSON tự do, agent không hiểu.
+   Lab: ba mảng có kiểu chặt. Chỗ dịch nằm gọn ở đây, và CHỈ ở đây. */
+
+type PresetKind = "style" | "element" | "mascot";
+
+interface PresetPayload {
+  kind: PresetKind;
+  name: string;
+  data: Record<string, unknown>;
+}
+
+/** Bất kỳ dòng nào trong ba mảng: ba kiểu chỉ khác nhau ở phần ĐUÔI, nên dạng
+    chung là "phần chung bắt buộc + phần đuôi tuỳ chọn". Cả ba interface public
+    ở trên đều gán được vào đây, và `payloadOf` chỉ đọc đuôi đúng theo `kind`. */
+type AnyPreset = StylePreset & Partial<Omit<ElementPreset, keyof StylePreset>> & Partial<Omit<MascotPreset, keyof StylePreset>>;
+
+/** `name` của server là nhãn tiếng Việt; phần còn lại nằm trong `data`. */
+function payloadOf(kind: PresetKind, preset: AnyPreset): PresetPayload {
+  /* `key` là id bundle — lý do #2 ở đầu file. Nó phải nằm TRONG `data` vì `id`
+     của bản ghi thuộc về server (agent tự sinh, client không được chọn). */
+  const base: Record<string, unknown> = { key: preset.id, en: preset.en };
+  if (kind === "element") return { kind, name: preset.vi, data: { ...base, decor: preset.decor ?? 4, materialId: preset.materialId ?? "" } };
+  if (kind === "mascot") return { kind, name: preset.vi, data: { ...base, refName: preset.refName ?? "" } };
+  return { kind, name: preset.vi, data: base };
+}
+
+/** Đọc PHÒNG THỦ: `data` do đời code trước ghi và do người dùng sửa được. */
+function str(data: Record<string, unknown>, field: string, fallback = ""): string {
+  const value = data[field];
+  return typeof value === "string" ? value : fallback;
+}
+
+function toBundle(rows: readonly LibraryPreset[]): PresetBundle {
+  const bundle: PresetBundle = { styles: [], elements: [], mascots: [] };
+  for (const row of rows) {
+    const data = row.data ?? {};
+    /* Thiếu `key` ⇒ dùng id server. Xảy ra khi bản ghi được tạo bởi một client
+       khác (hoặc bằng tay) — thà một id xấu còn hơn nuốt mất bản ghi. */
+    const id = str(data, "key") || row.id;
+    const en = str(data, "en");
+    if (row.kind === "style") bundle.styles.push({ id, vi: row.name, en });
+    else if (row.kind === "element") {
+      const decor = Number(data.decor);
+      bundle.elements.push({
+        id, vi: row.name, en,
+        decor: Number.isFinite(decor) ? decor : 4,
+        materialId: str(data, "materialId"),
+      });
+    } else if (row.kind === "mascot") bundle.mascots.push({ id, vi: row.name, en, refName: str(data, "refName") });
+    /* `material` / `outfit` là hai `kind` agent chấp nhận nhưng lab CHƯA dùng.
+       Bỏ qua chứ không ném: một bản web cũ không được làm hỏng dữ liệu bản mới. */
+  }
+  return bundle;
+}
+
+/* ══ BẢN SAO TRONG RAM + HÀNG ĐỢI GHI ═══════════════════════════════════════
+   Vẫn tự viết một store 30 dòng thay vì kéo zustand vào: cả lab chỉ có ĐÚNG một
+   mẩu state chia sẻ. `useSyncExternalStore` là API React chuẩn cho việc này. */
+
+/** Hoãn bao lâu trước khi đẩy lên server. Đủ dài để gộp một cụm phím, đủ ngắn để
+    người dùng rời trang ngay sau đó vẫn kịp (màn này không có nút Lưu). */
+const FLUSH_DELAY_MS = 400;
 
 let cache: PresetBundle | null = null;
 const listeners = new Set<() => void>();
 
-/** localStorage KHÔNG tồn tại khi render phía server / trong test node. */
-function readStorage(): PresetBundle | null {
-  try {
-    if (typeof localStorage === "undefined") return null;
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<PresetBundle>;
-    /* Đọc phòng thủ: dữ liệu này do NGƯỜI dùng sửa và do đời code trước ghi.
-       Thiếu một mảng thì lấy hạt giống cho mảng đó, đừng làm trắng cả màn. */
-    const seed = seedPresets();
-    return {
-      styles: Array.isArray(parsed.styles) ? parsed.styles : seed.styles,
-      elements: Array.isArray(parsed.elements) ? parsed.elements : seed.elements,
-      mascots: Array.isArray(parsed.mascots) ? parsed.mascots : seed.mascots,
-    };
-  } catch {
-    /* JSON hỏng (sửa tay, ghi dở) ⇒ quay về hạt giống thay vì ném lỗi làm
-       trắng cả hai màn. Mất preset tự thêm là tệ, nhưng không tệ bằng một lab
-       không mở được và không nói vì sao. */
-    return null;
-  }
-}
+/** Bản ghi server đã biết, để `flush` biết cái gì là thêm / sửa / xoá. */
+let serverRows: LibraryPreset[] = [];
+/** `"kind:key"` → id server. */
+let serverIdOf = new Map<string, string>();
+/** Ảnh chụp JSON của lần hydrate gần nhất — để không hydrate lại y hệt. */
+let hydratedFrom = "";
+/** Có sửa chưa đẩy lên server ⇒ CẤM hydrate đè lên (sẽ nuốt chữ đang gõ). */
+let dirty = false;
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+let flushing = false;
+/** Lỗi ghi gần nhất, hiện ra màn preset — im lặng nuốt lỗi ghi là không chấp nhận được. */
+let syncError: string | null = null;
+
+/** Cửa để `usePresets` báo cho query biết dữ liệu đã cũ. Đặt bởi hook, không import
+    thẳng `queryClient` singleton — test dựng QueryClient riêng của chúng. */
+let invalidateLibrary: (() => void) | null = null;
+
+function emit() { for (const listener of listeners) listener(); }
+
+function rowKey(kind: string, key: string) { return `${kind}:${key}`; }
 
 export function getPresets(): PresetBundle {
-  if (!cache) cache = readStorage() ?? seedPresets();
+  if (!cache) cache = seedPresets();
   return cache;
 }
 
+/** Lỗi đồng bộ gần nhất (`null` = đang sạch). Màn preset đọc để nói ra. */
+export function getPresetSyncError(): string | null { return syncError; }
+
 export function setPresets(next: PresetBundle): void {
   cache = next;
-  try {
-    if (typeof localStorage !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    /* Hết hạn mức / chế độ riêng tư. Giữ nguyên bản trong RAM để phiên đang làm
-       không mất, chỉ là lần sau mở lại sẽ không còn. */
-  }
-  for (const listener of listeners) listener();
+  dirty = true;
+  emit();
+  scheduleFlush();
 }
 
 /** Xoá kho, quay về hạt giống — nút "Khôi phục mặc định" của trang preset. */
@@ -175,12 +251,171 @@ export function resetPresets(): PresetBundle {
   return seed;
 }
 
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+function scheduleFlush() {
+  if (flushTimer) clearTimeout(flushTimer);
+  flushTimer = setTimeout(() => { flushTimer = null; void flush(); }, FLUSH_DELAY_MS);
 }
 
-/** Hook đọc kho. Hai màn cùng dùng ⇒ sửa ở trang preset là composer đổi theo. */
+/**
+ * Đẩy chênh lệch lên server: thêm cái mới, sửa cái đổi, xoá cái biến mất.
+ *
+ * TUẦN TỰ chứ không `Promise.all`: agent ghi cả kho vào MỘT file JSON
+ * (`library.json`) theo kiểu đọc-sửa-ghi. Bắn song song thì hai request cùng đọc
+ * một bản rồi ghi đè nhau — mất bản ghi mà không ai báo lỗi. Danh mục dài vài
+ * chục dòng nên tuần tự vẫn xong trong một nhịp.
+ */
+async function flush(): Promise<void> {
+  if (flushing) { scheduleFlush(); return; }
+  flushing = true;
+  const desired = getPresets();
+  const before = serverRows;
+  const seen = new Set<string>();
+  try {
+    const jobs: [PresetKind, AnyPreset[]][] = [
+      ["style", desired.styles],
+      ["element", desired.elements],
+      ["mascot", desired.mascots],
+    ];
+    let touched = false;
+    for (const [kind, list] of jobs) {
+      for (const preset of list) {
+        const key = rowKey(kind, preset.id);
+        seen.add(key);
+        const payload = payloadOf(kind, preset);
+        const id = serverIdOf.get(key);
+        if (!id) {
+          const created = await api.library.addPreset(payload);
+          serverIdOf.set(key, created.id);
+          touched = true;
+          continue;
+        }
+        const existing = before.find((row) => row.id === id);
+        /* So bằng JSON: `data` là object tự do, không có trường nào để so lẻ.
+           Bỏ qua bản ghi không đổi là thứ giữ cho một phím gõ ở ô "phong cách"
+           không kéo theo 10 PATCH của mọi dòng khác. */
+        if (existing && existing.name === payload.name && stable(existing.data ?? {}) === stable(payload.data)) continue;
+        await api.library.patchPreset(id, payload);
+        touched = true;
+      }
+    }
+    for (const [key, id] of [...serverIdOf]) {
+      if (seen.has(key)) continue;
+      await api.library.removePreset(id);
+      serverIdOf.delete(key);
+      touched = true;
+    }
+    dirty = false;
+    syncError = null;
+    if (touched) invalidateLibrary?.();
+  } catch (error) {
+    /* GIỮ `dirty`: bản trong RAM vẫn là cái người dùng đang thấy và đang sửa, và
+       lần sửa tiếp theo sẽ thử ghi lại toàn bộ chênh lệch. Nhưng KHÔNG im lặng —
+       màn preset hiện dòng cảnh báo, vì "tưởng đã lưu mà chưa" là hỏng tệ nhất. */
+    syncError = error instanceof Error ? error.message : "Không ghi được danh mục lên workspace";
+    emit();
+  } finally {
+    flushing = false;
+  }
+}
+
+/** JSON có khoá sắp xếp — để so sánh không phụ thuộc thứ tự khoá. */
+function stable(value: Record<string, unknown>): string {
+  return JSON.stringify(Object.keys(value).sort().map((key) => [key, value[key]]));
+}
+
+function hydrate(rows: readonly LibraryPreset[]): void {
+  const snapshot = JSON.stringify(rows);
+  if (snapshot === hydratedFrom) return;
+  hydratedFrom = snapshot;
+  serverRows = [...rows];
+  serverIdOf = new Map(rows.map((row) => [rowKey(row.kind, str(row.data ?? {}, "key") || row.id), row.id]));
+  /* Đang có sửa chưa đẩy đi ⇒ chỉ nhận bảng id, KHÔNG nhận nội dung. Nhận nội
+     dung lúc này là xoá đúng ký tự người dùng vừa gõ. */
+  if (dirty) return;
+  /* KHO RỖNG KHÔNG PHẢI LÀ "DANH MỤC RỖNG". Rỗng nghĩa là chưa gieo hạt — và
+     giữa lúc thấy rỗng với lúc các POST gieo hạt về là một khoảng có thật (còn
+     nếu agent tắt thì nó là mãi mãi). Vẽ ba mảng trắng trong khoảng đó là đúng
+     cái mà cả phần hạt giống sinh ra để tránh: người mở lần đầu nhìn vào trang
+     trắng. Nên rỗng ⇒ hiện hạt giống, và `seedOnce()` lo phần ghi xuống. */
+  cache = rows.length === 0 ? seedPresets() : toBundle(rows);
+  emit();
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+
+/* ══ GIEO HẠT LẦN ĐẦU ═══════════════════════════════════════════════════════
+   Cờ chống gieo lặp phải là MỘT cờ dùng chung cho cả module, không phải state
+   của component: `usePresets` được gọi ở 5 chỗ cùng lúc, và giữa lúc POST bay đi
+   với lúc query trả về danh sách mới thì `presets` vẫn còn RỖNG — mỗi component
+   sẽ tự thấy "kho rỗng, gieo đi" và ta có 5 bộ hạt giống chồng lên nhau. */
+type SeedState = "idle" | "running" | "done";
+let seedState: SeedState = "idle";
+
+async function seedOnce(): Promise<void> {
+  if (seedState !== "idle") return;
+  seedState = "running";
+  try {
+    const seed = seedPresets();
+    for (const preset of seed.styles) await api.library.addPreset(payloadOf("style", preset));
+    for (const preset of seed.elements) await api.library.addPreset(payloadOf("element", preset));
+    for (const preset of seed.mascots) await api.library.addPreset(payloadOf("mascot", preset));
+    seedState = "done";
+    invalidateLibrary?.();
+  } catch (error) {
+    /* Gieo hụt (agent tắt giữa chừng) ⇒ về `idle` để lần mở sau thử lại. Bản
+       trong RAM vẫn là hạt giống nên màn hình vẫn dùng được ngay bây giờ. */
+    seedState = "idle";
+    syncError = error instanceof Error ? error.message : "Không gieo được danh mục mặc định";
+    emit();
+  }
+}
+
+/** Chỉ cho test dùng: trả module về trạng thái vừa nạp. */
+export function __resetPresetsStoreForTest(): void {
+  cache = null;
+  serverRows = [];
+  serverIdOf = new Map();
+  hydratedFrom = "";
+  dirty = false;
+  flushing = false;
+  syncError = null;
+  seedState = "idle";
+  if (flushTimer) clearTimeout(flushTimer);
+  flushTimer = null;
+  invalidateLibrary = null;
+}
+
+/**
+ * Hook đọc kho. Mọi màn cùng dùng ⇒ sửa ở trang preset là composer đổi theo.
+ *
+ * Đọc qua `useUserLibrary()` — CÙNG query với kho ảnh/thương hiệu, vì cả ba nằm
+ * trong cùng một `GET /api/library`. Không mở query riêng cho preset: hai cache
+ * cho cùng một response là hai thứ chắc chắn sẽ lệch nhau.
+ */
 export function usePresets(): PresetBundle {
+  const client = useQueryClient();
+  const library = useUserLibrary();
+  const rows = library.data?.presets;
+
+  React.useEffect(() => {
+    invalidateLibrary = () => void client.invalidateQueries({ queryKey: qk.library() });
+  }, [client]);
+
+  React.useEffect(() => {
+    if (!rows) return;
+    hydrate(rows);
+    /* Kho rỗng THẬT (đã tải xong, mảng rỗng) ⇒ gieo hạt. Phân biệt với "chưa
+       tải" bằng chính `rows === undefined` ở trên: chưa tải thì không làm gì. */
+    if (rows.length === 0 && !dirty) void seedOnce();
+  }, [rows]);
+
   return React.useSyncExternalStore(subscribe, getPresets, getPresets);
+}
+
+/** Lỗi ghi gần nhất, dạng hook — màn preset hiện nó ra. */
+export function usePresetSyncError(): string | null {
+  return React.useSyncExternalStore(subscribe, getPresetSyncError, getPresetSyncError);
 }

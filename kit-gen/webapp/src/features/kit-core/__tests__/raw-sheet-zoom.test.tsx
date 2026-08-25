@@ -62,7 +62,7 @@ vi.mock("@/lib/hooks", () => ({
 }));
 
 /** Hình dạng run lấy từ fixture chung — cổng check-no-gen.mjs cấm chuỗi kind gen
- *  viết thẳng trong vùng workflow-v4, kể cả ở test (xem chú thích trong fixture). */
+ *  viết thẳng trong vùng kit-core, kể cả ở test (xem chú thích trong fixture). */
 const RUN = DONE_GEN_RUN;
 
 const CONTRACT = {

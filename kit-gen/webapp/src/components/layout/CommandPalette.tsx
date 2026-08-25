@@ -62,9 +62,10 @@ export function CommandPalette(props: CommandPaletteProps) {
         /* ĐÃ GỠ: mục trỏ tới bước «UI Elements» của trình thuật sĩ.
            Bảng lệnh là danh sách ĐIỂM ĐẾN, và wizard 6 bước không còn là một điểm
            đến kể từ khi `/k/:projectId` mở thẳng màn soạn prompt. Giữ lại thì nó
-           là một cái tên mượn từ `workflow-v4/steps/Stepper` cho một hành trình
-           người dùng không còn đi — và cái import ấy là sợi dây neo cuối cùng của
-           bảng lệnh vào wizard. Mọi mục khác của bảng giữ nguyên. */
+           là một cái tên mượn từ `steps/Stepper` cho một hành trình người dùng
+           không còn đi — và cái import ấy là sợi dây neo cuối cùng của bảng lệnh
+           vào wizard. Wave 4·B đã xoá hẳn `steps/Stepper.tsx`, nên dây đó nay
+           không thể nối lại được kể cả khi ai đó muốn. Mọi mục khác giữ nguyên. */
         { id: "p.mascot", group: "Dự án", icon: Images, label: "Dự án: Mascot",
           run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { section: "mascot" } })) },
         { id: "p.images", group: "Dự án", icon: Images, label: "Dự án: Ảnh đã tạo", hint: ["g", "r"], hintSequence: true,

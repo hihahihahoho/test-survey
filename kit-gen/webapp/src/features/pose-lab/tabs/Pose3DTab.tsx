@@ -187,7 +187,7 @@ export function Pose3DTab({ onShot }: Pose3DTabProps) {
 
           <p className="text-caption text-fg-muted">{base.note}</p>
           <p className="text-caption text-fg-muted">
-            Dáng lấy từ 19 dáng thật của KitGen (<code className="font-mono">workflow-v4/lib/poses.ts</code>); {CAMERA_VIEWS.length} góc
+            Dáng lấy từ 19 dáng thật của KitGen (<code className="font-mono">kit-core/lib/poses.ts</code>); {CAMERA_VIEWS.length} góc
             máy khai trong <code className="font-mono">pose-state.ts</code>.
           </p>
 

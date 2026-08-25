@@ -4,7 +4,7 @@
  *
  * Nằm ở ĐÂY (features/runs) chứ không nằm cạnh test dùng nó, vì cổng
  * `scripts/check-no-gen.mjs` cấm chuỗi `kind:"gen"` xuất hiện trong ba vùng
- * workflow-v4/canvas/gen — kể cả trong test. Cổng đó canh code TẠO run tiêu tiền;
+ * kit-core/canvas/gen — kể cả trong test. Cổng đó canh code TẠO run tiêu tiền;
  * một fixture chỉ MÔ TẢ run đã chạy xong thì hợp lệ, nhưng phải sống ngoài vùng cấm
  * để cổng giữ nguyên độ chặt.
  */

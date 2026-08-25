@@ -26,7 +26,8 @@ import {
   refUploadResultSchema, restoreContractResultSchema, runListSchema, runSchema,
   saveContractResultSchema, startRunResultSchema, trashListSchema, uploadResultSchema, usageSchema,
   validationSchema, workspaceListSchema, workflowDraftSchema, userLibrarySchema, libraryItemResultSchema,
-  librarySettingsResultSchema, brandProfileResultSchema, poseTemplateResultSchema,
+  librarySettingsResultSchema, brandProfileResultSchema, poseTemplateResultSchema, libraryPresetResultSchema,
+  type LibraryPresetKind,
   type CleanTarget, type CreateProjectInput, type DuplicateInput,
   type PatchProjectInput, type RefKind, type StartRunInput,
   type LibrarySettings,
@@ -441,6 +442,16 @@ export const libraryApi = {
     return parse(poseTemplateResultSchema, await httpPatch(`/api/library/poses/${pid(id)}`, input), "khung pose vừa sửa").pose;
   },
   async removePose(id: string) { await httpDelete(`/api/library/poses/${pid(id)}`); return { ok: true }; },
+  /* Preset — không có `getPresets()` riêng: `GET /api/library` đã trả kèm mảng
+     `presets`, nên một query duy nhất (`qk.library()`) là nguồn sự thật cho cả
+     kho. Thêm một endpoint đọc thứ hai chỉ tạo ra hai cache lệch nhau. */
+  async addPreset(input: { kind: LibraryPresetKind; name: string; data?: Record<string, unknown> }) {
+    return parse(libraryPresetResultSchema, await httpPost("/api/library/presets", input), "preset vừa tạo").preset;
+  },
+  async patchPreset(id: string, input: { kind?: LibraryPresetKind; name?: string; data?: Record<string, unknown> }) {
+    return parse(libraryPresetResultSchema, await httpPatch(`/api/library/presets/${pid(id)}`, input), "preset vừa sửa").preset;
+  },
+  async removePreset(id: string) { await httpDelete(`/api/library/presets/${pid(id)}`); return { ok: true }; },
   async add(input: { file: File; kind: "ui" | "mascot" | "reference"; group: string; name: string; description?: string; tags?: string[]; poses?: string[]; cell?: string; skel?: Record<string, unknown> }) {
     if (input.file.size > LIMITS.refBytes) {
       throw new AgentError({ code: "TOO_LARGE", status: 413, transport: "client", message: "Ảnh vượt quá 20 MB" });

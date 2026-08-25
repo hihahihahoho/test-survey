@@ -3,7 +3,7 @@
  *
  * `tsconfig.json` không bật `allowJs` ⇒ TypeScript sẽ không đọc file .js; nó tìm
  * `figma-h2d.global.d.ts` cạnh bên. Đây chỉ là BỀ MẶT tối thiểu mà `features/
- * workflow-v4/lib/figma-node.ts` dùng — không mô tả lại toàn bộ IR của encoder, vì
+ * kit-core/lib/figma-node.ts` dùng — không mô tả lại toàn bộ IR của encoder, vì
  * mô tả nửa vời một IR 49 KB thì sai nhiều hơn đúng.
  */
 

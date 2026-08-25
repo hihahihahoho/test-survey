@@ -20,7 +20,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { kitFileSchema, type KitFile } from "@/lib/types";
 import { BLEND_SCREEN_CLASS, GLOW_GROUND_CLASS, GLOW_FIGMA_HINT, isGlowAsset } from "../lib/blend";
 import { KitImage } from "../components/KitImage";
-import { CutAssetGrid } from "@/features/workflow-v4/components/CutAssetGrid";
+import { CutAssetGrid } from "@/features/kit-core/components/CutAssetGrid";
 
 /* Radix DropdownMenu gọi API con trỏ mà jsdom chưa có (cùng vá như
    `features/docs/__tests__/subfile-a11y.dom.test.tsx`). */
@@ -38,13 +38,13 @@ vi.mock("@/features/kit/lib/image-source", () => {
 vi.mock("@/features/projects/lib/feedback", () => ({
   toastSuccess: vi.fn(), toastInfo: vi.fn(), toastError: vi.fn(),
 }));
-vi.mock("@/features/workflow-v4/lib/figma-node", () => ({
+vi.mock("@/features/kit-core/lib/figma-node", () => ({
   copyAssetAsFigmaNode: vi.fn(async () => ({ frame: { w: 100, h: 80 } })),
 }));
 vi.mock("@/lib/hooks", () => ({ useKit: vi.fn() }));
 
 const { toastInfo, toastSuccess } = await import("@/features/projects/lib/feedback");
-const { copyAssetAsFigmaNode } = await import("@/features/workflow-v4/lib/figma-node");
+const { copyAssetAsFigmaNode } = await import("@/features/kit-core/lib/figma-node");
 const { useKit } = await import("@/lib/hooks");
 
 const PID = "kit-glow";

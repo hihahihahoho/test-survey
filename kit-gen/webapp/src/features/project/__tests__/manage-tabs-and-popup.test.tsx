@@ -22,10 +22,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { WorkflowStoreProvider, createWorkflowStore, resetWorkflowStores } from "@/features/workflow-v4/lib/model";
-import { KitsetStep } from "@/features/workflow-v4/steps/KitsetStep";
-import { MascotStep } from "@/features/workflow-v4/steps/MascotStep";
-import { RESULT_GROUP_ORDER, groupAnchorId } from "@/features/workflow-v4/lib/generated-results";
+import { WorkflowStoreProvider, createWorkflowStore, resetWorkflowStores } from "@/features/kit-core/lib/model";
+import { KitsetStep } from "@/features/kit-core/steps/KitsetStep";
+import { MascotStep } from "@/features/kit-core/steps/MascotStep";
+import { RESULT_GROUP_ORDER, groupAnchorId } from "@/features/kit-core/lib/generated-results";
 
 const PID = "kit-quan-ly";
 

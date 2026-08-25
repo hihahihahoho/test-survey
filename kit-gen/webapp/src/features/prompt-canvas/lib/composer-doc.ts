@@ -19,7 +19,7 @@ import { getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets
  * ║ (`GET/PUT /api/projects/:id/workflow-draft` — JSON tự do, trần 2MB).      ║
  * ║                                                                          ║
  * ║ `docVersion` KHÔNG phải trang trí: chỗ chứa ấy ĐANG có dữ liệu của một    ║
- * ║ định dạng khác (bản nháp wizard workflow-v4). Không có số phiên bản thì   ║
+ * ║ định dạng khác (bản nháp của wizard đời cũ). Không có số phiên bản thì ║
  * ║ mở một dự án cũ là đọc bản nháp wizard như thể nó là composer, và mọi     ║
  * ║ trường đọc ra `undefined` — một màn trống mà không ai biết vì sao trống.  ║
  * ╚══════════════════════════════════════════════════════════════════════════╝

@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { KitImage } from "@/features/kit/components/KitImage";
 import { loadFull } from "@/features/kit/lib/image-source";
 import { saveProjectFile } from "@/features/kit/lib/download";
-import { copyAssetAsFigmaNode } from "@/features/workflow-v4/lib/figma-node";
+import { copyAssetAsFigmaNode } from "@/features/kit-core/lib/figma-node";
 import { toastError, toastSuccess } from "@/features/projects/lib/feedback";
 import type { KitFile } from "@/lib/types";
 import { cellName } from "../../lib/result/sheet-files";
@@ -94,7 +94,7 @@ function CellCard({ projectId, cell, poseFiles }: {
 
   /**
    * Copy MỘT Ô → node Figma thật. Dùng NGUYÊN `copyAssetAsFigmaNode` của
-   * `workflow-v4/lib/figma-node.ts` — hàm đã được 4 bộ test khoá và đã dán thử thật
+   * `kit-core/lib/figma-node.ts` — hàm đã được 4 bộ test khoá và đã dán thử thật
    * ra Figma desktop. Không chép lại số học safe zone sang đây: hai bản số sẽ trôi
    * khỏi nhau, và cái trôi sai là cái không ai đo lại.
    */

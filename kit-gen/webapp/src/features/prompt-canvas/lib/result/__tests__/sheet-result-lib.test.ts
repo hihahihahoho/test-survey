@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { kitFileSchema, type KitFile } from "@/lib/types";
-import { assertDocShape, renderSpec, FigmaNodeUnsupported } from "@/features/workflow-v4/lib/figma-node";
+import { assertDocShape, renderSpec, FigmaNodeUnsupported } from "@/features/kit-core/lib/figma-node";
 import type { H2DDocument } from "@/vendor/figma-h2d";
 import { figmaNodeForSheet } from "../sheet-figma";
 import { cellName, cellsOfSheet, rawSheetImagePath, skeletonImagePath } from "../sheet-files";

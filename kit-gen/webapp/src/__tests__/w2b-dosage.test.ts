@@ -144,51 +144,27 @@ describe("2B-2 · thang tint hai bậc, giảm liều mint", () => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   2B-3 · STEPPER NHẸ
+   2B-3 · STEPPER NHẸ — KHỐI NÀY ĐÃ RÚT (Wave 4·B)
+
+   Nó khoá liều lượng thị giác của hàng-6-bước: `.workflow-stepper` không được
+   mang vỏ nặng, pill `active` chỉ khác ở màu chữ, không `w-fit`. Cả CSS lẫn
+   `steps/Stepper.tsx` đã bị xoá cùng wizard, nên không còn đối tượng nào để đo.
+
+   KHÔNG chuyển các khẳng định này sang màn soạn prompt: chúng nói về một hàng
+   bước tuần tự, mà màn mới cố ý KHÔNG có bước nào. Viết lại chúng cho một thứ
+   khác hình dạng là giữ cái tên test mà bỏ mất điều nó bảo vệ.
    ══════════════════════════════════════════════════════════════════════════════ */
-describe("2B-3 · stepper hạ cấp về điều hướng phụ", () => {
-  const stepper = /\.workflow-stepper\s*\{([^}]*)\}/.exec(GLOBALS)![1]!;
-
-  it.each(["rounded-full", "border", "bg-surface", "backdrop-blur"])(
-    "vỏ nặng `%s` đã gỡ khỏi container",
-    (token) => expect(stepper).not.toContain(token),
-  );
-
-  it("pill `active` thôi mang nền riêng — chỉ còn màu chữ", () => {
-    const active = /\.workflow-step\.active\s*\{([^}]*)\}/.exec(GLOBALS)![1]!;
-    expect(active).not.toContain("bg-raised");
-    expect(active).toContain("text-fg-strong");
-  });
-
-  /* Bẫy: `w-fit` (toa gốc đề nghị) + `mx-auto` của `.kg-page` sẽ CĂN GIỮA hàng
-     bước và phá luật "một mép trái" của W2A-2 — tiêu chí nghiệm thu #5 của plan. */
-  it("KHÔNG dùng `w-fit`: phần tử này đeo `.kg-page` (có mx-auto) ⇒ sẽ bị căn giữa", () => {
-    expect(stepper).not.toContain("w-fit");
-    expect(read("src/features/workflow-v4/steps/Stepper.tsx")).toContain("kg-page workflow-stepper");
-  });
-});
 
 /* ══════════════════════════════════════════════════════════════════════════════
    2B-4 · BA TẦNG TIÊU ĐỀ CÒN MỘT
+
+   Hai ca đầu ("hero đầy đủ CHỈ ở bước ①", "nhãn trạng thái lưu ở MỌI bước") đọc
+   thẳng `WorkflowScreen.tsx` — file đã xoá. Ca thứ ba đo `steps/BriefStep.tsx`,
+   file VẪN SỐNG (`ProjectSettingsDialog` render nó), nên nó ở lại nguyên văn.
    ══════════════════════════════════════════════════════════════════════════════ */
 describe("2B-4 · cắt tầng tiêu đề", () => {
-  it("hero đầy đủ CHỈ ở bước ①", () => {
-    expect(read("src/features/workflow-v4/WorkflowScreen.tsx")).toMatch(/s\.step === 1 && \(/);
-  });
-
-  it("nhãn trạng thái lưu vẫn ở MỌI bước (nghiệm thu #9 của W3 không được mất)", () => {
-    const src = read("src/features/workflow-v4/WorkflowScreen.tsx");
-    expect(src).toContain("<SyncBadge");
-    // `SyncBadge` phải nằm NGOÀI nhánh chỉ-bước-1, nếu không 5 bước sau mất nhãn lưu.
-    const from = src.indexOf("s.step === 1 && (");
-    const onlyStep1 = src.slice(from, src.indexOf(")}", from));
-    expect(from).toBeGreaterThan(-1);
-    expect(onlyStep1).not.toContain("SyncBadge");
-    expect(onlyStep1).toContain("<h1>");
-  });
-
   it("eyebrow 'Bước trong một mạch' đã bỏ khỏi mọi bước", () => {
-    expect(stripComments(read("src/features/workflow-v4/steps/BriefStep.tsx"))).not.toContain("Bước trong một mạch");
+    expect(stripComments(read("src/features/kit-core/steps/BriefStep.tsx"))).not.toContain("Bước trong một mạch");
   });
 });
 
@@ -247,8 +223,8 @@ describe("2B-6 · sạn nhỏ nhưng lộ ngay", () => {
        hiện ra sau khi thả phải nằm TRONG khung `.dropfield`, nên ca test chỉ đổi
        địa chỉ và tên mảnh xem trước, không nới điều kiện. */
     const cases: ReadonlyArray<[string, string]> = [
-      ["src/features/workflow-v4/steps/StyleStep.tsx", "<RefChips"],
-      ["src/features/workflow-v4/components/MascotDialog.tsx", "<MascotThumb"],
+      ["src/features/kit-core/steps/StyleStep.tsx", "<RefChips"],
+      ["src/features/kit-core/components/MascotDialog.tsx", "<MascotThumb"],
     ];
     for (const [f, preview] of cases) {
       const src = read(f);
@@ -316,18 +292,22 @@ describe("2B-7 · chữ của người dùng, không phải của lập trình v
      nối + khoảng trắng); mọi câu tiếng Việt đều có dấu hoặc chữ hoa nên vẫn lọt lưới. */
   const looksLikeClassList = (s: string) => /^[a-z][a-z0-9-]*( [a-z][a-z0-9-]*)*$/.test(s);
 
+  /* `ReviewStep` đã rời danh sách vì file bị xoá cùng wizard (Wave 4·B). Bốn màn
+     còn lại vẫn LIVE — chúng là ruột của `ProjectScreen` và `ProjectSettingsDialog`
+     — nên luật "không nói 'element' với người dùng" vẫn có đủ chỗ để canh. */
   it("màn workflow không còn nói 'element' với người dùng", () => {
-    for (const f of ["KitsetStep", "ReviewStep", "BriefStep", "StyleStep", "MascotStep"]) {
-      const code = stripComments(read(`src/features/workflow-v4/steps/${f}.tsx`));
+    for (const f of ["KitsetStep", "BriefStep", "StyleStep", "MascotStep"]) {
+      const code = stripComments(read(`src/features/kit-core/steps/${f}.tsx`));
       const quoted = [...code.matchAll(/"([^"\n]*)"/g)].map((m) => m[1]!).filter((s) => !looksLikeClassList(s));
       const jsxText = [...code.matchAll(/>([^<>{}\n]+)</g)].map((m) => m[1]!);
       expect([...quoted, ...jsxText].filter((s) => /\belement\b/i.test(s))).toEqual([]);
     }
   });
 
-  it("nhãn ô tìm nói 'thành phần', thẻ recap dùng đơn vị ngắn", () => {
-    expect(read("src/features/workflow-v4/steps/KitsetStep.tsx")).toContain('placeholder="Tìm thành phần…"');
-    expect(read("src/features/workflow-v4/steps/ReviewStep.tsx")).toContain("${drawable.length} thành phần");
+  /* Nửa sau của ca này đo `steps/ReviewStep.tsx` (thẻ recap "N thành phần") —
+     màn Kiểm tra của wizard, đã xoá. Nửa còn lại vẫn đo được và vẫn đáng đo. */
+  it("nhãn ô tìm nói 'thành phần'", () => {
+    expect(read("src/features/kit-core/steps/KitsetStep.tsx")).toContain('placeholder="Tìm thành phần…"');
   });
 
   it("màn thành phẩm không còn panel kỹ thuật cắt/chroma", () => {

@@ -131,7 +131,7 @@ describe("V-9 · sàn chữ 12px (audit I3) không được thủng", () => {
 });
 
 describe("V-10 · preview ảnh không lồng ổ cuộn", () => {
-  const source = () => read("src/features/workflow-v4/components/CutAssetGrid.tsx");
+  const source = () => read("src/features/kit-core/components/CutAssetGrid.tsx");
   const preview = () => source().slice(source().indexOf("function AssetZoomDialog"));
 
   it("chỉ DialogBody giữ overflow-y-auto; khung ảnh không tạo overflow riêng", () => {

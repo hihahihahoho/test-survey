@@ -17,8 +17,8 @@ import {
   poseSpecFor,
   resolveElementSpec,
   type SheetLimits,
-} from "@/features/workflow-v4/lib/kitset-to-contract";
-import type { StyleAxes } from "@/features/workflow-v4/lib/model";
+} from "@/features/kit-core/lib/kitset-to-contract";
+import type { StyleAxes } from "@/features/kit-core/lib/model";
 import { STYLE_AXIS_IDS } from "@/features/kit-form/lib/form-model";
 import { describeBrandColors } from "@/features/prompt-lab/lib/brand-colors";
 import { INHERIT, phraseOf, type PillKind } from "@/features/prompt-lab/lib/pill-registry";

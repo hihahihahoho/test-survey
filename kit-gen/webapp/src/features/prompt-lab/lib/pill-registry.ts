@@ -1,5 +1,5 @@
-import { MATERIAL_PRESETS } from "@/features/workflow-v4/lib/materials";
-import { EXPRESSIONS, OUTFIT_THEMES, POSES } from "@/features/workflow-v4/lib/poses";
+import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
+import { EXPRESSIONS, OUTFIT_THEMES, POSES } from "@/features/kit-core/lib/poses";
 import { DECOR_LEVELS, getPresets, type PresetBundle } from "./presets-store";
 
 /**
@@ -18,7 +18,7 @@ import { DECOR_LEVELS, getPresets, type PresetBundle } from "./presets-store";
  * Danh mục của repo có sẵn hai quy ước và lab KHÔNG bẻ lại chúng:
  *  · id ổn định (`material`, `pose`, `style`) — chữ EN tra ra từ id;
  *  · chính CỤM TIẾNG ANH (`expression`, `outfit`, theo `PhraseOption` của
- *    poses.ts) — vì hai ô đó bên workflow-v4 có đường TỰ GÕ, mà chuỗi tự gõ
+ *    poses.ts) — vì hai ô đó bên kit-core có đường TỰ GÕ, mà chuỗi tự gõ
  *    thì không có id nào để đặt.
  * `phraseOf()` che khác biệt đó đi, nên chỗ gọi không cần biết.
  */

@@ -24,7 +24,7 @@ import type { KitFile } from "@/lib/types";
 import {
   FigmaNodeUnsupported, assetName, buildFigmaNodeForAsset, geometryOf,
   type FigmaNodeSpec,
-} from "@/features/workflow-v4/lib/figma-node";
+} from "@/features/kit-core/lib/figma-node";
 import type { ScreenNode, ScreenSpec, ScreenTextSpec } from "./screen-spec";
 
 /** Một ô đã chốt xong mọi con số, đơn vị px trong khung màn. */

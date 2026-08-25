@@ -1,6 +1,6 @@
 import * as React from "react";
 import { api } from "@/lib/api";
-import { promptPreviewProblem } from "@/features/workflow-v4/lib/prompt-studio";
+import { promptPreviewProblem } from "@/features/kit-core/lib/prompt-studio";
 import type { Contract } from "@/lib/types/contract";
 import type { PromptPreviewJob } from "@/lib/types/api";
 

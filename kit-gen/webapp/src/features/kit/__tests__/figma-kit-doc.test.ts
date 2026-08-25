@@ -8,7 +8,7 @@
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
  * Fixture là `kits/manifest.json` THẬT của `blindtest-a-trung-thu-candy` — dùng
- * chung với `workflow-v4/lib/__tests__/figma-node.test.ts`, nơi 6 ô đó đã được đo
+ * chung với `kit-core/lib/__tests__/figma-node.test.ts`, nơi 6 ô đó đã được đo
  * lại trên đĩa bằng header PNG (`tight/x.png ≡ content`, `x.png ≡ canvas`, 6/6 khớp).
  * Số bịa sẽ đi qua cả công thức sai; số thật thì không.
  */
@@ -20,7 +20,7 @@ import {
 } from "../lib/figma-kit-doc";
 import { packBoard } from "../lib/figma-board";
 import { exportSize } from "../lib/export-scale";
-import manifest from "@/features/workflow-v4/lib/__tests__/fixtures/kit-blindtest-a.manifest.json";
+import manifest from "@/features/kit-core/lib/__tests__/fixtures/kit-blindtest-a.manifest.json";
 
 type Asset = {
   file: string; sheet: string;

@@ -19,7 +19,7 @@ import type {
 /* Bản nháp workflow nằm ở `localStorage`, ngoài tầm với của TanStack Query — nên vòng đời
    của nó phải bám vào đúng hai mutation này (UPGRADE-PLAN §W1-1). Module được nhập là
    file THUẦN, không kéo theo zustand/React vào chunk dùng chung. */
-import { dropWorkflowDraft, restoreWorkflowDraft } from "@/features/workflow-v4/lib/draft-storage";
+import { dropWorkflowDraft, restoreWorkflowDraft } from "@/features/kit-core/lib/draft-storage";
 
 /* ═════════ Đọc ═════════ */
 

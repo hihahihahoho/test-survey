@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { renderToString } from "react-dom/server";
 
 import { routeTree } from "@/routeTree";
-import { POSES } from "@/features/workflow-v4/lib/poses";
+import { POSES } from "@/features/kit-core/lib/poses";
 import { loadBundledV2 } from "@/features/design/library/lib/source";
 
 import { PoseSketchLabScreen } from "../PoseSketchLabScreen";
@@ -96,7 +96,7 @@ describe("cây khớp — thứ mà mọi bảng góc và mọi slider đứng l
 });
 
 describe("bảng dáng — id phải là id THẬT của KitGen, không phải tên lab tự đặt", () => {
-  it("cả 8 preset đều có trong danh mục 19 dáng của workflow-v4", () => {
+  it("cả 8 preset đều có trong danh mục 19 dáng của kit-core (`lib/poses.ts`)", () => {
     const known = new Set<string>(POSES.map((p) => p.id));
     expect(POSE_PRESETS).toHaveLength(8);
     for (const preset of POSE_PRESETS) {

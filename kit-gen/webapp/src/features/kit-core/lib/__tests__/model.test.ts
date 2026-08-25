@@ -242,7 +242,7 @@ describe("preset kitset — §W3-5 một danh sách duy nhất", () => {
   });
 
   it("`model.ts` KHÔNG còn mảng element literal nào — chỉ còn danh sách id", () => {
-    const src = readFileSync(resolve(process.cwd(), "src/features/workflow-v4/lib/model.ts"), "utf8");
+    const src = readFileSync(resolve(process.cwd(), "src/features/kit-core/lib/model.ts"), "utf8");
     // Dấu hiệu của dữ liệu element chép tay: một object có cả `file:` lẫn `role:`.
     // Ngoại lệ DUY NHẤT được phép là `PRESET_MISSING_DESIGN` (wheel-board — plan §C3).
     const literals = src.match(/\{\s*file:\s*"[^"]+",[^}]*role:/g) ?? [];

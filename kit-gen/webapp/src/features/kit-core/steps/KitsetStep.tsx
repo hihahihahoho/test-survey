@@ -25,7 +25,7 @@ import { MATERIAL_PRESETS, materialPreset } from "../lib/materials";
 import { useWorkflowRefs } from "../lib/refs-sync";
 import { isPropElement, mergeElements, userUiElements } from "../lib/user-library";
 import { Step } from "./BriefStep";
-import { UI_STEP_LABEL } from "./Stepper";
+import { UI_STEP_LABEL } from "../lib/labels";
 
 type GroupId = "background" | "popup" | "small-ui" | "props";
 
