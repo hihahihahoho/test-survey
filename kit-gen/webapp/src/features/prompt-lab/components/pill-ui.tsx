@@ -44,7 +44,12 @@ export const PillButton = React.forwardRef<
       "border-line bg-raised text-fg-strong",
       "transition-colors duration-fast ease-out hover:border-line-strong hover:bg-overlay",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-      active && "border-accent",
+      /* ĐANG MỞ MENU ⇒ vòng 1px của riêng nó. Viền accent một mình không đủ: pill
+         vốn đã có viền, nên "đổi màu viền" là một thay đổi người ta chỉ thấy khi
+         đã biết mà tìm. Thêm một vòng mỏng thì cái pill đang mở tự tách ra khỏi
+         hàng pill cạnh nó — cùng ngôn ngữ 1px với vòng focus của vùng soạn thảo
+         (xem `prompt-lab.css`), nên cả màn chỉ có MỘT kiểu "đang được chú ý". */
+      active && "border-accent ring-1 ring-accent",
       muted && "text-fg-muted",
       className,
     )}

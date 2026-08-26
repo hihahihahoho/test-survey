@@ -92,6 +92,31 @@ const BLOCK_LABEL: Record<Block["kind"], string> = {
  *  · block rỗng (chưa có ô, chưa có chữ) bị bỏ hẳn — một prompt có dòng
  *    "Bộ UI:" trống là một dòng nói dối.
  */
+/**
+ * Câu NGỮ CẢNH CHUNG do người dùng tự viết — rỗng khi khối đang ở chế độ khuôn.
+ *
+ * Xuất ra để CẢ HAI đường tiêu thụ cùng dùng: bản prompt copy được
+ * (`serializeComposer` ngay dưới) và `variant.style` của contract
+ * (`composer-to-contract.ts`). Hai bản dựng riêng là hai câu sẽ lệch nhau sau
+ * đúng một lượt sửa — mà lệch ở đây nghĩa là thứ người dùng ĐỌC không phải thứ
+ * máy vẽ NHẬN.
+ */
+export function contextFreeText(state: ComposerState, presets: PresetBundle = getPresets()): string {
+  if (state.contextMode !== "free" || !state.contextDoc) return "";
+  return tidy(
+    serializeDoc(state.contextDoc as PromptDocNode, {
+      /* Pill `style` để trống trong CÂU NGỮ CẢNH không có "cái chung" nào cao hơn
+         để kế thừa — nó CHÍNH LÀ cái chung. Nên `styleEN`/`themeEN` để rỗng: bỏ
+         trống ở đây nghĩa là thật sự không nói gì về phong cách. */
+      styleEN: "",
+      themeEN: "",
+      presets,
+      imageCounter: { count: 0 },
+      brandColors: state.brandColors,
+    }),
+  );
+}
+
 export function serializeComposer(state: ComposerState, presets: PresetBundle = getPresets()): string {
   const styleEN = phraseOf("style", state.styleId, presets);
   const themeEN = phraseOf("theme", state.themeValue, presets);
@@ -121,7 +146,12 @@ export function serializeComposer(state: ComposerState, presets: PresetBundle = 
   const header = [lead, brandEN].filter(Boolean).join(", ");
 
   const chunks: string[] = [];
-  if (themeEN || styleEN || brandEN) chunks.push(`${header}.`);
+  /* Người dùng đã tự viết câu ngữ cảnh ⇒ dùng ĐÚNG câu đó, không ghép lại từ ba
+     mảnh. Ghép lại là bỏ qua chữ họ viết; ghép THÊM vào là nói hai lần cùng một
+     điều bằng hai giọng khác nhau. */
+  const free = contextFreeText(state, presets);
+  if (free) chunks.push(free.endsWith(".") ? free : `${free}.`);
+  else if (themeEN || styleEN || brandEN) chunks.push(`${header}.`);
 
   for (const block of state.blocks) {
     const lines = blockLines(block, ctx);

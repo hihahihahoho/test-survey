@@ -17,8 +17,8 @@ import { ProjectSettingsDialog } from "@/features/project/components/ProjectSett
 import { CopyFigmaButton, DownloadKitButton } from "@/features/kit/components/KitExits";
 import { DemoScreenButton } from "@/features/demo";
 
-import { OptionPill, PillButton, PillCaret, PillMenu, PillMenuItem } from "@/features/prompt-lab/components/pill-ui";
-import { BrandColorPills } from "@/features/prompt-lab/components/BrandColorPills";
+import { PillButton, PillCaret, PillMenu, PillMenuItem } from "@/features/prompt-lab/components/pill-ui";
+import { ContextSection } from "./components/ContextSection";
 import { usePresets } from "@/features/prompt-lab/lib/presets-store";
 import {
   newDocBlock,
@@ -42,7 +42,7 @@ import {
 import { jobIdOf, sheetsHash } from "./lib/block-jobs";
 import { useBlockPrompts } from "./lib/block-prompt";
 import { useGenQueue } from "./lib/gen-queue";
-import { CARD, PAGE, SECTION_LABEL } from "./lib/ui";
+import { PAGE } from "./lib/ui";
 import { ensurePoseRef } from "./lib/pose-refs";
 
 /**
@@ -290,27 +290,7 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
           </p>
         )}
 
-        <section className={CARD} aria-labelledby="kg-ctx-label">
-          <h2 id="kg-ctx-label" className={`mb-3 ${SECTION_LABEL}`}>Ngữ cảnh chung</h2>
-          {/* `text-prose` (20px): CÙNG bậc mà editor của từng thẻ dùng. Trước lượt
-              này khối ngữ cảnh là 24px còn nhãn của nó là 13px — hai đầu của thang
-              chữ cạnh nhau trong một khối cao 120px. */}
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-3 text-prose text-fg-strong">
-            <span>Bộ kit theme</span>
-            <OptionPill kind="theme" value={store.composer.themeValue} onChange={(themeValue) => edit((prev) => ({ ...prev, themeValue }))} />
-            <span>phong cách</span>
-            <OptionPill kind="style" value={store.composer.styleId} onChange={(styleId) => edit((prev) => ({ ...prev, styleId }))} />
-            <span>, màu thương hiệu</span>
-            <BrandColorPills
-              colors={store.composer.brandColors}
-              onChange={(updater) => edit((prev) => ({ ...prev, brandColors: updater(prev.brandColors) }))}
-            />
-            <span>.</span>
-          </p>
-          <p className="mt-3 text-caption text-fg-muted">
-            Mọi thẻ bên dưới kế thừa ngữ cảnh này; theme và phong cách thì từng thẻ vẫn ghi đè riêng được.
-          </p>
-        </section>
+        <ContextSection composer={store.composer} edit={edit} />
 
         {store.composer.blocks.map((block) => (
           <CanvasBlock

@@ -45,6 +45,7 @@ const state = (partial: Partial<ComposerState> = {}): ComposerState => ({
   /* Mặc định KHÔNG màu, để những ca không nói về màu đọc ra đúng thứ chúng
      kiểm. Ca nào về màu thì tự truyền vào. */
   brandColors: [],
+  contextMode: "template",
   blocks: [],
   ...partial,
 });

@@ -24,7 +24,7 @@ import type { JSONContent } from "@tiptap/react";
 
 import { composerToContract } from "@/features/prompt-canvas/lib/composer-to-contract";
 import { seedPresets } from "../lib/presets-store";
-import { uiCellDoc } from "../lib/doc-templates";
+import { PILL_SLOTS, docHasBrokenPill, repairPills, retitleCellDoc, uiCellDoc } from "../lib/doc-templates";
 import { serializeComposer } from "../lib/serialize-composer";
 import {
   moveCell,
@@ -50,6 +50,7 @@ const state = (blocks: UiKitBlock[]): ComposerState => ({
   themeValue: "a Vietnamese Tết festive outfit",
   styleId: PRESETS.styles[0]!.id,
   brandColors: [],
+  contextMode: "template",
   blocks,
 });
 
@@ -303,5 +304,191 @@ describe("③ câu tự do của một dòng ĐI TỚI ĐƯỢC contract và pro
   it("chế độ template KHÔNG đọc `doc` — có câu tự do cũ nằm đó cũng không lọt vào", () => {
     const contract = composerToContract(state([uikit(cells(), "template")]), { presets: PRESETS });
     expect(contract.sheets[0]!.components[0]!.spec).not.toContain("khắc hình con rồng");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ④ PILL PHẢI GIỮ ĐƯỢC DANH TÍNH QUA MỌI LẦN GẠT CÔNG TẮC
+   ══════════════════════════════════════════════════════════════════════════
+   Chủ sản phẩm mở chế độ tự do và thấy CẢ BA pill của mọi dòng đều ghi "theo
+   phong cách chung" — đáng lẽ pill 2 là mức viền, pill 3 là chất liệu. Nguyên
+   nhân đo được trên đĩa: tài liệu đã lưu mang `{kind: null, value: null}`, và
+   `OptionPillView` lặng lẽ quy null về mặc định `style`/rỗng. Tức là MẤT DỮ
+   LIỆU đội lốt một giá trị hợp lệ.
+
+   Ba ca dưới khoá ba mắt xích của cùng một đường: dựng đúng → cứu được cái đã
+   hỏng → gạt về khuôn không mất thứ vừa bấm. */
+describe("④ pill của dòng tự do: đúng kind, đúng value, không mất khi gạt lại", () => {
+  it("Template → Tự do: ba pill mang ĐÚNG kind và ĐÚNG value của ô", async () => {
+    const cell: UiCell = { ...newCell("coin", PRESETS), id: "c1", decor: "6", materialId: "gold-metal" };
+    render(<Harness initial={uikit([cell], "template")} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Tự do" }));
+    await waitFor(() => expect(document.querySelector(".ProseMirror")).not.toBeNull());
+
+    const pills = [...document.querySelectorAll("[data-kg-node='optionPill']")];
+    expect(pills.map((p) => p.getAttribute("data-kind"))).toEqual(["style", "decor", "material"]);
+    /* Chính chỗ chủ sản phẩm chỉ mặt: pill 2 và 3 KHÔNG được rỗng. */
+    expect(pills.map((p) => p.getAttribute("data-value"))).toEqual(["", "6", "gold-metal"]);
+  });
+
+  it("tài liệu đã lưu bị mất attrs ⇒ CỨU LẠI theo vị trí + ba trường của ô", () => {
+    /* Đúng hình dạng đọc được từ `workflow-draft.json` của dự án đang hỏng. */
+    const broken: JSONContent = {
+      type: "doc",
+      content: [{
+        type: "paragraph",
+        content: [
+          { type: "text", text: "a coin currency icon, " },
+          { type: "optionPill", attrs: { kind: null, value: null } },
+          { type: "text", text: ", " },
+          { type: "optionPill", attrs: { kind: null, value: null } },
+          { type: "text", text: ", " },
+          { type: "optionPill", attrs: { kind: null, value: null } },
+        ],
+      }],
+    };
+    const healed = repairPills(broken, PILL_SLOTS.uikit, ["", "2", "gold-metal"]);
+    const pills = (healed.content![0]!.content ?? []).filter((n) => n.type === "optionPill");
+    expect(pills.map((p) => p.attrs!["kind"])).toEqual(["style", "decor", "material"]);
+    expect(pills.map((p) => p.attrs!["value"])).toEqual(["", "2", "gold-metal"]);
+    /* Chữ của người dùng KHÔNG được đụng tới trong lúc cứu hộ. */
+    expect(JSON.stringify(healed)).toContain("a coin currency icon");
+  });
+
+  it("tài liệu LÀNH đi qua nguyên vẹn — cứu hộ không phải một lượt viết lại", () => {
+    const good = uiCellDoc({ ...newCell("coin", PRESETS), id: "c1" }, PRESETS);
+    expect(docHasBrokenPill(good)).toBe(false);
+    expect(repairPills(good, PILL_SLOTS.uikit, ["x", "y", "z"])).toEqual(good);
+  });
+
+  it("Tự do → Template: pill đã bấm trong câu KHÔNG bị mất", async () => {
+    let latest: UiKitBlock | null = null;
+    const cell: UiCell = { ...newCell("button", PRESETS), id: "c1" };
+    render(<Harness initial={uikit([cell], "free")} onState={(next) => { latest = next; }} />);
+    await waitFor(() => expect(document.querySelector(".ProseMirror")).not.toBeNull());
+
+    /* Bấm pill CHẤT LIỆU trong câu và chọn một giá trị — trước lượt này việc đó
+       chỉ đổi tài liệu, còn `materialId` của ô thì đứng yên. */
+    const materialPill = [...document.querySelectorAll("[data-kg-node='optionPill']")]
+      .find((p) => p.getAttribute("data-kind") === "material")!;
+    fireEvent.click(materialPill.querySelector("button")!);
+    fireEvent.click(screen.getAllByRole("option")[1]!);
+
+    await waitFor(() => expect(latest?.cells[0]?.materialId).toBeTruthy());
+    const picked = latest!.cells[0]!.materialId;
+
+    /* Về khuôn: không hỏi (chỉ đổi pill thì chẳng có chữ nào để mất) và giá trị
+       vừa bấm phải còn nguyên trong trường có cấu trúc. */
+    fireEvent.click(screen.getByRole("button", { name: "Theo template" }));
+    await waitFor(() => expect(latest?.mode).toBe("template"));
+    expect(latest!.cells[0]!.materialId).toBe(picked);
+    expect(latest!.cells[0]!.doc).toBeUndefined();
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⑤ TÊN ELEMENT LÀ PILL CHỌN ĐƯỢC
+   ══════════════════════════════════════════════════════════════════════════ */
+describe("⑤ đổi loại element tại chỗ", () => {
+  it("bấm tên ⇒ mở CÙNG bộ tra danh mục, tìm được bằng chữ không dấu", () => {
+    render(<Harness initial={uikit([{ ...newCell("button", PRESETS), id: "c1" }])} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Đổi loại món/ }));
+    expect(screen.getByRole("dialog", { name: "Đổi loại món" })).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "thanh mau" } });
+    expect(screen.getByRole("option", { name: /Thanh máu/ })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: /Icon tiền/ })).toBeNull();
+  });
+
+  it("đổi loại ⇒ đổi ô trong contract, nhưng GIỮ viền · chất liệu · ghi chú", async () => {
+    let latest: UiKitBlock | null = null;
+    /* Ba thứ người dùng đã chỉnh tay. `decor: "7"` cố ý KHÁC mặc định của cả hai
+       element, để nếu code lỡ áp preset của element mới thì ca này đỏ. */
+    const cell: UiCell = {
+      ...newCell("button", PRESETS), id: "c1",
+      decor: "7", materialId: "gold-metal", note: "bo góc thật tròn",
+    };
+    render(<Harness initial={uikit([cell])} onState={(next) => { latest = next; }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Đổi loại món/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Thanh máu/ }));
+
+    await waitFor(() => expect(latest?.cells[0]?.elementId).toBe("healthbar"));
+    expect(latest!.cells[0]!.decor).toBe("7");
+    expect(latest!.cells[0]!.materialId).toBe("gold-metal");
+    expect(latest!.cells[0]!.note).toBe("bo góc thật tròn");
+
+    const contract = composerToContract(state([uikit(latest!.cells)]), { presets: PRESETS });
+    const component = contract.sheets[0]!.components[0]!;
+    expect(component.vi).toBe("Thanh máu");
+    expect(component.spec).toContain(PRESETS.elements.find((e) => e.id === "healthbar")!.en);
+    expect(component.spec).toContain("bo góc thật tròn");
+  });
+
+  it("dòng TỰ DO: đổi loại vá đúng cụm EN mở đầu, chữ người dùng viết thêm còn nguyên", () => {
+    const doc = uiCellDoc({ ...newCell("button", PRESETS), id: "c1" }, PRESETS);
+    const mine: JSONContent = {
+      ...doc,
+      content: [{ ...doc.content![0], content: [...doc.content![0]!.content!, { type: "text", text: ", khắc hình rồng" }] }],
+    };
+    const buttonEN = PRESETS.elements.find((e) => e.id === "button")!.en;
+    const healthEN = PRESETS.elements.find((e) => e.id === "healthbar")!.en;
+
+    const swapped = retitleCellDoc(mine, buttonEN, healthEN);
+    const flat = JSON.stringify(swapped);
+    expect(flat).toContain(healthEN);
+    expect(flat).not.toContain(buttonEN);
+    expect(flat).toContain("khắc hình rồng");
+  });
+
+  it("người dùng đã sửa cụm mở đầu ⇒ KHÔNG đụng vào chữ của họ", () => {
+    const mine: JSONContent = {
+      type: "doc",
+      content: [{ type: "paragraph", content: [{ type: "text", text: "cái nút của riêng tôi, " }] }],
+    };
+    expect(retitleCellDoc(mine, "a primary action button with a centered label", "X")).toEqual(mine);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⑥ EDITOR KHÔNG ĐƯỢC "ĐỔI" KHI KHÔNG CÓ GÌ ĐỔI
+   ══════════════════════════════════════════════════════════════════════════
+   Lượt bắn `onUpdate` lúc mount là MẮT XÍCH đã đóng dấu bản tài liệu hỏng xuống
+   đĩa mà không cần người dùng chạm phím (xem `knownRef` trong `BlockEditor`).
+   Ca này canh đúng cái mắt xích ấy. */
+describe("⑥ mount một dòng tự do KHÔNG được tự ghi lại tài liệu", () => {
+  it("dựng xong editor mà chưa gõ gì ⇒ block KHÔNG bị báo là đã đổi", async () => {
+    const changes: UiKitBlock[] = [];
+    render(
+      <Harness
+        initial={uikit([{ ...newCell("button", PRESETS), id: "c1" }], "free")}
+        onState={(next) => changes.push(next)}
+      />,
+    );
+    await waitFor(() => expect(document.querySelector(".ProseMirror")).not.toBeNull());
+    /* Cho editor thêm một nhịp để mọi transaction khởi tạo chạy xong. */
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(changes).toEqual([]);
+  });
+
+  it("gõ thật thì VẪN báo đổi — cửa chặn không được chặn nhầm việc thật", async () => {
+    const changes: UiKitBlock[] = [];
+    render(
+      <Harness
+        initial={uikit([{ ...newCell("button", PRESETS), id: "c1" }], "free")}
+        onState={(next) => changes.push(next)}
+      />,
+    );
+    await waitFor(() => expect(document.querySelector(".ProseMirror")).not.toBeNull());
+
+    /* Bấm một pill là một thay đổi THẬT của tài liệu. */
+    const decorPill = [...document.querySelectorAll("[data-kg-node='optionPill']")]
+      .find((p) => p.getAttribute("data-kind") === "decor")!;
+    fireEvent.click(decorPill.querySelector("button")!);
+    fireEvent.click(screen.getAllByRole("option")[3]!);
+
+    await waitFor(() => expect(changes.length).toBeGreaterThan(0));
   });
 });

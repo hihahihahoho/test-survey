@@ -93,10 +93,44 @@ export function mascotDoc(): JSONContent {
   };
 }
 
+/* ── NGỮ CẢNH CHUNG ───────────────────────────────────────────────────────── */
+
+export const SCAFFOLD_CONTEXT = ["Bộ kit theme ", " phong cách ", ", màu thương hiệu ", "."] as const;
+
+/**
+ * Câu Ngữ cảnh chung — bản TipTap của đúng cái câu React đang hiện ở chế độ khuôn.
+ *
+ * Ba pill khớp một-một với ba control của bản khuôn (`theme`, `style`, dãy màu),
+ * nên gạt sang Tự do là thấy CHÍNH câu mình đang đọc, chỉ khác ở chỗ giờ gõ được
+ * vào giữa. Đó là điều kiện để công tắc không làm người ta mất phương hướng.
+ */
+export function contextDoc(state: { themeValue: string; styleId: string }): JSONContent {
+  const [a, b, c, d] = SCAFFOLD_CONTEXT;
+  return {
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: [
+          text(a),
+          pill("theme", state.themeValue),
+          text(b),
+          pill("style", state.styleId),
+          text(c),
+          /* Node RỖNG, màu đọc từ ngữ cảnh — xem `NODE.brandPill`. */
+          { type: NODE.brandPill },
+          text(d),
+        ],
+      },
+    ],
+  };
+}
+
 /** Scaffolding theo loại block — bộ serialize chế độ TỰ DO dùng để trừ chuỗi. */
-export const SCAFFOLDS: Record<"background" | "mascot", readonly string[]> = {
+export const SCAFFOLDS: Record<"background" | "mascot" | "context", readonly string[]> = {
   background: SCAFFOLD_BACKGROUND,
   mascot: SCAFFOLD_MASCOT,
+  context: SCAFFOLD_CONTEXT,
 };
 
 /* ── MỘT DÒNG element của block BỘ UI ─────────────────────────────────────── */
@@ -151,4 +185,157 @@ export function uiCellDoc(cell: UiCell, presets: PresetBundle = getPresets()): J
       },
     ],
   };
+}
+
+/**
+ * Đổi LOẠI element của một dòng đã có câu tự do: thay đúng cụm EN mở đầu.
+ *
+ * ╔══ VÌ SAO VÁ ĐÚNG MỘT MẨU, KHÔNG DỰNG LẠI CẢ CÂU ═════════════════════════╗
+ * ║ Dựng lại câu từ ô mới thì mọi chữ người dùng đã viết bay sạch — mà đổi    ║
+ * ║ loại element thường xảy ra CHÍNH VÌ họ đã viết xong phần mô tả và chỉ     ║
+ * ║ chọn nhầm loại. Nên chỉ thay phần mà `uiCellDoc` tự đặt vào: cụm EN mở    ║
+ * ║ đầu. Ta biết chính xác nó là gì vì chính ta vừa viết nó ra.               ║
+ * ║ Người dùng đã sửa cụm ấy (nó không còn khớp `prevEn`) ⇒ KHÔNG đụng vào:   ║
+ * ║ chữ của họ thắng chữ của template, luôn luôn.                            ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export function retitleCellDoc(doc: JSONContent, prevEn: string, nextEn: string): JSONContent {
+  if (prevEn === nextEn) return doc;
+  let done = false;
+  const walk = (node: JSONContent): JSONContent => {
+    if (done) return node;
+    if (node.type === "text") {
+      done = true;
+      const value = node.text ?? "";
+      return value.startsWith(prevEn) ? { ...node, text: nextEn + value.slice(prevEn.length) } : node;
+    }
+    if (!node.content) return node;
+    return { ...node, content: node.content.map(walk) };
+  };
+  return walk(doc);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CỨU HỘ PILL MẤT ATTRS
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Thứ tự pill mà mỗi câu khởi điểm sinh ra — bảng tra để GÁN LẠI `kind` đã mất.
+ *
+ * ╔══ VÌ SAO CẦN CỨU HỘ, CHỨ KHÔNG CHỈ CẦN "ĐÃ VÁ NGUỒN" ═══════════════════╗
+ * ║ Node view của pill từng không mang `data-kind`/`data-value` trên DOM, nên ║
+ * ║ mọi lượt dựng lại tài liệu TỪ DOM (một nhịp HMR giữa phiên dev, một cú    ║
+ * ║ dán) đọc ra pill KHÔNG CÓ attrs và ghi `{kind: null, value: null}` xuống  ║
+ * ║ `workflow-draft.json`. Nguồn đã vá ở Wave 6 — nhưng vá nguồn KHÔNG chữa   ║
+ * ║ những tài liệu đã hỏng nằm sẵn trên đĩa, và `OptionPillView` lại lặng lẽ  ║
+ * ║ quy `null` về mặc định `"style"`/`""`. Kết quả người dùng thấy: cả ba     ║
+ * ║ pill của mọi dòng đều là "theo phong cách chung" — mất dữ liệu đội lốt    ║
+ * ║ một giá trị hợp lệ, thứ hỏng câm khó chịu nhất.                          ║
+ * ║ Đo tận nơi trên dự án `kit-thu-nghiem-wave-6`: 12/12 pill mang attrs null.║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * VÌ SAO GÁN THEO VỊ TRÍ: pill hỏng không còn MỘT BIT thông tin nào về chính nó,
+ * nên thứ duy nhất còn nói được nó là gì chính là CHỖ NÓ ĐỨNG trong câu — mà chỗ
+ * ấy do các hàm `*Doc()` ngay trên file này đặt ra. Đó là lý do bảng này nằm cạnh
+ * chúng: sửa câu khởi điểm mà quên bảng thì cứu hộ gán sai, và hai thứ ở cạnh
+ * nhau thì khó quên hơn.
+ */
+export const PILL_SLOTS: Record<"uikit" | "background" | "mascot" | "context", readonly PillKind[]> = {
+  uikit: ["style", "decor", "material"],
+  background: ["scene", "mood"],
+  mascot: ["pose", "expression", "outfit"],
+  context: ["theme", "style"],
+};
+
+/** Pill này có còn tự mô tả được không. `null`/thiếu ⇒ đã mất attrs. */
+function pillBroken(node: JSONContent): boolean {
+  if (node.type !== NODE.optionPill) return false;
+  const attrs = node.attrs ?? {};
+  return typeof attrs["kind"] !== "string" || typeof attrs["value"] !== "string";
+}
+
+/** Có ít nhất một pill hỏng trong tài liệu này không — để chỉ dựng lại khi cần. */
+export function docHasBrokenPill(doc: unknown): boolean {
+  let found = false;
+  const walk = (node: JSONContent) => {
+    if (found) return;
+    if (pillBroken(node)) { found = true; return; }
+    for (const child of node.content ?? []) walk(child);
+  };
+  if (typeof doc === "object" && doc !== null) walk(doc as JSONContent);
+  return found;
+}
+
+/**
+ * Gán lại `kind`/`value` cho những pill đã mất attrs.
+ *
+ * `slots` là thứ tự pill của câu khởi điểm; `values` (tuỳ chọn) là giá trị lấy
+ * lại được từ nơi khác. Pill thứ i trong tài liệu ⇒ ô thứ i của bảng.
+ *
+ * ══ GIỚI HẠN, NÓI THẲNG ═══════════════════════════════════════════════════
+ * Phép gán theo vị trí chỉ đúng khi tài liệu CÒN GIỮ bố cục pill của template.
+ * Người dùng chèn thêm pill bằng `/` rồi mới dính hỏng thì vị trí lệch. Chấp
+ * nhận, vì (1) hỏng thật xảy ra theo kiểu CẢ tài liệu cùng lúc — một lượt
+ * DOM→doc đọc lại toàn bộ, không đọc lẻ một pill, nên "vừa lệch vừa hỏng" gần
+ * như không có thật; (2) hết ô trong bảng thì pill được để NGUYÊN ở mặc định
+ * an toàn, không đoán bừa — cùng lắm là không cứu được, chứ không gán sai.
+ */
+export function repairPills(
+  doc: JSONContent,
+  slots: readonly PillKind[],
+  values: readonly string[] = [],
+): JSONContent {
+  let seen = 0;
+  const walk = (node: JSONContent): JSONContent => {
+    const kids = node.content?.map(walk);
+    const rebuilt: JSONContent = kids ? { ...node, content: kids } : node;
+    if (rebuilt.type !== NODE.optionPill) return rebuilt;
+    const index = seen++;
+    if (!pillBroken(rebuilt)) return rebuilt;
+    const kind = slots[index];
+    if (!kind) return rebuilt;
+    const attrs = rebuilt.attrs ?? {};
+    return {
+      ...rebuilt,
+      attrs: {
+        ...attrs,
+        kind,
+        /* `value` hỏng ⇒ lấy giá trị cứu được, không có thì để RỖNG. Rỗng là
+           "chưa chọn" — pill hiện placeholder đúng loại và bấm ra đúng danh
+           sách. Bịa một giá trị mặc định vào đây là đặt một lựa chọn người dùng
+           chưa từng bấm vào prompt sắp gửi đi vẽ. */
+        value: typeof attrs["value"] === "string" ? attrs["value"] : (values[index] ?? INHERIT),
+      },
+    };
+  };
+  return walk(doc);
+}
+
+/**
+ * Giá trị hiện tại của các pill trong một câu, tra THEO `kind`.
+ *
+ * Dùng cho đường NGƯỢC LẠI với `uiCellDoc`: người dùng bấm pill trong chế độ tự
+ * do thì `updateAttributes` chỉ đổi tài liệu, còn `styleId`/`decor`/`materialId`
+ * của ô đứng yên. Hai nguồn lệch nhau kéo theo hai hỏng thật: quay về template
+ * là mất lựa chọn vừa bấm, và bảng cứu hộ ở trên lấy lại giá trị CŨ.
+ * Tra theo `kind` chứ không theo vị trí vì ở đây tài liệu còn lành — `kind` là
+ * câu trả lời trực tiếp, vị trí chỉ là suy đoán.
+ */
+export function pillValuesOf(doc: JSONContent): Partial<Record<PillKind, string>> {
+  const out: Partial<Record<PillKind, string>> = {};
+  const walk = (node: JSONContent) => {
+    if (node.type === NODE.optionPill) {
+      const attrs = node.attrs ?? {};
+      const kind = attrs["kind"];
+      const value = attrs["value"];
+      /* Chỉ nhận pill LÀNH: một pill hỏng mà ghi đè lên trường có cấu trúc là
+         lấy rác đắp lên dữ liệu còn tốt — đúng chiều ngược với việc đang làm. */
+      if (typeof kind === "string" && typeof value === "string" && !(kind in out)) {
+        out[kind as PillKind] = value;
+      }
+    }
+    for (const child of node.content ?? []) walk(child);
+  };
+  walk(doc);
+  return out;
 }

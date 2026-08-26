@@ -1,6 +1,7 @@
 import { NODE } from "./schema";
 import { readPillImage } from "@/features/prompt-canvas/lib/pill-image";
 import { INHERIT, phraseOf, type PillKind } from "./pill-registry";
+import { describeBrandColors } from "./brand-colors";
 import { getPresets, type PresetBundle } from "./presets-store";
 
 /**
@@ -44,6 +45,14 @@ export interface SerializeContext {
   presets: PresetBundle;
   /** Bộ đếm ảnh, dùng CHUNG cho cả prompt để đánh số liên tục qua mọi block. */
   imageCounter: { count: number };
+  /**
+   * Màu thương hiệu, để dựng chữ cho node `brandPill`.
+   *
+   * Ở ĐÂY chứ không trong attrs của node — node ấy cố ý rỗng, xem `NODE.brandPill`.
+   * Nhờ vậy câu chữ luôn tả đúng mảng màu HIỆN TẠI, kể cả khi người dùng sửa màu
+   * sau lúc viết câu.
+   */
+  brandColors: readonly string[];
 }
 
 export function makeContext(partial: Partial<SerializeContext> = {}): SerializeContext {
@@ -52,6 +61,7 @@ export function makeContext(partial: Partial<SerializeContext> = {}): SerializeC
     themeEN: partial.themeEN ?? "",
     presets: partial.presets ?? getPresets(),
     imageCounter: partial.imageCounter ?? { count: 0 },
+    brandColors: partial.brandColors ?? [],
   };
 }
 
@@ -100,6 +110,11 @@ function walkInline(nodes: PromptDocNode[] | undefined, ctx: SerializeContext): 
         break;
       case NODE.imagePill:
         out += imageText(node, ctx);
+        break;
+      case NODE.brandPill:
+        /* Node rỗng ⇒ chữ đến từ NGỮ CẢNH, không từ node. Cùng một hàm mô tả mà
+           câu template đang dùng, nên gạt công tắc không làm đổi chữ gửi đi vẽ. */
+        out += describeBrandColors(ctx.brandColors);
         break;
       case "hardBreak":
         out += " ";

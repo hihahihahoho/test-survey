@@ -1,15 +1,16 @@
 import * as React from "react";
+import type { JSONContent } from "@tiptap/react";
 import { GripVertical, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { usePresets } from "../lib/presets-store";
 import type { ElementPreset, PresetBundle } from "../lib/presets-store";
-import { uiCellDoc } from "../lib/doc-templates";
+import { pillValuesOf, retitleCellDoc, uiCellDoc } from "../lib/doc-templates";
 import { moveCell, newCell, type BlockMode, type UiCell, type UiKitBlock } from "../lib/composer-model";
 import { BlockCard, ModeBadge, ModeToggle } from "./BlockCard";
 import { BlockEditor } from "./BlockEditor";
-import { OptionPill } from "./pill-ui";
+import { OptionPill, PillButton, PillCaret } from "./pill-ui";
 
 /**
  * UiKitBlockView — block "Bộ UI": một DANH SÁCH DÒNG, mỗi dòng một element.
@@ -162,11 +163,13 @@ function RowShell({
  */
 function CellRow({
   cell,
+  used,
   onChange,
   onRemove,
   drag,
 }: {
   cell: UiCell;
+  used: ReadonlySet<string>;
   onChange: (next: UiCell) => void;
   onRemove: () => void;
   drag: RowDragProps;
@@ -179,7 +182,11 @@ function CellRow({
     <RowShell {...drag}>
       <DragHandle {...drag} label={label} />
       <span className="text-caption text-fg-muted">#{drag.index + 1}</span>
-      <span className="font-medium text-fg-strong">{label}</span>
+      <ElementNamePill
+        label={label}
+        used={used}
+        onPick={(next) => onChange(swapCellElement(cell, next, presets))}
+      />
       <span className="text-fg-muted">— phong cách</span>
       <OptionPill compact kind="style" value={cell.styleId} onChange={(styleId) => onChange({ ...cell, styleId })} />
       <span className="text-fg-muted">, viền</span>
@@ -222,17 +229,19 @@ function CellRow({
  * block Cảnh nền — nếu không thì "chế độ tự do" ở hai chỗ là hai thứ khác nhau
  * mang chung một cái tên.
  *
- * `resetToken={0}` = KHÔNG BAO GIỜ nạp lại từ ngoài. Ở đây không có thanh công
- * cụ nào sửa `doc` sau lưng editor (khác thẻ Nhân vật với pill [dáng]), nên một
- * tín hiệu nạp lại chỉ là một đường để con trỏ bị nhảy về đầu dòng.
+ * `resetToken` chỉ nhích khi ĐỔI LOẠI ELEMENT — xem `reload` bên dưới. Mọi thay
+ * đổi khác đều do chính editor bắn ra, và nạp lại vì chúng là một đường để con
+ * trỏ nhảy về đầu dòng sau mỗi ký tự.
  */
 function FreeCellRow({
   cell,
+  used,
   onChange,
   onRemove,
   drag,
 }: {
   cell: UiCell;
+  used: ReadonlySet<string>;
   onChange: (next: UiCell) => void;
   onRemove: () => void;
   drag: RowDragProps;
@@ -245,11 +254,38 @@ function FreeCellRow({
      rỗng, và `BlockEditor` nhận `content` đúng MỘT lần lúc dựng. */
   const doc = cell.doc ?? uiCellDoc(cell, presets);
 
+  /**
+   * Tín hiệu NẠP LẠI cho editor, bật lên mỗi lần đổi loại element.
+   *
+   * ╔══ VÌ SAO `resetToken={0}` KHÔNG CÒN ĐÚNG ════════════════════════════════╗
+   * ║ Trước lượt này dòng tự do không có gì sửa `doc` sau lưng editor, nên      ║
+   * ║ "không bao giờ nạp lại" là lựa chọn đúng. Pill TÊN ELEMENT làm đúng việc  ║
+   * ║ đó: `swapCellElement` vá cụm EN mở đầu ngay trong tài liệu.               ║
+   * ║ Bắt được tận tay trên trình duyệt: đổi "Nút bấm" → "Thanh máu" thì nhãn   ║
+   * ║ đổi nhưng câu trong editor VẪN là "a primary action button…" — và cú gõ   ║
+   * ║ tiếp theo bắn `onUpdate` mang câu cũ ấy, ghi đè bản vừa vá. Tức là đổi    ║
+   * ║ loại xong nó tự quay về, mà không một thông báo nào.                      ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   *
+   * Đếm theo `elementId` chứ không theo `doc`: `doc` đổi sau MỌI phím gõ (chính
+   * editor bắn ra), lấy nó làm mốc là editor tự nạp lại mình mỗi ký tự.
+   */
+  const [reload, setReload] = React.useState(0);
+  const [seenElement, setSeenElement] = React.useState(cell.elementId);
+  if (seenElement !== cell.elementId) {
+    setSeenElement(cell.elementId);
+    setReload((n) => n + 1);
+  }
+
   return (
     <RowShell {...drag}>
       <DragHandle {...drag} label={label} />
       <span className="text-caption text-fg-muted">#{drag.index + 1}</span>
-      <span className="shrink-0 font-medium text-fg-strong">{label}</span>
+      <ElementNamePill
+        label={label}
+        used={used}
+        onPick={(next) => onChange(swapCellElement(cell, next, presets))}
+      />
       {/* `min-w-0` để ô soạn co được trong flex — thiếu nó thì một câu dài đẩy cả
           dòng tràn ngang khỏi thẻ. `basis-64` là ĐÁY chứ không phải chiều rộng:
           một câu ngắn vẫn được cả hàng, còn khi phải xuống dòng thì nó xuống ở
@@ -262,14 +298,69 @@ function FreeCellRow({
              thẻ. Xem khối chú thích `SCALE` ở `BlockEditor.tsx` — để bậc mặc
              định thì gạt công tắc là chữ trong cùng một thẻ nhảy một bậc. */
           scale="row"
-          resetToken={0}
+          resetToken={reload}
           placeholder="Viết mô tả riêng cho món này… (gõ / để chèn pill)"
-          onChange={(next) => onChange({ ...cell, doc: next })}
+          onChange={(next) => onChange(syncCellFromDoc(cell, next))}
         />
       </div>
       <RemoveButton label={label} onRemove={onRemove} />
     </RowShell>
   );
+}
+
+/**
+ * Câu tự do vừa đổi ⇒ ĐỒNG BỘ NGƯỢC ba trường có cấu trúc của ô.
+ *
+ * ╔══ VÌ SAO PHẢI CHẢY NGƯỢC, KHÔNG CHỈ XUÔI ════════════════════════════════╗
+ * ║ `uiCellDoc` dựng câu TỪ ô, nhưng khi người dùng bấm một pill TRONG câu thì║
+ * ║ `updateAttributes` chỉ đổi tài liệu — `styleId`/`decor`/`materialId` đứng ║
+ * ║ nguyên giá trị cũ. Hai nguồn cho cùng một sự thật, và cái lệch ấy đẻ ra ba║
+ * ║ hỏng thật:                                                               ║
+ * ║  ① Quay về «Theo template» là mất trắng lựa chọn vừa bấm — vì lúc đó chỉ  ║
+ * ║    còn ba trường, mà ba trường chưa từng nghe tin.                       ║
+ * ║  ② Phép cứu hộ pill (`PILL_SLOTS`) lấy giá trị từ ba trường ấy, nên nó    ║
+ * ║    khôi phục về giá trị CŨ thay vì giá trị người dùng đang thấy.          ║
+ * ║  ③ `cellEdited` tưởng ô "đã bị sửa" chỉ vì đổi một pill, nên hỏi một câu  ║
+ * ║    doạ người dùng trong khi chẳng có chữ nào để mất.                      ║
+ * ║ Chảy ngược ở đây làm ba trường luôn là bản sao đọc được của câu — và ba   ║
+ * ║ hỏng trên biến mất cùng một lúc.                                         ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+function syncCellFromDoc(cell: UiCell, doc: JSONContent): UiCell {
+  const pills = pillValuesOf(doc);
+  return {
+    ...cell,
+    doc,
+    /* Pill bị xoá khỏi câu ⇒ GIỮ giá trị cũ trong trường, không xoá theo. Người
+       ta bỏ pill khỏi một câu tiếng Anh tự viết là bỏ CHỮ, không phải tuyên bố
+       "ô này không còn chất liệu" — và nếu gạt về template thì ba trường vẫn là
+       thứ duy nhất còn lại để dựng lại ô. */
+    styleId: pills.style ?? cell.styleId,
+    decor: pills.decor ?? cell.decor,
+    materialId: pills.material ?? cell.materialId,
+  };
+}
+
+/**
+ * Đổi LOẠI element của một dòng — giữ lại mọi thứ người dùng đã chỉnh tay.
+ *
+ * Đổi `elementId` là đổi thứ SẼ VẼ (`component.vi` + cụm EN gốc của ô, và qua đó
+ * cả tên file trong contract). Nhưng mức viền, chất liệu, ghi chú và câu tự do là
+ * CÔNG CHỈNH TAY của người dùng — chúng không thuộc về loại element, chúng thuộc
+ * về DÒNG này. Nên chúng đi qua nguyên vẹn, và chỉ cụm EN mở đầu của câu tự do
+ * được vá lại (xem `retitleCellDoc`).
+ *
+ * KHÔNG áp `decor`/`materialId` mặc định của element mới đè lên: preset chỉ là
+ * GIÁ TRỊ KHỞI ĐIỂM lúc thêm dòng — dùng nó để ghi đè lúc đổi loại là lấy mặc
+ * định của danh mục đắp lên lựa chọn của người dùng, đúng cái sai mà `seedOnce`
+ * và `addLibraryPreset` vừa phải đi vòng để tránh.
+ */
+function swapCellElement(cell: UiCell, next: ElementPreset, presets: PresetBundle): UiCell {
+  if (next.id === cell.elementId) return cell;
+  const swapped: UiCell = { ...cell, elementId: next.id };
+  if (!cell.doc) return swapped;
+  const prevEn = presets.elements.find((preset) => preset.id === cell.elementId)?.en ?? cell.elementId;
+  return { ...swapped, doc: retitleCellDoc(cell.doc, prevEn, next.en) };
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -304,10 +395,8 @@ function fold(value: string): string {
  * ║ trang Preset. Đó là một wave khác, và nó nên là một wave có thật.         ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
-function ElementPicker({ used, onPick }: { used: ReadonlySet<string>; onPick: (element: ElementPreset) => void }) {
-  const presets = usePresets();
+function useCataloguePopover() {
   const [open, setOpen] = React.useState(false);
-  const [query, setQuery] = React.useState("");
   /**
    * MỞ NGƯỢC LÊN khi phía dưới không đủ chỗ.
    *
@@ -317,14 +406,10 @@ function ElementPicker({ used, onPick }: { used: ReadonlySet<string>; onPick: (e
    * tìm cái mình vừa mở" là một cú giật mà người dùng phải chịu ở MỌI lần thêm.
    */
   const [dropUp, setDropUp] = React.useState(false);
-  const boxRef = React.useRef<HTMLDivElement>(null);
-  const searchRef = React.useRef<HTMLInputElement>(null);
+  const boxRef = React.useRef<HTMLElement>(null);
 
   React.useEffect(() => {
     if (!open) return;
-    /* Mở ra là gõ được ngay: hộp này tồn tại để TRA, và bắt người dùng bấm thêm
-       một nhát vào ô tìm kiếm là bắt họ làm một việc thừa mỗi lần thêm element. */
-    searchRef.current?.focus();
     const onPointerDown = (event: MouseEvent) => {
       if (!boxRef.current?.contains(event.target as globalThis.Node)) setOpen(false);
     };
@@ -341,6 +426,47 @@ function ElementPicker({ used, onPick }: { used: ReadonlySet<string>; onPick: (e
     };
   }, [open]);
 
+  const toggle = (event: React.MouseEvent<HTMLElement>) => {
+    /* Đo NGAY LÚC BẤM, trên chính cái nút vừa bấm — không đo trong effect sau khi
+       hộp đã render: lúc đó hộp đã đẩy chiều cao trang và phép đo "còn bao nhiêu
+       chỗ phía dưới" trả lời cho một trang khác. */
+    const rect = event.currentTarget.getBoundingClientRect();
+    const below = window.innerHeight - rect.bottom;
+    setDropUp(below < PICKER_MAX_PX + PICKER_GAP_PX && rect.top > below);
+    setOpen((v) => !v);
+  };
+
+  return { open, setOpen, dropUp, boxRef, toggle };
+}
+
+/**
+ * HỘP TRA DANH MỤC — phần ruột dùng chung của hai chỗ mở nó.
+ *
+ * Tách ra vì nút «+ Element» và pill TÊN ELEMENT phải là CÙNG MỘT bộ tra: cùng ô
+ * tìm không dấu, cùng cách gom nhóm, cùng thứ tự. Hai bản sao của một danh mục là
+ * hai chỗ để lệch nhau, và người dùng thì học hai lần cho một việc.
+ */
+function ElementCatalogue({
+  label,
+  dropUp,
+  used,
+  onPick,
+}: {
+  label: string;
+  dropUp: boolean;
+  used: ReadonlySet<string>;
+  onPick: (element: ElementPreset) => void;
+}) {
+  const presets = usePresets();
+  const [query, setQuery] = React.useState("");
+  const searchRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    /* Mở ra là gõ được ngay: hộp này tồn tại để TRA, và bắt người dùng bấm thêm
+       một nhát vào ô tìm kiếm là bắt họ làm một việc thừa mỗi lần thêm element. */
+    searchRef.current?.focus();
+  }, []);
+
   const hits = React.useMemo(() => {
     const needle = fold(query.trim());
     const match = presets.elements.filter(
@@ -355,61 +481,112 @@ function ElementPicker({ used, onPick }: { used: ReadonlySet<string>; onPick: (e
   const total = hits.fresh.length + hits.again.length;
 
   return (
-    <div ref={boxRef} className="relative inline-block">
-      <Button
-        variant="secondary"
-        size="sm"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={(event) => {
-          /* Đo NGAY LÚC BẤM, trên chính cái nút vừa bấm — không đo trong effect
-             sau khi hộp đã render: lúc đó hộp đã đẩy chiều cao trang và phép đo
-             "còn bao nhiêu chỗ phía dưới" trả lời cho một trang khác. */
-          const rect = event.currentTarget.getBoundingClientRect();
-          const below = window.innerHeight - rect.bottom;
-          setDropUp(below < PICKER_MAX_PX + PICKER_GAP_PX && rect.top > below);
-          setOpen((v) => !v);
-        }}
-      >
+    <div
+      role="dialog"
+      aria-label={label}
+      className={cn(
+        "absolute left-0 z-40 flex max-h-96 w-80 flex-col rounded-2 border border-line-subtle bg-overlay p-2 shadow-2",
+        dropUp ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]",
+      )}
+    >
+      <div className="relative">
+        <Search aria-hidden className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-fg-muted" />
+        <Input
+          ref={searchRef}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Tìm trong danh mục…"
+          aria-label="Tìm trong danh mục"
+          className="pl-8"
+        />
+      </div>
+
+      <div role="listbox" aria-label="Danh mục món giao diện" className="mt-2 min-h-0 flex-1 overflow-y-auto">
+        {total === 0 && (
+          <p className="px-2 py-4 text-center text-body text-fg-muted">
+            Không có món nào khớp. Thêm mới ở trang «Quản lý preset».
+          </p>
+        )}
+        <PickGroup title="Chưa có trong thẻ" items={hits.fresh} onPick={onPick} />
+        {/* Vẫn thêm lại được: một bộ kit có ba cỡ nút là chuyện thường. Nhóm
+            này chỉ nói "bạn đã có rồi", không cấm. */}
+        <PickGroup title="Đã có trong thẻ" items={hits.again} onPick={onPick} muted />
+      </div>
+    </div>
+  );
+}
+
+function ElementPicker({ used, onPick }: { used: ReadonlySet<string>; onPick: (element: ElementPreset) => void }) {
+  const pop = useCataloguePopover();
+
+  return (
+    <div ref={pop.boxRef as React.RefObject<HTMLDivElement>} className="relative inline-block">
+      <Button variant="secondary" size="sm" aria-haspopup="dialog" aria-expanded={pop.open} onClick={pop.toggle}>
         <Plus aria-hidden strokeWidth={1.5} />
         Element
       </Button>
 
-      {open && (
-        <div
-          role="dialog"
-          aria-label="Thêm món vào bộ kit"
-          className={cn(
-            "absolute left-0 z-40 flex max-h-96 w-80 flex-col rounded-2 border border-line-subtle bg-overlay p-2 shadow-2",
-            dropUp ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]",
-          )}
-        >
-          <div className="relative">
-            <Search aria-hidden className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-fg-muted" />
-            <Input
-              ref={searchRef}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Tìm trong danh mục…"
-              aria-label="Tìm trong danh mục"
-              className="pl-8"
-            />
-          </div>
-
-          <div role="listbox" aria-label="Danh mục món giao diện" className="mt-2 min-h-0 flex-1 overflow-y-auto">
-            {total === 0 && (
-              <p className="px-2 py-4 text-center text-body text-fg-muted">
-                Không có món nào khớp. Thêm mới ở trang «Quản lý preset».
-              </p>
-            )}
-            <PickGroup title="Chưa có trong thẻ" items={hits.fresh} onPick={onPick} />
-            {/* Vẫn thêm lại được: một bộ kit có ba cỡ nút là chuyện thường. Nhóm
-                này chỉ nói "bạn đã có rồi", không cấm. */}
-            <PickGroup title="Đã có trong thẻ" items={hits.again} onPick={onPick} muted />
-          </div>
-        </div>
-      )}
+      {/* KHÔNG đóng sau khi chọn: thêm vài món liên tiếp là việc thường, và mỗi
+          lần đóng là một lần phải bấm lại rồi gõ lại câu tìm. */}
+      {pop.open && <ElementCatalogue label="Thêm món vào bộ kit" dropUp={pop.dropUp} used={used} onPick={onPick} />}
     </div>
+  );
+}
+
+/**
+ * TÊN ELEMENT = MỘT PILL CHỌN ĐƯỢC, không phải một nhãn chết.
+ *
+ * ╔══ VÌ SAO TÊN PHẢI BẤM ĐƯỢC ══════════════════════════════════════════════╗
+ * ║ Trước lượt này, đổi "Bảng nền" thành "Nút bấm" chỉ có một đường: xoá dòng ║
+ * ║ rồi thêm dòng mới. Đường ấy làm mất ba thứ người dùng đã chỉnh tay — mức  ║
+ * ║ viền, chất liệu, ghi chú — và làm mất luôn VỊ TRÍ của dòng trong danh sách║
+ * ║ (dòng mới luôn nối vào cuối), mà vị trí thì đi thẳng vào thứ tự           ║
+ * ║ `components[]` của contract. Một thao tác "đổi loại" mà phá bốn thứ khác  ║
+ * ║ thì người ta sẽ không dùng nó, họ sẽ dựng lại cả thẻ.                     ║
+ * ║ Là pill thì nó cũng nói đúng bản chất: loại element là MỘT LỰA CHỌN trong ║
+ * ║ danh mục, y như phong cách hay chất liệu — cùng hình dạng, cùng cách bấm. ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+function ElementNamePill({
+  label,
+  used,
+  onPick,
+}: {
+  label: string;
+  used: ReadonlySet<string>;
+  onPick: (element: ElementPreset) => void;
+}) {
+  const pop = useCataloguePopover();
+
+  return (
+    <span ref={pop.boxRef as React.RefObject<HTMLSpanElement>} className="relative inline-block shrink-0">
+      <PillButton
+        compact
+        active={pop.open}
+        aria-haspopup="dialog"
+        aria-expanded={pop.open}
+        aria-label={`Đổi loại món — đang là ${label}`}
+        onClick={pop.toggle}
+        className="font-medium"
+      >
+        <span>{label}</span>
+        <PillCaret compact />
+      </PillButton>
+
+      {/* ĐÓNG ngay sau khi chọn — ngược với «+ Element». Một dòng chỉ có MỘT loại,
+          nên chọn xong là hết việc; để hộp mở lại chỉ mời người dùng bấm nhầm. */}
+      {pop.open && (
+        <ElementCatalogue
+          label="Đổi loại món"
+          dropUp={pop.dropUp}
+          used={used}
+          onPick={(element) => {
+            onPick(element);
+            pop.setOpen(false);
+          }}
+        />
+      )}
+    </span>
   );
 }
 
@@ -560,6 +737,7 @@ export function UiKitBlockBody({
           <Row
             key={cell.id}
             cell={cell}
+            used={used}
             drag={{ index, count: block.cells.length, onMove: move, dragFrom }}
             onChange={(next) =>
               onChange((prev) => ({ ...prev, cells: prev.cells.map((c) => (c.id === cell.id ? next : c)) }))

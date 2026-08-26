@@ -26,6 +26,7 @@ import { getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets
 import { NODE } from "@/features/prompt-lab/lib/schema";
 import { SCAFFOLDS } from "@/features/prompt-lab/lib/doc-templates";
 import { freeText, makeContext, serializeDoc, tidy, type PromptDocNode } from "@/features/prompt-lab/lib/serialize";
+import { contextFreeText } from "@/features/prompt-lab/lib/serialize-composer";
 import type { Block, ComposerState, DocBlock, UiKitBlock } from "@/features/prompt-lab/lib/composer-model";
 import { readPillImage, type PillImage } from "./pill-image";
 import type { ComposerDoc } from "./composer-doc";
@@ -468,7 +469,23 @@ export function composerToContract(input: ComposerDoc | ComposerState, opts: Com
      `variant.style` — nơi `gen.sh` chèn nó vào MỌI tấm. Nhắc lại ở từng ô là dạy
      máy vẽ rằng mỗi element có bảng màu riêng, ngược hẳn ý "một bộ nhận diện"
      (cùng lập luận với `serializeComposer`). */
-  const stylePrompt = [styleEN, themeEN, describeBrandColors(state.brandColors)].filter(Boolean).join(", ");
+  /**
+   * ══ CHẾ ĐỘ TỰ DO: THAY `stylePrompt`, KHÔNG THAY `buildVariantStyle` ═══════
+   * `buildVariantStyle` = `stylePrompt` + 7 trục ngữ nghĩa (`styleAxes`) + mệnh
+   * đề `avoid:`. Ba phần ấy đến từ BA CHỖ KHÁC NHAU trên màn hình, và câu tự do
+   * chỉ là bản viết lại của phần ĐẦU — người dùng không có ô nào để diễn đạt
+   * trục ngữ nghĩa hay điều-không-muốn bằng văn xuôi. Nên thay cả cụm
+   * `buildVariantStyle` bằng câu tự do là lặng lẽ vứt hai thiết lập mà họ đã đặt
+   * ở chỗ khác và vẫn đang thấy trên màn.
+   * Thay đúng `stylePrompt` là phép đổi 1-1: cùng vai trò, cùng chỗ trong câu.
+   *
+   * Câu tự do RỖNG ⇒ lùi về bản ghép. Một `variant.style` mất mệnh đề mô tả bộ
+   * kit là bộ kit không còn phong cách nào cả — im lặng gửi đi vẽ như thế thì
+   * tốn lượt mà ra ảnh không ai nhận ra.
+   */
+  const stylePrompt =
+    contextFreeText(state, presets) ||
+    [styleEN, themeEN, describeBrandColors(state.brandColors)].filter(Boolean).join(", ");
 
   return contractSchema.parse({
     schemaVersion: 4,

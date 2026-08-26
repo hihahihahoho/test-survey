@@ -185,6 +185,22 @@ export interface ComposerState {
    * thật lệch nhau; đổi vai trò = đổi chỗ trong mảng.
    */
   brandColors: string[];
+  /**
+   * Chế độ của khối NGỮ CẢNH CHUNG — cùng hai chế độ với mọi block khác.
+   *
+   * ╔══ VÌ SAO KHỐI NÀY CŨNG PHẢI CÓ, DÙ NÓ "CHỈ CÓ HAI LỰA CHỌN" ═════════════╗
+   * ║ Lập luận cũ (ghi ở `PromptComposerScreen`) là: khối này không có câu chữ  ║
+   * ║ để soạn, chỉ hai dropdown, nên mount một ProseMirror cho nó là trả giá    ║
+   * ║ một editor để lấy về hai cái select. Lập luận ấy đúng về CHI PHÍ và sai   ║
+   * ║ về NHU CẦU: câu này đi vào `variant.style` — mệnh đề mà `gen.sh` chèn vào ║
+   * ║ MỌI tấm của bộ kit. Nó là câu có sức nặng nhất trong cả tài liệu, và cho  ║
+   * ║ tới lượt này nó là câu DUY NHẤT người dùng không được viết lại.           ║
+   * ║ `template` vẫn là mặc định, nên ai không cần thì không trả giá gì.        ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  contextMode: BlockMode;
+  /** Câu ngữ cảnh tự do. Chỉ có nghĩa khi `contextMode === "free"` — xem `contextDoc`. */
+  contextDoc?: JSONContent;
   blocks: Block[];
 }
 
@@ -237,6 +253,7 @@ export function initialComposer(presets: PresetBundle = getPresets()): ComposerS
        thấy màu đi vào prompt ra chữ gì, mà một danh sách rỗng thì không thấy
        gì cả. Hai màu cũng là hình dạng thật của phần lớn bộ nhận diện. */
     brandColors: ["#ff5533", "#112233"],
+    contextMode: "template",
     blocks: [],
   };
 }

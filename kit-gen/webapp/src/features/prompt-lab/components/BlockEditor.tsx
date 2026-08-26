@@ -5,6 +5,7 @@ import { Placeholder } from "@tiptap/extension-placeholder";
 
 import { OptionPill } from "../extensions/OptionPill";
 import { ImagePill } from "../extensions/ImagePill";
+import { BrandPill } from "../extensions/BrandPill";
 import { SlashCommand } from "../extensions/SlashCommand";
 import type { BlockMode } from "../lib/composer-model";
 
@@ -78,6 +79,34 @@ export function BlockEditor({
   resetToken: number;
   placeholder: string;
 }) {
+  /**
+   * ẢNH CHỤP CỦA TÀI LIỆU MÀ TA ĐÃ BIẾT — cửa chặn những lần "đổi" KHÔNG đổi gì.
+   *
+   * ╔══ ĐO ĐƯỢC: EDITOR BẮN `onUpdate` ĐÚNG MỘT LẦN NGAY SAU KHI MOUNT ════════╗
+   * ║ `immediatelyRender: false` nên nội dung được nạp bằng một transaction SAU ║
+   * ║ khi editor dựng xong, và transaction ấy phát `update` như mọi transaction ║
+   * ║ khác. Không có gì thay đổi cả, nhưng lượt bắn đó chạy suốt lên trên:      ║
+   * ║ `setComposer` → tài liệu thành "bẩn" → một lượt PUT `workflow-draft.json` ║
+   * ║ ở MỌI lần mở dự án, dù người dùng chưa chạm phím nào.                     ║
+   * ║                                                                          ║
+   * ║ Và đây chính là MẮT XÍCH GHI ĐĨA của vết mất dữ liệu vừa phải đi cứu hộ   ║
+   * ║ (xem `PILL_SLOTS`): editor đọc lại tài liệu bằng một đường nào đó làm rơi ║
+   * ║ attrs của pill, rồi lượt bắn-lúc-mount lặng lẽ ĐÓNG DẤU bản hỏng ấy xuống ║
+   * ║ đĩa — không cần người dùng làm gì. Chặn ở đây là rút chân cái mắt xích đó:║
+   * ║ tài liệu chỉ được ghi khi nó THẬT SỰ khác thứ ta đưa vào.                 ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   *
+   * So bằng JSON chứ không so tham chiếu: `getJSON()` dựng object mới mỗi lần gọi,
+   * nên so tham chiếu thì không lần nào bằng nhau cả.
+   */
+  const knownRef = React.useRef(JSON.stringify(doc));
+  const emit = (next: JSONContent) => {
+    const encoded = JSON.stringify(next);
+    if (encoded === knownRef.current) return;
+    knownRef.current = encoded;
+    onChange(next);
+  };
+
   const editor = useEditor({
     /* `immediatelyRender: false` — editor dựng ở effect sau lần render đầu. Cần
        cho hai chuyện: render phía server / trong test không chạm DOM, và React
@@ -114,10 +143,15 @@ export function BlockEditor({
          từng chỗ gọi, không đổi lúc chạy. */
       OptionPill.configure({ compact: scale === "row" }),
       ImagePill,
+      /* Node RỖNG, màu đọc qua React context — xem `BrandPill.tsx`. Đăng ký cho
+         MỌI editor chứ không riêng khối Ngữ cảnh: schema phải nhận diện được node
+         này ở bất cứ tài liệu nào, nếu không thì một câu ngữ cảnh dán sang thẻ
+         khác sẽ bị ProseMirror lặng lẽ bỏ mất dãy màu. */
+      BrandPill,
       SlashCommand,
     ],
     content: doc,
-    onUpdate: ({ editor: instance }) => onChange(instance.getJSON()),
+    onUpdate: ({ editor: instance }) => emit(instance.getJSON()),
     editorProps: {
       attributes: {
         /* Cỡ chữ to đặt Ở ĐÂY (trên chính vùng contenteditable) chứ không ở thẻ
@@ -145,6 +179,9 @@ export function BlockEditor({
     if (!editor || resetToken === 0) return;
     /* `emitUpdate: false`: lần nạp lại này là do CHÍNH ta gây ra và `doc` đã là
        thứ vừa đưa vào state. Cho nó bắn `onUpdate` là một vòng state thừa. */
+    /* Cập nhật ảnh chụp TRƯỚC khi nạp: bản vừa nạp là thứ ta chủ động đưa vào,
+       nên nó không phải "thay đổi của người dùng" và không được ghi ngược lên. */
+    knownRef.current = JSON.stringify(doc);
     editor.commands.setContent(doc, { emitUpdate: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ nạp lại theo TÍN HIỆU, xem chú thích `resetToken`
   }, [editor, resetToken]);

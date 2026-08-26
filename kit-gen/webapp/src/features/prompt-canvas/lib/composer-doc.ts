@@ -9,6 +9,7 @@ import {
   type UiCell,
 } from "@/features/prompt-lab/lib/composer-model";
 import { getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
+import { PILL_SLOTS, docHasBrokenPill, repairPills } from "@/features/prompt-lab/lib/doc-templates";
 
 /**
  * composer-doc.ts — TÀI LIỆU COMPOSER LƯU BỀN THEO DỰ ÁN.
@@ -64,19 +65,34 @@ function readCell(raw: unknown, index: number): UiCell | null {
   if (!isRecord(raw)) return null;
   const elementId = str(raw["elementId"]);
   if (!elementId) return null;
+  const styleId = str(raw["styleId"]);
+  const decor = str(raw["decor"]);
+  const materialId = str(raw["materialId"]);
   return {
     id: str(raw["id"]) || `cell-${index}`,
     elementId,
-    styleId: str(raw["styleId"]),
-    decor: str(raw["decor"]),
-    materialId: str(raw["materialId"]),
+    styleId,
+    decor,
+    materialId,
     note: str(raw["note"]),
     /* Câu tự do của riêng dòng (chế độ `free`). Thiếu ⇒ để `undefined` chứ KHÔNG
        dựng câu khởi điểm ở đây: dựng ở đây là ghi một tài liệu TipTap vào mọi ô
        của mọi dự án cũ, kể cả những ô sẽ không bao giờ vào chế độ tự do. Chỗ
-       dựng đúng là lúc gạt công tắc (`UiKitBlockBody.pick`). */
-    ...(isRecord(raw["doc"]) ? { doc: raw["doc"] as JSONContent } : {}),
+       dựng đúng là lúc gạt công tắc (`UiKitBlockBody.pick`).
+
+       CỨU HỘ NGAY LÚC ĐỌC: tài liệu đời trước có thể mang pill `{kind: null}` —
+       xem `PILL_SLOTS`. Ô element là chỗ cứu được TRỌN VẸN, vì ba giá trị pill
+       vẫn còn nguyên trong ba trường có cấu trúc ngay cạnh đây; chúng không đi
+       qua ProseMirror nên không dính lượt DOM→doc đã làm hỏng tài liệu. */
+    ...(isRecord(raw["doc"])
+      ? { doc: healDoc(raw["doc"] as JSONContent, "uikit", [styleId, decor, materialId]) }
+      : {}),
   };
+}
+
+/** Chỉ dựng lại tài liệu KHI CÓ pill hỏng — không đụng vào tài liệu lành. */
+function healDoc(doc: JSONContent, slot: keyof typeof PILL_SLOTS, values?: readonly string[]): JSONContent {
+  return docHasBrokenPill(doc) ? repairPills(doc, PILL_SLOTS[slot], values) : doc;
 }
 
 /**
@@ -110,7 +126,11 @@ function readBlock(raw: unknown, index: number): Block | null {
     id,
     kind,
     mode,
-    doc: raw["doc"],
+    /* Cùng phép cứu hộ, nhưng KHÔNG có giá trị để trả lại: câu Cảnh nền / Nhân
+       vật không lưu lựa chọn ở đâu ngoài chính tài liệu. Nên chỉ khôi phục được
+       pill ĐÓ LÀ GÌ (đúng nhãn, đúng danh sách khi bấm), còn NÓ ĐANG CHỌN GÌ thì
+       đã mất thật — và để rỗng là nói đúng điều đó. Xem `repairPills`. */
+    doc: healDoc(raw["doc"] as JSONContent, kind),
     ...(str(raw["poseView"]) ? { poseView: str(raw["poseView"]) } : {}),
     ...(Object.keys(poseRefs).length ? { poseRefs } : {}),
   };
@@ -126,6 +146,12 @@ function readComposer(raw: unknown, presets: PresetBundle): ComposerState {
     themeValue: typeof raw["themeValue"] === "string" ? (raw["themeValue"] as string) : base.themeValue,
     styleId: typeof raw["styleId"] === "string" ? (raw["styleId"] as string) : base.styleId,
     brandColors: brand,
+    /* Dự án lưu TRƯỚC khi khối Ngữ cảnh có hai chế độ ⇒ `template`, đúng thứ nó
+       đang là — cùng luật với block Bộ UI ở `readBlock`. */
+    contextMode: raw["contextMode"] === "free" ? "free" : "template",
+    ...(isRecord(raw["contextDoc"])
+      ? { contextDoc: healDoc(raw["contextDoc"] as JSONContent, "context") }
+      : {}),
     blocks: Array.isArray(raw["blocks"])
       ? (raw["blocks"] as unknown[]).map(readBlock).filter((b): b is Block => b !== null)
       : [],

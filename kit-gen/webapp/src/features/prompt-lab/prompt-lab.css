@@ -35,6 +35,43 @@
      cả đoạn trông như bị dính. 1.8 là con số nhỏ nhất còn thở được với pill có
      thumbnail ảnh 28px bên trong. */
   line-height: 1.8;
+
+  /* Vùng gõ có HÌNH DẠNG cả khi chưa focus, để lúc focus chỉ là "sáng lên" chứ
+     không phải "mọc thêm một cái hộp". Bo 12px = `rounded-2`, cùng bậc bo của
+     các thẻ quanh nó — vòng focus vì thế trông như thuộc về thẻ, không phải một
+     vật lạ dán đè lên. */
+  border-radius: 12px;
+  padding: 2px 8px;
+  /* 120ms = bậc `duration-fast` của `tailwind.config.ts`. Ghi thẳng số vì bậc ấy
+     sống trong config Tailwind, KHÔNG có custom property tương ứng để `var()`. */
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+/* ── Vòng focus của vùng soạn thảo ────────────────────────────────────────────
+   ╔══ VÌ SAO PHẢI GHI ĐÈ, VÀ VÌ SAO ĐÂY KHÔNG PHẢI "BỎ RING" ═════════════════╗
+   ║ ProseMirror tự đặt `tabindex="0"` lên vùng contenteditable. Nó vì thế KHỚP ║
+   ║ luật chung ở `globals.css` §5.8-A4                                        ║
+   ║   `:where(…, [tabindex]:not([tabindex="-1"])):focus-visible { ring-2 }`    ║
+   ║ — luật vốn viết cho nút và ô nhập, những vật CAO 32–40px và có viền sẵn.   ║
+   ║ Áp lên một dòng văn cao 25px, rộng hết thẻ, bo góc 0 thì ra đúng thứ chủ   ║
+   ║ sản phẩm chỉ mặt: một khung xanh dày quây trọn dòng. Đo tận nơi trước khi  ║
+   ║ sửa: `ring-2` + `border-radius: 0` + hộp 837×25.                          ║
+   ║                                                                          ║
+   ║ Ở đây KHÔNG bỏ vòng focus — chỉ HẠ LIỀU, đúng chữ trong §5.8-A4 ("tuyệt   ║
+   ║ đối không được bỏ ring, chỉ giảm LIỀU"): 2px quây ngoài ⇒ 1px ôm trong,   ║
+   ║ cộng thêm một tầng nền nhích sáng. Hai tín hiệu yếu thay cho một tín hiệu ║
+   ║ mạnh: vẫn thấy rõ mình đang gõ ở đâu, nhưng không còn cái khung.          ║
+   ║ Vì là `:focus-visible` (không phải `:focus`) nên đường bàn phím giữ nguyên║
+   ║ — và contenteditable thì Chrome cũng khớp `:focus-visible` khi bấm chuột,  ║
+   ║ nên người gõ chuột cũng thấy. Đã soi tận nơi cả hai đường.                ║
+   ╚══════════════════════════════════════════════════════════════════════════╝ */
+[data-prompt-lab] .ProseMirror:focus-visible {
+  /* `inset` chứ không phải vòng ngoài: vòng ngoài cộng thêm 2px vào chiều cao
+     hàng, nên mỗi lần đặt con trỏ vào một dòng là cả danh sách nhích một nhịp. */
+  box-shadow: inset 0 0 0 1px rgb(var(--kg-focus-ring) / 0.55);
+  background-color: rgb(var(--kg-raised));
 }
 
 /* Chữ mờ của @tiptap/extension-placeholder: nó gắn `data-placeholder` + class

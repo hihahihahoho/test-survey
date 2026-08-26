@@ -7,7 +7,7 @@ import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
 import { EXPRESSIONS, OUTFIT_THEMES } from "@/features/kit-core/lib/poses";
 
 import { seedPresets } from "@/features/prompt-lab/lib/presets-store";
-import { backgroundDoc, mascotDoc } from "@/features/prompt-lab/lib/doc-templates";
+import { backgroundDoc, contextDoc, mascotDoc } from "@/features/prompt-lab/lib/doc-templates";
 import { NODE } from "@/features/prompt-lab/lib/schema";
 import { phraseOf } from "@/features/prompt-lab/lib/pill-registry";
 import { countComposerImages, serializeComposer } from "@/features/prompt-lab/lib/serialize-composer";
@@ -37,6 +37,7 @@ const state = (partial: Partial<ComposerState> = {}): ComposerState => ({
   themeValue: OUTFIT_THEMES[0]!.value,
   styleId: PRESETS.styles[0]!.id,
   brandColors: [],
+  contextMode: "template",
   blocks: [],
   ...partial,
 });
@@ -352,5 +353,131 @@ describe("ảnh của pill — không còn blob:, và không có đường thoá
     expect(out).toContain("[ảnh tham chiếu]");
     expect(out).not.toContain("[ảnh tham chiếu 2]");
     expect(countComposerImages(s)).toBe(1);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   NGỮ CẢNH CHUNG Ở CHẾ ĐỘ TỰ DO
+   ══════════════════════════════════════════════════════════════════════════
+   Câu này đi vào `variant.style` — mệnh đề mà `gen.sh` chèn vào MỌI tấm. Nếu
+   chữ người dùng gõ không tới được đó thì họ gõ vào hư không: màn hình vẫn hiện
+   câu của họ, còn máy vẽ nhận câu ghép sẵn. Hỏng kiểu trông-như-đang-chạy. */
+describe("ngữ cảnh chung tự do → variant.style", () => {
+  /** Câu ngữ cảnh có người dùng viết thêm một mệnh đề của riêng họ. */
+  const written = (extra: string): JSONContent => {
+    const doc = contextDoc({ themeValue: OUTFIT_THEMES[0]!.value, styleId: PRESETS.styles[0]!.id });
+    const para = doc.content![0]!;
+    return { ...doc, content: [{ ...para, content: [...(para.content ?? []), { type: "text", text: extra }] }] };
+  };
+
+  const freeState = (extra: string) =>
+    state({
+      brandColors: ["#ff5533", "#112233"],
+      contextMode: "free",
+      contextDoc: written(extra),
+    });
+
+  it("câu người dùng gõ ĐI VÀO variant.style", () => {
+    const contract = composerToContract(freeState(" tiết chế, như poster phim 80s"), { presets: PRESETS });
+    expect(contract.variants![0]!.style).toContain("tiết chế, như poster phim 80s");
+  });
+
+  it("pill trong câu vẫn ra cụm TIẾNG ANH, và dãy màu vẫn thành chữ", () => {
+    const style = composerToContract(freeState(""), { presets: PRESETS }).variants![0]!.style;
+    expect(style).toContain(PRESETS.styles[0]!.en);
+    expect(style).toContain(OUTFIT_THEMES[0]!.value);
+    /* `brandPill` là node RỖNG — chữ phải đến từ `SerializeContext.brandColors`,
+       nên nếu ai đó quên nối dây ấy thì mã màu biến mất khỏi câu. */
+    expect(style).toContain("#ff5533");
+  });
+
+  it("hex VẪN đi vào brand.primary/secondary — hai đường khác nhau, không thay nhau", () => {
+    const variant = composerToContract(freeState("gì đó"), { presets: PRESETS }).variants![0]!;
+    expect(variant.brand?.primary).toBe("#ff5533");
+    expect(variant.brand?.secondary).toBe("#112233");
+  });
+
+  it("KHÔNG nuốt `styleAxes`/`avoid` — câu tự do chỉ thay phần mô tả bộ kit", () => {
+    const contract = composerToContract(freeState("câu của tôi"), {
+      presets: PRESETS,
+      styleAvoid: "chữ nhỏ, hoa văn rối",
+    });
+    const style = contract.variants![0]!.style;
+    expect(style).toContain("câu của tôi");
+    /* Hai thiết lập này đến từ chỗ khác trên màn; người dùng vẫn thấy chúng,
+       nên chúng phải còn trong prompt. */
+    expect(style).toContain("avoid: chữ nhỏ, hoa văn rối");
+  });
+
+  it("câu tự do RỖNG ⇒ lùi về bản ghép, không gửi đi một bộ kit không phong cách", () => {
+    const empty = state({ contextMode: "free", contextDoc: { type: "doc", content: [] } });
+    const style = composerToContract(empty, { presets: PRESETS }).variants![0]!.style;
+    expect(style).toContain(PRESETS.styles[0]!.en);
+  });
+
+  it("chế độ khuôn KHÔNG đọc `contextDoc` — câu cũ nằm đó cũng không lọt vào", () => {
+    const kept = state({ contextMode: "template", contextDoc: written(" câu cũ còn sót") });
+    expect(composerToContract(kept, { presets: PRESETS }).variants![0]!.style).not.toContain("câu cũ còn sót");
+  });
+
+  it("prompt copy ra ChatGPT nói CÙNG một điều với contract", () => {
+    const line = serializeComposer(freeState(" tiết chế hết mức"), PRESETS);
+    expect(line).toContain("tiết chế hết mức");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CỨU HỘ PILL MẤT ATTRS, NGAY TRÊN ĐƯỜNG ĐỌC TÀI LIỆU
+   ══════════════════════════════════════════════════════════════════════════ */
+describe("migrateComposerDoc — chữa tài liệu đã lưu với pill `{kind: null}`", () => {
+  /** Đúng hình dạng đọc được từ `workflow-draft.json` của dự án đang hỏng. */
+  const nullPills = (count: number): JSONContent => ({
+    type: "doc",
+    content: [{
+      type: "paragraph",
+      content: Array.from({ length: count }, () => ({ type: NODE.optionPill, attrs: { kind: null, value: null } })),
+    }],
+  });
+
+  const saved = (composer: unknown) => ({ docVersion: COMPOSER_DOC_VERSION, updatedAt: "", composer });
+
+  it("ô của block Bộ UI: lấy lại CẢ kind lẫn value từ ba trường có cấu trúc", () => {
+    const doc = migrateComposerDoc(
+      saved({
+        blocks: [{
+          id: "u1", kind: "uikit", mode: "free",
+          cells: [{ id: "c1", elementId: "coin", styleId: "", decor: "2", materialId: "gold-metal", note: "", doc: nullPills(3) }],
+        }],
+      }),
+      PRESETS,
+    );
+    const cell = (doc.composer.blocks[0] as { cells: UiCell[] }).cells[0]!;
+    const pills = (cell.doc as JSONContent).content![0]!.content!;
+    expect(pills.map((p) => p.attrs!["kind"])).toEqual(["style", "decor", "material"]);
+    expect(pills.map((p) => p.attrs!["value"])).toEqual(["", "2", "gold-metal"]);
+  });
+
+  it("câu Cảnh nền: lấy lại được kind, còn value thì để RỖNG chứ không bịa", () => {
+    const doc = migrateComposerDoc(
+      saved({ blocks: [{ id: "b1", kind: "background", mode: "free", doc: nullPills(2) }] }),
+      PRESETS,
+    );
+    const pills = ((doc.composer.blocks[0] as { doc: JSONContent }).doc).content![0]!.content!;
+    expect(pills.map((p) => p.attrs!["kind"])).toEqual(["scene", "mood"]);
+    /* Giá trị người dùng từng chọn đã mất thật. Điền một mặc định vào đây là đặt
+       một lựa chọn họ chưa từng bấm vào prompt sắp tiêu lượt vẽ. */
+    expect(pills.map((p) => p.attrs!["value"])).toEqual(["", ""]);
+  });
+
+  it("câu Ngữ cảnh chung cũng đi qua cùng phép cứu hộ", () => {
+    const doc = migrateComposerDoc(saved({ contextMode: "free", contextDoc: nullPills(2) }), PRESETS);
+    const pills = (doc.composer.contextDoc as JSONContent).content![0]!.content!;
+    expect(pills.map((p) => p.attrs!["kind"])).toEqual(["theme", "style"]);
+  });
+
+  it("dự án đời trước (chưa có `contextMode`) đọc ra `template`, không tự bật tự do", () => {
+    const doc = migrateComposerDoc(saved({ blocks: [] }), PRESETS);
+    expect(doc.composer.contextMode).toBe("template");
+    expect(doc.composer.contextDoc).toBeUndefined();
   });
 });

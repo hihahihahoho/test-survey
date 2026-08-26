@@ -25,6 +25,25 @@ export const NODE = {
   optionPill: "optionPill",
   /** Pill ảnh tham chiếu, inline atom. attrs: `{ refName, path }` — xem `PillImage`. */
   imagePill: "imagePill",
+  /**
+   * Dãy màu thương hiệu trong câu Ngữ cảnh chung, inline atom. **KHÔNG CÓ ATTR.**
+   *
+   * ╔══ VÌ SAO NODE NÀY RỖNG, KHÁC HẲN HAI NODE TRÊN ══════════════════════════╗
+   * ║ Vì màu thương hiệu KHÔNG chỉ là chữ trong câu: chính những mã hex ấy phải ║
+   * ║ đi tới `variant.brand.primary`/`.secondary` của contract, và THỨ TỰ mảng  ║
+   * ║ chính là vai trò ([0] chủ đạo, [1] nhấn — xem `ComposerState.brandColors`)║
+   * ║ Nếu node mang màu trong attrs thì cùng một sự thật nằm ở hai chỗ: mảng    ║
+   * ║ `brandColors` và tài liệu TipTap. Hai chỗ thì có ngày lệch — và lượt này  ║
+   * ║ vừa phải đi sửa đúng một vết như thế (pill của dòng element mất attrs,     ║
+   * ║ xem `PILL_SLOTS`). Không mở lại cái hố đó.                                ║
+   * ║ Nên node này chỉ là một CÁI MỐC: "chỗ này trong câu là dãy màu". Dữ liệu  ║
+   * ║ vẫn nằm đúng một chỗ, node view đọc màu sống qua React context và bộ      ║
+   * ║ serialize đọc từ `SerializeContext.brandColors`. Xoá node = thôi nhắc màu ║
+   * ║ trong câu; hex vẫn đi vào `brand.*` như thường, vì đó là hai đường khác   ║
+   * ║ nhau.                                                                     ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  brandPill: "brandPill",
 } as const;
 
 /**
