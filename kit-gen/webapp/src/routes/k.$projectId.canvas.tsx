@@ -11,7 +11,10 @@ export const Route = createRoute({
   component: CanvasProjectRoute,
 });
 
+/* ĐÍCH ĐỔI TỪ `/p/:id` SANG `/k/:id`: app chỉ còn MỘT màn làm việc (khu soạn
+   prompt). Trỏ về `/p/:id` vẫn chạy — nhưng đó là một cú nhảy thừa qua một
+   route nay cũng chỉ chuyển hướng, và người dùng thấy URL đổi hai lần. */
 function CanvasProjectRoute() {
   const { projectId } = Route.useParams();
-  return <Navigate to="/p/$projectId" params={{ projectId }} search={{ section: "images" }} replace />;
+  return <Navigate to="/k/$projectId" params={{ projectId }} replace />;
 }

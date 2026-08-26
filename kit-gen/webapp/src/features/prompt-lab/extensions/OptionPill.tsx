@@ -25,13 +25,46 @@ import { OptionPill as OptionPillControl } from "../components/pill-ui";
  * `pill-registry.ts`). Chín node là chín bản sao của cùng một node view — và
  * chín chỗ để quên khi sửa. Xem chú thích đầu `schema.ts`.
  */
-function OptionPillView({ node, updateAttributes }: ReactNodeViewProps) {
+function OptionPillView({ node, updateAttributes, extension }: ReactNodeViewProps) {
   const kind = (typeof node.attrs["kind"] === "string" ? node.attrs["kind"] : "style") as PillKind;
   const value = typeof node.attrs["value"] === "string" ? node.attrs["value"] : INHERIT;
+  /* Hình dạng pill đến từ CẤU HÌNH EXTENSION, không từ attrs của node: "pill này
+     to hay nhỏ" là thuộc tính của CHỖ ĐẶT (một câu cả thẻ hay một dòng danh sách),
+     không phải của nội dung. Nhét nó vào attrs là ghi một quyết định trình bày
+     xuống đĩa cùng tài liệu, rồi tài liệu ấy mở ở chỗ khác vẫn mang cỡ cũ. */
+  const compact = extension.options["compact"] === true;
 
   return (
-    <NodeViewWrapper as="span" className="relative inline-block">
-      <OptionPillControl kind={kind} value={value} onChange={(next) => updateAttributes({ value: next })} />
+    /**
+     * ⚠️ DATA-ATTR PHẢI CÓ MẶT NGAY TRÊN VỎ NODE VIEW, KHÔNG CHỈ Ở `renderHTML`.
+     *
+     * `renderHTML()` chỉ được dùng khi ProseMirror tự vẽ node; có node view thì
+     * DOM thật là cái vỏ này, và nó KHÔNG mang `data-kind`/`data-value`. Mọi lượt
+     * dựng lại tài liệu TỪ DOM vì thế đọc ra một pill không có kind, không có
+     * value — quy tắc `parseHTML` (`span[data-kg-node="optionPill"]`) cũng không
+     * khớp nổi cái vỏ trần.
+     *
+     * Đã bắt được tận tay: một lượt HMR giữa phiên dev làm editor dựng lại từ DOM,
+     * và tài liệu ĐÃ LƯU của dự án biến thành `attrs: {kind: null, value: null}` —
+     * cả ba pill của mọi dòng tụt về nhãn mặc định "theo phong cách chung". Đây là
+     * MẤT DỮ LIỆU, chỉ tình cờ là mất trong lúc dev. Dán vào một editor khác, hay
+     * bất kỳ đường DOM→doc nào của đời sau, đều đi qua đúng cái cửa ấy.
+     *
+     * Ba dòng attr này làm cái vỏ tự mô tả được, nên đường DOM→doc phục hồi đúng.
+     */
+    <NodeViewWrapper
+      as="span"
+      className="relative inline-block"
+      data-kg-node={NODE.optionPill}
+      data-kind={kind}
+      data-value={value}
+    >
+      <OptionPillControl
+        kind={kind}
+        value={value}
+        compact={compact}
+        onChange={(next) => updateAttributes({ value: next })}
+      />
     </NodeViewWrapper>
   );
 }
@@ -43,6 +76,18 @@ export const OptionPill = Node.create({
   atom: true,
   selectable: true,
   draggable: false,
+
+  /**
+   * `compact` — pill cỡ dòng danh sách thay vì cỡ câu.
+   *
+   * Cần thật, không phải cho đẹp: dòng element của block Bộ UI chạy ở bậc chữ
+   * `text-body`, còn pill mặc định mang `px-3 py-1` của một câu 20px. Để nguyên
+   * thì trong CÙNG MỘT thẻ, pill của dòng tự do cao hơn pill của dòng template
+   * gần 8px — đúng kiểu "to nhỏ không đều" mà chủ sản phẩm chỉ ra.
+   */
+  addOptions() {
+    return { compact: false };
+  },
 
   addAttributes() {
     return {

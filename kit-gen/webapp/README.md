@@ -8,10 +8,38 @@ Scaffold + design system. **Bản vanilla `web/` KHÔNG bị đụng tới** —
 cd webapp
 npm install
 npm run dev        # http://localhost:5173 (proxy /api,/health sang agent 8765)
+npm run dev:full   # agent CỦA REPO + vite, cùng lúc — dùng cái này khi sửa mã agent
 npm run build      # tsc --noEmit && vite build → dist/
 npm run typecheck  # tsc --noEmit
 npm run contrast   # đo tương phản WCAG từ chính tokens.css
 ```
+
+### ⚠️ `npm run dev` nói chuyện với agent NÀO?
+
+`npm run dev` chỉ chạy vite; nó proxy `/api` sang **cổng 8765**, và ở cổng đó thường là
+agent **bản cài** (`~/.kitgen/releases/<ver>/agent/server.mjs --workspace ~/KitGen`) đang
+chạy thường trực — KHÔNG phải agent trong repo này. Mã web mới + agent cũ = endpoint mới
+trả `404 NOT_FOUND`, và triệu chứng trên màn hình là một vòng xoay không dứt.
+
+`npm run dev:full` (`scripts/dev-full.mjs`) chạy **agent của repo** rồi mới bật vite trỏ
+vào đúng nó:
+
+| | |
+|---|---|
+| workspace | `~/KitGen-dev` (tự tạo) — đổi bằng `KITGEN_DEV_WORKSPACE=…` |
+| `KITGEN_HOME` | `<workspace>/.kitgen-home` — đổi bằng `KITGEN_DEV_HOME=…` |
+| cổng agent | dò từ `8799` trở lên, cổng bận thì nhảy tiếp — đổi mốc bằng `KITGEN_DEV_PORT=…` |
+| vite | nhận `KITGEN_AGENT_PORT=<cổng vừa dò>` |
+
+Phải tách **cả hai** khỏi bản cài, không chỉ workspace: khoá một-tiến-trình nằm ở
+`<KITGEN_HOME>/agent.lock` (`agent/lib/instance-lock.mjs` + `server.mjs`), tức là **một
+khoá cho cả máy** chứ không phải một khoá mỗi workspace. Chỉ đổi workspace thì agent repo
+vẫn chết ngay lúc khởi động với `KitGen agent da chay (PID …)` vì bản cài đang giữ
+`~/.kitgen/agent.lock`. Ctrl+C hạ cả hai tiến trình.
+
+> Trên **Windows**, `KITGEN_HOME` cũng là nơi `gen.sh` tìm shim `python3`/`node`. Nếu cần
+> bấm Vẽ thật khi đang `dev:full` trên Windows: tắt bản cài rồi chạy với
+> `KITGEN_DEV_HOME=<thư mục cài thật>`. macOS/Linux không vướng (dùng PATH).
 
 ## Quy ước cho team màn — đọc trước khi viết dòng đầu tiên
 

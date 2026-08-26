@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertCircle, Check, Clock, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { AlertCircle, Check, Clock, Loader2, RotateCw, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -20,6 +20,7 @@ import type { PromptPreviewJob } from "@/lib/types/api";
 import { FALLBACK_POSE, poseViewOf, readPosePill, writePosePill } from "../lib/pose-doc";
 import type { BlockPromptState } from "../lib/block-prompt";
 import type { GenBlockState } from "../lib/gen-queue";
+import { CARD, SECTION_LABEL } from "../lib/ui";
 import { SheetResultSlot } from "./SheetResultSlot";
 
 /**
@@ -85,13 +86,22 @@ export function CanvasBlock(props: CanvasBlockProps) {
   };
 
   return (
-    <section className="rounded-3 border border-line-subtle bg-surface p-5">
-      <header className="mb-3 flex flex-wrap items-center gap-2">
-        <h3 className="text-label uppercase tracking-wide text-fg-muted">{title}</h3>
-        {block.kind === "uikit" ? <UiKitBlockBadge block={block} /> : <ModeBadge mode={block.mode} />}
+    /* Vỏ thẻ dùng CHUNG hằng số với khối «Ngữ cảnh chung» của màn (`lib/ui.ts`):
+       trước đây hai nơi tự gõ cùng một chuỗi class, và chuỗi ấy đã bắt đầu lệch. */
+    <section className={CARD}>
+      <header className="mb-4 flex flex-wrap items-center gap-2">
+        <h3 className={SECTION_LABEL}>{title}</h3>
+        {/* Thẻ Bộ UI đeo CẢ HAI badge: số element (nó có bao nhiêu món) và chế độ
+            (nó đang ở khuôn hay đã bị chế). Từ đợt này block Bộ UI cũng có hai
+            chế độ như hai thẻ kia, nên giấu badge chế độ đi là để người dùng
+            phải mở thẻ ra mới biết mình đang ở đâu. */}
+        {block.kind === "uikit" && <UiKitBlockBadge block={block} />}
+        <ModeBadge mode={block.mode} />
 
         <div className="ml-auto flex items-center gap-2">
-          <div role="tablist" aria-label={`Chế độ xem thẻ ${title}`} className="inline-flex rounded-full border border-line-subtle p-0.5">
+          {/* `h-8` khớp chiều cao nút `size="sm"` cạnh nó — hai control cùng hàng mà
+              lệch 4px thì cả hàng trông như bị xô. */}
+          <div role="tablist" aria-label={`Chế độ xem thẻ ${title}`} className="inline-flex h-8 items-center rounded-full border border-line-subtle p-0.5">
             <TabButton active={tab === "compose"} onClick={() => setTab("compose")}>Soạn</TabButton>
             <TabButton active={tab === "prompt"} onClick={openPrompt}>Prompt</TabButton>
           </div>
@@ -122,7 +132,7 @@ export function CanvasBlock(props: CanvasBlockProps) {
       )}
 
       {sheets.length > 0 && (
-        <div className="mt-4 flex flex-col gap-3 border-t border-line-subtle pt-4">
+        <div className="mt-5 flex flex-col gap-4 border-t border-line-subtle pt-5">
           {sheets.map((sheet) => (
             <SheetResultSlot
               key={sheet.id}
@@ -164,7 +174,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       aria-selected={active}
       onClick={onClick}
       className={cn(
-        "rounded-full px-2.5 py-0.5 text-caption transition-colors duration-fast",
+        "inline-flex h-7 items-center rounded-full px-3 text-caption transition-colors duration-fast",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
         active ? "bg-raised text-fg-strong" : "text-fg-muted hover:text-fg",
       )}
@@ -217,8 +227,12 @@ function GenControl({ gen, canGen, onGen, onDequeue }: {
           <AlertCircle aria-hidden className="size-4" />{gen.message}
         </span>
       )}
+      {/* NÚT PRIMARY DUY NHẤT của cả màn (§5.4 UX-SPEC: đúng một CTA accent mỗi
+          màn — ở đây "màn" là một thẻ, vì mỗi thẻ là một đơn vị việc trọn vẹn).
+          Nó cũng là control DUY NHẤT tiêu tiền, nên nó phải là thứ nổi nhất trên
+          thẻ; mọi nút khác quanh nó đã hạ về `ghost`/`secondary`. */}
       <Button
-        variant="secondary"
+        variant="primary"
         size="sm"
         onClick={onGen}
         disabled={!canGen}
@@ -274,8 +288,16 @@ function PromptPanel({ prompt, stale, canGen, busy, onWantPrompt }: {
       )}
 
       {prompt.status === "error" && (
-        <div role="alert" className="rounded-2 border border-danger/60 bg-danger/[var(--kg-tint-b)] px-3 py-2">
+        /* MỘT HỘP LỖI PHẢI CÓ MỘT CÁI NÚT. Nút "Xem lại" ở hàng trên cũng thử lại
+           được, nhưng nó nằm cách hộp lỗi cả một đoạn và lúc này đang mang chữ
+           "Xem prompt" — người vừa đọc câu lỗi không nhận ra đó là đường đi tiếp.
+           §3.9: mọi ca hỏng phải ra CHỮ **và** một lối thoát ngay tại chỗ. */
+        <div role="alert" className="rounded-2 border border-danger/60 bg-danger/[var(--kg-tint-b)] px-4 py-3">
           <p className="text-body text-fg-strong">{prompt.message}</p>
+          <Button variant="secondary" size="sm" className="mt-2" onClick={onWantPrompt} disabled={busy}>
+            <RotateCw aria-hidden strokeWidth={1.5} />
+            Thử lại
+          </Button>
           {prompt.details.length > 0 && (
             <details className="mt-1">
               <summary className="cursor-pointer text-caption text-fg-muted">Chi tiết</summary>

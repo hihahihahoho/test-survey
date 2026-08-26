@@ -1,7 +1,7 @@
 import { getPresets, type PresetBundle } from "./presets-store";
 import { phraseOf } from "./pill-registry";
 import { describeBrandColors } from "./brand-colors";
-import { gridFor, type Block, type ComposerState, type UiCell } from "./composer-model";
+import { gridFor, type Block, type BlockMode, type ComposerState, type UiCell } from "./composer-model";
 import { countImageRefs, makeContext, serializeDoc, tidy, type PromptDocNode, type SerializeContext } from "./serialize";
 
 /**
@@ -24,9 +24,20 @@ import { countImageRefs, makeContext, serializeDoc, tidy, type PromptDocNode, ty
  * với máy vẽ một thứ mà chính ta không kiểm soát — rồi khi engine xếp khác,
  * prompt và ảnh nói hai điều trái nhau. Số thứ tự ở đây chỉ để ĐẾM và đối chiếu.
  */
-function cellLine(cell: UiCell, index: number, ctx: SerializeContext): string {
+function cellLine(cell: UiCell, index: number, ctx: SerializeContext, mode: BlockMode): string {
   const element = ctx.presets.elements.find((preset) => preset.id === cell.elementId);
   const name = element?.vi ?? cell.elementId;
+
+  /* CHẾ ĐỘ TỰ DO: câu của dòng thay cho cả phần ghép pill. Cùng luật với block
+     Cảnh nền/Nhân vật — người dùng đã chọn phá khuôn thì đừng lén dựng lại khuôn
+     quanh chữ của họ. Câu rỗng ⇒ rơi về khuôn, y như bên `uiKitSheets`: hai
+     đường sinh prompt phải nói CÙNG một điều, nếu không thì bản xem trước và
+     bản copy ra ChatGPT là hai thứ khác nhau. */
+  if (mode === "free") {
+    const line = tidy(serializeDoc(cell.doc as PromptDocNode, ctx));
+    if (line) return tidy(`cell ${index + 1} (${name}): ${line}`);
+  }
+
   /* Phong cách của ô: rỗng = theo phong cách chung. Cùng luật với pill `style`
      trong câu mad-lib — xem `pillText()` bên serialize.ts. */
   const style = cell.styleId ? phraseOf("style", cell.styleId, ctx.presets) : ctx.styleEN;
@@ -48,7 +59,7 @@ function blockLines(block: Block, ctx: SerializeContext): string[] {
       /* Nói rõ "hệ thống tự xếp lưới" NGAY TRONG PROMPT. Người đọc prompt (và
          model) không được hiểu nhầm rằng thứ tự liệt kê là vị trí trên sheet. */
       `UI kit spritesheet ${cols}x${rows} (hệ thống tự xếp lưới, thứ tự dưới đây chỉ để liệt kê):`,
-      ...block.cells.map((cell, index) => cellLine(cell, index, ctx)),
+      ...block.cells.map((cell, index) => cellLine(cell, index, ctx, block.mode)),
     ];
   }
 

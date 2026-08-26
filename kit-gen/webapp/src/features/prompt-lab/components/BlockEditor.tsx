@@ -35,16 +35,39 @@ import type { BlockMode } from "../lib/composer-model";
  * mất luôn chữ vừa gõ. Gọi `setEditable()` trong effect thì chỉ đổi đúng cái cần
  * đổi.
  */
+/**
+ * BẬC CHỮ CỦA VÙNG SOẠN — hai bậc, và chúng ứng với hai thứ khác nhau.
+ *
+ * ╔══ VÌ SAO KHÔNG ĐỂ MỘT BẬC DUY NHẤT ══════════════════════════════════════╗
+ * ║ `prose` (20px) là bậc của MỘT CÂU LÀ CẢ MỘT THẺ — block Cảnh nền / Nhân   ║
+ * ║ vật, nơi câu ấy là toàn bộ nội dung và xứng đáng cỡ chữ ấy.               ║
+ * ║ `row` (text-body) là bậc của MỘT DÒNG TRONG DANH SÁCH — dòng element của  ║
+ * ║ block Bộ UI. Soi tận mắt trên trình duyệt: để nguyên `prose` ở đó thì gạt ║
+ * ║ công tắc «Tự do» làm chữ trong CÙNG MỘT THẺ nhảy một bậc, dòng tràn thành ║
+ * ║ hai hàng, và nhãn "#1 Nút bấm" bên trái tụt hẳn khỏi hàng chữ nó chú.     ║
+ * ║ Đúng cái "to nhỏ không đều" mà chủ sản phẩm chỉ ra ở đợt trước.           ║
+ * ║ Pill KHÔNG khai cỡ riêng (xem `pill-ui.tsx`) nên nó tự đi theo bậc này —  ║
+ * ║ đổi một chỗ, cả dòng theo, không có chỗ nào lệch lại.                     ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+const SCALE: Record<"prose" | "row", string> = {
+  prose: "text-prose text-fg-strong",
+  row: "text-body text-fg-strong",
+};
+
 export function BlockEditor({
   doc,
   mode,
   onChange,
   resetToken,
   placeholder,
+  scale = "prose",
 }: {
   doc: JSONContent;
   mode: BlockMode;
   onChange: (next: JSONContent) => void;
+  /** Bậc chữ của vùng soạn — xem `SCALE`. */
+  scale?: "prose" | "row";
   /**
    * Đổi số này = "nạp lại `doc` vào editor".
    *
@@ -86,7 +109,10 @@ export function BlockEditor({
         trailingNode: false,
       }),
       Placeholder.configure({ placeholder }),
-      OptionPill,
+      /* Pill đi theo bậc chữ của vùng soạn — xem `SCALE` và `addOptions()` của
+         `OptionPill`. Cấu hình MỘT LẦN lúc dựng editor là đủ: `scale` là hằng của
+         từng chỗ gọi, không đổi lúc chạy. */
+      OptionPill.configure({ compact: scale === "row" }),
       ImagePill,
       SlashCommand,
     ],
@@ -98,12 +124,15 @@ export function BlockEditor({
            bọc: caret cao bao nhiêu là do thẻ editable quyết định. Đặt sai chỗ ⇒
            con nháy cao 14px giữa dòng 24px.
 
-           `text-display` (24px) chứ KHÔNG phải `text-[26px]`: bậc `display` của
-           thang §5.2 nằm đúng trong khoảng cần, và repo có cổng cấm cỡ chữ
-           ngoặc vuông (`src/__tests__/w2b-dosage.test.ts`). Một prototype không
-           phải lý do để mở lại cái cổng đó. `font-normal` gỡ độ đậm 650 của bậc
-           display: đây là một CÂU để đọc, không phải một tiêu đề. */
-        class: "text-display font-normal text-fg-strong",
+           `text-prose` (20px, weight 400) — bậc dựng RIÊNG cho câu mad-lib. Bản
+           trước mượn `text-display` (24px/650) rồi gỡ đậm bằng `font-normal`: hai
+           lần chữa cho một bậc vốn dành cho tiêu đề, và câu soạn hoá ra to gần
+           bằng H1 của trang. Vẫn KHÔNG được gõ `text-[20px]` — repo có cổng cấm
+           cỡ chữ ngoặc vuông (`src/__tests__/w2b-dosage.test.ts`); cách đúng là
+           thêm một bậc có tên, và đó là việc đã làm.
+
+           Bậc CỤ THỂ do `scale` chọn — xem khối chú thích của `SCALE`. */
+        class: SCALE[scale],
       },
     },
   });

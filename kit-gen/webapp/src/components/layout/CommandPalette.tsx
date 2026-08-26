@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
-  BookOpen, Boxes, Compass, Images, Keyboard, Pencil, Plus,
+  BookOpen, Boxes, Compass, Keyboard, Pencil, Plus,
   RefreshCw, Settings, Terminal, Trash2, Upload, Wrench,
 } from "lucide-react";
 import {
@@ -55,19 +55,16 @@ export function CommandPalette(props: CommandPaletteProps) {
     if (projectId) {
       const p = { projectId };
       list.push(
-        /* BA MỤC, ĐÚNG BA CĂN PHÒNG CÒN TỒN TẠI.
-           Bảng lệnh là danh sách ĐIỂM ĐẾN — mục nào trỏ tới một nơi không còn thì
+        /* HAI MỤC, ĐÚNG HAI THỨ CÒN MỞ ĐƯỢC — và một trong hai là một DIALOG.
+           Bảng lệnh là danh sách ĐIỂM ĐẾN; mục nào trỏ tới một nơi không còn thì
            nó tệ hơn là không có mục, vì người dùng gõ đúng tên mình nhớ và được đưa
-           tới một trang khác hẳn mà không ai giải thích. Năm mục cũ («Yêu cầu»,
-           «Phong cách», «Mascot», «Ảnh đã tạo», «Cài đặt») đều là tên các mục
-           sidebar/tab của trình quản lý dự án đời wizard; sidebar đó đã bị gỡ cùng
-           đợt IA prompt-first. Hai điểm đến thật bây giờ là KHU SOẠN và KẾT QUẢ. */
-        { id: "p.results", group: "Dự án", icon: Images, label: "Dự án: Kết quả & xuất kit", hint: ["g", "r"], hintSequence: true,
-          run: go(() => void navigate({ to: "/p/$projectId", params: p })) },
+           tới một trang khác hẳn mà không ai giải thích. Mục «Kết quả & xuất kit»
+           vừa bị gỡ theo chính màn của nó: thành phẩm nay nằm ngay dưới chân từng
+           thẻ trong khu soạn, nên «mở kết quả» và «mở khu soạn» đã là một. */
         { id: "p.compose", group: "Dự án", icon: Pencil, label: "Dự án: Mở khu soạn", hint: ["g", "d"], hintSequence: true,
           run: go(() => void navigate({ to: "/k/$projectId", params: p })) },
         { id: "p.settings", group: "Dự án", icon: Settings, label: "Dự án: Cài đặt", hint: ["g", "s"], hintSequence: true,
-          run: go(() => void navigate({ to: "/p/$projectId", params: p, search: { settings: "project" } })) },
+          run: go(() => void navigate({ to: "/k/$projectId", params: p, search: { settings: "project" } })) },
       );
     }
 

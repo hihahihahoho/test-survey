@@ -350,7 +350,26 @@ function subscribe(listener: () => void): () => void {
    Cờ chống gieo lặp phải là MỘT cờ dùng chung cho cả module, không phải state
    của component: `usePresets` được gọi ở 5 chỗ cùng lúc, và giữa lúc POST bay đi
    với lúc query trả về danh sách mới thì `presets` vẫn còn RỖNG — mỗi component
-   sẽ tự thấy "kho rỗng, gieo đi" và ta có 5 bộ hạt giống chồng lên nhau. */
+   sẽ tự thấy "kho rỗng, gieo đi" và ta có 5 bộ hạt giống chồng lên nhau.
+
+   ══ NHƯNG CỜ ĐÓ CHỈ SỐNG TRONG MỘT LẦN TẢI TRANG ═════════════════════════════
+   Và đó chính là chỗ nó thủng. Cờ này reset mỗi lần tải lại trang (F5, HMR nạp
+   lại module, mở tab thứ hai) — trong khi thứ nó bảo vệ, cái kho, thì KHÔNG.
+   Cảnh đã xảy ra thật trên `~/KitGen-dev`: một lần tải trang thấy kho rỗng và
+   bắt đầu gieo; trước khi bộ POST ấy về, trang được tải lại; lần tải mới có cờ
+   `idle` tinh khôi VÀ một ảnh chụp query vẫn còn rỗng — nên nó gieo lần nữa.
+   Kết quả: 11 element với 3 bản trùng (Nút bấm / Popover / Thanh máu hai lần).
+
+   Nên chống trùng phải nằm ở thứ SỐNG LÂU HƠN MỘT LẦN TẢI TRANG, tức là ở kho.
+   Hai lớp, và chúng khác vai:
+     ① (ở đây) ĐỐI CHIẾU DANH SÁCH SERVER NGAY TRƯỚC KHI GHI. Thu hẹp khe hở từ
+       "bao lâu tuỳ độ cũ của cache query" xuống còn đúng một vòng request, và
+       tránh bắn đi hàng chục POST vô ích. Đây là phép tối ưu, KHÔNG phải bảo đảm.
+     ② (agent, `addLibraryPreset`) upsert nhẹ theo `kind`+`data.key`. Đây mới là
+       BẢO ĐẢM: agent là chỗ duy nhất nhìn thấy mọi tab, mọi lần tải trang, nên
+       chỉ nó mới đóng được khe hở "hai client cùng đọc rồi cùng ghi".
+   Cờ `seedState` giữ nguyên làm lớp phụ: nó vẫn chặn được 5 component trong CÙNG
+   một lần tải, mà không tốn request nào. */
 type SeedState = "idle" | "running" | "done";
 let seedState: SeedState = "idle";
 
@@ -358,11 +377,34 @@ async function seedOnce(): Promise<void> {
   if (seedState !== "idle") return;
   seedState = "running";
   try {
+    /* ĐỌC LẠI TỪ SERVER, không tin `rows` mà hook vừa đưa: chính cái ảnh chụp cũ
+       đó là nguyên nhân. Ở đây gọi thẳng `api.library.get()` chứ không đi qua
+       TanStack Query — ta cần giá trị TẠI THỜI ĐIỂM GHI, mà query thì có quyền
+       trả về bản cache. */
+    const live = await api.library.get();
+    const have = new Set((live.presets ?? []).map((row) => rowKey(row.kind, str(row.data ?? {}, "key") || row.id)));
+
     const seed = seedPresets();
-    for (const preset of seed.styles) await api.library.addPreset(payloadOf("style", preset));
-    for (const preset of seed.elements) await api.library.addPreset(payloadOf("element", preset));
-    for (const preset of seed.mascots) await api.library.addPreset(payloadOf("mascot", preset));
+    const jobs: [PresetKind, AnyPreset[]][] = [
+      ["style", seed.styles],
+      ["element", seed.elements],
+      ["mascot", seed.mascots],
+    ];
+    for (const [kind, list] of jobs) {
+      for (const preset of list) {
+        /* Khoá đã có trên server ⇒ BỎ QUA. Kể cả khi bản trên server đã bị người
+           dùng sửa khác hạt giống: hạt giống là điểm KHỞI ĐẦU, không phải giá trị
+           đúng cần khôi phục. Ghi đè ở đây là xoá công sửa của họ. */
+        if (have.has(rowKey(kind, preset.id))) continue;
+        await api.library.addPreset(payloadOf(kind, preset));
+      }
+    }
     seedState = "done";
+    /* Làm mới query KỂ CẢ KHI KHÔNG GIEO GÌ. Không gieo gì nghĩa là server đã có
+       đủ — và cũng nghĩa là ảnh chụp query đang rỗng SAI. Bản trong RAM lúc này
+       vẫn là hạt giống (`hydrate` đặt khi thấy rỗng), tức người dùng đang nhìn
+       giá trị mặc định thay vì danh mục thật của họ. Một lượt refetch chữa đúng
+       chỗ đó. */
     invalidateLibrary?.();
   } catch (error) {
     /* Gieo hụt (agent tắt giữa chừng) ⇒ về `idle` để lần mở sau thử lại. Bản

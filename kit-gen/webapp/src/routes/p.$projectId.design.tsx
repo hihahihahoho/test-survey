@@ -13,7 +13,10 @@ export const Route = createRoute({
   component: DesignRoute,
 });
 
+/* ĐÍCH ĐỔI TỪ `/p/:id` SANG `/k/:id`: app chỉ còn MỘT màn làm việc (khu soạn
+   prompt). Trỏ về `/p/:id` vẫn chạy — nhưng đó là một cú nhảy thừa qua một
+   route nay cũng chỉ chuyển hướng, và người dùng thấy URL đổi hai lần. */
 function DesignRoute() {
   const { projectId } = Route.useParams();
-  return <Navigate to="/p/$projectId" params={{ projectId }} search={{ section: "skeleton" }} replace />;
+  return <Navigate to="/k/$projectId" params={{ projectId }} replace />;
 }

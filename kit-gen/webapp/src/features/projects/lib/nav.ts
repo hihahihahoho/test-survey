@@ -13,18 +13,22 @@ const pid = (id: string) => encodeURIComponent(id);
 
 export const PATHS = {
   projects: () => "/",
-  project: (id: string) => `/p/${pid(id)}`,
-  design: (id: string, tab: "sheets" | "styles" | "advanced" = "sheets") => `/p/${pid(id)}/design?tab=${tab}`,
-  runs: (id: string) => `/p/${pid(id)}/runs`,
+  /* MỘT MÀN, MỘT ĐƯỜNG. Cả năm hàm dưới đây từng trỏ vào năm màn khác nhau của
+     trình quản lý dự án đời cũ; các màn ấy đã bị gỡ và route của chúng nay chỉ
+     còn chuyển hướng về `/k/:id`. Trả thẳng `/k/:id` ở đây để không có link nào
+     trong app đi vòng qua một trạm trung chuyển. */
+  project: (id: string) => `/k/${pid(id)}`,
+  design: (id: string, _tab: "sheets" | "styles" | "advanced" = "sheets") => `/k/${pid(id)}`,
+  runs: (id: string) => `/k/${pid(id)}`,
   trash: () => "/trash",
-  /** Đích thật của file bàn làm việc trong dự án. */
+  /** File con của dự án — vẫn có route riêng, và route ấy tự chuyển về khu soạn. */
   file: (id: string, fileId: string) => `/p/${pid(id)}/f/${pid(fileId)}`,
 } as const;
 
 export interface ProjectNav {
-  /** Mở project (S2 tổng quan). */
+  /** Mở dự án — khu soạn prompt, màn làm việc duy nhất. */
   open: (id: string) => void;
-  /** Mở THẲNG trang kết quả `?section=images` — đích của một dự án đã có ảnh. */
+  /** Ý ĐỊNH «xem thành phẩm». Nay thành phẩm nằm ngay dưới chân từng thẻ của khu soạn. */
   openImages: (id: string) => void;
   openWizard: (id: string) => void;
   navigateCanvas: (id: string) => void;
@@ -99,10 +103,13 @@ export function hasGeneratedOutput(project: GeneratedOutputInput | null | undefi
 }
 
 /**
- * MỞ MỘT DỰ ÁN TỪ MÀN HOME — vào phòng có đồ, không vào phòng trống.
+ * MỞ MỘT DỰ ÁN TỪ MÀN HOME.
  *
- * Dự án đã có ảnh ⇒ trang kết quả `?section=images` (thứ người dùng bấm thẻ để xem).
- * Dự án chưa gen bao giờ ⇒ wizard, vì ở đó chưa có gì để xem cả.
+ * Ba nhánh nay cùng ra một chỗ (`/k/:id`) vì app chỉ còn một màn làm việc — và ba
+ * nhánh ấy VẪN ĐƯỢC GIỮ. Chúng ghi lại câu hỏi *"dự án này đã có thành phẩm chưa"*,
+ * thứ mà thẻ ở màn Home vẫn hỏi (`KitCard` dùng `hasGeneratedOutput` để quyết định
+ * có chạy ảnh bìa động không). Rút gọn thành một dòng `toKit(id)` là xoá câu hỏi đó
+ * khỏi mã, và người sau sẽ phải nghĩ lại từ đầu khi cần nó.
  */
 export function openProjectWith(
   nav: ProjectNav,
@@ -113,15 +120,27 @@ export function openProjectWith(
   else nav.open(project.id);
 }
 
+/**
+ * ══ TÁM CỬA, MỘT ĐÍCH ══════════════════════════════════════════════════════
+ * Tám hàm dưới đây từng dẫn tới tám màn: tổng quan · kết quả · wizard · bàn làm
+ * việc · bản thiết kế · phong cách · lượt chạy. App nay chỉ còn MỘT màn làm việc
+ * (`/k/:id` — khu soạn prompt), nên tất cả đều về đó.
+ *
+ * VÌ SAO KHÔNG GỘP CHÚNG LẠI THÀNH MỘT HÀM: mỗi tên vẫn nói một Ý ĐỊNH khác nhau
+ * ở nơi gọi (*"vừa nhân bản xong, mở phong cách của bản sao"* ≠ *"mở dự án"*), và
+ * ngày nào app có lại một màn thứ hai thì chỗ phải sửa là file này, không phải hai
+ * chục chỗ gọi. Xoá tên đi là xoá luôn thông tin ấy khỏi mã.
+ */
 export function createNav(navigate: Navigate): ProjectNav {
+  const toKit = (projectId: string) => void navigate({ to: "/k/$projectId", params: { projectId } });
   return {
-    open: (id) => void navigate({ to: "/p/$projectId", params: { projectId: id } }),
-    openImages: (id) => void navigate({ to: "/p/$projectId", params: { projectId: id }, search: { section: "images" } }),
-    openWizard: (id) => void navigate({ to: "/k/$projectId", params: { projectId: id } }),
-    navigateCanvas: (id) => void navigate({ to: "/k/$projectId/canvas", params: { projectId: id } }),
-    openDesign: (id, tab = "sheets") => void navigate({ to: "/p/$projectId/design", params: { projectId: id }, search: { tab } }),
-    openStyles: (id) => void navigate({ to: "/p/$projectId/design", params: { projectId: id }, search: { tab: "styles" } }),
-    openRuns: (id) => void navigate({ to: "/p/$projectId/runs", params: { projectId: id } }),
+    open: toKit,
+    openImages: toKit,
+    openWizard: toKit,
+    navigateCanvas: toKit,
+    openDesign: (id) => toKit(id),
+    openStyles: toKit,
+    openRuns: toKit,
     openTrash: () => void navigate({ to: "/trash" }),
     openFile: (projectId, fileId) => {
       void navigate({ to: "/p/$projectId/f/$fileId", params: { projectId, fileId } });

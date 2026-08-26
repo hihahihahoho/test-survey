@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { describe, eq, includes, it, multipart, ok, pathExists, PNG_1x1 } from "./harness.mjs"
 
@@ -139,6 +139,57 @@ export async function run({ api, wsRoot }) {
     eq((await api("GET", "/api/library")).json.presets, [])
   })
 
+  await it("preset: POST lặp cùng `kind`+`data.key` ⇒ upsert nhẹ, kho chỉ có MỘT bản", async () => {
+    /* Cảnh thật đã làm bẩn `~/KitGen-dev`: web gieo hạt giống, trang được tải lại
+       giữa chừng, và cả bộ POST bay đi LẦN THỨ HAI. Agent là chỗ duy nhất nhìn
+       thấy cả hai lần đó, nên nó phải là chỗ chặn. */
+    const seed = { kind: "element", name: "Nút bấm", data: { key: "button", en: "a primary action button", decor: 4 } }
+    const first = await api("POST", "/api/library/presets", { body: seed })
+    eq(first.status, 201)
+    const keptId = first.json.preset.id
+
+    /* Người dùng sửa bản ấy — đây là thứ KHÔNG ĐƯỢC MẤT ở lần gieo lại. */
+    await api("PATCH", `/api/library/presets/${keptId}`, { body: { name: "Nút chính", data: { key: "button", en: "gõ tay", decor: 7 } } })
+
+    const again = await api("POST", "/api/library/presets", { body: seed })
+    eq(again.status, 201, "vẫn 201: sau lệnh này preset tồn tại — đúng trong cả hai trường hợp")
+    eq(again.json.preset.id, keptId, "trả về ĐÚNG bản đã có, không sinh id mới")
+    eq(again.json.preset.name, "Nút chính", "KHÔNG đắp hạt giống mặc định lên bản người dùng đã sửa")
+    eq(again.json.preset.data.decor, 7)
+
+    const listed = await api("GET", "/api/library")
+    eq(listed.json.presets.length, 1, "gieo hai lần ⇒ vẫn một bản")
+
+    /* Cùng `key` nhưng KHÁC `kind` là hai danh tính khác nhau — không được gộp. */
+    const otherKind = await api("POST", "/api/library/presets", { body: { kind: "style", name: "Nút bấm", data: { key: "button", en: "x" } } })
+    eq(otherKind.status, 201)
+    ok(otherKind.json.preset.id !== keptId, "`kind` khác ⇒ bản ghi khác")
+
+    /* KHÔNG có `key` ⇒ không có danh tính ⇒ luôn tạo mới. Gộp những bản này lại
+       theo `kind` là xoá dữ liệu của người tạo chúng bằng tay / bằng curl. */
+    const noKey1 = await api("POST", "/api/library/presets", { body: { kind: "style", name: "Không khoá", data: { en: "a" } } })
+    const noKey2 = await api("POST", "/api/library/presets", { body: { kind: "style", name: "Không khoá", data: { en: "a" } } })
+    ok(noKey1.json.preset.id !== noKey2.json.preset.id, "thiếu `key` ⇒ vẫn là hai bản ghi riêng")
+    eq((await api("GET", "/api/library")).json.presets.length, 4)
+
+    for (const id of [keptId, otherKind.json.preset.id, noKey1.json.preset.id, noKey2.json.preset.id]) {
+      eq((await api("DELETE", `/api/library/presets/${id}`)).status, 204)
+    }
+  })
+
+  await it("preset: PATCH không được kéo bản này đè lên danh tính của bản khác", async () => {
+    const a = await api("POST", "/api/library/presets", { body: { kind: "element", name: "A", data: { key: "aaa", en: "a" } } })
+    const b = await api("POST", "/api/library/presets", { body: { kind: "element", name: "B", data: { key: "bbb", en: "b" } } })
+    /* Không có hàng rào này, `dedupePresets` sẽ lặng lẽ bỏ một trong hai ở lần ghi
+       kế tiếp — một lệnh SỬA lại XOÁ mất một bản ghi khác, mà không ai báo gì. */
+    eq((await api("PATCH", `/api/library/presets/${b.json.preset.id}`, { body: { data: { key: "aaa", en: "b" } } })).status, 400)
+    /* Nhưng PATCH giữ nguyên khoá của CHÍNH NÓ thì vẫn phải chạy được. */
+    eq((await api("PATCH", `/api/library/presets/${b.json.preset.id}`, { body: { name: "B mới", data: { key: "bbb", en: "b2" } } })).status, 200)
+    eq((await api("GET", "/api/library")).json.presets.length, 2)
+    eq((await api("DELETE", `/api/library/presets/${a.json.preset.id}`)).status, 204)
+    eq((await api("DELETE", `/api/library/presets/${b.json.preset.id}`)).status, 204)
+  })
+
   await it("preset: từ chối kind lạ, tên rỗng, data không phải object và id sai dạng", async () => {
     eq((await api("POST", "/api/library/presets", { body: { kind: "khong-co", name: "X", data: {} } })).status, 400)
     eq((await api("POST", "/api/library/presets", { body: { kind: "style", name: "   ", data: {} } })).status, 400)
@@ -205,5 +256,44 @@ export async function run({ api, wsRoot }) {
     eq(again.json.presets.map(preset => preset.name), ["Sau di trú"])
     eq(again.json.brands[0].name, "VCB cũ", "ghi preset không đụng vào phần dữ liệu cũ")
     eq((await api("DELETE", `/api/library/presets/${created.json.preset.id}`)).status, 204)
+  })
+
+  /* CŨNG GHI ĐÈ FILE STATE ⇒ phải đứng sau mọi ca dùng kho, như ca di trú trên. */
+  await it("dọn bản trùng có sẵn trên đĩa: giữ bản CŨ NHẤT, workspace tự sạch khi đọc", async () => {
+    const libDir = join(wsRoot, ".kitgen", "library")
+    await mkdir(libDir, { recursive: true })
+    /* Đúng hình dạng mà `~/KitGen-dev` đã dính: hạt giống gieo hai lần, nên có
+       hai bản `element:button` — bản cũ đã được người dùng sửa tên, bản mới là
+       mặc định gieo lại đè lên sau. */
+    const dirty = {
+      version: 4,
+      brands: [], poseTemplates: [], settings: { background: 2, popup: 4, small: 16, props: 16, mascot: 4 }, items: [],
+      presets: [
+        { id: "preset_00000000000000a1", kind: "element", name: "Nút của tôi", data: { key: "button", en: "đã sửa" }, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z" },
+        { id: "preset_00000000000000a2", kind: "element", name: "Popover", data: { key: "popover", en: "b" }, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" },
+        { id: "preset_00000000000000a3", kind: "element", name: "Nút bấm", data: { key: "button", en: "mặc định" }, createdAt: "2026-03-09T00:00:00.000Z", updatedAt: "2026-03-09T00:00:00.000Z" },
+        /* Trùng khoá nhưng `createdAt` BẰNG NHAU (cùng mili-giây — chuyện thường
+           khi vòng gieo chạy liên tiếp): bản đứng TRƯỚC thắng, vì thứ tự mảng
+           chính là thứ tự tạo. */
+        { id: "preset_00000000000000a4", kind: "style", name: "Cổ tích", data: { key: "fairy", en: "trước" }, createdAt: "2026-02-02T00:00:00.000Z", updatedAt: "2026-02-02T00:00:00.000Z" },
+        { id: "preset_00000000000000a5", kind: "style", name: "Cổ tích", data: { key: "fairy", en: "sau" }, createdAt: "2026-02-02T00:00:00.000Z", updatedAt: "2026-02-02T00:00:00.000Z" },
+      ],
+    }
+    await writeFile(join(libDir, "library.json"), JSON.stringify(dirty), "utf8")
+
+    const r = await api("GET", "/api/library")
+    eq(r.status, 200)
+    eq(r.json.presets.length, 3, "5 bản ghi, 2 bản trùng bị bỏ")
+    eq(r.json.presets.map(preset => preset.id), ["preset_00000000000000a1", "preset_00000000000000a2", "preset_00000000000000a4"])
+    /* Điều cốt lõi: bản GIỮ LẠI là bản người dùng đã sửa, không phải hạt giống
+       mặc định gieo đè lên sau. Giữ bản mới là lặng lẽ ném đi công của họ. */
+    eq(r.json.presets[0].name, "Nút của tôi")
+    eq(r.json.presets[0].data.en, "đã sửa")
+
+    /* Và một lần ghi bất kỳ sau đó ĐÓNG DẤU bản đã dọn xuống đĩa — không để file
+       bẩn nằm lại rồi mỗi lần đọc phải dọn lại. */
+    eq((await api("DELETE", "/api/library/presets/preset_00000000000000a2")).status, 204)
+    const raw = JSON.parse(await readFile(join(libDir, "library.json"), "utf8"))
+    eq(raw.presets.map(preset => preset.id), ["preset_00000000000000a1", "preset_00000000000000a4"])
   })
 }

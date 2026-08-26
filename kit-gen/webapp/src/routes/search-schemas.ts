@@ -151,6 +151,21 @@ export type SettingsTab = (typeof SETTINGS_TABS)[number];
    Ba mảng hằng ở trên Ở LẠI vì `projectSearchSchema` vẫn cần chúng để NHẬN link cũ —
    một alias không ai gõ thì khác hẳn một giá trị URL vẫn có người mở. */
 
+/**
+ * `/k/:projectId` — MÀN LÀM VIỆC DUY NHẤT, và nó có đúng MỘT trục URL.
+ *
+ * `?settings=` mở dialog «Cài đặt dự án» (khối meta + vùng nguy hiểm). Nó phải nằm
+ * trên URL chứ không phải trong state cục bộ vì hai đường vào đã có thật trỏ tới nó:
+ * mục ⌘K «Dự án: Cài đặt», và bookmark đời cũ `/p/:id?settings=requirements` — route
+ * `/p` chuyển hướng sang đây và MANG THEO param, nên link cũ mở đúng cái cửa cũ.
+ *
+ * Ba giá trị đời cũ (`requirements`/`style`/`project`) từng là ba TAB; dialog nay chỉ
+ * còn một khối, nên màn đọc nó bằng «có mặt hay không» chứ không bằng tên.
+ */
+export const kitCanvasSearchSchema = z.object({
+  settings: z.enum(PROJECT_SETTINGS_TABS).optional().catch(undefined),
+});
+
 export const projectSearchSchema = z.object({
   section: z.enum([...PROJECT_SECTIONS, ...LEGACY_PROJECT_SECTIONS]).default("images").catch("images"),
   group: z.enum(PROJECT_IMAGE_GROUPS).optional().catch(undefined),

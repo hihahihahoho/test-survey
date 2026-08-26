@@ -55,7 +55,10 @@ describe("V-3 · mốc <768px là CHỈ-ĐỌC THẬT (audit M5)", () => {
   it.each([
     "src/features/projects/ProjectsScreen.tsx",
     "src/features/kit/KitScreen.tsx",
-    "src/features/project/ProjectScreen.tsx",
+    /* `features/project/ProjectScreen.tsx` ĐÃ XOÁ cùng đợt "một màn duy nhất" — màn
+       «Kết quả & xuất kit» không còn, và hàng cửa ra của nó (cùng cái `gate` này)
+       nay nằm trong `PromptCanvasScreen`. */
+    "src/features/prompt-canvas/PromptCanvasScreen.tsx",
     "src/features/project/ProjectSettingsScreen.tsx",
     "src/features/runs/RunsScreen.tsx",
     "src/features/runs/RunDetailScreen.tsx",

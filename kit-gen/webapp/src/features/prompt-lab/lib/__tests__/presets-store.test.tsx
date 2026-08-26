@@ -141,6 +141,65 @@ describe("gieo hạt: đúng một lần, kể cả khi nhiều màn cùng mở"
     expect(keys).toContain("mascot:mascot-default");
   });
 
+  it("tải lại trang giữa lúc gieo ⇒ lần gieo thứ hai KHÔNG đẻ thêm bản trùng", async () => {
+    /* ══ ĐÂY LÀ CA TÁI HIỆN ĐÚNG CÁI ĐÃ LÀM BẨN `~/KitGen-dev` ══════════════
+       Cờ `seedState` chỉ sống trong MỘT lần tải trang. Tải lại trang giữa lúc bộ
+       POST đầu chưa về ⇒ lần tải mới có cờ tinh khôi VÀ một ảnh chụp query vẫn
+       còn rỗng ⇒ nó gieo lần nữa. Kho thành 11 element với 3 bản trùng.
+
+       Dựng lại chính xác cảnh đó ở đây: `__resetPresetsStoreForTest()` CHÍNH LÀ
+       một lần tải lại trang (module state về mặc định), còn `mockImplementationOnce`
+       dựng "ảnh chụp query đã cũ" — cửa đọc đầu tiên của lần tải thứ hai trả về
+       kho RỖNG, trong khi kho thật đã có đủ 17 bản. */
+    const server: Row[] = [];
+    addPreset.mockImplementation(async (input: { kind: string; name: string; data: Record<string, unknown> }) => {
+      const created = row(`preset_server_${String(input.data.key)}`, input.kind, input.name, input.data);
+      server.push(created);
+      return created;
+    });
+
+    get.mockImplementation(async () => library([...server]));
+    mount();
+    const seed = seedPresets();
+    const total = seed.styles.length + seed.elements.length + seed.mascots.length;
+    await waitFor(() => expect(server).toHaveLength(total));
+    cleanup();
+
+    /* ── LẦN TẢI TRANG THỨ HAI ─────────────────────────────────────────────── */
+    __resetPresetsStoreForTest();
+    addPreset.mockClear();
+    /* Cửa đọc của query: ảnh chụp CŨ, rỗng. Mọi cửa đọc sau đó (gồm cửa mà
+       `seedOnce` tự gọi ngay trước khi ghi) thấy kho THẬT. */
+    get.mockImplementationOnce(async () => library([]));
+    mount();
+
+    /* Hạt giống đã có đủ trên server ⇒ KHÔNG một POST nào bay đi nữa. */
+    await waitFor(() => expect(seen?.elements.length).toBeGreaterThan(0));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(addPreset).not.toHaveBeenCalled();
+    expect(server).toHaveLength(total);
+    /* Và điều thật sự cần khoá: mỗi khoá đúng MỘT bản trong kho. */
+    const keys = server.map((entry) => `${entry.kind}:${String(entry.data.key)}`);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("gieo hụt để lại kho DỞ DANG ⇒ lần sau chỉ gieo phần CÒN THIẾU", async () => {
+    /* Nhánh còn lại của cùng một vết: lần gieo đầu chết giữa chừng (agent tắt),
+       để lại kho có style nhưng chưa có element/mascot. Lần gieo sau không được
+       POST lại những khoá đã nằm sẵn — nếu không thì mỗi lần thử lại là một lớp
+       style trùng chồng lên. */
+    const seed = seedPresets();
+    const already = seed.styles.map((preset) => row(`preset_s_${preset.id}`, "style", preset.vi, { key: preset.id, en: preset.en }));
+    /* Query thấy rỗng (ảnh chụp cũ), kho thật đã có toàn bộ style. */
+    get.mockImplementationOnce(async () => library([]));
+    get.mockImplementation(async () => library([...already]));
+    mount();
+
+    await waitFor(() => expect(addPreset).toHaveBeenCalledTimes(seed.elements.length + seed.mascots.length));
+    const kinds = new Set(addPreset.mock.calls.map(([input]) => input.kind));
+    expect(kinds).toEqual(new Set(["element", "mascot"]));
+  });
+
   it("gieo hụt (agent tắt) ⇒ màn vẫn có hạt giống trong RAM và nói ra lỗi", async () => {
     get.mockResolvedValue(library([]));
     addPreset.mockRejectedValue(new Error("Agent không phản hồi"));

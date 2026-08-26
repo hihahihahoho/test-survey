@@ -1,9 +1,10 @@
-import { createRoute } from "@tanstack/react-router";
+import { createRoute, useNavigate } from "@tanstack/react-router";
 import { Route as rootRoute } from "./__root";
 import { AppLayout } from "@/components/layout";
 import { PromptCanvasScreen } from "@/features/prompt-canvas";
 import { requireSetup } from "./guards";
 import { parseProjectParams } from "./params";
+import { kitCanvasSearchSchema } from "./search-schemas";
 
 /**
  * FE3 E1: đường chính mới, một project agent được trình bày như một bộ kit.
@@ -24,19 +25,39 @@ export const Route = createRoute({
   getParentRoute: () => rootRoute,
   path: "/k/$projectId",
   params: { parse: parseProjectParams },
+  validateSearch: kitCanvasSearchSchema,
   beforeLoad: ({ location }) => requireSetup(location.pathname),
   component: KitRoute,
 });
 
+/**
+ * ROUTE BIẾT VỀ URL, MÀN BIẾT VỀ UI — nên `?settings=` được đọc Ở ĐÂY rồi truyền
+ * xuống thành hai prop thường. Xem `PromptCanvasScreenProps` để biết vì sao màn
+ * KHÔNG tự gọi `Route.useSearch()` (nó ném khi dựng ngoài router, và màn có hai
+ * chỗ dựng ngoài router có thật).
+ */
 function KitRoute() {
   const { projectId } = Route.useParams();
+  const { settings } = Route.useSearch();
+  const navigate = useNavigate();
+
   return (
     <AppLayout screen="kit" projectId={projectId} simplified>
-      <KitEntry projectId={projectId} />
+      <PromptCanvasScreen
+        projectId={projectId}
+        settingsOpen={settings !== undefined}
+        /* Đóng thì `replace`: mở-rồi-đóng một dialog không đáng để lại hai nấc
+           trong lịch sử trình duyệt — người dùng sẽ phải bấm Back hai lần mới
+           rời được màn. Mở thì KHÔNG replace, để Back đóng đúng cái vừa mở. */
+        onSettingsOpenChange={(open) => {
+          void navigate({
+            to: "/k/$projectId",
+            params: { projectId },
+            search: open ? { settings: "project" as const } : {},
+            replace: !open,
+          });
+        }}
+      />
     </AppLayout>
   );
-}
-
-function KitEntry({ projectId }: { projectId: string }) {
-  return <PromptCanvasScreen projectId={projectId} />;
 }

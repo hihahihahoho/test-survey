@@ -30,8 +30,8 @@
   white-space: pre-wrap;
   word-wrap: break-word;
 
-  /* Giãn dòng RỘNG hơn bậc `display` mặc định (24/32px). Pill trong câu cao hơn
-     chữ trần vì có viền + padding dọc; ở 32px chúng chạm nhau giữa hai dòng và
+  /* Giãn dòng RỘNG hơn bậc `prose` mặc định (20/30px). Pill trong câu cao hơn
+     chữ trần vì có viền + padding dọc; ở 30px chúng chạm nhau giữa hai dòng và
      cả đoạn trông như bị dính. 1.8 là con số nhỏ nhất còn thở được với pill có
      thumbnail ảnh 28px bên trong. */
   line-height: 1.8;

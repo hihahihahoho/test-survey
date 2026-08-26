@@ -32,6 +32,20 @@ export const TIMEOUT = {
   /** 0 = KHÔNG đặt hạn. Stream chạy hàng phút, đặt hạn là tự cắt log của mình. */
   stream: 0,
   bridge: 8000,
+  /**
+   * ══ `preview` 75s — CHO ĐÚNG MỘT ENDPOINT: `POST …/prompt-preview` ═════════
+   *
+   * Nó là POST, nên trước lượt này nó đi bằng hạn `write` = 15s. Nhưng nó KHÔNG
+   * phải một phép ghi vài chục byte: agent chạy `renderPromptsOnly`, tức khởi
+   * động engine thật và render prompt cho từng tấm — đo trên máy dev là 20–50s
+   * cho một dự án bốn tấm. Hạn 15s vì thế cắt một lượt HOÀN TOÀN KHOẺ MẠNH, và
+   * `transportError` phân loại cú cắt ấy là `AGENT_NOT_RUNNING` ⇒ người dùng
+   * được bảo "agent chưa chạy" trong khi agent đang chạy và đang làm việc.
+   *
+   * 75s là trần trên của khoảng đo được cộng biên. Quá 75s thì có thật là hỏng,
+   * và lúc đó UI phải ra CHỮ kèm nút bấm lại — xem `block-prompt.ts`.
+   */
+  preview: 75_000,
 } as const;
 
 export const RETRY = {
@@ -40,6 +54,9 @@ export const RETRY = {
   write: 0,
   upload: 0,
   stream: 0,
+  /** Chạy engine thật ⇒ KHÔNG thử lại: lần thử thứ hai là một tiến trình engine
+      thứ hai cùng ghi vào `prompts/` của một dự án. */
+  preview: 0,
   /** §3.9 RATE_LIMITED: tự thử lại sau 2s — CHỈ cho request đọc. */
   rateLimitDelayMs: 2000,
 } as const;

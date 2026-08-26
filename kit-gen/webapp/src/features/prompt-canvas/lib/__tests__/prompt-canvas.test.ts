@@ -99,7 +99,7 @@ describe("migrateComposerDoc — thiếu docVersion thì KHÔNG cố dịch", ()
         brandColors: ["#ff5533"],
         blocks: [
           { id: "b1", kind: "background", mode: "free", doc: backgroundDoc() },
-          { id: "u1", kind: "uikit", cells: [] },
+          { id: "u1", kind: "uikit", mode: "template", cells: [] },
         ],
       }),
     };
@@ -128,6 +128,7 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
         {
           id: "u1",
           kind: "uikit",
+          mode: "template",
           cells: [
             { id: "c1", elementId: "button", styleId: "", decor: "4", materialId: "glass", note: "bo góc to" },
             { id: "c2", elementId: "coin", styleId: "match3", decor: "2", materialId: "", note: "" },
@@ -295,7 +296,7 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
       materialId: "",
       note: "",
     }));
-    const contract = composerToContract(state({ blocks: [{ id: "u1", kind: "uikit", cells }] }), {
+    const contract = composerToContract(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), {
       presets: PRESETS,
       limits: { small: 4 },
     });

@@ -1,4 +1,5 @@
 import * as React from "react";
+import type { JSONContent } from "@tiptap/react";
 import { useSaveWorkflowDraft, useWorkflowDraft } from "@/lib/hooks/use-projects";
 import {
   initialComposer,
@@ -70,6 +71,11 @@ function readCell(raw: unknown, index: number): UiCell | null {
     decor: str(raw["decor"]),
     materialId: str(raw["materialId"]),
     note: str(raw["note"]),
+    /* Câu tự do của riêng dòng (chế độ `free`). Thiếu ⇒ để `undefined` chứ KHÔNG
+       dựng câu khởi điểm ở đây: dựng ở đây là ghi một tài liệu TipTap vào mọi ô
+       của mọi dự án cũ, kể cả những ô sẽ không bao giờ vào chế độ tự do. Chỗ
+       dựng đúng là lúc gạt công tắc (`UiKitBlockBody.pick`). */
+    ...(isRecord(raw["doc"]) ? { doc: raw["doc"] as JSONContent } : {}),
   };
 }
 
@@ -85,7 +91,9 @@ function readBlock(raw: unknown, index: number): Block | null {
     const cells = Array.isArray(raw["cells"])
       ? (raw["cells"] as unknown[]).map(readCell).filter((c): c is UiCell => c !== null)
       : [];
-    return { id, kind: "uikit", cells };
+    /* Dự án lưu TRƯỚC khi block Bộ UI có hai chế độ ⇒ `template`, đúng thứ nó
+       đang là. Đoán sang `free` là bật một cơ chế người dùng chưa từng chọn. */
+    return { id, kind: "uikit", mode: raw["mode"] === "free" ? "free" : "template", cells };
   }
   if (kind !== "background" && kind !== "mascot") return null;
   if (!isRecord(raw["doc"])) return null;

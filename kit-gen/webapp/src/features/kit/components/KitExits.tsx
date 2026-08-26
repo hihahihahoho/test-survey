@@ -91,8 +91,12 @@ export function DownloadKitButton({ projectId }: { projectId: string }) {
   };
 
   return (
+    /* `size="sm"`: nút này sống trên HÀNG CỬA RA của khu soạn — việc làm một lần
+       ở cuối buổi. Nút primary duy nhất của màn là «Vẽ · tiêu lượt» trên từng thẻ,
+       nên mọi thứ ở hàng này phải nhẹ hơn nó cả về màu lẫn về khối. */
     <Button
       variant="secondary"
+      size="sm"
       disabled={!ready || busy}
       title={ready
         ? `Tải ${files.length} ảnh đã cắt về máy — không tiêu lượt tạo nào`
@@ -229,8 +233,12 @@ export function CopyFigmaButton({ projectId, kitName }: { projectId: string; kit
     ? `Copy nhóm tiếp theo (${batchAt + 1}/${batches.length})`
     : "Copy sang Figma";
   return (
+    /* `size="sm"`: nút này sống trên HÀNG CỬA RA của khu soạn — việc làm một lần
+       ở cuối buổi. Nút primary duy nhất của màn là «Vẽ · tiêu lượt» trên từng thẻ,
+       nên mọi thứ ở hàng này phải nhẹ hơn nó cả về màu lẫn về khối. */
     <Button
       variant="secondary"
+      size="sm"
       disabled={!ready || busy}
       title={ready
         ? `Copy ${files.length} ảnh thành node Figma (mỗi ô một frame safe zone, ảnh giữ pixel gốc) — không tiêu lượt tạo nào`

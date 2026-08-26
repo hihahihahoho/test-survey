@@ -44,9 +44,16 @@ vi.mock("@/features/projects/lib/feedback", () => ({
 let kitFiles: KitFile[] = [];
 let kitLoading = false;
 const revealMutate = vi.fn();
+/**
+ * Trạng thái lượt vẽ của tấm, ĐÚNG hình dạng `#9 GET …/projects/:id` trả về.
+ * Mặc định `"ok"` = đã vẽ rồi, vì đó là bối cảnh của gần hết ca dưới đây (chúng
+ * hỏi về ẢNH ĐÃ CÓ). Ca "chưa vẽ" tự đặt lại thành `{}` — xem describe cuối file.
+ */
+let jobStates: Record<string, string> = { "chinh-ui": "ok", "chinh-nen": "ok" };
 
 vi.mock("@/lib/hooks", () => ({
   useContract: () => ({ data: { version: 1, contract: CONTRACT } }),
+  useProject: () => ({ data: { id: "p1", name: "Dự án thử", state: { jobs: jobStates } } }),
   useKit: () => ({ data: { variant: "chinh", files: kitFiles }, isLoading: kitLoading }),
   useRevealProject: () => ({ mutate: revealMutate }),
   /* Thanh phiên bản dùng chung module hooks; ở đây cho nó im (chưa có lịch sử). */
@@ -77,6 +84,7 @@ const mount = (props: Partial<React.ComponentProps<typeof SheetResultPanel>> = {
 beforeEach(() => {
   asked.length = 0;
   kitLoading = false;
+  jobStates = { "chinh-ui": "ok", "chinh-nen": "ok" };
   revealMutate.mockReset();
   kitFiles = [
     cell("tight/01-btn-pill", "ui", 0),

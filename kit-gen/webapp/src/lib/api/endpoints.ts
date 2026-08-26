@@ -411,8 +411,17 @@ export const contractApi = {
    * Đây vẫn là I/O đĩa: agent chạy `renderPromptsOnly`, dừng TRƯỚC vòng gọi `codex exec`.
    * Không có `kind` nào, không lượt AI nào — xem `scripts/check-no-gen.mjs`.
    */
-  async promptPreview(id: string, contract: Contract) {
-    const data = await httpPost(`/api/projects/${pid(id)}/prompt-preview`, { contract: normalizeContract(contract) });
+  /**
+   * `kind: "preview"` (75s) chứ KHÔNG phải hạn `write` 15s mặc định của POST — endpoint
+   * này chạy engine thật, xem `TIMEOUT.preview`. `signal` để nơi gọi tự đặt hạn/huỷ của
+   * NÓ (khu soạn dựng đồng hồ riêng để phân biệt "quá hạn" với "agent không có route").
+   */
+  async promptPreview(id: string, contract: Contract, signal?: AbortSignal) {
+    const data = await httpPost(
+      `/api/projects/${pid(id)}/prompt-preview`,
+      { contract: normalizeContract(contract) },
+      { kind: "preview", ...(signal ? { signal } : {}) },
+    );
     return parse(promptPreviewSchema, data, "bản xem trước prompt");
   },
 };

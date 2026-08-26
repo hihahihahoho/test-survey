@@ -1,12 +1,21 @@
 import * as React from "react";
-import { Image as ImageIcon, LayoutGrid, Plus, Smile } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { Image as ImageIcon, LayoutGrid, Plus, Settings, Smile, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { AgentError } from "@/lib/api/client";
 import { contractConflictDetailsSchema } from "@/lib/types/api";
-import { useContract, useProject, useSaveContract } from "@/lib/hooks";
+import { useAgentStatus, useContract, useProject, useSaveContract } from "@/lib/hooks";
 import type { Contract } from "@/lib/types/contract";
+
+import { gateOf, useNarrowViewport } from "@/features/projects/lib/gate";
+import { createNav } from "@/features/projects/lib/nav";
+import { useProjectDialogs } from "@/features/projects/lib/useProjectDialogs";
+import { ProjectDialogs } from "@/features/projects/ProjectDialogs";
+import { ProjectSettingsDialog } from "@/features/project/components/ProjectSettingsDialog";
+import { CopyFigmaButton, DownloadKitButton } from "@/features/kit/components/KitExits";
+import { DemoScreenButton } from "@/features/demo";
 
 import { OptionPill, PillButton, PillCaret, PillMenu, PillMenuItem } from "@/features/prompt-lab/components/pill-ui";
 import { BrandColorPills } from "@/features/prompt-lab/components/BrandColorPills";
@@ -33,10 +42,11 @@ import {
 import { jobIdOf, sheetsHash } from "./lib/block-jobs";
 import { useBlockPrompts } from "./lib/block-prompt";
 import { useGenQueue } from "./lib/gen-queue";
+import { CARD, PAGE, SECTION_LABEL } from "./lib/ui";
 import { ensurePoseRef } from "./lib/pose-refs";
 
 /**
- * PromptCanvasScreen — MÀN LÀM VIỆC CHÍNH của một dự án, bản prompt-first.
+ * PromptCanvasScreen — MÀN LÀM VIỆC DUY NHẤT của app.
  *
  * ╔══ ĐÂY LÀ BẢN THẬT CỦA DEMO `prompt-lab` ═════════════════════════════════╗
  * ║ Nhịp tương tác giữ nguyên (thẻ · câu mad-lib · pill · hai chế độ), và mã   ║
@@ -48,12 +58,31 @@ import { ensurePoseRef } from "./lib/pose-refs";
  * ║  ④ thẻ Nhân vật tự dựng ảnh dáng bằng manơcanh 3D lúc bấm Vẽ.              ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
+ * ╔══ MỘT MÀN, VÀ NĂM CỬA RA NẰM GỌN TRÊN MỘT HÀNG ══════════════════════════╗
+ * ║ Chủ sản phẩm chốt: *"bỏ giao diện này đi, chỉ có 1 giao diện prompt,       ║
+ * ║ preview trực tiếp trên đấy"*. Màn «Kết quả & xuất kit» (`/p/:id`) đã bị    ║
+ * ║ xoá; route của nó nay chỉ chuyển hướng về đây.                             ║
+ * ║                                                                            ║
+ * ║ Năm thứ màn ấy giữ (tải .zip · copy Figma cả bảng · xem màn demo · cài đặt ║
+ * ║ dự án · xoá) chuyển sang `ExitRow` — MỘT hàng nút `sm`, tất cả `ghost`     ║
+ * ║ hoặc `secondary`. Cố ý không có banner, không có thẻ, không có nút to:     ║
+ * ║ chúng là việc làm MỘT LẦN ở cuối buổi, còn thứ người dùng làm cả buổi là   ║
+ * ║ gõ chữ và bấm Vẽ. Nút primary DUY NHẤT của màn nằm trên thẻ («Vẽ · tiêu    ║
+ * ║ lượt»); mọi thứ ở hàng này phải nhẹ hơn nó về thị giác.                    ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
  * ══ VÌ SAO CÓ MỘT CỬA HỎI TRƯỚC KHI CHO GÕ ════════════════════════════════
  * Tài liệu composer nằm trong `workflow-draft.json` — chính ô nhớ đang chứa bản
  * nháp WIZARD của những dự án làm bằng bản cũ. `migrateComposerDoc` đọc bản ấy ra
  * tài liệu RỖNG (đúng: dịch mò là bịa chữ vào miệng người dùng), nhưng cú
  * `setComposer` đầu tiên sẽ GHI ĐÈ lên nó. Nên trước khi cho gõ chữ đầu tiên,
  * màn hỏi một câu — và trong lúc chưa trả lời thì KHÔNG có một lượt ghi nào.
+ *
+ * ══ KHUNG TRANG ═══════════════════════════════════════════════════════════
+ * `FloraShell` KHÔNG cấp padding nào cho `<main>`. Trước lượt này màn tự dựng một
+ * `<div className="flex flex-col gap-4">` trần, nên nội dung dán sát mép trái cửa
+ * sổ và trải hết bề ngang màn 27". Đó là lời chê *"sát sàn sạt, không có max
+ * width"*. Hộp trang nay là `PAGE` — xem `lib/ui.ts` để biết vì sao 1120px.
  */
 
 const ADD_ITEMS: { kind: BlockKind; label: string; hint: string; icon: React.ReactNode }[] = [
@@ -62,7 +91,26 @@ const ADD_ITEMS: { kind: BlockKind; label: string; hint: string; icon: React.Rea
   { kind: "mascot", label: "Nhân vật", hint: "Một nhân vật: dáng, biểu cảm, trang phục", icon: <Smile aria-hidden className="size-4" /> },
 ];
 
-export function PromptCanvasScreen({ projectId }: { projectId: string }) {
+export interface PromptCanvasScreenProps {
+  projectId: string;
+  /**
+   * Dialog «Cài đặt dự án» đang mở hay không — ĐỌC TỪ `?settings=` ở tầng route.
+   *
+   * ══ VÌ SAO TRẠNG THÁI NÀY ĐI BẰNG PROP, KHÔNG PHẢI `Route.useSearch()` ══════
+   * `Route.useSearch()` gọi `useMatch`, và `useMatch` NÉM khi không có router phía
+   * trên (`Cannot read properties of null (reading 'stores')`). Màn này được dựng
+   * ngoài router ở hai chỗ có thật: bộ ca DOM của chính nó, và bất cứ ai muốn xem
+   * nó riêng lẻ. Đọc URL ở tầng route rồi truyền xuống giữ cho màn dựng được ở mọi
+   * nơi — và giữ đúng ranh giới vốn có: route biết về URL, màn biết về UI.
+   *
+   * Vắng cả hai prop ⇒ dialog sống trong state của tab. Đó là đường lùi cho ca
+   * "dựng ngoài router", KHÔNG phải đường chính: route `/k/$projectId` luôn truyền.
+   */
+  settingsOpen?: boolean;
+  onSettingsOpenChange?: (open: boolean) => void;
+}
+
+export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChange }: PromptCanvasScreenProps) {
   const presets = usePresets();
   const store = useComposerDoc(projectId, presets);
   const project = useProject(projectId);
@@ -208,32 +256,46 @@ export function PromptCanvasScreen({ projectId }: { projectId: string }) {
     setAddOpen(false);
   };
 
-  if (store.loading) return <p className="text-body text-fg-muted">Đang mở bản soạn của dự án…</p>;
+  if (store.loading) {
+    return (
+      <div className={PAGE}>
+        <p className="text-body text-fg-muted">Đang mở bản soạn của dự án…</p>
+      </div>
+    );
+  }
 
   return (
     <PromptProjectContext.Provider value={projectId}>
-      <div className="flex flex-col gap-4">
-        <header className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-display-2 text-fg-strong">Soạn bộ kit</h1>
-            <p className="text-body text-fg-muted">
+      <div className={`${PAGE} flex flex-col gap-6`}>
+        <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0">
+            {/* `display-3` (22px) chứ không `DISPLAY` (32→44px): đây là một khu làm
+                việc, không phải một trang giới thiệu. Tên dự án đã nằm trên topbar
+                và trên `<title>`, nên H1 ở đây chỉ cần nói ĐANG LÀM GÌ. */}
+            <h1 className="text-display-3 text-fg-strong">Soạn bộ kit</h1>
+            <p className="mt-1 max-w-[68ch] text-body text-fg-muted">
               Đặt ngữ cảnh chung, rồi thêm từng thẻ. Mỗi thẻ có nút Vẽ riêng và tab Prompt để xem chữ engine sẽ gửi.
             </p>
           </div>
           <SaveState updatedAt={store.updatedAt} dirty={store.dirty} saving={store.saving} error={store.saveError} />
         </header>
 
+        <ExitRow projectId={projectId} settingsOpen={settingsOpen} onSettingsOpenChange={onSettingsOpenChange} />
+
         {locked && <LegacyDraftGate onAccept={() => setReplaceOk(true)} />}
 
         {buildError && (
-          <p role="alert" className="rounded-2 border border-danger/60 bg-danger/[var(--kg-tint-b)] px-3 py-2 text-body text-fg-strong">
+          <p role="alert" className="rounded-2 border border-danger/60 bg-danger/[var(--kg-tint-b)] px-4 py-3 text-body text-fg-strong">
             Bản thiết kế chưa dựng được: {buildError}
           </p>
         )}
 
-        <section className="rounded-3 border border-line-subtle bg-surface p-5">
-          <h2 className="mb-2 text-label uppercase tracking-wide text-fg-muted">Ngữ cảnh chung</h2>
-          <p className="flex flex-wrap items-center gap-2 text-display font-normal text-fg-strong">
+        <section className={CARD} aria-labelledby="kg-ctx-label">
+          <h2 id="kg-ctx-label" className={`mb-3 ${SECTION_LABEL}`}>Ngữ cảnh chung</h2>
+          {/* `text-prose` (20px): CÙNG bậc mà editor của từng thẻ dùng. Trước lượt
+              này khối ngữ cảnh là 24px còn nhãn của nó là 13px — hai đầu của thang
+              chữ cạnh nhau trong một khối cao 120px. */}
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-3 text-prose text-fg-strong">
             <span>Bộ kit theme</span>
             <OptionPill kind="theme" value={store.composer.themeValue} onChange={(themeValue) => edit((prev) => ({ ...prev, themeValue }))} />
             <span>phong cách</span>
@@ -245,7 +307,7 @@ export function PromptCanvasScreen({ projectId }: { projectId: string }) {
             />
             <span>.</span>
           </p>
-          <p className="mt-2 text-caption text-fg-muted">
+          <p className="mt-3 text-caption text-fg-muted">
             Mọi thẻ bên dưới kế thừa ngữ cảnh này; theme và phong cách thì từng thẻ vẫn ghi đè riêng được.
           </p>
         </section>
@@ -270,8 +332,8 @@ export function PromptCanvasScreen({ projectId }: { projectId: string }) {
           />
         ))}
 
-        <div className="relative">
-          <PillButton active={addOpen} onClick={() => setAddOpen((v) => !v)} aria-expanded={addOpen} disabled={locked}>
+        <div className="relative pb-16">
+          <PillButton active={addOpen} onClick={() => setAddOpen((v) => !v)} aria-expanded={addOpen} disabled={locked} className="text-body">
             <Plus aria-hidden className="size-4" />
             <span>Thêm thẻ</span>
             <PillCaret />
@@ -293,6 +355,98 @@ export function PromptCanvasScreen({ projectId }: { projectId: string }) {
         </div>
       </div>
     </PromptProjectContext.Provider>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Hàng cửa ra
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * NĂM CỬA RA của một dự án, gộp vào một hàng nút nhỏ.
+ *
+ * ╔══ VÌ SAO NÓ TỰ ĐI LẤY DỮ LIỆU CHỨ KHÔNG NHẬN PROP ═══════════════════════╗
+ * ║ `useProject`/`useContract` ở đây trả về CÙNG cache TanStack mà màn cha    ║
+ * ║ đang đọc (cùng query key) ⇒ không có request thứ hai. Đổi lại, cả khối    ║
+ * ║ dialog nặng (`ProjectDialogs`: 7 dialog + wizard nhập) nằm gọn trong một  ║
+ * ║ component có thể tháo ra nguyên khối, và thân màn soạn không phải mang    ║
+ * ║ thêm sáu state chẳng liên quan gì tới việc soạn chữ.                      ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Ba nút đầu đều **0 đồng** (đọc đĩa · canvas + clipboard) nên không cần `gate`;
+ * hai nút cuối có thao tác GHI thật nên phải khoá kèm lý do khi agent chưa chạy
+ * hoặc màn quá hẹp (§2.5-2).
+ */
+function ExitRow({ projectId, settingsOpen, onSettingsOpenChange }: {
+  projectId: string;
+  settingsOpen?: boolean;
+  onSettingsOpenChange?: (open: boolean) => void;
+}) {
+  const navigate = useNavigate();
+  const nav = React.useMemo(() => createNav(navigate), [navigate]);
+  const { status } = useAgentStatus();
+  const narrow = useNarrowViewport();
+  const gate = React.useMemo(() => gateOf(status, narrow), [status, narrow]);
+
+  const project = useProject(projectId);
+  const contract = useContract(projectId);
+  /* Ảnh bìa (#42) hỏi theo phong cách đầu tiên — cùng quy ước với `useProjectData`. */
+  const variantId = contract.data?.contract.variants?.[0]?.id;
+
+  const all = React.useMemo(() => (project.data ? [project.data] : []), [project.data]);
+  const dialogs = useProjectDialogs(all);
+
+  /* Đường lùi khi không ai điều khiển từ ngoài — xem `PromptCanvasScreenProps`. */
+  const [localSettings, setLocalSettings] = React.useState(false);
+  const open = settingsOpen ?? localSettings;
+  const setSettings = onSettingsOpenChange ?? setLocalSettings;
+
+  const data = project.data;
+  /* Chưa tải xong dự án ⇒ CHƯA vẽ hàng nút. Vẽ trước rồi bật sáng sau là hàng nút
+     nhảy chỗ ngay dưới tay người dùng; và ba trong năm nút cần `project.name`. */
+  if (!data) return null;
+
+  const guard = {
+    disabled: gate.readOnly,
+    "aria-disabled": gate.readOnly || undefined,
+    title: gate.readOnly ? gate.reason : undefined,
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b border-line-subtle pb-4">
+      <DownloadKitButton projectId={projectId} />
+      <CopyFigmaButton projectId={projectId} kitName={data.name} />
+      <DemoScreenButton projectId={projectId} />
+      <span className="flex-1" />
+      <Button variant="ghost" size="sm" onClick={() => setSettings(true)}>
+        <Settings aria-hidden strokeWidth={1.5} />
+        Cài đặt dự án
+      </Button>
+      <Button variant="ghost" size="sm" {...guard} onClick={() => dialogs.openDialog("delete", data)}>
+        <Trash2 aria-hidden strokeWidth={1.5} />
+        Xoá
+      </Button>
+
+      <ProjectSettingsDialog
+        open={open}
+        onOpenChange={setSettings}
+        project={data}
+        gate={gate}
+        variantId={variantId}
+        onDuplicate={() => { setSettings(false); dialogs.openDialog("duplicate", data); }}
+        onExport={() => { setSettings(false); dialogs.openDialog("export", data); }}
+        onDelete={() => { setSettings(false); dialogs.openDialog("delete", data); }}
+      />
+
+      <ProjectDialogs
+        dialogs={dialogs}
+        all={all}
+        gate={gate}
+        nav={nav}
+        /* Xoá xong thì không còn màn nào để ở lại — về danh sách (§4.4). */
+        onDeleted={() => void navigate({ to: "/" })}
+      />
+    </div>
   );
 }
 
@@ -327,7 +481,7 @@ function SaveState({ updatedAt, dirty, saving, error }: {
 /** Câu hỏi CHẶN — xem khối chú thích đầu file để biết vì sao nó chặn chứ không nhắc. */
 function LegacyDraftGate({ onAccept }: { onAccept: () => void }) {
   return (
-    <div role="alertdialog" aria-label="Thay bản nháp cũ" className="flex flex-wrap items-center gap-3 rounded-2 border border-warn/40 bg-warn/[var(--kg-tint-a)] px-4 py-3">
+    <div role="alertdialog" aria-label="Thay bản nháp cũ" className="flex flex-wrap items-center gap-4 rounded-3 border border-warn/40 bg-warn/[var(--kg-tint-a)] px-4 py-3">
       <div className="min-w-0 flex-1">
         <p className="text-subtitle text-fg-strong">Dự án này đang có một bản nháp kiểu cũ</p>
         <p className="text-body text-fg-muted">

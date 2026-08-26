@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Download, FolderOpen, Image as ImageIcon, Layers, Ruler } from "lucide-react";
+import { Download, FolderOpen, Image as ImageIcon, Layers, Ruler, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -12,11 +12,13 @@ import { forgetProject, loadFull } from "@/features/kit/lib/image-source";
 import { saveProjectFile } from "@/features/kit/lib/download";
 import { poseFileSet } from "@/features/kit/lib/export-scale";
 import { SkeletonPreview } from "@/features/design/preview/SkeletonPreview";
+import { canvasOf } from "@/features/design/preview/geometry";
 import { toastError, toastSuccess } from "@/features/projects/lib/feedback";
-import { useContract, useKit, useRevealProject } from "@/lib/hooks";
+import { useContract, useKit, useProject, useRevealProject } from "@/lib/hooks";
 import type { Sheet } from "@/lib/types/contract";
 import { cellsOfSheet, rawSheetImagePath } from "../../lib/result/sheet-files";
 import { copySheetAsFigmaNode, measureImage } from "../../lib/result/sheet-figma";
+import { PREVIEW_MAX_H, PREVIEW_MAX_PX } from "../../lib/ui";
 import { SheetCellGrid } from "./SheetCellGrid";
 import { SheetVersionBar } from "./SheetVersionBar";
 
@@ -92,6 +94,30 @@ export function SheetResultPanel({
   const contract = useContract(projectId);
   const kit = useKit(projectId);
   const reveal = useRevealProject(projectId);
+
+  /**
+   * ══ TẤM NÀY ĐÃ TỪNG ĐƯỢC VẼ CHƯA ═══════════════════════════════════════════
+   *
+   * Chủ sản phẩm mở một dự án mới và thấy ô ảnh đỏ *"Thiếu file · Thử lại"* dưới
+   * MỌI thẻ. Ô ấy không nói dối — file `raw/<job>.png` đúng là không có — nhưng nó
+   * trả lời SAI CÂU HỎI: chưa ai bấm Vẽ thì lấy đâu ra file, và không có gì để
+   * "thử lại" cả. Một ô lỗi ở chỗ đáng lẽ là một lời mời khiến người dùng đi tìm
+   * một hỏng hóc không tồn tại.
+   *
+   * `state.jobs[job]` của agent phân biệt được đúng chuyện đó: `"never"` (hoặc
+   * vắng mặt) = CHƯA CHẠY LẦN NÀO, mọi giá trị khác = đã có một lượt chạm vào tấm
+   * này. Nên `"never"` ⇒ khối rỗng mời bấm Vẽ; mọi giá trị khác mà thiếu file ⇒
+   * ĐÚNG là lỗi, và ô đỏ kèm nút thử lại là câu trả lời đúng.
+   *
+   * Hai cửa lách, cả hai đều có thật:
+   *  · `artifactPath` vừa được stream báo ⇒ ảnh có rồi, dù `#9` chưa mời lại;
+   *  · `busy` (tấm đang chạy) ⇒ đừng nói "chưa vẽ" giữa lúc nó đang được vẽ.
+   * `useProject` dùng CHUNG query key với màn cha nên không sinh request thứ hai.
+   */
+  const project = useProject(projectId);
+  const jobState = project.data?.state?.jobs?.[job] ?? "never";
+  const neverDrawn =
+    jobState === "never" && !busy && !(typeof artifactPath === "string" && artifactPath !== "");
 
   /**
    * TÊN TẤM rút ra TRƯỚC rồi mới ghép vào câu — cùng lý do (và cùng cách) với `OnePrompt`
@@ -192,41 +218,52 @@ export function SheetResultPanel({
         </div>
 
         <TabsContent value="raw" className="mt-3">
-          {/* Bấm vào ảnh = xem ở độ nét thật. Lưới dùng bản `?w=512` cho nhẹ, còn popup
-              mới xin ảnh gốc — cùng quy ước với `AssetZoomDialog` của tab kết quả cũ. */}
-          <button
-            type="button"
-            onClick={() => setZoom(true)}
-            aria-label={`Phóng to ảnh gốc ${name}`}
-            className={cn("block w-full", FOCUS)}
-          >
-            <KitImage
-              key={reloadKey}
-              projectId={projectId}
-              path={rawPath}
-              alt={`Ảnh gốc tấm ${name}`}
-              backdrop="checker"
-              full={false}
-              width={512}
-              className="max-h-[420px] w-full"
-              imgClassName="max-h-[420px]"
-            />
-          </button>
-          <p className="mt-2 text-caption text-fg-muted">
-            {runId === null || runId === ""
-              ? "Bản hiện hành — mỗi lượt gen ghi đè lên nó."
-              : "Ảnh của đúng lượt chạy này — không bị lượt sau ghi đè."}
-          </p>
+          {neverDrawn ? (
+            <NotDrawnYet what="Chưa vẽ tấm này" />
+          ) : (
+            <>
+              {/* Bấm vào ảnh = xem ở độ nét thật. Lưới dùng bản `?w=512` cho nhẹ, còn popup
+                  mới xin ảnh gốc — cùng quy ước với `AssetZoomDialog` của tab kết quả cũ. */}
+              <button
+                type="button"
+                onClick={() => setZoom(true)}
+                aria-label={`Phóng to ảnh gốc ${name}`}
+                className={cn("block w-full", FOCUS)}
+              >
+                <KitImage
+                  key={reloadKey}
+                  projectId={projectId}
+                  path={rawPath}
+                  alt={`Ảnh gốc tấm ${name}`}
+                  backdrop="checker"
+                  full={false}
+                  width={512}
+                  className={cn(PREVIEW_MAX_H, "w-full")}
+                  imgClassName={PREVIEW_MAX_H}
+                />
+              </button>
+              <p className="mt-2 text-caption text-fg-muted">
+                Bấm vào ảnh để phóng to ở độ nét thật.{" "}
+                {runId === null || runId === ""
+                  ? "Đây là bản hiện hành — mỗi lượt vẽ ghi đè lên nó."
+                  : "Đây là ảnh của đúng lượt chạy này — không bị lượt sau ghi đè."}
+              </p>
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="cut" className="mt-3">
-          <SheetCellGrid
-            projectId={projectId}
-            cells={cells}
-            cutting={cutting}
-            loading={kit.isLoading}
-            poseFiles={poseFiles}
-          />
+          {neverDrawn ? (
+            <NotDrawnYet what="Chưa có ô nào để crop" />
+          ) : (
+            <SheetCellGrid
+              projectId={projectId}
+              cells={cells}
+              cutting={cutting}
+              loading={kit.isLoading}
+              poseFiles={poseFiles}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="skeleton" className="mt-3">
@@ -245,29 +282,49 @@ export function SheetResultPanel({
                 </Button>
               </div>
               {/* SVG dựng tại chỗ: không tốn một request nào và luôn có, kể cả khi
-                  agent chưa chạy. Đây là bố cục mà engine SẼ vẽ, không phải ảnh gen. */}
-              <SkeletonPreview sheet={skeletonSheet} showIndex showSafeFrame={safeFrame} />
+                  agent chưa chạy. Đây là bố cục mà engine SẼ vẽ, không phải ảnh gen.
+
+                  TRẦN CHIỀU CAO KHÔNG GẮN ĐƯỢC THẲNG LÊN `<svg>`: nó khai `w-full h-auto`
+                  và tự cao theo `viewBox`, nên `max-h` trên chính nó chỉ CẮT hình. Cách
+                  đúng là chặn BỀ NGANG của thẻ bọc bằng đúng tỉ lệ khổ ảnh:
+                      rộng-tối-đa = 320px × (w ÷ h)
+                  Số này tính từ `canvasOf` — CÙNG hàm mà svg dùng để dựng `viewBox`, nên
+                  hai bên không bao giờ nói hai tỉ lệ khác nhau. Khung xương của sheet
+                  1536×1024 vì thế cao đúng 320px thay vì gần 800px — đúng lời chê "xương
+                  to quá". `w-full` giữ nguyên để ở màn hẹp nó vẫn co theo cột. */}
+              <div
+                className="mt-2 flex justify-center"
+                style={{ maxWidth: `${Math.round(PREVIEW_MAX_PX * (canvasOf(skeletonSheet).w / canvasOf(skeletonSheet).h))}px` }}
+              >
+                <SkeletonPreview sheet={skeletonSheet} showIndex showSafeFrame={safeFrame} />
+              </div>
             </>
           )}
         </TabsContent>
       </Tabs>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line-subtle pt-3">
-        <Button type="button" variant="secondary" size="sm" onClick={copySheet} disabled={copying} loading={copying}>
-          <Layers aria-hidden strokeWidth={1.5} />
-          Copy cả tấm sang Figma
-        </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={downloadSheet}>
-          <Download aria-hidden strokeWidth={1.5} />
-          Tải PNG
-        </Button>
-        {/* `#21` mở đúng THƯ MỤC DỰ ÁN (agent bỏ qua `path` — projects.mjs:299-306),
-            nên nhãn nói "thư mục dự án" chứ không hứa là trỏ thẳng vào file. */}
-        <Button type="button" variant="ghost" size="sm" onClick={() => reveal.mutate(undefined)}>
-          <FolderOpen aria-hidden strokeWidth={1.5} />
-          Mở thư mục dự án
-        </Button>
-      </div>
+      {/* HÀNG NÀY BIẾN MẤT KHI CHƯA CÓ ẢNH. Ba nút đều thao tác trên `raw/<job>.png`;
+          bày chúng ra dưới một khối "chưa vẽ" là mời người dùng bấm ba lần để nhận ba
+          thông báo lỗi. §2.5-2 cấm ẩn nút *có thể dùng được* — ở đây thì chưa có gì để
+          dùng cả, và khối rỗng ngay trên đã nói rõ việc phải làm trước. */}
+      {!neverDrawn && (
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line-subtle pt-4">
+          <Button type="button" variant="secondary" size="sm" onClick={copySheet} disabled={copying} loading={copying}>
+            <Layers aria-hidden strokeWidth={1.5} />
+            Copy cả tấm sang Figma
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={downloadSheet}>
+            <Download aria-hidden strokeWidth={1.5} />
+            Tải PNG
+          </Button>
+          {/* `#21` mở đúng THƯ MỤC DỰ ÁN (agent bỏ qua `path` — projects.mjs:299-306),
+              nên nhãn nói "thư mục dự án" chứ không hứa là trỏ thẳng vào file. */}
+          <Button type="button" variant="ghost" size="sm" onClick={() => reveal.mutate(undefined)}>
+            <FolderOpen aria-hidden strokeWidth={1.5} />
+            Mở thư mục dự án
+          </Button>
+        </div>
+      )}
 
       <Dialog open={zoom} onOpenChange={setZoom}>
         <DialogContent size="xl" className="!max-h-[min(90dvh,720px)]">
@@ -289,5 +346,23 @@ export function SheetResultPanel({
         </DialogContent>
       </Dialog>
     </section>
+  );
+}
+
+/**
+ * KHỐI RỖNG «CHƯA VẼ» — thay cho ô đỏ "Thiếu file · Thử lại".
+ *
+ * Nó KHÔNG có nút. Nút Vẽ nằm ở đầu thẻ, cách đây vài chục pixel, và nó là nút
+ * primary duy nhất của thẻ — thêm một bản sao ở đây là hai CTA cho cùng một việc
+ * và hai chỗ phải sửa mỗi khi luật "vẽ được hay chưa" đổi (thẻ rỗng, agent tắt,
+ * đang có lượt khác chạy). Nên khối này chỉ CHỈ ĐƯỜNG, và nói đúng nút nào.
+ */
+function NotDrawnYet({ what }: { what: string }) {
+  return (
+    <div className="flex flex-col items-center gap-1 rounded-2 border border-dashed border-line-subtle bg-raised/40 px-4 py-8 text-center">
+      <Sparkles aria-hidden strokeWidth={1.5} className="size-5 text-fg-muted" />
+      <p className="text-body text-fg">{what}</p>
+      <p className="text-caption text-fg-muted">Bấm «Vẽ · tiêu lượt» ở đầu thẻ để tạo ảnh cho tấm này.</p>
+    </div>
   );
 }

@@ -48,7 +48,13 @@ export function register(r) {
 
   /* Preset — danh mục người dùng tự sửa. `GET /api/library` đã trả kèm mảng
      `presets`, nên ở đây chỉ cần ba cửa ghi; không có route đọc riêng để web
-     không phải giữ hai nguồn sự thật cho cùng một kho. */
+     không phải giữ hai nguồn sự thật cho cùng một kho.
+
+     POST vẫn trả 201 KỂ CẢ KHI bản ghi đã có sẵn (xem upsert nhẹ trong
+     `addLibraryPreset`). Cố ý: điều mà người gọi cần biết sau lệnh này là "preset
+     với khoá đó nay tồn tại, và đây là nó" — đúng trong cả hai trường hợp. Tách
+     200/201 chỉ để phân biệt "tôi tạo" với "đã có" là bắt mọi client phải quan
+     tâm tới một khác biệt mà không client nào hành động khác đi. */
   r.post("/api/library/presets", async ctx => ({ status: 201, json: { preset: await addLibraryPreset(ctx.registry.active, await ctx.json()) } }))
   r.patch("/api/library/presets/:id", async ctx => ({ status: 200, json: { preset: await patchLibraryPreset(ctx.registry.active, presetId(ctx.params.id), await ctx.json()) } }))
   r.delete("/api/library/presets/:id", async ctx => { await removeLibraryPreset(ctx.registry.active, presetId(ctx.params.id)); return { status: 204 } })

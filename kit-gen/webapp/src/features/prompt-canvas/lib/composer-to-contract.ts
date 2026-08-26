@@ -315,9 +315,27 @@ function mascotSheet(block: DocBlock, index: number, presets: PresetBundle, styl
   };
 }
 
-/** Một block Bộ UI → một hoặc nhiều tấm, mỗi tấm ≤ trần ô. */
+/**
+ * Một block Bộ UI → một hoặc nhiều tấm, mỗi tấm ≤ trần ô.
+ *
+ * ══ CHẾ ĐỘ TỰ DO CỦA DÒNG ĐI VÀO `spec`, KHÔNG VÀO `directive` ═════════════
+ * Đây là một lựa chọn có hai đường và chỉ một đường đúng. `sheet.directive` là
+ * MỘT dòng chỉ đạo cho CẢ TẤM (`gen.sh:760`), mà một tấm UI kit chứa tới 16 ô
+ * của 16 element khác nhau — nhét câu tự do của dòng #3 vào đó là bảo máy vẽ áp
+ * nó cho cả 15 ô còn lại. `components[].spec` mới là "ô này vẽ cái gì", và một
+ * dòng element CHÍNH LÀ một ô. Nên: câu tự do của dòng → `spec` của đúng ô ấy.
+ *
+ * (Hai block có câu chữ thì ngược lại — ở đó cả block chỉ sinh MỘT ô phủ kín
+ * tấm, nên `promptOverride` cấp tấm mới là chỗ đúng. Xem khối chú thích đầu file.)
+ */
 function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundle, limit: number): Sheet[] {
   if (block.cells.length === 0) return [];
+  /* Ngữ cảnh RỖNG có chủ ý: pill `style`/`outfit` để trống nghĩa là "theo cái
+     chung", và cái chung đã nằm ở `variant.style` — nơi `gen.sh` chèn nó vào MỌI
+     tấm. Trả về `ctx.styleEN` ở đây là nhắc lại phong cách trong từng ô, đúng
+     thứ mà `composerToContract` tự cấm ở dòng dựng `stylePrompt`. */
+  const freeCtx = makeContext({ styleEN: "", themeEN: "", presets, imageCounter: { count: 0 } });
+
   return chunkBySize(block.cells, limit).map((chunk, i) => {
     const grid = squareGrid(chunk.length);
     const cells: Component[] = chunk.map((cell, k) => {
@@ -329,7 +347,12 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
       const text = [element?.en ?? cell.elementId, style, decor].filter(Boolean).join(", ");
       /* `resolveElementSpec` là nơi DUY NHẤT biết cách nối chất liệu (và mức kính)
          vào mô tả một ô — dùng lại thay vì chép luật nối chuỗi sang đây. */
-      const spec = tidy([resolveElementSpec({ spec: text, skel: CELL_SKEL }, { material: cell.materialId }), cell.note.trim()].filter(Boolean).join(", "));
+      const templateSpec = tidy([resolveElementSpec({ spec: text, skel: CELL_SKEL }, { material: cell.materialId }), cell.note.trim()].filter(Boolean).join(", "));
+      /* Câu tự do RỖNG (người dùng xoá sạch dòng) ⇒ rơi về khuôn, KHÔNG ra ô
+         không mô tả gì. Bỏ hẳn ô đi thì lưới tụt một bậc và mọi ô sau nhảy chỗ —
+         một dòng bị xoá chữ không được kéo theo cả tấm đổi bố cục. */
+      const freeSpec = block.mode === "free" ? tidy(serializeDoc(cell.doc as PromptDocNode, freeCtx)) : "";
+      const spec = freeSpec || templateSpec;
       return {
         file: `${String(k + 1).padStart(2, "0")}-${slugify(cell.elementId) || "o"}`,
         vi: element?.vi ?? cell.elementId,

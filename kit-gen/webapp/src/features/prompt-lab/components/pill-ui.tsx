@@ -35,9 +35,10 @@ export const PillButton = React.forwardRef<
     ref={ref}
     type="button"
     className={cn(
-      /* `align-baseline` + cỡ chữ kế thừa: pill nằm trong dòng chữ 24px, nếu
-         không ghim đường chân chữ thì mỗi pill đẩy dòng của nó cao thêm vài px
-         và cả đoạn văn răng cưa. */
+      /* `align-baseline` + cỡ chữ KẾ THỪA: pill nằm trong câu `text-prose` (20px).
+         Không khai cỡ riêng ở đây là có chủ ý — đổi bậc của câu thì pill đi theo,
+         nên chữ và pill không bao giờ lệch cỡ nhau. Ghim đường chân chữ vì nếu
+         không, mỗi pill đẩy dòng của nó cao thêm vài px và cả đoạn răng cưa. */
       "inline-flex items-center gap-1.5 rounded-full border align-baseline",
       compact ? "px-2 py-0.5 text-caption" : "px-3 py-1",
       "border-line bg-raised text-fg-strong",

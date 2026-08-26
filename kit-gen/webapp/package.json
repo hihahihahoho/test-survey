@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:full": "node scripts/dev-full.mjs",
     "build": "tsc --noEmit && vite build",
     "build:only": "vite build",
     "preview": "vite preview",

@@ -83,6 +83,28 @@ export interface UiCell {
   materialId: string;
   /** Ghi chú tự do của người dùng cho riêng ô này. */
   note: string;
+  /**
+   * CÂU TỰ DO CỦA RIÊNG DÒNG NÀY — chỉ có nghĩa khi block đang ở chế độ `free`.
+   *
+   * ╔══ VÌ SAO MỘT TÀI LIỆU TIPTAP CHO MỖI DÒNG, TRÁI VỚI CHÚ THÍCH ĐỜI TRƯỚC ═╗
+   * ║ Bản trước viết thẳng trong `UiKitBlockView.tsx` rằng dòng element KHÔNG   ║
+   * ║ đáng một instance ProseMirror: "một dòng cần đúng bốn thứ… không có chỗ   ║
+   * ║ nào để chèn pill GIỮA câu". Lập luận ấy đúng với CHẾ ĐỘ TEMPLATE và nó    ║
+   * ║ vẫn còn nguyên hiệu lực ở đó — template vẫn là React thuần, không editor. ║
+   * ║ Nhưng nó trả lời sai một câu hỏi khác: "người ta có muốn viết câu KHÁC     ║
+   * ║ cho một element không". Chủ sản phẩm hỏi thẳng: *"sao tôi không thấy      ║
+   * ║ tiptap edit được, tôi bảo có mode select-only + mode editor mà?"* — và    ║
+   * ║ câu trả lời trung thực là: block Bộ UI đã bị bỏ quên một nửa cơ chế.      ║
+   * ║                                                                          ║
+   * ║ CÁI GIÁ ĐÃ ĐO, KHÔNG PHẢI ĐÃ QUÊN: một bộ kit 16 element ở chế độ tự do   ║
+   * ║ = 16 instance ProseMirror trong một block. Nên chế độ tự do là thứ người  ║
+   * ║ dùng PHẢI TỰ BẬT; mặc định vẫn là `template`, và ở template không editor  ║
+   * ║ nào được mount. Ai bật tự do là đã chọn trả cái giá đó cho block của mình.║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   *
+   * Thiếu (`undefined`) = dòng chưa từng vào chế độ tự do. Xem `uiCellDoc()`.
+   */
+  doc?: JSONContent;
 }
 
 /**
@@ -101,7 +123,42 @@ export interface UiCell {
 export interface UiKitBlock {
   id: string;
   kind: "uikit";
+  /**
+   * CÙNG hai chế độ với block có câu chữ — xem `BlockMode`.
+   *
+   * Chế độ nằm ở BLOCK chứ không ở từng dòng, giống hệt block Cảnh nền/Nhân vật:
+   * một công tắc cho cả thẻ thì nhìn phát biết thẻ này đang ở khuôn hay đã bị
+   * chế. Để mỗi dòng một chế độ riêng là mười sáu trạng thái trên một thẻ, và
+   * không có chỗ nào đủ rộng để nói ra cả mười sáu.
+   */
+  mode: BlockMode;
+  /** Thứ tự trong mảng CHÍNH LÀ thứ tự ô đi vào contract — xem `moveCell`. */
   cells: UiCell[];
+}
+
+/**
+ * Đổi chỗ một dòng element. Hàm THUẦN, và đó là điểm quan trọng nhất của nó.
+ *
+ * ╔══ THỨ TỰ DÒNG LÀ DỮ LIỆU, KHÔNG PHẢI HIỆU ỨNG KÉO THẢ ═══════════════════╗
+ * ║ `uiKitSheets()` xếp `block.cells` vào `components[]` theo đúng thứ tự mảng,║
+ * ║ rồi `gen.sh` vẽ ô theo đúng thứ tự ấy. Nên "kéo dòng #2 lên trên #1" KHÔNG ║
+ * ║ phải một chuyện trang trí — nó đổi vị trí món đồ trên tấm ảnh sẽ vẽ ra.    ║
+ * ║ Vì thế phép đổi chỗ được tách thành một hàm thuần test được, thay vì nằm   ║
+ * ║ trong một trình xử lý `onDrop` mà chỉ chuột mới chạm tới.                  ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Chỉ số ngoài khoảng ⇒ trả về mảng CŨ, không cắt xén: `splice` với chỉ số âm
+ * đếm ngược từ cuối mảng, nên một lỗi đánh chỉ số sẽ âm thầm ném dòng sang tận
+ * đầu bên kia thay vì báo hỏng.
+ */
+export function moveCell(cells: readonly UiCell[], from: number, to: number): UiCell[] {
+  if (from === to) return [...cells];
+  if (from < 0 || from >= cells.length || to < 0 || to >= cells.length) return [...cells];
+  const next = [...cells];
+  const [moved] = next.splice(from, 1);
+  if (!moved) return [...cells];
+  next.splice(to, 0, moved);
+  return next;
 }
 
 /**
@@ -166,7 +223,9 @@ export function newCell(elementId: string, presets: PresetBundle = getPresets())
 }
 
 export function newUiKitBlock(): UiKitBlock {
-  return { id: newId("uikit"), kind: "uikit", cells: [] };
+  /* `template` là mặc định — xem khối chú thích của `UiCell.doc`: chế độ tự do
+     mount một editor cho MỖI dòng, và không ai được trả cái giá ấy vì lỡ tay. */
+  return { id: newId("uikit"), kind: "uikit", mode: "template", cells: [] };
 }
 
 /** Trạng thái lúc mở màn: chỉ có ngữ cảnh chung, chưa block nào. */

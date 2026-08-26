@@ -29,6 +29,8 @@ export const FONT_SIZE_KEYS = [
   "display-2",
   "display-3",
   "display",
+  /* Câu mad-lib của khu soạn prompt — xem chú thích bậc `prose` trong tailwind.config.ts. */
+  "prose",
   "title",
   "subtitle",
   "body",

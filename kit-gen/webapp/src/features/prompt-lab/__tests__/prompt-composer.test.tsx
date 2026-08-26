@@ -185,7 +185,7 @@ describe("màu thương hiệu — hex phải thành CHỮ, không phải một 
       { id: "c2", elementId: "coin", styleId: INHERIT, decor: "2", materialId: "", note: "" },
     ];
     const out = serializeComposer(
-      state({ brandColors: ["#ff5533", "#112233"], blocks: [{ id: "u1", kind: "uikit", cells }] }),
+      state({ brandColors: ["#ff5533", "#112233"], blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }),
       PRESETS,
     );
     expect(out.match(/a palette built around/g)).toHaveLength(1);
@@ -202,7 +202,7 @@ describe("serialize cả màn — mỗi block một đoạn, ảnh đánh số l
 
   it("block rỗng bị BỎ HẲN — prompt không có dòng 'Bộ UI:' trống", () => {
     const out = serializeComposer(
-      state({ blocks: [{ id: "u1", kind: "uikit", cells: [] }] }),
+      state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells: [] }] }),
       PRESETS,
     );
     expect(out).not.toContain("Bộ UI");
@@ -213,7 +213,7 @@ describe("serialize cả màn — mỗi block một đoạn, ảnh đánh số l
       { id: "c1", elementId: "button", styleId: INHERIT, decor: "4", materialId: "glass", note: "" },
       { id: "c2", elementId: "coin", styleId: "match3", decor: "2", materialId: "", note: "xoay 15 độ" },
     ];
-    const out = serializeComposer(state({ blocks: [{ id: "u1", kind: "uikit", cells }] }), PRESETS);
+    const out = serializeComposer(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), PRESETS);
 
     expect(out).toContain("hệ thống tự xếp lưới");
     expect(out).toContain("cell 1 (Nút bấm)");

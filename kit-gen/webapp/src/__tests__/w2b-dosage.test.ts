@@ -305,9 +305,11 @@ describe("2B-7 · chữ của người dùng, không phải của lập trình v
      `steps/KitsetStep.tsx` — lưới ấy đã bị xoá, và khu soạn không có ô tìm nào tương
      đương (người dùng GÕ TÊN món chứ không lọc một danh mục có sẵn). */
 
-  it("màn kết quả không còn panel kỹ thuật cắt/chroma", () => {
-    const src = read("src/features/project/ProjectScreen.tsx");
-    expect(src).toContain("SheetResultPanel");
+  it("chỗ xem thành phẩm không còn panel kỹ thuật cắt/chroma", () => {
+    /* Thành phẩm đã dọn nhà lần thứ ba: nay nó treo dưới chân từng thẻ của khu soạn.
+       Xem chú thích cùng chủ đề ở `w2a-system-beauty.test.ts`. */
+    const src = read("src/features/prompt-canvas/components/CanvasBlock.tsx");
+    expect(src).toContain("SheetResultSlot");
     expect(src).not.toContain("result-chroma");
     expect(src).not.toContain("Cắt lại");
     expect(src).not.toContain("slice.run()");

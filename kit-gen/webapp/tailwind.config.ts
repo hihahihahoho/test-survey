@@ -95,6 +95,16 @@ export default {
       "display-3": ["22px", { lineHeight: "30px", letterSpacing: "-0.015em", fontWeight: "600" }],
 
       display: ["24px", { lineHeight: "32px", fontWeight: "650" }],
+      /* ══ `prose` 20px — CỠ CỦA MỘT CÂU ĐỂ ĐỌC, không phải của một tiêu đề ══
+         Khu soạn prompt viết bằng CÂU MAD-LIB ("Bộ kit theme [Tết] phong cách
+         [hoạt hình], màu thương hiệu […]"). Bản trước mượn bậc `display` (24px,
+         weight 650) rồi gỡ độ đậm bằng `font-normal` — hai lần chữa cho một bậc
+         vốn không sinh ra để làm việc này, và kết quả là câu mad-lib to gần bằng
+         H1 của trang: chủ sản phẩm nhìn thấy ngay ("to nhỏ không đều").
+         20px/30px là cỡ đọc thoải mái mà vẫn nhỏ hơn `display-3` (22px) của tiêu
+         đề màn, nên phân cấp đọc được. Pill trong câu KHÔNG khai cỡ riêng — chúng
+         kế thừa cỡ này, nên một bậc ở đây giữ cho pill và chữ luôn cùng cỡ. */
+      prose: ["20px", { lineHeight: "30px", fontWeight: "400" }],
       title: ["18px", { lineHeight: "26px", fontWeight: "600" }],
       subtitle: ["15px", { lineHeight: "22px", fontWeight: "600" }],
       body: ["14px", { lineHeight: "21px", fontWeight: "400" }],

@@ -42,6 +42,57 @@ const PRESET_DATA_BYTES = 8000
 /** Trần số bản ghi — kho là danh mục người gõ tay, không phải nơi đổ dữ liệu máy sinh. */
 const PRESET_MAX = 500
 
+/* ══ DANH TÍNH CỦA MỘT PRESET: `kind` + `data.key` ══════════════════════════
+   `id` là địa chỉ VẬN CHUYỂN do agent sinh ngẫu nhiên mỗi lần POST — hai lần
+   gieo cùng một hạt giống ra hai `id` khác nhau, nên `id` KHÔNG nói được "hai
+   bản ghi này là một". Thứ nói được điều đó là `data.key`: id bundle do web đặt,
+   ổn định qua mọi lần gieo, và chính là thứ nằm trong tài liệu đã lưu
+   (`elementId` của mỗi ô). Xem chú thích #2 ở đầu `presets-store.ts`.
+
+   VÌ SAO CHỈ TÍNH KHI `key` KHÁC RỖNG: preset không có `key` là preset được tạo
+   bằng tay / bằng curl / bởi một client khác. Chúng KHÔNG có danh tính chung nào
+   cả — gộp chúng lại theo `kind` là xoá dữ liệu của người ta. Không có key thì
+   không có bản trùng, luôn tạo mới. */
+function presetKey(preset) {
+  const key = preset?.data?.key
+  return typeof key === "string" && key ? `${preset.kind}:${key}` : ""
+}
+
+/**
+ * Bỏ bản ghi trùng `kind`+`data.key`, GIỮ BẢN CŨ NHẤT.
+ *
+ * VÌ SAO GIỮ BẢN CŨ NHẤT chứ không phải bản mới nhất: bản cũ nhất là bản mà mọi
+ * tài liệu đã lưu đang trỏ tới, và là bản người dùng đã có cơ hội SỬA. Bản trùng
+ * sinh sau là bản hạt giống gieo lại — nội dung mặc định. Giữ bản mới là lặng lẽ
+ * ném đi những gì người ta đã gõ.
+ *
+ * VÌ SAO CHẠY TRONG `cleanState` (mọi lần đọc) CHỨ KHÔNG PHẢI MỘT BƯỚC DI TRÚ
+ * CHẠY LÚC KHỞI ĐỘNG: một bước chạy-một-lần chỉ chữa được những workspace đã
+ * dính, và chỉ chữa được nếu agent có dịp khởi động lại. Đặt ở đây thì (1) mọi
+ * workspace tự sạch ngay lần đọc đầu tiên — kể cả `~/KitGen-dev` đang dính,
+ * (2) `saveLibrary` cũng đi qua `cleanState`, nên từ giờ KHÔNG một đường ghi nào
+ * có thể để lại bản trùng trên đĩa, dù đường đó do ai viết. Giá phải trả là một
+ * lượt duyệt O(n) trên tối đa 500 bản ghi mỗi lần đọc — không đáng kể.
+ */
+function dedupePresets(presets) {
+  /* `kind:key` → chỉ số của bản đang giữ. Duyệt một lượt, so `createdAt` để
+     chọn bản cũ hơn; `createdAt` bằng nhau (cùng một mili-giây — chuyện thường
+     khi vòng lặp gieo hạt chạy liên tiếp) thì bản đứng TRƯỚC thắng, vì thứ tự
+     mảng chính là thứ tự `push` lúc tạo. */
+  const winner = new Map()
+  const dropped = new Set()
+  presets.forEach((preset, index) => {
+    const key = presetKey(preset)
+    if (!key) return
+    const held = winner.get(key)
+    if (held === undefined) { winner.set(key, index); return }
+    const older = presets[held].createdAt <= preset.createdAt ? held : index
+    dropped.add(older === held ? index : held)
+    winner.set(key, older)
+  })
+  return dropped.size === 0 ? presets : presets.filter((_, index) => !dropped.has(index))
+}
+
 function statePath(ws) { return join(ws.libraryDir, "library.json") }
 function assetsDir(ws) { return join(ws.libraryDir, "assets") }
 
@@ -176,11 +227,15 @@ function cleanState(raw) {
       : defaultPoseTemplates(),
     settings: { ...LIBRARY_DEFAULTS, ...(raw?.settings ?? {}) },
     items,
+    /* `dedupePresets` đứng SAU `cleanPreset` (cần `kind` và `createdAt` đã chuẩn
+       hoá để so) và TRƯỚC `slice` (nếu không, bản trùng chiếm mất chỗ trong 500
+       suất rồi mới bị bỏ — kho đầy giả). */
     presets: Array.isArray(raw?.presets)
-      ? raw.presets
-        .filter(preset => preset && typeof preset.id === "string" && cleanPresetData(preset.data) !== null)
-        .map(cleanPreset)
-        .slice(0, PRESET_MAX)
+      ? dedupePresets(
+        raw.presets
+          .filter(preset => preset && typeof preset.id === "string" && cleanPresetData(preset.data) !== null)
+          .map(cleanPreset),
+      ).slice(0, PRESET_MAX)
       : [],
   }
 }
@@ -267,6 +322,26 @@ export async function addLibraryPreset(ws, input) {
   if (!name) fail("BAD_REQUEST", "preset name is required")
   if (cleanPresetData(input?.data) === null) fail("BAD_REQUEST", `preset data must be a JSON object of at most ${PRESET_DATA_BYTES} bytes`)
   const state = await readLibrary(ws)
+  /* ══ UPSERT NHẸ: ĐÃ CÓ `kind`+`data.key` NÀY ⇒ TRẢ BẢN CŨ, KHÔNG TẠO BẢN MỚI ══
+     POST preset là ĐƯỜNG GIEO HẠT, và gieo hạt là việc bị PHÁT LẠI: web mở nhiều
+     tab, một lần tải lại trang giữa chừng, một ảnh chụp query cũ — mọi cái đó đều
+     dẫn tới cùng một bộ POST bay đi lần thứ hai. Nên đường này phải BẤT BIẾN THEO
+     SỐ LẦN GỌI, và agent là chỗ duy nhất bảo đảm được điều đó: nó là nơi duy nhất
+     nhìn thấy tất cả client.
+
+     VÌ SAO TRẢ BẢN CŨ CHỨ KHÔNG PHẢI 409:
+       Client sẽ phải xử lý một nhánh lỗi cho một việc KHÔNG HỎNG — kết quả mong
+       muốn ("kho có đúng một bản của khoá này") đã đạt được rồi. Và một nhánh lỗi
+       hiếm là một nhánh không ai chạy thử; nó sẽ hỏng lặng lẽ.
+     VÌ SAO TRẢ BẢN CŨ CHỨ KHÔNG PHẢI GHI ĐÈ BẰNG `input`:
+       Bản trùng đến sau gần như luôn là HẠT GIỐNG MẶC ĐỊNH phát lại. Ghi đè là
+       lấy giá trị mặc định đắp lên đúng thứ người dùng vừa sửa — mất dữ liệu, mà
+       lại câm. Muốn sửa thì đã có PATCH, nơi người gọi nói rõ ý định đó. */
+  const existing = presetKey({ kind, data: cleanPresetData(input?.data) ?? {} })
+  if (existing) {
+    const found = state.presets.find(preset => presetKey(preset) === existing)
+    if (found) return found
+  }
   if (state.presets.length >= PRESET_MAX) fail("BAD_REQUEST", `library holds at most ${PRESET_MAX} presets`)
   const now = new Date().toISOString()
   const preset = cleanPreset({ ...input, id: "preset_" + randomBytes(8).toString("hex"), kind, name, createdAt: now, updatedAt: now })
@@ -288,6 +363,15 @@ export async function patchLibraryPreset(ws, id, patch) {
      của nó, và trộn nông thì không có cách nào XOÁ một khoá đã lỗi thời. */
   const next = cleanPreset({ ...state.presets[index], ...patch, id, updatedAt: new Date().toISOString() })
   if (!String(patch.name ?? next.name).trim()) fail("BAD_REQUEST", "preset name is required")
+  /* Chặn PATCH kéo bản ghi này ĐÈ LÊN DANH TÍNH của bản khác. Không có hàng rào
+     này thì `dedupePresets` sẽ lặng lẽ bỏ một trong hai ở lần ghi kế tiếp — tức
+     là một lệnh sửa lại XOÁ mất một bản ghi khác, mà không ai báo gì. Web không
+     bao giờ đi vào đây (`key` sinh từ `newId`, luôn duy nhất), nên trả 400 là
+     đúng: đây là lỗi của người gọi, không phải một tình huống cần chiều. */
+  const key = presetKey(next)
+  if (key && state.presets.some((preset, at) => at !== index && presetKey(preset) === key)) {
+    fail("BAD_REQUEST", "another preset already uses this kind and data.key")
+  }
   state.presets[index] = next
   await saveLibrary(ws, state)
   return next

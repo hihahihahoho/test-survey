@@ -232,9 +232,11 @@ describe("bàn làm việc lazy-load, KHÔNG kéo mọi component thành chunk r
       "utf8",
     );
     expect(src).not.toMatch(/^import .*from "@\/features\/canvas"/m);
-    /* Canvas là lựa chọn ngoài dự án: deep link cũ quay về tổng quan dự án. */
-    expect(src).toContain('<Navigate to="/p/$projectId"');
-    expect(src).toContain('search={{ section: "overview" }}');
+    /* Canvas là lựa chọn ngoài dự án. Đích ĐÃ ĐỔI sang `/k/:id` cùng đợt "một màn
+       duy nhất": `/p/:id` nay cũng chỉ chuyển hướng, nên trỏ về đó là bắt người
+       dùng nhảy hai lần và nhìn URL đổi hai lần. */
+    expect(src).toContain('<Navigate to="/k/$projectId"');
+    expect(src).not.toContain('search={{ section:');
   });
 
   it("chỉ có ĐÚNG MỘT `import(\"@/features/canvas\")` trong toàn bộ src/", () => {

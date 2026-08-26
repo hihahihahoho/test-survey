@@ -129,13 +129,14 @@ describe("W2A-3 · không còn control thô của hệ điều hành", () => {
     }
   });
 
-  /* Nhà của "màn thành phẩm" đã đổi hai lần: bước ⑥ của wizard → tab "Ảnh đã tạo" của
-     trình quản lý dự án → nay là chính màn `/p/:id` («Kết quả & xuất kit», IA
-     prompt-first). Hợp đồng giữ nguyên chữ: ưu tiên thành phẩm, không nhét control
-     kỹ thuật vào đó — chỉ đổi tên component chở thành phẩm. */
+  /* Nhà của "màn thành phẩm" đã đổi BA lần: bước ⑥ của wizard → tab "Ảnh đã tạo" của
+     trình quản lý dự án → màn `/p/:id` («Kết quả & xuất kit») → nay là chính khu soạn,
+     nơi mỗi thẻ treo panel kết quả của nó ngay dưới chân (`CanvasBlock` →
+     `SheetResultSlot` → `SheetResultPanel`). Hợp đồng giữ nguyên chữ: ưu tiên thành
+     phẩm, không nhét control kỹ thuật vào đó — chỉ đổi chỗ đặt. */
   it("màn thành phẩm ưu tiên thành phẩm, không đưa control kỹ thuật vào màn chính", () => {
-    const s = strip(read("src/features/project/ProjectScreen.tsx"));
-    expect(s).toContain("<SheetResultPanel");
+    const s = strip(read("src/features/prompt-canvas/components/CanvasBlock.tsx"));
+    expect(s).toContain("<SheetResultSlot");
     expect(s).not.toContain('<select');
     expect(s).not.toContain('result-chroma');
   });

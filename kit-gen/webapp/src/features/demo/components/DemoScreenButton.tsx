@@ -20,8 +20,10 @@ export function DemoScreenButton({ projectId }: { projectId: string }) {
 
   return (
     <>
+      {/* `size="sm"` — cùng lý do với hai nút cạnh nó ở `KitExits.tsx`. */}
       <Button
         variant="secondary"
+        size="sm"
         disabled={!ready}
         title={ready ? "Lắp thử một màn game từ ảnh đã cắt rồi copy sang Figma" : "Mở sau khi dự án có ảnh đã cắt"}
         onClick={() => setOpen(true)}

@@ -515,8 +515,19 @@ export async function request<T = unknown>(path: string, opts: RequestOptions = 
 
 export const httpGet = <T>(path: string, opts: RequestOptions = {}) =>
   request<T>(path, { ...opts, method: "GET", kind: "get" });
+/**
+ * `kind` MẶC ĐỊNH là `write`, nhưng nơi gọi ĐƯỢC PHÉP đổi — và đúng một nơi làm thế.
+ *
+ * Bốn `http*` còn lại ghim cứng `kind` (`{...opts, kind: "..."}` đè lên opts) vì mọi
+ * lời gọi của chúng đều là ghi vài chục byte. `POST …/prompt-preview` thì không: nó
+ * khởi động engine thật và chạy hàng chục giây (xem `TIMEOUT.preview`). Ép nó vào hạn
+ * 15s là cắt một lượt khoẻ mạnh rồi báo sai nguyên nhân cho người dùng.
+ *
+ * Đây KHÔNG phải cửa để mỗi nơi tự đặt số của mình — §6.1 vẫn giữ: số nằm trong bảng
+ * `constants.ts`, nơi gọi chỉ được CHỌN một hàng có sẵn trong bảng.
+ */
 export const httpPost = <T>(path: string, body?: unknown, opts: RequestOptions = {}) =>
-  request<T>(path, { ...opts, method: "POST", kind: "write", body });
+  request<T>(path, { ...opts, method: "POST", kind: opts.kind ?? "write", body });
 export const httpPut = <T>(path: string, body?: unknown, opts: RequestOptions = {}) =>
   request<T>(path, { ...opts, method: "PUT", kind: "write", body });
 export const httpPatch = <T>(path: string, body?: unknown, opts: RequestOptions = {}) =>
