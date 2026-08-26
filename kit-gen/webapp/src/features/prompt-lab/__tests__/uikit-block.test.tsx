@@ -240,14 +240,14 @@ describe("③ hai chế độ — dòng element ở «Tự do» là một TipTap
    * value, và tài liệu đã lưu của dự án biến thành `{kind: null, value: null}`.
    */
   it("mỗi pill mang `data-kind`/`data-value` ngay trên DOM — đường DOM→doc phục hồi được", async () => {
-    render(<Harness initial={uikit([{ ...newCell("coin", PRESETS), id: "c1" }], "free")} />);
+    const cell: UiCell = { ...newCell("coin", PRESETS), id: "c1", glazeId: "glow" };
+    render(<Harness initial={uikit([cell], "free")} />);
     await waitFor(() => expect(document.querySelector(".ProseMirror")).not.toBeNull());
 
     const pills = [...document.querySelectorAll("[data-kg-node='optionPill']")];
-    expect(pills.map((p) => p.getAttribute("data-kind"))).toEqual(["style", "decor", "material"]);
-    /* "Icon tiền" mang sẵn mức viền 2 và chất liệu kim loại vàng — giá trị THẬT
-       của ô phải nằm trong DOM, không phải mặc định của schema. */
-    expect(pills.map((p) => p.getAttribute("data-value"))).toEqual(["", "2", "gold-metal"]);
+    expect(pills.map((p) => p.getAttribute("data-kind"))).toEqual(["style", "glaze", "decor"]);
+    /* Giá trị THẬT của ô phải nằm trong DOM, không phải mặc định của schema. */
+    expect(pills.map((p) => p.getAttribute("data-value"))).toEqual(["", "glow", "2"]);
   });
 });
 
@@ -320,16 +320,16 @@ describe("③ câu tự do của một dòng ĐI TỚI ĐƯỢC contract và pro
    hỏng → gạt về khuôn không mất thứ vừa bấm. */
 describe("④ pill của dòng tự do: đúng kind, đúng value, không mất khi gạt lại", () => {
   it("Template → Tự do: ba pill mang ĐÚNG kind và ĐÚNG value của ô", async () => {
-    const cell: UiCell = { ...newCell("coin", PRESETS), id: "c1", decor: "6", materialId: "gold-metal" };
+    const cell: UiCell = { ...newCell("coin", PRESETS), id: "c1", decor: "6", glazeId: "ice" };
     render(<Harness initial={uikit([cell], "template")} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Tự do" }));
     await waitFor(() => expect(document.querySelector(".ProseMirror")).not.toBeNull());
 
     const pills = [...document.querySelectorAll("[data-kg-node='optionPill']")];
-    expect(pills.map((p) => p.getAttribute("data-kind"))).toEqual(["style", "decor", "material"]);
+    expect(pills.map((p) => p.getAttribute("data-kind"))).toEqual(["style", "glaze", "decor"]);
     /* Chính chỗ chủ sản phẩm chỉ mặt: pill 2 và 3 KHÔNG được rỗng. */
-    expect(pills.map((p) => p.getAttribute("data-value"))).toEqual(["", "6", "gold-metal"]);
+    expect(pills.map((p) => p.getAttribute("data-value"))).toEqual(["", "ice", "6"]);
   });
 
   it("tài liệu đã lưu bị mất attrs ⇒ CỨU LẠI theo vị trí + ba trường của ô", () => {
@@ -339,7 +339,7 @@ describe("④ pill của dòng tự do: đúng kind, đúng value, không mất 
       content: [{
         type: "paragraph",
         content: [
-          { type: "text", text: "a coin currency icon, " },
+          { type: "text", text: "coin icon, " },
           { type: "optionPill", attrs: { kind: null, value: null } },
           { type: "text", text: ", " },
           { type: "optionPill", attrs: { kind: null, value: null } },
@@ -348,12 +348,12 @@ describe("④ pill của dòng tự do: đúng kind, đúng value, không mất 
         ],
       }],
     };
-    const healed = repairPills(broken, PILL_SLOTS.uikit, ["", "2", "gold-metal"]);
+    const healed = repairPills(broken, PILL_SLOTS.uikit, ["", "ice", "2"]);
     const pills = (healed.content![0]!.content ?? []).filter((n) => n.type === "optionPill");
-    expect(pills.map((p) => p.attrs!["kind"])).toEqual(["style", "decor", "material"]);
-    expect(pills.map((p) => p.attrs!["value"])).toEqual(["", "2", "gold-metal"]);
+    expect(pills.map((p) => p.attrs!["kind"])).toEqual(["style", "glaze", "decor"]);
+    expect(pills.map((p) => p.attrs!["value"])).toEqual(["", "ice", "2"]);
     /* Chữ của người dùng KHÔNG được đụng tới trong lúc cứu hộ. */
-    expect(JSON.stringify(healed)).toContain("a coin currency icon");
+    expect(JSON.stringify(healed)).toContain("coin icon");
   });
 
   it("tài liệu LÀNH đi qua nguyên vẹn — cứu hộ không phải một lượt viết lại", () => {
@@ -368,21 +368,21 @@ describe("④ pill của dòng tự do: đúng kind, đúng value, không mất 
     render(<Harness initial={uikit([cell], "free")} onState={(next) => { latest = next; }} />);
     await waitFor(() => expect(document.querySelector(".ProseMirror")).not.toBeNull());
 
-    /* Bấm pill CHẤT LIỆU trong câu và chọn một giá trị — trước lượt này việc đó
-       chỉ đổi tài liệu, còn `materialId` của ô thì đứng yên. */
-    const materialPill = [...document.querySelectorAll("[data-kg-node='optionPill']")]
-      .find((p) => p.getAttribute("data-kind") === "material")!;
-    fireEvent.click(materialPill.querySelector("button")!);
+    /* Bấm pill ĐỤC NỀN trong câu và chọn một giá trị — trước lượt này việc đó
+       chỉ đổi tài liệu, còn trường có cấu trúc của ô thì đứng yên. */
+    const glazePill = [...document.querySelectorAll("[data-kg-node='optionPill']")]
+      .find((p) => p.getAttribute("data-kind") === "glaze")!;
+    fireEvent.click(glazePill.querySelector("button")!);
     fireEvent.click(screen.getAllByRole("option")[1]!);
 
-    await waitFor(() => expect(latest?.cells[0]?.materialId).toBeTruthy());
-    const picked = latest!.cells[0]!.materialId;
+    await waitFor(() => expect(latest?.cells[0]?.glazeId).toBeTruthy());
+    const picked = latest!.cells[0]!.glazeId;
 
     /* Về khuôn: không hỏi (chỉ đổi pill thì chẳng có chữ nào để mất) và giá trị
        vừa bấm phải còn nguyên trong trường có cấu trúc. */
     fireEvent.click(screen.getByRole("button", { name: "Theo template" }));
     await waitFor(() => expect(latest?.mode).toBe("template"));
-    expect(latest!.cells[0]!.materialId).toBe(picked);
+    expect(latest!.cells[0]!.glazeId).toBe(picked);
     expect(latest!.cells[0]!.doc).toBeUndefined();
   });
 });
@@ -402,13 +402,13 @@ describe("⑤ đổi loại element tại chỗ", () => {
     expect(screen.queryByRole("option", { name: /Icon tiền/ })).toBeNull();
   });
 
-  it("đổi loại ⇒ đổi ô trong contract, nhưng GIỮ viền · chất liệu · ghi chú", async () => {
+  it("đổi loại ⇒ đổi ô trong contract, nhưng GIỮ viền · đục nền · ghi chú", async () => {
     let latest: UiKitBlock | null = null;
     /* Ba thứ người dùng đã chỉnh tay. `decor: "7"` cố ý KHÁC mặc định của cả hai
        element, để nếu code lỡ áp preset của element mới thì ca này đỏ. */
     const cell: UiCell = {
       ...newCell("button", PRESETS), id: "c1",
-      decor: "7", materialId: "gold-metal", note: "bo góc thật tròn",
+      decor: "7", glazeId: "ice", note: "bo góc thật tròn",
     };
     render(<Harness initial={uikit([cell])} onState={(next) => { latest = next; }} />);
 
@@ -417,7 +417,7 @@ describe("⑤ đổi loại element tại chỗ", () => {
 
     await waitFor(() => expect(latest?.cells[0]?.elementId).toBe("healthbar"));
     expect(latest!.cells[0]!.decor).toBe("7");
-    expect(latest!.cells[0]!.materialId).toBe("gold-metal");
+    expect(latest!.cells[0]!.glazeId).toBe("ice");
     expect(latest!.cells[0]!.note).toBe("bo góc thật tròn");
 
     const contract = composerToContract(state([uikit(latest!.cells)]), { presets: PRESETS });

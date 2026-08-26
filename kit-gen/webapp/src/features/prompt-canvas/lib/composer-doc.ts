@@ -8,6 +8,7 @@ import {
   type ComposerState,
   type UiCell,
 } from "@/features/prompt-lab/lib/composer-model";
+import { glazeFromMaterial } from "@/features/kit-core/lib/glaze";
 import { getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
 import { PILL_SLOTS, docHasBrokenPill, repairPills } from "@/features/prompt-lab/lib/doc-templates";
 
@@ -67,13 +68,26 @@ function readCell(raw: unknown, index: number): UiCell | null {
   if (!elementId) return null;
   const styleId = str(raw["styleId"]);
   const decor = str(raw["decor"]);
-  const materialId = str(raw["materialId"]);
+  /**
+   * DI TRÚ `materialId` → `glazeId`.
+   *
+   * Bản nháp đời trước lưu id chất liệu; pill ấy không còn. `glazeFromMaterial` đưa
+   * nó về đục nền gần nhất (kính→Kính trong, băng→Băng, lửa/phát sáng→Phát sáng,
+   * còn lại→nền đặc) — xem bảng ở `glaze.ts` để biết vì sao gỗ/đá/kim loại rơi về
+   * rỗng thay vì được cố giữ.
+   *
+   * `"glazeId" in raw` chứ không phải `str(...) || fallback`: RỖNG là một lựa chọn
+   * ("nền đặc"), không phải "chưa có gì". Hỏi bằng `||` thì người dùng bỏ đục nền
+   * của một dòng cũ xong, mở lại dự án là nó tự quay về theo `materialId` còn sót.
+   */
+  const glazeId = "glazeId" in raw ? str(raw["glazeId"]) : glazeFromMaterial(str(raw["materialId"]));
   return {
     id: str(raw["id"]) || `cell-${index}`,
     elementId,
     styleId,
     decor,
-    materialId,
+    glazeId,
+    sizeId: str(raw["sizeId"]),
     note: str(raw["note"]),
     /* Câu tự do của riêng dòng (chế độ `free`). Thiếu ⇒ để `undefined` chứ KHÔNG
        dựng câu khởi điểm ở đây: dựng ở đây là ghi một tài liệu TipTap vào mọi ô
@@ -84,8 +98,12 @@ function readCell(raw: unknown, index: number): UiCell | null {
        xem `PILL_SLOTS`. Ô element là chỗ cứu được TRỌN VẸN, vì ba giá trị pill
        vẫn còn nguyên trong ba trường có cấu trúc ngay cạnh đây; chúng không đi
        qua ProseMirror nên không dính lượt DOM→doc đã làm hỏng tài liệu. */
+    /* Thứ tự `values` PHẢI khớp `PILL_SLOTS.uikit` — ba nơi, một thứ tự (xem bảng
+       ấy). Truyền giá trị ĐÃ DI TRÚ (`glazeId`), không phải `materialId` thô: pill
+       được cứu hộ mang `kind: "glaze"`, mà một id chất liệu trong pill đục nền là
+       một giá trị lạ ⇒ `phraseOf` trả rỗng ⇒ lựa chọn biến mất khỏi prompt. */
     ...(isRecord(raw["doc"])
-      ? { doc: healDoc(raw["doc"] as JSONContent, "uikit", [styleId, decor, materialId]) }
+      ? { doc: healDoc(raw["doc"] as JSONContent, "uikit", [styleId, glazeId, decor]) }
       : {}),
   };
 }

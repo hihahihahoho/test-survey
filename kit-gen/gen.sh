@@ -186,310 +186,102 @@ fi
 
 # Build prompt cho từng (style, sheet) → prompts/<style>-<sheet>.txt
 python3 - <<'PY'
-import json, os, re, sys
+import json, os
 cfg = json.load(open("styles.json", encoding="utf-8"))
 
-# Từ vựng VẬT LIỆU / MÀU trong spec của thư viện element (element-lib.json).
-# CHỈ chứa từ nói về chất liệu, bề mặt và màu — TUYỆT ĐỐI không chứa từ nói về
-# hình dáng hay trạng thái (capsule, pill, outline, hollow, open, rounded, wide,
-# bar, plate, badge…): những từ đó là HỢP ĐỒNG hình học, không được hạ cấp.
-MATERIAL_WORDS = {
-    # bề mặt / chất liệu
-    "glossy", "gloss", "matte", "candy", "jelly", "gummy", "plastic", "3d", "metal",
-    "metallic", "chrome", "foil", "velvet", "satin", "silk", "wood", "wooden",
-    "paper", "papery", "glass", "glassy", "ceramic", "porcelain", "marble", "stone",
-    "enamel", "lacquer", "rubber", "gel", "frosted", "brushed", "polished",
-    "iridescent", "holographic", "pearlescent", "neon", "pastel", "shiny", "waxy",
-    "specular", "bevel", "beveled", "bevelled", "gradient", "sheen", "desaturated",
-    "muted", "vivid", "translucent", "creamy", "velvety",
-    # màu
-    "red", "orange", "coral", "gold", "golden", "silver", "bronze", "copper",
-    "blue", "green", "yellow", "purple", "violet", "pink", "white", "black",
-    "grey", "gray", "cream", "ivory", "teal", "cyan", "magenta", "brown", "beige",
-    "amber", "crimson", "scarlet", "turquoise", "lime", "navy", "maroon", "peach",
-    "mint", "lavender", "burgundy", "olive", "tan", "charcoal",
-    # NHIỆT ĐỘ MÀU / SẮC ĐỘ / ĐỘ BÃO HOÀ — bổ sung 2026-08-14.
-    # Vì sao phải có: `08-progress-fill` vẫn ra CAM KẸO dù khối ưu tiên + hạ cấp
-    # đã chạy. Đo bằng chính prompt dựng ra: 8 chữ được gọi đích danh (jelly,
-    # glossy, vivid, orange-to-coral, gradient, specular, metal, gold) nhưng
-    # "warm" và "bright" SỐNG SÓT ⇒ dòng ô vẫn còn nguyên câu "vivid warm …
-    # gradient, bright … streak", tức vẫn còn một mệnh lệnh màu ấm đứng sát ô.
-    # "warm" thậm chí được nêu làm ví dụ ngay trong khối ưu tiên phía dưới
-    # ('warm orange-to-coral gradient') mà lại thiếu trong chính từ điển này.
-    "warm", "cool", "dark", "deep", "pale", "bright", "saturated",
-    "colorful", "colourful",
+# ╔══ PROMPT ĐƯỢC LẮP THEO LỐI COMPOSITION ════════════════════════════════════╗
+# ║ Bốn khối, đúng bốn nguồn sự thật, không khối nào lấn sân khối khác:        ║
+# ║   ① PHONG CÁCH TỔNG — style + bảng màu + ảnh ref của người dùng. ĐỨNG ĐẦU. ║
+# ║      Đây là nơi DUY NHẤT nói một thứ TRÔNG THẾ NÀO.                        ║
+# ║   ② HÌNH HỌC — canvas, lưới, ô, safe zone, khung xương đính kèm. Thuần kỹ  ║
+# ║      thuật, không một tính từ thẩm mỹ nào.                                 ║
+# ║   ③ RÀNG BUỘC KỸ THUẬT — nền alpha thật, cấm caro, cấm chữ, cấm tràn ô.    ║
+# ║   ④ DANH SÁCH Ô — mỗi ô là một DANH TỪ (+ trạng thái người dùng chọn).     ║
+# ║                                                                            ║
+# ║ VÌ SAO PHẢI DỌN (chủ sản phẩm 26/08/2026: "dễ bị nhiễm prompt lắm"):       ║
+# ║   · nhãn phiên bản nội bộ ("V16 GUIDE CONTRACT", "the nine-element v14+    ║
+# ║     layout") lọt thẳng vào prompt gửi model — model không có cách nào biết ║
+# ║     V16 là gì, nên nó chỉ là nhiễu, và nó làm người đọc prompt tưởng engine║
+# ║     đang hỏng;                                                             ║
+# ║   · danh sách trang trí CỨNG ("flowers, ribbons, tassels, jewels, sparkles ║
+# ║     and filigree") nhét vào MỌI element bất kể phong cách — đó là ra lệnh  ║
+# ║     thẩm mỹ từ engine, đúng thứ phải đến từ style của người dùng;          ║
+# ║   · khung ngữ cảnh cứng ("a mobile mini-game marketing campaign") đóng đinh║
+# ║     thể loại cho mọi dự án.                                                ║
+# ║ Luật thay thế: engine chỉ được nói HÌNH HỌC và RÀNG BUỘC KỸ THUẬT. Mọi câu ║
+# ║ nói về vật liệu/màu/độ bóng/trang trí phải bắt nguồn từ chữ của người dùng.║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+# ── BẢNG KHỔ CANVAS — MỘT NGUỒN SỰ THẬT DUY NHẤT ─────────────────────────────
+# Trước bản này khổ ảnh được suy ra ĐỘC LẬP ở bốn chỗ, mỗi chỗ một dòng
+# `orient == "portrait" ? … : …`:
+#   ① khối python này (dòng "Canvas orientation: …"),
+#   ② `run_one` ở tầng bash (`want_size`),
+#   ③ `skeleton-svg.js:sheetSize` (khổ ảnh khung xương),
+#   ④ `slice.py:orientation_error` (khổ mong đợi lúc cắt).
+# Thêm một khổ thứ ba là phải sửa đủ bốn, và chỗ nào quên thì hỏng LẶNG LẼ:
+# khung xương vẽ một khổ, prompt xin khổ khác, slicer chia lưới trên khổ thứ ba.
+# Nay bảng nằm ở ĐÂY. ② đọc ngược từ chính dòng đầu prompt (nên không thể lệch),
+# ③ và ④ chép đúng ba dòng này và trỏ ngược về đây bằng chú thích.
+#
+# `sheet.canvas` ∈ {"landscape","portrait","square"} là field CHÍNH; `sheet.orient`
+# (đời cũ, chỉ có landscape/portrait) vẫn được đọc để contract cũ chạy nguyên vẹn.
+#
+# ⚠️ VÌ SAO Ô VUÔNG LÀ 1254x1254 CHỨ KHÔNG PHẢI 1024x1024 HAY 2048x2048.
+# Đã soi binary codex 0.149.0 (26/08/2026). Tool `image_gen.imagegen` có ĐÚNG BA
+# tham số — `prompt`, `referenced_image_paths`, `num_last_images_to_include` — và
+# KHÔNG có `size`. Khổ ảnh do backend chọn, model chỉ lái được TỈ LỆ bằng lời văn.
+# Đo 685 ảnh thật do tool sinh ra trên máy này: MỌI ảnh đều xấp xỉ 1.572.864 pixel
+# (= 1536×1024) ±1500, tỉ lệ thì tự do. Trong đó có 132 ảnh vuông, và tất cả đều
+# là **1254×1254** (1.572.516 px). KHÔNG một ảnh nào 1024×1024, không một ảnh nào
+# 2048 hay 2040 — cạnh dài nhất từng thấy là 2172 (dải 3:1).
+# Vậy: câu "MUST be exactly …" trong task chỉ có tác dụng như một lời khai TỈ LỆ.
+# Ghi 1254x1254 thay vì 1024x1024 để con số ta hứa với model trùng với con số nó
+# thật sự trả về — nói dối ở đây thì mọi lượt vuông đều trông như "model làm sai".
+# (Bảng size cứng {1024x1024, 2048x2048…} chỉ tồn tại ở đường CLI
+# `scripts/image_gen.py --size`, đường mà gen.sh CẤM THẲNG ở khối HARD BAN dưới.)
+CANVAS = {
+    "landscape": (1536, 1024, "LANDSCAPE 1536x1024", "landscape 3:2"),
+    "portrait":  (1024, 1536, "PORTRAIT 1024x1536",  "portrait 2:3"),
+    "square":    (1254, 1254, "SQUARE 1254x1254",    "square 1:1"),
 }
-# CỐ Ý KHÔNG THÊM — đã cân nhắc và loại, đừng "bổ sung cho đủ" ở đợt sau:
-#   · glow / glowing / luminous / bloom — với ô `-glow` thì phát sáng LÀ hợp đồng
-#     của ô (skel.matte == "glow", nền ô đen, slicer tách alpha theo kênh sáng).
-#     Bảo model "đừng vẽ glow" là xoá luôn thành phần đó.
-#   · smooth — spec ô glow-burst dùng nó làm YÊU CẦU CHẤT LƯỢNG
-#     ("the glow must be perfectly SMOOTH and CLEAN — no film grain"), không phải preset.
-#   · light — vừa là "thin light outer rim" (sắc độ) vừa là "the light effect is
-#     drawn ADDITIVELY" trong đoạn phụ của ô glow. Hạ cấp là đá nhầm vế thứ hai.
-#   · soft / flat / highlight / darker — dính hình dáng hoặc TRẠNG THÁI
-#     ("flat cap", "flat face" là hình dáng; "but darker, pushed-in look" là trạng
-#     thái nhấn của nút). Ví dụ cũ ở đây trích câu "flat background color of the
-#     sheet must show through" của `22-board-panel` — câu đó là DI CHỨNG CHROMA-KEY
-#     và đã bị xoá khỏi element-lib.json (24/08/2026, nay là "LOW ALPHA … the
-#     transparent sheet background shows through"). Từ `flat` vẫn ở ngoài từ điển,
-#     nhưng vì lý do hình dáng, không vì một hợp đồng nền không còn tồn tại.
 
 
-# CAP của danh sách từ được nêu đích danh. Bản cũ cắt cứng `hits[:10]` KHÔNG BÁO
-# GÌ — và `08-progress-fill` đang đứng đúng 10/10 (jelly, glossy, vivid, warm,
-# orange-to-coral, gradient, bright, specular, metal, gold), tức thêm một từ vật
-# liệu nữa vào spec là từ thứ 11 rơi âm thầm và ô lại ra màu preset. Đo trên
-# styles.json hiện tại: 122 component, đúng 1 ô chạm cap, dài nhất 86 ký tự.
-# Nới lên 24 từ / 320 ký tự (gấp ~4 lần chỗ đang dùng, vẫn chặn prompt phình) và
-# LUÔN kêu ra stderr khi phải cắt.
-PRESET_WORD_CAP = 24
-PRESET_CHAR_CAP = 320
+def canvas_of(sh):
+    """Khổ của tấm. `canvas` thắng `orient`; giá trị lạ rơi về landscape.
 
+    Rơi về landscape chứ không nổ: một chữ gõ sai trong contract không đáng để
+    giết cả lượt gen, và khổ mặc định là khổ mà mọi tấm đời cũ đang dùng.
+    """
+    key = str(sh.get("canvas") or sh.get("orient") or "landscape").lower()
+    return CANVAS.get(key, CANVAS["landscape"])
+
+
+# ── VÌ SAO Ở ĐÂY KHÔNG CÒN BỘ MÁY GẶM CHỮ VẬT LIỆU ───────────────────────────
+# Từng có ~250 dòng ở đúng chỗ này: MATERIAL_WORDS / FINISH_WORDS / COLOUR_WORDS,
+# `strip_finish()` xoá chữ bề mặt + màu khỏi spec, `preset_words()` nêu đích danh
+# rồi hạ cấp, `COLOUR_ROLE` dịch gold/silver/bronze sang "rank 1/2/3".
+#
+# Toàn bộ bộ máy đó tồn tại vì MỘT lý do: spec trong element-lib.json là mô tả
+# VẬT LIỆU CỨNG ("glossy 3D candy-red capsule button…"), tức thư viện tự ra lệnh
+# thẩm mỹ, và engine phải đi gỡ mồi do chính nó gieo.
+#
+# Nay spec của thư viện chỉ còn DANH TỪ ("the primary action button", "a popover
+# panel", "a background panel"). Không còn preset để mà hạ cấp — nên bộ máy này
+# vừa thừa vừa NGUY HIỂM: chữ vật liệu còn sót lại trong một spec bây giờ là chữ
+# NGƯỜI DÙNG tự chọn (khu soạn prompt cho chọn vật liệu theo từng ô), và xoá lựa
+# chọn của người dùng là một lỗi, không phải một phép dọn.
+#
+# Thứ thay thế nó là MỘT CÂU nói về THỨ HẠNG, ngay trên danh sách ô: khối phong
+# cách quyết diện mạo, dòng đánh số chỉ nói ô đó LÀ CÁI GÌ. Engine tuyên bố ai
+# thắng ai; engine không viết lại chữ của ai cả.
+#
 # ── VÌ SAO Ở ĐÂY KHÔNG CÒN BẢNG MÀU CHROMA-KEY ────────────────────────────────
-# Từng có `CHROMA_KEYS` / `key_of()` ở đúng chỗ này để chọn màu nền giả-trong-suốt
-# (magenta / green / cyan / blue) rồi nhét tên màu vào prompt. Bỏ vì image_gen của
-# codex 0.149 trả về RGBA thật: prompt nay xin thẳng nền trong suốt, không xin màu.
-#
-# `slice.py` cũng KHÔNG còn `KEY_COLORS` lẫn đường tách chroma. Đoạn trên từng ghi
-# là "vẫn giữ để cắt lại sheet cũ" — không còn đúng: chủ sản phẩm đã chốt bỏ HẲN,
-# và hệ quả đã biết là sheet raw ĐỜI CŨ (nền magenta/green) không cắt lại được nữa,
-# phải sinh lại. Nay chỉ còn ĐÚNG MỘT đường trong cả engine: alpha thật.
-#
-# Và vì chỉ còn một đường nên nó phải được KIỂM, không chỉ được XIN: xem
-# `alpha_verdict` ở đầu file — RGBA, có chỗ alpha = 0, và có dải mờ liên tục (dải mờ
-# 0% là dấu vân tay của một phép tách bằng script, không phải alpha do model vẽ).
-
-
-def preset_words(spec, tag=""):
-    """Các từ VẬT LIỆU/MÀU có mặt trong spec — để nêu đích danh mà HẠ CẤP chúng.
-    Trả về theo thứ tự xuất hiện, giữ nguyên dạng gốc, không trùng lặp."""
-    hits, seen = [], set()
-    for tok in re.findall(r"[A-Za-z0-9][A-Za-z0-9-]*", spec):   # bắt cả "3D"
-        low = tok.lower()
-        if low in seen:
-            continue
-        if any(p in MATERIAL_WORDS for p in [low] + low.split("-")):
-            seen.add(low)
-            hits.append(tok)
-    kept, used = [], 0
-    for w in hits:
-        if len(kept) >= PRESET_WORD_CAP or used + len(w) + 2 > PRESET_CHAR_CAP:
-            break
-        kept.append(w)
-        used += len(w) + 2
-    if len(kept) < len(hits):
-        print(f"⚠ {tag or 'spec'}: cắt {len(hits) - len(kept)}/{len(hits)} từ vật liệu "
-              f"khỏi câu hạ cấp (cap {PRESET_WORD_CAP} từ / {PRESET_CHAR_CAP} ký tự) — "
-              f"BỊ BỎ: {', '.join(hits[len(kept):])}. Những từ này KHÔNG được hạ cấp "
-              f"nên ô có thể ra màu/vật liệu preset thay vì art style.", file=sys.stderr)
-    return kept
-
-
-# ── TỪ TẢ KẾT CẤU BỀ MẶT / KHỐI: PHẢI XOÁ HẲN, KHÔNG "NÊU RỒI CẤM" ────────────
-# Đo trên dự án thật hello-368a (art style = ảnh ref UI kiếm hiệp MỰC HOẠ PHẲNG):
-#   · sheet `nen` và 3 sheet `pose-*` — spec KHÔNG có chữ vật liệu nào, 0 câu hạ
-#     cấp ⇒ ảnh ra ĐÚNG mực hoạ phẳng của ref.
-#   · sheet `ui` (11 câu hạ cấp) và `dao-cu` (8 câu) ⇒ ảnh ra NHỰA BÓNG 3D:
-#     nút viên nang đỏ kẹo có vành bevel, nút tròn mái vòm, mảnh ghép đùn khối,
-#     huy chương kim loại — tức đúng preset của thư viện element, không phải ref.
-# Cùng một prompt, cùng một ảnh ref đính kèm, khác nhau đúng ở chỗ dòng ô có hay
-# không có chữ 'glossy 3D … bevel'. Kết luận: câu "the words glossy, 3D … do NOT
-# paint them" KHÔNG gỡ được mồi — nhắc tên một kết cấu rồi phủ định vẫn là nhắc,
-# và nó đứng sát ô nên thắng cả khối ưu tiên lẫn khối Art style ở cuối.
-#
-# Nên: với từ chỉ nói BỀ MẶT / ĐỘ BÓNG / ĐỘ NỔI KHỐI — thứ không mang chút hợp
-# đồng hình học hay trạng thái nào — thì XOÁ khỏi câu spec trước khi ghép prompt.
-# Model không đọc thấy thì không có gì để bắt chước; hình dáng, bộ phận và trạng
-# thái vẫn còn nguyên trong câu.
-#
-# CỐ Ý KHÔNG XOÁ (vẫn hạ cấp bằng cách nêu tên như cũ):
-#   · MỌI TỪ MÀU (red, blue, gold, silver, bronze, grey…) — màu là VAI TRÒ và là
-#     thứ phân biệt ô với ô: 45/46/47-rank-badge chỉ khác nhau ở GOLD/SILVER/
-#     BRONZE, 44-btn-pill-disabled dựa vào 'desaturated grey' để ra trạng thái mờ.
-#     Xoá là mất nghĩa, đúng cái bẫy mà bản trước đã tránh.
-#   · matte / desaturated / muted / vivid / bright / dark… — sắc độ mang TRẠNG
-#     THÁI (locked, disabled, active).
-#   · glass / glassy / frosted / translucent / gel — 09-popup-panel là ô kính
-#     THẬT: slice.py có nhánh matte kính, xoá chữ là hỏng luôn khâu cắt.
-#   · metal / wood / stone / paper… — chất liệu định danh món đồ, và còn xuất
-#     hiện trong mệnh lệnh PHỦ ĐỊNH ("NO metal or gold rim" của 08-progress-fill).
-FINISH_WORDS = {
-    "3d", "glossy", "gloss", "candy", "jelly", "gummy", "plastic", "metallic",
-    "chrome", "foil", "enamel", "lacquer", "specular", "bevel", "beveled",
-    "bevelled", "gradient", "sheen", "shiny", "polished", "iridescent",
-    "holographic", "pearlescent", "waxy", "creamy", "velvety", "satin", "silk",
-    "velvet", "brushed", "porcelain", "ceramic", "marble",
-}
-assert FINISH_WORDS <= MATERIAL_WORDS, "FINISH_WORDS phải là tập con của MATERIAL_WORDS"
-
-# ── TỪ MÀU: CŨNG XOÁ HẲN — SPEC CỦA Ô CHỈ CÒN NÓI *NÓ LÀ CÁI GÌ* ─────────────
-# Bản trước CỐ Ý GIỮ mọi từ màu, lý lẽ là "màu là VAI TRÒ và là thứ phân biệt ô
-# với ô". Lý lẽ đó đúng một nửa, và nửa sai đã đo được: từ màu literal đứng SÁT Ô
-# — đúng vị trí mà chính khối trên vừa chứng minh là thắng cả khối ưu tiên lẫn
-# khối Art style — nên `01-btn-pill-red` ra ĐỎ bất kể bảng màu thương hiệu là gì.
-# Chủ sản phẩm báo đúng triệu chứng đó: "màu nhận diện thương hiệu không được
-# respect". Không thể vừa để một mệnh lệnh màu cạnh ô vừa mong bảng màu thắng.
-#
-# Nên: spec của element chỉ còn tả NÓ LÀ CÁI GÌ và Ở TRẠNG THÁI NÀO (nút, popup,
-# checkbox bật/tắt, thẻ hạng). Màu do bảng màu thương hiệu + ảnh ref quyết định.
-#
-# NỬA ĐÚNG CỦA LÝ LẼ CŨ VẪN PHẢI GIỮ, và đây là phần dễ làm hỏng: 45/46/47-rank-
-# badge chỉ khác nhau ở GOLD/SILVER/BRONZE, `44-btn-pill-disabled` dựa vào
-# 'desaturated grey' để ra trạng thái mờ. Xoá trần là ba cái huy chương thành y
-# hệt nhau. Nên từ màu nào MANG THỨ HẠNG/TRẠNG THÁI thì không biến mất — nó được
-# DỊCH sang vai trò (`COLOUR_ROLE`) rồi phát lại thành một tag riêng, tức giữ
-# nguyên sự phân biệt mà không ra lệnh một màu cụ thể nào.
-COLOUR_ROLE = {
-    "gold": "highest tier / rank 1", "golden": "highest tier / rank 1",
-    "silver": "second tier / rank 2",
-    "bronze": "third tier / rank 3", "copper": "third tier / rank 3",
-    "desaturated": "inactive / disabled", "muted": "inactive / disabled",
-    "grey": "neutral", "gray": "neutral", "charcoal": "neutral",
-}
-COLOUR_WORDS = {
-    "red", "orange", "coral", "gold", "golden", "silver", "bronze", "copper",
-    "blue", "green", "yellow", "purple", "violet", "pink", "white", "black",
-    "grey", "gray", "cream", "ivory", "teal", "cyan", "magenta", "brown", "beige",
-    "amber", "crimson", "scarlet", "turquoise", "lime", "navy", "maroon", "peach",
-    "mint", "lavender", "burgundy", "olive", "tan", "charcoal",
-    "desaturated", "muted", "vivid", "warm", "cool", "bright", "dark", "pale",
-    "neon", "pastel",
-}
-assert COLOUR_WORDS <= MATERIAL_WORDS, "COLOUR_WORDS phải là tập con của MATERIAL_WORDS"
-# CỐ Ý KHÔNG NẰM TRONG ĐÂY: glass/glassy/frosted/translucent/gel (slice.py có
-# nhánh matte kính, xoá chữ là hỏng khâu CẮT chứ không chỉ khâu vẽ) và
-# metal/wood/stone/paper (chất liệu định danh món đồ, không phải phong cách).
-STRIP_WORDS = FINISH_WORDS | COLOUR_WORDS
-
-# Từ phủ định đứng ngay trước: "no gloss", "NO metal or gold rim" — xoá danh từ
-# sau nó là lật ngược nghĩa câu (từ "đừng bóng" thành "bóng"). Giữ nguyên.
-_NEGATORS = {"no", "not", "never", "without", "non"}
-
-# Giới từ chỉ dẫn vào MỘT TỪ MÀU ("badge in GOLD", "rim of silver"). Bỏ từ màu mà
-# để giới từ ở lại là đẻ ra câu cụt. KHÔNG có "with"/"and": chúng nối mệnh đề thật.
-_COLOUR_PREPS = {"in", "of"}
-
-# Danh từ chỉ MẶT PHẲNG TRỪU TƯỢNG của element: một mình chúng không tả gì cả,
-# chúng chỉ tồn tại để đỡ cho tính từ vật liệu đứng trước ("gradient face",
-# "beveled edge", "glossy foil surface"). Bỏ tính từ đi thì cả mệnh đề thành rác
-# ("…plate for one countdown digit, face, edge, top highlight, EMPTY center…"),
-# nên mệnh đề nào MẤT CHỮ mà chỉ còn lại toàn nhóm này thì bỏ hẳn mệnh đề.
-# KHÔNG có "rim"/"border"/"outline"/"frame": chúng là hợp đồng hình học ("darker
-# red rim" vẫn phải còn cái vành), và mệnh đề chứa chúng thường còn từ khác.
-_FILLER_NOUNS = {"surface", "face", "finish", "texture", "edge", "highlight",
-                 "top", "shading", "look", "tone", "the", "a", "an", "its",
-                 "with", "and"}
-
-
-def _strip_clause(clause):
-    """Xoá STRIP_WORDS (bề mặt + màu) trong MỘT mệnh đề. Trả (mệnh đề mới, đã bỏ).
-
-    Token có gạch nối chỉ bỏ ĐÚNG phần thuộc STRIP_WORDS: 'candy-red' rụng cả hai
-    nửa (candy = bề mặt, red = màu), còn 'pill-shaped' không đụng tới.
-
-    MỆNH ĐỀ PHỦ ĐỊNH THÌ MIỄN TRỪ TRỌN VẸN, không chỉ token ngay sau từ phủ định.
-    Bản trước chỉ nhìn ĐÚNG MỘT token phía trước, nên "NO metal or gold rim" vẫn
-    mất chữ `gold` (token trước nó là "or", không phải "no") — tức lệnh cấm bị gặm
-    mất một nửa vế. Nay hễ mệnh đề có từ phủ định thì phần còn lại giữ nguyên: một
-    mệnh đề cấm là HỢP ĐỒNG, không phải preset để hạ cấp.
-    """
-    out, dropped, prev, neg = [], [], "", False
-    for tok in re.findall(r"\s+|[^\s]+", clause):
-        if tok.isspace():
-            out.append(tok)
-            continue
-        m = re.match(r"^([^A-Za-z0-9]*)([A-Za-z0-9][A-Za-z0-9-]*)([^A-Za-z0-9]*)$", tok)
-        if not m or prev in _NEGATORS or neg:
-            out.append(tok)
-            prev = re.sub(r"[^a-z]", "", tok.lower())
-            if prev in _NEGATORS:
-                neg = True
-            continue
-        pre, word, post = m.groups()
-        if word.lower() in _NEGATORS:
-            neg = True
-            out.append(tok)
-            prev = word.lower()
-            continue
-        parts = word.split("-")
-        keep = [p for p in parts if p.lower() not in STRIP_WORDS]
-        if len(keep) != len(parts):
-            dropped += [p for p in parts if p.lower() in STRIP_WORDS]
-            if keep:
-                out.append(pre + "-".join(keep) + post)
-            elif post.strip():
-                out.append(post.lstrip())       # giữ dấu câu, bỏ chữ
-            else:
-                if out and out[-1].isspace():
-                    out.pop()                   # nuốt luôn khoảng trắng đứng trước
-                # GIỚI TỪ MỒ CÔI: "medal badge in GOLD for this place" mà chỉ bỏ
-                # chữ GOLD thì còn "…badge in for this place" — câu hỏng, và câu
-                # hỏng là thứ model tự bịa nghĩa để lấp. Giới từ đó tồn tại CHỈ để
-                # dẫn vào từ màu vừa bỏ, nên bỏ theo.
-                if out and re.sub(r"[^a-z]", "", (out[-1] if out else "").lower()) in _COLOUR_PREPS:
-                    out.pop()
-                    if out and out[-1].isspace():
-                        out.pop()
-        else:
-            out.append(tok)
-        prev = word.lower()
-    return re.sub(r"\s{2,}", " ", "".join(out)).strip(), dropped
-
-
-def colour_roles(dropped):
-    """Vai trò rút ra từ những TỪ MÀU vừa bị xoá — thứ duy nhất của màu được giữ.
-
-    Ba huy chương chỉ khác nhau ở gold/silver/bronze; xoá trần là chúng thành y
-    hệt nhau. `COLOUR_ROLE` dịch đúng những từ MANG THỨ HẠNG/TRẠNG THÁI sang lời
-    nói về vai trò, nên sự phân biệt còn nguyên mà không ô nào bị ra lệnh một màu
-    cụ thể. Từ màu thuần tuý (red, blue…) không có trong bảng ⇒ mất hẳn, đúng ý.
-    """
-    seen = []
-    for w in dropped:
-        role = COLOUR_ROLE.get(w.lower())
-        if role and role not in seen:
-            seen.append(role)
-    return seen
-
-
-def strip_finish(spec):
-    """Bỏ hẳn từ tả bề mặt/độ nổi khối VÀ từ màu khỏi spec. Trả (spec mới, đã bỏ).
-
-    Cắt theo DẤU PHẨY để mệnh đề nào rỗng nghĩa sau khi xoá thì bỏ trọn — spec
-    của thư viện element viết theo lối liệt kê mệnh đề, nên đây là ranh giới an
-    toàn nhất. Chỉ tách ở dấu phẩy NGOÀI ngoặc để không xé câu "(the decorated
-    track is a SEPARATE element)".
-    """
-    clauses, buf, depth = [], "", 0
-    for ch in spec:
-        if ch in "([":
-            depth += 1
-        elif ch in ")]":
-            depth = max(0, depth - 1)
-        if ch == "," and depth == 0:
-            clauses.append(buf)
-            buf = ""
-        else:
-            buf += ch
-    clauses.append(buf)
-
-    kept, dropped = [], []
-    for cl in clauses:
-        new, cut = _strip_clause(cl)
-        dropped += cut
-        if cut and new:
-            words = [w.lower() for w in re.findall(r"[A-Za-z][A-Za-z-]*", new)]
-            if words and all(w in _FILLER_NOUNS for w in words):
-                continue                       # mệnh đề mất hết nghĩa ⇒ bỏ trọn
-        if new:
-            kept.append(new)
-    txt = ", ".join(kept)
-    # dấu câu mồ côi do xoá chữ: ", —" thành " —", ", :" thành ":"
-    txt = re.sub(r",\s*([—:;])", r" \1", txt)
-    txt = re.sub(r"\s{2,}", " ", txt).strip(" ,;")
-    return txt, dropped
-
+# Từng có `CHROMA_KEYS` / `key_of()` để chọn màu nền giả-trong-suốt rồi nhét tên
+# màu vào prompt. Bỏ vì image_gen của codex 0.149 trả về RGBA thật: prompt nay xin
+# thẳng nền trong suốt, không xin màu. `slice.py` cũng không còn đường tách chroma.
+# Chỉ còn ĐÚNG MỘT đường trong cả engine: alpha thật — và vì chỉ còn một đường nên
+# nó phải được KIỂM, không chỉ được XIN (xem `alpha_verdict` ở đầu file).
 
 for s in cfg["styles"]:
     for sh in cfg["sheets"]:
@@ -500,36 +292,106 @@ for s in cfg["styles"]:
         assert len(comps) == cols * rows, f'{sh["id"]}: {len(comps)} component ≠ lưới {cols}x{rows}'
         real = [c for c in comps if c["skel"].get("shape") != "empty"]
         n_real = len(real)
-        portrait = sh.get("orient") == "portrait"
+        _cw, _ch, canvas_header, canvas_ratio = canvas_of(sh)
         # ⚠️ SHEET FULL-BLEED NHẬN DIỆN THEO skel.shape, KHÔNG theo id sheet.
         # Bản cũ: `if sh["id"] != "bg"`. Nhưng id sheet do NGƯỜI DÙNG/agent đặt —
         # dự án thật đặt "nen", "background", "bg-scene"… nên nhánh full-bleed gần
         # như KHÔNG BAO GIỜ chạy, và sheet nền lãnh đúng câu dành cho ô UI:
-        # "keeping at least 40px of empty background padding on every side of the
-        # element; … never touch the image edges". Model làm theo ⇒ cảnh nền bị
-        # vẽ THỤT VÀO, chừa nguyên khung chroma-key quanh 4 cạnh; slice.py cắt ô
-        # full-bleed KHÔNG key gì cả nên viền key đó đi thẳng vào asset (đã dính:
-        # viền magenta 40-55px quanh 25-bg-home ở lần gen thứ hai của BlindTest-B2).
-        # Ngay cả nhánh "bg" cũ cũng hỏng: toán tử ba ngôi chỉ buộc vào DÒNG CUỐI
-        # nên hai dòng "40px padding" vẫn được in ra trước câu "edge to edge".
+        # "keeping at least 40px of empty background padding on every side" ⇒ cảnh
+        # nền bị vẽ THỤT VÀO, chừa nguyên khung rỗng quanh 4 cạnh; slice.py cắt ô
+        # full-bleed KHÔNG key gì cả nên viền đó đi thẳng vào asset (đã dính: viền
+        # magenta 40-55px quanh 25-bg-home ở lần gen thứ hai của BlindTest-B2).
         full_bleed = n_real > 0 and all(c["skel"].get("shape") == "full" for c in real)
-        nine_element = (
-            cols == 3 and rows == 3 and len(comps) == 9
-            and all(c["skel"].get("shape") != "empty" for c in comps)
-        )
-        layout_note = (
-            [
-                "This is the v14+ NINE-ELEMENT production layout: exactly nine outer cells",
-                "in a locked 3-by-3 landscape sheet. Keep this density and cell order;",
-                "never repack the nine elements into another grid.",
+        # Sheet mascot nhận diện bằng `sh["ref"]` — CÓ ẢNH THAM CHIẾU NHÂN VẬT thì
+        # cả tấm là nhân vật (đúng vị từ mà khối "SECOND attached image" dùng dưới).
+        mascot_sheet = bool(sh.get("ref"))
+
+        b = s.get("brand") or {}
+        use_brand_refs = bool(b.get("refs"))
+        # ⚠️ ẢNH PHONG CÁCH ĐÃ TẢI LÊN THÌ PHẢI ĐƯỢC DÙNG.
+        # Bản cũ: `use_inspo = styleMode == "inspo" and inspo`. Nhưng không còn màn
+        # nào đặt `styleMode = "inspo"` ⇒ `use_inspo` LUÔN sai ⇒ ảnh phong cách không
+        # bao giờ được đính, và mô tả vật liệu mặc định của từng ô là thứ DUY NHẤT
+        # dẫn dắt style. Nay: có ảnh phong cách = dùng ảnh phong cách.
+        use_inspo = bool(s.get("inspo"))
+
+        # ═══ ① PHONG CÁCH TỔNG — ĐỨNG ĐẦU PROMPT ═════════════════════════════
+        # Chủ sản phẩm: "phải copy cả prompt của phong cách, có prompt tổng".
+        # Bản cũ chôn khối này ở TẬN CUỐI, sau ~900 dòng hình học, nên người mở tab
+        # Prompt ra đọc thì thấy engine nói về V16 và về hoa lá trước khi thấy một
+        # chữ nào của chính mình. Đưa lên đầu vừa đúng thứ tự đọc của con người,
+        # vừa an toàn: dòng đánh số ở dưới nay chỉ còn DANH TỪ, không còn mô tả vật
+        # liệu nào để cạnh tranh với nó (đó là điều kiện làm cho việc dời lên được).
+        style_text = str(s.get("style") or "").strip()
+        style_block = []
+        if use_inspo:
+            style_block += [
+                "ART STYLE — this block decides EVERY visual quality of this sheet:",
+                "material, texture, finish, lighting, palette, every actual colour, the",
+                "rendering technique, and how much depth and volume anything has.",
+                "The attached inspiration reference image(s) ARE the style: match their",
+                "rendering technique, materials, palette and level of detail exactly. Do not",
+                "copy their layout — only their look.",
             ]
-            if nine_element else
-            [
-                "The contract grid is immutable for this sheet. Do not convert it to a",
-                "different density or repack elements; the nine-element v14+ layout applies",
-                "only when the contract itself declares a complete 3-by-3 nine-cell sheet.",
+            if style_text:
+                style_block += [
+                    f"Additional direction from the project (SECONDARY to the reference "
+                    f"image — never contradict it): {style_text}.",
+                ]
+        elif style_text:
+            style_block += [
+                "ART STYLE — this block decides EVERY visual quality of this sheet:",
+                "material, texture, finish, lighting, palette, every actual colour, the",
+                "rendering technique, and how much depth and volume anything has.",
+                f"Art style: {style_text}.",
             ]
-        )
+        else:
+            # KHÔNG bịa một phong cách thay người dùng. Nói thẳng là chưa có, và chốt
+            # điều kiện duy nhất còn lại: cả tấm phải nhất quán với chính nó.
+            style_block += [
+                "ART STYLE: none was given for this project. Choose one coherent look and",
+                "apply it to every element on this sheet without exception.",
+            ]
+        if b.get("primary"):
+            bl = f"Brand palette: primary {b.get('primary')}, secondary {b.get('secondary')}"
+            if b.get("gradient"):
+                bl += f", gradient {b['gradient']}"
+            style_block += [bl + " — use these as the dominant UI colors."]
+        # ⚠️ BẢNG MÀU VÀ ẢNH BRAND KHÔNG LOẠI TRỪ NHAU. Bản cũ chỉ in dòng palette
+        # khi `mode == "colors"`, mà `kitset-to-contract.ts` đặt mode = "image" ngay
+        # khi có logo ⇒ **tải logo lên là MẤT TRẮNG dòng màu thương hiệu**. Hai thứ
+        # trả lời hai câu hỏi khác nhau (màu nào / vẽ theo lối nào) nên CÓ GÌ DÙNG NẤY.
+        if use_brand_refs or use_inspo:
+            style_block += [
+                "Also attached: brand / inspiration reference images — match their colour",
+                "mood, material finish and overall vibe (do NOT copy their layout).",
+                "IMPORTANT: even though the reference images have their own backgrounds,",
+                "the sheet background MUST still be fully transparent as stated below —",
+                "NEVER reuse a reference background colour, especially not for character cells.",
+            ]
+        # MỘT TRỌNG TÀI MÀU DUY NHẤT. Có tới ba nguồn màu (bảng màu, ảnh ref, và chữ
+        # trong spec của ô) mà trước đây không ai phân xử, nên nguồn ĐỨNG GẦN Ô NHẤT
+        # luôn thắng và bảng màu thương hiệu bị bỏ qua — đúng triệu chứng chủ sản
+        # phẩm báo ("màu nhận diện thương hiệu không được respect").
+        if b.get("primary"):
+            style_block += [
+                "COLOUR AUTHORITY: the brand palette above is the source of every colour on",
+                "this sheet. Its primary is the dominant colour of primary actions and key",
+                "surfaces; its secondary carries secondary actions; neutrals derive from them.",
+            ]
+            if use_brand_refs or use_inspo:
+                style_block += [
+                    "The attached reference image(s) decide the RENDERING — technique, material,",
+                    "texture, lighting, amount of depth. They do NOT decide hue: re-tint whatever",
+                    "they show into the brand palette above.",
+                ]
+        elif use_brand_refs or use_inspo:
+            style_block += [
+                "COLOUR AUTHORITY: the attached reference image(s) decide both the rendering",
+                "AND the palette.",
+            ]
+
+        # ═══ ② HÌNH HỌC — THUẦN KỸ THUẬT ═════════════════════════════════════
         if full_bleed:
             place = [
                 f"Each cell is a {sh.get('cell_hint', 'full-bleed scene')}.",
@@ -548,60 +410,82 @@ for s in cfg["styles"]:
                 "centered, keeping at least 40px of empty background padding on every side of the element;",
                 "elements never touch each other and never touch the image edges.",
             ]
-        # ⚠️ KHỐI "BA LỚP" ĐƯỢC VIẾT CHO NÚT BẤM, KHÔNG PHẢI CHO NHÂN VẬT.
-        # Nó ra lệnh: một MẶT PHẲNG liền lạc thay chỗ bóng xám, viền/rim ngay bên
-        # ngoài mặt phẳng đó, trang trí đẩy ra xa hơn. Với nút, khay, thanh thì đó
-        # đúng là cấu tạo. Với sheet mascot thì không có "mặt phẳng" nào cả — và
-        # model vẫn tuân lệnh: nó vẽ con vật như một cái huy hiệu có viền, dáng cứng
-        # đơ, tóc/tai/đuôi bị ép vào trong "footprint". Đúng loại lệnh đã từng phá ô
-        # ánh sáng (xem câu huỷ lệnh trong nhánh matte == "glow" bên dưới), chỉ khác
-        # là ở đây nó phá cả tấm.
-        # Sheet mascot nhận diện bằng `sh["ref"]` — CÓ ẢNH THAM CHIẾU NHÂN VẬT thì cả
-        # tấm là nhân vật (đúng vị từ mà khối "SECOND attached image" dùng ở dưới).
-        # Bỏ khối ba lớp/rim, GIỮ nguyên mọi thứ khác: safe zone, nền trong suốt,
-        # cấm chữ, cấm caro. Chỉ giữ lại một câu — ràng buộc THẬT SỰ cần của lớp 3:
-        # trang trí tràn ra ngoài guide thì được, tràn sang ô hàng xóm thì không.
-        mascot_sheet = bool(sh.get("ref"))
+        # ⚠️ KHỐI CẤU TẠO NÀY ĐƯỢC VIẾT CHO NÚT BẤM, KHÔNG PHẢI CHO NHÂN VẬT.
+        # Nó ra lệnh: một MẶT PHẲNG liền lạc thay chỗ bóng xám, viền ngay bên ngoài
+        # mặt phẳng đó. Với nút, khay, thanh thì đó đúng là cấu tạo. Với sheet mascot
+        # thì không có "mặt phẳng" nào cả — và model vẫn tuân lệnh: nó vẽ con vật như
+        # một cái huy hiệu có viền, dáng cứng đơ, tóc/tai/đuôi bị ép vào trong.
+        #
+        # DANH SÁCH TRANG TRÍ CỨNG ĐÃ BỊ XOÁ KHỎI CẢ HAI NHÁNH. Bản cũ liệt kê
+        # "flowers, ribbons, tassels, jewels, sparkles and filigree" (nhánh nút) và
+        # "Hair, ears, tails, ribbons, props and sparkles" (nhánh mascot). Ràng buộc
+        # THẬT ở đây chỉ có một: thứ tràn ra được phép vượt guide, KHÔNG được vượt ô.
+        # Tràn ra là CÁI GÌ thì phong cách của người dùng quyết, không phải engine —
+        # nêu tên một món trang trí là mồi cho model vẽ đúng món đó, kể cả khi phong
+        # cách là mực hoạ phẳng không có lấy một cái tua rua.
         layer_block = (
             [
                 "Draw the character as ONE natural figure, not as a rim around a flat plate:",
-                "no forced border, no badge frame, no plaque. Hair, ears, tails, ribbons, props",
-                "and sparkles may overflow outside the guide, but must stay inside this",
-                "character's own cell and never cross into another cell.",
+                "no forced border, no badge frame, no plaque. Anything that overflows the",
+                "figure may cross the guide, but must stay inside this character's own cell",
+                "and never cross into another cell.",
             ]
             if mascot_sheet else
             [
-                "Build each element in three layers, from the inside out:",
+                "Build each element from the inside out:",
                 "1) one continuous, clean content surface replacing the gray silhouette, on the",
-                "   same footprint;",
-                "2) the rim/border immediately OUTSIDE that footprint — it must not consume or",
-                "   reduce the safe-zone surface;",
-                "3) flowers, ribbons, tassels, jewels, sparkles and filigree farther outside as",
-                "   overflow decoration; they may cross the frame but must stay inside their own",
-                "   cell and never cross into another cell.",
-                "Keep the crop-safe area clean: no decoration may cover the functional surface.",
+                "   same footprint — this is the CORE;",
+                "2) any rim, border or edge treatment immediately OUTSIDE that footprint — it",
+                "   must not consume or reduce the safe-zone surface;",
+                "3) decoration, if the art style calls for any, farther outside still as overflow;",
+                "   it may cross the guide but must stay inside its own cell and never cross into",
+                "   another cell.",
+                "Keep the crop-safe area clean: no decoration may cover the functional core.",
             ]
         )
         lines = [
-            "Canvas orientation: " + ("PORTRAIT 1024x1536." if portrait else "LANDSCAPE 1536x1024."),
-            (f"A sheet of {n_real} full-bleed background scenes for a mobile mini-game."
-             if full_bleed and n_real > 1 else
-             "A single full-bleed background scene for a mobile mini-game." if full_bleed else
-             "A game UI kit sprite sheet for a mobile mini-game marketing campaign."
-             if len(comps) > 1 else
-             "A single full-bleed background scene for a mobile mini-game."),
+            # DÒNG 1 LÀ HỢP ĐỒNG VỚI TẦNG BASH: `run_one` đọc ngược khổ giấy bằng
+            # `head -n1 … | grep -qi 'PORTRAIT|SQUARE'`. Đừng dời, đừng bọc.
+            "Canvas orientation: " + canvas_header + ".",
+            "",
+            *style_block,
+            "",
+            # KHÔNG CÒN KHUNG NGỮ CẢNH CỨNG. Bản cũ mở đầu bằng "A game UI kit sprite
+            # sheet for a mobile mini-game marketing campaign." — một thể loại, một
+            # kênh phát hành và một mục đích thương mại, đóng đinh cho MỌI dự án dùng
+            # engine này. Ngữ cảnh đến từ khối phong cách ở trên; câu này chỉ còn nói
+            # tấm ảnh NÀY là cái gì về mặt kỹ thuật.
+            (f"A sheet of {n_real} full-bleed background scenes." if full_bleed and n_real > 1 else
+             "A single full-bleed background scene." if full_bleed else
+             # Tấm mascot KHÔNG phải "UI elements": ô của nó là các DÁNG của cùng một
+             # nhân vật. Bản cũ gọi mọi tấm nhiều ô là "game UI kit sprite sheet", nên
+             # tấm dáng bị mời vẽ nhân vật như một món đồ giao diện — cùng họ với lỗi
+             # mà khối cấu tạo ba lớp đã gây ra (xem `layer_block`).
+             f"A sheet of {n_real} poses of one character, laid out on one transparent canvas."
+             if mascot_sheet and len(comps) > 1 else
+             "A single character on a transparent canvas." if mascot_sheet else
+             "A sprite sheet of separate UI elements on one transparent canvas." if len(comps) > 1 else
+             "A single element on a transparent canvas."),
             f"Exactly {n_real} elements arranged in a STRICT grid of {cols} columns and {rows} rows, evenly spaced."
             + ("" if n_real == len(comps) else
                f" The LAST {len(comps) - n_real} cell(s) of the grid are INTENTIONALLY EMPTY:"
                " draw absolutely nothing there — the whole cell stays fully transparent."),
-            *layout_note,
+            # NHÃN PHIÊN BẢN NỘI BỘ ĐÃ BỊ XOÁ. Bản cũ có hai biến thể của câu này, một
+            # cái mở đầu bằng "This is the v14+ NINE-ELEMENT production layout", cái kia
+            # kết bằng "the nine-element v14+ layout applies only when the contract itself
+            # declares a complete 3-by-3 nine-cell sheet". Model không biết v14 là gì; nó
+            # chỉ cần biết lưới này BẤT BIẾN — và câu đó đúng cho mọi lưới, nên không cần
+            # hai nhánh.
+            "The grid above is fixed for this sheet: keep exactly this many cells in exactly",
+            "this order. Do not repack the elements into a denser or looser grid, and do not",
+            "invent extra cells.",
             *place,
             "",
-            # ── Khối neo hình học — theo prompt crop-safe v15 của spike safe-zone
-            #    (docs/SPRITESHEET-SAFE-ZONE-HANDOFF.md §5.3). Điểm khác bản trước:
-            #    nói RA HẬU QUẢ ("phần mềm sẽ crop đúng 4 toạ độ này") thay vì chỉ ra
-            #    lệnh "respect the frame", và cấm THẲNG hành vi hỏng phổ biến nhất mà
-            #    §8.1 đã đo: model co mặt nội dung lại để nhét viền vào trong.
+            # ── Khối neo hình học — theo prompt crop-safe của spike safe-zone
+            #    (docs/SPRITESHEET-SAFE-ZONE-HANDOFF.md §5.3). Điểm mấu chốt: nói RA
+            #    HẬU QUẢ ("phần mềm sẽ crop đúng 4 toạ độ này") thay vì chỉ ra lệnh
+            #    "respect the frame", và cấm THẲNG hành vi hỏng phổ biến nhất mà §8.1
+            #    đã đo: model co mặt nội dung lại để nhét viền vào trong.
             "The FIRST attached image is the geometry contract and the edit target for this",
             "exact sheet: it decides canvas, cell positions, sizes, proportions and centers.",
             "In each cell the dark rectangular frame is the INNER CROP BOX and the gray",
@@ -616,14 +500,16 @@ for s in cfg["styles"]:
             "- never enlarge, stretch, move, offset or recenter it;",
             "- a shifted or undersized CORE is unusable and will be regenerated.",
             "",
-            "V16 GUIDE CONTRACT: the attached gray silhouette and local guide box mark the",
-            "OUTERMOST boundary of the functional CORE for this style. The guide is not an",
-            "invitation to enlarge the artwork: fit the continuous core INSIDE it, never beyond",
-            "its left, top, right or bottom edge. If a rim or decoration needs more room, put it",
-            "outside the core and let it overflow; do not spend core pixels on the rim.",
+            "GUIDE CONTRACT: the attached gray silhouette and its local guide box mark the",
+            "OUTERMOST boundary of the functional CORE. The guide is not an invitation to",
+            "enlarge the artwork: fit the continuous core INSIDE it, never beyond its left,",
+            "top, right or bottom edge. If a rim or decoration needs more room, put it outside",
+            "the core and let it overflow; do not spend core pixels on the rim.",
             "",
             *layer_block,
-            "The continuous enamel/content surface is the CORE and the only layer scored for",
+            # "enamel" là một chất liệu (men sứ) — nó nằm ở đây từ đời prompt kẹo bóng
+            # và không có việc gì trong một câu chỉ nói về ĐO ĐẠC hình học.
+            "The continuous content surface is the CORE and the only layer scored for",
             "geometry. Measure intrusion one-sided: core missing inside the safe zone is a",
             "failure; decoration or core extending outside the safe zone is harmless if it",
             "stays in the element's own cell.",
@@ -633,24 +519,31 @@ for s in cfg["styles"]:
             "keeping generous empty padding inside the cell.",
             "Keep the existing cell boundaries and guide positions; do not invent extra cells",
             "or guides. Guide lines and gray fills are alignment references only, never",
-            "decoration: do NOT paint their gray color, frames, grid lines or plain shapes",
+            "decoration: do NOT paint their gray colour, frames, grid lines or plain shapes",
             "into the artwork.",
             "The grid lines and local guides exist ONLY in the first attached skeleton",
             "reference. They are alignment marks, not artwork: never reproduce, redraw, or",
             "leave any guide or grid line in the generated output.",
             "",
+            # ⚠️ KHÔNG quay lại luật "mỗi element phủ 70-80% bề ngang ô". Đó là một chỉ
+            #    thị hình học THỨ HAI đá nhau với khối crop-safe ở trên, và nó đẩy model
+            #    đúng về phía lỗi mà handoff §8.1 đo được: co mặt nội dung vào trong.
+            #    Kích thước đã nằm trong skeleton (skel.w/h); prompt chỉ nói tính nhất quán.
+            "SIZING: the skeleton decides every size. Do not rescale anything to look tidy;",
+            "elements of the same kind simply share one consistent visual weight.",
+            "",
+            # ═══ ③ RÀNG BUỘC KỸ THUẬT ════════════════════════════════════════
             # ── NỀN: ALPHA THẬT, KHÔNG CÒN CHROMA-KEY ────────────────────────
-            # Vì sao đổi: image_gen của codex 0.149 trả về RGBA thật. Chroma-key
-            # là cách CŨ để giả trong suốt khi công cụ không có alpha — và nó phải
-            # trả giá: viền nhiễm màu key, quầng sáng mất, kính phải giải ngược
-            # C = α·F + (1−α)·K. Có alpha thật thì mọi thứ đó biến mất.
-            # BẪY: khi không tạo được trong suốt, model KHÔNG báo lỗi mà VẼ MỘT
-            # TẤM CARO GIẢ ở α=255 (đo được, BACKLOG #24 ⑦). Nên câu dưới cấm
-            # đích danh việc vẽ caro, và slice.py còn soi kênh α để chặn lần nữa.
+            # image_gen của codex 0.149 trả về RGBA thật. Chroma-key là cách CŨ để giả
+            # trong suốt khi công cụ không có alpha — và nó phải trả giá: viền nhiễm
+            # màu key, quầng sáng mất, kính phải giải ngược C = α·F + (1−α)·K.
+            # BẪY: khi không tạo được trong suốt, model KHÔNG báo lỗi mà VẼ MỘT TẤM
+            # CARO GIẢ ở α=255 (đo được, BACKLOG #24 ⑦). Nên câu dưới cấm đích danh
+            # việc vẽ caro, và slice.py còn soi kênh α để chặn lần nữa.
             "BACKGROUND of the sheet: FULLY TRANSPARENT. Save a PNG with a real alpha",
             "channel; every pixel that is not part of a drawn element must have alpha = 0.",
             "This background rule OVERRIDES the art style and every reference image: never",
-            "use a style-colored, scene, gradient or flat-colour background for the sheet.",
+            "use a style-coloured, scene, gradient or flat-colour background for the sheet.",
             "",
             # ── CẤM VẼ CARO — LỜI CẤM NẶNG NHẤT TRONG CẢ PROMPT ──────────────
             # Đo được, nhiều lượt: model KHÔNG báo lỗi khi nó không tạo được trong
@@ -682,13 +575,6 @@ for s in cfg["styles"]:
             "alpha, not lighter paint. If you cannot lower the alpha of a region, leave that",
             "region completely unpainted rather than filling it with a stand-in pattern.",
             "",
-            # ⚠️ KHÔNG quay lại luật "mỗi element phủ 70-80% bề ngang ô". Đó là một chỉ
-            #    thị hình học THỨ HAI đá nhau với khối crop-safe ở trên, và nó đẩy model
-            #    đúng về phía lỗi mà handoff §8.1 đo được: co mặt nội dung vào trong.
-            #    Kích thước đã nằm trong skeleton (skel.w/h); prompt chỉ nói tính nhất quán.
-            "SIZING: the skeleton decides every size. Do not rescale anything to look tidy;",
-            "elements of the same kind simply share one consistent visual weight and finish.",
-            "",
             "ABSOLUTELY NO TEXT: no letters, no digits, no words, no characters of any language",
             "anywhere in the image. All faces, banners, buttons, plates and screens are BLANK — text will",
             "be composited later in the game engine.",
@@ -702,7 +588,7 @@ for s in cfg["styles"]:
             "explicitly says the element is hollow, see-through or made of light.",
             ""
         ]
-        if sh.get("ref"):
+        if mascot_sheet:
             lines += [
                 "The SECOND attached image is a character REFERENCE PHOTO: every character",
                 "cell must show EXACTLY this character — same species, face, colors, costume,",
@@ -710,156 +596,41 @@ for s in cfg["styles"]:
                 "This rule OVERRIDES everything else: if the art style description or any other",
                 "reference image mentions or shows a DIFFERENT mascot/character, IGNORE that one",
                 "completely — the reference photo is the ONLY source of the character's identity.", ""]
-        # Branding: mode "colors" → dòng palette; mode "image" → ảnh brand đính kèm
-        # ⚠️ BẢNG MÀU VÀ ẢNH BRAND KHÔNG CÒN LOẠI TRỪ NHAU.
-        # Bản cũ: dòng palette chỉ in khi `bmode == "colors"`, còn ảnh brand chỉ
-        # đính khi `bmode == "image"`. Mà `kitset-to-contract.ts` đặt
-        # `mode = brandRefs.length > 0 ? "image" : "colors"` ⇒ **tải logo lên là
-        # MẤT TRẮNG dòng màu thương hiệu**: ảnh được đính, nhưng câu "dùng
-        # #xxxxxx làm màu chủ đạo" biến mất khỏi prompt. Đúng triệu chứng chủ sản
-        # phẩm báo: "màu nhận diện thương hiệu và logo không được respect".
-        # Hai thứ đó không mâu thuẫn — chúng trả lời hai câu hỏi khác nhau (màu
-        # nào / vẽ theo lối nào), nên nay CÓ GÌ DÙNG NẤY, và thứ hạng nói rõ ở
-        # khối "COLOUR AUTHORITY" bên dưới.
-        b = s.get("brand") or {}
-        if b.get("primary"):
-            bl = f"Brand palette: primary {b.get('primary')}, secondary {b.get('secondary')}"
-            if b.get("gradient"):
-                bl += f", gradient {b['gradient']}"
-            lines += [bl + " — use these as the dominant UI colors.", ""]
-        use_brand_refs = bool(b.get("refs"))
-        # ⚠️ ẢNH PHONG CÁCH ĐÃ TẢI LÊN THÌ PHẢI ĐƯỢC DÙNG.
-        # Bản cũ: `use_inspo = styleMode == "inspo" and inspo`. Nhưng wizard hiện tại
-        # KHÔNG còn chỗ nào đặt `styleMode = "inspo"` — `StyleStep.tsx:76` chỉ đặt
-        # "prompt" khi gõ mô tả, và `model.ts:395` mặc định cũng là "prompt" (nút
-        # segmented "Dùng ảnh tham khảo" đã bị bỏ ở đợt làm lại wizard). Hệ quả:
-        # `use_inspo` LUÔN sai ⇒ dòng 170 không đính ảnh phong cách vào `codex exec`
-        # ⇒ ảnh ra không bám ref, và mô tả vật liệu mặc định của từng ô ('glossy',
-        # 'candy', '3D'…) là thứ DUY NHẤT dẫn dắt style. Đúng triệu chứng người dùng báo.
-        # Nay: có ảnh phong cách = dùng ảnh phong cách. `styleMode` chỉ còn quyết định
-        # có GIỮ thêm câu mô tả của người dùng hay không (xem khối "Art style" bên dưới).
-        has_inspo = bool(s.get("inspo"))
-        use_inspo = has_inspo
-        if use_brand_refs or use_inspo:
-            lines += [
-                "Also attached: brand / inspiration reference images — match their color",
-                "mood, material finish and overall vibe (do NOT copy their layout).",
-                "IMPORTANT: even though the reference images have their own backgrounds,",
-                "the sheet background MUST still be fully transparent as stated above —",
-                "NEVER reuse a reference background color, especially not for character cells.", ""]
         if sh.get("note"):
             lines += [sh["note"], ""]
-        # CHỈ ĐẠO RIÊNG CỦA TẤM — một câu người thiết kế gõ ở Prompt Studio.
+        # CHỈ ĐẠO RIÊNG CỦA TẤM — một câu người thiết kế gõ ở khu soạn prompt.
         # Khác `note` ở CHỖ ĐỨNG TRONG HỢP ĐỒNG, không ở hình thức: `note` là mô tả
         # tấm do template/thư viện sinh ra, còn dòng này là lời người dùng nói thêm
         # cho ĐÚNG tấm này ở ĐÚNG lượt này. Đặt ngay sau `note` vì cả hai cùng nói về
-        # tấm, và đặt TRƯỚC danh sách ô để nó còn kịp áp lên từng ô (chữ ở xa thua
-        # chữ ở gần — bài học của cả khối "thứ tự ưu tiên" bên dưới).
+        # tấm, và đặt TRƯỚC danh sách ô để nó còn kịp áp lên từng ô.
         # Nói RA NGUỒN ("from the designer") có chủ ý: model phân biệt được đây là
-        # yêu cầu của người, không phải một câu preset của thư viện có thể hạ cấp.
+        # yêu cầu của người, không phải một câu preset của thư viện.
         directive = str(sh.get("directive") or "").strip()
         if directive:
             lines += [f"Extra direction for this sheet (from the designer): {directive}", ""]
-        # ⚠️ THỨ TỰ ƯU TIÊN PHẢI ĐƯỢC NÊU NGAY CẠNH DANH SÁCH Ô, KHÔNG PHẢI Ở CUỐI.
-        # Dòng `N) <spec>` là spec VẬT LIỆU CỨNG lấy nguyên văn từ thư viện element
-        # ("glossy 3D candy-red capsule button…", "vivid warm orange-to-coral
-        # gradient…"). Câu override đứng tận cuối prompt (khối "Art style") thua
-        # ngay: model đọc mô tả CỤ THỂ, SÁT NGỮ CẢNH của từng ô rồi vẽ preset đó
-        # (đã đo trên BlindTest-B2: sheet nền + mascot bám style sci-fi neon, còn
-        # 01-btn-pill-red và 08-progress-fill ra thẳng preset kẹo đỏ / cam-coral).
-        # Cách sửa: KHÔNG cắt xén spec (mất nghĩa hình dáng/trạng thái), mà đặt
-        # ngay TRƯỚC danh sách một khối phân vai — spec = hình dáng + chức năng +
-        # trạng thái, style = vật liệu + màu — và nói rõ ai thắng ai.
-        # Không đụng khối neo hình học phía trên: KHÔNG bắt model vẽ lại grid (§8.1).
-        style_override = use_inspo or bool(s.get("style"))
-        if style_override:
-            src = ("the attached inspiration reference image(s) and the ART STYLE block"
-                   if use_inspo else "the ART STYLE block")
-            lines += [
-                "HOW TO READ THE NUMBERED ELEMENT LIST BELOW — priority order, highest first:",
-                "1. GEOMETRY — the attached skeleton: canvas, cell, position, size, safe zone.",
-                f"2. ART STYLE — {src} at the end of this prompt. It alone decides",
-                "   MATERIAL, TEXTURE, FINISH, LIGHTING, PALETTE, every actual COLOR — and the",
-                "   RENDERING TECHNIQUE, including how much DEPTH and VOLUME an element has.",
-                "   Buttons, chips, plates, panels and props are drawn with EXACTLY the same",
-                "   technique and the same amount of relief as the art style — never more, never",
-                "   less: add no depth, no volume and no surface effect the art style itself",
-                "   does not show, and flatten nothing that it does show.",
-                "3. The numbered specs — they define ONLY what each element IS and DOES:",
-                "   its SHAPE, its LAYOUT and parts, and its STATE (filled / outline / hollow /",
-                "   open / closed / active / disabled).",
-                # KHÔNG nêu ví dụ bằng chữ vật liệu THẬT ('glossy', '3D', 'plastic'…).
-                # Chính câu ví dụ đó bơm kết cấu vào MỌI prompt, kể cả sheet nền vốn
-                # sạch. Nói bằng TÊN LOẠI là đủ nghĩa mà không mồi một diện mạo nào.
-                "Any remaining material, finish, surface or colour word inside a numbered spec is",
-                "only the element library's DEFAULT preset, never a request.",
-                "It is OUTRANKED by the art style: do NOT paint it. Keep the spec's shape and its",
-                "COLOR ROLE (primary / secondary / neutral / accent / warning) and re-render that",
-                "role in the art style's own materials and palette.",
-                "Shape and state words (capsule, pill, wide, rounded caps, outline, hollow,",
-                "see-through, inner filling, no frame, blank face…) are REQUIREMENTS — always obey.",
-                "Result: all elements must look like they came from the SAME art style as the",
-                "backgrounds and characters of this project, never from a generic default UI kit.",
-                "",
-            ]
-            # ── AI QUYẾT MÀU: một trọng tài, nói ngay cạnh danh sách ô ──────────
-            # Trước bản này có tới BA nguồn màu mà không ai phân xử: dòng bảng màu
-            # thương hiệu (ở xa), ảnh ref (ở xa), và TỪ MÀU LITERAL nằm ngay trong
-            # spec của ô (sát nhất ⇒ luôn thắng). Nay từ màu đã bị xoá khỏi spec
-            # (COLOUR_WORDS) nên chỗ này chỉ còn phải nói ai bảo ai, và nói ở đúng
-            # vị trí mà mọi phép đo đều cho thấy là vị trí có trọng lượng nhất.
-            authority = ["COLOUR AUTHORITY — read this before choosing any colour:"]
-            if b.get("primary"):
-                authority += [
-                    "1. The BRAND PALETTE above is the source of every colour in this sheet.",
-                    "   Its primary is the dominant colour of primary actions and key surfaces;",
-                    "   its secondary carries secondary actions; neutrals are derived from them.",
-                ]
-                if use_brand_refs or use_inspo:
-                    authority += [
-                        "2. The attached reference image(s) decide the RENDERING — technique,",
-                        "   material, texture, lighting, amount of depth. They do NOT decide hue:",
-                        "   re-tint whatever they show into the brand palette above.",
-                    ]
-            elif use_brand_refs or use_inspo:
-                authority += [
-                    "1. The attached reference image(s) decide both the rendering AND the palette.",
-                ]
-            authority += [
-                "The numbered specs below name NO colour at all — that is deliberate, not an",
-                "omission. Where two cells must differ (rank 1 / 2 / 3, on / off, active /",
-                "locked / disabled), a [COLOUR ROLE ONLY: …] tag says which role each one holds;",
-                "express that difference with shades of the palette above, keeping the order",
-                "readable, and never by inventing a colour the palette does not contain.",
-                "",
-            ]
-            lines += authority
+
+        # ═══ ④ DANH SÁCH Ô — MỖI Ô LÀ MỘT DANH TỪ ════════════════════════════
+        # BA DÒNG, KHÔNG PHẢI BA MƯƠI. Bản cũ có một khối "HOW TO READ …" 20 dòng +
+        # một khối "COLOUR AUTHORITY" 12 dòng đứng ngay đây, cả hai đều nói đi nói
+        # lại rằng art style thắng spec — vì hồi đó spec CÓ vật liệu để mà thắng.
+        # Nay spec chỉ còn danh từ, nên chỉ cần nói ranh giới một lần, ở đúng chỗ
+        # người đọc (và model) cần nó nhất: ngay trên danh sách.
+        lines += [
+            "THE NUMBERED LIST BELOW NAMES ONLY *WHAT* EACH CELL IS — its identity, its parts",
+            "and its state (filled / outline / hollow / open / closed / active / disabled).",
+            "HOW everything looks — material, texture, finish, lighting, palette, every actual",
+            "colour, and how much depth and volume it has — comes from the ART STYLE block at",
+            "the top of this prompt, and from nowhere else. If a line below still happens to",
+            "carry a material or colour word, the ART STYLE outranks it.",
+            "Geometry always outranks both: the attached skeleton decides canvas, cell,",
+            "position, size and safe zone.",
+            "",
+        ]
         for r in range(rows):
-            lines.append(f"Row {r + 1}, left to right:"
-                         if not style_override else
-                         f"Row {r + 1}, left to right (shape / function / state — materials and colors come from the ART STYLE):")
+            lines.append(f"Row {r + 1}, left to right:")
             for c in range(cols):
                 i = r * cols + c
                 spec = comps[i]["spec"]
-                # ① XOÁ TỪ TẢ BỀ MẶT/ĐỘ NỔI KHỐI TRƯỚC ĐÃ (xem FINISH_WORDS).
-                # Chỉ khi có art style — không có style thì preset thư viện CHÍNH
-                # LÀ diện mạo mong muốn, xoá đi là làm nghèo spec.
-                roles = []
-                if style_override:
-                    spec, _cut = strip_finish(spec)
-                    roles = colour_roles(_cut)
-                # ⚠️ QUÉT TỪ VẬT LIỆU TRÊN SPEC CỦA THƯ VIỆN (đã xoá ở bước ①),
-                # TRƯỚC khi nối câu hợp đồng của engine. Bản cũ quét SAU nên ô
-                # glow bị chính engine tự bắn vào chân: câu "SPECIAL CELL
-                # BACKGROUND … PURE BLACK #000000" làm 'BLACK' lọt vào danh sách
-                # hạ cấp ⇒ prompt vừa bắt vẽ nền đen vừa bảo "do NOT paint black"
-                # (đã kiểm: prompt ipay-main ô 4 liệt kê 'golden, BLACK'). Nêu tên
-                # màu key trong câu đó còn kéo thêm 'magenta' vào.
-                # Quét SAU bước ① cũng là bắt buộc: câu hạ cấp NHẮC LẠI từng chữ
-                # nó liệt kê, nên liệt kê chữ vừa xoá là mời nó quay lại prompt.
-                preset = (preset_words(spec, f"{s['id']}-{sh['id']} ô {i + 1} "
-                                             f"({comps[i]['file']})")
-                          if style_override else [])
                 if comps[i]["skel"].get("matte") == "glow":
                     # NỀN ĐEN ĐÃ BỎ. Nó từng là cách duy nhất lấy được quầng sáng:
                     # vẽ cộng sáng trên đen ⇒ C = α·F ⇒ slicer đọc alpha ra từ độ
@@ -867,14 +638,13 @@ for s in cfg["styles"]:
                     # dải mờ — đo trên ảnh mẫu chủ sản phẩm gửi: 12,96% pixel nằm
                     # ở dải α 1..191 (BACKLOG #24 ⑤). Giữ nền đen bây giờ chỉ tổ
                     # nướng một mảng đen vào asset.
-                    # THỦ PHẠM THẬT SỰ của cái đế caro: khối "Build each element in
-                    # three layers" ở trên ra lệnh "one continuous, clean content
-                    # surface replacing the gray silhouette, on the same footprint".
-                    # Với ô ÁNH SÁNG thì lệnh đó sai hẳn — không có mặt phẳng nào để
-                    # thay cả. Model vẫn tuân lệnh: nó lấp kín bóng silhouette (đúng
-                    # hình sao 8 cánh) bằng thứ nó nghĩ là "trong suốt", tức là caro.
-                    # Nên câu của ô phải HUỶ lệnh kia một cách nói thẳng, không chỉ
-                    # cấm caro — cấm mà không gỡ lệnh lấp thì nó lấp bằng thứ khác.
+                    # THỦ PHẠM THẬT SỰ của cái đế caro: khối cấu tạo ở trên ra lệnh
+                    # "one continuous, clean content surface replacing the gray
+                    # silhouette". Với ô ÁNH SÁNG thì lệnh đó sai hẳn — không có mặt
+                    # phẳng nào để thay cả. Model vẫn tuân lệnh: nó lấp kín bóng
+                    # silhouette bằng thứ nó nghĩ là "trong suốt", tức là caro. Nên
+                    # câu của ô phải HUỶ lệnh kia một cách nói thẳng, không chỉ cấm
+                    # caro — cấm mà không gỡ lệnh lấp thì nó lấp bằng thứ khác.
                     spec += (" — LIGHT EFFECT: for THIS cell, ignore the rule about replacing the"
                              " gray silhouette with a continuous content surface: there is no"
                              " surface here. The gray shape only marks HOW FAR the light reaches;"
@@ -889,10 +659,9 @@ for s in cfg["styles"]:
                 elif comps[i]["skel"].get("matte") == "glass":
                     # Trước đây độ trong của kính được ĐO GIÁN TIẾP: nền key lộ qua
                     # thân bao nhiêu thì trong bấy nhiêu, slicer giải ngược
-                    # C = α·F + (1−α)·K. Cách đó có một điểm yếu đã ghi ở
-                    # docs/design-glass-transparent-panel-2026-08.md §2 — nó phụ
-                    # thuộc hoàn toàn vào việc model chịu để key lộ ra. Alpha thật
-                    # thì độ trong nằm THẲNG trong kênh α, không phải suy ngược.
+                    # C = α·F + (1−α)·K. Cách đó phụ thuộc hoàn toàn vào việc model
+                    # chịu để key lộ ra (docs/design-glass-transparent-panel-2026-08.md
+                    # §2). Alpha thật thì độ trong nằm THẲNG trong kênh α.
                     spec += (" — SEE-THROUGH ELEMENT: the gray silhouette marks the pane, but"
                              " 'replacing it with a continuous content surface' here means a"
                              " SEE-THROUGH surface, not a solid one. The body of this element is a"
@@ -902,61 +671,11 @@ for s in cfg["styles"]:
                              " paint: no opaque fill, no white or pale grey wash, and above all no"
                              " checkerboard squares. Lower alpha, not lighter paint. Frame, rim,"
                              " bevel and specular highlights stay fully opaque")
-                # Hạ cấp NGAY TRÊN DÒNG CỦA Ô. Khối ưu tiên phía trên là luật chung;
-                # nhưng model bám mô tả cụ thể nhất ở cạnh nó, nên phải gọi ĐÍCH DANH
-                # những chữ vật liệu/màu có trong chính spec này (đo thật: chỉ có khối
-                # ưu tiên thôi thì 01-btn-pill-red vẫn ra đỏ kẹo bóng, chỉ thêm được
-                # viền neon). Từ hình dáng/trạng thái không nằm trong từ điển nên
-                # không bao giờ bị hạ cấp. (`preset` đã tính ở trên, trên spec ĐÃ
-                # xoá từ bề mặt — nên câu này chỉ còn nhắc từ MÀU/SẮC ĐỘ, thứ buộc
-                # phải ở lại vì mang vai trò và trạng thái.)
-                # Sau bước ① thì spec CHỈ CÒN nói ô này là cái gì và ở trạng thái
-                # nào — không còn chữ màu/bề mặt nào để mà hạ cấp. `preset` vì thế
-                # thường rỗng; nó ở lại cho những chữ lọt lưới từ điển (và để câu
-                # cảnh báo cap vẫn có tác dụng).
-                if preset:
-                    spec += (f" — [SHAPE, PARTS AND STATE ONLY. The words "
-                             f"{', '.join(preset)} are the element library's DEFAULT preset:"
-                             f" do NOT paint them. Render this element in the ART STYLE's own"
-                             f" materials, textures and palette, keeping only its colour ROLE.]")
-                # VAI TRÒ MÀU thay cho MỆNH LỆNH MÀU. Chỉ phát khi ô đó thật sự
-                # mất một từ màu mang thứ hạng/trạng thái — ô thường không có tag
-                # này, và đó là chủ ý: im lặng ⇒ màu hoàn toàn do bảng màu quyết.
-                if roles:
-                    spec += (f" — [COLOUR ROLE ONLY: {'; '.join(roles)}. Take the actual colour"
-                             f" from the brand palette / reference; this cell names no colour.]")
                 lines.append(f"{i + 1}) {spec}")
             lines.append("")
-        if use_inspo:
-            art = ["Art style: faithfully match the attached inspiration reference image(s) — "
-                   "same rendering technique, same amount of depth and volume, same materials, "
-                   "palette and level of detail. Every UI element, prop and panel is drawn with "
-                   "the SAME technique as the reference: if the reference is flat, they are flat. "
-                   "IMPORTANT: this reference OVERRIDES every material, finish and colour word "
-                   "left in the per-cell descriptions above — those only describe the element "
-                   "library's DEFAULT look. Re-imagine every element in the reference's actual "
-                   "materials, textures and palette, keeping only each cell's SHAPE, layout and "
-                   "color ROLE (primary vs secondary vs neutral element)."]
-            # Mô tả người dùng gõ KHÔNG bị vứt đi nữa (bản cũ nhánh inspo bỏ hẳn `s['style']`,
-            # nên chọn ảnh ref = mất trắng câu mô tả). Nó ở đây với thứ hạng rõ ràng: SAU ảnh.
-            if s.get("style"):
-                art.append(f"Additional direction from the project (SECONDARY to the reference "
-                           f"image — never contradict it): {s['style']}.")
-        else:
-            # Người dùng chỉ GÕ mô tả, không có ảnh ref: bản cũ in trần một câu
-            # "Art style: …" — không một chữ nào nói nó thắng spec vật liệu của ô,
-            # nên nút/thanh vẫn ra preset thư viện. Nay cùng thứ hạng với nhánh ảnh.
-            art = [f"Art style: {s['style']}.",
-                   "This art style OVERRIDES every material, finish and colour word left in the "
-                   "per-cell descriptions above — those are only the element library's DEFAULT "
-                   "preset. It also decides the rendering technique and how much depth and volume "
-                   "every element has: UI elements, props and panels carry exactly as much (or as "
-                   "little) dimensionality as this style, never more. Re-render every element in "
-                   "THIS style's materials, textures and palette, keeping only each cell's SHAPE, "
-                   "layout, state and colour ROLE (primary vs secondary vs neutral element)."]
-        lines += art + [
-            f"All {n_real} elements share the exact same consistent style and belong to one coherent game. "
-            "Game-ready UI asset quality, " + ("portrait 2:3." if portrait else "landscape 3:2.")
+        lines += [
+            f"All {n_real} elements share the exact same consistent style and belong to one coherent set. "
+            "Game-ready UI asset quality, " + canvas_ratio + "."
         ]
         # ── NGƯỜI DÙNG TỰ SOẠN TRỌN PROMPT CỦA TẤM ────────────────────────────
         # Toàn bộ khối trên là lời của engine. `promptOverride` là chỗ người dùng nói
@@ -965,9 +684,9 @@ for s in cfg["styles"]:
         # sửa câu chữ của mình mãi mà không hiểu vì sao ảnh vẫn ra kiểu cũ.
         #
         # NGOẠI LỆ DUY NHẤT — và nó là ngoại lệ KỸ THUẬT, không phải cãi lời:
-        # `run_one` đọc ngược khổ giấy bằng `head -n1 … | grep -qi PORTRAIT` (xem hàm
-        # ngay dưới khối python này). Mất dòng đầu là mọi sheet dọc bị gửi đi với
-        # 1536x1024 ⇒ ảnh về sai tỉ lệ, cắt lưới méo hết — đúng sự cố mà
+        # `run_one` đọc ngược khổ giấy bằng `head -n1 … | grep -qiE 'PORTRAIT|SQUARE'`
+        # (xem hàm ngay dưới khối python này). Mất dòng đầu là mọi sheet dọc/vuông bị
+        # gửi đi với 1536x1024 ⇒ ảnh về sai tỉ lệ, cắt lưới méo hết — đúng sự cố mà
         # test/gen-canvas-size.test.sh sinh ra để chặn. Nên dòng khổ giấy ở lại, và
         # nó cũng là thông tin người viết prompt cần biết chứ không phải rác.
         override = str(sh.get("promptOverride") or "").strip()
@@ -1029,10 +748,24 @@ run_one() {
   #   `orientation_error` của slice.py thì nó méo LẶNG LẼ: ảnh vẫn ra, chỉ là sai tỉ lệ,
   #   người dùng phát hiện lúc đã dán vào Figma.
   #   Nay khổ được ĐỌC RA TỪ CHÍNH PROMPT rồi nhắc lại thành số ngay câu đầu của task.
-  local want_size="1536x1024" want_orient="landscape"
-  if head -n1 "prompts/${job}.txt" 2>/dev/null | grep -qi 'PORTRAIT'; then
-    want_size="1024x1536"; want_orient="portrait"
-  fi
+  #
+  # ĐỌC NGƯỢC, KHÔNG TÍNH LẠI — và đó là chủ ý. Bảng khổ duy nhất nằm trong khối
+  # python (`CANVAS`, xem đầu file). Tầng bash này không được có bảng thứ hai: chỉ
+  # nhìn dòng đầu prompt xem nó khai khổ nào rồi nhắc lại. Nhờ vậy `promptOverride`
+  # (người dùng tự soạn cả prompt) vẫn ra đúng khổ, miễn dòng đầu còn nguyên.
+  #
+  # `case` chứ không phải chuỗi `if grep`: ba khổ là ba nhánh loại trừ nhau, và
+  # `grep -qi PORTRAIT` chạy trước sẽ không bao giờ thấy SQUARE. Đọc MỘT LẦN vào
+  # biến để khỏi gọi `head` ba lượt trên cùng một file.
+  local want_size="1536x1024" want_orient="landscape" head1
+  head1="$(head -n1 "prompts/${job}.txt" 2>/dev/null)"
+  case "$head1" in
+    *PORTRAIT*|*portrait*) want_size="1024x1536"; want_orient="portrait" ;;
+    # 1254x1254, không phải 1024x1024: tool image_gen không có tham số `size` và
+    # luôn trả về ~1,57 triệu pixel — ảnh vuông nó sinh ra đo được là 1254x1254
+    # (132/132 lượt). Xem khối chú thích của bảng CANVAS ở đầu file.
+    *SQUARE*|*square*)     want_size="1254x1254"; want_orient="square" ;;
+  esac
 
   # Đọc .att TRƯỚC khi dựng task: đường dẫn ảnh phải được NÓI RA trong task (khối
   # REFERENCE IMAGES bên dưới) chứ không chỉ đính `-i` — xem chú thích ở khối att_note.

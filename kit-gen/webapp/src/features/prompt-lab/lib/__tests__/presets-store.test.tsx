@@ -91,7 +91,7 @@ describe("đọc: server là nguồn, id bundle giữ nguyên qua `data.key`", (
   it("dựng lại ba mảng từ mảng `presets` của GET /api/library", async () => {
     get.mockResolvedValue(library([
       row("preset_aaaa", "style", "Cổ tích", { key: "fairy", en: "storybook" }),
-      row("preset_bbbb", "element", "Nút bấm", { key: "button", en: "a button", decor: 6, materialId: "gold-metal" }),
+      row("preset_bbbb", "element", "Nút bấm", { key: "button", en: "button", decor: 6, glazeId: "ice", sizeId: "m" }),
       row("preset_cccc", "mascot", "Sóc", { key: "squirrel", en: "a squirrel", refName: "soc.png" }),
     ]));
     mount();
@@ -99,7 +99,7 @@ describe("đọc: server là nguồn, id bundle giữ nguyên qua `data.key`", (
     await waitFor(() => expect(seen?.styles).toHaveLength(1));
     /* ĐIỀU KHOẢN #1: id là `data.key`, KHÔNG phải `preset_aaaa`. */
     expect(seen?.styles[0]).toEqual({ id: "fairy", vi: "Cổ tích", en: "storybook" });
-    expect(seen?.elements[0]).toEqual({ id: "button", vi: "Nút bấm", en: "a button", decor: 6, materialId: "gold-metal" });
+    expect(seen?.elements[0]).toEqual({ id: "button", vi: "Nút bấm", en: "button", decor: 6, glazeId: "ice", sizeId: "m" });
     expect(seen?.mascots[0]).toEqual({ id: "squirrel", vi: "Sóc", en: "a squirrel", refName: "soc.png" });
     /* Kho đã có bản ghi ⇒ KHÔNG gieo lại đè lên danh mục của người ta. */
     expect(addPreset).not.toHaveBeenCalled();
@@ -213,7 +213,7 @@ describe("gieo hạt: đúng một lần, kể cả khi nhiều màn cùng mở"
 describe("ghi: gộp, chỉ đụng cái đổi, và không im lặng khi hỏng", () => {
   const three = () => library([
     row("preset_s1", "style", "Cổ tích", { key: "fairy", en: "storybook" }),
-    row("preset_e1", "element", "Nút bấm", { key: "button", en: "a button", decor: 4, materialId: "" }),
+    row("preset_e1", "element", "Nút bấm", { key: "button", en: "button", decor: 4, glazeId: "", sizeId: "" }),
     row("preset_m1", "mascot", "Sóc", { key: "squirrel", en: "a squirrel", refName: "" }),
   ]);
 
@@ -255,7 +255,7 @@ describe("ghi: gộp, chỉ đụng cái đổi, và không im lặng khi hỏng
       ...seen!,
       elements: [
         seen!.elements[0]!,
-        { id: "slider", vi: "Thanh trượt", en: "a slider", decor: 3, materialId: "" },
+        { id: "slider", vi: "Thanh trượt", en: "slider", decor: 3, glazeId: "", sizeId: "" },
       ],
       mascots: [],
     });
@@ -263,7 +263,7 @@ describe("ghi: gộp, chỉ đụng cái đổi, và không im lặng khi hỏng
     await waitFor(() => expect(removePreset).toHaveBeenCalledWith("preset_m1"));
     expect(addPreset).toHaveBeenCalledTimes(1);
     expect(addPreset.mock.calls[0]![0]).toEqual({
-      kind: "element", name: "Thanh trượt", data: { key: "slider", en: "a slider", decor: 3, materialId: "" },
+      kind: "element", name: "Thanh trượt", data: { key: "slider", en: "slider", decor: 3, glazeId: "", sizeId: "" },
     });
     expect(patchPreset).not.toHaveBeenCalled();
   });

@@ -38,31 +38,40 @@ import { SLICE_CONST, type SkelLike as ShapeSkelLike } from "../lib/shapes";
 export type SkelLike = ShapeSkelLike;
 export type AnySkel = Skel | SkelLike;
 
-/** Khổ ảnh sinh, theo `gen.sh` dòng 35. */
+/** Khổ ảnh sinh — bản sao có nhãn của bảng `CANVAS` trong gen.sh (nguồn sự thật).
+ *  Vuông là 1254×1254 chứ không phải 1024²: tool image_gen của codex không có
+ *  tham số size, luôn trả ~1,57 triệu pixel — đo 685 ảnh thật, ảnh vuông đều 1254. */
 export const CANVAS_LANDSCAPE = { w: 1536, h: 1024 } as const;
 export const CANVAS_PORTRAIT = { w: 1024, h: 1536 } as const;
+export const CANVAS_SQUARE = { w: 1254, h: 1254 } as const;
 
 /** `slice.py` dòng 66 — HẰNG SỐ MODULE, UI không đổi được (M4).
  *  Số lấy từ `SLICE_CONST` (rút tự động từ slice.py), KHÔNG gõ lại. */
 export const SLICE_BLEED = SLICE_CONST.bleed;
 export const BLEED_IS_FIXED = SLICE_CONST.bleedIsModuleConstant;
 
-export type Orient = "landscape" | "portrait";
+export type Orient = "landscape" | "portrait" | "square";
 
-export function sheetOrient(sheet: Pick<Sheet, "orient"> | null | undefined): Orient {
+/** `canvas` (mới, có "square") thắng `orient` (cũ, chỉ 2 khổ) — cùng thứ tự ưu tiên
+ *  với `sheetSize()` trong skeleton-svg.js, kẻo preview vẽ khác tấm thật. */
+export function sheetOrient(sheet: Pick<Sheet, "orient" | "canvas"> | null | undefined): Orient {
+  const c = sheet?.canvas;
+  if (c === "square" || c === "portrait" || c === "landscape") return c;
   return sheet?.orient === "portrait" ? "portrait" : "landscape";
 }
 
 /** Tỉ lệ ngang/dọc của MỘT Ô (§3-S3.3: landscape 3:2 · portrait 2:3).
  *  Tính từ khổ ảnh ÷ lưới nên lưới không vuông vẫn ra đúng tỉ lệ thật. */
-export function cellAspect(sheet: Pick<Sheet, "orient" | "grid"> | null | undefined): number {
+export function cellAspect(sheet: Pick<Sheet, "orient" | "canvas" | "grid"> | null | undefined): number {
   const g = gridOf(sheet);
   const c = canvasOf(sheet);
   return c.w / g.cols / (c.h / g.rows);
 }
 
-export function canvasOf(sheet: Pick<Sheet, "orient"> | null | undefined): { w: number; h: number } {
-  return sheetOrient(sheet) === "portrait" ? { ...CANVAS_PORTRAIT } : { ...CANVAS_LANDSCAPE };
+export function canvasOf(sheet: Pick<Sheet, "orient" | "canvas"> | null | undefined): { w: number; h: number } {
+  const o = sheetOrient(sheet);
+  if (o === "square") return { ...CANVAS_SQUARE };
+  return o === "portrait" ? { ...CANVAS_PORTRAIT } : { ...CANVAS_LANDSCAPE };
 }
 
 /** Lưới an toàn: thiếu/hỏng thì về 1×1 thay vì chia cho 0. */
@@ -211,9 +220,9 @@ export function formatPx(w: number, h: number): string {
  * `f"Each cell is a {sh.get('cell_hint','cell')}."`). Khi sheet chưa có hint thì
  * gợi ý câu khớp tỉ lệ ô thật, đúng cách `studio.html`/`ops.js` đặt.
  */
-export function suggestCellHint(sheet: Pick<Sheet, "orient" | "grid"> | null | undefined): string {
+export function suggestCellHint(sheet: Pick<Sheet, "orient" | "canvas" | "grid"> | null | undefined): string {
   const m = cellMetrics(sheet);
-  return `${sheetOrient(sheet) === "portrait" ? "portrait" : "landscape"} ${simpleRatio(m.cell.w, m.cell.h)} cell`;
+  return `${sheetOrient(sheet)} ${simpleRatio(m.cell.w, m.cell.h)} cell`;
 }
 
 /** Hint đang dùng thật (của sheet) hoặc câu gợi ý — cùng chỗ để UI không tự chế. */

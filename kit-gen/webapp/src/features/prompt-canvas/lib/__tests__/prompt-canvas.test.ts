@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { JSONContent } from "@tiptap/react";
 
 import { contractJobs, contractSchema } from "@/lib/types/contract";
-import { MAIN_VARIANT_ID } from "@/features/kit-core/lib/kitset-to-contract";
+import { HINT_SQUARE, MAIN_VARIANT_ID, resolveElementSpec } from "@/features/kit-core/lib/kitset-to-contract";
+import { glazeFromMaterial, glazePhrase } from "@/features/kit-core/lib/glaze";
 import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
 import { EXPRESSIONS, OUTFIT_THEMES } from "@/features/kit-core/lib/poses";
 
+import { SIZE_PRESETS, SQUARE_CANVAS_PX } from "@/features/prompt-lab/lib/cell-size";
 import { seedPresets } from "@/features/prompt-lab/lib/presets-store";
 import { backgroundDoc, contextDoc, mascotDoc } from "@/features/prompt-lab/lib/doc-templates";
 import { NODE } from "@/features/prompt-lab/lib/schema";
@@ -14,7 +16,7 @@ import { countComposerImages, serializeComposer } from "@/features/prompt-lab/li
 import type { Block, ComposerState, UiCell } from "@/features/prompt-lab/lib/composer-model";
 
 import { COMPOSER_DOC_VERSION, emptyComposerDoc, migrateComposerDoc, type ComposerDoc } from "../composer-doc";
-import { composerToContract } from "../composer-to-contract";
+import { composerStyleLine, composerToContract } from "../composer-to-contract";
 import { EMPTY_PILL_IMAGE, dataUrlToFile, readPillImage } from "../pill-image";
 
 /**
@@ -131,8 +133,8 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
           kind: "uikit",
           mode: "template",
           cells: [
-            { id: "c1", elementId: "button", styleId: "", decor: "4", materialId: "glass", note: "bo góc to" },
-            { id: "c2", elementId: "coin", styleId: "match3", decor: "2", materialId: "", note: "" },
+            { id: "c1", elementId: "button", styleId: "", decor: "4", glazeId: "glass", sizeId: "", note: "bo góc to" },
+            { id: "c2", elementId: "coin", styleId: "match3", decor: "2", glazeId: "", sizeId: "xl", note: "" },
           ],
         },
         { id: "m1", kind: "mascot", mode: "template", doc: withImage(mascotDoc(), "char-lan.png") },
@@ -194,8 +196,10 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     expect(first.vi).toBe("Nút bấm");
     expect(first.spec).toContain(PRESETS.elements.find((e) => e.id === "button")!.en);
     expect(first.spec).toContain(phraseOf("decor", "4", PRESETS));
-    /* Chất liệu nối qua `resolveElementSpec`, không phải một luật nối chuỗi thứ hai. */
-    expect(first.spec).toContain(MATERIAL_PRESETS.find((m) => m.id === "glass")!.en);
+    /* Đục nền nối qua `resolveElementSpec`, không phải một luật nối chuỗi thứ hai. */
+    expect(first.spec).toContain(glazePhrase("glass"));
+    /* DANH TỪ THUẦN: mô tả có thuộc tính đã bị bỏ khỏi danh mục (ý kiến chủ SP). */
+    expect(first.spec.startsWith("button,")).toBe(true);
     expect(first.spec).toContain("bo góc to");
 
     /* Ô 2 tự chọn phong cách ⇒ phong cách RIÊNG nằm trong spec của chính nó. */
@@ -204,6 +208,109 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     /* Ô trống phải có TÊN khác nhau, nếu không V-02 (trùng tên trong tấm) nổ. */
     expect(ui.components.slice(2).map((c) => c.file)).toEqual(["_empty-1", "_empty-2"]);
     expect(ui.components.slice(2).every((c) => c.skel.shape === "empty")).toBe(true);
+  });
+
+  /* ══ WAVE 7 — ba trục mới của một dòng element ══════════════════════════════
+     Ba ca dưới khoá đúng ba thứ chủ sản phẩm xin và ba thứ hỏng thì KHÔNG CÓ GÌ BÁO:
+     danh từ thuần trong `spec`, đục nền kéo theo `matte`, cỡ đi vào `skel`. */
+
+  it("tấm Bộ UI: canvas VUÔNG + cell_hint 1:1, `orient` vẫn còn cho engine đời cũ", () => {
+    const ui = composerToContract(full(), { presets: PRESETS }).sheets.find((s) => s.id === "ui")!;
+    expect(ui.canvas).toBe("square");
+    expect(ui.cell_hint).toBe(HINT_SQUARE);
+    /* Lưới n×n trên canvas vuông ⇒ ô 1:1, đúng thứ "canvas lưới UI 1:1" đòi. */
+    expect(ui.grid.cols).toBe(ui.grid.rows);
+    expect(ui.orient).toBe("landscape");
+  });
+
+  it("spec của ô là DANH TỪ THUẦN — không còn câu mô tả thuộc tính", () => {
+    const ui = composerToContract(full(), { presets: PRESETS }).sheets.find((s) => s.id === "ui")!;
+    for (const preset of PRESETS.elements) {
+      /* Danh mục hạt giống KHÔNG được mang mạo từ hay tính từ thẩm mỹ. Đây là ca
+         bắt được đúng lời than "a rounded background panel for a dialog". */
+      expect(preset.en.startsWith("a "), preset.id).toBe(false);
+      expect(preset.en.split(" ").length, preset.id).toBeLessThanOrEqual(3);
+    }
+    expect(ui.components[0]!.spec.startsWith("button,")).toBe(true);
+    expect(ui.components[0]!.spec).not.toContain("centered label");
+  });
+
+  it("đục nền kéo theo CÁCH TÁCH: `matte` + câu alpha, không phải chỉ chữ", () => {
+    const ui = composerToContract(full(), { presets: PRESETS }).sheets.find((s) => s.id === "ui")!;
+    const glassy = ui.components[0]!;
+    /* Nửa PROMPT… */
+    expect(glassy.spec).toContain("alpha about 64 of 255");
+    /* …và nửa SLICER. Thiếu nửa này thì máy vẽ ra kính đục và slice cắt như mảng đặc. */
+    expect(glassy.skel.matte).toBe("glass");
+    /* Ô không chọn đục nền ⇒ KHÔNG mọc `matte` (không âm thầm hạ chất lượng tách). */
+    expect(ui.components[1]!.skel.matte).toBeUndefined();
+  });
+
+  it("chất liệu ĐỜI CŨ được dịch sang đục nền, không rơi mất và không nói chữ thẩm mỹ", () => {
+    expect(glazeFromMaterial("ice")).toBe("ice");
+    expect(glazeFromMaterial("fire")).toBe("glow");
+    expect(glazeFromMaterial("glass")).toBe("glass");
+    /* Gỗ/đá/kim loại là THẨM MỸ ⇒ về "nền đặc": thẩm mỹ nay do prompt tổng lo. */
+    expect(glazeFromMaterial("wood")).toBe("");
+    expect(glazeFromMaterial("gold-metal")).toBe("");
+    const legacySpec = resolveElementSpec({ spec: "coin icon", skel: { shape: "rrect" } }, { material: "ice" });
+    expect(legacySpec).toContain("alpha about 128 of 255");
+    expect(legacySpec).not.toContain("glacial");
+  });
+
+  it("cỡ safe zone → skel.w/h theo Ô THẬT của lưới, kẹp trần 1", () => {
+    const ui = composerToContract(full(), { presets: PRESETS }).sheets.find((s) => s.id === "ui")!;
+    /* Lưới 2×2 trên canvas 1254 ⇒ ô 627px; "XL · 304px" ⇒ 304/627 ≈ 0.485. */
+    const cellPx = SQUARE_CANVAS_PX / ui.grid.cols;
+    const xl = SIZE_PRESETS.find((p) => p.id === "xl")!;
+    expect(ui.components[1]!.skel.w).toBeCloseTo(xl.w / cellPx, 2);
+    expect(ui.components[1]!.skel.h).toBeCloseTo(xl.h / cellPx, 2);
+    /* Không chọn cỡ ⇒ GIỮ khung mặc định — một lượt sửa không được đổi kích thước
+       những dòng người dùng đã vẽ xong. */
+    expect(ui.components[0]!.skel.w).toBe(0.8);
+    expect(ui.components[0]!.skel.h).toBe(0.6);
+  });
+
+  it("cỡ TỰ ĐIỀN: chuỗi `<w>x<h>` px vào skel, và cỡ to hơn ô thì kẹp về tràn ô", () => {
+    const cells: UiCell[] = [
+      { id: "c1", elementId: "panel", styleId: "", decor: "4", glazeId: "", sizeId: "120x80", note: "" },
+      { id: "c2", elementId: "panel", styleId: "", decor: "4", glazeId: "", sizeId: "9999x9999", note: "" },
+    ];
+    const ui = composerToContract(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), {
+      presets: PRESETS,
+    }).sheets[0]!;
+    const cellPx = SQUARE_CANVAS_PX / ui.grid.cols;
+    expect(ui.components[0]!.skel.w).toBeCloseTo(120 / cellPx, 2);
+    expect(ui.components[0]!.skel.h).toBeCloseTo(80 / cellPx, 2);
+    /* V-06 cấm `w`/`h` > 1 ⇒ phải kẹp, không được ném: người điền 9999 muốn "tràn ô". */
+    expect(ui.components[1]!.skel.w).toBe(1);
+    expect(ui.components[1]!.skel.h).toBe(1);
+    expect(() => contractSchema.parse(ui)).not.toThrow();
+  });
+
+  it("element TỰ ĐẶT TÊN: file id an toàn + spec là chính danh từ người dùng gõ", () => {
+    const custom = { id: "tu-dat-khung-nhiem-vu", vi: "Khung nhiệm vụ", en: "Khung nhiệm vụ", decor: 4, glazeId: "", sizeId: "" };
+    const presets = { ...PRESETS, elements: [...PRESETS.elements, custom] };
+    const cells: UiCell[] = [
+      { id: "c1", elementId: custom.id, styleId: "", decor: "1", glazeId: "", sizeId: "", note: "" },
+    ];
+    const ui = composerToContract(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), {
+      presets,
+    }).sheets[0]!;
+    const cell = ui.components[0]!;
+    /* Tên file phải khớp `^[0-9]{2}-[a-z0-9-]+$` (V-01) — dấu tiếng Việt mà lọt vào
+       đây thì agent TỪ CHỐI GHI cả contract, im lặng với người dùng. */
+    expect(cell.file).toMatch(/^[0-9]{2}-[a-z0-9-]+$/);
+    expect(cell.file).toBe("01-tu-dat-khung-nhiem-vu");
+    expect(cell.vi).toBe("Khung nhiệm vụ");
+    expect(cell.spec.startsWith("Khung nhiệm vụ,")).toBe(true);
+    expect(() => contractSchema.parse(ui)).not.toThrow();
+  });
+
+  it("prompt tổng phong cách = ĐÚNG `variant.style`, không phải một bản ghép thứ hai", () => {
+    const composer = full();
+    const contract = composerToContract(composer, { presets: PRESETS, kitName: "Kit Tết" });
+    expect(composerStyleLine(composer, { presets: PRESETS, kitName: "Kit Tết" })).toBe(contract.variants![0]!.style);
   });
 
   it("block Nhân vật: dáng lấy câu của POSE_SPEC và nét mặt vào đúng chỗ", () => {
@@ -294,7 +401,8 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
       elementId: "button",
       styleId: "",
       decor: "4",
-      materialId: "",
+      glazeId: "",
+      sizeId: "",
       note: "",
     }));
     const contract = composerToContract(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), {
@@ -446,15 +554,19 @@ describe("migrateComposerDoc — chữa tài liệu đã lưu với pill `{kind:
       saved({
         blocks: [{
           id: "u1", kind: "uikit", mode: "free",
-          cells: [{ id: "c1", elementId: "coin", styleId: "", decor: "2", materialId: "gold-metal", note: "", doc: nullPills(3) }],
+          cells: [{ id: "c1", elementId: "coin", styleId: "", decor: "2", materialId: "ice", note: "", doc: nullPills(3) }],
         }],
       }),
       PRESETS,
     );
     const cell = (doc.composer.blocks[0] as { cells: UiCell[] }).cells[0]!;
     const pills = (cell.doc as JSONContent).content![0]!.content!;
-    expect(pills.map((p) => p.attrs!["kind"])).toEqual(["style", "decor", "material"]);
-    expect(pills.map((p) => p.attrs!["value"])).toEqual(["", "2", "gold-metal"]);
+    expect(pills.map((p) => p.attrs!["kind"])).toEqual(["style", "glaze", "decor"]);
+    /* `materialId: "ice"` của bản nháp cũ đã được DỊCH sang đục nền trước khi vào
+       phép cứu hộ — nếu truyền id chất liệu thô thì pill `glaze` nhận một giá trị
+       lạ và lựa chọn rụng khỏi prompt mà không ai báo. */
+    expect(pills.map((p) => p.attrs!["value"])).toEqual(["", "ice", "2"]);
+    expect(cell.glazeId).toBe("ice");
   });
 
   it("câu Cảnh nền: lấy lại được kind, còn value thì để RỖNG chứ không bịa", () => {

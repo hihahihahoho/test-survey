@@ -34,6 +34,7 @@ import { useComposerDoc } from "./lib/composer-doc";
 import { PromptProjectContext } from "./lib/project-context";
 import {
   composerBlockSheets,
+  composerStyleLine,
   composerToContract,
   narrowContractToSheets,
   type BlockSheets,
@@ -155,6 +156,18 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
   }, [store.composer, contractOpts]);
   const blockSheets = built.sheets;
   const buildError = built.error;
+
+  /* Câu phong cách của CẢ BỘ KIT — mỗi thẻ hiện lại nó ở đầu tab Prompt. Dựng MỘT
+     lần ở đây (hàm thuần, rẻ) rồi truyền xuống: ba thẻ tự dựng là ba câu có quyền
+     lệch nhau. Ném thì để rỗng — khối prompt tổng biến mất, còn cả màn vẫn dùng
+     được; cùng tinh thần với `built` ngay trên. */
+  const styleLine = React.useMemo(() => {
+    try {
+      return composerStyleLine(store.composer, contractOpts);
+    } catch {
+      return "";
+    }
+  }, [store.composer, contractOpts]);
 
   const sheetsOf = React.useCallback(
     (blockId: string) => blockSheets.find((b) => b.blockId === blockId)?.sheets ?? [],
@@ -304,6 +317,7 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
             onGen={() => queue.enqueue(block.id)}
             onDequeue={() => queue.dequeue(block.id)}
             prompt={prompts.stateOf(block.id)}
+            styleLine={styleLine}
             onWantPrompt={() => wantPrompt(block.id)}
             promptBusy={prompts.busy}
             hash={sheetsHash(sheetsOf(block.id))}

@@ -111,6 +111,15 @@ cat > "$WORK/p/styles.json" <<'JSON'
         { "file": "30-pose-vui", "vi": "Dáng vui", "spec": "mascot waving",
           "skel": { "shape": "pose", "w": 0.8, "h": 0.8 } }
       ]
+    },
+    {
+      "id": "vuong", "canvas": "square", "grid": { "cols": 2, "rows": 2 },
+      "components": [
+        { "file": "01-a", "vi": "A", "spec": "a button", "skel": { "shape": "pill", "w": 0.8, "h": 0.4 } },
+        { "file": "02-b", "vi": "B", "spec": "a popover panel", "skel": { "shape": "rrect", "w": 0.8, "h": 0.6 } },
+        { "file": "03-c", "vi": "C", "spec": "a checkbox", "skel": { "shape": "rrect", "w": 0.3, "h": 0.4 } },
+        { "file": "04-d", "vi": "D", "spec": "a toggle switch", "skel": { "shape": "pill", "w": 0.5, "h": 0.3 } }
+      ]
     }
   ]
 }
@@ -123,7 +132,7 @@ rc=$?
 expect "nói rõ là đã dừng, không gọi codex" "KHÔNG gọi codex" "$out"
 
 echo "── prompt được dựng đủ, ảnh thì không có tấm nào"
-for j in tet-main tet-doc tet-nen tet-linh; do
+for j in tet-main tet-doc tet-nen tet-linh tet-vuong; do
   have "prompt của $j" "$WORK/p/prompts/$j.txt"
   have "danh sách ảnh kèm của $j" "$WORK/p/prompts/$j.att"
 done
@@ -137,6 +146,24 @@ fi
 main="$(cat "$WORK/p/prompts/tet-main.txt")"
 doc="$(cat "$WORK/p/prompts/tet-doc.txt")"
 linh="$(cat "$WORK/p/prompts/tet-linh.txt")"
+
+# ── KHỔ VUÔNG: `sheet.canvas` là field mới, và nó phải đi tới TẬN dòng đầu prompt ──
+# Chủ sản phẩm hỏi "2040x2040 thì phải? codex có option đó không?". Câu trả lời đo
+# được: tool `image_gen` của codex 0.149 KHÔNG có tham số `size` nào cả (đúng ba
+# tham số: prompt, referenced_image_paths, num_last_images_to_include) — nó luôn trả
+# ~1,57 triệu pixel và chỉ lái được TỈ LỆ bằng lời văn. 685 ảnh thật đo trên máy dev:
+# 132 ảnh vuông, TẤT CẢ đều đúng 1254x1254; không một ảnh nào 1024x1024, không một
+# ảnh nào 2048 hay 2040. Nên con số ta hứa với model phải là 1254 — hứa 1024 rồi
+# nhận về 1254 thì mọi lượt vuông đều trông như "model làm sai".
+echo "── sheet.canvas = square ⇒ dòng đầu prompt khai đúng khổ vuông"
+head_vuong="$(head -n1 "$WORK/p/prompts/tet-vuong.txt")"
+expect "dòng đầu là SQUARE 1254x1254" "Canvas orientation: SQUARE 1254x1254." "$head_vuong"
+vuong="$(cat "$WORK/p/prompts/tet-vuong.txt")"
+expect "câu chốt cuối nói tỉ lệ 1:1" "square 1:1." "$vuong"
+refute "không lẫn sang khổ ngang" "1536x1024" "$vuong"
+refute "và không hứa một khổ codex không trả về" "1024x1024" "$vuong"
+# `orient` đời cũ vẫn phải chạy nguyên vẹn: tấm `doc` chỉ khai `orient: portrait`.
+expect "contract đời cũ chỉ có orient vẫn ra đúng khổ dọc" "Canvas orientation: PORTRAIT 1024x1536." "$doc"
 
 echo "── sheet.directive thành MỘT DÒNG trong prompt, ngay sau ghi chú của tấm"
 expect "có câu chỉ đạo riêng" "Extra direction for this sheet (from the designer): vẽ thêm mưa xuân rơi nhẹ" "$main"
@@ -166,14 +193,80 @@ havent "lượt sau xoá dấu của tấm không còn full-bleed" "$WORK/p/prom
 have "dấu của tấm nền vẫn còn" "$WORK/p/prompts/tet-nen.fullbleed"
 
 echo "── tấm mascot KHÔNG lãnh khối chỉ dẫn viết cho nút bấm"
-refute "không có khối ba lớp" "Build each element in three layers" "$linh"
-refute "không có lệnh rim/border" "the rim/border immediately OUTSIDE that footprint" "$linh"
+refute "không có khối cấu tạo" "Build each element from the inside out" "$linh"
+refute "không có lệnh rim/border" "immediately OUTSIDE that footprint" "$linh"
 expect "nhưng vẫn giữ vùng an toàn" "production SAFE ZONE" "$linh"
 expect "vẫn giữ nền trong suốt" "BACKGROUND of the sheet: FULLY TRANSPARENT" "$linh"
 expect "vẫn cấm chữ" "ABSOLUTELY NO TEXT" "$linh"
 expect "vẫn cấm vẽ caro" "NEVER DRAW A CHECKERBOARD" "$linh"
 expect "và vẫn cấm tràn sang ô khác" "never cross into another cell" "$linh"
-expect "tấm nút bấm thì VẪN CÓ khối ba lớp" "Build each element in three layers" "$main"
+expect "tấm nút bấm thì VẪN CÓ khối cấu tạo" "Build each element from the inside out" "$main"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PROMPT KHÔNG ĐƯỢC NHIỄM (chủ sản phẩm 26/08/2026: "nhìn prompt lỗi này v16???",
+# "dễ bị nhiễm prompt lắm — audit lại toàn bộ prompt đi").
+#
+# BA HỌ CHỮ BỊ CẤM, và mỗi họ có một lý do riêng — đừng gộp lại thành "prompt phải
+# gọn". Chúng khác nhau ở chỗ ai là người phải trả giá:
+#
+#  ① NHÃN PHIÊN BẢN NỘI BỘ ("V16 GUIDE CONTRACT", "the nine-element v14+ layout").
+#     Model không có cách nào biết V16 là gì, nên nó thuần tuý là nhiễu token; còn
+#     người mở tab Prompt ra đọc thì kết luận engine đang hỏng. Đúng câu chủ sản
+#     phẩm đã nói khi nhìn thấy nó.
+#  ② DANH TỪ TRANG TRÍ CỨNG ("flowers, ribbons, tassels, jewels, filigree").
+#     Bản cũ nhét nguyên câu này vào MỌI element của MỌI tấm, bất kể phong cách.
+#     Với ref là tranh mực hoạ phẳng thì đó là lệnh vẽ thêm hoa và tua rua vào một
+#     bộ UI không hề có chúng — engine ra lệnh thẩm mỹ, đúng thứ chỉ người dùng
+#     mới được quyết.
+#  ③ KHUNG NGỮ CẢNH CỨNG ("a mobile mini-game marketing campaign"). Một thể loại +
+#     một kênh phát hành + một mục đích thương mại, đóng đinh cho mọi dự án.
+#
+# Quét trên PROMPT ĐÃ DỰNG, không quét mã nguồn: chú thích trong gen.sh còn trích
+# lại nguyên văn mấy câu này để đời sau biết vì sao chúng bị bỏ, và đó là chuyện
+# tốt. Thứ phải sạch là cái ĐI RA khỏi engine.
+# ═══════════════════════════════════════════════════════════════════════════════
+echo "── prompt gửi model KHÔNG được nhiễm (nhãn phiên bản / trang trí cứng / ngữ cảnh cứng)"
+allp="$(cat "$WORK"/p/prompts/*.txt)"
+for bad in "V16" "V14" "v14+" "v16" "nine-element"; do
+  refute "không còn nhãn phiên bản nội bộ: $bad" "$bad" "$allp"
+done
+# grep -E vì đây là HỌ chữ, không phải một chuỗi: "V15", "v17" của mai sau cũng
+# phải đỏ ngay, không đợi ai nhớ ra mà thêm vào danh sách trên.
+if printf '%s' "$allp" | grep -qiE '\bv1[0-9]\b'; then
+  printf 'LOI  prompt còn nhãn phiên bản dạng V1x:\n%s\n' \
+    "$(printf '%s' "$allp" | grep -inE '\bv1[0-9]\b' | head -5)" >&2; fail=1
+else
+  printf 'ok   %s\n' "không còn bất kỳ nhãn V1x nào (quét bằng biểu thức, không bằng danh sách)"
+fi
+for bad in "flowers" "ribbons" "tassels" "jewels" "filigree"; do
+  refute "không còn danh từ trang trí cứng: $bad" "$bad" "$allp"
+done
+for bad in "marketing" "mini-game" "campaign"; do
+  refute "không còn khung ngữ cảnh cứng: $bad" "$bad" "$allp"
+done
+# "enamel" là một CHẤT LIỆU (men sứ) và nó từng nằm trong câu chỉ nói về đo đạc
+# hình học ("The continuous enamel/content surface is the CORE") — di chứng của
+# đời prompt kẹo bóng, không ai để ý vì nó núp trong một câu kỹ thuật.
+refute "không còn chất liệu lọt vào câu hình học" "enamel" "$allp"
+
+echo "── PHONG CÁCH TỔNG phải đứng ĐẦU, không phải cuối"
+# Chủ sản phẩm: "phải copy cả prompt của phong cách, có prompt tổng". Đứng đầu là
+# yêu cầu về ĐỌC (mở prompt ra thấy ngay chữ của mình), và nó chỉ an toàn được vì
+# dòng đánh số ở dưới nay chỉ còn DANH TỪ — không còn mô tả vật liệu nào cạnh tranh.
+expect "có khối ART STYLE" "ART STYLE" "$main"
+expect "có nguyên văn câu phong cách của người dùng" "Art style: flat vector, red and gold." "$main"
+style_ln="$(grep -n 'Art style:' "$WORK/p/prompts/tet-main.txt" | head -n1 | cut -d: -f1)"
+list_ln="$(grep -n '^Row 1, left to right:' "$WORK/p/prompts/tet-main.txt" | head -n1 | cut -d: -f1)"
+if [ -n "$style_ln" ] && [ -n "$list_ln" ] && [ "$style_ln" -lt "$list_ln" ]; then
+  printf 'ok   %s (dòng %s < dòng %s)\n' "phong cách đứng TRƯỚC danh sách ô" "$style_ln" "$list_ln"
+else
+  printf 'LOI  phong cách phải đứng trước danh sách ô (style=%s, list=%s)\n' "$style_ln" "$list_ln" >&2; fail=1
+fi
+if [ -n "$style_ln" ] && [ "$style_ln" -le 12 ]; then
+  printf 'ok   %s (dòng %s)\n' "và đứng ngay đầu prompt, không phải lưng chừng" "$style_ln"
+else
+  printf 'LOI  khối phong cách bị đẩy xuống dòng %s — phải nằm trong 12 dòng đầu\n' "$style_ln" >&2; fail=1
+fi
 
 echo "── không có cờ thì codex PHẢI bị gọi (chứng minh chính cái cờ là thứ chặn)"
 : > "$CALLS"

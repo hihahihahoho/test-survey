@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { JSONContent } from "@tiptap/react";
 
 import { routeTree } from "@/routeTree";
+import { GLAZE_PRESETS, glazePhrase } from "@/features/kit-core/lib/glaze";
 import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
 import { GENRE_PRESETS } from "@/features/kit-core/lib/genre-presets";
 import { EXPRESSIONS, OUTFIT_THEMES, POSES } from "@/features/kit-core/lib/poses";
@@ -182,8 +183,8 @@ describe("màu thương hiệu — hex phải thành CHỮ, không phải một 
 
   it("KHÔNG nhắc lại palette ở từng dòng cell — một bộ nhận diện, không phải mỗi ô một bảng màu", () => {
     const cells: UiCell[] = [
-      { id: "c1", elementId: "button", styleId: INHERIT, decor: "4", materialId: "", note: "" },
-      { id: "c2", elementId: "coin", styleId: INHERIT, decor: "2", materialId: "", note: "" },
+      { id: "c1", elementId: "button", styleId: INHERIT, decor: "4", glazeId: "", sizeId: "", note: "" },
+      { id: "c2", elementId: "coin", styleId: INHERIT, decor: "2", glazeId: "", sizeId: "", note: "" },
     ];
     const out = serializeComposer(
       state({ brandColors: ["#ff5533", "#112233"], blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }),
@@ -211,8 +212,8 @@ describe("serialize cả màn — mỗi block một đoạn, ảnh đánh số l
 
   it("block UI kit liệt kê element, KHÔNG có toạ độ — lưới là việc của hệ thống", () => {
     const cells: UiCell[] = [
-      { id: "c1", elementId: "button", styleId: INHERIT, decor: "4", materialId: "glass", note: "" },
-      { id: "c2", elementId: "coin", styleId: "match3", decor: "2", materialId: "", note: "xoay 15 độ" },
+      { id: "c1", elementId: "button", styleId: INHERIT, decor: "4", glazeId: "glass", sizeId: "", note: "" },
+      { id: "c2", elementId: "coin", styleId: "match3", decor: "2", glazeId: "", sizeId: "", note: "xoay 15 độ" },
     ];
     const out = serializeComposer(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), PRESETS);
 
@@ -222,7 +223,7 @@ describe("serialize cả màn — mỗi block một đoạn, ảnh đánh số l
     /* Ô 1 để trống phong cách ⇒ ăn phong cách chung; ô 2 tự chọn ⇒ phong cách riêng. */
     expect(out).toContain(PRESETS.styles[0]!.en);
     expect(out).toContain(PRESETS.styles.find((s) => s.id === "match3")!.en);
-    expect(out).toContain(MATERIAL_PRESETS.find((m) => m.id === "glass")!.en);
+    expect(out).toContain(glazePhrase("glass"));
     expect(out).toContain("xoay 15 độ");
     /* Không được lọt bất kỳ dấu vết toạ độ nào vào prompt. */
     expect(out).not.toMatch(/hàng \d+ cột \d+/i);
@@ -282,9 +283,12 @@ describe("danh mục — lab đi bằng dữ liệu THẬT của kit-core, khôn
     }
   });
 
-  it("pill theme/chất liệu/dáng/biểu cảm đọc thẳng danh mục gốc", () => {
+  it("pill theme/đục nền/dáng/biểu cảm đọc thẳng danh mục gốc", () => {
     expect(pillOptions("theme", PRESETS)).toHaveLength(OUTFIT_THEMES.length);
+    expect(pillOptions("glaze", PRESETS)).toHaveLength(GLAZE_PRESETS.length);
+    /* `material` CÒN ĐỌC ĐƯỢC (câu tự do đời cũ mang nó) nhưng không còn cửa chèn. */
     expect(pillOptions("material", PRESETS)).toHaveLength(MATERIAL_PRESETS.length);
+    expect(SLASH_ITEMS.some((item) => item.id === "pill-material")).toBe(false);
     expect(pillOptions("pose", PRESETS)).toHaveLength(POSES.length);
     expect(pillOptions("expression", PRESETS)).toHaveLength(EXPRESSIONS.length);
   });
@@ -292,7 +296,10 @@ describe("danh mục — lab đi bằng dữ liệu THẬT của kit-core, khôn
   it("ô mới kế thừa phong cách chung và ăn mặc định của element preset", () => {
     const cell = newCell("coin", PRESETS);
     expect(cell.styleId).toBe(INHERIT);
-    expect(cell.materialId).toBe("gold-metal");
+    /* Đục nền KHÔNG còn được áp sẵn theo loại element (nó là hiệu ứng, không phải
+       bản chất của "icon tiền"); CỠ thì có, vì cỡ là hình học. */
+    expect(cell.glazeId).toBe("");
+    expect(cell.sizeId).toBe("s");
     expect(cell.decor).toBe("2");
   });
 
@@ -303,8 +310,11 @@ describe("danh mục — lab đi bằng dữ liệu THẬT của kit-core, khôn
     }
   });
 
-  it("lọc menu bỏ dấu tiếng Việt — gõ 'chat' phải ra 'Chất liệu'", () => {
-    expect(slashItems("chat").map((i) => i.id)).toContain("pill-material");
+  it("lọc menu bỏ dấu tiếng Việt — gõ 'duc' phải ra 'Đục nền'", () => {
+    /* Đổi ca từ 'chat'/Chất liệu sang 'duc'/Đục nền cùng lượt bỏ pill chất liệu.
+       Vẫn là ca cho phép GẤP DẤU — và nay còn khoẻ hơn: 'duc' đòi cả `đ`→`d`, thứ
+       NFD không tách ra được (xem `fold`). */
+    expect(slashItems("duc").map((i) => i.id)).toContain("pill-glaze");
     expect(slashItems("bieu").map((i) => i.id)).toContain("pill-expression");
     expect(slashItems("")).toHaveLength(SLASH_ITEMS.length);
     /* Không khớp ⇒ RỖNG, không phải "trả về cả danh sách". */

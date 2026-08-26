@@ -4,13 +4,24 @@ import { GripVertical, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { usePresets } from "../lib/presets-store";
+import { addCustomElement, usePresets } from "../lib/presets-store";
 import type { ElementPreset, PresetBundle } from "../lib/presets-store";
+import {
+  MAX_SIZE_PX,
+  MIN_SIZE_PX,
+  REFERENCE_CELL_PX,
+  SIZE_PRESETS,
+  SQUARE_CANVAS_PX,
+  customSizeValue,
+  parseCustomSize,
+  sizeLabel,
+  sizePx,
+} from "../lib/cell-size";
 import { pillValuesOf, retitleCellDoc, uiCellDoc } from "../lib/doc-templates";
 import { moveCell, newCell, type BlockMode, type UiCell, type UiKitBlock } from "../lib/composer-model";
 import { BlockCard, ModeBadge, ModeToggle } from "./BlockCard";
 import { BlockEditor } from "./BlockEditor";
-import { OptionPill, PillButton, PillCaret } from "./pill-ui";
+import { OptionPill, PillButton, PillCaret, PillMenu, PillMenuItem } from "./pill-ui";
 
 /**
  * UiKitBlockView — block "Bộ UI": một DANH SÁCH DÒNG, mỗi dòng một element.
@@ -187,17 +198,17 @@ function CellRow({
         used={used}
         onPick={(next) => onChange(swapCellElement(cell, next, presets))}
       />
+      {/* Thứ tự pill do chủ sản phẩm chốt: phong cách → đục nền → viền → cỡ.
+          «Chất liệu» ĐÃ BỊ BỎ HẲN (không ẩn đi, không đổi tên): nó ăn theo prompt
+          tổng phong cách — xem khối chú thích đầu `glaze.ts`. */}
       <span className="text-fg-muted">— phong cách</span>
       <OptionPill compact kind="style" value={cell.styleId} onChange={(styleId) => onChange({ ...cell, styleId })} />
+      <span className="text-fg-muted">, đục nền</span>
+      <OptionPill compact kind="glaze" value={cell.glazeId} onChange={(glazeId) => onChange({ ...cell, glazeId })} />
       <span className="text-fg-muted">, viền</span>
       <OptionPill compact kind="decor" value={cell.decor} onChange={(decor) => onChange({ ...cell, decor })} />
-      <span className="text-fg-muted">, chất liệu</span>
-      <OptionPill
-        compact
-        kind="material"
-        value={cell.materialId}
-        onChange={(materialId) => onChange({ ...cell, materialId })}
-      />
+      <span className="text-fg-muted">, cỡ</span>
+      <SizePill label={label} value={cell.sizeId} onChange={(sizeId) => onChange({ ...cell, sizeId })} />
       <span className="text-fg-muted">,</span>
 
       {/* Ghi chú: KHÔNG viền, nền trong suốt — nó là phần đuôi của câu. Gạch chân
@@ -286,6 +297,11 @@ function FreeCellRow({
         used={used}
         onPick={(next) => onChange(swapCellElement(cell, next, presets))}
       />
+      {/* CỠ Ở NGOÀI EDITOR, kể cả ở chế độ tự do — nó không đi vào prompt một chữ
+          nào (nó thành `skel.w`/`skel.h`), nên nó không có chỗ trong một câu văn.
+          Cùng lý do với pill tên element đứng ngoài: cả hai là DANH TÍNH/HÌNH HỌC
+          của dòng, không phải nội dung của câu. */}
+      <SizePill label={label} value={cell.sizeId} onChange={(sizeId) => onChange({ ...cell, sizeId })} />
       {/* `min-w-0` để ô soạn co được trong flex — thiếu nó thì một câu dài đẩy cả
           dòng tràn ngang khỏi thẻ. `basis-64` là ĐÁY chứ không phải chiều rộng:
           một câu ngắn vẫn được cả hàng, còn khi phải xuống dòng thì nó xuống ở
@@ -337,8 +353,133 @@ function syncCellFromDoc(cell: UiCell, doc: JSONContent): UiCell {
        thứ duy nhất còn lại để dựng lại ô. */
     styleId: pills.style ?? cell.styleId,
     decor: pills.decor ?? cell.decor,
-    materialId: pills.material ?? cell.materialId,
+    glazeId: pills.glaze ?? cell.glazeId,
   };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Pill CỠ SAFE ZONE — preset hoặc tự điền
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * [cỡ ⌄] — bốn nấc preset + một ô TỰ ĐIỀN w×h pixel.
+ *
+ * ╔══ VÌ SAO KHÔNG DÙNG `OptionPill` ════════════════════════════════════════╗
+ * ║ `OptionPill` là pill CHỌN-MỘT trong một danh sách đóng, và cả sức mạnh    ║
+ * ║ của nó nằm ở chỗ đó: giá trị nào cũng tra được ra nhãn + cụm EN. Cỡ thì   ║
+ * ║ có một giá trị KHÔNG nằm trong danh sách nào — con số người dùng gõ.      ║
+ * ║ Nhét một ô nhập vào `OptionPill` là bắt tám pill khác mang theo một nhánh ║
+ * ║ chúng không bao giờ chạy; nên cỡ có pill riêng, và `pill-ui` giữ nguyên   ║
+ * ║ vai trò "một danh sách, một lựa chọn".                                   ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Ô tự điền nhận số RỜI (w, h) chứ không nhận chuỗi `"160x120"`: người dùng
+ * không phải học một cú pháp, và không có gì để gõ sai. Chuỗi ấy là chuyện của
+ * chỗ lưu (`customSizeValue`), không phải chuyện của người đang thiết kế.
+ */
+function SizePill({ label, value, onChange }: { label: string; value: string; onChange: (next: string) => void }) {
+  const [open, setOpen] = React.useState(false);
+  const custom = parseCustomSize(value);
+  /* Ô nhập mở ra với cỡ ĐANG DÙNG, kể cả khi cỡ ấy đến từ một preset: người ta
+     mở «Tự điền» để CHỈNH từ chỗ đang đứng, không phải để bắt đầu từ trang trắng. */
+  const current = sizePx(value);
+  const [w, setW] = React.useState(String(current?.w ?? REFERENCE_CELL_PX));
+  const [h, setH] = React.useState(String(current?.h ?? REFERENCE_CELL_PX));
+
+  const apply = () => {
+    const next = parseCustomSize(customSizeValue(Number(w) || 0, Number(h) || 0));
+    if (!next) return;
+    onChange(customSizeValue(next.w, next.h));
+    setOpen(false);
+  };
+
+  return (
+    <span className="relative inline-block">
+      <PillButton
+        compact
+        active={open}
+        muted={!value}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={`Cỡ của ${label}`}
+      >
+        <span>{sizeLabel(value) || "theo hệ thống"}</span>
+        <PillCaret compact />
+      </PillButton>
+
+      {open && (
+        <PillMenu label="Chọn cỡ safe zone" onClose={() => setOpen(false)}>
+          <PillMenuItem
+            selected={!value}
+            onSelect={() => {
+              onChange("");
+              setOpen(false);
+            }}
+          >
+            <span className="text-fg-muted">— theo hệ thống —</span>
+          </PillMenuItem>
+
+          {SIZE_PRESETS.map((preset) => (
+            <PillMenuItem
+              key={preset.id}
+              selected={preset.id === value}
+              onSelect={() => {
+                onChange(preset.id);
+                setOpen(false);
+              }}
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-fg-strong">{preset.vi}</span>
+                {/* Con số hiện ngay dưới nhãn: "L · lớn" một mình không nói được
+                    nó lớn hơn "M" bao nhiêu, mà đó đúng là câu người thiết kế hỏi. */}
+                <span className="block truncate text-caption text-fg-muted">{preset.w}×{preset.h}px</span>
+              </span>
+            </PillMenuItem>
+          ))}
+
+          <div className="mt-1 border-t border-line-subtle px-2 pb-1 pt-2">
+            <p className="mb-1 text-caption text-fg-muted">Tự điền (px trên khung {SQUARE_CANVAS_PX})</p>
+            <div className="flex items-center gap-1.5">
+              <SizeNumber label={`Bề rộng của ${label}`} value={w} onChange={setW} onEnter={apply} />
+              <span aria-hidden className="text-caption text-fg-muted">×</span>
+              <SizeNumber label={`Bề cao của ${label}`} value={h} onChange={setH} onEnter={apply} />
+              <Button variant="secondary" size="sm" onClick={apply}>Đặt</Button>
+            </div>
+            {custom && <p className="mt-1 text-caption text-fg-muted">Đang dùng {custom.w}×{custom.h}px</p>}
+          </div>
+        </PillMenu>
+      )}
+    </span>
+  );
+}
+
+/** Một ô số của phần tự điền. Tách ra vì hai ô giống hệt nhau tới từng class. */
+function SizeNumber({ label, value, onChange, onEnter }: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+  onEnter: () => void;
+}) {
+  return (
+    <Input
+      type="number"
+      inputMode="numeric"
+      min={MIN_SIZE_PX}
+      max={MAX_SIZE_PX}
+      value={value}
+      aria-label={label}
+      onChange={(event) => onChange(event.target.value)}
+      /* Enter = «Đặt». Một hộp có ô nhập mà phải rê chuột sang nút mới xong là một
+         hộp người ta bỏ dở — và bỏ dở ở đây nghĩa là cỡ vừa gõ không được lưu. */
+      onKeyDown={(event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        onEnter();
+      }}
+      className="w-20"
+    />
+  );
 }
 
 /**
@@ -504,7 +645,7 @@ function ElementCatalogue({
       <div role="listbox" aria-label="Danh mục món giao diện" className="mt-2 min-h-0 flex-1 overflow-y-auto">
         {total === 0 && (
           <p className="px-2 py-4 text-center text-body text-fg-muted">
-            Không có món nào khớp. Thêm mới ở trang «Quản lý preset».
+            Không có món nào khớp — đặt tên riêng cho nó ở ngay dưới.
           </p>
         )}
         <PickGroup title="Chưa có trong thẻ" items={hits.fresh} onPick={onPick} />
@@ -512,6 +653,68 @@ function ElementCatalogue({
             này chỉ nói "bạn đã có rồi", không cấm. */}
         <PickGroup title="Đã có trong thẻ" items={hits.again} onPick={onPick} muted />
       </div>
+
+      {/* CỬA TỰ ĐẶT TÊN nằm ở ĐÁY và LUÔN hiện, không phải chỉ khi tìm không ra:
+          nó điền sẵn đúng chữ vừa gõ, nên "gõ tên món của mình rồi bấm thêm" là
+          một mạch liền — còn nếu nó chỉ xuất hiện lúc danh mục rỗng thì người dùng
+          phải học rằng "tìm hụt mới đặt tên được". */}
+      <CustomElementRow query={query} onPick={onPick} />
+    </div>
+  );
+}
+
+/**
+ * «Tự đặt tên…» — thêm một element KHÔNG có trong danh mục.
+ *
+ * ╔══ VÌ SAO CHỦ SẢN PHẨM CẦN CỬA NÀY ═══════════════════════════════════════╗
+ * ║ *«Bảng nền,… custom element cũng cho điền custom.»* Danh mục hạt giống có ║
+ * ║ tám món; một game thật có "khung nhiệm vụ", "ô rương", "huy chương hạng   ║
+ * ║ ba". Không có cửa này thì người dùng phải rời màn soạn, sang trang         ║
+ * ║ «Quản lý preset», thêm một dòng, rồi quay lại tìm nó — bốn bước cho một    ║
+ * ║ việc mà họ đang nghĩ tới ngay lúc này.                                    ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Món tạo ra vào THẲNG danh mục (`addCustomElement`), nên nó dùng lại được ở thẻ
+ * khác và sửa/xoá được ở trang preset — xem chú thích của hàm ấy để biết vì sao
+ * không giữ tên riêng trên từng dòng.
+ */
+function CustomElementRow({ query, onPick }: { query: string; onPick: (element: ElementPreset) => void }) {
+  const [name, setName] = React.useState("");
+  /* Chữ đang gõ ở ô tìm kiếm là ứng viên tốt nhất cho cái tên: người ta gõ "rương"
+     để TÌM, không thấy, và thứ họ muốn tiếp theo là một món tên "rương". */
+  const value = name || query;
+  const add = () => {
+    const made = addCustomElement(value);
+    if (!made) return;
+    onPick(made);
+    setName("");
+  };
+
+  return (
+    <div className="mt-2 border-t border-line-subtle px-1 pt-2">
+      <p className="mb-1 px-1 text-caption font-medium uppercase tracking-label text-fg-muted">Tự đặt tên</p>
+      <div className="flex items-center gap-1.5">
+        <Input
+          value={value}
+          onChange={(event) => setName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            add();
+          }}
+          placeholder="Tên món, ví dụ «Khung nhiệm vụ»"
+          aria-label="Tên món tự đặt"
+        />
+        <Button variant="secondary" size="sm" disabled={!value.trim()} onClick={add}>
+          Thêm
+        </Button>
+      </div>
+      {/* NÓI THẲNG chuyện gì xảy ra với chữ tiếng Việt: nó đi NGUYÊN VĂN tới máy vẽ.
+          Không dịch hộ — dịch máy một danh từ chuyên ngành là đoán, mà đoán sai thì
+          máy vẽ ra một món khác hẳn (xem `addCustomElement`). */}
+      <p className="mt-1 px-1 text-caption text-fg-muted">
+        Gõ tiếng Anh thì chữ đó đi thẳng tới máy vẽ; gõ tiếng Việt cũng được, sửa lại sau ở «Quản lý preset».
+      </p>
     </div>
   );
 }
@@ -619,8 +822,15 @@ function PickGroup({
           )}
         >
           <span className={cn("text-body", muted ? "text-fg" : "text-fg-strong")}>{element.vi}</span>
-          {/* Cụm EN là thứ THẬT SỰ đi tới máy vẽ — cho nhìn thấy trước khi chọn. */}
-          <span className="line-clamp-1 text-caption text-fg-muted">{element.en}</span>
+          {/* DANH TỪ EN là thứ THẬT SỰ đi tới máy vẽ — cho nhìn thấy trước khi chọn.
+              Ẩn khi nó trùng nhãn tiếng Việt (món tự đặt tên): lặp lại nguyên một
+              chuỗi ngay dưới chính nó là một dòng không nói thêm gì.
+              ⚠️ Đây từng là chỗ hiện CÂU MÔ TẢ ("a floating popover panel with a
+              title bar") — thứ chủ sản phẩm chỉ mặt: *"không có thuộc tính nhé"*.
+              Nếu dòng này lại dài ra thì nguồn đã sai, sửa ở `ElementPreset.en`. */}
+          {element.en.toLowerCase() !== element.vi.toLowerCase() && (
+            <span className="line-clamp-1 text-caption text-fg-muted">{element.en}</span>
+          )}
         </button>
       ))}
     </>

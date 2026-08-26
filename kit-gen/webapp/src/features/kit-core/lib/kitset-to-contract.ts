@@ -52,7 +52,7 @@ import { loadBundledV2 } from "@/features/design/library/lib/source";
 import type { LibElement } from "@/features/design/library/lib/types";
 import { buildStylePrompt } from "@/features/kit-form/lib/style-phrases";
 import type { GlassLevel, KitElementSkel, SheetPromptTweak, WorkflowMascot, WorkflowState } from "./model";
-import { materialPhrase } from "./materials";
+import { GLASS_LEVEL_SPEC, glazeFromMaterial, glazePreset, type GlazePreset } from "./glaze";
 import { isPropElement } from "./user-library";
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -120,6 +120,16 @@ export const DEFAULT_SHEET_LIMITS: SheetLimits = {
    nơi, nơi kia lặng lẽ nói khác. Chỉ thêm từ khoá `export`, không đổi giá trị. */
 export const HINT_LANDSCAPE = "landscape 3:2 cell";
 export const HINT_PORTRAIT = "portrait 3:4 cell";
+/**
+ * Ô VUÔNG — chỉ đúng trên canvas `square` (1024×1024) chia lưới n×n.
+ *
+ * Thêm mới 08/2026 cùng `sheet.canvas`: chủ sản phẩm xin lưới UI tỉ lệ 1:1 (*"canvas
+ * lưới UI 1:1"*), và trên canvas vuông thì `HINT_LANDSCAPE` là một lời nói dối — nó
+ * bảo máy vẽ bố trí món đồ trong một ô 3:2 trong khi ô thật là 1:1, nên món nào cũng
+ * bị vẽ dẹt rồi mới bị cắt. Hằng ở ĐÂY chứ không ở bộ dịch composer vì ba chuỗi
+ * `cell_hint` kia cũng ở đây — bốn anh em phải nằm cùng một chỗ, xem chú thích export.
+ */
+export const HINT_SQUARE = "square 1:1 cell";
 export const HINT_BG = "full-bleed portrait scene";
 export const HINT_POSE = "cell containing ONE full-body character";
 
@@ -185,19 +195,9 @@ export function poseSpecFor(pose: string, expression?: string | null): string {
    1b. CHẤT LIỆU + ĐỘ TRONG CỦA MỘT Ô — thực thi bằng CHỮ, không bằng field mới
    ══════════════════════════════════════════════════════════════════════════ */
 
-/**
- * Ba mức kính → câu tiếng Anh nối vào `spec`.
- *
- * Con số alpha trong câu KHÔNG phải tôi ước: `gen.sh` (nhánh `matte == "glass"`, mirror
- * ở `item-prompt.ts:glassCellPrompt`) đã ra hợp đồng *"about 64 out of 255 for a clear
- * pane, up to 128 for a strongly tinted one"*. Ba mức này chỉ ĐỊNH VỊ ô trong dải ấy,
- * nên chúng không thể mâu thuẫn với câu kính chung — đó là lý do không cần đụng `gen.sh`.
- */
-export const GLASS_LEVEL_SPEC: Record<GlassLevel, string> = {
-  clear: "a clear pane: barely tinted see-through glass, alpha about 64 of 255",
-  frosted: "strongly frosted glass: milky diffused surface, alpha about 96 of 255",
-  tinted: "strongly tinted glass: deep saturated tint, alpha about 128 of 255",
-};
+/** Ba mức kính → câu tiếng Anh. NHÀ THẬT của nó nay là `glaze.ts`; xuất lại ở đây
+ *  để chỗ gọi cũ (và bộ test đang khoá đúng ba câu ấy) không phải đổi import. */
+export { GLASS_LEVEL_SPEC } from "./glaze";
 
 /** Nhãn tiếng Việt của ba mức — UI đọc chỗ này để không tự chế bộ chữ thứ hai. */
 export const GLASS_LEVEL_VI: Record<GlassLevel, string> = {
@@ -233,16 +233,33 @@ export function looksLikeGlass(spec: string | null | undefined): boolean {
 }
 
 /**
- * MÔ TẢ CUỐI CÙNG CỦA MỘT Ô = [mô tả] + [chất liệu] + [mức kính].
+ * ĐỤC NỀN ĐANG CÓ HIỆU LỰC của một lớp đè — một chỗ tra, dùng ở cả hai hàm dưới.
+ *
+ * Hai lối vào, và thứ tự ưu tiên là bắt buộc: `glaze` là trường của HÔM NAY, còn
+ * `material` là bản nháp ĐỜI CŨ được dịch sang (`glazeFromMaterial`). Bản nháp nào
+ * có cả hai (người dùng mở dự án cũ rồi bấm pill) thì lựa chọn MỚI phải thắng —
+ * ngược lại là chọn xong thấy nó tự quay về giá trị cũ, hỏng câm khó chịu nhất.
+ */
+function glazeOf(override: KitElementSkel | undefined): GlazePreset | null {
+  if (!override) return null;
+  return glazePreset(override.glaze) ?? glazePreset(glazeFromMaterial(override.material));
+}
+
+/**
+ * MÔ TẢ CUỐI CÙNG CỦA MỘT Ô = [mô tả] + [đục nền] + [mức kính].
  *
  * ┌── BA NGUỒN, MỘT DÒNG ────────────────────────────────────────────────────┐
  * │ ① mô tả  : lớp đè của dự án nếu có, không thì `spec` của thư viện;        │
- * │ ② chất liệu: cụm tiếng Anh của preset (hoặc chữ người dùng tự gõ);        │
+ * │ ② đục nền: cụm tiếng Anh NGẮN về độ xuyên thấu (`GLAZE_PRESETS`);         │
  * │ ③ mức kính: chỉ nối khi ô THẬT SỰ đang là kính sau khi trộn `matte`.      │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
- * Điều kiện ③ không phải chuyện vặt: người dùng chọn "Kính đậm" rồi đổi Nền tách về
- * "Nền thường" thì `glassLevel` vẫn còn nằm trong bản nháp. Nối nó vào lúc ấy là dặn
+ * ② KHÔNG CÒN LÀ "CHẤT LIỆU". Cụm chữ thẩm mỹ ("polished gold metal, warm
+ * reflections") đã bị bỏ khỏi đây — thẩm mỹ đến từ prompt tổng phong cách, thứ
+ * `gen.sh` chèn vào MỌI tấm. Đọc khối đầu `glaze.ts` trước khi định đưa nó về.
+ *
+ * Điều kiện ③ không phải chuyện vặt: người dùng chọn "Băng" rồi đổi Đục nền về
+ * "Không" thì `glassLevel` vẫn còn nằm trong bản nháp. Nối nó vào lúc ấy là dặn
  * máy vẽ hạ alpha xuống 128 trong khi slicer đang cắt ô như một mảng đặc — ảnh ra mờ
  * và không ai hiểu tại sao. Giá trị được GIỮ (đổi ý lần nữa là có lại) nhưng KHÔNG nói.
  */
@@ -252,12 +269,15 @@ export function resolveElementSpec(base: Pick<LibElement, "spec" | "skel">, over
   const text = own || base.spec;
   if (text) parts.push(text);
 
-  const material = materialPhrase(override?.material);
-  if (material) parts.push(material);
+  const glaze = glazeOf(override);
+  if (glaze?.en) parts.push(glaze.en);
 
-  if (override?.glassLevel) {
+  /* Mức kính khai TAY thắng mức của preset: bản nháp workflow có ô chọn riêng ba
+     nấc, và một lựa chọn người dùng bấm bằng tay không được preset đắp lên. */
+  const level = override?.glassLevel ?? glaze?.glassLevel;
+  if (level) {
     const matte = override ? mergeElementSkel(base.skel, override).matte : base.skel.matte;
-    if (matte === "glass") parts.push(GLASS_LEVEL_SPEC[override.glassLevel]);
+    if (matte === "glass") parts.push(GLASS_LEVEL_SPEC[level]);
   }
   return parts.join(", ");
 }
@@ -355,8 +375,14 @@ export function mergeElementSkel(base: LibElement["skel"], override: KitElementS
   const patch: Partial<LibElement["skel"]> = {};
   if (override.w !== undefined) patch.w = override.w;
   if (override.h !== undefined) patch.h = override.h;
-  if (override.matte === "glow" || override.matte === "glass") patch.matte = override.matte;
-  const clears = override.matte === "none" && USER_MATTE.has(String(base.matte));
+  /* ĐỤC NỀN TỰ MANG THEO CÁCH TÁCH — đây là nửa còn lại của hợp đồng mà `glaze.ts`
+     mô tả: chọn "Băng" mà `matte` vẫn rỗng thì máy vẽ ra một khối băng ĐỤC và
+     `slice.py` cắt nó như mảng đặc. Lớp đè khai `matte` bằng tay vẫn THẮNG: bản
+     nháp workflow có ba nút "Nền thường / Phát sáng / Trong suốt" riêng, và một
+     lựa chọn bấm bằng tay không được preset đắp lên. */
+  const matte = override.matte ?? glazeOf(override)?.matte;
+  if (matte === "glow" || matte === "glass") patch.matte = matte;
+  const clears = matte === "none" && USER_MATTE.has(String(base.matte));
   if (Object.keys(patch).length === 0 && !clears) return base;
   const next = { ...base, ...patch };
   if (clears) delete next.matte;

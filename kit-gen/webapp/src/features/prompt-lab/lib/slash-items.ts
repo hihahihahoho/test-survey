@@ -55,7 +55,10 @@ const pillItem = (kind: PillKind, title: string, hint: string, keywords: string)
 
 export const SLASH_ITEMS: readonly SlashItem[] = [
   pillItem("style", "Phong cách", "Pill phong cách — mặc định theo phong cách chung", "style phong cach"),
-  pillItem("material", "Chất liệu", "Pill chất liệu — kính, băng, gỗ…", "material chat lieu"),
+  /* «Chất liệu» ĐÃ RỜI MENU (08/2026): chất liệu ăn theo prompt tổng phong cách,
+     xem `glaze.ts`. Pill `material` vẫn ĐỌC được trong câu cũ — nó chỉ không còn
+     cửa nào để chèn thêm bản mới. */
+  pillItem("glaze", "Đục nền", "Pill đục nền — kính trong, kính gradient, băng, phát sáng", "glaze duc nen kinh trong suot alpha"),
   pillItem("scene", "Khung cảnh", "Pill khung cảnh — menu chính, màn chơi, shop…", "scene khung canh"),
   pillItem("mood", "Không khí", "Pill mood — rộn ràng, yên bình, hoàng hôn…", "mood khong khi"),
   pillItem("decor", "Mức viền", "Pill mức trang trí 1–7", "decor muc vien trang tri"),

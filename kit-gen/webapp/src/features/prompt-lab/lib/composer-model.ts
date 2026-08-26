@@ -79,8 +79,23 @@ export interface UiCell {
   styleId: string;
   /** "1".."7" — xem `DECOR_LEVELS`. */
   decor: string;
-  /** Id trong MATERIAL_PRESETS; rỗng = không nói gì về chất liệu. */
-  materialId: string;
+  /**
+   * ĐỤC NỀN — id trong `GLAZE_PRESETS`; rỗng = nền đặc.
+   *
+   * Thay cho `materialId` từ 08/2026. Không phải đổi tên cho đẹp: pill cũ hỏi
+   * "ô này làm bằng gì" (thẩm mỹ, đã có prompt tổng lo), pill mới hỏi "ô này trong
+   * tới đâu" — và câu trả lời quyết định `skel.matte`, thứ `slice.py` đọc để cắt.
+   * Bản nháp cũ mang `materialId` được dịch sang lúc ĐỌC (`composer-doc.readCell`).
+   */
+  glazeId: string;
+  /**
+   * CỠ SAFE ZONE — id preset hoặc `"<w>x<h>"` px; rỗng = theo hệ thống.
+   *
+   * Nằm NGOÀI câu chữ (không có pill nào cho nó trong `uiCellDoc`) vì nó không đi
+   * vào prompt một chữ nào: nó thành `skel.w`/`skel.h` của ô. Nhét nó vào câu là
+   * hứa với người đọc rằng prompt có nhắc tới kích thước — mà không.
+   */
+  sizeId: string;
   /** Ghi chú tự do của người dùng cho riêng ô này. */
   note: string;
   /**
@@ -233,7 +248,8 @@ export function newCell(elementId: string, presets: PresetBundle = getPresets())
        tách khỏi phong cách của cả bộ kit. */
     styleId: INHERIT,
     decor: String(preset?.decor ?? 4),
-    materialId: preset?.materialId ?? "",
+    glazeId: preset?.glazeId ?? "",
+    sizeId: preset?.sizeId ?? "",
     note: "",
   };
 }

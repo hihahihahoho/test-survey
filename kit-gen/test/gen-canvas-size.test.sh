@@ -83,6 +83,28 @@ expect "nêu đích danh 1024x1536"        "exactly 1024x1536 pixels" "$out"
 expect "nói rõ là portrait"             "(portrait)"               "$out"
 refute "không lẫn sang khổ ngang"       "1536x1024"                "$out"
 
+echo "── sheet khai VUÔNG (sheet.canvas = 'square')"
+# 1254x1254 chứ không phải 1024x1024 hay 2048x2048, và con số đó KHÔNG phải chọn
+# đại. Soi binary codex 0.149.0: tool `image_gen.imagegen` có ĐÚNG BA tham số —
+# prompt / referenced_image_paths / num_last_images_to_include — và KHÔNG có `size`.
+# Khổ do backend chọn; model chỉ lái được TỈ LỆ bằng lời văn. Đo 685 ảnh thật tool
+# đã sinh trên máy dev: mọi ảnh đều ≈1.572.864 pixel (=1536×1024) ±1500, trong đó
+# 132 ảnh vuông và TẤT CẢ đều đúng 1254×1254. Không ảnh nào 1024², không ảnh nào
+# 2048/2040. Bảng size cứng {1024x1024, 2048x2048…} chỉ có ở đường CLI
+# `scripts/image_gen.py --size` — đường mà gen.sh cấm thẳng ở khối HARD BAN.
+# Nên hứa 1254 là hứa đúng thứ sẽ nhận; hứa 1024 là tự đẻ ra một lượt "sai khổ"
+# giả trong mọi lần chạy tấm vuông.
+printf 'Canvas orientation: SQUARE 1254x1254.\nmore prompt\n' > "$WORK/p/prompts/sq.txt"
+: > "$WORK/p/prompts/sq.att"
+out="$(run_case sq)"
+expect "nêu đích danh 1254x1254"        "exactly 1254x1254 pixels" "$out"
+expect "nói rõ là square"               "(square)"                 "$out"
+refute "không lẫn sang khổ ngang"       "1536x1024"                "$out"
+refute "không lẫn sang khổ dọc"         "1024x1536"                "$out"
+# Bẫy đã suýt dính: `grep -qi PORTRAIT` chạy trước thì nhánh SQUARE không bao giờ
+# tới. Ca này chết ngay nếu ai đó nối lại thành chuỗi if lồng nhau sai thứ tự.
+refute "không rơi nhầm vào nhánh portrait" "(portrait)"            "$out"
+
 echo "── prompt không khai gì ⇒ rơi về NGANG (mặc định của engine), không phải im lặng"
 printf 'no orientation line here\n' > "$WORK/p/prompts/mute.txt"
 : > "$WORK/p/prompts/mute.att"

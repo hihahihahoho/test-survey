@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  BLEED_IS_FIXED, CANVAS_LANDSCAPE, CANVAS_PORTRAIT, SLICE_BLEED,
+  BLEED_IS_FIXED, CANVAS_LANDSCAPE, CANVAS_PORTRAIT, CANVAS_SQUARE, SLICE_BLEED,
   canvasOf, cellAspect, cellMetrics, effectiveCellHint, elementBox, elementMetrics,
   formatPx, gridOf, sheetOrient, simpleRatio, suggestCellHint,
 } from "../geometry";
@@ -33,15 +33,26 @@ describe("khổ ảnh sinh — đúng gen.sh dòng 35 và skeleton-svg.js", () =
   it("con số 1536×1024 / 1024×1536 có THẬT trong mã engine", () => {
     expect(read("gen.sh")).toContain("PORTRAIT 1024x1536");
     expect(read("gen.sh")).toContain("LANDSCAPE 1536x1024");
-    expect(read("skeleton-svg.js")).toMatch(/"portrait"\s*\?\s*\[1024,\s*1536\]\s*:\s*\[1536,\s*1024\]/);
+    expect(read("gen.sh")).toContain("SQUARE 1254x1254");
+    const svg = read("skeleton-svg.js");
+    expect(svg).toMatch(/landscape:\s*\[1536,\s*1024\]/);
+    expect(svg).toMatch(/portrait:\s*\[1024,\s*1536\]/);
+    expect(svg).toMatch(/square:\s*\[1254,\s*1254\]/);
   });
 
   it("khớp hằng số trong code của tôi", () => {
     expect(CANVAS_LANDSCAPE).toEqual({ w: 1536, h: 1024 });
     expect(CANVAS_PORTRAIT).toEqual({ w: 1024, h: 1536 });
+    expect(CANVAS_SQUARE).toEqual({ w: 1254, h: 1254 });
     expect(canvasOf(sheet(4, 4))).toEqual({ w: 1536, h: 1024 });
     expect(canvasOf(sheet(4, 4, "portrait"))).toEqual({ w: 1024, h: 1536 });
     expect(sheetOrient(undefined)).toBe("landscape");
+  });
+
+  it("canvas:'square' thắng orient cũ — preview vẽ đúng tấm 1:1 như engine", () => {
+    expect(canvasOf({ orient: "landscape", canvas: "square" })).toEqual({ w: 1254, h: 1254 });
+    expect(sheetOrient({ orient: "landscape", canvas: "square" })).toBe("square");
+    expect(cellAspect({ orient: "landscape", canvas: "square", grid: { cols: 3, rows: 3 } })).toBe(1);
   });
 });
 

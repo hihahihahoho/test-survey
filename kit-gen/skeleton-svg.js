@@ -193,9 +193,29 @@
       + "\" y2=\"" + n(gy1) + "\" " + attrs + "/>";
   }
 
-  /** Khổ ảnh gen: landscape 3:2 mặc định, `orient:"portrait"` thì 2:3. */
+  /** Khổ ảnh gen — BẢN CHÉP của bảng `CANVAS` trong khối python của `gen.sh`.
+   *
+   *  ĐỪNG SUY LẠI TỪ `orient` Ở ĐÂY. Khổ ảnh từng được suy độc lập ở bốn chỗ
+   *  (gen.sh, run_one, file này, slice.py) và mỗi chỗ tự viết một dòng ba ngôi
+   *  `orient === "portrait" ? … : …`. Thêm một khổ thứ ba là phải sửa đủ bốn, và
+   *  chỗ nào quên thì hỏng LẶNG LẼ: khung xương vẽ một khổ, prompt xin khổ khác.
+   *  Nguồn sự thật nay là bảng `CANVAS` ở gen.sh; sửa ở đó thì sửa cả ở đây.
+   *
+   *  `canvas` thắng `orient` (field cũ, chỉ có landscape/portrait) để contract
+   *  đời trước chạy nguyên vẹn. Giá trị lạ rơi về landscape, không ném.
+   *
+   *  1254×1254 cho ô vuông chứ không phải 1024×1024: tool `image_gen` của codex
+   *  KHÔNG có tham số `size` — nó luôn trả ~1,57 triệu pixel và chỉ lái được tỉ
+   *  lệ. Đo 685 ảnh thật: 132 ảnh vuông, tất cả đều đúng 1254×1254.
+   */
+  const CANVAS = {
+    landscape: [1536, 1024],
+    portrait: [1024, 1536],
+    square: [1254, 1254],
+  };
   function sheetSize(sh) {
-    return sh.orient === "portrait" ? [1024, 1536] : [1536, 1024];
+    const key = String(sh.canvas || sh.orient || "landscape").toLowerCase();
+    return CANVAS[key] || CANVAS.landscape;
   }
 
   /* Mask id của shape `puzzle` phải DUY NHẤT trong một tài liệu. Khung xem nhét

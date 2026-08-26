@@ -9,11 +9,12 @@ import {
   CHARACTER_ID,
   DEFAULT_SHEET_LIMITS,
   HINT_BG,
-  HINT_LANDSCAPE,
   HINT_POSE,
+  HINT_SQUARE,
   MAIN_VARIANT_ID,
   POSE_NOTE,
   buildVariantStyle,
+  mergeElementSkel,
   poseSpecFor,
   resolveElementSpec,
   type SheetLimits,
@@ -24,6 +25,7 @@ import { describeBrandColors } from "@/features/prompt-lab/lib/brand-colors";
 import { INHERIT, phraseOf, type PillKind } from "@/features/prompt-lab/lib/pill-registry";
 import { getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
 import { NODE } from "@/features/prompt-lab/lib/schema";
+import { SQUARE_CANVAS_PX, skelSizeOf } from "@/features/prompt-lab/lib/cell-size";
 import { SCAFFOLDS } from "@/features/prompt-lab/lib/doc-templates";
 import { freeText, makeContext, serializeDoc, tidy, type PromptDocNode } from "@/features/prompt-lab/lib/serialize";
 import { contextFreeText } from "@/features/prompt-lab/lib/serialize-composer";
@@ -69,16 +71,37 @@ import type { ComposerDoc } from "./composer-doc";
 const MAX_CELLS_SQUARE = 16;
 
 /**
- * Skeleton mặc định của một ô UI kit.
+ * Skeleton mặc định của một ô UI kit — dùng khi dòng KHÔNG chọn cỡ.
  *
  * ⚠️ NÓI THẲNG GIỚI HẠN: danh mục element của composer (`presets-store.ts`) chỉ có
  * chữ (`vi`/`en`), KHÔNG có hình học — nó là danh mục do người dùng tự sửa, không
  * phải `element-lib.json`. Nên mọi ô ra cùng một khung `rrect` cỡ vừa. Đây là một
  * MẶC ĐỊNH TRUNG TÍNH, không phải một phép đo: nó chỉ quyết định ô skeleton vẽ ra
- * to bằng nào, còn hình thù thật do máy vẽ quyết theo `spec`. Khi danh mục có thêm
- * hình học (wave sau), thay đúng chỗ này.
+ * to bằng nào, còn hình thù thật do máy vẽ quyết theo `spec`.
+ *
+ * Từ 08/2026 dòng element CÓ pill cỡ (`UiCell.sizeId`), và cỡ ấy đè lên đây —
+ * xem `cell-size.ts`. Giữ nguyên hằng này làm ĐƯỜNG LÙI chứ không bỏ: mọi dòng
+ * của mọi dự án đang có đều chưa chọn cỡ, và một lượt sửa không được đổi kích
+ * thước những thứ người dùng đã vẽ xong.
  */
 const CELL_SKEL = { shape: "rrect" as const, w: 0.8, h: 0.6 };
+
+/**
+ * KHỔ CANVAS CỦA TẤM BỘ UI — vuông.
+ *
+ * ╔══ VÌ SAO LƯỚI UI PHẢI VUÔNG ═════════════════════════════════════════════╗
+ * ║ Chủ sản phẩm: *«canvas lưới UI 1:1»*. Lý do hình học: `squareGrid` xếp ô   ║
+ * ║ thành n×n, nên trên canvas ngang 1536×1024 mỗi ô ra 3:2 — và một cái nút   ║
+ * ║ hay một huy hiệu thì không phải hình 3:2. Máy vẽ được giao một ô dẹt sẽ vẽ ║
+ * ║ món đồ dẹt theo, rồi `slice.py` cắt đúng cái dẹt ấy ra file.               ║
+ * ║ Canvas vuông + lưới n×n ⇒ ô 1:1, và món đồ được vẽ đúng tỉ lệ của nó.      ║
+ * ║                                                                            ║
+ * ║ `orient` VẪN ĐƯỢC GHI (`landscape`) bên cạnh: contract đời trước chỉ biết  ║
+ * ║ `orient`, và bỏ nó đi là mọi bản engine chưa cập nhật đọc tấm này thành    ║
+ * ║ mặc định của chúng. Có cả hai thì `canvas` thắng — xem `sheetSchema`.      ║
+ * ╚════════════════════════════════════════════════════════════════════════════╝
+ */
+const UI_CANVAS = "square" as const;
 
 /** Khung xương ô dáng — số của `styles.json` thật, giống hệt `buildKitsetContract`. */
 const POSE_SKEL = { shape: "pose" as const, w: 0.3, h: 0.85 };
@@ -339,33 +362,51 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
 
   return chunkBySize(block.cells, limit).map((chunk, i) => {
     const grid = squareGrid(chunk.length);
+    /* Ô vuông ⇒ một cạnh là đủ. Chia theo LƯỚI THẬT của tấm này, không theo ô
+       tham chiếu 4×4: một tấm 4 món có lưới 2×2 ⇒ ô 627px, và cỡ "S · 112px"
+       phải vẫn ra 112 pixel thật ở đó. Xem `skelSizeOf`. */
+    const cellPx = SQUARE_CANVAS_PX / grid.cols;
     const cells: Component[] = chunk.map((cell, k) => {
       const element = presets.elements.find((preset) => preset.id === cell.elementId);
       /* Phong cách của ô: rỗng = theo phong cách chung — CÙNG luật với pill
          `style` và với `cellLine()` của bộ serialize. Ba nơi phải nói một điều. */
       const style = cell.styleId ? phraseOf("style", cell.styleId, presets) : "";
       const decor = phraseOf("decor", cell.decor, presets);
+      /* DANH TỪ ĐỨNG ĐẦU, rồi mới tới phong cách và mức viền. `element.en` nay là
+         một danh từ thuần ("popover"), không còn là câu mô tả có sẵn thuộc tính —
+         xem `ElementPreset.en`. Nhờ vậy thứ tự này đọc ra đúng một câu tiếng Anh:
+         "popover, chunky cartoon style, a thick beveled frame…". */
       const text = [element?.en ?? cell.elementId, style, decor].filter(Boolean).join(", ");
-      /* `resolveElementSpec` là nơi DUY NHẤT biết cách nối chất liệu (và mức kính)
+      /* `resolveElementSpec` là nơi DUY NHẤT biết cách nối đục nền (và mức kính)
          vào mô tả một ô — dùng lại thay vì chép luật nối chuỗi sang đây. */
-      const templateSpec = tidy([resolveElementSpec({ spec: text, skel: CELL_SKEL }, { material: cell.materialId }), cell.note.trim()].filter(Boolean).join(", "));
+      const glaze = { glaze: cell.glazeId };
+      const templateSpec = tidy([resolveElementSpec({ spec: text, skel: CELL_SKEL }, glaze), cell.note.trim()].filter(Boolean).join(", "));
       /* Câu tự do RỖNG (người dùng xoá sạch dòng) ⇒ rơi về khuôn, KHÔNG ra ô
          không mô tả gì. Bỏ hẳn ô đi thì lưới tụt một bậc và mọi ô sau nhảy chỗ —
          một dòng bị xoá chữ không được kéo theo cả tấm đổi bố cục. */
       const freeSpec = block.mode === "free" ? tidy(serializeDoc(cell.doc as PromptDocNode, freeCtx)) : "";
       const spec = freeSpec || templateSpec;
+      /* CÁCH TÁCH đi cùng đục nền — `mergeElementSkel` là nơi biết luật ấy. Ở chế
+         độ TỰ DO cũng vậy: người dùng viết lại CÂU CHỮ, không viết lại cách slicer
+         cắt ô, nên `matte` vẫn phải theo pill họ bấm.
+         CỠ đè lên `w`/`h` sau cùng; không chọn cỡ ⇒ giữ nguyên khung mặc định. */
+      const size = skelSizeOf(cell.sizeId, cellPx);
+      const skel = mergeElementSkel(CELL_SKEL, { ...glaze, ...(size ?? {}) });
       return {
         file: `${String(k + 1).padStart(2, "0")}-${slugify(cell.elementId) || "o"}`,
         vi: element?.vi ?? cell.elementId,
         spec,
-        skel: { ...CELL_SKEL },
+        skel: { ...skel },
       };
     });
     return {
       id: seriesId("ui", startIndex + i),
+      /* `orient` giữ lại cho engine đời cũ; `canvas` mới là thứ quyết định — xem
+         khối chú thích của `UI_CANVAS`. */
       orient: "landscape",
+      canvas: UI_CANVAS,
       grid,
-      cell_hint: HINT_LANDSCAPE,
+      cell_hint: HINT_SQUARE,
       components: padTo(cells, grid.cols * grid.rows),
     };
   });
@@ -448,11 +489,46 @@ export function composerBlockSheets(
   return out;
 }
 
+/**
+ * PROMPT TỔNG PHONG CÁCH — chính chuỗi đi vào `variant.style`.
+ *
+ * ╔══ VÌ SAO NÓ PHẢI XUẤT RA CHO MÀN HÌNH ĐỌC ═══════════════════════════════╗
+ * ║ Chủ sản phẩm: *"prompt này phải copy cả prompt của phong cách — có prompt  ║
+ * ║ tổng"*. `gen.sh` chèn câu này vào ĐẦU prompt của MỌI tấm, nên nó là câu có ║
+ * ║ sức nặng nhất trong cả bộ kit — và cho tới lượt này nó là câu người dùng   ║
+ * ║ KHÔNG nhìn thấy ở đâu cả: tab Prompt chỉ hiện prompt của tấm, còn khối     ║
+ * ║ Ngữ cảnh chung thì hiện các pill chứ không hiện chuỗi ghép ra.             ║
+ * ║                                                                            ║
+ * ║ Xuất ra ở ĐÂY chứ không dựng lại ở màn: đây là nơi `composerToContract`     ║
+ * ║ dựng nó, và hai bản ghép là hai câu sẽ lệch nhau sau đúng một lượt sửa —   ║
+ * ║ mà lệch ở đây nghĩa là thứ người dùng ĐỌC không phải thứ máy vẽ NHẬN.      ║
+ * ╚════════════════════════════════════════════════════════════════════════════╝
+ */
+export function composerStyleLine(
+  input: ComposerDoc | ComposerState,
+  opts: ComposerContractOptions = {},
+): string {
+  const state = stateOf(input);
+  const presets = opts.presets ?? getPresets();
+  const stylePrompt =
+    contextFreeText(state, presets) ||
+    [
+      phraseOf("style", state.styleId, presets),
+      phraseOf("theme", state.themeValue, presets),
+      describeBrandColors(state.brandColors),
+    ]
+      .filter(Boolean)
+      .join(", ");
+  return buildVariantStyle({
+    stylePrompt,
+    styleAxes: opts.styleAxes ?? defaultStyleAxes(),
+    styleAvoid: opts.styleAvoid ?? "",
+  });
+}
+
 export function composerToContract(input: ComposerDoc | ComposerState, opts: ComposerContractOptions = {}): Contract {
   const state = stateOf(input);
   const presets = opts.presets ?? getPresets();
-  const styleEN = phraseOf("style", state.styleId, presets);
-  const themeEN = phraseOf("theme", state.themeValue, presets);
 
   const sheets: Sheet[] = [];
   const poses: string[] = [];
@@ -483,10 +559,6 @@ export function composerToContract(input: ComposerDoc | ComposerState, opts: Com
    * kit là bộ kit không còn phong cách nào cả — im lặng gửi đi vẽ như thế thì
    * tốn lượt mà ra ảnh không ai nhận ra.
    */
-  const stylePrompt =
-    contextFreeText(state, presets) ||
-    [styleEN, themeEN, describeBrandColors(state.brandColors)].filter(Boolean).join(", ");
-
   return contractSchema.parse({
     schemaVersion: 4,
     sheets,
@@ -494,11 +566,8 @@ export function composerToContract(input: ComposerDoc | ComposerState, opts: Com
       {
         id: MAIN_VARIANT_ID,
         vi: (opts.kitName ?? "").trim() || "Phong cách chính",
-        style: buildVariantStyle({
-          stylePrompt,
-          styleAxes: opts.styleAxes ?? defaultStyleAxes(),
-          styleAvoid: opts.styleAvoid ?? "",
-        }),
+        /* MỘT chỗ dựng câu này, và tab Prompt đọc CHÍNH nó — xem `composerStyleLine`. */
+        style: composerStyleLine(state, { ...opts, presets }),
         styleMode: "prompt",
         brand: {
           /* Composer tả màu bằng CHỮ trong `style` (xem `describeBrandColors`), nhưng

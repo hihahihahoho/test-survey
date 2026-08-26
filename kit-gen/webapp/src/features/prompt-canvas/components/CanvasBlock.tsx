@@ -1,7 +1,10 @@
 import * as React from "react";
-import { AlertCircle, Check, Clock, Loader2, RotateCw, Sparkles, Trash2 } from "lucide-react";
+import { AlertCircle, Check, Clock, Copy, Loader2, RotateCw, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
+import { KitImage } from "@/features/kit/components/KitImage";
+import { copyImageBlob } from "@/features/kit-core/lib/result-copy";
 import {
   DocBlockBody,
   DOC_BLOCK_TITLE,
@@ -19,6 +22,7 @@ import type { Sheet } from "@/lib/types/contract";
 import type { PromptPreviewJob } from "@/lib/types/api";
 import { FALLBACK_POSE, poseViewOf, readPosePill, writePosePill } from "../lib/pose-doc";
 import type { BlockPromptState } from "../lib/block-prompt";
+import { copyProjectImage, copyPromptWithImage, fullPromptText } from "../lib/prompt-copy";
 import type { GenBlockState } from "../lib/gen-queue";
 import { CARD, SECTION_LABEL } from "../lib/ui";
 import { SheetResultSlot } from "./SheetResultSlot";
@@ -56,6 +60,14 @@ export interface CanvasBlockProps {
   onGen: () => void;
   onDequeue: () => void;
   prompt: BlockPromptState;
+  /**
+   * PROMPT TỔNG PHONG CÁCH (`variant.style`) — dựng ở màn, hiện ở tab Prompt.
+   *
+   * Đi bằng prop chứ không tự dựng ở đây: nó là câu của CẢ BỘ KIT (ngữ cảnh chung
+   * + màu thương hiệu), không phải của thẻ này — vỏ thẻ không biết gì về hai thứ
+   * ấy, và cho nó biết là mở đường cho ba thẻ dựng ra ba câu khác nhau.
+   */
+  styleLine: string;
   /** Người dùng MỞ tab Prompt hoặc bấm "Xem lại" — nơi gọi mới đi mạng. */
   onWantPrompt: () => void;
   /** Vân tay nội dung hiện tại — lệch với `prompt.hash` ⇒ bản đang xem đã cũ. */
@@ -71,7 +83,7 @@ export interface CanvasBlockProps {
 const GEN_HINT = "Vẽ ảnh bằng AI — tiêu lượt tạo.";
 
 export function CanvasBlock(props: CanvasBlockProps) {
-  const { projectId, block, sheets, onDelete, gen, onGen, onDequeue, prompt, onWantPrompt, hash, promptBusy } = props;
+  const { projectId, block, sheets, onDelete, gen, onGen, onDequeue, prompt, styleLine, onWantPrompt, hash, promptBusy } = props;
   const [tab, setTab] = React.useState<BlockTab>("compose");
 
   const title = block.kind === "uikit" ? UI_KIT_BLOCK_TITLE : DOC_BLOCK_TITLE[block.kind];
@@ -128,7 +140,15 @@ export function CanvasBlock(props: CanvasBlockProps) {
       {tab === "compose" ? (
         <BlockBody {...props} />
       ) : (
-        <PromptPanel prompt={prompt} stale={stale} canGen={canGen} busy={promptBusy} onWantPrompt={onWantPrompt} />
+        <PromptPanel
+          projectId={projectId}
+          prompt={prompt}
+          styleLine={styleLine}
+          stale={stale}
+          canGen={canGen}
+          busy={promptBusy}
+          onWantPrompt={onWantPrompt}
+        />
       )}
 
       {sheets.length > 0 && (
@@ -249,8 +269,11 @@ function GenControl({ gen, canGen, onGen, onDequeue }: {
    Tab "Prompt"
    ══════════════════════════════════════════════════════════════════════════ */
 
-function PromptPanel({ prompt, stale, canGen, busy, onWantPrompt }: {
+function PromptPanel({ projectId, prompt, styleLine, stale, canGen, busy, onWantPrompt }: {
+  projectId: string;
   prompt: BlockPromptState;
+  /** Prompt tổng phong cách — `variant.style`, câu engine đặt ở đầu MỌI tấm. */
+  styleLine: string;
   stale: boolean;
   canGen: boolean;
   busy: boolean;
@@ -262,6 +285,16 @@ function PromptPanel({ prompt, stale, canGen, busy, onWantPrompt }: {
 
   return (
     <div className="flex flex-col gap-3">
+      {/* PROMPT TỔNG ĐỨNG ĐẦU, hiện NGAY — không đợi engine.
+          ╔══ VÌ SAO NÓ Ở ĐÂY, TRÊN CẢ NÚT «Xem prompt» ═══════════════════════════╗
+          ║ Chủ sản phẩm: *"prompt này phải copy cả prompt của phong cách — có     ║
+          ║ prompt tổng"*. Câu này đi vào ĐẦU prompt của mọi tấm, nên nó là ngữ     ║
+          ║ cảnh để đọc mọi thứ bên dưới. Và nó dựng được TẠI CHỖ (hàm thuần,      ║
+          ║ không cần engine), nên bắt người dùng bấm một nút tốn vài chục giây    ║
+          ║ mới thấy nó là bắt trả giá cho một thứ đã có sẵn trong tay.            ║
+          ╚═══════════════════════════════════════════════════════════════════════╝ */}
+      {styleLine && <StyleLine text={styleLine} />}
+
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-caption text-fg-muted">
           Đây là chữ engine sẽ gửi cho tấm của thẻ này. Xem một lần là chạy engine thật — không tự chạy lại khi bạn gõ.
@@ -313,31 +346,180 @@ function PromptPanel({ prompt, stale, canGen, busy, onWantPrompt }: {
         <p className="text-caption text-warn">Chưa xem trước được: {prompt.missing.join(", ")}</p>
       )}
 
-      {prompt.jobs.map((item) => <OnePrompt key={item.job} item={item} />)}
+      {prompt.jobs.map((item) => (
+        <OnePrompt key={item.job} projectId={projectId} item={item} styleLine={styleLine} />
+      ))}
     </div>
   );
 }
 
-/** Prompt nguyên văn của MỘT tấm + danh sách ảnh sẽ đính kèm. */
-function OnePrompt({ item }: { item: PromptPreviewJob }) {
+/** Khối «Prompt tổng phong cách» — chữ + nút copy riêng. */
+function StyleLine({ text }: { text: string }) {
+  return (
+    /* `border-accent/60` + nền `tint-b` — ĐÚNG cặp mà mọi khối ghi chú nhấn mạnh
+       khác đang dùng (`projects/dialogs/parts.tsx`, `design/safety/DraftBanner`).
+       Không phải chuyện gu: `accent/40` tụt xuống 2.05 tương phản trên nền sáng,
+       dưới ngưỡng 3.0 của cổng `npm run contrast` — viền mờ tới mức người mắt kém
+       không thấy hộp này đóng khung tới đâu. */
+    <div className="rounded-2 border border-accent/60 bg-accent/[var(--kg-tint-b)] px-3 py-2">
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <span className={SECTION_LABEL}>Prompt tổng phong cách</span>
+        <span className="text-caption text-fg-muted">engine đặt câu này ở đầu MỌI tấm</span>
+        <CopyTextButton className="ml-auto" text={text} label="Copy prompt tổng" />
+      </div>
+      <p className="whitespace-pre-wrap text-mono text-fg">{text}</p>
+    </div>
+  );
+}
+
+/** Prompt nguyên văn của MỘT tấm + ảnh sẽ đính kèm + hai đường copy. */
+function OnePrompt({ projectId, item, styleLine }: { projectId: string; item: PromptPreviewJob; styleLine: string }) {
   /* Tên tấm rút ra TRƯỚC rồi mới ghép vào câu: cổng từ cấm §5.4 quét cả biểu thức
      bên trong chuỗi mẫu, nên `${item.sheet}` nằm giữa một câu tiếng Việt bị đọc là
      chữ kỹ thuật lọt ra UI. Rút ra ngoài thì câu chỉ còn chữ người dùng đọc được —
      và cũng dễ đọc hơn. */
   const name = item.sheet || item.job;
+  const text = fullPromptText(styleLine, item.prompt);
+  const [copying, setCopying] = React.useState(false);
+
+  const copyAll = async () => {
+    setCopying(true);
+    try {
+      const res = await copyPromptWithImage(projectId, text, item.attachments);
+      if (res.outcome === "text+image") {
+        toast.success("Đã copy prompt kèm ảnh", {
+          description: res.remainingImages > 0
+            ? `Còn ${res.remainingImages} ảnh nữa — bấm từng nút «Copy ảnh» bên dưới.`
+            : undefined,
+        });
+        return;
+      }
+      /* CHỈ CHỮ ⇒ nói ra ngay trong toast, không để người dùng dán rồi mới phát
+         hiện thiếu ảnh. §3.9: mọi ca lùi bước phải ra chữ. */
+      toast.warning("Mới copy được phần chữ", {
+        description: res.reason ?? "Ảnh đính kèm chưa vào được bộ nhớ tạm — bấm «Copy ảnh» bên dưới.",
+      });
+    } catch (error) {
+      toast.error("Không copy được prompt", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setCopying(false);
+    }
+  };
+
   return (
     <div>
-      <p className="mb-1 text-caption text-fg-muted">{name}</p>
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <p className="text-caption text-fg-muted">{name}</p>
+        <Button variant="secondary" size="sm" className="ml-auto" onClick={copyAll} disabled={copying}>
+          <Copy aria-hidden strokeWidth={1.5} />
+          {item.attachments.length > 0 ? "Copy prompt + ảnh" : "Copy prompt"}
+        </Button>
+      </div>
+      {/* `overflow-auto` là CUỘN, không phải cắt: prompt của một tấm UI kit dài
+          vài chục dòng, và chủ sản phẩm cần đọc được TRỌN VẸN. Trần cao hơn trước
+          (28rem) để phần lớn prompt vào vừa một màn mà không phải cuộn trong cuộn. */}
       <pre
         aria-label={`Prompt của tấm ${name}`}
-        className="max-h-80 overflow-auto whitespace-pre-wrap rounded-2 border border-line-subtle bg-canvas p-3 text-mono text-fg"
+        className="max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-2 border border-line-subtle bg-canvas p-3 text-mono text-fg"
       >
-        {item.prompt}
+        {text}
       </pre>
-      {item.attachments.length > 0 && (
-        <p className="mt-1 text-caption text-fg-muted">Đính kèm: {item.attachments.join(" · ")}</p>
-      )}
+      {item.attachments.length > 0 && <Attachments projectId={projectId} paths={item.attachments} />}
     </div>
+  );
+}
+
+/**
+ * ẢNH ĐÍNH KÈM — thumbnail thật, không phải một dòng tên file.
+ *
+ * Bản trước chỉ liệt kê `skeleton/ui.png · refs/char-lan.png`. Với người đang hỏi
+ * "engine gửi đi cái gì" thì một đường dẫn không trả lời được câu nào: khung xương
+ * có đúng lưới không, ảnh mẫu có đúng con nhân vật không — cả hai chỉ nhìn mới biết.
+ * Ảnh đi qua `KitImage` (transport có header) vì `<img src>` thẳng tới agent trả 403.
+ */
+function Attachments({ projectId, paths }: { projectId: string; paths: readonly string[] }) {
+  return (
+    <div className="mt-2">
+      <p className="mb-1 text-caption text-fg-muted">Đính kèm ({paths.length})</p>
+      <div className="flex flex-wrap gap-3">
+        {paths.map((path, index) => (
+          <figure key={path} className="w-32">
+            <KitImage
+              projectId={projectId}
+              path={path}
+              alt={`Ảnh đính kèm: ${path}`}
+              backdrop="checker"
+              full={false}
+              width={256}
+              className="aspect-square w-32"
+            />
+            <figcaption className="mt-1 truncate text-caption text-fg-muted" title={path}>
+              {path}
+            </figcaption>
+            {/* Ảnh thứ HAI trở đi không kèm được vào lượt copy chung (một
+                `ClipboardItem` chỉ mang được một `image/png`), nên mỗi ảnh có
+                đường riêng. Ảnh đầu cũng có nút — người ta có thể chỉ muốn ảnh. */}
+            <CopyImageButton projectId={projectId} path={path} index={index} />
+          </figure>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CopyImageButton({ projectId, path, index }: { projectId: string; path: string; index: number }) {
+  const [busy, setBusy] = React.useState(false);
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="mt-0.5 w-full"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const blob = await copyProjectImage(projectId, path);
+          const res = await copyImageBlob(blob, path.slice(path.lastIndexOf("/") + 1));
+          if (res.outcome === "clipboard") toast.success(`Đã copy ảnh ${index + 1}`);
+          else toast.warning("Đã tải ảnh về máy", { description: res.reason });
+        } catch (error) {
+          toast.error("Không lấy được ảnh", {
+            description: error instanceof Error ? error.message : String(error),
+          });
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <Copy aria-hidden strokeWidth={1.5} />
+      Copy ảnh {index + 1}
+    </Button>
+  );
+}
+
+/** Copy một đoạn chữ thuần — dùng cho khối prompt tổng. */
+function CopyTextButton({ text, label, className }: { text: string; label: string; className?: string }) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className={className}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          toast.success("Đã copy prompt tổng");
+        } catch (error) {
+          toast.error("Không copy được", {
+            description: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }}
+    >
+      <Copy aria-hidden strokeWidth={1.5} />
+      {label}
+    </Button>
   );
 }
 

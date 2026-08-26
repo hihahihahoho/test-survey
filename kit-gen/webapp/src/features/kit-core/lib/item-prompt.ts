@@ -2,19 +2,24 @@
  * item-prompt.ts — PROMPT THẬT SỰ ĐƯỢC GỬI ĐI, cho MỘT ô.
  *
  * ┌── VÌ SAO CHỈ ĐỌC ────────────────────────────────────────────────────────┐
- * │ Prompt cuối cùng do `gen.sh` dựng (khối python ở dòng 21–145): mỗi tấm    │
- * │ một file `prompts/<variant>-<sheet>.txt`. Module này KHÔNG dựng lại bản   │
- * │ thứ hai của cả file đó — làm vậy là tạo một sự thật song song, và nó sẽ   │
- * │ lệch ngay lần đầu ai đó sửa `gen.sh`. Nó chỉ rút ra ĐÚNG những mảnh mà    │
- * │ contract đang giữ và `gen.sh` chèn NGUYÊN VĂN:                            │
- * │   · dòng đánh số của ô  →  `f"{i + 1}) {spec}"`   (gen.sh:110-115)        │
- * │   · hướng canvas        →  `sheet.orient`         (gen.sh:35)             │
- * │   · loại ô              →  `sheet.cell_hint`      (gen.sh:43)             │
- * │   · dòng phong cách     →  `f"Art style: {s['style']}."` (gen.sh:137)     │
- * │   · ghi chú tấm dáng    →  `sheet.note`           (gen.sh:106)            │
- * │   · câu NỀN ĐEN của ô   →  `skel.matte == "glow"`  (gen.sh:480-488)       │
- * │   · câu TRONG SUỐT của ô →  `skel.matte == "glass"` (gen.sh:489-506)      │
+ * │ Prompt cuối cùng do `gen.sh` dựng (khối python của nó): mỗi tấm một file  │
+ * │ `prompts/<variant>-<sheet>.txt`. Module này KHÔNG dựng lại bản thứ hai    │
+ * │ của cả file đó — làm vậy là tạo một sự thật song song, và nó sẽ lệch ngay │
+ * │ lần đầu ai đó sửa `gen.sh`. Nó chỉ rút ra ĐÚNG những mảnh mà contract     │
+ * │ đang giữ và `gen.sh` chèn NGUYÊN VĂN:                                     │
+ * │   · dòng khổ canvas      →  bảng `CANVAS` của gen.sh (dòng ĐẦU prompt)    │
+ * │   · dòng phong cách      →  `f"Art style: {s['style']}."` — ĐỨNG ĐẦU      │
+ * │   · loại ô               →  `sheet.cell_hint`                             │
+ * │   · dòng đánh số của ô   →  `f"{i + 1}) {spec}"`                          │
+ * │   · ghi chú tấm          →  `sheet.note`                                  │
+ * │   · câu ÁNH SÁNG của ô   →  `skel.matte == "glow"`                        │
+ * │   · câu TRONG SUỐT của ô →  `skel.matte == "glass"`                       │
  * └──────────────────────────────────────────────────────────────────────────┘
+ *
+ * KHÔNG chép các khối HÌNH HỌC và RÀNG BUỘC KỸ THUẬT của engine (safe zone, cấm
+ * caro, cấm chữ…): chúng giống hệt nhau ở mọi ô, nên chép vào đây thì panel dài
+ * gấp mười mà không nói thêm được điều gì về CHÍNH Ô NÀY. Muốn đọc nguyên văn cả
+ * tấm thì có `POST /api/projects/:id/prompt-preview` — nó chạy gen.sh thật.
  *
  * Vì thế UI hiện nó ở dạng **chỉ đọc + nút sao chép**: đây là bằng chứng, không phải
  * một ô nhập thứ hai để người dùng sửa rồi tưởng mình đã đổi được prompt.
@@ -29,6 +34,9 @@ export interface ItemPrompt {
   /** Vị trí ô trong lưới, đếm từ 1 — đúng con số `gen.sh` viết ra đầu dòng. */
   cellNumber: number;
   grid: { cols: number; rows: number };
+  /** Khổ canvas của tấm — `canvas` của contract, đường lùi là `orient` đời cũ. */
+  canvas: "landscape" | "portrait" | "square";
+  /** Đường lùi cho nơi gọi chỉ biết hai khổ; tấm vuông đọc ra "landscape". */
   orient: "landscape" | "portrait";
   cellHint: string;
   /** Dòng mô tả của riêng ô này (`3) glossy red pill button…`). */
@@ -37,8 +45,28 @@ export interface ItemPrompt {
   text: string;
 }
 
-const orientLine = (orient: string) =>
-  orient === "portrait" ? "Canvas orientation: PORTRAIT 1024x1536." : "Canvas orientation: LANDSCAPE 1536x1024.";
+/**
+ * BẢN CHÉP của bảng `CANVAS` trong khối python của `gen.sh` — dòng ĐẦU TIÊN của mọi
+ * prompt. Không suy lại bằng một dòng ba ngôi `orient === "portrait" ? … : …` nữa:
+ * khổ ảnh từng được suy độc lập ở bốn chỗ và thêm một khổ thứ ba là phải sửa đủ bốn.
+ *
+ * 1254×1254 cho ô vuông chứ không phải 1024×1024: tool `image_gen` của codex KHÔNG
+ * có tham số `size` — nó luôn trả ~1,57 triệu pixel và chỉ lái được TỈ LỆ. Đo 685
+ * ảnh thật do tool sinh: 132 ảnh vuông, tất cả đúng 1254×1254, không ảnh nào 1024².
+ */
+const CANVAS_HEADER = {
+  landscape: "LANDSCAPE 1536x1024",
+  portrait: "PORTRAIT 1024x1536",
+  square: "SQUARE 1254x1254",
+} as const;
+
+/** `canvas` thắng `orient` (field đời cũ); chữ lạ rơi về landscape, đúng như engine. */
+export function canvasKindOf(sheet: { canvas?: unknown; orient?: unknown }): keyof typeof CANVAS_HEADER {
+  const key = String(sheet.canvas ?? sheet.orient ?? "landscape").toLowerCase();
+  return key in CANVAS_HEADER ? (key as keyof typeof CANVAS_HEADER) : "landscape";
+}
+
+const orientLine = (kind: keyof typeof CANVAS_HEADER) => `Canvas orientation: ${CANVAS_HEADER[kind]}.`;
 
 /**
  * CHÉP NGUYÊN VĂN đoạn `gen.sh` nối vào `spec` của ô `matte:"glow"` (khối
@@ -123,21 +151,30 @@ export function itemPromptFor(contract: Contract | null | undefined, file: strin
     : isGlassCell(component.skel) ? glassCellPrompt()
       : "";
   const line = `${index + 1}) ${component.spec}${extra}`;
+  const kind = canvasKindOf(sheet);
+  /* PHONG CÁCH ĐỨNG ĐẦU, đúng thứ tự của `gen.sh` từ 26/08/2026 (chủ sản phẩm:
+     "phải copy cả prompt của phong cách, có prompt tổng"). Bản cũ dán `Art style:`
+     xuống CUỐI — mà cuối là chỗ engine đã đo được là thua dòng đứng sát ô, nên
+     preview vừa sai thứ tự vừa dạy người dùng một mô hình sai về thứ hạng. */
   const text = [
-    orientLine(sheet.orient ?? "landscape"),
+    orientLine(kind),
+    "",
+    style ? `Art style: ${style}.` : "",
+    style ? "" : null,
     `Sheet ${sheet.id} · grid ${sheet.grid.cols}×${sheet.grid.rows} · each cell is a ${sheet.cell_hint ?? "cell"}.`,
     "",
     line,
     "",
     sheet.note ?? "",
-    style ? `Art style: ${style}.` : "",
-  ].filter((part, i, all) => !(part === "" && all[i - 1] === "")).join("\n").trim();
+  ].filter((part): part is string => part !== null)
+    .filter((part, i, all) => !(part === "" && all[i - 1] === "")).join("\n").trim();
 
   return {
     sheetId: sheet.id,
     cellNumber: index + 1,
     grid: { cols: sheet.grid.cols, rows: sheet.grid.rows },
-    orient: sheet.orient === "portrait" ? "portrait" : "landscape",
+    canvas: kind,
+    orient: kind === "portrait" ? "portrait" : "landscape",
     cellHint: sheet.cell_hint ?? "cell",
     line,
     text,

@@ -177,9 +177,13 @@ export function uiCellDoc(cell: UiCell, presets: PresetBundle = getPresets()): J
              câu mad-lib, nên gạt công tắc không làm đổi nghĩa của ô. */
           pill("style", cell.styleId || INHERIT),
           text(comma),
-          pill("decor", cell.decor),
+          /* Thứ tự pill ở đây PHẢI khớp `PILL_SLOTS.uikit` — xem chú thích của bảng
+             ấy. Nó cũng khớp thứ tự pill trên dòng ở chế độ khuôn, để gạt công tắc
+             không làm các lựa chọn nhảy chỗ dưới tay người dùng.
+             CỠ (`sizeId`) KHÔNG có mặt: nó không đi vào prompt, xem `UiCell.sizeId`. */
+          pill("glaze", cell.glazeId),
           text(comma),
-          pill("material", cell.materialId),
+          pill("decor", cell.decor),
           ...(note ? [text(`${comma}${note}`)] : []),
         ],
       },
@@ -241,7 +245,12 @@ export function retitleCellDoc(doc: JSONContent, prevEn: string, nextEn: string)
  * nhau thì khó quên hơn.
  */
 export const PILL_SLOTS: Record<"uikit" | "background" | "mascot" | "context", readonly PillKind[]> = {
-  uikit: ["style", "decor", "material"],
+  /* Đổi 08/2026: ô thứ ba `material` → `glaze`, và nó lên đứng thứ hai cùng lượt
+     `uiCellDoc` đổi thứ tự. Bảng và câu khởi điểm phải đi CÙNG NHAU (xem khối chú
+     thích trên) — nhưng ở ĐÂY còn một điều kiện thứ hai, dễ quên hơn: `values`
+     truyền vào `repairPills` (từ `composer-doc.readCell`) cũng phải đổi thứ tự
+     theo. Ba nơi, một thứ tự. */
+  uikit: ["style", "glaze", "decor"],
   background: ["scene", "mood"],
   mascot: ["pose", "expression", "outfit"],
   context: ["theme", "style"],

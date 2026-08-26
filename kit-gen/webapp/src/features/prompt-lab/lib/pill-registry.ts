@@ -1,3 +1,4 @@
+import { GLAZE_PRESETS, glazePhrase } from "@/features/kit-core/lib/glaze";
 import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
 import { EXPRESSIONS, OUTFIT_THEMES, POSES } from "@/features/kit-core/lib/poses";
 import { DECOR_LEVELS, getPresets, type PresetBundle } from "./presets-store";
@@ -28,6 +29,16 @@ export type PillKind =
   | "style"
   | "scene"
   | "mood"
+  /**
+   * ĐỤC NỀN — pill thay cho `material` từ 08/2026. Xem `glaze.ts`.
+   */
+  | "glaze"
+  /**
+   * CHẤT LIỆU — **DI SẢN, chỉ để ĐỌC**. Không còn menu `/` nào chèn nó và không
+   * còn dòng element nào sinh ra nó; nhưng nó đang nằm trong câu tự do của những
+   * dự án có thật, và một `kind` bị xoá khỏi bảng này là một pill hiện ra chữ
+   * trần rồi rụng khỏi prompt mà không ai báo. Giữ để đọc, không quảng cáo.
+   */
   | "material"
   | "decor"
   | "pose"
@@ -79,6 +90,9 @@ const PLACEHOLDER: Record<PillKind, string> = {
   style: "theo phong cách chung",
   scene: "khung cảnh",
   mood: "không khí",
+  /* "Không đục" chứ không phải "đục nền": pill để trống phải nói TRẠNG THÁI đang
+     có (ô đặc), không nói tên của trục. Nhãn trục đã nằm ngay bên trái pill. */
+  glaze: "không đục",
   material: "chất liệu",
   decor: "mức viền",
   pose: "dáng",
@@ -106,6 +120,12 @@ export function pillOptions(kind: PillKind, presets: PresetBundle = getPresets()
 
     case "mood":
       return [...MOODS];
+
+    case "glaze":
+      /* `glazePhrase` chứ không phải `preset.en`: `en` của "Kính trong" RỖNG (câu
+         alpha của nấc kính đã nói trọn), và một dòng phụ trống trơn trong menu là
+         lời hứa "chọn cái này thì không thêm chữ nào" — sai. */
+      return GLAZE_PRESETS.map((preset) => ({ value: preset.id, vi: preset.vi, en: glazePhrase(preset.id) }));
 
     case "material":
       return MATERIAL_PRESETS.map((preset) => ({ value: preset.id, vi: preset.vi, en: preset.en }));

@@ -173,6 +173,16 @@ export const sheetSchema = z
     styles: z.array(z.string()).optional(),
     cell_hint: z.string().optional(),
     orient: z.enum(["landscape", "portrait"]).optional(),
+    /* KHỔ CANVAS CỦA TẤM — field CHÍNH, thay cho `orient` (chỉ có ngang/dọc).
+       Khoá phải khớp ĐÚNG bảng `CANVAS` trong khối python của `gen.sh`; bản chép
+       của bảng đó nằm ở `skeleton-svg.js:sheetSize` và `slice.py:CANVAS`, và agent
+       kiểm cùng tập khoá ở `agent/lib/validate.mjs:CANVAS_KINDS`.
+         landscape → 1536×1024 · portrait → 1024×1536 · square → 1254×1254
+       1254 chứ không phải 1024/2048: tool `image_gen` của codex KHÔNG có tham số
+       `size`, nó luôn trả ~1,57 triệu pixel và chỉ lái được TỈ LỆ — đo 685 ảnh
+       thật thì 132 ảnh vuông đều đúng 1254×1254.
+       `orient` giữ lại để contract đời trước còn chạy; có cả hai thì `canvas` thắng. */
+    canvas: z.enum(["landscape", "portrait", "square"]).optional(),
     note: z.string().optional(),
     /* PROMPT STUDIO — hai trường CHỮ mà `gen.sh` đọc thẳng từ `styles.json`:
        `directive` (gen.sh:760 — chèn một dòng chỉ đạo ngay sau `note`) và

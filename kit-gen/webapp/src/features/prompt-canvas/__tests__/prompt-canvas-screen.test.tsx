@@ -236,6 +236,7 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
         onGen={() => {}}
         onDequeue={() => {}}
         prompt={{ status: "idle", jobs: [], missing: [], message: "", details: [], hash: "" }}
+        styleLine=""
         onWantPrompt={onWantPrompt}
         promptBusy={false}
         hash={hash}
@@ -261,6 +262,7 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
           onGen={() => {}}
           onDequeue={() => {}}
           prompt={{ status: "idle", jobs: [], missing: [], message: "", details: [], hash: "" }}
+          styleLine=""
           onWantPrompt={want}
           promptBusy={false}
           hash="h2"

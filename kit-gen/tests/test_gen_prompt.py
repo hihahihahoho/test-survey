@@ -59,183 +59,257 @@ def render_prompt_text(cfg, name="demo-pose-demo"):
 gen = load_gen_block()
 
 
-class StripFinishTest(unittest.TestCase):
-    """Nhiễm kết cấu 3D vào sheet element (dự án thật hello-368a).
+class KhoiPhongCachDungDauTest(unittest.TestCase):
+    """PROMPT TỔNG PHONG CÁCH PHẢI ĐỨNG ĐẦU, KHÔNG PHẢI CUỐI.
 
-    Art style của dự án là ảnh ref UI kiếm hiệp MỰC HOẠ PHẲNG. Sheet `nen` và
-    `pose-*` (spec không có chữ vật liệu) ra đúng mực hoạ phẳng; sheet `ui` và
-    `dao-cu` ra NHỰA BÓNG 3D — nút viên nang đỏ kẹo vành bevel, nút tròn mái vòm,
-    mảnh ghép đùn khối. Khác nhau đúng ở chỗ dòng ô có chữ 'glossy 3D … bevel'
-    hay không. Câu "do NOT paint them" không gỡ được mồi ⇒ phải XOÁ chữ."""
+    Chủ sản phẩm (26/08/2026): "phải copy cả prompt của phong cách, có prompt tổng".
+    Bản cũ chôn khối `Art style:` ở TẬN CUỐI, sau ~900 dòng hình học — người mở tab
+    Prompt ra đọc thì gặp engine nói về V16 và về hoa lá trước khi gặp một chữ nào
+    của chính mình.
 
-    def strip(self, spec):
-        return gen["strip_finish"](spec)[0]
+    Dời lên đầu chỉ AN TOÀN được nhờ một điều kiện, và điều kiện đó chính là phần
+    còn lại của bản vá: dòng đánh số ở dưới nay chỉ còn DANH TỪ. Chừng nào spec còn
+    tả vật liệu ("glossy 3D candy-red…") thì chữ ở gần ô vẫn thắng chữ ở xa, và đưa
+    phong cách ra xa là tự dâng phần thua. Nên nếu ai đó nhét mô tả vật liệu trở
+    lại element-lib thì hai lớp test này cùng đỏ, không phải một.
+    """
 
-    def test_tu_be_mat_bien_mat_khoi_cau(self):
-        got = self.strip("glossy 3D candy-red capsule button, wide pill shape, "
-                         "soft white top highlight, darker red bevel rim, blank face")
-        for w in ("glossy", "3D", "candy", "bevel"):
-            self.assertNotIn(w.lower(), got.lower(), f"{w} vẫn còn trong spec")
+    def setUp(self):
+        self.txt = render_prompt_text(_cfg(spec="the primary action button"))
 
-    def test_hinh_dang_va_trang_thai_con_nguyen(self):
-        got = self.strip("glossy 3D candy-red capsule button, wide pill shape, "
-                         "soft white top highlight, darker red bevel rim, blank face")
-        for w in ("capsule", "button", "wide pill shape", "rim", "blank face"):
-            self.assertIn(w, got, f"mất hợp đồng hình học: {w}")
+    def test_khoi_phong_cach_nam_trong_dau_prompt(self):
+        i = self.txt.index("ART STYLE")
+        self.assertLess(self.txt[:i].count("\n"), 12,
+                        "khối phong cách bị đẩy xuống lưng chừng prompt")
 
-    def test_tu_ghep_rung_CA_HAI_nua(self):
-        """'candy-red' rụng trọn: candy là bề mặt, red là màu — cả hai đều là style.
+    def test_phong_cach_dung_TRUOC_danh_sach_o(self):
+        self.assertLess(self.txt.index("Art style:"),
+                        self.txt.index("Row 1, left to right"),
+                        "chữ của người dùng phải đến trước danh sách ô")
 
-        Bản trước giữ lại 'red' với lý lẽ "màu là vai trò". Đo được nửa sai của lý
-        lẽ đó: từ màu literal đứng SÁT Ô, đúng vị trí vừa chứng minh là thắng cả
-        khối ưu tiên lẫn khối Art style ⇒ `01-btn-pill-red` ra ĐỎ bất kể bảng màu
-        thương hiệu là gì. Không thể vừa để mệnh lệnh màu cạnh ô vừa mong bảng màu
-        thắng. Spec của element nay chỉ nói NÓ LÀ CÁI GÌ."""
-        got = self.strip("glossy 3D candy-red capsule button")
-        self.assertNotIn("candy", got.lower())
-        self.assertNotIn("red", got.lower())
-        self.assertIn("capsule button", got, "mất luôn danh tính element là hỏng khác")
+    def test_giu_NGUYEN_VAN_cau_nguoi_dung_go(self):
+        self.assertIn("Art style: flat ink.", self.txt)
 
-    def test_thu_hang_SONG_SOT_duoi_dang_VAI_TRO(self):
-        """Nửa ĐÚNG của lý lẽ cũ: 45/46/47-rank-badge chỉ khác nhau ở GOLD/SILVER/
-        BRONZE. Xoá trần là ba huy chương thành y hệt nhau — nên từ màu mang THỨ
-        HẠNG không biến mất, nó được DỊCH sang vai trò rồi phát thành tag riêng."""
-        roles = {}
-        for w in ("GOLD", "SILVER", "BRONZE"):
-            spec, cut = gen["strip_finish"](f"the SAME glossy 3D medal badge in {w} for this place")
-            self.assertNotIn(w.lower(), spec.lower(), "màu literal vẫn phải biến mất")
-            roles[w] = gen["colour_roles"](cut)
-            self.assertTrue(roles[w], f"{w} mất cả vai trò lẫn màu ⇒ ba ô thành một")
-        self.assertEqual(len({tuple(v) for v in roles.values()}), 3,
-                         f"ba hạng phải ra ba vai trò KHÁC nhau, được: {roles}")
+    def test_khong_co_style_thi_NOI_THANG_chu_khong_bia_mot_phong_cach(self):
+        cfg = _cfg()
+        cfg["styles"][0].pop("style")
+        txt = render_prompt_text(cfg)
+        self.assertIn("ART STYLE: none was given", txt)
+        self.assertNotIn("Art style:", txt)
 
-    def test_gioi_tu_mo_coi_bi_don_theo(self):
-        """"badge in GOLD for this place" bỏ mỗi GOLD thì còn "badge in for this
-        place" — câu cụt, và câu cụt là thứ model tự bịa nghĩa để lấp."""
-        got = self.strip("the SAME medal badge in GOLD for this place")
-        self.assertNotIn(" in for ", got)
-        self.assertIn("medal badge", got)
 
-    def test_khong_lat_nguoc_menh_lenh_phu_dinh(self):
-        """'no gloss', 'NO metal or gold rim' — xoá danh từ sau `no` là lật nghĩa."""
-        got = self.strip("the SAME capsule button in DISABLED state: flat "
-                         "desaturated grey, matte, no gloss")
-        self.assertIn("no gloss", got)
-        got2 = self.strip("smooth glossy capsule — absolutely NO outer frame, "
-                          "NO metal or gold rim, NO border")
-        self.assertIn("NO metal or gold rim", got2)
-        self.assertNotIn("glossy", got2)
+class PromptKhongNhiemTest(unittest.TestCase):
+    """PROMPT GỬI MODEL KHÔNG ĐƯỢC MANG CHỮ CỦA RIÊNG ENGINE.
 
-    def test_khong_dung_vao_tu_trang_thai_va_kinh(self):
-        """matte/desaturated = trạng thái disabled; glass/frosted/translucent là
-        hợp đồng của nhánh matte kính trong slice.py."""
-        for w in ("matte", "desaturated", "muted", "translucent", "glass",
-                  "frosted", "vivid", "bright", "dark"):
-            self.assertNotIn(w, gen["FINISH_WORDS"], f"{w} không được phép xoá")
+    ╔══ BỆNH ĐÃ ĐO (chủ sản phẩm, 26/08/2026) ══════════════════════════════════╗
+    ║ "nhìn prompt lỗi này v16???" · "dễ bị nhiễm prompt lắm — audit lại toàn bộ ║
+    ║ prompt đi". Ba họ chữ, ba cái giá khác nhau:                                ║
+    ║  ① NHÃN PHIÊN BẢN NỘI BỘ — "V16 GUIDE CONTRACT", "the nine-element v14+     ║
+    ║    layout". Model không có cách nào biết V16 là gì ⇒ thuần nhiễu token; còn ║
+    ║    người đọc prompt thì kết luận engine đang hỏng.                          ║
+    ║  ② DANH TỪ TRANG TRÍ CỨNG — "flowers, ribbons, tassels, jewels, sparkles    ║
+    ║    and filigree", nhét vào MỌI element của MỌI tấm bất kể phong cách. Với   ║
+    ║    ref là tranh mực hoạ phẳng thì đó là lệnh vẽ thêm hoa và tua rua vào một ║
+    ║    bộ UI không hề có chúng — engine ra lệnh thẩm mỹ, việc của người dùng.   ║
+    ║  ③ KHUNG NGỮ CẢNH CỨNG — "a game UI kit sprite sheet for a mobile mini-game ║
+    ║    marketing campaign": một thể loại + một kênh + một mục đích thương mại,  ║
+    ║    đóng đinh cho mọi dự án dùng engine này.                                 ║
+    ╚═══════════════════════════════════════════════════════════════════════════╝
+    Luật thay thế: engine CHỈ được nói HÌNH HỌC và RÀNG BUỘC KỸ THUẬT. Mọi câu nói
+    về vật liệu / màu / độ bóng / trang trí phải bắt nguồn từ chữ của người dùng.
 
-    def test_menh_de_mat_het_nghia_thi_bo_tron(self):
-        """'gradient face, beveled edge, glossy top highlight' → rác nếu chỉ xoá
-        tính từ. Bỏ trọn mệnh đề, giữ nguyên mệnh đề còn nghĩa."""
-        got = self.strip("small rounded-square 3D plate for one countdown digit, "
-                         "gradient face, beveled edge, glossy top highlight, "
-                         "EMPTY center with no number")
-        self.assertEqual(got, "small rounded-square plate for one countdown digit, "
-                              "EMPTY center with no number")
+    Quét trên PROMPT ĐÃ DỰNG, không quét mã nguồn: chú thích trong gen.sh còn trích
+    nguyên văn mấy câu này để đời sau biết vì sao chúng bị bỏ — và đó là chuyện tốt.
+    """
 
-    def test_khong_xe_cau_trong_ngoac(self):
-        got = self.strip("smooth glossy capsule (the decorated track is a "
-                         "SEPARATE element)")
-        self.assertIn("(the decorated track is a SEPARATE element)", got)
+    def setUp(self):
+        # Dựng đủ mọi nhánh: tấm UI thường, tấm mascot (có ref), tấm nền full-bleed.
+        self.texts = {
+            "ui": render_prompt_text(_cfg(spec="the primary action button")),
+            "mascot": render_prompt_text(_cfg(extra=None, skel={"shape": "pose"})),
+        }
+        cfg = _cfg(spec="the HOME screen background", skel={"shape": "full", "w": 1, "h": 1})
+        self.texts["nen"] = render_prompt_text(cfg)
+        cfg = _cfg(spec="a mascot waving", skel={"shape": "pose"})
+        cfg["sheets"][0]["ref"] = "refs/mascot.png"
+        self.texts["mascot"] = render_prompt_text(cfg)
 
-    def test_spec_khong_co_tu_be_mat_thi_khong_doi_mot_ky_tu(self):
-        cfg = json.loads((ROOT / "styles.json").read_text(encoding="utf-8"))
-        for sh in cfg["sheets"]:
-            for c in sh["components"]:
-                out, cut = gen["strip_finish"](c["spec"])
-                if not cut:
-                    self.assertEqual(out, c["spec"].strip(), c["file"])
+    def _khong_co(self, *cam):
+        for ten, txt in self.texts.items():
+            low = txt.lower()
+            for w in cam:
+                self.assertNotIn(w.lower(), low, f"prompt tấm '{ten}' còn chữ cấm: {w}")
 
-    def test_thu_vien_element_that_khong_con_tu_be_mat_nao(self):
-        """Chạy trên element-lib.json đang ship — thư viện thêm món mới mà lọt
-        chữ kết cấu thì test này đỏ ngay."""
-        lib = json.loads((ROOT / "element-lib.json").read_text(encoding="utf-8"))
+    def test_khong_con_nhan_phien_ban_noi_bo(self):
+        self._khong_co("V16", "V14", "v14+", "nine-element")
+        # Biểu thức, không phải danh sách: "V15"/"v17" của mai sau cũng phải đỏ ngay
+        # thay vì đợi ai đó nhớ ra mà bổ sung vào danh sách trên.
+        for ten, txt in self.texts.items():
+            self.assertIsNone(re.search(r"\bv1[0-9]\b", txt, re.I),
+                              f"prompt tấm '{ten}' còn nhãn phiên bản dạng V1x")
+
+    def test_khong_con_danh_tu_trang_tri_cung(self):
+        self._khong_co("flowers", "ribbons", "tassels", "jewels", "filigree", "sparkles")
+
+    def test_khong_con_khung_ngu_canh_cung(self):
+        self._khong_co("marketing", "mini-game", "campaign")
+
+    def test_khong_con_chat_lieu_lot_vao_cau_hinh_hoc(self):
+        """'enamel' (men sứ) từng núp trong một câu chỉ nói về ĐO ĐẠC:
+        "The continuous enamel/content surface is the CORE". Di chứng của đời prompt
+        kẹo bóng — không ai để ý vì nó nằm trong một câu trông rất kỹ thuật."""
+        self._khong_co("enamel", "glossy", "candy")
+
+    def test_bo_may_gam_chu_da_bi_do_HAN(self):
+        """~250 dòng MATERIAL_WORDS / FINISH_WORDS / strip_finish / preset_words đã
+        bị xoá, và đó là chủ ý chứ không phải quên dọn.
+
+        Bộ máy đó tồn tại vì MỘT lý do: spec của thư viện là mô tả vật liệu cứng,
+        nên engine phải đi gỡ cái mồi do chính nó gieo. Nay spec chỉ còn danh từ ⇒
+        không còn preset nào để hạ cấp, và chữ vật liệu còn sót trong một spec bây
+        giờ là chữ NGƯỜI DÙNG tự chọn (khu soạn prompt cho chọn vật liệu theo ô).
+        Xoá lựa chọn của người dùng là một lỗi, không phải một phép dọn — nên ca này
+        khoá luôn chiều ngược: đừng ai "khôi phục lại cho chắc".
+        """
+        for ten in ("MATERIAL_WORDS", "FINISH_WORDS", "COLOUR_WORDS", "COLOUR_ROLE",
+                    "strip_finish", "preset_words", "colour_roles",
+                    "PRESET_WORD_CAP", "PRESET_CHAR_CAP"):
+            self.assertNotIn(ten, gen, f"{ten} đã bị bỏ — đừng dựng lại")
+
+    def test_spec_di_thang_vao_prompt_KHONG_bi_sua_mot_ky_tu(self):
+        """Hệ quả trực tiếp của việc bỏ bộ máy trên, và là thứ người dùng cảm được:
+        họ gõ gì thì model đọc đúng cái đó."""
+        spec = "a glossy neon-pink popover panel, made of frosted glass"
+        txt = render_prompt_text(_cfg(spec=spec))
+        lines = txt.splitlines()
+        head = next(i for i, l in enumerate(lines) if l.startswith("Row 1, left to right"))
+        self.assertEqual(lines[head + 1], f"1) {spec}")
+
+    def test_engine_van_TUYEN_BO_THU_HANG_thay_vi_viet_lai_chu_cua_ai(self):
+        """Bỏ gặm chữ KHÔNG có nghĩa là bỏ phòng thủ. Thứ thay thế nó là một câu
+        nói về THỨ HẠNG, đặt ngay trên danh sách ô — engine tuyên bố ai thắng ai,
+        engine không viết lại chữ của ai cả."""
+        txt = self.texts["ui"]
+        i = txt.index("Row 1, left to right")
+        head = txt[:i]
+        self.assertIn("NAMES ONLY *WHAT* EACH CELL IS", head)
+        self.assertIn("the ART STYLE outranks it", head)
+        self.assertIn("Geometry always outranks both", head)
+
+
+class BangKhoCanvasTest(unittest.TestCase):
+    """MỘT BẢNG KHỔ DUY NHẤT, VÀ NÓ PHẢI ĐI TỚI DÒNG ĐẦU PROMPT.
+
+    Khổ ảnh từng được suy ĐỘC LẬP ở bốn chỗ (khối python này, `run_one` ở tầng bash,
+    `skeleton-svg.js:sheetSize`, `slice.py:orientation_error`), mỗi chỗ một dòng ba
+    ngôi `orient == "portrait" ? … : …`. Thêm một khổ thứ ba là phải sửa đủ bốn, và
+    chỗ nào quên thì hỏng LẶNG LẼ. Bảng `CANVAS` ở đây là nguồn sự thật; ba chỗ kia
+    hoặc đọc ngược từ dòng đầu prompt, hoặc chép bảng này và trỏ ngược về đây.
+
+    VÌ SAO Ô VUÔNG LÀ 1254x1254 — đã soi binary codex 0.149.0: tool
+    `image_gen.imagegen` có ĐÚNG BA tham số (prompt, referenced_image_paths,
+    num_last_images_to_include) và KHÔNG có `size`. Khổ do backend chọn; model chỉ
+    lái được TỈ LỆ bằng lời văn. Đo 685 ảnh thật tool đã sinh: mọi ảnh đều ≈1.572.864
+    pixel, trong đó 132 ảnh vuông và TẤT CẢ đúng 1254x1254 — không ảnh nào 1024²,
+    không ảnh nào 2048/2040.
+    """
+
+    def test_bang_co_du_ba_kho(self):
+        self.assertEqual(set(gen["CANVAS"]), {"landscape", "portrait", "square"})
+        self.assertEqual(gen["CANVAS"]["square"][:2], (1254, 1254),
+                         "hứa một khổ codex không trả về thì mọi lượt vuông trông như model sai")
+
+    def test_canvas_thang_orient_va_chu_la_roi_ve_landscape(self):
+        self.assertEqual(gen["canvas_of"]({"canvas": "square"})[2], "SQUARE 1254x1254")
+        self.assertEqual(gen["canvas_of"]({"canvas": "square", "orient": "portrait"})[2],
+                         "SQUARE 1254x1254")
+        self.assertEqual(gen["canvas_of"]({"orient": "portrait"})[2], "PORTRAIT 1024x1536")
+        self.assertEqual(gen["canvas_of"]({})[2], "LANDSCAPE 1536x1024")
+        self.assertEqual(gen["canvas_of"]({"canvas": "squre"})[2], "LANDSCAPE 1536x1024")
+
+    def test_kho_di_toi_DONG_DAU_prompt(self):
+        """`run_one` đọc ngược khổ bằng `head -n1 | grep`. Dòng đầu lệch một chữ là
+        mọi tấm dọc/vuông bị gửi đi với 1536x1024."""
+        cfg = _cfg()
+        cfg["sheets"][0]["canvas"] = "square"
+        txt = render_prompt_text(cfg)
+        self.assertEqual(txt.splitlines()[0], "Canvas orientation: SQUARE 1254x1254.")
+        self.assertIn("square 1:1.", txt)
+
+    def test_promptOverride_van_giu_dong_kho(self):
+        """Người dùng tự soạn cả prompt thì engine không nối thêm một chữ nào —
+        NGOẠI TRỪ dòng khổ giấy, vì `run_one` đọc ngược từ đó."""
+        cfg = _cfg()
+        cfg["sheets"][0]["canvas"] = "square"
+        cfg["sheets"][0]["promptOverride"] = "TÔI TỰ SOẠN."
+        txt = render_prompt_text(cfg)
+        self.assertEqual(txt.splitlines()[0], "Canvas orientation: SQUARE 1254x1254.")
+        self.assertIn("TÔI TỰ SOẠN.", txt)
+        self.assertNotIn("ABSOLUTELY NO TEXT", txt)
+
+
+class ThuVienChiCoDANHTUTest(unittest.TestCase):
+    """SPEC CỦA THƯ VIỆN = MỘT DANH TỪ. Chủ sản phẩm: "popover thì chỉ là popover thôi".
+
+    Chạy trên `element-lib.json` ĐANG SHIP: thêm một món mới mà lọt chữ vật liệu thì
+    ca này đỏ ngay, thay vì phải đợi tới lúc nhìn ảnh ra sai phong cách.
+
+    Ràng buộc KỸ THUẬT của ô KHÔNG nằm trong spec: nó nằm ở `skel.matte` và do gen.sh
+    phát ra (matte='glow' ⇒ câu tan-về-alpha-0; matte='glass' ⇒ câu low-alpha
+    see-through). Một nguồn sự thật, engine nói một lần — không chép tay vào 42 dòng.
+    """
+
+    # Chữ VẬT LIỆU / BỀ MẶT / MÀU. Cố ý KHÔNG có từ hình dáng hay trạng thái
+    # (capsule, pill, hollow, outline, open, closed…): những từ đó là hợp đồng
+    # hình học và trạng thái, chúng ĐƯỢC PHÉP ở lại.
+    CAM = {
+        "glossy", "gloss", "matte", "candy", "jelly", "gummy", "plastic", "3d",
+        "metal", "metallic", "chrome", "foil", "velvet", "satin", "silk", "wooden",
+        "papery", "glassy", "ceramic", "porcelain", "marble", "enamel", "lacquer",
+        "rubber", "gel", "frosted", "brushed", "polished", "iridescent",
+        "holographic", "pearlescent", "neon", "pastel", "shiny", "waxy", "specular",
+        "bevel", "beveled", "bevelled", "gradient", "sheen", "creamy", "velvety",
+        "red", "orange", "coral", "gold", "golden", "silver", "bronze", "copper",
+        "blue", "green", "yellow", "purple", "violet", "pink", "crimson", "scarlet",
+        "turquoise", "lime", "navy", "maroon", "peach", "mint", "lavender",
+        "burgundy", "olive", "charcoal", "vivid", "saturated", "luminous",
+    }
+
+    def setUp(self):
+        self.lib = json.loads((ROOT / "element-lib.json").read_text(encoding="utf-8"))
+
+    def test_khong_spec_nao_con_chu_vat_lieu_hay_mau(self):
         bad = []
-        for el in lib["elements"]:
-            out, _ = gen["strip_finish"](el["spec"])
-            words = {w.lower() for w in re.findall(r"[A-Za-z0-9][A-Za-z0-9-]*", out)}
-            # 'gloss' của "no gloss" được cố ý giữ lại (mệnh lệnh phủ định)
-            leak = {w for w in words & gen["FINISH_WORDS"]
-                    if not re.search(r"\b(no|not|never|without|non)\s+%s\b" % w,
-                                     out, re.I)}
+        for el in self.lib["elements"]:
+            words = {w.lower() for w in re.findall(r"[A-Za-z0-9][A-Za-z0-9-]*", el["spec"])}
+            for w in list(words):
+                words |= set(w.split("-"))
+            leak = sorted(words & self.CAM)
             if leak:
-                bad.append((el["file"], sorted(leak)))
-        self.assertEqual(bad, [], "spec thư viện còn chữ kết cấu sau khi lọc")
+                bad.append((el["file"], leak))
+        self.assertEqual(bad, [], "spec thư viện còn chữ thẩm mỹ — phải là DANH TỪ thuần")
 
-    def test_la_tap_con_cua_material_words(self):
-        self.assertTrue(gen["FINISH_WORDS"] <= gen["MATERIAL_WORDS"])
+    def test_spec_ngan_gon_dung_nghia_mot_danh_tu(self):
+        """Không có ngưỡng thần thánh nào ở đây; 140 ký tự chỉ đủ rộng cho một danh
+        từ kèm trạng thái và một mệnh đề phân biệt, và đủ chặt để chặn một đoạn văn
+        tả vật liệu bò về."""
+        dai = [(e["file"], len(e["spec"])) for e in self.lib["elements"] if len(e["spec"]) > 140]
+        self.assertEqual(dai, [], "spec dài quá mức của một danh từ")
 
-    def test_cau_ha_cap_khong_duoc_nhac_lai_chu_da_xoa(self):
-        """Bẫy chí mạng: preset_words() chạy trên spec GỐC thì câu hạ cấp lại
-        đọc to đúng những chữ vừa xoá — mời chúng quay lại prompt."""
-        spec, _ = gen["strip_finish"]("glossy 3D candy-red capsule button, "
-                                      "darker red bevel rim")
-        named = [w.lower() for w in gen["preset_words"](spec)]
-        for w in ("glossy", "3d", "candy", "bevel"):
-            self.assertNotIn(w, named)
-        # Từ MÀU nay cũng đã bị xoá ở bước ① ⇒ không còn gì để nêu tên. Danh sách
-        # rỗng chính là đích: câu hạ cấp chỉ tồn tại cho chữ LỌT LƯỚI từ điển.
-        self.assertNotIn("red", named, "chữ màu đã xoá mà câu hạ cấp còn đọc to là mời nó quay lại")
+    def test_rang_buoc_ky_thuat_o_skel_KHONG_o_spec(self):
+        """Hai ô mang hợp đồng alpha thật sự — và hợp đồng đó phải ở `skel.matte`,
+        vì đó là thứ cả gen.sh lẫn slice.py cùng đọc. Chép vào spec là đẻ ra nguồn
+        sự thật thứ hai, và nó sẽ lệch ngay lần đầu ai sửa một trong hai."""
+        by = {e["file"]: e for e in self.lib["elements"]}
+        self.assertEqual(by["16-fx-burst"]["skel"].get("matte"), "glow")
+        self.assertEqual(by["22-board-panel"]["skel"].get("matte"), "glass")
+        for f in ("16-fx-burst", "22-board-panel"):
+            self.assertNotIn("alpha", by[f]["spec"].lower(), f"{f}: luật alpha đã ở skel.matte")
 
-
-class PresetWordCapTest(unittest.TestCase):
-    """Bẫy `hits[:10]`: `08-progress-fill` đứng đúng 10/10, thêm một từ vật liệu
-    nữa vào spec là từ thứ 11 rơi ÂM THẦM và ô lại ra màu preset."""
-
-    def test_cap_moi_rong_hon_han_cho_dang_dung(self):
-        self.assertGreaterEqual(gen["PRESET_WORD_CAP"], 20)
-        self.assertGreaterEqual(gen["PRESET_CHAR_CAP"], 200)
-
-    def test_o_10_tu_khong_con_cham_cap(self):
-        spec = ("wide jelly glossy vivid warm orange-to-coral gradient bar with a "
-                "bright specular metal streak and a gold rim")
-        with contextlib.redirect_stderr(io.StringIO()) as err:
-            got = gen["preset_words"](spec, "ô thử")
-        self.assertEqual(len(got), 10)
-        self.assertIn("gold", got, "từ thứ 10 phải còn nguyên")
-        self.assertEqual(err.getvalue(), "", "không được cảnh báo khi chưa chạm cap")
-
-    def test_moi_spec_that_trong_styles_json_deu_khong_bi_cat(self):
-        cfg = json.loads((ROOT / "styles.json").read_text(encoding="utf-8"))
-        with contextlib.redirect_stderr(io.StringIO()) as err:
-            for sh in cfg["sheets"]:
-                for c in sh["components"]:
-                    gen["preset_words"](c["spec"], c["file"])
-        self.assertEqual(err.getvalue(), "",
-                         "có spec đang bị cắt âm thầm — nới cap hoặc rút spec")
-
-    def test_vuot_cap_thi_keu_ra_stderr_kem_ten_o_va_tu_bi_bo(self):
-        words = ["glossy", "candy", "jelly", "metal", "chrome", "foil", "velvet",
-                 "satin", "silk", "wood", "paper", "glass", "ceramic", "marble",
-                 "stone", "enamel", "rubber", "frosted", "brushed", "polished",
-                 "neon", "pastel", "shiny", "waxy", "crimson", "turquoise"]
-        spec = "a pill with " + " ".join(words)
-        with contextlib.redirect_stderr(io.StringIO()) as err:
-            got = gen["preset_words"](spec, "ipay-main ô 8 (08-progress-fill)")
-        msg = err.getvalue()
-        self.assertEqual(len(got), gen["PRESET_WORD_CAP"])
-        self.assertTrue(msg, "cắt từ mà im lặng — đúng cái bẫy phải bỏ")
-        self.assertIn("08-progress-fill", msg, "cảnh báo phải chỉ ra Ô NÀO")
-        for dropped in words[gen["PRESET_WORD_CAP"]:]:
-            self.assertIn(dropped, msg, "phải liệt kê đúng từ bị bỏ")
-
-    def test_cap_ky_tu_cung_chan_va_bao(self):
-        spec = "a pill with " + " ".join(["holographic"] * 1 + ["iridescent",
-                "pearlescent", "desaturated", "translucent", "metallic",
-                "bevelled", "turquoise", "burgundy", "lavender", "charcoal",
-                "colourful", "saturated", "porcelain", "specular", "beveled"])
-        with contextlib.redirect_stderr(io.StringIO()):
-            got = gen["preset_words"](spec, "x")
-        self.assertLessEqual(sum(len(w) + 2 for w in got), gen["PRESET_CHAR_CAP"])
+    def test_o_glow_va_glass_van_nhan_dung_cau_ky_thuat_tu_engine(self):
+        for matte, dau in (("glow", "LIGHT EFFECT"), ("glass", "SEE-THROUGH ELEMENT")):
+            txt = render_prompt_text(_cfg(spec="a radial light burst", skel={"matte": matte}))
+            self.assertIn(dau, txt, f"ô matte={matte} mất câu kỹ thuật của engine")
 
 
 class AttachmentListTest(unittest.TestCase):
@@ -399,7 +473,7 @@ class MauThuongHieuTest(unittest.TestCase):
         }],
         "sheets": [{
             "id": "pose-demo", "grid": {"cols": 1, "rows": 1},
-            "components": [{"file": "01-thing", "spec": "glossy 3D candy-red capsule button",
+            "components": [{"file": "01-thing", "spec": "the primary action button",
                             "skel": {"shape": "rrect", "w": 0.8, "h": 0.6}}],
         }],
     }
@@ -412,30 +486,48 @@ class MauThuongHieuTest(unittest.TestCase):
     def test_va_logo_van_duoc_dinh_kem(self):
         self.assertIn("refs/logo.png", render_prompt_files(self.CFG))
 
+    # Prompt ngắt dòng ở ~86 cột, nên câu nào cũng có thể bị cắt giữa chừng. Cái
+    # phải khớp là CHỮ, không phải chỗ xuống dòng — y hệt mẹo `flat()` mà ca mirror
+    # bên webapp (`cell-background.test.tsx`) đã phải dùng, và vì cùng một lý do.
+    @staticmethod
+    def _lien(txt):
+        return re.sub(r"\s+", " ", txt)
+
     def test_co_khoi_phan_xu_mau_va_no_dat_bang_mau_len_dau(self):
         txt = render_prompt_text(self.CFG)
         self.assertIn("COLOUR AUTHORITY", txt)
-        i = txt.index("COLOUR AUTHORITY")
-        self.assertIn("BRAND PALETTE above is the source of every colour", txt[i:])
-        self.assertIn("They do NOT decide hue", txt[i:],
+        sau = self._lien(txt[txt.index("COLOUR AUTHORITY"):])
+        self.assertIn("brand palette above is the source of every colour", sau)
+        self.assertIn("They do NOT decide hue", sau,
                       "ảnh ref phải quyết lối vẽ, không quyết màu")
 
-    def test_dong_o_khong_con_mot_chu_mau_nao(self):
-        """Đây là điều chủ sản phẩm yêu cầu: spec của element chỉ tả ĐẶC TÍNH."""
+    def test_engine_KHONG_con_viet_lai_spec_cua_nguoi_dung(self):
+        """CA NÀY ĐÃ ĐỔI HẲN Ý NGHĨA — đọc kỹ trước khi "sửa cho xanh".
+
+        Bản cũ tên là `test_dong_o_khong_con_mot_chu_mau_nao`: nó nạp một spec vật
+        liệu ("glossy 3D candy-red capsule button") rồi đòi engine GẶM sạch chữ màu
+        khỏi dòng ô. Bộ máy gặm chữ đó (`strip_finish`/`preset_words`, ~250 dòng) đã
+        bị bỏ, và bỏ có lý do: nó tồn tại chỉ vì THƯ VIỆN tự ra lệnh vật liệu, tức
+        engine đi gỡ cái mồi do chính nó gieo. Nay thư viện chỉ còn danh từ
+        (`ThuVienChiCoDANHTUTest` canh điều đó), nên chữ vật liệu còn sót lại trong
+        một spec là chữ NGƯỜI DÙNG tự chọn — và gặm chữ của người dùng là một lỗi.
+
+        Nên yêu cầu của chủ sản phẩm được giữ ở CHỖ KHÁC: spec đi thẳng, nguyên vẹn;
+        còn thứ hạng thì engine TUYÊN BỐ ngay trên danh sách ô.
+        """
         txt = render_prompt_text(self.CFG)
-        # Lấy dòng ô THẬT: nó là dòng ngay sau tiêu đề hàng, không phải mọi "1) "
-        # trong prompt (khối neo hình học cũng đánh số kiểu đó).
         lines = txt.splitlines()
         head = next(i for i, l in enumerate(lines) if l.startswith("Row 1, left to right"))
-        dong_o = lines[head + 1]
-        for w in ("red", "candy", "glossy", "3D"):
-            self.assertNotIn(w.lower(), dong_o.lower(), f"dòng ô còn chữ style: {w}")
-        self.assertIn("capsule button", dong_o, "mất luôn danh tính element là hỏng khác")
+        self.assertEqual(lines[head + 1], "1) " + self.CFG["sheets"][0]["components"][0]["spec"],
+                         "spec của người dùng phải đi thẳng vào prompt, không bị sửa")
+        truoc = txt[:txt.index("Row 1, left to right")]
+        self.assertIn("the ART STYLE outranks it", truoc,
+                      "bỏ gặm chữ thì phải còn câu tuyên bố thứ hạng, không thì mất cả hai")
 
     def test_khong_co_brand_thi_khong_bia_ra_dong_mau(self):
         cfg = json.loads(json.dumps(self.CFG))
         cfg["styles"][0]["brand"] = {"refs": ["refs/logo.png"]}
         txt = render_prompt_text(cfg)
         self.assertNotIn("Brand palette:", txt)
-        i = txt.index("COLOUR AUTHORITY")
-        self.assertIn("decide both the rendering AND the palette", txt[i:])
+        sau = self._lien(txt[txt.index("COLOUR AUTHORITY"):])
+        self.assertIn("decide both the rendering AND the palette", sau)

@@ -5,6 +5,13 @@ import { RE_SHEET_ID, RE_VARIANT_ID, RE_COMPONENT_FILE } from "./paths.mjs"
 /* Đúng tập shape mà silhouettes.js vẽ được (dòng 87–125) + "rect" cho contract nhập từ ngoài. */
 const SHAPES = new Set(["empty", "pose", "pill", "bar", "rrect", "rect", "circle", "burst", "puzzle", "figure", "full"])
 
+/* Khổ canvas — ĐÚNG tập khoá của bảng `CANVAS` trong khối python của gen.sh
+   (và bản chép của nó ở skeleton-svg.js + slice.py). Thêm khổ mới thì sửa cả bốn. */
+const CANVAS_KINDS = new Set(["landscape", "portrait", "square"])
+/* `orient` là field ĐỜI TRƯỚC và cố ý KHÔNG có "square": tấm vuông phải khai qua
+   `canvas`. Giữ hẹp để không có hai đường cùng nói một điều. */
+const ORIENT_KINDS = new Set(["landscape", "portrait"])
+
 export function validateContract(contract) {
   const errors = []
   const warnings = []
@@ -43,6 +50,18 @@ export function validateContract(contract) {
       if (sh?.[k] !== undefined && sh[k] !== null && typeof sh[k] !== "string")
         E("SCHEMA", `${path}.${k}`, `${k} must be a string`)
     }
+
+    /* KHỔ CANVAS CỦA TẤM. `canvas` là field chính; `orient` (đời cũ, chỉ có
+       landscape/portrait) vẫn hợp lệ và vẫn được engine đọc làm đường lùi.
+       CHẶN Ở ĐÂY vì chuỗi lạ KHÔNG nổ ở tầng dưới — cả gen.sh lẫn skeleton-svg.js
+       lẫn slice.py đều rơi về landscape khi không nhận ra chữ, nên một lỗi gõ
+       ("squre") đi xuyên cả đường ống rồi mới hiện ra thành một tấm sai khổ mà
+       không ai giải thích được. Là ERROR chứ không phải warning: người dùng đã
+       chọn khổ vuông thì nhận về khổ ngang là sai hợp đồng, không phải "gần đúng". */
+    if (sh?.canvas !== undefined && sh.canvas !== null && !CANVAS_KINDS.has(String(sh.canvas)))
+      E("SCHEMA", `${path}.canvas`, `canvas must be one of ${[...CANVAS_KINDS].join(", ")}`)
+    if (sh?.orient !== undefined && sh.orient !== null && !ORIENT_KINDS.has(String(sh.orient)))
+      E("SCHEMA", `${path}.orient`, `orient must be one of ${[...ORIENT_KINDS].join(", ")}`)
 
     const cols = Number(sh?.grid?.cols), rows = Number(sh?.grid?.rows)
     if (!Number.isInteger(cols) || cols < 1 || cols > 8) E("SCHEMA", `${path}.grid.cols`, "cols must be 1..8")

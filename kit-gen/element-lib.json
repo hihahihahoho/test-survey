@@ -1,10 +1,10 @@
 {
-  "_note": "Thư viện element cho studio — sheet UI dàn trang ĐỘNG từ selection. cell: landscape (ô 4:cột ngang 3:2) | portrait | full. group: các element phải liền kề (spec 'SAME as previous'). sheetHint: tên sheet ưu tiên khi cả chunk cùng group. Thứ tự trong file = thứ tự dàn trang (07 track và 08 fill cách xa nhau có chủ đích).",
+  "_note": "Thư viện element cho studio — sheet UI dàn trang ĐỘNG từ selection. cell: landscape (ô 4:cột ngang 3:2) | portrait | full. group: các element phải liền kề (spec 'SAME as previous'). sheetHint: tên sheet ưu tiên khi cả chunk cùng group. Thứ tự trong file = thứ tự dàn trang (07 track và 08 fill cách xa nhau có chủ đích). LUẬT SPEC (26/08/2026): spec là một DANH TỪ + trạng thái, KHÔNG có thuộc tính thẩm mỹ. Không tính từ vật liệu (glossy, 3D, candy, foil…), không tên màu (red, gold…), không mô tả bề mặt/ánh sáng. Diện mạo đến từ phong cách người dùng chọn; spec chỉ trả lời 'ô này LÀ CÁI GÌ'. Ràng buộc KỸ THUẬT của ô không nằm trong spec mà nằm ở skel: skel.matte='glow' (gen.sh nối câu tan-về-alpha-0) và skel.matte='glass' (gen.sh nối câu low-alpha see-through) — một nguồn sự thật, engine phát ra, không chép tay vào 42 dòng spec.",
   "elements": [
     {
       "file": "01-btn-pill-red",
       "vi": "Nút đỏ (CTA)",
-      "spec": "glossy 3D candy-red capsule button, wide pill shape, soft white top highlight, darker red bevel rim, blank face",
+      "spec": "the primary action button",
       "skel": {
         "shape": "pill",
         "w": 0.78,
@@ -16,7 +16,7 @@
     {
       "file": "02-btn-pill-blue",
       "vi": "Nút xanh",
-      "spec": "glossy 3D azure-blue capsule button, wide pill shape, cyan rim light, gradient from light blue top to deep blue bottom, blank face",
+      "spec": "the secondary action button",
       "skel": {
         "shape": "pill",
         "w": 0.78,
@@ -28,7 +28,7 @@
     {
       "file": "03-btn-pill-outline",
       "vi": "Nút viền",
-      "spec": "wide capsule outline button, thick glowing stroke, fully hollow see-through interior, soft outer glow, no fill",
+      "spec": "an outline button, hollow and see-through inside",
       "skel": {
         "shape": "pill",
         "w": 0.78,
@@ -40,7 +40,7 @@
     {
       "file": "16-fx-burst",
       "vi": "Hiệu ứng nổ sáng",
-      "spec": "radial light burst with four-point sparkles and soft golden rays, centered explosion; the glow must be perfectly SMOOTH and CLEAN — no film grain, no noise texture, no patchy haze: every ray and the halo fade evenly to FULL TRANSPARENCY (alpha 0) at their outer edge, keeping the light's own colour while the alpha drops, and the whole burst stays inside the cell",
+      "spec": "a radial light burst",
       "skel": {
         "shape": "burst",
         "w": 0.6,
@@ -53,7 +53,7 @@
     {
       "file": "07-progress-track",
       "vi": "Progress: máng",
-      "spec": "empty horizontal capsule groove, dark inset well, thin light outer rim, hollow interior, no fill inside",
+      "spec": "an empty progress bar track",
       "skel": {
         "shape": "bar",
         "w": 0.84,
@@ -65,7 +65,7 @@
     {
       "file": "04-btn-circle",
       "vi": "Nút tròn",
-      "spec": "round glossy button plate, 3D dome, EMPTY center with no icon, light rim highlight top-left, soft drop shadow",
+      "spec": "a round icon button",
       "skel": {
         "shape": "circle",
         "w": 0.55,
@@ -77,7 +77,7 @@
     {
       "file": "11-digit-plate",
       "vi": "Ô số đếm ngược",
-      "spec": "small rounded-square 3D plate for one countdown digit, gradient face, beveled edge, glossy top highlight, EMPTY center with no number",
+      "spec": "a countdown digit plate",
       "skel": {
         "shape": "rrect",
         "w": 0.38,
@@ -90,7 +90,7 @@
     {
       "file": "10-popup-ribbon",
       "vi": "Ruy băng tiêu đề",
-      "spec": "ornate 3D banner ribbon plate for a modal heading, slight upward arc, bright outline, empty blank face",
+      "spec": "a heading banner for a dialog",
       "skel": {
         "shape": "rrect",
         "w": 0.84,
@@ -102,7 +102,7 @@
     {
       "file": "12-piece-active",
       "vi": "Mảnh ghép sáng",
-      "spec": "single jigsaw puzzle piece with one tab and one blank, vivid saturated colorful glossy 3D surface, bright rim light",
+      "spec": "a jigsaw puzzle piece, unlocked",
       "skel": {
         "shape": "puzzle",
         "w": 0.48,
@@ -114,7 +114,7 @@
     {
       "file": "13-piece-locked",
       "vi": "Mảnh ghép khoá",
-      "spec": "jigsaw puzzle piece with IDENTICAL outline and silhouette as the previous piece, but locked state: flat desaturated grey, matte, faint inner edge, no highlight",
+      "spec": "the same jigsaw puzzle piece, locked",
       "skel": {
         "shape": "puzzle",
         "w": 0.48,
@@ -126,7 +126,7 @@
     {
       "file": "05-tab-chip-idle",
       "vi": "Tab thường",
-      "spec": "rounded-square glassy tab chip, muted translucent dark tone, thin light border, flat empty face",
+      "spec": "a tab chip, unselected",
       "skel": {
         "shape": "rrect",
         "w": 0.42,
@@ -139,7 +139,7 @@
     {
       "file": "06-tab-chip-active",
       "vi": "Tab đang chọn",
-      "spec": "tab chip with the SAME shape and size as the previous chip, but selected state: bright glowing border, luminous fill, outer bloom",
+      "spec": "the same tab chip, selected",
       "skel": {
         "shape": "rrect",
         "w": 0.42,
@@ -152,7 +152,7 @@
     {
       "file": "08-progress-fill",
       "vi": "Progress: thanh chạy",
-      "spec": "the plain INNER filling of a progress bar, ONLY the sliding jelly bar itself: smooth glossy capsule, vivid warm orange-to-coral gradient, bright specular streak along the top, rounded caps — absolutely NO outer frame, NO metal or gold rim, NO border, NO ornaments, flowers or charms (the decorated track is a SEPARATE element)",
+      "spec": "the inner fill bar of a progress bar, with no track or frame around it (the track is a separate element)",
       "skel": {
         "shape": "bar",
         "w": 0.78,
@@ -164,7 +164,7 @@
     {
       "file": "14-reward-voucher",
       "vi": "Quà voucher",
-      "spec": "3D voucher coupon ticket token with perforated notch on both sides, glossy foil surface, tilted slightly, empty blank face",
+      "spec": "a voucher coupon ticket",
       "skel": {
         "shape": "rrect",
         "w": 0.64,
@@ -176,7 +176,7 @@
     {
       "file": "15-reward-giftbox",
       "vi": "Quà hộp",
-      "spec": "3D wrapped gift box with ribbon bow, glossy paper, floating slightly with soft shadow below",
+      "spec": "a closed gift box",
       "skel": {
         "shape": "rrect",
         "w": 0.48,
@@ -187,7 +187,7 @@
     {
       "file": "09-popup-panel-short",
       "vi": "Popup ngang (S/M)",
-      "spec": "rounded rectangle modal panel, landscape orientation, decorative double border, clean corners, flat EVEN interior fill suitable for stretching, empty inside",
+      "spec": "a popover panel, landscape",
       "skel": {
         "shape": "rrect",
         "w": 0.84,
@@ -200,7 +200,7 @@
     {
       "file": "24-popup-panel-tall",
       "vi": "Popup dọc (L)",
-      "spec": "tall rounded rectangle modal panel, portrait orientation, decorative double border, soft inner vignette, empty interior",
+      "spec": "a popover panel, portrait",
       "skel": {
         "shape": "rrect",
         "w": 0.78,
@@ -213,7 +213,7 @@
     {
       "file": "20-game-object-closed",
       "vi": "Túi quà đóng",
-      "spec": "sealed glossy foil gift pouch standing upright, crimped top and bottom edges, plain circular emblem centered on the front, blank wrapper",
+      "spec": "a sealed gift pouch",
       "skel": {
         "shape": "rrect",
         "w": 0.62,
@@ -225,7 +225,7 @@
     {
       "file": "21-game-object-open",
       "vi": "Túi quà mở",
-      "spec": "the SAME foil gift pouch but torn open at the top, wrapper edges flared outward, bright golden light spilling from inside, empty interior visible",
+      "spec": "the same gift pouch, torn open at the top",
       "skel": {
         "shape": "rrect",
         "w": 0.62,
@@ -237,7 +237,7 @@
     {
       "file": "22-board-panel",
       "vi": "Khay đựng túi",
-      "spec": "rounded-square translucent glass tray panel, glowing border with bracket corners, frosted interior, completely empty, no grid lines; the glass is GENUINELY see-through: draw the frosted interior with a LOW ALPHA value so the transparent sheet background shows through it (never paint the interior opaque white, never fake it with a pale wash)",
+      "spec": "a background panel",
       "skel": {
         "shape": "rrect",
         "w": 0.8,
@@ -251,7 +251,7 @@
     {
       "file": "35-input-field",
       "vi": "Ô nhập liệu",
-      "spec": "flat rounded input field with a light inner well and subtle inner shadow, thin border, completely empty",
+      "spec": "an input field",
       "skel": {
         "shape": "rrect",
         "w": 0.8,
@@ -264,7 +264,7 @@
     {
       "file": "36-select-field",
       "vi": "Ô chọn (select)",
-      "spec": "the SAME input field but as a dropdown select: a small down-pointing chevron arrow plate attached at the right end",
+      "spec": "the same input field as a dropdown select, with a chevron at the right end",
       "skel": {
         "shape": "rrect",
         "w": 0.8,
@@ -277,7 +277,7 @@
     {
       "file": "37-checkbox-on",
       "vi": "Checkbox bật",
-      "spec": "small rounded-square checkbox in CHECKED state with a bold tick mark inside, glossy 3D",
+      "spec": "a checkbox, checked",
       "skel": {
         "shape": "rrect",
         "w": 0.3,
@@ -289,7 +289,7 @@
     {
       "file": "38-checkbox-off",
       "vi": "Checkbox tắt",
-      "spec": "the SAME checkbox UNCHECKED: empty inner well, no tick",
+      "spec": "the same checkbox, unchecked",
       "skel": {
         "shape": "rrect",
         "w": 0.3,
@@ -301,7 +301,7 @@
     {
       "file": "39-toggle-on",
       "vi": "Toggle bật",
-      "spec": "pill toggle switch in ON state, round knob on the RIGHT, bright vivid fill, glossy",
+      "spec": "a toggle switch, on, knob at the right",
       "skel": {
         "shape": "pill",
         "w": 0.44,
@@ -313,7 +313,7 @@
     {
       "file": "40-toggle-off",
       "vi": "Toggle tắt",
-      "spec": "the SAME toggle switch OFF: knob on the LEFT, muted grey fill",
+      "spec": "the same toggle switch, off, knob at the left",
       "skel": {
         "shape": "pill",
         "w": 0.44,
@@ -325,7 +325,7 @@
     {
       "file": "41-btn-close",
       "vi": "Nút đóng",
-      "spec": "small round close button with a bold diagonal cross mark, 3D glossy dome",
+      "spec": "a round close button with a cross mark",
       "skel": {
         "shape": "circle",
         "w": 0.42,
@@ -338,7 +338,7 @@
     {
       "file": "42-btn-back",
       "vi": "Nút back",
-      "spec": "the SAME style small round button with a bold left-pointing arrow instead of the cross",
+      "spec": "the same round button with a left arrow instead of the cross",
       "skel": {
         "shape": "circle",
         "w": 0.42,
@@ -351,7 +351,7 @@
     {
       "file": "43-btn-pill-pressed",
       "vi": "Nút CTA nhấn",
-      "spec": "wide capsule button in PRESSED state: same shape as this kit's main CTA button but darker, pushed-in look, shorter highlight",
+      "spec": "the primary action button, pressed",
       "skel": {
         "shape": "pill",
         "w": 0.78,
@@ -364,7 +364,7 @@
     {
       "file": "44-btn-pill-disabled",
       "vi": "Nút CTA disabled",
-      "spec": "the SAME capsule button in DISABLED state: flat desaturated grey, matte, no gloss",
+      "spec": "the primary action button, disabled",
       "skel": {
         "shape": "pill",
         "w": 0.78,
@@ -377,7 +377,7 @@
     {
       "file": "45-rank-badge-1",
       "vi": "Huy chương #1",
-      "spec": "round 1st-place medal badge with gold laurel wreath, blank center face",
+      "spec": "a first-place rank medal",
       "skel": {
         "shape": "circle",
         "w": 0.4,
@@ -390,7 +390,7 @@
     {
       "file": "46-rank-badge-2",
       "vi": "Huy chương #2",
-      "spec": "the SAME medal badge in SILVER for 2nd place",
+      "spec": "the same rank medal, second place",
       "skel": {
         "shape": "circle",
         "w": 0.4,
@@ -403,7 +403,7 @@
     {
       "file": "47-rank-badge-3",
       "vi": "Huy chương #3",
-      "spec": "the SAME medal badge in BRONZE for 3rd place",
+      "spec": "the same rank medal, third place",
       "skel": {
         "shape": "circle",
         "w": 0.4,
@@ -416,7 +416,7 @@
     {
       "file": "48-rank-row",
       "vi": "Hàng BXH",
-      "spec": "wide leaderboard row bar: rounded strip with a circular avatar slot on the left and long empty space for name and score, subtle even fill",
+      "spec": "a leaderboard row with an avatar slot at the left",
       "skel": {
         "shape": "bar",
         "w": 0.86,
@@ -429,7 +429,7 @@
     {
       "file": "49-rank-row-self",
       "vi": "Hàng BXH của mình",
-      "spec": "the SAME leaderboard row but HIGHLIGHTED as the current player: glowing bright border and brighter fill",
+      "spec": "the same leaderboard row, highlighted as the current player",
       "skel": {
         "shape": "bar",
         "w": 0.86,
@@ -442,7 +442,7 @@
     {
       "file": "50-counter-pill",
       "vi": "Counter lượt/xu",
-      "spec": "small capsule counter chip with a circular icon slot on one end and empty space for a number, glossy",
+      "spec": "a counter chip with an icon slot at one end",
       "skel": {
         "shape": "pill",
         "w": 0.6,
@@ -455,7 +455,7 @@
     {
       "file": "51-reward-giftbox-open",
       "vi": "Quà hộp MỞ",
-      "spec": "a wrapped gift box with the SAME design as this kit's gift box but OPEN: lid tilted off, golden light rays and sparkles rising from inside",
+      "spec": "the same gift box, open",
       "skel": {
         "shape": "rrect",
         "w": 0.6,
@@ -467,7 +467,7 @@
     {
       "file": "52-envelope-body",
       "vi": "Lì xì: thân",
-      "spec": "the FRONT BODY of a lucky-money envelope WITHOUT its top flap: upright rectangle with a straight top edge, ornate trim and emblem, blank face — the separate flap piece is another element",
+      "spec": "the body of a lucky-money envelope, without its top flap",
       "skel": {
         "shape": "rrect",
         "w": 0.55,
@@ -479,7 +479,7 @@
     {
       "file": "53-envelope-flap",
       "vi": "Lì xì: nắp",
-      "spec": "ONLY the detached triangular TOP FLAP of the SAME envelope, pointing downward, matching design and trim exactly, nothing else",
+      "spec": "only the detached top flap of the same envelope",
       "skel": {
         "shape": "rrect",
         "w": 0.55,
@@ -491,7 +491,7 @@
     {
       "file": "54-trophy-cup",
       "vi": "Cúp vô địch",
-      "spec": "golden champion trophy cup with two handles on a small base, glossy, blank plaque",
+      "spec": "a trophy cup",
       "skel": {
         "shape": "rrect",
         "w": 0.6,
@@ -503,7 +503,7 @@
     {
       "file": "25-bg-home",
       "vi": "Nền màn HOME",
-      "spec": "vertical mobile game HOME screen background: welcoming hero scene with a stage or podium area in the lower half for game objects, decorative side framing, clear empty upper-middle area reserved for a title, rich but not noisy detail, NO characters, NO creatures, NO UI widgets, fills the whole image edge to edge",
+      "spec": "the HOME screen background of the game, with no characters and no UI widgets",
       "skel": {
         "shape": "full",
         "w": 1.0,
@@ -515,7 +515,7 @@
     {
       "file": "26-bg-play",
       "vi": "Nền màn CHƠI",
-      "spec": "vertical mobile game GAMEPLAY background of the SAME world: calmer and more open than the home scene, soft depth, large uncluttered middle area where gameplay objects will sit, matching palette and lighting, NO characters, NO creatures, NO UI widgets, fills the whole image edge to edge",
+      "spec": "the GAMEPLAY background of the same game, with no characters and no UI widgets",
       "skel": {
         "shape": "full",
         "w": 1.0,

@@ -111,8 +111,19 @@ export type KitElementSkel = {
   /** Mức trong của ô kính. Chỉ được nối vào prompt khi ô THẬT SỰ đang là kính. */
   glassLevel?: GlassLevel;
   /**
-   * CHẤT LIỆU của ô — id preset (`materials.ts`) hoặc chính cụm tiếng Anh người dùng
-   * tự gõ. Nối vào `spec` khi dựng contract; xem `resolveElementSpec()`.
+   * ĐỤC NỀN của ô — id trong `glaze.ts` (`""`/vắng = nền đặc).
+   *
+   * Đây là trục THAY CHO `material` từ 08/2026 (chủ sản phẩm: *"chất liệu bỏ, nó ăn
+   * theo style; chỉ có option đục nền"*). Nó tự mang theo `matte` + mức kính, nên
+   * chọn nó là chọn CẢ cách tách lẫn câu prompt — xem `GLAZE_PRESETS`.
+   */
+  glaze?: string;
+  /**
+   * CHẤT LIỆU của ô — **DI SẢN, chỉ còn để ĐỌC bản nháp cũ**.
+   *
+   * Không còn UI nào ghi trường này. Lúc dựng contract nó được dịch sang `glaze` gần
+   * nhất (`glazeFromMaterial`) chứ không còn tự nối cụm chữ thẩm mỹ vào `spec` —
+   * xem khối chú thích đầu `glaze.ts` để biết vì sao cụm chữ ấy phải biến mất.
    */
   material?: string;
   /**

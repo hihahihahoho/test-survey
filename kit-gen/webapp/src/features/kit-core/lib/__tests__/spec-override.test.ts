@@ -125,6 +125,8 @@ describe("ý kiến 4 — chất liệu nối vào mô tả, mức kính chỉ n
     expect(new Set(MATERIAL_PRESETS.map((m) => m.id)).size).toBe(MATERIAL_PRESETS.length);
   });
 
+  /* Bảng chất liệu CÒN NGUYÊN (di sản: bản nháp cũ mang id của nó, và
+     `glazeFromMaterial` tra ngược qua đây), nên hai ca hình dạng vẫn phải xanh. */
   it("chất liệu trong suốt gợi ý `glass`, chất liệu phát sáng gợi ý `glow`, chất liệu đục gợi ý `none`", () => {
     expect(materialPreset("glass")!.suggestedMatte).toBe("glass");
     expect(materialPreset("ice")!.suggestedMatte).toBe("glass");
@@ -134,22 +136,53 @@ describe("ý kiến 4 — chất liệu nối vào mô tả, mức kính chỉ n
     expect(materialPreset("gold-metal")!.suggestedMatte).toBe("none");
   });
 
-  it("preset ⇒ contract nối ĐÚNG cụm tiếng Anh của preset vào sau mô tả", () => {
+  /**
+   * ══ 08/2026 — CHẤT LIỆU ĐÃ RỜI `spec`, ĐỤC NỀN THAY CHỖ ═══════════════════
+   * Chủ sản phẩm: *«Chất liệu → bỏ, nó ăn theo style mà. Chỉ có option ĐỤC NỀN»*.
+   * Nên ba ca dưới đổi kỳ vọng chứ không bị xoá: chúng vẫn đi TRỌN đường tới
+   * `components[].spec` (đúng tinh thần đầu file), chỉ khác ở chỗ thứ đi vào đó
+   * nay là câu về ĐỘ XUYÊN THẤU, không phải câu tả bề mặt.
+   */
+  it("chất liệu ĐỤC (gỗ · đá · kim loại) KHÔNG còn nói gì trong `spec`", () => {
     const c = build(withSkel(PLAIN.file, { material: "gold-metal" }));
-    expect(cellOf(c, PLAIN.file)?.spec).toBe(`${PLAIN.spec}, polished gold metal, warm reflections`);
+    /* Thẩm mỹ nay do prompt tổng phong cách lo — nhắc lại ở từng ô là dạy máy vẽ
+       rằng mỗi element có chất liệu riêng, ngược hẳn ý "một bộ nhận diện". */
+    expect(cellOf(c, PLAIN.file)?.spec).toBe(PLAIN.spec);
   });
 
-  it("chất liệu TỰ GÕ đi vào nguyên văn — id preset và câu tự gõ dùng chung một trường", () => {
+  it("chất liệu TỰ GÕ cũng không còn đi vào `spec` — không có đục nền nào tra ra từ nó", () => {
     const c = build(withSkel(PLAIN.file, { material: "brushed copper with soft patina" }));
-    expect(cellOf(c, PLAIN.file)?.spec).toContain("brushed copper with soft patina");
+    expect(cellOf(c, PLAIN.file)?.spec).toBe(PLAIN.spec);
+    /* `materialPhrase` vẫn còn (di sản, có nơi khác đọc) nhưng KHÔNG còn ai nối
+       kết quả của nó vào contract. Ca này khoá đúng điều đó. */
     expect(materialPhrase("brushed copper with soft patina")).toBe("brushed copper with soft patina");
     expect(materialPhrase("")).toBe("");
   });
 
-  it("chất liệu bám theo MÔ TẢ ĐÃ SỬA, không bám theo mô tả thư viện", () => {
+  it("chất liệu TRONG SUỐT đời cũ ⇒ dịch sang đục nền, bám theo MÔ TẢ ĐÃ SỬA", () => {
     const c = build(withSkel(PLAIN.file, { spec: "a hexagon token", material: "ice" }));
-    expect(cellOf(c, PLAIN.file)?.spec)
-      .toBe("a hexagon token, carved from translucent glacial ice, frosty surface with a cool inner glow");
+    const spec = cellOf(c, PLAIN.file)!.spec;
+    expect(spec.startsWith("a hexagon token,")).toBe(true);
+    /* Câu về độ xuyên thấu — KHÔNG phải câu tả bề mặt băng của bảng chất liệu cũ. */
+    expect(spec).toContain(GLASS_LEVEL_SPEC.tinted);
+    expect(spec).not.toContain("glacial");
+  });
+
+  it("đục nền tự kéo theo `matte`, kể cả khi lớp đè chỉ khai mỗi nó", () => {
+    const c = build(withSkel(PLAIN.file, { glaze: "glow" }));
+    const cell = cellOf(c, PLAIN.file)!;
+    /* Nửa PROMPT… */
+    expect(cell.spec).toContain("emits its own light");
+    /* …và nửa SLICER. Thiếu nửa này là bệnh `research-glow-extraction` gọi tên. */
+    expect((cell.skel as Record<string, unknown>).matte).toBe("glow");
+  });
+
+  it("`matte` khai TAY thắng `matte` của đục nền — người bấm nút thắng preset", () => {
+    const c = build(withSkel(PLAIN.file, { glaze: "ice", matte: "none" }));
+    const cell = cellOf(c, PLAIN.file)!;
+    expect((cell.skel as Record<string, unknown>).matte).toBeUndefined();
+    /* Ô đã về nền đặc ⇒ KHÔNG nói câu alpha nữa (cùng luật với mức kính bị giữ). */
+    expect(cell.spec).not.toContain("alpha about");
   });
 
   it("ba mức kính có câu riêng, và câu ấy vào contract khi ô đang là kính", () => {
@@ -176,26 +209,27 @@ describe("ý kiến 4 — chất liệu nối vào mô tả, mức kính chỉ n
     expect(cellOf(off, "03-btn-pill-outline")?.spec).not.toContain("alpha about");
   });
 
-  it("chất liệu + mức kính cùng có ⇒ mô tả · chất liệu · mức kính, đúng thứ tự đó", () => {
-    const c = build(withSkel(PLAIN.file, { material: "glass", matte: "glass", glassLevel: "frosted" }));
+  it("đục nền + mức kính khai tay ⇒ mô tả · câu đục nền · mức kính KHAI TAY", () => {
+    const c = build(withSkel(PLAIN.file, { glaze: "glass-gradient", matte: "glass", glassLevel: "frosted" }));
     expect(cellOf(c, PLAIN.file)?.spec).toBe(
-      `${PLAIN.spec}, made of clear polished glass, crisp specular highlights, ${GLASS_LEVEL_SPEC.frosted}`,
+      `${PLAIN.spec}, its transparency fades from top to bottom, ${GLASS_LEVEL_SPEC.frosted}`,
     );
   });
 
-  it("chữ chất liệu/mức kính KHÔNG rò vào `skel` của contract (đó là chỗ của slicer)", () => {
-    const c = build(withSkel(PLAIN.file, { material: "ice", matte: "glass", glassLevel: "clear" }));
+  it("chữ đục nền/mức kính KHÔNG rò vào `skel` của contract (đó là chỗ của slicer)", () => {
+    const c = build(withSkel(PLAIN.file, { glaze: "ice", matte: "glass", glassLevel: "clear" }));
     const skel = cellOf(c, PLAIN.file)!.skel as Record<string, unknown>;
     expect(skel.matte).toBe("glass");
+    expect(skel.glaze).toBeUndefined();
     expect(skel.material).toBeUndefined();
     expect(skel.glassLevel).toBeUndefined();
     expect(skel.spec).toBeUndefined();
   });
 
-  it("preview của ô nhận cả chất liệu lẫn mức kính (không phải một bản dựng lại)", () => {
-    const c = build(withSkel(PLAIN.file, { material: "fire", matte: "glow" }));
+  it("preview của ô nhận cả đục nền lẫn mức kính (không phải một bản dựng lại)", () => {
+    const c = build(withSkel(PLAIN.file, { glaze: "glow" }));
     const prompt = itemPromptFor(c, PLAIN.file)!;
-    expect(prompt.line).toContain("wreathed in stylized flames");
+    expect(prompt.line).toContain("emits its own light");
     expect(prompt.line).toContain("LIGHT EFFECT"); // câu glow của gen.sh vẫn nối sau cùng
   });
 

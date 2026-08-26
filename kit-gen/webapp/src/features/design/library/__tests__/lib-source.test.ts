@@ -112,7 +112,16 @@ describe("nhóm + tìm kiếm (đóng issue audit «42 ô không tìm kiếm đ�
   it("tìm được theo tên file, theo nhãn VI, và theo mô tả", () => {
     expect(filterViews(views, { query: "42-btn-back", group: "all" })).toHaveLength(1);
     expect(filterViews(views, { query: "huy chương", group: "all" }).length).toBeGreaterThanOrEqual(3);
-    expect(filterViews(views, { query: "capsule", group: "all" }).length).toBeGreaterThan(0);
+    /* ĐỪNG ĐÓNG ĐINH MỘT TỪ CỦA `spec` VÀO ĐÂY. Bản trước gõ thẳng "capsule" và ca
+       đỏ ngay ngày spec được dọn (26/08/2026: spec đổi từ mô tả vật liệu sang DANH
+       TỪ thuần — "the primary action button" thay cho "glossy 3D candy-red capsule
+       button"). Thứ ca này phải chứng minh là ĐƯỜNG TÌM có đọc tới `spec`, không
+       phải là thư viện có chứa đúng chữ nào. Nên lấy một từ RA TỪ CHÍNH dữ liệu rồi
+       tìm ngược lại — luôn đúng, và vẫn đỏ nếu ai đó cắt `spec` khỏi phép tìm. */
+    const target = loadBundledV2().elements.find((e) => e.file === "48-rank-row")!;
+    const word = target.spec.split(/\s+/).find((w) => w.length > 6 && !/[^a-z]/i.test(w))!;
+    expect(word, "spec của 48-rank-row phải còn ít nhất một từ tìm được").toBeTruthy();
+    expect(filterViews(views, { query: word, group: "all" }).map((v) => v.file)).toContain("48-rank-row");
   });
 
   it("lọc nhóm cắt đúng, và lọc + tìm cộng dồn được", () => {

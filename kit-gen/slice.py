@@ -74,7 +74,21 @@ def in_boxes(x, y, boxes):
     return any(l <= x < r and t <= y < b for l, t, r, b in boxes)
 
 
-def orientation_error(orient, W, H):
+# Khổ mong đợi theo khai báo của sheet — BẢN CHÉP của bảng `CANVAS` trong khối
+# python của gen.sh. Đừng suy lại từ `orient` bằng một dòng ba ngôi nữa: khổ ảnh
+# từng được suy ĐỘC LẬP ở bốn chỗ (gen.sh, run_one, skeleton-svg.js, file này) và
+# thêm một khổ thứ ba là phải sửa đủ bốn — chỗ nào quên thì hỏng lặng lẽ.
+# 1254x1254 cho ô vuông chứ không phải 1024x1024: tool image_gen của codex KHÔNG
+# có tham số `size`, nó luôn trả ~1,57 triệu pixel; đo 685 ảnh thật thì 132 ảnh
+# vuông đều đúng 1254x1254.
+CANVAS = {
+    "landscape": (1536, 1024),
+    "portrait": (1024, 1536),
+    "square": (1254, 1254),
+}
+
+
+def orientation_error(orient, W, H, canvas=None):
     """Ảnh raw có đúng khổ mà sheet đã khai không? Trả câu lỗi, hoặc None nếu đúng.
 
     VÌ SAO TÁCH RA: phép chia lưới ở cuối file lấy ĐẠI kích thước ảnh nhận được rồi
@@ -83,18 +97,23 @@ def orientation_error(orient, W, H):
     chỉ báo SAU KHI đã cắt, tức là đã tiêu tiền sinh ảnh rồi mới biết. Sự cố 21/08/2026.
 
     Ngưỡng 10%: đủ rộng cho vài pixel làm tròn của model, đủ chặt để bắt cả ảnh VUÔNG
-    (tỉ lệ 1.0 lệch 33% so với 1.5 và 50% so với 0.667) lẫn ảnh lộn hướng.
+    (tỉ lệ 1.0 lệch 33% so với 1.5 và 50% so với 0.667) lẫn ảnh lộn hướng. Với sheet
+    khai VUÔNG thì ngưỡng đó lật ngược lại đúng như vậy: ảnh ngang/dọc bị bắt.
+
+    `canvas` là field mới ("landscape"|"portrait"|"square") và THẮNG `orient`; sheet
+    đời cũ chỉ có `orient` nên nó vẫn được đọc làm đường lùi.
     """
     if not H:
         return f"anh cao 0px ({W}x{H})"
-    want_portrait = orient == "portrait"
-    want_ratio = (2 / 3) if want_portrait else (3 / 2)
+    key = str(canvas or orient or "landscape").lower()
+    if key not in CANVAS:
+        key = "landscape"
+    want_w, want_h = CANVAS[key]
+    want_ratio = want_w / want_h
     got_ratio = W / H
     if want_ratio * 0.9 <= got_ratio <= want_ratio * 1.1:
         return None
-    want_name = "portrait" if want_portrait else "landscape"
-    want_size = "1024x1536" if want_portrait else "1536x1024"
-    return f"sheet khai {want_name} ({want_size}) nhung anh la {W}x{H}"
+    return f"sheet khai {key} ({want_w}x{want_h}) nhung anh la {W}x{H}"
 
 
 SOLID_ALPHA = 240      # từ mức này trở lên coi là ĐỤC HẲN — xem alpha_sheet
@@ -974,7 +993,7 @@ if __name__ == "__main__":
             # Ảnh cắt ra trông "bị kéo cao", còn cờ QA thì chỉ báo lệch SAU KHI đã cắt —
             # tức là đã tiêu tiền sinh ảnh và đã đẻ ra hàng chục file rác. Sự cố thật
             # ngày 21/08/2026. Chặn ở đây: sai hướng thì BỎ QUA sheet, nói rõ phải làm gì.
-            orient_err = orientation_error(sh.get("orient"), W, H)
+            orient_err = orientation_error(sh.get("orient"), W, H, sh.get("canvas"))
             if orient_err:
                 print(f"⚠ bỏ qua {job}: {orient_err}. Cắt lưới {COLS}x{ROWS} trên khổ "
                       f"sai sẽ ra ô méo — sinh lại sheet này thay vì dùng ảnh hiện có.")

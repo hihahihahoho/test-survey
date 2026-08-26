@@ -1,7 +1,9 @@
 import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { GENRE_PRESETS } from "@/features/kit-core/lib/genre-presets";
+import { glazeFromMaterial } from "@/features/kit-core/lib/glaze";
 import { EXPRESSIONS, POSES } from "@/features/kit-core/lib/poses";
+import { slugify } from "@/lib/types/contract";
 import { api } from "@/lib/api/endpoints";
 import { qk, useUserLibrary } from "@/lib/hooks";
 import type { LibraryPreset } from "@/lib/types/api";
@@ -55,15 +57,34 @@ export interface StylePreset {
   en: string;
 }
 
-/** Một loại element của bộ UI kit — thứ sinh ra các nút "+ Nút bấm", "+ Popover"… */
+/**
+ * Một loại element của bộ UI kit — thứ sinh ra các nút "+ Nút bấm", "+ Popover"…
+ *
+ * ╔══ `en` LÀ MỘT DANH TỪ, KHÔNG PHẢI MỘT CÂU MÔ TẢ ═════════════════════════╗
+ * ║ Chủ sản phẩm, khi nhìn thấy "a rounded background panel for a dialog" và  ║
+ * ║ "a floating popover panel with a title bar" trên màn: *"KHÔNG có thuộc    ║
+ * ║ tính nhé… làm theo kiểu composition, popover thì chỉ là popover thôi."*   ║
+ * ║                                                                          ║
+ * ║ Ba tính từ trong một danh mục là ba quyết định thẩm mỹ bị đóng cứng vào   ║
+ * ║ MỌI bộ kit dùng nó: "rounded" đá nhau với một style góc cạnh, "floating"  ║
+ * ║ đá nhau với một popover dán mép màn hình, "with a title bar" thì thêm hẳn ║
+ * ║ một bộ phận người dùng không xin. Thẩm mỹ đến từ prompt tổng phong cách + ║
+ * ║ pill người dùng bấm; danh mục chỉ trả lời "món này TÊN LÀ GÌ".            ║
+ * ║ Luật thành văn: `en` là DANH TỪ (cụm danh từ), không mạo từ, không tính   ║
+ * ║ từ thẩm mỹ. Đúng hình dạng mà `element-lib.json` của engine đang đổi về.  ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
 export interface ElementPreset {
   id: string;
   vi: string;
+  /** DANH TỪ tiếng Anh đi vào `spec` của ô — xem khối chú thích trên. */
   en: string;
   /** Mức viền/trang trí áp sẵn khi thêm ô này (1–7). */
   decor: number;
-  /** Id chất liệu áp sẵn; rỗng = chưa chọn. */
-  materialId: string;
+  /** Id đục nền áp sẵn (`glaze.ts`); rỗng = nền đặc. */
+  glazeId: string;
+  /** Cỡ safe zone áp sẵn (`cell-size.ts`); rỗng = theo hệ thống. */
+  sizeId: string;
 }
 
 export interface MascotPreset {
@@ -110,15 +131,18 @@ export function seedPresets(): PresetBundle {
        kit-core mô tả từng ô bằng chữ tự do, không bằng loại). Nên đây là danh
        mục MỚI của lab — và chính vì nó là mới nên nó phải sửa được, không được
        đóng cứng. Đúng thứ trang preset sinh ra để trả lời. */
+    /* `en` = DANH TỪ THUẦN, `sizeId` = cỡ hay gặp của chính món đó. Cỡ là thứ
+       DUY NHẤT còn được áp sẵn theo loại element, vì nó là hình học chứ không
+       phải thẩm mỹ: một bảng nền vốn to hơn một huy hiệu ở mọi phong cách. */
     elements: [
-      { id: "button", vi: "Nút bấm", en: "a primary action button with a centered label", decor: 4, materialId: "" },
-      { id: "popover", vi: "Popover", en: "a floating popover panel with a title bar", decor: 5, materialId: "" },
-      { id: "healthbar", vi: "Thanh máu", en: "a horizontal health bar with a filled track", decor: 3, materialId: "" },
-      { id: "coin", vi: "Icon tiền", en: "a coin currency icon seen from a slight angle", decor: 2, materialId: "gold-metal" },
-      { id: "avatar-frame", vi: "Khung avatar", en: "a circular avatar frame with a rim", decor: 5, materialId: "" },
-      { id: "panel", vi: "Bảng nền", en: "a rounded background panel for a dialog", decor: 4, materialId: "" },
-      { id: "badge", vi: "Huy hiệu", en: "a small badge with a number counter", decor: 3, materialId: "" },
-      { id: "progress", vi: "Thanh tiến trình", en: "a segmented progress bar with a knob", decor: 3, materialId: "" },
+      { id: "button", vi: "Nút bấm", en: "button", decor: 4, glazeId: "", sizeId: "m" },
+      { id: "popover", vi: "Popover", en: "popover", decor: 5, glazeId: "", sizeId: "xl" },
+      { id: "healthbar", vi: "Thanh máu", en: "health bar", decor: 3, glazeId: "", sizeId: "l" },
+      { id: "coin", vi: "Icon tiền", en: "coin icon", decor: 2, glazeId: "", sizeId: "s" },
+      { id: "avatar-frame", vi: "Khung avatar", en: "avatar frame", decor: 5, glazeId: "", sizeId: "m" },
+      { id: "panel", vi: "Bảng nền", en: "panel", decor: 4, glazeId: "", sizeId: "xl" },
+      { id: "badge", vi: "Huy hiệu", en: "badge", decor: 3, glazeId: "", sizeId: "s" },
+      { id: "progress", vi: "Thanh tiến trình", en: "progress bar", decor: 3, glazeId: "", sizeId: "l" },
     ],
 
     /* Mascot: ghép dáng + biểu cảm có sẵn thành vài "nhân vật mẫu" để trang
@@ -163,7 +187,17 @@ function payloadOf(kind: PresetKind, preset: AnyPreset): PresetPayload {
   /* `key` là id bundle — lý do #2 ở đầu file. Nó phải nằm TRONG `data` vì `id`
      của bản ghi thuộc về server (agent tự sinh, client không được chọn). */
   const base: Record<string, unknown> = { key: preset.id, en: preset.en };
-  if (kind === "element") return { kind, name: preset.vi, data: { ...base, decor: preset.decor ?? 4, materialId: preset.materialId ?? "" } };
+  if (kind === "element") {
+    return {
+      kind,
+      name: preset.vi,
+      /* `materialId` KHÔNG còn được ghi: trường ấy đã chết cùng pill Chất liệu.
+         Bản ghi cũ trên workspace vẫn còn nó cho tới lượt PATCH đầu tiên — và
+         `toBundle` dịch nó sang `glazeId` khi đọc, nên không có khoảng nào mà
+         người dùng mất lựa chọn. */
+      data: { ...base, decor: preset.decor ?? 4, glazeId: preset.glazeId ?? "", sizeId: preset.sizeId ?? "" },
+    };
+  }
   if (kind === "mascot") return { kind, name: preset.vi, data: { ...base, refName: preset.refName ?? "" } };
   return { kind, name: preset.vi, data: base };
 }
@@ -173,6 +207,33 @@ function str(data: Record<string, unknown>, field: string, fallback = ""): strin
   const value = data[field];
   return typeof value === "string" ? value : fallback;
 }
+
+/**
+ * DI TRÚ CHỮ: mô tả có thuộc tính (đời trước) → DANH TỪ THUẦN.
+ *
+ * ╔══ VÌ SAO PHẢI CÓ BẢNG NÀY, DÙ HẠT GIỐNG ĐÃ ĐỔI ═════════════════════════╗
+ * ║ Hạt giống chỉ gieo MỘT LẦN, vào một kho rỗng. Mọi workspace đã mở app     ║
+ * ║ trước hôm nay đang giữ tám bản ghi với `en` là câu mô tả cũ — và           ║
+ * ║ `seedOnce` cố ý KHÔNG ghi đè chúng (bản trên server có thể đã được người   ║
+ * ║ dùng sửa). Không có bảng này thì chủ sản phẩm mở lại đúng máy đang test    ║
+ * ║ vẫn thấy "a floating popover panel with a title bar" — đúng câu vừa bị      ║
+ * ║ than, sau một lượt sửa mà anh ấy được báo là đã xong.                     ║
+ * ║                                                                          ║
+ * ║ Bảng khớp NGUYÊN VĂN, không đoán bằng regex: chỉ tám chuỗi do CHÍNH ta    ║
+ * ║ ghi ra mới bị đổi. Người dùng tự sửa một chữ trong đó ⇒ không khớp ⇒ chữ   ║
+ * ║ của họ được giữ nguyên, luôn luôn.                                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+const LEGACY_ELEMENT_EN: Record<string, string> = {
+  "a primary action button with a centered label": "button",
+  "a floating popover panel with a title bar": "popover",
+  "a horizontal health bar with a filled track": "health bar",
+  "a coin currency icon seen from a slight angle": "coin icon",
+  "a circular avatar frame with a rim": "avatar frame",
+  "a rounded background panel for a dialog": "panel",
+  "a small badge with a number counter": "badge",
+  "a segmented progress bar with a knob": "progress bar",
+};
 
 function toBundle(rows: readonly LibraryPreset[]): PresetBundle {
   const bundle: PresetBundle = { styles: [], elements: [], mascots: [] };
@@ -185,10 +246,17 @@ function toBundle(rows: readonly LibraryPreset[]): PresetBundle {
     if (row.kind === "style") bundle.styles.push({ id, vi: row.name, en });
     else if (row.kind === "element") {
       const decor = Number(data.decor);
+      /* Bản ghi đời trước chỉ có `materialId` ⇒ dịch sang đục nền gần nhất.
+         Bản ghi đời nay có `glazeId` ⇒ nó thắng, kể cả khi rỗng (rỗng là một
+         lựa chọn: "nền đặc"), nên phải hỏi `"glazeId" in data` chứ không phải
+         `str(...) || fallback` — nếu không thì bỏ đục nền là nó tự quay lại. */
+      const glazeId = "glazeId" in data ? str(data, "glazeId") : glazeFromMaterial(str(data, "materialId"));
       bundle.elements.push({
-        id, vi: row.name, en,
+        id, vi: row.name,
+        en: LEGACY_ELEMENT_EN[en] ?? en,
         decor: Number.isFinite(decor) ? decor : 4,
-        materialId: str(data, "materialId"),
+        glazeId,
+        sizeId: str(data, "sizeId"),
       });
     } else if (row.kind === "mascot") bundle.mascots.push({ id, vi: row.name, en, refName: str(data, "refName") });
     /* `material` / `outfit` là hai `kind` agent chấp nhận nhưng lab CHƯA dùng.
@@ -242,6 +310,51 @@ export function setPresets(next: PresetBundle): void {
   dirty = true;
   emit();
   scheduleFlush();
+}
+
+/**
+ * ELEMENT NGƯỜI DÙNG TỰ ĐẶT TÊN — «Tự đặt tên…» trong hộp tra danh mục.
+ *
+ * ╔══ VÌ SAO NÓ VÀO THẲNG DANH MỤC, KHÔNG PHẢI MỘT TRƯỜNG RIÊNG CỦA DÒNG ════╗
+ * ║ Đường kia (giữ tên ngay trên `UiCell`) nghe gọn hơn nhưng đẻ ra hai loại  ║
+ * ║ dòng element: loại tra được trong danh mục và loại không. Mọi chỗ đọc tên ║
+ * ║ (`cellLine`, `uiCellDoc`, `uiKitSheets`, pill tên, ô tìm kiếm) sẽ phải    ║
+ * ║ nhớ hỏi cả hai nguồn — và chỗ nào quên thì hiện ra một id trần.           ║
+ * ║ Vào danh mục thì nó là một element như mọi element: đổi loại được, tìm    ║
+ * ║ được, dùng lại ở thẻ khác, và sửa/xoá được ở trang «Quản lý preset».      ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ══ TÊN VI VÀ DANH TỪ EN LÀ HAI TRƯỜNG, DÙ THƯỜNG BẰNG NHAU ════════════════
+ * Người dùng gõ tiếng Anh thì một chuỗi làm cả hai việc. Gõ tiếng Việt thì `vi`
+ * là chữ họ đọc trên màn, còn `en` là chữ đi tới máy vẽ — và ta KHÔNG dịch hộ:
+ * dịch máy một danh từ chuyên ngành ("khiên chắn" → "shield"? "barrier"?) là
+ * đoán, mà đoán sai thì máy vẽ ra một món khác hẳn. Nên `en` mặc định là NGUYÊN
+ * chuỗi ấy (model đa ngữ đọc được tiếng Việt), và nơi gọi có quyền đưa `en` riêng.
+ *
+ * Trả về preset đã tạo. Trùng tên với một element đã có ⇒ trả về CHÍNH element ấy,
+ * không đẻ bản thứ hai: hai dòng cùng tên trong danh mục là hai dòng không phân
+ * biệt được, và người dùng gõ lại đúng tên cũ là đang muốn dùng lại nó.
+ */
+export function addCustomElement(name: string, enInput?: string): ElementPreset | null {
+  const vi = name.trim();
+  if (!vi) return null;
+  const en = (enInput ?? "").trim() || vi;
+  const bundle = getPresets();
+
+  const same = bundle.elements.find((element) => element.vi.toLowerCase() === vi.toLowerCase());
+  if (same) return same;
+
+  /* Id đi thẳng vào TÊN FILE của ô trong contract (`uiKitSheets` slug hoá nó), nên
+     nó phải an toàn ngay từ lúc sinh: `slugify` bỏ dấu tiếng Việt và mọi ký tự lạ.
+     Tiền tố `tu-dat` để phân biệt với id của danh mục gốc, và hậu tố số để hai
+     tên khác nhau mà cùng slug ("Nút X" / "Nút x") không đè lên nhau. */
+  const base = `tu-dat-${slugify(vi)}`;
+  let id = base;
+  for (let n = 2; bundle.elements.some((element) => element.id === id); n += 1) id = `${base}-${n}`;
+
+  const preset: ElementPreset = { id, vi, en, decor: 4, glazeId: "", sizeId: "" };
+  setPresets({ ...bundle, elements: [...bundle.elements, preset] });
+  return preset;
 }
 
 /** Xoá kho, quay về hạt giống — nút "Khôi phục mặc định" của trang preset. */

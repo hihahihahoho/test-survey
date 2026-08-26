@@ -4,8 +4,9 @@ import { Link } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
-import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
+import { GLAZE_PRESETS } from "@/features/kit-core/lib/glaze";
 
+import { SIZE_PRESETS } from "./lib/cell-size";
 import {
   DECOR_LEVELS,
   resetPresets,
@@ -193,12 +194,12 @@ export function PresetsScreen() {
 
         <Section
           title="Element của bộ UI"
-          description="Sinh ra các nút “+ Nút bấm / + Popover…” trong block Bộ UI, kèm mức viền và chất liệu áp sẵn."
+          description="Sinh ra các món trong block Bộ UI, kèm mức viền · đục nền · cỡ áp sẵn."
           onAdd={() =>
             patch({
               elements: [
                 ...presets.elements,
-                { id: newId("element"), vi: "Element mới", en: "", decor: 4, materialId: "" },
+                { id: newId("element"), vi: "Element mới", en: "", decor: 4, glazeId: "", sizeId: "" },
               ],
             })
           }
@@ -209,12 +210,15 @@ export function PresetsScreen() {
               onRemove={() => patch({ elements: presets.elements.filter((e) => e.id !== preset.id) })}
             >
               <Field label="Tên (VI)" value={preset.vi} onChange={(vi) => updateElement(preset.id, { vi })} />
+              {/* DANH TỪ, không phải câu mô tả — xem khối chú thích của
+                  `ElementPreset.en`. Nhãn và placeholder nói ĐÚNG điều đó, vì đây
+                  là chỗ duy nhất người dùng gõ chữ ấy ra. */}
               <Field
-                label="Mô tả tiếng Anh"
+                label="Danh từ tiếng Anh"
                 mono
                 value={preset.en}
                 onChange={(en) => updateElement(preset.id, { en })}
-                placeholder="a primary action button…"
+                placeholder="button · popover · health bar…"
               />
               <label className="flex flex-col gap-1">
                 <span className="text-caption text-fg-muted">Mức viền</span>
@@ -231,16 +235,34 @@ export function PresetsScreen() {
                 </select>
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-caption text-fg-muted">Chất liệu mặc định</span>
+                <span className="text-caption text-fg-muted">Đục nền mặc định</span>
                 <select
-                  value={preset.materialId}
-                  onChange={(event) => updateElement(preset.id, { materialId: event.target.value })}
+                  value={preset.glazeId}
+                  onChange={(event) => updateElement(preset.id, { glazeId: event.target.value })}
                   className="rounded-1 border border-line-subtle bg-canvas px-2 py-1.5 text-body text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                 >
-                  <option value="">— không —</option>
-                  {MATERIAL_PRESETS.map((material) => (
-                    <option key={material.id} value={material.id}>
-                      {material.vi}
+                  <option value="">— không đục —</option>
+                  {GLAZE_PRESETS.map((glaze) => (
+                    <option key={glaze.id} value={glaze.id}>
+                      {glaze.vi}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-caption text-fg-muted">Cỡ mặc định</span>
+                <select
+                  value={preset.sizeId}
+                  onChange={(event) => updateElement(preset.id, { sizeId: event.target.value })}
+                  className="rounded-1 border border-line-subtle bg-canvas px-2 py-1.5 text-body text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                >
+                  {/* Chỉ preset: ô tự điền là chuyện của TỪNG DÒNG trong thẻ, không
+                      phải của danh mục — một cỡ pixel cụ thể áp cho mọi bộ kit dùng
+                      món này là đóng cứng hình học vào một danh mục dùng chung. */}
+                  <option value="">— theo hệ thống —</option>
+                  {SIZE_PRESETS.map((size) => (
+                    <option key={size.id} value={size.id}>
+                      {size.vi} · {size.w}×{size.h}px
                     </option>
                   ))}
                 </select>
