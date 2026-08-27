@@ -19,7 +19,7 @@
 | Installer | `install.sh` (bash) — tải runtime `.tar.gz` theo `release.json`, đối chiếu sha256, giải nén vào `~/.kitgen/releases/<version>`, symlink `~/.kitgen/current` |
 | Runtime riêng | Node 20.19.5 tải từ `nodejs.org/dist` vào `~/.kitgen/tools/node`, `@resvg/resvg-wasm` + Codex CLI qua `npm --prefix ~/.kitgen/tools` |
 | Workspace | `~/KitGen` — `projects/`, `.kitgen/engine`, `.kitgen/config.json`, `.venv` (pillow numpy scipy pymatting) |
-| Engine | `gen.sh` + `cover.sh` (bash, gọi `codex exec`), `slice.py` / `validate_output_geometry.py` (python3) + `render-skeleton.mjs` / `skeleton-svg.js` (node) |
+| Engine | `gen.sh` + `cover.sh` (bash, gọi `codex exec`), `slice.py` / `geometry.py` / `validate_output_geometry.py` (python3). Từ 27/08/2026 engine KHÔNG còn file node nào — bộ render khung xương đã bỏ |
 | Agent | Node stdlib thuần, `agent/server.mjs`, bind 127.0.0.1 + [::1] cổng 8765 |
 | Dịch vụ nền | launchd (`com.kitgen.agent.plist`) trên macOS, systemd user unit trên Linux |
 | Lệnh | `~/.kitgen/bin/kitgen {start\|stop\|status\|doctor\|logs\|open\|update}` (bash) |
@@ -54,7 +54,7 @@ gọi đúng chúng" — chứ không phải viết lại engine.
 |---|---|---|
 | `bash.exe` nằm ở `<Git>\bin` nhưng coreutils ở `<Git>\usr\bin`, và **không** đường nào trong `PATH` của Windows | `gen.sh` chết ngay dòng `date +%s`, `grep`, `du` | `bashEnvPath()` dựng PATH riêng cho tiến trình bash: `<KITGEN_HOME>\bin`, `<KITGEN_HOME>\tools\node`, `<KITGEN_HOME>\tools\node_modules\.bin`, rồi `<Git>\usr\bin`, `<Git>\mingw64\bin`, `<Git>\bin` |
 | `gen.sh` dòng 5 là `cd "$(dirname "$0")"`. Truyền `$0 = C:\...\gen.sh` thì `dirname` trả `.` (chuỗi không có dấu `/`) | engine neo sai thư mục ⇒ đọc nhầm `styles.json`, ghi nhầm `raw/` | `toBashPath()` đổi `C:\a\b` → `/c/a/b` trước khi truyền cho `bash.exe` |
-| Windows **không có lệnh tên `python3`** (python.org cài `python.exe` + `py.exe`) | `gen.sh` dòng 19 `python3 skeleton.py` và cả khối `python3 - <<'PY'` chết ⇒ không có prompt nào được dựng | installer sinh **shim `%LOCALAPPDATA%\KitGen\bin\python3`** — một shell script **không đuôi file** mà bash chạy được, `exec` thẳng `python.exe` của venv. Agent thì dùng `KITGEN_PYTHON` (đường dẫn tuyệt đối), không dùng shim |
+| Windows **không có lệnh tên `python3`** (python.org cài `python.exe` + `py.exe`) | khối `python3 - <<'PY'` của `gen.sh` chết ⇒ không có prompt nào được dựng | installer sinh **shim `%LOCALAPPDATA%\KitGen\bin\python3`** — một shell script **không đuôi file** mà bash chạy được, `exec` thẳng `python.exe` của venv. Agent thì dùng `KITGEN_PYTHON` (đường dẫn tuyệt đối), không dùng shim |
 
 ### 2.2 Đường dự phòng: **WSL2** — KHÔNG chọn làm mặc định, giữ làm phương án B
 

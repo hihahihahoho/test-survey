@@ -68,7 +68,7 @@ cho các cổng dò (8765–8767) — để đường vào (2) tự chạy. **Kh
 <workspace>/
 ├─ .kitgen/
 │  ├─ config.json                     # {maxJobs, imageGen:{mode,codexHome}} — KHÔNG có secret
-│  ├─ engine/                          # bản pipeline: gen.sh, slice.py, skeleton-svg.js, element-lib.json…
+│  ├─ engine/                          # bản pipeline: gen.sh, slice.py, geometry.py, element-lib.json…
 │  ├─ app/                             # (tuỳ chọn) bundle giao diện phục vụ tại /app/
 │  ├─ cache/thumbs/                    # thumbnail cho ?w=256
 │  ├─ uploads/                         # staging của POST /api/uploads (TTL 1 giờ)
@@ -77,7 +77,7 @@ cho các cổng dò (8765–8767) — để đường vào (2) tự chạy. **Kh
    ├─ project.json  contract.json  styles.json (agent sinh cho engine)
    ├─ .history/contract/*.json        # 50 bản gần nhất
    ├─ .history/raw/<job>@<runId>.png  # 3 đời ảnh raw
-   ├─ refs/  skeleton/  prompts/  raw/  kits/  logs/
+   ├─ refs/  prompts/  raw/  kits/  logs/
    └─ runs/<runId>/run.json + events.ndjson + logs/<job>.log · runs/latest.json
 ```
 
@@ -89,7 +89,7 @@ cho các cổng dò (8765–8767) — để đường vào (2) tự chạy. **Kh
 `gen.sh` dòng 5 `cd "$(dirname "$0")"` và `slice.py` dòng 60 `HERE = dirname(abspath(__file__))`
 ⇒ engine neo mọi đường dẫn theo **thư mục chứa script**, không theo `cwd`.
 Vì vậy agent **copy engine vào chính thư mục project** rồi chạy bản copy đó ⇒ `HERE = <project>`, mọi
-`raw/ kits/ prompts/ skeleton/ logs/` nằm trong project (project tự chứa, không còn `kits/manifest.json` dùng chung như v1).
+`raw/ kits/ prompts/ logs/` nằm trong project (project tự chứa, không còn `kits/manifest.json` dùng chung như v1).
 
 Ngoài ra filter của `gen.sh` là **substring** (`"tet-main"` sẽ chạy luôn `tet-main2`), nên agent
 **không dùng argv filter** cho pha gen: nó ghi `styles.json` **thu hẹp đúng tập lượt đã chọn**.
@@ -130,7 +130,7 @@ Mọi response có `X-KitGen-Protocol: 1`. Lỗi luôn theo envelope §6.1:
 | 14 | DELETE | `/api/trash/:trashId?purge=1` | **Xoá vĩnh viễn**, cần header `X-KitGen-Confirm: <4 số>` |
 | 15 | POST | `/api/trash/:trashId/code` | Agent **in mã 4 số ra terminal**; response chỉ có `{expiresInMs:60000}` |
 | 16 | POST | `/api/projects/:id/duplicate` | `{name, include:["contract","refs","raw","kits","runs"], variants:"all"|[…]|"none", newVariant?}` |
-| 17 | POST | `/api/projects/:id/clean` | `{targets:["skeleton","prompts","kits","rawHistory","oldLogs"]}`. **Không bao giờ** chạm `contract.json` và `raw/` đang dùng |
+| 17 | POST | `/api/projects/:id/clean` | `{targets:["skeleton","prompts","kits","rawHistory","oldLogs"]}` (`skeleton` chỉ để dọn thư mục còn sót của dự án tạo trước 27/08/2026). **Không bao giờ** chạm `contract.json` và `raw/` đang dùng |
 | 18 | GET | `/api/projects/:id/export.zip` | `?include=contract,refs,raw,kits,runs` → `kitgen-<slug>-<yyyymmdd>.zip` |
 | 19 | POST | `/api/uploads` | multipart hoặc raw body, ≤200 MB → `{uploadId, kind:"zip"|"json"|"image"}`. `413`/`415` |
 | 20 | POST | `/api/import/preview` | Báo cáo đối chiếu **trước khi** tạo gì: `sheets/components/variants/unknownComponents/duplicateSheetIds/warnings` |
@@ -160,7 +160,7 @@ Mọi response có `X-KitGen-Protocol: 1`. Lỗi luôn theo envelope §6.1:
 
 | # | Method | Path | Việc |
 |---|---|---|---|
-| 32 | POST | `/api/projects/:id/runs` | `{kind:"gen"|"slice"|"skeleton", jobs:[…], maxJobs, autoSliceAfterGen}` → `202 {runId, jobs, estimate{seconds,quotaUnits}}`. `409 RUN_CONFLICT` / `422 UNKNOWN_JOB` / `422 CONTRACT_INVALID` / `409 IMAGEGEN_UNAVAILABLE` |
+| 32 | POST | `/api/projects/:id/runs` | `{kind:"gen"|"slice", jobs:[…], maxJobs, autoSliceAfterGen}` → `202 {runId, jobs, estimate{seconds,quotaUnits}}`. `409 RUN_CONFLICT` / `422 UNKNOWN_JOB` / `422 CONTRACT_INVALID` / `409 IMAGEGEN_UNAVAILABLE` |
 | 33 | GET | `/api/projects/:id/runs?limit=20` | Lịch sử run |
 | 34 | GET | `/api/runs/:runId` | Trạng thái đầy đủ (nguồn của fallback poll 2s) |
 | 35 | GET | `/api/runs/:runId/stream?from=<seq>` | **NDJSON** chunked, heartbeat 15s. Mất kết nối thì `?from=lastSeq+1` |
@@ -174,7 +174,7 @@ Mọi response có `X-KitGen-Protocol: 1`. Lỗi luôn theo envelope §6.1:
 
 | # | Method | Path | Việc |
 |---|---|---|---|
-| 41 | GET | `/api/projects/:id/files/*` | `?w=128\|256\|512` → thumbnail (cache trong `.kitgen/cache/thumbs`). `ETag: "<mtimeMs>-<size>"`, `Cache-Control: no-cache`. **Chỉ** đọc được `raw/ kits/ refs/ skeleton/ prompts/ export/` + `project.json contract.json styles.json` — **thu hẹp** so với v1 (v1 phục vụ cả repo, lộ `.git/config`) |
+| 41 | GET | `/api/projects/:id/files/*` | `?w=128\|256\|512` → thumbnail (cache trong `.kitgen/cache/thumbs`). `ETag: "<mtimeMs>-<size>"`, `Cache-Control: no-cache`. **Chỉ** đọc được `raw/ kits/ refs/ skeleton/ prompts/ export/` (`skeleton/` chỉ-đọc, cho dự án đời cũ) + `project.json contract.json styles.json` — **thu hẹp** so với v1 (v1 phục vụ cả repo, lộ `.git/config`) |
 | 42 | GET | `/api/projects/:id/kit?variant=<id>` | Danh mục file đã cắt từ `kits/manifest.json` |
 
 > Thumbnail cần Pillow (đã là phụ thuộc của `slice.py`). Không có Pillow → trả **ảnh gốc** kèm
@@ -469,5 +469,5 @@ agent/
 ```
 
 **Không sửa gì ngoài `agent/`.** `studio.html`, `studio-server.mjs`, `gen.sh`, `slice.py`, `styles.json`,
-`element-lib.json`, `silhouettes.js`, `skeleton-svg.js`, `skeleton.html`, `render-skeleton.mjs` giữ nguyên
+`element-lib.json`, `geometry.py` giữ nguyên (bộ khung xương `skeleton-svg.js` / `skeleton.html` / `render-skeleton.mjs` đã xoá 27/08/2026)
 để bản cũ còn chạy được mà đối chiếu.

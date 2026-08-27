@@ -1,10 +1,8 @@
 agent/
 gen.sh
+cover.sh
 slice.py
-skeleton.py
-skeleton.html
-silhouettes.js
-render-skeleton.mjs
+geometry.py
 validate_output_geometry.py
 element-lib.json
 webapp/dist/

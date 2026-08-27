@@ -34,11 +34,18 @@ if _fn is None:
     print("LOI  không tìm thấy orientation_error trong slice.py "
           "(đổi tên hàm thì sửa cả ca này)", file=sys.stderr)
     sys.exit(1)
-# Hàm KHÔNG còn đứng một mình: từ 26/08/2026 nó tra bảng `CANVAS` ở tầng module
-# (bản chép của bảng cùng tên trong khối python của gen.sh — xem chú thích ở đó về
-# việc khổ ảnh từng bị suy độc lập ở bốn chỗ). Trích thiếu bảng thì ca này chết vì
-# `NameError`, một lời báo lỗi chẳng liên quan gì tới thứ nó đang đo. Nên lấy CẢ
-# HAI, và vẫn bằng AST để không phải import PIL.
+# Hàm KHÔNG còn đứng một mình: từ 26/08/2026 nó tra bảng `CANVAS` ở tầng module.
+# Trích thiếu bảng thì ca này chết vì `NameError`, một lời báo lỗi chẳng liên quan
+# gì tới thứ nó đang đo. Nên lấy CẢ HAI, và vẫn bằng AST để không phải import PIL.
+#
+# Từ 27/08/2026 bảng đó không còn là bản chép nữa mà DẪN XUẤT từ `geometry.py`
+# (`{k: v[:2] for k, v in geometry.CANVAS.items()}`) — cùng module mà khối python
+# của gen.sh import, nên khổ ảnh chỉ còn MỘT bản trong cả engine. `geometry.py`
+# thuần số học, không kéo theo PIL, nên import thật nó ở đây vẫn giữ nguyên lý do
+# ban đầu của ca này: chạy được trên runner trần.
+sys.path.insert(0, os.path.abspath(os.path.join(HERE, "..")))
+import geometry                                                   # noqa: E402
+
 _canvas = next((n for n in _tree.body
                 if isinstance(n, ast.Assign)
                 and any(isinstance(t, ast.Name) and t.id == "CANVAS" for t in n.targets)), None)
@@ -46,7 +53,7 @@ if _canvas is None:
     print("LOI  không tìm thấy bảng CANVAS trong slice.py "
           "(đổi tên bảng thì sửa cả ca này)", file=sys.stderr)
     sys.exit(1)
-_ns = {}
+_ns = {"geometry": geometry}
 exec(compile(ast.Module(body=[_canvas, _fn], type_ignores=[]), "slice.py", "exec"), _ns)
 orientation_error = _ns["orientation_error"]
 CANVAS = _ns["CANVAS"]
@@ -91,9 +98,9 @@ check("canvas=square mà nhận ảnh DỌC → bắt", False, None, 1024, 1536,
 # `canvas` là field CHÍNH; `orient` chỉ là đường lùi cho contract đời trước. Khai cả
 # hai thì canvas thắng — không thì một tấm cũ được nâng lên vuông vẫn bị xử theo dọc.
 check("canvas THẮNG orient khi khai cả hai", True, "portrait", 1254, 1254, "square")
-# Chữ lạ không được giết cả lượt cắt: rơi về landscape, đúng như gen.sh và
-# skeleton-svg.js. Ba tầng phải cùng một hành vi, không thì lỗi gõ hiện ra mỗi tầng
-# một kiểu.
+# Chữ lạ không được giết cả lượt cắt: rơi về landscape. Nay chỉ còn MỘT bản của
+# hành vi đó (`geometry.canvas_of`), nên hai tầng không thể lệch — nhưng ca vẫn ở
+# lại để bảng dùng chung không bị ai đổi thành "ném lỗi" mà không thấy hậu quả.
 check("canvas gõ sai ⇒ rơi về landscape, không ném", True, None, 1536, 1024, "squre")
 
 if set(CANVAS) != {"landscape", "portrait", "square"}:

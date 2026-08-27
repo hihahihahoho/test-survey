@@ -286,7 +286,7 @@ export class RunHandle {
     // styles.json thu hẹp đúng tập job đã chọn: filter của gen.sh là SUBSTRING nên không dùng argv
     const onlyJobs = this.run.jobs.map(j => ({ variant: j.variant, sheet: j.sheet }))
     await materializeStyles(pdir, this.opts.contract, onlyJobs.length ? onlyJobs : null)
-    for (const d of ["raw", "logs", "prompts", "skeleton", "kits"]) await ensureDir(join(pdir, d))
+    for (const d of ["raw", "logs", "prompts", "kits"]) await ensureDir(join(pdir, d))
     if (this.stopped()) return
     this.run.status = "running"
     await this.persist()

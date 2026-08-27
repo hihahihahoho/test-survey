@@ -34,17 +34,12 @@ export function rawSheetImagePath(job: string, runId?: string | null): string {
   return run === "" ? `raw/${safeJob}.png` : `runs/${run}/artifacts/${safeJob}.png`;
 }
 
-/**
- * Ảnh khung xương mà engine ĐÃ GỬI CHO MODEL (`skeleton/<sheetId>.png`).
- * Khác với SVG vẽ tại chỗ bằng `SkeletonPreview`: SVG là thứ webapp *tưởng*, PNG này
- * là thứ *thật sự* đi kèm prompt. Panel ưu tiên SVG (không cần mạng, luôn có) và để
- * PNG làm đường đối chiếu khi người dùng nghi ảnh gen không khớp bố cục.
- */
-export function skeletonImagePath(sheetId: string): string {
-  const id = String(sheetId).trim();
-  if (id === "") throw new Error("thiếu mã tấm — không dựng được đường ảnh khung xương");
-  return `skeleton/${id}.png`;
-}
+/* `skeletonImagePath()` ĐÃ BỎ. Nó dựng đường tới `skeleton/<sheetId>.png` — ảnh
+   khung xương mà engine từng gửi kèm prompt. Engine thôi dựng ảnh ấy (vùng an
+   toàn nay vào prompt bằng toạ độ số), nên hàm này chỉ còn dựng được đường tới
+   một file không bao giờ tồn tại. Giữ lại là để dành một cái bẫy: agent VẪN mở
+   thư mục `skeleton` cho phép đọc (`routes/files.mjs`), nên lượt xin sẽ không
+   nổ ngay — nó chỉ trả về 404 ở một chỗ xa nơi gây ra lỗi. */
 
 /** Tên ô đã bỏ tiền tố thư mục: `tight/01-btn` → `01-btn`. */
 export function cellName(file: KitFile): string {

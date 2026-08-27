@@ -4,7 +4,7 @@
 #
 # ĐÂY LÀ NHÁNH RIÊNG, KHÔNG PHẢI MỘT SHEET.
 #   · gen.sh giữ nguyên hợp đồng spritesheet/crop-safe v15: lưới ô, khung chroma-key,
-#     safe zone, skeleton đính kèm. Ảnh bìa KHÔNG có gì trong số đó — nó là một cảnh
+#     safe zone, toạ độ từng ô. Ảnh bìa KHÔNG có gì trong số đó — nó là một cảnh
 #     full-bleed, không tách nền, không cắt ô. Trộn hai việc vào một script là cách
 #     nhanh nhất để làm hỏng cái đang chạy tốt, nên cover đi bằng file riêng.
 #   · Điểm CHUNG với gen.sh (cố ý dùng lại, không viết đường thứ hai):

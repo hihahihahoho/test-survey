@@ -136,7 +136,9 @@ describe("② + ③ contract nhận field, và prompt preview nói đúng sự t
     expectMirrored(gen, glassCellPrompt());
     // Nhánh của kính phải là `elif` sau nhánh glow — nếu ai đó đổi thành `if` rời thì
     // một ô có thể ăn cả hai câu, và ca "đúng một câu phụ" ở trên sẽ không đủ để bắt.
-    expect(gen).toMatch(/elif comps\[i\]\["skel"\]\.get\("matte"\) == "glass":/);
+    // (Vòng lặp đổi từ `for r in range(rows) / comps[i]` sang `for i, comp in
+    //  enumerate(comps)` khi bỏ tiêu đề hàng "Row r, left to right:" — 27/08/2026.)
+    expect(gen).toMatch(/elif comp\["skel"\]\.get\("matte"\) == "glass":/);
   });
 
   it("`isGlassCell` đọc đúng `matte` của contract, không đoán theo tên file", () => {

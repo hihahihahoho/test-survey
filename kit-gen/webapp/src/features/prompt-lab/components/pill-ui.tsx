@@ -40,6 +40,10 @@ export const PillButton = React.forwardRef<
          nên chữ và pill không bao giờ lệch cỡ nhau. Ghim đường chân chữ vì nếu
          không, mỗi pill đẩy dòng của nó cao thêm vài px và cả đoạn răng cưa. */
       "inline-flex items-center gap-1.5 rounded-full border align-baseline",
+      /* `min-w-0` để pill CO ĐƯỢC khi nằm trong một hàng `flex-nowrap` (hàng 1 của
+         dòng element). Thiếu nó thì nội dung giữ nguyên bề rộng tự nhiên và hàng
+         tràn ngang — đúng chỗ vỡ bố cục mà hàng element vừa phải sửa. */
+      "min-w-0",
       compact ? "px-2 py-0.5 text-caption" : "px-3 py-1",
       "border-line bg-raised text-fg-strong",
       "transition-colors duration-fast ease-out hover:border-line-strong hover:bg-overlay",
@@ -63,6 +67,28 @@ PillButton.displayName = "PillButton";
 /** Mũi tên ⌄ của pill mở được menu — đúng dấu hiệu trong ảnh mẫu. */
 export function PillCaret({ compact }: { compact?: boolean }) {
   return <ChevronDown aria-hidden className={cn("shrink-0 opacity-60", compact ? "size-3" : "size-4")} />;
+}
+
+/**
+ * TÊN TRỤC in mờ NGAY TRONG pill — «Phong cách: Chibi ⌄».
+ *
+ * ╔══ VÌ SAO CHỮ NỐI RỜI KHỎI PILL PHẢI BIẾN MẤT ════════════════════════════╗
+ * ║ Hàng element trước đây là một câu: `— phong cách [pill], đục nền [pill],` ║
+ * ║ `viền [pill], cỡ [pill],` rồi tới ô ghi chú. Bốn cụm chữ nối ấy là bốn    ║
+ * ║ vật KHÔNG CO ĐƯỢC nằm xen giữa bốn vật co được, nên khi tên element dài   ║
+ * ║ ra thì thứ bị đẩy xuống hàng dưới là ô ghi chú — và mỗi dòng cao một kiểu.║
+ * ║ Chủ sản phẩm chỉ đúng chỗ ấy: *"bố cục vỡ, mỗi dòng cao thấp khác nhau"*. ║
+ * ║ Gộp nhãn trục VÀO pill thì hàng chỉ còn TOÀN vật co được: nó không bao    ║
+ * ║ giờ wrap nữa, nó chỉ cắt bớt chữ — mà chữ bị cắt là nhãn, còn giá trị thì ║
+ * ║ vẫn đọc được vì nó đứng sau dấu hai chấm và được ưu tiên giữ.             ║
+ * ║ Tiện thể nó trả lời luôn *"sao vẫn không thấy select điền size"*: pill cỡ ║
+ * ║ nay TỰ XƯNG TÊN («Cỡ: theo hệ thống ⌄») thay vì là một chữ trôi nổi.      ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export function PillAxis({ children }: { children: React.ReactNode }) {
+  /* `shrink-0` cho nhãn, còn phần giá trị mới là phần co: khi hàng chật, thứ đáng
+     giữ là "đây là pill gì" — mất nó thì bốn pill giống hệt nhau. */
+  return <span className="shrink-0 text-fg-muted">{children}:</span>;
 }
 
 /**
@@ -156,11 +182,18 @@ export function OptionPill({
   value,
   onChange,
   compact,
+  axis,
 }: {
   kind: PillKind;
   value: string;
   onChange: (next: string) => void;
   compact?: boolean;
+  /**
+   * Tên trục in mờ trong pill («Phong cách»). Chỉ truyền ở chỗ pill đứng THÀNH
+   * HÀNG cạnh nhau (dòng element) — trong một câu mad-lib thì câu đã nói ra trục
+   * rồi, thêm nhãn nữa là đọc hai lần cùng một chữ.
+   */
+  axis?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const presets = usePresets();
@@ -168,7 +201,7 @@ export function OptionPill({
   const canInherit = inheritsWhenEmpty(kind);
 
   return (
-    <span className="relative inline-block">
+    <span className={cn("relative inline-block", axis && "min-w-0")}>
       <PillButton
         compact={compact}
         active={open}
@@ -176,8 +209,13 @@ export function OptionPill({
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}
+        /* `aria-label` chỉ khi có nhãn trục: trình đọc màn hình phải nghe được
+           TRỤC lẫn GIÁ TRỊ, mà `truncate` thì chỉ cắt phần nhìn thấy. */
+        {...(axis ? { "aria-label": `${axis}: ${labelOf(kind, value, presets)}` } : {})}
+        className={axis ? "max-w-full" : undefined}
       >
-        <span>{labelOf(kind, value, presets)}</span>
+        {axis && <PillAxis>{axis}</PillAxis>}
+        <span className={cn(axis && "truncate")}>{labelOf(kind, value, presets)}</span>
         <PillCaret compact={compact} />
       </PillButton>
 

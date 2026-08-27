@@ -46,6 +46,10 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/kitgen-promptsonly.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/bin" "$WORK/p"
 cp "$HERE/gen.sh" "$WORK/p/gen.sh"
+# geometry.py đi CÙNG gen.sh, không phải phụ kiện: khối python của nó `import geometry`
+# ngay dòng đầu. Thiếu file này thì ca đỏ vì ModuleNotFoundError — đúng như trên máy
+# người dùng nếu ai đó quên thêm nó vào ENGINE_FILES của agent.
+cp "$HERE/geometry.py" "$WORK/p/geometry.py"
 chmod +x "$WORK/p/gen.sh"
 CALLS="$WORK/codex-calls.txt"
 
@@ -57,15 +61,10 @@ exit 0
 FAKE
 chmod +x "$WORK/bin/codex"
 
-# Khung xương giả. Bản thật cần @resvg/resvg-wasm (2,4 MB wasm) và ảnh khung xương
-# không dính gì tới câu chữ của prompt — thứ ca này soi. Stub giữ đúng hợp đồng:
-# ghi skeleton/<sheet>.png rồi thoát 0.
-cat > "$WORK/p/render-skeleton.mjs" <<'STUB'
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
-const cfg = JSON.parse(readFileSync("styles.json", "utf8"))
-mkdirSync("skeleton", { recursive: true })
-for (const sh of cfg.sheets) writeFileSync(`skeleton/${sh.id}.png`, "KHUNG-XUONG-GIA")
-STUB
+# KHÔNG CÒN STUB KHUNG XƯƠNG. Bản trước phải giả lập `render-skeleton.mjs` (bản thật
+# cần @resvg/resvg-wasm, 2,4 MB wasm) chỉ để gen.sh đi qua được bước đó. Khung xương
+# đã bỏ 27/08/2026: gen.sh nay chỉ đọc styles.json và viết chữ, nên ca này chạy được
+# trên một máy trần — không node module nào, không ảnh nào.
 
 # Bốn tấm, mỗi tấm chứng minh một điều:
 #   main   — tấm UI thường + `directive`
@@ -194,13 +193,64 @@ have "dấu của tấm nền vẫn còn" "$WORK/p/prompts/tet-nen.fullbleed"
 
 echo "── tấm mascot KHÔNG lãnh khối chỉ dẫn viết cho nút bấm"
 refute "không có khối cấu tạo" "Build each element from the inside out" "$linh"
-refute "không có lệnh rim/border" "immediately OUTSIDE that footprint" "$linh"
-expect "nhưng vẫn giữ vùng an toàn" "production SAFE ZONE" "$linh"
+refute "không có lệnh rim/border" "immediately OUTSIDE the safe zone" "$linh"
+expect "nhưng vẫn giữ vùng an toàn" "production crop box" "$linh"
 expect "vẫn giữ nền trong suốt" "BACKGROUND of the sheet: FULLY TRANSPARENT" "$linh"
 expect "vẫn cấm chữ" "ABSOLUTELY NO TEXT" "$linh"
 expect "vẫn cấm vẽ caro" "NEVER DRAW A CHECKERBOARD" "$linh"
-expect "và vẫn cấm tràn sang ô khác" "never cross into another cell" "$linh"
+# Ranh giới của tấm mascot nay nói bằng SAFE ZONE của hàng xóm, không bằng "ô":
+# ô là chuyện của dao cắt, còn thứ model phải tránh là vùng của thằng bên cạnh.
+expect "và vẫn cấm lấn sang element khác" "well clear of every other" "$linh"
 expect "tấm nút bấm thì VẪN CÓ khối cấu tạo" "Build each element from the inside out" "$main"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BỎ SKELETON — PROMPT PHẢI TỰ NÓI TOẠ ĐỘ (27/08/2026)
+#
+# Trước bản này hình học đi tới model bằng MỘT TẤM ẢNH: `skeleton/<sheet>.png`, vẽ
+# lưới ô + bóng xám + khung safe, đính ở vị trí thứ nhất. Prompt chỉ trỏ vào nó
+# ("The FIRST attached image is the geometry contract", "match the gray silhouette
+# exactly"). Hai cái giá phải trả:
+#   ① model BẮT CHƯỚC ảnh tham chiếu chứ không chỉ đọc nó — tấm khung xương phẳng,
+#      viền cứng, nên nhân vật ra như huy hiệu có viền;
+#   ② nó là nguồn hình học THỨ HAI, và nó lệch: skeleton-svg.js cộng +1px (vì `.cell`
+#      có border 1px) còn slice.py thì không.
+# Nay prompt in thẳng bốn con số cho từng ô, lấy từ `geometry.py` — cùng hàm slice.py
+# dùng để cắt. Ca này khoá cả ba mặt: có toạ độ, không còn ảnh khung xương, không còn
+# một chữ nào của đời cũ.
+# ═══════════════════════════════════════════════════════════════════════════════
+echo "── mỗi element mang toạ độ safe zone NGAY TRÊN DÒNG CỦA NÓ"
+allp="$(cat "$WORK"/p/prompts/*.txt)"
+expect "khai gốc toạ độ" "Canvas 1254x1254 px, origin top-left" "$vuong"
+expect "luật chung một câu" "must lie fully inside its safe zone" "$vuong"
+# 3x3? Không — tấm `vuong` là 2x2 trên khổ 1254: ô 627, skel 0.8x0.4 ⇒ safe 502x251,
+# lệch trong ô là (627-502)//2 = 62 và (627-251)//2 = 188. Con số phải khớp TỪNG CÁI,
+# không phải "có dạng toạ độ": sai số 1px ở đây là mọi asset lệch 1px lúc cắt.
+expect "ô 1 đúng số"  "1) a button — safe zone x=62..564, y=188..439 (502x251 px)" "$vuong"
+expect "ô 2 đúng số"  "2) a popover panel — safe zone x=689..1191, y=125..501 (502x376 px)" "$vuong"
+expect "ô 3 đúng số"  "3) a checkbox — safe zone x=219..407, y=815..1066 (188x251 px)" "$vuong"
+expect "ô 4 đúng số"  "4) a toggle switch — safe zone x=783..1097, y=846..1034 (314x188 px)" "$vuong"
+# Danh sách CHỈ CÓ MỘT: danh từ và toạ độ trên cùng dòng (chủ sản phẩm 27/08/2026).
+refute "không có bảng toạ độ thứ hai" "Cell 1 (row 1, col 1)" "$allp"
+refute "không còn tiêu đề hàng"       "Row 1, left to right" "$allp"
+# Mỗi ô THẬT phải có đúng một toạ độ. Đếm bằng regex để một ô bị bỏ sót là đỏ ngay.
+n_zone=$(printf '%s' "$vuong" | grep -cE '^[0-9]+\) .* — safe zone x=[0-9]+\.\.[0-9]+, y=[0-9]+\.\.[0-9]+ \([0-9]+x[0-9]+ px\)')
+eq_n() { if [ "$2" = "$3" ]; then printf 'ok   %s\n' "$1"; else printf 'LOI  %s (mong %s, thực %s)\n' "$1" "$2" "$3" >&2; fail=1; fi; }
+eq_n "tấm 2x2 có đủ 4 dòng toạ độ" 4 "$n_zone"
+# Tấm full-bleed KHÔNG có safe zone (cảnh phủ kín ô), tấm mascot thì CÓ.
+nen="$(cat "$WORK/p/prompts/tet-nen.txt")"
+refute "tấm nền không hứa khung cắt nào" "safe zone x=" "$nen"
+expect "tấm nền nói rõ là phủ kín ô" "full-bleed scene, fills its whole cell" "$nen"
+expect "tấm mascot 1x1 ⇒ safe zone bằng 0.8x0.8 của cả canvas" \
+  "1) mascot waving — safe zone x=153..1382, y=102..921 (1229x819 px)" "$linh"
+
+echo "── KHÔNG còn một dấu vết nào của khung xương trong thứ gửi đi"
+for bad in "skeleton" "silhouette" "FIRST attached image" "gray silhouette" "guide box" "grid lines" "attached image is the geometry"; do
+  refute "prompt sạch: $bad" "$bad" "$allp"
+done
+for j in tet-main tet-doc tet-nen tet-linh tet-vuong; do
+  refute ".att của $j không còn ảnh khung xương" "skeleton/" "$(cat "$WORK/p/prompts/$j.att")"
+done
+havent "và engine KHÔNG tạo thư mục skeleton/ nữa" "$WORK/p/skeleton"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PROMPT KHÔNG ĐƯỢC NHIỄM (chủ sản phẩm 26/08/2026: "nhìn prompt lỗi này v16???",
@@ -226,7 +276,6 @@ expect "tấm nút bấm thì VẪN CÓ khối cấu tạo" "Build each element 
 # tốt. Thứ phải sạch là cái ĐI RA khỏi engine.
 # ═══════════════════════════════════════════════════════════════════════════════
 echo "── prompt gửi model KHÔNG được nhiễm (nhãn phiên bản / trang trí cứng / ngữ cảnh cứng)"
-allp="$(cat "$WORK"/p/prompts/*.txt)"
 for bad in "V16" "V14" "v14+" "v16" "nine-element"; do
   refute "không còn nhãn phiên bản nội bộ: $bad" "$bad" "$allp"
 done
@@ -256,7 +305,9 @@ echo "── PHONG CÁCH TỔNG phải đứng ĐẦU, không phải cuối"
 expect "có khối ART STYLE" "ART STYLE" "$main"
 expect "có nguyên văn câu phong cách của người dùng" "Art style: flat vector, red and gold." "$main"
 style_ln="$(grep -n 'Art style:' "$WORK/p/prompts/tet-main.txt" | head -n1 | cut -d: -f1)"
-list_ln="$(grep -n '^Row 1, left to right:' "$WORK/p/prompts/tet-main.txt" | head -n1 | cut -d: -f1)"
+# Neo cũ là dòng "Row 1, left to right:" — đã bỏ cùng khung xương (toạ độ tuyệt đối
+# nói vị trí chính xác hơn tiêu đề hàng). Neo mới: dòng đánh số ĐẦU TIÊN có toạ độ.
+list_ln="$(grep -nE '^1\) .* — safe zone x=' "$WORK/p/prompts/tet-main.txt" | head -n1 | cut -d: -f1)"
 if [ -n "$style_ln" ] && [ -n "$list_ln" ] && [ "$style_ln" -lt "$list_ln" ]; then
   printf 'ok   %s (dòng %s < dòng %s)\n' "phong cách đứng TRƯỚC danh sách ô" "$style_ln" "$list_ln"
 else

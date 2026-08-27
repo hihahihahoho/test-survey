@@ -12,6 +12,11 @@ import { imageSize } from "../lib/multipart.mjs"
 /** Chỉ các thư mục dữ liệu được đọc; không bao giờ .history, không bao giờ file lạ ngoài whitelist.
  *  `cover` = ảnh bìa tự sinh (cover/cover.png + cover.json). Nhật ký thô của lượt vẽ bìa CỐ Ý
  *  nằm ở `logs/` — thư mục KHÔNG đọc được từ web — vì log codex có đường dẫn tuyệt đối của máy. */
+/* Thư mục con được phép đọc qua API file.
+   "skeleton" GIỮ LẠI Ở CHẾ ĐỘ CHỈ-ĐỌC. Engine không còn ghi vào đó (khung xương bỏ
+   27/08/2026), nhưng dự án tạo trước ngày đó vẫn có ảnh trong thư mục này, và
+   `manifest`/`run.json` đời cũ còn trỏ vào chúng. Bỏ khỏi tập này là biến mọi đường
+   dẫn cũ thành 403 — một lỗi khó hiểu cho một file vẫn nằm sờ sờ trên đĩa. */
 const READABLE_TOP = new Set(["raw", "kits", "refs", "skeleton", "prompts", "export", "runs", "cover"])
 const READABLE_FILES = new Set(["project.json", "contract.json", "styles.json"])
 
@@ -118,7 +123,7 @@ export function register(r) {
            ngoài frame mà vẫn hiện (Clip content = off). Không trả ra đây thì webapp
            không có cách nào copy sang Figma đúng chuẩn — nó chỉ còn bitmap phẳng. */
         safe: meta?.safe ?? null,
-        /* Đo-ký-sổ sau slice: safe là core thật; contractSafe là rect skeleton
+        /* Đo-ký-sổ sau slice: safe là core thật; contractSafe là rect safe zone của contract
            để người dùng đối chiếu, sizeDeviation chỉ gắn cờ QA. */
         contractSafe: meta?.contractSafe ?? null,
         core: meta?.core ?? null,

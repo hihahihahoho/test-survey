@@ -211,7 +211,7 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     process.env.KITGEN_RESVG_DIR = prefix
     try {
       eq(resvgAnchorDirs()[0], prefix, "KITGEN_RESVG_DIR là neo ĐẦU TIÊN, y như engine")
-      // render-skeleton.mjs readFileSync(index_bg.wasm) ⇒ thiếu file này là gen chết.
+      // Gói cài dở phải bị coi là thiếu (nó không nạp được .wasm).
       // Không khẳng định renderer.ok=false ở đây: máy dev có thể có gói THẬT ở neo sau.
       const req = createRequire(join(prefix, "package.json"))
       let threw = false
@@ -223,14 +223,12 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     }
   })
 
-  await it("danh sách neo của doctor KHÔNG được lệch với render-skeleton.mjs", async () => {
+  /* CA CŨ ĐỌC `render-skeleton.mjs` ĐỂ ĐỐI CHIẾU DANH SÁCH NEO — file đó đã xoá
+     (khung xương bỏ 27/08/2026), nên không còn "hai danh sách" nào để lệch nhau.
+     Phần CÒN GIÁ TRỊ của ca thì ở lại: doctor phải dò đúng những chỗ mà `install.sh`
+     thật sự cài gói vào, nếu không nó báo thiếu OAN và khách đi cài lại. */
+  await it("doctor dò đúng những neo mà installer cài gói vào", async () => {
     const { resvgAnchorDirs } = await import("../lib/doctor.mjs")
-    const engineDir = join(agentDir, "..")
-    const src = readFileSync(join(engineDir, "render-skeleton.mjs"), "utf8")
-    // Engine khai neo ở resvgAnchors(); mọi nguồn nó dùng, doctor phải dùng.
-    for (const needle of ["KITGEN_RESVG_DIR", 'KITGEN_HOME', '"tools"', '".kitgen"']) {
-      ok(src.includes(needle), `render-skeleton.mjs phải còn khai ${needle} — nếu engine đổi, sửa CẢ doctor.mjs`)
-    }
     const before = process.env.KITGEN_HOME
     process.env.KITGEN_HOME = join(tmp, "kitgen-home-gia")
     try {

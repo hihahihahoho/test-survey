@@ -1,4 +1,43 @@
-# BACKLOG — cập nhật 2026-08-14 (đợt fix tổng 2.1.20)
+# BACKLOG — cập nhật 2026-08-27
+
+## Quyết định 27/08/2026 — **BỎ SKELETON**
+
+Mục 15 dưới đây ("Thay Playwright bằng renderer nhẹ (resvg)") và mọi mục nói về
+khung xương nay là **LỊCH SỬ**, không phải mô tả sản phẩm. Giữ nguyên chữ để đời sau
+đọc được vì sao từng làm thế; đừng dùng chúng như đặc tả.
+
+**Bỏ cái gì:** engine không còn render và không còn đính ảnh khung xương. Đã xoá
+`render-skeleton.mjs`, `skeleton-svg.js`, `skeleton.html`, `tests/test_skeleton_svg.py`,
+`tests/test_grid_engine.py`; `buildCommand("skeleton")` và run kind `"skeleton"` cũng đi
+cùng. Ảnh tham chiếu của NGƯỜI DÙNG (mascot ref, brand, inspo) không đổi một chữ.
+
+**Thay bằng cái gì:** prompt IN THẲNG toạ độ pixel của safe zone từng ô
+(`3) a badge — safe zone x=940..1149, y=973..1117 (209x144 px)`), tính bằng
+**`geometry.py`** — module mà CẢ `gen.sh` (dựng prompt) lẫn `slice.py` (cắt asset) cùng
+import. Danh từ và toạ độ nằm trên CÙNG MỘT DÒNG; không còn hai danh sách song song và
+không còn tiêu đề `Row r, left to right:`.
+
+**Vì sao — ba lý do, không phải một:**
+1. Model **bắt chước** ảnh tham chiếu chứ không chỉ đọc nó. Khung xương là hình phẳng
+   viền cứng, nên nó lái luôn phong cách: nhân vật ra như huy hiệu có viền, dáng cứng đơ.
+2. Nó là **nguồn hình học thứ hai, và nó lệch**: `skeleton-svg.js` cộng `CELL_BORDER = 1`
+   (vì `.cell` có border 1px) còn `slice.py` thì không ⇒ khung ta ĐƯA và khung ta CẮT
+   lệch nhau 1px ở mọi ô, suốt nhiều tháng, không một test nào đỏ — vì một bên là ảnh,
+   một bên là số, không có cách nào so.
+3. Nó bắt cả sản phẩm phụ thuộc `@resvg/resvg-wasm` chỉ để nói một điều mà **bốn con số**
+   nói rẻ hơn và chính xác hơn.
+
+**Nợ còn lại (cắt ngang, làm riêng):** `@resvg/resvg-wasm` nay KHÔNG còn ai gọi, nhưng
+`install.sh` bước 4/7, `scripts/install.ps1`, `agent/lib/doctor.mjs::rendererInfo` và dòng
+"Trình render khung xương" ở màn Cài đặt (`webapp/.../setup/lib/doctor-view.ts` + bản `web/`
+cũ) vẫn nói về nó. Gỡ một chỗ mà không gỡ đồng thời cả năm thì dòng đó thành đỏ vĩnh viễn.
+
+**Test:** `tests/test_geometry.py` (16 ca — gồm ca đọc ngược toạ độ RA KHỎI prompt thật
+rồi so với `geometry.safe_box`, thứ bản cũ không thể kiểm) · `test/gen-prompts-only.test.sh`
+(khối toạ độ + không còn dấu vết khung xương) · `test/gen-canvas-square.test.sh` (ca chống
+chép-lại bảng khổ) · `tests/test_gen_prompt.py::SteeringPromptTest`.
+
+---
 
 Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, lỗ rỗ), báo cáo các agent fix, và các phát hiện vận hành. Đợt 14/08 đã xử **15/16** mục — dưới đây mục xong giữ một dòng chỉ chỗ, mục còn lại giữ nguyên chi tiết.
 

@@ -70,6 +70,10 @@ class SliceCliTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="kitgen-slice-cli-"))
         shutil.copy(ROOT / "slice.py", self.tmp / "slice.py")
+        # geometry.py đi CÙNG slice.py: nó `import geometry` để lấy bảng khổ canvas
+        # + toạ độ ô/safe zone (dùng chung với khối python của gen.sh). Copy thiếu là
+        # ModuleNotFoundError — đúng thứ sẽ xảy ra nếu ai quên nó trong ENGINE_FILES.
+        shutil.copy(ROOT / "geometry.py", self.tmp / "geometry.py")
         (self.tmp / "raw").mkdir()
         make_bg_sheet(self.tmp / "raw" / "v1-nen.png")
         make_ui_sheet(self.tmp / "raw" / "v1-ui.png")

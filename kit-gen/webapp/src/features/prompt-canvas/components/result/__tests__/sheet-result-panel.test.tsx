@@ -1,14 +1,21 @@
 /* @vitest-environment jsdom */
 /**
- * PANEL KẾT QUẢ DƯỚI CHÂN MỘT BLOCK — ba tab, và không tab nào nói dối.
+ * PANEL KẾT QUẢ DƯỚI CHÂN MỘT BLOCK — hai tab, và không tab nào nói dối.
  *
  * Ba thứ được khoá ở đây, đều là thứ hỏng thì người dùng KHÔNG NHÌN RA:
- *  ① Đủ ba tab và tab mặc định là «Ảnh gốc» — vì `sheet.image` về TRƯỚC
+ *  ① ĐÚNG HAI tab, và tab mặc định là «Ảnh gốc» — vì `sheet.image` về TRƯỚC
  *    `sheet.ready`, mở thẳng vào «Đã crop» là cho xem một khung trống trong khi
  *    ảnh vừa chờ mấy phút đã nằm ngay tab bên cạnh.
  *  ② Tab «Đã crop» chỉ hiện ô CỦA TẤM NÀY. `#42` trả cả bộ kit; panel treo dưới
  *    chân một block mà hiện ô của tấm khác là nói dối về chỗ đứng.
  *  ③ Lưới trống lúc đang cắt phải nói "đang cắt", không nói "chưa có ô nào".
+ *
+ * ══ VÌ SAO CÓ MỘT CA CANH THỨ ĐÃ BỊ BỎ ═════════════════════════════════════
+ * Tab «Khung xương» bị bỏ theo quyết định sản phẩm: engine thôi gửi ảnh khung
+ * xương, vùng an toàn đi vào prompt bằng toạ độ số. Một ca chỉ đếm "có 2 tab"
+ * sẽ vẫn xanh nếu ai đó thêm lại tab ấy và bỏ đi tab «Đã crop»; nên ca ① gọi
+ * ĐÍCH DANH cái đã bỏ. Bỏ một tính năng cũng là một hợp đồng, và hợp đồng nào
+ * không có test thì lượt refactor sau sẽ lặng lẽ xé.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -95,14 +102,23 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe("ba tab của panel kết quả", () => {
-  it("có đủ Ảnh gốc · Đã crop · Khung xương", () => {
+describe("hai tab của panel kết quả", () => {
+  it("có ĐÚNG hai tab: Ảnh gốc · Đã crop", () => {
     mount();
     const tabs = screen.getAllByRole("tab").map((t) => t.textContent ?? "");
-    expect(tabs).toHaveLength(3);
+    expect(tabs).toHaveLength(2);
     expect(tabs[0]).toContain("Ảnh gốc");
     expect(tabs[1]).toContain("Đã crop");
-    expect(tabs[2]).toContain("Khung xương");
+  });
+
+  it("tab «Khung xương» ĐÃ BỊ BỎ — không còn đường nào mở nó ra", () => {
+    const { container } = mount();
+    expect(screen.queryByRole("tab", { name: /Khung xương/ })).toBeNull();
+    /* Không chỉ mất cái nút: SVG khung xương cũng không được mount ở đâu, kể cả
+       trong một tabpanel đang ẩn. Một component vẫn dựng mà chỉ bị `hidden` là
+       một component vẫn tốn máy và vẫn quay lại được bằng một dòng CSS. */
+    expect(container.querySelector("svg[role='img']")).toBeNull();
+    expect(screen.queryByRole("button", { name: /khung an toàn/i })).toBeNull();
   });
 
   it("mặc định đứng ở «Ảnh gốc» — vì sheet.image về trước sheet.ready", () => {
@@ -171,31 +187,22 @@ describe("tab «Đã crop» — chỉ ô của ĐÚNG tấm này", () => {
   });
 });
 
-describe("tab «Khung xương» — SVG vẽ tại chỗ, không cần mạng", () => {
-  const openSkeleton = () => fireEvent.mouseDown(screen.getByRole("tab", { name: /Khung xương/ }));
-
-  it("vẽ preview của đúng sheet trong contract", () => {
-    const { container } = mount();
-    openSkeleton();
-    const svg = container.querySelector("svg[role='img']");
-    expect(svg).not.toBeNull();
-    expect(svg?.getAttribute("aria-label")).toContain("sheet ui");
-    /* Không một request ảnh nào phát sinh cho tab này. */
+describe("không còn ĐƯỜNG NÀO tới ảnh khung xương", () => {
+  /* `skeleton/<id>.png` là thư mục mà agent vẫn mở (`routes/files.mjs`), nên một
+     lượt xin nhầm sẽ THÀNH CÔNG và không ai thấy gì bất thường — trừ việc panel
+     tải một ảnh mà máy vẽ không còn dùng. Ca này canh đúng lượt xin ấy. */
+  it("panel KHÔNG xin một byte nào từ thư mục skeleton/", () => {
+    mount();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /Đã crop/ }));
     expect(asked.every((a) => !a.path.startsWith("skeleton/"))).toBe(true);
   });
 
-  it("bật/tắt được khung an toàn", () => {
-    mount();
-    openSkeleton();
-    const toggle = screen.getByRole("button", { name: /khung an toàn/i });
-    expect(toggle.getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(toggle);
-    expect(screen.getByRole("button", { name: /khung an toàn/i }).getAttribute("aria-pressed")).toBe("false");
-  });
-
-  it("sheet không có trong bản thiết kế ⇒ nói rõ, không vẽ khung rỗng bí ẩn", () => {
+  it("tấm lạ ⇒ vẫn dựng được panel, không rơi vào nhánh «chưa tìm thấy tấm»", () => {
+    /* Trước đây panel tra contract để lấy sheet mà vẽ khung xương, nên một
+       `sheetId` không có trong contract cho ra một câu lỗi. Nay panel chỉ cần
+       `sheetId` để LỌC ô đã cắt: tấm lạ = không có ô nào, không phải một lỗi. */
     mount({ sheetId: "khong-co" });
-    openSkeleton();
-    expect(screen.getByText(/Chưa tìm thấy tấm/)).toBeTruthy();
+    expect(screen.queryByText(/Chưa tìm thấy tấm/)).toBeNull();
+    expect(screen.getByRole("tab", { name: /Ảnh gốc/ })).toBeTruthy();
   });
 });

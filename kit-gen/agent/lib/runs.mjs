@@ -126,26 +126,25 @@ export class RunStore {
         },
       })
     }
-    if (!["gen", "slice", "skeleton"].includes(kind)) fail("BAD_REQUEST", `invalid run kind ${kind}`)
+    /* "skeleton" ĐÃ RỜI KHỎI TẬP NÀY (27/08/2026). Nó từng là lượt chạy "vẽ lại khung
+       xương"; khung xương không còn được render nữa nên một lượt như thế không có gì
+       để làm. Từ chối THẲNG ở đây thay vì cho chạy một lượt rỗng: một run báo "xong"
+       mà không sinh ra file nào là lời nói dối tốn công gỡ hơn một lỗi 400. */
+    if (!["gen", "slice"].includes(kind)) fail("BAD_REQUEST", `invalid run kind ${kind}`)
 
     const { contract } = await readContract(this.ws, projectId)
     const known = new Map(contractJobs(contract).map(j => [j.job, j]))
-    let selected = []
-    if (kind === "skeleton") {
-      selected = []
-    } else {
-      const want = Array.isArray(jobs) && jobs.length ? jobs.map(String) : [...known.keys()]
-      const unknown = want.filter(j => !known.has(j))
-      if (unknown.length) fail("UNKNOWN_JOB", `unknown jobs: ${unknown.join(", ")}`, { details: { unknown } })
-      for (const j of want) assertMatch(RE_JOB, j, "BAD_REQUEST", "job")
-      selected = want.map(j => known.get(j))
-    }
+    const want = Array.isArray(jobs) && jobs.length ? jobs.map(String) : [...known.keys()]
+    const unknown = want.filter(j => !known.has(j))
+    if (unknown.length) fail("UNKNOWN_JOB", `unknown jobs: ${unknown.join(", ")}`, { details: { unknown } })
+    for (const j of want) assertMatch(RE_JOB, j, "BAD_REQUEST", "job")
+    const selected = want.map(j => known.get(j))
 
     const runId = await this.nextRunId(projectId)
     const dir = join(projectDir(this.ws, projectId), "runs", runId)
     await ensureDir(join(dir, "logs"))
 
-    const total = kind === "skeleton" ? 1 : selected.length
+    const total = selected.length
     const phases = kind === "gen" && autoSliceAfterGen ? 2 : 1
     const run = {
       id: runId, projectId, kind, status: "queued",

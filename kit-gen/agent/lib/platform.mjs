@@ -117,7 +117,7 @@ function bashEnvPath(bashExe) {
   const dirs = [
     // shim `python3` do installer sinh (Windows không có lệnh tên python3)
     home ? join(home, "bin") : null,
-    // gen.sh dòng 19 gọi `node render-skeleton.mjs`
+    // node cho mọi thứ gen.sh/cover.sh gọi bằng node (và cho `codex` do npm cài)
     home ? join(home, "tools", "node") : null,
     // gen.sh/cover.sh gọi `codex` — npm sinh script không đuôi ở .bin, bash chạy được
     home ? join(home, "tools", "node_modules", ".bin") : null,
@@ -166,7 +166,7 @@ export function pythonCommand(args = []) {
  * spawn engine đều đỏ chỉ vì dòng `json.load(open('styles.json'))` trong engine.
  *
  * `PYTHONUTF8=1` (UTF-8 Mode, Python 3.7+) đổi mặc định của `open()` VÀ của stdio sang
- * UTF-8 cho CẢ tiến trình — vá được cả `slice.py`, `skeleton.py` lẫn mọi heredoc python
+ * UTF-8 cho CẢ tiến trình — vá được cả `slice.py`, `geometry.py` lẫn mọi heredoc python
  * trong gen.sh/cover.sh mà không phải sửa từng lời gọi `open()`. `PYTHONIOENCODING`
  * chốt thêm phần stdio phòng khi UTF-8 Mode bị tắt bằng `-X utf8=0`.
  *

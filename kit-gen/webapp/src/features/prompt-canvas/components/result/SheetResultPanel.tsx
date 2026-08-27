@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Download, FolderOpen, Image as ImageIcon, Layers, Ruler, Sparkles } from "lucide-react";
+import { Download, FolderOpen, Image as ImageIcon, Layers, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -11,14 +11,11 @@ import { KitImage } from "@/features/kit/components/KitImage";
 import { forgetProject, loadFull } from "@/features/kit/lib/image-source";
 import { saveProjectFile } from "@/features/kit/lib/download";
 import { poseFileSet } from "@/features/kit/lib/export-scale";
-import { SkeletonPreview } from "@/features/design/preview/SkeletonPreview";
-import { canvasOf } from "@/features/design/preview/geometry";
 import { toastError, toastSuccess } from "@/features/projects/lib/feedback";
 import { useContract, useKit, useProject, useRevealProject } from "@/lib/hooks";
-import type { Sheet } from "@/lib/types/contract";
 import { cellsOfSheet, rawSheetImagePath } from "../../lib/result/sheet-files";
 import { copySheetAsFigmaNode, measureImage } from "../../lib/result/sheet-figma";
-import { PREVIEW_MAX_H, PREVIEW_MAX_PX } from "../../lib/ui";
+import { PREVIEW_MAX_H } from "../../lib/ui";
 import { SheetCellGrid } from "./SheetCellGrid";
 import { SheetVersionBar } from "./SheetVersionBar";
 
@@ -26,14 +23,24 @@ import { SheetVersionBar } from "./SheetVersionBar";
  * PANEL KẾT QUẢ dưới chân MỘT block của Prompt Canvas.
  *
  * ╔══ PHẠM VI — ĐỌC TRƯỚC KHI THÊM BẤT CỨ THỨ GÌ ════════════════════════════╗
- * ║ Chủ sản phẩm chốt: **3 tab xem + chọn phiên bản + Copy Figma + Tải về**.   ║
+ * ║ Chủ sản phẩm chốt: **2 tab xem + chọn phiên bản + Copy Figma + Tải về**.   ║
  * ║ KHÔNG có pipeline tách element mới ở đây. Mọi dữ liệu đã có sẵn:           ║
  * ║   · ảnh gốc     ← `raw/<job>.png` | `runs/<runId>/artifacts/<job>.png`     ║
- * ║   · khung xương ← `SkeletonPreview` (SVG thuần, KHÔNG cần mạng)            ║
  * ║   · ô đã crop   ← `#42 GET …/kit`, lọc theo `sheet`                        ║
  * ║   · phiên bản   ← `#39`/`#40` (3 đời)                                      ║
  * ║ Panel chỉ ghép chúng lại. Thêm một đường tính toán ảnh mới ở tầng webapp   ║
  * ║ là tạo bản thứ hai của sự thật, và bản thứ hai luôn là bản không ai đo.    ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ╔══ TAB «KHUNG XƯƠNG» ĐÃ BỊ BỎ — QUYẾT ĐỊNH SẢN PHẨM, KHÔNG PHẢI VIỆC DỞ ══╗
+ * ║ Engine THÔI GỬI ẢNH KHUNG XƯƠNG cho máy vẽ: vùng an toàn nay đi vào prompt║
+ * ║ bằng TOẠ ĐỘ SỐ. Cái tab ấy vì thế mất chỗ đứng — nó vẽ một tấm ảnh mà     ║
+ * ║ không ai còn nhìn, và đó là kiểu sai tệ nhất của một màn kết quả: nó       ║
+ * ║ trông như đang cho xem thứ engine dùng, trong khi engine không dùng nữa.  ║
+ * ║ Bỏ hẳn, không ẩn đi: một tab ẩn là một chỗ để ai đó bật lại vì tưởng nó    ║
+ * ║ chỉ đang tắt tạm. `SkeletonPreview` VẪN CÒN — màn Thiết kế cũ             ║
+ * ║ (`features/design/preview/SheetPreviewPanel`) còn dùng nó thật; thứ bị     ║
+ * ║ cắt ở đây là ĐƯỜNG DẪN TỚI nó từ màn soạn, không phải bản thân component. ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
  * ╔══ VÌ SAO TAB MẶC ĐỊNH LÀ «ẢNH GỐC» ══════════════════════════════════════╗
@@ -62,12 +69,6 @@ export interface SheetResultPanelProps {
    */
   runId?: string | null;
   /**
-   * Sheet của contract cho `SkeletonPreview`. Truyền vào nếu màn cha đang giữ bản
-   * SOẠN DỞ (canvas sửa mà chưa lưu) — bản soạn dở mới là thứ người dùng đang nhìn.
-   * Bỏ trống ⇒ lấy sheet cùng `sheetId` trong contract ĐÃ LƯU.
-   */
-  sheet?: Sheet | null;
-  /**
    * Đường ảnh mà `sheet.image` vừa báo (tương đối trong project). Đổi giá trị ⇒ panel
    * quên ảnh cũ trong cache và tải lại — cùng một đường dẫn `raw/<job>.png` sau một
    * lượt gen mới vẫn là BYTE KHÁC.
@@ -80,15 +81,14 @@ export interface SheetResultPanelProps {
   className?: string;
 }
 
-type TabId = "raw" | "cut" | "skeleton";
+type TabId = "raw" | "cut";
 
 export function SheetResultPanel({
-  projectId, sheetId, job, runId = null, sheet = null,
+  projectId, sheetId, job, runId = null,
   artifactPath = null, cutting = false, busy = false, className,
 }: SheetResultPanelProps) {
   const [tab, setTab] = React.useState<TabId>("raw");
   const [zoom, setZoom] = React.useState(false);
-  const [safeFrame, setSafeFrame] = React.useState(true);
   const [copying, setCopying] = React.useState(false);
 
   const contract = useContract(projectId);
@@ -163,8 +163,6 @@ export function SheetResultPanel({
     () => poseFileSet(contract.data?.contract ?? null),
     [contract.data?.contract],
   );
-  /* Sheet của contract ĐÃ LƯU là đường lùi; bản soạn dở (prop) luôn thắng. */
-  const skeletonSheet = sheet ?? contract.data?.contract.sheets.find((s) => s.id === sheetId) ?? null;
 
   /**
    * COPY CẢ TẤM sang Figma.
@@ -212,7 +210,6 @@ export function SheetResultPanel({
           <TabsList>
             <TabsTrigger value="raw"><ImageIcon aria-hidden strokeWidth={1.5} />Ảnh gốc</TabsTrigger>
             <TabsTrigger value="cut">Đã crop{cells.length > 0 ? ` (${cells.length})` : ""}</TabsTrigger>
-            <TabsTrigger value="skeleton">Khung xương</TabsTrigger>
           </TabsList>
           <SheetVersionBar projectId={projectId} job={job} name={name} busy={busy} onRestored={reloadImage} />
         </div>
@@ -266,41 +263,6 @@ export function SheetResultPanel({
           )}
         </TabsContent>
 
-        <TabsContent value="skeleton" className="mt-3">
-          {skeletonSheet === null ? (
-            <p className="text-body text-fg-muted">Chưa tìm thấy tấm «{sheetId}» trong bản thiết kế.</p>
-          ) : (
-            <>
-              <div className="flex items-center justify-end">
-                <Button
-                  type="button" variant="ghost" size="sm"
-                  aria-pressed={safeFrame}
-                  onClick={() => setSafeFrame((on) => !on)}
-                >
-                  <Ruler aria-hidden strokeWidth={1.5} />
-                  {safeFrame ? "Ẩn khung an toàn" : "Hiện khung an toàn"}
-                </Button>
-              </div>
-              {/* SVG dựng tại chỗ: không tốn một request nào và luôn có, kể cả khi
-                  agent chưa chạy. Đây là bố cục mà engine SẼ vẽ, không phải ảnh gen.
-
-                  TRẦN CHIỀU CAO KHÔNG GẮN ĐƯỢC THẲNG LÊN `<svg>`: nó khai `w-full h-auto`
-                  và tự cao theo `viewBox`, nên `max-h` trên chính nó chỉ CẮT hình. Cách
-                  đúng là chặn BỀ NGANG của thẻ bọc bằng đúng tỉ lệ khổ ảnh:
-                      rộng-tối-đa = 320px × (w ÷ h)
-                  Số này tính từ `canvasOf` — CÙNG hàm mà svg dùng để dựng `viewBox`, nên
-                  hai bên không bao giờ nói hai tỉ lệ khác nhau. Khung xương của sheet
-                  1536×1024 vì thế cao đúng 320px thay vì gần 800px — đúng lời chê "xương
-                  to quá". `w-full` giữ nguyên để ở màn hẹp nó vẫn co theo cột. */}
-              <div
-                className="mt-2 flex justify-center"
-                style={{ maxWidth: `${Math.round(PREVIEW_MAX_PX * (canvasOf(skeletonSheet).w / canvasOf(skeletonSheet).h))}px` }}
-              >
-                <SkeletonPreview sheet={skeletonSheet} showIndex showSafeFrame={safeFrame} />
-              </div>
-            </>
-          )}
-        </TabsContent>
       </Tabs>
 
       {/* HÀNG NÀY BIẾN MẤT KHI CHƯA CÓ ẢNH. Ba nút đều thao tác trên `raw/<job>.png`;

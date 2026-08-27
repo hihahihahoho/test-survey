@@ -120,7 +120,10 @@ export function PromptComposerScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-canvas text-fg">
+    /* `data-prompt-lab` ở gốc màn — cùng lý do với `PromptCanvasScreen`: luật vòng
+       focus mảnh trong `prompt-lab.css` nay nói cho MỌI ô nhập của màn, không chỉ
+       cho vùng contenteditable. */
+    <div data-prompt-lab="" className="min-h-screen bg-canvas text-fg">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-8">
         {/* ── Nhãn lab: phải là thứ ĐẦU TIÊN đọc được trên trang ───────────── */}
         <div className="flex items-start gap-3 rounded-2 border border-warn/40 bg-warn/[var(--kg-tint-a)] px-4 py-3">

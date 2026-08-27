@@ -1,5 +1,5 @@
 {
-  "_note": "Contract v4 — rút từ Figma game thật (VietinBank iPay 'Mở túi - Khui quà', fileKey vqpCLz0PsQXhddbSHWRH5R). Element nào code cần điều khiển độc lập (đổi %, swap state) thì tách thành file riêng, nằm ở Ô KHÁC NHAU trên sheet. Thứ tự trong components = thứ tự ô row-major; tên file giữ số thứ tự semantic. Element có glow đặt ở ô biên/góc. Track và fill của progress KHÔNG kề nhau. skel = khung xương vẽ vào ảnh ref cho codex (skeleton.py): shape + w/h theo tỷ lệ ô; anchor 'bottom' = dính đáy ô.",
+  "_note": "Contract v4 — rút từ Figma game thật (VietinBank iPay 'Mở túi - Khui quà', fileKey vqpCLz0PsQXhddbSHWRH5R). Element nào code cần điều khiển độc lập (đổi %, swap state) thì tách thành file riêng, nằm ở Ô KHÁC NHAU trên sheet. Thứ tự trong components = thứ tự ô row-major; tên file giữ số thứ tự semantic. Element có glow đặt ở ô biên/góc. Track và fill của progress KHÔNG kề nhau. skel = SAFE ZONE của ô: shape + w/h theo tỷ lệ ô; anchor 'bottom' = dính đáy ô. gen.sh in w/h này ra thành toạ độ pixel tuyệt đối trong prompt ('safe zone x=…, y=…') và slice.py cắt asset theo đúng toạ độ đó — cùng một hàm trong geometry.py. (Trước 27/08/2026 nó được VẼ thành một ảnh khung xương đính kèm cho codex; ảnh đó đã bỏ.)",
   "sheets": [],
   "styles": [
     {

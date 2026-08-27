@@ -1,5 +1,16 @@
 # Handoff — Spritesheet, safe zone và Figma
 
+> **LỖI THỜI MỘT PHẦN — 27/08/2026.** Tài liệu này mô tả cách lái model bằng **ảnh
+> đính kèm** ("IMAGE 1 — contract skeleton"). Ảnh đó đã bỏ: engine không render và
+> không đính khung xương nữa, prompt in thẳng toạ độ pixel của safe zone từng ô
+> (`geometry.py`, dùng chung với `slice.py`). Xem đầu `docs/BACKLOG.md`.
+>
+> Phần **VẪN CÒN GIÁ TRỊ** và đã đi thẳng vào prompt hiện tại là §5.3 + §8.1: nói ra
+> HẬU QUẢ ("phần mềm sẽ crop đúng bốn toạ độ này") thay vì ra lệnh "respect the frame",
+> và cấm đích danh hành vi hỏng phổ biến nhất — model co mặt nội dung lại để nhét viền
+> vào trong. `gen.sh` còn trích dẫn mục này ở khối neo hình học.
+
+
 > Cập nhật: 2026-08-13  
 > Trạng thái: spike đang thử nghiệm, chưa phải pipeline production hoàn tất  
 > Nhánh hiện tại: `feat/kitgen-local-runtime`

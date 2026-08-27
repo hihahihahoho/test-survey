@@ -2,17 +2,14 @@
  *
  * SỰ THẬT ĐÃ ĐỌC TỪ MÃ (không phải giả định):
  *   · gen.sh dòng 5:   `cd "$(dirname "$0")"` ; ROOT="$(pwd)"
- *   · slice.py dòng 60: HERE = dirname(abspath(__file__)) ; đọc HERE/styles.json, ghi HERE/kits
- *   · render-skeleton.mjs: HERE = dirname(fileURLToPath(import.meta.url)); đọc HERE/styles.json,
- *     nạp HERE/silhouettes.js + HERE/skeleton-svg.js, ghi HERE/skeleton
+ *   · slice.py:        HERE = dirname(abspath(__file__)) ; đọc HERE/styles.json + HERE/geometry.py,
+ *                      ghi HERE/kits
  *   ⇒ engine neo mọi đường dẫn theo THƯ MỤC CHỨA SCRIPT, **không** theo cwd.
  *     Vì vậy chạy `bash <engine>/gen.sh` với cwd=<project> vẫn đọc styles.json của <engine>.
  *
  * CÁCH XỬ LÝ: COPY engine vào chính thư mục project rồi chạy bản copy đó.
- *   → HERE = <project> ⇒ styles.json / raw / kits / prompts / skeleton / logs đều nằm trong project
+ *   → HERE = <project> ⇒ styles.json / raw / kits / prompts / logs đều nằm trong project
  *   → đúng tinh thần "project tự chứa" (architecture §2.2), không sửa một dòng engine nào.
- *   (Dùng COPY chứ không symlink: `import.meta.url` của Node GIẢI symlink, nên bản symlink của
- *    render-skeleton.mjs sẽ đọc styles.json của repo — đúng cái ta phải tránh.)
  *
  * CHỐNG "ĐỔ QUOTA OAN": filter của gen.sh là SUBSTRING (dòng ~180), nên truyền "tet-main"
  * sẽ chạy luôn "tet-main2". Vì vậy pha gen KHÔNG dùng argv filter: agent ghi styles.json
@@ -33,13 +30,15 @@ const REPO_DIR = resolve(HERE, "..", "..")
 const ENGINE_FILES = [
   { name: "gen.sh", required: true, mode: 0o755 },
   { name: "slice.py", required: true },
-  // Khung xương: render-skeleton.mjs (Node + @resvg/resvg-wasm) gọi skeleton-svg.js,
-  // skeleton-svg.js gọi silhouettes.js. Cả ba phải đi cùng nhau — thiếu một cái là
-  // gen.sh dừng ở bước khung xương (cố ý, không còn bản PIL để rơi về).
-  { name: "skeleton.html", required: false },
-  { name: "skeleton-svg.js", required: false },
-  { name: "silhouettes.js", required: false },
-  { name: "render-skeleton.mjs", required: false },
+  /* geometry.py là BẮT BUỘC, và bắt buộc theo nghĩa mạnh nhất: cả hai file trên đều
+     `import geometry`. Thiếu nó thì gen.sh chết ở dòng import với một `ModuleNotFoundError`
+     mà người dùng không đọc ra được điều gì.
+     Từ 27/08/2026 nó thay chỗ của bộ khung xương (skeleton.html / skeleton-svg.js /
+     render-skeleton.mjs, đã xoá): prompt nay TỰ NÓI toạ độ safe zone thay vì đính một
+     tấm PNG vẽ khung, và toạ độ đó phải ra từ cùng hàm mà slice.py cắt.
+     `silhouettes.js` KHÔNG còn trong danh sách — engine không nạp nó nữa; file vẫn ở
+     repo vì webapp rút dữ liệu shape từ đó (features/design/scripts/extract-shapes.mjs). */
+  { name: "geometry.py", required: true },
   { name: "element-lib.json", required: false },
   { name: "validate_output_geometry.py", required: false },
 ]
@@ -73,11 +72,11 @@ export async function prepareEngine(engineDir, projectDirAbs) {
 }
 
 /* CHUẨN HOÁ SHAPE Ở ĐÚNG MỐI NỐI agent → engine.
-   Lý do (QA LEAD đã chạy để xác nhận, không phải suy đoán):
-     · silhouettes.js không có nhánh "rect" ⇒ trả chuỗi rỗng = ô trống câm, và
-       khung xương im lặng mất hẳn một element.
-     (Bản PIL skeleton.py trước đây còn ném `KeyError: 'rect'` — file đó đã xoá
-      cùng BACKLOG #15, nhưng lý do chuẩn hoá thì không đổi.)
+   Lý do gốc là bộ vẽ khung xương: `silhouettes.js` không có nhánh "rect" ⇒ trả chuỗi
+   rỗng = ô trống câm (và bản PIL trước nó còn ném `KeyError: 'rect'`). Khung xương đã
+   bỏ hẳn 27/08/2026, nhưng phép dịch này Ở LẠI: `slice.py` vẫn phân nhánh theo
+   `skel.shape` (`"empty"` / `"full"` / `"pose"`), và webapp cũng đọc cùng tập shape đó
+   để vẽ preview. Một giá trị ngoài tập là một ô hành xử khác cả engine lẫn UI.
    Mà "rect" lại là skel MẶC ĐỊNH mà agent tự gán cho element thiếu skel (importer/templates)
    ⇒ đây là ĐƯỜNG MẶC ĐỊNH của luồng nhập, không phải ca hiếm.
    Sửa ở đây thay vì sửa engine vì gen.sh/slice.py là file bị CẤM sửa, và vì contract cũ
@@ -156,7 +155,7 @@ export const PROMPTS_ONLY_TIMEOUT_MS = 60_000
 export async function renderPromptsOnly(engineDir, projectDirAbs, contract, { timeoutMs = PROMPTS_ONLY_TIMEOUT_MS } = {}) {
   await prepareEngine(engineDir, projectDirAbs)
   await materializeStyles(projectDirAbs, contract)
-  for (const d of ["prompts", "skeleton", "logs"]) await ensureDir(join(projectDirAbs, d))
+  for (const d of ["prompts", "logs"]) await ensureDir(join(projectDirAbs, d))
   const { cmd, args, env } = buildCommand("gen", projectDirAbs, { maxJobs: 1 })
   return new Promise(done => {
     let child
@@ -211,18 +210,10 @@ export function buildCommand(kind, projectDirAbs, { variants = [], sheets = null
     const p = pythonCommand([join(projectDirAbs, "slice.py"), ...variants, ...only])
     return { cmd: p.cmd, args: p.args, env: { ...env, ...pythonEnv() } }
   }
-  if (kind === "skeleton") {
-    /* TRƯỚC 14/08 dòng này chạy `python3 skeleton.py` — tức nút "vẽ lại khung xương"
-       của app luôn dùng bản PIL, bản đo được là lệch 17,6% khối lượng mực và vẽ sai
-       hẳn dáng pose, KHÁC với khung xương mà gen.sh thật sự dùng. Nay cả hai đường
-       gọi chung một renderer. `process.execPath` = đúng Node đang chạy agent (bền
-       hơn `node` trần: PATH của tiến trình con không chắc có node, nhất là Windows). */
-    return {
-      cmd: process.execPath,
-      args: [join(projectDirAbs, "render-skeleton.mjs")],
-      env: { ...env, KITGEN_GRID_GUIDE: "v16" },
-    }
-  }
+  /* KHÔNG CÒN `kind === "skeleton"`. Nó từng chạy `render-skeleton.mjs` cho nút "vẽ
+     lại khung xương". Khung xương đã bỏ (xem khối đầu gen.sh), nên nhánh này không
+     còn thứ gì để chạy — và `runs.mjs` cũng đã loại "skeleton" khỏi tập kind hợp lệ,
+     tức request kiểu cũ bị từ chối Ở CỔNG với BAD_REQUEST chứ không rơi tới đây. */
   throw new Error(`unknown run kind ${kind}`)
 }
 

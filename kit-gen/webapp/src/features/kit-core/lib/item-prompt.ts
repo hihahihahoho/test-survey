@@ -77,6 +77,11 @@ const orientLine = (kind: keyof typeof CANVAS_HEADER) => `Canvas orientation: ${
  * vẽ trên tấm đen nữa: quầng sáng nằm sẵn trong kênh α, đủ cả dải mờ. Câu này vì
  * thế chỉ còn ra hợp đồng về ĐỘ TAN — sáng phải nhoè hết ra nền trong suốt.
  *
+ * 27/08/2026 — "gray silhouette" ĐỔI THÀNH "safe zone". Không phải sửa văn: bóng xám
+ * là một vật thể trong ẢNH KHUNG XƯƠNG đính kèm, và ảnh đó không còn được render nữa
+ * (`gen.sh` nay in thẳng toạ độ safe zone của từng ô). Câu cũ vì thế trỏ vào một thứ
+ * model không nhìn thấy — nó sẽ tự bịa ra "bóng xám" nào đó rồi vẽ theo.
+ *
  * Vì sao phải mirror (research-glow-extraction §4.2 "Lỗ 3"): bật "nền đen cho hiệu ứng
  * phát sáng" là đổi HẲN câu lệnh gửi cho máy vẽ. Nếu panel "Prompt sẽ gửi đi" không đổi
  * một chữ thì nó đang nói dối về chính thứ nó tự nhận là bằng chứng — và người dùng sẽ
@@ -86,8 +91,8 @@ const orientLine = (kind: keyof typeof CANVAS_HEADER) => `Canvas orientation: ${
  * `__tests__/cell-background.test.tsx` đỏ (nó đọc `gen.sh` thật, không đọc trí nhớ).
  */
 export function glowCellPrompt(): string {
-  return " — LIGHT EFFECT: for THIS cell, ignore the rule about replacing the gray silhouette"
-    + " with a continuous content surface: there is no surface here. The gray shape only marks"
+  return " — LIGHT EFFECT: for THIS cell, ignore the rule about filling the safe zone"
+    + " with a continuous content surface: there is no surface here. The safe zone only marks"
     + " HOW FAR the light reaches; it is not an area to fill. This element is pure light. The"
     + " halo fades out by LOWERING ALPHA, not by painting paler pixels: at the outer edge the"
     + " alpha reaches 0 while the colour stays the light's own colour, so the fade is gradual"
@@ -106,7 +111,7 @@ export function glowCellPrompt(): string {
  * THẲNG trong kênh α, nên câu này ra hợp đồng ngay trên α.
  */
 export function glassCellPrompt(): string {
-  return " — SEE-THROUGH ELEMENT: the gray silhouette marks the pane, but 'replacing it with a"
+  return " — SEE-THROUGH ELEMENT: the safe zone marks the pane, but 'filling it with a"
     + " continuous content surface' here means a SEE-THROUGH surface, not a solid one. The body"
     + " of this element is a thin sheet of tinted glass. Draw it with a LOW ALPHA VALUE — about"
     + " 64 out of 255 for a clear pane, up to 128 for a strongly tinted one — keeping the glass's"

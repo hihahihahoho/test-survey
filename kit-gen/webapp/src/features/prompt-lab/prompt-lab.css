@@ -74,6 +74,38 @@
   background-color: rgb(var(--kg-raised));
 }
 
+/* ── CÙNG VÒNG FOCUS ẤY CHO MỌI Ô NHẬP CỦA MÀN ────────────────────────────────
+   ╔══ *"FOCUS XẤU QUÁ"* — VÀ NÓ LÀ CÙNG MỘT CÁI XẤU, Ở CHỖ THỨ HAI ══════════╗
+   ║ Lượt trước hạ liều vòng focus cho `.ProseMirror` và dừng ở đó. Nhưng màn  ║
+   ║ này còn BỐN loại ô nhập nữa, tất cả đều là `<input>` thật nên tất cả đều  ║
+   ║ ăn nguyên `ring-2` của §5.8-A4:                                          ║
+   ║   · ô ghi chú của dòng element (hàng 2, cao 28px — vòng 2px quây quanh    ║
+   ║     một ô mảnh như thế là thứ chủ sản phẩm vừa chỉ mặt trên ảnh chụp);    ║
+   ║   · ô tìm trong hộp tra danh mục;                                        ║
+   ║   · hai ô số W×H của pill cỡ;                                            ║
+   ║   · ô hex của pill màu thương hiệu.                                      ║
+   ║ Một màn có HAI ngôn ngữ focus thì cái mạnh hơn trông như lỗi. Nên luật ở  ║
+   ║ đây nói CHO CẢ MÀN, không dán riêng vào từng component.                   ║
+   ║                                                                          ║
+   ║ VẪN KHÔNG BỎ RING (§5.8-A4): 2px quây ngoài ⇒ 1px ôm trong + nền nhích    ║
+   ║ sáng, y hệt liều đã chọn cho vùng soạn thảo. Đo bằng độ đặc hiệu, không   ║
+   ║ bằng may rủi: `[data-prompt-lab] input:focus-visible` = (0,2,1) THẮNG cả  ║
+   ║ luật chung `:where(…):focus-visible` (0,1,0) lẫn utility                  ║
+   ║ `.focus-visible\:ring-2:focus-visible` (0,2,0) của component `Input` —    ║
+   ║ nên nó không phụ thuộc thứ tự nạp file, thứ vốn đổi giữa dev và bản build.║
+   ║ KHÔNG đụng `border-radius`: mỗi ô tự mang bậc bo của nó, và ghi đè ở đây  ║
+   ║ là bắt cả bốn loại ô có chung một hình dạng chúng không có.               ║
+   ╚══════════════════════════════════════════════════════════════════════════╝ */
+[data-prompt-lab] input:focus-visible,
+[data-prompt-lab] textarea:focus-visible {
+  /* `outline: none` ở đây KHÔNG phải bỏ vòng focus — dòng ngay dưới dựng lại nó
+     bằng `box-shadow`. Cần vì luật chung `@apply outline-none ring-2` đặt cả hai,
+     và nếu chỉ ghi đè `box-shadow` thì `outline` của Tailwind vẫn còn nguyên. */
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgb(var(--kg-focus-ring) / 0.55);
+  background-color: rgb(var(--kg-raised));
+}
+
 /* Chữ mờ của @tiptap/extension-placeholder: nó gắn `data-placeholder` + class
    `is-empty` lên node rỗng, phần vẽ ra là việc của CSS. */
 [data-prompt-lab] .ProseMirror .is-empty::before {

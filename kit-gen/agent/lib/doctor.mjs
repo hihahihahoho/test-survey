@@ -13,23 +13,22 @@ import { resolveEngine } from "./engine.mjs"
 import { shortenPath } from "./redact.mjs"
 import { pythonCommand, winShellOpts, winSpawnOpts, pythonEnv } from "./platform.mjs"
 
-/* ── Trình render khung xương: @resvg/resvg-wasm ──────────────────────────────
-   PHẢI hỏi ĐÚNG CÂU mà render-skeleton.mjs hỏi. Bản trước hỏi câu khác:
+/* ── Trình render SVG: @resvg/resvg-wasm ──────────────────────────────────────
+   ⚠️ TỪ 27/08/2026 GÓI NÀY KHÔNG CÒN AI DÙNG TRONG ENGINE.
+   Nó tồn tại để `render-skeleton.mjs` raster ảnh khung xương ra PNG; khung xương đã
+   bỏ (prompt nay tự nói toạ độ safe zone — xem khối đầu `gen.sh`) và cả ba file
+   skeleton.* đã xoá. Phép dò dưới đây Ở LẠI vì `install.sh` vẫn cài gói và màn
+   "Cài đặt" của webapp vẫn hiện một dòng cho nó: gỡ ở đây mà không gỡ đồng thời ở
+   hai chỗ kia thì dòng đó thành đỏ vĩnh viễn. Việc gỡ trọn (installer + PowerShell
+   + màn setup) là một thay đổi cắt ngang, làm riêng.
 
-     node -e "require.resolve('@resvg/resvg-wasm')"
-
-   `require.resolve` trần neo theo THƯ MỤC LÀM VIỆC của tiến trình agent, mà gói
-   này KHÔNG bao giờ nằm ở đó — installer cài vào prefix riêng
-   (`npm install --prefix "$KITGEN_HOME/tools"`, install.sh:769). Bản cài chính
-   quy sống sót chỉ nhờ launcher có đặt sẵn NODE_PATH (install.sh:830); mọi cách
-   khởi động KHÔNG qua launcher (dev chạy `node agent/server.mjs`, hoặc launcher
-   bị sửa) đều bị báo **"Thiếu — KHÔNG gen được ảnh"** trong khi gói vẫn nằm yên ở
-   `~/.kitgen/tools` và gen THẬT SỰ chạy được. Báo thiếu oan ⇒ khách đi cài lại.
-
-   Nên ở đây dò ĐÚNG danh sách neo của render-skeleton.mjs::resvgAnchors, và làm
-   trong tiến trình (createRequire) thay vì spawn: nhanh hơn, và vẫn tôn trọng
-   NODE_PATH vì Node gắn Module.globalPaths vào mọi require không tương đối.
-   suite-system có ca kiểm ĐỌC render-skeleton.mjs để chặn hai danh sách lệch nhau. */
+   Vì sao phép dò lại phức tạp thế: `require.resolve` trần neo theo THƯ MỤC LÀM VIỆC
+   của tiến trình agent, mà gói này KHÔNG bao giờ nằm ở đó — installer cài vào prefix
+   riêng (`npm install --prefix "$KITGEN_HOME/tools"`). Bản cài chính quy sống sót chỉ
+   nhờ launcher có đặt sẵn NODE_PATH; mọi cách khởi động KHÔNG qua launcher đều bị báo
+   thiếu OAN trong khi gói vẫn nằm yên ở `~/.kitgen/tools`. Nên dò theo danh sách neo
+   của installer, và làm trong tiến trình (createRequire) thay vì spawn: nhanh hơn, và
+   vẫn tôn trọng NODE_PATH vì Node gắn Module.globalPaths vào mọi require không tương đối. */
 export function resvgAnchorDirs() {
   const home = process.env.KITGEN_HOME
     || (platform() === "win32"
@@ -44,13 +43,11 @@ export function resvgAnchorDirs() {
 }
 
 function rendererInfo() {
-  // KHÔNG còn khoá `fallback`: cố ý. Thiếu gói này là KHÔNG gen được, không phải
-  // "chạy bản dự phòng" — báo sai chỗ này chính là lỗi mà BACKLOG #15 gỡ ra.
   for (const dir of resvgAnchorDirs()) {
     try {
       const req = createRequire(join(dir, "package.json"))
       req.resolve("@resvg/resvg-wasm")
-      // render-skeleton.mjs còn ĐỌC file .wasm; gói cài dở phải tính là thiếu.
+      // Gói cài dở (thiếu .wasm) phải tính là thiếu, không phải là có.
       req.resolve("@resvg/resvg-wasm/index_bg.wasm")
       return { ok: true, engine: "@resvg/resvg-wasm" }
     } catch { /* thử neo kế tiếp */ }

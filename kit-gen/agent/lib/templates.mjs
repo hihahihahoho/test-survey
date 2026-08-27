@@ -40,7 +40,7 @@ function elementToComponent(el) {
     file: el.file,
     vi: el.vi ?? el.file,
     spec: el.spec ?? "",
-    skel: structuredClone(el.skel ?? { shape: "rrect", w: 0.8, h: 0.6 }),  // "rect" không vẽ được (skeleton.py:81)
+    skel: structuredClone(el.skel ?? { shape: "rrect", w: 0.8, h: 0.6 }),  // "rect" không thuộc tập shape engine hiểu — engine.mjs dịch sang "rrect"
     fromLib: el.file,
   }
 }

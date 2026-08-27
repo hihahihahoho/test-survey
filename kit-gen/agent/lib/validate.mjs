@@ -5,8 +5,8 @@ import { RE_SHEET_ID, RE_VARIANT_ID, RE_COMPONENT_FILE } from "./paths.mjs"
 /* Đúng tập shape mà silhouettes.js vẽ được (dòng 87–125) + "rect" cho contract nhập từ ngoài. */
 const SHAPES = new Set(["empty", "pose", "pill", "bar", "rrect", "rect", "circle", "burst", "puzzle", "figure", "full"])
 
-/* Khổ canvas — ĐÚNG tập khoá của bảng `CANVAS` trong khối python của gen.sh
-   (và bản chép của nó ở skeleton-svg.js + slice.py). Thêm khổ mới thì sửa cả bốn. */
+/* Khổ canvas — ĐÚNG tập khoá của bảng `geometry.CANVAS`, bảng mà cả gen.sh lẫn
+   slice.py cùng import. Thêm khổ mới thì sửa `geometry.py` và dòng này. */
 const CANVAS_KINDS = new Set(["landscape", "portrait", "square"])
 /* `orient` là field ĐỜI TRƯỚC và cố ý KHÔNG có "square": tấm vuông phải khai qua
    `canvas`. Giữ hẹp để không có hai đường cùng nói một điều. */
@@ -53,8 +53,9 @@ export function validateContract(contract) {
 
     /* KHỔ CANVAS CỦA TẤM. `canvas` là field chính; `orient` (đời cũ, chỉ có
        landscape/portrait) vẫn hợp lệ và vẫn được engine đọc làm đường lùi.
-       CHẶN Ở ĐÂY vì chuỗi lạ KHÔNG nổ ở tầng dưới — cả gen.sh lẫn skeleton-svg.js
-       lẫn slice.py đều rơi về landscape khi không nhận ra chữ, nên một lỗi gõ
+       CHẶN Ở ĐÂY vì chuỗi lạ KHÔNG nổ ở tầng dưới — `geometry.canvas_of` rơi về
+       landscape khi không nhận ra chữ (cố ý: một lỗi gõ không đáng giết cả lượt gen),
+       nên một lỗi gõ
        ("squre") đi xuyên cả đường ống rồi mới hiện ra thành một tấm sai khổ mà
        không ai giải thích được. Là ERROR chứ không phải warning: người dùng đã
        chọn khổ vuông thì nhận về khổ ngang là sai hợp đồng, không phải "gần đúng". */

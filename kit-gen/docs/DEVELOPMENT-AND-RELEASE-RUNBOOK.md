@@ -44,7 +44,8 @@ Máy đã cài KitGen
 | `kit-gen/experiments/` | Spike safe-zone, prompt và ảnh thử local | Không; thư mục đang bị Git ignore |
 
 Prototype quan trọng nhất cho pipeline ảnh là `studio.html`. Nó giải thích cách
-tổ chức sheet, skeleton, safe zone và asset. Giao diện sản phẩm mới được phép đơn
+tổ chức sheet, safe zone và asset. (Phần nó nói về "khung xương đính kèm" đã lỗi
+thời từ 27/08/2026 — xem đầu `docs/BACKLOG.md`: prompt nay tự nói toạ độ.) Giao diện sản phẩm mới được phép đơn
 giản hơn prototype, nhưng không được vô tình đổi contract/pipeline chỉ vì UI khác.
 
 Chạy prototype qua HTTP từ repo root:
@@ -88,8 +89,10 @@ Backend local là `kit-gen/agent/`. Nó phục vụ:
 - React bundle tại `/app/` trong runtime cài đặt;
 - thao tác file/project và chạy engine.
 
-Pipeline ảnh được đóng từ các file engine ở gốc `kit-gen/`, gồm `gen.sh`,
-`slice.py`, `skeleton.py`, renderer skeleton, element library và geometry validator.
+Pipeline ảnh được đóng từ các file engine ở gốc `kit-gen/`, gồm `gen.sh`, `cover.sh`,
+`slice.py`, `geometry.py` (toạ độ ô + safe zone, dùng chung bởi gen.sh và slice.py),
+element library và geometry validator. Danh sách thật nằm ở `scripts/build-runtime.sh`
+— nó `exit 1` khi thiếu một file, nên đừng để hai danh sách lệch nhau.
 
 ### 2.3 Runtime đã cài
 
@@ -140,7 +143,6 @@ Mặc định dữ liệu nằm ngoài runtime, tại `~/KitGen`:
     ├── contract.json
     ├── styles.json
     ├── refs/
-    ├── skeleton/
     ├── prompts/
     ├── raw/
     ├── kits/

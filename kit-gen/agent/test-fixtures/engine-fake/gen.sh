@@ -34,7 +34,10 @@ for j in $jobs; do
     echo "fake prompt for ${j}"
     echo "duong dan tuyet doi cua engine gia: ${PWD}/raw/${j}.png"
   } > "prompts/${j}.txt"
-  echo "skeleton/${j#*-}.png" > "prompts/${j}.att"
+  # .att chỉ còn ẢNH CỦA NGƯỜI DÙNG. Bản thật từng đặt `skeleton/<sheet>.png` ở dòng
+  # đầu; khung xương bỏ 27/08/2026 nên fixture phải khai đúng hình dạng mới, không thì
+  # ca prompt-preview xanh trên một hợp đồng đã chết.
+  echo "refs/${j#*-}.png" > "prompts/${j}.att"
   echo "fake log for ${j}" > "logs/${j}.log"
   # ĐÚNG CHỖ DỪNG CỦA BẢN THẬT: gen.sh thoát ngay sau khi dựng xong prompt/.att, TRƯỚC
   # vòng gọi codex. Fixture phải dừng ở đúng đó thì ca prompt-preview mới chứng minh

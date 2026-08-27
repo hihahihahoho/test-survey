@@ -87,7 +87,13 @@ const MOODS: readonly PillOption[] = [
 /** Chữ hiện trên pill khi giá trị rỗng và kind KHÔNG có nghĩa kế thừa. */
 const PLACEHOLDER: Record<PillKind, string> = {
   theme: "chủ đề",
-  style: "theo phong cách chung",
+  /* «theo chung», KHÔNG phải «theo phong cách chung». Cùng nghĩa, ngắn hơn 11 ký
+     tự — và 11 ký tự ở đây là chuyện bố cục có thật: pill này đứng trong hàng
+     một-dòng của dòng element, sau nhãn trục «Phong cách:». Để nguyên chuỗi cũ
+     là pill đọc ra «Phong cách: theo phong cách chung» — nói hai lần cùng một
+     chữ, và dài tới mức ba pill còn lại bị cắt cụt. Menu vẫn ghi đầy đủ
+     («— theo cái chung —»), nên nghĩa không mất đi đâu. */
+  style: "theo chung",
   scene: "khung cảnh",
   mood: "không khí",
   /* "Không đục" chứ không phải "đục nền": pill để trống phải nói TRẠNG THÁI đang

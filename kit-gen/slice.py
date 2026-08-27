@@ -53,6 +53,13 @@ except (ImportError, RuntimeError):        # thiếu lib ⇒ bỏ bước dọn 
     HAS_NDIMAGE = False
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# HÌNH HỌC DÙNG CHUNG VỚI PROMPT. `geometry.py` nằm cạnh file này (engine.mjs copy
+# cả hai vào project). Bốn con số mà prompt HỨA với model và bốn con số dao cắt
+# DÙNG phải ra từ cùng một hàm — trước 27/08/2026 chúng là hai công thức viết tay ở
+# hai file khác ngôn ngữ, lệch nhau đúng 1px, và không có test nào nhìn thấy.
+sys.path.insert(0, HERE)
+import geometry                                                   # noqa: E402
+
 DEFAULT_THRESHOLD = 52   # tâm ramp: dưới lo → trong suốt, trên hi → đục hẳn
 GROW_OFFSET = 60         # mask nghiêm = threshold + 60 (style ghi đè bằng grow_threshold)
 MIN_BLOB = 12            # khối nhỏ hơn (px) coi là nhiễu
@@ -74,18 +81,14 @@ def in_boxes(x, y, boxes):
     return any(l <= x < r and t <= y < b for l, t, r, b in boxes)
 
 
-# Khổ mong đợi theo khai báo của sheet — BẢN CHÉP của bảng `CANVAS` trong khối
-# python của gen.sh. Đừng suy lại từ `orient` bằng một dòng ba ngôi nữa: khổ ảnh
-# từng được suy ĐỘC LẬP ở bốn chỗ (gen.sh, run_one, skeleton-svg.js, file này) và
-# thêm một khổ thứ ba là phải sửa đủ bốn — chỗ nào quên thì hỏng lặng lẽ.
-# 1254x1254 cho ô vuông chứ không phải 1024x1024: tool image_gen của codex KHÔNG
-# có tham số `size`, nó luôn trả ~1,57 triệu pixel; đo 685 ảnh thật thì 132 ảnh
-# vuông đều đúng 1254x1254.
-CANVAS = {
-    "landscape": (1536, 1024),
-    "portrait": (1024, 1536),
-    "square": (1254, 1254),
-}
+# Khổ mong đợi theo khai báo của sheet — KHÔNG còn là bản chép. Bảng thật nằm ở
+# `geometry.py:CANVAS`, cùng bảng mà khối python của gen.sh import. Khổ ảnh từng
+# được suy ĐỘC LẬP ở bốn chỗ (gen.sh, run_one, skeleton-svg.js, file này), mỗi chỗ
+# một dòng ba ngôi `orient == "portrait" ? … : …`; nay khung xương đã bỏ và hai chỗ
+# còn lại ăn chung một bảng, nên không còn gì để mà quên đồng bộ.
+# `[:2]` vì `geometry.CANVAS` mang thêm hai chuỗi (header + tỉ lệ) dành cho prompt —
+# ở đây chỉ cần con số.
+CANVAS = {k: v[:2] for k, v in geometry.CANVAS.items()}
 
 
 def orientation_error(orient, W, H, canvas=None):
@@ -576,7 +579,7 @@ def measure_asset_geometry(canvas, contract_safe=None, threshold=SIZE_DEVIATION_
                            shape=None):
     """Đo geometry THẬT của canvas sau mọi bước tách/nắn.
 
-    `contract_safe` là `[x, y, w, h]` của skeleton trong canvas; kết quả `core`,
+    `contract_safe` là `[x, y, w, h]` của safe zone trong canvas; kết quả `core`,
     `enamel`, `silhouette`, `decoration` là bbox `[left, top, right, bottom]`
     theo pixel canvas. `safe` dùng core đo được (fallback enamel/silhouette), để
     snap/crop giữ đúng functional surface mà không để decoration điều khiển scale.
@@ -1000,7 +1003,12 @@ if __name__ == "__main__":
                 continue
 
             cell_w, cell_h = W / COLS, H / ROWS
-            CW, CH = round(cell_w), round(cell_h)          # canvas chuẩn của sheet này
+            # CW/CH qua `geometry.cell_size` chứ không `round()` tại chỗ: đây là cùng
+            # hàm mà khối python của gen.sh gọi để in toạ độ safe zone vào prompt. Chia
+            # trên W/H CỦA ẢNH THẬT (không phải của bảng CANVAS) là có chủ ý — model
+            # được phép lệch vài chục pixel trong ngưỡng tỉ lệ, và ô phải bám ảnh nhận
+            # được chứ không bám con số ta mong.
+            CW, CH = geometry.cell_size(W, H, COLS, ROWS)   # canvas chuẩn của sheet này
 
             # ── MỘT ĐƯỜNG DUY NHẤT: ALPHA THẬT ────────────────────────────
             # Trước bản này ở đây có HAI nhánh: ảnh có alpha thì dùng thẳng, ảnh
@@ -1085,8 +1093,7 @@ if __name__ == "__main__":
             for idx, comp in enumerate(sh["components"]):
                 if comp["skel"]["shape"] == "empty":
                     continue                      # ô đệm cố ý bỏ trống — không cắt
-                row, col = divmod(idx, COLS)
-                cx0, cy0 = round(col * cell_w), round(row * cell_h)
+                cx0, cy0 = geometry.cell_origin(W, H, COLS, ROWS, idx)
                 canvas = Image.new("RGBA", (CVW, CVH), (0, 0, 0, 0))
                 if comp["skel"]["shape"] == "full":
                     # Ô full-bleed (nền): artwork phủ kín ô, không có gì để tách —
@@ -1141,21 +1148,18 @@ if __name__ == "__main__":
                 if sk["shape"] == "pose" and POSE_SIDE.get(sk.get("pose")):
                     canvas = normalize_pose_side(canvas, POSE_SIDE[sk["pose"]], f"{sid}/{comp['file']}")
                 content_safe = sk.get("contentSafe")
-                if content_safe:
-                    # contentSafe là vùng chữ/hitbox sạch. Với contract mới, chính
-                    # silhouette xám w/h là safe zone duy nhất. Nó nằm cố định giữa
-                    # ô và tuyệt đối không được dùng làm target để resize artwork.
-                    # Dạng boolean mới: chính skel w/h là safe zone xám duy nhất.
-                    # Vẫn đọc được object đời thử nghiệm để không làm hỏng manifest cũ.
-                    safe_spec = content_safe if isinstance(content_safe, dict) else sk
-                    sw = round(CW * safe_spec["w"])
-                    sh_ = round(CH * safe_spec["h"])
-                    sx = BX + (CW - sw) // 2
-                    sy = BY + (CH - sh_) // 2
-                else:
-                    sw, sh_ = round(CW * sk["w"]), round(CH * sk["h"])
-                    sx = BX + (CW - sw) // 2
-                    sy = BY + (CH - sh_ - round(CH * 0.04) if sk.get("anchor") == "bottom" else (CH - sh_) // 2)
+                # SAFE ZONE = ĐÚNG HỘP MÀ PROMPT ĐÃ HỨA. `geometry.safe_offset_in_cell`
+                # là cùng hàm khối python của gen.sh gọi để in "safe zone x=…, y=…" vào
+                # prompt; ở đây chỉ cộng thêm vành bleed (BX/BY) để đổi từ toạ độ TRONG Ô
+                # sang toạ độ TRÊN CANVAS asset.
+                #
+                # Hai nhánh (contentSafe căn giữa / skel thường có `anchor:"bottom"`) và
+                # phép `//2` nằm TRỌN trong hàm đó — trước 27/08/2026 chúng nằm ở đây,
+                # còn prompt thì không có con số nào, nên "hứa" và "cắt" không thể đối
+                # chiếu được với nhau. Nay lệch một pixel là một test đỏ, không phải một
+                # asset lệch mà không ai biết.
+                dx, dy, sw, sh_ = geometry.safe_offset_in_cell(CW, CH, sk)
+                sx, sy = BX + dx, BY + dy
                 contract_safe_box = [sx, sy, sw, sh_]
                 # Audit chạm mép TRƯỚC snap: snap kéo content vào trong canvas nên vết
                 # cụt (cắt ở biên vùng crop) sẽ "tàng hình" nếu đo sau

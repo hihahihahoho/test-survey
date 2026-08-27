@@ -16,7 +16,7 @@ import { kitFileSchema, type KitFile } from "@/lib/types";
 import { assertDocShape, renderSpec, FigmaNodeUnsupported } from "@/features/kit-core/lib/figma-node";
 import type { H2DDocument } from "@/vendor/figma-h2d";
 import { figmaNodeForSheet } from "../sheet-figma";
-import { cellName, cellsOfSheet, rawSheetImagePath, skeletonImagePath } from "../sheet-files";
+import { cellName, cellsOfSheet, rawSheetImagePath } from "../sheet-files";
 import { currentVersion, sheetVersions } from "../sheet-versions";
 
 /* ═════════ ① Spec cho CẢ TẤM ═════════ */
@@ -187,14 +187,12 @@ describe("đường dẫn ảnh — runs/ là bản BẤT BIẾN, raw/ là bản
     expect(rawSheetImagePath("chinh-ui", "r-42")).toBe("runs/r-42/artifacts/chinh-ui.png");
   });
 
-  it("thiếu tên lượt vẽ / mã tấm ⇒ ném ngay, không dựng đường dẫn cụt", () => {
+  it("thiếu tên lượt vẽ ⇒ ném ngay, không dựng đường dẫn cụt", () => {
     expect(() => rawSheetImagePath("")).toThrow(/thiếu tên lượt vẽ/);
-    expect(() => skeletonImagePath("  ")).toThrow(/thiếu mã tấm/);
   });
 
-  it("khung xương đọc từ thư mục skeleton/", () => {
-    expect(skeletonImagePath("ui")).toBe("skeleton/ui.png");
-  });
+  /* Ca «khung xương đọc từ thư mục skeleton/» ĐÃ BỎ cùng `skeletonImagePath` —
+     engine thôi dựng ảnh khung xương, xem chú thích trong `sheet-files.ts`. */
 });
 
 /* ═════════ ③ Phiên bản ═════════ */

@@ -158,9 +158,6 @@ export function CanvasBlock(props: CanvasBlockProps) {
               key={sheet.id}
               projectId={projectId}
               sheetId={sheet.id}
-              /* Tấm ĐANG SOẠN, không phải bản trên đĩa: khung xương phải khớp thứ
-                 người dùng vừa gõ, kể cả khi lượt lưu 600ms chưa chạy xong. */
-              sheet={sheet}
               runId={gen.runId}
               busy={gen.status === "running"}
             />
@@ -381,11 +378,31 @@ function OnePrompt({ projectId, item, styleLine }: { projectId: string; item: Pr
   const name = item.sheet || item.job;
   const text = fullPromptText(styleLine, item.prompt);
   const [copying, setCopying] = React.useState(false);
+  /**
+   * ẢNH KHUNG XƯƠNG BỊ LỌC RA KHỎI DANH SÁCH ĐÍNH KÈM.
+   *
+   * ╔══ VÌ SAO LỌC Ở ĐÂY THAY VÌ ĐỢI ENGINE ══════════════════════════════════╗
+   * ║ Engine đã bỏ ảnh khung xương — vùng an toàn nay đi vào prompt bằng toạ   ║
+   * ║ độ số. Nhưng bản engine trên máy người dùng KHÔNG cập nhật cùng nhịp với ║
+   * ║ webapp (nó nằm ở `~/KitGen/.kitgen/engine`, cập nhật bằng một lượt riêng)║
+   * ║ nên trong khoảng giao thời `attachments` vẫn có thể trả về `skeleton/…`. ║
+   * ║ Bày nó ra là nói dối hai lần: khoe một ảnh máy vẽ không nhận, và nhét nó ║
+   * ║ vào lượt «Copy prompt + ảnh» ở vị trí ĐẦU TIÊN — tức là ảnh DUY NHẤT     ║
+   * ║ kèm được vào clipboard (xem `prompt-copy.ts`) lại là ảnh vô dụng, còn    ║
+   * ║ ảnh mẫu nhân vật thì bị đẩy xuống nút phụ.                               ║
+   * ║ Lọc theo TIỀN TỐ THƯ MỤC vì đó là hợp đồng thật của agent                ║
+   * ║ (`routes/files.mjs` chỉ mở đúng vài thư mục, `skeleton` là một trong đó).║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  const attachments = React.useMemo(
+    () => item.attachments.filter((path) => !path.startsWith("skeleton/")),
+    [item.attachments],
+  );
 
   const copyAll = async () => {
     setCopying(true);
     try {
-      const res = await copyPromptWithImage(projectId, text, item.attachments);
+      const res = await copyPromptWithImage(projectId, text, attachments);
       if (res.outcome === "text+image") {
         toast.success("Đã copy prompt kèm ảnh", {
           description: res.remainingImages > 0
@@ -414,7 +431,7 @@ function OnePrompt({ projectId, item, styleLine }: { projectId: string; item: Pr
         <p className="text-caption text-fg-muted">{name}</p>
         <Button variant="secondary" size="sm" className="ml-auto" onClick={copyAll} disabled={copying}>
           <Copy aria-hidden strokeWidth={1.5} />
-          {item.attachments.length > 0 ? "Copy prompt + ảnh" : "Copy prompt"}
+          {attachments.length > 0 ? "Copy prompt + ảnh" : "Copy prompt"}
         </Button>
       </div>
       {/* `overflow-auto` là CUỘN, không phải cắt: prompt của một tấm UI kit dài
@@ -426,7 +443,7 @@ function OnePrompt({ projectId, item, styleLine }: { projectId: string; item: Pr
       >
         {text}
       </pre>
-      {item.attachments.length > 0 && <Attachments projectId={projectId} paths={item.attachments} />}
+      {attachments.length > 0 && <Attachments projectId={projectId} paths={attachments} />}
     </div>
   );
 }

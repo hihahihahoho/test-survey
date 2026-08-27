@@ -141,7 +141,7 @@ function defaultPoseTemplates() {
   return [...POSE_IDS].map(sourcePose => ({
     id: `pose_${sourcePose}`,
     name: POSE_LABELS[sourcePose],
-    description: "Khung skeleton chuẩn từ prototype silhouettes.js.",
+    description: "Khung dáng chuẩn từ prototype silhouettes.js.",
     sourcePose, enabled: true, builtIn: true, createdAt: now, updatedAt: now,
   }))
 }

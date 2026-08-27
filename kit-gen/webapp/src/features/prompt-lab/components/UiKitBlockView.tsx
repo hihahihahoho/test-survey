@@ -21,7 +21,7 @@ import { pillValuesOf, retitleCellDoc, uiCellDoc } from "../lib/doc-templates";
 import { moveCell, newCell, type BlockMode, type UiCell, type UiKitBlock } from "../lib/composer-model";
 import { BlockCard, ModeBadge, ModeToggle } from "./BlockCard";
 import { BlockEditor } from "./BlockEditor";
-import { OptionPill, PillButton, PillCaret, PillMenu, PillMenuItem } from "./pill-ui";
+import { OptionPill, PillAxis, PillButton, PillCaret, PillMenu, PillMenuItem } from "./pill-ui";
 
 /**
  * UiKitBlockView — block "Bộ UI": một DANH SÁCH DÒNG, mỗi dòng một element.
@@ -102,7 +102,19 @@ function DragHandle({ index, count, onMove, dragFrom, label }: RowDragProps & { 
   );
 }
 
-/** Nút bỏ một dòng — hình dạng chung của hai chế độ. */
+/**
+ * Nút bỏ một dòng — hình dạng chung của hai chế độ.
+ *
+ * ╔══ NÓ PHẢI Ở CUỐI HÀNG 1, KHÔNG PHẢI CẠNH Ô GHI CHÚ ══════════════════════╗
+ * ║ Chủ sản phẩm: *"dấu × bị lỗi"*. Không phải nút hỏng — nó ĐỨNG SAI CHỖ.    ║
+ * ║ Bản trước hàng element là một dải `flex-wrap` gồm pill · ô ghi chú · ×,   ║
+ * ║ nên khi hàng pill dài quá thì ô ghi chú tụt xuống dòng dưới và kéo dấu ×  ║
+ * ║ theo — dấu xoá của dòng #3 hiện ra ngay cạnh ô ghi chú của dòng #3, thấp  ║
+ * ║ hơn dấu × của dòng #1 một tầng. Cùng một nút, ba vị trí, tuỳ độ dài tên.  ║
+ * ║ Nay nó bị GHIM vào cuối hàng 1 bằng `ml-auto`, và hàng 1 thì không bao    ║
+ * ║ giờ wrap. Một dòng = một chỗ xoá, ở đúng một toạ độ, mọi dòng như nhau.   ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
 function RemoveButton({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
     <button
@@ -112,14 +124,22 @@ function RemoveButton({ label, onRemove }: { label: string; onRemove: () => void
       /* Hiện mờ, rõ lên khi trỏ vào dòng hoặc khi chính nút được focus bằng bàn
          phím. `opacity-0` mà thiếu `focus-visible:opacity-100` là một nút bấm
          Tab tới được nhưng không nhìn thấy. */
-      className="inline-flex size-7 shrink-0 items-center justify-center rounded-1 text-fg-muted opacity-0 transition-opacity duration-fast hover:text-fg-strong focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring group-hover/cell:opacity-100"
+      className="ml-auto inline-flex size-7 shrink-0 items-center justify-center rounded-1 text-fg-muted opacity-0 transition-opacity duration-fast hover:text-fg-strong focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring group-hover/cell:opacity-100"
     >
       <X aria-hidden className="size-4" />
     </button>
   );
 }
 
-/** Vỏ chung của một dòng: nó cũng chính là VÙNG THẢ của phép kéo. */
+/**
+ * Vỏ chung của một dòng: nó cũng chính là VÙNG THẢ của phép kéo.
+ *
+ * ══ HAI TẦNG CỐ ĐỊNH, KHÔNG PHẢI MỘT DẢI TỰ WRAP ═══════════════════════════
+ * `flex-col` chứ không `flex-wrap`: hàng 1 (danh tính + pill + ×) và hàng 2 (ô
+ * ghi chú / ô soạn) là HAI TẦNG CÓ TÊN, không phải kết quả ngẫu nhiên của phép
+ * xuống dòng. Nhờ vậy mọi dòng cao BẰNG NHAU bất kể tên element dài ngắn ra sao
+ * — thứ mà một dải `flex-wrap` không hứa được, và đã không giữ được.
+ */
 function RowShell({
   index,
   onMove,
@@ -146,7 +166,7 @@ function RowShell({
         if (from !== null && from !== index) onMove(from, index);
       }}
       className={cn(
-        "group/cell flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-2 px-2 py-2 text-body",
+        "group/cell flex flex-col gap-1.5 rounded-2 px-2 py-2 text-body",
         "hover:bg-raised",
         /* Vạch chỉ CHỖ SẼ RƠI. Không có nó thì kéo trên một danh sách dày là
            thả mù — và `count` dòng trông giống hệt nhau. */
@@ -158,12 +178,29 @@ function RowShell({
   );
 }
 
+/**
+ * HÀNG 1 của một dòng — danh tính, pill, và dấu × ở mép phải.
+ *
+ * `flex-nowrap` là điều KHOÁ CỨNG bố cục: mọi con bên trong đều co được
+ * (`PillButton` có `min-w-0`, nhãn giá trị có `truncate`), nên hàng này KHÔNG
+ * CÓ ĐƯỜNG nào để tràn sang dòng thứ hai. Chật thì chữ trong pill ngắn lại;
+ * dấu × không đi đâu cả.
+ */
+function RowTop({ children }: { children: React.ReactNode }) {
+  return <div className="flex min-w-0 flex-nowrap items-center gap-1.5">{children}</div>;
+}
+
+/** Số thứ tự dòng. Bề rộng CỐ ĐỊNH để #1 và #10 không đẩy lệch pill của nhau. */
+function RowIndex({ index }: { index: number }) {
+  return <span className="w-6 shrink-0 text-caption tabular-nums text-fg-muted">#{index + 1}</span>;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    Dòng ở CHẾ ĐỘ TEMPLATE — React thuần, không editor
    ══════════════════════════════════════════════════════════════════════════ */
 
 /**
- * Một dòng element — câu mad-lib thu nhỏ.
+ * Một dòng element — HAI TẦNG, không còn là một câu mad-lib.
  *
  * ══ VÌ SAO DÒNG TEMPLATE VẪN LÀ REACT THUẦN ════════════════════════════════
  * Ở khuôn, một dòng cần đúng bốn thứ: tên element (chọn lúc thêm), ba pill, một
@@ -171,6 +208,18 @@ function RowShell({
  * Mount một ProseMirror cho mỗi dòng là trả giá đầy đủ của một editor để lấy về
  * một cái `<input>` — với bộ kit 16 element thì đó là 16 instance trong MỘT
  * block. Ai cần chèn/viết lại thì gạt sang «Tự do», và lúc đó mới trả giá ấy.
+ *
+ * ╔══ CÂU MAD-LIB ĐÃ BỊ BỎ Ở ĐÂY — VÀ ĐÓ LÀ MỘT QUYẾT ĐỊNH ══════════════════╗
+ * ║ Dòng này từng đọc như một câu: «#1 [Nút bấm] — phong cách [x], đục nền    ║
+ * ║ [y], viền [z], cỡ [t], ghi-chú-thêm…». Đẹp trên một dòng ngắn, vỡ trên    ║
+ * ║ dòng dài: bốn cụm chữ nối không co được, nên ô ghi chú bị đẩy xuống hàng  ║
+ * ║ dưới ở dòng #3/#4 mà vẫn nằm cùng hàng ở dòng #1/#2 — bốn dòng, bốn chiều ║
+ * ║ cao, dấu × mỗi dòng một chỗ. Chủ sản phẩm gọi tên đúng triệu chứng ấy.    ║
+ * ║ Nay: hàng 1 = danh tính + pill (nhãn trục nằm TRONG pill, xem `PillAxis`),║
+ * ║ hàng 2 = ghi chú full-width, LUÔN LUÔN có mặt, LUÔN LUÔN ở dòng riêng.    ║
+ * ║ Đổi lại ta mất chất "một câu đọc được" ở chế độ khuôn. Chỗ để đọc thành   ║
+ * ║ câu vẫn còn nguyên và còn đúng hơn: gạt sang «Tự do».                     ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 function CellRow({
   cell,
@@ -191,40 +240,70 @@ function CellRow({
 
   return (
     <RowShell {...drag}>
-      <DragHandle {...drag} label={label} />
-      <span className="text-caption text-fg-muted">#{drag.index + 1}</span>
-      <ElementNamePill
+      <RowTop>
+        <DragHandle {...drag} label={label} />
+        <RowIndex index={drag.index} />
+        <ElementNamePill
+          label={label}
+          used={used}
+          onPick={(next) => onChange(swapCellElement(cell, next, presets))}
+        />
+        {/* Thứ tự pill do chủ sản phẩm chốt: phong cách → đục nền → viền → cỡ.
+            «Chất liệu» ĐÃ BỊ BỎ HẲN (không ẩn đi, không đổi tên): nó ăn theo prompt
+            tổng phong cách — xem khối chú thích đầu `glaze.ts`.
+            Nhãn trục đi VÀO pill (`axis`) thay vì làm chữ nối rời — xem `PillAxis`. */}
+        <OptionPill compact axis="Phong cách" kind="style" value={cell.styleId} onChange={(styleId) => onChange({ ...cell, styleId })} />
+        <OptionPill compact axis="Đục nền" kind="glaze" value={cell.glazeId} onChange={(glazeId) => onChange({ ...cell, glazeId })} />
+        <OptionPill compact axis="Viền" kind="decor" value={cell.decor} onChange={(decor) => onChange({ ...cell, decor })} />
+        <SizePill label={label} value={cell.sizeId} onChange={(sizeId) => onChange({ ...cell, sizeId })} />
+        <RemoveButton label={label} onRemove={onRemove} />
+      </RowTop>
+
+      <NoteField
         label={label}
-        used={used}
-        onPick={(next) => onChange(swapCellElement(cell, next, presets))}
-      />
-      {/* Thứ tự pill do chủ sản phẩm chốt: phong cách → đục nền → viền → cỡ.
-          «Chất liệu» ĐÃ BỊ BỎ HẲN (không ẩn đi, không đổi tên): nó ăn theo prompt
-          tổng phong cách — xem khối chú thích đầu `glaze.ts`. */}
-      <span className="text-fg-muted">— phong cách</span>
-      <OptionPill compact kind="style" value={cell.styleId} onChange={(styleId) => onChange({ ...cell, styleId })} />
-      <span className="text-fg-muted">, đục nền</span>
-      <OptionPill compact kind="glaze" value={cell.glazeId} onChange={(glazeId) => onChange({ ...cell, glazeId })} />
-      <span className="text-fg-muted">, viền</span>
-      <OptionPill compact kind="decor" value={cell.decor} onChange={(decor) => onChange({ ...cell, decor })} />
-      <span className="text-fg-muted">, cỡ</span>
-      <SizePill label={label} value={cell.sizeId} onChange={(sizeId) => onChange({ ...cell, sizeId })} />
-      <span className="text-fg-muted">,</span>
-
-      {/* Ghi chú: KHÔNG viền, nền trong suốt — nó là phần đuôi của câu. Gạch chân
-          chỉ hiện khi focus, đủ để biết đang gõ ở đâu mà không dựng thêm một cái
-          hộp giữa dòng văn. `min-w-40 flex-1` để nó ăn hết chỗ còn lại của dòng
-          thay vì co lại thành một khe hẹp. */}
-      <input
         value={cell.note}
-        onChange={(event) => onChange({ ...cell, note: event.target.value })}
-        placeholder="ghi chú thêm…"
-        aria-label={`Ghi chú cho ${label}`}
-        className="min-w-40 flex-1 border-b border-transparent bg-transparent px-0.5 py-0.5 text-body text-fg placeholder:text-fg-muted focus-visible:border-line focus-visible:outline-none"
+        onChange={(note) => onChange({ ...cell, note })}
       />
-
-      <RemoveButton label={label} onRemove={onRemove} />
     </RowShell>
+  );
+}
+
+/**
+ * HÀNG 2 — ô ghi chú, full-width, LUÔN có mặt.
+ *
+ * ╔══ VÌ SAO NÓ KHÔNG CÒN LÀ "ĐUÔI CÂU" NỮA ═════════════════════════════════╗
+ * ║ Bản trước ô này là một `<input>` không viền, `flex-1`, thả vào giữa chuỗi ║
+ * ║ pill để đọc như phần đuôi của một câu. Hai giá phải trả, cả hai đều đo    ║
+ * ║ được trên màn: ① nó là thứ ĐẦU TIÊN bị đẩy xuống dòng khi hàng pill dài,  ║
+ * ║ nên dòng nào có tên element dài thì cao gấp đôi dòng bên cạnh; ② khi bị   ║
+ * ║ đẩy xuống nó kéo theo dấu ×, và người dùng mất chỗ xoá quen thuộc.        ║
+ * ║ Nay nó có TẦNG RIÊNG: mọi dòng cao bằng nhau, và ô ghi chú luôn rộng hết  ║
+ * ║ thẻ — vốn cũng đúng hơn với thứ người ta gõ vào đó (một câu mô tả, không  ║
+ * ║ phải một từ).                                                            ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Viền `line-subtle` thay cho gạch chân: nó phải trông như MỘT Ô NHẬP kể cả khi
+ * rỗng — một gạch chân mờ dưới chữ mờ là thứ người dùng không nhận ra là gõ được.
+ * Vòng focus thì đi theo ngôn ngữ chung của màn (hairline inset + nền raised),
+ * đặt ở `prompt-lab.css` cho MỌI ô nhập chứ không dán riêng vào đây.
+ */
+function NoteField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <input
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder="Ghi chú thêm cho món này…"
+      aria-label={`Ghi chú cho ${label}`}
+      className="h-7 w-full rounded-2 border border-line-subtle bg-transparent px-2 text-caption text-fg placeholder:text-fg-muted"
+    />
   );
 }
 
@@ -290,23 +369,29 @@ function FreeCellRow({
 
   return (
     <RowShell {...drag}>
-      <DragHandle {...drag} label={label} />
-      <span className="text-caption text-fg-muted">#{drag.index + 1}</span>
-      <ElementNamePill
-        label={label}
-        used={used}
-        onPick={(next) => onChange(swapCellElement(cell, next, presets))}
-      />
-      {/* CỠ Ở NGOÀI EDITOR, kể cả ở chế độ tự do — nó không đi vào prompt một chữ
-          nào (nó thành `skel.w`/`skel.h`), nên nó không có chỗ trong một câu văn.
-          Cùng lý do với pill tên element đứng ngoài: cả hai là DANH TÍNH/HÌNH HỌC
-          của dòng, không phải nội dung của câu. */}
-      <SizePill label={label} value={cell.sizeId} onChange={(sizeId) => onChange({ ...cell, sizeId })} />
-      {/* `min-w-0` để ô soạn co được trong flex — thiếu nó thì một câu dài đẩy cả
-          dòng tràn ngang khỏi thẻ. `basis-64` là ĐÁY chứ không phải chiều rộng:
-          một câu ngắn vẫn được cả hàng, còn khi phải xuống dòng thì nó xuống ở
-          một bề rộng đọc được, không co thành một khe hẹp cạnh nhãn. */}
-      <div data-prompt-lab="" className="min-w-0 flex-1 basis-64">
+      {/* CÙNG hàng 1 với dòng khuôn — cố ý giống tới từng vị trí. Gạt công tắc
+          không được làm dòng nhảy chỗ: tay nắm, số thứ tự, tên món và dấu × phải
+          nằm nguyên chỗ cũ, chỉ TẦNG DƯỚI đổi từ ô ghi chú sang ô soạn. */}
+      <RowTop>
+        <DragHandle {...drag} label={label} />
+        <RowIndex index={drag.index} />
+        <ElementNamePill
+          label={label}
+          used={used}
+          onPick={(next) => onChange(swapCellElement(cell, next, presets))}
+        />
+        {/* CỠ Ở NGOÀI EDITOR, kể cả ở chế độ tự do — nó không đi vào prompt một chữ
+            nào (nó thành `skel.w`/`skel.h`), nên nó không có chỗ trong một câu văn.
+            Cùng lý do với pill tên element đứng ngoài: cả hai là DANH TÍNH/HÌNH HỌC
+            của dòng, không phải nội dung của câu. */}
+        <SizePill label={label} value={cell.sizeId} onChange={(sizeId) => onChange({ ...cell, sizeId })} />
+        <RemoveButton label={label} onRemove={onRemove} />
+      </RowTop>
+
+      {/* Ô soạn ăn TRỌN tầng dưới. Trước đây nó chen cùng hàng với pill và mang
+          `basis-64` để tự tìm chỗ xuống dòng — nay không phải đàm phán với ai nữa,
+          nên `min-w-0` là thứ duy nhất còn cần (cho phép co trong flex-col). */}
+      <div data-prompt-lab="" className="min-w-0">
         <BlockEditor
           doc={doc}
           mode="free"
@@ -319,7 +404,6 @@ function FreeCellRow({
           onChange={(next) => onChange(syncCellFromDoc(cell, next))}
         />
       </div>
-      <RemoveButton label={label} onRemove={onRemove} />
     </RowShell>
   );
 }
@@ -376,6 +460,18 @@ function syncCellFromDoc(cell: UiCell, doc: JSONContent): UiCell {
  * Ô tự điền nhận số RỜI (w, h) chứ không nhận chuỗi `"160x120"`: người dùng
  * không phải học một cú pháp, và không có gì để gõ sai. Chuỗi ấy là chuyện của
  * chỗ lưu (`customSizeValue`), không phải chuyện của người đang thiết kế.
+ *
+ * ╔══ *"SAO VẪN KHÔNG THẤY SELECT ĐIỀN SIZE"* ═══════════════════════════════╗
+ * ║ Menu đã có đủ 4 nấc + ô tự điền từ lượt trước, nhưng chủ sản phẩm KHÔNG   ║
+ * ║ TÌM RA nó — và một tính năng không tìm ra thì bằng không có. Ba chỗ sửa,  ║
+ * ║ đều là chỗ NÓI RA, không phải chỗ thêm chức năng:                         ║
+ * ║  ① pill tự xưng tên: «Cỡ: theo hệ thống ⌄» thay vì chữ «theo hệ thống»    ║
+ * ║    trôi nổi cạnh một chữ nối mờ — trước đó nó trông y hệt một nhãn chết;   ║
+ * ║  ② menu có TIÊU ĐỀ nhìn thấy được, không chỉ `aria-label` cho máy đọc;     ║
+ * ║  ③ khối tự điền có nhãn «Tự điền…» đúng chữ trong lời chủ sản phẩm, hai    ║
+ * ║    ô W×H ghi rõ đơn vị, và nút «Áp cỡ» nói ra việc nó làm (nút cũ ghi      ║
+ * ║    «Đặt» — một chữ không cho biết đặt cái gì vào đâu).                     ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 function SizePill({ label, value, onChange }: { label: string; value: string; onChange: (next: string) => void }) {
   const [open, setOpen] = React.useState(false);
@@ -394,7 +490,7 @@ function SizePill({ label, value, onChange }: { label: string; value: string; on
   };
 
   return (
-    <span className="relative inline-block">
+    <span className="relative inline-block min-w-0">
       <PillButton
         compact
         active={open}
@@ -402,14 +498,23 @@ function SizePill({ label, value, onChange }: { label: string; value: string; on
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={`Cỡ của ${label}`}
+        aria-label={`Cỡ của ${label} — ${sizeLabel(value) || "theo hệ thống"}`}
+        className="max-w-full"
       >
-        <span>{sizeLabel(value) || "theo hệ thống"}</span>
+        <PillAxis>Cỡ</PillAxis>
+        <span className="truncate">{sizeLabel(value) || "theo hệ thống"}</span>
         <PillCaret compact />
       </PillButton>
 
       {open && (
         <PillMenu label="Chọn cỡ safe zone" onClose={() => setOpen(false)}>
+          {/* TIÊU ĐỀ NHÌN THẤY ĐƯỢC. `aria-label` của `PillMenu` chỉ nói cho máy
+              đọc màn hình; người dùng mắt thường mở hộp ra và thấy bốn dòng chữ
+              không đầu không đuôi thì vẫn không biết mình đang chọn cái gì. */}
+          <p className="px-2 pb-1 pt-1 text-caption font-medium uppercase tracking-label text-fg-muted">
+            Cỡ safe zone
+          </p>
+
           <PillMenuItem
             selected={!value}
             onSelect={() => {
@@ -439,14 +544,21 @@ function SizePill({ label, value, onChange }: { label: string; value: string; on
           ))}
 
           <div className="mt-1 border-t border-line-subtle px-2 pb-1 pt-2">
-            <p className="mb-1 text-caption text-fg-muted">Tự điền (px trên khung {SQUARE_CANVAS_PX})</p>
+            <p className="mb-1 text-caption font-medium uppercase tracking-label text-fg-muted">Tự điền…</p>
             <div className="flex items-center gap-1.5">
               <SizeNumber label={`Bề rộng của ${label}`} value={w} onChange={setW} onEnter={apply} />
               <span aria-hidden className="text-caption text-fg-muted">×</span>
               <SizeNumber label={`Bề cao của ${label}`} value={h} onChange={setH} onEnter={apply} />
-              <Button variant="secondary" size="sm" onClick={apply}>Đặt</Button>
+              {/* «Áp cỡ», không phải «Đặt»: nút này KHÔNG đóng menu hộ mà làm một
+                  việc có hậu quả — ghi cỡ vừa gõ vào dòng element. Một chữ «Đặt»
+                  đứng cạnh hai ô số thì đọc như "đặt lại", tức là ngược nghĩa. */}
+              <Button variant="secondary" size="sm" onClick={apply}>Áp cỡ</Button>
             </div>
-            {custom && <p className="mt-1 text-caption text-fg-muted">Đang dùng {custom.w}×{custom.h}px</p>}
+            <p className="mt-1 text-caption text-fg-muted">
+              {custom
+                ? `Đang dùng ${custom.w}×${custom.h}px`
+                : `Pixel trên khung ${SQUARE_CANVAS_PX}×${SQUARE_CANVAS_PX}`}
+            </p>
           </div>
         </PillMenu>
       )}

@@ -49,13 +49,16 @@ cp -R "$ROOT/agent" "$STAGE/$PKG/agent"
 rm -rf "$STAGE/$PKG/agent/test" "$STAGE/$PKG/agent/test-fixtures" "$STAGE/$PKG/agent/test-agent.mjs"
 # cover.sh đi CÙNG gen.sh: agent tìm nó cạnh gen.sh trong engine đã cài. Thiếu ⇒ ảnh bìa
 # trả 409 COVER_UNAVAILABLE trên máy người dùng dù test ở repo vẫn xanh.
-# skeleton-svg.js là NGUỒN SỰ THẬT hình học của khung xương (render-skeleton.mjs và
-# skeleton.html cùng gọi nó). Thiếu file này thì render-skeleton.mjs ném ngay và gen.sh
-# dừng — không còn bản PIL để rơi về (skeleton.py đã xoá, BACKLOG #15).
+# geometry.py là NGUỒN SỰ THẬT hình học: CẢ gen.sh (in toạ độ safe zone vào prompt) lẫn
+# slice.py (cắt asset theo đúng toạ độ ấy) đều `import geometry` ngay dòng đầu. Thiếu nó
+# thì lượt gen chết bằng ModuleNotFoundError trên máy người dùng.
+# (Chỗ này trước 27/08/2026 chép bộ khung xương — skeleton.html / skeleton-svg.js /
+#  render-skeleton.mjs / silhouettes.js. Khung xương đã bỏ: prompt tự nói toạ độ, không
+#  còn ảnh nào để render, và @resvg/resvg-wasm không còn ai gọi.)
 # Thiếu file ở đây KHÔNG được im lặng: bản build vẫn ra tar.gz, cài xong mới hỏng trên
 # máy người dùng. `[ -f ] && cp` đời cũ vừa bỏ qua âm thầm vừa làm `set -e` bắn nhầm khi
 # file cuối danh sách vắng mặt.
-for f in gen.sh cover.sh slice.py skeleton.html skeleton-svg.js silhouettes.js render-skeleton.mjs element-lib.json validate_output_geometry.py; do
+for f in gen.sh cover.sh slice.py geometry.py element-lib.json validate_output_geometry.py; do
   if [ ! -f "$ROOT/$f" ]; then
     echo "build-runtime: thiếu file engine bắt buộc: $f" >&2
     exit 1

@@ -115,7 +115,7 @@ MAXJOBS="${MAXJOBS:-4}"
 # Prompt gửi cho model được LẮP TRONG CHÍNH FILE NÀY, nên trước bản này cách duy
 # nhất để đọc nó là… chạy một lượt gen thật và trả tiền cho nó. Đúng thứ tự ngược:
 # người ta muốn soi câu chữ TRƯỚC khi tiêu quota, nhất là khi vừa sửa mô tả sheet.
-# Chế độ này chạy đủ hai bước rẻ và tất định — khung xương + khối python lắp prompt —
+# Chế độ này chạy đủ bước rẻ và tất định — khối python lắp prompt (kể cả toạ độ) —
 # rồi DỪNG ngay trước vòng gọi codex. Không mạng, không quota, không đụng raw/.
 # Nó cũng là đường mà agent dùng cho `POST /api/projects/:id/prompt-preview`.
 PROMPTS_ONLY="${KITGEN_PROMPTS_ONLY:-}"
@@ -164,37 +164,44 @@ if [[ -z "$PROMPTS_ONLY" && -n "$IMG_HOME" && ! -f "$IMG_HOME/auth.json" ]]; the
   echo "FATAL: profile Codex riêng chưa đăng nhập. Chạy: CODEX_HOME=$IMG_HOME codex login"; exit 1
 fi
 
-# Khung xương layout (ảnh ref đính kèm codex) — deterministic từ styles.json.
-# MỘT renderer duy nhất: skeleton-svg.js dựng SVG, @resvg/resvg-wasm raster ra PNG.
-#
-# KHÔNG có đường lùi, và đó là chủ ý. Bản PIL cũ (skeleton.py) lệch 17,6% khối
-# lượng mực và vẽ sai hẳn dáng pose — nó đẻ ra ảnh ref SAI mà không ai biết, rồi
-# mọi ảnh gen sau đó lệch bố cục. Render hỏng thì DỪNG TO ở đây, đừng đốt quota
-# codex cho một lượt gen đã sai từ đầu vào.
-# v16: ảnh attachment có gray registration grid + nested safe guides; bias mặc định 0.
-# NỀN ẢNH ATTACHMENT TRONG SUỐT, và đó là ràng buộc chứ không phải thẩm mỹ: model
-# bắt chước nền của ảnh tham chiếu chứ không nghe prompt (đo 4/4 lượt, BACKLOG #24 ⑥
-# — nền ref đặc ⇒ ảnh ra 0,0% pixel trong suốt, kể cả khi prompt hô transparent thật
-# to). Xem khối "NỀN SHEET" trong skeleton-svg.js. slice.py không đọc ảnh skeleton.
-export KITGEN_GRID_GUIDE=v16
-if ! node render-skeleton.mjs; then
-  echo "FATAL: không render được khung xương (render-skeleton.mjs)." >&2
-  echo "       Thường là thiếu @resvg/resvg-wasm. Cài lại:" >&2
-  echo "         npm install --prefix \"\$HOME/.kitgen/tools\" @resvg/resvg-wasm" >&2
-  exit 1
-fi
+# ╔══ KHÔNG CÒN KHUNG XƯƠNG — VÀ ĐÂY LÀ CHỖ NÓ TỪNG ĐỨNG ═════════════════════════╗
+# ║ Trước 27/08/2026 ở ngay đây có `node render-skeleton.mjs`: nó dựng một tấm PNG ║
+# ║ vẽ lưới ô + bóng xám + khung safe, rồi đính tấm đó làm ẢNH THAM CHIẾU THỨ NHẤT ║
+# ║ cho model. Cả prompt xây quanh nó ("The FIRST attached image is the geometry   ║
+# ║ contract", "match the gray silhouette exactly"…).                              ║
+# ║                                                                                ║
+# ║ VÌ SAO BỎ:                                                                     ║
+# ║  ① Model bắt chước ảnh tham chiếu chứ không chỉ đọc nó. Ảnh khung xương là     ║
+# ║     hình phẳng, viền cứng, nền đặc-hay-không cũng vẫn là một tấm ĐỒ HOẠ — nên  ║
+# ║     nó lái luôn cả phong cách: nhân vật ra như huy hiệu có viền, dáng cứng đơ. ║
+# ║  ② Nó là nguồn hình học THỨ HAI. skeleton-svg.js cộng +1px (vì `.cell` có      ║
+# ║     border 1px) còn slice.py thì không ⇒ khung ta ĐƯA và khung ta CẮT lệch     ║
+# ║     nhau, lặng lẽ, ở mọi ô.                                                    ║
+# ║  ③ Nó bắt cả sản phẩm phụ thuộc @resvg/resvg-wasm chỉ để nói một điều mà chữ   ║
+# ║     nói được rẻ hơn và chính xác hơn: BỐN CON SỐ.                              ║
+# ║                                                                                ║
+# ║ Thay thế: khối python dưới đây in thẳng toạ độ safe zone của từng ô vào prompt,║
+# ║ lấy từ `geometry.py` — CÙNG hàm mà `slice.py` dùng để cắt. Hứa và cắt nay là   ║
+# ║ một phép tính, không phải hai.                                                 ║
+# ║ Ảnh tham chiếu của NGƯỜI DÙNG (mascot ref, brand, inspo) KHÔNG đổi gì.         ║
+# ╚════════════════════════════════════════════════════════════════════════════════╝
 
 # Build prompt cho từng (style, sheet) → prompts/<style>-<sheet>.txt
 python3 - <<'PY'
-import json, os
+import json, os, sys
+# `python3 - <<PY` chạy từ stdin ⇒ sys.path[0] là "" (cwd). gen.sh đã `cd` về thư
+# mục chứa chính nó ở dòng 5, và agent COPY cả engine vào project, nên geometry.py
+# luôn nằm ngay cạnh. Chèn cwd tường minh để không phụ thuộc mặc định của python.
+sys.path.insert(0, os.getcwd())
+import geometry
 cfg = json.load(open("styles.json", encoding="utf-8"))
 
 # ╔══ PROMPT ĐƯỢC LẮP THEO LỐI COMPOSITION ════════════════════════════════════╗
 # ║ Bốn khối, đúng bốn nguồn sự thật, không khối nào lấn sân khối khác:        ║
 # ║   ① PHONG CÁCH TỔNG — style + bảng màu + ảnh ref của người dùng. ĐỨNG ĐẦU. ║
 # ║      Đây là nơi DUY NHẤT nói một thứ TRÔNG THẾ NÀO.                        ║
-# ║   ② HÌNH HỌC — canvas, lưới, ô, safe zone, khung xương đính kèm. Thuần kỹ  ║
-# ║      thuật, không một tính từ thẩm mỹ nào.                                 ║
+# ║   ② HÌNH HỌC — canvas, lưới, và TOẠ ĐỘ safe zone của từng ô. Thuần kỹ      ║
+# ║      thuật, không một tính từ thẩm mỹ nào, không một ảnh nào.              ║
 # ║   ③ RÀNG BUỘC KỸ THUẬT — nền alpha thật, cấm caro, cấm chữ, cấm tràn ô.    ║
 # ║   ④ DANH SÁCH Ô — mỗi ô là một DANH TỪ (+ trạng thái người dùng chọn).     ║
 # ║                                                                            ║
@@ -212,49 +219,20 @@ cfg = json.load(open("styles.json", encoding="utf-8"))
 # ║ nói về vật liệu/màu/độ bóng/trang trí phải bắt nguồn từ chữ của người dùng.║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
-# ── BẢNG KHỔ CANVAS — MỘT NGUỒN SỰ THẬT DUY NHẤT ─────────────────────────────
+# ── BẢNG KHỔ CANVAS + TOẠ ĐỘ Ô: ĐÃ DỜI SANG `geometry.py` ────────────────────
 # Trước bản này khổ ảnh được suy ra ĐỘC LẬP ở bốn chỗ, mỗi chỗ một dòng
 # `orient == "portrait" ? … : …`:
 #   ① khối python này (dòng "Canvas orientation: …"),
 #   ② `run_one` ở tầng bash (`want_size`),
 #   ③ `skeleton-svg.js:sheetSize` (khổ ảnh khung xương),
 #   ④ `slice.py:orientation_error` (khổ mong đợi lúc cắt).
-# Thêm một khổ thứ ba là phải sửa đủ bốn, và chỗ nào quên thì hỏng LẶNG LẼ:
-# khung xương vẽ một khổ, prompt xin khổ khác, slicer chia lưới trên khổ thứ ba.
-# Nay bảng nằm ở ĐÂY. ② đọc ngược từ chính dòng đầu prompt (nên không thể lệch),
-# ③ và ④ chép đúng ba dòng này và trỏ ngược về đây bằng chú thích.
+# Nay ③ đã chết cùng khung xương, còn ① và ④ import CHUNG `geometry.py`. ② vẫn
+# đọc ngược từ chính dòng đầu prompt nên không thể lệch.
 #
-# `sheet.canvas` ∈ {"landscape","portrait","square"} là field CHÍNH; `sheet.orient`
-# (đời cũ, chỉ có landscape/portrait) vẫn được đọc để contract cũ chạy nguyên vẹn.
-#
-# ⚠️ VÌ SAO Ô VUÔNG LÀ 1254x1254 CHỨ KHÔNG PHẢI 1024x1024 HAY 2048x2048.
-# Đã soi binary codex 0.149.0 (26/08/2026). Tool `image_gen.imagegen` có ĐÚNG BA
-# tham số — `prompt`, `referenced_image_paths`, `num_last_images_to_include` — và
-# KHÔNG có `size`. Khổ ảnh do backend chọn, model chỉ lái được TỈ LỆ bằng lời văn.
-# Đo 685 ảnh thật do tool sinh ra trên máy này: MỌI ảnh đều xấp xỉ 1.572.864 pixel
-# (= 1536×1024) ±1500, tỉ lệ thì tự do. Trong đó có 132 ảnh vuông, và tất cả đều
-# là **1254×1254** (1.572.516 px). KHÔNG một ảnh nào 1024×1024, không một ảnh nào
-# 2048 hay 2040 — cạnh dài nhất từng thấy là 2172 (dải 3:1).
-# Vậy: câu "MUST be exactly …" trong task chỉ có tác dụng như một lời khai TỈ LỆ.
-# Ghi 1254x1254 thay vì 1024x1024 để con số ta hứa với model trùng với con số nó
-# thật sự trả về — nói dối ở đây thì mọi lượt vuông đều trông như "model làm sai".
-# (Bảng size cứng {1024x1024, 2048x2048…} chỉ tồn tại ở đường CLI
-# `scripts/image_gen.py --size`, đường mà gen.sh CẤM THẲNG ở khối HARD BAN dưới.)
-CANVAS = {
-    "landscape": (1536, 1024, "LANDSCAPE 1536x1024", "landscape 3:2"),
-    "portrait":  (1024, 1536, "PORTRAIT 1024x1536",  "portrait 2:3"),
-    "square":    (1254, 1254, "SQUARE 1254x1254",    "square 1:1"),
-}
-
-
-def canvas_of(sh):
-    """Khổ của tấm. `canvas` thắng `orient`; giá trị lạ rơi về landscape.
-
-    Rơi về landscape chứ không nổ: một chữ gõ sai trong contract không đáng để
-    giết cả lượt gen, và khổ mặc định là khổ mà mọi tấm đời cũ đang dùng.
-    """
-    key = str(sh.get("canvas") or sh.get("orient") or "landscape").lower()
-    return CANVAS.get(key, CANVAS["landscape"])
+# Và từ bản này bảng khổ không phải thứ duy nhất phải dùng chung: TOẠ ĐỘ SAFE ZONE
+# của từng ô cũng vậy. Prompt in ra bốn con số, `slice.py` cắt theo bốn con số —
+# nếu hai bên tự tính thì lời hứa và nhát cắt lệch nhau mà không ai thấy.
+canvas_of = geometry.canvas_of
 
 
 # ── VÌ SAO Ở ĐÂY KHÔNG CÒN BỘ MÁY GẶM CHỮ VẬT LIỆU ───────────────────────────
@@ -292,7 +270,12 @@ for s in cfg["styles"]:
         assert len(comps) == cols * rows, f'{sh["id"]}: {len(comps)} component ≠ lưới {cols}x{rows}'
         real = [c for c in comps if c["skel"].get("shape") != "empty"]
         n_real = len(real)
-        _cw, _ch, canvas_header, canvas_ratio = canvas_of(sh)
+        canvas_w, canvas_h, canvas_header, canvas_ratio = canvas_of(sh)
+        # HÌNH HỌC CỦA CẢ TẤM, tính MỘT LẦN, bằng ĐÚNG hàm `slice.py` dùng để cắt.
+        # `geo[i]["safe"]` là bốn con số sẽ đi vào prompt; `geo[i]["cell"]` chỉ dùng
+        # nội bộ (dao cắt) — chủ sản phẩm chốt KHÔNG in hộp ô vào prompt vì nó không
+        # thêm được gì mà lại dài gấp đôi danh sách.
+        geo = geometry.sheet_geometry(sh)
         # ⚠️ SHEET FULL-BLEED NHẬN DIỆN THEO skel.shape, KHÔNG theo id sheet.
         # Bản cũ: `if sh["id"] != "bg"`. Nhưng id sheet do NGƯỜI DÙNG/agent đặt —
         # dự án thật đặt "nen", "background", "bg-scene"… nên nhánh full-bleed gần
@@ -411,7 +394,7 @@ for s in cfg["styles"]:
                 "elements never touch each other and never touch the image edges.",
             ]
         # ⚠️ KHỐI CẤU TẠO NÀY ĐƯỢC VIẾT CHO NÚT BẤM, KHÔNG PHẢI CHO NHÂN VẬT.
-        # Nó ra lệnh: một MẶT PHẲNG liền lạc thay chỗ bóng xám, viền ngay bên ngoài
+        # Nó ra lệnh: một MẶT PHẲNG liền lạc lấp kín safe zone, viền ngay bên ngoài
         # mặt phẳng đó. Với nút, khay, thanh thì đó đúng là cấu tạo. Với sheet mascot
         # thì không có "mặt phẳng" nào cả — và model vẫn tuân lệnh: nó vẽ con vật như
         # một cái huy hiệu có viền, dáng cứng đơ, tóc/tai/đuôi bị ép vào trong.
@@ -419,7 +402,7 @@ for s in cfg["styles"]:
         # DANH SÁCH TRANG TRÍ CỨNG ĐÃ BỊ XOÁ KHỎI CẢ HAI NHÁNH. Bản cũ liệt kê
         # "flowers, ribbons, tassels, jewels, sparkles and filigree" (nhánh nút) và
         # "Hair, ears, tails, ribbons, props and sparkles" (nhánh mascot). Ràng buộc
-        # THẬT ở đây chỉ có một: thứ tràn ra được phép vượt guide, KHÔNG được vượt ô.
+        # THẬT ở đây chỉ có một: thứ tràn ra được phép vượt safe zone, KHÔNG vượt ô.
         # Tràn ra là CÁI GÌ thì phong cách của người dùng quyết, không phải engine —
         # nêu tên một món trang trí là mồi cho model vẽ đúng món đó, kể cả khi phong
         # cách là mực hoạ phẳng không có lấy một cái tua rua.
@@ -427,20 +410,20 @@ for s in cfg["styles"]:
             [
                 "Draw the character as ONE natural figure, not as a rim around a flat plate:",
                 "no forced border, no badge frame, no plaque. Anything that overflows the",
-                "figure may cross the guide, but must stay inside this character's own cell",
-                "and never cross into another cell.",
+                "figure may cross its safe zone, but must stay well clear of every other",
+                "element's safe zone.",
             ]
             if mascot_sheet else
             [
                 "Build each element from the inside out:",
-                "1) one continuous, clean content surface replacing the gray silhouette, on the",
-                "   same footprint — this is the CORE;",
-                "2) any rim, border or edge treatment immediately OUTSIDE that footprint — it",
+                "1) one continuous, clean content surface filling its whole safe zone — this is",
+                "   the CORE;",
+                "2) any rim, border or edge treatment immediately OUTSIDE the safe zone — it",
                 "   must not consume or reduce the safe-zone surface;",
                 "3) decoration, if the art style calls for any, farther outside still as overflow;",
-                "   it may cross the guide but must stay inside its own cell and never cross into",
-                "   another cell.",
-                "Keep the crop-safe area clean: no decoration may cover the functional core.",
+                "   it may cross the safe zone but must stay well clear of every other element's",
+                "   safe zone.",
+                "Keep the safe zone clean: no decoration may cover the functional core.",
             ]
         )
         lines = [
@@ -486,25 +469,25 @@ for s in cfg["styles"]:
             #    HẬU QUẢ ("phần mềm sẽ crop đúng 4 toạ độ này") thay vì chỉ ra lệnh
             #    "respect the frame", và cấm THẲNG hành vi hỏng phổ biến nhất mà §8.1
             #    đã đo: model co mặt nội dung lại để nhét viền vào trong.
-            "The FIRST attached image is the geometry contract and the edit target for this",
-            "exact sheet: it decides canvas, cell positions, sizes, proportions and centers.",
-            "In each cell the dark rectangular frame is the INNER CROP BOX and the gray",
-            "silhouette, centered inside it, is the exact required functional CORE.",
+            #
+            #    KHÔNG CÒN "The FIRST attached image is the geometry contract…". Ba khối
+            #    cũ (ảnh đính kèm là hợp đồng / dark frame là crop box / gray silhouette
+            #    là core) đều trỏ vào một tấm PNG nay không còn được render nữa. Thay
+            #    bằng ĐÚNG THỨ tấm PNG đó từng mã hoá: bốn con số, in ngay cạnh từng ô.
+            f"Canvas {canvas_w}x{canvas_h} px, origin top-left: x grows right, y grows down.",
+            "Every coordinate in this prompt is a pixel position in the final image.",
+            "No guide image is attached and no alignment marks of any kind exist in this",
+            "sheet: the numbers below are the entire layout instruction. Never draw a frame,",
+            "a grid line or a placeholder shape to mark them.",
             "",
-            "The inner crop box is a production SAFE ZONE: after generation, software crops",
-            "each asset using those exact four coordinates. Therefore:",
-            "- the finished functional CORE must keep the EXACT center of the crop box;",
-            "- its continuous CORE must match the gray silhouette exactly — same left, top,",
-            "  right and bottom extents, same footprint;",
+            "The safe zone printed on each element's line below is a production crop box:",
+            "after generation, software cuts that asset out using exactly those four",
+            "coordinates. Therefore, for every element:",
+            "- its continuous functional CORE must fill its own safe zone — same left, top,",
+            "  right and bottom extents, and the same center;",
             "- NEVER shrink the CORE to make room for a border or rim;",
             "- never enlarge, stretch, move, offset or recenter it;",
             "- a shifted or undersized CORE is unusable and will be regenerated.",
-            "",
-            "GUIDE CONTRACT: the attached gray silhouette and its local guide box mark the",
-            "OUTERMOST boundary of the functional CORE. The guide is not an invitation to",
-            "enlarge the artwork: fit the continuous core INSIDE it, never beyond its left,",
-            "top, right or bottom edge. If a rim or decoration needs more room, put it outside",
-            "the core and let it overflow; do not spend core pixels on the rim.",
             "",
             *layer_block,
             # "enamel" là một chất liệu (men sứ) — nó nằm ở đây từ đời prompt kẹo bóng
@@ -514,23 +497,12 @@ for s in cfg["styles"]:
             "failure; decoration or core extending outside the safe zone is harmless if it",
             "stays in the element's own cell.",
             "",
-            "Cells with NO dark frame: the gray silhouette itself is the placement guide —",
-            "draw the element centered on it at the same size, in natural proportions,",
-            "keeping generous empty padding inside the cell.",
-            "Keep the existing cell boundaries and guide positions; do not invent extra cells",
-            "or guides. Guide lines and gray fills are alignment references only, never",
-            "decoration: do NOT paint their gray colour, frames, grid lines or plain shapes",
-            "into the artwork.",
-            "The grid lines and local guides exist ONLY in the first attached skeleton",
-            "reference. They are alignment marks, not artwork: never reproduce, redraw, or",
-            "leave any guide or grid line in the generated output.",
-            "",
             # ⚠️ KHÔNG quay lại luật "mỗi element phủ 70-80% bề ngang ô". Đó là một chỉ
             #    thị hình học THỨ HAI đá nhau với khối crop-safe ở trên, và nó đẩy model
             #    đúng về phía lỗi mà handoff §8.1 đo được: co mặt nội dung vào trong.
-            #    Kích thước đã nằm trong skeleton (skel.w/h); prompt chỉ nói tính nhất quán.
-            "SIZING: the skeleton decides every size. Do not rescale anything to look tidy;",
-            "elements of the same kind simply share one consistent visual weight.",
+            #    Kích thước đã nằm trong chính toạ độ; prompt chỉ nói tính nhất quán.
+            "SIZING: the safe-zone coordinates decide every size. Do not rescale anything to",
+            "look tidy; elements of the same kind simply share one consistent visual weight.",
             "",
             # ═══ ③ RÀNG BUỘC KỸ THUẬT ════════════════════════════════════════
             # ── NỀN: ALPHA THẬT, KHÔNG CÒN CHROMA-KEY ────────────────────────
@@ -589,8 +561,12 @@ for s in cfg["styles"]:
             ""
         ]
         if mascot_sheet:
+            # KHÔNG CÒN "The SECOND attached image". Câu cũ đếm theo thứ tự đính kèm,
+            # mà vị trí thứ hai là vị trí của ảnh khung xương — bỏ khung xương thì ảnh
+            # nhân vật lên hàng đầu và câu này trỏ nhầm sang ảnh brand/inspo. Gọi ảnh
+            # theo VAI TRÒ thì không có thứ tự nào để mà lệch.
             lines += [
-                "The SECOND attached image is a character REFERENCE PHOTO: every character",
+                "The attached character REFERENCE PHOTO is the character: every character",
                 "cell must show EXACTLY this character — same species, face, colors, costume,",
                 "materials and proportions — re-drawn cleanly in this sheet's art style.",
                 "This rule OVERRIDES everything else: if the art style description or any other",
@@ -622,58 +598,90 @@ for s in cfg["styles"]:
             "colour, and how much depth and volume it has — comes from the ART STYLE block at",
             "the top of this prompt, and from nowhere else. If a line below still happens to",
             "carry a material or colour word, the ART STYLE outranks it.",
-            "Geometry always outranks both: the attached skeleton decides canvas, cell,",
-            "position, size and safe zone.",
+            "Geometry always outranks both: the safe-zone coordinates on each line decide",
+            "position and size.",
+            "Each element's continuous core must lie fully inside its safe zone; rim and",
+            "decoration may overflow outside the box but must not touch another element's zone.",
             "",
         ]
-        for r in range(rows):
-            lines.append(f"Row {r + 1}, left to right:")
-            for c in range(cols):
-                i = r * cols + c
-                spec = comps[i]["spec"]
-                if comps[i]["skel"].get("matte") == "glow":
-                    # NỀN ĐEN ĐÃ BỎ. Nó từng là cách duy nhất lấy được quầng sáng:
-                    # vẽ cộng sáng trên đen ⇒ C = α·F ⇒ slicer đọc alpha ra từ độ
-                    # sáng. Có alpha thật thì quầng nằm SẴN trong kênh α, đủ cả
-                    # dải mờ — đo trên ảnh mẫu chủ sản phẩm gửi: 12,96% pixel nằm
-                    # ở dải α 1..191 (BACKLOG #24 ⑤). Giữ nền đen bây giờ chỉ tổ
-                    # nướng một mảng đen vào asset.
-                    # THỦ PHẠM THẬT SỰ của cái đế caro: khối cấu tạo ở trên ra lệnh
-                    # "one continuous, clean content surface replacing the gray
-                    # silhouette". Với ô ÁNH SÁNG thì lệnh đó sai hẳn — không có mặt
-                    # phẳng nào để thay cả. Model vẫn tuân lệnh: nó lấp kín bóng
-                    # silhouette bằng thứ nó nghĩ là "trong suốt", tức là caro. Nên
-                    # câu của ô phải HUỶ lệnh kia một cách nói thẳng, không chỉ cấm
-                    # caro — cấm mà không gỡ lệnh lấp thì nó lấp bằng thứ khác.
-                    spec += (" — LIGHT EFFECT: for THIS cell, ignore the rule about replacing the"
-                             " gray silhouette with a continuous content surface: there is no"
-                             " surface here. The gray shape only marks HOW FAR the light reaches;"
-                             " it is not an area to fill. This element is pure light. The halo"
-                             " fades out by"
-                             " LOWERING ALPHA, not by painting paler pixels: at the outer edge the"
-                             " alpha reaches 0 while the colour stays the light's own colour, so"
-                             " the fade is gradual and never stops at a hard edge. There is NO"
-                             " plate of any kind behind the light — no black, no white, no pale"
-                             " grey, and above all no checkerboard squares. Every pixel that is"
-                             " not lit is simply unpainted")
-                elif comps[i]["skel"].get("matte") == "glass":
-                    # Trước đây độ trong của kính được ĐO GIÁN TIẾP: nền key lộ qua
-                    # thân bao nhiêu thì trong bấy nhiêu, slicer giải ngược
-                    # C = α·F + (1−α)·K. Cách đó phụ thuộc hoàn toàn vào việc model
-                    # chịu để key lộ ra (docs/design-glass-transparent-panel-2026-08.md
-                    # §2). Alpha thật thì độ trong nằm THẲNG trong kênh α.
-                    spec += (" — SEE-THROUGH ELEMENT: the gray silhouette marks the pane, but"
-                             " 'replacing it with a continuous content surface' here means a"
-                             " SEE-THROUGH surface, not a solid one. The body of this element is a"
-                             " thin sheet of tinted glass. Draw it with a LOW ALPHA VALUE — about 64 out of 255"
-                             " for a clear pane, up to 128 for a strongly tinted one — keeping the"
-                             " glass's own tint colour at that low alpha. Do NOT fake it with"
-                             " paint: no opaque fill, no white or pale grey wash, and above all no"
-                             " checkerboard squares. Lower alpha, not lighter paint. Frame, rim,"
-                             " bevel and specular highlights stay fully opaque")
-                lines.append(f"{i + 1}) {spec}")
-            lines.append("")
+        # ── MỘT DANH SÁCH, KHÔNG PHẢI HAI ───────────────────────────────────
+        # Bản nháp đầu của bản bỏ-skeleton in một khối "Cell 1 (row 1, col 1): cell
+        # box …; SAFE ZONE …" RIÊNG, đứng trên danh sách danh từ. Chủ sản phẩm bác
+        # (27/08/2026): hai danh sách song song bắt cả người lẫn model phải tự ghép
+        # "ô số 3" của bảng này với "3)" của bảng kia, và một tấm 3×3 thành 18 dòng
+        # nói về 9 thứ. Nay danh từ và toạ độ nằm CÙNG MỘT DÒNG.
+        #
+        # Cũng vì thế không còn dòng tiêu đề "Row r, left to right:": toạ độ tuyệt
+        # đối đã nói vị trí chính xác hơn mọi lời mô tả hàng/cột, nên tiêu đề hàng
+        # chỉ còn là chữ thừa xen giữa danh sách.
+        #
+        # HỘP Ô (`geo[i]["cell"]`) KHÔNG ĐƯỢC IN. Nó là chuyện của dao cắt; với model
+        # thì nó chỉ mời gọi vẽ cho đầy ô. Ranh giới duy nhất model cần biết đã nằm
+        # trong luật chung ngay trên: đừng chạm safe zone của thằng bên cạnh.
+        for i, comp in enumerate(comps):
+            spec = comp["spec"]
+            g = geo[i]
+            # TOẠ ĐỘ ĐỨNG NGAY SAU DANH TỪ, TRƯỚC câu kỹ thuật của ô. Thứ tự đó có
+            # chủ ý: câu glow/glass nói VỀ safe zone ("the safe zone marks the pane"),
+            # nên nó phải đọc được sau khi safe zone đã được nêu ra.
+            if g["safe"]:
+                x0, y0, x1, y1 = g["safe"]
+                zone = f" — safe zone x={x0}..{x1}, y={y0}..{y1} ({x1 - x0}x{y1 - y0} px)"
+                # Ô `free` KHÔNG được gọi hộp của nó là hộp cắt: `slice.py` cắt ô này
+                # theo LÕI ĐO ĐƯỢC của chính artwork (nhánh `sk.get("free")`), đúng ý
+                # "để AI vẽ tự do". Hứa crop box ở đây là hứa một thứ dao cắt không làm.
+                if g["kind"] == "free":
+                    zone += ", placement guide"
+                spec += zone
+            elif g["kind"] == "full":
+                # Full-bleed: cảnh phủ kín ô nên không có khung nào để hứa, và khối
+                # `place` ở trên đã nói đủ. In hộp ô ra đây chỉ mời model vẽ viền.
+                spec += " — full-bleed scene, fills its whole cell edge to edge"
+            elif g["kind"] == "empty":
+                spec += " — leave this area completely empty and fully transparent"
+            if comp["skel"].get("matte") == "glow":
+                # NỀN ĐEN ĐÃ BỎ. Nó từng là cách duy nhất lấy được quầng sáng:
+                # vẽ cộng sáng trên đen ⇒ C = α·F ⇒ slicer đọc alpha ra từ độ
+                # sáng. Có alpha thật thì quầng nằm SẴN trong kênh α, đủ cả
+                # dải mờ — đo trên ảnh mẫu chủ sản phẩm gửi: 12,96% pixel nằm
+                # ở dải α 1..191 (BACKLOG #24 ⑤). Giữ nền đen bây giờ chỉ tổ
+                # nướng một mảng đen vào asset.
+                # THỦ PHẠM THẬT SỰ của cái đế caro: khối cấu tạo ở trên ra lệnh
+                # lấp kín safe zone bằng "one continuous content surface". Với ô
+                # ÁNH SÁNG thì lệnh đó sai hẳn — không có mặt phẳng nào để lấp cả.
+                # Model vẫn tuân lệnh: nó lấp kín vùng đó bằng thứ nó nghĩ là
+                # "trong suốt", tức là caro. Nên câu của ô phải HUỶ lệnh kia một
+                # cách nói thẳng, không chỉ cấm caro — cấm mà không gỡ lệnh lấp
+                # thì nó lấp bằng thứ khác.
+                spec += (" — LIGHT EFFECT: for THIS cell, ignore the rule about filling the safe"
+                         " zone with a continuous content surface: there is no surface here. The"
+                         " safe zone only marks HOW FAR the light reaches;"
+                         " it is not an area to fill. This element is pure light. The halo"
+                         " fades out by"
+                         " LOWERING ALPHA, not by painting paler pixels: at the outer edge the"
+                         " alpha reaches 0 while the colour stays the light's own colour, so"
+                         " the fade is gradual and never stops at a hard edge. There is NO"
+                         " plate of any kind behind the light — no black, no white, no pale"
+                         " grey, and above all no checkerboard squares. Every pixel that is"
+                         " not lit is simply unpainted")
+            elif comp["skel"].get("matte") == "glass":
+                # Trước đây độ trong của kính được ĐO GIÁN TIẾP: nền key lộ qua
+                # thân bao nhiêu thì trong bấy nhiêu, slicer giải ngược
+                # C = α·F + (1−α)·K. Cách đó phụ thuộc hoàn toàn vào việc model
+                # chịu để key lộ ra (docs/design-glass-transparent-panel-2026-08.md
+                # §2). Alpha thật thì độ trong nằm THẲNG trong kênh α.
+                spec += (" — SEE-THROUGH ELEMENT: the safe zone marks the pane, but"
+                         " 'filling it with a continuous content surface' here means a"
+                         " SEE-THROUGH surface, not a solid one. The body of this element is a"
+                         " thin sheet of tinted glass. Draw it with a LOW ALPHA VALUE — about 64 out of 255"
+                         " for a clear pane, up to 128 for a strongly tinted one — keeping the"
+                         " glass's own tint colour at that low alpha. Do NOT fake it with"
+                         " paint: no opaque fill, no white or pale grey wash, and above all no"
+                         " checkerboard squares. Lower alpha, not lighter paint. Frame, rim,"
+                         " bevel and specular highlights stay fully opaque")
+            lines.append(f"{i + 1}) {spec}")
         lines += [
+            "",
             f"All {n_real} elements share the exact same consistent style and belong to one coherent set. "
             "Game-ready UI asset quality, " + canvas_ratio + "."
         ]
@@ -709,12 +717,15 @@ for s in cfg["styles"]:
         # codex trả lời "Please reattach the two reference images"). encoding cũng phải
         # đóng đinh utf-8: prompt có tiếng Việt, locale mặc định Windows là cp1252.
         open(f"prompts/{s['id']}-{sh['id']}.txt", "w", encoding="utf-8", newline="\n").write("\n".join(lines))
-        # file đính kèm cho job: skeleton trước, ref nhân vật rồi brand/inspo.
+        # File đính kèm cho job: ref nhân vật trước, rồi brand/inspo. TOÀN BỘ là ảnh
+        # của NGƯỜI DÙNG — engine không còn đính ảnh nào của chính nó.
+        # (Vị trí đầu tiên từng là `skeleton/<sheet>.png`. Xem khối "KHÔNG CÒN KHUNG
+        #  XƯƠNG" ở đầu file: tấm đó vừa lái nhầm phong cách vừa là nguồn hình học
+        #  thứ hai lệch 1px với dao cắt.)
         # Một ảnh có thể xuất hiện ở nhiều vai (vd sheet.ref cũng là brand ref).
         # Codex tính token theo từng `-i`; khử trùng lặp ngay lúc dựng argv.
         att = []
-        for p in ([f"skeleton/{sh['id']}.png"]
-                  + ([sh["ref"]] if sh.get("ref") else [])
+        for p in (([sh["ref"]] if sh.get("ref") else [])
                   + (s["brand"]["refs"] if use_brand_refs else [])
                   + (s["inspo"] if use_inspo else [])):
             if p and p not in att:
@@ -726,7 +737,7 @@ py_rc=$?
 
 # ── DỪNG Ở ĐÂY KHI CHỈ XIN XEM PROMPT ─────────────────────────────────────────
 # Mọi thứ đắt tiền nằm PHÍA SAU dòng này: vòng lặp gọi `codex exec`, hạn mức ảnh,
-# ghi đè raw/. Phía trước chỉ có khung xương và văn bản — chạy lại bao nhiêu lần
+# ghi đè raw/. Phía trước chỉ có số học và văn bản — chạy lại bao nhiêu lần
 # cũng ra đúng một kết quả và không tốn gì.
 # Thoát PHẢI mang mã của khối python: contract sai lưới thì `assert` của nó chết,
 # và "xem trước" mà báo thành công với một thư mục prompts/ cũ mới là lời nói dối
@@ -792,7 +803,7 @@ run_one() {
   # ╚════════════════════════════════════════════════════════════════════════════╝
   local att_note=""
   if [[ ${#att[@]} -gt 0 ]]; then
-    att_note="The reference images are attached to this conversation AND exist on disk at the exact paths listed below (in order: the layout skeleton first, then any character reference / brand / inspiration images the prompt mentions). When you call image_gen you MUST pass ALL of these paths, in this exact order, in its referenced_image_paths parameter. Never call it without them, and never claim the images are unavailable — they are right here:
+    att_note="The reference images are attached to this conversation AND exist on disk at the exact paths listed below (in order: the character reference first if the prompt mentions one, then any brand / inspiration images). When you call image_gen you MUST pass ALL of these paths, in this exact order, in its referenced_image_paths parameter. Never call it without them, and never claim the images are unavailable — they are right here:
 
 --- REFERENCE IMAGES START ---
 ${att_paths}--- REFERENCE IMAGES END ---

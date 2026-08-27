@@ -4,7 +4,7 @@ gen.sh nhúng một khối Python heredoc. Test nạp ĐÚNG mã đang ship (c�
 trước vòng lặp dựng prompt) chứ không chép lại — chép lại là test xanh mà sản
 phẩm đỏ.
 """
-import contextlib, io, json, os, re, tempfile, unittest
+import contextlib, io, json, os, re, shutil, tempfile, unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,13 +24,25 @@ def load_gen_block():
     return ns
 
 
+def _seed_workspace(td, cfg):
+    """Dựng thư mục làm việc y như gen.sh thấy nó.
+
+    `geometry.py` PHẢI có mặt: khối python `import geometry` ngay dòng đầu (bảng khổ
+    canvas + toạ độ safe zone đều ở đó, dùng chung với slice.py). Chép thật chứ không
+    nhét sys.path — engine trên máy người dùng cũng chạy bằng một bản CHÉP nằm cạnh
+    gen.sh, nên workspace của test phải có cùng hình dạng.
+    """
+    Path(td, "styles.json").write_text(json.dumps(cfg), encoding="utf-8")
+    Path(td, "prompts").mkdir()
+    shutil.copy(ROOT / "geometry.py", Path(td, "geometry.py"))
+
+
 def render_prompt_files(cfg):
     """Chạy đúng heredoc dựng prompt của gen.sh trong workspace tạm."""
     src = (ROOT / "gen.sh").read_text(encoding="utf-8")
     block = re.search(r"python3 - <<'PY'\n(.*?)\nPY\n", src, re.S).group(1)
     with tempfile.TemporaryDirectory() as td:
-        Path(td, "styles.json").write_text(json.dumps(cfg), encoding="utf-8")
-        Path(td, "prompts").mkdir()
+        _seed_workspace(td, cfg)
         cwd = os.getcwd()
         os.chdir(td)
         try:
@@ -45,8 +57,7 @@ def render_prompt_text(cfg, name="demo-pose-demo"):
     src = (ROOT / "gen.sh").read_text(encoding="utf-8")
     block = re.search(r"python3 - <<'PY'\n(.*?)\nPY\n", src, re.S).group(1)
     with tempfile.TemporaryDirectory() as td:
-        Path(td, "styles.json").write_text(json.dumps(cfg), encoding="utf-8")
-        Path(td, "prompts").mkdir()
+        _seed_workspace(td, cfg)
         cwd = os.getcwd()
         os.chdir(td)
         try:
@@ -54,6 +65,32 @@ def render_prompt_text(cfg, name="demo-pose-demo"):
             return Path(td, "prompts", f"{name}.txt").read_text(encoding="utf-8")
         finally:
             os.chdir(cwd)
+
+
+ROW1 = re.compile(r"^1\) ", re.M)
+
+
+def first_cell_line(txt):
+    """Chỉ số dòng của mục ĐẦU TIÊN trong danh sách ô.
+
+    Neo cũ là dòng tiêu đề "Row 1, left to right:". Nó đã bị bỏ cùng khung xương
+    (27/08/2026): mỗi dòng ô nay tự mang toạ độ tuyệt đối, nói vị trí chính xác hơn
+    mọi tiêu đề hàng, nên tiêu đề chỉ còn là chữ xen giữa danh sách.
+    Phải bỏ qua khối "Build each element from the inside out" — nó cũng đánh số 1)2)3)
+    nhưng là các LỚP của một element, không phải các ô.
+    """
+    lines = txt.splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith("1) ") and " — safe zone " in line:
+            return i
+        if line.startswith("1) ") and "content surface" not in line and "safe zone" not in line:
+            return i          # ô full-bleed / ô trống: không có toạ độ để mang
+    raise AssertionError("prompt không có danh sách ô nào")
+
+
+def cell_list_offset(txt):
+    """Vị trí KÝ TỰ của dòng ô đầu tiên — cho các phép so `index(...) <`."""
+    return sum(len(l) + 1 for l in txt.splitlines()[:first_cell_line(txt)])
 
 
 gen = load_gen_block()
@@ -83,8 +120,7 @@ class KhoiPhongCachDungDauTest(unittest.TestCase):
                         "khối phong cách bị đẩy xuống lưng chừng prompt")
 
     def test_phong_cach_dung_TRUOC_danh_sach_o(self):
-        self.assertLess(self.txt.index("Art style:"),
-                        self.txt.index("Row 1, left to right"),
+        self.assertLess(self.txt.index("Art style:"), cell_list_offset(self.txt),
                         "chữ của người dùng phải đến trước danh sách ô")
 
     def test_giu_NGUYEN_VAN_cau_nguoi_dung_go(self):
@@ -182,16 +218,18 @@ class PromptKhongNhiemTest(unittest.TestCase):
         spec = "a glossy neon-pink popover panel, made of frosted glass"
         txt = render_prompt_text(_cfg(spec=spec))
         lines = txt.splitlines()
-        head = next(i for i, l in enumerate(lines) if l.startswith("Row 1, left to right"))
-        self.assertEqual(lines[head + 1], f"1) {spec}")
+        head = first_cell_line(lines and txt)
+        # Spec đi thẳng, KHÔNG bị sửa một ký tự — phần engine nối thêm chỉ được nằm
+        # SAU nó (toạ độ safe zone), không được chen vào giữa.
+        self.assertTrue(lines[head].startswith(f"1) {spec} — safe zone x="),
+                        f"dòng ô bị sửa: {lines[head]!r}")
 
     def test_engine_van_TUYEN_BO_THU_HANG_thay_vi_viet_lai_chu_cua_ai(self):
         """Bỏ gặm chữ KHÔNG có nghĩa là bỏ phòng thủ. Thứ thay thế nó là một câu
         nói về THỨ HẠNG, đặt ngay trên danh sách ô — engine tuyên bố ai thắng ai,
         engine không viết lại chữ của ai cả."""
         txt = self.texts["ui"]
-        i = txt.index("Row 1, left to right")
-        head = txt[:i]
+        head = txt[:cell_list_offset(txt)]
         self.assertIn("NAMES ONLY *WHAT* EACH CELL IS", head)
         self.assertIn("the ART STYLE outranks it", head)
         self.assertIn("Geometry always outranks both", head)
@@ -215,8 +253,12 @@ class BangKhoCanvasTest(unittest.TestCase):
     """
 
     def test_bang_co_du_ba_kho(self):
-        self.assertEqual(set(gen["CANVAS"]), {"landscape", "portrait", "square"})
-        self.assertEqual(gen["CANVAS"]["square"][:2], (1254, 1254),
+        """Bảng nay nằm ở `geometry.py` — khối python của gen.sh chỉ import. Ca này đọc
+        qua chính đường import đó, nên nếu ai đó dựng lại một bảng cục bộ trong gen.sh
+        thì ca vẫn xanh mà sản phẩm đã có hai nguồn: `test/gen-canvas-square.test.sh`
+        có ca chống chép-lại canh đúng chuyện ấy."""
+        self.assertEqual(set(gen["geometry"].CANVAS), {"landscape", "portrait", "square"})
+        self.assertEqual(gen["geometry"].CANVAS["square"][:2], (1254, 1254),
                          "hứa một khổ codex không trả về thì mọi lượt vuông trông như model sai")
 
     def test_canvas_thang_orient_va_chu_la_roi_ve_landscape(self):
@@ -328,18 +370,35 @@ class AttachmentListTest(unittest.TestCase):
                 "ref": shared,
             }],
         })
-        self.assertEqual(got, [
-            "skeleton/pose-demo.png", shared, "refs/brand.png", "refs/inspo.png"
-        ])
+        # KHÔNG còn `skeleton/pose-demo.png` ở vị trí đầu: engine không đính ảnh của
+        # chính nó nữa (khung xương bỏ 27/08/2026). `.att` giờ TOÀN LÀ ảnh người dùng.
+        self.assertEqual(got, [shared, "refs/brand.png", "refs/inspo.png"])
 
 
 class SteeringPromptTest(unittest.TestCase):
-    def test_v16_no_bias_va_core_la_bien_ngoai(self):
-        prompt = (ROOT / "gen.sh").read_text(encoding="utf-8")
-        self.assertIn("OUTERMOST boundary of the functional CORE", prompt)
-        self.assertIn("fit the continuous core INSIDE it, never beyond", prompt)
-        self.assertIn("must match the gray silhouette exactly", prompt)
-        self.assertNotIn("deliberately expanded", prompt)
+    """Luật hình học phải nói bằng SỐ, và chỉ bằng số.
+
+    Bản cũ ra lệnh bằng cách trỏ vào một tấm ảnh đính kèm ("the FIRST attached image
+    is the geometry contract", "match the gray silhouette exactly"). Tấm ảnh đó không
+    còn được render nữa, nên mọi câu trỏ vào nó là câu trỏ vào hư không — model sẽ tự
+    bịa ra thứ nó nghĩ là đang được nói tới. Ca này khoá cả hai chiều: luật mới phải
+    CÓ, luật cũ phải KHÔNG.
+    """
+
+    def setUp(self):
+        self.txt = render_prompt_text(_cfg())
+
+    def test_luat_core_noi_bang_toa_do_chu_khong_bang_anh(self):
+        self.assertIn("production crop box", self.txt)
+        self.assertIn("must fill its own safe zone", self.txt)
+        self.assertIn("must lie fully inside its safe zone", self.txt)
+        self.assertIn("origin top-left", self.txt)
+
+    def test_moi_dau_vet_cua_khung_xuong_da_bien_khoi_prompt(self):
+        for chet in ("skeleton", "silhouette", "attached image is the geometry",
+                     "guide box", "INNER CROP BOX", "deliberately expanded",
+                     "OUTERMOST boundary of the functional CORE"):
+            self.assertNotIn(chet, self.txt, f"prompt còn dấu vết khung xương: {chet}")
 
 
 def _cfg(spec="blank button", skel=None, extra=None):
@@ -517,10 +576,11 @@ class MauThuongHieuTest(unittest.TestCase):
         """
         txt = render_prompt_text(self.CFG)
         lines = txt.splitlines()
-        head = next(i for i, l in enumerate(lines) if l.startswith("Row 1, left to right"))
-        self.assertEqual(lines[head + 1], "1) " + self.CFG["sheets"][0]["components"][0]["spec"],
-                         "spec của người dùng phải đi thẳng vào prompt, không bị sửa")
-        truoc = txt[:txt.index("Row 1, left to right")]
+        head = first_cell_line(txt)
+        self.assertTrue(
+            lines[head].startswith("1) " + self.CFG["sheets"][0]["components"][0]["spec"] + " — safe zone x="),
+            "spec của người dùng phải đi thẳng vào prompt, không bị sửa")
+        truoc = txt[:cell_list_offset(txt)]
         self.assertIn("the ART STYLE outranks it", truoc,
                       "bỏ gặm chữ thì phải còn câu tuyên bố thứ hạng, không thì mất cả hai")
 

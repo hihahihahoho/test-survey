@@ -1,4 +1,4 @@
-/* routes/runs.mjs — §6.2 E: #32..#40. Chạy gen/slice/skeleton + stream NDJSON + dừng
+/* routes/runs.mjs — §6.2 E: #32..#40. Chạy gen/slice + stream NDJSON + dừng
    + log/prompt từng lượt + lịch sử ảnh raw 3 đời. */
 import { join } from "node:path"
 import { fail } from "../lib/errors.mjs"

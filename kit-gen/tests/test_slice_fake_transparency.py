@@ -110,6 +110,10 @@ class SliceTuChoiTest(unittest.TestCase):
         self.box = tempfile.mkdtemp(prefix="kitgen-caro-")
         self.addCleanup(shutil.rmtree, self.box, True)
         shutil.copy(os.path.join(ROOT, "slice.py"), os.path.join(self.box, "slice.py"))
+        # geometry.py đi CÙNG slice.py: nó `import geometry` để lấy bảng khổ canvas
+        # + toạ độ ô/safe zone (dùng chung với khối python của gen.sh). Copy thiếu là
+        # ModuleNotFoundError — đúng thứ sẽ xảy ra nếu ai quên nó trong ENGINE_FILES.
+        shutil.copy(os.path.join(ROOT, "geometry.py"), os.path.join(self.box, "geometry.py"))
         os.makedirs(os.path.join(self.box, "raw"))
         with open(os.path.join(self.box, "styles.json"), "w") as f:
             json.dump({

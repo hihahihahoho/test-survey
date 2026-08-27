@@ -279,7 +279,13 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
 
   return (
     <PromptProjectContext.Provider value={projectId}>
-      <div className={`${PAGE} flex flex-col gap-6`}>
+      {/* `data-prompt-lab` ở GỐC MÀN, không chỉ quanh mỗi ô soạn thảo. Nó là móc
+          của `prompt-lab.css`, và từ lượt này file ấy còn mang luật vòng focus
+          mảnh cho MỌI `<input>`/`<textarea>` của màn — ô ghi chú dòng element, ô
+          tìm danh mục, hai ô số W×H của pill cỡ, ô hex màu thương hiệu. Đặt móc
+          ở từng chỗ thì cứ thêm một ô nhập là thêm một chỗ dễ quên, và chỗ quên
+          nào cũng hiện ra thành một vòng xanh 2px lạc lõng giữa màn. */}
+      <div data-prompt-lab="" className={`${PAGE} flex flex-col gap-6`}>
         <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
           <div className="min-w-0">
             {/* `display-3` (22px) chứ không `DISPLAY` (32→44px): đây là một khu làm

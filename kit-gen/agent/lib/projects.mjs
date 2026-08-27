@@ -13,6 +13,12 @@ import { projectDir } from "./projects-dir.mjs"
 import { readContract, contractJobs } from "./contract.mjs"
 import { redactLine } from "./redact.mjs"
 
+/* Thư mục DẪN XUẤT — sinh lại được, nên được phép dọn.
+   "skeleton" Ở LẠI DANH SÁCH dù engine không còn sinh nó (khung xương bỏ 27/08/2026):
+   dự án tạo trước ngày đó vẫn còn thư mục đó trên đĩa, có khi hàng chục MB, và cách
+   duy nhất để người dùng lấy lại chỗ là nút "Dọn dự án". Bỏ khỏi đây thì thư mục ma
+   nằm lại vĩnh viễn mà không màn nào nhắc tới nó.
+   Chiều NGƯỢC lại — tạo thư mục mới — thì KHÔNG còn tạo nữa (xem `createProjectDir`). */
 export const DERIVED_DIRS = ["skeleton", "prompts", "kits", "export"]
 
 /** Nhóm dung lượng của `stats.diskBreakdown` (§6.2 #9) — khớp 6 dòng wireframe §3-S2b.
@@ -210,7 +216,10 @@ export async function createProjectDir(ws, { id, name, slug, description = "", t
     fail("PROJECT_ID_TAKEN", `project id ${id} already exists`, { details: { suggestion: `${id}-2` } })
   const dir = join(ws.projectsDir, id)
   await ensureDir(dir)
-  for (const d of ["refs", "raw", "kits", "runs", "prompts", "skeleton", ".history/contract", ".history/raw"])
+  /* KHÔNG còn tạo "skeleton": engine không ghi vào đó nữa (khung xương bỏ 27/08/2026).
+     Một thư mục rỗng vĩnh viễn trong mọi dự án mới là rác, và nó còn nói dối màn "Dung
+     lượng" rằng có một loại dữ liệu như thế. Dự án CŨ vẫn dọn được — xem `DERIVED_DIRS`. */
+  for (const d of ["refs", "raw", "kits", "runs", "prompts", ".history/contract", ".history/raw"])
     await ensureDir(join(dir, d))
   const now = new Date().toISOString()
   const project = {

@@ -23,6 +23,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { JSONContent } from "@tiptap/react";
 
 import { composerToContract } from "@/features/prompt-canvas/lib/composer-to-contract";
+import { SIZE_PRESETS } from "../lib/cell-size";
 import { seedPresets } from "../lib/presets-store";
 import { PILL_SLOTS, docHasBrokenPill, repairPills, retitleCellDoc, uiCellDoc } from "../lib/doc-templates";
 import { serializeComposer } from "../lib/serialize-composer";
@@ -449,6 +450,160 @@ describe("⑤ đổi loại element tại chỗ", () => {
       content: [{ type: "paragraph", content: [{ type: "text", text: "cái nút của riêng tôi, " }] }],
     };
     expect(retitleCellDoc(mine, "a primary action button with a centered label", "X")).toEqual(mine);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⑦ BỐ CỤC HAI TẦNG CỦA MỘT DÒNG ELEMENT
+   ══════════════════════════════════════════════════════════════════════════
+   Chủ sản phẩm: *"dấu × bị lỗi"* và *"bố cục vỡ, mỗi dòng cao thấp khác nhau"*.
+   Nguyên nhân là một dải `flex-wrap` duy nhất chứa cả pill lẫn ô ghi chú lẫn
+   dấu ×: dòng nào có tên element dài thì ô ghi chú tụt xuống hàng dưới và kéo
+   dấu × theo, dòng nào tên ngắn thì tất cả nằm chung một hàng.
+
+   Ba ca dưới khoá cái KHÔNG ĐO ĐƯỢC BẰNG SNAPSHOT: THỨ TỰ và QUAN HỆ CHA-CON
+   trong DOM. Chiều cao thật thì jsdom không tính (không có layout engine), nên
+   thứ duy nhất kiểm được — và cũng là thứ quyết định — là "× nằm trong hàng 1
+   cùng cha với pill" và "ô ghi chú là con RIÊNG của dòng, không nằm trong hàng
+   1". Hễ ai đó nhét lại ô ghi chú vào chuỗi pill thì ca ⑦.2 đỏ. */
+describe("⑦ dòng element: hàng 1 có ×, hàng 2 là ghi chú", () => {
+  const rowOf = (label: string) =>
+    screen.getByLabelText(`Ghi chú cho ${label}`).closest("div")!;
+
+  beforeEach(() => {
+    render(<Harness initial={uikit([{ ...newCell("button", PRESETS), id: "c1" }])} />);
+  });
+
+  it("dấu × ở CUỐI hàng 1, cùng cha với tay nắm và các pill — không cạnh ô ghi chú", () => {
+    const remove = screen.getByRole("button", { name: /^Bỏ element/ });
+    const grip = screen.getByRole("button", { name: /^Đổi chỗ/ });
+    const top = remove.parentElement!;
+
+    /* Cùng CHA với tay nắm ⇒ cùng hàng 1. Trước lượt này nó là anh em với ô ghi
+       chú trong một dải wrap, nên vị trí của nó phụ thuộc độ dài tên element. */
+    expect(grip.parentElement).toBe(top);
+    expect(top.contains(screen.getByLabelText(/^Cỡ của/))).toBe(true);
+
+    /* Và nó là con CUỐI CÙNG của hàng ấy — «× căn phải, cùng hàng với pill». */
+    expect(top.lastElementChild).toBe(remove);
+
+    /* Ô ghi chú KHÔNG nằm trong hàng 1. Đây là mấu chốt: nó ở tầng dưới. */
+    expect(top.contains(screen.getByLabelText("Ghi chú cho Nút bấm"))).toBe(false);
+  });
+
+  it("ô ghi chú là con RIÊNG của dòng, đứng SAU hàng 1 — luôn ở dòng của nó", () => {
+    const note = screen.getByLabelText("Ghi chú cho Nút bấm");
+    const row = rowOf("Nút bấm");
+    const kids = [...row.children];
+
+    expect(kids).toHaveLength(2);
+    expect(kids[1]).toBe(note);
+    /* Hàng 1 KHÔNG được wrap: mọi con của nó co được, nên ô ghi chú không bao giờ
+       bị đẩy đi đâu — và dấu × cũng vậy. */
+    expect(kids[0]!.className).toContain("flex-nowrap");
+  });
+
+  it("chữ nối «— phong cách», «, đục nền», «, viền», «, cỡ» đã BIẾN MẤT khỏi dòng", () => {
+    /* Chúng là bốn vật không co được nằm xen giữa các pill — đúng thứ đã làm vỡ
+       bố cục. Nhãn trục nay nằm TRONG pill (xem `PillAxis`), nên bốn cụm rời này
+       phải không còn tồn tại; nếu ai đó thêm lại thì ca này đỏ. */
+    const row = rowOf("Nút bấm");
+    expect(row.textContent).not.toContain("— phong cách");
+    expect(row.textContent).not.toContain(", đục nền");
+    expect(row.textContent).not.toContain(", viền");
+
+    /* Nhưng TÊN TRỤC thì vẫn phải đọc được — bỏ chữ nối không phải bỏ nhãn. */
+    for (const axis of ["Phong cách:", "Đục nền:", "Viền:", "Cỡ:"]) {
+      expect(row.textContent).toContain(axis);
+    }
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⑧ PILL CỠ — 4 NẤC PRESET + MỘT CỬA TỰ ĐIỀN, VÀ CẢ HAI PHẢI TÌM RA ĐƯỢC
+   ══════════════════════════════════════════════════════════════════════════
+   Chủ sản phẩm: *"sao vẫn không thấy select điền size"*. Menu đã có đủ từ lượt
+   trước — nên ca ở đây KHÔNG chỉ hỏi "có mở ra không", nó hỏi "mở ra thì có
+   NHÌN THẤY đủ bốn nấc kèm số px và cửa tự điền không", tức đúng câu người dùng
+   không trả lời được. */
+describe("⑧ pill cỡ mở ra 4 preset + ô tự điền", () => {
+  const openSize = () => fireEvent.click(screen.getByLabelText(/^Cỡ của Nút bấm/));
+
+  beforeEach(() => {
+    render(<Harness initial={uikit([{ ...newCell("button", PRESETS), id: "c1" }])} />);
+  });
+
+  it("pill TỰ XƯNG TÊN — «Cỡ: …», không phải một chữ trôi nổi cạnh chữ nối mờ", () => {
+    expect(screen.getByLabelText(/^Cỡ của Nút bấm/).textContent).toContain("Cỡ:");
+  });
+
+  it("mở ra: 4 nấc preset, mỗi nấc kèm số px thật", () => {
+    openSize();
+    const options = screen.getAllByRole("option").map((o) => o.textContent ?? "");
+    /* 4 preset + mục «— theo hệ thống —». */
+    expect(options).toHaveLength(SIZE_PRESETS.length + 1);
+    for (const preset of SIZE_PRESETS) {
+      const hit = options.find((text) => text.includes(preset.vi));
+      expect(hit).toBeTruthy();
+      /* Con số là cả điểm của menu: "L · lớn" một mình không nói được nó lớn hơn
+         "M" bao nhiêu — mà đó đúng là câu người thiết kế đang hỏi. */
+      expect(hit).toContain(`${preset.w}×${preset.h}px`);
+    }
+  });
+
+  it("chọn một nấc ⇒ ghi ĐÚNG id preset vào ô, và pill đọc ra nhãn của nấc ấy", async () => {
+    let latest: UiKitBlock | null = null;
+    cleanup();
+    render(
+      <Harness
+        initial={uikit([{ ...newCell("button", PRESETS), id: "c1" }])}
+        onState={(next) => { latest = next; }}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText(/^Cỡ của Nút bấm/));
+    fireEvent.click(screen.getByRole("option", { name: /XL · tràn ô/ }));
+
+    await waitFor(() => expect(latest?.cells[0]?.sizeId).toBe("xl"));
+    expect(screen.getByLabelText(/^Cỡ của Nút bấm/).textContent).toContain("XL · tràn ô");
+  });
+
+  it("cửa «Tự điền» có hai ô W×H + nút áp — và nó ghi ra chuỗi «<w>x<h>»", async () => {
+    let latest: UiKitBlock | null = null;
+    cleanup();
+    render(
+      <Harness
+        initial={uikit([{ ...newCell("button", PRESETS), id: "c1" }])}
+        onState={(next) => { latest = next; }}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText(/^Cỡ của Nút bấm/));
+
+    expect(screen.getByText(/Tự điền/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Bề rộng của Nút bấm"), { target: { value: "160" } });
+    fireEvent.change(screen.getByLabelText("Bề cao của Nút bấm"), { target: { value: "120" } });
+    fireEvent.click(screen.getByRole("button", { name: "Áp cỡ" }));
+
+    await waitFor(() => expect(latest?.cells[0]?.sizeId).toBe("160x120"));
+    /* Áp xong thì hộp đóng lại và pill nói ra con số vừa gõ — không phải "theo
+       hệ thống", cũng không phải chuỗi lưu `160x120` chưa được dịch. */
+    expect(screen.getByLabelText(/^Cỡ của Nút bấm/).textContent).toContain("160×120px");
+  });
+
+  it("Enter trong ô số = bấm «Áp cỡ» — không ai phải rê chuột để lưu số vừa gõ", async () => {
+    let latest: UiKitBlock | null = null;
+    cleanup();
+    render(
+      <Harness
+        initial={uikit([{ ...newCell("button", PRESETS), id: "c1" }])}
+        onState={(next) => { latest = next; }}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText(/^Cỡ của Nút bấm/));
+    const wide = screen.getByLabelText("Bề rộng của Nút bấm");
+    fireEvent.change(wide, { target: { value: "200" } });
+    fireEvent.keyDown(wide, { key: "Enter" });
+
+    await waitFor(() => expect(latest?.cells[0]?.sizeId).toMatch(/^200x/));
   });
 });
 
