@@ -22,14 +22,21 @@ import {
 import type { StyleAxes } from "@/features/kit-core/lib/model";
 import { STYLE_AXIS_IDS } from "@/features/kit-form/lib/form-model";
 import { describeBrandColors } from "@/features/prompt-lab/lib/brand-colors";
-import { INHERIT, phraseOf, type PillKind } from "@/features/prompt-lab/lib/pill-registry";
+import { INHERIT, labelOf, phraseOf, type PillKind } from "@/features/prompt-lab/lib/pill-registry";
 import { getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
 import { NODE } from "@/features/prompt-lab/lib/schema";
 import { SQUARE_CANVAS_PX, skelSizeOf } from "@/features/prompt-lab/lib/cell-size";
 import { SCAFFOLDS } from "@/features/prompt-lab/lib/doc-templates";
 import { freeText, makeContext, serializeDoc, tidy, type PromptDocNode } from "@/features/prompt-lab/lib/serialize";
 import { contextFreeText } from "@/features/prompt-lab/lib/serialize-composer";
-import type { Block, ComposerState, DocBlock, UiKitBlock } from "@/features/prompt-lab/lib/composer-model";
+import type {
+  Block,
+  ComposerState,
+  DocBlock,
+  MascotBlock,
+  MascotPose,
+  UiKitBlock,
+} from "@/features/prompt-lab/lib/composer-model";
 import { readPillImage, type PillImage } from "./pill-image";
 import type { ComposerDoc } from "./composer-doc";
 
@@ -103,11 +110,13 @@ const CELL_SKEL = { shape: "rrect" as const, w: 0.8, h: 0.6 };
  */
 const UI_CANVAS = "square" as const;
 
-/** Khung xương ô dáng — số của `styles.json` thật, giống hệt `buildKitsetContract`. */
+/**
+ * Khung xương ô dáng — số của `styles.json` thật, giống hệt `buildKitsetContract`.
+ *
+ * `shape: "pose"` là TÍN HIỆU NHẬN DIỆN mà `gen.sh` đọc để biết tấm này là tấm
+ * nhân vật (xem `mascot_sheet` ở đó). Đổi chuỗi này là làm câm cả nhánh ấy.
+ */
 const POSE_SKEL = { shape: "pose" as const, w: 0.3, h: 0.85 };
-
-/** Dáng dùng khi block Nhân vật không có pill dáng nào. `POSE_SPEC` có mục cho nó. */
-const DEFAULT_POSE = "idle";
 
 /**
  * Nấc giữa của 8 trục phong cách.
@@ -283,21 +292,79 @@ function backgroundSheet(block: DocBlock, index: number, presets: PresetBundle, 
 }
 
 /**
- * Một block Nhân vật → một tấm dáng 1×1.
+ * KẾ HOẠCH TẤM của một thẻ Nhân vật: dòng nào vào tấm nào, tấm ấy lưới bao nhiêu.
  *
- * `poseSpecFor()` chứ không phải cụm chữ của pill: pill trả `"a idle pose"` (id
- * ghép máy móc), còn `POSE_SPEC` là câu đã chạy thật trong `styles.json`
+ * ╔══ VÌ SAO TÁCH RA THÀNH MỘT HÀM CÔNG KHAI ════════════════════════════════╗
+ * ║ Hai nơi cần ĐÚNG cùng một phép chia: bộ dịch này (dựng `components[]`) và  ║
+ * ║ `ensurePoseRefs()` (ghép ảnh manơcanh theo đúng lưới ấy). Lệch một nhịp    ║
+ * ║ chia là ô thứ k của tấm ảnh dáng không còn nằm chồng lên ô thứ k của tấm   ║
+ * ║ sắp vẽ — và lúc đó ảnh tham chiếu dạy máy vẽ một bố cục SAI, im lặng.      ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export interface MascotSheetPlan {
+  /** Dòng của tấm này, THEO THỨ TỰ ô. */
+  poses: MascotPose[];
+  grid: { cols: number; rows: number };
+}
+
+export function mascotSheetPlan(block: MascotBlock, opts: ComposerContractOptions = {}): MascotSheetPlan[] {
+  return chunkBySize(block.poses, cellLimit(opts)).map((chunk) => ({
+    poses: chunk,
+    grid: squareGrid(chunk.length),
+  }));
+}
+
+/**
+ * VÂN TAY của kế hoạch tấm — "tấm ảnh dáng đã ghép có còn tả đúng thẻ này không".
+ *
+ * Gồm cả lưới lẫn cặp (dáng, góc) của từng ô theo thứ tự: đổi thứ tự dòng cũng
+ * làm ảnh cũ sai chỗ y như đổi dáng, nên nó phải nằm trong vân tay.
+ */
+export function poseSheetKey(block: MascotBlock, opts: ComposerContractOptions = {}): string {
+  return mascotSheetPlan(block, opts)
+    .map((plan) => `${plan.grid.cols}x${plan.grid.rows}:${plan.poses.map((p) => `${p.pose}|${p.view}`).join(",")}`)
+    .join(";");
+}
+
+/**
+ * Một thẻ Nhân vật → một hoặc nhiều tấm sprite sheet dáng.
+ *
+ * ══ CÂU ĐẦU THẺ CHO CẢ TẤM, DÒNG CHO TỪNG Ô ═══════════════════════════════
+ * Câu đầu thẻ nói DANH TÍNH (ảnh nhân vật + trang phục) nên nó được ghép vào
+ * `spec` của MỌI ô: mỗi ô phải tự đứng được như một mô tả trọn vẹn — `gen.sh`
+ * không hứa với model rằng các ô đọc chung một chủ ngữ nào cả.
+ *
+ * ══ CHẾ ĐỘ TỰ DO ĐI VÀO `directive`, KHÔNG VÀO `promptOverride` ════════════
+ * Đây là chỗ đổi so với thẻ Nhân vật một-ô đời trước, và lý do là cùng lý do đã
+ * ghi ở `uiKitSheets`: `promptOverride` THAY TRỌN prompt của tấm — kể cả khối
+ * hình học nói toạ độ safe zone của từng ô. Với một tấm 1 ô thì mất khối ấy không
+ * sao; với một tấm 9 ô thì nó là thứ duy nhất giữ cho chín dáng nằm đúng lưới, và
+ * `slice.py` cắt theo đúng lưới đó. Nên câu tự do CẤP THẺ thành một dòng chỉ đạo,
+ * còn câu tự do CẤP DÒNG thành `spec` của đúng ô ấy.
+ *
+ * `poseSpecFor()` chứ không phải cụm chữ của pill dáng: pill trả `"a idle pose"`
+ * (id ghép máy móc), còn `POSE_SPEC` là câu đã chạy thật trong `styles.json`
  * ("standing still in a neutral relaxed idle pose, facing the viewer") và nó biết
  * cách NHÉT NÉT MẶT vào đúng chỗ thay vì nối thêm một mệnh đề đá nhau.
  */
-function mascotSheet(block: DocBlock, index: number, presets: PresetBundle, styleEN: string, themeEN: string): { sheet: Sheet; pose: string; ref: string } | null {
+function mascotSheets(
+  block: MascotBlock,
+  startIndex: number,
+  presets: PresetBundle,
+  styleEN: string,
+  themeEN: string,
+  opts: ComposerContractOptions,
+): { sheets: Sheet[]; poses: string[]; ref: string } {
+  if (block.poses.length === 0) return { sheets: [], poses: [], ref: "" };
+
   const scan = scanDoc(block.doc as PromptDocNode);
   const ctx = makeContext({ styleEN, themeEN, presets, imageCounter: { count: 0 } });
-  const line = serializeDoc(block.doc as PromptDocNode, ctx);
-  if (block.mode === "free" && !line) return null;
+  const headLine = tidy(serializeDoc(block.doc as PromptDocNode, ctx));
+  /* Ngữ cảnh RỖNG cho câu của DÒNG: pill trong đó không có "cái chung" nào cao
+     hơn để kế thừa ngoài chính câu đầu thẻ, mà câu đầu thẻ đã được ghép sẵn vào
+     `subject` ngay dưới. Cùng luật với `uiKitSheets`. */
+  const rowCtx = makeContext({ styleEN: "", themeEN: "", presets, imageCounter: { count: 0 } });
 
-  const pose = take(scan, "pose") || DEFAULT_POSE;
-  const expression = phraseOf("expression", take(scan, "expression"), presets);
   /* Trang phục để trống = theo theme chung — cùng luật `INHERIT` của pill, và
      `themeEN` chính là thứ pill ấy kế thừa khi serialize. */
   const outfitValue = take(scan, "outfit");
@@ -308,35 +375,60 @@ function mascotSheet(block: DocBlock, index: number, presets: PresetBundle, styl
      không có thì phải tả bằng chữ, nếu không máy vẽ tự bịa ra một con khác nhau
      ở mỗi lượt. */
   const base = ref ? "the SAME character from the reference photo" : "the same original mascot character";
-  const subject = outfit ? `${base} wearing ${outfit}` : base;
-  const spec = tidy([subject, poseSpecFor(pose, expression), ...leftover(scan, presets), "full body"].filter(Boolean).join(", "));
+  const subject = [base, outfit ? `wearing ${outfit}` : "", ...leftover(scan, presets)].filter(Boolean).join(", ");
 
-  const note = block.mode === "free" ? "" : freeText(block.doc as PromptDocNode, SCAFFOLDS.mascot);
+  /* Chữ CẤP THẺ: ở khuôn là phần người dùng gõ THÊM ngoài template; ở tự do là cả
+     câu họ viết. Cả hai đều là "lời người thiết kế nói cho tấm này". */
+  const directive =
+    block.mode === "free" ? headLine : freeText(block.doc as PromptDocNode, SCAFFOLDS.mascot);
 
-  return {
-    pose,
-    ref,
-    sheet: {
-      id: seriesId("nhan-vat", index),
-      orient: "landscape",
-      grid: { cols: 1, rows: 1 },
+  const plans = mascotSheetPlan(block, opts);
+  const sheetKey = poseSheetKey(block, opts);
+  /* Ảnh dáng đã ghép chỉ được dùng khi nó tả ĐÚNG bộ dòng hiện tại — xem
+     `poseSheetKey`. Lệch ⇒ bỏ, và tấm vẫn vẽ được bằng chữ. */
+  const poseSheets = block.poseSheet?.key === sheetKey ? block.poseSheet.paths : [];
+
+  const sheets = plans.map((plan, i) => {
+    const cells: Component[] = plan.poses.map((row, k) => {
+      const expression = phraseOf("expression", row.expression, presets);
+      const viewEN = phraseOf("view", row.view, presets);
+      const free = block.mode === "free" ? tidy(serializeDoc(row.doc as PromptDocNode, rowCtx)) : "";
+      /* Câu tự do RỖNG (người dùng xoá sạch dòng) ⇒ rơi về khuôn, KHÔNG ra ô không
+         mô tả gì — cùng luật với dòng element. */
+      const body = free || [poseSpecFor(row.pose, expression), viewEN, row.note.trim()].filter(Boolean).join(", ");
+      return {
+        /* Tên ô KHÔNG mang tiền tố `pose-` như `styles.json`: agent
+           (`validate.mjs`) chỉ miễn luật tên file cho `shape:"empty"`, nên `pose-…`
+           là contract client cho qua mà server từ chối ghi. Bài học đã trả giá một
+           lần ở `buildKitsetContract`, không trả lại lần hai. */
+        file: `${String(k + 1).padStart(2, "0")}-${slugify(row.pose) || "dang"}`,
+        vi: labelOf("pose", row.pose, presets),
+        spec: tidy([subject, body, "full body"].filter(Boolean).join(", ")),
+        skel: { ...POSE_SKEL, pose: row.pose },
+      };
+    });
+
+    const poseRef = poseSheets[i] ?? "";
+    return {
+      id: seriesId("nhan-vat", startIndex + i),
+      /* Ô dáng phải VUÔNG cùng lý do với ô Bộ UI (xem `UI_CANVAS`): trên canvas
+         ngang 1536×1024 chia n×n thì mỗi ô ra 3:2, và một nhân vật đứng thẳng
+         trong một ô dẹt thì bị vẽ lùn rồi bị dao cắt cắt đúng cái lùn ấy.
+         `orient` vẫn ghi cho engine đời cũ — có cả hai thì `canvas` thắng. */
+      orient: "landscape" as const,
+      canvas: UI_CANVAS,
+      grid: plan.grid,
       cell_hint: HINT_POSE,
       ...(ref ? { ref, note: POSE_NOTE } : {}),
-      ...(block.mode === "free" ? { promptOverride: line } : note ? { directive: note } : {}),
-      components: [
-        {
-          /* Tên ô KHÔNG mang tiền tố `pose-` như `styles.json`: agent
-             (`validate.mjs:63`) chỉ miễn luật tên file cho `shape:"empty"`, nên
-             `pose-…` là contract client cho qua mà server từ chối ghi. Bài học đã
-             trả giá một lần ở `buildKitsetContract`, không trả lại lần hai. */
-          file: "01-nhan-vat",
-          vi: "Nhân vật",
-          spec: block.mode === "free" ? line : spec,
-          skel: { ...POSE_SKEL, pose },
-        },
-      ],
-    },
-  };
+      ...(poseRef ? { poseRef } : {}),
+      ...(directive ? { directive } : {}),
+      components: padTo(cells, plan.grid.cols * plan.grid.rows),
+    };
+  });
+
+  const poses: string[] = [];
+  for (const row of block.poses) if (!poses.includes(row.pose)) poses.push(row.pose);
+  return { sheets, poses, ref };
 }
 
 /**
@@ -436,10 +528,23 @@ export interface BlockSheets {
   kind: Block["kind"];
   /** Tấm block này sinh ra, THEO THỨ TỰ. Rỗng ⇒ block chưa có gì để vẽ. */
   sheets: Sheet[];
-  /** Dáng của block Nhân vật; rỗng với block khác. */
-  pose: string;
-  /** Ảnh mẫu của block Nhân vật (`refs/…`); rỗng khi không có. */
+  /** Dáng của thẻ Nhân vật, không trùng lặp; rỗng với thẻ khác. */
+  poses: string[];
+  /** Ảnh mẫu của thẻ Nhân vật (`refs/…`); rỗng khi không có. */
   ref: string;
+}
+
+/**
+ * TRẦN Ô CỦA MỘT TẤM — dùng chung cho thẻ Bộ UI và thẻ Nhân vật.
+ *
+ * Một trần duy nhất chứ không phải `limits.small` cho Bộ UI và `limits.mascot`
+ * cho Nhân vật: cả hai nay là lưới vuông trên cùng một khổ canvas, nên cái quyết
+ * định "bao nhiêu ô là còn đọc được" là hình học của tấm, không phải loại nội
+ * dung. Quá trần thì CHIA TẤM (`chunkBySize`), không cắt bớt dòng của người dùng.
+ */
+function cellLimit(opts: ComposerContractOptions): number {
+  const asked = Number(opts.limits?.small);
+  return Math.min(Number.isInteger(asked) && asked > 0 ? asked : DEFAULT_SHEET_LIMITS.small, MAX_CELLS_SQUARE);
 }
 
 /** Duyệt các block đúng MỘT lần, đúng MỘT bộ luật — nguồn của cả hai hàm dưới. */
@@ -455,36 +560,25 @@ export function composerBlockSheets(
   /* Đếm RIÊNG theo loại: thứ tự tấm bám thứ tự block trên màn (người dùng nhìn
      thấy), còn hậu tố `2`, `3` bám số tấm CÙNG LOẠI. */
   const seen = { background: 0, mascot: 0, uikit: 0 };
-  const limitSmall = Math.min(
-    Number.isInteger(opts.limits?.small) && Number(opts.limits?.small) > 0
-      ? Number(opts.limits?.small)
-      : DEFAULT_SHEET_LIMITS.small,
-    MAX_CELLS_SQUARE,
-  );
+  const limit = cellLimit(opts);
 
   const out: BlockSheets[] = [];
   for (const block of state.blocks as Block[]) {
     if (block.kind === "uikit") {
-      const made = uiKitSheets(block, seen.uikit, presets, limitSmall);
+      const made = uiKitSheets(block, seen.uikit, presets, limit);
       seen.uikit += made.length;
-      out.push({ blockId: block.id, kind: "uikit", sheets: made, pose: "", ref: "" });
+      out.push({ blockId: block.id, kind: "uikit", sheets: made, poses: [], ref: "" });
       continue;
     }
     if (block.kind === "background") {
       const sheet = backgroundSheet(block, seen.background, presets, styleEN, themeEN);
       if (sheet) seen.background += 1;
-      out.push({ blockId: block.id, kind: "background", sheets: sheet ? [sheet] : [], pose: "", ref: "" });
+      out.push({ blockId: block.id, kind: "background", sheets: sheet ? [sheet] : [], poses: [], ref: "" });
       continue;
     }
-    const made = mascotSheet(block, seen.mascot, presets, styleEN, themeEN);
-    if (made) seen.mascot += 1;
-    out.push({
-      blockId: block.id,
-      kind: "mascot",
-      sheets: made ? [made.sheet] : [],
-      pose: made?.pose ?? "",
-      ref: made?.ref ?? "",
-    });
+    const made = mascotSheets(block, seen.mascot, presets, styleEN, themeEN, { ...opts, presets });
+    seen.mascot += made.sheets.length;
+    out.push({ blockId: block.id, kind: "mascot", sheets: made.sheets, poses: made.poses, ref: made.ref });
   }
   return out;
 }
@@ -537,7 +631,7 @@ export function composerToContract(input: ComposerDoc | ComposerState, opts: Com
   for (const made of composerBlockSheets(input, opts)) {
     sheets.push(...made.sheets);
     if (made.kind !== "mascot" || made.sheets.length === 0) continue;
-    if (made.pose && !poses.includes(made.pose)) poses.push(made.pose);
+    for (const pose of made.poses) if (!poses.includes(pose)) poses.push(pose);
     if (!characterRef && made.ref) characterRef = made.ref;
   }
 

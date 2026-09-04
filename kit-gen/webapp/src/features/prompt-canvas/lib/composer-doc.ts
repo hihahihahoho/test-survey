@@ -2,15 +2,27 @@ import * as React from "react";
 import type { JSONContent } from "@tiptap/react";
 import { useSaveWorkflowDraft, useWorkflowDraft } from "@/lib/hooks/use-projects";
 import {
+  DEFAULT_MASCOT_POSE,
   initialComposer,
   type Block,
   type BlockMode,
   type ComposerState,
+  type MascotPose,
   type UiCell,
 } from "@/features/prompt-lab/lib/composer-model";
 import { glazeFromMaterial } from "@/features/kit-core/lib/glaze";
+import { EXPRESSIONS } from "@/features/kit-core/lib/poses";
+import { DEFAULT_VIEW } from "@/features/pose-lab/lib/pose-state";
 import { getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
-import { PILL_SLOTS, docHasBrokenPill, repairPills } from "@/features/prompt-lab/lib/doc-templates";
+import { INHERIT } from "@/features/prompt-lab/lib/pill-registry";
+import { NODE } from "@/features/prompt-lab/lib/schema";
+import {
+  PILL_SLOTS,
+  docHasBrokenPill,
+  mascotDoc,
+  pillValuesOf,
+  repairPills,
+} from "@/features/prompt-lab/lib/doc-templates";
 
 /**
  * composer-doc.ts — TÀI LIỆU COMPOSER LƯU BỀN THEO DỰ ÁN.
@@ -113,6 +125,131 @@ function healDoc(doc: JSONContent, slot: keyof typeof PILL_SLOTS, values?: reado
   return docHasBrokenPill(doc) ? repairPills(doc, PILL_SLOTS[slot], values) : doc;
 }
 
+/** Một dòng dáng ĐÃ Ở ĐỊNH DẠNG MỚI. Thiếu `pose` ⇒ bỏ: dòng không biết vẽ gì. */
+function readPose(raw: unknown, index: number, view: string, expression: string): MascotPose | null {
+  if (!isRecord(raw)) return null;
+  const pose = str(raw["pose"]);
+  if (!pose) return null;
+  const row: MascotPose = {
+    id: str(raw["id"]) || `pose-${index}`,
+    pose,
+    /* Thiếu góc/nét mặt ⇒ mặc định dùng được ngay, không để rỗng: một ô không có
+       góc máy nào trong câu là một ô để máy vẽ tự chọn góc, và mười sáu ô như thế
+       thì không còn là một tấm turnaround. */
+    view: str(raw["view"]) || view,
+    expression: str(raw["expression"]) || expression,
+    note: str(raw["note"]),
+    ...(str(raw["refPath"]) ? { refPath: str(raw["refPath"]) } : {}),
+  };
+  /* Cứu hộ pill NGAY LÚC ĐỌC, cùng luật với ô element: ba giá trị pill của dòng
+     vẫn còn nguyên trong ba trường có cấu trúc ngay cạnh đây, nên dòng dáng cứu
+     được TRỌN VẸN — xem `PILL_SLOTS`. */
+  return isRecord(raw["doc"])
+    ? { ...row, doc: healDoc(raw["doc"] as JSONContent, "mascotPose", [row.pose, row.view, row.expression]) }
+    : row;
+}
+
+/**
+ * Thẻ Nhân vật — đọc được CẢ hình dạng mới lẫn hình dạng một-dáng đời trước.
+ *
+ * ╔══ HAI ĐỊNH DẠNG, PHÂN BIỆT BẰNG SỰ CÓ MẶT CỦA `poses` ═══════════════════╗
+ * ║ Bản cũ là một `DocBlock`: một câu mad-lib chứa [ảnh][dáng][ảnh dáng]      ║
+ * ║ [biểu cảm][trang phục], cộng `poseView` và bảng `poseRefs` nằm rời.       ║
+ * ║ Dịch sang bản mới là một phép ánh xạ CÓ KIỂM CHỨNG ĐƯỢC, không phải đoán  ║
+ * ║ mò — mỗi mảnh cũ có đúng một chỗ mới để đi tới:                           ║
+ * ║   ảnh #1 → pill ảnh của câu đầu · trang phục → pill outfit của câu đầu    ║
+ * ║   dáng + `poseView` + biểu cảm → MỘT dòng dáng · `poseRefs[dáng|góc]` →   ║
+ * ║   `refPath` của chính dòng ấy.                                            ║
+ * ║ Ảnh #2 (ô «hoặc ảnh dáng») bị BỎ có chủ ý: nó chứa ảnh manơcanh engine tự ║
+ * ║ chụp, và ảnh ấy nay được ghép lại theo lưới ở `ensurePoseRefs` — mang một ║
+ * ║ tấm chụp riêng lẻ sang là mang một ảnh sai bố cục.                        ║
+ * ║ CÂU ĐẦU ĐƯỢC DỰNG LẠI TỪ TEMPLATE MỚI chứ không vá câu cũ: câu cũ có năm  ║
+ * ║ chỗ chọn và ba trong số đó nay thuộc về dòng — cắt bớt một câu ProseMirror║
+ * ║ tại chỗ là một phép chỉnh cây mà không có cách nào kiểm được nó đúng.     ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+function readMascotBlock(raw: Record<string, unknown>, id: string, mode: BlockMode): Block | null {
+  if (!isRecord(raw["doc"])) return null;
+  const fallbackView = DEFAULT_VIEW;
+  const fallbackExpression = EXPRESSIONS[0]?.value ?? "";
+
+  if (Array.isArray(raw["poses"])) {
+    const poses = (raw["poses"] as unknown[])
+      .map((row, i) => readPose(row, i, fallbackView, fallbackExpression))
+      .filter((row): row is MascotPose => row !== null);
+    const sheet = raw["poseSheet"];
+    return {
+      id,
+      kind: "mascot",
+      mode,
+      doc: healDoc(raw["doc"] as JSONContent, "mascot"),
+      poses,
+      ...(isRecord(sheet) && Array.isArray(sheet["paths"]) && typeof sheet["key"] === "string"
+        ? {
+            poseSheet: {
+              key: sheet["key"],
+              paths: (sheet["paths"] as unknown[]).map((p) => (typeof p === "string" ? p : "")),
+            },
+          }
+        : {}),
+    };
+  }
+
+  /* ── Bản MỘT DÁNG đời trước ──────────────────────────────────────────────── */
+  const old = raw["doc"] as JSONContent;
+  const pills = pillValuesOf(old);
+  const view = str(raw["poseView"]) || fallbackView;
+  const pose = pills.pose || DEFAULT_MASCOT_POSE;
+  const refs = isRecord(raw["poseRefs"]) ? raw["poseRefs"] : {};
+  const cached = refs[`${pose}|${view}`];
+
+  const row: MascotPose = {
+    id: `${id}-pose-1`,
+    pose,
+    view,
+    expression: pills.expression ?? fallbackExpression,
+    note: "",
+    ...(typeof cached === "string" && cached ? { refPath: cached } : {}),
+  };
+
+  return {
+    id,
+    kind: "mascot",
+    mode,
+    /* Ảnh nhân vật là thứ DUY NHẤT của câu cũ không dựng lại được từ template —
+       nó là một tệp người dùng đã tải lên. Nên nó được bê sang từng attr một. */
+    doc: withHeadImage(mascotDoc(), firstImageAttrs(old), pills.outfit ?? INHERIT),
+    poses: [row],
+  };
+}
+
+/** Attrs của pill ảnh ĐẦU TIÊN trong một tài liệu — ảnh nhân vật của câu cũ. */
+function firstImageAttrs(doc: JSONContent): Record<string, unknown> | null {
+  let found: Record<string, unknown> | null = null;
+  const walk = (node: JSONContent): void => {
+    if (found) return;
+    if (node.type === NODE.imagePill) {
+      found = node.attrs ?? {};
+      return;
+    }
+    for (const child of node.content ?? []) walk(child);
+  };
+  walk(doc);
+  return found;
+}
+
+/** Đổ ảnh + trang phục cũ vào câu đầu thẻ vừa dựng từ template mới. */
+function withHeadImage(doc: JSONContent, image: Record<string, unknown> | null, outfit: string): JSONContent {
+  const walk = (node: JSONContent): JSONContent => {
+    if (node.type === NODE.imagePill && image) return { ...node, attrs: { ...node.attrs, ...image } };
+    if (node.type === NODE.optionPill && node.attrs?.["kind"] === "outfit") {
+      return { ...node, attrs: { ...node.attrs, value: outfit } };
+    }
+    return node.content ? { ...node, content: node.content.map(walk) } : node;
+  };
+  return walk(doc);
+}
+
 /**
  * Một block. Trả `null` khi không đọc nổi — và block hỏng bị BỎ RIÊNG nó, không
  * làm hỏng cả tài liệu (cùng tinh thần §6.5-6 của thư viện element).
@@ -121,36 +258,27 @@ function readBlock(raw: unknown, index: number): Block | null {
   if (!isRecord(raw)) return null;
   const kind = str(raw["kind"]);
   const id = str(raw["id"]) || `block-${index}`;
+  /* Dự án lưu TRƯỚC khi block có hai chế độ ⇒ `template`, đúng thứ nó đang là.
+     Đoán sang `free` là bật một cơ chế người dùng chưa từng chọn. */
+  const mode: BlockMode = raw["mode"] === "free" ? "free" : "template";
   if (kind === "uikit") {
     const cells = Array.isArray(raw["cells"])
       ? (raw["cells"] as unknown[]).map(readCell).filter((c): c is UiCell => c !== null)
       : [];
-    /* Dự án lưu TRƯỚC khi block Bộ UI có hai chế độ ⇒ `template`, đúng thứ nó
-       đang là. Đoán sang `free` là bật một cơ chế người dùng chưa từng chọn. */
-    return { id, kind: "uikit", mode: raw["mode"] === "free" ? "free" : "template", cells };
+    return { id, kind: "uikit", mode, cells };
   }
-  if (kind !== "background" && kind !== "mascot") return null;
+  if (kind === "mascot") return readMascotBlock(raw, id, mode);
+  if (kind !== "background") return null;
   if (!isRecord(raw["doc"])) return null;
-  const mode: BlockMode = raw["mode"] === "free" ? "free" : "template";
-  /* Bảng ảnh dáng đọc PHÒNG THỦ từng ô: một khoá trỏ vào chuỗi rác chỉ làm mất
-     đúng một lần chụp lại, còn ném cả block đi là mất câu chữ người dùng viết. */
-  const poseRefs: Record<string, string> = {};
-  if (isRecord(raw["poseRefs"])) {
-    for (const [key, value] of Object.entries(raw["poseRefs"])) {
-      if (typeof value === "string" && value) poseRefs[key] = value;
-    }
-  }
   return {
     id,
     kind,
     mode,
-    /* Cùng phép cứu hộ, nhưng KHÔNG có giá trị để trả lại: câu Cảnh nền / Nhân
-       vật không lưu lựa chọn ở đâu ngoài chính tài liệu. Nên chỉ khôi phục được
-       pill ĐÓ LÀ GÌ (đúng nhãn, đúng danh sách khi bấm), còn NÓ ĐANG CHỌN GÌ thì
-       đã mất thật — và để rỗng là nói đúng điều đó. Xem `repairPills`. */
+    /* Cùng phép cứu hộ, nhưng KHÔNG có giá trị để trả lại: câu Cảnh nền không lưu
+       lựa chọn ở đâu ngoài chính tài liệu. Nên chỉ khôi phục được pill ĐÓ LÀ GÌ
+       (đúng nhãn, đúng danh sách khi bấm), còn NÓ ĐANG CHỌN GÌ thì đã mất thật —
+       và để rỗng là nói đúng điều đó. Xem `repairPills`. */
     doc: healDoc(raw["doc"] as JSONContent, kind),
-    ...(str(raw["poseView"]) ? { poseView: str(raw["poseView"]) } : {}),
-    ...(Object.keys(poseRefs).length ? { poseRefs } : {}),
   };
 }
 

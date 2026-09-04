@@ -375,6 +375,79 @@ class AttachmentListTest(unittest.TestCase):
         self.assertEqual(got, [shared, "refs/brand.png", "refs/inspo.png"])
 
 
+class PoseSheetTest(unittest.TestCase):
+    """TẤM DÁNG NHÂN VẬT: NHẬN DIỆN BẰNG GÌ, VÀ NÓI VỀ ẢNH THEO VAI TRÒ NÀO.
+
+    ╔══ HAI LỖ CỦA BẢN CŨ, CẢ HAI ĐỀU IM LẶNG ═════════════════════════════════╗
+    ║ ① `mascot_sheet = bool(sh.get("ref"))`. Thẻ Nhân vật của webapp nay ra một ║
+    ║   tấm NHIỀU DÁNG, và người dùng được phép tả nhân vật bằng chữ thay vì tải ║
+    ║   ảnh lên. Tấm ấy không có `ref` ⇒ rơi vào nhánh UI ⇒ lãnh khối "core /    ║
+    ║   rim / decoration" và bị vẽ như một món đồ giao diện. Không có gì báo:    ║
+    ║   prompt vẫn hợp lệ, ảnh vẫn ra, chỉ là ra sai thứ.                        ║
+    ║ ② Ảnh manơcanh: `image_gen` nhận MỘT danh sách ảnh dùng chung cho cả tấm,  ║
+    ║   nên client ghép sẵn thành một tấm cùng lưới rồi gửi qua `sheet.poseRef`. ║
+    ║   Engine phải (a) đính nó và (b) NÓI nó là gì — thiếu (b) thì model coi nó ║
+    ║   là một ảnh tham chiếu phong cách và vẽ ra một con manơcanh xám.          ║
+    ╚═══════════════════════════════════════════════════════════════════════════╝
+    """
+
+    def _pose_cfg(self, **sheet):
+        cfg = _cfg(spec="a mascot waving", skel={"shape": "pose", "w": 0.3, "h": 0.85})
+        cfg["sheets"][0].update(sheet)
+        return cfg
+
+    def test_o_dang_DU_de_vao_nhanh_mascot_du_khong_co_anh_nhan_vat(self):
+        txt = render_prompt_text(self._pose_cfg())
+        self.assertIn("A single character on a transparent canvas.", txt)
+        # Khối cấu tạo ba lớp của ô UI KHÔNG được áp lên một nhân vật.
+        self.assertNotIn("Build each element from the inside out", txt)
+
+    def test_khong_co_ref_thi_KHONG_noi_ve_mot_tam_anh_khong_ton_tai(self):
+        txt = render_prompt_text(self._pose_cfg())
+        self.assertNotIn("character REFERENCE PHOTO", txt)
+
+    def test_co_ref_thi_van_noi_dung_cau_cu(self):
+        txt = render_prompt_text(self._pose_cfg(ref="refs/lan.png"))
+        self.assertIn("The attached character REFERENCE PHOTO is the character", txt)
+
+    def test_poseRef_duoc_NOI_RA_theo_vai_tro_va_bi_cam_ve_lai(self):
+        txt = render_prompt_text(self._pose_cfg(ref="refs/lan.png", poseRef="refs/tam-dang.png"))
+        self.assertIn("POSE REFERENCE SHEET", txt)
+        self.assertIn("cell k of the mannequin sheet", txt)
+        self.assertIn("NEVER draw the mannequin itself", txt)
+        # Vai trò, KHÔNG phải thứ tự đính kèm — cùng luật đã bỏ "The SECOND attached image".
+        self.assertNotIn("SECOND attached image", txt)
+
+    def test_poseRef_mot_minh_van_du_de_vao_nhanh_mascot(self):
+        cfg = _cfg(spec="a mascot waving")            # skel mặc định: rrect, KHÔNG phải pose
+        cfg["sheets"][0]["poseRef"] = "refs/tam-dang.png"
+        self.assertIn("A single character on a transparent canvas.", render_prompt_text(cfg))
+
+    def test_tam_nhieu_dang_van_duoc_goi_dung_ten(self):
+        cfg = _cfg(skel={"shape": "pose", "w": 0.3, "h": 0.85})
+        cfg["sheets"][0]["grid"] = {"cols": 2, "rows": 1}
+        cfg["sheets"][0]["components"].append(
+            {"file": "02-thing", "spec": "waving", "skel": {"shape": "pose", "w": 0.3, "h": 0.85}})
+        self.assertIn("A sheet of 2 poses of one character", render_prompt_text(cfg))
+
+    def test_poseRef_dinh_kem_NGAY_SAU_anh_nhan_vat(self):
+        got = render_prompt_files({
+            "styles": [{
+                "id": "demo", "bg": "magenta", "style": "flat ink",
+                "brand": {"mode": "image", "refs": ["refs/brand.png"]},
+                "inspo": ["refs/inspo.png"],
+            }],
+            "sheets": [{
+                "id": "pose-demo", "grid": {"cols": 1, "rows": 1},
+                "components": [{"file": "01-thing", "spec": "a mascot waving",
+                                "skel": {"shape": "pose", "w": 0.3, "h": 0.85}}],
+                "ref": "refs/lan.png",
+                "poseRef": "refs/tam-dang.png",
+            }],
+        })
+        self.assertEqual(got, ["refs/lan.png", "refs/tam-dang.png", "refs/brand.png", "refs/inspo.png"])
+
+
 class SteeringPromptTest(unittest.TestCase):
     """Luật hình học phải nói bằng SỐ, và chỉ bằng số.
 

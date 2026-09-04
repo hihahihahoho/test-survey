@@ -17,11 +17,12 @@ import { ProjectSettingsDialog } from "@/features/project/components/ProjectSett
 import { CopyFigmaButton, DownloadKitButton } from "@/features/kit/components/KitExits";
 import { DemoScreenButton } from "@/features/demo";
 
-import { PillButton, PillCaret, PillMenu, PillMenuItem } from "@/features/prompt-lab/components/pill-ui";
+import { PillButton, PillCaret, PillMenu, PillMenuItem, useMenuFlip } from "@/features/prompt-lab/components/pill-ui";
 import { ContextSection } from "./components/ContextSection";
 import { usePresets } from "@/features/prompt-lab/lib/presets-store";
 import {
   newDocBlock,
+  newMascotBlock,
   newUiKitBlock,
   type Block,
   type BlockKind,
@@ -44,7 +45,7 @@ import { jobIdOf, sheetsHash } from "./lib/block-jobs";
 import { useBlockPrompts } from "./lib/block-prompt";
 import { useGenQueue } from "./lib/gen-queue";
 import { PAGE } from "./lib/ui";
-import { ensurePoseRef } from "./lib/pose-refs";
+import { ensurePoseRefs } from "./lib/pose-refs";
 
 /**
  * PromptCanvasScreen — MÀN LÀM VIỆC DUY NHẤT của app.
@@ -124,7 +125,10 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
   const [replaceOk, setReplaceOk] = React.useState(false);
   const locked = store.legacyDraft && !replaceOk;
 
-  const [addOpen, setAddOpen] = React.useState(false);
+  /* Nút «Thêm thẻ» nằm CUỐI một trang cuộn dài, nên nó thường ở sát đáy khung
+     nhìn: menu phải biết lật lên trên. Cùng cái móc mà bảng danh mục của thẻ Bộ
+     UI dùng, không chép lại phép đo. */
+  const { open: addOpen, setOpen: setAddOpen, dropUp: addDropUp, toggle: toggleAdd } = useMenuFlip();
   const [reloads, setReloads] = React.useState<Record<string, number>>({});
 
   /* Bản mới nhất NGOÀI vòng render: `prepare()` chạy bất đồng bộ vài giây sau cú
@@ -204,7 +208,7 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
 
       const block = state.blocks.find((b) => b.id === blockId);
       if (block && block.kind === "mascot") {
-        const outcome = await ensurePoseRef(projectId, block);
+        const outcome = await ensurePoseRefs(projectId, block, contractOpts);
         if (outcome.skipped) toast.warning("Vẽ không kèm ảnh dáng", { description: outcome.skipped });
         if (outcome.changed) {
           state = { ...state, blocks: state.blocks.map((b) => (b.id === blockId ? outcome.block : b)) };
@@ -264,7 +268,10 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
   );
 
   const addBlock = (kind: BlockKind) => {
-    const block: Block = kind === "uikit" ? newUiKitBlock() : newDocBlock(kind);
+    /* Ba loại thẻ, ba hàm dựng khác nhau — `DocBlock` nay CHỈ còn cảnh nền, nên
+       không có nhánh "mặc định" nào đúng cho cả ba. */
+    const block: Block =
+      kind === "uikit" ? newUiKitBlock() : kind === "mascot" ? newMascotBlock() : newDocBlock(kind);
     edit((prev) => ({ ...prev, blocks: [...prev.blocks, block] }));
     setAddOpen(false);
   };
@@ -332,26 +339,32 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
           />
         ))}
 
-        <div className="relative pb-16">
-          <PillButton active={addOpen} onClick={() => setAddOpen((v) => !v)} aria-expanded={addOpen} disabled={locked} className="text-body">
-            <Plus aria-hidden className="size-4" />
-            <span>Thêm thẻ</span>
-            <PillCaret />
-          </PillButton>
+        {/* Lớp ĐỆM ở NGOÀI, lớp `relative` ôm SÁT nút — hai việc, hai thẻ.
+            Gộp làm một (`relative pb-16`) là menu rơi xuống dưới cả 64px đệm, vì
+            `top-[calc(100%+8px)]` đo từ đáy khối `relative` chứ không từ đáy nút:
+            đó chính là con bọ "menu Thêm thẻ dính đáy màn hình". Xem `PillMenu`. */}
+        <div className="pb-16">
+          <span className="relative inline-block">
+            <PillButton active={addOpen} onClick={toggleAdd} aria-expanded={addOpen} disabled={locked} className="text-body">
+              <Plus aria-hidden className="size-4" />
+              <span>Thêm thẻ</span>
+              <PillCaret />
+            </PillButton>
 
-          {addOpen && (
-            <PillMenu label="Chọn loại thẻ" onClose={() => setAddOpen(false)}>
-              {ADD_ITEMS.map((item) => (
-                <PillMenuItem key={item.kind} onSelect={() => addBlock(item.kind)}>
-                  <span className="mt-0.5 text-fg-muted">{item.icon}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-fg-strong">{item.label}</span>
-                    <span className="block truncate text-caption text-fg-muted">{item.hint}</span>
-                  </span>
-                </PillMenuItem>
-              ))}
-            </PillMenu>
-          )}
+            {addOpen && (
+              <PillMenu label="Chọn loại thẻ" dropUp={addDropUp} onClose={() => setAddOpen(false)}>
+                {ADD_ITEMS.map((item) => (
+                  <PillMenuItem key={item.kind} onSelect={() => addBlock(item.kind)}>
+                    <span className="mt-0.5 text-fg-muted">{item.icon}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-fg-strong">{item.label}</span>
+                      <span className="block truncate text-caption text-fg-muted">{item.hint}</span>
+                    </span>
+                  </PillMenuItem>
+                ))}
+              </PillMenu>
+            )}
+          </span>
         </div>
       </div>
     </PromptProjectContext.Provider>

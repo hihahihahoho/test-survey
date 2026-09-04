@@ -358,3 +358,38 @@ describe("route /k/$projectId", () => {
     expect(screen.getByText(/Ngữ cảnh chung/)).toBeTruthy();
   });
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⑤ MENU «Thêm thẻ» PHẢI NEO VÀO NÚT, KHÔNG NEO VÀO LỚP ĐỆM
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * ╔══ CON BỌ CÓ THẬT, VÀ NÓ KHÔNG HỎNG Ở CHỖ NÓ TRÔNG NHƯ HỎNG ══════════════╗
+ * ║ Nút + menu từng nằm chung trong `<div class="relative pb-16">`. `PillMenu` ║
+ * ║ định vị bằng `top-[calc(100%+8px)]` — mà `100%` là chiều cao của khối       ║
+ * ║ `relative` gần nhất, tức là ĐÃ CỘNG 64px đệm. Kết quả: menu rơi cách nút   ║
+ * ║ ~70px, dính đáy khung nhìn, trông như một menu của thứ khác.               ║
+ * ║ jsdom KHÔNG tính layout nên không đo được khoảng cách ấy. Nhưng NGUYÊN     ║
+ * ║ NHÂN thì đo được, và nó là thứ duy nhất cần khoá: menu và nút phải chung   ║
+ * ║ MỘT vỏ, và vỏ đó không được mang đệm.                                      ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+describe("menu «Thêm thẻ» neo vào nút", () => {
+  it("menu và nút chung một vỏ, và vỏ ấy KHÔNG mang đệm", async () => {
+    wrap(<PromptCanvasScreen projectId={PID} />);
+    const button = await screen.findByRole("button", { name: /Thêm thẻ/ });
+
+    fireEvent.click(button);
+    const menu = await screen.findByRole("listbox", { name: "Chọn loại thẻ" });
+
+    /* Cùng CHA: đó chính là "menu đo từ nút", không phải từ một khối bao ngoài. */
+    expect(menu.parentElement).toBe(button.parentElement);
+
+    const shell = button.parentElement!;
+    expect(shell.className).toContain("relative");
+    /* Không một lớp đệm/lề nào — mọi khoảng cách phải ở lớp NGOÀI vỏ này. */
+    expect(shell.className).not.toMatch(/\b[pm][btlrxy]?-/);
+    /* Và lớp ngoài vẫn còn đệm: sửa bọ không được đổi luôn bố cục của trang. */
+    expect(shell.parentElement?.className).toMatch(/\bpb-/);
+  });
+});

@@ -57,17 +57,23 @@ export function backgroundDoc(): JSONContent {
 
 /* ── Block MASCOT ─────────────────────────────────────────────────────────── */
 
-export const SCAFFOLD_MASCOT = [
-  "Tạo nhân vật ",
-  " với dáng ",
-  " (hoặc ảnh dáng ",
-  "), biểu cảm ",
-  ", trang phục ",
-  ".",
-] as const;
+/**
+ * ╔══ CÂU NÀY ĐÃ NGẮN LẠI CÒN MỘT NỬA, VÀ ĐÓ LÀ CẢ Ý ĐỒ ═════════════════════╗
+ * ║ Câu cũ: «Tạo nhân vật [ảnh] với dáng [⌄] (hoặc ảnh dáng [ảnh]), biểu cảm  ║
+ * ║ [⌄], trang phục [⌄].» — năm chỗ chọn cho MỘT nhân vật, tức là một thẻ chỉ ║
+ * ║ vẽ được đúng một dáng. Chủ sản phẩm bác thẳng: *"mỗi nhân vật 1 pose 1 góc ║
+ * ║ camera riêng"*, và *"bỏ cái «hoặc» đi"*.                                   ║
+ * ║ Nay câu đầu thẻ chỉ giữ thứ ĐÚNG CHO MỌI Ô: nhân vật này là ai (ảnh) và    ║
+ * ║ mặc gì. Dáng · góc · nét mặt xuống từng dòng (`MASCOT_POSE_ROW`).          ║
+ * ║ Cụm «(hoặc ảnh dáng [ảnh])» bị BỎ HẲN, không ẩn đi: pill ảnh thứ hai ấy    ║
+ * ║ tồn tại để chứa ảnh manơcanh engine tự chụp — một chuyện nội bộ mà người   ║
+ * ║ dùng chưa bao giờ cần thấy, và bày ra thì họ tưởng phải tự đi tìm một ảnh. ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export const SCAFFOLD_MASCOT = ["Tạo nhân vật ", ", trang phục ", "."] as const;
 
 export function mascotDoc(): JSONContent {
-  const [a, b, c, d, e, f] = SCAFFOLD_MASCOT;
+  const [a, b, c] = SCAFFOLD_MASCOT;
   return {
     type: "doc",
     content: [
@@ -77,16 +83,52 @@ export function mascotDoc(): JSONContent {
           text(a),
           imagePill(),
           text(b),
-          pill("pose", "idle"),
-          text(c),
-          imagePill(),
-          text(d),
-          pill("expression", "a big bright smile"),
-          text(e),
           /* Rỗng = kế thừa theme tổng ở đầu tài liệu. Mặc định đúng ngay, và
              người dùng vẫn bấm để ghi đè cho riêng nhân vật này. */
           pill("outfit", INHERIT),
-          text(f),
+          text(c),
+        ],
+      },
+    ],
+  };
+}
+
+/* ── MỘT DÒNG DÁNG của thẻ NHÂN VẬT ───────────────────────────────────────── */
+
+/**
+ * Câu khởi điểm cho MỘT dòng dáng khi thẻ chuyển sang chế độ tự do.
+ *
+ * Cùng lập luận với `SCAFFOLD_UI_CELL`: câu này đi vào `components[].spec` — nơi
+ * bị ghép vào giữa một prompt tiếng Anh — nên khung của nó là tiếng Anh, không
+ * phải khung tiếng Việt như hai câu cấp THẺ. Ở đây khung chỉ còn dấu phẩy.
+ */
+export const SCAFFOLD_MASCOT_POSE = [", "] as const;
+
+/**
+ * Dòng dáng → câu tự do khởi điểm.
+ *
+ * KHÔNG mang chủ ngữ ("the same character…") vào câu: chủ ngữ là chuyện của CẢ
+ * THẺ (nó dựng từ ảnh + trang phục ở câu đầu) và bộ dịch tự đặt nó lên trước mọi
+ * ô — xem `mascotSheets`. Viết lại chủ ngữ ở từng dòng là mời người dùng sửa
+ * danh tính nhân vật ở mười sáu chỗ khác nhau.
+ */
+export function mascotPoseDoc(row: { pose: string; view: string; expression: string; note: string }): JSONContent {
+  const [comma] = SCAFFOLD_MASCOT_POSE;
+  const note = row.note.trim();
+  return {
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: [
+          /* Thứ tự pill PHẢI khớp `PILL_SLOTS.mascotPose` và khớp thứ tự pill trên
+             dòng ở chế độ khuôn — gạt công tắc không được làm lựa chọn nhảy chỗ. */
+          pill("pose", row.pose),
+          text(comma),
+          pill("view", row.view),
+          text(comma),
+          pill("expression", row.expression),
+          ...(note ? [text(`${comma}${note}`)] : []),
         ],
       },
     ],
@@ -127,9 +169,10 @@ export function contextDoc(state: { themeValue: string; styleId: string }): JSON
 }
 
 /** Scaffolding theo loại block — bộ serialize chế độ TỰ DO dùng để trừ chuỗi. */
-export const SCAFFOLDS: Record<"background" | "mascot" | "context", readonly string[]> = {
+export const SCAFFOLDS: Record<"background" | "mascot" | "mascotPose" | "context", readonly string[]> = {
   background: SCAFFOLD_BACKGROUND,
   mascot: SCAFFOLD_MASCOT,
+  mascotPose: SCAFFOLD_MASCOT_POSE,
   context: SCAFFOLD_CONTEXT,
 };
 
@@ -244,7 +287,7 @@ export function retitleCellDoc(doc: JSONContent, prevEn: string, nextEn: string)
  * chúng: sửa câu khởi điểm mà quên bảng thì cứu hộ gán sai, và hai thứ ở cạnh
  * nhau thì khó quên hơn.
  */
-export const PILL_SLOTS: Record<"uikit" | "background" | "mascot" | "context", readonly PillKind[]> = {
+export const PILL_SLOTS: Record<"uikit" | "background" | "mascot" | "mascotPose" | "context", readonly PillKind[]> = {
   /* Đổi 08/2026: ô thứ ba `material` → `glaze`, và nó lên đứng thứ hai cùng lượt
      `uiCellDoc` đổi thứ tự. Bảng và câu khởi điểm phải đi CÙNG NHAU (xem khối chú
      thích trên) — nhưng ở ĐÂY còn một điều kiện thứ hai, dễ quên hơn: `values`
@@ -252,7 +295,13 @@ export const PILL_SLOTS: Record<"uikit" | "background" | "mascot" | "context", r
      theo. Ba nơi, một thứ tự. */
   uikit: ["style", "glaze", "decor"],
   background: ["scene", "mood"],
-  mascot: ["pose", "expression", "outfit"],
+  /* Đổi 09/2026 cùng lượt tách thẻ Nhân vật thành sprite sheet: câu ĐẦU THẺ nay
+     chỉ còn pill trang phục, còn dáng/góc/nét mặt xuống dòng (`mascotPose`). Tài
+     liệu đời trước có ba pill ở câu đầu — nhưng chúng KHÔNG đi qua bảng này nữa:
+     `readMascotBlock` dựng lại câu đầu từ template mới, nên bảng chỉ phải đúng
+     cho hình dạng HIỆN TẠI. */
+  mascot: ["outfit"],
+  mascotPose: ["pose", "view", "expression"],
   context: ["theme", "style"],
 };
 

@@ -60,4 +60,47 @@ export async function run({ api, pid }) {
     eq(f.status, 204, "force xoá được")
   })
 
+  /* `poseRef` là TẤM ẢNH DÁNG ghép sẵn của sheet nhân vật — cùng một tệp trong
+     `refs/` như `ref`, chỉ khác vai trò trong prompt. Nếu `refUsage` không nhìn
+     trường này thì xoá ảnh ấy đi là 204 im lặng, và lượt vẽ sau mất ảnh dáng mà
+     không ai được báo. Ca này canh đúng chỗ đó, không canh gì khác. */
+  await it("ảnh dáng ghép (poseRef) cũng được tính là ĐANG DÙNG", async () => {
+    const mp = multipart([
+      { name: "file", filename: "sheet.png", contentType: "image/png", data: PNG_1x1 },
+      { name: "kind", data: "character" },
+      { name: "hintName", data: "Tam dang" },
+    ])
+    const up = await api("POST", `/api/projects/${pid}/refs`, {
+      headers: { "content-type": mp.contentType }, body: mp.body,
+    })
+    eq(up.status, 201, "tải tấm ảnh dáng lên")
+
+    const g = await api("GET", `/api/projects/${pid}/contract`)
+    const c = structuredClone(g.json.contract)
+    c.sheets[0].poseRef = up.json.path
+    const put = await api("PUT", `/api/projects/${pid}/contract`, {
+      headers: { "if-match": String(g.json.version) }, body: { contract: c },
+    })
+    eq(put.status, 200, "contract có poseRef vẫn lưu được")
+
+    const r = await api("DELETE", `/api/projects/${pid}/refs/${up.json.name}`)
+    eq(r.status, 409, "status")
+    eq(r.json.error.code, "REF_IN_USE", "code")
+    ok(r.json.error.details.usedBy.some(u => u.kind === "sheetPose"), "nói rõ nó bị dùng làm ảnh dáng")
+  })
+
+  /* Đường dẫn thoát ra ngoài project bị chặn ở `ref` từ lâu; `poseRef` phải chịu
+     ĐÚNG luật ấy, nếu không thì contract đọc được tệp ngoài thư mục dự án. */
+  await it("poseRef có `..` → contract bị TỪ CHỐI, y như ref", async () => {
+    const g = await api("GET", `/api/projects/${pid}/contract`)
+    const c = structuredClone(g.json.contract)
+    c.sheets[0].poseRef = "../../etc/passwd.png"
+    const r = await api("PUT", `/api/projects/${pid}/contract`, {
+      headers: { "if-match": String(g.json.version) }, body: { contract: c },
+    })
+    eq(r.status, 422, "status")
+    eq(r.json.error.code, "CONTRACT_INVALID", "code")
+    ok(JSON.stringify(r.json.error.details).includes("REF_PATH"), "nêu đúng luật REF_PATH")
+  })
+
 }

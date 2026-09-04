@@ -14,13 +14,15 @@ import {
   UiKitBlockBody,
   UI_KIT_BLOCK_TITLE,
 } from "@/features/prompt-lab/components/UiKitBlockView";
+import {
+  MascotBlockBadge,
+  MascotBlockBody,
+  MASCOT_BLOCK_TITLE,
+} from "@/features/prompt-lab/components/MascotBlockView";
 import { ModeBadge } from "@/features/prompt-lab/components/BlockCard";
-import { OptionPill, PillButton, PillCaret, PillMenu, PillMenuItem } from "@/features/prompt-lab/components/pill-ui";
-import { CAMERA_VIEWS } from "@/features/pose-lab/lib/pose-state";
-import type { Block, DocBlock, UiKitBlock } from "@/features/prompt-lab/lib/composer-model";
+import type { Block, DocBlock, MascotBlock, UiKitBlock } from "@/features/prompt-lab/lib/composer-model";
 import type { Sheet } from "@/lib/types/contract";
 import type { PromptPreviewJob } from "@/lib/types/api";
-import { FALLBACK_POSE, poseViewOf, readPosePill, writePosePill } from "../lib/pose-doc";
 import type { BlockPromptState } from "../lib/block-prompt";
 import { copyProjectImage, copyPromptWithImage, fullPromptText } from "../lib/prompt-copy";
 import type { GenBlockState } from "../lib/gen-queue";
@@ -30,15 +32,21 @@ import { SheetResultSlot } from "./SheetResultSlot";
 /**
  * CanvasBlock — VỎ CỦA MỘT THẺ TRÊN MÀN LÀM VIỆC THẬT.
  *
- * ╔══ VỎ NÀY KHÁC VỎ CỦA LAB Ở BỐN THỨ, VÀ CHỈ BỐN ══════════════════════════╗
+ * ╔══ VỎ NÀY KHÁC VỎ CỦA LAB Ở BA THỨ, VÀ CHỈ BA ════════════════════════════╗
  * ║  ① hai tab "Soạn | Prompt" — xem trước đúng chữ engine sẽ gửi cho TẤM NÀY; ║
  * ║  ② nút Vẽ + trạng thái hàng đợi (chờ · đang vẽ · xong · lỗi);              ║
- * ║  ③ ô ảnh kết quả của từng tấm mà thẻ sinh ra;                              ║
- * ║  ④ (riêng thẻ Nhân vật) hai pill [dáng] + [góc] cho ảnh manơcanh.          ║
- * ║ RUỘT thì dùng nguyên của lab (`DocBlockBody` / `UiKitBlockBody`) — cùng     ║
- * ║ một editor, cùng một luật đổi chế độ. Xem `DocBlockView.tsx` để biết vì sao║
- * ║ tách ruột khỏi vỏ thay vì chép.                                            ║
+ * ║  ③ ô ảnh kết quả của từng tấm mà thẻ sinh ra.                              ║
+ * ║ RUỘT thì dùng nguyên của lab (`DocBlockBody` / `UiKitBlockBody` /           ║
+ * ║ `MascotBlockBody`) — cùng một editor, cùng một luật đổi chế độ. Xem         ║
+ * ║ `DocBlockView.tsx` để biết vì sao tách ruột khỏi vỏ thay vì chép.           ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ══ THỨ TƯ ĐÃ BỊ XOÁ: THANH «Ảnh dáng tự dựng» ════════════════════════════
+ * Vỏ này từng có một thanh riêng cho thẻ Nhân vật: «Ảnh dáng tự dựng: [dáng]
+ * [góc] sẽ dựng khi bấm Vẽ». Chủ sản phẩm: *"cái này là sao nhỉ, sao ko cho vào
+ * trong chọn prompt cho tự nhiên?"*. Hai pill ấy nay là pill của TỪNG DÒNG DÁNG
+ * trong thẻ (`MascotBlockBody`), và cả câu nói về ảnh manơcanh biến mất — nó là
+ * chuyện nội bộ của công cụ, không phải một bước người dùng phải hiểu.
  */
 
 export type BlockTab = "compose" | "prompt";
@@ -82,11 +90,18 @@ export interface CanvasBlockProps {
 
 const GEN_HINT = "Vẽ ảnh bằng AI — tiêu lượt tạo.";
 
+/** Tên thẻ theo loại — MỘT bảng, để vỏ không phải nối hai bảng bằng ba nhánh `if`. */
+const BLOCK_TITLE: Record<Block["kind"], string> = {
+  ...DOC_BLOCK_TITLE,
+  uikit: UI_KIT_BLOCK_TITLE,
+  mascot: MASCOT_BLOCK_TITLE,
+};
+
 export function CanvasBlock(props: CanvasBlockProps) {
   const { projectId, block, sheets, onDelete, gen, onGen, onDequeue, prompt, styleLine, onWantPrompt, hash, promptBusy } = props;
   const [tab, setTab] = React.useState<BlockTab>("compose");
 
-  const title = block.kind === "uikit" ? UI_KIT_BLOCK_TITLE : DOC_BLOCK_TITLE[block.kind];
+  const title = BLOCK_TITLE[block.kind];
   const canGen = sheets.length > 0;
   const stale = prompt.status === "ready" && prompt.hash !== hash;
 
@@ -108,6 +123,7 @@ export function CanvasBlock(props: CanvasBlockProps) {
             chế độ như hai thẻ kia, nên giấu badge chế độ đi là để người dùng
             phải mở thẻ ra mới biết mình đang ở đâu. */}
         {block.kind === "uikit" && <UiKitBlockBadge block={block} />}
+        {block.kind === "mascot" && <MascotBlockBadge block={block} />}
         <ModeBadge mode={block.mode} />
 
         <div className="ml-auto flex items-center gap-2">
@@ -128,14 +144,6 @@ export function CanvasBlock(props: CanvasBlockProps) {
           </button>
         </div>
       </header>
-
-      {block.kind === "mascot" && (
-        <PoseRow
-          block={block}
-          onChange={(updater) => props.onChange((prev) => updater(prev as DocBlock))}
-          onReload={props.onReload}
-        />
-      )}
 
       {tab === "compose" ? (
         <BlockBody {...props} />
@@ -168,11 +176,18 @@ export function CanvasBlock(props: CanvasBlockProps) {
   );
 }
 
-type DocChange = (updater: (prev: DocBlock) => DocBlock) => void;
-
 function BlockBody({ block, onChange, reloadSignal }: CanvasBlockProps) {
   if (block.kind === "uikit") {
     return <UiKitBlockBody block={block} onChange={(updater) => onChange((prev) => updater(prev as UiKitBlock))} />;
+  }
+  if (block.kind === "mascot") {
+    return (
+      <MascotBlockBody
+        block={block}
+        onChange={(updater) => onChange((prev) => updater(prev as MascotBlock))}
+        reloadSignal={reloadSignal}
+      />
+    );
   }
   return (
     <DocBlockBody
@@ -537,64 +552,5 @@ function CopyTextButton({ text, label, className }: { text: string; label: strin
       <Copy aria-hidden strokeWidth={1.5} />
       {label}
     </Button>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
-   Hai pill của thẻ Nhân vật
-   ══════════════════════════════════════════════════════════════════════════ */
-
-/**
- * [dáng ⌄] [góc ⌄] — hai lựa chọn DUY NHẤT người dùng phải làm để có ảnh manơcanh.
- *
- * Pill [dáng] ghi thẳng vào PILL TRONG CÂU (xem `pose-doc.ts`): thanh này và câu
- * chữ là hai cửa nhìn vào cùng một giá trị, không phải hai giá trị. Vì thế nó
- * cũng phải bắn `reload` để ô soạn nạp lại chữ — nếu không, state đã đổi mà câu
- * trên màn vẫn là câu cũ.
- */
-function PoseRow({ block, onChange, onReload }: { block: DocBlock; onChange: DocChange; onReload: () => void }) {
-  const pose = readPosePill(block.doc) || FALLBACK_POSE;
-  const view = poseViewOf(block);
-  const [open, setOpen] = React.useState(false);
-  const current = CAMERA_VIEWS.find((v) => v.id === view) ?? CAMERA_VIEWS[0]!;
-
-  return (
-    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2 bg-raised px-3 py-2">
-      <span className="text-caption text-fg-muted">Ảnh dáng tự dựng:</span>
-      <OptionPill
-        compact
-        kind="pose"
-        value={pose}
-        onChange={(next) => {
-          onChange((prev) => ({ ...prev, doc: writePosePill(prev.doc, next) }));
-          onReload();
-        }}
-      />
-      <span className="relative inline-block">
-        <PillButton compact active={open} onClick={() => setOpen((v) => !v)} aria-haspopup="listbox" aria-expanded={open}>
-          <span>{current.vi}</span>
-          <PillCaret compact />
-        </PillButton>
-        {open && (
-          <PillMenu label="Chọn góc máy" onClose={() => setOpen(false)}>
-            {CAMERA_VIEWS.map((option) => (
-              <PillMenuItem
-                key={option.id}
-                selected={option.id === view}
-                onSelect={() => {
-                  onChange((prev) => ({ ...prev, poseView: option.id }));
-                  setOpen(false);
-                }}
-              >
-                <span className="text-fg-strong">{option.vi}</span>
-              </PillMenuItem>
-            ))}
-          </PillMenu>
-        )}
-      </span>
-      <span className="text-caption text-fg-muted">
-        {block.poseRefs?.[`${pose}|${view}`] ? "đã có ảnh" : "sẽ dựng khi bấm Vẽ"}
-      </span>
-    </div>
   );
 }

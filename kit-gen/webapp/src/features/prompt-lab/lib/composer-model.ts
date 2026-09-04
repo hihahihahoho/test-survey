@@ -1,4 +1,6 @@
 import type { JSONContent } from "@tiptap/react";
+import { EXPRESSIONS } from "@/features/kit-core/lib/poses";
+import { DEFAULT_VIEW } from "@/features/pose-lab/lib/pose-state";
 import { getPresets, type PresetBundle } from "./presets-store";
 import { INHERIT } from "./pill-registry";
 import { backgroundDoc, mascotDoc } from "./doc-templates";
@@ -43,31 +45,104 @@ export type BlockKind = "background" | "uikit" | "mascot";
  */
 export type BlockMode = "template" | "free";
 
-/** Block có một câu mad-lib do TipTap giữ. */
+/**
+ * Block có một câu mad-lib do TipTap giữ.
+ *
+ * ══ CHỈ CÒN CẢNH NỀN, VÀ ĐÓ LÀ MỘT QUYẾT ĐỊNH ĐÃ ĐẢO ══════════════════════
+ * `kind` từng có cả `"mascot"`: một thẻ Nhân vật là MỘT câu sinh ra MỘT ô. Lời
+ * chủ sản phẩm đảo nó: *"nhân vật cũng nên để sprite sheet nhé, bỏ cái «hoặc» đi
+ * vì mỗi nhân vật 1 pose 1 góc camera riêng"* — tức là một thẻ Nhân vật giờ là
+ * một DANH SÁCH DÒNG y như Bộ UI, không phải một câu. Xem `MascotBlock`.
+ */
 export interface DocBlock {
   id: string;
-  kind: "background" | "mascot";
+  kind: "background";
   mode: BlockMode;
   doc: JSONContent;
+}
+
+/**
+ * MỘT DÒNG DÁNG của thẻ Nhân vật — một ô trên tấm sprite sheet nhân vật.
+ *
+ * ╔══ VÌ SAO GÓC MÁY NAY LÀ MỘT TRƯỜNG NGANG HÀNG VỚI DÁNG ══════════════════╗
+ * ║ Đời trước góc máy nằm rời ở `DocBlock.poseView`, và chú thích ở đó giải     ║
+ * ║ thích rằng nó KHÔNG đi vào prompt: nó chỉ chọn tấm ảnh manơcanh, còn tấm    ║
+ * ║ ảnh mới là thứ tới máy vẽ. Lập luận ấy đứng được khi mỗi thẻ đúng MỘT dáng  ║
+ * ║ và tấm nào cũng đính được ảnh manơcanh của riêng nó.                       ║
+ * ║ Nay một thẻ ra một tấm NHIỀU Ô, mà `image_gen` chỉ nhận một danh sách ảnh   ║
+ * ║ dùng chung cho cả tấm — ảnh manơcanh phải được GHÉP thành một tấm duy nhất  ║
+ * ║ (xem `sheet.poseRef`). Nên mỗi ô buộc phải tự nói ra góc của mình bằng chữ, ║
+ * ║ và câu prompt của ô phải đứng được cả khi máy người dùng không dựng nổi ảnh.║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export interface MascotPose {
+  id: string;
+  /** Id dáng trong `POSES` (`kit-core/lib/poses.ts`). */
+  pose: string;
+  /** Id góc máy trong `CAMERA_VIEWS` (`pose-lab/lib/pose-state.ts`). */
+  view: string;
+  /** Cụm EN của nét mặt — quy ước `PhraseOption`: value CHÍNH LÀ cụm EN. */
+  expression: string;
+  /** Ghi chú tự do của người dùng cho riêng dòng này. */
+  note: string;
+  /** Câu tự do của dòng — chỉ có nghĩa ở chế độ `free`. Cùng luật với `UiCell.doc`. */
+  doc?: JSONContent;
   /**
-   * GÓC MÁY của ảnh dáng — chỉ có nghĩa với block Nhân vật. Rỗng/thiếu = góc mặc
-   * định của pose-lab (`DEFAULT_VIEW`).
+   * ẢNH MANƠCANH đã chụp cho ĐÚNG cặp (`pose`, `view`) hiện tại — `refs/<tên>`.
    *
-   * Vì sao KHÔNG là một pill trong `doc` như [dáng]: góc máy không đi vào prompt
-   * một chữ nào. Nó chỉ quyết định tấm ảnh manơcanh chụp ra trông thế nào, rồi
-   * chính TẤM ẢNH mới đi tới máy vẽ. Nhét nó vào câu là hứa với người đọc rằng
-   * câu prompt có nhắc tới góc máy — mà không.
+   * ╔══ VÌ SAO KHÔNG CÓ BẢNG CACHE THEO CẶP NHƯ ĐỜI TRƯỚC ═════════════════════╗
+   * ║ `DocBlock.poseRefs` cũ là một `Record<"<dáng>|<góc>", path>` nằm trên      ║
+   * ║ block, để đổi dáng qua lại không đẻ ra hai tệp y hệt nhau trong `refs/`.   ║
+   * ║ Ở mô hình dòng thì bảng ấy trả lời sai câu hỏi quan trọng hơn: "ảnh đang   ║
+   * ║ nằm trên DÒNG NÀY có còn đúng dáng/góc của dòng này không". Nên luật nay   ║
+   * ║ đơn giản và không có trạng thái thứ hai để lệch: **đổi `pose` hoặc `view`  ║
+   * ║ là XOÁ `refPath`** (xem `retakePose`), và ảnh chỉ được coi là hợp lệ khi   ║
+   * ║ nó còn nằm đó.                                                            ║
+   * ║ ĐÁNH ĐỔI, NÓI THẲNG: đổi dáng rồi đổi ngược lại là chụp + tải lên lần nữa. ║
+   * ║ Đổi lại, hai dòng CÙNG cặp trong một thẻ vẫn dùng chung đúng một tệp —     ║
+   * ║ `ensurePoseRefs` gom theo cặp trong một lượt (đó mới là ca thường gặp:     ║
+   * ║ một tấm turnaround hay lặp lại một dáng ở nhiều góc).                      ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
    */
-  poseView?: string;
+  refPath?: string;
+}
+
+/**
+ * Thẻ Nhân vật = MỘT DANH SÁCH DÁNG + một câu nói về DANH TÍNH.
+ *
+ * ┌── HAI TẦNG, VÀ RANH GIỚI GIỮA CHÚNG LÀ "CHUNG HAY RIÊNG" ────────────────┐
+ * │ `doc` (câu đầu thẻ) chỉ chứa thứ ĐÚNG CHO CẢ BỘ: ảnh nhân vật + trang     │
+ * │ phục. `poses[]` chứa thứ mỗi ô một khác: dáng, góc máy, nét mặt.         │
+ * │ Cụm «(hoặc ảnh dáng […])» của câu cũ đã bị BỎ HẲN — nó mời người dùng    │
+ * │ đưa một ảnh dáng cho cả thẻ, trong khi giờ mỗi dòng có dáng riêng.       │
+ * └──────────────────────────────────────────────────────────────────────────┘
+ */
+export interface MascotBlock {
+  id: string;
+  kind: "mascot";
+  /** CÙNG hai chế độ với mọi thẻ khác — xem `BlockMode` và `UiKitBlock.mode`. */
+  mode: BlockMode;
+  /** Câu đầu thẻ: `Tạo nhân vật [ảnh], trang phục [⌄].` — xem `mascotDoc()`. */
+  doc: JSONContent;
+  /** Thứ tự trong mảng CHÍNH LÀ thứ tự ô trên tấm — xem `moveRow`. */
+  poses: MascotPose[];
   /**
-   * ẢNH DÁNG ĐÃ CHỤP, khoá theo cặp `"<dáng>|<góc>"` → đường dẫn `refs/<tên>`.
+   * ẢNH DÁNG ĐÃ GHÉP của thẻ này: một tấm manơcanh cùng lưới với tấm sẽ vẽ.
    *
-   * Đây là bộ nhớ đệm, và nó nằm TRONG TÀI LIỆU (chứ không trong RAM của tab) vì
-   * cái đắt không phải phép render 10ms mà là VÒNG TẢI LÊN: mỗi lần chụp lại là
-   * một tệp mới trong `refs/` của dự án. Đổi dáng rồi đổi lại là hai tệp y hệt
-   * nhau nằm trên đĩa mãi mãi nếu không có bảng này.
+   * ╔══ VÌ SAO NÓ PHẢI ĐƯỢC LƯU, CHỨ KHÔNG DỰNG LẠI MỖI LƯỢT ══════════════════╗
+   * ║ `composerBlockSheets()` là hàm THUẦN và ĐỒNG BỘ — màn hình gọi nó ở mỗi   ║
+   * ║ nhịp render để biết thẻ này sinh ra tấm nào. Ghép ảnh thì cần canvas +     ║
+   * ║ một vòng tải lên, tức là bất đồng bộ và tốn tiền băng thông. Nên đường     ║
+   * ║ dẫn tấm đã ghép phải nằm TRONG TÀI LIỆU: `ensurePoseRefs()` ghi nó lúc     ║
+   * ║ bấm Vẽ, còn bộ dịch chỉ đọc.                                              ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   *
+   * `key` là VÂN TAY của bộ dòng đã ghép nên tấm ấy. Lệch ⇒ tấm cũ tả một bố cục
+   * khác với tấm sắp vẽ, và một ảnh tham chiếu sai lưới còn hại hơn không có ảnh.
+   * `paths[i]` ứng với tấm thứ i của thẻ (thẻ nhiều dáng bị chia tấm — xem
+   * `mascotSheets`); chuỗi rỗng = tấm đó không dựng được ảnh nào.
    */
-  poseRefs?: Record<string, string>;
+  poseSheet?: { key: string; paths: string[] };
 }
 
 /** Một ô của lưới spritesheet. */
@@ -147,31 +222,37 @@ export interface UiKitBlock {
    * không có chỗ nào đủ rộng để nói ra cả mười sáu.
    */
   mode: BlockMode;
-  /** Thứ tự trong mảng CHÍNH LÀ thứ tự ô đi vào contract — xem `moveCell`. */
+  /** Thứ tự trong mảng CHÍNH LÀ thứ tự ô đi vào contract — xem `moveRow`. */
   cells: UiCell[];
 }
 
 /**
- * Đổi chỗ một dòng element. Hàm THUẦN, và đó là điểm quan trọng nhất của nó.
+ * Đổi chỗ một dòng trong một danh sách có thứ tự. Hàm THUẦN, và đó là điểm quan
+ * trọng nhất của nó.
  *
  * ╔══ THỨ TỰ DÒNG LÀ DỮ LIỆU, KHÔNG PHẢI HIỆU ỨNG KÉO THẢ ═══════════════════╗
  * ║ `uiKitSheets()` xếp `block.cells` vào `components[]` theo đúng thứ tự mảng,║
- * ║ rồi `gen.sh` vẽ ô theo đúng thứ tự ấy. Nên "kéo dòng #2 lên trên #1" KHÔNG ║
- * ║ phải một chuyện trang trí — nó đổi vị trí món đồ trên tấm ảnh sẽ vẽ ra.    ║
- * ║ Vì thế phép đổi chỗ được tách thành một hàm thuần test được, thay vì nằm   ║
- * ║ trong một trình xử lý `onDrop` mà chỉ chuột mới chạm tới.                  ║
+ * ║ `mascotSheets()` xếp `block.poses` y hệt, rồi `gen.sh` vẽ ô theo đúng thứ  ║
+ * ║ tự ấy. Nên "kéo dòng #2 lên trên #1" KHÔNG phải một chuyện trang trí — nó  ║
+ * ║ đổi vị trí món đồ trên tấm ảnh sẽ vẽ ra. Vì thế phép đổi chỗ được tách     ║
+ * ║ thành một hàm thuần test được, thay vì nằm trong một trình xử lý `onDrop`  ║
+ * ║ mà chỉ chuột mới chạm tới.                                                ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * TỔNG QUÁT theo `T` chứ không riêng cho ô UI (tên cũ: `moveCell`): hai loại thẻ
+ * có danh sách dòng, và luật đổi chỗ của chúng phải là MỘT — hai bản sao là hai
+ * chỗ để một cái được sửa còn cái kia thì không.
  *
  * Chỉ số ngoài khoảng ⇒ trả về mảng CŨ, không cắt xén: `splice` với chỉ số âm
  * đếm ngược từ cuối mảng, nên một lỗi đánh chỉ số sẽ âm thầm ném dòng sang tận
  * đầu bên kia thay vì báo hỏng.
  */
-export function moveCell(cells: readonly UiCell[], from: number, to: number): UiCell[] {
-  if (from === to) return [...cells];
-  if (from < 0 || from >= cells.length || to < 0 || to >= cells.length) return [...cells];
-  const next = [...cells];
+export function moveRow<T>(rows: readonly T[], from: number, to: number): T[] {
+  if (from === to) return [...rows];
+  if (from < 0 || from >= rows.length || to < 0 || to >= rows.length) return [...rows];
+  const next = [...rows];
   const [moved] = next.splice(from, 1);
-  if (!moved) return [...cells];
+  if (moved === undefined) return [...rows];
   next.splice(to, 0, moved);
   return next;
 }
@@ -186,7 +267,7 @@ export function gridFor(cellCount: number): { cols: number; rows: number } {
   return { cols, rows: Math.max(3, Math.ceil(cellCount / cols)) };
 }
 
-export type Block = DocBlock | UiKitBlock;
+export type Block = DocBlock | UiKitBlock | MascotBlock;
 
 export interface ComposerState {
   /** Cụm EN của chủ đề chung (theo quy ước `OUTFIT_THEMES`: value CHÍNH LÀ cụm EN). */
@@ -230,13 +311,45 @@ export function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${seq}`;
 }
 
-export function newDocBlock(kind: "background" | "mascot"): DocBlock {
-  return {
-    id: newId(kind),
-    kind,
-    mode: "template",
-    doc: kind === "background" ? backgroundDoc() : mascotDoc(),
-  };
+export function newDocBlock(kind: "background" = "background"): DocBlock {
+  return { id: newId(kind), kind, mode: "template", doc: backgroundDoc() };
+}
+
+/** Dáng mặc định của một dòng mới — cùng id với `DEFAULT_POSE` của bộ dịch. */
+export const DEFAULT_MASCOT_POSE = "idle";
+
+/**
+ * Một dòng dáng mới.
+ *
+ * Mặc định là dáng đứng chờ + góc mặc định của pose-lab + nét mặt ĐẦU danh mục:
+ * bấm «+ Dáng» phải ra một dòng VẼ ĐƯỢC NGAY, không phải ba ô trống bắt người
+ * dùng điền trước khi thấy được gì.
+ */
+export function newMascotPose(
+  pose: string = DEFAULT_MASCOT_POSE,
+  view: string = DEFAULT_VIEW,
+  expression: string = EXPRESSIONS[0]?.value ?? "",
+): MascotPose {
+  return { id: newId("pose"), pose, view, expression, note: "" };
+}
+
+/**
+ * Đổi dáng hoặc góc của một dòng ⇒ ẢNH MANƠCANH CŨ HẾT HIỆU LỰC.
+ *
+ * Một hàm riêng chứ không phải một cú `{...row, pose}` rải ở ba chỗ trong UI:
+ * quên xoá `refPath` ở đúng một chỗ là tấm dáng đính kèm tả một dáng khác với
+ * chữ trong prompt — hai nguồn nói ngược nhau, và ảnh thì luôn thắng chữ.
+ */
+export function retakePose(row: MascotPose, patch: Partial<Pick<MascotPose, "pose" | "view">>): MascotPose {
+  const next = { ...row, ...patch };
+  if (next.pose === row.pose && next.view === row.view) return next;
+  const { refPath: _stale, ...rest } = next;
+  return rest;
+}
+
+/** Thẻ Nhân vật mới: có câu danh tính, CHƯA có dáng nào — cùng nhịp với thẻ Bộ UI. */
+export function newMascotBlock(): MascotBlock {
+  return { id: newId("mascot"), kind: "mascot", mode: "template", doc: mascotDoc(), poses: [] };
 }
 
 export function newCell(elementId: string, presets: PresetBundle = getPresets()): UiCell {

@@ -91,6 +91,23 @@ export interface CameraViewSpec {
   id: CameraView;
   /** Nhãn tiếng Việt — thứ DUY NHẤT người dùng thấy. */
   vi: string;
+  /**
+   * Cụm tiếng Anh đi vào prompt.
+   *
+   * ╔══ VÌ SAO GÓC MÁY NAY CÓ CHỮ, TRONG KHI TRƯỚC ĐÂY KHÔNG ══════════════════╗
+   * ║ Đời trước góc máy chỉ quyết định TẤM ẢNH manơcanh trông thế nào, và chính  ║
+   * ║ tấm ảnh mới đi tới máy vẽ — nên nhét góc vào prompt là hứa một thứ prompt  ║
+   * ║ không nói. Từ đợt sprite sheet nhân vật thì ảnh manơcanh của MỘT dòng      ║
+   * ║ không còn đi riêng nữa: cả tấm chỉ đính được một ảnh dáng đã ghép, và ô    ║
+   * ║ nào cũng cần tự nói ra góc của mình bằng chữ để câu prompt của ô đứng được ║
+   * ║ một mình (kể cả khi máy không dựng nổi ảnh manơcanh — xem `pose-refs.ts`). ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   *
+   * Viết bằng chữ THƯỜNG NGÀY, không dùng biệt ngữ máy quay ("dutch", "worm's
+   * eye"): câu này bị ghép vào giữa một mô tả dáng, và một chữ chuyên ngành lạ ở
+   * đó là mồi để máy vẽ đoán sang một phong cách nhiếp ảnh nào đó.
+   */
+  en: string;
   /** Vị trí camera trong world. Ngắm về `CAMERA_TARGET`. */
   position: Vec3;
 }
@@ -114,22 +131,22 @@ export const CAMERA_TARGET: Vec3 = [0, 1.55, 0];
  * `skeleton.ts` (xem khối chú thích đầu file đó).
  */
 export const CAMERA_VIEWS: readonly CameraViewSpec[] = [
-  { id: "front", vi: "Chính diện", position: [0, 1.8, 7.8] },
-  { id: "three-quarter-left", vi: "¾ trái", position: [-5.4, 2.3, 5.6] },
-  { id: "three-quarter-right", vi: "¾ phải", position: [5.4, 2.3, 5.6] },
+  { id: "front", vi: "Chính diện", en: "seen straight from the front", position: [0, 1.8, 7.8] },
+  { id: "three-quarter-left", vi: "¾ trái", en: "seen from a three-quarter left view", position: [-5.4, 2.3, 5.6] },
+  { id: "three-quarter-right", vi: "¾ phải", en: "seen from a three-quarter right view", position: [5.4, 2.3, 5.6] },
   /* `z: 0.01` chứ không phải 0: camera nằm ĐÚNG trên trục X thì vector nhìn song
      song với "up" ở vài phép `lookAt`, và ma trận xoay suy biến ⇒ khung hình lật. */
-  { id: "side-left", vi: "Ngang trái", position: [-7.8, 1.8, 0.01] },
-  { id: "side-right", vi: "Ngang phải", position: [7.8, 1.8, 0.01] },
-  { id: "back", vi: "Sau lưng", position: [0, 1.8, -7.8] },
+  { id: "side-left", vi: "Ngang trái", en: "seen from the left side", position: [-7.8, 1.8, 0.01] },
+  { id: "side-right", vi: "Ngang phải", en: "seen from the right side", position: [7.8, 1.8, 0.01] },
+  { id: "back", vi: "Sau lưng", en: "seen from behind", position: [0, 1.8, -7.8] },
   /* Ngẩng 70°, KHÔNG phải 90° — thẳng đứng tuyệt đối cũng gặp đúng cái suy biến
      `lookAt` nói trên, và một tấm nhìn từ đỉnh đầu thì không đọc được dáng. */
-  { id: "top-down", vi: "Trên xuống", position: [0, 8.9, 2.7] },
-  { id: "low-angle", vi: "Dưới lên", position: [0, -1.7, 7.1] },
+  { id: "top-down", vi: "Trên xuống", en: "seen from directly above, looking down", position: [0, 8.9, 2.7] },
+  { id: "low-angle", vi: "Dưới lên", en: "seen from below, looking up", position: [0, -1.7, 7.1] },
   /* ISOMETRIC ĐÚNG NGHĨA, không phải "một góc chéo cho đẹp": ba thành phần lệch
      so với tâm ngắm BẰNG NHAU (4.5 · 4.5 · 4.5) ⇒ phương vị 45°, ngẩng 35.26° —
      đúng hướng nhìn của tile isometric trong game, và bán kính vẫn là 7.79. */
-  { id: "isometric", vi: "Isometric", position: [-4.5, 6.05, 4.5] },
+  { id: "isometric", vi: "Isometric", en: "seen from a high angled corner view", position: [-4.5, 6.05, 4.5] },
 ];
 
 /** Góc theo id; id lạ rơi về "chính diện" thay vì làm trắng màn. */

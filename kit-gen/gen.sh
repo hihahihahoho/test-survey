@@ -285,9 +285,19 @@ for s in cfg["styles"]:
         # full-bleed KHÔNG key gì cả nên viền đó đi thẳng vào asset (đã dính: viền
         # magenta 40-55px quanh 25-bg-home ở lần gen thứ hai của BlindTest-B2).
         full_bleed = n_real > 0 and all(c["skel"].get("shape") == "full" for c in real)
-        # Sheet mascot nhận diện bằng `sh["ref"]` — CÓ ẢNH THAM CHIẾU NHÂN VẬT thì
-        # cả tấm là nhân vật (đúng vị từ mà khối "SECOND attached image" dùng dưới).
-        mascot_sheet = bool(sh.get("ref"))
+        # ⚠️ SHEET MASCOT KHÔNG CÒN NHẬN DIỆN BẰNG MỖI `sh["ref"]`.
+        # Bản cũ: `mascot_sheet = bool(sh.get("ref"))` — có ảnh nhân vật thì cả tấm
+        # là nhân vật. Vị từ ấy sai theo CẢ HAI CHIỀU kể từ khi thẻ Nhân vật ra
+        # sprite sheet: một tấm dáng mà người dùng CHƯA tải ảnh nhân vật lên (tả
+        # bằng chữ, đúng ca `subject = "the same original mascot character"` bên
+        # webapp) sẽ rơi vào nhánh UI — nhận khối cấu tạo ba lớp "core / rim /
+        # decoration" và bị vẽ như một món đồ giao diện.
+        # Tín hiệu THẬT nằm ngay trong ô: `skel.shape == "pose"` là thứ `slice.py`
+        # đã đọc từ lâu để cắt ô dáng (`slice.py:839`), nên nó có sẵn trong contract
+        # và không phải bịa thêm field. `poseRef` (tấm manơcanh ghép) cũng đủ để
+        # kết luận, và `ref` vẫn giữ cho contract đời cũ chỉ có một ô dáng.
+        pose_cells = any(c["skel"].get("shape") == "pose" for c in real)
+        mascot_sheet = bool(sh.get("ref")) or bool(sh.get("poseRef")) or pose_cells
 
         b = s.get("brand") or {}
         use_brand_refs = bool(b.get("refs"))
@@ -560,7 +570,12 @@ for s in cfg["styles"]:
             "explicitly says the element is hollow, see-through or made of light.",
             ""
         ]
-        if mascot_sheet:
+        # ⚠️ KHỐI NÀY GIỜ HỎI `sh["ref"]`, KHÔNG HỎI `mascot_sheet`.
+        # Từ khi `mascot_sheet` còn bật lên bằng `skel.shape=="pose"`, một tấm dáng
+        # KHÔNG có ảnh nhân vật vẫn là tấm mascot — mà nói "The attached character
+        # REFERENCE PHOTO" khi không đính ảnh nào là chỉ cho model một tấm ảnh không
+        # tồn tại, và nó sẽ đi tìm trong đám ảnh brand/inspo.
+        if sh.get("ref"):
             # KHÔNG CÒN "The SECOND attached image". Câu cũ đếm theo thứ tự đính kèm,
             # mà vị trí thứ hai là vị trí của ảnh khung xương — bỏ khung xương thì ảnh
             # nhân vật lên hàng đầu và câu này trỏ nhầm sang ảnh brand/inspo. Gọi ảnh
@@ -572,6 +587,23 @@ for s in cfg["styles"]:
                 "This rule OVERRIDES everything else: if the art style description or any other",
                 "reference image mentions or shows a DIFFERENT mascot/character, IGNORE that one",
                 "completely — the reference photo is the ONLY source of the character's identity.", ""]
+        # ═══ TẤM ẢNH DÁNG — CÙNG LƯỚI, CÙNG TOẠ ĐỘ Ô ═════════════════════════
+        # Vì sao phải là MỘT tấm ghép chứ không phải n ảnh manơcanh rời: tool
+        # image_gen nhận đúng MỘT danh sách `referenced_image_paths` dùng chung cho
+        # cả tấm — không có chỗ nào để nói "ảnh này của ô 3". Đính rời thì model chỉ
+        # còn cách đoán theo THỨ TỰ đính kèm, đúng thứ vừa bị bỏ ở khối trên.
+        # Ghép sẵn ở client (`webapp/.../pose-sheet.ts`, dùng đúng `cell_origin`/
+        # `cell_size` của geometry.py) thì ánh xạ ô↔ô là hiển nhiên, không phải đoán.
+        # Vẫn gọi theo VAI TRÒ ("POSE REFERENCE SHEET"), không theo vị trí đính kèm.
+        if sh.get("poseRef"):
+            lines += [
+                "The attached POSE REFERENCE SHEET is a grey mannequin laid out in the SAME grid",
+                "as this sheet: cell k of the mannequin sheet shows the exact body pose and camera",
+                "angle for cell k here. Copy pose and camera angle from it; take identity, face,",
+                "colors and costume from the character reference photo (or, if there is none, from",
+                "the text). NEVER draw the mannequin itself: it is grey, faceless and unstyled on",
+                "purpose — it is a posing guide, not a subject, and none of its grey plastic look",
+                "may appear in the finished sheet.", ""]
         if sh.get("note"):
             lines += [sh["note"], ""]
         # CHỈ ĐẠO RIÊNG CỦA TẤM — một câu người thiết kế gõ ở khu soạn prompt.
@@ -717,8 +749,12 @@ for s in cfg["styles"]:
         # codex trả lời "Please reattach the two reference images"). encoding cũng phải
         # đóng đinh utf-8: prompt có tiếng Việt, locale mặc định Windows là cp1252.
         open(f"prompts/{s['id']}-{sh['id']}.txt", "w", encoding="utf-8", newline="\n").write("\n".join(lines))
-        # File đính kèm cho job: ref nhân vật trước, rồi brand/inspo. TOÀN BỘ là ảnh
-        # của NGƯỜI DÙNG — engine không còn đính ảnh nào của chính nó.
+        # File đính kèm cho job: ref nhân vật trước, rồi TẤM ẢNH DÁNG, rồi brand/inspo.
+        # Tấm ảnh dáng đứng NGAY SAU ảnh nhân vật vì hai ảnh ấy nói về cùng một thứ
+        # (nhân vật này, ở những dáng này) và cả hai đều được prompt gọi theo VAI TRÒ
+        # — thứ tự ở đây chỉ để người đọc log thấy chúng đi cùng nhau, không phải để
+        # prompt đếm. Ảnh dáng do công cụ dựng chứ không phải người dùng tải lên; đó
+        # là ngoại lệ DUY NHẤT của câu "toàn bộ là ảnh của người dùng" bên dưới.
         # (Vị trí đầu tiên từng là `skeleton/<sheet>.png`. Xem khối "KHÔNG CÒN KHUNG
         #  XƯƠNG" ở đầu file: tấm đó vừa lái nhầm phong cách vừa là nguồn hình học
         #  thứ hai lệch 1px với dao cắt.)
@@ -726,6 +762,7 @@ for s in cfg["styles"]:
         # Codex tính token theo từng `-i`; khử trùng lặp ngay lúc dựng argv.
         att = []
         for p in (([sh["ref"]] if sh.get("ref") else [])
+                  + ([sh["poseRef"]] if sh.get("poseRef") else [])
                   + (s["brand"]["refs"] if use_brand_refs else [])
                   + (s["inspo"] if use_inspo else [])):
             if p and p not in att:
@@ -803,7 +840,7 @@ run_one() {
   # ╚════════════════════════════════════════════════════════════════════════════╝
   local att_note=""
   if [[ ${#att[@]} -gt 0 ]]; then
-    att_note="The reference images are attached to this conversation AND exist on disk at the exact paths listed below (in order: the character reference first if the prompt mentions one, then any brand / inspiration images). When you call image_gen you MUST pass ALL of these paths, in this exact order, in its referenced_image_paths parameter. Never call it without them, and never claim the images are unavailable — they are right here:
+    att_note="The reference images are attached to this conversation AND exist on disk at the exact paths listed below. The prompt names each image by its ROLE (character reference photo, pose reference sheet, brand or inspiration images) — match them by what the image shows, never by their position in this list. When you call image_gen you MUST pass ALL of these paths, in this exact order, in its referenced_image_paths parameter. Never call it without them, and never claim the images are unavailable — they are right here:
 
 --- REFERENCE IMAGES START ---
 ${att_paths}--- REFERENCE IMAGES END ---

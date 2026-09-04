@@ -13,7 +13,7 @@ import { backgroundDoc, contextDoc, mascotDoc } from "@/features/prompt-lab/lib/
 import { NODE } from "@/features/prompt-lab/lib/schema";
 import { phraseOf } from "@/features/prompt-lab/lib/pill-registry";
 import { countComposerImages, serializeComposer } from "@/features/prompt-lab/lib/serialize-composer";
-import type { Block, ComposerState, UiCell } from "@/features/prompt-lab/lib/composer-model";
+import { newMascotPose, type Block, type ComposerState, type MascotBlock, type MascotPose, type UiCell } from "@/features/prompt-lab/lib/composer-model";
 
 import { COMPOSER_DOC_VERSION, emptyComposerDoc, migrateComposerDoc, type ComposerDoc } from "../composer-doc";
 import { composerStyleLine, composerToContract } from "../composer-to-contract";
@@ -43,6 +43,17 @@ const state = (partial: Partial<ComposerState> = {}): ComposerState => ({
   blocks: [],
   ...partial,
 });
+
+/**
+ * Thẻ Nhân vật ở hình dạng MỚI: một câu danh tính + một danh sách dáng.
+ *
+ * Mặc định MỘT dáng, vì phần lớn ca ở đây kiểm ô đầu tiên — nhưng nó là một
+ * MẢNG, nên ca nào cần tấm nhiều ô thì truyền thêm dáng vào chứ không phải dựng
+ * một thẻ khác kiểu.
+ */
+function mascotBlock(id: string, doc: JSONContent, poses: MascotPose[] = [newMascotPose()]): MascotBlock {
+  return { id, kind: "mascot", mode: "template", doc, poses };
+}
 
 /** Nối thêm một mẩu chữ vào cuối câu template — đúng thứ người dùng gõ thêm. */
 function withExtraText(doc: JSONContent, extra: string): JSONContent {
@@ -120,6 +131,94 @@ describe("migrateComposerDoc — thiếu docVersion thì KHÔNG cố dịch", ()
     const doc = emptyComposerDoc(PRESETS);
     expect(migrateComposerDoc(doc, PRESETS)).toEqual(doc);
   });
+
+  /**
+   * ╔══ THẺ NHÂN VẬT ĐỜI TRƯỚC: MỘT CÂU, MỘT DÁNG ═════════════════════════════╗
+   * ║ Bản nháp cũ lưu thẻ Nhân vật như một `DocBlock`: câu mad-lib «Tạo nhân    ║
+   * ║ vật [ảnh] với dáng [⌄] (hoặc ảnh dáng [ảnh]), biểu cảm [⌄], trang phục    ║
+   * ║ [⌄].» + `poseView` + bảng `poseRefs`. Hình dạng ấy KHÔNG dựng lại được    ║
+   * ║ từ mã hiện tại nữa, nên nó được gõ tay ở đây — đúng vai của một ca        ║
+   * ║ migrate: dữ liệu cũ là DỮ LIỆU, không phải thứ sinh ra từ template mới.    ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  const legacyMascotDraft = () => ({
+    docVersion: COMPOSER_DOC_VERSION,
+    updatedAt: "2026-08-30T09:00:00.000Z",
+    composer: {
+      ...state(),
+      blocks: [
+        {
+          id: "m-cu",
+          kind: "mascot",
+          mode: "template",
+          poseView: "side-right",
+          poseRefs: { "wave|side-right": "refs/pose-wave-side-right.png", "idle|front": "refs/thua.png" },
+          doc: {
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [
+                  { type: "text", text: "Tạo nhân vật " },
+                  { type: NODE.imagePill, attrs: { refName: "lan.png", path: "refs/lan.png" } },
+                  { type: "text", text: " với dáng " },
+                  { type: NODE.optionPill, attrs: { kind: "pose", value: "wave" } },
+                  { type: "text", text: " (hoặc ảnh dáng " },
+                  { type: NODE.imagePill, attrs: { refName: "manocanh.png", path: "refs/manocanh.png" } },
+                  { type: "text", text: "), biểu cảm " },
+                  { type: NODE.optionPill, attrs: { kind: "expression", value: EXPRESSIONS[1]!.value } },
+                  { type: "text", text: ", trang phục " },
+                  { type: NODE.optionPill, attrs: { kind: "outfit", value: OUTFIT_THEMES[1]!.value } },
+                  { type: "text", text: "." },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    },
+  });
+
+  it("thẻ Nhân vật MỘT DÁNG đời trước ⇒ thẻ nhiều dáng, không mất mảnh nào", () => {
+    const block = migrateComposerDoc(legacyMascotDraft(), PRESETS).composer.blocks[0] as MascotBlock;
+    expect(block.kind).toBe("mascot");
+    expect(block.id).toBe("m-cu");
+
+    /* Dáng + góc + nét mặt xuống ĐÚNG MỘT dòng, và ảnh manơcanh cũ của đúng cặp
+       (dáng|góc) ấy được nhận lại — không phải chụp lại từ đầu. */
+    expect(block.poses).toHaveLength(1);
+    expect(block.poses[0]).toMatchObject({
+      pose: "wave",
+      view: "side-right",
+      expression: EXPRESSIONS[1]!.value,
+      refPath: "refs/pose-wave-side-right.png",
+    });
+
+    /* Câu đầu giữ ẢNH NHÂN VẬT và TRANG PHỤC — hai thứ đúng cho cả tấm. */
+    const head = JSON.stringify(block.doc);
+    expect(head).toContain("refs/lan.png");
+    expect(head).toContain(OUTFIT_THEMES[1]!.value);
+    /* Ảnh manơcanh cũ KHÔNG được bê vào câu: nó là ảnh chụp rời, sai bố cục so
+       với tấm ghép mà `ensurePoseRefs` dựng theo lưới. */
+    expect(head).not.toContain("refs/manocanh.png");
+    /* Dáng và nét mặt KHÔNG còn ở câu đầu — chúng đã xuống dòng. */
+    expect(head).not.toContain('"pose"');
+    expect(head).not.toContain('"expression"');
+  });
+
+  it("thẻ Nhân vật đời mới đọc lại nguyên vẹn, kể cả tấm ảnh dáng đã ghép", () => {
+    const row = { ...newMascotPose("wave"), refPath: "refs/pose-wave.png", note: "tay phải giơ cao" };
+    const doc: ComposerDoc = {
+      docVersion: COMPOSER_DOC_VERSION,
+      updatedAt: "2026-09-01T00:00:00.000Z",
+      composer: state({
+        blocks: [{ ...mascotBlock("m1", mascotDoc(), [row]), poseSheet: { key: "k1", paths: ["refs/tam-dang.png"] } }],
+      }),
+    };
+    const back = migrateComposerDoc(JSON.parse(JSON.stringify(doc)), PRESETS).composer.blocks[0] as MascotBlock;
+    expect(back.poses).toEqual([row]);
+    expect(back.poseSheet).toEqual({ key: "k1", paths: ["refs/tam-dang.png"] });
+  });
 });
 
 describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract", () => {
@@ -137,7 +236,7 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
             { id: "c2", elementId: "coin", styleId: "match3", decor: "2", glazeId: "", sizeId: "xl", note: "" },
           ],
         },
-        { id: "m1", kind: "mascot", mode: "template", doc: withImage(mascotDoc(), "char-lan.png") },
+        mascotBlock("m1", withImage(mascotDoc(), "char-lan.png")),
       ],
     });
 
@@ -388,8 +487,8 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     const blocks: Block[] = [
       { id: "b1", kind: "background", mode: "template", doc: backgroundDoc() },
       { id: "b2", kind: "background", mode: "template", doc: backgroundDoc() },
-      { id: "m1", kind: "mascot", mode: "template", doc: mascotDoc() },
-      { id: "m2", kind: "mascot", mode: "template", doc: mascotDoc() },
+      mascotBlock("m1", mascotDoc()),
+      mascotBlock("m2", mascotDoc()),
     ];
     const contract = composerToContract(state({ blocks }), { presets: PRESETS });
     expect(contract.sheets.map((s) => s.id)).toEqual(["nen", "nen2", "nhan-vat", "nhan-vat2"]);
@@ -452,12 +551,12 @@ describe("ảnh của pill — không còn blob:, và không có đường thoá
     const s = state({
       blocks: [
         { id: "b1", kind: "background", mode: "template", doc: withImage(backgroundDoc(), "inspo-1.png") },
-        { id: "m1", kind: "mascot", mode: "template", doc: mascotDoc() },
+        mascotBlock("m1", mascotDoc()),
       ],
     });
     const out = serializeComposer(s, PRESETS);
     expect(out).toContain("[ảnh tham chiếu 1]");
-    /* Hai pill ảnh của câu Nhân vật chưa chọn ảnh ⇒ móc KHÔNG số. */
+    /* Pill ảnh của câu Nhân vật chưa chọn ảnh ⇒ móc KHÔNG số. */
     expect(out).toContain("[ảnh tham chiếu]");
     expect(out).not.toContain("[ảnh tham chiếu 2]");
     expect(countComposerImages(s)).toBe(1);

@@ -28,7 +28,7 @@ import { seedPresets } from "../lib/presets-store";
 import { PILL_SLOTS, docHasBrokenPill, repairPills, retitleCellDoc, uiCellDoc } from "../lib/doc-templates";
 import { serializeComposer } from "../lib/serialize-composer";
 import {
-  moveCell,
+  moveRow,
   newCell,
   type ComposerState,
   type UiCell,
@@ -77,15 +77,15 @@ describe("① thứ tự dòng = thứ tự ô trong contract", () => {
     { ...newCell("panel", PRESETS), id: "c3" },
   ];
 
-  it("`moveCell` đưa dòng cuối lên đầu, giữ nguyên phần còn lại", () => {
-    const moved = moveCell(cells(), 2, 0);
+  it("`moveRow` đưa dòng cuối lên đầu, giữ nguyên phần còn lại", () => {
+    const moved = moveRow(cells(), 2, 0);
     expect(moved.map((c) => c.elementId)).toEqual(["panel", "button", "coin"]);
   });
 
   it("chỉ số ngoài khoảng KHÔNG cắt xén mảng — `splice` âm sẽ ném dòng sang đầu kia", () => {
     const base = cells();
     for (const [from, to] of [[-1, 0], [0, 9], [3, 1], [0, -2]] as const) {
-      expect(moveCell(base, from, to).map((c) => c.elementId)).toEqual(["button", "coin", "panel"]);
+      expect(moveRow(base, from, to).map((c) => c.elementId)).toEqual(["button", "coin", "panel"]);
     }
   });
 
@@ -93,12 +93,12 @@ describe("① thứ tự dòng = thứ tự ô trong contract", () => {
     const before = cellNames(cells());
     expect(before).toEqual(["Nút bấm", "Icon tiền", "Bảng nền"]);
 
-    const after = cellNames(moveCell(cells(), 2, 0));
+    const after = cellNames(moveRow(cells(), 2, 0));
     expect(after).toEqual(["Bảng nền", "Nút bấm", "Icon tiền"]);
   });
 
   it("tên tệp của ô bám VỊ TRÍ, không bám element — số thứ tự phải chạy lại sau khi kéo", () => {
-    const contract = composerToContract(state([uikit(moveCell(cells(), 2, 0))]), { presets: PRESETS });
+    const contract = composerToContract(state([uikit(moveRow(cells(), 2, 0))]), { presets: PRESETS });
     const files = (contract.sheets[0]?.components ?? []).map((component) => component.file);
     expect(files.slice(0, 3)).toEqual(["01-panel", "02-button", "03-coin"]);
   });

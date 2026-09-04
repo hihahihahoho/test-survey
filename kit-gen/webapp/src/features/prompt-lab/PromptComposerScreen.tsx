@@ -9,10 +9,12 @@ import { OptionPill, PillButton, PillCaret, PillMenu, PillMenuItem } from "./com
 import { BrandColorPills } from "./components/BrandColorPills";
 import { DocBlockView } from "./components/DocBlockView";
 import { UiKitBlockView } from "./components/UiKitBlockView";
+import { MascotBlockView } from "./components/MascotBlockView";
 import { usePresets } from "./lib/presets-store";
 import {
   initialComposer,
   newDocBlock,
+  newMascotBlock,
   newUiKitBlock,
   type Block,
   type BlockKind,
@@ -33,9 +35,10 @@ import "./prompt-lab.css";
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
  * ══ KIẾN TRÚC: REACT LO CẤU TRÚC, TIPTAP LO CÂU CHỮ ════════════════════════
- * Màn hình là một MẢNG BLOCK do React quản. Mỗi block Background/Nhân vật mount
- * MỘT instance TipTap riêng; block Bộ UI không mount cái nào (nó là lưới ô, không
- * phải văn bản). Lý do đầy đủ nằm ở đầu `composer-model.ts` — tóm tắt: template
+ * Màn hình là một MẢNG BLOCK do React quản. Block Cảnh nền mount MỘT instance
+ * TipTap; block Nhân vật mount một cho câu đầu thẻ (và thêm một cho mỗi dòng dáng
+ * khi ở chế độ tự do); block Bộ UI ở chế độ khuôn không mount cái nào (nó là lưới
+ * ô, không phải văn bản). Lý do đầy đủ nằm ở đầu `composer-model.ts` — tóm tắt: template
  * không lây giữa các block, xoá block = unmount, thứ tự block = thứ tự mảng, và
  * serialize = map qua mảng rồi ghép.
  *
@@ -63,7 +66,7 @@ const ADD_ITEMS: { kind: BlockKind; label: string; hint: string; icon: React.Rea
   {
     kind: "mascot",
     label: "Nhân vật",
-    hint: "Một nhân vật: dáng, biểu cảm, trang phục",
+    hint: "Một nhân vật, nhiều dáng — hệ thống tự xếp lưới",
     icon: <Smile aria-hidden className="size-4" />,
   },
 ];
@@ -77,7 +80,9 @@ export function PromptComposerScreen() {
   const imageCount = React.useMemo(() => countComposerImages(state), [state]);
 
   const addBlock = (kind: BlockKind) => {
-    const block: Block = kind === "uikit" ? newUiKitBlock() : newDocBlock(kind);
+    /* Ba loại, ba hàm dựng: `newDocBlock` nay chỉ còn dựng được Cảnh nền. */
+    const block: Block =
+      kind === "uikit" ? newUiKitBlock() : kind === "mascot" ? newMascotBlock() : newDocBlock(kind);
     setState((prev) => ({ ...prev, blocks: [...prev.blocks, block] }));
     setAddOpen(false);
   };
@@ -183,23 +188,37 @@ export function PromptComposerScreen() {
               </p>
             </section>
 
-            {state.blocks.map((block) =>
-              block.kind === "uikit" ? (
-                <UiKitBlockView
-                  key={block.id}
-                  block={block}
-                  onChange={(updater) => updateBlock(block.id, updater)}
-                  onDelete={() => removeBlock(block.id)}
-                />
-              ) : (
+            {state.blocks.map((block) => {
+              const onDelete = () => removeBlock(block.id);
+              if (block.kind === "uikit") {
+                return (
+                  <UiKitBlockView
+                    key={block.id}
+                    block={block}
+                    onChange={(updater) => updateBlock(block.id, updater)}
+                    onDelete={onDelete}
+                  />
+                );
+              }
+              if (block.kind === "mascot") {
+                return (
+                  <MascotBlockView
+                    key={block.id}
+                    block={block}
+                    onChange={(updater) => updateBlock(block.id, updater)}
+                    onDelete={onDelete}
+                  />
+                );
+              }
+              return (
                 <DocBlockView
                   key={block.id}
                   block={block}
                   onChange={(updater) => updateBlock(block.id, updater)}
-                  onDelete={() => removeBlock(block.id)}
+                  onDelete={onDelete}
                 />
-              ),
-            )}
+              );
+            })}
 
             {/* ── Cửa DUY NHẤT để thêm cấu trúc ───────────────────────────── */}
             <div className="relative">

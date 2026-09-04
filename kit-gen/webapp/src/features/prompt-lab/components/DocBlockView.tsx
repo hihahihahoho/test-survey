@@ -1,14 +1,14 @@
 import * as React from "react";
 import type { JSONContent } from "@tiptap/react";
 import { Button } from "@/components/ui/button";
-import { backgroundDoc, mascotDoc, SCAFFOLDS } from "../lib/doc-templates";
+import { backgroundDoc, SCAFFOLDS } from "../lib/doc-templates";
 import { freeText, type PromptDocNode } from "../lib/serialize";
 import type { BlockMode, DocBlock } from "../lib/composer-model";
 import { BlockCard, ModeBadge, ModeToggle } from "./BlockCard";
 import { BlockEditor } from "./BlockEditor";
 
 /**
- * DocBlockView — card cho block CÓ CÂU CHỮ (Background · Nhân vật).
+ * DocBlockView — card cho block CHỈ LÀ MỘT CÂU CHỮ (nay chỉ còn Cảnh nền).
  *
  * Chỗ duy nhất trong lab quản chuyện ĐỔI CHẾ ĐỘ, vì đó là chỗ duy nhất có thể
  * làm mất công sức của người dùng.
@@ -26,19 +26,16 @@ import { BlockEditor } from "./BlockEditor";
 
 export const DOC_BLOCK_TITLE: Record<DocBlock["kind"], string> = {
   background: "Cảnh nền",
-  mascot: "Nhân vật",
 };
 
 const TITLE = DOC_BLOCK_TITLE;
 
 const PLACEHOLDER: Record<DocBlock["kind"], string> = {
   background: "Mô tả cảnh nền… (gõ / để chèn pill)",
-  mascot: "Mô tả nhân vật… (gõ / để chèn pill)",
 };
 
 const FRESH_DOC: Record<DocBlock["kind"], () => JSONContent> = {
   background: backgroundDoc,
-  mascot: mascotDoc,
 };
 
 export function DocBlockBody({
@@ -52,10 +49,10 @@ export function DocBlockBody({
   /**
    * Tín hiệu NẠP LẠI đến từ BÊN NGOÀI — cộng thẳng vào `resetToken` nội bộ.
    *
-   * Ai cần: màn thật sửa `block.doc` mà KHÔNG qua editor (bấm pill [dáng] trên
-   * thanh công cụ của thẻ, dán đường dẫn ảnh pose vừa chụp). Không có tín hiệu
-   * này thì state đã đổi mà chữ trong ô soạn vẫn là chữ cũ — hai nguồn sự thật
-   * lệch nhau ngay trước mắt người dùng.
+   * Ai cần: màn thật sửa `block.doc` mà KHÔNG qua editor (nạp lại bản nháp từ
+   * đĩa, hay một lượt chuẩn bị vẽ ghi đè state). Không có tín hiệu này thì state
+   * đã đổi mà chữ trong ô soạn vẫn là chữ cũ — hai nguồn sự thật lệch nhau ngay
+   * trước mắt người dùng.
    */
   reloadSignal?: number;
 }) {

@@ -11,7 +11,7 @@
  * ĐỐI CHIẾU DỮ LIỆU THẬT (đã chạy python đếm trên repo, không đoán):
  *   · styles.json                        13 sheet · 122 component · 4 phong cách
  *   · teams/t4-tichhop/styles-campaign.json  12 sheet ·  78 component · 3 phong cách
- *   · key của sheet     : id, styles|variants, grid, cell_hint, components, orient?, note?, ref?
+ *   · key của sheet     : id, styles|variants, grid, cell_hint, components, orient?, note?, ref?, poseRef?
  *   · key của component : file, vi, spec, skel
  *   · key của skel      : shape, w, h, slice9?, free?, matte?, anchor?, pose?, plain?
  *   · shape gặp thật    : pose, rrect, pill, circle, bar, empty, puzzle, full, burst
@@ -198,6 +198,13 @@ export const sheetSchema = z
        `.optional()` không nhận null ⇒ zod ném ⇒ endpoints.ts biến thành AGENT_INTERNAL
        ⇒ MÀN S3 THIẾT KẾ KHÔNG MỞ ĐƯỢC với bất kỳ project nào. Dùng `.nullish()`. */
     ref: z.string().nullish(),
+    /* TẤM ẢNH DÁNG GHÉP SẴN — cùng luật đường dẫn với `ref`, khác vai trò.
+       `ref` là ảnh NHÂN VẬT (danh tính, trang phục); `poseRef` là một tấm manơcanh
+       xám xếp CÙNG LƯỚI, CÙNG TOẠ ĐỘ Ô với tấm sắp vẽ, chỉ để chép DÁNG và GÓC
+       MÁY của từng ô. Phải là hai trường chứ không phải một mảng `refs`: `gen.sh`
+       nói vai trò của từng ảnh bằng một CÂU riêng, và câu ấy chỉ viết được khi
+       biết ảnh nào đóng vai nào (xem khối "KHÔNG CÒN The SECOND attached image"). */
+    poseRef: z.string().nullish(),
     mode: z.string().optional(),
   })
   .superRefine((sh, ctx) => {
@@ -224,14 +231,17 @@ export const sheetSchema = z
         });
       } else seen.set(c.file, i);
     });
-    // ref phải là đường dẫn TƯƠNG ĐỐI trong project (khớp agent: REF_PATH).
-    if (sh.ref && (sh.ref.includes("..") || sh.ref.startsWith("/"))) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["ref"],
-        message: "Đường dẫn ảnh phải nằm trong project.",
-        params: { rule: "REF_PATH" },
-      });
+    // ref/poseRef phải là đường dẫn TƯƠNG ĐỐI trong project (khớp agent: REF_PATH).
+    for (const field of ["ref", "poseRef"] as const) {
+      const path = sh[field];
+      if (path && (path.includes("..") || path.startsWith("/"))) {
+        ctx.addIssue({
+          code: "custom",
+          path: [field],
+          message: "Đường dẫn ảnh phải nằm trong project.",
+          params: { rule: "REF_PATH" },
+        });
+      }
     }
   });
 export type Sheet = z.infer<typeof sheetSchema>;

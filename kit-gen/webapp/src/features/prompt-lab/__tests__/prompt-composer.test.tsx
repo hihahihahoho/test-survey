@@ -15,11 +15,11 @@ import { PromptComposerScreen } from "../PromptComposerScreen";
 import { PresetsScreen } from "../PresetsScreen";
 import { serializeComposer, countComposerImages } from "../lib/serialize-composer";
 import { freeText, serializeDoc, makeContext, type PromptDocNode } from "../lib/serialize";
-import { backgroundDoc, mascotDoc, SCAFFOLD_BACKGROUND } from "../lib/doc-templates";
+import { backgroundDoc, mascotDoc, mascotPoseDoc, SCAFFOLD_BACKGROUND } from "../lib/doc-templates";
 import { slashItems, SLASH_ITEMS } from "../lib/slash-items";
 import { phraseOf, pillOptions, INHERIT } from "../lib/pill-registry";
 import { seedPresets } from "../lib/presets-store";
-import { gridFor, newCell, type ComposerState, type UiCell } from "../lib/composer-model";
+import { gridFor, newCell, newMascotPose, type ComposerState, type UiCell } from "../lib/composer-model";
 import { brandColorName, describeBrandColors } from "../lib/brand-colors";
 import { NODE } from "../lib/schema";
 
@@ -61,13 +61,26 @@ describe("serialize — pill đổi thành cụm TIẾNG ANH, không phải nhã
     expect(out).not.toContain("Rộn ràng");
   });
 
-  it("câu Nhân vật: pill trang phục để TRỐNG ⇒ kế thừa theme chung", () => {
+  it("câu Nhân vật CHỈ còn thứ chung cho cả tấm: ảnh + trang phục, không dáng/nét mặt", () => {
     const out = serializeDoc(mascotDoc() as PromptDocNode, ctx());
-    expect(out).toContain(phraseOf("pose", "idle", PRESETS));
-    expect(out).toContain(EXPRESSIONS[0]!.value);
+    expect(out).toContain("[ảnh tham chiếu]");
     /* Đây là luật quan trọng nhất của cả model: ô để trống KHÔNG phải là ô rỗng,
        nó là "theo cái chung". Hỏng luật này thì mọi block âm thầm mất theme. */
     expect(out).toContain("THEME_CHUNG");
+    /* Dáng và nét mặt XUỐNG TỪNG DÒNG kể từ khi thẻ ra sprite sheet — mỗi ô một
+       dáng một góc riêng. Còn sót ở câu đầu là cả tấm bị ép về một dáng. */
+    expect(out).not.toContain(phraseOf("pose", "idle", PRESETS));
+    expect(out).not.toContain(EXPRESSIONS[0]!.value);
+    /* Cụm «(hoặc ảnh dáng [ảnh])» bị bỏ hẳn ⇒ đúng MỘT pill ảnh trong câu. */
+    expect(out.match(/\[ảnh tham chiếu\]/g)).toHaveLength(1);
+  });
+
+  it("một dòng dáng ra một câu riêng: dáng · góc máy · nét mặt", () => {
+    const row = newMascotPose();
+    const out = serializeDoc(mascotPoseDoc({ ...row, note: "" }) as PromptDocNode, ctx());
+    expect(out).toContain(phraseOf("pose", row.pose, PRESETS));
+    expect(out).toContain(phraseOf("view", row.view, PRESETS));
+    expect(out).toContain(EXPRESSIONS[0]!.value);
   });
 
   it("pill phong cách để trống ⇒ kế thừa phong cách chung", () => {
@@ -248,7 +261,7 @@ describe("serialize cả màn — mỗi block một đoạn, ảnh đánh số l
     const s = state({
       blocks: [
         { id: "b1", kind: "background", mode: "template", doc: withImages(["a", "b"]) },
-        { id: "b2", kind: "mascot", mode: "template", doc: withImages(["c"]) },
+        { id: "b2", kind: "mascot", mode: "template", doc: withImages(["c"]), poses: [newMascotPose()] },
       ],
     });
 

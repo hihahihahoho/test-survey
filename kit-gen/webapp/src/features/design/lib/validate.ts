@@ -296,6 +296,11 @@ export function refUsage(c: Contract): { ref: string; target: Target; what: stri
     if (typeof sh.ref === "string" && sh.ref !== "") {
       out.push({ ref: sh.ref, target: { kind: "sheet", sheetId: sh.id, field: "ref" }, what: `sheet ${sh.id}` });
     }
+    /* Tấm ảnh dáng ghép cũng là một chỗ DÙNG ảnh — mirror `refUsage()` của agent.
+       Bỏ sót nó thì màn thiết kế báo ảnh ấy là mồ côi và mời người dùng xoá đi. */
+    if (typeof sh.poseRef === "string" && sh.poseRef !== "") {
+      out.push({ ref: sh.poseRef, target: { kind: "sheet", sheetId: sh.id, field: "poseRef" }, what: `ảnh dáng ${sh.id}` });
+    }
   });
   contractVariants(c).forEach((v) => {
     for (const p of v.inspo ?? []) {

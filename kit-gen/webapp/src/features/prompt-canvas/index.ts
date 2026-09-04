@@ -13,8 +13,8 @@ export { CanvasBlock, type CanvasBlockProps } from "./components/CanvasBlock";
 export { jobIdOf, rawPathOf, sheetsHash } from "./lib/block-jobs";
 export { useGenQueue, WAITING_COPY, type GenBlockState, type GenQueue, type GenStatus } from "./lib/gen-queue";
 export { useBlockPrompts, type BlockPromptState, type BlockPrompts } from "./lib/block-prompt";
-export { ensurePoseRef, type PoseRefOutcome } from "./lib/pose-refs";
-export { FALLBACK_POSE, poseRefKey, poseViewOf, readPosePill, writePosePill, writePoseRefPill } from "./lib/pose-doc";
+export { ensurePoseRefs, type PoseRefOutcome } from "./lib/pose-refs";
+export { canComposePoseSheet, cellBoxes, composePoseSheet, fitBox, type PoseSheetBox } from "./lib/pose-sheet";
 export {
   COMPOSER_DOC_VERSION,
   COMPOSER_SAVE_DEBOUNCE_MS,

@@ -91,6 +91,58 @@ export function PillAxis({ children }: { children: React.ReactNode }) {
   return <span className="shrink-0 text-fg-muted">{children}:</span>;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   LẬT MENU LÊN TRÊN KHI PHÍA DƯỚI HẾT CHỖ
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/** Trần cao của `PillMenu` — PHẢI khớp `max-h-80` trong class của nó. */
+export const PILL_MENU_MAX_PX = 320;
+/** Khe giữa nút và menu — khớp `calc(100% + 8px)` ở cả hai chiều. */
+export const PILL_MENU_GAP_PX = 8;
+
+/**
+ * Menu này có nên mở NGƯỢC LÊN không.
+ *
+ * Hàm thuần nhận sẵn hình chữ nhật của nút: chỗ nào cũng đo được, và test được
+ * mà không cần một trình duyệt thật.
+ *
+ * Hai điều kiện, và điều kiện thứ hai mới là điều dễ quên: (1) phía dưới không
+ * đủ chỗ, VÀ (2) phía trên rộng hơn phía dưới. Thiếu (2) thì một nút nằm gần đỉnh
+ * màn hình sẽ lật lên trên để rồi bị cắt còn tệ hơn.
+ */
+export function shouldDropUp(rect: DOMRect, maxPx: number, gapPx: number = PILL_MENU_GAP_PX): boolean {
+  const below = window.innerHeight - rect.bottom;
+  return below < maxPx + gapPx && rect.top > below;
+}
+
+/**
+ * Trạng thái mở + phép lật của một menu neo dưới nút.
+ *
+ * ╔══ VÌ SAO ĐO NGAY LÚC BẤM, KHÔNG ĐO TRONG EFFECT ═════════════════════════╗
+ * ║ Đo trong một effect sau khi menu đã render thì menu đã đẩy chiều cao trang ║
+ * ║ (và có thể đã kéo cả thanh cuộn), nên phép đo "còn bao nhiêu chỗ phía dưới"║
+ * ║ trả lời cho một trang khác với trang lúc người dùng bấm.                   ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Nhà của hook này là `pill-ui` chứ không phải một màn cụ thể: luật lật từng chỉ
+ * sống trong `UiKitBlockView` (hộp tra danh mục), và vì thế mọi menu khác của màn
+ * — kể cả «Thêm thẻ» ở cuối trang, nơi thiếu chỗ nhất — không có nó.
+ */
+export function useMenuFlip(maxPx: number = PILL_MENU_MAX_PX) {
+  const [open, setOpen] = React.useState(false);
+  const [dropUp, setDropUp] = React.useState(false);
+
+  const toggle = React.useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      setDropUp(shouldDropUp(event.currentTarget.getBoundingClientRect(), maxPx));
+      setOpen((v) => !v);
+    },
+    [maxPx],
+  );
+
+  return { open, setOpen, dropUp, toggle };
+}
+
 /**
  * Hộp menu thả xuống dưới pill.
  *
@@ -98,14 +150,24 @@ export function PillAxis({ children }: { children: React.ReactNode }) {
  * Escape (bàn phím), và chọn một mục (đường thường). Nghe ở pha CAPTURE để bắt
  * được cả cú bấm rơi vào vùng contenteditable — ProseMirror gọi
  * `preventDefault()` khá sớm ở pha bubble.
+ *
+ * ⚠️ MENU NEO VÀO ĐÚNG CÁI NÚT, VÀ VÌ THẾ VỎ BỌC PHẢI ÔM SÁT NÚT.
+ * `top-[calc(100%+8px)]` đo từ đáy của phần tử `relative` gần nhất — không phải
+ * từ đáy nút. Bọc nút trong một khối `relative` CÓ ĐỆM DƯỚI là menu rơi xuống
+ * dưới lớp đệm ấy: đã dính thật ở nút «Thêm thẻ» (`pb-16` ⇒ menu lơ lửng cách nút
+ * ~70px, dính đáy khung nhìn). Vỏ của menu chỉ được là một `relative inline-block`
+ * ôm sát nút; mọi khoảng cách để ở lớp NGOÀI.
  */
 export function PillMenu({
   label,
   onClose,
+  dropUp,
   children,
 }: {
   label: string;
   onClose: () => void;
+  /** Mở ngược lên trên — xem `useMenuFlip`. */
+  dropUp?: boolean;
   children: React.ReactNode;
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
@@ -135,7 +197,10 @@ export function PillMenu({
       aria-label={label}
       /* `text-body`: menu KHÔNG kế thừa cỡ chữ của câu. Một menu 10 mục ở cỡ
          tiêu đề thì cao hơn cả màn hình. */
-      className="absolute left-0 top-[calc(100%+8px)] z-40 max-h-80 w-72 overflow-y-auto rounded-2 border border-line-subtle bg-overlay p-1 text-body shadow-2"
+      className={cn(
+        "absolute left-0 z-40 max-h-80 w-72 overflow-y-auto rounded-2 border border-line-subtle bg-overlay p-1 text-body shadow-2",
+        dropUp ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]",
+      )}
     >
       {children}
     </div>

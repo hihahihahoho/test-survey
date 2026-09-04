@@ -1,6 +1,6 @@
 import * as React from "react";
 import type { JSONContent } from "@tiptap/react";
-import { GripVertical, Plus, Search, X } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -18,10 +18,11 @@ import {
   sizePx,
 } from "../lib/cell-size";
 import { pillValuesOf, retitleCellDoc, uiCellDoc } from "../lib/doc-templates";
-import { moveCell, newCell, type BlockMode, type UiCell, type UiKitBlock } from "../lib/composer-model";
+import { moveRow, newCell, type BlockMode, type UiCell, type UiKitBlock } from "../lib/composer-model";
 import { BlockCard, ModeBadge, ModeToggle } from "./BlockCard";
 import { BlockEditor } from "./BlockEditor";
-import { OptionPill, PillAxis, PillButton, PillCaret, PillMenu, PillMenuItem } from "./pill-ui";
+import { DragHandle, NoteField, RemoveButton, RowIndex, RowShell, RowTop, type RowDragProps } from "./row-ui";
+import { OptionPill, PillAxis, PillButton, PillCaret, PillMenu, PillMenuItem, useMenuFlip } from "./pill-ui";
 
 /**
  * UiKitBlockView — block "Bộ UI": một DANH SÁCH DÒNG, mỗi dòng một element.
@@ -38,7 +39,7 @@ import { OptionPill, PillAxis, PillButton, PillCaret, PillMenu, PillMenuItem } f
  *
  * ══ BA THỨ ĐÃ ĐỔI SAU KHI CHỦ SẢN PHẨM XEM TẬN MẮT ═════════════════════════
  *  ① KÉO THẢ ĐỔI THỨ TỰ. Thứ tự dòng đi thẳng vào `components[]` của contract
- *    (xem `moveCell` trong `composer-model.ts`), nên nó là dữ liệu chứ không
+ *    (xem `moveRow` trong `composer-model.ts`), nên nó là dữ liệu chứ không
  *    phải trang trí — và trước đây không có cách nào sửa ngoài xoá rồi thêm lại.
  *  ② MỘT NÚT «+ Element» THAY CHO DÃY CHIP. Dãy chip liệt kê CẢ danh mục ngay
  *    dưới block: với 8 element nó đã tràn hai hàng, với danh mục 42 element
@@ -49,151 +50,6 @@ import { OptionPill, PillAxis, PillButton, PillCaret, PillMenu, PillMenuItem } f
  *    đây block này bị bỏ quên một nửa cơ chế, và vì sao editor CHỈ mount ở chế
  *    độ tự do.
  */
-
-/* ══════════════════════════════════════════════════════════════════════════
-   Kéo thả / bàn phím — phần dùng chung của mọi dòng
-   ══════════════════════════════════════════════════════════════════════════ */
-
-interface RowDragProps {
-  index: number;
-  count: number;
-  onMove: (from: number, to: number) => void;
-  /** Dòng đang được kéo (để `dragFrom` sống chung cho cả danh sách). */
-  dragFrom: React.MutableRefObject<number | null>;
-}
-
-/**
- * Tay nắm kéo.
- *
- * ╔══ CHUỘT LÀ LỐI TẮT, BÀN PHÍM LÀ ĐƯỜNG CHÍNH THỨC ════════════════════════╗
- * ║ HTML5 drag-and-drop KHÔNG có đường bàn phím — `dragstart` chỉ đến từ chuột║
- * ║ (và từ cảm ứng thì cũng không). Một tính năng chỉ chuột mới chạm tới là   ║
- * ║ một tính năng có người dùng không dùng được, mà ở đây "không dùng được"   ║
- * ║ nghĩa là không sắp lại được thứ tự món đồ trên tấm ảnh sẽ vẽ.             ║
- * ║ Nên tay nắm là một `<button>` thật: ↑/↓ đổi chỗ dòng, và `aria-label` nói ║
- * ║ ra cả hai đường. Cùng khuôn với lưới ô của màn Thiết kế                   ║
- * ║ (`features/design/components/CellGrid.tsx`) — nơi bài này đã học một lần. ║
- * ╚══════════════════════════════════════════════════════════════════════════╝
- */
-function DragHandle({ index, count, onMove, dragFrom, label }: RowDragProps & { label: string }) {
-  return (
-    <button
-      type="button"
-      draggable
-      onDragStart={() => {
-        dragFrom.current = index;
-      }}
-      onDragEnd={() => {
-        dragFrom.current = null;
-      }}
-      onKeyDown={(event) => {
-        const delta = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
-        if (delta === 0) return;
-        /* Chặn cuộn trang: mũi tên trong một danh sách dài mà vẫn cuộn thì dòng
-           đang cầm chạy ra khỏi tầm nhìn ngay lần bấm thứ hai. */
-        event.preventDefault();
-        onMove(index, index + delta);
-      }}
-      aria-label={`Đổi chỗ ${label} — dòng ${index + 1} trên ${count}. Kéo bằng chuột, hoặc bấm mũi tên lên xuống.`}
-      className="inline-flex size-7 shrink-0 cursor-grab items-center justify-center rounded-1 text-fg-muted opacity-0 transition-opacity duration-fast hover:text-fg-strong focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring active:cursor-grabbing group-hover/cell:opacity-100"
-    >
-      <GripVertical aria-hidden className="size-4" />
-    </button>
-  );
-}
-
-/**
- * Nút bỏ một dòng — hình dạng chung của hai chế độ.
- *
- * ╔══ NÓ PHẢI Ở CUỐI HÀNG 1, KHÔNG PHẢI CẠNH Ô GHI CHÚ ══════════════════════╗
- * ║ Chủ sản phẩm: *"dấu × bị lỗi"*. Không phải nút hỏng — nó ĐỨNG SAI CHỖ.    ║
- * ║ Bản trước hàng element là một dải `flex-wrap` gồm pill · ô ghi chú · ×,   ║
- * ║ nên khi hàng pill dài quá thì ô ghi chú tụt xuống dòng dưới và kéo dấu ×  ║
- * ║ theo — dấu xoá của dòng #3 hiện ra ngay cạnh ô ghi chú của dòng #3, thấp  ║
- * ║ hơn dấu × của dòng #1 một tầng. Cùng một nút, ba vị trí, tuỳ độ dài tên.  ║
- * ║ Nay nó bị GHIM vào cuối hàng 1 bằng `ml-auto`, và hàng 1 thì không bao    ║
- * ║ giờ wrap. Một dòng = một chỗ xoá, ở đúng một toạ độ, mọi dòng như nhau.   ║
- * ╚══════════════════════════════════════════════════════════════════════════╝
- */
-function RemoveButton({ label, onRemove }: { label: string; onRemove: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onRemove}
-      aria-label={`Bỏ element ${label}`}
-      /* Hiện mờ, rõ lên khi trỏ vào dòng hoặc khi chính nút được focus bằng bàn
-         phím. `opacity-0` mà thiếu `focus-visible:opacity-100` là một nút bấm
-         Tab tới được nhưng không nhìn thấy. */
-      className="ml-auto inline-flex size-7 shrink-0 items-center justify-center rounded-1 text-fg-muted opacity-0 transition-opacity duration-fast hover:text-fg-strong focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring group-hover/cell:opacity-100"
-    >
-      <X aria-hidden className="size-4" />
-    </button>
-  );
-}
-
-/**
- * Vỏ chung của một dòng: nó cũng chính là VÙNG THẢ của phép kéo.
- *
- * ══ HAI TẦNG CỐ ĐỊNH, KHÔNG PHẢI MỘT DẢI TỰ WRAP ═══════════════════════════
- * `flex-col` chứ không `flex-wrap`: hàng 1 (danh tính + pill + ×) và hàng 2 (ô
- * ghi chú / ô soạn) là HAI TẦNG CÓ TÊN, không phải kết quả ngẫu nhiên của phép
- * xuống dòng. Nhờ vậy mọi dòng cao BẰNG NHAU bất kể tên element dài ngắn ra sao
- * — thứ mà một dải `flex-wrap` không hứa được, và đã không giữ được.
- */
-function RowShell({
-  index,
-  onMove,
-  dragFrom,
-  children,
-}: Omit<RowDragProps, "count"> & { children: React.ReactNode }) {
-  const [over, setOver] = React.useState(false);
-
-  return (
-    <div
-      onDragOver={(event) => {
-        /* `preventDefault` là điều kiện BẮT BUỘC để một phần tử nhận `drop` —
-           thiếu nó thì con trỏ hiện dấu cấm và không có sự kiện thả nào. */
-        if (dragFrom.current === null) return;
-        event.preventDefault();
-        setOver(true);
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(event) => {
-        event.preventDefault();
-        setOver(false);
-        const from = dragFrom.current;
-        dragFrom.current = null;
-        if (from !== null && from !== index) onMove(from, index);
-      }}
-      className={cn(
-        "group/cell flex flex-col gap-1.5 rounded-2 px-2 py-2 text-body",
-        "hover:bg-raised",
-        /* Vạch chỉ CHỖ SẼ RƠI. Không có nó thì kéo trên một danh sách dày là
-           thả mù — và `count` dòng trông giống hệt nhau. */
-        over && "bg-raised ring-1 ring-accent",
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-/**
- * HÀNG 1 của một dòng — danh tính, pill, và dấu × ở mép phải.
- *
- * `flex-nowrap` là điều KHOÁ CỨNG bố cục: mọi con bên trong đều co được
- * (`PillButton` có `min-w-0`, nhãn giá trị có `truncate`), nên hàng này KHÔNG
- * CÓ ĐƯỜNG nào để tràn sang dòng thứ hai. Chật thì chữ trong pill ngắn lại;
- * dấu × không đi đâu cả.
- */
-function RowTop({ children }: { children: React.ReactNode }) {
-  return <div className="flex min-w-0 flex-nowrap items-center gap-1.5">{children}</div>;
-}
-
-/** Số thứ tự dòng. Bề rộng CỐ ĐỊNH để #1 và #10 không đẩy lệch pill của nhau. */
-function RowIndex({ index }: { index: number }) {
-  return <span className="w-6 shrink-0 text-caption tabular-nums text-fg-muted">#{index + 1}</span>;
-}
 
 /* ══════════════════════════════════════════════════════════════════════════
    Dòng ở CHẾ ĐỘ TEMPLATE — React thuần, không editor
@@ -256,54 +112,16 @@ function CellRow({
         <OptionPill compact axis="Đục nền" kind="glaze" value={cell.glazeId} onChange={(glazeId) => onChange({ ...cell, glazeId })} />
         <OptionPill compact axis="Viền" kind="decor" value={cell.decor} onChange={(decor) => onChange({ ...cell, decor })} />
         <SizePill label={label} value={cell.sizeId} onChange={(sizeId) => onChange({ ...cell, sizeId })} />
-        <RemoveButton label={label} onRemove={onRemove} />
+        <RemoveButton what={`element ${label}`} onRemove={onRemove} />
       </RowTop>
 
       <NoteField
         label={label}
+        placeholder="Ghi chú thêm cho món này…"
         value={cell.note}
         onChange={(note) => onChange({ ...cell, note })}
       />
     </RowShell>
-  );
-}
-
-/**
- * HÀNG 2 — ô ghi chú, full-width, LUÔN có mặt.
- *
- * ╔══ VÌ SAO NÓ KHÔNG CÒN LÀ "ĐUÔI CÂU" NỮA ═════════════════════════════════╗
- * ║ Bản trước ô này là một `<input>` không viền, `flex-1`, thả vào giữa chuỗi ║
- * ║ pill để đọc như phần đuôi của một câu. Hai giá phải trả, cả hai đều đo    ║
- * ║ được trên màn: ① nó là thứ ĐẦU TIÊN bị đẩy xuống dòng khi hàng pill dài,  ║
- * ║ nên dòng nào có tên element dài thì cao gấp đôi dòng bên cạnh; ② khi bị   ║
- * ║ đẩy xuống nó kéo theo dấu ×, và người dùng mất chỗ xoá quen thuộc.        ║
- * ║ Nay nó có TẦNG RIÊNG: mọi dòng cao bằng nhau, và ô ghi chú luôn rộng hết  ║
- * ║ thẻ — vốn cũng đúng hơn với thứ người ta gõ vào đó (một câu mô tả, không  ║
- * ║ phải một từ).                                                            ║
- * ╚══════════════════════════════════════════════════════════════════════════╝
- *
- * Viền `line-subtle` thay cho gạch chân: nó phải trông như MỘT Ô NHẬP kể cả khi
- * rỗng — một gạch chân mờ dưới chữ mờ là thứ người dùng không nhận ra là gõ được.
- * Vòng focus thì đi theo ngôn ngữ chung của màn (hairline inset + nền raised),
- * đặt ở `prompt-lab.css` cho MỌI ô nhập chứ không dán riêng vào đây.
- */
-function NoteField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  return (
-    <input
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      placeholder="Ghi chú thêm cho món này…"
-      aria-label={`Ghi chú cho ${label}`}
-      className="h-7 w-full rounded-2 border border-line-subtle bg-transparent px-2 text-caption text-fg placeholder:text-fg-muted"
-    />
   );
 }
 
@@ -385,7 +203,7 @@ function FreeCellRow({
             Cùng lý do với pill tên element đứng ngoài: cả hai là DANH TÍNH/HÌNH HỌC
             của dòng, không phải nội dung của câu. */}
         <SizePill label={label} value={cell.sizeId} onChange={(sizeId) => onChange({ ...cell, sizeId })} />
-        <RemoveButton label={label} onRemove={onRemove} />
+        <RemoveButton what={`element ${label}`} onRemove={onRemove} />
       </RowTop>
 
       {/* Ô soạn ăn TRỌN tầng dưới. Trước đây nó chen cùng hàng với pill và mang
@@ -622,8 +440,6 @@ function swapCellElement(cell: UiCell, next: ElementPreset, presets: PresetBundl
 
 /** Trần cao của hộp tra danh mục — PHẢI khớp `max-h-96` ở class, xem `dropUp`. */
 const PICKER_MAX_PX = 384;
-/** Khe giữa nút và hộp — khớp `calc(100%+8px)`. */
-const PICKER_GAP_PX = 8;
 
 /** Bỏ dấu tiếng Việt + hạ chữ thường — để gõ "nut bam" tìm ra "Nút bấm". */
 function fold(value: string): string {
@@ -649,7 +465,6 @@ function fold(value: string): string {
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 function useCataloguePopover() {
-  const [open, setOpen] = React.useState(false);
   /**
    * MỞ NGƯỢC LÊN khi phía dưới không đủ chỗ.
    *
@@ -657,8 +472,19 @@ function useCataloguePopover() {
    * của một dự án nằm gần đáy trang — hộp cao 384px mở xuống thì 267px của nó rơi
    * ra ngoài khung nhìn. Cuộn xuống vẫn thấy, nhưng "vừa bấm xong đã phải cuộn đi
    * tìm cái mình vừa mở" là một cú giật mà người dùng phải chịu ở MỌI lần thêm.
+   *
+   * Phép lật ấy nay ở `pill-ui.useMenuFlip` chứ không ở đây: nó không có gì riêng
+   * của danh mục element, và mọi menu khác của màn — kể cả «Thêm thẻ» ở cuối
+   * trang, nơi thiếu chỗ nhất — đã phải sống thiếu nó suốt vì luật nằm trong file
+   * này. Trần cao thì vẫn là số của RIÊNG hộp này (`max-h-96`), nên nó đi bằng
+   * tham số.
    */
-  const [dropUp, setDropUp] = React.useState(false);
+  const flip = useMenuFlip(PICKER_MAX_PX);
+  const { open, setOpen } = flip;
+  /* Hộp tra danh mục TỰ đóng lấy, không như `PillMenu` (đã có sẵn hai đường đóng
+     bên trong nó): nó là một `role="dialog"` do file này vẽ, và `boxRef` phải bọc
+     CẢ NÚT lẫn hộp — bấm lại vào nút mà tính là "bấm ra ngoài" thì menu đóng rồi
+     mở lại ngay trong một cú click. */
   const boxRef = React.useRef<HTMLElement>(null);
 
   React.useEffect(() => {
@@ -677,19 +503,9 @@ function useCataloguePopover() {
       document.removeEventListener("mousedown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [open]);
+  }, [open, setOpen]);
 
-  const toggle = (event: React.MouseEvent<HTMLElement>) => {
-    /* Đo NGAY LÚC BẤM, trên chính cái nút vừa bấm — không đo trong effect sau khi
-       hộp đã render: lúc đó hộp đã đẩy chiều cao trang và phép đo "còn bao nhiêu
-       chỗ phía dưới" trả lời cho một trang khác. */
-    const rect = event.currentTarget.getBoundingClientRect();
-    const below = window.innerHeight - rect.bottom;
-    setDropUp(below < PICKER_MAX_PX + PICKER_GAP_PX && rect.top > below);
-    setOpen((v) => !v);
-  };
-
-  return { open, setOpen, dropUp, boxRef, toggle };
+  return { ...flip, boxRef };
 }
 
 /**
@@ -1030,7 +846,7 @@ export function UiKitBlockBody({
   };
 
   const move = (from: number, to: number) =>
-    onChange((prev) => ({ ...prev, cells: moveCell(prev.cells, from, to) }));
+    onChange((prev) => ({ ...prev, cells: moveRow(prev.cells, from, to) }));
 
   const Row = block.mode === "free" ? FreeCellRow : CellRow;
 

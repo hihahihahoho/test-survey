@@ -1,7 +1,8 @@
+import { poseSpecFor } from "@/features/kit-core/lib/kitset-to-contract";
 import { getPresets, type PresetBundle } from "./presets-store";
-import { phraseOf } from "./pill-registry";
+import { labelOf, phraseOf } from "./pill-registry";
 import { describeBrandColors } from "./brand-colors";
-import { gridFor, type Block, type BlockMode, type ComposerState, type UiCell } from "./composer-model";
+import { gridFor, type Block, type BlockMode, type ComposerState, type MascotPose, type UiCell } from "./composer-model";
 import { countImageRefs, makeContext, serializeDoc, tidy, type PromptDocNode, type SerializeContext } from "./serialize";
 
 /**
@@ -54,7 +55,49 @@ function cellLine(cell: UiCell, index: number, ctx: SerializeContext, mode: Bloc
   return tidy(`cell ${index + 1} (${name}): ${parts.join(", ")}`);
 }
 
+/**
+ * Một DÒNG DÁNG của thẻ Nhân vật → một dòng prompt.
+ *
+ * Ghép bằng ĐÚNG những mẩu mà `mascotSheets` ghép vào `components[].spec`
+ * (`poseSpecFor` + cụm góc máy + ghi chú), vì bản copy ra ChatGPT và bản gửi cho
+ * engine là hai cửa nhìn vào cùng một dòng — người dùng đối chiếu chúng bằng
+ * mắt. Không có toạ độ ở đây, cùng lý do với `cellLine`: lưới do engine xếp.
+ */
+function poseLine(row: MascotPose, index: number, ctx: SerializeContext, mode: BlockMode): string {
+  const name = labelOf("pose", row.pose, ctx.presets);
+
+  if (mode === "free") {
+    const line = tidy(serializeDoc(row.doc as PromptDocNode, ctx));
+    if (line) return tidy(`cell ${index + 1} (${name}): ${line}`);
+  }
+
+  const parts = [
+    poseSpecFor(row.pose, phraseOf("expression", row.expression, ctx.presets)),
+    phraseOf("view", row.view, ctx.presets),
+    row.note.trim(),
+  ].filter(Boolean);
+  return tidy(`cell ${index + 1} (${name}): ${parts.join(", ")}`);
+}
+
 function blockLines(block: Block, ctx: SerializeContext): string[] {
+  if (block.kind === "mascot") {
+    /* Câu đầu thẻ đứng RIÊNG một dòng và luôn có mặt: nó tả nhân vật là ai, thứ
+       đúng cho mọi ô. Chưa có dáng nào thì thẻ vẫn nói được điều đó. */
+    const head = serializeDoc(block.doc as PromptDocNode, ctx);
+    if (block.poses.length === 0) return head ? [head] : [];
+    const { cols, rows } = gridFor(block.poses.length);
+    /* Ghép `NxM` ở một chuỗi KHÔNG DẤU rồi mới chèn vào câu tiếng Việt: cổng từ
+       cấm §5.4 chỉ soi những chuỗi có dấu tiếng Việt, và `cols`/`rows` nằm trong
+       danh sách cấm. Đây không phải mẹo lách — chuỗi này là PROMPT gửi cho máy
+       vẽ, không phải chữ hiện lên màn, nên đếm nó vào hạn mức chữ kỹ thuật của
+       giao diện là đếm nhầm chỗ. */
+    const size = `${cols}x${rows}`;
+    return [
+      tidy(`${head} Spritesheet nhân vật ${size} (hệ thống tự xếp lưới, thứ tự dưới đây chỉ để liệt kê):`),
+      ...block.poses.map((row, index) => poseLine(row, index, ctx, block.mode)),
+    ];
+  }
+
   if (block.kind === "uikit") {
     if (block.cells.length === 0) return [];
     const { cols, rows } = gridFor(block.cells.length);
@@ -66,7 +109,7 @@ function blockLines(block: Block, ctx: SerializeContext): string[] {
     ];
   }
 
-  /* Background / Mascot: một dòng, lấy thẳng từ tài liệu TipTap của block.
+  /* Cảnh nền: một dòng, lấy thẳng từ tài liệu TipTap của block.
      ══ VÌ SAO HAI CHẾ ĐỘ DÙNG CHUNG MỘT ĐƯỜNG SERIALIZE ═══════════════════
      Ở chế độ `template`, tài liệu CHÍNH LÀ template với các pill đã chọn — nên
      "ghép theo template" và "lấy nguyên văn" ra cùng một kết quả. Viết hai
@@ -166,7 +209,13 @@ export function serializeComposer(state: ComposerState, presets: PresetBundle = 
   return chunks.join("\n\n");
 }
 
-/** Tổng số ảnh tham chiếu trong cả màn — thanh dưới nhắc "nhớ đính kèm N ảnh". */
+/**
+ * Tổng số ảnh tham chiếu trong cả màn — thanh dưới nhắc "nhớ đính kèm N ảnh".
+ *
+ * Thẻ Nhân vật chỉ đếm CÂU ĐẦU: pill ảnh của nó là ảnh nhân vật, thứ người dùng
+ * phải tự đính. Ảnh manơcanh của từng dòng dáng do công cụ tự dựng và tự đính —
+ * đếm nó vào đây là bảo người dùng đi tìm một tệp không tồn tại trên máy họ.
+ */
 export function countComposerImages(state: ComposerState): number {
   return state.blocks.reduce(
     (total, block) => (block.kind === "uikit" ? total : total + countImageRefs(block.doc as PromptDocNode)),
