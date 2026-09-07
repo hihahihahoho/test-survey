@@ -16,7 +16,9 @@ import { countComposerImages, serializeComposer } from "@/features/prompt-lab/li
 import { newMascotPose, type Block, type ComposerState, type MascotBlock, type MascotPose, type UiCell } from "@/features/prompt-lab/lib/composer-model";
 
 import { COMPOSER_DOC_VERSION, emptyComposerDoc, migrateComposerDoc, type ComposerDoc } from "../composer-doc";
-import { composerStyleLine, composerToContract } from "../composer-to-contract";
+import { composerBlockSheets, composerStyleLine, composerToContract } from "../composer-to-contract";
+import { drawableBlockIds, lotsOf } from "../block-jobs";
+import { sameColors, swapBrandRefs } from "../brand-binding";
 import { EMPTY_PILL_IMAGE, dataUrlToFile, readPillImage } from "../pill-image";
 
 /**
@@ -39,6 +41,11 @@ const state = (partial: Partial<ComposerState> = {}): ComposerState => ({
   themeValue: OUTFIT_THEMES[0]!.value,
   styleId: PRESETS.styles[0]!.id,
   brandColors: [],
+  themeCustom: "",
+  styleCustom: "",
+  brandId: "",
+  contextRefs: [],
+  brandAssets: {},
   contextMode: "template",
   blocks: [],
   ...partial,
@@ -690,5 +697,264 @@ describe("migrateComposerDoc — chữa tài liệu đã lưu với pill `{kind:
     const doc = migrateComposerDoc(saved({ blocks: [] }), PRESETS);
     expect(doc.composer.contextMode).toBe("template");
     expect(doc.composer.contextDoc).toBeUndefined();
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ④ BA NGẢ CỦA PILL · THƯƠNG HIỆU · ẢNH CẤP BỘ KIT
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Ba đường mới mở ra ba cách hỏng IM LẶNG, và đó là lý do chúng có ca riêng:
+ *  · chữ tự gõ (`custom`) — quên một nhánh là chữ người dùng viết rụng khỏi
+ *    prompt SAU KHI họ đã đọc thấy nó trên pill;
+ *  · `contextRefs` — một tấm ảnh đính vào câu mà không tới `inspo`/`brand.refs`
+ *    thì nó nằm trên màn, chiếm chỗ, và không bao giờ tới máy vẽ;
+ *  · di trú — bản nháp lưu trước lượt này KHÔNG có bốn trường mới, và một giá
+ *    trị đoán ở đó là đổ màu của một thương hiệu người dùng chưa từng chọn.
+ */
+describe("chữ tự gõ thắng preset, và đi NGUYÊN VĂN", () => {
+  const CUSTOM = "kiểu tranh khắc gỗ Đông Hồ, nét thô, giấy điệp";
+
+  it("`themeCustom` thay cụm EN của preset trong `variant.style`", () => {
+    const line = composerStyleLine(state({ themeCustom: CUSTOM }), { presets: PRESETS });
+    expect(line).toContain(CUSTOM);
+    /* Nguyên văn: không dấu nháy bọc ngoài, không nhãn "custom:" nào được thêm. */
+    expect(line).not.toContain(`"${CUSTOM}"`);
+    expect(line.toLowerCase()).not.toContain("custom:");
+    expect(line).not.toContain(phraseOf("theme", OUTFIT_THEMES[0]!.value, PRESETS));
+  });
+
+  it("`styleCustom` cũng vậy, và hai chữ tự gõ đứng cạnh nhau được", () => {
+    const line = composerStyleLine(state({ themeCustom: "mùa hè biển", styleCustom: CUSTOM }), { presets: PRESETS });
+    expect(line).toContain("mùa hè biển");
+    expect(line).toContain(CUSTOM);
+  });
+
+  it("chữ tự gõ RỖNG ⇒ preset vẫn nói, không rơi về câu trống", () => {
+    const line = composerStyleLine(state({ themeCustom: "   " }), { presets: PRESETS });
+    expect(line).toContain(phraseOf("theme", OUTFIT_THEMES[0]!.value, PRESETS));
+  });
+
+  it("pill TRONG CÂU của một thẻ: `custom` thắng cả luật kế thừa của `outfit`", () => {
+    const doc = mascotDoc();
+    const para = doc.content![0]!;
+    /* Pill `outfit` để trống + có chữ tự gõ: rỗng vốn nghĩa là "theo theme chung",
+       nhưng người dùng vừa trả lời câu hỏi ấy bằng chữ của họ. */
+    para.content = para.content!.map((node) =>
+      node.type === NODE.optionPill ? { ...node, attrs: { ...node.attrs, custom: "áo dài gấm đỏ" } } : node,
+    );
+    const contract = composerToContract(state({ blocks: [mascotBlock("m1", doc)] }), { presets: PRESETS });
+    const spec = contract.sheets[0]!.components[0]!.spec;
+    expect(spec).toContain("áo dài gấm đỏ");
+    expect(spec).not.toContain(phraseOf("theme", OUTFIT_THEMES[0]!.value, PRESETS));
+  });
+});
+
+describe("ảnh cấp BỘ KIT đi tới đúng hai cửa của contract", () => {
+  it("vai `theme`/`style` → `inspo`, vai `logo` → `brand.refs`", () => {
+    const contract = composerToContract(
+      state({
+        contextRefs: [
+          { path: "refs/tet.png", role: "theme" },
+          { path: "refs/net-ve.png", role: "style" },
+          { path: "refs/logo.png", role: "logo", assetId: "a1" },
+        ],
+      }),
+      { presets: PRESETS },
+    );
+    const variant = contract.variants![0]!;
+    expect(variant.inspo).toEqual(["refs/tet.png", "refs/net-ve.png"]);
+    expect(variant.brand!.refs).toEqual(["refs/logo.png"]);
+    /* `mode` PHẢI ở lại `colors` kể cả khi đã có logo — bản engine cũ bỏ dòng
+       palette khi mode là "image", tức là tải logo lên là mất màu thương hiệu. */
+    expect(variant.brand!.mode).toBe("colors");
+  });
+
+  it("cùng một tấm khai hai lần ⇒ chỉ đính MỘT lần (một `-i` là một lần tính tiền)", () => {
+    const contract = composerToContract(
+      state({
+        contextRefs: [
+          { path: "refs/tet.png", role: "theme" },
+          { path: "refs/tet.png", role: "style" },
+        ],
+      }),
+      { presets: PRESETS },
+    );
+    expect(contract.variants![0]!.inspo).toEqual(["refs/tet.png"]);
+  });
+
+  it("tên thương hiệu KHÔNG lọt vào prompt — chỉ màu và logo mới nói lên nó", () => {
+    const line = composerStyleLine(state({ brandId: "brand-vinamilk", brandColors: ["#ff5533"] }), { presets: PRESETS });
+    expect(line).not.toContain("brand-vinamilk");
+  });
+});
+
+describe("di trú: bản nháp đời trước không có bốn trường mới", () => {
+  const saved = (composer: unknown) => ({ docVersion: COMPOSER_DOC_VERSION, updatedAt: "", composer });
+
+  it("mở được, và mọi trường mới về MẶC ĐỊNH RỖNG — không đoán một thương hiệu nào", () => {
+    const doc = migrateComposerDoc(saved({ themeValue: "x", styleId: "y", brandColors: ["#000000"], blocks: [] }), PRESETS);
+    expect(doc.composer.themeCustom).toBe("");
+    expect(doc.composer.styleCustom).toBe("");
+    expect(doc.composer.brandId).toBe("");
+    expect(doc.composer.contextRefs).toEqual([]);
+    expect(doc.composer.brandAssets).toEqual({});
+    /* Thứ CŨ không được đụng vào: một lượt di trú làm mất màu là mất dữ liệu. */
+    expect(doc.composer.brandColors).toEqual(["#000000"]);
+  });
+
+  it("`contextRefs` rác bị BỎ TỪNG MỤC, không làm hỏng cả tài liệu", () => {
+    const doc = migrateComposerDoc(
+      saved({
+        blocks: [],
+        contextRefs: [
+          { path: "refs/ok.png", role: "theme" },
+          { path: "refs/khong-vai-tro.png" },
+          { path: "refs/vai-tro-la.png", role: "mascot" },
+          { role: "logo" },
+          "rác",
+        ],
+      }),
+      PRESETS,
+    );
+    expect(doc.composer.contextRefs).toEqual([{ path: "refs/ok.png", role: "theme" }]);
+  });
+
+  it("`brandAssets` chỉ nhận cặp chuỗi-chuỗi", () => {
+    const doc = migrateComposerDoc(saved({ blocks: [], brandAssets: { a1: "refs/logo.png", a2: 7, a3: "" } }), PRESETS);
+    expect(doc.composer.brandAssets).toEqual({ a1: "refs/logo.png" });
+  });
+
+  it("thẻ Nhân vật đời trước được gán vai trò `character` cho pill ảnh", () => {
+    const doc = migrateComposerDoc(
+      saved({ blocks: [{ id: "m1", kind: "mascot", mode: "template", doc: mascotDoc(), poses: [] }] }),
+      PRESETS,
+    );
+    const head = (doc.composer.blocks[0] as { doc: JSONContent }).doc;
+    const image = head.content![0]!.content!.find((node) => node.type === NODE.imagePill)!;
+    expect(image.attrs!["role"]).toBe("character");
+  });
+});
+
+describe("câu Ngữ cảnh chung dựng lại được TỪ trạng thái, kể cả ảnh và chữ tự gõ", () => {
+  it("`contextDoc` mang `custom` xuống pill và đặt ảnh NGAY SAU pill nó minh hoạ", () => {
+    const doc = contextDoc(
+      state({
+        themeCustom: "chợ hoa ngày Tết",
+        contextRefs: [
+          { path: "refs/tet.png", role: "theme" },
+          { path: "refs/logo.png", role: "logo", assetId: "a1" },
+        ],
+      }),
+    );
+    const nodes = doc.content![0]!.content!;
+    const themeAt = nodes.findIndex((n) => n.type === NODE.optionPill && n.attrs!["kind"] === "theme");
+    expect(nodes[themeAt]!.attrs!["custom"]).toBe("chợ hoa ngày Tết");
+    expect(nodes[themeAt + 1]!.type).toBe(NODE.imagePill);
+    expect(nodes[themeAt + 1]!.attrs!["path"]).toBe("refs/tet.png");
+    /* Ảnh vai `logo` KHÔNG có mặt trong câu — nó là tài sản của thương hiệu, và
+       pill thương hiệu đã nói ra điều đó. */
+    expect(JSON.stringify(doc)).not.toContain("refs/logo.png");
+  });
+
+  it("câu có pill thương hiệu, và pill ấy KHÔNG thêm chữ nào vào prompt", () => {
+    const withBrand = state({ brandId: "b1", brandColors: ["#ff5533"] });
+    const line = composerStyleLine(
+      { ...withBrand, contextMode: "free", contextDoc: contextDoc(withBrand) },
+      { presets: PRESETS },
+    );
+    expect(JSON.stringify(contextDoc(withBrand))).toContain(NODE.brandProfilePill);
+    expect(line).not.toContain("b1");
+    /* Bộ màu vẫn nói — nó là thứ THẬT SỰ mang thương hiệu vào prompt. */
+    expect(line).toContain("#ff5533");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⑤ ĐẾM LƯỢT CHO NÚT «VẼ TẤT CẢ» · ĐỔI THƯƠNG HIỆU
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Con số trên nút «Vẽ tất cả» LÀ toàn bộ lời cảnh báo trước một hành động tiêu
+ * tiền — không có hộp xác nhận nào phía sau nó. Nên nó phải đếm đúng thứ sẽ
+ * chạy, và mấy ca dưới đây khoá đúng chỗ nó dễ nói dối nhất: thẻ rỗng và thẻ
+ * sinh nhiều hơn một tấm.
+ */
+describe("đếm lượt: một tấm = một lượt gọi máy vẽ = tiền", () => {
+  const uiBlock = (id: string, cells: number): Block => ({
+    id,
+    kind: "uikit",
+    mode: "template",
+    cells: Array.from({ length: cells }, (_, at) => ({
+      id: `${id}-c${at}`,
+      elementId: "button",
+      styleId: "",
+      decor: "4",
+      glazeId: "",
+      sizeId: "",
+      note: "",
+    })),
+  });
+  const opts = { presets: PRESETS, limits: { small: 4 } };
+
+  it("cộng đúng bằng số tấm `composerBlockSheets` sinh ra, không bằng số thẻ", () => {
+    const sheets = composerBlockSheets(state({ blocks: [uiBlock("u1", 6), mascotBlock("m1", mascotDoc())] }), opts);
+    expect(lotsOf(sheets)).toBe(sheets.reduce((n, b) => n + b.sheets.length, 0));
+    /* Một thẻ Bộ UI quá trần ô KHÔNG phải một lượt: nó tràn sang tấm thứ hai,
+       và tấm thứ hai là một lần gọi máy vẽ nữa. */
+    expect(sheets.find((b) => b.blockId === "u1")!.sheets.length).toBe(2);
+    expect(lotsOf(sheets)).toBe(3);
+  });
+
+  it("thẻ RỖNG không tính lượt nào, và không vào hàng đợi", () => {
+    const sheets = composerBlockSheets(state({ blocks: [uiBlock("trong", 0)] }), opts);
+    expect(lotsOf(sheets)).toBe(0);
+    expect(drawableBlockIds(sheets)).toEqual([]);
+  });
+
+  it("`only` thu hẹp phép đếm về đúng mấy thẻ của một lượt bấm", () => {
+    const sheets = composerBlockSheets(state({ blocks: [uiBlock("u1", 6), mascotBlock("m1", mascotDoc())] }), opts);
+    expect(lotsOf(sheets, ["m1"])).toBe(1);
+    expect(lotsOf(sheets, [])).toBe(0);
+  });
+
+  it("`drawableBlockIds` giữ THỨ TỰ trên màn — hàng đợi chạy đúng thứ tự ấy", () => {
+    const sheets = composerBlockSheets(
+      state({ blocks: [mascotBlock("m1", mascotDoc()), uiBlock("trong", 0), uiBlock("u2", 2)] }),
+      opts,
+    );
+    expect(drawableBlockIds(sheets)).toEqual(["m1", "u2"]);
+  });
+});
+
+describe("đổi thương hiệu: chỉ ảnh CỦA THƯƠNG HIỆU bị thay, ảnh người dùng ở lại", () => {
+  it("`sameColors` so theo thứ tự và không phân biệt hoa/thường của mã màu", () => {
+    expect(sameColors(["#FF5533", "#112233"], ["#ff5533", "#112233"])).toBe(true);
+    /* Thứ tự LÀ vai trò (chủ đạo/nhấn) — đảo hai màu là một bộ nhận diện khác. */
+    expect(sameColors(["#ff5533", "#112233"], ["#112233", "#ff5533"])).toBe(false);
+    expect(sameColors([], [])).toBe(true);
+    expect(sameColors(["#ff5533"], [])).toBe(false);
+  });
+
+  it("`swapBrandRefs` giữ ảnh người dùng tự đính, thay hết ảnh mang `assetId`", () => {
+    const before = [
+      { path: "refs/toi-tu-chup.png", role: "theme" as const },
+      { path: "refs/logo-cu.png", role: "logo" as const, assetId: "a1" },
+      { path: "refs/net-ve-cu.png", role: "style" as const, assetId: "a2" },
+    ];
+    const after = swapBrandRefs(before, [{ path: "refs/logo-moi.png", role: "logo", assetId: "b1" }]);
+    expect(after).toEqual([
+      { path: "refs/toi-tu-chup.png", role: "theme" },
+      { path: "refs/logo-moi.png", role: "logo", assetId: "b1" },
+    ]);
+  });
+
+  it("bỏ thương hiệu ⇒ ảnh của nó rời câu, ảnh người dùng vẫn nguyên", () => {
+    const before = [
+      { path: "refs/toi-tu-chup.png", role: "style" as const },
+      { path: "refs/logo.png", role: "logo" as const, assetId: "a1" },
+    ];
+    expect(swapBrandRefs(before, [])).toEqual([{ path: "refs/toi-tu-chup.png", role: "style" }]);
   });
 });

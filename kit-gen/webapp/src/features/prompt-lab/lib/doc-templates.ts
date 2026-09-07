@@ -2,7 +2,7 @@ import type { JSONContent } from "@tiptap/react";
 import { NODE } from "./schema";
 import { INHERIT, type PillKind } from "./pill-registry";
 import { getPresets, type PresetBundle } from "./presets-store";
-import type { UiCell } from "./composer-model";
+import type { ContextRef, UiCell } from "./composer-model";
 
 /**
  * doc-templates.ts — CÂU MAD-LIB của từng loại block, dựng bằng JSON.
@@ -21,14 +21,22 @@ import type { UiCell } from "./composer-model";
 
 const text = (value: string): JSONContent => ({ type: "text", text: value });
 
-const pill = (kind: PillKind, value: string): JSONContent => ({
+const pill = (kind: PillKind, value: string, custom = ""): JSONContent => ({
   type: NODE.optionPill,
-  attrs: { kind, value },
+  attrs: { kind, value, custom },
 });
 
-/* Pill ảnh RỖNG: chưa có ảnh nào trên đĩa. Hai trường rỗng chứ không phải
+/* Pill ảnh RỖNG: chưa có ảnh nào trên đĩa. Ba trường rỗng chứ không phải
    `null` — đúng giá trị mặc định của attr, xem `EMPTY_PILL_IMAGE`. */
-const imagePill = (): JSONContent => ({ type: NODE.imagePill, attrs: { refName: "", path: "" } });
+const imagePill = (role = ""): JSONContent => ({ type: NODE.imagePill, attrs: { refName: "", path: "", role } });
+
+/* Pill ảnh ĐÃ CÓ tấm trên đĩa — dùng khi dựng lại câu ngữ cảnh từ `contextRefs`.
+   `refName` để rỗng: `readPillImage` tự suy nó ra từ `path` khi thiếu, và chép
+   một cái tên vào đây là mở đường cho hai chỗ ghi hai tên cho một tệp. */
+const refPill = (ref: ContextRef): JSONContent => ({
+  type: NODE.imagePill,
+  attrs: { refName: "", path: ref.path, role: ref.role },
+});
 
 /* ── Block BACKGROUND ─────────────────────────────────────────────────────── */
 
@@ -81,7 +89,12 @@ export function mascotDoc(): JSONContent {
         type: "paragraph",
         content: [
           text(a),
-          imagePill(),
+          /* `role: "character"` — pill này KHÔNG đổi chỗ đi đâu trong contract (nó
+             vẫn là `sheet.ref` của tấm dáng, đúng như trước), nhưng vai trò khai ra
+             cho phép menu của nó mời «Mascot của <thương hiệu>». Ảnh của thẻ Cảnh
+             nền để rỗng vai trò, nên nó không nhận lời mời ấy — mời một linh vật
+             làm ảnh tham chiếu cho một cảnh nền là mời sai chỗ. */
+          imagePill("character"),
           text(b),
           /* Rỗng = kế thừa theme tổng ở đầu tài liệu. Mặc định đúng ngay, và
              người dùng vẫn bấm để ghi đè cho riêng nhân vật này. */
@@ -137,17 +150,37 @@ export function mascotPoseDoc(row: { pose: string; view: string; expression: str
 
 /* ── NGỮ CẢNH CHUNG ───────────────────────────────────────────────────────── */
 
-export const SCAFFOLD_CONTEXT = ["Bộ kit theme ", " phong cách ", ", màu thương hiệu ", "."] as const;
+export const SCAFFOLD_CONTEXT = ["Bộ kit theme ", " phong cách ", ", thương hiệu ", " với màu ", "."] as const;
 
 /**
  * Câu Ngữ cảnh chung — bản TipTap của đúng cái câu React đang hiện ở chế độ khuôn.
  *
- * Ba pill khớp một-một với ba control của bản khuôn (`theme`, `style`, dãy màu),
- * nên gạt sang Tự do là thấy CHÍNH câu mình đang đọc, chỉ khác ở chỗ giờ gõ được
- * vào giữa. Đó là điều kiện để công tắc không làm người ta mất phương hướng.
+ * Bốn pill khớp một-một với bốn control của bản khuôn (`theme`, `style`, thương
+ * hiệu, dãy màu), nên gạt sang Tự do là thấy CHÍNH câu mình đang đọc, chỉ khác ở
+ * chỗ giờ gõ được vào giữa. Đó là điều kiện để công tắc không làm người ta mất
+ * phương hướng.
+ *
+ * ╔══ ẢNH ĐI THEO PILL NÓ MINH HOẠ, KHÔNG DỒN VỀ CUỐI CÂU ═══════════════════╗
+ * ║ `contextRefs` mang sẵn vai trò của từng tấm, nên tấm `theme` được đặt ngay ║
+ * ║ sau pill theme và tấm `style` ngay sau pill phong cách — đúng chỗ mà mục   ║
+ * ║ «Đính ảnh tham chiếu» của chính pill ấy chèn vào ở chế độ tự do. Nhờ vậy   ║
+ * ║ gạt công tắc qua lại không làm ảnh nhảy chỗ, và câu vẫn đọc được thành     ║
+ * ║ "theme [Tết][🖼]".                                                        ║
+ * ║ Ảnh vai `logo` KHÔNG có mặt trong câu: nó không phải một mệnh đề người     ║
+ * ║ dùng viết ra mà là tài sản của thương hiệu đang chọn, và pill thương hiệu  ║
+ * ║ đã nói ra điều đó rồi. Nó vẫn đi tới `variant.brand.refs` như thường.      ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
  */
-export function contextDoc(state: { themeValue: string; styleId: string }): JSONContent {
-  const [a, b, c, d] = SCAFFOLD_CONTEXT;
+export function contextDoc(state: {
+  themeValue: string;
+  styleId: string;
+  themeCustom?: string;
+  styleCustom?: string;
+  contextRefs?: readonly ContextRef[];
+}): JSONContent {
+  const [a, b, c, d, e] = SCAFFOLD_CONTEXT;
+  const refs = state.contextRefs ?? [];
+  const shots = (role: ContextRef["role"]) => refs.filter((ref) => ref.role === role && ref.path).map(refPill);
   return {
     type: "doc",
     content: [
@@ -155,13 +188,18 @@ export function contextDoc(state: { themeValue: string; styleId: string }): JSON
         type: "paragraph",
         content: [
           text(a),
-          pill("theme", state.themeValue),
+          pill("theme", state.themeValue, state.themeCustom ?? ""),
+          ...shots("theme"),
           text(b),
-          pill("style", state.styleId),
+          pill("style", state.styleId, state.styleCustom ?? ""),
+          ...shots("style"),
           text(c),
+          /* Node RỖNG, thương hiệu đọc từ ngữ cảnh — xem `NODE.brandProfilePill`. */
+          { type: NODE.brandProfilePill },
+          text(d),
           /* Node RỖNG, màu đọc từ ngữ cảnh — xem `NODE.brandPill`. */
           { type: NODE.brandPill },
-          text(d),
+          text(e),
         ],
       },
     ],
@@ -309,6 +347,10 @@ export const PILL_SLOTS: Record<"uikit" | "background" | "mascot" | "mascotPose"
 function pillBroken(node: JSONContent): boolean {
   if (node.type !== NODE.optionPill) return false;
   const attrs = node.attrs ?? {};
+  /* `custom` CỐ Ý không nằm trong phép kiểm: mọi tài liệu lưu trước 09/2026 đều
+     thiếu nó, và chúng không hỏng — thiếu `custom` nghĩa là "chưa gõ chữ riêng",
+     đúng thứ chúng đang là. Coi nó là hỏng thì mỗi lần mở một dự án cũ là một
+     lượt dựng lại toàn bộ tài liệu, không sửa được gì mà lại đóng dấu xuống đĩa. */
   return typeof attrs["kind"] !== "string" || typeof attrs["value"] !== "string";
 }
 
@@ -390,6 +432,63 @@ export function pillValuesOf(doc: JSONContent): Partial<Record<PillKind, string>
          lấy rác đắp lên dữ liệu còn tốt — đúng chiều ngược với việc đang làm. */
       if (typeof kind === "string" && typeof value === "string" && !(kind in out)) {
         out[kind as PillKind] = value;
+      }
+    }
+    for (const child of node.content ?? []) walk(child);
+  };
+  walk(doc);
+  return out;
+}
+
+/**
+ * CHỮ TỰ GÕ của các pill trong một câu, tra theo `kind` — song sinh với
+ * `pillValuesOf`.
+ *
+ * Hai hàm chứ không một hàm trả cặp: chỗ gọi cũ chỉ hỏi `value` và không được
+ * phải sửa vì một trường mới; còn chỗ nào cần cả hai thì gọi cả hai, rẻ như nhau
+ * (cùng một phép duyệt cây trên một câu dài vài chục node).
+ * Chuỗi rỗng KHÔNG được ghi vào bảng: "chưa gõ gì" phải phân biệt được với "pill
+ * này không có trong câu", nếu không thì đọc ngược sẽ XOÁ chữ đang có ở trường
+ * có cấu trúc mỗi lần người dùng lỡ xoá pill khỏi câu.
+ */
+export function pillCustomOf(doc: JSONContent): Partial<Record<PillKind, string>> {
+  const out: Partial<Record<PillKind, string>> = {};
+  const walk = (node: JSONContent) => {
+    if (node.type === NODE.optionPill) {
+      const attrs = node.attrs ?? {};
+      const kind = attrs["kind"];
+      const custom = attrs["custom"];
+      if (typeof kind === "string" && typeof custom === "string" && custom !== "" && !(kind in out)) {
+        out[kind as PillKind] = custom;
+      }
+    }
+    for (const child of node.content ?? []) walk(child);
+  };
+  walk(doc);
+  return out;
+}
+
+/**
+ * ẢNH CÓ VAI TRÒ trong một câu → `ContextRef[]`, theo thứ tự xuất hiện.
+ *
+ * Đường ĐỌC NGƯỢC của `contextDoc`: ở chế độ tự do, câu chữ là nguồn sự thật, nên
+ * mỗi nhịp gõ phải rút ảnh trong câu về `ComposerState.contextRefs` — cùng lý do
+ * mà `pillValuesOf` rút `themeValue`/`styleId` về. Không rút thì bộ dịch contract
+ * phải rẽ nhánh theo chế độ, và hai nhánh ấy sẽ lệch nhau.
+ *
+ * Ảnh KHÔNG khai vai trò (`role: ""`) bị bỏ qua: đó là pill ảnh của một thẻ, và
+ * ở câu ngữ cảnh thì nó không có ô nào trong contract để đi tới. Ảnh vai `logo`
+ * cũng không đến từ đây — nó không bao giờ được đặt vào câu (xem `contextDoc`).
+ */
+export function contextRefsOf(doc: JSONContent): ContextRef[] {
+  const out: ContextRef[] = [];
+  const walk = (node: JSONContent) => {
+    if (node.type === NODE.imagePill) {
+      const attrs = node.attrs ?? {};
+      const path = attrs["path"];
+      const role = attrs["role"];
+      if (typeof path === "string" && path && (role === "theme" || role === "style")) {
+        out.push({ path, role });
       }
     }
     for (const child of node.content ?? []) walk(child);

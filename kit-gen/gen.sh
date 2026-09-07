@@ -325,6 +325,23 @@ for s in cfg["styles"]:
                 "The attached inspiration reference image(s) ARE the style: match their",
                 "rendering technique, materials, palette and level of detail exactly. Do not",
                 "copy their layout — only their look.",
+                # ⚠️ MỘT TẤM INSPO KHÔNG CHỈ NÓI VỀ LỐI VẼ NỮA.
+                # Từ khi màn soạn có mục «Đính ảnh tham chiếu» trên pill THEME lẫn
+                # pill PHONG CÁCH (và asset `brand-style` của thương hiệu cũng đổ về
+                # `inspo`), một tấm ở đây có thể đang tả BỐI CẢNH — mùa, lễ hội,
+                # mô-típ trang trí — chứ không tả nét cọ. Câu cũ chỉ nói "ARE the
+                # style", nên model đọc một tấm ảnh chợ Tết thành một yêu cầu về
+                # kỹ thuật vẽ và bỏ qua đúng thứ người dùng muốn mượn.
+                # KHÔNG đánh số thứ tự để phân biệt hai loại: `referenced_image_paths`
+                # là một danh sách phẳng và thứ tự trong đó đã bị bỏ làm căn cứ ở
+                # khối ảnh nhân vật (xem chú thích «KHÔNG CÒN The SECOND attached
+                # image»). Nói theo VAI TRÒ và để model tự nhận ra tấm nào nói gì là
+                # thứ duy nhất không lệch được.
+                "Some of those references may describe the SUBJECT MATTER instead of the",
+                "technique — a season, a festival, a setting, a recurring motif. Read each",
+                "reference for what it actually shows: borrow the look from the ones that",
+                "are about rendering, and borrow the theme, props and decorative motifs from",
+                "the ones that are about a subject. Never copy either kind's composition.",
             ]
             if style_text:
                 style_block += [

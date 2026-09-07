@@ -44,6 +44,14 @@ export const NODE = {
    * ╚═══════════════════════════════════════════════════════════════════════════╝
    */
   brandPill: "brandPill",
+  /**
+   * THƯƠNG HIỆU đang theo, inline atom. **KHÔNG CÓ ATTR** — cùng luật `brandPill`.
+   *
+   * Thứ tài liệu giữ chỉ là `ComposerState.brandId`, một con trỏ tới kho dùng
+   * chung; node này là CÁI MỐC nói "chỗ này trong câu là thương hiệu". Lý do đầy
+   * đủ ở `extensions/BrandProfilePill.tsx`.
+   */
+  brandProfilePill: "brandProfilePill",
 } as const;
 
 /**

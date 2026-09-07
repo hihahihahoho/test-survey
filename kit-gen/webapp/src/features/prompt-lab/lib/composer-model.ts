@@ -269,11 +269,86 @@ export function gridFor(cellCount: number): { cols: number; rows: number } {
 
 export type Block = DocBlock | UiKitBlock | MascotBlock;
 
+/**
+ * MỘT TẤM ẢNH của câu ngữ cảnh chung, đã nằm trên đĩa dự án.
+ *
+ * ╔══ VÌ SAO CÓ MỘT MẢNG RIÊNG, KHÔNG NHÉT ẢNH VÀO `contextDoc` ═════════════╗
+ * ║ Khối Ngữ cảnh chung có HAI chế độ, và ở chế độ khuôn nó là React thuần —   ║
+ * ║ không có tài liệu TipTap nào để chứa một node ảnh. Nên mảng này là nguồn   ║
+ * ║ sự thật cho CẢ HAI chế độ: ở khuôn nó là thứ duy nhất; ở tự do câu chữ vẫn ║
+ * ║ là nguồn, nhưng `adoptContextDoc` rút ảnh trong câu ra đây ngay sau mỗi    ║
+ * ║ nhịp gõ (đúng cách `themeValue`/`styleId` được rút ra). Nhờ vậy bộ dịch    ║
+ * ║ contract chỉ phải đọc MỘT chỗ, không phải rẽ nhánh theo chế độ.            ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export interface ContextRef {
+  /** `refs/<tên>` trong dự án — thứ `gen.sh` đính kèm được. */
+  path: string;
+  /**
+   * ẢNH NÀY NÓI VỀ CÁI GÌ, và vì thế nó đi vào đâu của contract:
+   *  · `theme` / `style` → `variant.inspo[]` (ảnh tả bối cảnh, hoặc tả lối vẽ);
+   *  · `logo`            → `variant.brand.refs[]`.
+   * Hai đường khác nhau vì `gen.sh` nói về chúng bằng hai câu khác nhau.
+   */
+  role: "theme" | "style" | "logo";
+  /**
+   * Id asset trong THƯ VIỆN đã sinh ra tấm này; vắng = người dùng tự đính.
+   *
+   * Không phải để truy vết cho vui: đổi thương hiệu phải THAY đúng những tấm do
+   * thương hiệu cũ mang tới và không được đụng vào tấm người dùng tự đính. Không
+   * có dấu này thì phép thay ấy chỉ còn cách so đường dẫn với một bảng cache —
+   * hai nguồn sự thật cho một câu hỏi.
+   */
+  assetId?: string;
+}
+
 export interface ComposerState {
   /** Cụm EN của chủ đề chung (theo quy ước `OUTFIT_THEMES`: value CHÍNH LÀ cụm EN). */
   themeValue: string;
+  /**
+   * MÔ TẢ CHỦ ĐỀ DO NGƯỜI DÙNG TỰ GÕ — thắng `themeValue` khi có chữ.
+   *
+   * ╔══ VÌ SAO MỘT TRƯỜNG RIÊNG, KHÔNG GHI ĐÈ THẲNG VÀO `themeValue` ══════════╗
+   * ║ `theme` là kind lưu THẲNG cụm tiếng Anh (`phraseOf` trả về nguyên văn khi ║
+   * ║ giá trị không có trong danh mục), nên về mặt kỹ thuật gõ thẳng vào        ║
+   * ║ `themeValue` là chạy được. Nhưng lúc đó lựa chọn preset của người dùng bị ║
+   * ║ NUỐT MẤT: bỏ chữ tự gõ đi thì không còn gì để quay về, và menu không biết ║
+   * ║ đang chọn mục nào. Tách hai trường thì «Gõ mô tả riêng…» là một lớp phủ   ║
+   * ║ tháo ra được, đúng như người dùng hiểu khi họ bấm vào nó.                 ║
+   * ║ Và nó phải đúng cho MỌI kind, kể cả `style` — nơi value là một id, không   ║
+   * ║ phải chữ (`phraseOf` trả rỗng cho id lạ ⇒ chữ tự gõ sẽ rơi khỏi prompt).   ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  themeCustom: string;
   /** Id phong cách chung, tra trong `presets.styles`. */
   styleId: string;
+  /** Mô tả phong cách do người dùng tự gõ — thắng `styleId`. Xem `themeCustom`. */
+  styleCustom: string;
+  /**
+   * THƯƠNG HIỆU đang theo (`brands[]` của thư viện dùng chung); rỗng = không theo.
+   *
+   * Là một THỰC THỂ được trỏ tới, không phải một túi thuộc tính chép vào tài
+   * liệu: màu và asset của thương hiệu vẫn sống trong thư viện, ở đây chỉ giữ id.
+   * Thứ ĐƯỢC chép sang là hệ quả của việc chọn (màu đổ vào `brandColors`, ảnh
+   * chép vào `refs/` của dự án) — và chúng chép được vì người dùng còn phải sửa
+   * chúng riêng cho bộ kit này.
+   */
+  brandId: string;
+  /**
+   * Ảnh của câu ngữ cảnh chung: ảnh người dùng tự đính + ảnh của thương hiệu.
+   * Xem `ContextRef`.
+   */
+  contextRefs: ContextRef[];
+  /**
+   * BẢNG CHỐNG TẢI LẠI: id asset thư viện → `refs/<tên>` đã chép vào dự án.
+   *
+   * Asset của thư viện nằm ở kho dùng chung, KHÔNG nằm trong `refs/` của dự án,
+   * mà `gen.sh` chỉ đính được tệp trong dự án. Nên chọn thương hiệu là một vòng
+   * tải xuống + tải lên cho mỗi asset. Bảng này để lần chọn thứ hai (đổi đi rồi
+   * đổi lại, mở lại dự án hôm sau) không trả lại cái giá ấy.
+   * Nó CHỈ là cache: vai trò của từng tấm nằm ở `contextRefs`, không ở đây.
+   */
+  brandAssets: Record<string, string>;
   /**
    * Màu thương hiệu, `#rrggbb` thường, THEO THỨ TỰ VAI TRÒ: [0] là màu chủ đạo,
    * [1] là màu nhấn, còn lại là màu phụ. Thứ tự mảng CHÍNH LÀ ngữ nghĩa — xem
@@ -382,6 +457,11 @@ export function initialComposer(presets: PresetBundle = getPresets()): ComposerS
        thấy màu đi vào prompt ra chữ gì, mà một danh sách rỗng thì không thấy
        gì cả. Hai màu cũng là hình dạng thật của phần lớn bộ nhận diện. */
     brandColors: ["#ff5533", "#112233"],
+    themeCustom: "",
+    styleCustom: "",
+    brandId: "",
+    contextRefs: [],
+    brandAssets: {},
     contextMode: "template",
     blocks: [],
   };

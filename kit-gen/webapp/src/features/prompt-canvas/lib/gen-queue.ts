@@ -57,8 +57,28 @@ export interface GenQueue {
   stateOf: (blockId: string) => GenBlockState;
   /** Đưa một thẻ vào cuối hàng. Thẻ đã ở trong hàng ⇒ không làm gì. */
   enqueue: (blockId: string) => void;
+  /**
+   * Đưa NHIỀU thẻ vào cuối hàng, giữ nguyên thứ tự đưa vào.
+   *
+   * ╔══ VÌ SAO KHÔNG PHẢI `ids.forEach(enqueue)` ══════════════════════════════╗
+   * ║ `enqueue` là một `setState` với hàm cập nhật, nên gọi n lần trong một     ║
+   * ║ trình xử lý sự kiện thì React gộp chúng lại và kết quả ĐÚNG. Nhưng nó     ║
+   * ║ cũng gọi `setSettled` n lần, và mỗi lượt dựng một object mới cho cả bảng  ║
+   * ║ — với hai chục thẻ thì đó là hai chục lần chép bảng để xoá đúng một khoá. ║
+   * ║ Quan trọng hơn: nút «Vẽ tất cả» cần một hành động ĐƠN để nói về ("đã xếp  ║
+   * ║ 7 thẻ"), chứ không phải bảy hành động rời mà nó tự đếm hộ.                ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
+   */
+  enqueueMany: (blockIds: readonly string[]) => void;
   /** Bỏ một thẻ ĐANG CHỜ khỏi hàng. Thẻ đang chạy thì không bỏ được (đã tiêu lượt). */
   dequeue: (blockId: string) => void;
+  /**
+   * Bỏ MỌI thẻ chưa phóng khỏi hàng. Thẻ đang chạy ở lại — nó đã tiêu lượt rồi,
+   * và dừng nó là việc của nút Dừng ở màn lượt chạy, không phải của hàng đợi.
+   */
+  clearWaiting: () => void;
+  /** Thẻ đang trong hàng (kể cả thẻ đang chạy), THEO THỨ TỰ. */
+  pending: string[];
   /** Số thẻ đang chờ tới lượt (không kể thẻ đang chạy). */
   waiting: number;
   activeRunId: string | null;
@@ -188,16 +208,44 @@ export function useGenQueue(
     setEntries((prev) => (prev.some((e) => e.blockId === blockId) ? prev : [...prev, { blockId, jobs: [], runId: null, message: WAITING_COPY }]));
   }, []);
 
+  const enqueueMany = React.useCallback((blockIds: readonly string[]) => {
+    setSettled((prev) => {
+      /* Chỉ dựng lại bảng khi CÓ gì để xoá — thẻ chưa từng vẽ không có mục nào ở
+         đây, và ca thường gặp của «Vẽ tất cả» là một bộ kit chưa vẽ lần nào. */
+      const stale = blockIds.filter((id) => id in prev);
+      if (stale.length === 0) return prev;
+      const next = { ...prev };
+      for (const id of stale) delete next[id];
+      return next;
+    });
+    setEntries((prev) => {
+      const fresh = blockIds
+        .filter((id) => !prev.some((e) => e.blockId === id))
+        /* Khử trùng lặp NGAY TRONG danh sách đưa vào: hai lần cùng một thẻ là hai
+           lượt vẽ cùng một tấm, tức là tiêu tiền hai lần cho một kết quả. */
+        .filter((id, at, all) => all.indexOf(id) === at)
+        .map((blockId) => ({ blockId, jobs: [] as string[], runId: null, message: WAITING_COPY }));
+      return fresh.length === 0 ? prev : [...prev, ...fresh];
+    });
+  }, []);
+
   const dequeue = React.useCallback((blockId: string) => {
     /* CHỈ bỏ được thẻ chưa phóng. Thẻ đang chạy đã tiêu lượt rồi — muốn dừng thì
        đó là chuyện của nút Dừng ở màn lượt chạy, không phải "bỏ khỏi hàng". */
     setEntries((prev) => prev.filter((e) => e.blockId !== blockId || e.runId !== null));
   }, []);
 
+  const clearWaiting = React.useCallback(() => {
+    setEntries((prev) => prev.filter((e) => e.runId !== null));
+  }, []);
+
   return {
     stateOf,
     enqueue,
+    enqueueMany,
     dequeue,
+    clearWaiting,
+    pending: entries.map((e) => e.blockId),
     waiting: entries.filter((e) => e.runId === null).length,
     activeRunId,
   };

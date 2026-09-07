@@ -125,18 +125,29 @@ afterEach(() => {
    ① HÀNG ĐỢI VẼ — FIFO, một lượt một lúc
    ══════════════════════════════════════════════════════════════════════════ */
 
-/** Bàn thử nhỏ nhất còn nói được sự thật: hai thẻ, ba nút, ba nhãn trạng thái. */
-function QueueHarness({ prepare }: { prepare: (blockId: string) => Promise<string[]> }) {
+/** Bàn thử nhỏ nhất còn nói được sự thật: mấy thẻ, mấy nút, mấy nhãn trạng thái. */
+function QueueHarness({
+  prepare,
+  ids = ["b1", "b2"],
+}: {
+  prepare: (blockId: string) => Promise<string[]>;
+  ids?: string[];
+}) {
   const queue = useGenQueue(PID, prepare);
   return (
     <div>
-      {["b1", "b2"].map((id) => (
+      {ids.map((id) => (
         <div key={id}>
           <button type="button" onClick={() => queue.enqueue(id)}>{`gen-${id}`}</button>
           <button type="button" onClick={() => queue.dequeue(id)}>{`drop-${id}`}</button>
           <span data-testid={`s-${id}`}>{queue.stateOf(id).status}</span>
         </div>
       ))}
+      {/* Hai nút của «Vẽ tất cả»: xếp cả loạt, và bỏ mấy thẻ còn đang chờ. */}
+      <button type="button" onClick={() => queue.enqueueMany(ids)}>gen-all</button>
+      <button type="button" onClick={() => queue.clearWaiting()}>clear</button>
+      <span data-testid="pending">{queue.pending.join(",")}</span>
+      <span data-testid="waiting">{queue.waiting}</span>
     </div>
   );
 }
@@ -213,6 +224,55 @@ describe("hàng đợi vẽ — mỗi dự án MỘT lượt, thẻ sau xếp h�
     await waitFor(() => expect(statusOf("b2")).toBe("idle"));
     fireEvent.click(screen.getByText("drop-b1"));
     expect(statusOf("b1")).toBe("running");
+  });
+
+  /* ══ «VẼ TẤT CẢ» — MỘT CÚ BẤM, N LƯỢT, VẪN MỘT LƯỢT MỘT LÚC ══════════════
+     Nút này là chỗ duy nhất trong màn xếp hàng loạt, nên nó cũng là chỗ duy
+     nhất một lỗi gộp state biến thành TIỀN: xếp trùng một thẻ là vẽ lại đúng
+     tấm ấy lần nữa, còn xếp thiếu thì người dùng bấm rồi mà thẻ nằm im. */
+  it("«Vẽ tất cả» xếp cả loạt theo thứ tự, và vẫn chỉ POST MỘT lượt", async () => {
+    H.startRun.mockResolvedValue({ runId: "r-1", jobs: [] });
+    H.getRun.mockImplementation(async (id: string) => makeRun(id, "running", "running"));
+
+    wrap(<QueueHarness prepare={prepare} ids={["b1", "b2", "b3"]} />);
+    fireEvent.click(screen.getByText("gen-all"));
+
+    await waitFor(() => expect(statusOf("b1")).toBe("running"));
+    expect(screen.getByTestId("pending").textContent).toBe("b1,b2,b3");
+    expect(statusOf("b2")).toBe("queued");
+    expect(statusOf("b3")).toBe("queued");
+    expect(H.startRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("thẻ đã trong hàng KHÔNG bị xếp lần hai — một tấm không được vẽ hai lượt", async () => {
+    H.startRun.mockResolvedValue({ runId: "r-1", jobs: [] });
+    H.getRun.mockImplementation(async (id: string) => makeRun(id, "running", "running"));
+
+    wrap(<QueueHarness prepare={prepare} ids={["b1", "b2"]} />);
+    fireEvent.click(screen.getByText("gen-b2"));
+    await waitFor(() => expect(statusOf("b2")).toBe("running"));
+
+    fireEvent.click(screen.getByText("gen-all"));
+    await waitFor(() => expect(statusOf("b1")).toBe("queued"));
+    /* b2 vẫn đứng ĐẦU hàng và chỉ có mặt MỘT lần. */
+    expect(screen.getByTestId("pending").textContent).toBe("b2,b1");
+  });
+
+  it("«Bỏ mấy thẻ đang chờ» dọn sạch hàng chờ nhưng KHÔNG đụng thẻ đang chạy", async () => {
+    H.startRun.mockResolvedValue({ runId: "r-1", jobs: [] });
+    H.getRun.mockImplementation(async (id: string) => makeRun(id, "running", "running"));
+
+    wrap(<QueueHarness prepare={prepare} ids={["b1", "b2", "b3"]} />);
+    fireEvent.click(screen.getByText("gen-all"));
+    await waitFor(() => expect(statusOf("b1")).toBe("running"));
+    await waitFor(() => expect(screen.getByTestId("waiting").textContent).toBe("2"));
+
+    fireEvent.click(screen.getByText("clear"));
+    await waitFor(() => expect(screen.getByTestId("waiting").textContent).toBe("0"));
+    expect(screen.getByTestId("pending").textContent).toBe("b1");
+    /* Thẻ đang chạy đã tiêu lượt: hàng đợi không giả vờ huỷ được nó. */
+    expect(statusOf("b1")).toBe("running");
+    expect(statusOf("b2")).toBe("idle");
   });
 });
 

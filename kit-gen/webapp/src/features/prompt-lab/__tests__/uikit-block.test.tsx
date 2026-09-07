@@ -51,6 +51,11 @@ const state = (blocks: UiKitBlock[]): ComposerState => ({
   themeValue: "a Vietnamese Tết festive outfit",
   styleId: PRESETS.styles[0]!.id,
   brandColors: [],
+  themeCustom: "",
+  styleCustom: "",
+  brandId: "",
+  contextRefs: [],
+  brandAssets: {},
   contextMode: "template",
   blocks,
 });

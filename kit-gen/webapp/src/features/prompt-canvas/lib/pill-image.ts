@@ -35,6 +35,34 @@ export interface PillImage {
   path: string;
 }
 
+/**
+ * VAI TRÒ của một tấm ảnh trong câu — thứ quyết định nó đi vào ĐÂU của contract.
+ *
+ * ╔══ VÌ SAO VAI TRÒ PHẢI ĐƯỢC GHI RA, KHÔNG SUY TỪ VỊ TRÍ ══════════════════╗
+ * ║ `gen.sh` đính mọi ảnh vào cùng một danh sách `referenced_image_paths` và   ║
+ * ║ gọi chúng theo VAI TRÒ trong prompt ("the attached character REFERENCE     ║
+ * ║ PHOTO", "brand / inspiration reference images") — nó cố ý không đếm thứ tự ║
+ * ║ nữa (xem khối «KHÔNG CÒN "The SECOND attached image"» ở gen.sh). Nhưng để  ║
+ * ║ nói được vai trò thì contract phải xếp tấm ảnh vào đúng ô: `sheet.ref` cho ║
+ * ║ nhân vật, `variant.brand.refs` cho logo, `variant.inspo` cho ảnh tả chủ đề ║
+ * ║ hay lối vẽ. Một pill ảnh không khai vai trò thì bộ dịch chỉ còn cách đoán  ║
+ * ║ theo chỗ nó đứng trong câu — mà chỗ đứng thì người dùng đổi được bằng một  ║
+ * ║ nhịp mũi tên.                                                             ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Rỗng = ảnh của một thẻ (nhân vật / cảnh nền) — vai trò đã do CHỖ ĐẶT quyết
+ * định (`sheet.ref` của chính tấm ấy), nên nó không cần tự khai thêm gì.
+ */
+export type PillImageRole = "" | "theme" | "style" | "character";
+
+const ROLES: readonly string[] = ["theme", "style", "character"];
+
+/** Vai trò khai trong attr của node. Giá trị lạ ⇒ rỗng, không đoán. */
+export function readPillImageRole(attrs: Record<string, unknown> | null | undefined): PillImageRole {
+  const raw = attrs?.["role"];
+  return typeof raw === "string" && ROLES.includes(raw) ? (raw as PillImageRole) : "";
+}
+
 /** Pill chưa có ảnh. Đây là GIÁ TRỊ MẶC ĐỊNH của attr, không phải `null`. */
 export const EMPTY_PILL_IMAGE: PillImage = { refName: "", path: "" };
 

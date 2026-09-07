@@ -6,6 +6,7 @@ import { Placeholder } from "@tiptap/extension-placeholder";
 import { OptionPill } from "../extensions/OptionPill";
 import { ImagePill } from "../extensions/ImagePill";
 import { BrandPill } from "../extensions/BrandPill";
+import { BrandProfilePill } from "../extensions/BrandProfilePill";
 import { SlashCommand } from "../extensions/SlashCommand";
 import type { BlockMode } from "../lib/composer-model";
 
@@ -63,12 +64,21 @@ export function BlockEditor({
   resetToken,
   placeholder,
   scale = "prose",
+  refs = false,
 }: {
   doc: JSONContent;
   mode: BlockMode;
   onChange: (next: JSONContent) => void;
   /** Bậc chữ của vùng soạn — xem `SCALE`. */
   scale?: "prose" | "row";
+  /**
+   * Câu này CÓ ĐƯỜNG đưa ảnh tới contract hay không.
+   *
+   * Chỉ câu Ngữ cảnh chung có (`variant.inspo`), nên mặc định là KHÔNG. Bật ở một
+   * câu không có đường ra là bày nút «Đính ảnh tham chiếu» cho một tấm ảnh sẽ bị
+   * bộ dịch bỏ qua — xem chú thích `role` trong `OptionPill.tsx`.
+   */
+  refs?: boolean;
   /**
    * Đổi số này = "nạp lại `doc` vào editor".
    *
@@ -141,13 +151,17 @@ export function BlockEditor({
       /* Pill đi theo bậc chữ của vùng soạn — xem `SCALE` và `addOptions()` của
          `OptionPill`. Cấu hình MỘT LẦN lúc dựng editor là đủ: `scale` là hằng của
          từng chỗ gọi, không đổi lúc chạy. */
-      OptionPill.configure({ compact: scale === "row" }),
+      OptionPill.configure({ compact: scale === "row", refs }),
       ImagePill,
       /* Node RỖNG, màu đọc qua React context — xem `BrandPill.tsx`. Đăng ký cho
          MỌI editor chứ không riêng khối Ngữ cảnh: schema phải nhận diện được node
          này ở bất cứ tài liệu nào, nếu không thì một câu ngữ cảnh dán sang thẻ
          khác sẽ bị ProseMirror lặng lẽ bỏ mất dãy màu. */
       BrandPill,
+      /* Cùng lý do đăng ký-cho-mọi-editor với `BrandPill` ngay trên: schema phải
+         nhận diện được node này ở bất cứ tài liệu nào, nếu không thì một câu ngữ
+         cảnh dán sang thẻ khác sẽ bị ProseMirror lặng lẽ bỏ mất pill thương hiệu. */
+      BrandProfilePill,
       SlashCommand,
     ],
     content: doc,

@@ -70,10 +70,21 @@ function readAttr(attrs: Record<string, unknown> | null | undefined, key: string
   return typeof raw === "string" ? raw : "";
 }
 
-/** Cụm EN của một pill, đã tính cả luật "để trống = kế thừa". */
+/**
+ * Cụm EN của một pill, đã tính cả luật "để trống = kế thừa".
+ *
+ * ╔══ CHỮ TỰ GÕ THẮNG PRESET, VÀ ĐI NGUYÊN VĂN ══════════════════════════════╗
+ * ║ Không dịch, không bọc dấu nháy, không thêm nhãn kiểu `custom:` — mọi thứ   ║
+ * ║ ta gói quanh câu của người dùng đều là chữ HỌ KHÔNG VIẾT mà vẫn bị gửi tới ║
+ * ║ máy vẽ. Ngôn ngữ họ tự chịu: pill hiện sẵn cụm tiếng Anh của từng preset   ║
+ * ║ ngay trong menu, nên ai gõ tay cũng đã thấy trước hàng xóm của câu mình.   ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
 function pillText(node: PromptDocNode, ctx: SerializeContext): string {
   const kind = readAttr(node.attrs, "kind") as PillKind;
   const value = readAttr(node.attrs, "value");
+  const custom = readAttr(node.attrs, "custom").trim();
+  if (custom) return custom;
   if (value === INHERIT) {
     if (kind === "style") return ctx.styleEN;
     if (kind === "outfit") return ctx.themeEN;
@@ -115,6 +126,13 @@ function walkInline(nodes: PromptDocNode[] | undefined, ctx: SerializeContext): 
         /* Node rỗng ⇒ chữ đến từ NGỮ CẢNH, không từ node. Cùng một hàm mô tả mà
            câu template đang dùng, nên gạt công tắc không làm đổi chữ gửi đi vẽ. */
         out += describeBrandColors(ctx.brandColors);
+        break;
+      case NODE.brandProfilePill:
+        /* KHÔNG MỘT CHỮ NÀO. Tên riêng của một thương hiệu không giúp máy vẽ:
+           "Bộ kit theme Tết phong cách Merge, thương hiệu Vinamilk" dạy model đi
+           lục trí nhớ về một cái tên thay vì vẽ theo thứ đang được tả. Thứ THẬT
+           SỰ nói lên thương hiệu đã đi bằng hai đường khác: bộ màu (mệnh đề của
+           `brandPill` ngay cạnh) và logo đính kèm (`variant.brand.refs`). */
         break;
       case "hardBreak":
         out += " ";

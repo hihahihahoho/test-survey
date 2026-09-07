@@ -7,6 +7,7 @@ import {
   type Block,
   type BlockMode,
   type ComposerState,
+  type ContextRef,
   type MascotPose,
   type UiCell,
 } from "@/features/prompt-lab/lib/composer-model";
@@ -182,7 +183,12 @@ function readMascotBlock(raw: Record<string, unknown>, id: string, mode: BlockMo
       id,
       kind: "mascot",
       mode,
-      doc: healDoc(raw["doc"] as JSONContent, "mascot"),
+      /* `withImageRole`: bản nháp lưu TRƯỚC 09/2026 có pill ảnh không khai vai
+         trò. Vai trò ấy không đổi chỗ tấm ảnh trong contract (nó vẫn là
+         `sheet.ref` của tấm dáng) — nó chỉ mở menu «Mascot của <thương hiệu>».
+         Thiếu nó thì mọi thẻ Nhân vật đã có sẵn im lặng không nhận được gợi ý,
+         và người dùng thấy tính năng chỉ chạy trên thẻ mới tạo. */
+      doc: withImageRole(healDoc(raw["doc"] as JSONContent, "mascot"), "character"),
       poses,
       ...(isRecord(sheet) && Array.isArray(sheet["paths"]) && typeof sheet["key"] === "string"
         ? {
@@ -221,6 +227,28 @@ function readMascotBlock(raw: Record<string, unknown>, id: string, mode: BlockMo
     doc: withHeadImage(mascotDoc(), firstImageAttrs(old), pills.outfit ?? INHERIT),
     poses: [row],
   };
+}
+
+/**
+ * Gán vai trò cho những pill ảnh CHƯA KHAI vai trò — không đụng pill đã khai.
+ *
+ * Không dựng lại tài liệu khi không có gì để sửa (trả về đúng object cũ), cùng
+ * luật với `healDoc`: một lượt dựng lại thừa là một lượt `onUpdate` thừa của
+ * editor, và lượt ấy đóng dấu xuống đĩa ở MỌI lần mở dự án.
+ */
+function withImageRole(doc: JSONContent, role: string): JSONContent {
+  let changed = false;
+  const walk = (node: JSONContent): JSONContent => {
+    if (node.type === NODE.imagePill && !str(node.attrs?.["role"])) {
+      changed = true;
+      return { ...node, attrs: { ...node.attrs, role } };
+    }
+    if (!node.content) return node;
+    const kids = node.content.map(walk);
+    return changed ? { ...node, content: kids } : node;
+  };
+  const next = walk(doc);
+  return changed ? next : doc;
 }
 
 /** Attrs của pill ảnh ĐẦU TIÊN trong một tài liệu — ảnh nhân vật của câu cũ. */
@@ -282,16 +310,52 @@ function readBlock(raw: unknown, index: number): Block | null {
   };
 }
 
+/**
+ * Một tấm ảnh của câu ngữ cảnh. Thiếu `path` hoặc vai trò lạ ⇒ BỎ.
+ *
+ * Không "sửa cho hợp lệ": một tấm không biết mình nói về cái gì thì bộ dịch chỉ
+ * còn cách đoán nó đi vào `inspo` hay `brand.refs` — và đoán sai ở đây là đính
+ * một cái logo vào chỗ dạy máy vẽ lối vẽ.
+ */
+function readContextRef(raw: unknown): ContextRef | null {
+  if (!isRecord(raw)) return null;
+  const path = str(raw["path"]);
+  const role = str(raw["role"]);
+  if (!path) return null;
+  if (role !== "theme" && role !== "style" && role !== "logo") return null;
+  const assetId = str(raw["assetId"]);
+  return { path, role, ...(assetId ? { assetId } : {}) };
+}
+
 function readComposer(raw: unknown, presets: PresetBundle): ComposerState {
   const base = initialComposer(presets);
   if (!isRecord(raw)) return base;
   const brand = Array.isArray(raw["brandColors"])
     ? (raw["brandColors"] as unknown[]).filter((c): c is string => typeof c === "string")
     : base.brandColors;
+  /* Bảng cache asset: chỉ nhận cặp chuỗi-chuỗi. Một giá trị không phải chuỗi ở
+     đây sẽ đi thẳng vào `sheet.ref` của contract dưới dạng `undefined`. */
+  const assets: Record<string, string> = {};
+  if (isRecord(raw["brandAssets"])) {
+    for (const [id, path] of Object.entries(raw["brandAssets"])) {
+      if (typeof path === "string" && path) assets[id] = path;
+    }
+  }
   return {
     themeValue: typeof raw["themeValue"] === "string" ? (raw["themeValue"] as string) : base.themeValue,
     styleId: typeof raw["styleId"] === "string" ? (raw["styleId"] as string) : base.styleId,
     brandColors: brand,
+    /* BỐN TRƯỜNG DƯỚI ĐÂY LÀ MỚI (09/2026) và mọi bản nháp đang nằm trên đĩa đều
+       thiếu chúng. Mặc định phải là "chưa có gì", KHÔNG phải một giá trị đoán:
+       một `brandId` bịa ra là đổ màu của một thương hiệu vào bộ kit người dùng
+       chưa từng chọn, và họ chỉ phát hiện sau khi đã vẽ. */
+    themeCustom: str(raw["themeCustom"]),
+    styleCustom: str(raw["styleCustom"]),
+    brandId: str(raw["brandId"]),
+    contextRefs: Array.isArray(raw["contextRefs"])
+      ? (raw["contextRefs"] as unknown[]).map(readContextRef).filter((r): r is ContextRef => r !== null)
+      : [],
+    brandAssets: assets,
     /* Dự án lưu TRƯỚC khi khối Ngữ cảnh có hai chế độ ⇒ `template`, đúng thứ nó
        đang là — cùng luật với block Bộ UI ở `readBlock`. */
     contextMode: raw["contextMode"] === "free" ? "free" : "template",

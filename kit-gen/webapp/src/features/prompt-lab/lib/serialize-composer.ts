@@ -147,6 +147,32 @@ const BLOCK_LABEL: Record<Block["kind"], string> = {
  * đúng một lượt sửa — mà lệch ở đây nghĩa là thứ người dùng ĐỌC không phải thứ
  * máy vẽ NHẬN.
  */
+/**
+ * CỤM EN CỦA THEME CHUNG — chữ tự gõ thắng preset.
+ *
+ * ╔══ VÌ SAO PHẢI LÀ MỘT HÀM, KHÔNG PHẢI `state.themeCustom || phraseOf(...)` ═╗
+ * ║ Cụm này được hỏi ở BỐN chỗ: prompt copy-dán (`serializeComposer`), câu      ║
+ * ║ `variant.style` (`composerStyleLine`), ngữ cảnh kế thừa của pill `outfit`   ║
+ * ║ để trống, và nhãn trên màn. Bốn chỗ tự ghép là bốn cơ hội để một chỗ quên   ║
+ * ║ nhánh `custom` — mà quên ở đây nghĩa là chữ người dùng gõ ra biến mất khỏi  ║
+ * ║ prompt, im lặng, sau khi họ đã đọc thấy nó trên pill.                      ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export function contextThemeEN(
+  state: Pick<ComposerState, "themeValue" | "themeCustom">,
+  presets: PresetBundle = getPresets(),
+): string {
+  return (state.themeCustom ?? "").trim() || phraseOf("theme", state.themeValue, presets);
+}
+
+/** Cụm EN của phong cách chung — chữ tự gõ thắng preset. Xem `contextThemeEN`. */
+export function contextStyleEN(
+  state: Pick<ComposerState, "styleId" | "styleCustom">,
+  presets: PresetBundle = getPresets(),
+): string {
+  return (state.styleCustom ?? "").trim() || phraseOf("style", state.styleId, presets);
+}
+
 export function contextFreeText(state: ComposerState, presets: PresetBundle = getPresets()): string {
   if (state.contextMode !== "free" || !state.contextDoc) return "";
   return tidy(
@@ -164,8 +190,8 @@ export function contextFreeText(state: ComposerState, presets: PresetBundle = ge
 }
 
 export function serializeComposer(state: ComposerState, presets: PresetBundle = getPresets()): string {
-  const styleEN = phraseOf("style", state.styleId, presets);
-  const themeEN = phraseOf("theme", state.themeValue, presets);
+  const styleEN = contextStyleEN(state, presets);
+  const themeEN = contextThemeEN(state, presets);
   /* Màu KHÔNG có pill riêng trong từng block, nên nó không cần chỗ trong
      `SerializeContext` (chỗ đó chỉ để pill để-trống tra ngược lên cái chung).
      Màu kế thừa xuống mọi block bằng đúng cách một art director làm: nói MỘT

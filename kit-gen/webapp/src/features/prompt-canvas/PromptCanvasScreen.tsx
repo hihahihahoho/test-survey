@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Image as ImageIcon, LayoutGrid, Plus, Settings, Smile, Trash2 } from "lucide-react";
+import { Image as ImageIcon, LayoutGrid, Plus, Settings, Smile, Sparkles, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
@@ -18,6 +18,7 @@ import { CopyFigmaButton, DownloadKitButton } from "@/features/kit/components/Ki
 import { DemoScreenButton } from "@/features/demo";
 
 import { PillButton, PillCaret, PillMenu, PillMenuItem, useMenuFlip } from "@/features/prompt-lab/components/pill-ui";
+import { BrandBindingProvider } from "@/features/prompt-lab/extensions/BrandProfilePill";
 import { ContextSection } from "./components/ContextSection";
 import { usePresets } from "@/features/prompt-lab/lib/presets-store";
 import {
@@ -41,9 +42,10 @@ import {
   type BlockSheets,
   type ComposerContractOptions,
 } from "./lib/composer-to-contract";
-import { jobIdOf, sheetsHash } from "./lib/block-jobs";
+import { drawableBlockIds, jobIdOf, lotsOf, sheetsHash } from "./lib/block-jobs";
 import { useBlockPrompts } from "./lib/block-prompt";
-import { useGenQueue } from "./lib/gen-queue";
+import { useGenQueue, type GenQueue } from "./lib/gen-queue";
+import { useBrandBinding } from "./lib/brand-binding";
 import { PAGE } from "./lib/ui";
 import { ensurePoseRefs } from "./lib/pose-refs";
 
@@ -113,6 +115,7 @@ export interface PromptCanvasScreenProps {
 }
 
 export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChange }: PromptCanvasScreenProps) {
+  const navigate = useNavigate();
   const presets = usePresets();
   const store = useComposerDoc(projectId, presets);
   const project = useProject(projectId);
@@ -261,6 +264,10 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
     [locked, store],
   );
 
+  /* Kho thương hiệu đi qua ĐÚNG cửa `edit` ở trên, nên chọn thương hiệu cũng bị
+     câu hỏi "thay bản nháp cũ" chặn lại như mọi lượt sửa khác. */
+  const brand = useBrandBinding(projectId, store.composer, edit, () => void navigate({ to: "/brands" }));
+
   const updateBlock = React.useCallback(
     <T extends Block>(id: string, updater: (prev: T) => T) =>
       edit((prev) => ({ ...prev, blocks: prev.blocks.map((b) => (b.id === id ? updater(b as T) : b)) })),
@@ -286,6 +293,12 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
 
   return (
     <PromptProjectContext.Provider value={projectId}>
+      {/* DÂY THƯƠNG HIỆU BỌC CẢ MÀN, không chỉ khối Ngữ cảnh chung.
+          Vì pill ảnh NHÂN VẬT cũng đọc nó (nó mời «Mascot của <thương hiệu>» —
+          xem `ImagePill.tsx`), mà thẻ Nhân vật nằm ở tận dưới danh sách thẻ. Bọc
+          hẹp quanh câu ngữ cảnh thì gợi ý ấy im lặng biến mất và không có lỗi nào
+          nổ: `useBrandBinding()` chỉ trả `null` và menu rút xuống một mục. */}
+      <BrandBindingProvider value={brand}>
       {/* `data-prompt-lab` ở GỐC MÀN, không chỉ quanh mỗi ô soạn thảo. Nó là móc
           của `prompt-lab.css`, và từ lượt này file ấy còn mang luật vòng focus
           mảnh cho MỌI `<input>`/`<textarea>` của màn — ô ghi chú dòng element, ô
@@ -303,7 +316,10 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
               Đặt ngữ cảnh chung, rồi thêm từng thẻ. Mỗi thẻ có nút Vẽ riêng và tab Prompt để xem chữ engine sẽ gửi.
             </p>
           </div>
-          <SaveState updatedAt={store.updatedAt} dirty={store.dirty} saving={store.saving} error={store.saveError} />
+          <div className="flex flex-wrap items-center gap-4">
+            <SaveState updatedAt={store.updatedAt} dirty={store.dirty} saving={store.saving} error={store.saveError} />
+            <GenAllButton blocks={blockSheets} queue={queue} locked={locked} />
+          </div>
         </header>
 
         <ExitRow projectId={projectId} settingsOpen={settingsOpen} onSettingsOpenChange={onSettingsOpenChange} />
@@ -316,7 +332,7 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
           </p>
         )}
 
-        <ContextSection composer={store.composer} edit={edit} />
+        <ContextSection composer={store.composer} edit={edit} brand={brand} projectId={projectId} />
 
         {store.composer.blocks.map((block) => (
           <CanvasBlock
@@ -367,6 +383,7 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
           </span>
         </div>
       </div>
+      </BrandBindingProvider>
     </PromptProjectContext.Provider>
   );
 }
@@ -460,6 +477,92 @@ function ExitRow({ projectId, settingsOpen, onSettingsOpenChange }: {
         onDeleted={() => void navigate({ to: "/" })}
       />
     </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   «Vẽ tất cả»
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * VẼ CẢ TRANG BẰNG MỘT CÚ BẤM — và nói thẳng nó tốn bao nhiêu.
+ *
+ * ╔══ VÌ SAO CON SỐ TRÊN NÚT THAY CHO HỘP XÁC NHẬN ══════════════════════════╗
+ * ║ Một hộp "bạn có chắc không?" đứng sau một nút không nói gì thì dạy người   ║
+ * ║ ta bấm hai lần thay vì đọc một lần — và con số thật (7 lượt hay 23 lượt)   ║
+ * ║ chỉ hiện ra ở bước thứ hai, sau khi họ đã quyết. Đặt nó lên MẶT NÚT thì    ║
+ * ║ lời cảnh báo có mặt trước cú bấm, mọi lúc, kể cả khi họ chỉ liếc qua.      ║
+ * ║ Con số ấy phải THẬT: xem `lotsOf` — một tấm là một lượt gọi máy vẽ.        ║
+ * ╚═════════════════════════════════════════════════════════════════════════╝
+ *
+ * ╔══ VÌ SAO NÚT TỰ NHỚ LƯỢT BẤM CỦA MÌNH (`batch`) ═════════════════════════╗
+ * ║ Hàng đợi là của CẢ MÀN: nút Vẽ trên từng thẻ cũng đẩy thẻ vào đó. Nên      ║
+ * ║ "đang vẽ k/N" mà đọc thẳng hàng đợi thì một cú bấm lẻ trên thẻ #3 sẽ làm   ║
+ * ║ nút này báo tiến trình của một việc nó không khởi động. Nhớ đúng danh sách ║
+ * ║ mình vừa xếp là cách rẻ nhất để con số nói về đúng thứ người dùng vừa làm. ║
+ * ╚═════════════════════════════════════════════════════════════════════════╝
+ */
+function GenAllButton({ blocks, queue, locked }: { blocks: BlockSheets[]; queue: GenQueue; locked: boolean }) {
+  const { status } = useAgentStatus();
+  const narrow = useNarrowViewport();
+  const gate = React.useMemo(() => gateOf(status, narrow), [status, narrow]);
+
+  /* Thẻ mà LƯỢT BẤM NÀY đã xếp vào hàng. Rỗng lại khi không còn thẻ nào của nó
+     trong hàng — không cần dọn tay, và không giữ rác qua nhiều lượt. */
+  const [batch, setBatch] = React.useState<readonly string[]>([]);
+
+  const ids = drawableBlockIds(blocks);
+  const total = lotsOf(blocks, ids);
+  const mine = batch.filter((id) => queue.pending.includes(id));
+
+  React.useEffect(() => {
+    if (batch.length > 0 && mine.length === 0) setBatch([]);
+  }, [batch, mine]);
+
+  if (mine.length > 0) {
+    const batchTotal = lotsOf(blocks, batch);
+    const left = lotsOf(blocks, mine);
+    return (
+      <span className="flex items-center gap-2">
+        <span className="text-caption text-accent-text">Đang vẽ {batchTotal - left}/{batchTotal}</span>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={queue.clearWaiting}
+          /* Chỉ bỏ được thẻ CHƯA phóng: thẻ đang chạy đã tiêu lượt rồi. Nút nói
+             đúng điều đó bằng tên của nó, thay vì hứa "dừng" rồi không dừng nổi. */
+          disabled={queue.waiting === 0}
+          title={queue.waiting === 0 ? "Chỉ còn thẻ đang vẽ — lượt đã tiêu rồi" : undefined}
+        >
+          Bỏ mấy thẻ đang chờ
+        </Button>
+      </span>
+    );
+  }
+
+  const why = locked
+    ? "Trả lời câu hỏi phía dưới trước đã"
+    : gate.readOnly
+      ? gate.reason
+      : total === 0
+        ? "Chưa có thẻ nào có gì để vẽ"
+        : "";
+
+  return (
+    <Button
+      variant="primary"
+      size="sm"
+      onClick={() => {
+        queue.enqueueMany(ids);
+        setBatch(ids);
+      }}
+      disabled={why !== ""}
+      aria-disabled={why !== "" || undefined}
+      title={why || "Vẽ mọi thẻ trên trang — mỗi tấm tiêu một lượt tạo."}
+    >
+      <Sparkles aria-hidden />
+      Vẽ tất cả · {total} lượt
+    </Button>
   );
 }
 

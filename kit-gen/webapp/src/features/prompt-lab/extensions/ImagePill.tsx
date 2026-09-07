@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ImagePlus, Loader2, TriangleAlert, X } from "lucide-react";
+import { ImagePlus, Loader2, TriangleAlert } from "lucide-react";
 import {
   Node,
   NodeViewWrapper,
@@ -8,14 +8,20 @@ import {
   type ReactNodeViewProps,
 } from "@tiptap/react";
 import { NODE } from "../lib/schema";
-import { PillButton } from "../components/pill-ui";
-import { EMPTY_PILL_IMAGE, readPillImage, uploadPillImage } from "@/features/prompt-canvas/lib/pill-image";
+import { PillButton, PillCaret, PillMenu, PillMenuItem, useMenuFlip } from "../components/pill-ui";
+import { RefImageBody } from "../components/RefImagePill";
+import { useBrandBinding } from "./BrandProfilePill";
+import {
+  EMPTY_PILL_IMAGE,
+  readPillImage,
+  readPillImageRole,
+  uploadPillImage,
+} from "@/features/prompt-canvas/lib/pill-image";
 import { usePromptProjectId } from "@/features/prompt-canvas/lib/project-context";
-import { loadThumb } from "@/features/kit/lib/image-source";
 
 /**
- * ImagePill — ô `[🖼 ⌄]` của ảnh mẫu: bấm vào là chọn ảnh, pill biến thành một
- * THUMBNAIL nhỏ nằm ngay trong câu.
+ * ImagePill — ô `[🖼 ⌄]` của ảnh mẫu: bấm vào là mở menu chọn ảnh, pill biến
+ * thành một THUMBNAIL nhỏ nằm ngay trong câu.
  *
  * ══ ẢNH SỐNG Ở ĐÂU — ĐÃ ĐỔI, ĐỌC TRƯỚC KHI SỬA ═════════════════════════════
  * KHÔNG còn `URL.createObjectURL(file)`. Ảnh được TẢI LÊN dự án ngay lúc chọn
@@ -31,41 +37,37 @@ import { loadThumb } from "@/features/kit/lib/image-source";
  *    không bao giờ tự hết.
  *  · KHÔNG CÓ DỰ ÁN THÌ KHÔNG CHỌN ĐƯỢC ẢNH (route lab `/lab/prompt-composer`).
  *    Pill nói ra điều đó bằng nhãn, thay vì bấm vào rồi không có gì xảy ra.
+ *
+ * ╔══ VÌ SAO BẤM PILL NAY RA MỘT MENU, KHÔNG RA THẲNG HỘP CHỌN TỆP ══════════╗
+ * ║ Vì đã có một nguồn ảnh thứ hai đáng được mời: MASCOT CỦA THƯƠNG HIỆU đang ║
+ * ║ chọn (`brand-mascot` trong kho dùng chung). Chủ sản phẩm hỏi thẳng *"nhân  ║
+ * ║ vật ở dưới cũng sẽ select theo thương hiệu nếu chọn?"* — và câu trả lời là ║
+ * ║ có, nhưng là GỢI Ý chứ không tự điền: một thương hiệu có thể có nhiều linh ║
+ * ║ vật, và tự chọn hộ là đặt một nhân vật người dùng chưa từng bấm vào tấm    ║
+ * ║ ảnh sắp tiêu tiền. Chưa chọn thương hiệu ⇒ menu chỉ còn đúng một mục và    ║
+ * ║ nó cư xử y như nút cũ.                                                    ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
  */
-
-/** Ảnh trong pill hiện qua transport (agent trả 403 cho `<img src>` — xem `image-source.ts`). */
-function useRefThumb(projectId: string | null, path: string): string | null {
-  const [url, setUrl] = React.useState<string | null>(null);
-  React.useEffect(() => {
-    setUrl(null);
-    if (!projectId || !path) return;
-    const handle = loadThumb(projectId, path);
-    let alive = true;
-    handle.promise.then((next) => { if (alive) setUrl(next); }).catch(() => { /* ô ảnh hỏng: giữ nhãn tên tệp */ });
-    return () => {
-      alive = false;
-      handle.cancel();
-    };
-  }, [projectId, path]);
-  return url;
-}
 
 function ImagePillView({ node, updateAttributes }: ReactNodeViewProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const projectId = usePromptProjectId();
   const image = readPillImage(node.attrs);
+  const role = readPillImageRole(node.attrs);
   const [busy, setBusy] = React.useState(false);
   const [failed, setFailed] = React.useState("");
-  const thumb = useRefThumb(projectId, image.path);
+  const menu = useMenuFlip();
+  const brand = useBrandBinding();
+  /* Chỉ mời linh vật ở pill ảnh NHÂN VẬT. Pill ảnh của thẻ Cảnh nền cũng là
+     `ImagePill` (vai trò rỗng), và mời một linh vật làm ảnh tham chiếu cho một
+     cảnh nền là mời sai chỗ. */
+  const mascots = role === "character" ? (brand?.mascots ?? []) : [];
 
-  const pick = async (files: FileList | null) => {
-    const file = files?.[0];
-    if (!file || !projectId) return;
+  const adopt = async (work: () => Promise<{ refName: string; path: string }>) => {
     setBusy(true);
     setFailed("");
     try {
-      const next = await uploadPillImage(projectId, file, { kind: "character", hintName: file.name });
-      updateAttributes(next);
+      updateAttributes(await work());
     } catch (error) {
       /* NÓI RA. Một pill im lặng quay về trạng thái rỗng là người dùng tưởng mình
          bấm hụt và bấm lại — cùng một lỗi, lần thứ hai. */
@@ -73,6 +75,17 @@ function ImagePillView({ node, updateAttributes }: ReactNodeViewProps) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const pick = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file || !projectId) return;
+    await adopt(() =>
+      uploadPillImage(projectId, file, {
+        kind: role === "theme" || role === "style" ? "inspo" : "character",
+        hintName: file.name,
+      }),
+    );
   };
 
   const clear = () => {
@@ -92,16 +105,29 @@ function ImagePillView({ node, updateAttributes }: ReactNodeViewProps) {
           ? `Đổi ảnh tham chiếu (${image.refName})`
           : "Chọn ảnh tham chiếu";
 
+  const openFiles = () => {
+    menu.setOpen(false);
+    inputRef.current?.click();
+  };
+
   return (
     <NodeViewWrapper as="span" className="relative inline-block">
       <PillButton
         muted={!image.path}
-        onClick={() => {
+        active={menu.open}
+        onClick={(event) => {
           if (!projectId || busy) return;
-          inputRef.current?.click();
+          /* Không có gợi ý nào ⇒ ĐỪNG bày một menu một-mục: đó là thêm một cú bấm
+             cho đúng cái việc mà nút này vẫn luôn làm. */
+          if (mascots.length === 0) {
+            openFiles();
+            return;
+          }
+          menu.toggle(event);
         }}
         aria-label={label}
         title={label}
+        {...(mascots.length > 0 ? { "aria-haspopup": "listbox" as const, "aria-expanded": menu.open } : {})}
       >
         {busy ? (
           <>
@@ -114,48 +140,39 @@ function ImagePillView({ node, updateAttributes }: ReactNodeViewProps) {
             <span>lỗi ảnh</span>
           </>
         ) : image.path ? (
-          <span className="relative inline-flex">
-            {/* Thumbnail nhỏ hơn cỡ chữ một chút để pill không đội dòng lên.
-                `size-7` ≈ 28px, vừa trong một dòng 26px có padding. Chưa tải xong
-                bytes thì hiện TÊN ảnh — vẫn đọc được là đang trỏ vào tấm nào. */}
-            {thumb ? (
-              <img
-                src={thumb}
-                alt={image.refName}
-                title={image.refName}
-                className="size-7 shrink-0 rounded-1 border border-line-subtle object-cover"
-              />
-            ) : (
-              <span className="max-w-40 truncate">{image.refName}</span>
-            )}
-            <span
-              role="button"
-              tabIndex={0}
-              aria-label={`Bỏ ảnh ${image.refName}`}
-              onClick={(event) => {
-                /* Không cho nổi bọt lên PillButton — nếu không, xoá ảnh sẽ đồng
-                   thời mở hộp chọn file. */
-                event.stopPropagation();
-                clear();
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter" && event.key !== " ") return;
-                event.preventDefault();
-                event.stopPropagation();
-                clear();
-              }}
-              className="absolute -right-1 -top-1 inline-flex size-4 items-center justify-center rounded-full border border-line bg-overlay text-fg-muted hover:text-fg-strong"
-            >
-              <X aria-hidden className="size-3" />
-            </span>
-          </span>
+          <RefImageBody projectId={projectId} image={image} onRemove={clear} />
         ) : (
           <>
             <ImagePlus aria-hidden className="size-5 shrink-0" />
             <span>ảnh</span>
           </>
         )}
+        {mascots.length > 0 && <PillCaret />}
       </PillButton>
+
+      {menu.open && (
+        <PillMenu label="Chọn ảnh nhân vật" dropUp={menu.dropUp} onClose={() => menu.setOpen(false)}>
+          {mascots.map((item) => (
+            <PillMenuItem
+              key={item.assetId}
+              onSelect={() => {
+                menu.setOpen(false);
+                void adopt(() => brand!.copyAsset(item.assetId));
+              }}
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-fg-strong">{item.name}</span>
+                <span className="block truncate text-caption text-fg-muted">Nhân vật của {brand?.name}</span>
+              </span>
+            </PillMenuItem>
+          ))}
+          <div aria-hidden className="my-1 h-px bg-line-subtle" />
+          <PillMenuItem onSelect={openFiles}>
+            <ImagePlus aria-hidden className="size-4 shrink-0 text-fg-muted" />
+            <span className="text-fg-strong">Chọn ảnh từ máy…</span>
+          </PillMenuItem>
+        </PillMenu>
+      )}
 
       <input
         ref={inputRef}
@@ -182,8 +199,8 @@ export const ImagePill = Node.create({
 
   addAttributes() {
     return {
-      /* HAI attr phẳng, không một object: ProseMirror so sánh attr bằng `===`
-         cho giá trị nguyên thuỷ, nên hai chuỗi làm mọi phép undo/redo và mọi
+      /* BA attr phẳng, không một object: ProseMirror so sánh attr bằng `===`
+         cho giá trị nguyên thuỷ, nên ba chuỗi làm mọi phép undo/redo và mọi
          phép so tài liệu ("có gì đổi không") chạy đúng mà không cần luật riêng. */
       refName: {
         default: "",
@@ -194,6 +211,18 @@ export const ImagePill = Node.create({
         default: "",
         parseHTML: (element) => element.getAttribute("data-ref-path") ?? "",
         renderHTML: (attributes) => ({ "data-ref-path": String(attributes["path"] ?? "") }),
+      },
+      /**
+       * VAI TRÒ — `""` (ảnh của thẻ) · `"theme"` · `"style"` · `"character"`.
+       *
+       * Mặc định RỖNG, đúng thứ mọi tài liệu đời trước đang là: ảnh của một thẻ,
+       * đi vào `sheet.ref` của chính tấm ấy. Xem `PillImageRole` để biết vì sao
+       * vai trò phải được ghi ra thay vì suy từ chỗ đứng trong câu.
+       */
+      role: {
+        default: "",
+        parseHTML: (element) => element.getAttribute("data-ref-role") ?? "",
+        renderHTML: (attributes) => ({ "data-ref-role": String(attributes["role"] ?? "") }),
       },
     };
   },

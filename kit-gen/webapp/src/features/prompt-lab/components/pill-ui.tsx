@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ImagePlus, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { inheritsWhenEmpty, labelOf, pillOptions, type PillKind } from "../lib/pill-registry";
 import { usePresets } from "../lib/presets-store";
@@ -236,11 +236,35 @@ export function PillMenuItem({
 }
 
 /**
+ * BỀ NGANG CHỮ TỰ GÕ hiện trên pill trước khi bị cắt.
+ *
+ * Cắt là bắt buộc, không phải thẩm mỹ: chuỗi này đi NGUYÊN VĂN vào prompt nên nó
+ * dài bao nhiêu cũng hợp lệ, mà một câu 300 ký tự nằm trong một cái pill thì đẩy
+ * cả đoạn văn quanh nó xuống bốn hàng. Chữ đầy đủ vẫn đọc được ở `title`.
+ */
+const CUSTOM_MAX = 40;
+
+function shorten(value: string): string {
+  return value.length > CUSTOM_MAX ? `${value.slice(0, CUSTOM_MAX)}…` : value;
+}
+
+/**
  * PILL CHỌN-MỘT hoàn chỉnh — nhãn + menu, đọc danh mục theo `kind`.
  *
  * Đây là thứ mà cả node view TipTap lẫn ô lưới React đều gọi. Nhận `value` +
  * `onChange` chứ không tự giữ state: nguồn sự thật là tài liệu ProseMirror (ca
  * thứ nhất) hoặc mảng ô trong React (ca thứ hai), không phải cái nút.
+ *
+ * ╔══ BA NGẢ, VÀ VÌ SAO CHÚNG PHẢI Ở CHUNG MỘT MENU ═════════════════════════╗
+ * ║ Chủ sản phẩm: *"theme ngoài chọn ra còn có cho kiểu upload ảnh custom,     ║
+ * ║ hoặc là điền text prompt custom nhé, phong cách cũng thế"*. Ba ngả ấy trả  ║
+ * ║ lời CÙNG MỘT câu hỏi ("bộ kit này theo chủ đề gì") bằng ba thứ nguyên      ║
+ * ║ liệu khác nhau: một mục danh mục, một câu tự viết, một tấm ảnh. Đặt chúng  ║
+ * ║ vào ba control cạnh nhau là bắt người dùng tự hiểu rằng ba cái ấy loại trừ ║
+ * ║ nhau — mà chúng KHÔNG hẳn loại trừ (ảnh đi kèm được với cả hai ngả kia).   ║
+ * ║ Một menu thì thứ tự đọc tự nói ra luật: chọn sẵn ở trên, tự viết ở dưới,   ║
+ * ║ đính ảnh là một hành động THÊM chứ không phải một lựa chọn thứ ba.         ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 export function OptionPill({
   kind,
@@ -248,6 +272,10 @@ export function OptionPill({
   onChange,
   compact,
   axis,
+  custom = "",
+  onCustom,
+  onAttachRef,
+  attaching,
 }: {
   kind: PillKind;
   value: string;
@@ -259,28 +287,114 @@ export function OptionPill({
    * rồi, thêm nhãn nữa là đọc hai lần cùng một chữ.
    */
   axis?: string;
+  /**
+   * Chữ NGƯỜI DÙNG TỰ GÕ. Có chữ ⇒ nó THẮNG `value` cả trên pill lẫn trong
+   * prompt (xem `pillText` ở `serialize.ts`), và `value` vẫn nằm nguyên đó để
+   * bỏ chữ đi là quay về đúng lựa chọn cũ.
+   */
+  custom?: string;
+  /** Vắng ⇒ pill KHÔNG bày mục «Gõ mô tả riêng…». */
+  onCustom?: (next: string) => void;
+  /** Vắng ⇒ pill KHÔNG bày mục «Đính ảnh tham chiếu» — xem `refRoleOf`. */
+  onAttachRef?: () => void;
+  /** Đang tải tấm ảnh vừa chọn lên dự án. */
+  attaching?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
+  /* ĐANG GÕ là trạng thái của CÁI NÚT, không của tài liệu: nó phải biến mất khi
+     người dùng bỏ đi, còn chữ thì chỉ được ghi xuống khi họ chốt. */
+  const [typing, setTyping] = React.useState(false);
+  const [draft, setDraft] = React.useState("");
   const presets = usePresets();
   const options = React.useMemo(() => pillOptions(kind, presets), [kind, presets]);
   const canInherit = inheritsWhenEmpty(kind);
+
+  const label = custom ? shorten(custom) : labelOf(kind, value, presets);
+  const title = custom || undefined;
+
+  const startTyping = () => {
+    setDraft(custom);
+    setTyping(true);
+    setOpen(false);
+  };
+
+  /* Chốt: chuỗi RỖNG ⇒ bỏ hẳn lớp phủ, pill quay về preset đang chọn. Đó là đường
+     lùi duy nhất và nó phải hiển nhiên — không có nút "bỏ chữ" riêng nào cả. */
+  const commit = () => {
+    setTyping(false);
+    onCustom?.(draft.trim());
+  };
+
+  /* Bấm một mục có sẵn ⇒ chữ tự gõ bị GỠ. Giữ lại là pill hiện chữ cũ trong khi
+     người dùng vừa bấm một mục khác — hai câu trả lời cho một câu hỏi. */
+  const choose = (next: string) => {
+    onChange(next);
+    onCustom?.("");
+    setOpen(false);
+  };
+
+  if (typing) {
+    return (
+      <span className={cn("relative inline-block", axis && "min-w-0")}>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border align-baseline",
+            "border-accent bg-raised ring-1 ring-accent",
+            compact ? "px-2 py-0.5 text-caption" : "px-3 py-1",
+          )}
+        >
+          {axis && <PillAxis>{axis}</PillAxis>}
+          <input
+            autoFocus
+            value={draft}
+            aria-label={`Mô tả riêng cho ${labelOf(kind, "", presets)}`}
+            placeholder="Gõ mô tả rồi Enter…"
+            onChange={(event) => setDraft(event.target.value)}
+            onBlur={commit}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commit();
+                return;
+              }
+              if (event.key !== "Escape") return;
+              /* Escape là HUỶ, không phải chốt-rỗng: bỏ dở một câu đang gõ không
+                 được xoá câu đã có từ trước. */
+              event.preventDefault();
+              event.stopPropagation();
+              setTyping(false);
+            }}
+            /* `w-48` chứ không `w-full`: pill nằm giữa một dòng chữ, và một ô nhập
+               co giãn theo nội dung làm cả đoạn văn nhảy sau mỗi ký tự. */
+            className="w-48 min-w-0 bg-transparent text-inherit outline-none placeholder:text-fg-muted"
+          />
+        </span>
+      </span>
+    );
+  }
 
   return (
     <span className={cn("relative inline-block", axis && "min-w-0")}>
       <PillButton
         compact={compact}
         active={open}
-        muted={!value}
+        muted={!value && !custom}
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}
         /* `aria-label` chỉ khi có nhãn trục: trình đọc màn hình phải nghe được
            TRỤC lẫn GIÁ TRỊ, mà `truncate` thì chỉ cắt phần nhìn thấy. */
-        {...(axis ? { "aria-label": `${axis}: ${labelOf(kind, value, presets)}` } : {})}
+        {...(axis ? { "aria-label": `${axis}: ${label}` } : {})}
+        {...(title ? { title } : {})}
         className={axis ? "max-w-full" : undefined}
       >
         {axis && <PillAxis>{axis}</PillAxis>}
-        <span className={cn(axis && "truncate")}>{labelOf(kind, value, presets)}</span>
+        <span className={cn(axis && "truncate")}>{label}</span>
+        {/* Cái bút nói ra "chữ này do bạn viết, không phải một mục có sẵn" — nếu
+            không thì một mô tả tự gõ trông y hệt một preset và người dùng đi tìm
+            nó trong danh sách. */}
+        {custom && <Pencil aria-hidden className="size-3.5 shrink-0 opacity-60" />}
+        {attaching && <Loader aria-hidden />}
         <PillCaret compact={compact} />
       </PillButton>
 
@@ -289,24 +403,15 @@ export function OptionPill({
           {/* Mục "để trống" luôn có mặt. Với kind kế thừa thì nó là MẶC ĐỊNH có
               nghĩa ("theo cái chung"); với kind còn lại nó là đường lùi khi lỡ
               tay chọn. Không có nó là người dùng kẹt với lựa chọn đầu tiên. */}
-          <PillMenuItem
-            selected={!value}
-            onSelect={() => {
-              onChange("");
-              setOpen(false);
-            }}
-          >
+          <PillMenuItem selected={!value && !custom} onSelect={() => choose("")}>
             <span className="text-fg-muted">{canInherit ? "— theo cái chung —" : "— để trống —"}</span>
           </PillMenuItem>
 
           {options.map((option) => (
             <PillMenuItem
               key={option.value}
-              selected={option.value === value}
-              onSelect={() => {
-                onChange(option.value);
-                setOpen(false);
-              }}
+              selected={!custom && option.value === value}
+              onSelect={() => choose(option.value)}
             >
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-fg-strong">{option.vi}</span>
@@ -316,8 +421,49 @@ export function OptionPill({
               </span>
             </PillMenuItem>
           ))}
+
+          {(onCustom || onAttachRef) && <div aria-hidden className="my-1 h-px bg-line-subtle" />}
+
+          {onCustom && (
+            <PillMenuItem selected={custom !== ""} onSelect={startTyping}>
+              <Pencil aria-hidden className="size-4 shrink-0 text-fg-muted" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-fg-strong">Gõ mô tả riêng…</span>
+                <span className="block truncate text-caption text-fg-muted">
+                  Chữ bạn viết đi thẳng vào prompt, không dịch
+                </span>
+              </span>
+            </PillMenuItem>
+          )}
+
+          {onAttachRef && (
+            <PillMenuItem
+              onSelect={() => {
+                setOpen(false);
+                onAttachRef();
+              }}
+            >
+              <ImagePlus aria-hidden className="size-4 shrink-0 text-fg-muted" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-fg-strong">Đính ảnh tham chiếu</span>
+                <span className="block truncate text-caption text-fg-muted">
+                  Tấm ảnh nằm cạnh trong câu, bỏ ra lúc nào cũng được
+                </span>
+              </span>
+            </PillMenuItem>
+          )}
         </PillMenu>
       )}
     </span>
+  );
+}
+
+/** Vòng xoay bé xíu, chỉ dùng trong pill — không kéo cả một component trạng thái. */
+function Loader(props: { "aria-hidden"?: boolean }) {
+  return (
+    <span
+      {...props}
+      className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-line border-t-accent"
+    />
   );
 }

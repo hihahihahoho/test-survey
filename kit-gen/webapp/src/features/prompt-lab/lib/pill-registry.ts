@@ -167,6 +167,24 @@ export function pillOptions(kind: PillKind, presets: PresetBundle = getPresets()
   }
 }
 
+/**
+ * VAI TRÒ của tấm ảnh mà mục «Đính ảnh tham chiếu» của pill này sẽ chèn.
+ *
+ * ╔══ VÌ SAO CHỈ HAI KIND CÓ MỤC ẤY ═════════════════════════════════════════╗
+ * ║ Ảnh chỉ tới được máy vẽ qua ba cửa của contract: `sheet.ref` (ảnh của một  ║
+ * ║ tấm), `variant.brand.refs` (logo) và `variant.inspo` (ảnh tả cả bộ kit).   ║
+ * ║ Pill trong câu NGỮ CẢNH CHUNG nói về cả bộ kit ⇒ cửa của nó là `inspo`.    ║
+ * ║ Pill `decor`/`glaze`/`pose`… thì nói về MỘT Ô, mà một ô không có cửa ảnh   ║
+ * ║ riêng nào — bày nút đính ảnh ở đó là hứa một thứ contract không nhận, và   ║
+ * ║ tấm ảnh sẽ chết lặng trong tài liệu. Thà không có nút.                     ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export function refRoleOf(kind: PillKind): "theme" | "style" | "" {
+  if (kind === "theme") return "theme";
+  if (kind === "style") return "style";
+  return "";
+}
+
 /** Kind này có nghĩa "để trống = kế thừa ngữ cảnh chung" không. */
 export function inheritsWhenEmpty(kind: PillKind): boolean {
   return kind === "style" || kind === "outfit";

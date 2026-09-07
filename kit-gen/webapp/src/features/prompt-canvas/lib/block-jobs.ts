@@ -1,5 +1,6 @@
 import { MAIN_VARIANT_ID } from "@/features/kit-core/lib/kitset-to-contract";
 import type { Sheet } from "@/lib/types/contract";
+import type { BlockSheets } from "./composer-to-contract";
 
 /**
  * block-jobs.ts — TÊN CỦA MỘT TẤM Ở BA TẦNG, khai đúng MỘT lần.
@@ -44,4 +45,35 @@ export function rawPathOf(sheetId: string): string {
  */
 export function sheetsHash(sheets: readonly Sheet[]): string {
   return JSON.stringify(sheets);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ĐẾM LƯỢT
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * SỐ LƯỢT mà một tập thẻ sẽ tiêu: **một tấm = một lượt gọi máy vẽ = tiền**.
+ *
+ * ╔══ CON SỐ NÀY PHẢI THẬT, KHÔNG ĐƯỢC LÀ SỐ THẺ ════════════════════════════╗
+ * ║ Nút «Vẽ tất cả» in con số này lên mặt nó, và đó là toàn bộ lời cảnh báo    ║
+ * ║ trước một hành động tiêu tiền — không có hộp xác nhận nào phía sau. Nên nó ║
+ * ║ phải đếm ĐÚNG THỨ SẼ CHẠY: một thẻ Bộ UI 20 món sinh HAI tấm, một thẻ rỗng ║
+ * ║ sinh KHÔNG tấm nào. Đếm số thẻ là nói dối theo cả hai chiều.               ║
+ * ║ Nguồn duy nhất của phép chia ấy là `composerBlockSheets` — hàm này chỉ      ║
+ * ║ cộng, không tự suy lại luật nào.                                          ║
+ * ╚═════════════════════════════════════════════════════════════════════════╝
+ *
+ * `only` vắng ⇒ đếm cả tài liệu; có ⇒ chỉ đếm mấy thẻ được nêu tên (nút dùng nó
+ * để nói "đang vẽ k/N" về đúng lượt bấm của mình, không về cả trang).
+ */
+export function lotsOf(blocks: readonly BlockSheets[], only?: readonly string[]): number {
+  return blocks.reduce(
+    (total, block) => (only && !only.includes(block.blockId) ? total : total + block.sheets.length),
+    0,
+  );
+}
+
+/** Thẻ CÓ GÌ ĐỂ VẼ, theo thứ tự trên màn — đúng thứ tự chúng vào hàng đợi. */
+export function drawableBlockIds(blocks: readonly BlockSheets[]): string[] {
+  return blocks.filter((block) => block.sheets.length > 0).map((block) => block.blockId);
 }

@@ -28,10 +28,11 @@ import { NODE } from "@/features/prompt-lab/lib/schema";
 import { SQUARE_CANVAS_PX, skelSizeOf } from "@/features/prompt-lab/lib/cell-size";
 import { SCAFFOLDS } from "@/features/prompt-lab/lib/doc-templates";
 import { freeText, makeContext, serializeDoc, tidy, type PromptDocNode } from "@/features/prompt-lab/lib/serialize";
-import { contextFreeText } from "@/features/prompt-lab/lib/serialize-composer";
+import { contextFreeText, contextStyleEN, contextThemeEN } from "@/features/prompt-lab/lib/serialize-composer";
 import type {
   Block,
   ComposerState,
+  ContextRef,
   DocBlock,
   MascotBlock,
   MascotPose,
@@ -140,6 +141,23 @@ function defaultStyleAxes(): StyleAxes {
 interface PillHit {
   kind: PillKind;
   value: string;
+  /** Chữ người dùng tự gõ cho pill này — có chữ thì nó THẮNG `value`. */
+  custom: string;
+}
+
+/**
+ * Cụm chữ mà một pill đóng góp vào prompt.
+ *
+ * Một hàm chứ không phải `hit.custom || phraseOf(...)` rải khắp file: đây là chỗ
+ * DUY NHẤT trong bộ dịch biết luật "chữ tự gõ thắng preset", và bốn chỗ đọc pill
+ * bên dưới (`scene`, `mood`, `outfit`, `leftover`) đi qua nó. Bỏ sót một chỗ
+ * nghĩa là chữ người dùng gõ ra biến mất khỏi ĐÚNG một loại tấm — kiểu hỏng chỉ
+ * lộ ra khi ai đó đối chiếu hai tấm cạnh nhau.
+ */
+function hitPhrase(hit: PillHit | null, presets: PresetBundle): string {
+  if (!hit) return "";
+  const custom = hit.custom.trim();
+  return custom || phraseOf(hit.kind, hit.value, presets);
 }
 
 interface DocScan {
@@ -161,7 +179,8 @@ function scanDoc(node: PromptDocNode | null | undefined, out: DocScan = { pills:
   if (node.type === NODE.optionPill) {
     const kind = typeof node.attrs?.["kind"] === "string" ? (node.attrs["kind"] as PillKind) : null;
     const value = typeof node.attrs?.["value"] === "string" ? (node.attrs["value"] as string) : "";
-    if (kind) out.pills.push({ kind, value });
+    const custom = typeof node.attrs?.["custom"] === "string" ? (node.attrs["custom"] as string) : "";
+    if (kind) out.pills.push({ kind, value, custom });
     return out;
   }
   if (node.type === NODE.imagePill) {
@@ -174,11 +193,10 @@ function scanDoc(node: PromptDocNode | null | undefined, out: DocScan = { pills:
 }
 
 /** Lấy RA (và bỏ khỏi danh sách) pill đầu tiên của một kind — xem `leftover`. */
-function take(scan: DocScan, kind: PillKind): string {
+function take(scan: DocScan, kind: PillKind): PillHit | null {
   const at = scan.pills.findIndex((p) => p.kind === kind);
-  if (at === -1) return "";
-  const [hit] = scan.pills.splice(at, 1);
-  return hit?.value ?? "";
+  if (at === -1) return null;
+  return scan.pills.splice(at, 1)[0] ?? null;
 }
 
 /**
@@ -191,7 +209,7 @@ function take(scan: DocScan, kind: PillKind): string {
  * chung đã nằm ở `variant.style` rồi.
  */
 function leftover(scan: DocScan, presets: PresetBundle): string[] {
-  return scan.pills.map((p) => phraseOf(p.kind, p.value, presets)).filter((text) => text !== "");
+  return scan.pills.map((p) => hitPhrase(p, presets)).filter((text) => text !== "");
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -257,6 +275,23 @@ function stateOf(input: ComposerDoc | ComposerState): ComposerState {
 }
 
 /**
+ * Đường dẫn ảnh của câu ngữ cảnh, lọc theo vai trò và KHỬ TRÙNG LẶP.
+ *
+ * Khử trùng ở đây chứ không ở `gen.sh`: engine cũng khử (một tệp có thể vừa là
+ * `sheet.ref` vừa là ảnh brand), nhưng một mảng có hai lần cùng một tệp là một
+ * contract nói dối về việc nó đính bao nhiêu ảnh — và người đọc contract (tab
+ * Prompt, log) đọc trước khi engine kịp dọn.
+ */
+function refPathsOf(state: ComposerState, ...roles: ContextRef["role"][]): string[] {
+  const out: string[] = [];
+  for (const ref of state.contextRefs ?? []) {
+    if (!ref.path || !roles.includes(ref.role)) continue;
+    if (!out.includes(ref.path)) out.push(ref.path);
+  }
+  return out;
+}
+
+/**
  * Một block Cảnh nền → một tấm 1×1.
  *
  * MỖI CẢNH NỀN MỘT TẤM RIÊNG, không gộp — đây là `DEFAULT_SHEET_LIMITS.background = 1`
@@ -270,8 +305,8 @@ function backgroundSheet(block: DocBlock, index: number, presets: PresetBundle, 
   const line = serializeDoc(block.doc as PromptDocNode, ctx);
   if (block.mode === "free" && !line) return null;
 
-  const scene = phraseOf("scene", take(scan, "scene"), presets);
-  const mood = phraseOf("mood", take(scan, "mood"), presets);
+  const scene = hitPhrase(take(scan, "scene"), presets);
+  const mood = hitPhrase(take(scan, "mood"), presets);
   const spec = tidy([scene || "a game screen background", mood, ...leftover(scan, presets)].filter(Boolean).join(", "));
   if (block.mode !== "free" && !scene && !mood && scan.pills.length === 0 && !line) return null;
 
@@ -365,10 +400,14 @@ function mascotSheets(
      `subject` ngay dưới. Cùng luật với `uiKitSheets`. */
   const rowCtx = makeContext({ styleEN: "", themeEN: "", presets, imageCounter: { count: 0 } });
 
-  /* Trang phục để trống = theo theme chung — cùng luật `INHERIT` của pill, và
-     `themeEN` chính là thứ pill ấy kế thừa khi serialize. */
-  const outfitValue = take(scan, "outfit");
-  const outfit = outfitValue === INHERIT ? themeEN : phraseOf("outfit", outfitValue, presets);
+  const outfitHit = take(scan, "outfit");
+  /* Trang phục để trống = theo theme chung — nhưng CHỮ TỰ GÕ vẫn thắng cả luật
+     kế thừa ấy: người dùng gõ một bộ đồ riêng cho nhân vật này thì họ đã trả lời
+     câu hỏi, không còn gì để kế thừa. */
+  const outfit =
+    outfitHit && !outfitHit.custom.trim() && outfitHit.value === INHERIT
+      ? themeEN
+      : hitPhrase(outfitHit, presets);
   const ref = scan.images[0]?.path ?? "";
 
   /* Có ảnh mẫu thì SUBJECT là chính tấm ảnh ấy (kèm `note` POSE_NOTE ở tấm);
@@ -554,8 +593,9 @@ export function composerBlockSheets(
 ): BlockSheets[] {
   const state = stateOf(input);
   const presets = opts.presets ?? getPresets();
-  const styleEN = phraseOf("style", state.styleId, presets);
-  const themeEN = phraseOf("theme", state.themeValue, presets);
+  /* Chữ tự gõ THẮNG preset — một hàm duy nhất biết luật ấy, xem `contextThemeEN`. */
+  const styleEN = contextStyleEN(state, presets);
+  const themeEN = contextThemeEN(state, presets);
 
   /* Đếm RIÊNG theo loại: thứ tự tấm bám thứ tự block trên màn (người dùng nhìn
      thấy), còn hậu tố `2`, `3` bám số tấm CÙNG LOẠI. */
@@ -607,8 +647,12 @@ export function composerStyleLine(
   const stylePrompt =
     contextFreeText(state, presets) ||
     [
-      phraseOf("style", state.styleId, presets),
-      phraseOf("theme", state.themeValue, presets),
+      contextStyleEN(state, presets),
+      contextThemeEN(state, presets),
+      /* Tên riêng của thương hiệu KHÔNG có mặt ở đây, dù người dùng vừa chọn một
+         cái: nó không giúp máy vẽ (xem nhánh `brandProfilePill` trong
+         `serialize.ts`). Thứ nói lên thương hiệu là bộ màu ngay dòng này và logo
+         đã đính ở `brand.refs`. */
       describeBrandColors(state.brandColors),
     ]
       .filter(Boolean)
@@ -666,16 +710,34 @@ export function composerToContract(input: ComposerDoc | ComposerState, opts: Com
         brand: {
           /* Composer tả màu bằng CHỮ trong `style` (xem `describeBrandColors`), nhưng
              hex vẫn phải nằm ở `brand` — `gen.sh` chèn dòng palette từ đây, và đó là
-             chỗ duy nhất con số thương hiệu đi tới máy vẽ nguyên vẹn. */
+             chỗ duy nhất con số thương hiệu đi tới máy vẽ nguyên vẹn.
+             `mode: "colors"` GIỮ NGUYÊN kể cả khi đã có logo: `gen.sh` từng bỏ dòng
+             palette khi mode là "image" (xem khối «BẢNG MÀU VÀ ẢNH BRAND KHÔNG LOẠI
+             TRỪ NHAU» ở đó) — bản engine hiện tại đã vá, nhưng đặt mode là "image"
+             ở đây là mời lại đúng con bọ ấy ở mọi bản engine chưa cập nhật. */
           mode: "colors",
           primary: state.brandColors[0] ?? "",
           secondary: state.brandColors[1] ?? "",
-          refs: [],
+          /* LOGO của thương hiệu. `gen.sh` gọi chúng theo VAI TRÒ ("brand /
+             inspiration reference images") nên thứ tự ở đây không mang nghĩa gì —
+             chỉ cần đủ và không trùng. */
+          refs: refPathsOf(state, "logo"),
         },
         ...(poses.length > 0
           ? { characters: [{ id: CHARACTER_ID, vi: "Nhân vật", ref: characterRef || null, poses }] }
           : {}),
-        inspo: [],
+        /**
+         * ẢNH TẢ CẢ BỘ KIT — chủ đề (bối cảnh, mùa, mô-típ) hoặc lối vẽ.
+         *
+         * ╔══ TRƯỜNG NÀY TỪNG LUÔN RỖNG, VÀ ĐÓ LÀ MỘT CỬA BỊ BỎ QUÊN ═══════════╗
+         * ║ `gen.sh` bật cả một khối ART STYLE riêng khi `inspo` có ảnh (xem      ║
+         * ║ `use_inspo`), nhưng composer chưa bao giờ có chỗ nào để đính một tấm  ║
+         * ║ ảnh cấp BỘ KIT — pill ảnh duy nhất là ảnh của một thẻ, và nó đi vào   ║
+         * ║ `sheet.ref`. Nay mục «Đính ảnh tham chiếu» của pill theme/phong cách  ║
+         * ║ và asset `brand-style` của thương hiệu cùng đổ về đây.                ║
+         * ╚═════════════════════════════════════════════════════════════════════╝
+         */
+        inspo: refPathsOf(state, "theme", "style"),
       },
     ],
     characterPoses: poses,
