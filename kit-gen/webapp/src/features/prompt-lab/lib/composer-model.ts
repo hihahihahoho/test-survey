@@ -3,6 +3,7 @@ import { EXPRESSIONS } from "@/features/kit-core/lib/poses";
 import { DEFAULT_VIEW } from "@/features/pose-lab/lib/pose-state";
 import { getPresets, type PresetBundle } from "./presets-store";
 import { INHERIT } from "./pill-registry";
+import { defaultSizeOf } from "./cell-size";
 import { backgroundDoc, mascotDoc } from "./doc-templates";
 
 /**
@@ -164,7 +165,10 @@ export interface UiCell {
    */
   glazeId: string;
   /**
-   * CỠ SAFE ZONE — id preset hoặc `"<w>x<h>"` px; rỗng = theo hệ thống.
+   * CỠ SAFE ZONE — id preset hoặc `"<w>x<h>"` px. LUÔN CÓ GIÁ TRỊ.
+   *
+   * Rỗng vẫn ĐỌC được (bản nháp trước 07/09/2026), nhưng `readCell` vá nó ngay lúc
+   * đọc và `newCell` không bao giờ sinh ra rỗng nữa — xem `systemSizePx`.
    *
    * Nằm NGOÀI câu chữ (không có pill nào cho nó trong `uiCellDoc`) vì nó không đi
    * vào prompt một chữ nào: nó thành `skel.w`/`skel.h` của ô. Nhét nó vào câu là
@@ -437,7 +441,9 @@ export function newCell(elementId: string, presets: PresetBundle = getPresets())
     styleId: INHERIT,
     decor: String(preset?.decor ?? 4),
     glazeId: preset?.glazeId ?? "",
-    sizeId: preset?.sizeId ?? "",
+    /* CỠ LUÔN CỤ THỂ. Danh mục không khai cỡ (element người dùng tự thêm) thì
+       lấy cỡ hệ thống ĐÃ VIẾT RA THÀNH SỐ, không để rỗng — xem `systemSizePx`. */
+    sizeId: defaultSizeOf(preset),
     note: "",
   };
 }

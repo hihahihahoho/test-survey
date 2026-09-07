@@ -664,3 +664,126 @@ class MauThuongHieuTest(unittest.TestCase):
         self.assertNotIn("Brand palette:", txt)
         sau = self._lien(txt[txt.index("COLOUR AUTHORITY"):])
         self.assertIn("decide both the rendering AND the palette", sau)
+
+
+def _cfg_nen(spec="a village square at dawn, red lanterns overhead", n=1, extra=None):
+    """Contract của thẻ «Cảnh nền» bên webapp: khổ dọc, lưới 1x1, ô `shape:"full"`.
+
+    Giữ khác `_cfg` chứ không thêm cờ: hai ca này khác nhau ở HÌNH DẠNG contract, và
+    ca nhiều ô (`n > 1`) tồn tại chỉ để chứng minh nhánh cũ CÒN SỐNG.
+    """
+    sheet = {
+        "id": "nen", "canvas": "portrait", "grid": {"cols": 1, "rows": n},
+        "components": [{"file": f"{i + 1:02d}-nen", "vi": "Cảnh nền", "spec": spec,
+                        "skel": {"shape": "full", "w": 1, "h": 1}} for i in range(n)],
+    }
+    sheet.update(extra or {})
+    return {"styles": [{"id": "demo", "bg": "magenta", "style": "flat ink"}], "sheets": [sheet]}
+
+
+class CanhNenMotKhungTest(unittest.TestCase):
+    """MỘT CẢNH NỀN LÀ MỘT MÀN HÌNH, KHÔNG PHẢI MỘT SPRITE SHEET CÓ ĐÚNG MỘT Ô.
+
+    ╔══ BỆNH ĐÃ ĐO (chủ sản phẩm, 07/09/2026) ══════════════════════════════════╗
+    ║ «Cảnh nền → prompt dài quá, giờ tách ra ko cho nó gen sprite sheet nữa    ║
+    ║ nhé, kiểu gen full khung mobile luôn.»                                    ║
+    ╚═══════════════════════════════════════════════════════════════════════════╝
+    Trước bản này tấm nền đi CHUNG một đường với tấm giao diện, nên nó lãnh nguyên
+    bộ luật viết cho những ô sẽ bị cắt rời: lưới cứng, hộp cắt safe zone, cấu tạo
+    ba lớp core/rim/decoration, nền phải trong suốt hoàn toàn, cấm vẽ caro. Ngót
+    trăm dòng nói về những thứ tấm này KHÔNG có — và tệ hơn cả thừa, chúng nói
+    NGƯỢC: một tấm mà tranh phải phủ kín từ mép đến mép lại vừa được lệnh «nền phải
+    trong suốt» vừa được lệnh «chừa 40px đệm quanh element».
+
+    Ca này khoá HAI CHIỀU. Chiều một: prompt nền không được mang lại một chữ nào của
+    bộ luật kia. Chiều hai: tấm full-bleed NHIỀU ô (bộ nhiều cảnh trên một canvas)
+    vẫn phải đi đường cũ — gộp hai ca lại là mất một trong hai.
+    """
+
+    def setUp(self):
+        self.txt = render_prompt_text(_cfg_nen(), name="demo-nen")
+
+    # ── chiều một: những thứ KHÔNG được có mặt nữa ────────────────────────────
+    def test_khong_con_mot_chu_nao_cua_bo_luat_sprite_sheet(self):
+        # "empty" trần không nằm trong danh sách: chính nhánh mới cũng nói "inset
+        # inside an empty frame is unusable" — đó là câu CẤM chừa viền, tức là thứ
+        # ngược hẳn với luật ô trống của tấm giao diện. Cấm theo cụm, không theo từ.
+        for w in ("grid", "safe zone", "CORE", "transparent", "checkerboard",
+                  "alpha", "cell", "40px", "INTENTIONALLY EMPTY"):
+            self.assertNotIn(w.lower(), self.txt.lower(),
+                             f"prompt cảnh nền còn chữ của tấm giao diện: {w}")
+
+    def test_khong_con_danh_sach_o_danh_so(self):
+        """Không có ô nào để đánh số: cả tấm LÀ một ô. Một danh sách "1) …" ở đây
+        chỉ mời model chia tranh ra thành ngăn."""
+        self.assertNotIn("\n1) ", self.txt)
+        with self.assertRaises(AssertionError):
+            first_cell_line(self.txt)
+
+    def test_prompt_ngan_bang_mot_phan_ba_tam_giao_dien(self):
+        """Ngưỡng đo được, không phải cảm tính: đây chính là lời phàn nàn («prompt
+        dài quá»), nên nó phải có một con số canh gác. Bản trước tấm nền dài xấp xỉ
+        bằng tấm UI vì chúng dùng chung mọi khối."""
+        ui = render_prompt_text(_cfg(spec="the primary action button"))
+        self.assertLess(len(self.txt.splitlines()), 30,
+                        "prompt cảnh nền phình trở lại")
+        self.assertLess(len(self.txt), len(ui) / 3,
+                        "prompt cảnh nền phải ngắn hơn hẳn tấm giao diện")
+
+    # ── chiều hai: những thứ PHẢI có mặt ─────────────────────────────────────
+    def test_dong_dau_van_la_hop_dong_kho_giay_voi_tang_bash(self):
+        """`run_one` đọc ngược khổ bằng `head -n1 … | grep -qiE 'PORTRAIT|SQUARE'`.
+        Nhánh mới cũng là một nhánh dựng prompt, nên nó cũng phải giữ hợp đồng ấy."""
+        self.assertEqual(self.txt.splitlines()[0], "Canvas orientation: PORTRAIT 1024x1536.")
+
+    def test_co_cau_ky_thuat_phu_kin_khung_va_phong_cach_cua_nguoi_dung(self):
+        self.assertIn("A single full-screen mobile game background", self.txt)
+        self.assertIn("filling the whole frame edge to edge", self.txt)
+        self.assertIn("1024x1536 px", self.txt)
+        self.assertIn("Art style: flat ink.", self.txt)
+
+    def test_canh_nguoi_dung_go_la_cau_cuoi_va_khong_bi_sua_mot_ky_tu(self):
+        spec = "a village square at dawn, red lanterns overhead"
+        con = [l for l in self.txt.splitlines() if l.strip()]
+        self.assertIn(spec, con)
+        self.assertEqual(con[-1], "Game-ready mobile game background art, portrait 2:3.")
+        self.assertEqual(con[-2], spec, "cảnh phải là câu cuối, ngay trên dòng chốt")
+
+    def test_ghi_chu_va_chi_dao_cua_nguoi_dung_van_di_theo(self):
+        txt = render_prompt_text(
+            _cfg_nen(extra={"note": "Ghi chú của tấm.", "directive": "thêm mưa xuân"}),
+            name="demo-nen")
+        self.assertIn("Ghi chú của tấm.", txt)
+        self.assertIn("Extra direction for this sheet (from the designer): thêm mưa xuân", txt)
+
+    def test_anh_dinh_kem_cua_tam_nen_TA_CANH_chu_khong_ta_nhan_vat(self):
+        """Thẻ Cảnh nền cho đính ảnh, và ảnh ấy về contract là `sheet.ref` — đúng
+        field mà tấm mascot dùng. Câu cũ nói thẳng «trong ảnh này là NHÂN VẬT», nên
+        một tấm ảnh chợ Tết sẽ mọc ra giữa màn hình một con mascot không ai xin."""
+        txt = render_prompt_text(_cfg_nen(extra={"ref": "refs/cho-tet.png"}), name="demo-nen")
+        self.assertIn("The attached SCENE REFERENCE image", txt)
+        self.assertNotIn("character REFERENCE PHOTO", txt)
+
+    # ── nhánh cũ còn sống ────────────────────────────────────────────────────
+    def test_tam_full_bleed_NHIEU_o_van_di_duong_cu(self):
+        """Nhiều cảnh trên một canvas thì vẫn phải có lưới và ranh giới ô — nó chỉ
+        giống tấm nền ở chỗ không có pixel rỗng."""
+        txt = render_prompt_text(_cfg_nen(n=2), name="demo-nen")
+        self.assertIn("STRICT grid", txt)
+        self.assertIn("full-bleed scene, fills its whole cell", txt)
+        self.assertIn("A sheet of 2 full-bleed background scenes.", txt)
+
+    def test_dau_fullbleed_cho_tang_bash_van_duoc_ghi(self):
+        """Mối nối python→bash của cổng alpha (`alpha_verdict` lật ngược phép kiểm
+        cho tấm full-bleed). Nhánh mới không được đánh rơi nó."""
+        src = (ROOT / "gen.sh").read_text(encoding="utf-8")
+        block = re.search(r"python3 - <<'PY'\n(.*?)\nPY\n", src, re.S).group(1)
+        with tempfile.TemporaryDirectory() as td:
+            _seed_workspace(td, _cfg_nen())
+            cwd = os.getcwd()
+            os.chdir(td)
+            try:
+                exec(compile(block, "gen.sh:PY", "exec"), {"__name__": "gen_prompt_test"})
+                self.assertTrue(Path(td, "prompts", "demo-nen.fullbleed").exists())
+            finally:
+                os.chdir(cwd)

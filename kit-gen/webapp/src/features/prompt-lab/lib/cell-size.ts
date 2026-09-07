@@ -20,6 +20,7 @@
  * trên lưới 4×4 (ô 256px) và trên lưới 2×2 (ô 512px) phải ra CÙNG 96 pixel thật,
  * và chỉ phép chia theo ô mới giữ được điều đó.
  */
+import { elementBox } from "@/features/design/preview/geometry";
 
 /**
  * Bề rộng canvas vuông của tấm Bộ UI.
@@ -78,6 +79,65 @@ export interface SizePx {
   h: number;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   CỠ HỆ THỐNG — và vì sao nó phải được VIẾT RA thành một con số
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Khung mặc định của một ô Bộ UI, tính bằng PHÂN SỐ của ô.
+ *
+ * Đây là nguồn của `CELL_SKEL` bên `composer-to-contract.ts` — hai nơi cùng một
+ * cặp số, nên cặp số ở ĐÂY và chỗ kia đọc sang.
+ */
+export const SYSTEM_CELL_FRACTION: SizePx = { w: 0.8, h: 0.6 };
+
+/**
+ * Cỡ hệ thống, đo bằng pixel trên ô tham chiếu.
+ *
+ * ╔══ VÌ SAO PILL CỠ KHÔNG CÒN MỤC «— theo hệ thống —» ══════════════════════╗
+ * ║ Chủ sản phẩm 07/09/2026: *"Mà cỡ theo hệ thống là sao nhỉ, kiểu chọn mặc  ║
+ * ║ định 1 cái thôi chứ?"* — và câu hỏi ấy đúng: «theo hệ thống» KHÔNG phải   ║
+ * ║ một cỡ, nó là lời hứa rằng ở đâu đó có một cỡ mà màn hình không nói ra.   ║
+ * ║ Tệ hơn: cái cỡ giấu đi ấy là 0,8×0,6 của Ô, mà ô thì to nhỏ theo LƯỚI —  ║
+ * ║ thêm một element vào thẻ là lưới đổi và mọi món «theo hệ thống» đổi cỡ    ║
+ * ║ theo, lặng lẽ. Một con số cụ thể vừa trả lời được câu hỏi vừa đứng yên.   ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Đo bằng `elementBox` của `design/preview/geometry.ts` chứ không nhân tay: đó là
+ * bản mirror của `geometry.safe_offset_in_cell` (engine), và nó đã có test đọc
+ * thẳng `geometry.py` canh không cho trôi. Nhân tay ở đây là dựng nguồn thứ hai.
+ */
+export function systemSizePx(cellPx: number = REFERENCE_CELL_PX): SizePx {
+  const side = cellPx > 0 ? cellPx : REFERENCE_CELL_PX;
+  const box = elementBox({ shape: "rrect", ...SYSTEM_CELL_FRACTION }, side, side);
+  return { w: Math.round(box.w), h: Math.round(box.h) };
+}
+
+/**
+ * Cỡ pixel → giá trị LƯU: id preset nếu trùng khít một nấc, không thì chuỗi tự điền.
+ *
+ * Ưu tiên id preset vì nó là thứ người dùng đọc được («M · vừa» thay vì «192×136px»)
+ * và vì nó sống sót khi bảng preset được chỉnh lại.
+ */
+export function sizeValueOfPx(px: SizePx): string {
+  const hit = SIZE_PRESETS.find((preset) => preset.w === px.w && preset.h === px.h);
+  return hit ? hit.id : customSizeValue(px.w, px.h);
+}
+
+/** Cỡ áp cho một dòng element chưa ai đặt cỡ. Một hằng, tính một lần. */
+export const SYSTEM_SIZE_VALUE = sizeValueOfPx(systemSizePx());
+
+/**
+ * Cỡ của một loại element: cỡ danh mục khai, không khai thì cỡ hệ thống.
+ *
+ * Ở đây chứ không rải ở ba chỗ gọi, vì nó là ĐỊNH NGHĨA của "cỡ mặc định của loại
+ * này" — và `swapCellElement` phải so ĐÚNG định nghĩa ấy để biết người dùng đã
+ * chỉnh tay hay chưa.
+ */
+export function defaultSizeOf(preset: { sizeId?: string } | null | undefined): string {
+  return String(preset?.sizeId ?? "").trim() || SYSTEM_SIZE_VALUE;
+}
+
 /**
  * Một trường, HAI hình dạng — cùng quy ước đã dùng cho `material` đời trước:
  * giá trị lưu là **id preset HOẶC chuỗi `"<w>x<h>"` người dùng tự điền**.
@@ -108,8 +168,11 @@ export function customSizeValue(w: number, h: number): string {
 }
 
 /**
- * Cỡ pixel của một giá trị đã lưu. `null` = "theo hệ thống" (rỗng, hoặc id lạ của
- * tài liệu đời sau) — nơi gọi giữ nguyên khung mặc định thay vì đoán bừa một cỡ.
+ * Cỡ pixel của một giá trị đã lưu. `null` = KHÔNG ĐỌC RA CỠ NÀO (rỗng, hoặc id lạ
+ * của tài liệu đời sau) — nơi gọi giữ nguyên khung mặc định thay vì đoán bừa.
+ *
+ * Rỗng vẫn phải đọc được, dù UI không còn sinh ra nó: bản nháp lưu trước 07/09/2026
+ * có `sizeId` rỗng, và `readCell` mới là chỗ vá chúng (bằng `SYSTEM_SIZE_VALUE`).
  */
 export function sizePx(value: string | null | undefined): SizePx | null {
   const raw = String(value ?? "").trim();

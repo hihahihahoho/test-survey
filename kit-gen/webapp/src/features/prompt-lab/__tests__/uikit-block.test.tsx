@@ -23,7 +23,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { JSONContent } from "@tiptap/react";
 
 import { composerToContract } from "@/features/prompt-canvas/lib/composer-to-contract";
-import { SIZE_PRESETS } from "../lib/cell-size";
+import {
+  REFERENCE_CELL_PX,
+  SIZE_PRESETS,
+  SYSTEM_CELL_FRACTION,
+  SYSTEM_SIZE_VALUE,
+  sizePx,
+  systemSizePx,
+} from "../lib/cell-size";
 import { seedPresets } from "../lib/presets-store";
 import { PILL_SLOTS, docHasBrokenPill, repairPills, retitleCellDoc, uiCellDoc } from "../lib/doc-templates";
 import { serializeComposer } from "../lib/serialize-composer";
@@ -525,13 +532,17 @@ describe("⑦ dòng element: hàng 1 có ×, hàng 2 là ghi chú", () => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
-   ⑧ PILL CỠ — 4 NẤC PRESET + MỘT CỬA TỰ ĐIỀN, VÀ CẢ HAI PHẢI TÌM RA ĐƯỢC
+   ⑧ PILL CỠ — CÙNG MỘT HỘP «CHỌN SẴN · GÕ RIÊNG» VỚI MỌI PILL KHÁC
    ══════════════════════════════════════════════════════════════════════════
-   Chủ sản phẩm: *"sao vẫn không thấy select điền size"*. Menu đã có đủ từ lượt
-   trước — nên ca ở đây KHÔNG chỉ hỏi "có mở ra không", nó hỏi "mở ra thì có
-   NHÌN THẤY đủ bốn nấc kèm số px và cửa tự điền không", tức đúng câu người dùng
-   không trả lời được. */
-describe("⑧ pill cỡ mở ra 4 preset + ô tự điền", () => {
+   Hai lời của chủ sản phẩm chồng lên nhau ở đúng cái pill này:
+    · *"sao vẫn không thấy select điền size"* — cửa tự điền phải TÌM RA ĐƯỢC;
+    · *"giống như mấy cái kia có mode select với tự điền đó, nhất quán vào chứ"*
+      — và nó phải tìm ra được Ở ĐÚNG CHỖ mà bảy pill kia đặt cửa ấy, tức là một
+      nấc trên thanh ghim đầu hộp, không phải một khối dán ở đáy danh sách.
+    · *"cỡ theo hệ thống là sao nhỉ, kiểu chọn mặc định 1 cái thôi chứ?"* — nên
+      mục rỗng biến mất, và cả ba đường vào (thêm dòng, mở nháp cũ, đổi loại)
+      đều phải cho ra một con số. */
+describe("⑧ pill cỡ dùng chung hộp chọn nguồn", () => {
   const openSize = () => fireEvent.click(screen.getByLabelText(/^Cỡ của Nút bấm/));
 
   beforeEach(() => {
@@ -542,16 +553,24 @@ describe("⑧ pill cỡ mở ra 4 preset + ô tự điền", () => {
     expect(screen.getByLabelText(/^Cỡ của Nút bấm/).textContent).toContain("Cỡ:");
   });
 
-  it("mở ra: 4 nấc preset, mỗi nấc kèm số px thật", () => {
+  it("mở ra: thanh hai nấc y như pill theme/phong cách", () => {
+    openSize();
+    expect(screen.getByRole("tab", { name: "Chọn sẵn" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Gõ riêng" })).toBeTruthy();
+    /* KHÔNG có nấc ảnh: một cỡ không đến từ tấm ảnh nào. */
+    expect(screen.queryByRole("tab", { name: "Đính ảnh" })).toBeNull();
+  });
+
+  it("nấc «Chọn sẵn» = ĐÚNG 4 nấc, mỗi nấc kèm số px thật — không còn mục rỗng", () => {
     openSize();
     const options = screen.getAllByRole("option").map((o) => o.textContent ?? "");
-    /* 4 preset + mục «— theo hệ thống —». */
-    expect(options).toHaveLength(SIZE_PRESETS.length + 1);
+    expect(options).toHaveLength(SIZE_PRESETS.length);
+    expect(options.join(" ")).not.toContain("theo hệ thống");
     for (const preset of SIZE_PRESETS) {
       const hit = options.find((text) => text.includes(preset.vi));
       expect(hit).toBeTruthy();
-      /* Con số là cả điểm của menu: "L · lớn" một mình không nói được nó lớn hơn
-         "M" bao nhiêu — mà đó đúng là câu người thiết kế đang hỏi. */
+      /* Con số là cả điểm của danh sách: "L · lớn" một mình không nói được nó lớn
+         hơn "M" bao nhiêu — mà đó đúng là câu người thiết kế đang hỏi. */
       expect(hit).toContain(`${preset.w}×${preset.h}px`);
     }
   });
@@ -572,7 +591,7 @@ describe("⑧ pill cỡ mở ra 4 preset + ô tự điền", () => {
     expect(screen.getByLabelText(/^Cỡ của Nút bấm/).textContent).toContain("XL · tràn ô");
   });
 
-  it("cửa «Tự điền» có hai ô W×H + nút áp — và nó ghi ra chuỗi «<w>x<h>»", async () => {
+  it("nấc «Gõ riêng» có hai ô W×H + nút chốt — và nó ghi ra chuỗi «<w>x<h>»", async () => {
     let latest: UiKitBlock | null = null;
     cleanup();
     render(
@@ -582,19 +601,19 @@ describe("⑧ pill cỡ mở ra 4 preset + ô tự điền", () => {
       />,
     );
     fireEvent.click(screen.getByLabelText(/^Cỡ của Nút bấm/));
+    fireEvent.click(screen.getByRole("tab", { name: "Gõ riêng" }));
 
-    expect(screen.getByText(/Tự điền/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Bề rộng của Nút bấm"), { target: { value: "160" } });
     fireEvent.change(screen.getByLabelText("Bề cao của Nút bấm"), { target: { value: "120" } });
-    fireEvent.click(screen.getByRole("button", { name: "Áp cỡ" }));
+    fireEvent.click(screen.getByRole("button", { name: "Dùng cỡ này" }));
 
     await waitFor(() => expect(latest?.cells[0]?.sizeId).toBe("160x120"));
-    /* Áp xong thì hộp đóng lại và pill nói ra con số vừa gõ — không phải "theo
-       hệ thống", cũng không phải chuỗi lưu `160x120` chưa được dịch. */
+    /* Chốt xong thì hộp đóng lại và pill nói ra con số vừa gõ — không phải chuỗi
+       lưu `160x120` chưa được dịch. */
     expect(screen.getByLabelText(/^Cỡ của Nút bấm/).textContent).toContain("160×120px");
   });
 
-  it("Enter trong ô số = bấm «Áp cỡ» — không ai phải rê chuột để lưu số vừa gõ", async () => {
+  it("Enter trong ô số = bấm nút chốt — không ai phải rê chuột để lưu số vừa gõ", async () => {
     let latest: UiKitBlock | null = null;
     cleanup();
     render(
@@ -604,13 +623,89 @@ describe("⑧ pill cỡ mở ra 4 preset + ô tự điền", () => {
       />,
     );
     fireEvent.click(screen.getByLabelText(/^Cỡ của Nút bấm/));
+    fireEvent.click(screen.getByRole("tab", { name: "Gõ riêng" }));
     const wide = screen.getByLabelText("Bề rộng của Nút bấm");
     fireEvent.change(wide, { target: { value: "200" } });
     fireEvent.keyDown(wide, { key: "Enter" });
 
     await waitFor(() => expect(latest?.cells[0]?.sizeId).toMatch(/^200x/));
   });
+
+  it("cỡ đang dùng là chuỗi tự gõ ⇒ hộp mở SẴN ở nấc «Gõ riêng», không nấc nào được tick", () => {
+    cleanup();
+    render(<Harness initial={uikit([{ ...newCell("button", PRESETS), id: "c1", sizeId: "160x120" }])} />);
+    openSize();
+    expect(screen.getByRole("tab", { name: "Gõ riêng" }).getAttribute("aria-selected")).toBe("true");
+    fireEvent.click(screen.getByRole("tab", { name: "Chọn sẵn" }));
+    for (const option of screen.getAllByRole("option")) {
+      expect(option.getAttribute("aria-selected")).toBe("false");
+    }
+  });
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⑧b CỠ LUÔN LÀ MỘT CON SỐ — KHÔNG CÒN «THEO HỆ THỐNG» Ở BẤT KỲ ĐƯỜNG VÀO NÀO
+   ══════════════════════════════════════════════════════════════════════════
+   *"Mà cỡ theo hệ thống là sao nhỉ, kiểu chọn mặc định 1 cái thôi chứ?"*
+   Ba đường sinh ra một dòng element, và chỉ cần MỘT đường còn để rỗng là câu hỏi
+   ấy quay lại: rỗng nghĩa là 0,8×0,6 của Ô, mà ô thì co giãn theo lưới — thêm
+   một món vào thẻ là mọi món rỗng đổi cỡ theo, không ai bấm gì cả. */
+describe("⑧b cỡ luôn cụ thể ở mọi đường vào", () => {
+  it("thêm dòng: element có cỡ trong danh mục ⇒ lấy cỡ ấy", () => {
+    expect(newCell("button", PRESETS).sizeId).toBe("m");
+  });
+
+  it("thêm dòng: element KHÔNG khai cỡ ⇒ vẫn ra một con số, không ra rỗng", () => {
+    const bare = { ...PRESETS, elements: PRESETS.elements.map((e) => ({ ...e, sizeId: "" })) };
+    const cell = newCell("button", bare);
+    expect(cell.sizeId).toBe(SYSTEM_SIZE_VALUE);
+    expect(sizePx(cell.sizeId)).not.toBeNull();
+  });
+
+  it("cỡ hệ thống là 0,8×0,6 của ô tham chiếu — đọc qua đúng bản mirror của geometry.py", () => {
+    /* Không gõ lại "250x188" ở đây: ca này khoá QUAN HỆ (khung mặc định của
+       contract ⇄ con số hiện trên pill), không khoá một chuỗi. */
+    expect(systemSizePx()).toEqual({
+      w: Math.round(REFERENCE_CELL_PX * SYSTEM_CELL_FRACTION.w),
+      h: Math.round(REFERENCE_CELL_PX * SYSTEM_CELL_FRACTION.h),
+    });
+  });
+
+  it("đổi loại element: cỡ CHƯA bị chỉnh tay ⇒ đi theo loại mới", async () => {
+    let latest: UiKitBlock | null = null;
+    render(
+      <Harness
+        initial={uikit([{ ...newCell("button", PRESETS), id: "c1" }])}
+        onState={(next) => { latest = next; }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Đổi loại/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Bảng nền/ }));
+    /* «Bảng nền» khai `xl`; huy hiệu 192×136 đổi thành bảng mà vẫn 192×136 là
+       một cái bảng bằng cái nút. */
+    await waitFor(() => expect(latest?.cells[0]?.sizeId).toBe("xl"));
+  });
+
+  it("đổi loại element: cỡ ĐÃ chỉnh tay ⇒ GIỮ NGUYÊN, không bị mặc định đắp lên", async () => {
+    let latest: UiKitBlock | null = null;
+    render(
+      <Harness
+        initial={uikit([{ ...newCell("button", PRESETS), id: "c1", sizeId: "240x90" }])}
+        onState={(next) => { latest = next; }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Đổi loại/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Bảng nền/ }));
+    await waitFor(() => {
+      expect(latest?.cells[0]?.elementId).toBe("panel");
+      /* Trong CÙNG một `waitFor`: đọc `latest` sau đó thì TypeScript đã thu hẹp nó
+         về `null` (gán nằm trong closure), và một `as` chỉ để chiều compiler là
+         chỗ dễ nói dối nhất trong cả file. */
+      expect(latest?.cells[0]?.sizeId).toBe("240x90");
+    });
+  });
+});
+
 
 /* ══════════════════════════════════════════════════════════════════════════
    ⑥ EDITOR KHÔNG ĐƯỢC "ĐỔI" KHI KHÔNG CÓ GÌ ĐỔI

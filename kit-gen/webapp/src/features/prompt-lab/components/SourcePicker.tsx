@@ -117,6 +117,19 @@ export interface SourcePickerProps {
   onChoose: (value: string) => void;
   /** Vắng ⇒ KHÔNG có nấc «Gõ riêng». */
   onCustom?: (text: string) => void;
+  /**
+   * RUỘT RIÊNG cho nấc «Gõ riêng», thay cho ô ba dòng mặc định.
+   *
+   * ╔══ VÌ SAO LÀ MỘT KHE, KHÔNG PHẢI MỘT HỘP THỨ HAI ════════════════════════╗
+   * ║ Pill CỠ cũng hỏi đúng câu của hộp này («chọn sẵn hay tự điền?») nhưng    ║
+   * ║ thứ tự điền của nó là HAI Ô SỐ, không phải một câu văn. Chép cả hộp ra   ║
+   * ║ một bản thứ hai để đổi mỗi cái ruột là có ngay hai thanh nấc trôi khỏi   ║
+   * ║ nhau — đúng thứ file này sinh ra để chặn. Nên chỗ khác nhau duy nhất     ║
+   * ║ được mở thành một khe, còn khung, thanh nấc và luật đóng thì dùng chung. ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   * Nhận `close` để ruột tự đóng hộp sau khi chốt.
+   */
+  renderCustom?: (close: () => void) => React.ReactNode;
   /** Vắng ⇒ KHÔNG có nấc «Đính ảnh». */
   onAttach?: (file: File) => void;
   /** Bỏ tấm ảnh đang dùng. Vắng ⇒ không bày nút bỏ. */
@@ -135,7 +148,7 @@ export function SourcePicker(props: SourcePickerProps) {
   const tabs: SourceTab[] = [
     ...(hasPreset ? (["preset"] as const) : []),
     ...(props.onAttach ? (["ref"] as const) : []),
-    ...(props.onCustom ? (["custom"] as const) : []),
+    ...(props.onCustom || props.renderCustom ? (["custom"] as const) : []),
   ];
 
   /* Nấc mở sẵn = nấc ĐANG HIỆU LỰC, không phải nấc đầu tiên. Mở ra mà thấy danh
@@ -207,7 +220,9 @@ export function SourcePicker(props: SourcePickerProps) {
         />
       )}
 
-      {tab === "custom" && props.onCustom && (
+      {tab === "custom" && props.renderCustom?.(onClose)}
+
+      {tab === "custom" && !props.renderCustom && props.onCustom && (
         <CustomPanel
           label={label}
           custom={custom}

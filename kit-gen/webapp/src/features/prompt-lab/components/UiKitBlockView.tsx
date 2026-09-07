@@ -1,6 +1,6 @@
 import * as React from "react";
 import type { JSONContent } from "@tiptap/react";
-import { Plus, Search } from "lucide-react";
+import { Pencil, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ import {
   SIZE_PRESETS,
   SQUARE_CANVAS_PX,
   customSizeValue,
+  defaultSizeOf,
   parseCustomSize,
   sizeLabel,
   sizePx,
@@ -22,7 +23,15 @@ import { moveRow, newCell, type BlockMode, type UiCell, type UiKitBlock } from "
 import { BlockCard, ModeBadge, ModeToggle } from "./BlockCard";
 import { BlockEditor } from "./BlockEditor";
 import { DragHandle, NoteField, RemoveButton, RowIndex, RowShell, RowTop, type RowDragProps } from "./row-ui";
-import { OptionPill, PillAxis, PillButton, PillCaret, PillMenu, PillMenuItem, useMenuFlip } from "./pill-ui";
+import {
+  OptionPill,
+  PillAxis,
+  PillButton,
+  PillCaret,
+  SOURCE_PICKER_MAX_PX,
+  useMenuFlip,
+} from "./pill-ui";
+import { SourcePicker, type SourceGroup } from "./SourcePicker";
 
 /**
  * UiKitBlockView — block "Bộ UI": một DANH SÁCH DÒNG, mỗi dòng một element.
@@ -264,38 +273,101 @@ function syncCellFromDoc(cell: UiCell, doc: JSONContent): UiCell {
    ══════════════════════════════════════════════════════════════════════════ */
 
 /**
- * [cỡ ⌄] — bốn nấc preset + một ô TỰ ĐIỀN w×h pixel.
+ * Pill CỠ — cùng một hộp «Chọn sẵn · Gõ riêng» với mọi pill khác.
  *
- * ╔══ VÌ SAO KHÔNG DÙNG `OptionPill` ════════════════════════════════════════╗
- * ║ `OptionPill` là pill CHỌN-MỘT trong một danh sách đóng, và cả sức mạnh    ║
- * ║ của nó nằm ở chỗ đó: giá trị nào cũng tra được ra nhãn + cụm EN. Cỡ thì   ║
- * ║ có một giá trị KHÔNG nằm trong danh sách nào — con số người dùng gõ.      ║
- * ║ Nhét một ô nhập vào `OptionPill` là bắt tám pill khác mang theo một nhánh ║
- * ║ chúng không bao giờ chạy; nên cỡ có pill riêng, và `pill-ui` giữ nguyên   ║
- * ║ vai trò "một danh sách, một lựa chọn".                                   ║
+ * ╔══ *"giống như mấy cái kia có mode select với tự điền đó, nhất quán vào"* ═╗
+ * ║ Chủ sản phẩm 07/09/2026. Trước lượt này pill cỡ có hộp RIÊNG: bốn nấc     ║
+ * ║ trong một danh sách, rồi một khối «Tự điền…» dán ở đáy — tức là đúng cái  ║
+ * ║ hình dạng mà `SourcePicker` sinh ra để thay, và đúng cái bệnh nó chữa:    ║
+ * ║ đường tự điền nằm dưới thanh cuộn, ai không cuộn xuống thì không biết nó  ║
+ * ║ có. Nay cỡ dùng chung khung, chung thanh nấc, chung luật đóng; chỗ khác   ║
+ * ║ nhau duy nhất — hai ô số thay cho một ô văn bản — đi qua khe `renderCustom`║
+ * ║ (xem `SourcePicker`).                                                     ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * Ô tự điền nhận số RỜI (w, h) chứ không nhận chuỗi `"160x120"`: người dùng
- * không phải học một cú pháp, và không có gì để gõ sai. Chuỗi ấy là chuyện của
- * chỗ lưu (`customSizeValue`), không phải chuyện của người đang thiết kế.
+ * KHÔNG có mục «— theo hệ thống —» nữa: cỡ luôn là một con số cụ thể. Vì sao,
+ * xem khối chú thích của `systemSizePx` trong `cell-size.ts`.
  *
- * ╔══ *"SAO VẪN KHÔNG THẤY SELECT ĐIỀN SIZE"* ═══════════════════════════════╗
- * ║ Menu đã có đủ 4 nấc + ô tự điền từ lượt trước, nhưng chủ sản phẩm KHÔNG   ║
- * ║ TÌM RA nó — và một tính năng không tìm ra thì bằng không có. Ba chỗ sửa,  ║
- * ║ đều là chỗ NÓI RA, không phải chỗ thêm chức năng:                         ║
- * ║  ① pill tự xưng tên: «Cỡ: theo hệ thống ⌄» thay vì chữ «theo hệ thống»    ║
- * ║    trôi nổi cạnh một chữ nối mờ — trước đó nó trông y hệt một nhãn chết;   ║
- * ║  ② menu có TIÊU ĐỀ nhìn thấy được, không chỉ `aria-label` cho máy đọc;     ║
- * ║  ③ khối tự điền có nhãn «Tự điền…» đúng chữ trong lời chủ sản phẩm, hai    ║
- * ║    ô W×H ghi rõ đơn vị, và nút «Áp cỡ» nói ra việc nó làm (nút cũ ghi      ║
- * ║    «Đặt» — một chữ không cho biết đặt cái gì vào đâu).                     ║
- * ╚══════════════════════════════════════════════════════════════════════════╝
+ * Ô tự điền nhận số RỜI (w, h) chứ không nhận chuỗi `"160x120"`: người dùng không
+ * phải học một cú pháp, và không có gì để gõ sai. Chuỗi ấy là chuyện của chỗ lưu
+ * (`customSizeValue`), không phải chuyện của người đang thiết kế.
  */
 function SizePill({ label, value, onChange }: { label: string; value: string; onChange: (next: string) => void }) {
-  const [open, setOpen] = React.useState(false);
-  const custom = parseCustomSize(value);
-  /* Ô nhập mở ra với cỡ ĐANG DÙNG, kể cả khi cỡ ấy đến từ một preset: người ta
-     mở «Tự điền» để CHỈNH từ chỗ đang đứng, không phải để bắt đầu từ trang trắng. */
+  const flip = useMenuFlip(SOURCE_PICKER_MAX_PX);
+  const button = React.useRef<HTMLButtonElement>(null);
+  /* Cỡ TỰ ĐIỀN đóng vai «chữ tự gõ» của hộp: nó là thứ không có trong danh sách,
+     nên nó bật nấc «Gõ riêng» lúc mở và gỡ dấu tick khỏi mọi nấc preset. */
+  const typed = parseCustomSize(value) ? value : "";
+  const close = React.useCallback(() => {
+    flip.setOpen(false);
+    button.current?.focus();
+  }, [flip]);
+
+  /* Con số đi vào `en` — chỗ hộp vẫn dùng để hiện "cái máy sẽ đọc". Với cỡ thì
+     con số CHÍNH LÀ câu trả lời, và "L · lớn" một mình không nói được nó lớn
+     hơn "M" bao nhiêu. */
+  const groups: SourceGroup[] = React.useMemo(
+    () => [{ options: SIZE_PRESETS.map((preset) => ({ value: preset.id, vi: preset.vi, en: `${preset.w}×${preset.h}px` })) }],
+    [],
+  );
+
+  return (
+    <span className="relative inline-block min-w-0">
+      <PillButton
+        ref={button}
+        compact
+        active={flip.open}
+        onClick={flip.toggle}
+        aria-haspopup="listbox"
+        aria-expanded={flip.open}
+        aria-label={`Cỡ của ${label} — ${sizeLabel(value)}`}
+        className="max-w-full"
+      >
+        <PillAxis>Cỡ</PillAxis>
+        <span className="truncate">{sizeLabel(value)}</span>
+        {/* Cái bút: cùng quy ước với `OptionPill` — "con số này do bạn gõ, không
+            phải một nấc có sẵn". */}
+        {typed && <Pencil aria-hidden className="size-3.5 shrink-0 opacity-60" />}
+        <PillCaret compact />
+      </PillButton>
+
+      {flip.open && (
+        <SourcePicker
+          label={`cỡ của ${label}`}
+          groups={groups}
+          value={typed ? "" : value}
+          custom={typed}
+          image={null}
+          dropUp={flip.dropUp}
+          onClose={close}
+          onChoose={(next) => onChange(next)}
+          renderCustom={(done) => (
+            <SizeCustomPanel
+              label={label}
+              value={value}
+              onApply={(next) => {
+                onChange(next);
+                done();
+              }}
+            />
+          )}
+        />
+      )}
+    </span>
+  );
+}
+
+/**
+ * Ruột nấc «Gõ riêng» của pill cỡ: W × H, đơn vị pixel.
+ *
+ * Mở ra với cỡ ĐANG DÙNG, kể cả khi cỡ ấy đến từ một nấc preset: người ta mở
+ * «Gõ riêng» để CHỈNH từ chỗ đang đứng, không phải để bắt đầu từ trang trắng.
+ */
+function SizeCustomPanel({ label, value, onApply }: {
+  label: string;
+  value: string;
+  onApply: (next: string) => void;
+}) {
   const current = sizePx(value);
   const [w, setW] = React.useState(String(current?.w ?? REFERENCE_CELL_PX));
   const [h, setH] = React.useState(String(current?.h ?? REFERENCE_CELL_PX));
@@ -303,83 +375,22 @@ function SizePill({ label, value, onChange }: { label: string; value: string; on
   const apply = () => {
     const next = parseCustomSize(customSizeValue(Number(w) || 0, Number(h) || 0));
     if (!next) return;
-    onChange(customSizeValue(next.w, next.h));
-    setOpen(false);
+    onApply(customSizeValue(next.w, next.h));
   };
 
   return (
-    <span className="relative inline-block min-w-0">
-      <PillButton
-        compact
-        active={open}
-        muted={!value}
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={`Cỡ của ${label} — ${sizeLabel(value) || "theo hệ thống"}`}
-        className="max-w-full"
-      >
-        <PillAxis>Cỡ</PillAxis>
-        <span className="truncate">{sizeLabel(value) || "theo hệ thống"}</span>
-        <PillCaret compact />
-      </PillButton>
-
-      {open && (
-        <PillMenu label="Chọn cỡ safe zone" onClose={() => setOpen(false)}>
-          {/* TIÊU ĐỀ NHÌN THẤY ĐƯỢC. `aria-label` của `PillMenu` chỉ nói cho máy
-              đọc màn hình; người dùng mắt thường mở hộp ra và thấy bốn dòng chữ
-              không đầu không đuôi thì vẫn không biết mình đang chọn cái gì. */}
-          <p className="px-2 pb-1 pt-1 text-caption font-medium uppercase tracking-label text-fg-muted">
-            Cỡ safe zone
-          </p>
-
-          <PillMenuItem
-            selected={!value}
-            onSelect={() => {
-              onChange("");
-              setOpen(false);
-            }}
-          >
-            <span className="text-fg-muted">— theo hệ thống —</span>
-          </PillMenuItem>
-
-          {SIZE_PRESETS.map((preset) => (
-            <PillMenuItem
-              key={preset.id}
-              selected={preset.id === value}
-              onSelect={() => {
-                onChange(preset.id);
-                setOpen(false);
-              }}
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-fg-strong">{preset.vi}</span>
-                {/* Con số hiện ngay dưới nhãn: "L · lớn" một mình không nói được
-                    nó lớn hơn "M" bao nhiêu, mà đó đúng là câu người thiết kế hỏi. */}
-                <span className="block truncate text-caption text-fg-muted">{preset.w}×{preset.h}px</span>
-              </span>
-            </PillMenuItem>
-          ))}
-
-          <div className="mt-1 border-t border-line-subtle px-2 pb-1 pt-2">
-            <p className="mb-1 text-caption font-medium uppercase tracking-label text-fg-muted">Tự điền…</p>
-            <div className="flex items-center gap-1.5">
-              <SizeNumber label={`Bề rộng của ${label}`} value={w} onChange={setW} onEnter={apply} />
-              <span aria-hidden className="text-caption text-fg-muted">×</span>
-              <SizeNumber label={`Bề cao của ${label}`} value={h} onChange={setH} onEnter={apply} />
-              {/* «Áp cỡ», không phải «Đặt»: nút này KHÔNG đóng menu hộ mà làm một
-                  việc có hậu quả — ghi cỡ vừa gõ vào dòng element. Một chữ «Đặt»
-                  đứng cạnh hai ô số thì đọc như "đặt lại", tức là ngược nghĩa. */}
-              <Button variant="secondary" size="sm" onClick={apply}>Áp cỡ</Button>
-            </div>
-            <p className="mt-1 text-caption text-fg-muted">
-              {custom
-                ? `Đang dùng ${custom.w}×${custom.h}px`
-                : `Pixel trên khung ${SQUARE_CANVAS_PX}×${SQUARE_CANVAS_PX}`}
-            </p>
-          </div>
-        </PillMenu>
-      )}
+    <span className="flex min-h-0 flex-1 flex-col gap-2 p-3">
+      <span className="flex items-center gap-1.5">
+        <SizeNumber label={`Bề rộng của ${label}`} value={w} onChange={setW} onEnter={apply} />
+        <span aria-hidden className="text-caption text-fg-muted">×</span>
+        <SizeNumber label={`Bề cao của ${label}`} value={h} onChange={setH} onEnter={apply} />
+        {/* «Dùng cỡ này», cùng lối nói với «Dùng chữ này» của nấc gõ riêng —
+            một chữ «Đặt» đứng cạnh hai ô số thì đọc như "đặt lại", ngược nghĩa. */}
+        <Button variant="secondary" size="sm" onClick={apply}>Dùng cỡ này</Button>
+      </span>
+      <span className="text-caption text-fg-muted">
+        Pixel trên khung {SQUARE_CANVAS_PX}×{SQUARE_CANVAS_PX} · Enter để chốt
+      </span>
     </span>
   );
 }
@@ -428,7 +439,14 @@ function SizeNumber({ label, value, onChange, onEnter }: {
  */
 function swapCellElement(cell: UiCell, next: ElementPreset, presets: PresetBundle): UiCell {
   if (next.id === cell.elementId) return cell;
-  const swapped: UiCell = { ...cell, elementId: next.id };
+  /* CỠ LÀ NGOẠI LỆ DUY NHẤT của luật "giữ nguyên mọi thứ người dùng đã chỉnh",
+     và chỉ khi nó CHƯA bị chỉnh: một huy hiệu 112px đổi thành bảng nền mà vẫn
+     112px là một cái bảng bằng cái tem. Nhưng ai đã tự gõ 240×90 thì con số ấy
+     là ý của họ, không phải mặc định sót lại — nên chỉ đổi khi cỡ đang dùng
+     ĐÚNG BẰNG cỡ mặc định của loại cũ. */
+  const prev = presets.elements.find((preset) => preset.id === cell.elementId);
+  const size = cell.sizeId === defaultSizeOf(prev) ? defaultSizeOf(next) : cell.sizeId;
+  const swapped: UiCell = { ...cell, elementId: next.id, sizeId: size };
   if (!cell.doc) return swapped;
   const prevEn = presets.elements.find((preset) => preset.id === cell.elementId)?.en ?? cell.elementId;
   return { ...swapped, doc: retitleCellDoc(cell.doc, prevEn, next.en) };

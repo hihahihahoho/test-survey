@@ -7,7 +7,7 @@ import { glazeFromMaterial, glazePhrase } from "@/features/kit-core/lib/glaze";
 import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
 import { EXPRESSIONS, OUTFIT_THEMES } from "@/features/kit-core/lib/poses";
 
-import { SIZE_PRESETS, SQUARE_CANVAS_PX } from "@/features/prompt-lab/lib/cell-size";
+import { SIZE_PRESETS, SQUARE_CANVAS_PX, SYSTEM_SIZE_VALUE } from "@/features/prompt-lab/lib/cell-size";
 import { seedPresets } from "@/features/prompt-lab/lib/presets-store";
 import { backgroundDoc, contextDoc, mascotDoc } from "@/features/prompt-lab/lib/doc-templates";
 import { NODE } from "@/features/prompt-lab/lib/schema";
@@ -903,6 +903,30 @@ describe("di trú: bản nháp đời trước không có bốn trường mới"
       PRESETS,
     );
     expect(doc.composer.contextRefs).toEqual([{ path: "refs/ok.png", role: "theme" }]);
+  });
+
+  it("dòng element có `sizeId` rỗng ⇒ VÁ NGAY LÚC ĐỌC thành một con số", () => {
+    /* Rỗng là di sản trước 07/09/2026 («theo hệ thống»): nó không phải một cỡ mà
+       là 0,8×0,6 của Ô, nên nó ĐỔI khi lưới đổi — thêm một món vào thẻ là mọi
+       dòng cũ tự co lại, không ai bấm gì. Vá lúc đọc là chỗ duy nhất vá được một
+       lần cho tất cả; vá ở lúc dựng contract thì bản nháp trên đĩa vẫn rỗng và
+       màn hình vẫn không nói ra được cỡ nào. */
+    const doc = migrateComposerDoc(
+      saved({
+        blocks: [{
+          id: "u1", kind: "uikit", mode: "template",
+          cells: [
+            { id: "c1", elementId: "button", styleId: "", decor: "4", glazeId: "", sizeId: "", note: "" },
+            { id: "c2", elementId: "coin", styleId: "", decor: "2", glazeId: "", sizeId: "xl", note: "" },
+          ],
+        }],
+      }),
+      PRESETS,
+    );
+    const cells = (doc.composer.blocks[0] as { cells: { sizeId: string }[] }).cells;
+    expect(cells[0]!.sizeId).toBe(SYSTEM_SIZE_VALUE);
+    /* Cỡ người dùng ĐÃ chọn thì không được đụng tới. */
+    expect(cells[1]!.sizeId).toBe("xl");
   });
 
   it("`brandAssets` chỉ nhận cặp chuỗi-chuỗi", () => {

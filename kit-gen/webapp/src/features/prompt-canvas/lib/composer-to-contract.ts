@@ -25,7 +25,7 @@ import { describeBrandColors } from "@/features/prompt-lab/lib/brand-colors";
 import { INHERIT, labelOf, phraseOf, type PillKind } from "@/features/prompt-lab/lib/pill-registry";
 import { getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
 import { NODE } from "@/features/prompt-lab/lib/schema";
-import { SQUARE_CANVAS_PX, skelSizeOf } from "@/features/prompt-lab/lib/cell-size";
+import { SQUARE_CANVAS_PX, SYSTEM_CELL_FRACTION, skelSizeOf } from "@/features/prompt-lab/lib/cell-size";
 import { SCAFFOLDS } from "@/features/prompt-lab/lib/doc-templates";
 import { freeText, makeContext, serializeDoc, tidy, type PromptDocNode } from "@/features/prompt-lab/lib/serialize";
 import { contextFreeText, contextStyleEN, contextThemeEN } from "@/features/prompt-lab/lib/serialize-composer";
@@ -92,7 +92,7 @@ const MAX_CELLS_SQUARE = 16;
  * của mọi dự án đang có đều chưa chọn cỡ, và một lượt sửa không được đổi kích
  * thước những thứ người dùng đã vẽ xong.
  */
-const CELL_SKEL = { shape: "rrect" as const, w: 0.8, h: 0.6 };
+const CELL_SKEL = { shape: "rrect" as const, ...SYSTEM_CELL_FRACTION };
 
 /**
  * KHỔ CANVAS CỦA TẤM BỘ UI — vuông.

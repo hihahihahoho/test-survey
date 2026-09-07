@@ -85,7 +85,7 @@ export function PillCaret({ compact }: { compact?: boolean }) {
  * ║ giờ wrap nữa, nó chỉ cắt bớt chữ — mà chữ bị cắt là nhãn, còn giá trị thì ║
  * ║ vẫn đọc được vì nó đứng sau dấu hai chấm và được ưu tiên giữ.             ║
  * ║ Tiện thể nó trả lời luôn *"sao vẫn không thấy select điền size"*: pill cỡ ║
- * ║ nay TỰ XƯNG TÊN («Cỡ: theo hệ thống ⌄») thay vì là một chữ trôi nổi.      ║
+ * ║ nay TỰ XƯNG TÊN («Cỡ: M · vừa ⌄») thay vì là một chữ trôi nổi.            ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 export function PillAxis({ children }: { children: React.ReactNode }) {

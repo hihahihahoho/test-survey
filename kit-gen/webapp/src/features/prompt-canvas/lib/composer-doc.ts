@@ -11,6 +11,7 @@ import {
   type MascotPose,
   type UiCell,
 } from "@/features/prompt-lab/lib/composer-model";
+import { SYSTEM_SIZE_VALUE } from "@/features/prompt-lab/lib/cell-size";
 import { glazeFromMaterial } from "@/features/kit-core/lib/glaze";
 import { EXPRESSIONS } from "@/features/kit-core/lib/poses";
 import { DEFAULT_VIEW } from "@/features/pose-lab/lib/pose-state";
@@ -101,7 +102,12 @@ function readCell(raw: unknown, index: number): UiCell | null {
     styleId,
     decor,
     glazeId,
-    sizeId: str(raw["sizeId"]),
+    /* CỠ RỖNG LÀ DI SẢN, KHÔNG PHẢI MỘT LỰA CHỌN. Bản nháp lưu trước 07/09/2026
+       để rỗng nghĩa là «theo hệ thống» — một cỡ không ai đọc ra được và còn đổi
+       theo lưới. Vá ngay lúc đọc: từ đây trở đi dòng nào cũng mang một con số.
+       Khác `glazeId` ngay bên trên ở chỗ đó: rỗng của đục nền LÀ một lựa chọn
+       («nền đặc»), rỗng của cỡ thì không. */
+    sizeId: str(raw["sizeId"]) || SYSTEM_SIZE_VALUE,
     note: str(raw["note"]),
     /* Câu tự do của riêng dòng (chế độ `free`). Thiếu ⇒ để `undefined` chứ KHÔNG
        dựng câu khởi điểm ở đây: dựng ở đây là ghi một tài liệu TipTap vào mọi ô

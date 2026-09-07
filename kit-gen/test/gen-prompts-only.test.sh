@@ -236,10 +236,16 @@ refute "không còn tiêu đề hàng"       "Row 1, left to right" "$allp"
 n_zone=$(printf '%s' "$vuong" | grep -cE '^[0-9]+\) .* — safe zone x=[0-9]+\.\.[0-9]+, y=[0-9]+\.\.[0-9]+ \([0-9]+x[0-9]+ px\)')
 eq_n() { if [ "$2" = "$3" ]; then printf 'ok   %s\n' "$1"; else printf 'LOI  %s (mong %s, thực %s)\n' "$1" "$2" "$3" >&2; fail=1; fi; }
 eq_n "tấm 2x2 có đủ 4 dòng toạ độ" 4 "$n_zone"
-# Tấm full-bleed KHÔNG có safe zone (cảnh phủ kín ô), tấm mascot thì CÓ.
+# Tấm nền MỘT Ô đi hẳn một nhánh khác (chủ sản phẩm 07/09/2026: "prompt dài quá,
+# gen full khung mobile luôn"): nó không phải sprite sheet nên không có lưới, không
+# có hộp cắt, không có luật nền trong suốt — chỉ còn khổ giấy, phong cách, một câu
+# kỹ thuật và cảnh muốn vẽ. Tấm mascot thì vẫn CÓ safe zone.
 nen="$(cat "$WORK/p/prompts/tet-nen.txt")"
 refute "tấm nền không hứa khung cắt nào" "safe zone x=" "$nen"
-expect "tấm nền nói rõ là phủ kín ô" "full-bleed scene, fills its whole cell" "$nen"
+refute "tấm nền không lãnh lưới của sprite sheet" "STRICT grid" "$nen"
+refute "tấm nền không bị đòi nền trong suốt" "FULLY TRANSPARENT" "$nen"
+expect "tấm nền nói rõ là phủ kín khung" "filling the whole frame edge to edge" "$nen"
+expect "và vẫn mang đúng cảnh người dùng gõ" "village scene at dawn" "$nen"
 expect "tấm mascot 1x1 ⇒ safe zone bằng 0.8x0.8 của cả canvas" \
   "1) mascot waving — safe zone x=153..1382, y=102..921 (1229x819 px)" "$linh"
 

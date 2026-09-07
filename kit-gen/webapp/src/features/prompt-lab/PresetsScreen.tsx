@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { GLAZE_PRESETS } from "@/features/kit-core/lib/glaze";
 
-import { SIZE_PRESETS } from "./lib/cell-size";
+import { SIZE_PRESETS, defaultSizeOf, sizeLabel } from "./lib/cell-size";
 import {
   DECOR_LEVELS,
   resetPresets,
@@ -252,14 +252,21 @@ export function PresetsScreen() {
               <label className="flex flex-col gap-1">
                 <span className="text-caption text-fg-muted">Cỡ mặc định</span>
                 <select
-                  value={preset.sizeId}
+                  /* KHÔNG CÒN MỤC RỖNG. Rỗng từng nghĩa là «theo hệ thống» — một cỡ
+                     không hiện ra ở đâu và còn đổi theo lưới; chủ sản phẩm hỏi thẳng
+                     "cỡ theo hệ thống là sao nhỉ". Danh mục cũ còn lưu rỗng thì ô này
+                     hiện cỡ hệ thống ĐÃ VIẾT RA (`defaultSizeOf`), nên người sửa danh
+                     mục đọc được đúng con số mà dòng element sẽ nhận. */
+                  value={defaultSizeOf(preset)}
                   onChange={(event) => updateElement(preset.id, { sizeId: event.target.value })}
                   className="rounded-1 border border-line-subtle bg-canvas px-2 py-1.5 text-body text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                 >
                   {/* Chỉ preset: ô tự điền là chuyện của TỪNG DÒNG trong thẻ, không
                       phải của danh mục — một cỡ pixel cụ thể áp cho mọi bộ kit dùng
                       món này là đóng cứng hình học vào một danh mục dùng chung. */}
-                  <option value="">— theo hệ thống —</option>
+                  {!SIZE_PRESETS.some((size) => size.id === defaultSizeOf(preset)) && (
+                    <option value={defaultSizeOf(preset)}>{sizeLabel(defaultSizeOf(preset))}</option>
+                  )}
                   {SIZE_PRESETS.map((size) => (
                     <option key={size.id} value={size.id}>
                       {size.vi} · {size.w}×{size.h}px

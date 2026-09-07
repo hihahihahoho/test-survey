@@ -285,6 +285,11 @@ for s in cfg["styles"]:
         # full-bleed KHÔNG key gì cả nên viền đó đi thẳng vào asset (đã dính: viền
         # magenta 40-55px quanh 25-bg-home ở lần gen thứ hai của BlindTest-B2).
         full_bleed = n_real > 0 and all(c["skel"].get("shape") == "full" for c in real)
+        # MỘT Ô FULL-BLEED = MỘT MÀN HÌNH, không phải một sprite sheet 1x1. Tách hẳn
+        # vị từ này ra khỏi `full_bleed` vì tấm NHIỀU ô full-bleed (bộ nhiều cảnh trên
+        # một canvas) vẫn cần lưới, vẫn cần biết ranh giới ô — nó chỉ giống tấm nền ở
+        # chỗ không có pixel rỗng. Nhập hai ca lại là mất một trong hai.
+        screen_sheet = full_bleed and len(comps) == 1
         # ⚠️ SHEET MASCOT KHÔNG CÒN NHẬN DIỆN BẰNG MỖI `sh["ref"]`.
         # Bản cũ: `mascot_sheet = bool(sh.get("ref"))` — có ảnh nhân vật thì cả tấm
         # là nhân vật. Vị từ ấy sai theo CẢ HAI CHIỀU kể từ khi thẻ Nhân vật ra
@@ -402,197 +407,239 @@ for s in cfg["styles"]:
             ]
 
         # ═══ ② HÌNH HỌC — THUẦN KỸ THUẬT ═════════════════════════════════════
-        if full_bleed:
-            place = [
-                f"Each cell is a {sh.get('cell_hint', 'full-bleed scene')}.",
-                "Each scene FILLS ITS OWN CELL COMPLETELY, edge to edge, and bleeds off all four",
-                "sides of that cell: no border, no frame, no margin, no vignette band — and above",
-                "all NOT ONE PIXEL of empty transparent background may show around a scene.",
-                ("The ONLY transparent gap allowed on this sheet is a thin 24px line exactly on"
-                 " the cell boundaries between neighbouring scenes."
-                 if n_real > 1 else
-                 "This sheet has no empty background anywhere: the scene covers every pixel."),
-                "A scene inset inside an empty transparent frame is unusable and will be regenerated.",
+        # ⚠️ MỘT CẢNH NỀN KHÔNG PHẢI MỘT SPRITE SHEET CÓ ĐÚNG MỘT Ô.
+        # Chủ sản phẩm 07/09/2026: «Cảnh nền → prompt dài quá, giờ tách ra ko cho nó
+        # gen sprite sheet nữa nhé, kiểu gen full khung mobile luôn.» Trước bản này
+        # tấm nền lãnh NGUYÊN bộ luật của tấm giao diện: lưới cứng, hộp cắt safe zone,
+        # cấu tạo ba lớp core/rim/decoration, luật nền trong suốt, lệnh cấm vẽ caro —
+        # ngót trăm dòng nói về những thứ tấm này KHÔNG có. Tệ hơn cả thừa: chúng nói
+        # NGƯỢC. Một tấm mà nền phải phủ kín từ mép đến mép lại được lệnh «nền phải
+        # trong suốt hoàn toàn» và «chừa 40px đệm quanh element» thì model chọn đường
+        # nào cũng sai, và cái sai nó hay chọn là vẽ cảnh thụt vào giữa một khung rỗng.
+        # Ở nhánh này prompt chỉ còn đúng bốn thứ: khổ giấy, phong cách, một câu kỹ
+        # thuật, và cảnh người dùng muốn vẽ.
+        if screen_sheet:
+            lines = [
+                # DÒNG 1 VẪN LÀ HỢP ĐỒNG VỚI TẦNG BASH: `run_one` đọc ngược khổ giấy
+                # bằng `head -n1 … | grep -qiE 'PORTRAIT|SQUARE'`. Đừng dời, đừng bọc.
+                "Canvas orientation: " + canvas_header + ".",
+                "",
+                *style_block,
+                "",
+                f"A single full-screen mobile game background, {canvas_ratio}, {canvas_w}x{canvas_h} px,",
+                "filling the whole frame edge to edge. This is one finished screen, not a sheet of",
+                "separate parts: no border, no frame, no margin, no rounded corners, no vignette",
+                "band. The art reaches all four edges and every pixel of the canvas is painted —",
+                "a scene sitting inset inside an empty frame is unusable and will be regenerated.",
+                "",
+                # MỘT DÒNG DUY NHẤT CÒN LẠI TỪ KHỐI RÀNG BUỘC CŨ, và nó ở lại vì lý do
+                # riêng: chữ do model vẽ ra luôn là chữ méo, không đọc được, không sửa
+                # được — với cảnh nền thì đó là vệt hỏng nằm giữa màn hình.
+                "ABSOLUTELY NO TEXT: no letters, no digits and no words anywhere in the image.",
+                "",
             ]
         else:
-            place = [
-                f"Each cell is a {sh.get('cell_hint', 'cell')}. Each element sits fully inside its own invisible cell,",
-                "centered, keeping at least 40px of empty background padding on every side of the element;",
-                "elements never touch each other and never touch the image edges.",
-            ]
-        # ⚠️ KHỐI CẤU TẠO NÀY ĐƯỢC VIẾT CHO NÚT BẤM, KHÔNG PHẢI CHO NHÂN VẬT.
-        # Nó ra lệnh: một MẶT PHẲNG liền lạc lấp kín safe zone, viền ngay bên ngoài
-        # mặt phẳng đó. Với nút, khay, thanh thì đó đúng là cấu tạo. Với sheet mascot
-        # thì không có "mặt phẳng" nào cả — và model vẫn tuân lệnh: nó vẽ con vật như
-        # một cái huy hiệu có viền, dáng cứng đơ, tóc/tai/đuôi bị ép vào trong.
-        #
-        # DANH SÁCH TRANG TRÍ CỨNG ĐÃ BỊ XOÁ KHỎI CẢ HAI NHÁNH. Bản cũ liệt kê
-        # "flowers, ribbons, tassels, jewels, sparkles and filigree" (nhánh nút) và
-        # "Hair, ears, tails, ribbons, props and sparkles" (nhánh mascot). Ràng buộc
-        # THẬT ở đây chỉ có một: thứ tràn ra được phép vượt safe zone, KHÔNG vượt ô.
-        # Tràn ra là CÁI GÌ thì phong cách của người dùng quyết, không phải engine —
-        # nêu tên một món trang trí là mồi cho model vẽ đúng món đó, kể cả khi phong
-        # cách là mực hoạ phẳng không có lấy một cái tua rua.
-        layer_block = (
-            [
-                "Draw the character as ONE natural figure, not as a rim around a flat plate:",
-                "no forced border, no badge frame, no plaque. Anything that overflows the",
-                "figure may cross its safe zone, but must stay well clear of every other",
-                "element's safe zone.",
-            ]
-            if mascot_sheet else
-            [
-                "Build each element from the inside out:",
-                "1) one continuous, clean content surface filling its whole safe zone — this is",
-                "   the CORE;",
-                "2) any rim, border or edge treatment immediately OUTSIDE the safe zone — it",
-                "   must not consume or reduce the safe-zone surface;",
-                "3) decoration, if the art style calls for any, farther outside still as overflow;",
-                "   it may cross the safe zone but must stay well clear of every other element's",
-                "   safe zone.",
-                "Keep the safe zone clean: no decoration may cover the functional core.",
-            ]
-        )
-        lines = [
-            # DÒNG 1 LÀ HỢP ĐỒNG VỚI TẦNG BASH: `run_one` đọc ngược khổ giấy bằng
-            # `head -n1 … | grep -qi 'PORTRAIT|SQUARE'`. Đừng dời, đừng bọc.
-            "Canvas orientation: " + canvas_header + ".",
-            "",
-            *style_block,
-            "",
-            # KHÔNG CÒN KHUNG NGỮ CẢNH CỨNG. Bản cũ mở đầu bằng "A game UI kit sprite
-            # sheet for a mobile mini-game marketing campaign." — một thể loại, một
-            # kênh phát hành và một mục đích thương mại, đóng đinh cho MỌI dự án dùng
-            # engine này. Ngữ cảnh đến từ khối phong cách ở trên; câu này chỉ còn nói
-            # tấm ảnh NÀY là cái gì về mặt kỹ thuật.
-            (f"A sheet of {n_real} full-bleed background scenes." if full_bleed and n_real > 1 else
-             "A single full-bleed background scene." if full_bleed else
-             # Tấm mascot KHÔNG phải "UI elements": ô của nó là các DÁNG của cùng một
-             # nhân vật. Bản cũ gọi mọi tấm nhiều ô là "game UI kit sprite sheet", nên
-             # tấm dáng bị mời vẽ nhân vật như một món đồ giao diện — cùng họ với lỗi
-             # mà khối cấu tạo ba lớp đã gây ra (xem `layer_block`).
-             f"A sheet of {n_real} poses of one character, laid out on one transparent canvas."
-             if mascot_sheet and len(comps) > 1 else
-             "A single character on a transparent canvas." if mascot_sheet else
-             "A sprite sheet of separate UI elements on one transparent canvas." if len(comps) > 1 else
-             "A single element on a transparent canvas."),
-            f"Exactly {n_real} elements arranged in a STRICT grid of {cols} columns and {rows} rows, evenly spaced."
-            + ("" if n_real == len(comps) else
-               f" The LAST {len(comps) - n_real} cell(s) of the grid are INTENTIONALLY EMPTY:"
-               " draw absolutely nothing there — the whole cell stays fully transparent."),
-            # NHÃN PHIÊN BẢN NỘI BỘ ĐÃ BỊ XOÁ. Bản cũ có hai biến thể của câu này, một
-            # cái mở đầu bằng "This is the v14+ NINE-ELEMENT production layout", cái kia
-            # kết bằng "the nine-element v14+ layout applies only when the contract itself
-            # declares a complete 3-by-3 nine-cell sheet". Model không biết v14 là gì; nó
-            # chỉ cần biết lưới này BẤT BIẾN — và câu đó đúng cho mọi lưới, nên không cần
-            # hai nhánh.
-            "The grid above is fixed for this sheet: keep exactly this many cells in exactly",
-            "this order. Do not repack the elements into a denser or looser grid, and do not",
-            "invent extra cells.",
-            *place,
-            "",
-            # ── Khối neo hình học — theo prompt crop-safe của spike safe-zone
-            #    (docs/SPRITESHEET-SAFE-ZONE-HANDOFF.md §5.3). Điểm mấu chốt: nói RA
-            #    HẬU QUẢ ("phần mềm sẽ crop đúng 4 toạ độ này") thay vì chỉ ra lệnh
-            #    "respect the frame", và cấm THẲNG hành vi hỏng phổ biến nhất mà §8.1
-            #    đã đo: model co mặt nội dung lại để nhét viền vào trong.
+            if full_bleed:
+                place = [
+                    f"Each cell is a {sh.get('cell_hint', 'full-bleed scene')}.",
+                    "Each scene FILLS ITS OWN CELL COMPLETELY, edge to edge, and bleeds off all four",
+                    "sides of that cell: no border, no frame, no margin, no vignette band — and above",
+                    "all NOT ONE PIXEL of empty transparent background may show around a scene.",
+                    ("The ONLY transparent gap allowed on this sheet is a thin 24px line exactly on"
+                     " the cell boundaries between neighbouring scenes."
+                     if n_real > 1 else
+                     "This sheet has no empty background anywhere: the scene covers every pixel."),
+                    "A scene inset inside an empty transparent frame is unusable and will be regenerated.",
+                ]
+            else:
+                place = [
+                    f"Each cell is a {sh.get('cell_hint', 'cell')}. Each element sits fully inside its own invisible cell,",
+                    "centered, keeping at least 40px of empty background padding on every side of the element;",
+                    "elements never touch each other and never touch the image edges.",
+                ]
+            # ⚠️ KHỐI CẤU TẠO NÀY ĐƯỢC VIẾT CHO NÚT BẤM, KHÔNG PHẢI CHO NHÂN VẬT.
+            # Nó ra lệnh: một MẶT PHẲNG liền lạc lấp kín safe zone, viền ngay bên ngoài
+            # mặt phẳng đó. Với nút, khay, thanh thì đó đúng là cấu tạo. Với sheet mascot
+            # thì không có "mặt phẳng" nào cả — và model vẫn tuân lệnh: nó vẽ con vật như
+            # một cái huy hiệu có viền, dáng cứng đơ, tóc/tai/đuôi bị ép vào trong.
             #
-            #    KHÔNG CÒN "The FIRST attached image is the geometry contract…". Ba khối
-            #    cũ (ảnh đính kèm là hợp đồng / dark frame là crop box / gray silhouette
-            #    là core) đều trỏ vào một tấm PNG nay không còn được render nữa. Thay
-            #    bằng ĐÚNG THỨ tấm PNG đó từng mã hoá: bốn con số, in ngay cạnh từng ô.
-            f"Canvas {canvas_w}x{canvas_h} px, origin top-left: x grows right, y grows down.",
-            "Every coordinate in this prompt is a pixel position in the final image.",
-            "No guide image is attached and no alignment marks of any kind exist in this",
-            "sheet: the numbers below are the entire layout instruction. Never draw a frame,",
-            "a grid line or a placeholder shape to mark them.",
-            "",
-            "The safe zone printed on each element's line below is a production crop box:",
-            "after generation, software cuts that asset out using exactly those four",
-            "coordinates. Therefore, for every element:",
-            "- its continuous functional CORE must fill its own safe zone — same left, top,",
-            "  right and bottom extents, and the same center;",
-            "- NEVER shrink the CORE to make room for a border or rim;",
-            "- never enlarge, stretch, move, offset or recenter it;",
-            "- a shifted or undersized CORE is unusable and will be regenerated.",
-            "",
-            *layer_block,
-            # "enamel" là một chất liệu (men sứ) — nó nằm ở đây từ đời prompt kẹo bóng
-            # và không có việc gì trong một câu chỉ nói về ĐO ĐẠC hình học.
-            "The continuous content surface is the CORE and the only layer scored for",
-            "geometry. Measure intrusion one-sided: core missing inside the safe zone is a",
-            "failure; decoration or core extending outside the safe zone is harmless if it",
-            "stays in the element's own cell.",
-            "",
-            # ⚠️ KHÔNG quay lại luật "mỗi element phủ 70-80% bề ngang ô". Đó là một chỉ
-            #    thị hình học THỨ HAI đá nhau với khối crop-safe ở trên, và nó đẩy model
-            #    đúng về phía lỗi mà handoff §8.1 đo được: co mặt nội dung vào trong.
-            #    Kích thước đã nằm trong chính toạ độ; prompt chỉ nói tính nhất quán.
-            "SIZING: the safe-zone coordinates decide every size. Do not rescale anything to",
-            "look tidy; elements of the same kind simply share one consistent visual weight.",
-            "",
-            # ═══ ③ RÀNG BUỘC KỸ THUẬT ════════════════════════════════════════
-            # ── NỀN: ALPHA THẬT, KHÔNG CÒN CHROMA-KEY ────────────────────────
-            # image_gen của codex 0.149 trả về RGBA thật. Chroma-key là cách CŨ để giả
-            # trong suốt khi công cụ không có alpha — và nó phải trả giá: viền nhiễm
-            # màu key, quầng sáng mất, kính phải giải ngược C = α·F + (1−α)·K.
-            # BẪY: khi không tạo được trong suốt, model KHÔNG báo lỗi mà VẼ MỘT TẤM
-            # CARO GIẢ ở α=255 (đo được, BACKLOG #24 ⑦). Nên câu dưới cấm đích danh
-            # việc vẽ caro, và slice.py còn soi kênh α để chặn lần nữa.
-            "BACKGROUND of the sheet: FULLY TRANSPARENT. Save a PNG with a real alpha",
-            "channel; every pixel that is not part of a drawn element must have alpha = 0.",
-            "This background rule OVERRIDES the art style and every reference image: never",
-            "use a style-coloured, scene, gradient or flat-colour background for the sheet.",
-            "",
-            # ── CẤM VẼ CARO — LỜI CẤM NẶNG NHẤT TRONG CẢ PROMPT ──────────────
-            # Đo được, nhiều lượt: model KHÔNG báo lỗi khi nó không tạo được trong
-            # suốt. Nó vẽ lại *cái hình ảnh tượng trưng cho trong suốt* — ô caro
-            # xám-trắng — rồi trả về ở α=255. Nói "hãy trong suốt" là chưa đủ, vì
-            # với model thì tấm caro TRÔNG cũng đúng như thế. Phải:
-            #   ① gọi tên đúng thứ bị cấm,
-            #   ② nói ra vì sao nó sai (caro là cách trình xem ảnh HIỂN THỊ chỗ
-            #      rỗng, không phải một thứ có trong tranh),
-            #   ③ và chỉ ra cách làm ĐÚNG thay thế (hạ α, đừng tô màu nhạt).
-            # Thiếu ③ là model chỉ biết mình sai mà không biết đi đường nào.
-            "NEVER DRAW A CHECKERBOARD. Grey-and-white squares are how an image editor",
-            "DISPLAYS empty pixels on screen; they are not part of any artwork, and painting",
-            "them is the single worst thing you can do to this sheet — it makes every asset",
-            "cut from it unusable. This applies everywhere, at any scale, at any opacity:",
-            "no checker tiles, no pale square grid, no 'transparency pattern' texture.",
-            #
-            # ĐÃ THỬ VÀ ĐÃ BỎ — đừng viết lại: một khối nữa nói "cái phông tưởng
-            # tượng không được ghi vào file / mỗi element là một sticker die-cut,
-            # ngoài mực là file rỗng". Đo lượt 5: nó KHÔNG bớt caro ở ô glow (13% →
-            # 10%) mà làm khâu cắt alpha hoá hung hãn — mép răng cưa lởm chởm, thủng
-            # lỗ đỏ vào giữa thân nút và thân xu, quầng sáng bạc trắng hết. Nói mạnh
-            # thêm về "rỗng" là đổi một lỗi nhìn thấy được lấy một lỗi tệ hơn.
-            "",
-            "WHENEVER SOMETHING SHOULD BE SEE-THROUGH — the background, the faint outer halo",
-            "of a light, the body of a glass panel — express it with the ALPHA CHANNEL: give",
-            "those pixels a LOW alpha value and keep their own colour. Do NOT simulate it with",
-            "paint: no white wash, no pale grey fill, no checker tiles at full alpha. Less",
-            "alpha, not lighter paint. If you cannot lower the alpha of a region, leave that",
-            "region completely unpainted rather than filling it with a stand-in pattern.",
-            "",
-            "ABSOLUTELY NO TEXT: no letters, no digits, no words, no characters of any language",
-            "anywhere in the image. All faces, banners, buttons, plates and screens are BLANK — text will",
-            "be composited later in the game engine.",
-            # Câu này nói về THÂN ELEMENT, không phải về nền sheet — và từ khi nền
-            # sheet là alpha thật thì hai thứ đó dễ bị đọc lẫn. Nêu rõ ngoại lệ:
-            # ô `matte:"glass"` cố ý mang alpha một phần, ô `matte:"glow"` cố ý tan
-            # dần ra nền. Không trừ ra thì hai dòng đá nhau ngay trong một prompt.
-            "Every element is FULLY OPAQUE with solid fills (alpha 255) — never leave an element",
-            "interior hollow, semi-transparent, or showing the background through it. This is about",
-            "the BODY of an element, not the sheet background, and it does not apply where a spec",
-            "explicitly says the element is hollow, see-through or made of light.",
-            ""
-        ]
+            # DANH SÁCH TRANG TRÍ CỨNG ĐÃ BỊ XOÁ KHỎI CẢ HAI NHÁNH. Bản cũ liệt kê
+            # "flowers, ribbons, tassels, jewels, sparkles and filigree" (nhánh nút) và
+            # "Hair, ears, tails, ribbons, props and sparkles" (nhánh mascot). Ràng buộc
+            # THẬT ở đây chỉ có một: thứ tràn ra được phép vượt safe zone, KHÔNG vượt ô.
+            # Tràn ra là CÁI GÌ thì phong cách của người dùng quyết, không phải engine —
+            # nêu tên một món trang trí là mồi cho model vẽ đúng món đó, kể cả khi phong
+            # cách là mực hoạ phẳng không có lấy một cái tua rua.
+            layer_block = (
+                [
+                    "Draw the character as ONE natural figure, not as a rim around a flat plate:",
+                    "no forced border, no badge frame, no plaque. Anything that overflows the",
+                    "figure may cross its safe zone, but must stay well clear of every other",
+                    "element's safe zone.",
+                ]
+                if mascot_sheet else
+                [
+                    "Build each element from the inside out:",
+                    "1) one continuous, clean content surface filling its whole safe zone — this is",
+                    "   the CORE;",
+                    "2) any rim, border or edge treatment immediately OUTSIDE the safe zone — it",
+                    "   must not consume or reduce the safe-zone surface;",
+                    "3) decoration, if the art style calls for any, farther outside still as overflow;",
+                    "   it may cross the safe zone but must stay well clear of every other element's",
+                    "   safe zone.",
+                    "Keep the safe zone clean: no decoration may cover the functional core.",
+                ]
+            )
+            lines = [
+                # DÒNG 1 LÀ HỢP ĐỒNG VỚI TẦNG BASH: `run_one` đọc ngược khổ giấy bằng
+                # `head -n1 … | grep -qi 'PORTRAIT|SQUARE'`. Đừng dời, đừng bọc.
+                "Canvas orientation: " + canvas_header + ".",
+                "",
+                *style_block,
+                "",
+                # KHÔNG CÒN KHUNG NGỮ CẢNH CỨNG. Bản cũ mở đầu bằng "A game UI kit sprite
+                # sheet for a mobile mini-game marketing campaign." — một thể loại, một
+                # kênh phát hành và một mục đích thương mại, đóng đinh cho MỌI dự án dùng
+                # engine này. Ngữ cảnh đến từ khối phong cách ở trên; câu này chỉ còn nói
+                # tấm ảnh NÀY là cái gì về mặt kỹ thuật.
+                (f"A sheet of {n_real} full-bleed background scenes." if full_bleed and n_real > 1 else
+                 "A single full-bleed background scene." if full_bleed else
+                 # Tấm mascot KHÔNG phải "UI elements": ô của nó là các DÁNG của cùng một
+                 # nhân vật. Bản cũ gọi mọi tấm nhiều ô là "game UI kit sprite sheet", nên
+                 # tấm dáng bị mời vẽ nhân vật như một món đồ giao diện — cùng họ với lỗi
+                 # mà khối cấu tạo ba lớp đã gây ra (xem `layer_block`).
+                 f"A sheet of {n_real} poses of one character, laid out on one transparent canvas."
+                 if mascot_sheet and len(comps) > 1 else
+                 "A single character on a transparent canvas." if mascot_sheet else
+                 "A sprite sheet of separate UI elements on one transparent canvas." if len(comps) > 1 else
+                 "A single element on a transparent canvas."),
+                f"Exactly {n_real} elements arranged in a STRICT grid of {cols} columns and {rows} rows, evenly spaced."
+                + ("" if n_real == len(comps) else
+                   f" The LAST {len(comps) - n_real} cell(s) of the grid are INTENTIONALLY EMPTY:"
+                   " draw absolutely nothing there — the whole cell stays fully transparent."),
+                # NHÃN PHIÊN BẢN NỘI BỘ ĐÃ BỊ XOÁ. Bản cũ có hai biến thể của câu này, một
+                # cái mở đầu bằng "This is the v14+ NINE-ELEMENT production layout", cái kia
+                # kết bằng "the nine-element v14+ layout applies only when the contract itself
+                # declares a complete 3-by-3 nine-cell sheet". Model không biết v14 là gì; nó
+                # chỉ cần biết lưới này BẤT BIẾN — và câu đó đúng cho mọi lưới, nên không cần
+                # hai nhánh.
+                "The grid above is fixed for this sheet: keep exactly this many cells in exactly",
+                "this order. Do not repack the elements into a denser or looser grid, and do not",
+                "invent extra cells.",
+                *place,
+                "",
+                # ── Khối neo hình học — theo prompt crop-safe của spike safe-zone
+                #    (docs/SPRITESHEET-SAFE-ZONE-HANDOFF.md §5.3). Điểm mấu chốt: nói RA
+                #    HẬU QUẢ ("phần mềm sẽ crop đúng 4 toạ độ này") thay vì chỉ ra lệnh
+                #    "respect the frame", và cấm THẲNG hành vi hỏng phổ biến nhất mà §8.1
+                #    đã đo: model co mặt nội dung lại để nhét viền vào trong.
+                #
+                #    KHÔNG CÒN "The FIRST attached image is the geometry contract…". Ba khối
+                #    cũ (ảnh đính kèm là hợp đồng / dark frame là crop box / gray silhouette
+                #    là core) đều trỏ vào một tấm PNG nay không còn được render nữa. Thay
+                #    bằng ĐÚNG THỨ tấm PNG đó từng mã hoá: bốn con số, in ngay cạnh từng ô.
+                f"Canvas {canvas_w}x{canvas_h} px, origin top-left: x grows right, y grows down.",
+                "Every coordinate in this prompt is a pixel position in the final image.",
+                "No guide image is attached and no alignment marks of any kind exist in this",
+                "sheet: the numbers below are the entire layout instruction. Never draw a frame,",
+                "a grid line or a placeholder shape to mark them.",
+                "",
+                "The safe zone printed on each element's line below is a production crop box:",
+                "after generation, software cuts that asset out using exactly those four",
+                "coordinates. Therefore, for every element:",
+                "- its continuous functional CORE must fill its own safe zone — same left, top,",
+                "  right and bottom extents, and the same center;",
+                "- NEVER shrink the CORE to make room for a border or rim;",
+                "- never enlarge, stretch, move, offset or recenter it;",
+                "- a shifted or undersized CORE is unusable and will be regenerated.",
+                "",
+                *layer_block,
+                # "enamel" là một chất liệu (men sứ) — nó nằm ở đây từ đời prompt kẹo bóng
+                # và không có việc gì trong một câu chỉ nói về ĐO ĐẠC hình học.
+                "The continuous content surface is the CORE and the only layer scored for",
+                "geometry. Measure intrusion one-sided: core missing inside the safe zone is a",
+                "failure; decoration or core extending outside the safe zone is harmless if it",
+                "stays in the element's own cell.",
+                "",
+                # ⚠️ KHÔNG quay lại luật "mỗi element phủ 70-80% bề ngang ô". Đó là một chỉ
+                #    thị hình học THỨ HAI đá nhau với khối crop-safe ở trên, và nó đẩy model
+                #    đúng về phía lỗi mà handoff §8.1 đo được: co mặt nội dung vào trong.
+                #    Kích thước đã nằm trong chính toạ độ; prompt chỉ nói tính nhất quán.
+                "SIZING: the safe-zone coordinates decide every size. Do not rescale anything to",
+                "look tidy; elements of the same kind simply share one consistent visual weight.",
+                "",
+                # ═══ ③ RÀNG BUỘC KỸ THUẬT ════════════════════════════════════════
+                # ── NỀN: ALPHA THẬT, KHÔNG CÒN CHROMA-KEY ────────────────────────
+                # image_gen của codex 0.149 trả về RGBA thật. Chroma-key là cách CŨ để giả
+                # trong suốt khi công cụ không có alpha — và nó phải trả giá: viền nhiễm
+                # màu key, quầng sáng mất, kính phải giải ngược C = α·F + (1−α)·K.
+                # BẪY: khi không tạo được trong suốt, model KHÔNG báo lỗi mà VẼ MỘT TẤM
+                # CARO GIẢ ở α=255 (đo được, BACKLOG #24 ⑦). Nên câu dưới cấm đích danh
+                # việc vẽ caro, và slice.py còn soi kênh α để chặn lần nữa.
+                "BACKGROUND of the sheet: FULLY TRANSPARENT. Save a PNG with a real alpha",
+                "channel; every pixel that is not part of a drawn element must have alpha = 0.",
+                "This background rule OVERRIDES the art style and every reference image: never",
+                "use a style-coloured, scene, gradient or flat-colour background for the sheet.",
+                "",
+                # ── CẤM VẼ CARO — LỜI CẤM NẶNG NHẤT TRONG CẢ PROMPT ──────────────
+                # Đo được, nhiều lượt: model KHÔNG báo lỗi khi nó không tạo được trong
+                # suốt. Nó vẽ lại *cái hình ảnh tượng trưng cho trong suốt* — ô caro
+                # xám-trắng — rồi trả về ở α=255. Nói "hãy trong suốt" là chưa đủ, vì
+                # với model thì tấm caro TRÔNG cũng đúng như thế. Phải:
+                #   ① gọi tên đúng thứ bị cấm,
+                #   ② nói ra vì sao nó sai (caro là cách trình xem ảnh HIỂN THỊ chỗ
+                #      rỗng, không phải một thứ có trong tranh),
+                #   ③ và chỉ ra cách làm ĐÚNG thay thế (hạ α, đừng tô màu nhạt).
+                # Thiếu ③ là model chỉ biết mình sai mà không biết đi đường nào.
+                "NEVER DRAW A CHECKERBOARD. Grey-and-white squares are how an image editor",
+                "DISPLAYS empty pixels on screen; they are not part of any artwork, and painting",
+                "them is the single worst thing you can do to this sheet — it makes every asset",
+                "cut from it unusable. This applies everywhere, at any scale, at any opacity:",
+                "no checker tiles, no pale square grid, no 'transparency pattern' texture.",
+                #
+                # ĐÃ THỬ VÀ ĐÃ BỎ — đừng viết lại: một khối nữa nói "cái phông tưởng
+                # tượng không được ghi vào file / mỗi element là một sticker die-cut,
+                # ngoài mực là file rỗng". Đo lượt 5: nó KHÔNG bớt caro ở ô glow (13% →
+                # 10%) mà làm khâu cắt alpha hoá hung hãn — mép răng cưa lởm chởm, thủng
+                # lỗ đỏ vào giữa thân nút và thân xu, quầng sáng bạc trắng hết. Nói mạnh
+                # thêm về "rỗng" là đổi một lỗi nhìn thấy được lấy một lỗi tệ hơn.
+                "",
+                "WHENEVER SOMETHING SHOULD BE SEE-THROUGH — the background, the faint outer halo",
+                "of a light, the body of a glass panel — express it with the ALPHA CHANNEL: give",
+                "those pixels a LOW alpha value and keep their own colour. Do NOT simulate it with",
+                "paint: no white wash, no pale grey fill, no checker tiles at full alpha. Less",
+                "alpha, not lighter paint. If you cannot lower the alpha of a region, leave that",
+                "region completely unpainted rather than filling it with a stand-in pattern.",
+                "",
+                "ABSOLUTELY NO TEXT: no letters, no digits, no words, no characters of any language",
+                "anywhere in the image. All faces, banners, buttons, plates and screens are BLANK — text will",
+                "be composited later in the game engine.",
+                # Câu này nói về THÂN ELEMENT, không phải về nền sheet — và từ khi nền
+                # sheet là alpha thật thì hai thứ đó dễ bị đọc lẫn. Nêu rõ ngoại lệ:
+                # ô `matte:"glass"` cố ý mang alpha một phần, ô `matte:"glow"` cố ý tan
+                # dần ra nền. Không trừ ra thì hai dòng đá nhau ngay trong một prompt.
+                "Every element is FULLY OPAQUE with solid fills (alpha 255) — never leave an element",
+                "interior hollow, semi-transparent, or showing the background through it. This is about",
+                "the BODY of an element, not the sheet background, and it does not apply where a spec",
+                "explicitly says the element is hollow, see-through or made of light.",
+                ""
+            ]
         # ⚠️ KHỐI NÀY GIỜ HỎI `sh["ref"]`, KHÔNG HỎI `mascot_sheet`.
         # Từ khi `mascot_sheet` còn bật lên bằng `skel.shape=="pose"`, một tấm dáng
         # KHÔNG có ảnh nhân vật vẫn là tấm mascot — mà nói "The attached character
         # REFERENCE PHOTO" khi không đính ảnh nào là chỉ cho model một tấm ảnh không
         # tồn tại, và nó sẽ đi tìm trong đám ảnh brand/inspo.
-        if sh.get("ref"):
+        # ẢNH THAM CHIẾU CỦA TẤM NỀN TẢ CẢNH, KHÔNG TẢ NHÂN VẬT. Một câu duy nhất
+        # cho mọi tấm là sai từ khi thẻ Cảnh nền cho đính ảnh: người dùng đưa lên ảnh
+        # một khu chợ Tết, engine bảo model «trong ảnh này là NHÂN VẬT», thế là giữa
+        # màn hình mọc ra một con mascot không ai xin.
+        if sh.get("ref") and screen_sheet:
+            lines += [
+                "The attached SCENE REFERENCE image says WHAT this background shows: take its",
+                "subject, setting, season and mood from it. Re-draw it in the art style above and",
+                "recompose it to fill this canvas — never copy it pixel for pixel, and never keep",
+                "its original framing, borders or empty margins.", ""]
+        elif sh.get("ref"):
             # KHÔNG CÒN "The SECOND attached image". Câu cũ đếm theo thứ tự đính kèm,
             # mà vị trí thứ hai là vị trí của ảnh khung xương — bỏ khung xương thì ảnh
             # nhân vật lên hàng đầu và câu này trỏ nhầm sang ảnh brand/inspo. Gọi ảnh
@@ -640,100 +687,110 @@ for s in cfg["styles"]:
         # lại rằng art style thắng spec — vì hồi đó spec CÓ vật liệu để mà thắng.
         # Nay spec chỉ còn danh từ, nên chỉ cần nói ranh giới một lần, ở đúng chỗ
         # người đọc (và model) cần nó nhất: ngay trên danh sách.
-        lines += [
-            "THE NUMBERED LIST BELOW NAMES ONLY *WHAT* EACH CELL IS — its identity, its parts",
-            "and its state (filled / outline / hollow / open / closed / active / disabled).",
-            "HOW everything looks — material, texture, finish, lighting, palette, every actual",
-            "colour, and how much depth and volume it has — comes from the ART STYLE block at",
-            "the top of this prompt, and from nowhere else. If a line below still happens to",
-            "carry a material or colour word, the ART STYLE outranks it.",
-            "Geometry always outranks both: the safe-zone coordinates on each line decide",
-            "position and size.",
-            "Each element's continuous core must lie fully inside its safe zone; rim and",
-            "decoration may overflow outside the box but must not touch another element's zone.",
-            "",
-        ]
-        # ── MỘT DANH SÁCH, KHÔNG PHẢI HAI ───────────────────────────────────
-        # Bản nháp đầu của bản bỏ-skeleton in một khối "Cell 1 (row 1, col 1): cell
-        # box …; SAFE ZONE …" RIÊNG, đứng trên danh sách danh từ. Chủ sản phẩm bác
-        # (27/08/2026): hai danh sách song song bắt cả người lẫn model phải tự ghép
-        # "ô số 3" của bảng này với "3)" của bảng kia, và một tấm 3×3 thành 18 dòng
-        # nói về 9 thứ. Nay danh từ và toạ độ nằm CÙNG MỘT DÒNG.
-        #
-        # Cũng vì thế không còn dòng tiêu đề "Row r, left to right:": toạ độ tuyệt
-        # đối đã nói vị trí chính xác hơn mọi lời mô tả hàng/cột, nên tiêu đề hàng
-        # chỉ còn là chữ thừa xen giữa danh sách.
-        #
-        # HỘP Ô (`geo[i]["cell"]`) KHÔNG ĐƯỢC IN. Nó là chuyện của dao cắt; với model
-        # thì nó chỉ mời gọi vẽ cho đầy ô. Ranh giới duy nhất model cần biết đã nằm
-        # trong luật chung ngay trên: đừng chạm safe zone của thằng bên cạnh.
-        for i, comp in enumerate(comps):
-            spec = comp["spec"]
-            g = geo[i]
-            # TOẠ ĐỘ ĐỨNG NGAY SAU DANH TỪ, TRƯỚC câu kỹ thuật của ô. Thứ tự đó có
-            # chủ ý: câu glow/glass nói VỀ safe zone ("the safe zone marks the pane"),
-            # nên nó phải đọc được sau khi safe zone đã được nêu ra.
-            if g["safe"]:
-                x0, y0, x1, y1 = g["safe"]
-                zone = f" — safe zone x={x0}..{x1}, y={y0}..{y1} ({x1 - x0}x{y1 - y0} px)"
-                # Ô `free` KHÔNG được gọi hộp của nó là hộp cắt: `slice.py` cắt ô này
-                # theo LÕI ĐO ĐƯỢC của chính artwork (nhánh `sk.get("free")`), đúng ý
-                # "để AI vẽ tự do". Hứa crop box ở đây là hứa một thứ dao cắt không làm.
-                if g["kind"] == "free":
-                    zone += ", placement guide"
-                spec += zone
-            elif g["kind"] == "full":
-                # Full-bleed: cảnh phủ kín ô nên không có khung nào để hứa, và khối
-                # `place` ở trên đã nói đủ. In hộp ô ra đây chỉ mời model vẽ viền.
-                spec += " — full-bleed scene, fills its whole cell edge to edge"
-            elif g["kind"] == "empty":
-                spec += " — leave this area completely empty and fully transparent"
-            if comp["skel"].get("matte") == "glow":
-                # NỀN ĐEN ĐÃ BỎ. Nó từng là cách duy nhất lấy được quầng sáng:
-                # vẽ cộng sáng trên đen ⇒ C = α·F ⇒ slicer đọc alpha ra từ độ
-                # sáng. Có alpha thật thì quầng nằm SẴN trong kênh α, đủ cả
-                # dải mờ — đo trên ảnh mẫu chủ sản phẩm gửi: 12,96% pixel nằm
-                # ở dải α 1..191 (BACKLOG #24 ⑤). Giữ nền đen bây giờ chỉ tổ
-                # nướng một mảng đen vào asset.
-                # THỦ PHẠM THẬT SỰ của cái đế caro: khối cấu tạo ở trên ra lệnh
-                # lấp kín safe zone bằng "one continuous content surface". Với ô
-                # ÁNH SÁNG thì lệnh đó sai hẳn — không có mặt phẳng nào để lấp cả.
-                # Model vẫn tuân lệnh: nó lấp kín vùng đó bằng thứ nó nghĩ là
-                # "trong suốt", tức là caro. Nên câu của ô phải HUỶ lệnh kia một
-                # cách nói thẳng, không chỉ cấm caro — cấm mà không gỡ lệnh lấp
-                # thì nó lấp bằng thứ khác.
-                spec += (" — LIGHT EFFECT: for THIS cell, ignore the rule about filling the safe"
-                         " zone with a continuous content surface: there is no surface here. The"
-                         " safe zone only marks HOW FAR the light reaches;"
-                         " it is not an area to fill. This element is pure light. The halo"
-                         " fades out by"
-                         " LOWERING ALPHA, not by painting paler pixels: at the outer edge the"
-                         " alpha reaches 0 while the colour stays the light's own colour, so"
-                         " the fade is gradual and never stops at a hard edge. There is NO"
-                         " plate of any kind behind the light — no black, no white, no pale"
-                         " grey, and above all no checkerboard squares. Every pixel that is"
-                         " not lit is simply unpainted")
-            elif comp["skel"].get("matte") == "glass":
-                # Trước đây độ trong của kính được ĐO GIÁN TIẾP: nền key lộ qua
-                # thân bao nhiêu thì trong bấy nhiêu, slicer giải ngược
-                # C = α·F + (1−α)·K. Cách đó phụ thuộc hoàn toàn vào việc model
-                # chịu để key lộ ra (docs/design-glass-transparent-panel-2026-08.md
-                # §2). Alpha thật thì độ trong nằm THẲNG trong kênh α.
-                spec += (" — SEE-THROUGH ELEMENT: the safe zone marks the pane, but"
-                         " 'filling it with a continuous content surface' here means a"
-                         " SEE-THROUGH surface, not a solid one. The body of this element is a"
-                         " thin sheet of tinted glass. Draw it with a LOW ALPHA VALUE — about 64 out of 255"
-                         " for a clear pane, up to 128 for a strongly tinted one — keeping the"
-                         " glass's own tint colour at that low alpha. Do NOT fake it with"
-                         " paint: no opaque fill, no white or pale grey wash, and above all no"
-                         " checkerboard squares. Lower alpha, not lighter paint. Frame, rim,"
-                         " bevel and specular highlights stay fully opaque")
-            lines.append(f"{i + 1}) {spec}")
-        lines += [
-            "",
-            f"All {n_real} elements share the exact same consistent style and belong to one coherent set. "
-            "Game-ready UI asset quality, " + canvas_ratio + "."
-        ]
+        # Cảnh muốn vẽ là câu CUỐI của prompt nền: mọi dòng trên chỉ là điều kiện,
+        # dòng này mới là nội dung. Không đánh số, không toạ độ — chỉ có một ô, và ô
+        # đó là cả tấm ảnh.
+        if screen_sheet:
+            lines += [
+                comps[0]["spec"],
+                "",
+                "Game-ready mobile game background art, " + canvas_ratio + ".",
+            ]
+        else:
+            lines += [
+                "THE NUMBERED LIST BELOW NAMES ONLY *WHAT* EACH CELL IS — its identity, its parts",
+                "and its state (filled / outline / hollow / open / closed / active / disabled).",
+                "HOW everything looks — material, texture, finish, lighting, palette, every actual",
+                "colour, and how much depth and volume it has — comes from the ART STYLE block at",
+                "the top of this prompt, and from nowhere else. If a line below still happens to",
+                "carry a material or colour word, the ART STYLE outranks it.",
+                "Geometry always outranks both: the safe-zone coordinates on each line decide",
+                "position and size.",
+                "Each element's continuous core must lie fully inside its safe zone; rim and",
+                "decoration may overflow outside the box but must not touch another element's zone.",
+                "",
+            ]
+            # ── MỘT DANH SÁCH, KHÔNG PHẢI HAI ───────────────────────────────────
+            # Bản nháp đầu của bản bỏ-skeleton in một khối "Cell 1 (row 1, col 1): cell
+            # box …; SAFE ZONE …" RIÊNG, đứng trên danh sách danh từ. Chủ sản phẩm bác
+            # (27/08/2026): hai danh sách song song bắt cả người lẫn model phải tự ghép
+            # "ô số 3" của bảng này với "3)" của bảng kia, và một tấm 3×3 thành 18 dòng
+            # nói về 9 thứ. Nay danh từ và toạ độ nằm CÙNG MỘT DÒNG.
+            #
+            # Cũng vì thế không còn dòng tiêu đề "Row r, left to right:": toạ độ tuyệt
+            # đối đã nói vị trí chính xác hơn mọi lời mô tả hàng/cột, nên tiêu đề hàng
+            # chỉ còn là chữ thừa xen giữa danh sách.
+            #
+            # HỘP Ô (`geo[i]["cell"]`) KHÔNG ĐƯỢC IN. Nó là chuyện của dao cắt; với model
+            # thì nó chỉ mời gọi vẽ cho đầy ô. Ranh giới duy nhất model cần biết đã nằm
+            # trong luật chung ngay trên: đừng chạm safe zone của thằng bên cạnh.
+            for i, comp in enumerate(comps):
+                spec = comp["spec"]
+                g = geo[i]
+                # TOẠ ĐỘ ĐỨNG NGAY SAU DANH TỪ, TRƯỚC câu kỹ thuật của ô. Thứ tự đó có
+                # chủ ý: câu glow/glass nói VỀ safe zone ("the safe zone marks the pane"),
+                # nên nó phải đọc được sau khi safe zone đã được nêu ra.
+                if g["safe"]:
+                    x0, y0, x1, y1 = g["safe"]
+                    zone = f" — safe zone x={x0}..{x1}, y={y0}..{y1} ({x1 - x0}x{y1 - y0} px)"
+                    # Ô `free` KHÔNG được gọi hộp của nó là hộp cắt: `slice.py` cắt ô này
+                    # theo LÕI ĐO ĐƯỢC của chính artwork (nhánh `sk.get("free")`), đúng ý
+                    # "để AI vẽ tự do". Hứa crop box ở đây là hứa một thứ dao cắt không làm.
+                    if g["kind"] == "free":
+                        zone += ", placement guide"
+                    spec += zone
+                elif g["kind"] == "full":
+                    # Full-bleed: cảnh phủ kín ô nên không có khung nào để hứa, và khối
+                    # `place` ở trên đã nói đủ. In hộp ô ra đây chỉ mời model vẽ viền.
+                    spec += " — full-bleed scene, fills its whole cell edge to edge"
+                elif g["kind"] == "empty":
+                    spec += " — leave this area completely empty and fully transparent"
+                if comp["skel"].get("matte") == "glow":
+                    # NỀN ĐEN ĐÃ BỎ. Nó từng là cách duy nhất lấy được quầng sáng:
+                    # vẽ cộng sáng trên đen ⇒ C = α·F ⇒ slicer đọc alpha ra từ độ
+                    # sáng. Có alpha thật thì quầng nằm SẴN trong kênh α, đủ cả
+                    # dải mờ — đo trên ảnh mẫu chủ sản phẩm gửi: 12,96% pixel nằm
+                    # ở dải α 1..191 (BACKLOG #24 ⑤). Giữ nền đen bây giờ chỉ tổ
+                    # nướng một mảng đen vào asset.
+                    # THỦ PHẠM THẬT SỰ của cái đế caro: khối cấu tạo ở trên ra lệnh
+                    # lấp kín safe zone bằng "one continuous content surface". Với ô
+                    # ÁNH SÁNG thì lệnh đó sai hẳn — không có mặt phẳng nào để lấp cả.
+                    # Model vẫn tuân lệnh: nó lấp kín vùng đó bằng thứ nó nghĩ là
+                    # "trong suốt", tức là caro. Nên câu của ô phải HUỶ lệnh kia một
+                    # cách nói thẳng, không chỉ cấm caro — cấm mà không gỡ lệnh lấp
+                    # thì nó lấp bằng thứ khác.
+                    spec += (" — LIGHT EFFECT: for THIS cell, ignore the rule about filling the safe"
+                             " zone with a continuous content surface: there is no surface here. The"
+                             " safe zone only marks HOW FAR the light reaches;"
+                             " it is not an area to fill. This element is pure light. The halo"
+                             " fades out by"
+                             " LOWERING ALPHA, not by painting paler pixels: at the outer edge the"
+                             " alpha reaches 0 while the colour stays the light's own colour, so"
+                             " the fade is gradual and never stops at a hard edge. There is NO"
+                             " plate of any kind behind the light — no black, no white, no pale"
+                             " grey, and above all no checkerboard squares. Every pixel that is"
+                             " not lit is simply unpainted")
+                elif comp["skel"].get("matte") == "glass":
+                    # Trước đây độ trong của kính được ĐO GIÁN TIẾP: nền key lộ qua
+                    # thân bao nhiêu thì trong bấy nhiêu, slicer giải ngược
+                    # C = α·F + (1−α)·K. Cách đó phụ thuộc hoàn toàn vào việc model
+                    # chịu để key lộ ra (docs/design-glass-transparent-panel-2026-08.md
+                    # §2). Alpha thật thì độ trong nằm THẲNG trong kênh α.
+                    spec += (" — SEE-THROUGH ELEMENT: the safe zone marks the pane, but"
+                             " 'filling it with a continuous content surface' here means a"
+                             " SEE-THROUGH surface, not a solid one. The body of this element is a"
+                             " thin sheet of tinted glass. Draw it with a LOW ALPHA VALUE — about 64 out of 255"
+                             " for a clear pane, up to 128 for a strongly tinted one — keeping the"
+                             " glass's own tint colour at that low alpha. Do NOT fake it with"
+                             " paint: no opaque fill, no white or pale grey wash, and above all no"
+                             " checkerboard squares. Lower alpha, not lighter paint. Frame, rim,"
+                             " bevel and specular highlights stay fully opaque")
+                lines.append(f"{i + 1}) {spec}")
+            lines += [
+                "",
+                f"All {n_real} elements share the exact same consistent style and belong to one coherent set. "
+                "Game-ready UI asset quality, " + canvas_ratio + "."
+            ]
         # ── NGƯỜI DÙNG TỰ SOẠN TRỌN PROMPT CỦA TẤM ────────────────────────────
         # Toàn bộ khối trên là lời của engine. `promptOverride` là chỗ người dùng nói
         # "để tôi tự viết" — và khi đã nói thế thì phải được viết THẬT: không nối

@@ -83,7 +83,7 @@ export interface ElementPreset {
   decor: number;
   /** Id đục nền áp sẵn (`glaze.ts`); rỗng = nền đặc. */
   glazeId: string;
-  /** Cỡ safe zone áp sẵn (`cell-size.ts`); rỗng = theo hệ thống. */
+  /** Cỡ safe zone áp sẵn (`cell-size.ts`); rỗng ⇒ dòng element lấy `SYSTEM_SIZE_VALUE`. */
   sizeId: string;
 }
 
