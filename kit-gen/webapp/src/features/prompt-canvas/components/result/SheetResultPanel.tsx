@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Download, FolderOpen, Image as ImageIcon, Layers, Sparkles } from "lucide-react";
+import { Check, Download, FolderOpen, Image as ImageIcon, Layers, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -11,7 +11,11 @@ import { KitImage } from "@/features/kit/components/KitImage";
 import { forgetProject, loadFull } from "@/features/kit/lib/image-source";
 import { saveProjectFile } from "@/features/kit/lib/download";
 import { poseFileSet } from "@/features/kit/lib/export-scale";
-import { toastError, toastSuccess } from "@/features/projects/lib/feedback";
+import {
+  BoardCancelled, PHASE_LABEL, buildFigmaBoard, type BoardProgress,
+} from "@/features/kit/lib/figma-board";
+import { cellsOf, copyKitDoc, packKitDoc } from "@/features/kit/lib/figma-kit-doc";
+import { toastError, toastInfo, toastSuccess } from "@/features/projects/lib/feedback";
 import { useContract, useKit, useProject, useRevealProject } from "@/lib/hooks";
 import { cellsOfSheet, rawSheetImagePath } from "../../lib/result/sheet-files";
 import { copySheetAsFigmaNode, measureImage } from "../../lib/result/sheet-figma";
@@ -56,6 +60,27 @@ import { SheetVersionBar } from "./SheetVersionBar";
  * ║ mỗi block là N kết nối cho cùng một nguồn, và hai bên sẽ lệch nhau lúc     ║
  * ║ stream đứt/hạ xuống poll. Panel nhận `artifactPath` + `cutting` qua props. ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ╔══ NÚT FIGMA CHÍNH LÀ «TỪNG Ô», KHÔNG PHẢI «CẢ TẤM» ══════════════════════╗
+ * ║ Chủ sản phẩm báo đúng chỗ hỏng: *"copy cả tấm sang figma → nó lại copy cái ║
+ * ║ ảnh gốc, mà không phải element riêng đã quy định khung… cái nút cũ là nó   ║
+ * ║ copy riêng nhé"*. Bản trước ở đây chỉ có MỘT nút, và nó dán `raw/<job>.png`║
+ * ║ — một tấm lưới thô nguyên khối. Designer nhận về một ảnh chữ nhật phải tự  ║
+ * ║ cắt lại bằng tay, tức là ném đi đúng thứ lượt cắt vừa làm xong.            ║
+ * ║                                                                            ║
+ * ║ Nút cũ mà chủ sản phẩm nhắc tới là `features/kit/components/KitExits`      ║
+ * ║ (`CopyFigmaButton`): mỗi ô đã cắt thành MỘT khung riêng đúng cỡ vùng an    ║
+ * ║ toàn, ảnh đặt lệch âm khi ruột tràn ra ngoài — số học của                  ║
+ * ║ `kit-core/lib/figma-node.ts:buildFigmaNodeForAsset`, thứ đã dán thử thật   ║
+ * ║ ra Figma desktop. Panel này TÁI DÙNG nguyên đường đó, chỉ khác một điều:   ║
+ * ║ danh sách ô là `cellsOfSheet(kit, sheetId)` — ô của ĐÚNG tấm đang đứng     ║
+ * ║ dưới chân, không phải cả bộ kit. Không chép lại một dòng số học nào sang   ║
+ * ║ đây: hai bản số sẽ trôi khỏi nhau và bản trôi sai là bản không ai đo lại.  ║
+ * ║                                                                            ║
+ * ║ Ảnh gốc thô KHÔNG chết — nó lùi xuống nút phụ và chỉ hiện ở tab «Ảnh gốc», ║
+ * ║ đúng nơi người dùng đang nhìn chính tấm ấy. Ở tab «Đã crop» mà bày một nút ║
+ * ║ dán nguyên tấm là mời bấm nhầm lần nữa.                                    ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 export interface SheetResultPanelProps {
   projectId: string;
@@ -83,6 +108,13 @@ export interface SheetResultPanelProps {
 
 type TabId = "raw" | "cut";
 
+/**
+ * Nhãn pha 3 của nút chính. Ba pha còn lại dùng thẳng `PHASE_LABEL` của
+ * `figma-board.ts`; riêng pha này KHÔNG ghép bảng nào — nó dựng từng khung một, và
+ * một thanh tiến trình nói sai việc đang làm là thanh tiến trình vô dụng.
+ */
+const CELL_PHASE_3 = "Dựng khung cho từng ô";
+
 export function SheetResultPanel({
   projectId, sheetId, job, runId = null,
   artifactPath = null, cutting = false, busy = false, className,
@@ -90,6 +122,11 @@ export function SheetResultPanel({
   const [tab, setTab] = React.useState<TabId>("raw");
   const [zoom, setZoom] = React.useState(false);
   const [copying, setCopying] = React.useState(false);
+  /** Tiến trình của nút chính (4 pha). `null` = đang rảnh — đây cũng là cờ "đang bận". */
+  const [progress, setProgress] = React.useState<BoardProgress | null>(null);
+  /** Số ô vừa dán được; > 0 ⇒ nhãn nút đổi thành «Đã copy N ô» trong 2 giây. */
+  const [copied, setCopied] = React.useState(0);
+  const abortRef = React.useRef<AbortController | null>(null);
 
   const contract = useContract(projectId);
   const kit = useKit(projectId);
@@ -164,8 +201,114 @@ export function SheetResultPanel({
     [contract.data?.contract],
   );
 
+  /* Nhãn «Đã copy N ô» tự tắt sau 2 giây — cùng cách với nút «Copy prompt» của
+     `CanvasBlock.tsx:426`. Dọn timer khi khối gỡ sớm: người dùng cuộn qua thẻ khác
+     ngay sau khi bấm thì `setCopied` sẽ chạy trên một khối không còn nữa. */
+  React.useEffect(() => {
+    if (copied === 0) return;
+    const t = setTimeout(() => setCopied(0), 2000);
+    return () => clearTimeout(t);
+  }, [copied]);
+
+  /* Rời panel giữa lúc đang tải ảnh ⇒ huỷ luôn, đừng để hàng đợi chạy tiếp cho một
+     khối đã chết (cùng lý do với `KitExits.CopyFigmaButton`). */
+  React.useEffect(() => () => abortRef.current?.abort(), []);
+
   /**
-   * COPY CẢ TẤM sang Figma.
+   * ĐƯỜNG LÙI của nút chính: bảng ảnh phẳng.
+   *
+   * Chỉ chạy khi đường khung riêng đã hỏng thật (thiếu toạ độ vùng an toàn, encoder
+   * không nạp được, bộ nhớ tạm từ chối). Nó vẫn nhận ĐÚNG danh sách ô của tấm này,
+   * nên tệ nhất người dùng cũng còn một bảng các ô đã cắt — không bao giờ tụt về
+   * nguyên tấm thô. Và phải NÓI RÕ là đang đi đường lùi: báo "đã copy" trơn ở đây là
+   * để designer phát hiện ra mình cầm một tấm ảnh phẳng lúc đã dán vào file thật.
+   */
+  const copyBoardFallback = async (why: string, signal: AbortSignal) => {
+    const res = await buildFigmaBoard({
+      projectId, files: cells, poseFiles, variantLabel: name, onProgress: setProgress, signal,
+    });
+    if (res.outcome === "clipboard") {
+      setCopied(res.files);
+      toastInfo(
+        "Chưa dựng được khung riêng cho từng ô",
+        `${why} Đã copy một ảnh phẳng ${res.width}×${res.height} gồm ${res.files} ô — dán vẫn được, nhưng không tách lớp.`,
+      );
+      return;
+    }
+    toastInfo(
+      "Đã tải bảng ô về máy",
+      `${why} Trình duyệt không cho ghi ảnh vào bộ nhớ tạm nên bảng ${res.width}×${res.height} được lưu thành file để bạn tự kéo vào Figma.`
+      + (res.fallbackReason === undefined ? "" : ` (${res.fallbackReason})`),
+    );
+  };
+
+  /**
+   * NÚT CHÍNH — mỗi ô đã cắt của TẤM NÀY thành một khung Figma riêng.
+   *
+   * Bốn pha, nhãn lấy từ `PHASE_LABEL` để thanh tiến trình của panel và của màn
+   * «Kết quả & xuất kit» nói cùng một thứ tiếng. Pha 3 là chỗ duy nhất khác: ở đây
+   * không ghép bảng nào cả, mà chụp từng ô thành một khung — nên nó có nhãn riêng.
+   *
+   * KHÔNG chia đợt như `KitExits`: chỗ ấy copy CẢ BỘ KIT (80 ô, ~24 MB đã đo) nên
+   * phải cắt theo nhóm; ở đây một tấm chỉ có vài ô, chia đợt chỉ thêm một trạng thái
+   * "bấm lại để lấy tiếp" mà không bao giờ chạy tới. Payload có vỡ thì đường lùi bắt.
+   */
+  const copyCells = () => {
+    if (cells.length === 0) return;
+    const ac = new AbortController();
+    abortRef.current = ac;
+    setProgress({ phase: 1, label: PHASE_LABEL[1], done: 0, total: cells.length });
+    void (async () => {
+      try {
+        const nodes = cellsOf(packKitDoc(cells, poseFiles).groups);
+        if (nodes.length === 0) {
+          throw new Error("Không ô nào của tấm này có đủ toạ độ vùng an toàn để dựng khung.");
+        }
+
+        /* 2/4 — ẢNH GỐC, không bản thu nhỏ: `loadFull` không kèm `?w=`, còn `loadThumb`
+           ép 256px và sẽ dán sang Figma một bộ ô mờ. */
+        const paths = [...new Set(nodes.map((c) => c.file.path))];
+        const handles = paths.map((path) => ({ path, handle: loadFull(projectId, path) }));
+        const onAbort = () => handles.forEach((h) => h.handle.cancel());
+        ac.signal.addEventListener("abort", onAbort, { once: true });
+        const urls = new Map<string, string>();
+        try {
+          for (const [i, { path, handle }] of handles.entries()) {
+            if (ac.signal.aborted) throw new BoardCancelled();
+            setProgress({ phase: 2, label: PHASE_LABEL[2], done: i, total: handles.length });
+            urls.set(path, await handle.promise);
+          }
+        } finally {
+          ac.signal.removeEventListener("abort", onAbort);
+        }
+
+        /* 3/4 + 4/4 — chụp rồi ghi bộ nhớ tạm trong CÙNG một cử chỉ người dùng. */
+        setProgress({ phase: 3, label: CELL_PHASE_3, done: 0, total: nodes.length });
+        const res = await copyKitDoc(nodes, urls, (done, total) => {
+          setProgress({ phase: 3, label: CELL_PHASE_3, done, total });
+        });
+        setProgress({ phase: 4, label: PHASE_LABEL[4], done: 1, total: 1 });
+        setCopied(res.docs);
+        toastSuccess(
+          "Đã copy các ô sang Figma",
+          `${name} · ${res.docs} ô, mỗi ô một khung riêng, ảnh giữ nguyên nét gốc. Dán bằng Ctrl/Cmd+V.`,
+        );
+      } catch (err) {
+        if (err instanceof BoardCancelled || ac.signal.aborted) return;
+        try {
+          await copyBoardFallback(err instanceof Error ? err.message : String(err), ac.signal);
+        } catch (fallbackErr) {
+          if (!(fallbackErr instanceof BoardCancelled)) toastError(fallbackErr, {});
+        }
+      } finally {
+        setProgress(null);
+        abortRef.current = null;
+      }
+    })();
+  };
+
+  /**
+   * COPY CẢ TẤM sang Figma — nay là nút PHỤ, chỉ ở tab «Ảnh gốc».
    *
    * Đo cỡ ảnh THẬT trước khi dựng spec (`measureImage`) thay vì lấy khổ trong contract:
    * contract nói khổ *đáng lẽ*, còn `assertDocShape` bên trong encoder đo frame THẬT
@@ -202,6 +345,20 @@ export function SheetResultPanel({
       .then((saved) => toastSuccess("Đã tải ảnh gốc", saved.fileName))
       .catch((err: unknown) => toastError(err, {}));
   };
+
+  /**
+   * NHÃN NÚT CHÍNH — bốn trạng thái, mỗi trạng thái nói đúng một sự thật:
+   * đang chạy (pha + đếm) · vừa xong (số ô đã dán) · sẵn sàng (số ô sẽ dán) ·
+   * chưa có gì để dán. Con số rút ra ngoài chuỗi mẫu để câu vẫn đọc được thành
+   * một câu tiếng Việt — cùng lý do với `name` ở trên.
+   */
+  const busyCells = progress !== null;
+  const n = cells.length;
+  const cellsButtonLabel = progress !== null
+    ? `${progress.label}${progress.total > 0 ? ` ${progress.done}/${progress.total}` : ""}`
+    : copied > 0 ? `Đã copy ${copied} ô`
+      : n > 0 ? `Copy ${n} ô sang Figma`
+        : "Copy ô sang Figma · chờ cắt";
 
   return (
     <section className={cn("rounded-4 border border-line-subtle bg-surface p-3", className)} aria-label={`Kết quả tấm ${name}`}>
@@ -271,10 +428,36 @@ export function SheetResultPanel({
           dùng cả, và khối rỗng ngay trên đã nói rõ việc phải làm trước. */}
       {!neverDrawn && (
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line-subtle pt-4">
-          <Button type="button" variant="secondary" size="sm" onClick={copySheet} disabled={copying} loading={copying}>
-            <Layers aria-hidden strokeWidth={1.5} />
-            Copy cả tấm sang Figma
+          {/* NÚT CHÍNH. Chưa cắt xong ⇒ vô hiệu và NÓI RA vì sao ngay trên nhãn: một nút
+              «Copy 0 ô» bấm được là một lời hứa rỗng, còn một nút xám không lời giải thích
+              thì người dùng đọc thành "tính năng hỏng" (§2.5-2 chỉ cấm ẩn nút DÙNG ĐƯỢC). */}
+          <Button
+            type="button" variant="secondary" size="sm" onClick={copyCells}
+            disabled={cells.length === 0 || busyCells} loading={busyCells}
+            title={cells.length === 0
+              ? "Chờ máy cắt xong tấm này thì mới có ô để copy"
+              : "Mỗi ô một khung riêng đúng cỡ vùng an toàn, ảnh giữ nguyên nét gốc"}
+          >
+            {copied > 0 && !busyCells
+              ? <Check aria-hidden strokeWidth={1.5} />
+              : <Layers aria-hidden strokeWidth={1.5} />}
+            {cellsButtonLabel}
           </Button>
+          {busyCells && (
+            <Button type="button" variant="ghost" size="sm" onClick={() => abortRef.current?.abort()}>
+              <X aria-hidden strokeWidth={1.5} />
+              Huỷ
+            </Button>
+          )}
+          {/* Nút PHỤ, và chỉ ở tab «Ảnh gốc»: nó dán nguyên tấm lưới thô — thứ chỉ có
+              nghĩa khi người dùng đang nhìn chính tấm ấy. Bày nó cạnh lưới ô đã cắt là
+              đặt lại đúng cái bẫy vừa gỡ. */}
+          {tab === "raw" && (
+            <Button type="button" variant="ghost" size="sm" onClick={copySheet} disabled={copying} loading={copying}>
+              <ImageIcon aria-hidden strokeWidth={1.5} />
+              Copy ảnh gốc sang Figma
+            </Button>
+          )}
           <Button type="button" variant="ghost" size="sm" onClick={downloadSheet}>
             <Download aria-hidden strokeWidth={1.5} />
             Tải PNG

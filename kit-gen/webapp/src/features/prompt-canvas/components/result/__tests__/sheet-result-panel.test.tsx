@@ -48,6 +48,54 @@ vi.mock("@/features/projects/lib/feedback", () => ({
   toastSuccess: vi.fn(), toastInfo: vi.fn(), toastError: vi.fn(),
 }));
 
+/**
+ * ══ NÚT FIGMA CHÍNH: HAI ĐƯỜNG, CẢ HAI ĐỀU PHẢI NHẬN ĐÚNG Ô CỦA TẤM NÀY ═════
+ *
+ * Đường chính (`figma-kit-doc`) dựng mỗi ô một khung; đường lùi (`figma-board`)
+ * ghép một ảnh phẳng. Mock cả hai vì cả hai đều cần trình duyệt thật (encoder +
+ * bộ nhớ tạm) — thứ ĐÁNG canh ở đây không phải chúng chạy ra gì, mà là panel
+ * ĐƯA CHO chúng danh sách nào. Bản trước của nút này dán `raw/<job>.png`; một ca
+ * chỉ đếm "có gọi hàm copy" sẽ xanh y hệt cho cả hai bản, nên mọi ca dưới đây
+ * soi vào ĐỐI SỐ.
+ */
+const docCalls: Array<Array<{ file: { file: string } }>> = [];
+const boardCalls: Array<{ files: Array<{ file: string }>; variantLabel: string }> = [];
+/** true ⇒ giả cảnh không ô nào dựng được khung ⇒ panel phải rơi về đường lùi. */
+let packEmpty = false;
+/** Kết cục của đường lùi: vào bộ nhớ tạm, hay chỉ tải được file về máy. */
+let boardOutcome: "clipboard" | "download" = "clipboard";
+
+vi.mock("@/features/kit/lib/figma-kit-doc", () => ({
+  packKitDoc: (files: Array<{ file: string }>) => ({
+    groups: packEmpty ? [] : [{
+      category: "ui",
+      label: "Giao diện",
+      cells: files.map((f) => ({ file: f, name: f.file, group: "ui", spec: {}, left: 0, top: 0 })),
+      bytes: 0,
+    }],
+    skipped: [],
+    width: 2400,
+    height: 100,
+  }),
+  cellsOf: (groups: Array<{ cells: unknown[] }>) => groups.flatMap((g) => g.cells),
+  copyKitDoc: (cells: Array<{ file: { file: string } }>) => {
+    docCalls.push(cells);
+    return Promise.resolve({ html: "<i></i>", docs: cells.length, bytes: 10 });
+  },
+}));
+
+vi.mock("@/features/kit/lib/figma-board", () => ({
+  PHASE_LABEL: { 1: "Chuẩn bị danh sách", 2: "Tải ảnh", 3: "Ghép bảng", 4: "Đưa vào bộ nhớ tạm" },
+  BoardCancelled: class BoardCancelled extends Error {},
+  buildFigmaBoard: (opts: { files: Array<{ file: string }>; variantLabel: string }) => {
+    boardCalls.push({ files: [...opts.files], variantLabel: opts.variantLabel });
+    return Promise.resolve({
+      outcome: boardOutcome, files: opts.files.length, width: 2400, height: 100,
+      ...(boardOutcome === "download" ? { fallbackReason: "bộ nhớ tạm bị khoá" } : {}),
+    });
+  },
+}));
+
 let kitFiles: KitFile[] = [];
 let kitLoading = false;
 const revealMutate = vi.fn();
@@ -90,6 +138,10 @@ const mount = (props: Partial<React.ComponentProps<typeof SheetResultPanel>> = {
 
 beforeEach(() => {
   asked.length = 0;
+  docCalls.length = 0;
+  boardCalls.length = 0;
+  packEmpty = false;
+  boardOutcome = "clipboard";
   kitLoading = false;
   jobStates = { "chinh-ui": "ok", "chinh-nen": "ok" };
   revealMutate.mockReset();
@@ -138,12 +190,81 @@ describe("hai tab của panel kết quả", () => {
     expect(asked.map((a) => a.path)).toContain("raw/chinh-ui-v2.png");
   });
 
-  it("hàng nút có Copy Figma cả tấm · Tải PNG · Mở thư mục", () => {
+  it("hàng nút có Copy từng ô · Copy ảnh gốc · Tải PNG · Mở thư mục", () => {
     mount();
-    expect(screen.getByRole("button", { name: /Copy cả tấm sang Figma/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Copy 2 ô sang Figma/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Copy ảnh gốc sang Figma/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Tải PNG/ })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Mở thư mục dự án/ }));
     expect(revealMutate).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * ══ NÚT CHÍNH = TỪNG Ô CỦA ĐÚNG TẤM NÀY ════════════════════════════════════
+ *
+ * Bệnh đang chữa (chủ sản phẩm báo): nút Figma của panel dán NGUYÊN TẤM THÔ, nên
+ * designer nhận về một ảnh chữ nhật phải cắt lại bằng tay. Ba thứ khoá ở đây đều
+ * là thứ hỏng lặng lẽ: sai danh sách ô (lẫn ô tấm khác), sai số trên nhãn, và
+ * nút bấm được lúc chưa có ô nào.
+ */
+describe("nút «Copy N ô sang Figma»", () => {
+  const openCut = () => fireEvent.mouseDown(screen.getByRole("tab", { name: /Đã crop/ }));
+
+  it("đưa cho đường copy ĐÚNG ô của tấm này — không lẫn ô tấm khác", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /Copy 2 ô sang Figma/ }));
+    expect(await screen.findByRole("button", { name: /Đã copy 2 ô/ })).toBeTruthy();
+    expect(docCalls).toHaveLength(1);
+    const names = (docCalls[0] ?? []).map((c) => c.file.file);
+    expect(names).toEqual(["tight/01-btn-pill", "tight/02-chip"]);
+    expect(names.join("|")).not.toContain("25-bg-home");
+  });
+
+  it("tấm khác ⇒ nhãn đếm số ô của chính nó", () => {
+    mount({ sheetId: "nen" });
+    expect(screen.getByRole("button", { name: /Copy 1 ô sang Figma/ })).toBeTruthy();
+  });
+
+  it("chưa cắt ra ô nào ⇒ nút vô hiệu và nói «chờ cắt», không hứa suông", () => {
+    kitFiles = [];
+    mount({ cutting: true });
+    const btn = screen.getByRole("button", { name: /chờ cắt/ });
+    expect(btn.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(btn);
+    expect(docCalls).toHaveLength(0);
+    expect(boardCalls).toHaveLength(0);
+  });
+
+  /* Đường lùi PHẢI nhận cùng danh sách ô: tệ nhất người dùng cũng còn bảng các ô đã
+     cắt, không bao giờ tụt về nguyên tấm thô — đó chính là lỗi đang chữa. */
+  it("dựng khung hỏng ⇒ rơi về bảng ảnh phẳng, VẪN đúng ô của tấm này", async () => {
+    packEmpty = true;
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /Copy 2 ô sang Figma/ }));
+    expect(await screen.findByRole("button", { name: /Đã copy 2 ô/ })).toBeTruthy();
+    expect(docCalls).toHaveLength(0);
+    expect(boardCalls).toHaveLength(1);
+    expect((boardCalls[0]?.files ?? []).map((f) => f.file)).toEqual(["tight/01-btn-pill", "tight/02-chip"]);
+  });
+
+  it("bộ nhớ tạm từ chối ⇒ KHÔNG khoe «đã copy», chỉ báo đã tải file về", async () => {
+    packEmpty = true;
+    boardOutcome = "download";
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /Copy 2 ô sang Figma/ }));
+    await screen.findByRole("button", { name: /Copy 2 ô sang Figma/ });
+    expect(boardCalls).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /Đã copy/ })).toBeNull();
+  });
+
+  it("nút phụ «Copy ảnh gốc» CHỈ sống ở tab «Ảnh gốc»", () => {
+    mount();
+    expect(screen.getByRole("button", { name: /Copy ảnh gốc sang Figma/ })).toBeTruthy();
+    openCut();
+    expect(screen.queryByRole("button", { name: /Copy ảnh gốc sang Figma/ })).toBeNull();
+    /* Nút chính thì ở lại: tab «Đã crop» là chỗ nó có nghĩa nhất. */
+    expect(screen.getByRole("button", { name: /Copy 2 ô sang Figma/ })).toBeTruthy();
   });
 });
 
