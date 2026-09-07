@@ -409,14 +409,7 @@ export function DesignScreen({ projectId }: ScreenProps) {
 
         <TabsContent value="advanced" className="mt-0 h-full">
           <div className="h-full overflow-auto">
-            <AdvancedTab
-              contract={contract}
-              readOnly={api.readOnly}
-              readOnlyReason={api.readOnlyReason}
-              deps={doctor.data?.python?.deps ?? null}
-              onPatchSlice={actions.patchSlice}
-              onCheckMachine={() => void doctor.refetch()}
-            />
+            <AdvancedTab onCheckMachine={() => void doctor.refetch()} />
           </div>
         </TabsContent>
       </div>

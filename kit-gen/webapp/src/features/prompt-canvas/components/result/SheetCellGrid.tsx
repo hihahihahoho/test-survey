@@ -1,13 +1,12 @@
 import * as React from "react";
-import { Download, Layers, Loader2, Scissors } from "lucide-react";
+import { AlertTriangle, Download, Layers, Loader2, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { KitImage } from "@/features/kit/components/KitImage";
 import { loadFull } from "@/features/kit/lib/image-source";
 import { saveProjectFile } from "@/features/kit/lib/download";
 import { copyAssetAsFigmaNode } from "@/features/kit-core/lib/figma-node";
-import { GLOW_FIGMA_HINT, isGlowAsset } from "@/features/kit/lib/blend";
-import { toastError, toastInfo, toastSuccess } from "@/features/projects/lib/feedback";
+import { toastError, toastSuccess } from "@/features/projects/lib/feedback";
 import type { KitFile } from "@/lib/types";
 import { cellName } from "../../lib/result/sheet-files";
 
@@ -69,12 +68,32 @@ export function SheetCellGrid({
     );
   }
 
+  /* TẤM KHÔNG CÓ NỀN TRONG SUỐT — phải nói ra, không được để người dùng tự đoán.
+     `slice.py` KHÔNG còn từ chối cắt tấm đục (từ chối là giữ ảnh của người dùng làm
+     con tin) và tuyệt đối KHÔNG tự chế alpha — đoán đâu là nền chính là cỗ máy tách
+     nền vừa bị bỏ, và đoán sai thì nó gặm vào giữa hình. Nên ô vẫn ra file, và chỗ
+     duy nhất còn có thể nói sự thật là đây. Kit cắt bằng bản slice.py cũ không có
+     khoá `mode` ⇒ im lặng đúng như trước. */
+  const duc = cells.some((cell) => cell.mode === "rgb");
+
   return (
-    <ul className={cn("grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4", className)}>
-      {cells.map((cell) => (
-        <CellCard key={cell.path} projectId={projectId} cell={cell} poseFiles={poseFiles} />
-      ))}
-    </ul>
+    <div className={cn("flex flex-col gap-3", className)}>
+      {duc && (
+        <p className="flex items-start gap-2 rounded-3 border border-dashed border-line p-3 text-caption text-on-tint-warn">
+          <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
+          <span>
+            <strong>Tấm này không có nền trong suốt.</strong> Máy vẽ trả ảnh đục, nên ô cắt ra
+            mang theo cả nền. Bước cắt không tự tách nền hộ (tách bằng máy là gặm vào hình) —
+            hãy tạo lại tấm này.
+          </span>
+        </p>
+      )}
+      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {cells.map((cell) => (
+          <CellCard key={cell.path} projectId={projectId} cell={cell} poseFiles={poseFiles} />
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -115,18 +134,6 @@ function CellCard({ projectId, cell, poseFiles }: {
           "Đã copy sang Figma",
           `${name} · khung an toàn ${w}×${h}. Dán bằng Ctrl/Cmd+V.`,
         );
-        /**
-         * Ô PHÁT SÁNG PHẢI ĐƯỢC NÓI RA (P1-3·③), và đây là nhà mới của luật đó.
-         *
-         * PNG của ô `matte:"glow"` mang alpha = độ sáng và chỉ đúng khi vẽ bằng phép
-         * CỘNG; payload clipboard của Figma KHÔNG chở nổi blend mode. Web không nhắc
-         * thì layer dán sang nằm ở Normal và quầng sáng bị nền nuốt — hỏng y hệt lỗi
-         * đã chữa ở preview, chỉ là hỏng ở nhà người khác nên không ai lần ra.
-         * Luật này trước ở `kit-core/components/CutAssetGrid`; lưới ô ấy đã bị xoá
-         * cùng đợt IA prompt-first, nên nó chuyển sang đây chứ KHÔNG chết theo.
-         * Nhắc là LỚP PHỤ: nó đứng SAU lời báo copy thành công, không thay lời đó.
-         */
-        if (isGlowAsset(cell)) toastInfo("Asset phát sáng", GLOW_FIGMA_HINT);
       } catch (err) {
         /* KHÔNG có đường lùi bitmap cho MỘT ô (đường lùi ấy chỉ có ở nút "copy cả
            bảng" của `features/kit/components/KitExits`). Nên tuyệt đối không báo
@@ -153,7 +160,6 @@ function CellCard({ projectId, cell, poseFiles }: {
         path={cell.path}
         alt={name}
         backdrop="checker"
-        blend={cell.blend}
         full={false}
         width={256}
         className="aspect-square rounded-none border-0"

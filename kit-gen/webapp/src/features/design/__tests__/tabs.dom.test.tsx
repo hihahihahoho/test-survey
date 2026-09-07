@@ -93,54 +93,43 @@ describe("tab Phong cách — đóng audit C3", () => {
   });
 });
 
-describe("tab Nâng cao — TRUNG THỰC về M4", () => {
-  function renderAdv(over: Record<string, unknown> = {}) {
-    const noop = () => {};
+describe("tab Nâng cao — TRUNG THỰC về thứ không chạy", () => {
+  /* ĐỔI SỰ THẬT, KHÔNG ĐỔI NGUYÊN TẮC (07/09/2026). Tab này từng bày «Ngưỡng tách»,
+     «Ngưỡng nghiêm», «Vành ngoài ô» và «Chất lượng tách» (ViTMatte/PyMatting) — cả
+     bốn thuộc cỗ máy TÁCH NỀN mà `slice.py` không còn chạy. Một cái núm không nối
+     vào gì tệ hơn hẳn một chỗ trống có lời giải thích, nên chúng bị bỏ và ca test
+     đổi sang canh chuyện đó: không núm nào sống lại, và lý do phải đọc được. */
+  function renderAdv() {
     return render(
       <TooltipProvider>
-        <AdvancedTab
-          contract={base()}
-          readOnly={false}
-          readOnlyReason=""
-          deps={null}
-          onPatchSlice={noop}
-          onCheckMachine={noop}
-          {...over}
-        />
+        <AdvancedTab onCheckMachine={() => {}} />
       </TooltipProvider>,
     );
   }
 
-  it('ô "Vành ngoài ô" đeo badge «chưa có tác dụng» và giải thích vì sao', () => {
+  it("KHÔNG còn núm tham số cắt nào để bấm", () => {
     renderAdv();
-    const bleed = screen.getByLabelText("Vành ngoài ô");
-    expect(bleed).toBeTruthy();
-    // Lời cảnh báo phải nối được với ô nhập qua aria-describedby (screen reader đọc được).
-    const describedBy = bleed.getAttribute("aria-describedby")!;
-    const why = document.getElementById(describedBy)!;
-    expect(why.textContent).toContain("chưa làm thay đổi kết quả cắt");
-    expect(screen.getAllByText("chưa có tác dụng").length).toBeGreaterThan(0);
+    for (const nhan of ["Ngưỡng tách", "Ngưỡng nghiêm", "Vành ngoài ô"]) {
+      expect(screen.queryByLabelText(nhan)).toBeNull();
+    }
+    expect(screen.queryByRole("spinbutton")).toBeNull();
   });
 
-  it("chất lượng tách: nói rõ engine TỰ DÒ, không có công tắc", () => {
+  it("nói thẳng VÌ SAO không còn gì để chỉnh", () => {
     renderAdv();
-    expect(screen.getByText(/tự dò/)).toBeTruthy();
-    expect(screen.getByText(/không có công tắc để ép/)).toBeTruthy();
+    expect(screen.getByText(/Không còn tham số nào để chỉnh/)).toBeTruthy();
+    expect(screen.getByText(/cắt theo toạ độ ô/)).toBeTruthy();
   });
 
-  it("ngưỡng tách / ngưỡng nghiêm thì KHÔNG bị gắn nhãn vô hiệu (chúng chạy thật)", () => {
+  it("không còn hứa hẹn ViTMatte/PyMatting — nói rõ là đã bỏ khỏi engine", () => {
     renderAdv();
-    expect(screen.getByLabelText("Ngưỡng tách")).toBeTruthy();
-    expect(screen.getByLabelText("Ngưỡng nghiêm")).toBeTruthy();
-    expect(screen.getByText(/engine đọc thật khi cắt/)).toBeTruthy();
+    expect(screen.getByText(/đã bỏ khỏi engine/)).toBeTruthy();
+    expect(screen.queryByText("✓ đã cài")).toBeNull();
+    expect(screen.queryByText("chưa kiểm tra")).toBeNull();
   });
 
-  it("trạng thái máy: chưa hỏi doctor thì nói 'chưa kiểm tra', không đoán bừa là 'chưa cài'", () => {
+  it('nút "Kiểm tra máy" vẫn còn — doctor không dính gì tới tách nền', () => {
     renderAdv();
-    expect(screen.getAllByText("chưa kiểm tra")).toHaveLength(2);
-    cleanup();
-    renderAdv({ deps: { vitmatte: false, pymatting: true } });
-    expect(screen.getByText("✗ chưa cài")).toBeTruthy();
-    expect(screen.getByText("✓ đã cài")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Kiểm tra máy" })).toBeTruthy();
   });
 });

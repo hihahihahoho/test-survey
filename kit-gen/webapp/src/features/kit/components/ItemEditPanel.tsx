@@ -91,7 +91,7 @@ export function ItemEditPanel(p: {
     <SheetContent aria-describedby="item-edit-description">
       <SheetHeader><SheetTitle>{location?.item.vi || p.file?.file || "Sửa món"}</SheetTitle><SheetDescription id="item-edit-description">Sửa mô tả hoặc đổi món trước khi vẽ lại.</SheetDescription></SheetHeader>
       <SheetBody className="flex flex-col gap-6">
-        {p.file && <KitImage projectId={p.projectId} path={p.file.path} alt={p.file.file} backdrop="checker" blend={p.file.blend} offline={p.offline} empty={p.file.empty} className="aspect-square w-full rounded-4" />}
+        {p.file && <KitImage projectId={p.projectId} path={p.file.path} alt={p.file.file} backdrop="checker" offline={p.offline} empty={p.file.empty} className="aspect-square w-full rounded-4" />}
         <div className="flex flex-col gap-2"><Label htmlFor="item-spec">Mô tả cho máy</Label><Textarea id="item-spec" value={spec} disabled={empty} onChange={(event) => setSpec(event.target.value)} /></div>
         <div className="flex flex-col gap-2"><Label>Hoặc đổi sang món khác</Label><Select value={replacementFile} disabled={empty || library.isLoading} onValueChange={(value) => { setReplacementFile(value); const found = elements.find((item) => item.file === value); if (found) setSpec(found.spec); }}><SelectTrigger aria-label="Chọn từ thư viện có sẵn"><SelectValue placeholder={library.isLoading ? "Đang mở thư viện…" : "Chọn từ thư viện có sẵn"} /></SelectTrigger><SelectContent>{elements.map((item) => <SelectItem key={item.file} value={item.file}>{item.vi || item.file}</SelectItem>)}</SelectContent></Select></div>
         <Button variant="ghost" onClick={() => setEmpty((value) => !value)}>{empty ? "Giữ món này" : "Bỏ trống món này"}</Button>

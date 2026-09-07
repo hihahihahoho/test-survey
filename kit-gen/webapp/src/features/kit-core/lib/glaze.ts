@@ -12,21 +12,25 @@
  * ║ thứ `gen.sh` chèn vào MỌI tấm). Nhắc lại ở từng ô là dạy máy vẽ rằng mỗi   ║
  * ║ element có một chất liệu riêng — ngược hẳn ý "một bộ nhận diện".           ║
  * ║                                                                            ║
- * ║ Thứ CÒN LẠI, thứ prompt tổng KHÔNG nói hộ được, là ĐỘ TRONG của ô: nó      ║
- * ║ quyết định `skel.matte` (thứ `slice.py` đọc để cắt) chứ không chỉ quyết    ║
- * ║ định ô trông thế nào. Đó là trục duy nhất đáng một pill, và đây là nó.     ║
+ * ║ Thứ CÒN LẠI, thứ prompt tổng KHÔNG nói hộ được, là ĐỘ TRONG của ô. Đó là   ║
+ * ║ trục duy nhất đáng một pill, và đây là nó.                                 ║
  * ╚════════════════════════════════════════════════════════════════════════════╝
  *
- * ══ MỘT LỰA CHỌN = HAI NỬA CỦA CÙNG MỘT HỢP ĐỒNG ═══════════════════════════
- *  · `matte` (+ `glassLevel`) đi vào **CÁCH TÁCH** — `gen.sh` xin nền đen / xin
- *    alpha thật, rồi `slice.py` giải ngược đúng cách ấy;
- *  · `en` đi vào **PROMPT**, và nó CỐ Ý NGẮN: chỉ nói về độ xuyên thấu, không
- *    tả bề mặt. Một cụm dài kiểu "carved from translucent glacial ice, frosty
- *    surface with a cool inner glow" là chất liệu thẩm mỹ đội lốt độ trong — nó
- *    đá nhau với prompt tổng phong cách, và đó chính là thứ vừa bị bỏ.
- * Nói một nửa là hỏng: chỉ nối chữ mà `matte` rỗng ⇒ máy vẽ ra kính ĐỤC và
- * slicer cắt nó như mảng đặc; chỉ đặt `matte` mà không nói chữ ⇒ máy vẽ không
- * biết phải chừa alpha ở đâu.
+ * ══ TỪ 07/09/2026: PILL NÀY CHỈ CÒN LÁI **PROMPT** ═════════════════════════
+ * `matte` từng có hai vế: nó vừa chọn câu tiếng Anh, vừa chọn CÁCH CẮT — `glow`
+ * nghĩa là "gen ô này trên nền ĐEN rồi `slice.py` giải ngược α = độ sáng", và
+ * asset ship kèm `blend:"screen"`. Vế thứ hai đã bị bỏ hẳn: máy vẽ trả alpha
+ * thật, `slice.py` chỉ crop theo toạ độ và không đọc `matte` nữa. Cái nền đen ấy
+ * chính là tấm đen chủ sản phẩm nhìn thấy dưới ô avatar.
+ *
+ * Nên nay `matte` (+ `glassLevel`) chỉ còn đổi CÂU CHỮ gửi cho máy vẽ (`gen.sh`,
+ * hai nhánh `glow`/`glass`), và alpha là do chính máy vẽ vẽ ra. `en` vẫn CỐ Ý
+ * NGẮN: chỉ nói về độ xuyên thấu, không tả bề mặt. Một cụm dài kiểu "carved from
+ * translucent glacial ice, frosty surface with a cool inner glow" là chất liệu
+ * thẩm mỹ đội lốt độ trong — nó đá nhau với prompt tổng phong cách.
+ *
+ * Contract vẫn CHẤP NHẬN `skel.matte` của dự án cũ (agent validate không đổi);
+ * `slice.py` chỉ đơn giản bỏ qua nó, nên không dự án nào vỡ.
  */
 import type { GlassLevel, SkelMatteChoice } from "./model";
 
@@ -104,8 +108,9 @@ export const GLAZE_PRESETS: readonly GlazePreset[] = [
   {
     id: "glow",
     vi: "Phát sáng",
-    /* `glow` = nền ô lúc gen là ĐEN và `slice.py` tách theo kênh sáng, nên câu
-       tiếng Anh phải nói về ÁNH SÁNG TỰ PHÁT — thứ phép tách ấy trông cậy vào. */
+    /* `glow` chỉ còn là một CÂU: `gen.sh` in thêm luật "pure light, no surface,
+       quầng tan bằng cách HẠ ALPHA về 0, không có gì phía sau". Không còn nền đen
+       nào, và `slice.py` không đọc `matte` — xem khối đầu file. */
     matte: "glow",
     en: "it emits its own light, luminous edges",
   },

@@ -7,7 +7,6 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useKit } from "@/lib/hooks";
 import type { KitFile } from "@/lib/types";
-import { GLOW_FIGMA_HINT } from "@/features/kit/lib/blend";
 import { loadFull } from "@/features/kit/lib/image-source";
 import { toastError, toastSuccess } from "@/features/projects/lib/feedback";
 import { DEMO_SCREENS } from "../data/screens.default";
@@ -255,11 +254,6 @@ function SceneReport({ scene }: { scene: ResolvedScene | null }) {
       {scene.broken.length > 0 && (
         <p className="text-caption text-fg-muted">
           Bỏ qua {scene.broken.length} ô sai hình học: {scene.broken.map((b) => `${b.file} (${b.reason})`).join("; ")}
-        </p>
-      )}
-      {scene.glow.length > 0 && (
-        <p className="text-caption text-fg-muted">
-          Ô phát sáng ({scene.glow.join(", ")}): {GLOW_FIGMA_HINT}
         </p>
       )}
     </div>

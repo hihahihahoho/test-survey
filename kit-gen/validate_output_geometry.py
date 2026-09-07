@@ -12,202 +12,85 @@ thẳng: `alpha < ngưỡng`. Không đoán màu, không đo viền, không lệ
 còn ca hỏng nào kiểu "sheet magenta rơi về key xanh lá nên MỌI pixel tính là
 foreground" (docs/research-glow-extraction-2026-08.md §3.3).
 
+╔══ 07/09/2026 — BỎ NỐT PHÉP DÒ LÕI BẰNG MÀU + MORPHOLOGY ═════════════════════╗
+║ File này CỐ Ý soi gương `slice.py`. Cho tới hôm nay nó soi một cái gương đã   ║
+║ vỡ: `_core_mask` erode silhouette, lấy thành phần liên thông lớn nhất, có hẳn ║
+║ một nhánh nhận diện "màu tím là men" — và trên ô kính thật (`test-e0d4`,      ║
+║ 02-healthbar) phép đó trả về lõi 212x107 cho một thanh rộng 473px. Sai 2,2    ║
+║ lần, im lặng, rồi đi thẳng vào cờ `regenerate`.                              ║
+║                                                                              ║
+║ `slice.py` nay đo lõi bằng ĐÚNG MỘT phép: bbox của pixel α ≥ 128. File này    ║
+║ dùng lại đúng phép ấy, nên hai bên không thể lệch nhau nữa.                   ║
+║ Hệ quả đã biết và đã chấp nhận: `core` và `decoration` không còn tách được    ║
+║ theo MÀU, chỉ còn tách theo ĐỘ ĐỤC — trang trí đục nằm chung hộp với thân.    ║
+║ Đổi lại, không còn chỗ nào để đoán sai.                                       ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
 File này CỐ Ý tự chứa (không import slice.py): runtime deploy nó cạnh slice.py
-nhưng cũng chạy độc lập trong tools/. Thuật toán phải soi gương slice.py.
-`actual` là bbox CORE sau tách morphology/màu; `silhouette`/`decoration` là số
-theo dõi overflow. Chỉ ``core_undershoot`` vào safe-zone làm cell regenerate.
+nhưng cũng chạy độc lập trong tools/. Chỉ ``core_undershoot`` vào safe-zone làm
+cell regenerate; `silhouette`/`decoration` là số theo dõi overflow.
 """
-import argparse, json, math, re
+import argparse, json
 from pathlib import Path
 from PIL import Image
 
 ALPHA_FG = 24                        # α ≥ ngưỡng ⇒ pixel CÓ MỰC, dưới ⇒ nền trống.
                                      # Lấy thấp có chủ ý: quầng glow tan tới α rất
                                      # nhỏ vẫn là mực, và bbox silhouette phải ôm nó.
+ALPHA_CORE = 128                     # α ≥ ngưỡng ⇒ pixel thuộc LÕI (mặt chức năng).
+                                     # Cùng con số `slice.py:CORE_ALPHA` dùng để ghi
+                                     # `safe` vào manifest — một phép, hai người dùng.
+
+
+def bbox_at(image, threshold):
+    """bbox của pixel có α ≥ `threshold` → ``(l, t, r, b)`` hoặc None.
+
+    `point()` + `getbbox()` chạy ở tầng C của Pillow; bản trước quét từng pixel
+    bằng vòng lặp Python trên cả ảnh 1536x1024 cho MỖI ô.
+    """
+    alpha = image.convert("RGBA").getchannel("A")
+    if threshold > 1:
+        alpha = alpha.point(lambda v: 255 if v >= threshold else 0)
+    return alpha.getbbox()
 
 
 def bbox_foreground(image, threshold=ALPHA_FG):
     """bbox của phần CÓ MỰC. Nền = alpha thấp, không phải một màu nào cả."""
-    w, _h = image.size
-    alpha = image.convert("RGBA").getchannel("A").getdata()
-    xs = []; ys = []
-    for i, a in enumerate(alpha):
-        if a >= threshold:
-            xs.append(i % w); ys.append(i // w)
-    return None if not xs else (min(xs), min(ys), max(xs) + 1, max(ys) + 1)
+    return bbox_at(image, threshold)
 
 
-def _foreground_mask(image, threshold=ALPHA_FG):
-    """Mask foreground giống ``bbox_foreground`` nhưng giữ được từng pixel."""
-    alpha = image.convert("RGBA").getchannel("A").getdata()
-    return bytearray(1 if a >= threshold else 0 for a in alpha)
+def _decoration_bbox(image, core_box, threshold=ALPHA_FG):
+    """bbox của phần mực nằm NGOÀI hộp lõi — đồ trang trí tràn ra.
 
-
-def _mask_bbox(mask, width, height):
-    points = [i for i, value in enumerate(mask) if value]
-    if not points:
-        return None
-    return min(i % width for i in points), min(i // width for i in points), \
-        max(i % width for i in points) + 1, max(i // width for i in points) + 1
-
-
-def _largest_component(mask, width, height):
-    """Largest 4-connected body used for core; caller retains all foreground."""
-    seen = bytearray(width * height)
-    best = bytearray(width * height)
-    best_size = 0
-    for start, present in enumerate(mask):
-        if not present or seen[start]:
+    Đo bằng bốn dải quanh hộp lõi (trên/dưới/trái/phải) thay vì quét mask: mỗi dải
+    là một `crop` + `getbbox`, vẫn ở tầng C, và hợp của bốn hộp con chính là bbox
+    của phần còn lại.
+    """
+    if core_box is None:
+        return bbox_foreground(image, threshold)
+    w, h = image.size
+    l, t, r, b = core_box
+    out = None
+    for band in ((0, 0, w, t), (0, b, w, h), (0, t, l, b), (r, t, w, b)):
+        if band[0] >= band[2] or band[1] >= band[3]:
             continue
-        queue = [start]
-        seen[start] = 1
-        component = []
-        while queue:
-            index = queue.pop()
-            component.append(index)
-            x, y = index % width, index // width
-            for nxt in (
-                index - 1 if x else -1,
-                index + 1 if x + 1 < width else -1,
-                index - width if y else -1,
-                index + width if y + 1 < height else -1,
-            ):
-                if nxt >= 0 and mask[nxt] and not seen[nxt]:
-                    seen[nxt] = 1
-                    queue.append(nxt)
-        if len(component) > best_size:
-            best_size = len(component)
-            best = bytearray(width * height)
-            for index in component:
-                best[index] = 1
-    return best, best_size
-
-
-def _erode_mask(mask, width, height, iterations):
-    current = bytearray(mask)
-    for _ in range(max(0, iterations)):
-        nxt = bytearray(width * height)
-        for index, present in enumerate(current):
-            if not present:
-                continue
-            x, y = index % width, index // width
-            if (x == 0 or x + 1 == width or y == 0 or y + 1 == height
-                    or not current[index - 1] or not current[index + 1]
-                    or not current[index - width] or not current[index + width]):
-                continue
-            nxt[index] = 1
-        current = nxt
-    return current
-
-
-def _projection_core_mask(silhouette, width, height):
-    """Erode trước, lấy plateau liên tục, nới lại mép core; bỏ tua/hoa mảnh."""
-    main_box = _mask_bbox(silhouette, width, height)
-    main_size = sum(1 for value in silhouette if value)
-    if not main_box or not main_size:
-        return silhouette, main_size
-    radius = max(2, min(12, round(min(width, height) * 0.025)))
-    eroded = _erode_mask(silhouette, width, height, radius)
-    seed, seed_size = _largest_component(eroded, width, height)
-    if seed_size < max(16, int(main_size * 0.04)):
-        return silhouette, main_size
-    rows = [0] * height
-    cols = [0] * width
-    for index, value in enumerate(seed):
-        if value:
-            x, y = index % width, index // width
-            rows[y] += 1
-            cols[x] += 1
-    ys = [y for y, count in enumerate(rows) if count >= max(rows) * 0.5]
-    xs = [x for x, count in enumerate(cols) if count >= max(cols) * 0.5]
-    if not xs or not ys:
-        return silhouette, main_size
-    box = (
-        max(main_box[0], min(xs) - radius),
-        max(main_box[1], min(ys) - radius),
-        min(main_box[2], max(xs) + 1 + radius),
-        min(main_box[3], max(ys) + 1 + radius),
-    )
-    if box == main_box:
-        return silhouette, main_size
-    candidate = bytearray(width * height)
-    candidate_size = 0
-    for index, value in enumerate(silhouette):
-        if not value:
+        sub = bbox_at(image.crop(band), threshold)
+        if sub is None:
             continue
-        x, y = index % width, index // width
-        if box[0] <= x < box[2] and box[1] <= y < box[3]:
-            candidate[index] = 1
-            candidate_size += 1
-    if candidate_size < max(16, int(main_size * 0.05)):
-        return silhouette, main_size
-    return candidate, candidate_size
-
-
-def _median_rgb(image, indices, width):
-    if not indices:
-        return (0, 0, 0)
-    pixels = image.load()
-    sample = indices if len(indices) <= 12000 else indices[::max(1, len(indices) // 12000)]
-    return tuple(sorted(pixels[i % width, i // width][channel] for i in sample)[len(sample) // 2]
-                 for channel in range(3))
-
-
-def _core_mask(image, silhouette, width, height):
-    """Core màu enamel; soi gương nhánh tím của slice.py rồi fallback morphology."""
-    main_indices = [i for i, value in enumerate(silhouette) if value]
-    main_size = len(main_indices)
-    if not main_indices:
-        return bytearray(width * height), 0
-    pixels = image.load()
-    purple = bytearray(width * height)
-    for index in main_indices:
-        r, g, b = pixels[index % width, index // width][:3]
-        if b >= 60 and r >= 35 and g <= min(r * 0.72, b * 0.68):
-            purple[index] = 1
-    purple_core, purple_size = _largest_component(purple, width, height)
-    if purple_size >= max(16, int(main_size * 0.05)):
-        return purple_core, purple_size
-    depth = max(1, min(4, round(min(width, height) * 0.02)))
-    inner = _erode_mask(silhouette, width, height, depth)
-    inner_indices = [i for i, value in enumerate(inner) if value]
-    if not inner_indices:
-        return _projection_core_mask(silhouette, width, height)
-    median = _median_rgb(image, inner_indices, width)
-    candidate = bytearray(width * height)
-    for index in main_indices:
-        color = pixels[index % width, index // width][:3]
-        if math.dist(color, median) <= 72:
-            candidate[index] = 1
-    core, core_size = _largest_component(candidate, width, height)
-    core_box = _mask_bbox(core, width, height)
-    main_box = _mask_bbox(silhouette, width, height)
-    if (not core_box or core_size < max(16, int(main_size * 0.05))
-            or core_box == main_box or core_size >= int(main_size * 0.82)
-            or core_box[2] - core_box[0] < max(3, round((main_box[2] - main_box[0]) * 0.2))
-            or core_box[3] - core_box[1] < max(3, round((main_box[3] - main_box[1]) * 0.2))):
-        return _projection_core_mask(silhouette, width, height)
-    return core, core_size
-
-
-def _difference_bbox(outer, inner, width, height):
-    remainder = bytearray(width * height)
-    for index, value in enumerate(outer):
-        if value and not inner[index]:
-            remainder[index] = 1
-    return _mask_bbox(remainder, width, height)
+        box = (sub[0] + band[0], sub[1] + band[1], sub[2] + band[0], sub[3] + band[1])
+        out = box if out is None else (min(out[0], box[0]), min(out[1], box[1]),
+                                       max(out[2], box[2]), max(out[3], box[3]))
+    return out
 
 
 def _measure_core_decoration(image):
-    width, height = image.size
-    foreground = _foreground_mask(image)
-    body, body_size = _largest_component(foreground, width, height)
-    core, core_size = _core_mask(image, body, width, height)
+    silhouette = bbox_foreground(image)
+    core = bbox_at(image, ALPHA_CORE) or silhouette
     return {
-        "silhouette": _mask_bbox(foreground, width, height),
-        "core": _mask_bbox(core, width, height),
-        "decoration": _difference_bbox(foreground, core, width, height),
-        "measured": bool(body_size),
+        "silhouette": silhouette,
+        "core": core,
+        "decoration": _decoration_bbox(image, core),
+        "measured": silhouette is not None,
     }
 
 

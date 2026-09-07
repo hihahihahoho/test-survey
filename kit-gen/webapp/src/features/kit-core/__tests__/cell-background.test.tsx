@@ -1,9 +1,12 @@
 /**
  * P1-4 — «NỀN TÁCH» CỦA TỪNG Ô: từ lớp đè của dự án tới câu prompt.
  *
- * Cơ chế `skel.matte:"glow"` vốn đã đi hết đường ống engine (`gen.sh:273–281` in câu
- * ánh sáng cho đúng ô đó, `slice.py:740–798` tách bằng nhánh riêng); thứ dễ hỏng nằm ở
- * phía webapp, và nó hỏng IM LẶNG:
+ * Cơ chế `skel.matte:"glow"` đi hết đường ống engine — nhưng từ 07/09/2026 nó chỉ còn
+ * MỘT vế: `gen.sh` in câu ánh sáng cho đúng ô đó. Vế thứ hai (`slice.py` tách ô ấy khỏi
+ * một tấm ĐEN bằng nhánh riêng, rồi ship `blend:"screen"`) đã bị bỏ hẳn: máy vẽ trả
+ * alpha thật và dao cắt chỉ crop theo toạ độ. Nghĩa là mọi ca dưới đây nay đo ĐÚNG một
+ * thứ — CÂU CHỮ tới máy vẽ — và ca «KHÔNG còn câu NỀN ĐEN» chuyển từ "chốt giữ đề
+ * phòng" thành "khoá cái đã bỏ". Thứ dễ hỏng vẫn nằm ở phía webapp, và nó hỏng IM LẶNG:
  *
  *  ② lớp đè của dự án chỉ chép `w`/`h` ⇒ chọn xong, UI hiện đúng, contract TRỐNG;
  *  ③ `item-prompt.ts` không dựng lại câu ánh sáng ⇒ panel "Prompt sẽ gửi đi" nói dối

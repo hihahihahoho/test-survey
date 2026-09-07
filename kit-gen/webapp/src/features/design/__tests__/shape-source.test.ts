@@ -101,26 +101,34 @@ describe("silhouette SVG khớp TỪNG KÝ TỰ với silhouettes.js", () => {
 });
 
 describe("hằng số engine rút từ slice.py", () => {
-  it("matte đúng 2 giá trị mà slice.py hiểu", () => {
+  it("matte đúng 2 giá trị — và nguồn nay là gen.sh, không phải slice.py", () => {
     expect([...MATTE_VALUES].sort()).toEqual(["glass", "glow"]);
+    // `matte` chỉ còn đổi CÂU CHỮ của prompt. Hai nhánh đó phải có thật trong gen.sh…
+    const gen = read("gen.sh");
+    expect(gen).toMatch(/skel"\]\.get\("matte"\) == "glow"/);
+    expect(gen).toMatch(/skel"\]\.get\("matte"\) == "glass"/);
+    /* …và slice.py TUYỆT ĐỐI không được ĐỌC lại khoá đó: nhánh `matte:"glow"` chính
+       là nhánh vẽ trên nền đen. Quét LỜI GỌI chứ không quét chữ — docstring của
+       slice.py cố ý kể lại tên cỗ máy đã bỏ. */
+    const slice = read("slice.py");
+    expect(slice).not.toMatch(/get\("matte"\)/);
+    expect(slice).not.toMatch(/\["matte"\]/);
   });
 
-  it("BLEED là hằng số MODULE — căn cứ cho cảnh báo M4 ở tab Nâng cao", () => {
+  it("KHÔNG còn tham số cắt nào — slice.py chỉ crop theo toạ độ", () => {
     const src = read("slice.py");
-    expect(src).toMatch(/^BLEED\s*=\s*0\.18/m);
-    expect(SLICE_CONST.bleed).toBe(0.18);
+    // Vành ngoài ô: bỏ hẳn. Nó từng nới vùng cắt sang đất ô hàng xóm rồi phải dựng
+    // mask sở hữu khối để đuổi lại — và vẫn lọt rác (`01-button`, dự án test-e0d4).
+    expect(src).not.toMatch(/^BLEED\s*=/m);
+    expect(SLICE_CONST.bleed).toBe(0);
     expect(SLICE_CONST.bleedIsModuleConstant).toBe(true);
-    // slice.py KHÔNG đọc bleed từ contract/style ⇒ tham số UI chưa có tác dụng.
-    expect(src).not.toMatch(/style\.get\("bleed"/);
-    expect(src).not.toMatch(/contract.*bleed/);
-  });
-
-  it("threshold/grow_threshold thì NGƯỢC LẠI: đọc theo từng style ⇒ ghi được thật", () => {
-    const src = read("slice.py");
-    expect(src).toMatch(/style\.get\("threshold"/);
-    expect(src).toMatch(/style\.get\("grow_threshold"/);
-    expect(SLICE_CONST.threshold).toBe(52);
-    expect(SLICE_CONST.growOffset).toBe(60);
+    // Hai ngưỡng của mask tách nền: bỏ cùng cỗ máy tách nền.
+    expect(src).not.toMatch(/^DEFAULT_THRESHOLD\s*=/m);
+    expect(src).not.toMatch(/^GROW_OFFSET\s*=/m);
+    expect(src).not.toMatch(/style\.get\("threshold"/);
+    expect(src).not.toMatch(/style\.get\("grow_threshold"/);
+    expect(SLICE_CONST.threshold).toBeNull();
+    expect(SLICE_CONST.growOffset).toBeNull();
   });
 });
 

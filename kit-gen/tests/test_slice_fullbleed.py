@@ -52,8 +52,8 @@ def make_full_sheet(w=200, h=120, gap=8, ragged=3):
 
 def cut(sheet):
     """Đúng thứ nhánh `shape == "full"` của slice.py làm: crop nguyên ô."""
-    keyed, _strict = s.alpha_sheet(sheet)
-    return keyed.crop((0, 0, *sheet.size))
+    sheet_img, _mode = s.read_sheet(sheet)
+    return sheet_img.crop((0, 0, *sheet.size))
 
 
 class FullBleedTest(unittest.TestCase):

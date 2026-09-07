@@ -133,19 +133,18 @@ export function register(r) {
            `sheet-files.ts` lặng lẽ rơi về `contractSafe` — tức dán ra Figma đúng cỡ
            máy vẽ chứ không đúng cỡ người dùng chọn. */
         outSize: meta?.outSize ?? null,
-        core: meta?.core ?? null,
-        enamel: meta?.enamel ?? null,
         sizeDeviation: meta?.sizeDeviation ?? null,
         contentAt: meta?.content_at ?? null,
         content: meta?.content ?? null,
         canvas: meta?.canvas ?? null,
         cell: meta?.cell && Array.isArray(meta.cell) ? meta.cell : null,
         bleed: meta?.bleed ?? null,
-        /* `blend` = chỉ dẫn VẼ đi kèm asset, `slice.py` ghi `"screen"` cho ô
-           `matte:"glow"` (backlog P1-3). Vật liệu phát sáng không bake được vào
-           alpha, nên nơi vẽ phải biết mà đặt mix-blend-mode/Linear Dodge; không
-           chuyển tiếp ở đây thì webapp không có đường nào biết. Ô thường: null. */
-        blend: meta?.blend ?? null,
+        /* `mode` = "alpha" | "rgb" — tấm mà ô này được cắt ra CÓ nền trong suốt hay
+           không. `slice.py` không còn từ chối cắt tấm đục (từ chối là giữ ảnh của
+           người dùng làm con tin) và tuyệt đối không tự chế alpha; nó ghi cờ này để
+           web nói thẳng "tấm này không có nền trong suốt, sinh lại đi". Kit cắt bằng
+           bản cũ không có khoá này ⇒ null, và web im lặng như trước. */
+        mode: meta?.mode ?? null,
         empty: st.size === 0,
         mtime: new Date(st.mtimeMs).toISOString(),
       })

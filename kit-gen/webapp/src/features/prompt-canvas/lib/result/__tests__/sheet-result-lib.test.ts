@@ -34,7 +34,6 @@ describe("figmaNodeForSheet — cả tấm là MỘT ảnh chữ nhật, không 
     expect(spec.image).toEqual({ x: 0, y: 0, w: 1536, h: 1024 });
     expect(spec.clipsContent).toBe(false);
     expect(spec.source).toBe("canvas");
-    expect(spec.blend).toBeNull();
     expect(spec.scale).toBe(1);
     expect(spec.name).toBe("chinh-ui");
   });

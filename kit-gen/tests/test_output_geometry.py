@@ -108,31 +108,54 @@ class AlphaDoDacTest(unittest.TestCase):
 
 
 class CoreVaDecorationTest(unittest.TestCase):
-    """Core = mặt chức năng; decoration = phần tràn ra. Không dính gì tới nền."""
+    """LÕI = phần ĐỤC (α ≥ 128); decoration = phần mực nằm ngoài hộp lõi.
 
-    def test_cham_core_khong_nuot_decoration(self):
-        im = sheet((300, 220), (70, 70, 229, 149), (40, 130, 99, 189), (180, 145, 199, 214))
-        code, out = run_tool(im, contract(w=160 / 300, h=80 / 220))
-        cell = out['cells'][0]
-        self.assertEqual(code, 0)
-        self.assertEqual(cell['actual'], [70, 70, 160, 80])
-        self.assertEqual(cell['core'], [70, 70, 230, 150])
-        self.assertEqual(cell['decoration'], [40, 130, 200, 215])
-        self.assertEqual(cell['deviation']['maxEdgePx'], 0)
-        self.assertEqual(cell['status'], 'ok')
+    ĐỔI LUẬT 07/09/2026, và phải nói thẳng cái mất: bản trước tách lõi khỏi trang
+    trí bằng MÀU + morphology (erode → thành phần liên thông lớn nhất → projection,
+    kèm một nhánh riêng cho màu tím). Phép đó đo sai 2,2 lần trên ô kính thật, nên
+    nó đã bị bỏ ở cả `slice.py` lẫn đây. Hệ quả: trang trí ĐỤC không còn tách được
+    khỏi thân — nó nằm chung hộp lõi. Chỉ phần MỀM (quầng sáng, rìa tan) mới ra
+    ngoài. Đổi lại: một phép duy nhất, không có chỗ nào để đoán sai, và con số ở
+    đây bằng đúng con số `slice.py` ghi vào `manifest.safe`.
+    """
 
-    def test_ghi_ca_decoration_roi(self):
+    def test_quang_MEM_khong_keo_loi_phinh_ra(self):
+        """Thân đục 160x80, quầng α=60 phủ rộng: lõi bám thân, quầng thành decoration."""
         im = Image.new("RGBA", (300, 220), TRONG)
         draw = ImageDraw.Draw(im)
-        draw.rectangle((70, 70, 229, 149), fill=INK)
-        draw.ellipse((40, 30, 55, 45), fill=INK)
+        draw.rectangle((20, 20, 279, 199), fill=(255, 200, 90, 60))   # quầng mềm
+        draw.rectangle((70, 70, 229, 149), fill=INK)                  # thân đục
         code, out = run_tool(im, contract(w=160 / 300, h=80 / 220))
         cell = out['cells'][0]
-        self.assertEqual(code, 0)
         self.assertEqual(cell['core'], [70, 70, 230, 150])
-        self.assertEqual(cell['silhouette'], [40, 30, 230, 150])
-        self.assertEqual(cell['decoration'], [40, 30, 56, 46])
+        self.assertEqual(cell['silhouette'], [20, 20, 280, 200])
+        self.assertEqual(cell['decoration'], [20, 20, 280, 200])
+        self.assertEqual(cell['actual'], [70, 70, 160, 80])
+        self.assertEqual(cell['deviation']['maxEdgePx'], 0)
         self.assertEqual(cell['status'], 'ok')
+        self.assertEqual(code, 0)
+
+    def test_khong_co_gi_ngoai_loi_thi_decoration_la_None(self):
+        im = sheet((300, 220), (70, 70, 229, 149))
+        _code, out = run_tool(im, contract(w=160 / 300, h=80 / 220))
+        cell = out['cells'][0]
+        self.assertEqual(cell['core'], [70, 70, 230, 150])
+        self.assertIsNone(cell['decoration'])
+
+    def test_trang_tri_DUC_nay_nam_chung_hop_loi_va_ca_nay_ghi_lai_dieu_do(self):
+        """Ca chống-bất-ngờ: ai đọc `core` phải biết nó KHÔNG còn là "mặt chức năng".
+
+        Một cái tua đục thò ra khỏi thân sẽ kéo hộp lõi theo, và vì thân lệch tâm
+        so với ô nên tấm bị đòi sinh lại. Đó là hành vi ĐÚNG của luật mới, không
+        phải hồi quy — và nó cũng là hành vi mà `slice.py` đang ghi vào manifest.
+        """
+        im = sheet((300, 220), (70, 70, 229, 149), (40, 130, 99, 189))
+        code, out = run_tool(im, contract(w=160 / 300, h=80 / 220))
+        cell = out['cells'][0]
+        self.assertEqual(cell['core'], [40, 70, 230, 190])
+        self.assertIsNone(cell['decoration'])
+        self.assertEqual(code, 2)
+        self.assertIn('position', cell['reasons'])
 
     def test_o_trong_co_y_khong_bi_tinh_la_can_tao_lai(self):
         data = contract(cols=2, rows=1, comps=[

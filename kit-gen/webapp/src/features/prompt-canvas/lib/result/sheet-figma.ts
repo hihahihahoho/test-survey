@@ -25,7 +25,6 @@
  * ║ vài trăm pixel mà không có gì báo.                                        ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
-import { BLEND_SCREEN } from "@/features/kit/lib/blend";
 import {
   FigmaNodeUnsupported, encodeFigmaNode, type FigmaNodeSpec,
 } from "@/features/kit-core/lib/figma-node";
@@ -38,13 +37,6 @@ export interface SheetFigmaOptions {
    * một nửa là làm mất đúng thứ người dùng mở nó ra để nhìn.
    */
   scale?: number;
-  /**
-   * `"screen"` nếu cả tấm là vật liệu PHÁT SÁNG. Gần như luôn `null`: `blend` là
-   * thuộc tính của TỪNG Ô trong `kits/manifest.json`, một tấm trộn ô glow và ô
-   * thường thì không có giá trị chung nào đúng. Để mở vì tấm hiệu ứng thuần glow
-   * có tồn tại, nhưng nơi gọi phải chủ động khẳng định.
-   */
-  blend?: typeof BLEND_SCREEN | null;
 }
 
 /**
@@ -77,7 +69,6 @@ export function figmaNodeForSheet(
     image: { x: 0, y: 0, w: w * scale, h: h * scale },
     /* Vẫn TẮT clip cho đúng hợp đồng §3.3 — và để `assertDocShape` không đỏ. */
     clipsContent: false,
-    blend: opts.blend ?? null,
     source: "canvas",
     scale,
   };

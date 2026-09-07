@@ -147,20 +147,9 @@
       calc(-1 * var(--kg-checker-cell)) 0;
   }
 
-  /* Ô ảnh PHÁT SÁNG — `blend:"screen"` trong `kits/manifest.json` (slice.py, P1-3).
-     Ba việc, cả ba đều bắt buộc thì ảnh mới đọc đúng:
-      · nền ĐO (tối, không lật theo theme) — `mix-blend-mode: screen` trên nền sáng
-        cho ra nền sáng, tức ô glow tàng hình ở theme Trắng;
-      · `background-image: none` đè ô vuông alpha của `.kg-checkerboard` — checker
-        sáng cộng vào ảnh thành mảng trắng, không còn đọc được gì;
-      · `isolation: isolate` — nhốt phép blend trong đúng ô này, để nó không ăn
-        xuống nền thẻ/khối bên dưới (mix-blend-mode trộn với cả stacking context).
-     Khai SAU `.kg-checkerboard` là cố ý: cùng độ đặc hiệu, class sau thắng. */
-  .kg-glow-ground {
-    background-color: var(--kg-glow-ground);
-    background-image: none;
-    isolation: isolate;
-  }
+  /* `.kg-glow-ground` (nền ĐO tối cho ô `blend:"screen"`) đã bỏ 07/09/2026 cùng
+     nhánh nền đen của `slice.py`: ô phát sáng nay là PNG alpha thật, vẽ thường
+     trên đúng cái nền người dùng chọn như mọi ô khác. */
 
   /* Nền tint cho badge: màu trạng thái ở alpha --kg-tint-a (16% dark / 12% light) */
   .kg-tint-never   { background: rgb(var(--kg-never)   / var(--kg-tint-a)); }

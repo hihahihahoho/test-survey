@@ -44,7 +44,7 @@ def sheet(*alphas):
 
 
 def alpha_of(img):
-    rgba, _strict = slice_mod.alpha_sheet(img)
+    rgba = slice_mod.snap_solid_alpha(img.convert("RGBA"))
     return [rgba.getchannel("A").load()[x, 0] for x in range(img.size[0])]
 
 
@@ -66,7 +66,7 @@ class AlphaDucHanTest(unittest.TestCase):
     def test_mau_RGB_khong_doi_mot_byte(self):
         """Chỉ động vào kênh α. Đụng vào màu là despill trá hình, không ai gọi."""
         img = sheet(252, 100, 0)
-        rgba, _ = slice_mod.alpha_sheet(img)
+        rgba = slice_mod.snap_solid_alpha(img.convert("RGBA"))
         px = rgba.load()
         self.assertEqual([px[x, 0][:3] for x in range(3)], [(200, 80, 40)] * 3)
 
@@ -75,10 +75,14 @@ class AlphaDucHanTest(unittest.TestCase):
         img = sheet(0, 128, 255)
         self.assertEqual(alpha_of(img), [0, 128, 255])
 
-    def test_mask_strict_van_bam_dung_nguong_cu(self):
-        """`strict` = "ruột đặc" cho khâu dán nhãn blob; nó phải khớp cùng một ngưỡng."""
-        _rgba, strict = slice_mod.alpha_sheet(sheet(0, 239, 240, 255))
-        self.assertEqual(list(strict), [0, 0, 1, 1])
+    def test_phep_nan_CHI_TANG_alpha_khong_bao_gio_ha(self):
+        """Ranh giới quan trọng nhất sau khi bỏ tách nền: dao cắt không được HẠ một
+        byte alpha nào. Phép nắn là phép duy nhất còn chạm vào α, nên nó phải đơn
+        điệu tăng — có thế mới không tồn tại đường nào gặm ruột element."""
+        vao = tuple(range(0, 256, 7)) + (239, 240, 254, 255)
+        ra = alpha_of(sheet(*vao))
+        for truoc, sau in zip(vao, ra):
+            self.assertGreaterEqual(sau, truoc, f"alpha {truoc} bị hạ xuống {sau}")
 
 
 if __name__ == "__main__":

@@ -12,13 +12,16 @@
  *    và `slice.py` dòng 661 (`cell_w, cell_h = W/COLS, H/ROWS`).
  *  · Element = ô × (skel.w, skel.h), CĂN GIỮA; `anchor:"bottom"` thì dán đáy
  *    chừa 4% chiều cao ô — `skeleton.py` dòng 105–107, `skeleton.html` dòng 52–54.
- *  · Canvas file PNG cắt ra = ô + vành bleed mỗi phía — `slice.py` dòng 788–789:
- *        BX = round(cell_w × BLEED), BY = round(cell_h × BLEED), BLEED = 0.18
+ *  · Canvas file PNG cắt ra = ĐÚNG MỘT Ô, không hơn một pixel (07/09/2026).
+ *    `slice.py` từng nới vùng cắt ra một vành `BLEED = 0.18` mỗi phía để "vớt trang
+ *    trí tràn", rồi phải dựng cả bộ mask sở hữu khối để đuổi lại đồ của ô hàng xóm
+ *    vừa múc vào — và vẫn lọt (vệt vàng lẻ loi dưới `01-button`, dự án `test-e0d4`).
+ *    Vành đó đã bỏ: lề 10% mỗi cạnh mà luật safe zone chừa sẵn NẰM TRONG ô, nên
+ *    phần tràn có chỗ mà không cần mượn đất ô bên.
  *
- * ⚠ GHI CHÚ TRUNG THỰC (teams/design/INTEGRATION.md §5 mốc M4): `BLEED` là HẰNG SỐ
- * MODULE trong `slice.py` (dòng 66). Tham số "Vành ngoài ô" ở tab Nâng cao được ghi
- * vào contract nhưng **không đổi được kết quả cắt thật**. Vì vậy hàm ở đây dùng đúng
- * hằng số 0.18 và `bleedIsFixed` = true để UI nói thật với user, không hứa suông.
+ * ⇒ `SLICE_BLEED` nay là 0 và `bleedPx` luôn `{0, 0}`. Giữ hai trường ấy (thay vì
+ * xoá) vì màn đo ô vẫn hiển thị "canvas file cắt ra", và để nếu vành quay lại thì
+ * chỉ có một chỗ phải sửa.
  *
  * KHÔNG CHÉP LẠI HÌNH KHỐI Ở ĐÂY. Bản chép `silhouettes.js` là của R2-P1
  * (`../lib/shapes.ts` + `shape-data.generated.ts`, sinh bằng `scripts/extract-shapes.mjs`
@@ -45,8 +48,8 @@ export const CANVAS_LANDSCAPE = { w: 1536, h: 1024 } as const;
 export const CANVAS_PORTRAIT = { w: 1024, h: 1536 } as const;
 export const CANVAS_SQUARE = { w: 1254, h: 1254 } as const;
 
-/** `slice.py` dòng 66 — HẰNG SỐ MODULE, UI không đổi được (M4).
- *  Số lấy từ `SLICE_CONST` (rút tự động từ slice.py), KHÔNG gõ lại. */
+/** Vành ngoài ô — nay là 0. Số lấy từ `SLICE_CONST` (rút tự động từ slice.py),
+ *  KHÔNG gõ lại: đổi ở engine là đổi ở đây, không phải sửa hai chỗ. */
 export const SLICE_BLEED = SLICE_CONST.bleed;
 export const BLEED_IS_FIXED = SLICE_CONST.bleedIsModuleConstant;
 

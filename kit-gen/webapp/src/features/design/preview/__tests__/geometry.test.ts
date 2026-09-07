@@ -101,19 +101,21 @@ describe("chia ô — `geometry.cell_size`, dùng chung bởi prompt và dao c�
   });
 });
 
-describe("vành bleed — slice.py dòng 66 + 788–789", () => {
-  it("BLEED = 0.18 là HẰNG SỐ MODULE (căn cứ cảnh báo M4)", () => {
-    expect(read("slice.py")).toMatch(/^BLEED\s*=\s*0\.18/m);
-    expect(SLICE_BLEED).toBe(0.18);
+describe("KHÔNG CÒN vành bleed — canvas file cắt ra = ĐÚNG một ô (07/09/2026)", () => {
+  it("slice.py không còn hằng số BLEED nào", () => {
+    expect(read("slice.py")).not.toMatch(/^BLEED\s*=/m);
+    expect(SLICE_BLEED).toBe(0);
     expect(BLEED_IS_FIXED).toBe(true);
   });
 
-  it("canvas file cắt ra = ô + 2×bleed, đúng `CVW, CVH = CW + 2*BX, CH + 2*BY`", () => {
-    expect(read("slice.py")).toMatch(/CVW,\s*CVH\s*=\s*CW\s*\+\s*2\s*\*\s*BX,\s*CH\s*\+\s*2\s*\*\s*BY/);
+  it("dao cắt lấy ĐÚNG hộp ô, không nới sang ô bên", () => {
+    /* Chính dòng crop của slice.py. Nới vùng cắt ra ngoài ranh giới ô là cách vệt
+       vàng của ô dưới lọt vào `01-button` (dự án test-e0d4) — nên hình dạng của
+       dòng này là thứ phải khoá, không phải một con số. */
+    expect(read("slice.py")).toMatch(/crop\(\(cx0,\s*cy0,\s*cx0\s*\+\s*CW,\s*cy0\s*\+\s*CH\)\)/);
     const m = cellMetrics(sheet(4, 4));
-    // BX = round(384*0.18) = 69 · BY = round(256*0.18) = 46
-    expect(m.bleedPx).toEqual({ x: 69, y: 46 });
-    expect(m.exportPx).toEqual({ w: 384 + 138, h: 256 + 92 });
+    expect(m.bleedPx).toEqual({ x: 0, y: 0 });
+    expect(m.exportPx).toEqual({ w: 384, h: 256 });
   });
 });
 

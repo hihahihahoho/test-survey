@@ -7,7 +7,6 @@ import { loadImage } from "../lib/image-source";
 import { LIMITS } from "@/lib/api";
 import type { Backdrop } from "../lib/backdrop";
 import { backdropClass } from "../lib/backdrop";
-import { GLOW_GROUND_CLASS, blendImgClass } from "../lib/blend";
 
 /**
  * MỘT Ô ẢNH KIT — lazy-load thật + nền xem thử 3 chế độ.
@@ -65,13 +64,6 @@ export interface KitImageProps {
   empty?: boolean;
   /** agent chưa chạy ⇒ không thử tải, hiện "Ảnh nằm trên máy bạn" (§2.5-3) */
   offline?: boolean;
-  /**
-   * `blend` của ô trong `kits/manifest.json` — `"screen"` cho vật liệu PHÁT SÁNG
-   * (`matte:"glow"`, backlog P1-3). Có nó thì ô này vẽ bằng phép CỘNG trên nền đo
-   * tối, bất kể `backdrop` người dùng chọn: screen trên nền sáng = ô trắng trơn.
-   * Ô thường bỏ trống ⇒ không đổi một pixel nào so với trước.
-   */
-  blend?: string;
   className?: string;
   imgClassName?: string;
 }
@@ -102,7 +94,6 @@ export function KitImage({
   eager = false,
   empty = false,
   offline = false,
-  blend,
   className,
   imgClassName,
 }: KitImageProps) {
@@ -179,11 +170,13 @@ export function KitImage({
 
   const shell = cn("relative overflow-hidden rounded-2 border border-line", className);
 
-  /* Ô PHÁT SÁNG: ảnh vẽ bằng phép cộng (`mix-blend-mode`) trên nền đo tối. Nền do
-     `.kg-glow-ground` lo TRỌN GÓI (màu + tắt checker + isolate) và nó thay hẳn
-     `backdropClass` — ba chế độ nền của §3-S5 không áp dụng cho vật liệu cộng. */
-  const blendClass = blendImgClass(blend);
-  const ground = blendClass === undefined ? backdropClass(backdrop) : GLOW_GROUND_CLASS;
+  /* MỘT ĐƯỜNG VẼ DUY NHẤT (07/09/2026). Trước đây ô `matte:"glow"` được `slice.py`
+     tách khỏi TẤM ĐEN nên PNG của nó là premultiplied `C = α·F`; vẽ đúng nó cần
+     `mix-blend-mode: screen` trên một nền tối riêng (`.kg-glow-ground`). Nay model
+     trả alpha thật và dao cắt không đụng vào alpha, nên quầng sáng nằm sẵn trong
+     kênh α: vẽ thường là đúng, còn ép nền tối chính là "tấm nền đen" mà chủ sản
+     phẩm nhìn thấy dưới ô avatar. */
+  const ground = backdropClass(backdrop);
 
   /* File rỗng: §3-S5 đòi nói rõ, KHÔNG để ô trống khiến user tưởng lỗi tải. */
   if (empty) {
@@ -255,7 +248,7 @@ export function KitImage({
         src={state.url}
         // Nền do S5 quyết (ô vuông / đen / trắng) nên ghi đè lớp nền của R0.
         className={cn(shell, ground)}
-        imgClassName={cn(imgClassName, blendClass)}
+        imgClassName={imgClassName}
       />
     </div>
   );

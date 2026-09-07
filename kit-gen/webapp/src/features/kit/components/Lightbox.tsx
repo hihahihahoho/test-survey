@@ -142,7 +142,6 @@ export function Lightbox(props: LightboxProps) {
                 path={file.path}
                 alt={`${file.file} — xem lớn`}
                 backdrop={props.backdrop}
-                blend={file.blend}
                 full
                 eager
                 empty={file.empty}

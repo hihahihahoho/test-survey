@@ -646,9 +646,24 @@ class TransparentBackgroundTest(unittest.TestCase):
         sl = importlib.util.module_from_spec(spec); spec.loader.exec_module(sl)
         for name in ("KEY_COLORS", "matte_chroma", "is_key_color", "border_colors"):
             self.assertFalse(hasattr(sl, name), f"slice.py còn export `{name}`")
-        # Và thứ PHẢI ở lại: chốt chặn caro giả + đường alpha.
-        self.assertTrue(hasattr(sl, "painted_checkerboard"))
-        self.assertTrue(hasattr(sl, "alpha_sheet"))
+        # 07/09/2026 — VẾT THỨ HAI của cùng một quyết định. Cỗ máy dưới đây không
+        # phải chroma, nhưng nó là ĐỜI SAU của chroma: mask "nghiêm" theo ngưỡng
+        # alpha, dán nhãn khối, feather bằng blur, nắn nội dung về khung, và nhánh
+        # vẽ ô glow trên nền đen. Chúng gặm ruột element có alpha thật (đo được:
+        # ruột thanh máu α≈90 ra α≈5). slice.py nay CHỈ CẮT.
+        for name in ("label_blobs", "fill_mask_holes", "snap_to_safe", "align_content_safe",
+                     "measure_core", "measure_asset_geometry", "MATTE_BLEND", "asset_blend",
+                     "normalize_pose_side", "painted_checkerboard", "alpha_sheet"):
+            self.assertFalse(hasattr(sl, name), f"slice.py còn máy móc cũ: `{name}`")
+        # Quét TÊN IMPORT chứ không quét chữ mô tả: `code_of` chỉ bỏ chú thích `#`,
+        # docstring thì ở lại, và docstring của slice.py cố ý kể tên cỗ máy đã bỏ.
+        code = code_of(ROOT / "slice.py")
+        for w in ("ImageFilter", "ImageChops", "ImageOps", "scipy", "ndimage"):
+            self.assertNotIn(w, code, f"slice.py nạp lại đồ sửa mask: {w}")
+        # Và thứ PHẢI ở lại: đường alpha thật + phép đo thuần.
+        self.assertTrue(hasattr(sl, "read_sheet"))
+        self.assertTrue(hasattr(sl, "snap_solid_alpha"))
+        self.assertTrue(hasattr(sl, "measure_cell"))
 
     def test_KHONG_CON_NAP_torch_hay_pymatting(self):
         """Bỏ matting chroma là bỏ luôn lý do tồn tại của ViTMatte/PyMatting.

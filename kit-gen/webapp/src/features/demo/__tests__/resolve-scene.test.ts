@@ -31,7 +31,6 @@ type Asset = {
   file: string; sheet?: string;
   canvas: number[]; cell: number[]; bleed: number[];
   content: number[]; content_at: number[]; safe: number[];
-  blend?: string;
 };
 type KitId = "ipay" | "candy" | "tet" | "rnd";
 const KITS: readonly KitId[] = ["ipay", "candy", "tet", "rnd"];
@@ -46,7 +45,6 @@ function kitFile(a: Asset, tight: boolean): KitFile {
     w, h, bytes: 1234, sheet: a.sheet ?? "main", cellIndex: null,
     safe: a.safe, contentAt: a.content_at, content: a.content,
     canvas: a.canvas, cell: a.cell, bleed: a.bleed,
-    ...(a.blend === undefined ? {} : { blend: a.blend }),
   });
 }
 
@@ -88,7 +86,6 @@ describe("màn Home dựng đúng số trên kit thật", () => {
       top: 495,
       frame: { w: 300, h: 102 },
       image: { x: 26, y: -3, w: 248, h: 110 },
-      blend: null,
       text: { value: "CHƠI NGAY", size: 19 },
     });
   });

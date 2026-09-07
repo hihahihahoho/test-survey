@@ -181,7 +181,6 @@ export function MatrixTab(p: MatrixTabProps) {
                           path={f.path}
                           alt={`${row.name} — phong cách ${v.label}`}
                           backdrop={p.backdrop}
-                          blend={f.blend}
                           offline={p.offline}
                           className="aspect-square w-28"
                         />

@@ -97,8 +97,7 @@ function frameOf(layer: SceneLayer, urls: ReadonlyMap<string, string>): HTMLElem
   img.src = urlOf(urls, layer.path);
   img.style.cssText =
     `position:absolute;left:${layer.image.x}px;top:${layer.image.y}px;`
-    + `width:${layer.image.w}px;height:${layer.image.h}px;display:block;max-width:none`
-    + (layer.blend === null ? "" : `;mix-blend-mode:${layer.blend}`);
+    + `width:${layer.image.w}px;height:${layer.image.h}px;display:block;max-width:none`;
   frame.appendChild(img);
 
   if (layer.text !== null) frame.appendChild(textNode(layer.text, layer.text.value));

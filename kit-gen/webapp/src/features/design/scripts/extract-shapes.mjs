@@ -72,27 +72,40 @@ export function shapesFromAgent(src = read("agent/lib/validate.mjs")) {
   return [...m[1].matchAll(/"([a-z0-9]+)"/g)].map((x) => x[1]);
 }
 
-/** matte: slice.py chỉ hiểu đúng 2 giá trị — rút từ chính slice.py. */
-export function matteFromSlicePy(src = read("slice.py")) {
+/**
+ * matte: hai giá trị mà PROMPT hiểu — rút từ `gen.sh`, không phải `slice.py`.
+ *
+ * 07/09/2026 đổi nguồn: `matte` từng lái CÁCH CẮT (`glow` ⇒ tách khỏi nền đen,
+ * ship kèm `blend:"screen"`), nên `slice.py` là nguồn đúng. Nhánh đó đã bỏ; nay
+ * `matte` chỉ còn đổi CÂU CHỮ trong prompt (`gen.sh`, nhánh `== "glow"` / `== "glass"`),
+ * và `slice.py` không đọc khoá này nữa. Rút từ chỗ nó thật sự có tác dụng.
+ */
+export function matteFromGenSh(src = read("gen.sh")) {
   const out = new Set();
-  for (const m of src.matchAll(/matte"?\)?\s*in\s*\("([a-z]+)",\s*"([a-z]+)"\)/g)) {
-    out.add(m[1]);
-    out.add(m[2]);
-  }
+  for (const m of src.matchAll(/skel"\]\.get\("matte"\)\s*==\s*"([a-z]+)"/g)) out.add(m[1]);
   return [...out];
 }
 
-/** BLEED của slice.py — hằng số module (M4: UI đổi KHÔNG có tác dụng thật). */
+/**
+ * Tham số CẮT mà `slice.py` thật sự còn đọc.
+ *
+ * 07/09/2026 — cả ba đều đã CHẾT, và hàm này vẫn phải đo chứ không được chép kết
+ * luận: `slice.py` nay chỉ crop theo toạ độ ô nên không còn `BLEED` (vành ngoài),
+ * không còn `DEFAULT_THRESHOLD`/`GROW_OFFSET` (hai ngưỡng của mask tách nền). Trả
+ * `null` cho những thứ biến mất và `bleed: 0` cho vành — vì con số vành BÂY GIỜ là
+ * 0 thật, không phải "không biết". Tab «Nâng cao» đọc đúng ba số này để quyết định
+ * nói câu nào; ai cắm lại một tham số vào engine thì số ở đây đổi ngay.
+ */
 export function bleedFromSlicePy(src = read("slice.py")) {
   const m = src.match(/^BLEED\s*=\s*([0-9.]+)/m);
   const th = src.match(/^DEFAULT_THRESHOLD\s*=\s*([0-9]+)/m);
   const go = src.match(/^GROW_OFFSET\s*=\s*([0-9]+)/m);
   return {
-    bleed: m ? Number(m[1]) : null,
+    bleed: m ? Number(m[1]) : 0,
     threshold: th ? Number(th[1]) : null,
     growOffset: go ? Number(go[1]) : null,
-    /** true = BLEED là hằng số module, KHÔNG đọc từ contract ⇒ UI phải nói rõ. */
-    bleedIsModuleConstant: /^BLEED\s*=/m.test(src) && !/BLEED\s*=\s*(style|sheet|cfg)/.test(src),
+    /** true = vành ngoài KHÔNG đọc từ contract ⇒ UI không được bày núm chỉnh nó. */
+    bleedIsModuleConstant: !/BLEED\s*=\s*(style|sheet|cfg)/.test(src),
   };
 }
 
@@ -127,7 +140,7 @@ export async function build() {
     vi: KITSIL.POSES[id].vi,
     j: KITSIL.POSES[id].j,
   }));
-  const matte = matteFromSlicePy();
+  const matte = matteFromGenSh();
   const slice = bleedFromSlicePy();
   const defaultPoses = posesFromExample();
 
@@ -170,7 +183,7 @@ export const DEFAULT_POSES: readonly string[] = ${JSON.stringify(defaultPoses)} 
 /** slice.py chỉ hiểu 2 giá trị matte này (rút từ chính slice.py). */
 export const MATTE_VALUES: readonly string[] = ${JSON.stringify(matte.sort())} as const;
 
-/** Hằng số cắt đọc từ slice.py — \`bleedIsModuleConstant\` là căn cứ cho cảnh báo M4. */
+/** Tham số cắt đọc từ slice.py. \`null\` = engine KHÔNG còn đọc tham số đó nữa. */
 export const SLICE_CONST = ${JSON.stringify(slice, null, 2)} as const;
 
 /** Màu chi kiểu OpenPose — nguyên văn LIMBS của silhouettes.js. */

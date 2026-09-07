@@ -26,7 +26,7 @@ import manifest from "./fixtures/kits-4.manifest.json";
 
 type Asset = {
   file: string; canvas: number[]; cell: number[]; bleed: number[];
-  content: number[]; content_at: number[]; safe: number[]; blend?: string;
+  content: number[]; content_at: number[]; safe: number[];
 };
 const assets = manifest.styles.ipay.assets as Asset[];
 

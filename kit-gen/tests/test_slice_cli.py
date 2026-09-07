@@ -118,9 +118,13 @@ class SliceCliTest(unittest.TestCase):
         self.assertIn("25-bg-home.png", files, "asset của tấm cắt trước biến mất khỏi manifest")
         self.assertIn("01-btn.png", files)
         measured = next(a for a in m["styles"]["v1"]["assets"] if a["file"] == "01-btn.png")
-        self.assertIn("core", measured)
-        self.assertIn("enamel", measured)
+        self.assertIn("safe", measured)
         self.assertIn("contractSafe", measured)
+        # `core`/`enamel`/`decoration` đã bỏ 07/09/2026: chúng là sản phẩm của phép dò
+        # lõi bằng màu + morphology (đo sai 2,2 lần trên ô kính thật), và không có một
+        # người đọc nào trong agent lẫn webapp.
+        for chet in ("core", "enamel", "decoration", "blend"):
+            self.assertNotIn(chet, measured, f"manifest còn trường đã bỏ: {chet}")
         self.assertIn("sizeDeviation", measured)
         self.assertEqual(m["qa"]["sizeDeviation"]["threshold"], 15)
         self.assertIn("qa", m["styles"]["v1"])

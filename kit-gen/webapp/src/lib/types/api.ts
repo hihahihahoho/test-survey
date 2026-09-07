@@ -938,13 +938,20 @@ export const kitFileSchema = z.looseObject({
   cell: kitBox,
   bleed: kitBox,
   /**
-   * CHỈ DẪN VẼ đi kèm asset — `slice.py` ghi `"screen"` cho ô `matte:"glow"`
-   * (backlog P1-3, đo trong `docs/research-glow-extraction-2026-08.md`).
-   * Vật liệu phát sáng là phép CỘNG nên không bake được vào một PNG dán thường;
-   * ô thường KHÔNG có khoá này (⇒ `undefined`, không phải `"normal"`).
-   * Nơi dùng: `features/kit/lib/blend.ts`.
+   * `"alpha"` | `"rgb"` — tấm mà ô này cắt ra CÓ nền trong suốt hay không.
+   *
+   * ╔══ VÌ SAO NÓ THAY CHỖ `blend` ═════════════════════════════════════════════╗
+   * ║ `blend:"screen"` từng đi kèm ô `matte:"glow"`, vì `slice.py` tách ô đó ra  ║
+   * ║ khỏi một TẤM ĐEN nên PNG mang alpha = độ sáng và chỉ vẽ đúng bằng phép     ║
+   * ║ CỘNG. Nhánh nền đen đã bỏ hẳn 07/09/2026 — model trả alpha thật, dao cắt   ║
+   * ║ không đụng vào alpha — nên không còn ô nào cần blend mode.                 ║
+   * ║ Thứ web CẦN biết thay vào đó là ca hỏng THẬT còn lại: model trả tấm ĐỤC.   ║
+   * ║ `slice.py` vẫn cắt (không giữ ảnh của người dùng làm con tin) và tuyệt đối ║
+   * ║ không tự chế alpha; nó ghi cờ này để web nói thẳng ra.                     ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   * Kit cắt bằng bản slice.py cũ không có khoá này ⇒ `undefined`.
    */
-  blend: kitOptionalString,
+  mode: kitOptionalString,
   /**
    * Khung hợp đồng mà ô ĐÁNG LẼ phải lấp (`[x, y, w, h]`), để đối chiếu với `safe`
    * — tức thứ model vẽ ra thật. Chênh lệch giữa hai cái này chính là `sizeDeviation`.

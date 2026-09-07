@@ -40,8 +40,6 @@ export interface SceneLayer {
   frame: { w: number; h: number };
   /** Ảnh raster trong frame; `x`/`y` âm = trang trí tràn ra ngoài hitbox. */
   image: { x: number; y: number; w: number; h: number };
-  /** `"screen"` cho ô phát sáng (`manifest.blend`) — xem `features/kit/lib/blend.ts`. */
-  blend: FigmaNodeSpec["blend"];
   text: ScreenTextSpec | null;
 }
 
@@ -77,8 +75,6 @@ export interface ResolvedScene {
   missing: readonly string[];
   /** Ô có ảnh nhưng manifest tả sai hình học ⇒ bỏ qua kèm lý do (`geometryOf` ném). */
   broken: readonly SceneGap[];
-  /** Ô phát sáng trong màn — dialog gộp thành MỘT dòng nhắc, không bắn N toast. */
-  glow: readonly string[];
 }
 
 export interface ResolveOptions {
@@ -214,7 +210,6 @@ export function resolveScene(
 
   const missing: string[] = [];
   const broken: SceneGap[] = [];
-  const glow: string[] = [];
   const layers: Array<{ z: number; order: number; layer: SceneLayer }> = [];
 
   let background: SceneBackground | null = null;
@@ -245,7 +240,6 @@ export function resolveScene(
     }
     const k = fitScale(node, base);
     const frame = { w: base.frame.w * k, h: base.frame.h * k };
-    if (base.blend !== null) glow.push(name);
     layers.push({
       z: node.z ?? 0,
       order,
@@ -261,7 +255,6 @@ export function resolveScene(
           w: base.image.w * k,
           h: base.image.h * k,
         },
-        blend: base.blend,
         text: node.text ?? null,
       },
     });
@@ -278,7 +271,6 @@ export function resolveScene(
     layers: layers.map((l) => l.layer),
     missing,
     broken,
-    glow,
   };
 }
 

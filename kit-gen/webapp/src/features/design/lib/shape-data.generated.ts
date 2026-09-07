@@ -90,14 +90,16 @@ export const POSE_META: readonly { id: string; vi: string; j: Record<string, [nu
 /** `characterPoses` mặc định — đọc từ styles.example.json. */
 export const DEFAULT_POSES: readonly string[] = ["idle","wave","point","hold-gift","cheer","sad","run","think","sit","jump","bow","thumbs-up","fly","walk","dance","present","view-34","view-side","view-back"] as const;
 
-/** slice.py chỉ hiểu 2 giá trị matte này (rút từ chính slice.py). */
+/** 2 giá trị `matte` mà PROMPT hiểu — rút từ `gen.sh` (nhánh glow/glass).
+ *  Chúng chỉ còn đổi CÂU CHỮ gửi cho máy vẽ; `slice.py` không đọc `matte` nữa. */
 export const MATTE_VALUES: readonly string[] = ["glass","glow"] as const;
 
-/** Hằng số cắt đọc từ slice.py — `bleedIsModuleConstant` là căn cứ cho cảnh báo M4. */
+/** Tham số cắt đọc từ slice.py. `null` = engine KHÔNG còn đọc tham số đó nữa.
+ *  07/09: slice.py chỉ crop theo toạ độ ô ⇒ vành ngoài = 0, hai ngưỡng tách biến mất. */
 export const SLICE_CONST = {
-  "bleed": 0.18,
-  "threshold": 52,
-  "growOffset": 60,
+  "bleed": 0,
+  "threshold": null,
+  "growOffset": null,
   "bleedIsModuleConstant": true
 } as const;
 
