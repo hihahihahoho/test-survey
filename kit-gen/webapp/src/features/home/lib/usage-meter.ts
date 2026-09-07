@@ -27,6 +27,10 @@ export interface UsageView {
   resetLabel: string | null;
   /** "số đọc lúc 5 phút trước" — luật 2. */
   observedLabel: string;
+  /** "Gói plus", hoặc null khi server không nói gói nào. */
+  planLabel: string | null;
+  /** "Số dư mua thêm: 12,5" · "…: không giới hạn", hoặc null khi agent cũ / không có ví. */
+  creditsLabel: string | null;
   /** Câu đầy đủ cho tooltip/`title`, đã gộp mọi thứ trên. */
   detail: string;
   /** Ngưỡng để tô màu. Chỉ là ENUM — màu không bao giờ là thông tin duy nhất (A3). */
@@ -68,6 +72,21 @@ export function tightestWindow(data: Usage | null | undefined): UsageWindow | nu
   return candidates.reduce((a, b) => (b.remainingPercent < a.remainingPercent ? b : a));
 }
 
+/**
+ * Ví trả thêm. Chỉ nói khi CÓ GÌ ĐỂ NÓI:
+ *  · agent 2.1.44 không trả field này ⇒ `undefined` ⇒ null, tooltip ngắn lại như cũ;
+ *  · `unlimited` là câu trả lời hoàn chỉnh, số dư lúc đó vô nghĩa;
+ *  · số dư 0 VẪN được nói ra. Đây đúng là lúc người dùng cần biết: hạn mức tuần cạn
+ *    và ví cũng cạn ⇒ không còn đường nào vẽ tiếp. Giấu số 0 là giấu tin xấu (luật 1).
+ */
+function creditsLabelOf(data: Usage | null | undefined): string | null {
+  const c = data?.credits;
+  if (!c) return null;
+  if (c.unlimited === true) return "Số dư mua thêm: không giới hạn";
+  if (typeof c.balance !== "number" || !Number.isFinite(c.balance)) return null;
+  return `Số dư mua thêm: ${c.balance}`;
+}
+
 export function usageView(data: Usage | null | undefined, now: number = Date.now()): UsageView | null {
   const w = tightestWindow(data);
   if (!w) return null;
@@ -77,6 +96,8 @@ export function usageView(data: Usage | null | undefined, now: number = Date.now
   const resetLabel = w.resetsAt ? `đặt lại ${absTime(w.resetsAt)}` : null;
   const observedLabel = `số đọc lúc ${relTime(data?.observedAt, now)}`;
   const title = `Hạn mức ${windowLabel}`;
+  const planLabel = typeof data?.plan === "string" && data.plan.trim() ? `Gói ${data.plan.trim()}` : null;
+  const creditsLabel = creditsLabelOf(data);
   return {
     remainingPercent,
     remainingLabel,
@@ -84,7 +105,12 @@ export function usageView(data: Usage | null | undefined, now: number = Date.now
     title,
     resetLabel,
     observedLabel,
-    detail: [title, remainingLabel, resetLabel, observedLabel].filter(Boolean).join(" · "),
+    planLabel,
+    creditsLabel,
+    /* `observedLabel` đứng CUỐI và không bao giờ bị cắt: đó là câu chống nói dối của
+       cả thanh này (luật 2). Gói cước + ví chèn vào giữa, sau mốc đặt lại. */
+    detail: [title, remainingLabel, resetLabel, planLabel, creditsLabel, observedLabel]
+      .filter(Boolean).join(" · "),
     tone: toneOf(remainingPercent),
   };
 }

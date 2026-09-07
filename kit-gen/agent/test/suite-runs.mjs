@@ -1,6 +1,6 @@
 /* suite-runs.mjs — §6.2 E: run-store trên đĩa, chặn trước bằng doctor, UNKNOWN_JOB,
    RUN_CONFLICT, stream NDJSON + reconnect ?from=, dừng run, gen→auto-slice bằng engine giả. */
-import { readFile, writeFile } from "node:fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import {
   describe, it, eq, ok, includes, waitFor, pathExists, lsDir,
@@ -535,6 +535,56 @@ export async function run({ api, wsRoot, agentDir, pid }) {
       const back = await a7("POST", `/api/trash/${del.json.trashId}/restore`)
       eq(back.status, 200, `vòng ${i}: Hoàn tác phải chạy được, nhận ${back.status} ${back.json?.error?.code ?? ""}`)
       await a7("DELETE", `/api/projects/${gid}`)
+    }
+  })
+
+  /* ── THANH HẠN MỨC PHẢI ĐỘNG (07/09/2026) ─────────────────────────────────
+     Lời phàn nàn nguyên văn của chủ sản phẩm: "ý là nó phải động chứ không phải
+     tĩnh". Con số 0% là THẬT, cái sai là nó đứng im: `/api/usage` cache 5 phút và
+     chỉ login/logout/`?refresh=1` mới dọn, nên vẽ xong cả lượt mà số vẫn y nguyên —
+     đúng lúc người dùng nhìn nó chằm chằm. Ca này khoá cả hai nửa của sự thật:
+     cache CÓ THẬT (không phải vừa sửa vừa bỏ luôn cache), và một lượt chạy đóng sổ
+     là ĐỦ để lần đọc kế tiếp thấy số mới — không cần bấm, không đợi hết 5 phút. */
+  await it("lượt chạy xong ⇒ hạn mức Codex đọc lại ngay, không đợi hết cache 5 phút", async () => {
+    const { api: aU } = await agentWithEngine("engine-fake")
+    const home = join(wsRoot, "..", "codex-home-run-usage")
+    const day = join(home, "sessions", "2026", "09", "04")
+    await mkdir(day, { recursive: true })
+    const file = join(day, "rollout-2026-09-04T00-00-00-ddd.jsonl")
+    const evt = used => JSON.stringify({
+      timestamp: "2026-09-04T00:00:00.000Z", type: "event_msg",
+      payload: {
+        type: "token_count",
+        rate_limits: {
+          limit_id: "codex", plan_type: "prolite", secondary: null,
+          primary: { used_percent: used, window_minutes: 10080, resets_at: 1788763415 },
+          credits: { has_credits: false, unlimited: false, balance: "0" },
+        },
+      },
+    })
+    await writeFile(file, evt(10) + "\n")
+    process.env.KITGEN_CODEX_HOME = home
+    let gid = null
+    try {
+      eq((await aU("GET", "/api/usage")).json.primary.remainingPercent, 90, "số đọc lần đầu")
+      /* Giả lập đúng thứ codex làm khi chạy: ghi thêm một dòng `rate_limits` mới. */
+      await writeFile(file, evt(10) + "\n" + evt(42) + "\n")
+      eq((await aU("GET", "/api/usage")).json.primary.remainingPercent, 90,
+        "chưa chạy gì ⇒ vẫn số cũ — cache là thật, ca này không phải xanh vì cache đã bị bỏ")
+
+      const created = await aU("POST", "/api/projects", {
+        body: { name: "Han muc phai dong", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
+      })
+      gid = created.json.project.id
+      const run = await aU("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", autoSliceAfterGen: false } })
+      eq(run.status, 202, "run 202")
+      await aU("GET", `/api/runs/${run.json.runId}/stream?from=0`)   // đóng khi run.finished
+
+      eq((await aU("GET", "/api/usage")).json.primary.remainingPercent, 58,
+        "lượt chạy đóng sổ ⇒ cache bị dọn ⇒ lần hỏi kế tiếp thấy con số mới (không cần ?refresh=1)")
+    } finally {
+      delete process.env.KITGEN_CODEX_HOME
+      if (gid) await aU("DELETE", `/api/projects/${gid}`)
     }
   })
 

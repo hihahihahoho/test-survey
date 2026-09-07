@@ -140,26 +140,63 @@ export function useInstallUpdateFlow(): { pending: boolean; start: (latestVersio
   };
 }
 
+/** Nhịp hỏi lại hạn mức TRONG LÚC có lượt vẽ chạy. 60s: mỗi tấm mất hàng chục giây,
+ *  dày hơn cũng chỉ nhận lại y hệt con số cũ. Ngoài lúc chạy: không poll. */
+export const USAGE_ACTIVE_POLL_MS = 60_000;
+/** Bao lâu thì con số bị coi là cũ. 30s (không phải 5 phút như trước): agent nay dọn
+ *  cache ngay khi một lượt vẽ đóng sổ, nên quay lại tab là đáng hỏi lại một lần. */
+export const USAGE_STALE_MS = 30_000;
+
 /**
- * Quota Codex còn lại. KHÔNG cùng loại với `/api/doctor`: endpoint này chỉ đọc file
- * trạng thái local (không spawn `codex`, không gọi mạng, không tốn quota) nên gọi
+ * Hạn mức Codex còn lại. KHÔNG cùng loại với `/api/doctor`: endpoint này chỉ đọc file
+ * trạng thái local (không spawn `codex`, không gọi mạng, không tốn hạn mức) nên gọi
  * được lúc app mở mà không vi phạm §6.2.
  *
- * `staleTime` 5 phút khớp đúng cache phía agent — nạp dày hơn cũng chỉ nhận lại y
- * hệt con số cũ, vì nguồn của nó là lượt chạy Codex gần nhất chứ không phải hiện tại.
+ * VÌ SAO NÓ TỪNG ĐỨNG IM (07/09/2026). Bốn cái khoá cùng khoá một cửa: agent cache
+ * 5 phút và chỉ mở khi login/logout; hook này `staleTime` 5 phút, không poll, không
+ * refetch khi quay lại tab; và không có nút nào bấm được. Vẽ xong hai chục tấm mà
+ * con số vẫn là con số của sáng hôm qua. Nay:
+ *   · agent tự dọn cache mỗi khi một job / một lượt chạy đóng sổ (`run-handle.mjs`);
+ *   · `staleTime` 30s + quay lại tab là hỏi lại (số này đổi sau lưng, ở tiến trình khác);
+ *   · đang có lượt chạy ⇒ hỏi lại mỗi 60s;
+ *   · `use-runs` bắn `invalidate(qk.usage())` ngay khi nghe `run.finished`/`sheet.ready`;
+ *   · bấm vào thanh ⇒ `?refresh=1` (xem `UsageMeter`).
+ * Vẫn KHÔNG có nhịp poll nào lúc app đứng yên: nguồn số là file rollout, nó chỉ đổi
+ * khi codex chạy.
  *
  * `retry:false` + im lặng: đây là số liệu THAM KHẢO. Agent tắt ⇒ `data` undefined ⇒
- * thanh usage tự ẩn; không toast, không banner, không làm hỏng màn vì một thứ phụ.
+ * thanh tự ẩn; không toast, không banner, không làm hỏng màn vì một thứ phụ.
  */
-export function useUsage(opts: { enabled?: boolean } = {}) {
+export function useUsage(opts: { enabled?: boolean; activeRun?: boolean } = {}) {
   return useQuery({
     queryKey: qk.usage(),
     queryFn: () => api.system.usage(),
     enabled: opts.enabled ?? true,
-    staleTime: 5 * 60_000,
+    staleTime: USAGE_STALE_MS,
     gcTime: 30 * 60_000,
-    refetchInterval: false,
-    refetchOnWindowFocus: false,
+    refetchInterval: opts.activeRun ? USAGE_ACTIVE_POLL_MS : false,
+    refetchOnWindowFocus: true,
+    retry: false,
+  });
+}
+
+/**
+ * BẤM ĐỂ ĐỌC LẠI — `?refresh=1` bỏ qua cache 5 phút của agent và quét lại đĩa.
+ *
+ * Là mutation chứ không phải `invalidateQueries`: invalidate chỉ hỏi lại endpoint và
+ * agent sẽ vui vẻ trả về ĐÚNG bản cache cũ, tức là nút bấm không làm gì cả — thứ tệ
+ * hơn cả không có nút. Kết quả được nhét thẳng vào cache của `qk.usage()` để mọi
+ * thanh hạn mức trên màn cùng nhảy một lượt.
+ *
+ * Lỗi thì NUỐT: agent tắt giữa chừng không được phép nổ một toast đỏ vì một số liệu
+ * tham khảo — thanh giữ nguyên số cũ (vẫn kèm "số đọc lúc …", nên không nói dối).
+ */
+export function useRefreshUsage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.system.usage({ refresh: true }),
+    onSuccess: (data) => qc.setQueryData(qk.usage(), data),
+    onError: () => {},
     retry: false,
   });
 }

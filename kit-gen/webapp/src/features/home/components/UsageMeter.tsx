@@ -1,5 +1,6 @@
+import { Loader2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useCodexAccount, useUsage } from "@/lib/hooks";
+import { useAgentStatus, useCodexAccount, useRefreshUsage, useUsage } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 import { usageView } from "../lib/usage-meter";
 
@@ -20,6 +21,16 @@ import { usageView } from "../lib/usage-meter";
  * A3 — màu KHÔNG BAO GIỜ là thông tin duy nhất: phần trăm luôn hiện thành CHỮ, `tone`
  * chỉ thêm sắc thái. Thanh vẽ là `aria-hidden`, con số mới là thứ screen reader đọc.
  *
+ * PHẢI ĐỘNG, KHÔNG ĐƯỢC TĨNH (07/09/2026). Nguyên văn chủ sản phẩm: "ý là nó phải động
+ * chứ không phải tĩnh". Con số đứng im hàng ngày vì bốn cái khoá cùng lúc — xem
+ * `useUsage` để biết cả bốn và cách gỡ. Phần thuộc về component này:
+ *  · CẢ THANH LÀ MỘT NÚT. Bấm ⇒ `/api/usage?refresh=1` (bỏ qua cache 5 phút của agent).
+ *    Không có nút thì người dùng không có cách nào ép nó nói lại — nguồn số nằm ở tiến
+ *    trình khác (file rollout của codex), web không tự biết lúc nào nó đổi.
+ *  · Đang đọc lại ⇒ vòng quay nhỏ + `aria-busy`. Bấm mà không thấy gì nhúc nhích thì
+ *    người dùng bấm tiếp, rồi kết luận nút hỏng.
+ *  · Đang có lượt vẽ chạy ⇒ tự hỏi lại theo nhịp (`useUsage({ activeRun })`).
+ *
  * Hai dáng:
  *  · `sidebar` — thanh mảnh + "còn N%", dùng ở chân sidebar Home, ngay trên "Cài đặt".
  *  · `compact` — chip một dòng cho topbar/header màn dự án (chưa mount, xem README).
@@ -28,9 +39,18 @@ export function UsageMeter({ variant = "sidebar", className }: {
   variant?: "sidebar" | "compact";
   className?: string;
 }) {
-  const usage = useUsage();
+  /* ĐANG VẼ THÌ SỐ ĐANG TỤT. `/health` là endpoint duy nhất được poll (§6.2) và nó
+     đã mang sẵn `activeRuns` — dùng lại nó thay vì dựng thêm một nhịp hỏi nữa. */
+  const { status } = useAgentStatus();
+  const activeRun = (status.health?.activeRuns ?? 0) > 0;
+  const usage = useUsage({ activeRun });
+  const refresh = useRefreshUsage();
   const account = useCodexAccount();
   const view = usageView(usage.data);
+  /** Vòng quay nhỏ cho MỌI lần đọc lại — bấm tay, nhịp 60s, hay quay lại tab. Người
+   *  dùng phải thấy con số đang được đi lấy, nếu không thì "bấm mà chẳng thấy gì". */
+  const reloading = refresh.isPending || usage.isFetching;
+  const reload = () => { if (!refresh.isPending) refresh.mutate(); };
 
   /* "LÚC HIỆN LÚC KHÔNG" LÀ MỘT BUG UX CÓ THẬT (báo cáo 24/08): nguồn số là lượt
      chạy Codex GẦN NHẤT, nên máy mới cài / vừa đổi hồ sơ / chưa gen lần nào thì
@@ -66,22 +86,44 @@ export function UsageMeter({ variant = "sidebar", className }: {
       : view.tone === "warn" ? "text-warn"
         : "text-fg-muted";
 
+  /* `span` chứ không `div`: cả thanh nay nằm TRONG một `<button>`, mà button chỉ được
+     phép chứa nội dung dạng phrasing. Hình thức không đổi một pixel (`block`/`flex`). */
   const bar = (
-    <div className="h-1 w-full overflow-hidden rounded-full bg-raised" aria-hidden>
-      <div className={cn("h-full rounded-full transition-all duration-2", barTone)} style={{ width: `${view.remainingPercent}%` }} />
-    </div>
+    <span className="block h-1 w-full overflow-hidden rounded-full bg-raised" aria-hidden>
+      <span className={cn("block h-full rounded-full transition-all duration-2", barTone)} style={{ width: `${view.remainingPercent}%` }} />
+    </span>
   );
 
+  /* TOOLTIP = TOÀN BỘ SỰ THẬT, mỗi ý một dòng. `detail` (một dòng, ngăn bằng «·») vẫn
+     là thứ screen reader đọc qua `aria-label`; ở đây bẻ dòng cho mắt người. Dòng
+     "số đọc lúc …" luôn ở cuối và không bao giờ vắng mặt (luật 2 của `usage-meter.ts`). */
+  const tip = (
+    <span className="block space-y-0.5">
+      <span className="block">{[view.title, view.remainingLabel].join(" · ")}</span>
+      {view.resetLabel ? <span className="block">{view.resetLabel}</span> : null}
+      {view.planLabel ? <span className="block">{view.planLabel}</span> : null}
+      {view.creditsLabel ? <span className="block">{view.creditsLabel}</span> : null}
+      <span className="block text-fg-muted">
+        {reloading ? "đang đọc lại…" : `${view.observedLabel} — bấm để đọc lại`}
+      </span>
+    </span>
+  );
+
+  /* NÚT, KHÔNG PHẢI CHỮ CHẾT. Nguồn số là file rollout của codex: nó đổi ở tiến trình
+     KHÁC, sau lưng web, nên phải có một cú bấm ép đọc lại — `?refresh=1` bỏ qua cả
+     cache 5 phút của agent. `type="button"` để không submit form nào chứa nó. */
   if (variant === "compact") {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <span
-            role="status"
+          <button
+            type="button"
+            onClick={reload}
             aria-label={view.detail}
+            aria-busy={reloading}
             className={cn(
               "flex h-8 shrink-0 items-center gap-2 rounded-full border border-line-subtle px-3 text-caption",
-              "cursor-default tabular-nums",
+              "tabular-nums transition-colors hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
               textTone,
               className,
             )}
@@ -90,9 +132,10 @@ export function UsageMeter({ variant = "sidebar", className }: {
               <span className={cn("block h-full rounded-full", barTone)} style={{ width: `${view.remainingPercent}%` }} />
             </span>
             {view.remainingLabel}
-          </span>
+            {reloading ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
+          </button>
         </TooltipTrigger>
-        <TooltipContent>{view.detail}</TooltipContent>
+        <TooltipContent>{tip}</TooltipContent>
       </Tooltip>
     );
   }
@@ -100,19 +143,28 @@ export function UsageMeter({ variant = "sidebar", className }: {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div
-          role="status"
+        <button
+          type="button"
+          onClick={reload}
           aria-label={view.detail}
-          className={cn("cursor-default space-y-1 rounded-2 px-3 py-2", className)}
+          aria-busy={reloading}
+          className={cn(
+            "w-full space-y-1 rounded-2 px-3 py-2 text-left",
+            "transition-colors hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+            className,
+          )}
         >
-          <div className="flex items-baseline justify-between gap-2">
+          <span className="flex items-baseline justify-between gap-2">
             <span className="truncate text-caption text-fg-muted">{view.title}</span>
-            <span className={cn("shrink-0 text-caption tabular-nums", textTone)}>{view.remainingLabel}</span>
-          </div>
+            <span className={cn("flex shrink-0 items-center gap-1 text-caption tabular-nums", textTone)}>
+              {reloading ? <Loader2 className="size-3 animate-spin" aria-hidden /> : null}
+              {view.remainingLabel}
+            </span>
+          </span>
           {bar}
-        </div>
+        </button>
       </TooltipTrigger>
-      <TooltipContent>{view.detail}</TooltipContent>
+      <TooltipContent>{tip}</TooltipContent>
     </Tooltip>
   );
 }

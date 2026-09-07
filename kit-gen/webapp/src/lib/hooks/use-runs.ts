@@ -225,12 +225,21 @@ export function useRunStream(runId: string | null, opts: { enabled?: boolean } =
         qc.setQueryData<Run>(qk.runs.detail(runId), (old) => (old ? applyEvent(old, ev) : old));
         const projectId = qc.getQueryData<Run>(qk.runs.detail(runId))?.projectId;
         if (projectId) void qc.invalidateQueries({ queryKey: qk.kit.all(projectId) });
+        /* GIỮA LƯỢT, KHÔNG ĐỢI TỚI CUỐI. Một tấm xong = một lượt hỏi Codex đã tiêu và
+           agent vừa dọn cache hạn mức. Lượt 20 tấm chạy cả chục phút; đợi `run.finished`
+           mới cập nhật thì suốt chừng ấy phút thanh hạn mức nói dối một con số cũ.
+           Rẻ: `/api/usage` chỉ đọc một file local, không gọi mạng, không tốn hạn mức. */
+        void qc.invalidateQueries({ queryKey: qk.usage() });
         return;
       }
       if (ev.type === "run.finished") {
         void qc.invalidateQueries({ queryKey: qk.runs.detail(runId) });
         const projectId = qc.getQueryData<Run>(qk.runs.detail(runId))?.projectId;
         if (projectId) for (const key of keysAfterRun(projectId)) void qc.invalidateQueries({ queryKey: key });
+        /* KHÔNG nằm trong nhánh `if (projectId)`: hạn mức là số của cả MÁY, không của
+           project nào. Cache thiếu `runs.detail` (vào thẳng bằng link, F5 giữa lượt)
+           là ca có thật — và đó đúng là ca người dùng cần con số mới nhất. */
+        void qc.invalidateQueries({ queryKey: qk.usage() });
         stoppedRef.current = true;
       }
       if (ev.type === "workspace.changed") {

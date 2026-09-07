@@ -185,6 +185,24 @@ export const usageWindowSchema = z.looseObject({
   /** ISO, hoặc null. */
   resetsAt: z.string().nullish(),
 });
+/**
+ * Ví credits của tài khoản — thứ còn tiêu được SAU KHI hạn mức tuần đã cạn.
+ *
+ * TẤT CẢ đều `nullish()` và cả khối là optional: agent 2.1.44 (bản người dùng đang
+ * chạy) KHÔNG trả field này. Bắt buộc ở đây = mọi màn dùng `usageSchema` vỡ thành
+ * AGENT_INTERNAL ngay khi web mới gặp agent cũ — đúng cái bẫy đã sập một lần với
+ * `diskBytes` (xem `workspaceItemSchema`).
+ *
+ * `balance` là SỐ: agent đã đổi từ chuỗi `"12.5"` của server Codex sang số trước khi
+ * trả ra (hợp đồng bảo mật `agent/lib/usage.mjs`: chỉ số + enum được đi ra ngoài).
+ */
+export const usageCreditsSchema = z.looseObject({
+  hasCredits: z.boolean().nullish(),
+  unlimited: z.boolean().nullish(),
+  balance: z.number().nullish(),
+});
+export type UsageCredits = z.infer<typeof usageCreditsSchema>;
+
 export const usageSchema = z.looseObject({
   ok: z.boolean(),
   /** nhãn rút gọn `~/.codex-img`, KHÔNG phải path tuyệt đối. */
@@ -194,6 +212,8 @@ export const usageSchema = z.looseObject({
   plan: z.string().nullish(),
   primary: usageWindowSchema.nullish(),
   secondary: usageWindowSchema.nullish(),
+  /** agent ≥ 2.1.45; agent cũ không có ⇒ `undefined`, UI bỏ dòng ví đi. */
+  credits: usageCreditsSchema.nullish(),
   observedAt: z.string().nullish(),
   reason: z.string().nullish(),
   checkedAt: z.string().nullish(),

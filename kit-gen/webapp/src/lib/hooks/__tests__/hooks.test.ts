@@ -71,6 +71,13 @@ describe("gom key phải invalidate sau mỗi loại thao tác", () => {
     expect(keys).toContainEqual(qk.kit.all("p1"));
   });
 
+  /* Bug 07/09/2026 — thanh «Hạn mức Codex» đứng im cả ngày. Mỗi tấm vừa vẽ là một lượt
+     hỏi đã tiêu, nhưng không nơi nào bảo `qk.usage()` là nó đã cũ, nên con số chỉ đổi
+     khi người dùng đăng nhập lại. Cổng này giữ dòng đó nằm nguyên trong danh sách. */
+  it("sau một lượt chạy: HẠN MỨC Codex cũng cũ — nó vừa bị tiêu chính bởi lượt vừa rồi", () => {
+    expect(keysAfterRun("p1")).toContainEqual(qk.usage());
+  });
+
   it("sau khi lưu thiết kế: contract + project (version/stale đổi)", () => {
     const keys = keysAfterContractSave("p1");
     expect(keys).toContainEqual(qk.contract.all("p1"));

@@ -373,9 +373,23 @@ Cách kiểm `image_gen` theo `teams/t3-auth/PLAN.md` §6.1 — **fallback, khô
   "primary":   {"usedPercent":2,"remainingPercent":98,
                 "windowMinutes":10080,"resetsAt":"2026-08-20T06:30:28.000Z"},
   "secondary": null,                 // cửa sổ thứ hai (thường 5 giờ), null nếu không có
-  "observedAt": "2026-08-13T09:00:24.138Z",   // lượt chạy Codex nào cho ra con số này
+  "credits": {"hasCredits":false,"unlimited":false,"balance":0},  // ví trả thêm; agent ≤2.1.44 KHÔNG có field này
+  "observedAt": "2026-09-03T05:43:05.955Z",   // lượt chạy Codex nào cho ra con số này
   "source": "codex-rollout", "checkedAt": "…" }
 ```
+
+**Cache mở lúc nào.** Không chỉ login/logout/`?refresh=1` nữa: `run-handle` gọi
+`invalidateUsageCache()` mỗi khi **một job đóng sổ** và khi **cả lượt chạy kết thúc** —
+mỗi lượt codex vừa ghi một dòng `rate_limits` mới vào rollout, giữ cache lúc đó nghĩa là
+thanh hạn mức trên web đứng im tới 5 phút giữa lúc người dùng đang nhìn nó tụt
+(bug 07/09/2026). `CACHE_MS` vì thế là **trần tuổi**, không phải nhịp làm mới.
+
+**Bản ghi cuối có thể không có window.** Dòng `rate_limits` cuối của một phiên thường là
+`limit_id:"premium"` với `primary`/`secondary` = `null`, chỉ mang `credits`. Agent giữ
+window của bản ghi gần nhất **có số**, nhưng lấy `credits` · `plan` · `observedAt` của bản
+ghi **mới nhất** — nếu không, mốc "số đọc lúc …" hiện ra là mốc cũ hơn thực tế.
+`credits.balance` server trả dạng **chuỗi** (`"12.5"`); agent đổi sang **số** ngay tại chỗ
+vì hợp đồng bảo mật chỉ cho số + enum đi ra ngoài.
 
 **Nguồn.** Codex CLI 0.147 **không có** lệnh `usage`/`quota`/`status`; `codex doctor --json`
 chỉ nói sức khoẻ cài đặt. Con số mà TUI Codex vẽ ("Weekly usage limit · 98% remaining ·

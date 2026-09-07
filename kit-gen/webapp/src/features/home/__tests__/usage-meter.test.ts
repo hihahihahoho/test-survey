@@ -109,3 +109,46 @@ describe("tightestWindow — hiện cái SẮP HẾT, không hiện cái thoáng
     expect(tightestWindow({ ...both, primary: null })?.remainingPercent).toBe(12);
   });
 });
+
+/**
+ * GÓI CƯỚC + VÍ TRẢ THÊM — thêm ở đợt chữa "thanh đứng im" (07/09/2026).
+ *
+ * Ca thật gây ra bản vá: hạn mức tuần cạn 100% VÀ ví cũng bằng 0. Thanh cũ chỉ nói
+ * "còn 0%", không nói còn đường nào khác không. Hai dòng mới trả lời đúng câu đó.
+ */
+describe("usageView — gói cước và ví trả thêm", () => {
+  it("có plan ⇒ tooltip nói gói cước; agent không nói gói nào ⇒ bỏ hẳn dòng đó", () => {
+    expect(usageView(WEEKLY, NOW)!.planLabel).toBe("Gói plus");
+    expect(usageView({ ...WEEKLY, plan: null }, NOW)!.planLabel).toBeNull();
+    expect(usageView({ ...WEEKLY, plan: "  " }, NOW)!.planLabel).toBeNull();
+  });
+
+  it("agent CŨ (2.1.44) không trả credits ⇒ không dòng ví, và tuyệt đối không vỡ", () => {
+    const v = usageView(WEEKLY, NOW)!;
+    expect(v.creditsLabel).toBeNull();
+    expect(v.detail).toContain("còn 98%");
+  });
+
+  it("số dư 0 VẪN được nói ra — đây đúng là lúc người dùng cần biết là hết đường", () => {
+    const v = usageView({ ...WEEKLY, credits: { hasCredits: false, unlimited: false, balance: 0 } }, NOW)!;
+    expect(v.creditsLabel).toBe("Số dư mua thêm: 0");
+    expect(v.detail).toContain("Số dư mua thêm: 0");
+  });
+
+  it("unlimited là câu trả lời hoàn chỉnh — không đọc số dư nữa", () => {
+    const v = usageView({ ...WEEKLY, credits: { hasCredits: true, unlimited: true, balance: 0 } }, NOW)!;
+    expect(v.creditsLabel).toBe("Số dư mua thêm: không giới hạn");
+  });
+
+  it("balance không phải số (agent lạ) ⇒ bỏ dòng ví, KHÔNG in ra chuỗi thô", () => {
+    const v = usageView({ ...WEEKLY, credits: { hasCredits: true, unlimited: false, balance: null } }, NOW)!;
+    expect(v.creditsLabel).toBeNull();
+  });
+
+  it("dòng «số đọc lúc …» vẫn đứng CUỐI sau khi chèn thêm gói cước + ví (luật 2)", () => {
+    const v = usageView({ ...WEEKLY, credits: { hasCredits: true, unlimited: false, balance: 12.5 } }, NOW)!;
+    expect(v.detail.endsWith(v.observedLabel)).toBe(true);
+    expect(v.detail).toContain("Gói plus");
+    expect(v.detail).toContain("Số dư mua thêm: 12.5");
+  });
+});

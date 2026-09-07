@@ -102,7 +102,10 @@ export const qk = {
 
 /**
  * Sau khi một lượt chạy kết thúc, những thứ này CHẮC CHẮN cũ:
- * project (state.jobs + stats đổi), danh sách run, và thư viện kit (nếu có pha cắt).
+ * project (state.jobs + stats đổi), danh sách run, thư viện kit (nếu có pha cắt),
+ * và HẠN MỨC CODEX — mỗi tấm vừa vẽ là một lượt hỏi đã tiêu, agent cũng vừa dọn
+ * cache của nó ở đúng thời điểm này. Không có dòng cuối thì thanh hạn mức đứng im
+ * suốt buổi làm việc và người dùng chỉ biết nó sai khi hết sạch (bug 07/09/2026).
  * Gom vào một hàm để không nơi nào quên một cái.
  */
 export function keysAfterRun(projectId: string) {
@@ -111,6 +114,7 @@ export function keysAfterRun(projectId: string) {
     qk.projects.lists(),
     qk.runs.ofProject(projectId),
     qk.kit.all(projectId),
+    qk.usage(),
   ] as const;
 }
 

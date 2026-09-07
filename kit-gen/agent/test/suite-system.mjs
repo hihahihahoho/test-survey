@@ -301,6 +301,76 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
         eq(r.json.primary, null, "KHÔNG bịa số phần trăm")
       } finally { delete process.env.KITGEN_CODEX_HOME }
     })
+
+    /* ── BẢN GHI CUỐI KHÔNG CÓ WINDOW (bug "thanh đứng im", 07/09/2026) ────────
+       Hình dạng THẬT lấy từ `~/.codex/sessions/2026/09/03`: dòng `rate_limits` cuối
+       của phiên là `limit_id:"premium"` với primary/secondary = null và chỉ mang
+       `credits`. Bản cũ bỏ qua nguyên dòng đó ⇒ `observedAt` trả về là mốc của dòng
+       CŨ HƠN, và `credits` thì không bao giờ ra tới UI. */
+    const creditsHome = join(tmp, "codex-home-credits")
+    {
+      const cday = join(creditsHome, "sessions", "2026", "09", "03")
+      mkdirSync(cday, { recursive: true })
+      const line = (at, rl) => JSON.stringify({ timestamp: at, type: "event_msg", payload: { type: "token_count", rate_limits: rl } })
+      writeFileSync(join(cday, "rollout-2026-09-03T00-45-00-bbb.jsonl"), [
+        line("2026-09-03T05:40:00.000Z", {
+          limit_id: "codex", plan_type: "prolite",
+          primary: { used_percent: 100, window_minutes: 10080, resets_at: 1788763415 },
+          secondary: null, credits: { has_credits: false, unlimited: false, balance: "0" },
+        }),
+        line("2026-09-03T05:43:05.955Z", {
+          limit_id: "premium", plan_type: "prolite",
+          primary: null, secondary: null,
+          credits: { has_credits: true, unlimited: false, balance: "12.5" },
+        }),
+      ].join("\n") + "\n")
+    }
+
+    await it("bản ghi CUỐI chỉ có credits ⇒ giữ window của bản có số, nhưng credits + observedAt là của bản MỚI", async () => {
+      process.env.KITGEN_CODEX_HOME = creditsHome
+      try {
+        const r = await api("GET", "/api/usage?refresh=1")
+        eq(r.json.ok, true, "ok")
+        eq(r.json.primary.usedPercent, 100, "window vẫn là của bản ghi gần nhất CÓ SỐ")
+        eq(r.json.observedAt, "2026-09-03T05:43:05.955Z",
+          "mốc quan sát phải là dòng rate_limits MỚI NHẤT — nếu không, UI hiện một mốc đứng im mà không nói vì sao")
+        eq(r.json.credits.hasCredits, true, "credits lấy của bản mới")
+        eq(r.json.credits.balance, 12.5, "balance là SỐ, không phải chuỗi '12.5'")
+        eq(r.json.credits.unlimited, false, "unlimited là boolean")
+        eq(r.json.plan, "prolite", "gói cước đi cùng mọi bản ghi")
+      } finally { delete process.env.KITGEN_CODEX_HOME }
+    })
+
+    await it("credits ra ngoài chỉ là số + boolean (hợp đồng bảo mật: không chuỗi tự do)", async () => {
+      process.env.KITGEN_CODEX_HOME = creditsHome
+      try {
+        const r = await api("GET", "/api/usage?refresh=1")
+        eq(typeof r.json.credits.balance, "number", "balance đã đổi sang số ngay ở agent")
+        ok(!r.text.includes("\"12.5\""), `chuỗi thô của server KHÔNG được đi ra: ${r.text}`)
+        ok(!("limit_id" in r.json), "không bê nguyên khối rate_limits ra ngoài")
+      } finally { delete process.env.KITGEN_CODEX_HOME }
+    })
+
+    await it("cache là THẬT, và invalidateUsageCache() là cửa duy nhất mở nó ra", async () => {
+      const { usage, invalidateUsageCache } = await import("../lib/usage.mjs")
+      const churn = join(tmp, "codex-home-churn")
+      const cday = join(churn, "sessions", "2026", "09", "04")
+      mkdirSync(cday, { recursive: true })
+      const file = join(cday, "rollout-2026-09-04T00-00-00-ccc.jsonl")
+      const evt = used => JSON.stringify({
+        timestamp: "2026-09-04T00:00:00.000Z", type: "event_msg",
+        payload: { type: "token_count", rate_limits: { limit_id: "codex", plan_type: "prolite", primary: { used_percent: used, window_minutes: 10080, resets_at: 1788763415 }, secondary: null } },
+      })
+      writeFileSync(file, evt(10) + "\n")
+      process.env.KITGEN_CODEX_HOME = churn
+      try {
+        eq((await usage(null, { refresh: true })).primary.remainingPercent, 90, "số đọc lần đầu")
+        writeFileSync(file, evt(10) + "\n" + evt(42) + "\n")
+        eq((await usage(null)).primary.remainingPercent, 90, "chưa dọn cache ⇒ vẫn là số cũ (cache có thật)")
+        invalidateUsageCache()
+        eq((await usage(null)).primary.remainingPercent, 58, "dọn xong ⇒ lần đọc kế tiếp thấy dòng mới")
+      } finally { delete process.env.KITGEN_CODEX_HOME; invalidateUsageCache() }
+    })
   }
 
   describe("health")

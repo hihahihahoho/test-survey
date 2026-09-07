@@ -9,6 +9,10 @@ import { projectDir } from "./projects-dir.mjs"
 import { resolveEngine, prepareEngine, materializeStyles, buildCommand, diagnose, summarizeFailures } from "./engine.mjs"
 import { hasMascotCoverSource, maybeAutoCover } from "./cover.mjs"
 import { thumbnail } from "./thumbs.mjs"
+/* MỘT CHIỀU, KHÔNG VÒNG: usage.mjs → doctor.mjs → engine.mjs; không file nào trong
+   nhánh đó import ngược lại run-handle. Nhập vào đây để mỗi lượt vẽ xong là con số
+   hạn mức được đọc lại — chính codex vừa ghi một dòng `rate_limits` mới vào rollout. */
+import { invalidateUsageCache } from "./usage.mjs"
 import { IS_WIN, pythonCommand, pythonSpawnOpts, killTree, winSpawnOpts } from "./platform.mjs"
 
 const HEARTBEAT_MS = 15000
@@ -429,6 +433,11 @@ export class RunHandle {
     else this.run.progress.done += 1
     if (j.durationMs) this.durations.push(j.durationMs)
     this.run.progress.etaSeconds = this.eta()
+    /* MỘT JOB ĐÓNG SỔ = MỘT LƯỢT CODEX VỪA XONG = một dòng `rate_limits` mới trong
+       rollout. Không dọn cache ở đây thì thanh hạn mức đứng im tới 5 phút giữa lúc
+       người dùng đang nhìn nó tụt — đúng lời phàn nàn "nó phải động chứ không tĩnh".
+       Rẻ: chỉ xoá Map, lần ĐỌC sau mới quét đĩa (mà lần đọc là do web hỏi). */
+    invalidateUsageCache()
     this.emit({
       type: "job.done", job: j.job, status: j.status,
       durationMs: j.durationMs, diagnosis: j.diagnosis ?? undefined,
@@ -952,6 +961,11 @@ export class RunHandle {
     this.run.progress.done = ok
     this.run.progress.failed = failed
     this.run.failSummary = summarizeFailures(this.run.jobs)
+    /* Lần dọn CUỐI, kể cả những đường KHÔNG đi qua `markJob` (env-failed, engine chết
+       ngay khi spawn, người dùng bấm Dừng): web nghe `run.finished` rồi hỏi lại
+       `/api/usage` ngay sau đó, và câu trả lời phải là số đọc mới chứ không phải
+       bản cache dựng từ trước khi lượt chạy bắt đầu. */
+    invalidateUsageCache()
     await this.persist()
     this.emit({
       type: "run.finished", status, ok, failed, failSummary: this.run.failSummary ?? undefined,
