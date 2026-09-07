@@ -211,17 +211,23 @@ export function pillOptions(kind: PillKind, presets: PresetBundle = getPresets()
       return OUTFIT_THEMES.map((option) => ({ value: option.value, vi: option.label, en: option.value }));
 
     case "mascot":
-      /* `refName` của preset CHỈ là một ghi chú chữ, không phải một tấm ảnh có
-         thật (xem khối ẢNH TRONG PRESET ở `presets-store.ts`). Nên nó đi vào
-         `hint` để người dùng biết preset này nhắc tới tấm nào, chứ KHÔNG được
-         dựng thành thumbnail — vẽ một ô ảnh cho một tệp không tồn tại là hứa
-         một thứ bấm vào không có gì. */
-      return presets.mascots.map((preset) => ({
-        value: preset.id,
-        vi: preset.vi,
-        en: preset.en,
-        ...(preset.refName ? { hint: `ảnh gợi ý: ${preset.refName}` } : {}),
-      }));
+      /**
+       * RỖNG, VÀ ĐÓ LÀ CÂU TRẢ LỜI ĐẦY ĐỦ.
+       *
+       * ╔══ NHÂN VẬT KHÔNG CÓ DANH MỤC DÙNG CHUNG ═══════════════════════════╗
+       * ║ Lượt trước ô này đổ `presets.mascots` ra — «Linh vật chính», «Nhân   ║
+       * ║ vật phụ»… Chủ sản phẩm nhìn màn và bác thẳng: *"cái chọn nhân vật    ║
+       * ║ này nó chỉ đi theo cái nhận diện thương hiệu thôi, thương hiệu ko có ║
+       * ║ con mascot nào thì ko có cái này nhé"*. Đúng: một nhân vật là TÀI    ║
+       * ║ SẢN của một thương hiệu cụ thể, không phải một mục trong bảng tra    ║
+       * ║ như «Chibi» hay «Tết». Mời một «Nhân vật phụ» chung chung là mời một ║
+       * ║ con không thuộc về ai — và nó lại còn không có ảnh thật để vẽ theo.  ║
+       * ║ Nên danh sách chọn sẵn của pill này KHÔNG đến từ đây; nó đến từ kho  ║
+       * ║ thương hiệu và được truyền vào bằng `extraGroups` (xem node view của ║
+       * ║ `optionPill`). Không có thương hiệu ⇒ không có nấc «Chọn sẵn».       ║
+       * ╚═════════════════════════════════════════════════════════════════════╝
+       */
+      return [];
   }
 }
 
@@ -254,6 +260,20 @@ export function refRoleOf(kind: PillKind): "theme" | "style" | "" {
  */
 export function takesImage(kind: PillKind): boolean {
   return kind === "mascot" || refRoleOf(kind) !== "";
+}
+
+/**
+ * Pill này có mục "để trống" ở đầu danh sách chọn sẵn không.
+ *
+ * `mascot` là ca DUY NHẤT không có, và lý do không phải thẩm mỹ: mục ấy sinh ra
+ * làm ĐƯỜNG LÙI khỏi một danh mục đóng ("lỡ bấm thì bấm lại cái này"). Danh sách
+ * của pill nhân vật lại là linh vật của thương hiệu đang chọn — bỏ một linh vật
+ * đã chọn nghĩa là bỏ TẤM ẢNH đã chép vào dự án, và đường lùi đúng cho việc ấy đã
+ * nằm ở nấc «Đính ảnh» («Bỏ ảnh»). Bày thêm một mục "để trống" ở đây là hai cửa
+ * cho một việc, và cửa này thì không nói ra nó sẽ xoá cái gì.
+ */
+export function hasBlankChoice(kind: PillKind): boolean {
+  return kind !== "mascot";
 }
 
 /** Kind này có nghĩa "để trống = kế thừa ngữ cảnh chung" không. */

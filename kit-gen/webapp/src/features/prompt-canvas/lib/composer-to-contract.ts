@@ -406,9 +406,18 @@ function mascotSheets(
      `subject` ngay dưới. Cùng luật với `uiKitSheets`. */
   const rowCtx = makeContext({ styleEN: "", themeEN: "", presets, imageCounter: { count: 0 } });
 
-  /* DANH TÍNH nhân vật — lấy RA trước `leftover` để nó không bị nối thêm một lần
-     nữa ở cuối `subject`. */
-  const identity = hitPhrase(take(scan, "mascot"), presets);
+  /**
+   * DANH TÍNH nhân vật — CHỈ chữ người dùng tự gõ.
+   *
+   * Lấy RA (`take`) trước `leftover` để nó không bị nối thêm một lần nữa ở cuối
+   * `subject`. KHÔNG đi qua `hitPhrase`: pill nhân vật không còn danh mục nào để
+   * tra cụm EN (`pillOptions("mascot")` rỗng — linh vật là tài sản của một thương
+   * hiệu, không phải một mục trong bảng tra). Hai nguồn còn lại của nó nói bằng
+   * hai đường khác: ẢNH thành `ref` ngay dưới đây, còn CHỮ thì chính là chuỗi này.
+   * Bản nháp của lượt trước có thể còn một `value` trỏ vào preset thư viện đã bỏ;
+   * nó không đóng góp gì — đúng như nó đang là, một lựa chọn không còn tồn tại.
+   */
+  const identity = take(scan, "mascot")?.custom.trim() ?? "";
   const outfitHit = take(scan, "outfit");
   /* Trang phục để trống = theo theme chung — nhưng CHỮ TỰ GÕ vẫn thắng cả luật
      kế thừa ấy: người dùng gõ một bộ đồ riêng cho nhân vật này thì họ đã trả lời
@@ -422,11 +431,11 @@ function mascotSheets(
   /**
    * CHỦ NGỮ của mọi ô — "con này là ai".
    *
-   * ══ BA NGUỒN, MỘT THỨ TỰ ƯU TIÊN, VÀ NÓ KHÔNG TUỲ TIỆN ═══════════════════
+   * ══ BA NGUỒN (ảnh · chữ · sàn), MỘT THỨ TỰ ƯU TIÊN, VÀ NÓ KHÔNG TUỲ TIỆN ═
    * Có ẢNH ⇒ ảnh nói trước, luôn luôn: một tấm ảnh tả nhân vật chính xác hơn mọi
    * câu chữ, và `gen.sh` gọi đích danh "the attached character REFERENCE PHOTO".
-   * Chữ (preset thư viện hoặc câu người dùng gõ) khi ấy đi KÈM chứ không thay —
-   * nó vẫn nói được thứ ảnh không nói ra (tên, tính cách, chi tiết muốn giữ).
+   * Chữ người dùng gõ khi ấy đi KÈM chứ không thay — nó vẫn nói được thứ ảnh
+   * không nói ra (tên, tính cách, chi tiết muốn giữ).
    * KHÔNG có ảnh ⇒ chữ ấy LÀ chủ ngữ. Chỉ khi cả hai đều vắng mới rơi về câu
    * chung chung cũ; máy vẽ không có gì để bám thì mỗi lượt ra một con khác nhau,
    * nên câu ấy là mức sàn, không phải mặc định.

@@ -57,11 +57,21 @@ function OptionPillView({ node, updateAttributes, extension }: ReactNodeViewProp
   const canAttach = takesImage(kind) && (kind === "mascot" || extension.options["refs"] === true);
 
   /**
-   * Linh vật của thương hiệu đang chọn, mời ở ĐẦU danh sách nhân vật.
+   * Linh vật của thương hiệu đang chọn — nguồn CHỌN SẴN duy nhất của pill này.
    *
-   * GỢI Ý chứ không tự điền: một thương hiệu có thể có nhiều linh vật, và tự
-   * chọn hộ là đặt một nhân vật người dùng chưa từng bấm vào tấm ảnh sắp tiêu
-   * tiền. Chưa chọn thương hiệu ⇒ nhóm này vắng mặt, hộp chỉ còn thư viện.
+   * ╔══ KHÔNG CÓ LINH VẬT ⇒ KHÔNG CÓ NẤC «CHỌN SẴN» ═══════════════════════════╗
+   * ║ Chủ sản phẩm: *"nó chỉ đi theo cái nhận diện thương hiệu thôi, thương     ║
+   * ║ hiệu ko có con mascot nào thì ko có cái này nhé, cho up ảnh hoặc gõ text  ║
+   * ║ thôi"*. Nên nhóm này rỗng ⇒ `groups` rỗng ⇒ hộp tự thu về hai nấc         ║
+   * ║ «Đính ảnh · Gõ riêng». Không có danh sách trống nào được bày ra: một nấc  ║
+   * ║ mở ra rồi bảo "chưa có gì" là một cú bấm để đọc một lời từ chối.          ║
+   * ║ Vẫn là GỢI Ý chứ không tự điền — một thương hiệu có thể có nhiều linh     ║
+   * ║ vật, và tự chọn hộ là đặt một nhân vật người dùng chưa từng bấm vào tấm   ║
+   * ║ ảnh sắp tiêu tiền.                                                       ║
+   * ║ Bỏ thương hiệu SAU KHI đã chọn một linh vật thì tấm ảnh VẪN Ở LẠI pill:   ║
+   * ║ nó đã được chép vào `refs/` của dự án và không còn phụ thuộc kho nữa —    ║
+   * ║ chỉ là không còn danh sách để chọn lại con khác.                          ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
    */
   const brandMascots = kind === "mascot" ? (brand?.mascots ?? []) : [];
   const extraGroups: SourceGroup[] =
@@ -154,7 +164,6 @@ function OptionPillView({ node, updateAttributes, extension }: ReactNodeViewProp
         image={image}
         projectId={projectId}
         extraGroups={extraGroups}
-        {...(extraGroups.length > 0 ? { listTitle: "Thư viện nhân vật" } : {})}
         onChange={choose}
         onCustom={(next) => updateAttributes({ custom: next })}
         {...(canAttach && projectId ? { onAttach: attach } : {})}

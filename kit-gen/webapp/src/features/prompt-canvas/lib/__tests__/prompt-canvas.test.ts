@@ -787,33 +787,45 @@ describe("pill nhân vật: ba nguồn đều tới được chủ ngữ của m
     composerToContract(state({ blocks: [mascotBlock("m1", doc)] }), { presets: PRESETS })
       .sheets[0]!.components[0]!.spec;
 
-  it("CHỌN SẴN một nhân vật thư viện ⇒ cụm EN của nó LÀ chủ ngữ", () => {
-    const preset = PRESETS.mascots[0]!;
-    const spec = specOf(withMascot({ value: preset.id }));
-    expect(spec).toContain(preset.en);
+  it("GÕ RIÊNG ⇒ chữ người dùng đi NGUYÊN VĂN vào chủ ngữ", () => {
+    const spec = specOf(withMascot({ custom: "một chú mèo mướp đội nón lá" }));
+    expect(spec).toContain("một chú mèo mướp đội nón lá");
     /* Câu sàn "the same original mascot character" chỉ dành cho ca KHÔNG có
        nguồn nào — còn để lại là hai chủ ngữ đá nhau trong một câu. */
     expect(spec).not.toContain("the same original mascot character");
   });
 
-  it("GÕ RIÊNG ⇒ chữ người dùng đi NGUYÊN VĂN vào chủ ngữ, thắng cả preset", () => {
-    const preset = PRESETS.mascots[0]!;
-    const spec = specOf(withMascot({ value: preset.id, custom: "một chú mèo mướp đội nón lá" }));
-    expect(spec).toContain("một chú mèo mướp đội nón lá");
-    expect(spec).not.toContain(preset.en);
-  });
-
   it("ĐÍNH ẢNH ⇒ `sheet.ref` + chủ ngữ trỏ vào tấm ảnh, chữ đi KÈM chứ không mất", () => {
-    const preset = PRESETS.mascots[0]!;
     const contract = composerToContract(
-      state({ blocks: [mascotBlock("m1", withMascot({ value: preset.id, path: "refs/lan.png", refName: "lan.png" }))] }),
+      state({
+        blocks: [
+          mascotBlock(
+            "m1",
+            withMascot({ custom: "linh vật gấu trúc", path: "refs/lan.png", refName: "lan.png" }),
+          ),
+        ],
+      }),
       { presets: PRESETS },
     );
     const sheet = contract.sheets[0]!;
     expect(sheet.ref).toBe("refs/lan.png");
     const spec = sheet.components[0]!.spec;
     expect(spec).toContain("the SAME character from the reference photo");
-    expect(spec).toContain(preset.en);
+    expect(spec).toContain("linh vật gấu trúc");
+  });
+
+  /**
+   * Bản nháp của lượt trước có thể mang `value` trỏ vào một preset thư viện —
+   * danh mục ấy đã bị bỏ (linh vật đi theo thương hiệu, không phải một bảng tra
+   * dùng chung). Ca này khoá điều DUY NHẤT được phép xảy ra: nó không đóng góp
+   * chữ nào. Đóng góp một cụm EN của một lựa chọn không còn tồn tại là gửi cho
+   * máy vẽ một chỉ thị mà màn hình không còn hiện ra ở đâu cả.
+   */
+  it("`value` sót lại từ danh mục preset đã bỏ ⇒ KHÔNG lọt vào chủ ngữ", () => {
+    const preset = PRESETS.mascots[0]!;
+    const spec = specOf(withMascot({ value: preset.id }));
+    expect(spec).not.toContain(preset.en);
+    expect(spec).toContain("the same original mascot character");
   });
 
   it("KHÔNG nguồn nào ⇒ vẫn có chủ ngữ sàn, tấm không có `ref`", () => {

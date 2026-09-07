@@ -2,7 +2,7 @@ import * as React from "react";
 import { ChevronDown, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PillImage } from "@/features/prompt-canvas/lib/pill-image";
-import { inheritsWhenEmpty, labelOf, nounOf, pillOptions, type PillKind } from "../lib/pill-registry";
+import { hasBlankChoice, inheritsWhenEmpty, labelOf, nounOf, pillOptions, type PillKind } from "../lib/pill-registry";
 import { usePresets } from "../lib/presets-store";
 import { RefImageBody } from "./RefImagePill";
 import { SourcePicker, useDismiss, type SourceGroup } from "./SourcePicker";
@@ -276,7 +276,6 @@ export function OptionPill({
   onDropImage,
   attaching,
   extraGroups,
-  listTitle,
   projectId,
 }: {
   kind: PillKind;
@@ -309,10 +308,11 @@ export function OptionPill({
    * Nhóm mục ĐỨNG TRƯỚC danh mục của `kind` — chỗ để mời linh vật của thương
    * hiệu đang chọn. Đứng trước vì nó CỤ THỂ hơn: người đã chọn thương hiệu thì
    * thứ họ tìm gần như chắc chắn nằm ở đó.
+   *
+   * Với pill nhân vật thì đây là nguồn DUY NHẤT (`pillOptions("mascot")` rỗng):
+   * rỗng cả hai ⇒ hộp không còn nấc «Chọn sẵn» nào để bày.
    */
   extraGroups?: readonly SourceGroup[];
-  /** Tiêu đề cho nhóm danh mục gốc — chỉ cần khi có `extraGroups` để phân biệt. */
-  listTitle?: string;
   /** Dự án đang mở — cần để hộp đọc được thumbnail của ảnh đã đính. */
   projectId?: string | null;
 }) {
@@ -323,12 +323,12 @@ export function OptionPill({
   const canInherit = inheritsWhenEmpty(kind);
   const noun = nounOf(kind);
 
+  /* Nhóm RỖNG bị loại ngay ở đây, không đẩy xuống cho hộp tự lọc: `SourcePicker`
+     quyết định có bày nấc «Chọn sẵn» hay không bằng chính mảng này, nên một nhóm
+     rỗng lọt vào là một nấc trống mở ra không có gì. */
   const groups: SourceGroup[] = React.useMemo(
-    () => [
-      ...(extraGroups ?? []),
-      { ...(listTitle ? { title: listTitle } : {}), options },
-    ],
-    [extraGroups, listTitle, options],
+    () => [...(extraGroups ?? []), { options }].filter((group) => group.options.length > 0),
+    [extraGroups, options],
   );
 
   const shot = image?.path ? image : null;
@@ -340,9 +340,13 @@ export function OptionPill({
    * nếu ảnh che mất nhãn thì người vừa bấm "Tết" sẽ tưởng cú bấm của mình rơi
    * đâu mất. Chỉ khi KHÔNG có gì khác để nói thì tên tệp mới làm nhãn.
    */
+  /* `value` chỉ được lên nhãn khi CÓ danh mục để tra nó: pill nhân vật không còn
+     danh mục nào (xem `pillOptions`), nên một `value` sót lại từ bản nháp lượt
+     trước sẽ hiện ra nguyên id thô ("mascot-default") — một chữ người dùng chưa
+     bao giờ gõ, cho một lựa chọn không còn tồn tại. */
   const label = custom
     ? shorten(custom)
-    : value
+    : value && options.length > 0
       ? labelOf(kind, value, presets)
       : shot
         ? shot.refName
@@ -391,7 +395,7 @@ export function OptionPill({
         <SourcePicker
           label={noun}
           groups={groups}
-          emptyLabel={canInherit ? "— theo cái chung —" : "— để trống —"}
+          {...(hasBlankChoice(kind) ? { emptyLabel: canInherit ? "— theo cái chung —" : "— để trống —" } : {})}
           value={value}
           custom={custom}
           image={shot}
