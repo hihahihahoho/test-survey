@@ -136,6 +136,22 @@ export function estimateBytes(files: readonly KitFile[]): number {
  */
 export const CLIPBOARD_SOFT_MAX = 24 * 1024 * 1024;
 
+export interface PackOptions {
+  /**
+   * ÉP TỈ LỆ XUẤT cho MỌI ô, thay cho quy ước «mascot 1:1 · UI 50%» của
+   * `export-scale.ts`.
+   *
+   * Quy ước 50% ấy có gốc thật (`studio.html:715`: "asset gen là @2x") và màn «Thư
+   * viện kit» vẫn sống bằng nó — nên nó KHÔNG bị đổi. Nhưng ở màn prompt-first thì
+   * người dùng vừa tự đặt cỡ safe zone bằng pixel và vừa đọc con số ấy trong prompt;
+   * dán ra Figma một khung bằng nửa con số đó là biến lựa chọn của họ thành một câu
+   * đố. Ở đó — và chỉ ở đó — tỉ lệ là 1.
+   *
+   * Vắng ⇒ giữ nguyên `scaleOf` như cũ.
+   */
+  scale?: number;
+}
+
 /**
  * Xếp lưới: mỗi nhóm một dải ngang riêng, trong dải thì xếp "kệ" (hết bề rộng thì
  * xuống dòng). Hàm THUẦN ⇒ kiểm được bằng kit thật, không cần trình duyệt.
@@ -144,6 +160,7 @@ export function packKitDoc(
   files: readonly KitFile[],
   poseFiles: ReadonlySet<string>,
   boardWidth: number = BOARD_W,
+  opts: PackOptions = {},
 ): KitDocLayout {
   const byGroup = new Map<ResultCategory, KitFile[]>();
   for (const f of preferTight(files)) {
@@ -171,7 +188,7 @@ export function packKitDoc(
       const name = assetName(file);
       let spec: FigmaNodeSpec;
       try {
-        spec = buildFigmaNodeForAsset(file, { name, poseFiles });
+        spec = buildFigmaNodeForAsset(file, { name, poseFiles, ...(opts.scale === undefined ? {} : { scale: opts.scale }) });
       } catch (err) {
         skipped.push({ name, reason: err instanceof FigmaNodeUnsupported ? err.message : String(err) });
         continue;
@@ -265,7 +282,7 @@ export async function encodeKitDoc(
     for (const [i, frame] of frames.entries()) {
       const doc = await h2d.captureElement(frame);
       assertDocShape(doc, cells[i]!.spec);
-      docs.push(doc);
+      docs.push(stripPageTitle(doc));
       onEncoded?.(i + 1, frames.length);
     }
     const { html } = await h2d.toFigmaClipboardHtml(docs, { source: KIT_DOC_SOURCE });
@@ -273,6 +290,29 @@ export async function encodeKitDoc(
   } finally {
     stage.remove();
   }
+}
+
+/**
+ * BỎ TIÊU ĐỀ TRANG khỏi payload — nếu không, tên node dán ra Figma mọc thêm đuôi.
+ *
+ * ╔══ ĐO ĐƯỢC, KHÔNG ĐOÁN ═══════════════════════════════════════════════════╗
+ * ║ Chủ sản phẩm chụp màn Figma: node tên `01-button (test · Thư viện kit ·   ║
+ * ║ kit-…)`. Nửa trong ngoặc KHÔNG đến từ `assetName` — nó là `document.title`║
+ * ║ của chính tab web: `AppLayout.tsx:71` đặt `[tên dự án, tên màn, "kit-gen"]║
+ * ║ .join(" · ")`, và encoder chở nó đi nguyên vẹn                            ║
+ * ║ (`figma-h2d.global.js:1194`: `documentTitle: doc.title || void 0`, rồi     ║
+ * ║ `serializeDocument` `JSON.stringify` cả object).                          ║
+ * ║                                                                          ║
+ * ║ Đúng chỗ để chữa là Ở ĐÂY, không phải trong vendor (khoá theo hash) và    ║
+ * ║ cũng không phải bằng cách đổi `document.title` — đổi tiêu đề tab để lấy    ║
+ * ║ một cái tên node là sửa nhầm cái. Encoder chính nó ghi `void 0` khi trang ║
+ * ║ không có tiêu đề, nên `undefined` ở đây là một giá trị nó vẫn sinh ra —   ║
+ * ║ `JSON.stringify` bỏ hẳn khoá, và Figma còn đúng tên frame để đặt.         ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export function stripPageTitle(doc: H2DDocument): H2DDocument {
+  const { documentTitle: _pageTitle, ...rest } = doc as H2DDocument & { documentTitle?: unknown };
+  return rest as H2DDocument;
 }
 
 /** Đường đầy đủ: ô đã cắt → nhiều node Figma trong bộ nhớ tạm. Ném ở mọi bước hỏng. */

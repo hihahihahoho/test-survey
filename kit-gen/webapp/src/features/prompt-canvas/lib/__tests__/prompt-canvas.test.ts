@@ -7,7 +7,9 @@ import { glazeFromMaterial, glazePhrase } from "@/features/kit-core/lib/glaze";
 import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
 import { EXPRESSIONS, OUTFIT_THEMES } from "@/features/kit-core/lib/poses";
 
-import { SIZE_PRESETS, SQUARE_CANVAS_PX, SYSTEM_SIZE_VALUE } from "@/features/prompt-lab/lib/cell-size";
+import {
+  CUSTOM_ELEMENT_SKEL, SIZE_PRESETS, SQUARE_CANVAS_PX, defaultSizeOf, skelSizePx,
+} from "@/features/prompt-lab/lib/cell-size";
 import { seedPresets } from "@/features/prompt-lab/lib/presets-store";
 import { backgroundDoc, contextDoc, mascotDoc } from "@/features/prompt-lab/lib/doc-templates";
 import { NODE } from "@/features/prompt-lab/lib/schema";
@@ -433,10 +435,52 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     const xl = SIZE_PRESETS.find((p) => p.id === "xl")!;
     expect(ui.components[1]!.skel.w).toBeCloseTo(xl.w / cellPx, 2);
     expect(ui.components[1]!.skel.h).toBeCloseTo(xl.h / cellPx, 2);
-    /* Không chọn cỡ ⇒ GIỮ khung mặc định — một lượt sửa không được đổi kích thước
-       những dòng người dùng đã vẽ xong. */
-    expect(ui.components[0]!.skel.w).toBe(0.8);
-    expect(ui.components[0]!.skel.h).toBe(0.6);
+    /* Không chọn cỡ ⇒ GIỮ hình dạng của LOẠI element, không rơi về một khung
+       chung: ô c1 là «Nút bấm», mà một cái nút là hộp rộng-mỏng (pill 2,9:1) chứ
+       không phải hộp 4:3. Đây là chỗ mà tấm thật từng hứa `251x188` cho cả thanh
+       máu lẫn khung avatar — xem `cell-size.ts`. */
+    const button = PRESETS.elements.find((e) => e.id === "button")!;
+    expect(ui.components[0]!.skel.shape).toBe("pill");
+    expect(ui.components[0]!.skel.w).toBeCloseTo(skelSizePx(button.skel).w / cellPx, 2);
+    expect(ui.components[0]!.skel.h).toBeCloseTo(skelSizePx(button.skel).h / cellPx, 2);
+  });
+
+  it("HÌNH DẠNG của ô = hình dạng của loại element — thanh máu ≠ khung avatar", () => {
+    /* Bệnh 07/09/2026, đo trên `kits/manifest.json` của dự án `test`: prompt in
+       cùng một hộp `251x188` cho «health bar» và «avatar frame», nên lõi model vẽ
+       ra (370×97 và 303×263) lệch khỏi lời hứa và QA gắn cờ 46px. */
+    const cells: UiCell[] = [
+      { id: "c1", elementId: "healthbar", styleId: "", decor: "3", glazeId: "", sizeId: "", note: "" },
+      { id: "c2", elementId: "avatar-frame", styleId: "", decor: "5", glazeId: "", sizeId: "", note: "" },
+    ];
+    const ui = composerToContract(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), {
+      presets: PRESETS,
+    }).sheets[0]!;
+    const [bar, avatar] = [ui.components[0]!.skel, ui.components[1]!.skel];
+    expect(bar.shape).toBe("bar");
+    expect(avatar.shape).toBe("circle");
+    /* Ô vuông ⇒ `w/h` LÀ tỉ lệ hình: thanh phải rộng-mỏng, khung avatar phải vuông. */
+    expect(bar.w! / bar.h!).toBeGreaterThan(3);
+    expect(avatar.w).toBeCloseTo(avatar.h!, 3);
+    /* `slice9` của loại đi theo vào contract — `slice.py` đọc nó để ghi inset. */
+    expect(bar.slice9).toBe(true);
+    expect(avatar.slice9).toBeUndefined();
+  });
+
+  it("element TỰ ĐẶT TÊN (không có trong danh mục) ⇒ khung trung tính, không nổ", () => {
+    const cells: UiCell[] = [
+      { id: "c1", elementId: "tu-dat-khien-chan", styleId: "", decor: "4", glazeId: "", sizeId: "", note: "" },
+    ];
+    const ui = composerToContract(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), {
+      presets: PRESETS,
+    }).sheets[0]!;
+    const skel = ui.components[0]!.skel;
+    const cellPx = SQUARE_CANVAS_PX / ui.grid.cols;
+    expect(skel.shape).toBe(CUSTOM_ELEMENT_SKEL.shape);
+    /* Hộp TÍNH RA PIXEL mới là thứ đứng yên: `w`/`h` là phân số của ô, mà ô co
+       giãn theo lưới. So bằng pixel là so đúng cái người dùng thấy trên pill. */
+    expect(Math.round(skel.w! * cellPx)).toBe(skelSizePx(CUSTOM_ELEMENT_SKEL).w);
+    expect(Math.round(skel.h! * cellPx)).toBe(skelSizePx(CUSTOM_ELEMENT_SKEL).h);
   });
 
   it("cỡ TỰ ĐIỀN: chuỗi `<w>x<h>` px vào skel, và cỡ to hơn ô thì kẹp về tràn ô", () => {
@@ -980,7 +1024,8 @@ describe("di trú: bản nháp đời trước không có bốn trường mới"
       PRESETS,
     );
     const cells = (doc.composer.blocks[0] as { cells: { sizeId: string }[] }).cells;
-    expect(cells[0]!.sizeId).toBe(SYSTEM_SIZE_VALUE);
+    /* Con số ấy là cỡ mặc định CỦA «Nút bấm», không phải một cỡ hệ thống chung. */
+    expect(cells[0]!.sizeId).toBe(defaultSizeOf(PRESETS.elements.find((e) => e.id === "button")));
     /* Cỡ người dùng ĐÃ chọn thì không được đụng tới. */
     expect(cells[1]!.sizeId).toBe("xl");
   });

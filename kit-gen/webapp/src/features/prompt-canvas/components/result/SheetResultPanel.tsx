@@ -14,10 +14,10 @@ import { poseFileSet } from "@/features/kit/lib/export-scale";
 import {
   BoardCancelled, PHASE_LABEL, buildFigmaBoard, type BoardProgress,
 } from "@/features/kit/lib/figma-board";
-import { cellsOf, copyKitDoc, packKitDoc } from "@/features/kit/lib/figma-kit-doc";
+import { BOARD_W, cellsOf, copyKitDoc, packKitDoc } from "@/features/kit/lib/figma-kit-doc";
 import { toastError, toastInfo, toastSuccess } from "@/features/projects/lib/feedback";
 import { useContract, useKit, useProject, useRevealProject } from "@/lib/hooks";
-import { cellsOfSheet, rawSheetImagePath } from "../../lib/result/sheet-files";
+import { cellsOfSheet, contractFramed, rawSheetImagePath } from "../../lib/result/sheet-files";
 import { copySheetAsFigmaNode, measureImage } from "../../lib/result/sheet-figma";
 import { PREVIEW_MAX_H } from "../../lib/ui";
 import { SheetCellGrid } from "./SheetCellGrid";
@@ -260,7 +260,12 @@ export function SheetResultPanel({
     setProgress({ phase: 1, label: PHASE_LABEL[1], done: 0, total: cells.length });
     void (async () => {
       try {
-        const nodes = cellsOf(packKitDoc(cells, poseFiles).groups);
+        /* KHUNG = HỘP HỢP ĐỒNG, TỈ LỆ = 1:1 — hai nửa của cùng một lời hứa. Người
+           dùng vừa đặt cỡ safe zone bằng pixel và đọc đúng con số ấy trong prompt;
+           khung dán ra Figma phải là con số đó, không phải lõi model vẽ ra thu 50%.
+           Xem `contractFramed` (`sheet-files.ts`) và `PackOptions.scale`. */
+        const framed = contractFramed(cells);
+        const nodes = cellsOf(packKitDoc(framed.files, poseFiles, BOARD_W, { scale: 1 }).groups);
         if (nodes.length === 0) {
           throw new Error("Không ô nào của tấm này có đủ toạ độ vùng an toàn để dựng khung.");
         }
@@ -289,9 +294,15 @@ export function SheetResultPanel({
         });
         setProgress({ phase: 4, label: PHASE_LABEL[4], done: 1, total: 1 });
         setCopied(res.docs);
+        /* NÓI RA khi có ô phải dùng khung ĐO ĐƯỢC: kit cắt bằng bản engine cũ không
+           có `contractSafe`, và lúc ấy con số ở Figma khác con số trong prompt. Báo
+           "đã copy" trơn ở đây là để designer tự phát hiện lúc đã dán vào file thật. */
+        const doPhong = framed.measured.length;
         toastSuccess(
           "Đã copy các ô sang Figma",
-          `${name} · ${res.docs} ô, mỗi ô một khung riêng, ảnh giữ nguyên nét gốc. Dán bằng Ctrl/Cmd+V.`,
+          `${name} · ${res.docs} ô, mỗi ô một khung riêng đúng cỡ đã chọn (1:1), ảnh giữ nguyên nét gốc.`
+          + " Dán bằng Ctrl/Cmd+V."
+          + (doPhong === 0 ? "" : ` Riêng ${doPhong} ô cắt bằng bản cũ thì khung lấy theo cỡ đo được, có thể lệch cỡ bạn đã chọn.`),
         );
       } catch (err) {
         if (err instanceof BoardCancelled || ac.signal.aborted) return;

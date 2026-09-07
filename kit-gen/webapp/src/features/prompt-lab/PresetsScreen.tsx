@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { GLAZE_PRESETS } from "@/features/kit-core/lib/glaze";
 
-import { SIZE_PRESETS, defaultSizeOf, sizeLabel } from "./lib/cell-size";
+import { SIZE_PRESETS, defaultSizePx, sizeLabel } from "./lib/cell-size";
 import {
   DECOR_LEVELS,
   resetPresets,
@@ -252,20 +252,27 @@ export function PresetsScreen() {
               <label className="flex flex-col gap-1">
                 <span className="text-caption text-fg-muted">Cỡ mặc định</span>
                 <select
-                  /* KHÔNG CÒN MỤC RỖNG. Rỗng từng nghĩa là «theo hệ thống» — một cỡ
-                     không hiện ra ở đâu và còn đổi theo lưới; chủ sản phẩm hỏi thẳng
-                     "cỡ theo hệ thống là sao nhỉ". Danh mục cũ còn lưu rỗng thì ô này
-                     hiện cỡ hệ thống ĐÃ VIẾT RA (`defaultSizeOf`), nên người sửa danh
-                     mục đọc được đúng con số mà dòng element sẽ nhận. */
-                  value={defaultSizeOf(preset)}
+                  /* MỤC RỖNG QUAY LẠI, NHƯNG NÓ KHÔNG CÒN LÀ «THEO HỆ THỐNG».
+                     Rỗng từng nghĩa là 0,8×0,6 của Ô — một cỡ không hiện ra ở đâu và
+                     còn đổi theo lưới; chủ sản phẩm hỏi thẳng "cỡ theo hệ thống là sao
+                     nhỉ". Nay rỗng nghĩa là «đo theo HÌNH DẠNG của chính loại này», và
+                     mục ấy NÓI RA con số (`defaultSizePx`) nên không còn gì giấu.
+                     Nó cũng là đường DUY NHẤT bỏ ghim: chọn một nấc S/M/L/XL là đè lên
+                     hình dạng vừa khai, và người ta phải quay lại được. */
+                  value={preset.sizeId}
                   onChange={(event) => updateElement(preset.id, { sizeId: event.target.value })}
                   className="rounded-1 border border-line-subtle bg-canvas px-2 py-1.5 text-body text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                 >
-                  {/* Chỉ preset: ô tự điền là chuyện của TỪNG DÒNG trong thẻ, không
-                      phải của danh mục — một cỡ pixel cụ thể áp cho mọi bộ kit dùng
-                      món này là đóng cứng hình học vào một danh mục dùng chung. */}
-                  {!SIZE_PRESETS.some((size) => size.id === defaultSizeOf(preset)) && (
-                    <option value={defaultSizeOf(preset)}>{sizeLabel(defaultSizeOf(preset))}</option>
+                  <option value="">
+                    Theo hình dạng · {defaultSizePx({ ...preset, sizeId: "" }).w}×{defaultSizePx({ ...preset, sizeId: "" }).h}px
+                  </option>
+                  {/* Ngoài bốn nấc thì chỉ hiện cỡ ĐANG được ghim (danh mục đời trước
+                      có thể mang một chuỗi tự điền): ô tự điền là chuyện của TỪNG DÒNG
+                      trong thẻ, không phải của danh mục — một cỡ pixel cụ thể áp cho
+                      mọi bộ kit dùng món này là đóng cứng hình học vào một danh mục
+                      dùng chung. */}
+                  {preset.sizeId !== "" && !SIZE_PRESETS.some((size) => size.id === preset.sizeId) && (
+                    <option value={preset.sizeId}>{sizeLabel(preset.sizeId)}</option>
                   )}
                   {SIZE_PRESETS.map((size) => (
                     <option key={size.id} value={size.id}>

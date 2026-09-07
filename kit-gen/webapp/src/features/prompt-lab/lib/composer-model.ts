@@ -185,7 +185,7 @@ export interface UiCell {
    * CỠ SAFE ZONE — id preset hoặc `"<w>x<h>"` px. LUÔN CÓ GIÁ TRỊ.
    *
    * Rỗng vẫn ĐỌC được (bản nháp trước 07/09/2026), nhưng `readCell` vá nó ngay lúc
-   * đọc và `newCell` không bao giờ sinh ra rỗng nữa — xem `systemSizePx`.
+   * đọc và `newCell` không bao giờ sinh ra rỗng nữa — xem `defaultSizeOf`.
    *
    * Nằm NGOÀI câu chữ (không có pill nào cho nó trong `uiCellDoc`) vì nó không đi
    * vào prompt một chữ nào: nó thành `skel.w`/`skel.h` của ô. Nhét nó vào câu là
@@ -458,8 +458,9 @@ export function newCell(elementId: string, presets: PresetBundle = getPresets())
     styleId: INHERIT,
     decor: String(preset?.decor ?? 4),
     glazeId: preset?.glazeId ?? "",
-    /* CỠ LUÔN CỤ THỂ. Danh mục không khai cỡ (element người dùng tự thêm) thì
-       lấy cỡ hệ thống ĐÃ VIẾT RA THÀNH SỐ, không để rỗng — xem `systemSizePx`. */
+    /* CỠ LUÔN CỤ THỂ, và cụ thể THEO LOẠI: `defaultSizeOf` đo từ `skel` của chính
+       loại element (thanh máu ra hộp rộng-mỏng, khung avatar ra hộp vuông). Element
+       người dùng tự thêm không khai hình dạng ⇒ hộp trung tính — xem `cell-size.ts`. */
     sizeId: defaultSizeOf(preset),
     note: "",
   };

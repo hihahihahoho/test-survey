@@ -9,8 +9,23 @@
  * ║ lưới = chọn ô nào nằm ở đâu (hệ thống lo). Safe zone = món đồ chiếm bao   ║
  * ║ nhiêu TRONG ô của nó — và đó là thứ duy nhất quyết định một cái bảng nền  ║
  * ║ vẽ ra to bằng cả ô hay bé bằng một cái nút. Trước lượt này mọi ô dùng     ║
- * ║ chung một khung `0.8 × 0.6` (xem `CELL_SKEL`), nên bảng nền và huy hiệu   ║
- * ║ ra cùng một cỡ — đúng thứ chủ sản phẩm nhìn thấy và than.                 ║
+ * ║ chung một khung `0.8 × 0.6`, nên bảng nền và huy hiệu ra cùng một cỡ —    ║
+ * ║ đúng thứ chủ sản phẩm nhìn thấy và than.                                  ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ╔══ VÀ VÌ SAO CỠ MẶC ĐỊNH PHẢI ĐẾN TỪ *HÌNH DẠNG* CỦA ELEMENT ═════════════╗
+ * ║ 07/09/2026, đo trên `kits/manifest.json` thật của dự án `test`: prompt in  ║
+ * ║ *"2) health bar — safe zone … (251x188 px)"* và *"3) avatar frame — safe   ║
+ * ║ zone … (251x188 px)"* — CÙNG MỘT HỘP cho một thanh máu và một khung tròn.  ║
+ * ║ Model vẽ ra thứ hợp lý: lõi thanh máu đo được 370×97, lõi khung avatar     ║
+ * ║ 303×263. Cả hai đều "sai" so với hộp ta đòi, QA gắn cờ 46px, và ở Figma ô  ║
+ * ║ dán ra lệch cỡ. Nhưng cái sai không nằm ở model: một cái hộp 4:3 KHÔNG     ║
+ * ║ PHẢI hình dạng của thanh máu, và không lời hứa nào bắt nó thành hình ấy.   ║
+ * ║                                                                          ║
+ * ║ ⇒ Cỡ mặc định của một dòng element = `skel` của CHÍNH loại element ấy      ║
+ * ║   (`ElementPreset.skel`, cùng từ vựng `shape` với `element-lib.json`) đo   ║
+ * ║   trên ô tham chiếu. Bar ra hộp rộng-mỏng, circle ra hộp vuông, panel ra   ║
+ * ║   hộp to. Không còn MỘT con số hệ thống cho mọi loại.                     ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
  * ══ ĐƠN VỊ LÀ PIXEL, NHƯNG CONTRACT ĂN PHÂN SỐ ═════════════════════════════
@@ -21,6 +36,7 @@
  * và chỉ phép chia theo ô mới giữ được điều đó.
  */
 import { elementBox } from "@/features/design/preview/geometry";
+import type { Skel } from "@/lib/types/contract";
 
 /**
  * Bề rộng canvas vuông của tấm Bộ UI.
@@ -80,36 +96,36 @@ export interface SizePx {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   CỠ HỆ THỐNG — và vì sao nó phải được VIẾT RA thành một con số
+   CỠ MẶC ĐỊNH — của TỪNG LOẠI ELEMENT, không phải của hệ thống
    ══════════════════════════════════════════════════════════════════════════ */
 
 /**
- * Khung mặc định của một ô Bộ UI, tính bằng PHÂN SỐ của ô.
+ * Khung của element NGƯỜI DÙNG TỰ ĐẶT TÊN — và chỉ của nó.
  *
- * Đây là nguồn của `CELL_SKEL` bên `composer-to-contract.ts` — hai nơi cùng một
- * cặp số, nên cặp số ở ĐÂY và chỗ kia đọc sang.
+ * Một cái tên tự gõ ("Khiên chắn", "wheel pointer") không nói được hình dạng nào,
+ * nên ở đây thật sự không có gì tốt hơn một hộp trung tính: `rrect` 0.8×0.6, đúng
+ * cặp số mà MỌI ô từng dùng chung trước 07/09/2026. Khác biệt duy nhất — và là cả
+ * lượt sửa này — là nó không còn được áp cho element CÓ KHAI hình dạng.
+ *
+ * Người dùng vẫn chỉnh được bằng pill «Cỡ» ở từng dòng; đây chỉ là điểm xuất phát.
  */
-export const SYSTEM_CELL_FRACTION: SizePx = { w: 0.8, h: 0.6 };
+export const CUSTOM_ELEMENT_SKEL: Skel = { shape: "rrect", w: 0.8, h: 0.6 };
 
 /**
- * Cỡ hệ thống, đo bằng pixel trên ô tham chiếu.
- *
- * ╔══ VÌ SAO PILL CỠ KHÔNG CÒN MỤC «— theo hệ thống —» ══════════════════════╗
- * ║ Chủ sản phẩm 07/09/2026: *"Mà cỡ theo hệ thống là sao nhỉ, kiểu chọn mặc  ║
- * ║ định 1 cái thôi chứ?"* — và câu hỏi ấy đúng: «theo hệ thống» KHÔNG phải   ║
- * ║ một cỡ, nó là lời hứa rằng ở đâu đó có một cỡ mà màn hình không nói ra.   ║
- * ║ Tệ hơn: cái cỡ giấu đi ấy là 0,8×0,6 của Ô, mà ô thì to nhỏ theo LƯỚI —  ║
- * ║ thêm một element vào thẻ là lưới đổi và mọi món «theo hệ thống» đổi cỡ    ║
- * ║ theo, lặng lẽ. Một con số cụ thể vừa trả lời được câu hỏi vừa đứng yên.   ║
- * ╚══════════════════════════════════════════════════════════════════════════╝
+ * Hộp safe zone (pixel) mà một `skel` chiếm trên một ô VUÔNG cạnh `cellPx`.
  *
  * Đo bằng `elementBox` của `design/preview/geometry.ts` chứ không nhân tay: đó là
  * bản mirror của `geometry.safe_offset_in_cell` (engine), và nó đã có test đọc
  * thẳng `geometry.py` canh không cho trôi. Nhân tay ở đây là dựng nguồn thứ hai.
+ *
+ * Ô VUÔNG là chủ ý, không phải đơn giản hoá: tấm Bộ UI của màn prompt-first luôn
+ * là canvas vuông chia lưới vuông (`UI_CANVAS` + `squareGrid` của
+ * `composer-to-contract.ts`), nên trên ô ấy `w/h` CHÍNH LÀ tỉ lệ hình dạng của
+ * element. Đó là điều làm cho bảng `skel` dưới `presets-store.ts` đọc được bằng mắt.
  */
-export function systemSizePx(cellPx: number = REFERENCE_CELL_PX): SizePx {
+export function skelSizePx(skel: Skel | null | undefined, cellPx: number = REFERENCE_CELL_PX): SizePx {
   const side = cellPx > 0 ? cellPx : REFERENCE_CELL_PX;
-  const box = elementBox({ shape: "rrect", ...SYSTEM_CELL_FRACTION }, side, side);
+  const box = elementBox(skel ?? CUSTOM_ELEMENT_SKEL, side, side);
   return { w: Math.round(box.w), h: Math.round(box.h) };
 }
 
@@ -124,18 +140,36 @@ export function sizeValueOfPx(px: SizePx): string {
   return hit ? hit.id : customSizeValue(px.w, px.h);
 }
 
-/** Cỡ áp cho một dòng element chưa ai đặt cỡ. Một hằng, tính một lần. */
-export const SYSTEM_SIZE_VALUE = sizeValueOfPx(systemSizePx());
+/** Hình dạng + cỡ ghim của một loại element — phần `ElementPreset` mà cỡ cần đọc. */
+export interface SizedElement {
+  /** Cỡ GHIM TAY ở trang danh mục; rỗng ⇒ cỡ suy từ `skel`. */
+  sizeId?: string;
+  /** Hình dạng của loại element; thiếu ⇒ hộp trung tính `CUSTOM_ELEMENT_SKEL`. */
+  skel?: Skel;
+}
 
 /**
- * Cỡ của một loại element: cỡ danh mục khai, không khai thì cỡ hệ thống.
+ * Cỡ mặc định của một loại element, tính bằng PIXEL trên ô tham chiếu.
+ *
+ * Hai tầng, theo đúng thứ tự ai-nói-sau-thắng:
+ *  ① `sizeId` của danh mục — ai đó đã GHIM một nấc cỡ cho loại này ở trang preset;
+ *  ② không ghim ⇒ đo từ `skel` của chính loại ấy (thanh máu ra hộp rộng-mỏng,
+ *     khung avatar ra hộp vuông). Đây là tầng thay cho cỡ hệ thống cũ.
+ */
+export function defaultSizePx(preset: SizedElement | null | undefined): SizePx {
+  const pinned = sizePx(preset?.sizeId);
+  return pinned ?? skelSizePx(preset?.skel);
+}
+
+/**
+ * Cỡ của một loại element, dạng GIÁ TRỊ LƯU (id preset hoặc `"<w>x<h>"`).
  *
  * Ở đây chứ không rải ở ba chỗ gọi, vì nó là ĐỊNH NGHĨA của "cỡ mặc định của loại
  * này" — và `swapCellElement` phải so ĐÚNG định nghĩa ấy để biết người dùng đã
  * chỉnh tay hay chưa.
  */
-export function defaultSizeOf(preset: { sizeId?: string } | null | undefined): string {
-  return String(preset?.sizeId ?? "").trim() || SYSTEM_SIZE_VALUE;
+export function defaultSizeOf(preset: SizedElement | null | undefined): string {
+  return String(preset?.sizeId ?? "").trim() || sizeValueOfPx(skelSizePx(preset?.skel));
 }
 
 /**
@@ -172,7 +206,8 @@ export function customSizeValue(w: number, h: number): string {
  * của tài liệu đời sau) — nơi gọi giữ nguyên khung mặc định thay vì đoán bừa.
  *
  * Rỗng vẫn phải đọc được, dù UI không còn sinh ra nó: bản nháp lưu trước 07/09/2026
- * có `sizeId` rỗng, và `readCell` mới là chỗ vá chúng (bằng `SYSTEM_SIZE_VALUE`).
+ * có `sizeId` rỗng, và `readCell` mới là chỗ vá chúng (bằng `defaultSizeOf` của
+ * chính loại element ấy).
  */
 export function sizePx(value: string | null | undefined): SizePx | null {
   const raw = String(value ?? "").trim();

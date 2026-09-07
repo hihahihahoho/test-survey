@@ -24,12 +24,13 @@ import type { JSONContent } from "@tiptap/react";
 
 import { composerToContract } from "@/features/prompt-canvas/lib/composer-to-contract";
 import {
+  CUSTOM_ELEMENT_SKEL,
   REFERENCE_CELL_PX,
   SIZE_PRESETS,
-  SYSTEM_CELL_FRACTION,
-  SYSTEM_SIZE_VALUE,
+  defaultSizeOf,
+  defaultSizePx,
   sizePx,
-  systemSizePx,
+  skelSizePx,
 } from "../lib/cell-size";
 import { seedPresets } from "../lib/presets-store";
 import { PILL_SLOTS, docHasBrokenPill, repairPills, retitleCellDoc, uiCellDoc } from "../lib/doc-templates";
@@ -561,11 +562,18 @@ describe("⑧ pill cỡ dùng chung hộp chọn nguồn", () => {
     expect(screen.queryByRole("tab", { name: "Đính ảnh" })).toBeNull();
   });
 
-  it("nấc «Chọn sẵn» = ĐÚNG 4 nấc, mỗi nấc kèm số px thật — không còn mục rỗng", () => {
+  it("nấc «Chọn sẵn» = cỡ mặc định CỦA LOẠI + 4 nấc, mỗi mục kèm số px thật", () => {
     openSize();
     const options = screen.getAllByRole("option").map((o) => o.textContent ?? "");
-    expect(options).toHaveLength(SIZE_PRESETS.length);
+    expect(options).toHaveLength(SIZE_PRESETS.length + 1);
     expect(options.join(" ")).not.toContain("theo hệ thống");
+    /* Mục đầu nói RA con số của chính loại element — «Nút bấm» là một hộp
+       rộng-mỏng, không phải hộp 4:3 dùng chung như trước 07/09/2026. */
+    const button = PRESETS.elements.find((e) => e.id === "button");
+    const px = defaultSizePx(button);
+    expect(options[0]).toContain("Mặc định của Nút bấm");
+    expect(options[0]).toContain(`${px.w}×${px.h}px`);
+    expect(px.w / px.h).toBeGreaterThan(2);
     for (const preset of SIZE_PRESETS) {
       const hit = options.find((text) => text.includes(preset.vi));
       expect(hit).toBeTruthy();
@@ -644,31 +652,37 @@ describe("⑧ pill cỡ dùng chung hộp chọn nguồn", () => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
-   ⑧b CỠ LUÔN LÀ MỘT CON SỐ — KHÔNG CÒN «THEO HỆ THỐNG» Ở BẤT KỲ ĐƯỜNG VÀO NÀO
+   ⑧b CỠ LUÔN LÀ MỘT CON SỐ, VÀ CON SỐ ẤY THEO *HÌNH DẠNG* CỦA LOẠI ELEMENT
    ══════════════════════════════════════════════════════════════════════════
    *"Mà cỡ theo hệ thống là sao nhỉ, kiểu chọn mặc định 1 cái thôi chứ?"*
    Ba đường sinh ra một dòng element, và chỉ cần MỘT đường còn để rỗng là câu hỏi
    ấy quay lại: rỗng nghĩa là 0,8×0,6 của Ô, mà ô thì co giãn theo lưới — thêm
-   một món vào thẻ là mọi món rỗng đổi cỡ theo, không ai bấm gì cả. */
-describe("⑧b cỡ luôn cụ thể ở mọi đường vào", () => {
-  it("thêm dòng: element có cỡ trong danh mục ⇒ lấy cỡ ấy", () => {
-    expect(newCell("button", PRESETS).sizeId).toBe("m");
+   một món vào thẻ là mọi món rỗng đổi cỡ theo, không ai bấm gì cả.
+
+   Và từ 07/09/2026 còn một luật nữa, nặng hơn: một con số CHUNG cho mọi loại là
+   sai ngang với rỗng. Prompt của tấm thật hứa cùng hộp `251x188` cho «thanh máu»
+   và «khung avatar» — xem khối đo ở đầu `cell-size.ts`. */
+describe("⑧b cỡ luôn cụ thể, và cụ thể theo hình dạng của loại", () => {
+  it("thêm dòng: cỡ = hộp đo từ `skel` của chính loại element", () => {
+    const button = PRESETS.elements.find((e) => e.id === "button");
+    expect(newCell("button", PRESETS).sizeId).toBe(defaultSizeOf(button));
+    expect(sizePx(newCell("button", PRESETS).sizeId)).toEqual(skelSizePx(button?.skel));
   });
 
-  it("thêm dòng: element KHÔNG khai cỡ ⇒ vẫn ra một con số, không ra rỗng", () => {
-    const bare = { ...PRESETS, elements: PRESETS.elements.map((e) => ({ ...e, sizeId: "" })) };
+  it("thanh máu ra hộp RỘNG-MỎNG, khung avatar ra hộp VUÔNG — không còn cùng một hộp", () => {
+    const bar = sizePx(newCell("healthbar", PRESETS).sizeId)!;
+    const avatar = sizePx(newCell("avatar-frame", PRESETS).sizeId)!;
+    expect(bar.w / bar.h).toBeGreaterThan(3);
+    expect(avatar.w).toBe(avatar.h);
+    expect(bar).not.toEqual(avatar);
+  });
+
+  it("element KHÔNG khai hình dạng (tự đặt tên) ⇒ hộp trung tính, không ra rỗng", () => {
+    const bare = { ...PRESETS, elements: PRESETS.elements.map((e) => ({ ...e, sizeId: "", skel: undefined })) };
     const cell = newCell("button", bare);
-    expect(cell.sizeId).toBe(SYSTEM_SIZE_VALUE);
-    expect(sizePx(cell.sizeId)).not.toBeNull();
-  });
-
-  it("cỡ hệ thống là 0,8×0,6 của ô tham chiếu — đọc qua đúng bản mirror của geometry.py", () => {
-    /* Không gõ lại "250x188" ở đây: ca này khoá QUAN HỆ (khung mặc định của
-       contract ⇄ con số hiện trên pill), không khoá một chuỗi. */
-    expect(systemSizePx()).toEqual({
-      w: Math.round(REFERENCE_CELL_PX * SYSTEM_CELL_FRACTION.w),
-      h: Math.round(REFERENCE_CELL_PX * SYSTEM_CELL_FRACTION.h),
-    });
+    /* Không gõ lại "251x188" ở đây: ca này khoá QUAN HỆ (khung trung tính ⇄ con số
+       hiện trên pill), không khoá một chuỗi. */
+    expect(sizePx(cell.sizeId)).toEqual(skelSizePx(CUSTOM_ELEMENT_SKEL, REFERENCE_CELL_PX));
   });
 
   it("đổi loại element: cỡ CHƯA bị chỉnh tay ⇒ đi theo loại mới", async () => {
@@ -681,9 +695,10 @@ describe("⑧b cỡ luôn cụ thể ở mọi đường vào", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /Đổi loại/ }));
     fireEvent.click(screen.getByRole("option", { name: /Bảng nền/ }));
-    /* «Bảng nền» khai `xl`; huy hiệu 192×136 đổi thành bảng mà vẫn 192×136 là
-       một cái bảng bằng cái nút. */
-    await waitFor(() => expect(latest?.cells[0]?.sizeId).toBe("xl"));
+    /* Một cái nút 245×85 đổi thành bảng nền mà vẫn 245×85 là một cái bảng bằng
+       cái nút — nên cỡ phải đi theo hình dạng của loại MỚI. */
+    const panel = defaultSizeOf(PRESETS.elements.find((e) => e.id === "panel"));
+    await waitFor(() => expect(latest?.cells[0]?.sizeId).toBe(panel));
   });
 
   it("đổi loại element: cỡ ĐÃ chỉnh tay ⇒ GIỮ NGUYÊN, không bị mặc định đắp lên", async () => {

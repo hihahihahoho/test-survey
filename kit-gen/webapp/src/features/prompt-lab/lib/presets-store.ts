@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { GENRE_PRESETS } from "@/features/kit-core/lib/genre-presets";
 import { glazeFromMaterial } from "@/features/kit-core/lib/glaze";
 import { EXPRESSIONS, POSES } from "@/features/kit-core/lib/poses";
-import { slugify } from "@/lib/types/contract";
+import { skelSchema, slugify, type Skel } from "@/lib/types/contract";
 import { api } from "@/lib/api/endpoints";
 import { qk, useUserLibrary } from "@/lib/hooks";
 import type { LibraryPreset } from "@/lib/types/api";
@@ -83,8 +83,29 @@ export interface ElementPreset {
   decor: number;
   /** Id đục nền áp sẵn (`glaze.ts`); rỗng = nền đặc. */
   glazeId: string;
-  /** Cỡ safe zone áp sẵn (`cell-size.ts`); rỗng ⇒ dòng element lấy `SYSTEM_SIZE_VALUE`. */
+  /**
+   * Cỡ safe zone GHIM TAY (`cell-size.ts`); rỗng ⇒ cỡ đo từ `skel` của chính loại này.
+   * Rỗng là giá trị BÌNH THƯỜNG từ 07/09/2026, không phải "chưa điền".
+   */
   sizeId: string;
+  /**
+   * HÌNH DẠNG của loại element — thứ đi thẳng vào `component.skel` của contract.
+   *
+   * ╔══ VÌ SAO DANH MỤC PHẢI BIẾT HÌNH DẠNG, KHÔNG CHỈ BIẾT TÊN ═══════════════╗
+   * ║ `shape` không phải trang trí: `gen.sh` in toạ độ safe zone ra prompt từ   ║
+   * ║ nó (`geometry.safe_box`), `slice.py` nắn lõi về đúng hộp ấy               ║
+   * ║ (`snap_to_safe`, chỉ với pill/bar/rrect/circle/puzzle) và ghi 9-slice từ  ║
+   * ║ `slice9`. Không khai ⇒ mọi ô là `rrect` 0.8×0.6, tức là ta đòi một cái    ║
+   * ║ hộp 4:3 cho cả thanh máu lẫn khung tròn — xem khối đo thật ở đầu           ║
+   * ║ `cell-size.ts`.                                                          ║
+   * ║                                                                          ║
+   * ║ `w`/`h` là phân số của một ô VUÔNG (tấm Bộ UI luôn vuông), nên đọc thẳng  ║
+   * ║ ra tỉ lệ hình: `0.86 × 0.22` LÀ một thanh 3,9:1.                          ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   *
+   * Thiếu (element tự đặt tên, hoặc bản ghi đời trước) ⇒ `CUSTOM_ELEMENT_SKEL`.
+   */
+  skel?: Skel;
 }
 
 export interface MascotPreset {
@@ -145,18 +166,38 @@ export function seedPresets(): PresetBundle {
        kit-core mô tả từng ô bằng chữ tự do, không bằng loại). Nên đây là danh
        mục MỚI của lab — và chính vì nó là mới nên nó phải sửa được, không được
        đóng cứng. Đúng thứ trang preset sinh ra để trả lời. */
-    /* `en` = DANH TỪ THUẦN, `sizeId` = cỡ hay gặp của chính món đó. Cỡ là thứ
-       DUY NHẤT còn được áp sẵn theo loại element, vì nó là hình học chứ không
-       phải thẩm mỹ: một bảng nền vốn to hơn một huy hiệu ở mọi phong cách. */
+    /* `en` = DANH TỪ THUẦN, `skel` = HÌNH HỌC của chính món đó. Hình học là thứ
+       DUY NHẤT còn được áp sẵn theo loại element, vì nó không phải thẩm mỹ: một
+       thanh máu là hộp rộng-mỏng ở mọi phong cách, một khung avatar là hộp vuông
+       ở mọi phong cách.
+
+       ══ BẢNG HÌNH DẠNG → TỈ LỆ (đo trên ô tham chiếu 314×314) ══════════════
+         button        pill   0.78×0.27 → 245×85   2,9:1  ← element-lib 01-btn-pill-red
+         popover       rrect  0.86×0.66 → 270×207  1,3:1  hộp thoại nổi
+         health bar    bar    0.86×0.22 → 270×69   3,9:1  ← lõi model tự vẽ đo được 370×97
+         coin icon     circle 0.40×0.40 → 126×126  1:1    đồng xu
+         avatar frame  circle 0.62×0.62 → 195×195  1:1    ← lõi đo được 303×263
+         panel         rrect  0.92×0.80 → 289×251  1,15:1 to nhất, còn chừa biên cho dao cắt
+         badge         circle 0.46×0.46 → 144×144  1:1
+         progress bar  bar    0.86×0.18 → 270×57   4,8:1  ← element-lib 07-progress-track
+
+       Hai cột phải nói cùng một thứ tiếng với `element-lib.json` của engine: ở đó
+       pill/bar là rộng-mỏng, circle/burst/puzzle là vuông, popup là hộp to. Khác
+       biệt duy nhất là MẪU SỐ — element-lib đo trên ô 3:2 của tấm landscape, còn
+       tấm Bộ UI ở đây luôn vuông, nên cùng một tỉ lệ ra cặp phân số khác.
+
+       `slice9` bật cho món CO GIÃN ĐƯỢC (nút, thanh, bảng, hộp thoại) và tắt cho
+       món tròn — kéo một cái huy hiệu tròn theo 9-slice là méo nó. `sizeId` để
+       RỖNG: ghim một nấc cỡ ở đây là đè lên chính hình dạng vừa khai. */
     elements: [
-      { id: "button", vi: "Nút bấm", en: "button", decor: 4, glazeId: "", sizeId: "m" },
-      { id: "popover", vi: "Popover", en: "popover", decor: 5, glazeId: "", sizeId: "xl" },
-      { id: "healthbar", vi: "Thanh máu", en: "health bar", decor: 3, glazeId: "", sizeId: "l" },
-      { id: "coin", vi: "Icon tiền", en: "coin icon", decor: 2, glazeId: "", sizeId: "s" },
-      { id: "avatar-frame", vi: "Khung avatar", en: "avatar frame", decor: 5, glazeId: "", sizeId: "m" },
-      { id: "panel", vi: "Bảng nền", en: "panel", decor: 4, glazeId: "", sizeId: "xl" },
-      { id: "badge", vi: "Huy hiệu", en: "badge", decor: 3, glazeId: "", sizeId: "s" },
-      { id: "progress", vi: "Thanh tiến trình", en: "progress bar", decor: 3, glazeId: "", sizeId: "l" },
+      { id: "button", vi: "Nút bấm", en: "button", decor: 4, glazeId: "", sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true } },
+      { id: "popover", vi: "Popover", en: "popover", decor: 5, glazeId: "", sizeId: "", skel: { shape: "rrect", w: 0.86, h: 0.66, slice9: true } },
+      { id: "healthbar", vi: "Thanh máu", en: "health bar", decor: 3, glazeId: "", sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.22, slice9: true } },
+      { id: "coin", vi: "Icon tiền", en: "coin icon", decor: 2, glazeId: "", sizeId: "", skel: { shape: "circle", w: 0.4, h: 0.4 } },
+      { id: "avatar-frame", vi: "Khung avatar", en: "avatar frame", decor: 5, glazeId: "", sizeId: "", skel: { shape: "circle", w: 0.62, h: 0.62 } },
+      { id: "panel", vi: "Bảng nền", en: "panel", decor: 4, glazeId: "", sizeId: "", skel: { shape: "rrect", w: 0.92, h: 0.8, slice9: true } },
+      { id: "badge", vi: "Huy hiệu", en: "badge", decor: 3, glazeId: "", sizeId: "", skel: { shape: "circle", w: 0.46, h: 0.46 } },
+      { id: "progress", vi: "Thanh tiến trình", en: "progress bar", decor: 3, glazeId: "", sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.18, slice9: true } },
     ],
 
     /* Mascot: ghép dáng + biểu cảm có sẵn thành vài "nhân vật mẫu" để trang
@@ -209,7 +250,16 @@ function payloadOf(kind: PresetKind, preset: AnyPreset): PresetPayload {
          Bản ghi cũ trên workspace vẫn còn nó cho tới lượt PATCH đầu tiên — và
          `toBundle` dịch nó sang `glazeId` khi đọc, nên không có khoảng nào mà
          người dùng mất lựa chọn. */
-      data: { ...base, decor: preset.decor ?? 4, glazeId: preset.glazeId ?? "", sizeId: preset.sizeId ?? "" },
+      /* `skel` ghi ra NGUYÊN OBJECT: nó là hình học của loại element, và bỏ nó lại
+         ở client nghĩa là mở app trên máy thứ hai thì mọi element về `rrect` 0.8×0.6
+         — đúng cái bệnh vừa chữa, nhưng lần này chỉ hiện ở máy khác. */
+      data: {
+        ...base,
+        decor: preset.decor ?? 4,
+        glazeId: preset.glazeId ?? "",
+        sizeId: preset.sizeId ?? "",
+        ...(preset.skel ? { skel: preset.skel } : {}),
+      },
     };
   }
   if (kind === "mascot") return { kind, name: preset.vi, data: { ...base, refName: preset.refName ?? "" } };
@@ -249,6 +299,41 @@ const LEGACY_ELEMENT_EN: Record<string, string> = {
   "a segmented progress bar with a knob": "progress bar",
 };
 
+/** Hình dạng hạt giống, tra theo id — nguồn của cả `seedPresets()` lẫn bảng di trú
+ *  ngay dưới, để hai chỗ không thể nói khác nhau. */
+const SEED_SKEL: Record<string, Skel | undefined> = Object.fromEntries(
+  seedPresets().elements.map((element) => [element.id, element.skel]),
+);
+
+/**
+ * DI TRÚ CỠ GHIM: bốn nấc S/M/L/XL của hạt giống ĐỜI TRƯỚC → rỗng (đo theo hình).
+ *
+ * Trước 07/09/2026 hạt giống ghim sẵn một nấc cỡ cho từng loại — đó là cách duy
+ * nhất lúc ấy để một bảng nền to hơn một huy hiệu, khi mà danh mục chưa biết hình
+ * dạng. Nay hình dạng đã có, và một nấc ghim sẽ ĐÈ LÊN chính nó: `defaultSizeOf`
+ * ưu tiên `sizeId`, nên một cái nút vẫn ra hộp 192×136 (1,4:1) thay vì 245×85 (2,9:1).
+ *
+ * Khớp NGUYÊN VĂN cặp (id hạt giống, nấc hạt giống) — cùng kỷ luật với
+ * `LEGACY_ELEMENT_EN`. Ai đã tự đổi nút sang «L» thì cặp không khớp và nấc của họ
+ * ở nguyên đó.
+ */
+const LEGACY_ELEMENT_SIZE: Record<string, string> = {
+  button: "m", popover: "xl", healthbar: "l", coin: "s",
+  "avatar-frame": "m", panel: "xl", badge: "s", progress: "l",
+};
+
+/**
+ * `data.skel` trên đĩa → `Skel`, hoặc `undefined`.
+ *
+ * Đọc qua `skelSchema` (schema THẬT của contract) chứ không tự kiểm tay: `shape`
+ * là một enum đóng và `w`/`h` có luật V-06 ∈ (0,1]. Một `skel` rác lọt vào đây sẽ
+ * đi thẳng ra `contract.json` rồi làm `gen.sh` in một hộp âm.
+ */
+function readSkel(value: unknown): Skel | undefined {
+  const parsed = skelSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
+
 function toBundle(rows: readonly LibraryPreset[]): PresetBundle {
   const bundle: PresetBundle = { styles: [], elements: [], mascots: [] };
   for (const row of rows) {
@@ -265,12 +350,28 @@ function toBundle(rows: readonly LibraryPreset[]): PresetBundle {
          lựa chọn: "nền đặc"), nên phải hỏi `"glazeId" in data` chứ không phải
          `str(...) || fallback` — nếu không thì bỏ đục nền là nó tự quay lại. */
       const glazeId = "glazeId" in data ? str(data, "glazeId") : glazeFromMaterial(str(data, "materialId"));
+      /**
+       * DI TRÚ HÌNH DẠNG — cùng lý do (và cùng cách) với `LEGACY_ELEMENT_EN`.
+       *
+       * `skel` là khoá MỚI: mọi workspace đã mở app trước 07/09/2026 đang giữ tám
+       * bản ghi element KHÔNG có nó, và `seedOnce` cố ý không ghi đè bản ghi cũ.
+       * Không vá ở đây thì chủ sản phẩm mở lại đúng máy đang test vẫn thấy mọi ô ra
+       * `rrect` 0.8×0.6 — đúng cái vừa được báo là đã sửa.
+       *
+       * Vá theo ID HẠT GIỐNG, không theo tên: tám id ấy do CHÍNH ta sinh ra. Element
+       * người dùng tự thêm (`tu-dat-…`) không có trong bảng ⇒ giữ nguyên `undefined`,
+       * và `CUSTOM_ELEMENT_SKEL` lo phần còn lại. Bản ghi ĐÃ CÓ `skel` thì nó thắng,
+       * kể cả khi người dùng sửa tay trên đĩa.
+       */
+      const skel = readSkel(data["skel"]) ?? SEED_SKEL[id];
+      const savedSize = str(data, "sizeId");
       bundle.elements.push({
         id, vi: row.name,
         en: LEGACY_ELEMENT_EN[en] ?? en,
         decor: Number.isFinite(decor) ? decor : 4,
         glazeId,
-        sizeId: str(data, "sizeId"),
+        sizeId: savedSize === LEGACY_ELEMENT_SIZE[id] ? "" : savedSize,
+        ...(skel ? { skel } : {}),
       });
     } else if (row.kind === "mascot") bundle.mascots.push({ id, vi: row.name, en, refName: str(data, "refName") });
     /* `material` / `outfit` là hai `kind` agent chấp nhận nhưng lab CHƯA dùng.
@@ -366,6 +467,10 @@ export function addCustomElement(name: string, enInput?: string): ElementPreset 
   let id = base;
   for (let n = 2; bundle.elements.some((element) => element.id === id); n += 1) id = `${base}-${n}`;
 
+  /* KHÔNG có `skel`: một cái tên tự gõ không nói được hình dạng nào, và đoán hộ
+     ("khiên" → circle? rrect?) là đoán sai ở đúng chỗ tốn một lượt vẽ. Thiếu `skel`
+     ⇒ `CUSTOM_ELEMENT_SKEL` (rrect 0.8×0.6) — xem `cell-size.ts`. Người dùng chỉnh
+     bằng pill «Cỡ» ngay trên dòng. */
   const preset: ElementPreset = { id, vi, en, decor: 4, glazeId: "", sizeId: "" };
   setPresets({ ...bundle, elements: [...bundle.elements, preset] });
   return preset;

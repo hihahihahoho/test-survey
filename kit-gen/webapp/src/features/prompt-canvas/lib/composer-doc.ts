@@ -11,7 +11,7 @@ import {
   type MascotPose,
   type UiCell,
 } from "@/features/prompt-lab/lib/composer-model";
-import { SYSTEM_SIZE_VALUE } from "@/features/prompt-lab/lib/cell-size";
+import { defaultSizeOf } from "@/features/prompt-lab/lib/cell-size";
 import { glazeFromMaterial } from "@/features/kit-core/lib/glaze";
 import { EXPRESSIONS } from "@/features/kit-core/lib/poses";
 import { DEFAULT_VIEW } from "@/features/pose-lab/lib/pose-state";
@@ -77,7 +77,7 @@ function str(value: unknown): string {
 }
 
 /** Ô của lưới UI kit. Ô thiếu `elementId` bị BỎ: một ô không biết vẽ gì là một ô rác. */
-function readCell(raw: unknown, index: number): UiCell | null {
+function readCell(raw: unknown, index: number, presets: PresetBundle): UiCell | null {
   if (!isRecord(raw)) return null;
   const elementId = str(raw["elementId"]);
   if (!elementId) return null;
@@ -106,8 +106,12 @@ function readCell(raw: unknown, index: number): UiCell | null {
        để rỗng nghĩa là «theo hệ thống» — một cỡ không ai đọc ra được và còn đổi
        theo lưới. Vá ngay lúc đọc: từ đây trở đi dòng nào cũng mang một con số.
        Khác `glazeId` ngay bên trên ở chỗ đó: rỗng của đục nền LÀ một lựa chọn
-       («nền đặc»), rỗng của cỡ thì không. */
-    sizeId: str(raw["sizeId"]) || SYSTEM_SIZE_VALUE,
+       («nền đặc»), rỗng của cỡ thì không.
+
+       Con số ấy là cỡ mặc định CỦA LOẠI ELEMENT NÀY (`defaultSizeOf`), không phải
+       một cỡ hệ thống chung: vá một dòng «thanh máu» bằng hộp 251×188 là chép lại
+       đúng cái lỗi mà lượt này đang chữa — xem `cell-size.ts`. */
+    sizeId: str(raw["sizeId"]) || defaultSizeOf(presets.elements.find((preset) => preset.id === elementId)),
     note: str(raw["note"]),
     /* Câu tự do của riêng dòng (chế độ `free`). Thiếu ⇒ để `undefined` chứ KHÔNG
        dựng câu khởi điểm ở đây: dựng ở đây là ghi một tài liệu TipTap vào mọi ô
@@ -348,7 +352,7 @@ function withHeadImage(doc: JSONContent, image: Record<string, unknown> | null, 
  * Một block. Trả `null` khi không đọc nổi — và block hỏng bị BỎ RIÊNG nó, không
  * làm hỏng cả tài liệu (cùng tinh thần §6.5-6 của thư viện element).
  */
-function readBlock(raw: unknown, index: number): Block | null {
+function readBlock(raw: unknown, index: number, presets: PresetBundle): Block | null {
   if (!isRecord(raw)) return null;
   const kind = str(raw["kind"]);
   const id = str(raw["id"]) || `block-${index}`;
@@ -357,7 +361,9 @@ function readBlock(raw: unknown, index: number): Block | null {
   const mode: BlockMode = raw["mode"] === "free" ? "free" : "template";
   if (kind === "uikit") {
     const cells = Array.isArray(raw["cells"])
-      ? (raw["cells"] as unknown[]).map(readCell).filter((c): c is UiCell => c !== null)
+      ? (raw["cells"] as unknown[])
+        .map((cell, i) => readCell(cell, i, presets))
+        .filter((c): c is UiCell => c !== null)
       : [];
     return { id, kind: "uikit", mode, cells };
   }
@@ -490,7 +496,9 @@ function readComposer(raw: unknown, presets: PresetBundle): ComposerState {
       ? { contextDoc: foldContextRefs(healDoc(raw["contextDoc"] as JSONContent, "context")) }
       : {}),
     blocks: Array.isArray(raw["blocks"])
-      ? (raw["blocks"] as unknown[]).map(readBlock).filter((b): b is Block => b !== null)
+      ? (raw["blocks"] as unknown[])
+        .map((block, i) => readBlock(block, i, presets))
+        .filter((b): b is Block => b !== null)
       : [],
   };
 }

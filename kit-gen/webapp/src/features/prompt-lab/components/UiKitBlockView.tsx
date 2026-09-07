@@ -14,6 +14,7 @@ import {
   SQUARE_CANVAS_PX,
   customSizeValue,
   defaultSizeOf,
+  defaultSizePx,
   parseCustomSize,
   sizeLabel,
   sizePx,
@@ -120,7 +121,7 @@ function CellRow({
         <OptionPill compact axis="Phong cách" kind="style" value={cell.styleId} onChange={(styleId) => onChange({ ...cell, styleId })} />
         <OptionPill compact axis="Đục nền" kind="glaze" value={cell.glazeId} onChange={(glazeId) => onChange({ ...cell, glazeId })} />
         <OptionPill compact axis="Viền" kind="decor" value={cell.decor} onChange={(decor) => onChange({ ...cell, decor })} />
-        <SizePill label={label} value={cell.sizeId} onChange={(sizeId) => onChange({ ...cell, sizeId })} />
+        <SizePill label={label} element={element} value={cell.sizeId} onChange={(sizeId) => onChange({ ...cell, sizeId })} />
         <RemoveButton what={`element ${label}`} onRemove={onRemove} />
       </RowTop>
 
@@ -211,7 +212,7 @@ function FreeCellRow({
             nào (nó thành `skel.w`/`skel.h`), nên nó không có chỗ trong một câu văn.
             Cùng lý do với pill tên element đứng ngoài: cả hai là DANH TÍNH/HÌNH HỌC
             của dòng, không phải nội dung của câu. */}
-        <SizePill label={label} value={cell.sizeId} onChange={(sizeId) => onChange({ ...cell, sizeId })} />
+        <SizePill label={label} element={element} value={cell.sizeId} onChange={(sizeId) => onChange({ ...cell, sizeId })} />
         <RemoveButton what={`element ${label}`} onRemove={onRemove} />
       </RowTop>
 
@@ -285,19 +286,37 @@ function syncCellFromDoc(cell: UiCell, doc: JSONContent): UiCell {
  * ║ (xem `SourcePicker`).                                                     ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * KHÔNG có mục «— theo hệ thống —» nữa: cỡ luôn là một con số cụ thể. Vì sao,
- * xem khối chú thích của `systemSizePx` trong `cell-size.ts`.
+ * KHÔNG có mục «— theo hệ thống —» nữa: cỡ luôn là một con số cụ thể. Thay vào đó
+ * mục ĐẦU TIÊN là «Mặc định của <tên loại> · W×H» — cỡ đo từ hình dạng của chính
+ * loại element ấy (`defaultSizeOf`). Nó nói ra con số thay vì hứa suông, và nó khác
+ * nhau theo từng loại: thanh máu ra hộp rộng-mỏng, khung avatar ra hộp vuông. Vì
+ * sao phải thế, xem khối đo thật ở đầu `cell-size.ts`.
  *
  * Ô tự điền nhận số RỜI (w, h) chứ không nhận chuỗi `"160x120"`: người dùng không
  * phải học một cú pháp, và không có gì để gõ sai. Chuỗi ấy là chuyện của chỗ lưu
  * (`customSizeValue`), không phải chuyện của người đang thiết kế.
  */
-function SizePill({ label, value, onChange }: { label: string; value: string; onChange: (next: string) => void }) {
+function SizePill({ label, element, value, onChange }: {
+  label: string;
+  /** Loại element của dòng; `undefined` khi id không còn trong danh mục. */
+  element: ElementPreset | undefined;
+  value: string;
+  onChange: (next: string) => void;
+}) {
   const flip = useMenuFlip(SOURCE_PICKER_MAX_PX);
   const button = React.useRef<HTMLButtonElement>(null);
+  /* CỠ MẶC ĐỊNH đứng RIÊNG một nhóm ở đầu, không trộn vào bốn nấc: nó không phải
+     nấc thứ năm của một thang, nó là «để loại element tự quyết». Giá trị của nó là
+     một chuỗi cỡ thật (`defaultSizeOf`), nên khi dòng đang dùng đúng cỡ ấy thì dấu
+     tick tự về đúng chỗ — không cần một trạng thái "đang mặc định" thứ hai. */
+  const fallback = defaultSizeOf(element);
+  const fallbackPx = defaultSizePx(element);
   /* Cỡ TỰ ĐIỀN đóng vai «chữ tự gõ» của hộp: nó là thứ không có trong danh sách,
-     nên nó bật nấc «Gõ riêng» lúc mở và gỡ dấu tick khỏi mọi nấc preset. */
-  const typed = parseCustomSize(value) ? value : "";
+     nên nó bật nấc «Gõ riêng» lúc mở và gỡ dấu tick khỏi mọi nấc preset.
+     Cỡ MẶC ĐỊNH cũng là một chuỗi `"<w>x<h>"` (`245x85`), nhưng nó CÓ trong danh
+     sách — coi nó là chữ tự gõ thì hộp mở ra ở nấc «Gõ riêng» với danh sách trống,
+     và người dùng không thấy đường nào quay về mặc định. */
+  const typed = value !== fallback && parseCustomSize(value) ? value : "";
   const close = React.useCallback(() => {
     flip.setOpen(false);
     button.current?.focus();
@@ -307,8 +326,17 @@ function SizePill({ label, value, onChange }: { label: string; value: string; on
      con số CHÍNH LÀ câu trả lời, và "L · lớn" một mình không nói được nó lớn
      hơn "M" bao nhiêu. */
   const groups: SourceGroup[] = React.useMemo(
-    () => [{ options: SIZE_PRESETS.map((preset) => ({ value: preset.id, vi: preset.vi, en: `${preset.w}×${preset.h}px` })) }],
-    [],
+    () => [
+      {
+        options: [{
+          value: fallback,
+          vi: `Mặc định của ${label}`,
+          en: `${fallbackPx.w}×${fallbackPx.h}px`,
+        }],
+      },
+      { options: SIZE_PRESETS.map((preset) => ({ value: preset.id, vi: preset.vi, en: `${preset.w}×${preset.h}px` })) },
+    ],
+    [fallback, fallbackPx.h, fallbackPx.w, label],
   );
 
   return (

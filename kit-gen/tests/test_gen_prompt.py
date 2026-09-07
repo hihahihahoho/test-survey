@@ -966,3 +966,74 @@ class KhungPromptSectionTest(unittest.TestCase):
         self.assertEqual(heads, ["Canvas", "Art style", "Layout", "Safe zone", "Transparency",
                                  "Text", "Character reference", "Pose reference",
                                  "Elements", "Output"])
+
+
+class HinhDangOQuyetDinhHopSafeZoneTest(unittest.TestCase):
+    """DÒNG ELEMENT PHẢI IN HỘP ĐÚNG HÌNH DẠNG CỦA ELEMENT ẤY.
+
+    Bệnh đo được 07/09/2026 trên tấm Bộ UI thật của dự án ``test``
+    (``kits/manifest.json``): prompt in
+
+        2) health bar … — safe zone x=815..1066, y=219..407 (251x188 px)
+        3) avatar frame … — safe zone x=188..439, y=846..1034 (251x188 px)
+
+    CÙNG một cái hộp 4:3 cho một thanh dài mỏng và một khung tròn, vì contract khai
+    ``skel`` giống hệt nhau (``rrect`` 0.8×0.6) cho mọi ô. Model vẽ ra hình hợp lý —
+    lõi đo được 370×97 và 303×263 — nên cả hai "sai" so với lời hứa, QA gắn cờ 46px,
+    và ô dán sang Figma lệch cỡ. Cái sai nằm ở LỜI HỨA, không ở model.
+
+    Lớp này khoá phía engine của bản vá: cùng một tấm, ô ``bar`` phải ra hộp
+    RỘNG-MỎNG và ô ``circle`` phải ra hộp VUÔNG. Nó không kiểm một chuỗi cứng nào —
+    chuỗi cứng sẽ chết theo lần đầu ai đó chỉnh bảng tỉ lệ; nó kiểm QUAN HỆ giữa
+    hình dạng và hộp, thứ không được phép đổi.
+    """
+
+    @staticmethod
+    def _cfg_ui():
+        """Tấm vuông 2×2, ba ô ba hình dạng — đúng hình dạng tấm mà màn prompt-first
+        sinh ra (`composer-to-contract.ts`: canvas vuông + lưới vuông)."""
+        return {"styles": [{"id": "demo", "bg": "magenta", "style": "flat ink"}],
+                "sheets": [{"id": "ui", "canvas": "square", "grid": {"cols": 2, "rows": 2},
+                            "components": [
+                                {"file": "01-button", "spec": "button",
+                                 "skel": {"shape": "pill", "w": 0.391, "h": 0.136, "slice9": True}},
+                                {"file": "02-healthbar", "spec": "health bar",
+                                 "skel": {"shape": "bar", "w": 0.431, "h": 0.11, "slice9": True}},
+                                {"file": "03-avatar-frame", "spec": "avatar frame",
+                                 "skel": {"shape": "circle", "w": 0.311, "h": 0.311}},
+                                {"file": "_empty-1", "spec": "", "skel": {"shape": "empty"}}]}]}
+
+    def setUp(self):
+        self.txt = render_prompt_text(self._cfg_ui(), name="demo-ui")
+
+    def _hop(self, dau_dong):
+        """(w, h) mà dòng ô ấy hứa với model — đọc từ chính chuỗi prompt."""
+        for line in self.txt.splitlines():
+            if line.startswith(dau_dong):
+                hit = re.search(r"\((\d+)x(\d+) px\)", line)
+                self.assertIsNotNone(hit, f"dòng không mang hộp nào: {line}")
+                return int(hit.group(1)), int(hit.group(2))
+        raise AssertionError(f"prompt không có dòng {dau_dong!r}")
+
+    def test_ba_o_ba_hop_KHAC_NHAU(self):
+        hop = [self._hop(f"{i}) ") for i in (1, 2, 3)]
+        self.assertEqual(len(set(hop)), 3, f"vẫn còn hai ô dùng chung một hộp: {hop}")
+
+    def test_thanh_mau_ra_hop_RONG_MONG(self):
+        w, h = self._hop("2) ")
+        self.assertGreater(w / h, 3, f"thanh máu ra hộp {w}x{h} — không phải hình một cái thanh")
+
+    def test_khung_avatar_ra_hop_VUONG(self):
+        w, h = self._hop("3) ")
+        # Ô vuông ⇒ w/h của skel LÀ tỉ lệ hình; lệch 1px là chuyện làm tròn của
+        # `safe_offset_in_cell`, không phải chuyện hình dạng.
+        self.assertLessEqual(abs(w - h), 1, f"khung avatar ra hộp {w}x{h} — không vuông")
+
+    def test_hop_in_ra_KHOP_voi_geometry_py_chu_khong_phai_mot_phep_nhan_thu_hai(self):
+        """Con số trong prompt phải đến từ `geometry.safe_box` — cùng hàm mà
+        `slice.py` dùng để cắt. Hai phép nhân song song là hai con số sẽ trôi."""
+        import geometry
+        sheet = self._cfg_ui()["sheets"][0]
+        for i, comp in enumerate(sheet["components"][:3]):
+            x0, y0, x1, y1 = geometry.safe_box(1254, 1254, 2, 2, i, comp["skel"])
+            self.assertEqual(self._hop(f"{i + 1}) "), (x1 - x0, y1 - y0))

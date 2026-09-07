@@ -19,6 +19,7 @@ import { backgroundDoc, mascotDoc, mascotPoseDoc, SCAFFOLD_BACKGROUND } from "..
 import { slashItems, SLASH_ITEMS } from "../lib/slash-items";
 import { phraseOf, pillOptions, INHERIT } from "../lib/pill-registry";
 import { DECOR_LEVELS, seedPresets } from "../lib/presets-store";
+import { defaultSizeOf, sizePx } from "../lib/cell-size";
 import { gridFor, newCell, newMascotPose, type ComposerState, type UiCell } from "../lib/composer-model";
 import { brandColorName, describeBrandColors } from "../lib/brand-colors";
 import { NODE } from "../lib/schema";
@@ -363,9 +364,11 @@ describe("danh mục — lab đi bằng dữ liệu THẬT của kit-core, khôn
     const cell = newCell("coin", PRESETS);
     expect(cell.styleId).toBe(INHERIT);
     /* Đục nền KHÔNG còn được áp sẵn theo loại element (nó là hiệu ứng, không phải
-       bản chất của "icon tiền"); CỠ thì có, vì cỡ là hình học. */
+       bản chất của "icon tiền"); CỠ thì có, vì cỡ là hình học — và nó đo từ `skel`
+       của chính loại: một đồng xu là hộp VUÔNG. */
     expect(cell.glazeId).toBe("");
-    expect(cell.sizeId).toBe("s");
+    expect(cell.sizeId).toBe(defaultSizeOf(PRESETS.elements.find((e) => e.id === "coin")));
+    expect(sizePx(cell.sizeId)?.w).toBe(sizePx(cell.sizeId)?.h);
     expect(cell.decor).toBe("2");
   });
 

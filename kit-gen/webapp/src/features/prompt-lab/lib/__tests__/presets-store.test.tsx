@@ -91,7 +91,9 @@ describe("đọc: server là nguồn, id bundle giữ nguyên qua `data.key`", (
   it("dựng lại ba mảng từ mảng `presets` của GET /api/library", async () => {
     get.mockResolvedValue(library([
       row("preset_aaaa", "style", "Cổ tích", { key: "fairy", en: "storybook" }),
-      row("preset_bbbb", "element", "Nút bấm", { key: "button", en: "button", decor: 6, glazeId: "ice", sizeId: "m" }),
+      /* Id KHÔNG nằm trong hạt giống ⇒ không dính bảng di trú hình dạng/cỡ ở dưới;
+         ca này khoá điều khoản #1 (id = `data.key`), không khoá di trú. */
+      row("preset_bbbb", "element", "Khiên", { key: "shield", en: "shield", decor: 6, glazeId: "ice", sizeId: "m" }),
       row("preset_cccc", "mascot", "Sóc", { key: "squirrel", en: "a squirrel", refName: "soc.png" }),
     ]));
     mount();
@@ -99,7 +101,7 @@ describe("đọc: server là nguồn, id bundle giữ nguyên qua `data.key`", (
     await waitFor(() => expect(seen?.styles).toHaveLength(1));
     /* ĐIỀU KHOẢN #1: id là `data.key`, KHÔNG phải `preset_aaaa`. */
     expect(seen?.styles[0]).toEqual({ id: "fairy", vi: "Cổ tích", en: "storybook" });
-    expect(seen?.elements[0]).toEqual({ id: "button", vi: "Nút bấm", en: "button", decor: 6, glazeId: "ice", sizeId: "m" });
+    expect(seen?.elements[0]).toEqual({ id: "shield", vi: "Khiên", en: "shield", decor: 6, glazeId: "ice", sizeId: "m" });
     expect(seen?.mascots[0]).toEqual({ id: "squirrel", vi: "Sóc", en: "a squirrel", refName: "soc.png" });
     /* Kho đã có bản ghi ⇒ KHÔNG gieo lại đè lên danh mục của người ta. */
     expect(addPreset).not.toHaveBeenCalled();
@@ -121,6 +123,66 @@ describe("đọc: server là nguồn, id bundle giữ nguyên qua `data.key`", (
     expect(seen?.elements).toHaveLength(1);
     expect(seen?.elements[0]!.decor).toBe(4);
     expect(seen?.mascots).toHaveLength(0);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DI TRÚ HÌNH DẠNG — bản ghi đời trước KHÔNG có `skel`
+   ══════════════════════════════════════════════════════════════════════════
+   Hạt giống chỉ gieo vào kho RỖNG, nên mọi workspace đã mở app trước 07/09/2026
+   đang giữ tám bản ghi element không có `skel` và có `sizeId` ghim theo bốn nấc
+   S/M/L/XL. Không vá thì lượt sửa này chỉ chạy trên máy chưa ai dùng — đúng cái
+   bẫy mà `LEGACY_ELEMENT_EN` đã phải đi vòng để tránh. */
+describe("di trú: hình dạng cho bản ghi element đời trước", () => {
+  const seed = seedPresets();
+  const seedOf = (id: string) => seed.elements.find((element) => element.id === id);
+
+  it("thiếu `skel` + id hạt giống ⇒ vá hình dạng theo bảng hạt giống", async () => {
+    get.mockResolvedValue(library([
+      row("preset_h1", "element", "Thanh máu", { key: "healthbar", en: "health bar", decor: 3, glazeId: "", sizeId: "" }),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen?.elements[0]!.skel).toEqual(seedOf("healthbar")!.skel);
+  });
+
+  it("`sizeId` ĐÚNG BẰNG nấc hạt giống đời trước ⇒ trả về rỗng để hình dạng lên tiếng", async () => {
+    get.mockResolvedValue(library([
+      /* `l` là nấc mà hạt giống cũ ghim cho thanh máu. Giữ nó lại thì hộp ra
+         256×192 (1,3:1) — vẫn không phải hình dạng của một thanh máu. */
+      row("preset_h1", "element", "Thanh máu", { key: "healthbar", en: "health bar", decor: 3, glazeId: "", sizeId: "l" }),
+      /* «M» KHÔNG phải nấc cũ của thanh máu ⇒ đó là lựa chọn của người dùng, giữ. */
+      row("preset_b1", "element", "Nút bấm", { key: "button", en: "button", decor: 4, glazeId: "", sizeId: "l" }),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(2));
+    expect(seen?.elements[0]!.sizeId).toBe("");
+    expect(seen?.elements[1]!.sizeId).toBe("l");
+  });
+
+  it("`skel` ĐÃ có trên đĩa ⇒ nó thắng bảng hạt giống", async () => {
+    const mine = { shape: "rrect", w: 0.5, h: 0.5 };
+    get.mockResolvedValue(library([
+      row("preset_h1", "element", "Thanh máu", { key: "healthbar", en: "health bar", decor: 3, glazeId: "", sizeId: "", skel: mine }),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen?.elements[0]!.skel).toEqual(mine);
+  });
+
+  it("`skel` RÁC trên đĩa ⇒ bỏ, không đẩy một hộp âm vào contract", async () => {
+    get.mockResolvedValue(library([
+      row("preset_x1", "element", "Khiên", { key: "shield", en: "shield", decor: 4, glazeId: "", sizeId: "", skel: { shape: "khong-co-that", w: 9 } }),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    /* Id lạ ⇒ không có bảng hạt giống nào để rơi về ⇒ `undefined`, và
+       `CUSTOM_ELEMENT_SKEL` lo phần còn lại ở chỗ dùng. */
+    expect(seen?.elements[0]!.skel).toBeUndefined();
   });
 });
 
@@ -213,7 +275,7 @@ describe("gieo hạt: đúng một lần, kể cả khi nhiều màn cùng mở"
 describe("ghi: gộp, chỉ đụng cái đổi, và không im lặng khi hỏng", () => {
   const three = () => library([
     row("preset_s1", "style", "Cổ tích", { key: "fairy", en: "storybook" }),
-    row("preset_e1", "element", "Nút bấm", { key: "button", en: "button", decor: 4, glazeId: "", sizeId: "" }),
+    row("preset_e1", "element", "Khiên", { key: "shield", en: "shield", decor: 4, glazeId: "", sizeId: "" }),
     row("preset_m1", "mascot", "Sóc", { key: "squirrel", en: "a squirrel", refName: "" }),
   ]);
 

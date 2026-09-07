@@ -80,3 +80,56 @@ export function cellsOfSheet(files: readonly KitFile[], sheetId: string): KitFil
 export function sheetDownloadName(job: string): string {
   return `${String(job).trim() || "sheet"}.png`;
 }
+
+/**
+ * KHUNG FIGMA = HỘP HỢP ĐỒNG, KHÔNG PHẢI HỘP ĐO ĐƯỢC.
+ *
+ * ╔══ BỆNH, ĐO TRÊN MANIFEST THẬT (dự án `test`, ô `03-avatar-frame`) ═══════╗
+ * ║   "safe":         [276, 294, 303, 263]   ← LÕI MODEL VẼ RA, slice.py đo   ║
+ * ║   "contractSafe": [301, 332, 251, 188]   ← HỘP MÀ PROMPT ĐÃ HỨA           ║
+ * ║ `figma-node.ts:geometryOf` lấy `safe`, rồi tỉ lệ xuất 50% của màn kit cũ  ║
+ * ║ nhân vào ⇒ frame dán ra Figma là 151,5×131,5. Người thiết kế vừa chọn cỡ  ║
+ * ║ trong prompt, nhìn thấy `251x188` ở đó, rồi nhận về một con số thứ ba mà   ║
+ * ║ không có gì giải thích.                                                   ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Ở màn prompt-first, khung phải là thứ NGƯỜI DÙNG ĐẶT — `contractSafe`, 1:1. Lõi
+ * đo được vẫn còn nguyên giá trị của nó (QA `sizeDeviation` đọc chênh lệch giữa hai
+ * hộp), nhưng nó là KẾT QUẢ, không phải HỢP ĐỒNG; layout của app căn theo hợp đồng.
+ *
+ * ══ VÌ SAO ĐỔI Ở ĐÂY CHỨ KHÔNG SỬA `geometryOf` ════════════════════════════
+ * `figma-node.ts` đang phục vụ CẢ màn «Thư viện kit» cũ, nơi quy ước là hộp đo
+ * được × 50%. Sửa trong đó là đổi hành vi của một màn không ai xin. Ở đây thì phép
+ * đổi gọn đúng một dòng — `safe ← contractSafe` — và nó THUẦN, nên kiểm được bằng
+ * số thật mà không cần trình duyệt.
+ *
+ * `contentAt` KHÔNG bị đụng: ảnh vẫn đặt lệch `contentAt − safe`, nên đổi mẫu số
+ * `safe` là tự động đổi luôn phần tràn ra ngoài khung cho đúng chỗ.
+ */
+export interface ContractFramed {
+  /** Ô đã đổi khung; thứ tự giữ nguyên đầu vào. */
+  files: KitFile[];
+  /**
+   * Tên ô PHẢI dùng khung đo được vì manifest chưa có `contractSafe` (kit cắt bằng
+   * bản `slice.py` cũ). Nói ra chứ không nuốt: con số ở Figma lúc ấy KHÁC con số
+   * người dùng đọc trong prompt, và họ có quyền biết vì sao.
+   */
+  measured: string[];
+}
+
+/** `[x, y, w, h]` dùng được (đủ bốn số, `w`/`h` dương)? Cùng luật với `box4`. */
+function usableBox(box: readonly number[] | undefined): boolean {
+  if (box === undefined || box.length < 4) return false;
+  const [, , w, h] = box;
+  return typeof w === "number" && typeof h === "number" && w > 0 && h > 0;
+}
+
+export function contractFramed(files: readonly KitFile[]): ContractFramed {
+  const measured: string[] = [];
+  const out = files.map((file) => {
+    if (usableBox(file.contractSafe)) return { ...file, safe: file.contractSafe };
+    measured.push(cellName(file));
+    return file;
+  });
+  return { files: out, measured };
+}

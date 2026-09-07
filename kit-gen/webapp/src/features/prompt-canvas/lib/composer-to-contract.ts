@@ -4,6 +4,7 @@ import {
   type Component,
   type Contract,
   type Sheet,
+  type Skel,
 } from "@/lib/types/contract";
 import {
   CHARACTER_ID,
@@ -19,13 +20,16 @@ import {
   resolveElementSpec,
   type SheetLimits,
 } from "@/features/kit-core/lib/kitset-to-contract";
+import type { KitElementSkel } from "@/features/kit-core/lib/model";
 import type { StyleAxes } from "@/features/kit-core/lib/model";
 import { STYLE_AXIS_IDS } from "@/features/kit-form/lib/form-model";
 import { subjectAxisLine } from "@/features/kit-form/lib/style-phrases";
 import { INHERIT, labelOf, phraseOf, type PillKind } from "@/features/prompt-lab/lib/pill-registry";
-import { getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
+import { getPresets, type ElementPreset, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
 import { NODE } from "@/features/prompt-lab/lib/schema";
-import { SQUARE_CANVAS_PX, SYSTEM_CELL_FRACTION, skelSizeOf } from "@/features/prompt-lab/lib/cell-size";
+import {
+  CUSTOM_ELEMENT_SKEL, SQUARE_CANVAS_PX, defaultSizeOf, skelSizeOf, type SizePx,
+} from "@/features/prompt-lab/lib/cell-size";
 import { SCAFFOLDS } from "@/features/prompt-lab/lib/doc-templates";
 import { freeText, makeContext, serializeDoc, tidy, type PromptDocNode } from "@/features/prompt-lab/lib/serialize";
 import { contextFreeText, contextOutfitEN, contextStyleEN, contextThemeEN } from "@/features/prompt-lab/lib/serialize-composer";
@@ -79,20 +83,45 @@ import type { ComposerDoc } from "./composer-doc";
 const MAX_CELLS_SQUARE = 16;
 
 /**
- * Skeleton mặc định của một ô UI kit — dùng khi dòng KHÔNG chọn cỡ.
+ * HÌNH DẠNG CỦA MỘT Ô = hình dạng của LOẠI ELEMENT trong ô đó.
  *
- * ⚠️ NÓI THẲNG GIỚI HẠN: danh mục element của composer (`presets-store.ts`) chỉ có
- * chữ (`vi`/`en`), KHÔNG có hình học — nó là danh mục do người dùng tự sửa, không
- * phải `element-lib.json`. Nên mọi ô ra cùng một khung `rrect` cỡ vừa. Đây là một
- * MẶC ĐỊNH TRUNG TÍNH, không phải một phép đo: nó chỉ quyết định ô skeleton vẽ ra
- * to bằng nào, còn hình thù thật do máy vẽ quyết theo `spec`.
+ * ╔══ CÁI BỊ SỬA, VÀ VÌ SAO NÓ KHÔNG PHẢI CHUYỆN NHỎ ═══════════════════════╗
+ * ║ Tới 07/09/2026 hàm này trả về MỘT khung `rrect` 0.8×0.6 cho MỌI ô, vì     ║
+ * ║ danh mục element của composer chỉ có chữ (`vi`/`en`), không có hình học.  ║
+ * ║ Hậu quả đo được trên tấm Bộ UI thật (dự án `test`): prompt hứa cùng một   ║
+ * ║ hộp `251x188` cho «health bar» và «avatar frame». Model vẽ đúng hình của  ║
+ * ║ chúng — lõi 370×97 và 303×263 — nên cả hai lệch khỏi lời hứa, QA gắn cờ,  ║
+ * ║ và ô dán ra Figma sai cỡ. Ta đã đòi một thứ không hợp hình dạng element.  ║
+ * ║                                                                          ║
+ * ║ Nay `ElementPreset.skel` khai hình dạng thật của từng loại, và ba thứ     ║
+ * ║ dưới đây đi ĐÚNG vào contract để engine biết: `shape` (gen.sh in toạ độ   ║
+ * ║ safe zone, slice.py nắn lõi về hộp ấy), `slice9` (manifest ghi inset      ║
+ * ║ 9-slice), `free`/`matte` (dao cắt bám lõi / cách tách nền).               ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * Từ 08/2026 dòng element CÓ pill cỡ (`UiCell.sizeId`), và cỡ ấy đè lên đây —
- * xem `cell-size.ts`. Giữ nguyên hằng này làm ĐƯỜNG LÙI chứ không bỏ: mọi dòng
- * của mọi dự án đang có đều chưa chọn cỡ, và một lượt sửa không được đổi kích
- * thước những thứ người dùng đã vẽ xong.
+ * Ba tầng, tầng sau đè tầng trước:
+ *  ① `skel` của loại element — `shape`, `slice9`, `free`, `matte` và tỉ lệ gốc;
+ *  ② `glaze` của dòng — `matte` (`mergeElementSkel` là nơi biết luật ấy);
+ *  ③ `size` — `w`/`h` tính bằng PIXEL, chia lại theo ô thật của tấm này.
+ *
+ * Tầng ③ LUÔN có mặt, kể cả khi dòng chưa chọn cỡ: nơi gọi đưa vào cỡ mặc định
+ * của chính loại element (`defaultSizeOf`). Bỏ trống tầng ấy thì `w`/`h` của ①
+ * được đọc như phân số của Ô THẬT — mà ô thật to nhỏ theo lưới, nên cùng một cái
+ * nút ra 245px trên lưới 4×4 và 489px trên lưới 2×2, trong khi pill «Cỡ» vẫn nói
+ * 245. Một con số trên màn mà contract không giữ là con số tệ hơn không có.
+ *
+ * Element người dùng TỰ ĐẶT TÊN không có ①, và rơi về `CUSTOM_ELEMENT_SKEL`
+ * (`rrect` 0.8×0.6 — đúng khung trung tính cũ): một cái tên tự gõ không nói được
+ * hình dạng nào, nên ở đó thật sự không có gì tốt hơn.
  */
-const CELL_SKEL = { shape: "rrect" as const, ...SYSTEM_CELL_FRACTION };
+function cellSkel(
+  element: ElementPreset | undefined,
+  glaze: KitElementSkel,
+  size: SizePx | null,
+): Skel {
+  const base = element?.skel ?? CUSTOM_ELEMENT_SKEL;
+  return mergeElementSkel(base, { ...glaze, ...(size ?? {}) });
+}
 
 /**
  * KHỔ CANVAS CỦA TẤM BỘ UI — vuông.
@@ -584,18 +613,21 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
       /* `resolveElementSpec` là nơi DUY NHẤT biết cách nối đục nền (và mức kính)
          vào mô tả một ô — dùng lại thay vì chép luật nối chuỗi sang đây. */
       const glaze = { glaze: cell.glazeId };
-      const templateSpec = tidy([resolveElementSpec({ spec: text, skel: CELL_SKEL }, glaze), cell.note.trim()].filter(Boolean).join(", "));
+      /* CỠ đè lên `w`/`h` sau cùng; dòng không chọn cỡ ⇒ giữ nguyên tỉ lệ của loại.
+         Dựng TRƯỚC `templateSpec` vì `resolveElementSpec` đọc `skel.matte` để biết
+         có nói câu "mức kính" hay không — và `matte` ấy có thể đến từ chính loại
+         element (`element-lib` khai `matte:"glass"` cho nút viền, khay kính…). */
+      const size = skelSizeOf(cell.sizeId || defaultSizeOf(element), cellPx);
+      const skel = cellSkel(element, glaze, size);
+      const templateSpec = tidy([resolveElementSpec({ spec: text, skel }, glaze), cell.note.trim()].filter(Boolean).join(", "));
       /* Câu tự do RỖNG (người dùng xoá sạch dòng) ⇒ rơi về khuôn, KHÔNG ra ô
          không mô tả gì. Bỏ hẳn ô đi thì lưới tụt một bậc và mọi ô sau nhảy chỗ —
          một dòng bị xoá chữ không được kéo theo cả tấm đổi bố cục. */
       const freeSpec = block.mode === "free" ? tidy(serializeDoc(cell.doc as PromptDocNode, freeCtx)) : "";
+      /* HÌNH HỌC KHÔNG THEO CHẾ ĐỘ VIẾT: ở chế độ TỰ DO người dùng viết lại CÂU
+         CHỮ, không viết lại cách dao cắt cắt ô — nên `skel` (hình dạng, đục nền,
+         cỡ) vẫn là `skel` dựng ở trên, y hệt chế độ khuôn. */
       const spec = freeSpec || templateSpec;
-      /* CÁCH TÁCH đi cùng đục nền — `mergeElementSkel` là nơi biết luật ấy. Ở chế
-         độ TỰ DO cũng vậy: người dùng viết lại CÂU CHỮ, không viết lại cách slicer
-         cắt ô, nên `matte` vẫn phải theo pill họ bấm.
-         CỠ đè lên `w`/`h` sau cùng; không chọn cỡ ⇒ giữ nguyên khung mặc định. */
-      const size = skelSizeOf(cell.sizeId, cellPx);
-      const skel = mergeElementSkel(CELL_SKEL, { ...glaze, ...(size ?? {}) });
       return {
         file: `${String(k + 1).padStart(2, "0")}-${slugify(cell.elementId) || "o"}`,
         vi: element?.vi ?? cell.elementId,

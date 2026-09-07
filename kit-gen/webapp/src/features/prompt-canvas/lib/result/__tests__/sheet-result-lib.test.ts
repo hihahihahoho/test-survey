@@ -13,10 +13,12 @@
  */
 import { describe, expect, it } from "vitest";
 import { kitFileSchema, type KitFile } from "@/lib/types";
-import { assertDocShape, renderSpec, FigmaNodeUnsupported } from "@/features/kit-core/lib/figma-node";
+import {
+  assertDocShape, buildFigmaNodeForAsset, renderSpec, FigmaNodeUnsupported,
+} from "@/features/kit-core/lib/figma-node";
 import type { H2DDocument } from "@/vendor/figma-h2d";
 import { figmaNodeForSheet } from "../sheet-figma";
-import { cellName, cellsOfSheet, rawSheetImagePath } from "../sheet-files";
+import { cellName, cellsOfSheet, contractFramed, rawSheetImagePath } from "../sheet-files";
 import { currentVersion, sheetVersions } from "../sheet-versions";
 
 /* ═════════ ① Spec cho CẢ TẤM ═════════ */
@@ -173,6 +175,62 @@ describe("cellsOfSheet — panel của MỘT block chỉ được hiện ô củ
   it("tấm không có ô nào ⇒ mảng rỗng, không ném", () => {
     expect(cellsOfSheet(files, "khong-co")).toEqual([]);
     expect(cellsOfSheet([], "ui")).toEqual([]);
+  });
+});
+
+/* ═════════ ②b Khung Figma = hộp HỢP ĐỒNG ═════════
+   Số dưới đây chép NGUYÊN từ `kits/manifest.json` thật của dự án `test`
+   (`~/KitGen-dev/projects/test-e0d4`, tấm `ui` 2×2 trên canvas vuông) — đúng ba ô
+   mà chủ sản phẩm chụp màn Figma và đo được frame 151,5×131,5. */
+describe("contractFramed — khung là cỡ ĐÃ CHỌN, không phải lõi model vẽ ra", () => {
+  const avatar = cell("tight/03-avatar-frame", "ui", {
+    w: 392, h: 328, cellIndex: 2,
+    canvas: [853, 853], content: [392, 328], contentAt: [233, 253],
+    safe: [276, 294, 303, 263],
+    contractSafe: [301, 332, 251, 188],
+  });
+
+  it("có `contractSafe` ⇒ khung = hộp hợp đồng, KHÔNG phải lõi đo được", () => {
+    const out = contractFramed([avatar]);
+    expect(out.files[0]!.safe).toEqual([301, 332, 251, 188]);
+    expect(out.measured).toEqual([]);
+  });
+
+  it("thiếu `contractSafe` (kit cắt bằng bản cũ) ⇒ giữ lõi đo được VÀ nói ra tên ô", () => {
+    const old = cell("tight/03-avatar-frame", "ui", { safe: [276, 294, 303, 263] });
+    const out = contractFramed([old]);
+    expect(out.files[0]!.safe).toEqual([276, 294, 303, 263]);
+    expect(out.measured).toEqual(["03-avatar-frame"]);
+  });
+
+  it("`contractSafe` rác (thiếu số, cạnh 0) ⇒ coi như không có, không dựng frame 0×0", () => {
+    for (const rac of [[301, 332], [301, 332, 0, 188]]) {
+      const out = contractFramed([cell("tight/x", "ui", { safe: [1, 2, 3, 4], contractSafe: rac })]);
+      expect(out.files[0]!.safe).toEqual([1, 2, 3, 4]);
+      expect(out.measured).toEqual(["x"]);
+    }
+  });
+
+  it("KHÔNG sửa gốc — mảng vào ra là hai object khác nhau", () => {
+    const out = contractFramed([avatar]);
+    expect(avatar.safe).toEqual([276, 294, 303, 263]);
+    expect(out.files[0]).not.toBe(avatar);
+  });
+
+  it("nối vào `buildFigmaNodeForAsset` ở tỉ lệ 1 ⇒ frame ĐÚNG con số prompt đã hứa", () => {
+    /* Đây là cả cái bệnh gói trong một dòng: 303 × 0,5 = 151,5 (thứ chủ sản phẩm
+       đo được ở Figma) ⇄ 251 × 1 (thứ prompt in ra). */
+    const spec = buildFigmaNodeForAsset(contractFramed([avatar]).files[0]!, { scale: 1 });
+    expect(spec.frame).toEqual({ w: 251, h: 188 });
+    /* Ảnh vẫn đặt lệch `contentAt − safe`, nay so với hộp HỢP ĐỒNG ⇒ phần tràn nằm
+       ngoài khung đúng chỗ. */
+    expect(spec.image).toEqual({ x: 233 - 301, y: 253 - 332, w: 392, h: 328 });
+    expect(spec.clipsContent).toBe(false);
+  });
+
+  it("KHÔNG đổi quy ước 50% của màn kit cũ: không truyền tỉ lệ ⇒ vẫn là `scaleOf`", () => {
+    const spec = buildFigmaNodeForAsset(contractFramed([avatar]).files[0]!);
+    expect(spec.scale).toBe(0.5);
   });
 });
 

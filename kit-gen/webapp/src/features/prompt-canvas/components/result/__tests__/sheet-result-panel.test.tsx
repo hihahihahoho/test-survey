@@ -66,6 +66,10 @@ let packEmpty = false;
 let boardOutcome: "clipboard" | "download" = "clipboard";
 
 vi.mock("@/features/kit/lib/figma-kit-doc", () => ({
+  /* Mock phải có ĐỦ export mà panel import: một tên thiếu ném ngay lúc truy cập, và
+     lỗi ấy bị chính `try/catch` của nút nuốt thành "rơi về đường lùi" — ca sẽ xanh
+     nhầm chỗ (nút vẫn hiện «Đã copy N ô» vì đường lùi cũng gọi `setCopied`). */
+  BOARD_W: 2400,
   packKitDoc: (files: Array<{ file: string }>) => ({
     groups: packEmpty ? [] : [{
       category: "ui",

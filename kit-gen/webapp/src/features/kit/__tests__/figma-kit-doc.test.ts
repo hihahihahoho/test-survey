@@ -16,7 +16,8 @@ import { describe, expect, it } from "vitest";
 import { kitFileSchema } from "@/lib/types/api";
 import type { KitFile } from "@/lib/types";
 import {
-  BASE64_FACTOR, CLIPBOARD_SOFT_MAX, batchGroups, cellsOf, estimateBytes, packKitDoc, preferTight,
+  BASE64_FACTOR, BOARD_W, CLIPBOARD_SOFT_MAX, batchGroups, cellsOf, estimateBytes, packKitDoc,
+  preferTight, stripPageTitle,
 } from "../lib/figma-kit-doc";
 import { packBoard } from "../lib/figma-board";
 import { exportSize } from "../lib/export-scale";
@@ -101,6 +102,21 @@ describe("② TỈ LỆ XUẤT LÀ CỠ NODE, KHÔNG PHẢI CỠ ẢNH — gốc
     expect(pose.spec.scale).toBe(1);
     expect(pose.spec.frame).toEqual({ w: 230, h: 435 });
   });
+
+  /* Màn prompt-first dán ô 1:1 (`SheetResultPanel`): ở đó người dùng vừa tự đặt cỡ
+     safe zone bằng pixel và đọc đúng con số ấy trong prompt, nên một khung bằng nửa
+     con số đó là biến lựa chọn của họ thành câu đố. Màn «Thư viện kit» thì KHÔNG
+     đổi — quy ước 50% của nó có gốc thật (`export-scale.ts`). */
+  it("`scale` ép tỉ lệ cho MỌI ô — và chỉ khi được truyền vào", () => {
+    for (const cell of cellsOf(packKitDoc(KIT, POSE, BOARD_W, { scale: 1 }).groups)) {
+      expect(cell.spec.scale).toBe(1);
+      expect(cell.spec.frame.w).toBe(cell.file.safe![2]);
+      expect(cell.spec.frame.h).toBe(cell.file.safe![3]);
+    }
+    /* Không truyền ⇒ luật cũ nguyên vẹn: UI 50%, mascot 1:1. */
+    const asIs = cellsOf(packKitDoc(KIT, POSE).groups);
+    expect(new Set(asIs.map((c) => c.spec.scale))).toEqual(new Set([0.5, 1]));
+  });
 });
 
 describe("lưới xếp theo nhóm, không ô nào chồng ô nào", () => {
@@ -163,5 +179,38 @@ describe("③ cỡ payload và phép chia đợt", () => {
     const ipayLike = Array.from({ length: 80 }, (_, i) =>
       kitFileSchema.parse({ file: `tight/x${i}`, path: `p${i}`, w: 1, h: 1, bytes: 13.0e6 / 80 }));
     expect(estimateBytes(ipayLike)).toBeLessThan(CLIPBOARD_SOFT_MAX);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TÊN NODE = TÊN Ô, KHÔNG KÈM TIÊU ĐỀ TAB
+   ══════════════════════════════════════════════════════════════════════════
+   Chủ sản phẩm chụp màn Figma: node tên `01-button (test · Thư viện kit · kit-…)`.
+   Nửa trong ngoặc là `document.title` (`AppLayout.tsx:71`), thứ mà encoder chở đi
+   trong `documentTitle` (`figma-h2d.global.js:1194`). */
+describe("payload không mang tiêu đề tab — tên node là tên ô", () => {
+  const doc = () => ({
+    root: { tag: "DIV" },
+    documentTitle: "test · Thư viện kit · kit-gen",
+    documentRect: { x: 0, y: 0, width: 1, height: 1 },
+    viewportRect: { x: 0, y: 0, width: 1, height: 1 },
+    devicePixelRatio: 2, version: 2, assets: new Map(),
+  }) as unknown as Parameters<typeof stripPageTitle>[0];
+
+  it("khoá `documentTitle` bị BỎ HẲN — `JSON.stringify` không chở một chuỗi rỗng đi", () => {
+    const out = stripPageTitle(doc());
+    expect("documentTitle" in out).toBe(false);
+    expect(JSON.stringify(out)).not.toContain("documentTitle");
+  });
+
+  it("không đụng phần còn lại của payload", () => {
+    const before = doc();
+    const out = stripPageTitle(before);
+    expect(out.root).toBe(before.root);
+    expect(out.assets).toBe(before.assets);
+    expect(out.devicePixelRatio).toBe(2);
+    /* Trang KHÔNG có tiêu đề vốn đã là ca encoder tự sinh (`doc.title || void 0`),
+       nên đi qua hàm này hai lần cũng không hỏng gì. */
+    expect(stripPageTitle(out)).toEqual(out);
   });
 });
