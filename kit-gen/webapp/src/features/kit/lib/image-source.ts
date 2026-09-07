@@ -72,8 +72,24 @@ const pending = new Map<Key, Promise<string>>();
 const queue: Task[] = [];
 let inflight = 0;
 
-function keyOf(projectId: string, relPath: string, width: number | null): Key {
-  return `${projectId}|${relPath}|${width ?? "full"}`;
+/**
+ * ╔══ `version` — VÌ SAO KHOÁ CACHE PHẢI CÓ NÓ ═══════════════════════════════╗
+ * ║ Đường dẫn ảnh KHÔNG ĐỔI giữa hai lượt vẽ: một tấm luôn là `raw/<tấm>.png`, ║
+ * ║ một ô luôn là `kits/<phong cách>/<tên>.png`. Cache ở dưới khoá theo (dự án,║
+ * ║ đường dẫn, bề rộng) ⇒ sau khi gen/cắt lại, ô nào đã từng hiện sẽ hiện lại   ║
+ * ║ ĐÚNG ẢNH CŨ, và chỉ F5 mới chữa được — đúng lỗi chủ sản phẩm báo 07/09/2026.║
+ * ║ Bản trước chữa bằng `forgetProject()` (dọn cả dự án) gọi lúc nghe tin ảnh   ║
+ * ║ mới về. Nó không đủ, vì hai lý do có thật:                                  ║
+ * ║  ① Tin ảnh mới về (`sheet.image`) tới TRƯỚC bước cắt. Giữa lúc ấy và lúc    ║
+ * ║    cắt xong, lưới ô vẫn tải — và nạp lại ĐÚNG ô cũ vào cache vừa dọn.       ║
+ * ║  ② Dọn cả dự án thì mọi tấm khác cũng mất ảnh và phải tải lại từ đầu.       ║
+ * ║ `version` chữa tận gốc: nó là `mtime` của chính file (agent trả trong `#42`  ║
+ * ║ và trong đường dẫn ảnh của lượt chạy). File đổi ⇒ khoá đổi ⇒ URL đổi ⇒ ảnh  ║
+ * ║ mới. File không đổi ⇒ vẫn là cache hit, không có một byte nào tải thừa.     ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+function keyOf(projectId: string, relPath: string, width: number | null, version: string | null): Key {
+  return `${projectId}|${relPath}|${width ?? "full"}|${version ?? ""}`;
 }
 
 /**
@@ -82,11 +98,21 @@ function keyOf(projectId: string, relPath: string, width: number | null): Key {
  * và để transport lo base + header, đúng §6.5-1 (một cửa transport duy nhất).
  * Chặn `..` giống `client.fileUrl` để bug tầng trên lộ ra ngay thay vì thành 400 âm thầm.
  */
-export function filePath(projectId: string, relPath: string, width: number | null): string {
+export function filePath(
+  projectId: string, relPath: string, width: number | null, version: string | null = null,
+): string {
   const segs = String(relPath).split("/").filter((s) => s !== "" && s !== ".");
   if (segs.some((s) => s === "..")) throw new Error(`đường dẫn không hợp lệ: ${relPath}`);
-  const q = width === null ? "" : `?w=${encodeURIComponent(width)}`;
-  return `/api/projects/${encodeURIComponent(projectId)}/files/${segs.map(encodeURIComponent).join("/")}${q}`;
+  /* `v` ĐI VÀO URL, không chỉ vào khoá cache trong bộ nhớ. Agent bỏ qua tham số nó
+     không đọc (`files.mjs` chỉ đọc `w`), nên đây là chỗ rẻ nhất để cắt luôn cả cache
+     heuristic của trình duyệt: cùng một file mà mtime khác thì là một URL khác.
+     Bỏ trống khi không biết phiên bản — hành vi y hệt bản trước, không xấu đi ca nào. */
+  const q = [
+    width === null ? null : `w=${encodeURIComponent(width)}`,
+    version === null || version === "" ? null : `v=${encodeURIComponent(version)}`,
+  ].filter((x) => x !== null).join("&");
+  const path = `/api/projects/${encodeURIComponent(projectId)}/files/${segs.map(encodeURIComponent).join("/")}`;
+  return q === "" ? path : `${path}?${q}`;
 }
 
 function pump(): void {
@@ -149,8 +175,10 @@ export interface LoadHandle {
  * Lấy object URL của một ảnh trong project.
  * @param width `null` = ảnh GỐC (chỉ dùng ở lightbox — §6.5-5); còn lại là thumbnail.
  */
-export function loadImage(projectId: string, relPath: string, width: number | null): LoadHandle {
-  const key = keyOf(projectId, relPath, width);
+export function loadImage(
+  projectId: string, relPath: string, width: number | null, version: string | null = null,
+): LoadHandle {
+  const key = keyOf(projectId, relPath, width, version);
 
   const hit = cache.get(key);
   if (hit !== undefined) {
@@ -165,7 +193,7 @@ export function loadImage(projectId: string, relPath: string, width: number | nu
 
   let task: Task | null = null;
   const promise = new Promise<string>((resolve, reject) => {
-    task = { key, url: filePath(projectId, relPath, width), resolve, reject, cancelled: false };
+    task = { key, url: filePath(projectId, relPath, width, version), resolve, reject, cancelled: false };
     queue.push(task);
   });
   pending.set(key, promise);
@@ -182,19 +210,24 @@ export function loadImage(projectId: string, relPath: string, width: number | nu
 }
 
 /** Thumbnail cho lưới — LUÔN `?w=256` (§6.5-5, đóng H4). */
-export function loadThumb(projectId: string, relPath: string): LoadHandle {
-  return loadImage(projectId, relPath, LIMITS.thumbWidth);
+export function loadThumb(projectId: string, relPath: string, version: string | null = null): LoadHandle {
+  return loadImage(projectId, relPath, LIMITS.thumbWidth, version);
 }
 
 /** Ảnh GỐC — chỉ lightbox và "xem pixel" được gọi. */
-export function loadFull(projectId: string, relPath: string): LoadHandle {
-  return loadImage(projectId, relPath, null);
+export function loadFull(projectId: string, relPath: string, version: string | null = null): LoadHandle {
+  return loadImage(projectId, relPath, null, version);
 }
 
 /**
- * Quên ảnh của một project (sau khi cắt lại: file trên đĩa đã đổi).
- * Cache-bust theo `mtime` là việc của `kit-model.ts`; hàm này là lối dọn thô khi
- * user bấm [Cắt lại] và ta biết chắc mọi thứ vừa được ghi lại.
+ * Quên ảnh của một project — LỐI DỌN THÔ, KHÔNG PHẢI CÁCH CHỮA ẢNH CŨ.
+ *
+ * Cách chữa là `version` (xem `keyOf`): mỗi ảnh mang `mtime` của chính nó, nên ảnh mới
+ * có khoá mới mà không ai phải dọn gì. Hàm này ở lại cho ca "tôi không tin cái gì nữa"
+ * — nút tải lại thủ công — và cho dự án mà agent đời cũ không trả `mtime`.
+ * KHÔNG gọi nó theo sự kiện của lượt chạy: nó dọn CẢ dự án, tức mọi tấm khác cũng phải
+ * tải lại từ đầu, và nếu gọi lúc `sheet.image` (trước bước cắt) thì lưới ô lập tức nạp
+ * lại đúng ảnh cũ vào cache vừa dọn — dọn xong vẫn cũ.
  */
 export function forgetProject(projectId: string): void {
   for (const key of [...cache.keys()]) {

@@ -100,6 +100,24 @@ export function useRawHistory(projectId: string | null, job: string | null) {
   });
 }
 
+/**
+ * #39.1 — XOÁ một đời ảnh cũ.
+ *
+ * Chỉ mời lại LỊCH SỬ, không mời cả `keysAfterRun`: xoá một bản cũ không đụng tới
+ * `raw/`, `kits/`, hạn mức hay trạng thái tấm — mời lại tất cả là bắt cả màn dựng lại
+ * để lấy về y hệt dữ liệu cũ (đúng cái "lưới lác lác" đã phải chữa một lần).
+ */
+export function useDeleteRawHistory(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ job, historyId }: { job: string; historyId: string }) =>
+      api.runs.rawHistoryDelete(projectId, job, historyId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: qk.runs.rawHistoryOf(projectId) });
+    },
+  });
+}
+
 /** #40 — khôi phục ảnh cũ. */
 export function useRestoreRaw(projectId: string) {
   const qc = useQueryClient();
@@ -224,7 +242,15 @@ export function useRunStream(runId: string | null, opts: { enabled?: boolean } =
         // (ô "Đã xong" hiện ảnh ngay) và mời lại kho kit vì asset cắt đã đổi.
         qc.setQueryData<Run>(qk.runs.detail(runId), (old) => (old ? applyEvent(old, ev) : old));
         const projectId = qc.getQueryData<Run>(qk.runs.detail(runId))?.projectId;
-        if (projectId) void qc.invalidateQueries({ queryKey: qk.kit.all(projectId) });
+        if (projectId) {
+          void qc.invalidateQueries({ queryKey: qk.kit.all(projectId) });
+          /* LỊCH SỬ ẢNH GỐC cũng vừa đổi: `run-handle` đã đẩy đời ảnh trước vào
+             `.history/raw/` ngay trước khi engine vẽ tấm này. Không mời lại thì thanh
+             phiên bản vẫn hiện đúng một mục và người dùng kết luận "gen lại không lên
+             ver 2" — đúng câu chủ sản phẩm báo. Mời ở đây (giữa lượt) chứ không đợi
+             `run.finished`: một lượt 20 tấm chạy cả chục phút. */
+          void qc.invalidateQueries({ queryKey: qk.runs.rawHistoryOf(projectId) });
+        }
         /* GIỮA LƯỢT, KHÔNG ĐỢI TỚI CUỐI. Một tấm xong = một lượt hỏi Codex đã tiêu và
            agent vừa dọn cache hạn mức. Lượt 20 tấm chạy cả chục phút; đợi `run.finished`
            mới cập nhật thì suốt chừng ấy phút thanh hạn mức nói dối một con số cũ.

@@ -26,11 +26,13 @@ if (!globalThis.ResizeObserver) {
 }
 
 const restoreMutate = vi.fn();
+const deleteMutate = vi.fn();
 let historyItems: Array<{ id: string; at: string | null; current: boolean }> = [];
 
 vi.mock("@/lib/hooks", () => ({
   useRawHistory: () => ({ data: { items: historyItems }, isLoading: false }),
   useRestoreRaw: () => ({ mutate: restoreMutate, isPending: false }),
+  useDeleteRawHistory: () => ({ mutate: deleteMutate, isPending: false }),
 }));
 vi.mock("@/features/projects/lib/feedback", () => ({
   toastSuccess: vi.fn(), toastInfo: vi.fn(), toastError: vi.fn(),
@@ -46,7 +48,11 @@ const mount = () => render(<SheetVersionBar projectId="p1" job="chinh-ui" />);
 const restoreButton = () =>
   screen.getByRole<HTMLButtonElement>("button", { name: /Khôi phục bản này/ });
 
-beforeEach(() => { restoreMutate.mockReset(); historyItems = [CURRENT, OLD_1, OLD_2]; });
+beforeEach(() => {
+  restoreMutate.mockReset();
+  deleteMutate.mockReset();
+  historyItems = [CURRENT, OLD_1, OLD_2];
+});
 afterEach(cleanup);
 
 describe("thanh phiên bản v1 · v2 · v3", () => {
@@ -104,5 +110,77 @@ describe("khôi phục — MỘT CÚ BẤM KHÔNG ĐƯỢC PHÉP GHI ĐÈ", () =
     withoutCurrent();
     render(<SheetVersionBar projectId="p1" job="chinh-ui" busy />);
     expect(restoreButton().disabled).toBe(true);
+  });
+});
+
+/* ══ XOÁ BẢN CŨ — "cho phép xoá ver cũ" (chủ sản phẩm, 07/09/2026) ═══════════
+   Hai điều phải đúng cùng lúc, và chúng kéo về hai hướng ngược nhau:
+     ① XOÁ ĐƯỢC, không phải qua ba lớp hộp thoại — nó chỉ bỏ một file trong
+        `.history/`, ảnh đang dùng không suy suyển.
+     ② KHÔNG BAO GIỜ chạm tới bản ĐANG DÙNG: đó là `raw/<tấm>.png`, đầu vào của
+        bước cắt. Agent trả 409 `HISTORY_CURRENT` nếu ai đó thử — nút ở đây phải
+        không tồn tại từ đầu, chứ không phải bấm rồi mới ăn lỗi. */
+describe("xoá bản cũ", () => {
+  const withoutCurrent = () => { historyItems = [OLD_1, OLD_2]; };
+  const trash = () => screen.queryByRole<HTMLButtonElement>("button", { name: /^Xoá v\d/ });
+
+  it("đang đứng ở bản ĐANG DÙNG ⇒ KHÔNG có nút xoá nào để bấm", () => {
+    mount();
+    expect(trash()).toBeNull();
+  });
+
+  it("bấm lần đầu CHỈ hỏi lại, chưa gọi API", () => {
+    withoutCurrent();
+    mount();
+    const btn = trash();
+    expect(btn).not.toBeNull();
+    fireEvent.click(btn!);
+    expect(deleteMutate).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Xoá v2?" })).toBeTruthy();
+  });
+
+  it("bấm lần hai mới xoá thật, đúng tấm + đúng bản", () => {
+    withoutCurrent();
+    mount();
+    fireEvent.click(trash()!);
+    fireEvent.click(screen.getByRole("button", { name: "Xoá v2?" }));
+    expect(deleteMutate).toHaveBeenCalledTimes(1);
+    expect(deleteMutate.mock.calls[0]?.[0]).toEqual({ job: "chinh-ui", historyId: OLD_1.id });
+  });
+
+  it("rời khỏi nút ⇒ lời hỏi tự huỷ, không treo một cú bấm chờ sẵn", () => {
+    withoutCurrent();
+    mount();
+    fireEvent.click(trash()!);
+    fireEvent.blur(screen.getByRole("button", { name: "Xoá v2?" }));
+    expect(screen.queryByRole("button", { name: "Xoá v2?" })).toBeNull();
+    expect(deleteMutate).not.toHaveBeenCalled();
+  });
+
+  it("đang có lượt chạy ⇒ nút xoá khoá (agent cũng trả 409 RUN_ACTIVE)", () => {
+    withoutCurrent();
+    render(<SheetVersionBar projectId="p1" job="chinh-ui" busy />);
+    expect(trash()!.disabled).toBe(true);
+  });
+});
+
+/* ══ ĐÁNH SỐ ĐI THEO CÁC BẢN CÒN LẠI ═══════════════════════════════════════
+   Xoá một bản giữa chừng thì số bị đánh lại — v3 cũ thành v2. Đó là chủ ý (số lớn
+   nhất luôn bằng số bản, không có lỗ), nhưng nó là thứ người dùng phải được BÁO,
+   nếu không họ sẽ tưởng mình vừa xoá nhầm bản khác. Câu báo nằm ở `title` của ô chọn. */
+describe("đánh số sau khi xoá", () => {
+  it("số thứ tự luôn liền mạch v1..vN theo các bản CÒN LẠI", () => {
+    historyItems = [CURRENT, OLD_1, OLD_2];
+    mount();
+    expect(screen.getByRole("combobox").textContent).toContain("v3");
+    cleanup();
+    historyItems = [CURRENT, OLD_2];   // xoá mất bản Ở GIỮA, không phải bản cuối
+    mount();
+    expect(screen.getByRole("combobox").textContent).toContain("v2");
+  });
+
+  it("NÓI RA việc đánh số lại — không để người dùng tự phát hiện", () => {
+    mount();
+    expect(screen.getByRole("combobox").getAttribute("title")).toMatch(/đánh số lại/);
   });
 });

@@ -66,7 +66,14 @@ export const qk = {
     detail: (runId: string) => ["runs", "detail", runId] as const,
     jobLog: (runId: string, job: string) => ["runs", "detail", runId, "log", job] as const,
     jobPrompt: (runId: string, job: string) => ["runs", "detail", runId, "prompt", job] as const,
+    /**
+     * Lịch sử ảnh gốc của MỘT tấm. Chú ý tiền tố: nó KHÔNG nằm dưới `ofProject`, nên
+     * `keysAfterRun` phải mời lại `rawHistoryOf` riêng — thiếu dòng ấy thì thanh phiên
+     * bản đứng im ở số cũ suốt buổi làm việc (lỗi 07/09/2026, cùng họ với "ảnh bị cache").
+     */
     rawHistory: (projectId: string, job: string) => ["runs", "raw-history", projectId, job] as const,
+    /** Lịch sử ảnh gốc của MỌI tấm trong dự án — dùng để mời lại một lượt. */
+    rawHistoryOf: (projectId: string) => ["runs", "raw-history", projectId] as const,
   },
 
   kit: {
@@ -113,6 +120,11 @@ export function keysAfterRun(projectId: string) {
     qk.projects.detail(projectId),
     qk.projects.lists(),
     qk.runs.ofProject(projectId),
+    /* LỊCH SỬ ẢNH GỐC — cùng cấp bậc với `kit`, không phải chi tiết của `runs.ofProject`.
+       Một lượt gen vừa đẩy đời ảnh trước vào `.history/raw/`, nên danh sách phiên bản
+       ĐÃ CŨ ngay lúc lượt chạy đóng sổ. Không có dòng này thì thanh phiên bản vẫn nói
+       "v1 · đang dùng" cho một tấm vừa được vẽ lại lần thứ ba. */
+    qk.runs.rawHistoryOf(projectId),
     qk.kit.all(projectId),
     qk.usage(),
   ] as const;

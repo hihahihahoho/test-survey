@@ -135,6 +135,7 @@ vi.mock("@/lib/hooks", () => ({
   /* Thanh phiên bản dùng chung module hooks; ở đây cho nó im (chưa có lịch sử). */
   useRawHistory: () => ({ data: { items: [] }, isLoading: false }),
   useRestoreRaw: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteRawHistory: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 const CONTRACT = {

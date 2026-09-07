@@ -78,6 +78,20 @@ describe("gom key phải invalidate sau mỗi loại thao tác", () => {
     expect(keysAfterRun("p1")).toContainEqual(qk.usage());
   });
 
+  /* Bug 07/09/2026 — "gen lại nó phải ver 1 2 chứ". Agent CÓ cất đời ảnh trước vào
+     `.history/raw/` trước mỗi lượt gen, nhưng lịch sử ảnh nằm ở một nhánh key riêng
+     (`runs/raw-history/...`), KHÔNG nằm dưới `runs.ofProject` — nên nó không được mời
+     lại và thanh phiên bản vẫn hiện đúng một mục sau khi vẽ lại lần thứ ba. */
+  it("sau một lượt chạy: LỊCH SỬ ẢNH GỐC cũng cũ — lượt vừa rồi vừa đẩy một đời vào đó", () => {
+    expect(keysAfterRun("p1")).toContainEqual(qk.runs.rawHistoryOf("p1"));
+  });
+
+  it("key lịch sử của MỘT tấm nằm dưới key lịch sử của cả dự án (mời một lượt là đủ)", () => {
+    expect(isPrefixOf(qk.runs.rawHistoryOf("p1"), qk.runs.rawHistory("p1", "chinh-ui"))).toBe(true);
+    /* Và nó KHÔNG nằm dưới `ofProject` — đúng cái bẫy đã sập một lần. */
+    expect(isPrefixOf(qk.runs.ofProject("p1"), qk.runs.rawHistory("p1", "chinh-ui"))).toBe(false);
+  });
+
   it("sau khi lưu thiết kế: contract + project (version/stale đổi)", () => {
     const keys = keysAfterContractSave("p1");
     expect(keys).toContainEqual(qk.contract.all("p1"));

@@ -973,6 +973,19 @@ export const kitFileSchema = z.looseObject({
    * ╚═══════════════════════════════════════════════════════════════════════════╝
    */
   outSize: kitBox,
+  /**
+   * Hệ số phóng mà prompt đã nói với máy vẽ: `outSize × drawScale` = hộp vẽ trong ô.
+   * Chỉ để ĐỐI CHIẾU khi một ô ra sai cỡ (lệch ở lời dặn hay ở nét vẽ) — phép co dán
+   * ra Figma vẫn lấy `outSize` làm đích. Kit cắt bằng bản engine cũ ⇒ `undefined`.
+   */
+  drawScale: kitOptionalNumber,
+  /**
+   * Thời điểm ghi file trên đĩa (ISO). ĐÂY LÀ KHOÁ PHIÊN BẢN CỦA ẢNH: đường dẫn ô
+   * (`kits/<phong cách>/<tên>.png`) GIỮ NGUYÊN sau mỗi lượt cắt, nên nếu không mang
+   * `mtime` vào URL/khoá cache thì lượt gen mới hiện lại đúng ảnh cũ cho tới khi F5.
+   * Khai tường minh (trước đây chỉ lọt qua `looseObject`) vì nay CÓ NƠI PHỤ THUỘC.
+   */
+  mtime: kitOptionalString,
   /** Sổ đo QA của riêng ô này; thiếu ⇒ ô không đo được hoặc kit cắt bằng bản cũ. */
   sizeDeviation: kitSizeDeviationSchema.nullish().transform((v) => v ?? undefined),
   /** `empty:true` ⇒ dải cảnh báo "N file trống" + [Xem sheet gốc] (S5). */

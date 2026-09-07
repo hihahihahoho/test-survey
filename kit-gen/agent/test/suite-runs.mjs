@@ -200,6 +200,69 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     await a3("DELETE", `/api/projects/${gid}`)
   })
 
+  /* ══ BA ĐỜI ẢNH GỐC — v1, v2, và quyền XOÁ BẢN CŨ ═══════════════════════════
+     Chủ sản phẩm: "gen lại nó phải ver 1 2 chứ, cho phép xoá ver cũ". Trước bản này
+     thanh phiên bản đứng ở "v1" vĩnh viễn vì KHÔNG AI ghi vào `.history/raw/`:
+     `gen.sh` dặn codex đè thẳng lên `raw/<job>.png`, còn agent chỉ chép snapshot ra
+     `runs/<id>/artifacts/` SAU khi ảnh mới đã ghi — bản cũ mất trước đó. Nay
+     `run-handle.launch()` cất bản cũ NGAY TRƯỚC khi spawn engine.
+     Ca này chạy engine giả HAI lượt trên cùng một tấm và đòi thấy đời thứ hai. */
+  await it("[phiên bản] gen lượt hai ⇒ bản cũ vào lịch sử (v1 + v2), xoá được bản cũ, KHÔNG xoá được bản đang dùng", async () => {
+    const { api: aH } = await agentWithEngine("engine-fake")
+    const created = await aH("POST", "/api/projects", {
+      body: { name: "Ba doi anh", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
+    })
+    const gid = created.json.project.id
+    const genOnce = async () => {
+      const r = await aH("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", jobs: ["tet-main"], autoSliceAfterGen: false } })
+      eq(r.status, 202, "run 202")
+      await aH("GET", `/api/runs/${r.json.runId}/stream?from=0`)   // đóng khi run.finished
+    }
+    try {
+      await genOnce()
+      const h1 = await aH("GET", `/api/projects/${gid}/raw/tet-main/history`)
+      eq(h1.status, 200, "đọc được lịch sử")
+      eq(h1.json.items.length, 1, "lượt ĐẦU chưa có gì để cất ⇒ chỉ bản đang dùng")
+      eq(h1.json.items[0].current, true, "và nó là bản đang dùng")
+
+      await genOnce()
+      const h2 = await aH("GET", `/api/projects/${gid}/raw/tet-main/history`)
+      eq(h2.json.items.length, 2, "lượt HAI ⇒ hai đời (v1 cũ + v2 đang dùng)")
+      eq(h2.json.items.filter(i => i.current).length, 1, "đúng một bản đang dùng")
+      const old = h2.json.items.find(i => !i.current)
+      ok(/^r-\d+$/.test(old.id), `id bản cũ ${old.id} đúng dạng r-<ms>`)
+      ok(old.bytes > 0, "bản cũ có bytes thật, không phải file rỗng")
+
+      // ① BẢN ĐANG DÙNG KHÔNG XOÁ ĐƯỢC — đó là `raw/<job>.png`, đầu vào của bước cắt.
+      const cur = await aH("DELETE", `/api/projects/${gid}/raw/tet-main/history/current`)
+      eq(cur.status, 409, "xoá bản đang dùng ⇒ 409")
+      eq(cur.json.error.code, "HISTORY_CURRENT", "có mã riêng để web nói đúng lý do")
+
+      // ② ID LẠ / TRAVERSAL bị chặn TRƯỚC khi chạm đĩa.
+      eq((await aH("DELETE", `/api/projects/${gid}/raw/tet-main/history/r-abc`)).status, 400, "id sai dạng ⇒ 400")
+      /* `..` ĐÃ RỖNG NGHĨA TỪ ĐƯỜNG ĐI: router khớp `/history/..` là 404 (không có route
+         nào tên đó sau khi chuẩn hoá). Ca này khoá cái quan trọng hơn — dạng ĐÃ MÃ HOÁ,
+         thứ đi lọt qua chuẩn hoá URL rồi mới rơi vào tay handler: nó phải chết ở
+         `safeSegment`/`RE_RAW_HISTORY_ID`, KHÔNG bao giờ thành một đường dẫn trên đĩa. */
+      const escape = await aH("DELETE", `/api/projects/${gid}/raw/tet-main/history/${encodeURIComponent("../../contract.json")}`)
+      ok(escape.status === 400, `thoát thư mục ⇒ 400, nhận ${escape.status}`)
+      ok(await pathExists(join(wsRoot, "projects", gid, "contract.json")), "contract.json KHÔNG bị đụng tới")
+      eq((await aH("DELETE", `/api/projects/${gid}/raw/tet-main/history/r-1`)).status, 404, "id đúng dạng mà không có ⇒ 404")
+
+      // ③ XOÁ THẬT: bản cũ biến mất, bản đang dùng còn nguyên trên đĩa.
+      const del = await aH("DELETE", `/api/projects/${gid}/raw/tet-main/history/${old.id}`)
+      eq(del.status, 200, "xoá bản cũ ⇒ 200")
+      eq(del.json.deleted, true, "báo đã xoá")
+      const h3 = await aH("GET", `/api/projects/${gid}/raw/tet-main/history`)
+      eq(h3.json.items.length, 1, "chỉ còn bản đang dùng")
+      eq(h3.json.items[0].current, true, "và nó vẫn là bản đang dùng")
+      eq((await aH("GET", `/api/projects/${gid}/files/raw/tet-main.png`)).status, 200,
+        "ảnh gốc đang dùng KHÔNG hề bị đụng tới")
+    } finally {
+      await aH("DELETE", `/api/projects/${gid}`)
+    }
+  })
+
   /* ── CẮT LŨY TIẾN (15/08) ─────────────────────────────────────────────────
      Chủ sản phẩm ngồi xem một lượt gen THẬT: 10 tấm, mỗi tấm vài phút, và KHÔNG có
      gì hiện ra cho tới khi tấm cuối xong — vì cả ba việc hậu kỳ đều xếp sau lượt:

@@ -90,6 +90,18 @@ export function currentVersion(versions: readonly SheetVersion[]): SheetVersion 
 }
 
 /**
+ * Nhãn của bước hỏi lại khi xoá — «Xoá v1?».
+ *
+ * Ở cùng chỗ với `restoreWarning` vì cùng một lý do: đây là LỜI HỨA với người dùng về
+ * việc sắp xảy ra, và nó phải nói đúng thứ agent làm. `#39.1` chỉ xoá MỘT file trong
+ * `.history/raw/`; nó không bao giờ chạm tới `raw/<tấm>.png`, nên câu này không được
+ * doạ nhiều hơn thế. Ngắn vì nó nằm ngay trên một cái nút, không phải trong hộp thoại.
+ */
+export function deleteConfirmLabel(version: SheetVersion): string {
+  return `Xoá ${version.label}?`;
+}
+
+/**
  * Câu hỏi của hộp xác nhận. Viết ở đây (không nhét trong JSX) vì đây là LỜI HỨA với
  * người dùng về việc gì sắp xảy ra, và nó phải khớp đúng thứ agent làm:
  * ghi đè `raw/<job>.png` — tức mọi bước sau (cắt, xuất, copy) đổi theo.

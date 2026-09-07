@@ -2,13 +2,16 @@
    + log/prompt từng lượt + lịch sử ảnh raw 3 đời. */
 import { join } from "node:path"
 import { fail } from "../lib/errors.mjs"
-import { exists, readFile, readdir, stat, mtimeOf, ensureDir, copyFile, readTailFile } from "../lib/fsx.mjs"
+import { exists, readFile, stat, mtimeOf, ensureDir, readTailFile, removeTree, writeFileAtomic } from "../lib/fsx.mjs"
 import { redactLine } from "../lib/redact.mjs"
 import { RE_JOB, RE_RUN_ID, assertMatch, safeSegment } from "../lib/paths.mjs"
 import { projectDir, readProject } from "../lib/projects.mjs"
 import { sanitizeRun } from "../lib/runs.mjs"
 import { readContract } from "../lib/contract.mjs"
 import { validateContract } from "../lib/validate.mjs"
+import {
+  RE_RAW_HISTORY_ID, archiveRaw, listRawHistory, rawHistoryDir, rawHistoryName,
+} from "../lib/raw-history.mjs"
 
 const QUOTA_PER_JOB = [3, 5]
 const MAX_LOG_READ_BYTES = 4 * 1024 * 1024
@@ -120,16 +123,10 @@ export function register(r) {
   r.get("/api/projects/:id/raw/:job/history", async ctx => {
     const ws = ctx.registry.active
     const job = assertMatch(RE_JOB, ctx.params.job, "BAD_REQUEST", "job")
-    const dir = join(projectDir(ws, ctx.params.id), ".history", "raw")
-    await ensureDir(dir)
-    const items = []
-    for (const name of (await readdir(dir).catch(() => []))) {
-      const m = new RegExp(`^${job}@(r-\\d+)\\.png$`).exec(name)
-      if (!m) continue
-      const st = await stat(join(dir, name)).catch(() => null)
-      if (!st) continue
-      items.push({ id: m[1], at: new Date(st.mtimeMs).toISOString(), bytes: st.size, current: false })
-    }
+    /* Liệt kê nằm ở `lib/raw-history.mjs` — CHUNG với chỗ CẤT (`run-handle.launch`)
+       và chỗ XOÁ (#39.1). Ba nơi tự viết lại cùng một mẫu tên file là ba cơ hội để
+       bản cất được mà không bao giờ hiện ra. */
+    const items = await listRawHistory(ws, ctx.params.id, job)
     const cur = join(projectDir(ws, ctx.params.id), "raw", `${job}.png`)
     if (await exists(cur)) {
       const st = await stat(cur)
@@ -137,6 +134,35 @@ export function register(r) {
     }
     items.sort((a, b) => String(b.at).localeCompare(String(a.at)))
     return { status: 200, json: { items } }
+  })
+
+  /* #39.1 XOÁ MỘT BẢN LỊCH SỬ.
+     ╔══ BA CHỐT CHẶN, KHÔNG BỚT CÁI NÀO ═══════════════════════════════════════╗
+     ║ ① `hid` phải khớp `r-<số>` — `safeSegment` chặn `..` và dấu phân cách,    ║
+     ║   `RE_RAW_HISTORY_ID` chặn phần còn lại. Đường dẫn đích được DỰNG LẠI từ  ║
+     ║   `job` + `hid` đã kiểm, không bao giờ ghép chuỗi của client vào path.    ║
+     ║ ② Id `current` bị từ chối THẲNG: nó không phải file trong `.history/`, và ║
+     ║   xoá "bản đang dùng" là xoá `raw/<job>.png` — đầu vào của bước cắt, thứ  ║
+     ║   nút này KHÔNG BAO GIỜ được phép chạm tới. Từ chối bằng một mã riêng để  ║
+     ║   web nói được lý do thay vì "không tìm thấy".                            ║
+     ║ ③ Không xoá giữa lượt chạy: `#40` đã chặn vậy, và cùng lý do — engine có  ║
+     ║   thể đang ghi vào đúng thư mục này.                                      ║
+     ╚═══════════════════════════════════════════════════════════════════════════╝ */
+  r.delete("/api/projects/:id/raw/:job/history/:hid", async ctx => {
+    const ws = ctx.registry.active
+    const id = ctx.params.id
+    await readProject(ws, id)
+    const job = assertMatch(RE_JOB, ctx.params.job, "BAD_REQUEST", "job")
+    const hid = safeSegment(ctx.params.hid, "historyId")
+    if (hid === "current")
+      fail("HISTORY_CURRENT", "the version in use cannot be deleted", { details: { job } })
+    assertMatch(RE_RAW_HISTORY_ID, hid, "BAD_REQUEST", "historyId")
+    const active = ctx.runs.activeForProject(id)
+    if (active && !active.finished) fail("RUN_ACTIVE", `run ${active.id} is active`, { details: { runId: active.id } })
+    const abs = join(rawHistoryDir(ws, id), rawHistoryName(job, hid))
+    if (!(await exists(abs))) fail("NOT_FOUND", `raw history ${hid} for ${job} not found`)
+    await removeTree(abs)
+    return { status: 200, json: { deleted: true, id: hid } }
   })
 
   // #40 khôi phục ảnh raw từ lịch sử
@@ -154,11 +180,17 @@ export function register(r) {
     if (!(await exists(src))) fail("NOT_FOUND", `raw history ${historyId} for ${job} not found`)
     const dst = join(pdir, "raw", `${job}.png`)
     await ensureDir(join(pdir, "raw"))
-    if (await exists(dst)) {
-      await ensureDir(join(pdir, ".history", "raw"))
-      await copyFile(dst, join(pdir, ".history", "raw", `${job}@restore-${Date.now()}.png`))
-    }
-    await copyFile(src, dst)
+    /* ĐỌC NGUỒN VÀO BỘ NHỚ TRƯỚC KHI CẤT — thứ tự này không phải ngẫu nhiên.
+       `archiveRaw` cất bản đang dùng rồi TỈA lịch sử về 3 đời; nếu lịch sử đã đủ 3 thì
+       bản bị tỉa có thể chính là `src` mà ta sắp chép về. Chép sau khi tỉa là `ENOENT`
+       ở giữa một thao tác đã ghi đè xong một nửa. Giữ bytes trong tay thì tỉa gì cũng
+       không ảnh hưởng. Ảnh một tấm cỡ MB — rẻ hơn nhiều so với một trạng thái nửa vời.
+       Cất bằng đúng hàm mà lượt gen dùng: bản cũ ở đây ghi tên `<job>@restore-<ms>.png`,
+       một dạng mà `#39` KHÔNG liệt kê được (mẫu của nó là `r-<số>`), nên bản vừa bị ghi
+       đè biến mất khỏi thanh phiên bản ngay lúc người dùng cần nó nhất: để bấm quay lại. */
+    const bytes = await readFile(src)
+    await archiveRaw(ws, id, job)
+    await writeFileAtomic(dst, bytes)
     return { status: 200, json: { restored: true, mtime: new Date(await mtimeOf(dst)).toISOString() } }
   })
 }

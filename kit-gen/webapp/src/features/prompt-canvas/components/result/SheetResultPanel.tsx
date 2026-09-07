@@ -17,9 +17,10 @@ import {
 } from "@/features/kit/lib/figma-board";
 import { BOARD_W, cellsOf, copyKitDoc, packKitDoc } from "@/features/kit/lib/figma-kit-doc";
 import { toastError, toastInfo, toastSuccess } from "@/features/projects/lib/feedback";
-import { useContract, useKit, useProject, useRevealProject } from "@/lib/hooks";
+import { useContract, useKit, useProject, useRawHistory, useRevealProject } from "@/lib/hooks";
 import { cellsOfSheet, contractFramed, rawSheetImagePath } from "../../lib/result/sheet-files";
 import { copySheetAsFigmaNode, measureImage } from "../../lib/result/sheet-figma";
+import { currentVersion, sheetVersions } from "../../lib/result/sheet-versions";
 import { PREVIEW_MAX_H } from "../../lib/ui";
 import { SheetCellGrid } from "./SheetCellGrid";
 import { SheetVersionBar } from "./SheetVersionBar";
@@ -188,6 +189,22 @@ export function SheetResultPanel({
   const rawPath = React.useMemo(
     () => (typeof artifactPath === "string" && artifactPath !== "" ? artifactPath : rawSheetImagePath(job, runId)),
     [artifactPath, job, runId],
+  );
+
+  /**
+   * KHOÁ PHIÊN BẢN CỦA ẢNH GỐC = thời điểm ghi của bản ĐANG DÙNG.
+   *
+   * `raw/<tấm>.png` giữ nguyên đường dẫn qua mọi lượt gen và mọi lần khôi phục, nên
+   * đường dẫn một mình không đủ để phân biệt hai đời ảnh — và đó là lý do panel này
+   * từng phải dọn cache cả dự án. Lịch sử ảnh (`#39`) đã nói đúng con số ấy, và
+   * `SheetVersionBar` ngay cạnh cũng hỏi cùng khoá query ⇒ không thêm một request nào.
+   * Ảnh của một LƯỢT CHẠY thì nằm trong thư mục mang mã lượt: đã bất biến sẵn, khoá
+   * phiên bản là thừa nhưng vô hại.
+   */
+  const history = useRawHistory(projectId, job);
+  const rawVersion = React.useMemo(
+    () => currentVersion(sheetVersions(history.data?.items))?.at ?? null,
+    [history.data?.items],
   );
 
   /**
@@ -454,6 +471,7 @@ export function SheetResultPanel({
                   key={reloadKey}
                   projectId={projectId}
                   path={rawPath}
+                  version={rawVersion}
                   alt={`Ảnh gốc tấm ${name}`}
                   backdrop="checker"
                   full={false}

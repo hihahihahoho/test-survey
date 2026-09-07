@@ -9,6 +9,7 @@ import { copyAssetAsFigmaNode } from "@/features/kit-core/lib/figma-node";
 import { toastError, toastSuccess } from "@/features/projects/lib/feedback";
 import type { KitFile } from "@/lib/types";
 import { cellName } from "../../lib/result/sheet-files";
+import { fileMtime } from "@/features/kit/lib/kit-model";
 
 /**
  * TAB «ĐÃ CROP» — lưới ô đã cắt CỦA ĐÚNG TẤM NÀY.
@@ -162,6 +163,9 @@ function CellCard({ projectId, cell, poseFiles }: {
         backdrop="checker"
         full={false}
         width={256}
+        /* Ô cắt lại GIỮ NGUYÊN đường dẫn, chỉ `mtime` đổi. Không truyền nó xuống thì
+           lượt cắt mới hiện lại đúng ảnh cũ cho tới khi F5 (lỗi 07/09/2026). */
+        version={fileMtime(cell)}
         className="aspect-square rounded-none border-0"
       />
       <div className="flex items-center gap-1 p-2">

@@ -133,6 +133,10 @@ export function register(r) {
            `sheet-files.ts` lặng lẽ rơi về `contractSafe` — tức dán ra Figma đúng cỡ
            máy vẽ chứ không đúng cỡ người dùng chọn. */
         outSize: meta?.outSize ?? null,
+        /* HỆ SỐ PHÓNG mà prompt đã nói với máy vẽ (`out` × k = hộp vẽ). Không tham gia
+           phép co ở web — `outSize` mới là đích — nhưng nó là con số để ĐỐI CHIẾU khi
+           một ô ra sai cỡ: lệch nằm ở lời dặn hay ở nét vẽ. Kit cắt bằng bản cũ ⇒ null. */
+        drawScale: typeof meta?.drawScale === "number" ? meta.drawScale : null,
         sizeDeviation: meta?.sizeDeviation ?? null,
         contentAt: meta?.content_at ?? null,
         content: meta?.content ?? null,

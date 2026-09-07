@@ -251,6 +251,48 @@ export async function run({ api, pid, wsRoot, agentDir }) {
     eq(sh.components[0].skel.shape, "rrect", "rect → rrect")
   })
 
+  /* ══ `out`/`drawScale` PHẢI ĐI QUA DANH SÁCH TRẮNG CỦA COMPONENT ══════════════
+     Lỗi 07/09/2026, chủ sản phẩm báo bằng câu "ra Figma vẫn không đúng size của mình".
+     Chuỗi đứt ở ĐÚNG một chỗ: `contractToStylesV1` lọc component xuống 4 khoá, nên
+     `styles.json` không có `out` ⇒ `gen.sh:583` không in "final size WxH, drawn at kx"
+     (máy vẽ không biết cỡ thật) và `slice.py:498` không ghi `outSize` vào manifest ⇒
+     `sheet-files.ts` rơi về `contractSafe`, tức khung Figma = cỡ MÁY VẼ, không phải cỡ
+     NGƯỜI DÙNG. Mọi tầng khác vẫn xanh khi nó đứt — nên phải khoá tại đây. */
+  await it("contractToStylesV1 TRUYỀN out + drawScale (nếu không, prompt mất cỡ thật và Figma sai size)", () => {
+    const styles = contractToStylesV1({
+      schemaVersion: 4,
+      variants: [{ id: "tet", vi: "Tết" }],
+      sheets: [{
+        id: "ui", grid: { cols: 2, rows: 1 }, orient: "landscape", variants: ["tet"],
+        components: [
+          { file: "01-btn", vi: "Nút", spec: "nút", skel: { shape: "pill", w: 0.8, h: 0.3 }, out: { w: 112, h: 39 }, drawScale: 4.25 },
+          { file: "02-nen", vi: "Nền", spec: "nền", skel: { shape: "rect", w: 1, h: 1 } },
+        ],
+      }],
+    })
+    const [btn, nen] = styles.sheets[0].components
+    eq(btn.out, { w: 112, h: 39 }, "out đi tới engine")
+    eq(btn.drawScale, 4.25, "drawScale đi tới engine")
+    eq(Object.keys(btn).sort(), ["drawScale", "file", "out", "skel", "spec", "vi"], "đúng 6 khoá, không hơn")
+    // Element KHÔNG khai cỡ vẫn phải sạch: `out: undefined` lọt xuống là `int(None)` giữa slice.py.
+    eq("out" in nen, false, "element không khai cỡ ⇒ không có khoá out")
+    eq("drawScale" in nen, false, "element không khai cỡ ⇒ không có khoá drawScale")
+  })
+
+  await it("contractToStylesV1 GỌT out rác — contract sửa tay không được biến thành int(None) giữa slice.py", () => {
+    const of = c => contractToStylesV1({
+      schemaVersion: 4, variants: [{ id: "tet", vi: "Tết" }],
+      sheets: [{ id: "ui", grid: { cols: 1, rows: 1 }, orient: "landscape", variants: ["tet"], components: [c] }],
+    }).sheets[0].components[0]
+    const base = { file: "x", vi: "X", spec: "x", skel: { shape: "rect", w: 1, h: 1 } }
+    eq("out" in of({ ...base, out: { w: 0, h: 39 } }), false, "cạnh 0 ⇒ bỏ")
+    eq("out" in of({ ...base, out: { w: -5, h: 39 } }), false, "cạnh âm ⇒ bỏ")
+    eq("out" in of({ ...base, out: "112x39" }), false, "out không phải object ⇒ bỏ")
+    eq(of({ ...base, out: { w: 112.4, h: 39.6 } }).out, { w: 112, h: 40 }, "làm tròn về số nguyên px")
+    eq("drawScale" in of({ ...base, drawScale: 0 }), false, "hệ số 0 ⇒ bỏ")
+    eq("drawScale" in of({ ...base, drawScale: "nhiều" }), false, "hệ số không phải số ⇒ bỏ")
+  })
+
   await it("validate: directive/promptOverride sai kiểu bị chặn, đúng kiểu thì không", async () => {
     const g = await api("GET", `/api/projects/${pid}/contract`)
     const good = structuredClone(g.json.contract)

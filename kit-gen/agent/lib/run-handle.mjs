@@ -13,6 +13,7 @@ import { thumbnail } from "./thumbs.mjs"
    nhánh đó import ngược lại run-handle. Nhập vào đây để mỗi lượt vẽ xong là con số
    hạn mức được đọc lại — chính codex vừa ghi một dòng `rate_limits` mới vào rollout. */
 import { invalidateUsageCache } from "./usage.mjs"
+import { archiveRaw } from "./raw-history.mjs"
 import { IS_WIN, pythonCommand, pythonSpawnOpts, killTree, winSpawnOpts } from "./platform.mjs"
 
 const HEARTBEAT_MS = 15000
@@ -291,6 +292,15 @@ export class RunHandle {
     const onlyJobs = this.run.jobs.map(j => ({ variant: j.variant, sheet: j.sheet }))
     await materializeStyles(pdir, this.opts.contract, onlyJobs.length ? onlyJobs : null)
     for (const d of ["raw", "logs", "prompts", "kits"]) await ensureDir(join(pdir, d))
+    /* CẤT BẢN CŨ TRƯỚC KHI ENGINE GHI ĐÈ — đây là chỗ DUY NHẤT còn kịp.
+       `gen.sh` dặn codex lưu thẳng đè lên `raw/<job>.png`, và `attachArtifact()` chỉ
+       chép snapshot SAU khi ảnh mới đã nằm đó; không cất ở đây thì đời ảnh trước biến
+       mất và thanh phiên bản đứng ở "v1" vĩnh viễn (xem `raw-history.mjs`).
+       Chỉ cho pha `gen`: pha `slice` không đụng `raw/`, cất ở đó là nhân bản một bản
+       y hệt thành một "phiên bản" giả. */
+    if (this.run.kind === "gen") {
+      for (const j of this.run.jobs) await archiveRaw(this.ws, this.run.projectId, j.job)
+    }
     if (this.stopped()) return
     this.run.status = "running"
     await this.persist()

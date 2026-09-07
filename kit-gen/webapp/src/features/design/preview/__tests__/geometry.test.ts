@@ -266,6 +266,18 @@ describe("hộp vẽ max-fit — gương của geometry.py", () => {
     expect(read("agent/routes/files.mjs")).toMatch(/outSize: meta\?\.outSize/);
     /* Và engine phải CHẤP NHẬN trường ấy, không đánh nó là schema lạ. */
     expect(read("agent/lib/validate.mjs")).toContain("OUT_SIZE");
+    /* ══ MẮT XÍCH THỨ TƯ — CÁI ĐÃ ĐỨT THẬT ═══════════════════════════════════
+       Ba dòng trên xanh suốt, mà chủ sản phẩm vẫn báo "ra Figma không đúng size".
+       Vì chuỗi có BỐN mắt, không phải ba: giữa contract và `slice.py` còn
+       `contractToStylesV1` — nơi dựng `styles.json` cho engine đọc. Nó lọc
+       `components` xuống một danh sách trắng, và `out`/`drawScale` không có tên
+       trong đó ⇒ `styles.json` trống ⇒ `slice.py` không có gì để chép sang
+       `outSize`, `gen.sh` không có gì để in ra cỡ thật cho máy vẽ. */
+    const engine = read("agent/lib/engine.mjs");
+    expect(engine).toMatch(/e\.out = \{ w: Math\.round\(ow\), h: Math\.round\(oh\) \}/);
+    expect(engine).toMatch(/e\.drawScale = k/);
+    /* Và `gen.sh` là nơi con số ấy thành câu nói với máy vẽ. */
+    expect(read("gen.sh")).toContain("final size {ow}x{oh} px, drawn at {k:g}x");
   });
 
   it("cỡ đầu ra LỚN HƠN ô ⇒ hệ số tụt dưới 1 nhưng tỉ lệ không méo", () => {

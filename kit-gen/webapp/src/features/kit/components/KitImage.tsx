@@ -58,6 +58,19 @@ export interface KitImageProps {
    * hai bên nói hai cỡ khác nhau. Kiểu literal ở đây chặn chuyện đó ngay lúc biên dịch.
    */
   width?: 128 | 256 | 512;
+  /**
+   * KHOÁ PHIÊN BẢN CỦA FILE — thường là `mtime` mà `#42` trả về cho chính ô này.
+   *
+   * ╔══ VÌ SAO KHÔNG BỎ QUA PROP NÀY ══════════════════════════════════════════╗
+   * ║ Đường dẫn của một ô KHÔNG ĐỔI khi vẽ lại: vẫn `kits/<phong cách>/<tên>.png`║
+   * ║ Cache ảnh khoá theo đường dẫn, nên gen xong ô hiện lại đúng ảnh cũ và chỉ  ║
+   * ║ F5 mới chữa được. Truyền `mtime` vào đây là ảnh mới lên ngay, còn ảnh KHÔNG║
+   * ║ đổi thì vẫn là cache hit — không tải thừa một byte nào.                    ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   * Bỏ trống ⇒ hành vi y hệt bản trước (dùng cho ảnh vốn đã có đường dẫn bất biến,
+   * ví dụ ảnh của một lượt chạy nằm trong thư mục mang mã lượt).
+   */
+  version?: string | null;
   /** true ⇒ tải ngay, không chờ vào khung nhìn (dùng ở lightbox). */
   eager?: boolean;
   /** file cắt ra rỗng — nói thật, không hiện ô trống bí ẩn */
@@ -91,6 +104,7 @@ export function KitImage({
   backdrop,
   full = true,
   width = LIMITS.thumbWidth,
+  version = null,
   eager = false,
   empty = false,
   offline = false,
@@ -147,7 +161,7 @@ export function KitImage({
     if (offline || empty || !visible) return;
     let alive = true;
     setState({ kind: "loading" });
-    const handle = loadImage(projectId, path, full ? null : width);
+    const handle = loadImage(projectId, path, full ? null : width, version);
     /* Vẫn để request chạy tiếp — nó có thể về muộn và tự lên `ready`. Cái đổi ở đây
        chỉ là NÓI THẬT với người dùng rằng chờ tiếp là vô ích, kèm một lối thoát. */
     const slowTimer = setTimeout(() => {
@@ -166,7 +180,7 @@ export function KitImage({
       clearTimeout(slowTimer);
       handle.cancel();
     };
-  }, [visible, offline, empty, full, width, projectId, path, attempt]);
+  }, [visible, offline, empty, full, width, projectId, path, version, attempt]);
 
   const shell = cn("relative overflow-hidden rounded-2 border border-line", className);
 

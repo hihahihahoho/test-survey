@@ -570,6 +570,20 @@ export const runsApi = {
   async rawHistory(id: string, job: string) {
     return parse(rawHistorySchema, await httpGet(`/api/projects/${pid(id)}/raw/${pid(job)}/history`), "lịch sử ảnh");
   },
+  /**
+   * #39.1 — XOÁ một đời ảnh cũ.
+   *
+   * Agent từ chối `current` bằng 409 `HISTORY_CURRENT`: bản đang dùng là
+   * `raw/<tấm>.png`, đầu vào của bước cắt, và nút xoá không bao giờ được chạm tới nó.
+   * Ở đây không tự chặn trước — chặn ở UI (nút không hiện) VÀ ở agent là đủ hai lớp;
+   * thêm một lớp thứ ba trong tầng transport chỉ làm lỗi thật khó lần ra.
+   */
+  async rawHistoryDelete(id: string, job: string, historyId: string) {
+    return (await httpDelete(`/api/projects/${pid(id)}/raw/${pid(job)}/history/${pid(historyId)}`)) as {
+      deleted?: boolean;
+      id?: string;
+    };
+  },
   /** #40 */
   async rawRestore(id: string, job: string, historyId: string) {
     return (await httpPost(`/api/projects/${pid(id)}/raw/${pid(job)}/restore`, { historyId })) as {

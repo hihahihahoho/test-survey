@@ -122,10 +122,25 @@ export function contractToStylesV1(contract, onlyJobs = null) {
       const only = perSheet?.get(sh.id)
       if (only) out.styles = [...only]
       else if (Array.isArray(sh.variants) && sh.variants.length) out.styles = sh.variants
-      out.components = (sh.components ?? []).map(c => ({
-        file: c.file, vi: c.vi, spec: c.spec,
-        skel: engineSkel(c.skel),
-      }))
+      out.components = (sh.components ?? []).map(c => {
+        /* DANH SÁCH TRẮNG NÀY ĐÃ TỪNG NUỐT MẤT MỘT TÍNH NĂNG — đọc trước khi thêm khoá.
+           Lọc là CHỦ Ý cho `components`: engine v1 chỉ hiểu vài khoá và một object lạ
+           lọt vào `skel` là `slice.py` cắt sai chứ không báo lỗi. Nhưng cái giá của nó
+           là mỗi khoá MỚI phải được ghi tên vào đây, và ngày 07/09/2026 `out`/`drawScale`
+           không được ghi ⇒ contract lưu đúng, UI hiện đúng, mà `styles.json` thì trống:
+           `gen.sh:583` không in "final size WxH, drawn at kx" (máy vẽ mất cỡ thật),
+           `slice.py:498` không ghi `outSize`/`drawScale` vào manifest ⇒ `sheet-files.ts`
+           rơi về `contractSafe` ⇒ dán ra Figma đúng cỡ MÁY VẼ chứ không đúng cỡ NGƯỜI DÙNG.
+           Vì vậy hai khoá ấy phải đi qua — và chúng an toàn: engine chỉ ĐỌC, không cắt theo.
+           `out` chép có gọt (chỉ `w`/`h` dương) để một object rác trong contract cũ không
+           thành `int(None)` giữa `slice.py`. */
+        const e = { file: c.file, vi: c.vi, spec: c.spec, skel: engineSkel(c.skel) }
+        const ow = Number(c.out?.w), oh = Number(c.out?.h)
+        if (ow > 0 && oh > 0) e.out = { w: Math.round(ow), h: Math.round(oh) }
+        const k = Number(c.drawScale)
+        if (k > 0) e.drawScale = k
+        return e
+      })
       return out
     }),
     styles: variants.map(v => ({ ...v })),
