@@ -7,6 +7,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FOCUS } from "@/components/layout/flora";
 import { cn } from "@/lib/utils";
+import type { KitFile } from "@/lib/types";
 import { KitImage } from "@/features/kit/components/KitImage";
 import { forgetProject, loadFull } from "@/features/kit/lib/image-source";
 import { saveProjectFile } from "@/features/kit/lib/download";
@@ -80,6 +81,22 @@ import { SheetVersionBar } from "./SheetVersionBar";
  * ║ Ảnh gốc thô KHÔNG chết — nó lùi xuống nút phụ và chỉ hiện ở tab «Ảnh gốc», ║
  * ║ đúng nơi người dùng đang nhìn chính tấm ấy. Ở tab «Đã crop» mà bày một nút ║
  * ║ dán nguyên tấm là mời bấm nhầm lần nữa.                                    ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ╔══ «CLIP CONTENT» BẬT KHI DÁN — ĐÃ TRUY, VÀ WEB KHÔNG TẮT ĐƯỢC ═══════════╗
+ * ║ Chủ sản phẩm chụp lại một khung dán ra Figma có Clip content BẬT, tức phần ║
+ * ║ trang trí tràn ra ngoài khung bị cắt mất. Đã truy tới đáy:                 ║
+ * ║  ① `figma-node.ts` KHAI `clipsContent: false` và `renderSpec` để frame ở    ║
+ * ║    `overflow` mặc định (`visible`) — phía web nói đúng thứ mình muốn;       ║
+ * ║  ② `assertDocShape` còn CHẶN payload nào có `overflow:"hidden"`;            ║
+ * ║  ③ NHƯNG `figma-h2d.global.js:429` để `overflow:"visible"` trong bảng       ║
+ * ║    `STYLE_DEFAULTS`, và encoder chỉ chở những style KHÁC mặc định ⇒ payload  ║
+ * ║    KHÔNG mang theo một chữ nào về clip, và bên nhận (trình đọc H2D trong    ║
+ * ║    Figma desktop) tự quyết — nó chọn BẬT.                                   ║
+ * ║ ⇒ Không có đường nào tắt clip từ web mà không sửa `vendor/figma-h2d/`, thứ  ║
+ * ║ đang bị test khoá theo hash. Việc phải xin duyệt riêng, không lặng lẽ làm.  ║
+ * ║ Đỡ được phần nào: nay ảnh đã co để LÕI vừa khít khung, nên thứ bị cắt chỉ   ║
+ * ║ còn là trang trí tràn — không còn cảnh cắt cụt cả thân element như trước.   ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 export interface SheetResultPanelProps {
@@ -201,6 +218,40 @@ export function SheetResultPanel({
     [contract.data?.contract],
   );
 
+  /**
+   * KHUNG = HỘP HỢP ĐỒNG, ẢNH CO SAO CHO LÕI VỪA KHÍT — tính TRƯỚC, ngoài lượt bấm.
+   *
+   * Cả hai đường (khung riêng và bảng ảnh phẳng) đọc chung một kết quả, nên không
+   * có cách nào để hai đường co ảnh khác nhau. Lý do đầy đủ nằm ở `contractFramed`
+   * (`sheet-files.ts`) — đây chỉ là chỗ nối dây.
+   */
+  const framed = React.useMemo(() => contractFramed(cells), [cells]);
+  const fitScale = React.useCallback(
+    (f: KitFile) => framed.scales.get(f.path) ?? 1,
+    [framed],
+  );
+
+  /**
+   * NÓI RA PHÉP CO — nó là thứ người dùng sẽ đo lại đầu tiên.
+   *
+   * Ảnh dán ra không còn là pixel gốc nữa, và im lặng về chuyện đó nghĩa là để
+   * designer tự phát hiện lúc so hai con số. Nói cả KHOẢNG khi mỗi ô một tỉ lệ:
+   * đó chính là chân dung của lượt vẽ (ô nào máy vẽ lố bao nhiêu).
+   */
+  const fitNote = React.useMemo(() => {
+    if (framed.fitted.length === 0) return "";
+    const pcts = framed.fitted.map((f) => f.percent);
+    const lo = Math.min(...pcts);
+    const hi = Math.max(...pcts);
+    const range = lo === hi ? `${lo}%` : `${lo}–${hi}%`;
+    const soO = framed.fitted.length;
+    /* Mọi ô cùng một cỡ đầu ra ⇒ nói thẳng con số ấy, vì đó là thứ người dùng vừa
+       chọn và sắp đo lại. Nhiều cỡ khác nhau ⇒ đừng chọn bừa một cái để in ra. */
+    const sizes = new Set(framed.fitted.map((f) => `${f.w}×${f.h}`));
+    const co = sizes.size === 1 ? `cỡ xuất ${[...sizes][0]}` : "đúng cỡ xuất đã chọn";
+    return ` Máy vẽ luôn vẽ to hết ô cho nét, nên ${soO} ô được co về ${co} (${range}).`;
+  }, [framed]);
+
   /* Nhãn «Đã copy N ô» tự tắt sau 2 giây — cùng cách với nút «Copy prompt» của
      `CanvasBlock.tsx:426`. Dọn timer khi khối gỡ sớm: người dùng cuộn qua thẻ khác
      ngay sau khi bấm thì `setCopied` sẽ chạy trên một khối không còn nữa. */
@@ -226,6 +277,9 @@ export function SheetResultPanel({
   const copyBoardFallback = async (why: string, signal: AbortSignal) => {
     const res = await buildFigmaBoard({
       projectId, files: cells, poseFiles, variantLabel: name, onProgress: setProgress, signal,
+      /* Cùng tỉ lệ với đường node: bấm một nút mà ra hai bố cục khác nhau tuỳ hôm
+         nay encoder có chạy hay không là cách chắc chắn để không ai tin nút này. */
+      scaleOf: fitScale,
     });
     if (res.outcome === "clipboard") {
       setCopied(res.files);
@@ -260,12 +314,12 @@ export function SheetResultPanel({
     setProgress({ phase: 1, label: PHASE_LABEL[1], done: 0, total: cells.length });
     void (async () => {
       try {
-        /* KHUNG = HỘP HỢP ĐỒNG, TỈ LỆ = 1:1 — hai nửa của cùng một lời hứa. Người
-           dùng vừa đặt cỡ safe zone bằng pixel và đọc đúng con số ấy trong prompt;
-           khung dán ra Figma phải là con số đó, không phải lõi model vẽ ra thu 50%.
-           Xem `contractFramed` (`sheet-files.ts`) và `PackOptions.scale`. */
-        const framed = contractFramed(cells);
-        const nodes = cellsOf(packKitDoc(framed.files, poseFiles, BOARD_W, { scale: 1 }).groups);
+        /* KHUNG = HỘP HỢP ĐỒNG, ẢNH CO CHO LÕI VỪA KHÍT — hai nửa của cùng một lời
+           hứa. Người dùng vừa đặt cỡ bằng pixel và đọc đúng con số ấy trong prompt;
+           khung dán ra Figma phải là con số đó, còn ảnh thì co theo phần lố của
+           chính ô đó (máy vẽ không bao giờ vẽ đúng px). Tỉ lệ đi THEO TỪNG Ô — xem
+           `contractFramed` (`sheet-files.ts`) và `PackOptions.scale`. */
+        const nodes = cellsOf(packKitDoc(framed.files, poseFiles, BOARD_W, { scale: fitScale }).groups);
         if (nodes.length === 0) {
           throw new Error("Không ô nào của tấm này có đủ toạ độ vùng an toàn để dựng khung.");
         }
@@ -300,7 +354,8 @@ export function SheetResultPanel({
         const doPhong = framed.measured.length;
         toastSuccess(
           "Đã copy các ô sang Figma",
-          `${name} · ${res.docs} ô, mỗi ô một khung riêng đúng cỡ đã chọn (1:1), ảnh giữ nguyên nét gốc.`
+          `${name} · ${res.docs} ô, mỗi ô một khung riêng đúng cỡ xuất đã chọn.`
+          + fitNote
           + " Dán bằng Ctrl/Cmd+V."
           + (doPhong === 0 ? "" : ` Riêng ${doPhong} ô cắt bằng bản cũ thì khung lấy theo cỡ đo được, có thể lệch cỡ bạn đã chọn.`),
         );
@@ -447,7 +502,7 @@ export function SheetResultPanel({
             disabled={cells.length === 0 || busyCells} loading={busyCells}
             title={cells.length === 0
               ? "Chờ máy cắt xong tấm này thì mới có ô để copy"
-              : "Mỗi ô một khung riêng đúng cỡ vùng an toàn, ảnh giữ nguyên nét gốc"}
+              : `Mỗi ô một khung riêng đúng cỡ xuất đã chọn, ảnh co cho phần chính vừa khít khung.${fitNote}`}
           >
             {copied > 0 && !busyCells
               ? <Check aria-hidden strokeWidth={1.5} />

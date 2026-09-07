@@ -115,6 +115,33 @@ describe("8 luật chặn đúng chỗ", () => {
   });
 });
 
+describe("cỡ đầu ra (`out`) — gương của agent/lib/validate.mjs", () => {
+  it("thiếu `out` là HỢP LỆ (kit đời cũ), có thì phải là số nguyên 8..4096", () => {
+    const c = campaign();
+    expect(rules(validateDesign(c).errors)).not.toContain("OUT_SIZE");
+    const ok = campaign();
+    (ok.sheets[0]!.components[0]! as { out?: unknown }).out = { w: 120, h: 52 };
+    expect(rules(validateDesign(ok).errors)).not.toContain("OUT_SIZE");
+    for (const bad of [{ w: 4, h: 52 }, { w: 120, h: 9999 }, { w: 120.5, h: 52 }]) {
+      const c2 = campaign();
+      (c2.sheets[0]!.components[0]! as { out?: unknown }).out = bad;
+      expect(rules(validateDesign(c2).errors)).toContain("OUT_SIZE");
+    }
+  });
+
+  it("`out` KHÔNG đụng tới V-06: nó là px đầu ra, không phải phân số ô", () => {
+    /* Hai cỡ sống cạnh nhau trong một ô: `skel.w/h` là hộp VẼ (phân số ô, ≤ 1) còn
+       `out` là cỡ ĐẦU RA tính bằng pixel. Gộp chúng làm một là quay lại đúng bệnh
+       "chọn nút nhỏ ⇒ máy vẽ nhỏ ⇒ mất độ phân giải". */
+    const c = campaign();
+    (c.sheets[0]!.components[0]! as { out?: unknown }).out = { w: 1254, h: 1254 };
+    c.sheets[0]!.components[0]!.skel.w = 0.8;
+    const r = validateDesign(c);
+    expect(rules(r.errors)).not.toContain("OUT_SIZE");
+    expect(rules(r.errors)).not.toContain("V-06");
+  });
+});
+
 describe("luật engine ngoài schema", () => {
   it("matte chỉ nhận glow|glass — sai là CHẶN (slice.py không hiểu giá trị khác)", () => {
     const c = campaign();

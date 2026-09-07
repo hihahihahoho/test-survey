@@ -1037,3 +1037,73 @@ class HinhDangOQuyetDinhHopSafeZoneTest(unittest.TestCase):
         for i, comp in enumerate(sheet["components"][:3]):
             x0, y0, x1, y1 = geometry.safe_box(1254, 1254, 2, 2, i, comp["skel"])
             self.assertEqual(self._hop(f"{i + 1}) "), (x1 - x0, y1 - y0))
+
+
+class CoDauRaVaHeSoPhongTest(unittest.TestCase):
+    """PROMPT PHẢI NÓI CỠ THẬT + HỆ SỐ PHÓNG, không chỉ nói cái hộp to.
+
+    Chủ sản phẩm 07/09/2026: *«vẫn phải bảo nó là khi scale ra thật thì là size bao
+    nhiêu, tức là bảo nó upscale bao nhiêu lần… độ dày của border»*. Lỗ hổng thật:
+    ô nay được lấp bằng hộp lớn nhất vừa lề, nên một cái nút 120×52 được vẽ ở
+    480×208 — nếu model không biết cỡ thật, nó chọn độ dày nét / bán kính bo / mật
+    độ chi tiết theo hộp 480×208 và ra một tấm banner viền mảnh; co về 120×52 là
+    nát. Ba con số phải cùng có mặt trên MỘT dòng: cỡ thật, hệ số, hộp.
+    """
+
+    @staticmethod
+    def _cfg():
+        return {"styles": [{"id": "demo", "bg": "magenta", "style": "flat ink"}],
+                "sheets": [{"id": "ui", "canvas": "square", "grid": {"cols": 2, "rows": 2},
+                            "components": [
+                                {"file": "01-button", "spec": "button",
+                                 "skel": {"shape": "pill", "w": 0.765, "h": 0.332},
+                                 "out": {"w": 120, "h": 52}, "drawScale": 4.0},
+                                {"file": "02-healthbar", "spec": "health bar",
+                                 "skel": {"shape": "bar", "w": 0.8, "h": 0.205},
+                                 "out": {"w": 240, "h": 62}},
+                                {"file": "03-avatar-frame", "spec": "avatar frame",
+                                 "skel": {"shape": "circle", "w": 0.777, "h": 0.777},
+                                 "out": {"w": 195, "h": 195}, "drawScale": 2.5},
+                                {"file": "_empty-1", "spec": "", "skel": {"shape": "empty"}}]}]}
+
+    def setUp(self):
+        self.txt = render_prompt_text(self._cfg(), name="demo-ui")
+
+    def _dong(self, dau_dong):
+        for line in self.txt.splitlines():
+            if line.startswith(dau_dong):
+                return line
+        raise AssertionError(f"prompt không có dòng {dau_dong!r}")
+
+    def test_dong_element_mang_co_that_va_he_so(self):
+        line = self._dong("1) ")
+        self.assertIn("final size 120x52 px", line)
+        self.assertIn("drawn at 4x", line)
+        # Hộp sau dấu "=" phải là ĐÚNG hộp safe zone in ở cuối dòng, không phải một
+        # con số thứ hai: hứa hai hộp khác nhau trên cùng một dòng là hỏng cả dòng.
+        hop = re.findall(r"(\d+)x(\d+) px", line)
+        self.assertEqual(hop[1], hop[2], f"hộp phóng ≠ hộp safe zone: {line}")
+
+    def test_he_so_thieu_thi_engine_TU_TINH_chu_khong_im_lang(self):
+        """Contract do bản webapp cũ sinh ra không có `drawScale`. Bỏ trống câu ấy
+        là để model đoán cỡ thật — đúng cái bệnh này sinh ra để chữa."""
+        line = self._dong("2) ")
+        self.assertIn("final size 240x62 px", line)
+        # Hệ số dựng lại từ CHÍNH hộp in ở cuối dòng ⇒ dòng luôn tự nhất quán, kể cả
+        # với contract sửa tay có `skel` không dựng từ `out`.
+        hop = re.findall(r"(\d+)x(\d+) px", line)
+        k = float(re.search(r"drawn at ([\d.]+)x", line).group(1))
+        self.assertAlmostEqual(int(hop[1][0]) / 240, k, places=2)
+
+    def test_cau_chung_giai_thich_HE_SO_dung_mot_lan(self):
+        self.assertEqual(self.txt.count("drawn ENLARGED from its final on-screen size"), 1)
+        self.assertIn("a small button drawn at 2.5x must still read as a small button", self.txt)
+
+    def test_o_khong_co_out_thi_KHONG_bia_ra_co(self):
+        cfg = self._cfg()
+        for comp in cfg["sheets"][0]["components"]:
+            comp.pop("out", None)
+            comp.pop("drawScale", None)
+        txt = render_prompt_text(cfg, name="demo-ui")
+        self.assertNotIn("final size", txt)
+        self.assertNotIn("drawn at", txt)

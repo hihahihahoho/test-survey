@@ -1264,6 +1264,16 @@ if __name__ == "__main__":
                          "decoration": ledger["decoration"],
                          "deviation": ledger["deviation"],
                          "sizeDeviation": ledger["sizeDeviation"]}
+                # CỠ ĐẦU RA CHỈ ĐI QUA, KHÔNG THAM GIA CẮT. `out` là cỡ người dùng
+                # muốn có khi element rời khỏi app (dán Figma, xuất PNG); ô thì luôn
+                # được vẽ to hết cỡ lề cho phép để ăn trọn độ phân giải ảnh sinh. Nên
+                # dao cắt vẫn cắt theo `contractSafe` như cũ, còn hai số này được CHÉP
+                # nguyên sang manifest để tầng xuất biết phải co lõi về đâu.
+                out = comp.get("out")
+                if isinstance(out, dict) and out.get("w") and out.get("h"):
+                    asset["outSize"] = [int(out["w"]), int(out["h"])]
+                    if comp.get("drawScale"):
+                        asset["drawScale"] = float(comp["drawScale"])
                 blend = asset_blend(sk)
                 if blend:
                     asset["blend"] = blend       # xem MATTE_BLEND: ô glow ship kèm blend

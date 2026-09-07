@@ -28,12 +28,20 @@
  * ║   hộp to. Không còn MỘT con số hệ thống cho mọi loại.                     ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * ══ ĐƠN VỊ LÀ PIXEL, NHƯNG CONTRACT ĂN PHÂN SỐ ═════════════════════════════
- * `skel.w`/`skel.h` của contract là PHÂN SỐ của ô (V-06: ∈ (0,1]) — người thiết
- * kế thì nghĩ bằng pixel. Nên UI nói pixel, còn `skelOf()` chia cho bề rộng ô
- * thật để ra phân số. Chia theo Ô CHỨ KHÔNG THEO CANVAS: cùng một món 96px nằm
- * trên lưới 4×4 (ô 256px) và trên lưới 2×2 (ô 512px) phải ra CÙNG 96 pixel thật,
- * và chỉ phép chia theo ô mới giữ được điều đó.
+ * ╔══ 07/09/2026 — CON SỐ Ở ĐÂY LÀ CỠ ĐẦU RA, KHÔNG PHẢI CỠ VẼ ══════════════╗
+ * ║ Chủ sản phẩm: *«nó chỉ cần vẽ đúng tỉ lệ, để tối đa độ phân giải — còn     ║
+ * ║ việc co về của Figma là của code»*. Bảo máy vẽ một cái nút 120px trên tấm  ║
+ * ║ 1254px là tự nguyện vứt đi 90% pixel mà lượt gen ấy đã trả tiền.           ║
+ * ║                                                                          ║
+ * ║ ⇒ Ô LUÔN được lấp bằng hộp lớn nhất vừa lề (`drawBox` trong               ║
+ * ║   `design/preview/geometry.ts`, gương của `geometry.py`), và cỡ chọn ở đây ║
+ * ║   còn đúng hai vai: ① cho ra TỈ LỆ của hộp vẽ ấy, ② đi vào                 ║
+ * ║   `component.out` → `manifest.outSize` để tầng xuất co lõi về đúng cỡ.     ║
+ * ║                                                                          ║
+ * ║ Vì thế file này KHÔNG còn hàm nào đổi cỡ chọn thành phân số ô: phân số ô   ║
+ * ║ nay do `drawBox` quyết, và hai đường cùng tính một thứ là hai đường sẽ     ║
+ * ║ trôi khỏi nhau (xem chính `geometry.py` sinh ra để chấm dứt chuyện đó).    ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 import { elementBox } from "@/features/design/preview/geometry";
 import type { Skel } from "@/lib/types/contract";
@@ -64,25 +72,39 @@ export interface SizePreset {
   id: string;
   /** Nhãn tiếng Việt trên pill. */
   vi: string;
-  /** Bề rộng safe zone, pixel trên canvas vuông. */
-  w: number;
-  /** Bề cao safe zone, pixel trên canvas vuông. */
-  h: number;
+  /** CẠNH DÀI của safe zone, pixel trên canvas vuông. Cạnh còn lại suy từ hình dạng. */
+  long: number;
 }
 
 /**
- * Bốn nấc cỡ. Số đo chọn theo ba mốc có thật, không phải bốn số tròn cho đẹp:
- *  · S  = một icon/huy hiệu vuông, đủ chỗ cho một ký hiệu đọc được ở 96px;
- *  · M  = một nút bấm có nhãn — ngang gấp rưỡi cao, hình dạng thật của nút;
+ * Bốn NẤC CỠ — mỗi nấc là một CẠNH DÀI, không phải một cái hộp.
+ *
+ * ╔══ VÌ SAO KHÔNG CÒN LÀ BỐN HỘP CỐ ĐỊNH ══════════════════════════════════╗
+ * ║ Chủ sản phẩm nhìn pill Cỡ của «Khung avatar» rồi hỏi: *"mà avatar sao lại ║
+ * ║ có 256×192 nhỉ…"*. Câu hỏi ấy không có câu trả lời nào tử tế: bốn nấc cũ  ║
+ * ║ là bốn hộp chữ nhật đóng cứng (112×112 · 192×136 · 256×192 · 304×304), và ║
+ * ║ ba trong bốn hộp đó KHÔNG PHẢI hình dạng của một khung avatar vuông. Chọn ║
+ * ║ «L» cho một cái khung tròn nghĩa là tự tay phá đúng cái hình dạng mà lượt ║
+ * ║ trước vừa dựng lên — và prompt lại hứa với model một hộp nó không vẽ được.║
+ * ║                                                                          ║
+ * ║ ⇒ Nấc chỉ trả lời «TO CỠ NÀO», hình dạng vẫn là của element. Cạnh dài ăn ║
+ * ║   đúng con số cũ (112 · 192 · 256 · 304 — thói quen không đổi), cạnh ngắn ║
+ * ║   = cạnh dài × tỉ lệ của `skel`. Khung avatar (1:1) ⇒ 256×256; thanh máu  ║
+ * ║   (3,9:1) ⇒ 256×65; nút pill (2,9:1) ⇒ 256×89.                            ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Bốn mốc vẫn là bốn mốc CÓ THẬT, chỉ đọc lại theo cạnh dài:
+ *  · S  = một icon/huy hiệu, đủ chỗ cho một ký hiệu đọc được;
+ *  · M  = một nút bấm có nhãn;
  *  · L  = một thanh (máu, tiến trình) hoặc khung avatar lớn;
  *  · XL = bảng nền / popup: gần trọn ô, chỉ chừa vài px mỗi bên để `slice.py`
- *         còn biên mà cắt (ô 313 ⇒ 304).
+ *         còn biên mà cắt (ô 314 ⇒ 304).
  */
 export const SIZE_PRESETS: readonly SizePreset[] = [
-  { id: "s", vi: "S · nhỏ", w: 112, h: 112 },
-  { id: "m", vi: "M · vừa", w: 192, h: 136 },
-  { id: "l", vi: "L · lớn", w: 256, h: 192 },
-  { id: "xl", vi: "XL · tràn ô", w: 304, h: 304 },
+  { id: "s", vi: "S · nhỏ", long: 112 },
+  { id: "m", vi: "M · vừa", long: 192 },
+  { id: "l", vi: "L · lớn", long: 256 },
+  { id: "xl", vi: "XL · tràn ô", long: 304 },
 ];
 
 /** Trần một cạnh — không ai đặt safe zone rộng hơn cả canvas. */
@@ -130,13 +152,54 @@ export function skelSizePx(skel: Skel | null | undefined, cellPx: number = REFER
 }
 
 /**
- * Cỡ pixel → giá trị LƯU: id preset nếu trùng khít một nấc, không thì chuỗi tự điền.
+ * TỈ LỆ NGANG/DỌC của một hình dạng.
  *
- * Ưu tiên id preset vì nó là thứ người dùng đọc được («M · vừa» thay vì «192×136px»)
- * và vì nó sống sót khi bảng preset được chỉnh lại.
+ * Đọc thẳng `w/h` được là nhờ ô Bộ UI luôn VUÔNG (xem `skelSizePx`). Hình dạng
+ * hỏng (`h` thiếu, bằng 0, hay `full` không khai w/h) ⇒ rơi về tỉ lệ của
+ * `CUSTOM_ELEMENT_SKEL` (0,8/0,6 = 4:3) thay vì trả `Infinity` hay `NaN` — một
+ * cạnh `NaN` đi thẳng vào contract và làm `gen.sh` in ra một hộp không đọc được.
  */
-export function sizeValueOfPx(px: SizePx): string {
-  const hit = SIZE_PRESETS.find((preset) => preset.w === px.w && preset.h === px.h);
+export function aspectOf(skel: Skel | null | undefined): number {
+  const w = Number(skel?.w);
+  const h = Number(skel?.h);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+    return (CUSTOM_ELEMENT_SKEL.w ?? 0.8) / (CUSTOM_ELEMENT_SKEL.h ?? 0.6);
+  }
+  return w / h;
+}
+
+/**
+ * Một NẤC (cạnh dài) + một hình dạng → hộp pixel.
+ *
+ * Cạnh dài ăn đúng con số của nấc; cạnh ngắn suy ra từ tỉ lệ rồi LÀM TRÒN. Kẹp cả
+ * hai cạnh vào `[MIN_SIZE_PX, MAX_SIZE_PX]`: một hình cực dẹt (thanh 6:1) ở nấc S
+ * cho cạnh ngắn 19px — vẫn cắt được; nhưng nếu ai đó khai một tỉ lệ hoang thì sàn
+ * 8px là thứ giữ cho ô cắt ra còn có gì để nhìn.
+ */
+export function stepSizePx(longPx: number, skel: Skel | null | undefined): SizePx {
+  const long = clampSide(longPx);
+  const ratio = aspectOf(skel);
+  return ratio >= 1
+    ? { w: long, h: clampSide(long / ratio) }
+    : { w: clampSide(long * ratio), h: long };
+}
+
+/**
+ * Cỡ pixel → giá trị LƯU: id nấc nếu trùng khít một nấc, không thì chuỗi tự điền.
+ *
+ * Ưu tiên id nấc vì nó là thứ người dùng đọc được («M · vừa» thay vì «192×66px»)
+ * và vì nó sống sót khi bảng nấc được chỉnh lại.
+ *
+ * PHẢI có `skel`: từ khi nấc là một CẠNH DÀI, cùng một con số `192` ra hộp khác
+ * nhau theo hình dạng, nên "px này có phải nấc M không" là câu hỏi chỉ trả lời
+ * được khi biết hình. Thiếu hình ⇒ hỏi theo hộp trung tính, đúng thứ nơi gọi sẽ
+ * dùng để vẽ.
+ */
+export function sizeValueOfPx(px: SizePx, skel: Skel | null | undefined): string {
+  const hit = SIZE_PRESETS.find((preset) => {
+    const step = stepSizePx(preset.long, skel);
+    return step.w === px.w && step.h === px.h;
+  });
   return hit ? hit.id : customSizeValue(px.w, px.h);
 }
 
@@ -157,7 +220,7 @@ export interface SizedElement {
  *     khung avatar ra hộp vuông). Đây là tầng thay cho cỡ hệ thống cũ.
  */
 export function defaultSizePx(preset: SizedElement | null | undefined): SizePx {
-  const pinned = sizePx(preset?.sizeId);
+  const pinned = sizePx(preset?.sizeId, preset?.skel);
   return pinned ?? skelSizePx(preset?.skel);
 }
 
@@ -169,7 +232,7 @@ export function defaultSizePx(preset: SizedElement | null | undefined): SizePx {
  * chỉnh tay hay chưa.
  */
 export function defaultSizeOf(preset: SizedElement | null | undefined): string {
-  return String(preset?.sizeId ?? "").trim() || sizeValueOfPx(skelSizePx(preset?.skel));
+  return String(preset?.sizeId ?? "").trim() || sizeValueOfPx(skelSizePx(preset?.skel), preset?.skel);
 }
 
 /**
@@ -208,16 +271,29 @@ export function customSizeValue(w: number, h: number): string {
  * Rỗng vẫn phải đọc được, dù UI không còn sinh ra nó: bản nháp lưu trước 07/09/2026
  * có `sizeId` rỗng, và `readCell` mới là chỗ vá chúng (bằng `defaultSizeOf` của
  * chính loại element ấy).
+ *
+ * ⚠️ NHÁP CŨ LƯU MỘT NẤC SẼ ĐỔI HỘP, CÓ CHỦ Ý. Một dòng «Khung avatar» lưu `"l"`
+ * trước lượt này đọc ra 256×192; nay nó đọc ra 256×256. Đó KHÔNG phải mất dữ liệu:
+ * `"l"` luôn có nghĩa là «nấc lớn», và nghĩa của nấc lớn nay là «cạnh dài 256, giữ
+ * hình dạng». Giữ nguyên hộp cũ thì phải lưu thêm một bảng hộp-đời-trước, tức là
+ * giữ sống đúng cái thứ vừa bị chủ sản phẩm chỉ tay vào. Ai đã tự gõ `"256x192"`
+ * thì con số ấy vẫn nguyên — chuỗi tự điền không đi qua bảng nấc.
  */
-export function sizePx(value: string | null | undefined): SizePx | null {
+export function sizePx(value: string | null | undefined, skel: Skel | null | undefined): SizePx | null {
   const raw = String(value ?? "").trim();
   if (!raw) return null;
   const preset = SIZE_PRESETS.find((item) => item.id === raw);
-  if (preset) return { w: preset.w, h: preset.h };
+  if (preset) return stepSizePx(preset.long, skel);
   return parseCustomSize(raw);
 }
 
-/** Nhãn hiện trên pill. Rỗng ⇒ chuỗi rỗng (nơi gọi tự quyết chữ placeholder). */
+/**
+ * Nhãn hiện trên pill. Rỗng ⇒ chuỗi rỗng (nơi gọi tự quyết chữ placeholder).
+ *
+ * KHÔNG nhận `skel`, và đó là chủ ý: nhãn của một nấc là TÊN NẤC («L · lớn»), thứ
+ * không phụ thuộc hình dạng. Con số px thì có — nhưng nó thuộc về cột phụ của hộp
+ * chọn (`SizePill`), nơi đã có `skel` trong tay.
+ */
 export function sizeLabel(value: string | null | undefined): string {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
@@ -225,21 +301,4 @@ export function sizeLabel(value: string | null | undefined): string {
   if (preset) return preset.vi;
   const custom = parseCustomSize(raw);
   return custom ? `${custom.w}×${custom.h}px` : raw;
-}
-
-/**
- * Cỡ pixel → PHÂN SỐ của một ô rộng `cellPx`.
- *
- * Kẹp trần ở 1: contract cấm `w`/`h` > 1 (V-06), và một safe zone to hơn ô của nó
- * là một yêu cầu không thực hiện được chứ không phải một lỗi cần ném — người dùng
- * điền 400px cho một ô 256px thì thứ họ muốn là "tràn ô", và đó là điều ta cho họ.
- */
-export function skelSizeOf(value: string | null | undefined, cellPx: number): SizePx | null {
-  const px = sizePx(value);
-  if (!px) return null;
-  const side = cellPx > 0 ? cellPx : REFERENCE_CELL_PX;
-  return {
-    w: Math.min(1, Math.round((px.w / side) * 1000) / 1000),
-    h: Math.min(1, Math.round((px.h / side) * 1000) / 1000),
-  };
 }

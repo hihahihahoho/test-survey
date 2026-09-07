@@ -1,5 +1,6 @@
 import * as React from "react";
 import type { JSONContent } from "@tiptap/react";
+import type { Skel } from "@/lib/types/contract";
 import { Pencil, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import {
   defaultSizeOf,
   defaultSizePx,
   parseCustomSize,
+  stepSizePx,
   sizeLabel,
   sizePx,
 } from "../lib/cell-size";
@@ -296,6 +298,9 @@ function syncCellFromDoc(cell: UiCell, doc: JSONContent): UiCell {
  * phải học một cú pháp, và không có gì để gõ sai. Chuỗi ấy là chuyện của chỗ lưu
  * (`customSizeValue`), không phải chuyện của người đang thiết kế.
  */
+/** Câu nhắc «con số này là cỡ ĐẦU RA» — xem `drawBox`: hộp vẽ là max-fit của ô. */
+const SIZE_PICKER_NOTE = "Cỡ khi xuất ra Figma/PNG";
+
 function SizePill({ label, element, value, onChange }: {
   label: string;
   /** Loại element của dòng; `undefined` khi id không còn trong danh mục. */
@@ -326,17 +331,37 @@ function SizePill({ label, element, value, onChange }: {
      con số CHÍNH LÀ câu trả lời, và "L · lớn" một mình không nói được nó lớn
      hơn "M" bao nhiêu. */
   const groups: SourceGroup[] = React.useMemo(
-    () => [
+    () => ([
+      /* Mặc định ĐỨNG RIÊNG một nhóm ở đầu — trừ khi nó trùng khít một nấc, lúc ấy
+         nấc kia đã mang nhãn «(mặc định)» và bày thêm mục nữa là hai dòng cùng số. */
+      ...(SIZE_PRESETS.some((preset) => preset.id === fallback)
+        ? []
+        : [{
+          options: [{
+            value: fallback,
+            vi: `Mặc định của ${label}`,
+            en: `${fallbackPx.w}×${fallbackPx.h}px`,
+          }],
+        }]),
       {
-        options: [{
-          value: fallback,
-          vi: `Mặc định của ${label}`,
-          en: `${fallbackPx.w}×${fallbackPx.h}px`,
-        }],
+        options: SIZE_PRESETS.map((preset) => {
+          const px = stepSizePx(preset.long, element?.skel);
+          /* Nấc TRÙNG cỡ mặc định ⇒ gộp làm một, không bày hai mục cùng số. */
+          return {
+            value: preset.id,
+            vi: preset.id === fallback ? `${preset.vi} (mặc định)` : preset.vi,
+            en: `${px.w}×${px.h}px`,
+          };
+        }),
       },
-      { options: SIZE_PRESETS.map((preset) => ({ value: preset.id, vi: preset.vi, en: `${preset.w}×${preset.h}px` })) },
-    ],
-    [fallback, fallbackPx.h, fallbackPx.w, label],
+    ] as SourceGroup[])
+      /* NHÃN PHỤ, ĐẶT MỘT LẦN Ở ĐẦU DANH SÁCH. Từ khi hộp vẽ là max-fit của ô, con
+         số ở đây KHÔNG còn là cỡ máy vẽ — nó là cỡ element phải có khi rời khỏi
+         app. Không nói ra thì người dùng chọn "S" rồi mở ảnh sheet ra thấy món đồ
+         to bằng cả ô và tưởng pill hỏng. Chỉ nhóm ĐẦU mang nhãn: hai nhóm cùng một
+         nhãn là đọc hai lần cùng một câu. */
+      .map((group, at) => (at === 0 ? { ...group, title: SIZE_PICKER_NOTE } : group)),
+    [element?.skel, fallback, fallbackPx.h, fallbackPx.w, label],
   );
 
   return (
@@ -372,6 +397,7 @@ function SizePill({ label, element, value, onChange }: {
           renderCustom={(done) => (
             <SizeCustomPanel
               label={label}
+              skel={element?.skel}
               value={value}
               onApply={(next) => {
                 onChange(next);
@@ -391,12 +417,14 @@ function SizePill({ label, element, value, onChange }: {
  * Mở ra với cỡ ĐANG DÙNG, kể cả khi cỡ ấy đến từ một nấc preset: người ta mở
  * «Gõ riêng» để CHỈNH từ chỗ đang đứng, không phải để bắt đầu từ trang trắng.
  */
-function SizeCustomPanel({ label, value, onApply }: {
+function SizeCustomPanel({ label, skel, value, onApply }: {
   label: string;
+  /** Hình dạng của loại element — cần để đọc ra px của một NẤC (`stepSizePx`). */
+  skel: Skel | undefined;
   value: string;
   onApply: (next: string) => void;
 }) {
-  const current = sizePx(value);
+  const current = sizePx(value, skel);
   const [w, setW] = React.useState(String(current?.w ?? REFERENCE_CELL_PX));
   const [h, setH] = React.useState(String(current?.h ?? REFERENCE_CELL_PX));
 

@@ -76,6 +76,12 @@ export function packBoard(
   files: readonly KitFile[],
   poseFiles: ReadonlySet<string>,
   boardWidth: number = BOARD_W,
+  /**
+   * Tỉ lệ ÉP theo từng ô — đường lùi phải co ảnh y hệt đường node, nếu không thì
+   * bấm một nút mà ra hai bố cục khác nhau tuỳ hôm đó encoder có chạy hay không.
+   * Trả `undefined` cho ô nào ⇒ ô đó theo quy ước mascot/UI như cũ.
+   */
+  scaleOf?: (file: KitFile) => number | undefined,
 ): BoardLayout {
   const cells: BoardCell[] = [];
   let x = PAD;
@@ -84,7 +90,7 @@ export function packBoard(
   const inner = Math.max(boardWidth - PAD * 2, 1);
 
   for (const f of files) {
-    const size = exportSize(f, poseFiles);
+    const size = exportSize(f, poseFiles, scaleOf?.(f));
     // Ảnh thiếu w/h (agent không đọc được cỡ) vẫn phải có ô — đừng bỏ file đi im lặng.
     const w = Math.max(size.w ?? 96, 24);
     const h = Math.max(size.h ?? 96, 24);
@@ -124,6 +130,8 @@ export interface BoardOptions {
   variantLabel: string;
   onProgress: (p: BoardProgress) => void;
   signal: AbortSignal;
+  /** Xem `packBoard`: tỉ lệ ép theo từng ô, để đường lùi co ảnh giống đường node. */
+  scaleOf?: (file: KitFile) => number | undefined;
 }
 
 const throwIfAborted = (signal: AbortSignal) => {
@@ -141,7 +149,7 @@ export async function buildFigmaBoard(opts: BoardOptions): Promise<BoardResult> 
   onProgress({ phase: 1, label: PHASE_LABEL[1], done: 0, total: files.length });
   throwIfAborted(signal);
   const usable = files.filter((f) => !f.empty);
-  const layout = packBoard(usable, poseFiles);
+  const layout = packBoard(usable, poseFiles, BOARD_W, opts.scaleOf);
   onProgress({ phase: 1, label: PHASE_LABEL[1], done: usable.length, total: usable.length });
 
   /* ── 2/4 Tải ảnh ────────────────────────────────────────────────────── */

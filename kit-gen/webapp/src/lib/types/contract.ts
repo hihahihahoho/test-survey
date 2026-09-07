@@ -136,6 +136,18 @@ export const componentSchema = z
     vi: z.string().default(""),
     spec: z.string().default(""),
     skel: skelSchema,
+    /**
+     * CỠ ĐẦU RA (px thiết kế) — KHÔNG phải cỡ vẽ.
+     *
+     * Ô luôn được vẽ to hết cỡ lề cho phép (`geometry.max_fit_box`) để ăn trọn độ
+     * phân giải của ảnh sinh; `out` chỉ nói element này phải to bao nhiêu khi RỜI
+     * khỏi app (dán Figma, xuất PNG). `slice.py` chép nguyên sang manifest thành
+     * `outSize`, dao cắt không đọc. Không có `out` = kit đời cũ, tầng xuất rơi về
+     * `contractSafe` như trước.
+     */
+    out: z.looseObject({ w: z.number().int(), h: z.number().int() }).optional(),
+    /** Hệ số phóng từ `out` lên hộp vẽ — chỉ để prompt nói ra ("drawn at 2.5x"). */
+    drawScale: z.number().optional(),
   })
   .superRefine((c, ctx) => {
     // V-01 — "Tên file: 2 số + gạch nối + chữ thường. Gợi ý: `17-btn-close`"

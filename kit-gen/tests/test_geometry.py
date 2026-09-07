@@ -252,5 +252,55 @@ class SliceUsesTheModuleTest(unittest.TestCase):
         self.assertNotIn('"landscape": (1536, 1024)', re.sub(r"#.*", "", self.src))
 
 
+class MaxFitBoxTest(unittest.TestCase):
+    """HỘP VẼ = MAX-FIT, không còn là cỡ người dùng chọn.
+
+    Chủ sản phẩm 07/09/2026: *«nó chỉ cần vẽ đúng tỉ lệ, để tối đa độ phân giải —
+    còn việc co về của Figma là của code»*. Nên ô luôn được lấp bằng hộp lớn nhất
+    vừa lề, và cỡ người dùng chọn chỉ còn hai vai: cho ra TỈ LỆ ở đây, và đi vào
+    manifest thành `outSize` cho tầng xuất.
+    """
+
+    def test_khung_trong_va_hop_lon_nhat(self):
+        # Con số chủ sản phẩm nêu: ô 313 ⇒ hộp vuông ~250², thanh 3,9:1 ⇒ ~250x64.
+        self.assertEqual(geometry.cell_inner(313, 313), (250, 250))
+        self.assertEqual(geometry.max_fit_box(313, 313, 1.0), (250, 250))
+        self.assertEqual(geometry.max_fit_box(313, 313, 3.909), (250, 64))
+        # Ô KHÔNG VUÔNG vẫn phải ra hộp nằm gọn theo CẢ HAI cạnh.
+        w, h = geometry.max_fit_box(384, 256, 3.0)
+        self.assertLessEqual(w, geometry.cell_inner(384, 256)[0])
+        self.assertLessEqual(h, geometry.cell_inner(384, 256)[1])
+
+    def test_he_so_lam_tron_xuong_buoc_025(self):
+        # 502/120 = 4,18 ⇒ 4,0. Làm tròn LÊN (4,25) là cho hộp vượt lề.
+        self.assertEqual(geometry.draw_scale(627, 627, 120, 52), 4.0)
+        self.assertEqual(geometry.draw_box(627, 627, 120, 52), (480, 208, 4.0))
+        # Bội của 0,25 khi k >= 1 (số model đọc được: "drawn at 2.5x"); dưới 1 thì
+        # bước 0,05 vì bước 0,25 ở dải ấy phí tới một phần tư diện tích ô.
+        for out_w, out_h in [(120, 52), (195, 195), (40, 40), (250, 90)]:
+            k = geometry.draw_scale(313, 313, out_w, out_h)
+            self.assertGreaterEqual(k, 1)
+            self.assertAlmostEqual(k * 4, round(k * 4), places=6,
+                                   msg=f"{out_w}x{out_h}: {k} không phải bội của 0,25")
+        k = geometry.draw_scale(313, 313, 304, 78)
+        self.assertAlmostEqual(k * 20, round(k * 20), places=6)
+
+    def test_khong_bao_gio_tran_le_va_khong_meo_ti_le(self):
+        aw, ah = geometry.cell_inner(313, 313)
+        for out_w, out_h in [(120, 52), (195, 195), (304, 78), (8, 4096), (1254, 1254)]:
+            w, h, _k = geometry.draw_box(313, 313, out_w, out_h)
+            self.assertLessEqual(w, aw, f"{out_w}x{out_h} tràn lề ngang")
+            self.assertLessEqual(h, ah, f"{out_w}x{out_h} tràn lề dọc")
+            # Tỉ lệ là thứ DUY NHẤT ta thật sự yêu cầu ở máy vẽ — nó không được méo.
+            self.assertAlmostEqual(w / h, out_w / out_h, delta=max(0.06, out_w / out_h * 0.03))
+
+    def test_co_dau_ra_lon_hon_o_thi_he_so_tut_duoi_1(self):
+        # Bản chốt đầu tiên nói "k >= 1, hộp = min(out, box)"; `min` từng trục bóp
+        # thanh 3,9:1 thành 3,2:1 ⇒ bỏ, xem khối chú thích của `draw_box`.
+        w, h, k = geometry.draw_box(313, 313, 304, 78)
+        self.assertLess(k, 1)
+        self.assertAlmostEqual(w / h, 304 / 78, delta=0.2)
+
+
 if __name__ == "__main__":
     unittest.main()

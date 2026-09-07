@@ -135,6 +135,78 @@ def safe_box(width, height, cols, rows, index, skel):
     return cx0 + dx, cy0 + dy, cx0 + dx + sw, cy0 + dy + sh
 
 
+#: Lề chừa quanh ô cho phần TRÀN (viền, bevel, bóng, quầng sáng) — 10% mỗi cạnh,
+#: nên hộp vẽ lớn nhất bằng 0,8 ô. Vì sao chính con số này: luật safe zone trong
+#: prompt cho phép viền/trang trí nằm NGOÀI hộp nhưng cấm chạm element bên cạnh,
+#: nên giữa hai hộp cạnh nhau phải còn 20% bề ngang ô. Trước đây "lề" là thứ tàng
+#: hình: nó nằm rải trong các phân số `skel.w/h` mà người ta gõ tay (0,78 · 0,86 ·
+#: 0,92 …) nên mỗi element chừa một kiểu và không ai đọc ra được luật.
+CELL_MARGIN_RATIO = 0.10
+
+#: Hệ số phóng làm tròn XUỐNG về bước 0,25. Vì sao làm tròn: con số đi thẳng vào
+#: câu tiếng Anh của prompt ("drawn at 2.5x"), và "phóng 2,5 lần" là mệnh lệnh mà
+#: model làm theo được, còn "phóng 2,0773 lần" thì không. Vì sao XUỐNG chứ không
+#: gần nhất: làm tròn lên là cho phép hộp vẽ vượt lề — tức là element tràn sang ô
+#: bên cạnh, đúng thứ lề sinh ra để chặn.
+DRAW_SCALE_STEP = 0.25
+
+#: Sàn của hệ số khi cỡ đầu ra LỚN HƠN ô (ví dụ ô 313px mà người dùng chọn 304px
+#: cho một thanh dài): lúc đó không phóng được nữa, phải THU. Bước 0,05 chứ không
+#: 0,25 vì ở dải dưới 1 thì bước 0,25 phí tới một phần tư diện tích ô.
+DRAW_SHRINK_STEP = 0.05
+
+
+def cell_inner(cell_w, cell_h, margin=CELL_MARGIN_RATIO):
+    """Phần ô còn lại sau khi trừ lề mỗi cạnh → ``(w, h)`` pixel nguyên."""
+    return round(cell_w * (1 - 2 * margin)), round(cell_h * (1 - 2 * margin))
+
+
+def max_fit_box(cell_w, cell_h, aspect, margin=CELL_MARGIN_RATIO):
+    """Hộp LỚN NHẤT có tỉ lệ `aspect` (= w/h) nằm gọn trong ô sau khi trừ lề.
+
+    Đây là hộp mà máy vẽ được yêu cầu lấp: vẽ to hết cỡ ô cho phép để ăn trọn độ
+    phân giải của ảnh sinh, rồi code mới co về cỡ thật lúc xuất. Cỡ người dùng
+    chọn KHÔNG còn là cỡ vẽ — nó chỉ cho ra TỈ LỆ ở đây (và cỡ đầu ra ở manifest).
+    """
+    aw, ah = cell_inner(cell_w, cell_h, margin)
+    if not aspect or aspect <= 0:
+        return aw, ah
+    w = min(aw, ah * aspect)
+    return round(w), round(w / aspect)
+
+
+def draw_scale(cell_w, cell_h, out_w, out_h, margin=CELL_MARGIN_RATIO):
+    """Hệ số phóng từ cỡ ĐẦU RA lên cỡ VẼ → float đã làm tròn xuống theo bước.
+
+    Vì sao prompt cần con số này chứ không chỉ cần hộp: một cái nút 120x52 vẽ ở
+    300x130 phải trông như cái nút nhỏ ấy phóng 2,5 lần — viền dày lên 2,5 lần,
+    bo góc to lên 2,5 lần. Không nói hệ số thì model coi hộp 300x130 là cỡ thật
+    và vẽ một tấm banner viền mảnh, chi tiết dày đặc: sai độ dày nét, và co về
+    120x52 thì nát.
+    """
+    aw, ah = cell_inner(cell_w, cell_h, margin)
+    if out_w <= 0 or out_h <= 0:
+        return 1.0
+    raw = min(aw / out_w, ah / out_h)
+    step = DRAW_SCALE_STEP if raw >= 1 else DRAW_SHRINK_STEP
+    return max(step, round(int(raw / step) * step, 2))
+
+
+def draw_box(cell_w, cell_h, out_w, out_h, margin=CELL_MARGIN_RATIO):
+    """Hộp vẽ của một ô → ``(w, h, k)``: cỡ đầu ra nhân hệ số phóng, kẹp trong lề.
+
+    ⚠ CA CỠ ĐẦU RA LỚN HƠN Ô. Bản chốt đầu tiên nói "k >= 1 luôn, hộp = min(out,
+    box)" — nhưng `min` theo từng trục làm HỎNG TỈ LỆ: thanh máu 304x78 trong ô
+    313 (khung trong 250) sẽ thành 250x78, tức 3,2:1 thay vì 3,9:1, và tỉ lệ mới
+    là thứ duy nhất ta thật sự yêu cầu ở máy vẽ. Nên ở ca này k tụt xuống dưới 1
+    (bước 0,05) và tỉ lệ được giữ nguyên; prompt nói thật là "drawn at 0.8x".
+    """
+    k = draw_scale(cell_w, cell_h, out_w, out_h, margin)
+    aw, ah = cell_inner(cell_w, cell_h, margin)
+    # `min` cuối chỉ đỡ sai số làm tròn nửa pixel — k đã bảo đảm out*k <= khung trong
+    return min(round(out_w * k), aw), min(round(out_h * k), ah), k
+
+
 def cell_kind(skel):
     """Ô này thuộc loại nào — quyết định câu prompt và nhánh cắt.
 

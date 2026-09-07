@@ -97,6 +97,22 @@ export function validateContract(contract) {
         else files.add(c.file)
       }
       if (c?.spec !== undefined && typeof c.spec !== "string") E("SCHEMA", `${cp}.spec`, "spec must be a string")
+      // OUT_SIZE: `out` = cỡ ĐẦU RA (px thiết kế), KHÔNG phải cỡ vẽ — ô luôn được vẽ to
+      // hết cỡ lề cho phép (geometry.max_fit_box) rồi code mới co về `out` lúc xuất.
+      // Trần 4096 chứ không 1254 (khổ ảnh sinh): `out` là cỡ ở đích, một tấm nền
+      // @2x hoàn toàn có thể lớn hơn tấm sheet mà nó được vẽ ra.
+      if (c?.out !== undefined && c.out !== null) {
+        if (typeof c.out !== "object") E("SCHEMA", `${cp}.out`, "out must be an object {w,h}")
+        else for (const k of ["w", "h"]) {
+          const n = Number(c.out[k])
+          if (!Number.isInteger(n) || n < 8 || n > 4096)
+            E("OUT_SIZE", `${cp}.out.${k}`, `out.${k} must be an integer in [8,4096]`)
+        }
+      }
+      if (c?.drawScale !== undefined && c.drawScale !== null) {
+        const k = Number(c.drawScale)
+        if (!(k > 0 && k <= 64)) E("DRAW_SCALE", `${cp}.drawScale`, "drawScale must be a number in (0,64]")
+      }
       const sk = c?.skel
       if (sk === undefined || sk === null) { W("SKEL_MISSING", `${cp}.skel`, "skel missing, engine will use rect 0.8x0.6"); return }
       if (typeof sk !== "object") { E("SCHEMA", `${cp}.skel`, "skel must be an object"); return }

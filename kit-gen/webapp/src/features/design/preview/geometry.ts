@@ -163,6 +163,63 @@ export function elementBox(skel: AnySkel | null | undefined, boxW: number, boxH:
   };
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * HỘP VẼ MAX-FIT — gương của `geometry.py` (`CELL_MARGIN_RATIO`, `max_fit_box`,
+ * `draw_scale`, `draw_box`). Khoá bằng `__tests__/geometry.test.ts`, test ấy ĐỌC
+ * `geometry.py` chứ không chép số.
+ *
+ * Vì sao hộp vẽ không còn là "cỡ người dùng chọn": máy vẽ nên lấp trọn ô để ăn
+ * hết độ phân giải của ảnh sinh, còn cỡ thật là việc của code lúc xuất. Cái duy
+ * nhất người dùng thật sự truyền cho máy vẽ là TỈ LỆ — cộng thêm HỆ SỐ PHÓNG, để
+ * độ dày nét và bán kính bo được thiết kế ở cỡ thật rồi mới phóng lên.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Lề chừa cho phần tràn (viền/bevel/quầng), mỗi cạnh — `geometry.py`. */
+export const CELL_MARGIN_RATIO = 0.1;
+/** Bước làm tròn XUỐNG của hệ số phóng khi k ≥ 1 (và khi k < 1). */
+export const DRAW_SCALE_STEP = 0.25;
+export const DRAW_SHRINK_STEP = 0.05;
+
+/** Phần ô còn lại sau khi trừ lề mỗi cạnh. */
+export function cellInner(cellW: number, cellH: number, margin = CELL_MARGIN_RATIO): { w: number; h: number } {
+  return { w: Math.round(cellW * (1 - 2 * margin)), h: Math.round(cellH * (1 - 2 * margin)) };
+}
+
+/** Hộp LỚN NHẤT có tỉ lệ `aspect` (w/h) nằm gọn trong ô sau khi trừ lề. */
+export function maxFitBox(cellW: number, cellH: number, aspect: number, margin = CELL_MARGIN_RATIO): { w: number; h: number } {
+  const inner = cellInner(cellW, cellH, margin);
+  if (!Number.isFinite(aspect) || aspect <= 0) return inner;
+  const w = Math.min(inner.w, inner.h * aspect);
+  return { w: Math.round(w), h: Math.round(w / aspect) };
+}
+
+/** Hệ số phóng từ cỡ đầu ra lên cỡ vẽ, làm tròn XUỐNG theo bước (không bao giờ tràn lề). */
+export function drawScale(cellW: number, cellH: number, outW: number, outH: number, margin = CELL_MARGIN_RATIO): number {
+  const inner = cellInner(cellW, cellH, margin);
+  if (!(outW > 0) || !(outH > 0)) return 1;
+  const raw = Math.min(inner.w / outW, inner.h / outH);
+  const step = raw >= 1 ? DRAW_SCALE_STEP : DRAW_SHRINK_STEP;
+  return Math.max(step, Math.round(Math.floor(raw / step) * step * 100) / 100);
+}
+
+export interface DrawBox { w: number; h: number; scale: number; }
+
+/**
+ * Hộp vẽ của một ô = cỡ đầu ra × hệ số phóng, kẹp trong lề.
+ * Ca cỡ đầu ra LỚN HƠN ô: hệ số tụt xuống dưới 1 (bước 0,05) và TỈ LỆ ĐƯỢC GIỮ —
+ * kẹp `min` theo từng trục thay vào đó sẽ bóp thanh máu 3,9:1 thành 3,2:1, tức
+ * làm hỏng đúng thứ duy nhất ta yêu cầu ở máy vẽ. Xem `geometry.py:draw_box`.
+ */
+export function drawBox(cellW: number, cellH: number, outW: number, outH: number, margin = CELL_MARGIN_RATIO): DrawBox {
+  const scale = drawScale(cellW, cellH, outW, outH, margin);
+  const inner = cellInner(cellW, cellH, margin);
+  return {
+    w: Math.min(Math.round(outW * scale), inner.w),
+    h: Math.min(Math.round(outH * scale), inner.h),
+    scale,
+  };
+}
+
 export interface ElementMetrics extends CellMetrics {
   /** cỡ THẬT của element trên ảnh sinh (px), đã làm tròn để hiện cho user */
   elementPx: { w: number; h: number };

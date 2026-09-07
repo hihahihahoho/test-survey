@@ -570,6 +570,20 @@ for s in cfg["styles"]:
                 "The list names WHAT each cell is; the art style above decides how it looks; the"
                 " coordinates decide where and how big.",
             ]
+            # ⚠️ VÌ SAO CỠ ĐẦU RA PHẢI CÓ MẶT TRONG PROMPT dù dao cắt không dùng nó.
+            # Ô được lấp bằng hộp LỚN NHẤT vừa lề (geometry.max_fit_box) để ăn trọn
+            # độ phân giải ảnh sinh — nhưng nếu chỉ đưa cái hộp to ấy thì model không
+            # có cách nào biết element này ngoài đời là 120x52 hay 600x260, nên nó
+            # chọn độ dày nét / bán kính bo / mật độ chi tiết theo hộp: cái nút nhỏ
+            # ra thành tấm banner viền mảnh, co về cỡ thật là nát. Nói ra CỠ THẬT +
+            # HỆ SỐ PHÓNG thì mọi nét được thiết kế ở cỡ thật rồi mới phóng lên.
+            if any(c.get("out") for c in comps):
+                listing.append(
+                    "Each element is drawn ENLARGED from its final on-screen size; its line gives"
+                    " the final size and the multiplier. Design every stroke weight, corner"
+                    " radius, bevel and detail for the FINAL size, then draw the whole thing"
+                    " scaled up by the multiplier — a small button drawn at 2.5x must still read"
+                    " as a small button.")
             for i, comp in enumerate(comps):
                 g = geo[i]
                 # Ô TRỐNG KHÔNG CÓ DÒNG RIÊNG NỮA. Section «Layout» đã gọi tên chúng
@@ -580,6 +594,22 @@ for s in cfg["styles"]:
                 if g["kind"] == "empty":
                     continue
                 spec = comp["spec"]
+                out = comp.get("out") or None
+                if out and g["safe"]:
+                    # `drawScale` do webapp tính sẵn; thiếu thì dựng lại tại chỗ bằng
+                    # ĐÚNG hàm mà webapp mirror, để hai bên không thể lệch.
+                    ow, oh = int(out["w"]), int(out["h"])
+                    dw, dh = g["safe"][2] - g["safe"][0], g["safe"][3] - g["safe"][1]
+                    # HỆ SỐ PHẢI KHỚP CHÍNH HỘP IN Ở CUỐI DÒNG. `drawScale` của
+                    # contract là con số đẹp (bội 0,25) và bình thường nó đúng khít;
+                    # nhưng contract đời cũ / sửa tay có thể mang `skel` không dựng
+                    # từ `out` — lúc ấy in "drawn at 2x" cạnh một hộp 2,09 lần là nói
+                    # dối model đúng cái điều dòng này sinh ra để nói thật.
+                    k = comp.get("drawScale")
+                    if not k or abs(ow * float(k) - dw) > 1:
+                        k = round(dw / ow, 2) if ow else 1
+                    spec += (f" — final size {ow}x{oh} px, drawn at {k:g}x"
+                             f" = {dw}x{dh} px")
                 if g["safe"]:
                     x0, y0, x1, y1 = g["safe"]
                     zone = f" — safe zone x={x0}..{x1}, y={y0}..{y1} ({x1 - x0}x{y1 - y0} px)"

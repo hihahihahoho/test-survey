@@ -26,13 +26,16 @@ import { composerToContract } from "@/features/prompt-canvas/lib/composer-to-con
 import {
   CUSTOM_ELEMENT_SKEL,
   REFERENCE_CELL_PX,
+  MAX_SIZE_PX,
+  MIN_SIZE_PX,
   SIZE_PRESETS,
   defaultSizeOf,
   defaultSizePx,
+  stepSizePx,
   sizePx,
   skelSizePx,
 } from "../lib/cell-size";
-import { seedPresets } from "../lib/presets-store";
+import { getPresets, seedPresets, type ElementPreset } from "../lib/presets-store";
 import { PILL_SLOTS, docHasBrokenPill, repairPills, retitleCellDoc, uiCellDoc } from "../lib/doc-templates";
 import { serializeComposer } from "../lib/serialize-composer";
 import {
@@ -562,6 +565,15 @@ describe("⑧ pill cỡ dùng chung hộp chọn nguồn", () => {
     expect(screen.queryByRole("tab", { name: "Đính ảnh" })).toBeNull();
   });
 
+  it("hộp NÓI RA con số này là cỡ ĐẦU RA, không phải cỡ máy vẽ", () => {
+    /* Từ 07/09/2026 ô luôn được vẽ to hết cỡ lề cho phép (`drawBox`), nên chọn «S»
+       không làm món đồ nhỏ đi trên tấm sheet. Không nói ra thì người dùng mở ảnh ra,
+       thấy nút to bằng cả ô, và kết luận pill hỏng. Nhãn đứng ĐÚNG MỘT LẦN. */
+    openSize();
+    const note = screen.getAllByText("Cỡ khi xuất ra Figma/PNG");
+    expect(note).toHaveLength(1);
+  });
+
   it("nấc «Chọn sẵn» = cỡ mặc định CỦA LOẠI + 4 nấc, mỗi mục kèm số px thật", () => {
     openSize();
     const options = screen.getAllByRole("option").map((o) => o.textContent ?? "");
@@ -578,8 +590,41 @@ describe("⑧ pill cỡ dùng chung hộp chọn nguồn", () => {
       const hit = options.find((text) => text.includes(preset.vi));
       expect(hit).toBeTruthy();
       /* Con số là cả điểm của danh sách: "L · lớn" một mình không nói được nó lớn
-         hơn "M" bao nhiêu — mà đó đúng là câu người thiết kế đang hỏi. */
-      expect(hit).toContain(`${preset.w}×${preset.h}px`);
+         hơn "M" bao nhiêu — mà đó đúng là câu người thiết kế đang hỏi. Và nay con
+         số ấy GIỮ TỈ LỆ của element: nút pill ở nấc L ra 256×89, không phải 256×192. */
+      const step = stepSizePx(preset.long, button?.skel);
+      expect(hit).toContain(`${step.w}×${step.h}px`);
+      expect(step.w).toBe(preset.long);
+    }
+  });
+
+  it("cỡ mặc định TRÙNG một nấc ⇒ GỘP làm một mục, không bày hai dòng cùng số", () => {
+    /* Ca hiếm nhưng có thật: một hình vuông 0,815 ra đúng 256×256 = nấc L. Bày cả
+       «Mặc định của …» lẫn «L · lớn» lúc ấy là hai dòng khác tên, cùng số, cùng
+       giá trị — người dùng phải tự đoán chúng có khác nhau không.
+       Danh mục sống được lấy qua `getPresets()` (đã mock ở đầu file thành CHÍNH
+       object mà `usePresets` trả về), nên thêm một loại vào đây là màn thấy ngay. */
+    const live = getPresets();
+    const plate: ElementPreset = {
+      id: "dia-tron", vi: "Đĩa tròn", en: "round plate", decor: 4, glazeId: "", sizeId: "",
+      skel: { shape: "circle", w: 0.815, h: 0.815 },
+    };
+    live.elements.push(plate);
+    try {
+      cleanup();
+      render(<Harness initial={uikit([{
+        id: "c1", elementId: plate.id, styleId: "", decor: "4", glazeId: "",
+        sizeId: defaultSizeOf(plate), note: "",
+      }])} />);
+      fireEvent.click(screen.getByLabelText(/^Cỡ của Đĩa tròn/));
+      const options = screen.getAllByRole("option").map((o) => o.textContent ?? "");
+      expect(options).toHaveLength(SIZE_PRESETS.length);
+      expect(options.join(" ")).not.toContain("Mặc định của Đĩa tròn");
+      const hit = options.find((text) => text.includes("L · lớn"))!;
+      expect(hit).toContain("(mặc định)");
+      expect(hit).toContain("256×256px");
+    } finally {
+      live.elements.splice(live.elements.indexOf(plate), 1);
     }
   });
 
@@ -666,12 +711,14 @@ describe("⑧b cỡ luôn cụ thể, và cụ thể theo hình dạng của lo�
   it("thêm dòng: cỡ = hộp đo từ `skel` của chính loại element", () => {
     const button = PRESETS.elements.find((e) => e.id === "button");
     expect(newCell("button", PRESETS).sizeId).toBe(defaultSizeOf(button));
-    expect(sizePx(newCell("button", PRESETS).sizeId)).toEqual(skelSizePx(button?.skel));
+    expect(sizePx(newCell("button", PRESETS).sizeId, button?.skel)).toEqual(skelSizePx(button?.skel));
   });
 
   it("thanh máu ra hộp RỘNG-MỎNG, khung avatar ra hộp VUÔNG — không còn cùng một hộp", () => {
-    const bar = sizePx(newCell("healthbar", PRESETS).sizeId)!;
-    const avatar = sizePx(newCell("avatar-frame", PRESETS).sizeId)!;
+    const barEl = PRESETS.elements.find((e) => e.id === "healthbar");
+    const avatarEl = PRESETS.elements.find((e) => e.id === "avatar-frame");
+    const bar = sizePx(newCell("healthbar", PRESETS).sizeId, barEl?.skel)!;
+    const avatar = sizePx(newCell("avatar-frame", PRESETS).sizeId, avatarEl?.skel)!;
     expect(bar.w / bar.h).toBeGreaterThan(3);
     expect(avatar.w).toBe(avatar.h);
     expect(bar).not.toEqual(avatar);
@@ -682,7 +729,66 @@ describe("⑧b cỡ luôn cụ thể, và cụ thể theo hình dạng của lo�
     const cell = newCell("button", bare);
     /* Không gõ lại "251x188" ở đây: ca này khoá QUAN HỆ (khung trung tính ⇄ con số
        hiện trên pill), không khoá một chuỗi. */
-    expect(sizePx(cell.sizeId)).toEqual(skelSizePx(CUSTOM_ELEMENT_SKEL, REFERENCE_CELL_PX));
+    expect(sizePx(cell.sizeId, undefined)).toEqual(skelSizePx(CUSTOM_ELEMENT_SKEL, REFERENCE_CELL_PX));
+  });
+
+  /* ══ NẤC S/M/L/XL = CẠNH DÀI, KHÔNG PHẢI HỘP CỐ ĐỊNH ══════════════════════
+     Chủ sản phẩm nhìn pill Cỡ của «Khung avatar» rồi hỏi: *"mà avatar sao lại có
+     256×192 nhỉ…"*. Bốn nấc cũ là bốn hộp đóng cứng, nên chọn «L» cho một khung
+     vuông là tự tay phá đúng cái hình dạng vừa dựng lên ở lượt trước. */
+  it("một nấc, ba tỉ lệ, ba hộp — và cạnh dài LUÔN đúng con số của nấc", () => {
+    const of = (id: string) => PRESETS.elements.find((e) => e.id === id)?.skel;
+    const l = SIZE_PRESETS.find((p) => p.id === "l")!;
+    expect(stepSizePx(l.long, of("avatar-frame"))).toEqual({ w: 256, h: 256 });
+    expect(stepSizePx(l.long, of("healthbar"))).toEqual({ w: 256, h: 65 });
+    /* Nút pill 0,78/0,27 = 2,889 ⇒ 256/2,889 = 88,6 ⇒ 89 (làm tròn, không cắt cụt:
+       thanh máu ở nấc S ra 28,65 và phải là 29 chứ không phải 28). */
+    expect(stepSizePx(l.long, of("button"))).toEqual({ w: 256, h: 89 });
+    /* Element TỰ ĐẶT TÊN đi cùng luật, qua hộp trung tính 0,8×0,6 (4:3). */
+    expect(stepSizePx(l.long, undefined)).toEqual({ w: 256, h: 192 });
+    for (const preset of SIZE_PRESETS) {
+      for (const id of ["avatar-frame", "healthbar", "button"]) {
+        const px = stepSizePx(preset.long, of(id));
+        expect(Math.max(px.w, px.h)).toBe(preset.long);
+      }
+    }
+  });
+
+  it("hình CAO hơn rộng ⇒ cạnh dài là CHIỀU CAO, không phải chiều ngang", () => {
+    const tall = { shape: "rrect" as const, w: 0.4, h: 0.8 };
+    expect(stepSizePx(112, tall)).toEqual({ w: 56, h: 112 });
+    expect(stepSizePx(304, tall)).toEqual({ w: 152, h: 304 });
+  });
+
+  it("kẹp biên: tỉ lệ hoang không đẻ ra cạnh 0, nấc quá khổ không vượt canvas", () => {
+    const det = { shape: "bar" as const, w: 1, h: 0.02 };   // 50:1
+    expect(stepSizePx(112, det)).toEqual({ w: 112, h: MIN_SIZE_PX });
+    expect(stepSizePx(99_999, { shape: "circle" as const, w: 0.5, h: 0.5 }))
+      .toEqual({ w: MAX_SIZE_PX, h: MAX_SIZE_PX });
+    /* Hình dạng hỏng (thiếu `h`) ⇒ tỉ lệ của hộp trung tính, không phải NaN. */
+    expect(stepSizePx(256, { shape: "rrect" as const, w: 0.8 })).toEqual({ w: 256, h: 192 });
+  });
+
+  it("nháp cũ lưu một nấc ⇒ nay ĐỌC LẠI theo hình dạng, có chủ ý", () => {
+    /* Một dòng «Khung avatar» lưu `"l"` trước lượt này đọc ra 256×192; nay 256×256.
+       `"l"` luôn có nghĩa «nấc lớn», và nghĩa của nấc lớn nay là «cạnh dài 256, giữ
+       hình». Chuỗi TỰ ĐIỀN thì không đi qua bảng nấc nên không đổi một pixel. */
+    const avatar = PRESETS.elements.find((e) => e.id === "avatar-frame")?.skel;
+    expect(sizePx("l", avatar)).toEqual({ w: 256, h: 256 });
+    expect(sizePx("256x192", avatar)).toEqual({ w: 256, h: 192 });
+  });
+
+  it("cỡ mặc định TRÙNG một nấc ⇒ giá trị lưu là id nấc ấy, không phải chuỗi px", () => {
+    /* 314 × 0,815 = 255,9 ⇒ 256 — đúng cạnh dài của nấc L, và hình vuông nên cả hai
+       cạnh khớp. Đây là ca duy nhất mà hộp chọn phải GỘP hai mục làm một. */
+    const plate = { skel: { shape: "circle" as const, w: 0.815, h: 0.815 } };
+    expect(defaultSizePx(plate)).toEqual({ w: 256, h: 256 });
+    expect(defaultSizeOf(plate)).toBe("l");
+    /* Còn tám loại hạt giống thì KHÔNG trùng nấc nào ⇒ mục «Mặc định của …» vẫn
+       đứng riêng, và hộp chọn có 5 mục (xem ca ⑧). */
+    for (const element of PRESETS.elements) {
+      expect(SIZE_PRESETS.some((preset) => preset.id === defaultSizeOf(element))).toBe(false);
+    }
   });
 
   it("đổi loại element: cỡ CHƯA bị chỉnh tay ⇒ đi theo loại mới", async () => {

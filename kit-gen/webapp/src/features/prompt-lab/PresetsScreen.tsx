@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { GLAZE_PRESETS } from "@/features/kit-core/lib/glaze";
 
-import { SIZE_PRESETS, defaultSizePx, sizeLabel } from "./lib/cell-size";
+import { SIZE_PRESETS, defaultSizePx, sizeLabel, stepSizePx } from "./lib/cell-size";
 import {
   DECOR_LEVELS,
   resetPresets,
@@ -250,7 +250,11 @@ export function PresetsScreen() {
                 </select>
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-caption text-fg-muted">Cỡ mặc định</span>
+                {/* NÓI RA CON SỐ NÀY LÀ CỠ GÌ. Từ 07/09/2026 ô luôn được vẽ to hết
+                    cỡ lề cho phép (`drawBox`), nên đây không còn là cỡ máy vẽ — nó là
+                    cỡ element phải có khi rời khỏi app. Không ghi ra thì người ta ghim
+                    «S» rồi mở ảnh sheet thấy món đồ to bằng cả ô và tưởng hỏng. */}
+                <span className="text-caption text-fg-muted">Cỡ mặc định · khi xuất ra Figma/PNG</span>
                 <select
                   /* MỤC RỖNG QUAY LẠI, NHƯNG NÓ KHÔNG CÒN LÀ «THEO HỆ THỐNG».
                      Rỗng từng nghĩa là 0,8×0,6 của Ô — một cỡ không hiện ra ở đâu và
@@ -274,11 +278,17 @@ export function PresetsScreen() {
                   {preset.sizeId !== "" && !SIZE_PRESETS.some((size) => size.id === preset.sizeId) && (
                     <option value={preset.sizeId}>{sizeLabel(preset.sizeId)}</option>
                   )}
-                  {SIZE_PRESETS.map((size) => (
-                    <option key={size.id} value={size.id}>
-                      {size.vi} · {size.w}×{size.h}px
-                    </option>
-                  ))}
+                  {/* Con số của một nấc phụ thuộc HÌNH DẠNG của chính element đang
+                      sửa (nấc = cạnh dài) — nên nó phải tính lại cho từng dòng,
+                      không được là một bảng hằng số. Xem `stepSizePx`. */}
+                  {SIZE_PRESETS.map((size) => {
+                    const px = stepSizePx(size.long, preset.skel);
+                    return (
+                      <option key={size.id} value={size.id}>
+                        {size.vi} · {px.w}×{px.h}px
+                      </option>
+                    );
+                  })}
                 </select>
               </label>
             </Row>

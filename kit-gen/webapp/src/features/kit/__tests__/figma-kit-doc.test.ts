@@ -117,6 +117,20 @@ describe("② TỈ LỆ XUẤT LÀ CỠ NODE, KHÔNG PHẢI CỠ ẢNH — gốc
     const asIs = cellsOf(packKitDoc(KIT, POSE).groups);
     expect(new Set(asIs.map((c) => c.spec.scale))).toEqual(new Set([0.5, 1]));
   });
+
+  /* Màn prompt-first co ảnh sao cho lõi model vẽ ra vừa khít CỠ ĐẦU RA người dùng
+     chọn, và mỗi ô lố một kiểu ⇒ tỉ lệ là phép đo của TỪNG Ô, không phải một quy
+     ước. Vì thế `scale` nhận cả một hàm; trả `undefined` cho ô nào thì ô đó rơi về
+     luật cũ, để hai màn không phải biết gì về nhau. */
+  it("`scale` nhận cả HÀM ⇒ mỗi ô một tỉ lệ riêng, `undefined` ⇒ luật cũ", () => {
+    const rieng = (f: KitFile) => (f.file.includes("bg-home") ? 0.25 : undefined);
+    const cells = cellsOf(packKitDoc(KIT, POSE, BOARD_W, { scale: rieng }).groups);
+    const bg = cells.find((c) => c.name === "25-bg-home")!;
+    const pose = cells.find((c) => c.name === "01-pose-idle")!;
+    expect(bg.spec.scale).toBe(0.25);
+    expect(bg.spec.frame).toEqual({ w: 256, h: 384 });
+    expect(pose.spec.scale).toBe(1); // không được đụng tới
+  });
 });
 
 describe("lưới xếp theo nhóm, không ô nào chồng ô nào", () => {

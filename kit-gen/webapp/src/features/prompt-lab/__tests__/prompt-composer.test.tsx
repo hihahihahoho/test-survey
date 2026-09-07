@@ -368,7 +368,8 @@ describe("danh mục — lab đi bằng dữ liệu THẬT của kit-core, khôn
        của chính loại: một đồng xu là hộp VUÔNG. */
     expect(cell.glazeId).toBe("");
     expect(cell.sizeId).toBe(defaultSizeOf(PRESETS.elements.find((e) => e.id === "coin")));
-    expect(sizePx(cell.sizeId)?.w).toBe(sizePx(cell.sizeId)?.h);
+    const coin = PRESETS.elements.find((e) => e.id === "coin");
+    expect(sizePx(cell.sizeId, coin?.skel)?.w).toBe(sizePx(cell.sizeId, coin?.skel)?.h);
     expect(cell.decor).toBe("2");
   });
 

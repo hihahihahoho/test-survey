@@ -22,9 +22,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  BLEED_IS_FIXED, CANVAS_LANDSCAPE, CANVAS_PORTRAIT, CANVAS_SQUARE, SLICE_BLEED,
-  canvasOf, cellAspect, cellMetrics, effectiveCellHint, elementBox, elementMetrics,
-  formatPx, gridOf, sheetOrient, simpleRatio, suggestCellHint,
+  BLEED_IS_FIXED, CANVAS_LANDSCAPE, CANVAS_PORTRAIT, CANVAS_SQUARE,
+  CELL_MARGIN_RATIO, DRAW_SCALE_STEP, SLICE_BLEED,
+  canvasOf, cellAspect, cellInner, cellMetrics, drawBox, drawScale, effectiveCellHint,
+  elementBox, elementMetrics, formatPx, gridOf, maxFitBox, sheetOrient, simpleRatio,
+  suggestCellHint,
 } from "../geometry";
 
 const REPO = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../../../../");
@@ -205,5 +207,71 @@ describe("cell_hint — câu ghép thẳng vào prompt (gen.sh dòng 43)", () =>
     expect(r.text).toBe("landscape 3:2 cell");
     expect(suggestCellHint(sheet(2, 4))).toBe("landscape 3:1 cell");
     expect(suggestCellHint(sheet(4, 4, "portrait"))).toBe("portrait 2:3 cell");
+  });
+});
+
+/* ────────────────────────────────────────────────────────────────────────────
+   HỘP VẼ MAX-FIT — cùng bốn hàm với `geometry.py`
+
+   Vì sao có cả một nhóm ca cho thứ trông như một phép chia: đây là chỗ CỠ NGƯỜI
+   DÙNG CHỌN thôi làm cỡ vẽ. Nếu bản TS và bản python trôi khỏi nhau thì prompt
+   hứa một hộp còn dao cắt cắt một hộp khác — đúng cái bệnh mà `geometry.py` sinh
+   ra để chấm dứt, chỉ khác là lần này biên giới nằm giữa hai NGÔN NGỮ.
+   ──────────────────────────────────────────────────────────────────────────── */
+describe("hộp vẽ max-fit — gương của geometry.py", () => {
+  it("hằng số lề và bước hệ số có THẬT trong geometry.py", () => {
+    const src = read("geometry.py");
+    expect(src).toMatch(/CELL_MARGIN_RATIO\s*=\s*0\.10/);
+    expect(src).toMatch(/DRAW_SCALE_STEP\s*=\s*0\.25/);
+    expect(src).toMatch(/DRAW_SHRINK_STEP\s*=\s*0\.05/);
+    expect(CELL_MARGIN_RATIO).toBe(0.1);
+    expect(DRAW_SCALE_STEP).toBe(0.25);
+  });
+
+  it("công thức max-fit có thật trong geometry.py và ô 313 ra khung trong 250", () => {
+    const src = read("geometry.py");
+    expect(src).toMatch(/def max_fit_box\(cell_w, cell_h, aspect, margin=CELL_MARGIN_RATIO\)/);
+    expect(src).toMatch(/w = min\(aw, ah \* aspect\)/);
+    expect(src).toMatch(/return round\(w\), round\(w \/ aspect\)/);
+    /* Con số chủ sản phẩm nêu: ô 313px ⇒ hộp vuông ~250², thanh 3,9:1 ⇒ ~250×64. */
+    expect(cellInner(313, 313)).toEqual({ w: 250, h: 250 });
+    expect(maxFitBox(313, 313, 1)).toEqual({ w: 250, h: 250 });
+    expect(maxFitBox(313, 313, 3.909)).toEqual({ w: 250, h: 64 });
+  });
+
+  it("hệ số phóng làm tròn XUỐNG bước 0,25 và hộp vẽ KHÔNG BAO GIỜ vượt lề", () => {
+    expect(read("geometry.py")).toMatch(/raw = min\(aw \/ out_w, ah \/ out_h\)/);
+    /* Nút 120×52 trong ô 627 (khung trong 502): 502/120 = 4,18 ⇒ 4,0 chẵn. */
+    expect(drawScale(627, 627, 120, 52)).toBe(4);
+    expect(drawBox(627, 627, 120, 52)).toEqual({ w: 480, h: 208, scale: 4 });
+    /* Quét rộng: mọi cỡ đầu ra hợp lệ trên mọi lưới đều phải nằm gọn trong lề. */
+    const inner = cellInner(313, 313);
+    for (const out of [[120, 52], [195, 195], [304, 78], [8, 4096], [1254, 1254], [40, 40]]) {
+      const box = drawBox(313, 313, out[0]!, out[1]!);
+      expect(box.w).toBeLessThanOrEqual(inner.w);
+      expect(box.h).toBeLessThanOrEqual(inner.h);
+      /* Tỉ lệ được GIỮ — đó là thứ duy nhất ta thật sự yêu cầu ở máy vẽ. */
+      expect(box.w / box.h).toBeCloseTo(out[0]! / out[1]!, 0);
+    }
+  });
+
+  it("CỠ ĐẦU RA đi hết đường: contract → slice.py → manifest → route /kit", () => {
+    /* Ba mắt xích, đứt một mắt là cả tính năng chết LẶNG LẼ: webapp không thấy
+       `outSize` thì `sheet-files.ts` rơi về `contractSafe`, tức dán ra Figma đúng
+       cỡ MÁY VẼ (hộp max-fit) chứ không đúng cỡ người dùng chọn — và không có gì
+       đỏ ở đâu cả. Đọc mã thật của cả ba, không tin trí nhớ. */
+    expect(read("slice.py")).toMatch(/asset\["outSize"\] = \[int\(out\["w"\]\), int\(out\["h"\]\)\]/);
+    expect(read("agent/routes/files.mjs")).toMatch(/outSize: meta\?\.outSize/);
+    /* Và engine phải CHẤP NHẬN trường ấy, không đánh nó là schema lạ. */
+    expect(read("agent/lib/validate.mjs")).toContain("OUT_SIZE");
+  });
+
+  it("cỡ đầu ra LỚN HƠN ô ⇒ hệ số tụt dưới 1 nhưng tỉ lệ không méo", () => {
+    /* Ca này từng được chốt là "k = 1, hộp = min(out, box)" — `min` theo từng trục
+       biến thanh 3,9:1 thành 3,2:1. Xem khối chú thích của `draw_box`. */
+    const box = drawBox(313, 313, 304, 78);
+    expect(box.scale).toBeLessThan(1);
+    expect(box.w).toBeLessThanOrEqual(cellInner(313, 313).w);
+    expect(box.w / box.h).toBeCloseTo(304 / 78, 0);
   });
 });

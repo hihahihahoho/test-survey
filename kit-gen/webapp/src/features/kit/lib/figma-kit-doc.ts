@@ -148,8 +148,18 @@ export interface PackOptions {
    * đố. Ở đó — và chỉ ở đó — tỉ lệ là 1.
    *
    * Vắng ⇒ giữ nguyên `scaleOf` như cũ.
+   *
+   * ╔══ VÌ SAO NHẬN CẢ MỘT HÀM ════════════════════════════════════════════════╗
+   * ║ Một con số chung là đủ khi tỉ lệ là một QUY ƯỚC (mascot 1:1 · UI 50%).    ║
+   * ║ Ở màn prompt-first thì tỉ lệ là một PHÉP ĐO của riêng từng ô: model vẽ ô  ║
+   * ║ này lố 35%, ô kia lố 8%, và mỗi ô phải co đúng phần lố của chính nó thì   ║
+   * ║ lõi mới vừa khít hộp người dùng chọn (`prompt-canvas/lib/result/          ║
+   * ║ sheet-files.ts:contractFramed`). Ép một số chung lên cả tấm là dựng lại    ║
+   * ║ đúng cái sai vừa gỡ, chỉ ở một chỗ khác.                                  ║
+   * ║ Hàm trả `undefined` cho một ô ⇒ ô đó rơi về `scaleOf` như cũ.             ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
    */
-  scale?: number;
+  scale?: number | ((file: KitFile) => number | undefined);
 }
 
 /**
@@ -186,9 +196,10 @@ export function packKitDoc(
 
     for (const file of bucket) {
       const name = assetName(file);
+      const scale = typeof opts.scale === "function" ? opts.scale(file) : opts.scale;
       let spec: FigmaNodeSpec;
       try {
-        spec = buildFigmaNodeForAsset(file, { name, poseFiles, ...(opts.scale === undefined ? {} : { scale: opts.scale }) });
+        spec = buildFigmaNodeForAsset(file, { name, poseFiles, ...(scale === undefined ? {} : { scale }) });
       } catch (err) {
         skipped.push({ name, reason: err instanceof FigmaNodeUnsupported ? err.message : String(err) });
         continue;

@@ -8,8 +8,9 @@ import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
 import { EXPRESSIONS, OUTFIT_THEMES } from "@/features/kit-core/lib/poses";
 
 import {
-  CUSTOM_ELEMENT_SKEL, SIZE_PRESETS, SQUARE_CANVAS_PX, defaultSizeOf, skelSizePx,
+  CUSTOM_ELEMENT_SKEL, SIZE_PRESETS, SQUARE_CANVAS_PX, defaultSizeOf, skelSizePx, stepSizePx,
 } from "@/features/prompt-lab/lib/cell-size";
+import { cellInner, drawBox } from "@/features/design/preview/geometry";
 import { seedPresets } from "@/features/prompt-lab/lib/presets-store";
 import { backgroundDoc, contextDoc, mascotDoc } from "@/features/prompt-lab/lib/doc-templates";
 import { NODE } from "@/features/prompt-lab/lib/schema";
@@ -359,7 +360,9 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     const ui = contract.sheets.find((s) => s.id === "ui")!;
     expect(ui.grid).toEqual({ cols: 2, rows: 2 });
     expect(ui.components).toHaveLength(4);
-    expect(Object.keys(ui.components[0]!)).toEqual(["file", "vi", "spec", "skel"]);
+    /* `out`/`drawScale` là hai khoá MỚI và chúng phải có mặt: `out` là cỡ đầu ra
+       (slice.py chép sang `outSize`), `drawScale` là hệ số phóng mà prompt nói ra. */
+    expect(Object.keys(ui.components[0]!)).toEqual(["file", "vi", "spec", "skel", "out", "drawScale"]);
 
     const first = ui.components[0]!;
     expect(first.file).toBe("01-button");
@@ -428,21 +431,37 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     expect(legacySpec).not.toContain("glacial");
   });
 
-  it("cỡ safe zone → skel.w/h theo Ô THẬT của lưới, kẹp trần 1", () => {
+  it("CỠ ĐẦU RA vào `out`; hộp VẼ là max-fit của ô, giữ đúng tỉ lệ ấy", () => {
     const ui = composerToContract(full(), { presets: PRESETS }).sheets.find((s) => s.id === "ui")!;
-    /* Lưới 2×2 trên canvas 1254 ⇒ ô 627px; "XL · 304px" ⇒ 304/627 ≈ 0.485. */
-    const cellPx = SQUARE_CANVAS_PX / ui.grid.cols;
+    /* Lưới 2×2 trên canvas 1254 ⇒ ô 627px. Ô c2 là «Icon tiền» (tròn 1:1) chọn XL
+       ⇒ cỡ ĐẦU RA 304×304 — nhưng hộp VẼ không phải 304: máy vẽ được giao hộp lớn
+       nhất vừa lề (502²) để ăn trọn độ phân giải, code mới co về 304 lúc xuất. */
+    const cellPx = Math.round(SQUARE_CANVAS_PX / ui.grid.cols);
     const xl = SIZE_PRESETS.find((p) => p.id === "xl")!;
-    expect(ui.components[1]!.skel.w).toBeCloseTo(xl.w / cellPx, 2);
-    expect(ui.components[1]!.skel.h).toBeCloseTo(xl.h / cellPx, 2);
-    /* Không chọn cỡ ⇒ GIỮ hình dạng của LOẠI element, không rơi về một khung
-       chung: ô c1 là «Nút bấm», mà một cái nút là hộp rộng-mỏng (pill 2,9:1) chứ
-       không phải hộp 4:3. Đây là chỗ mà tấm thật từng hứa `251x188` cho cả thanh
-       máu lẫn khung avatar — xem `cell-size.ts`. */
+    const coin = PRESETS.elements.find((e) => e.id === "coin")!;
+    const xlPx = stepSizePx(xl.long, coin.skel);
+    expect(xlPx).toEqual({ w: 304, h: 304 });
+    expect(ui.components[1]!.out).toEqual({ w: 304, h: 304 });
+    const coinDraw = drawBox(cellPx, cellPx, 304, 304);
+    expect(ui.components[1]!.skel.w).toBeCloseTo(coinDraw.w / cellPx, 4);
+    expect(ui.components[1]!.skel.h).toBeCloseTo(coinDraw.h / cellPx, 4);
+    expect(ui.components[1]!.drawScale).toBe(coinDraw.scale);
+    /* HỘP VẼ TO HƠN CỠ ĐẦU RA — đó là cả mục đích: "bỏ nó vẽ 500×500, co về là
+       việc của code". Trước đây hộp vẽ CHÍNH LÀ 304 nên hơn nửa ô bỏ không. */
+    expect(coinDraw.w).toBeGreaterThan(304);
+    /* Không chọn cỡ ⇒ cỡ đầu ra là mặc định của LOẠI element, và tỉ lệ ấy (pill
+       2,9:1) là thứ đi vào hộp vẽ: một cái nút vẫn phải rộng-mỏng, không thành hộp
+       4:3. Đây là chỗ mà tấm thật từng hứa `251x188` cho cả thanh máu lẫn khung
+       avatar — xem `cell-size.ts`. */
     const button = PRESETS.elements.find((e) => e.id === "button")!;
+    const btnOut = skelSizePx(button.skel);
     expect(ui.components[0]!.skel.shape).toBe("pill");
-    expect(ui.components[0]!.skel.w).toBeCloseTo(skelSizePx(button.skel).w / cellPx, 2);
-    expect(ui.components[0]!.skel.h).toBeCloseTo(skelSizePx(button.skel).h / cellPx, 2);
+    expect(ui.components[0]!.out).toEqual(btnOut);
+    const btnDraw = drawBox(cellPx, cellPx, btnOut.w, btnOut.h);
+    expect(ui.components[0]!.skel.w).toBeCloseTo(btnDraw.w / cellPx, 4);
+    expect(ui.components[0]!.skel.h).toBeCloseTo(btnDraw.h / cellPx, 4);
+    /* Tỉ lệ hộp vẽ = tỉ lệ cỡ đầu ra (sai số làm tròn pixel). */
+    expect(btnDraw.w / btnDraw.h).toBeCloseTo(btnOut.w / btnOut.h, 1);
   });
 
   it("HÌNH DẠNG của ô = hình dạng của loại element — thanh máu ≠ khung avatar", () => {
@@ -475,15 +494,18 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
       presets: PRESETS,
     }).sheets[0]!;
     const skel = ui.components[0]!.skel;
-    const cellPx = SQUARE_CANVAS_PX / ui.grid.cols;
+    const cellPx = Math.round(SQUARE_CANVAS_PX / ui.grid.cols);
     expect(skel.shape).toBe(CUSTOM_ELEMENT_SKEL.shape);
-    /* Hộp TÍNH RA PIXEL mới là thứ đứng yên: `w`/`h` là phân số của ô, mà ô co
-       giãn theo lưới. So bằng pixel là so đúng cái người dùng thấy trên pill. */
-    expect(Math.round(skel.w! * cellPx)).toBe(skelSizePx(CUSTOM_ELEMENT_SKEL).w);
-    expect(Math.round(skel.h! * cellPx)).toBe(skelSizePx(CUSTOM_ELEMENT_SKEL).h);
+    /* Không có hình dạng ⇒ cỡ ĐẦU RA rơi về khung trung tính 4:3 (`251x188`), và
+       hộp vẽ là max-fit của chính tỉ lệ ấy. So bằng pixel chứ không bằng phân số:
+       phân số co giãn theo lưới, pixel thì không. */
+    expect(ui.components[0]!.out).toEqual(skelSizePx(CUSTOM_ELEMENT_SKEL));
+    const box = drawBox(cellPx, cellPx, skelSizePx(CUSTOM_ELEMENT_SKEL).w, skelSizePx(CUSTOM_ELEMENT_SKEL).h);
+    expect(Math.round(skel.w! * cellPx)).toBe(box.w);
+    expect(Math.round(skel.h! * cellPx)).toBe(box.h);
   });
 
-  it("cỡ TỰ ĐIỀN: chuỗi `<w>x<h>` px vào skel, và cỡ to hơn ô thì kẹp về tràn ô", () => {
+  it("cỡ TỰ ĐIỀN: chuỗi `<w>x<h>` px vào `out`, hộp vẽ vẫn max-fit và không vượt lề", () => {
     const cells: UiCell[] = [
       { id: "c1", elementId: "panel", styleId: "", decor: "4", glazeId: "", sizeId: "120x80", note: "" },
       { id: "c2", elementId: "panel", styleId: "", decor: "4", glazeId: "", sizeId: "9999x9999", note: "" },
@@ -491,12 +513,19 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     const ui = composerToContract(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), {
       presets: PRESETS,
     }).sheets[0]!;
-    const cellPx = SQUARE_CANVAS_PX / ui.grid.cols;
-    expect(ui.components[0]!.skel.w).toBeCloseTo(120 / cellPx, 2);
-    expect(ui.components[0]!.skel.h).toBeCloseTo(80 / cellPx, 2);
-    /* V-06 cấm `w`/`h` > 1 ⇒ phải kẹp, không được ném: người điền 9999 muốn "tràn ô". */
-    expect(ui.components[1]!.skel.w).toBe(1);
-    expect(ui.components[1]!.skel.h).toBe(1);
+    const cellPx = Math.round(SQUARE_CANVAS_PX / ui.grid.cols);
+    /* Con số người dùng gõ đi vào CỠ ĐẦU RA nguyên vẹn… */
+    expect(ui.components[0]!.out).toEqual({ w: 120, h: 80 });
+    /* …còn hộp vẽ là max-fit của tỉ lệ 3:2, tức to hơn nhiều lần và kèm hệ số. */
+    const box = drawBox(cellPx, cellPx, 120, 80);
+    expect(ui.components[0]!.skel.w).toBeCloseTo(box.w / cellPx, 4);
+    expect(ui.components[0]!.drawScale).toBeGreaterThan(1);
+    /* V-06 cấm `w`/`h` > 1. Cỡ đầu ra 9999 bị kẹp về 1254 ngay ở pill, và hộp vẽ
+       thì KHÔNG BAO GIỜ vượt khung trong của ô — kể cả khi cỡ đầu ra lớn hơn ô. */
+    const inner = cellInner(cellPx, cellPx);
+    expect(ui.components[1]!.skel.w! * cellPx).toBeLessThanOrEqual(inner.w);
+    expect(ui.components[1]!.skel.h! * cellPx).toBeLessThanOrEqual(inner.h);
+    expect(ui.components[1]!.drawScale).toBeLessThan(1);
     expect(() => contractSchema.parse(ui)).not.toThrow();
   });
 

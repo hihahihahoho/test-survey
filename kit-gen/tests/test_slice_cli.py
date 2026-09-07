@@ -83,7 +83,10 @@ class SliceCliTest(unittest.TestCase):
                 {"id": "nen", "grid": {"cols": 2, "rows": 1}, "orient": "landscape",
                  "components": [cell_component("25-bg-home", "full"), cell_component("26-bg-play", "full")]},
                 {"id": "ui", "grid": {"cols": 1, "rows": 1}, "orient": "landscape",
-                 "components": [cell_component("01-btn", "rrect")]},
+                 # `out`/`drawScale` = CỠ ĐẦU RA + hệ số phóng: hai số ĐI QUA dao cắt
+                 # chứ không tham gia cắt (xem khối chú thích trong slice.py).
+                 "components": [{**cell_component("01-btn", "rrect"),
+                                 "out": {"w": 120, "h": 52}, "drawScale": 2.5}]},
             ],
         }
         (self.tmp / "styles.json").write_text(json.dumps(styles), encoding="utf-8")
@@ -140,6 +143,25 @@ class SliceCliTest(unittest.TestCase):
             lo, hi = im.getchannel("A").getextrema()
             self.assertEqual(hi, 255, f"{name}: mất phần tranh đục")
             self.assertEqual(lo, 0, f"{name}: phần model chừa bị tô đặc thay vì trong suốt")
+
+    def test_co_dau_ra_di_QUA_dao_cat_vao_manifest(self):
+        """`outSize` là cỡ mà thành phẩm phải có khi RỜI khỏi app; dao cắt vẫn cắt
+        theo `contractSafe` (hộp max-fit mà prompt đã hứa). Hai số khác nhau nằm
+        cạnh nhau trong cùng một asset — đó là cả điểm của bản vá: trước đây chỉ có
+        một cỡ, nên muốn nút nhỏ thì phải bảo máy vẽ nhỏ, và mất độ phân giải."""
+        self.run_slice("v1", "--sheet=ui")
+        asset = self.manifest()["styles"]["v1"]["assets"][0]
+        self.assertEqual(asset["outSize"], [120, 52])
+        self.assertEqual(asset["drawScale"], 2.5)
+        # Hộp cắt KHÔNG đổi theo `out`: nó vẫn là `round(ô × skel.w/h)` = 96x48.
+        self.assertEqual(asset["contractSafe"][2:], [96, 48])
+
+    def test_o_khong_khai_out_thi_manifest_KHONG_bia_outSize(self):
+        """Kit đời cũ không có `out`. Bịa một `outSize` mặc định ở đây là ép tầng
+        xuất co ảnh về một cỡ chưa ai chọn — im lặng và sai."""
+        self.run_slice("v1", "--sheet=nen")
+        for asset in self.manifest()["styles"]["v1"]["assets"]:
+            self.assertNotIn("outSize", asset)
 
     def test_ghi_manifest_nguyen_tu(self):
         self.run_slice("v1", "--sheet=ui")

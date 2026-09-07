@@ -59,7 +59,12 @@ vi.mock("@/features/projects/lib/feedback", () => ({
  * soi vào ĐỐI SỐ.
  */
 const docCalls: Array<Array<{ file: { file: string } }>> = [];
-const boardCalls: Array<{ files: Array<{ file: string }>; variantLabel: string }> = [];
+const packCalls: Array<{ files: KitFile[]; scale?: number | ((f: KitFile) => number | undefined) }> = [];
+const boardCalls: Array<{
+  files: Array<{ file: string }>;
+  variantLabel: string;
+  scaleOf?: (f: KitFile) => number | undefined;
+}> = [];
 /** true ⇒ giả cảnh không ô nào dựng được khung ⇒ panel phải rơi về đường lùi. */
 let packEmpty = false;
 /** Kết cục của đường lùi: vào bộ nhớ tạm, hay chỉ tải được file về máy. */
@@ -70,17 +75,25 @@ vi.mock("@/features/kit/lib/figma-kit-doc", () => ({
      lỗi ấy bị chính `try/catch` của nút nuốt thành "rơi về đường lùi" — ca sẽ xanh
      nhầm chỗ (nút vẫn hiện «Đã copy N ô» vì đường lùi cũng gọi `setCopied`). */
   BOARD_W: 2400,
-  packKitDoc: (files: Array<{ file: string }>) => ({
-    groups: packEmpty ? [] : [{
-      category: "ui",
-      label: "Giao diện",
-      cells: files.map((f) => ({ file: f, name: f.file, group: "ui", spec: {}, left: 0, top: 0 })),
-      bytes: 0,
-    }],
-    skipped: [],
-    width: 2400,
-    height: 100,
-  }),
+  packKitDoc: (
+    files: KitFile[],
+    _poseFiles: ReadonlySet<string>,
+    _boardWidth: number,
+    opts?: { scale?: number | ((f: KitFile) => number | undefined) },
+  ) => {
+    packCalls.push({ files: [...files], scale: opts?.scale });
+    return {
+      groups: packEmpty ? [] : [{
+        category: "ui",
+        label: "Giao diện",
+        cells: files.map((f) => ({ file: f, name: f.file, group: "ui", spec: {}, left: 0, top: 0 })),
+        bytes: 0,
+      }],
+      skipped: [],
+      width: 2400,
+      height: 100,
+    };
+  },
   cellsOf: (groups: Array<{ cells: unknown[] }>) => groups.flatMap((g) => g.cells),
   copyKitDoc: (cells: Array<{ file: { file: string } }>) => {
     docCalls.push(cells);
@@ -91,8 +104,12 @@ vi.mock("@/features/kit/lib/figma-kit-doc", () => ({
 vi.mock("@/features/kit/lib/figma-board", () => ({
   PHASE_LABEL: { 1: "Chuẩn bị danh sách", 2: "Tải ảnh", 3: "Ghép bảng", 4: "Đưa vào bộ nhớ tạm" },
   BoardCancelled: class BoardCancelled extends Error {},
-  buildFigmaBoard: (opts: { files: Array<{ file: string }>; variantLabel: string }) => {
-    boardCalls.push({ files: [...opts.files], variantLabel: opts.variantLabel });
+  buildFigmaBoard: (opts: {
+    files: Array<{ file: string }>;
+    variantLabel: string;
+    scaleOf?: (f: KitFile) => number | undefined;
+  }) => {
+    boardCalls.push({ files: [...opts.files], variantLabel: opts.variantLabel, scaleOf: opts.scaleOf });
     return Promise.resolve({
       outcome: boardOutcome, files: opts.files.length, width: 2400, height: 100,
       ...(boardOutcome === "download" ? { fallbackReason: "bộ nhớ tạm bị khoá" } : {}),
@@ -131,9 +148,9 @@ const CONTRACT = {
 
 const { SheetResultPanel } = await import("../SheetResultPanel");
 
-function cell(file: string, sheet: string, cellIndex: number): KitFile {
+function cell(file: string, sheet: string, cellIndex: number, over: Partial<KitFile> = {}): KitFile {
   return kitFileSchema.parse({
-    file, path: `kits/chinh/${file}.png`, w: 512, h: 341, bytes: 100, sheet, cellIndex,
+    file, path: `kits/chinh/${file}.png`, w: 512, h: 341, bytes: 100, sheet, cellIndex, ...over,
   });
 }
 
@@ -143,6 +160,7 @@ const mount = (props: Partial<React.ComponentProps<typeof SheetResultPanel>> = {
 beforeEach(() => {
   asked.length = 0;
   docCalls.length = 0;
+  packCalls.length = 0;
   boardCalls.length = 0;
   packEmpty = false;
   boardOutcome = "clipboard";
@@ -260,6 +278,62 @@ describe("nút «Copy N ô sang Figma»", () => {
     await screen.findByRole("button", { name: /Copy 2 ô sang Figma/ });
     expect(boardCalls).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /Đã copy/ })).toBeNull();
+  });
+
+  /**
+   * ══ TỈ LỆ ĐI THEO TỪNG Ô, VÀ NÓ PHẢI TỚI ĐƯỢC CẢ HAI ĐƯỜNG ═════════════════
+   *
+   * Máy vẽ luôn vẽ to hết ô cho nét, nên ô nào cũng lố cỡ đầu ra một kiểu khác
+   * nhau. Panel không tự tính lại số nào — nó chỉ phải ĐƯA hàm tỉ lệ xuống đúng
+   * hai chỗ dùng (dựng khung, và bảng ảnh phẳng đường lùi). Quên một trong hai là
+   * bấm cùng một nút mà ra hai bố cục khác nhau tuỳ hôm đó encoder có chạy không.
+   */
+  describe("tỉ lệ co theo từng ô", () => {
+    /** Ô «01-button»: xin ra 120×120, model vẽ lõi 263×262 ⇒ co còn 46%. */
+    const fitCell = () => cell("tight/01-button", "ui", 0, {
+      w: 392, h: 328, canvas: [853, 853], content: [392, 328], contentAt: [233, 253],
+      safe: [276, 294, 263, 262], contractSafe: [301, 332, 195, 195], outSize: [120, 120],
+    });
+
+    it("đưa xuống đường dựng khung một HÀM tỉ lệ, không phải một số chung", async () => {
+      kitFiles = [fitCell(), cell("tight/02-chip", "ui", 1)];
+      mount();
+      fireEvent.click(screen.getByRole("button", { name: /Copy 2 ô sang Figma/ }));
+      await screen.findByRole("button", { name: /Đã copy 2 ô/ });
+      expect(packCalls).toHaveLength(1);
+      const scale = packCalls[0]?.scale;
+      expect(typeof scale).toBe("function");
+      const fn = scale as (f: KitFile) => number | undefined;
+      expect(fn(packCalls[0]!.files[0]!)).toBeCloseTo(120 / 263, 6);
+      /* Ô không có số đo nào ⇒ 1, KHÔNG phải quy ước 50% của màn kit cũ. */
+      expect(fn(packCalls[0]!.files[1]!)).toBe(1);
+    });
+
+    it("đường lùi nhận CÙNG hàm tỉ lệ ⇒ hai đường không thể co khác nhau", async () => {
+      packEmpty = true;
+      kitFiles = [fitCell()];
+      mount();
+      fireEvent.click(screen.getByRole("button", { name: /Copy 1 ô sang Figma/ }));
+      await screen.findByRole("button", { name: /Đã copy 1 ô/ });
+      expect(boardCalls).toHaveLength(1);
+      const fn = boardCalls[0]?.scaleOf;
+      expect(typeof fn).toBe("function");
+      expect(fn?.(boardCalls[0]!.files[0] as KitFile)).toBeCloseTo(120 / 263, 6);
+    });
+
+    it("nói ra phép co ngay trên nút: cỡ xuất + phần trăm", () => {
+      kitFiles = [fitCell()];
+      mount();
+      const title = screen.getByRole("button", { name: /Copy 1 ô sang Figma/ }).getAttribute("title") ?? "";
+      expect(title).toContain("cỡ xuất 120×120");
+      expect(title).toContain("46%");
+    });
+
+    it("không ô nào lệch cỡ ⇒ KHÔNG bịa thêm câu «đã co»", () => {
+      mount();
+      const title = screen.getByRole("button", { name: /Copy 2 ô sang Figma/ }).getAttribute("title") ?? "";
+      expect(title).not.toContain("%");
+    });
   });
 
   it("nút phụ «Copy ảnh gốc» CHỈ sống ở tab «Ảnh gốc»", () => {

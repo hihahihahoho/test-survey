@@ -950,6 +950,22 @@ export const kitFileSchema = z.looseObject({
    * — tức thứ model vẽ ra thật. Chênh lệch giữa hai cái này chính là `sizeDeviation`.
    */
   contractSafe: kitBox,
+  /**
+   * `[w, h]` — CỠ ĐẦU RA mà người dùng đã chọn cho ô này (`component.out` trong
+   * contract, `slice.py` chép sang manifest).
+   *
+   * ╔══ VÌ SAO NÓ KHÁC `contractSafe`, VÀ VÌ SAO PHẢI CÓ CẢ HAI ════════════════╗
+   * ║ Chủ sản phẩm chốt: *cỡ người dùng chọn = CỠ ĐẦU RA; máy vẽ luôn vẽ max-fit ║
+   * ║ trong ô để tối đa độ phân giải; co về là việc của code*. Nghĩa là           ║
+   * ║ `contractSafe` (hộp max-fit trong ô lưới) là thứ ĐI VÀO prompt và ở lại     ║
+   * ║ làm số đo QA, còn `outSize` mới là cỡ mà thành phẩm phải có khi ra khỏi     ║
+   * ║ app. Hai con số khác nhau và cả hai đều đúng việc của mình — trộn làm một   ║
+   * ║ là hoặc dán ra Figma sai cỡ, hoặc bắt máy vẽ ở độ phân giải thấp hơn nó     ║
+   * ║ vẽ được. Nơi dùng: `prompt-canvas/lib/result/sheet-files.ts:contractFramed`.║
+   * ║ Vắng (kit cắt bằng bản cũ) ⇒ rơi về `contractSafe`, xem hàm đó.            ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  outSize: kitBox,
   /** Sổ đo QA của riêng ô này; thiếu ⇒ ô không đo được hoặc kit cắt bằng bản cũ. */
   sizeDeviation: kitSizeDeviationSchema.nullish().transform((v) => v ?? undefined),
   /** `empty:true` ⇒ dải cảnh báo "N file trống" + [Xem sheet gốc] (S5). */

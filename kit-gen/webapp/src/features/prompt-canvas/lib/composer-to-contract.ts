@@ -28,8 +28,9 @@ import { INHERIT, labelOf, phraseOf, type PillKind } from "@/features/prompt-lab
 import { getPresets, type ElementPreset, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
 import { NODE } from "@/features/prompt-lab/lib/schema";
 import {
-  CUSTOM_ELEMENT_SKEL, SQUARE_CANVAS_PX, defaultSizeOf, skelSizeOf, type SizePx,
+  CUSTOM_ELEMENT_SKEL, SQUARE_CANVAS_PX, defaultSizePx, sizePx, type SizePx,
 } from "@/features/prompt-lab/lib/cell-size";
+import { drawBox } from "@/features/design/preview/geometry";
 import { SCAFFOLDS } from "@/features/prompt-lab/lib/doc-templates";
 import { freeText, makeContext, serializeDoc, tidy, type PromptDocNode } from "@/features/prompt-lab/lib/serialize";
 import { contextFreeText, contextOutfitEN, contextStyleEN, contextThemeEN } from "@/features/prompt-lab/lib/serialize-composer";
@@ -102,13 +103,17 @@ const MAX_CELLS_SQUARE = 16;
  * Ba tầng, tầng sau đè tầng trước:
  *  ① `skel` của loại element — `shape`, `slice9`, `free`, `matte` và tỉ lệ gốc;
  *  ② `glaze` của dòng — `matte` (`mergeElementSkel` là nơi biết luật ấy);
- *  ③ `size` — `w`/`h` tính bằng PIXEL, chia lại theo ô thật của tấm này.
+ *  ③ `size` — HỘP VẼ tính bằng PIXEL, chia lại theo ô thật của tấm này.
  *
- * Tầng ③ LUÔN có mặt, kể cả khi dòng chưa chọn cỡ: nơi gọi đưa vào cỡ mặc định
- * của chính loại element (`defaultSizeOf`). Bỏ trống tầng ấy thì `w`/`h` của ①
- * được đọc như phân số của Ô THẬT — mà ô thật to nhỏ theo lưới, nên cùng một cái
- * nút ra 245px trên lưới 4×4 và 489px trên lưới 2×2, trong khi pill «Cỡ» vẫn nói
- * 245. Một con số trên màn mà contract không giữ là con số tệ hơn không có.
+ * ⚠️ TẦNG ③ KHÔNG CÒN LÀ CỠ NGƯỜI DÙNG CHỌN. Cỡ chọn ở pill «Cỡ» là cỡ ĐẦU RA
+ * (`component.out`) — cỡ element phải có khi rời khỏi app. Hộp vẽ thì luôn là hộp
+ * LỚN NHẤT vừa lề của ô mà giữ đúng tỉ lệ ấy (`drawBox`), để máy vẽ ăn trọn độ
+ * phân giải của ảnh sinh; co về cỡ thật là việc của code lúc xuất.
+ *
+ * Tầng ③ LUÔN có mặt. Bỏ trống nó thì `w`/`h` của ① được đọc như phân số của Ô
+ * THẬT — mà ô thật to nhỏ theo lưới, nên cùng một cái nút ra 245px trên lưới 4×4
+ * và 489px trên lưới 2×2. Một con số trên màn mà contract không giữ là con số tệ
+ * hơn không có.
  *
  * Element người dùng TỰ ĐẶT TÊN không có ①, và rơi về `CUSTOM_ELEMENT_SKEL`
  * (`rrect` 0.8×0.6 — đúng khung trung tính cũ): một cái tên tự gõ không nói được
@@ -596,9 +601,12 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
   return chunkBySize(block.cells, limit).map((chunk, i) => {
     const grid = squareGrid(chunk.length);
     /* Ô vuông ⇒ một cạnh là đủ. Chia theo LƯỚI THẬT của tấm này, không theo ô
-       tham chiếu 4×4: một tấm 4 món có lưới 2×2 ⇒ ô 627px, và cỡ "S · 112px"
-       phải vẫn ra 112 pixel thật ở đó. Xem `skelSizeOf`. */
-    const cellPx = SQUARE_CANVAS_PX / grid.cols;
+       tham chiếu 4×4: một tấm 4 món có lưới 2×2 ⇒ ô 627px, và hộp vẽ phải là hộp
+       lớn nhất vừa lề của CHÍNH ô ấy. Xem `drawBox`. */
+    /* Ô NGUYÊN PIXEL, không phải 1254/cols thô: `geometry.cell_size` của engine là
+       `round(width / cols)`, và hộp vẽ phải quy về ĐÚNG con số ấy thì phân số
+       `skel.w = hộp / ô` mới cắt lại ra đúng hộp cũ (`round(ô × phân số)`). */
+    const cellPx = Math.round(SQUARE_CANVAS_PX / grid.cols);
     const cells: Component[] = chunk.map((cell, k) => {
       const element = presets.elements.find((preset) => preset.id === cell.elementId);
       /* Phong cách của ô: rỗng = theo phong cách chung — CÙNG luật với pill
@@ -613,11 +621,19 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
       /* `resolveElementSpec` là nơi DUY NHẤT biết cách nối đục nền (và mức kính)
          vào mô tả một ô — dùng lại thay vì chép luật nối chuỗi sang đây. */
       const glaze = { glaze: cell.glazeId };
-      /* CỠ đè lên `w`/`h` sau cùng; dòng không chọn cỡ ⇒ giữ nguyên tỉ lệ của loại.
-         Dựng TRƯỚC `templateSpec` vì `resolveElementSpec` đọc `skel.matte` để biết
+      /* Dựng TRƯỚC `templateSpec` vì `resolveElementSpec` đọc `skel.matte` để biết
          có nói câu "mức kính" hay không — và `matte` ấy có thể đến từ chính loại
          element (`element-lib` khai `matte:"glass"` cho nút viền, khay kính…). */
-      const size = skelSizeOf(cell.sizeId || defaultSizeOf(element), cellPx);
+      /* HAI CỠ, KHÔNG PHẢI MỘT.
+         · `out` = cỡ ĐẦU RA (pill «Cỡ», nấc S/M/L/XL theo cạnh dài, hoặc mặc định
+           của loại) — chỉ đi vào manifest để tầng xuất co lõi về đúng cỡ ấy;
+         · hộp vẽ = `drawBox(ô, tỉ lệ của out)` — hộp lớn nhất vừa lề của ô. Máy vẽ
+           luôn được giao hộp to nhất có thể, kèm hệ số phóng để biết đây là "cái
+           nút nhỏ phóng 2,5 lần" chứ không phải một tấm banner. */
+      const out = sizePx(cell.sizeId, element?.skel) ?? defaultSizePx(element);
+      const draw = drawBox(cellPx, cellPx, out.w, out.h);
+      /* Về PHÂN SỐ Ô — đơn vị của `skel.w/h` (V-06 ∈ (0,1]), không phải pixel. */
+      const size: SizePx = { w: draw.w / cellPx, h: draw.h / cellPx };
       const skel = cellSkel(element, glaze, size);
       const templateSpec = tidy([resolveElementSpec({ spec: text, skel }, glaze), cell.note.trim()].filter(Boolean).join(", "));
       /* Câu tự do RỖNG (người dùng xoá sạch dòng) ⇒ rơi về khuôn, KHÔNG ra ô
@@ -633,6 +649,8 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
         vi: element?.vi ?? cell.elementId,
         spec,
         skel: { ...skel },
+        out: { w: out.w, h: out.h },
+        drawScale: draw.scale,
       };
     });
     return {

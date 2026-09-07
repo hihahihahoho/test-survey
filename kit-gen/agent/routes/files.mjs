@@ -126,6 +126,13 @@ export function register(r) {
         /* Đo-ký-sổ sau slice: safe là core thật; contractSafe là rect safe zone của contract
            để người dùng đối chiếu, sizeDeviation chỉ gắn cờ QA. */
         contractSafe: meta?.contractSafe ?? null,
+        /* CỠ ĐẦU RA — cỡ người dùng chọn, thứ thành phẩm phải có khi rời khỏi app.
+           Khác `contractSafe`: từ 07/09/2026 ô luôn được VẼ to hết cỡ lề cho phép
+           (hộp max-fit) để tối đa độ phân giải, nên hộp trong prompt KHÔNG còn là
+           cỡ đích. Không trả nó ra đây thì webapp không có gì để co lõi về, và
+           `sheet-files.ts` lặng lẽ rơi về `contractSafe` — tức dán ra Figma đúng cỡ
+           máy vẽ chứ không đúng cỡ người dùng chọn. */
+        outSize: meta?.outSize ?? null,
         core: meta?.core ?? null,
         enamel: meta?.enamel ?? null,
         sizeDeviation: meta?.sizeDeviation ?? null,

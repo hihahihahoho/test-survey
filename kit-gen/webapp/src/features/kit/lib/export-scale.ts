@@ -74,16 +74,35 @@ export interface ExportSize {
   label: string;
 }
 
-export function exportSize(file: KitFile, poseFiles: ReadonlySet<string>): ExportSize {
+/**
+ * @param forced Tỉ lệ ÉP cho riêng ô này, thay cho quy ước mascot/UI ở trên.
+ *
+ * Có một ca thật cần nó: màn prompt-first co ảnh sao cho lõi model vẽ ra vừa khít
+ * hộp cỡ người dùng đã chọn, và tỉ lệ ấy là PHÉP ĐO của từng ô, không phải quy ước
+ * (`prompt-canvas/lib/result/sheet-files.ts:contractFramed`). Vắng ⇒ không đổi một
+ * hành vi nào của màn «Thư viện kit» cũ.
+ */
+export function exportSize(
+  file: KitFile,
+  poseFiles: ReadonlySet<string>,
+  forced?: number,
+): ExportSize {
   const kind = kindOf(file, poseFiles);
-  const scale = kind === "mascot" ? MASCOT_SCALE : UI_SCALE;
+  const fit = typeof forced === "number" && Number.isFinite(forced) && forced > 0 ? forced : null;
+  const scale = fit ?? (kind === "mascot" ? MASCOT_SCALE : UI_SCALE);
   const srcW = typeof file.w === "number" ? file.w : null;
   const srcH = typeof file.h === "number" ? file.h : null;
   const w = srcW === null ? null : Math.round(srcW * scale);
   const h = srcH === null ? null : Math.round(srcH * scale);
   const dims = w !== null && h !== null ? `${w}×${h}` : "chưa rõ cỡ";
-  const label =
-    scale === 1
+  /* Tỉ lệ ép thì nhãn phải nói LÝ DO ép, và chỉ nói khi có gì để nói: ép đúng 1
+     (ô không lệch cỡ) mà in ra «co về 100%» chỉ làm người đọc dừng lại hỏi. Cũng
+     không mượn câu «(nhân vật)» của quy ước cũ — ô ép tỉ lệ có thể là ô bất kỳ. */
+  const label = fit !== null
+    ? Math.abs(fit - 1) > 0.005
+      ? `${dims} · co về cỡ xuất đã chọn (${Math.round(fit * 100)}%)`
+      : `${dims} · giữ nguyên 1:1`
+    : scale === 1
       ? `${dims} · giữ nguyên 1:1 (nhân vật)`
       : `${dims}${srcW !== null && srcH !== null ? ` (ảnh gốc @2x ${srcW}×${srcH})` : ""} · thu 50%`;
   return { kind, scale, w, h, srcW, srcH, label };

@@ -190,20 +190,146 @@ describe("contractFramed — khung là cỡ ĐÃ CHỌN, không phải lõi mode
     contractSafe: [301, 332, 251, 188],
   });
 
-  it("có `contractSafe` ⇒ khung = hộp hợp đồng, KHÔNG phải lõi đo được", () => {
-    const out = contractFramed([avatar]);
-    expect(out.files[0]!.safe).toEqual([301, 332, 251, 188]);
+  /**
+   * Ô «01-button» mà chủ sản phẩm dán thử và đo được ở Figma: xin 195×195, model
+   * trả về lõi 263×262. Đây là ca ĐIỂN HÌNH, không phải ca hỏng — máy vẽ không bao
+   * giờ vẽ đúng pixel, nên mọi con số dưới đây là con số của một lượt vẽ BÌNH THƯỜNG.
+   */
+  const button = cell("tight/01-button", "ui", {
+    w: 392, h: 328, cellIndex: 0,
+    canvas: [853, 853], content: [392, 328], contentAt: [233, 253],
+    safe: [276, 294, 263, 262],
+    contractSafe: [301, 332, 195, 195],
+  });
+  /** `s` của ô nút: chiều cao là cạnh chặt hơn (195/262 < 195/263). */
+  const S_BUTTON = 195 / 263;
+
+  it("lõi to hơn hộp ⇒ tỉ lệ co = cạnh CHẶT NHẤT, và nói ra bằng phần trăm", () => {
+    const out = contractFramed([button]);
+    expect(out.scales.get(button.path)).toBeCloseTo(S_BUTTON, 6);
+    expect(out.fitted).toEqual([{ name: "01-button", percent: 74, w: 195, h: 195 }]);
     expect(out.measured).toEqual([]);
   });
 
-  it("thiếu `contractSafe` (kit cắt bằng bản cũ) ⇒ giữ lõi đo được VÀ nói ra tên ô", () => {
+  it("hộp ảo = hộp hợp đồng ÷ tỉ lệ, tâm trùng tâm lõi ⇒ trục dư chia đều hai bên", () => {
+    const safe = contractFramed([button]).files[0]!.safe!;
+    /* 195/s = 263 ⇒ hộp ảo vuông 263: trục ngang khít đúng lõi (263), trục dọc dư
+       1px so với lõi 262 nên lõi lùi xuống nửa pixel. */
+    expect(safe[2]).toBeCloseTo(263, 6);
+    expect(safe[3]).toBeCloseTo(263, 6);
+    expect(safe[0]).toBeCloseTo(276, 6);
+    expect(safe[1]).toBeCloseTo(293.5, 6);
+  });
+
+  /**
+   * CA CHỐT của cả lượt sửa này: ba con số mà chủ sản phẩm sẽ đo lại trong Figma.
+   * Khung đúng cỡ đã chọn, ảnh co theo cùng một tỉ lệ, lệch âm giữ nguyên hướng.
+   */
+  it("nối vào `buildFigmaNodeForAsset` ⇒ khung 195×195, ảnh co còn ~291×243", () => {
+    const out = contractFramed([button]);
+    const spec = buildFigmaNodeForAsset(out.files[0]!, { scale: out.scales.get(button.path)! });
+    expect(spec.frame.w).toBeCloseTo(195, 6);
+    expect(spec.frame.h).toBeCloseTo(195, 6);
+    expect(spec.image.w).toBeCloseTo(392 * S_BUTTON, 6); // ≈ 290,6
+    expect(spec.image.h).toBeCloseTo(328 * S_BUTTON, 6); // ≈ 243,2
+    expect(Math.round(spec.image.w)).toBe(291);
+    expect(Math.round(spec.image.h)).toBe(243);
+    /* Ảnh vẫn đặt lệch `content_at − safe`, nay ĐÃ NHÂN tỉ lệ ⇒ trang trí tràn ra
+       ngoài khung đúng chỗ thay vì tràn theo px gốc. */
+    expect(spec.image.x).toBeCloseTo((233 - 276) * S_BUTTON, 6);
+    expect(spec.image.y).toBeCloseTo((253 - 293.5) * S_BUTTON, 6);
+    expect(spec.clipsContent).toBe(false);
+  });
+
+  /**
+   * ══ `outSize` THẮNG `contractSafe` — HAI CON SỐ, HAI VIỆC ══════════════════
+   *
+   * Luật chủ sản phẩm chốt: cỡ người dùng chọn là CỠ ĐẦU RA, còn máy vẽ luôn được
+   * xin vẽ to hết ô (max-fit) để tối đa độ phân giải. Nên `contractSafe` CỐ Ý to hơn
+   * `outSize` và chỉ còn là số đo QA; lấy nhầm nó làm đích là dán ra Figma một ô to
+   * hơn cỡ người dùng đã chọn — đúng loại sai mà không ai nhìn ra ngay.
+   */
+  it("có `outSize` ⇒ co về CỠ ĐẦU RA, không phải hộp max-fit trong ô", () => {
+    const nut = cell("tight/01-button", "ui", {
+      w: 392, h: 328, canvas: [853, 853], content: [392, 328], contentAt: [233, 253],
+      safe: [276, 294, 263, 262],
+      contractSafe: [301, 332, 195, 195],
+      outSize: [120, 120],
+    });
+    const out = contractFramed([nut]);
+    const s = 120 / 263; // min(120/263, 120/262) — cạnh chặt nhất
+    expect(out.scales.get(nut.path)).toBeCloseTo(s, 6);
+    expect(out.fitted).toEqual([{ name: "01-button", percent: 46, w: 120, h: 120 }]);
+
+    const spec = buildFigmaNodeForAsset(out.files[0]!, { scale: out.scales.get(nut.path)! });
+    expect(spec.frame.w).toBeCloseTo(120, 6);
+    expect(spec.frame.h).toBeCloseTo(120, 6);
+    expect(spec.image.w).toBeCloseTo(392 * s, 6);
+  });
+
+  it("`outSize` rác (một số, số 0) ⇒ rơi về `contractSafe`, không dựng khung 0×0", () => {
+    for (const rac of [[120], [0, 120]]) {
+      const nut = cell("tight/01-button", "ui", {
+        w: 392, h: 328, canvas: [853, 853], content: [392, 328], contentAt: [233, 253],
+        safe: [276, 294, 263, 262], contractSafe: [301, 332, 195, 195], outSize: rac,
+      });
+      expect(contractFramed([nut]).scales.get(nut.path)).toBeCloseTo(S_BUTTON, 6);
+    }
+  });
+
+  it("có `outSize` mà THIẾU `contractSafe` (kit mới, hộp QA vắng) ⇒ vẫn co đúng", () => {
+    const nut = cell("tight/01-button", "ui", {
+      w: 392, h: 328, canvas: [853, 853], content: [392, 328], contentAt: [233, 253],
+      safe: [276, 294, 263, 262], outSize: [120, 120],
+    });
+    const out = contractFramed([nut]);
+    expect(out.measured).toEqual([]);
+    expect(out.scales.get(nut.path)).toBeCloseTo(120 / 263, 6);
+  });
+
+  it("lõi NHỎ hơn hộp ⇒ giãn lên chứ không bỏ mặc — cùng một công thức", () => {
+    const nho = cell("tight/02-chip", "ui", {
+      w: 100, h: 100, canvas: [853, 853], content: [100, 100], contentAt: [10, 10],
+      safe: [10, 10, 100, 100], contractSafe: [0, 0, 200, 150],
+    });
+    const out = contractFramed([nho]);
+    expect(out.scales.get(nho.path)).toBeCloseTo(1.5, 6); // min(200/100, 150/100)
+    const spec = buildFigmaNodeForAsset(out.files[0]!, { scale: out.scales.get(nho.path)! });
+    expect(spec.frame.w).toBeCloseTo(200, 6);
+    expect(spec.frame.h).toBeCloseTo(150, 6);
+    expect(spec.image.w).toBeCloseTo(150, 6);
+  });
+
+  it("lõi ĐÃ khít hộp ⇒ tỉ lệ 1 và KHÔNG báo gì (không ai muốn đọc «đã co về 100%»)", () => {
+    const khit = cell("tight/03-ok", "ui", {
+      w: 50, h: 50, canvas: [853, 853], content: [50, 50], contentAt: [5, 5],
+      safe: [5, 5, 100, 100], contractSafe: [0, 0, 100, 100],
+    });
+    const out = contractFramed([khit]);
+    expect(out.scales.get(khit.path)).toBe(1);
+    expect(out.fitted).toEqual([]);
+  });
+
+  it("có hộp hợp đồng nhưng KHÔNG đo được lõi ⇒ khung = hộp hợp đồng, tỉ lệ 1", () => {
+    const khongLoi = cell("tight/04-mo", "ui", { contractSafe: [301, 332, 251, 188] });
+    const out = contractFramed([khongLoi]);
+    expect(out.files[0]!.safe).toEqual([301, 332, 251, 188]);
+    expect(out.scales.get(khongLoi.path)).toBe(1);
+    expect(out.fitted).toEqual([]);
+    expect(out.measured).toEqual([]);
+  });
+
+  it("thiếu `contractSafe` (kit cắt bằng bản cũ) ⇒ giữ lõi đo được, tỉ lệ 1, VÀ nói ra tên ô", () => {
     const old = cell("tight/03-avatar-frame", "ui", { safe: [276, 294, 303, 263] });
     const out = contractFramed([old]);
     expect(out.files[0]!.safe).toEqual([276, 294, 303, 263]);
     expect(out.measured).toEqual(["03-avatar-frame"]);
+    /* Tỉ lệ 1 chứ KHÔNG phải quy ước 50% của màn kit cũ: màn này vẫn hứa 1:1 cho ô
+       không đo được, và `scaleOf` sẽ lặng lẽ chia đôi nếu để nó tự quyết. */
+    expect(out.scales.get(old.path)).toBe(1);
   });
 
-  it("`contractSafe` rác (thiếu số, cạnh 0) ⇒ coi như không có, không dựng frame 0×0", () => {
+  it("`contractSafe` rác (thiếu số, cạnh 0) ⇒ coi như không có, không dựng khung 0×0", () => {
     for (const rac of [[301, 332], [301, 332, 0, 188]]) {
       const out = contractFramed([cell("tight/x", "ui", { safe: [1, 2, 3, 4], contractSafe: rac })]);
       expect(out.files[0]!.safe).toEqual([1, 2, 3, 4]);
@@ -217,15 +343,13 @@ describe("contractFramed — khung là cỡ ĐÃ CHỌN, không phải lõi mode
     expect(out.files[0]).not.toBe(avatar);
   });
 
-  it("nối vào `buildFigmaNodeForAsset` ở tỉ lệ 1 ⇒ frame ĐÚNG con số prompt đã hứa", () => {
-    /* Đây là cả cái bệnh gói trong một dòng: 303 × 0,5 = 151,5 (thứ chủ sản phẩm
-       đo được ở Figma) ⇄ 251 × 1 (thứ prompt in ra). */
-    const spec = buildFigmaNodeForAsset(contractFramed([avatar]).files[0]!, { scale: 1 });
-    expect(spec.frame).toEqual({ w: 251, h: 188 });
-    /* Ảnh vẫn đặt lệch `contentAt − safe`, nay so với hộp HỢP ĐỒNG ⇒ phần tràn nằm
-       ngoài khung đúng chỗ. */
-    expect(spec.image).toEqual({ x: 233 - 301, y: 253 - 332, w: 392, h: 328 });
-    expect(spec.clipsContent).toBe(false);
+  it("mỗi ô một tỉ lệ RIÊNG — một số chung cho cả tấm là dựng lại đúng cái sai vừa gỡ", () => {
+    const out = contractFramed([button, avatar]);
+    const sButton = out.scales.get(button.path)!;
+    const sAvatar = out.scales.get(avatar.path)!;
+    expect(sButton).not.toBeCloseTo(sAvatar, 3);
+    expect(sAvatar).toBeCloseTo(Math.min(251 / 303, 188 / 263), 6);
+    expect(out.fitted.map((f) => f.name)).toEqual(["01-button", "03-avatar-frame"]);
   });
 
   it("KHÔNG đổi quy ước 50% của màn kit cũ: không truyền tỉ lệ ⇒ vẫn là `scaleOf`", () => {

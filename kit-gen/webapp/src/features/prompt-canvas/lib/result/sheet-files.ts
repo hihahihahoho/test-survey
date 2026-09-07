@@ -82,7 +82,7 @@ export function sheetDownloadName(job: string): string {
 }
 
 /**
- * KHUNG FIGMA = HỘP HỢP ĐỒNG, KHÔNG PHẢI HỘP ĐO ĐƯỢC.
+ * KHUNG FIGMA = CỠ ĐẦU RA NGƯỜI DÙNG CHỌN, KHÔNG PHẢI HỘP ĐO ĐƯỢC.
  *
  * ╔══ BỆNH, ĐO TRÊN MANIFEST THẬT (dự án `test`, ô `03-avatar-frame`) ═══════╗
  * ║   "safe":         [276, 294, 303, 263]   ← LÕI MODEL VẼ RA, slice.py đo   ║
@@ -93,28 +93,82 @@ export function sheetDownloadName(job: string): string {
  * ║ không có gì giải thích.                                                   ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * Ở màn prompt-first, khung phải là thứ NGƯỜI DÙNG ĐẶT — `contractSafe`, 1:1. Lõi
- * đo được vẫn còn nguyên giá trị của nó (QA `sizeDeviation` đọc chênh lệch giữa hai
- * hộp), nhưng nó là KẾT QUẢ, không phải HỢP ĐỒNG; layout của app căn theo hợp đồng.
+ * Ở màn prompt-first, khung phải là thứ NGƯỜI DÙNG ĐẶT. Lõi đo được vẫn còn nguyên
+ * giá trị của nó (QA `sizeDeviation` đọc chênh lệch giữa hai hộp), nhưng nó là KẾT
+ * QUẢ, không phải HỢP ĐỒNG; layout của app căn theo hợp đồng.
+ *
+ * ╔══ ĐÍCH LÀ `outSize`, `contractSafe` CHỈ LÀ ĐƯỜNG LÙI ═════════════════════╗
+ * ║ Chủ sản phẩm chốt luật: *cỡ người dùng chọn = CỠ ĐẦU RA; máy vẽ luôn vẽ    ║
+ * ║ max-fit trong ô để tối đa độ phân giải; co về là việc của code*. Nên hai   ║
+ * ║ con số sống song song và KHÔNG được trộn:                                  ║
+ * ║   · `contractSafe` = hộp max-fit trong ô lưới — thứ đi vào prompt và ở lại  ║
+ * ║     làm số đo QA. Nó CỐ Ý to hơn cỡ đầu ra: xin model vẽ to rồi thu nhỏ    ║
+ * ║     cho nét, chứ không xin nhỏ rồi phóng to cho vỡ.                        ║
+ * ║   · `outSize` = cỡ thành phẩm phải có khi ra khỏi app (`component.out`).   ║
+ * ║ ⇒ đích của phép co là `outSize`; thiếu nó (kit cắt bằng bản cũ) mới lấy    ║
+ * ║ `contractSafe`; thiếu cả hai thì không co gì cả và NÓI RA.                 ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ╔══ NỬA THỨ HAI, VÀ LÀ NỬA QUAN TRỌNG HƠN: PHẢI CO ẢNH ════════════════════╗
+ * ║ Bản trước chỉ đổi khung rồi dán ảnh ở tỉ lệ 1. Chủ sản phẩm dán thử ô      ║
+ * ║ «01-button» và thấy khung 263×262 (lõi model vẽ) chứ không phải 195×195 mà ║
+ * ║ họ đã chọn, rồi nói đúng vào bản chất: *"cái element thật kia nó phải      ║
+ * ║ scale safe zone chứ đúng không? không thể để nguyên cỡ 263 gốc mà ai gen   ║
+ * ║ ra được"*.                                                                 ║
+ * ║                                                                            ║
+ * ║ MÁY VẼ KHÔNG BAO GIỜ VẼ ĐÚNG PIXEL. Prompt xin một nút 195×195, model trả  ║
+ * ║ về một nút 263×262 — sai số ~35%, và đó là chuyện BÌNH THƯỜNG của mọi lượt ║
+ * ║ vẽ, không phải một lượt hỏng. Dán nguyên px thì hoặc lõi tràn khỏi hộp     ║
+ * ║ (Figma cắt mất), hoặc người thiết kế phải tự co tay từng ô. Vậy nên:       ║
+ * ║   **co ảnh sao cho LÕI ĐO ĐƯỢC vừa khít CỠ ĐẦU RA**,                       ║
+ * ║ trang trí (bóng, tia sáng, lá cờ…) tràn ra ngoài theo ĐÚNG cùng tỉ lệ.     ║
+ * ║ `s = min(out.w/core.w, out.h/core.h)` — lấy `min` nên lõi không bao giờ    ║
+ * ║ vượt hộp; đồng dạng nên không bao giờ méo. Trục còn dư thì chia đều hai    ║
+ * ║ bên (căn giữa), vì không có thông tin nào nói lõi lệch về phía nào.        ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
  *
  * ══ VÌ SAO ĐỔI Ở ĐÂY CHỨ KHÔNG SỬA `geometryOf` ════════════════════════════
  * `figma-node.ts` đang phục vụ CẢ màn «Thư viện kit» cũ, nơi quy ước là hộp đo
- * được × 50%. Sửa trong đó là đổi hành vi của một màn không ai xin. Ở đây thì phép
- * đổi gọn đúng một dòng — `safe ← contractSafe` — và nó THUẦN, nên kiểm được bằng
- * số thật mà không cần trình duyệt.
+ * được × 50%. Sửa trong đó là đổi hành vi của một màn không ai xin — và nó còn bị
+ * bốn bộ test khoá theo hash. Nên phép co ở đây đi bằng CỬA CÓ SẴN của nó:
  *
- * `contentAt` KHÔNG bị đụng: ảnh vẫn đặt lệch `contentAt − safe`, nên đổi mẫu số
- * `safe` là tự động đổi luôn phần tràn ra ngoài khung cho đúng chỗ.
+ *   · `safe` ← một **hộp ảo trong không gian ảnh gốc**, cỡ `outSize / s`,
+ *     căn giữa quanh lõi đo được;
+ *   · tỉ lệ xuất của riêng ô ← `s`.
+ *
+ * `buildFigmaNodeForAsset` nhân cả hai lại và ra đúng ba con số mình cần:
+ *     khung = safe × s = outSize                 ✓ đúng cỡ người dùng chọn
+ *     ảnh   = content × s                        ✓ lõi vừa khít khung
+ *     lệch  = (content_at − safe.xy) × s         ✓ trang trí tràn đúng chỗ
+ * Không một dòng số học nào bị chép lại — nếu công thức của `figma-node.ts` đổi,
+ * chỗ này đổi theo, không trôi khỏi nhau.
  */
+export interface FittedCell {
+  name: string;
+  /** Tỉ lệ đã co, làm tròn thành phần trăm — chỉ để NÓI cho người dùng. */
+  percent: number;
+  /** Cỡ đầu ra của ô sau khi co (px, đã làm tròn) — cũng chỉ để NÓI. */
+  w: number;
+  h: number;
+}
+
 export interface ContractFramed {
   /** Ô đã đổi khung; thứ tự giữ nguyên đầu vào. */
   files: KitFile[];
   /**
-   * Tên ô PHẢI dùng khung đo được vì manifest chưa có `contractSafe` (kit cắt bằng
-   * bản `slice.py` cũ). Nói ra chứ không nuốt: con số ở Figma lúc ấy KHÁC con số
-   * người dùng đọc trong prompt, và họ có quyền biết vì sao.
+   * Tên ô PHẢI dùng khung đo được vì manifest không có cả `outSize` lẫn
+   * `contractSafe` (kit cắt bằng bản `slice.py` cũ). Nói ra chứ không nuốt: con số ở
+   * Figma lúc ấy KHÁC con số người dùng đọc trong prompt, và họ có quyền biết vì sao.
    */
   measured: string[];
+  /**
+   * Tỉ lệ xuất của TỪNG Ô, khoá theo `path`. Mỗi ô một số riêng vì mỗi ô lệch cỡ
+   * một kiểu — một tỉ lệ chung cho cả tấm là quay lại đúng cái bệnh đang chữa.
+   * Ô vắng mặt ⇒ 1 (không có gì để co, hoặc không đo được).
+   */
+  scales: Map<string, number>;
+  /** Ô đã bị co/giãn thật sự (≠ 1) — nguồn cho câu báo "co về đúng cỡ (k%)". */
+  fitted: FittedCell[];
 }
 
 /** `[x, y, w, h]` dùng được (đủ bốn số, `w`/`h` dương)? Cùng luật với `box4`. */
@@ -124,12 +178,83 @@ function usableBox(box: readonly number[] | undefined): boolean {
   return typeof w === "number" && typeof h === "number" && w > 0 && h > 0;
 }
 
+/** `[x, y, w, h]` → object, chỉ khi cả bốn số dùng được. */
+function boxOf(box: readonly number[] | undefined): { x: number; y: number; w: number; h: number } | null {
+  if (!usableBox(box)) return null;
+  const [x, y, w, h] = box as readonly number[];
+  return { x: x ?? 0, y: y ?? 0, w: w as number, h: h as number };
+}
+
+/** `[w, h]` → object, chỉ khi cả hai số dương. `outSize` là CỠ, không phải hộp. */
+function sizeOf(size: readonly number[] | undefined): { w: number; h: number } | null {
+  if (size === undefined || size.length < 2) return null;
+  const [w, h] = size;
+  if (typeof w !== "number" || typeof h !== "number" || !(w > 0) || !(h > 0)) return null;
+  return { w, h };
+}
+
+/**
+ * Lệch dưới nửa phần trăm thì coi như không co: `0,998` in ra là «100%», và một câu
+ * báo "đã co về 100%" chỉ làm người đọc dừng lại hỏi mình vừa đọc cái gì.
+ */
+const FIT_EPS = 0.005;
+
 export function contractFramed(files: readonly KitFile[]): ContractFramed {
   const measured: string[] = [];
+  const fitted: FittedCell[] = [];
+  const scales = new Map<string, number>();
+
   const out = files.map((file) => {
-    if (usableBox(file.contractSafe)) return { ...file, safe: file.contractSafe };
-    measured.push(cellName(file));
-    return file;
+    scales.set(file.path, 1);
+
+    /* ĐÍCH: cỡ đầu ra người dùng chọn. `contractSafe` (hộp max-fit, cố ý to hơn) chỉ
+       vào cuộc khi kit cắt bằng bản engine chưa ghi `outSize`. */
+    const box = boxOf(file.contractSafe);
+    const target = sizeOf(file.outSize) ?? (box === null ? null : { w: box.w, h: box.h });
+    if (target === null) {
+      /* Không biết cỡ đầu ra ⇒ giữ nguyên mọi thứ: khung là lõi đo được, tỉ lệ 1.
+         Đoán một tỉ lệ ở đây là bịa ra một cỡ mà không ai hứa — và tỉ lệ 1 (chứ
+         không phải quy ước 50% của màn kit cũ) mới là thứ màn này vẫn hứa. */
+      measured.push(cellName(file));
+      return file;
+    }
+
+    const core = boxOf(file.safe);
+    if (core === null) {
+      /* Biết cỡ đầu ra nhưng KHÔNG đo được lõi (slice.py không tách được ruột): không
+         có gì để căn theo, nên giữ hành vi cũ — khung là hộp hợp đồng nếu có, tỉ lệ 1. */
+      if (box === null) {
+        measured.push(cellName(file));
+        return file;
+      }
+      return { ...file, safe: [box.x, box.y, box.w, box.h] };
+    }
+
+    const s = Math.min(target.w / core.w, target.h / core.h);
+    if (!Number.isFinite(s) || s <= 0) {
+      return box === null ? file : { ...file, safe: [box.x, box.y, box.w, box.h] };
+    }
+
+    /* Hộp ảo: cỡ `outSize / s` (để nhân ngược lại ra đúng `outSize`), tâm trùng tâm
+       lõi ⇒ phần dư của trục còn lại chia đều hai bên. Toạ độ x/y của `contractSafe`
+       KHÔNG dùng tới: vị trí khung trên bàn Figma do lưới quyết định, còn thứ phải
+       khớp là ẢNH so với KHUNG — và cái đó neo vào lõi. */
+    const vw = target.w / s;
+    const vh = target.h / s;
+    scales.set(file.path, s);
+    if (Math.abs(s - 1) > FIT_EPS) {
+      fitted.push({
+        name: cellName(file),
+        percent: Math.round(s * 100),
+        w: Math.round(target.w),
+        h: Math.round(target.h),
+      });
+    }
+    return {
+      ...file,
+      safe: [core.x + core.w / 2 - vw / 2, core.y + core.h / 2 - vh / 2, vw, vh],
+    };
   });
-  return { files: out, measured };
+
+  return { files: out, measured, scales, fitted };
 }

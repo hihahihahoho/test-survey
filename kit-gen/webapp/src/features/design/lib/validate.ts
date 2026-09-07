@@ -22,6 +22,10 @@ import {
   type Contract,
 } from "@/lib/types/contract";
 import { MATTE_VALUES, isKnownShape } from "./shapes";
+
+/** Biên của `component.out` — chép từ `agent/lib/validate.mjs` (8..4096). */
+export const OUT_SIZE_MIN = 8;
+export const OUT_SIZE_MAX = 4096;
 import { isEmptyCell } from "./ops";
 
 import {
@@ -226,6 +230,24 @@ export function validateDesign(contract: Contract | null | undefined, ctx: Valid
             target: t(k),
             severity: "error",
           });
+        }
+      }
+
+      // OUT_SIZE — gương của `agent/lib/validate.mjs`. `out` là cỡ ĐẦU RA (px thiết
+      // kế), KHÔNG phải cỡ vẽ: ô luôn được vẽ to hết cỡ lề cho phép rồi code mới co
+      // lõi về `out` lúc xuất. Trần 4096 chứ không 1254 vì đích có thể là bản @2x.
+      const out = (cp as { out?: { w?: unknown; h?: unknown } }).out;
+      if (out !== undefined && out !== null) {
+        for (const k of ["w", "h"] as const) {
+          const n = Number(out[k]);
+          if (!Number.isInteger(n) || n < OUT_SIZE_MIN || n > OUT_SIZE_MAX) {
+            push({
+              rule: "OUT_SIZE",
+              message: `Cỡ đầu ra phải là số nguyên ${OUT_SIZE_MIN}–${OUT_SIZE_MAX} px.`,
+              target: t("out"),
+              severity: "error",
+            });
+          }
         }
       }
 
