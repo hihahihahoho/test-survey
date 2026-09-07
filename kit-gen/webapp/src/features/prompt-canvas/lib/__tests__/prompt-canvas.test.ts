@@ -17,7 +17,7 @@ import { newMascotPose, type Block, type ComposerState, type MascotBlock, type M
 
 import { COMPOSER_DOC_VERSION, emptyComposerDoc, migrateComposerDoc, type ComposerDoc } from "../composer-doc";
 import { composerBlockSheets, composerStyleLine, composerToContract } from "../composer-to-contract";
-import { drawableBlockIds, lotsOf } from "../block-jobs";
+import { drawableBlockIds, lotsOf, sheetsHash } from "../block-jobs";
 import { sameColors, swapBrandRefs } from "../brand-binding";
 import { EMPTY_PILL_IMAGE, dataUrlToFile, readPillImage } from "../pill-image";
 
@@ -83,7 +83,12 @@ function withImage(doc: JSONContent, refName: string): JSONContent {
   let done = false;
   const walk = (node: JSONContent): JSONContent => {
     if (done) return node;
-    const takes = node.type === NODE.imagePill || (node.type === NODE.optionPill && node.attrs?.["kind"] === "mascot");
+    /* Ba chỗ nhận ảnh trong ba câu khởi điểm: node ảnh RỜI (bản nháp đời trước),
+       pill NHÂN VẬT (→ `sheet.ref`) và pill BỐ CỤC của thẻ Background
+       (→ `sheet.layoutRef`). Câu Background KHÔNG còn node ảnh rời từ 09/2026. */
+    const takes =
+      node.type === NODE.imagePill ||
+      (node.type === NODE.optionPill && (node.attrs?.["kind"] === "mascot" || node.attrs?.["kind"] === "layout"));
     if (takes) {
       done = true;
       return { ...node, attrs: { ...node.attrs, refName, path: `refs/${refName}` } };
@@ -128,7 +133,7 @@ describe("migrateComposerDoc — thiếu docVersion thì KHÔNG cố dịch", ()
       composer: state({
         brandColors: ["#ff5533"],
         blocks: [
-          { id: "b1", kind: "background", mode: "free", doc: backgroundDoc() },
+          { id: "b1", kind: "background", mode: "free", doc: backgroundDoc(), note: "" },
           { id: "u1", kind: "uikit", mode: "template", cells: [] },
         ],
       }),
@@ -242,7 +247,7 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     state({
       brandColors: ["#ff5533", "#112233"],
       blocks: [
-        { id: "b1", kind: "background", mode: "template", doc: withImage(backgroundDoc(), "inspo-1.png") },
+        { id: "b1", kind: "background", mode: "template", doc: withImage(backgroundDoc(), "inspo-1.png"), note: "" },
         {
           id: "u1",
           kind: "uikit",
@@ -272,14 +277,15 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     expect(composerToContract(doc, { presets: PRESETS })).toEqual(composerToContract(composer, { presets: PRESETS }));
   });
 
-  it("câu theme tổng + màu thương hiệu đi vào variant.style, KHÔNG lặp ở từng ô", () => {
+  it("câu theme tổng đi vào variant.style, KHÔNG lặp ở từng ô", () => {
     const contract = composerToContract(full(), { presets: PRESETS });
     const style = contract.variants![0]!.style;
     expect(style).toContain(PRESETS.styles[0]!.en);
-    expect(style).toContain(OUTFIT_THEMES[0]!.value);
-    /* `describeBrandColors` — chữ dẫn hướng kèm mã hex, đúng thứ tự vai trò. */
-    expect(style).toContain("dominant brand colour");
-    expect(style).toContain("#ff5533");
+    /* Cụm CỦA BỘ KIT (mô-típ, màu, biểu tượng), KHÔNG phải cụm trang phục: chuỗi
+       này được `gen.sh` in vào `## Art style` của MỌI tấm, mà 15/16 tấm không có
+       người nào mặc gì cả. Xem `ThemeOption.kitEN`. */
+    expect(style).toContain(OUTFIT_THEMES[0]!.kitEN);
+    expect(style).not.toContain("outfit");
     expect(contract.variants![0]!.brand?.primary).toBe("#ff5533");
     expect(contract.variants![0]!.brand?.secondary).toBe("#112233");
     for (const sheet of contract.sheets) {
@@ -287,9 +293,56 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     }
   });
 
+  /**
+   * BẢNG MÀU NÓI MỘT LẦN, VÀ CHỖ ẤY LÀ `brand` — không phải `style`.
+   *
+   * Chủ sản phẩm đọc prompt thật: *"khá dài dòng và không chuẩn"*. Đo được: cùng
+   * một bảng màu xuất hiện ba lần trong một prompt — câu tả màu bằng chữ nối vào
+   * `variant.style`, dòng "Brand palette:", rồi khối COLOUR AUTHORITY. Nay chỉ còn
+   * section `## Palette` dựng từ hex ở `brand`. Ca này canh chiều DỄ HỎNG LẠI: ai
+   * đó nối `describeBrandColors` về `style` cho "đầy đủ" là ba lần nói lại ngay.
+   */
+  it("mã màu KHÔNG còn nối vào variant.style — palette chỉ nói ở một chỗ", () => {
+    const contract = composerToContract(full(), { presets: PRESETS });
+    const style = contract.variants![0]!.style;
+    expect(style).not.toContain("#ff5533");
+    expect(style).not.toContain("dominant brand colour");
+    /* Nhưng hex vẫn PHẢI tới máy vẽ — qua `brand`, nguyên vẹn. */
+    expect(contract.variants![0]!.brand?.primary).toBe("#ff5533");
+  });
+
+  /**
+   * TRỤC Ở NẤC GIỮA = người dùng chưa kéo gì. Tám mệnh đề trung tính ("balanced in
+   * age", "timeless", "medium outline") đứng cạnh một câu phong cách thật thì
+   * chúng thắng bằng số đông, và prompt dài gấp đôi mà không nói thêm điều gì.
+   */
+  it("trục phong cách ở nấc giữa KHÔNG lọt vào variant.style", () => {
+    const style = composerToContract(full(), { presets: PRESETS }).variants![0]!.style;
+    for (const phrase of ["balanced in age", "balanced energy", "timeless", "medium outline", "gender-neutral"]) {
+      expect(style, phrase).not.toContain(phrase);
+    }
+  });
+
+  /**
+   * Ba trục TẢ NGƯỜI chỉ được in ở tấm nhân vật. Chúng vào `variant.style` là dán
+   * "clearly feminine" lên mọi cái nút của bộ kit.
+   */
+  it("trục tuổi/giới/năng lượng: vào ô dáng, KHÔNG vào variant.style", () => {
+    const axes = { age: 4, energy: 4, lux: 4, era: 4, gender: 7, detail: 4, outline: 4, ornament: 4 } as const;
+    const contract = composerToContract(full(), { presets: PRESETS, styleAxes: { ...axes } });
+    const soft = "soft feminine character";
+    expect(contract.variants![0]!.style).not.toContain(soft);
+    expect(contract.sheets.find((s) => s.id === "nhan-vat")!.components[0]!.spec).toContain(soft);
+    expect(contract.sheets.find((s) => s.id === "ui")!.components[0]!.spec).not.toContain(soft);
+  });
+
   it("ảnh của pill → sheet.ref, đường dẫn TƯƠNG ĐỐI refs/…", () => {
     const contract = composerToContract(full(), { presets: PRESETS });
-    expect(contract.sheets.find((s) => s.id === "nen")?.ref).toBe("refs/inspo-1.png");
+    /* Ảnh của pill BỐ CỤC đi ra `layoutRef` chứ KHÔNG ra `ref`: `ref` của tấm nền
+       nghĩa là "vẽ ra cảnh này", còn bản phác bố cục chỉ nói chỗ đặt. Lẫn hai
+       trường là máy vẽ chép luôn nét nguệch ngoạc của bản phác. */
+    expect(contract.sheets.find((s) => s.id === "nen")?.layoutRef).toBe("refs/inspo-1.png");
+    expect(contract.sheets.find((s) => s.id === "nen")?.ref).toBeUndefined();
     const mascot = contract.sheets.find((s) => s.id === "nhan-vat");
     expect(mascot?.ref).toBe("refs/char-lan.png");
     /* Có ảnh mẫu ⇒ tấm dáng phải mang `note` "cùng một nhân vật", nếu không mỗi
@@ -443,7 +496,7 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
   it("chế độ TỰ DO ⇒ promptOverride (thay trọn prompt), KHÔNG phải directive", () => {
     const doc = withExtraText(backgroundDoc(), " với cá chép vàng bơi ngang");
     const contract = composerToContract(
-      state({ blocks: [{ id: "b1", kind: "background", mode: "free", doc }] }),
+      state({ blocks: [{ id: "b1", kind: "background", mode: "free", doc, note: "" }] }),
       { presets: PRESETS },
     );
     const sheet = contract.sheets[0]!;
@@ -455,7 +508,7 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
   it("chế độ template + chữ gõ THÊM ⇒ directive, và chỉ phần gõ thêm", () => {
     const doc = withExtraText(backgroundDoc(), " thêm mấy con cá chép");
     const contract = composerToContract(
-      state({ blocks: [{ id: "b1", kind: "background", mode: "template", doc }] }),
+      state({ blocks: [{ id: "b1", kind: "background", mode: "template", doc, note: "" }] }),
       { presets: PRESETS },
     );
     const sheet = contract.sheets[0]!;
@@ -470,7 +523,7 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
 
   it("block template không sửa gì ⇒ KHÔNG mọc thêm khoá nào", () => {
     const contract = composerToContract(
-      state({ blocks: [{ id: "b1", kind: "background", mode: "template", doc: backgroundDoc() }] }),
+      state({ blocks: [{ id: "b1", kind: "background", mode: "template", doc: backgroundDoc(), note: "" }] }),
       { presets: PRESETS },
     );
     expect("directive" in contract.sheets[0]!).toBe(false);
@@ -483,7 +536,7 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     const para = doc.content![0]!;
     para.content!.push({ type: NODE.optionPill, attrs: { kind: "material", value: "gold-metal" } });
     const contract = composerToContract(
-      state({ blocks: [{ id: "b1", kind: "background", mode: "template", doc }] }),
+      state({ blocks: [{ id: "b1", kind: "background", mode: "template", doc, note: "" }] }),
       { presets: PRESETS },
     );
     expect(contract.sheets[0]!.components[0]!.spec).toContain(
@@ -501,8 +554,8 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
 
   it("nhiều block cùng loại ⇒ id nối tiếp kiểu styles.json (nen, nen2), không trùng", () => {
     const blocks: Block[] = [
-      { id: "b1", kind: "background", mode: "template", doc: backgroundDoc() },
-      { id: "b2", kind: "background", mode: "template", doc: backgroundDoc() },
+      { id: "b1", kind: "background", mode: "template", doc: backgroundDoc(), note: "" },
+      { id: "b2", kind: "background", mode: "template", doc: backgroundDoc(), note: "" },
       mascotBlock("m1", mascotDoc()),
       mascotBlock("m2", mascotDoc()),
     ];
@@ -566,7 +619,7 @@ describe("ảnh của pill — không còn blob:, và không có đường thoá
   it("prompt xem trước vẫn chạy: chỉ ảnh CÓ THẬT mới được đánh số", () => {
     const s = state({
       blocks: [
-        { id: "b1", kind: "background", mode: "template", doc: withImage(backgroundDoc(), "inspo-1.png") },
+        { id: "b1", kind: "background", mode: "template", doc: withImage(backgroundDoc(), "inspo-1.png"), note: "" },
         mascotBlock("m1", mascotDoc()),
       ],
     });
@@ -609,9 +662,12 @@ describe("ngữ cảnh chung tự do → variant.style", () => {
   it("pill trong câu vẫn ra cụm TIẾNG ANH, và dãy màu vẫn thành chữ", () => {
     const style = composerToContract(freeState(""), { presets: PRESETS }).variants![0]!.style;
     expect(style).toContain(PRESETS.styles[0]!.en);
-    expect(style).toContain(OUTFIT_THEMES[0]!.value);
+    /* Pill THEME ra cụm của BỘ KIT, không ra cụm trang phục — xem `ThemeOption.kitEN`. */
+    expect(style).toContain(OUTFIT_THEMES[0]!.kitEN);
     /* `brandPill` là node RỖNG — chữ phải đến từ `SerializeContext.brandColors`,
-       nên nếu ai đó quên nối dây ấy thì mã màu biến mất khỏi câu. */
+       nên nếu ai đó quên nối dây ấy thì mã màu biến mất khỏi câu.
+       Ở ĐÂY hex vẫn đúng chỗ dù bản ghép tự động đã bỏ nó: người dùng TỰ ĐẶT node
+       màu vào câu của họ, và chữ họ viết ra thì không ai được cắt. */
     expect(style).toContain("#ff5533");
   });
 
@@ -687,7 +743,7 @@ describe("migrateComposerDoc — chữa tài liệu đã lưu với pill `{kind:
 
   it("câu Cảnh nền: lấy lại được kind, còn value thì để RỖNG chứ không bịa", () => {
     const doc = migrateComposerDoc(
-      saved({ blocks: [{ id: "b1", kind: "background", mode: "free", doc: nullPills(2) }] }),
+      saved({ blocks: [{ id: "b1", kind: "background", mode: "free", doc: nullPills(2), note: "" }] }),
       PRESETS,
     );
     const pills = ((doc.composer.blocks[0] as { doc: JSONContent }).doc).content![0]!.content!;
@@ -993,6 +1049,148 @@ describe("di trú: bản nháp đời trước không có bốn trường mới"
   });
 });
 
+/* ══════════════════════════════════════════════════════════════════════════
+   THẺ BACKGROUND — ô thứ ba đổi từ ẢNH sang BỐ CỤC (09/2026)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+describe("thẻ Background: khung cảnh · không khí · bố cục", () => {
+  const saved = (composer: unknown) => ({ docVersion: COMPOSER_DOC_VERSION, updatedAt: "", composer });
+
+  const pillsOf = (doc: JSONContent): { kind: string; value: string; path: string }[] => {
+    const out: { kind: string; value: string; path: string }[] = [];
+    const walk = (node: JSONContent) => {
+      if (node.type === NODE.optionPill) {
+        out.push({
+          kind: String(node.attrs?.["kind"] ?? ""),
+          value: String(node.attrs?.["value"] ?? ""),
+          path: String(node.attrs?.["path"] ?? ""),
+        });
+      }
+      for (const child of node.content ?? []) walk(child);
+    };
+    walk(doc);
+    return out;
+  };
+
+  it("câu khởi điểm có ĐÚNG ba pill, và không còn node ảnh rời nào", () => {
+    const doc = backgroundDoc();
+    expect(pillsOf(doc).map((p) => p.kind)).toEqual(["scene", "mood", "layout"]);
+    expect(JSON.stringify(doc)).not.toContain(NODE.imagePill);
+  });
+
+  it("cụm bố cục đi vào `spec` của tấm, SAU không khí", () => {
+    const contract = composerToContract(
+      state({ blocks: [{ id: "b1", kind: "background", mode: "template", doc: backgroundDoc(), note: "" }] }),
+      { presets: PRESETS },
+    );
+    const spec = contract.sheets[0]!.components[0]!.spec;
+    const layout = phraseOf("layout", "center-clear", PRESETS);
+    expect(spec).toContain(layout);
+    expect(spec.indexOf(phraseOf("mood", "festive", PRESETS))).toBeLessThan(spec.indexOf(layout));
+  });
+
+  /**
+   * ẢNH BỐ CỤC KHÔNG BAO GIỜ ĐƯỢC LÀ `sheet.ref`.
+   *
+   * `gen.sh` tả hai trường ấy bằng hai câu ngược nhau: `ref` = "vẽ ra cái này",
+   * `layoutRef` = "chỉ chép chỗ đặt, đừng lấy nét, màu hay độ hoàn thiện". Một
+   * bản phác nằm ở `ref` là lệnh "vẽ lại chính bản phác này cho đẹp" — đúng con
+   * bọ mà lượt này sinh ra để dọn.
+   */
+  it("ảnh trên pill bố cục → `layoutRef`, KHÔNG BAO GIỜ → `ref`", () => {
+    const doc = backgroundDoc();
+    const withLayoutShot = JSON.parse(JSON.stringify(doc)) as JSONContent;
+    const paragraph = withLayoutShot.content![0]!;
+    paragraph.content = paragraph.content!.map((node) =>
+      node.attrs?.["kind"] === "layout"
+        ? { ...node, attrs: { ...node.attrs, path: "refs/phac-bo-cuc.png", refName: "phac-bo-cuc.png" } }
+        : node,
+    );
+    const sheet = composerToContract(
+      state({ blocks: [{ id: "b1", kind: "background", mode: "template", doc: withLayoutShot, note: "" }] }),
+      { presets: PRESETS },
+    ).sheets[0]!;
+    expect(sheet.layoutRef).toBe("refs/phac-bo-cuc.png");
+    expect(sheet.ref).toBeUndefined();
+  });
+
+  it("`layoutRef` phải là đường dẫn trong project — schema chặn `../`", () => {
+    const bad = { id: "nen", orient: "portrait", grid: { cols: 1, rows: 1 }, layoutRef: "../../etc/passwd",
+      components: [{ file: "01-nen", vi: "Background", spec: "x", skel: { shape: "full", w: 1, h: 1 } }] };
+    expect(() => contractSchema.parse({ schemaVersion: 4, sheets: [bad], variants: [], characterPoses: [], slice: { threshold: 120 } })).toThrow();
+  });
+
+  /**
+   * Ô GHI CHÚ của thẻ → `sheet.directive`, và nó SỐNG QUA cả hai chế độ.
+   *
+   * Ở chế độ tự do câu chữ thành `promptOverride` (thay trọn prompt của tấm), nên
+   * nếu ghi chú cũng đi vào đó thì nó biến mất. Nó là một ô KHÁC của contract, và
+   * `gen.sh` in nó dưới `## Direction` kể cả ở nhánh override.
+   */
+  it("ghi chú của thẻ → `directive`, ở CẢ hai chế độ", () => {
+    for (const mode of ["template", "free"] as const) {
+      const contract = composerToContract(
+        state({ blocks: [{ id: "b1", kind: "background", mode, doc: backgroundDoc(), note: "màn chính của game" }] }),
+        { presets: PRESETS },
+      );
+      expect(contract.sheets[0]!.directive, mode).toContain("màn chính của game");
+    }
+  });
+
+  /**
+   * DI TRÚ bản nháp đời trước: «tham chiếu [🖼]» → «bố cục [⌄ mang ảnh]».
+   *
+   * Ảnh người dùng đã tải lên đĩa phải Ở LẠI trong câu; mất nó là mất một tệp họ
+   * không tải lại được từ đâu (kho ảnh gốc nằm trên máy họ, không nằm trong dự án).
+   */
+  it("bản nháp cũ: pill ảnh «tham chiếu» thành pill bố cục mang đúng ảnh ấy", () => {
+    const legacy: JSONContent = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Vẽ cảnh nền " },
+            { type: NODE.optionPill, attrs: { kind: "scene", value: "shop", custom: "", path: "", refName: "" } },
+            { type: "text", text: ", không khí " },
+            { type: NODE.optionPill, attrs: { kind: "mood", value: "cozy", custom: "", path: "", refName: "" } },
+            { type: "text", text: ", tham chiếu " },
+            { type: NODE.imagePill, attrs: { refName: "phac.png", path: "refs/phac.png", role: "" } },
+            { type: "text", text: "." },
+          ],
+        },
+      ],
+    };
+    const doc = migrateComposerDoc(
+      saved({ blocks: [{ id: "b1", kind: "background", mode: "template", doc: legacy }] }),
+      PRESETS,
+    );
+    const block = doc.composer.blocks[0] as { doc: JSONContent; note: string };
+    expect(pillsOf(block.doc)).toEqual([
+      { kind: "scene", value: "shop", path: "" },
+      { kind: "mood", value: "cozy", path: "" },
+      { kind: "layout", value: "center-clear", path: "refs/phac.png" },
+    ]);
+    expect(JSON.stringify(block.doc)).not.toContain("tham chiếu");
+    expect(JSON.stringify(block.doc)).toContain("bố cục");
+    /* Thẻ cũ chưa có ô ghi chú ⇒ rỗng, đúng thứ nó đang là. */
+    expect(block.note).toBe("");
+  });
+
+  it("di trú CHẠY ĐÚNG MỘT LẦN — mở lại lần hai không sinh pill thứ tư", () => {
+    const once = migrateComposerDoc(
+      saved({ blocks: [{ id: "b1", kind: "background", mode: "template", doc: backgroundDoc() }] }),
+      PRESETS,
+    );
+    const twice = migrateComposerDoc(saved(once.composer), PRESETS);
+    expect(pillsOf((twice.composer.blocks[0] as { doc: JSONContent }).doc).map((p) => p.kind)).toEqual([
+      "scene",
+      "mood",
+      "layout",
+    ]);
+  });
+});
+
 describe("câu Ngữ cảnh chung dựng lại được TỪ trạng thái, kể cả ảnh và chữ tự gõ", () => {
   it("`contextDoc` mang `custom` VÀ ảnh xuống chính pill nó minh hoạ", () => {
     const doc = contextDoc(
@@ -1082,6 +1280,55 @@ describe("đếm lượt: một tấm = một lượt gọi máy vẽ = tiền",
       opts,
     );
     expect(drawableBlockIds(sheets)).toEqual(["m1", "u2"]);
+  });
+});
+
+/**
+ * KHOÁ CACHE CỦA TAB PROMPT — con bọ "đổi phong cách chung mà prompt vẫn cũ".
+ *
+ * ╔══ VÌ SAO CA NÀY ĐÁNG MỘT CHỖ RIÊNG ══════════════════════════════════════╗
+ * ║ Nó hỏng theo kiểu KHÔNG AI THẤY: người dùng đổi phong cách của cả bộ,     ║
+ * ║ mở tab Prompt, và đọc một prompt của đời trước — không có hộp đỏ nào, chữ ║
+ * ║ vẫn đầy đủ, chỉ là chữ sai. Rồi họ copy nó đi vẽ.                         ║
+ * ║ Gốc: câu phong cách · chủ đề · màu thương hiệu · 8 trục ngữ nghĩa KHÔNG   ║
+ * ║ nằm trong tấm nào — chúng tả CẢ BỘ KIT. Khoá chỉ băm mấy tấm là khoá mù   ║
+ * ║ với đúng thứ người dùng vừa đổi. Ca đầu dưới đây chứng minh cái mù ấy có  ║
+ * ║ thật trước, rồi mới đo phép vá — nếu không thì test chỉ đang khen chính   ║
+ * ║ nó, và ngày ai đó bỏ tham số thứ hai đi nó vẫn xanh.                      ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+describe("khoá cache tab Prompt — đổi phần mô tả cả bộ kit phải làm bản đang xem hết hạn", () => {
+  const opts = { presets: PRESETS, limits: { small: 4 } };
+  const before = state({ blocks: [mascotBlock("m1", mascotDoc())], brandColors: ["#112233"] });
+  const after = { ...before, brandColors: ["#ff5533"] };
+
+  const sheetsOf = (s: ComposerState) => composerBlockSheets(s, opts).flatMap((b) => b.sheets);
+  const kitKey = (s: ComposerState) => JSON.stringify(composerToContract(s, opts).variants);
+
+  it("mấy tấm y NGUYÊN mà phần mô tả cả bộ kit đã đổi ⇒ khoá phải đổi theo", () => {
+    /* Bước 1 — dựng lại đúng ca hỏng: tấm không nhúc nhích một ký tự nào. */
+    expect(sheetsOf(after)).toEqual(sheetsOf(before));
+    /* Bước 2 — nên khoá chỉ-băm-tấm hoàn toàn mù trước phép đổi này. */
+    expect(sheetsHash(sheetsOf(after))).toBe(sheetsHash(sheetsOf(before)));
+    /* Bước 3 — phần mô tả cả bộ kit thì có đổi thật, và khoá đủ phải thấy nó. */
+    expect(kitKey(after)).not.toBe(kitKey(before));
+    expect(sheetsHash(sheetsOf(after), kitKey(after))).not.toBe(
+      sheetsHash(sheetsOf(before), kitKey(before)),
+    );
+  });
+
+  it("không đổi gì thì khoá ĐỨNG YÊN — lời cảnh báo nào cũng kêu thì không ai đọc nữa", () => {
+    expect(sheetsHash(sheetsOf(before), kitKey(before))).toBe(
+      sheetsHash(sheetsOf(before), kitKey(before)),
+    );
+  });
+
+  it("hai nửa của khoá không lẫn vào nhau được", () => {
+    /* Nối chuỗi trần thì hai tổ hợp khác nhau ra cùng một khoá — và cái đụng độ ấy
+       im lặng đúng như con bọ ở trên. Bọc bằng mảng nên không có chuyện đó. */
+    const a = sheetsHash([{ id: "x" } as never], "yz");
+    const b = sheetsHash([{ id: "xy" } as never], "z");
+    expect(a).not.toBe(b);
   });
 });
 

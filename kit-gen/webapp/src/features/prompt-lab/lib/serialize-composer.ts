@@ -30,7 +30,7 @@ function cellLine(cell: UiCell, index: number, ctx: SerializeContext, mode: Bloc
   const name = element?.vi ?? cell.elementId;
 
   /* CHẾ ĐỘ TỰ DO: câu của dòng thay cho cả phần ghép pill. Cùng luật với block
-     Cảnh nền/Nhân vật — người dùng đã chọn phá khuôn thì đừng lén dựng lại khuôn
+     Background/Nhân vật — người dùng đã chọn phá khuôn thì đừng lén dựng lại khuôn
      quanh chữ của họ. Câu rỗng ⇒ rơi về khuôn, y như bên `uiKitSheets`: hai
      đường sinh prompt phải nói CÙNG một điều, nếu không thì bản xem trước và
      bản copy ra ChatGPT là hai thứ khác nhau. */
@@ -122,7 +122,7 @@ function blockLines(block: Block, ctx: SerializeContext): string[] {
 
 /** Nhãn của loại block khi đứng đầu đoạn trong prompt. */
 const BLOCK_LABEL: Record<Block["kind"], string> = {
-  background: "Cảnh nền",
+  background: "Background",
   uikit: "Bộ UI",
   mascot: "Nhân vật",
 };
@@ -165,6 +165,22 @@ export function contextThemeEN(
   return (state.themeCustom ?? "").trim() || phraseOf("theme", state.themeValue, presets);
 }
 
+/**
+ * CỤM TRANG PHỤC của chủ đề chung — thứ pill `outfit` để trống kế thừa.
+ *
+ * Song sinh với `contextThemeEN` và cùng đọc MỘT lựa chọn (`state.themeValue`),
+ * chỉ khác cụm chữ lấy ra: chủ đề nói với cả bộ kit bằng mô-típ và màu, còn nhân
+ * vật thì mặc quần áo. Xem `ThemeOption.kitEN` để biết vì sao một mục mang hai cụm.
+ * Chữ TỰ GÕ vẫn thắng cả hai đường: người dùng gõ "kimono xanh" thì đó vừa là chủ
+ * đề vừa là trang phục — họ chỉ có một ô, ta không được bịa ra ô thứ hai.
+ */
+export function contextOutfitEN(
+  state: Pick<ComposerState, "themeValue" | "themeCustom">,
+  presets: PresetBundle = getPresets(),
+): string {
+  return (state.themeCustom ?? "").trim() || phraseOf("outfit", state.themeValue, presets);
+}
+
 /** Cụm EN của phong cách chung — chữ tự gõ thắng preset. Xem `contextThemeEN`. */
 export function contextStyleEN(
   state: Pick<ComposerState, "styleId" | "styleCustom">,
@@ -182,6 +198,7 @@ export function contextFreeText(state: ComposerState, presets: PresetBundle = ge
          trống ở đây nghĩa là thật sự không nói gì về phong cách. */
       styleEN: "",
       themeEN: "",
+      outfitEN: "",
       presets,
       imageCounter: { count: 0 },
       brandColors: state.brandColors,
@@ -199,7 +216,7 @@ export function serializeComposer(state: ComposerState, presets: PresetBundle = 
      Nhắc lại palette ở từng dòng cell là dạy model rằng mỗi element có bảng
      màu riêng — ngược hẳn ý "một bộ nhận diện". */
   const brandEN = describeBrandColors(state.brandColors);
-  const ctx = makeContext({ styleEN, themeEN, presets, imageCounter: { count: 0 } });
+  const ctx = makeContext({ styleEN, themeEN, outfitEN: contextOutfitEN(state, presets), presets, imageCounter: { count: 0 } });
 
   const lead = tidy(
     [

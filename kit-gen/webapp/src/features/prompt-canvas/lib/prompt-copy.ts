@@ -1,60 +1,74 @@
 /**
- * prompt-copy.ts — COPY PROMPT **KÈM ẢNH** vào bộ nhớ tạm.
+ * prompt-copy.ts — CHỮ ĐI MỘT ĐƯỜNG, ẢNH ĐI MỘT ĐƯỜNG.
  *
- * ╔══ VÌ SAO CHỮ KHÔNG CÒN ĐỦ ═══════════════════════════════════════════════╗
- * ║ Chủ sản phẩm: *"copy prompt sẽ là copy bao gồm cả ảnh vào clipboard"*.     ║
- * ║ Câu ấy đúng về mặt kỹ thuật chứ không phải một mong muốn xa xỉ: prompt của ║
- * ║ một tấm KHÔNG TỰ ĐỨNG ĐƯỢC — engine gửi kèm ảnh khung xương (`skeleton/`)  ║
- * ║ và ảnh mẫu (`refs/`), và mọi câu "ô thứ 3 hàng 2" trong prompt đều trỏ vào ║
- * ║ tấm khung xương ấy. Dán mỗi chữ sang ChatGPT là dán một nửa hợp đồng.      ║
+ * ╔══ VÌ SAO BỎ ĐƯỜNG «MỘT ITEM, HAI KIỂU DỮ LIỆU» ══════════════════════════╗
+ * ║ Bản trước ghi MỘT `ClipboardItem` mang cả `text/plain` lẫn `image/png`,    ║
+ * ║ tin rằng nơi dán sẽ tự chọn kiểu hợp với nó. ChatGPT web KHÔNG làm thế:    ║
+ * ║ nó nhận CHỮ và bỏ ảnh — im lặng. Chủ sản phẩm dán xong thì máy trả lời     ║
+ * ║ *"Bạn gửi lại ảnh gốc/reference cần dùng vào chat nhé… chưa có ảnh nguồn   ║
+ * ║ khả dụng"*, tức là ảnh đã rơi mất mà nút vừa bấm vẫn báo xanh.             ║
+ * ║ Một lượt copy hứa hai thứ mà chỉ giao được một thứ là kiểu hỏng tệ nhất:   ║
+ * ║ người dùng chỉ phát hiện ra ở đầu bên kia, sau khi đã tốn một lượt hỏi.    ║
+ * ║ Nên nay: nút chữ copy CHỮ, và ảnh có đường riêng của nó (copy từng ảnh,    ║
+ * ║ hoặc tải về máy rồi kéo vào chat). Hai lời hứa nhỏ mà giữ được, hơn một    ║
+ * ║ lời hứa to mà nửa vời.                                                    ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * ══ MỘT `ClipboardItem`, NHIỀU MIME — VÀ VÌ SAO CHỈ MỘT ẢNH ════════════════
- * Chrome nhận đúng MỘT item trong một lượt `write()`, nhưng một item mang được
- * NHIỀU kiểu dữ liệu. Nên: `{ "text/plain": prompt, "image/png": ảnh đầu }` —
- * dán vào chỗ nhận chữ thì ra chữ, dán vào chỗ nhận ảnh thì ra ảnh. Ảnh thứ hai
- * trở đi KHÔNG nhét vào được, và cũng không nên im lặng bỏ: hàm trả về số ảnh
- * còn lại để UI mọc ra nút «Copy ảnh N» cho từng cái.
- *
  * ══ LUẬT: KHÔNG BAO GIỜ BÁO "ĐÃ COPY" KHI CHƯA COPY ĐƯỢC ═══════════════════
- * Cùng luật với `result-copy.ts` và `figma-board.ts`. Trình duyệt không có
- * `ClipboardItem`, hoặc ảnh tải hụt, thì ta lùi về CHỮ KHÔNG (`text-only`) và
- * NÓI RA lý do — chứ không dựng một cái toast xanh cho một việc chưa xảy ra.
+ * Cùng luật với `result-copy.ts` và `figma-board.ts`. Ở đây nó thành một phép
+ * kiểm trước khi gọi: trình duyệt thiếu `navigator.clipboard` thì NÉM ra chữ
+ * người đọc hiểu được, chứ không để `undefined.writeText` ném ra một câu tiếng
+ * Anh mà nơi gọi lỡ nuốt mất.
  */
 import { loadFull } from "@/features/kit/lib/image-source";
 
 /**
- * PROMPT ĐỦ CỦA MỘT TẤM — thứ ĐI VÀO BỘ NHỚ TẠM khi bấm Copy.
+ * ẢNH THAM CHIẾU CỦA MỘT TẤM — danh sách để bày ra và để người dùng dán vào chat.
  *
- * ╔══ VÌ SAO CÓ MỘT PHÉP KIỂM "ĐÃ CÓ CHƯA" THAY VÌ CỨ NỐI VÀO ═══════════════╗
- * ║ Engine ĐANG được sửa để tự đặt prompt tổng ở đầu prompt mỗi tấm. Trong    ║
- * ║ khoảng giao thời, hai bản engine cùng tồn tại trên máy người dùng: bản    ║
- * ║ mới đã có câu ấy, bản cũ chưa. Cứ nối vào thì bản mới ra prompt nói HAI   ║
- * ║ LẦN cùng một mệnh đề phong cách — và nhắc lại một chỉ thị là cách chắc    ║
- * ║ chắn để máy vẽ đè nó lên mọi thứ khác. Cứ KHÔNG nối thì bản cũ ra một     ║
- * ║ prompt không có phong cách nào, đúng thứ chủ sản phẩm vừa than.           ║
- * ║ Nên: hỏi trước. Có rồi thì để nguyên (chữ của engine là chữ thật), chưa   ║
- * ║ có thì nối lên đầu.                                                      ║
+ * ╔══ VÌ SAO CHỈ LỌC, KHÔNG TỰ GOM LẠI TỪ ĐẦU ═══════════════════════════════╗
+ * ║ Thứ tự đính kèm là quyết định của engine, không phải của màn hình:         ║
+ * ║ `gen.sh` ghép `ref` → tấm ảnh dáng → ảnh thương hiệu → ảnh gợi hứng, khử   ║
+ * ║ trùng, rồi ghi ra `prompts/<job>.att`; agent đọc đúng file đó và trả về    ║
+ * ║ nguyên thứ tự ấy trong `attachments` (`routes/contract.mjs`, nhánh         ║
+ * ║ prompt-preview). Dựng lại danh sách ở đây từ contract là mở NGUỒN SỰ THẬT  ║
+ * ║ THỨ HAI cho cùng một câu hỏi — và hai nguồn ấy sẽ lệch nhau đúng vào ngày  ║
+ * ║ engine thêm một vai ảnh mới (đang thêm: ảnh bố cục), vì webapp và engine   ║
+ * ║ trên máy người dùng KHÔNG cập nhật cùng nhịp.                             ║
+ * ║ Nên hàm này nhận chính `attachments` và chỉ làm hai việc engine đã làm rồi ║
+ * ║ nhưng ta không được phép giả định: khử trùng lặp và bỏ ảnh khung xương.    ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ══ VÌ SAO BỎ `skeleton/` ═════════════════════════════════════════════════
+ * Engine đã thôi gửi ảnh khung xương — vùng an toàn nay đi vào prompt bằng toạ
+ * độ số. Nhưng bản engine trên máy người dùng nằm ở một thư mục riêng và cập
+ * nhật bằng một lượt riêng, nên trong khoảng giao thời `attachments` vẫn có thể
+ * trả về `skeleton/…`. Bày nó ra là bảo người dùng dán vào chat một tấm mà máy
+ * vẽ không còn nhận — tốn một lượt hỏi để nhận về một câu hỏi lại.
+ * Lọc theo TIỀN TỐ THƯ MỤC vì đó là hợp đồng thật của agent (`routes/files.mjs`
+ * chỉ mở đúng vài thư mục, `skeleton` là một trong đó).
  */
-export function fullPromptText(styleLine: string, prompt: string): string {
-  const style = styleLine.trim();
-  if (!style) return prompt;
-  /* So bằng MỘT MẨU ĐẦU chứ không cả câu: engine có quyền xuống dòng hay chèn dấu
-     câu quanh nó, và một phép so nguyên văn sẽ trượt vì đúng một ký tự. 40 ký tự
-     đủ dài để không đụng nhầm một câu khác trong prompt. */
-  const probe = style.slice(0, 40);
-  return prompt.includes(probe) ? prompt : `${style}\n\n${prompt}`;
+export function referenceImages(attachments: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const raw of attachments) {
+    const path = raw.trim();
+    if (!path || path.startsWith("skeleton/")) continue;
+    /* Danh sách này dài nhất là dăm bảy đường dẫn — `includes` rẻ hơn dựng một
+       `Set` và giữ được ĐÚNG thứ tự engine đã chọn. */
+    if (!out.includes(path)) out.push(path);
+  }
+  return out;
 }
 
-
-/** Kết quả một lượt copy. `reason` chỉ có mặt khi phải lùi bước — và phải hiện ra. */
-export interface PromptCopyResult {
-  /** `"text+image"` = chữ và ảnh cùng vào; `"text"` = chỉ chữ. */
-  outcome: "text+image" | "text";
-  /** Ảnh KHÔNG kèm được vào lượt này (ảnh thứ hai trở đi). Số, không phải cờ. */
-  remainingImages: number;
-  reason?: string;
+/**
+ * Copy CHỮ vào bộ nhớ tạm — cửa duy nhất cho nút «Copy prompt».
+ *
+ * Ném thay vì trả cờ: nơi gọi phải hiện lỗi, và một hàm trả `false` lặng lẽ là
+ * lời mời quên kiểm. Chữ ném ra là chữ tiếng Việt vì nó đi thẳng vào hộp báo lỗi.
+ */
+export async function copyPromptText(text: string): Promise<void> {
+  const clip = typeof navigator === "undefined" ? undefined : navigator.clipboard;
+  if (!clip?.writeText) throw new Error("Trình duyệt này không cho ghi vào bộ nhớ tạm.");
+  await clip.writeText(text);
 }
 
 /**
@@ -72,65 +86,8 @@ export async function fetchProjectImage(projectId: string, relPath: string): Pro
   return res.blob();
 }
 
-/** Trình duyệt này có ghi được cả ảnh lẫn chữ trong một lượt không. */
-export function canCopyImage(): boolean {
-  return typeof ClipboardItem === "function" && typeof navigator !== "undefined" && Boolean(navigator.clipboard?.write);
-}
-
 /**
- * Copy `text` (+ ảnh đầu tiên trong `imagePaths`) vào bộ nhớ tạm.
- *
- * `imagePaths` rỗng ⇒ vẫn đi đường `ClipboardItem` một-MIME nếu có, và rơi về
- * `writeText` nếu không. Hai đường đều kết thúc bằng "chữ đã vào bộ nhớ tạm" —
- * ném ra ngoài chỉ khi tới cả chữ cũng không copy nổi, vì lúc đó nút vừa bấm
- * KHÔNG làm gì cả và người dùng phải biết điều đó.
- */
-export async function copyPromptWithImage(
-  projectId: string,
-  text: string,
-  imagePaths: readonly string[],
-): Promise<PromptCopyResult> {
-  const remaining = Math.max(0, imagePaths.length - 1);
-  const first = imagePaths[0];
-
-  if (!canCopyImage()) {
-    await navigator.clipboard.writeText(text);
-    return {
-      outcome: "text",
-      remainingImages: imagePaths.length,
-      ...(imagePaths.length > 0
-        ? { reason: "Trình duyệt này không cho ghi ảnh vào bộ nhớ tạm — mới copy được phần chữ." }
-        : {}),
-    };
-  }
-
-  if (!first) {
-    await navigator.clipboard.write([new ClipboardItem({ "text/plain": new Blob([text], { type: "text/plain" }) })]);
-    return { outcome: "text", remainingImages: 0 };
-  }
-
-  try {
-    const png = await fetchProjectImage(projectId, first);
-    /* MỘT item, HAI kiểu — xem khối chú thích đầu file. `text/plain` phải là Blob
-       chứ không phải chuỗi ở một số bản Safari, và Blob thì bản nào cũng nhận. */
-    await navigator.clipboard.write([
-      new ClipboardItem({ "text/plain": new Blob([text], { type: "text/plain" }), "image/png": png }),
-    ]);
-    return { outcome: "text+image", remainingImages: remaining };
-  } catch (error) {
-    /* Ảnh hụt KHÔNG được kéo theo cả phần chữ: chữ là thứ người dùng cần nhất, và
-       nó luôn copy được. Lùi một nấc, giữ nguyên phần lấy được, nói ra phần mất. */
-    await navigator.clipboard.writeText(text);
-    return {
-      outcome: "text",
-      remainingImages: imagePaths.length,
-      reason: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * Copy MỘT ảnh lẻ — nút «Copy ảnh N» của những ảnh không kèm vào lượt trên.
+ * Copy MỘT ảnh lẻ — nút «Copy ảnh» của từng tấm trong panel ảnh tham chiếu.
  *
  * Tách khỏi `copyImageBlob` của `result-copy.ts` ở đúng một điểm: ở đó ảnh đã nằm
  * sẵn trong tay (object URL của ô kết quả), còn ở đây phải đi lấy theo đường dẫn.

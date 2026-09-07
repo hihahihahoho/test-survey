@@ -205,6 +205,14 @@ export const sheetSchema = z
        nói vai trò của từng ảnh bằng một CÂU riêng, và câu ấy chỉ viết được khi
        biết ảnh nào đóng vai nào (xem khối "KHÔNG CÒN The SECOND attached image"). */
     poseRef: z.string().nullish(),
+    /* BẢN PHÁC BỐ CỤC của tấm nền — cùng luật đường dẫn với `ref`, vai trò ngược
+       lại. `ref` nói NỘI DUNG ("cảnh này"), `layoutRef` chỉ nói CHỖ ĐẶT ("khối
+       này to chừng này, nằm chỗ này") và `gen.sh` dặn máy vẽ đừng lấy gì khác từ
+       nó — không lấy nét, không lấy màu, không lấy độ hoàn thiện. Phải là trường
+       RIÊNG chứ không dùng lại `ref`: một bản phác nằm ở `ref` là lệnh "vẽ lại
+       chính bản phác này cho đẹp", và đó đúng là thứ đã xảy ra khi câu Background
+       chỉ có một ô ảnh không khai vai trò. */
+    layoutRef: z.string().nullish(),
     mode: z.string().optional(),
   })
   .superRefine((sh, ctx) => {
@@ -232,7 +240,7 @@ export const sheetSchema = z
       } else seen.set(c.file, i);
     });
     // ref/poseRef phải là đường dẫn TƯƠNG ĐỐI trong project (khớp agent: REF_PATH).
-    for (const field of ["ref", "poseRef"] as const) {
+    for (const field of ["ref", "poseRef", "layoutRef"] as const) {
       const path = sh[field];
       if (path && (path.includes("..") || path.startsWith("/"))) {
         ctx.addIssue({

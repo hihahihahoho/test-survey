@@ -112,12 +112,13 @@ export function validateContract(contract) {
   })
 
   // V-08: ref bị xoá nhưng còn tham chiếu → kiểm ở tầng refs (cần đĩa), ở đây chỉ kiểm hình thức.
-  // `poseRef` (tấm ảnh dáng ghép của sheet nhân vật) là ảnh nằm trong `refs/` y như
-  // `ref`, chỉ khác vai trò trong prompt — nên nó chịu ĐÚNG luật đường dẫn ấy.
+  // `poseRef` (tấm ảnh dáng ghép của sheet nhân vật) và `layoutRef` (bản phác bố cục
+  // của tấm nền) là ảnh nằm trong `refs/` y như `ref`, chỉ khác vai trò trong prompt —
+  // nên chúng chịu ĐÚNG luật đường dẫn ấy.
   // Bỏ sót nó là mở lại đúng lỗ mà REF_PATH sinh ra để bịt: một đường dẫn `../`
   // trong contract đọc được tệp ngoài project.
   for (const [i, sh] of contract.sheets.entries()) {
-    for (const field of ["ref", "poseRef"]) {
+    for (const field of ["ref", "poseRef", "layoutRef"]) {
       if (sh?.[field] === undefined || sh[field] === null) continue
       const r = String(sh[field])
       if (r.includes("..") || r.startsWith("/")) E("REF_PATH", `sheets[${i}].${field}`, `${field} must be a relative path inside project`)
@@ -135,6 +136,8 @@ export function refUsage(contract, refName) {
     // Tấm ảnh dáng cũng là một chỗ DÙNG ảnh. Thiếu dòng này thì lệnh xoá ref coi
     // tấm ấy là mồ côi và xoá được — sheet nhân vật mất ảnh dáng mà không ai cảnh báo.
     if (hit(sh.poseRef)) used.push({ kind: "sheetPose", id: sh.id })
+    // Bản phác bố cục cũng vậy: xoá nó đi là tấm nền mất chỗ dựa bố cục, im lặng.
+    if (hit(sh.layoutRef)) used.push({ kind: "sheetLayout", id: sh.id })
   })
   ;(contract?.variants ?? []).forEach(v => {
     for (const p of v.inspo ?? []) if (hit(p)) used.push({ kind: "variantInspo", id: v.id })

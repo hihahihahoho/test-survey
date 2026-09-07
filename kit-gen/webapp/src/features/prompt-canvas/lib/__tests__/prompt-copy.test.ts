@@ -1,18 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { copyPromptWithImage, fullPromptText } from "../prompt-copy";
+import { copyProjectImage, copyPromptText, referenceImages } from "../prompt-copy";
 
 /**
- * Test của NÚT «Copy prompt + ảnh».
+ * Test của HAI ĐƯỜNG COPY ở tab Prompt: chữ đi một đường, ảnh đi một đường.
  *
  * ╔══ VÌ SAO PHẢI KHOÁ CHỖ NÀY BẰNG TEST ════════════════════════════════════╗
- * ║ Bộ nhớ tạm là thứ KHÔNG TỰ TỐ CÁO khi hỏng: nút vẫn sáng, toast vẫn xanh, ║
- * ║ và người dùng chỉ biết mình mất công khi đã dán sang ChatGPT và thấy một   ║
- * ║ nửa hợp đồng. Nên hai điều duy nhất đáng khoá cũng chính là hai lời hứa   ║
- * ║ của file `prompt-copy.ts`:                                                ║
- * ║   ① máy đủ sức ⇒ CHỮ VÀ ẢNH cùng vào trong ĐÚNG MỘT `ClipboardItem`;      ║
- * ║   ② máy thiếu sức (hoặc ảnh tải hụt) ⇒ vẫn copy được CHỮ, và NÓI RA rằng  ║
- * ║      ảnh chưa vào — không bao giờ im lặng báo thành công.                 ║
+ * ║ Bộ nhớ tạm là thứ KHÔNG TỰ TỐ CÁO khi hỏng: nút vẫn sáng, hộp báo vẫn      ║
+ * ║ xanh, và người dùng chỉ biết mình mất công khi đã dán sang chỗ khác. Bản   ║
+ * ║ trước nhét chữ và ảnh vào cùng một `ClipboardItem` và test cũ khoá đúng    ║
+ * ║ hành vi ấy — test xanh, hiện trường vẫn mất ảnh, vì nơi dán chỉ lấy chữ.   ║
+ * ║ Nên nay khoá đúng ba lời hứa CÒN LẠI, mỗi cái nhỏ nhưng kiểm được thật:   ║
+ * ║   ① `referenceImages` giữ NGUYÊN thứ tự engine đã chọn, khử trùng lặp,    ║
+ * ║      và không bao giờ để lọt một tấm khung xương ra màn hình;             ║
+ * ║   ② copy chữ mà trình duyệt không cho ghi ⇒ NÉM, không im lặng báo xong;  ║
+ * ║   ③ lấy ảnh vẫn đi qua `loadFull` (đường có header, agent mới không 403). ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
  * ══ VÌ SAO GIẢ LẬP `loadFull` CHỨ KHÔNG GIẢ LẬP `fetch` ════════════════════
@@ -30,33 +32,18 @@ vi.mock("@/features/kit/lib/image-source", () => ({ loadFull }));
 const PNG_1PX =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
-/** Một `ClipboardItem` giả GIỮ LẠI các MIME được đưa vào — thứ test cần soi. */
-class FakeClipboardItem {
-  readonly types: string[];
-  constructor(readonly items: Record<string, Blob>) {
-    this.types = Object.keys(items);
-  }
-}
-
-interface ClipboardSpy {
-  write: ReturnType<typeof vi.fn>;
-  writeText: ReturnType<typeof vi.fn>;
-}
-
-/** Dựng `navigator.clipboard` + `ClipboardItem` giả. `withImage=false` = trình duyệt cũ. */
-function installClipboard(withImage: boolean): ClipboardSpy {
-  const spy: ClipboardSpy = { write: vi.fn(async () => {}), writeText: vi.fn(async () => {}) };
+/** Dựng `navigator.clipboard` giả. `ok=false` = trình duyệt không cho ghi. */
+function installClipboard(ok: boolean) {
+  const writeText = vi.fn(async () => {});
   /* Gán thẳng vào `globalThis` chứ không `vi.stubGlobal("navigator")`: môi trường
      test là "node", ở đó `navigator` có sẵn và chỉ đọc — ta chỉ cần cắm thêm
      `clipboard` vào nó. */
   Object.defineProperty(globalThis, "navigator", {
-    value: { clipboard: withImage ? spy : { writeText: spy.writeText } },
+    value: { clipboard: ok ? { writeText } : {} },
     configurable: true,
     writable: true,
   });
-  if (withImage) vi.stubGlobal("ClipboardItem", FakeClipboardItem);
-  else vi.stubGlobal("ClipboardItem", undefined);
-  return spy;
+  return writeText;
 }
 
 beforeEach(() => {
@@ -68,93 +55,60 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("copy prompt kèm ảnh — một item, hai kiểu dữ liệu", () => {
-  it("máy đủ sức: chữ và PNG đi cùng MỘT ClipboardItem", async () => {
-    const clip = installClipboard(true);
-
-    const out = await copyPromptWithImage("p1", "prompt của tấm", ["skeleton/01-ui.png"]);
-
-    expect(out.outcome).toBe("text+image");
-    expect(out.remainingImages).toBe(0);
-    expect(clip.writeText).not.toHaveBeenCalled();
-    /* ĐÚNG MỘT item — Chrome chỉ nhận một, gửi hai là mất im lặng cái thứ hai. */
-    const written = clip.write.mock.calls[0]?.[0] as FakeClipboardItem[];
-    expect(written).toHaveLength(1);
-    expect(written[0]!.types.sort()).toEqual(["image/png", "text/plain"]);
-
-    const png = written[0]!.items["image/png"]!;
-    expect(png.type).toBe("image/png");
-    expect(png.size).toBeGreaterThan(0);
-    await expect(written[0]!.items["text/plain"]!.text()).resolves.toBe("prompt của tấm");
+describe("referenceImages — chỉ lọc, KHÔNG dựng lại thứ tự", () => {
+  it("giữ nguyên thứ tự engine đã ghi ra: ảnh nhân vật → ảnh dáng → bố cục → thương hiệu → gợi hứng", () => {
+    const att = [
+      "refs/mascot.png",
+      "refs/pose-mascot.png",
+      "refs/layout.png",
+      "refs/logo.png",
+      "refs/inspo.png",
+    ];
+    /* So bằng `toEqual` trên CẢ MẢNG chứ không `toContain` từng cái: thứ tự chính
+       là thứ đang được khoá, và `toContain` sẽ xanh kể cả khi ta xáo tung nó. */
+    expect(referenceImages(att)).toEqual(att);
   });
 
-  it("nhiều ảnh: ảnh đầu đi kèm, số ảnh CÒN LẠI được trả về cho UI mọc nút", async () => {
-    installClipboard(true);
-
-    const out = await copyPromptWithImage("p1", "x", ["skeleton/01.png", "refs/a.png", "refs/b.png"]);
-
-    expect(out.outcome).toBe("text+image");
-    expect(out.remainingImages).toBe(2);
-    expect(loadFull).toHaveBeenCalledTimes(1);
-    expect(loadFull).toHaveBeenCalledWith("p1", "skeleton/01.png");
+  it("một ảnh đóng hai vai (vừa là ảnh của tấm vừa là ảnh thương hiệu) chỉ hiện MỘT lần", () => {
+    expect(referenceImages(["refs/logo.png", "refs/a.png", "refs/logo.png"])).toEqual([
+      "refs/logo.png",
+      "refs/a.png",
+    ]);
   });
 
-  it("không ảnh nào: vẫn là một lượt copy chữ trọn vẹn, không kêu ca gì", async () => {
-    const clip = installClipboard(true);
+  it("engine bản cũ còn gửi tấm khung xương ⇒ không được bày ra cho người dùng dán", () => {
+    expect(referenceImages(["skeleton/ui.png", "refs/mascot.png"])).toEqual(["refs/mascot.png"]);
+  });
 
-    const out = await copyPromptWithImage("p1", "chỉ có chữ", []);
+  it("dòng rỗng và khoảng trắng thừa của file trên đĩa không đẻ ra một ô ảnh trống", () => {
+    /* `.att` được ghi kèm một dấu xuống dòng ở cuối, và agent tách theo "\n" —
+       một chuỗi rỗng lọt vào đây sẽ thành một ô ảnh hỏng trên màn. */
+    expect(referenceImages(["  refs/a.png  ", "", "   "])).toEqual(["refs/a.png"]);
+  });
 
-    expect(out).toEqual({ outcome: "text", remainingImages: 0 });
-    const written = clip.write.mock.calls[0]?.[0] as FakeClipboardItem[];
-    expect(written[0]!.types).toEqual(["text/plain"]);
+  it("không có ảnh nào ⇒ mảng rỗng, không phải null (nơi gọi đếm thẳng `.length`)", () => {
+    expect(referenceImages([])).toEqual([]);
   });
 });
 
-describe("lùi về chữ — và PHẢI nói ra vì sao", () => {
-  it("trình duyệt không có ClipboardItem: copy chữ, đếm ĐỦ số ảnh chưa vào, có lý do", async () => {
-    const clip = installClipboard(false);
-
-    const out = await copyPromptWithImage("p1", "prompt", ["skeleton/01.png", "refs/a.png"]);
-
-    expect(out.outcome).toBe("text");
-    /* 2 chứ không phải 1: lượt này KHÔNG ảnh nào vào cả, nên cả hai đều còn lại. */
-    expect(out.remainingImages).toBe(2);
-    expect(out.reason).toBeTruthy();
-    expect(clip.writeText).toHaveBeenCalledWith("prompt");
+describe("copy chữ — và PHẢI nói ra khi không copy được", () => {
+  it("máy đủ sức: chữ vào bộ nhớ tạm NGUYÊN VĂN, không thêm bớt gì", async () => {
+    const writeText = installClipboard(true);
+    await copyPromptText("prompt của tấm");
+    expect(writeText).toHaveBeenCalledWith("prompt của tấm");
   });
 
-  it("trình duyệt cũ mà cũng không có ảnh nào: không bịa ra lý do để dọa người dùng", async () => {
+  it("trình duyệt không cho ghi: NÉM ra chữ người đọc hiểu được, không im lặng báo xong", async () => {
     installClipboard(false);
-    const out = await copyPromptWithImage("p1", "prompt", []);
-    expect(out).toEqual({ outcome: "text", remainingImages: 0 });
-  });
-
-  it("ảnh tải hụt: chữ vẫn vào bộ nhớ tạm, lý do là lời của lỗi thật", async () => {
-    const clip = installClipboard(true);
-    loadFull.mockImplementation(() => ({ promise: Promise.reject(new Error("agent trả 403")) }));
-
-    const out = await copyPromptWithImage("p1", "prompt", ["skeleton/01.png"]);
-
-    expect(out.outcome).toBe("text");
-    expect(out.remainingImages).toBe(1);
-    expect(out.reason).toContain("403");
-    expect(clip.writeText).toHaveBeenCalledWith("prompt");
+    await expect(copyPromptText("x")).rejects.toThrow(/bộ nhớ tạm/);
   });
 });
 
-describe("prompt tổng phong cách đứng ở ĐẦU — và chỉ MỘT lần", () => {
-  it("engine bản cũ chưa có câu phong cách ⇒ nối lên đầu", () => {
-    const out = fullPromptText("flat vector, mint palette", "Draw a 4x4 sheet of UI parts.");
-    expect(out).toBe("flat vector, mint palette\n\nDraw a 4x4 sheet of UI parts.");
-  });
-
-  it("engine bản mới đã tự đặt câu ấy ⇒ KHÔNG nói lại lần hai", () => {
-    const style = "flat vector illustration with a mint and cream palette, soft shadows";
-    const prompt = `${style}. Draw a 4x4 sheet of UI parts.`;
-    expect(fullPromptText(style, prompt)).toBe(prompt);
-  });
-
-  it("không có phong cách nào ⇒ prompt đi nguyên vẹn, không mọc dòng trống", () => {
-    expect(fullPromptText("   ", "prompt")).toBe("prompt");
+describe("lấy ảnh lẻ — vẫn đi đường có header", () => {
+  it("copyProjectImage gọi loadFull đúng dự án + đường dẫn, và trả về PNG thật", async () => {
+    const blob = await copyProjectImage("p1", "refs/mascot.png");
+    expect(loadFull).toHaveBeenCalledWith("p1", "refs/mascot.png");
+    expect(blob.type).toBe("image/png");
+    expect(blob.size).toBeGreaterThan(0);
   });
 });

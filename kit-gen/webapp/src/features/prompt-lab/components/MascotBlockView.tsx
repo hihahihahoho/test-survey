@@ -300,7 +300,7 @@ export function MascotBlockBody({
       /* 1 → 2: chỉ MỞ KHOÁ, và dựng câu khởi điểm cho dòng nào chưa có. Dòng đã
          từng viết tự do thì GIỮ NGUYÊN câu cũ — gạt qua gạt lại không được là một
          đường xoá chữ. Câu ĐẦU THẺ không phải dựng lại: nó vốn đã là một tài liệu
-         thật, mở khoá là gõ được ngay (cùng luật với thẻ Cảnh nền). */
+         thật, mở khoá là gõ được ngay (cùng luật với thẻ Background). */
       onChange((prev) => ({
         ...prev,
         mode: "free",

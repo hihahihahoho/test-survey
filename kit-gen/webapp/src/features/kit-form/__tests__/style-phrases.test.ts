@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { readBrief } from "@/features/docs/lib/brief-read";
 import { DEFAULT_VALUES, STYLE_AXIS_IDS, briefToForm } from "../lib/form-model";
-import { buildStylePrompt, sliderValueText, STYLE_AXES } from "../lib/style-phrases";
+import {
+  AXIS_GROUP,
+  AXIS_MID,
+  buildStylePrompt,
+  sliderValueText,
+  STYLE_AXES,
+  styleAxisPhrases,
+  subjectAxisLine,
+} from "../lib/style-phrases";
 
 describe("bảng câu phong cách tĩnh", () => {
   /* 8 thang từ 24/08: `ornament` (trang trí) là trục thứ 8 — feedback team §3 "mức
@@ -43,6 +51,47 @@ describe("bảng câu phong cách tĩnh", () => {
   it("aria-valuetext nói bằng chữ", () => {
     expect(sliderValueText(STYLE_AXES[0]!, 6)).toBe("nấc 6 trên 7 — nghiêng về Trẻ trung");
     expect(sliderValueText(STYLE_AXES[0]!, 4)).toContain("ở giữa");
+  });
+});
+
+/**
+ * ══ TRỤC NÀO ĐƯỢC IN, VÀ Ở TẤM NÀO ═════════════════════════════════════════
+ * Chủ sản phẩm đọc prompt thật và nói: *"khá dài dòng và không chuẩn"*. Hai
+ * nguồn dài dòng đo được ở đây: (1) tám mệnh đề trung tính của tám thanh trượt
+ * chưa ai kéo, (2) ba mệnh đề tả một CON NGƯỜI dán lên tấm 16 cái nút.
+ */
+describe("chọn trục để in — nấc giữa im lặng, trục tả người chỉ ở tấm nhân vật", () => {
+  it("mỗi trục thuộc đúng một cụm, và đủ cả tám", () => {
+    expect(STYLE_AXES.map((a) => AXIS_GROUP[a.id]).filter((g) => g === "subject")).toHaveLength(3);
+    expect(STYLE_AXES.every((a) => AXIS_GROUP[a.id] !== undefined)).toBe(true);
+  });
+
+  it("mọi trục ở nấc giữa ⇒ KHÔNG một mệnh đề nào", () => {
+    expect(styleAxisPhrases(DEFAULT_VALUES.style)).toEqual([]);
+    expect(subjectAxisLine(DEFAULT_VALUES.style)).toBe("");
+  });
+
+  it("chỉ trục ĐÃ KÉO mới được in, và in đúng câu của nấc đó", () => {
+    const axes = { ...DEFAULT_VALUES.style, ornament: 7, age: 1 };
+    expect(styleAxisPhrases(axes)).toEqual([
+      STYLE_AXES.find((a) => a.id === "age")!.phrases[0],
+      STYLE_AXES.find((a) => a.id === "ornament")!.phrases[6],
+    ]);
+  });
+
+  it("lọc theo cụm: câu cho CẢ BỘ KIT không mang trục tả người", () => {
+    const axes = { ...DEFAULT_VALUES.style, gender: 7, ornament: 7 };
+    const kit = styleAxisPhrases(axes, ["feel", "render"]);
+    expect(kit).toEqual([STYLE_AXES.find((a) => a.id === "ornament")!.phrases[6]]);
+    expect(subjectAxisLine(axes)).toBe(STYLE_AXES.find((a) => a.id === "gender")!.phrases[6]);
+  });
+
+  /* Ô SOẠN của form kit đời cũ vẫn cần đủ 8 mệnh đề: ở đó đầu ra là GỢI Ý điền
+     sẵn cho người dùng sửa, không phải prompt gửi đi — một ô trống trơn không
+     gợi được gì. Hai hàm, hai việc; ca này khoá chúng KHÔNG bị gộp lại. */
+  it("`buildStylePrompt` (ô soạn của form) vẫn in cả tám, kể cả nấc giữa", () => {
+    expect(buildStylePrompt(DEFAULT_VALUES.style).split(", ")).toHaveLength(STYLE_AXES.length);
+    expect(AXIS_MID).toBe(4);
   });
 });
 

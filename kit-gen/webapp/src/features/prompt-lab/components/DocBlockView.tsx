@@ -5,6 +5,7 @@ import { backgroundDoc, SCAFFOLDS } from "../lib/doc-templates";
 import { freeText, type PromptDocNode } from "../lib/serialize";
 import type { BlockMode, DocBlock } from "../lib/composer-model";
 import { BlockCard, ModeBadge, ModeToggle } from "./BlockCard";
+import { NoteField } from "./row-ui";
 import { BlockEditor } from "./BlockEditor";
 
 /**
@@ -24,14 +25,22 @@ import { BlockEditor } from "./BlockEditor";
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 
+/**
+ * «Background», không phải «Cảnh nền».
+ *
+ * Cùng thanh ngôn ngữ với «Bộ UI» ngay cạnh nó: cả hai là tên GỌI THẲNG thứ mà
+ * người làm game gọi hằng ngày, chứ không phải bản dịch sát nghĩa. Đo được lý do
+ * ở chỗ khác: câu «Cảnh nền» dịch đúng nhưng người dùng vẫn gõ "background" khi
+ * nói về nó — thẻ mang tên họ dùng thì họ tìm ra nó nhanh hơn.
+ */
 export const DOC_BLOCK_TITLE: Record<DocBlock["kind"], string> = {
-  background: "Cảnh nền",
+  background: "Background",
 };
 
 const TITLE = DOC_BLOCK_TITLE;
 
 const PLACEHOLDER: Record<DocBlock["kind"], string> = {
-  background: "Mô tả cảnh nền… (gõ / để chèn pill)",
+  background: "Mô tả background… (gõ / để chèn pill)",
 };
 
 const FRESH_DOC: Record<DocBlock["kind"], () => JSONContent> = {
@@ -118,6 +127,30 @@ export function DocBlockBody({
           resetToken={resetToken + reloadSignal}
           placeholder={PLACEHOLDER[block.kind]}
           onChange={(doc) => onChange((prev) => ({ ...prev, doc }))}
+        />
+      </div>
+
+      {/**
+       * Ô GHI CHÚ — ngoài câu, và có mặt ở CẢ HAI chế độ.
+       *
+       * Ngoài câu vì ở chế độ khuôn người dùng không gõ được vào giữa câu, nên mọi
+       * thứ template không hỏi tới sẽ không có đường nào tới máy vẽ (xem
+       * `DocBlock.note`). Ở cả hai chế độ vì nó KHÔNG phải bản thay thế của chế độ
+       * tự do: tự do là viết lại cả câu, còn đây là nói thêm một điều bên cạnh câu
+       * — và nó đi vào một ô khác của contract (`sheet.directive`, không phải
+       * `promptOverride`). Ẩn nó đi ở chế độ tự do là làm chữ người dùng đã gõ biến
+       * mất khỏi màn hình mà vẫn tiếp tục được gửi đi vẽ.
+       *
+       * Dùng lại `NoteField` của dòng element/dáng: cùng hình dạng, cùng vòng focus,
+       * cùng chỗ đứng "một tầng riêng, rộng hết thẻ". Ba ô ghi chú của lab trông
+       * khác nhau là ba lần người dùng phải học lại cùng một thứ.
+       */}
+      <div className="mt-3">
+        <NoteField
+          label={TITLE[block.kind]}
+          placeholder="Ghi chú thêm cho tấm này (tuỳ chọn)…"
+          value={block.note}
+          onChange={(note) => onChange((prev) => ({ ...prev, note }))}
         />
       </div>
     </>

@@ -301,6 +301,14 @@ export function refUsage(c: Contract): { ref: string; target: Target; what: stri
     if (typeof sh.poseRef === "string" && sh.poseRef !== "") {
       out.push({ ref: sh.poseRef, target: { kind: "sheet", sheetId: sh.id, field: "poseRef" }, what: `ảnh dáng ${sh.id}` });
     }
+    /* Bản phác bố cục của tấm nền — cùng lý do với `poseRef` ngay trên. */
+    if (typeof sh.layoutRef === "string" && sh.layoutRef !== "") {
+      out.push({
+        ref: sh.layoutRef,
+        target: { kind: "sheet", sheetId: sh.id, field: "layoutRef" },
+        what: `bản phác bố cục ${sh.id}`,
+      });
+    }
   });
   contractVariants(c).forEach((v) => {
     for (const p of v.inspo ?? []) {

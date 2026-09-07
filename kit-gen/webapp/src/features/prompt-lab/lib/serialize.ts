@@ -40,8 +40,17 @@ export interface PromptDocNode {
 export interface SerializeContext {
   /** Cụm EN của phong cách chung — thay cho pill `style` để trống. */
   styleEN: string;
-  /** Cụm EN của theme chung — thay cho pill `outfit` để trống. */
+  /** Cụm EN của CHỦ ĐỀ chung (mô-típ, màu, biểu tượng) — xem `ThemeOption.kitEN`. */
   themeEN: string;
+  /**
+   * Cụm TRANG PHỤC của chủ đề chung — thay cho pill `outfit` để trống.
+   *
+   * Tách khỏi `themeEN` từ 09/2026: hai chỗ dùng hai câu khác nhau cho cùng một
+   * chủ đề ("Vietnamese Tết theme: red and gold, lanterns…" cho cả bộ kit,
+   * "a Vietnamese Tết festive outfit…" cho quần áo của nhân vật). Dùng chung một
+   * chuỗi thì một trong hai chỗ luôn đọc sai — và chỗ đọc sai là 15/16 tấm.
+   */
+  outfitEN: string;
   presets: PresetBundle;
   /** Bộ đếm ảnh, dùng CHUNG cho cả prompt để đánh số liên tục qua mọi block. */
   imageCounter: { count: number };
@@ -59,6 +68,7 @@ export function makeContext(partial: Partial<SerializeContext> = {}): SerializeC
   return {
     styleEN: partial.styleEN ?? "",
     themeEN: partial.themeEN ?? "",
+    outfitEN: partial.outfitEN ?? "",
     presets: partial.presets ?? getPresets(),
     imageCounter: partial.imageCounter ?? { count: 0 },
     brandColors: partial.brandColors ?? [],
@@ -87,7 +97,7 @@ function pillText(node: PromptDocNode, ctx: SerializeContext): string {
   if (custom) return custom;
   if (value === INHERIT) {
     if (kind === "style") return ctx.styleEN;
-    if (kind === "outfit") return ctx.themeEN;
+    if (kind === "outfit") return ctx.outfitEN;
     /* Các kind khác để trống là THẬT SỰ trống — không bịa gì vào prompt. */
     return "";
   }

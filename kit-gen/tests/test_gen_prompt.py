@@ -115,23 +115,27 @@ class KhoiPhongCachDungDauTest(unittest.TestCase):
         self.txt = render_prompt_text(_cfg(spec="the primary action button"))
 
     def test_khoi_phong_cach_nam_trong_dau_prompt(self):
-        i = self.txt.index("ART STYLE")
-        self.assertLess(self.txt[:i].count("\n"), 12,
+        """Section «Art style» đứng NGAY SAU «Canvas» — hai section, không phải
+        chín. Chủ sản phẩm 07/09/2026: *"đáng nhẽ nên chia thành section
+        ## Art style"*."""
+        i = self.txt.index("## Art style")
+        self.assertLess(self.txt[:i].count("\n"), 5,
                         "khối phong cách bị đẩy xuống lưng chừng prompt")
 
     def test_phong_cach_dung_TRUOC_danh_sach_o(self):
-        self.assertLess(self.txt.index("Art style:"), cell_list_offset(self.txt),
+        self.assertLess(self.txt.index("## Art style"), self.txt.index("## Elements"),
                         "chữ của người dùng phải đến trước danh sách ô")
 
     def test_giu_NGUYEN_VAN_cau_nguoi_dung_go(self):
-        self.assertIn("Art style: flat ink.", self.txt)
+        """Engine KHÔNG bóc `variant.style` ra, không thêm một tính từ nào: nó là
+        chữ của người dùng, in nguyên văn dưới đúng một tiêu đề."""
+        self.assertIn("## Art style\nflat ink.", self.txt)
 
     def test_khong_co_style_thi_NOI_THANG_chu_khong_bia_mot_phong_cach(self):
         cfg = _cfg()
         cfg["styles"][0].pop("style")
         txt = render_prompt_text(cfg)
-        self.assertIn("ART STYLE: none was given", txt)
-        self.assertNotIn("Art style:", txt)
+        self.assertIn("None was given for this project", txt)
 
 
 class PromptKhongNhiemTest(unittest.TestCase):
@@ -230,9 +234,11 @@ class PromptKhongNhiemTest(unittest.TestCase):
         engine không viết lại chữ của ai cả."""
         txt = self.texts["ui"]
         head = txt[:cell_list_offset(txt)]
-        self.assertIn("NAMES ONLY *WHAT* EACH CELL IS", head)
-        self.assertIn("the ART STYLE outranks it", head)
-        self.assertIn("Geometry always outranks both", head)
+        # MỘT DÒNG thay cho khối 9 dòng cũ: cùng ba thứ hạng (danh từ / lối vẽ /
+        # toạ độ), nói một lần, ngay trên danh sách.
+        self.assertIn("The list names WHAT each cell is", head)
+        self.assertIn("the art style above decides how it looks", head)
+        self.assertIn("the coordinates decide where and how big", head)
 
 
 class BangKhoCanvasTest(unittest.TestCase):
@@ -269,25 +275,44 @@ class BangKhoCanvasTest(unittest.TestCase):
         self.assertEqual(gen["canvas_of"]({})[2], "LANDSCAPE 1536x1024")
         self.assertEqual(gen["canvas_of"]({"canvas": "squre"})[2], "LANDSCAPE 1536x1024")
 
-    def test_kho_di_toi_DONG_DAU_prompt(self):
-        """`run_one` đọc ngược khổ bằng `head -n1 | grep`. Dòng đầu lệch một chữ là
-        mọi tấm dọc/vuông bị gửi đi với 1536x1024."""
+    def test_kho_di_toi_HAI_DONG_DAU_prompt(self):
+        """`run_one` đọc ngược khổ bằng `head -n2 | grep`. Hai dòng đầu lệch một chữ
+        là mọi tấm dọc/vuông bị gửi đi với 1536x1024.
+
+        HAI chứ không phải MỘT kể từ khi prompt chia section: dòng 1 là tiêu đề
+        `## Canvas`, khổ giấy nằm ở dòng ngay dưới."""
         cfg = _cfg()
         cfg["sheets"][0]["canvas"] = "square"
         txt = render_prompt_text(cfg)
-        self.assertEqual(txt.splitlines()[0], "Canvas orientation: SQUARE 1254x1254.")
-        self.assertIn("square 1:1.", txt)
+        rows = txt.splitlines()
+        self.assertEqual(rows[0], "## Canvas")
+        self.assertTrue(rows[1].startswith("SQUARE 1254x1254 px,"), rows[1])
+        self.assertIn("square 1:1", txt)
 
-    def test_promptOverride_van_giu_dong_kho(self):
+    def test_promptOverride_van_giu_SECTION_KHO_GIAY(self):
         """Người dùng tự soạn cả prompt thì engine không nối thêm một chữ nào —
-        NGOẠI TRỪ dòng khổ giấy, vì `run_one` đọc ngược từ đó."""
+        NGOẠI TRỪ section «Canvas», vì `run_one` đọc ngược khổ từ đó."""
         cfg = _cfg()
         cfg["sheets"][0]["canvas"] = "square"
         cfg["sheets"][0]["promptOverride"] = "TÔI TỰ SOẠN."
         txt = render_prompt_text(cfg)
-        self.assertEqual(txt.splitlines()[0], "Canvas orientation: SQUARE 1254x1254.")
+        rows = txt.splitlines()
+        self.assertEqual(rows[0], "## Canvas")
+        self.assertTrue(rows[1].startswith("SQUARE 1254x1254 px,"), rows[1])
         self.assertIn("TÔI TỰ SOẠN.", txt)
-        self.assertNotIn("ABSOLUTELY NO TEXT", txt)
+        self.assertNotIn("## Safe zone", txt)
+        self.assertNotIn("No letters, no digits", txt)
+
+    def test_promptOverride_van_cho_GHI_CHU_cua_nguoi_dung_di_theo(self):
+        """Ghi chú và câu chỉ đạo là chữ của CHÍNH người dùng, gõ ở một ô khác trên
+        cùng cái thẻ. Vứt nó đi vì họ lỡ bật chế độ tự do là lặng lẽ nuốt một thứ
+        họ vẫn đang nhìn thấy trên màn hình."""
+        cfg = _cfg()
+        cfg["sheets"][0]["promptOverride"] = "TÔI TỰ SOẠN."
+        cfg["sheets"][0]["directive"] = "thêm mưa xuân"
+        txt = render_prompt_text(cfg)
+        self.assertIn("## Direction", txt)
+        self.assertIn("From the designer: thêm mưa xuân", txt)
 
 
 class ThuVienChiCoDANHTUTest(unittest.TestCase):
@@ -398,22 +423,27 @@ class PoseSheetTest(unittest.TestCase):
 
     def test_o_dang_DU_de_vao_nhanh_mascot_du_khong_co_anh_nhan_vat(self):
         txt = render_prompt_text(self._pose_cfg())
-        self.assertIn("A single character on a transparent canvas.", txt)
-        # Khối cấu tạo ba lớp của ô UI KHÔNG được áp lên một nhân vật.
-        self.assertNotIn("Build each element from the inside out", txt)
+        # DẤU HIỆU của nhánh mascot nằm ở section «Safe zone»: nhân vật được vẽ như
+        # một dáng người, không phải một cái viền quanh mặt phẳng.
+        self.assertIn("Draw the character as ONE natural figure", txt)
+        # Luật viền/trang trí của ô UI KHÔNG được áp lên một nhân vật.
+        self.assertNotIn("Any rim, border or edge treatment", txt)
 
     def test_khong_co_ref_thi_KHONG_noi_ve_mot_tam_anh_khong_ton_tai(self):
         txt = render_prompt_text(self._pose_cfg())
-        self.assertNotIn("character REFERENCE PHOTO", txt)
+        self.assertNotIn("REFERENCE PHOTO", txt)
+        self.assertNotIn("## Character reference", txt)
 
     def test_co_ref_thi_van_noi_dung_cau_cu(self):
         txt = render_prompt_text(self._pose_cfg(ref="refs/lan.png"))
-        self.assertIn("The attached character REFERENCE PHOTO is the character", txt)
+        self.assertIn("## Character reference", txt)
+        self.assertIn("The attached CHARACTER REFERENCE PHOTO is the character", txt)
 
     def test_poseRef_duoc_NOI_RA_theo_vai_tro_va_bi_cam_ve_lai(self):
         txt = render_prompt_text(self._pose_cfg(ref="refs/lan.png", poseRef="refs/tam-dang.png"))
+        self.assertIn("## Pose reference", txt)
         self.assertIn("POSE REFERENCE SHEET", txt)
-        self.assertIn("cell k of the mannequin sheet", txt)
+        self.assertIn("cell k there gives the body pose and camera angle", txt)
         self.assertIn("NEVER draw the mannequin itself", txt)
         # Vai trò, KHÔNG phải thứ tự đính kèm — cùng luật đã bỏ "The SECOND attached image".
         self.assertNotIn("SECOND attached image", txt)
@@ -421,14 +451,38 @@ class PoseSheetTest(unittest.TestCase):
     def test_poseRef_mot_minh_van_du_de_vao_nhanh_mascot(self):
         cfg = _cfg(spec="a mascot waving")            # skel mặc định: rrect, KHÔNG phải pose
         cfg["sheets"][0]["poseRef"] = "refs/tam-dang.png"
-        self.assertIn("A single character on a transparent canvas.", render_prompt_text(cfg))
+        self.assertIn("Draw the character as ONE natural figure", render_prompt_text(cfg))
 
     def test_tam_nhieu_dang_van_duoc_goi_dung_ten(self):
         cfg = _cfg(skel={"shape": "pose", "w": 0.3, "h": 0.85})
         cfg["sheets"][0]["grid"] = {"cols": 2, "rows": 1}
         cfg["sheets"][0]["components"].append(
             {"file": "02-thing", "spec": "waving", "skel": {"shape": "pose", "w": 0.3, "h": 0.85}})
-        self.assertIn("A sheet of 2 poses of one character", render_prompt_text(cfg))
+        txt = render_prompt_text(cfg)
+        self.assertIn("2x1 grid, 2 elements in reading order", txt)
+        self.assertIn("Draw the character as ONE natural figure", txt)
+
+    def test_layoutRef_duoc_NOI_RA_theo_vai_tro_va_KHONG_lai_loi_ve(self):
+        """Bản phác bố cục trả lời câu «cái gì nằm ở đâu», KHÔNG trả lời «vẽ theo lối
+        nào». Thiếu vế cấm thì model chép luôn nét chì và mảng xám của bản phác —
+        đó là toàn bộ lý do câu này phải nói ra cả hai vế."""
+        txt = render_prompt_text(self._pose_cfg(layoutRef="refs/bo-cuc.png"))
+        self.assertIn("## Layout sketch", txt)
+        self.assertIn("copy WHERE things sit", txt)
+        self.assertIn("not its style, colours, line quality or level of finish", txt)
+
+    def test_layoutRef_dinh_kem_NGAY_SAU_anh_cua_tam(self):
+        got = render_prompt_files({
+            "styles": [{"id": "demo", "bg": "magenta", "style": "flat ink"}],
+            "sheets": [{
+                "id": "pose-demo", "grid": {"cols": 1, "rows": 1},
+                "components": [{"file": "01-thing", "spec": "a village at dawn",
+                                "skel": {"shape": "full", "w": 1, "h": 1}}],
+                "ref": "refs/cho-tet.png",
+                "layoutRef": "refs/bo-cuc.png",
+            }],
+        })
+        self.assertEqual(got, ["refs/cho-tet.png", "refs/bo-cuc.png"])
 
     def test_poseRef_dinh_kem_NGAY_SAU_anh_nhan_vat(self):
         got = render_prompt_files({
@@ -462,10 +516,27 @@ class SteeringPromptTest(unittest.TestCase):
         self.txt = render_prompt_text(_cfg())
 
     def test_luat_core_noi_bang_toa_do_chu_khong_bang_anh(self):
-        self.assertIn("production crop box", self.txt)
-        self.assertIn("must fill its own safe zone", self.txt)
-        self.assertIn("must lie fully inside its safe zone", self.txt)
+        self.assertIn("exact pixel crop boxes", self.txt)
+        self.assertIn("fills its safe zone exactly", self.txt)
         self.assertIn("origin top-left", self.txt)
+
+    def test_luat_vung_an_toan_CHI_NOI_MOT_LAN(self):
+        """Chủ sản phẩm 07/09/2026: *"khá dài dòng và không chuẩn"*. Đo được: luật
+        vùng an toàn từng nằm ở BỐN chỗ ("production crop box", "Build each element
+        from the inside out", "The continuous content surface is the CORE", và một
+        dòng kết lặp lại lần nữa). Nói một luật bốn lần không làm model tuân bốn
+        lần — nó làm mọi luật khác loãng đi."""
+        self.assertEqual(self.txt.count("## Safe zone"), 1)
+        # Cụm "safe zone" vẫn được nhắc ở dòng toạ độ của từng ô — đó là DỮ LIỆU,
+        # không phải luật. Cái phải đúng một lần là LUẬT, và luật có đúng một nhà.
+        head = self.txt[:self.txt.index("## Elements")]
+        self.assertEqual(head.count("## Safe zone"), 1)
+        for chet in ("Build each element from the inside out",
+                     "production crop box",
+                     "The continuous content surface is the CORE",
+                     "SIZING:",
+                     "The grid above is fixed for this sheet"):
+            self.assertNotIn(chet, self.txt, f"khối cũ mọc lại: {chet}")
 
     def test_moi_dau_vet_cua_khung_xuong_da_bien_khoi_prompt(self):
         for chet in ("skeleton", "silhouette", "attached image is the geometry",
@@ -501,9 +572,21 @@ class TransparentBackgroundTest(unittest.TestCase):
         self.prompt = render_prompt_text(_cfg())
 
     def test_prompt_doi_ALPHA_THAT_chu_khong_phai_mau_nen(self):
-        self.assertIn("BACKGROUND of the sheet: FULLY TRANSPARENT", self.prompt)
-        self.assertIn("real alpha", self.prompt)
-        self.assertIn("alpha = 0", self.prompt)
+        # Luật nền nay nói ĐÚNG MỘT LẦN, trong section «Canvas» — không lặp lại ở
+        # section «Transparency» nữa (xem `test_luat_trong_suot_CHI_NOI_MOT_LAN`).
+        self.assertIn("Background fully transparent", self.prompt)
+        self.assertIn("real alpha channel", self.prompt)
+        self.assertIn("alpha 0 on every pixel", self.prompt)
+
+    def test_luat_trong_suot_CHI_NOI_MOT_LAN(self):
+        """Bốn khối cũ (nền alpha, cấm caro, "see-through", "fully opaque") gộp còn
+        một section ba gạch đầu dòng, và câu nền thì ở hẳn section «Canvas»."""
+        self.assertEqual(self.prompt.count("## Transparency"), 1)
+        self.assertEqual(self.prompt.count("NEVER DRAW A CHECKERBOARD"), 1)
+        for chet in ("This background rule OVERRIDES the art style",
+                     "WHENEVER SOMETHING SHOULD BE SEE-THROUGH",
+                     "Every element is FULLY OPAQUE with solid fills"):
+            self.assertNotIn(chet, self.prompt, f"khối cũ mọc lại: {chet}")
 
     def test_prompt_CAM_DICH_DANH_viec_ve_caro_gia(self):
         """Bẫy đã đo được (BACKLOG #24 ⑦): không tạo được trong suốt thì model
@@ -514,8 +597,7 @@ class TransparentBackgroundTest(unittest.TestCase):
         # model chỉ biết mình sai mà không biết đi đường nào (đo được: nó lấp bằng
         # thứ khác thay vì thôi lấp).
         self.assertIn("DISPLAYS empty pixels", self.prompt)
-        self.assertIn("Less", self.prompt)
-        self.assertIn("alpha, not lighter paint", self.prompt)
+        self.assertIn("LOW ALPHA value in its own colour, never paler paint", self.prompt)
 
     def test_tu_vung_chroma_khong_duoc_quay_lai_prompt(self):
         for w in ("chroma", "flat solid", "#FF00FF", "#00FF00"):
@@ -528,13 +610,13 @@ class TransparentBackgroundTest(unittest.TestCase):
         p = render_prompt_text(_cfg(skel={"matte": "glow"}))
         self.assertNotIn("PURE BLACK", p)
         self.assertNotIn("#000000", p)
-        self.assertIn("no checkerboard squares", p)
-        self.assertIn("not an area to fill", p)
+        self.assertIn("no plate, no black, no checkerboard", p)
+        self.assertIn("Ignore the safe-zone fill rule here", p)
 
     def test_o_glass_do_trong_nam_trong_kenh_alpha(self):
         p = render_prompt_text(_cfg(skel={"matte": "glass"}))
-        self.assertIn("LOW ALPHA VALUE", p)
-        self.assertIn("no checkerboard squares", p)
+        self.assertIn("LOW ALPHA", p)
+        self.assertIn("thin sheet of tinted glass", p)
         self.assertNotIn("chroma", p)
 
     def test_KHONG_MOT_MANH_CHROMA_NAO_CON_SONG(self):
@@ -627,11 +709,21 @@ class MauThuongHieuTest(unittest.TestCase):
 
     def test_co_khoi_phan_xu_mau_va_no_dat_bang_mau_len_dau(self):
         txt = render_prompt_text(self.CFG)
-        self.assertIn("COLOUR AUTHORITY", txt)
-        sau = self._lien(txt[txt.index("COLOUR AUTHORITY"):])
-        self.assertIn("brand palette above is the source of every colour", sau)
-        self.assertIn("They do NOT decide hue", sau,
+        self.assertIn("## Palette", txt)
+        sau = self._lien(txt[txt.index("## Palette"):])
+        self.assertIn("dominant: primary actions and key surfaces", sau)
+        self.assertIn("decide the RENDERING, not the hue", sau,
                       "ảnh ref phải quyết lối vẽ, không quyết màu")
+
+    def test_moi_ma_mau_XUAT_HIEN_DUNG_MOT_LAN(self):
+        """Bảng màu từng được nói BA lần: chữ trong `variant.style`
+        (`describeBrandColors`), dòng "Brand palette:", và khối "COLOUR AUTHORITY".
+        Ba nguồn cùng nói về màu thì nguồn ĐỨNG GẦN Ô NHẤT thắng — đúng triệu chứng
+        "màu nhận diện thương hiệu không được respect"."""
+        txt = render_prompt_text(self.CFG)
+        self.assertEqual(txt.count("#0A5C36"), 1)
+        self.assertEqual(txt.count("#F2C230"), 1)
+        self.assertEqual(txt.count("## Palette"), 1)
 
     def test_engine_KHONG_con_viet_lai_spec_cua_nguoi_dung(self):
         """CA NÀY ĐÃ ĐỔI HẲN Ý NGHĨA — đọc kỹ trước khi "sửa cho xanh".
@@ -654,16 +746,16 @@ class MauThuongHieuTest(unittest.TestCase):
             lines[head].startswith("1) " + self.CFG["sheets"][0]["components"][0]["spec"] + " — safe zone x="),
             "spec của người dùng phải đi thẳng vào prompt, không bị sửa")
         truoc = txt[:cell_list_offset(txt)]
-        self.assertIn("the ART STYLE outranks it", truoc,
+        self.assertIn("the art style above decides how it looks", truoc,
                       "bỏ gặm chữ thì phải còn câu tuyên bố thứ hạng, không thì mất cả hai")
 
     def test_khong_co_brand_thi_khong_bia_ra_dong_mau(self):
         cfg = json.loads(json.dumps(self.CFG))
         cfg["styles"][0]["brand"] = {"refs": ["refs/logo.png"]}
         txt = render_prompt_text(cfg)
-        self.assertNotIn("Brand palette:", txt)
-        sau = self._lien(txt[txt.index("COLOUR AUTHORITY"):])
-        self.assertIn("decide both the rendering AND the palette", sau)
+        self.assertNotIn("Primary #", txt)
+        sau = self._lien(txt[txt.index("## Palette"):])
+        self.assertIn("decide both the rendering and the palette", sau)
 
 
 def _cfg_nen(spec="a village square at dawn, red lanterns overhead", n=1, extra=None):
@@ -708,8 +800,12 @@ class CanhNenMotKhungTest(unittest.TestCase):
         # "empty" trần không nằm trong danh sách: chính nhánh mới cũng nói "inset
         # inside an empty frame is unusable" — đó là câu CẤM chừa viền, tức là thứ
         # ngược hẳn với luật ô trống của tấm giao diện. Cấm theo cụm, không theo từ.
-        for w in ("grid", "safe zone", "CORE", "transparent", "checkerboard",
-                  "alpha", "cell", "40px", "INTENTIONALLY EMPTY"):
+        # "transparent" trần KHÔNG nằm trong danh sách nữa: section «Canvas» của
+        # nhánh này nói "there is no transparent area anywhere" — câu ĐẢO NGƯỢC luật
+        # nền, và nó phải có mặt. Cấm theo cụm, không theo từ.
+        for w in ("grid", "safe zone", "CORE", "fully transparent", "checkerboard",
+                  "alpha", "cell", "40px", "intentionally empty",
+                  "## Safe zone", "## Transparency"):
             self.assertNotIn(w.lower(), self.txt.lower(),
                              f"prompt cảnh nền còn chữ của tấm giao diện: {w}")
 
@@ -725,36 +821,40 @@ class CanhNenMotKhungTest(unittest.TestCase):
         dài quá»), nên nó phải có một con số canh gác. Bản trước tấm nền dài xấp xỉ
         bằng tấm UI vì chúng dùng chung mọi khối."""
         ui = render_prompt_text(_cfg(spec="the primary action button"))
-        self.assertLess(len(self.txt.splitlines()), 30,
+        self.assertLess(len(self.txt.splitlines()), 22,
                         "prompt cảnh nền phình trở lại")
-        self.assertLess(len(self.txt), len(ui) / 3,
+        self.assertLess(len(self.txt), len(ui) / 2,
                         "prompt cảnh nền phải ngắn hơn hẳn tấm giao diện")
 
     # ── chiều hai: những thứ PHẢI có mặt ─────────────────────────────────────
-    def test_dong_dau_van_la_hop_dong_kho_giay_voi_tang_bash(self):
-        """`run_one` đọc ngược khổ bằng `head -n1 … | grep -qiE 'PORTRAIT|SQUARE'`.
+    def test_hai_dong_dau_van_la_hop_dong_kho_giay_voi_tang_bash(self):
+        """`run_one` đọc ngược khổ bằng `head -n2 … | grep -qiE 'PORTRAIT|SQUARE'`.
         Nhánh mới cũng là một nhánh dựng prompt, nên nó cũng phải giữ hợp đồng ấy."""
-        self.assertEqual(self.txt.splitlines()[0], "Canvas orientation: PORTRAIT 1024x1536.")
+        rows = self.txt.splitlines()
+        self.assertEqual(rows[0], "## Canvas")
+        self.assertTrue(rows[1].startswith("PORTRAIT 1024x1536 px,"), rows[1])
 
     def test_co_cau_ky_thuat_phu_kin_khung_va_phong_cach_cua_nguoi_dung(self):
         self.assertIn("A single full-screen mobile game background", self.txt)
         self.assertIn("filling the whole frame edge to edge", self.txt)
         self.assertIn("1024x1536 px", self.txt)
-        self.assertIn("Art style: flat ink.", self.txt)
+        self.assertIn("## Art style\nflat ink.", self.txt)
 
     def test_canh_nguoi_dung_go_la_cau_cuoi_va_khong_bi_sua_mot_ky_tu(self):
         spec = "a village square at dawn, red lanterns overhead"
         con = [l for l in self.txt.splitlines() if l.strip()]
         self.assertIn(spec, con)
         self.assertEqual(con[-1], "Game-ready mobile game background art, portrait 2:3.")
-        self.assertEqual(con[-2], spec, "cảnh phải là câu cuối, ngay trên dòng chốt")
+        self.assertEqual(con[-2], "## Output")
+        self.assertEqual(con[-3], spec, "cảnh phải là câu cuối trước dòng chốt")
 
     def test_ghi_chu_va_chi_dao_cua_nguoi_dung_van_di_theo(self):
         txt = render_prompt_text(
             _cfg_nen(extra={"note": "Ghi chú của tấm.", "directive": "thêm mưa xuân"}),
             name="demo-nen")
+        self.assertIn("## Direction", txt)
         self.assertIn("Ghi chú của tấm.", txt)
-        self.assertIn("Extra direction for this sheet (from the designer): thêm mưa xuân", txt)
+        self.assertIn("From the designer: thêm mưa xuân", txt)
 
     def test_anh_dinh_kem_cua_tam_nen_TA_CANH_chu_khong_ta_nhan_vat(self):
         """Thẻ Cảnh nền cho đính ảnh, và ảnh ấy về contract là `sheet.ref` — đúng
@@ -769,9 +869,10 @@ class CanhNenMotKhungTest(unittest.TestCase):
         """Nhiều cảnh trên một canvas thì vẫn phải có lưới và ranh giới ô — nó chỉ
         giống tấm nền ở chỗ không có pixel rỗng."""
         txt = render_prompt_text(_cfg_nen(n=2), name="demo-nen")
-        self.assertIn("STRICT grid", txt)
+        self.assertIn("1x2 grid, 2 elements in reading order", txt)
         self.assertIn("full-bleed scene, fills its whole cell", txt)
-        self.assertIn("A sheet of 2 full-bleed background scenes.", txt)
+        self.assertIn("bleeds off all four sides of that cell", txt)
+        self.assertIn("## Scenes", txt)
 
     def test_dau_fullbleed_cho_tang_bash_van_duoc_ghi(self):
         """Mối nối python→bash của cổng alpha (`alpha_verdict` lật ngược phép kiểm
@@ -787,3 +888,81 @@ class CanhNenMotKhungTest(unittest.TestCase):
                 self.assertTrue(Path(td, "prompts", "demo-nen.fullbleed").exists())
             finally:
                 os.chdir(cwd)
+
+
+class KhungPromptSectionTest(unittest.TestCase):
+    """KHUNG PROMPT = SECTION MARKDOWN, MỖI LUẬT MỘT NHÀ.
+
+    ╔══ BỆNH ĐÃ ĐO (chủ sản phẩm, 07/09/2026) ══════════════════════════════════╗
+    ║ Dán nguyên văn prompt một tấm Bộ UI ba element — 95 dòng — rồi nói: *"tôi  ║
+    ║ đổi style khác nó lại nhồi cái đoạn style lên đầu à… đáng nhẽ nên chia     ║
+    ║ thành section ## Art style… bạn audit lại toàn bộ khung prompt đi, khá dài ║
+    ║ dòng và không chuẩn"*.                                                     ║
+    ╚═══════════════════════════════════════════════════════════════════════════╝
+    Ca này khoá HÌNH DẠNG, không khoá câu chữ: tiêu đề nào có mặt, theo thứ tự nào,
+    và tổng cộng dài bao nhiêu. Câu chữ bên trong từng section thì các lớp khác
+    canh — tách ra vì hai thứ hỏng theo hai kiểu khác nhau: sửa một câu là chuyện
+    thường ngày, còn để một luật mọc lại ở hai chỗ là quay về đúng cái bệnh trên.
+    """
+
+    def _ui3(self):
+        cfg = {
+            "styles": [{"id": "demo", "bg": "magenta", "style": "clean vector shapes with flat fills",
+                        "brand": {"mode": "colors", "primary": "#43437a", "secondary": "#712323"}}],
+            "sheets": [{
+                "id": "ui", "canvas": "square", "grid": {"cols": 2, "rows": 2},
+                "components": [
+                    {"file": "01-button", "vi": "Nút", "spec": "button",
+                     "skel": {"shape": "rrect", "w": 0.36, "h": 0.36}},
+                    {"file": "02-hp", "vi": "Máu", "spec": "health bar",
+                     "skel": {"shape": "bar", "w": 0.8, "h": 0.6}},
+                    {"file": "03-avatar", "vi": "Avatar", "spec": "avatar frame",
+                     "skel": {"shape": "rrect", "w": 0.8, "h": 0.6}},
+                    {"file": "_empty-1", "vi": "", "spec": "", "skel": {"shape": "empty"}},
+                ],
+            }],
+        }
+        return render_prompt_text(cfg, name="demo-ui")
+
+    @staticmethod
+    def _headings(txt):
+        return [row[3:] for row in txt.splitlines() if row.startswith("## ")]
+
+    def test_tam_giao_dien_co_dung_bo_section_va_dung_thu_tu(self):
+        self.assertEqual(
+            self._headings(self._ui3()),
+            ["Canvas", "Art style", "Palette", "Layout", "Safe zone",
+             "Transparency", "Text", "Elements", "Output"])
+
+    def test_tam_giao_dien_ba_element_khong_qua_50_dong(self):
+        """Con số này LÀ lời phàn nàn, nên nó phải có một cái chốt đo được. Bản
+        trước tấm ấy dài 95 dòng."""
+        rows = self._ui3().splitlines()
+        self.assertLessEqual(len(rows), 50, "\n".join(rows))
+
+    def test_moi_tieu_de_XUAT_HIEN_DUNG_MOT_LAN(self):
+        txt = self._ui3()
+        heads = self._headings(txt)
+        self.assertEqual(len(heads), len(set(heads)), "một luật mọc ra hai nhà")
+
+    def test_o_TRONG_chi_duoc_goi_ten_o_section_Layout(self):
+        """Ô trống từng có một dòng riêng trong danh sách ("4)  — leave this area
+        empty") — vừa là lần nói thứ hai của cùng một luật, vừa là một dòng mở đầu
+        bằng số thứ tự mà không có danh từ nào theo sau."""
+        txt = self._ui3()
+        self.assertIn("Cell 4 is intentionally empty", txt)
+        self.assertNotIn("\n4)", txt)
+
+    def test_tam_man_hinh_bo_ba_section_khong_co_nghia_voi_no(self):
+        cfg = _cfg_nen()
+        heads = self._headings(render_prompt_text(cfg, name="demo-nen"))
+        self.assertEqual(heads, ["Canvas", "Art style", "Layout", "Text", "Scene", "Output"])
+
+    def test_tam_nhan_vat_co_them_section_anh_theo_vai_tro(self):
+        cfg = _cfg(spec="a mascot waving", skel={"shape": "pose", "w": 0.3, "h": 0.85})
+        cfg["sheets"][0]["ref"] = "refs/lan.png"
+        cfg["sheets"][0]["poseRef"] = "refs/tam-dang.png"
+        heads = self._headings(render_prompt_text(cfg))
+        self.assertEqual(heads, ["Canvas", "Art style", "Layout", "Safe zone", "Transparency",
+                                 "Text", "Character reference", "Pose reference",
+                                 "Elements", "Output"])

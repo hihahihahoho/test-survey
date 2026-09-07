@@ -53,7 +53,10 @@ describe("② + ③ contract nhận field, và prompt preview nói đúng sự t
     const prompt = itemPromptFor(contractWith(GLOW_FILE, "glow"), GLOW_FILE)!;
     expect(prompt.line).toContain(glowCellPrompt());
     expect(prompt.text).toContain("LIGHT EFFECT");
-    expect(prompt.text).toContain("no checkerboard squares");
+    /* Câu đã ngắn lại cùng lượt dựng khung prompt theo section (09/2026): luật
+       "không vẽ ô cờ" nay nói MỘT lần ở `## Transparency` cho cả tấm, nên dòng của
+       ô chỉ còn nhắc gọn. Chữ còn lại vẫn phải là chữ của `gen.sh` từng ký tự. */
+    expect(prompt.text).toContain("no checkerboard");
   });
 
   /* NỀN ĐEN ĐÃ BỎ HẲN, và ca này là chốt giữ. Nó từng là cách duy nhất lấy quầng
@@ -92,7 +95,7 @@ describe("② + ③ contract nhận field, và prompt preview nói đúng sự t
     const prompt = itemPromptFor(contractWith(GLASS_FILE, "glass"), GLASS_FILE)!;
     expect(prompt.line).toContain(glassCellPrompt());
     expect(prompt.text).toContain("SEE-THROUGH ELEMENT");
-    expect(prompt.text).toContain("LOW ALPHA VALUE");
+    expect(prompt.text).toContain("LOW ALPHA");
     // Kính KHÔNG phải hiệu ứng ánh sáng — khoá lại kẻo ai đó "thống nhất" hai nhánh.
     expect(prompt.text).not.toContain("LIGHT EFFECT");
   });

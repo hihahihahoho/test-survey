@@ -103,4 +103,45 @@ export async function run({ api, pid }) {
     ok(JSON.stringify(r.json.error.details).includes("REF_PATH"), "nêu đúng luật REF_PATH")
   })
 
+  /* `layoutRef` là BẢN PHÁC BỐ CỤC của tấm nền — tấm thứ ba cùng nằm trong `refs/`
+     và cùng phải chịu hai luật của `ref`: không xoá được khi đang dùng, và không
+     được trỏ ra ngoài dự án. Thêm một trường ảnh mà quên `refUsage` là mở lại
+     đúng cái hố mà `poseRef` vừa bịt ở hai ca trên. */
+  await it("bản phác bố cục (layoutRef) cũng được tính là ĐANG DÙNG", async () => {
+    const mp = multipart([
+      { name: "file", filename: "phac.png", contentType: "image/png", data: PNG_1x1 },
+      { name: "kind", data: "inspo" },
+      { name: "hintName", data: "Phac bo cuc" },
+    ])
+    const up = await api("POST", `/api/projects/${pid}/refs`, {
+      headers: { "content-type": mp.contentType }, body: mp.body,
+    })
+    eq(up.status, 201, "tải bản phác lên")
+
+    const g = await api("GET", `/api/projects/${pid}/contract`)
+    const c = structuredClone(g.json.contract)
+    c.sheets[0].layoutRef = up.json.path
+    const put = await api("PUT", `/api/projects/${pid}/contract`, {
+      headers: { "if-match": String(g.json.version) }, body: { contract: c },
+    })
+    eq(put.status, 200, "contract có layoutRef vẫn lưu được")
+
+    const r = await api("DELETE", `/api/projects/${pid}/refs/${up.json.name}`)
+    eq(r.status, 409, "status")
+    eq(r.json.error.code, "REF_IN_USE", "code")
+    ok(r.json.error.details.usedBy.some(u => u.kind === "sheetLayout"), "nói rõ nó bị dùng làm bản phác bố cục")
+  })
+
+  await it("layoutRef có `..` → contract bị TỪ CHỐI, y như ref", async () => {
+    const g = await api("GET", `/api/projects/${pid}/contract`)
+    const c = structuredClone(g.json.contract)
+    c.sheets[0].layoutRef = "../../etc/passwd.png"
+    const r = await api("PUT", `/api/projects/${pid}/contract`, {
+      headers: { "if-match": String(g.json.version) }, body: { contract: c },
+    })
+    eq(r.status, 422, "status")
+    eq(r.json.error.code, "CONTRACT_INVALID", "code")
+    ok(JSON.stringify(r.json.error.details).includes("REF_PATH"), "nêu đúng luật REF_PATH")
+  })
+
 }

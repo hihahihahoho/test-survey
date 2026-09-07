@@ -52,9 +52,12 @@ function OptionPillView({ node, updateAttributes, extension }: ReactNodeViewProp
    * contract để đi tới — `uiKitSheets` chỉ đọc chữ. Bày nút đính ảnh ở đó là mời
    * người dùng tải một tấm ảnh lên rồi im lặng vứt nó đi.
    * Pill `mascot` thì KHÔNG cần option `refs`: ảnh của nó là `sheet.ref` của
-   * chính tấm dáng, một cửa luôn có mặt ở thẻ Nhân vật.
+   * chính tấm dáng, một cửa luôn có mặt ở thẻ Nhân vật. Pill `layout` cùng họ:
+   * ảnh của nó là `sheet.layoutRef` của chính tấm nền — cũng là một cửa của tấm,
+   * không phải của cả bộ kit.
    */
-  const canAttach = takesImage(kind) && (kind === "mascot" || extension.options["refs"] === true);
+  const canAttach =
+    takesImage(kind) && (kind === "mascot" || kind === "layout" || extension.options["refs"] === true);
 
   /**
    * Linh vật của thương hiệu đang chọn — nguồn CHỌN SẴN duy nhất của pill này.

@@ -21,14 +21,14 @@ import {
 } from "@/features/kit-core/lib/kitset-to-contract";
 import type { StyleAxes } from "@/features/kit-core/lib/model";
 import { STYLE_AXIS_IDS } from "@/features/kit-form/lib/form-model";
-import { describeBrandColors } from "@/features/prompt-lab/lib/brand-colors";
+import { subjectAxisLine } from "@/features/kit-form/lib/style-phrases";
 import { INHERIT, labelOf, phraseOf, type PillKind } from "@/features/prompt-lab/lib/pill-registry";
 import { getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
 import { NODE } from "@/features/prompt-lab/lib/schema";
 import { SQUARE_CANVAS_PX, SYSTEM_CELL_FRACTION, skelSizeOf } from "@/features/prompt-lab/lib/cell-size";
 import { SCAFFOLDS } from "@/features/prompt-lab/lib/doc-templates";
 import { freeText, makeContext, serializeDoc, tidy, type PromptDocNode } from "@/features/prompt-lab/lib/serialize";
-import { contextFreeText, contextStyleEN, contextThemeEN } from "@/features/prompt-lab/lib/serialize-composer";
+import { contextFreeText, contextOutfitEN, contextStyleEN, contextThemeEN } from "@/features/prompt-lab/lib/serialize-composer";
 import type {
   Block,
   ComposerState,
@@ -160,11 +160,22 @@ function hitPhrase(hit: PillHit | null, presets: PresetBundle): string {
   return custom || phraseOf(hit.kind, hit.value, presets);
 }
 
+/**
+ * Một tấm ảnh trong câu, KÈM loại pill đã mang nó.
+ *
+ * `kind` là thứ quyết định ảnh đi vào ô nào của contract, và nó phải đi cùng
+ * tấm ảnh chứ không suy từ thứ tự: thẻ Background nay có tới hai ảnh mang hai
+ * vai trò ngược nhau — ảnh CẢNH (`sheet.ref`, "vẽ ra cái này") và bản PHÁC BỐ
+ * CỤC (`sheet.layoutRef`, "chỉ chép chỗ đặt, đừng chép nét"). Lẫn hai tấm ấy là
+ * máy vẽ chép nét nguệch ngoạc của bản phác thành tấm nền thành phẩm.
+ */
+type ScanImage = PillImage & { kind: PillKind | "" };
+
 interface DocScan {
   /** Mọi pill chọn-một, THEO THỨ TỰ trong câu. */
   pills: PillHit[];
   /** Mọi ảnh đã tải lên xong. Ảnh đang tải dở chưa có `path` ⇒ không lọt vào đây. */
-  images: PillImage[];
+  images: ScanImage[];
 }
 
 /**
@@ -186,12 +197,15 @@ function scanDoc(node: PromptDocNode | null | undefined, out: DocScan = { pills:
        nhân vật người dùng vừa tải lên không bao giờ thành `sheet.ref`, và cả tấm
        dáng được vẽ bằng chữ suông trong khi ảnh nằm im trên đĩa. */
     const pillImage = readPillImage(node.attrs);
-    if (pillImage.path) out.images.push(pillImage);
+    if (pillImage.path) out.images.push({ ...pillImage, kind: kind ?? "" });
     return out;
   }
   if (node.type === NODE.imagePill) {
+    /* Node ảnh RỜI của bản nháp đời trước — không có `kind` nào để khai, và đó là
+       CHÍNH XÁC lý do nó bị khai tử (xem `foldBackgroundLayout`). Vai trò rỗng ⇒
+       nó được xử như ảnh của thẻ, đúng chỗ nó vẫn luôn đi tới. */
     const image = readPillImage(node.attrs);
-    if (image.path) out.images.push(image);
+    if (image.path) out.images.push({ ...image, kind: "" });
     return out;
   }
   for (const child of node.content ?? []) scanDoc(child, out);
@@ -313,11 +327,25 @@ function backgroundSheet(block: DocBlock, index: number, presets: PresetBundle, 
 
   const scene = hitPhrase(take(scan, "scene"), presets);
   const mood = hitPhrase(take(scan, "mood"), presets);
-  const spec = tidy([scene || "a game screen background", mood, ...leftover(scan, presets)].filter(Boolean).join(", "));
-  if (block.mode !== "free" && !scene && !mood && scan.pills.length === 0 && !line) return null;
+  /* BỐ CỤC đứng SAU không khí trong `spec`: cảnh là "vẽ cái gì", không khí là "vẽ
+     thế nào", còn bố cục là "xếp vào đâu" — đọc theo đúng thứ tự người ta dựng một
+     tấm nền. Cùng thứ tự với câu trên màn, nên prompt đọc ra giống câu đang nhìn. */
+  const layout = hitPhrase(take(scan, "layout"), presets);
+  const spec = tidy(
+    [scene || "a game screen background", mood, layout, ...leftover(scan, presets)].filter(Boolean).join(", "),
+  );
+  if (block.mode !== "free" && !scene && !mood && !layout && scan.pills.length === 0 && !line) return null;
 
-  const note = block.mode === "free" ? "" : freeText(block.doc as PromptDocNode, SCAFFOLDS.background);
-  const ref = scan.images[0]?.path ?? "";
+  /* Chữ gõ THÊM ngoài khuôn + ô ghi chú của thẻ — cả hai đều là "lời người thiết kế
+     nói cho tấm này", nên cả hai vào `directive`. Ở chế độ tự do câu chữ đã thành
+     `promptOverride`, nên chỉ còn ô ghi chú; và nó VẪN đi (xem `DocBlock.note`). */
+  const extra = block.mode === "free" ? "" : freeText(block.doc as PromptDocNode, SCAFFOLDS.background);
+  const directive = [block.note.trim(), extra].filter(Boolean).join(" — ");
+  /* Ảnh của pill BỐ CỤC đi ra `layoutRef`, KHÔNG BAO GIỜ ra `ref`: `gen.sh` tả hai
+     trường ấy bằng hai câu ngược nhau, và một bản phác nằm ở `ref` là lệnh "vẽ lại
+     bản phác này cho đẹp". Mọi ảnh còn lại của thẻ vẫn là ảnh CẢNH như cũ. */
+  const layoutRef = scan.images.find((image) => image.kind === "layout")?.path ?? "";
+  const ref = scan.images.find((image) => image.kind !== "layout")?.path ?? "";
 
   return {
     id: seriesId("nen", index),
@@ -327,8 +355,10 @@ function backgroundSheet(block: DocBlock, index: number, presets: PresetBundle, 
     grid: { cols: 1, rows: 1 },
     cell_hint: HINT_BG,
     ...(ref ? { ref } : {}),
-    ...(block.mode === "free" ? { promptOverride: line } : note ? { directive: note } : {}),
-    components: [{ file: "01-nen", vi: "Cảnh nền", spec: block.mode === "free" ? line : spec, skel: { shape: "full", w: 1, h: 1 } }],
+    ...(layoutRef ? { layoutRef } : {}),
+    ...(block.mode === "free" ? { promptOverride: line } : {}),
+    ...(directive ? { directive } : {}),
+    components: [{ file: "01-nen", vi: "Background", spec: block.mode === "free" ? line : spec, skel: { shape: "full", w: 1, h: 1 } }],
   };
 }
 
@@ -394,12 +424,14 @@ function mascotSheets(
   presets: PresetBundle,
   styleEN: string,
   themeEN: string,
+  /* Cụm TRANG PHỤC của chủ đề chung — KHÁC `themeEN` từ 09/2026, xem `contextOutfitEN`. */
+  outfitEN: string,
   opts: ComposerContractOptions,
 ): { sheets: Sheet[]; poses: string[]; ref: string } {
   if (block.poses.length === 0) return { sheets: [], poses: [], ref: "" };
 
   const scan = scanDoc(block.doc as PromptDocNode);
-  const ctx = makeContext({ styleEN, themeEN, presets, imageCounter: { count: 0 } });
+  const ctx = makeContext({ styleEN, themeEN, outfitEN, presets, imageCounter: { count: 0 } });
   const headLine = tidy(serializeDoc(block.doc as PromptDocNode, ctx));
   /* Ngữ cảnh RỖNG cho câu của DÒNG: pill trong đó không có "cái chung" nào cao
      hơn để kế thừa ngoài chính câu đầu thẻ, mà câu đầu thẻ đã được ghép sẵn vào
@@ -424,7 +456,7 @@ function mascotSheets(
      câu hỏi, không còn gì để kế thừa. */
   const outfit =
     outfitHit && !outfitHit.custom.trim() && outfitHit.value === INHERIT
-      ? themeEN
+      ? outfitEN
       : hitPhrase(outfitHit, presets);
   const ref = scan.images[0]?.path ?? "";
 
@@ -447,6 +479,11 @@ function mascotSheets(
     base,
     ...(ref && identity ? [identity] : []),
     outfit ? `wearing ${outfit}` : "",
+    /* Ba trục TẢ NGƯỜI vào đây chứ không vào `variant.style` — xem `buildVariantStyle`.
+       Đây là tấm DUY NHẤT của một bộ kit có một con người trong khung; mọi tấm còn
+       lại nhận cùng chuỗi `variant.style`, và "clearly feminine" dán lên một cái nút
+       thì tốt nhất là nhiễu. */
+    subjectAxisLine(opts.styleAxes ?? defaultStyleAxes()),
     ...leftover(scan, presets),
   ]
     .filter(Boolean)
@@ -542,7 +579,7 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
       /* DANH TỪ ĐỨNG ĐẦU, rồi mới tới phong cách và mức viền. `element.en` nay là
          một danh từ thuần ("popover"), không còn là câu mô tả có sẵn thuộc tính —
          xem `ElementPreset.en`. Nhờ vậy thứ tự này đọc ra đúng một câu tiếng Anh:
-         "popover, chunky cartoon style, a thick beveled frame…". */
+         "popover, chunky cartoon style, a thick rim with corner accents…". */
       const text = [element?.en ?? cell.elementId, style, decor].filter(Boolean).join(", ");
       /* `resolveElementSpec` là nơi DUY NHẤT biết cách nối đục nền (và mức kính)
          vào mô tả một ô — dùng lại thay vì chép luật nối chuỗi sang đây. */
@@ -632,6 +669,9 @@ export function composerBlockSheets(
   /* Chữ tự gõ THẮNG preset — một hàm duy nhất biết luật ấy, xem `contextThemeEN`. */
   const styleEN = contextStyleEN(state, presets);
   const themeEN = contextThemeEN(state, presets);
+  /* Chủ đề nói với BỘ KIT bằng mô-típ (`themeEN`) và nói với NHÂN VẬT bằng quần áo
+     (`outfitEN`) — cùng một lựa chọn, hai cụm chữ. Xem `ThemeOption.kitEN`. */
+  const outfitEN = contextOutfitEN(state, presets);
 
   /* Đếm RIÊNG theo loại: thứ tự tấm bám thứ tự block trên màn (người dùng nhìn
      thấy), còn hậu tố `2`, `3` bám số tấm CÙNG LOẠI. */
@@ -652,7 +692,7 @@ export function composerBlockSheets(
       out.push({ blockId: block.id, kind: "background", sheets: sheet ? [sheet] : [], poses: [], ref: "" });
       continue;
     }
-    const made = mascotSheets(block, seen.mascot, presets, styleEN, themeEN, { ...opts, presets });
+    const made = mascotSheets(block, seen.mascot, presets, styleEN, themeEN, outfitEN, { ...opts, presets });
     seen.mascot += made.sheets.length;
     out.push({ blockId: block.id, kind: "mascot", sheets: made.sheets, poses: made.poses, ref: made.ref });
   }
@@ -687,9 +727,15 @@ export function composerStyleLine(
       contextThemeEN(state, presets),
       /* Tên riêng của thương hiệu KHÔNG có mặt ở đây, dù người dùng vừa chọn một
          cái: nó không giúp máy vẽ (xem nhánh `brandProfilePill` trong
-         `serialize.ts`). Thứ nói lên thương hiệu là bộ màu ngay dòng này và logo
-         đã đính ở `brand.refs`. */
-      describeBrandColors(state.brandColors),
+         `serialize.ts`). Thứ nói lên thương hiệu là logo đã đính ở `brand.refs`.
+         ══ BỘ MÀU CŨNG KHÔNG CÒN Ở ĐÂY, VÀ ĐÓ LÀ MỘT LỖI ĐÃ VÁ ═══════════════
+         `describeBrandColors()` từng được nối vào chuỗi này. Hệ quả đo được trên
+         prompt thật: cùng một bảng màu được nói BA lần trong một tấm — một lần ở
+         `## Art style` (qua chính chỗ này), một lần ở dòng "Brand palette:", một
+         lần nữa ở khối COLOUR AUTHORITY. Ba lần nói cùng một điều bằng ba giọng
+         khác nhau là ba cơ hội để chúng lệch nhau, và người đọc prompt không biết
+         bản nào thắng. Nay màu chỉ còn MỘT chỗ: section `## Palette` của `gen.sh`,
+         dựng từ `variant.brand.primary/secondary` — con số, không phải chữ tả. */
     ]
       .filter(Boolean)
       .join(", ");
@@ -744,8 +790,9 @@ export function composerToContract(input: ComposerDoc | ComposerState, opts: Com
         style: composerStyleLine(state, { ...opts, presets }),
         styleMode: "prompt",
         brand: {
-          /* Composer tả màu bằng CHỮ trong `style` (xem `describeBrandColors`), nhưng
-             hex vẫn phải nằm ở `brand` — `gen.sh` chèn dòng palette từ đây, và đó là
+          /* Hex là chỗ DUY NHẤT bộ màu đi tới máy vẽ từ 09/2026 (câu tả màu bằng chữ
+             đã bị cắt khỏi `style` — xem `composerStyleLine`): `gen.sh` dựng section
+             `## Palette` từ đúng hai trường dưới đây — `gen.sh` chèn dòng palette từ đây, và đó là
              chỗ duy nhất con số thương hiệu đi tới máy vẽ nguyên vẹn.
              `mode: "colors"` GIỮ NGUYÊN kể cả khi đã có logo: `gen.sh` từng bỏ dòng
              palette khi mode là "image" (xem khối «BẢNG MÀU VÀ ẢNH BRAND KHÔNG LOẠI

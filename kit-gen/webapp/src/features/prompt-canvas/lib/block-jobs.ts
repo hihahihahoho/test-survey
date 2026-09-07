@@ -42,9 +42,28 @@ export function rawPathOf(sheetId: string): string {
  * nguyên nhưng prompt đổi hẳn. `JSON.stringify` là đủ và ĐÚNG ở đây vì mấy tấm
  * này vừa được `composerToContract` dựng ra theo một thứ tự khoá cố định — không
  * có chuyện cùng dữ liệu ra hai chuỗi khác nhau như khi băm object tuỳ ý.
+ *
+ * ╔══ VÌ SAO PHẢI CÓ THAM SỐ THỨ HAI ════════════════════════════════════════╗
+ * ║ CON BỌ THẬT: đổi phong cách chung xong, tab Prompt vẫn hiện prompt phong  ║
+ * ║ cách CŨ. Vì khoá cache chỉ băm mấy tấm — mà câu phong cách, chủ đề, màu   ║
+ * ║ thương hiệu và 8 trục ngữ nghĩa KHÔNG nằm trong tấm nào cả: chúng nằm ở   ║
+ * ║ phần mô tả cả bộ kit. Người dùng đổi thứ hiện ra ở ĐẦU mọi prompt mà khoá ║
+ * ║ không nhúc nhích ⇒ cache không bao giờ hết hạn, và màn hình nói dối một   ║
+ * ║ cách hoàn toàn im lặng.                                                   ║
+ * ║ Nên phần ấy đi vào khoá bằng `extra`. Nơi gọi truyền gì thì tuỳ, MIỄN LÀ  ║
+ * ║ CẢ HAI CHỖ TRUYỀN CÙNG MỘT THỨ: chỗ hỏi engine và chỗ so "bản đang xem đã ║
+ * ║ cũ chưa". Lệch nhau là hoặc không bao giờ hết hạn (như con bọ trên), hoặc ║
+ * ║ lúc nào cũng báo cũ — và lời cảnh báo nào cũng kêu thì không ai đọc nữa.  ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * `extra` mặc định rỗng để nơi gọi nào chỉ quan tâm mấy tấm vẫn dùng được một
+ * tham số — nhưng ở màn prompt-first thì cả hai nơi gọi đều PHẢI truyền.
  */
-export function sheetsHash(sheets: readonly Sheet[]): string {
-  return JSON.stringify(sheets);
+export function sheetsHash(sheets: readonly Sheet[], extra = ""): string {
+  /* Bọc trong một mảng chứ không nối chuỗi: `extra` là văn bản người dùng gõ, và
+     nối thẳng thì một câu phong cách chứa đúng đoạn mở đầu của phần tấm sẽ ra
+     cùng một khoá với một tổ hợp khác. Mảng thì `JSON.stringify` tự đóng ngoặc. */
+  return JSON.stringify([extra, sheets]);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

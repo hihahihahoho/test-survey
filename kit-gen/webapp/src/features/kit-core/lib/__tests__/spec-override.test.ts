@@ -339,6 +339,16 @@ describe("ý kiến 5 — chủ đề trang phục vào SUBJECT của ô dáng",
   it("6 chủ đề dựng sẵn có nhãn VI và cụm tiếng Anh đọc xuôi sau chữ `wearing`", () => {
     expect(OUTFIT_THEMES.map((o) => o.label)).toEqual(["Tết", "Giáng sinh", "Hè", "Đông", "Bóng đá", "Halloween"]);
     for (const option of OUTFIT_THEMES) expect(option.value, option.label).toMatch(/^an? /);
+    /* ══ MỘT MỤC, HAI CỤM CHỮ ═══════════════════════════════════════════════
+       `value` = cụm TRANG PHỤC (và là id ổn định của mục, nằm trong bản nháp của
+       mọi dự án cũ). `kitEN` = cụm của CẢ BỘ KIT — mô-típ, màu, biểu tượng — thứ
+       đi vào `## Art style` của mọi tấm. Chữ "outfit"/"costume"/"kit" lọt vào
+       `kitEN` là một tấm 16 cái nút được lệnh mặc quần áo. */
+    for (const option of OUTFIT_THEMES) {
+      expect(option.kitEN, option.label).toContain("theme");
+      expect(option.kitEN.toLowerCase(), option.label).not.toMatch(/outfit|costume|wearing|jersey/);
+      expect(option.kitEN, option.label).not.toBe(option.value);
+    }
     expect(phraseLabel(OUTFIT_THEMES, "a Vietnamese Tết festive outfit with red and gold")).toBe("Tết");
   });
 

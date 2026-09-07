@@ -18,7 +18,7 @@ import { freeText, serializeDoc, makeContext, type PromptDocNode } from "../lib/
 import { backgroundDoc, mascotDoc, mascotPoseDoc, SCAFFOLD_BACKGROUND } from "../lib/doc-templates";
 import { slashItems, SLASH_ITEMS } from "../lib/slash-items";
 import { phraseOf, pillOptions, INHERIT } from "../lib/pill-registry";
-import { seedPresets } from "../lib/presets-store";
+import { DECOR_LEVELS, seedPresets } from "../lib/presets-store";
 import { gridFor, newCell, newMascotPose, type ComposerState, type UiCell } from "../lib/composer-model";
 import { brandColorName, describeBrandColors } from "../lib/brand-colors";
 import { NODE } from "../lib/schema";
@@ -38,7 +38,11 @@ import { NODE } from "../lib/schema";
  */
 
 const PRESETS = seedPresets();
-const ctx = () => makeContext({ presets: PRESETS, styleEN: "STYLE_CHUNG", themeEN: "THEME_CHUNG" });
+/* `outfitEN` TÁCH khỏi `themeEN` từ 09/2026: chủ đề nói với bộ kit bằng mô-típ, nói
+   với nhân vật bằng quần áo — cùng một lựa chọn, hai cụm chữ (`ThemeOption.kitEN`).
+   Hai chuỗi giả khác nhau ở đây để ca test bắt được nếu ai đó nối lại làm một. */
+const ctx = () =>
+  makeContext({ presets: PRESETS, styleEN: "STYLE_CHUNG", themeEN: "THEME_CHUNG", outfitEN: "OUTFIT_CHUNG" });
 
 const state = (partial: Partial<ComposerState> = {}): ComposerState => ({
   themeValue: OUTFIT_THEMES[0]!.value,
@@ -57,20 +61,29 @@ const state = (partial: Partial<ComposerState> = {}): ComposerState => ({
 });
 
 describe("serialize — pill đổi thành cụm TIẾNG ANH, không phải nhãn tiếng Việt", () => {
-  it("câu Cảnh nền mặc định: mọi pill ra chữ EN, nhãn VI không lọt vào prompt", () => {
+  it("câu Background mặc định: mọi pill ra chữ EN, nhãn VI không lọt vào prompt", () => {
     const out = serializeDoc(backgroundDoc() as PromptDocNode, ctx());
     expect(out).toContain(phraseOf("scene", "main-menu", PRESETS));
     expect(out).toContain(phraseOf("mood", "festive", PRESETS));
-    expect(out).toContain("[ảnh tham chiếu]");
+    /* Ô thứ ba nay là pill BỐ CỤC, không còn là pill ảnh trần — nên câu mặc định
+       KHÔNG mang móc "[ảnh tham chiếu]" nữa: không hứa đính kèm một tấm ảnh mà
+       người dùng chưa chọn. Ảnh vẫn đính được, vào chính pill ấy. */
+    expect(out).toContain(phraseOf("layout", "center-clear", PRESETS));
+    expect(out).not.toContain("[ảnh tham chiếu]");
     expect(out).not.toContain("Màn hình chính");
     expect(out).not.toContain("Rộn ràng");
+    expect(out).not.toContain("thoáng giữa");
   });
 
   it("câu Nhân vật CHỈ còn thứ chung cho cả tấm: nhân vật + trang phục, không dáng/nét mặt", () => {
     const out = serializeDoc(mascotDoc() as PromptDocNode, ctx());
     /* Đây là luật quan trọng nhất của cả model: ô để trống KHÔNG phải là ô rỗng,
        nó là "theo cái chung". Hỏng luật này thì mọi block âm thầm mất theme. */
-    expect(out).toContain("THEME_CHUNG");
+    expect(out).toContain("OUTFIT_CHUNG");
+    /* Pill trang phục để trống kế thừa cụm TRANG PHỤC, không kế thừa cụm mô-típ
+       của cả bộ kit — "wearing Vietnamese Tết theme: red and gold, lanterns" là
+       một câu không ai mặc được. */
+    expect(out).not.toContain("THEME_CHUNG");
     /* Dáng và nét mặt XUỐNG TỪNG DÒNG kể từ khi thẻ ra sprite sheet — mỗi ô một
        dáng một góc riêng. Còn sót ở câu đầu là cả tấm bị ép về một dáng. */
     expect(out).not.toContain(phraseOf("pose", "idle", PRESETS));
@@ -204,7 +217,7 @@ describe("màu thương hiệu — hex phải thành CHỮ, không phải một 
 
     /* Một câu: theme, phong cách và màu nối nhau bằng dấu phẩy, kết bằng MỘT
        dấu chấm — không xuống dòng, không có nhãn kiểu "brand palette:". */
-    expect(first).toContain(OUTFIT_THEMES[0]!.value);
+    expect(first).toContain(OUTFIT_THEMES[0]!.kitEN);
     expect(first).toContain(PRESETS.styles[0]!.en);
     expect(first).toContain("a palette built around vivid orange-red (#ff5533) as the dominant brand colour");
     expect(first).toContain("accented with deep navy blue (#112233)");
@@ -226,10 +239,32 @@ describe("màu thương hiệu — hex phải thành CHỮ, không phải một 
   });
 });
 
+/**
+ * THANG VIỀN CHỈ TẢ CẤU TRÚC, KHÔNG TẢ CÁCH ĐÁNH BÓNG.
+ *
+ * Cách hoàn thiện (vát khối, chuyển màu, đổ bóng) là việc của PHONG CÁCH — đã
+ * nói một lần ở `## Art style` cho cả tấm. Nhắc lại ở từng ô là hai giọng cùng
+ * chỉ huy một chuyện: chọn "flat vector" rồi kéo viền lên nấc 4 là prompt tự mâu
+ * thuẫn ngay trong chính nó.
+ */
+describe("thang mức viền — cấu trúc thuần", () => {
+  it("bảy nấc, không nấc nào mang chữ về cách hoàn thiện", () => {
+    expect(DECOR_LEVELS).toHaveLength(7);
+    for (const level of DECOR_LEVELS) {
+      expect(level.en.toLowerCase(), level.vi).not.toMatch(/bevel|gradient|shadow|glow|gloss|sheen/);
+    }
+  });
+
+  it("nấc 1 và nấc 7 ĐỐI NHAU: không viền ↔ viền có hoa văn góc", () => {
+    expect(DECOR_LEVELS[0]!.en).toBe("plain edge, no rim");
+    expect(DECOR_LEVELS[6]!.en).toBe("an ornate rim with corner ornaments");
+  });
+});
+
 describe("serialize cả màn — mỗi block một đoạn, ảnh đánh số liên tục", () => {
   it("dòng đầu là NGỮ CẢNH CHUNG, mọi block kế thừa nó", () => {
     const out = serializeComposer(state(), PRESETS);
-    expect(out.split("\n")[0]).toContain(OUTFIT_THEMES[0]!.value);
+    expect(out.split("\n")[0]).toContain(OUTFIT_THEMES[0]!.kitEN);
     expect(out.split("\n")[0]).toContain(PRESETS.styles[0]!.en);
   });
 
@@ -278,7 +313,7 @@ describe("serialize cả màn — mỗi block một đoạn, ảnh đánh số l
     });
     const s = state({
       blocks: [
-        { id: "b1", kind: "background", mode: "template", doc: withImages(["a", "b"]) },
+        { id: "b1", kind: "background", mode: "template", doc: withImages(["a", "b"]), note: "" },
         { id: "b2", kind: "mascot", mode: "template", doc: withImages(["c"]), poses: [newMascotPose()] },
       ],
     });

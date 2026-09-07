@@ -88,13 +88,60 @@ export const EXPRESSIONS: readonly PhraseOption[] = [
  * Cụm chữ được nối vào SUBJECT của ô dáng dưới dạng `"… wearing {outfit}"`, nên nó
  * phải là một cụm danh từ đọc xuôi sau chữ "wearing" — không phải một câu.
  */
-export const OUTFIT_THEMES: readonly PhraseOption[] = [
-  { value: "a Vietnamese Tết festive outfit with red and gold", label: "Tết" },
-  { value: "a Christmas outfit with a red santa hat and white fur trim", label: "Giáng sinh" },
-  { value: "a light summer outfit with short sleeves and sunglasses", label: "Hè" },
-  { value: "a warm winter outfit with a thick knitted scarf and coat", label: "Đông" },
-  { value: "a football kit with a team jersey, shorts and long socks", label: "Bóng đá" },
-  { value: "a Halloween costume with a pumpkin motif and a dark cape", label: "Halloween" },
+export interface ThemeOption extends PhraseOption {
+  /**
+   * CHỦ ĐỀ CỦA CẢ BỘ KIT — mô-típ, màu, biểu tượng. KHÔNG nói tới quần áo.
+   *
+   * ╔══ VÌ SAO MỘT MỤC PHẢI MANG HAI CỤM CHỮ ══════════════════════════════════╗
+   * ║ Danh mục này trả lời MỘT câu hỏi ("chủ đề gì") ở HAI chỗ khác hẳn nhau:   ║
+   * ║  · pill `theme` của câu Ngữ cảnh chung → đi vào `variant.style`, tức là    ║
+   * ║    vào `## Art style` của MỌI tấm: nút bấm, thanh máu, cảnh nền.          ║
+   * ║  · pill `outfit` để trống ("theo theme chung") → đi vào chủ ngữ của ô dáng ║
+   * ║    dưới dạng "… wearing {cụm}".                                          ║
+   * ║ Trước 09/2026 chỉ có MỘT cụm — cụm trang phục — nên một tấm 16 nút bấm    ║
+   * ║ nhận được câu "a Vietnamese Tết festive outfit with red and gold" ở đầu   ║
+   * ║ prompt. Máy vẽ đọc chữ "outfit" đúng như nó viết: có ảnh trả về nút bấm   ║
+   * ║ mang cổ áo và khuy. Hai chỗ dùng ⇒ hai cụm, nhưng vẫn MỘT mục để người    ║
+   * ║ dùng chỉ phải chọn một lần.                                              ║
+   * ║ `value` GIỮ NGUYÊN là cụm trang phục cũ vì nó đang là ID ổn định nằm      ║
+   * ║ trong bản nháp của mọi dự án có thật (`themeValue`, attr `value` của       ║
+   * ║ pill). Đổi nó là mọi dự án cũ mở lên mất chủ đề đã chọn.                  ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  kitEN: string;
+}
+
+export const OUTFIT_THEMES: readonly ThemeOption[] = [
+  {
+    value: "a Vietnamese Tết festive outfit with red and gold",
+    label: "Tết",
+    kitEN: "Vietnamese Tết theme: red and gold, lanterns, apricot and peach blossom motifs",
+  },
+  {
+    value: "a Christmas outfit with a red santa hat and white fur trim",
+    label: "Giáng sinh",
+    kitEN: "Christmas theme: deep red and pine green, snowflakes, baubles and holly motifs",
+  },
+  {
+    value: "a light summer outfit with short sleeves and sunglasses",
+    label: "Hè",
+    kitEN: "summer theme: sun-bright blues and warm sand, waves, palm leaves and ice-cream motifs",
+  },
+  {
+    value: "a warm winter outfit with a thick knitted scarf and coat",
+    label: "Đông",
+    kitEN: "winter theme: cool blues and white, snow, frost patterns and knitted textures",
+  },
+  {
+    value: "a football kit with a team jersey, shorts and long socks",
+    label: "Bóng đá",
+    kitEN: "football theme: pitch green and white line markings, balls, trophies and pennant motifs",
+  },
+  {
+    value: "a Halloween costume with a pumpkin motif and a dark cape",
+    label: "Halloween",
+    kitEN: "Halloween theme: pumpkin orange and deep purple, bats, cobwebs and crescent-moon motifs",
+  },
 ];
 
 /** Nhãn VI của một cụm đã lưu. Cụm TỰ GÕ không có trong danh mục ⇒ hiện nguyên văn. */

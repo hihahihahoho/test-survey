@@ -154,31 +154,35 @@ linh="$(cat "$WORK/p/prompts/tet-linh.txt")"
 # 132 ảnh vuông, TẤT CẢ đều đúng 1254x1254; không một ảnh nào 1024x1024, không một
 # ảnh nào 2048 hay 2040. Nên con số ta hứa với model phải là 1254 — hứa 1024 rồi
 # nhận về 1254 thì mọi lượt vuông đều trông như "model làm sai".
-echo "── sheet.canvas = square ⇒ dòng đầu prompt khai đúng khổ vuông"
-head_vuong="$(head -n1 "$WORK/p/prompts/tet-vuong.txt")"
-expect "dòng đầu là SQUARE 1254x1254" "Canvas orientation: SQUARE 1254x1254." "$head_vuong"
+# HAI DÒNG ĐẦU, không phải một: prompt nay mở đầu bằng tiêu đề section `## Canvas`
+# và khổ giấy nằm ở dòng ngay dưới — `run_one` đọc `head -n2`.
+echo "── sheet.canvas = square ⇒ hai dòng đầu prompt khai đúng khổ vuông"
+head_vuong="$(head -n2 "$WORK/p/prompts/tet-vuong.txt")"
+expect "mở đầu bằng tiêu đề khổ giấy" "## Canvas" "$head_vuong"
+expect "dòng ngay dưới là SQUARE 1254x1254" "SQUARE 1254x1254 px, origin top-left" "$head_vuong"
 vuong="$(cat "$WORK/p/prompts/tet-vuong.txt")"
-expect "câu chốt cuối nói tỉ lệ 1:1" "square 1:1." "$vuong"
+expect "câu chốt cuối nói tỉ lệ 1:1" "square 1:1 PNG" "$vuong"
 refute "không lẫn sang khổ ngang" "1536x1024" "$vuong"
 refute "và không hứa một khổ codex không trả về" "1024x1024" "$vuong"
 # `orient` đời cũ vẫn phải chạy nguyên vẹn: tấm `doc` chỉ khai `orient: portrait`.
-expect "contract đời cũ chỉ có orient vẫn ra đúng khổ dọc" "Canvas orientation: PORTRAIT 1024x1536." "$doc"
+expect "contract đời cũ chỉ có orient vẫn ra đúng khổ dọc" "PORTRAIT 1024x1536 px" "$doc"
 
-echo "── sheet.directive thành MỘT DÒNG trong prompt, ngay sau ghi chú của tấm"
-expect "có câu chỉ đạo riêng" "Extra direction for this sheet (from the designer): vẽ thêm mưa xuân rơi nhẹ" "$main"
+echo "── sheet.note + sheet.directive gom vào MỘT section «Direction»"
+expect "có section riêng"    "## Direction" "$main"
+expect "có câu chỉ đạo riêng" "From the designer: vẽ thêm mưa xuân rơi nhẹ" "$main"
 expect "ghi chú của template vẫn còn" "ghi chú của template" "$main"
-refute "tấm không khai directive thì không có câu đó" "Extra direction for this sheet" "$linh"
+refute "tấm không khai gì thì không có section đó" "## Direction" "$linh"
 
 echo "── sheet.promptOverride = prompt của người dùng, NGUYÊN VĂN"
 expect "chữ của người dùng có trong prompt" "TÔI TỰ SOẠN: vẽ một tấm bảng gỗ mộc" "$doc"
 # Dòng khổ giấy là NGOẠI LỆ KỸ THUẬT: run_one đọc ngược khổ bằng `head -n1 | grep PORTRAIT`.
 # Mất nó là mọi tấm dọc bị gửi đi với 1536x1024 (xem test/gen-canvas-size.test.sh).
-head1="$(head -n1 "$WORK/p/prompts/tet-doc.txt")"
-expect "dòng đầu vẫn là khổ giấy, và vẫn đúng PORTRAIT" "Canvas orientation: PORTRAIT 1024x1536." "$head1"
-refute "KHÔNG nối thêm luật của engine (cấm chữ)" "ABSOLUTELY NO TEXT" "$doc"
-refute "KHÔNG nối thêm luật của engine (khối lưới)" "STRICT grid" "$doc"
-refute "KHÔNG nối thêm luật của engine (art style)" "Art style:" "$doc"
-expect "tấm KHÔNG override thì vẫn có đủ luật engine" "ABSOLUTELY NO TEXT" "$main"
+head1="$(head -n2 "$WORK/p/prompts/tet-doc.txt")"
+expect "hai dòng đầu vẫn là khổ giấy, và vẫn đúng PORTRAIT" "PORTRAIT 1024x1536 px" "$head1"
+refute "KHÔNG nối thêm luật của engine (cấm chữ)"  "No letters, no digits" "$doc"
+refute "KHÔNG nối thêm luật của engine (vùng an toàn)" "## Safe zone" "$doc"
+refute "KHÔNG nối thêm luật của engine (art style)" "## Art style" "$doc"
+expect "tấm KHÔNG override thì vẫn có đủ luật engine" "No letters, no digits" "$main"
 
 echo "── dấu full-bleed: mối nối python → bash cho cổng alpha"
 have "tấm nền có dấu" "$WORK/p/prompts/tet-nen.fullbleed"
@@ -192,16 +196,16 @@ havent "lượt sau xoá dấu của tấm không còn full-bleed" "$WORK/p/prom
 have "dấu của tấm nền vẫn còn" "$WORK/p/prompts/tet-nen.fullbleed"
 
 echo "── tấm mascot KHÔNG lãnh khối chỉ dẫn viết cho nút bấm"
-refute "không có khối cấu tạo" "Build each element from the inside out" "$linh"
-refute "không có lệnh rim/border" "immediately OUTSIDE the safe zone" "$linh"
-expect "nhưng vẫn giữ vùng an toàn" "production crop box" "$linh"
-expect "vẫn giữ nền trong suốt" "BACKGROUND of the sheet: FULLY TRANSPARENT" "$linh"
-expect "vẫn cấm chữ" "ABSOLUTELY NO TEXT" "$linh"
+refute "không có luật viền của ô giao diện" "Any rim, border or edge treatment" "$linh"
+expect "thay bằng luật của một dáng người" "Draw the character as ONE natural figure" "$linh"
+expect "nhưng vẫn giữ vùng an toàn" "## Safe zone" "$linh"
+expect "vẫn giữ nền trong suốt" "Background fully transparent" "$linh"
+expect "vẫn cấm chữ" "No letters, no digits" "$linh"
 expect "vẫn cấm vẽ caro" "NEVER DRAW A CHECKERBOARD" "$linh"
 # Ranh giới của tấm mascot nay nói bằng SAFE ZONE của hàng xóm, không bằng "ô":
 # ô là chuyện của dao cắt, còn thứ model phải tránh là vùng của thằng bên cạnh.
 expect "và vẫn cấm lấn sang element khác" "well clear of every other" "$linh"
-expect "tấm nút bấm thì VẪN CÓ khối cấu tạo" "Build each element from the inside out" "$main"
+expect "tấm nút bấm thì VẪN CÓ luật viền" "Any rim, border or edge treatment" "$main"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # BỎ SKELETON — PROMPT PHẢI TỰ NÓI TOẠ ĐỘ (27/08/2026)
@@ -220,8 +224,8 @@ expect "tấm nút bấm thì VẪN CÓ khối cấu tạo" "Build each element 
 # ═══════════════════════════════════════════════════════════════════════════════
 echo "── mỗi element mang toạ độ safe zone NGAY TRÊN DÒNG CỦA NÓ"
 allp="$(cat "$WORK"/p/prompts/*.txt)"
-expect "khai gốc toạ độ" "Canvas 1254x1254 px, origin top-left" "$vuong"
-expect "luật chung một câu" "must lie fully inside its safe zone" "$vuong"
+expect "khai gốc toạ độ" "SQUARE 1254x1254 px, origin top-left" "$vuong"
+expect "luật chung một câu" "fills its safe zone exactly" "$vuong"
 # 3x3? Không — tấm `vuong` là 2x2 trên khổ 1254: ô 627, skel 0.8x0.4 ⇒ safe 502x251,
 # lệch trong ô là (627-502)//2 = 62 và (627-251)//2 = 188. Con số phải khớp TỪNG CÁI,
 # không phải "có dạng toạ độ": sai số 1px ở đây là mọi asset lệch 1px lúc cắt.
@@ -308,9 +312,9 @@ echo "── PHONG CÁCH TỔNG phải đứng ĐẦU, không phải cuối"
 # Chủ sản phẩm: "phải copy cả prompt của phong cách, có prompt tổng". Đứng đầu là
 # yêu cầu về ĐỌC (mở prompt ra thấy ngay chữ của mình), và nó chỉ an toàn được vì
 # dòng đánh số ở dưới nay chỉ còn DANH TỪ — không còn mô tả vật liệu nào cạnh tranh.
-expect "có khối ART STYLE" "ART STYLE" "$main"
-expect "có nguyên văn câu phong cách của người dùng" "Art style: flat vector, red and gold." "$main"
-style_ln="$(grep -n 'Art style:' "$WORK/p/prompts/tet-main.txt" | head -n1 | cut -d: -f1)"
+expect "có section Art style" "## Art style" "$main"
+expect "có nguyên văn câu phong cách của người dùng" "flat vector, red and gold." "$main"
+style_ln="$(grep -n '^## Art style' "$WORK/p/prompts/tet-main.txt" | head -n1 | cut -d: -f1)"
 # Neo cũ là dòng "Row 1, left to right:" — đã bỏ cùng khung xương (toạ độ tuyệt đối
 # nói vị trí chính xác hơn tiêu đề hàng). Neo mới: dòng đánh số ĐẦU TIÊN có toạ độ.
 list_ln="$(grep -nE '^1\) .* — safe zone x=' "$WORK/p/prompts/tet-main.txt" | head -n1 | cut -d: -f1)"

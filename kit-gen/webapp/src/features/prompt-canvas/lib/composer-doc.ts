@@ -307,7 +307,7 @@ function foldContextRefs(doc: JSONContent): JSONContent {
   return changed ? next : doc;
 }
 
-/** Attrs của pill ảnh ĐẦU TIÊN trong một tài liệu/** Attrs của pill ảnh ĐẦU TIÊN trong một tài liệu — ảnh nhân vật của câu cũ. */
+/** Attrs của pill ảnh ĐẦU TIÊN trong một tài liệu — ảnh nhân vật của câu cũ. */
 function firstImageAttrs(doc: JSONContent): Record<string, unknown> | null {
   let found: Record<string, unknown> | null = null;
   const walk = (node: JSONContent): void => {
@@ -368,12 +368,73 @@ function readBlock(raw: unknown, index: number): Block | null {
     id,
     kind,
     mode,
-    /* Cùng phép cứu hộ, nhưng KHÔNG có giá trị để trả lại: câu Cảnh nền không lưu
+    /* Cùng phép cứu hộ, nhưng KHÔNG có giá trị để trả lại: câu Background không lưu
        lựa chọn ở đâu ngoài chính tài liệu. Nên chỉ khôi phục được pill ĐÓ LÀ GÌ
        (đúng nhãn, đúng danh sách khi bấm), còn NÓ ĐANG CHỌN GÌ thì đã mất thật —
        và để rỗng là nói đúng điều đó. Xem `repairPills`. */
-    doc: healDoc(raw["doc"] as JSONContent, kind),
+    doc: healDoc(foldBackgroundLayout(raw["doc"] as JSONContent), kind),
+    /* Thiếu ⇒ rỗng, đúng thứ nó đang là: bản nháp lưu trước lượt có ô ghi chú thì
+       người dùng chưa từng gõ gì vào đó. */
+    note: str(raw["note"]),
   };
+}
+
+/**
+ * DI TRÚ CÂU BACKGROUND ĐỜI TRƯỚC: pill ảnh «tham chiếu» → pill `layout` mang ảnh.
+ *
+ * ╔══ VÌ SAO VÁ TẠI CHỖ, KHÔNG DỰNG LẠI CÂU TỪ TEMPLATE MỚI ═════════════════╗
+ * ║ Câu cũ là «Vẽ cảnh nền [khung cảnh], không khí [⌄], tham chiếu [🖼].» Dựng ║
+ * ║ lại từ template mới thì mọi chữ người dùng gõ thêm ở chế độ tự do bay      ║
+ * ║ sạch, và ảnh họ đã tải lên đĩa mất chỗ bám trong câu. Vá tại chỗ giữ được  ║
+ * ║ cả hai: node ảnh RỜI biến thành pill `layout` mang đúng `path`/`refName`   ║
+ * ║ ấy, còn mẩu chữ «, tham chiếu » của khuôn cũ đổi thành «, bố cục ».        ║
+ * ║                                                                          ║
+ * ║ Ảnh ấy thành ảnh của pill BỐ CỤC chứ không thành `sheet.ref`: người dùng   ║
+ * ║ đính vào ô ấy chủ yếu là bản phác "xếp chỗ thế này", và `gen.sh` nay nói   ║
+ * ║ với máy vẽ rằng bản phác chỉ được chép CHỖ ĐẶT. Đoán ngược lại (coi mọi    ║
+ * ║ ảnh cũ là ảnh cảnh) là rủi ro lớn hơn: máy vẽ chép luôn nét vẽ của bản     ║
+ * ║ phác vào tấm nền, đúng con bọ mà lượt này sinh ra để dọn.                  ║
+ * ║                                                                          ║
+ * ║ KHÔNG chạy khi câu đã có pill `layout`: một tài liệu đã di trú mở lại lần  ║
+ * ║ thứ hai phải đi ra CHÍNH NÓ, không thêm một pill thứ tư.                   ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+function foldBackgroundLayout(doc: JSONContent): JSONContent {
+  let hasLayout = false;
+  let hasLooseImage = false;
+  const scan = (node: JSONContent): void => {
+    if (node.type === NODE.optionPill && node.attrs?.["kind"] === "layout") hasLayout = true;
+    /* Chỉ ảnh KHÔNG KHAI VAI TRÒ mới là ảnh của ô «tham chiếu» cũ. Ảnh vai
+       `theme`/`style` là ảnh của câu ngữ cảnh chung mà người dùng dán vào đây —
+       chúng đi tới `variant.inspo` và không liên quan gì tới bố cục. */
+    if (node.type === NODE.imagePill && !str(node.attrs?.["role"])) hasLooseImage = true;
+    for (const child of node.content ?? []) scan(child);
+  };
+  scan(doc);
+  if (hasLayout || !hasLooseImage) return doc;
+
+  let done = false;
+  const walk = (node: JSONContent): JSONContent => {
+    if (!done && node.type === NODE.imagePill && !str(node.attrs?.["role"])) {
+      done = true;
+      const shot = readPillImage(node.attrs);
+      return {
+        type: NODE.optionPill,
+        attrs: { kind: "layout", value: "center-clear", custom: "", path: shot.path, refName: shot.refName },
+      };
+    }
+    if (node.type === "text") {
+      const value = node.text ?? "";
+      /* CHÍNH XÁC mẩu chữ của khuôn cũ, không phải một phép thay chung chung:
+         người dùng có thể đã tự gõ chữ «tham chiếu» ở chỗ khác trong câu, và chữ
+         của họ không phải thứ ta được quyền viết lại. */
+      return value.includes(", tham chiếu ")
+        ? { ...node, text: value.replace(", tham chiếu ", ", bố cục ") }
+        : node;
+    }
+    return node.content ? { ...node, content: node.content.map(walk) } : node;
+  };
+  return walk(doc);
 }
 
 /**

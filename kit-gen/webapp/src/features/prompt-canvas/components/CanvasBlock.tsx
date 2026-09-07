@@ -1,10 +1,15 @@
 import * as React from "react";
-import { AlertCircle, Check, Clock, Copy, Loader2, RotateCw, Sparkles, Trash2 } from "lucide-react";
+import { AlertCircle, Check, Clock, Copy, Download, Loader2, RotateCw, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import { KitImage } from "@/features/kit/components/KitImage";
 import { copyImageBlob } from "@/features/kit-core/lib/result-copy";
+/* Nút «Tải» dùng LẠI đường tải file của kit — nó đã đi qua transport có header
+   `X-KitGen-Client` (đường thẳng tới agent trả 403, đo thật ở đầu `download.ts`)
+   và tự đặt tên file theo `Content-Disposition`. Viết bản thứ hai ở đây là chép
+   lại cả hai thứ ấy để rồi quên một cái. */
+import { saveProjectFile } from "@/features/kit/lib/download";
 import {
   DocBlockBody,
   DOC_BLOCK_TITLE,
@@ -24,7 +29,7 @@ import type { Block, DocBlock, MascotBlock, UiKitBlock } from "@/features/prompt
 import type { Sheet } from "@/lib/types/contract";
 import type { PromptPreviewJob } from "@/lib/types/api";
 import type { BlockPromptState } from "../lib/block-prompt";
-import { copyProjectImage, copyPromptWithImage, fullPromptText } from "../lib/prompt-copy";
+import { copyProjectImage, copyPromptText, referenceImages } from "../lib/prompt-copy";
 import type { GenBlockState } from "../lib/gen-queue";
 import { CARD, SECTION_LABEL } from "../lib/ui";
 import { SheetResultSlot } from "./SheetResultSlot";
@@ -156,6 +161,7 @@ export function CanvasBlock(props: CanvasBlockProps) {
           canGen={canGen}
           busy={promptBusy}
           onWantPrompt={onWantPrompt}
+          hash={hash}
         />
       )}
 
@@ -281,7 +287,7 @@ function GenControl({ gen, canGen, onGen, onDequeue }: {
    Tab "Prompt"
    ══════════════════════════════════════════════════════════════════════════ */
 
-function PromptPanel({ projectId, prompt, styleLine, stale, canGen, busy, onWantPrompt }: {
+function PromptPanel({ projectId, prompt, styleLine, stale, canGen, busy, onWantPrompt, hash }: {
   projectId: string;
   prompt: BlockPromptState;
   /** Prompt tổng phong cách — `variant.style`, câu engine đặt ở đầu MỌI tấm. */
@@ -290,6 +296,8 @@ function PromptPanel({ projectId, prompt, styleLine, stale, canGen, busy, onWant
   canGen: boolean;
   busy: boolean;
   onWantPrompt: () => void;
+  /** Vân tay nội dung hiện tại — đi thẳng xuống panel ảnh để nó biết lúc nào phải quên số đã đếm. */
+  hash: string;
 }) {
   if (!canGen) {
     return <p className="text-body text-fg-muted">Thẻ này chưa có nội dung nào nên chưa có prompt để xem.</p>;
@@ -359,13 +367,27 @@ function PromptPanel({ projectId, prompt, styleLine, stale, canGen, busy, onWant
       )}
 
       {prompt.jobs.map((item) => (
-        <OnePrompt key={item.job} projectId={projectId} item={item} styleLine={styleLine} />
+        <OnePrompt key={item.job} projectId={projectId} item={item} hash={hash} />
       ))}
     </div>
   );
 }
 
-/** Khối «Prompt tổng phong cách» — chữ + nút copy riêng. */
+/**
+ * Khối «Prompt tổng phong cách» — BẢN XEM TRƯỚC, không phải chữ để dán.
+ *
+ * ╔══ VÌ SAO KHỐI NÀY KHÔNG CÒN DÍNH VÀO CHỮ COPY ═══════════════════════════╗
+ * ║ Nó từng được NỐI LÊN ĐẦU chữ mà nút «Copy prompt» ghi ra, phòng khi engine ║
+ * ║ trên máy người dùng là bản cũ chưa tự đặt câu phong cách. Bản engine mới   ║
+ * ║ ĐÃ tự đặt — và kết quả là chủ sản phẩm copy một tấm rồi dán, thấy prompt   ║
+ * ║ mở đầu bằng câu phong cách đời CŨ (tính ở đây), còn bên trong lại là câu   ║
+ * ║ phong cách đời MỚI (của engine): hai mệnh đề chồng nhau, mâu thuẫn nhau,   ║
+ * ║ và máy vẽ nghe câu nào cũng sai.                                          ║
+ * ║ Nên nay chữ copy = ĐÚNG NGUYÊN VĂN prompt của engine, không thêm một ký    ║
+ * ║ tự nào. Khối này vẫn ở lại vì nó trả lời một câu hỏi thật — "phong cách    ║
+ * ║ chung của cả bộ đang là gì" — và trả lời được NGAY, không cần chạy engine. ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
 function StyleLine({ text }: { text: string }) {
   return (
     /* `border-accent/60` + nền `tint-b` — ĐÚNG cặp mà mọi khối ghi chú nhấn mạnh
@@ -376,7 +398,7 @@ function StyleLine({ text }: { text: string }) {
     <div className="rounded-2 border border-accent/60 bg-accent/[var(--kg-tint-b)] px-3 py-2">
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <span className={SECTION_LABEL}>Prompt tổng phong cách</span>
-        <span className="text-caption text-fg-muted">engine đặt câu này ở đầu MỌI tấm</span>
+        <span className="text-caption text-fg-muted">engine đã đặt sẵn câu này trong prompt của mọi tấm</span>
         <CopyTextButton className="ml-auto" text={text} label="Copy prompt tổng" />
       </div>
       <p className="whitespace-pre-wrap text-mono text-fg">{text}</p>
@@ -384,71 +406,69 @@ function StyleLine({ text }: { text: string }) {
   );
 }
 
-/** Prompt nguyên văn của MỘT tấm + ảnh sẽ đính kèm + hai đường copy. */
-function OnePrompt({ projectId, item, styleLine }: { projectId: string; item: PromptPreviewJob; styleLine: string }) {
+/** Prompt nguyên văn của MỘT tấm + ảnh tham chiếu của nó. */
+function OnePrompt({ projectId, item, hash }: { projectId: string; item: PromptPreviewJob; hash: string }) {
   /* Tên tấm rút ra TRƯỚC rồi mới ghép vào câu: cổng từ cấm §5.4 quét cả biểu thức
      bên trong chuỗi mẫu, nên `${item.sheet}` nằm giữa một câu tiếng Việt bị đọc là
      chữ kỹ thuật lọt ra UI. Rút ra ngoài thì câu chỉ còn chữ người dùng đọc được —
      và cũng dễ đọc hơn. */
   const name = item.sheet || item.job;
-  const text = fullPromptText(styleLine, item.prompt);
-  const [copying, setCopying] = React.useState(false);
   /**
-   * ẢNH KHUNG XƯƠNG BỊ LỌC RA KHỎI DANH SÁCH ĐÍNH KÈM.
+   * ẢNH THAM CHIẾU — lọc từ chính danh sách engine đã ghi ra, không dựng lại.
    *
-   * ╔══ VÌ SAO LỌC Ở ĐÂY THAY VÌ ĐỢI ENGINE ══════════════════════════════════╗
-   * ║ Engine đã bỏ ảnh khung xương — vùng an toàn nay đi vào prompt bằng toạ   ║
-   * ║ độ số. Nhưng bản engine trên máy người dùng KHÔNG cập nhật cùng nhịp với ║
-   * ║ webapp (nó nằm ở `~/KitGen/.kitgen/engine`, cập nhật bằng một lượt riêng)║
-   * ║ nên trong khoảng giao thời `attachments` vẫn có thể trả về `skeleton/…`. ║
-   * ║ Bày nó ra là nói dối hai lần: khoe một ảnh máy vẽ không nhận, và nhét nó ║
-   * ║ vào lượt «Copy prompt + ảnh» ở vị trí ĐẦU TIÊN — tức là ảnh DUY NHẤT     ║
-   * ║ kèm được vào clipboard (xem `prompt-copy.ts`) lại là ảnh vô dụng, còn    ║
-   * ║ ảnh mẫu nhân vật thì bị đẩy xuống nút phụ.                               ║
-   * ║ Lọc theo TIỀN TỐ THƯ MỤC vì đó là hợp đồng thật của agent                ║
-   * ║ (`routes/files.mjs` chỉ mở đúng vài thư mục, `skeleton` là một trong đó).║
-   * ╚══════════════════════════════════════════════════════════════════════════╝
+   * Thứ tự (ảnh của tấm → ảnh dáng → ảnh bố cục → ảnh thương hiệu → ảnh gợi hứng)
+   * là quyết định của engine và đi thẳng qua agent tới đây; lý do đầy đủ nằm ở
+   * `referenceImages` trong `lib/prompt-copy.ts`, cùng với lý do bỏ ảnh khung xương.
    */
-  const attachments = React.useMemo(
-    () => item.attachments.filter((path) => !path.startsWith("skeleton/")),
-    [item.attachments],
-  );
+  const refs = React.useMemo(() => referenceImages(item.attachments), [item.attachments]);
+  const [copied, setCopied] = React.useState(false);
 
-  const copyAll = async () => {
-    setCopying(true);
+  /* Nhãn «Đã copy» tự tắt sau 2 giây. Dọn timer khi tắt sớm: người dùng đổi tab
+     ngay sau khi bấm thì `setCopied` chạy trên một khối đã gỡ. */
+  React.useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(t);
+  }, [copied]);
+
+  const copyText = async () => {
     try {
-      const res = await copyPromptWithImage(projectId, text, attachments);
-      if (res.outcome === "text+image") {
-        toast.success("Đã copy prompt kèm ảnh", {
-          description: res.remainingImages > 0
-            ? `Còn ${res.remainingImages} ảnh nữa — bấm từng nút «Copy ảnh» bên dưới.`
-            : undefined,
-        });
-        return;
-      }
-      /* CHỈ CHỮ ⇒ nói ra ngay trong toast, không để người dùng dán rồi mới phát
-         hiện thiếu ảnh. §3.9: mọi ca lùi bước phải ra chữ. */
-      toast.warning("Mới copy được phần chữ", {
-        description: res.reason ?? "Ảnh đính kèm chưa vào được bộ nhớ tạm — bấm «Copy ảnh» bên dưới.",
-      });
+      /* NGUYÊN VĂN `item.prompt`, không nối gì thêm — xem khối chú thích của `StyleLine`. */
+      await copyPromptText(item.prompt);
+      setCopied(true);
     } catch (error) {
       toast.error("Không copy được prompt", {
         description: error instanceof Error ? error.message : String(error),
       });
-    } finally {
-      setCopying(false);
     }
   };
+
+  /* Con số rút ra ngoài chuỗi mẫu cho câu dưới đọc được thành một câu tiếng Việt
+     trọn vẹn — cùng lý do với `name` ở trên. */
+  const n = refs.length;
 
   return (
     <div>
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <p className="text-caption text-fg-muted">{name}</p>
-        <Button variant="secondary" size="sm" className="ml-auto" onClick={copyAll} disabled={copying}>
-          <Copy aria-hidden strokeWidth={1.5} />
-          {attachments.length > 0 ? "Copy prompt + ảnh" : "Copy prompt"}
+        <Button variant="secondary" size="sm" className="ml-auto" onClick={copyText}>
+          {copied ? <Check aria-hidden strokeWidth={1.5} /> : <Copy aria-hidden strokeWidth={1.5} />}
+          {copied ? "Đã copy" : "Copy prompt"}
         </Button>
       </div>
+      {n > 0 && (
+        /* ╔══ VÌ SAO PHẢI CÓ MỘT DÒNG DẶN, VÀ VÌ SAO NÓ Ở NGAY CẠNH NÚT ═══════════╗
+           ║ Nút này từng hứa chép cả chữ lẫn ảnh trong một lượt. Chỗ dán (khung    ║
+           ║ chat của máy vẽ) chỉ lấy chữ và bỏ ảnh — im lặng — nên người dùng dán  ║
+           ║ xong mới nhận được câu hỏi lại *"chưa có ảnh nguồn khả dụng"*. Nay ảnh ║
+           ║ có đường riêng, và cái giá phải trả là người dùng phải biết mình còn   ║
+           ║ một việc nữa. Câu dặn đứng ngay cạnh nút vì đó là chỗ duy nhất người   ║
+           ║ ta còn đang nhìn khi bấm; đặt nó ở cuối panel ảnh là đặt sau lúc cần.  ║
+           ╚═══════════════════════════════════════════════════════════════════════╝ */
+        <p className="mb-1 text-caption text-fg-muted">
+          Prompt này nhắc {n} ảnh tham chiếu — dán {n} ảnh vào chat trước, rồi dán prompt.
+        </p>
+      )}
       {/* `overflow-auto` là CUỘN, không phải cắt: prompt của một tấm UI kit dài
           vài chục dòng, và chủ sản phẩm cần đọc được TRỌN VẸN. Trần cao hơn trước
           (28rem) để phần lớn prompt vào vừa một màn mà không phải cuộn trong cuộn. */}
@@ -456,32 +476,70 @@ function OnePrompt({ projectId, item, styleLine }: { projectId: string; item: Pr
         aria-label={`Prompt của tấm ${name}`}
         className="max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-2 border border-line-subtle bg-canvas p-3 text-mono text-fg"
       >
-        {text}
+        {item.prompt}
       </pre>
-      {attachments.length > 0 && <Attachments projectId={projectId} paths={attachments} />}
+      {n > 0 && <Attachments projectId={projectId} paths={refs} hash={hash} />}
     </div>
   );
 }
 
 /**
- * ẢNH ĐÍNH KÈM — thumbnail thật, không phải một dòng tên file.
+ * PANEL ẢNH THAM CHIẾU — thumbnail thật, không phải một dòng tên file.
  *
- * Bản trước chỉ liệt kê `skeleton/ui.png · refs/char-lan.png`. Với người đang hỏi
- * "engine gửi đi cái gì" thì một đường dẫn không trả lời được câu nào: khung xương
- * có đúng lưới không, ảnh mẫu có đúng con nhân vật không — cả hai chỉ nhìn mới biết.
- * Ảnh đi qua `KitImage` (transport có header) vì `<img src>` thẳng tới agent trả 403.
+ * Bản trước chỉ liệt kê `refs/char-lan.png`. Với người đang hỏi "engine gửi đi cái
+ * gì" thì một đường dẫn không trả lời được câu nào: ảnh mẫu có đúng con nhân vật
+ * không, tấm dáng có đủ góc không — chỉ nhìn mới biết. Ảnh đi qua `KitImage`
+ * (transport có header) vì `<img src>` thẳng tới agent trả 403.
+ *
+ * ══ HAI NÚT MỖI ẢNH, VÀ VÌ SAO KHÔNG PHẢI MỘT ═════════════════════════════
+ * «Copy ảnh» nhanh hơn, nhưng bộ nhớ tạm chỉ giữ được MỘT ảnh: dán bốn ảnh vào
+ * chat là bốn vòng bấm-dán xen kẽ, và lỡ nhịp một cái thì mất dấu. «Tải» đưa cả
+ * bốn file xuống máy để kéo thả một lượt. Hai thói quen khác nhau, cả hai đều
+ * thật — bỏ cái nào cũng là bắt một nửa người dùng làm cách của nửa kia.
  */
-function Attachments({ projectId, paths }: { projectId: string; paths: readonly string[] }) {
+function Attachments({ projectId, paths, hash }: { projectId: string; paths: readonly string[]; hash: string }) {
+  /* Đếm theo ĐƯỜNG DẪN chứ không cộng dồn một con số: bấm «Copy ảnh» hai lần trên
+     cùng một tấm là chuyện thường (dán hụt, dán nhầm ô), và một biến đếm sẽ báo
+     «Đã copy ảnh 2/2» trong khi tấm thứ hai chưa hề được chạm tới. */
+  const [copied, setCopied] = React.useState<readonly string[]>([]);
+
+  /**
+   * QUÊN SỐ ĐÃ ĐẾM KHI NỘI DUNG THẺ ĐỔI.
+   *
+   * `hash` đổi nghĩa là prompt đang xem không còn tả đúng thẻ nữa — số "đã copy
+   * 3/4" của bản cũ mà còn nằm đó thì nó đang nói về những tấm ảnh của một lần
+   * khác. Chỉnh state ngay trong lượt vẽ (thay vì `useEffect`) là cách React
+   * khuyên cho đúng ca này: không có một khung hình nào hiện con số sai.
+   */
+  const [seenHash, setSeenHash] = React.useState(hash);
+  if (seenHash !== hash) {
+    setSeenHash(hash);
+    setCopied([]);
+  }
+
+  const mark = (path: string) =>
+    setCopied((prev) => (prev.includes(path) ? prev : [...prev, path]));
+
+  const done = copied.length;
+
   return (
     <div className="mt-2">
-      <p className="mb-1 text-caption text-fg-muted">Đính kèm ({paths.length})</p>
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <p className="text-caption text-fg-muted">Ảnh tham chiếu ({paths.length})</p>
+        {done > 0 && (
+          <span className="inline-flex items-center gap-1 text-caption text-ok">
+            <Check aria-hidden className="size-4" />
+            Đã copy ảnh {done}/{paths.length}
+          </span>
+        )}
+      </div>
       <div className="flex flex-wrap gap-3">
         {paths.map((path, index) => (
           <figure key={path} className="w-32">
             <KitImage
               projectId={projectId}
               path={path}
-              alt={`Ảnh đính kèm: ${path}`}
+              alt={`Ảnh tham chiếu: ${path}`}
               backdrop="checker"
               full={false}
               width={256}
@@ -490,10 +548,15 @@ function Attachments({ projectId, paths }: { projectId: string; paths: readonly 
             <figcaption className="mt-1 truncate text-caption text-fg-muted" title={path}>
               {path}
             </figcaption>
-            {/* Ảnh thứ HAI trở đi không kèm được vào lượt copy chung (một
-                `ClipboardItem` chỉ mang được một `image/png`), nên mỗi ảnh có
-                đường riêng. Ảnh đầu cũng có nút — người ta có thể chỉ muốn ảnh. */}
-            <CopyImageButton projectId={projectId} path={path} index={index} />
+            <div className="mt-0.5 flex gap-1">
+              <CopyImageButton
+                projectId={projectId}
+                path={path}
+                index={index}
+                onCopied={() => mark(path)}
+              />
+              <SaveImageButton projectId={projectId} path={path} />
+            </div>
           </figure>
         ))}
       </div>
@@ -501,21 +564,36 @@ function Attachments({ projectId, paths }: { projectId: string; paths: readonly 
   );
 }
 
-function CopyImageButton({ projectId, path, index }: { projectId: string; path: string; index: number }) {
+function CopyImageButton({ projectId, path, index, onCopied }: {
+  projectId: string;
+  path: string;
+  index: number;
+  /** Gọi CHỈ KHI ảnh thật sự vào bộ nhớ tạm — nhánh lùi về tải file không tính. */
+  onCopied: () => void;
+}) {
   const [busy, setBusy] = React.useState(false);
   return (
     <Button
       variant="ghost"
       size="sm"
-      className="mt-0.5 w-full"
+      className="flex-1"
       disabled={busy}
+      aria-label={`Copy ảnh ${index + 1}`}
       onClick={async () => {
         setBusy(true);
         try {
           const blob = await copyProjectImage(projectId, path);
           const res = await copyImageBlob(blob, path.slice(path.lastIndexOf("/") + 1));
-          if (res.outcome === "clipboard") toast.success(`Đã copy ảnh ${index + 1}`);
-          else toast.warning("Đã tải ảnh về máy", { description: res.reason });
+          if (res.outcome === "clipboard") {
+            onCopied();
+            toast.success(`Đã copy ảnh ${index + 1}`);
+          } else {
+            /* Máy không cho ghi ảnh vào bộ nhớ tạm ⇒ `copyImageBlob` đã TẢI file
+               xuống. Nói đúng việc vừa xảy ra và KHÔNG tính vào số "đã copy":
+               người dùng phải biết ảnh này nay nằm ở thư mục tải về, không nằm
+               ở đầu ngón tay dán. */
+            toast.warning("Đã tải ảnh về máy", { description: res.reason });
+          }
         } catch (error) {
           toast.error("Không lấy được ảnh", {
             description: error instanceof Error ? error.message : String(error),
@@ -526,7 +604,37 @@ function CopyImageButton({ projectId, path, index }: { projectId: string; path: 
       }}
     >
       <Copy aria-hidden strokeWidth={1.5} />
-      Copy ảnh {index + 1}
+      Copy ảnh
+    </Button>
+  );
+}
+
+/** Tải một ảnh tham chiếu về máy — để kéo thả cả nhóm vào chat trong một lượt. */
+function SaveImageButton({ projectId, path }: { projectId: string; path: string }) {
+  const [busy, setBusy] = React.useState(false);
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="flex-1"
+      disabled={busy}
+      aria-label={`Tải ảnh ${path}`}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const saved = await saveProjectFile(projectId, path);
+          toast.success("Đã tải ảnh về máy", { description: saved.fileName });
+        } catch (error) {
+          toast.error("Không tải được ảnh", {
+            description: error instanceof Error ? error.message : String(error),
+          });
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <Download aria-hidden strokeWidth={1.5} />
+      Tải
     </Button>
   );
 }

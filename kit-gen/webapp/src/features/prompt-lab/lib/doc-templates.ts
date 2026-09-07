@@ -35,13 +35,25 @@ const pill = (kind: PillKind, value: string, custom = "", image?: { path: string
   attrs: { kind, value, custom, path: image?.path ?? "", refName: "" },
 });
 
-/* Pill ảnh RỖNG: chưa có ảnh nào trên đĩa. Ba trường rỗng chứ không phải
-   `null` — đúng giá trị mặc định của attr, xem `EMPTY_PILL_IMAGE`. */
-const imagePill = (role = ""): JSONContent => ({ type: NODE.imagePill, attrs: { refName: "", path: "", role } });
+/* Không còn hàm dựng `imagePill` ở đây, và đó là chủ ý: từ 09/2026 KHÔNG câu khởi
+   điểm nào đặt một node ảnh RỜI vào tài liệu nữa — ảnh luôn nằm TRONG pill mà nó
+   minh hoạ (`optionPill.path`), nên vai trò của nó suy được từ `kind`. Node
+   `NODE.imagePill` vẫn sống trong schema để ĐỌC bản nháp đời trước (xem
+   `contextRefsOf` và bộ di trú ở `composer-doc.ts`), chỉ là không ai sinh ra nó nữa. */
 
 /* ── Block BACKGROUND ─────────────────────────────────────────────────────── */
 
-export const SCAFFOLD_BACKGROUND = ["Vẽ cảnh nền ", ", không khí ", ", tham chiếu ", "."] as const;
+/**
+ * ╔══ Ô THỨ BA ĐỔI TỪ «tham chiếu [🖼]» SANG «bố cục [⌄]» ═══════════════════╗
+ * ║ Pill ảnh trần ở cuối câu không nói được ảnh ấy đóng vai gì, nên người dùng ║
+ * ║ đính vào đó cả ảnh CẢNH lẫn bản PHÁC BỐ CỤC — và máy vẽ chép luôn nét      ║
+ * ║ nguệch ngoạc của bản phác vào tấm nền. Nay ô thứ ba hỏi đúng câu hỏi còn   ║
+ * ║ thiếu của một tấm nền game ("chừa chỗ nào cho UI"), và ẢNH là một trong ba ║
+ * ║ nguồn trả lời nó — đi vào `sheet.layoutRef` với một câu nói rõ vai trò.    ║
+ * ║ Xem `PillKind.layout`. Bản nháp cũ được di trú ở `composer-doc.ts`.        ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export const SCAFFOLD_BACKGROUND = ["Vẽ background ", ", không khí ", ", bố cục ", "."] as const;
 
 export function backgroundDoc(): JSONContent {
   const [a, b, c, d] = SCAFFOLD_BACKGROUND;
@@ -56,7 +68,7 @@ export function backgroundDoc(): JSONContent {
           text(b),
           pill("mood", "festive"),
           text(c),
-          imagePill(),
+          pill("layout", "center-clear"),
           text(d),
         ],
       },
@@ -336,7 +348,8 @@ export const PILL_SLOTS: Record<"uikit" | "background" | "mascot" | "mascotPose"
      truyền vào `repairPills` (từ `composer-doc.readCell`) cũng phải đổi thứ tự
      theo. Ba nơi, một thứ tự. */
   uikit: ["style", "glaze", "decor"],
-  background: ["scene", "mood"],
+  /* Ba ô từ 09/2026 — ô ảnh cuối câu đã thành pill `layout`, xem `SCAFFOLD_BACKGROUND`. */
+  background: ["scene", "mood", "layout"],
   /* Đổi 09/2026 cùng lượt tách thẻ Nhân vật thành sprite sheet: câu ĐẦU THẺ nay
      chỉ còn danh tính nhân vật + trang phục, còn dáng/góc/nét mặt xuống dòng
      (`mascotPose`). Tài liệu đời trước có ba pill ở câu đầu — nhưng chúng KHÔNG

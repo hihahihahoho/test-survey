@@ -60,6 +60,23 @@ export interface DocBlock {
   kind: "background";
   mode: BlockMode;
   doc: JSONContent;
+  /**
+   * GHI CHÚ CẤP THẺ — một dòng người thiết kế nói thêm cho cả tấm.
+   *
+   * ╔══ VÌ SAO NÓ LÀ MỘT TRƯỜNG RIÊNG, KHÔNG PHẢI CHỮ GÕ THÊM VÀO CÂU ════════╗
+   * ║ Ở chế độ KHUÔN, câu mad-lib là bất di bất dịch — người dùng chỉ bấm pill, ║
+   * ║ không gõ được vào giữa. Nghĩa là mọi thứ template không hỏi tới ("vẽ thêm ║
+   * ║ mưa xuân", "đừng có người trong khung") đều KHÔNG có chỗ nào để nói, trừ  ║
+   * ║ khi bỏ khuôn đi. Dòng element và dòng dáng đã có ô ghi chú của riêng      ║
+   * ║ chúng (`UiCell.note`, `MascotPose.note`); thẻ Background thì chưa, và đó  ║
+   * ║ là thẻ DUY NHẤT mà cả thẻ chỉ sinh ra một ô — tức là chỗ thiếu ô ghi chú  ║
+   * ║ đau nhất.                                                                ║
+   * ║ Nó đi vào `sheet.directive` (`gen.sh` in ra dưới `## Direction`), sống    ║
+   * ║ song song với câu — nên nó CÒN NGUYÊN cả khi gạt sang chế độ tự do rồi    ║
+   * ║ quay về, và không bao giờ bị bộ serialize trừ nhầm vào scaffolding.       ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  note: string;
 }
 
 /**
@@ -391,7 +408,7 @@ export function newId(prefix: string): string {
 }
 
 export function newDocBlock(kind: "background" = "background"): DocBlock {
-  return { id: newId(kind), kind, mode: "template", doc: backgroundDoc() };
+  return { id: newId(kind), kind, mode: "template", doc: backgroundDoc(), note: "" };
 }
 
 /** Dáng mặc định của một dòng mới — cùng id với `DEFAULT_POSE` của bộ dịch. */

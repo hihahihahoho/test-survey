@@ -295,7 +295,7 @@ describe("③ câu tự do của một dòng ĐI TỚI ĐƯỢC contract và pro
     const spec = contract.sheets[0]!.components[0]!.spec;
     expect(spec).toContain(PRESETS.elements.find((e) => e.id === "button")!.en);
     /* Mức viền mặc định của "Nút bấm" là 4 — cụm EN của nó, không phải chữ "Vừa". */
-    expect(spec).toContain("a beveled border with a subtle gradient face");
+    expect(spec).toContain("a distinct rim");
     expect(spec).not.toContain("Vừa");
   });
 

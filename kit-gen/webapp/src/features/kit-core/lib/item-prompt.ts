@@ -91,14 +91,11 @@ const orientLine = (kind: keyof typeof CANVAS_HEADER) => `Canvas orientation: ${
  * `__tests__/cell-background.test.tsx` đỏ (nó đọc `gen.sh` thật, không đọc trí nhớ).
  */
 export function glowCellPrompt(): string {
-  return " — LIGHT EFFECT: for THIS cell, ignore the rule about filling the safe zone"
-    + " with a continuous content surface: there is no surface here. The safe zone only marks"
-    + " HOW FAR the light reaches; it is not an area to fill. This element is pure light. The"
-    + " halo fades out by LOWERING ALPHA, not by painting paler pixels: at the outer edge the"
-    + " alpha reaches 0 while the colour stays the light's own colour, so the fade is gradual"
-    + " and never stops at a hard edge. There is NO plate of any kind behind the light — no"
-    + " black, no white, no pale grey, and above all no checkerboard squares. Every pixel that"
-    + " is not lit is simply unpainted";
+  return " — LIGHT EFFECT: pure light, no surface. Ignore the safe-zone fill"
+    + " rule here: the box only marks HOW FAR the light reaches. The halo"
+    + " fades out by LOWERING ALPHA to 0 at its edge while keeping the"
+    + " light's own colour, and nothing sits behind it — no plate, no"
+    + " black, no checkerboard";
 }
 
 /**
@@ -111,13 +108,11 @@ export function glowCellPrompt(): string {
  * THẲNG trong kênh α, nên câu này ra hợp đồng ngay trên α.
  */
 export function glassCellPrompt(): string {
-  return " — SEE-THROUGH ELEMENT: the safe zone marks the pane, but 'filling it with a"
-    + " continuous content surface' here means a SEE-THROUGH surface, not a solid one. The body"
-    + " of this element is a thin sheet of tinted glass. Draw it with a LOW ALPHA VALUE — about"
-    + " 64 out of 255 for a clear pane, up to 128 for a strongly tinted one — keeping the glass's"
-    + " own tint colour at that low alpha. Do NOT fake it with paint: no opaque fill, no white or"
-    + " pale grey wash, and above all no checkerboard squares. Lower alpha, not lighter paint."
-    + " Frame, rim, bevel and specular highlights stay fully opaque";
+  return " — SEE-THROUGH ELEMENT: the body is a thin sheet of tinted glass"
+    + " drawn at LOW ALPHA — about 64 out of 255 for a clear pane, up to"
+    + " 128 for a strongly tinted one — keeping its own tint colour at that"
+    + " low alpha. Frame, rim, bevel and specular highlights stay fully"
+    + " opaque";
 }
 
 /** `true` khi ô là hiệu ứng phát sáng — quầng phải tan hết ra nền trong suốt. */

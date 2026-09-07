@@ -90,7 +90,7 @@ import { ensurePoseRefs } from "./lib/pose-refs";
  */
 
 const ADD_ITEMS: { kind: BlockKind; label: string; hint: string; icon: React.ReactNode }[] = [
-  { kind: "background", label: "Cảnh nền", hint: "Một cảnh nền: khung cảnh, không khí, ảnh tham chiếu", icon: <ImageIcon aria-hidden className="size-4" /> },
+  { kind: "background", label: "Background", hint: "Một tấm nền: khung cảnh, không khí, bố cục", icon: <ImageIcon aria-hidden className="size-4" /> },
   { kind: "uikit", label: "Bộ UI", hint: "Danh sách món giao diện — hệ thống tự xếp lưới", icon: <LayoutGrid aria-hidden className="size-4" /> },
   { kind: "mascot", label: "Nhân vật", hint: "Một nhân vật: dáng, biểu cảm, trang phục", icon: <Smile aria-hidden className="size-4" /> },
 ];
@@ -176,6 +176,30 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
     }
   }, [store.composer, contractOpts]);
 
+  /**
+   * PHẦN MÔ TẢ CẢ BỘ KIT, dạng chuỗi — nửa còn lại của khoá cache tab Prompt.
+   *
+   * ╔══ CON BỌ MÀ NÓ VÁ ═══════════════════════════════════════════════════════╗
+   * ║ Đổi phong cách chung xong, tab Prompt vẫn hiện prompt phong cách CŨ. Vì   ║
+   * ║ khoá cache trước đây chỉ băm mấy tấm, mà câu phong cách · chủ đề · màu    ║
+   * ║ thương hiệu · 8 trục ngữ nghĩa lại nằm ở phần mô tả cả bộ kit, không nằm  ║
+   * ║ trong tấm nào. Khoá không đổi ⇒ bản cũ sống mãi, và không có gì báo.      ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
+   *
+   * Lấy từ chính bản dịch mà `POST /prompt-preview` sẽ nhận, chứ không tự liệt kê
+   * lại mấy trường "có ảnh hưởng tới prompt": liệt kê tay là một danh sách phải
+   * nhớ cập nhật mỗi lần thêm một ô trên màn, và cái quên cập nhật ấy hỏng lặng.
+   * Ném thì rơi về rỗng — cùng tinh thần với `built`/`styleLine` ngay trên: khoá
+   * mất một nửa còn đỡ hơn cả màn trắng, và người dùng vẫn bấm «Xem lại» được.
+   */
+  const variantKey = React.useMemo(() => {
+    try {
+      return JSON.stringify(composerToContract(store.composer, contractOpts).variants);
+    } catch {
+      return "";
+    }
+  }, [store.composer, contractOpts]);
+
   const sheetsOf = React.useCallback(
     (blockId: string) => blockSheets.find((b) => b.blockId === blockId)?.sheets ?? [],
     [blockSheets],
@@ -242,14 +266,17 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
       const ids = mine.sheets.map((sheet) => sheet.id);
       try {
         const full = composerToContract(composerRef.current, contractOpts);
-        prompts.request(blockId, sheetsHash(mine.sheets), narrowContractToSheets(full, ids));
+        /* CÙNG MỘT KHOÁ với prop `hash` ở dưới — xem khối chú thích của `sheetsHash`.
+           Hai chỗ này là một cặp: chỗ này ghi khoá vào cache, chỗ kia so lại để nói
+           "bản đang xem đã cũ". Sửa một mà quên chỗ kia là hỏng lặng theo cả hai chiều. */
+        prompts.request(blockId, sheetsHash(mine.sheets, variantKey), narrowContractToSheets(full, ids));
       } catch (error) {
         toast.error("Chưa dựng được bản thiết kế để xem prompt", {
           description: error instanceof Error ? error.message : String(error),
         });
       }
     },
-    [blockSheets, contractOpts, prompts],
+    [blockSheets, contractOpts, prompts, variantKey],
   );
 
   /* ── Sửa tài liệu ─────────────────────────────────────────────────────────
@@ -349,7 +376,7 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
             styleLine={styleLine}
             onWantPrompt={() => wantPrompt(block.id)}
             promptBusy={prompts.busy}
-            hash={sheetsHash(sheetsOf(block.id))}
+            hash={sheetsHash(sheetsOf(block.id), variantKey)}
             reloadSignal={reloads[block.id] ?? 0}
             onReload={() => setReloads((prev) => ({ ...prev, [block.id]: (prev[block.id] ?? 0) + 1 }))}
           />

@@ -111,15 +111,29 @@ export interface PresetBundle {
  * vì thế chỉ mang TÊN ảnh như một lời nhắc; ảnh thật vẫn chọn ở pill trong block.
  */
 
-/** Bảy mức trang trí — thang của pill `decor`, dùng lại ở seed element. */
+/**
+ * Bảy mức trang trí — thang của pill `decor`, dùng lại ở seed element.
+ *
+ * ╔══ CHỈ TẢ CẤU TRÚC, KHÔNG TẢ CÁCH ĐÁNH BÓNG ══════════════════════════════╗
+ * ║ Bản trước trộn hai thứ vào một thang: "a beveled border with a subtle      ║
+ * ║ gradient face" nói CẢ "có viền" (cấu trúc) LẪN "vát khối, mặt chuyển màu"  ║
+ * ║ (cách hoàn thiện). Cách hoàn thiện là việc của PHONG CÁCH — nó đã được nói ║
+ * ║ ở `## Art style`, cho cả tấm, một lần. Nhắc lại ở từng ô là hai giọng cùng ║
+ * ║ chỉ huy một chuyện: chọn phong cách "flat vector" rồi kéo viền lên nấc 4   ║
+ * ║ là prompt tự mâu thuẫn — phẳng ở đầu tấm, vát khối ở dòng thứ ba.          ║
+ * ║ Nên thang này chỉ còn trả lời ĐÚNG một câu hỏi: viền dày mỏng tới đâu, có  ║
+ * ║ hoa văn ở góc không. Không "bevel", không "gradient", không "shadow",      ║
+ * ║ không "glow" — `tests/test_gen_prompt.py` canh đúng những chữ ấy.          ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
 export const DECOR_LEVELS: readonly { value: string; vi: string; en: string }[] = [
-  { value: "1", vi: "1 · Trần trụi", en: "no border, no ornament, pure flat shape" },
-  { value: "2", vi: "2 · Tối giản", en: "a thin 1px border, no ornament" },
-  { value: "3", vi: "3 · Gọn", en: "a clean border with a soft inner shadow" },
-  { value: "4", vi: "4 · Vừa", en: "a beveled border with a subtle gradient face" },
-  { value: "5", vi: "5 · Có nhấn", en: "a thick beveled frame with corner accents" },
-  { value: "6", vi: "6 · Cầu kỳ", en: "an ornate frame with carved trim and inlays" },
-  { value: "7", vi: "7 · Lộng lẫy", en: "a heavily ornamented frame with gems, filigree and gold trim" },
+  { value: "1", vi: "1 · Trần trụi", en: "plain edge, no rim" },
+  { value: "2", vi: "2 · Tối giản", en: "a hairline rim" },
+  { value: "3", vi: "3 · Gọn", en: "a thin even rim" },
+  { value: "4", vi: "4 · Vừa", en: "a distinct rim" },
+  { value: "5", vi: "5 · Có nhấn", en: "a thick rim with corner accents" },
+  { value: "6", vi: "6 · Cầu kỳ", en: "a wide rim with a patterned band" },
+  { value: "7", vi: "7 · Lộng lẫy", en: "an ornate rim with corner ornaments" },
 ];
 
 /** Hạt giống — đọc từ danh mục THẬT của kit-core, không chép tay. */

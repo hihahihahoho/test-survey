@@ -50,7 +50,7 @@ import {
 } from "@/lib/types/contract";
 import { loadBundledV2 } from "@/features/design/library/lib/source";
 import type { LibElement } from "@/features/design/library/lib/types";
-import { buildStylePrompt } from "@/features/kit-form/lib/style-phrases";
+import { styleAxisPhrases, subjectAxisLine } from "@/features/kit-form/lib/style-phrases";
 import type { GlassLevel, KitElementSkel, SheetPromptTweak, WorkflowMascot, WorkflowState } from "./model";
 import { GLASS_LEVEL_SPEC, glazeFromMaterial, glazePreset, type GlazePreset } from "./glaze";
 import { isPropElement } from "./user-library";
@@ -677,9 +677,23 @@ export function contractCast(
    ảnh hưởng tới lượt gen mới nữa.
    ══════════════════════════════════════════════════════════════════════════ */
 
-/** Mô tả phong cách gửi cho `gen.sh` = ô mô tả + 7 trục ngữ nghĩa + điều không muốn. */
+/**
+ * Mô tả phong cách gửi cho `gen.sh` = ô mô tả + trục ngữ nghĩa + điều không muốn.
+ *
+ * ╔══ HAI THỨ BỊ CẮT KHỎI CÂU NÀY, VÀ CẢ HAI ĐỀU CÓ LÝ DO ĐO ĐƯỢC ═══════════╗
+ * ║ `gen.sh` in chuỗi này nguyên văn vào `## Art style` của MỌI tấm — nút bấm, ║
+ * ║ cảnh nền, nhân vật, không phân biệt. Nên câu chỉ được chứa thứ ĐÚNG cho    ║
+ * ║ mọi tấm:                                                                  ║
+ * ║  ① trục ở NẤC GIỮA không in (xem `styleAxisPhrases`);                     ║
+ * ║  ② trục cụm `subject` (tuổi · giới · năng lượng) không in ở đây — chúng tả ║
+ * ║    một con người, mà 15/16 tấm của một bộ kit không có người nào. Chúng đi ║
+ * ║    theo đường riêng vào chủ ngữ của ô dáng (xem `subjectAxisLine`).        ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
 export function buildVariantStyle(s: Pick<KitsetContractInput, "stylePrompt" | "styleAxes" | "styleAvoid">): string {
-  const parts = [s.stylePrompt.trim(), buildStylePrompt(s.styleAxes)].filter((p) => p.length > 0);
+  const parts = [s.stylePrompt.trim(), styleAxisPhrases(s.styleAxes, ["feel", "render"]).join(", ")].filter(
+    (p) => p.length > 0,
+  );
   const avoid = s.styleAvoid.trim();
   if (avoid) parts.push(`avoid: ${avoid}`);
   return parts.join(", ");
@@ -848,7 +862,11 @@ export function buildKitsetContract(s: KitsetContractInput, opts: BuildKitsetOpt
   /* TRANG PHỤC NẰM Ở SUBJECT, không ở mệnh đề dáng — nó tả CON NGƯỜI ấy, không tả cử
      động. Đặt nhầm chỗ (nối vào cuối câu dáng) thì với dáng `run` ta được "…arms
      swinging, wearing a football kit", và máy vẽ đọc ra "bộ đồ đang vung tay". */
-  const subject = character.outfit ? `${base} wearing ${character.outfit}` : base;
+  /* Ba trục TẢ NGƯỜI (tuổi · giới · năng lượng) đổ về ĐÂY, không về `variant.style`
+     — xem `buildVariantStyle`. Cả ba ở nấc giữa ⇒ chuỗi rỗng ⇒ câu không đổi một
+     ký tự nào so với trước, nên không dự án cũ nào bị đổi prompt vì lượt này. */
+  const dressed = character.outfit ? `${base} wearing ${character.outfit}` : base;
+  const subject = [dressed, subjectAxisLine(s.styleAxes)].filter(Boolean).join(", ");
   const charName = character.vi;
   const multi = cast.length > 1;
 

@@ -283,7 +283,13 @@ describe("hàng đợi vẽ — mỗi dự án MỘT lượt, thẻ sau xếp h�
 describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
   const sheet = { id: "nen", orient: "portrait", grid: { cols: 1, rows: 1 }, components: [] };
 
-  const mountBlock = (onWantPrompt: () => void, hash = "h1") => {
+  const IDLE = { status: "idle" as const, jobs: [], missing: [], message: "", details: [], hash: "" };
+
+  const mountBlock = (
+    onWantPrompt: () => void,
+    hash = "h1",
+    extra: { prompt?: typeof IDLE | Record<string, unknown>; styleLine?: string } = {},
+  ) => {
     const block = newDocBlock("background");
     return wrap(
       <CanvasBlock
@@ -295,8 +301,8 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
         gen={{ status: "idle", message: "", runId: null, done: 0, total: 0 }}
         onGen={() => {}}
         onDequeue={() => {}}
-        prompt={{ status: "idle", jobs: [], missing: [], message: "", details: [], hash: "" }}
-        styleLine=""
+        prompt={(extra.prompt ?? IDLE) as never}
+        styleLine={extra.styleLine ?? ""}
         onWantPrompt={onWantPrompt}
         promptBusy={false}
         hash={hash}
@@ -341,6 +347,69 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
     mountBlock(want);
     fireEvent.click(screen.getByRole("tab", { name: "Prompt" }));
     expect(want).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * ══ CON BỌ THẬT MÀ BA CA DƯỚI ĐÂY KHOÁ LẠI ════════════════════════════════
+   * Chủ sản phẩm copy prompt một tấm rồi dán sang chỗ hỏi máy vẽ. Hai thứ hỏng
+   * cùng lúc, cả hai đều im lặng:
+   *   ① chữ dán ra MỞ ĐẦU bằng câu phong cách đời cũ mà màn tự nối vào, rồi mới
+   *      tới prompt thật — bên trong prompt đã có câu phong cách đời mới. Hai
+   *      mệnh đề chồng nhau, máy vẽ nghe câu nào cũng sai;
+   *   ② ảnh tham chiếu đi kèm trong cùng một lượt copy bị chỗ dán bỏ đi, và máy
+   *      trả lời *"chưa có ảnh nguồn khả dụng"*.
+   * Nên: chữ phải là NGUYÊN VĂN prompt của engine, và ảnh phải có đường riêng
+   * cùng một câu dặn nói rõ còn mấy tấm phải dán.
+   */
+  const READY_PROMPT =
+    "Art style: soft rounded 3D clay-like.\nCanvas orientation: portrait.\nDraw one background.";
+  const ready = {
+    status: "ready",
+    jobs: [{
+      job: "chinh-nen",
+      variant: "chinh",
+      sheet: "nen",
+      prompt: READY_PROMPT,
+      /* Đúng hình dạng đời thật: một ảnh lặp lại ở hai vai, cộng một tấm khung
+         xương do bản engine cũ còn gửi. Cả hai đều không được hiện thành một ô. */
+      attachments: ["refs/mascot.png", "skeleton/nen.png", "refs/mascot.png"],
+    }],
+    missing: [],
+    message: "",
+    details: [],
+    hash: "h1",
+  };
+
+  /** `navigator.clipboard` không có sẵn trong jsdom — cắm vào rồi trả lại sau. */
+  const stubClipboard = () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    return writeText;
+  };
+
+  it("chữ hiện ra là NGUYÊN VĂN prompt của engine — câu phong cách của màn không chen vào", () => {
+    mountBlock(() => {}, "h1", { prompt: ready, styleLine: "clean vector shapes with flat fills" });
+    fireEvent.click(screen.getByRole("tab", { name: "Prompt" }));
+    expect(screen.getByLabelText("Prompt của tấm nen").textContent).toBe(READY_PROMPT);
+  });
+
+  it("bấm «Copy prompt» ⇒ vào bộ nhớ tạm đúng chữ ấy, và nhãn đổi thành «Đã copy»", async () => {
+    const writeText = stubClipboard();
+    mountBlock(() => {}, "h1", { prompt: ready, styleLine: "clean vector shapes with flat fills" });
+    fireEvent.click(screen.getByRole("tab", { name: "Prompt" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy prompt" }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(READY_PROMPT));
+    await screen.findByRole("button", { name: "Đã copy" });
+  });
+
+  it("câu dặn đếm ĐÚNG số ảnh thật: trùng lặp khử đi, tấm khung xương bỏ đi", () => {
+    mountBlock(() => {}, "h1", { prompt: ready });
+    fireEvent.click(screen.getByRole("tab", { name: "Prompt" }));
+    /* 3 đường dẫn vào, 1 tấm ảnh ra — và câu dặn phải nói 1, không nói 3. */
+    expect(screen.getByText(/dán 1 ảnh vào chat trước/)).toBeTruthy();
+    expect(screen.getByText("Ảnh tham chiếu (1)")).toBeTruthy();
   });
 });
 

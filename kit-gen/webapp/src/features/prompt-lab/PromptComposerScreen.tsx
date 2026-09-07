@@ -53,8 +53,8 @@ import "./prompt-lab.css";
 const ADD_ITEMS: { kind: BlockKind; label: string; hint: string; icon: React.ReactNode }[] = [
   {
     kind: "background",
-    label: "Cảnh nền",
-    hint: "Một cảnh nền: khung cảnh, không khí, ảnh tham chiếu",
+    label: "Background",
+    hint: "Một tấm nền: khung cảnh, không khí, bố cục",
     icon: <ImageIcon aria-hidden className="size-4" />,
   },
   {

@@ -31,6 +31,20 @@ export type PillKind =
   | "scene"
   | "mood"
   /**
+   * BỐ CỤC của thẻ Background — "chừa chỗ nào cho UI, dồn chi tiết vào đâu".
+   *
+   * ╔══ VÌ SAO NÓ THAY CHO PILL ẢNH CŨ ════════════════════════════════════════╗
+   * ║ Câu Background trước đây kết bằng «tham chiếu [🖼]» — một pill ảnh trần,   ║
+   * ║ không nói ảnh ấy đóng vai gì. Người dùng đính vào đó cả hai loại ảnh khác ║
+   * ║ hẳn nhau: ảnh CẢNH ("vẽ giống cái này") và ảnh PHÁC BỐ CỤC ("xếp chỗ như  ║
+   * ║ thế này"), rồi máy vẽ chép luôn nét vẽ nguệch ngoạc của bản phác.         ║
+   * ║ Nay bố cục là một pill ĐÚNG NGHĨA với ba nguồn: chọn sẵn, đính bản phác   ║
+   * ║ (đi vào `sheet.layoutRef`, `gen.sh` nói rõ "chỉ chép CHỖ ĐẶT"), hoặc gõ   ║
+   * ║ một câu riêng. Ảnh cảnh vẫn vào `sheet.ref` như cũ, qua pill khung cảnh.  ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  | "layout"
+  /**
    * ĐỤC NỀN — pill thay cho `material` từ 08/2026. Xem `glaze.ts`.
    */
   | "glaze"
@@ -97,14 +111,103 @@ const SCENES: readonly PillOption[] = [
   { value: "loading", vi: "Màn chờ", en: "a loading screen background" },
 ];
 
-/** Không khí / mood của cảnh nền. */
+/**
+ * Không khí của tấm background.
+ *
+ * ╔══ MỖI NẤC PHẢI MANG CHUYỂN ĐỘNG · ÁNH SÁNG · CHIỀU SÂU ══════════════════╗
+ * ║ Bản trước mỗi mục là hai chữ tính từ ("a festive celebratory mood, warm    ║
+ * ║ lanterns and confetti"). Đo trên ảnh thật: ra một tấm phông tĩnh, đẹp mà   ║
+ * ║ chết — không có gì đang chuyển động, không biết nguồn sáng ở đâu, mọi thứ  ║
+ * ║ nằm cùng một mặt phẳng. Nền game thì ngược lại: nó phải có thứ ĐANG động   ║
+ * ║ (đèn nhấp nháy, mây trôi, sương cuộn), một hướng sáng nói ra được, và ít   ║
+ * ║ nhất hai lớp XA/GẦN để lớp UI có chỗ đứng lên trên.                       ║
+ * ║ Nên mỗi mục dưới đây là ba mệnh đề theo đúng thứ tự ấy — chữ đời thường,   ║
+ * ║ không thuật ngữ nhiếp ảnh, vì máy vẽ đọc "sương cuộn thấp" tốt hơn         ║
+ * ║ "atmospheric perspective".                                                ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
 const MOODS: readonly PillOption[] = [
-  { value: "festive", vi: "Rộn ràng", en: "a festive celebratory mood, warm lanterns and confetti" },
-  { value: "calm", vi: "Yên bình", en: "a calm peaceful mood, soft diffused daylight" },
-  { value: "epic", vi: "Hoành tráng", en: "an epic dramatic mood, strong rim light and deep shadows" },
-  { value: "cozy", vi: "Ấm cúng", en: "a cozy intimate mood, warm indoor light" },
-  { value: "mysterious", vi: "Bí ẩn", en: "a mysterious moody atmosphere, fog and cool backlight" },
-  { value: "sunset", vi: "Hoàng hôn", en: "a golden-hour sunset atmosphere, long orange light" },
+  {
+    value: "festive",
+    vi: "Rộn ràng",
+    en: "a festive celebratory mood: lanterns blinking overhead, confetti drifting down through the air, fireworks going off far behind the rooftops",
+  },
+  {
+    value: "calm",
+    vi: "Yên bình",
+    en: "a calm peaceful mood: clouds drifting slowly across the sky, slanted sunlight falling over the ground, dust motes floating close to the viewer",
+  },
+  {
+    value: "epic",
+    vi: "Hoành tráng",
+    en: "an epic dramatic mood: strong rim light along every edge, dust and haze hanging in the air, god rays reaching down into the far distance",
+  },
+  {
+    value: "cozy",
+    vi: "Ấm cúng",
+    en: "a cosy intimate mood: a warm lamp glowing in the near foreground, its light spreading over everything around it, snow falling outside the window behind",
+  },
+  {
+    value: "mysterious",
+    vi: "Bí ẩn",
+    en: "a mysterious mood: fog curling low over the ground, cold moonlight coming from behind, fireflies blinking in the middle distance",
+  },
+  {
+    value: "night",
+    vi: "Sôi động ban đêm",
+    en: "a busy night mood: neon signs glowing along the street, their colours reflected in the wet ground underfoot, headlights streaking past far behind",
+  },
+  {
+    value: "dawn",
+    vi: "Bình minh",
+    en: "an early dawn mood: a low warm sun just breaking the horizon, mist lifting slowly off the ground, birds crossing the far sky",
+  },
+  {
+    value: "sunset",
+    vi: "Hoàng hôn",
+    en: "a golden-hour sunset mood: long orange light raking across everything, warm haze thickening with distance, dark silhouettes along the far horizon",
+  },
+];
+
+/**
+ * Bố cục của tấm background — CHỖ NÀO ĐỂ TRỐNG cho UI, chi tiết dồn vào đâu.
+ *
+ * Mỗi cụm EN nói ra hai vế ấy bằng số phần khung cụ thể ("the middle third"),
+ * không nói bằng tính từ ("balanced"): một tấm nền game hỏng hay không là ở chỗ
+ * cái nút bấm sắp đặt lên nó có nằm trên một vùng rối rắm hay không.
+ */
+const LAYOUTS: readonly PillOption[] = [
+  {
+    value: "center-clear",
+    vi: "thoáng giữa",
+    hint: "chỗ đặt UI",
+    en: "composition: keep the middle third of the frame open and low in detail so UI can sit there, and concentrate the detail along the top and bottom edges",
+  },
+  {
+    value: "top-clear",
+    vi: "thoáng phía trên",
+    en: "composition: keep the upper third of the frame open and low in detail so UI can sit there, and concentrate the detail in the lower half",
+  },
+  {
+    value: "bottom-clear",
+    vi: "thoáng phía dưới",
+    en: "composition: keep the lower third of the frame open and low in detail so UI can sit there, and concentrate the detail in the upper half",
+  },
+  {
+    value: "full",
+    vi: "kín toàn khung",
+    en: "composition: detail spread evenly across the whole frame, with no area held back for UI",
+  },
+  {
+    value: "low-horizon",
+    vi: "chân trời thấp",
+    en: "composition: horizon low in the frame with a wide open sky above it, and the detail concentrated along the bottom",
+  },
+  {
+    value: "high-horizon",
+    vi: "chân trời cao",
+    en: "composition: horizon high in the frame with a wide open foreground below it, and the detail concentrated along the top",
+  },
 ];
 
 /** Chữ hiện trên pill khi giá trị rỗng và kind KHÔNG có nghĩa kế thừa. */
@@ -119,6 +222,7 @@ const PLACEHOLDER: Record<PillKind, string> = {
   style: "theo chung",
   scene: "khung cảnh",
   mood: "không khí",
+  layout: "bố cục",
   /* "Không đục" chứ không phải "đục nền": pill để trống phải nói TRẠNG THÁI đang
      có (ô đặc), không nói tên của trục. Nhãn trục đã nằm ngay bên trái pill. */
   glaze: "không đục",
@@ -144,6 +248,7 @@ const NOUN: Record<PillKind, string> = {
   style: "phong cách",
   scene: "khung cảnh",
   mood: "không khí",
+  layout: "bố cục",
   glaze: "đục nền",
   material: "chất liệu",
   decor: "mức viền",
@@ -169,7 +274,11 @@ export function nounOf(kind: PillKind): string {
 export function pillOptions(kind: PillKind, presets: PresetBundle = getPresets()): PillOption[] {
   switch (kind) {
     case "theme":
-      return OUTFIT_THEMES.map((option) => ({ value: option.value, vi: option.label, en: option.value }));
+      /* `kitEN`, KHÔNG phải `value`: pill này nói về CẢ BỘ KIT (mô-típ, màu, biểu
+         tượng) và cụm của nó đi vào `## Art style` của mọi tấm. `value` là cụm
+         TRANG PHỤC — nó vẫn là id ổn định của mục, và vẫn được pill `outfit` dùng
+         đúng nghĩa của nó ở dưới. Xem `ThemeOption.kitEN`. */
+      return OUTFIT_THEMES.map((option) => ({ value: option.value, vi: option.label, en: option.kitEN }));
 
     case "style":
       return presets.styles.map((preset) => ({ value: preset.id, vi: preset.vi, en: preset.en }));
@@ -179,6 +288,9 @@ export function pillOptions(kind: PillKind, presets: PresetBundle = getPresets()
 
     case "mood":
       return [...MOODS];
+
+    case "layout":
+      return [...LAYOUTS];
 
     case "glaze":
       /* `glazePhrase` chứ không phải `preset.en`: `en` của "Kính trong" RỖNG (câu
@@ -259,7 +371,11 @@ export function refRoleOf(kind: PillKind): "theme" | "style" | "" {
  * pill nhân vật mất luôn nấc «Đính ảnh».
  */
 export function takesImage(kind: PillKind): boolean {
-  return kind === "mascot" || refRoleOf(kind) !== "";
+  /* `layout` là ca THỨ HAI cùng họ với `mascot`: ảnh của nó KHÔNG đi qua
+     `contextRefs` (nó không tả cả bộ kit) mà thành `sheet.layoutRef` của đúng tấm
+     background ấy — một bản phác bố cục, và `gen.sh` nói rõ với máy vẽ rằng chỉ
+     được chép CHỖ ĐẶT từ nó chứ không chép nét vẽ. Xem `PillKind.layout`. */
+  return kind === "mascot" || kind === "layout" || refRoleOf(kind) !== "";
 }
 
 /**
