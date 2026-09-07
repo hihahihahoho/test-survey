@@ -195,7 +195,9 @@ describe("hàng đợi vẽ — mỗi dự án MỘT lượt, thẻ sau xếp h�
     await waitFor(() => expect(statusOf("b2")).toBe("running"));
     expect(H.startRun).toHaveBeenCalledTimes(2);
     // Đúng thứ tự FIFO: thẻ b2 chạy SAU, với job của chính nó.
-    expect(H.startRun.mock.calls[1]![1]).toMatchObject({ jobs: ["chinh-b2"], maxJobs: 1, autoSliceAfterGen: false });
+    // `autoSliceAfterGen: true` là HỢP ĐỒNG, không phải chi tiết: tab «Đã crop» và
+    // Copy Figma của thẻ chỉ có dữ liệu khi agent cắt ngay sau khi vẽ (xem `useGenerateRun`).
+    expect(H.startRun.mock.calls[1]![1]).toMatchObject({ jobs: ["chinh-b2"], maxJobs: 1, autoSliceAfterGen: true });
   });
 
   it("409 RUN_CONFLICT (lượt của tab khác) ⇒ vẫn xếp hàng, KHÔNG hiện lỗi", async () => {
