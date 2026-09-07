@@ -71,13 +71,22 @@ function withExtraText(doc: JSONContent, extra: string): JSONContent {
   };
 }
 
-/** Đặt ảnh (đã tải lên) vào pill ảnh ĐẦU TIÊN của tài liệu. */
+/**
+ * Đặt ảnh (đã tải lên) vào pill MANG ẢNH đầu tiên của tài liệu.
+ *
+ * Hai loại node cùng mang ảnh từ 09/2026: `imagePill` (ảnh của thẻ Cảnh nền) và
+ * `optionPill` có ảnh riêng (theme · phong cách · nhân vật). Helper phải biết cả
+ * hai, nếu không mỗi câu lại cần một helper — và ca test sẽ đo hai đường khác
+ * nhau cho cùng một luật.
+ */
 function withImage(doc: JSONContent, refName: string): JSONContent {
   let done = false;
   const walk = (node: JSONContent): JSONContent => {
-    if (node.type === NODE.imagePill && !done) {
+    if (done) return node;
+    const takes = node.type === NODE.imagePill || (node.type === NODE.optionPill && node.attrs?.["kind"] === "mascot");
+    if (takes) {
       done = true;
-      return { ...node, attrs: { refName, path: `refs/${refName}` } };
+      return { ...node, attrs: { ...node.attrs, refName, path: `refs/${refName}` } };
     }
     return node.content ? { ...node, content: node.content.map(walk) } : node;
   };
@@ -563,8 +572,9 @@ describe("ảnh của pill — không còn blob:, và không có đường thoá
     });
     const out = serializeComposer(s, PRESETS);
     expect(out).toContain("[ảnh tham chiếu 1]");
-    /* Pill ảnh của câu Nhân vật chưa chọn ảnh ⇒ móc KHÔNG số. */
-    expect(out).toContain("[ảnh tham chiếu]");
+    /* Pill NHÂN VẬT chưa chọn ảnh ⇒ KHÔNG móc nào cả. Bản trước để lại một móc
+       không số cho pill ảnh rỗng; nay pill rỗng nghĩa là chưa có nguồn nào, và
+       hứa một tấm đính kèm không tồn tại là nói dối người sắp dán prompt đi. */
     expect(out).not.toContain("[ảnh tham chiếu 2]");
     expect(countComposerImages(s)).toBe(1);
   });
@@ -742,12 +752,74 @@ describe("chữ tự gõ thắng preset, và đi NGUYÊN VĂN", () => {
     /* Pill `outfit` để trống + có chữ tự gõ: rỗng vốn nghĩa là "theo theme chung",
        nhưng người dùng vừa trả lời câu hỏi ấy bằng chữ của họ. */
     para.content = para.content!.map((node) =>
-      node.type === NODE.optionPill ? { ...node, attrs: { ...node.attrs, custom: "áo dài gấm đỏ" } } : node,
+      node.type === NODE.optionPill && node.attrs!["kind"] === "outfit"
+        ? { ...node, attrs: { ...node.attrs, custom: "áo dài gấm đỏ" } }
+        : node,
     );
     const contract = composerToContract(state({ blocks: [mascotBlock("m1", doc)] }), { presets: PRESETS });
     const spec = contract.sheets[0]!.components[0]!.spec;
     expect(spec).toContain("áo dài gấm đỏ");
     expect(spec).not.toContain(phraseOf("theme", OUTFIT_THEMES[0]!.value, PRESETS));
+  });
+});
+
+/**
+ * DANH TÍNH NHÂN VẬT — ba nguồn, một chủ ngữ.
+ *
+ * Đây là chỗ hỏng IM LẶNG nhất của cả lượt này: chủ ngữ sai không làm contract
+ * đỏ, không làm test schema đỏ — nó chỉ làm máy vẽ ra một con khác với con người
+ * dùng vừa chọn, sau khi đã tiêu một lượt tiền.
+ */
+describe("pill nhân vật: ba nguồn đều tới được chủ ngữ của mọi ô", () => {
+  /** Đặt nguồn cho pill nhân vật của câu đầu thẻ. */
+  const withMascot = (attrs: Record<string, unknown>): JSONContent => {
+    const doc = mascotDoc();
+    const para = doc.content![0]!;
+    para.content = para.content!.map((node) =>
+      node.type === NODE.optionPill && node.attrs!["kind"] === "mascot"
+        ? { ...node, attrs: { ...node.attrs, ...attrs } }
+        : node,
+    );
+    return doc;
+  };
+
+  const specOf = (doc: JSONContent) =>
+    composerToContract(state({ blocks: [mascotBlock("m1", doc)] }), { presets: PRESETS })
+      .sheets[0]!.components[0]!.spec;
+
+  it("CHỌN SẴN một nhân vật thư viện ⇒ cụm EN của nó LÀ chủ ngữ", () => {
+    const preset = PRESETS.mascots[0]!;
+    const spec = specOf(withMascot({ value: preset.id }));
+    expect(spec).toContain(preset.en);
+    /* Câu sàn "the same original mascot character" chỉ dành cho ca KHÔNG có
+       nguồn nào — còn để lại là hai chủ ngữ đá nhau trong một câu. */
+    expect(spec).not.toContain("the same original mascot character");
+  });
+
+  it("GÕ RIÊNG ⇒ chữ người dùng đi NGUYÊN VĂN vào chủ ngữ, thắng cả preset", () => {
+    const preset = PRESETS.mascots[0]!;
+    const spec = specOf(withMascot({ value: preset.id, custom: "một chú mèo mướp đội nón lá" }));
+    expect(spec).toContain("một chú mèo mướp đội nón lá");
+    expect(spec).not.toContain(preset.en);
+  });
+
+  it("ĐÍNH ẢNH ⇒ `sheet.ref` + chủ ngữ trỏ vào tấm ảnh, chữ đi KÈM chứ không mất", () => {
+    const preset = PRESETS.mascots[0]!;
+    const contract = composerToContract(
+      state({ blocks: [mascotBlock("m1", withMascot({ value: preset.id, path: "refs/lan.png", refName: "lan.png" }))] }),
+      { presets: PRESETS },
+    );
+    const sheet = contract.sheets[0]!;
+    expect(sheet.ref).toBe("refs/lan.png");
+    const spec = sheet.components[0]!.spec;
+    expect(spec).toContain("the SAME character from the reference photo");
+    expect(spec).toContain(preset.en);
+  });
+
+  it("KHÔNG nguồn nào ⇒ vẫn có chủ ngữ sàn, tấm không có `ref`", () => {
+    const contract = composerToContract(state({ blocks: [mascotBlock("m1", mascotDoc())] }), { presets: PRESETS });
+    expect(contract.sheets[0]!.ref).toBeUndefined();
+    expect(contract.sheets[0]!.components[0]!.spec).toContain("the same original mascot character");
   });
 });
 
@@ -826,19 +898,67 @@ describe("di trú: bản nháp đời trước không có bốn trường mới"
     expect(doc.composer.brandAssets).toEqual({ a1: "refs/logo.png" });
   });
 
-  it("thẻ Nhân vật đời trước được gán vai trò `character` cho pill ảnh", () => {
+  it("pill ảnh RỜI của thẻ Nhân vật đời trước ⇒ gấp vào pill nhân vật, ảnh còn nguyên", () => {
+    /* Hình dạng THẬT của câu đầu thẻ ở hai lượt trước (52bf64a · 42cb8ce): một
+       `imagePill` vai `character` đứng đúng chỗ mà pill nhân vật nay đứng. */
+    const legacy: JSONContent = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Tạo nhân vật " },
+            { type: NODE.imagePill, attrs: { refName: "lan.png", path: "refs/lan.png", role: "character" } },
+            { type: "text", text: ", trang phục " },
+            { type: NODE.optionPill, attrs: { kind: "outfit", value: OUTFIT_THEMES[1]!.value, custom: "" } },
+            { type: "text", text: " và đội nón lá." },
+          ],
+        },
+      ],
+    };
     const doc = migrateComposerDoc(
-      saved({ blocks: [{ id: "m1", kind: "mascot", mode: "template", doc: mascotDoc(), poses: [] }] }),
+      saved({ blocks: [{ id: "m1", kind: "mascot", mode: "free", doc: legacy, poses: [] }] }),
       PRESETS,
     );
-    const head = (doc.composer.blocks[0] as { doc: JSONContent }).doc;
-    const image = head.content![0]!.content!.find((node) => node.type === NODE.imagePill)!;
-    expect(image.attrs!["role"]).toBe("character");
+    const nodes = (doc.composer.blocks[0] as { doc: JSONContent }).doc.content![0]!.content!;
+
+    /* Không còn node ảnh rời nào — một pill là một nguồn. */
+    expect(nodes.some((node) => node.type === NODE.imagePill)).toBe(false);
+    const mascot = nodes.find((node) => node.type === NODE.optionPill && node.attrs!["kind"] === "mascot")!;
+    expect(mascot.attrs!["path"]).toBe("refs/lan.png");
+
+    /* Chữ NGƯỜI DÙNG viết thêm ở chế độ tự do phải sống sót: câu này là câu họ
+       được phép viết, nên di trú không được dựng lại nó từ khuôn. */
+    expect(JSON.stringify(nodes)).toContain("và đội nón lá");
+    /* Trang phục cũ không bị đụng tới. */
+    expect(nodes.find((node) => node.attrs?.["kind"] === "outfit")!.attrs!["value"]).toBe(OUTFIT_THEMES[1]!.value);
+  });
+
+  it("ảnh RỜI trong câu Ngữ cảnh chung ⇒ về đúng pill nó minh hoạ", () => {
+    const legacy: JSONContent = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Bộ kit theme " },
+            { type: NODE.optionPill, attrs: { kind: "theme", value: OUTFIT_THEMES[0]!.value, custom: "" } },
+            { type: NODE.imagePill, attrs: { refName: "tet.png", path: "refs/tet.png", role: "theme" } },
+            { type: "text", text: " phong cách " },
+            { type: NODE.optionPill, attrs: { kind: "style", value: "", custom: "" } },
+          ],
+        },
+      ],
+    };
+    const doc = migrateComposerDoc(saved({ blocks: [], contextDoc: legacy }), PRESETS);
+    const nodes = doc.composer.contextDoc!.content![0]!.content!;
+    expect(nodes.some((node) => node.type === NODE.imagePill)).toBe(false);
+    expect(nodes.find((node) => node.attrs?.["kind"] === "theme")!.attrs!["path"]).toBe("refs/tet.png");
   });
 });
 
 describe("câu Ngữ cảnh chung dựng lại được TỪ trạng thái, kể cả ảnh và chữ tự gõ", () => {
-  it("`contextDoc` mang `custom` xuống pill và đặt ảnh NGAY SAU pill nó minh hoạ", () => {
+  it("`contextDoc` mang `custom` VÀ ảnh xuống chính pill nó minh hoạ", () => {
     const doc = contextDoc(
       state({
         themeCustom: "chợ hoa ngày Tết",
@@ -851,8 +971,9 @@ describe("câu Ngữ cảnh chung dựng lại được TỪ trạng thái, kể
     const nodes = doc.content![0]!.content!;
     const themeAt = nodes.findIndex((n) => n.type === NODE.optionPill && n.attrs!["kind"] === "theme");
     expect(nodes[themeAt]!.attrs!["custom"]).toBe("chợ hoa ngày Tết");
-    expect(nodes[themeAt + 1]!.type).toBe(NODE.imagePill);
-    expect(nodes[themeAt + 1]!.attrs!["path"]).toBe("refs/tet.png");
+    /* Ảnh nằm TRONG pill, không phải một node đứng cạnh — một pill là một nguồn. */
+    expect(nodes[themeAt]!.attrs!["path"]).toBe("refs/tet.png");
+    expect(nodes.some((n) => n.type === NODE.imagePill)).toBe(false);
     /* Ảnh vai `logo` KHÔNG có mặt trong câu — nó là tài sản của thương hiệu, và
        pill thương hiệu đã nói ra điều đó. */
     expect(JSON.stringify(doc)).not.toContain("refs/logo.png");

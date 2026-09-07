@@ -21,22 +21,23 @@ import type { ContextRef, UiCell } from "./composer-model";
 
 const text = (value: string): JSONContent => ({ type: "text", text: value });
 
-const pill = (kind: PillKind, value: string, custom = ""): JSONContent => ({
+/**
+ * Một pill chọn-một.
+ *
+ * `path`/`refName` luôn có mặt (rỗng khi chưa có ảnh) chứ không bị bỏ khi trống:
+ * ProseMirror điền attr mặc định lúc nạp, và một tài liệu dựng tay thiếu attr sẽ
+ * KHÁC tài liệu ProseMirror trả về ngay nhịp đầu — mà hai chỗ so tài liệu bằng
+ * `JSON.stringify` (`poseEdited`, `cellEdited`) đọc chênh lệch ấy thành "người
+ * dùng đã sửa" và hỏi một câu không ai gây ra.
+ */
+const pill = (kind: PillKind, value: string, custom = "", image?: { path: string }): JSONContent => ({
   type: NODE.optionPill,
-  attrs: { kind, value, custom },
+  attrs: { kind, value, custom, path: image?.path ?? "", refName: "" },
 });
 
 /* Pill ảnh RỖNG: chưa có ảnh nào trên đĩa. Ba trường rỗng chứ không phải
    `null` — đúng giá trị mặc định của attr, xem `EMPTY_PILL_IMAGE`. */
 const imagePill = (role = ""): JSONContent => ({ type: NODE.imagePill, attrs: { refName: "", path: "", role } });
-
-/* Pill ảnh ĐÃ CÓ tấm trên đĩa — dùng khi dựng lại câu ngữ cảnh từ `contextRefs`.
-   `refName` để rỗng: `readPillImage` tự suy nó ra từ `path` khi thiếu, và chép
-   một cái tên vào đây là mở đường cho hai chỗ ghi hai tên cho một tệp. */
-const refPill = (ref: ContextRef): JSONContent => ({
-  type: NODE.imagePill,
-  attrs: { refName: "", path: ref.path, role: ref.role },
-});
 
 /* ── Block BACKGROUND ─────────────────────────────────────────────────────── */
 
@@ -89,12 +90,11 @@ export function mascotDoc(): JSONContent {
         type: "paragraph",
         content: [
           text(a),
-          /* `role: "character"` — pill này KHÔNG đổi chỗ đi đâu trong contract (nó
-             vẫn là `sheet.ref` của tấm dáng, đúng như trước), nhưng vai trò khai ra
-             cho phép menu của nó mời «Mascot của <thương hiệu>». Ảnh của thẻ Cảnh
-             nền để rỗng vai trò, nên nó không nhận lời mời ấy — mời một linh vật
-             làm ảnh tham chiếu cho một cảnh nền là mời sai chỗ. */
-          imagePill("character"),
+          /* Pill NHÂN VẬT, không phải pill ảnh. Câu hỏi ở đây là "con này là ai",
+             và ảnh chỉ là MỘT trong ba cách trả lời (xem `PillKind.mascot`). Ảnh
+             của pill này vẫn đi đúng chỗ cũ trong contract — `sheet.ref` của tấm
+             dáng, xem `mascotSheets`. */
+          pill("mascot", INHERIT),
           text(b),
           /* Rỗng = kế thừa theme tổng ở đầu tài liệu. Mặc định đúng ngay, và
              người dùng vẫn bấm để ghi đè cho riêng nhân vật này. */
@@ -160,12 +160,13 @@ export const SCAFFOLD_CONTEXT = ["Bộ kit theme ", " phong cách ", ", thương
  * chỗ giờ gõ được vào giữa. Đó là điều kiện để công tắc không làm người ta mất
  * phương hướng.
  *
- * ╔══ ẢNH ĐI THEO PILL NÓ MINH HOẠ, KHÔNG DỒN VỀ CUỐI CÂU ═══════════════════╗
- * ║ `contextRefs` mang sẵn vai trò của từng tấm, nên tấm `theme` được đặt ngay ║
- * ║ sau pill theme và tấm `style` ngay sau pill phong cách — đúng chỗ mà mục   ║
- * ║ «Đính ảnh tham chiếu» của chính pill ấy chèn vào ở chế độ tự do. Nhờ vậy   ║
- * ║ gạt công tắc qua lại không làm ảnh nhảy chỗ, và câu vẫn đọc được thành     ║
- * ║ "theme [Tết][🖼]".                                                        ║
+ * ╔══ ẢNH NẰM TRONG CHÍNH PILL NÓ MINH HOẠ ══════════════════════════════════╗
+ * ║ `contextRefs` mang sẵn vai trò của từng tấm, nên tấm `theme` đi vào pill   ║
+ * ║ theme và tấm `style` vào pill phong cách — đúng chỗ mà nấc «Đính ảnh» của  ║
+ * ║ chính pill ấy ghi vào ở chế độ tự do. Hai chế độ vì thế đọc và ghi cùng    ║
+ * ║ một ô, và gạt công tắc qua lại không làm ảnh nhảy chỗ.                     ║
+ * ║ (Bản trước thả một node ảnh RỜI ngay sau pill. Nó đọc được, nhưng là hai   ║
+ * ║ vật cho một câu trả lời — xem attr `path` ở `extensions/OptionPill.tsx`.)  ║
  * ║ Ảnh vai `logo` KHÔNG có mặt trong câu: nó không phải một mệnh đề người     ║
  * ║ dùng viết ra mà là tài sản của thương hiệu đang chọn, và pill thương hiệu  ║
  * ║ đã nói ra điều đó rồi. Nó vẫn đi tới `variant.brand.refs` như thường.      ║
@@ -180,7 +181,12 @@ export function contextDoc(state: {
 }): JSONContent {
   const [a, b, c, d, e] = SCAFFOLD_CONTEXT;
   const refs = state.contextRefs ?? [];
-  const shots = (role: ContextRef["role"]) => refs.filter((ref) => ref.role === role && ref.path).map(refPill);
+  /* TẤM ĐẦU TIÊN của vai trò, không phải cả danh sách: một pill là một nguồn.
+     Bản nháp đời trước có thể mang nhiều tấm cùng vai (câu cũ cho đính nhiều
+     lần) — những tấm sau vẫn nằm nguyên trong `contextRefs` và vẫn tới
+     `variant.inspo`, chỉ là câu không vẽ chúng ra. Bỏ chúng đi ở đây là xoá ảnh
+     người dùng đã tải lên chỉ vì hình dạng câu đổi. */
+  const shot = (role: ContextRef["role"]) => refs.find((ref) => ref.role === role && ref.path);
   return {
     type: "doc",
     content: [
@@ -188,11 +194,9 @@ export function contextDoc(state: {
         type: "paragraph",
         content: [
           text(a),
-          pill("theme", state.themeValue, state.themeCustom ?? ""),
-          ...shots("theme"),
+          pill("theme", state.themeValue, state.themeCustom ?? "", shot("theme")),
           text(b),
-          pill("style", state.styleId, state.styleCustom ?? ""),
-          ...shots("style"),
+          pill("style", state.styleId, state.styleCustom ?? "", shot("style")),
           text(c),
           /* Node RỖNG, thương hiệu đọc từ ngữ cảnh — xem `NODE.brandProfilePill`. */
           { type: NODE.brandProfilePill },
@@ -334,11 +338,13 @@ export const PILL_SLOTS: Record<"uikit" | "background" | "mascot" | "mascotPose"
   uikit: ["style", "glaze", "decor"],
   background: ["scene", "mood"],
   /* Đổi 09/2026 cùng lượt tách thẻ Nhân vật thành sprite sheet: câu ĐẦU THẺ nay
-     chỉ còn pill trang phục, còn dáng/góc/nét mặt xuống dòng (`mascotPose`). Tài
-     liệu đời trước có ba pill ở câu đầu — nhưng chúng KHÔNG đi qua bảng này nữa:
-     `readMascotBlock` dựng lại câu đầu từ template mới, nên bảng chỉ phải đúng
-     cho hình dạng HIỆN TẠI. */
-  mascot: ["outfit"],
+     chỉ còn danh tính nhân vật + trang phục, còn dáng/góc/nét mặt xuống dòng
+     (`mascotPose`). Tài liệu đời trước có ba pill ở câu đầu — nhưng chúng KHÔNG
+     đi qua bảng này nữa: `readMascotBlock` dựng lại câu đầu từ template mới, nên
+     bảng chỉ phải đúng cho hình dạng HIỆN TẠI.
+     Ô đầu là `mascot` từ lượt hộp nguồn dùng chung: pill ảnh nhân vật đã thành
+     một pill chọn-một, nên nó ĐẾM trong phép gán theo vị trí. */
+  mascot: ["mascot", "outfit"],
   mascotPose: ["pose", "view", "expression"],
   context: ["theme", "style"],
 };
@@ -479,13 +485,26 @@ export function pillCustomOf(doc: JSONContent): Partial<Record<PillKind, string>
  * Ảnh KHÔNG khai vai trò (`role: ""`) bị bỏ qua: đó là pill ảnh của một thẻ, và
  * ở câu ngữ cảnh thì nó không có ô nào trong contract để đi tới. Ảnh vai `logo`
  * cũng không đến từ đây — nó không bao giờ được đặt vào câu (xem `contextDoc`).
+ *
+ * ══ HAI HÌNH DẠNG CÙNG ĐƯỢC ĐỌC, VÀ ĐÓ KHÔNG PHẢI DO DỰ ═══════════════════
+ * Từ 09/2026 ảnh nằm TRONG pill (`optionPill.path`, vai trò suy từ `kind`).
+ * Nhưng bản nháp lưu trước lượt ấy có ảnh là một `imagePill` RỜI đứng cạnh pill,
+ * và bộ di trú chỉ chạy lúc MỞ dự án — trong khi hàm này chạy sau MỖI NHỊP GÕ ở
+ * chế độ tự do. Bỏ nhánh cũ đi thì một câu chưa kịp di trú sẽ im lặng đánh rơi
+ * tấm ảnh của nó vào đúng lần gõ đầu tiên.
  */
 export function contextRefsOf(doc: JSONContent): ContextRef[] {
   const out: ContextRef[] = [];
   const walk = (node: JSONContent) => {
+    const attrs = node.attrs ?? {};
+    const path = attrs["path"];
+    if (node.type === NODE.optionPill) {
+      const role = attrs["kind"];
+      if (typeof path === "string" && path && (role === "theme" || role === "style")) {
+        out.push({ path, role });
+      }
+    }
     if (node.type === NODE.imagePill) {
-      const attrs = node.attrs ?? {};
-      const path = attrs["path"];
       const role = attrs["role"];
       if (typeof path === "string" && path && (role === "theme" || role === "style")) {
         out.push({ path, role });

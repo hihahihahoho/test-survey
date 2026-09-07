@@ -132,7 +132,7 @@ export function BrandPickerPill({ binding }: { binding: BrandBinding }) {
 
           {binding.brandId !== "" && binding.colorsEdited && (
             <>
-              <div aria-hidden className="my-1 h-px bg-line-subtle" />
+              <span aria-hidden className="my-1 block h-px bg-line-subtle" />
               <PillMenuItem
                 onSelect={() => {
                   binding.restoreColors();
@@ -147,7 +147,7 @@ export function BrandPickerPill({ binding }: { binding: BrandBinding }) {
 
           {binding.manage && (
             <>
-              <div aria-hidden className="my-1 h-px bg-line-subtle" />
+              <span aria-hidden className="my-1 block h-px bg-line-subtle" />
               <PillMenuItem
                 onSelect={() => {
                   menu.setOpen(false);

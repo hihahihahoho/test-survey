@@ -50,7 +50,21 @@ export type PillKind =
    */
   | "view"
   | "expression"
-  | "outfit";
+  | "outfit"
+  /**
+   * NHÂN VẬT của câu đầu thẻ Nhân vật — "con này là ai".
+   *
+   * ╔══ VÌ SAO NÓ LÀ MỘT PILL CHỌN-MỘT, KHÔNG PHẢI MỘT Ô CHỌN ẢNH ═════════════╗
+   * ║ Bản trước câu đầu thẻ là «Tạo nhân vật [🖼 ảnh]» — một pill ảnh, và hết.  ║
+   * ║ Chủ sản phẩm nhìn màn và nói: *"tạo nhân vật cũng sẽ cho chọn theo thương ║
+   * ║ hiệu ấy, thay vì fix sẵn up ảnh luôn"*. Đúng: "ai" trả lời được bằng ba   ║
+   * ║ thứ — một nhân vật mẫu trong danh mục, một tấm ảnh, hoặc một câu tả. Đóng ║
+   * ║ cứng vào ảnh là bắt người chưa có ảnh phải đi vẽ một tấm trước khi dùng   ║
+   * ║ được công cụ vẽ. Nên nó là pill chọn-một y như theme/phong cách, và ảnh   ║
+   * ║ chỉ là MỘT trong ba nguồn của cùng cái pill ấy.                          ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  | "mascot";
 
 export interface PillOption {
   /** Thứ nằm trong attrs của node. */
@@ -59,6 +73,8 @@ export interface PillOption {
   vi: string;
   /** Cụm tiếng Anh đi vào prompt. */
   en: string;
+  /** Dòng ghi chú phụ trong hộp chọn — không đi vào prompt. */
+  hint?: string;
 }
 
 /**
@@ -112,7 +128,36 @@ const PLACEHOLDER: Record<PillKind, string> = {
   view: "góc máy",
   expression: "biểu cảm",
   outfit: "theo theme chung",
+  mascot: "chọn nhân vật",
 };
+
+/**
+ * TÊN GỌI của trục, dùng trong nhãn trợ năng («Nguồn cho phong cách»).
+ *
+ * Không dùng lại `PLACEHOLDER`: chữ ở đó là chữ hiện TRÊN PILL khi để trống, nên
+ * nó nói TRẠNG THÁI («theo chung», «không đục», «chọn nhân vật»). Ghép nó vào một
+ * câu là ra "Nguồn cho theo chung" — trình đọc màn hình đọc đúng câu ấy. Hai việc
+ * khác nhau thì hai bảng, kể cả khi vài ô trùng chữ.
+ */
+const NOUN: Record<PillKind, string> = {
+  theme: "chủ đề",
+  style: "phong cách",
+  scene: "khung cảnh",
+  mood: "không khí",
+  glaze: "đục nền",
+  material: "chất liệu",
+  decor: "mức viền",
+  pose: "dáng",
+  view: "góc máy",
+  expression: "biểu cảm",
+  outfit: "trang phục",
+  mascot: "nhân vật",
+};
+
+/** Tên trục để ghép vào câu — xem `NOUN`. */
+export function nounOf(kind: PillKind): string {
+  return NOUN[kind];
+}
 
 /**
  * Danh sách lựa chọn của một kind.
@@ -164,6 +209,19 @@ export function pillOptions(kind: PillKind, presets: PresetBundle = getPresets()
 
     case "outfit":
       return OUTFIT_THEMES.map((option) => ({ value: option.value, vi: option.label, en: option.value }));
+
+    case "mascot":
+      /* `refName` của preset CHỈ là một ghi chú chữ, không phải một tấm ảnh có
+         thật (xem khối ẢNH TRONG PRESET ở `presets-store.ts`). Nên nó đi vào
+         `hint` để người dùng biết preset này nhắc tới tấm nào, chứ KHÔNG được
+         dựng thành thumbnail — vẽ một ô ảnh cho một tệp không tồn tại là hứa
+         một thứ bấm vào không có gì. */
+      return presets.mascots.map((preset) => ({
+        value: preset.id,
+        vi: preset.vi,
+        en: preset.en,
+        ...(preset.refName ? { hint: `ảnh gợi ý: ${preset.refName}` } : {}),
+      }));
   }
 }
 
@@ -183,6 +241,19 @@ export function refRoleOf(kind: PillKind): "theme" | "style" | "" {
   if (kind === "theme") return "theme";
   if (kind === "style") return "style";
   return "";
+}
+
+/**
+ * Pill này CÓ NHẬN ẢNH không.
+ *
+ * Rộng hơn `refRoleOf` đúng một ca, và ca ấy đáng được nói ra: pill `mascot`
+ * nhận ảnh, nhưng tấm ảnh của nó KHÔNG đi qua `contextRefs` — nó là `sheet.ref`
+ * của chính tấm dáng ấy (xem `mascotSheets`). Gộp hai câu hỏi vào một hàm thì
+ * hoặc là ảnh nhân vật bị đẩy nhầm vào `variant.inspo` của cả bộ kit, hoặc là
+ * pill nhân vật mất luôn nấc «Đính ảnh».
+ */
+export function takesImage(kind: PillKind): boolean {
+  return kind === "mascot" || refRoleOf(kind) !== "";
 }
 
 /** Kind này có nghĩa "để trống = kế thừa ngữ cảnh chung" không. */

@@ -181,6 +181,12 @@ function scanDoc(node: PromptDocNode | null | undefined, out: DocScan = { pills:
     const value = typeof node.attrs?.["value"] === "string" ? (node.attrs["value"] as string) : "";
     const custom = typeof node.attrs?.["custom"] === "string" ? (node.attrs["custom"] as string) : "";
     if (kind) out.pills.push({ kind, value, custom });
+    /* Pill chọn-một cũng MANG ẢNH từ 09/2026 (theme · phong cách · nhân vật —
+       xem attr `path` ở `extensions/OptionPill.tsx`). Quên nhánh này thì tấm ảnh
+       nhân vật người dùng vừa tải lên không bao giờ thành `sheet.ref`, và cả tấm
+       dáng được vẽ bằng chữ suông trong khi ảnh nằm im trên đĩa. */
+    const pillImage = readPillImage(node.attrs);
+    if (pillImage.path) out.images.push(pillImage);
     return out;
   }
   if (node.type === NODE.imagePill) {
@@ -400,6 +406,9 @@ function mascotSheets(
      `subject` ngay dưới. Cùng luật với `uiKitSheets`. */
   const rowCtx = makeContext({ styleEN: "", themeEN: "", presets, imageCounter: { count: 0 } });
 
+  /* DANH TÍNH nhân vật — lấy RA trước `leftover` để nó không bị nối thêm một lần
+     nữa ở cuối `subject`. */
+  const identity = hitPhrase(take(scan, "mascot"), presets);
   const outfitHit = take(scan, "outfit");
   /* Trang phục để trống = theo theme chung — nhưng CHỮ TỰ GÕ vẫn thắng cả luật
      kế thừa ấy: người dùng gõ một bộ đồ riêng cho nhân vật này thì họ đã trả lời
@@ -410,11 +419,29 @@ function mascotSheets(
       : hitPhrase(outfitHit, presets);
   const ref = scan.images[0]?.path ?? "";
 
-  /* Có ảnh mẫu thì SUBJECT là chính tấm ảnh ấy (kèm `note` POSE_NOTE ở tấm);
-     không có thì phải tả bằng chữ, nếu không máy vẽ tự bịa ra một con khác nhau
-     ở mỗi lượt. */
-  const base = ref ? "the SAME character from the reference photo" : "the same original mascot character";
-  const subject = [base, outfit ? `wearing ${outfit}` : "", ...leftover(scan, presets)].filter(Boolean).join(", ");
+  /**
+   * CHỦ NGỮ của mọi ô — "con này là ai".
+   *
+   * ══ BA NGUỒN, MỘT THỨ TỰ ƯU TIÊN, VÀ NÓ KHÔNG TUỲ TIỆN ═══════════════════
+   * Có ẢNH ⇒ ảnh nói trước, luôn luôn: một tấm ảnh tả nhân vật chính xác hơn mọi
+   * câu chữ, và `gen.sh` gọi đích danh "the attached character REFERENCE PHOTO".
+   * Chữ (preset thư viện hoặc câu người dùng gõ) khi ấy đi KÈM chứ không thay —
+   * nó vẫn nói được thứ ảnh không nói ra (tên, tính cách, chi tiết muốn giữ).
+   * KHÔNG có ảnh ⇒ chữ ấy LÀ chủ ngữ. Chỉ khi cả hai đều vắng mới rơi về câu
+   * chung chung cũ; máy vẽ không có gì để bám thì mỗi lượt ra một con khác nhau,
+   * nên câu ấy là mức sàn, không phải mặc định.
+   */
+  const base = ref
+    ? "the SAME character from the reference photo"
+    : identity || "the same original mascot character";
+  const subject = [
+    base,
+    ...(ref && identity ? [identity] : []),
+    outfit ? `wearing ${outfit}` : "",
+    ...leftover(scan, presets),
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   /* Chữ CẤP THẺ: ở khuôn là phần người dùng gõ THÊM ngoài template; ở tự do là cả
      câu họ viết. Cả hai đều là "lời người thiết kế nói cho tấm này". */

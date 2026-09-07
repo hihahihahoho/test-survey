@@ -53,7 +53,16 @@ function written(state: ComposerState, extra: string): JSONContent {
   return { ...doc, content: [{ ...para, content: [...(para.content ?? []), { type: "text", text: extra }] }] };
 }
 
-function Harness({ initial, onState }: { initial: ComposerState; onState?: (next: ComposerState) => void }) {
+function Harness({
+  initial,
+  onState,
+  projectId,
+}: {
+  initial: ComposerState;
+  onState?: (next: ComposerState) => void;
+  /** Có dự án ⇒ pill mới bày được nấc «Đính ảnh» (ảnh phải có chỗ để tải lên). */
+  projectId?: string;
+}) {
   const [composer, setComposer] = React.useState(initial);
   return (
     <ContextSection
@@ -65,6 +74,7 @@ function Harness({ initial, onState }: { initial: ComposerState; onState?: (next
           return next;
         })
       }
+      {...(projectId ? { projectId } : {})}
     />
   );
 }
@@ -170,5 +180,82 @@ describe("hai chế độ của khối Ngữ cảnh chung", () => {
     await waitFor(() => expect(latest?.styleId).toBeTruthy());
     expect(latest!.styleId).toBe(PRESETS.styles[1]!.id);
     expect(latest!.contextDoc).toBeTruthy();
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HỘP CHỌN NGUỒN — ba nấc, và chúng phải THẤY ĐƯỢC MÀ KHÔNG CUỘN
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * ╔══ CA NÀY ĐO ĐÚNG LỜI PHÀN NÀN, KHÔNG ĐO MỘT THỨ NA NÁ ═══════════════════╗
+ * ║ Chủ sản phẩm: *"phải scroll xuống dưới mới thấy được custom"*. Thứ chữa   ║
+ * ║ nó không phải "có mục custom" (mục ấy vốn đã có) mà là "mục ấy KHÔNG nằm  ║
+ * ║ trong vùng cuộn". Nên ca đo: ba nấc phải là anh em của thanh cố định, và  ║
+ * ║ thanh ấy KHÔNG được nằm trong cái hộp có thanh cuộn của danh sách.        ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+describe("pill theme/phong cách mở ra hộp chọn nguồn ba nấc", () => {
+  it("mở pill ⇒ đủ ba nấc, và chúng KHÔNG nằm trong vùng cuộn của danh sách", () => {
+    render(<Harness initial={base()} projectId="p1" />);
+    /* Pill theme là nút đầu tiên trong câu — nhãn của nó là giá trị đang chọn. */
+    const pill = screen.getByRole("button", { name: /Tết|festive/ });
+    fireEvent.click(pill);
+
+    for (const name of ["Chọn sẵn", "Đính ảnh", "Gõ riêng"]) {
+      expect(screen.getByRole("tab", { name })).toBeTruthy();
+    }
+    /* Không có tổ tiên nào của thanh nấc là vùng cuộn ⇒ nó không thể trôi khỏi
+       tầm mắt dù danh sách dài bao nhiêu. */
+    const bar = screen.getByRole("tab", { name: "Gõ riêng" }).parentElement!;
+    for (let node: HTMLElement | null = bar; node; node = node.parentElement) {
+      expect(node.className).not.toContain("overflow-y-auto");
+    }
+  });
+
+  it("nấc «Gõ riêng»: chữ chốt bằng Enter đi thẳng vào `themeCustom`, hộp đóng lại", () => {
+    let latest: ComposerState | null = null;
+    render(<Harness initial={base()} projectId="p1" onState={(next) => { latest = next; }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Tết|festive/ }));
+    fireEvent.click(screen.getByRole("tab", { name: "Gõ riêng" }));
+
+    const box = screen.getByRole("textbox", { name: /Mô tả riêng/ });
+    fireEvent.change(box, { target: { value: "chợ hoa ngày Tết, nét khắc gỗ" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+
+    expect(latest!.themeCustom).toBe("chợ hoa ngày Tết, nét khắc gỗ");
+    expect(screen.queryByRole("tab", { name: "Gõ riêng" })).toBeNull();
+  });
+
+  it("đang dùng chữ tự gõ ⇒ mở hộp là vào THẲNG nấc «Gõ riêng», không phải nấc đầu", () => {
+    render(<Harness initial={base({ themeCustom: "tranh Đông Hồ" })} projectId="p1" />);
+    fireEvent.click(screen.getByRole("button", { name: /tranh Đông Hồ/ }));
+    expect(screen.getByRole("tab", { name: "Gõ riêng" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("đang dùng ảnh ⇒ mở hộp là vào nấc «Đính ảnh», và có đường bỏ ảnh", () => {
+    let latest: ComposerState | null = null;
+    render(
+      <Harness
+        initial={base({ contextRefs: [{ path: "refs/tet.png", role: "theme" }] })}
+        projectId="p1"
+        onState={(next) => { latest = next; }}
+      />,
+    );
+    /* Pill mang ảnh ⇒ nhãn của nó là TÊN tấm ảnh. `getAllByRole`[0] vì nút bỏ
+       ảnh nằm NGAY TRONG pill và cũng mang tên tệp trong nhãn — vật ngoài cùng
+       (chính cái pill) là vật đứng trước trong cây. */
+    fireEvent.click(screen.getAllByRole("button", { name: /tet\.png/ })[0]!);
+    expect(screen.getByRole("tab", { name: "Đính ảnh" }).getAttribute("aria-selected")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Bỏ ảnh" }));
+    expect(latest!.contextRefs).toEqual([]);
+  });
+
+  it("KHÔNG có dự án ⇒ nấc «Đính ảnh» vắng mặt, thay vì bấm vào rồi không có gì xảy ra", () => {
+    render(<Harness initial={base()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Tết|festive/ }));
+    expect(screen.queryByRole("tab", { name: "Đính ảnh" })).toBeNull();
+    expect(screen.getByRole("tab", { name: "Gõ riêng" })).toBeTruthy();
   });
 });

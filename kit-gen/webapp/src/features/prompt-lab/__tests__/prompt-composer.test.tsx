@@ -66,9 +66,8 @@ describe("serialize — pill đổi thành cụm TIẾNG ANH, không phải nhã
     expect(out).not.toContain("Rộn ràng");
   });
 
-  it("câu Nhân vật CHỈ còn thứ chung cho cả tấm: ảnh + trang phục, không dáng/nét mặt", () => {
+  it("câu Nhân vật CHỈ còn thứ chung cho cả tấm: nhân vật + trang phục, không dáng/nét mặt", () => {
     const out = serializeDoc(mascotDoc() as PromptDocNode, ctx());
-    expect(out).toContain("[ảnh tham chiếu]");
     /* Đây là luật quan trọng nhất của cả model: ô để trống KHÔNG phải là ô rỗng,
        nó là "theo cái chung". Hỏng luật này thì mọi block âm thầm mất theme. */
     expect(out).toContain("THEME_CHUNG");
@@ -76,8 +75,22 @@ describe("serialize — pill đổi thành cụm TIẾNG ANH, không phải nhã
        dáng một góc riêng. Còn sót ở câu đầu là cả tấm bị ép về một dáng. */
     expect(out).not.toContain(phraseOf("pose", "idle", PRESETS));
     expect(out).not.toContain(EXPRESSIONS[0]!.value);
-    /* Cụm «(hoặc ảnh dáng [ảnh])» bị bỏ hẳn ⇒ đúng MỘT pill ảnh trong câu. */
-    expect(out.match(/\[ảnh tham chiếu\]/g)).toHaveLength(1);
+    /* Pill NHÂN VẬT chưa chọn gì ⇒ KHÔNG một cái móc ảnh nào. Đây là chỗ đổi so
+       với bản trước: câu từng luôn có sẵn một pill ảnh rỗng, nên prompt luôn mang
+       chữ "[ảnh tham chiếu]" — một lời hứa đính kèm cho tấm ảnh không tồn tại. */
+    expect(out).not.toContain("[ảnh tham chiếu");
+  });
+
+  it("pill nhân vật CÓ ẢNH ⇒ móc ảnh có số, ngay sau chữ của chính pill ấy", () => {
+    const doc = mascotDoc();
+    const para = doc.content![0]!;
+    para.content = para.content!.map((node) =>
+      node.type === NODE.optionPill && node.attrs!["kind"] === "mascot"
+        ? { ...node, attrs: { ...node.attrs, path: "refs/lan.png", refName: "lan.png" } }
+        : node,
+    );
+    const out = serializeDoc(doc as PromptDocNode, ctx());
+    expect(out).toContain("[ảnh tham chiếu 1]");
   });
 
   it("một dòng dáng ra một câu riêng: dáng · góc máy · nét mặt", () => {

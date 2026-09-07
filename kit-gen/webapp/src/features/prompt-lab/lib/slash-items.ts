@@ -65,6 +65,11 @@ export const SLASH_ITEMS: readonly SlashItem[] = [
   pillItem("pose", "Dáng", "Pill dáng nhân vật", "pose dang"),
   pillItem("expression", "Biểu cảm", "Pill biểu cảm khuôn mặt", "expression bieu cam"),
   pillItem("outfit", "Trang phục", "Pill trang phục — mặc định theo theme chung", "outfit trang phuc"),
+  /* Có mặt ở menu vì nó là pill DUY NHẤT giữ một thứ không có trường nào ngoài
+     câu để cứu: xoá nó ở chế độ tự do là mất cả danh tính lẫn ảnh nhân vật, và
+     không có đường nào chèn lại. Theme/phong cách không cần vì giá trị của chúng
+     còn nằm trong `ComposerState`. */
+  pillItem("mascot", "Nhân vật", "Pill nhân vật — chọn sẵn, đính ảnh, hoặc gõ mô tả", "mascot nhan vat linh vat"),
   {
     id: "pill-image",
     title: "Ảnh tham chiếu",

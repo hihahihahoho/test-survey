@@ -7,10 +7,12 @@ import {
   type ReactNodeViewProps,
 } from "@tiptap/react";
 import { NODE } from "../lib/schema";
-import { INHERIT, refRoleOf, type PillKind } from "../lib/pill-registry";
+import { INHERIT, takesImage, type PillKind } from "../lib/pill-registry";
 import { OptionPill as OptionPillControl } from "../components/pill-ui";
-import { uploadPillImage } from "@/features/prompt-canvas/lib/pill-image";
+import type { SourceGroup } from "../components/SourcePicker";
+import { EMPTY_PILL_IMAGE, readPillImage, uploadPillImage } from "@/features/prompt-canvas/lib/pill-image";
 import { usePromptProjectId } from "@/features/prompt-canvas/lib/project-context";
+import { useBrandBinding } from "./BrandProfilePill";
 
 /**
  * OptionPill — MỘT node cho MỌI pill chọn-một trong câu mad-lib.
@@ -28,47 +30,88 @@ import { usePromptProjectId } from "@/features/prompt-canvas/lib/project-context
  * `pill-registry.ts`). Chín node là chín bản sao của cùng một node view — và
  * chín chỗ để quên khi sửa. Xem chú thích đầu `schema.ts`.
  */
-function OptionPillView({ node, updateAttributes, editor, getPos, extension }: ReactNodeViewProps) {
+function OptionPillView({ node, updateAttributes, extension }: ReactNodeViewProps) {
   const kind = (typeof node.attrs["kind"] === "string" ? node.attrs["kind"] : "style") as PillKind;
   const value = typeof node.attrs["value"] === "string" ? node.attrs["value"] : INHERIT;
   const custom = typeof node.attrs["custom"] === "string" ? node.attrs["custom"] : "";
+  const image = readPillImage(node.attrs);
   /* Hình dạng pill đến từ CẤU HÌNH EXTENSION, không từ attrs của node: "pill này
      to hay nhỏ" là thuộc tính của CHỖ ĐẶT (một câu cả thẻ hay một dòng danh sách),
      không phải của nội dung. Nhét nó vào attrs là ghi một quyết định trình bày
      xuống đĩa cùng tài liệu, rồi tài liệu ấy mở ở chỗ khác vẫn mang cỡ cũ. */
   const compact = extension.options["compact"] === true;
   const projectId = usePromptProjectId();
-  const inputRef = React.useRef<HTMLInputElement>(null);
+  const brand = useBrandBinding();
   const [attaching, setAttaching] = React.useState(false);
 
   /**
-   * Ảnh chỉ được mời ở CÂU CÓ ĐƯỜNG RA — xem `refRoleOf` và option `refs`.
+   * Ảnh chỉ được mời ở PILL CÓ ĐƯỜNG RA — xem `takesImage` và option `refs`.
    *
-   * Hai điều kiện, và điều kiện thứ hai không thừa: pill `style` cũng đứng trong
-   * câu của MỘT DÒNG ELEMENT (`uiCellDoc`), mà ảnh trong câu ấy không có ô nào
-   * trong contract để đi tới — `uiKitSheets` chỉ đọc chữ. Bày nút đính ảnh ở đó
-   * là mời người dùng tải một tấm ảnh lên rồi im lặng vứt nó đi.
+   * Hai luật, và luật thứ hai không thừa: pill `style` cũng đứng trong câu của
+   * MỘT DÒNG ELEMENT (`uiCellDoc`), mà ảnh trong câu ấy không có ô nào trong
+   * contract để đi tới — `uiKitSheets` chỉ đọc chữ. Bày nút đính ảnh ở đó là mời
+   * người dùng tải một tấm ảnh lên rồi im lặng vứt nó đi.
+   * Pill `mascot` thì KHÔNG cần option `refs`: ảnh của nó là `sheet.ref` của
+   * chính tấm dáng, một cửa luôn có mặt ở thẻ Nhân vật.
    */
-  const role = extension.options["refs"] === true ? refRoleOf(kind) : "";
+  const canAttach = takesImage(kind) && (kind === "mascot" || extension.options["refs"] === true);
 
-  const attach = async (files: FileList | null) => {
-    const file = files?.[0];
-    if (!file || !projectId || !role) return;
+  /**
+   * Linh vật của thương hiệu đang chọn, mời ở ĐẦU danh sách nhân vật.
+   *
+   * GỢI Ý chứ không tự điền: một thương hiệu có thể có nhiều linh vật, và tự
+   * chọn hộ là đặt một nhân vật người dùng chưa từng bấm vào tấm ảnh sắp tiêu
+   * tiền. Chưa chọn thương hiệu ⇒ nhóm này vắng mặt, hộp chỉ còn thư viện.
+   */
+  const brandMascots = kind === "mascot" ? (brand?.mascots ?? []) : [];
+  const extraGroups: SourceGroup[] =
+    brandMascots.length > 0
+      ? [
+          {
+            title: `Linh vật của ${brand?.name || "thương hiệu"}`,
+            options: brandMascots.map((item) => ({ value: assetValue(item.assetId), vi: item.name })),
+          },
+        ]
+      : [];
+
+  const adopt = async (work: () => Promise<{ refName: string; path: string }>) => {
     setAttaching(true);
     try {
-      const image = await uploadPillImage(projectId, file, { kind: "inspo", hintName: `${role}-ref-${file.name}` });
-      const at = getPos();
-      if (at === undefined) return;
-      /* Chèn NGAY SAU pill này, không nối vào cuối câu: câu phải đọc được thành
-         "theme [Tết][🖼]" — tấm ảnh đứng cạnh thứ nó minh hoạ. Nối vào cuối là
-         một tấm ảnh mồ côi mà không ai biết nó nói về pill nào. */
-      editor
-        .chain()
-        .insertContentAt(at + node.nodeSize, { type: NODE.imagePill, attrs: { ...image, role } })
-        .run();
+      updateAttributes(await work());
     } finally {
       setAttaching(false);
     }
+  };
+
+  const attach = (file: File) => {
+    if (!projectId) return;
+    void adopt(() =>
+      uploadPillImage(projectId, file, {
+        /* Phân loại của agent chỉ để nó xếp thư mục; vai trò THẬT của tấm ảnh
+           trong prompt do chỗ đặt quyết định. */
+        kind: kind === "mascot" ? "character" : "inspo",
+        hintName: `${kind}-ref-${file.name}`,
+      }),
+    );
+  };
+
+  /**
+   * Chọn một mục.
+   *
+   * Mục LINH VẬT THƯƠNG HIỆU không phải một giá trị preset — nó là một asset
+   * trong kho dùng chung, và thứ pill giữ được là tấm ảnh đã chép sang dự án.
+   * Nên nhánh này đi qua `copyAsset` (có nhớ, xem `brand-binding.ts`) rồi ghi
+   * xuống ĐÚNG hai trường ảnh, còn `value` để rỗng: giữ một id kho trong `value`
+   * là dựng nguồn sự thật thứ hai cho một thứ đã nằm trong `path`.
+   */
+  const choose = (next: string) => {
+    const assetId = readAssetValue(next);
+    if (assetId && brand) {
+      updateAttributes({ value: INHERIT, custom: "" });
+      void adopt(() => brand.copyAsset(assetId));
+      return;
+    }
+    updateAttributes({ value: next });
   };
 
   return (
@@ -89,7 +132,8 @@ function OptionPillView({ node, updateAttributes, editor, getPos, extension }: R
      *
      * `data-custom` đi cùng bộ, và nó còn ĐẮT HƠN hai cái kia: `kind`/`value` cứu
      * hộ lại được bằng `repairPills` (vị trí trong câu nói ra chúng là gì), còn
-     * chữ người dùng tự gõ thì không có bảng tra nào dựng lại nổi.
+     * chữ người dùng tự gõ thì không có bảng tra nào dựng lại nổi. Hai attr ảnh
+     * cũng vậy — mất chúng là mất một tệp người dùng đã tải lên.
      */
     <NodeViewWrapper
       as="span"
@@ -98,6 +142,8 @@ function OptionPillView({ node, updateAttributes, editor, getPos, extension }: R
       data-kind={kind}
       data-value={value}
       data-custom={custom}
+      data-ref-path={image.path}
+      data-ref-name={image.refName}
     >
       <OptionPillControl
         kind={kind}
@@ -105,26 +151,35 @@ function OptionPillView({ node, updateAttributes, editor, getPos, extension }: R
         custom={custom}
         compact={compact}
         attaching={attaching}
-        onChange={(next) => updateAttributes({ value: next })}
+        image={image}
+        projectId={projectId}
+        extraGroups={extraGroups}
+        {...(extraGroups.length > 0 ? { listTitle: "Thư viện nhân vật" } : {})}
+        onChange={choose}
         onCustom={(next) => updateAttributes({ custom: next })}
-        {...(role && projectId ? { onAttachRef: () => inputRef.current?.click() } : {})}
+        {...(canAttach && projectId ? { onAttach: attach } : {})}
+        {...(image.path ? { onDropImage: () => updateAttributes(EMPTY_PILL_IMAGE) } : {})}
       />
-
-      {role && projectId && (
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          className="hidden"
-          onChange={(event) => {
-            void attach(event.target.files);
-            /* Xoá value để chọn LẠI ĐÚNG tấm vừa chọn vẫn bắn `change`. */
-            event.target.value = "";
-          }}
-        />
-      )}
     </NodeViewWrapper>
   );
+}
+
+/**
+ * Một asset của kho dùng chung, đội lốt một `value` của hộp chọn.
+ *
+ * Tiền tố `asset:` chứ không phải một trường thứ hai trong `SourceOption`: hộp
+ * chọn là thứ dùng chung cho bốn chỗ, và thêm một trường chỉ MỘT chỗ hiểu là bắt
+ * ba chỗ kia mang theo một khái niệm chúng không có. Tiền tố thì chỉ nơi dựng
+ * danh sách và nơi nhận lựa chọn phải biết — hai chỗ nằm cạnh nhau ngay đây.
+ */
+const ASSET_PREFIX = "asset:";
+
+function assetValue(assetId: string): string {
+  return `${ASSET_PREFIX}${assetId}`;
+}
+
+function readAssetValue(value: string): string {
+  return value.startsWith(ASSET_PREFIX) ? value.slice(ASSET_PREFIX.length) : "";
 }
 
 export const OptionPill = Node.create({
@@ -177,6 +232,30 @@ export const OptionPill = Node.create({
         default: "",
         parseHTML: (element) => element.getAttribute("data-custom") ?? "",
         renderHTML: (attributes) => ({ "data-custom": String(attributes["custom"] ?? "") }),
+      },
+      /**
+       * ẢNH CỦA CHÍNH PILL NÀY — `refs/<tên>` + tên tệp, đúng hình dạng
+       * `PillImage`.
+       *
+       * ╔══ VÌ SAO ẢNH VÀO ĐÂY, KHÔNG CÒN LÀ MỘT NODE `imagePill` ĐỨNG CẠNH ═════╗
+       * ║ Bản trước: đính ảnh cho pill theme thì chèn một `imagePill` NGAY SAU nó ║
+       * ║ trong câu. Câu đọc được ("theme [Tết][🖼]") nhưng nó là HAI vật cho MỘT ║
+       * ║ câu trả lời: xoá nhầm một cái là câu còn lại nói dở dang, và người dùng ║
+       * ║ phải tự hiểu rằng chúng thuộc về nhau. Nay một pill = một nguồn, và     ║
+       * ║ "nguồn" là preset · chữ · ảnh — ba thứ nằm trong cùng một node.         ║
+       * ║ Tên attr trùng `imagePill` (`path`/`refName`) là CỐ Ý: `readPillImage`  ║
+       * ║ và `EMPTY_PILL_IMAGE` đọc được cả hai node mà không cần một nhánh riêng.║
+       * ╚════════════════════════════════════════════════════════════════════════╝
+       */
+      path: {
+        default: "",
+        parseHTML: (element) => element.getAttribute("data-ref-path") ?? "",
+        renderHTML: (attributes) => ({ "data-ref-path": String(attributes["path"] ?? "") }),
+      },
+      refName: {
+        default: "",
+        parseHTML: (element) => element.getAttribute("data-ref-name") ?? "",
+        renderHTML: (attributes) => ({ "data-ref-name": String(attributes["refName"] ?? "") }),
       },
     };
   },

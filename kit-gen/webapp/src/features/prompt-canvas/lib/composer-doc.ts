@@ -17,6 +17,7 @@ import { DEFAULT_VIEW } from "@/features/pose-lab/lib/pose-state";
 import { getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
 import { INHERIT } from "@/features/prompt-lab/lib/pill-registry";
 import { NODE } from "@/features/prompt-lab/lib/schema";
+import { readPillImage } from "./pill-image";
 import {
   PILL_SLOTS,
   docHasBrokenPill,
@@ -183,12 +184,11 @@ function readMascotBlock(raw: Record<string, unknown>, id: string, mode: BlockMo
       id,
       kind: "mascot",
       mode,
-      /* `withImageRole`: bản nháp lưu TRƯỚC 09/2026 có pill ảnh không khai vai
-         trò. Vai trò ấy không đổi chỗ tấm ảnh trong contract (nó vẫn là
-         `sheet.ref` của tấm dáng) — nó chỉ mở menu «Mascot của <thương hiệu>».
-         Thiếu nó thì mọi thẻ Nhân vật đã có sẵn im lặng không nhận được gợi ý,
-         và người dùng thấy tính năng chỉ chạy trên thẻ mới tạo. */
-      doc: withImageRole(healDoc(raw["doc"] as JSONContent, "mascot"), "character"),
+      /* GẤP TRƯỚC, CỨU HỘ SAU — thứ tự này bắt buộc: `foldMascotHead` biến pill
+         ảnh rời thành một pill CHỌN-MỘT, và `repairPills` gán `kind` theo VỊ TRÍ
+         trong dãy pill chọn-một. Cứu hộ trước thì pill trang phục đứng ở ô số 0
+         và nhận nhầm `kind: "mascot"`. */
+      doc: healDoc(foldMascotHead(raw["doc"] as JSONContent), "mascot"),
       poses,
       ...(isRecord(sheet) && Array.isArray(sheet["paths"]) && typeof sheet["key"] === "string"
         ? {
@@ -230,28 +230,78 @@ function readMascotBlock(raw: Record<string, unknown>, id: string, mode: BlockMo
 }
 
 /**
- * Gán vai trò cho những pill ảnh CHƯA KHAI vai trò — không đụng pill đã khai.
+ * PILL ẢNH RỜI của câu đầu thẻ Nhân vật → PILL NHÂN VẬT mang chính tấm ảnh ấy.
  *
- * Không dựng lại tài liệu khi không có gì để sửa (trả về đúng object cũ), cùng
- * luật với `healDoc`: một lượt dựng lại thừa là một lượt `onUpdate` thừa của
- * editor, và lượt ấy đóng dấu xuống đĩa ở MỌI lần mở dự án.
+ * ╔══ VÌ SAO VÁ TẠI CHỖ, KHÔNG DỰNG LẠI CẢ CÂU ══════════════════════════════╗
+ * ║ Câu đầu thẻ nay là «Tạo nhân vật [chọn nhân vật ⌄], trang phục [⌄].» —     ║
+ * ║ chỗ của ảnh đã thành một pill chọn-một có ba nguồn (xem `PillKind.mascot`).║
+ * ║ Bản nháp lưu ở hai lượt trước (52bf64a · 42cb8ce) có một `imagePill` đứng  ║
+ * ║ đúng chỗ ấy. Dựng lại câu từ template mới thì mọi chữ người dùng đã viết   ║
+ * ║ thêm ở chế độ tự do bay sạch — mà câu này là câu họ được phép viết. Nên    ║
+ * ║ chỉ ĐỔI ĐÚNG MỘT NODE, giữ nguyên phần còn lại của cây.                    ║
+ * ║ Tấm ảnh đi theo nguyên vẹn: nó vẫn là `sheet.ref` của tấm dáng, y như cũ.  ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Trả về ĐÚNG object cũ khi không có gì để sửa (thẻ đời mới), cùng luật với
+ * `healDoc`: một lượt dựng lại thừa là một lượt `onUpdate` thừa của editor, và
+ * lượt ấy đóng dấu xuống đĩa ở MỌI lần mở dự án.
  */
-function withImageRole(doc: JSONContent, role: string): JSONContent {
-  let changed = false;
+function foldMascotHead(doc: JSONContent): JSONContent {
+  let done = false;
   const walk = (node: JSONContent): JSONContent => {
-    if (node.type === NODE.imagePill && !str(node.attrs?.["role"])) {
-      changed = true;
-      return { ...node, attrs: { ...node.attrs, role } };
+    if (done) return node;
+    if (node.type === NODE.imagePill) {
+      done = true;
+      const image = readPillImage(node.attrs);
+      return {
+        type: NODE.optionPill,
+        attrs: { kind: "mascot", value: INHERIT, custom: "", path: image.path, refName: image.refName },
+      };
     }
     if (!node.content) return node;
     const kids = node.content.map(walk);
+    return done ? { ...node, content: kids } : node;
+  };
+  const next = walk(doc);
+  return done ? next : doc;
+}
+
+/**
+ * ẢNH RỜI trong câu Ngữ cảnh chung → vào chính PILL nó minh hoạ.
+ *
+ * Cùng lượt đổi với `foldMascotHead` và cùng lý do: một pill là MỘT nguồn, nên
+ * tấm ảnh của theme nằm trong pill theme chứ không đứng cạnh nó. Ảnh không tìm
+ * được pill để về (người dùng đã xoá pill khỏi câu, hoặc pill ấy đã có ảnh khác)
+ * thì Ở LẠI NGUYÊN CHỖ: `contextRefsOf` vẫn đọc được node rời, nên nó vẫn tới
+ * `variant.inspo` — bỏ nó đi để câu gọn hơn là xoá một tệp người dùng đã tải lên.
+ */
+function foldContextRefs(doc: JSONContent): JSONContent {
+  let changed = false;
+  const walk = (node: JSONContent): JSONContent => {
+    if (!node.content) return node;
+    const kids: JSONContent[] = [];
+    for (const child of node.content) {
+      const role = str(child.attrs?.["role"]);
+      const image = child.type === NODE.imagePill ? readPillImage(child.attrs) : null;
+      if (image?.path && (role === "theme" || role === "style")) {
+        const at = kids.findIndex(
+          (seen) => seen.type === NODE.optionPill && seen.attrs?.["kind"] === role && !str(seen.attrs?.["path"]),
+        );
+        if (at !== -1) {
+          kids[at] = { ...kids[at], attrs: { ...kids[at]!.attrs, path: image.path, refName: image.refName } };
+          changed = true;
+          continue;
+        }
+      }
+      kids.push(walk(child));
+    }
     return changed ? { ...node, content: kids } : node;
   };
   const next = walk(doc);
   return changed ? next : doc;
 }
 
-/** Attrs của pill ảnh ĐẦU TIÊN trong một tài liệu — ảnh nhân vật của câu cũ. */
+/** Attrs của pill ảnh ĐẦU TIÊN trong một tài liệu/** Attrs của pill ảnh ĐẦU TIÊN trong một tài liệu — ảnh nhân vật của câu cũ. */
 function firstImageAttrs(doc: JSONContent): Record<string, unknown> | null {
   let found: Record<string, unknown> | null = null;
   const walk = (node: JSONContent): void => {
@@ -266,10 +316,20 @@ function firstImageAttrs(doc: JSONContent): Record<string, unknown> | null {
   return found;
 }
 
-/** Đổ ảnh + trang phục cũ vào câu đầu thẻ vừa dựng từ template mới. */
+/**
+ * Đổ ảnh + trang phục cũ vào câu đầu thẻ vừa dựng từ template mới.
+ *
+ * Ảnh vào PILL NHÂN VẬT, không vào một pill ảnh rời: câu mới không còn node ấy
+ * (xem `foldMascotHead`). Chỉ chép hai trường ảnh chứ không trải cả attrs cũ —
+ * attrs cũ mang `role` của một loại node khác, và một `role` lạc vào pill
+ * chọn-một là rác nằm im chờ ai đó đọc nhầm.
+ */
 function withHeadImage(doc: JSONContent, image: Record<string, unknown> | null, outfit: string): JSONContent {
+  const shot = image ? readPillImage(image) : null;
   const walk = (node: JSONContent): JSONContent => {
-    if (node.type === NODE.imagePill && image) return { ...node, attrs: { ...node.attrs, ...image } };
+    if (node.type === NODE.optionPill && node.attrs?.["kind"] === "mascot" && shot?.path) {
+      return { ...node, attrs: { ...node.attrs, path: shot.path, refName: shot.refName } };
+    }
     if (node.type === NODE.optionPill && node.attrs?.["kind"] === "outfit") {
       return { ...node, attrs: { ...node.attrs, value: outfit } };
     }
@@ -360,7 +420,7 @@ function readComposer(raw: unknown, presets: PresetBundle): ComposerState {
        đang là — cùng luật với block Bộ UI ở `readBlock`. */
     contextMode: raw["contextMode"] === "free" ? "free" : "template",
     ...(isRecord(raw["contextDoc"])
-      ? { contextDoc: healDoc(raw["contextDoc"] as JSONContent, "context") }
+      ? { contextDoc: foldContextRefs(healDoc(raw["contextDoc"] as JSONContent, "context")) }
       : {}),
     blocks: Array.isArray(raw["blocks"])
       ? (raw["blocks"] as unknown[]).map(readBlock).filter((b): b is Block => b !== null)

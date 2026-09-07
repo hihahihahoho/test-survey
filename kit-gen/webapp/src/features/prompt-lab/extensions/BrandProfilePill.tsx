@@ -37,10 +37,10 @@ export function BrandBindingProvider({ value, children }: { value: BrandBinding;
 /**
  * Dây thương hiệu đang treo trên cây React, hoặc `null`.
  *
- * Công khai vì `ImagePill` cũng đọc nó — pill ảnh nhân vật mời «Mascot của …»
- * lấy từ đúng thương hiệu này. Hai chỗ đọc, MỘT dây: nếu pill ảnh tự đi hỏi kho
- * thư viện lần nữa thì có ngày nó mời linh vật của một thương hiệu khác với cái
- * đang ghi trong câu.
+ * Công khai vì node view của `optionPill` cũng đọc nó — pill NHÂN VẬT mời «Linh
+ * vật của <thương hiệu>» lấy từ đúng thương hiệu này. Hai chỗ đọc, MỘT dây: nếu
+ * pill kia tự đi hỏi kho thư viện lần nữa thì có ngày nó mời linh vật của một
+ * thương hiệu khác với cái đang ghi trong câu.
  */
 export function useBrandBinding(): BrandBinding | null {
   return React.useContext(BrandBindingContext);

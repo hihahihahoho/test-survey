@@ -116,9 +116,16 @@ function walkInline(nodes: PromptDocNode[] | undefined, ctx: SerializeContext): 
       case "text":
         out += node.text ?? "";
         break;
-      case NODE.optionPill:
+      case NODE.optionPill: {
         out += pillText(node, ctx);
+        /* Pill CÓ ẢNH ⇒ cái móc có số đi NGAY SAU chữ của nó, y như hồi ảnh còn
+           là một node rời đứng cạnh. Bỏ bước này thì prompt vẫn đúng chữ nhưng
+           mất chỗ trỏ tới tấm ảnh sắp đính kèm, và `countImageRefs` (thanh nhắc
+           "nhớ kèm N ảnh") đếm hụt — hai lời nói dối đối với người sắp dán prompt
+           vào khung chat. */
+        if (readPillImage(node.attrs).path) out += ` ${imageText(node, ctx)}`;
         break;
+      }
       case NODE.imagePill:
         out += imageText(node, ctx);
         break;
@@ -207,9 +214,16 @@ export function countImageRefs(doc: PromptDocNode | null | undefined): number {
   if (!doc) return 0;
   let total = 0;
   const walk = (node: PromptDocNode): void => {
-    /* Đếm ảnh CÓ THẬT trên đĩa, không đếm pill: một pill trống là một chỗ người
-       dùng chưa chọn ảnh, không phải một tấm phải nhớ đính kèm. */
-    if (node.type === NODE.imagePill && readPillImage(node.attrs).path) total += 1;
+    /* Đếm ảnh CÓ THẬT trên đĩa, không đếm pill trống: một pill chưa chọn ảnh là
+       một chỗ để trống, không phải một tấm phải nhớ đính kèm. Hai loại node cùng
+       mang ảnh từ 09/2026 — pill chọn-một giữ ảnh của chính nó (xem attr `path`
+       ở `extensions/OptionPill.tsx`). */
+    if (
+      (node.type === NODE.imagePill || node.type === NODE.optionPill) &&
+      readPillImage(node.attrs).path
+    ) {
+      total += 1;
+    }
     for (const child of node.content ?? []) walk(child);
   };
   walk(doc);

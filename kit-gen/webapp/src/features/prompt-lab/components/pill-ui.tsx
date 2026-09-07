@@ -1,8 +1,11 @@
 import * as React from "react";
-import { ChevronDown, ImagePlus, Pencil } from "lucide-react";
+import { ChevronDown, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { inheritsWhenEmpty, labelOf, pillOptions, type PillKind } from "../lib/pill-registry";
+import type { PillImage } from "@/features/prompt-canvas/lib/pill-image";
+import { inheritsWhenEmpty, labelOf, nounOf, pillOptions, type PillKind } from "../lib/pill-registry";
 import { usePresets } from "../lib/presets-store";
+import { RefImageBody } from "./RefImagePill";
+import { SourcePicker, useDismiss, type SourceGroup } from "./SourcePicker";
 
 /**
  * pill-ui.tsx — HÌNH DẠNG CHUNG của mọi pill, dùng ở HAI NƠI.
@@ -97,6 +100,8 @@ export function PillAxis({ children }: { children: React.ReactNode }) {
 
 /** Trần cao của `PillMenu` — PHẢI khớp `max-h-80` trong class của nó. */
 export const PILL_MENU_MAX_PX = 320;
+/** Trần cao của `SourcePicker` — PHẢI khớp `max-h-[22.5rem]` trong class của nó. */
+export const SOURCE_PICKER_MAX_PX = 360;
 /** Khe giữa nút và menu — khớp `calc(100% + 8px)` ở cả hai chiều. */
 export const PILL_MENU_GAP_PX = 8;
 
@@ -147,9 +152,9 @@ export function useMenuFlip(maxPx: number = PILL_MENU_MAX_PX) {
  * Hộp menu thả xuống dưới pill.
  *
  * Đóng bằng ba đường, vì thiếu đường nào cũng có người kẹt: bấm ra ngoài (chuột),
- * Escape (bàn phím), và chọn một mục (đường thường). Nghe ở pha CAPTURE để bắt
- * được cả cú bấm rơi vào vùng contenteditable — ProseMirror gọi
- * `preventDefault()` khá sớm ở pha bubble.
+ * Escape (bàn phím), và chọn một mục (đường thường). Hai đường đầu do `useDismiss`
+ * lo — CÙNG hàm mà `SourcePicker` dùng, nên hai hộp trên cùng một màn không bao
+ * giờ đóng theo hai luật khác nhau.
  *
  * ⚠️ MENU NEO VÀO ĐÚNG CÁI NÚT, VÀ VÌ THẾ VỎ BỌC PHẢI ÔM SÁT NÚT.
  * `top-[calc(100%+8px)]` đo từ đáy của phần tử `relative` gần nhất — không phải
@@ -170,40 +175,29 @@ export function PillMenu({
   dropUp?: boolean;
   children: React.ReactNode;
 }) {
-  const ref = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    const onPointerDown = (event: MouseEvent) => {
-      if (!ref.current?.contains(event.target as globalThis.Node)) onClose();
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", onPointerDown, true);
-    document.addEventListener("keydown", onKeyDown, true);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown, true);
-      document.removeEventListener("keydown", onKeyDown, true);
-    };
-  }, [onClose]);
+  const ref = React.useRef<HTMLSpanElement>(null);
+  /* Luật đóng nằm ở `useDismiss` — CÙNG một luật với `SourcePicker`, vì hai hộp
+     này đứng cạnh nhau trên màn và một cái đóng theo kiểu khác là một thứ nữa
+     phải học. */
+  useDismiss(ref, onClose);
 
   return (
-    <div
+    /* `<span className="block">` chứ không `<div>`: menu này cũng mọc ra từ một
+       pill nằm giữa một `<p>` (câu Ngữ cảnh chung), và `<div>` trong `<p>` là
+       một thẻ bị parser HTML đẩy ra ngoài câu — xem `SourcePicker`. */
+    <span
       ref={ref}
       role="listbox"
       aria-label={label}
       /* `text-body`: menu KHÔNG kế thừa cỡ chữ của câu. Một menu 10 mục ở cỡ
          tiêu đề thì cao hơn cả màn hình. */
       className={cn(
-        "absolute left-0 z-40 max-h-80 w-72 overflow-y-auto rounded-2 border border-line-subtle bg-overlay p-1 text-body shadow-2",
+        "absolute left-0 z-40 block max-h-80 w-72 overflow-y-auto rounded-2 border border-line-subtle bg-overlay p-1 text-body shadow-2",
         dropUp ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]",
       )}
     >
       {children}
-    </div>
+    </span>
   );
 }
 
@@ -249,22 +243,25 @@ function shorten(value: string): string {
 }
 
 /**
- * PILL CHỌN-MỘT hoàn chỉnh — nhãn + menu, đọc danh mục theo `kind`.
+ * PILL CHỌN-MỘT hoàn chỉnh — nhãn + hộp nguồn, đọc danh mục theo `kind`.
  *
  * Đây là thứ mà cả node view TipTap lẫn ô lưới React đều gọi. Nhận `value` +
  * `onChange` chứ không tự giữ state: nguồn sự thật là tài liệu ProseMirror (ca
  * thứ nhất) hoặc mảng ô trong React (ca thứ hai), không phải cái nút.
  *
- * ╔══ BA NGẢ, VÀ VÌ SAO CHÚNG PHẢI Ở CHUNG MỘT MENU ═════════════════════════╗
- * ║ Chủ sản phẩm: *"theme ngoài chọn ra còn có cho kiểu upload ảnh custom,     ║
- * ║ hoặc là điền text prompt custom nhé, phong cách cũng thế"*. Ba ngả ấy trả  ║
- * ║ lời CÙNG MỘT câu hỏi ("bộ kit này theo chủ đề gì") bằng ba thứ nguyên      ║
- * ║ liệu khác nhau: một mục danh mục, một câu tự viết, một tấm ảnh. Đặt chúng  ║
- * ║ vào ba control cạnh nhau là bắt người dùng tự hiểu rằng ba cái ấy loại trừ ║
- * ║ nhau — mà chúng KHÔNG hẳn loại trừ (ảnh đi kèm được với cả hai ngả kia).   ║
- * ║ Một menu thì thứ tự đọc tự nói ra luật: chọn sẵn ở trên, tự viết ở dưới,   ║
- * ║ đính ảnh là một hành động THÊM chứ không phải một lựa chọn thứ ba.         ║
+ * ╔══ BA NGẢ, VÀ VÌ SAO CHÚNG KHÔNG CÒN LÀ BA MỤC CUỐI MENU ═════════════════╗
+ * ║ Bản trước để «Gõ mô tả riêng…» và «Đính ảnh tham chiếu» làm hai MỤC nằm   ║
+ * ║ dưới đáy danh sách. Với danh mục 10 mục thì chúng rơi ra ngoài tầm nhìn,  ║
+ * ║ và chủ sản phẩm bắt đúng: *"phải scroll xuống dưới mới thấy được custom"*.║
+ * ║ Nay ba ngả là ba NẤC ghim ở đầu hộp (`SourcePicker`) — cùng một hộp cho   ║
+ * ║ theme, phong cách, nhân vật và trang phục, nên bốn chỗ trông và bấm giống ║
+ * ║ hệt nhau. Pill chỉ còn lo phần NHÌN: nó đang trả lời bằng đường nào.      ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ══ ẢNH NẰM TRONG PILL, KHÔNG ĐỨNG CẠNH PILL ══════════════════════════════
+ * Bản trước đính ảnh xong thì thả một pill ảnh RỜI ngay sau pill — hai vật cho
+ * một câu trả lời, và người dùng phải tự hiểu rằng chúng đi cùng nhau. Nay một
+ * pill là một nguồn: tấm ảnh thành thumbnail ngay trong chính pill ấy.
  */
 export function OptionPill({
   kind,
@@ -274,8 +271,13 @@ export function OptionPill({
   axis,
   custom = "",
   onCustom,
-  onAttachRef,
+  image = null,
+  onAttach,
+  onDropImage,
   attaching,
+  extraGroups,
+  listTitle,
+  projectId,
 }: {
   kind: PillKind;
   value: string;
@@ -293,95 +295,77 @@ export function OptionPill({
    * bỏ chữ đi là quay về đúng lựa chọn cũ.
    */
   custom?: string;
-  /** Vắng ⇒ pill KHÔNG bày mục «Gõ mô tả riêng…». */
+  /** Vắng ⇒ hộp KHÔNG bày nấc «Gõ riêng». */
   onCustom?: (next: string) => void;
-  /** Vắng ⇒ pill KHÔNG bày mục «Đính ảnh tham chiếu» — xem `refRoleOf`. */
-  onAttachRef?: () => void;
+  /** Ảnh đang dùng cho pill này — hiện thành thumbnail ĐỨNG TRƯỚC nhãn. */
+  image?: PillImage | null;
+  /** Vắng ⇒ hộp KHÔNG bày nấc «Đính ảnh» — xem `takesImage`. */
+  onAttach?: (file: File) => void;
+  /** Bỏ tấm ảnh đang dùng. */
+  onDropImage?: () => void;
   /** Đang tải tấm ảnh vừa chọn lên dự án. */
   attaching?: boolean;
+  /**
+   * Nhóm mục ĐỨNG TRƯỚC danh mục của `kind` — chỗ để mời linh vật của thương
+   * hiệu đang chọn. Đứng trước vì nó CỤ THỂ hơn: người đã chọn thương hiệu thì
+   * thứ họ tìm gần như chắc chắn nằm ở đó.
+   */
+  extraGroups?: readonly SourceGroup[];
+  /** Tiêu đề cho nhóm danh mục gốc — chỉ cần khi có `extraGroups` để phân biệt. */
+  listTitle?: string;
+  /** Dự án đang mở — cần để hộp đọc được thumbnail của ảnh đã đính. */
+  projectId?: string | null;
 }) {
-  const [open, setOpen] = React.useState(false);
-  /* ĐANG GÕ là trạng thái của CÁI NÚT, không của tài liệu: nó phải biến mất khi
-     người dùng bỏ đi, còn chữ thì chỉ được ghi xuống khi họ chốt. */
-  const [typing, setTyping] = React.useState(false);
-  const [draft, setDraft] = React.useState("");
+  const flip = useMenuFlip(SOURCE_PICKER_MAX_PX);
+  const button = React.useRef<HTMLButtonElement>(null);
   const presets = usePresets();
   const options = React.useMemo(() => pillOptions(kind, presets), [kind, presets]);
   const canInherit = inheritsWhenEmpty(kind);
+  const noun = nounOf(kind);
 
-  const label = custom ? shorten(custom) : labelOf(kind, value, presets);
+  const groups: SourceGroup[] = React.useMemo(
+    () => [
+      ...(extraGroups ?? []),
+      { ...(listTitle ? { title: listTitle } : {}), options },
+    ],
+    [extraGroups, listTitle, options],
+  );
+
+  const shot = image?.path ? image : null;
+  /**
+   * CHỮ trên pill.
+   *
+   * Ảnh KHÔNG nuốt chữ, nó chỉ đứng thêm vào: một pill có cả ảnh lẫn một mục
+   * chọn sẵn là chuyện thường (ảnh nhân vật + tên nhân vật trong thư viện), và
+   * nếu ảnh che mất nhãn thì người vừa bấm "Tết" sẽ tưởng cú bấm của mình rơi
+   * đâu mất. Chỉ khi KHÔNG có gì khác để nói thì tên tệp mới làm nhãn.
+   */
+  const label = custom
+    ? shorten(custom)
+    : value
+      ? labelOf(kind, value, presets)
+      : shot
+        ? shot.refName
+        : labelOf(kind, "", presets);
   const title = custom || undefined;
 
-  const startTyping = () => {
-    setDraft(custom);
-    setTyping(true);
-    setOpen(false);
-  };
-
-  /* Chốt: chuỗi RỖNG ⇒ bỏ hẳn lớp phủ, pill quay về preset đang chọn. Đó là đường
-     lùi duy nhất và nó phải hiển nhiên — không có nút "bỏ chữ" riêng nào cả. */
-  const commit = () => {
-    setTyping(false);
-    onCustom?.(draft.trim());
-  };
-
-  /* Bấm một mục có sẵn ⇒ chữ tự gõ bị GỠ. Giữ lại là pill hiện chữ cũ trong khi
-     người dùng vừa bấm một mục khác — hai câu trả lời cho một câu hỏi. */
-  const choose = (next: string) => {
-    onChange(next);
-    onCustom?.("");
-    setOpen(false);
-  };
-
-  if (typing) {
-    return (
-      <span className={cn("relative inline-block", axis && "min-w-0")}>
-        <span
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border align-baseline",
-            "border-accent bg-raised ring-1 ring-accent",
-            compact ? "px-2 py-0.5 text-caption" : "px-3 py-1",
-          )}
-        >
-          {axis && <PillAxis>{axis}</PillAxis>}
-          <input
-            autoFocus
-            value={draft}
-            aria-label={`Mô tả riêng cho ${labelOf(kind, "", presets)}`}
-            placeholder="Gõ mô tả rồi Enter…"
-            onChange={(event) => setDraft(event.target.value)}
-            onBlur={commit}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                commit();
-                return;
-              }
-              if (event.key !== "Escape") return;
-              /* Escape là HUỶ, không phải chốt-rỗng: bỏ dở một câu đang gõ không
-                 được xoá câu đã có từ trước. */
-              event.preventDefault();
-              event.stopPropagation();
-              setTyping(false);
-            }}
-            /* `w-48` chứ không `w-full`: pill nằm giữa một dòng chữ, và một ô nhập
-               co giãn theo nội dung làm cả đoạn văn nhảy sau mỗi ký tự. */
-            className="w-48 min-w-0 bg-transparent text-inherit outline-none placeholder:text-fg-muted"
-          />
-        </span>
-      </span>
-    );
-  }
+  /* Đóng hộp thì trả focus VỀ ĐÚNG cái pill vừa mở nó. Thiếu bước này thì người
+     dùng bàn phím bị thả về đầu tài liệu sau mỗi lượt chọn. */
+  const close = React.useCallback(() => {
+    flip.setOpen(false);
+    button.current?.focus();
+  }, [flip]);
 
   return (
     <span className={cn("relative inline-block", axis && "min-w-0")}>
       <PillButton
+        ref={button}
         compact={compact}
-        active={open}
-        muted={!value && !custom}
-        onClick={() => setOpen((v) => !v)}
+        active={flip.open}
+        muted={!value && !custom && !shot}
+        onClick={flip.toggle}
         aria-haspopup="listbox"
-        aria-expanded={open}
+        aria-expanded={flip.open}
         /* `aria-label` chỉ khi có nhãn trục: trình đọc màn hình phải nghe được
            TRỤC lẫn GIÁ TRỊ, mà `truncate` thì chỉ cắt phần nhìn thấy. */
         {...(axis ? { "aria-label": `${axis}: ${label}` } : {})}
@@ -389,70 +373,43 @@ export function OptionPill({
         className={axis ? "max-w-full" : undefined}
       >
         {axis && <PillAxis>{axis}</PillAxis>}
+        {/* Thumbnail đứng TRƯỚC chữ. Nút bỏ ảnh nằm ngay trên nó vì đó là hành
+            động duy nhất người ta muốn làm với tấm ảnh mà không cần mở hộp. */}
+        {shot && onDropImage && (
+          <RefImageBody projectId={projectId ?? null} image={shot} onRemove={onDropImage} />
+        )}
         <span className={cn(axis && "truncate")}>{label}</span>
         {/* Cái bút nói ra "chữ này do bạn viết, không phải một mục có sẵn" — nếu
             không thì một mô tả tự gõ trông y hệt một preset và người dùng đi tìm
             nó trong danh sách. */}
-        {custom && <Pencil aria-hidden className="size-3.5 shrink-0 opacity-60" />}
+        {!shot && custom && <Pencil aria-hidden className="size-3.5 shrink-0 opacity-60" />}
         {attaching && <Loader aria-hidden />}
         <PillCaret compact={compact} />
       </PillButton>
 
-      {open && (
-        <PillMenu label={`Chọn ${labelOf(kind, "", presets)}`} onClose={() => setOpen(false)}>
-          {/* Mục "để trống" luôn có mặt. Với kind kế thừa thì nó là MẶC ĐỊNH có
-              nghĩa ("theo cái chung"); với kind còn lại nó là đường lùi khi lỡ
-              tay chọn. Không có nó là người dùng kẹt với lựa chọn đầu tiên. */}
-          <PillMenuItem selected={!value && !custom} onSelect={() => choose("")}>
-            <span className="text-fg-muted">{canInherit ? "— theo cái chung —" : "— để trống —"}</span>
-          </PillMenuItem>
-
-          {options.map((option) => (
-            <PillMenuItem
-              key={option.value}
-              selected={!custom && option.value === value}
-              onSelect={() => choose(option.value)}
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-fg-strong">{option.vi}</span>
-                {/* Hiện luôn cụm tiếng Anh SẼ vào prompt. Đây là cả điểm của
-                    demo: người dùng thấy trước cái máy sẽ đọc, không phải đoán. */}
-                <span className="block truncate text-caption text-fg-muted">{option.en}</span>
-              </span>
-            </PillMenuItem>
-          ))}
-
-          {(onCustom || onAttachRef) && <div aria-hidden className="my-1 h-px bg-line-subtle" />}
-
-          {onCustom && (
-            <PillMenuItem selected={custom !== ""} onSelect={startTyping}>
-              <Pencil aria-hidden className="size-4 shrink-0 text-fg-muted" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-fg-strong">Gõ mô tả riêng…</span>
-                <span className="block truncate text-caption text-fg-muted">
-                  Chữ bạn viết đi thẳng vào prompt, không dịch
-                </span>
-              </span>
-            </PillMenuItem>
-          )}
-
-          {onAttachRef && (
-            <PillMenuItem
-              onSelect={() => {
-                setOpen(false);
-                onAttachRef();
-              }}
-            >
-              <ImagePlus aria-hidden className="size-4 shrink-0 text-fg-muted" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-fg-strong">Đính ảnh tham chiếu</span>
-                <span className="block truncate text-caption text-fg-muted">
-                  Tấm ảnh nằm cạnh trong câu, bỏ ra lúc nào cũng được
-                </span>
-              </span>
-            </PillMenuItem>
-          )}
-        </PillMenu>
+      {flip.open && (
+        <SourcePicker
+          label={noun}
+          groups={groups}
+          emptyLabel={canInherit ? "— theo cái chung —" : "— để trống —"}
+          value={value}
+          custom={custom}
+          image={shot}
+          projectId={projectId ?? null}
+          dropUp={flip.dropUp}
+          onClose={close}
+          /* Bấm một mục có sẵn ⇒ chữ tự gõ bị GỠ. Giữ lại là pill hiện chữ cũ
+             trong khi người dùng vừa bấm một mục khác — hai câu trả lời cho một
+             câu hỏi. Ảnh thì KHÔNG bị gỡ: một tấm ảnh nhân vật vẫn đúng khi đổi
+             tên nhân vật, và gỡ nó là xoá thứ đắt nhất họ đã tải lên. */
+          onChoose={(next) => {
+            onChange(next);
+            onCustom?.("");
+          }}
+          {...(onCustom ? { onCustom } : {})}
+          {...(onAttach ? { onAttach } : {})}
+          {...(onDropImage ? { onDropImage } : {})}
+        />
       )}
     </span>
   );

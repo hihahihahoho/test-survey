@@ -8,9 +8,8 @@ import {
   type ReactNodeViewProps,
 } from "@tiptap/react";
 import { NODE } from "../lib/schema";
-import { PillButton, PillCaret, PillMenu, PillMenuItem, useMenuFlip } from "../components/pill-ui";
+import { PillButton } from "../components/pill-ui";
 import { RefImageBody } from "../components/RefImagePill";
-import { useBrandBinding } from "./BrandProfilePill";
 import {
   EMPTY_PILL_IMAGE,
   readPillImage,
@@ -38,14 +37,14 @@ import { usePromptProjectId } from "@/features/prompt-canvas/lib/project-context
  *  · KHÔNG CÓ DỰ ÁN THÌ KHÔNG CHỌN ĐƯỢC ẢNH (route lab `/lab/prompt-composer`).
  *    Pill nói ra điều đó bằng nhãn, thay vì bấm vào rồi không có gì xảy ra.
  *
- * ╔══ VÌ SAO BẤM PILL NAY RA MỘT MENU, KHÔNG RA THẲNG HỘP CHỌN TỆP ══════════╗
- * ║ Vì đã có một nguồn ảnh thứ hai đáng được mời: MASCOT CỦA THƯƠNG HIỆU đang ║
- * ║ chọn (`brand-mascot` trong kho dùng chung). Chủ sản phẩm hỏi thẳng *"nhân  ║
- * ║ vật ở dưới cũng sẽ select theo thương hiệu nếu chọn?"* — và câu trả lời là ║
- * ║ có, nhưng là GỢI Ý chứ không tự điền: một thương hiệu có thể có nhiều linh ║
- * ║ vật, và tự chọn hộ là đặt một nhân vật người dùng chưa từng bấm vào tấm    ║
- * ║ ảnh sắp tiêu tiền. Chưa chọn thương hiệu ⇒ menu chỉ còn đúng một mục và    ║
- * ║ nó cư xử y như nút cũ.                                                    ║
+ * ╔══ PILL NÀY NAY CHỈ CÒN MỘT VIỆC: CHỌN MỘT TỆP ═══════════════════════════╗
+ * ║ Nó từng bày một menu để mời linh vật của thương hiệu (pill ảnh NHÂN VẬT),  ║
+ * ║ và mời ảnh chủ đề/phong cách cho câu Ngữ cảnh chung. Cả hai vai ấy đã dọn  ║
+ * ║ sang `optionPill`: ảnh nay nằm TRONG chính pill nó minh hoạ, và hộp chọn   ║
+ * ║ nguồn dùng chung (`SourcePicker`) là chỗ duy nhất mời preset · ảnh · chữ.  ║
+ * ║ Còn lại đúng một chỗ dùng nó: ảnh tham chiếu của thẻ Cảnh nền — nơi câu    ║
+ * ║ hỏi thật sự chỉ là "tấm nào", không có nguồn nào khác để chọn. Bày một     ║
+ * ║ menu một-mục ở đó là thêm một cú bấm cho đúng cái việc nút này vẫn làm.    ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 
@@ -56,12 +55,6 @@ function ImagePillView({ node, updateAttributes }: ReactNodeViewProps) {
   const role = readPillImageRole(node.attrs);
   const [busy, setBusy] = React.useState(false);
   const [failed, setFailed] = React.useState("");
-  const menu = useMenuFlip();
-  const brand = useBrandBinding();
-  /* Chỉ mời linh vật ở pill ảnh NHÂN VẬT. Pill ảnh của thẻ Cảnh nền cũng là
-     `ImagePill` (vai trò rỗng), và mời một linh vật làm ảnh tham chiếu cho một
-     cảnh nền là mời sai chỗ. */
-  const mascots = role === "character" ? (brand?.mascots ?? []) : [];
 
   const adopt = async (work: () => Promise<{ refName: string; path: string }>) => {
     setBusy(true);
@@ -105,29 +98,16 @@ function ImagePillView({ node, updateAttributes }: ReactNodeViewProps) {
           ? `Đổi ảnh tham chiếu (${image.refName})`
           : "Chọn ảnh tham chiếu";
 
-  const openFiles = () => {
-    menu.setOpen(false);
-    inputRef.current?.click();
-  };
-
   return (
     <NodeViewWrapper as="span" className="relative inline-block">
       <PillButton
         muted={!image.path}
-        active={menu.open}
-        onClick={(event) => {
+        onClick={() => {
           if (!projectId || busy) return;
-          /* Không có gợi ý nào ⇒ ĐỪNG bày một menu một-mục: đó là thêm một cú bấm
-             cho đúng cái việc mà nút này vẫn luôn làm. */
-          if (mascots.length === 0) {
-            openFiles();
-            return;
-          }
-          menu.toggle(event);
+          inputRef.current?.click();
         }}
         aria-label={label}
         title={label}
-        {...(mascots.length > 0 ? { "aria-haspopup": "listbox" as const, "aria-expanded": menu.open } : {})}
       >
         {busy ? (
           <>
@@ -147,32 +127,7 @@ function ImagePillView({ node, updateAttributes }: ReactNodeViewProps) {
             <span>ảnh</span>
           </>
         )}
-        {mascots.length > 0 && <PillCaret />}
       </PillButton>
-
-      {menu.open && (
-        <PillMenu label="Chọn ảnh nhân vật" dropUp={menu.dropUp} onClose={() => menu.setOpen(false)}>
-          {mascots.map((item) => (
-            <PillMenuItem
-              key={item.assetId}
-              onSelect={() => {
-                menu.setOpen(false);
-                void adopt(() => brand!.copyAsset(item.assetId));
-              }}
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-fg-strong">{item.name}</span>
-                <span className="block truncate text-caption text-fg-muted">Nhân vật của {brand?.name}</span>
-              </span>
-            </PillMenuItem>
-          ))}
-          <div aria-hidden className="my-1 h-px bg-line-subtle" />
-          <PillMenuItem onSelect={openFiles}>
-            <ImagePlus aria-hidden className="size-4 shrink-0 text-fg-muted" />
-            <span className="text-fg-strong">Chọn ảnh từ máy…</span>
-          </PillMenuItem>
-        </PillMenu>
-      )}
 
       <input
         ref={inputRef}
