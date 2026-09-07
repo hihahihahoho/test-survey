@@ -38,6 +38,7 @@ const readSrc = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
 const H = vi.hoisted(() => ({
   startRun: vi.fn(),
   getRun: vi.fn(),
+  cancelRun: vi.fn(),
   promptPreview: vi.fn(),
   saveContract: vi.fn(),
   getContract: vi.fn(),
@@ -57,6 +58,7 @@ vi.mock("@/lib/api/endpoints", async (orig) => {
       ...real.api.runs,
       start: H.startRun,
       get: H.getRun,
+      cancel: H.cancelRun,
       /* Stream KHÔNG BAO GIỜ tự kết thúc — đúng như thật (agent giữ kết nối mở).
          Ca test giữ `onEvent` để bắn `run.finished` vào đúng thời điểm nó muốn. */
       stream: (runId: string, opts: { onEvent: (ev: unknown) => void }) => {
@@ -103,7 +105,7 @@ function wrap(ui: React.ReactElement) {
 }
 
 beforeEach(() => {
-  for (const fn of [H.startRun, H.getRun, H.promptPreview, H.saveContract, H.getContract, H.workflowDraft, H.saveWorkflowDraft, H.getProject, H.kit]) {
+  for (const fn of [H.startRun, H.getRun, H.cancelRun, H.promptPreview, H.saveContract, H.getContract, H.workflowDraft, H.saveWorkflowDraft, H.getProject, H.kit]) {
     fn.mockReset();
   }
   H.streams.clear();
@@ -140,7 +142,10 @@ function QueueHarness({
         <div key={id}>
           <button type="button" onClick={() => queue.enqueue(id)}>{`gen-${id}`}</button>
           <button type="button" onClick={() => queue.dequeue(id)}>{`drop-${id}`}</button>
+          <button type="button" onClick={() => queue.stop(id)}>{`stop-${id}`}</button>
           <span data-testid={`s-${id}`}>{queue.stateOf(id).status}</span>
+          <span data-testid={`m-${id}`}>{queue.stateOf(id).message}</span>
+          <span data-testid={`stopping-${id}`}>{String(queue.stopping === id)}</span>
         </div>
       ))}
       {/* Hai nút của «Vẽ tất cả»: xếp cả loạt, và bỏ mấy thẻ còn đang chờ. */}
@@ -228,6 +233,49 @@ describe("hàng đợi vẽ — mỗi dự án MỘT lượt, thẻ sau xếp h�
     expect(statusOf("b1")).toBe("running");
   });
 
+  /* ══ NÚT DỪNG — cái mà «Bỏ khỏi hàng» cố ý không làm ═══════════════════════
+     Thẻ đang chạy đã tiêu lượt; thứ dừng được là thời gian. Ca này khoá ba
+     điều: gọi ĐÚNG lượt lên #36, không tự chốt sổ trước khi agent xác nhận,
+     và khi agent phát cancelled thì thẻ kế phóng như mọi lượt kết thúc khác. */
+  it("«Dừng» gọi cancel lên đúng lượt, đợi agent xác nhận, rồi thẻ kế tự phóng", async () => {
+    H.startRun.mockResolvedValueOnce({ runId: "r-1", jobs: [] }).mockResolvedValueOnce({ runId: "r-2", jobs: [] });
+    let cancelled = false;
+    H.getRun.mockImplementation(async (id: string) =>
+      id === "r-1" && cancelled ? makeRun("r-1", "cancelled", "failed") : makeRun(id, "running", "running"),
+    );
+    let release: () => void = () => {};
+    H.cancelRun.mockImplementation(() => new Promise<{ ok: true }>((resolve) => { release = () => resolve({ ok: true }); }));
+
+    wrap(<QueueHarness prepare={prepare} />);
+    fireEvent.click(screen.getByText("gen-b1"));
+    await waitFor(() => expect(statusOf("b1")).toBe("running"));
+    fireEvent.click(screen.getByText("gen-b2"));
+    await waitFor(() => expect(statusOf("b2")).toBe("queued"));
+
+    // Thẻ đang CHỜ không có gì để dừng — không được gọi agent vô cớ.
+    fireEvent.click(screen.getByText("stop-b2"));
+    await act(async () => {});
+    expect(H.cancelRun).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText("stop-b1"));
+    // `mutateAsync` gọi mutationFn ở microtask kế ⇒ đợi, không đọc ngay.
+    await waitFor(() => expect(H.cancelRun).toHaveBeenCalledWith("r-1"));
+    await waitFor(() => expect(screen.getByTestId("stopping-b1").textContent).toBe("true"));
+    // Chưa có xác nhận ⇒ thẻ vẫn là đang chạy, không "giả vờ" đã dừng.
+    expect(statusOf("b1")).toBe("running");
+
+    cancelled = true;
+    await act(async () => { release(); });
+    await act(async () => {
+      H.streams.get("r-1")?.({ type: "run.finished", seq: 5 });
+    });
+    await waitFor(() => expect(statusOf("b1")).toBe("fail"));
+    expect(screen.getByTestId("m-b1").textContent).toBe("Lượt vẽ đã bị dừng.");
+    expect(screen.getByTestId("stopping-b1").textContent).toBe("false");
+    await waitFor(() => expect(statusOf("b2")).toBe("running"));
+    expect(H.startRun.mock.calls[1]![1]).toMatchObject({ jobs: ["chinh-b2"] });
+  });
+
   /* ══ «VẼ TẤT CẢ» — MỘT CÚ BẤM, N LƯỢT, VẪN MỘT LƯỢT MỘT LÚC ══════════════
      Nút này là chỗ duy nhất trong màn xếp hàng loạt, nên nó cũng là chỗ duy
      nhất một lỗi gộp state biến thành TIỀN: xếp trùng một thẻ là vẽ lại đúng
@@ -303,6 +351,8 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
         gen={{ status: "idle", message: "", runId: null, done: 0, total: 0 }}
         onGen={() => {}}
         onDequeue={() => {}}
+        onStop={() => {}}
+        stopping={false}
         prompt={(extra.prompt ?? IDLE) as never}
         styleLine={extra.styleLine ?? ""}
         onWantPrompt={onWantPrompt}
@@ -329,6 +379,8 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
           gen={{ status: "idle", message: "", runId: null, done: 0, total: 0 }}
           onGen={() => {}}
           onDequeue={() => {}}
+        onStop={() => {}}
+        stopping={false}
           prompt={{ status: "idle", jobs: [], missing: [], message: "", details: [], hash: "" }}
           styleLine=""
           onWantPrompt={want}

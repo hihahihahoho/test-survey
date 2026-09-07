@@ -372,6 +372,8 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
             gen={queue.stateOf(block.id)}
             onGen={() => queue.enqueue(block.id)}
             onDequeue={() => queue.dequeue(block.id)}
+            onStop={() => queue.stop(block.id)}
+            stopping={queue.stopping === block.id}
             prompt={prompts.stateOf(block.id)}
             styleLine={styleLine}
             onWantPrompt={() => wantPrompt(block.id)}

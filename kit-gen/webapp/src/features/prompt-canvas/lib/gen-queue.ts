@@ -1,7 +1,7 @@
 import * as React from "react";
 import { AgentError } from "@/lib/api/client";
 import { presentError } from "@/lib/api/errors";
-import { useRun, useRunStream } from "@/lib/hooks";
+import { useCancelRun, useRun, useRunStream } from "@/lib/hooks";
 import { useGenerateRun } from "@/features/runs";
 import { isRunLive } from "@/features/kit-core/lib/generated-results";
 
@@ -73,6 +73,18 @@ export interface GenQueue {
   /** Bỏ một thẻ ĐANG CHỜ khỏi hàng. Thẻ đang chạy thì không bỏ được (đã tiêu lượt). */
   dequeue: (blockId: string) => void;
   /**
+   * DỪNG thẻ ĐANG VẼ: gọi `#36 cancel` lên đúng lượt của nó. Lượt đã tiêu nên
+   * không hoàn lại được; cái dừng được là thời gian chờ và hàng đợi phía sau
+   * (thẻ kế phóng ngay khi agent phát `run.finished` với trạng thái cancelled).
+   *
+   * Đời trước ghi ở `dequeue`: "muốn dừng thì đó là chuyện của nút Dừng ở màn
+   * lượt chạy". Màn ấy đã bị bỏ (chỉ còn một màn /k), nên lời hẹn đó rơi vào
+   * khoảng không — chủ sản phẩm hỏi thẳng "không có nút stop vẽ à". Đây là nút đó.
+   */
+  stop: (blockId: string) => void;
+  /** Thẻ đang được gửi lệnh dừng (đợi agent xác nhận) — để nút hiện «Đang dừng…». */
+  stopping: string | null;
+  /**
    * Bỏ MỌI thẻ chưa phóng khỏi hàng. Thẻ đang chạy ở lại — nó đã tiêu lượt rồi,
    * và dừng nó là việc của nút Dừng ở màn lượt chạy, không phải của hàng đợi.
    */
@@ -100,6 +112,8 @@ export function useGenQueue(
   const [activeRunId, setActiveRunId] = React.useState<string | null>(null);
 
   const gen = useGenerateRun(projectId);
+  const cancel = useCancelRun(projectId);
+  const [stopping, setStopping] = React.useState<string | null>(null);
   const run = useRun(activeRunId, { poll: false });
   /* Stream để tiến trình chạy MƯỢT: nó đẩy `progress`/`job.done` thẳng vào cache
      của Query, tức chính chỗ `useRun` ở trên đọc. Không có state song song. */
@@ -235,6 +249,19 @@ export function useGenQueue(
     setEntries((prev) => prev.filter((e) => e.blockId !== blockId || e.runId !== null));
   }, []);
 
+  const stop = React.useCallback((blockId: string) => {
+    const entry = entriesRef.current.find((e) => e.blockId === blockId && e.runId !== null);
+    if (!entry?.runId) return;
+    setStopping(blockId);
+    /* Không tự "chốt sổ" thẻ ở đây: agent là người biết lượt đã chết hay chưa.
+       Nó phát `run.finished{cancelled}` ⇒ effect "Lượt kết thúc" phía trên ghi
+       "Lượt vẽ đã bị dừng." và mở đường cho thẻ kế — đúng con đường của mọi
+       lượt khác, không có nhánh riêng cho ca dừng. */
+    cancel.mutateAsync(entry.runId)
+      .catch(() => { /* lỗi mạng: nút trở lại «Dừng», người dùng bấm lại */ })
+      .finally(() => setStopping((cur) => (cur === blockId ? null : cur)));
+  }, [cancel]);
+
   const clearWaiting = React.useCallback(() => {
     setEntries((prev) => prev.filter((e) => e.runId !== null));
   }, []);
@@ -244,6 +271,8 @@ export function useGenQueue(
     enqueue,
     enqueueMany,
     dequeue,
+    stop,
+    stopping,
     clearWaiting,
     pending: entries.map((e) => e.blockId),
     waiting: entries.filter((e) => e.runId === null).length,

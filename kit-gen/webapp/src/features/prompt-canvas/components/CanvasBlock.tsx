@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertCircle, Check, Clock, Copy, Download, Loader2, RotateCw, Sparkles, Trash2 } from "lucide-react";
+import { AlertCircle, Check, Clock, Copy, Download, Loader2, RotateCw, Sparkles, Square, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
@@ -72,6 +72,10 @@ export interface CanvasBlockProps {
   gen: GenBlockState;
   onGen: () => void;
   onDequeue: () => void;
+  /** Dừng lượt đang vẽ của thẻ này — xem `GenQueue.stop`. */
+  onStop: () => void;
+  /** Đang đợi agent xác nhận lệnh dừng. */
+  stopping: boolean;
   prompt: BlockPromptState;
   /**
    * PROMPT TỔNG PHONG CÁCH (`variant.style`) — dựng ở màn, hiện ở tab Prompt.
@@ -103,7 +107,7 @@ const BLOCK_TITLE: Record<Block["kind"], string> = {
 };
 
 export function CanvasBlock(props: CanvasBlockProps) {
-  const { projectId, block, sheets, onDelete, gen, onGen, onDequeue, prompt, styleLine, onWantPrompt, hash, promptBusy } = props;
+  const { projectId, block, sheets, onDelete, gen, onGen, onDequeue, onStop, stopping, prompt, styleLine, onWantPrompt, hash, promptBusy } = props;
   const [tab, setTab] = React.useState<BlockTab>("compose");
 
   const title = BLOCK_TITLE[block.kind];
@@ -138,7 +142,7 @@ export function CanvasBlock(props: CanvasBlockProps) {
             <TabButton active={tab === "compose"} onClick={() => setTab("compose")}>Soạn</TabButton>
             <TabButton active={tab === "prompt"} onClick={openPrompt}>Prompt</TabButton>
           </div>
-          <GenControl gen={gen} canGen={canGen} onGen={onGen} onDequeue={onDequeue} />
+          <GenControl gen={gen} canGen={canGen} onGen={onGen} onDequeue={onDequeue} onStop={onStop} stopping={stopping} />
           <button
             type="button"
             onClick={onDelete}
@@ -226,11 +230,13 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
    Nút Vẽ + trạng thái hàng đợi
    ══════════════════════════════════════════════════════════════════════════ */
 
-function GenControl({ gen, canGen, onGen, onDequeue }: {
+function GenControl({ gen, canGen, onGen, onDequeue, onStop, stopping }: {
   gen: GenBlockState;
   canGen: boolean;
   onGen: () => void;
   onDequeue: () => void;
+  onStop: () => void;
+  stopping: boolean;
 }) {
   if (gen.status === "queued") {
     return (
@@ -246,9 +252,24 @@ function GenControl({ gen, canGen, onGen, onDequeue }: {
 
   if (gen.status === "running") {
     return (
-      <span className="inline-flex items-center gap-1 text-caption text-accent-text">
-        <Loader2 aria-hidden className="size-4 animate-spin" />
-        {gen.total > 0 ? `Đang vẽ ${gen.done}/${gen.total}` : gen.message}
+      <span className="flex items-center gap-2">
+        <span className="inline-flex items-center gap-1 text-caption text-accent-text">
+          <Loader2 aria-hidden className="size-4 animate-spin" />
+          {gen.total > 0 ? `Đang vẽ ${gen.done}/${gen.total}` : gen.message}
+        </span>
+        {/* Dừng KHÔNG hoàn lại lượt đã tiêu — nói thẳng ở `title`, không ở một
+            hộp xác nhận: người bấm Dừng đang sốt ruột, và cái họ cứu được là thời
+            gian chờ của cả hàng phía sau. */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onStop}
+          disabled={stopping}
+          title="Dừng lượt vẽ này. Lượt đã tiêu không hoàn lại; thẻ kế trong hàng sẽ chạy ngay."
+        >
+          {stopping ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <Square aria-hidden className="size-3.5" />}
+          {stopping ? "Đang dừng…" : "Dừng"}
+        </Button>
       </span>
     );
   }
