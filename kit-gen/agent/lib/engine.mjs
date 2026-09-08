@@ -83,10 +83,19 @@ export async function prepareEngine(engineDir, projectDirAbs) {
    của user đã lỡ lưu "rect" thì vẫn phải chạy được. Contract v2 KHÔNG đổi lược đồ:
    "rect" vẫn hợp lệ, chỉ được dịch sang "rrect" khi ghi styles.json cho engine. */
 const SHAPE_TO_ENGINE = { rect: "rrect" }
+/* `matte` BỊ LƯỢC Ở ĐÂY (08/09/2026). Nó là cờ đời tách-nền-bằng-key: `gen.sh` in
+   thêm một khối câu chữ theo nó, `slice.py` chọn nhánh giải ngược theo nó. Cả hai
+   vế đã bỏ — độ trong của một ô nay chỉ là chữ trong `spec`. Contract ĐÃ LƯU của
+   người dùng vẫn còn khoá ấy và vẫn phải chạy được: nó không bị coi là lỗi, không
+   bị cảnh báo, chỉ đơn giản không đi tiếp sang styles.json. (`validate.mjs` chưa
+   bao giờ kiểm `matte` nên ở đó không có gì để bỏ.) */
 function engineSkel(skel) {
   const s = skel ?? DEFAULT_SKEL_V1
   const mapped = SHAPE_TO_ENGINE[s.shape]
-  return mapped ? { ...s, shape: mapped } : s
+  const out = mapped ? { ...s, shape: mapped } : s
+  if (!("matte" in out)) return out
+  const { matte: _drop, ...rest } = out
+  return rest
 }
 /** skel mặc định khi component không khai — dùng shape engine VẼ ĐƯỢC. */
 const DEFAULT_SKEL_V1 = { shape: "rrect", w: 0.8, h: 0.6 }

@@ -105,9 +105,11 @@ export function cellLabel(cell: unknown): string {
   return CELL_LABELS[c] ?? c;
 }
 
-/** Cờ khung xương hiện thành badge (§3-S3.3: matte glow|glass / slice9 / free). */
+/** Cờ khung xương hiện thành badge (§3-S3.3: slice9 / free / anchor).
+ *  `matte` từng là cờ thứ tư ở đây; nó bị bỏ 08/09/2026 cùng cả khái niệm "cách
+ *  tách của một ô" — độ trong nay là chữ trong `spec`, không phải một badge. */
 export interface SkelFlag {
-  key: "slice9" | "free" | "matte" | "anchor";
+  key: "slice9" | "free" | "anchor";
   label: string;
   hint: string;
 }
@@ -119,21 +121,6 @@ export function skelFlags(skel: Partial<Skel> | null | undefined): SkelFlag[] {
   }
   if (skel?.free === true) {
     out.push({ key: "free", label: "khung tự do", hint: "Không có khung an toàn cố định — hình tự do theo art." });
-  }
-  const matte = skel?.matte;
-  if (typeof matte === "string" && matte !== "") {
-    out.push({
-      key: "matte",
-      label: matte === "glow" ? "phát sáng" : matte === "glass" ? "trong suốt" : `tách: ${matte}`,
-      hint:
-        matte === "glow"
-          ? "Tách nền kiểu phát sáng: giữ vầng sáng bán trong suốt quanh element."
-          : matte === "glass"
-            ? "Tách nền kiểu kính: ruột rỗng nhìn xuyên qua được."
-            : "Chế độ tách nền riêng cho element này.",
-    });
-  } else if (matte === true) {
-    out.push({ key: "matte", label: "tách kỹ", hint: "Bật chế độ tách nền mềm cho element này." });
   }
   if (skel?.anchor === "bottom") {
     out.push({ key: "anchor", label: "dán đáy", hint: "Element bám đáy ô thay vì căn giữa." });

@@ -408,15 +408,17 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     expect(ui.components[0]!.spec).not.toContain("centered label");
   });
 
-  it("đục nền kéo theo CÁCH TÁCH: `matte` + câu alpha, không phải chỉ chữ", () => {
+  /* GUARD ÂM (08/09/2026). Đục nền từng nói HAI LẦN: một câu trong `spec` VÀ một cờ
+     `skel.matte` bắt `gen.sh` in thêm khối kỹ thuật của riêng nó. Nay đúng một câu,
+     đúng một chỗ — `glaze.ts`. Ca này canh cả hai chiều: chữ phải tới, cờ phải không. */
+  it("đục nền là ĐÚNG MỘT câu trong `spec`, không kèm cờ `matte` nào", () => {
     const ui = composerToContract(full(), { presets: PRESETS }).sheets.find((s) => s.id === "ui")!;
     const glassy = ui.components[0]!;
-    /* Nửa PROMPT… */
-    expect(glassy.spec).toContain("alpha about 64 of 255");
-    /* …và nửa SLICER. Thiếu nửa này thì máy vẽ ra kính đục và slice cắt như mảng đặc. */
-    expect(glassy.skel.matte).toBe("glass");
-    /* Ô không chọn đục nền ⇒ KHÔNG mọc `matte` (không âm thầm hạ chất lượng tách). */
-    expect(ui.components[1]!.skel.matte).toBeUndefined();
+    expect(glassy.spec).toContain(glazePhrase("glass"));
+    expect(glassy.spec).toContain("about 64 of 255");
+    for (const c of ui.components) expect(c.skel, c.file).not.toHaveProperty("matte");
+    /* Ô không chọn đục nền ⇒ không mọc thêm chữ độ trong nào. */
+    expect(ui.components[1]!.spec).not.toContain("alpha");
   });
 
   it("chất liệu ĐỜI CŨ được dịch sang đục nền, không rơi mất và không nói chữ thẩm mỹ", () => {
@@ -426,8 +428,9 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     /* Gỗ/đá/kim loại là THẨM MỸ ⇒ về "nền đặc": thẩm mỹ nay do prompt tổng lo. */
     expect(glazeFromMaterial("wood")).toBe("");
     expect(glazeFromMaterial("gold-metal")).toBe("");
-    const legacySpec = resolveElementSpec({ spec: "coin icon", skel: { shape: "rrect" } }, { material: "ice" });
-    expect(legacySpec).toContain("alpha about 128 of 255");
+    const legacySpec = resolveElementSpec({ spec: "coin icon" }, { material: "ice" });
+    expect(legacySpec).toBe(`coin icon, ${glazePhrase("ice")}`);
+    expect(legacySpec).toContain("about 128 of 255");
     expect(legacySpec).not.toContain("glacial");
   });
 

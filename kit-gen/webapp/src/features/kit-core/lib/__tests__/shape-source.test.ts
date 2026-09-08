@@ -15,15 +15,15 @@
  * chiếu, nên hai describe so-từng-ký-tự ĐÃ XOÁ thay vì để chúng so với chính mình.
  *
  * Những gì Ở LẠI vẫn đối chiếu với mã nguồn THẬT — whitelist shape của
- * `agent/lib/validate.mjs`, hai nhánh `matte` của `gen.sh`, và các hằng số cắt của
- * `slice.py`. Đó vẫn là chỗ webapp có thể trôi khỏi engine một cách lặng lẽ.
+ * `agent/lib/validate.mjs` và các hằng số cắt của `slice.py`. Đó vẫn là chỗ webapp
+ * có thể trôi khỏi engine một cách lặng lẽ.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  MATTE_VALUES, POSE_META, SHAPE_META, SLICE_CONST,
+  POSE_META, SHAPE_META, SLICE_CONST,
   cellAspect, elementPixels, isKnownShape, poseSvgMarkup, shapeOptions, silhouetteMarkup,
 } from "../shapes";
 
@@ -78,18 +78,22 @@ describe("bảng dáng — 19 dáng, mỗi dáng 13 khớp", () => {
 });
 
 describe("hằng số engine rút từ slice.py", () => {
-  it("matte đúng 2 giá trị — và nguồn nay là gen.sh, không phải slice.py", () => {
-    expect([...MATTE_VALUES].sort()).toEqual(["glass", "glow"]);
-    // `matte` chỉ còn đổi CÂU CHỮ của prompt. Hai nhánh đó phải có thật trong gen.sh…
+  /* GUARD ÂM (08/09/2026). `skel.matte` từng là cờ mà CẢ HAI tầng cùng đọc — gen.sh
+     in thêm một khối "LIGHT EFFECT…"/"SEE-THROUGH ELEMENT…", slice.py chọn nhánh giải
+     ngược. Cả hai vế đã bỏ: độ trong của một ô nay CHỈ là câu chữ của `glaze.ts` nằm
+     trong `spec`. Ca này canh cái cờ ấy không lặng lẽ mọc lại ở tầng engine — mọc lại
+     là có ngay hai bản của cùng một luật, đúng thứ đợt dọn này gỡ đi.
+     Quét LỜI GỌI chứ không quét chữ: docstring của cả hai file cố ý kể lại lịch sử. */
+  it("engine KHÔNG còn đọc `skel.matte` — cả gen.sh lẫn slice.py", () => {
+    for (const f of ["gen.sh", "slice.py"]) {
+      const src = read(f);
+      expect(src, f).not.toMatch(/get\("matte"\)/);
+      expect(src, f).not.toMatch(/\["matte"\]/);
+    }
+    // …và không câu prompt nào của engine còn tự phát ra hợp đồng alpha của riêng nó.
     const gen = read("gen.sh");
-    expect(gen).toMatch(/skel"\]\.get\("matte"\) == "glow"/);
-    expect(gen).toMatch(/skel"\]\.get\("matte"\) == "glass"/);
-    /* …và slice.py TUYỆT ĐỐI không được ĐỌC lại khoá đó: nhánh `matte:"glow"` chính
-       là nhánh vẽ trên nền đen. Quét LỜI GỌI chứ không quét chữ — docstring của
-       slice.py cố ý kể lại tên cỗ máy đã bỏ. */
-    const slice = read("slice.py");
-    expect(slice).not.toMatch(/get\("matte"\)/);
-    expect(slice).not.toMatch(/\["matte"\]/);
+    expect(gen).not.toMatch(/LIGHT EFFECT/);
+    expect(gen).not.toMatch(/SEE-THROUGH ELEMENT/);
   });
 
   it("KHÔNG còn tham số cắt nào — slice.py chỉ crop theo toạ độ", () => {

@@ -20,7 +20,6 @@ import {
   resolveElementSpec,
   type SheetLimits,
 } from "@/features/kit-core/lib/kitset-to-contract";
-import type { KitElementSkel } from "@/features/kit-core/lib/model";
 import type { StyleAxes } from "@/features/kit-core/lib/model";
 import { STYLE_AXIS_IDS } from "@/features/kit-core/lib/form-model";
 import { subjectAxisLine } from "@/features/kit-core/lib/style-phrases";
@@ -97,20 +96,22 @@ const MAX_CELLS_SQUARE = 16;
  * ║ Nay `ElementPreset.skel` khai hình dạng thật của từng loại, và ba thứ     ║
  * ║ dưới đây đi ĐÚNG vào contract để engine biết: `shape` (gen.sh in toạ độ   ║
  * ║ safe zone, slice.py nắn lõi về hộp ấy), `slice9` (manifest ghi inset      ║
- * ║ 9-slice), `free`/`matte` (dao cắt bám lõi / cách tách nền).               ║
+ * ║ 9-slice), `free` (dao cắt bám lõi).                                       ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * Ba tầng, tầng sau đè tầng trước:
- *  ① `skel` của loại element — `shape`, `slice9`, `free`, `matte` và tỉ lệ gốc;
- *  ② `glaze` của dòng — `matte` (`mergeElementSkel` là nơi biết luật ấy);
- *  ③ `size` — HỘP VẼ tính bằng PIXEL, chia lại theo ô thật của tấm này.
+ * Hai tầng, tầng sau đè tầng trước:
+ *  ① `skel` của loại element — `shape`, `slice9`, `free` và tỉ lệ gốc;
+ *  ② `size` — HỘP VẼ tính bằng PIXEL, chia lại theo ô thật của tấm này.
  *
- * ⚠️ TẦNG ③ KHÔNG CÒN LÀ CỠ NGƯỜI DÙNG CHỌN. Cỡ chọn ở pill «Cỡ» là cỡ ĐẦU RA
+ * Đục nền KHÔNG có mặt ở đây nữa: nó chỉ còn là CHỮ (`resolveElementSpec`), không
+ * còn cờ `skel.matte` nào đi kèm — xem khối đầu `kit-core/lib/glaze.ts`.
+ *
+ * ⚠️ TẦNG ② KHÔNG CÒN LÀ CỠ NGƯỜI DÙNG CHỌN. Cỡ chọn ở pill «Cỡ» là cỡ ĐẦU RA
  * (`component.out`) — cỡ element phải có khi rời khỏi app. Hộp vẽ thì luôn là hộp
  * LỚN NHẤT vừa lề của ô mà giữ đúng tỉ lệ ấy (`drawBox`), để máy vẽ ăn trọn độ
  * phân giải của ảnh sinh; co về cỡ thật là việc của code lúc xuất.
  *
- * Tầng ③ LUÔN có mặt. Bỏ trống nó thì `w`/`h` của ① được đọc như phân số của Ô
+ * Tầng ② LUÔN có mặt. Bỏ trống nó thì `w`/`h` của ① được đọc như phân số của Ô
  * THẬT — mà ô thật to nhỏ theo lưới, nên cùng một cái nút ra 245px trên lưới 4×4
  * và 489px trên lưới 2×2. Một con số trên màn mà contract không giữ là con số tệ
  * hơn không có.
@@ -119,13 +120,11 @@ const MAX_CELLS_SQUARE = 16;
  * (`rrect` 0.8×0.6 — đúng khung trung tính cũ): một cái tên tự gõ không nói được
  * hình dạng nào, nên ở đó thật sự không có gì tốt hơn.
  */
-function cellSkel(
-  element: ElementPreset | undefined,
-  glaze: KitElementSkel,
-  size: SizePx | null,
-): Skel {
+function cellSkel(element: ElementPreset | undefined, size: SizePx | null): Skel {
   const base = element?.skel ?? CUSTOM_ELEMENT_SKEL;
-  return mergeElementSkel(base, { ...glaze, ...(size ?? {}) });
+  /* Vẫn đi qua `mergeElementSkel` dù chỉ còn `w`/`h` để trộn: đó cũng là cửa lược
+     bỏ `skel.matte` của preset ĐỜI CŨ mà người dùng đã lưu vào thư viện riêng. */
+  return mergeElementSkel(base, { ...(size ?? {}) });
 }
 
 /**
@@ -618,12 +617,9 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
          xem `ElementPreset.en`. Nhờ vậy thứ tự này đọc ra đúng một câu tiếng Anh:
          "popover, chunky cartoon style, a thick rim with corner accents…". */
       const text = [element?.en ?? cell.elementId, style, decor].filter(Boolean).join(", ");
-      /* `resolveElementSpec` là nơi DUY NHẤT biết cách nối đục nền (và mức kính)
-         vào mô tả một ô — dùng lại thay vì chép luật nối chuỗi sang đây. */
+      /* `resolveElementSpec` là nơi DUY NHẤT biết cách nối câu đục nền vào mô tả
+         một ô — dùng lại thay vì chép luật nối chuỗi sang đây. */
       const glaze = { glaze: cell.glazeId };
-      /* Dựng TRƯỚC `templateSpec` vì `resolveElementSpec` đọc `skel.matte` để biết
-         có nói câu "mức kính" hay không — và `matte` ấy có thể đến từ chính loại
-         element (`element-lib` khai `matte:"glass"` cho nút viền, khay kính…). */
       /* HAI CỠ, KHÔNG PHẢI MỘT.
          · `out` = cỡ ĐẦU RA (pill «Cỡ», nấc S/M/L/XL theo cạnh dài, hoặc mặc định
            của loại) — chỉ đi vào manifest để tầng xuất co lõi về đúng cỡ ấy;
@@ -634,8 +630,8 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
       const draw = drawBox(cellPx, cellPx, out.w, out.h);
       /* Về PHÂN SỐ Ô — đơn vị của `skel.w/h` (V-06 ∈ (0,1]), không phải pixel. */
       const size: SizePx = { w: draw.w / cellPx, h: draw.h / cellPx };
-      const skel = cellSkel(element, glaze, size);
-      const templateSpec = tidy([resolveElementSpec({ spec: text, skel }, glaze), cell.note.trim()].filter(Boolean).join(", "));
+      const skel = cellSkel(element, size);
+      const templateSpec = tidy([resolveElementSpec({ spec: text }, glaze), cell.note.trim()].filter(Boolean).join(", "));
       /* Câu tự do RỖNG (người dùng xoá sạch dòng) ⇒ rơi về khuôn, KHÔNG ra ô
          không mô tả gì. Bỏ hẳn ô đi thì lưới tụt một bậc và mọi ô sau nhảy chỗ —
          một dòng bị xoá chữ không được kéo theo cả tấm đổi bố cục. */

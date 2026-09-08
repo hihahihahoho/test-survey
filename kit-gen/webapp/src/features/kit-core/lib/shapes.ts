@@ -14,10 +14,10 @@
  * Ca `__tests__/shape-source.test.ts` so TỪNG KÝ TỰ markup với file gốc — lệch là FAIL.
  */
 import {
-  DEFAULT_POSES, LIMBS, MATTE_VALUES, POSE_META, SHAPE_META, SLICE_CONST,
+  DEFAULT_POSES, LIMBS, POSE_META, SHAPE_META, SLICE_CONST,
 } from "./shape-data.generated";
 
-export { DEFAULT_POSES, MATTE_VALUES, SLICE_CONST, SHAPE_META, POSE_META };
+export { DEFAULT_POSES, SLICE_CONST, SHAPE_META, POSE_META };
 
 /** Màu của silhouettes.js (FILL/EDGE) — hình khung xương là ẢNH GỬI CHO MODEL,
  *  không phải phần tử giao diện, nên nó KHÔNG dùng token màu của app: đổi màu ở

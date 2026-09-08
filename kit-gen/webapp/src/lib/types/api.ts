@@ -895,7 +895,7 @@ export const kitFileSchema = z.looseObject({
    * `"alpha"` | `"rgb"` — tấm mà ô này cắt ra CÓ nền trong suốt hay không.
    *
    * ╔══ VÌ SAO NÓ THAY CHỖ `blend` ═════════════════════════════════════════════╗
-   * ║ `blend:"screen"` từng đi kèm ô `matte:"glow"`, vì `slice.py` tách ô đó ra  ║
+   * ║ `blend:"screen"` từng đi kèm ô hiệu ứng phát sáng, vì `slice.py` tách nó   ║
    * ║ khỏi một TẤM ĐEN nên PNG mang alpha = độ sáng và chỉ vẽ đúng bằng phép     ║
    * ║ CỘNG. Nhánh nền đen đã bỏ hẳn 07/09/2026 — model trả alpha thật, dao cắt   ║
    * ║ không đụng vào alpha — nên không còn ô nào cần blend mode.                 ║

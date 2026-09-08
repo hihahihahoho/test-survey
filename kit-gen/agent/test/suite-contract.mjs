@@ -251,6 +251,41 @@ export async function run({ api, pid, wsRoot, agentDir }) {
     eq("drawScale" in nen, false, "element không khai cỡ ⇒ không có khoá drawScale")
   })
 
+  /* ══ CONTRACT ĐỜI CŨ CÒN `skel.matte` — LƯỢC ÊM, KHÔNG NỔ ════════════════════
+     `matte` là cờ đời tách-nền-bằng-key: `gen.sh` in thêm một khối câu chữ theo nó,
+     `slice.py` chọn nhánh giải ngược theo nó. Cả hai vế đã bỏ 08/09/2026 — độ trong
+     của một ô nay chỉ là chữ trong `spec` (webapp `kit-core/lib/glaze.ts`).
+     Nhưng contract ĐÃ LƯU trên máy người dùng vẫn mang khoá ấy, và một dự án cũ mở
+     lên phải chạy được y như cũ: không lỗi validate, không cảnh báo, chỉ là khoá đó
+     không đi tiếp sang styles.json. Ca này khoá đúng hai vế đó. */
+  await it("contract đời cũ mang skel.matte ⇒ bị lược êm, không lỗi", async () => {
+    const styles = contractToStylesV1({
+      schemaVersion: 4,
+      variants: [{ id: "tet", vi: "Tết" }],
+      sheets: [{
+        id: "ui", grid: { cols: 2, rows: 1 }, orient: "landscape", variants: ["tet"],
+        components: [
+          { file: "01-fx", vi: "Nổ sáng", spec: "a radial light burst", skel: { shape: "burst", w: 0.6, h: 0.9, free: true, matte: "glow" } },
+          { file: "02-panel", vi: "Khay", spec: "a background panel", skel: { shape: "rect", w: 0.8, h: 0.8, matte: "vitmatte" } },
+        ],
+      }],
+    })
+    const [fx, panel] = styles.sheets[0].components
+    eq("matte" in fx.skel, false, "matte glow bị lược khỏi styles.json")
+    eq("matte" in panel.skel, false, "matte vitmatte cũng bị lược")
+    eq(fx.skel.free, true, "phần còn lại của skel đi nguyên vẹn")
+    eq(panel.skel.shape, "rrect", "rect → rrect vẫn chạy trên cùng đường")
+
+    /* …và validate KHÔNG được coi đó là lỗi: người dùng mở dự án cũ ra phải sửa
+       được nó, không bị chặn ở cửa. */
+    const g = await api("GET", `/api/projects/${pid}/contract`)
+    const legacy = structuredClone(g.json.contract)
+    legacy.sheets[0].components[0].skel.matte = "glow"
+    const v = validateContract(legacy)
+    eq(v.errors.filter(e => /matte/.test(e.path) || /matte/.test(e.message ?? "")).length, 0, "matte không sinh lỗi")
+    eq(v.warnings.filter(e => /matte/.test(e.path) || /matte/.test(e.message ?? "")).length, 0, "matte cũng không sinh cảnh báo")
+  })
+
   await it("contractToStylesV1 GỌT out rác — contract sửa tay không được biến thành int(None) giữa slice.py", () => {
     const of = c => contractToStylesV1({
       schemaVersion: 4, variants: [{ id: "tet", vi: "Tết" }],

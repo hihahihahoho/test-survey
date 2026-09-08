@@ -1,5 +1,5 @@
 {
-  "_note": "Thư viện element cho studio — sheet UI dàn trang ĐỘNG từ selection. cell: landscape (ô 4:cột ngang 3:2) | portrait | full. group: các element phải liền kề (spec 'SAME as previous'). sheetHint: tên sheet ưu tiên khi cả chunk cùng group. Thứ tự trong file = thứ tự dàn trang (07 track và 08 fill cách xa nhau có chủ đích). LUẬT SPEC (26/08/2026): spec là một DANH TỪ + trạng thái, KHÔNG có thuộc tính thẩm mỹ. Không tính từ vật liệu (glossy, 3D, candy, foil…), không tên màu (red, gold…), không mô tả bề mặt/ánh sáng. Diện mạo đến từ phong cách người dùng chọn; spec chỉ trả lời 'ô này LÀ CÁI GÌ'. Ràng buộc KỸ THUẬT của ô không nằm trong spec mà nằm ở skel: skel.matte='glow' (gen.sh nối câu tan-về-alpha-0) và skel.matte='glass' (gen.sh nối câu low-alpha see-through) — một nguồn sự thật, engine phát ra, không chép tay vào 42 dòng spec.",
+  "_note": "Thư viện element cho studio — sheet UI dàn trang ĐỘNG từ selection. cell: landscape (ô 4:cột ngang 3:2) | portrait | full. group: các element phải liền kề (spec 'SAME as previous'). sheetHint: tên sheet ưu tiên khi cả chunk cùng group. Thứ tự trong file = thứ tự dàn trang (07 track và 08 fill cách xa nhau có chủ đích). LUẬT SPEC (26/08/2026): spec là một DANH TỪ + trạng thái, KHÔNG có thuộc tính thẩm mỹ. Không tính từ vật liệu (glossy, 3D, candy, foil…), không tên màu (red, gold…), không mô tả bề mặt/ánh sáng. Diện mạo đến từ phong cách người dùng chọn; spec chỉ trả lời 'ô này LÀ CÁI GÌ'. NGOẠI LỆ DUY NHẤT (08/09/2026): ô CÓ ĐỘ TRONG nói luôn cách vẽ alpha trong spec (kính low-alpha, ánh sáng tan về alpha 0). Trước đó nó nằm ở skel.matte và gen.sh in ra một khối riêng — cùng một luật ở hai kho. Cờ matte đã bỏ khỏi contract/engine/agent; alpha là ĐỘ TRONG, không phải thẩm mỹ, nên nó được ở lại trong spec.",
   "elements": [
     {
       "file": "01-btn-pill-red",
@@ -40,13 +40,12 @@
     {
       "file": "16-fx-burst",
       "vi": "Hiệu ứng nổ sáng",
-      "spec": "a radial light burst",
+      "spec": "a radial light burst, pure light with no surface that fades to alpha 0 at its edge",
       "skel": {
         "shape": "burst",
         "w": 0.6,
         "h": 0.9,
-        "free": true,
-        "matte": "glow"
+        "free": true
       },
       "cell": "landscape"
     },
@@ -237,14 +236,13 @@
     {
       "file": "22-board-panel",
       "vi": "Khay đựng túi",
-      "spec": "a background panel",
+      "spec": "a background panel, a see-through sheet of glass drawn at low alpha with an opaque frame and rim",
       "skel": {
         "shape": "rrect",
         "w": 0.8,
         "h": 0.78,
         "slice9": true,
-        "free": true,
-        "matte": "glass"
+        "free": true
       },
       "cell": "portrait"
     },

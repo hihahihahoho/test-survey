@@ -66,24 +66,6 @@ export const STYLE_PROMPT_PLACEHOLDER =
   "Ví dụ: vui tươi, 3D bóng nhẹ, hai màu chủ đạo, sạch và dễ đọc trên màn hình game.";
 
 /**
- * CÁCH TÁCH NỀN CỦA MỘT Ô — lớp đè của riêng dự án lên `skel.matte` của thư viện.
- *
- * Ba giá trị, đúng ba câu người dùng đọc được trong popup Chi tiết:
- *  · `"glow"` — ô này vẽ trên **nền đen**, hiệu ứng sáng cộng thêm vào nền
- *    (`gen.sh:480–488` chèn câu "SPECIAL CELL BACKGROUND … PURE BLACK #000000",
- *    `slice.py` tách bằng nhánh `glow_alpha`).
- *  · `"glass"` — ô **trong suốt**: vẫn nền chroma, nhưng `gen.sh:489–506` bắt model để
- *    key lộ qua thân, và `slice.py` giải ngược `C = α·F + (1−α)·K` lấy alpha thật.
- *  · `"none"` — ô này theo **nền chroma** thường, kể cả khi thư viện chung khai
- *    `matte:"glow"`/`"glass"`. Đây là lý do phải có một giá trị "không" TƯỜNG MINH: lớp
- *    đè trộn bằng spread, mà vắng mặt thì không xoá được giá trị của thư viện.
- *
- * ⚠️ `"none"` KHÔNG xoá `matte:"vitmatte"` của thư viện — xem `mergeElementSkel()`. Đó là
- * *thuật toán tách* thuần tuý, không có mặt nào ở prompt; popup không hỏi về nó.
- */
-export type SkelMatteChoice = "glow" | "glass" | "none";
-
-/**
  * KÍCH THƯỚC RIÊNG CỦA DỰ ÁN cho một ô skeleton — phần trăm bề rộng/cao của Ô, đúng
  * đơn vị mà `LibElement.skel.w/h` và `Contract.components[].skel.w/h` đang dùng (0–1).
  *
@@ -92,30 +74,16 @@ export type SkelMatteChoice = "glow" | "glass" | "none";
  * TRƯỚC khi dựng contract. Bỏ trống ⇒ dùng số của thư viện (§7 sitemap: "sửa bộ khung
  * trong dự án chỉ sửa bản của dự án đó").
  */
-/**
- * ĐỘ TRONG CỦA MỘT Ô KÍNH — chỉ có nghĩa khi `matte === "glass"`.
- *
- * Ba mức, và cả ba được thực thi bằng **CHỮ NỐI VÀO `spec`**, không phải bằng một cờ
- * mới cho engine. Đó là quyết định có chủ ý: `gen.sh` đã có sẵn hợp đồng alpha cho ô
- * kính ("about 64 out of 255 for a clear pane, up to 128 for a strongly tinted one"),
- * nên thứ còn thiếu chỉ là NÓI cho máy vẽ biết ô này nằm ở đâu trong dải ấy. Thêm một
- * field vào contract là bắt `gen.sh` + `slice.py` + `validate.mjs` cùng học một khái
- * niệm mới cho một việc mà một câu tiếng Anh làm xong.
- */
-export type GlassLevel = "clear" | "frosted" | "tinted";
-
 export type KitElementSkel = {
   w?: number;
   h?: number;
-  matte?: SkelMatteChoice;
-  /** Mức trong của ô kính. Chỉ được nối vào prompt khi ô THẬT SỰ đang là kính. */
-  glassLevel?: GlassLevel;
   /**
    * ĐỤC NỀN của ô — id trong `glaze.ts` (`""`/vắng = nền đặc).
    *
    * Đây là trục THAY CHO `material` từ 08/2026 (chủ sản phẩm: *"chất liệu bỏ, nó ăn
-   * theo style; chỉ có option đục nền"*). Nó tự mang theo `matte` + mức kính, nên
-   * chọn nó là chọn CẢ cách tách lẫn câu prompt — xem `GLAZE_PRESETS`.
+   * theo style; chỉ có option đục nền"*). Từ 08/09/2026 nó chỉ còn NÓI CHỮ: một câu
+   * tiếng Anh nối vào `spec` của ô, không kèm cờ nào cho engine — `skel.matte` (cách
+   * tách đời chroma) đã bị bỏ khỏi cả contract lẫn `gen.sh`. Xem `GLAZE_PRESETS`.
    */
   glaze?: string;
   /**
@@ -420,8 +388,6 @@ export type WorkflowState = {
   setElementSkel: (file: string, patch: {
     w?: number | null;
     h?: number | null;
-    matte?: SkelMatteChoice | null;
-    glassLevel?: GlassLevel | null;
     material?: string | null;
     spec?: string | null;
   }) => void;
@@ -746,16 +712,6 @@ export function createWorkflowStore(projectId: string): WorkflowStore {
             if ("h" in patch) {
               const h = clampSkelSide(patch.h ?? null);
               if (h === null) delete next.h; else next.h = h;
-            }
-            if ("matte" in patch) {
-              const matte = patch.matte;
-              if (matte === "glow" || matte === "glass" || matte === "none") next.matte = matte;
-              else delete next.matte;
-            }
-            if ("glassLevel" in patch) {
-              const level = patch.glassLevel;
-              if (level === "clear" || level === "frosted" || level === "tinted") next.glassLevel = level;
-              else delete next.glassLevel;
             }
             /* CHẤT LIỆU và MÔ TẢ đều là CHỮ, nên luật của chúng giống nhau và giống luật
                của `w`/`h`: rỗng (sau khi bỏ khoảng trắng) = *trả về mặc định*, không phải

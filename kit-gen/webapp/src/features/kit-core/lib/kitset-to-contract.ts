@@ -51,8 +51,8 @@ import {
 import { loadBundledV2 } from "@/features/kit-core/lib/element-lib/source";
 import type { LibElement } from "@/features/kit-core/lib/element-lib/types";
 import { styleAxisPhrases, subjectAxisLine } from "@/features/kit-core/lib/style-phrases";
-import type { GlassLevel, KitElementSkel, SheetPromptTweak, WorkflowMascot, WorkflowState } from "./model";
-import { GLASS_LEVEL_SPEC, glazeFromMaterial, glazePreset, type GlazePreset } from "./glaze";
+import type { KitElementSkel, SheetPromptTweak, WorkflowMascot, WorkflowState } from "./model";
+import { glazeFromMaterial, glazePreset, type GlazePreset } from "./glaze";
 import { isPropElement } from "./user-library";
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -192,21 +192,8 @@ export function poseSpecFor(pose: string, expression?: string | null): string {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   1b. CHẤT LIỆU + ĐỘ TRONG CỦA MỘT Ô — thực thi bằng CHỮ, không bằng field mới
+   1b. ĐỘ TRONG CỦA MỘT Ô — thực thi bằng CHỮ, không bằng field mới
    ══════════════════════════════════════════════════════════════════════════ */
-
-/** Ba mức kính → câu tiếng Anh. NHÀ THẬT của nó nay là `glaze.ts`; xuất lại ở đây
- *  để chỗ gọi cũ (và bộ test đang khoá đúng ba câu ấy) không phải đổi import. */
-export { GLASS_LEVEL_SPEC } from "./glaze";
-
-/** Nhãn tiếng Việt của ba mức — UI đọc chỗ này để không tự chế bộ chữ thứ hai. */
-export const GLASS_LEVEL_VI: Record<GlassLevel, string> = {
-  clear: "Kính trong",
-  frosted: "Kính mờ",
-  tinted: "Kính đậm",
-};
-
-export const GLASS_LEVELS: readonly GlassLevel[] = ["clear", "frosted", "tinted"];
 
 /**
  * Từ khoá "ô này nghe như là kính" — nguồn của DÒNG GỢI Ý cạnh ba nút Nền tách.
@@ -246,24 +233,23 @@ function glazeOf(override: KitElementSkel | undefined): GlazePreset | null {
 }
 
 /**
- * MÔ TẢ CUỐI CÙNG CỦA MỘT Ô = [mô tả] + [đục nền] + [mức kính].
+ * MÔ TẢ CUỐI CÙNG CỦA MỘT Ô = [mô tả] + [câu đục nền]. Hết — không có vế thứ ba.
  *
- * ┌── BA NGUỒN, MỘT DÒNG ────────────────────────────────────────────────────┐
+ * ┌── HAI NGUỒN, MỘT DÒNG ───────────────────────────────────────────────────┐
  * │ ① mô tả  : lớp đè của dự án nếu có, không thì `spec` của thư viện;        │
- * │ ② đục nền: cụm tiếng Anh NGẮN về độ xuyên thấu (`GLAZE_PRESETS`);         │
- * │ ③ mức kính: chỉ nối khi ô THẬT SỰ đang là kính sau khi trộn `matte`.      │
+ * │ ② đục nền: ĐÚNG MỘT câu của preset (`GLAZE_PRESETS[].en`).                │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
  * ② KHÔNG CÒN LÀ "CHẤT LIỆU". Cụm chữ thẩm mỹ ("polished gold metal, warm
  * reflections") đã bị bỏ khỏi đây — thẩm mỹ đến từ prompt tổng phong cách, thứ
  * `gen.sh` chèn vào MỌI tấm. Đọc khối đầu `glaze.ts` trước khi định đưa nó về.
  *
- * Điều kiện ③ không phải chuyện vặt: người dùng chọn "Băng" rồi đổi Đục nền về
- * "Không" thì `glassLevel` vẫn còn nằm trong bản nháp. Nối nó vào lúc ấy là dặn
- * máy vẽ hạ alpha xuống 128 trong khi slicer đang cắt ô như một mảng đặc — ảnh ra mờ
- * và không ai hiểu tại sao. Giá trị được GIỮ (đổi ý lần nữa là có lại) nhưng KHÔNG nói.
+ * ⚠️ ĐỪNG THÊM VẾ THỨ BA. Tới 08/09/2026 hàm này còn nối thêm một câu "mức kính"
+ * *và* `gen.sh` in thêm một khối kỹ thuật của riêng nó theo `skel.matte` — cùng
+ * một luật, ba mảnh, ba kho. Nay câu của preset đã tự nói trọn cách vẽ alpha, và
+ * `matte` không còn tồn tại ở tầng nào cả. Cần đổi lời cho ô kính ⇒ sửa `glaze.ts`.
  */
-export function resolveElementSpec(base: Pick<LibElement, "spec" | "skel">, override?: KitElementSkel): string {
+export function resolveElementSpec(base: Pick<LibElement, "spec">, override?: KitElementSkel): string {
   const parts: string[] = [];
   const own = override?.spec?.trim();
   const text = own || base.spec;
@@ -272,13 +258,6 @@ export function resolveElementSpec(base: Pick<LibElement, "spec" | "skel">, over
   const glaze = glazeOf(override);
   if (glaze?.en) parts.push(glaze.en);
 
-  /* Mức kính khai TAY thắng mức của preset: bản nháp workflow có ô chọn riêng ba
-     nấc, và một lựa chọn người dùng bấm bằng tay không được preset đắp lên. */
-  const level = override?.glassLevel ?? glaze?.glassLevel;
-  if (level) {
-    const matte = override ? mergeElementSkel(base.skel, override).matte : base.skel.matte;
-    if (matte === "glass") parts.push(GLASS_LEVEL_SPEC[level]);
-  }
   return parts.join(", ");
 }
 
@@ -338,7 +317,7 @@ export function resolveKitset(
        chỗ này thì người dùng chọn xong, UI hiện đúng, còn contract KHÔNG có gì —
        không lỗi, không cảnh báo. Thêm trường mới ⇒ thêm một nhánh ở đây.
 
-       Từ 08/2026 lớp đè mang thêm CHỮ (`spec` sửa tay · `material` · `glassLevel`), và
+       Từ 08/2026 lớp đè mang thêm CHỮ (`spec` sửa tay · `glaze` · `material` đời cũ), và
        chữ KHÔNG đi vào `skel` — nó đi vào `spec` của component. Hai đích khác nhau nên
        phải trộn bằng hai hàm khác nhau; gộp lại là đẩy `material` vào `skel` của
        contract, nơi `skelSchema` (looseObject) sẽ vui vẻ ghi nó ra đĩa cho không ai đọc. */
@@ -355,37 +334,29 @@ export function resolveKitset(
  * Trộn lớp đè của dự án vào `skel` của thư viện. Trả về CHÍNH `base` khi không có gì
  * để đè (giữ đúng hành vi cũ: không sinh object mới cho 42 món mỗi lần dựng contract).
  *
- * EXPORT vì `KitsetStep` phải vẽ silhouette và bật/tắt nút "Nền tách" theo ĐÚNG thứ
- * contract sẽ nhận. Bản trước UI tự spread `{...lib.skel, ...override}` — một bản sao
- * của luật trộn, và bản sao đó không biết `matte:"none"` nghĩa là gì.
+ * EXPORT vì `KitsetStep` phải vẽ silhouette theo ĐÚNG thứ contract sẽ nhận. Bản
+ * trước UI tự spread `{...lib.skel, ...override}` — một bản sao của luật trộn, và
+ * một bản sao thì lệch được.
  *
- * Luật của `matte` — CÁCH TÁCH của một ô. Người dùng chọn được hai giá trị, vì cả hai
- * đều có mặt ở CẢ prompt lẫn slicer, nên phải cùng bật cùng tắt:
- *  · `"glow"`  = nền ô lúc gen là ĐEN (`gen.sh:480`) + `slice.py` tách theo kênh sáng.
- *  · `"glass"` = ô TRONG SUỐT: prompt bắt để key lộ qua thân (`gen.sh:489`) + `slice.py`
- *    giải ngược `C = α·F + (1−α)·K`. Từ 08/2026 đây là MỘT cờ duy nhất, không tách thành
- *    "transparent-panel" riêng: prompt và slicer là hai nửa của cùng một hợp đồng, tách
- *    ra là mở đường cho hai nửa đó mâu thuẫn (xem docs/design-glass-transparent-panel).
- *  · `"vitmatte"` = **thuần thuật toán tách**, không có mặt nào ở prompt. Thư viện khai
- *    sẵn, popup KHÔNG hỏi ⇒ `"none"` không được âm thầm hạ chất lượng tách của nó.
+ * ══ ĐÂY CŨNG LÀ CỬA LƯỢC BỎ `matte` ĐỜI CŨ ═════════════════════════════════
+ * `matte` (`"glow"`/`"glass"`/`"vitmatte"`) là DI SẢN của thời tách nền bằng key:
+ * nó vừa đổi câu chữ của `gen.sh`, vừa chọn nhánh giải ngược của `slice.py`. Cả hai
+ * vế đã chết — máy vẽ trả alpha thật, `slice.py` chỉ crop theo toạ độ — và độ trong
+ * nay CHỈ còn là một câu tiếng Anh trong `spec` (`glaze.ts`).
+ *
+ * Bản nháp / thư viện người dùng lưu trên đĩa TRƯỚC đợt này vẫn còn khoá ấy. Hàm
+ * này là cửa duy nhất mà cả hai luồng dựng contract (kitset + composer) đi qua, nên
+ * nó bỏ khoá đó ở ĐÂY, một lần, và không kêu ca: một dự án cũ mở lên vẫn chạy, chỉ
+ * là contract sinh ra không còn `matte` nữa.
  */
-const USER_MATTE = new Set(["glow", "glass"]);
-
 export function mergeElementSkel(base: LibElement["skel"], override: KitElementSkel): LibElement["skel"] {
   const patch: Partial<LibElement["skel"]> = {};
   if (override.w !== undefined) patch.w = override.w;
   if (override.h !== undefined) patch.h = override.h;
-  /* ĐỤC NỀN TỰ MANG THEO CÁCH TÁCH — đây là nửa còn lại của hợp đồng mà `glaze.ts`
-     mô tả: chọn "Băng" mà `matte` vẫn rỗng thì máy vẽ ra một khối băng ĐỤC và
-     `slice.py` cắt nó như mảng đặc. Lớp đè khai `matte` bằng tay vẫn THẮNG: bản
-     nháp workflow có ba nút "Nền thường / Phát sáng / Trong suốt" riêng, và một
-     lựa chọn bấm bằng tay không được preset đắp lên. */
-  const matte = override.matte ?? glazeOf(override)?.matte;
-  if (matte === "glow" || matte === "glass") patch.matte = matte;
-  const clears = matte === "none" && USER_MATTE.has(String(base.matte));
-  if (Object.keys(patch).length === 0 && !clears) return base;
+  const legacyMatte = "matte" in base;
+  if (Object.keys(patch).length === 0 && !legacyMatte) return base;
   const next = { ...base, ...patch };
-  if (clears) delete next.matte;
+  delete (next as { matte?: unknown }).matte;
   return next;
 }
 

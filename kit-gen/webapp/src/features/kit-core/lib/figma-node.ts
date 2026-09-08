@@ -239,7 +239,7 @@ export function mountStage(): HTMLDivElement {
  * to hơn frame không bị co lại.
  *
  * ┌── KHÔNG CÒN `mix-blend-mode` (07/09/2026) ────────────────────────────────┐
- * │ Node từng mang `mixBlendMode:"screen"` cho ô `matte:"glow"`, vì `slice.py` │
+ * │ Node từng mang `mixBlendMode:"screen"` cho ô hiệu ứng phát sáng, vì        │
  * │ tách ô đó khỏi một TẤM ĐEN nên PNG của nó là premultiplied `C = α·F` và    │
  * │ chỉ vẽ đúng bằng phép CỘNG. Nhánh nền đen đã bỏ: model trả alpha thật, dao │
  * │ cắt không đụng alpha, quầng sáng nằm sẵn trong kênh α ⇒ dán thường là đúng.│

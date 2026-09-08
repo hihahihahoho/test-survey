@@ -92,10 +92,6 @@ export const POSE_META: readonly { id: string; vi: string; j: Record<string, [nu
 /** `characterPoses` mặc định — đọc từ styles.example.json. */
 export const DEFAULT_POSES: readonly string[] = ["idle","wave","point","hold-gift","cheer","sad","run","think","sit","jump","bow","thumbs-up","fly","walk","dance","present","view-34","view-side","view-back"] as const;
 
-/** 2 giá trị `matte` mà PROMPT hiểu — rút từ `gen.sh` (nhánh glow/glass).
- *  Chúng chỉ còn đổi CÂU CHỮ gửi cho máy vẽ; `slice.py` không đọc `matte` nữa. */
-export const MATTE_VALUES: readonly string[] = ["glass","glow"] as const;
-
 /** Tham số cắt đọc từ slice.py. `null` = engine KHÔNG còn đọc tham số đó nữa.
  *  07/09: slice.py chỉ crop theo toạ độ ô ⇒ vành ngoài = 0, hai ngưỡng tách biến mất. */
 export const SLICE_CONST = {

@@ -177,7 +177,7 @@ export interface UiCell {
    *
    * Thay cho `materialId` từ 08/2026. Không phải đổi tên cho đẹp: pill cũ hỏi
    * "ô này làm bằng gì" (thẩm mỹ, đã có prompt tổng lo), pill mới hỏi "ô này trong
-   * tới đâu" — và câu trả lời quyết định `skel.matte`, thứ `slice.py` đọc để cắt.
+   * tới đâu" — và câu trả lời là MỘT CÂU tả cách vẽ alpha, nối thẳng vào `spec` của ô.
    * Bản nháp cũ mang `materialId` được dịch sang lúc ĐỌC (`composer-doc.readCell`).
    */
   glazeId: string;

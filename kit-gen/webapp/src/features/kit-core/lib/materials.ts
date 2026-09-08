@@ -13,19 +13,12 @@
  * │   · gợi ý   = mô tả đã LỠ nói chất liệu ⇒ ta nhắc, không tự bấm hộ.      │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
- * ══ HAI TRƯỜNG, HAI VIỆC — ĐỌC KỸ TRƯỚC KHI GỘP ═════════════════════════════
- *  · `en` đi vào **PROMPT** (nối vào `spec` của ô, xem `resolveElementSpec()`);
- *  · `suggestedMatte` đi vào **CÁCH TÁCH** (`skel.matte`, thứ `slice.py` đọc).
- * Một chất liệu trong suốt phải nói cả hai: nếu chỉ nối chữ "made of glass" mà
- * `matte` vẫn rỗng thì máy vẽ vẽ kính ĐỤC (prompt không có hợp đồng alpha) và
- * slicer cắt nó như một mảng đặc — đúng cái bệnh `research-glow-extraction` gọi
- * tên. Vì thế mọi preset đều khai `suggestedMatte`, kể cả chất liệu ĐỤC (`"none"`):
- * đổi từ kính sang gỗ mà độ trong còn kẹt lại là một ô gỗ nhìn xuyên qua được.
- *
- * ⚠️ `suggestedMatte` là GỢI Ý ÁP SẴN, không phải khoá: popup vẫn còn nguyên ba nút
- * "Nền thường / Hiệu ứng phát sáng / Trong suốt" và người dùng bấm sau là thắng.
+ * ══ DI SẢN, MỘT TRƯỜNG DUY NHẤT CÒN VIỆC ═══════════════════════════════════
+ * Preset từng khai thêm `suggestedMatte` — cách tách áp sẵn cho `skel.matte`. Khoá
+ * ấy đã bị bỏ khỏi mọi tầng (08/09/2026): độ trong của một ô nay CHỈ là chữ trong
+ * `spec`, và trục ấy là pill «Đục nền» (`glaze.ts`), không phải chất liệu. Còn lại
+ * đúng `en` — cụm chữ mà pill `material` của tài liệu ĐỜI CŨ vẫn đọc được.
  */
-import type { SkelMatteChoice } from "./model";
 
 export interface MaterialPreset {
   /** Id ỔN ĐỊNH — thứ được lưu vào bản nháp. Không slug từ tên tiếng Việt. */
@@ -34,8 +27,6 @@ export interface MaterialPreset {
   vi: string;
   /** Cụm tiếng Anh NỐI VÀO `spec` của ô khi dựng contract. */
   en: string;
-  /** Cách tách được áp sẵn khi chọn preset này. Xem khối trên. */
-  suggestedMatte: SkelMatteChoice;
 }
 
 /**
@@ -44,20 +35,20 @@ export interface MaterialPreset {
  * thừa là một chi tiết máy vẽ phải chiều, mỗi tính từ thiếu là một ô vẽ đại khái.
  */
 export const MATERIAL_PRESETS: readonly MaterialPreset[] = [
-  { id: "glass", vi: "Kính", en: "made of clear polished glass, crisp specular highlights", suggestedMatte: "glass" },
-  /* "Kính nhám", KHÔNG phải "Kính mờ": ba mức độ trong của ô kính (`GLASS_LEVEL_VI`)
-     đã dùng đúng chữ "Kính mờ", và hai control nằm cạnh nhau trong CÙNG một popup.
-     Hai nút cùng tên trong một hộp thoại là hai nút không phân biệt được — bằng mắt,
-     và bằng cả trình đọc màn hình. */
-  { id: "frosted-glass", vi: "Kính nhám", en: "made of frosted glass, softly diffused milky surface", suggestedMatte: "glass" },
-  { id: "ice", vi: "Băng", en: "carved from translucent glacial ice, frosty surface with a cool inner glow", suggestedMatte: "glass" },
-  { id: "fire", vi: "Lửa", en: "wreathed in stylized flames, ember-orange rim light", suggestedMatte: "glow" },
-  { id: "glow", vi: "Phát sáng", en: "emitting a soft neon glow, luminous edges", suggestedMatte: "glow" },
-  { id: "holographic", vi: "Hologram", en: "an iridescent holographic film, shifting rainbow sheen", suggestedMatte: "glass" },
-  { id: "gold-metal", vi: "Kim loại vàng", en: "polished gold metal, warm reflections", suggestedMatte: "none" },
-  { id: "candy-gradient", vi: "Kẹo gradient", en: "smooth glossy candy gradient finish", suggestedMatte: "none" },
-  { id: "wood", vi: "Gỗ", en: "carved from warm natural wood, visible grain and soft matte finish", suggestedMatte: "none" },
-  { id: "stone", vi: "Đá", en: "chiselled from rough grey stone, chipped edges and matte surface", suggestedMatte: "none" },
+  { id: "glass", vi: "Kính", en: "made of clear polished glass, crisp specular highlights" },
+  /* "Kính nhám", KHÔNG phải "Kính mờ": danh mục đục nền (`GLAZE_PRESETS`) đã có
+     "Kính trong"/"Kính gradient", và hai pill này nằm cạnh nhau trong CÙNG một câu.
+     Hai lựa chọn cùng tên là hai lựa chọn không phân biệt được — bằng mắt, và bằng
+     cả trình đọc màn hình. */
+  { id: "frosted-glass", vi: "Kính nhám", en: "made of frosted glass, softly diffused milky surface" },
+  { id: "ice", vi: "Băng", en: "carved from translucent glacial ice, frosty surface with a cool inner glow" },
+  { id: "fire", vi: "Lửa", en: "wreathed in stylized flames, ember-orange rim light" },
+  { id: "glow", vi: "Phát sáng", en: "emitting a soft neon glow, luminous edges" },
+  { id: "holographic", vi: "Hologram", en: "an iridescent holographic film, shifting rainbow sheen" },
+  { id: "gold-metal", vi: "Kim loại vàng", en: "polished gold metal, warm reflections" },
+  { id: "candy-gradient", vi: "Kẹo gradient", en: "smooth glossy candy gradient finish" },
+  { id: "wood", vi: "Gỗ", en: "carved from warm natural wood, visible grain and soft matte finish" },
+  { id: "stone", vi: "Đá", en: "chiselled from rough grey stone, chipped edges and matte surface" },
 ];
 
 /** Preset theo id. `null` cho chuỗi TỰ GÕ (và cho id lạ của bản nháp đời sau). */

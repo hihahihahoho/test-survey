@@ -118,6 +118,10 @@ export function validateContract(contract) {
       if (typeof sk !== "object") { E("SCHEMA", `${cp}.skel`, "skel must be an object"); return }
       if (sk.shape !== undefined && !SHAPES.has(String(sk.shape)))
         W("SKEL_SHAPE", `${cp}.skel.shape`, `unknown shape ${sk.shape}`)
+      /* `skel.matte` (glow/glass/vitmatte) đã bị bỏ khỏi contract 08/09/2026 — độ trong
+         của một ô nay chỉ là chữ trong `spec`. KHÔNG kiểm, KHÔNG cảnh báo: contract đã
+         lưu của người dùng còn mang khoá ấy và phải mở lại được bình thường;
+         `engineSkel` (lib/engine.mjs) lược nó ra trước khi tới gen.sh. */
       // V-06: w,h ∈ (0,1]
       for (const k of ["w", "h"]) {
         if (sk[k] === undefined) continue

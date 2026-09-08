@@ -180,7 +180,7 @@ export function KitImage({
 
   const shell = cn("relative overflow-hidden rounded-2 border border-line", className);
 
-  /* MỘT ĐƯỜNG VẼ DUY NHẤT (07/09/2026). Trước đây ô `matte:"glow"` được `slice.py`
+  /* MỘT ĐƯỜNG VẼ DUY NHẤT (07/09/2026). Trước đây ô hiệu ứng phát sáng được `slice.py`
      tách khỏi TẤM ĐEN nên PNG của nó là premultiplied `C = α·F`; vẽ đúng nó cần
      `mix-blend-mode: screen` trên một nền tối riêng (`.kg-glow-ground`). Nay model
      trả alpha thật và dao cắt không đụng vào alpha, nên quầng sáng nằm sẵn trong

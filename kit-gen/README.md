@@ -51,8 +51,8 @@ logs/           log từng con codex
 - **KHÔNG CÓ TẦNG TÁCH NỀN.** Sheet do model sinh mang **alpha thật**, nên `slice.py`
   CHỈ CẮT: không chroma-key, không matting, không lấp lỗ, không nắn lõi về khung. Mọi cỗ
   máy đó đã bỏ (07/09/2026) vì chúng gặm ruột element có alpha thật — đo được: ruột thanh
-  máu α≈90 ra α≈5. Ô cần nhìn xuyên thì nói bằng prompt (`skel.matte` = `glow`/`glass`),
-  không phải bằng thuật toán hậu kỳ.
+  máu α≈90 ra α≈5. Ô cần nhìn xuyên thì nói bằng prompt (pill «Đục nền» của app nối
+  một câu tả alpha vào `spec` của ô), không phải bằng thuật toán hậu kỳ.
 - **Canvas chuẩn hoá**: mỗi element xuất đúng kích thước ô của sheet, căn giữa — cùng
   element ở mọi style ra file cùng size. Ảnh gốc chưa cắt ở `raw/`, prompt ở `prompts/`.
 - Component **không chữ có chủ đích** — text ghép sau bằng code/Figma.

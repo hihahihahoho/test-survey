@@ -22,8 +22,10 @@ import {
   chunkKeepingGroups,
   mergeElementSkel,
   refPath,
+  resolveElementSpec,
   resolveKitset,
 } from "../kitset-to-contract";
+import { glazePhrase } from "../glaze";
 
 /** Gốc repo `kit-gen/` — `process.cwd()` là `webapp/` khi chạy `npm test`. */
 const REPO = resolve(process.cwd(), "..");
@@ -359,78 +361,80 @@ describe("§W3-1 — món không vẽ được", () => {
  * đều biến mất **không một tiếng động**: UI hiện đúng, bản nháp lưu đúng, contract
  * trống trơn. Bộ ca này khoá đúng cái cửa đó.
  *
- * Món dùng để đo lấy từ chính thư viện đóng gói, không bịa:
- *  · `16-fx-burst` — thư viện ĐÃ khai `matte:"glow"` (ô hiệu ứng);
- *  · `03-btn-pill-outline` — thư viện khai `matte:"glass"` (ô trong suốt).
+ * ══ 08/09/2026 — `matte` KHÔNG CÒN LÀ MỘT TRỤC NỮA ═════════════════════════
+ * Bộ ca này từng đo 8 chiều bật/tắt của `skel.matte` ("nền tách" của một ô): thư
+ * viện khai sẵn ⇒ contract có; `"none"` ⇒ gỡ được; `"vitmatte"` thì không đụng…
+ * Cả khái niệm ấy đã bị bỏ. `matte` là cờ đời tách-nền-bằng-key — nó vừa bắt
+ * `gen.sh` in thêm một khối câu chữ, vừa chọn nhánh giải ngược của `slice.py` — và
+ * hai vế đều đã chết. Độ trong của một ô nay CHỈ là một câu tiếng Anh trong `spec`
+ * (`glaze.ts` → `resolveElementSpec`), nói đúng một lần, ở đúng một chỗ.
  *
- * ⚠️ ĐỔI LUẬT 17/08: `"none"` giờ gỡ được CẢ `"glass"`. Trước đó `glass` bị coi là
- * "thuật toán tách của slicer, popup không hỏi" nên phải giữ lại. Từ khi ô kính có
- * câu prompt riêng (`gen.sh:382`) thì `glass` mang nghĩa ở CẢ hai đầu — prompt và
- * slicer — và popup có nút cho nó, nên người dùng bấm "Nền thường" phải tắt được
- * cả hai đầu. `"vitmatte"` vẫn thuần thuật toán, vẫn không bị `"none"` chạm tới.
+ * Nên bộ ca đổi chiều: nó không đo `matte` đi tới đâu nữa, nó đo `matte` KHÔNG đi
+ * tới đâu cả — kể cả khi dữ liệu cũ trên đĩa vẫn còn mang nó.
  */
-describe("§P1-4 — nền của ô đi trọn đường từ lớp đè tới contract", () => {
-  const GLOW = "16-fx-burst";
-  const GLASS = "03-btn-pill-outline";
-  /** Ô ngang thường, thư viện KHÔNG khai `matte` — chọn nó để đo đúng chiều "bật lên". */
-  const PLAIN = LIB.find((e) => e.skel.matte === undefined && e.skel.shape !== "full" && e.cell !== "portrait")!.file;
+describe("§P1-4 — lớp đè `skel` đi trọn đường từ bản nháp tới contract", () => {
+  /** Ô ngang thường — chọn nó để đo đúng chiều "lớp đè bật lên". */
+  const PLAIN = LIB.find((e) => e.skel.shape !== "full" && e.cell !== "portrait")!.file;
 
-  const withSkel = (file: string, skel: { w?: number; h?: number; matte?: "glow" | "glass" | "none" }) => {
+  const withSkel = (file: string, skel: Record<string, unknown>) => {
     const s = defaultState();
     return { ...s, elements: s.elements.map((e) => (e.file === file ? { ...e, selected: true, skel } : e)) };
   };
   const cellOf = (contract: ReturnType<typeof build>, file: string) =>
     contract.sheets.flatMap((sh) => sh.components).find((cp) => cp.file === file);
 
-  it("thư viện đã khai sẵn ⇒ `matte:\"glow\"` có mặt trong contract kể cả khi không đè", () => {
-    expect(cellOf(build(), GLOW)?.skel.matte).toBe("glow");
+  it("kích thước của dự án đi tới contract (chiều mà bản cũ làm rơi im lặng)", () => {
+    const c = buildKitsetContract(withSkel(PLAIN, { w: 0.42, h: 0.31 }), { lib: LIB });
+    expect(cellOf(c, PLAIN)?.skel).toMatchObject({ w: 0.42, h: 0.31 });
   });
 
-  it("BẬT nền đen cho một ô thường ⇒ contract nhận `matte:\"glow\"` (bản cũ rơi mất)", () => {
-    const c = buildKitsetContract(withSkel(PLAIN, { matte: "glow" }), { lib: LIB });
-    expect(cellOf(c, PLAIN)?.skel.matte).toBe("glow");
+  it("THƯ VIỆN ĐÓNG GÓI không còn một `matte` nào — độ trong đã về `spec`", () => {
+    for (const e of LIB) expect(e.skel, e.file).not.toHaveProperty("matte");
+    /* …và hai ô THẬT SỰ có độ trong vẫn nói ra điều đó, chỉ là nói bằng chữ. */
+    const glassy = LIB.find((e) => e.file === "22-board-panel")!;
+    expect(glassy.spec).toContain("low alpha");
+    const glow = LIB.find((e) => e.file === "16-fx-burst")!;
+    expect(glow.spec).toContain("alpha 0");
   });
 
-  it("kích thước vẫn đi cùng chuyến — thêm `matte` không được làm rơi `w`/`h`", () => {
+  it("bản nháp ĐỜI CŨ còn `matte` ⇒ lược êm, không lỗi, không lọt vào contract", () => {
     const c = buildKitsetContract(withSkel(PLAIN, { w: 0.42, matte: "glow" }), { lib: LIB });
-    expect(cellOf(c, PLAIN)?.skel).toMatchObject({ w: 0.42, matte: "glow" });
+    expect(cellOf(c, PLAIN)?.skel).not.toHaveProperty("matte");
+    /* Phần hợp lệ của cùng lớp đè ấy KHÔNG được rơi theo. */
+    expect(cellOf(c, PLAIN)?.skel.w).toBe(0.42);
   });
 
-  it("TẮT ⇒ gỡ đúng `glow` của thư viện, ô về nền thường của tấm", () => {
-    const c = buildKitsetContract(withSkel(GLOW, { matte: "none" }), { lib: LIB });
-    expect(cellOf(c, GLOW)?.skel.matte).toBeUndefined();
-  });
-
-  it("thư viện khai `glass` ⇒ contract giữ nguyên khi không đè gì", () => {
-    expect(cellOf(build(), GLASS)?.skel.matte).toBe("glass");
-  });
-
-  it("TẮT ⇒ gỡ được cả `glass` (nay là cờ người dùng chọn, không còn là nội bộ slicer)", () => {
-    const c = buildKitsetContract(withSkel(GLASS, { matte: "none" }), { lib: LIB });
-    expect(cellOf(c, GLASS)?.skel.matte).toBeUndefined();
-  });
-
-  it("BẬT trong suốt cho một ô thường ⇒ contract nhận `matte:\"glass\"`", () => {
-    const c = buildKitsetContract(withSkel(PLAIN, { matte: "glass" }), { lib: LIB });
-    expect(cellOf(c, PLAIN)?.skel.matte).toBe("glass");
-  });
-
-  it("`\"none\"` KHÔNG chạm `matte:\"vitmatte\"` — đó mới là thuật toán tách thuần tuý", () => {
-    const base = { shape: "rrect" as const, matte: "vitmatte" };
-    expect(mergeElementSkel(base, { matte: "none" })).toBe(base);
+  it("thư viện RIÊNG của người dùng còn `matte` ⇒ `mergeElementSkel` cũng lược", () => {
+    const legacy = { shape: "rrect" as const, w: 0.8, h: 0.6, matte: "vitmatte" };
+    const merged = mergeElementSkel(legacy, {});
+    expect(merged).not.toHaveProperty("matte");
+    expect(merged).toMatchObject({ shape: "rrect", w: 0.8, h: 0.6 });
+    /* Bản gốc KHÔNG bị sửa tại chỗ — nó là bộ nhớ dùng lại giữa các dự án. */
+    expect(legacy.matte).toBe("vitmatte");
   });
 
   it("lớp đè KHÔNG chạm vào thư viện chung (bộ nhớ dùng lại giữa các dự án)", () => {
-    buildKitsetContract(withSkel(GLOW, { matte: "none" }), { lib: LIB });
-    buildKitsetContract(withSkel(PLAIN, { matte: "glow" }), { lib: LIB });
-    expect(LIB.find((e) => e.file === GLOW)!.skel.matte).toBe("glow");
-    expect(LIB.find((e) => e.file === PLAIN)!.skel.matte).toBeUndefined();
+    const before = structuredClone(LIB.find((e) => e.file === PLAIN)!.skel);
+    buildKitsetContract(withSkel(PLAIN, { w: 0.5 }), { lib: LIB });
+    expect(LIB.find((e) => e.file === PLAIN)!.skel).toEqual(before);
   });
 
   it("`mergeElementSkel` trả về CHÍNH object cũ khi không có gì để đè", () => {
     const base = LIB.find((e) => e.file === PLAIN)!.skel;
     expect(mergeElementSkel(base, {})).toBe(base);
-    expect(mergeElementSkel(base, { matte: "none" })).toBe(base); // vốn đã là nền thường
+  });
+
+  /* ĐỤC NỀN CHỈ CÒN LÀ CHỮ. Ca này là nửa còn lại của quyết định trên: bỏ `matte`
+     mà không kiểm câu chữ thì độ trong biến mất hoàn toàn, im lặng. */
+  it("đục nền = ĐÚNG MỘT câu, nối vào `spec`, không kèm cờ nào", () => {
+    const base = { spec: "a coin icon" };
+    expect(resolveElementSpec(base, { glaze: "glass" })).toBe(`a coin icon, ${glazePhrase("glass")}`);
+    expect(resolveElementSpec(base, { glaze: "glow" })).toBe(`a coin icon, ${glazePhrase("glow")}`);
+    /* Không chọn ⇒ không thêm chữ nào. */
+    expect(resolveElementSpec(base, {})).toBe("a coin icon");
+    expect(resolveElementSpec(base)).toBe("a coin icon");
+    /* Id lạ (tài liệu đời sau) ⇒ bỏ qua, không ném. */
+    expect(resolveElementSpec(base, { glaze: "khong-co-that" })).toBe("a coin icon");
   });
 });
 

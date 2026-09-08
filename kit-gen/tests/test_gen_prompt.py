@@ -321,9 +321,11 @@ class ThuVienChiCoDANHTUTest(unittest.TestCase):
     Chạy trên `element-lib.json` ĐANG SHIP: thêm một món mới mà lọt chữ vật liệu thì
     ca này đỏ ngay, thay vì phải đợi tới lúc nhìn ảnh ra sai phong cách.
 
-    Ràng buộc KỸ THUẬT của ô KHÔNG nằm trong spec: nó nằm ở `skel.matte` và do gen.sh
-    phát ra (matte='glow' ⇒ câu tan-về-alpha-0; matte='glass' ⇒ câu low-alpha
-    see-through). Một nguồn sự thật, engine nói một lần — không chép tay vào 42 dòng.
+    NGOẠI LỆ DUY NHẤT, chốt 08/09/2026: ô CÓ ĐỘ TRONG nói luôn cách vẽ alpha ngay
+    trong spec. Trước đó nó nằm ở `skel.matte` và gen.sh in ra một khối riêng — nhưng
+    webapp cũng nối một câu đục nền vào chính ô ấy, tức CÙNG MỘT LUẬT ở hai kho, không
+    gì bắt chúng khớp. Cờ `matte` đã bỏ khỏi contract/engine/agent; alpha là ĐỘ TRONG
+    (hợp đồng kỹ thuật), không phải thẩm mỹ, nên nó được ở lại trong spec.
     """
 
     # Chữ VẬT LIỆU / BỀ MẶT / MÀU. Cố ý KHÔNG có từ hình dáng hay trạng thái
@@ -363,20 +365,35 @@ class ThuVienChiCoDANHTUTest(unittest.TestCase):
         dai = [(e["file"], len(e["spec"])) for e in self.lib["elements"] if len(e["spec"]) > 140]
         self.assertEqual(dai, [], "spec dài quá mức của một danh từ")
 
-    def test_rang_buoc_ky_thuat_o_skel_KHONG_o_spec(self):
-        """Hai ô mang hợp đồng alpha thật sự — và hợp đồng đó phải ở `skel.matte`,
-        vì đó là thứ cả gen.sh lẫn slice.py cùng đọc. Chép vào spec là đẻ ra nguồn
-        sự thật thứ hai, và nó sẽ lệch ngay lần đầu ai sửa một trong hai."""
-        by = {e["file"]: e for e in self.lib["elements"]}
-        self.assertEqual(by["16-fx-burst"]["skel"].get("matte"), "glow")
-        self.assertEqual(by["22-board-panel"]["skel"].get("matte"), "glass")
-        for f in ("16-fx-burst", "22-board-panel"):
-            self.assertNotIn("alpha", by[f]["spec"].lower(), f"{f}: luật alpha đã ở skel.matte")
+    def test_rang_buoc_ky_thuat_ALPHA_o_spec_KHONG_o_skel(self):
+        """ĐẢO CHIỀU 08/09/2026 (ca này trước đây đòi đúng điều ngược lại).
 
-    def test_o_glow_va_glass_van_nhan_dung_cau_ky_thuat_tu_engine(self):
-        for matte, dau in (("glow", "LIGHT EFFECT"), ("glass", "SEE-THROUGH ELEMENT")):
+        Hai ô mang hợp đồng alpha thật sự. Hợp đồng ấy từng ở `skel.matte` vì đó là
+        thứ cả gen.sh lẫn slice.py cùng đọc — nhưng slice.py đã thôi đọc nó (chỉ crop
+        theo toạ độ), còn gen.sh thì in ra một khối câu chữ CHỒNG lên câu đục nền mà
+        webapp đã nối vào cùng ô. Nguồn sự thật thứ hai nằm ở chính chỗ đó, không phải
+        ở spec. Nay: một câu, trong spec, và `matte` không còn ở đâu trong thư viện."""
+        by = {e["file"]: e for e in self.lib["elements"]}
+        for f in ("16-fx-burst", "22-board-panel"):
+            self.assertNotIn("matte", by[f]["skel"], f"{f}: cờ matte đã bỏ")
+            self.assertIn("alpha", by[f]["spec"].lower(), f"{f}: hợp đồng alpha phải ở spec")
+        # …và KHÔNG ô nào khác trong thư viện lén mang lại cờ ấy.
+        self.assertEqual(
+            [e["file"] for e in self.lib["elements"] if "matte" in e.get("skel", {})], [],
+            "thư viện còn khai skel.matte")
+
+    def test_engine_KHONG_con_tu_phat_cau_ky_thuat_cho_o_glow_glass(self):
+        """GUARD ÂM. Hai nhánh `skel.matte` của gen.sh đã bỏ: prompt không được mọc
+        lại một khối alpha thứ hai bên cạnh câu đục nền mà webapp gửi trong spec."""
+        for matte in ("glow", "glass"):
             txt = render_prompt_text(_cfg(spec="a radial light burst", skel={"matte": matte}))
-            self.assertIn(dau, txt, f"ô matte={matte} mất câu kỹ thuật của engine")
+            self.assertNotIn("LIGHT EFFECT", txt)
+            self.assertNotIn("SEE-THROUGH ELEMENT", txt)
+            self.assertNotIn("matte", txt.lower(), f"matte={matte} rò vào prompt")
+        # Ô kính nói độ trong bằng SPEC, và spec đi nguyên văn vào prompt.
+        glassy = render_prompt_text(_cfg(spec="a background panel, a see-through sheet of glass"
+                                              " drawn at low alpha with an opaque frame and rim"))
+        self.assertIn("drawn at low alpha", glassy)
 
 
 class AttachmentListTest(unittest.TestCase):
@@ -619,14 +636,38 @@ class TransparentBackgroundTest(unittest.TestCase):
         p = render_prompt_text(_cfg(skel={"matte": "glow"}))
         self.assertNotIn("PURE BLACK", p)
         self.assertNotIn("#000000", p)
-        self.assertIn("no plate, no black, no checkerboard", p)
-        self.assertIn("Ignore the safe-zone fill rule here", p)
 
-    def test_o_glass_do_trong_nam_trong_kenh_alpha(self):
-        p = render_prompt_text(_cfg(skel={"matte": "glass"}))
-        self.assertIn("LOW ALPHA", p)
-        self.assertIn("thin sheet of tinted glass", p)
+    def test_LUAT_SAFE_ZONE_TRUNG_LAP_voi_o_kinh_va_o_anh_sang(self):
+        """THAY CHO HAI CA `matte` CŨ (08/09/2026).
+
+        Bản trước, luật safe zone ra lệnh "lấp kín hộp" và model đọc nó thành "phủ
+        SƠN ĐẶC kín hộp" — với một quầng sáng thì nó lấp phần trong suốt bằng thứ nó
+        nghĩ là trong suốt, tức cái đế caro. Cách chữa cũ là in một câu HUỶ LỆNH riêng
+        cho từng ô `matte:"glow"`: hai luật cãi nhau trong cùng một prompt, và câu huỷ
+        ấy chỉ tới được những ô có cờ.
+
+        Nay luật gốc TỰ trung lập — nói một lần, cho mọi ô — nên không còn câu huỷ
+        lệnh nào, và cũng không cần cờ nào để bật nó."""
+        p = render_prompt_text(_cfg(skel={"shape": "rrect", "w": 0.5, "h": 0.5}))
+        self.assertIn("Filling the box is about REACH, not about opaque paint", p)
+        self.assertIn("fade to full transparency inside its own box", p)
+        # Không còn câu nào bảo model BỎ QUA một luật khác của chính prompt này.
+        self.assertNotIn("Ignore the safe-zone fill rule", p)
+
+    def test_do_trong_cua_o_chi_den_tu_SPEC(self):
+        """Ô kính nói độ trong qua `spec` (câu của webapp `kit-core/lib/glaze.ts`),
+        không qua một cờ nào. Cờ `matte` có mặt cũng KHÔNG sinh thêm chữ."""
+        cau = ("a see-through pane of barely tinted glass drawn at low alpha, about 64 of 255,"
+               " keeping its own tint colour at that alpha; frame, rim and highlights stay fully opaque")
+        p = render_prompt_text(_cfg(spec=f"a coin icon, {cau}"))
+        self.assertIn(cau, p)
         self.assertNotIn("chroma", p)
+        # Cùng ô ấy mà không có câu ⇒ DÒNG CỦA Ô không mọc thêm hợp đồng alpha nào.
+        # (Quét đúng dòng element, vì section «Transparency» chung vẫn nói "low alpha"
+        # cho cả tấm — đó là luật chung, không phải câu riêng của ô.)
+        tron = render_prompt_text(_cfg(spec="a coin icon", skel={"matte": "glass"}))
+        dong = next(l for l in tron.splitlines() if l.startswith("1) "))
+        self.assertEqual(dong, "1) a coin icon — safe zone x=153..1382, y=205..819 (1229x614 px)")
 
     def test_KHONG_MOT_MANH_CHROMA_NAO_CON_SONG(self):
         """Quyết định của chủ sản phẩm 22/08: bỏ HẲN, cả hai vế.

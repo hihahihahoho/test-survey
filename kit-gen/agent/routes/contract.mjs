@@ -38,7 +38,7 @@ export function register(r) {
 
   /* ══ #29 XEM TRƯỚC PROMPT ═══════════════════════════════════════════════════
      VÌ SAO KHÔNG DỰNG LẠI PROMPT BẰNG JS: prompt được lắp trong gen.sh (khối
-     python ~700 dòng, có cả những câu chỉ bật theo skel.matte, theo ảnh ref, theo
+     python ~700 dòng, có cả những câu chỉ bật theo hình dạng ô, theo ảnh ref, theo
      bảng màu). Một bản dựng lại ở agent sẽ trôi khỏi bản gốc trong im lặng và nói
      dối đúng lúc người dùng tin nó nhất — đúng lỗi mà `item-prompt.ts` bên web
      phải có cả một bộ ca đọc gen.sh THẬT để canh. Nên ở đây CHẠY THẬT gen.sh với

@@ -451,7 +451,7 @@ for s in cfg["styles"]:
             section("Layout", layout)
 
         # ── Safe zone ─────────────────────────────────────────────────────────
-        # BỐN KHỐI CŨ GỘP LẠI CÒN BỐN GẠCH ĐẦU DÒNG. Điểm mấu chốt của bản gốc
+        # BỐN KHỐI CŨ GỘP LẠI CÒN NĂM GẠCH ĐẦU DÒNG. Điểm mấu chốt của bản gốc
         # được giữ nguyên: nói RA HẬU
         # QUẢ ("phần mềm sẽ cắt đúng bốn toạ độ này") chứ không chỉ ra lệnh, và cấm
         # thẳng hành vi hỏng phổ biến nhất §8.1 đã đo — model co mặt nội dung lại
@@ -461,6 +461,15 @@ for s in cfg["styles"]:
                 "- The element's continuous functional CORE fills its safe zone exactly: same"
                 " left, top, right and bottom, same center. Never shrink it to make room for a"
                 " border, and never enlarge, stretch, move or recenter it.",
+                # TRUNG LẬP VỚI Ô KÍNH / Ô ÁNH SÁNG. Luật trên nói "lấp kín hộp", và
+                # model đọc nó thành "phủ SƠN ĐẶC kín hộp": với một quầng sáng hay một
+                # tấm kính thì nó lấp phần trong suốt bằng thứ nó nghĩ là "trong suốt",
+                # tức cái đế caro. Bản trước chữa bằng một câu HUỶ LỆNH in riêng cho
+                # từng ô phát sáng — hai luật cãi nhau trong cùng một prompt. Nói
+                # một lần, ở đây, rằng "lấp kín" là chuyện TẦM VỚI chứ không phải độ đục.
+                "- Filling the box is about REACH, not about opaque paint: a see-through or"
+                " glowing element may fade to full transparency inside its own box, and nothing"
+                " is ever added behind it to fill the space.",
             ]
             if mascot_sheet:
                 # Khối cấu tạo ba lớp được viết cho NÚT BẤM. Với nhân vật thì không có
@@ -619,23 +628,14 @@ for s in cfg["styles"]:
                     spec += f" — safe zone x={x0}..{x1}, y={y0}..{y1} ({x1 - x0}x{y1 - y0} px)"
                 elif g["kind"] == "full":
                     spec += " — full-bleed scene, fills its whole cell edge to edge"
-                if comp["skel"].get("matte") == "glow":
-                    # THỦ PHẠM THẬT SỰ của cái đế caro dưới ô ánh sáng: luật safe zone ra
-                    # lệnh lấp kín hộp bằng một mặt phẳng liền lạc. Với ô ÁNH SÁNG thì
-                    # không có mặt phẳng nào cả — model vẫn tuân lệnh và lấp bằng thứ nó
-                    # nghĩ là "trong suốt", tức là caro. Câu của ô phải HUỶ lệnh kia,
-                    # không chỉ cấm caro.
-                    spec += (" — LIGHT EFFECT: pure light, no surface. Ignore the safe-zone fill"
-                             " rule here: the box only marks HOW FAR the light reaches. The halo"
-                             " fades out by LOWERING ALPHA to 0 at its edge while keeping the"
-                             " light's own colour, and nothing sits behind it — no plate, no"
-                             " black, no checkerboard")
-                elif comp["skel"].get("matte") == "glass":
-                    spec += (" — SEE-THROUGH ELEMENT: the body is a thin sheet of tinted glass"
-                             " drawn at LOW ALPHA — about 64 out of 255 for a clear pane, up to"
-                             " 128 for a strongly tinted one — keeping its own tint colour at that"
-                             " low alpha. Frame, rim, bevel and specular highlights stay fully"
-                             " opaque")
+                # 08/09/2026 — HAI NHÁNH `skel.matte` (glow/glass) ĐÃ BỎ Ở ĐÂY.
+                # Chúng nối thêm một khối câu chữ về độ trong cho riêng ô, trong khi
+                # webapp CŨNG nối một câu đục nền vào `spec` của chính ô ấy: cùng một
+                # luật, hai kho, không gì bắt chúng khớp nhau. Nay độ trong chỉ còn là
+                # chữ trong `spec` (webapp `kit-core/lib/glaze.ts`), và luật «Safe zone»
+                # ở trên đã viết lại cho trung lập với ô kính / ô ánh sáng, nên không
+                # còn gì để huỷ lệnh nữa. Contract đời cũ vẫn mang `skel.matte`: nó chỉ
+                # đơn giản không được đọc.
                 listing.append(f"{i + 1}) {spec}")
             section("Scenes" if full_bleed else "Elements", listing)
 

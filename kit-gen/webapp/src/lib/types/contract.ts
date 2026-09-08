@@ -13,7 +13,7 @@
  *   · teams/t4-tichhop/styles-campaign.json  12 sheet ·  78 component · 3 phong cách
  *   · key của sheet     : id, styles|variants, grid, cell_hint, components, orient?, note?, ref?, poseRef?
  *   · key của component : file, vi, spec, skel
- *   · key của skel      : shape, w, h, slice9?, free?, matte?, anchor?, pose?, plain?
+ *   · key của skel      : shape, w, h, slice9?, free?, anchor?, pose?, plain?
  *   · shape gặp thật    : pose, rrect, pill, circle, bar, empty, puzzle, full, burst
  *   · file KHÔNG khớp `^\d{2}-[a-z0-9-]+$`: 80/122 ở styles.json (76 `pose-*`, 4 `_empty-*`)
  *     ⇒ V-01 phải MIỄN cho ô pose và ô trống, nếu không thì contract thật của dự án
@@ -78,6 +78,12 @@ export const NEUTRAL_SECONDARY_COLOR = "#9A9A9A";
  * Dùng `looseObject` (không phải strict) vì §6.5-6: agent thêm field mới thì UI cũ
  * KHÔNG ĐƯỢC VỠ. Field lạ được giữ nguyên khi ghi lại để không làm mất dữ liệu của
  * bản agent mới hơn.
+ *
+ * ⚠️ `matte` ĐÃ BỊ BỎ (08/09/2026) — nó là cờ đời tách-nền-bằng-key, vừa đổi câu chữ
+ * của `gen.sh` vừa chọn nhánh giải ngược của `slice.py`, và cả hai vế đã chết. Độ
+ * trong của một ô nay CHỈ là một câu tiếng Anh trong `spec` (`kit-core/lib/glaze.ts`).
+ * Contract cũ trên đĩa còn khoá ấy vẫn parse được (looseObject giữ nguyên field lạ) và
+ * `mergeElementSkel` lược nó ra khi dựng contract mới — không có đường nào báo lỗi.
  */
 export const skelSchema = z.looseObject({
   shape: skelShapeSchema,
@@ -104,8 +110,6 @@ export const skelSchema = z.looseObject({
     .optional(),
   slice9: z.boolean().optional(),
   free: z.boolean().optional(),
-  /** `matte:"vitmatte"` — chất lượng tách cao (S3.6). Dữ liệu thật có 9 ô dùng. */
-  matte: z.union([z.boolean(), z.string()]).optional(),
   anchor: z.enum(["bottom", "center", "top"]).optional(),
   /** chỉ có nghĩa khi shape="pose" — 1 trong `characterPoses`. */
   pose: z.string().optional(),

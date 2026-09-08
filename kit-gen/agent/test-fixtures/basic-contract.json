@@ -57,8 +57,7 @@
             "shape": "burst",
             "w": 0.6,
             "h": 0.9,
-            "free": true,
-            "matte": "glow"
+            "free": true
           },
           "fromLib": "16-fx-burst"
         },
@@ -263,8 +262,7 @@
             "w": 0.8,
             "h": 0.78,
             "slice9": true,
-            "free": true,
-            "matte": "glass"
+            "free": true
           },
           "fromLib": "22-board-panel"
         },

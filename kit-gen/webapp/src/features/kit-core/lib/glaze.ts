@@ -1,5 +1,5 @@
 /**
- * glaze.ts — «ĐỤC NỀN» CỦA MỘT Ô: một pill, một hiệu ứng alpha.
+ * glaze.ts — «ĐỤC NỀN» CỦA MỘT Ô: một pill, một câu tiếng Anh, hết.
  *
  * ╔══ VÌ SAO FILE NÀY THAY CHO `materials.ts` Ở TẦNG SOẠN PROMPT ═════════════╗
  * ║ Chủ sản phẩm (dân design) chốt thẳng: *"Chất liệu → bỏ, nó ăn theo style   ║
@@ -16,59 +16,39 @@
  * ║ trục duy nhất đáng một pill, và đây là nó.                                 ║
  * ╚════════════════════════════════════════════════════════════════════════════╝
  *
- * ══ TỪ 07/09/2026: PILL NÀY CHỈ CÒN LÁI **PROMPT** ═════════════════════════
- * `matte` từng có hai vế: nó vừa chọn câu tiếng Anh, vừa chọn CÁCH CẮT — `glow`
- * nghĩa là "gen ô này trên nền ĐEN rồi `slice.py` giải ngược α = độ sáng", và
- * asset ship kèm `blend:"screen"`. Vế thứ hai đã bị bỏ hẳn: máy vẽ trả alpha
- * thật, `slice.py` chỉ crop theo toạ độ và không đọc `matte` nữa. Cái nền đen ấy
- * chính là tấm đen chủ sản phẩm nhìn thấy dưới ô avatar.
+ * ══ TỪ 08/09/2026: MỘT PRESET = MỘT CÂU, VÀ CHỈ MỘT NƠI NÓI NÓ ═════════════
+ * Trước đợt này, đục nền nói HAI LẦN cho cùng một ô: `resolveElementSpec` nối
+ * `en` + `GLASS_LEVEL_SPEC[level]` vào mô tả, RỒI `skel.matte` bắt `gen.sh` in
+ * thêm một khối "LIGHT EFFECT…" / "SEE-THROUGH ELEMENT…" của riêng nó. Hai bản
+ * của cùng một luật, ở hai kho, viết bởi hai người — và không có gì bắt chúng
+ * khớp nhau.
  *
- * Nên nay `matte` (+ `glassLevel`) chỉ còn đổi CÂU CHỮ gửi cho máy vẽ (`gen.sh`,
- * hai nhánh `glow`/`glass`), và alpha là do chính máy vẽ vẽ ra. `en` vẫn CỐ Ý
- * NGẮN: chỉ nói về độ xuyên thấu, không tả bề mặt. Một cụm dài kiểu "carved from
- * translucent glacial ice, frosty surface with a cool inner glow" là chất liệu
- * thẩm mỹ đội lốt độ trong — nó đá nhau với prompt tổng phong cách.
+ * `skel.matte` là DI SẢN của thời tách nền bằng key: `"glow"` từng nghĩa là "gen
+ * ô này trên nền ĐEN rồi `slice.py` giải ngược α = độ sáng", `"glass"` là "để key
+ * lộ qua thân rồi giải ngược `C = α·F + (1−α)·K`". Cả hai vế thuật toán đã chết:
+ * máy vẽ trả alpha THẬT, `slice.py` chỉ crop theo toạ độ. Cái còn sót lại chỉ là
+ * mấy câu tiếng Anh — nên chúng về đây, nơi người dùng NHÌN THẤY chúng trên pill
+ * trước khi bấm, và `matte` bị bỏ khỏi contract/engine/agent.
  *
- * Contract vẫn CHẤP NHẬN `skel.matte` của dự án cũ (agent validate không đổi);
- * `slice.py` chỉ đơn giản bỏ qua nó, nên không dự án nào vỡ.
+ * ⚠️ LUẬT VIẾT `en`: mỗi câu phải TỰ ĐỨNG ĐƯỢC — nói trọn cách vẽ alpha của ô,
+ * vì sau đợt này KHÔNG còn tầng nào nối thêm chữ cho nó nữa. Nhưng nó vẫn chỉ
+ * nói về ĐỘ XUYÊN THẤU: một cụm kiểu "carved from translucent glacial ice, frosty
+ * surface with a cool inner glow" là chất liệu thẩm mỹ đội lốt độ trong — nó đá
+ * nhau với prompt tổng phong cách.
+ *
+ * Bản nháp / contract ĐỜI CŨ còn `skel.matte` trên đĩa: mọi tầng đọc đều LƯỢC BỎ
+ * êm (`mergeElementSkel` ở `kitset-to-contract.ts`, `engineSkel` ở
+ * `agent/lib/engine.mjs`), không tầng nào báo lỗi.
  */
-import type { GlassLevel, SkelMatteChoice } from "./model";
-
-/**
- * Ba mức kính → câu tiếng Anh nối vào `spec`.
- *
- * Con số alpha trong câu KHÔNG phải tôi ước: `gen.sh` (nhánh `matte == "glass"`, mirror
- * ở `item-prompt.ts:glassCellPrompt`) đã ra hợp đồng *"about 64 out of 255 for a clear
- * pane, up to 128 for a strongly tinted one"*. Ba mức này chỉ ĐỊNH VỊ ô trong dải ấy,
- * nên chúng không thể mâu thuẫn với câu kính chung — đó là lý do không cần đụng `gen.sh`.
- *
- * ⚠️ CHUYỂN NHÀ 08/2026: hằng này từng ở `kitset-to-contract.ts` và vẫn được xuất lại
- * từ đó (chỗ gọi cũ không phải đổi). Nó về đây vì nó là NỬA CÒN LẠI của bảng đục nền —
- * mỗi preset kính chỉ nói mình nằm ở nấc nào, còn câu chữ của nấc thì ở đây; hai thứ
- * ở hai file khác nhau là hai thứ sẽ lệch nhau sau đúng một lượt sửa.
- */
-export const GLASS_LEVEL_SPEC: Record<GlassLevel, string> = {
-  clear: "a clear pane: barely tinted see-through glass, alpha about 64 of 255",
-  frosted: "strongly frosted glass: milky diffused surface, alpha about 96 of 255",
-  tinted: "strongly tinted glass: deep saturated tint, alpha about 128 of 255",
-};
 
 export interface GlazePreset {
   /** Id ỔN ĐỊNH — thứ được lưu vào tài liệu. Không slug từ nhãn tiếng Việt. */
   id: string;
   /** Nhãn tiếng Việt trên pill. */
   vi: string;
-  /** Cách tách áp cho ô này. `"none"` = nền đặc, cắt như một mảng thường. */
-  matte: SkelMatteChoice;
   /**
-   * Mức trong khi `matte === "glass"` — quy về ba nấc alpha mà `gen.sh` đã có hợp
-   * đồng sẵn (xem `GLASS_LEVEL_SPEC`). Không có nghĩa với `matte` khác.
-   */
-  glassLevel?: GlassLevel;
-  /**
-   * Cụm tiếng Anh NỐI THÊM vào `spec`. Rỗng là hợp lệ và hay gặp: với "Kính
-   * trong" thì câu alpha của `GLASS_LEVEL_SPEC` đã nói trọn, thêm chữ nữa chỉ là
-   * nói hai lần cùng một điều bằng hai giọng.
+   * CÂU TIẾNG ANH DUY NHẤT của preset — thứ được nối vào `spec` của ô và cũng là
+   * thứ pill hiện ra làm dòng phụ. Không có mảnh nào của nó nằm ở nơi khác.
    */
   en: string;
 }
@@ -80,39 +60,40 @@ export interface GlazePreset {
  * định tự nhiên của một trường — đúng quy ước `INHERIT` của pill. Có mặt trong
  * bảng thì nó thành một lựa chọn phải bấm mới có, và một ô mới thêm sẽ không có
  * giá trị nào hợp lệ cho tới lúc người dùng bấm.
+ *
+ * Con số alpha trong ba câu kính KHÔNG phải ước lượng tại chỗ: nó là hợp đồng
+ * `gen.sh` đã dùng nhiều tháng ("about 64 out of 255 for a clear pane, up to 128
+ * for a strongly tinted one"), nay viết thẳng ra chỗ người dùng đọc được.
  */
 export const GLAZE_PRESETS: readonly GlazePreset[] = [
   {
     id: "glass",
     vi: "Kính trong",
-    matte: "glass",
-    glassLevel: "clear",
-    /* Rỗng có chủ ý — `GLASS_LEVEL_SPEC.clear` đã là câu tả độ trong đầy đủ. */
-    en: "",
+    en: "a see-through pane of barely tinted glass drawn at low alpha, about 64 of 255,"
+      + " keeping its own tint colour at that alpha; frame, rim and highlights stay fully opaque",
   },
   {
     id: "glass-gradient",
     vi: "Kính gradient",
-    matte: "glass",
-    glassLevel: "frosted",
     /* Chỉ nói ĐỘ TRONG BIẾN THIÊN — không nói màu, không nói bề mặt. */
-    en: "its transparency fades from top to bottom",
+    en: "a see-through sheet of glass whose alpha fades top to bottom, about 96 of 255 at the top"
+      + " down to 0 at the bottom; frame, rim and highlights stay fully opaque",
   },
   {
     id: "ice",
     vi: "Băng",
-    matte: "glass",
-    glassLevel: "tinted",
-    en: "a thick translucent body that light passes through",
+    en: "a thick translucent body that light passes through, drawn at alpha about 128 of 255,"
+      + " keeping its own tint colour at that alpha; frame, rim and highlights stay fully opaque",
   },
   {
     id: "glow",
     vi: "Phát sáng",
-    /* `glow` chỉ còn là một CÂU: `gen.sh` in thêm luật "pure light, no surface,
-       quầng tan bằng cách HẠ ALPHA về 0, không có gì phía sau". Không còn nền đen
-       nào, và `slice.py` không đọc `matte` — xem khối đầu file. */
-    matte: "glow",
-    en: "it emits its own light, luminous edges",
+    /* Câu này phải HUỶ phản xạ "lấp kín hộp bằng một mặt phẳng liền lạc" — đó mới
+       là thứ đẻ ra cái đế caro dưới ô ánh sáng, chứ không phải thiếu lời cấm caro.
+       Luật safe zone của `gen.sh` nay đã trung lập (nói về TẦM VỚI, không về sơn
+       đặc), nên câu này chỉ còn tả ô, không phải huỷ lệnh của engine. */
+    en: "pure light with no surface: the halo keeps its own colour and fades to alpha 0 at its"
+      + " edge, and nothing sits behind it — no plate, no black, no checkerboard",
   },
 ];
 
@@ -129,18 +110,12 @@ export function glazeLabel(id: string | null | undefined): string {
 }
 
 /**
- * TRỌN cụm tiếng Anh của một đục nền = [câu riêng] + [câu alpha của nấc kính].
- *
- * Đây là thứ MỘT NƠI DUY NHẤT phải dựng: pill hiện nó ra để người dùng thấy trước
- * chữ sẽ tới máy vẽ, và prompt copy-dán (`serialize-composer`) nối nó vào dòng ô.
- * `resolveElementSpec` dựng lại cùng nội dung nhưng CÓ THÊM một cửa: nó chỉ nói câu
- * alpha khi ô THẬT SỰ còn là kính sau khi trộn `matte` — cửa ấy chỉ tồn tại được ở
- * chỗ biết `skel`, nên hai đường không gộp làm một được.
+ * Cụm tiếng Anh của một đục nền — MỘT NGUỒN cho cả ba chỗ đọc nó: pill (dòng phụ
+ * trong menu), prompt copy-dán (`serialize-composer`) và contract
+ * (`resolveElementSpec`). Ba chỗ, một chuỗi, không có nhánh điều kiện nào.
  */
 export function glazePhrase(id: string | null | undefined): string {
-  const preset = glazePreset(id);
-  if (!preset) return "";
-  return [preset.en, preset.glassLevel ? GLASS_LEVEL_SPEC[preset.glassLevel] : ""].filter(Boolean).join(", ");
+  return glazePreset(id)?.en ?? "";
 }
 
 /**

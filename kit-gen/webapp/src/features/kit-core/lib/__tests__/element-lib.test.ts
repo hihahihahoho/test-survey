@@ -24,10 +24,47 @@ const REPO = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../../
 const read = (p: string) => readFileSync(resolve(REPO, p), "utf8");
 
 describe("bản v2 đóng gói trong bundle KHÔNG được trôi khỏi bản gốc", () => {
-  it("giống TỪNG BYTE `teams/t1-chuanhoa/element-lib-v2.json`", () => {
-    const goc = read("teams/t1-chuanhoa/element-lib-v2.json");
-    const dongGoi = read("webapp/src/features/kit-core/lib/element-lib/element-lib-v2.json");
-    expect(dongGoi).toBe(goc);
+  /**
+   * TỪNG BYTE → "khác ĐÚNG ba ô, và khác đúng chỗ đã biết" (08/09/2026).
+   *
+   * `teams/t1-chuanhoa/element-lib-v2.json` là bản bàn giao ĐÃ ĐÓNG BĂNG của đội T1;
+   * không ai được sửa nó nữa. Bản đóng gói thì vừa phải đổi, vì `skel.matte` bị bỏ
+   * khỏi contract/engine/agent và ba ô CÓ ĐỘ TRONG phải nói lại điều đó bằng chữ
+   * trong `spec`. So từng byte sau đợt ấy chỉ còn hai lối thoát, và cả hai đều tệ:
+   * sửa file bàn giao, hoặc xoá ca test.
+   *
+   * Nên ca này đổi câu hỏi: KHÔNG phải "hai file có giống nhau không" mà "bản đóng
+   * gói có trôi khỏi bản gốc ở chỗ nào NGOÀI danh sách đã chốt không". Mọi ô khác
+   * vẫn phải giống hệt, và ba ô kia phải khác đúng theo kiểu đã khai — mất `matte`,
+   * `spec` mọc thêm hợp đồng alpha. Một chữ đổi trộm ở ô thứ tư vẫn đỏ như cũ.
+   */
+  const ALPHA_CELLS = ["03-btn-pill-outline", "16-fx-burst", "22-board-panel"];
+
+  it("khác bản bàn giao ĐÚNG ba ô có độ trong, không hơn", () => {
+    type El = { file: string; spec: string; skel: Record<string, unknown> };
+    const parse = (p: string) => JSON.parse(read(p)) as { elements: El[] };
+    const goc = parse("teams/t1-chuanhoa/element-lib-v2.json");
+    const dongGoi = parse("webapp/src/features/kit-core/lib/element-lib/element-lib-v2.json");
+
+    expect(dongGoi.elements.map((e) => e.file)).toEqual(goc.elements.map((e) => e.file));
+    const gocBy = new Map(goc.elements.map((e) => [e.file, e]));
+    const khac: string[] = [];
+    for (const e of dongGoi.elements) {
+      if (JSON.stringify(e) !== JSON.stringify(gocBy.get(e.file))) khac.push(e.file);
+    }
+    expect(khac.sort()).toEqual([...ALPHA_CELLS].sort());
+
+    for (const file of ALPHA_CELLS) {
+      const truoc = gocBy.get(file)!;
+      const sau = dongGoi.elements.find((e) => e.file === file)!;
+      /* Bản gốc khai độ trong bằng CỜ; bản nay khai bằng CHỮ. Đó là toàn bộ khác biệt. */
+      expect(truoc.skel, `${file} — bản gốc vốn có cờ`).toHaveProperty("matte");
+      expect(sau.skel, `${file} — cờ đã bỏ`).not.toHaveProperty("matte");
+      expect(sau.spec, `${file} — hợp đồng alpha nay nằm trong spec`).toContain("alpha");
+      /* Ngoài `spec` và `matte` thì không được đổi gì khác. */
+      expect({ ...sau, spec: "", skel: { ...sau.skel } })
+        .toEqual({ ...truoc, spec: "", skel: (({ matte: _m, ...rest }) => rest)(truoc.skel) });
+    }
   });
 
   it("đủ 42 element, parse sạch, không element nào bị bỏ", () => {
@@ -153,13 +190,21 @@ describe("«đã có trong sheet» — cảnh báo trùng tên file TRƯỚC khi
 });
 
 describe("cờ khung xương hiện thành badge", () => {
-  it("đọc đúng slice9 / free / matte / anchor", () => {
+  it("đọc đúng slice9 / free / anchor", () => {
     expect(skelFlags({ slice9: true }).map((f) => f.key)).toEqual(["slice9"]);
-    expect(skelFlags({ matte: "glow" })[0]?.label).toBe("phát sáng");
-    expect(skelFlags({ matte: "glass" })[0]?.label).toBe("trong suốt");
     expect(skelFlags({ free: true, anchor: "bottom" }).map((f) => f.key)).toEqual(["free", "anchor"]);
     expect(skelFlags({})).toEqual([]);
     expect(skelFlags(null)).toEqual([]);
+  });
+
+  /* GUARD ÂM: `matte` từng là badge thứ tư ("phát sáng" / "trong suốt"). Cả khái
+     niệm "cách tách của một ô" đã bỏ — dữ liệu ĐỜI CŨ còn khoá ấy thì cũng không
+     được mọc ra badge nào, nếu không người dùng đọc được một trạng thái mà app
+     không còn thi hành. */
+  it("dữ liệu đời cũ còn `matte` ⇒ KHÔNG sinh badge nào", () => {
+    expect(skelFlags({ matte: "glow" } as Parameters<typeof skelFlags>[0])).toEqual([]);
+    expect(skelFlags({ matte: "glass", slice9: true } as Parameters<typeof skelFlags>[0]).map((f) => f.key))
+      .toEqual(["slice9"]);
   });
 
   it("nhãn `cell` sang tiếng Việt", () => {
