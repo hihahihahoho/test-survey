@@ -5,7 +5,6 @@ import {
   LayoutGrid,
   PanelsTopLeft,
   Settings,
-  Sparkles,
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -14,7 +13,7 @@ import { UsageMeter } from "./UsageMeter";
 
 /** Mục "Gần đây" đã bỏ theo yêu cầu chủ sản phẩm — chỉ còn một danh sách Dự án. */
 export type HomeSection = "all";
-export type HomeDestination = "projects" | "brands" | "ui-library" | "mascot-library" | "prompt-library" | "references" | "trash" | "settings";
+export type HomeDestination = "projects" | "brands" | "prompt-library" | "references" | "trash" | "settings";
 
 export interface HomeSidebarProps {
   section: HomeSection;
@@ -24,8 +23,6 @@ export interface HomeSidebarProps {
   onTrash: () => void;
   onSettings: () => void;
   onBrands: () => void;
-  onUiLibrary: () => void;
-  onMascotLibrary: () => void;
   onPromptLibrary: () => void;
   onReferences: () => void;
 }
@@ -38,8 +35,6 @@ export function HomeSidebar({
   onTrash,
   onSettings,
   onBrands,
-  onUiLibrary,
-  onMascotLibrary,
   onPromptLibrary,
   onReferences,
 }: HomeSidebarProps) {
@@ -102,11 +97,11 @@ export function HomeSidebar({
       <p className="mb-2 px-3 text-caption font-medium uppercase tracking-wide text-fg-muted">Quản lý</p>
       <nav aria-label="Quản lý" className="space-y-1">
         {destination("brands", "Nhận dạng thương hiệu", Palette, onBrands)}
-        {destination("ui-library", "Bộ khung UI", PanelsTopLeft, onUiLibrary)}
-        {destination("mascot-library", "Mascot", Sparkles, onMascotLibrary)}
-        {/* «Prompt» đứng cạnh bốn thư viện nội dung vì nó cũng là NỘI DUNG: bốn kho
-            kia giữ ảnh, kho này giữ chữ — và chữ mới là thứ đi tới máy vẽ ở mọi tấm,
-            kể cả tấm không đính ảnh nào. */}
+        {/* «Prompt» đứng cạnh hai kho ảnh vì nó cũng là NỘI DUNG: hai kho kia giữ
+            ảnh, kho này giữ chữ — và chữ mới là thứ đi tới máy vẽ ở mọi tấm, kể cả
+            tấm không đính ảnh nào.
+            08/09/2026 — «Bộ khung UI» và «Mascot» rời thanh bên cùng hai màn của
+            chúng: mọi thứ hai màn ấy từng tả bằng ảnh nay tả bằng prompt. */}
         {destination("prompt-library", "Prompt", ListTree, onPromptLibrary)}
         {destination("references", "Ảnh phong cách", Images, onReferences)}
       </nav>

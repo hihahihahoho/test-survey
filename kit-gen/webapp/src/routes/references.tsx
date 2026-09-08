@@ -1,7 +1,7 @@
 import { createRoute } from "@tanstack/react-router";
 import { Route as rootRoute } from "./__root";
 import { AppLayout } from "@/components/layout";
-import { ReferencesLibraryScreen } from "@/features/home/LibraryScreen";
+import { ReferencesLibraryScreen } from "@/features/home/ReferencesScreen";
 
 export const Route = createRoute({
   getParentRoute: () => rootRoute,

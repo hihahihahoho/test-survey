@@ -4,7 +4,7 @@ import { useAgentStatus, useTrash } from "@/lib/hooks";
 import { useRecentStore } from "@/lib/store";
 import type { ScreenProps } from "@/components/layout";
 import { Input } from "@/components/ui/input";
-import { Images, PanelsTopLeft, Search, Settings, Sparkles, Trash2 } from "lucide-react";
+import { Images, Search, Settings, Trash2 } from "lucide-react";
 import type { Project } from "@/lib/types";
 
 import { gateOf, useNarrowViewport } from "./lib/gate";
@@ -189,8 +189,6 @@ export function ProjectsScreen(_props: ScreenProps) {
         trashCount={trashCount}
         onSection={() => {}}
         onBrands={() => void navigate({ to: "/brands" })}
-        onUiLibrary={() => void navigate({ to: "/library/ui" })}
-        onMascotLibrary={() => void navigate({ to: "/library/mascot" })}
         onPromptLibrary={() => void navigate({ to: "/library/prompts", search: {} })}
         onReferences={() => void navigate({ to: "/references" })}
         onTrash={() => nav.openTrash()}
@@ -224,12 +222,6 @@ export function ProjectsScreen(_props: ScreenProps) {
         </div>
 
         <nav aria-label="Điều hướng trên màn hình nhỏ" className="mt-3 flex items-center gap-1 overflow-x-auto pb-1 md:hidden">
-          <button type="button" onClick={() => void navigate({ to: "/library/ui" })} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Bộ khung UI">
-            <PanelsTopLeft className="size-4" aria-hidden />UI
-          </button>
-          <button type="button" onClick={() => void navigate({ to: "/library/mascot" })} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Mascot">
-            <Sparkles className="size-4" aria-hidden />Mascot
-          </button>
           <button type="button" onClick={() => void navigate({ to: "/references" })} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Ảnh phong cách">
             <Images className="size-4" aria-hidden />Tham chiếu
           </button>

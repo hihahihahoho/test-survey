@@ -47,10 +47,10 @@ nên script bị xoá và file dữ liệu ở lại như một hằng số ché
 | `generated-results.ts` | `prompt-canvas/lib/gen-queue`, `kit/lib/figma-kit-doc` |
 | `prompt-studio.ts` | `prompt-canvas/lib/block-prompt`, `lib/hooks/use-contract` |
 | `geometry.ts` | `prompt-canvas/lib/{composer-to-contract,pose-sheet}`, `prompt-lab/lib/cell-size` |
-| `shapes.ts` (+ `shape-data.generated.ts`) | `home/{LibraryScreen,components/Silhouette}`, `geometry.ts` |
+| `shapes.ts` (+ `shape-data.generated.ts`) | `geometry.ts` (hằng `SLICE_CONST`). ⚠️ `silhouetteMarkup`/`cellAspect` KHÔNG còn ai gọi từ 08/09/2026 — `home/components/Silhouette.tsx` bị xoá cùng màn «Bộ khung UI». Giữ lại vì `__tests__/shape-source.test.ts` soi chúng từng ký tự với mã engine; ai xoá thì xoá cả ca test ấy. |
 | `glaze.ts` · `poses.ts` · `materials.ts` | `prompt-canvas/lib/composer-doc`, `prompt-lab/lib/pill-registry` |
-| `user-library.ts` | `kitset-to-contract`, `home/LibraryScreen` |
-| `element-lib/` | `user-library`, `model`, `kitset-to-contract`, `home/LibraryScreen` |
+| `user-library.ts` | `kitset-to-contract` |
+| `element-lib/` | `user-library`, `model`, `kitset-to-contract`; `foldVi` cho `home/{ReferencesScreen,PromptLibraryScreen}` |
 | `idb.ts` | `settings/tabs/PrefsTab` (nút "Xoá dữ liệu trình duyệt") |
 
 Không còn dòng nào trong bảng này chỉ có test làm người dùng — ba dòng như vậy ở

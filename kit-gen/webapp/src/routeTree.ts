@@ -1,8 +1,6 @@
 import { Route as rootRoute } from "./routes/__root";
 import { Route as indexRoute } from "./routes/index";
 import { Route as settingsRoute } from "./routes/settings";
-import { Route as uiLibraryRoute } from "./routes/library.ui";
-import { Route as mascotLibraryRoute } from "./routes/library.mascot";
 import { Route as promptLibraryRoute } from "./routes/library.prompts";
 import { Route as brandsRoute } from "./routes/brands";
 import { Route as referencesRoute } from "./routes/references";
@@ -21,8 +19,9 @@ import { Route as legacyProjectRoute } from "./routes/p.$";
  *
  * ══ IA PROMPT-FIRST: MỘT MÀN LÀM VIỆC, MỘT LỚP VỎ ═════════════════════════
  * `/k/:projectId` là màn làm việc DUY NHẤT (khu soạn prompt). Bảy route còn lại
- * là vỏ: trang chủ, cài đặt máy, thùng rác, và NĂM thư viện — thư viện thứ năm
- * (`/library/prompts`, 09/2026) là chỗ sửa mọi danh mục đi vào prompt.
+ * là vỏ: trang chủ, cài đặt máy, thùng rác, và BA thư viện — «Thư viện prompt»
+ * (`/library/prompts`, 09/2026) là chỗ sửa mọi danh mục đi vào prompt, cạnh
+ * «Nhận dạng thương hiệu» (`/brands`) và «Ảnh phong cách» (`/references`).
  *
  * `/p/$` là TẤM BIỂN CHỈ ĐƯỜNG cho mọi địa chỉ đời cũ — xem `routes/p.$.tsx`.
  * Nó phải đứng CUỐI: một route splat khớp rất rộng, đặt trước là nó nuốt mất
@@ -33,12 +32,15 @@ import { Route as legacyProjectRoute } from "./routes/p.$";
  * 08/09/2026 — bảy stub `/p/:id/**` + ba stub `/k/:id/{studio,form,canvas}` gộp
  * thành `/p/$`; trang showcase `/__preview` bị xoá (component của nó đã đi theo
  * các màn bị gỡ). Ai dựng lại một trang lab/preview thì đăng ký ở ĐÂY.
+ * 08/09/2026 — `/library/ui` và `/library/mascot` BỊ XOÁ. Chủ sản phẩm: *"tab bộ
+ * khung UI giờ có cần không? tab mascot cũng thế — giờ mô tả bằng prompt hết rồi"*.
+ * Đo lại thì đúng: không màn nào của luồng prompt-first đọc ảnh thư viện loại
+ * `ui`/`mascot`. Kho phía agent GIỮ NGUYÊN (dữ liệu cũ + ảnh của `/brands`); chỉ
+ * hai màn ra đi. Ai dựng lại một màn duyệt ảnh thì khai route mới ở ĐÂY.
  */
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   settingsRoute,
-  uiLibraryRoute,
-  mascotLibraryRoute,
   promptLibraryRoute,
   brandsRoute,
   referencesRoute,

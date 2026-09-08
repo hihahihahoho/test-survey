@@ -11,8 +11,14 @@
  * Engine đã BỎ khung xương: prompt in thẳng toạ độ safe zone bằng số, không đính ảnh
  * silhouette nào nữa, và `silhouettes.js` bị xoá khỏi repo. Nghĩa là `shapes.ts` +
  * `shape-data.generated.ts` nay là BẢN DUY NHẤT của hình học ấy — chúng chỉ còn vẽ
- * cho THƯ VIỆN ELEMENT trên web (`home/LibraryScreen`), không còn bản nào để đối
- * chiếu, nên hai describe so-từng-ký-tự ĐÃ XOÁ thay vì để chúng so với chính mình.
+ * cho THƯ VIỆN ELEMENT trên web, không còn bản nào để đối chiếu, nên hai describe
+ * so-từng-ký-tự ĐÃ XOÁ thay vì để chúng so với chính mình.
+ *
+ * 08/09/2026 (cùng ngày, muộn hơn) — màn thư viện ấy (`home/LibraryScreen`) cũng bị
+ * xoá: mọi thứ nó tả bằng ảnh nay tả bằng prompt. Nên `silhouetteMarkup`/`cellAspect`
+ * KHÔNG CÒN NGƯỜI GỌI trong mã sản phẩm, và file này là chỗ duy nhất còn đọc chúng.
+ * Giữ hay xoá là một quyết định chờ chủ sản phẩm: chúng vẫn là bản duy nhất của hình
+ * học safe zone, và ai dựng lại một màn xem trước khung sẽ cần đúng chúng.
  *
  * Những gì Ở LẠI vẫn đối chiếu với mã nguồn THẬT — whitelist shape của
  * `agent/lib/validate.mjs` và các hằng số cắt của `slice.py`. Đó vẫn là chỗ webapp

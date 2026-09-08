@@ -44,15 +44,13 @@ const matchAt = (pathname: string, search: Record<string, unknown> = {}) =>
 const leaf = (pathname: string): string =>
   (matchAt(pathname).at(-1)?.routeId as string | undefined) ?? "";
 
-describe("sitemap — 10 đường dẫn khớp đúng route", () => {
+describe("sitemap — 8 đường dẫn khớp đúng route", () => {
   it.each([
     ["/", "/"],
     ["/settings", "/settings"],
     ["/trash", "/trash"],
     ["/brands", "/brands"],
     ["/references", "/references"],
-    ["/library/ui", "/library/ui"],
-    ["/library/mascot", "/library/mascot"],
     ["/library/prompts", "/library/prompts"],
     [`/k/${PID}`, "/k/$projectId"],
     [`/p/${PID}`, "/p/$"],
@@ -64,8 +62,20 @@ describe("sitemap — 10 đường dẫn khớp đúng route", () => {
   it("`/p/$` KHÔNG nuốt màn làm việc `/k/:id` lẫn các trang vỏ", () => {
     expect(leaf(`/k/${PID}`)).toBe("/k/$projectId");
     expect(leaf("/settings")).toBe("/settings");
-    expect(leaf("/library/ui")).toBe("/library/ui");
+    expect(leaf("/references")).toBe("/references");
     expect(leaf("/library/prompts")).toBe("/library/prompts");
+  });
+
+  /**
+   * HAI ĐỊA CHỈ ĐÃ GỠ (08/09/2026) KHÔNG ĐƯỢC LẶNG LẼ SỐNG LẠI.
+   *
+   * `/library/ui` và `/library/mascot` bị xoá cùng hai màn của chúng. Ca này canh
+   * đúng một thứ: một link cũ (bookmark, tab đang mở) rơi xuống trang 404 chứ không
+   * khớp trúng `/library/prompts` hay bị `/p/$` nuốt thành một màn trông có vẻ ổn.
+   */
+  it.each(["/library/ui", "/library/mascot"])("%s đã gỡ ⇒ không khớp route nào", (path) => {
+    const { foundRoute, routeParams } = makeRouter().getMatchedRoutes(path);
+    expect(foundRoute === undefined || (routeParams["**"] ?? "") !== "").toBe(true);
   });
 
   /* `?kind=` là trục URL duy nhất của thư viện prompt, và nó phải sống sót một

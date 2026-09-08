@@ -49,27 +49,93 @@ import { HomeWorkspaceShell } from "./components/HomeWorkspaceShell";
  * workspace được gộp và hoãn trong kho; màn này KHÔNG tự gọi API.
  */
 
-/** Chữ của một danh mục: tên trên rail, và một câu nói nó điều khiển cái gì. */
-const CATEGORY: Record<ManagedKind, { label: string; blurb: string }> = {
+/**
+ * Chữ của một danh mục: tên trên rail, một câu nói nó điều khiển cái gì, và — từ
+ * lượt này — MỘT CÂU CHỈ CHỖ: mục này hiện ra ở đâu trên màn soạn.
+ *
+ * ══ VÌ SAO THÊM `where` CHỨ KHÔNG VIẾT DÀI THÊM `blurb` ════════════════════
+ * Chủ sản phẩm mở màn này ra và hỏi *"cái nào cho món giao diện, cái nào cho nền,
+ * cái nào cho nhân vật?"* — tức là câu hỏi đầu tiên KHÔNG phải "danh mục này nghĩa
+ * là gì" mà "sửa nó thì cái gì trên màn soạn đổi theo". Rail đã trả lời một nửa
+ * bằng bốn nhóm; nửa còn lại phải nói bằng chữ, và phải nói bằng ĐÚNG TÊN người
+ * dùng thấy («pill Trang trí», «thẻ Bộ UI»), không phải tên biến.
+ */
+const CATEGORY: Record<ManagedKind, { label: string; blurb: string; where: string }> = {
   style: {
     label: "Phong cách",
     blurb: "Lối vẽ chung của cả bộ: nét, khối, bảng màu. Câu này đi vào mọi tấm.",
+    where: "Pill «Phong cách» ở khối Ngữ cảnh chung, và trên mỗi dòng của thẻ Bộ UI.",
   },
   theme: {
     label: "Chủ đề",
     blurb: "Mô-típ và màu của cả bộ. Mỗi mục có hai câu — một cho cả bộ, một cho bộ đồ nhân vật mặc.",
+    where: "Pill «Chủ đề» ở khối Ngữ cảnh chung.",
   },
-  scene: { label: "Khung cảnh", blurb: "Tấm nền vẽ cảnh gì: màn chính, màn chơi, cửa hàng…" },
-  layout: { label: "Bố cục", blurb: "Chừa chỗ nào trên nền cho các nút bấm đứng lên." },
-  glaze: { label: "Đục nền", blurb: "Món này đặc, hay nhìn xuyên qua được." },
-  decor: { label: "Trang trí", blurb: "Một món mang bao nhiêu hoa văn." },
-  decorPlace: { label: "Bố trí", blurb: "Hoa văn dồn về phía nào." },
-  element: { label: "Món giao diện", blurb: "Danh mục món: nút bấm, popover, thanh máu… kèm hình dạng và cỡ." },
-  pose: { label: "Dáng", blurb: "Dáng đứng của nhân vật." },
-  view: { label: "Góc máy", blurb: "Nhìn nhân vật từ hướng nào." },
-  expression: { label: "Biểu cảm", blurb: "Nét mặt của nhân vật." },
-  outfit: { label: "Trang phục", blurb: "Nhân vật mặc gì, khi không lấy theo chủ đề chung." },
+  scene: {
+    label: "Khung cảnh", blurb: "Tấm nền vẽ cảnh gì: màn chính, màn chơi, cửa hàng…",
+    where: "Pill khung cảnh trong câu của thẻ Background.",
+  },
+  layout: {
+    label: "Bố cục", blurb: "Chừa chỗ nào trên nền cho các nút bấm đứng lên.",
+    where: "Pill bố cục trong câu của thẻ Background.",
+  },
+  glaze: {
+    label: "Đục nền", blurb: "Món này đặc, hay nhìn xuyên qua được.",
+    where: "Pill «Đục nền» trên mỗi dòng của thẻ Bộ UI.",
+  },
+  decor: {
+    label: "Trang trí", blurb: "Một món mang bao nhiêu hoa văn.",
+    where: "Pill «Trang trí» trên mỗi dòng của thẻ Bộ UI.",
+  },
+  decorPlace: {
+    label: "Bố trí", blurb: "Hoa văn dồn về phía nào.",
+    where: "Pill «Bố trí» trên mỗi dòng của thẻ Bộ UI — chỉ hiện khi dòng ấy có hoa văn.",
+  },
+  element: {
+    label: "Món giao diện", blurb: "Danh mục món: nút bấm, popover, thanh máu… kèm hình dạng và cỡ.",
+    where: "Ô chọn món ở đầu mỗi dòng của thẻ Bộ UI.",
+  },
+  pose: { label: "Dáng", blurb: "Dáng đứng của nhân vật.", where: "Pill «Dáng» trên mỗi dòng của thẻ Nhân vật." },
+  view: {
+    label: "Góc máy", blurb: "Nhìn nhân vật từ hướng nào.",
+    where: "Pill «Góc» trên mỗi dòng của thẻ Nhân vật.",
+  },
+  expression: {
+    label: "Biểu cảm", blurb: "Nét mặt của nhân vật.",
+    where: "Pill «Biểu cảm» trên mỗi dòng của thẻ Nhân vật.",
+  },
+  outfit: {
+    label: "Trang phục", blurb: "Nhân vật mặc gì, khi không lấy theo chủ đề chung.",
+    where: "Pill trang phục trong câu của thẻ Nhân vật.",
+  },
 };
+
+/**
+ * BỐN NHÓM CỦA RAIL — và chúng đi theo THỨ TỰ THẺ TRÊN MÀN SOẠN, không theo bảng chữ cái.
+ *
+ * ╔══ MƯỜI HAI MỤC PHẲNG LÀ MỘT DANH SÁCH KHÔNG TRẢ LỜI ĐƯỢC GÌ ═════════════╗
+ * ║ Chủ sản phẩm nhìn rail cũ và hỏi thẳng: *"phải phân ra từng cụm: cái nào  ║
+ * ║ cho món giao diện, cái nào cho nền, cái nào cho nhân vật"*. Mười hai nhãn ║
+ * ║ xếp thẳng hàng bắt người ta phải BIẾT TRƯỚC «Bố trí» là hoa văn của món   ║
+ * ║ giao diện chứ không phải bố cục của nền — tức là bắt họ nhớ chính cái mà  ║
+ * ║ màn này lẽ ra phải bày ra.                                               ║
+ * ║                                                                          ║
+ * ║ Thứ tự nhóm CỐ Ý trùng thứ tự thẻ ở `/k/:id` (khối «Ngữ cảnh chung», rồi  ║
+ * ║ ba loại thẻ trong `BLOCK_MENU` của `PromptCanvasScreen`): người ta đi từ  ║
+ * ║ màn soạn sang đây với một cái thẻ trong đầu, và tìm nó ở đúng thứ tự họ   ║
+ * ║ vừa thấy. Đổi thứ tự thẻ bên kia thì đổi cả ở đây.                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * `RAIL_GROUPS` phải phủ ĐÚNG `MANAGED_ORDER` — không thiếu, không thừa, không
+ * trùng: một danh mục rơi khỏi đây là một danh mục KHÔNG CÒN ĐƯỜNG NÀO MỞ RA
+ * ngoài việc gõ tay `?kind=`. Có ca test canh (`prompt-library.test.tsx` ①).
+ */
+const RAIL_GROUPS: ReadonlyArray<{ title: string; kinds: readonly ManagedKind[] }> = [
+  { title: "Ngữ cảnh chung", kinds: ["style", "theme"] },
+  { title: "Background", kinds: ["scene", "layout"] },
+  { title: "Bộ UI", kinds: ["element", "glaze", "decor", "decorPlace"] },
+  { title: "Nhân vật", kinds: ["pose", "view", "expression", "outfit"] },
+];
 
 /**
  * Vì sao MỘT DÒNG bị khoá xoá — chữ hiện ngay trên dòng, không giấu trong tooltip.
@@ -94,6 +160,33 @@ const SHAPE_OPTIONS: ReadonlyArray<{ id: string; label: string }> = [
   { id: "circle", label: "Tròn" },
   { id: "full", label: "Tràn cả ô" },
 ];
+
+/**
+ * BĂNG LỖI ĐỎ «preset kind must be …» KHÔNG PHẢI LỖI CỦA NGƯỜI DÙNG.
+ *
+ * ╔══ MỘT THÔNG ĐIỆP ĐÚNG MÀ VÔ DỤNG ════════════════════════════════════════╗
+ * ║ Kho đẩy danh mục lên máy bằng `POST /api/library/presets`, và bản agent   ║
+ * ║ đời cũ chỉ biết bốn loại danh mục. Gặp loại thứ năm nó trả 400 kèm nguyên ║
+ * ║ văn câu tiếng Anh của mình. Ta ĐANG in nguyên văn ấy ra — và phải giữ,    ║
+ * ║ vì giấu đi thì người sửa lỗi mất manh mối duy nhất. Nhưng với người dùng  ║
+ * ║ thì câu ấy chỉ nói "có gì đó sai", không nói PHẢI LÀM GÌ.                 ║
+ * ║                                                                          ║
+ * ║ Việc phải làm luôn luôn là một việc: khởi động lại KitGen để agent mới    ║
+ * ║ lên thay. Nên nhận ra đúng họ lỗi ấy rồi nối thêm một câu chỉ việc — chứ  ║
+ * ║ KHÔNG thay câu gốc bằng nó.                                              ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Nhận diện bằng chính chuỗi agent gửi về, không bằng mã HTTP: 400 còn tới từ
+ * nhãn rỗng và vài ca khác, mà những ca đó khởi động lại không chữa được gì.
+ */
+const OLD_AGENT_HINT = "Agent trên máy đang là bản cũ — khởi động lại KitGen rồi thử lại.";
+
+function isOldAgentError(message: string): boolean {
+  return message.toLowerCase().includes("preset kind");
+}
+
+/** Khuôn của cột thứ ba — dùng chung cho panel sửa và cho panel rỗng, xem `EmptyEditor`. */
+const PANEL = "shrink-0 self-start rounded-3 border border-line-subtle bg-surface p-4 lg:sticky lg:top-6 lg:w-80";
 
 /** Nhãn tạm của một dòng vừa thêm — xem khối chú thích ở `add()`. */
 const NEW_LABEL = "Mục mới";
@@ -206,17 +299,30 @@ export function PromptLibraryScreen() {
       {syncError !== null && (
         <p className="mb-4 flex items-start gap-2 rounded-2 border border-line-subtle bg-raised px-3 py-2 text-caption text-fg">
           <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-fg-muted" />
-          <span>Chưa ghi được thay đổi xuống máy: {syncError}. Chữ bạn vừa sửa vẫn còn trên màn.</span>
+          <span>
+            Chưa ghi được thay đổi xuống máy: {syncError}. Chữ bạn vừa sửa vẫn còn trên màn.
+            {isOldAgentError(syncError) && ` ${OLD_AGENT_HINT}`}
+          </span>
         </p>
       )}
 
-      <div className="flex flex-col gap-6 lg:flex-row">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <CategoryRail active={kind} presets={presets} onPick={pick} />
 
-        <section aria-label={CATEGORY[kind].label} className="min-w-0 flex-1">
+        {/* TRẦN BỀ NGANG CỦA DANH SÁCH, và đây là một sửa lỗi chứ không phải trang trí:
+            một dòng chỉ có nhãn + một câu tiếng Anh, nên khi cột giữa được thả rộng hết
+            khổ thì nút ⋯ trôi ra tận mép màn còn giữa dòng là một dải trắng — mắt phải
+            đi hết bề ngang để nối một cái tên với cái nút của chính nó. */}
+        <section aria-label={CATEGORY[kind].label} className="min-w-0 flex-1 lg:max-w-4xl">
           <header className="border-b border-line-subtle pb-3">
             <h2 className="text-label text-fg-strong">{CATEGORY[kind].label}</h2>
             <p className="mt-1 text-caption text-fg-muted">{CATEGORY[kind].blurb}</p>
+            {/* «Hiện ở:» chứ không phải một dòng mờ thứ hai: hai câu cùng cỡ cùng màu
+                đứng liền nhau thì mắt đọc thành một đoạn, và câu chỉ chỗ — thứ trả lời
+                câu hỏi người ta thật sự mang tới đây — chìm mất trong câu định nghĩa. */}
+            <p className="mt-1 text-caption text-fg-muted">
+              <span className="text-fg">Hiện ở:</span> {CATEGORY[kind].where}
+            </p>
             {FIXED_REASON[kind] !== undefined && (
               <p className="mt-2 rounded-2 bg-raised px-3 py-2 text-caption text-fg-muted">{FIXED_REASON[kind]}</p>
             )}
@@ -284,7 +390,7 @@ export function PromptLibraryScreen() {
           )}
         </section>
 
-        {editing !== null && (
+        {editing !== null ? (
           <RowEditor
             kind={kind}
             row={editing}
@@ -293,6 +399,8 @@ export function PromptLibraryScreen() {
             onDelete={() => remove(editing)}
             onClose={() => setEditingId(null)}
           />
+        ) : (
+          <EmptyEditor kind={kind} />
         )}
       </div>
     </HomeWorkspaceShell>
@@ -312,28 +420,38 @@ function CategoryRail({
 }) {
   return (
     <nav aria-label="Danh mục prompt" className="shrink-0 lg:w-56">
-      <ul className="space-y-0.5">
-        {MANAGED_ORDER.map((kind) => {
-          const count = managedRows(presets, kind).length;
-          return (
-            <li key={kind}>
-              <button
-                type="button"
-                onClick={() => onPick(kind)}
-                aria-current={active === kind ? "page" : undefined}
-                className={cn(
-                  "flex h-9 w-full items-center gap-2 rounded-2 px-3 text-left text-label",
-                  "transition-colors duration-fast",
-                  active === kind ? "bg-raised text-fg-strong" : "text-fg hover:bg-raised",
-                )}
-              >
-                <span className="truncate">{CATEGORY[kind].label}</span>
-                <span className="ml-auto shrink-0 tabular-nums text-caption text-fg-muted">{count}</span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      {RAIL_GROUPS.map((group) => (
+        <div key={group.title} className="mb-4 last:mb-0">
+          {/* Tiêu đề nhóm là CHỮ, không phải nút: bấm vào «Bộ UI» không mở được gì
+              cả — nhóm chỉ có nghĩa qua bốn danh mục dưới nó. Cho nó dáng nút là
+              hứa một cú bấm không tồn tại. */}
+          <p className="px-3 pb-1 text-caption font-medium uppercase tracking-wide text-fg-muted">
+            {group.title}
+          </p>
+          <ul className="space-y-0.5">
+            {group.kinds.map((kind) => {
+              const count = managedRows(presets, kind).length;
+              return (
+                <li key={kind}>
+                  <button
+                    type="button"
+                    onClick={() => onPick(kind)}
+                    aria-current={active === kind ? "page" : undefined}
+                    className={cn(
+                      "flex h-9 w-full items-center gap-2 rounded-2 px-3 text-left text-label",
+                      "transition-colors duration-fast",
+                      active === kind ? "bg-raised text-fg-strong" : "text-fg hover:bg-raised",
+                    )}
+                  >
+                    <span className="truncate">{CATEGORY[kind].label}</span>
+                    <span className="ml-auto shrink-0 tabular-nums text-caption text-fg-muted">{count}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
     </nav>
   );
 }
@@ -488,6 +606,41 @@ function RowExtra({ kind, row }: { kind: ManagedKind; row: ManagedRow }) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   CỘT THỨ BA KHI CHƯA CHỌN DÒNG NÀO
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Panel rỗng — CÙNG KHUÔN, CÙNG CHỖ với panel sửa.
+ *
+ * ╔══ VÌ SAO KHÔNG ĐỂ CỘT THỨ BA BIẾN MẤT ═══════════════════════════════════╗
+ * ║ Trước lượt này, chưa chọn dòng nào thì cột sửa KHÔNG được dựng, và người  ║
+ * ║ mở màn lần đầu thấy đúng cái mà chủ sản phẩm mô tả là *"UI có vẻ lỗi"*:   ║
+ * ║ một rail hẹp, một danh sách trải hết khổ màn, và một khoảng trống không   ║
+ * ║ ai giải thích ở bên phải. Không có gì hỏng cả — nhưng màn KHÔNG NÓI THẾ.  ║
+ * ║                                                                          ║
+ * ║ Đường kia là tự chọn dòng đầu khi mở danh mục. Bỏ, vì nó mở sẵn một ô     ║
+ * ║ nhập có `autoFocus` cho một dòng người dùng chưa hề chỉ vào: cú gõ đầu    ║
+ * ║ tiên sẽ rơi vào nhãn của mục ấy và ghi đè nó, im lặng.                    ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+function EmptyEditor({ kind }: { kind: ManagedKind }) {
+  return (
+    <aside aria-label="Chưa chọn mục nào" className={PANEL}>
+      <h3 className="text-label text-fg-strong">Chọn một mục để sửa</h3>
+      <p className="mt-2 text-caption text-fg-muted">
+        Bấm một dòng bên trái để mở nhãn tiếng Việt và câu tiếng Anh của nó ra tại đây.
+      </p>
+      <p className="mt-3 border-t border-line-subtle pt-3 text-caption text-fg-muted">
+        <span className="text-fg">Hiện ở:</span> {CATEGORY[kind].where}
+      </p>
+      <p className="mt-2 text-caption text-fg-muted">
+        Kéo tay nắm bên trái mỗi dòng để đổi thứ tự trong menu, hoặc bấm ⋯ để nhân bản và ẩn bớt.
+      </p>
+    </aside>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    PANEL SỬA
    ══════════════════════════════════════════════════════════════════════════ */
 
@@ -528,10 +681,7 @@ function RowEditor({
     onChange({ element: { ...(element ?? { decor: "medium", glazeId: "auto", sizeId: "" }), ...part } });
 
   return (
-    <aside
-      aria-label={`Sửa ${row.vi || "mục mới"}`}
-      className="shrink-0 self-start rounded-3 border border-line-subtle bg-surface p-4 lg:sticky lg:top-6 lg:w-80"
-    >
+    <aside aria-label={`Sửa ${row.vi || "mục mới"}`} className={PANEL}>
       <div className="flex items-center justify-between gap-2 border-b border-line-subtle pb-3">
         <h3 className="truncate text-label text-fg-strong">Sửa mục</h3>
         <Button type="button" variant="secondary" size="sm" onClick={onClose}>Xong</Button>

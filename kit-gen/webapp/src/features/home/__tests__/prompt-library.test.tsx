@@ -100,6 +100,38 @@ describe("① rail danh mục + `?kind=`", () => {
     }
   });
 
+  /**
+   * BỐN NHÓM, VÀ KHÔNG DANH MỤC NÀO RƠI RA NGOÀI.
+   *
+   * Rail vẽ theo `RAIL_GROUPS` chứ không theo `MANAGED_ORDER` nữa. Hai bảng lệch
+   * nhau thì hỏng CÂM đúng kiểu tệ nhất: màn vẫn chạy, chỉ là một danh mục không
+   * còn đường nào mở ra ngoài việc gõ tay `?kind=`. Đếm 12 nút ở ca trên bắt được
+   * ca THIẾU; ca này bắt thêm ca nhóm bị đặt sai tên hoặc mất tiêu đề.
+   */
+  it("chia bốn nhóm theo đúng thứ tự thẻ của màn soạn", async () => {
+    mount();
+    await ready();
+    const rail = screen.getByRole("navigation", { name: "Danh mục prompt" });
+    for (const title of ["Ngữ cảnh chung", "Background", "Bộ UI", "Nhân vật"]) {
+      expect(within(rail).getByText(title)).toBeTruthy();
+    }
+    /* Thứ tự ĐỌC TỪ DOM, không từ mảng nguồn — nếu đọc mảng thì ca tự so với chính nó. */
+    const order = [...rail.querySelectorAll("p")].map((node) => node.textContent);
+    expect(order).toEqual(["Ngữ cảnh chung", "Background", "Bộ UI", "Nhân vật"]);
+  });
+
+  /**
+   * CỘT THỨ BA LUÔN CÓ MẶT — xem `EmptyEditor`. Chưa chọn dòng nào mà cột biến mất
+   * thì màn trông như vỡ layout, và đó chính là báo cáo *"UI có vẻ lỗi"* của chủ
+   * sản phẩm.
+   */
+  it("chưa chọn dòng nào ⇒ cột sửa vẫn đứng đó với lời mời chọn", async () => {
+    mount();
+    await ready();
+    const panel = screen.getByRole("complementary", { name: "Chưa chọn mục nào" });
+    expect(within(panel).getByText("Chọn một mục để sửa")).toBeTruthy();
+  });
+
   it("`?kind=scene` mở thẳng danh mục Khung cảnh, không đổ về mục đầu", async () => {
     searchParams = { kind: "scene" };
     mount();

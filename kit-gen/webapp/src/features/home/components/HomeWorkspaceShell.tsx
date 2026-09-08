@@ -24,8 +24,6 @@ export function HomeWorkspaceShell({
   );
   const go = {
     brands: () => void navigate({ to: "/brands" }),
-    ui: () => void navigate({ to: "/library/ui" }),
-    mascot: () => void navigate({ to: "/library/mascot" }),
     prompts: () => void navigate({ to: "/library/prompts", search: {} }),
     references: () => void navigate({ to: "/references" }),
     trash: () => void navigate({ to: "/trash" }),
@@ -40,8 +38,6 @@ export function HomeWorkspaceShell({
         trashCount={trash.data?.items.length ?? 0}
         onSection={goProjects}
         onBrands={go.brands}
-        onUiLibrary={go.ui}
-        onMascotLibrary={go.mascot}
         onPromptLibrary={go.prompts}
         onReferences={go.references}
         onTrash={go.trash}

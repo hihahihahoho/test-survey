@@ -25,6 +25,7 @@ const hits = scanBannedWords("src/features");
  *   · Dọn mã chết (2026-09-07): **228** chỗ trúng / 86 file — hạ trần.
  *   · Đợt 2 — gộp về một màn soạn (2026-09-08): **105** chỗ trúng / 41 file — hạ trần.
  *   · Nấc «Tự động theo vật liệu» (2026-09-08): **79** chỗ trúng / 33 file — hạ trần.
+ *   · Gỡ hai màn thư viện ảnh (2026-09-08): **78** chỗ trúng / 32 file — hạ trần.
  *
  * Số giảm ở đợt Wave 4·B vì wizard `workflow-v4` bị khai tử: `WorkflowScreen` ·
  * `steps/Stepper` · `steps/ReviewStep` · `components/{PromptStudio,SyncBadge,RunPanel}`
@@ -53,6 +54,12 @@ const hits = scanBannedWords("src/features");
  * pill «Đục nền» («Tự động», «Đục hoàn toàn», dòng gợi ý theo vật liệu) và đo lại:
  * cả ba đều sạch, delta bằng 0, nên trần siết về đúng số thật.
  *
+ * Lượt 78 KHÔNG sửa một chữ nào: `home/LibraryScreen.tsx` bị xoá (hai màn «Bộ khung
+ * UI» và «Mascot» ra đi, phần còn sống tách sang `home/ReferencesScreen.tsx`), và nó
+ * mang theo đúng một chỗ trúng của mình. Chữ mới của lượt này — bốn tiêu đề nhóm trên
+ * rail thư viện prompt, câu chỉ chỗ của mười hai danh mục, panel rỗng, câu gợi ý khởi
+ * động lại — đo lại đều sạch, delta bằng 0.
+ *
  * HẠ TRẦN LÀ BẮT BUỘC, không phải lịch sự. Để nguyên 300 sau khi xoá 11 chỗ nghĩa là
  * tặng cho nhánh sau một hạn mức 11 từ cấm mới mà không ai quyết định cả — bánh cóc
  * chỉ có tác dụng khi răng của nó siết theo số đo thật.
@@ -61,7 +68,7 @@ const hits = scanBannedWords("src/features");
  * tự so với chính nó và KHÔNG BAO GIỜ đỏ được, tức là một cổng giả.
  * Ai kéo số xuống thì HẠ luôn trần này (và ghi vào report của mình).
  */
-const BASELINE_TOTAL = 79;
+const BASELINE_TOTAL = 78;
 
 describe("§5.4 — vùng S1 sở hữu: 0 từ cấm, không ngoại lệ", () => {
   it("features/kitfile/** hoàn toàn sạch", () => {

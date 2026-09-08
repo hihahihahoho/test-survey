@@ -28,8 +28,6 @@ function mount(onPromptLibrary = vi.fn()) {
       onTrash={vi.fn()}
       onSettings={vi.fn()}
       onBrands={vi.fn()}
-      onUiLibrary={vi.fn()}
-      onMascotLibrary={vi.fn()}
       onPromptLibrary={onPromptLibrary}
       onReferences={vi.fn()}
     />,
