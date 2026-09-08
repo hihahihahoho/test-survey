@@ -9,7 +9,7 @@
  * mờ ranh giới mà `lib/settings.mjs` đang giữ (system trả trạng thái MÁY; settings trả
  * lựa chọn NGƯỜI).
  *
- * Bảo mật: mọi luật nằm ở `lib/settings.mjs` (enum · bool · int · mã khớp `ID_RE`), và
+ * Bảo mật: mọi luật nằm ở `lib/settings.mjs` (chỉ ENUM — không ô nào cho chữ tự do), và
  * route này KHÔNG được phép nới thêm. Không có field nào ở đây chạm tới đường dẫn, biến
  * môi trường hay hồ sơ codex — `/api/image-profile` vẫn là chỗ duy nhất đụng `imageGen`.
  */

@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import {
   describe, it, eq, ok, includes, waitFor, pathExists, lsDir,
-  makeClient, fakeDoctor, CLIENT, PAGES, PORT,
+  makeClient, fakeDoctor, CLIENT, PAGES, PORT, createBasicProject,
 } from "./harness.mjs"
 import { createAgent } from "../server.mjs"
 import { buildCommand } from "../lib/engine.mjs"
@@ -100,9 +100,7 @@ export async function run({ api, wsRoot, agentDir, pid }) {
 
   await it("gen → auto-slice: SPAWN engine thật, phán theo SẢN PHẨM, stream đủ event", async () => {
     const { api: a3 } = await agentWithEngine("engine-fake")
-    const created = await a3("POST", "/api/projects", {
-      body: { name: "Chay thu engine", template: "basic", firstVariant: { id: "tet", vi: "Tết đỏ", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a3, { name: "Chay thu engine", firstVariant: { id: "tet", vi: "Tết đỏ", bg: "magenta" } })
     eq(created.status, 201, "tạo project")
     const gid = created.json.project.id
 
@@ -201,9 +199,7 @@ export async function run({ api, wsRoot, agentDir, pid }) {
      Ca này chạy engine giả HAI lượt trên cùng một tấm và đòi thấy đời thứ hai. */
   await it("[phiên bản] gen lượt hai ⇒ bản cũ vào lịch sử (v1 + v2), xoá được bản cũ, KHÔNG xoá được bản đang dùng", async () => {
     const { api: aH } = await agentWithEngine("engine-fake")
-    const created = await aH("POST", "/api/projects", {
-      body: { name: "Ba doi anh", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(aH, { name: "Ba doi anh", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const gid = created.json.project.id
     const genOnce = async () => {
       const r = await aH("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", jobs: ["tet-main"], autoSliceAfterGen: false } })
@@ -272,9 +268,7 @@ export async function run({ api, wsRoot, agentDir, pid }) {
       "không truyền sheets ⇒ argv y hệt bản cũ (pha cắt tổng không đổi)")
 
     const { api: a9 } = await agentWithEngine("engine-fake")
-    const created = await a9("POST", "/api/projects", {
-      body: { name: "Cat luy tien", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a9, { name: "Cat luy tien", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const gid = created.json.project.id
     const run = await a9("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", maxJobs: 2, autoSliceAfterGen: true } })
     eq(run.status, 202, "run 202")
@@ -345,9 +339,7 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     process.env.KITGEN_GEOMETRY_TIMEOUT_MS = "600"
     try {
       const { api: aS } = await agentWithEngine("engine-slowpost")
-      const created = await aS("POST", "/api/projects", {
-        body: { name: "Hai nhip", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-      })
+      const created = await createBasicProject(aS, { name: "Hai nhip", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
       const gid = created.json.project.id
       const run = await aS("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", maxJobs: 2, autoSliceAfterGen: true } })
       eq(run.status, 202, "run 202")
@@ -437,9 +429,7 @@ export async function run({ api, wsRoot, agentDir, pid }) {
      dẫn tuyệt đối; cả hai PHẢI biến mất trước khi ra khỏi API. */
   await it("[#22] job lỗi mang errorTail đã redact + run có failSummary gộp", async () => {
     const { api: a8 } = await agentWithEngine("engine-fake")
-    const created = await a8("POST", "/api/projects", {
-      body: { name: "Bang chung loi", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a8, { name: "Bang chung loi", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const gid = created.json.project.id
     const run = await a8("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", autoSliceAfterGen: false } })
     eq(run.status, 202, "run 202")
@@ -483,9 +473,7 @@ export async function run({ api, wsRoot, agentDir, pid }) {
 
   await it("styles.json sinh ra THU HẸP đúng tập lượt đã chọn (filter gen.sh là substring)", async () => {
     const { api: a5 } = await agentWithEngine("engine-fake")
-    const created = await a5("POST", "/api/projects", {
-      body: { name: "Chon mot luot", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a5, { name: "Chon mot luot", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const gid = created.json.project.id
     const run = await a5("POST", `/api/projects/${gid}/runs`, {
       body: { kind: "gen", jobs: ["tet-main"], autoSliceAfterGen: false },
@@ -503,9 +491,7 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     // NEEDS-setup-projects.md N3: chip "Đang chạy N" của S1 và badge ⚡done/total ở thẻ project.
     // /health.activeRuns chỉ là TỔNG toàn workspace nên không biết của project nào.
     const { api: a6 } = await agentWithEngine("engine-slow")
-    const created = await a6("POST", "/api/projects", {
-      body: { name: "Dang chay bao nhieu", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a6, { name: "Dang chay bao nhieu", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const gid = created.json.project.id
     const before = await a6("GET", `/api/projects/${gid}`)
     eq(before.json.project.state.activeRun, null, "chưa chạy ⇒ activeRun = null")
@@ -538,9 +524,7 @@ export async function run({ api, wsRoot, agentDir, pid }) {
 
   await it("dừng run đang chạy → 200, ảnh của lượt đã xong vẫn được giữ", async () => {
     const { api: a4 } = await agentWithEngine("engine-slow")
-    const created = await a4("POST", "/api/projects", {
-      body: { name: "Dung giua chung", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a4, { name: "Dung giua chung", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const gid = created.json.project.id
     const run = await a4("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", autoSliceAfterGen: false } })
     eq(run.status, 202, "run bắt đầu")
@@ -574,9 +558,7 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     const { api: a7 } = await agentWithEngine("engine-slow")
     const ROUNDS = 6
     for (let i = 0; i < ROUNDS; i++) {
-      const created = await a7("POST", "/api/projects", {
-        body: { name: `Xoa khi dang chay ${i}`, template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-      })
+      const created = await createBasicProject(a7, { name: `Xoa khi dang chay ${i}`, firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
       const gid = created.json.project.id
       const run = await a7("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", autoSliceAfterGen: false } })
       eq(run.status, 202, "run bắt đầu")
@@ -627,9 +609,7 @@ export async function run({ api, wsRoot, agentDir, pid }) {
       eq((await aU("GET", "/api/usage")).json.primary.remainingPercent, 90,
         "chưa chạy gì ⇒ vẫn số cũ — cache là thật, ca này không phải xanh vì cache đã bị bỏ")
 
-      const created = await aU("POST", "/api/projects", {
-        body: { name: "Han muc phai dong", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-      })
+      const created = await createBasicProject(aU, { name: "Han muc phai dong", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
       gid = created.json.project.id
       const run = await aU("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", autoSliceAfterGen: false } })
       eq(run.status, 202, "run 202")

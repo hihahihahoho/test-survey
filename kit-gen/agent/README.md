@@ -71,7 +71,6 @@ cho các cổng dò (8765–8767) — để đường vào (2) tự chạy. **Kh
 │  ├─ engine/                          # bản pipeline: gen.sh, slice.py, geometry.py, element-lib.json…
 │  ├─ app/                             # (tuỳ chọn) bundle giao diện phục vụ tại /app/
 │  ├─ cache/thumbs/                    # thumbnail cho ?w=256
-│  ├─ uploads/                         # staging của POST /api/uploads (TTL 1 giờ)
 │  └─ trash/<yyyymmdd-hhmmss>-<id>/    # project đã xoá, giữ 30 ngày
 └─ projects/<projectId>/
    ├─ project.json  contract.json  styles.json (agent sinh cho engine)
@@ -121,7 +120,7 @@ Mọi response có `X-KitGen-Protocol: 1`. Lỗi luôn theo envelope §6.1:
 | # | Method | Path | Việc |
 |---|---|---|---|
 | 7 | GET | `/api/projects` | `?q&tag&include`; có `ETag` + `304` với `If-None-Match` |
-| 8 | POST | `/api/projects` | `{name, slug?, template:"blank"|"basic"|"import", firstVariant, tags?, import?}` → `201`. Slug tự bỏ dấu (`"Xuân 26"`→`xuan-26`), agent thêm 4 hex ⇒ trùng thư mục không thể xảy ra |
+| 8 | POST | `/api/projects` | `{name, slug?, template:"blank", firstVariant, tags?}` → `201`. Slug tự bỏ dấu (`"Xuân 26"`→`xuan-26`), agent thêm 4 hex ⇒ trùng thư mục không thể xảy ra. `template` **chỉ còn `"blank"`** (08/09/2026 bỏ `basic`/`import`/`from-project` — web chỉ gửi `blank`); giá trị khác ⇒ `400 BAD_REQUEST` |
 | 9 | GET | `/api/projects/:id` | Kèm `stats` + `state.stale/staleReason/jobs` (nguồn của ma trận S2 & modal M1) |
 | 10 | PATCH | `/api/projects/:id` | `{name?,slug?,description?,tags?,cover?}`. **id và thư mục không đổi** |
 | 11 | DELETE | `/api/projects/:id` | **Soft**: chuyển vào `.kitgen/trash/`, trả `{trashId, restoreBefore (+30 ngày), cancelledRuns, bytes}` |
@@ -132,8 +131,8 @@ Mọi response có `X-KitGen-Protocol: 1`. Lỗi luôn theo envelope §6.1:
 | 16 | POST | `/api/projects/:id/duplicate` | `{name, include:["contract","refs","raw","kits","runs"], variants:"all"|[…]|"none", newVariant?}` |
 | 17 | POST | `/api/projects/:id/clean` | `{targets:["skeleton","prompts","kits","rawHistory","oldLogs"]}` (`skeleton` chỉ để dọn thư mục còn sót của dự án tạo trước 27/08/2026). **Không bao giờ** chạm `contract.json` và `raw/` đang dùng |
 | 18 | GET | `/api/projects/:id/export.zip` | `?include=contract,refs,raw,kits,runs` → `kitgen-<slug>-<yyyymmdd>.zip` |
-| ~~19~~ | ~~POST~~ | ~~`/api/uploads`~~ | **ĐÃ BỎ** (07/09/2026) cùng trình nhập zip |
-| ~~20~~ | ~~POST~~ | ~~`/api/import/preview`~~ | **ĐÃ BỎ** (07/09/2026). `loadImportSource` vẫn phục vụ `POST /api/projects` với `import.path` |
+| ~~19~~ | ~~POST~~ | ~~`/api/uploads`~~ | **ĐÃ BỎ** (07/09/2026) cùng trình nhập zip. `lib/uploads.mjs` gỡ nốt 08/09/2026 khi đường nhập cuối cùng biến mất |
+| ~~20~~ | ~~POST~~ | ~~`/api/import/preview`~~ | **ĐÃ BỎ** (07/09/2026); `lib/importer.mjs` xoá hẳn 08/09/2026 cùng `template:"import"`. Dự án nay chỉ ra/vào bằng thư mục trên đĩa |
 | 21 | POST | `/api/projects/:id/reveal` | Mở Finder/Explorer. `501 NOT_SUPPORTED` nếu OS không hỗ trợ |
 
 ### C. Bản thiết kế (contract)
@@ -276,7 +275,7 @@ Agent là cửa cho phép chạy `codex exec -s workspace-write` trên máy user
 | 10 | **Xoá là chuyển vào `.trash/`**, không `rm -rf`. Không cho xoá ngoài workspace | `lib/projects.mjs` `trashProject` |
 | 11 | **Redact bắt buộc** ở lớp cuối: mọi JSON qua `redactDeep`, mọi dòng log qua `redactLine`; đường dẫn tuyệt đối rút thành `~/…` (PII) | `lib/redact.mjs` + `lib/http.mjs` |
 | 12 | **Kiểm magic bytes** khi upload, không tin `Content-Type` của client | `lib/multipart.mjs` `sniff` |
-| 13 | **Zip-slip**: entry có `..` hoặc path tuyệt đối bị loại ngay khi đọc zip | `lib/zip.mjs` `readZip` |
+| 13 | ~~**Zip-slip**~~ | **KHÔNG CÒN BỀ MẶT** (08/09/2026): agent bỏ mọi cửa NHẬN zip, `lib/zip.mjs` chỉ còn ghi. Bản đọc kèm chốt zip-slip ở lại `test/harness.mjs` để test mở zip vừa xuất |
 
 **Giới hạn thừa nhận thẳng:** lớp 2–3 chặn được *website bất kỳ*, **không** chặn được (a) tiến trình local
 khác trên cùng máy nếu bạn bật `--allow-cli`, (b) XSS trên chính domain Pages. Đổi lại, agent **không có
@@ -460,12 +459,12 @@ agent/
 │  ├─ platform.mjs          khác biệt Windows/POSIX gom về một chỗ (spawn, taskkill, đường dẫn)
 │  ├─ instance-lock.mjs     một agent một workspace — khoá file, báo tên tiến trình đang giữ
 │  ├─ workspace.mjs         Workspace + registry (id đục, không lộ path)
-│  ├─ settings.mjs          `/api/settings`: bảng field đầy đủ, coerce, patch, ghi atomic
+│  ├─ settings.mjs          `/api/settings`: bảng field (chỉ còn `ui.theme`, chỉ ENUM), coerce, patch, ghi atomic
 │  ├─ projects-dir.mjs      tách riêng để không import vòng
 │  ├─ projects.mjs          quét/CRUD/state.jobs/trash/clean
 │  ├─ contract.mjs          version + If-Match + snapshot 50 bản (snapshot: chỉ ghi, không còn route đọc)
 │  ├─ validate.mjs          V-01..V-08 (agent validate LẠI, client không đáng tin)
-│  ├─ templates.mjs         template blank/basic (danh sách file cụ thể)
+│  ├─ templates.mjs         contract lúc tạo dự án (`blank`) + element-lib chỉ-đọc
 │  ├─ engine.mjs            adapter sang gen.sh/slice.py + thu hẹp styles.json
 │  ├─ runs.mjs              run-store: 1 run/project, tìm run trên đĩa
 │  ├─ run-handle.mjs        spawn engine, event NDJSON, phán theo sản phẩm, cancel
@@ -479,14 +478,11 @@ agent/
 │  ├─ update.mjs            kiểm bản mới + cài + khoá chống chạy chồng + log xoay vòng
 │  ├─ thumbs.mjs            thumbnail qua Pillow, có fallback thật thà
 │  ├─ multipart.mjs         parser multipart + magic bytes + đọc kích thước ảnh
-│  ├─ zip.mjs               zip đọc/ghi bằng zlib (chống zip-slip)
-│  ├─ importer.mjs          nhập một chiều (styles.json v1 / zip) — báo cáo đối chiếu ĐÃ BỎ cùng `/api/import/preview`
-│  ├─ uploads.mjs           staging upload, TTL 1 giờ
+│  ├─ zip.mjs               GHI zip bằng zlib (chỉ phục vụ `export.zip`)
 │  └─ confirm.mjs           mã 4 số in ra terminal
 ├─ routes/                  system · settings · projects · contract · refs · runs · files · library · cover · app
-├─ templates/basic.json     template "Kit cơ bản": 3 sheet / 25 ô, danh sách file cố định
 ├─ test/                    harness + suite-*.mjs
-└─ test-fixtures/           engine giả cho test (không tốn quota)
+└─ test-fixtures/           engine giả + `basic-contract.json` (bộ khung mẫu 3 tấm / 25 ô — đồ thử, không phải mã sản phẩm)
 ```
 
 **Không sửa gì ngoài `agent/`.** `gen.sh`, `slice.py`, `styles.json`, `element-lib.json`,

@@ -14,7 +14,7 @@ import { promisify } from "node:util"
 import { join } from "node:path"
 import {
   describe, it, eq, ok, includes, waitFor, pathExists,
-  makeClient, fakeDoctor, CLIENT, PAGES, PORT, rmTemp,
+  makeClient, fakeDoctor, CLIENT, PAGES, PORT, rmTemp, createBasicProject,
 } from "./harness.mjs"
 import { createAgent } from "../server.mjs"
 import {
@@ -401,9 +401,7 @@ export async function run({ api, wsRoot, agentDir }) {
   }
 
   await it("chưa vẽ lần nào → GET cover = none (không phải lỗi)", async () => {
-    const created = await api("POST", "/api/projects", {
-      body: { name: "Bia chua ve", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(api, { name: "Bia chua ve", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const id = created.json.project.id
     const r = await api("GET", `/api/projects/${id}/cover`)
     eq(r.status, 200, "status")
@@ -415,9 +413,7 @@ export async function run({ api, wsRoot, agentDir }) {
 
   await it("POST cover → 202, vẽ xong thì đọc được qua #41 và project.cover tự trỏ vào nó", async () => {
     const a = await agentWithEngine("engine-fake")
-    const created = await a("POST", "/api/projects", {
-      body: { name: "Bia tu ve", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a, { name: "Bia tu ve", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const id = created.json.project.id
 
     const start = await a("POST", `/api/projects/${id}/cover`)
@@ -456,9 +452,7 @@ export async function run({ api, wsRoot, agentDir }) {
 
   await it("lượt gen đầu tiên tự kéo theo ảnh bìa — và ảnh bìa hỏng KHÔNG làm hỏng lượt gen", async () => {
     const a = await agentWithEngine("engine-fake")
-    const created = await a("POST", "/api/projects", {
-      body: { name: "Gen roi co bia", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a, { name: "Gen roi co bia", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const id = created.json.project.id
     const run = await a("POST", `/api/projects/${id}/runs`, { body: { kind: "gen", autoSliceAfterGen: false } })
     eq(run.status, 202, "run 202")
@@ -481,9 +475,7 @@ export async function run({ api, wsRoot, agentDir }) {
      chặn lượt thứ hai) — ca dưới đo bằng số lần cover.sh thật sự chạy. */
   await it("bìa được kích NGAY KHI tấm đầu xong, không đợi hết lượt — và vẫn chỉ MỘT lượt vẽ", async () => {
     const a = await agentWithEngine("engine-fake")
-    const created = await a("POST", "/api/projects", {
-      body: { name: "Bia som", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a, { name: "Bia som", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const id = created.json.project.id
     const contract = structuredClone(BRANDED)
     contract.variants[0].id = "tet"
@@ -510,9 +502,7 @@ export async function run({ api, wsRoot, agentDir }) {
 
   await it("không mascot → KHÔNG early-cover; finish() chỉ gọi sau khi manifest đã ghi", async () => {
     const a = await agentWithEngine("engine-fake")
-    const created = await a("POST", "/api/projects", {
-      body: { name: "Bia asset sau manifest", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a, { name: "Bia asset sau manifest", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const id = created.json.project.id
     const contract = structuredClone(NO_MASCOT)
     contract.variants[0].id = "tet"
@@ -552,9 +542,7 @@ export async function run({ api, wsRoot, agentDir }) {
 
   await it("early-cover lỗi tức thì → finish KHÔNG spawn cover lần hai", async () => {
     const a = await agentWithEngine("engine-fake")
-    const created = await a("POST", "/api/projects", {
-      body: { name: "Bia loi som", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a, { name: "Bia loi som", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const id = created.json.project.id
     const contract = structuredClone(BRANDED)
     contract.variants[0].id = "tet"
@@ -576,9 +564,7 @@ export async function run({ api, wsRoot, agentDir }) {
 
   await it("KHÔNG vẽ đè lên ảnh bìa user tự chọn, và KHÔNG vẽ lại khi đã có bìa", async () => {
     const a = await agentWithEngine("engine-fake")
-    const created = await a("POST", "/api/projects", {
-      body: { name: "Bia cua nguoi dung", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a, { name: "Bia cua nguoi dung", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const id = created.json.project.id
     const picked = await a("PATCH", `/api/projects/${id}`, { body: { cover: "kits/tet/01-btn.png" } })
     eq(picked.json.project.cover, "kits/tet/01-btn.png", "user đã tự chọn ảnh bìa")
@@ -596,9 +582,7 @@ export async function run({ api, wsRoot, agentDir }) {
   await it("engine chưa có cover.sh → 409 COVER_UNAVAILABLE (không phải 500, không job ma)", async () => {
     // engine-slow cố ý KHÔNG có cover.sh: đúng cảnh máy đang chạy bản engine cũ.
     const b = await agentWithEngine("engine-slow")
-    const created = await b("POST", "/api/projects", {
-      body: { name: "Engine cu khong co bia", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(b, { name: "Engine cu khong co bia", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const id = created.json.project.id
     const r = await b("POST", `/api/projects/${id}/cover`)
     eq(r.status, 409, "thiếu cover.sh → 409 chứ không phải 500")
@@ -621,9 +605,7 @@ export async function run({ api, wsRoot, agentDir }) {
 
   await it("vẽ bìa thất bại (engine không ghi ảnh) → failed, KHÔNG đặt project.cover", async () => {
     const a = await agentWithEngine("engine-fake")
-    const created = await a("POST", "/api/projects", {
-      body: { name: "Bia loi", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a, { name: "Bia loi", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const id = created.json.project.id
     // Fixture bỏ qua khi prompt chứa dấu hiệu này. Agent ghi đè prompt mỗi lần chạy, nên
     // dấu hiệu được nhét vào TÊN dự án — thứ chắc chắn đi vào prompt qua mô tả mascot.
@@ -651,9 +633,7 @@ export async function run({ api, wsRoot, agentDir }) {
      thì cover.json nằm lại "running" và KHÔNG ai ghi tiếp — coverStatus trả "none" mãi
      mãi, người dùng không thấy lỗi cũng không thấy ảnh. Boot phải dọn. */
   await it("meta mồ côi 'running' sau khi agent bị thay → boot đánh failed/INTERRUPTED", async () => {
-    const created = await api("POST", "/api/projects", {
-      body: { name: "Bia mo coi", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(api, { name: "Bia mo coi", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const id = created.json.project.id
     const metaPath = join(wsRoot, "projects", id, "cover", "cover.json")
     await mkdir(join(wsRoot, "projects", id, "cover"), { recursive: true })
@@ -679,9 +659,7 @@ export async function run({ api, wsRoot, agentDir }) {
 
   await it("boot KHÔNG động vào project đã vẽ xong: meta 'ok' và ảnh thật giữ nguyên", async () => {
     const a = await agentWithEngine("engine-fake")
-    const created = await a("POST", "/api/projects", {
-      body: { name: "Bia da xong", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a, { name: "Bia da xong", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const id = created.json.project.id
     await a("POST", `/api/projects/${id}/cover`)
     await waitFor(async () => (await a("GET", `/api/projects/${id}/cover`)).json.cover.status === "ok", 15000, "vẽ xong")
@@ -695,9 +673,7 @@ export async function run({ api, wsRoot, agentDir }) {
 
   await it("chưa tạo được ảnh (chưa đăng nhập codex) → 409 IMAGEGEN_UNAVAILABLE, chặn TRƯỚC khi chạy", async () => {
     const a = await agentWithEngine("engine-fake", false)
-    const created = await a("POST", "/api/projects", {
-      body: { name: "Chua dang nhap", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a, { name: "Chua dang nhap", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const id = created.json.project.id
     const r = await a("POST", `/api/projects/${id}/cover`)
     eq(r.status, 409, "status")
@@ -711,9 +687,7 @@ export async function run({ api, wsRoot, agentDir }) {
      cứ thứ gì của dự án, web phải nói thẳng ra. #43 là chỗ duy nhất web hỏi được. */
   await it("#43 trả `subject` (enum) + `placeholder` (boolean) — và KHÔNG rò tên file ra web", async () => {
     const a = await agentWithEngine("engine-fake")
-    const created = await a("POST", "/api/projects", {
-      body: { name: "Bia anh tam", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a, { name: "Bia anh tam", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const id = created.json.project.id
     await a("POST", `/api/projects/${id}/cover`)
     await waitFor(async () => (await a("GET", `/api/projects/${id}/cover`)).json.cover.status === "ok", 15000, "vẽ xong")

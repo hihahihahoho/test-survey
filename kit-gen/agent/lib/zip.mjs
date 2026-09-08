@@ -1,13 +1,17 @@
-/* zip.mjs — đọc/ghi ZIP bằng Node stdlib (zlib deflateRaw + CRC32 tự tính).
-   Không dependency ngoài. Chỉ hỗ trợ store(0) + deflate(8) — đủ cho export/import project. */
-import { deflateRaw, inflateRaw } from "node:zlib"
+/* zip.mjs — GHI zip bằng Node stdlib (zlib deflateRaw + CRC32 tự tính), không dependency
+   ngoài. Chỉ store(0) + deflate(8) — đủ cho `GET /api/projects/:id/export.zip`, cửa duy
+   nhất còn dùng file này (nút «Tải kit .zip»).
+
+   08/09/2026 — `readZip` (nhánh ĐỌC) đã rời khỏi sản phẩm cùng đường nhập dự án bằng zip:
+   agent không còn cửa nào nhận zip từ ngoài vào, nên giữ một bộ giải nén trong mã chạy
+   thật là giữ một bề mặt tấn công không ai gọi tới. Bản đọc (kèm chốt chống zip-slip) ở
+   lại trong `agent/test/harness.mjs` để test còn mở được zip mà mình vừa xuất. */
+import { deflateRaw } from "node:zlib"
 import { promisify } from "node:util"
 import { readFile } from "node:fs/promises"
-import { relative, sep } from "node:path"
-import { fail } from "./errors.mjs"
+import { sep } from "node:path"
 
 const deflate = promisify(deflateRaw)
-const inflate = promisify(inflateRaw)
 
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256)
@@ -81,36 +85,3 @@ export async function makeZip(entries) {
   end.writeUInt32LE(offset, 16)
   return Buffer.concat([...parts, cd, end])
 }
-
-/** Đọc zip → [{name, data}]. Bỏ entry có `..`/tuyệt đối (zip-slip) NGAY TẠI ĐÂY. */
-export async function readZip(buf) {
-  const eocdIdx = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]))
-  if (eocdIdx < 0) fail("IMPORT_INVALID", "not a zip file (no end-of-central-directory)")
-  const count = buf.readUInt16LE(eocdIdx + 10)
-  let p = buf.readUInt32LE(eocdIdx + 16)
-  const out = []
-  for (let i = 0; i < count; i++) {
-    if (buf.readUInt32LE(p) !== 0x02014b50) fail("IMPORT_INVALID", "corrupt central directory")
-    const method = buf.readUInt16LE(p + 10)
-    const compSize = buf.readUInt32LE(p + 20)
-    const nameLen = buf.readUInt16LE(p + 28)
-    const extraLen = buf.readUInt16LE(p + 30)
-    const commentLen = buf.readUInt16LE(p + 32)
-    const localOff = buf.readUInt32LE(p + 42)
-    const name = buf.slice(p + 46, p + 46 + nameLen).toString("utf8")
-    p += 46 + nameLen + extraLen + commentLen
-
-    const lnameLen = buf.readUInt16LE(localOff + 26)
-    const lextraLen = buf.readUInt16LE(localOff + 28)
-    const start = localOff + 30 + lnameLen + lextraLen
-    const raw = buf.slice(start, start + compSize)
-    if (name.endsWith("/")) continue
-    const norm = name.replace(/\\/g, "/")
-    if (norm.startsWith("/") || norm.split("/").includes("..")) continue   // zip-slip
-    const data = method === 8 ? await inflate(raw) : raw
-    out.push({ name: norm, data })
-  }
-  return out
-}
-
-export { relative }

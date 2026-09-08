@@ -10,10 +10,9 @@ import { buildTemplateContract } from "../lib/templates.mjs"
 import { writeContract, readContract } from "../lib/contract.mjs"
 import { fail } from "../lib/errors.mjs"
 import { RE_SLUG, RE_VARIANT_ID, assertMatch } from "../lib/paths.mjs"
-import { exists, walkFiles, dirStats, writeFileAtomic, sha256 } from "../lib/fsx.mjs"
+import { exists, walkFiles, dirStats, sha256 } from "../lib/fsx.mjs"
 import { forgetCover } from "../lib/cover.mjs"
 import { makeZip } from "../lib/zip.mjs"
-import { loadImportSource } from "../lib/importer.mjs"
 
 const INCLUDE_DIRS = { contract: [], refs: ["refs"], raw: ["raw"], kits: ["kits"], runs: ["runs"] }
 
@@ -49,8 +48,12 @@ export function register(r) {
     const body = await ctx.json()
     const name = String(body.name ?? "").trim()
     if (!name || name.length > 120) fail("INVALID_NAME", "name must be 1..120 chars")
-    const template = String(body.template ?? "basic")
-    if (!["blank", "basic", "import"].includes(template)) fail("BAD_REQUEST", `unknown template ${template}`)
+    /* MỘT đường tạo duy nhất. `template` từng có thêm "basic"/"import"/"from-project";
+       cả ba đã bỏ 08/09/2026 (web chỉ gửi "blank" — CreateModeDialog.tsx), nên khoá này
+       chỉ còn được KIỂM chứ không còn rẽ nhánh: gửi giá trị khác là dấu hiệu client lệch
+       bản, và một dự án rỗng im lặng thay cho thứ họ tưởng mình đặt là tệ hơn 400. */
+    const template = String(body.template ?? "blank")
+    if (template !== "blank") fail("BAD_REQUEST", `unknown template ${template}`)
 
     const slug = body.slug !== undefined && body.slug !== null && body.slug !== ""
       ? assertMatch(RE_SLUG, body.slug, "INVALID_SLUG", "slug")
@@ -71,33 +74,14 @@ export function register(r) {
       style: fv.style ?? "",
     }
 
-    const warnings = []
-    let contract
-    let importFiles = []
-    if (template === "import") {
-      const src = await loadImportSource(ws, body.import ?? {}, ctx.uploads)
-      contract = src.contract
-      warnings.push(...(src.warnings ?? []))
-      importFiles = src.files ?? []
-    } else {
-      const built = await buildTemplateContract(ws, template, firstVariant)
-      contract = built.contract ?? built
-      warnings.push(...(built.warnings ?? []))
-    }
+    await createProjectDir(ws, { id, name, slug, description: body.description, tags: body.tags })
+    await writeContract(ws, id, buildTemplateContract(firstVariant), { ifMatch: 0 })
 
-    const { dir, project } = await createProjectDir(ws, { id, name, slug, description: body.description, tags: body.tags })
-    await writeContract(ws, id, contract, { ifMatch: 0 })
-
-    if (template === "import" && importFiles.length) {
-      for (const f of importFiles) {
-        if (!/^(refs|raw|kits)\//.test(f.name)) continue      // chỉ nhận 3 nhóm dữ liệu, không nhận file lạ
-        if (f.name.includes("..")) continue
-        await writeFileAtomic(join(dir, f.name), f.data)
-      }
-    }
     const p = await readProject(ws, id)
     Object.assign(p, await computeState(ws, id, p))
-    return { status: 201, json: { project: p, warnings } }
+    // `warnings` giữ nguyên trong thân trả về (web vẫn đọc): đường tạo hiện không sinh
+    // cảnh báo nào, nhưng bỏ khoá đi là đổi hợp đồng của một field vẫn đang được parse.
+    return { status: 201, json: { project: p, warnings: [] } }
   })
 
   // #9 GET /api/projects/:id

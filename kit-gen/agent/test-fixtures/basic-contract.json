@@ -1,0 +1,344 @@
+{
+  "_note": "Bộ khung mẫu 3 tấm / 25 ô — TRƯỚC ĐÂY là template `basic` của sản phẩm (agent/templates/basic.json + element-lib.json). Đợt 4 (08/09/2026) bỏ template khỏi mã sản phẩm; bản dựng sẵn này ở lại làm ĐỒ THỬ cho test: nhiều suite cần một dự án có tấm thật (id `bg-home` là tấm mà engine giả cố ý cho FAIL). Chỉ `sheets` được dùng — variant do chính agent dựng từ `firstVariant` của POST /api/projects.",
+  "sheets": [
+    {
+      "id": "main",
+      "grid": {
+        "cols": 4,
+        "rows": 4
+      },
+      "orient": "landscape",
+      "cell_hint": "landscape 3:2 cell",
+      "note": "",
+      "ref": null,
+      "variants": [],
+      "components": [
+        {
+          "file": "01-btn-pill-red",
+          "vi": "Nút đỏ (CTA)",
+          "spec": "the primary action button",
+          "skel": {
+            "shape": "pill",
+            "w": 0.78,
+            "h": 0.4,
+            "slice9": true
+          },
+          "fromLib": "01-btn-pill-red"
+        },
+        {
+          "file": "02-btn-pill-blue",
+          "vi": "Nút xanh",
+          "spec": "the secondary action button",
+          "skel": {
+            "shape": "pill",
+            "w": 0.78,
+            "h": 0.4,
+            "slice9": true
+          },
+          "fromLib": "02-btn-pill-blue"
+        },
+        {
+          "file": "03-btn-pill-outline",
+          "vi": "Nút viền",
+          "spec": "an outline button, hollow and see-through inside",
+          "skel": {
+            "shape": "pill",
+            "w": 0.78,
+            "h": 0.4,
+            "slice9": true
+          },
+          "fromLib": "03-btn-pill-outline"
+        },
+        {
+          "file": "16-fx-burst",
+          "vi": "Hiệu ứng nổ sáng",
+          "spec": "a radial light burst",
+          "skel": {
+            "shape": "burst",
+            "w": 0.6,
+            "h": 0.9,
+            "free": true,
+            "matte": "glow"
+          },
+          "fromLib": "16-fx-burst"
+        },
+        {
+          "file": "07-progress-track",
+          "vi": "Progress: máng",
+          "spec": "an empty progress bar track",
+          "skel": {
+            "shape": "bar",
+            "w": 0.84,
+            "h": 0.26,
+            "slice9": true
+          },
+          "fromLib": "07-progress-track"
+        },
+        {
+          "file": "04-btn-circle",
+          "vi": "Nút tròn",
+          "spec": "a round icon button",
+          "skel": {
+            "shape": "circle",
+            "w": 0.55,
+            "h": 0.82,
+            "free": true
+          },
+          "fromLib": "04-btn-circle"
+        },
+        {
+          "file": "11-digit-plate",
+          "vi": "Ô số đếm ngược",
+          "spec": "a countdown digit plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.38,
+            "h": 0.58,
+            "slice9": true,
+            "free": true
+          },
+          "fromLib": "11-digit-plate"
+        },
+        {
+          "file": "10-popup-ribbon",
+          "vi": "Ruy băng tiêu đề",
+          "spec": "a heading banner for a dialog",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.84,
+            "h": 0.44,
+            "free": true
+          },
+          "fromLib": "10-popup-ribbon"
+        },
+        {
+          "file": "12-piece-active",
+          "vi": "Mảnh ghép sáng",
+          "spec": "a jigsaw puzzle piece, unlocked",
+          "skel": {
+            "shape": "puzzle",
+            "w": 0.48,
+            "h": 0.72
+          },
+          "fromLib": "12-piece-active"
+        },
+        {
+          "file": "13-piece-locked",
+          "vi": "Mảnh ghép khoá",
+          "spec": "the same jigsaw puzzle piece, locked",
+          "skel": {
+            "shape": "puzzle",
+            "w": 0.48,
+            "h": 0.72
+          },
+          "fromLib": "13-piece-locked"
+        },
+        {
+          "file": "05-tab-chip-idle",
+          "vi": "Tab thường",
+          "spec": "a tab chip, unselected",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.42,
+            "h": 0.62,
+            "slice9": true
+          },
+          "fromLib": "05-tab-chip-idle"
+        },
+        {
+          "file": "06-tab-chip-active",
+          "vi": "Tab đang chọn",
+          "spec": "the same tab chip, selected",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.42,
+            "h": 0.62,
+            "slice9": true
+          },
+          "fromLib": "06-tab-chip-active"
+        },
+        {
+          "file": "08-progress-fill",
+          "vi": "Progress: thanh chạy",
+          "spec": "the inner fill bar of a progress bar, with no track or frame around it (the track is a separate element)",
+          "skel": {
+            "shape": "bar",
+            "w": 0.78,
+            "h": 0.13,
+            "plain": true
+          },
+          "fromLib": "08-progress-fill"
+        },
+        {
+          "file": "14-reward-voucher",
+          "vi": "Quà voucher",
+          "spec": "a voucher coupon ticket",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.64,
+            "h": 0.48,
+            "free": true
+          },
+          "fromLib": "14-reward-voucher"
+        },
+        {
+          "file": "15-reward-giftbox",
+          "vi": "Quà hộp",
+          "spec": "a closed gift box",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.48,
+            "h": 0.68
+          },
+          "fromLib": "15-reward-giftbox"
+        },
+        {
+          "file": "09-popup-panel-short",
+          "vi": "Popup ngang (S/M)",
+          "spec": "a popover panel, landscape",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.84,
+            "h": 0.72,
+            "slice9": true,
+            "free": true
+          },
+          "fromLib": "09-popup-panel-short"
+        }
+      ]
+    },
+    {
+      "id": "tall",
+      "grid": {
+        "cols": 4,
+        "rows": 2
+      },
+      "orient": "portrait",
+      "cell_hint": "portrait 2:3 cell",
+      "note": "",
+      "ref": null,
+      "variants": [],
+      "components": [
+        {
+          "file": "24-popup-panel-tall",
+          "vi": "Popup dọc (L)",
+          "spec": "a popover panel, portrait",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.78,
+            "h": 0.84,
+            "slice9": true,
+            "free": true
+          },
+          "fromLib": "24-popup-panel-tall"
+        },
+        {
+          "file": "20-game-object-closed",
+          "vi": "Túi quà đóng",
+          "spec": "a sealed gift pouch",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.62,
+            "h": 0.74
+          },
+          "fromLib": "20-game-object-closed"
+        },
+        {
+          "file": "21-game-object-open",
+          "vi": "Túi quà mở",
+          "spec": "the same gift pouch, torn open at the top",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.62,
+            "h": 0.74
+          },
+          "fromLib": "21-game-object-open"
+        },
+        {
+          "file": "22-board-panel",
+          "vi": "Khay đựng túi",
+          "spec": "a background panel",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.78,
+            "slice9": true,
+            "free": true,
+            "matte": "glass"
+          },
+          "fromLib": "22-board-panel"
+        },
+        {
+          "file": "51-reward-giftbox-open",
+          "vi": "Quà hộp MỞ",
+          "spec": "the same gift box, open",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.6,
+            "h": 0.74
+          },
+          "fromLib": "51-reward-giftbox-open"
+        },
+        {
+          "file": "52-envelope-body",
+          "vi": "Lì xì: thân",
+          "spec": "the body of a lucky-money envelope, without its top flap",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.55,
+            "h": 0.62
+          },
+          "fromLib": "52-envelope-body"
+        },
+        {
+          "file": "53-envelope-flap",
+          "vi": "Lì xì: nắp",
+          "spec": "only the detached top flap of the same envelope",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.55,
+            "h": 0.3
+          },
+          "fromLib": "53-envelope-flap"
+        },
+        {
+          "file": "54-trophy-cup",
+          "vi": "Cúp vô địch",
+          "spec": "a trophy cup",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.6,
+            "h": 0.74,
+            "free": true
+          },
+          "fromLib": "54-trophy-cup"
+        }
+      ]
+    },
+    {
+      "id": "bg-home",
+      "grid": {
+        "cols": 1,
+        "rows": 1
+      },
+      "orient": "landscape",
+      "cell_hint": "full-bleed background",
+      "note": "",
+      "ref": null,
+      "variants": [],
+      "components": [
+        {
+          "file": "25-bg-home",
+          "vi": "Nền màn HOME",
+          "spec": "the HOME screen background of the game, with no characters and no UI widgets",
+          "skel": {
+            "shape": "full",
+            "w": 1,
+            "h": 1
+          },
+          "fromLib": "25-bg-home"
+        }
+      ]
+    }
+  ]
+}

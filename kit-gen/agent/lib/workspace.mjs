@@ -36,7 +36,6 @@ export class Workspace {
     this.trashDir = join(this.kitgenDir, "trash")
     this.engineDir = join(this.kitgenDir, "engine")
     this.cacheDir = join(this.kitgenDir, "cache")
-    this.uploadsDir = join(this.kitgenDir, "uploads")
     this.libraryDir = join(this.kitgenDir, "library")
   }
   get label() { return workspaceLabel(this.root) }
@@ -46,7 +45,6 @@ export class Workspace {
     await ensureDir(this.projectsDir)
     await ensureDir(this.trashDir)
     await ensureDir(this.cacheDir)
-    await ensureDir(this.uploadsDir)
     await ensureDir(this.libraryDir)
     if (!(await exists(this.configPath))) await writeJsonAtomic(this.configPath, CONFIG_DEFAULT)
     return this

@@ -8,7 +8,8 @@ import { sheetSchema, characterSchema } from "../contract";
  * `endpoints.ts` ném ⇒ biến thành `AGENT_INTERNAL` ⇒ MÀN TRẮNG.
  *
  * Cả ba đều đo bằng agent thật (workspace /tmp/kitws-qa, agent 1.2.0):
- *   · sheet.ref = null           ← agent/lib/templates.mjs:80 + importer.mjs:54 (MỌI sheet)
+ *   · sheet.ref = null           ← agent dựng sẵn tấm (MỌI sheet, mọi project tạo
+ *                                  trước 08/09/2026 — vẫn nằm trên đĩa người dùng)
  *   · project.contract.hash=null ← agent/lib/projects.mjs:200 (MỌI project vừa tạo)
  *   · workspace.diskBytes = null ← agent/routes/system.mjs #3
  *

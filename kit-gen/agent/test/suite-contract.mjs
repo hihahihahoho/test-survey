@@ -5,7 +5,7 @@
    Lịch sử/khôi phục snapshot và validate dry-run KHÔNG còn route (dọn prompt-first):
    luật validate vẫn được canh, nhưng gọi thẳng `validateContract` thay vì qua HTTP. */
 import { join } from "node:path"
-import { describe, it, eq, ok, includes, waitFor, lsDir, makeClient, fakeDoctor, CLIENT, PAGES, PORT } from "./harness.mjs"
+import { CLIENT, PAGES, PORT, createBasicProject, describe, eq, fakeDoctor, includes, it, lsDir, makeClient, ok, waitFor } from "./harness.mjs"
 import { createAgent } from "../server.mjs"
 import { contractToStylesV1 } from "../lib/engine.mjs"
 import { validateContract } from "../lib/validate.mjs"
@@ -104,9 +104,7 @@ export async function run({ api, pid, wsRoot, agentDir }) {
 
   await it("POST prompt-preview trả prompt CÓ NỘI DUNG cho từng job, kèm ảnh đính kèm", async () => {
     const a = await agentWithEngine("engine-fake")
-    const created = await a("POST", "/api/projects", {
-      body: { name: "Xem truoc prompt", template: "basic", firstVariant: { id: "tet", vi: "Tết đỏ", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a, { name: "Xem truoc prompt", firstVariant: { id: "tet", vi: "Tết đỏ", bg: "magenta" } })
     const gid = created.json.project.id
     try {
       const r = await a("POST", `/api/projects/${gid}/prompt-preview`, { body: {} })
@@ -127,9 +125,7 @@ export async function run({ api, pid, wsRoot, agentDir }) {
 
   await it("prompt và ảnh kèm KHÔNG lộ đường dẫn tuyệt đối", async () => {
     const a = await agentWithEngine("engine-fake")
-    const created = await a("POST", "/api/projects", {
-      body: { name: "Khong lo path", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a, { name: "Khong lo path", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const gid = created.json.project.id
     try {
       const r = await a("POST", `/api/projects/${gid}/prompt-preview`, { body: {} })
@@ -150,9 +146,7 @@ export async function run({ api, pid, wsRoot, agentDir }) {
 
   await it("body {contract} = xem trước bản ĐANG SỬA, KHÔNG ghi đè contract.json", async () => {
     const a = await agentWithEngine("engine-fake")
-    const created = await a("POST", "/api/projects", {
-      body: { name: "Ban dang sua", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a, { name: "Ban dang sua", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const gid = created.json.project.id
     try {
       const g = await a("GET", `/api/projects/${gid}/contract`)
@@ -171,9 +165,7 @@ export async function run({ api, pid, wsRoot, agentDir }) {
 
   await it("contract sai lưới → 422 CONTRACT_INVALID, không spawn engine", async () => {
     const a = await agentWithEngine("engine-fake")
-    const created = await a("POST", "/api/projects", {
-      body: { name: "Contract sai luoi", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a, { name: "Contract sai luoi", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const gid = created.json.project.id
     try {
       const g = await a("GET", `/api/projects/${gid}/contract`)
@@ -187,9 +179,7 @@ export async function run({ api, pid, wsRoot, agentDir }) {
 
   await it("đang có lượt chạy → 409 RUN_ACTIVE (hai tiến trình không giẫm chân nhau trên prompts/)", async () => {
     const a = await agentWithEngine("engine-slow")
-    const created = await a("POST", "/api/projects", {
-      body: { name: "Dang chay thi khong xem truoc", template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(a, { name: "Dang chay thi khong xem truoc", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const gid = created.json.project.id
     const run = await a("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", autoSliceAfterGen: false } })
     eq(run.status, 202, "run bắt đầu")

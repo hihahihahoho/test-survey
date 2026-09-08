@@ -25,7 +25,7 @@ import { readFile, writeFile, mkdir, stat, utimes } from "node:fs/promises"
 import { join } from "node:path"
 import {
   describe, it, eq, ok, waitFor, pathExists, lsDir,
-  makeClient, fakeDoctor, CLIENT, PAGES, PORT,
+  makeClient, fakeDoctor, CLIENT, PAGES, PORT, createBasicProject,
 } from "./harness.mjs"
 import { createAgent } from "../server.mjs"
 import { sweepOrphanRuns } from "../lib/runs.mjs"
@@ -51,9 +51,7 @@ export async function run({ wsRoot, agentDir }) {
 
   /** Project 2 biến thể × 3 tấm = 6 lượt: đủ để "dừng ở giữa" là một câu có nghĩa. */
   async function project(api, name) {
-    const created = await api("POST", "/api/projects", {
-      body: { name, template: "basic", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } },
-    })
+    const created = await createBasicProject(api, { name, firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const gid = created.json.project.id
     const cpath = join(wsRoot, "projects", gid, "contract.json")
     const c = JSON.parse(await readFile(cpath, "utf8"))

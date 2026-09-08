@@ -19,9 +19,10 @@
  * DÙNG GÕ, thứ mà hợp đồng bảo mật của API này cố ý không cho đi qua, và một bộ lọc còn
  * sót từ hôm qua chắn hết danh sách là lỗi chứ không phải tính năng).
  *
- * Agent VẪN nhận `ui.sortBy` / `ui.sortDir` (`agent/lib/settings.mjs`), nên config.json
- * đã ghi hai field đó đọc lên không vỡ: `uiDiskSchema` là `z.object` nên lược bỏ field
- * lạ. Web chỉ thôi ghi vào chúng.
+ * Đợt 4 (08/09/2026) dọn nốt phía agent: `SETTINGS_SPEC` của `agent/lib/settings.mjs`
+ * cũng chỉ còn `ui.theme` — hai bên khớp nhau một-một. config.json đã ghi `sortBy`,
+ * `kitZoom`, cả khối `prefs`… đọc lên vẫn không vỡ ở CẢ HAI phía: agent lược bỏ theo
+ * bảng của nó, còn `uiDiskSchema` ở đây là `z.object` nên bỏ qua field lạ.
  *
  * Danh sách field dưới đây được LẤY RA TỪ `SCHEMAS` của persist.ts chứ không gõ lại, nên
  * kiểu và giá trị mặc định không thể trôi khỏi nhau giữa hai kho.

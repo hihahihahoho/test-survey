@@ -357,21 +357,24 @@ export const projectListSchema = z.looseObject({
 });
 export type ProjectList = z.infer<typeof projectListSchema>;
 
-/** #8 `POST /api/projects` — 4 template chốt ở §4.1. */
+/**
+ * #8 `POST /api/projects` — MỘT đường tạo duy nhất.
+ *
+ * 08/09/2026 — `template` từng có 4 giá trị (§4.1 đời đầu). `basic` (25 ô dựng sẵn),
+ * `from-project` và `import` đã bỏ khỏi cả hai phía: wizard mới là nơi người dùng chọn
+ * bộ khung đầu tiên, còn dự án ra/vào bằng thư mục trên đĩa chứ không bằng .zip. Khoá
+ * này ở lại (agent vẫn đọc và vẫn 400 nếu thấy giá trị khác) nhưng chỉ còn một giá trị,
+ * nên `CreateModeDialog` không có gì để chọn nữa. Khối `import` đi theo `template:"import"`.
+ */
 export const createProjectInputSchema = z.object({
   name: z.string().min(1, "Nhập tên project."),
   slug: z.string().regex(RE_SLUG, "Chỉ chữ thường, số, gạch nối (3–48 ký tự).").optional(),
-  template: z.enum(["blank", "basic", "from-project", "import"]).default("basic"),
+  template: z.literal("blank").default("blank"),
   firstVariant: z.object({
     id: z.string().optional(),
     vi: z.string().min(1, "Đặt tên cho phong cách đầu tiên."),
   }),
   tags: z.array(z.string()).default([]),
-  import: z.object({
-    source: z.enum(["zip", "stylesJson", "folder"]),
-    uploadId: z.string().optional(),
-    path: z.string().optional(),
-  }).optional(),
 });
 export type CreateProjectInput = z.infer<typeof createProjectInputSchema>;
 

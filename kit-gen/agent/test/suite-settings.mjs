@@ -6,9 +6,14 @@
  *   ① tuỳ chọn đi vào `<workspace>/.kitgen/config.json` và đọc lại được;
  *   ② hợp đồng bảo mật của `lib/settings.mjs` không thủng — đường dẫn, chuỗi tự do và
  *      field lạ KHÔNG có cách nào lọt vào file đó qua ngả API.
+ *
+ * 08/09/2026 — bảng field còn ĐÚNG MỘT dòng `ui.theme` (Đợt 4). 10 field `ui.*` và cả
+ * khối `prefs` đã bỏ vì web không còn gửi/đọc chúng, nên ca của chúng cũng đi theo. Thứ
+ * KHÔNG được phép mất theo là hai ca tương thích ngược ở cuối file: config.json của bản
+ * cũ (đầy khoá đã chết) phải đọc lên êm và PATCH kèm khoá cũ không được 400.
  */
 import { join } from "node:path"
-import { readFile } from "node:fs/promises"
+import { readFile, writeFile } from "node:fs/promises"
 import { describe, it, eq, ok } from "./harness.mjs"
 
 const CONFIG = ws => join(ws, ".kitgen", "config.json")
@@ -17,23 +22,20 @@ const readConfig = async ws => JSON.parse(await readFile(CONFIG(ws), "utf8"))
 export async function run({ api, wsRoot }) {
   describe("tuỳ chọn người dùng trên đĩa (/api/settings)")
 
-  await it("GET trả đủ hai nhóm với giá trị mặc định", async () => {
+  await it("GET trả bảng với giá trị mặc định", async () => {
     const r = await api("GET", "/api/settings")
     eq(r.status, 200, "status")
-    const s = r.json.settings
-    eq(s.ui.theme, "dark", "ui.theme")
-    eq(s.ui.projectsView, "grid", "ui.projectsView")
-    eq(s.prefs.maxJobs, 4, "prefs.maxJobs")
-    eq(s.prefs.autoSliceAfterGen, true, "prefs.autoSliceAfterGen")
+    eq(r.json.settings.ui.theme, "dark", "ui.theme")
+    eq(Object.keys(r.json.settings), ["ui"], "chỉ còn một nhóm — `prefs` đã bỏ")
+    eq(Object.keys(r.json.settings.ui), ["theme"], "và một field duy nhất trong nhóm đó")
   })
 
   /* ════════ NHẬN NUÔI LẦN ĐẦU — chống xoá tuỳ chọn khi nâng cấp ════════
-     Mọi workspace đang tồn tại đều CHƯA có khối ui/prefs. Nếu API không nói ra điều đó,
-     web sẽ tưởng mặc định là sự thật và ghi đè lên tuỳ chọn thật của người dùng ngay lần
-     mở đầu tiên sau khi cập nhật. Ba ca dưới đây khoá đúng tín hiệu ấy lại. */
+     Workspace tạo trước bảng này CHƯA có khối `ui`. Nếu API không nói ra điều đó, web sẽ
+     tưởng mặc định là sự thật và ghi đè lên tuỳ chọn thật của người dùng ngay lần mở đầu
+     tiên sau khi cập nhật. Ba ca dưới đây khoá đúng tín hiệu ấy lại. */
 
   await it("workspace CHƯA từng lưu tuỳ chọn ⇒ configured:false (mặc định KHÔNG phải sự thật)", async () => {
-    const { writeFile } = await import("node:fs/promises")
     await writeFile(CONFIG(wsRoot), '{"workspaceVersion": 1, "maxJobs": 4, "imageGen": {"mode": "unknown"}}\n')
     const r = await api("GET", "/api/settings")
     eq(r.json.configured, false, "configured")
@@ -42,11 +44,9 @@ export async function run({ api, wsRoot }) {
   await it("`maxJobs` ở gốc KHÔNG được tính là đã cấu hình", async () => {
     // CONFIG_DEFAULT ghi `maxJobs` cho cả workspace mới toanh ⇒ lấy nó làm dấu hiệu thì
     // workspace nào cũng hoá ra "đã cấu hình", và ca nhận nuôi sẽ không bao giờ chạy.
-    const { writeFile } = await import("node:fs/promises")
     await writeFile(CONFIG(wsRoot), '{"workspaceVersion": 1, "maxJobs": 6, "imageGen": {"mode": "unknown"}}\n')
     const r = await api("GET", "/api/settings")
     eq(r.json.configured, false, "configured")
-    eq(r.json.settings.prefs.maxJobs, 6, "vẫn đọc được con số kiểu cũ")
   })
 
   await it("ghi một lần rồi thì configured:true — đĩa thành bên thắng", async () => {
@@ -58,48 +58,29 @@ export async function run({ api, wsRoot }) {
   })
 
   await it("PATCH ghi xuống config.json và GET đọc lại đúng (sống qua reload)", async () => {
-    const r = await api("PATCH", "/api/settings", {
-      body: { ui: { theme: "light", projectsView: "list" }, prefs: { autoSliceAfterGen: false } },
-    })
+    const r = await api("PATCH", "/api/settings", { body: { ui: { theme: "system" } } })
     eq(r.status, 200, "status")
-    eq(r.json.settings.ui.theme, "light", "trả về bảng đã vá")
+    eq(r.json.settings.ui.theme, "system", "trả về bảng đã vá")
 
     const cfg = await readConfig(wsRoot)
-    eq(cfg.ui.theme, "light", "config.json ui.theme")
-    eq(cfg.ui.projectsView, "list", "config.json ui.projectsView")
-    eq(cfg.prefs.autoSliceAfterGen, false, "config.json prefs.autoSliceAfterGen")
+    eq(cfg.ui.theme, "system", "config.json ui.theme")
+    eq(cfg.maxJobs, 6, "`maxJobs` ở gốc là của workspace, /api/settings KHÔNG đụng vào")
 
     const again = await api("GET", "/api/settings")
-    eq(again.json.settings.ui.theme, "light", "đọc lại sau khi ghi")
-    eq(again.json.settings.prefs.autoSliceAfterGen, false, "đọc lại prefs")
+    eq(again.json.settings.ui.theme, "system", "đọc lại sau khi ghi")
   })
 
-  await it("PATCH là VÁ MỘT PHẦN — field không gửi giữ nguyên", async () => {
-    await api("PATCH", "/api/settings", { body: { ui: { density: "compact" } } })
+  await it("PATCH rỗng KHÔNG dựng field cũ về mặc định", async () => {
+    await api("PATCH", "/api/settings", { body: { ui: { theme: "light" } } })
+    await api("PATCH", "/api/settings", { body: {} })
     const r = await api("GET", "/api/settings")
-    eq(r.json.settings.ui.density, "compact", "field vừa vá")
-    eq(r.json.settings.ui.theme, "light", "field cũ KHÔNG bị dựng về mặc định")
-  })
-
-  await it("số ngoài khoảng bị KẸP chứ không từ chối (giao diện tự sửa theo)", async () => {
-    const r = await api("PATCH", "/api/settings", { body: { prefs: { maxJobs: 99, logTail: 1 } } })
-    eq(r.status, 200, "status")
-    eq(r.json.settings.prefs.maxJobs, 8, "maxJobs kẹp về trần 8")
-    eq(r.json.settings.prefs.logTail, 200, "logTail kẹp về sàn 200")
-  })
-
-  await it("`maxJobs` ở GỐC config.json được giữ đồng bộ với prefs", async () => {
-    await api("PATCH", "/api/settings", { body: { prefs: { maxJobs: 2 } } })
-    const cfg = await readConfig(wsRoot)
-    eq(cfg.maxJobs, 2, "maxJobs gốc")
-    eq(cfg.prefs.maxJobs, 2, "prefs.maxJobs")
+    eq(r.json.settings.ui.theme, "light", "field cũ còn nguyên")
   })
 
   await it("enum sai bị BỎ, không làm hỏng cả lần lưu", async () => {
-    const r = await api("PATCH", "/api/settings", { body: { ui: { theme: "neon", density: "comfortable" } } })
+    const r = await api("PATCH", "/api/settings", { body: { ui: { theme: "neon" } } })
     eq(r.status, 200, "status")
     eq(r.json.settings.ui.theme, "light", "enum sai ⇒ giữ giá trị cũ")
-    eq(r.json.settings.ui.density, "comfortable", "field hợp lệ cùng lần gửi VẪN được ghi")
   })
 
   /* ════════ HỢP ĐỒNG BẢO MẬT ════════ */
@@ -113,25 +94,15 @@ export async function run({ api, wsRoot }) {
     ok(!raw.includes("sk-live-abcdef"), "giá trị của field lạ KHÔNG được nằm trong file")
   })
 
-  await it("ĐƯỜNG DẪN không lọt qua được ô mã (ID_RE)", async () => {
+  await it("ĐƯỜNG DẪN không có ô nào để lọt vào — bảng chỉ còn ENUM", async () => {
     const paths = ["/Users/ai/.codex/auth.json", "~/KitGen", "C:\\Users\\ai", "../../etc/passwd", "$HOME"]
-    await api("PATCH", "/api/settings", {
-      body: { ui: { collapsedSections: paths, lastTab: { "/etc/passwd": "sheets", design: "~/secret" } } },
-    })
-    const r = await api("GET", "/api/settings")
-    eq(r.json.settings.ui.collapsedSections, [], "mọi đường dẫn bị loại")
-    eq(r.json.settings.ui.lastTab, {}, "khoá và giá trị dạng đường dẫn đều bị loại")
+    for (const p of paths) {
+      await api("PATCH", "/api/settings", { body: { ui: { theme: p, workspacePath: p } } })
+    }
     const raw = await readFile(CONFIG(wsRoot), "utf8")
     for (const p of paths) ok(!raw.includes(p), `KHÔNG được ghi ${JSON.stringify(p)}`)
-  })
-
-  await it("mã hợp lệ do ứng dụng sinh thì ĐI QUA (không phải chặn tất)", async () => {
-    await api("PATCH", "/api/settings", {
-      body: { ui: { collapsedSections: ["sheet-01", "mascot", "sheet-01"], lastTab: { design: "sheets" } } },
-    })
     const r = await api("GET", "/api/settings")
-    eq(r.json.settings.ui.collapsedSections, ["sheet-01", "mascot"], "giữ thứ tự, bỏ trùng")
-    eq(r.json.settings.ui.lastTab, { design: "sheets" }, "bảng tab")
+    eq(r.json.settings.ui.theme, "light", "giá trị cũ còn nguyên")
   })
 
   await it("body không phải object ⇒ 400, config.json KHÔNG đổi", async () => {
@@ -144,30 +115,52 @@ export async function run({ api, wsRoot }) {
 
   await it("KHÔNG chạm `imageGen` — hồ sơ codex chỉ đổi qua /api/image-profile", async () => {
     const before = await readConfig(wsRoot)
-    await api("PATCH", "/api/settings", { body: { imageGen: { mode: "img-home" }, ui: { kitZoom: 150 } } })
+    await api("PATCH", "/api/settings", { body: { imageGen: { mode: "img-home" }, ui: { theme: "dark" } } })
     const after = await readConfig(wsRoot)
     eq(after.imageGen, before.imageGen, "imageGen giữ nguyên")
-    eq(after.ui.kitZoom, 150, "phần hợp lệ vẫn được ghi")
+    eq(after.ui.theme, "dark", "phần hợp lệ vẫn được ghi")
   })
 
   await it("config.json bị sửa tay thành rác ⇒ trả mặc định, không 500", async () => {
-    const { writeFile } = await import("node:fs/promises")
     await writeFile(CONFIG(wsRoot), '{"ui": 5, "prefs": "hỏng", "workspaceVersion": 1}\n')
     const r = await api("GET", "/api/settings")
     eq(r.status, 200, "status")
     eq(r.json.settings.ui.theme, "dark", "về mặc định")
-    eq(r.json.settings.prefs.maxJobs, 4, "về mặc định")
   })
 
-  await it("workspace CŨ chỉ có `maxJobs` ở gốc ⇒ con số đó KHÔNG bị mất", async () => {
-    const { writeFile } = await import("node:fs/promises")
-    await writeFile(CONFIG(wsRoot), '{"workspaceVersion": 1, "maxJobs": 6, "imageGen": {"mode": "unknown"}}\n')
+  /* ════════ TƯƠNG THÍCH NGƯỢC — config.json do bản CŨ ghi ════════
+     Máy người dùng bản trước còn `ui.density`, `ui.kitZoom`, cả khối `prefs`. Hai ca
+     dưới khoá đúng cái hợp đồng đã hứa: lược bỏ ÊM, không crash và không 400. */
+
+  await it("config.json bản CŨ (10 field ui.* + khối prefs) đọc lên êm, chỉ còn theme", async () => {
+    await writeFile(CONFIG(wsRoot), JSON.stringify({
+      workspaceVersion: 1, maxJobs: 6, imageGen: { mode: "unknown" },
+      ui: {
+        theme: "light", locale: "en", density: "compact", sidebarWidth: 320, railCollapsed: true,
+        projectsView: "list", sortBy: "name", sortDir: "asc", filterChip: "running",
+        collapsedSections: ["sheet-01"], lastTab: { design: "sheets" }, kitBackdrop: "dark", kitZoom: 150,
+      },
+      prefs: { maxJobs: 6, autoSliceAfterGen: false, confirmDestructive: false, showEmptyCells: false, logTail: 5000 },
+    }, null, 2) + "\n")
     const r = await api("GET", "/api/settings")
-    eq(r.json.settings.prefs.maxJobs, 6, "đọc được maxJobs kiểu cũ ở gốc")
+    eq(r.status, 200, "status — không crash")
+    eq(r.json.configured, true, "khối ui có mặt ⇒ đĩa là bên thắng")
+    eq(r.json.settings.ui, { theme: "light" }, "chỉ field còn sống được trả về")
+    eq(r.json.settings.prefs, undefined, "khối prefs không được dựng lại")
   })
 
-  /* Hai ca cuối cố ý viết đè config.json bằng tay. Trả nó về hình dạng lành lặn trước
-     khi rời suite — nhóm ca chạy sau dùng chung workspace này. */
-  const { writeFile } = await import("node:fs/promises")
+  await it("PATCH kèm khoá của bản CŨ vẫn 200 — khoá lạ bị BỎ IM LẶNG, phần hợp lệ vẫn ghi", async () => {
+    const r = await api("PATCH", "/api/settings", {
+      body: { ui: { theme: "dark", density: "compact", kitZoom: 150 }, prefs: { maxJobs: 2 } },
+    })
+    eq(r.status, 200, "status — khoá lạ KHÔNG được làm hỏng cả lần lưu")
+    eq(r.json.settings.ui, { theme: "dark" }, "chỉ theme được nhận")
+    const cfg = await readConfig(wsRoot)
+    eq(cfg.ui, { theme: "dark" }, "khối ui được ghi lại nguyên khối ⇒ rác cũ trong đó tự biến mất")
+    eq(cfg.maxJobs, 6, "`maxJobs` ở gốc KHÔNG bị /api/settings kéo theo")
+  })
+
+  /* Nhiều ca ở trên cố ý viết đè config.json bằng tay. Trả nó về hình dạng lành lặn
+     trước khi rời suite — nhóm ca chạy sau dùng chung workspace này. */
   await writeFile(CONFIG(wsRoot), JSON.stringify({ workspaceVersion: 1, maxJobs: 4, imageGen: { mode: "unknown" } }, null, 2) + "\n")
 }

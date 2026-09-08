@@ -206,9 +206,11 @@ export const sheetSchema = z
        Agent kiểm cùng một luật ở `agent/lib/validate.mjs:42`: có thì phải là chuỗi. */
     directive: z.string().optional(),
     promptOverride: z.string().optional(),
-    /* QA-FUNC: agent GỬI `ref: null` cho MỌI sheet (templates.mjs:80, importer.mjs:54).
+    /* QA-FUNC: agent ĐÃ GỬI `ref: null` cho MỌI sheet của MỌI project tạo trước
+       08/09/2026 (khi ấy `agent/lib/templates.mjs` và `importer.mjs` dựng sẵn tấm).
        `.optional()` không nhận null ⇒ zod ném ⇒ endpoints.ts biến thành AGENT_INTERNAL
-       ⇒ MÀN S3 THIẾT KẾ KHÔNG MỞ ĐƯỢC với bất kỳ project nào. Dùng `.nullish()`. */
+       ⇒ MÀN S3 THIẾT KẾ KHÔNG MỞ ĐƯỢC với bất kỳ project nào. Dùng `.nullish()` — và
+       giữ nguyên: contract.json trên đĩa người dùng vẫn còn nguyên những `null` đó. */
     ref: z.string().nullish(),
     /* TẤM ẢNH DÁNG GHÉP SẴN — cùng luật đường dẫn với `ref`, khác vai trò.
        `ref` là ảnh NHÂN VẬT (danh tính, trang phục); `poseRef` là một tấm manơcanh
@@ -287,7 +289,7 @@ export type Character = z.infer<typeof characterSchema>;
  *
  * `styleMode` là `"prompt" | "inspo"`, KHÔNG phải `"prompt" | "image"`. Nguồn sự thật là
  * `gen.sh:95` (`s.get("styleMode","prompt") == "inspo" and s.get("inspo")`), khớp
- * `studio.html:346` và `agent/lib/importer.mjs:66`. Bản đầu của schema này ghi `"image"`
+ * `studio.html:346`. Bản đầu của schema này ghi `"image"`
  * theo trực giác và bị ca test "styles.json thật parse sạch" bắt lỗi ngay: 3/4 phong cách
  * trong `styles.json` dùng `styleMode:"inspo"` và bị báo sai. Đã sửa theo code, không theo
  * trí nhớ. (`brand.mode` mới là chỗ dùng `"colors" | "image"` — hai trường khác nhau.)

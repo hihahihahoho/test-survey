@@ -2,8 +2,7 @@
    + mã xác nhận 4 số ngoài băng (§3.4 lớp 8) + export .zip. */
 import { mkdir, writeFile, readFile } from "node:fs/promises"
 import { join } from "node:path"
-import { describe, it, eq, ok, includes, rmTemp } from "./harness.mjs"
-import { readZip } from "../lib/zip.mjs"
+import { createBasicProject, describe, eq, includes, it, ok, readZip, rmTemp } from "./harness.mjs"
 
 export async function run({ api, agent, wsRoot }) {
   // ─────────────────────────────────────────── 3. PROJECT CRUD trọn vòng
@@ -15,10 +14,8 @@ export async function run({ api, agent, wsRoot }) {
     eq(r.json.items.length, 0, "0 project")
     ok(r.headers.etag, "có ETag")
   })
-  await it("POST tạo project template basic → 201, slug bỏ dấu, 3 sheet 25 ô", async () => {
-    const r = await api("POST", "/api/projects", {
-      body: { name: "Tết 2026 — VietinBank iPay", template: "basic", firstVariant: { vi: "Tết đỏ", bg: "magenta" }, tags: ["tet", "banking"] },
-    })
+  await it("POST tạo project → 201, slug bỏ dấu; lắp bộ khung mẫu vào là 3 sheet 25 ô", async () => {
+    const r = await createBasicProject(api, { name: "Tết 2026 — VietinBank iPay", firstVariant: { vi: "Tết đỏ", bg: "magenta" }, tags: ["tet", "banking"] })
     eq(r.status, 201, "status")
     projectId = r.json.project.id
     ok(/^tet-2026-vietinbank-ipay-[0-9a-f]{4}$/.test(projectId), `id có hậu tố hex: ${projectId}`)
@@ -63,6 +60,18 @@ export async function run({ api, agent, wsRoot }) {
     eq(r.json.error.code, "PROJECT_ID_TAKEN", "code")
     ok(r.json.error.details.suggestion, "có gợi ý")
   })
+  /* `basic`/`import`/`from-project` đã rời khỏi sản phẩm 08/09/2026. Một client bản cũ
+     gửi lại tên đó phải NGHE THẤY 400, chứ không nhận về một dự án rỗng trông y như
+     thành công rồi ngồi hỏi 25 ô mẫu của mình đâu. */
+  await it("template ngoài `blank` → 400 BAD_REQUEST (không im lặng tạo dự án rỗng)", async () => {
+    for (const template of ["basic", "import", "from-project"]) {
+      const r = await api("POST", "/api/projects", { body: { name: `Mẫu ${template}`, template, firstVariant: { vi: "V1" } } })
+      eq(r.status, 400, `status của template ${template}`)
+      eq(r.json.error.code, "BAD_REQUEST", "code")
+    }
+    const after = await api("GET", "/api/projects")
+    ok(!after.json.items.some(x => x.name.startsWith("Mẫu ")), "không dự án nào được tạo")
+  })
   await it("nhân bản project (contract+refs) → 201, project mới độc lập", async () => {
     const r = await api("POST", `/api/projects/${projectId}/duplicate`, {
       body: { name: "Tết 2026 (bản sao)", include: ["contract", "refs"], variants: "all" },
@@ -103,7 +112,6 @@ export async function run({ api, agent, wsRoot }) {
     const r = await api("GET", `/api/projects/${projectId}/export.zip?include=contract,refs`)
     eq(r.status, 200, "status")
     includes(r.headers["content-disposition"], ".zip", "Content-Disposition")
-    const { readZip } = await import("../lib/zip.mjs")
     const entries = await readZip(r.body)
     ok(entries.some(e => e.name.endsWith("contract.json")), "có contract.json")
     ok(entries.some(e => e.name.endsWith("project.json")), "có project.json")
@@ -233,9 +241,7 @@ export async function run({ api, agent, wsRoot }) {
   // project mới cho các nhóm test sau
   let pid = null
   await it("tạo lại project để test contract/refs/run", async () => {
-    const r = await api("POST", "/api/projects", {
-      body: { name: "Kiểm thử hợp đồng", template: "basic", firstVariant: { id: "tet", vi: "Tết đỏ", bg: "magenta" } },
-    })
+    const r = await createBasicProject(api, { name: "Kiểm thử hợp đồng", firstVariant: { id: "tet", vi: "Tết đỏ", bg: "magenta" } })
     eq(r.status, 201, "status")
     pid = r.json.project.id
   })

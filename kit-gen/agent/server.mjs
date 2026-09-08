@@ -30,7 +30,6 @@ import { Router } from "./lib/router.mjs"
 import { WorkspaceRegistry, defaultWorkspaceRoot } from "./lib/workspace.mjs"
 import { doctor as realDoctor } from "./lib/doctor.mjs"
 import { RunStore, sweepOrphanRuns } from "./lib/runs.mjs"
-import { Uploads } from "./lib/uploads.mjs"
 import { ConfirmCodes } from "./lib/confirm.mjs"
 import { register as registerSystem } from "./routes/system.mjs"
 import { register as registerSettings } from "./routes/settings.mjs"
@@ -166,7 +165,6 @@ export async function createAgent(opts = {}) {
   const label = instanceLabel()
   const confirm = new ConfirmCodes(opts.print ?? (s => process.stdout.write(String(s) + "\n")))
   let runs = new RunStore(registry.active)
-  let uploads = new Uploads(registry.active)
 
   const router = new Router()
   registerSystem(router)
@@ -222,7 +220,7 @@ export async function createAgent(opts = {}) {
       if (hit === "METHOD") throw new AgentError("METHOD_NOT_ALLOWED", `${req.method} not allowed on ${url.pathname}`)
 
       const ctx = {
-        req, res, url, params: hit.params, registry, runs, uploads, confirm,
+        req, res, url, params: hit.params, registry, runs, confirm,
         origins: originSet, limits: LIMITS, version: PROTOCOL_VERSION, runtimeVersion: state.runtimeVersion, buildId: BUILD_ID,
         kitgenHome,
         instanceLabel: label, appRootOverride: opts.appRoot ?? null,
@@ -231,11 +229,7 @@ export async function createAgent(opts = {}) {
         json: () => readJson(req, { limit: LIMITS.json }),
         body: limit => readBody(req, { limit: limit ?? LIMITS.json }),
         reveal: revealInFinder,
-        onWorkspaceChange: ws => {
-          runs = new RunStore(ws)
-          uploads.dispose().catch(() => {})
-          uploads = new Uploads(ws)
-        },
+        onWorkspaceChange: ws => { runs = new RunStore(ws) },
       }
       const out = await hit.handler(ctx)
       await respond(res, out, corsHeaders(origin), req)

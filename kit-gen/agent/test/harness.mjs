@@ -10,6 +10,7 @@
  */
 import http from "node:http"
 import { Duplex } from "node:stream"
+import { readFileSync } from "node:fs"
 
 export const PORT = 8765
 export const PAGES = "https://kitgen.pages.dev"
@@ -195,6 +196,75 @@ export function multipart(fields) {
   }
   parts.push(Buffer.from(`--${b}--\r\n`))
   return { body: Buffer.concat(parts), contentType: `multipart/form-data; boundary=${b}` }
+}
+
+/* ═══ ĐỒ THỬ: dự án CÓ TẤM THẬT ═════════════════════════════════════════════
+   Trước 08/09/2026 mọi suite lấy `template:"basic"` làm đồ thử: một POST là có ngay 3
+   tấm / 25 ô. Template đó đã rời khỏi sản phẩm (web chỉ gửi `"blank"`), nhưng NHU CẦU
+   của test thì không đổi — engine giả cố ý cho tấm `bg-home` FAIL, ma trận job cần
+   nhiều tấm, cover cần tấm có ô. Nên bộ khung ấy chuyển thành một FIXTURE và test tự
+   lắp nó vào bằng đúng hai cửa công khai (`POST /api/projects` + `PUT …/contract`).
+
+   Đổi lại được một thứ: đường tạo dự án nay được test ĐÚNG như web dùng nó. */
+
+const BASIC_SHEETS = JSON.parse(
+  readFileSync(new URL("../test-fixtures/basic-contract.json", import.meta.url), "utf8")).sheets
+
+/** Trả về Y HỆT hình dạng của `POST /api/projects` (`{status, json:{project, warnings}}`),
+ *  nhưng `project` đã được đọc lại SAU khi contract có tấm ⇒ `stats`/`state` là thật.
+ *  Lỗi ở bất kỳ bước nào được trả nguyên response để ca gọi tự phán (ví dụ 409 slug trùng). */
+export async function createBasicProject(api, body) {
+  const created = await api("POST", "/api/projects", { body: { ...body, template: "blank" } })
+  if (created.status !== 201) return created
+  const id = created.json.project.id
+  const got = await api("GET", `/api/projects/${id}/contract`)
+  if (got.status !== 200) return got
+  const contract = { ...got.json.contract, sheets: structuredClone(BASIC_SHEETS) }
+  const put = await api("PUT", `/api/projects/${id}/contract`, {
+    body: { contract }, headers: { "if-match": String(got.json.version) },
+  })
+  if (put.status !== 200) return put
+  const fresh = await api("GET", `/api/projects/${id}`)
+  if (fresh.status !== 200) return fresh
+  return { ...created, json: { project: fresh.json.project, warnings: [] } }
+}
+
+/* ═══ ĐỌC ZIP — chỉ dùng trong test ═════════════════════════════════════════
+   Bản gốc sống ở `agent/lib/zip.mjs`; Đợt 4 gỡ nó khỏi sản phẩm cùng đường NHẬP dự án
+   bằng zip (agent không còn cửa nào nhận zip từ ngoài vào). Test vẫn phải mở được zip
+   mà `GET …/export.zip` vừa xuất để phán theo NỘI DUNG chứ không theo mã trạng thái,
+   nên bản đọc ở lại đây — kèm nguyên chốt chống zip-slip, để ca "zip xuất ra không
+   chứa entry `..`" vẫn kiểm được đúng thứ nó định kiểm. */
+export async function readZip(buf) {
+  const { inflateRaw } = await import("node:zlib")
+  const { promisify } = await import("node:util")
+  const inflate = promisify(inflateRaw)
+  const eocdIdx = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]))
+  if (eocdIdx < 0) throw new Error("not a zip file (no end-of-central-directory)")
+  const count = buf.readUInt16LE(eocdIdx + 10)
+  let p = buf.readUInt32LE(eocdIdx + 16)
+  const out = []
+  for (let i = 0; i < count; i++) {
+    if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error("corrupt central directory")
+    const method = buf.readUInt16LE(p + 10)
+    const compSize = buf.readUInt32LE(p + 20)
+    const nameLen = buf.readUInt16LE(p + 28)
+    const extraLen = buf.readUInt16LE(p + 30)
+    const commentLen = buf.readUInt16LE(p + 32)
+    const localOff = buf.readUInt32LE(p + 42)
+    const name = buf.slice(p + 46, p + 46 + nameLen).toString("utf8")
+    p += 46 + nameLen + extraLen + commentLen
+
+    const lnameLen = buf.readUInt16LE(localOff + 26)
+    const lextraLen = buf.readUInt16LE(localOff + 28)
+    const start = localOff + 30 + lnameLen + lextraLen
+    const raw = buf.slice(start, start + compSize)
+    if (name.endsWith("/")) continue
+    const norm = name.replace(/\\/g, "/")
+    if (norm.startsWith("/") || norm.split("/").includes("..")) continue   // zip-slip
+    out.push({ name: norm, data: method === 8 ? await inflate(raw) : raw })
+  }
+  return out
 }
 
 /** PNG 1×1 thật (để kiểm magic bytes + đọc kích thước). */
