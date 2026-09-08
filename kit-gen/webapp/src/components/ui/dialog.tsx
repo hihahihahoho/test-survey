@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
  * §5.5 Modal — scrim, panel `raised`, r-3, 4 cỡ, cao tối đa min(90vh,720px),
  * body cuộn riêng (header/footer dính).
  * A11y (§5.8-A7): Radix lo focus trap + Esc + aria-modal + trả focus.
- * ĐÃ KIỂM chứ không tin suông — xem trang /__preview mục "Kiểm chứng a11y".
+ * ĐÃ KIỂM chứ không tin suông — trang showcase `/__preview` từng giữ checklist đó đã bị
+ * xoá; phần còn canh được bằng máy nằm ở `npm test` + `npm run contrast`.
  * Modal đang thực thi: truyền `onEscapeKeyDown`/`onPointerDownOutside` preventDefault
  * (xem ConfirmDestructive) để Esc KHÔNG đóng khi thao tác đang chạy.
  */

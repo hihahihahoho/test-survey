@@ -10,8 +10,10 @@ export async function run({ api, wsRoot }) {
     eq(r.status, 200)
     eq(r.json.settings, { background: 2, popup: 4, small: 16, props: 16, mascot: 4 })
     eq(r.json.items, [])
-    eq(r.json.poseTemplates.length, 19)
-    eq(r.json.poseTemplates[0].sourcePose, "idle")
+    /* `poseTemplates` (19 khung dáng dựng sẵn) đã bị bỏ 08/09/2026 cùng tab «khung
+       pose»: không web lẫn engine nào đọc nữa. Ca này khoá lại rằng nó KHÔNG quay
+       về — một mảng 19 phần tử trong mọi lần `GET /api/library` là chi phí thật. */
+    eq(r.json.poseTemplates, undefined)
     /* v4: kho mở ra là có sẵn ô cho danh mục người dùng tự sửa. Rỗng, không phải
        thiếu — web phân biệt hai thứ đó để biết có cần gieo hạt giống hay không. */
     eq(r.json.version, 4)
@@ -223,11 +225,14 @@ export async function run({ api, wsRoot }) {
     eq(r.status, 200)
     eq(r.json.version, 4, "số phiên bản đã lên 4")
     eq(r.json.presets, [], "thiếu `presets` ⇒ mảng rỗng, KHÔNG phải lỗi")
-    /* Bốn mảng cũ phải đi qua nguyên vẹn — đây mới là điều "không mất gì" nghĩa là gì. */
+    /* Ba mảng cũ còn dùng phải đi qua nguyên vẹn — đây mới là điều "không mất gì"
+       nghĩa là gì. */
     eq(r.json.brands.length, 1)
     eq(r.json.brands[0].name, "VCB cũ")
     eq(r.json.brands[0].colors, ["#006b5b"])
-    eq(r.json.poseTemplates.map(pose => pose.id), ["pose_idle"])
+    /* `poseTemplates` của file cũ bị LƯỢC BỎ chứ không làm hỏng lần đọc — đó chính
+       là điều phải chứng minh khi bỏ một khoá khỏi state. */
+    eq(r.json.poseTemplates, undefined, "khoá đã bỏ không quay lại, và không crash")
     eq(r.json.settings, { background: 5, popup: 4, small: 16, props: 16, mascot: 4 })
     eq(r.json.items.map(item => item.id), ["asset_00112233445566bb"])
     eq(r.json.items[0].tags, ["cũ"])

@@ -6,66 +6,54 @@
  * schema strict + bộ dò secret. `partialize` dùng allowlist FIELD tường minh: hàm
  * (action) và state tạm không bao giờ rời khỏi RAM.
  *
- * ⚠ localStorage KHÔNG CÒN LÀ NGUỒN SỰ THẬT. Phần lớn store này sống trên đĩa tại
+ * ⚠ localStorage KHÔNG CÒN LÀ NGUỒN SỰ THẬT. Store này sống trên đĩa tại
  * `<workspace>/.kitgen/config.json`; localStorage tụt xuống làm bộ nhớ đệm khởi động và
- * làm đường lùi khi agent chưa chạy. Danh sách field nào lên đĩa (và vì sao `filterQuery`
- * / `filterTags` CỐ Ý ở lại) nằm ở `./disk-settings.ts`; cây cầu ở `./settings-sync.ts`.
- * Thêm field mới vào đây thì cân nhắc thêm nó vào `DISK_UI_FIELDS` luôn.
+ * làm đường lùi khi agent chưa chạy. Danh sách field nào lên đĩa nằm ở
+ * `./disk-settings.ts`; cây cầu ở `./settings-sync.ts`. Thêm field mới vào đây thì cân
+ * nhắc thêm nó vào `DISK_UI_FIELDS` luôn.
  *
  * ⚠ Đợt 2 (một màn duy nhất) đã bỏ các field của những màn không còn: `locale`,
  * `density`, `sidebarWidth`, `railCollapsed`, `projectsView`, `filterChip`,
- * `collapsedSections`, `lastTab`, `kitBackdrop`, `kitZoom`. Vài KIỂU trong số đó vẫn ở
- * lại đây vì `features/projects` còn dùng để mô tả props (`ProjectsView`, `FilterChip`)
- * — kiểu thì còn, state thì không.
+ * `collapsedSections`, `lastTab`, `kitBackdrop`, `kitZoom`.
+ *
+ * ⚠ Đợt 3 bỏ nốt `sortBy` / `sortDir` / `filterTags` / `filterQuery` cùng bộ action của
+ * chúng: KHÔNG còn màn nào đọc. Danh sách bộ kit chỉ có MỘT thứ tự («sửa gần nhất»,
+ * `features/home/lib/home-view.ts`) và ô tìm là state CỤC BỘ của `ProjectsScreen` —
+ * cố ý, vì một bộ lọc còn sót từ hôm qua chắn hết danh sách là lỗi, không phải tính
+ * năng. `sortBy`/`sortDir` cũng rời `DISK_UI_FIELDS`; agent vẫn nhận hai field đó nên
+ * config.json cũ đọc lên không vỡ, web chỉ thôi ghi vào chúng. Ba KIỂU đi kèm
+ * (`SortBy`, `SortDir`, `FilterChip`) đã dời về `features/projects/lib/view.ts` — nơi
+ * duy nhất còn dùng chúng, và dùng như THAM SỐ hàm chứ không phải state.
+ *
+ * Còn lại ĐÚNG MỘT tuỳ chọn: `theme`. Giữ store (không hạ xuống một biến) vì cây cầu
+ * `settings-sync.ts` subscribe vào nó, và vì đây là nơi allowlist khoá localStorage
+ * được thi hành.
  */
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { LS_KEYS, createPersistStorage, defaultsFor, pickAllowed } from "./persist";
 
 export type Theme = "dark" | "light" | "system";
-export type ProjectsView = "grid" | "list";
-export type SortBy = "updated" | "name" | "size" | "created";
-export type SortDir = "asc" | "desc";
-export type FilterChip = "all" | "need-gen" | "running" | "failed" | "unfinished";
 
 const d = defaultsFor(LS_KEYS.ui);
 
 /** Field được phép ghi ra localStorage — TƯỜNG MINH. Thêm field mới phải sửa cả đây. */
-const PERSISTED_FIELDS = ["theme", "sortBy", "sortDir", "filterTags", "filterQuery"] as const;
+const PERSISTED_FIELDS = ["theme"] as const;
 
 export interface UiState {
   theme: Theme;
-  sortBy: SortBy;
-  sortDir: SortDir;
-  filterTags: string[];
-  filterQuery: string;
 
   setTheme: (t: Theme) => void;
   toggleTheme: () => void;
-  setSort: (by: SortBy, dir?: SortDir) => void;
-  setFilterQuery: (q: string) => void;
-  toggleFilterTag: (tag: string) => void;
-  clearFilters: () => void;
 }
 
 export const useUiStore = create<UiState>()(
   persist(
     (set, get) => ({
       theme: d.theme as Theme,
-      sortBy: d.sortBy as SortBy,
-      sortDir: d.sortDir as SortDir,
-      filterTags: d.filterTags,
-      filterQuery: d.filterQuery,
 
       setTheme: (theme) => set({ theme }),
       toggleTheme: () => set({ theme: get().theme === "dark" ? "light" : "dark" }),
-      setSort: (sortBy, sortDir) => set({ sortBy, ...(sortDir ? { sortDir } : {}) }),
-      setFilterQuery: (filterQuery) => set({ filterQuery }),
-      toggleFilterTag: (tag) =>
-        set((s) => ({
-          filterTags: s.filterTags.includes(tag) ? s.filterTags.filter((t) => t !== tag) : [...s.filterTags, tag],
-        })),
-      clearFilters: () => set({ filterTags: [], filterQuery: "" }),
     }),
     {
       name: LS_KEYS.ui,

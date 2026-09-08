@@ -52,8 +52,11 @@ import {
  *   home/components/HomeGrid    lưới + ô CTA + thùng rác
  *   home/components/HomeStates  5 ca hiển thị
  *
- * Bản danh sách project kiểu cũ được lưu ở `features/home/legacy/` — không xoá
- * (FE3-PLAN §0-N8), không import, không vào bundle. Mọi file nó cần vẫn nguyên trên đĩa.
+ * Bản danh sách project kiểu cũ từng được chép sang `features/home/legacy/` vì lúc đó
+ * `webapp/` CHƯA vào Git — không có `git show` để lấy lại (FE3-PLAN §0-N8). Nay repo đã
+ * theo dõi `webapp/`, và chín component mà bản chép ấy cần (`components/Projects*.tsx`,
+ * `ProjectCard`, `ProjectMenu`…) đã bị xoá ở Đợt 3 vì không ai render, nên thư mục
+ * `legacy/` vừa hết lý do tồn tại vừa hết khả năng khôi phục. Đã xoá; lịch sử nằm ở Git.
  *
  * BANNER AGENT: khung (`AppLayout` của R1-P1) đã có `AgentBanner`. Màn vẫn dựng
  * `HomeAgentOffline` vì §6 đòi banner nói ĐÚNG chuyện của Home («Danh sách đang xem là bản

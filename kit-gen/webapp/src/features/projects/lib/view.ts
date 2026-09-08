@@ -10,26 +10,20 @@
  */
 import type { Project } from "@/lib/types";
 import { JOB_STATUS_PRIORITY, type JobStatus } from "@/lib/status";
-import type { FilterChip, SortBy, SortDir } from "@/lib/store";
 import { foldCase } from "./format";
+
+/* Ba kiểu này từng là state trong `@/lib/store` (`useUiStore`). Đợt 3 gỡ state đó —
+   danh sách bộ kit chỉ còn MỘT thứ tự và không màn nào lưu bộ lọc — nên kiểu về ở
+   cạnh hàm nhận chúng làm THAM SỐ, đúng nơi chúng còn nghĩa.
+   Cùng đợt, hai bảng nhãn `CHIPS` / `SORTS` và bảng `STATE_ROW` (dòng trạng thái của
+   thẻ đời cũ) bị xoá: chúng chỉ phục vụ thanh lọc + bảng danh sách + `ProjectCard`, cả
+   ba đã không còn. Nhãn trạng thái của thẻ hiện tại nằm ở `features/home/lib/run-line.ts`. */
+export type FilterChip = "all" | "need-gen" | "running" | "failed" | "unfinished";
+export type SortBy = "updated" | "name" | "size" | "created";
+export type SortDir = "asc" | "desc";
 
 /** Trạng thái tổng hợp của 1 project. `broken`/`empty` là 2 ca ngoài 7 trạng thái §5.7. */
 export type ProjectState = JobStatus | "broken" | "empty";
-
-export const CHIPS: readonly { id: FilterChip; label: string }[] = [
-  { id: "all", label: "Tất cả" },
-  { id: "need-gen", label: "Cần sinh ảnh" },
-  { id: "running", label: "Đang chạy" },
-  { id: "failed", label: "Lỗi" },
-  { id: "unfinished", label: "Chưa xong" },
-] as const;
-
-export const SORTS: readonly { id: SortBy; label: string }[] = [
-  { id: "updated", label: "Sửa gần nhất" },
-  { id: "name", label: "Tên A→Z" },
-  { id: "size", label: "Dung lượng" },
-  { id: "created", label: "Ngày tạo" },
-] as const;
 
 /** Gộp `state.jobs` thành 1 trạng thái đại diện, đúng thứ tự ưu tiên §5.7. */
 export function projectState(p: Project): ProjectState {
@@ -129,16 +123,3 @@ export function allTags(items: readonly Project[]): [string, number][] {
   for (const p of items) for (const t of p.tags ?? []) m.set(t, (m.get(t) ?? 0) + 1);
   return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "vi"));
 }
-
-/** Dòng trạng thái trên thẻ (§3-S1-2 vùng 6). `action` ⇒ có nút hành động ngay cạnh (§5.7). */
-export const STATE_ROW: Record<ProjectState, { badge: JobStatus; text: string; action?: string }> = {
-  ok: { badge: "ok", text: "Mọi thứ đã đồng bộ" },
-  stale: { badge: "stale", text: "Thiết kế đã đổi sau lần sinh ảnh cuối", action: "Xem việc cần làm" },
-  uncut: { badge: "uncut", text: "Có ảnh mới nhưng chưa cắt", action: "Xem việc cần làm" },
-  never: { badge: "never", text: "Chưa sinh ảnh lần nào", action: "Bắt đầu" },
-  queued: { badge: "queued", text: "Đang chờ tới lượt" },
-  running: { badge: "running", text: "Đang sinh ảnh" },
-  failed: { badge: "failed", text: "Có lượt sinh ảnh bị lỗi", action: "Xem lỗi" },
-  empty: { badge: "never", text: "Chưa bắt đầu", action: "Chọn element" },
-  broken: { badge: "failed", text: "Không đọc được dự án" },
-};

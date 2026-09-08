@@ -404,9 +404,9 @@ export const libraryApi = {
     return parse(brandProfileResultSchema, await httpPatch(`/api/library/brands/${pid(id)}`, input), "thương hiệu vừa sửa").brand;
   },
   async removeBrand(id: string) { await httpDelete(`/api/library/brands/${pid(id)}`); return { ok: true }; },
-  /* KHUNG POSE CHỈ CÒN ĐỌC. `POST/PATCH/DELETE /api/library/poses` đã bị gỡ khỏi agent
-     ở Đợt 2; `GET /api/library` vẫn trả mảng `poseTemplates` (các khung prototype dựng
-     sẵn), nên màn Mascot còn liệt kê được chúng — chỉ không còn cửa ghi nào. */
+  /* KHÔNG CÒN KHUNG POSE. Ba cửa ghi `/api/library/poses` rời agent ở Đợt 2, và Đợt 3
+     bỏ nốt mảng `poseTemplates` khỏi `GET /api/library`: màn Mascot thôi liệt kê khung
+     dựng sẵn, luồng prompt-first chụp manơcanh thành `sheet.poseRef` thay cho nó. */
   /* Preset — không có `getPresets()` riêng: `GET /api/library` đã trả kèm mảng
      `presets`, nên một query duy nhất (`qk.library()`) là nguồn sự thật cho cả
      kho. Thêm một endpoint đọc thứ hai chỉ tạo ra hai cache lệch nhau. */

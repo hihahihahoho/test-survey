@@ -448,6 +448,7 @@ hãy chạy thêm `node agent/server.mjs` và `curl /health` như §1.
 ```
 agent/
 ├─ server.mjs               pipeline HTTP + bind loopback + dò cổng + NDJSON writer
+├─ log-run.mjs              supervisor cho Startup của Windows (một con, log xoay vòng, KHÔNG restart loop)
 ├─ lib/
 │  ├─ errors.mjs            envelope §6.1 + bảng code → HTTP status (nguồn duy nhất)
 │  ├─ security.mjs          Host/Origin/preflight/rate-limit/body-limit/CORS
@@ -456,7 +457,10 @@ agent/
 │  ├─ http.mjs              sendJson/sendFile/sendError (mọi JSON qua redactDeep)
 │  ├─ router.mjs            router pattern nhỏ (:param và *)
 │  ├─ fsx.mjs               fs helper, ghi ATOMIC (tmp + rename)
+│  ├─ platform.mjs          khác biệt Windows/POSIX gom về một chỗ (spawn, taskkill, đường dẫn)
+│  ├─ instance-lock.mjs     một agent một workspace — khoá file, báo tên tiến trình đang giữ
 │  ├─ workspace.mjs         Workspace + registry (id đục, không lộ path)
+│  ├─ settings.mjs          `/api/settings`: bảng field đầy đủ, coerce, patch, ghi atomic
 │  ├─ projects-dir.mjs      tách riêng để không import vòng
 │  ├─ projects.mjs          quét/CRUD/state.jobs/trash/clean
 │  ├─ contract.mjs          version + If-Match + snapshot 50 bản (snapshot: chỉ ghi, không còn route đọc)
@@ -465,14 +469,21 @@ agent/
 │  ├─ engine.mjs            adapter sang gen.sh/slice.py + thu hẹp styles.json
 │  ├─ runs.mjs              run-store: 1 run/project, tìm run trên đĩa
 │  ├─ run-handle.mjs        spawn engine, event NDJSON, phán theo sản phẩm, cancel
+│  ├─ raw-history.mjs       giữ bản ảnh gốc đời trước mỗi lần gen lại (.history v1/v2)
+│  ├─ cover.mjs             ảnh bìa bộ kit: chọn chủ thể, dựng prompt, đọc/quên meta
+│  ├─ library.mjs           kho dùng chung của workspace: brand · item · preset
 │  ├─ doctor.mjs            môi trường + image_gen (chỉ enum/boolean)
+│  ├─ codex-login.mjs       đăng nhập codex bằng mã thiết bị (không giữ token)
+│  ├─ codex-account.mjs     đọc tài khoản/gói hiện hành để hiện trong Cài đặt
+│  ├─ usage.mjs             hạn mức codex còn lại (đọc, có cache)
+│  ├─ update.mjs            kiểm bản mới + cài + khoá chống chạy chồng + log xoay vòng
 │  ├─ thumbs.mjs            thumbnail qua Pillow, có fallback thật thà
 │  ├─ multipart.mjs         parser multipart + magic bytes + đọc kích thước ảnh
 │  ├─ zip.mjs               zip đọc/ghi bằng zlib (chống zip-slip)
-│  ├─ importer.mjs          nhập một chiều + báo cáo đối chiếu
+│  ├─ importer.mjs          nhập một chiều (styles.json v1 / zip) — báo cáo đối chiếu ĐÃ BỎ cùng `/api/import/preview`
 │  ├─ uploads.mjs           staging upload, TTL 1 giờ
 │  └─ confirm.mjs           mã 4 số in ra terminal
-├─ routes/                  system · projects · contract · refs · runs · files · library · cover · app
+├─ routes/                  system · settings · projects · contract · refs · runs · files · library · cover · app
 ├─ templates/basic.json     template "Kit cơ bản": 3 sheet / 25 ô, danh sách file cố định
 ├─ test/                    harness + suite-*.mjs
 └─ test-fixtures/           engine giả cho test (không tốn quota)

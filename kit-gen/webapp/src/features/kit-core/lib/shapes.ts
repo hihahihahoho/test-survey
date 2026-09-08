@@ -54,11 +54,6 @@ export function shapeOptions(extra: readonly string[] = []): { value: string; la
     }));
 }
 
-/** 19 dáng: id + nhãn VI (nguyên văn `POSES[x].vi` của silhouettes.js). */
-export function poseOptions(): { value: string; label: string }[] {
-  return POSE_META.map((p) => ({ value: p.id, label: p.vi }));
-}
-
 export function poseLabel(id: unknown): string {
   const s = String(id ?? "");
   return POSE_META.find((p) => p.id === s)?.vi ?? s;

@@ -56,7 +56,6 @@ import geometry                                                   # noqa: E402
 # 15px đủ lớn hơn nhiễu thường đo được (~6px/mép), vẫn bắt sai lệch hình học
 # có ý nghĩa; không đặt thấp hơn sàn nhiễu.
 SIZE_DEVIATION_THRESHOLD_PX = 15
-QA_SIZE_DEVIATION_THRESHOLD_PX = SIZE_DEVIATION_THRESHOLD_PX
 
 #: Từ mức này trở lên coi là ĐỤC HẲN — xem `snap_solid_alpha`.
 SOLID_ALPHA = 240

@@ -1,12 +1,15 @@
-/* importer.mjs — nhập MỘT CHIỀU, không xoá gốc, luôn có BÁO CÁO ĐỐI CHIẾU (X12/§4.6).
+/* importer.mjs — nhập MỘT CHIỀU, không xoá gốc (X12/§4.6).
    Ràng buộc cứng: KHÔNG BAO GIỜ tái sinh sheet từ element-lib.json (rebuildSheets của v1
-   bị xoá khỏi sản phẩm). Element lạ được GIỮ NGUYÊN spec/skel; thiếu skel → gán rrect 0.8x0.6
-   và ghi vào báo cáo. Id sheet trùng → thêm hậu tố -2 và ghi vào báo cáo. */
+   bị xoá khỏi sản phẩm). Element lạ được GIỮ NGUYÊN spec/skel; thiếu skel → gán rrect 0.8x0.6.
+   Id sheet trùng → thêm hậu tố -2, và cảnh báo đi kèm trong `warnings` của kết quả.
+
+   08/09/2026 — `buildImportReport` (BÁO CÁO ĐỐI CHIẾU trước khi nhập) đã xoá: nó chỉ
+   phục vụ `POST /api/import/preview`, cửa đã bị gỡ ở Đợt 2 cùng màn xem trước của web.
+   Đường nhập THẬT (`POST /api/projects` với `template:"import"`) không đi qua nó. */
 import { join } from "node:path"
 import { exists, readJsonFile, readdir } from "./fsx.mjs"
 import { fail } from "./errors.mjs"
-import { validateContract } from "./validate.mjs"
-import { loadElementLib, DEFAULT_POSES } from "./templates.mjs"
+import { DEFAULT_POSES } from "./templates.mjs"
 import { readZip } from "./zip.mjs"
 import { RE_SHEET_ID, RE_VARIANT_ID } from "./paths.mjs"
 
@@ -87,44 +90,6 @@ export function stylesJsonToContract(src) {
 }
 
 /** Báo cáo đối chiếu bước 2 của wizard — KHÔNG BỎ QUA ĐƯỢC. */
-export async function buildImportReport(ws, contract, extra = {}) {
-  const lib = await loadElementLib(ws)
-  const known = new Set(lib.elements.map(e => e.file))
-  const allComps = contract.sheets.flatMap(s => s.components ?? [])
-  const unknown = allComps.filter(c => c.file && !known.has(c.file))
-  const validation = validateContract(contract)
-  const refs = new Set()
-  for (const sh of contract.sheets) if (sh.ref) refs.add(sh.ref)
-  for (const v of contract.variants) {
-    for (const p of v.inspo ?? []) refs.add(p)
-    for (const p of v.brand?.refs ?? []) refs.add(p)
-    for (const c of v.characters ?? []) if (c.ref) refs.add(c.ref)
-  }
-  return {
-    sheets: contract.sheets.length,
-    components: allComps.length,
-    variants: contract.variants.length,
-    poses: contract.characterPoses?.length ?? 0,
-    unknownComponents: unknown.length,
-    duplicateSheetIds: (extra.duplicateSheetIds ?? []).map(d => d.from),
-    missingRefs: [...refs],
-    willCreate: {
-      sheets: contract.sheets.length, components: allComps.length, variants: contract.variants.length,
-      raw: extra.rawFiles ?? 0, kits: extra.kitFiles ?? 0,
-    },
-    warnings: [
-      ...(extra.warnings ?? []),
-      ...(unknown.length
-        ? [{ code: "UNKNOWN_COMPONENTS", message: `${unknown.length}/${allComps.length} element không có trong thư viện chuẩn — GIỮ NGUYÊN như trong file`, items: unknown.slice(0, 80).map(c => c.file) }]
-        : []),
-      ...validation.errors.map(e => ({ code: e.code, message: e.message, items: [e.path] })),
-      ...validation.warnings.map(e => ({ code: e.code, message: e.message, items: [e.path] })),
-    ],
-    validation,
-  }
-}
-
-/** Đọc nguồn nhập → {contract, warnings, files:[{name,data}]} (files chỉ có với zip). */
 export async function loadImportSource(ws, { source, uploadId, path: relFolder }, uploads) {
   if (source === "stylesJson") {
     const buf = uploads.read(uploadId)

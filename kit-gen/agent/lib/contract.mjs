@@ -1,8 +1,13 @@
 /* contract.mjs — đọc/ghi bản thiết kế có VERSION + If-Match + snapshot lịch sử 50 bản.
-   Schema v4 giữ tương thích (architecture §2.4): styles[] → variants[], sheet.styles → sheet.variants. */
+   Schema v4 giữ tương thích (architecture §2.4): styles[] → variants[], sheet.styles → sheet.variants.
+
+   08/09/2026 — snapshot vẫn được GHI (và tỉa còn 50 bản) nhưng KHÔNG còn cửa đọc:
+   `listHistory` / `readHistorySnapshot` đi cùng hai route `contract/history` bị gỡ ở
+   Đợt 2, và Đợt 3 xoá nốt hai hàm vì không nơi nào gọi. Snapshot ở lại có chủ đích —
+   nó là đường cứu dữ liệu bằng tay khi một lần ghi contract làm hỏng dự án. */
 import { join } from "node:path"
 import {
-  ensureDir, exists, readJsonFile, writeJsonAtomic, readdir, removeTree, sha256, stat,
+  ensureDir, exists, readJsonFile, writeJsonAtomic, readdir, removeTree, sha256,
 } from "./fsx.mjs"
 import { fail } from "./errors.mjs"
 import { projectDir } from "./projects-dir.mjs"
@@ -102,30 +107,3 @@ async function pruneHistory(ws, id) {
   while (files.length > HISTORY_KEEP) await removeTree(join(dir, files.shift()))
 }
 
-export async function listHistory(ws, id, limit = HISTORY_KEEP) {
-  const dir = historyDir(ws, id)
-  const files = (await readdir(dir).catch(() => [])).filter(f => f.endsWith(".json")).sort().reverse().slice(0, limit)
-  const items = []
-  for (const f of files) {
-    const abs = join(dir, f)
-    const st = await stat(abs).catch(() => null)
-    let snap = null
-    try { snap = await readJsonFile(abs) } catch { /* bỏ bản hỏng */ }
-    items.push({
-      snapshot: f.replace(/\.json$/, ""), version: snap?.version ?? null,
-      at: st ? new Date(st.mtimeMs).toISOString() : null, bytes: st?.size ?? 0,
-      summary: {
-        sheets: snap?.contract?.sheets?.length ?? 0,
-        components: (snap?.contract?.sheets ?? []).reduce((n, s) => n + (s.components?.length ?? 0), 0),
-      },
-    })
-  }
-  return items
-}
-
-export async function readHistorySnapshot(ws, id, snapshot) {
-  const abs = join(historyDir(ws, id), `${snapshot}.json`)
-  if (!(await exists(abs))) fail("NOT_FOUND", `snapshot ${snapshot} not found`)
-  const snap = await readJsonFile(abs)
-  return { version: snap.version ?? null, contract: snap.contract }
-}

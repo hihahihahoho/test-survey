@@ -227,12 +227,12 @@ const SOLID_INK = {
  *  token, KHÔNG được thêm vào đây.
  *  ------------------------------------------------------------------------ */
 const WAIVED = new Map([
-  /* FE-2·A1 ĐÃ ĐÓNG (xoá khỏi đây, không phải nới thêm):
-     - `bg-line/40` + `bg-line/70` (thumb ScrollArea): `ui/scroll-area.tsx` nay dùng token
-       ĐẶC `bg-scroll-thumb`/`bg-scroll-thumb-hover`; hai class alpha cũ không còn trong
-       src ⇒ scanner không sinh phép đo nào cho chúng nữa.
-     - `bg-accent/50` (vạch nối WizardStepper): xem ghi chú ngay dưới. */
-  ["bg-accent/50", "setup/components/WizardStepper.tsx:99 — NGOÀI glob A (FE2-PLAN §1) → teams/react/NEEDS-fe2-a.md #1"],
+  /* TRỐNG — và giữ cho nó trống. Hai mục cũ đều đã ĐÓNG bằng cách xoá nguồn phát,
+     không phải bằng cách nới ngưỡng:
+     - `bg-line/40` + `bg-line/70` (thumb ScrollArea) → `ui/scroll-area.tsx` đổi sang
+       token ĐẶC rồi bị xoá hẳn ở Đợt 3 (không màn nào còn dùng ScrollArea).
+     - `bg-accent/50` (vạch nối WizardStepper) → wizard tạo dự án đã bị xoá ở Đợt 1.
+     Cả bốn class không còn trong src ⇒ scanner không sinh phép đo nào cho chúng. */
 ]);
 let waived = 0;
 
@@ -260,12 +260,12 @@ const NO_TEXT_TOKENS = new Map([
 ]);
 
 /** Các class alpha KHÔNG mang chữ — đo theo WCAG 1.4.11 (≥3:1) thay vì 4.5:1.
-    Mỗi mục kèm file:dòng để người sau kiểm được là nó thật sự không có chữ. */
-const NON_TEXT_ALPHA = new Map([
-  ["bg-accent/50",  "thanh tiến trình bước — components/WizardStepper.tsx:99"],
-  ["bg-line/40",    "thumb thanh cuộn — ui/scroll-area.tsx:34"],
-  ["bg-line/70",    "thumb thanh cuộn hover — ui/scroll-area.tsx:34"],
-]);
+    Mỗi mục kèm file:dòng để người sau kiểm được là nó thật sự không có chữ.
+
+    TRỐNG từ Đợt 3: cả ba mục cũ (`bg-accent/50` của WizardStepper, `bg-line/40` +
+    `bg-line/70` của thumb ScrollArea) trỏ vào file đã bị xoá. Bảng ở lại vì cơ chế
+    vẫn đúng — một thanh tiến trình hay một thumb mới sẽ cần đúng lối này. */
+const NON_TEXT_ALPHA = new Map([]);
 
 /** Quét toàn bộ nguồn, gom (kind, token, alpha) → nơi dùng đầu tiên. */
 function scanAlphaUsages(V) {

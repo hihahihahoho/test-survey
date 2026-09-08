@@ -22,9 +22,6 @@ export const POSES = [
   { id: "view-back", label: "Nhìn sau", group: "Góc nhìn" },
 ] as const satisfies ReadonlyArray<{ id: string; label: string; group: PoseGroup }>;
 
-/** Thứ tự nhóm hiện trên hàng chip — lấy từ chính danh mục để không lệch khi thêm dáng. */
-export const POSE_GROUPS: PoseGroup[] = [...new Set(POSES.map((pose) => pose.group))];
-
 /** Nhãn tiếng Việt của một id; id lạ (dữ liệu cũ) rơi về chính nó thay vì biến mất. */
 export function poseLabel(id: string): string {
   return POSES.find((pose) => pose.id === id)?.label ?? id;
@@ -143,18 +140,6 @@ export const OUTFIT_THEMES: readonly ThemeOption[] = [
     kitEN: "Halloween theme: pumpkin orange and deep purple, bats, cobwebs and crescent-moon motifs",
   },
 ];
-
-/** Nhãn VI của một cụm đã lưu. Cụm TỰ GÕ không có trong danh mục ⇒ hiện nguyên văn. */
-export function phraseLabel(options: readonly PhraseOption[], value: string): string {
-  const raw = (value ?? "").trim();
-  if (!raw) return "";
-  return options.find((option) => option.value === raw)?.label ?? raw;
-}
-
-/** `true` khi cụm này là một preset (⇒ dropdown chọn được nó, không cần ô tự gõ). */
-export function isPresetPhrase(options: readonly PhraseOption[], value: string): boolean {
-  return options.some((option) => option.value === (value ?? "").trim());
-}
 
 /** 3 sheet × 4 ô (= `DEFAULT_SHEET_LIMITS.mascot` của `kitset-to-contract.ts` — không
  *  import được vì file đó import ngược `model.ts`). Đổi trần ô/sheet thì sửa cả hai. */

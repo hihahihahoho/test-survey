@@ -7,7 +7,7 @@ import { UsageMeter } from "@/features/home";
 import type { ConnectionStatus } from "@/lib/api";
 import { RuntimeStatus } from "./RuntimeStatus";
 import { UpdateHeaderButton } from "./UpdateHeaderButton";
-import { FLORA, FOCUS, FLOATBAR } from "./flora";
+import { FLORA, FOCUS } from "./flora";
 
 /**
  * ══════════════════════════════════════════════════════════════════════════
@@ -202,73 +202,6 @@ export function FloraShell({
           )}
         </main>
       </div>
-    </div>
-  );
-}
-
-/**
- * Thanh công cụ NỔI bo pill có backdrop blur (§3) — dùng chung cho S1 và các màn sau.
- * Tách ra đây (không để trong features/) vì đây là thành phần KHUNG, và brief gọi nó
- */
-export function FloatBar({
-  children,
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div className={cn("flex items-center gap-2 px-2 py-2", FLOATBAR, className)} {...props}>
-      {children}
-    </div>
-  );
-}
-
-/**
- * FE-2·E1 — DÒNG "ĐANG LỌC THEO FILE" + ĐƯỜNG RA.
- *
- * §4.5 chốt bất biến *"không bao giờ có sheet tàng hình"*. Một bộ lọc im lặng là cách
- * nhanh nhất để phá bất biến đó **về mặt trải nghiệm**: dữ liệu vẫn còn nhưng người
- * dùng tưởng mất. Nên mỗi màn đang lọc PHẢI hiện dòng này, và dòng này PHẢI có nút
- * mở «Tất cả sheet» — đường ra một bước, không phải đi tìm.
- *
- * Đặt ở tầng khung (không phải trong `features/`) vì bốn màn workflow đều dùng, và vì
- * nó là thành phần KHUNG y như `FloatBar` ngay trên.
- */
-export function FileScopeNotice({
-  docName,
-  hiddenCount,
-  unit = "sheet",
-  onShowAll,
-  className,
-}: {
-  docName: string;
-  /** Số phần tử đang bị ẩn. 0 ⇒ không render gì: một cảnh báo không có nội dung là nhiễu. */
-  hiddenCount: number;
-  /** Đơn vị đang bị ẩn — S5 ẩn **ảnh**, không phải sheet. Nói sai đơn vị là nói sai sự thật. */
-  unit?: "sheet" | "ảnh";
-  onShowAll: () => void;
-  className?: string;
-}) {
-  if (hiddenCount <= 0) return null;
-  return (
-    <div
-      role="status"
-      className={cn(
-        "flex flex-wrap items-center gap-x-3 gap-y-1 border px-3 py-2 text-caption",
-        FLORA.surface, FLORA.hair, FLORA.r12, FLORA.fg,
-        className,
-      )}
-    >
-      <span>
-        Đang xem theo file <span className="text-fg-strong">{docName}</span> — {hiddenCount} {unit} của
-        project đang tạm ẩn. Chúng không bị xoá.
-      </span>
-      <button
-        type="button"
-        onClick={onShowAll}
-        className={cn("rounded-1 underline underline-offset-4", FLORA.accentText, FOCUS)}
-      >
-        Xem tất cả sheet
-      </button>
     </div>
   );
 }

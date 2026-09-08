@@ -12,25 +12,25 @@
  * `localStorage` TỤT XUỐNG làm bộ nhớ đệm khởi động: nó vẽ ngay khung đúng màu trong lúc
  * chờ agent trả lời, và là đường lùi khi agent chưa chạy. Mất nó không mất gì.
  *
- * ══ VÌ SAO KHÔNG PHẢI TẤT CẢ ═════════════════════════════════════════════════
- * `filterQuery` (ô tìm) và `filterTags` (thẻ người dùng đặt) CỐ Ý ở lại localStorage.
- * Hai lý do, cả hai đều đủ để một mình quyết định:
- *   ① Chúng là CHỮ NGƯỜI DÙNG GÕ. Hợp đồng bảo mật của API mới chỉ cho enum · boolean ·
- *      số · mã do app sinh đi qua — chuỗi tự do là đúng cái đường mà một token dán nhầm
- *      hay một mẩu đường dẫn sẽ đi vào file cấu hình.
- *   ② Kể cả bỏ qua ①: mở app lên và thấy một bộ lọc từ hôm qua đang chắn hết danh sách
- *      là một lỗi, không phải một tính năng.
+ * ══ CÒN LẠI GÌ ═══════════════════════════════════════════════════════════════
+ * Đúng một field: `theme`. Đợt 2 bỏ khối `prefs` (xem `diskSettingsSchema`); Đợt 3 bỏ
+ * `sortBy`/`sortDir` vì danh sách bộ kit chỉ còn MỘT thứ tự và không màn nào đọc lại hai
+ * field đó (`filterQuery`/`filterTags` thì đã rời hẳn `useUiStore` — chúng là chữ NGƯỜI
+ * DÙNG GÕ, thứ mà hợp đồng bảo mật của API này cố ý không cho đi qua, và một bộ lọc còn
+ * sót từ hôm qua chắn hết danh sách là lỗi chứ không phải tính năng).
+ *
+ * Agent VẪN nhận `ui.sortBy` / `ui.sortDir` (`agent/lib/settings.mjs`), nên config.json
+ * đã ghi hai field đó đọc lên không vỡ: `uiDiskSchema` là `z.object` nên lược bỏ field
+ * lạ. Web chỉ thôi ghi vào chúng.
  *
  * Danh sách field dưới đây được LẤY RA TỪ `SCHEMAS` của persist.ts chứ không gõ lại, nên
  * kiểu và giá trị mặc định không thể trôi khỏi nhau giữa hai kho.
- *
- * Đợt 2: khối `prefs` không còn (xem `diskSettingsSchema`), chỉ còn `ui`.
  */
 import { z } from "zod";
 import { LS_KEYS, SCHEMAS, type StoreShape } from "./persist";
 
-/** Field của `kitgen.ui.v1` được nâng lên đĩa. Xem khối "VÌ SAO KHÔNG PHẢI TẤT CẢ". */
-export const DISK_UI_FIELDS = ["theme", "sortBy", "sortDir"] as const;
+/** Field của `kitgen.ui.v1` được nâng lên đĩa. Xem khối "CÒN LẠI GÌ". */
+export const DISK_UI_FIELDS = ["theme"] as const;
 
 const pickShape = <T extends readonly string[]>(fields: T) =>
   Object.fromEntries(fields.map((f) => [f, true])) as { [K in T[number]]: true };

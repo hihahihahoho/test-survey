@@ -97,27 +97,6 @@
     background-size: var(--kg-dot-step) var(--kg-dot-step);
     background-attachment: fixed;
   }
-  /* THANH CÔNG CỤ NỔI (FLORA-REF §2 "thanh công cụ NỔI bo pill có backdrop blur").
-     FE-2·A1 đóng NEEDS-fe1-b2 N1: bản cũ đặt `bg-overlay/90` + `backdrop-blur-xl` VÔ
-     ĐIỀU KIỆN. Trình duyệt không hỗ trợ `backdrop-filter` sẽ thấy thanh trong suốt 10%
-     mà KHÔNG có gì làm mờ nền dưới ⇒ chữ chồng lên nội dung đang cuộn.
-     Ba tầng, đúng thứ tự tăng dần độ "xịn" — mỗi tầng tự nó đã đọc được:
-       ① mặc định: nền ĐẶC `bg-overlay`, không blur — an toàn tuyệt đối.
-       ② `@supports`: mới hạ xuống alpha + bật blur.
-       ③ `prefers-reduced-transparency: reduce`: quay lại nền đặc, tắt blur.
-     Đây CÙNG một chuẩn mà `components/common/FloatingToolbar.tsx` (provider FE-1) đã tự
-     khai bằng tay; nay `.kg-floatbar` ngang hàng nên TODO trong file đó có thể rút gọn
-     về tiện ích này. A1 KHÔNG sửa `FloatingToolbar.tsx` (ngoài glob). */
-  .kg-floatbar {
-    @apply rounded-full border border-line-subtle bg-overlay shadow-3;
-    @apply supports-[backdrop-filter:blur(0px)]:bg-overlay/90
-           supports-[backdrop-filter:blur(0px)]:backdrop-blur-xl;
-  }
-  @media (prefers-reduced-transparency: reduce) {
-    .kg-floatbar {
-      @apply bg-overlay backdrop-blur-none;
-    }
-  }
   /* P-SWEEP·3 — nhãn nhỏ THÔI IN HOA. Tiếng Việt có dấu viết hoa toàn phần đọc
      chậm hẳn ("ƯỚC LƯỢNG TRƯỚC KHI VẼ"), và khi MỌI nhãn đều hoa thì không nhãn
      nào nổi — phân cấp mất luôn tác dụng. Cỡ nhỏ + `fg-muted` đã đủ nói "đây là

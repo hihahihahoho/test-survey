@@ -11,18 +11,6 @@ const KINDS = new Set(["ui", "mascot", "reference"])
 const GROUPS = new Set(["background", "popup", "small", "props", "mascot", "style", "mascot-reference", "brand-logo", "brand-style", "brand-mascot"])
 const CELLS = new Set(["landscape", "portrait", "full"])
 const SHAPES = new Set(["pill", "bar", "rrect", "rect", "circle", "burst", "puzzle", "full"])
-const POSE_IDS = new Set([
-  "idle", "wave", "point", "present", "cheer", "sad", "think", "thumbs-up",
-  "run", "walk", "jump", "dance", "hold-gift", "bow", "sit", "fly",
-  "view-34", "view-side", "view-back",
-])
-const POSE_LABELS = {
-  idle: "Đứng thẳng", wave: "Vẫy chào", point: "Chỉ tay", present: "Giới thiệu",
-  cheer: "Ăn mừng", sad: "Buồn", think: "Suy nghĩ", "thumbs-up": "Giơ ngón cái",
-  run: "Chạy", walk: "Đi bộ", jump: "Bật nhảy", dance: "Nhảy múa",
-  "hold-gift": "Ôm quà", bow: "Cúi chào", sit: "Ngồi", fly: "Bay",
-  "view-34": "Góc ¾", "view-side": "Nhìn ngang", "view-back": "Nhìn lưng",
-}
 export const LIBRARY_DEFAULTS = { background: 2, popup: 4, small: 16, props: 16, mascot: 4 }
 
 /* ══ PRESET — danh mục người dùng tự sửa (phong cách, loại element, mascot…) ══
@@ -136,28 +124,6 @@ function cleanBrand(brand) {
   }
 }
 
-function defaultPoseTemplates() {
-  const now = "2026-01-01T00:00:00.000Z"
-  return [...POSE_IDS].map(sourcePose => ({
-    id: `pose_${sourcePose}`,
-    name: POSE_LABELS[sourcePose],
-    description: "Khung dáng chuẩn từ prototype silhouettes.js.",
-    sourcePose, enabled: true, builtIn: true, createdAt: now, updatedAt: now,
-  }))
-}
-
-function cleanPoseTemplate(pose) {
-  const now = new Date().toISOString()
-  const sourcePose = POSE_IDS.has(String(pose.sourcePose)) ? String(pose.sourcePose) : "idle"
-  return {
-    id: String(pose.id),
-    name: String(pose.name ?? POSE_LABELS[sourcePose]).trim().slice(0, 100) || POSE_LABELS[sourcePose],
-    description: String(pose.description ?? "").trim().slice(0, 1000),
-    sourcePose, enabled: pose.enabled !== false, builtIn: pose.builtIn === true,
-    createdAt: String(pose.createdAt ?? now), updatedAt: String(pose.updatedAt ?? now),
-  }
-}
-
 /**
  * Chuẩn hoá `data`. Trả `null` khi KHÔNG hợp lệ thay vì ném lỗi — vì hàm này chạy
  * ở CẢ hai đường: lúc ghi (phải từ chối, và nơi gọi sẽ `fail`) và lúc ĐỌC state cũ
@@ -212,19 +178,25 @@ function cleanState(raw) {
       })
     : []
   /* ══ DI TRÚ v3 → v4 ══════════════════════════════════════════════════════
-     v4 chỉ THÊM `presets`. Không có trường nào đổi tên, đổi kiểu hay bị bỏ, nên
-     việc di trú là "đọc file v3, thấy thiếu `presets` thì cho mảng rỗng" — đúng
-     cái `cleanState` vốn đã làm cho mọi khoá khác. Không cần bảng chuyển đổi
-     riêng, và quan trọng hơn: KHÔNG có bước ghi đè nào có thể làm mất dữ liệu
-     cũ. brands / poseTemplates / settings / items đi qua nguyên vẹn.
+     v4 chỉ THÊM `presets`. Không có trường nào đổi tên hay đổi kiểu, nên việc di
+     trú là "đọc file v3, thấy thiếu `presets` thì cho mảng rỗng" — đúng cái
+     `cleanState` vốn đã làm cho mọi khoá khác. brands / settings / items đi qua
+     nguyên vẹn.
      (Có test khoá điều này: `suite-library.mjs` ghi thẳng một file v3 xuống đĩa
-     rồi đọc lại, so từng mảng.) */
+     rồi đọc lại, so từng mảng.)
+
+     ══ 08/09/2026 — `poseTemplates` BỊ BỎ, KHÔNG PHẢI BỊ ĐỔI ═══════════════════
+     19 khung dáng dựng sẵn (+ ba cửa ghi `addPoseTemplate`/`patchPoseTemplate`/
+     `removePoseTemplate`) từng phục vụ tab «khung pose» của thư viện mascot. Tab
+     đó đã bị xoá ở Đợt 2 và luồng prompt-first chụp manơcanh thành `sheet.poseRef`
+     thay cho nó, nên KHÔNG còn ai đọc mảng này — cả web lẫn engine.
+     Tương thích: `cleanState` chỉ đọc những khoá nó biết, nên `library.json` cũ có
+     `poseTemplates` vẫn mở được y như trước; khoá thừa bị lược bỏ ở lần ghi kế
+     tiếp, không crash và không đụng tới brands/items/presets. Số `version` GIỮ
+     nguyên 4: bỏ một khoá không ai đọc thì không có gì để di trú. */
   return {
     version: 4,
     brands: Array.isArray(raw?.brands) ? raw.brands.filter(brand => brand && typeof brand.id === "string").map(cleanBrand) : [],
-    poseTemplates: Array.isArray(raw?.poseTemplates)
-      ? raw.poseTemplates.filter(pose => pose && typeof pose.id === "string").map(cleanPoseTemplate)
-      : defaultPoseTemplates(),
     settings: { ...LIBRARY_DEFAULTS, ...(raw?.settings ?? {}) },
     items,
     /* `dedupePresets` đứng SAU `cleanPreset` (cần `kind` và `createdAt` đã chuẩn
@@ -282,39 +254,6 @@ export async function removeBrandProfile(ws, id) {
   await saveLibrary(ws, state)
 }
 
-export async function addPoseTemplate(ws, input) {
-  const sourcePose = String(input?.sourcePose ?? "")
-  if (!POSE_IDS.has(sourcePose)) fail("BAD_REQUEST", "unknown prototype pose")
-  const name = String(input?.name ?? "").trim()
-  if (!name) fail("BAD_REQUEST", "pose name is required")
-  const state = await readLibrary(ws)
-  const now = new Date().toISOString()
-  const pose = cleanPoseTemplate({ ...input, id: "pose_" + randomBytes(8).toString("hex"), name, sourcePose, builtIn: false, createdAt: now, updatedAt: now })
-  state.poseTemplates.unshift(pose)
-  await saveLibrary(ws, state)
-  return pose
-}
-
-export async function patchPoseTemplate(ws, id, patch) {
-  const state = await readLibrary(ws)
-  const index = state.poseTemplates.findIndex(pose => pose.id === id)
-  if (index < 0) fail("NOT_FOUND", `pose template ${id} not found`)
-  if (patch.sourcePose !== undefined && !POSE_IDS.has(String(patch.sourcePose))) fail("BAD_REQUEST", "unknown prototype pose")
-  const next = cleanPoseTemplate({ ...state.poseTemplates[index], ...patch, id, updatedAt: new Date().toISOString() })
-  if (!next.name) fail("BAD_REQUEST", "pose name is required")
-  state.poseTemplates[index] = next
-  await saveLibrary(ws, state)
-  return next
-}
-
-export async function removePoseTemplate(ws, id) {
-  const state = await readLibrary(ws)
-  const index = state.poseTemplates.findIndex(pose => pose.id === id)
-  if (index < 0) fail("NOT_FOUND", `pose template ${id} not found`)
-  state.poseTemplates.splice(index, 1)
-  await saveLibrary(ws, state)
-}
-
 export async function addLibraryPreset(ws, input) {
   const kind = String(input?.kind ?? "")
   if (!PRESET_KINDS.has(kind)) fail("BAD_REQUEST", "preset kind must be style, element, mascot, material or outfit")
@@ -345,7 +284,7 @@ export async function addLibraryPreset(ws, input) {
   if (state.presets.length >= PRESET_MAX) fail("BAD_REQUEST", `library holds at most ${PRESET_MAX} presets`)
   const now = new Date().toISOString()
   const preset = cleanPreset({ ...input, id: "preset_" + randomBytes(8).toString("hex"), kind, name, createdAt: now, updatedAt: now })
-  /* `push`, KHÔNG `unshift` như brands/poses: preset là một DANH MỤC người dùng
+  /* `push`, KHÔNG `unshift` như brands: preset là một DANH MỤC người dùng
      đọc theo thứ tự (bảng pill trên màn soạn prompt). Thêm một mẫu mà cả danh
      mục nhảy chỗ là thứ khiến người ta mất dấu cái mình vừa gõ. */
   state.presets.push(preset)

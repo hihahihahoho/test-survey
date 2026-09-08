@@ -13,10 +13,18 @@ import react from "@vitejs/plugin-react";
  * ║ Đây là đề nghị được lặp lại nhiều nhất trong toàn bộ NEEDS ⇒ nhận.         ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
- * PHẠM VI: mọi test THUẦN LOGIC của `src/**`, trừ test cần DOM (`*.dom.test.tsx`).
- * Test DOM vẫn phải chạy bằng config riêng vì `jsdom` + `@testing-library` hiện
- * KHÔNG có trong `devDependencies` (cài ở /tmp và symlink) — xem INTEGRATION.md,
- * đây là món nợ hạ tầng CHƯA đóng, không giấu.
+ * PHẠM VI: MỌI test của `src/**`. Không còn bộ nào chạy ngoài file này.
+ *
+ * ══ 08/09/2026 — MỘT CONFIG, KHÔNG CÒN QUY ƯỚC `*.dom.test.tsx` ═══════════════
+ * `jsdom` + `@testing-library/react` nay nằm trong `devDependencies` THẬT (món nợ
+ * hạ tầng của INTEGRATION.md đã đóng), nên test cần DOM không phải đi config riêng
+ * nữa: nó khai `// @vitest-environment jsdom` ở DÒNG ĐẦU file và chạy cùng bộ này.
+ * 19 file test đang làm đúng vậy.
+ *
+ * Cùng lúc đó, `exclude: ["**\/*.dom.test.tsx"]` bị GỠ. Mẫu ấy là một cái bẫy: bốn
+ * file mang tên đó bị loại ở MỌI config nên không script nào chạy chúng, và chúng
+ * mục dần cho tới khi 19/66 ca đỏ mà không ai biết (đã xoá cả bốn ở Đợt 3). Không
+ * có mẫu loại trừ theo TÊN thì không có chỗ nào để một test lặng lẽ chết như thế.
  *
  * Cần `@vitejs/plugin-react` vì có test render bằng `renderToString` trong .tsx.
  */
@@ -28,8 +36,8 @@ export default defineConfig({
     include: ["src/**/__tests__/**/*.test.ts", "src/**/__tests__/**/*.test.tsx"],
     /* Đợt 2 đã xoá nhóm `*.integration.test.ts` (spawn agent server thật) cùng config
        riêng của nó; mẫu vẫn giữ ở đây để một file mới kiểu đó không lọt vào `npm test`
-       mà không ai để ý. Test DOM vẫn cần config riêng — xem khối PHẠM VI bên trên. */
-    exclude: ["**/node_modules/**", "**/*.dom.test.tsx", "**/*.integration.test.ts"],
+       mà không ai để ý — nó cần một agent đang chạy, không chạy được ở đây. */
+    exclude: ["**/node_modules/**", "**/*.integration.test.ts"],
     reporters: ["default"],
   },
 });

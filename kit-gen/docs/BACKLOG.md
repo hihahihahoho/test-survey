@@ -1,4 +1,4 @@
-# BACKLOG — cập nhật 2026-09-07
+# BACKLOG — cập nhật 2026-09-08
 
 ## Quyết định 07/09/2026 — **PROMPT-FIRST**
 
@@ -7,6 +7,61 @@ giữ nguyên alpha của model. Mọi tầng dưới đây đã bị gỡ khỏ
 **đừng đọc chúng như đặc tả**: khung xương, tách nền/matting (chroma · pymatting ·
 ViTMatte), `@resvg/resvg-wasm`, `studio.html` / `demo.html` / `figma.html` / `screens.html`
 / `figma-export/` / `web/`, canvas & sub-file docs, wizard, atlas Phaser.
+
+## Dọn mồ côi — đợt 3 (08/09/2026)
+
+Hai đợt trước xoá màn và tính năng; đợt này quét thứ **hai đợt đó bỏ lại** — mã không
+còn ai gọi. Không đổi hành vi nào. Cổng: webapp `1719/93` (từ 1747/95 — chỉ bớt đúng
+những ca canh thứ đã xoá) · release `1678/92` · `tsc` sạch · `vite build` xanh ·
+`check-no-gen` 0 · `check-dead-classes` 0 · `check-contrast` **6/226 FAIL, y hệt 6 ca
+trước đây** (mẫu số giảm vì file bị xoá, không ca nào mới đỏ) · agent `211/211` ·
+`pytest tests/` 145 · 14/14 `test/*.test.sh` · `slice-orientation.test.py` OK.
+
+**Webapp** — màn danh sách kit đã chuyển hẳn sang `features/home/**`, nên chín component
+`features/projects/components/*` của bản cũ (ProjectCard · ProjectCover · ProjectMenu ·
+ProjectsHeader · ProjectsListView · ProjectsBody · ProjectsStates · ProjectsToolbar ·
+BulkBar) không còn ai render; `ProjectsScreen.tsx` chỉ ĐIỀU PHỐI và giữ tên vì hợp đồng
+lazy-mount. Đi cùng: 9 primitive shadcn không ai import (avatar · breadcrumb · drawer ·
+progress · scroll-area · sheet · slider · toggle · table) và 6 dependency của chúng
+(`@radix-ui/react-{avatar,progress,scroll-area,slider,toggle}`, `vaul`).
+`FloatingToolbar` + `FloatBar` + `FileScopeNotice` + `.kg-floatbar` cũng đi — thanh công
+cụ nổi không còn màn nào để nổi trên.
+
+**Bốn bộ `*.dom.test.tsx` bị loại ở MỌI config** (nên không script nào chạy) đã xoá thay
+vì bật lên. Lý do đo được: bật cả bốn thì 19/66 ca đỏ — chúng khoá chữ và cấu trúc mà
+IA prompt-first CỐ Ý đổi (h1 «Bộ kit của bạn» nay là «Dự án», «Đang vẽ» nay là «Đang tạo
+ảnh»…). Viết lại assertion cho khớp mã hiện tại là dựng một cổng giả, không phải cứu một
+cổng. Cùng lúc, mẫu `exclude: "**/*.dom.test.tsx"` bị GỠ khỏi cả hai vitest config: đó
+chính là cái bẫy đã để bốn bộ ấy mục ruỗng trong im lặng. Test cần DOM nay khai
+`// @vitest-environment jsdom` ở dòng đầu và chạy chung `npm test` — 19 file đang làm vậy.
+`jsdom` + `@testing-library` đã là devDependency thật, nên `setup-dom-deps.sh` (cài vào
+/tmp rồi symlink) và hai config DOM rải rác cũng xoá theo.
+
+**`kitgen.ui.v1` còn đúng một field: `theme`.** `sortBy` / `sortDir` / `filterTags` /
+`filterQuery` không có consumer nào — danh sách kit chỉ có MỘT thứ tự («sửa gần nhất») và
+ô tìm là state cục bộ của màn. `sortBy`/`sortDir` cũng rời `DISK_UI_FIELDS`; agent VẪN
+nhận hai field đó nên `config.json` cũ đọc lên không vỡ, web chỉ thôi ghi.
+
+**Agent** — `poseTemplates` (19 khung dáng dựng sẵn + ba cửa ghi) rời `lib/library.mjs`:
+tab «khung pose» đã xoá ở đợt 2 và luồng prompt-first chụp manơcanh thành `sheet.poseRef`
+thay cho nó. `library.json` cũ vẫn mở được — `cleanState` lược bỏ khoá lạ, `version` giữ
+4 vì bỏ một khoá không ai đọc thì không có gì để di trú. Xoá thêm bốn hàm chết theo hai
+route đã gỡ: `contract.mjs:{listHistory,readHistorySnapshot}` (snapshot VẪN được ghi, chỉ
+không còn cửa đọc), `importer.mjs:buildImportReport` (chỉ phục vụ `/api/import/preview`),
+`fsx.mjs:sha256File`.
+
+Xoá thêm ba mảnh mồ côi nhỏ: `features/kitfile/lib/deprecate.ts` (+ test) — nhãn «Nâng
+cao» cho năm màn rời đường chính, mà bốn trong năm màn đó không còn tồn tại và không màn
+nào từng render dải thông báo; `kit-core/lib/shapes.ts:poseOptions` và
+`kit-core/lib/poses.ts:{POSE_GROUPS,phraseLabel,isPresetPhrase}` — bộ chọn dáng đã đi
+cùng tab khung pose. `poseSvgMarkup` thì GIỮ: `silhouetteMarkup` (màn thư viện đang
+render) rẽ vào nó khi `shape === "pose"`, và `shape-source.test.ts` là cổng soi gương với
+`silhouettes.js`.
+
+**Engine** — sạch: mọi hàm trong `gen.sh` · `cover.sh` · `slice.py` · `geometry.py` ·
+`validate_output_geometry.py` đều còn nơi gọi (nhiều hàm chỉ được gọi từ test — đó là
+CỐ Ý, test bóc thẳng hàm khỏi `gen.sh` bằng `sed` để không chép lại logic). Chết duy
+nhất: alias `QA_SIZE_DEVIATION_THRESHOLD_PX` trong `slice.py`.
 
 ## Quyết định 27/08/2026 — **BỎ SKELETON**
 

@@ -57,12 +57,6 @@ export const SERIF = "font-serif italic font-normal";
 export const DISPLAY = "text-display-2 sm:text-display-1";
 
 /**
- * Thanh công cụ NỔI bo pill có backdrop blur (§3) — thay thanh dán cứng.
- * Tiện ích `.kg-floatbar` nằm trong globals.css.
- */
-export const FLOATBAR = "kg-floatbar";
-
-/**
  * Nền dot-grid RẤT MỜ (§2.7) — gợi cảm giác không gian làm việc vô hạn.
  * Chấm 1px, bước 22px, alpha .07: thấy được chất liệu mà không cạnh tranh với nội dung.
  * `bg-fixed` để lưới không "trôi" theo khi cuộn danh sách.
@@ -85,12 +79,6 @@ export const CTA = [
   FLORA.accentBg, FLORA.onAccent, "rounded-1",
   "hover:bg-accent-hover active:bg-accent-active",
   "font-medium",
-].join(" ");
-
-/** Nút phụ: viền hairline trên nền tối, KHÔNG nền đặc (§2.4 phần còn lại đơn sắc). */
-export const GHOST_PILL = [
-  "rounded-1", FLORA.ctlBorder, "border", FLORA.fg,
-  "bg-transparent hover:bg-fg-strong/[0.06] hover:text-fg-strong",
 ].join(" ");
 
 /** Card nổi kiểu FLORA: surface + hairline + bo lớn. */

@@ -98,7 +98,6 @@ describe("B1 quét cùng loại · input/select/textarea không còn chữ chìm
     "components/ui/checkbox.tsx",
     "components/ui/radio-group.tsx",
     "components/ui/switch.tsx",
-    "components/ui/slider.tsx",
     "components/ui/label.tsx",
     "components/ui/command.tsx",
     "components/ui/toggle-group.tsx",

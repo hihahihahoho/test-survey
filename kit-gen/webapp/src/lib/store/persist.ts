@@ -101,17 +101,16 @@ const projectsCacheSchema = z.object({
   })).default([]),
 });
 
-/* Field của các màn đã bị gỡ ở Đợt 2 (`locale`, `density`, `sidebarWidth`,
-   `railCollapsed`, `projectsView`, `filterChip`, `collapsedSections`, `lastTab`,
-   `kitBackdrop`, `kitZoom`) KHÔNG còn khai ở đây. Máy người dùng cũ vẫn còn chúng trong
-   `kitgen.ui.v1`: `z.object` LƯỢC BỎ field lạ (xem khối "CHI TIẾT ĐÃ ĐO" đầu file) nên
-   bản cũ đọc lên vẫn ra tuỳ chọn hợp lệ, không vỡ và không mất `theme`. */
+/* Field của các màn đã bị gỡ KHÔNG còn khai ở đây — Đợt 2 bỏ `locale`, `density`,
+   `sidebarWidth`, `railCollapsed`, `projectsView`, `filterChip`, `collapsedSections`,
+   `lastTab`, `kitBackdrop`, `kitZoom`; Đợt 3 bỏ nốt `sortBy`, `sortDir`, `filterTags`,
+   `filterQuery` (danh sách bộ kit chỉ còn MỘT thứ tự «sửa gần nhất» và ô tìm là state
+   cục bộ của màn, xem `features/home/lib/home-view.ts` — không consumer nào đọc bốn
+   field đó nữa). Máy người dùng cũ vẫn còn chúng trong `kitgen.ui.v1`: `z.object` LƯỢC
+   BỎ field lạ (xem khối "CHI TIẾT ĐÃ ĐO" đầu file) nên bản cũ đọc lên vẫn ra tuỳ chọn
+   hợp lệ, không vỡ và không mất `theme`. */
 const uiSchema = z.object({
   theme: z.enum(["dark", "light", "system"]).default("dark"),
-  sortBy: z.enum(["updated", "name", "size", "created"]).default("updated"),
-  sortDir: z.enum(["asc", "desc"]).default("desc"),
-  filterTags: z.array(z.string()).default([]),
-  filterQuery: z.string().default(""),
 });
 
 /**

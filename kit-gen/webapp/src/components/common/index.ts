@@ -11,4 +11,3 @@ export { CopyableCode, type CopyableCodeProps } from "./CopyableCode";
 export { CheckerboardImage, type CheckerboardImageProps } from "./CheckerboardImage";
 export { HexColorField, normalizeHex, type HexColorFieldProps } from "./HexColorField";
 export { KeyboardHint, type KeyboardHintProps } from "./KeyboardHint";
-export { FloatingToolbar, type FloatingToolbarProps } from "./FloatingToolbar";

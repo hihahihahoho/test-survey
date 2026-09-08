@@ -180,24 +180,6 @@ describe("W2A-3 · không còn control thô của hệ điều hành", () => {
   });
 });
 
-describe("W2A-4 · slider: mint là NHẤN, không phải NỀN", () => {
-  const s = strip(read("src/components/ui/slider.tsx"));
-
-  it("ray KHÔNG còn tô mint đặc", () => {
-    expect(s).not.toMatch(/Range[^/]*bg-accent/);
-    expect(s).toMatch(/SliderPrimitive\.Range className="absolute h-full bg-line"/);
-  });
-
-  it("có vạch mốc giữa — thang lưỡng cực phải nhìn ra cái GIỮA", () => {
-    expect(s).toMatch(/after:left-1\/2/);
-    expect(s).toMatch(/after:bg-line-subtle/);
-  });
-
-  it("CHỈ núm giữ mint", () => {
-    expect(s).toMatch(/Thumb[\s\S]{0,200}border-accent/);
-  });
-});
-
 describe("W2A-5 · ba class mồ côi nay có thân thật", () => {
   it.each(["workflow-choice", "brand-ref", "mascot-dropzone"])("`.%s` có rule trong CSS", (cls) => {
     expect(GLOBALS).toMatch(new RegExp(`\\.${cls}\\s*\\{`));

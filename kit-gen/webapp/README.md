@@ -1,6 +1,7 @@
 # webapp/ — kit-gen v2 (React + shadcn/ui + TanStack)
 
-Scaffold + design system. **Bản vanilla `web/` KHÔNG bị đụng tới** — vẫn là đường lùi.
+Scaffold + design system. Đây là ĐƯỜNG DUY NHẤT: bản vanilla `web/` từng là đường lùi
+đã bị xoá 07/09/2026 (cùng `studio.html` / `demo.html` / `figma.html` / `preview.html`).
 
 ## Chạy
 
@@ -98,8 +99,11 @@ Mọi nhãn/icon/màu của 7 trạng thái job, 5 trạng thái run, 6 trạng 
 
 ### 6. State
 
-- **Server state** → TanStack Query (`src/lib/query.ts`). Cache, invalidate, retry.
-- **Client state** → Zustand (`src/stores/ui.ts`), persist key `kitgen.ui.v1`.
+- **Server state** → TanStack Query (`src/lib/hooks/query-client.ts`, khoá ở `keys.ts`).
+  Cache, invalidate, retry.
+- **Client state** → Zustand (`src/lib/store/`), khoá persist `kitgen.ui.v1`. Cửa chung là
+  `@/lib/store`; `settings-sync.ts` cố ý KHÔNG nằm sau cửa đó (nó kéo theo cả tầng API).
+  Từ Đợt 3, `kitgen.ui.v1` chỉ còn ĐÚNG một field: `theme`.
 - **TUYỆT ĐỐI KHÔNG** để API key / token / nội dung `auth.json` vào store, localStorage,
   hay `console.log`. Store ghi thẳng ra localStorage, ai mở DevTools cũng đọc được.
 
@@ -113,13 +117,16 @@ Khai báo tay (không dùng codegen) để xung đột merge giữa các team nh
 ## Hai đường vào — đừng phá
 
 `vite.config.ts` đặt `base: "./"`, và `index.html` có script nội tuyến đặt `<base href>`.
-**Cần cả hai.** `base:"./"` một mình KHÔNG đủ: ở deep link `/app/p/tet26/design`,
-`./assets/x.js` phân giải thành `/app/p/tet26/assets/x.js` → SPA fallback trả HTML →
-`<script>` nhận HTML → **trang trắng**. Đây đúng là lỗi B2 trong `INTEGRATION.md §0`.
-Tôi đã dựng HTTP server thật, tái hiện lỗi, rồi mới vá — xem `src/lib/basepath.ts`.
+**Cần cả hai.** `base:"./"` một mình KHÔNG đủ: ở một deep link nhiều tầng như
+`/app/k/tet26`, `./assets/x.js` phân giải thành `/app/k/assets/x.js` → SPA fallback trả
+HTML → `<script>` nhận HTML → **trang trắng**. Đây đúng là lỗi B2 trong
+`teams/react/INTEGRATION.md §0`. Tôi đã dựng HTTP server thật, tái hiện lỗi, rồi mới vá —
+xem `src/lib/basepath.ts`.
 
 Yêu cầu phía agent: SPA fallback của `/app/**` phải trả `/app/index.html`.
 
-## Trang showcase
+## Không còn trang showcase
 
-`/__preview` — mọi component ở mọi trạng thái, kèm checklist a11y QA phải tự bấm.
+`/__preview` (mọi component ở mọi trạng thái + checklist a11y) đã bị xoá cùng component
+của nó ở đợt gộp-về-một-màn. Chỗ kiểm a11y bây giờ là test: `npm test` + `npm run
+contrast` + `npm run deadclass`.

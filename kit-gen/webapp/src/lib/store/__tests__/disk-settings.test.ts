@@ -26,7 +26,9 @@ describe("phạm vi — cái gì lên đĩa, cái gì ở lại trình duyệt",
   it("chữ NGƯỜI DÙNG GÕ không bao giờ lên đĩa", () => {
     /* Hợp đồng bảo mật của `/api/settings`: chỉ enum · boolean · số · mã do app sinh.
        `filterQuery`/`filterTags` là chuỗi tự do ⇒ đúng đường mà một token dán nhầm sẽ đi
-       vào file cấu hình. Ca này là cái chốt cửa: thêm chúng vào danh sách là test đỏ. */
+       vào file cấu hình. Đợt 3 đã gỡ hẳn hai field đó khỏi `useUiStore`, nhưng ca này ở
+       lại làm CHỐT CỬA: ai dựng lại một ô tìm "nhớ được" rồi tiện tay đẩy nó lên đĩa sẽ
+       thấy test đỏ chứ không thấy im lặng. */
     expect(DISK_UI_FIELDS).not.toContain("filterQuery");
     expect(DISK_UI_FIELDS).not.toContain("filterTags");
   });
@@ -55,29 +57,17 @@ describe("đĩa → RAM (khôi phục sau Cmd+F5)", () => {
     _setBackend(mem);
     expect(useUiStore.getState().theme).toBe("dark"); // kho trình duyệt rỗng ⇒ mặc định
 
-    applyDiskSettings(diskSettingsSchema.parse({
-      ui: { theme: "light", sortBy: "name", sortDir: "asc" },
-    }));
+    applyDiskSettings(diskSettingsSchema.parse({ ui: { theme: "light" } }));
 
     expect(useUiStore.getState().theme).toBe("light");
-    expect(useUiStore.getState().sortBy).toBe("name");
-    expect(useUiStore.getState().sortDir).toBe("asc");
   });
 
   it("khôi phục xong thì localStorage được HÂM NÓNG (lần mở sau vẽ ngay, không chờ mạng)", () => {
     const mem = memoryBackend();
     _setBackend(mem);
-    applyDiskSettings(diskSettingsSchema.parse({ ui: { theme: "light", sortBy: "name" } }));
+    applyDiskSettings(diskSettingsSchema.parse({ ui: { theme: "light" } }));
     const dump = mem.dump();
     expect(JSON.parse(dump[LS_KEYS.ui]!).theme).toBe("light");
-    expect(JSON.parse(dump[LS_KEYS.ui]!).sortBy).toBe("name");
-  });
-
-  it("KHÔNG đụng tới field ở lại trình duyệt", () => {
-    useUiStore.setState({ filterQuery: "vcb tết", filterTags: ["tet26"] });
-    applyDiskSettings(diskSettingsSchema.parse({ ui: { theme: "light" } }));
-    expect(useUiStore.getState().filterQuery).toBe("vcb tết");
-    expect(useUiStore.getState().filterTags).toEqual(["tet26"]);
   });
 
   it("agent bản MỚI thêm field lạ ⇒ bundle CŨ lược bỏ chứ không vỡ", () => {
@@ -177,13 +167,6 @@ describe("RAM → đĩa (chỉ gửi thứ đã đổi)", () => {
     expect(diffDiskSettings(server(), currentDiskSettings())).toEqual({ ui: { theme: "light" } });
   });
 
-  it("đổi hai field ⇒ patch có cả hai, và không kèm field không đổi", () => {
-    useUiStore.getState().setTheme("light");
-    useUiStore.getState().setSort("name", "asc");
-    const patch = diffDiskSettings(server(), currentDiskSettings());
-    expect(patch).toEqual({ ui: { theme: "light", sortBy: "name", sortDir: "asc" } });
-  });
-
   /* So bằng NỘI DUNG chứ không bằng tham chiếu: hôm nay ba field lên đĩa đều là enum nên
      `===` cũng đủ, nhưng một field mảng/bảng thêm vào ngày mai mà so bằng tham chiếu thì
      mỗi lần `setState` dựng object mới là một lần ghi file thừa. */
@@ -192,17 +175,11 @@ describe("RAM → đĩa (chỉ gửi thứ đã đổi)", () => {
     expect(diffDiskSettings(server(), sameContent)).toBeNull();
   });
 
-  it("đổi field Ở LẠI trình duyệt KHÔNG sinh lần ghi đĩa nào", () => {
-    useUiStore.getState().setFilterQuery("tìm gì đó");
-    useUiStore.getState().toggleFilterTag("tet26");
-    expect(diffDiskSettings(server(), currentDiskSettings())).toBeNull();
-  });
-
   it("áp bản agent trả về xuống RAM ⇒ vòng so kế tiếp IM (không giằng co)", () => {
-    // Người dùng đổi thứ tự, agent ghi rồi trả lại bản của nó; áp bản đó về RAM thì vòng
+    // Người dùng đổi chủ đề, agent ghi rồi trả lại bản của nó; áp bản đó về RAM thì vòng
     // so kế tiếp phải im — nếu không, hai bên sẽ ghi qua ghi lại vô hạn.
-    useUiStore.getState().setSort("size", "asc");
-    const afterServer = diskSettingsSchema.parse({ ui: { sortBy: "size", sortDir: "asc" } });
+    useUiStore.getState().setTheme("light");
+    const afterServer = diskSettingsSchema.parse({ ui: { theme: "light" } });
     applyDiskSettings(afterServer);
     expect(diffDiskSettings(afterServer, currentDiskSettings())).toBeNull();
   });
@@ -258,11 +235,11 @@ describe("gom nhịp — bấm liên tiếp không sinh một lần ghi mỗi b�
       timer = setTimeout(() => calls.push(diffDiskSettings(base, currentDiskSettings())), 600);
     };
     const off = useUiStore.subscribe(push);
-    const seq = ["name", "size", "created", "name", "size", "created", "name", "size"] as const;
-    for (const by of seq) useUiStore.getState().setSort(by);
+    const seq = ["light", "system", "dark", "light", "system", "dark", "light", "system"] as const;
+    for (const t of seq) useUiStore.getState().setTheme(t);
     vi.advanceTimersByTime(600);
     off();
     vi.useRealTimers();
-    expect(calls).toEqual([{ ui: { sortBy: "size" } }]);
+    expect(calls).toEqual([{ ui: { theme: "system" } }]);
   });
 });

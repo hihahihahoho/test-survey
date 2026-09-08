@@ -157,12 +157,6 @@ export async function copyTree(src, dst) {
   return dirStats(dst)
 }
 
-export async function sha256File(p) {
-  const h = createHash("sha256")
-  h.update(await readFile(p))
-  return "sha256:" + h.digest("hex")
-}
-
 export function sha256(str) { return "sha256:" + createHash("sha256").update(str).digest("hex") }
 
 /* Windows KHÔNG cho xoá thứ đang có handle mở, và handle đó thường được nhả CHẬM một

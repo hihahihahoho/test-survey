@@ -574,14 +574,11 @@ export const brandProfileSchema = z.looseObject({
 });
 export type BrandProfile = z.infer<typeof brandProfileSchema>;
 export const brandProfileResultSchema = z.looseObject({ brand: brandProfileSchema });
-export const poseTemplateSchema = z.looseObject({
-  id: z.string(), name: z.string(), description: z.string().default(""),
-  sourcePose: z.string(), enabled: z.boolean().default(true), builtIn: z.boolean().default(false),
-  createdAt: z.string().optional(), updatedAt: z.string().optional(),
-});
-export type PoseTemplate = z.infer<typeof poseTemplateSchema>;
-/* `poseTemplateResultSchema` (bọc trả lời của ba cửa ghi `/api/library/poses`) đã bỏ:
-   khung pose CHỈ ĐỌC từ Đợt 2, đọc kèm trong `GET /api/library`. */
+/* `poseTemplateSchema` + `poseTemplateResultSchema` ĐÃ BỎ HẲN. Ba cửa ghi
+   `/api/library/poses` rời agent ở Đợt 2; Đợt 3 bỏ nốt mảng `poseTemplates` trong
+   `GET /api/library` vì không màn nào đọc — luồng prompt-first chụp manơcanh thành
+   `sheet.poseRef` thay cho khung dáng dựng sẵn. `userLibrarySchema` là `looseObject`
+   nên agent bản cũ CÒN trả mảng đó thì web mới chỉ lược bỏ, không vỡ. */
 /**
  * Preset — danh mục người dùng tự sửa (phong cách, loại element, nhân vật mẫu…).
  *
@@ -608,7 +605,6 @@ export const libraryPresetResultSchema = z.looseObject({ preset: libraryPresetSc
 export const userLibrarySchema = z.looseObject({
   version: z.number().default(1),
   brands: z.array(brandProfileSchema).default([]),
-  poseTemplates: z.array(poseTemplateSchema).default([]),
   settings: librarySettingsSchema,
   items: z.array(libraryItemSchema).default([]),
   presets: z.array(libraryPresetSchema).default([]),

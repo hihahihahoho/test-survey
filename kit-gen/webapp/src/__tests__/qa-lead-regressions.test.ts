@@ -99,14 +99,6 @@ describe("V-7 · biến khung phải được KHAI, không sống bằng fallbac
   });
 });
 
-describe("V-8 · không hứa phím tắt mà mã không hề xử lý", () => {
-  it("tooltip menu ⋯ không còn nhắc Shift+F10", () => {
-    expect(read("src/features/projects/components/ProjectMenu.tsx")).not.toContain(
-      "Thao tác khác (Shift+F10)",
-    );
-  });
-});
-
 describe("V-9 · sàn chữ 12px (audit I3) không được thủng", () => {
   /* ĐỔI ĐỊA CHỈ, KHÔNG ĐỔI LUẬT. Chỗ thủng sàn ban đầu là `WizardStepper.tsx` của
      wizard cài đặt; wizard đã bị xoá 07/09/2026. Bốn mảnh dưới đây là phần THỪA KẾ

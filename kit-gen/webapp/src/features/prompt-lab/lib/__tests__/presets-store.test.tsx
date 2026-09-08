@@ -43,7 +43,6 @@ type Row = { id: string; kind: string; name: string; data: Record<string, unknow
 const library = (presets: Row[]) => ({
   version: 4,
   brands: [],
-  poseTemplates: [],
   settings: { background: 2, popup: 4, small: 16, props: 16, mascot: 4 },
   items: [],
   presets,

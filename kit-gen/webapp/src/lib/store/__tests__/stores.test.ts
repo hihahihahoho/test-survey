@@ -38,12 +38,9 @@ describe("useUiStore", () => {
 
   it("chỉ ghi ra đĩa các field trong allowlist; KHÔNG ghi hàm action", () => {
     useUiStore.getState().setTheme("light");
-    useUiStore.getState().setSort("name", "asc");
     const d = onDisk(LS_KEYS.ui)!;
     expect(d.theme).toBe("light");
-    expect(d.sortBy).toBe("name");
-    expect(d.sortDir).toBe("asc");
-    for (const fn of ["setTheme", "toggleTheme", "setSort", "clearFilters"]) {
+    for (const fn of ["setTheme", "toggleTheme"]) {
       expect(d, `hàm ${fn} không được ghi ra đĩa`).not.toHaveProperty(fn);
     }
   });
@@ -51,9 +48,10 @@ describe("useUiStore", () => {
   /**
    * Đợt 2 gỡ 10 field của những màn không còn (`locale`, `density`, `sidebarWidth`,
    * `railCollapsed`, `projectsView`, `filterChip`, `collapsedSections`, `lastTab`,
-   * `kitBackdrop`, `kitZoom`). Máy người dùng bản cũ VẪN CÒN chúng trong `kitgen.ui.v1`
-   * — ca này khoá lại rằng bản mới đọc dữ liệu cũ thì lược bỏ phần thừa chứ không rơi
-   * về mặc định, tức là không ai bị mất `theme` vì một lần cập nhật.
+   * `kitBackdrop`, `kitZoom`); Đợt 3 gỡ nốt `sortBy`, `sortDir`, `filterTags`,
+   * `filterQuery`. Máy người dùng bản cũ VẪN CÒN chúng trong `kitgen.ui.v1` — ca này
+   * khoá lại rằng bản mới đọc dữ liệu cũ thì lược bỏ phần thừa chứ không rơi về mặc
+   * định, tức là không ai bị mất `theme` vì một lần cập nhật.
    */
   it("đọc được kitgen.ui.v1 của bản CŨ: bỏ field thừa, giữ tuỳ chọn hợp lệ", () => {
     /* `createPersistStorage` chỉ lưu phần `state` (không có vỏ `{state,version}`), nên
@@ -64,7 +62,7 @@ describe("useUiStore", () => {
     );
     const parsed = storeGet(LS_KEYS.ui);
     expect(parsed.theme).toBe("light");
-    expect(parsed.sortBy).toBe("name");
+    expect(parsed).not.toHaveProperty("sortBy");
     expect(parsed).not.toHaveProperty("kitZoom");
     expect(parsed).not.toHaveProperty("railCollapsed");
   });
@@ -76,25 +74,11 @@ describe("useUiStore", () => {
     for (const k of Object.keys(mem.dump())) expect(allowed.has(k as never), `khoá lạ: ${k}`).toBe(true);
   });
 
-  it("filter tag/query dùng lại được sau khi tải lại trang", () => {
-    const s = useUiStore.getState();
-    s.toggleFilterTag("tet");
-    s.toggleFilterTag("banking");
-    s.setFilterQuery("xuân");
-    const d = onDisk(LS_KEYS.ui)!;
-    expect(d.filterTags).toEqual(["tet", "banking"]);
-    expect(d.filterQuery).toBe("xuân");
-    useUiStore.getState().toggleFilterTag("tet");
-    expect(useUiStore.getState().filterTags).toEqual(["banking"]);
-  });
-
-  it("clearFilters dọn cả tag lẫn ô tìm", () => {
-    const s = useUiStore.getState();
-    s.toggleFilterTag("a");
-    s.setFilterQuery("q");
-    useUiStore.getState().clearFilters();
-    const st = useUiStore.getState();
-    expect([st.filterTags, st.filterQuery]).toEqual([[], ""]);
+  /* Đợt 3: `kitgen.ui.v1` chỉ còn ĐÚNG `theme`. Ca này khoá con số đó lại — thêm một
+     field vào store mà quên `PERSISTED_FIELDS`/`SCHEMAS` sẽ hiện ra ở đây. */
+  it("chỉ còn ĐÚNG một tuỳ chọn được ghi ra đĩa: theme", () => {
+    useUiStore.getState().setTheme("light");
+    expect(Object.keys(onDisk(LS_KEYS.ui)!)).toEqual(["theme"]);
   });
 });
 

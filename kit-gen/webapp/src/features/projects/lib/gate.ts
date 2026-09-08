@@ -20,8 +20,6 @@ import type { ConnectionStatus } from "@/lib/api";
  * trở thành MỘT NGUỒN read-only ngang hàng với trạng thái agent.
  */
 export const NARROW_QUERY = "(max-width: 767.98px)";
-/** Mốc `lg` của Tailwind — dưới mốc này bố cục 3 vùng của S3 phải xếp DỌC (§2.2). */
-export const COMPACT_QUERY = "(max-width: 1023.98px)";
 
 /** SSR-safe, không ném khi `matchMedia` vắng mặt (jsdom cũ, môi trường test). */
 export function useMediaQuery(query: string): boolean {
@@ -46,10 +44,6 @@ export function useMediaQuery(query: string): boolean {
 
 export function useNarrowViewport(): boolean {
   return useMediaQuery(NARROW_QUERY);
-}
-
-export function useCompactViewport(): boolean {
-  return useMediaQuery(COMPACT_QUERY);
 }
 
 export interface Gate {
