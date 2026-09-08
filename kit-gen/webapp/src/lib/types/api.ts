@@ -596,7 +596,16 @@ export const brandProfileResultSchema = z.looseObject({ brand: brandProfileSchem
  */
 export const libraryPresetSchema = z.looseObject({
   id: z.string(),
-  kind: z.enum(["style", "element", "mascot", "material", "outfit"]),
+  /* MƯỜI TÊN MỚI (09/2026) = ĐÚNG `kind` của pill tương ứng ở `pill-registry.ts`.
+     Một tên cho một thứ, không bảng dịch ở giữa. `material` là DI SẢN: pill chất
+     liệu đã chết nhưng bản ghi cũ trên workspace vẫn còn, và một `kind` rơi khỏi
+     enum này là cả `GET /api/library` hỏng chứ không phải một bản ghi bị bỏ.
+     Danh sách này phải khớp `PRESET_KINDS` của `agent/lib/library.mjs`. */
+  kind: z.enum([
+    "style", "element", "mascot", "material",
+    "theme", "scene", "layout", "glaze", "decor", "decorPlace",
+    "pose", "view", "expression", "outfit",
+  ]),
   name: z.string(),
   data: z.record(z.string(), z.unknown()).default({}),
   createdAt: z.string().optional(),

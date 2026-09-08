@@ -179,6 +179,34 @@ export async function run({ api, wsRoot }) {
     eq((await api("DELETE", `/api/library/presets/${b.json.preset.id}`)).status, 204)
   })
 
+  await it("preset: nhận đủ MƯỜI `kind` danh mục mới của web, mỗi kind một danh tính riêng", async () => {
+    /* Từ 09/2026 web quản lý được mười danh mục nữa (chủ đề · khung cảnh · bố cục ·
+       đục nền · trang trí · bố trí · dáng · góc máy · biểu cảm · trang phục). Nếu
+       agent không nhận `kind` của chúng thì màn «Thư viện prompt» vẫn chạy — bằng
+       hạt giống trong RAM — và mọi thứ người dùng sửa BỐC HƠI sau khi tải lại trang,
+       với đúng một dòng lỗi nhỏ ở góc màn. Đó là lý do ca này tồn tại.
+       `PRESET_KINDS` của `lib/library.mjs` phải khớp `libraryPresetSchema.kind` của
+       `webapp/src/lib/types/api.ts`. */
+    const kinds = ["theme", "scene", "layout", "glaze", "decor", "decorPlace", "pose", "view", "expression", "outfit"]
+    const made = []
+    for (const kind of kinds) {
+      const res = await api("POST", "/api/library/presets", {
+        body: { kind, name: `Mục ${kind}`, data: { key: "chung-mot-khoa", en: `phrase for ${kind}`, hidden: true } },
+      })
+      eq(res.status, 201, `kind ${kind} phải được nhận`)
+      eq(res.json.preset.kind, kind)
+      eq(res.json.preset.data.hidden, true, "`data` là JSON tự do — cờ ẩn của web đi qua nguyên vẹn")
+      made.push(res.json.preset.id)
+    }
+    /* CÙNG `data.key` nhưng KHÁC `kind` ⇒ mười bản ghi riêng, không bị gộp:
+       danh tính của một preset là cặp `kind`+`key`, và mười danh mục dùng chung
+       vài id (chủ đề và trang phục cùng gieo từ một bảng). */
+    eq(new Set(made).size, kinds.length)
+    eq((await api("GET", "/api/library")).json.presets.length, kinds.length)
+    for (const id of made) eq((await api("DELETE", `/api/library/presets/${id}`)).status, 204)
+    eq((await api("GET", "/api/library")).json.presets, [])
+  })
+
   await it("preset: từ chối kind lạ, tên rỗng, data không phải object và id sai dạng", async () => {
     eq((await api("POST", "/api/library/presets", { body: { kind: "khong-co", name: "X", data: {} } })).status, 400)
     eq((await api("POST", "/api/library/presets", { body: { kind: "style", name: "   ", data: {} } })).status, 400)

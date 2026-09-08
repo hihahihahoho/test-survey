@@ -1,6 +1,9 @@
 import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { GENRE_PRESETS } from "@/features/prompt-lab/lib/genre-presets";
+import {
+  CATALOG_ORDER, CATALOG_SEEDS, type CatalogKind,
+} from "@/features/prompt-lab/lib/catalog-seeds";
 import { GLAZE_AUTO, glazeFromMaterial } from "@/features/kit-core/lib/glaze";
 import { EXPRESSIONS, POSES } from "@/features/kit-core/lib/poses";
 import { skelSchema, slugify, type Skel } from "@/lib/types/contract";
@@ -130,11 +133,56 @@ export interface MascotPreset {
   refName: string;
 }
 
+/**
+ * MỘT DÒNG của một danh mục pill chọn-một — nhãn Việt + câu Anh, và hết.
+ *
+ * ╔══ VÌ SAO MƯỜI TRỤC DÙNG CHUNG MỘT HÌNH DẠNG ═════════════════════════════╗
+ * ║ Chủ đề · khung cảnh · bố cục · đục nền · trang trí · bố trí · dáng · góc  ║
+ * ║ máy · biểu cảm · trang phục khác nhau ĐÚNG ở danh sách lựa chọn. Mỗi trục ║
+ * ║ một kiểu bản ghi là mười đường đọc, mười đường ghi, mười chỗ để quên khi  ║
+ * ║ thêm một cờ như `hidden`. Ở đây: một kiểu, một bảng tra theo `kind` —     ║
+ * ║ cùng lý lẽ đã làm ra `optionPill` một node cho chín loại pill.            ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export interface CatalogRow {
+  /** Id ổn định — nằm trong `attrs.value` của pill ĐÃ LƯU. Không đổi được. */
+  id: string;
+  /** Nhãn tiếng Việt trên pill và trong menu. */
+  vi: string;
+  /** Cụm tiếng Anh đi vào prompt. */
+  en: string;
+  /** Dòng ghi chú phụ trong hộp chọn — KHÔNG đi vào prompt. */
+  hint?: string;
+  /** Câu tiếng Anh THỨ HAI — chỉ `theme`, xem `SeedRow.en2`. */
+  en2?: string;
+  /**
+   * ẨN KHỎI MENU PILL, nhưng VẪN TRA ĐƯỢC.
+   *
+   * Đây là đường "xoá" của hai trục không xoá được (`pose`, `view`) và là đường
+   * lùi an toàn cho mọi trục còn lại: một dòng bị XOÁ thật thì mọi tài liệu đang
+   * trỏ vào nó hiện chữ trần và rụng khỏi prompt; một dòng bị ẩn thì biến khỏi
+   * menu mà câu cũ vẫn đọc ra đúng chữ.
+   */
+  hidden?: boolean;
+}
+
 export interface PresetBundle {
   styles: StylePreset[];
   elements: ElementPreset[];
   mascots: MascotPreset[];
+  /**
+   * MƯỜI DANH MỤC CÒN LẠI, tra theo `kind` của pill.
+   *
+   * `styles`/`elements`/`mascots` KHÔNG bị kéo vào bảng này dù cũng là danh mục:
+   * ba mảng ấy có hình dạng riêng (element mang hình học, mascot mang tên ảnh) và
+   * có hàng chục chỗ đọc theo tên trường. Gộp chúng vào một map là một lượt sửa
+   * xuyên tầng đổi lấy đúng một chút đối xứng trên giấy.
+   */
+  catalogs: Record<Exclude<CatalogKind, "style">, CatalogRow[]>;
 }
+
+/** Trục nào có thể quản lý ở màn «Thư viện prompt» — mười danh mục + hai kho cũ. */
+export type ManagedKind = CatalogKind | "element";
 
 /**
  * ẢNH TRONG PRESET — cố ý chỉ lưu TÊN, không lưu ảnh.
@@ -148,6 +196,10 @@ export interface PresetBundle {
 
 /**
  * BỐN NẤC TRANG TRÍ — thang của pill `decor`, dùng lại ở seed element.
+ *
+ * ⚠️ CHỈ CÒN LÀ MỘT LỐI TẮT ĐỌC HẠT GIỐNG (`CATALOG_SEEDS.decor`). Danh mục THẬT
+ * mà pill đọc nằm trong kho (`PresetBundle.catalogs.decor`) và người dùng sửa được
+ * ở màn «Thư viện prompt» — bảng này chỉ để mã nguồn tra bốn nấc gốc.
  *
  * ╔══ VÌ SAO BỐN NẤC CÓ TÊN THAY CHO THANG 1..7 ═════════════════════════════╗
  * ║ Thang cũ hỏi "viền dày bao nhiêu" và trả lời bằng bảy mức độ dày. Chủ sản ║
@@ -173,17 +225,8 @@ export interface PresetBundle {
  * ║ `__tests__/prompt-composer.test.tsx` canh đúng những chữ ấy.              ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
-export const DECOR_LEVELS: readonly { value: string; vi: string; en: string }[] = [
-  {
-    value: "none",
-    vi: "Không",
-    en: "clean silhouette: a plain edge with no rim ornament and NO decorative objects attached"
-      + " — no flowers, lanterns, ribbons, gems or trinkets on or around it",
-  },
-  { value: "light", vi: "Ít", en: "a simple rim and at most one small accent, no clusters of ornaments" },
-  { value: "medium", vi: "Vừa", en: "a distinct rim with a few ornaments at the corners, the body itself left clear" },
-  { value: "rich", vi: "Nhiều", en: "an ornate rim with generous ornaments around it" },
-];
+export const DECOR_LEVELS: readonly { value: string; vi: string; en: string }[] =
+  CATALOG_SEEDS.decor.map((row) => ({ value: row.id, vi: row.vi, en: row.en }));
 
 /** Nấc «Không» — nấc DUY NHẤT làm pill «Bố trí» mất nghĩa. Xem `hasDecorPlacement`. */
 export const DECOR_NONE = "none";
@@ -193,6 +236,8 @@ export const DECOR_DEFAULT = "medium";
 
 /**
  * BỐN CÁCH BỐ TRÍ chỗ trang trí — thang của pill `decorPlace`.
+ *
+ * ⚠️ Cùng thân phận với `DECOR_LEVELS`: lối tắt đọc hạt giống, không phải danh mục.
  *
  * ╔══ VÌ SAO LƯỢNG VÀ CHỖ LÀ HAI TRỤC, KHÔNG PHẢI MỘT THANG ═════════════════╗
  * ║ Chủ sản phẩm hỏi hai câu tách bạch: *"lượng trang trí"* và *"bố trí trang ║
@@ -206,12 +251,8 @@ export const DECOR_DEFAULT = "medium";
  * Câu Anh nói ra CHỖ, không nói ra lượng: lượng đã là việc của `DECOR_LEVELS`, và
  * hai trục cùng nói về lượng là hai giọng chỉ huy một chuyện.
  */
-export const DECOR_PLACES: readonly { value: string; vi: string; en: string }[] = [
-  { value: "balanced", vi: "Cân đối", en: "ornaments mirrored symmetrically, left and right halves matching" },
-  { value: "left", vi: "Lệch trái", en: "ornaments clustered on the LEFT side, the right side kept clean" },
-  { value: "right", vi: "Lệch phải", en: "ornaments clustered on the RIGHT side, the left side kept clean" },
-  { value: "random", vi: "Ngẫu nhiên", en: "ornaments placed freely, asymmetric" },
-];
+export const DECOR_PLACES: readonly { value: string; vi: string; en: string }[] =
+  CATALOG_SEEDS.decorPlace.map((row) => ({ value: row.id, vi: row.vi, en: row.en }));
 
 /** Cách bố trí mặc định — đối xứng, thứ một bộ UI muốn ở gần như mọi ô. */
 export const DECOR_PLACE_DEFAULT = "balanced";
@@ -237,9 +278,14 @@ export const DECOR_PLACE_DEFAULT = "balanced";
 export function decorLevelOf(raw: unknown): string {
   const value = typeof raw === "number" ? String(raw) : typeof raw === "string" ? raw.trim() : "";
   if (!value) return DECOR_DEFAULT;
-  if (DECOR_LEVELS.some((level) => level.value === value)) return value;
   const n = Number(value);
-  if (!Number.isFinite(n)) return DECOR_DEFAULT;
+  /* KHÔNG PHẢI SỐ ⇒ TRẢ NGUYÊN VĂN, kể cả khi nó không nằm trong bốn nấc gốc.
+     Đổi 09/2026 cùng lượt danh mục trang trí thành sửa được: bản trước so với
+     `DECOR_LEVELS` rồi rơi về «Vừa» khi không khớp — nghĩa là nấc thứ năm do
+     người dùng tự thêm sẽ bị âm thầm đổi thành «Vừa» ngay lần đọc đầu tiên.
+     Rác thật (một chuỗi không tra ra dòng nào) vẫn vô hại: `phraseOf` trả rỗng,
+     đúng như mọi giá trị lạ khác của mọi trục pill. */
+  if (!Number.isFinite(n)) return value;
   if (n <= 1) return DECOR_NONE;
   if (n <= 3) return "light";
   if (n <= 5) return DECOR_DEFAULT;
@@ -249,7 +295,9 @@ export function decorLevelOf(raw: unknown): string {
 /** Chuỗi lạ / thiếu → «Cân đối». Song sinh với `decorLevelOf`, cùng một lý do. */
 export function decorPlaceOf(raw: unknown): string {
   const value = typeof raw === "string" ? raw.trim() : "";
-  return DECOR_PLACES.some((place) => place.value === value) ? value : DECOR_PLACE_DEFAULT;
+  /* Cùng nới lỏng với `decorLevelOf`: một cách bố trí do người dùng thêm không
+     được bị đổi ngược về «Cân đối» chỉ vì nó không có trong bốn nấc gốc. */
+  return value || DECOR_PLACE_DEFAULT;
 }
 
 /**
@@ -264,9 +312,24 @@ export function hasDecorPlacement(decor: string): boolean {
   return decorLevelOf(decor) !== DECOR_NONE;
 }
 
+/**
+ * Hạt giống của MƯỜI danh mục dòng-đơn — bản sao SÂU của `CATALOG_SEEDS`.
+ *
+ * Sao chép chứ không trả thẳng bảng hằng: `setPresets` nhận về một bundle mà người
+ * dùng vừa sửa, và nếu bundle ấy còn dùng chung object với bảng hằng thì một lượt
+ * sửa nhãn sẽ đổi luôn HẠT GIỐNG — nút «Khôi phục mặc định» khi ấy khôi phục về
+ * đúng thứ vừa bị sửa.
+ */
+export function seedCatalogs(): PresetBundle["catalogs"] {
+  const out = {} as PresetBundle["catalogs"];
+  for (const kind of CATALOG_ORDER) out[kind] = CATALOG_SEEDS[kind].map((row) => ({ ...row }));
+  return out;
+}
+
 /** Hạt giống — đọc từ danh mục THẬT của kit-core, không chép tay. */
 export function seedPresets(): PresetBundle {
   return {
+    catalogs: seedCatalogs(),
     styles: GENRE_PRESETS.map((preset) => ({ id: preset.id, vi: preset.vi, en: preset.stylePrompt })),
 
     /* Danh mục element: repo CHƯA có danh mục tương đương để mượn (contract của
@@ -331,7 +394,17 @@ export function seedPresets(): PresetBundle {
    Server: `{id, kind, name, data}` — `data` là JSON tự do, agent không hiểu.
    Lab: ba mảng có kiểu chặt. Chỗ dịch nằm gọn ở đây, và CHỈ ở đây. */
 
-type PresetKind = "style" | "element" | "mascot";
+/**
+ * `kind` của một bản ghi trên server. Mười trục mới dùng CHÍNH `kind` của pill
+ * làm `kind` bản ghi — một tên cho một thứ, không có bảng dịch ở giữa.
+ * Agent phải biết đủ chừng này tên: xem `PRESET_KINDS` ở `agent/lib/library.mjs`.
+ */
+type PresetKind = ManagedKind | "mascot";
+
+/** `kind` này lưu ở `catalogs`, không phải ở `styles`/`elements`/`mascots`. */
+function isCatalogKind(kind: string): kind is Exclude<CatalogKind, "style"> {
+  return (CATALOG_ORDER as readonly string[]).includes(kind);
+}
 
 interface PresetPayload {
   kind: PresetKind;
@@ -342,17 +415,30 @@ interface PresetPayload {
 /** Bất kỳ dòng nào trong ba mảng: ba kiểu chỉ khác nhau ở phần ĐUÔI, nên dạng
     chung là "phần chung bắt buộc + phần đuôi tuỳ chọn". Cả ba interface public
     ở trên đều gán được vào đây, và `payloadOf` chỉ đọc đuôi đúng theo `kind`. */
-type AnyPreset = StylePreset & Partial<Omit<ElementPreset, keyof StylePreset>> & Partial<Omit<MascotPreset, keyof StylePreset>>;
+type AnyPreset = StylePreset
+  & Partial<Omit<ElementPreset, keyof StylePreset>>
+  & Partial<Omit<MascotPreset, keyof StylePreset>>
+  & Partial<Omit<CatalogRow, keyof StylePreset>>;
 
 /** `name` của server là nhãn tiếng Việt; phần còn lại nằm trong `data`. */
 function payloadOf(kind: PresetKind, preset: AnyPreset): PresetPayload {
   /* `key` là id bundle — lý do #2 ở đầu file. Nó phải nằm TRONG `data` vì `id`
      của bản ghi thuộc về server (agent tự sinh, client không được chọn). */
   const base: Record<string, unknown> = { key: preset.id, en: preset.en };
+  /**
+   * NHÃN RỖNG RƠI VỀ ID, và đó là một hàng rào chứ không phải một phép làm đẹp.
+   *
+   * Agent từ chối `name` rỗng bằng 400 (`suite-library`: «tên rỗng ⇒ 400»). Màn
+   * quản lý thì ghi theo TỪNG PHÍM — nên khoảnh khắc người dùng bôi đen nhãn cũ và
+   * bấm xoá để gõ lại, kho có một dòng nhãn rỗng và lượt ghi kế tiếp nổ, kèm một
+   * dải cảnh báo đỏ cho một thao tác hoàn toàn bình thường. Rơi về id thì lượt ghi
+   * ấy đi qua, và ký tự đầu tiên họ gõ tiếp sẽ ghi đè lên nó.
+   */
+  const name = (preset.vi ?? "").trim() || preset.id;
   if (kind === "element") {
     return {
       kind,
-      name: preset.vi,
+      name,
       /* `materialId` KHÔNG còn được ghi: trường ấy đã chết cùng pill Chất liệu.
          Bản ghi cũ trên workspace vẫn còn nó cho tới lượt PATCH đầu tiên — và
          `toBundle` dịch nó sang `glazeId` khi đọc, nên không có khoảng nào mà
@@ -376,8 +462,23 @@ function payloadOf(kind: PresetKind, preset: AnyPreset): PresetPayload {
       },
     };
   }
-  if (kind === "mascot") return { kind, name: preset.vi, data: { ...base, refName: preset.refName ?? "" } };
-  return { kind, name: preset.vi, data: base };
+  if (kind === "mascot") return { kind, name, data: { ...base, refName: preset.refName ?? "" } };
+  /* Ba trường phụ CHỈ ghi khi có giá trị — không ghi `hint: ""`, `hidden: false`.
+     Lý do là `flush` so hai `data` bằng JSON: một khoá rỗng thừa ở bên này mà bên
+     kia không có là một PATCH cho một bản ghi không đổi gì, nhân với 60 dòng. */
+  if (isCatalogKind(kind)) {
+    return {
+      kind,
+      name,
+      data: {
+        ...base,
+        ...(preset.hint ? { hint: preset.hint } : {}),
+        ...(preset.en2 ? { en2: preset.en2 } : {}),
+        ...(preset.hidden ? { hidden: true } : {}),
+      },
+    };
+  }
+  return { kind, name, data: base };
 }
 
 /** Đọc PHÒNG THỦ: `data` do đời code trước ghi và do người dùng sửa được. */
@@ -449,7 +550,9 @@ function readSkel(value: unknown): Skel | undefined {
 }
 
 function toBundle(rows: readonly LibraryPreset[]): PresetBundle {
-  const bundle: PresetBundle = { styles: [], elements: [], mascots: [] };
+  const empty = {} as PresetBundle["catalogs"];
+  for (const kind of CATALOG_ORDER) empty[kind] = [];
+  const bundle: PresetBundle = { styles: [], elements: [], mascots: [], catalogs: empty };
   for (const row of rows) {
     const data = row.data ?? {};
     /* Thiếu `key` ⇒ dùng id server. Xảy ra khi bản ghi được tạo bởi một client
@@ -494,8 +597,33 @@ function toBundle(rows: readonly LibraryPreset[]): PresetBundle {
         ...(skel ? { skel } : {}),
       });
     } else if (row.kind === "mascot") bundle.mascots.push({ id, vi: row.name, en, refName: str(data, "refName") });
-    /* `material` / `outfit` là hai `kind` agent chấp nhận nhưng lab CHƯA dùng.
-       Bỏ qua chứ không ném: một bản web cũ không được làm hỏng dữ liệu bản mới. */
+    else if (isCatalogKind(row.kind)) {
+      bundle.catalogs[row.kind].push({
+        id, vi: row.name, en,
+        ...(str(data, "hint") ? { hint: str(data, "hint") } : {}),
+        ...(str(data, "en2") ? { en2: str(data, "en2") } : {}),
+        ...(data["hidden"] === true ? { hidden: true } : {}),
+      });
+    }
+    /* `material` là `kind` agent chấp nhận nhưng lab KHÔNG dùng (pill chất liệu đã
+       chết). Bỏ qua chứ không ném: một bản web cũ không được làm hỏng dữ liệu bản mới. */
+  }
+  /**
+   * TRỤC CHƯA CÓ MỘT DÒNG NÀO TRÊN SERVER ⇒ HẠT GIỐNG, không phải rỗng.
+   *
+   * ╔══ ĐÂY LÀ CỬA DI TRÚ CỦA MỌI WORKSPACE ĐÃ MỞ APP TRƯỚC LƯỢT NÀY ══════════╗
+   * ║ Chúng đang giữ đúng ba loại bản ghi (style · element · mascot) vì mười    ║
+   * ║ trục còn lại hôm qua còn nằm cứng trong mã. Đọc thẳng ra thì `catalogs`    ║
+   * ║ rỗng ⇒ MỌI menu pill rỗng ⇒ mọi câu prompt mất chữ. Và khoảng giữa lúc    ║
+   * ║ thấy rỗng với lúc `seedOnce` gieo xong là một khoảng có thật (agent tắt   ║
+   * ║ thì nó là mãi mãi). Cùng lý lẽ với nhánh "kho rỗng ⇒ hạt giống" ở         ║
+   * ║ `hydrate`, chỉ là ở mức TỪNG TRỤC.                                       ║
+   * ║ Rơi về hạt giống ở đây KHÔNG sinh ra request nào: `flush` chỉ chạy sau    ║
+   * ║ một `setPresets`, còn việc ghi xuống là của `seedOnce`.                    ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  for (const kind of CATALOG_ORDER) {
+    if (bundle.catalogs[kind].length === 0) bundle.catalogs[kind] = CATALOG_SEEDS[kind].map((row) => ({ ...row }));
   }
   return bundle;
 }
@@ -596,6 +724,119 @@ export function addCustomElement(name: string, enInput?: string): ElementPreset 
   return preset;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   MỘT HÌNH DẠNG DÒNG CHO MỌI DANH MỤC — cửa của màn «Thư viện prompt»
+   ══════════════════════════════════════════════════════════════════════════
+
+   ╔══ VÌ SAO MÀN QUẢN LÝ KHÔNG ĐƯỢC BIẾT BA KIỂU BẢN GHI ═══════════════════╗
+   ║ Kho có ba hình dạng khác nhau: `styles` (id/vi/en), `elements` (thêm     ║
+   ║ hình học + mặc định trang trí/đục nền), `catalogs` (thêm hint/en2/ẩn).   ║
+   ║ Nếu màn tự phân nhánh theo ba hình dạng ấy thì mỗi việc — thêm, sửa,     ║
+   ║ nhân bản, xoá, kéo thứ tự, khôi phục — phải viết ba lần, và lần thứ ba   ║
+   ║ bao giờ cũng là lần bị quên. Nên chỗ dịch nằm ở ĐÂY, cạnh dữ liệu, và    ║
+   ║ màn chỉ biết đúng một kiểu: `ManagedRow`.                                ║
+   ╚══════════════════════════════════════════════════════════════════════════╝ */
+
+/** Phần đuôi CHỈ trục `element` có — hình học và mặc định của một loại ô. */
+export type ManagedElementFields = Pick<ElementPreset, "decor" | "glazeId" | "sizeId" | "skel">;
+
+/** Một dòng bất kỳ của bất kỳ danh mục nào, nhìn từ màn quản lý. */
+export interface ManagedRow extends CatalogRow {
+  element?: ManagedElementFields;
+}
+
+/** Thứ tự danh mục trên rail trái. Phong cách đứng đầu vì nó chi phối mọi tấm. */
+export const MANAGED_ORDER: readonly ManagedKind[] = [
+  "style", "theme", "scene", "layout", "glaze", "decor", "decorPlace", "element",
+  "pose", "view", "expression", "outfit",
+];
+
+/** Đọc một danh mục ra dạng dòng chung. */
+export function managedRows(bundle: PresetBundle, kind: ManagedKind): ManagedRow[] {
+  if (kind === "style") return bundle.styles.map((row) => ({ id: row.id, vi: row.vi, en: row.en }));
+  if (kind === "element") {
+    return bundle.elements.map((row) => ({
+      id: row.id, vi: row.vi, en: row.en,
+      element: {
+        decor: row.decor, glazeId: row.glazeId, sizeId: row.sizeId,
+        ...(row.skel ? { skel: row.skel } : {}),
+      },
+    }));
+  }
+  return bundle.catalogs[kind].map((row) => ({ ...row }));
+}
+
+/** Bundle MỚI với một danh mục đã thay. Không đụng vào các danh mục khác. */
+export function withManagedRows(bundle: PresetBundle, kind: ManagedKind, rows: readonly ManagedRow[]): PresetBundle {
+  if (kind === "style") return { ...bundle, styles: rows.map((row) => ({ id: row.id, vi: row.vi, en: row.en })) };
+  if (kind === "element") {
+    return {
+      ...bundle,
+      elements: rows.map((row) => ({
+        id: row.id, vi: row.vi, en: row.en,
+        decor: row.element?.decor ?? DECOR_DEFAULT,
+        glazeId: row.element?.glazeId ?? GLAZE_AUTO,
+        sizeId: row.element?.sizeId ?? "",
+        ...(row.element?.skel ? { skel: row.element.skel } : {}),
+      })),
+    };
+  }
+  return {
+    ...bundle,
+    catalogs: {
+      ...bundle.catalogs,
+      [kind]: rows.map(({ element: _element, ...row }) => ({ ...row })),
+    },
+  };
+}
+
+/** Ghi một danh mục vào kho (và hẹn giờ đẩy lên workspace). */
+export function setManagedRows(kind: ManagedKind, rows: readonly ManagedRow[]): void {
+  setPresets(withManagedRows(getPresets(), kind, rows));
+}
+
+/** Hạt giống của MỘT danh mục — nút «Khôi phục mặc định» của danh mục ấy. */
+export function seedRowsOf(kind: ManagedKind): ManagedRow[] {
+  return managedRows(seedPresets(), kind);
+}
+
+/**
+ * Id mới cho một dòng người dùng vừa thêm.
+ *
+ * Slug hoá vì id của element đi thẳng vào TÊN FILE trong contract (`uiKitSheets`),
+ * và một id có dấu tiếng Việt ở đó là một tệp không mở được trên vài hệ tệp. Hậu
+ * tố số để hai nhãn khác nhau mà cùng slug không đè lên nhau.
+ */
+export function nextRowId(kind: ManagedKind, vi: string, taken: readonly string[]): string {
+  const base = `${kind === "element" ? "tu-dat-" : ""}${slugify(vi) || "moi"}`;
+  let id = base;
+  for (let n = 2; taken.includes(id); n += 1) id = `${base}-${n}`;
+  return id;
+}
+
+/**
+ * CỤM TRANG PHỤC của một chủ đề — thứ pill «Trang phục» để trống sẽ dùng.
+ *
+ * ╔══ VÌ SAO KHÔNG ĐỌC THẲNG `phraseOf("outfit", themeValue)` NỮA ═══════════╗
+ * ║ Hạt giống đặt id của chủ đề BẰNG cụm trang phục đời đầu, nên tra chéo hai ║
+ * ║ danh mục bằng id vẫn ra đúng chữ — cho tới khi ai đó THÊM một chủ đề mới. ║
+ * ║ Chủ đề mới có id dạng slug (`chu-de-halloween-2`), và tra nó trong danh   ║
+ * ║ mục trang phục thì không thấy ⇒ `phraseOf` của trục `outfit` trả về CHÍNH ║
+ * ║ id ấy (quy ước "giá trị lạ là chữ tự gõ") ⇒ prompt nhận được chuỗi        ║
+ * ║ "wearing chu-de-halloween-2". Nên chữ trang phục của một chủ đề phải nằm  ║
+ * ║ TRONG chính dòng chủ đề (`en2`), và chỉ khi không có mới tra chéo.         ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export function themeOutfitEN(themeValue: string, bundle: PresetBundle = getPresets()): string {
+  const raw = (themeValue ?? "").trim();
+  if (!raw) return "";
+  const hit = bundle.catalogs.theme.find((row) => row.id === raw);
+  if (hit?.en2) return hit.en2;
+  /* Không tra ra dòng chủ đề nào: giá trị này là CHỮ NGƯỜI DÙNG TỰ GÕ (pill chủ
+     đề cho gõ riêng) — trả nguyên văn, đúng quy ước của trục `theme`/`outfit`. */
+  return bundle.catalogs.outfit.find((row) => row.id === raw)?.en ?? raw;
+}
+
 /** Xoá kho, quay về hạt giống — nút "Khôi phục mặc định" của trang preset. */
 export function resetPresets(): PresetBundle {
   const seed = seedPresets();
@@ -627,6 +868,7 @@ async function flush(): Promise<void> {
       ["style", desired.styles],
       ["element", desired.elements],
       ["mascot", desired.mascots],
+      ...CATALOG_ORDER.map((kind) => [kind, desired.catalogs[kind]] as [PresetKind, AnyPreset[]]),
     ];
     let touched = false;
     for (const [kind, list] of jobs) {
@@ -725,6 +967,21 @@ function subscribe(listener: () => void): () => void {
 type SeedState = "idle" | "running" | "done";
 let seedState: SeedState = "idle";
 
+/**
+ * Kho này còn THIẾU hạt giống nào không.
+ *
+ * Không chỉ hỏi "kho có rỗng không" nữa: một workspace mở app trước lượt mười
+ * danh mục mới có đủ style/element/mascot mà KHÔNG có dòng nào của chủ đề, khung
+ * cảnh, dáng… Hỏi bằng "rỗng hay không" thì nó không bao giờ được gieo, và mười
+ * trục ấy vĩnh viễn sống bằng hạt giống trong RAM — sửa được trên màn nhưng mất
+ * sạch sau mỗi lần tải lại trang.
+ */
+function needsSeed(rows: readonly LibraryPreset[]): boolean {
+  if (rows.length === 0) return true;
+  const kinds = new Set(rows.map((row) => row.kind));
+  return CATALOG_ORDER.some((kind) => !kinds.has(kind));
+}
+
 async function seedOnce(): Promise<void> {
   if (seedState !== "idle") return;
   seedState = "running";
@@ -741,6 +998,7 @@ async function seedOnce(): Promise<void> {
       ["style", seed.styles],
       ["element", seed.elements],
       ["mascot", seed.mascots],
+      ...CATALOG_ORDER.map((kind) => [kind, seed.catalogs[kind]] as [PresetKind, AnyPreset[]]),
     ];
     for (const [kind, list] of jobs) {
       for (const preset of list) {
@@ -803,7 +1061,7 @@ export function usePresets(): PresetBundle {
     hydrate(rows);
     /* Kho rỗng THẬT (đã tải xong, mảng rỗng) ⇒ gieo hạt. Phân biệt với "chưa
        tải" bằng chính `rows === undefined` ở trên: chưa tải thì không làm gì. */
-    if (rows.length === 0 && !dirty) void seedOnce();
+    if (needsSeed(rows) && !dirty) void seedOnce();
   }, [rows]);
 
   return React.useSyncExternalStore(subscribe, getPresets, getPresets);

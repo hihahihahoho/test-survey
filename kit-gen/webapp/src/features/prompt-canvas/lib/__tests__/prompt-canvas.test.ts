@@ -14,7 +14,7 @@ import { cellInner, drawBox } from "@/features/kit-core/lib/geometry";
 import { seedPresets } from "@/features/prompt-lab/lib/presets-store";
 import { backgroundDoc, contextDoc, mascotDoc } from "@/features/prompt-lab/lib/doc-templates";
 import { NODE } from "@/features/prompt-lab/lib/schema";
-import { phraseOf } from "@/features/prompt-lab/lib/pill-registry";
+import { phraseOf, pillOptions } from "@/features/prompt-lab/lib/pill-registry";
 import { countComposerImages, serializeComposer } from "@/features/prompt-lab/lib/serialize-composer";
 import { newMascotPose, type Block, type ComposerState, type MascotBlock, type MascotPose, type UiCell } from "@/features/prompt-lab/lib/composer-model";
 
@@ -906,7 +906,9 @@ describe("migrateComposerDoc — chữa tài liệu đã lưu với pill `{kind:
       PRESETS,
     );
     const pills = ((doc.composer.blocks[0] as { doc: JSONContent }).doc).content![0]!.content!;
-    expect(pills.map((p) => p.attrs!["kind"])).toEqual(["scene", "mood"]);
+    /* HAI Ô, và ô thứ hai là BỐ CỤC — ô «không khí» đã bị bỏ khỏi câu (09/2026),
+       nên `PILL_SLOTS.background` gán theo vị trí ra `scene` rồi `layout`. */
+    expect(pills.map((p) => p.attrs!["kind"])).toEqual(["scene", "layout"]);
     /* Giá trị người dùng từng chọn đã mất thật. Điền một mặc định vào đây là đặt
        một lựa chọn họ chưa từng bấm vào prompt sắp tiêu lượt vẽ. */
     expect(pills.map((p) => p.attrs!["value"])).toEqual(["", ""]);
@@ -1213,7 +1215,7 @@ describe("di trú: bản nháp đời trước không có bốn trường mới"
    THẺ BACKGROUND — ô thứ ba đổi từ ẢNH sang BỐ CỤC (09/2026)
    ══════════════════════════════════════════════════════════════════════════ */
 
-describe("thẻ Background: khung cảnh · không khí · bố cục", () => {
+describe("thẻ Background: khung cảnh · bố cục", () => {
   const saved = (composer: unknown) => ({ docVersion: COMPOSER_DOC_VERSION, updatedAt: "", composer });
 
   const pillsOf = (doc: JSONContent): { kind: string; value: string; path: string }[] => {
@@ -1232,13 +1234,21 @@ describe("thẻ Background: khung cảnh · không khí · bố cục", () => {
     return out;
   };
 
-  it("câu khởi điểm có ĐÚNG ba pill, và không còn node ảnh rời nào", () => {
+  it("câu khởi điểm có ĐÚNG hai pill, và không còn node ảnh rời nào", () => {
     const doc = backgroundDoc();
-    expect(pillsOf(doc).map((p) => p.kind)).toEqual(["scene", "mood", "layout"]);
+    /* HAI, không phải ba: ô «không khí» đã bị bỏ theo yêu cầu chủ sản phẩm. Hai ô
+       còn lại là hai câu hỏi mà một tấm nền game bắt buộc phải trả lời — vẽ cảnh
+       gì, và chừa chỗ nào cho UI. */
+    expect(pillsOf(doc).map((p) => p.kind)).toEqual(["scene", "layout"]);
     expect(JSON.stringify(doc)).not.toContain(NODE.imagePill);
   });
 
-  it("cụm bố cục đi vào `spec` của tấm, SAU không khí", () => {
+  it("câu khởi điểm KHÔNG còn chữ «không khí» lẫn pill `mood`", () => {
+    expect(JSON.stringify(backgroundDoc())).not.toContain("mood");
+    expect(JSON.stringify(backgroundDoc())).not.toContain("không khí");
+  });
+
+  it("cụm bố cục đi vào `spec` của tấm, SAU khung cảnh", () => {
     const contract = composerToContract(
       state({ blocks: [{ id: "b1", kind: "background", mode: "template", doc: backgroundDoc(), note: "" }] }),
       { presets: PRESETS },
@@ -1246,7 +1256,19 @@ describe("thẻ Background: khung cảnh · không khí · bố cục", () => {
     const spec = contract.sheets[0]!.components[0]!.spec;
     const layout = phraseOf("layout", "center-clear", PRESETS);
     expect(spec).toContain(layout);
-    expect(spec.indexOf(phraseOf("mood", "festive", PRESETS))).toBeLessThan(spec.indexOf(layout));
+    expect(spec.indexOf(phraseOf("scene", "main-menu", PRESETS))).toBeLessThan(spec.indexOf(layout));
+  });
+
+  /**
+   * PILL `mood` CÒN SÓT trong một câu TỰ DO không được làm hỏng gì.
+   *
+   * Bộ di trú gỡ ô ấy khỏi câu KHUÔN, nhưng câu tự do là chữ của người dùng và ta
+   * cố ý không viết lại nó. Nên phải có đúng một hành vi: pill hiện chữ trần, và
+   * KHÔNG góp chữ nào vào prompt — `pillOptions("mood")` trả rỗng.
+   */
+  it("pill `mood` di sản: không ném, không góp chữ nào vào prompt", () => {
+    expect(pillOptions("mood", PRESETS)).toEqual([]);
+    expect(phraseOf("mood", "festive", PRESETS)).toBe("");
   });
 
   /**
@@ -1326,12 +1348,15 @@ describe("thẻ Background: khung cảnh · không khí · bố cục", () => {
       PRESETS,
     );
     const block = doc.composer.blocks[0] as { doc: JSONContent; note: string };
+    /* Ô «không khí» bị GỠ trong cùng một lượt đọc: pill `mood` và mẩu chữ
+       «, không khí » của khuôn cũ đi cùng nhau, vì để lại nhãn trục lơ lửng thì
+       `freeText()` sẽ coi nó là chữ người dùng gõ thêm và đẩy vào `directive`. */
     expect(pillsOf(block.doc)).toEqual([
       { kind: "scene", value: "shop", path: "" },
-      { kind: "mood", value: "cozy", path: "" },
       { kind: "layout", value: "center-clear", path: "refs/phac.png" },
     ]);
     expect(JSON.stringify(block.doc)).not.toContain("tham chiếu");
+    expect(JSON.stringify(block.doc)).not.toContain("không khí");
     expect(JSON.stringify(block.doc)).toContain("bố cục");
     /* Thẻ cũ chưa có ô ghi chú ⇒ rỗng, đúng thứ nó đang là. */
     expect(block.note).toBe("");
@@ -1345,7 +1370,6 @@ describe("thẻ Background: khung cảnh · không khí · bố cục", () => {
     const twice = migrateComposerDoc(saved(once.composer), PRESETS);
     expect(pillsOf((twice.composer.blocks[0] as { doc: JSONContent }).doc).map((p) => p.kind)).toEqual([
       "scene",
-      "mood",
       "layout",
     ]);
   });

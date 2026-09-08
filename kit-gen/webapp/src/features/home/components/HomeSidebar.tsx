@@ -1,5 +1,6 @@
 import {
   Images,
+  ListTree,
   Palette,
   LayoutGrid,
   PanelsTopLeft,
@@ -13,7 +14,7 @@ import { UsageMeter } from "./UsageMeter";
 
 /** Mục "Gần đây" đã bỏ theo yêu cầu chủ sản phẩm — chỉ còn một danh sách Dự án. */
 export type HomeSection = "all";
-export type HomeDestination = "projects" | "brands" | "ui-library" | "mascot-library" | "references" | "trash" | "settings";
+export type HomeDestination = "projects" | "brands" | "ui-library" | "mascot-library" | "prompt-library" | "references" | "trash" | "settings";
 
 export interface HomeSidebarProps {
   section: HomeSection;
@@ -25,6 +26,7 @@ export interface HomeSidebarProps {
   onBrands: () => void;
   onUiLibrary: () => void;
   onMascotLibrary: () => void;
+  onPromptLibrary: () => void;
   onReferences: () => void;
 }
 
@@ -38,6 +40,7 @@ export function HomeSidebar({
   onBrands,
   onUiLibrary,
   onMascotLibrary,
+  onPromptLibrary,
   onReferences,
 }: HomeSidebarProps) {
   const item = (id: HomeSection, label: string, Icon: typeof LayoutGrid) => (
@@ -101,6 +104,10 @@ export function HomeSidebar({
         {destination("brands", "Nhận dạng thương hiệu", Palette, onBrands)}
         {destination("ui-library", "Bộ khung UI", PanelsTopLeft, onUiLibrary)}
         {destination("mascot-library", "Mascot", Sparkles, onMascotLibrary)}
+        {/* «Prompt» đứng cạnh bốn thư viện nội dung vì nó cũng là NỘI DUNG: bốn kho
+            kia giữ ảnh, kho này giữ chữ — và chữ mới là thứ đi tới máy vẽ ở mọi tấm,
+            kể cả tấm không đính ảnh nào. */}
+        {destination("prompt-library", "Prompt", ListTree, onPromptLibrary)}
         {destination("references", "Ảnh phong cách", Images, onReferences)}
       </nav>
 

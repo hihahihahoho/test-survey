@@ -3,6 +3,7 @@ import { Route as indexRoute } from "./routes/index";
 import { Route as settingsRoute } from "./routes/settings";
 import { Route as uiLibraryRoute } from "./routes/library.ui";
 import { Route as mascotLibraryRoute } from "./routes/library.mascot";
+import { Route as promptLibraryRoute } from "./routes/library.prompts";
 import { Route as brandsRoute } from "./routes/brands";
 import { Route as referencesRoute } from "./routes/references";
 import { Route as trashRoute } from "./routes/trash";
@@ -20,7 +21,8 @@ import { Route as legacyProjectRoute } from "./routes/p.$";
  *
  * ══ IA PROMPT-FIRST: MỘT MÀN LÀM VIỆC, MỘT LỚP VỎ ═════════════════════════
  * `/k/:projectId` là màn làm việc DUY NHẤT (khu soạn prompt). Bảy route còn lại
- * là vỏ: trang chủ, cài đặt máy, thùng rác, và bốn thư viện.
+ * là vỏ: trang chủ, cài đặt máy, thùng rác, và NĂM thư viện — thư viện thứ năm
+ * (`/library/prompts`, 09/2026) là chỗ sửa mọi danh mục đi vào prompt.
  *
  * `/p/$` là TẤM BIỂN CHỈ ĐƯỜNG cho mọi địa chỉ đời cũ — xem `routes/p.$.tsx`.
  * Nó phải đứng CUỐI: một route splat khớp rất rộng, đặt trước là nó nuốt mất
@@ -37,6 +39,7 @@ export const routeTree = rootRoute.addChildren([
   settingsRoute,
   uiLibraryRoute,
   mascotLibraryRoute,
+  promptLibraryRoute,
   brandsRoute,
   referencesRoute,
   trashRoute,

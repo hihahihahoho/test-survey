@@ -44,7 +44,7 @@ const matchAt = (pathname: string, search: Record<string, unknown> = {}) =>
 const leaf = (pathname: string): string =>
   (matchAt(pathname).at(-1)?.routeId as string | undefined) ?? "";
 
-describe("sitemap — 9 đường dẫn khớp đúng route", () => {
+describe("sitemap — 10 đường dẫn khớp đúng route", () => {
   it.each([
     ["/", "/"],
     ["/settings", "/settings"],
@@ -53,6 +53,7 @@ describe("sitemap — 9 đường dẫn khớp đúng route", () => {
     ["/references", "/references"],
     ["/library/ui", "/library/ui"],
     ["/library/mascot", "/library/mascot"],
+    ["/library/prompts", "/library/prompts"],
     [`/k/${PID}`, "/k/$projectId"],
     [`/p/${PID}`, "/p/$"],
   ])("%s → %s", (path, expected) => {
@@ -64,6 +65,14 @@ describe("sitemap — 9 đường dẫn khớp đúng route", () => {
     expect(leaf(`/k/${PID}`)).toBe("/k/$projectId");
     expect(leaf("/settings")).toBe("/settings");
     expect(leaf("/library/ui")).toBe("/library/ui");
+    expect(leaf("/library/prompts")).toBe("/library/prompts");
+  });
+
+  /* `?kind=` là trục URL duy nhất của thư viện prompt, và nó phải sống sót một
+     giá trị rác: link cũ / URL gõ tay không được làm trắng màn. */
+  it("`/library/prompts?kind=` nhận giá trị lạ mà không ném", () => {
+    expect(matchAt("/library/prompts", { kind: "khong-co-that" }).at(-1)?.routeId).toBe("/library/prompts");
+    expect(matchAt("/library/prompts", { kind: 42 }).at(-1)?.routeId).toBe("/library/prompts");
   });
 });
 

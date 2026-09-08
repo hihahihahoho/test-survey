@@ -1,5 +1,5 @@
 import { poseSpecFor } from "@/features/kit-core/lib/kitset-to-contract";
-import { getPresets, hasDecorPlacement, type PresetBundle } from "./presets-store";
+import { getPresets, hasDecorPlacement, themeOutfitEN, type PresetBundle } from "./presets-store";
 import { labelOf, phraseOf } from "./pill-registry";
 import { describeBrandColors } from "./brand-colors";
 import { gridFor, type Block, type BlockMode, type ComposerState, type MascotPose, type UiCell } from "./composer-model";
@@ -184,7 +184,12 @@ export function contextOutfitEN(
   state: Pick<ComposerState, "themeValue" | "themeCustom">,
   presets: PresetBundle = getPresets(),
 ): string {
-  return (state.themeCustom ?? "").trim() || phraseOf("outfit", state.themeValue, presets);
+  /* `themeOutfitEN`, KHÔNG phải `phraseOf("outfit", …)`: cụm trang phục của một
+     chủ đề nay nằm TRONG chính dòng chủ đề (`CatalogRow.en2`). Tra chéo sang danh
+     mục trang phục bằng id chỉ đúng với sáu chủ đề hạt giống — một chủ đề người
+     dùng vừa thêm có id dạng slug, và tra nó ở đó sẽ đẩy chính cái slug vào prompt
+     dưới dạng "wearing chu-de-...". Xem khối chú thích của `themeOutfitEN`. */
+  return (state.themeCustom ?? "").trim() || themeOutfitEN(state.themeValue, presets);
 }
 
 /** Cụm EN của phong cách chung — chữ tự gõ thắng preset. Xem `contextThemeEN`. */

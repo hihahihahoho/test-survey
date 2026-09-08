@@ -35,22 +35,56 @@ vi.mock("@/lib/api/endpoints", () => ({
 }));
 
 const {
-  usePresets, usePresetSyncError, setPresets, seedPresets, DECOR_DEFAULT, __resetPresetsStoreForTest,
+  usePresets, usePresetSyncError, setPresets, seedPresets, seedRowsOf, DECOR_DEFAULT,
+  MANAGED_ORDER, managedRows, withManagedRows, setManagedRows, themeOutfitEN, nextRowId, getPresets,
+  __resetPresetsStoreForTest,
 } = await import("../presets-store");
+const { pillOptions, phraseOf, labelOf } = await import("../pill-registry");
+const { CATALOG_ORDER } = await import("../catalog-seeds");
 
 type Row = { id: string; kind: string; name: string; data: Record<string, unknown> };
 
-const library = (presets: Row[]) => ({
+/**
+ * Kho giả của workspace.
+ *
+ * ╔══ `catalogs` MẶC ĐỊNH CÓ MẶT, VÀ ĐÓ LÀ MỘT QUYẾT ĐỊNH ═══════════════════╗
+ * ║ Từ 09/2026 kho còn giữ mười danh mục dòng-đơn (chủ đề · khung cảnh ·      ║
+ * ║ dáng…). `needsSeed` coi một trục KHÔNG có dòng nào là "chưa gieo" và bắn   ║
+ * ║ ngay một loạt POST — đúng hành vi cần có, nhưng nó sẽ nhấn chìm con số mà ║
+ * ║ mọi ca đo phép GHI đang đếm ("sửa một dòng ⇒ đúng một PATCH"). Nên fixture║
+ * ║ mặc định là một workspace ĐÃ GIEO XONG, còn ca nào muốn đo chính việc     ║
+ * ║ gieo thì truyền `false`.                                                 ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+const library = (presets: Row[], withCatalogs = true) => ({
   version: 4,
   brands: [],
   settings: { background: 2, popup: 4, small: 16, props: 16, mascot: 4 },
   items: [],
-  presets,
+  presets: withCatalogs ? [...presets, ...catalogRows()] : presets,
 });
 
 /** Bản ghi server giả — luôn có `data.key`, đúng như `payloadOf` ghi ra. */
 const row = (id: string, kind: string, name: string, data: Record<string, unknown>): Row =>
   ({ id, kind, name, data });
+
+/** Bản ghi server của mười danh mục dòng-đơn, dựng từ CHÍNH hạt giống. */
+const catalogRows = (): Row[] =>
+  CATALOG_ORDER.flatMap((kind) => seedRowsOf(kind).map((seedRow) => row(
+    `preset_${kind}_${seedRow.id}`, kind, seedRow.vi,
+    {
+      key: seedRow.id, en: seedRow.en,
+      ...(seedRow.hint ? { hint: seedRow.hint } : {}),
+      ...(seedRow.en2 ? { en2: seedRow.en2 } : {}),
+    },
+  )));
+
+/** Tổng số bản ghi của một bộ hạt giống đầy đủ — 3 kho cũ + 10 danh mục mới. */
+const seedTotal = () => {
+  const seed = seedPresets();
+  return seed.styles.length + seed.elements.length + seed.mascots.length
+    + CATALOG_ORDER.reduce((sum, kind) => sum + seed.catalogs[kind].length, 0);
+};
 
 let seen: ReturnType<typeof seedPresets> | null = null;
 let lastError: string | null = null;
@@ -115,6 +149,10 @@ describe("đọc: server là nguồn, id bundle giữ nguyên qua `data.key`", (
       /* `material` là kind agent chấp nhận nhưng lab chưa vẽ. Một bản web cũ
          không được làm hỏng dữ liệu mà bản mới vừa ghi ⇒ bỏ qua, không ném. */
       row("preset_eeee", "material", "Kim loại", { key: "metal", en: "brushed metal" }),
+      /* Một chuỗi KHÔNG PHẢI SỐ đi qua nguyên vẹn từ 09/2026: nấc trang trí nay là
+         danh mục người dùng sửa được, nên "không nằm trong bốn nấc gốc" KHÔNG còn
+         đồng nghĩa với "rác". Rác thật thì vô hại — `phraseOf` trả rỗng như mọi
+         giá trị lạ của mọi trục pill. Xem `decorLevelOf`. */
       row("preset_ffff", "element", "Sai kiểu decor", { key: "odd", en: "x", decor: "sáu" }),
     ]));
     mount();
@@ -123,7 +161,9 @@ describe("đọc: server là nguồn, id bundle giữ nguyên qua `data.key`", (
     /* Thiếu `key` thì thà một id xấu (id server) còn hơn nuốt mất bản ghi. */
     expect(seen?.styles[0]!.id).toBe("preset_dddd");
     expect(seen?.elements).toHaveLength(1);
-    expect(seen?.elements[0]!.decor).toBe(DECOR_DEFAULT);
+    expect(seen?.elements[0]!.decor).toBe("sáu");
+    /* Còn THIẾU HẲN trục ấy thì mới rơi về mặc định. */
+    expect(DECOR_DEFAULT).toBe("medium");
     expect(seen?.mascots).toHaveLength(0);
   });
 });
@@ -216,8 +256,8 @@ describe("di trú: hình dạng cho bản ghi element đời trước", () => {
 describe("gieo hạt: đúng một lần, kể cả khi nhiều màn cùng mở", () => {
   it("kho rỗng ⇒ POST đủ bộ hạt giống, mỗi bản ghi một lần", async () => {
     const seed = seedPresets();
-    const total = seed.styles.length + seed.elements.length + seed.mascots.length;
-    get.mockResolvedValue(library([]));
+    const total = seedTotal();
+    get.mockResolvedValue(library([], false));
     /* ĐIỀU KHOẢN #2: năm `usePresets` cùng lúc — đúng như app thật (composer,
        pill-ui, UiKitBlockView, canvas, màn preset). */
     mount(5);
@@ -228,6 +268,9 @@ describe("gieo hạt: đúng một lần, kể cả khi nhiều màn cùng mở"
     expect(keys).toContain("style:" + seed.styles[0]!.id);
     expect(keys).toContain("element:button");
     expect(keys).toContain("mascot:mascot-default");
+    /* Mười danh mục mới cũng phải được gieo — nếu không thì mọi menu pill rỗng. */
+    expect(keys).toContain("scene:main-menu");
+    expect(keys).toContain(`pose:${seed.catalogs.pose[0]!.id}`);
   });
 
   it("tải lại trang giữa lúc gieo ⇒ lần gieo thứ hai KHÔNG đẻ thêm bản trùng", async () => {
@@ -247,10 +290,9 @@ describe("gieo hạt: đúng một lần, kể cả khi nhiều màn cùng mở"
       return created;
     });
 
-    get.mockImplementation(async () => library([...server]));
+    get.mockImplementation(async () => library([...server], false));
     mount();
-    const seed = seedPresets();
-    const total = seed.styles.length + seed.elements.length + seed.mascots.length;
+    const total = seedTotal();
     await waitFor(() => expect(server).toHaveLength(total));
     cleanup();
 
@@ -259,7 +301,7 @@ describe("gieo hạt: đúng một lần, kể cả khi nhiều màn cùng mở"
     addPreset.mockClear();
     /* Cửa đọc của query: ảnh chụp CŨ, rỗng. Mọi cửa đọc sau đó (gồm cửa mà
        `seedOnce` tự gọi ngay trước khi ghi) thấy kho THẬT. */
-    get.mockImplementationOnce(async () => library([]));
+    get.mockImplementationOnce(async () => library([], false));
     mount();
 
     /* Hạt giống đã có đủ trên server ⇒ KHÔNG một POST nào bay đi nữa. */
@@ -278,10 +320,13 @@ describe("gieo hạt: đúng một lần, kể cả khi nhiều màn cùng mở"
        POST lại những khoá đã nằm sẵn — nếu không thì mỗi lần thử lại là một lớp
        style trùng chồng lên. */
     const seed = seedPresets();
-    const already = seed.styles.map((preset) => row(`preset_s_${preset.id}`, "style", preset.vi, { key: preset.id, en: preset.en }));
-    /* Query thấy rỗng (ảnh chụp cũ), kho thật đã có toàn bộ style. */
-    get.mockImplementationOnce(async () => library([]));
-    get.mockImplementation(async () => library([...already]));
+    const already = [
+      ...seed.styles.map((preset) => row(`preset_s_${preset.id}`, "style", preset.vi, { key: preset.id, en: preset.en })),
+      ...catalogRows(),
+    ];
+    /* Query thấy rỗng (ảnh chụp cũ), kho thật đã có toàn bộ style + mười danh mục. */
+    get.mockImplementationOnce(async () => library([], false));
+    get.mockImplementation(async () => library(already, false));
     mount();
 
     await waitFor(() => expect(addPreset).toHaveBeenCalledTimes(seed.elements.length + seed.mascots.length));
@@ -290,7 +335,7 @@ describe("gieo hạt: đúng một lần, kể cả khi nhiều màn cùng mở"
   });
 
   it("gieo hụt (agent tắt) ⇒ màn vẫn có hạt giống trong RAM và nói ra lỗi", async () => {
-    get.mockResolvedValue(library([]));
+    get.mockResolvedValue(library([], false));
     addPreset.mockRejectedValue(new Error("Agent không phản hồi"));
     mount();
 
@@ -376,3 +421,142 @@ describe("ghi: gộp, chỉ đụng cái đổi, và không im lặng khi hỏng
     expect(seen?.styles[0]!.vi).toBe("Đang gõ dở");
   });
 });
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MƯỜI DANH MỤC DÒNG-ĐƠN — thứ mà lượt 09/2026 mang vào kho
+   ══════════════════════════════════════════════════════════════════════════
+
+   ╔══ VÌ SAO CHÚNG PHẢI CÓ CA RIÊNG ═══════════════════════════════════════╗
+   ║ Ba kho cũ (style · element · mascot) hỏng thì màn quản lý hiện sai — dễ ║
+   ║ thấy. Mười danh mục này hỏng thì MENU PILL rỗng, và một menu rỗng trông ║
+   ║ y hệt "danh mục này vốn chẳng có gì": không có gì báo, và câu prompt     ║
+   ║ lặng lẽ mất một mệnh đề.                                                ║
+   ╚═════════════════════════════════════════════════════════════════════════╝ */
+describe("danh mục dòng-đơn: hạt giống · đọc · ghi", () => {
+  it("hạt giống có ĐỦ mười hai danh mục, không danh mục nào rỗng", () => {
+    const seed = seedPresets();
+    for (const kind of MANAGED_ORDER) {
+      expect(managedRows(seed, kind).length, `danh mục ${kind} rỗng`).toBeGreaterThan(0);
+    }
+  });
+
+  it("`pillOptions` đọc kho cho MỌI trục — không còn bảng cứng nào", async () => {
+    get.mockResolvedValue(library([]));
+    mount();
+    await waitFor(() => expect(seen?.catalogs.scene.length).toBeGreaterThan(0));
+
+    /* Đổi nhãn ở kho ⇒ menu pill đổi theo. Đây là điều khoản mà cả màn «Thư viện
+       prompt» dựa lên: trước lượt này `pillOptions("scene")` đọc một hằng số. */
+    for (const kind of ["theme", "scene", "layout", "glaze", "decor", "decorPlace", "pose", "view", "expression", "outfit"] as const) {
+      const rows = managedRows(seen!, kind);
+      setPresets(withManagedRows(seen!, kind, rows.map((row, at) => (at === 0 ? { ...row, vi: `Đổi ${kind}` } : row))));
+      expect(pillOptions(kind, getSeen())[0]!.vi).toBe(`Đổi ${kind}`);
+    }
+  });
+
+  it("đổi thứ tự dòng ⇒ menu pill đổi thứ tự theo", async () => {
+    get.mockResolvedValue(library([]));
+    mount();
+    await waitFor(() => expect(seen?.catalogs.scene.length).toBeGreaterThan(0));
+
+    const rows = managedRows(seen!, "scene");
+    setManagedRows("scene", [rows[2]!, rows[0]!, rows[1]!, ...rows.slice(3)]);
+    expect(pillOptions("scene", getSeen()).map((option) => option.value).slice(0, 3))
+      .toEqual([rows[2]!.id, rows[0]!.id, rows[1]!.id]);
+  });
+
+  it("dòng ẩn: rời MENU nhưng câu cũ vẫn tra ra nhãn và cụm tiếng Anh", async () => {
+    get.mockResolvedValue(library([]));
+    mount();
+    await waitFor(() => expect(seen?.catalogs.scene.length).toBeGreaterThan(0));
+
+    const rows = managedRows(seen!, "scene");
+    const target = rows[1]!;
+    setManagedRows("scene", rows.map((row) => (row.id === target.id ? { ...row, hidden: true } : row)));
+
+    expect(pillOptions("scene", getSeen()).some((option) => option.value === target.id)).toBe(false);
+    /* ĐIỀU KHOẢN QUAN TRỌNG NHẤT của cờ `hidden`: ẩn KHÔNG ĐƯỢC giống xoá. */
+    expect(labelOf("scene", target.id, getSeen())).toBe(target.vi);
+    expect(phraseOf("scene", target.id, getSeen())).toBe(target.en);
+  });
+
+  it("dòng bị XOÁ thật: pill hiện chữ trần và rụng khỏi prompt — hành vi đã có, ghi lại thành luật", async () => {
+    get.mockResolvedValue(library([]));
+    mount();
+    await waitFor(() => expect(seen?.catalogs.scene.length).toBeGreaterThan(0));
+
+    const rows = managedRows(seen!, "scene");
+    setManagedRows("scene", rows.filter((row) => row.id !== "shop"));
+    expect(labelOf("scene", "shop", getSeen())).toBe("shop");
+    expect(phraseOf("scene", "shop", getSeen())).toBe("");
+  });
+
+  it("cụm trang phục của một chủ đề nằm TRONG dòng chủ đề, không tra chéo bằng id", async () => {
+    get.mockResolvedValue(library([]));
+    mount();
+    await waitFor(() => expect(seen?.catalogs.theme.length).toBeGreaterThan(0));
+
+    /* Chủ đề hạt giống: `en2` có sẵn. */
+    const tet = seen!.catalogs.theme[0]!;
+    expect(themeOutfitEN(tet.id, seen!)).toBe(tet.en2);
+
+    /* Chủ đề NGƯỜI DÙNG VỪA THÊM: id là một slug, và tra chéo sang danh mục trang
+       phục sẽ đẩy chính cái slug vào prompt («wearing chu-de-...»). */
+    const id = nextRowId("theme", "Chủ đề mới", seen!.catalogs.theme.map((row) => row.id));
+    setManagedRows("theme", [...managedRows(seen!, "theme"), { id, vi: "Chủ đề mới", en: "a new theme", en2: "a new outfit" }]);
+    expect(themeOutfitEN(id, getSeen())).toBe("a new outfit");
+    expect(themeOutfitEN(id, getSeen())).not.toContain(id);
+  });
+
+  it("ghi một danh mục ⇒ PATCH ĐÚNG bản ghi ấy, đúng `kind`, không đụng danh mục khác", async () => {
+    get.mockResolvedValue(library([]));
+    mount();
+    await waitFor(() => expect(seen?.catalogs.scene.length).toBeGreaterThan(0));
+    patchPreset.mockClear();
+
+    const rows = managedRows(seen!, "scene");
+    setManagedRows("scene", rows.map((row, at) => (at === 0 ? { ...row, en: "a brand new phrase" } : row)));
+
+    await waitFor(() => expect(patchPreset).toHaveBeenCalledTimes(1));
+    const [id, payload] = patchPreset.mock.calls[0]!;
+    expect(id).toBe(`preset_scene_${rows[0]!.id}`);
+    expect(payload.kind).toBe("scene");
+    expect(payload.data).toEqual({ key: rows[0]!.id, en: "a brand new phrase" });
+  });
+
+  it("mở app KHÔNG sinh một lượt ghi nào, dù kho đã có đủ mười hai danh mục", async () => {
+    get.mockResolvedValue(library([]));
+    mount();
+    await waitFor(() => expect(seen?.catalogs.pose.length).toBeGreaterThan(0));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(patchPreset).not.toHaveBeenCalled();
+    expect(removePreset).not.toHaveBeenCalled();
+    expect(addPreset).not.toHaveBeenCalled();
+  });
+
+  it("workspace ĐỜI TRƯỚC (chỉ có style/element/mascot) ⇒ mười danh mục rơi về hạt giống, và được gieo", async () => {
+    /* Đây là cửa di trú thật: mọi máy đã mở app trước lượt này rơi vào đúng ca này.
+       Không có nhánh rơi-về-hạt-giống thì MỌI menu pill rỗng cho tới khi gieo xong. */
+    get.mockResolvedValue(library([
+      row("preset_s1", "style", "Cổ tích", { key: "fairy", en: "storybook" }),
+    ], false));
+    mount();
+
+    await waitFor(() => expect(seen?.catalogs.scene.length).toBeGreaterThan(0));
+    expect(pillOptions("scene", getSeen()).length).toBeGreaterThan(0);
+    /* Và kho được bổ sung phần còn thiếu — không thì danh mục chỉ sống trong RAM. */
+    await waitFor(() => expect(addPreset.mock.calls.some(([input]) => input.kind === "scene")).toBe(true));
+  });
+});
+
+/**
+ * BẢN TRONG RAM, không phải bản render gần nhất.
+ *
+ * `seen` chỉ đổi khi React vẽ lại, mà một `setPresets` gọi ngoài `act()` thì chưa
+ * kịp kéo theo lượt vẽ nào. Mọi phép tra ở nhóm ca này hỏi về KHO, nên nó phải hỏi
+ * đúng kho — dùng `seen` ở đây là đo một ảnh chụp cũ và tin rằng nó là hiện tại.
+ */
+function getSeen() {
+  return getPresets();
+}

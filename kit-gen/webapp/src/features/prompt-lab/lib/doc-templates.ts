@@ -53,10 +53,21 @@ const pill = (kind: PillKind, value: string, custom = "", image?: { path: string
  * ║ Xem `PillKind.layout`. Bản nháp cũ được di trú ở `composer-doc.ts`.        ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
-export const SCAFFOLD_BACKGROUND = ["Vẽ background ", ", không khí ", ", bố cục ", "."] as const;
+/**
+ * ╔══ Ô «KHÔNG KHÍ» ĐÃ BỊ BỎ (09/2026) ══════════════════════════════════════╗
+ * ║ Chủ sản phẩm: *"cảnh nền bỏ cái không khí đi"*. Câu nay còn hai ô, và đó   ║
+ * ║ là hai câu hỏi mà một tấm nền game bắt buộc phải trả lời: VẼ CẢNH GÌ và    ║
+ * ║ CHỪA CHỖ NÀO CHO UI. Ô thứ ba cũ hỏi "vẽ thế nào" — mà "thế nào" đã có     ║
+ * ║ hai giọng khác nói rồi (phong cách chung ở câu ngữ cảnh, và chính cụm      ║
+ * ║ khung cảnh), nên nó là giọng thứ ba chỉ huy cùng một chuyện.               ║
+ * ║ Pill `mood` của dự án cũ được gỡ khỏi câu ở `composer-doc.ts`, và `kind`   ║
+ * ║ của nó ở lại `pill-registry` dưới dạng DI SẢN chỉ-đọc.                     ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export const SCAFFOLD_BACKGROUND = ["Vẽ background ", ", bố cục ", "."] as const;
 
 export function backgroundDoc(): JSONContent {
-  const [a, b, c, d] = SCAFFOLD_BACKGROUND;
+  const [a, b, c] = SCAFFOLD_BACKGROUND;
   return {
     type: "doc",
     content: [
@@ -66,10 +77,8 @@ export function backgroundDoc(): JSONContent {
           text(a),
           pill("scene", "main-menu"),
           text(b),
-          pill("mood", "festive"),
-          text(c),
           pill("layout", "center-clear"),
-          text(d),
+          text(c),
         ],
       },
     ],
@@ -359,8 +368,11 @@ export const PILL_SLOTS: Record<"uikit" | "background" | "mascot" | "mascotPose"
      KHÔNG có mặt trong tài liệu (ô «Không trang trí» — xem `uiCellDoc`). Bảng vẫn
      đúng vì phép gán chạy theo tiền tố: câu ba pill ăn ba ô đầu. */
   uikit: ["style", "glaze", "decor", "decorPlace"],
-  /* Ba ô từ 09/2026 — ô ảnh cuối câu đã thành pill `layout`, xem `SCAFFOLD_BACKGROUND`. */
-  background: ["scene", "mood", "layout"],
+  /* HAI ô từ 09/2026: ô ảnh cuối câu đã thành pill `layout`, rồi ô «không khí» bị
+     bỏ hẳn. Tài liệu đời trước có ba ô — nhưng chúng KHÔNG đi qua bảng này với ba
+     ô nữa: `dropBackgroundMood` (ở `composer-doc.ts`) gỡ pill `mood` TRƯỚC khi
+     `repairPills` chạy, nên tới đây câu đã đúng hình dạng hiện tại. */
+  background: ["scene", "layout"],
   /* Đổi 09/2026 cùng lượt tách thẻ Nhân vật thành sprite sheet: câu ĐẦU THẺ nay
      chỉ còn danh tính nhân vật + trang phục, còn dáng/góc/nét mặt xuống dòng
      (`mascotPose`). Tài liệu đời trước có ba pill ở câu đầu — nhưng chúng KHÔNG

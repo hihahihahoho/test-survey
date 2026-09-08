@@ -255,14 +255,34 @@ function glazeOf(override: KitElementSkel | undefined): GlazePreset | null {
  * một luật, ba mảnh, ba kho. Nay câu của preset đã tự nói trọn cách vẽ alpha, và
  * `matte` không còn tồn tại ở tầng nào cả. Cần đổi lời cho ô kính ⇒ sửa `glaze.ts`.
  */
-export function resolveElementSpec(base: Pick<LibElement, "spec">, override?: KitElementSkel): string {
+export function resolveElementSpec(
+  base: Pick<LibElement, "spec">,
+  override?: KitElementSkel,
+  /**
+   * CÂU ĐỤC NỀN ĐÃ TRA SẴN — cửa cho luồng composer, nơi danh mục đục nền là KHO
+   * người dùng sửa được chứ không phải `GLAZE_PRESETS`.
+   *
+   * ╔══ VÌ SAO LÀ MỘT THAM SỐ, KHÔNG PHẢI MỘT NHÁNH `if` TRONG THÂN HÀM ══════╗
+   * ║ Hàm này nằm ở `kit-core`, tầng KHÔNG được biết tới kho của prompt-lab    ║
+   * ║ (kho import ngược lên `glaze.ts` — nối thẳng là một vòng import). Nhưng   ║
+   * ║ nếu để nguyên thì một nấc đục nền vừa được sửa trên màn «Thư viện prompt» ║
+   * ║ sẽ đổi chữ ở pill và ở prompt copy-dán mà KHÔNG đổi chữ trong contract —  ║
+   * ║ hai câu khác nhau cho cùng một ô, và chỉ một trong hai đi tới máy vẽ.     ║
+   * ║ Nên chỗ gọi nào biết kho thì đưa câu vào; chỗ không biết (luồng kitset)   ║
+   * ║ để trống và hàm tự tra bảng hằng như cũ.                                 ║
+   * ║ `undefined` = "tôi không biết, cứ tra đi"; chuỗi rỗng = "tra rồi, không   ║
+   * ║ có chữ nào" (đúng nấc `auto`) — hai thứ khác nhau, nên không gộp.         ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
+   */
+  glazeEN?: string,
+): string {
   const parts: string[] = [];
   const own = override?.spec?.trim();
   const text = own || base.spec;
   if (text) parts.push(text);
 
-  const glaze = glazeOf(override);
-  if (glaze?.en) parts.push(glaze.en);
+  const glaze = glazeEN ?? glazeOf(override)?.en ?? "";
+  if (glaze) parts.push(glaze);
 
   return parts.join(", ");
 }

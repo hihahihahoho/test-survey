@@ -49,3 +49,22 @@ export const projectsSearchSchema = z.object({
    */
   action: z.enum(["create", "import"]).optional().catch(undefined),
 });
+
+/**
+ * `/library/prompts` — MỘT trục URL: danh mục đang mở.
+ *
+ * ╔══ VÌ SAO DANH MỤC PHẢI NẰM TRÊN URL ═════════════════════════════════════╗
+ * ║ Menu của mỗi pill trên màn soạn có một lối tắt «Sửa danh mục này» dẫn     ║
+ * ║ sang đây. Nếu danh mục đang mở chỉ là state trong component thì lối tắt   ║
+ * ║ ấy chỉ đưa được người dùng tới rail 12 mục và bỏ họ ở đó tự tìm — đúng    ║
+ * ║ chỗ họ vừa rời đi. Trên URL thì nó mở thẳng, và cái link còn gửi được.    ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * `z.string()` chứ không phải `z.enum(MANAGED_ORDER)`: danh sách danh mục sống ở
+ * `features/prompt-lab`, và một route đọc ngược vào tầng màn là chiều phụ thuộc mà
+ * `routeTree.ts` cấm. Giá trị lạ rơi về danh mục đầu ở chính màn — cùng tinh thần
+ * `.catch()` của mọi schema trên file này: URL gõ tay không được làm trắng màn.
+ */
+export const promptLibrarySearchSchema = z.object({
+  kind: z.string().optional().catch(undefined),
+});

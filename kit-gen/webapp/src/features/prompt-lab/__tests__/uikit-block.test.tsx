@@ -563,6 +563,24 @@ describe("⑦ dòng element: hàng 1 có ×, hàng 2 là ghi chú", () => {
     await waitFor(() => expect(screen.getByLabelText(/^Bố trí:/)).not.toBeNull());
     expect(screen.getByLabelText(/^Bố trí:/).textContent).toContain("Lệch phải");
   });
+
+  /**
+   * LỐI TẮT TỚI CHỖ SỬA DANH MỤC — ghim ở chân hộp «Chọn sẵn».
+   *
+   * Người dùng phát hiện danh mục thiếu một mục ĐÚNG LÚC mở hộp này ra và không
+   * thấy thứ mình cần. Không có lối tắt thì họ gõ đại vào nấc «Gõ riêng», rồi lần
+   * sau gõ lại y như thế — danh mục vĩnh viễn không bao giờ đầy lên.
+   */
+  it("chân hộp «Chọn sẵn» có lối tắt sang Thư viện prompt, mở đúng danh mục của pill", () => {
+    cleanup();
+    render(<Harness initial={uikit([{ ...newCell("button", PRESETS), id: "c1" }])} />);
+    fireEvent.click(screen.getByLabelText(/^Trang trí:/));
+
+    const link = screen.getByRole("link", { name: /Thư viện prompt/ }) as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toBe("/library/prompts?kind=decor");
+    /* TAB MỚI, không điều hướng tại chỗ: hộp này sống trong một câu đang soạn dở. */
+    expect(link.getAttribute("target")).toBe("_blank");
+  });
 });
 
 /* ══════════════════════════════════════════════════════════════════════════

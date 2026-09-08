@@ -400,11 +400,55 @@ function readBlock(raw: unknown, index: number, presets: PresetBundle): Block | 
        lựa chọn ở đâu ngoài chính tài liệu. Nên chỉ khôi phục được pill ĐÓ LÀ GÌ
        (đúng nhãn, đúng danh sách khi bấm), còn NÓ ĐANG CHỌN GÌ thì đã mất thật —
        và để rỗng là nói đúng điều đó. Xem `repairPills`. */
-    doc: healDoc(foldBackgroundLayout(raw["doc"] as JSONContent), kind),
+    doc: healDoc(dropBackgroundMood(foldBackgroundLayout(raw["doc"] as JSONContent)), kind),
     /* Thiếu ⇒ rỗng, đúng thứ nó đang là: bản nháp lưu trước lượt có ô ghi chú thì
        người dùng chưa từng gõ gì vào đó. */
     note: str(raw["note"]),
   };
+}
+
+/**
+ * DI TRÚ CÂU BACKGROUND: GỠ PILL «KHÔNG KHÍ» khỏi câu.
+ *
+ * ╔══ VÌ SAO GỠ CẢ MẨU CHỮ, KHÔNG CHỈ GỠ PILL ═══════════════════════════════╗
+ * ║ Khuôn cũ là «Vẽ background [cảnh], không khí [⌄], bố cục [⌄].» Gỡ mỗi     ║
+ * ║ pill thì câu còn lại là «Vẽ background [cảnh], không khí , bố cục [⌄].» — ║
+ * ║ một nhãn trục lơ lửng không còn ô nào để chọn, và tệ hơn: `freeText()`    ║
+ * ║ so câu với khuôn MỚI để tìm chữ người dùng gõ thêm, nên mẩu «, không khí »║
+ * ║ ấy sẽ được coi là chữ của người dùng và đi thẳng vào `sheet.directive`.   ║
+ * ║ Nên phải gỡ cả hai, và gỡ đúng MỘT lần cho mỗi pill.                      ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ══ KHỚP NGUYÊN VĂN MẨU CHỮ CỦA KHUÔN, KHÔNG PHẢI MỘT PHÉP THAY CHUNG ══════
+ * Cùng kỷ luật với `foldBackgroundLayout`: chỉ mẩu «, không khí » do CHÍNH khuôn
+ * sinh ra mới bị bỏ. Người dùng tự gõ chữ "không khí" ở chỗ khác trong câu thì
+ * chữ ấy ở nguyên đó — nó là chữ của họ, không phải của ta. Không khớp được thì
+ * pill vẫn bị gỡ (đó là phần bắt buộc), còn chữ thừa thì để lại: thà một mẩu chữ
+ * lạc còn hơn cắt nhầm vào câu người ta viết.
+ */
+function dropBackgroundMood(doc: JSONContent): JSONContent {
+  const walk = (node: JSONContent): JSONContent => {
+    if (!node.content) return node;
+    const out: JSONContent[] = [];
+    for (const child of node.content) {
+      if (child.type === NODE.optionPill && child.attrs?.["kind"] === "mood") {
+        const prev = out[out.length - 1];
+        if (prev?.type === "text" && (prev.text ?? "").endsWith(", không khí ")) {
+          const trimmed = (prev.text ?? "").slice(0, -", không khí ".length);
+          /* Mẩu chữ rỗng sau khi cắt ⇒ bỏ luôn node, không để lại một text rỗng:
+             ProseMirror coi node text rỗng là không hợp lệ và sẽ tự dọn — nhưng
+             nó dọn lúc dựng editor, tức là tài liệu trên đĩa và tài liệu trên màn
+             khác nhau một node cho tới lần lưu sau. */
+          if (trimmed) out[out.length - 1] = { ...prev, text: trimmed };
+          else out.pop();
+        }
+        continue;
+      }
+      out.push(walk(child));
+    }
+    return { ...node, content: out };
+  };
+  return walk(doc);
 }
 
 /**

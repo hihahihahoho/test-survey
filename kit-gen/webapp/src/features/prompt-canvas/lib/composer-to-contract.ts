@@ -183,7 +183,7 @@ interface PillHit {
  *
  * Một hàm chứ không phải `hit.custom || phraseOf(...)` rải khắp file: đây là chỗ
  * DUY NHẤT trong bộ dịch biết luật "chữ tự gõ thắng preset", và bốn chỗ đọc pill
- * bên dưới (`scene`, `mood`, `outfit`, `leftover`) đi qua nó. Bỏ sót một chỗ
+ * bên dưới (`scene`, `layout`, `outfit`, `leftover`) đi qua nó. Bỏ sót một chỗ
  * nghĩa là chữ người dùng gõ ra biến mất khỏi ĐÚNG một loại tấm — kiểu hỏng chỉ
  * lộ ra khi ai đó đối chiếu hai tấm cạnh nhau.
  */
@@ -359,15 +359,17 @@ function backgroundSheet(block: DocBlock, index: number, presets: PresetBundle, 
   if (block.mode === "free" && !line) return null;
 
   const scene = hitPhrase(take(scan, "scene"), presets);
-  const mood = hitPhrase(take(scan, "mood"), presets);
-  /* BỐ CỤC đứng SAU không khí trong `spec`: cảnh là "vẽ cái gì", không khí là "vẽ
-     thế nào", còn bố cục là "xếp vào đâu" — đọc theo đúng thứ tự người ta dựng một
-     tấm nền. Cùng thứ tự với câu trên màn, nên prompt đọc ra giống câu đang nhìn. */
+  /* BỐ CỤC đứng SAU khung cảnh trong `spec`: cảnh là "vẽ cái gì", bố cục là "xếp
+     vào đâu" — đọc theo đúng thứ tự người ta dựng một tấm nền. Cùng thứ tự với câu
+     trên màn, nên prompt đọc ra giống câu đang nhìn.
+     Ô «không khí» đã bị bỏ (xem `SCAFFOLD_BACKGROUND`); một pill `mood` còn sót
+     trong câu tự do của dự án cũ vẫn đi qua `leftover`, nhưng `pillOptions("mood")`
+     trả rỗng nên nó không góp chữ nào — rụng, đúng như đã hẹn. */
   const layout = hitPhrase(take(scan, "layout"), presets);
   const spec = tidy(
-    [scene || "a game screen background", mood, layout, ...leftover(scan, presets)].filter(Boolean).join(", "),
+    [scene || "a game screen background", layout, ...leftover(scan, presets)].filter(Boolean).join(", "),
   );
-  if (block.mode !== "free" && !scene && !mood && !layout && scan.pills.length === 0 && !line) return null;
+  if (block.mode !== "free" && !scene && !layout && scan.pills.length === 0 && !line) return null;
 
   /* Chữ gõ THÊM ngoài khuôn + ô ghi chú của thẻ — cả hai đều là "lời người thiết kế
      nói cho tấm này", nên cả hai vào `directive`. Ở chế độ tự do câu chữ đã thành
@@ -636,7 +638,13 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
       /* Về PHÂN SỐ Ô — đơn vị của `skel.w/h` (V-06 ∈ (0,1]), không phải pixel. */
       const size: SizePx = { w: draw.w / cellPx, h: draw.h / cellPx };
       const skel = cellSkel(element, size);
-      const templateSpec = tidy([resolveElementSpec({ spec: text }, glaze), cell.note.trim()].filter(Boolean).join(", "));
+      const templateSpec = tidy([
+        /* Câu đục nền tra từ KHO (`phraseOf`) chứ không để `resolveElementSpec` tự
+           tra bảng hằng: nấc đục nền nay sửa được ở màn «Thư viện prompt», và hai
+           đường tra khác nhau là hai câu khác nhau cho cùng một ô. */
+        resolveElementSpec({ spec: text }, glaze, phraseOf("glaze", cell.glazeId, presets)),
+        cell.note.trim(),
+      ].filter(Boolean).join(", "));
       /* Câu tự do RỖNG (người dùng xoá sạch dòng) ⇒ rơi về khuôn, KHÔNG ra ô
          không mô tả gì. Bỏ hẳn ô đi thì lưới tụt một bậc và mọi ô sau nhảy chỗ —
          một dòng bị xoá chữ không được kéo theo cả tấm đổi bố cục. */

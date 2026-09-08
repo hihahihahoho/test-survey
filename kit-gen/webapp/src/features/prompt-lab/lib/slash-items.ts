@@ -60,7 +60,6 @@ export const SLASH_ITEMS: readonly SlashItem[] = [
      cửa nào để chèn thêm bản mới. */
   pillItem("glaze", "Đục nền", "Pill đục nền — tự động theo vật liệu, đục hoàn toàn, kính, băng, phát sáng", "glaze duc nen kinh trong suot alpha tu dong vat lieu"),
   pillItem("scene", "Khung cảnh", "Pill khung cảnh — menu chính, màn chơi, shop…", "scene khung canh"),
-  pillItem("mood", "Không khí", "Pill mood — rộn ràng, yên bình, hoàng hôn…", "mood khong khi"),
   pillItem("layout", "Bố cục", "Pill bố cục — chừa chỗ nào cho UI, hoặc đính bản phác", "layout bo cuc composition khung"),
   pillItem("decor", "Trang trí", "Pill lượng trang trí — không, ít, vừa, nhiều", "decor trang tri vien luong ornament"),
   pillItem("decorPlace", "Bố trí", "Pill bố trí trang trí — cân đối, lệch trái, lệch phải, ngẫu nhiên", "decorplace bo tri doi xung lech trai phai ngau nhien"),

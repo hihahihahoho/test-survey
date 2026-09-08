@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, ImagePlus, Pencil, Search, X } from "lucide-react";
+import { Check, ImagePlus, Pencil, Search, Settings2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PillImage } from "@/features/prompt-canvas/lib/pill-image";
@@ -137,10 +137,26 @@ export interface SourcePickerProps {
   onClose: () => void;
   /** Mở ngược lên trên — xem `useMenuFlip` ở `pill-ui.tsx`. */
   dropUp?: boolean;
+  /**
+   * ĐƯỜNG TỚI CHỖ SỬA DANH MỤC NÀY — `/library/prompts?kind=…`. Vắng ⇒ không bày.
+   *
+   * ╔══ VÌ SAO NÓ PHẢI NẰM Ở ĐÂY, CHỨ KHÔNG CHỈ Ở RAIL BÊN THƯ VIỆN ══════════╗
+   * ║ Người dùng phát hiện ra danh mục thiếu một mục ĐÚNG LÚC họ mở hộp này ra ║
+   * ║ và không thấy thứ mình cần. Bắt họ tự nhớ rằng có một màn tên «Thư viện  ║
+   * ║ prompt» ở đâu đó trong thanh bên là bắt họ đoán — và đa số sẽ gõ đại một ║
+   * ║ câu vào nấc «Gõ riêng», rồi lần sau gõ lại y như thế.                    ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
+   *
+   * MỞ TAB MỚI, không điều hướng tại chỗ: hộp này sống trong một câu đang soạn dở,
+   * và rời trang giữa chừng là ném đi thứ người ta chưa lưu. Về lại tab cũ thì kho
+   * tự nạp lại (query làm mới khi cửa sổ được focus), nên danh mục mới hiện ra mà
+   * không phải tải lại gì.
+   */
+  manageHref?: string;
 }
 
 export function SourcePicker(props: SourcePickerProps) {
-  const { label, groups, emptyLabel, value, custom, image, onClose, dropUp } = props;
+  const { label, groups, emptyLabel, value, custom, image, onClose, dropUp, manageHref } = props;
   const box = React.useRef<HTMLSpanElement>(null);
   useDismiss(box, onClose);
 
@@ -193,6 +209,7 @@ export function SourcePicker(props: SourcePickerProps) {
           /* Đang dùng ảnh hoặc chữ ⇒ KHÔNG mục nào được đánh dấu đang chọn: dấu
              tick ở đây sẽ nói rằng preset ấy đang có hiệu lực, mà nó thì không. */
           marked={!custom && !image?.path}
+          {...(manageHref === undefined ? {} : { manageHref })}
           onChoose={(next) => {
             props.onChoose(next);
             onClose();
@@ -299,6 +316,7 @@ function PresetPanel({
   emptyLabel,
   value,
   marked,
+  manageHref,
   onChoose,
 }: {
   label: string;
@@ -306,6 +324,7 @@ function PresetPanel({
   emptyLabel?: string;
   value: string;
   marked: boolean;
+  manageHref?: string;
   onChoose: (value: string) => void;
 }) {
   const [query, setQuery] = React.useState("");
@@ -381,6 +400,31 @@ function PresetPanel({
           <span className="block px-2 py-3 text-body text-fg-muted">Không có mục nào khớp chữ bạn gõ.</span>
         )}
       </span>
+
+      {/* GHIM Ở CHÂN HỘP, ngoài vùng cuộn: cùng lý do với ô tìm ghim ở đỉnh — một
+          lối đi trôi khỏi tầm mắt sau ba nhịp cuộn thì đúng bằng không có nó. */}
+      {manageHref !== undefined && (
+        <span className="block shrink-0 p-1">
+          {/* CÙNG KHUÔN với «Quản lý thương hiệu…» của BrandPickerPill: vạch ngăn +
+              một dòng menu có icon, chữ «Quản lý <danh mục>…». Một lối đi trong hộp
+              chọn phải trông như mọi dòng khác của hộp, không phải một câu link lạ. */}
+          <span aria-hidden className="mb-1 block h-px bg-line-subtle" />
+          <a
+            href={manageHref}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Quản lý ${label} ở Thư viện prompt`}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-1 px-2 py-1.5 text-left text-body text-fg",
+              "hover:bg-accent/[var(--kg-tint-a)] hover:text-fg-strong",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+            )}
+          >
+            <Settings2 aria-hidden className="size-4 shrink-0 text-fg-muted" />
+            <span className="text-fg-strong">Quản lý {label}…</span>
+          </a>
+        </span>
+      )}
     </>
   );
 }

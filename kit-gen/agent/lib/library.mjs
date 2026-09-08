@@ -24,7 +24,17 @@ export const LIBRARY_DEFAULTS = { background: 2, popup: 4, small: 16, props: 16,
    vi/en; element cần thêm decor + materialId; mascot cần tên ảnh tham chiếu) và
    hình dạng đó CÒN ĐANG ĐỔI ở phía web. Agent không hiểu ngữ nghĩa, chỉ giữ hộ
    — nên nó chỉ ép ba thứ đo được: là object, khoá hữu hạn, và không phình. */
-const PRESET_KINDS = new Set(["style", "element", "mascot", "material", "outfit"])
+/* Mười tên thêm 09/2026 là ĐÚNG `kind` của pill bên web (chủ đề · khung cảnh ·
+   bố cục · đục nền · trang trí · bố trí · dáng · góc máy · biểu cảm · trang phục):
+   mười danh mục ấy trước đây nằm cứng trong mã web, nay người dùng sửa được nên
+   chúng phải có chỗ nằm cạnh contract. Agent VẪN không hiểu ngữ nghĩa của chúng —
+   nó chỉ nới danh sách tên được phép. `material` là DI SẢN, giữ để đọc bản ghi cũ.
+   Danh sách này phải khớp `libraryPresetSchema.kind` của `webapp/src/lib/types/api.ts`. */
+const PRESET_KINDS = new Set([
+  "style", "element", "mascot", "material",
+  "theme", "scene", "layout", "glaze", "decor", "decorPlace",
+  "pose", "view", "expression", "outfit",
+])
 /** Chặn một preset khổng lồ nuốt cả file state; đủ rộng cho mọi hình dạng web đang dùng. */
 const PRESET_DATA_BYTES = 8000
 /** Trần số bản ghi — kho là danh mục người gõ tay, không phải nơi đổ dữ liệu máy sinh. */

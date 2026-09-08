@@ -243,6 +243,18 @@ function shorten(value: string): string {
 }
 
 /**
+ * ĐƯỜNG TỚI CHỖ SỬA DANH MỤC của một trục — rỗng nghĩa là "trục này không sửa được".
+ *
+ * `mascot` không có danh mục dùng chung (nó đi theo thương hiệu), `material` và
+ * `mood` là di sản chỉ-đọc — ba trục ấy không có mục nào trên màn «Thư viện prompt»
+ * để mà dẫn tới. Dẫn bừa là hứa một chỗ sửa không tồn tại.
+ */
+function manageHref(kind: PillKind): string {
+  if (kind === "mascot" || kind === "material" || kind === "mood") return "";
+  return `/library/prompts?kind=${kind}`;
+}
+
+/**
  * PILL CHỌN-MỘT hoàn chỉnh — nhãn + hộp nguồn, đọc danh mục theo `kind`.
  *
  * Đây là thứ mà cả node view TipTap lẫn ô lưới React đều gọi. Nhận `value` +
@@ -401,6 +413,7 @@ export function OptionPill({
           image={shot}
           projectId={projectId ?? null}
           dropUp={flip.dropUp}
+          {...(manageHref(kind) === "" ? {} : { manageHref: manageHref(kind) })}
           onClose={close}
           /* Bấm một mục có sẵn ⇒ chữ tự gõ bị GỠ. Giữ lại là pill hiện chữ cũ
              trong khi người dùng vừa bấm một mục khác — hai câu trả lời cho một

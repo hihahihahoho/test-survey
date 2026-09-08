@@ -1,8 +1,5 @@
-import { GLAZE_PRESETS, glazePhrase } from "@/features/kit-core/lib/glaze";
 import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
-import { EXPRESSIONS, OUTFIT_THEMES, POSES } from "@/features/kit-core/lib/poses";
-import { CAMERA_VIEWS } from "@/features/prompt-lab/lib/pose/pose-state";
-import { DECOR_LEVELS, DECOR_PLACES, getPresets, type PresetBundle } from "./presets-store";
+import { getPresets, type CatalogRow, type PresetBundle } from "./presets-store";
 
 /**
  * pill-registry.ts — MỘT BẢNG TRA cho mọi pill chọn-một.
@@ -23,6 +20,15 @@ import { DECOR_LEVELS, DECOR_PLACES, getPresets, type PresetBundle } from "./pre
  *    poses.ts) — vì hai ô đó bên kit-core có đường TỰ GÕ, mà chuỗi tự gõ
  *    thì không có id nào để đặt.
  * `phraseOf()` che khác biệt đó đi, nên chỗ gọi không cần biết.
+ *
+ * ══ 09/2026 — MỌI DANH SÁCH ĐÃ RỜI FILE NÀY ═══════════════════════════════
+ * Trước lượt này, khung cảnh · không khí · bố cục nằm CỨNG ngay trong file, và
+ * bảy trục còn lại đọc thẳng bảng hằng ở `glaze.ts`/`poses.ts`/`pose-state.ts`.
+ * Hệ quả: người dùng chỉ sửa được danh mục phong cách. Nay mọi `kind` đọc kho
+ * (`presets-store`), còn bảng hằng lùi về làm hạt giống (`catalog-seeds.ts`) —
+ * nên `pillOptions` sửa ở màn «Thư viện prompt» là pill trên `/k/:id` đổi theo.
+ * File này chỉ còn giữ thứ KHÔNG PHẢI dữ liệu: tên trục, chữ placeholder, và
+ * bốn câu hỏi về hành vi (`takesImage`, `hasBlankChoice`, `inheritsWhenEmpty`).
  */
 
 export type PillKind =
@@ -120,115 +126,6 @@ export interface PillOption {
  */
 export const INHERIT = "";
 
-/** Khung cảnh của block Background — danh mục riêng của lab. */
-const SCENES: readonly PillOption[] = [
-  { value: "main-menu", vi: "Màn hình chính", en: "a main menu screen background" },
-  { value: "level", vi: "Màn chơi", en: "an in-game level background" },
-  { value: "shop", vi: "Cửa hàng", en: "an in-game shop interior background" },
-  { value: "map", vi: "Bản đồ", en: "a world map screen background" },
-  { value: "result", vi: "Màn kết quả", en: "a level-complete result screen background" },
-  { value: "loading", vi: "Màn chờ", en: "a loading screen background" },
-];
-
-/**
- * Không khí của tấm background.
- *
- * ╔══ MỖI NẤC PHẢI MANG CHUYỂN ĐỘNG · ÁNH SÁNG · CHIỀU SÂU ══════════════════╗
- * ║ Bản trước mỗi mục là hai chữ tính từ ("a festive celebratory mood, warm    ║
- * ║ lanterns and confetti"). Đo trên ảnh thật: ra một tấm phông tĩnh, đẹp mà   ║
- * ║ chết — không có gì đang chuyển động, không biết nguồn sáng ở đâu, mọi thứ  ║
- * ║ nằm cùng một mặt phẳng. Nền game thì ngược lại: nó phải có thứ ĐANG động   ║
- * ║ (đèn nhấp nháy, mây trôi, sương cuộn), một hướng sáng nói ra được, và ít   ║
- * ║ nhất hai lớp XA/GẦN để lớp UI có chỗ đứng lên trên.                       ║
- * ║ Nên mỗi mục dưới đây là ba mệnh đề theo đúng thứ tự ấy — chữ đời thường,   ║
- * ║ không thuật ngữ nhiếp ảnh, vì máy vẽ đọc "sương cuộn thấp" tốt hơn         ║
- * ║ "atmospheric perspective".                                                ║
- * ╚══════════════════════════════════════════════════════════════════════════╝
- */
-const MOODS: readonly PillOption[] = [
-  {
-    value: "festive",
-    vi: "Rộn ràng",
-    en: "a festive celebratory mood: lanterns blinking overhead, confetti drifting down through the air, fireworks going off far behind the rooftops",
-  },
-  {
-    value: "calm",
-    vi: "Yên bình",
-    en: "a calm peaceful mood: clouds drifting slowly across the sky, slanted sunlight falling over the ground, dust motes floating close to the viewer",
-  },
-  {
-    value: "epic",
-    vi: "Hoành tráng",
-    en: "an epic dramatic mood: strong rim light along every edge, dust and haze hanging in the air, god rays reaching down into the far distance",
-  },
-  {
-    value: "cozy",
-    vi: "Ấm cúng",
-    en: "a cosy intimate mood: a warm lamp glowing in the near foreground, its light spreading over everything around it, snow falling outside the window behind",
-  },
-  {
-    value: "mysterious",
-    vi: "Bí ẩn",
-    en: "a mysterious mood: fog curling low over the ground, cold moonlight coming from behind, fireflies blinking in the middle distance",
-  },
-  {
-    value: "night",
-    vi: "Sôi động ban đêm",
-    en: "a busy night mood: neon signs glowing along the street, their colours reflected in the wet ground underfoot, headlights streaking past far behind",
-  },
-  {
-    value: "dawn",
-    vi: "Bình minh",
-    en: "an early dawn mood: a low warm sun just breaking the horizon, mist lifting slowly off the ground, birds crossing the far sky",
-  },
-  {
-    value: "sunset",
-    vi: "Hoàng hôn",
-    en: "a golden-hour sunset mood: long orange light raking across everything, warm haze thickening with distance, dark silhouettes along the far horizon",
-  },
-];
-
-/**
- * Bố cục của tấm background — CHỖ NÀO ĐỂ TRỐNG cho UI, chi tiết dồn vào đâu.
- *
- * Mỗi cụm EN nói ra hai vế ấy bằng số phần khung cụ thể ("the middle third"),
- * không nói bằng tính từ ("balanced"): một tấm nền game hỏng hay không là ở chỗ
- * cái nút bấm sắp đặt lên nó có nằm trên một vùng rối rắm hay không.
- */
-const LAYOUTS: readonly PillOption[] = [
-  {
-    value: "center-clear",
-    vi: "thoáng giữa",
-    hint: "chỗ đặt UI",
-    en: "composition: keep the middle third of the frame open and low in detail so UI can sit there, and concentrate the detail along the top and bottom edges",
-  },
-  {
-    value: "top-clear",
-    vi: "thoáng phía trên",
-    en: "composition: keep the upper third of the frame open and low in detail so UI can sit there, and concentrate the detail in the lower half",
-  },
-  {
-    value: "bottom-clear",
-    vi: "thoáng phía dưới",
-    en: "composition: keep the lower third of the frame open and low in detail so UI can sit there, and concentrate the detail in the upper half",
-  },
-  {
-    value: "full",
-    vi: "kín toàn khung",
-    en: "composition: detail spread evenly across the whole frame, with no area held back for UI",
-  },
-  {
-    value: "low-horizon",
-    vi: "chân trời thấp",
-    en: "composition: horizon low in the frame with a wide open sky above it, and the detail concentrated along the bottom",
-  },
-  {
-    value: "high-horizon",
-    vi: "chân trời cao",
-    en: "composition: horizon high in the frame with a wide open foreground below it, and the detail concentrated along the top",
-  },
-];
-
 /** Chữ hiện trên pill khi giá trị rỗng và kind KHÔNG có nghĩa kế thừa. */
 const PLACEHOLDER: Record<PillKind, string> = {
   theme: "chủ đề",
@@ -295,65 +192,34 @@ export function nounOf(kind: PillKind): string {
  * đó sửa ở trang preset, nên nó phải là tham số, không phải biến toàn cục ẩn.
  */
 export function pillOptions(kind: PillKind, presets: PresetBundle = getPresets()): PillOption[] {
-  switch (kind) {
-    case "theme":
-      /* `kitEN`, KHÔNG phải `value`: pill này nói về CẢ BỘ KIT (mô-típ, màu, biểu
-         tượng) và cụm của nó đi vào `## Art style` của mọi tấm. `value` là cụm
-         TRANG PHỤC — nó vẫn là id ổn định của mục, và vẫn được pill `outfit` dùng
-         đúng nghĩa của nó ở dưới. Xem `ThemeOption.kitEN`. */
-      return OUTFIT_THEMES.map((option) => ({ value: option.value, vi: option.label, en: option.kitEN }));
+  const rows = catalogRowsOf(kind, presets);
+  /* DÒNG ẨN BIẾN KHỎI MENU, nhưng KHÔNG biến khỏi phép tra — xem `lookupOptions`.
+     Hai cửa, hai câu hỏi: "bày cho người dùng chọn cái gì" và "giá trị đã lưu này
+     tên là gì". Trộn chúng vào một hàm thì ẩn một dòng đồng nghĩa với việc mọi câu
+     đang dùng dòng ấy hiện ra một id trần — tức là ẩn hoá ra chính là xoá. */
+  if (rows !== null) return rows.filter((row) => !row.hidden).map(toOption);
 
+  switch (kind) {
     case "style":
       return presets.styles.map((preset) => ({ value: preset.id, vi: preset.vi, en: preset.en }));
-
-    case "scene":
-      return [...SCENES];
-
-    case "mood":
-      return [...MOODS];
-
-    case "layout":
-      return [...LAYOUTS];
-
-    case "glaze":
-      /* DÒNG PHỤ = câu tiếng Anh của nấc, TRỪ nấc `auto`: `en` của nó RỖNG (nó không
-         nối chữ nào vào dòng element — luật của nó do `gen.sh` nói một lần cho cả
-         tấm), nên dòng phụ ấy nhường cho `hint`, chữ Việt nói bấm vào thì được gì.
-         `hint` là trường RIÊNG chứ không phải `en` đội lốt: `phraseOf` trả thẳng
-         `en` ra prompt, nên một câu tiếng Việt nhét vào đó sẽ đi vào prompt thật. */
-      return GLAZE_PRESETS.map((preset) => ({
-        value: preset.id,
-        vi: preset.vi,
-        en: glazePhrase(preset.id),
-        ...(preset.hint ? { hint: preset.hint } : {}),
-      }));
 
     case "material":
       return MATERIAL_PRESETS.map((preset) => ({ value: preset.id, vi: preset.vi, en: preset.en }));
 
-    case "decor":
-      return DECOR_LEVELS.map((level) => ({ value: level.value, vi: level.vi, en: level.en }));
-
-    case "decorPlace":
-      return DECOR_PLACES.map((place) => ({ value: place.value, vi: place.vi, en: place.en }));
-
-    case "pose":
-      /* POSES chỉ có nhãn VI + id. Id VỐN ĐÃ là tiếng Anh ("hold-gift", "view-34")
-         nên nó dùng luôn được trong prompt sau khi bỏ gạch nối — không bịa thêm
-         một bảng dịch thứ hai để rồi lệch với danh mục gốc. */
-      return POSES.map((pose) => ({ value: pose.id, vi: pose.label, en: `a ${pose.id.replace(/-/g, " ")} pose` }));
-
-    case "view":
-      /* Đọc THẲNG bảng camera của manơcanh (`lib/pose/pose-state.ts`), không chép một bảng thứ hai sang đây:
-         cùng `id` là cùng vị trí máy quay khi dựng ảnh manơcanh, nên chữ trong
-         prompt và ảnh đính kèm không có đường nào để nói hai góc khác nhau. */
-      return CAMERA_VIEWS.map((view) => ({ value: view.id, vi: view.vi, en: view.en }));
-
-    case "expression":
-      return EXPRESSIONS.map((option) => ({ value: option.value, vi: option.label, en: option.value }));
-
-    case "outfit":
-      return OUTFIT_THEMES.map((option) => ({ value: option.value, vi: option.label, en: option.value }));
+    /**
+     * KHÔNG KHÍ — **DI SẢN, chỉ để ĐỌC**, cùng thân phận với `material`.
+     *
+     * ╔══ VÌ SAO TRẢ RỖNG THAY VÌ XOÁ HẲN `kind` ═══════════════════════════════╗
+     * ║ Chủ sản phẩm: *"cảnh nền bỏ cái không khí đi"*. Câu khởi điểm của thẻ    ║
+     * ║ Cảnh nền không còn ô ấy, và bộ di trú gỡ nó khỏi câu của dự án cũ. Nhưng ║
+     * ║ một `kind` bị xoá khỏi kiểu `PillKind` là mọi chỗ đọc nó thành lỗi biên  ║
+     * ║ dịch, còn một pill `mood` sót lại trong một câu TỰ DO (nơi bộ di trú cố  ║
+     * ║ ý không đụng vào chữ người dùng) sẽ ném lúc chạy. Trả rỗng thì pill ấy   ║
+     * ║ hiện chữ trần và rụng khỏi prompt — im lặng, nhưng KHÔNG làm trắng màn.  ║
+     * ╚═════════════════════════════════════════════════════════════════════════╝
+     */
+    case "mood":
+      return [];
 
     case "mascot":
       /**
@@ -364,16 +230,72 @@ export function pillOptions(kind: PillKind, presets: PresetBundle = getPresets()
        * ║ vật phụ»… Chủ sản phẩm nhìn màn và bác thẳng: *"cái chọn nhân vật    ║
        * ║ này nó chỉ đi theo cái nhận diện thương hiệu thôi, thương hiệu ko có ║
        * ║ con mascot nào thì ko có cái này nhé"*. Đúng: một nhân vật là TÀI    ║
-       * ║ SẢN của một thương hiệu cụ thể, không phải một mục trong bảng tra    ║
-       * ║ như «Chibi» hay «Tết». Mời một «Nhân vật phụ» chung chung là mời một ║
-       * ║ con không thuộc về ai — và nó lại còn không có ảnh thật để vẽ theo.  ║
+       * ║ SẢN của một thương hiệu cụ thể, không phải một mục trong bảng tra.   ║
        * ║ Nên danh sách chọn sẵn của pill này KHÔNG đến từ đây; nó đến từ kho  ║
-       * ║ thương hiệu và được truyền vào bằng `extraGroups` (xem node view của ║
-       * ║ `optionPill`). Không có thương hiệu ⇒ không có nấc «Chọn sẵn».       ║
+       * ║ thương hiệu và được truyền vào bằng `extraGroups`.                   ║
        * ╚═════════════════════════════════════════════════════════════════════╝
        */
       return [];
+
+    /* Mười `kind` còn lại đã được `catalogRowsOf` trả lời ở trên; nhánh này chỉ có
+       mặt để `tsc` thấy switch phủ kín kiểu — bỏ nó đi là mất luôn cái cổng ấy. */
+    default:
+      return [];
   }
+}
+
+/**
+ * DANH MỤC THÔ của một trục — KỂ CẢ dòng đang ẩn. `null` = trục không đọc kho.
+ *
+ * Mười trục dưới đây trước 09/2026 mỗi trục đọc một bảng cứng khác nhau (`SCENES`
+ * ngay trong file này, `GLAZE_PRESETS`, `POSES`, `CAMERA_VIEWS`…) và hệ quả là chỉ
+ * `style` sửa được trên màn. Nay bảng cứng đã lùi về làm HẠT GIỐNG
+ * (`catalog-seeds.ts`) và nguồn đọc là kho — một đường, mọi trục.
+ */
+function catalogRowsOf(kind: PillKind, presets: PresetBundle): readonly CatalogRow[] | null {
+  switch (kind) {
+    /* `en` của dòng chủ đề là cụm BỘ KIT (mô-típ, màu, biểu tượng), không phải cụm
+       trang phục: nó đi vào `## Art style` của MỌI tấm, kể cả tấm 16 nút bấm. Cụm
+       trang phục của cùng dòng nằm ở `en2` và chỉ ra khi pill Trang phục để trống —
+       xem `themeOutfitEN`. */
+    case "theme": return presets.catalogs.theme;
+    case "scene": return presets.catalogs.scene;
+    case "layout": return presets.catalogs.layout;
+    /* DÒNG PHỤ = câu tiếng Anh của nấc, TRỪ nấc `auto`: `en` của nó RỖNG (nó không
+       nối chữ nào vào dòng element — luật của nó do `gen.sh` nói một lần cho cả
+       tấm), nên dòng phụ ấy nhường cho `hint`, chữ Việt nói bấm vào thì được gì. */
+    case "glaze": return presets.catalogs.glaze;
+    case "decor": return presets.catalogs.decor;
+    case "decorPlace": return presets.catalogs.decorPlace;
+    case "pose": return presets.catalogs.pose;
+    /* Cùng `id` với `CAMERA_VIEWS` của manơcanh, nên chữ trong prompt và tấm ảnh
+       đính kèm không có đường nào để nói hai góc khác nhau. Đó cũng là lý do trục
+       này không cho THÊM dòng — xem `FIXED_KINDS`. */
+    case "view": return presets.catalogs.view;
+    case "expression": return presets.catalogs.expression;
+    case "outfit": return presets.catalogs.outfit;
+    default: return null;
+  }
+}
+
+function toOption(row: CatalogRow): PillOption {
+  return { value: row.id, vi: row.vi, en: row.en, ...(row.hint ? { hint: row.hint } : {}) };
+}
+
+/**
+ * BẢNG TRA cho `labelOf`/`phraseOf` — rộng hơn `pillOptions` đúng một điều: nó CÓ
+ * cả dòng đang ẩn.
+ *
+ * ╔══ VÌ SAO ẨN KHÔNG ĐƯỢC PHÉP GIỐNG XOÁ ═══════════════════════════════════╗
+ * ║ Ẩn sinh ra làm đường lùi AN TOÀN: "tôi không muốn thấy mục này trong menu ║
+ * ║ nữa, nhưng đừng đụng vào những câu đã viết". Nếu phép tra cũng lọc dòng   ║
+ * ║ ẩn thì mọi dự án đang dùng dòng ấy lập tức hiện một id trần trên pill và  ║
+ * ║ rụng câu khỏi prompt — đúng hậu quả của XOÁ, chỉ khác cái tên nút bấm.    ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+function lookupOptions(kind: PillKind, presets: PresetBundle): PillOption[] {
+  const rows = catalogRowsOf(kind, presets);
+  return rows !== null ? rows.map(toOption) : pillOptions(kind, presets);
 }
 
 /**
@@ -447,7 +369,7 @@ export function inheritsWhenEmpty(kind: PillKind): boolean {
 export function labelOf(kind: PillKind, value: string, presets: PresetBundle = getPresets()): string {
   const raw = (value ?? "").trim();
   if (!raw) return PLACEHOLDER[kind];
-  return pillOptions(kind, presets).find((option) => option.value === raw)?.vi ?? raw;
+  return lookupOptions(kind, presets).find((option) => option.value === raw)?.vi ?? raw;
 }
 
 /**
@@ -462,7 +384,7 @@ export function labelOf(kind: PillKind, value: string, presets: PresetBundle = g
 export function phraseOf(kind: PillKind, value: string, presets: PresetBundle = getPresets()): string {
   const raw = (value ?? "").trim();
   if (!raw) return "";
-  const hit = pillOptions(kind, presets).find((option) => option.value === raw);
+  const hit = lookupOptions(kind, presets).find((option) => option.value === raw);
   if (hit) return hit.en;
   return kind === "expression" || kind === "outfit" || kind === "theme" ? raw : "";
 }

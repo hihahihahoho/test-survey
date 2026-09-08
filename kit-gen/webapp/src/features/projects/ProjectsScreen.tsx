@@ -191,6 +191,7 @@ export function ProjectsScreen(_props: ScreenProps) {
         onBrands={() => void navigate({ to: "/brands" })}
         onUiLibrary={() => void navigate({ to: "/library/ui" })}
         onMascotLibrary={() => void navigate({ to: "/library/mascot" })}
+        onPromptLibrary={() => void navigate({ to: "/library/prompts", search: {} })}
         onReferences={() => void navigate({ to: "/references" })}
         onTrash={() => nav.openTrash()}
         onSettings={() => void navigate({ to: "/settings", search: { tab: "agent" } })}
