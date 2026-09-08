@@ -107,7 +107,7 @@ export function cellLabel(cell: unknown): string {
 
 /** Cờ khung xương hiện thành badge (§3-S3.3: slice9 / free / anchor).
  *  `matte` từng là cờ thứ tư ở đây; nó bị bỏ 08/09/2026 cùng cả khái niệm "cách
- *  tách của một ô" — độ trong nay là chữ người dùng gõ, không phải một badge. */
+ *  tách của một ô" — độ trong nay là chữ trong `spec`, không phải một badge. */
 export interface SkelFlag {
   key: "slice9" | "free" | "anchor";
   label: string;

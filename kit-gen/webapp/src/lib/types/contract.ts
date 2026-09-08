@@ -81,7 +81,9 @@ export const NEUTRAL_SECONDARY_COLOR = "#9A9A9A";
  *
  * ⚠️ `matte` ĐÃ BỊ BỎ (08/09/2026) — nó là cờ đời tách-nền-bằng-key, vừa đổi câu chữ
  * của `gen.sh` vừa chọn nhánh giải ngược của `slice.py`, và cả hai vế đã chết. Độ
- * trong của một ô nay CHỈ là chữ trong `spec` — chữ người dùng tự gõ, không danh mục.
+ * trong của một ô nay CHỈ là một câu tiếng Anh trong `spec` (`kit-core/lib/glaze.ts`) —
+ * và ở nấc MẶC ĐỊNH («Tự động theo vật liệu») thì không có cả câu ấy: luật của nó do
+ * `gen.sh` nói một lần cho cả tấm, nên contract không mang mảnh nào của nó.
  * Contract cũ trên đĩa còn khoá ấy vẫn parse được (looseObject giữ nguyên field lạ) và
  * `mergeElementSkel` lược nó ra khi dựng contract mới — không có đường nào báo lỗi.
  */

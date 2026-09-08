@@ -92,7 +92,7 @@ describe("đọc: server là nguồn, id bundle giữ nguyên qua `data.key`", (
       row("preset_aaaa", "style", "Cổ tích", { key: "fairy", en: "storybook" }),
       /* Id KHÔNG nằm trong hạt giống ⇒ không dính bảng di trú hình dạng/cỡ ở dưới;
          ca này khoá điều khoản #1 (id = `data.key`), không khoá di trú. */
-      row("preset_bbbb", "element", "Khiên", { key: "shield", en: "shield", decor: 6, sizeId: "m" }),
+      row("preset_bbbb", "element", "Khiên", { key: "shield", en: "shield", decor: 6, glazeId: "ice", sizeId: "m" }),
       row("preset_cccc", "mascot", "Sóc", { key: "squirrel", en: "a squirrel", refName: "soc.png" }),
     ]));
     mount();
@@ -100,7 +100,7 @@ describe("đọc: server là nguồn, id bundle giữ nguyên qua `data.key`", (
     await waitFor(() => expect(seen?.styles).toHaveLength(1));
     /* ĐIỀU KHOẢN #1: id là `data.key`, KHÔNG phải `preset_aaaa`. */
     expect(seen?.styles[0]).toEqual({ id: "fairy", vi: "Cổ tích", en: "storybook" });
-    expect(seen?.elements[0]).toEqual({ id: "shield", vi: "Khiên", en: "shield", decor: 6, sizeId: "m" });
+    expect(seen?.elements[0]).toEqual({ id: "shield", vi: "Khiên", en: "shield", decor: 6, glazeId: "ice", sizeId: "m" });
     expect(seen?.mascots[0]).toEqual({ id: "squirrel", vi: "Sóc", en: "a squirrel", refName: "soc.png" });
     /* Kho đã có bản ghi ⇒ KHÔNG gieo lại đè lên danh mục của người ta. */
     expect(addPreset).not.toHaveBeenCalled();
@@ -138,7 +138,7 @@ describe("di trú: hình dạng cho bản ghi element đời trước", () => {
 
   it("thiếu `skel` + id hạt giống ⇒ vá hình dạng theo bảng hạt giống", async () => {
     get.mockResolvedValue(library([
-      row("preset_h1", "element", "Thanh máu", { key: "healthbar", en: "health bar", decor: 3, sizeId: "" }),
+      row("preset_h1", "element", "Thanh máu", { key: "healthbar", en: "health bar", decor: 3, glazeId: "", sizeId: "" }),
     ]));
     mount();
 
@@ -150,9 +150,9 @@ describe("di trú: hình dạng cho bản ghi element đời trước", () => {
     get.mockResolvedValue(library([
       /* `l` là nấc mà hạt giống cũ ghim cho thanh máu. Giữ nó lại thì hộp ra
          256×192 (1,3:1) — vẫn không phải hình dạng của một thanh máu. */
-      row("preset_h1", "element", "Thanh máu", { key: "healthbar", en: "health bar", decor: 3, sizeId: "l" }),
+      row("preset_h1", "element", "Thanh máu", { key: "healthbar", en: "health bar", decor: 3, glazeId: "", sizeId: "l" }),
       /* «M» KHÔNG phải nấc cũ của thanh máu ⇒ đó là lựa chọn của người dùng, giữ. */
-      row("preset_b1", "element", "Nút bấm", { key: "button", en: "button", decor: 4, sizeId: "l" }),
+      row("preset_b1", "element", "Nút bấm", { key: "button", en: "button", decor: 4, glazeId: "", sizeId: "l" }),
     ]));
     mount();
 
@@ -164,7 +164,7 @@ describe("di trú: hình dạng cho bản ghi element đời trước", () => {
   it("`skel` ĐÃ có trên đĩa ⇒ nó thắng bảng hạt giống", async () => {
     const mine = { shape: "rrect", w: 0.5, h: 0.5 };
     get.mockResolvedValue(library([
-      row("preset_h1", "element", "Thanh máu", { key: "healthbar", en: "health bar", decor: 3, sizeId: "", skel: mine }),
+      row("preset_h1", "element", "Thanh máu", { key: "healthbar", en: "health bar", decor: 3, glazeId: "", sizeId: "", skel: mine }),
     ]));
     mount();
 
@@ -174,7 +174,7 @@ describe("di trú: hình dạng cho bản ghi element đời trước", () => {
 
   it("`skel` RÁC trên đĩa ⇒ bỏ, không đẩy một hộp âm vào contract", async () => {
     get.mockResolvedValue(library([
-      row("preset_x1", "element", "Khiên", { key: "shield", en: "shield", decor: 4, sizeId: "", skel: { shape: "khong-co-that", w: 9 } }),
+      row("preset_x1", "element", "Khiên", { key: "shield", en: "shield", decor: 4, glazeId: "", sizeId: "", skel: { shape: "khong-co-that", w: 9 } }),
     ]));
     mount();
 
@@ -274,7 +274,7 @@ describe("gieo hạt: đúng một lần, kể cả khi nhiều màn cùng mở"
 describe("ghi: gộp, chỉ đụng cái đổi, và không im lặng khi hỏng", () => {
   const three = () => library([
     row("preset_s1", "style", "Cổ tích", { key: "fairy", en: "storybook" }),
-    row("preset_e1", "element", "Khiên", { key: "shield", en: "shield", decor: 4, sizeId: "" }),
+    row("preset_e1", "element", "Khiên", { key: "shield", en: "shield", decor: 4, glazeId: "", sizeId: "" }),
     row("preset_m1", "mascot", "Sóc", { key: "squirrel", en: "a squirrel", refName: "" }),
   ]);
 
@@ -316,7 +316,7 @@ describe("ghi: gộp, chỉ đụng cái đổi, và không im lặng khi hỏng
       ...seen!,
       elements: [
         seen!.elements[0]!,
-        { id: "slider", vi: "Thanh trượt", en: "slider", decor: 3, sizeId: "" },
+        { id: "slider", vi: "Thanh trượt", en: "slider", decor: 3, glazeId: "", sizeId: "" },
       ],
       mascots: [],
     });
@@ -324,7 +324,7 @@ describe("ghi: gộp, chỉ đụng cái đổi, và không im lặng khi hỏng
     await waitFor(() => expect(removePreset).toHaveBeenCalledWith("preset_m1"));
     expect(addPreset).toHaveBeenCalledTimes(1);
     expect(addPreset.mock.calls[0]![0]).toEqual({
-      kind: "element", name: "Thanh trượt", data: { key: "slider", en: "slider", decor: 3, sizeId: "" },
+      kind: "element", name: "Thanh trượt", data: { key: "slider", en: "slider", decor: 3, glazeId: "", sizeId: "" },
     });
     expect(patchPreset).not.toHaveBeenCalled();
   });

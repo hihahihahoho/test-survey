@@ -1,5 +1,6 @@
 import type { JSONContent } from "@tiptap/react";
 import { EXPRESSIONS } from "@/features/kit-core/lib/poses";
+import { glazeOrAuto } from "@/features/kit-core/lib/glaze";
 import { DEFAULT_VIEW } from "@/features/prompt-lab/lib/pose/pose-state";
 import { getPresets, type PresetBundle } from "./presets-store";
 import { INHERIT } from "./pill-registry";
@@ -172,11 +173,20 @@ export interface UiCell {
   styleId: string;
   /** "1".."7" — xem `DECOR_LEVELS`. */
   decor: string;
-  /* ĐÃ BỎ 08/09/2026: `glazeId` («Đục nền») — và trước nó là `materialId` («Chất
-     liệu»). Chủ sản phẩm: *"KO GIỮ MẤY CÁI TÁCH NỀN ĐỤC NỀN BỎ HẾT, GIỜ APP NHẸ
-     THÔI"*. Một dòng element còn đúng ba trục (phong cách · viền · cỡ) cộng ô ghi
-     chú tự do; kính/phát sáng thì GÕ vào ghi chú. Lựa chọn cũ trên đĩa được chuyển
-     sang `note` một lần lúc đọc — xem `LEGACY_GLAZE_NOTE` ở `composer-doc.ts`. */
+  /**
+   * ĐỤC NỀN — id trong `GLAZE_PRESETS`. LUÔN CÓ GIÁ TRỊ; mặc định là `auto`.
+   *
+   * Thay cho `materialId` từ 08/2026. Không phải đổi tên cho đẹp: pill cũ hỏi
+   * "ô này làm bằng gì" (thẩm mỹ, đã có prompt tổng lo), pill mới hỏi "ô này trong
+   * tới đâu" — và câu trả lời là MỘT CÂU tả cách vẽ alpha, nối thẳng vào `spec` của ô.
+   * Bản nháp cũ mang `materialId` được dịch sang lúc ĐỌC (`composer-doc.readCell`).
+   *
+   * RỖNG KHÔNG CÒN LÀ MỘT LỰA CHỌN (08/09/2026). Nó từng nghĩa "chưa chọn / nền
+   * đặc"; nay "nền đặc" có id riêng (`solid`) và "chưa chọn" là `auto` — nấc mà
+   * máy vẽ tự quyết theo vật liệu. Bản nháp cũ mang rỗng được vá lúc ĐỌC
+   * (`glazeOrAuto` trong `composer-doc.readCell`), y hệt cách `sizeId` được vá.
+   */
+  glazeId: string;
   /**
    * CỠ SAFE ZONE — id preset hoặc `"<w>x<h>"` px. LUÔN CÓ GIÁ TRỊ.
    *
@@ -453,6 +463,10 @@ export function newCell(elementId: string, presets: PresetBundle = getPresets())
        tách khỏi phong cách của cả bộ kit. */
     styleId: INHERIT,
     decor: String(preset?.decor ?? 4),
+    /* MẶC ĐỊNH `auto`, kể cả khi preset của loại element để rỗng: rỗng là di sản,
+       không phải một lựa chọn (xem `UiCell.glazeId`). `glazeOrAuto` là chỗ DUY NHẤT
+       biết luật ấy — đừng viết `?? "auto"` ở đây, sẽ có chỗ thứ hai quên. */
+    glazeId: glazeOrAuto(preset?.glazeId),
     /* CỠ LUÔN CỤ THỂ, và cụ thể THEO LOẠI: `defaultSizeOf` đo từ `skel` của chính
        loại element (thanh máu ra hộp rộng-mỏng, khung avatar ra hộp vuông). Element
        người dùng tự thêm không khai hình dạng ⇒ hộp trung tính — xem `cell-size.ts`. */

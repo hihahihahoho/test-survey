@@ -493,6 +493,26 @@ for s in cfg["styles"]:
         # ① gọi tên thứ bị cấm, ② nói vì sao nó sai, ③ chỉ ra cách làm đúng thay
         # thế. Thiếu ③ thì model chỉ biết mình sai mà không biết đi đường nào — đo
         # được: nó lấp bằng thứ khác thay vì thôi lấp.
+        #
+        # ── GẠCH ĐẦU DÒNG ③ LÀ NHÀ DUY NHẤT CỦA NẤC «TỰ ĐỘNG THEO VẬT LIỆU» ──
+        # 08/09/2026. Chủ sản phẩm chốt: mặc định của một ô KHÔNG còn là "đục", mà là
+        # *"model tự quyết độ trong theo vật liệu của element"* — kính/băng/ánh sáng
+        # xuyên thấu bằng alpha thật, kim loại/gỗ/đá đục hoàn toàn. Đó là nấc `auto`
+        # của pill «Đục nền» (webapp `kit-core/lib/glaze.ts`), và nó là mặc định của
+        # mọi ô mới.
+        #
+        # ⚠️ VÌ SAO CÂU ẤY NẰM Ở ĐÂY CHỨ KHÔNG NỐI VÀO TỪNG DÒNG ELEMENT: nó đúng với
+        # MỌI ô của MỌI tấm. Một luật đúng với mọi ô mà in lại N lần thì vừa dài vừa
+        # dạy model rằng mỗi ô có một hợp đồng alpha riêng — đúng cái bệnh mà
+        # `skel.matte` vừa bị bỏ vì mắc phải. Nên `auto` KHÔNG có cụm chữ nào trong
+        # `spec` (`GLAZE_PRESETS[0].en` rỗng có chủ ý) và cũng KHÔNG cần cờ nào trong
+        # contract: không có cờ thì không có gì để hai tầng nói lệch nhau.
+        #
+        # ⚠️ VÀ VÌ THẾ MỞ ĐẦU BẰNG "unless an element's own line below says otherwise":
+        # nấc CỤ THỂ (kính trong · kính gradient · băng · phát sáng · đục hoàn toàn)
+        # vẫn nối câu của nó vào `spec` của riêng ô, và câu ấy phải THẮNG luật chung —
+        # nếu không thì nấc «Đục hoàn toàn» của một ô trông-như-kính sẽ cãi nhau với
+        # dòng này và model tự hoà giải bằng cách vẽ nửa vời.
         if not screen_sheet:
             section("Transparency", [
                 "- NEVER DRAW A CHECKERBOARD. Grey-and-white squares are how an image editor"
@@ -501,9 +521,11 @@ for s in cfg["styles"]:
                 "- Whatever should be see-through — a glass body, the outer halo of a light —"
                 " gets a LOW ALPHA value in its own colour, never paler paint. If you cannot"
                 " lower the alpha of a region, leave it unpainted.",
-                "- Every element body is otherwise FULLY OPAQUE (alpha 255): never hollow, never"
-                " showing the background through it, unless its line below says it is hollow,"
-                " see-through or made of light.",
+                "- Unless an element's own line below says otherwise, its transparency FOLLOWS"
+                " ITS MATERIAL: glass, ice, water and light effects are see-through, drawn with"
+                " real alpha and nothing behind them — no plate, no checkerboard; every other"
+                " material — metal, wood, stone, plastic, fabric — is FULLY OPAQUE (alpha 255),"
+                " never hollow and never showing the background through it.",
             ])
 
         # ── Text ──────────────────────────────────────────────────────────────

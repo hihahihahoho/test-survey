@@ -77,12 +77,26 @@ export const STYLE_PROMPT_PLACEHOLDER =
 export type KitElementSkel = {
   w?: number;
   h?: number;
-  /* ĐÃ BỎ 08/09/2026: `glaze` («đục nền») và `material` («chất liệu»). Cả hai từng
-     nối một cụm tiếng Anh vào `spec` của ô; chủ sản phẩm chốt bỏ hẳn cả trục
-     (*"KO GIỮ MẤY CÁI TÁCH NỀN ĐỤC NỀN BỎ HẾT, GIỜ APP NHẸ THÔI"*). Bản nháp đời cũ
-     còn hai khoá ấy trên đĩa: `hydrateWorkflowStore` nạp nguyên `elements` nên chúng
-     vẫn nằm đó, chỉ là không tầng nào đọc nữa — không lỗi, không cảnh báo. Muốn kính
-     hay phát sáng thì viết vào `spec` ngay dưới đây, bằng chữ của mình. */
+  /**
+   * ĐỤC NỀN của ô — id trong `glaze.ts`. `""`/vắng ⇒ nấc mặc định `auto`: máy vẽ tự
+   * quyết độ trong theo vật liệu, và luật ấy do `gen.sh` nói một lần cho cả tấm
+   * (section `## Transparency`) chứ không nối chữ vào `spec` của từng ô. Muốn ô
+   * ĐẶC thì phải nói ra: nấc `solid`.
+   *
+   * Đây là trục THAY CHO `material` từ 08/2026 (chủ sản phẩm: *"chất liệu bỏ, nó ăn
+   * theo style; chỉ có option đục nền"*). Từ 08/09/2026 nó chỉ còn NÓI CHỮ: một câu
+   * tiếng Anh nối vào `spec` của ô, không kèm cờ nào cho engine — `skel.matte` (cách
+   * tách đời chroma) đã bị bỏ khỏi cả contract lẫn `gen.sh`. Xem `GLAZE_PRESETS`.
+   */
+  glaze?: string;
+  /**
+   * CHẤT LIỆU của ô — **DI SẢN, chỉ còn để ĐỌC bản nháp cũ**.
+   *
+   * Không còn UI nào ghi trường này. Lúc dựng contract nó được dịch sang `glaze` gần
+   * nhất (`glazeFromMaterial`) chứ không còn tự nối cụm chữ thẩm mỹ vào `spec` —
+   * xem khối chú thích đầu `glaze.ts` để biết vì sao cụm chữ ấy phải biến mất.
+   */
+  material?: string;
   /**
    * MÔ TẢ GỬI MÁY VẼ của riêng dự án — đè `spec` của thư viện chung.
    *
@@ -377,6 +391,7 @@ export type WorkflowState = {
   setElementSkel: (file: string, patch: {
     w?: number | null;
     h?: number | null;
+    material?: string | null;
     spec?: string | null;
   }) => void;
   /**
@@ -701,10 +716,14 @@ export function createWorkflowStore(projectId: string): WorkflowStore {
               const h = clampSkelSide(patch.h ?? null);
               if (h === null) delete next.h; else next.h = h;
             }
-            /* MÔ TẢ là CHỮ, và luật của nó giống luật của `w`/`h`: rỗng (sau khi bỏ
-               khoảng trắng) = *trả về mặc định*, không phải *ghi một giá trị rỗng*. Lưu
-               chuỗi THÔ (chưa trim) để người dùng còn gõ được dấu cách ở cuối câu —
-               chỗ đọc (`resolveElementSpec`) mới trim. */
+            /* CHẤT LIỆU và MÔ TẢ đều là CHỮ, nên luật của chúng giống nhau và giống luật
+               của `w`/`h`: rỗng (sau khi bỏ khoảng trắng) = *trả về mặc định*, không phải
+               *ghi một giá trị rỗng*. Lưu chuỗi THÔ (chưa trim) để người dùng còn gõ được
+               dấu cách ở cuối câu — chỗ đọc (`resolveElementSpec`) mới trim. */
+            if ("material" in patch) {
+              const material = typeof patch.material === "string" ? patch.material : "";
+              if (material.trim()) next.material = material; else delete next.material;
+            }
             if ("spec" in patch) {
               const spec = typeof patch.spec === "string" ? patch.spec : "";
               if (spec.trim()) next.spec = spec; else delete next.spec;
@@ -716,7 +735,7 @@ export function createWorkflowStore(projectId: string): WorkflowStore {
         setSheetPrompt: (sheetId, patch) => set((s) => {
           const next: SheetPromptTweak = { ...(s.sheetPrompts[sheetId] ?? {}) };
           /* Lưu chuỗi THÔ (chưa trim) nhưng QUYẾT ĐỊNH theo bản đã trim — cùng luật với
-             `setElementSkel` cho `spec`: người dùng còn gõ được dấu cách cuối
+             `setElementSkel` cho `material`/`spec`: người dùng còn gõ được dấu cách cuối
              câu, mà một ô chỉ có khoảng trắng thì vẫn là "không nói gì". */
           for (const key of ["directive", "promptOverride"] as const) {
             if (!(key in patch)) continue;

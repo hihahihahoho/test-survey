@@ -318,7 +318,7 @@ function PresetPanel({
         .map((group) => ({
           ...group,
           options: needle
-            ? group.options.filter((option) => fold(`${option.vi} ${option.en ?? ""}`).includes(needle))
+            ? group.options.filter((option) => fold(`${option.vi} ${option.en ?? ""} ${option.hint ?? ""}`).includes(needle))
             : [...group.options],
         }))
         .filter((group) => group.options.length > 0),

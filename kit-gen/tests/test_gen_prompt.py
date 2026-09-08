@@ -70,6 +70,15 @@ def render_prompt_text(cfg, name="demo-pose-demo"):
 ROW1 = re.compile(r"^1\) ", re.M)
 
 
+def first_cell_line_text(txt):
+    """NGUYÊN VĂN dòng element đầu tiên — dùng để quét thứ chỉ được có mặt Ở ĐÓ.
+
+    Khác `first_cell_line` (trả CHỈ SỐ dòng) đúng ở kiểu trả về, và tách ra vì hai
+    câu hỏi khác nhau: "danh sách ô bắt đầu ở đâu" và "dòng ấy nói gì".
+    """
+    return txt.splitlines()[first_cell_line(txt)]
+
+
 def first_cell_line(txt):
     """Chỉ số dòng của mục ĐẦU TIÊN trong danh sách ô.
 
@@ -603,6 +612,69 @@ class TransparentBackgroundTest(unittest.TestCase):
                      "WHENEVER SOMETHING SHOULD BE SEE-THROUGH",
                      "Every element is FULLY OPAQUE with solid fills"):
             self.assertNotIn(chet, self.prompt, f"khối cũ mọc lại: {chet}")
+
+    def test_nac_TU_DONG_THEO_VAT_LIEU_noi_dung_mot_lan_o_section_chung(self):
+        """MẶC ĐỊNH CỦA MỘT Ô LÀ «MÁY TỰ QUYẾT THEO VẬT LIỆU» (08/09/2026).
+
+        Chủ sản phẩm chốt: model tự vẽ trong suốt, và mặc định của một ô không còn
+        là "đục" mà là "theo vật liệu" — kính/băng/ánh sáng xuyên thấu bằng alpha
+        thật, kim loại/gỗ/đá đục hoàn toàn. Đó là nấc `auto` của pill «Đục nền»
+        (webapp `kit-core/lib/glaze.ts`), nấc mặc định của mọi ô mới.
+
+        Luật ấy đúng với MỌI ô nên nó nói ĐÚNG MỘT LẦN, ở section chung. Ca này
+        khoá cả ba vế của lời chốt: vật liệu xuyên thấu, vật liệu đục, và mệnh đề
+        "trừ khi dòng của ô nói khác" — thiếu vế thứ ba thì nấc «Đục hoàn toàn»
+        của một ô trông-như-kính sẽ cãi nhau với chính section này."""
+        self.assertEqual(self.prompt.count("its transparency FOLLOWS"), 1)
+        self.assertIn("Unless an element's own line below says otherwise", self.prompt)
+        self.assertIn("glass, ice, water and light effects are see-through", self.prompt)
+        for vat_lieu in ("metal", "wood", "stone", "plastic", "fabric"):
+            self.assertIn(vat_lieu, self.prompt, f"luật vật liệu thiếu {vat_lieu}")
+        self.assertIn("FULLY OPAQUE (alpha 255)", self.prompt)
+
+    def test_nac_TU_DONG_khong_in_lai_o_tung_dong_element(self):
+        """GUARD ÂM, và đây là lý do tồn tại của cả cách làm.
+
+        `auto` KHÔNG có cụm chữ nào trong `spec` (`GLAZE_PRESETS[0].en` rỗng có chủ
+        ý) và KHÔNG có cờ nào trong contract. Nếu mai này ai đó "cho chắc" bằng cách
+        nối câu ấy vào từng ô, prompt sẽ nói cùng một luật N lần — đúng cái bệnh mà
+        `skel.matte` vừa bị bỏ vì mắc phải, và không ca nào khác đỏ.
+
+        Ba ô, ba vật liệu khác nhau, không ô nào khai đục nền: dòng của chúng phải
+        SẠCH TRƠN, chỉ có mô tả và hộp safe zone."""
+        cfg = {"styles": [{"id": "demo", "bg": "magenta", "style": "flat ink"}], "sheets": [{
+            "id": "pose-demo", "grid": {"cols": 3, "rows": 1},
+            "components": [
+                {"file": "01-a", "spec": "a glass window pane",
+                 "skel": {"shape": "rrect", "w": 0.8, "h": 0.6}},
+                {"file": "02-b", "spec": "a gold metal coin",
+                 "skel": {"shape": "circle", "w": 0.5, "h": 0.5}},
+                {"file": "03-c", "spec": "a wooden signpost",
+                 "skel": {"shape": "rrect", "w": 0.6, "h": 0.8}},
+            ]}]}
+        txt = render_prompt_text(cfg, name="demo-pose-demo")
+        dong = [row for row in txt.splitlines() if re.match(r"^\d\) ", row)]
+        self.assertEqual(len(dong), 3, txt)
+        for row in dong:
+            self.assertNotIn("FOLLOWS", row)
+            self.assertNotIn("alpha", row.lower(), f"dòng element mọc hợp đồng alpha: {row}")
+            self.assertNotIn("see-through", row)
+        self.assertEqual(txt.count("its transparency FOLLOWS"), 1)
+
+    def test_nac_CU_THE_van_in_o_dong_cua_chinh_o_ay(self):
+        """Chiều còn lại: chọn một nấc cụ thể thì câu của nấc ấy PHẢI tới, và nó
+        tới bằng `spec` — webapp nối, engine chỉ chép. Hai nấc đáng canh nhất là hai
+        nấc cãi nhau với luật chung: «Đục hoàn toàn» trên một ô trông-như-kính, và
+        «Phát sáng» trên một ô mà luật chung sẽ vẽ đục."""
+        duc = ("fully opaque everywhere, alpha 255, with no see-through part at all,"
+               " whatever material it may look like")
+        p_duc = render_prompt_text(_cfg(spec=f"a glass window pane, {duc}"))
+        self.assertIn(duc, first_cell_line_text(p_duc))
+
+        sang = ("pure light with no surface: the halo keeps its own colour and fades to alpha 0"
+                " at its edge, and nothing sits behind it — no plate, no black, no checkerboard")
+        p_sang = render_prompt_text(_cfg(spec=f"a radial light burst, {sang}"))
+        self.assertIn(sang, first_cell_line_text(p_sang))
 
     def test_prompt_CAM_DICH_DANH_viec_ve_caro_gia(self):
         """Bẫy đã đo được (BACKLOG #24 ⑦): không tạo được trong suốt thì model
