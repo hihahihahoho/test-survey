@@ -109,6 +109,29 @@ export function sheetDownloadName(job: string): string {
  * ║ `contractSafe`; thiếu cả hai thì không co gì cả và NÓI RA.                 ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
+ * ╔══ LÕI ĐỂ CO LÀ HỘP HỢP ĐỒNG, KHÔNG PHẢI HỘP ĐO ĐƯỢC ═════════════════════╗
+ * ║ Bản trước lấy `core = safe` — bbox α ≥ 128 mà `slice.py:measure_cell` đo    ║
+ * ║ trên CẢ Ô. Con số ấy KHÔNG phải thân element: nó ôm luôn trang trí đục      ║
+ * ║ (hoa góc, đèn lồng, tua rua), và ranh giới thân/trang trí thì không tách    ║
+ * ║ được theo độ đục — `validate_output_geometry.py` đã ghi thẳng chuyện đó.    ║
+ * ║                                                                            ║
+ * ║ Đo trên dự án thật (`test-e0d4`, `chinh-ui`, ô «01-button»):                ║
+ * ║     safe          = [37, 212, 586, 249]   ← ôm cả hoa lẫn đèn lồng          ║
+ * ║     contractSafe  = [75, 230, 476, 166]   ← thân nút, đúng hộp prompt hứa   ║
+ * ║     outSize       = [112, 39]   drawScale = 4,25                           ║
+ * ║   lõi = safe        ⇒ s = min(112/586, 39/249) = 0,157  ← thân co còn 2/3   ║
+ * ║   lõi = contractSafe ⇒ s = min(112/476, 39/166) = 0,235 = 1/4,25  ✓         ║
+ * ║ Chủ sản phẩm dán ô này sang Figma và đo đúng triệu chứng của con số đầu:    ║
+ * ║ khung ra đúng 112×39 nhưng thân nút ngọc chỉ chiếm ~2/3 chỗ trong đó, phần  ║
+ * ║ còn lại là hoa và đèn lồng — *"ko đúng safe zone"*, họ nói.                 ║
+ * ║                                                                            ║
+ * ║ Mà `contractSafe` LÀ hộp đúng: QA của chính ô đó đọc `sizeDeviation         ║
+ * ║ .maxEdgePx = 0` — thân model vẽ ra khớp hộp hợp đồng, không thiếu một px.   ║
+ * ║ ⇒ `safe` đo được chỉ còn là ĐƯỜNG LÙI cho kit cắt bằng bản `slice.py` cũ    ║
+ * ║   (chưa ghi `contractSafe`). Khung vẫn = `outSize`, ảnh vẫn = tight × s, và ║
+ * ║   trang trí vẫn tràn ra NGOÀI khung — đúng như thiết kế muốn.               ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
  * ╔══ NỬA THỨ HAI, VÀ LÀ NỬA QUAN TRỌNG HƠN: PHẢI CO ẢNH ════════════════════╗
  * ║ Bản trước chỉ đổi khung rồi dán ảnh ở tỉ lệ 1. Chủ sản phẩm dán thử ô      ║
  * ║ «01-button» và thấy khung 263×262 (lõi model vẽ) chứ không phải 195×195 mà ║
@@ -219,26 +242,26 @@ export function contractFramed(files: readonly KitFile[]): ContractFramed {
       return file;
     }
 
-    const core = boxOf(file.safe);
+    /* LÕI = HỘP HỢP ĐỒNG. `safe` (bbox α≥128 do slice.py đo) ôm cả trang trí, nên
+       nó chỉ vào cuộc khi manifest KHÔNG có `contractSafe` — tức kit cắt bằng bản
+       engine cũ. Lý do đầy đủ + số đo ở khối «LÕI ĐỂ CO» phía trên. */
+    const core = box ?? boxOf(file.safe);
     if (core === null) {
-      /* Biết cỡ đầu ra nhưng KHÔNG đo được lõi (slice.py không tách được ruột): không
-         có gì để căn theo, nên giữ hành vi cũ — khung là hộp hợp đồng nếu có, tỉ lệ 1. */
-      if (box === null) {
-        measured.push(cellName(file));
-        return file;
-      }
-      return { ...file, safe: [box.x, box.y, box.w, box.h] };
+      /* Có `outSize` nhưng không có hộp nào để căn (không hợp đồng, không đo được):
+         không có gì để co, và đoán một tỉ lệ ở đây là bịa. Giữ nguyên, và nói ra. */
+      measured.push(cellName(file));
+      return file;
     }
 
     const s = Math.min(target.w / core.w, target.h / core.h);
     if (!Number.isFinite(s) || s <= 0) {
-      return box === null ? file : { ...file, safe: [box.x, box.y, box.w, box.h] };
+      return { ...file, safe: [core.x, core.y, core.w, core.h] };
     }
 
     /* Hộp ảo: cỡ `outSize / s` (để nhân ngược lại ra đúng `outSize`), tâm trùng tâm
-       lõi ⇒ phần dư của trục còn lại chia đều hai bên. Toạ độ x/y của `contractSafe`
-       KHÔNG dùng tới: vị trí khung trên bàn Figma do lưới quyết định, còn thứ phải
-       khớp là ẢNH so với KHUNG — và cái đó neo vào lõi. */
+       lõi ⇒ phần dư của trục còn lại chia đều hai bên. Vị trí khung trên bàn Figma do
+       lưới quyết định, không phải toạ độ này; thứ nó thật sự quyết là ẢNH đặt lệch
+       bao nhiêu SO VỚI khung — và cái đó phải neo vào lõi. */
     const vw = target.w / s;
     const vh = target.h / s;
     scales.set(file.path, s);

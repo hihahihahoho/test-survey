@@ -30,6 +30,12 @@ from PIL import Image
 ALPHA_FG = 24                        # α ≥ ngưỡng ⇒ pixel CÓ MỰC, dưới ⇒ nền trống.
                                      # Lấy thấp có chủ ý: quầng glow tan tới α rất
                                      # nhỏ vẫn là mực, và bbox silhouette phải ôm nó.
+                                     # Thấp, nhưng vẫn CAO HƠN màn sương α=1..3 mà
+                                     # model phủ lên cả ô (`slice.py:CONTENT_ALPHA`
+                                     # = 4 mang số đo). Nên `silhouette` ở đây không
+                                     # bị sương kéo phình ra cả ô như `content` từng
+                                     # bị — không phải sửa gì, chỉ là hai file phải
+                                     # đọc được cùng một lý do.
 ALPHA_CORE = 128                     # α ≥ ngưỡng ⇒ pixel thuộc LÕI (mặt chức năng).
                                      # Cùng con số `slice.py:CORE_ALPHA` dùng để ghi
                                      # `safe` vào manifest — một phép, hai người dùng.

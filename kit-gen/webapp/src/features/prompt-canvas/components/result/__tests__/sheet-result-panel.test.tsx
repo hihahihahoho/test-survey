@@ -290,10 +290,16 @@ describe("nút «Copy N ô sang Figma»", () => {
    * bấm cùng một nút mà ra hai bố cục khác nhau tuỳ hôm đó encoder có chạy không.
    */
   describe("tỉ lệ co theo từng ô", () => {
-    /** Ô «01-button»: xin ra 120×120, model vẽ lõi 263×262 ⇒ co còn 46%. */
+    /**
+     * Ô «01-button» của `test-e0d4`, số chép nguyên từ manifest: cỡ đầu ra 112×39,
+     * hộp hợp đồng 476×166 (engine xin model vẽ to `drawScale` = 4,25 lần) ⇒ co còn
+     * 39/166 ≈ 23%. Lõi co theo HỘP HỢP ĐỒNG chứ không theo `safe` đo được — `safe`
+     * ở đây (586×249) cố ý ôm cả hoa lẫn đèn lồng để ca này thấy được nếu ai đổi lại.
+     */
+    const S_FIT = 39 / 166;
     const fitCell = () => cell("tight/01-button", "ui", 0, {
-      w: 392, h: 328, canvas: [853, 853], content: [392, 328], contentAt: [233, 253],
-      safe: [276, 294, 263, 262], contractSafe: [301, 332, 195, 195], outSize: [120, 120],
+      w: 591, h: 417, canvas: [627, 627], content: [591, 417], contentAt: [34, 210],
+      safe: [37, 212, 586, 249], contractSafe: [75, 230, 476, 166], outSize: [112, 39],
     });
 
     it("đưa xuống đường dựng khung một HÀM tỉ lệ, không phải một số chung", async () => {
@@ -305,7 +311,7 @@ describe("nút «Copy N ô sang Figma»", () => {
       const scale = packCalls[0]?.scale;
       expect(typeof scale).toBe("function");
       const fn = scale as (f: KitFile) => number | undefined;
-      expect(fn(packCalls[0]!.files[0]!)).toBeCloseTo(120 / 263, 6);
+      expect(fn(packCalls[0]!.files[0]!)).toBeCloseTo(S_FIT, 6);
       /* Ô không có số đo nào ⇒ 1, KHÔNG phải quy ước 50% của màn kit cũ. */
       expect(fn(packCalls[0]!.files[1]!)).toBe(1);
     });
@@ -319,15 +325,15 @@ describe("nút «Copy N ô sang Figma»", () => {
       expect(boardCalls).toHaveLength(1);
       const fn = boardCalls[0]?.scaleOf;
       expect(typeof fn).toBe("function");
-      expect(fn?.(boardCalls[0]!.files[0] as KitFile)).toBeCloseTo(120 / 263, 6);
+      expect(fn?.(boardCalls[0]!.files[0] as KitFile)).toBeCloseTo(S_FIT, 6);
     });
 
     it("nói ra phép co ngay trên nút: cỡ xuất + phần trăm", () => {
       kitFiles = [fitCell()];
       mount();
       const title = screen.getByRole("button", { name: /Copy 1 ô sang Figma/ }).getAttribute("title") ?? "";
-      expect(title).toContain("cỡ xuất 120×120");
-      expect(title).toContain("46%");
+      expect(title).toContain("cỡ xuất 112×39");
+      expect(title).toContain("23%");
     });
 
     it("không ô nào lệch cỡ ⇒ KHÔNG bịa thêm câu «đã co»", () => {

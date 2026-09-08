@@ -17,7 +17,8 @@ LUẬT MỚI, ĐỌC HẾT TRONG MƯỜI GIÂY:
       │  ③ đo     = bbox alpha (chỉ ĐỌC, không sửa pixel) → content/safe
       ▼
   kits/<style>/<file>.png        canvas = ĐÚNG một ô
-  kits/<style>/tight/<file>.png  cùng ảnh, crop về bbox alpha>0 (không dư viền)
+  kits/<style>/tight/<file>.png  cùng ảnh, crop về bbox alpha ≥ CONTENT_ALPHA
+                                 (không dư viền, và không ôm màn sương của model)
 
 Thứ DUY NHẤT còn chạm vào alpha: `snap_solid_alpha` kéo α≥240 lên 255 (xem hàm).
 Nó không phải tách nền — nó chỉ vá chỗ model vẽ "gần đục" (đo được: đỉnh α=253,
@@ -48,6 +49,20 @@ SOLID_ALPHA = 240
 #: 128 = nửa đục — quầng sáng tan dần và mặt kính α≈64 nằm dưới, nên chúng không
 #: kéo hộp `safe` phình ra, mà vẫn còn nguyên trong ảnh.
 CORE_ALPHA = 128
+#: SÀN LƯỢNG TỬ của `content`/`content_at`/`tight/`. Nền "trong suốt" mà model trả
+#: về KHÔNG phải α=0: đo histogram alpha của một tấm raw 1254² thật (`test-e0d4`,
+#: chinh-ui) ⇒ α=0: 1.137.428 px · **α=1: 64.934 px** · α=2: 14.256 · α=3: 8.989 ·
+#: α=4: 6.898. Một màn sương α=1..3 phủ CẢ ô, nên `alpha_bbox(canvas)` (ngưỡng 1)
+#: trả về gần nguyên ô và `tight/` ra ảnh VUÔNG thay vì ôm sát element. Đo bbox
+#: theo từng ngưỡng trên ô `01-button` (ô 627²): ≥1 → 27,0–626,626 · ≥2 →
+#: 33,23–626,626 · ≥3 → 34,209–625,626 · **≥4 → 34,210–624,626** · ≥8 →
+#: 35,211–623,626 — từ 4 trở lên hộp đã đứng yên, nên 4 là sàn nhiễu chứ không
+#: phải một con số chọn cho đẹp. 4/255 ≈ 1,5% opacity: mắt không thấy.
+#:
+#: ĐÂY KHÔNG PHẢI TÁCH NỀN. Không một byte pixel nào bị đổi vì hằng này — nó chỉ
+#: quyết định HỘP CẮT đặt ở đâu. Sương vẫn nằm nguyên trong ảnh canvas, và phần
+#: sương lọt trong hộp `tight/` cũng đi ra nguyên vẹn.
+CONTENT_ALPHA = 4
 
 cfg = json.load(open(os.path.join(HERE, "styles.json")))
 for _sh in cfg["sheets"]:
@@ -410,11 +425,24 @@ if __name__ == "__main__":
                     contract_safe = [dx, dy, sw, sh_]
 
                 # ③ ĐO. Không một dòng nào dưới đây ghi vào pixel.
-                content_box = alpha_bbox(canvas)
+                # Sàn CONTENT_ALPHA để hộp không ôm màn sương α=1..3 của model (xem
+                # hằng). Đường lùi `or alpha_bbox(canvas)`: ô mà KHÔNG pixel nào đạt
+                # α≥4 vẫn được cắt bình thường theo bbox sương — TRỐNG là "không một
+                # pixel nào có alpha", không phải "mờ quá ngưỡng của tôi". Từ chối cắt
+                # một ô người dùng đã trả tiền gen là giữ nó làm con tin; và ô mờ toàn
+                # phần là chuyện của lượt gen hỏng, phải nhìn thấy được thì mới sửa.
+                content_box = alpha_bbox(canvas, CONTENT_ALPHA)
+                haze_only = content_box is None
+                if haze_only:
+                    content_box = alpha_bbox(canvas)
                 if content_box is None:
                     entry["empty_cells"].append(comp["file"])
                     print(f"  · {sid}/{comp['file']}: ô TRỐNG (không pixel nào có alpha)")
                     continue
+                if haze_only:
+                    print(f"  ⚠ {sid}/{comp['file']}: cả ô không có pixel nào α ≥ "
+                          f"{CONTENT_ALPHA} — chỉ là sương mờ. Vẫn cắt nguyên, nhưng "
+                          "lượt vẽ này gần như trống.")
                 ledger = measure_cell(canvas, contract_safe, qa_threshold)
                 if ledger["sizeDeviation"]["flagged"]:
                     print(f"  ⚠ QA {sid}/{comp['file']}: sizeDeviation "
@@ -425,8 +453,8 @@ if __name__ == "__main__":
                 ox, oy = content_box[0], content_box[1]
                 pw = content_box[2] - content_box[0]
                 ph = content_box[3] - content_box[1]
-                # tight/ = cùng ảnh, cắt về đúng bbox alpha — không dư một viền trong
-                # suốt nào. Web ưu tiên bản này (`cover.mjs`, lưới kết quả); bản canvas
+                # tight/ = cùng ảnh, cắt về đúng bbox alpha ≥ CONTENT_ALPHA — không dư
+                # một viền trong suốt nào, và không ôm màn sương phủ cả ô. Web ưu tiên bản này (`cover.mjs`, lưới kết quả); bản canvas
                 # ở lại vì Figma cần toạ độ tuyệt đối trong ô.
                 tight = canvas.crop(content_box)
                 os.makedirs(os.path.join(out_dir, "tight"), exist_ok=True)
