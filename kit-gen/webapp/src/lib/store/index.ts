@@ -6,7 +6,6 @@ export * from "./prefs";
 export * from "./setup";
 export * from "./recent";
 export * from "./editor";
-export * from "./wizard";
 /* Nguồn sự thật của tuỳ chọn nằm trên ĐĨA, không nằm ở localStorage. `disk-settings` là
    phần THUẦN (danh sách field + so sánh) nên vào được cửa chung.
 

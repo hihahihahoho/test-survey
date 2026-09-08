@@ -1,7 +1,7 @@
 import { GLAZE_PRESETS, glazePhrase } from "@/features/kit-core/lib/glaze";
 import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
 import { EXPRESSIONS, OUTFIT_THEMES, POSES } from "@/features/kit-core/lib/poses";
-import { CAMERA_VIEWS } from "@/features/pose-lab/lib/pose-state";
+import { CAMERA_VIEWS } from "@/features/prompt-lab/lib/pose/pose-state";
 import { DECOR_LEVELS, getPresets, type PresetBundle } from "./presets-store";
 
 /**
@@ -59,7 +59,7 @@ export type PillKind =
   | "pose"
   /**
    * GÓC MÁY của một dòng dáng trên thẻ Nhân vật. Danh mục là `CAMERA_VIEWS` của
-   * pose-lab — CÙNG bảng mà manơcanh 3D dùng để đặt camera, nên chữ đi vào prompt
+   * `lib/pose/pose-state.ts` — CÙNG bảng mà manơcanh 3D dùng để đặt camera, nên chữ đi vào prompt
    * và tấm ảnh đính kèm luôn nói về một góc. Hai bảng là hai thứ sẽ lệch nhau.
    */
   | "view"
@@ -311,7 +311,7 @@ export function pillOptions(kind: PillKind, presets: PresetBundle = getPresets()
       return POSES.map((pose) => ({ value: pose.id, vi: pose.label, en: `a ${pose.id.replace(/-/g, " ")} pose` }));
 
     case "view":
-      /* Đọc THẲNG bảng camera của pose-lab, không chép một bảng thứ hai sang đây:
+      /* Đọc THẲNG bảng camera của manơcanh (`lib/pose/pose-state.ts`), không chép một bảng thứ hai sang đây:
          cùng `id` là cùng vị trí máy quay khi dựng ảnh manơcanh, nên chữ trong
          prompt và ảnh đính kèm không có đường nào để nói hai góc khác nhau. */
       return CAMERA_VIEWS.map((view) => ({ value: view.id, vi: view.vi, en: view.en }));

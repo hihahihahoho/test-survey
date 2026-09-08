@@ -1,6 +1,5 @@
 import { createRoute, Navigate } from "@tanstack/react-router";
 import { Route as rootRoute } from "./__root";
-import { requireSetup } from "./guards";
 import { parseProjectParams } from "./params";
 import { projectSearchSchema } from "./search-schemas";
 
@@ -33,7 +32,6 @@ export const Route = createRoute({
   path: "/p/$projectId",
   params: { parse: parseProjectParams },
   validateSearch: projectSearchSchema,
-  beforeLoad: ({ location }) => requireSetup(location.pathname),
   component: ProjectRoute,
 });
 

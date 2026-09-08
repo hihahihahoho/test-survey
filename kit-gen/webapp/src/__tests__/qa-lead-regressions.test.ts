@@ -22,7 +22,6 @@ describe("V-1 · class Tailwind phải TỒN TẠI trong bảng màu của repo"
     "src/components/layout/ProjectRail.tsx",
     "src/components/layout/AppBreadcrumb.tsx",
     "src/components/layout/FloraShell.tsx",
-    "src/features/setup/components/WizardStepper.tsx",
   ];
   it.each(files)("%s không dùng token `white` (đã bị config xoá)", (f) => {
     expect(read(f)).not.toMatch(/(bg|border|text)-white\b|white\/\[/);
@@ -128,8 +127,17 @@ describe("V-8 · không hứa phím tắt mà mã không hề xử lý", () => {
 });
 
 describe("V-9 · sàn chữ 12px (audit I3) không được thủng", () => {
-  it("không còn text-[11px]/text-[10px] trong mã màn", () => {
-    expect(read("src/features/setup/components/WizardStepper.tsx")).not.toContain("text-[11px]");
+  /* ĐỔI ĐỊA CHỈ, KHÔNG ĐỔI LUẬT. Chỗ thủng sàn ban đầu là `WizardStepper.tsx` của
+     wizard cài đặt; wizard đã bị xoá 07/09/2026. Bốn mảnh dưới đây là phần THỪA KẾ
+     trực tiếp của nó (dời sang `features/settings/parts/` cùng đợt) — đúng chỗ mà
+     một `text-[11px]` chép lại từ mã cũ sẽ mọc lên. */
+  it.each([
+    "src/features/settings/parts/StepCard.tsx",
+    "src/features/settings/parts/DoctorChecklist.tsx",
+    "src/features/settings/parts/ImageGenCard.tsx",
+    "src/features/settings/parts/WorkspacePicker.tsx",
+  ])("%s không còn text-[11px]/text-[10px]", (f) => {
+    expect(read(f)).not.toMatch(/text-\[(10|11)px\]/);
   });
 });
 

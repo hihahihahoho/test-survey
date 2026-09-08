@@ -82,7 +82,7 @@ describe("2B-1 · thang display + dọn `text-[Npx]`", () => {
 
   it("bốn H1 cấp trang đều đi qua `DISPLAY`, không màn nào tự khai cỡ", () => {
     for (const f of [
-      "src/features/setup/components/StepShell.tsx",
+      "src/features/settings/parts/StepCard.tsx",
       "src/features/project/ProjectSettingsScreen.tsx",
     ]) {
       expect(read(f)).toContain("DISPLAY");

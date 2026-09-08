@@ -1,11 +1,11 @@
 /**
- * Cửa duy nhất của lab Prompt Composer.
+ * Cửa của `features/prompt-lab`.
  *
- * Route chỉ được biết tới hai màn; extension, node view và kho preset là chuyện
- * bên trong. Xuất thêm bộ serialize vì đó là mảnh DUY NHẤT của lab này đáng đi
- * tiếp nếu ý tưởng được chốt — phần còn lại là UI thử nghiệm.
+ * 07/09/2026 — hai màn demo (`PromptComposerScreen`, `PresetsScreen`) và ba route
+ * `/lab/*` của chúng đã bị xoá. Thứ còn lại KHÔNG phải một lab nữa: nó là bộ
+ * component + lib mà khu soạn prompt `/k/:id` (`features/prompt-canvas`) dùng
+ * thật. Cửa này chỉ giữ bộ serialize — phần còn lại prompt-canvas import thẳng
+ * theo đường dẫn con, đúng như nó vẫn làm.
  */
-export { PromptComposerScreen } from "./PromptComposerScreen";
-export { PresetsScreen } from "./PresetsScreen";
 export { serializeComposer, countComposerImages } from "./lib/serialize-composer";
 export { serializeDoc, type PromptDocNode } from "./lib/serialize";

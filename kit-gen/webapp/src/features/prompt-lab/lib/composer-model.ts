@@ -1,6 +1,6 @@
 import type { JSONContent } from "@tiptap/react";
 import { EXPRESSIONS } from "@/features/kit-core/lib/poses";
-import { DEFAULT_VIEW } from "@/features/pose-lab/lib/pose-state";
+import { DEFAULT_VIEW } from "@/features/prompt-lab/lib/pose/pose-state";
 import { getPresets, type PresetBundle } from "./presets-store";
 import { INHERIT } from "./pill-registry";
 import { defaultSizeOf } from "./cell-size";
@@ -97,7 +97,7 @@ export interface MascotPose {
   id: string;
   /** Id dáng trong `POSES` (`kit-core/lib/poses.ts`). */
   pose: string;
-  /** Id góc máy trong `CAMERA_VIEWS` (`pose-lab/lib/pose-state.ts`). */
+  /** Id góc máy trong `CAMERA_VIEWS` (`prompt-lab/lib/pose/pose-state.ts`). */
   view: string;
   /** Cụm EN của nét mặt — quy ước `PhraseOption`: value CHÍNH LÀ cụm EN. */
   expression: string;
@@ -417,7 +417,7 @@ export const DEFAULT_MASCOT_POSE = "idle";
 /**
  * Một dòng dáng mới.
  *
- * Mặc định là dáng đứng chờ + góc mặc định của pose-lab + nét mặt ĐẦU danh mục:
+ * Mặc định là dáng đứng chờ + góc mặc định của manơcanh + nét mặt ĐẦU danh mục:
  * bấm «+ Dáng» phải ra một dòng VẼ ĐƯỢC NGAY, không phải ba ô trống bắt người
  * dùng điền trước khi thấy được gì.
  */

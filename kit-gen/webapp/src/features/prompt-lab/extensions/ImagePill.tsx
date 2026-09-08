@@ -34,7 +34,7 @@ import { usePromptProjectId } from "@/features/prompt-canvas/lib/project-context
  *    thái đó nằm trong React state chứ KHÔNG trong attr của node: attr được ghi
  *    xuống đĩa, mà một tài liệu lưu vĩnh viễn chữ "đang tải" là một lời nói dối
  *    không bao giờ tự hết.
- *  · KHÔNG CÓ DỰ ÁN THÌ KHÔNG CHỌN ĐƯỢC ẢNH (route lab `/lab/prompt-composer`).
+ *  · KHÔNG CÓ DỰ ÁN THÌ KHÔNG CHỌN ĐƯỢC ẢNH (`PromptProjectContext` là `null`).
  *    Pill nói ra điều đó bằng nhãn, thay vì bấm vào rồi không có gì xảy ra.
  *
  * ╔══ PILL NÀY NAY CHỈ CÒN MỘT VIỆC: CHỌN MỘT TỆP ═══════════════════════════╗

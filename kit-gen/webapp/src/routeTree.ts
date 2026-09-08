@@ -1,5 +1,4 @@
 import { Route as rootRoute } from "./routes/__root";
-import { Route as setupRoute } from "./routes/setup";
 import { Route as indexRoute } from "./routes/index";
 import { Route as settingsRoute } from "./routes/settings";
 import { Route as uiLibraryRoute } from "./routes/library.ui";
@@ -19,9 +18,6 @@ import { Route as runDetailRoute } from "./routes/p.$projectId.runs.$runId";
 import { Route as kitRoute } from "./routes/p.$projectId.kit";
 import { Route as projectSettingsRoute } from "./routes/p.$projectId.settings";
 import { Route as previewRoute } from "./routes/__preview.route";
-import { Route as promptComposerLabRoute } from "./routes/lab.prompt-composer";
-import { Route as promptComposerPresetsRoute } from "./routes/lab.prompt-composer.presets";
-import { Route as poseEditorLabRoute } from "./routes/lab.pose-editor";
 
 /**
  * CÂY ROUTE — khai báo TAY, đúng sitemap §2.1. Không dùng file-based codegen.
@@ -38,6 +34,12 @@ import { Route as poseEditorLabRoute } from "./routes/lab.pose-editor";
  * là overlay của 8 màn đó — không thêm route mới mà không sửa spec trước.
  * `__preview` là trang showcase component của R0, không nằm trong sitemap.
  *
+ * 07/09/2026 — `/setup` (S0) BỊ XOÁ. Nó đã chỉ còn `throw redirect({ to: "/" })` từ
+ * đợt local-first: máy được cài xong TRƯỚC khi server mở app, nên không còn gì để
+ * hỏi. Wizard (`features/setup/`) đi cùng nó. Hệ quả cho người sửa sau: `/setup`
+ * nay ra 404 — nếu cần đỡ bookmark cũ thì thêm lại một stub chuyển hướng ở đây,
+ * đừng dựng lại wizard.
+ *
  * FE-2·E1 THÊM ROUTE THỨ 10 — `/p/:id/f/:fileId` (bàn làm việc, file con kiểu canvas).
  * Đúng luật "sửa spec trước": UI-SPEC-V2 §4.3 chốt đường dẫn này nguyên văn. File con
  * kiểu **workflow** thì KHÔNG có route riêng — chúng đi bằng `?file=` trên các route cũ,
@@ -47,7 +49,6 @@ import { Route as poseEditorLabRoute } from "./routes/lab.pose-editor";
  * `runDetailRoute` nằm trước `runsRoute` — route cụ thể trước route tổng.
  */
 export const routeTree = rootRoute.addChildren([
-  /* S0 */ setupRoute,
   /* S1 */ indexRoute,
   /* S6 */ settingsRoute,
   uiLibraryRoute,
@@ -67,12 +68,8 @@ export const routeTree = rootRoute.addChildren([
   /* legacy */ fileRoute,
   /* S2 */ projectRoute,
   previewRoute,
-  /* lab — cùng hạng với `previewRoute`: trang công cụ cho người làm, KHÔNG có
-     link nào trong UI trỏ tới, chỉ vào bằng URL. Xem đầu file route để biết vì
-     sao nó không đụng vào "đúng 8 màn" của §2.1.
-     Trang preset đứng TRƯỚC màn composer — route cụ thể trước route tổng, cùng
-     luật với `runDetailRoute` / `runsRoute` ở trên. */
-  promptComposerPresetsRoute,
-  promptComposerLabRoute,
-  poseEditorLabRoute,
+  /* 07/09/2026 — ba route `/lab/*` (prompt-composer · presets · pose-editor) đã bị
+     xoá cùng đợt dọn mã chết: chúng là bản demo, không link nào trong UI trỏ tới,
+     và phần sống của chúng đã dọn vào `features/prompt-lab/lib/**`. Ai dựng lại
+     một trang lab thì đăng ký ở ĐÂY, cùng hạng với `previewRoute`. */
 ]);

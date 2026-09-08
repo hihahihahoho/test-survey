@@ -4,6 +4,7 @@
  * ╔══ VÌ SAO FILE NÀY TỒN TẠI (INTEGRATION) ══════════════════════════════════╗
  * ║ Ba team viết ba bản `bytes()` và hai bản `count()` khác nhau:              ║
  * ║   features/projects/lib/format.ts · features/setup/lib/format.ts ·         ║
+ * ║   (bản setup đã bị xoá 07/09/2026 cùng wizard cài đặt)                     ║
  * ║   features/runs/lib/format.ts                                             ║
  * ║ và cả ba đều ghi cùng một dòng NEEDS: "nếu ≥2 màn cần, nâng lên lib/".     ║
  * ║ (NEEDS-s1-projects §N1 · NEEDS-s0-setup dòng đầu format.ts · runs §N4.)    ║

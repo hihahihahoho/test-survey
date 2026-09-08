@@ -114,7 +114,7 @@ const EXT_BY_MIME: Record<string, string> = {
  * là đúng phép đang cần, đồng bộ, và có mặt ở cả hai môi trường.
  *
  * Ném khi chuỗi không phải data URL base64 của ảnh: đây là đường đi của
- * `capturePoseRef()` (pose-lab trả data URL), và một chuỗi hỏng phải nổ NGAY ở
+ * `capturePoseRef()` (`prompt-lab/lib/pose/` trả data URL), và một chuỗi hỏng phải nổ NGAY ở
  * đây chứ không được biến thành một request 400 khó hiểu.
  */
 export function dataUrlToFile(dataUrl: string, name: string): File {

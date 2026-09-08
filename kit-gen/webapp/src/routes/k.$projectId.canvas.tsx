@@ -1,13 +1,11 @@
 import { createRoute, Navigate } from "@tanstack/react-router";
 import { Route as rootRoute } from "./__root";
-import { requireSetup } from "./guards";
 import { parseProjectParams } from "./params";
 
 export const Route = createRoute({
   getParentRoute: () => rootRoute,
   path: "/k/$projectId/canvas",
   params: { parse: parseProjectParams },
-  beforeLoad: ({ location }) => requireSetup(location.pathname),
   component: CanvasProjectRoute,
 });
 

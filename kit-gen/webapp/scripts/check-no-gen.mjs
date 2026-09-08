@@ -24,10 +24,9 @@
  *     · file SẢN PHẨM  — luật CHẶT NHẤT, đúng chữ của plan: chỉ cần NHẮC TÊN
  *       `useStartRun`, hay có chuỗi `kind:"gen"`, là ĐỎ.
  *     · file TEST      — luật theo HÌNH DẠNG LỜI GỌI (`useStartRun(`).
- *       Lý do có thật, không phải nới tay: `features/gen/__tests__/mock-boundary.test.ts:69`
- *       chứa `expect(src).not.toMatch(/useSaveContract|useStartRun|…/)` — tức là một
- *       CỔNG KHÁC đang khẳng định điều y hệt cổng này. Bắt đỏ vì một cổng anh em
- *       gọi tên kẻ bị cấm là bắt nhầm. Test không thể tạo run nếu không có lời gọi;
+ *       Lý do có thật, không phải nới tay: một cổng anh em có thể NHẮC TÊN kẻ bị cấm
+ *       ngay trong assertion của chính nó (`expect(src).not.toMatch(/…useStartRun…/)`).
+ *       Bắt đỏ vì một cổng khác gọi tên kẻ bị cấm là bắt nhầm. Test không thể tạo run nếu không có lời gọi;
  *       luật hình-dạng-lời-gọi đóng đủ lỗ đó.
  *
  *  ③ Luật ③ canh CÁI LỖ THẬT SỰ NGUY HIỂM: đường vòng. Workflow không gọi
@@ -55,12 +54,14 @@ const root = new URL("..", import.meta.url).pathname;
  *    một nút "Vẽ" sẽ mọc ra nếu ai đó lỡ tay, đúng vai trò mà `workflow-v4` giữ
  *    khi plan §W3-0 được viết. Vùng cấm phải theo nơi người ta đang gõ code, chứ
  *    không theo tên thư mục lịch sử.
+ *  · BỎ `src/features/canvas` và `src/features/gen` (dọn mã chết, 07/09/2026). Hai
+ *    thư mục đó ĐÃ BỊ XOÁ khỏi repo cùng đợt chuyển sang một màn duy nhất
+ *    `/k/:id`; giữ tên trong danh sách chính là cái bẫy "xanh vì mù" mô tả ở gạch
+ *    đầu dòng trên. Nếu ai dựng lại nhánh vẽ, THÊM đường dẫn mới vào đây trước.
  */
 const GUARDED = [
   "src/features/kit-core",
   "src/features/prompt-canvas",
-  "src/features/canvas",
-  "src/features/gen",
 ];
 
 /** Hook cắt: dù nằm ở đâu cũng phải giữ `kind` là hằng (luật ③). */

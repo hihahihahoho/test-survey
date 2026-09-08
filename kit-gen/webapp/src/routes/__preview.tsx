@@ -58,16 +58,15 @@ import { AGENT_STATUS, JOB_STATUS, RUN_STATUS, type AgentStatus, type JobStatus,
 import { useUiStore } from "@/lib/store";
 import { DISPLAY, SERIF, FLOATBAR, DOTGRID } from "@/components/layout/flora";
 
-/* Story do nhánh C/D bàn giao. Q CHỈ GHÉP, không sửa component (FE2-PLAN §2 "Q không sửa
+/* Story do nhánh C bàn giao. Q CHỈ GHÉP, không sửa component (FE2-PLAN §2 "Q không sửa
    logic để làm xanh test").
 
-   VÌ SAO `React.lazy` CHỨ KHÔNG PHẢI import tĩnh: lượt đầu tôi import tĩnh, build lại thì
-   `dist/assets/canvas-*.js` tụt từ 19.26 kB xuống 1.86 kB còn chunk chung `common-*.js`
-   phồng từ 361.92 lên 391.31 kB — Rolldown thấy `features/canvas` được hai điểm vào dùng
-   (route thật + trang preview) nên hoisted nó vào chunk chung, làm rỗng ruột việc lazy mà
-   E1 vừa dựng. Test đếm chunk của E1 vẫn xanh vì nó chỉ đếm SỐ chunk `canvas-*`, không đo
-   kích thước ⇒ đây đúng là loại hồi quy im lặng. `React.lazy` giữ trang preview là điểm
-   vào riêng: chunk chung trở lại đúng 361.92 kB (cùng hash với bản E1 bàn giao). */
+   VÌ SAO `React.lazy` CHỨ KHÔNG PHẢI import tĩnh — bài học đo được, giữ nguyên dù story
+   canvas đã bị xoá cùng `features/canvas` (07/09/2026): lượt đầu import tĩnh thì Rolldown
+   thấy feature được hai điểm vào dùng (route thật + trang preview) nên hoist nó lên chunk
+   chung, chunk chung phồng 361.92 → 391.31 kB và việc lazy ở route thành hình thức. Test
+   đếm chunk lúc đó vẫn xanh vì nó chỉ đếm SỐ chunk, không đo kích thước ⇒ đúng loại hồi
+   quy im lặng. Story nào cũng phải là điểm vào RIÊNG, nạp động. */
 const SubfilePreview = React.lazy(() =>
   import("@/features/docs/__preview__").then((m) => ({ default: m.SubfilePreview })),
 );
@@ -77,10 +76,6 @@ const SubfileCrudPreview = React.lazy(() =>
 const SubfileA11yPreview = React.lazy(() =>
   import("@/features/docs/__preview__").then((m) => ({ default: m.SubfileA11yPreview })),
 );
-const CanvasPreview = React.lazy(() =>
-  import("@/features/canvas/__preview__").then((m) => ({ default: m.CanvasPreview })),
-);
-
 /** Story nạp rời ⇒ phải có lối chờ tử tế, không nhảy layout, không trắng khối. */
 function StoryFrame({ children }: { children: React.ReactNode }) {
   return (
@@ -724,17 +719,6 @@ export function PreviewPage() {
             <SubfilePreview />
             <SubfileCrudPreview />
             <SubfileA11yPreview />
-          </StoryFrame>
-        </Section>
-
-        {/* -------------------------------------------------- FE-2 · CANVAS (nhánh D) */}
-        <Section
-          id="canvas-shell"
-          title="14 · Khung bàn làm việc — CHƯA phải canvas thật (FE-2 · D)"
-          note="Chỉ có khung xem trước: pan/zoom bằng useViewport của FE-1 + thanh công cụ nổi. KHÔNG có node, chọn, kéo, undo hay copy Figma — mọi hành động đó đang khoá kèm nhãn «Sắp có» và thuộc FE-3/FE-5."
-        >
-          <StoryFrame>
-            <CanvasPreview />
           </StoryFrame>
         </Section>
 

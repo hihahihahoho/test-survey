@@ -2,7 +2,6 @@ import { createRoute, useNavigate } from "@tanstack/react-router";
 import { Route as rootRoute } from "./__root";
 import { AppLayout } from "@/components/layout";
 import { PromptCanvasScreen } from "@/features/prompt-canvas";
-import { requireSetup } from "./guards";
 import { parseProjectParams } from "./params";
 import { kitCanvasSearchSchema } from "./search-schemas";
 
@@ -26,7 +25,6 @@ export const Route = createRoute({
   path: "/k/$projectId",
   params: { parse: parseProjectParams },
   validateSearch: kitCanvasSearchSchema,
-  beforeLoad: ({ location }) => requireSetup(location.pathname),
   component: KitRoute,
 });
 

@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingState } from "@/components/common";
 import { devDetails, presentError, type ConnectionStatus } from "@/lib/api";
 import type { useDoctor } from "@/lib/hooks";
-import { DoctorChecklist } from "@/features/setup/steps/parts/DoctorChecklist";
-import { ImageGenCard } from "@/features/setup/steps/parts/ImageGenCard";
+import { DoctorChecklist } from "../parts/DoctorChecklist";
+import { ImageGenCard } from "../parts/ImageGenCard";
 import { ErrorDocsPanel } from "@/features/docs/components/ErrorDocsPanel";
 import { codeFromLocationHash } from "@/features/docs/lib/anchors";
 

@@ -1,18 +1,11 @@
-import * as React from "react";
 import { describe, expect, it } from "vitest";
-import { renderToString } from "react-dom/server";
-import { RouterContextProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { JSONContent } from "@tiptap/react";
 
-import { routeTree } from "@/routeTree";
 import { GLAZE_PRESETS, glazePhrase } from "@/features/kit-core/lib/glaze";
 import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
 import { GENRE_PRESETS } from "@/features/kit-core/lib/genre-presets";
 import { EXPRESSIONS, OUTFIT_THEMES, POSES } from "@/features/kit-core/lib/poses";
 
-import { PromptComposerScreen } from "../PromptComposerScreen";
-import { PresetsScreen } from "../PresetsScreen";
 import { serializeComposer, countComposerImages } from "../lib/serialize-composer";
 import { freeText, serializeDoc, makeContext, type PromptDocNode } from "../lib/serialize";
 import { backgroundDoc, mascotDoc, mascotPoseDoc, SCAFFOLD_BACKGROUND } from "../lib/doc-templates";
@@ -25,17 +18,19 @@ import { brandColorName, describeBrandColors } from "../lib/brand-colors";
 import { NODE } from "../lib/schema";
 
 /**
- * Test của một PROTOTYPE — phạm vi cố ý hẹp, và nói rõ hẹp ở đâu.
+ * Bộ SERIALIZE của khu soạn prompt — màn → prompt.
  *
- * Thứ được khoá: bộ SERIALIZE (màn → prompt) và các dây nối dễ đứt CÂM (route,
- * danh mục lấy từ kit-core, luật "để trống = kế thừa"). Đó là phần sẽ sống
- * tiếp nếu ý tưởng được chốt, và cũng là phần hỏng KHÔNG BÁO — gõ lệch một tên
- * node thì prompt chỉ thiếu một mảnh, không ai thấy.
+ * 07/09/2026: hai màn demo (`PromptComposerScreen`, `PresetsScreen`) và ba route
+ * `/lab/*` đã bị xoá, nên describe cuối ("dây nối route + hai màn render được")
+ * đi theo — nó chỉ tồn tại để khoá những thứ đó. Phần Ở LẠI đúng là phần mà
+ * `features/prompt-canvas` (`/k/:id`) gọi thật.
+ *
+ * Thứ được khoá: bộ serialize và các dây nối dễ đứt CÂM (danh mục lấy từ
+ * kit-core, luật "để trống = kế thừa"). Đó cũng là phần hỏng KHÔNG BÁO — gõ lệch
+ * một tên node thì prompt chỉ thiếu một mảnh, không ai thấy.
  *
  * Thứ KHÔNG được khoá: gõ phím trong ProseMirror, menu `/` mở đúng chỗ, dropdown
- * pill, công tắc chế độ. Chúng cần DOM thật (`*.dom.test.tsx`, config riêng) và
- * với một lab thì cái giá đó chưa đáng — người thật sẽ sờ trực tiếp, đó là mục
- * đích của cả màn này. Chúng ĐÃ được kiểm bằng tay trên trình duyệt.
+ * pill, công tắc chế độ. Chúng cần DOM thật (`*.dom.test.tsx`, config riêng).
  */
 
 const PRESETS = seedPresets();
@@ -402,57 +397,5 @@ describe("hai chế độ — phát hiện 'đã chế' để hỏi trước khi
     const paragraph = doc.content![0]!;
     paragraph.content!.push({ type: "text", text: " nhìn từ trên cao lúc hoàng hôn" });
     expect(freeText(doc, SCAFFOLD_BACKGROUND)).toBe("nhìn từ trên cao lúc hoàng hôn");
-  });
-});
-
-describe("dây nối route + hai màn render được", () => {
-  it.each(["/lab/prompt-composer", "/lab/prompt-composer/presets"])("`%s` có trong cây route", (path) => {
-    expect(JSON.stringify(routeTree).replaceAll("\\/", "/")).toContain(path);
-  });
-
-  /**
-   * Hai màn có `<Link>` giữa chúng, mà `<Link>` đọc router qua context — render
-   * trần sẽ ném "Cannot read properties of null (reading 'isServer')". Nên bọc
-   * bằng `RouterContextProvider` với ĐÚNG router thật của app (cùng `routeTree`,
-   * cùng `notFoundMode` như App.tsx). Bọc bằng một router bịa ra thì test xanh
-   * trong khi link thật có thể trỏ vào một path không tồn tại.
-   */
-  const withRouter = (node: React.ReactNode) => {
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const router = createRouter({
-      routeTree,
-      history: createMemoryHistory({ initialEntries: ["/lab/prompt-composer"] }),
-      notFoundMode: "root",
-      context: { queryClient },
-    });
-    /* `QueryClientProvider` là dây MỚI từ Wave 4·A: danh mục preset đã rời
-       localStorage sang `GET /api/library`, nên `usePresets()` gọi `useQueryClient()`.
-       Router context có sẵn một `queryClient` nhưng đó là context của ROUTER —
-       react-query đọc context RIÊNG của nó, hai thứ khác nhau. */
-    return renderToString(
-      <QueryClientProvider client={queryClient}>
-        <RouterContextProvider router={router}>{node}</RouterContextProvider>
-      </QueryClientProvider>,
-    );
-  };
-
-  it("smoke: Composer render không ném, và nói rõ mình là lab", () => {
-    /* `immediatelyRender: false` trong `useEditor` là thứ làm cho lần render đầu
-       KHÔNG chạm DOM — nên `renderToString` chạy được ở môi trường `node` mà
-       không cần jsdom. Test này chính là cái canh tuỳ chọn đó không bị ai gỡ. */
-    const html = withRouter(<PromptComposerScreen />);
-    expect(html).toContain("Lab demo");
-    expect(html).toContain("Prompt xem trước");
-    expect(html).toContain("Thêm block");
-  });
-
-  it("smoke: trang preset render và nói ĐÚNG nơi danh mục được lưu", () => {
-    const html = withRouter(<PresetsScreen />);
-    expect(html).toContain("Preset của lab");
-    /* Wave 4·A: kho đã rời localStorage. Câu trên màn phải đổi theo — một màn nói
-       "lưu trong trình duyệt này" trong khi dữ liệu nằm ở workspace là một lời
-       nói dối, và người dùng sẽ dựa vào nó để quyết định có sao lưu hay không. */
-    expect(html).toContain("workspace KitGen");
-    expect(html).not.toContain("trình duyệt này");
   });
 });

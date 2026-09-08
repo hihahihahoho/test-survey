@@ -4,7 +4,7 @@ import { uploadPillImage } from "./pill-image";
 import { canComposePoseSheet, composePoseSheet } from "./pose-sheet";
 
 /**
- * pose-refs.ts — "BẤM VẼ THÌ ẢNH DÁNG TỰ CÓ", đúng luồng mà pose-lab đã hẹn.
+ * pose-refs.ts — "BẤM VẼ THÌ ẢNH DÁNG TỰ CÓ", đúng luồng mà bộ manơcanh (`prompt-lab/lib/pose/`) đã hẹn.
  *
  * ╔══ LỜI HẸN Ở `capture-pose-ref.ts` ═══════════════════════════════════════╗
  * ║ File đó tự ghi luồng đích: người dùng chỉ chọn [dáng] + [góc]; bấm Vẽ ⇒   ║
@@ -68,11 +68,11 @@ export async function ensurePoseRefs(
     return { ...idle, skipped: "Máy này chưa dựng được ảnh dáng — vẽ bằng chữ mô tả." };
   }
 
-  let capture: typeof import("@/features/pose-lab/lib/capture-pose-ref");
+  let capture: typeof import("@/features/prompt-lab/lib/pose/capture-pose-ref");
   try {
     /* `import()` ĐỘNG: `three` nặng ~700 kB và không được nằm trong bundle chính
        chỉ vì màn có một pill dáng. Xem đầu `capture-pose-ref.ts`. */
-    capture = await import("@/features/pose-lab/lib/capture-pose-ref");
+    capture = await import("@/features/prompt-lab/lib/pose/capture-pose-ref");
   } catch (error) {
     return { ...idle, skipped: `Chưa nạp được bộ dựng ảnh dáng (${message(error)}) — vẽ bằng chữ mô tả.` };
   }

@@ -8,7 +8,7 @@ import type { ConnectionStatus } from "@/lib/api";
 import { AGENT_STATUS } from "@/lib/status";
 import { useActivateWorkspace, useWorkspaces } from "@/lib/hooks";
 import { LS_KEYS } from "@/lib/store";
-import { WorkspacePicker } from "@/features/setup/steps/parts/WorkspacePicker";
+import { WorkspacePicker } from "../parts/WorkspacePicker";
 import { toastError, toastSuccess } from "@/features/projects/lib/feedback";
 
 /**

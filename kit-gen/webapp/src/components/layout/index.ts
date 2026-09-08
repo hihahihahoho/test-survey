@@ -18,7 +18,7 @@ export { ErrorBoundary, type ErrorBoundaryProps } from "./ErrorBoundary";
 export { ScreenPlaceholder } from "./ScreenPlaceholder";
 export { UpdateOverlay } from "./UpdateOverlay";
 export { UpdateResultNotice, announceUpdateResult } from "./UpdateResultNotice";
-export { LazyScreen, CanvasFileScreen, KitFormRouteScreen, isScreenAvailable, availableScreens } from "./lazy-screen";
+export { LazyScreen, KitFormRouteScreen, isScreenAvailable, availableScreens } from "./lazy-screen";
 export {
   useRegisterCommands, useScreenCommands, COMMAND_GROUPS,
   type Command, type CommandFactory, type CommandGroup,

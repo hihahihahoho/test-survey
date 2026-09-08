@@ -178,7 +178,10 @@ describe("§W1-9 — ý định `?action=` được đọc, chạy đúng một 
   it("màn Home có nối `useCreateIntent`, và đường CustomEvent đã bị bỏ hẳn", () => {
     const home = readFileSync(join(SRC, "features/projects/ProjectsScreen.tsx"), "utf8");
     expect(home).toContain("useCreateIntent(");
-    for (const file of ["routes/setup.tsx", "components/layout/AppLayout.tsx", "features/setup/hooks/use-setup-exit.ts"]) {
+    /* `routes/setup.tsx` và `features/setup/hooks/use-setup-exit.ts` đã bị xoá
+       07/09/2026 cùng wizard cài đặt — hai nơi từng dispatch CustomEvent. Nơi
+       CÒN LẠI mà đường sự kiện cũ có thể mọc lại là khung app. */
+    for (const file of ["components/layout/AppLayout.tsx"]) {
       const src = readFileSync(join(SRC, file), "utf8");
       expect(src, `${file} còn dispatch sự kiện không ai nghe`).not.toContain("dispatchEvent(new CustomEvent");
     }

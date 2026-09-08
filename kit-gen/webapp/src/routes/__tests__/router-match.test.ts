@@ -12,25 +12,16 @@
  *     `parseLocation()` thì ĐÒI một `HistoryLocation` làm đối số — gọi trần
  *     sẽ ném "Cannot destructure property 'pathname' of 'undefined'".
  *  2. `router.load()` trong Node KHÔNG chạy `beforeLoad` (router coi mình là
- *     server-side: `isServer === true`, `state.matches` rỗng). Nên guard được
+ *     server-side: `isServer === true`, `state.matches` rỗng). Nên guard phải được
  *     kiểm bằng cách gọi thẳng `beforeLoad` của route — đó cũng đúng là hàm mà
- *     trình duyệt sẽ gọi.
+ *     trình duyệt sẽ gọi. (Hiện KHÔNG route nào còn `beforeLoad`: `requireSetup`
+ *     là hàm rỗng và đã bị xoá 07/09/2026 cùng route `/setup`. Ghi chú giữ lại vì
+ *     nó là cái bẫy đầu tiên ai thêm guard mới sẽ vấp.)
  */
 import { describe, expect, it } from "vitest";
-import { createMemoryHistory, createRouter, isRedirect } from "@tanstack/react-router";
+import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { QueryClient } from "@tanstack/react-query";
 import { routeTree } from "@/routeTree";
-import { useSetupStore } from "@/lib/store";
-
-import { Route as setupRoute } from "../setup";
-import { Route as indexRoute } from "../index";
-import { Route as settingsRoute } from "../settings";
-import { Route as projectRoute } from "../p.$projectId";
-import { Route as designRoute } from "../p.$projectId.design";
-import { Route as runsRoute } from "../p.$projectId.runs";
-import { Route as runDetailRoute } from "../p.$projectId.runs.$runId";
-import { Route as kitRoute } from "../p.$projectId.kit";
-import { Route as projectSettingsRoute } from "../p.$projectId.settings";
 
 /**
  * Router dùng chung cho các phép khớp.
@@ -53,9 +44,8 @@ const matchAt = (pathname: string, search: Record<string, unknown> = {}) =>
 const leaf = (pathname: string): string =>
   (matchAt(pathname).at(-1)?.routeId as string | undefined) ?? "";
 
-describe("sitemap §2.1 — 9 đường dẫn khớp đúng route", () => {
+describe("sitemap §2.1 — 8 đường dẫn khớp đúng route", () => {
   it.each([
-    ["/setup", "/setup"],
     ["/", "/"],
     ["/settings", "/settings"],
     ["/p/tet26-a7f3", "/p/$projectId"],
@@ -111,7 +101,6 @@ describe("id sai dạng ⇒ ra trang 404, KHÔNG lọt vào màn nào", () => {
   it("ngược lại: URL hợp lệ khớp trọn, KHÔNG còn đuôi thừa", () => {
     for (const path of [
       "/",
-      "/setup",
       "/settings",
       "/p/tet26-a7f3",
       "/p/tet26-a7f3/design",
@@ -142,36 +131,6 @@ describe("search param — router thật validate đúng", () => {
     expect((matchAt("/p/tet26-a7f3/kit", { tab: "xx" }).at(-1)?.search as { tab?: string }).tab).toBe("assets");
     expect((matchAt("/settings", { tab: "xx" }).at(-1)?.search as { tab?: string }).tab).toBe("agent");
     expect((matchAt("/settings", { tab: "trash" }).at(-1)?.search as { tab?: string }).tab).toBe("agent");
-  });
-});
-
-/* ── Guard: gọi thẳng `beforeLoad` của từng route (xem ghi chú đầu file) ──── */
-
-type BeforeLoad = (ctx: { location: { pathname: string } }) => unknown;
-const beforeLoadOf = (route: { options: unknown }): BeforeLoad | undefined =>
-  (route.options as { beforeLoad?: BeforeLoad }).beforeLoad;
-
-const GUARDED: [string, { options: unknown }, string][] = [
-  ["S1 /", indexRoute, "/"],
-  ["S6 /settings", settingsRoute, "/settings"],
-  ["S2 /p/:id", projectRoute, "/p/tet26-a7f3"],
-  ["S3 /p/:id/design", designRoute, "/p/tet26-a7f3/design"],
-  ["S4 /p/:id/runs", runsRoute, "/p/tet26-a7f3/runs"],
-  ["S4d /p/:id/runs/:runId", runDetailRoute, "/p/tet26-a7f3/runs/r-0031"],
-  ["S5 /p/:id/kit", kitRoute, "/p/tet26-a7f3/kit"],
-  ["S2b /p/:id/settings", projectSettingsRoute, "/p/tet26-a7f3/settings"],
-];
-
-describe("local-first routes skip obsolete onboarding", () => {
-  it.each(GUARDED)("%s opens with stale setup state", (_label, route, pathname) => {
-    useSetupStore.setState({ completed: false });
-    expect(() => beforeLoadOf(route)!({ location: { pathname } })).not.toThrow();
-  });
-  it("/setup redirects to workspace", () => {
-    const fn = beforeLoadOf(setupRoute); let thrown: unknown = null;
-    try { fn!({ location: { pathname: "/setup" } }); } catch (e) { thrown = e; }
-    expect(isRedirect(thrown)).toBe(true);
-    expect((thrown as { options: { to?: string } }).options.to).toBe("/");
   });
 });
 

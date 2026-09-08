@@ -5,14 +5,16 @@
  * `src/lib/**\/__tests__`. Tôi không sửa file của team khác, nên chạy bằng:
  *     npx vitest run --dir src/routes
  * Đã ghi yêu cầu mở rộng `include` ở teams/react/NEEDS-appshell.md (N1).
+ *
+ * 07/09/2026 — hai describe cuối đi cùng đợt dọn mã chết: `setupSearchSchema`
+ * (`?redirect=` của `/setup`) và `requireSetup` không còn tồn tại — route `/setup`
+ * lẫn hàm guard rỗng đều đã bị xoá, nên không còn gì để khoá.
  */
 import { describe, expect, it } from "vitest";
 import { parseProjectParams, parseRunParams } from "../params";
 import {
-  designSearchSchema, kitSearchSchema, settingsSearchSchema, setupSearchSchema,
+  designSearchSchema, kitSearchSchema, settingsSearchSchema,
 } from "../search-schemas";
-import { requireSetup } from "../guards";
-import { useSetupStore } from "@/lib/store";
 
 describe("params — id sai dạng phải KHÔNG khớp route (⇒ 404), không lọt sang agent", () => {
   it("nhận id hợp lệ", () => {
@@ -59,30 +61,5 @@ describe("search schema — tab lạ rơi về tab đầu, KHÔNG ném lỗi là
     expect(designSearchSchema.parse({ tab: "styles" }).tab).toBe("styles");
     expect(settingsSearchSchema.parse({ tab: "prefs" }).tab).toBe("prefs");
     expect(settingsSearchSchema.parse({ tab: "trash" }).tab).toBe("agent");
-  });
-});
-
-describe("setup ?redirect= — chặn open-redirect ra ngoài", () => {
-  it("nhận đường dẫn nội bộ", () => {
-    expect(setupSearchSchema.parse({ redirect: "/p/tet26-a7f3/design" }).redirect).toBe(
-      "/p/tet26-a7f3/design",
-    );
-  });
-
-  it.each([
-    ["URL tuyệt đối", "https://evil.example/"],
-    ["giao thức tương đối", "//evil.example/"],
-    ["javascript:", "javascript:alert(1)"],
-  ])("bỏ qua %s", (_l, value) => {
-    // `.catch(undefined)` ⇒ giá trị xấu bị loại, KHÔNG ném lỗi làm hỏng /setup
-    expect(setupSearchSchema.parse({ redirect: value }).redirect).toBeUndefined();
-  });
-});
-
-describe("local-first routing has no onboarding gate", () => {
-  it("continues regardless of stale setup state", () => {
-    useSetupStore.setState({ completed: false });
-    expect(() => requireSetup("/p/tet26-a7f3/design")).not.toThrow();
-    expect(() => requireSetup("/")).not.toThrow();
   });
 });

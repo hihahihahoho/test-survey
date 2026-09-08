@@ -14,7 +14,7 @@ import {
 import { defaultSizeOf } from "@/features/prompt-lab/lib/cell-size";
 import { glazeFromMaterial } from "@/features/kit-core/lib/glaze";
 import { EXPRESSIONS } from "@/features/kit-core/lib/poses";
-import { DEFAULT_VIEW } from "@/features/pose-lab/lib/pose-state";
+import { DEFAULT_VIEW } from "@/features/prompt-lab/lib/pose/pose-state";
 import { getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
 import { INHERIT } from "@/features/prompt-lab/lib/pill-registry";
 import { NODE } from "@/features/prompt-lab/lib/schema";

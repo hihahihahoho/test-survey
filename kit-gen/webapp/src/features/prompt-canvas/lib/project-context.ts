@@ -10,8 +10,8 @@ import * as React from "react";
  * ║ `Extension.configure()` → node view: năm chặng, và chặng nào quên cũng     ║
  * ║ chỉ lộ ra bằng một cái pill không tải được ảnh, không lỗi.                 ║
  * ║                                                                          ║
- * ║ `null` là giá trị hợp lệ và có nghĩa rõ ràng: KHÔNG có dự án nào (route    ║
- * ║ `/lab/prompt-composer` là bản chơi thử, không gắn dự án). Pill ảnh phải    ║
+ * ║ `null` là giá trị hợp lệ và có nghĩa rõ ràng: KHÔNG có dự án nào — một     ║
+ * ║ tài liệu dựng ngoài ngữ cảnh dự án (test, story). Pill ảnh phải           ║
  * ║ NÓI RA điều đó thay vì im lặng không làm gì — xem `ImagePill`.            ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */

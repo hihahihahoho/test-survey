@@ -5,25 +5,22 @@
  * Cùng hai bài học đã ghi ở `router-match.test.ts`: `matchRoutes` nhận chuỗi, còn
  * `beforeLoad` phải gọi thẳng vì `router.load()` trong Node không chạy guard.
  *
- * BỐN THỨ ĐƯỢC KHOÁ Ở ĐÂY, mỗi thứ tương ứng một tiêu chí FE2-PLAN §3-E1:
+ * BA THỨ ĐƯỢC KHOÁ Ở ĐÂY, mỗi thứ tương ứng một tiêu chí FE2-PLAN §3-E1:
  *  ① `/p/:id/f/:fileId` khớp đúng route mới và KHÔNG bị `/p/:id` nuốt (⇒ reload giữ file).
  *  ② `?file=` lạ/rác rơi về mặc định, KHÔNG ném lỗi làm trắng màn.
  *  ③ `docPath` sinh đúng hình dạng URL cho từng kiểu file (mục «Sao chép liên kết»).
- *  ④ route mới có guard `requireSetup` như 9 route kia — thiếu là người chưa cài gì
- *     rơi thẳng vào bàn làm việc trống.
+ *  ④ (ĐÃ BỎ 07/09/2026) guard `requireSetup` — hàm đã rỗng từ lâu rồi bị xoá hẳn
+ *     cùng wizard cài đặt, nên không còn gì để khoá.
+ *
+ * ⑤ cũ ("ĐÚNG MỘT chunk cho cả nhánh canvas") cũng đi theo: `features/canvas` đã bị
+ * xoá khỏi repo, `/p/:id/f/:fileId` nay chỉ còn là stub chuyển hướng về `/k/:id`.
  */
 import { describe, expect, it } from "vitest";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { QueryClient } from "@tanstack/react-query";
 import { routeTree } from "@/routeTree";
-import { useSetupStore } from "@/lib/store";
 import { ALL_SHEETS_DOC_ID, RE_DOC_ID } from "@/features/docs/lib/types";
-import {
-  Route as fileRoute,
-  parseFileRouteParams,
-} from "../p.$projectId.f.$fileId";
+import { parseFileRouteParams } from "../p.$projectId.f.$fileId";
 import {
   FILE_ROUTE_PATH, designSearchSchema, docPath, fileSearchSchema, kitSearchSchema,
   readFileSearch, runsSearchSchema, withFileParam, withoutFileParam,
@@ -92,16 +89,6 @@ describe("route `/p/:projectId/f/:fileId` — deep link tới bàn làm việc",
         `${path} lại khớp trọn một route`,
       ).toBe(true);
     }
-  });
-});
-
-/* ═════════ ④ Guard ═════════ */
-
-describe("route file con không bị onboarding chặn", () => {
-  it("mở thẳng với setup state cũ", () => {
-    useSetupStore.setState({ completed: false });
-    const fn = (fileRoute.options as { beforeLoad?: (c: { location: { pathname: string } }) => unknown }).beforeLoad;
-    expect(() => fn!({ location: { pathname: `/p/${PID}/f/f-abc` } })).not.toThrow();
   });
 });
 
@@ -196,65 +183,6 @@ describe("docPath — hình dạng URL của file con", () => {
       expect(m, `${path} không khớp route nào`).toBeDefined();
       if (query) expect((m!.search as { file?: string }).file).toBe("f-main");
     }
-  });
-});
-
-/* ═════════ ⑤ Lazy — ĐÚNG MỘT chunk cho cả nhánh canvas ═════════ */
-
-describe("bàn làm việc lazy-load, KHÔNG kéo mọi component thành chunk rời", () => {
-  /**
-   * BÀI HỌC FE-1 ĐƯỢC KHOÁ BẰNG SỐ, KHÔNG BẰNG LỜI HỨA: mẫu glob rộng từng cắt mỗi
-   * component con thành một chunk động riêng. Test này đọc `dist/` THẬT.
-   *
-   * Bỏ qua khi chưa build (`npx vitest` chạy trước `vite build` trong `npm run verify`),
-   * và NÓI RA là đã bỏ qua — một test tự tắt trong im lặng là test vô dụng.
-   */
-  const dist = resolve(new URL("../../../dist/assets", import.meta.url).pathname);
-
-  it("dist/ chỉ có ĐÚNG MỘT chunk canvas, và nó tách khỏi chunk vào", () => {
-    if (!existsSync(dist)) {
-      console.log("[BỎ QUA] chưa có dist/ — chạy `npm run build:only` rồi chạy lại ca này");
-      return;
-    }
-    const files = readdirSync(dist).filter((f) => f.endsWith(".js"));
-    const canvas = files.filter((f) => /^canvas-/.test(f));
-    expect(canvas, `chunk canvas trong dist/: ${canvas.join(", ")}`).toHaveLength(1);
-
-    /* Và nó KHÔNG bị gộp vào chunk vào: gộp thì lazy chỉ còn là hình thức. */
-    const entry = files.find((f) => /^index-/.test(f));
-    expect(entry).toBeDefined();
-    expect(canvas[0]).not.toBe(entry);
-  });
-
-  it("route canvas KHÔNG import tĩnh `features/canvas` (nếu không thì lazy là vô nghĩa)", () => {
-    const src = readFileSync(
-      resolve(new URL("../p.$projectId.f.$fileId.tsx", import.meta.url).pathname),
-      "utf8",
-    );
-    expect(src).not.toMatch(/^import .*from "@\/features\/canvas"/m);
-    /* Canvas là lựa chọn ngoài dự án. Đích ĐÃ ĐỔI sang `/k/:id` cùng đợt "một màn
-       duy nhất": `/p/:id` nay cũng chỉ chuyển hướng, nên trỏ về đó là bắt người
-       dùng nhảy hai lần và nhìn URL đổi hai lần. */
-    expect(src).toContain('<Navigate to="/k/$projectId"');
-    expect(src).not.toContain('search={{ section:');
-  });
-
-  it("chỉ có ĐÚNG MỘT `import(\"@/features/canvas\")` trong toàn bộ src/", () => {
-    const hits: string[] = [];
-    const walk = (dir: string) => {
-      for (const e of readdirSync(dir, { withFileTypes: true })) {
-        const p = join(dir, e.name);
-        if (e.isDirectory()) walk(p);
-        else if (/\.tsx?$/.test(e.name) && !p.includes("__tests__")) {
-          const txt = readFileSync(p, "utf8");
-          const n = txt.match(/import\(\s*["']@\/features\/canvas["']\s*\)/g)?.length ?? 0;
-          for (let i = 0; i < n; i += 1) hits.push(p);
-        }
-      }
-    };
-    walk(resolve(new URL("../..", import.meta.url).pathname));
-    expect(hits, `điểm vào canvas: ${hits.join(", ")}`).toHaveLength(1);
-    expect(hits[0]).toContain("lazy-screen.tsx");
   });
 });
 

@@ -4,7 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { KeyboardHint } from "@/components/common";
 import { count } from "../lib/format";
 import type { Gate } from "../lib/gate";
-import { DisplayTitle } from "@/features/setup/components/StepShell";
+import { DisplayTitle } from "@/features/settings/parts/StepCard";
 
 /**
  * Đầu màn S1: tiêu đề + số đếm + 3 nút, và dòng "N project · quét lúc hh:mm".
@@ -52,8 +52,9 @@ export function ProjectsHeader({
           Sau: "Bộ *project*" — sans dẫn, serif italic đúng 1 danh từ, và ngắn hơn (bớt chữ,
           đúng FLORA-REF §2.8 "mật độ chữ thấp"). Ba màn kia đã đúng công thức này rồi:
           "Thư viện *kit*" · "Cài *đặt*" · "Cài đặt *project*".
-          `DisplayTitle` vẫn nằm ở features/setup/ — FE2-PLAN §3-A2 cấm dời component xuyên
-          feature trong đợt này; đề nghị dời lên components/common ở teams/react/NEEDS-fe2-a.md #A2-3.
+          `DisplayTitle` nay ở `features/settings/parts/StepCard.tsx` — 07/09/2026 nó theo
+          `features/setup/` đi khi wizard cài đặt bị xoá. Vẫn còn nợ #A2-3 của
+          teams/react/NEEDS-fe2-a.md: chỗ đúng của nó là components/common.
         */}
         <DisplayTitle lead="Bộ" accent="project" />
         {/* aria-live: đọc lên khi số đổi vì lọc — người dùng screen reader cần biết */}

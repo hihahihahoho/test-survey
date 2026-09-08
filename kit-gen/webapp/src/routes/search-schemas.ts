@@ -204,8 +204,7 @@ export const projectsSearchSchema = z.object({
   q: z.string().optional().catch(undefined),
   tag: z.string().optional().catch(undefined),
   /**
-   * Ý ĐỊNH mang từ màn khác sang: ⌘K "Tạo project mới…" bấm ở /settings, hay
-   * nút [Tạo project đầu tiên] ở cuối wizard S0.
+   * Ý ĐỊNH mang từ màn khác sang: ⌘K "Tạo project mới…" bấm ở /settings.
    *
    * Vì sao là search param chứ không chỉ CustomEvent: sự kiện là "bắn rồi
    * quên" — nếu S1 chưa kịp gắn listener (hoặc chưa gắn) thì thao tác CHÌM
@@ -216,15 +215,7 @@ export const projectsSearchSchema = z.object({
   action: z.enum(["create", "import"]).optional().catch(undefined),
 });
 
-/**
- * `/setup` nhớ mình được mở từ đâu để quay lại sau khi xong.
- * CHỈ nhận đường dẫn nội bộ bắt đầu bằng "/" và KHÔNG bắt đầu bằng "//" —
- * chặn open-redirect ra ngoài (`//evil.com` là URL tuyệt đối theo giao thức).
- */
-export const setupSearchSchema = z.object({
-  redirect: z
-    .string()
-    .refine((s) => s.startsWith("/") && !s.startsWith("//"), "chỉ nhận đường dẫn nội bộ")
-    .optional()
-    .catch(undefined),
-});
+/* 07/09/2026 — `setupSearchSchema` (`?redirect=` của `/setup`) đã bị xoá cùng route
+   `/setup` và wizard cài đặt. Nếu sau này có màn nào cần mang đường quay lại trên URL,
+   CHÉP LẠI luật của nó: chỉ nhận đường dẫn bắt đầu bằng "/" và KHÔNG bắt đầu bằng "//"
+   — `//evil.com` là URL tuyệt đối theo giao thức, tức một open-redirect ra ngoài. */

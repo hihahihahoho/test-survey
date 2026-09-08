@@ -107,62 +107,7 @@ export function LazyScreen({ screen, ...props }: { screen: ScreenId } & ScreenPr
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   FE-2 · E1 — NẠP ENTRY CANVAS (`/p/:projectId/f/:fileId`)
-   ══════════════════════════════════════════════════════════════════════════
-
-   BÀI HỌC FE-1 ĐƯỢC TÔN TRỌNG NGUYÊN VĂN: ghi chú đầu file này đã ghi lại giá phải
-   trả khi để glob rộng (`features/**` ⇒ 20+ chunk rời cho một màn). FE2-PLAN §3-E1
-   vì thế yêu cầu *"mở rộng lazy glob CHỈ ĐÚNG entry canvas, hoặc import tĩnh vì
-   file đã tồn tại"*.
-
-   CHỌN `import()` TĨNH MỘT ĐIỂM, KHÔNG GLOB. Lý do đo được, không phải sở thích:
-     · `features/canvas/index.ts` **đã tồn tại** (D1 bàn giao) ⇒ đường dẫn tĩnh phân
-       giải được lúc build. Ca "build gãy vì team chưa nộp file" — thứ khiến
-       `import.meta.glob` là lựa chọn đúng ở FE-1 — không tồn tại ở đây.
-     · Một `import()` = **đúng một** điểm vào ⇒ Rolldown cắt đúng một chunk cho cả
-       nhánh canvas. Có test đọc `dist/` khoá điều đó (`routes/__tests__/subfile-route.test.ts`).
-     · Thêm một mẫu glob nữa sẽ **im lặng** khớp thêm file trùng mẫu về sau; đường
-       dẫn tĩnh thì đổi là thấy trên diff.
-
-   Bọc luôn `Suspense` + `ErrorBoundary` tại đây để route không bao giờ render
-   `undefined` và không bao giờ trắng trang — cùng luật ba-kết-cục của `LazyScreen`.
-*/
-const CanvasFileViewLazy = React.lazy(async () => {
-  const mod = await import("@/features/canvas");
-  return { default: mod.CanvasFileView };
-});
-
-export interface CanvasFileScreenProps {
-  projectId: string;
-  docId: string;
-  docName: string;
-  agentOffline?: boolean;
-  agentCommand?: string;
-  onOpenWorkflow?: () => void;
-  onPacked?: (ids: string[]) => void;
-}
-
-export function CanvasFileScreen(props: CanvasFileScreenProps) {
-  return (
-    <ErrorBoundary
-      resetKey={`canvas:${props.projectId}:${props.docId}`}
-      title="Bàn làm việc gặp trục trặc"
-    >
-      <React.Suspense
-        fallback={
-          <div className="p-6">
-            <LoadingState count={2} label="Đang mở bàn làm việc…" />
-          </div>
-        }
-      >
-        <CanvasFileViewLazy {...props} />
-      </React.Suspense>
-    </ErrorBoundary>
-  );
-}
-
-/* FE3 E1: form là entry mới duy nhất; canvas dùng lại entry hẹp FE-2. */
+/* FE3 E1: form là entry lazy duy nhất của khung. */
 const KitFormViewLazy = React.lazy(async () => {
   const mod = await import("@/features/kit-form/KitFormScreen");
   return { default: mod.KitFormScreen };
