@@ -634,7 +634,7 @@ class TransparentBackgroundTest(unittest.TestCase):
         """Bốn khối cũ (nền alpha, cấm caro, "see-through", "fully opaque") gộp còn
         một section ba gạch đầu dòng, và câu nền thì ở hẳn section «Canvas»."""
         self.assertEqual(self.prompt.count("## Transparency"), 1)
-        self.assertEqual(self.prompt.count("NEVER DRAW A CHECKERBOARD"), 1)
+        self.assertEqual(self.prompt.count("is simply empty: alpha 0"), 1)
         for chet in ("This background rule OVERRIDES the art style",
                      "WHENEVER SOMETHING SHOULD BE SEE-THROUGH",
                      "Every element is FULLY OPAQUE with solid fills"):
@@ -652,12 +652,12 @@ class TransparentBackgroundTest(unittest.TestCase):
         khoá cả ba vế của lời chốt: vật liệu xuyên thấu, vật liệu đục, và mệnh đề
         "trừ khi dòng của ô nói khác" — thiếu vế thứ ba thì nấc «Đục hoàn toàn»
         của một ô trông-như-kính sẽ cãi nhau với chính section này."""
-        self.assertEqual(self.prompt.count("its transparency FOLLOWS"), 1)
+        self.assertEqual(self.prompt.count("its transparency follows"), 1)
         self.assertIn("Unless an element's own line below says otherwise", self.prompt)
         self.assertIn("glass, ice, water and light effects are see-through", self.prompt)
         for vat_lieu in ("metal", "wood", "stone", "plastic", "fabric"):
             self.assertIn(vat_lieu, self.prompt, f"luật vật liệu thiếu {vat_lieu}")
-        self.assertIn("FULLY OPAQUE (alpha 255)", self.prompt)
+        self.assertIn("fully opaque (alpha 255)", self.prompt)
 
     def test_nac_TU_DONG_khong_in_lai_o_tung_dong_element(self):
         """GUARD ÂM, và đây là lý do tồn tại của cả cách làm.
@@ -683,10 +683,10 @@ class TransparentBackgroundTest(unittest.TestCase):
         dong = [row for row in txt.splitlines() if re.match(r"^\d\) ", row)]
         self.assertEqual(len(dong), 3, txt)
         for row in dong:
-            self.assertNotIn("FOLLOWS", row)
+            self.assertNotIn("transparency follows", row)
             self.assertNotIn("alpha", row.lower(), f"dòng element mọc hợp đồng alpha: {row}")
             self.assertNotIn("see-through", row)
-        self.assertEqual(txt.count("its transparency FOLLOWS"), 1)
+        self.assertEqual(txt.count("its transparency follows"), 1)
 
     def test_nac_CU_THE_van_in_o_dong_cua_chinh_o_ay(self):
         """Chiều còn lại: chọn một nấc cụ thể thì câu của nấc ấy PHẢI tới, và nó
@@ -699,20 +699,26 @@ class TransparentBackgroundTest(unittest.TestCase):
         self.assertIn(duc, first_cell_line_text(p_duc))
 
         sang = ("pure light with no surface: the halo keeps its own colour and fades to alpha 0"
-                " at its edge, and nothing sits behind it — no plate, no black, no checkerboard")
+                " at its edge, and the empty canvas shows through all around it")
         p_sang = render_prompt_text(_cfg(spec=f"a radial light burst, {sang}"))
         self.assertIn(sang, first_cell_line_text(p_sang))
 
-    def test_prompt_CAM_DICH_DANH_viec_ve_caro_gia(self):
-        """Bẫy đã đo được (BACKLOG #24 ⑦): không tạo được trong suốt thì model
-        KHÔNG báo lỗi — nó vẽ một tấm caro xám-trắng ở α=255, nhìn bằng mắt y hệt
-        ảnh nền trong suốt. Prompt phải gọi tên đúng hành vi đó mà cấm."""
-        self.assertIn("NEVER DRAW A CHECKERBOARD", self.prompt)
-        # ② nói ra VÌ SAO nó sai, ③ và chỉ ra cách làm đúng thay thế — thiếu ③ thì
-        # model chỉ biết mình sai mà không biết đi đường nào (đo được: nó lấp bằng
-        # thứ khác thay vì thôi lấp).
-        self.assertIn("DISPLAYS empty pixels", self.prompt)
-        self.assertIn("LOW ALPHA value in its own colour, never paler paint", self.prompt)
+    def test_prompt_KHONG_nhac_ten_caro(self):
+        """08/09/2026 — chủ sản phẩm: "prompt tự nhiên mention mấy cái caro checker
+        board → AI gen không hiểu là negative prompt, lại bị nhiễm". Bản cũ gọi tên
+        "CHECKERBOARD" ba lần in hoa để cấm, và cái tên được nhắc chính là thứ model
+        vẽ ra (tấm caro xám-trắng ở α=255, nhìn y hệt nền trong suốt). Nay prompt
+        chỉ tả điều MUỐN: chỗ trống để trống (alpha 0), chỗ xuyên thấu vẽ alpha thấp
+        màu riêng. Chữ "checker" không được xuất hiện ở bất kỳ đâu, kể cả trong
+        câu của một nấc đục nền nối vào dòng ô."""
+        low = self.prompt.lower()
+        for cam in ("checker", "transparency pattern"):
+            self.assertNotIn(cam, low, f"prompt lại gọi tên thứ mình cấm: {cam}")
+        self.assertIn("is simply empty: alpha 0", self.prompt)
+        self.assertIn("draw it in its own colour at a lower alpha", self.prompt)
+        # Giọng tự nhiên: không còn câu cấm in hoa trong section này.
+        for gao in ("NEVER DRAW", "FOLLOWS ITS MATERIAL", "FULLY OPAQUE (alpha 255)"):
+            self.assertNotIn(gao, self.prompt, f"câu gào mọc lại: {gao}")
 
     def test_tu_vung_chroma_khong_duoc_quay_lai_prompt(self):
         for w in ("chroma", "flat solid", "#FF00FF", "#00FF00"):

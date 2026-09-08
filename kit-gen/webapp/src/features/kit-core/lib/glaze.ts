@@ -149,9 +149,11 @@ export const GLAZE_PRESETS: readonly GlazePreset[] = [
     /* Câu này phải HUỶ phản xạ "lấp kín hộp bằng một mặt phẳng liền lạc" — đó mới
        là thứ đẻ ra cái đế caro dưới ô ánh sáng, chứ không phải thiếu lời cấm caro.
        Luật safe zone của `gen.sh` nay đã trung lập (nói về TẦM VỚI, không về sơn
-       đặc), nên câu này chỉ còn tả ô, không phải huỷ lệnh của engine. */
+       đặc), nên câu này chỉ còn tả ô, không phải huỷ lệnh của engine.
+       08/09/2026: tả điều MUỐN, không gọi tên thứ không muốn — model ảnh đọc
+       "no checkerboard" thành gợi ý vẽ caro (chủ sản phẩm đo được). */
     en: "pure light with no surface: the halo keeps its own colour and fades to alpha 0 at its"
-      + " edge, and nothing sits behind it — no plate, no black, no checkerboard",
+      + " edge, and the empty canvas shows through all around it",
   },
 ];
 

@@ -201,7 +201,8 @@ expect "thay bằng luật của một dáng người" "Draw the character as ON
 expect "nhưng vẫn giữ vùng an toàn" "## Safe zone" "$linh"
 expect "vẫn giữ nền trong suốt" "Background fully transparent" "$linh"
 expect "vẫn cấm chữ" "No letters, no digits" "$linh"
-expect "vẫn cấm vẽ caro" "NEVER DRAW A CHECKERBOARD" "$linh"
+expect "vẫn tả nền trống bằng alpha 0 (không gọi tên caro)" "is simply empty: alpha 0" "$linh"
+refute "không nhắc chữ checker để khỏi nhiễm" "checker" "$linh"
 # Ranh giới của tấm mascot nay nói bằng SAFE ZONE của hàng xóm, không bằng "ô":
 # ô là chuyện của dao cắt, còn thứ model phải tránh là vùng của thằng bên cạnh.
 expect "và vẫn cấm lấn sang element khác" "well clear of every other" "$linh"

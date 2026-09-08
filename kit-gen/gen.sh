@@ -202,7 +202,8 @@ cfg = json.load(open("styles.json", encoding="utf-8"))
 # ║      Đây là nơi DUY NHẤT nói một thứ TRÔNG THẾ NÀO.                        ║
 # ║   ② HÌNH HỌC — canvas, lưới, và TOẠ ĐỘ safe zone của từng ô. Thuần kỹ      ║
 # ║      thuật, không một tính từ thẩm mỹ nào, không một ảnh nào.              ║
-# ║   ③ RÀNG BUỘC KỸ THUẬT — nền alpha thật, cấm caro, cấm chữ, cấm tràn ô.    ║
+# ║   ③ RÀNG BUỘC KỸ THUẬT — nền alpha thật (tả điều muốn, không gọi tên      ║
+# ║      caro), cấm chữ, cấm tràn ô.                                          ║
 # ║   ④ DANH SÁCH Ô — mỗi ô là một DANH TỪ (+ trạng thái người dùng chọn).     ║
 # ║                                                                            ║
 # ║ VÌ SAO PHẢI DỌN (chủ sản phẩm 26/08/2026: "dễ bị nhiễm prompt lắm"):       ║
@@ -489,10 +490,15 @@ for s in cfg["styles"]:
             section("Safe zone", safe)
 
         # ── Transparency ──────────────────────────────────────────────────────
-        # Câu cấm caro là lời cấm NẶNG NHẤT trong cả prompt và nó ở lại đủ ba vế:
-        # ① gọi tên thứ bị cấm, ② nói vì sao nó sai, ③ chỉ ra cách làm đúng thay
-        # thế. Thiếu ③ thì model chỉ biết mình sai mà không biết đi đường nào — đo
-        # được: nó lấp bằng thứ khác thay vì thôi lấp.
+        # 08/09/2026 — CHỦ SẢN PHẨM: "prompt tự nhiên mention mấy cái caro checker
+        # board → AI gen không hiểu là negative prompt, lại bị nhiễm". Bản trước
+        # gọi tên "CHECKERBOARD" ba lần in hoa để cấm; model ảnh đọc phủ định không
+        # tin cậy, và cái tên được nhắc đi nhắc lại chính là thứ nó vẽ ra. Nên:
+        # KHÔNG gọi tên thứ mình không muốn. Chỉ tả điều MUỐN, bằng câu tự nhiên:
+        # chỗ trống thì để trống (alpha 0), chỗ xuyên thấu thì alpha thấp màu riêng,
+        # còn lại theo vật liệu. Không in hoa, không "NEVER", không "no X, no Y".
+        # Guard: test_gen_prompt `test_prompt_KHONG_nhac_ten_caro` khoá việc chữ
+        # "checker" không được xuất hiện ở bất kỳ đâu trong prompt gửi model.
         #
         # ── GẠCH ĐẦU DÒNG ③ LÀ NHÀ DUY NHẤT CỦA NẤC «TỰ ĐỘNG THEO VẬT LIỆU» ──
         # 08/09/2026. Chủ sản phẩm chốt: mặc định của một ô KHÔNG còn là "đục", mà là
@@ -515,17 +521,17 @@ for s in cfg["styles"]:
         # dòng này và model tự hoà giải bằng cách vẽ nửa vời.
         if not screen_sheet:
             section("Transparency", [
-                "- NEVER DRAW A CHECKERBOARD. Grey-and-white squares are how an image editor"
-                " DISPLAYS empty pixels; they are not part of any artwork. No checker tiles, no"
-                " pale square grid, no 'transparency pattern', at any scale or any opacity.",
-                "- Whatever should be see-through — a glass body, the outer halo of a light —"
-                " gets a LOW ALPHA value in its own colour, never paler paint. If you cannot"
-                " lower the alpha of a region, leave it unpainted.",
-                "- Unless an element's own line below says otherwise, its transparency FOLLOWS"
-                " ITS MATERIAL: glass, ice, water and light effects are see-through, drawn with"
-                " real alpha and nothing behind them — no plate, no checkerboard; every other"
-                " material — metal, wood, stone, plastic, fabric — is FULLY OPAQUE (alpha 255),"
-                " never hollow and never showing the background through it.",
+                "- The space around and between the elements is simply empty: alpha 0 in the"
+                " PNG, with nothing painted there. Whatever is placed behind this layer later"
+                " will show through those pixels.",
+                "- Where something should be see-through — a glass body, the outer halo of a"
+                " light — draw it in its own colour at a lower alpha, so the layer behind shows"
+                " through it naturally. If a region cannot be made translucent, leave it"
+                " unpainted.",
+                "- Unless an element's own line below says otherwise, its transparency follows"
+                " its material: glass, ice, water and light effects are see-through, drawn with"
+                " real alpha; every other material — metal, wood, stone, plastic, fabric — is"
+                " fully opaque (alpha 255), solid all the way through.",
             ])
 
         # ── Text ──────────────────────────────────────────────────────────────
@@ -868,7 +874,7 @@ ${att_paths}--- REFERENCE IMAGES END ---
   # ╚════════════════════════════════════════════════════════════════════════════╝
   task="Use the imagegen skill and its built-in image_gen tool for this. If you have not read that skill yet, read its SKILL.md first and follow its transparent-image rule: ask image_gen for a genuinely transparent background and preserve the alpha channel it gives back.
 
-HARD BAN — this is the single most important rule here: you must NOT write, compile or run any program, script or tool of your own that removes, keys out, erases or otherwise alters the background or the alpha channel of the image. No Python, no Swift, no ffmpeg, no ImageMagick, no chroma key, no remove_chroma_key.py, no CLI fallback via scripts/image_gen.py. The transparency must be produced by image_gen itself. Copying or moving the resulting file is of course fine. If image_gen hands you an opaque image, say so plainly and stop — a background you cut out yourself is a FAILED result, it gets detected and rejected, and it wastes the whole run.
+One rule matters more than everything else: the transparency has to come from image_gen itself. You must not write, compile or run any program, script or tool of your own that removes, keys out, erases or otherwise edits the background or the alpha channel of the image — that includes Python, Swift, ffmpeg, ImageMagick, chroma keying, remove_chroma_key.py and the CLI fallback scripts/image_gen.py. Copying or moving the resulting file is fine. If image_gen hands you an opaque image, just say so plainly and stop: a background cut out by hand is detected and rejected, and it wastes the whole run.
 
 ${att_note}Generate ONE image with the built-in image_gen tool. The output image MUST be exactly ${want_size} pixels (${want_orient}) — this is a hard requirement, not a preference; do not return any other aspect ratio. Use EXACTLY the prompt between the IMAGE PROMPT markers below. Then save/copy the generated PNG to exactly this path: ${ROOT_OUT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
 

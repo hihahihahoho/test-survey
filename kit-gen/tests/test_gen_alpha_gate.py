@@ -138,7 +138,8 @@ class DinhTuyenSkillTest(unittest.TestCase):
 
     def test_cam_dat_TRUOC_khoi_layout(self):
         """Chữ ở gần thắng chữ ở xa: cấm phải nằm trước ~900 dòng đặc tả layout."""
-        self.assertLess(self.task.index("HARD BAN"), self.task.index("Generate ONE image"),
+        self.assertLess(self.task.index("has to come from image_gen itself"),
+                        self.task.index("Generate ONE image"),
                         "lệnh cấm phải đứng trước phần mô tả ảnh")
 
     def test_KHONG_cam_nham_viec_chep_file(self):
