@@ -172,15 +172,11 @@ export interface UiCell {
   styleId: string;
   /** "1".."7" — xem `DECOR_LEVELS`. */
   decor: string;
-  /**
-   * ĐỤC NỀN — id trong `GLAZE_PRESETS`; rỗng = nền đặc.
-   *
-   * Thay cho `materialId` từ 08/2026. Không phải đổi tên cho đẹp: pill cũ hỏi
-   * "ô này làm bằng gì" (thẩm mỹ, đã có prompt tổng lo), pill mới hỏi "ô này trong
-   * tới đâu" — và câu trả lời là MỘT CÂU tả cách vẽ alpha, nối thẳng vào `spec` của ô.
-   * Bản nháp cũ mang `materialId` được dịch sang lúc ĐỌC (`composer-doc.readCell`).
-   */
-  glazeId: string;
+  /* ĐÃ BỎ 08/09/2026: `glazeId` («Đục nền») — và trước nó là `materialId` («Chất
+     liệu»). Chủ sản phẩm: *"KO GIỮ MẤY CÁI TÁCH NỀN ĐỤC NỀN BỎ HẾT, GIỜ APP NHẸ
+     THÔI"*. Một dòng element còn đúng ba trục (phong cách · viền · cỡ) cộng ô ghi
+     chú tự do; kính/phát sáng thì GÕ vào ghi chú. Lựa chọn cũ trên đĩa được chuyển
+     sang `note` một lần lúc đọc — xem `LEGACY_GLAZE_NOTE` ở `composer-doc.ts`. */
   /**
    * CỠ SAFE ZONE — id preset hoặc `"<w>x<h>"` px. LUÔN CÓ GIÁ TRỊ.
    *
@@ -457,7 +453,6 @@ export function newCell(elementId: string, presets: PresetBundle = getPresets())
        tách khỏi phong cách của cả bộ kit. */
     styleId: INHERIT,
     decor: String(preset?.decor ?? 4),
-    glazeId: preset?.glazeId ?? "",
     /* CỠ LUÔN CỤ THỂ, và cụ thể THEO LOẠI: `defaultSizeOf` đo từ `skel` của chính
        loại element (thanh máu ra hộp rộng-mỏng, khung avatar ra hộp vuông). Element
        người dùng tự thêm không khai hình dạng ⇒ hộp trung tính — xem `cell-size.ts`. */

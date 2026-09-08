@@ -17,7 +17,6 @@ import {
   buildVariantStyle,
   mergeElementSkel,
   poseSpecFor,
-  resolveElementSpec,
   type SheetLimits,
 } from "@/features/kit-core/lib/kitset-to-contract";
 import type { StyleAxes } from "@/features/kit-core/lib/model";
@@ -103,8 +102,8 @@ const MAX_CELLS_SQUARE = 16;
  *  ① `skel` của loại element — `shape`, `slice9`, `free` và tỉ lệ gốc;
  *  ② `size` — HỘP VẼ tính bằng PIXEL, chia lại theo ô thật của tấm này.
  *
- * Đục nền KHÔNG có mặt ở đây nữa: nó chỉ còn là CHỮ (`resolveElementSpec`), không
- * còn cờ `skel.matte` nào đi kèm — xem khối đầu `kit-core/lib/glaze.ts`.
+ * Đục nền KHÔNG còn ở đây, và cũng không còn ở đâu cả (08/09/2026): cả trục ấy đã
+ * rời app. Kính / phát sáng nay là CHỮ người dùng tự gõ vào ghi chú của dòng.
  *
  * ⚠️ TẦNG ② KHÔNG CÒN LÀ CỠ NGƯỜI DÙNG CHỌN. Cỡ chọn ở pill «Cỡ» là cỡ ĐẦU RA
  * (`component.out`) — cỡ element phải có khi rời khỏi app. Hộp vẽ thì luôn là hộp
@@ -617,9 +616,6 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
          xem `ElementPreset.en`. Nhờ vậy thứ tự này đọc ra đúng một câu tiếng Anh:
          "popover, chunky cartoon style, a thick rim with corner accents…". */
       const text = [element?.en ?? cell.elementId, style, decor].filter(Boolean).join(", ");
-      /* `resolveElementSpec` là nơi DUY NHẤT biết cách nối câu đục nền vào mô tả
-         một ô — dùng lại thay vì chép luật nối chuỗi sang đây. */
-      const glaze = { glaze: cell.glazeId };
       /* HAI CỠ, KHÔNG PHẢI MỘT.
          · `out` = cỡ ĐẦU RA (pill «Cỡ», nấc S/M/L/XL theo cạnh dài, hoặc mặc định
            của loại) — chỉ đi vào manifest để tầng xuất co lõi về đúng cỡ ấy;
@@ -631,14 +627,14 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
       /* Về PHÂN SỐ Ô — đơn vị của `skel.w/h` (V-06 ∈ (0,1]), không phải pixel. */
       const size: SizePx = { w: draw.w / cellPx, h: draw.h / cellPx };
       const skel = cellSkel(element, size);
-      const templateSpec = tidy([resolveElementSpec({ spec: text }, glaze), cell.note.trim()].filter(Boolean).join(", "));
+      const templateSpec = tidy([text, cell.note.trim()].filter(Boolean).join(", "));
       /* Câu tự do RỖNG (người dùng xoá sạch dòng) ⇒ rơi về khuôn, KHÔNG ra ô
          không mô tả gì. Bỏ hẳn ô đi thì lưới tụt một bậc và mọi ô sau nhảy chỗ —
          một dòng bị xoá chữ không được kéo theo cả tấm đổi bố cục. */
       const freeSpec = block.mode === "free" ? tidy(serializeDoc(cell.doc as PromptDocNode, freeCtx)) : "";
       /* HÌNH HỌC KHÔNG THEO CHẾ ĐỘ VIẾT: ở chế độ TỰ DO người dùng viết lại CÂU
-         CHỮ, không viết lại cách dao cắt cắt ô — nên `skel` (hình dạng, đục nền,
-         cỡ) vẫn là `skel` dựng ở trên, y hệt chế độ khuôn. */
+         CHỮ, không viết lại cách dao cắt cắt ô — nên `skel` (hình dạng, cỡ) vẫn là
+         `skel` dựng ở trên, y hệt chế độ khuôn. */
       const spec = freeSpec || templateSpec;
       return {
         file: `${String(k + 1).padStart(2, "0")}-${slugify(cell.elementId) || "o"}`,

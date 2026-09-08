@@ -809,7 +809,7 @@ export type RunConflictDetails = z.infer<typeof runConflictDetailsSchema>;
  * được với `kits/manifest.json`. `.optional()` của zod không nhận `null` ⇒ `parse()`
  * ném ⇒ `AGENT_INTERNAL` ⇒ **toàn bộ đường "ảnh đã cắt" chết**: nút Tải .zip và Copy
  * Figma vĩnh viễn khoá ("Mở sau khi dự án có ảnh đã cắt") và màn kết quả không bao giờ
- * hiện được ô đã cắt, chỉ còn sheet thô nền chroma.
+ * hiện được ô đã cắt, chỉ còn tấm sheet thô chưa cắt.
  *
  * `.transform(v => v ?? undefined)` giữ nguyên kiểu TS cũ (`number | undefined`) nên
  * nơi dùng không phải đổi một dòng nào.

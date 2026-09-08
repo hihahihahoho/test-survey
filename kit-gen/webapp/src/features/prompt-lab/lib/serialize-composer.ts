@@ -42,13 +42,12 @@ function cellLine(cell: UiCell, index: number, ctx: SerializeContext, mode: Bloc
   /* Phong cách của ô: rỗng = theo phong cách chung. Cùng luật với pill `style`
      trong câu mad-lib — xem `pillText()` bên serialize.ts. */
   const style = cell.styleId ? phraseOf("style", cell.styleId, ctx.presets) : ctx.styleEN;
-  /* Thứ tự PHẢI khớp `uiCellDoc` (danh từ · phong cách · đục nền · viền · ghi chú):
-     prompt copy-dán và câu tự do là hai cửa nhìn vào cùng một ô, và người dùng đối
-     chiếu chúng bằng mắt. Cỡ safe zone không có mặt — nó vào `skel`, không vào chữ. */
+  /* Thứ tự PHẢI khớp `uiCellDoc` (danh từ · phong cách · viền · ghi chú): prompt
+     copy-dán và câu tự do là hai cửa nhìn vào cùng một ô, và người dùng đối chiếu
+     chúng bằng mắt. Cỡ safe zone không có mặt — nó vào `skel`, không vào chữ. */
   const parts = [
     element?.en ?? "",
     style,
-    phraseOf("glaze", cell.glazeId, ctx.presets),
     phraseOf("decor", cell.decor, ctx.presets),
     cell.note.trim(),
   ].filter(Boolean);

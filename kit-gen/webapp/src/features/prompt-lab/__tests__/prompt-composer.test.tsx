@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { JSONContent } from "@tiptap/react";
 
-import { GLAZE_PRESETS, glazePhrase } from "@/features/kit-core/lib/glaze";
-import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
 import { GENRE_PRESETS } from "@/features/prompt-lab/lib/genre-presets";
 import { EXPRESSIONS, OUTFIT_THEMES, POSES } from "@/features/kit-core/lib/poses";
 
@@ -10,7 +8,7 @@ import { serializeComposer, countComposerImages } from "../lib/serialize-compose
 import { freeText, serializeDoc, makeContext, type PromptDocNode } from "../lib/serialize";
 import { backgroundDoc, mascotDoc, mascotPoseDoc, SCAFFOLD_BACKGROUND } from "../lib/doc-templates";
 import { slashItems, SLASH_ITEMS } from "../lib/slash-items";
-import { phraseOf, pillOptions, INHERIT } from "../lib/pill-registry";
+import { labelOf, phraseOf, pillOptions, INHERIT, type PillKind } from "../lib/pill-registry";
 import { DECOR_LEVELS, seedPresets } from "../lib/presets-store";
 import { defaultSizeOf, sizePx } from "../lib/cell-size";
 import { gridFor, newCell, newMascotPose, type ComposerState, type UiCell } from "../lib/composer-model";
@@ -223,8 +221,8 @@ describe("màu thương hiệu — hex phải thành CHỮ, không phải một 
 
   it("KHÔNG nhắc lại palette ở từng dòng cell — một bộ nhận diện, không phải mỗi ô một bảng màu", () => {
     const cells: UiCell[] = [
-      { id: "c1", elementId: "button", styleId: INHERIT, decor: "4", glazeId: "", sizeId: "", note: "" },
-      { id: "c2", elementId: "coin", styleId: INHERIT, decor: "2", glazeId: "", sizeId: "", note: "" },
+      { id: "c1", elementId: "button", styleId: INHERIT, decor: "4", sizeId: "", note: "" },
+      { id: "c2", elementId: "coin", styleId: INHERIT, decor: "2", sizeId: "", note: "" },
     ];
     const out = serializeComposer(
       state({ brandColors: ["#ff5533", "#112233"], blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }),
@@ -274,8 +272,8 @@ describe("serialize cả màn — mỗi block một đoạn, ảnh đánh số l
 
   it("block UI kit liệt kê element, KHÔNG có toạ độ — lưới là việc của hệ thống", () => {
     const cells: UiCell[] = [
-      { id: "c1", elementId: "button", styleId: INHERIT, decor: "4", glazeId: "glass", sizeId: "", note: "" },
-      { id: "c2", elementId: "coin", styleId: "match3", decor: "2", glazeId: "", sizeId: "", note: "xoay 15 độ" },
+      { id: "c1", elementId: "button", styleId: INHERIT, decor: "4", sizeId: "", note: "" },
+      { id: "c2", elementId: "coin", styleId: "match3", decor: "2", sizeId: "", note: "xoay 15 độ" },
     ];
     const out = serializeComposer(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), PRESETS);
 
@@ -285,7 +283,6 @@ describe("serialize cả màn — mỗi block một đoạn, ảnh đánh số l
     /* Ô 1 để trống phong cách ⇒ ăn phong cách chung; ô 2 tự chọn ⇒ phong cách riêng. */
     expect(out).toContain(PRESETS.styles[0]!.en);
     expect(out).toContain(PRESETS.styles.find((s) => s.id === "match3")!.en);
-    expect(out).toContain(glazePhrase("glass"));
     expect(out).toContain("xoay 15 độ");
     /* Không được lọt bất kỳ dấu vết toạ độ nào vào prompt. */
     expect(out).not.toMatch(/hàng \d+ cột \d+/i);
@@ -345,23 +342,34 @@ describe("danh mục — lab đi bằng dữ liệu THẬT của kit-core, khôn
     }
   });
 
-  it("pill theme/đục nền/dáng/biểu cảm đọc thẳng danh mục gốc", () => {
+  it("pill theme/dáng/biểu cảm đọc thẳng danh mục gốc", () => {
     expect(pillOptions("theme", PRESETS)).toHaveLength(OUTFIT_THEMES.length);
-    expect(pillOptions("glaze", PRESETS)).toHaveLength(GLAZE_PRESETS.length);
-    /* `material` CÒN ĐỌC ĐƯỢC (câu tự do đời cũ mang nó) nhưng không còn cửa chèn. */
-    expect(pillOptions("material", PRESETS)).toHaveLength(MATERIAL_PRESETS.length);
-    expect(SLASH_ITEMS.some((item) => item.id === "pill-material")).toBe(false);
     expect(pillOptions("pose", PRESETS)).toHaveLength(POSES.length);
     expect(pillOptions("expression", PRESETS)).toHaveLength(EXPRESSIONS.length);
+  });
+
+  /* HAI TRỤC ĐÃ RỜI APP: «Chất liệu» (08/2026) rồi «Đục nền» (08/09/2026). Ca này
+     canh hai chiều cùng lúc — không còn cửa chèn, và tài liệu cũ mang chúng thì
+     không được làm sập màn soạn prompt (`pillOptions` trả rỗng thay vì `undefined`,
+     nếu không thì `.find` chạy trên `undefined`). */
+  it("trục ĐÃ BỎ: không còn cửa chèn, và kind cũ trong tài liệu không làm nổ", () => {
+    for (const id of ["pill-material", "pill-glaze"]) {
+      expect(SLASH_ITEMS.some((item) => item.id === id), id).toBe(false);
+    }
+    for (const kind of ["material", "glaze"] as unknown as PillKind[]) {
+      expect(pillOptions(kind, PRESETS), kind).toEqual([]);
+      expect(() => labelOf(kind, "ice", PRESETS)).not.toThrow();
+      expect(labelOf(kind, "ice", PRESETS), kind).toBe("ice");
+      expect(phraseOf(kind, "ice", PRESETS), kind).toBe("");
+    }
   });
 
   it("ô mới kế thừa phong cách chung và ăn mặc định của element preset", () => {
     const cell = newCell("coin", PRESETS);
     expect(cell.styleId).toBe(INHERIT);
-    /* Đục nền KHÔNG còn được áp sẵn theo loại element (nó là hiệu ứng, không phải
-       bản chất của "icon tiền"); CỠ thì có, vì cỡ là hình học — và nó đo từ `skel`
-       của chính loại: một đồng xu là hộp VUÔNG. */
-    expect(cell.glazeId).toBe("");
+    /* Một ô mới chỉ mang thứ HÌNH HỌC của loại (cỡ, đo từ `skel`: đồng xu là hộp
+       VUÔNG) và mức viền. Không có trục hiệu ứng nào áp sẵn — «Đục nền» đã bỏ. */
+    expect(cell).not.toHaveProperty("glazeId");
     expect(cell.sizeId).toBe(defaultSizeOf(PRESETS.elements.find((e) => e.id === "coin")));
     const coin = PRESETS.elements.find((e) => e.id === "coin");
     expect(sizePx(cell.sizeId, coin?.skel)?.w).toBe(sizePx(cell.sizeId, coin?.skel)?.h);
@@ -375,12 +383,12 @@ describe("danh mục — lab đi bằng dữ liệu THẬT của kit-core, khôn
     }
   });
 
-  it("lọc menu bỏ dấu tiếng Việt — gõ 'duc' phải ra 'Đục nền'", () => {
-    /* Đổi ca từ 'chat'/Chất liệu sang 'duc'/Đục nền cùng lượt bỏ pill chất liệu.
-       Vẫn là ca cho phép GẤP DẤU — và nay còn khoẻ hơn: 'duc' đòi cả `đ`→`d`, thứ
-       NFD không tách ra được (xem `fold`). */
-    expect(slashItems("duc").map((i) => i.id)).toContain("pill-glaze");
+  it("lọc menu bỏ dấu tiếng Việt — gõ 'bieu' phải ra 'Biểu cảm'", () => {
+    /* Ca GẤP DẤU đã đi qua ba chủ đề ('chat'/Chất liệu → 'duc'/Đục nền → đây), mỗi
+       lần vì đúng pill ấy bị bỏ. Thứ đang đo không phải mục nào, mà là phép gấp. */
     expect(slashItems("bieu").map((i) => i.id)).toContain("pill-expression");
+    /* 'dang' đòi cả `đ`→`d`, thứ NFD không tách ra được (xem `fold`). */
+    expect(slashItems("dang").map((i) => i.id)).toContain("pill-pose");
     expect(slashItems("")).toHaveLength(SLASH_ITEMS.length);
     /* Không khớp ⇒ RỖNG, không phải "trả về cả danh sách". */
     expect(slashItems("khong-co-muc-nao-ten-the-nay")).toHaveLength(0);

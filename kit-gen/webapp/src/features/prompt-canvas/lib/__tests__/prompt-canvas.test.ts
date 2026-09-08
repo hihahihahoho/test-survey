@@ -2,9 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { JSONContent } from "@tiptap/react";
 
 import { contractJobs, contractSchema } from "@/lib/types/contract";
-import { HINT_SQUARE, MAIN_VARIANT_ID, resolveElementSpec } from "@/features/kit-core/lib/kitset-to-contract";
-import { glazeFromMaterial, glazePhrase } from "@/features/kit-core/lib/glaze";
-import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
+import { HINT_SQUARE, MAIN_VARIANT_ID } from "@/features/kit-core/lib/kitset-to-contract";
 import { EXPRESSIONS, OUTFIT_THEMES } from "@/features/kit-core/lib/poses";
 
 import {
@@ -256,8 +254,8 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
           kind: "uikit",
           mode: "template",
           cells: [
-            { id: "c1", elementId: "button", styleId: "", decor: "4", glazeId: "glass", sizeId: "", note: "bo góc to" },
-            { id: "c2", elementId: "coin", styleId: "match3", decor: "2", glazeId: "", sizeId: "xl", note: "" },
+            { id: "c1", elementId: "button", styleId: "", decor: "4", sizeId: "", note: "bo góc to" },
+            { id: "c2", elementId: "coin", styleId: "match3", decor: "2", sizeId: "xl", note: "" },
           ],
         },
         mascotBlock("m1", withImage(mascotDoc(), "char-lan.png")),
@@ -369,8 +367,6 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     expect(first.vi).toBe("Nút bấm");
     expect(first.spec).toContain(PRESETS.elements.find((e) => e.id === "button")!.en);
     expect(first.spec).toContain(phraseOf("decor", "4", PRESETS));
-    /* Đục nền nối qua `resolveElementSpec`, không phải một luật nối chuỗi thứ hai. */
-    expect(first.spec).toContain(glazePhrase("glass"));
     /* DANH TỪ THUẦN: mô tả có thuộc tính đã bị bỏ khỏi danh mục (ý kiến chủ SP). */
     expect(first.spec.startsWith("button,")).toBe(true);
     expect(first.spec).toContain("bo góc to");
@@ -385,7 +381,7 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
 
   /* ══ WAVE 7 — ba trục mới của một dòng element ══════════════════════════════
      Ba ca dưới khoá đúng ba thứ chủ sản phẩm xin và ba thứ hỏng thì KHÔNG CÓ GÌ BÁO:
-     danh từ thuần trong `spec`, đục nền kéo theo `matte`, cỡ đi vào `skel`. */
+     danh từ thuần trong `spec`, không còn trục đục nền nào, cỡ đi vào `skel`. */
 
   it("tấm Bộ UI: canvas VUÔNG + cell_hint 1:1, `orient` vẫn còn cho engine đời cũ", () => {
     const ui = composerToContract(full(), { presets: PRESETS }).sheets.find((s) => s.id === "ui")!;
@@ -408,30 +404,26 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     expect(ui.components[0]!.spec).not.toContain("centered label");
   });
 
-  /* GUARD ÂM (08/09/2026). Đục nền từng nói HAI LẦN: một câu trong `spec` VÀ một cờ
-     `skel.matte` bắt `gen.sh` in thêm khối kỹ thuật của riêng nó. Nay đúng một câu,
-     đúng một chỗ — `glaze.ts`. Ca này canh cả hai chiều: chữ phải tới, cờ phải không. */
-  it("đục nền là ĐÚNG MỘT câu trong `spec`, không kèm cờ `matte` nào", () => {
+  /* GUARD ÂM (08/09/2026). «Đục nền» đã bỏ HẲN — không còn trường, không còn pill,
+     không còn danh mục. Một dòng element chỉ còn ba trục (phong cách · viền · cỡ)
+     cộng ô ghi chú, và ghi chú là đường DUY NHẤT để nói "ô này bằng kính". Ca này
+     canh cả hai chiều: danh mục không mọc lại, mà chữ người dùng gõ thì phải tới. */
+  it("KHÔNG còn trục đục nền — kính/phát sáng chỉ đến từ chữ người dùng gõ", () => {
     const ui = composerToContract(full(), { presets: PRESETS }).sheets.find((s) => s.id === "ui")!;
-    const glassy = ui.components[0]!;
-    expect(glassy.spec).toContain(glazePhrase("glass"));
-    expect(glassy.spec).toContain("about 64 of 255");
-    for (const c of ui.components) expect(c.skel, c.file).not.toHaveProperty("matte");
-    /* Ô không chọn đục nền ⇒ không mọc thêm chữ độ trong nào. */
-    expect(ui.components[1]!.spec).not.toContain("alpha");
+    for (const c of ui.components) {
+      expect(c.skel, c.file).not.toHaveProperty("matte");
+      expect(c.spec, c.file).not.toContain("of 255");
+    }
+    /* Ghi chú của dòng đi NGUYÊN VĂN vào `spec` — đó là cửa thay cho pill. */
+    expect(ui.components[0]!.spec).toContain("bo góc to");
   });
 
-  it("chất liệu ĐỜI CŨ được dịch sang đục nền, không rơi mất và không nói chữ thẩm mỹ", () => {
-    expect(glazeFromMaterial("ice")).toBe("ice");
-    expect(glazeFromMaterial("fire")).toBe("glow");
-    expect(glazeFromMaterial("glass")).toBe("glass");
-    /* Gỗ/đá/kim loại là THẨM MỸ ⇒ về "nền đặc": thẩm mỹ nay do prompt tổng lo. */
-    expect(glazeFromMaterial("wood")).toBe("");
-    expect(glazeFromMaterial("gold-metal")).toBe("");
-    const legacySpec = resolveElementSpec({ spec: "coin icon" }, { material: "ice" });
-    expect(legacySpec).toBe(`coin icon, ${glazePhrase("ice")}`);
-    expect(legacySpec).toContain("about 128 of 255");
-    expect(legacySpec).not.toContain("glacial");
+  it("ghi chú là cửa DUY NHẤT để nói độ trong, và nó đi trọn vào `spec`", () => {
+    const st = full();
+    const block = st.blocks.find((b) => b.kind === "uikit")! as Extract<typeof st.blocks[number], { kind: "uikit" }>;
+    block.cells[0]!.note = "see-through glass at low alpha, about 64 of 255";
+    const ui = composerToContract(st, { presets: PRESETS }).sheets.find((s) => s.id === "ui")!;
+    expect(ui.components[0]!.spec).toContain("see-through glass at low alpha, about 64 of 255");
   });
 
   it("CỠ ĐẦU RA vào `out`; hộp VẼ là max-fit của ô, giữ đúng tỉ lệ ấy", () => {
@@ -472,8 +464,8 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
        cùng một hộp `251x188` cho «health bar» và «avatar frame», nên lõi model vẽ
        ra (370×97 và 303×263) lệch khỏi lời hứa và QA gắn cờ 46px. */
     const cells: UiCell[] = [
-      { id: "c1", elementId: "healthbar", styleId: "", decor: "3", glazeId: "", sizeId: "", note: "" },
-      { id: "c2", elementId: "avatar-frame", styleId: "", decor: "5", glazeId: "", sizeId: "", note: "" },
+      { id: "c1", elementId: "healthbar", styleId: "", decor: "3", sizeId: "", note: "" },
+      { id: "c2", elementId: "avatar-frame", styleId: "", decor: "5", sizeId: "", note: "" },
     ];
     const ui = composerToContract(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), {
       presets: PRESETS,
@@ -491,7 +483,7 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
 
   it("element TỰ ĐẶT TÊN (không có trong danh mục) ⇒ khung trung tính, không nổ", () => {
     const cells: UiCell[] = [
-      { id: "c1", elementId: "tu-dat-khien-chan", styleId: "", decor: "4", glazeId: "", sizeId: "", note: "" },
+      { id: "c1", elementId: "tu-dat-khien-chan", styleId: "", decor: "4", sizeId: "", note: "" },
     ];
     const ui = composerToContract(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), {
       presets: PRESETS,
@@ -510,8 +502,8 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
 
   it("cỡ TỰ ĐIỀN: chuỗi `<w>x<h>` px vào `out`, hộp vẽ vẫn max-fit và không vượt lề", () => {
     const cells: UiCell[] = [
-      { id: "c1", elementId: "panel", styleId: "", decor: "4", glazeId: "", sizeId: "120x80", note: "" },
-      { id: "c2", elementId: "panel", styleId: "", decor: "4", glazeId: "", sizeId: "9999x9999", note: "" },
+      { id: "c1", elementId: "panel", styleId: "", decor: "4", sizeId: "120x80", note: "" },
+      { id: "c2", elementId: "panel", styleId: "", decor: "4", sizeId: "9999x9999", note: "" },
     ];
     const ui = composerToContract(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), {
       presets: PRESETS,
@@ -533,10 +525,10 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
   });
 
   it("element TỰ ĐẶT TÊN: file id an toàn + spec là chính danh từ người dùng gõ", () => {
-    const custom = { id: "tu-dat-khung-nhiem-vu", vi: "Khung nhiệm vụ", en: "Khung nhiệm vụ", decor: 4, glazeId: "", sizeId: "" };
+    const custom = { id: "tu-dat-khung-nhiem-vu", vi: "Khung nhiệm vụ", en: "Khung nhiệm vụ", decor: 4, sizeId: "" };
     const presets = { ...PRESETS, elements: [...PRESETS.elements, custom] };
     const cells: UiCell[] = [
-      { id: "c1", elementId: custom.id, styleId: "", decor: "1", glazeId: "", sizeId: "", note: "" },
+      { id: "c1", elementId: custom.id, styleId: "", decor: "1", sizeId: "", note: "" },
     ];
     const ui = composerToContract(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), {
       presets,
@@ -610,14 +602,32 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
   it("pill lạ chèn bằng `/` KHÔNG bị thả rơi", () => {
     const doc = backgroundDoc();
     const para = doc.content![0]!;
-    para.content!.push({ type: NODE.optionPill, attrs: { kind: "material", value: "gold-metal" } });
+    para.content!.push({ type: NODE.optionPill, attrs: { kind: "decor", value: "6" } });
     const contract = composerToContract(
       state({ blocks: [{ id: "b1", kind: "background", mode: "template", doc, note: "" }] }),
       { presets: PRESETS },
     );
-    expect(contract.sheets[0]!.components[0]!.spec).toContain(
-      MATERIAL_PRESETS.find((m) => m.id === "gold-metal")!.en,
+    expect(contract.sheets[0]!.components[0]!.spec).toContain(phraseOf("decor", "6", PRESETS));
+  });
+
+  /* KIND ĐÃ BỊ XOÁ (08/09/2026): `glaze` và `material` không còn trong `PillKind`,
+     nhưng chúng ĐANG nằm trong câu tự do của những dự án có thật. Hai chiều phải
+     đúng cùng lúc: (a) không được ném — `pillOptions` trả rỗng cho kind lạ, thiếu
+     nó thì `.find` chạy trên `undefined` và cả màn soạn prompt trắng bóc; (b) cụm
+     chữ của chúng rụng khỏi prompt, vì trục ấy đã không còn nghĩa. */
+  it("pill của trục ĐÃ BỎ trong tài liệu cũ ⇒ rụng êm, KHÔNG ném", () => {
+    const doc = backgroundDoc();
+    const para = doc.content![0]!;
+    para.content!.push({ type: NODE.optionPill, attrs: { kind: "glaze", value: "ice" } });
+    para.content!.push({ type: NODE.optionPill, attrs: { kind: "material", value: "gold-metal" } });
+    const build = () => composerToContract(
+      state({ blocks: [{ id: "b1", kind: "background", mode: "template", doc, note: "" }] }),
+      { presets: PRESETS },
     );
+    expect(build).not.toThrow();
+    const spec = build().sheets[0]!.components[0]!.spec;
+    expect(spec).not.toContain("ice");
+    expect(spec).not.toContain("gold");
   });
 
   it("màn trống ⇒ contract hợp lệ, không tấm nào — không sinh tấm ma", () => {
@@ -645,7 +655,6 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
       elementId: "button",
       styleId: "",
       decor: "4",
-      glazeId: "",
       sizeId: "",
       note: "",
     }));
@@ -797,24 +806,66 @@ describe("migrateComposerDoc — chữa tài liệu đã lưu với pill `{kind:
 
   const saved = (composer: unknown) => ({ docVersion: COMPOSER_DOC_VERSION, updatedAt: "", composer });
 
-  it("ô của block Bộ UI: lấy lại CẢ kind lẫn value từ ba trường có cấu trúc", () => {
+  it("ô của block Bộ UI: lấy lại CẢ kind lẫn value từ hai trường có cấu trúc", () => {
     const doc = migrateComposerDoc(
       saved({
         blocks: [{
           id: "u1", kind: "uikit", mode: "free",
-          cells: [{ id: "c1", elementId: "coin", styleId: "", decor: "2", materialId: "ice", note: "", doc: nullPills(3) }],
+          cells: [{ id: "c1", elementId: "coin", styleId: "", decor: "2", note: "", doc: nullPills(2) }],
         }],
       }),
       PRESETS,
     );
     const cell = (doc.composer.blocks[0] as { cells: UiCell[] }).cells[0]!;
     const pills = (cell.doc as JSONContent).content![0]!.content!;
-    expect(pills.map((p) => p.attrs!["kind"])).toEqual(["style", "glaze", "decor"]);
-    /* `materialId: "ice"` của bản nháp cũ đã được DỊCH sang đục nền trước khi vào
-       phép cứu hộ — nếu truyền id chất liệu thô thì pill `glaze` nhận một giá trị
-       lạ và lựa chọn rụng khỏi prompt mà không ai báo. */
-    expect(pills.map((p) => p.attrs!["value"])).toEqual(["", "ice", "2"]);
-    expect(cell.glazeId).toBe("ice");
+    expect(pills.map((p) => p.attrs!["kind"])).toEqual(["style", "decor"]);
+    expect(pills.map((p) => p.attrs!["value"])).toEqual(["", "2"]);
+  });
+
+  /* TÀI LIỆU ĐỜI CŨ CÓ BA PILL, BẢNG NAY CÓ HAI. `repairPills` đã khai giới hạn
+     ấy ngay trên đầu nó: hết ô trong bảng ⇒ để NGUYÊN ở mặc định an toàn. Không
+     cứu được thì thôi, còn hơn gán "đục nền" thành "mức viền" rồi gửi đi vẽ. */
+  it("tài liệu cũ 3 pill hỏng ⇒ cứu 2 ô đầu, ô thứ ba để nguyên chứ KHÔNG gán bừa", () => {
+    const doc = migrateComposerDoc(
+      saved({
+        blocks: [{
+          id: "u1", kind: "uikit", mode: "free",
+          cells: [{ id: "c1", elementId: "coin", styleId: "", decor: "2", note: "", doc: nullPills(3) }],
+        }],
+      }),
+      PRESETS,
+    );
+    const cell = (doc.composer.blocks[0] as { cells: UiCell[] }).cells[0]!;
+    const pills = (cell.doc as JSONContent).content![0]!.content!;
+    expect(pills.map((p) => p.attrs!["kind"])).toEqual(["style", "decor", null]);
+  });
+
+  /* LỰA CHỌN «ĐỤC NỀN» CŨ KHÔNG ĐƯỢC BỐC HƠI. Trục đã bỏ, nhưng một dự án có thật
+     đang mang `glazeId: "ice"` — và nó đang có mặt trong prompt của người ta. Nó
+     được chuyển MỘT LẦN sang ô ghi chú, đúng chỗ chủ sản phẩm chỉ ("muốn kính thì
+     gõ vào ghi chú"). Đọc lại lần nữa KHÔNG được nhân đôi. */
+  it("bản nháp cũ có `glazeId` ⇒ câu ấy chuyển sang `note`, đúng một lần", () => {
+    const draft = saved({
+      blocks: [{
+        id: "u1", kind: "uikit", mode: "template",
+        cells: [{ id: "c1", elementId: "coin", styleId: "", decor: "2", glazeId: "ice", note: "bo góc to" }],
+      }],
+    });
+    const cellOf = (d: unknown) => (migrateComposerDoc(d, PRESETS).composer.blocks[0] as { cells: UiCell[] }).cells[0]!;
+    const cell = cellOf(draft);
+    expect(cell).not.toHaveProperty("glazeId");
+    expect(cell.note.startsWith("bo góc to, ")).toBe(true);
+    expect(cell.note).toContain("about 128 of 255");
+    /* Đọc lại bản nháp CŨ y nguyên (chưa ai bấm lưu) ⇒ vẫn đúng một câu. */
+    expect(cellOf(draft).note).toBe(cell.note);
+    /* `materialId` đời trước nữa KHÔNG quay lại: thẩm mỹ do prompt tổng phong cách lo. */
+    const mat = cellOf(saved({
+      blocks: [{
+        id: "u1", kind: "uikit", mode: "template",
+        cells: [{ id: "c1", elementId: "coin", styleId: "", decor: "2", materialId: "gold-metal", note: "" }],
+      }],
+    }));
+    expect(mat.note).toBe("");
   });
 
   it("câu Cảnh nền: lấy lại được kind, còn value thì để RỖNG chứ không bịa", () => {
@@ -1048,8 +1099,8 @@ describe("di trú: bản nháp đời trước không có bốn trường mới"
         blocks: [{
           id: "u1", kind: "uikit", mode: "template",
           cells: [
-            { id: "c1", elementId: "button", styleId: "", decor: "4", glazeId: "", sizeId: "", note: "" },
-            { id: "c2", elementId: "coin", styleId: "", decor: "2", glazeId: "", sizeId: "xl", note: "" },
+            { id: "c1", elementId: "button", styleId: "", decor: "4", sizeId: "", note: "" },
+            { id: "c2", elementId: "coin", styleId: "", decor: "2", sizeId: "xl", note: "" },
           ],
         }],
       }),
@@ -1323,7 +1374,6 @@ describe("đếm lượt: một tấm = một lượt gọi máy vẽ = tiền",
       elementId: "button",
       styleId: "",
       decor: "4",
-      glazeId: "",
       sizeId: "",
       note: "",
     })),

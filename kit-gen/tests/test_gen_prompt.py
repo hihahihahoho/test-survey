@@ -321,11 +321,10 @@ class ThuVienChiCoDANHTUTest(unittest.TestCase):
     Chạy trên `element-lib.json` ĐANG SHIP: thêm một món mới mà lọt chữ vật liệu thì
     ca này đỏ ngay, thay vì phải đợi tới lúc nhìn ảnh ra sai phong cách.
 
-    NGOẠI LỆ DUY NHẤT, chốt 08/09/2026: ô CÓ ĐỘ TRONG nói luôn cách vẽ alpha ngay
-    trong spec. Trước đó nó nằm ở `skel.matte` và gen.sh in ra một khối riêng — nhưng
-    webapp cũng nối một câu đục nền vào chính ô ấy, tức CÙNG MỘT LUẬT ở hai kho, không
-    gì bắt chúng khớp. Cờ `matte` đã bỏ khỏi contract/engine/agent; alpha là ĐỘ TRONG
-    (hợp đồng kỹ thuật), không phải thẩm mỹ, nên nó được ở lại trong spec.
+    ĐỘ TRONG thì KHÁC, và nó được ở lại trong spec: alpha là TRẠNG THÁI kỹ thuật của
+    ô, không phải thẩm mỹ, và nó là thứ prompt tổng phong cách không nói hộ được. Nó
+    từng nằm ở `skel.matte` (gen.sh in ra một khối riêng) — cờ ấy đã bỏ khỏi
+    contract/engine/agent 08/09/2026, cùng ngày với cả pill «Đục nền» của app.
     """
 
     # Chữ VẬT LIỆU / BỀ MẶT / MÀU. Cố ý KHÔNG có từ hình dáng hay trạng thái

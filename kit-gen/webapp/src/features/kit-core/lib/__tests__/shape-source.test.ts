@@ -80,9 +80,9 @@ describe("bảng dáng — 19 dáng, mỗi dáng 13 khớp", () => {
 describe("hằng số engine rút từ slice.py", () => {
   /* GUARD ÂM (08/09/2026). `skel.matte` từng là cờ mà CẢ HAI tầng cùng đọc — gen.sh
      in thêm một khối "LIGHT EFFECT…"/"SEE-THROUGH ELEMENT…", slice.py chọn nhánh giải
-     ngược. Cả hai vế đã bỏ: độ trong của một ô nay CHỈ là câu chữ của `glaze.ts` nằm
-     trong `spec`. Ca này canh cái cờ ấy không lặng lẽ mọc lại ở tầng engine — mọc lại
-     là có ngay hai bản của cùng một luật, đúng thứ đợt dọn này gỡ đi.
+     ngược. Cả hai vế đã bỏ: độ trong của một ô nay CHỈ là chữ nằm trong `spec`. Ca này
+     canh cái cờ ấy không lặng lẽ mọc lại ở tầng engine — mọc lại là có ngay hai bản
+     của cùng một luật, đúng thứ đợt dọn này gỡ đi.
      Quét LỜI GỌI chứ không quét chữ: docstring của cả hai file cố ý kể lại lịch sử. */
   it("engine KHÔNG còn đọc `skel.matte` — cả gen.sh lẫn slice.py", () => {
     for (const f of ["gen.sh", "slice.py"]) {

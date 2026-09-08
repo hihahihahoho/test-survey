@@ -1,16 +1,9 @@
 #!/usr/bin/env python3
 """Validate generated sheet bodies against contract safe zones without deforming art.
 
-NỀN LÀ ALPHA, KHÔNG PHẢI MÀU. Bản trước phải đoán màu chroma-key của sheet để
-biết pixel nào là nền: đọc tên/hex từ `variant.bg`, rồi ĐO thêm màu viền ngoài vì
-model vẽ key lệch khỏi hex chuẩn tới ~50 level, rồi phân loại theo
-`spill = min(kênh CAO) − max(kênh THẤP)`. Cả chuỗi suy đoán đó tồn tại chỉ vì "nền"
-là một MÀU nào đó phải đi tìm.
-
-Sheet nay mang alpha thật, nên câu hỏi "pixel này có phải nền không" có câu trả lời
-thẳng: `alpha < ngưỡng`. Không đoán màu, không đo viền, không lệch trục — và không
-còn ca hỏng nào kiểu "sheet magenta rơi về key xanh lá nên MỌI pixel tính là
-foreground".
+NỀN LÀ ALPHA, KHÔNG PHẢI MÀU. Cả tầng đoán màu nền của bản trước đã bỏ (07/09/2026):
+sheet nay mang alpha thật, nên "pixel này có phải nền không" có câu trả lời thẳng —
+`alpha < ngưỡng`. Không đoán màu, không đo viền, không lệch trục.
 
 ╔══ 07/09/2026 — BỎ NỐT PHÉP DÒ LÕI BẰNG MÀU + MORPHOLOGY ═════════════════════╗
 ║ File này CỐ Ý soi gương `slice.py`. Cho tới hôm nay nó soi một cái gương đã   ║

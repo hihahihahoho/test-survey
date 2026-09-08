@@ -1,7 +1,6 @@
 import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { GENRE_PRESETS } from "@/features/prompt-lab/lib/genre-presets";
-import { glazeFromMaterial } from "@/features/kit-core/lib/glaze";
 import { EXPRESSIONS, POSES } from "@/features/kit-core/lib/poses";
 import { skelSchema, slugify, type Skel } from "@/lib/types/contract";
 import { api } from "@/lib/api/endpoints";
@@ -81,8 +80,9 @@ export interface ElementPreset {
   en: string;
   /** Mức viền/trang trí áp sẵn khi thêm ô này (1–7). */
   decor: number;
-  /** Id đục nền áp sẵn (`glaze.ts`); rỗng = nền đặc. */
-  glazeId: string;
+  /* ĐÃ BỎ 08/09/2026: `glazeId` (đục nền áp sẵn) — và trước nó `materialId`. Cả
+     trục ấy rời khỏi app; bản ghi cũ trên workspace còn khoá đó thì `toBundle` bỏ
+     qua, và lượt PATCH đầu tiên ghi đè không có nó. */
   /**
    * Cỡ safe zone GHIM TAY (`cell-size.ts`); rỗng ⇒ cỡ đo từ `skel` của chính loại này.
    * Rỗng là giá trị BÌNH THƯỜNG từ 07/09/2026, không phải "chưa điền".
@@ -190,14 +190,14 @@ export function seedPresets(): PresetBundle {
        món tròn — kéo một cái huy hiệu tròn theo 9-slice là méo nó. `sizeId` để
        RỖNG: ghim một nấc cỡ ở đây là đè lên chính hình dạng vừa khai. */
     elements: [
-      { id: "button", vi: "Nút bấm", en: "button", decor: 4, glazeId: "", sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true } },
-      { id: "popover", vi: "Popover", en: "popover", decor: 5, glazeId: "", sizeId: "", skel: { shape: "rrect", w: 0.86, h: 0.66, slice9: true } },
-      { id: "healthbar", vi: "Thanh máu", en: "health bar", decor: 3, glazeId: "", sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.22, slice9: true } },
-      { id: "coin", vi: "Icon tiền", en: "coin icon", decor: 2, glazeId: "", sizeId: "", skel: { shape: "circle", w: 0.4, h: 0.4 } },
-      { id: "avatar-frame", vi: "Khung avatar", en: "avatar frame", decor: 5, glazeId: "", sizeId: "", skel: { shape: "circle", w: 0.62, h: 0.62 } },
-      { id: "panel", vi: "Bảng nền", en: "panel", decor: 4, glazeId: "", sizeId: "", skel: { shape: "rrect", w: 0.92, h: 0.8, slice9: true } },
-      { id: "badge", vi: "Huy hiệu", en: "badge", decor: 3, glazeId: "", sizeId: "", skel: { shape: "circle", w: 0.46, h: 0.46 } },
-      { id: "progress", vi: "Thanh tiến trình", en: "progress bar", decor: 3, glazeId: "", sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.18, slice9: true } },
+      { id: "button", vi: "Nút bấm", en: "button", decor: 4, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true } },
+      { id: "popover", vi: "Popover", en: "popover", decor: 5, sizeId: "", skel: { shape: "rrect", w: 0.86, h: 0.66, slice9: true } },
+      { id: "healthbar", vi: "Thanh máu", en: "health bar", decor: 3, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.22, slice9: true } },
+      { id: "coin", vi: "Icon tiền", en: "coin icon", decor: 2, sizeId: "", skel: { shape: "circle", w: 0.4, h: 0.4 } },
+      { id: "avatar-frame", vi: "Khung avatar", en: "avatar frame", decor: 5, sizeId: "", skel: { shape: "circle", w: 0.62, h: 0.62 } },
+      { id: "panel", vi: "Bảng nền", en: "panel", decor: 4, sizeId: "", skel: { shape: "rrect", w: 0.92, h: 0.8, slice9: true } },
+      { id: "badge", vi: "Huy hiệu", en: "badge", decor: 3, sizeId: "", skel: { shape: "circle", w: 0.46, h: 0.46 } },
+      { id: "progress", vi: "Thanh tiến trình", en: "progress bar", decor: 3, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.18, slice9: true } },
     ],
 
     /* Mascot: ghép dáng + biểu cảm có sẵn thành vài "nhân vật mẫu" để trang
@@ -246,17 +246,15 @@ function payloadOf(kind: PresetKind, preset: AnyPreset): PresetPayload {
     return {
       kind,
       name: preset.vi,
-      /* `materialId` KHÔNG còn được ghi: trường ấy đã chết cùng pill Chất liệu.
-         Bản ghi cũ trên workspace vẫn còn nó cho tới lượt PATCH đầu tiên — và
-         `toBundle` dịch nó sang `glazeId` khi đọc, nên không có khoảng nào mà
-         người dùng mất lựa chọn. */
+      /* `materialId`/`glazeId` KHÔNG còn được ghi: cả hai trục đã chết cùng pill
+         Chất liệu (08/2026) và pill Đục nền (08/09/2026). Bản ghi cũ trên workspace
+         vẫn còn chúng cho tới lượt PATCH đầu tiên; `toBundle` đọc lướt qua. */
       /* `skel` ghi ra NGUYÊN OBJECT: nó là hình học của loại element, và bỏ nó lại
          ở client nghĩa là mở app trên máy thứ hai thì mọi element về `rrect` 0.8×0.6
          — đúng cái bệnh vừa chữa, nhưng lần này chỉ hiện ở máy khác. */
       data: {
         ...base,
         decor: preset.decor ?? 4,
-        glazeId: preset.glazeId ?? "",
         sizeId: preset.sizeId ?? "",
         ...(preset.skel ? { skel: preset.skel } : {}),
       },
@@ -345,11 +343,6 @@ function toBundle(rows: readonly LibraryPreset[]): PresetBundle {
     if (row.kind === "style") bundle.styles.push({ id, vi: row.name, en });
     else if (row.kind === "element") {
       const decor = Number(data.decor);
-      /* Bản ghi đời trước chỉ có `materialId` ⇒ dịch sang đục nền gần nhất.
-         Bản ghi đời nay có `glazeId` ⇒ nó thắng, kể cả khi rỗng (rỗng là một
-         lựa chọn: "nền đặc"), nên phải hỏi `"glazeId" in data` chứ không phải
-         `str(...) || fallback` — nếu không thì bỏ đục nền là nó tự quay lại. */
-      const glazeId = "glazeId" in data ? str(data, "glazeId") : glazeFromMaterial(str(data, "materialId"));
       /**
        * DI TRÚ HÌNH DẠNG — cùng lý do (và cùng cách) với `LEGACY_ELEMENT_EN`.
        *
@@ -369,7 +362,6 @@ function toBundle(rows: readonly LibraryPreset[]): PresetBundle {
         id, vi: row.name,
         en: LEGACY_ELEMENT_EN[en] ?? en,
         decor: Number.isFinite(decor) ? decor : 4,
-        glazeId,
         sizeId: savedSize === LEGACY_ELEMENT_SIZE[id] ? "" : savedSize,
         ...(skel ? { skel } : {}),
       });
@@ -471,7 +463,7 @@ export function addCustomElement(name: string, enInput?: string): ElementPreset 
      ("khiên" → circle? rrect?) là đoán sai ở đúng chỗ tốn một lượt vẽ. Thiếu `skel`
      ⇒ `CUSTOM_ELEMENT_SKEL` (rrect 0.8×0.6) — xem `cell-size.ts`. Người dùng chỉnh
      bằng pill «Cỡ» ngay trên dòng. */
-  const preset: ElementPreset = { id, vi, en, decor: 4, glazeId: "", sizeId: "" };
+  const preset: ElementPreset = { id, vi, en, decor: 4, sizeId: "" };
   setPresets({ ...bundle, elements: [...bundle.elements, preset] });
   return preset;
 }

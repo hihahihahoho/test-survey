@@ -12,7 +12,6 @@ import {
   type UiCell,
 } from "@/features/prompt-lab/lib/composer-model";
 import { defaultSizeOf } from "@/features/prompt-lab/lib/cell-size";
-import { glazeFromMaterial } from "@/features/kit-core/lib/glaze";
 import { EXPRESSIONS } from "@/features/kit-core/lib/poses";
 import { DEFAULT_VIEW } from "@/features/prompt-lab/lib/pose/pose-state";
 import { getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
@@ -77,42 +76,74 @@ function str(value: unknown): string {
 }
 
 /** Ô của lưới UI kit. Ô thiếu `elementId` bị BỎ: một ô không biết vẽ gì là một ô rác. */
+/**
+ * DI SẢN «ĐỤC NỀN» — bốn id → đúng câu tiếng Anh mà pill ấy từng gửi đi vẽ.
+ *
+ * ╔══ VÌ SAO BẢNG NÀY CÒN SỐNG SAU KHI CẢ TRỤC BỊ XOÁ ═══════════════════════╗
+ * ║ Pill «Đục nền» đã bỏ 08/09/2026 (*"KO GIỮ MẤY CÁI TÁCH NỀN ĐỤC NỀN BỎ    ║
+ * ║ HẾT"*). Nhưng những dự án CÓ THẬT trên đĩa đang mang `glazeId: "ice"` —   ║
+ * ║ một lựa chọn người dùng đã bấm, và nó đang có mặt trong prompt của họ.    ║
+ * ║ Xoá trường mà không làm gì nữa là lặng lẽ đổi ảnh sẽ vẽ ra, ở một dự án   ║
+ * ║ họ không hề mở ra sửa.                                                   ║
+ * ║                                                                          ║
+ * ║ Nên lựa chọn ấy được CHUYỂN NHÀ MỘT LẦN, sang đúng chỗ chủ sản phẩm chỉ:  ║
+ * ║ ô ghi chú của dòng ("ai muốn kính/phát sáng thì gõ vào ghi chú"). Từ lượt ║
+ * ║ lưu kế tiếp, `glazeId` không còn được ghi ra nữa và bảng này thôi chạm    ║
+ * ║ tới dự án đó — nó chỉ là một cửa đọc, không phải một trục quay lại.       ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * `materialId` (đời trước nữa) KHÔNG có mặt ở đây, và đó là quyết định CŨ được
+ * giữ nguyên: gỗ · đá · kim loại · kẹo gradient là THẨM MỸ, mà thẩm mỹ đến từ
+ * prompt tổng phong cách. Bản 08/2026 đã bỏ chúng khi dịch `material` → `glaze`;
+ * lượt này không lật lại.
+ */
+const LEGACY_GLAZE_NOTE: Record<string, string> = {
+  glass: "a see-through pane of barely tinted glass drawn at low alpha, about 64 of 255,"
+    + " keeping its own tint colour at that alpha; frame, rim and highlights stay fully opaque",
+  "glass-gradient": "a see-through sheet of glass whose alpha fades top to bottom, about 96 of 255"
+    + " at the top down to 0 at the bottom; frame, rim and highlights stay fully opaque",
+  ice: "a thick translucent body that light passes through, drawn at alpha about 128 of 255,"
+    + " keeping its own tint colour at that alpha; frame, rim and highlights stay fully opaque",
+  glow: "pure light with no surface: the halo keeps its own colour and fades to alpha 0 at its"
+    + " edge, and nothing sits behind it — no plate, no black, no checkerboard",
+};
+
+/**
+ * Ghi chú của dòng + câu đục nền đời cũ (nếu có), nối MỘT LẦN.
+ *
+ * `includes` chứ không phải một cờ "đã di trú": bản nháp trên đĩa chưa đổi cho tới
+ * lượt lưu kế tiếp, nên cùng một ô có thể được đọc nhiều lần trước khi ai đó bấm
+ * lưu. Phép kiểm theo NỘI DUNG làm việc ấy trở nên bất biến — đọc mười lần vẫn ra
+ * đúng một câu, không có cờ nào phải giữ đồng bộ.
+ */
+function withLegacyGlaze(note: string, glazeId: string): string {
+  const phrase = LEGACY_GLAZE_NOTE[glazeId.trim()];
+  if (!phrase || note.includes(phrase)) return note;
+  return note.trim() ? `${note.trim()}, ${phrase}` : phrase;
+}
+
 function readCell(raw: unknown, index: number, presets: PresetBundle): UiCell | null {
   if (!isRecord(raw)) return null;
   const elementId = str(raw["elementId"]);
   if (!elementId) return null;
   const styleId = str(raw["styleId"]);
   const decor = str(raw["decor"]);
-  /**
-   * DI TRÚ `materialId` → `glazeId`.
-   *
-   * Bản nháp đời trước lưu id chất liệu; pill ấy không còn. `glazeFromMaterial` đưa
-   * nó về đục nền gần nhất (kính→Kính trong, băng→Băng, lửa/phát sáng→Phát sáng,
-   * còn lại→nền đặc) — xem bảng ở `glaze.ts` để biết vì sao gỗ/đá/kim loại rơi về
-   * rỗng thay vì được cố giữ.
-   *
-   * `"glazeId" in raw` chứ không phải `str(...) || fallback`: RỖNG là một lựa chọn
-   * ("nền đặc"), không phải "chưa có gì". Hỏi bằng `||` thì người dùng bỏ đục nền
-   * của một dòng cũ xong, mở lại dự án là nó tự quay về theo `materialId` còn sót.
-   */
-  const glazeId = "glazeId" in raw ? str(raw["glazeId"]) : glazeFromMaterial(str(raw["materialId"]));
+  /* CỨU LỰA CHỌN «ĐỤC NỀN» ĐỜI CŨ — xem `LEGACY_GLAZE_NOTE`. */
+  const note = withLegacyGlaze(str(raw["note"]), str(raw["glazeId"]));
   return {
     id: str(raw["id"]) || `cell-${index}`,
     elementId,
     styleId,
     decor,
-    glazeId,
     /* CỠ RỖNG LÀ DI SẢN, KHÔNG PHẢI MỘT LỰA CHỌN. Bản nháp lưu trước 07/09/2026
        để rỗng nghĩa là «theo hệ thống» — một cỡ không ai đọc ra được và còn đổi
        theo lưới. Vá ngay lúc đọc: từ đây trở đi dòng nào cũng mang một con số.
-       Khác `glazeId` ngay bên trên ở chỗ đó: rỗng của đục nền LÀ một lựa chọn
-       («nền đặc»), rỗng của cỡ thì không.
 
        Con số ấy là cỡ mặc định CỦA LOẠI ELEMENT NÀY (`defaultSizeOf`), không phải
        một cỡ hệ thống chung: vá một dòng «thanh máu» bằng hộp 251×188 là chép lại
        đúng cái lỗi mà lượt này đang chữa — xem `cell-size.ts`. */
     sizeId: str(raw["sizeId"]) || defaultSizeOf(presets.elements.find((preset) => preset.id === elementId)),
-    note: str(raw["note"]),
+    note,
     /* Câu tự do của riêng dòng (chế độ `free`). Thiếu ⇒ để `undefined` chứ KHÔNG
        dựng câu khởi điểm ở đây: dựng ở đây là ghi một tài liệu TipTap vào mọi ô
        của mọi dự án cũ, kể cả những ô sẽ không bao giờ vào chế độ tự do. Chỗ
@@ -123,11 +154,9 @@ function readCell(raw: unknown, index: number, presets: PresetBundle): UiCell | 
        vẫn còn nguyên trong ba trường có cấu trúc ngay cạnh đây; chúng không đi
        qua ProseMirror nên không dính lượt DOM→doc đã làm hỏng tài liệu. */
     /* Thứ tự `values` PHẢI khớp `PILL_SLOTS.uikit` — ba nơi, một thứ tự (xem bảng
-       ấy). Truyền giá trị ĐÃ DI TRÚ (`glazeId`), không phải `materialId` thô: pill
-       được cứu hộ mang `kind: "glaze"`, mà một id chất liệu trong pill đục nền là
-       một giá trị lạ ⇒ `phraseOf` trả rỗng ⇒ lựa chọn biến mất khỏi prompt. */
+       ấy). Hai ô từ 08/09/2026: pill «Đục nền» đã bỏ hẳn khỏi câu khởi điểm. */
     ...(isRecord(raw["doc"])
-      ? { doc: healDoc(raw["doc"] as JSONContent, "uikit", [styleId, glazeId, decor]) }
+      ? { doc: healDoc(raw["doc"] as JSONContent, "uikit", [styleId, decor]) }
       : {}),
   };
 }

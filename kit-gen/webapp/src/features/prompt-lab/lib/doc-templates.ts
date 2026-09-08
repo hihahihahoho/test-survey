@@ -278,8 +278,6 @@ export function uiCellDoc(cell: UiCell, presets: PresetBundle = getPresets()): J
              ấy. Nó cũng khớp thứ tự pill trên dòng ở chế độ khuôn, để gạt công tắc
              không làm các lựa chọn nhảy chỗ dưới tay người dùng.
              CỠ (`sizeId`) KHÔNG có mặt: nó không đi vào prompt, xem `UiCell.sizeId`. */
-          pill("glaze", cell.glazeId),
-          text(comma),
           pill("decor", cell.decor),
           ...(note ? [text(`${comma}${note}`)] : []),
         ],
@@ -342,12 +340,15 @@ export function retitleCellDoc(doc: JSONContent, prevEn: string, nextEn: string)
  * nhau thì khó quên hơn.
  */
 export const PILL_SLOTS: Record<"uikit" | "background" | "mascot" | "mascotPose" | "context", readonly PillKind[]> = {
-  /* Đổi 08/2026: ô thứ ba `material` → `glaze`, và nó lên đứng thứ hai cùng lượt
-     `uiCellDoc` đổi thứ tự. Bảng và câu khởi điểm phải đi CÙNG NHAU (xem khối chú
-     thích trên) — nhưng ở ĐÂY còn một điều kiện thứ hai, dễ quên hơn: `values`
-     truyền vào `repairPills` (từ `composer-doc.readCell`) cũng phải đổi thứ tự
-     theo. Ba nơi, một thứ tự. */
-  uikit: ["style", "glaze", "decor"],
+  /* Còn HAI ô từ 08/09/2026: pill «Đục nền» (và trước nó «Chất liệu») đã bỏ hẳn.
+     Bảng và câu khởi điểm phải đi CÙNG NHAU (xem khối chú thích trên) — nhưng ở ĐÂY
+     còn một điều kiện thứ hai, dễ quên hơn: `values` truyền vào `repairPills` (từ
+     `composer-doc.readCell`) cũng phải đổi theo. Ba nơi, một thứ tự.
+
+     Tài liệu ĐỜI CŨ có ba pill: pill thứ ba mà hỏng thì hết ô trong bảng ⇒ được để
+     NGUYÊN ở mặc định an toàn, đúng giới hạn đã khai ngay trên `repairPills`. Không
+     đoán bừa còn hơn gán "đục nền" thành "mức viền". */
+  uikit: ["style", "decor"],
   /* Ba ô từ 09/2026 — ô ảnh cuối câu đã thành pill `layout`, xem `SCAFFOLD_BACKGROUND`. */
   background: ["scene", "mood", "layout"],
   /* Đổi 09/2026 cùng lượt tách thẻ Nhân vật thành sprite sheet: câu ĐẦU THẺ nay

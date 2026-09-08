@@ -254,12 +254,10 @@ canvas_of = geometry.canvas_of
 # cách quyết diện mạo, dòng đánh số chỉ nói ô đó LÀ CÁI GÌ. Engine tuyên bố ai
 # thắng ai; engine không viết lại chữ của ai cả.
 #
-# ── VÌ SAO Ở ĐÂY KHÔNG CÒN BẢNG MÀU CHROMA-KEY ────────────────────────────────
-# Từng có `CHROMA_KEYS` / `key_of()` để chọn màu nền giả-trong-suốt rồi nhét tên
-# màu vào prompt. Bỏ vì image_gen của codex 0.149 trả về RGBA thật: prompt nay xin
-# thẳng nền trong suốt, không xin màu. `slice.py` cũng không còn đường tách chroma.
-# Chỉ còn ĐÚNG MỘT đường trong cả engine: alpha thật — và vì chỉ còn một đường nên
-# nó phải được KIỂM, không chỉ được XIN (xem `alpha_verdict` ở đầu file).
+# ── CHỈ CÒN ĐÚNG MỘT ĐƯỜNG NỀN: ALPHA THẬT ────────────────────────────────────
+# Bảng màu nền giả-trong-suốt (và cả tầng tách theo nó) đã bỏ — image_gen của codex
+# 0.149 trả RGBA thật, nên prompt xin thẳng nền trong suốt. Chỉ còn một đường nghĩa
+# là nó phải được KIỂM, không chỉ được XIN (xem `alpha_verdict` ở đầu file).
 
 for s in cfg["styles"]:
     for sh in cfg["sheets"]:

@@ -92,9 +92,9 @@ async function codexWhere() {
   }
 }
 
-/* CHỈ CÒN PILLOW. `slice.py` nay chỉ CẮT theo toạ độ và giữ nguyên alpha của model,
-   nên numpy/scipy/pymatting (tầng tách nền) và torch/transformers (ViTMatte) không
-   còn đường nào gọi tới — dò chúng chỉ tạo ra một dòng đỏ cho thứ không ai cần. */
+/* CHỈ CÒN PILLOW. `slice.py` nay chỉ CẮT theo toạ độ và giữ nguyên alpha của model;
+   cả chồng thư viện của tầng tách nền cũ không còn đường nào gọi tới, và dò chúng
+   chỉ tạo ra một dòng đỏ cho thứ không ai cần. */
 async function pythonInfo() {
   const v = await firstLineVersion(pythonCommand().cmd)
   if (!v.ok) return { ok: false, version: null, venv: false, deps: {} }

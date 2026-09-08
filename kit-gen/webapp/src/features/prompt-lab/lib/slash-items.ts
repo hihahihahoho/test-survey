@@ -55,10 +55,10 @@ const pillItem = (kind: PillKind, title: string, hint: string, keywords: string)
 
 export const SLASH_ITEMS: readonly SlashItem[] = [
   pillItem("style", "Phong cách", "Pill phong cách — mặc định theo phong cách chung", "style phong cach"),
-  /* «Chất liệu» ĐÃ RỜI MENU (08/2026): chất liệu ăn theo prompt tổng phong cách,
-     xem `glaze.ts`. Pill `material` vẫn ĐỌC được trong câu cũ — nó chỉ không còn
-     cửa nào để chèn thêm bản mới. */
-  pillItem("glaze", "Đục nền", "Pill đục nền — kính trong, kính gradient, băng, phát sáng", "glaze duc nen kinh trong suot alpha"),
+  /* «Chất liệu» (08/2026) rồi «Đục nền» (08/09/2026) ĐÃ RỜI MENU, và lần này rời
+     hẳn khỏi app: chất liệu ăn theo prompt tổng phong cách, còn độ trong thì gõ
+     thẳng vào câu — ô ghi chú của dòng và nấc «Gõ riêng» của tên element đều đi
+     nguyên văn vào prompt, không qua danh mục nào. */
   pillItem("scene", "Khung cảnh", "Pill khung cảnh — menu chính, màn chơi, shop…", "scene khung canh"),
   pillItem("mood", "Không khí", "Pill mood — rộn ràng, yên bình, hoàng hôn…", "mood khong khi"),
   pillItem("layout", "Bố cục", "Pill bố cục — chừa chỗ nào cho UI, hoặc đính bản phác", "layout bo cuc composition khung"),

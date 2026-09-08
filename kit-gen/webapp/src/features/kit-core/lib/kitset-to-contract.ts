@@ -52,7 +52,6 @@ import { loadBundledV2 } from "@/features/kit-core/lib/element-lib/source";
 import type { LibElement } from "@/features/kit-core/lib/element-lib/types";
 import { styleAxisPhrases, subjectAxisLine } from "@/features/kit-core/lib/style-phrases";
 import type { KitElementSkel, SheetPromptTweak, WorkflowMascot, WorkflowState } from "./model";
-import { glazeFromMaterial, glazePreset, type GlazePreset } from "./glaze";
 import { isPropElement } from "./user-library";
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -196,69 +195,27 @@ export function poseSpecFor(pose: string, expression?: string | null): string {
    ══════════════════════════════════════════════════════════════════════════ */
 
 /**
- * Từ khoá "ô này nghe như là kính" — nguồn của DÒNG GỢI Ý cạnh ba nút Nền tách.
+ * MÔ TẢ CUỐI CÙNG CỦA MỘT Ô = mô tả. Hết.
  *
- * Đây là đường BỊ ĐỘNG (ý kiến 4): app **không tự bấm hộ**, chỉ nói ra chỗ có vẻ lệch.
- * Tự bấm hộ là đúng loại việc mà một mô tả nhắc tới "cửa sổ kính" (bối cảnh, không phải
- * chất liệu của chính ô) sẽ làm hỏng — và người dùng không hiểu vì sao ô của mình đột
- * nhiên trong suốt.
- */
-const GLASSY_WORDS = /\b(glass|crystal|transparent|see-?through|translucent)\b|kinh|thuy tinh|pha le|trong suot/;
-
-/** Bỏ dấu tiếng Việt để "kính"/"kinh" cùng khớp — cùng phép gấp mà ô tìm kiếm đang dùng. */
-function foldForMatch(text: string): string {
-  return String(text ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .toLowerCase();
-}
-
-/** `true` khi mô tả (thư viện HOẶC bản người dùng sửa) nghe như một vật trong suốt. */
-export function looksLikeGlass(spec: string | null | undefined): boolean {
-  return GLASSY_WORDS.test(foldForMatch(spec ?? ""));
-}
-
-/**
- * ĐỤC NỀN ĐANG CÓ HIỆU LỰC của một lớp đè — một chỗ tra, dùng ở cả hai hàm dưới.
- *
- * Hai lối vào, và thứ tự ưu tiên là bắt buộc: `glaze` là trường của HÔM NAY, còn
- * `material` là bản nháp ĐỜI CŨ được dịch sang (`glazeFromMaterial`). Bản nháp nào
- * có cả hai (người dùng mở dự án cũ rồi bấm pill) thì lựa chọn MỚI phải thắng —
- * ngược lại là chọn xong thấy nó tự quay về giá trị cũ, hỏng câm khó chịu nhất.
- */
-function glazeOf(override: KitElementSkel | undefined): GlazePreset | null {
-  if (!override) return null;
-  return glazePreset(override.glaze) ?? glazePreset(glazeFromMaterial(override.material));
-}
-
-/**
- * MÔ TẢ CUỐI CÙNG CỦA MỘT Ô = [mô tả] + [câu đục nền]. Hết — không có vế thứ ba.
- *
- * ┌── HAI NGUỒN, MỘT DÒNG ───────────────────────────────────────────────────┐
- * │ ① mô tả  : lớp đè của dự án nếu có, không thì `spec` của thư viện;        │
- * │ ② đục nền: ĐÚNG MỘT câu của preset (`GLAZE_PRESETS[].en`).                │
+ * ┌── MỘT NGUỒN, MỘT DÒNG ───────────────────────────────────────────────────┐
+ * │ lớp đè của dự án nếu có, không thì `spec` của thư viện.                   │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
- * ② KHÔNG CÒN LÀ "CHẤT LIỆU". Cụm chữ thẩm mỹ ("polished gold metal, warm
- * reflections") đã bị bỏ khỏi đây — thẩm mỹ đến từ prompt tổng phong cách, thứ
- * `gen.sh` chèn vào MỌI tấm. Đọc khối đầu `glaze.ts` trước khi định đưa nó về.
+ * ══ HÀM NÀY ĐÃ RỤNG HAI VẾ, VÀ CẢ HAI ĐỀU KHÔNG ĐƯỢC QUAY LẠI ══════════════
+ * ① «Chất liệu» (08/2026) — cụm thẩm mỹ ("polished gold metal, warm reflections").
+ *    Thẩm mỹ đến từ prompt tổng phong cách, thứ `gen.sh` chèn vào MỌI tấm; nhắc lại
+ *    ở từng ô là dạy máy vẽ rằng mỗi element có chất liệu riêng.
+ * ② «Đục nền» (08/09/2026) — câu tả độ trong (kính low-alpha / ánh sáng tan về 0).
+ *    Chủ sản phẩm: *"KO GIỮ MẤY CÁI TÁCH NỀN ĐỤC NỀN BỎ HẾT, GIỜ APP NHẸ THÔI"*.
+ *    Ai cần kính hay phát sáng thì GÕ RA — ô ghi chú của dòng và nấc «Gõ riêng» của
+ *    tên element đều đi thẳng vào `spec`, không qua một danh mục nào.
  *
- * ⚠️ ĐỪNG THÊM VẾ THỨ BA. Tới 08/09/2026 hàm này còn nối thêm một câu "mức kính"
- * *và* `gen.sh` in thêm một khối kỹ thuật của riêng nó theo `skel.matte` — cùng
- * một luật, ba mảnh, ba kho. Nay câu của preset đã tự nói trọn cách vẽ alpha, và
- * `matte` không còn tồn tại ở tầng nào cả. Cần đổi lời cho ô kính ⇒ sửa `glaze.ts`.
+ * Cái còn lại đúng một câu, và đó là điểm: một trục nữa ở đây là một trục nữa phải
+ * đồng bộ giữa pill, prompt copy-dán và contract.
  */
 export function resolveElementSpec(base: Pick<LibElement, "spec">, override?: KitElementSkel): string {
-  const parts: string[] = [];
   const own = override?.spec?.trim();
-  const text = own || base.spec;
-  if (text) parts.push(text);
-
-  const glaze = glazeOf(override);
-  if (glaze?.en) parts.push(glaze.en);
-
-  return parts.join(", ");
+  return own || base.spec;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -317,10 +274,10 @@ export function resolveKitset(
        chỗ này thì người dùng chọn xong, UI hiện đúng, còn contract KHÔNG có gì —
        không lỗi, không cảnh báo. Thêm trường mới ⇒ thêm một nhánh ở đây.
 
-       Từ 08/2026 lớp đè mang thêm CHỮ (`spec` sửa tay · `glaze` · `material` đời cũ), và
-       chữ KHÔNG đi vào `skel` — nó đi vào `spec` của component. Hai đích khác nhau nên
-       phải trộn bằng hai hàm khác nhau; gộp lại là đẩy `material` vào `skel` của
-       contract, nơi `skelSchema` (looseObject) sẽ vui vẻ ghi nó ra đĩa cho không ai đọc. */
+       Lớp đè còn mang CHỮ (`spec` sửa tay), và chữ KHÔNG đi vào `skel` — nó đi vào
+       `spec` của component. Hai đích khác nhau nên phải trộn bằng hai hàm khác nhau;
+       gộp lại là đẩy chữ vào `skel` của contract, nơi `skelSchema` (looseObject) sẽ
+       vui vẻ ghi nó ra đĩa cho không ai đọc. */
     const override = e.skel;
     if (!override) { drawable.push(hit); continue; }
     const skel = mergeElementSkel(hit.skel, override);
@@ -341,8 +298,7 @@ export function resolveKitset(
  * ══ ĐÂY CŨNG LÀ CỬA LƯỢC BỎ `matte` ĐỜI CŨ ═════════════════════════════════
  * `matte` (`"glow"`/`"glass"`/`"vitmatte"`) là DI SẢN của thời tách nền bằng key:
  * nó vừa đổi câu chữ của `gen.sh`, vừa chọn nhánh giải ngược của `slice.py`. Cả hai
- * vế đã chết — máy vẽ trả alpha thật, `slice.py` chỉ crop theo toạ độ — và độ trong
- * nay CHỈ còn là một câu tiếng Anh trong `spec` (`glaze.ts`).
+ * vế đã chết — máy vẽ trả alpha thật, `slice.py` chỉ crop theo toạ độ.
  *
  * Bản nháp / thư viện người dùng lưu trên đĩa TRƯỚC đợt này vẫn còn khoá ấy. Hàm
  * này là cửa duy nhất mà cả hai luồng dựng contract (kitset + composer) đi qua, nên
@@ -629,23 +585,11 @@ export function contractCast(
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   5b. Màu nền tách — DI SẢN, KHÔNG CÒN ĐI VÀO PROMPT
-   ══════════════════════════════════════════════════════════════════════════
+   5b. Màu nền tách — ĐÃ BỎ, KHÔNG CÒN ĐI VÀO PROMPT
 
-   Ở đây từng có cả một cỗ máy chọn key: `CHROMA_KEY_PRESETS` (4 màu),
-   `pickChromaKey`, `explainChromaKey`, `CHROMA_KEY_HEX` và phép đo hue để tránh
-   key trùng bảng màu — vì `gen.sh` viết thẳng tên màu vào prompt (*"BACKGROUND of
-   the sheet: one flat solid chroma-key color: {bg}"*) và một style neon magenta
-   trên key magenta thì bị `matte_vlahos` ăn mất độ bão hoà.
-
-   Prompt đó KHÔNG CÒN. `image_gen` của codex 0.149 trả về RGBA thật, nên gen.sh
-   xin thẳng nền trong suốt và không nhắc tới màu nào nữa. Không có tên màu trong
-   prompt thì cũng không có gì để đá bảng màu ⇒ toàn bộ phép tránh-va-chạm mất
-   nghĩa, và một ô swatch "Màu nền tách" chỉ còn là lời hứa suông với người dùng.
-
-   `bg` thì Ở LẠI, đúng như người dùng chọn: `slice.py` vẫn cần nó để cắt lại
-   những sheet raw ĐỜI CŨ (nền magenta/green) của project cũ. Nó chỉ không còn
-   ảnh hưởng tới lượt gen mới nữa.
+   Cỗ máy chọn màu nền (4 preset + phép đo hue tránh trùng bảng màu) đã bỏ cùng cả
+   tầng tách nền: `gen.sh` nay xin thẳng nền trong suốt, không nhắc tới màu nào.
+   `bg` chỉ còn là dữ liệu cũ đọc lại được, không ảnh hưởng lượt gen mới.
    ══════════════════════════════════════════════════════════════════════════ */
 
 /**

@@ -24,6 +24,7 @@ const hits = scanBannedWords("src/features");
  *   · IA prompt-first, làm lại `/p` (2026-08-25): **248** chỗ trúng / 94 file — hạ trần.
  *   · Dọn mã chết (2026-09-07): **228** chỗ trúng / 86 file — hạ trần.
  *   · Đợt 2 — gộp về một màn soạn (2026-09-08): **105** chỗ trúng / 41 file — hạ trần.
+ *   · Bỏ trục «Đục nền» (2026-09-08): **79** chỗ trúng — hạ trần.
  *
  * Số giảm ở đợt Wave 4·B vì wizard `workflow-v4` bị khai tử: `WorkflowScreen` ·
  * `steps/Stepper` · `steps/ReviewStep` · `components/{PromptStudio,SyncBadge,RunPanel}`
@@ -45,6 +46,11 @@ const hits = scanBannedWords("src/features");
  * mang theo chữ kỹ thuật của mình. Đây là lần hạ trần lớn nhất từ trước tới nay — đúng
  * bằng số mã chết đã dọn, không phải bằng một lần sửa câu chữ nào.
  *
+ * Đợt «Đục nền» (−26 chỗ) cũng KHÔNG sửa một câu nào cho người dùng đọc: `glaze.ts` và
+ * `materials.ts` bị xoá cùng cả trục đục nền/chất liệu (chủ sản phẩm: *"KO GIỮ MẤY CÁI
+ * TÁCH NỀN ĐỤC NỀN BỎ HẾT, GIỜ APP NHẸ THÔI"*), và hai file ấy vốn dày đặc chữ kỹ thuật
+ * («matte», «alpha», «chroma», «slice»). Bỏ một trục thì bỏ luôn từ vựng của nó.
+ *
  * HẠ TRẦN LÀ BẮT BUỘC, không phải lịch sự. Để nguyên 300 sau khi xoá 11 chỗ nghĩa là
  * tặng cho nhánh sau một hạn mức 11 từ cấm mới mà không ai quyết định cả — bánh cóc
  * chỉ có tác dụng khi răng của nó siết theo số đo thật.
@@ -53,7 +59,7 @@ const hits = scanBannedWords("src/features");
  * tự so với chính nó và KHÔNG BAO GIỜ đỏ được, tức là một cổng giả.
  * Ai kéo số xuống thì HẠ luôn trần này (và ghi vào report của mình).
  */
-const BASELINE_TOTAL = 105;
+const BASELINE_TOTAL = 79;
 
 describe("§5.4 — vùng S1 sở hữu: 0 từ cấm, không ngoại lệ", () => {
   it("features/kitfile/** hoàn toàn sạch", () => {

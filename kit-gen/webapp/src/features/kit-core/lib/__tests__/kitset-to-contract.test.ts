@@ -25,7 +25,6 @@ import {
   resolveElementSpec,
   resolveKitset,
 } from "../kitset-to-contract";
-import { glazePhrase } from "../glaze";
 
 /** Gốc repo `kit-gen/` — `process.cwd()` là `webapp/` khi chạy `npm test`. */
 const REPO = resolve(process.cwd(), "..");
@@ -366,8 +365,9 @@ describe("§W3-1 — món không vẽ được", () => {
  * viện khai sẵn ⇒ contract có; `"none"` ⇒ gỡ được; `"vitmatte"` thì không đụng…
  * Cả khái niệm ấy đã bị bỏ. `matte` là cờ đời tách-nền-bằng-key — nó vừa bắt
  * `gen.sh` in thêm một khối câu chữ, vừa chọn nhánh giải ngược của `slice.py` — và
- * hai vế đều đã chết. Độ trong của một ô nay CHỈ là một câu tiếng Anh trong `spec`
- * (`glaze.ts` → `resolveElementSpec`), nói đúng một lần, ở đúng một chỗ.
+ * hai vế đều đã chết. Cùng ngày, chủ sản phẩm bỏ nốt cả pill «Đục nền» (*"KO GIỮ
+ * MẤY CÁI TÁCH NỀN ĐỤC NỀN BỎ HẾT, GIỜ APP NHẸ THÔI"*): độ trong nay là CHỮ NGƯỜI
+ * DÙNG TỰ GÕ vào ghi chú của dòng, không còn một danh mục nào cả.
  *
  * Nên bộ ca đổi chiều: nó không đo `matte` đi tới đâu nữa, nó đo `matte` KHÔNG đi
  * tới đâu cả — kể cả khi dữ liệu cũ trên đĩa vẫn còn mang nó.
@@ -390,7 +390,7 @@ describe("§P1-4 — lớp đè `skel` đi trọn đường từ bản nháp t�
 
   it("THƯ VIỆN ĐÓNG GÓI không còn một `matte` nào — độ trong đã về `spec`", () => {
     for (const e of LIB) expect(e.skel, e.file).not.toHaveProperty("matte");
-    /* …và hai ô THẬT SỰ có độ trong vẫn nói ra điều đó, chỉ là nói bằng chữ. */
+    /* …và hai ô THẬT SỰ có độ trong vẫn nói ra điều đó, bằng chữ trong chính `spec`. */
     const glassy = LIB.find((e) => e.file === "22-board-panel")!;
     expect(glassy.spec).toContain("low alpha");
     const glow = LIB.find((e) => e.file === "16-fx-burst")!;
@@ -424,17 +424,20 @@ describe("§P1-4 — lớp đè `skel` đi trọn đường từ bản nháp t�
     expect(mergeElementSkel(base, {})).toBe(base);
   });
 
-  /* ĐỤC NỀN CHỈ CÒN LÀ CHỮ. Ca này là nửa còn lại của quyết định trên: bỏ `matte`
-     mà không kiểm câu chữ thì độ trong biến mất hoàn toàn, im lặng. */
-  it("đục nền = ĐÚNG MỘT câu, nối vào `spec`, không kèm cờ nào", () => {
+  /* MÔ TẢ Ô = MÔ TẢ, HẾT (08/09/2026). Hàm này đã rụng hai vế — «chất liệu» rồi
+     «đục nền» — và ca này là chốt chặn cho cả hai: một danh mục mới nối chữ vào đây
+     là một trục nữa phải giữ đồng bộ giữa pill, prompt copy-dán và contract, đúng
+     thứ chủ sản phẩm vừa bảo bỏ (*"BỎ HẾT, GIỜ APP NHẸ THÔI"*). */
+  it("mô tả ô = lớp đè nếu có, không thì thư viện — KHÔNG nối thêm gì", () => {
     const base = { spec: "a coin icon" };
-    expect(resolveElementSpec(base, { glaze: "glass" })).toBe(`a coin icon, ${glazePhrase("glass")}`);
-    expect(resolveElementSpec(base, { glaze: "glow" })).toBe(`a coin icon, ${glazePhrase("glow")}`);
-    /* Không chọn ⇒ không thêm chữ nào. */
-    expect(resolveElementSpec(base, {})).toBe("a coin icon");
     expect(resolveElementSpec(base)).toBe("a coin icon");
-    /* Id lạ (tài liệu đời sau) ⇒ bỏ qua, không ném. */
-    expect(resolveElementSpec(base, { glaze: "khong-co-that" })).toBe("a coin icon");
+    expect(resolveElementSpec(base, {})).toBe("a coin icon");
+    expect(resolveElementSpec(base, { spec: "  a golden coin  " })).toBe("a golden coin");
+    /* Lớp đè RỖNG (người dùng xoá sạch ô mô tả) ⇒ rơi về thư viện, không ra ô câm. */
+    expect(resolveElementSpec(base, { spec: "   " })).toBe("a coin icon");
+    /* Khoá ĐỜI CŨ trên đĩa (`glaze`/`material`) không còn cửa nào vào `spec`. */
+    const legacy = { glaze: "ice", material: "gold-metal" } as Parameters<typeof resolveElementSpec>[1];
+    expect(resolveElementSpec(base, legacy)).toBe("a coin icon");
   });
 });
 

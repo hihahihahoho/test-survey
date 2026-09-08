@@ -1,5 +1,3 @@
-import { GLAZE_PRESETS, glazePhrase } from "@/features/kit-core/lib/glaze";
-import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
 import { EXPRESSIONS, OUTFIT_THEMES, POSES } from "@/features/kit-core/lib/poses";
 import { CAMERA_VIEWS } from "@/features/prompt-lab/lib/pose/pose-state";
 import { DECOR_LEVELS, getPresets, type PresetBundle } from "./presets-store";
@@ -18,7 +16,7 @@ import { DECOR_LEVELS, getPresets, type PresetBundle } from "./presets-store";
  *
  * ══ HAI KIỂU `value`, CỐ Ý ══════════════════════════════════════════════════
  * Danh mục của repo có sẵn hai quy ước và lab KHÔNG bẻ lại chúng:
- *  · id ổn định (`material`, `pose`, `style`) — chữ EN tra ra từ id;
+ *  · id ổn định (`decor`, `pose`, `style`) — chữ EN tra ra từ id;
  *  · chính CỤM TIẾNG ANH (`expression`, `outfit`, theo `PhraseOption` của
  *    poses.ts) — vì hai ô đó bên kit-core có đường TỰ GÕ, mà chuỗi tự gõ
  *    thì không có id nào để đặt.
@@ -44,17 +42,11 @@ export type PillKind =
    * ╚══════════════════════════════════════════════════════════════════════════╝
    */
   | "layout"
-  /**
-   * ĐỤC NỀN — pill thay cho `material` từ 08/2026. Xem `glaze.ts`.
-   */
-  | "glaze"
-  /**
-   * CHẤT LIỆU — **DI SẢN, chỉ để ĐỌC**. Không còn menu `/` nào chèn nó và không
-   * còn dòng element nào sinh ra nó; nhưng nó đang nằm trong câu tự do của những
-   * dự án có thật, và một `kind` bị xoá khỏi bảng này là một pill hiện ra chữ
-   * trần rồi rụng khỏi prompt mà không ai báo. Giữ để đọc, không quảng cáo.
-   */
-  | "material"
+  /* ĐÃ BỎ 08/09/2026: `glaze` («Đục nền») và `material` («Chất liệu»). Chủ sản
+     phẩm: *"KO GIỮ MẤY CÁI TÁCH NỀN ĐỤC NỀN BỎ HẾT, GIỜ APP NHẸ THÔI"*. Ai muốn
+     kính/phát sáng thì gõ vào ô ghi chú của dòng, hoặc vào chính tên element ở
+     nấc «Gõ riêng». Tài liệu ĐỜI CŨ còn hai kind ấy trong câu tự do vẫn mở được:
+     `pillOptions` trả mảng rỗng cho kind lạ thay vì ném (xem cuối hàm ấy). */
   | "decor"
   | "pose"
   /**
@@ -223,10 +215,6 @@ const PLACEHOLDER: Record<PillKind, string> = {
   scene: "khung cảnh",
   mood: "không khí",
   layout: "bố cục",
-  /* "Không đục" chứ không phải "đục nền": pill để trống phải nói TRẠNG THÁI đang
-     có (ô đặc), không nói tên của trục. Nhãn trục đã nằm ngay bên trái pill. */
-  glaze: "không đục",
-  material: "chất liệu",
   decor: "mức viền",
   pose: "dáng",
   view: "góc máy",
@@ -249,8 +237,6 @@ const NOUN: Record<PillKind, string> = {
   scene: "khung cảnh",
   mood: "không khí",
   layout: "bố cục",
-  glaze: "đục nền",
-  material: "chất liệu",
   decor: "mức viền",
   pose: "dáng",
   view: "góc máy",
@@ -261,7 +247,7 @@ const NOUN: Record<PillKind, string> = {
 
 /** Tên trục để ghép vào câu — xem `NOUN`. */
 export function nounOf(kind: PillKind): string {
-  return NOUN[kind];
+  return NOUN[kind] ?? "";
 }
 
 /**
@@ -291,15 +277,6 @@ export function pillOptions(kind: PillKind, presets: PresetBundle = getPresets()
 
     case "layout":
       return [...LAYOUTS];
-
-    case "glaze":
-      /* `glazePhrase` chứ không phải `preset.en`: `en` của "Kính trong" RỖNG (câu
-         alpha của nấc kính đã nói trọn), và một dòng phụ trống trơn trong menu là
-         lời hứa "chọn cái này thì không thêm chữ nào" — sai. */
-      return GLAZE_PRESETS.map((preset) => ({ value: preset.id, vi: preset.vi, en: glazePhrase(preset.id) }));
-
-    case "material":
-      return MATERIAL_PRESETS.map((preset) => ({ value: preset.id, vi: preset.vi, en: preset.en }));
 
     case "decor":
       return DECOR_LEVELS.map((level) => ({ value: level.value, vi: level.vi, en: level.en }));
@@ -341,6 +318,13 @@ export function pillOptions(kind: PillKind, presets: PresetBundle = getPresets()
        */
       return [];
   }
+  /* KIND LẠ ⇒ MẢNG RỖNG, KHÔNG NÉM. `switch` ở trên đã phủ kín kiểu, nên dòng này
+     chỉ chạy khi một kind đã bị XOÁ khỏi `PillKind` còn nằm trong tài liệu trên
+     đĩa — đúng ca của `glaze`/`material` sau 08/09/2026. Thiếu nó thì `labelOf`
+     gọi `.find` trên `undefined` và cả màn soạn prompt trắng bóc chỉ vì một dự án
+     cũ. Rỗng ⇒ pill hiện nguyên văn giá trị cũ và rụng khỏi prompt: mất một cụm
+     chữ thì thấy được, còn màn trắng thì không sửa được. */
+  return [];
 }
 
 /**
@@ -350,9 +334,9 @@ export function pillOptions(kind: PillKind, presets: PresetBundle = getPresets()
  * ║ Ảnh chỉ tới được máy vẽ qua ba cửa của contract: `sheet.ref` (ảnh của một  ║
  * ║ tấm), `variant.brand.refs` (logo) và `variant.inspo` (ảnh tả cả bộ kit).   ║
  * ║ Pill trong câu NGỮ CẢNH CHUNG nói về cả bộ kit ⇒ cửa của nó là `inspo`.    ║
- * ║ Pill `decor`/`glaze`/`pose`… thì nói về MỘT Ô, mà một ô không có cửa ảnh   ║
- * ║ riêng nào — bày nút đính ảnh ở đó là hứa một thứ contract không nhận, và   ║
- * ║ tấm ảnh sẽ chết lặng trong tài liệu. Thà không có nút.                     ║
+ * ║ Pill `decor`/`pose`… thì nói về MỘT Ô, mà một ô không có cửa ảnh riêng     ║
+ * ║ nào — bày nút đính ảnh ở đó là hứa một thứ contract không nhận, và tấm     ║
+ * ║ ảnh sẽ chết lặng trong tài liệu. Thà không có nút.                         ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 export function refRoleOf(kind: PillKind): "theme" | "style" | "" {
@@ -400,7 +384,7 @@ export function inheritsWhenEmpty(kind: PillKind): boolean {
 /** Nhãn VI hiện trên pill. Giá trị lạ ⇒ hiện nguyên văn (còn debug được). */
 export function labelOf(kind: PillKind, value: string, presets: PresetBundle = getPresets()): string {
   const raw = (value ?? "").trim();
-  if (!raw) return PLACEHOLDER[kind];
+  if (!raw) return PLACEHOLDER[kind] ?? "";
   return pillOptions(kind, presets).find((option) => option.value === raw)?.vi ?? raw;
 }
 

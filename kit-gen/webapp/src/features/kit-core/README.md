@@ -48,7 +48,7 @@ nên script bị xoá và file dữ liệu ở lại như một hằng số ché
 | `prompt-studio.ts` | `prompt-canvas/lib/block-prompt`, `lib/hooks/use-contract` |
 | `geometry.ts` | `prompt-canvas/lib/{composer-to-contract,pose-sheet}`, `prompt-lab/lib/cell-size` |
 | `shapes.ts` (+ `shape-data.generated.ts`) | `home/{LibraryScreen,components/Silhouette}`, `geometry.ts` |
-| `glaze.ts` · `poses.ts` · `materials.ts` | `prompt-canvas/lib/composer-doc`, `prompt-lab/lib/pill-registry` |
+| `poses.ts` | `prompt-canvas/lib/composer-doc`, `prompt-lab/lib/pill-registry` |
 | `user-library.ts` | `kitset-to-contract`, `home/LibraryScreen` |
 | `element-lib/` | `user-library`, `model`, `kitset-to-contract`, `home/LibraryScreen` |
 | `idb.ts` | `settings/tabs/PrefsTab` (nút "Xoá dữ liệu trình duyệt") |

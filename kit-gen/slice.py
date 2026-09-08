@@ -2,26 +2,11 @@
 """
 slice.py — CHỈ CẮT. Không tách nền, không đụng alpha của model.
 
-╔══ VÌ SAO FILE NÀY NGẮN ĐI HƠN 900 DÒNG (07/09/2026) ═════════════════════════╗
-║ Bản trước là một cỗ máy TÁCH NỀN đời chroma-key, đắp thêm mãi: key màu        ║
-║ magenta/green, alpha mềm theo khoảng cách màu, un-mix màu nền khỏi viền, dán  ║
-║ nhãn khối liên thông (blob) để giành pixel giữa hai ô, MaxFilter + blur để    ║
-║ "feather" mép mask, lấp lỗ kín, erode/dilate dò "core enamel" theo màu tím,   ║
-║ nắn nội dung về khung safe (snap/align, có cả resize), lật ngang pose, và một ║
-║ nhánh riêng vẽ ô `matte:"glow"` trên NỀN ĐEN rồi ship kèm `blend:"screen"`.   ║
-║                                                                              ║
-║ Cả cỗ máy đó tồn tại vì một tiền đề đã CHẾT: "ảnh model trả về không có       ║
-║ alpha". Nay `image_gen` trả PNG RGBA có alpha thật và prompt (`gen.sh`,       ║
-║ section Transparency) đòi đúng điều đó. Giữ máy cũ chạy trên ảnh đã có alpha  ║
-║ không phải là thừa — nó PHÁ, và ba vết đo được trên dự án `test-e0d4`:        ║
-║   · 01-button   — một vệt vàng lẻ loi phía dưới: vùng crop được nới ra ngoài  ║
-║                   ranh giới ô (vành `bleed`) nên múc theo mảnh của ô bên;     ║
-║   · 02-healthbar— ruột thanh bị GẶM: thân kính model vẽ ở α≈86–93, nằm dưới   ║
-║                   mask "nghiêm" (α≥240) nên bị mask×blur bóp còn α≈3–8;       ║
-║   · 03-avatar   — nằm trên nền ĐEN ĐẶC: `matte:"glow"` ⇒ `blend:"screen"` ⇒   ║
-║                   web tự đặt nền tối cho ô đó.                               ║
-║ Không cái nào là lỗi của model. Cả ba là máy móc cũ tự gây ra.                ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+ĐÃ BỎ 07/09/2026: cả tầng tách nền đời cũ (key màu nền, alpha mềm theo khoảng cách
+màu, un-mix viền, mask khối, feather, lấp lỗ, nắn lõi về khung) — hơn 900 dòng. Nó
+tồn tại vì một tiền đề đã chết: "ảnh model trả về không có alpha". Nay `image_gen`
+trả PNG RGBA có alpha thật, và máy cũ chạy trên ảnh đã có alpha thì PHÁ chứ không
+thừa: đo trên dự án `test-e0d4`, ruột thanh máu α≈90 bị bóp còn α≈3.
 
 LUẬT MỚI, ĐỌC HẾT TRONG MƯỜI GIÂY:
 

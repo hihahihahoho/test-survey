@@ -116,12 +116,13 @@ function CellRow({
           used={used}
           onPick={(next) => onChange(swapCellElement(cell, next, presets))}
         />
-        {/* Thứ tự pill do chủ sản phẩm chốt: phong cách → đục nền → viền → cỡ.
-            «Chất liệu» ĐÃ BỊ BỎ HẲN (không ẩn đi, không đổi tên): nó ăn theo prompt
-            tổng phong cách — xem khối chú thích đầu `glaze.ts`.
+        {/* Thứ tự pill do chủ sản phẩm chốt: phong cách → viền → cỡ.
+            «Chất liệu» (08/2026) và «Đục nền» (08/09/2026) ĐÃ BỊ BỎ HẲN — không ẩn
+            đi, không đổi tên: *"KO GIỮ MẤY CÁI TÁCH NỀN ĐỤC NỀN BỎ HẾT, GIỜ APP NHẸ
+            THÔI"*. Kính / phát sáng thì gõ vào ô ghi chú ngay dưới, hoặc vào chính
+            tên element ở nấc «Gõ riêng»; cả hai đi nguyên văn vào prompt.
             Nhãn trục đi VÀO pill (`axis`) thay vì làm chữ nối rời — xem `PillAxis`. */}
         <OptionPill compact axis="Phong cách" kind="style" value={cell.styleId} onChange={(styleId) => onChange({ ...cell, styleId })} />
-        <OptionPill compact axis="Đục nền" kind="glaze" value={cell.glazeId} onChange={(glazeId) => onChange({ ...cell, glazeId })} />
         <OptionPill compact axis="Viền" kind="decor" value={cell.decor} onChange={(decor) => onChange({ ...cell, decor })} />
         <SizePill label={label} element={element} value={cell.sizeId} onChange={(sizeId) => onChange({ ...cell, sizeId })} />
         <RemoveButton what={`element ${label}`} onRemove={onRemove} />
@@ -243,7 +244,7 @@ function FreeCellRow({
  *
  * ╔══ VÌ SAO PHẢI CHẢY NGƯỢC, KHÔNG CHỈ XUÔI ════════════════════════════════╗
  * ║ `uiCellDoc` dựng câu TỪ ô, nhưng khi người dùng bấm một pill TRONG câu thì║
- * ║ `updateAttributes` chỉ đổi tài liệu — `styleId`/`decor`/`materialId` đứng ║
+ * ║ `updateAttributes` chỉ đổi tài liệu — `styleId`/`decor` thì đứng yên.    ║
  * ║ nguyên giá trị cũ. Hai nguồn cho cùng một sự thật, và cái lệch ấy đẻ ra ba║
  * ║ hỏng thật:                                                               ║
  * ║  ① Quay về «Theo template» là mất trắng lựa chọn vừa bấm — vì lúc đó chỉ  ║
@@ -263,11 +264,10 @@ function syncCellFromDoc(cell: UiCell, doc: JSONContent): UiCell {
     doc,
     /* Pill bị xoá khỏi câu ⇒ GIỮ giá trị cũ trong trường, không xoá theo. Người
        ta bỏ pill khỏi một câu tiếng Anh tự viết là bỏ CHỮ, không phải tuyên bố
-       "ô này không còn chất liệu" — và nếu gạt về template thì ba trường vẫn là
+       "ô này không còn phong cách" — và nếu gạt về template thì hai trường vẫn là
        thứ duy nhất còn lại để dựng lại ô. */
     styleId: pills.style ?? cell.styleId,
     decor: pills.decor ?? cell.decor,
-    glazeId: pills.glaze ?? cell.glazeId,
   };
 }
 
@@ -488,7 +488,7 @@ function SizeNumber({ label, value, onChange, onEnter }: {
  * về DÒNG này. Nên chúng đi qua nguyên vẹn, và chỉ cụm EN mở đầu của câu tự do
  * được vá lại (xem `retitleCellDoc`).
  *
- * KHÔNG áp `decor`/`materialId` mặc định của element mới đè lên: preset chỉ là
+ * KHÔNG áp `decor` mặc định của element mới đè lên: preset chỉ là
  * GIÁ TRỊ KHỞI ĐIỂM lúc thêm dòng — dùng nó để ghi đè lúc đổi loại là lấy mặc
  * định của danh mục đắp lên lựa chọn của người dùng, đúng cái sai mà `seedOnce`
  * và `addLibraryPreset` vừa phải đi vòng để tránh.
