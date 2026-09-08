@@ -62,10 +62,6 @@
   --kg-dot-alpha: 0.13;
   --kg-dot-size: 1.15px;
   --kg-dot-step: 22px;
-  --kg-dot-major-alpha: 0.2;
-  --kg-dot-major-size: 1.5px;
-  /* Bội số bước của mốc chính. Số THUẦN (không đơn vị) để `calc()` nhân được. */
-  --kg-dot-major-every: 5;
   --kg-checker-tile: 16px;
   --kg-checker-cell: 8px;
   --kg-selection-alpha: 0.32;
@@ -261,7 +257,6 @@
      tương phản âm (tối/sáng) nhạy hơn tương phản dương. */
   --kg-dot-color: 21 21 22;       /* #151516 */
   --kg-dot-alpha: 0.1;
-  --kg-dot-major-alpha: 0.16;
 
   /* VNPAY-RECOLOR — theme sáng dùng bậc ĐẬM của xanh VNPAY với CHỮ TRẮNG, đúng
      như nhận diện gốc. Vì sao #004A8C chứ không phải đúng #005BAA:

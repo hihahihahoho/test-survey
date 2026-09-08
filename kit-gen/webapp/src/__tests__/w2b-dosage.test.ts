@@ -17,8 +17,6 @@ const ROOT = join(new URL(".", import.meta.url).pathname, "..", "..");
 const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
 
 const GLOBALS = read("src/styles/globals.css");
-/** globals.css KHÔNG có chú thích — dùng cho mọi phép "rule này phải BIẾN MẤT". */
-const CSS_RULES = GLOBALS.replace(/\/\*[\s\S]*?\*\//g, " ");
 const TOKENS = read("src/styles/tokens.css");
 const CONFIG = read("tailwind.config.ts");
 const FLORA = read("src/components/layout/flora.ts");
@@ -121,18 +119,9 @@ describe("2B-2 · thang tint hai bậc, giảm liều mint", () => {
     expect([...used].sort()).toEqual(["tint-a", "tint-b"]);
   });
 
-  /* Ổ mint mà W2A CỐ Ý hoãn sang 2B (W2A-DONE §Kỷ luật mint) — nay phải xong. */
-  it("`.element-card.selected` thôi dùng viền mint đặc", () => {
-    const rule = /\.element-card\.selected\s*\{([^}]*)\}/.exec(GLOBALS)![1]!;
-    expect(rule).not.toMatch(/border-accent(?![\w-])/);
-    expect(rule).toContain("--kg-tint-b");
-  });
-
-  it("`.choice-card.selected` thôi là một HỘP mint (khối 'Có mascot', ảnh 08)", () => {
-    const rule = /\.choice-card\.selected\s*\{([^}]*)\}/.exec(GLOBALS)![1]!;
-    expect(rule).not.toMatch(/border-accent(?![\w-])/);
-    expect(rule).toContain("--kg-tint-a");
-  });
+  /* Hai ca "giảm liều mint" của `.element-card.selected` / `.choice-card.selected`
+     đã gỡ: cả hai rule rời `globals.css` cùng lưới 42 món và bước Phong cách. Luật
+     còn sống nằm ở hai ca alpha ngay trên — chúng quét CẢ src/, không neo vào rule. */
 
   /* Mục "phải giữ" #8: giảm LIỀU, tuyệt đối không bỏ vòng focus. */
   it("không wave nào lén bỏ ring focus", () => {
@@ -142,26 +131,10 @@ describe("2B-2 · thang tint hai bậc, giảm liều mint", () => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   2B-3 · STEPPER NHẸ — KHỐI NÀY ĐÃ RÚT (Wave 4·B)
-
-   Nó khoá liều lượng thị giác của hàng-6-bước: `.workflow-stepper` không được
-   mang vỏ nặng, pill `active` chỉ khác ở màu chữ, không `w-fit`. Cả CSS lẫn
-   `steps/Stepper.tsx` đã bị xoá cùng wizard, nên không còn đối tượng nào để đo.
-
-   KHÔNG chuyển các khẳng định này sang màn soạn prompt: chúng nói về một hàng
-   bước tuần tự, mà màn mới cố ý KHÔNG có bước nào. Viết lại chúng cho một thứ
-   khác hình dạng là giữ cái tên test mà bỏ mất điều nó bảo vệ.
-   ══════════════════════════════════════════════════════════════════════════════ */
-
-/* ══════════════════════════════════════════════════════════════════════════════
    2B-4 · BA TẦNG TIÊU ĐỀ CÒN MỘT
-
-   Cả ba ca gốc đọc thẳng file của wizard (`WorkflowScreen.tsx`, rồi `steps/BriefStep.tsx`
-   ở đợt kit-core) — cả ba file nay đã bị xoá cùng IA prompt-first. Nhưng cái LUẬT thì
-   không chết theo cái màn: eyebrow "Bước trong một mạch" là dấu vết của lối trình bày
-   "bạn đang ở bước N", và nếu ai đó dựng lại nó ở khu soạn thì tầng tiêu đề lại chồng
-   lên nhau y như cũ. Nên ca này ĐỔI CHIỀU: quét CẢ `src/`, không đọc một file cụ thể —
-   mạnh hơn bản gốc, và không còn neo vào một đường dẫn có thể biến mất.
+   Quét CẢ `src/` chứ không đọc một file: eyebrow "Bước trong một mạch" là dấu vết
+   của lối trình bày "bạn đang ở bước N", dựng lại nó ở đâu cũng làm tiêu đề chồng
+   tầng như cũ.
    ══════════════════════════════════════════════════════════════════════════════ */
 describe("2B-4 · cắt tầng tiêu đề", () => {
   it("eyebrow 'Bước trong một mạch' không mọc lại ở bất cứ đâu trong src/", () => {
@@ -180,25 +153,11 @@ describe("2B-5 · Playfair chỉ làm MỘT việc", () => {
     expect(FLORA).toContain("export const SERIF = \"font-serif italic font-normal\"");
   });
 
-  /* `fonts.css` CHỈ nạp face italic — thiếu `italic` là xin một face không tồn tại
-     và chỉ nghiêng nhờ UA stylesheet của <em>. Đúng trên màn nhưng mong manh. */
-  it("`.workflow-hero h1 em` có `italic` TƯỜNG MINH", () => {
-    const rule = /\.workflow-hero h1 em\s*\{([^}]*)\}/.exec(GLOBALS)![1]!;
-    expect(rule).toContain("italic");
+  /* `fonts.css` CHỈ nạp face italic — nghiêng phải TƯỜNG MINH, không dựa vào UA
+     stylesheet của <em>. Rule `.workflow-hero h1 em` đã đi cùng wizard, nhưng điều
+     kiện gốc (font có face italic thật) vẫn phải đúng cho `SERIF` ở trên. */
+  it("Playfair có face italic thật để `SERIF` bám vào", () => {
     expect(read("src/styles/fonts.css")).toMatch(/font-style:\s*italic/);
-  });
-
-  it("serif KHÔNG còn đè lên dữ liệu ở `.kitset-summary h3`", () => {
-    const rule = /\.kitset-summary h3\s*\{([^}]*)\}/.exec(GLOBALS)![1]!;
-    expect(rule).not.toContain("font-serif");
-    expect(rule).toContain("font-sans");
-  });
-
-  it("`.preview-wheel` (Playfair 80px làm nội dung giả) đã xoá hẳn khỏi CSS", () => {
-    // Đo LUẬT, không đo văn xuôi: chú thích của 2B có kể lại tên hai rule vừa xoá.
-    expect(CSS_RULES).not.toMatch(/\.preview-wheel/);
-    expect(CSS_RULES).not.toMatch(/\.preview-button/);
-    expect(CSS_RULES).not.toMatch(/\.skeleton-shape/);
   });
 
   it("tiêu đề 2 từ 'Cài đặt' thôi nhấn serif (điều ③ của luật)", () => {
@@ -215,37 +174,13 @@ describe("2B-5 · Playfair chỉ làm MỘT việc", () => {
    2B-6 · DỌN SẠN
    ══════════════════════════════════════════════════════════════════════════════ */
 describe("2B-6 · sạn nhỏ nhưng lộ ngay", () => {
-  it("`.summary-row` cuối cùng thôi kẻ một gạch lơ lửng", () => {
-    expect(/\.summary-row\s*\{([^}]*)\}/.exec(GLOBALS)![1]!).toContain("last:border-b-0");
-  });
+  /* ĐÃ GỠ bốn ca neo vào rule của wizard/màn kết quả (`.summary-row`, `.dropzone`,
+     `.workflow-project-pill`, `.result-toolbar`): cả bốn rule đã rời `globals.css`.
+     Hình thái tương đương của khu soạn có cổng riêng ở `prompt-canvas/__tests__`. */
 
-  /* ĐÃ GỠ: ca "chip ảnh nằm TRONG khung vùng thả".
-     Hai vùng thả mà nó đo (`steps/StyleStep.tsx` và `components/MascotDialog.tsx`) đã
-     bị xoá cùng IA prompt-first — ảnh tham chiếu nay đi vào câu prompt bằng pill ảnh
-     (`prompt-lab/extensions/ImagePill.tsx`), không còn khung thả nào để chip trôi ra
-     ngoài. Class `.dropfield` cũng đã rời `globals.css` theo. Giữ lại ca này là canh
-     một cái khung không tồn tại; ca "nét đứt kiểu wireframe" bên dưới đo `.dropzone`
-     — class KHÁC, vẫn còn dùng — nên nó ở lại nguyên văn. */
-
-  it("nét đứt kiểu wireframe đã bỏ khỏi vùng thả", () => {
-    expect(/\.dropzone\s*\{([^}]*)\}/.exec(GLOBALS)![1]!).not.toContain("border-dashed");
-  });
-
-  it("pill phiên bản thôi vỡ 3 dòng trên mobile", () => {
-    expect(/\.workflow-project-pill\s*\{([^}]*)\}/.exec(GLOBALS)![1]!).toContain("whitespace-nowrap");
-  });
-
-  it("`.result-toolbar` dưới 640px là THẺ, trên 640px mới là pill", () => {
-    const rule = /\.result-toolbar\s*\{([^}]*)\}/.exec(GLOBALS)![1]!;
-    expect(rule).toContain("sm:rounded-full");
-    expect(rule).toMatch(/rounded-4/);
-  });
-
-  it("dot-grid không còn ở trang nào — canvas tự do đã bị gỡ", () => {
-    expect(/\.workflow-page\s*\{([^}]*)\}/.exec(GLOBALS)![1]!).not.toContain("radial-gradient");
-    /* Chỗ CUỐI CÙNG còn nền chấm là `design/components/SheetCanvas.tsx` — canvas tự
-       do, đã xoá 08/09/2026. Nên luật đổi từ "rời trang form + danh sách, GIỮ trên
-       canvas" thành "không trang nào có": không còn canvas để mà giữ. */
+  it("dot-grid chỉ còn được khai ở MỘT chỗ — không trang nào tự rải nền chấm", () => {
+    /* Chỗ cuối cùng còn nền chấm là canvas tự do, đã xoá. `DOTGRID` chỉ được sống
+       trong bảng hằng của flora; mọi nơi khác gõ lại là một trang form đầy nhiễu. */
     expect(SRC.filter(({ code }) => code.includes("DOTGRID")).map((f) => f.path)).toEqual([
       "src/components/layout/flora.ts",
     ]);

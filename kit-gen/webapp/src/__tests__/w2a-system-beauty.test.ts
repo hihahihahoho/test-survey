@@ -8,7 +8,7 @@
  * xanh y nguyên nếu ai đó lặng lẽ trả `bg-accent` về cho ray slider hay thêm lại
  * `border-b` mặc định cho modal. Đây là cổng khoá chính chuỗi class đó.
  *
- * Cùng khuôn với `__tests__/visual-debt-a1.test.ts` (FE-2·A1) — kể cả việc XOÁ CHÚ
+ * Cùng khuôn với `__tests__/system-guards.test.ts` — kể cả việc XOÁ CHÚ
  * THÍCH trước khi so: các file W2A sửa đều có comment kể lại giá trị CŨ, quét thô sẽ
  * báo động giả trên chính lời giải thích.
  */
@@ -108,13 +108,6 @@ describe("W2A-2 · MỘT lưới cho cả app", () => {
     }
   });
 
-  it("`.workflow-page` KHÔNG còn padding ngang — nếu còn, mép trái lại lệch 16px", () => {
-    const rule = GLOBALS.match(/\.workflow-page\s*\{([^}]*)\}/)![1];
-    expect(rule).not.toMatch(/\bpx-\d/);
-    expect(rule).not.toMatch(/\bsm:px-\d/);
-    expect(rule).not.toMatch(/\blg:px-\d/);
-  });
-
   it("hairline header vẫn FULL-BLEED (ở thẻ <header>, không ở ruột `.kg-page`)", () => {
     const shell = strip(read("src/components/layout/FloraShell.tsx"));
     expect(shell).toMatch(/<header className=\{cn\("sticky top-0 z-sticky h-14 shrink-0 border-b"/);
@@ -138,10 +131,6 @@ describe("W2A-3 · không còn control thô của hệ điều hành", () => {
     expect(s).toContain("<SheetResultSlot");
     expect(s).not.toContain('<select');
     expect(s).not.toContain('result-chroma');
-  });
-
-  it("rule chồng style `.result-toolbar select` đã xoá", () => {
-    expect(GLOBALS).not.toMatch(/\.result-toolbar select\s*\{/);
   });
 
   /**
@@ -180,15 +169,17 @@ describe("W2A-3 · không còn control thô của hệ điều hành", () => {
   });
 });
 
-describe("W2A-5 · ba class mồ côi nay có thân thật", () => {
-  it.each(["workflow-choice", "brand-ref", "mascot-dropzone"])("`.%s` có rule trong CSS", (cls) => {
-    expect(GLOBALS).toMatch(new RegExp(`\\.${cls}\\s*\\{`));
-  });
-
-  it("cổng deadclass có LUẬT ② bắt class mồ côi, không chỉ allowlist tên cứng", () => {
+/* `workflow-choice` / `brand-ref` / `mascot-dropzone` — ba class mồ côi mà W2A-5
+   dựng thân cho — đã rời `globals.css` cùng wizard. Điều còn sống của W2A-5 là
+   CÁI CỔNG: nó phải canh cả hai chiều, class trong TSX không có CSS *và* rule CSS
+   không có ai đeo. */
+describe("W2A-5 · cổng class chết canh đủ hai chiều", () => {
+  it("cổng deadclass có LUẬT ② (class mồ côi) và LUẬT ③ (rule CSS mồ côi)", () => {
     const gate = read("scripts/check-dead-classes.mjs");
     expect(gate).toContain("class MỒ CÔI");
     expect(gate).toContain("classNameExpr");
+    expect(gate).toContain("RULE MỒ CÔI");
+    expect(gate).toContain("CSS_ALLOW");
   });
 });
 
