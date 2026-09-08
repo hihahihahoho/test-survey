@@ -27,8 +27,11 @@ export async function run({ api, call, wsRoot, pid }) {
     const r = await new Promise(resolveP => {
       const [srv, cli] = socketPair()
       tiny.server.emit("connection", srv)
+      /* `POST …/refs` là route ghi còn lại đọc body theo `ctx.limits.upload` (bản cũ
+         dùng `/api/uploads`, đã bỏ cùng trình nhập zip). Thứ được đo vẫn là lớp 9:
+         413 phát ra TỪ DÒNG DỮ LIỆU, trước khi handler kịp phân tích multipart. */
       const req = http.request({
-        method: "POST", path: "/api/uploads",
+        method: "POST", path: `/api/projects/${pid}/refs`,
         headers: { ...CLIENT, "content-type": "application/octet-stream", "transfer-encoding": "chunked" },
         createConnection: () => cli,
       }, res => {

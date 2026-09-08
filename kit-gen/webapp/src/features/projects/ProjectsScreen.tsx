@@ -113,10 +113,12 @@ export function ProjectsScreen(_props: ScreenProps) {
     [dialogs, nav, touchRecent],
   );
 
-  /* §W1-9: ý định "tạo/nhập" mang từ wizard cài đặt hoặc ⌘K sang, nằm trên `?action=`. */
+  /* §W1-9: ý định "tạo" mang từ ⌘K sang, nằm trên `?action=`. `import` đã bỏ cùng
+     wizard nhập .zip; giá trị ấy còn trong schema chỉ để link cũ không rơi vào hư không,
+     và ở đây nó mở đúng dialog Tạo. */
   useCreateIntent(
     search,
-    (intent) => (intent === "import" ? dialogs.openImport() : dialogs.openDialog("create")),
+    () => dialogs.openDialog("create"),
     () => void navigate({ to: "/", search: {}, replace: true }),
   );
 
@@ -125,7 +127,6 @@ export function ProjectsScreen(_props: ScreenProps) {
       open: openProject,
       rename: (p) => dialogs.openDialog("rename", p),
       duplicate: (p) => dialogs.openDialog("duplicate", p),
-      exportZip: (p) => dialogs.openForMany("export", [p]),
       remove: (p) => dialogs.openForMany("delete", [p]),
     }),
     [dialogs, openProject],

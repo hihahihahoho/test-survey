@@ -74,12 +74,12 @@ afterEach(() => { calls.length = 0; cleanup(); });
 
 describe("KitImage tải lại khi file trên đĩa đổi", () => {
   const draw = (version: string | null) =>
-    render(<KitImage projectId="p1" path="kits/chinh/01-btn.png" alt="Nút" backdrop="checker" version={version} />);
+    render(<KitImage projectId="p1" path="kits/chinh/01-btn.png" alt="Nút" version={version} />);
 
   it("mtime đổi ⇒ xin lại ảnh, và xin bằng ĐÚNG phiên bản mới", async () => {
     const { rerender } = draw("t1");
     await waitFor(() => expect(calls.length).toBe(1));
-    rerender(<KitImage projectId="p1" path="kits/chinh/01-btn.png" alt="Nút" backdrop="checker" version="t2" />);
+    rerender(<KitImage projectId="p1" path="kits/chinh/01-btn.png" alt="Nút" version="t2" />);
     await waitFor(() => expect(calls.length).toBe(2));
     expect(calls.map((c) => c.version)).toEqual(["t1", "t2"]);
   });
@@ -87,7 +87,7 @@ describe("KitImage tải lại khi file trên đĩa đổi", () => {
   it("mtime KHÔNG đổi ⇒ không xin lại — sửa cache cũ không được phép biến thành tải lại mọi lúc", async () => {
     const { rerender } = draw("t1");
     await waitFor(() => expect(calls.length).toBe(1));
-    rerender(<KitImage projectId="p1" path="kits/chinh/01-btn.png" alt="Nút" backdrop="checker" version="t1" />);
+    rerender(<KitImage projectId="p1" path="kits/chinh/01-btn.png" alt="Nút" version="t1" />);
     await waitFor(() => expect(calls.length).toBe(1));
   });
 });

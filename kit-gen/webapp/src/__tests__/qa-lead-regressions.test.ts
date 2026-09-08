@@ -19,8 +19,6 @@ describe("V-1 · class Tailwind phải TỒN TẠI trong bảng màu của repo"
   const files = [
     "src/components/ui/button.tsx",
     "src/components/layout/flora.ts",
-    "src/components/layout/ProjectRail.tsx",
-    "src/components/layout/AppBreadcrumb.tsx",
     "src/components/layout/FloraShell.tsx",
   ];
   it.each(files)("%s không dùng token `white` (đã bị config xoá)", (f) => {
@@ -51,29 +49,14 @@ describe("V-3 · mốc <768px là CHỈ-ĐỌC THẬT (audit M5)", () => {
     expect(gate).toContain("export function useNarrowViewport");
     expect(gate).toMatch(/gateOf\(status: ConnectionStatus, narrow = false\)/);
   });
+  /* Danh sách rút còn HAI: đợt IA prompt-first xoá `KitScreen`, `ProjectSettingsScreen`,
+     `RunsScreen`, `RunDetailScreen` và cả `features/design/**`. Hai màn còn lại đúng là
+     hai màn có nút GHI — và đó vẫn là toàn bộ điều mốc <768px nói. */
   it.each([
     "src/features/projects/ProjectsScreen.tsx",
-    "src/features/kit/KitScreen.tsx",
-    /* `features/project/ProjectScreen.tsx` ĐÃ XOÁ cùng đợt "một màn duy nhất" — màn
-       «Kết quả & xuất kit» không còn, và hàng cửa ra của nó (cùng cái `gate` này)
-       nay nằm trong `PromptCanvasScreen`. */
     "src/features/prompt-canvas/PromptCanvasScreen.tsx",
-    "src/features/project/ProjectSettingsScreen.tsx",
-    "src/features/runs/RunsScreen.tsx",
-    "src/features/runs/RunDetailScreen.tsx",
   ])("%s truyền narrow vào gate", (f) => {
     expect(read(f)).toContain("gateOf(status, narrow)");
-  });
-  it("S3 (trình soạn) cũng khoá ghi khi màn hẹp", () => {
-    expect(read("src/features/design/lib/useDesignEditor.ts")).toContain("const readOnly = narrow ||");
-  });
-});
-
-describe("V-4 · S3 xếp DỌC dưới 1024px", () => {
-  it("SheetsWorkspace đổi orientation theo bề rộng", () => {
-    const s = read("src/features/design/components/SheetsWorkspace.tsx");
-    expect(s).toContain("useCompactViewport");
-    expect(s).toContain('compact ? "vertical" : "horizontal"');
   });
 });
 
@@ -83,8 +66,6 @@ describe("V-5 · Tabs phải có TabsContent (aria-controls không được tr�
        cho `/settings` và cho bánh răng topbar trong dự án. `<Tabs>` đi theo ruột, nên
        phép kiểm này phải soi đúng chỗ có `<Tabs>`, không phải chỗ có cái tên cũ. */
     "src/features/settings/SettingsDialog.tsx",
-    "src/features/kit/KitScreen.tsx",
-    "src/features/design/DesignScreen.tsx",
   ])("%s có TabsContent", (f) => {
     expect(read(f)).toContain("<TabsContent");
   });

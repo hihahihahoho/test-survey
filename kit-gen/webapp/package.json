@@ -14,9 +14,6 @@
     "test": "vitest run",
     "test:release": "vitest run --config vitest.release.config.ts",
     "test:watch": "vitest",
-    "test:integration": "vitest run --config vitest.integration.config.ts",
-    "test:e2e": "playwright test",
-    "test:visual": "playwright test --grep @visual",
     "deadclass": "node scripts/check-dead-classes.mjs",
     "nogen": "node scripts/check-no-gen.mjs",
     "verify": "npm run nogen && npm run typecheck && npm run contrast && npm run deadclass && npm run test && npm run build:only",
@@ -57,7 +54,6 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.84.0",
-    "react-resizable-panels": "^4.12.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
     "three": "^0.166.1",
@@ -66,7 +62,6 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.3",
     "@types/node": "^26.1.2",

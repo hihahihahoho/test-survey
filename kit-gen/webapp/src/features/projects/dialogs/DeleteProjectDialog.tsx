@@ -1,6 +1,6 @@
 import * as React from "react";
 import { ConfirmDestructive } from "@/components/common";
-import { ActiveRunGuard } from "@/features/runs";
+import { ActiveRunGuard } from "../components/ActiveRunGuard";
 import { useDeleteProject, useRestoreProject } from "@/lib/hooks";
 import type { Project } from "@/lib/types";
 import { bytes, count } from "../lib/format";

@@ -4,7 +4,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { ScreenPlaceholder } from "./ScreenPlaceholder";
 import {
   SCREEN_EXPORT, SCREEN_LABEL, SCREEN_PATH,
-  type ScreenComponent, type ScreenId, type ScreenProps,
+  type LazyScreenId, type ScreenComponent, type ScreenProps,
 } from "./screen-contract";
 
 /**
@@ -22,7 +22,7 @@ import {
  * Bản đầu tôi để `features/**\/*.tsx` cho "an toàn", build xong đo lại thì mỗi
  * component con của team khác (ProjectCard, BulkBar, StepInstall…) đều bị
  * Rolldown cắt thành một chunk động riêng — 20+ file rời cho một màn. Mẫu hẹp
- * chỉ nhận đúng 9 điểm vào; component con đi theo chunk của màn nó thuộc về.
+ * chỉ nhận đúng hai điểm vào; component con đi theo chunk của màn nó thuộc về.
  */
 const MODULES = import.meta.glob("../../features/*/*Screen.tsx") as Record<
   string,
@@ -30,17 +30,17 @@ const MODULES = import.meta.glob("../../features/*/*Screen.tsx") as Record<
 >;
 
 /** `src/features/kit/KitScreen.tsx` → khoá glob `../../features/kit/KitScreen.tsx`. */
-function globKey(screen: ScreenId): string {
+function globKey(screen: LazyScreenId): string {
   return SCREEN_PATH[screen].replace(/^src\//, "../../");
 }
 
-export function isScreenAvailable(screen: ScreenId): boolean {
+export function isScreenAvailable(screen: LazyScreenId): boolean {
   return Object.hasOwn(MODULES, globKey(screen));
 }
 
 /** Danh sách màn đã có file thật — dùng cho panel dev / kiểm tra nhanh. */
-export function availableScreens(): ScreenId[] {
-  return (Object.keys(SCREEN_PATH) as ScreenId[]).filter(isScreenAvailable);
+export function availableScreens(): LazyScreenId[] {
+  return (Object.keys(SCREEN_PATH) as LazyScreenId[]).filter(isScreenAvailable);
 }
 
 /**
@@ -49,7 +49,7 @@ export function availableScreens(): ScreenId[] {
  * Không tìm thấy ⇒ ném lỗi CÓ NGHĨA (ErrorBoundary sẽ hiện, kèm chi tiết) —
  * chứ không render `undefined` để React ném một lỗi khó hiểu.
  */
-function pickComponent(mod: unknown, screen: ScreenId): ScreenComponent {
+function pickComponent(mod: unknown, screen: LazyScreenId): ScreenComponent {
   const m = mod as Record<string, unknown> | null;
   const named = m?.[SCREEN_EXPORT[screen]];
   const fallback = m?.default;
@@ -63,9 +63,9 @@ function pickComponent(mod: unknown, screen: ScreenId): ScreenComponent {
 }
 
 /** Cache để không tạo lại `React.lazy` mỗi lần render (sẽ remount vô tận). */
-const lazyCache = new Map<ScreenId, React.LazyExoticComponent<ScreenComponent>>();
+const lazyCache = new Map<LazyScreenId, React.LazyExoticComponent<ScreenComponent>>();
 
-function lazyFor(screen: ScreenId): React.LazyExoticComponent<ScreenComponent> {
+function lazyFor(screen: LazyScreenId): React.LazyExoticComponent<ScreenComponent> {
   const hit = lazyCache.get(screen);
   if (hit) return hit;
   const loader = MODULES[globKey(screen)];
@@ -87,10 +87,10 @@ function lazyFor(screen: ScreenId): React.LazyExoticComponent<ScreenComponent> {
  *   3. file có, ném lỗi  → ErrorBoundary của chính màn đó; phần khung
  *      (header, rail, bảng lệnh) VẪN sống, user vẫn đi màn khác được.
  */
-export function LazyScreen({ screen, ...props }: { screen: ScreenId } & ScreenProps) {
+export function LazyScreen({ screen, ...props }: { screen: LazyScreenId } & ScreenProps) {
   if (!isScreenAvailable(screen)) return <ScreenPlaceholder screen={screen} />;
   const Comp = lazyFor(screen);
-  const resetKey = `${screen}:${props.projectId ?? ""}:${props.runId ?? ""}`;
+  const resetKey = `${screen}:${props.projectId ?? ""}`;
 
   return (
     <ErrorBoundary resetKey={resetKey} title={`Màn «${SCREEN_LABEL[screen]}» gặp trục trặc`}>
@@ -105,14 +105,4 @@ export function LazyScreen({ screen, ...props }: { screen: ScreenId } & ScreenPr
       </React.Suspense>
     </ErrorBoundary>
   );
-}
-
-/* FE3 E1: form là entry lazy duy nhất của khung. */
-const KitFormViewLazy = React.lazy(async () => {
-  const mod = await import("@/features/kit-form/KitFormScreen");
-  return { default: mod.KitFormScreen };
-});
-
-export function KitFormRouteScreen(props: { projectId: string; onExit: () => void; onContinue: () => void }) {
-  return <ErrorBoundary resetKey={`kit-form:${props.projectId}`} title="Form bộ kit gặp trục trặc"><React.Suspense fallback={<div className="p-6"><LoadingState count={3} label="Đang mở form…" /></div>}><KitFormViewLazy projectId={props.projectId} onExit={props.onExit} onContinue={props.onContinue} /></React.Suspense></ErrorBoundary>;
 }

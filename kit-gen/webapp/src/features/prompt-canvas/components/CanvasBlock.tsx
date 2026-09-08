@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import { KitImage } from "@/features/kit/components/KitImage";
-import { copyImageBlob } from "@/features/kit-core/lib/result-copy";
 /* Nút «Tải» dùng LẠI đường tải file của kit — nó đã đi qua transport có header
    `X-KitGen-Client` (đường thẳng tới agent trả 403, đo thật ở đầu `download.ts`)
    và tự đặt tên file theo `Content-Disposition`. Viết bản thứ hai ở đây là chép
@@ -29,7 +28,7 @@ import type { Block, DocBlock, MascotBlock, UiKitBlock } from "@/features/prompt
 import type { Sheet } from "@/lib/types/contract";
 import type { PromptPreviewJob } from "@/lib/types/api";
 import type { BlockPromptState } from "../lib/block-prompt";
-import { copyProjectImage, copyPromptText, referenceImages } from "../lib/prompt-copy";
+import { copyImageBlob, copyProjectImage, copyPromptText, referenceImages } from "../lib/prompt-copy";
 import type { GenBlockState } from "../lib/gen-queue";
 import { CARD, SECTION_LABEL } from "../lib/ui";
 import { SheetResultSlot } from "./SheetResultSlot";
@@ -561,7 +560,6 @@ function Attachments({ projectId, paths, hash }: { projectId: string; paths: rea
               projectId={projectId}
               path={path}
               alt={`Ảnh tham chiếu: ${path}`}
-              backdrop="checker"
               full={false}
               width={256}
               className="aspect-square w-32"

@@ -10,7 +10,7 @@ là một MÀU nào đó phải đi tìm.
 Sheet nay mang alpha thật, nên câu hỏi "pixel này có phải nền không" có câu trả lời
 thẳng: `alpha < ngưỡng`. Không đoán màu, không đo viền, không lệch trục — và không
 còn ca hỏng nào kiểu "sheet magenta rơi về key xanh lá nên MỌI pixel tính là
-foreground" (docs/research-glow-extraction-2026-08.md §3.3).
+foreground".
 
 ╔══ 07/09/2026 — BỎ NỐT PHÉP DÒ LÕI BẰNG MÀU + MORPHOLOGY ═════════════════════╗
 ║ File này CỐ Ý soi gương `slice.py`. Cho tới hôm nay nó soi một cái gương đã   ║

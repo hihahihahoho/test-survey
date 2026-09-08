@@ -1,4 +1,4 @@
-import type { LibElement } from "@/features/design/library/lib/types";
+import type { LibElement } from "@/features/kit-core/lib/element-lib/types";
 import type { LibraryItem } from "@/lib/types";
 
 const DEFAULT_GEOMETRY = {

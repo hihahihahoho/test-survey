@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { CANVAS_SQUARE } from "@/features/design/preview/geometry";
+import { CANVAS_SQUARE } from "@/features/kit-core/lib/geometry";
 import { cellBoxes, fitBox } from "../pose-sheet";
 
 /**

@@ -26,9 +26,9 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/__tests__/**/*.test.ts", "src/**/__tests__/**/*.test.tsx"],
-    /* `*.integration.test.ts` spawn agent server thật + chạm ổ đĩa ⇒ chậm và phụ thuộc
-       môi trường (cổng trống, quyền ghi /tmp). Giữ `npm test` TẤT ĐỊNH; chạy riêng bằng
-       `npm run test:integration`. Xem đầu file agent-contract.integration.test.ts. */
+    /* Đợt 2 đã xoá nhóm `*.integration.test.ts` (spawn agent server thật) cùng config
+       riêng của nó; mẫu vẫn giữ ở đây để một file mới kiểu đó không lọt vào `npm test`
+       mà không ai để ý. Test DOM vẫn cần config riêng — xem khối PHẠM VI bên trên. */
     exclude: ["**/node_modules/**", "**/*.dom.test.tsx", "**/*.integration.test.ts"],
     reporters: ["default"],
   },

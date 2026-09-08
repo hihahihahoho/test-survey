@@ -14,19 +14,19 @@
  */
 import {
   AgentError, etagOf, fileUrl, httpDelete, httpGet, httpPatch, httpPost,
-  httpPut, httpUpload, currentBase, streamRun, thumbUrl,
+  httpPut, httpUpload, streamRun, thumbUrl,
 } from "./client";
 import { LIMITS } from "./constants";
 import {
   activateWorkspaceSchema, cancelRunResultSchema, cleanResultSchema, contractResponseSchema,
   coverResponseSchema,
   createProjectResultSchema, deleteProjectResultSchema, doctorSchema, duplicateResultSchema,
-  elementLibSchema, historyListSchema, importPreviewSchema, jobPromptSchema, kitSchema,
+  elementLibSchema, kitSchema,
   projectDetailSchema, projectListSchema, projectSchema, promptPreviewSchema, rawHistorySchema, refListSchema,
-  refUploadResultSchema, restoreContractResultSchema, runListSchema, runSchema,
-  saveContractResultSchema, startRunResultSchema, trashListSchema, uploadResultSchema, usageSchema,
-  validationSchema, workspaceListSchema, workflowDraftSchema, userLibrarySchema, libraryItemResultSchema,
-  librarySettingsResultSchema, brandProfileResultSchema, poseTemplateResultSchema, libraryPresetResultSchema,
+  refUploadResultSchema, runListSchema, runSchema,
+  saveContractResultSchema, startRunResultSchema, trashListSchema, usageSchema,
+  workspaceListSchema, workflowDraftSchema, userLibrarySchema, libraryItemResultSchema,
+  librarySettingsResultSchema, brandProfileResultSchema, libraryPresetResultSchema,
   type LibraryPresetKind,
   type CleanTarget, type CreateProjectInput, type DuplicateInput,
   type PatchProjectInput, type RefKind, type StartRunInput,
@@ -276,13 +276,6 @@ export const projectsApi = {
   async clean(id: string, targets: CleanTarget[]) {
     return parse(cleanResultSchema, await httpPost(`/api/projects/${pid(id)}/clean`, { targets }), "dọn cache");
   },
-  /**
-   * #18 — URL tải zip. Trả URL cho thẻ `<a download>` chứ không fetch: file có thể
-   * hàng trăm MB, nạp vào RAM là vô nghĩa và mất progress của trình duyệt.
-   */
-  exportUrl(id: string, include: string[] = ["contract", "refs", "raw", "kits"], variant?: string | string[]) {
-    return `${currentBase().replace(/\/+$/, "")}/api/projects/${pid(id)}/export.zip${qs({ include, variant })}`;
-  },
   /** #21 */
   async reveal(id: string, path?: string) {
     await httpPost(`/api/projects/${pid(id)}/reveal`, path ? { path } : {});
@@ -326,28 +319,9 @@ export const trashApi = {
   },
 };
 
-export const uploadsApi = {
-  /** #19 — kiểm cỡ TRƯỚC khi gửi để không tốn công upload rồi ăn 413. */
-  async create(file: File) {
-    if (typeof file?.size === "number" && file.size > LIMITS.uploadBytes) {
-      throw new AgentError({
-        code: "TOO_LARGE", status: 413, transport: "client",
-        message: `File ${file.size} byte vượt hạn mức ${LIMITS.uploadBytes}`,
-        details: { maxBytes: LIMITS.uploadBytes, bytes: file.size },
-      });
-    }
-    const fd = new FormData();
-    fd.append("file", file);
-    return parse(uploadResultSchema, await httpUpload("/api/uploads", fd), "upload");
-  },
-};
-
-export const importApi = {
-  /** #20 — LUÔN preview trước; cấm mọi đường import "im lặng" (chốt X12). */
-  async preview(payload: { source: "zip" | "stylesJson" | "folder"; uploadId?: string; path?: string }) {
-    return parse(importPreviewSchema, await httpPost("/api/import/preview", payload), "đối chiếu nhập").report;
-  },
-};
+/* #18 `export.zip`, #19 `POST /api/uploads` và #20 `POST /api/import/preview` ĐÃ RỜI KHỎI
+   BỀ MẶT NÀY ở Đợt 2: xuất/nhập project bằng file .zip không còn trong sản phẩm, nên
+   webapp không còn nơi nào gọi ba route đó (agent gỡ chúng ở phía kia). */
 
 /* ═════════ C. Bản thiết kế (#22–#28) ═════════ */
 
@@ -382,24 +356,10 @@ export const contractApi = {
     );
     return parse(saveContractResultSchema, data, "lưu bản thiết kế");
   },
-  /** #24 — 50 bản (thay `.bak` 1 tầng, đóng B4). */
-  async history(id: string, limit = 50) {
-    return parse(historyListSchema, await httpGet(`/api/projects/${pid(id)}/contract/history${qs({ limit })}`), "lịch sử");
-  },
-  /** #25 */
-  async snapshot(id: string, snapshot: string) {
-    const data = await httpGet(`/api/projects/${pid(id)}/contract/history/${pid(snapshot)}`);
-    return parse(contractResponseSchema, data, "bản lịch sử");
-  },
-  /** #26 — tạo bản MỚI, không ghi đè lịch sử. */
-  async restore(id: string, snapshot: string) {
-    return parse(restoreContractResultSchema, await httpPost(`/api/projects/${pid(id)}/contract/restore`, { snapshot }), "khôi phục");
-  },
-  /** #27 — dry-run, không ghi (đóng K5). */
-  async validate(id: string, contract: Contract) {
-    const data = await httpPost(`/api/projects/${pid(id)}/contract/validate`, { contract: normalizeContract(contract) });
-    return parse(validationSchema, data, "kiểm bản thiết kế");
-  },
+  /* #24–#27 (`contract/history`, `contract/history/:snapshot`, `contract/restore`,
+     `contract/validate`) ĐÃ RỜI KHỎI bề mặt này ở Đợt 2. Ba nơi gọi chúng — bảng lịch
+     sử ở màn thiết kế, `ItemEditPanel`, `StartDrawingButton` — đều đã bị gỡ; màn soạn
+     mới chỉ đọc/ghi contract (#22/#23) và xem trước prompt (#29). */
   /**
    * #29 — PROMPT STUDIO: nguyên văn prompt engine SẼ gửi, **trước khi tiêu một lượt nào**.
    *
@@ -444,13 +404,9 @@ export const libraryApi = {
     return parse(brandProfileResultSchema, await httpPatch(`/api/library/brands/${pid(id)}`, input), "thương hiệu vừa sửa").brand;
   },
   async removeBrand(id: string) { await httpDelete(`/api/library/brands/${pid(id)}`); return { ok: true }; },
-  async addPose(input: { name: string; description?: string; sourcePose: string; enabled?: boolean }) {
-    return parse(poseTemplateResultSchema, await httpPost("/api/library/poses", input), "khung pose vừa tạo").pose;
-  },
-  async patchPose(id: string, input: { name?: string; description?: string; sourcePose?: string; enabled?: boolean }) {
-    return parse(poseTemplateResultSchema, await httpPatch(`/api/library/poses/${pid(id)}`, input), "khung pose vừa sửa").pose;
-  },
-  async removePose(id: string) { await httpDelete(`/api/library/poses/${pid(id)}`); return { ok: true }; },
+  /* KHUNG POSE CHỈ CÒN ĐỌC. `POST/PATCH/DELETE /api/library/poses` đã bị gỡ khỏi agent
+     ở Đợt 2; `GET /api/library` vẫn trả mảng `poseTemplates` (các khung prototype dựng
+     sẵn), nên màn Mascot còn liệt kê được chúng — chỉ không còn cửa ghi nào. */
   /* Preset — không có `getPresets()` riêng: `GET /api/library` đã trả kèm mảng
      `presets`, nên một query duy nhất (`qk.library()`) là nguồn sự thật cho cả
      kho. Thêm một endpoint đọc thứ hai chỉ tạo ra hai cache lệch nhau. */
@@ -557,15 +513,9 @@ export const runsApi = {
   async cancel(runId: string) {
     return parse(cancelRunResultSchema, await httpPost(`/api/runs/${pid(runId)}/cancel`), "dừng lượt chạy");
   },
-  /** #37 — `text/plain`, ĐÃ redact phía agent (đóng D7). */
-  async jobLog(runId: string, job: string, tail = 2000) {
-    const res = await httpGet<Response>(`/api/runs/${pid(runId)}/jobs/${pid(job)}/log${qs({ tail })}`, { raw: true });
-    return res.text();
-  },
-  /** #38 (đóng §3.3 "prompt đã dùng"). */
-  async jobPrompt(runId: string, job: string) {
-    return parse(jobPromptSchema, await httpGet(`/api/runs/${pid(runId)}/jobs/${pid(job)}/prompt`), "prompt");
-  },
+  /* #37 `jobs/:job/log` và #38 `jobs/:job/prompt` ĐÃ RỜI KHỎI bề mặt này ở Đợt 2: bảng
+     nhật ký từng tấm sống ở màn lượt chạy, mà màn đó không còn. Tiến độ mà màn soạn cần
+     đã nằm trong stream #35. */
   /** #39 — giữ 3 đời (đóng B7, R9). */
   async rawHistory(id: string, job: string) {
     return parse(rawHistorySchema, await httpGet(`/api/projects/${pid(id)}/raw/${pid(job)}/history`), "lịch sử ảnh");
@@ -611,8 +561,6 @@ export const api = {
   system: systemApi,
   projects: projectsApi,
   trash: trashApi,
-  uploads: uploadsApi,
-  import: importApi,
   contract: contractApi,
   elementLib: elementLibApi,
   library: libraryApi,

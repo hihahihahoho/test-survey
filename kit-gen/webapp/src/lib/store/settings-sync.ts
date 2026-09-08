@@ -1,5 +1,5 @@
 /**
- * webapp/src/lib/store/settings-sync.ts — CÂY CẦU giữa hai store trong RAM và
+ * webapp/src/lib/store/settings-sync.ts — CÂY CẦU giữa `useUiStore` trong RAM và
  * `<workspace>/.kitgen/config.json`.
  *
  * ══ HAI CHIỀU, VÀ THỨ TỰ GIỮA CHÚNG LÀ CẢ VẤN ĐỀ ═════════════════════════════
@@ -10,7 +10,7 @@
  *
  * ①′ NHẬN NUÔI (`configured === false`) — LẦN ĐẦU SAU KHI CẬP NHẬT. Đĩa chưa từng có
  *    tuỳ chọn, nên thứ nó trả về chỉ là mặc định. Nhận về là xoá sạch tuỳ chọn thật của
- *    người dùng đang nằm trong localStorage: chủ đề sáng thành tối, `maxJobs` về 4. Mọi
+ *    người dùng đang nằm trong localStorage: chủ đề sáng thành tối. Mọi
  *    workspace đang tồn tại đều rơi vào ca này đúng một lần, nên đây không phải ca hiếm
  *    — nó là ca mà MỌI người dùng sẽ gặp. Xử lý: KHÔNG áp gì xuống RAM, lấy mặc định
  *    làm mốc so sánh rồi đẩy NGƯỢC bản của người dùng lên đĩa. Ghi xong agent trả
@@ -33,7 +33,6 @@ import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/endpoints";
 import { qk } from "../hooks/keys";
-import { usePrefsStore } from "./prefs";
 import { useUiStore } from "./ui";
 import { diffDiskSettings, diskSettingsOf, type DiskSettings, type DiskSettingsPatch } from "./disk-settings";
 
@@ -49,28 +48,27 @@ export function settingsDirection(configured: boolean): "adopt" | "apply" {
 }
 
 /**
- * 600ms — cùng bậc với nhịp autosave bản nháp workflow (600ms) và contract (700ms), nên
- * ba đường ghi đĩa của app không lệch nhịp nhau. Kéo thanh trượt "số tấm cùng lúc" từ 1
- * lên 8 là 8 lần `set()`; nhịp này gộp chúng thành ĐÚNG MỘT lần ghi file.
+ * 600ms — cùng bậc với nhịp autosave bản nháp của màn soạn, nên các đường ghi đĩa của
+ * app không lệch nhịp nhau. Một cú kéo/gõ liên tiếp là nhiều lần `set()`; nhịp này gộp
+ * chúng thành ĐÚNG MỘT lần ghi file.
  */
 export const SETTINGS_SAVE_DELAY_MS = 600;
 
 /** Ảnh chụp phần-sống-trên-đĩa của RAM ngay lúc này. */
 export function currentDiskSettings(): DiskSettings {
-  return diskSettingsOf(useUiStore.getState(), usePrefsStore.getState());
+  return diskSettingsOf(useUiStore.getState());
 }
 
 /**
- * Đổ tuỳ chọn từ đĩa vào hai store. Dùng `setState` thẳng (không qua action) vì đây
- * không phải một thao tác của người dùng mà là một lần KHÔI PHỤC — và vì mỗi field có
- * một action riêng, đi qua chúng sẽ là 18 lần `set()` cho một lần mở app.
+ * Đổ tuỳ chọn từ đĩa vào store. Dùng `setState` thẳng (không qua action) vì đây không
+ * phải một thao tác của người dùng mà là một lần KHÔI PHỤC — và vì mỗi field có một
+ * action riêng, đi qua chúng sẽ là nhiều lần `set()` cho một lần mở app.
  *
  * Middleware `persist` vẫn chạy ⇒ localStorage được hâm nóng theo, nên lần mở sau vẽ
  * đúng khung ngay từ frame đầu mà không phải chờ mạng.
  */
 export function applyDiskSettings(s: DiskSettings): void {
   useUiStore.setState(s.ui);
-  usePrefsStore.setState(s.prefs);
 }
 
 /** Đọc tuỳ chọn trên đĩa. Im lặng khi agent chưa chạy — xem khối "AGENT TẮT THÌ SAO". */
@@ -99,9 +97,9 @@ export function useSaveDiskSettings() {
 /**
  * Gắn MỘT LẦN ở gốc app (`App.tsx`). Không vẽ gì.
  *
- * Đặt ở gốc chứ không ở màn Cài đặt: tuỳ chọn bị đổi từ khắp nơi — công tắc chủ đề trên
- * thanh bên, ô "số tấm cùng lúc" trong modal tạo ảnh, nút gập cây thiết kế. Treo cầu vào
- * một màn thì đóng màn đó là mất đường ghi.
+ * Đặt ở gốc chứ không ở màn Cài đặt: tuỳ chọn bị đổi từ nhiều nơi — công tắc chủ đề ở
+ * vỏ app, bộ lọc/thứ tự ở danh sách dự án. Treo cầu vào một màn thì đóng màn đó là mất
+ * đường ghi.
  */
 export function SettingsSync(): null {
   const q = useDiskSettings();
@@ -160,10 +158,8 @@ export function SettingsSync(): null {
       }, SETTINGS_SAVE_DELAY_MS);
     };
     const offUi = useUiStore.subscribe(push);
-    const offPrefs = usePrefsStore.subscribe(push);
     return () => {
       offUi();
-      offPrefs();
       if (timer !== null) clearTimeout(timer);
     };
   }, []);

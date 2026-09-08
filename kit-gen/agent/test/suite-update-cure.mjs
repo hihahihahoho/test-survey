@@ -429,7 +429,7 @@ export async function run({ tmp, agentDir }) {
     }
   })
 
-  await it("installer đã vá temp+mv ⇒ nâng lên runtime dài hơn vẫn hoàn tất 7/7", async () => {
+  await it("installer đã vá temp+mv ⇒ nâng lên runtime dài hơn vẫn hoàn tất 6/6", async () => {
     const home = join(tmp, "update-mv-home")
     const workspace = join(tmp, "update-mv-workspace")
     const fakeBin = join(tmp, "update-mv-bin")
@@ -468,7 +468,7 @@ export async function run({ tmp, agentDir }) {
     const result = await runFixtureScript(join(home, "install.sh"), env,
       ["--archive", fixture.archive, "--sha256", fixture.sha, "--workspace", workspace, "--no-start"])
     eq(result.code, 0, `installer temp+mv phải thoát 0: rc=${result.code}\n${result.stdout}\n${result.stderr}`)
-    includes(`${result.stdout}\n${result.stderr}`, "[7/7]", "installer phải đi hết 7/7")
+    includes(`${result.stdout}\n${result.stderr}`, "[6/6]", "installer phải đi hết 6/6")
     const current = await fixtureRealpath(join(home, "current"), env)
     const installed = await fixtureRealpath(join(home, "releases", "2.1.26"), env)
     eq(current, installed, "current trỏ bản dài hơn sau lượt cài")

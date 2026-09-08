@@ -2,9 +2,9 @@ import * as React from "react";
 import { createStore, useStore, type StoreApi } from "zustand";
 import { persist } from "zustand/middleware";
 import { NEUTRAL_PRIMARY_COLOR, NEUTRAL_SECONDARY_COLOR } from "@/lib/types/contract";
-import { STYLE_AXIS_IDS } from "@/features/kit-form/lib/form-model";
-import type { StyleAxisId } from "@/features/kit-form/lib/form-model";
-import { loadBundledV2 } from "@/features/design/library/lib/source";
+import { STYLE_AXIS_IDS } from "@/features/kit-core/lib/form-model";
+import type { StyleAxisId } from "@/features/kit-core/lib/form-model";
+import { loadBundledV2 } from "@/features/kit-core/lib/element-lib/source";
 import { defaultPoseIds } from "./poses";
 import { draftKey, migrateLegacyDraft, onDraftForgotten } from "./draft-storage";
 

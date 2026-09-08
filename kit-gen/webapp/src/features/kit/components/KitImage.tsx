@@ -5,11 +5,9 @@ import { FOCUS } from "@/components/layout/flora";
 import { cn } from "@/lib/utils";
 import { loadImage } from "../lib/image-source";
 import { LIMITS } from "@/lib/api";
-import type { Backdrop } from "../lib/backdrop";
-import { backdropClass } from "../lib/backdrop";
 
 /**
- * MỘT Ô ẢNH KIT — lazy-load thật + nền xem thử 3 chế độ.
+ * MỘT Ô ẢNH KIT — lazy-load thật, nền ô vuông (checkerboard).
  *
  * VÌ SAO KHÔNG DÙNG THẲNG `<CheckerboardImage src=…>` CỦA R0:
  * component đó nhận `src` gắn vào `<img>`, mà `<img src>` tới agent trả **403**
@@ -29,7 +27,6 @@ export interface KitImageProps {
   path: string;
   /** nhãn tiếng Việt có nghĩa (A9) */
   alt: string;
-  backdrop: Backdrop;
   /**
    * ẢNH GỐC — **mặc định BẬT**. Tắt đi thì mới xin bản thu nhỏ `?w=<width>`.
    *
@@ -101,7 +98,6 @@ export function KitImage({
   projectId,
   path,
   alt,
-  backdrop,
   full = true,
   width = LIMITS.thumbWidth,
   version = null,
@@ -190,7 +186,13 @@ export function KitImage({
      trả alpha thật và dao cắt không đụng vào alpha, nên quầng sáng nằm sẵn trong
      kênh α: vẽ thường là đúng, còn ép nền tối chính là "tấm nền đen" mà chủ sản
      phẩm nhìn thấy dưới ô avatar. */
-  const ground = backdropClass(backdrop);
+  /* NỀN Ô VUÔNG, KHÔNG CÒN BỘ CHỌN 3 CHẾ ĐỘ (08/09/2026).
+     Ba chế độ (ô vuông · đen · trắng) thuộc thanh công cụ của màn «Kết quả & xuất
+     kit» — màn ấy đã bị xoá, và cả bốn chỗ gọi còn lại đều truyền `"checker"`. Một
+     prop mà mọi nơi gọi đều đặt cùng một giá trị thì không phải lựa chọn, chỉ là
+     một đường rẽ không ai đi. Muốn xem alpha trên nền đen/trắng thì mở lại
+     `lib/backdrop.ts` trong lịch sử git — luật ở đó vẫn đúng. */
+  const ground = "kg-checkerboard";
 
   /* File rỗng: §3-S5 đòi nói rõ, KHÔNG để ô trống khiến user tưởng lỗi tải. */
   if (empty) {

@@ -165,24 +165,9 @@ export function checkRows(doctor: Doctor | null | undefined, workspaceFree?: str
       consequence: "Thiếu Pillow: không cắt ảnh và không tạo được ảnh thu nhỏ.",
       cmd: INSTALL_CMD.pyDeps,
     },
-    {
-      key: "numpy",
-      ok: deps.numpy === true,
-      known: py?.deps !== undefined,
-      label: "numpy",
-      value: "",
-      consequence: "Thiếu numpy: chế độ tách nền nhanh không chạy được.",
-      cmd: INSTALL_CMD.pyDeps,
-    },
-    {
-      key: "renderer",
-      ok: doctor?.renderer?.ok === true,
-      known: doctor?.renderer !== undefined,
-      label: "Trình render khung xương",
-      value: ver(doctor?.renderer?.engine) || "@resvg/resvg-wasm",
-      consequence: "Thiếu — KHÔNG gen được ảnh (không còn bản dự phòng).",
-      cmd: INSTALL_CMD.resvg,
-    },
+    /* Dòng "numpy" và dòng "Trình render khung xương" (@resvg/resvg-wasm) đã bỏ ở Đợt 2:
+       `slice.py` chỉ còn cắt theo toạ độ nên không cần numpy, và bộ khung xương SVG không
+       còn được render ra ảnh nữa. Agent cũng thôi khai hai mục đó trong `doctor`. */
     {
       key: "workspace",
       ok: ws?.writable === true,

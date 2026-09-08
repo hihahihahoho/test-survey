@@ -15,7 +15,6 @@ import { useProjectDialogs } from "@/features/projects/lib/useProjectDialogs";
 import { ProjectDialogs } from "@/features/projects/ProjectDialogs";
 import { ProjectSettingsDialog } from "@/features/project/components/ProjectSettingsDialog";
 import { CopyFigmaButton, DownloadKitButton } from "@/features/kit/components/KitExits";
-import { DemoScreenButton } from "@/features/demo";
 
 import { PillButton, PillCaret, PillMenu, PillMenuItem, useMenuFlip } from "@/features/prompt-lab/components/pill-ui";
 import { BrandBindingProvider } from "@/features/prompt-lab/extensions/BrandProfilePill";
@@ -475,7 +474,6 @@ function ExitRow({ projectId, settingsOpen, onSettingsOpenChange }: {
     <div className="flex flex-wrap items-center gap-2 border-b border-line-subtle pb-4">
       <DownloadKitButton projectId={projectId} />
       <CopyFigmaButton projectId={projectId} kitName={data.name} />
-      <DemoScreenButton projectId={projectId} />
       <span className="flex-1" />
       <Button variant="ghost" size="sm" onClick={() => setSettings(true)}>
         <Settings aria-hidden strokeWidth={1.5} />
@@ -493,7 +491,6 @@ function ExitRow({ projectId, settingsOpen, onSettingsOpenChange }: {
         gate={gate}
         variantId={variantId}
         onDuplicate={() => { setSettings(false); dialogs.openDialog("duplicate", data); }}
-        onExport={() => { setSettings(false); dialogs.openDialog("export", data); }}
         onDelete={() => { setSettings(false); dialogs.openDialog("delete", data); }}
       />
 

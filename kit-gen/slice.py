@@ -213,40 +213,6 @@ def measure_cell(canvas, contract_safe, threshold=SIZE_DEVIATION_THRESHOLD_PX):
     }
 
 
-def pack_atlas(items, max_w=2048):
-    """Shelf-pack các mảnh RUỘT (đã crop chặt) thành 1 atlas + json Phaser.
-
-    Format JSON Hash của Phaser: frame = vị trí ruột trong atlas,
-    sourceSize = canvas chuẩn hoá, spriteSourceSize = vị trí ruột trong canvas
-    → Phaser tự bù đệm, sprite hành xử như ảnh canvas đầy đủ nhưng texture
-    chỉ tốn đúng phần ruột. (Vẫn còn người đọc: tab «Xuất kit» của webapp cho
-    tải thẳng `atlas.png` + `atlas.json`.)"""
-    items = sorted(items, key=lambda it: -it[1].height)
-    x = y = row_h = 0
-    placed = []
-    for name, tight, (W, H), (ox, oy) in items:
-        if x + tight.width > max_w:
-            x = 0
-            y += row_h + 2
-            row_h = 0
-        placed.append((name, tight, (W, H), (ox, oy), (x, y)))
-        x += tight.width + 2
-        row_h = max(row_h, tight.height)
-    atlas_h = y + row_h
-    atlas = Image.new("RGBA", (max_w, atlas_h), (0, 0, 0, 0))
-    frames = {}
-    for name, tight, (W, H), (ox, oy), (ax, ay) in placed:
-        atlas.paste(tight, (ax, ay))
-        frames[name] = {
-            "frame": {"x": ax, "y": ay, "w": tight.width, "h": tight.height},
-            "rotated": False, "trimmed": True,
-            "spriteSourceSize": {"x": ox, "y": oy, "w": tight.width, "h": tight.height},
-            "sourceSize": {"w": W, "h": H}
-        }
-    return atlas, {"frames": frames,
-                   "meta": {"image": "atlas.png", "size": {"w": max_w, "h": atlas_h}, "scale": "1"}}
-
-
 # ── CLI: tham số + ổ khoá manifest ───────────────────────────────────────────
 # CẮT LŨY TIẾN (14/08 → 15/08). Trước: cả lượt gen xong 10 tấm mới cắt MỘT LẦN, người
 # dùng ngồi nhìn màn hình trống 15 phút. Nay agent gọi slice.py NGAY khi một tấm gen
@@ -394,7 +360,6 @@ if __name__ == "__main__":
             qa_threshold = SIZE_DEVIATION_THRESHOLD_PX
         out_dir = os.path.join(HERE, "kits", sid)
         entry = {"sheets": {}, "assets": [], "empty_cells": []}
-        atlas_items = []
         done_sheets = set()          # sheet THỰC SỰ cắt lại lượt này (xem khối merge cuối)
 
         for sh in cfg["sheets"]:
@@ -482,7 +447,6 @@ if __name__ == "__main__":
                 tight = canvas.crop(content_box)
                 os.makedirs(os.path.join(out_dir, "tight"), exist_ok=True)
                 tight.save(os.path.join(out_dir, "tight", f"{comp['file']}.png"))
-                atlas_items.append((comp["file"], tight, (CW, CH), (ox, oy)))
 
                 asset = {"file": comp["file"] + ".png", "sheet": sh["id"], "mode": mode,
                          "canvas": [CW, CH], "cell": [CW, CH], "bleed": [0, 0],
@@ -511,7 +475,7 @@ if __name__ == "__main__":
         # contractToStylesV1 + materializeStyles), nên khi người dùng bấm "Lưu và tạo
         # lại" cho MỘT nhóm thì cfg["sheets"] chỉ còn sheet đó. Ghi thẳng
         # `manifest["styles"][sid] = entry` ⇒ mọi asset của các sheet KHÁC biến mất
-        # khỏi manifest và khỏi atlas, dù file PNG vẫn nằm trong kits/.
+        # khỏi manifest, dù file PNG vẫn nằm trong kits/.
         prev = manifest["styles"].get(sid) or {}
         keep_sheets = [k for k in (prev.get("sheets") or {}) if k not in done_sheets]
         if keep_sheets:
@@ -523,26 +487,12 @@ if __name__ == "__main__":
                 if a.get("sheet") not in keep_sheets or a.get("file", "")[:-4] in done_files:
                     continue
                 entry["assets"].append(a)
-                # Frame atlas của asset giữ lại: dựng lại từ tight/ đã có trên đĩa,
-                # kèm canvas/offset ghi trong manifest cũ → atlas không mất frame.
-                tp = os.path.join(out_dir, "tight", a["file"])
-                if os.path.exists(tp) and a.get("canvas") and a.get("content_at"):
-                    atlas_items.append((a["file"][:-4], Image.open(tp).convert("RGBA"),
-                                        tuple(a["canvas"]), tuple(a["content_at"])))
             for f in (prev.get("empty_cells") or []):
                 if f not in done_files and f not in entry["empty_cells"]:
                     entry["empty_cells"].append(f)
             print(f"  ↺ {sid}: giữ nguyên {len(keep_sheets)} sheet không chạy lượt này "
                   f"({', '.join(keep_sheets)})")
 
-        if atlas_items:
-            atlas_img, atlas_json = pack_atlas(atlas_items)
-            atlas_img.save(os.path.join(out_dir, "atlas.png"))
-            with open(os.path.join(out_dir, "atlas.json"), "w", encoding="utf-8") as f:
-                json.dump(atlas_json, f, indent=1)
-            entry["atlas"] = {"image": "atlas.png", "json": "atlas.json",
-                              "size": [atlas_img.width, atlas_img.height]}
-            print(f"  atlas {sid}: {atlas_img.width}x{atlas_img.height}, {len(atlas_items)} frame")
 
         entry["qa"] = {"sizeDeviation": summarize_size_deviation(
             entry["assets"], qa_threshold, sid)}

@@ -6,10 +6,12 @@
 # (uptime không đổi), không một dòng log nào, UI vẫn mời cập nhật. Ba mệnh đề bị khoá
 # ở đây, mỗi cái ứng với một mảnh của sự cố:
 #
-#   ① CÀI DỞ THÌ KHÔNG ĐƯỢC ĐỔI GÌ — installer chết ở bước 4/7 (trình render khung
-#      xương, trước 2.1.21 là Playwright) phải để
-#      `current` y nguyên. Trước 2.1.21 symlink đổi ở bước 2/7 nên mọi lỗi sau đó đều
-#      để lại đúng cái trạng thái nửa vời không ai đọc được.
+#   ① CÀI DỞ THÌ KHÔNG ĐƯỢC ĐỔI GÌ — installer chết SAU khi đã dựng xong bản mới
+#      trong `releases/` nhưng TRƯỚC khi kích hoạt (ở đây: pillow cài hỏng, bước 2/6)
+#      phải để `current` y nguyên. Trước 2.1.21 symlink đổi ở bước 2/7 nên mọi lỗi sau
+#      đó đều để lại đúng cái trạng thái nửa vời không ai đọc được.
+#      (Bản trước dùng health check @resvg/resvg-wasm làm chỗ chết; trình render khung
+#      xương đã bỏ hẳn khỏi installer, nên chỗ chết chuyển sang pip.)
 #   ② "CÓ AI TRẢ LỜI" KHÔNG PHẢI "BẢN MỚI ĐANG CHẠY" — agent cũ trả lời /health được.
 #      Restart không ăn ⇒ installer phải thử lại rồi HỎNG TO kèm lệnh chữa, không được
 #      in "OK agent phản hồi" rồi thoát 0.
@@ -72,9 +74,6 @@ case "${1:-}" in
     printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$KITGEN_HOME/tools/node_modules/.bin/codex"
     chmod +x "$KITGEN_HOME/tools/node_modules/.bin/codex"
     ;;
-  # `node -e "require.resolve('@resvg/resvg-wasm')"` là health check bước 4/7. Cờ
-  # `resvg-fails` dựng lại ca "installer chết SAU khi đã tải xong bản mới".
-  -e) [ ! -f "$KITGEN_TEST_STATE/resvg-fails" ] || exit 1 ;;
   --check) exit 0 ;;
   *) exit 0 ;;
 esac
@@ -109,9 +108,11 @@ cat > "$KITGEN_WORKSPACE/.venv/bin/python" <<'EOF'
 #!/usr/bin/env bash
 # `sys.base_prefix` phải khớp bản Python riêng ở trên, nếu không installer coi venv này
 # là đồ thừa của một Python khác và dựng lại (đúng như thiết kế) — rồi chạy pip thật.
+# Cờ `pip-fails` dựng lại ca "installer chết SAU khi đã dựng xong bản mới": `import PIL`
+# báo THIẾU ⇒ installer đi cài ⇒ pip hỏng ⇒ thoát 1, và `current` chưa được đụng tới.
 case "$*" in
   *"sys.base_prefix"*) printf '%s\n' "$KITGEN_HOME/tools/python" ;;
-  *) exit 0 ;;
+  *) [ ! -f "$KITGEN_TEST_STATE/pip-fails" ] || exit 1; exit 0 ;;
 esac
 EOF
 chmod +x \
@@ -183,20 +184,20 @@ run_install(){
 }
 
 # ── ① Cài dở ⇒ KHÔNG được đụng vào bản đang chạy ────────────────────────────
-: > "$KITGEN_TEST_STATE/resvg-fails"
+: > "$KITGEN_TEST_STATE/pip-fails"
 OUT1="$TEST_ROOT/install-abort.out"
 run_install "$OUT1"
-rm -f "$KITGEN_TEST_STATE/resvg-fails"
+rm -f "$KITGEN_TEST_STATE/pip-fails"
 
 [ "$status" -ne 0 ] || {
-  echo "installer đã nuốt lỗi ở bước trình render khung xương — thiếu @resvg/resvg-wasm là KHÔNG gen được ảnh" >&2
+  echo "installer đã nuốt lỗi ở bước thư viện ảnh — thiếu pillow là KHÔNG cắt được ảnh" >&2
   cat "$OUT1" >&2
   exit 1
 }
 # Chết ĐÚNG CHỖ: nếu ca này rơi vào một lỗi khác thì hai mệnh đề dưới vẫn xanh mà
 # chẳng đo được gì. Bắt installer nói tên gói còn thiếu.
-grep -q '@resvg/resvg-wasm' "$OUT1" || {
-  echo "installer chết ở đâu đó khác, không phải ở bước trình render khung xương" >&2
+grep -q 'thiếu pillow' "$OUT1" || {
+  echo "installer chết ở đâu đó khác, không phải ở bước cài thư viện ảnh" >&2
   cat "$OUT1" >&2
   exit 1
 }

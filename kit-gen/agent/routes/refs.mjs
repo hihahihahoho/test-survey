@@ -1,4 +1,4 @@
-/* routes/refs.mjs — §6.2 D: #29..#31 + #19 uploads + #20 import/preview.
+/* routes/refs.mjs — §6.2 D: #29..#31 (ảnh tham chiếu của project).
    Client KHÔNG BAO GIỜ gửi path (đóng G1): AGENT tự đặt tên `char-<slug>.png` / `inspo-<n>.png`
    / `brand-<n>.png`, trả về đường dẫn TƯƠNG ĐỐI trong project. Kiểm magic bytes, không tin Content-Type. */
 import { join } from "node:path"
@@ -10,7 +10,6 @@ import { readContract } from "../lib/contract.mjs"
 import { refUsage } from "../lib/validate.mjs"
 import { parseMultipart, sniff, imageSize } from "../lib/multipart.mjs"
 import { slugify } from "../lib/projects.mjs"
-import { loadImportSource, buildImportReport } from "../lib/importer.mjs"
 
 const IMAGE_EXT = new Set(["png", "jpg", "webp"])
 const KINDS = new Set(["character", "inspo", "brand"])
@@ -92,36 +91,6 @@ export function register(r) {
     return { status: 204 }
   })
 
-  // #19 POST /api/uploads (staging, zip ≤200 MB)
-  r.post("/api/uploads", async ctx => {
-    const buf = await ctx.body(ctx.limits.upload)
-    let data = buf, filename = "upload"
-    if (String(ctx.req.headers["content-type"] ?? "").startsWith("multipart/")) {
-      const parts = parseMultipart(buf, ctx.req.headers["content-type"])
-      const f = parts.find(p => p.name === "file" && p.filename !== null)
-      if (!f) fail("BAD_REQUEST", "multipart field `file` is required")
-      data = f.data
-      filename = f.filename ?? "upload"
-    }
-    const sn = sniff(data)
-    if (!sn) fail("BAD_TYPE", "unsupported file type (need zip, json, png, jpg or webp)")
-    const kind = sn.ext === "zip" ? "zip" : sn.ext === "json" ? "json" : "image"
-    const rec = await ctx.uploads.put(data, { kind, filename })
-    return { status: 201, json: { uploadId: rec.uploadId, filename: rec.filename, bytes: rec.bytes, kind } }
-  })
-
-  // #20 POST /api/import/preview — bảng đối chiếu, KHÔNG tạo gì
-  r.post("/api/import/preview", async ctx => {
-    const ws = ctx.registry.active
-    const body = await ctx.json()
-    const src = await loadImportSource(ws, body, ctx.uploads)
-    const rawFiles = (src.files ?? []).filter(f => f.name.startsWith("raw/")).length
-    const kitFiles = (src.files ?? []).filter(f => f.name.startsWith("kits/")).length
-    const report = await buildImportReport(ws, src.contract, {
-      warnings: src.warnings, duplicateSheetIds: src.duplicateSheetIds, rawFiles, kitFiles,
-    })
-    return { status: 200, json: { report } }
-  })
 }
 
 async function pickRefName(dir, kind, hint, ext) {

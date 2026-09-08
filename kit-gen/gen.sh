@@ -452,7 +452,7 @@ for s in cfg["styles"]:
 
         # ── Safe zone ─────────────────────────────────────────────────────────
         # BỐN KHỐI CŨ GỘP LẠI CÒN BỐN GẠCH ĐẦU DÒNG. Điểm mấu chốt của bản gốc
-        # (docs/SPRITESHEET-SAFE-ZONE-HANDOFF.md §5.3) được giữ nguyên: nói RA HẬU
+        # được giữ nguyên: nói RA HẬU
         # QUẢ ("phần mềm sẽ cắt đúng bốn toạ độ này") chứ không chỉ ra lệnh, và cấm
         # thẳng hành vi hỏng phổ biến nhất §8.1 đã đo — model co mặt nội dung lại
         # để nhét viền vào trong.
@@ -612,13 +612,11 @@ for s in cfg["styles"]:
                              f" = {dw}x{dh} px")
                 if g["safe"]:
                     x0, y0, x1, y1 = g["safe"]
-                    zone = f" — safe zone x={x0}..{x1}, y={y0}..{y1} ({x1 - x0}x{y1 - y0} px)"
-                    # Ô `free` KHÔNG được gọi hộp của nó là hộp cắt: `slice.py` cắt ô này
-                    # theo LÕI ĐO ĐƯỢC của chính artwork (nhánh `sk.get("free")`), đúng ý
-                    # "để AI vẽ tự do". Hứa crop box ở đây là hứa một thứ dao cắt không làm.
-                    if g["kind"] == "free":
-                        zone += ", placement guide"
-                    spec += zone
+                    # HỘP NÀY LÀ HỘP CẮT, KHÔNG PHẢI GỢI Ý. `slice.py` cắt MỌI ô không
+                    # full-bleed theo đúng toạ độ in ra đây (`geometry.safe_offset_in_cell`).
+                    # Bản trước còn nối thêm ", placement guide" cho ô `free` vì tin rằng
+                    # dao cắt bám lõi đo được — trong `slice.py` KHÔNG có nhánh nào như thế.
+                    spec += f" — safe zone x={x0}..{x1}, y={y0}..{y1} ({x1 - x0}x{y1 - y0} px)"
                 elif g["kind"] == "full":
                     spec += " — full-bleed scene, fills its whole cell edge to edge"
                 if comp["skel"].get("matte") == "glow":

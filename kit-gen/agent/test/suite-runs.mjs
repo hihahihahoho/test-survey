@@ -81,14 +81,6 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     const st = await c2("GET", `/api/runs/${rid}/stream?from=0`, { headers: CLIENT })
     eq(st.status, 200, "replay được event từ đĩa")
   })
-  await it("log của job không tồn tại → 404 LOG_NOT_FOUND", async () => {
-    const runs = await api("GET", `/api/projects/${pid}/runs`)
-    const rid = runs.json.items[0].id
-    const r = await api("GET", `/api/runs/${rid}/jobs/tet-main/log`)
-    ok([200, 404].includes(r.status), `status ${r.status}`)
-    if (r.status === 404) eq(r.json.error.code, "LOG_NOT_FOUND", "code")
-  })
-
 
   // ─────────────────────────────────────────── 9b. GEN THẬT (engine giả, KHÔNG tốn quota)
   describe("chạy engine thật")
@@ -178,13 +170,13 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     eq(st["tet-bg-home"], "never", "lượt lỗi → chưa có ảnh")
     ok(["ok", "uncut"].includes(st["tet-main"]), `lượt xong → ${st["tet-main"]}`)
 
-    // đọc được prompt + log của một lượt từ UI (đóng D7 / §3.3)
-    const prompt = await a3("GET", `/api/runs/${rid}/jobs/tet-main/prompt`)
-    eq(prompt.status, 200, "đọc được prompt đã dùng")
-    includes(prompt.json.prompt, "fake prompt", "nội dung prompt")
-    const log = await a3("GET", `/api/runs/${rid}/jobs/tet-main/log?tail=50`)
-    eq(log.status, 200, "đọc được log của lượt")
-    includes(log.text, "fake log", "nội dung log")
+    /* Prompt và log của lượt vẫn phải NẰM TRÊN ĐĨA (prompt-first: `prompts/*.txt`
+       là sản phẩm chính của gen.sh). Hai route đọc chúng qua HTTP đã bỏ, nên ca này
+       phán ngay tại chỗ engine ghi ra. */
+    includes(await readFile(join(wsRoot, "projects", gid, "prompts", "tet-main.txt"), "utf8"),
+      "fake prompt", "prompt đã dùng nằm trên đĩa")
+    includes(await readFile(join(wsRoot, "projects", gid, "logs", "tet-main.log"), "utf8"),
+      "fake log", "log của lượt nằm trên đĩa")
 
     // ảnh đã sinh đọc được qua #41, và thumbnail không làm vỡ đường đọc
     const img = await a3("GET", `/api/projects/${gid}/files/raw/tet-main.png`)

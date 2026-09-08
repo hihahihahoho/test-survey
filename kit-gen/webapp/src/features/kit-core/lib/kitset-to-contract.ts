@@ -48,9 +48,9 @@ import {
   type Contract,
   type Sheet,
 } from "@/lib/types/contract";
-import { loadBundledV2 } from "@/features/design/library/lib/source";
-import type { LibElement } from "@/features/design/library/lib/types";
-import { styleAxisPhrases, subjectAxisLine } from "@/features/kit-form/lib/style-phrases";
+import { loadBundledV2 } from "@/features/kit-core/lib/element-lib/source";
+import type { LibElement } from "@/features/kit-core/lib/element-lib/types";
+import { styleAxisPhrases, subjectAxisLine } from "@/features/kit-core/lib/style-phrases";
 import type { GlassLevel, KitElementSkel, SheetPromptTweak, WorkflowMascot, WorkflowState } from "./model";
 import { GLASS_LEVEL_SPEC, glazeFromMaterial, glazePreset, type GlazePreset } from "./glaze";
 import { isPropElement } from "./user-library";

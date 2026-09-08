@@ -5,8 +5,8 @@ import { devDetails, presentError, type ConnectionStatus } from "@/lib/api";
 import type { useDoctor } from "@/lib/hooks";
 import { DoctorChecklist } from "../parts/DoctorChecklist";
 import { ImageGenCard } from "../parts/ImageGenCard";
-import { ErrorDocsPanel } from "@/features/docs/components/ErrorDocsPanel";
-import { codeFromLocationHash } from "@/features/docs/lib/anchors";
+import { ErrorDocsPanel } from "@/features/settings/errors/ErrorDocsPanel";
+import { codeFromLocationHash } from "@/features/settings/errors/anchors";
 
 /**
  * TAB "MÔI TRƯỜNG" (§3-S6) — yêu cầu #5.
@@ -21,12 +21,11 @@ import { codeFromLocationHash } from "@/features/docs/lib/anchors";
  * 4 trạng thái: loading (skeleton) · error (không kiểm được + [Thử lại], message kỹ
  * thuật CHỈ trong panel dev) · success · agent tắt (nói thẳng là cần công cụ local).
  *
- * TRA CỨU MÃ LỖI (INTEGRATION): `features/docs/**` (1058 dòng: catalog 40+ mã, anchors,
- * panel, dialog) đã được viết đầy đủ nhưng KHÔNG file nào ngoài thư mục đó import —
- * mã chết hoàn toàn. Chính `docs/lib/anchors.ts` khai đích của nó là
- * `/settings?tab=env#loi-<anchor>` (vì route `/docs/errors` chưa có). Mọi envelope lỗi
- * của agent đều kèm `docs: "/docs/errors#<mã>"`, nên không cắm thì mỗi link trợ giúp
- * dẫn tới hư không. Ở đây cắm đúng chỗ tác giả đã thiết kế, KHÔNG sửa file của họ.
+ * TRA CỨU MÃ LỖI: catalog 40+ mã + anchors + panel sống ở `features/settings/errors/`
+ * (Đợt 2 dời về đây từ `features/docs/**`, thư mục đó chỉ còn phần này là có người dùng).
+ * `errors/anchors.ts` khai đích là `/settings?tab=env#loi-<anchor>` — và nay đó là đích
+ * DUY NHẤT: agent đã gỡ hẳn các route `/docs*`. Mọi envelope lỗi của agent vẫn kèm
+ * `docs: "/docs/errors#<mã>"`, nên không cắm thì mỗi link trợ giúp dẫn tới hư không.
  */
 export function EnvTab({
   doctor,

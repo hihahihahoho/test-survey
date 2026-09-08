@@ -43,7 +43,7 @@
  * ║ trôi khỏi nhau (xem chính `geometry.py` sinh ra để chấm dứt chuyện đó).    ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
-import { elementBox } from "@/features/design/preview/geometry";
+import { elementBox } from "@/features/kit-core/lib/geometry";
 import type { Skel } from "@/lib/types/contract";
 
 /**

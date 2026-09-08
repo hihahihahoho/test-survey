@@ -160,7 +160,6 @@ function CellCard({ projectId, cell, poseFiles }: {
         projectId={projectId}
         path={cell.path}
         alt={name}
-        backdrop="checker"
         full={false}
         width={256}
         /* Ô cắt lại GIỮ NGUYÊN đường dẫn, chỉ `mtime` đổi. Không truyền nó xuống thì

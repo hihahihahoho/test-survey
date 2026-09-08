@@ -22,7 +22,7 @@ import importlib.util, json, subprocess, sys, tempfile, unittest
 from pathlib import Path
 from PIL import Image, ImageDraw
 
-TOOL = Path(__file__).parents[1] / "tools" / "validate_output_geometry.py"
+TOOL = Path(__file__).parents[1] / "validate_output_geometry.py"
 
 _spec = importlib.util.spec_from_file_location("validate_output_geometry", TOOL)
 tool = importlib.util.module_from_spec(_spec)

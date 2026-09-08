@@ -91,32 +91,19 @@ def cell_box(width, height, cols, rows, index):
     return cx0, cy0, cx0 + cw, cy0 + ch
 
 
-def safe_spec_of(skel):
-    """Nguồn tỉ lệ safe zone của một ô.
-
-    `contentSafe` dạng object (đời thử nghiệm) khai riêng w/h; dạng boolean (đời
-    nay) nghĩa là "chính skel w/h LÀ safe zone". Đọc được cả hai để manifest cũ
-    không vỡ — đây là cùng một nhánh `slice.py` đang chạy.
-    """
-    content_safe = skel.get("contentSafe")
-    if content_safe:
-        return content_safe if isinstance(content_safe, dict) else skel, True
-    return skel, False
-
-
 def safe_offset_in_cell(cell_w, cell_h, skel):
     """Vị trí safe zone TRONG ô → ``(dx, dy, sw, sh)``.
 
-    Hai nhánh, đúng như `slice.py`:
-      · có `contentSafe` ⇒ luôn căn giữa (vùng chữ/hitbox không neo đáy);
-      · không ⇒ căn giữa ngang, còn dọc thì `anchor:"bottom"` đẩy xuống đáy ô.
+    Căn giữa ngang; dọc thì `anchor:"bottom"` dán đáy ô, còn lại căn giữa.
     `//2` (chia lấy nguyên) chứ không `round(…/2)`: lệch nửa pixel này đi thẳng vào
     hộp cắt, nên nó phải là ĐÚNG phép mà dao cắt dùng.
+
+    (`contentSafe` — vùng chữ/hitbox khai riêng w/h của đời thử nghiệm — đã bỏ:
+    không nơi nào trong app, thư viện element hay bộ dựng contract phát ra nó nữa.)
     """
-    spec, has_content_safe = safe_spec_of(skel)
-    sw = round(cell_w * spec["w"])
-    sh = round(cell_h * spec["h"])
-    if not has_content_safe and skel.get("anchor") == "bottom":
+    sw = round(cell_w * skel["w"])
+    sh = round(cell_h * skel["h"])
+    if skel.get("anchor") == "bottom":
         dy = cell_h - sh - round(cell_h * BOTTOM_ANCHOR_RATIO)
     else:
         dy = (cell_h - sh) // 2
@@ -212,16 +199,17 @@ def cell_kind(skel):
 
     · "empty" — ô đệm, không vẽ gì;
     · "full"  — full-bleed, artwork phủ kín ô, KHÔNG có safe zone;
-    · "free"  — khung động: safe zone chỉ là gợi ý đặt chỗ, dao cắt bám lõi đo được;
     · "safe"  — mặc định: safe zone LÀ hộp cắt.
+
+    KHÔNG CÒN "free". Nó từng hứa "dao cắt bám lõi đo được", nhưng `slice.py` chưa
+    bao giờ có nhánh ấy: mọi ô không full-bleed đều bị cắt theo `safe_offset_in_cell`.
+    Cờ `skel.free` của `element-lib.json` nay chỉ còn là nhãn trưng bày bên app.
     """
     shape = skel.get("shape")
     if shape == "empty":
         return "empty"
     if shape == "full":
         return "full"
-    if skel.get("free"):
-        return "free"
     return "safe"
 
 

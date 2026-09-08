@@ -45,19 +45,19 @@ const at = (path: string) => calls.find((c) => c.path === path);
 
 describe("ảnh trong app = ảnh gốc", () => {
   it("KitImage mặc định xin ảnh GỐC — width null ⇒ URL không có `?w`", async () => {
-    render(<KitImage projectId="p1" path="kits/chinh/01-btn.png" alt="nút" backdrop="checker" eager />);
+    render(<KitImage projectId="p1" path="kits/chinh/01-btn.png" alt="nút" eager />);
     await waitFor(() => expect(at("kits/chinh/01-btn.png")).toBeTruthy());
     expect(at("kits/chinh/01-btn.png")?.width).toBeNull();
   });
 
   it("sheet thô cũng vậy — đây là ô từng trả blob 512×341", async () => {
-    render(<KitImage projectId="p1" path="raw/chinh-ui.png" alt="sheet" backdrop="checker" eager />);
+    render(<KitImage projectId="p1" path="raw/chinh-ui.png" alt="sheet" eager />);
     await waitFor(() => expect(at("raw/chinh-ui.png")).toBeTruthy());
     expect(at("raw/chinh-ui.png")?.width).toBeNull();
   });
 
   it("bản thu nhỏ vẫn xin được, nhưng phải CỐ Ý — `full={false}`", async () => {
-    render(<KitImage projectId="p1" path="a.png" alt="a" backdrop="checker" eager full={false} width={128} />);
+    render(<KitImage projectId="p1" path="a.png" alt="a" eager full={false} width={128} />);
     await waitFor(() => expect(at("a.png")).toBeTruthy());
     expect(at("a.png")?.width).toBe(128);
   });

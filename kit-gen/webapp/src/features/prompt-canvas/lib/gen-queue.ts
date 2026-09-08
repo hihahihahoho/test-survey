@@ -2,7 +2,7 @@ import * as React from "react";
 import { AgentError } from "@/lib/api/client";
 import { presentError } from "@/lib/api/errors";
 import { useCancelRun, useRun, useRunStream } from "@/lib/hooks";
-import { useGenerateRun } from "@/features/runs";
+import { useGenerateRun } from "@/lib/hooks";
 import { isRunLive } from "@/features/kit-core/lib/generated-results";
 
 /**

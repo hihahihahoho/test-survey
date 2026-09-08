@@ -40,7 +40,7 @@ function KitRoute() {
   const navigate = useNavigate();
 
   return (
-    <AppLayout screen="kit" projectId={projectId} simplified>
+    <AppLayout screen="kit" projectId={projectId}>
       <PromptCanvasScreen
         projectId={projectId}
         settingsOpen={settings !== undefined}

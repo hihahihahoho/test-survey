@@ -12,12 +12,8 @@ import { imageSize } from "../lib/multipart.mjs"
 /** Chỉ các thư mục dữ liệu được đọc; không bao giờ .history, không bao giờ file lạ ngoài whitelist.
  *  `cover` = ảnh bìa tự sinh (cover/cover.png + cover.json). Nhật ký thô của lượt vẽ bìa CỐ Ý
  *  nằm ở `logs/` — thư mục KHÔNG đọc được từ web — vì log codex có đường dẫn tuyệt đối của máy. */
-/* Thư mục con được phép đọc qua API file.
-   "skeleton" GIỮ LẠI Ở CHẾ ĐỘ CHỈ-ĐỌC. Engine không còn ghi vào đó (khung xương bỏ
-   27/08/2026), nhưng dự án tạo trước ngày đó vẫn có ảnh trong thư mục này, và
-   `manifest`/`run.json` đời cũ còn trỏ vào chúng. Bỏ khỏi tập này là biến mọi đường
-   dẫn cũ thành 403 — một lỗi khó hiểu cho một file vẫn nằm sờ sờ trên đĩa. */
-const READABLE_TOP = new Set(["raw", "kits", "refs", "skeleton", "prompts", "export", "runs", "cover"])
+/* Thư mục con được phép đọc qua API file. */
+const READABLE_TOP = new Set(["raw", "kits", "refs", "prompts", "export", "runs", "cover"])
 const READABLE_FILES = new Set(["project.json", "contract.json", "styles.json"])
 
 /** Đủ cho header của mọi định dạng ta đọc kích thước (PNG/WebP/JPEG) — xem readHeadFile. */

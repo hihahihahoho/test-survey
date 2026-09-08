@@ -158,13 +158,6 @@ describe("#30 — ảnh ref: multipart, agent tự đặt tên, client KHÔNG g�
     expect(calls).toHaveLength(0);
   });
 
-  it("#19 chặn zip > 200 MB", async () => {
-    const calls = mock([json({})]);
-    await expect(api.uploads.create(file("a.zip", "application/zip", 201 * 1024 * 1024))).rejects.toMatchObject({
-      code: "TOO_LARGE",
-    });
-    expect(calls).toHaveLength(0);
-  });
 });
 
 describe("#32 — bắt đầu lượt chạy", () => {
@@ -210,14 +203,7 @@ describe("#14 — purge đối chiếu đúng project và cụm xác nhận", ()
   });
 });
 
-describe("#18/#41/#42 — file & xuất", () => {
-  it("exportUrl là URL cho <a download>, có include và variant", () => {
-    configureClient({ base: "http://127.0.0.1:8765" });
-    const u = api.projects.exportUrl("p1", ["contract", "kits"], "tet");
-    expect(u).toContain("/api/projects/p1/export.zip");
-    expect(u).toContain("include=contract%2Ckits");
-    expect(u).toContain("variant=tet");
-  });
+describe("#41/#42 — đọc file sản phẩm", () => {
   it("thumbUrl luôn có w=256", () => {
     configureClient({ base: "http://127.0.0.1:8765" });
     expect(api.files.thumbUrl("p1", "kits/tet/01.png")).toContain("w=256");

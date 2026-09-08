@@ -1,81 +1,64 @@
 /**
  * Test HỢP ĐỒNG LAZY-MOUNT + registry lệnh.
  *
- * Ca quan trọng nhất: bảng đường dẫn phải khớp ĐÚNG những gì brief chốt. Nếu
- * ai đó lỡ tay đổi một ký tự trong `SCREEN_PATH`, màn của team kia sẽ im lặng
- * biến thành placeholder mà build vẫn xanh — đúng kiểu lỗi khó truy nhất.
- * Test này biến nó thành lỗi ồn ào.
+ * Ca quan trọng nhất: bảng đường dẫn phải khớp ĐÚNG file có thật. Nếu ai đó lỡ tay
+ * đổi một ký tự trong `SCREEN_PATH`, màn sẽ im lặng biến thành placeholder mà build
+ * vẫn xanh — đúng kiểu lỗi khó truy nhất. Test này biến nó thành lỗi ồn ào.
  *
- * Chạy: npx vitest run --config vitest.shell.config.ts
+ * 08/09/2026 — bảng rút từ 9 màn xuống 2 màn lazy + 1 màn nạp tĩnh. Sáu id đã xoá
+ * (`setup`, `project`, `project-settings`, `design`, `runs`, `run-detail`) đi cùng
+ * màn của chúng ở đợt dọn prompt-first; `HAS_RAIL` cũng vậy — không màn nào còn rail.
  */
 import { describe, expect, it } from "vitest";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  HAS_RAIL, SCREEN_EXPORT, SCREEN_LABEL, SCREEN_PATH, type ScreenId,
+  SCREEN_EXPORT, SCREEN_LABEL, SCREEN_PATH,
+  type LazyScreenId, type ScreenId,
 } from "../screen-contract";
 import { _registry } from "../command-registry";
 
 const ROOT = resolve(new URL("../../../..", import.meta.url).pathname);
 
-/** Bảng NGUYÊN VĂN từ brief. Sửa test này = đang đổi hợp đồng với 3 team. */
+/** Bảng NGUYÊN VĂN. Sửa test này = đang đổi hợp đồng lazy-mount. */
 const CONTRACT: Record<string, string> = {
-  setup: "src/features/setup/SetupScreen.tsx",
   projects: "src/features/projects/ProjectsScreen.tsx",
-  design: "src/features/design/DesignScreen.tsx",
-  runs: "src/features/runs/RunsScreen.tsx",
-  "run-detail": "src/features/runs/RunDetailScreen.tsx",
-  project: "src/features/project/ProjectScreen.tsx",
-  "project-settings": "src/features/project/ProjectSettingsScreen.tsx",
-  kit: "src/features/kit/KitScreen.tsx",
   settings: "src/features/settings/SettingsScreen.tsx",
 };
 
-describe("bảng lazy-mount khớp brief", () => {
-  it("đủ 9 màn, không thừa không thiếu", () => {
+/** Ba id màn của app — `kit` KHÔNG lazy (route nạp tĩnh, props riêng). */
+const SCREEN_IDS: ScreenId[] = ["projects", "kit", "settings"];
+
+describe("bảng lazy-mount khớp hợp đồng", () => {
+  it("đúng hai màn lazy, không thừa không thiếu", () => {
     expect(Object.keys(SCREEN_PATH).sort()).toEqual(Object.keys(CONTRACT).sort());
+    expect(Object.keys(SCREEN_EXPORT).sort()).toEqual(Object.keys(CONTRACT).sort());
   });
 
   it.each(Object.entries(CONTRACT))("đường dẫn của %s đúng nguyên văn", (id, path) => {
-    expect(SCREEN_PATH[id as ScreenId]).toBe(path);
+    expect(SCREEN_PATH[id as LazyScreenId]).toBe(path);
   });
 
   it("tên export suy ra đúng từ tên file", () => {
     for (const [id, path] of Object.entries(CONTRACT)) {
       const fromPath = path.split("/").pop()!.replace(/\.tsx$/, "");
-      expect(SCREEN_EXPORT[id as ScreenId]).toBe(fromPath);
+      expect(SCREEN_EXPORT[id as LazyScreenId]).toBe(fromPath);
     }
   });
 
   it("mọi màn có nhãn tiếng Việt (placeholder và <title> đều dùng)", () => {
-    for (const id of Object.keys(CONTRACT) as ScreenId[]) {
-      expect(SCREEN_LABEL[id]).toBeTruthy();
-    }
-  });
-
-  it("§2.2: S1 và S6 full width; 6 màn trong project có rail", () => {
-    expect([...HAS_RAIL].sort()).toEqual(
-      ["design", "kit", "project", "project-settings", "run-detail", "runs"],
-    );
-    expect(HAS_RAIL.has("projects")).toBe(false);
-    expect(HAS_RAIL.has("settings")).toBe(false);
-    expect(HAS_RAIL.has("setup")).toBe(false);
+    expect(Object.keys(SCREEN_LABEL).sort()).toEqual([...SCREEN_IDS].sort());
+    for (const id of SCREEN_IDS) expect(SCREEN_LABEL[id]).toBeTruthy();
   });
 
   /**
-   * Không khẳng định "mọi file phải tồn tại" — cả điểm của hợp đồng là chạy
-   * được khi thiếu. Test này chỉ CHỤP LẠI hiện trạng để báo cáo trung thực.
+   * Hợp đồng cho phép file VẮNG MẶT (đó là cả điểm của nó). Nhưng hai màn này là
+   * đường vào duy nhất của app hôm nay — thiếu là app trắng, nên ở đây đòi có thật.
    */
-  it("báo hiện trạng: màn nào đã có file thật", () => {
-    const report = Object.entries(CONTRACT).map(([id, path]) => ({
-      id,
-      exists: existsSync(resolve(ROOT, path)),
-    }));
-    console.log(
-      "[hiện trạng màn]",
-      report.map((r) => `${r.exists ? "✓" : "…"} ${r.id}`).join("  "),
-    );
-    expect(report).toHaveLength(9);
+  it("hai file màn lazy CÓ THẬT trên đĩa", () => {
+    for (const path of Object.values(CONTRACT)) {
+      expect(existsSync(resolve(ROOT, path)), `${path} phải tồn tại`).toBe(true);
+    }
   });
 });
 

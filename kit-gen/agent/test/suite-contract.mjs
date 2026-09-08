@@ -1,10 +1,14 @@
 /* suite-contract.mjs — §6.2 C: version + If-Match (412 thiếu / 409 lệch), validate V-01..V-08,
-   lịch sử 50 bản, khôi phục tạo bản mới, element-lib chỉ-đọc.
-   + #29 prompt-preview: xem nguyên văn prompt TRƯỚC khi tiêu quota (Prompt Studio). */
+   element-lib chỉ-đọc.
+   + #29 prompt-preview: xem nguyên văn prompt TRƯỚC khi tiêu quota (Prompt Studio).
+
+   Lịch sử/khôi phục snapshot và validate dry-run KHÔNG còn route (dọn prompt-first):
+   luật validate vẫn được canh, nhưng gọi thẳng `validateContract` thay vì qua HTTP. */
 import { join } from "node:path"
 import { describe, it, eq, ok, includes, waitFor, lsDir, makeClient, fakeDoctor, CLIENT, PAGES, PORT } from "./harness.mjs"
 import { createAgent } from "../server.mjs"
 import { contractToStylesV1 } from "../lib/engine.mjs"
+import { validateContract } from "../lib/validate.mjs"
 
 export async function run({ api, pid, wsRoot, agentDir }) {
   // ─────────────────────────────────────────── 6. CONTRACT version / If-Match
@@ -69,28 +73,6 @@ export async function run({ api, pid, wsRoot, agentDir }) {
     })
     eq(r.status, 422, "status")
     ok(r.json.error.details.errors.some(e => e.code === "V-03"), "có V-03")
-  })
-  await it("validate dry-run KHÔNG ghi gì", async () => {
-    const g = await api("GET", `/api/projects/${pid}/contract`)
-    const c = structuredClone(g.json.contract)
-    c.sheets[0].grid.cols = 3
-    const r = await api("POST", `/api/projects/${pid}/contract/validate`, { body: { contract: c } })
-    eq(r.status, 200, "status")
-    ok(r.json.errors.length > 0, "báo lỗi")
-    const after = await api("GET", `/api/projects/${pid}/contract`)
-    eq(after.json.contract.sheets[0].grid.cols, 4, "đĩa không đổi")
-  })
-  await it("lịch sử contract có snapshot; khôi phục tạo bản MỚI", async () => {
-    const h = await api("GET", `/api/projects/${pid}/contract/history`)
-    eq(h.status, 200, "status")
-    ok(h.json.items.length >= 1, "có ≥1 snapshot")
-    const snap = h.json.items[0].snapshot
-    const one = await api("GET", `/api/projects/${pid}/contract/history/${snap}`)
-    eq(one.status, 200, "đọc được snapshot")
-    const before = (await api("GET", `/api/projects/${pid}/contract`)).json.version
-    const rs = await api("POST", `/api/projects/${pid}/contract/restore`, { body: { snapshot: snap } })
-    eq(rs.status, 200, "restore ok")
-    eq(rs.json.version, before + 1, "tạo bản mới, không ghi đè")
   })
   await it("GET /api/element-lib là catalogue chỉ-đọc 42 element", async () => {
     const r = await api("GET", "/api/element-lib")
@@ -298,13 +280,11 @@ export async function run({ api, pid, wsRoot, agentDir }) {
     const good = structuredClone(g.json.contract)
     good.sheets[0].directive = "một câu chỉ đạo"
     good.sheets[0].promptOverride = "prompt tự soạn"
-    const okRes = await api("POST", `/api/projects/${pid}/contract/validate`, { body: { contract: good } })
-    eq(okRes.json.errors.filter(e => /directive|promptOverride/.test(e.path)).length, 0, "chữ thì không chặn")
+    eq(validateContract(good).errors.filter(e => /directive|promptOverride/.test(e.path)).length, 0, "chữ thì không chặn")
 
     const bad = structuredClone(g.json.contract)
     bad.sheets[0].directive = { text: "không phải chuỗi" }
-    const badRes = await api("POST", `/api/projects/${pid}/contract/validate`, { body: { contract: bad } })
-    ok(badRes.json.errors.some(e => e.path.endsWith(".directive")), "sai kiểu thì chặn")
+    ok(validateContract(bad).errors.some(e => e.path.endsWith(".directive")), "sai kiểu thì chặn")
   })
 
 }

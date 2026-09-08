@@ -2,8 +2,6 @@
 export * from "./persist";
 export * from "./secrets";
 export * from "./ui";
-export * from "./prefs";
-export * from "./setup";
 export * from "./recent";
 export * from "./editor";
 /* Nguồn sự thật của tuỳ chọn nằm trên ĐĨA, không nằm ở localStorage. `disk-settings` là

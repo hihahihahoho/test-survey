@@ -16,8 +16,8 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { AgentError } from "@/lib/api/client";
-import { loadBundledV2 } from "@/features/design/library/lib/source";
-import type { LibElement } from "@/features/design/library/lib/types";
+import { loadBundledV2 } from "@/features/kit-core/lib/element-lib/source";
+import type { LibElement } from "@/features/kit-core/lib/element-lib/types";
 import {
   createWorkflowStore, draftKey, hydrateWorkflowStore, resetWorkflowStores, workflowDraftOf,
   type WorkflowState,

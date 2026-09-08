@@ -4,58 +4,13 @@
    `codex debug prompt-input | grep -cE "image_?gen"` — chỉ ĐẾM, không in nội dung, không tốn quota.
    Codex ≥0.147 đổi tên tool `image_gen` thành skill `imagegen` nên phải khớp cả hai dạng. */
 import { execFile } from "node:child_process"
-import { createRequire } from "node:module"
 import { homedir, platform, arch, release } from "node:os"
-import { dirname, join, resolve } from "node:path"
-import { fileURLToPath } from "node:url"
+import { join } from "node:path"
 import { statfs, readFile } from "node:fs/promises"
 import { resolveEngine } from "./engine.mjs"
 import { shortenPath } from "./redact.mjs"
 import { pythonCommand, winShellOpts, winSpawnOpts, pythonEnv } from "./platform.mjs"
 
-/* ── Trình render SVG: @resvg/resvg-wasm ──────────────────────────────────────
-   ⚠️ TỪ 27/08/2026 GÓI NÀY KHÔNG CÒN AI DÙNG TRONG ENGINE.
-   Nó tồn tại để `render-skeleton.mjs` raster ảnh khung xương ra PNG; khung xương đã
-   bỏ (prompt nay tự nói toạ độ safe zone — xem khối đầu `gen.sh`) và cả ba file
-   skeleton.* đã xoá. Phép dò dưới đây Ở LẠI vì `install.sh` vẫn cài gói và màn
-   "Cài đặt" của webapp vẫn hiện một dòng cho nó: gỡ ở đây mà không gỡ đồng thời ở
-   hai chỗ kia thì dòng đó thành đỏ vĩnh viễn. Việc gỡ trọn (installer + PowerShell
-   + màn setup) là một thay đổi cắt ngang, làm riêng.
-
-   Vì sao phép dò lại phức tạp thế: `require.resolve` trần neo theo THƯ MỤC LÀM VIỆC
-   của tiến trình agent, mà gói này KHÔNG bao giờ nằm ở đó — installer cài vào prefix
-   riêng (`npm install --prefix "$KITGEN_HOME/tools"`). Bản cài chính quy sống sót chỉ
-   nhờ launcher có đặt sẵn NODE_PATH; mọi cách khởi động KHÔNG qua launcher đều bị báo
-   thiếu OAN trong khi gói vẫn nằm yên ở `~/.kitgen/tools`. Nên dò theo danh sách neo
-   của installer, và làm trong tiến trình (createRequire) thay vì spawn: nhanh hơn, và
-   vẫn tôn trọng NODE_PATH vì Node gắn Module.globalPaths vào mọi require không tương đối. */
-export function resvgAnchorDirs() {
-  const home = process.env.KITGEN_HOME
-    || (platform() === "win32"
-      ? join(process.env.LOCALAPPDATA || process.env.USERPROFILE || "", "KitGen")
-      : join(homedir(), ".kitgen"))
-  return [
-    process.env.KITGEN_RESVG_DIR,      // thư mục CHỨA node_modules, không phải gói
-    join(home, "tools"),
-    join(homedir(), ".kitgen", "tools"),
-    REPO_DIR,                          // dev: node_modules cạnh repo (≈ HERE của engine)
-  ].filter(Boolean)
-}
-
-function rendererInfo() {
-  for (const dir of resvgAnchorDirs()) {
-    try {
-      const req = createRequire(join(dir, "package.json"))
-      req.resolve("@resvg/resvg-wasm")
-      // Gói cài dở (thiếu .wasm) phải tính là thiếu, không phải là có.
-      req.resolve("@resvg/resvg-wasm/index_bg.wasm")
-      return { ok: true, engine: "@resvg/resvg-wasm" }
-    } catch { /* thử neo kế tiếp */ }
-  }
-  return { ok: false, engine: "@resvg/resvg-wasm" }
-}
-
-const REPO_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
 const CACHE_MS = 60_000
 let cache = { at: 0, data: null }
 const CODEX = process.env.KITGEN_CODEX_BIN || "codex"
@@ -137,16 +92,18 @@ async function codexWhere() {
   }
 }
 
+/* CHỈ CÒN PILLOW. `slice.py` nay chỉ CẮT theo toạ độ và giữ nguyên alpha của model,
+   nên numpy/scipy/pymatting (tầng tách nền) và torch/transformers (ViTMatte) không
+   còn đường nào gọi tới — dò chúng chỉ tạo ra một dòng đỏ cho thứ không ai cần. */
 async function pythonInfo() {
   const v = await firstLineVersion(pythonCommand().cmd)
   if (!v.ok) return { ok: false, version: null, venv: false, deps: {} }
   const probe = await runPy(["-c",
-    "import importlib.util as u,json;print(json.dumps({m:(u.find_spec(m) is not None) for m in ['PIL','numpy','torch','transformers']}))"])
+    "import importlib.util as u,json;print(json.dumps({'PIL':u.find_spec('PIL') is not None}))"])
   let deps = {}
   try {
-    const raw = JSON.parse(probe.stdout.trim() || "{}")
-    deps = { pillow: !!raw.PIL, numpy: !!raw.numpy, torch: !!raw.torch, transformers: !!raw.transformers }
-  } catch { deps = { pillow: false, numpy: false, torch: false, transformers: false } }
+    deps = { pillow: !!JSON.parse(probe.stdout.trim() || "{}").PIL }
+  } catch { deps = { pillow: false } }
   const venvProbe = await runPy(["-c", "import sys;print('1' if sys.prefix!=sys.base_prefix else '0')"])
   return { ok: true, version: v.version, venv: venvProbe.stdout.trim() === "1", deps }
 }
@@ -292,7 +249,6 @@ export async function doctor(ws, { refresh = false } = {}) {
       os: `${platform()}-${arch()}`, shell: "unknown", kernel: release(),
       node: { ok: true, version: process.versions.node },
       python: { ok: false, version: null, venv: false, deps: {} },
-      renderer: { ok: false, engine: "@resvg/resvg-wasm" },
       codex: { ok: false, version: null, binLabel: null, shellOk: null, shellDirLabel: null },
       imageGen: {
         mode: "unknown", profile: "default-home", available: false,
@@ -308,12 +264,11 @@ export async function doctor(ws, { refresh = false } = {}) {
     cache = { at: Date.now(), data }
     return data
   }
-  const [node, py, codex, where, renderer, img, wsInfo] = await Promise.all([
+  const [node, py, codex, where, img, wsInfo] = await Promise.all([
     firstLineVersion(process.execPath),
     pythonInfo(),
     firstLineVersion(CODEX),
     codexWhere(),
-    rendererInfo(),
     imageGenInfo(ws),
     workspaceInfo(ws),
   ])
@@ -322,7 +277,6 @@ export async function doctor(ws, { refresh = false } = {}) {
     kernel: release(),
     node: { ok: true, version: process.versions.node },
     python: py,
-    renderer,
     /* `ok` = AGENT chạy được. `shellOk` = TERMINAL CỦA KHÁCH gõ được. Hai câu khác
        nhau — xem `codexWhere`; gộp chúng lại chính là con bug đã tốn một chuyến
        lên máy khách. */

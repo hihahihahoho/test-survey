@@ -31,40 +31,19 @@ Máy đã cài KitGen
 └── ~/KitGen/                   project, ảnh và dữ liệu người dùng
 ```
 
-### 2.1 Prototype kỹ thuật
+### 2.1 Prototype kỹ thuật — KHÔNG CÒN
 
-| File/khu vực | Vai trò | Có phải app production không? |
-|---|---|---|
-| `kit-gen/studio.html` | Prototype một trang đúng nhất cho contract → gen → cắt → showcase | Không |
-| `kit-gen/screens.html` | Các màn hình cũ lắp từ element | Không |
-| `kit-gen/demo.html` | Demo game Phaser từ các asset đã cắt | Không |
-| `kit-gen/figma.html` | DOM mode cũ để thử xuất Figma | Không |
-| `kit-gen/preview.html` | Ma trận xem asset/style đã tạo | Không |
-| `kit-gen/web/` | App vanilla JS đời trước | Legacy, không được đóng vào runtime hiện tại |
-| `kit-gen/experiments/` | Spike safe-zone, prompt và ảnh thử local | Không; thư mục đang bị Git ignore |
+Toàn bộ prototype một-trang đã xoá trong đợt dọn prompt-first (07/09/2026):
+`studio.html` + `studio-server.mjs`, `screens.html`, `demo.html` + `vendor/phaser.min.js`,
+`figma.html` + `figma-export/`, `preview.html` + `preview.py`, `silhouettes.js`,
+và SPA vanilla `web/` (kèm `scripts/pages-build.sh`). Không còn gì để chạy qua
+`python3 -m http.server`.
 
-Prototype quan trọng nhất cho pipeline ảnh là `studio.html`. Nó giải thích cách
-tổ chức sheet, safe zone và asset. (Phần nó nói về "khung xương đính kèm" đã lỗi
-thời từ 27/08/2026 — xem đầu `docs/BACKLOG.md`: prompt nay tự nói toạ độ.) Giao diện sản phẩm mới được phép đơn
-giản hơn prototype, nhưng không được vô tình đổi contract/pipeline chỉ vì UI khác.
+Nơi duy nhất còn mô tả pipeline ảnh là mã thật: `gen.sh` (prompt theo section, in toạ
+độ safe zone bằng số), `geometry.py` (nguồn hình học dùng chung) và `slice.py` (CẮT
+theo đúng toạ độ ấy, giữ nguyên alpha của model).
 
-Chạy prototype qua HTTP từ repo root:
-
-```bash
-python3 -m http.server 8000
-```
-
-Sau đó mở một trong các URL:
-
-```text
-http://127.0.0.1:8000/kit-gen/studio.html
-http://127.0.0.1:8000/kit-gen/screens.html
-http://127.0.0.1:8000/kit-gen/demo.html
-http://127.0.0.1:8000/kit-gen/figma.html
-http://127.0.0.1:8000/kit-gen/preview.html
-```
-
-Không mở trực tiếp bằng `file://`; một số asset/module không tải đúng theo cách đó.
+`kit-gen/experiments/` vẫn là chỗ để ảnh/prompt thử local và đang bị Git ignore.
 
 ### 2.2 App chính hiện tại
 
@@ -113,7 +92,7 @@ Runtime release là **source-free package**, không phải Git checkout. Sau khi
 ├── install.sh
 ├── config.env
 ├── install.log
-└── tools/               private Node, @resvg/resvg-wasm, Codex fallback
+└── tools/               private Node, private Python, Codex fallback
 ```
 
 Vì vậy, nếu Finder chỉ thấy `install.sh` và một file installer khác ở thư mục vừa
@@ -247,7 +226,8 @@ npm run verify:release
 npm run test:integration
 node ../agent/test-agent.mjs
 # `npx playwright install chromium` chỉ cần cho e2e của webapp (devDependency).
-# Đường SHIP không còn Playwright — engine render khung xương bằng @resvg/resvg-wasm.
+# Đường SHIP không có Playwright, và từ 07/09/2026 cũng không còn @resvg/resvg-wasm:
+# engine chỉ còn bash + python3 (Pillow).
 npx playwright install chromium
 npm run test:e2e
 cd ../..
@@ -505,7 +485,7 @@ Installer sẽ:
 1. đọc `release.json` trên nhánh release;
 2. tải archive và `.sha256` từ GitHub Release;
 3. kiểm checksum ngoài và manifest trong archive;
-4. cài private Node/Codex + `@resvg/resvg-wasm` nếu cần;
+4. cài private Node/Codex nếu cần;
 5. tạo Python venv cho workspace;
 6. chuyển symlink `~/.kitgen/current`;
 7. khởi động service và kiểm health;
@@ -646,7 +626,7 @@ khôi phục, LaunchAgent cũ được bootstrap nếu thiếu, restart và heal
 ## 11. Những điều không làm
 
 - Không coi hai file installer tải về là source code.
-- Không chỉnh `kit-gen/web/` hoặc `kit-gen/dist/` rồi kỳ vọng runtime React đổi.
+- Không chỉnh `kit-gen/dist/` rồi kỳ vọng runtime React đổi (`kit-gen/web/` đã xoá).
 - Không đóng gói từ `webapp/dist` cũ mà chưa build lại.
 - Không push branch `release.json` mới rồi để archive chưa tồn tại quá lâu.
 - Không nghĩ push `feat/**` đã tạo GitHub Release; chỉ tag `kitgen-v*` mới publish.

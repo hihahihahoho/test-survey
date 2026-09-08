@@ -103,9 +103,9 @@ $NODE_VERSION = '20.19.5'
 
 # ── PYTHON RIENG CUA KITGEN: PIN CUNG, KHONG DE MAY NGUOI DUNG QUYET DINH ─────
 # Doi xung voi khoi Node ngay tren: tai -> doi chieu SHA-256 -> giai nen vao
-# $KitgenHome\tools -> dung ban do. Vi sao phai mang theo Python: pillow/numpy/scipy/
-# pymatting chi co wheel dung san cho MOT DAI phien ban Python. Roi ra ngoai dai do thi
-# pip BIEN DICH scipy tu nguon; tren Windows nghia la can MSVC + Fortran (hong ngay),
+# $KitgenHome\tools -> dung ban do. Vi sao phai mang theo Python: wheel dung san chi co
+# cho MOT DAI phien ban Python. Roi ra ngoai dai do thi
+# pip BIEN DICH tu nguon; tren Windows nghia la can MSVC + Fortran (hong ngay),
 # con tren may co du trinh bien dich thi ninja bung mot tien trinh moi nhan CPU, moi
 # tien trinh hon 1 GB RAM => DO TOAN MAY. Da xay ra voi nguoi dung that.
 # Runner CI (may trang dung nghia) co san 3.14 va do chinh la ban `py -3` chon.
@@ -336,7 +336,7 @@ if ($bashExe) {
 # Ban truoc di do `py -3.13` -> `-3.12` -> `-3.11` -> `py -3`, khong thay thi Write-Block
 # 'Python 3.10+' va bao nguoi dung tu di cai roi chay lai. Hai cho sai:
 #   1) `py -3` = ban MOI NHAT dang cai, ma ban moi nhat chinh la ban de THIEU WHEEL nhat
-#      (runner CI co san 3.14) => pip di bien dich scipy => het RAM.
+#      (runner CI co san 3.14) => pip di bien dich tu nguon => het RAM.
 #   2) "May user thi khong co ai cai san Python 3.13 cho ho" (docs/WINDOWS-PORT.md).
 # Nay KitGen TU MANG THEO Python nhu da tu mang theo Node — xem buoc [5/8]. May co san
 # Python trong dai $PYTHON_WHEEL_OK thi dung luon cho do tai; khong thi tai ban pin cung.
@@ -563,7 +563,7 @@ if (-not $pyExe) {
   }
   # python-build-standalone chi phat hanh x86_64-pc-windows-msvc trong bo asset ma CI
   # cua minh mirror. Windows ARM64 chay file nay qua lop gia lap x64 — cham hon nhung
-  # chay duoc, va van hon la de pip di bien dich scipy.
+  # chay duoc, va van hon la de pip di bien dich tu nguon.
   $pyPkg = "cpython-$PYTHON_VERSION+$PYTHON_BUILD-x86_64-pc-windows-msvc-install_only.tar.gz"
   Write-Host "  tai Python $PYTHON_VERSION rieng cua KitGen (~45 MB) ..."
   $pyTar = Join-Path $Tmp $pyPkg
@@ -614,24 +614,26 @@ $pythonForAgent = $venvPy
 # Invoke-ExeSoft -Quiet (xem chu thich cua ham): goi thang kem `2>$null` thi EAP='Stop'
 # bien Traceback thanh loi cham dut va installer chet TAI DAY, khong bao gio chay toi
 # dong `pip install` ngay duoi. Dung loi da gap tren runner CI.
-$probe = Invoke-ExeSoft $venvPy @('-c', 'import PIL,numpy,scipy,pymatting') -Quiet
+# CHI CON PILLOW. `slice.py` nay CAT theo toa do va giu nguyen alpha cua model, nen
+# numpy/scipy/pymatting (tang tach nen cu) khong con duong nao goi toi.
+$probe = Invoke-ExeSoft $venvPy @('-c', 'import PIL') -Quiet
 if ($probe -ne 0) {
-  Write-Host '  cai thu vien xu ly anh (pillow numpy scipy pymatting) ...'
+  Write-Host '  cai thu vien xu ly anh (pillow) ...'
   $env:PIP_DISABLE_PIP_VERSION_CHECK = '1'
   # ═════════════════════════════════════════════════════════════════════════════
   # `--only-binary=:all:` KHONG phai tuy chon cho dep — DUNG BAO GIO BO NO.
-  # Thieu co nay, may nao khong co wheel se de pip BIEN DICH scipy tu nguon: ninja bung
+  # Thieu co nay, may nao khong co wheel se de pip BIEN DICH tu nguon: ninja bung
   # mot tien trinh moi nhan CPU, moi tien trinh hon 1 GB RAM. Nguoi dung that da bao may
   # DO hoan toan — chuot con di duoc, bam gi cung khong an, phai giu nut nguon.
   # Khong co wheel thi phai hong NGAY va RE, kem cach chua. install.sh cung vay.
   # ═════════════════════════════════════════════════════════════════════════════
   # KHONG -Quiet: pip hong thi phai doc duoc vi sao (thieu wheel? khong co mang?).
-  if ((Invoke-ExeSoft $venvPy @('-m', 'pip', 'install', '--upgrade', '--only-binary=:all:', 'pillow', 'numpy', 'scipy', 'pymatting')) -ne 0) {
+  if ((Invoke-ExeSoft $venvPy @('-m', 'pip', 'install', '--upgrade', '--only-binary=:all:', 'pillow')) -ne 0) {
     $pv = Get-PyVersion $venvPy @()
-    Die ("cai pillow/numpy/scipy/pymatting that bai (Python $pv · $pyExe) - CHUA GEN DUOC ANH. " +
+    Die ("cai pillow that bai (Python $pv · $pyExe) - CHUA CAT DUOC ANH. " +
       "Cach xu: 1) doc dong loi pip ngay tren day; 2) mat mang / proxy chan pypi.org thi cai lai khi co mang; " +
       "3) xoa thu muc .venv trong workspace roi chay lai installer. " +
-      'Installer CO Y KHONG bien dich scipy tu nguon (--only-binary=:all:): viec do ngon hang GB RAM va da treo may nguoi dung.')
+      'Installer CO Y KHONG bien dich tu nguon (--only-binary=:all:): viec do ngon hang GB RAM va da treo may nguoi dung.')
   }
 }
 Write-Ok "venv $venv"
@@ -650,7 +652,7 @@ Write-Ok 'shim python3 (cho Git-Bash)'
 
 
 # ── 6. Codex CLI + trình render khung xương ───────────────────────────────────
-Write-Step '6/8' 'Codex CLI va trinh dung anh'
+Write-Step '6/8' 'Codex CLI'
 $toolsPrefix = Join-Path $KitgenHome 'tools'
 New-Dir $toolsPrefix
 $codexBin = $null
@@ -766,18 +768,6 @@ if ($codexBin) {
     } catch { }
   }
 }
-
-# Trinh render khung xuong: @resvg/resvg-wasm (2,4 MB, thuan JS + .wasm) thay cho
-# Playwright + Chromium (790,9 MB) — xem BACKLOG #15. BAT BUOC, khong con duong lui:
-# gen.sh dung han neu thieu (ban PIL cu lech 17,6% muc, da xoa). Goi nay khong co file
-# .node nao, nen ban Windows het hang binary bien dich san cho AV can nham.
-$resvgProbe = Join-Path $toolsPrefix 'node_modules\@resvg\resvg-wasm\index_bg.wasm'
-if (-not (Test-Path -LiteralPath $resvgProbe)) {
-  Write-Host '  npm install @resvg/resvg-wasm ...'
-  [void](Invoke-ExeSoft $npmCmd @('install', '--silent', '--prefix', $toolsPrefix, '@resvg/resvg-wasm'))
-}
-if (Test-Path -LiteralPath $resvgProbe) { Write-Ok 'Trinh render khung xuong (@resvg/resvg-wasm)' }
-else { Write-Block 'Trinh render khung xuong' 'Chay: npm install --prefix <tools> @resvg/resvg-wasm. Thieu goi nay thi KHONG gen duoc anh.' }
 
 # Don rac doi Playwright (790,9 MB) o luot update. May sach khong co gi de xoa.
 foreach ($p in @('playwright-browsers', 'node_modules\playwright', 'node_modules\playwright-core')) {

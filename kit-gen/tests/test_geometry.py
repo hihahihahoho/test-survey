@@ -119,17 +119,16 @@ class CellAndSafeBoxTest(unittest.TestCase):
         self.assertEqual(box[1], 192)
         self.assertEqual(box[3], 192 + 209)
 
-    def test_contentSafe_thang_skel_va_KHONG_neo_day(self):
-        """`contentSafe` là vùng chữ/hitbox — luôn căn giữa, kể cả khi skel neo đáy.
-        Đây là hành vi có sẵn của `slice.py`; gom vào module để nó chỉ có một bản."""
-        skel = {"shape": "rrect", "w": 0.9, "h": 0.9, "anchor": "bottom",
-                "contentSafe": {"w": 0.5, "h": 0.5}}
-        box = geometry.safe_box(1254, 1254, 3, 3, 0, skel)
-        self.assertEqual(box, (104, 104, 313, 313))
-        # dạng boolean: chính skel w/h là safe zone
-        bool_box = geometry.safe_box(1254, 1254, 3, 3, 0,
-                                     {"shape": "rrect", "w": 0.5, "h": 0.5, "contentSafe": True})
-        self.assertEqual(bool_box, (104, 104, 313, 313))
+    def test_contentSafe_da_chet_KHONG_con_de_len_skel(self):
+        """GUARD ÂM. `contentSafe` (vùng chữ/hitbox khai riêng w/h, đời thử nghiệm) đã bỏ:
+        không app, thư viện element hay bộ dựng contract nào phát ra nó nữa. Nếu một
+        contract đời cũ còn mang nó thì nó phải bị BỎ QUA, không được đè lên skel w/h —
+        đọc nó lại là dựng lại hai nguồn sự thật cho cùng một hộp cắt."""
+        skel = {"shape": "rrect", "w": 0.5, "h": 0.5, "contentSafe": {"w": 0.9, "h": 0.9}}
+        self.assertEqual(geometry.safe_box(1254, 1254, 3, 3, 0, skel),
+                         geometry.safe_box(1254, 1254, 3, 3, 0,
+                                           {"shape": "rrect", "w": 0.5, "h": 0.5}))
+        self.assertFalse(hasattr(geometry, "safe_spec_of"))
 
     def test_o_full_va_o_trong_KHONG_co_safe_zone(self):
         """Không có khung nào để hứa: `full` phủ kín ô, `empty` không vẽ gì. Trả `None`
@@ -144,8 +143,13 @@ class CellAndSafeBoxTest(unittest.TestCase):
         self.assertIsNone(geo[0]["safe"])
         self.assertEqual(geo[1]["kind"], "empty")
         self.assertIsNone(geo[1]["safe"])
-        self.assertEqual(geo[2]["kind"], "free")
-        self.assertIsNotNone(geo[2]["safe"])       # `free` VẪN có hộp, chỉ là hộp gợi ý
+        # GUARD ÂM: `free` KHÔNG còn là một loại ô. `slice.py` chưa bao giờ có nhánh
+        # "bám lõi đo được" — mọi ô không full-bleed đều bị cắt theo safe zone — nên
+        # cờ ấy phải rơi về "safe" thay vì đẻ ra một loại mà dao cắt không biết.
+        self.assertEqual(geo[2]["kind"], "safe")
+        self.assertEqual(geo[2]["safe"],
+                         geometry.safe_box(1254, 1254, 3, 3, 2,
+                                           {"shape": "rrect", "w": 0.5, "h": 0.5}))
 
     def test_row_col_dem_tu_1_cho_nguoi_index_dem_tu_0_cho_may(self):
         geo = geometry.sheet_geometry(sheet_3x3_square()["sheets"][0])
@@ -198,19 +202,15 @@ class PromptMatchesSliceTest(unittest.TestCase):
                 self.assertEqual(zones[i + 1], geometry.safe_box(W, H, 3, 3, i, skel),
                                  f"{canvas} ô {i + 1} lệch")
 
-    def test_anchor_bottom_va_contentSafe_di_toi_tan_prompt(self):
-        """Hai nhánh dễ bị bỏ quên nhất, vì chúng chỉ khác nhau ở TRỤC DỌC — lệch ở đây
+    def test_anchor_bottom_di_toi_tan_prompt(self):
+        """Nhánh dễ bị bỏ quên nhất, vì nó chỉ khác căn giữa ở TRỤC DỌC — lệch ở đây
         không nhìn ra bằng mắt trên một tấm prompt, chỉ hiện ra khi asset bị cắt cụt."""
         cfg = sheet_3x3_square()
         cfg["sheets"][0]["components"][0]["skel"] = {"shape": "figure", "w": 0.5, "h": 0.5,
                                                      "anchor": "bottom"}
-        cfg["sheets"][0]["components"][1]["skel"] = {"shape": "rrect", "w": 0.9, "h": 0.9,
-                                                     "anchor": "bottom",
-                                                     "contentSafe": {"w": 0.5, "h": 0.5}}
         zones = self.zones_of(render_prompt(cfg, "demo-ui"))
         comps = cfg["sheets"][0]["components"]
         self.assertEqual(zones[1], geometry.safe_box(1254, 1254, 3, 3, 0, comps[0]["skel"]))
-        self.assertEqual(zones[2], geometry.safe_box(1254, 1254, 3, 3, 1, comps[1]["skel"]))
         self.assertNotEqual(zones[1][1], zones[3][1], "neo đáy phải KHÁC căn giữa")
 
     def test_prompt_khong_con_mot_chu_nao_ve_khung_xuong(self):

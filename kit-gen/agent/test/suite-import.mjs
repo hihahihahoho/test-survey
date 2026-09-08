@@ -1,45 +1,12 @@
-/* suite-import.mjs — §6.2 #19/#20 nhập một chiều có báo cáo đối chiếu (X12),
-   bundle /app/ same-origin (#6), cầu dò /bridge.html (#5), và kiểm KHÔNG rò secret. */
+/* suite-import.mjs — bundle /app/ same-origin (#6), cầu dò /bridge.html (#5),
+   và kiểm KHÔNG rò secret.
+   Phần "nhập một chiều" (#19 uploads / #20 import/preview) đã bỏ cùng trình nhập zip. */
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { describe, it, eq, ok, includes, pathExists, rmTemp, CLIENT, PAGES, PORT } from "./harness.mjs"
 
 export async function run({ api, call, agentDir, wsRoot }) {
-  // ─────────────────────────────────────────── 10. IMPORT / bundle /app/ / redact
-  describe("nhập dữ liệu")
-  await it("nhập styles.json cũ giữ ĐỦ sheet & element, KHÔNG tái sinh từ thư viện", async () => {
-    const legacy = {
-      schemaVersion: 4,
-      sheets: Array.from({ length: 4 }, (_, i) => ({
-        id: i === 3 ? "pose-soc" : `sheet-${i}`, grid: { cols: 2, rows: 2 }, orient: "landscape",
-        components: Array.from({ length: 4 }, (_, j) => ({ file: `${String(j + 1).padStart(2, "0")}-la-${i}`, vi: "lạ", spec: "custom" })),
-      })),
-      styles: [{ id: "tet", vi: "Tết", style: "x" }, { id: "vang", vi: "Vàng", style: "y" }],
-    }
-    legacy.sheets.push({ ...structuredClone(legacy.sheets[3]) })   // id trùng pose-soc
-    const up = await api("POST", "/api/uploads", {
-      headers: { "content-type": "application/json" }, body: Buffer.from(JSON.stringify(legacy)),
-    })
-    eq(up.status, 201, "upload ok")
-    eq(up.json.kind, "json", "nhận diện json")
-    const pv = await api("POST", "/api/import/preview", { body: { source: "stylesJson", uploadId: up.json.uploadId } })
-    eq(pv.status, 200, "preview ok")
-    eq(pv.json.report.sheets, 5, "5 sheet (giữ nguyên, không lọc)")
-    eq(pv.json.report.components, 20, "20 element (giữ nguyên)")
-    eq(pv.json.report.variants, 2, "2 phong cách")
-    eq(pv.json.report.unknownComponents, 20, "20 element lạ nhưng GIỮ NGUYÊN")
-    ok(pv.json.report.warnings.some(w => w.code === "SHEET_ID_RENAMED"), "báo id sheet trùng đã đổi tên")
-    ok(pv.json.report.warnings.some(w => w.code === "SKEL_DEFAULTED"), "báo thiếu skel đã gán mặc định")
-
-    const created = await api("POST", "/api/projects", {
-      body: { name: "Nhập từ bản cũ", template: "import", import: { source: "stylesJson", uploadId: up.json.uploadId } },
-    })
-    eq(created.status, 201, "tạo project từ import")
-    eq(created.json.project.stats.sheets, 5, "5/5 sheet vào project")
-    eq(created.json.project.stats.components, 20, "20/20 element vào project")
-    await api("DELETE", `/api/projects/${created.json.project.id}`)
-  })
-
+  // ─────────────────────────────────────────── 10. bundle /app/ · /bridge.html · redact
   /* ── CAO-01 (QA-UX, bằng chứng Network panel Chrome 151) ───────────────────
      App tải từ /app/ gọi GET /health bị agent trả 403 ORIGIN_NOT_ALLOWED ⇒ đường vào
      thứ hai (lá chắn mixed-content/Safari) CHẾT, app kẹt chế độ chỉ-đọc.
@@ -294,82 +261,6 @@ export async function run({ api, call, agentDir, wsRoot }) {
     await rmTemp(empty)
   })
 
-  await it("BUNDLE THẬT của web/: mọi tài nguyên index.html tham chiếu đều tải được (không 404, MIME đúng)", async () => {
-    // Đây là ca chống hồi quy cho HAI lỗi đã vá ở lượt tích hợp:
-    //  (1) rate limit dùng chung bucket với API ⇒ bundle >20 file tự bắn 429 vào chính mình;
-    //  (2) index.html khai `./js/…` ⇒ deep link phân giải sai ⇒ <script> nhận HTML ⇒ trang trắng.
-    const webRoot = join(agentDir, "..", "web")
-    if (!(await pathExists(join(webRoot, "index.html")))) return   // bundle không thuộc quyền agent
-    const { createAgent } = await import("../server.mjs")
-    const { apiFor } = await import("./harness.mjs")
-    // KHÔNG nâng rateLimit: phải chạy với trần THẬT của bản phát hành
-    const a2 = await createAgent({ workspaces: [wsRoot], port: PORT, print: () => {}, appRoot: webRoot })
-    a2.state.port = PORT
-    const c = apiFor(a2.server).call
-    const local = { host: `127.0.0.1:${PORT}` }        // điều hướng top-level: không Origin, không header client
-
-    const idx = await c("GET", "/app/", { headers: local })
-    eq(idx.status, 200, "GET /app/")
-    const refs = [...idx.text.matchAll(/<(?:link|script)\b[^>]*\b(?:href|src)="([^"]+)"/gi)]
-      .map(m => m[1]).filter(u => !u.startsWith("data:"))
-    ok(refs.length >= 2, `index.html phải khai css+js, thấy ${refs.length}`)
-    for (const ref of refs) ok(ref.startsWith("/app/"), `tài nguyên phải được rewrite về /app/: ${ref}`)
-
-    // đi hết đồ thị module thật (ES import graph) — số file lớn hơn trần API 20 req/s rất nhiều
-    const seen = new Set(), queue = []
-    for (const ref of refs) queue.push(ref)
-    let loaded = 0
-    while (queue.length) {
-      const url = queue.shift()
-      if (seen.has(url)) continue
-      seen.add(url)
-      const r = await c("GET", url, { headers: local })
-      eq(r.status, 200, `GET ${url}`)
-      const ct = String(r.headers["content-type"] ?? "")
-      ok(!/text\/html/.test(ct), `${url} trả text/html ⇒ rơi về index.html (404 ngầm): ${ct}`)
-      loaded++
-      const body = r.text
-      const dir = url.slice(0, url.lastIndexOf("/"))
-      const specs = []
-      if (url.endsWith(".css")) {
-        for (const m of body.matchAll(/@import\s+url\(["']?([^"')]+)["']?\)/g)) specs.push(m[1])
-      } else {
-        for (const re of [/(?:^|\n)\s*import\s+(?:[\s\S]*?)\s*from\s*['"]([^'"]+)['"]/g,
-                          /(?:^|\n)\s*export\s+(?:[\s\S]*?)\s*from\s*['"]([^'"]+)['"]/g,
-                          /import\(\s*['"]([^'"]+)['"]\s*\)/g]) {
-          for (const m of body.matchAll(re)) if (m[1].startsWith(".")) specs.push(m[1])
-        }
-      }
-      for (const spec of specs) queue.push(new URL(spec, `http://127.0.0.1${dir}/`).pathname)
-    }
-    ok(loaded > 100, `bundle thật phải nạp cả trăm file, chỉ nạp ${loaded}`)
-  })
-  await it("DEEP LINK (/app/p/:id/design) — tài nguyên vẫn phân giải ra file thật, không trắng trang", async () => {
-    const webRoot = join(agentDir, "..", "web")
-    if (!(await pathExists(join(webRoot, "index.html")))) return
-    const { createAgent } = await import("../server.mjs")
-    const { apiFor } = await import("./harness.mjs")
-    const a2 = await createAgent({ workspaces: [wsRoot], port: PORT, print: () => {}, appRoot: webRoot })
-    a2.state.port = PORT
-    const c = apiFor(a2.server).call
-    const local = { host: `127.0.0.1:${PORT}` }
-    for (const docPath of ["/app/p/tet26-abc/design?tab=styles", "/app/p/tet26-abc/runs/r-0032"]) {
-      const doc = await c("GET", docPath, { headers: local })
-      eq(doc.status, 200, `GET ${docPath}`)
-      includes(doc.headers["content-type"], "text/html", "SPA fallback trả index.html")
-      const refs = [...doc.text.matchAll(/<(?:link|script)\b[^>]*\b(?:href|src)="([^"]+)"/gi)]
-        .map(m => m[1]).filter(u => !u.startsWith("data:"))
-      ok(refs.length >= 2, "có khai tài nguyên")
-      for (const ref of refs) {
-        // phân giải Y NHƯ trình duyệt: theo thư mục của URL TÀI LIỆU
-        const abs = new URL(ref, new URL(docPath, "http://127.0.0.1:8765")).pathname
-        const got = await c("GET", abs, { headers: local })
-        eq(got.status, 200, `${ref} từ ${docPath} → ${abs}`)
-        ok(!/text\/html/.test(String(got.headers["content-type"] ?? "")),
-          `${abs} trả HTML ⇒ trình duyệt sẽ không chạy được ⇒ TRẮNG TRANG`)
-      }
-    }
-  })
   await it("/app/* KHÔNG đọc được file ngoài bundle", async () => {
     const r = await call("GET", "/app/../../../etc/passwd", { headers: { host: CLIENT.host, origin: `http://127.0.0.1:${PORT}` } })
     ok(!r.text.includes("root:"), "không rò /etc/passwd")

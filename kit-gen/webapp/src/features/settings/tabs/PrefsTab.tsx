@@ -3,24 +3,25 @@ import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ConfirmDestructive, InlineBanner } from "@/components/common";
-import { allowedKeys, usePrefsStore, useUiStore, type Theme } from "@/lib/store";
-import { IDB_STORES } from "@/features/design/safety";
+import { allowedKeys, useUiStore, type Theme } from "@/lib/store";
+import { IDB_STORES } from "@/features/kit-core/lib/idb";
 import { toastSuccess } from "@/features/projects/lib/feedback";
 
 /**
- * TAB "ƯU TIÊN" (§3-S6).
+ * TAB "ƯU TIÊN" (§3-S6) — CÒN ĐÚNG HAI THỨ.
  *
- * `maxJobs` và `autoSliceAfterGen` KHÔNG chỉ là chuyện giao diện — chúng đi thẳng vào
- * payload của #32 (bắt đầu lượt sinh ảnh), nên chỉnh ở đây là đổi hành vi thật.
- * Vì vậy ô song song có câu cảnh báo: càng cao càng dễ chạm giới hạn tài khoản.
+ * Đợt 2 (một màn duy nhất) đã gỡ mọi công tắc còn lại ở đây, và gỡ vì chúng KHÔNG CÒN
+ * NỐI VÀO ĐÂU: `maxJobs`/`autoSliceAfterGen` nay là hằng số trong
+ * `lib/hooks/use-generate-run.ts` (luồng mới chạy đúng một lượt và luôn tách ảnh), còn
+ * "luôn hỏi trước khi xoá" và "hiện ô trống" thuộc những màn đã bị gỡ. Một công tắc
+ * không nối vào đâu tệ hơn là không có công tắc: người dùng gạt nó rồi tin là đã đổi.
  *
  * NÚT XOÁ DỮ LIỆU TRÌNH DUYỆT: §3-S6 đòi "kèm liệt kê ĐÚNG các key + store sẽ xoá".
  * Danh sách dưới đây KHÔNG gõ tay — nó đọc thẳng `allowedKeys()` của R0 và
- * `IDB_STORES`, nên không bao giờ lệch với thứ thật sự bị xoá.
+ * `IDB_STORES`, nên không bao giờ lệch với thứ thật sự bị xoá (kể cả các khoá CŨ như
+ * `kitgen.prefs.v1` vẫn còn nằm trên máy người dùng bản trước).
  */
 const THEMES: { value: Theme; label: string }[] = [
   { value: "dark", label: "Tối" },
@@ -29,7 +30,6 @@ const THEMES: { value: Theme; label: string }[] = [
 ];
 
 export function PrefsTab() {
-  const prefs = usePrefsStore();
   const theme = useUiStore((s) => s.theme);
   const setTheme = useUiStore((s) => s.setTheme);
   const [confirmClear, setConfirmClear] = React.useState(false);
@@ -51,33 +51,6 @@ export function PrefsTab() {
   return (
     <div className="flex flex-col gap-5">
       <Card>
-        <CardHeader><CardTitle>Tạo ảnh</CardTitle></CardHeader>
-        <CardContent className="flex flex-col gap-6">
-          <div className="flex flex-col gap-3">
-            <Label htmlFor="maxJobs">Số tấm tạo cùng lúc: {prefs.maxJobs}</Label>
-            <Slider
-              id="maxJobs"
-              min={1}
-              max={8}
-              step={1}
-              value={[prefs.maxJobs]}
-              onValueChange={([v]) => prefs.setMaxJobs(v ?? 4)}
-              aria-label="Số tấm tạo cùng lúc"
-            />
-            <p className="text-caption text-fg-muted">
-              Tạo nhiều tấm cùng lúc có thể nhanh hơn, nhưng dễ chạm giới hạn của dịch vụ tạo ảnh.
-            </p>
-          </div>
-          <SwitchRow
-            label="Tự tách ảnh sau khi tạo"
-            description="Khi tạo xong, tự tách từng thành phần thành ảnh PNG trong suốt."
-            checked={prefs.autoSliceAfterGen}
-            onChange={prefs.setAutoSlice}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
         <CardHeader><CardTitle>Giao diện</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-6">
           <div className="flex flex-col gap-3">
@@ -93,18 +66,6 @@ export function PrefsTab() {
               ))}
             </ToggleGroup>
           </div>
-          <SwitchRow
-            label="Luôn hỏi trước khi xoá"
-            description="Tắt để bỏ qua xác nhận với các mục có thể khôi phục. Dữ liệu không thể khôi phục vẫn luôn được hỏi."
-            checked={prefs.confirmDestructive}
-            onChange={prefs.setConfirmDestructive}
-          />
-          <SwitchRow
-            label="Hiện ô trống trong bộ khung"
-            description="Ô trống chỉ giữ vị trí, không tạo ra hình ảnh."
-            checked={prefs.showEmptyCells}
-            onChange={prefs.setShowEmptyCells}
-          />
         </CardContent>
       </Card>
 
@@ -137,29 +98,6 @@ export function PrefsTab() {
         actionLabel="Xoá dữ liệu"
         onConfirm={clearAll}
       />
-    </div>
-  );
-}
-
-function SwitchRow({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string;
-  description: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  const id = React.useId();
-  return (
-    <div className="flex items-start justify-between gap-6">
-      <div className="flex flex-col gap-1">
-        <Label htmlFor={id}>{label}</Label>
-        <p className="max-w-[62ch] text-caption text-fg-muted">{description}</p>
-      </div>
-      <Switch id={id} checked={checked} onCheckedChange={onChange} />
     </div>
   );
 }

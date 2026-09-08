@@ -18,19 +18,6 @@ export async function run({ api, wsRoot }) {
     eq(r.json.presets, [])
   })
 
-  let poseId = ""
-  await it("quản lý riêng khung pose skeleton", async () => {
-    const created = await api("POST", "/api/library/poses", { body: { name: "Chào chiến dịch", sourcePose: "wave", description: "Dùng cho CTA" } })
-    eq(created.status, 201)
-    poseId = created.json.pose.id
-    eq(created.json.pose.sourcePose, "wave")
-    eq(created.json.pose.enabled, true)
-    const patched = await api("PATCH", `/api/library/poses/${poseId}`, { body: { enabled: false, sourcePose: "present" } })
-    eq(patched.status, 200)
-    eq(patched.json.pose.enabled, false)
-    eq(patched.json.pose.sourcePose, "present")
-  })
-
   let id = ""
   await it("thêm ảnh bằng multipart và agent tự đặt tên file", async () => {
     const form = multipart([
@@ -215,8 +202,6 @@ export async function run({ api, wsRoot }) {
     eq(delBrand.status, 204)
     const delMascot = await api("DELETE", `/api/library/items/${mascotId}`)
     eq(delMascot.status, 204)
-    const delPose = await api("DELETE", `/api/library/poses/${poseId}`)
-    eq(delPose.status, 204)
   })
 
   /* ĐẶT CUỐI CÙNG CÓ CHỦ Ý: ca này GHI ĐÈ file state trên đĩa, nên nó phải chạy

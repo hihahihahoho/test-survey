@@ -177,7 +177,7 @@ describe("B3② · hệ ACCENT phải là XANH DƯƠNG VNPAY (đảo chiều b�
       "styles/tokens.css",
       "components/ui/button.tsx",
       "features/home/components/CreateKitTile.tsx",
-      "features/kit-form/lib/form-model.ts",
+      "features/kit-core/lib/form-model.ts",
       "features/kit-core/lib/model.ts",
     ]) {
       const code = read(f).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -204,7 +204,6 @@ describe("B3 · số đo của hệ accent", () => {
       "styles/tokens.css",
       "components/ui/badge.tsx",
       "components/layout/flora.ts",
-      "features/design/components/CellGrid.tsx",
       "features/kit/lib/figma-board.ts",
     ]) {
       // Bỏ chú thích: các file có ghi lại hex CŨ để giải thích vì sao đã đổi.
@@ -214,28 +213,10 @@ describe("B3 · số đo của hệ accent", () => {
   });
 });
 
-describe("B4 · kích thước 3 vùng S3 phải có ĐƠN VỊ (số trần = pixel trong v4)", () => {
-  const src = read("features/design/components/SheetsWorkspace.tsx");
-
-  it("không còn defaultSize/minSize/maxSize dạng số trần", () => {
-    // bỏ chú thích trước khi soi: phần giải thích lỗi cũ có trích lại mã cũ.
-    const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    const bare = code.match(/(?:defaultSize|minSize|maxSize)=\{[^}]*\b\d+\b(?![^}]*["'])[^}]*\}/g) ?? [];
-    expect(bare, `còn số trần: ${bare.join(" | ")}`).toHaveLength(0);
-  });
-
-  it("rail trái và panel phải có sàn PIXEL đủ chỗ cho chữ", () => {
-    expect(src).toMatch(/minSize=\{compact \? "18%" : "232px"\}/);
-    expect(src).toMatch(/minSize=\{compact \? "20%" : "280px"\}/);
-  });
-
-  it("tay kéo có bề dày thật và grip absolute (không đè chữ)", () => {
-    const h = read("components/ui/resizable.tsx");
-    expect(h).toContain("aria-[orientation=vertical]:w-px");
-    expect(h).toContain("absolute z-10 flex h-6 w-3");
-    expect(h).toContain("pointer-events-none absolute");
-  });
-});
+/* B4 (kích thước 3 vùng của trình soạn S3) ĐÃ XOÁ 08/09/2026: `features/design/**`
+   và `components/ui/resizable.tsx` đi cùng màn ấy, và gói `react-resizable-panels`
+   đã gỡ khỏi `package.json`. Bài học vẫn đúng cho ai dựng lại một khung kéo được:
+   `defaultSize/minSize/maxSize` dạng SỐ TRẦN là pixel trong v4, không phải phần trăm. */
 
 describe("B5 · banner «Đã kết nối lại» phải tự tắt", () => {
   const src = read("components/layout/AgentBanner.tsx");

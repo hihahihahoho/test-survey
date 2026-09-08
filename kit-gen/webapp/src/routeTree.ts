@@ -6,70 +6,40 @@ import { Route as mascotLibraryRoute } from "./routes/library.mascot";
 import { Route as brandsRoute } from "./routes/brands";
 import { Route as referencesRoute } from "./routes/references";
 import { Route as trashRoute } from "./routes/trash";
-import { Route as projectRoute } from "./routes/p.$projectId";
 import { Route as kitMainRoute } from "./routes/k.$projectId";
-import { Route as kitStudioRoute } from "./routes/k.$projectId.studio";
-import { Route as kitFormRoute } from "./routes/k.$projectId.form";
-import { Route as canvasRoute } from "./routes/k.$projectId.canvas";
-import { Route as fileRoute } from "./routes/p.$projectId.f.$fileId";
-import { Route as designRoute } from "./routes/p.$projectId.design";
-import { Route as runsRoute } from "./routes/p.$projectId.runs";
-import { Route as runDetailRoute } from "./routes/p.$projectId.runs.$runId";
-import { Route as kitRoute } from "./routes/p.$projectId.kit";
-import { Route as projectSettingsRoute } from "./routes/p.$projectId.settings";
-import { Route as previewRoute } from "./routes/__preview.route";
+import { Route as legacyProjectRoute } from "./routes/p.$";
 
 /**
- * CÂY ROUTE — khai báo TAY, đúng sitemap §2.1. Không dùng file-based codegen.
+ * CÂY ROUTE — khai báo TAY, đúng sitemap. Không dùng file-based codegen.
  * Lý do giữ nguyên từ R0: `routeTree.gen.ts` phải commit và rất dễ lệch khi
  * nhiều team cùng thêm màn; khai tay thì xung đột merge nhìn thấy rõ.
  *
  * ┌─ AI ĐƯỢC SỬA FILE NÀY ─────────────────────────────────────────────────┐
  * │ CHỈ engineer app-shell + routing. Team màn KHÔNG khai route.            │
- * │ Team màn chỉ nộp file theo hợp đồng lazy-mount (screen-contract.ts);    │
- * │ route đã có sẵn và tự nhận file khi nó xuất hiện.                       │
  * └────────────────────────────────────────────────────────────────────────┘
  *
- * §2.1 có ĐÚNG 8 màn (9 route vì run-detail tách khỏi runs). Mọi thứ còn lại
- * là overlay của 8 màn đó — không thêm route mới mà không sửa spec trước.
- * `__preview` là trang showcase component của R0, không nằm trong sitemap.
+ * ══ IA PROMPT-FIRST: MỘT MÀN LÀM VIỆC, MỘT LỚP VỎ ═════════════════════════
+ * `/k/:projectId` là màn làm việc DUY NHẤT (khu soạn prompt). Bảy route còn lại
+ * là vỏ: trang chủ, cài đặt máy, thùng rác, và bốn thư viện.
  *
- * 07/09/2026 — `/setup` (S0) BỊ XOÁ. Nó đã chỉ còn `throw redirect({ to: "/" })` từ
- * đợt local-first: máy được cài xong TRƯỚC khi server mở app, nên không còn gì để
- * hỏi. Wizard (`features/setup/`) đi cùng nó. Hệ quả cho người sửa sau: `/setup`
- * nay ra 404 — nếu cần đỡ bookmark cũ thì thêm lại một stub chuyển hướng ở đây,
- * đừng dựng lại wizard.
+ * `/p/$` là TẤM BIỂN CHỈ ĐƯỜNG cho mọi địa chỉ đời cũ — xem `routes/p.$.tsx`.
+ * Nó phải đứng CUỐI: một route splat khớp rất rộng, đặt trước là nó nuốt mất
+ * những route cụ thể hơn.
  *
- * FE-2·E1 THÊM ROUTE THỨ 10 — `/p/:id/f/:fileId` (bàn làm việc, file con kiểu canvas).
- * Đúng luật "sửa spec trước": UI-SPEC-V2 §4.3 chốt đường dẫn này nguyên văn. File con
- * kiểu **workflow** thì KHÔNG có route riêng — chúng đi bằng `?file=` trên các route cũ,
- * để đổi file không remount màn (§2.1 vẫn đúng 8 màn + 2 route phụ).
- *
- * ⚠️ THỨ TỰ QUAN TRỌNG: `fileRoute` phải nằm TRƯỚC `projectRoute` cùng lý do mà
- * `runDetailRoute` nằm trước `runsRoute` — route cụ thể trước route tổng.
+ * 07/09/2026 — `/setup` (S0) BỊ XOÁ cùng wizard cài đặt: máy được cài xong TRƯỚC
+ * khi server mở app nên không còn gì để hỏi.
+ * 08/09/2026 — bảy stub `/p/:id/**` + ba stub `/k/:id/{studio,form,canvas}` gộp
+ * thành `/p/$`; trang showcase `/__preview` bị xoá (component của nó đã đi theo
+ * các màn bị gỡ). Ai dựng lại một trang lab/preview thì đăng ký ở ĐÂY.
  */
 export const routeTree = rootRoute.addChildren([
-  /* S1 */ indexRoute,
-  /* S6 */ settingsRoute,
+  indexRoute,
+  settingsRoute,
   uiLibraryRoute,
   mascotLibraryRoute,
   brandsRoute,
   referencesRoute,
   trashRoute,
-  /* W1 */ kitFormRoute,
-  /* Studio */ kitStudioRoute,
-  /* W3/C1 */ kitMainRoute,
-  /* C1 */ canvasRoute,
-  /* S3 */ designRoute,
-  /* S4d*/ runDetailRoute,
-  /* S4 */ runsRoute,
-  /* S5 */ kitRoute,
-  /* S2b*/ projectSettingsRoute,
-  /* legacy */ fileRoute,
-  /* S2 */ projectRoute,
-  previewRoute,
-  /* 07/09/2026 — ba route `/lab/*` (prompt-composer · presets · pose-editor) đã bị
-     xoá cùng đợt dọn mã chết: chúng là bản demo, không link nào trong UI trỏ tới,
-     và phần sống của chúng đã dọn vào `features/prompt-lab/lib/**`. Ai dựng lại
-     một trang lab thì đăng ký ở ĐÂY, cùng hạng với `previewRoute`. */
+  kitMainRoute,
+  legacyProjectRoute,
 ]);

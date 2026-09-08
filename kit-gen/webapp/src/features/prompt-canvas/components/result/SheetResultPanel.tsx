@@ -473,7 +473,6 @@ export function SheetResultPanel({
                   path={rawPath}
                   version={rawVersion}
                   alt={`Ảnh gốc tấm ${name}`}
-                  backdrop="checker"
                   full={false}
                   width={512}
                   className={cn(PREVIEW_MAX_H, "w-full")}
@@ -567,7 +566,6 @@ export function SheetResultPanel({
               projectId={projectId}
               path={rawPath}
               alt={`Ảnh gốc tấm ${name} ở độ nét thật`}
-              backdrop="checker"
               eager
               className="w-full"
             />

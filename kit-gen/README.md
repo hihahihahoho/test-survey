@@ -1,8 +1,6 @@
 # Game UI Kit PoC — 1 prompt contract → 5 style → asset đã cắt
 
-> Định hướng ứng dụng hiện tại: [Sitemap sản phẩm KitGen](docs/PRODUCT-SITEMAP.md).
->
-> Bản đồ prototype/app chính và quy trình phát hành: [Development & Release Runbook](docs/DEVELOPMENT-AND-RELEASE-RUNBOOK.md).
+> Bản đồ app và quy trình phát hành: [Development & Release Runbook](docs/DEVELOPMENT-AND-RELEASE-RUNBOOK.md).
 
 Proof-of-concept cho hướng tool #2 trong [analysis/ket-qua-dot-1.md](../analysis/ket-qua-dot-1.md):
 **bộ component cố định của mini-game campaign chỉ đổi style, không đổi nội dung**.
@@ -21,77 +19,41 @@ phân tích bằng sub-agent đọc trang Components + 34 màn hình flow):
 
 Quy tắc tách phần: **cái gì code cần điều khiển độc lập thì là file riêng, nằm ở ô riêng**
 — progress đổi %, tab swap state, túi swap đóng→mở, mascot đổi pose theo màn.
-Chỉ khâu GEN ẢNH cần AI; crop + tách nền + lấp lỗ là code thuần, chạy lại là ra đúng
-từng đó file, đúng từng đó tên.
+Chỉ khâu GEN ẢNH cần AI; cắt là code thuần, chạy lại là ra đúng từng đó file, đúng
+từng đó tên.
 
 ## Chạy
 
 ```bash
-./gen.sh              # 5 con codex exec song song, mỗi con 1 style → raw/<style>.png
-python3 slice.py      # cắt 4×3, tách nền, trim → kits/<style>/01-….png … 12-….png
-python3 preview.py    # sinh preview.html — ma trận 12 component × 5 style
-open preview.html
+./gen.sh              # codex exec song song, mỗi con 1 style → raw/<style>.png
+python3 slice.py      # cắt theo toạ độ → kits/<style>/01-….png …
 ```
 
 ## Cấu trúc
 
 ```
-styles.json     contract: lưới, 12 component (id + spec), 5 style (id + mô tả + màu nền)
-gen.sh          build prompt từ contract, chạy codex exec -s workspace-write song song
+styles.json     contract: lưới, element (id + spec + skel), style (id + mô tả)
+gen.sh          dựng prompt từ contract, chạy codex exec -s workspace-write song song
+geometry.py     nguồn hình học DÙNG CHUNG — gen.sh và slice.py cùng gọi
+slice.py        cắt sheet theo đúng toạ độ gen.sh đã hứa
 raw/            sprite sheet gốc từng style
-kits/<style>/   asset đã cắt — TÊN FILE GIỐNG NHAU giữa các style
-kits/manifest.json  kích thước từng asset, màu nền phát hiện được, ô trống nếu có
+kits/<style>/   asset đã cắt — TÊN FILE GIỐNG NHAU giữa các style; `tight/` là bản khít viền
+kits/manifest.json  canvas/lõi/safe zone từng asset, ô trống nếu có
+prompts/        prompt nguyên văn đã gửi cho từng tấm
 logs/           log từng con codex
-preview.html    bảng so sánh trực quan
 ```
-
-## Chạy demo
-
-```bash
-npm run dev          # từ gốc repo — demo cần http, mở file:// sẽ không nạp được atlas
-# → http://localhost:8000/kit-gen/demo.html   (game Phaser)
-# → http://localhost:8000/kit-gen/figma.html  (DOM mode để xuất Figma)
-# → http://localhost:8000/kit-gen/preview.html (soát từng asset)
-```
-
-## Hai chế độ render, một bộ kit
-
-| File | Render | Dùng để |
-|---|---|---|
-| `demo.html` | **Phaser 4.2** (canvas, vendor sẵn trong `vendor/`) | Chơi thật: Boot → Preload (progress bar từ track/fill của kit) → Home → chọn túi → mở túi → popup kết quả. Form/danh sách là DOM overlay (hybrid) |
-| `figma.html` | **DOM thuần** — mỗi element một `<img>`, mỗi chữ một text node | Xuất sang Figma bằng html.to.design: canvas là hộp đen với plugin (ra một ảnh bẹt), DOM mode ra **từng layer riêng, text layer sửa được**. 5 frame 390×844: Loading, Home, Gameplay, Popup, Nhiệm vụ |
-
-Kit nạp vào Phaser qua **texture atlas trimmed** (`kits/<style>/atlas.png + atlas.json`) do
-`slice.py` sinh ra — `sourceSize`/`spriteSourceSize` lấy thẳng từ canvas/content trong manifest,
-nên Phaser tự bù đệm canvas, sprite hành xử như ảnh khít viền. Đổi style = nạp atlas khác.
-
-## Demo màn home (mô tả cũ)
-
-```bash
-open demo.html
-```
-
-Full flow «Mở túi - Khui quà» lắp từ asset đã cắt: **loading** (progress track + fill lồng
-nhau, đổi % bằng clip-path) → **home** (đếm ngược 4 ô số chạy thật, khay 6 túi hue-rotate,
-mascot đứng) → **chọn túi** (mascot ngó) → **mở túi** (swap ảnh đóng→mở + nổ sáng) →
-**popup kết quả** (panel dọc + ruy băng cưỡi mép trên + quà + 2 nút thò dưới mép) →
-màn Nhiệm vụ/Giỏ quà/Lịch sử (tab active/idle, card CSS, mảnh ghép sưu tập).
-**Đổi style = đổi 1 đường dẫn thư mục** — tên file trùng nhau nên switcher chỉ đổi prefix.
-Toàn bộ chữ là HTML đè lên asset trống — text đổi theo campaign mà không đụng vào ảnh.
 
 ## Điểm cần biết
 
-- **Nền = màu chroma-key chát** (magenta cho style xanh, green cho style ấm — chọn ngoài
-  palette, prompt cấm dùng màu key trong element). Slicer matte theo công thức **Vlahos +
-  despill**: alpha đo bằng mức "nhiễm key" của từng pixel nên glow phai mượt không răng
-  cưa, ruột rỗng có chủ đích được rỗng thật, và viền không ám màu nền. Bài học: nền caro
-  "fake transparent" nhìn hay nhưng phá matte (mép gặm hình bàn cờ, ruột bị lấp caro) —
-  các chế độ cũ (binary + lấp lỗ) vẫn còn trong code làm đường lùi cho sheet nền nhạt.
-- **Canvas chuẩn hoá**: mỗi element xuất đúng kích thước ô của sheet (main 384×256,
-  tall 384×512, bg 768×1024), căn giữa — cùng element ở mọi style ra file cùng size,
-  layout demo không xô lệch. Ảnh gốc chưa cắt ở `raw/`, prompt từng sheet ở `prompts/`.
-- Model có thể vẽ lệch lưới hoặc gộp ô — slicer gán khối pixel về ô theo trọng tâm
-  (connected-component), chịu được component tràn vạch lưới; `empty_cells` trong manifest
-  là thước đo độ tin cậy.
-- Component **không chữ có chủ đích** — text ghép sau bằng code/Figma (xem demo.html).
-- Muốn thêm style: thêm một mục vào `styles.json` rồi chạy lại 3 lệnh. Không sửa code.
+- **PROMPT LÀ SẢN PHẨM.** `gen.sh` in prompt theo section và nói toạ độ safe zone **bằng
+  số tuyệt đối** ("safe zone x=104..313, y=104..313"); `slice.py` cắt đúng bốn con số đó.
+  Cả hai lấy toạ độ từ cùng một hàm trong `geometry.py`, nên hai bên không thể lệch nhau.
+- **KHÔNG CÓ TẦNG TÁCH NỀN.** Sheet do model sinh mang **alpha thật**, nên `slice.py`
+  CHỈ CẮT: không chroma-key, không matting, không lấp lỗ, không nắn lõi về khung. Mọi cỗ
+  máy đó đã bỏ (07/09/2026) vì chúng gặm ruột element có alpha thật — đo được: ruột thanh
+  máu α≈90 ra α≈5. Ô cần nhìn xuyên thì nói bằng prompt (`skel.matte` = `glow`/`glass`),
+  không phải bằng thuật toán hậu kỳ.
+- **Canvas chuẩn hoá**: mỗi element xuất đúng kích thước ô của sheet, căn giữa — cùng
+  element ở mọi style ra file cùng size. Ảnh gốc chưa cắt ở `raw/`, prompt ở `prompts/`.
+- Component **không chữ có chủ đích** — text ghép sau bằng code/Figma.
+- Muốn thêm style: thêm một mục vào `styles.json` rồi chạy lại hai lệnh. Không sửa code.

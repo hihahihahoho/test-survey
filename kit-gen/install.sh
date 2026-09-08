@@ -64,9 +64,9 @@ if [ -z "$PYTHON3" ]; then
 fi
 # ── PYTHON RIÊNG CỦA KITGEN: PIN CỨNG, KHÔNG ĐỂ MÁY NGƯỜI DÙNG QUYẾT ĐỊNH ─────
 # Cùng khuôn với khối tải Node bên dưới (tải → đối chiếu SHA-256 → giải nén vào
-# $KITGEN_HOME/tools → dùng bản riêng đó). Vì sao phải mang theo Python: pillow, numpy,
-# scipy, pymatting chỉ có wheel dựng sẵn cho một DẢI phiên bản Python; rơi ra ngoài dải
-# đó thì pip BIÊN DỊCH scipy từ nguồn — ninja bung một tiến trình mỗi nhân CPU, mỗi
+# $KITGEN_HOME/tools → dùng bản riêng đó). Vì sao phải mang theo Python: wheel dựng sẵn
+# chỉ có cho một DẢI phiên bản Python; rơi ra ngoài dải đó thì pip BIÊN DỊCH từ nguồn
+# — ninja bung một tiến trình mỗi nhân CPU, mỗi
 # tiến trình hơn 1 GB RAM — và đã ĐƠ TOÀN MÁY một người dùng thật (chuột còn di được,
 # bấm gì cũng không ăn, phải giữ nút nguồn). Node đã pin cứng từ lâu; Python thì trước
 # bản này vẫn đi dò 3.13→3.12→3.11→`py -3` trên máy người dùng, mà "máy user thì không
@@ -532,7 +532,7 @@ is_release "$CANDIDATE" || { echo "Invalid KitGen runtime archive." >&2; exit 1;
 VERSION="$(cat "$CANDIDATE/VERSION")"
 case "$VERSION" in *[!0-9A-Za-z._-]*|'') echo "Invalid runtime version." >&2; exit 1 ;; esac
 DEST="$KITGEN_HOME/releases/$VERSION"
-progress "1/7" "Kiểm tra gói cài đặt"
+progress "1/6" "Kiểm tra gói cài đặt"
 check_ok "runtime $VERSION và checksum hợp lệ"
 NEW="$DEST.new"
 rm -rf "$NEW"
@@ -569,7 +569,7 @@ fi
 # npm, npx, .bin shims, and npm postinstall scripts use `#!/usr/bin/env node`.
 # The private Node directory must be visible before any npm invocation.
 PATH="$(dirname "$NODE"):$PATH"; export PATH
-progress "2/7" "Health check môi trường nền"
+progress "2/6" "Health check môi trường nền"
 check_ok "Node $($NODE --version 2>/dev/null || printf '>=20') · $NODE"
 # ── Python: bản riêng pin cứng, hoặc bản hệ thống CHẮC CHẮN có wheel ──────────
 # Thứ tự: ① bản riêng đã tải lần trước → ② Python hệ thống trong dải 3.11-3.13 (đỡ tải
@@ -633,13 +633,13 @@ mv "$NEW" "$DEST"
 # ═══════════════════════════════════════════════════════════════════════════════
 # KÍCH HOẠT VÀO PHÚT CHÓT — vì sao `ln -sfn current` KHÔNG nằm ở đây nữa.
 #
-# Trước 2.1.21, symlink `current` được trỏ sang bản mới NGAY TẠI DÒNG NÀY, tức bước 2/7,
-# rồi script còn phải đi qua 4 bước hay hỏng nhất (venv+pip, cài/dò Codex, cài trình
-# render khung xương, ghi config) trước khi tới bước khởi động lại ở 5/7. Bất kỳ lỗi nào trong quãng
+# Trước 2.1.21, symlink `current` được trỏ sang bản mới NGAY TẠI DÒNG NÀY, tức bước 2/6,
+# rồi script còn phải đi qua mấy bước hay hỏng nhất (venv+pip, cài/dò Codex, ghi
+# config) trước khi tới bước khởi động lại ở 4/6. Bất kỳ lỗi nào trong quãng
 # đó là `set -e` thoát ngay ⇒ để lại ĐÚNG hiện trường ngày 14/08: `current` đã trỏ 2.1.20,
 # tiến trình agent vẫn là 2.1.19, không có dòng log nào, UI vẫn mời cập nhật.
 #
-# Nay `current` chỉ đổi khi mọi thứ đã sẵn sàng và ngay trước khi khởi động lại (bước 5/7),
+# Nay `current` chỉ đổi khi mọi thứ đã sẵn sàng và ngay trước khi khởi động lại (bước 4/6),
 # nên cửa sổ "cài dở" thu về vài mili-giây; phần còn lại được `cleanup` gác. Bản mới nằm
 # sẵn ở $DEST suốt quá trình — không ai đọc nó cho tới lúc đổi symlink.
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -654,27 +654,29 @@ if [ ! -x "$VENV/bin/python" ] || [ "$VENV_BASE" != "$ENGINE_BASE" ]; then
   rm -rf "$VENV"
   "$ENGINE_PYTHON" -m venv "$VENV"
 fi
-if ! "$VENV/bin/python" -c 'import PIL,numpy,scipy,pymatting' >/dev/null 2>&1; then
+# CHỈ CÒN PILLOW. `slice.py` nay CẮT theo toạ độ và giữ nguyên alpha của model, nên
+# numpy/scipy/pymatting (tầng tách nền cũ) không còn ai gọi.
+if ! "$VENV/bin/python" -c 'import PIL' >/dev/null 2>&1; then
   echo "Installing image-processing dependencies..."
   # ═════════════════════════════════════════════════════════════════════════════
   # `--only-binary=:all:` KHÔNG phải tuỳ chọn cho đẹp — ĐỪNG BAO GIỜ BỎ NÓ.
-  # Thiếu cờ này, máy nào không có wheel sẽ để pip BIÊN DỊCH scipy từ nguồn: ninja bung
-  # một tiến trình mỗi nhân CPU, mỗi tiến trình hơn 1 GB RAM. Người dùng thật đã báo máy
-  # ĐƠ hoàn toàn — chuột còn di được, bấm gì cũng không ăn, phải giữ nút nguồn.
-  # Không có wheel thì phải hỏng NGAY và RẺ, kèm câu chữa. install.ps1 cũng vậy.
+  # Thiếu cờ này, máy nào không có wheel sẽ để pip BIÊN DỊCH gói từ nguồn: đã có
+  # người dùng thật ĐƠ TOÀN MÁY vì việc đó (chuột còn di được, bấm gì cũng không
+  # ăn, phải giữ nút nguồn). Không có wheel thì phải hỏng NGAY và RẺ, kèm câu chữa.
+  # install.ps1 cũng vậy.
   # ═════════════════════════════════════════════════════════════════════════════
-  if ! PIP_DISABLE_PIP_VERSION_CHECK=1 "$VENV/bin/python" -m pip install --quiet --upgrade --only-binary=:all: pillow numpy scipy pymatting; then
-    echo "Cài đặt KitGen dừng trước khi kích hoạt — CHƯA GEN ĐƯỢC ẢNH — thiếu scipy/pymatting." >&2
+  if ! PIP_DISABLE_PIP_VERSION_CHECK=1 "$VENV/bin/python" -m pip install --quiet --upgrade --only-binary=:all: pillow; then
+    echo "Cài đặt KitGen dừng trước khi kích hoạt — CHƯA CẮT ĐƯỢC ẢNH — thiếu pillow." >&2
     echo "Python đang dùng: $("$VENV/bin/python" -c 'import sys;print(sys.version.split()[0])' 2>/dev/null || printf '?') · $ENGINE_PYTHON" >&2
     echo "Cách xử: 1) đọc dòng lỗi pip ở trên; 2) mất mạng / proxy chặn pypi.org thì cài lại khi có mạng; 3) xoá thư mục .venv trong workspace rồi chạy lại installer." >&2
-    echo "Installer CỐ Ý KHÔNG biên dịch scipy từ nguồn (--only-binary=:all:): việc đó ngốn hàng GB RAM và đã treo máy người dùng." >&2
+    echo "Installer CỐ Ý KHÔNG biên dịch gói từ nguồn (--only-binary=:all:): việc đó ngốn hàng GB RAM và đã treo máy người dùng." >&2
     exit 1
   fi
 fi
 
 # Prefer an existing healthy Codex CLI. Persisting its absolute path means the
 # background service does not depend on launchd/systemd inheriting the shell PATH.
-progress "3/7" "Health check Codex CLI"
+progress "3/6" "Health check Codex CLI"
 SYSTEM_CODEX="$(command -v codex 2>/dev/null || true)"
 if [ -n "$SYSTEM_CODEX" ] && [ -x "$SYSTEM_CODEX" ] && "$SYSTEM_CODEX" --version >/dev/null 2>&1; then
   CODEX_BIN="$SYSTEM_CODEX"
@@ -776,21 +778,6 @@ fi
 # người dùng thật. `debug prompt-input` rẻ: không mạng, không quota, chỉ liệt kê skill.
 run_with_timeout 60 env CODEX_HOME="$HOME/.codex" "$CODEX_BIN" debug prompt-input >/dev/null 2>&1 || true
 
-# Trình render khung xương: @resvg/resvg-wasm (2,4 MB, thuần JS + .wasm).
-# Thay Playwright + Chromium (790,9 MB) — xem BACKLOG #15. BẮT BUỘC, không có
-# đường lùi: gen.sh dừng hẳn nếu thiếu (bản PIL cũ lệch 17,6% mực, đã xoá).
-if ! NODE_PATH="$KITGEN_HOME/tools/node_modules" "$NODE" -e "require.resolve('@resvg/resvg-wasm')" >/dev/null 2>&1; then
-  echo "Installing skeleton renderer (@resvg/resvg-wasm)..."
-  "$KITGEN_HOME/tools/node/bin/npm" install --silent --prefix "$KITGEN_HOME/tools" @resvg/resvg-wasm || \
-    "$(dirname "$NODE")/npm" install --silent --prefix "$KITGEN_HOME/tools" @resvg/resvg-wasm
-fi
-progress "4/7" "Health check trình dựng ảnh"
-# `exit 1` chứ không `check_warn`: thiếu renderer là KHÔNG GEN ĐƯỢC ẢNH, không phải
-# suy giảm chất lượng — không còn đường lùi nào để rơi vào.
-NODE_PATH="$KITGEN_HOME/tools/node_modules" "$NODE" -e "require.resolve('@resvg/resvg-wasm')" >/dev/null 2>&1 \
-  || { echo "Skeleton renderer health check failed (@resvg/resvg-wasm)." >&2; exit 1; }
-check_ok "Trình render khung xương đã sẵn sàng (@resvg/resvg-wasm)"
-
 # Dọn rác đời Playwright ở LƯỢT UPDATE: 790,9 MB không còn ai dùng (browser 772,7 MB
 # + gói npm 18,1 MB). Máy sạch không có gì để xoá; đây chỉ là đường dọn cho máy đã trót
 # cài đời trước — kể cả bản 2.1.21 vừa tải thêm chromium/firefox/webkit.
@@ -845,7 +832,7 @@ CFG
 chmod 600 "$ATOMIC_TMP"
 mv -f "$ATOMIC_TMP" "$KITGEN_HOME/config.env"
 ATOMIC_TMP=""
-progress "5/7" "Đăng ký dịch vụ local"
+progress "4/6" "Đăng ký dịch vụ local"
 # Đây là điểm KHÔNG QUAY ĐẦU: từ dòng này `current` là bản mới, và mọi đường thoát
 # phía dưới đều phải tự nói ra mình để lại máy ở trạng thái nào (xem `cleanup`).
 ACTIVATED=1
@@ -928,14 +915,14 @@ if [ "$NO_START" -eq 0 ]; then
       exit 1
     fi
   fi
-  progress "6/7" "Health check dịch vụ"
+  progress "5/6" "Health check dịch vụ"
   check_ok "agent $VERSION phản hồi tại http://127.0.0.1:$PORT/health"
 else
   ACTIVATED=0   # --no-start: cài xong, cố ý không chạy — không có gì để lùi
-  progress "6/7" "Bỏ qua health check dịch vụ (--no-start)"
+  progress "5/6" "Bỏ qua health check dịch vụ (--no-start)"
 fi
 clear_update_txn
-progress "7/7" "Dọn bản cũ"
+progress "6/6" "Dọn bản cũ"
 prune_releases
 
 # TỔNG KẾT "MỌI THỨ NẰM ĐÂU".

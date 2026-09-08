@@ -9,7 +9,7 @@ import { join } from "node:path";
 
 import { AgentError } from "@/lib/api/client";
 import type { Run } from "@/lib/types/api";
-import { makeGenRun } from "@/features/runs/__tests__/fixtures/gen-run-progress";
+import { makeGenRun } from "@/__tests__/fixtures/gen-run-progress";
 
 /**
  * MÀN SOẠN PROMPT — bốn sợi dây mà hỏng thì KHÔNG CÓ GÌ BÁO.
@@ -91,7 +91,7 @@ const { newDocBlock } = await import("@/features/prompt-lab/lib/composer-model")
 
 const EMPTY_CONTRACT = { schemaVersion: 4, sheets: [], variants: [], characterPoses: [] };
 
-/* Thân của fixture này sống ở `features/runs/__tests__/fixtures/gen-run-progress.ts`,
+/* Thân của fixture này sống ở `src/__tests__/fixtures/gen-run-progress.ts`,
    KHÔNG ở đây: Wave 4·B đưa `features/prompt-canvas` vào vùng cấm của
    `scripts/check-no-gen.mjs`, và cổng đó cấm chuỗi `kind:"gen"` kể cả trong test.
    Đưa fixture ra ngoài giữ cổng nguyên độ chặt; nới luật cho file test thì mất

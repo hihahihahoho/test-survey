@@ -96,3 +96,51 @@ export async function fetchProjectImage(projectId: string, relPath: string): Pro
 export async function copyProjectImage(projectId: string, relPath: string): Promise<Blob> {
   return fetchProjectImage(projectId, relPath);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   COPY MỘT BLOB ẢNH VÀO BỘ NHỚ TẠM — đường lùi là TẢI FILE, và nói ra sự thật
+   ══════════════════════════════════════════════════════════════════════════
+   08/09/2026 — ba hàm dưới đây đổi nhà từ `kit-core/lib/result-copy.ts`. File cũ
+   phục vụ menu ⋯ của màn «Kết quả & xuất kit» (đã bị xoá); phần SỐNG SÓT là đúng
+   `copyImageBlob`, thứ `components/CanvasBlock` gọi cho nút «Copy ảnh» của một ô.
+   Phần chết đi cùng: `cellRect`/`locateComponent`/`rawSheetPath`/`cropCellBlob`
+   (cắt ô từ sheet thô — nay engine cắt, web không cắt nữa) và `blobOfImage`.
+
+   LUẬT GIỮ NGUYÊN, và đây là lý do hàm này không chỉ là một dòng `clipboard.write`:
+   clipboard ảnh cần `ClipboardItem` + một cử chỉ người dùng. Không có thì TẢI FILE
+   và trả về đúng chuyện đã xảy ra — KHÔNG BAO GIỜ báo "đã copy" khi chưa copy được
+   (cùng luật với `features/kit/lib/figma-board.ts`). */
+
+export type CopyOutcome = "clipboard" | "download";
+
+export interface CopyResult {
+  outcome: CopyOutcome;
+  /** Lý do phải dùng đường lùi — hiện trong toast, không nuốt. */
+  reason?: string;
+}
+
+function download(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/** Copy ảnh vào bộ nhớ tạm; hỏng thì tải file và TRẢ VỀ SỰ THẬT đó. */
+export async function copyImageBlob(blob: Blob, fileName: string): Promise<CopyResult> {
+  try {
+    if (typeof ClipboardItem === "function" && navigator.clipboard?.write) {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      return { outcome: "clipboard" };
+    }
+    download(blob, fileName);
+    return { outcome: "download", reason: "Trình duyệt này không cho ghi ảnh vào bộ nhớ tạm." };
+  } catch (e) {
+    download(blob, fileName);
+    return { outcome: "download", reason: e instanceof Error ? e.message : String(e) };
+  }
+}

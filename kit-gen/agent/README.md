@@ -132,8 +132,8 @@ Mọi response có `X-KitGen-Protocol: 1`. Lỗi luôn theo envelope §6.1:
 | 16 | POST | `/api/projects/:id/duplicate` | `{name, include:["contract","refs","raw","kits","runs"], variants:"all"|[…]|"none", newVariant?}` |
 | 17 | POST | `/api/projects/:id/clean` | `{targets:["skeleton","prompts","kits","rawHistory","oldLogs"]}` (`skeleton` chỉ để dọn thư mục còn sót của dự án tạo trước 27/08/2026). **Không bao giờ** chạm `contract.json` và `raw/` đang dùng |
 | 18 | GET | `/api/projects/:id/export.zip` | `?include=contract,refs,raw,kits,runs` → `kitgen-<slug>-<yyyymmdd>.zip` |
-| 19 | POST | `/api/uploads` | multipart hoặc raw body, ≤200 MB → `{uploadId, kind:"zip"|"json"|"image"}`. `413`/`415` |
-| 20 | POST | `/api/import/preview` | Báo cáo đối chiếu **trước khi** tạo gì: `sheets/components/variants/unknownComponents/duplicateSheetIds/warnings` |
+| ~~19~~ | ~~POST~~ | ~~`/api/uploads`~~ | **ĐÃ BỎ** (07/09/2026) cùng trình nhập zip |
+| ~~20~~ | ~~POST~~ | ~~`/api/import/preview`~~ | **ĐÃ BỎ** (07/09/2026). `loadImportSource` vẫn phục vụ `POST /api/projects` với `import.path` |
 | 21 | POST | `/api/projects/:id/reveal` | Mở Finder/Explorer. `501 NOT_SUPPORTED` nếu OS không hỗ trợ |
 
 ### C. Bản thiết kế (contract)
@@ -142,10 +142,8 @@ Mọi response có `X-KitGen-Protocol: 1`. Lỗi luôn theo envelope §6.1:
 |---|---|---|---|
 | 22 | GET | `/api/projects/:id/contract` | `{version, contract}` + `ETag: "<version>"` |
 | 23 | PUT | `/api/projects/:id/contract` | **Bắt buộc `If-Match: <version>`**. Thiếu → `412 IF_MATCH_REQUIRED`; lệch → `409 CONTRACT_CONFLICT` kèm `serverVersion` + `diffSummary`; sai luật → `422 CONTRACT_INVALID` kèm từng lỗi. Snapshot bản cũ **trước khi** ghi |
-| 24 | GET | `…/contract/history?limit=50` | 50 bản gần nhất |
-| 25 | GET | `…/contract/history/:snapshot` | Một bản cụ thể |
-| 26 | POST | `…/contract/restore` | `{snapshot}` → tạo bản **MỚI**, không ghi đè lịch sử |
-| 27 | POST | `…/contract/validate` | Dry-run, **không ghi gì** |
+| ~~24-26~~ | | ~~`…/contract/history` · `…/history/:snapshot` · `…/contract/restore`~~ | **ĐÃ BỎ** (07/09/2026) cùng màn Design đời cũ. `writeContract` **vẫn** ghi snapshot xuống đĩa — chỉ không còn route đọc |
+| ~~27~~ | ~~POST~~ | ~~`…/contract/validate`~~ | **ĐÃ BỎ**. Luật vẫn chạy trong `PUT` (422) và trong `lib/validate.mjs` |
 | 28 | GET | `/api/element-lib` | Catalogue **chỉ đọc** 42 element. Không có đường ghi |
 
 ### D. Ảnh tham khảo
@@ -165,8 +163,7 @@ Mọi response có `X-KitGen-Protocol: 1`. Lỗi luôn theo envelope §6.1:
 | 34 | GET | `/api/runs/:runId` | Trạng thái đầy đủ (nguồn của fallback poll 2s) |
 | 35 | GET | `/api/runs/:runId/stream?from=<seq>` | **NDJSON** chunked, heartbeat 15s. Mất kết nối thì `?from=lastSeq+1` |
 | 36 | POST | `/api/runs/:runId/cancel` | Kill **process group**; `{cancelled, killed[], kept, missing[]}`. Ảnh của lượt đã xong **được giữ và cắt nốt** — xem "Dừng & chạy tiếp" |
-| 37 | GET | `/api/runs/:runId/jobs/:job/log?tail=2000` | `text/plain`, **đã redact** |
-| 38 | GET | `/api/runs/:runId/jobs/:job/prompt` | Prompt đã dùng + danh sách ảnh kèm |
+| ~~37-38~~ | | ~~`…/jobs/:job/log` · `…/jobs/:job/prompt`~~ | **ĐÃ BỎ** (07/09/2026). Hai file vẫn nằm trên đĩa: `<project>/logs/<job>.log` và `<project>/prompts/<job>.txt` |
 | 39 | GET | `/api/projects/:id/raw/:job/history` | 3 đời ảnh raw |
 | 40 | POST | `/api/projects/:id/raw/:job/restore` | `{historyId}` — khôi phục ảnh đã tốn quota |
 
@@ -324,8 +321,7 @@ Hồi quy nằm ở `agent/test/suite-codex-login.mjs`; ca đắt nhất đổ n
 { "os":"darwin-arm64",
   "node":   {"ok":true,"version":"24.13.0"},
   "python": {"ok":true,"version":"3.9.6","venv":false,
-             "deps":{"pillow":true,"numpy":true,"torch":false,"transformers":false}},
-  "renderer": {"ok":true,"engine":"@resvg/resvg-wasm"},
+             "deps":{"pillow":true}},   // CHỈ pillow — slice.py không còn tầng tách nền
   "codex":  {"ok":true,"version":"0.146.0"},
   "imageGen": {
     "mode":"default-home",        // default-home | img-home | profile-overlay | unavailable | unknown
@@ -447,7 +443,7 @@ hãy chạy thêm `node agent/server.mjs` và `curl /health` như §1.
 
 ---
 
-## 7. Cấu trúc mã (mỗi file < ~400 dòng — bài học `studio.html` 743 dòng)
+## 7. Cấu trúc mã (mỗi file < ~400 dòng — bài học `studio.html` 743 dòng, nay đã xoá)
 
 ```
 agent/
@@ -463,7 +459,7 @@ agent/
 │  ├─ workspace.mjs         Workspace + registry (id đục, không lộ path)
 │  ├─ projects-dir.mjs      tách riêng để không import vòng
 │  ├─ projects.mjs          quét/CRUD/state.jobs/trash/clean
-│  ├─ contract.mjs          version + If-Match + snapshot 50 bản
+│  ├─ contract.mjs          version + If-Match + snapshot 50 bản (snapshot: chỉ ghi, không còn route đọc)
 │  ├─ validate.mjs          V-01..V-08 (agent validate LẠI, client không đáng tin)
 │  ├─ templates.mjs         template blank/basic (danh sách file cụ thể)
 │  ├─ engine.mjs            adapter sang gen.sh/slice.py + thu hẹp styles.json
@@ -476,12 +472,12 @@ agent/
 │  ├─ importer.mjs          nhập một chiều + báo cáo đối chiếu
 │  ├─ uploads.mjs           staging upload, TTL 1 giờ
 │  └─ confirm.mjs           mã 4 số in ra terminal
-├─ routes/                  system · projects · contract · refs · runs · files · app
+├─ routes/                  system · projects · contract · refs · runs · files · library · cover · app
 ├─ templates/basic.json     template "Kit cơ bản": 3 sheet / 25 ô, danh sách file cố định
-├─ test/                    harness + 8 suite
+├─ test/                    harness + suite-*.mjs
 └─ test-fixtures/           engine giả cho test (không tốn quota)
 ```
 
-**Không sửa gì ngoài `agent/`.** `studio.html`, `studio-server.mjs`, `gen.sh`, `slice.py`, `styles.json`,
-`element-lib.json`, `geometry.py` giữ nguyên (bộ khung xương `skeleton-svg.js` / `skeleton.html` / `render-skeleton.mjs` đã xoá 27/08/2026)
-để bản cũ còn chạy được mà đối chiếu.
+**Không sửa gì ngoài `agent/`.** `gen.sh`, `slice.py`, `styles.json`, `element-lib.json`,
+`geometry.py` giữ nguyên. (Bộ khung xương xoá 27/08/2026; `studio.html` / `studio-server.mjs`
+/ `demo.html` / `figma.html` / `preview.html` / `web/` xoá 07/09/2026.)

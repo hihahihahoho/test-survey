@@ -3,7 +3,7 @@ import type { JSONContent } from "@tiptap/react";
 
 import { GLAZE_PRESETS, glazePhrase } from "@/features/kit-core/lib/glaze";
 import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
-import { GENRE_PRESETS } from "@/features/kit-core/lib/genre-presets";
+import { GENRE_PRESETS } from "@/features/prompt-lab/lib/genre-presets";
 import { EXPRESSIONS, OUTFIT_THEMES, POSES } from "@/features/kit-core/lib/poses";
 
 import { serializeComposer, countComposerImages } from "../lib/serialize-composer";

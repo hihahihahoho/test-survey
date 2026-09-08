@@ -9,9 +9,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { loadBundledV2 } from "@/features/design/library/lib/source";
-import { STYLE_AXIS_IDS } from "@/features/kit-form/lib/form-model";
-import { buildStylePrompt } from "@/features/kit-form/lib/style-phrases";
+import { loadBundledV2 } from "@/features/kit-core/lib/element-lib/source";
+import { STYLE_AXIS_IDS } from "@/features/kit-core/lib/form-model";
+import { buildStylePrompt } from "@/features/kit-core/lib/style-phrases";
 import {
   LAST_STEP, LEGACY_DRAFT_KEY, LUCKY_PRESET_FILES, STYLE_AXIS_MID, createWorkflowStore, draftKey, dropWorkflowDraft,
   hydrateWorkflowStore, normalizeStyleAxes, presetKitset, resetWorkflowStores, restoreWorkflowDraft, settingsDirty,

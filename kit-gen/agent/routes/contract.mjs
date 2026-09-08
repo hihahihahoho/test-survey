@@ -1,12 +1,12 @@
-/* routes/contract.mjs — §6.2 C: #22..#28. Contract có version + If-Match (409 khi lệch)
-   + lịch sử 50 bản + validate dry-run + element-lib chỉ-đọc.
-   Thêm #29 prompt-preview: xem NGUYÊN VĂN prompt trước khi tiêu quota (Prompt Studio). */
+/* routes/contract.mjs — Contract có version + If-Match (409 khi lệch) + element-lib
+   chỉ-đọc + #29 prompt-preview: xem NGUYÊN VĂN prompt trước khi tiêu quota.
+   Lịch sử/khôi phục snapshot và validate dry-run đã bỏ cùng màn Design đời cũ;
+   `writeContract` vẫn ghi snapshot xuống đĩa (đường lùi tay), chỉ không còn route. */
 import { join } from "node:path"
-import { readContract, writeContract, listHistory, readHistorySnapshot, contractJobs } from "../lib/contract.mjs"
+import { readContract, writeContract, contractJobs } from "../lib/contract.mjs"
 import { validateContract } from "../lib/validate.mjs"
 import { loadElementLib } from "../lib/templates.mjs"
 import { fail } from "../lib/errors.mjs"
-import { RE_SNAPSHOT, assertMatch } from "../lib/paths.mjs"
 import { readProject } from "../lib/projects.mjs"
 import { projectDir } from "../lib/projects-dir.mjs"
 import { exists, readFile, removeTree } from "../lib/fsx.mjs"
@@ -34,37 +34,6 @@ export function register(r) {
       json: { version: res.version, hash: res.hash, snapshot: res.snapshot, validation: res.validation },
       headers: { ETag: `"${res.version}"` },
     }
-  })
-
-  // #24 history
-  r.get("/api/projects/:id/contract/history", async ctx => {
-    const limit = Math.min(50, Math.max(1, Number(ctx.url.searchParams.get("limit") ?? 50) || 50))
-    return { status: 200, json: { items: await listHistory(ctx.registry.active, ctx.params.id, limit) } }
-  })
-
-  // #25 một snapshot
-  r.get("/api/projects/:id/contract/history/:snapshot", async ctx => {
-    assertMatch(RE_SNAPSHOT, ctx.params.snapshot, "BAD_REQUEST", "snapshot")
-    return { status: 200, json: await readHistorySnapshot(ctx.registry.active, ctx.params.id, ctx.params.snapshot) }
-  })
-
-  // #26 restore — tạo bản MỚI, không ghi đè lịch sử
-  r.post("/api/projects/:id/contract/restore", async ctx => {
-    const ws = ctx.registry.active
-    const body = await ctx.json()
-    const snapshot = assertMatch(RE_SNAPSHOT, body.snapshot, "BAD_REQUEST", "snapshot")
-    const snap = await readHistorySnapshot(ws, ctx.params.id, snapshot)
-    const { version } = await readContract(ws, ctx.params.id)
-    const res = await writeContract(ws, ctx.params.id, snap.contract, { ifMatch: version })
-    return { status: 200, json: { version: res.version } }
-  })
-
-  // #27 validate dry-run (không ghi)
-  r.post("/api/projects/:id/contract/validate", async ctx => {
-    const body = await ctx.json()
-    if (!body || typeof body.contract !== "object" || body.contract === null)
-      fail("BAD_REQUEST", "body must be {contract:{…}}")
-    return { status: 200, json: validateContract(body.contract) }
   })
 
   /* ══ #29 XEM TRƯỚC PROMPT ═══════════════════════════════════════════════════

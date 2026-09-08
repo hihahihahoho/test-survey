@@ -57,6 +57,7 @@ export function allowedKeys(): LsKey[] {
 
 /* ═════════════ L2: schema strict cho từng khoá ═════════════ */
 
+/** KHOÁ CŨ — wizard S0 không còn; giữ trong allowlist để dọn được máy người dùng cũ. */
 const setupSchema = z.object({
   completed: z.boolean().default(false),
   step: z.enum(["download", "run", "connect", "imagegen", "done"]).default("download"),
@@ -100,24 +101,26 @@ const projectsCacheSchema = z.object({
   })).default([]),
 });
 
+/* Field của các màn đã bị gỡ ở Đợt 2 (`locale`, `density`, `sidebarWidth`,
+   `railCollapsed`, `projectsView`, `filterChip`, `collapsedSections`, `lastTab`,
+   `kitBackdrop`, `kitZoom`) KHÔNG còn khai ở đây. Máy người dùng cũ vẫn còn chúng trong
+   `kitgen.ui.v1`: `z.object` LƯỢC BỎ field lạ (xem khối "CHI TIẾT ĐÃ ĐO" đầu file) nên
+   bản cũ đọc lên vẫn ra tuỳ chọn hợp lệ, không vỡ và không mất `theme`. */
 const uiSchema = z.object({
   theme: z.enum(["dark", "light", "system"]).default("dark"),
-  locale: z.enum(["vi", "en"]).default("vi"),
-  density: z.enum(["comfortable", "compact"]).default("comfortable"),
-  sidebarWidth: z.number().default(260),
-  railCollapsed: z.boolean().default(false),
-  projectsView: z.enum(["grid", "list"]).default("grid"),
   sortBy: z.enum(["updated", "name", "size", "created"]).default("updated"),
   sortDir: z.enum(["asc", "desc"]).default("desc"),
-  filterChip: z.enum(["all", "need-gen", "running", "failed", "unfinished"]).default("all"),
   filterTags: z.array(z.string()).default([]),
   filterQuery: z.string().default(""),
-  collapsedSections: z.array(z.string()).default([]),
-  lastTab: z.record(z.string(), z.string()).default({}),
-  kitBackdrop: z.enum(["checker", "dark", "light"]).default("checker"),
-  kitZoom: z.number().default(100),
 });
 
+/**
+ * KHOÁ CŨ — không store nào còn ghi vào `kitgen.prefs.v1` kể từ Đợt 2: luồng một-màn
+ * hardcode `maxJobs:1` + `autoSliceAfterGen:true` ở `lib/hooks/use-generate-run.ts`, và
+ * ba field còn lại thuộc những màn đã bị gỡ. Khoá vẫn ở trong ALLOWLIST (và vì thế cần
+ * một schema) vì máy người dùng bản cũ VẪN CÒN nó: `allowedKeys()` là danh sách mà nút
+ * "Xoá dữ liệu trình duyệt" quét qua, bỏ khoá khỏi bảng là bỏ luôn rác lại trên máy họ.
+ */
 const prefsSchema = z.object({
   maxJobs: z.number().int().min(1).max(8).default(4),
   autoSliceAfterGen: z.boolean().default(true),

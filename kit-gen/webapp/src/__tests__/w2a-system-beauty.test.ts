@@ -92,7 +92,6 @@ describe("W2A-2 · MỘT lưới cho cả app", () => {
       ["src/features/projects/ProjectsScreen.tsx", "Home"],
       ["src/features/home/components/HomeWorkspaceShell.tsx", "Settings và thư viện"],
       ["src/components/layout/FloraShell.tsx", "ruột header"],
-      ["src/features/kit-form/KitFormScreen.tsx", "KitForm"],
     ];
     for (const [file, label] of users) {
       expect(strip(read(file)), `${label} phải dùng .kg-page`).toContain("kg-page");

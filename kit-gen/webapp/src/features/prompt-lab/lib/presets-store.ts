@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { GENRE_PRESETS } from "@/features/kit-core/lib/genre-presets";
+import { GENRE_PRESETS } from "@/features/prompt-lab/lib/genre-presets";
 import { glazeFromMaterial } from "@/features/kit-core/lib/glaze";
 import { EXPRESSIONS, POSES } from "@/features/kit-core/lib/poses";
 import { skelSchema, slugify, type Skel } from "@/lib/types/contract";

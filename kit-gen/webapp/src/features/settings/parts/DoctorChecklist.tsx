@@ -14,7 +14,7 @@ import { useCopy } from "./lib/use-copy";
  *  · §5.8-A3 — không dùng màu làm dấu hiệu duy nhất: mỗi dòng có ICON + chữ ẩn cho screen
  *    reader ("Đã có:" / "Còn thiếu:" / "Chưa kiểm được:").
  *  · mỗi dòng thiếu nêu HỆ QUẢ bằng tiếng Việt (mất gì) rồi mới tới lệnh sửa. Biết "thiếu
- *    numpy" mà không biết mất gì thì user không quyết định được có cần sửa ngay không.
+ *    Pillow" mà không biết mất gì thì user không quyết định được có cần sửa ngay không.
  *  · agent không khai mục nào ⇒ hiện "chưa kiểm được", KHÔNG bịa ✗. Sai lệch kiểu đó làm
  *    user đi cài lại thứ họ đã có.
  */

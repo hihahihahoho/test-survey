@@ -3,8 +3,6 @@
    không wildcard CORS, chỉ bind loopback). */
 import { fstatSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { homedir } from "node:os"
-import { createRequire } from "node:module"
 import { describe, it, eq, ok, includes, stripComments, PAGES, CLIENT } from "./harness.mjs"
 import { PROTOCOL_VERSION } from "../server.mjs"
 import { readRuntimeVersion } from "../lib/update.mjs"
@@ -24,7 +22,7 @@ const LOG_UPDATE  = WIN ? "%LOCALAPPDATA%\\KitGen\\update.log"              : "~
    được lưu nguyên văn trong config, không đi qua phép rút gọn đường dẫn nào.) */
 const CODEX_HOME_DEFAULT = WIN ? "~\\.codex" : "~/.codex"
 
-export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
+export async function run({ api, call, agent, agentDir, tmp }) {
   // ─────────────────────────────────────────── 1. HEALTH
   describe("health")
   await it("GET /health trả 200, protocol=1, không lộ đường dẫn tuyệt đối", async () => {
@@ -91,25 +89,9 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     ok(!/auth_mode|access_token|refresh_token|id_token|sk-/.test(r.text), "không có field auth nào")
     ok(typeof r.json.workspace.writable === "boolean", "workspace.writable")
   })
-  // ─────────────────────────────────────────── 1b. HỒ SƠ TẠO ẢNH (persist)
+  // ─────────────────────────────────────────── 1b. HỒ SƠ TẠO ẢNH
   describe("hồ sơ tạo ảnh")
-  const configPath = join(wsRoot, ".kitgen", "config.json")
-  const readConfig = () => JSON.parse(readFileSync(configPath, "utf8"))
 
-  /* Hồ sơ ảnh riêng đã bị BỎ (24/08/2026) — /api/image-profile chỉ còn là SHIM
-     cho bundle web cũ đứng chờ update: 200, hình dạng cũ, KHÔNG ghi config. */
-  await it("PATCH /api/image-profile là shim: mọi mode ⇒ 200 default-home, KHÔNG đụng config", async () => {
-    const before = JSON.stringify(readConfig())
-    for (const mode of ["separate", "default", "~/.evil-home"]) {
-      const r = await api("PATCH", "/api/image-profile", { body: { mode } })
-      eq(r.status, 200, `status (${mode})`)
-      eq(r.json.profile, "default-home", `profile (${mode})`)
-      eq(r.json.mode, "default", `mode (${mode})`)
-      eq(r.json.codexHomeLabel, "~/.codex", "nhãn rút gọn, không phải path tuyệt đối")
-      ok(!/\/Users\//.test(r.text), "không trả đường dẫn tuyệt đối")
-    }
-    eq(JSON.stringify(readConfig()), before, "config không bị ghi — kể cả imageGen sót lại")
-  })
   await it("doctor chỉ còn MỘT hồ sơ: profile default-home, nhãn ~/.codex", async () => {
     const { doctor } = await import("../lib/doctor.mjs")
     const ws = agent.registry.active
@@ -168,76 +150,6 @@ export async function run({ api, call, agent, agentDir, tmp, wsRoot }) {
     } finally {
       if (before === undefined) delete process.env.KITGEN_GEN_MODEL
       else process.env.KITGEN_GEN_MODEL = before
-    }
-  })
-
-  /* ── Trình render khung xương ────────────────────────────────────────────────
-     SỰ CỐ THẬT: checklist báo "@resvg/resvg-wasm — Thiếu — KHÔNG gen được ảnh"
-     trong khi gói vẫn nằm ở `~/.kitgen/tools/node_modules`. Phép dò cũ là
-     `node -e "require.resolve(...)"` — neo theo THƯ MỤC LÀM VIỆC của agent, nơi
-     gói không bao giờ được cài. Nó chỉ đúng nhờ NODE_PATH mà launcher đặt hộ, nên
-     mọi cách khởi động khác đều báo thiếu oan. Hai ca dưới ghim: (a) dò theo NEO
-     chứ không theo cwd/NODE_PATH, (b) danh sách neo KHÔNG được lệch với engine. */
-  await it("doctor tìm @resvg/resvg-wasm theo NEO, không theo thư mục làm việc", async () => {
-    const { doctor } = await import("../lib/doctor.mjs")
-    const ws = agent.registry.active
-    // Gói giả, đặt ở một prefix mà cwd của tiến trình test không hề nhìn thấy.
-    const prefix = join(tmp, "resvg-prefix")
-    const pkg = join(prefix, "node_modules", "@resvg", "resvg-wasm")
-    mkdirSync(pkg, { recursive: true })
-    writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@resvg/resvg-wasm", version: "0.0.0-test", main: "index.js" }))
-    writeFileSync(join(pkg, "index.js"), "module.exports = {}\n")
-    writeFileSync(join(pkg, "index_bg.wasm"), "\0asm")
-    const before = process.env.KITGEN_RESVG_DIR
-    process.env.KITGEN_RESVG_DIR = prefix
-    try {
-      const d = await doctor(ws, { refresh: true })
-      eq(d.renderer.ok, true, "gói có trong prefix ⇒ phải là CÓ, dù cwd không thấy")
-      eq(d.renderer.engine, "@resvg/resvg-wasm", "tên engine")
-    } finally {
-      if (before === undefined) delete process.env.KITGEN_RESVG_DIR
-      else process.env.KITGEN_RESVG_DIR = before
-    }
-  })
-
-  await it("gói cài DỞ (thiếu index_bg.wasm) phải tính là THIẾU, không phải có", async () => {
-    const { resvgAnchorDirs } = await import("../lib/doctor.mjs")
-    const prefix = join(tmp, "resvg-nua-voi")
-    const pkg = join(prefix, "node_modules", "@resvg", "resvg-wasm")
-    mkdirSync(pkg, { recursive: true })
-    writeFileSync(join(pkg, "package.json"), JSON.stringify({ name: "@resvg/resvg-wasm", version: "0.0.0-test", main: "index.js" }))
-    writeFileSync(join(pkg, "index.js"), "module.exports = {}\n")   // KHÔNG có index_bg.wasm
-    const before = process.env.KITGEN_RESVG_DIR
-    process.env.KITGEN_RESVG_DIR = prefix
-    try {
-      eq(resvgAnchorDirs()[0], prefix, "KITGEN_RESVG_DIR là neo ĐẦU TIÊN, y như engine")
-      // Gói cài dở phải bị coi là thiếu (nó không nạp được .wasm).
-      // Không khẳng định renderer.ok=false ở đây: máy dev có thể có gói THẬT ở neo sau.
-      const req = createRequire(join(prefix, "package.json"))
-      let threw = false
-      try { req.resolve("@resvg/resvg-wasm/index_bg.wasm") } catch { threw = true }
-      eq(threw, true, "prefix nửa vời phải KHÔNG giải được file wasm")
-    } finally {
-      if (before === undefined) delete process.env.KITGEN_RESVG_DIR
-      else process.env.KITGEN_RESVG_DIR = before
-    }
-  })
-
-  /* CA CŨ ĐỌC `render-skeleton.mjs` ĐỂ ĐỐI CHIẾU DANH SÁCH NEO — file đó đã xoá
-     (khung xương bỏ 27/08/2026), nên không còn "hai danh sách" nào để lệch nhau.
-     Phần CÒN GIÁ TRỊ của ca thì ở lại: doctor phải dò đúng những chỗ mà `install.sh`
-     thật sự cài gói vào, nếu không nó báo thiếu OAN và khách đi cài lại. */
-  await it("doctor dò đúng những neo mà installer cài gói vào", async () => {
-    const { resvgAnchorDirs } = await import("../lib/doctor.mjs")
-    const before = process.env.KITGEN_HOME
-    process.env.KITGEN_HOME = join(tmp, "kitgen-home-gia")
-    try {
-      const dirs = resvgAnchorDirs()
-      ok(dirs.includes(join(tmp, "kitgen-home-gia", "tools")), "phải dò <KITGEN_HOME>/tools — chỗ installer cài thật")
-      ok(dirs.includes(join(homedir(), ".kitgen", "tools")), "phải dò ~/.kitgen/tools — neo dự phòng của engine")
-    } finally {
-      if (before === undefined) delete process.env.KITGEN_HOME
-      else process.env.KITGEN_HOME = before
     }
   })
 

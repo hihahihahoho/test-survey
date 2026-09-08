@@ -1,4 +1,12 @@
-# BACKLOG — cập nhật 2026-08-27
+# BACKLOG — cập nhật 2026-09-07
+
+## Quyết định 07/09/2026 — **PROMPT-FIRST**
+
+Sản phẩm nay là: `gen.sh` in prompt theo section, `slice.py` **CHỈ CẮT** theo toạ độ và
+giữ nguyên alpha của model. Mọi tầng dưới đây đã bị gỡ khỏi mã và chỉ còn là lịch sử —
+**đừng đọc chúng như đặc tả**: khung xương, tách nền/matting (chroma · pymatting ·
+ViTMatte), `@resvg/resvg-wasm`, `studio.html` / `demo.html` / `figma.html` / `screens.html`
+/ `figma-export/` / `web/`, canvas & sub-file docs, wizard, atlas Phaser.
 
 ## Quyết định 27/08/2026 — **BỎ SKELETON**
 
@@ -27,10 +35,9 @@ không còn tiêu đề `Row r, left to right:`.
 3. Nó bắt cả sản phẩm phụ thuộc `@resvg/resvg-wasm` chỉ để nói một điều mà **bốn con số**
    nói rẻ hơn và chính xác hơn.
 
-**Nợ còn lại (cắt ngang, làm riêng):** `@resvg/resvg-wasm` nay KHÔNG còn ai gọi, nhưng
-`install.sh` bước 4/7, `scripts/install.ps1`, `agent/lib/doctor.mjs::rendererInfo` và dòng
-"Trình render khung xương" ở màn Cài đặt (`webapp/.../setup/lib/doctor-view.ts` + bản `web/`
-cũ) vẫn nói về nó. Gỡ một chỗ mà không gỡ đồng thời cả năm thì dòng đó thành đỏ vĩnh viễn.
+**Nợ này ĐÃ TRẢ (07/09/2026):** `@resvg/resvg-wasm` gỡ khỏi `install.sh`, `scripts/install.ps1`
+và `agent/lib/doctor.mjs` (`rendererInfo`/`resvgAnchorDirs` xoá, `doctor.renderer` không còn
+trong payload). `pythonInfo()` chỉ còn dò `PIL`; pip chỉ còn cài `pillow`.
 
 **Test:** `tests/test_geometry.py` (16 ca — gồm ca đọc ngược toạ độ RA KHỎI prompt thật
 rồi so với `geometry.safe_box`, thứ bản cũ không thể kiểm) · `test/gen-prompts-only.test.sh`
@@ -46,7 +53,7 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
 1. ~~**Lỗ rỗ alpha⁴**~~ — 3 chỗ `paste()`-làm-mask trong `slice.py` → `alpha_composite`/bỏ mask. A/B trùng khít research: nút đỏ 36 lỗ→0, ruy băng hộp quà +16.8% độ đục, pose-idle 54→6 (6 còn lại là art cố ý). **Ảnh đã cắt trước fix vẫn mang lỗ trong file PNG — bấm cắt lại (re-slice) là sạch, không cần gen lại.** Test: `tests/test_slice_alpha.py` (kiểm ngược: hoàn nguyên bug là test đỏ).
 2. ~~**Glow mất 57% sáng**~~ — `glow_alpha()` soft-gate `mx·smoothstep(6,28)`: mất sáng quầng yếu 41%→1.7%, nhiễu nền 0. Test: `tests/test_slice_glow.py`.
 3. ~~**Asset glow ship kèm blend mode**~~ — `slice.py` ghi `"blend":"screen"` cho `matte:"glow"` (re-slice hẹp giữ + bù khoá cho manifest đời cũ); agent chuyển tiếp ở `routes/files.mjs`; web vẽ `mix-blend-screen` trên nền đo `.kg-glow-ground` (không lật theme — screen trên nền sáng là ô trắng trơn); zip/atlas chép manifest nên mang khoá miễn phí. **Figma vẫn là việc tay** (toast nhắc "Linear Dodge (Add)/Screen" khi copy) — nhưng câu "clipboard figma-h2d không mang blendMode" viết ở đây là ĐOÁN, và mục 19 đã đo lại: payload CÓ mang, chỉ chưa ai biết Figma có nhận không. Chú thích cùng ý ở `webapp/src/features/kit/lib/blend.ts` cũng cần sửa theo khi mục 19 chốt. Test: `tests/test_slice_blend.py` + `features/kit/__tests__/glow-blend.test.tsx`.
-4. ~~**Nền tách per-element ở Skeleton UI**~~ — `KitElementSkel.matte?: "glow"|"none"` (`"none"` tường minh để gỡ được khai báo thư viện), `mergeElementSkel` đóng bẫy chỉ-merge-w/h, popup Chi tiết có mục "Nền tách", `item-prompt` mirror câu nền đen và test so trực tiếp với `gen.sh` thật. Test: `__tests__/cell-background.test.tsx`.
+4. ~~**Nền tách per-element ở Skeleton UI**~~ — `KitElementSkel.matte?: "glow"|"none"` (`"none"` tường minh để gỡ được khai báo thư viện), `mergeElementSkel` đóng bẫy chỉ-merge-w/h, popup Chi tiết có mục "Nền tách". *(`item-prompt.ts` và `cell-background.test.tsx` đã xoá cùng màn Design đời cũ; câu nền đen nay chỉ có một bản, ở `gen.sh`.)*
 5. ~~**Chroma-key tự chọn xa palette**~~ — contract chọn key trong {magenta, green, cyan, blue} cách palette ≥60° hue (kitset-to-contract §5b); engine nhận mọi key qua `key_axis()` tổng quát (magenta/green chứng minh trùng công thức cũ; cyan trước đây bị xếp nhầm thành magenta), key lấy từ khai báo `bg` thay vì đoán. Test: `tests/test_slice_keycolor.py` + kitset-to-contract §P1-5.
 6. ~~**Validator hình học tê liệt**~~ — nguyên nhân thật: có đọc `bg` nhưng parse chuỗi mô tả hỏng → luôn rơi về `#00FF00`. Nay đo màu nền thật ở viền sheet + phân loại bằng `spill` cùng đại lượng với slice; ô `shape:"empty"` trả `status:"empty"` (hết bị đếm oan là ô lệch). **Grid (16) giờ mới có tiền đề — cần chạy đo lại trên vài run thật trước khi quyết.**
 7. ~~**Màu VNPAY sót 3 chỗ**~~ — về `NEUTRAL_*_COLOR`, hằng chuyển sang `lib/types/contract.ts` (module lá) vì kit-form ↔ workflow-v4 là vòng import; `grep 005BAA|00B0F0` trong src chỉ còn test + comment lịch sử.
@@ -72,7 +79,7 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
 
 ## P3 — Việc to còn lại, cần quyết trước khi làm
 
-16. **Grid xám/đen neo khung** — **ĐÃ CÓ MỐC SO: `docs/research-grid-baseline-2026-08.md`** (validator bản 14/08 chạy trên 34 sheet raw thật / 259 ô — `kit-gen/raw` + 2 bộ blindtest trong `.kitgen/trash`, CHỈ ĐỌC; **không gen ảnh mới**). Tóm tắt mốc "không grid":
+16. **Grid xám/đen neo khung** — ~~mốc so ở `docs/research-grid-baseline-2026-08.md`, đã xoá cùng đợt dọn prompt-first~~ (validator bản 14/08 chạy trên 34 sheet raw thật / 259 ô — `kit-gen/raw` + 2 bộ blindtest trong `.kitgen/trash`, CHỈ ĐỌC; **không gen ảnh mới**). Tóm tắt mốc "không grid":
 
     - `ok/nonempty` = **0,171**, nhưng **0,142** sau khi loại 11 ô `full` — sheet full-bleed đúng-do-cấu-tạo (`skel.w=h=1` ⇒ expected = cả ô, nền tràn viền ⇒ actual cũng cả ô ⇒ lệch đúng 0), **phải loại khi so** kẻo grid thắng/thua bằng nhiễu.
     - `missing-body = 0/259` — mọi ô không-empty đều có thân đo được, `regenerate` không bao giờ vì ô câm.
@@ -93,8 +100,9 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
     - **CÒN LẠI — việc của chủ SP, KHÔNG ai làm thay được:** copy một ô glow (`blend:"screen"`) rồi Cmd+V vào Figma desktop, mở panel bên phải xem layer ảnh nằm ở **Normal** hay **Screen**. Agent không dán hộ được: macOS chặn `osascript keystroke`, và MCP figma-desktop chỉ đọc node đã có sẵn trong file.
     - **Nhận** ⇒ bỏ toast nhắc tay của mục 3 (`GLOW_FIGMA_HINT`, `CutAssetGrid.remindGlowBlend`) + sửa test `webapp/src/features/kit/__tests__/glow-blend.test.tsx` nhóm ③. **Không nhận** ⇒ gỡ 3 dòng `blend` ở `figma-node.ts` (hoặc để lại, vô hại) và chốt: muốn tự động thì phải viết plugin Figma đặt `blendMode = "LINEAR_DODGE"`.
 
-21. **Demo màn game → bắn sang Figma — LÁT 1 XONG (màn Home), CHỜ CHỦ SP DÁN THỬ ĐỂ ĐO R1.**
-    Thiết kế đầy đủ (kèm mọi giới hạn encoder đo bằng `file:dòng`): `docs/design-demo-to-figma-2026-08.md`.
+21. ~~**Demo màn game → bắn sang Figma**~~ — **BỎ (07/09/2026).** `demo.html`, `screens.html`,
+    `figma.html` và `figma-export/` đã xoá; thiết kế `docs/design-demo-to-figma-2026-08.md` cũng vậy.
+    Cửa ra sang Figma nay là nút Copy của màn prompt-first. Phần dưới giữ làm lịch sử.
     - **Đã có gì.** `webapp/src/features/demo/` — ① `lib/screen-spec.ts` + `data/screens.default.ts` (lớp dữ liệu bố cục MỚI: skeleton không hề có toạ độ màn, §3.1 của thiết kế); ② `lib/resolve-scene.ts` (hàm thuần, tái dùng nguyên `buildFigmaNodeForAsset`); ③ `lib/scene-dom.ts` (một hàm dựng DOM cho CẢ xem trước lẫn lượt chụp); ④ `lib/scene-figma.ts` (`assertSceneDoc` · `encodeScenes` · `copyScenesAsFigmaNodes`). UI: nút **"Xem màn demo"** — cửa ra thứ ba ở header "Ảnh đã tạo" cạnh `Tải .zip`/`Copy sang Figma` — mở dialog xem trước + copy. Không route mới, không nút sidebar. Chỉ hai file cũ bị đụng: `ImagesSection.tsx` (thêm 1 nút) và `figma-node.ts` (**chỉ** đổi `mountStage` thành export).
     - **Chốt của chủ SP đã áp:** demo là **cửa ra** (dialog, không phải nơi làm việc); bộ màn theo `screens.html`, lát 1 làm **Home**; nếu Figma làm phẳng cây thì đi đường **nhiều node phẳng** — công tắc `mode: "nested" | "flat"` đã có sẵn **trong dialog**, không phải sửa code để đổi.
     - **VIỆC CỦA CHỦ SP, KHÔNG AI LÀM THAY ĐƯỢC — phép đo R1:** mở một dự án đã có ảnh cắt → *Ảnh đã tạo* → **Xem màn demo** → **Copy màn này sang Figma** → Cmd+V vào Figma → **mở panel Layers và ĐẾM**. Chờ: 1 frame `Màn HOME` chứa `Nền · Màn HOME` + 7 frame con đúng tên ô. Nếu bên trong chỉ còn ảnh phẳng ⇒ hành vi "Figma flatten wrapper trong suốt trong board" (`figma-export/copy-sprite-images.mjs:4-7`) lặp lại ⇒ chọn **"Nhiều node rời"** trong dialog và copy lại; ghi kết quả vào đây rồi mới chốt mặc định. Đo luôn R5 (chữ `CHƠI NGAY`/`SĂN QUÀ MAY MẮN` có phải text node sửa được không, font có xê dịch không) và R2 (thời gian từ lúc bấm tới lúc dán được — payload một màn ~6,3 MB).
@@ -102,7 +110,12 @@ Gom từ: 2 báo cáo blind-test (designer candy + sci-fi), 2 research (glow, l�
     - **Bẫy đã né và được khoá bằng test:** không `border-image` (encoder KHÔNG nhúng ảnh cho nó ⇒ hình rỗng im lặng, §4.4), không `transform`, không `display:none`; `assertSceneDoc` ném nếu bất kỳ thứ nào lọt vào payload hoặc có asset `blob === null`. Nền tự tính phép "cover" thay vì `object-fit` (encoder chỉ chở `getBoundingClientRect`). Test: `features/demo/__tests__/{resolve-scene,scene-dom,scene-figma}.test.ts` (37 ca, fixture là manifest THẬT của 4 kit) + `tests/e2e/demo-screen-payload.spec.ts` (Chromium thật, giải base64 payload, soi cả hai chế độ).
     - **Lát sau:** 3 màn còn lại + chọn nhân vật + nút "Copy cả 4 màn" (lát 2); giải bài 9-slice — đo phương án B (9 mảnh `background-image`) vs C (canvas) — để bật lại các ô co giãn (lát 3); gộp nhắc glow + thanh tiến trình + cảnh báo ngưỡng payload (lát 4).
 
-22. **Element TRONG SUỐT (`matte:"glass"`) — TẦNG 1 XONG, TẦNG 2 CHỐT LÀ *KHÔNG* LÀM NỀN ĐEN.** Thiết kế đầy đủ: `docs/design-glass-transparent-panel-2026-08.md`.
+22. **Element TRONG SUỐT (`matte:"glass"`)** — **CÒN SỐNG, NHƯNG CHỈ TẦNG 2 (PROMPT).**
+    Tầng 1 (`matte_chroma`/`matte_pymatting` trong `slice.py`) đã xoá cùng chroma-key: sheet nay
+    mang alpha thật nên không còn gì để giải ngược. Thứ CÒN CHẠY là câu prompt `SEE-THROUGH
+    ELEMENT` của `gen.sh`, phát ra khi `skel.matte == "glass"` — pill «Đục nền» của app là
+    nguồn duy nhất của cờ ấy. Thiết kế `docs/design-glass-transparent-panel-2026-08.md` đã xoá;
+    phần dưới giữ làm lịch sử.
     - **Bệnh (đo trên `hello-368a` / `22-board-panel`):** 325 626 px magenta **đục** — model vẽ tấm khay kính, nền key lộ qua, solver alpha thấy mảng màu liền khối biên rõ nên gọi là foreground ⇒ panel ra **đục màu key**. Despill thường không cứu được: trừ sắc key đi thì thành **hồng cá hồi đục**, vẫn không nhìn xuyên.
     - **Tầng 1 đã ship — chữa được kit ĐÃ GEN, 0 quota.** `slice.py` (`matte_chroma`/`matte_pymatting`, tham số `glass=`) giải ngược `C = α·F + (1−α)·K` trong mặt nạ ô glass: `α = 1 − spill(C)/sref`, `F = (C − (1−α)K)/α`. Đo lại chính ô đó: tím đục **325 626 → 0**, α thân kính (25…250) **26 780 → 377 259** (kính CÒN THÂN, không bị đục thủng), α trong suốt 377 566 → 366 737, `F` trung bình (219,117,117) với spill **−0,1**, α trung bình 152/255 (mờ 60%). Người dùng chỉ cần **cắt lại**, không gen lại. Test: `tests/test_slice_glass.py` (8 ca, ground truth tổng hợp).
     - **Tầng 2 — ý "auto tạo nền đen cho panel" đã cân nhắc và LOẠI, có số.** Nền đen đúng cho `glow` *chính vì* glow cộng tính: kết quả chỉ phụ thuộc tích `α·F` nên tách `α` kiểu nào cũng ra một hình. Kính ghép bằng OVER ⇒ `α` tự nó quyết định bao nhiêu nền lọt qua, mà trên đen chỉ đọc được tích ⇒ **thiếu ràng buộc, luôn sai**: kính xám `F=(128,128,128) α=0,50` và kính trắng `α=0,25` cho ra **cùng** `C=(64,64,64)`; dán lên nền trắng lệch **63 mức**, kính khói `F=(20,20,25) α=0,60` lệch **138 mức** và gần như biến mất. Nền key thì ngược lại — key là hằng số đã biết, sáng, bão hoà, nên phần key lộ qua **chính là tín hiệu alpha**. ⇒ **giữ nền key cho ô glass.** Cũng KHÔNG gắn `blend:"screen"` cho panel: screen trên nền sáng ⇒ panel biến mất.

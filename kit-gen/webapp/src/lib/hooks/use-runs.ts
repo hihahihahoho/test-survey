@@ -70,25 +70,8 @@ export function useCancelRun(projectId: string) {
   });
 }
 
-/** #37 — log của một lượt (đã redact phía agent). */
-export function useJobLog(runId: string | null, job: string | null, tail = 2000) {
-  return useQuery({
-    queryKey: qk.runs.jobLog(runId ?? "", job ?? ""),
-    queryFn: () => api.runs.jobLog(runId!, job!, tail),
-    enabled: Boolean(runId && job),
-    staleTime: STALE.runFinished,
-  });
-}
-
-/** #38 — prompt đã dùng cho một lượt. */
-export function useJobPrompt(runId: string | null, job: string | null) {
-  return useQuery({
-    queryKey: qk.runs.jobPrompt(runId ?? "", job ?? ""),
-    queryFn: () => api.runs.jobPrompt(runId!, job!),
-    enabled: Boolean(runId && job),
-    staleTime: Infinity, // prompt của một lượt đã chạy là bất biến
-  });
-}
+/* `useJobLog` (#37) và `useJobPrompt` (#38) đã bị gỡ ở Đợt 2 cùng màn lượt chạy: tiến độ
+   mà màn soạn cần đã nằm trong stream #35, không màn nào còn mở nhật ký từng tấm. */
 
 /** #39 — 3 đời ảnh gần nhất của một lượt (đóng B7). */
 export function useRawHistory(projectId: string | null, job: string | null) {

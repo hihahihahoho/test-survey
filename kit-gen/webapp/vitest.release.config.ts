@@ -4,10 +4,12 @@ import react from "@vitejs/plugin-react";
 /**
  * Release suite: only tests whose fixtures are committed to the repository.
  *
- * The excluded files intentionally exercise live team data under `kit-gen/teams/`
- * and the developer's local `kit-gen/styles.json`; both locations are ignored to
- * avoid publishing project/customer data. They remain part of `npm test` locally
- * whenever those fixtures are available.
+ * The excluded file intentionally exercises the developer's local
+ * `kit-gen/styles.json`, which is ignored to avoid publishing project/customer
+ * data. It remains part of `npm test` locally whenever that fixture is available.
+ *
+ * Đợt 2 xoá 5 mục khác khỏi danh sách này vì chính các file test đó đã bị xoá cùng
+ * `features/design`, `features/docs` và wizard tạo dự án theo brief.
  */
 export default defineConfig({
   resolve: { alias: { "@": new URL("./src", import.meta.url).pathname } },
@@ -19,11 +21,6 @@ export default defineConfig({
       "**/node_modules/**",
       "**/*.dom.test.tsx",
       "**/*.integration.test.ts",
-      "**/features/design/__tests__/ops.test.ts",
-      "**/features/design/__tests__/validate.test.ts",
-      "**/features/design/library/__tests__/lib-source.test.ts",
-      "**/features/docs/__tests__/brief-read.test.ts",
-      "**/features/projects/__tests__/create-mode-brief.test.ts",
       "**/lib/types/__tests__/contract.test.ts",
     ],
     reporters: ["default"],

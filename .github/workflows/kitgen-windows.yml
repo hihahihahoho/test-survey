@@ -448,7 +448,6 @@ jobs:
             'OK   runtime',
             'shim python3',
             'dung Codex da co',
-            'Trinh render khung xuong',
             'config.json',
             'bo qua theo -NoStart'
           )
@@ -487,7 +486,6 @@ jobs:
             (Join-Path $home_ 'install.ps1'),
             (Join-Path $home_ 'tools\node\node.exe'),
             (Join-Path $home_ 'tools\node\npm.cmd'),
-            (Join-Path $home_ 'tools\node_modules\@resvg\resvg-wasm\index_bg.wasm'),
             (Join-Path $home_ "releases\$ver\VERSION"),
             (Join-Path $home_ "releases\$ver\agent\server.mjs"),
             (Join-Path $home_ "releases\$ver\engine\gen.sh"),

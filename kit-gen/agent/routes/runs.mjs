@@ -2,8 +2,7 @@
    + log/prompt từng lượt + lịch sử ảnh raw 3 đời. */
 import { join } from "node:path"
 import { fail } from "../lib/errors.mjs"
-import { exists, readFile, stat, mtimeOf, ensureDir, readTailFile, removeTree, writeFileAtomic } from "../lib/fsx.mjs"
-import { redactLine } from "../lib/redact.mjs"
+import { exists, readFile, stat, mtimeOf, ensureDir, removeTree, writeFileAtomic } from "../lib/fsx.mjs"
 import { RE_JOB, RE_RUN_ID, assertMatch, safeSegment } from "../lib/paths.mjs"
 import { projectDir, readProject } from "../lib/projects.mjs"
 import { sanitizeRun } from "../lib/runs.mjs"
@@ -14,7 +13,6 @@ import {
 } from "../lib/raw-history.mjs"
 
 const QUOTA_PER_JOB = [3, 5]
-const MAX_LOG_READ_BYTES = 4 * 1024 * 1024
 
 export function register(r) {
   // #32 POST runs
@@ -83,40 +81,6 @@ export function register(r) {
     const { handle, run } = await ctx.runs.find(ctx.params.runId)
     if (!handle || handle.finished) fail("RUN_FINISHED", `run ${run.id} already finished`)
     return { status: 200, json: await handle.cancel() }
-  })
-
-  // #37 log 1 lượt (đã redact)
-  r.get("/api/runs/:runId/jobs/:job/log", async ctx => {
-    const { dir, projectId } = await ctx.runs.find(ctx.params.runId)
-    const job = assertMatch(RE_JOB, ctx.params.job, "BAD_REQUEST", "job")
-    const tail = Math.min(20000, Math.max(1, Number(ctx.url.searchParams.get("tail") ?? 2000) || 2000))
-    const candidates = [
-      join(dir, "logs", `${job}.log`),
-      join(projectDir(ctx.registry.active, projectId), "logs", `${job}.log`),
-    ]
-    for (const abs of candidates) {
-      if (!(await exists(abs))) continue
-      const raw = await readTailFile(abs, MAX_LOG_READ_BYTES)
-      const lines = raw.split("\n")
-      const text = lines.slice(Math.max(0, lines.length - tail)).map(redactLine).join("\n")
-      return { status: 200, text, headers: { "Content-Type": "text/plain; charset=utf-8" } }
-    }
-    fail("LOG_NOT_FOUND", `log for job ${job} not found`)
-  })
-
-  // #38 prompt đã dùng
-  r.get("/api/runs/:runId/jobs/:job/prompt", async ctx => {
-    const { projectId } = await ctx.runs.find(ctx.params.runId)
-    const job = assertMatch(RE_JOB, ctx.params.job, "BAD_REQUEST", "job")
-    const pdir = projectDir(ctx.registry.active, projectId)
-    const txt = join(pdir, "prompts", `${job}.txt`)
-    if (!(await exists(txt))) fail("NOT_FOUND", `prompt for job ${job} not found`)
-    const prompt = redactLine(await readFile(txt, "utf8"))
-    let attachments = []
-    const att = join(pdir, "prompts", `${job}.att`)
-    if (await exists(att))
-      attachments = (await readFile(att, "utf8")).split("\n").map(s => s.trim()).filter(Boolean)
-    return { status: 200, json: { prompt, attachments } }
   })
 
   // #39 lịch sử ảnh raw (3 đời)

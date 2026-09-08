@@ -22,9 +22,11 @@ export const INSTALL_CMD = {
      chính thức của OpenAI; luật ③ của file này cấm `curl … | bash` nên đưa link, không
      đưa lệnh pipe (cùng kiểu với INSTALL_CMD.node). */
   codex: "# Cài Codex CLI: chạy lại bộ cài KitGen, hoặc installer chính thức tại https://chatgpt.com/codex",
-  python: "python3 -m venv ~/KitGen/.venv && ~/KitGen/.venv/bin/pip install pillow numpy",
-  pyDeps: "~/KitGen/.venv/bin/pip install pillow numpy",
-  resvg: 'npm install --prefix "$HOME/.kitgen/tools" @resvg/resvg-wasm',
+  /* CHỈ CÒN PILLOW. `slice.py` nay chỉ CẮT theo toạ độ và giữ nguyên alpha của model,
+     nên numpy (tầng tách nền) không còn đường nào gọi tới — bảo user cài thêm một gói
+     mà sản phẩm không dùng là bắt họ trả giá cho thứ vô ích. */
+  python: "python3 -m venv ~/KitGen/.venv && ~/KitGen/.venv/bin/pip install pillow",
+  pyDeps: "~/KitGen/.venv/bin/pip install pillow",
   node: "# Cài Node.js ≥ 20 từ https://nodejs.org rồi mở lại Terminal",
 } as const;
 

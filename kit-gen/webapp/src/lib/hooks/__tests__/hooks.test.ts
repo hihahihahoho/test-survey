@@ -40,20 +40,17 @@ describe("query key factory — phân cấp để invalidate theo TẦNG", () =>
     expect(qk.projects.detail("a")).not.toEqual(qk.projects.detail("b"));
   });
 
-  it("contract.all(id) phủ current + history + snapshot", () => {
+  it("contract.all(id) phủ bản đang mở", () => {
     expect(isPrefixOf(qk.contract.all("p1"), qk.contract.current("p1"))).toBe(true);
-    expect(isPrefixOf(qk.contract.all("p1"), qk.contract.history("p1"))).toBe(true);
-    expect(isPrefixOf(qk.contract.all("p1"), qk.contract.snapshot("p1", "2026-08-05T101233Z"))).toBe(true);
   });
 
   it("contract của project khác KHÔNG bị cuốn theo", () => {
     expect(isPrefixOf(qk.contract.all("p1"), qk.contract.current("p2"))).toBe(false);
   });
 
-  it("runs.detail phủ log và prompt của chính run đó", () => {
-    expect(isPrefixOf(qk.runs.detail("r-1"), qk.runs.jobLog("r-1", "tet-main"))).toBe(true);
-    expect(isPrefixOf(qk.runs.detail("r-1"), qk.runs.jobPrompt("r-1", "tet-main"))).toBe(true);
-    expect(isPrefixOf(qk.runs.detail("r-1"), qk.runs.jobLog("r-2", "tet-main"))).toBe(false);
+  it("runs.all phủ detail của một run, và hai run khác nhau không cuốn theo nhau", () => {
+    expect(isPrefixOf(qk.runs.all(), qk.runs.detail("r-1"))).toBe(true);
+    expect(isPrefixOf(qk.runs.detail("r-1"), qk.runs.detail("r-2"))).toBe(false);
   });
 
   it("kit.all(id) phủ mọi phong cách", () => {

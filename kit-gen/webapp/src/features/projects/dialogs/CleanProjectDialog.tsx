@@ -10,7 +10,7 @@ import { bytes } from "../lib/format";
 import { errorDetail, toastSuccess } from "../lib/feedback";
 import type { Gate } from "../lib/gate";
 import { CheckRow, InlineError, OfflineNotice } from "./parts";
-import { ActiveRunGuard } from "@/features/runs";
+import { ActiveRunGuard } from "../components/ActiveRunGuard";
 
 /**
  * §4.5 DỌN CACHE DẪN XUẤT. Không phải xoá project, nhưng vẫn là thao tác phá huỷ

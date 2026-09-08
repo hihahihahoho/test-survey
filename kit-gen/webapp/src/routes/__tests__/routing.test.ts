@@ -1,20 +1,14 @@
 /**
  * Test lớp ĐIỀU HƯỚNG — thuần logic, không cần DOM.
  *
- * GHI CHÚ CHẠY TEST: `vitest.config.ts` (của R0) mới chỉ include
- * `src/lib/**\/__tests__`. Tôi không sửa file của team khác, nên chạy bằng:
- *     npx vitest run --dir src/routes
- * Đã ghi yêu cầu mở rộng `include` ở teams/react/NEEDS-appshell.md (N1).
- *
  * 07/09/2026 — hai describe cuối đi cùng đợt dọn mã chết: `setupSearchSchema`
- * (`?redirect=` của `/setup`) và `requireSetup` không còn tồn tại — route `/setup`
- * lẫn hàm guard rỗng đều đã bị xoá, nên không còn gì để khoá.
+ * (`?redirect=` của `/setup`) và `requireSetup` không còn tồn tại.
+ * 08/09/2026 — `parseRunParams`, `designSearchSchema`, `kitSearchSchema` đi cùng
+ * bảy route `/p/**`; chỉ còn `/settings` có `?tab=`.
  */
 import { describe, expect, it } from "vitest";
-import { parseProjectParams, parseRunParams } from "../params";
-import {
-  designSearchSchema, kitSearchSchema, settingsSearchSchema,
-} from "../search-schemas";
+import { parseProjectParams } from "../params";
+import { kitCanvasSearchSchema, settingsSearchSchema } from "../search-schemas";
 
 describe("params — id sai dạng phải KHÔNG khớp route (⇒ 404), không lọt sang agent", () => {
   it("nhận id hợp lệ", () => {
@@ -33,33 +27,26 @@ describe("params — id sai dạng phải KHÔNG khớp route (⇒ 404), không 
   ])("từ chối %s", (_label, id) => {
     expect(parseProjectParams({ projectId: id })).toBe(false);
   });
-
-  it("runId phải đúng dạng r-NNNN", () => {
-    expect(parseRunParams({ projectId: "tet26-a7f3", runId: "r-0031" })).toEqual({
-      projectId: "tet26-a7f3",
-      runId: "r-0031",
-    });
-    expect(parseRunParams({ projectId: "tet26-a7f3", runId: "0031" })).toBe(false);
-    expect(parseRunParams({ projectId: "BAD", runId: "r-0031" })).toBe(false);
-  });
 });
 
-describe("search schema — tab lạ rơi về tab đầu, KHÔNG ném lỗi làm trắng màn", () => {
+describe("search schema — giá trị lạ rơi về mặc định, KHÔNG ném lỗi làm trắng màn", () => {
   it("thiếu tab ⇒ tab mặc định", () => {
-    expect(designSearchSchema.parse({}).tab).toBe("sheets");
-    expect(kitSearchSchema.parse({}).tab).toBe("assets");
     expect(settingsSearchSchema.parse({}).tab).toBe("agent");
   });
 
   it("tab lạ ⇒ tab đầu (link cũ vẫn mở được)", () => {
-    expect(designSearchSchema.parse({ tab: "khong-co" }).tab).toBe("sheets");
-    expect(kitSearchSchema.parse({ tab: 42 }).tab).toBe("assets");
+    expect(settingsSearchSchema.parse({ tab: "khong-co" }).tab).toBe("agent");
     expect(settingsSearchSchema.parse({ tab: null }).tab).toBe("agent");
+    expect(settingsSearchSchema.parse({ tab: "trash" }).tab).toBe("agent");
   });
 
   it("tab hợp lệ được giữ nguyên", () => {
-    expect(designSearchSchema.parse({ tab: "styles" }).tab).toBe("styles");
     expect(settingsSearchSchema.parse({ tab: "prefs" }).tab).toBe("prefs");
-    expect(settingsSearchSchema.parse({ tab: "trash" }).tab).toBe("agent");
+  });
+
+  it("`?settings=` đời cũ vẫn mở dialog; giá trị lạ ⇒ đóng", () => {
+    expect(kitCanvasSearchSchema.parse({ settings: "requirements" }).settings).toBe("requirements");
+    expect(kitCanvasSearchSchema.parse({ settings: "bịa" }).settings).toBeUndefined();
+    expect(kitCanvasSearchSchema.parse({}).settings).toBeUndefined();
   });
 });

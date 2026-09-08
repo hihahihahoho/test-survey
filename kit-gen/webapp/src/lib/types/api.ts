@@ -102,13 +102,8 @@ export const doctorSchema = z.looseObject({
     venv: z.boolean().optional(),
     deps: z.record(z.string(), z.boolean()).optional(),
   }).optional(),
-  /**
-   * TRÌNH RENDER KHUNG XƯƠNG — `@resvg/resvg-wasm` (BACKLOG #15, thay Playwright).
-   * KHÔNG có khoá `fallback` nữa: thiếu gói này là KHÔNG gen được ảnh, không phải
-   * "rơi về bản dự phòng". Agent cũ (≤2.1.20) còn gửi `playwright` — `looseObject`
-   * cho khoá lạ đi qua, và hàng doctor tự hiện "chưa rõ" khi `renderer` vắng mặt.
-   */
-  renderer: z.looseObject({ ok: z.boolean(), engine: z.string().optional() }).optional(),
+  /* Khoá `renderer` (@resvg/resvg-wasm) đã bỏ ở Đợt 2 cùng bộ khung xương: agent thôi
+     khai nó, và `looseObject` cho khoá lạ của agent CŨ đi qua mà không vỡ. */
   codex: z.looseObject({
     ok: z.boolean(),
     version: z.string().nullish(),
@@ -446,32 +441,8 @@ export const cleanResultSchema = z.looseObject({
   removed: z.record(z.string(), z.number()).default({}),
 });
 
-/** #19 `POST /api/uploads` */
-export const uploadResultSchema = z.looseObject({
-  uploadId: z.string(),
-  filename: z.string().optional(),
-  bytes: z.number().optional(),
-  kind: z.enum(["zip", "json", "image"]).optional(),
-});
-
-/** #20 `POST /api/import/preview` — LUÔN preview trước, cấm import im lặng (chốt X12). */
-export const importReportSchema = z.looseObject({
-  sheets: z.number().default(0),
-  components: z.number().default(0),
-  variants: z.number().default(0),
-  poses: z.number().default(0),
-  willCreate: z.record(z.string(), z.unknown()).optional(),
-  warnings: z.array(z.looseObject({
-    code: z.string(),
-    message: z.string().optional(),
-    items: z.array(z.string()).default([]),
-  })).default([]),
-  unknownComponents: z.number().default(0),
-  duplicateSheetIds: z.array(z.string()).default([]),
-  missingRefs: z.array(z.string()).default([]),
-});
-export type ImportReport = z.infer<typeof importReportSchema>;
-export const importPreviewSchema = z.looseObject({ report: importReportSchema });
+/* #19 `POST /api/uploads` và #20 `POST /api/import/preview` KHÔNG còn hình dạng ở đây:
+   Đợt 2 gỡ hẳn nhập/xuất project bằng file .zip khỏi sản phẩm. */
 
 /* ═════════════ C. Bản thiết kế (#22–#28) ═════════════ */
 
@@ -551,22 +522,8 @@ export const contractConflictDetailsSchema = z.looseObject({
 });
 export type ContractConflictDetails = z.infer<typeof contractConflictDetailsSchema>;
 
-/** #24 `GET …/contract/history?limit=50` — thay `.bak` 1 tầng (đóng B4). */
-export const historyItemSchema = z.looseObject({
-  snapshot: z.string(),
-  version: z.number().nullish(),
-  at: z.string().nullish(),
-  bytes: z.number().optional(),
-  summary: z.looseObject({
-    sheets: z.number().optional(),
-    components: z.number().optional(),
-  }).optional(),
-});
-export type HistoryItem = z.infer<typeof historyItemSchema>;
-export const historyListSchema = z.looseObject({ items: z.array(historyItemSchema).default([]) });
-
-/** #26 `POST …/contract/restore` — tạo bản MỚI, không ghi đè lịch sử. */
-export const restoreContractResultSchema = z.looseObject({ version: z.number() });
+/* #24 `contract/history` và #26 `contract/restore` KHÔNG còn hình dạng ở đây: drawer
+   lịch sử bản thiết kế đã bị gỡ ở Đợt 2. Lịch sử ẢNH (#39) là chuyện khác, vẫn còn. */
 
 /** #28 `GET /api/element-lib` — catalogue CHỈ ĐỌC (chốt X8). */
 export const libElementSchema = z.looseObject({
@@ -623,7 +580,8 @@ export const poseTemplateSchema = z.looseObject({
   createdAt: z.string().optional(), updatedAt: z.string().optional(),
 });
 export type PoseTemplate = z.infer<typeof poseTemplateSchema>;
-export const poseTemplateResultSchema = z.looseObject({ pose: poseTemplateSchema });
+/* `poseTemplateResultSchema` (bọc trả lời của ba cửa ghi `/api/library/poses`) đã bỏ:
+   khung pose CHỈ ĐỌC từ Đợt 2, đọc kèm trong `GET /api/library`. */
 /**
  * Preset — danh mục người dùng tự sửa (phong cách, loại element, nhân vật mẫu…).
  *
@@ -817,11 +775,8 @@ export const cancelRunResultSchema = z.looseObject({
 });
 export type CancelRunResult = z.infer<typeof cancelRunResultSchema>;
 
-/** #38 `GET …/jobs/:job/prompt` (đóng §3.3 "prompt đã dùng"). */
-export const jobPromptSchema = z.looseObject({
-  prompt: z.string().default(""),
-  attachments: z.array(z.string()).default([]),
-});
+/* #38 `jobs/:job/prompt` KHÔNG còn hình dạng ở đây: bảng nhật ký từng tấm sống ở màn
+   lượt chạy, mà màn đó đã bị gỡ ở Đợt 2. */
 
 /** #39 `GET …/raw/:job/history` — giữ 3 đời (đóng B7, R9). */
 export const rawHistoryItemSchema = z.looseObject({

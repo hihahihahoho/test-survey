@@ -6,11 +6,17 @@
  * schema strict + bộ dò secret. `partialize` dùng allowlist FIELD tường minh: hàm
  * (action) và state tạm không bao giờ rời khỏi RAM.
  *
- * ⚠ localStorage KHÔNG CÒN LÀ NGUỒN SỰ THẬT. Gần hết store này sống trên đĩa tại
+ * ⚠ localStorage KHÔNG CÒN LÀ NGUỒN SỰ THẬT. Phần lớn store này sống trên đĩa tại
  * `<workspace>/.kitgen/config.json`; localStorage tụt xuống làm bộ nhớ đệm khởi động và
  * làm đường lùi khi agent chưa chạy. Danh sách field nào lên đĩa (và vì sao `filterQuery`
  * / `filterTags` CỐ Ý ở lại) nằm ở `./disk-settings.ts`; cây cầu ở `./settings-sync.ts`.
  * Thêm field mới vào đây thì cân nhắc thêm nó vào `DISK_UI_FIELDS` luôn.
+ *
+ * ⚠ Đợt 2 (một màn duy nhất) đã bỏ các field của những màn không còn: `locale`,
+ * `density`, `sidebarWidth`, `railCollapsed`, `projectsView`, `filterChip`,
+ * `collapsedSections`, `lastTab`, `kitBackdrop`, `kitZoom`. Vài KIỂU trong số đó vẫn ở
+ * lại đây vì `features/projects` còn dùng để mô tả props (`ProjectsView`, `FilterChip`)
+ * — kiểu thì còn, state thì không.
  */
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -21,93 +27,45 @@ export type ProjectsView = "grid" | "list";
 export type SortBy = "updated" | "name" | "size" | "created";
 export type SortDir = "asc" | "desc";
 export type FilterChip = "all" | "need-gen" | "running" | "failed" | "unfinished";
-export type KitBackdrop = "checker" | "dark" | "light";
 
 const d = defaultsFor(LS_KEYS.ui);
 
 /** Field được phép ghi ra localStorage — TƯỜNG MINH. Thêm field mới phải sửa cả đây. */
-const PERSISTED_FIELDS = [
-  "theme", "locale", "density", "sidebarWidth", "railCollapsed", "projectsView",
-  "sortBy", "sortDir", "filterChip", "filterTags", "filterQuery",
-  "collapsedSections", "lastTab", "kitBackdrop", "kitZoom",
-] as const;
+const PERSISTED_FIELDS = ["theme", "sortBy", "sortDir", "filterTags", "filterQuery"] as const;
 
 export interface UiState {
   theme: Theme;
-  locale: "vi" | "en";
-  density: "comfortable" | "compact";
-  sidebarWidth: number;
-  railCollapsed: boolean;
-  projectsView: ProjectsView;
   sortBy: SortBy;
   sortDir: SortDir;
-  filterChip: FilterChip;
   filterTags: string[];
   filterQuery: string;
-  /** id các nhóm đang gập ở cây thiết kế S3.2 */
-  collapsedSections: string[];
-  /** tab cuối của từng màn: `{ design: "sheets", kit: "assets", settings: "agent" }` */
-  lastTab: Record<string, string>;
-  kitBackdrop: KitBackdrop;
-  kitZoom: number;
 
   setTheme: (t: Theme) => void;
   toggleTheme: () => void;
-  setRailCollapsed: (v: boolean) => void;
-  setSidebarWidth: (px: number) => void;
-  setProjectsView: (v: ProjectsView) => void;
   setSort: (by: SortBy, dir?: SortDir) => void;
-  setFilterChip: (c: FilterChip) => void;
   setFilterQuery: (q: string) => void;
   toggleFilterTag: (tag: string) => void;
   clearFilters: () => void;
-  toggleSection: (id: string) => void;
-  setLastTab: (screen: string, tab: string) => void;
-  setKitBackdrop: (b: KitBackdrop) => void;
-  setKitZoom: (z: number) => void;
 }
 
 export const useUiStore = create<UiState>()(
   persist(
     (set, get) => ({
       theme: d.theme as Theme,
-      locale: d.locale,
-      density: d.density,
-      sidebarWidth: d.sidebarWidth,
-      railCollapsed: d.railCollapsed,
-      projectsView: d.projectsView as ProjectsView,
       sortBy: d.sortBy as SortBy,
       sortDir: d.sortDir as SortDir,
-      filterChip: d.filterChip as FilterChip,
       filterTags: d.filterTags,
       filterQuery: d.filterQuery,
-      collapsedSections: d.collapsedSections,
-      lastTab: d.lastTab,
-      kitBackdrop: d.kitBackdrop as KitBackdrop,
-      kitZoom: d.kitZoom,
 
       setTheme: (theme) => set({ theme }),
       toggleTheme: () => set({ theme: get().theme === "dark" ? "light" : "dark" }),
-      setRailCollapsed: (railCollapsed) => set({ railCollapsed }),
-      setSidebarWidth: (px) => set({ sidebarWidth: Math.min(480, Math.max(180, Math.round(px))) }),
-      setProjectsView: (projectsView) => set({ projectsView }),
       setSort: (sortBy, sortDir) => set({ sortBy, ...(sortDir ? { sortDir } : {}) }),
-      setFilterChip: (filterChip) => set({ filterChip }),
       setFilterQuery: (filterQuery) => set({ filterQuery }),
       toggleFilterTag: (tag) =>
         set((s) => ({
           filterTags: s.filterTags.includes(tag) ? s.filterTags.filter((t) => t !== tag) : [...s.filterTags, tag],
         })),
-      clearFilters: () => set({ filterChip: "all", filterTags: [], filterQuery: "" }),
-      toggleSection: (id) =>
-        set((s) => ({
-          collapsedSections: s.collapsedSections.includes(id)
-            ? s.collapsedSections.filter((x) => x !== id)
-            : [...s.collapsedSections, id],
-        })),
-      setLastTab: (screen, tab) => set((s) => ({ lastTab: { ...s.lastTab, [screen]: tab } })),
-      setKitBackdrop: (kitBackdrop) => set({ kitBackdrop }),
-      setKitZoom: (z) => set({ kitZoom: Math.min(200, Math.max(25, Math.round(z))) }),
+      clearFilters: () => set({ filterTags: [], filterQuery: "" }),
     }),
     {
       name: LS_KEYS.ui,

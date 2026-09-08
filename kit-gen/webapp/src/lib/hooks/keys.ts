@@ -48,8 +48,6 @@ export const qk = {
   contract: {
     all: (projectId: string) => ["contract", projectId] as const,
     current: (projectId: string) => ["contract", projectId, "current"] as const,
-    history: (projectId: string) => ["contract", projectId, "history"] as const,
-    snapshot: (projectId: string, snapshot: string) => ["contract", projectId, "history", snapshot] as const,
   },
 
   elementLib: () => ["element-lib"] as const,
@@ -64,8 +62,6 @@ export const qk = {
     all: () => ["runs"] as const,
     ofProject: (projectId: string) => ["runs", "project", projectId] as const,
     detail: (runId: string) => ["runs", "detail", runId] as const,
-    jobLog: (runId: string, job: string) => ["runs", "detail", runId, "log", job] as const,
-    jobPrompt: (runId: string, job: string) => ["runs", "detail", runId, "prompt", job] as const,
     /**
      * Lịch sử ảnh gốc của MỘT tấm. Chú ý tiền tố: nó KHÔNG nằm dưới `ofProject`, nên
      * `keysAfterRun` phải mời lại `rawHistoryOf` riêng — thiếu dòng ấy thì thanh phiên

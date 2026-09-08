@@ -1,15 +1,14 @@
 /* routes/library.mjs — CRUD kho bộ khung/reference riêng của người dùng. */
 import { parseMultipart } from "../lib/multipart.mjs"
 import {
-  addBrandProfile, addLibraryItem, addLibraryPreset, addPoseTemplate, libraryItemFile, patchBrandProfile,
-  patchLibraryItem, patchLibraryPreset, patchLibrarySettings, patchPoseTemplate, readLibrary, removeBrandProfile,
-  removeLibraryItem, removeLibraryPreset, removePoseTemplate,
+  addBrandProfile, addLibraryItem, addLibraryPreset, libraryItemFile, patchBrandProfile,
+  patchLibraryItem, patchLibraryPreset, patchLibrarySettings, readLibrary, removeBrandProfile,
+  removeLibraryItem, removeLibraryPreset,
 } from "../lib/library.mjs"
 import { fail } from "../lib/errors.mjs"
 
 const BRAND_ID = /^brand_[a-f0-9]{16}$/
 const ID = /^asset_[a-f0-9]{16}$/
-const POSE_ID = /^pose_(?:[a-z0-9][a-z0-9-]{1,40}|[a-f0-9]{16})$/
 const PRESET_ID = /^preset_[a-f0-9]{16}$/
 function assetId(value) {
   const id = String(value ?? "")
@@ -20,12 +19,6 @@ function assetId(value) {
 function brandId(value) {
   const id = String(value ?? "")
   if (!BRAND_ID.test(id)) fail("BAD_REQUEST", "invalid brand id")
-  return id
-}
-
-function poseId(value) {
-  const id = String(value ?? "")
-  if (!POSE_ID.test(id)) fail("BAD_REQUEST", "invalid pose template id")
   return id
 }
 
@@ -41,10 +34,6 @@ export function register(r) {
   r.post("/api/library/brands", async ctx => ({ status: 201, json: { brand: await addBrandProfile(ctx.registry.active, await ctx.json()) } }))
   r.patch("/api/library/brands/:id", async ctx => ({ status: 200, json: { brand: await patchBrandProfile(ctx.registry.active, brandId(ctx.params.id), await ctx.json()) } }))
   r.delete("/api/library/brands/:id", async ctx => { await removeBrandProfile(ctx.registry.active, brandId(ctx.params.id)); return { status: 204 } })
-
-  r.post("/api/library/poses", async ctx => ({ status: 201, json: { pose: await addPoseTemplate(ctx.registry.active, await ctx.json()) } }))
-  r.patch("/api/library/poses/:id", async ctx => ({ status: 200, json: { pose: await patchPoseTemplate(ctx.registry.active, poseId(ctx.params.id), await ctx.json()) } }))
-  r.delete("/api/library/poses/:id", async ctx => { await removePoseTemplate(ctx.registry.active, poseId(ctx.params.id)); return { status: 204 } })
 
   /* Preset — danh mục người dùng tự sửa. `GET /api/library` đã trả kèm mảng
      `presets`, nên ở đây chỉ cần ba cửa ghi; không có route đọc riêng để web

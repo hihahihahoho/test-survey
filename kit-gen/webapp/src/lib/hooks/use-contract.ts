@@ -28,25 +28,9 @@ export function useContract(projectId: string | undefined | null) {
   });
 }
 
-/** #24 — 50 bản lưu, cho drawer "Lịch sử bản thiết kế". */
-export function useContractHistory(projectId: string | undefined | null, limit = 50) {
-  return useQuery({
-    queryKey: qk.contract.history(projectId ?? ""),
-    queryFn: () => api.contract.history(projectId!, limit),
-    enabled: Boolean(projectId),
-    staleTime: STALE.history,
-  });
-}
-
-/** #25 — một bản lịch sử cụ thể (để [Xem diff]). */
-export function useContractSnapshot(projectId: string | undefined | null, snapshot: string | null) {
-  return useQuery({
-    queryKey: qk.contract.snapshot(projectId ?? "", snapshot ?? ""),
-    queryFn: () => api.contract.snapshot(projectId!, snapshot!),
-    enabled: Boolean(projectId && snapshot),
-    staleTime: Infinity, // bản lịch sử là bất biến
-  });
-}
+/* `useContractHistory` (#24), `useContractSnapshot` (#25), `useRestoreContract` (#26) và
+   `useValidateContract` (#27) đã bị gỡ ở Đợt 2: drawer lịch sử bản thiết kế, panel sửa
+   ô và nút vẽ khung đều thuộc những màn không còn. Màn soạn chỉ còn đọc/ghi contract. */
 
 /** Trạng thái xung đột — đủ dữ liệu để dựng modal so sánh 2 cột của §3.4. */
 export interface ConflictState {
@@ -140,22 +124,6 @@ export function useSaveContract(projectId: string) {
     resolveConflict,
     dismissConflict: useCallback(() => setConflict(null), []),
   };
-}
-
-/** #26 — khôi phục từ lịch sử: tạo bản MỚI, không ghi đè lịch sử. */
-export function useRestoreContract(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (snapshot: string) => api.contract.restore(projectId, snapshot),
-    onSuccess: () => {
-      for (const key of keysAfterContractSave(projectId)) void qc.invalidateQueries({ queryKey: key });
-    },
-  });
-}
-
-/** #27 — dry-run validate ở agent (đóng K5). Client cũng validate bằng zod trước đó. */
-export function useValidateContract(projectId: string) {
-  return useMutation({ mutationFn: (contract: Contract) => api.contract.validate(projectId, contract) });
 }
 
 /**

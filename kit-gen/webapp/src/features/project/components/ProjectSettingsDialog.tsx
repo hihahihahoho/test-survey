@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Copy, Download, Trash2 } from "lucide-react";
+import { Copy, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -40,7 +40,7 @@ import { InfoForm } from "../settings/InfoForm";
  * nhau là chỗ người dùng bấm Esc một lần rồi tưởng đã huỷ cả hai.
  */
 export function ProjectSettingsDialog({
-  open, onOpenChange, project, gate, variantId, onDuplicate, onExport, onDelete,
+  open, onOpenChange, project, gate, variantId, onDuplicate, onDelete,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -49,7 +49,6 @@ export function ProjectSettingsDialog({
   /** Phong cách đầu tiên — picker ảnh bìa hỏi #42 theo nó. */
   variantId: string | undefined;
   onDuplicate: () => void;
-  onExport: () => void;
   onDelete: () => void;
 }) {
   const ro = gate.readOnly;
@@ -80,11 +79,6 @@ export function ProjectSettingsDialog({
                 title="Nhân bản dự án này"
                 description="Tạo một bản sao. Chọn được giữ hay bỏ ảnh đã sinh."
                 action={<Button variant="secondary" {...guard} onClick={onDuplicate}><Copy aria-hidden />Nhân bản…</Button>}
-              />
-              <DangerRow
-                title="Xuất ra file .zip"
-                description="Đóng gói bản thiết kế, kit đã cắt và ảnh tham khảo thành một file tải về."
-                action={<Button variant="secondary" {...guard} onClick={onExport}><Download aria-hidden />Xuất…</Button>}
               />
               <DangerRow
                 title="Chuyển dự án vào thùng rác"

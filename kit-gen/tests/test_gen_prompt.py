@@ -603,6 +603,15 @@ class TransparentBackgroundTest(unittest.TestCase):
         for w in ("chroma", "flat solid", "#FF00FF", "#00FF00"):
             self.assertNotIn(w, self.prompt, f"prompt còn nhắc {w!r}")
 
+    def test_safe_zone_KHONG_BAO_GIO_tu_ha_xuong_thanh_goi_y(self):
+        """GUARD ÂM. Ô `free` từng được nối thêm ", placement guide" — lời hứa rằng dao
+        cắt sẽ bám lõi artwork thay vì hộp in ra. `slice.py` KHÔNG có nhánh ấy: nó cắt
+        mọi ô không full-bleed theo đúng toạ độ này. Câu đó là nói dối model, và model
+        vẽ tràn ra ngoài hộp đúng như được cho phép."""
+        p = render_prompt_text(_cfg(skel={"shape": "rrect", "w": 0.5, "h": 0.5, "free": True}))
+        self.assertIn("safe zone x=", p)
+        self.assertNotIn("placement guide", p)
+
     def test_o_glow_khong_con_bat_ve_NEN_DEN(self):
         """Nền đen từng là cách duy nhất lấy quầng sáng (C = α·F trên đen). Alpha
         thật mang sẵn cả dải mờ, nên giữ nền đen chỉ tổ nướng một mảng đen vào
@@ -653,7 +662,11 @@ class TransparentBackgroundTest(unittest.TestCase):
         # ruột thanh máu α≈90 ra α≈5). slice.py nay CHỈ CẮT.
         for name in ("label_blobs", "fill_mask_holes", "snap_to_safe", "align_content_safe",
                      "measure_core", "measure_asset_geometry", "MATTE_BLEND", "asset_blend",
-                     "normalize_pose_side", "painted_checkerboard", "alpha_sheet"):
+                     "normalize_pose_side", "painted_checkerboard", "alpha_sheet",
+                     # `pack_atlas` gói mọi mảnh ruột thành atlas.png + atlas.json cho
+                     # Phaser. Không client nào đọc hai file ấy nữa (tab «Xuất kit» đã
+                     # bỏ), nên nó chỉ còn là hai file rác mỗi lượt cắt.
+                     "pack_atlas"):
             self.assertFalse(hasattr(sl, name), f"slice.py còn máy móc cũ: `{name}`")
         # Quét TÊN IMPORT chứ không quét chữ mô tả: `code_of` chỉ bỏ chú thích `#`,
         # docstring thì ở lại, và docstring của slice.py cố ý kể tên cỗ máy đã bỏ.

@@ -2,8 +2,9 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # P0 — "PIP TUYỆT ĐỐI KHÔNG ĐƯỢC BIÊN DỊCH" + "KITGEN MANG THEO PYTHON RIÊNG".
 #
-# Hiện trường: `pip install pillow numpy scipy pymatting` KHÔNG có `--only-binary`.
-# Máy nào không có wheel dựng sẵn (Python 3.14 chẳng hạn) là pip đi BIÊN DỊCH scipy —
+# Hiện trường: lời gọi `pip install` KHÔNG có `--only-binary` (bản đời đó còn cài cả
+# numpy/scipy/pymatting; nay chỉ còn pillow, nhưng luật thì không đổi một chữ).
+# Máy nào không có wheel dựng sẵn (Python 3.14 chẳng hạn) là pip đi BIÊN DỊCH từ nguồn —
 # ninja bung một tiến trình mỗi nhân CPU, mỗi tiến trình hơn 1 GB RAM. Người dùng thật
 # báo máy ĐƠ hoàn toàn: chuột còn di được, bấm gì cũng không ăn, phải giữ nút nguồn.
 # Gốc rễ sâu hơn: mình để MÁY NGƯỜI DÙNG quyết định phiên bản Python, trong khi Node
@@ -126,7 +127,7 @@ case "$*" in
   *"sys.base_prefix"*) printf '%s\n' "$_base"; exit 0 ;;
   *"sys.version.split"*) printf '%s\n' '3.13.15'; exit 0 ;;
   # Thư viện CHƯA có ⇒ installer buộc phải đi qua pip, đúng thứ ca thử muốn quan sát.
-  *"import PIL,numpy,scipy,pymatting"*) exit 1 ;;
+  *"import PIL"*) exit 1 ;;
 esac
 if [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ]; then
   shift 2

@@ -22,15 +22,15 @@ import {
 } from "@/features/kit-core/lib/kitset-to-contract";
 import type { KitElementSkel } from "@/features/kit-core/lib/model";
 import type { StyleAxes } from "@/features/kit-core/lib/model";
-import { STYLE_AXIS_IDS } from "@/features/kit-form/lib/form-model";
-import { subjectAxisLine } from "@/features/kit-form/lib/style-phrases";
+import { STYLE_AXIS_IDS } from "@/features/kit-core/lib/form-model";
+import { subjectAxisLine } from "@/features/kit-core/lib/style-phrases";
 import { INHERIT, labelOf, phraseOf, type PillKind } from "@/features/prompt-lab/lib/pill-registry";
 import { getPresets, type ElementPreset, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
 import { NODE } from "@/features/prompt-lab/lib/schema";
 import {
   CUSTOM_ELEMENT_SKEL, SQUARE_CANVAS_PX, defaultSizePx, sizePx, type SizePx,
 } from "@/features/prompt-lab/lib/cell-size";
-import { drawBox } from "@/features/design/preview/geometry";
+import { drawBox } from "@/features/kit-core/lib/geometry";
 import { SCAFFOLDS } from "@/features/prompt-lab/lib/doc-templates";
 import { freeText, makeContext, serializeDoc, tidy, type PromptDocNode } from "@/features/prompt-lab/lib/serialize";
 import { contextFreeText, contextOutfitEN, contextStyleEN, contextThemeEN } from "@/features/prompt-lab/lib/serialize-composer";

@@ -1,6 +1,6 @@
 import { Construction } from "lucide-react";
 import { EmptyState, CopyableCode } from "@/components/common";
-import { SCREEN_EXPORT, SCREEN_LABEL, SCREEN_PATH, type ScreenId } from "./screen-contract";
+import { SCREEN_EXPORT, SCREEN_LABEL, SCREEN_PATH, type LazyScreenId } from "./screen-contract";
 
 /**
  * Màn giữ chỗ khi file của team khác CHƯA TỒN TẠI (hợp đồng lazy-mount).
@@ -12,7 +12,7 @@ import { SCREEN_EXPORT, SCREEN_LABEL, SCREEN_PATH, type ScreenId } from "./scree
  * Nội dung cố tình nêu ĐÚNG đường dẫn file + tên export cần có, để người mở ra
  * biết phải tạo gì mà không phải đi hỏi.
  */
-export function ScreenPlaceholder({ screen }: { screen: ScreenId }) {
+export function ScreenPlaceholder({ screen }: { screen: LazyScreenId }) {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
       <EmptyState
@@ -22,7 +22,7 @@ export function ScreenPlaceholder({ screen }: { screen: ScreenId }) {
         steps={[
           `Tạo file ${SCREEN_PATH[screen]}`,
           `Export component tên ${SCREEN_EXPORT[screen]} (hoặc export default)`,
-          "Nhận props { projectId?, runId? } và tự lấy dữ liệu bằng hook trong @/lib/hooks",
+          "Nhận props { projectId? } và tự lấy dữ liệu bằng hook trong @/lib/hooks",
         ]}
       />
       <CopyableCode

@@ -40,7 +40,6 @@ import { register as registerRefs } from "./routes/refs.mjs"
 import { register as registerRuns } from "./routes/runs.mjs"
 import { register as registerFiles } from "./routes/files.mjs"
 import { register as registerCover } from "./routes/cover.mjs"
-import { register as registerDocs } from "./routes/docs.mjs"
 import { register as registerApp } from "./routes/app.mjs"
 import { register as registerLibrary } from "./routes/library.mjs"
 import { sweepOrphanCovers } from "./lib/cover.mjs"
@@ -178,7 +177,6 @@ export async function createAgent(opts = {}) {
   registerRuns(router)
   registerFiles(router)
   registerCover(router)
-  registerDocs(router)
   registerLibrary(router)
   registerApp(router)
 

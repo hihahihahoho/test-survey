@@ -1,4 +1,4 @@
-import { CANVAS_SQUARE } from "@/features/design/preview/geometry";
+import { CANVAS_SQUARE } from "@/features/kit-core/lib/geometry";
 
 /**
  * pose-sheet.ts — GHÉP ẢNH MANƠCANH CỦA NHIỀU DÒNG THÀNH MỘT TẤM.

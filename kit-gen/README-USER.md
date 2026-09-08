@@ -188,17 +188,17 @@ Nên làm:
 Vì mỗi lượt tạo ảnh ăn quota gấp 3–5 lần câu chat thường, một bộ 28 lượt tương đương khoảng
 **84–140 câu chat**. Hãy tính trước.
 
-### Thiếu thư viện cắt ảnh (Pillow / numpy)
+### Thiếu thư viện cắt ảnh (Pillow)
 
 Nếu script báo không cài được, thường là do mạng hoặc proxy công ty. Chạy lại:
 
 ```bash
-"$HOME/KitGen/.venv/bin/python" -m pip install pillow numpy scipy pymatting
+"$HOME/KitGen/.venv/bin/python" -m pip install pillow
 ```
 
 (thay `$HOME/KitGen` bằng thư mục làm việc của bạn). Log đầy đủ ở `<thư-mục-làm-việc>/.kitgen/pip-install.log`.
 
-Chỉ có `pillow` thì vẫn cắt được ảnh, nhưng mép vùng phát sáng sẽ kém mượt hơn.
+`pillow` là thư viện Python **duy nhất** công cụ cần.
 
 ### Muốn đổi thư mục làm việc
 
@@ -228,7 +228,6 @@ bash setup.sh                    # cài / kiểm tra / bật công cụ local
 bash setup.sh --dry-run          # xem trước, không thay đổi gì
 bash setup.sh --port 8770        # đổi cổng khi bị chiếm
 bash setup.sh --install-app      # cài bản chạy tại máy vào thư mục làm việc
-bash setup.sh --with-vitmatte    # thêm bộ cắt ảnh chất lượng cao nhất (~2-3 GB)
 bash setup.sh --help             # xem hết tuỳ chọn
 ```
 

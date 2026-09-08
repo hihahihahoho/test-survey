@@ -16,7 +16,7 @@
      suite-runs      run-store trên đĩa · stream NDJSON + reconnect · dừng · gen→slice thật
      suite-pause     dừng giữa chừng → chạy tiếp phần thiếu · run mồ côi sau khi agent chết
      suite-cover     ảnh bìa: prompt neo branding gốc · toạ độ vùng tiêu đề · job phụ không phá run
-     suite-import    nhập một chiều có báo cáo · /app/ same-origin · /bridge.html · redact
+     suite-import    /app/ same-origin · /bridge.html · redact
      suite-codex-login  nút đăng nhập device-auth: lọc theo danh sách trắng · mã dùng xong bỏ
    ========================================================================== */
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises"
@@ -32,7 +32,6 @@ import { run as runProjects } from "./test/suite-projects.mjs"
 import { run as runPaths } from "./test/suite-paths.mjs"
 import { run as runContract } from "./test/suite-contract.mjs"
 import { run as runLimits } from "./test/suite-limits.mjs"
-import { run as runDocs } from "./test/suite-docs.mjs"
 import { run as runRefs } from "./test/suite-refs.mjs"
 import { run as runRuns } from "./test/suite-runs.mjs"
 import { run as runPause } from "./test/suite-pause.mjs"
@@ -88,7 +87,6 @@ await runSettings(base)
 const { pid } = await runProjects(base)
 await runPaths({ ...base, pid })
 await runContract({ ...base, pid })
-await runDocs({ ...base, pid })
 await runLimits({ ...base, pid })
 await runRefs({ ...base, pid })
 await runLibrary(base)

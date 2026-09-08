@@ -53,8 +53,8 @@ rm -rf "$STAGE/$PKG/agent/test" "$STAGE/$PKG/agent/test-fixtures" "$STAGE/$PKG/a
 # slice.py (cắt asset theo đúng toạ độ ấy) đều `import geometry` ngay dòng đầu. Thiếu nó
 # thì lượt gen chết bằng ModuleNotFoundError trên máy người dùng.
 # (Chỗ này trước 27/08/2026 chép bộ khung xương — skeleton.html / skeleton-svg.js /
-#  render-skeleton.mjs / silhouettes.js. Khung xương đã bỏ: prompt tự nói toạ độ, không
-#  còn ảnh nào để render, và @resvg/resvg-wasm không còn ai gọi.)
+#  render-skeleton.mjs / silhouettes.js. Khung xương đã bỏ hẳn: prompt tự nói toạ độ,
+#  không còn ảnh nào để render; @resvg/resvg-wasm nay cũng không còn được cài nữa.)
 # Thiếu file ở đây KHÔNG được im lặng: bản build vẫn ra tar.gz, cài xong mới hỏng trên
 # máy người dùng. `[ -f ] && cp` đời cũ vừa bỏ qua âm thầm vừa làm `set -e` bắn nhầm khi
 # file cuối danh sách vắng mặt.

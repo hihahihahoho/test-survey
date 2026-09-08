@@ -257,14 +257,5 @@ export function useActivateWorkspace() {
   });
 }
 
-/** #19/#20 — upload + đối chiếu trước khi nhập (wizard §4.6). */
-export function useUpload() {
-  return useMutation({ mutationFn: (file: File) => api.uploads.create(file) });
-}
-
-export function useImportPreview() {
-  return useMutation({
-    mutationFn: (payload: { source: "zip" | "stylesJson" | "folder"; uploadId?: string; path?: string }) =>
-      api.import.preview(payload),
-  });
-}
+/* `useUpload` (#19) và `useImportPreview` (#20) đã bị gỡ ở Đợt 2 cùng wizard nhập .zip:
+   không còn màn nào nhập project từ file nén, nên không còn ai gọi hai route đó. */

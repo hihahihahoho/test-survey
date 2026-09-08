@@ -8,9 +8,11 @@
  * │ Đường đi tới nó: POST /api/projects/:id/runs với `kind:"gen"`            │
  * │            → agent/lib/engine.mjs:137 → bash gen.sh → gen.sh:163.        │
  * │ 41/42 endpoint còn lại là I/O đĩa thuần — KHÔNG tốn một lượt AI nào.     │
- * │ Khi được chốt: nút Vẽ đi qua features/runs/components/GenerateDialog.tsx │
- * │ ("CỬA DUY NHẤT TIÊU QUOTA" — đã có doctor gate, ước lượng, cảnh báo      │
- * │ quota, xử lý run đang chạy), rồi mới gỡ cổng này.                        │
+ * │ Cửa DUY NHẤT tiêu quota nay là src/lib/hooks/use-generate-run.ts — nó    │
+ * │ nằm NGOÀI mọi vùng cấm bên dưới, có chủ ý: cổng này chỉ có nghĩa khi cửa │
+ * │ tiêu tiền ở một chỗ được đọc kỹ, không phải trong màn người ta gõ mỗi   │
+ * │ ngày. `features/runs/components/GenerateDialog.tsx` (dialog xác nhận số │
+ * │ lượt của màn theo dõi) đã bị xoá cùng màn ấy ở đợt IA prompt-first.      │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
  * VÌ SAO KHÔNG PHẢI MỘT LỆNH `grep`:
@@ -64,15 +66,17 @@ const GUARDED = [
   "src/features/prompt-canvas",
 ];
 
-/** Hook cắt: dù nằm ở đâu cũng phải giữ `kind` là hằng (luật ③). */
-const SLICE_HOOKS = [
-  "src/features/runs/lib/useSliceRun.ts",
-  "src/features/kit/lib/useKitData.ts",
-  // Hook cắt của màn dự án (S2). Nó ĐÃ tồn tại từ lâu nhưng mồ côi — không nơi nào
-  // import — nên chưa ai nghĩ tới việc soi. Nay nút [Cắt N lượt] đấu vào nó thật, và
-  // luật ③ phải phủ nó: một hook cắt LIVE mà `kind` lỏng là đúng cái lỗ cổng này canh.
-  "src/features/project/lib/useSliceRun.ts",
-];
+/**
+ * Hook cắt: dù nằm ở đâu cũng phải giữ `kind` là hằng (luật ③).
+ *
+ * 08/09/2026 — DANH SÁCH RỖNG, và đó là sự thật chứ không phải một chỗ quên dọn.
+ * Web KHÔNG CÒN tự phát lượt cắt: `use-generate-run.ts` gửi `autoSliceAfterGen:true`
+ * và agent cắt từng tấm ngay sau khi ảnh về. Ba hook cũ
+ * (`runs/lib/useSliceRun`, `kit/lib/useKitData`, `project/lib/useSliceRun`) đã bị xoá
+ * cùng màn của chúng. Ai dựng lại một nút [Cắt] ở web thì THÊM đường dẫn vào đây —
+ * luật ③ tồn tại vì `kind` lỏng ở hook cắt là đường vòng qua luật ①.
+ */
+const SLICE_HOOKS = [];
 
 function walk(dir, acc = []) {
   if (!existsSync(dir)) return acc;

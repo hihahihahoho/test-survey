@@ -5,8 +5,7 @@
    Thứ tự dò bundle (xem resolveBundleRoot):
      1. --app-root <path>          — chỉ định tường minh
      2. <workspace>/.kitgen/app    — bản do setup.sh cài
-     3. <repo>/webapp/dist         — bản BUILD của React (stack mới)
-     4. <repo>/web                 — bản vanilla (đường lùi, giữ nguyên không xoá)
+     3. <repo>/webapp/dist         — bản BUILD của React (dev)
    Không có bundle nào → trả trang giải thích + link, KHÔNG 404 câm. */
 import { readFile } from "node:fs/promises"
 import { dirname, join, resolve, extname } from "node:path"
@@ -18,13 +17,12 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const AGENT_DIR = resolve(HERE, "..")
 const REPO_ROOT = resolve(AGENT_DIR, "..")
 const REPO_WEBAPP_DIST = resolve(REPO_ROOT, "webapp", "dist")
-const REPO_WEB = resolve(REPO_ROOT, "web")
 
-/** Ưu tiên bundle React đã build; rơi về bản vanilla nếu chưa build bao giờ.
- *  Điều kiện "hợp lệ" là có index.html — webapp/dist rỗng/nửa vời sẽ bị bỏ qua,
- *  người dùng vẫn vào được app cũ thay vì gặp trang trắng. */
+/** Bản do setup cài trước, rồi tới bản build tại chỗ của dev.
+ *  Điều kiện "hợp lệ" là có index.html — webapp/dist rỗng/nửa vời sẽ bị bỏ qua
+ *  để rơi tiếp xuống ứng viên sau thay vì phục vụ một trang trắng. */
 export async function resolveBundleRoot(ws, override) {
-  for (const c of [override, join(ws.kitgenDir, "app"), REPO_WEBAPP_DIST, REPO_WEB]) {
+  for (const c of [override, join(ws.kitgenDir, "app"), REPO_WEBAPP_DIST]) {
     if (c && (await isDir(c)) && (await exists(join(c, "index.html")))) return c
   }
   return null

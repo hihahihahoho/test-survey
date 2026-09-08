@@ -69,22 +69,20 @@ describe("2B-1 · thang display + dọn `text-[Npx]`", () => {
     expect(line).toBe("text-display-2 sm:text-display-1");
   });
 
-  /* Toa gốc đếm 55, đếm lại thật là 66. Ngưỡng 3 = ba chỗ CỐ Ý còn lại, tất cả
-     nằm ở `ProjectRail.tsx` (ĐÔNG LẠNH từ W1-13, không route nào render) — xem
-     W2B-DONE §Cố ý chưa làm. Ai thêm chỗ mới sẽ đẩy số này lên và làm đỏ ca này. */
-  it("`text-[Npx]` trong MÃ (không tính chú thích) chỉ còn ở file đông lạnh", () => {
+  /* Toa gốc đếm 55, đếm lại thật là 66. Trần từng là 3 (ba chỗ CỐ Ý ở
+     `ProjectRail.tsx`, ĐÔNG LẠNH từ W1-13); file đó đã bị XOÁ 08/09/2026 nên trần
+     hạ xuống 0. Trần chỉ được đi XUỐNG — ai thêm một `text-[Npx]` mới sẽ làm đỏ. */
+  it("`text-[Npx]` trong MÃ (không tính chú thích) đã sạch hoàn toàn", () => {
     const hits = SRC.flatMap(({ path, code }) =>
       [...code.matchAll(/text-\[\d+px\]/g)].map(() => path),
     );
-    expect([...new Set(hits)]).toEqual(["src/components/layout/ProjectRail.tsx"]);
-    expect(hits.length).toBeLessThanOrEqual(1);
+    expect([...new Set(hits)]).toEqual([]);
+    expect(hits.length).toBe(0);
   });
 
-  it("bốn H1 cấp trang đều đi qua `DISPLAY`, không màn nào tự khai cỡ", () => {
-    for (const f of [
-      "src/features/settings/parts/StepCard.tsx",
-      "src/features/project/ProjectSettingsScreen.tsx",
-    ]) {
+  it("H1 cấp trang đi qua `DISPLAY`, không màn nào tự khai cỡ", () => {
+    /* `ProjectSettingsScreen` đã xoá 08/09/2026 (cài đặt dự án nay là dialog). */
+    for (const f of ["src/features/settings/parts/StepCard.tsx"]) {
       expect(read(f)).toContain("DISPLAY");
     }
     expect(read("src/features/home/components/HomeHeader.tsx")).toContain("text-subtitle text-fg-strong");
@@ -243,12 +241,14 @@ describe("2B-6 · sạn nhỏ nhưng lộ ngay", () => {
     expect(rule).toMatch(/rounded-4/);
   });
 
-  it("dot-grid rời trang form + trang danh sách, GIỮ trên canvas (mục 'phải giữ' #10)", () => {
+  it("dot-grid không còn ở trang nào — canvas tự do đã bị gỡ", () => {
     expect(/\.workflow-page\s*\{([^}]*)\}/.exec(GLOBALS)![1]!).not.toContain("radial-gradient");
-    expect(read("src/features/projects/ProjectsScreen.tsx")).not.toContain("DOTGRID");
-    expect(read("src/features/kit-form/KitFormScreen.tsx")).not.toContain("DOTGRID");
-    expect(read("src/features/design/components/SheetCanvas.tsx")).toContain("DOTGRID");
-    expect(GLOBALS).toMatch(/\.kg-dotgrid\s*\{/); // tiện ích còn nguyên
+    /* Chỗ CUỐI CÙNG còn nền chấm là `design/components/SheetCanvas.tsx` — canvas tự
+       do, đã xoá 08/09/2026. Nên luật đổi từ "rời trang form + danh sách, GIỮ trên
+       canvas" thành "không trang nào có": không còn canvas để mà giữ. */
+    expect(SRC.filter(({ code }) => code.includes("DOTGRID")).map((f) => f.path)).toEqual([
+      "src/components/layout/flora.ts",
+    ]);
   });
 
   it("toast lỗi có đường tự thoát và vẫn giữ nút đóng thủ công", () => {

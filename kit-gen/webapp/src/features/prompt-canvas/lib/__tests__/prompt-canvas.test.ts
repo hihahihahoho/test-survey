@@ -10,7 +10,7 @@ import { EXPRESSIONS, OUTFIT_THEMES } from "@/features/kit-core/lib/poses";
 import {
   CUSTOM_ELEMENT_SKEL, SIZE_PRESETS, SQUARE_CANVAS_PX, defaultSizeOf, skelSizePx, stepSizePx,
 } from "@/features/prompt-lab/lib/cell-size";
-import { cellInner, drawBox } from "@/features/design/preview/geometry";
+import { cellInner, drawBox } from "@/features/kit-core/lib/geometry";
 import { seedPresets } from "@/features/prompt-lab/lib/presets-store";
 import { backgroundDoc, contextDoc, mascotDoc } from "@/features/prompt-lab/lib/doc-templates";
 import { NODE } from "@/features/prompt-lab/lib/schema";

@@ -1,5 +1,5 @@
 import {
-  ArrowUpRight, Copy, Download, FolderOpen, MoreHorizontal, Pencil, Trash2,
+  ArrowUpRight, Copy, FolderOpen, MoreHorizontal, Pencil, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,7 +36,6 @@ export interface KitActions {
   open: (p: Project) => void;
   rename: (p: Project) => void;
   duplicate: (p: Project) => void;
-  exportZip: (p: Project) => void;
   remove: (p: Project) => void;
 }
 
@@ -97,10 +96,6 @@ export function KitCardMenu({
           <DropdownMenuShortcut>⌘D</DropdownMenuShortcut>
         </DropdownMenuItem>
 
-        <DropdownMenuItem disabled={ro || kit.broken} onSelect={() => actions.exportZip(kit)}>
-          <Download aria-hidden />
-          {label(BTN.DOWNLOAD_ZIP)}
-        </DropdownMenuItem>
 
         <DropdownMenuItem disabled={ro} onSelect={doReveal}>
           <FolderOpen aria-hidden />

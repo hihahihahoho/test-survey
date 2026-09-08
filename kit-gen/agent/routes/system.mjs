@@ -39,20 +39,6 @@ export function register(r) {
     return { status: 200, json: await ctx.doctor(ctx.registry.active, { refresh }) }
   })
 
-  /** SHIM tương thích — hồ sơ ảnh riêng đã bị BỎ (quyết định 24/08/2026): chỉ còn
-   *  một home `~/.codex`, xem `resolveCodexHome` trong doctor.mjs. Bundle web CŨ
-   *  (đứng chờ trong lượt update kế tiếp) vẫn có thể PATCH vào đây; trả về hình
-   *  dạng cũ với giá trị duy nhất còn tồn tại và KHÔNG ghi gì vào config.
-   *  `imageGen` sót lại trong config.json cũ được mọi phần code bỏ qua. */
-  r.patch("/api/image-profile", async ctx => {
-    await ctx.json().catch(() => ({}))
-    invalidateDoctorCache()
-    return {
-      status: 200,
-      json: { ok: true, mode: "default", profile: "default-home", codexHomeLabel: "~/.codex" },
-    }
-  })
-
   /* ── ĐĂNG NHẬP CODEX BẰNG MÃ THIẾT BỊ ──────────────────────────────────────
      Ba endpoint dưới đây KHÔNG nới hợp đồng bảo mật, lý do đầy đủ ở đầu
      `lib/codex-login.mjs`. Tóm tắt phần liên quan tới tầng HTTP:
@@ -135,9 +121,6 @@ export function register(r) {
       },
     }
   }
-  /* `/api/update` giữ tương thích với webapp cũ; tên đầy đủ giúp bundle mới phân biệt
-     rõ đây là lệnh cài, đồng thời cả hai đi chung khóa idempotent. */
-  r.post("/api/update", installUpdate)
   r.post("/api/update/install", installUpdate)
 
   r.get("/api/workspaces", async ctx => ({
