@@ -62,6 +62,11 @@ export interface BrandBinding {
   restoreColors: () => void;
   /** Chép một asset thư viện vào `refs/` của dự án (có nhớ, không tải lại). */
   copyAsset: (assetId: string) => Promise<PillImage>;
+  /**
+   * Tên đọc được của một tấm `refs/…` đã chép từ kho («Bot»), tra ngược qua bảng
+   * `brandAssets`. Rỗng khi tấm ấy không đến từ kho — pill rơi về tên tệp.
+   */
+  labelOfRef?: (path: string) => string;
   /** Mở màn quản lý kho thương hiệu; vắng ⇒ menu không bày mục ấy. */
   manage?: () => void;
 }

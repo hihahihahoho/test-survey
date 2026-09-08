@@ -242,10 +242,10 @@ describe("pill theme/phong cách mở ra hộp chọn nguồn ba nấc", () => {
         onState={(next) => { latest = next; }}
       />,
     );
-    /* Pill mang ảnh ⇒ nhãn của nó là TÊN tấm ảnh. `getAllByRole`[0] vì nút bỏ
-       ảnh nằm NGAY TRONG pill và cũng mang tên tệp trong nhãn — vật ngoài cùng
-       (chính cái pill) là vật đứng trước trong cây. */
-    fireEvent.click(screen.getAllByRole("button", { name: /tet\.png/ })[0]!);
+    /* Pill có cả ảnh lẫn giá trị ⇒ nhãn là GIÁ TRỊ (ảnh chỉ đứng thêm vào, không
+       nuốt chữ); ô ảnh chưa tải là một ô giữ chỗ câm, không in tên tệp. Nút bỏ
+       ảnh («Bỏ ảnh tet.png») là vật RIÊNG nằm trong pill. */
+    fireEvent.click(screen.getByRole("button", { name: /Tết festive outfit/ }));
     expect(screen.getByRole("tab", { name: "Đính ảnh" }).getAttribute("aria-selected")).toBe("true");
 
     fireEvent.click(screen.getByRole("button", { name: "Bỏ ảnh" }));

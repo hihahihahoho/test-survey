@@ -284,6 +284,7 @@ export function OptionPill({
   custom = "",
   onCustom,
   image = null,
+  imageLabel = "",
   onAttach,
   onDropImage,
   attaching,
@@ -310,6 +311,8 @@ export function OptionPill({
   onCustom?: (next: string) => void;
   /** Ảnh đang dùng cho pill này — hiện thành thumbnail ĐỨNG TRƯỚC nhãn. */
   image?: PillImage | null;
+  /** Tên đọc được của tấm ảnh («Bot»). Rỗng ⇒ pill hiện tên tệp. */
+  imageLabel?: string;
   /** Vắng ⇒ hộp KHÔNG bày nấc «Đính ảnh» — xem `takesImage`. */
   onAttach?: (file: File) => void;
   /** Bỏ tấm ảnh đang dùng. */
@@ -361,7 +364,7 @@ export function OptionPill({
     : value && options.length > 0
       ? labelOf(kind, value, presets)
       : shot
-        ? shot.refName
+        ? imageLabel || shot.refName
         : labelOf(kind, "", presets);
   const title = custom || undefined;
 
@@ -394,7 +397,8 @@ export function OptionPill({
         {shot && onDropImage && (
           <RefImageBody projectId={projectId ?? null} image={shot} onRemove={onDropImage} />
         )}
-        <span className={cn(axis && "truncate")}>{label}</span>
+        {/* Chữ có TRẦN: một tên tệp dài không được kéo pill ra khỏi câu. */}
+        <span className={cn("truncate", axis ? "" : "max-w-56")}>{label}</span>
         {/* Cái bút nói ra "chữ này do bạn viết, không phải một mục có sẵn" — nếu
             không thì một mô tả tự gõ trông y hệt một preset và người dùng đi tìm
             nó trong danh sách. */}

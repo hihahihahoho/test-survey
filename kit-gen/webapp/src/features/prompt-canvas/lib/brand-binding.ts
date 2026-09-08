@@ -200,9 +200,22 @@ export function useBrandBinding(
     [current, items],
   );
 
+  /* Tra ngược path → assetId → tên trong kho. Đọc `composer` (không phải `stateRef`)
+     vì đây là chữ để VẼ, phải đi theo vòng render. Không phụ thuộc thương hiệu
+     đang chọn: bỏ thương hiệu sau khi đã chọn linh vật thì tên vẫn còn. */
+  const labelOfRef = React.useCallback(
+    (path: string): string => {
+      const hit = Object.entries(composer.brandAssets ?? {}).find(([, p]) => p === path);
+      if (!hit) return "";
+      return items.find((entry) => entry.id === hit[0])?.name ?? "";
+    },
+    [composer.brandAssets, items],
+  );
+
   return {
     brands: options,
     brandId: composer.brandId,
+    labelOfRef,
     name: current?.name ?? "",
     colorsEdited: !!current && current.colors.length > 0 && !sameColors(composer.brandColors, current.colors),
     busy,

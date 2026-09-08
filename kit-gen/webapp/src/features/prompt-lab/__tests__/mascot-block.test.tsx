@@ -31,8 +31,9 @@ vi.mock("../lib/presets-store", async (orig) => {
 });
 
 /** Dây thương hiệu tối thiểu — chỉ những thứ pill nhân vật thật sự đọc. */
-function binding(mascots: BrandMascot[], copyAsset = vi.fn()): BrandBinding {
+function binding(mascots: BrandMascot[], copyAsset = vi.fn(), labelOfRef?: (path: string) => string): BrandBinding {
   return {
+    ...(labelOfRef ? { labelOfRef } : {}),
     brands: [{ id: "b1", name: "Vinamilk", colors: [] }],
     brandId: "b1",
     name: "Vinamilk",
@@ -138,5 +139,35 @@ describe("pill nhân vật: danh sách chọn sẵn CHỈ đến từ thương h
     /* Ảnh phải nằm trong ATTR của chính pill — đó là thứ `mascotSheets` đọc ra
        `sheet.ref`. Nằm ở đâu khác thì màn hình vẫn đẹp còn máy vẽ không thấy gì. */
     await waitFor(() => expect(JSON.stringify(latest?.doc)).toContain("refs/gau-vang.png"));
+  });
+
+  /**
+   * Chủ sản phẩm nhìn pill hiện `char-asset-7718b693fe183f40.jpg` và hỏi: *"chọn
+   * nhân vật thì phải theo tên nhân vật chứ không phải ảnh?"*. Tên tệp là KHOÁ
+   * của agent; chữ trên pill phải là tên trong kho — và tra ngược từ `path`, không
+   * ghi thêm attr nào vào tài liệu.
+   */
+  it("chọn linh vật xong ⇒ pill hiện TÊN linh vật, không phải tên tệp", async () => {
+    const copyAsset = vi.fn().mockResolvedValue({ refName: "char-asset-7718b693fe183f40.jpg", path: "refs/char-asset-7718b693fe183f40.jpg" });
+    const labelOfRef = (path: string) => (path === "refs/char-asset-7718b693fe183f40.jpg" ? "Bot" : "");
+    render(<Harness brand={binding([{ assetId: "a1", name: "Bot" }], copyAsset, labelOfRef)} />);
+    await openMascotPill();
+    fireEvent.click(screen.getByRole("option", { name: /Bot/ }));
+
+    const pill = await waitFor(() => {
+      const found = document.querySelector("[data-kg-node='optionPill'][data-kind='mascot'] button") as HTMLElement | null;
+      expect(found?.textContent).toContain("Bot");
+      return found!;
+    });
+    expect(pill.textContent).not.toContain("char-asset-7718b693fe183f40.jpg");
+  });
+
+  it("linh vật trong danh sách có ô thumbnail đứng trước tên", async () => {
+    render(<Harness brand={binding([{ assetId: "a1", name: "Gấu Vàng" }])} />);
+    await openMascotPill();
+    const row = screen.getByRole("option", { name: /Gấu Vàng/ });
+    /* Ảnh tải bất đồng bộ; trước khi về thì đã có ô giữ chỗ cùng cỡ — danh sách
+       không nhảy khi ảnh tới. */
+    expect(row.querySelector("img, span[aria-hidden].size-8")).not.toBeNull();
   });
 });

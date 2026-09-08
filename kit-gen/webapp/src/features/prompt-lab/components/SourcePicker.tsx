@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PillImage } from "@/features/prompt-canvas/lib/pill-image";
 import { useRefThumb } from "./RefImagePill";
+import { useLibraryImage } from "@/lib/hooks";
 
 /**
  * SourcePicker — MỘT hộp chọn cho MỌI câu hỏi "cái này lấy từ đâu".
@@ -45,6 +46,8 @@ export interface SourceOption {
   en?: string;
   /** Ghi chú phụ (tên ảnh của một nhân vật mẫu chẳng hạn). */
   hint?: string;
+  /** Ảnh trong kho dùng chung đứng sau mục này (linh vật thương hiệu) — hiện thumbnail. */
+  assetId?: string;
 }
 
 /** Một nhóm mục có tiêu đề — dùng khi danh sách đến từ hai kho khác nhau. */
@@ -384,6 +387,7 @@ function PresetPanel({
                 selected={marked && option.value === value}
                 onSelect={() => onChoose(option.value)}
               >
+                {option.assetId && <AssetThumb id={option.assetId} alt={option.vi} />}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-fg-strong">{option.vi}</span>
                   {/* Hiện luôn cụm tiếng Anh SẼ vào prompt — người dùng thấy trước
@@ -436,6 +440,16 @@ function PresetPanel({
  * cách dài hơn thế, nên người dùng bàn phím không được phải Tab qua từng mục để
  * ra khỏi nó.
  */
+/** Thumbnail của một mục lấy từ kho dùng chung — người chọn nhân vật phải THẤY mặt nó. */
+function AssetThumb({ id, alt }: { id: string; alt: string }) {
+  const src = useLibraryImage(id);
+  return src ? (
+    <img src={src} alt={alt} className="size-8 shrink-0 rounded-1 border border-line-subtle object-cover" />
+  ) : (
+    <span aria-hidden className="size-8 shrink-0 rounded-1 border border-line-subtle bg-raised" />
+  );
+}
+
 function SourceRow({
   selected,
   onSelect,

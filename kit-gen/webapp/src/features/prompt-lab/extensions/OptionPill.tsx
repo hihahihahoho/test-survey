@@ -43,6 +43,15 @@ function OptionPillView({ node, updateAttributes, extension }: ReactNodeViewProp
   const projectId = usePromptProjectId();
   const brand = useBrandBinding();
   const [attaching, setAttaching] = React.useState(false);
+  /* TÊN HIỆN TRÊN PILL cho tấm ảnh — «Bot», không phải `char-asset-7718b….jpg`.
+     Tra NGƯỢC từ `path` qua bảng `brandAssets` của bản nháp (assetId → path) rồi
+     ra tên linh vật trong kho — KHÔNG ghi thêm attr vào tài liệu: một attr mới có
+     mặc định là mọi bản nháp cũ bị coi là "đã đổi" ngay lúc mở (xem ca ⑥ của
+     `uikit-block.test.tsx`). Ảnh tự tải lên không có trong bảng ⇒ rỗng ⇒ pill rơi
+     về tên tệp như cũ. `refName` vẫn là KHOÁ để agent xoá đúng tệp, không phải chữ
+     để đọc. */
+  const refLabel = image.path ? (brand?.labelOfRef?.(image.path) ?? "") : "";
+
 
   /**
    * Ảnh chỉ được mời ở PILL CÓ ĐƯỜNG RA — xem `takesImage` và option `refs`.
@@ -82,7 +91,7 @@ function OptionPillView({ node, updateAttributes, extension }: ReactNodeViewProp
       ? [
           {
             title: `Linh vật của ${brand?.name || "thương hiệu"}`,
-            options: brandMascots.map((item) => ({ value: assetValue(item.assetId), vi: item.name })),
+            options: brandMascots.map((item) => ({ value: assetValue(item.assetId), vi: item.name, assetId: item.assetId })),
           },
         ]
       : [];
@@ -165,6 +174,7 @@ function OptionPillView({ node, updateAttributes, extension }: ReactNodeViewProp
         compact={compact}
         attaching={attaching}
         image={image}
+        imageLabel={refLabel}
         projectId={projectId}
         extraGroups={extraGroups}
         onChange={choose}

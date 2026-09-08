@@ -68,7 +68,13 @@ export function RefImageBody({
           className="size-7 shrink-0 rounded-1 border border-line-subtle object-cover"
         />
       ) : (
-        <span className="max-w-40 truncate">{image.refName}</span>
+        /* Ảnh chưa về (hoặc hỏng) ⇒ ô giữ chỗ cùng cỡ, KHÔNG phải tên tệp: chữ
+           đứng cạnh đã là nhãn của pill, in tên tệp nữa là hai nhãn cho một ảnh. */
+        <span
+          aria-hidden
+          title={image.refName}
+          className="size-7 shrink-0 rounded-1 border border-line-subtle bg-raised"
+        />
       )}
       <span
         role="button"
