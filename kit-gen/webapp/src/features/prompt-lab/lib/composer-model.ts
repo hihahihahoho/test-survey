@@ -2,7 +2,7 @@ import type { JSONContent } from "@tiptap/react";
 import { EXPRESSIONS } from "@/features/kit-core/lib/poses";
 import { glazeOrAuto } from "@/features/kit-core/lib/glaze";
 import { DEFAULT_VIEW } from "@/features/prompt-lab/lib/pose/pose-state";
-import { getPresets, type PresetBundle } from "./presets-store";
+import { DECOR_PLACE_DEFAULT, decorLevelOf, getPresets, type PresetBundle } from "./presets-store";
 import { INHERIT } from "./pill-registry";
 import { defaultSizeOf } from "./cell-size";
 import { backgroundDoc, mascotDoc } from "./doc-templates";
@@ -171,8 +171,23 @@ export interface UiCell {
   elementId: string;
   /** Rỗng = theo phong cách chung ở đầu tài liệu. */
   styleId: string;
-  /** "1".."7" — xem `DECOR_LEVELS`. */
+  /**
+   * LƯỢNG TRANG TRÍ — id của `DECOR_LEVELS` (`none` · `light` · `medium` · `rich`).
+   *
+   * Trước 09/2026 trường này là một con số "1".."7" (độ dày viền). Bản nháp đời cũ
+   * được dịch ngay lúc ĐỌC (`decorLevelOf` trong `composer-doc.readCell`): một con
+   * số lọt vào thang mới không tra ra mục nào, và dòng element sẽ mất câu trang trí
+   * mà không ai báo.
+   */
   decor: string;
+  /**
+   * BỐ TRÍ chỗ trang trí — id của `DECOR_PLACES`. LUÔN CÓ GIÁ TRỊ; mặc định `balanced`.
+   *
+   * CHỈ ĐI VÀO PROMPT khi `decor` khác «Không» — xem `hasDecorPlacement`. Trường vẫn
+   * được GIỮ khi ô về «Không» (không xoá theo): kéo trang trí xuống rồi kéo lên lại
+   * mà mất cách bố trí đã chọn là một đường mất dữ liệu câm.
+   */
+  decorPlace: string;
   /**
    * ĐỤC NỀN — id trong `GLAZE_PRESETS`. LUÔN CÓ GIÁ TRỊ; mặc định là `auto`.
    *
@@ -462,7 +477,10 @@ export function newCell(elementId: string, presets: PresetBundle = getPresets())
     /* Kế thừa phong cách chung là mặc định — một ô vừa thêm KHÔNG được tự ý
        tách khỏi phong cách của cả bộ kit. */
     styleId: INHERIT,
-    decor: String(preset?.decor ?? 4),
+    decor: decorLevelOf(preset?.decor),
+    /* «Cân đối» cho mọi ô mới, kể cả ô «Không trang trí»: trường sống độc lập với
+       việc nó có được in ra hay không (xem `UiCell.decorPlace`). */
+    decorPlace: DECOR_PLACE_DEFAULT,
     /* MẶC ĐỊNH `auto`, kể cả khi preset của loại element để rỗng: rỗng là di sản,
        không phải một lựa chọn (xem `UiCell.glazeId`). `glazeOrAuto` là chỗ DUY NHẤT
        biết luật ấy — đừng viết `?? "auto"` ở đây, sẽ có chỗ thứ hai quên. */

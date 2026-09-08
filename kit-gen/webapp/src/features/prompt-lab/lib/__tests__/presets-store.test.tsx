@@ -35,7 +35,7 @@ vi.mock("@/lib/api/endpoints", () => ({
 }));
 
 const {
-  usePresets, usePresetSyncError, setPresets, seedPresets, __resetPresetsStoreForTest,
+  usePresets, usePresetSyncError, setPresets, seedPresets, DECOR_DEFAULT, __resetPresetsStoreForTest,
 } = await import("../presets-store");
 
 type Row = { id: string; kind: string; name: string; data: Record<string, unknown> };
@@ -100,7 +100,10 @@ describe("đọc: server là nguồn, id bundle giữ nguyên qua `data.key`", (
     await waitFor(() => expect(seen?.styles).toHaveLength(1));
     /* ĐIỀU KHOẢN #1: id là `data.key`, KHÔNG phải `preset_aaaa`. */
     expect(seen?.styles[0]).toEqual({ id: "fairy", vi: "Cổ tích", en: "storybook" });
-    expect(seen?.elements[0]).toEqual({ id: "shield", vi: "Khiên", en: "shield", decor: 6, glazeId: "ice", sizeId: "m" });
+    /* `decor: 6` là ĐỘ DÀY VIỀN trên thang 1..7 đã chết; cửa đọc dịch nó sang nấc
+       LƯỢNG TRANG TRÍ («Nhiều»). Không dịch thì số 6 không tra ra mục nào trong
+       thang mới ⇒ pill hiện placeholder và câu trang trí rụng khỏi prompt. */
+    expect(seen?.elements[0]).toEqual({ id: "shield", vi: "Khiên", en: "shield", decor: "rich", glazeId: "ice", sizeId: "m" });
     expect(seen?.mascots[0]).toEqual({ id: "squirrel", vi: "Sóc", en: "a squirrel", refName: "soc.png" });
     /* Kho đã có bản ghi ⇒ KHÔNG gieo lại đè lên danh mục của người ta. */
     expect(addPreset).not.toHaveBeenCalled();
@@ -120,7 +123,7 @@ describe("đọc: server là nguồn, id bundle giữ nguyên qua `data.key`", (
     /* Thiếu `key` thì thà một id xấu (id server) còn hơn nuốt mất bản ghi. */
     expect(seen?.styles[0]!.id).toBe("preset_dddd");
     expect(seen?.elements).toHaveLength(1);
-    expect(seen?.elements[0]!.decor).toBe(4);
+    expect(seen?.elements[0]!.decor).toBe(DECOR_DEFAULT);
     expect(seen?.mascots).toHaveLength(0);
   });
 });
@@ -182,6 +185,31 @@ describe("di trú: hình dạng cho bản ghi element đời trước", () => {
     /* Id lạ ⇒ không có bảng hạt giống nào để rơi về ⇒ `undefined`, và
        `CUSTOM_ELEMENT_SKEL` lo phần còn lại ở chỗ dùng. */
     expect(seen?.elements[0]!.skel).toBeUndefined();
+  });
+
+  /* ── TRỤC TRANG TRÍ: SỐ 1..7 ĐỜI TRƯỚC → BỐN NẤC CÓ TÊN ──────────────────
+     Cùng một cái bẫy với `skel` ngay trên: hạt giống chỉ gieo vào kho RỖNG, nên
+     mọi workspace đã mở app trước lượt này giữ tám bản ghi element mang `decor`
+     là SỐ. Số ấy không tra ra mục nào trong thang mới ⇒ `phraseOf` trả rỗng ⇒
+     dòng element mất hẳn câu trang trí, im lặng. */
+  it("`decor` SỐ đời trước ⇒ dịch sang nấc có tên, theo đúng bảng 1/2-3/4-5/6-7", async () => {
+    get.mockResolvedValue(library([
+      row("preset_d1", "element", "Một", { key: "e1", en: "e1", decor: 1, glazeId: "", sizeId: "" }),
+      row("preset_d3", "element", "Ba", { key: "e3", en: "e3", decor: 3, glazeId: "", sizeId: "" }),
+      row("preset_d5", "element", "Năm", { key: "e5", en: "e5", decor: 5, glazeId: "", sizeId: "" }),
+      row("preset_d7", "element", "Bảy", { key: "e7", en: "e7", decor: 7, glazeId: "", sizeId: "" }),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(4));
+    expect(seen!.elements.map((element) => element.decor)).toEqual(["none", "light", "medium", "rich"]);
+    /* VÀ KHÔNG MỘT REQUEST GHI NÀO chỉ vì mở app: `toBundle` đổi bản sao trong
+       RAM, còn `flush` chỉ chạy sau một `setPresets` — tức là sau khi có người
+       thật sự sửa danh mục. Vá lúc đọc mà kéo theo một lượt PATCH cả kho là
+       đúng thứ chú thích của `payloadOf` cấm. */
+    expect(patchPreset).not.toHaveBeenCalled();
+    expect(addPreset).not.toHaveBeenCalled();
+    expect(removePreset).not.toHaveBeenCalled();
   });
 });
 
@@ -274,7 +302,12 @@ describe("gieo hạt: đúng một lần, kể cả khi nhiều màn cùng mở"
 describe("ghi: gộp, chỉ đụng cái đổi, và không im lặng khi hỏng", () => {
   const three = () => library([
     row("preset_s1", "style", "Cổ tích", { key: "fairy", en: "storybook" }),
-    row("preset_e1", "element", "Khiên", { key: "shield", en: "shield", decor: 4, glazeId: "", sizeId: "" }),
+    /* `decor` ở đây là ID CHỮ (hình dạng đời nay), cố ý: nhóm ca này đo phép GỘP
+       ghi — "sửa một dòng thì hai dòng kia không bị đụng". Một bản ghi đời cũ mang
+       số sẽ được cửa đọc dịch sang id, và lượt ghi kế tiếp đóng đinh id ấy xuống
+       đĩa — MỘT lượt PATCH di trú đúng nghĩa, nhưng nó là câu chuyện khác và có ca
+       riêng ngay dưới. Trộn hai chuyện vào một ca thì ca này không còn đo được gì. */
+    row("preset_e1", "element", "Khiên", { key: "shield", en: "shield", decor: "medium", glazeId: "", sizeId: "" }),
     row("preset_m1", "mascot", "Sóc", { key: "squirrel", en: "a squirrel", refName: "" }),
   ]);
 
@@ -316,7 +349,7 @@ describe("ghi: gộp, chỉ đụng cái đổi, và không im lặng khi hỏng
       ...seen!,
       elements: [
         seen!.elements[0]!,
-        { id: "slider", vi: "Thanh trượt", en: "slider", decor: 3, glazeId: "", sizeId: "" },
+        { id: "slider", vi: "Thanh trượt", en: "slider", decor: "light", glazeId: "", sizeId: "" },
       ],
       mascots: [],
     });
@@ -324,7 +357,7 @@ describe("ghi: gộp, chỉ đụng cái đổi, và không im lặng khi hỏng
     await waitFor(() => expect(removePreset).toHaveBeenCalledWith("preset_m1"));
     expect(addPreset).toHaveBeenCalledTimes(1);
     expect(addPreset.mock.calls[0]![0]).toEqual({
-      kind: "element", name: "Thanh trượt", data: { key: "slider", en: "slider", decor: 3, glazeId: "", sizeId: "" },
+      kind: "element", name: "Thanh trượt", data: { key: "slider", en: "slider", decor: "light", glazeId: "", sizeId: "" },
     });
     expect(patchPreset).not.toHaveBeenCalled();
   });

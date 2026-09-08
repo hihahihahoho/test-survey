@@ -262,9 +262,9 @@ describe("③ hai chế độ — dòng element ở «Tự do» là một TipTap
     await waitFor(() => expect(document.querySelector(".ProseMirror")).not.toBeNull());
 
     const pills = [...document.querySelectorAll("[data-kg-node='optionPill']")];
-    expect(pills.map((p) => p.getAttribute("data-kind"))).toEqual(["style", "glaze", "decor"]);
+    expect(pills.map((p) => p.getAttribute("data-kind"))).toEqual(["style", "glaze", "decor", "decorPlace"]);
     /* Giá trị THẬT của ô phải nằm trong DOM, không phải mặc định của schema. */
-    expect(pills.map((p) => p.getAttribute("data-value"))).toEqual(["", "glow", "2"]);
+    expect(pills.map((p) => p.getAttribute("data-value"))).toEqual(["", "glow", "light", "balanced"]);
   });
 });
 
@@ -298,9 +298,12 @@ describe("③ câu tự do của một dòng ĐI TỚI ĐƯỢC contract và pro
     const contract = composerToContract(state([uikit(cells(), "free")]), { presets: PRESETS });
     const spec = contract.sheets[0]!.components[0]!.spec;
     expect(spec).toContain(PRESETS.elements.find((e) => e.id === "button")!.en);
-    /* Mức viền mặc định của "Nút bấm" là 4 — cụm EN của nó, không phải chữ "Vừa". */
-    expect(spec).toContain("a distinct rim");
-    expect(spec).not.toContain("Vừa");
+    /* Lượng trang trí mặc định của "Nút bấm" là «Ít» — cụm EN của nó, không phải chữ "Vừa". */
+    expect(spec).toContain("a simple rim and at most one small accent");
+    expect(spec).not.toContain("Ít");
+    /* Và câu BỐ TRÍ đi cùng nó, cũng bằng tiếng Anh: hai pill, hai câu, một dòng. */
+    expect(spec).toContain("ornaments mirrored symmetrically");
+    expect(spec).not.toContain("Cân đối");
   });
 
   it("prompt copy ra ChatGPT nói CÙNG một điều với contract", () => {
@@ -337,16 +340,16 @@ describe("③ câu tự do của một dòng ĐI TỚI ĐƯỢC contract và pro
    hỏng → gạt về khuôn không mất thứ vừa bấm. */
 describe("④ pill của dòng tự do: đúng kind, đúng value, không mất khi gạt lại", () => {
   it("Template → Tự do: ba pill mang ĐÚNG kind và ĐÚNG value của ô", async () => {
-    const cell: UiCell = { ...newCell("coin", PRESETS), id: "c1", decor: "6", glazeId: "ice" };
+    const cell: UiCell = { ...newCell("coin", PRESETS), id: "c1", decor: "rich", glazeId: "ice" };
     render(<Harness initial={uikit([cell], "template")} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Tự do" }));
     await waitFor(() => expect(document.querySelector(".ProseMirror")).not.toBeNull());
 
     const pills = [...document.querySelectorAll("[data-kg-node='optionPill']")];
-    expect(pills.map((p) => p.getAttribute("data-kind"))).toEqual(["style", "glaze", "decor"]);
+    expect(pills.map((p) => p.getAttribute("data-kind"))).toEqual(["style", "glaze", "decor", "decorPlace"]);
     /* Chính chỗ chủ sản phẩm chỉ mặt: pill 2 và 3 KHÔNG được rỗng. */
-    expect(pills.map((p) => p.getAttribute("data-value"))).toEqual(["", "ice", "6"]);
+    expect(pills.map((p) => p.getAttribute("data-value"))).toEqual(["", "ice", "rich", "balanced"]);
   });
 
   it("tài liệu đã lưu bị mất attrs ⇒ CỨU LẠI theo vị trí + ba trường của ô", () => {
@@ -421,11 +424,11 @@ describe("⑤ đổi loại element tại chỗ", () => {
 
   it("đổi loại ⇒ đổi ô trong contract, nhưng GIỮ viền · đục nền · ghi chú", async () => {
     let latest: UiKitBlock | null = null;
-    /* Ba thứ người dùng đã chỉnh tay. `decor: "7"` cố ý KHÁC mặc định của cả hai
+    /* Ba thứ người dùng đã chỉnh tay. `decor: "rich"` cố ý KHÁC mặc định của cả hai
        element, để nếu code lỡ áp preset của element mới thì ca này đỏ. */
     const cell: UiCell = {
       ...newCell("button", PRESETS), id: "c1",
-      decor: "7", glazeId: "ice", note: "bo góc thật tròn",
+      decor: "rich", glazeId: "ice", note: "bo góc thật tròn",
     };
     render(<Harness initial={uikit([cell])} onState={(next) => { latest = next; }} />);
 
@@ -433,7 +436,7 @@ describe("⑤ đổi loại element tại chỗ", () => {
     fireEvent.click(screen.getByRole("option", { name: /Thanh máu/ }));
 
     await waitFor(() => expect(latest?.cells[0]?.elementId).toBe("healthbar"));
-    expect(latest!.cells[0]!.decor).toBe("7");
+    expect(latest!.cells[0]!.decor).toBe("rich");
     expect(latest!.cells[0]!.glazeId).toBe("ice");
     expect(latest!.cells[0]!.note).toBe("bo góc thật tròn");
 
@@ -529,9 +532,36 @@ describe("⑦ dòng element: hàng 1 có ×, hàng 2 là ghi chú", () => {
     expect(row.textContent).not.toContain(", viền");
 
     /* Nhưng TÊN TRỤC thì vẫn phải đọc được — bỏ chữ nối không phải bỏ nhãn. */
-    for (const axis of ["Phong cách:", "Đục nền:", "Viền:", "Cỡ:"]) {
+    for (const axis of ["Phong cách:", "Đục nền:", "Trang trí:", "Bố trí:", "Cỡ:"]) {
       expect(row.textContent).toContain(axis);
     }
+  });
+
+  /* ── PILL «BỐ TRÍ» LÀ PILL DUY NHẤT ĐƯỢC PHÉP VẮNG MẶT ─────────────────────
+     Hàng 1 là `flex-nowrap`, và sáu pill đã là chật. Ẩn hẳn thay vì làm mờ vì hai
+     lẽ: một pill mờ VẪN chiếm chỗ trong hàng ấy, và nó vẫn mời người ta bấm vào
+     một câu hỏi không còn nghĩa ("xếp hoa văn ở đâu" cho ô không có hoa văn). */
+  it("ô «Không trang trí» ⇒ pill Bố trí BIẾN MẤT khỏi hàng, không phải mờ đi", () => {
+    cleanup();
+    render(<Harness initial={uikit([{ ...newCell("button", PRESETS), id: "c1", decor: "none" }])} />);
+    const row = rowOf("Nút bấm");
+    expect(row.textContent).toContain("Trang trí:Không");
+    expect(row.textContent).not.toContain("Bố trí:");
+    expect(screen.queryByLabelText(/^Bố trí:/)).toBeNull();
+  });
+
+  it("kéo trang trí lên lại ⇒ pill Bố trí trở về VỚI ĐÚNG lựa chọn cũ", async () => {
+    cleanup();
+    /* Ô đã chọn «Lệch phải» rồi mới bị hạ xuống «Không»: giá trị ấy nằm yên trong
+       `cell.decorPlace` (không bị xoá theo), nên nó phải hiện lại nguyên vẹn. */
+    render(<Harness initial={uikit([{ ...newCell("button", PRESETS), id: "c1", decor: "none", decorPlace: "right" }])} />);
+    expect(screen.queryByLabelText(/^Bố trí:/)).toBeNull();
+
+    fireEvent.click(screen.getByLabelText(/^Trang trí:/));
+    fireEvent.click(screen.getByRole("option", { name: /Nhiều/ }));
+
+    await waitFor(() => expect(screen.getByLabelText(/^Bố trí:/)).not.toBeNull());
+    expect(screen.getByLabelText(/^Bố trí:/).textContent).toContain("Lệch phải");
   });
 });
 
@@ -606,14 +636,14 @@ describe("⑧ pill cỡ dùng chung hộp chọn nguồn", () => {
        object mà `usePresets` trả về), nên thêm một loại vào đây là màn thấy ngay. */
     const live = getPresets();
     const plate: ElementPreset = {
-      id: "dia-tron", vi: "Đĩa tròn", en: "round plate", decor: 4, glazeId: "", sizeId: "",
+      id: "dia-tron", vi: "Đĩa tròn", en: "round plate", decor: "medium", glazeId: "", sizeId: "",
       skel: { shape: "circle", w: 0.815, h: 0.815 },
     };
     live.elements.push(plate);
     try {
       cleanup();
       render(<Harness initial={uikit([{
-        id: "c1", elementId: plate.id, styleId: "", decor: "4", glazeId: "",
+        id: "c1", elementId: plate.id, styleId: "", decor: "medium", decorPlace: "balanced", glazeId: "",
         sizeId: defaultSizeOf(plate), note: "",
       }])} />);
       fireEvent.click(screen.getByLabelText(/^Cỡ của Đĩa tròn/));

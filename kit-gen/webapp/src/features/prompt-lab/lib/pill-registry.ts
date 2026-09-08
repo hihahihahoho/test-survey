@@ -2,7 +2,7 @@ import { GLAZE_PRESETS, glazePhrase } from "@/features/kit-core/lib/glaze";
 import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
 import { EXPRESSIONS, OUTFIT_THEMES, POSES } from "@/features/kit-core/lib/poses";
 import { CAMERA_VIEWS } from "@/features/prompt-lab/lib/pose/pose-state";
-import { DECOR_LEVELS, getPresets, type PresetBundle } from "./presets-store";
+import { DECOR_LEVELS, DECOR_PLACES, getPresets, type PresetBundle } from "./presets-store";
 
 /**
  * pill-registry.ts — MỘT BẢNG TRA cho mọi pill chọn-một.
@@ -55,7 +55,26 @@ export type PillKind =
    * trần rồi rụng khỏi prompt mà không ai báo. Giữ để đọc, không quảng cáo.
    */
   | "material"
+  /**
+   * LƯỢNG TRANG TRÍ của một ô — không · ít · vừa · nhiều (`DECOR_LEVELS`).
+   *
+   * Tên `kind` giữ nguyên chữ `decor` dù thang bên dưới đã đổi hẳn câu hỏi (từ
+   * "viền dày bao nhiêu" sang "trang trí nhiều ít"): `kind` nằm trong attrs của
+   * mọi node pill ĐÃ LƯU trên đĩa, và đổi nó là làm mọi câu tự do đời trước hiện
+   * ra pill không tra được. Nhãn thì đổi — «Trang trí», ở `NOUN`.
+   */
   | "decor"
+  /**
+   * BỐ TRÍ chỗ trang trí — cân đối · lệch trái · lệch phải · ngẫu nhiên.
+   *
+   * ╔══ PILL DUY NHẤT CÓ THỂ VẮNG MẶT KHỎI DÒNG ELEMENT ═══════════════════════╗
+   * ║ Nó chỉ có nghĩa khi ô CÓ trang trí: hỏi "xếp hoa văn ở đâu" cho một ô vừa ║
+   * ║ tuyên bố "không hoa văn nào" là mời máy vẽ hoà giải hai câu ngược nhau —  ║
+   * ║ và nó hoà giải bằng cách vẽ vài bông hoa. Luật ẩn/hiện nằm ở đúng MỘT chỗ ║
+   * ║ (`hasDecorPlacement`), xem lý do trong `presets-store.ts`.                ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  | "decorPlace"
   | "pose"
   /**
    * GÓC MÁY của một dòng dáng trên thẻ Nhân vật. Danh mục là `CAMERA_VIEWS` của
@@ -229,7 +248,8 @@ const PLACEHOLDER: Record<PillKind, string> = {
      qua `readCell` — và lúc ấy nó phải nói ĐÚNG thứ sẽ xảy ra, tức là `auto`. */
   glaze: "tự động",
   material: "chất liệu",
-  decor: "mức viền",
+  decor: "trang trí",
+  decorPlace: "bố trí",
   pose: "dáng",
   view: "góc máy",
   expression: "biểu cảm",
@@ -253,7 +273,8 @@ const NOUN: Record<PillKind, string> = {
   layout: "bố cục",
   glaze: "đục nền",
   material: "chất liệu",
-  decor: "mức viền",
+  decor: "trang trí",
+  decorPlace: "bố trí",
   pose: "dáng",
   view: "góc máy",
   expression: "biểu cảm",
@@ -312,6 +333,9 @@ export function pillOptions(kind: PillKind, presets: PresetBundle = getPresets()
 
     case "decor":
       return DECOR_LEVELS.map((level) => ({ value: level.value, vi: level.vi, en: level.en }));
+
+    case "decorPlace":
+      return DECOR_PLACES.map((place) => ({ value: place.value, vi: place.vi, en: place.en }));
 
     case "pose":
       /* POSES chỉ có nhãn VI + id. Id VỐN ĐÃ là tiếng Anh ("hold-gift", "view-34")
@@ -404,7 +428,14 @@ export function hasBlankChoice(kind: PillKind): boolean {
      đầu danh sách. Bày thêm «— để trống —» bên trên nó là hai mục cho cùng một
      nghĩa (`""` và `auto` ra CÙNG một prompt), và người dùng không có cách nào
      đoán được chúng khác nhau ở đâu. */
-  return kind !== "mascot" && kind !== "glaze";
+  /* `decor` và `decorPlace` là ca THỨ BA và THỨ TƯ, thêm 09/2026, CÙNG một lý do:
+     nấc «Không» của trục trang trí là một mục có tên hẳn hoi, và nó nói MẠNH HƠN
+     một ô để trống — để trống chỉ là không nói gì (rồi theme tự bơm hoa vào ô, đúng
+     cái bệnh đang chữa), còn «Không» là một lệnh cấm viết ra chữ. Hai cửa cho một
+     nghĩa thì cửa YẾU HƠN phải đóng. Trục bố trí thì càng rõ: nó luôn có mặc định
+     «Cân đối», và một ô để trống ở đó nghĩa là trả lại chỗ đặt hoa văn cho máy vẽ
+     tự quyết — tức là đúng cái «hơi random» mà pill này sinh ra để chấm dứt. */
+  return kind !== "mascot" && kind !== "glaze" && kind !== "decor" && kind !== "decorPlace";
 }
 
 /** Kind này có nghĩa "để trống = kế thừa ngữ cảnh chung" không. */

@@ -249,6 +249,33 @@ class PromptKhongNhiemTest(unittest.TestCase):
         self.assertIn("the art style above decides how it looks", head)
         self.assertIn("the coordinates decide where and how big", head)
 
+    def test_luong_trang_tri_do_DONG_CUA_O_quyet_dinh_khong_phai_theme(self):
+        """CHỦ SẢN PHẨM, 09/2026: *"lần nào nó cũng ra viền decor"*.
+
+        Bộ kit theme Tết: hoa mai và đèn lồng bám quanh MỌI ô, kể cả ô người dùng đã
+        chọn «Không trang trí» trên app. Nguồn không phải một câu sai mà là một khoảng
+        TRỐNG — `## Art style` tả cả một bộ nhận diện lễ hội, `## Elements` nói lượng
+        trang trí cho từng ô, và không dòng nào nói ai thắng ai. Model chọn nguồn nói
+        to hơn, tức là theme. Một dòng phân vai, ngay trên danh sách ô.
+
+        Ca này khoá CẢ HAI CHIỀU: dòng phải có mặt ở tấm giao diện, và nó phải đứng
+        TRƯỚC danh sách (một luật in sau ô số 1 thì ô số 1 không nghe thấy)."""
+        txt = self.texts["ui"]
+        head = txt[:cell_list_offset(txt)]
+        self.assertIn("Ornament amount and placement are set PER ELEMENT", head)
+        self.assertIn("the theme supplies the motif, not the quantity", head)
+
+    def test_luat_trang_tri_KHONG_len_tam_full_bleed(self):
+        """GUARD ÂM. Ở tấm full-bleed mỗi ô là một bức tranh phủ kín ô, không có "vật
+        thể" nào để mà đếm hoa văn bám quanh — dòng ấy chỉ là chữ thừa ở đó.
+
+        Dùng tấm NHIỀU ô full-bleed (`_cfg_nen(n=2)`) chứ không phải tấm một ô: tấm
+        một ô đi hẳn nhánh `screen_sheet`, ở đó không có section «Elements» nào để mà
+        chứng minh điều gì — ca sẽ xanh vì mù."""
+        txt = render_prompt_text(_cfg_nen(n=2), name="demo-nen")
+        self.assertIn("## Scenes", txt)          # đúng là đã vào nhánh danh sách
+        self.assertNotIn("Ornament amount and placement", txt)
+
 
 class BangKhoCanvasTest(unittest.TestCase):
     """MỘT BẢNG KHỔ DUY NHẤT, VÀ NÓ PHẢI ĐI TỚI DÒNG ĐẦU PROMPT.

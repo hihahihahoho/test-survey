@@ -1,5 +1,5 @@
 import { poseSpecFor } from "@/features/kit-core/lib/kitset-to-contract";
-import { getPresets, type PresetBundle } from "./presets-store";
+import { getPresets, hasDecorPlacement, type PresetBundle } from "./presets-store";
 import { labelOf, phraseOf } from "./pill-registry";
 import { describeBrandColors } from "./brand-colors";
 import { gridFor, type Block, type BlockMode, type ComposerState, type MascotPose, type UiCell } from "./composer-model";
@@ -42,14 +42,20 @@ function cellLine(cell: UiCell, index: number, ctx: SerializeContext, mode: Bloc
   /* Phong cách của ô: rỗng = theo phong cách chung. Cùng luật với pill `style`
      trong câu mad-lib — xem `pillText()` bên serialize.ts. */
   const style = cell.styleId ? phraseOf("style", cell.styleId, ctx.presets) : ctx.styleEN;
-  /* Thứ tự PHẢI khớp `uiCellDoc` (danh từ · phong cách · đục nền · viền · ghi chú):
-     prompt copy-dán và câu tự do là hai cửa nhìn vào cùng một ô, và người dùng đối
-     chiếu chúng bằng mắt. Cỡ safe zone không có mặt — nó vào `skel`, không vào chữ. */
+  /* Thứ tự PHẢI khớp `uiCellDoc` (danh từ · phong cách · đục nền · trang trí · bố
+     trí · ghi chú): prompt copy-dán và câu tự do là hai cửa nhìn vào cùng một ô, và
+     người dùng đối chiếu chúng bằng mắt. Cỡ safe zone không có mặt — nó vào `skel`,
+     không vào chữ. */
   const parts = [
     element?.en ?? "",
     style,
     phraseOf("glaze", cell.glazeId, ctx.presets),
     phraseOf("decor", cell.decor, ctx.presets),
+    /* Ô «Không trang trí» KHÔNG in câu bố trí: "không hoa văn nào" rồi "hoa văn đối
+       xứng hai bên" là hai câu ngược nhau trong cùng một dòng, và máy vẽ hoà giải
+       chúng bằng cách vẽ vài bông hoa. Luật ở `hasDecorPlacement`, dùng chung với
+       dòng khuôn trên màn và với bộ dịch contract. */
+    hasDecorPlacement(cell.decor) ? phraseOf("decorPlace", cell.decorPlace, ctx.presets) : "",
     cell.note.trim(),
   ].filter(Boolean);
   return tidy(`cell ${index + 1} (${name}): ${parts.join(", ")}`);

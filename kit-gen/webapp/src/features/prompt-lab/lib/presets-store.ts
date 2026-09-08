@@ -79,8 +79,15 @@ export interface ElementPreset {
   vi: string;
   /** DANH TỪ tiếng Anh đi vào `spec` của ô — xem khối chú thích trên. */
   en: string;
-  /** Mức viền/trang trí áp sẵn khi thêm ô này (1–7). */
-  decor: number;
+  /**
+   * Lượng trang trí áp sẵn khi thêm ô này — id của `DECOR_LEVELS`.
+   *
+   * CHUỖI, không phải số nữa (09/2026). Bản ghi đời cũ trên workspace mang số và
+   * được dịch ngay lúc ĐỌC (`decorLevelOf` trong `toBundle`): một con số lọt vào
+   * thang mới không tra ra mục nào, và hậu quả là dòng element mất câu trang trí
+   * mà không ai báo.
+   */
+  decor: string;
   /**
    * Id đục nền áp sẵn (`glaze.ts`). Hạt giống đời nay ghi `auto` — "để máy tự quyết
    * theo vật liệu", chứ không phải "nền đặc" (nấc đặc là `solid`).
@@ -140,29 +147,122 @@ export interface PresetBundle {
  */
 
 /**
- * Bảy mức trang trí — thang của pill `decor`, dùng lại ở seed element.
+ * BỐN NẤC TRANG TRÍ — thang của pill `decor`, dùng lại ở seed element.
  *
- * ╔══ CHỈ TẢ CẤU TRÚC, KHÔNG TẢ CÁCH ĐÁNH BÓNG ══════════════════════════════╗
- * ║ Bản trước trộn hai thứ vào một thang: "a beveled border with a subtle      ║
- * ║ gradient face" nói CẢ "có viền" (cấu trúc) LẪN "vát khối, mặt chuyển màu"  ║
- * ║ (cách hoàn thiện). Cách hoàn thiện là việc của PHONG CÁCH — nó đã được nói ║
- * ║ ở `## Art style`, cho cả tấm, một lần. Nhắc lại ở từng ô là hai giọng cùng ║
- * ║ chỉ huy một chuyện: chọn phong cách "flat vector" rồi kéo viền lên nấc 4   ║
- * ║ là prompt tự mâu thuẫn — phẳng ở đầu tấm, vát khối ở dòng thứ ba.          ║
- * ║ Nên thang này chỉ còn trả lời ĐÚNG một câu hỏi: viền dày mỏng tới đâu, có  ║
- * ║ hoa văn ở góc không. Không "bevel", không "gradient", không "shadow",      ║
- * ║ không "glow" — `tests/test_gen_prompt.py` canh đúng những chữ ấy.          ║
+ * ╔══ VÌ SAO BỐN NẤC CÓ TÊN THAY CHO THANG 1..7 ═════════════════════════════╗
+ * ║ Thang cũ hỏi "viền dày bao nhiêu" và trả lời bằng bảy mức độ dày. Chủ sản ║
+ * ║ phẩm nhìn tấm khung Tết vẽ ra rồi nói: *"lần nào nó cũng ra viền decor"*  ║
+ * ║ — và cả bảy nấc đều đúng như thế, vì không nấc nào trong số đó CẤM được   ║
+ * ║ hoa mai với đèn lồng bám quanh ô. Chúng chỉ nói về VIỀN; hoa văn treo vào ║
+ * ║ ô thì đi theo theme, và theme Tết kéo chúng vào mọi ô.                    ║
+ * ║ Nên trục này đổi câu hỏi: không phải "viền dày mỏng" mà LƯỢNG TRANG TRÍ — ║
+ * ║ không · ít · vừa · nhiều — và mỗi nấc phải nói CẢ hai vế (viền lẫn hoa    ║
+ * ║ văn), đủ mạnh để thắng theme. Nấc «Không» vì thế gọi tên thẳng thứ bị cấm ║
+ * ║ ("no flowers, lanterns, ribbons, gems or trinkets"): một câu chung chung   ║
+ * ║ kiểu "plain edge" đã được thử và thua theme.                              ║
+ * ║ Bốn nấc chứ không bảy: người dùng không phân biệt được nấc 4 với nấc 5,   ║
+ * ║ mà máy vẽ lại càng không.                                                 ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ╔══ VẪN CHỈ TẢ CẤU TRÚC, KHÔNG TẢ CÁCH ĐÁNH BÓNG ══════════════════════════╗
+ * ║ Luật cũ giữ nguyên: cách hoàn thiện (vát khối, chuyển màu, đổ bóng) là    ║
+ * ║ việc của PHONG CÁCH — đã nói một lần ở `## Art style` cho cả tấm. Nhắc    ║
+ * ║ lại ở từng ô là hai giọng cùng chỉ huy một chuyện: chọn "flat vector" rồi ║
+ * ║ kéo trang trí lên «Nhiều» là prompt tự mâu thuẫn ngay trong chính nó.     ║
+ * ║ Không "bevel", không "gradient", không "shadow", không "glow" — cổng ở    ║
+ * ║ `__tests__/prompt-composer.test.tsx` canh đúng những chữ ấy.              ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 export const DECOR_LEVELS: readonly { value: string; vi: string; en: string }[] = [
-  { value: "1", vi: "1 · Trần trụi", en: "plain edge, no rim" },
-  { value: "2", vi: "2 · Tối giản", en: "a hairline rim" },
-  { value: "3", vi: "3 · Gọn", en: "a thin even rim" },
-  { value: "4", vi: "4 · Vừa", en: "a distinct rim" },
-  { value: "5", vi: "5 · Có nhấn", en: "a thick rim with corner accents" },
-  { value: "6", vi: "6 · Cầu kỳ", en: "a wide rim with a patterned band" },
-  { value: "7", vi: "7 · Lộng lẫy", en: "an ornate rim with corner ornaments" },
+  {
+    value: "none",
+    vi: "Không",
+    en: "clean silhouette: a plain edge with no rim ornament and NO decorative objects attached"
+      + " — no flowers, lanterns, ribbons, gems or trinkets on or around it",
+  },
+  { value: "light", vi: "Ít", en: "a simple rim and at most one small accent, no clusters of ornaments" },
+  { value: "medium", vi: "Vừa", en: "a distinct rim with a few ornaments at the corners, the body itself left clear" },
+  { value: "rich", vi: "Nhiều", en: "an ornate rim with generous ornaments around it" },
 ];
+
+/** Nấc «Không» — nấc DUY NHẤT làm pill «Bố trí» mất nghĩa. Xem `hasDecorPlacement`. */
+export const DECOR_NONE = "none";
+
+/** Nấc mặc định của một ô mới và của một bản ghi không đọc ra nấc nào. */
+export const DECOR_DEFAULT = "medium";
+
+/**
+ * BỐN CÁCH BỐ TRÍ chỗ trang trí — thang của pill `decorPlace`.
+ *
+ * ╔══ VÌ SAO LƯỢNG VÀ CHỖ LÀ HAI TRỤC, KHÔNG PHẢI MỘT THANG ═════════════════╗
+ * ║ Chủ sản phẩm hỏi hai câu tách bạch: *"lượng trang trí"* và *"bố trí trang ║
+ * ║ trí… hiện tại đang hơi random"*. Nhồi chúng vào một thang thì bảng lựa    ║
+ * ║ chọn là tích Descartes 4×4 = 16 nấc, và người dùng phải đi tìm "vừa +     ║
+ * ║ lệch trái" trong một danh sách mười sáu dòng. Hai pill thì mỗi pill trả   ║
+ * ║ lời đúng một câu, và pill thứ hai TẮT HẲN khi câu hỏi của nó vô nghĩa     ║
+ * ║ (không trang trí thì không có gì để mà bố trí).                           ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Câu Anh nói ra CHỖ, không nói ra lượng: lượng đã là việc của `DECOR_LEVELS`, và
+ * hai trục cùng nói về lượng là hai giọng chỉ huy một chuyện.
+ */
+export const DECOR_PLACES: readonly { value: string; vi: string; en: string }[] = [
+  { value: "balanced", vi: "Cân đối", en: "ornaments mirrored symmetrically, left and right halves matching" },
+  { value: "left", vi: "Lệch trái", en: "ornaments clustered on the LEFT side, the right side kept clean" },
+  { value: "right", vi: "Lệch phải", en: "ornaments clustered on the RIGHT side, the left side kept clean" },
+  { value: "random", vi: "Ngẫu nhiên", en: "ornaments placed freely, asymmetric" },
+];
+
+/** Cách bố trí mặc định — đối xứng, thứ một bộ UI muốn ở gần như mọi ô. */
+export const DECOR_PLACE_DEFAULT = "balanced";
+
+/**
+ * Số đời cũ / chuỗi lạ → một nấc CÓ THẬT của `DECOR_LEVELS`.
+ *
+ * ╔══ DI TRÚ ĐỌC-MỘT-CHIỀU, VÀ VÌ SAO NÓ KHÁC `glazeId` ═════════════════════╗
+ * ║ Bản ghi preset và bản nháp lưu trước lượt này mang `decor` là SỐ ("4").   ║
+ * ║ Với thang mới, "4" không tra ra mục nào ⇒ `phraseOf` trả rỗng ⇒ dòng      ║
+ * ║ element mất hẳn câu trang trí, im lặng. Đó là lý do trục này PHẢI được vá ║
+ * ║ ngay lúc đọc, khác với `glazeId` (rỗng ở đó vẫn đọc ra một nghĩa dùng      ║
+ * ║ được, nên nó chờ tới `newCell` mới vá để khỏi kéo theo một lượt ghi).      ║
+ * ║ Vá lúc đọc KHÔNG tự nó sinh ra request nào: `toBundle` chỉ đổi bản sao     ║
+ * ║ trong RAM, còn `flush` chỉ chạy sau một `setPresets` — tức là sau khi có   ║
+ * ║ người thật sự sửa danh mục. Xem chú thích của `payloadOf`.                 ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Bảng số: 1→«Không», 2-3→«Ít», 4-5→«Vừa», 6-7→«Nhiều». Rỗng/rác ⇒ «Vừa» — mặc
+ * định của một ô mới, chứ KHÔNG phải «Không»: một ô không nói gì về trang trí thì
+ * xưa nay vẫn được vẽ có viền, và di trú không phải chỗ để đổi thứ người dùng thấy.
+ */
+export function decorLevelOf(raw: unknown): string {
+  const value = typeof raw === "number" ? String(raw) : typeof raw === "string" ? raw.trim() : "";
+  if (!value) return DECOR_DEFAULT;
+  if (DECOR_LEVELS.some((level) => level.value === value)) return value;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return DECOR_DEFAULT;
+  if (n <= 1) return DECOR_NONE;
+  if (n <= 3) return "light";
+  if (n <= 5) return DECOR_DEFAULT;
+  return "rich";
+}
+
+/** Chuỗi lạ / thiếu → «Cân đối». Song sinh với `decorLevelOf`, cùng một lý do. */
+export function decorPlaceOf(raw: unknown): string {
+  const value = typeof raw === "string" ? raw.trim() : "";
+  return DECOR_PLACES.some((place) => place.value === value) ? value : DECOR_PLACE_DEFAULT;
+}
+
+/**
+ * Ô này có câu hỏi «bố trí ở đâu» không.
+ *
+ * MỘT hàm cho BỐN chỗ đọc (dòng khuôn trên màn, câu khởi điểm của chế độ tự do,
+ * bộ serialize, bộ dịch contract). Viết `decor !== "none"` ở bốn nơi là bốn chỗ
+ * để quên khi thang đổi — và chỗ quên sẽ in ra "không trang trí gì, hoa văn đối
+ * xứng hai bên" trong cùng một câu.
+ */
+export function hasDecorPlacement(decor: string): boolean {
+  return decorLevelOf(decor) !== DECOR_NONE;
+}
 
 /** Hạt giống — đọc từ danh mục THẬT của kit-core, không chép tay. */
 export function seedPresets(): PresetBundle {
@@ -197,14 +297,14 @@ export function seedPresets(): PresetBundle {
        món tròn — kéo một cái huy hiệu tròn theo 9-slice là méo nó. `sizeId` để
        RỖNG: ghim một nấc cỡ ở đây là đè lên chính hình dạng vừa khai. */
     elements: [
-      { id: "button", vi: "Nút bấm", en: "button", decor: 4, glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true } },
-      { id: "popover", vi: "Popover", en: "popover", decor: 5, glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.86, h: 0.66, slice9: true } },
-      { id: "healthbar", vi: "Thanh máu", en: "health bar", decor: 3, glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.22, slice9: true } },
-      { id: "coin", vi: "Icon tiền", en: "coin icon", decor: 2, glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.4, h: 0.4 } },
-      { id: "avatar-frame", vi: "Khung avatar", en: "avatar frame", decor: 5, glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.62, h: 0.62 } },
-      { id: "panel", vi: "Bảng nền", en: "panel", decor: 4, glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.92, h: 0.8, slice9: true } },
-      { id: "badge", vi: "Huy hiệu", en: "badge", decor: 3, glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.46, h: 0.46 } },
-      { id: "progress", vi: "Thanh tiến trình", en: "progress bar", decor: 3, glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.18, slice9: true } },
+      { id: "button", vi: "Nút bấm", en: "button", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true } },
+      { id: "popover", vi: "Popover", en: "popover", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.86, h: 0.66, slice9: true } },
+      { id: "healthbar", vi: "Thanh máu", en: "health bar", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.22, slice9: true } },
+      { id: "coin", vi: "Icon tiền", en: "coin icon", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.4, h: 0.4 } },
+      { id: "avatar-frame", vi: "Khung avatar", en: "avatar frame", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.62, h: 0.62 } },
+      { id: "panel", vi: "Bảng nền", en: "panel", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.92, h: 0.8, slice9: true } },
+      { id: "badge", vi: "Huy hiệu", en: "badge", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.46, h: 0.46 } },
+      { id: "progress", vi: "Thanh tiến trình", en: "progress bar", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.18, slice9: true } },
     ],
 
     /* Mascot: ghép dáng + biểu cảm có sẵn thành vài "nhân vật mẫu" để trang
@@ -262,7 +362,10 @@ function payloadOf(kind: PresetKind, preset: AnyPreset): PresetPayload {
          — đúng cái bệnh vừa chữa, nhưng lần này chỉ hiện ở máy khác. */
       data: {
         ...base,
-        decor: preset.decor ?? 4,
+        /* GHI RA ID CHỮ. Bản ghi đời cũ mang số; nó đã được `toBundle` dịch lúc đọc,
+           nên tới đây không còn số nào — và lượt PATCH đầu tiên (chỉ xảy ra khi có
+           người thật sự sửa danh mục) đóng đinh id chữ xuống đĩa. */
+        decor: decorLevelOf(preset.decor),
         /* GHI ĐÚNG THỨ ĐÃ ĐỌC LÊN, không chuẩn hoá `""` → `auto` ở đây. Chuẩn hoá
            lúc ghi nghĩa là mở app lên là mọi bản ghi element đời cũ bị PATCH lại
            một lượt — một lượt ghi mà không ai bấm, chỉ vì ta đổi cách gọi tên nấc
@@ -355,7 +458,9 @@ function toBundle(rows: readonly LibraryPreset[]): PresetBundle {
     const en = str(data, "en");
     if (row.kind === "style") bundle.styles.push({ id, vi: row.name, en });
     else if (row.kind === "element") {
-      const decor = Number(data.decor);
+      /* SỐ ĐỜI CŨ → ID CHỮ, ngay tại cửa đọc. Xem khối chú thích của `decorLevelOf`
+         để biết vì sao trục này được vá lúc đọc còn `glazeId` thì không. */
+      const decor = decorLevelOf(data["decor"]);
       /* Bản ghi đời trước chỉ có `materialId` ⇒ dịch sang đục nền gần nhất.
          Bản ghi đời nay có `glazeId` ⇒ nó thắng, nên phải hỏi `"glazeId" in data`
          chứ không phải `str(...) || fallback` — nếu không thì bỏ đục nền là nó tự
@@ -383,7 +488,7 @@ function toBundle(rows: readonly LibraryPreset[]): PresetBundle {
       bundle.elements.push({
         id, vi: row.name,
         en: LEGACY_ELEMENT_EN[en] ?? en,
-        decor: Number.isFinite(decor) ? decor : 4,
+        decor,
         glazeId,
         sizeId: savedSize === LEGACY_ELEMENT_SIZE[id] ? "" : savedSize,
         ...(skel ? { skel } : {}),
@@ -486,7 +591,7 @@ export function addCustomElement(name: string, enInput?: string): ElementPreset 
      ("khiên" → circle? rrect?) là đoán sai ở đúng chỗ tốn một lượt vẽ. Thiếu `skel`
      ⇒ `CUSTOM_ELEMENT_SKEL` (rrect 0.8×0.6) — xem `cell-size.ts`. Người dùng chỉnh
      bằng pill «Cỡ» ngay trên dòng. */
-  const preset: ElementPreset = { id, vi, en, decor: 4, glazeId: GLAZE_AUTO, sizeId: "" };
+  const preset: ElementPreset = { id, vi, en, decor: DECOR_DEFAULT, glazeId: GLAZE_AUTO, sizeId: "" };
   setPresets({ ...bundle, elements: [...bundle.elements, preset] });
   return preset;
 }

@@ -5,7 +5,7 @@ import { Pencil, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { addCustomElement, usePresets } from "../lib/presets-store";
+import { addCustomElement, hasDecorPlacement, usePresets } from "../lib/presets-store";
 import type { ElementPreset, PresetBundle } from "../lib/presets-store";
 import {
   MAX_SIZE_PX,
@@ -116,13 +116,21 @@ function CellRow({
           used={used}
           onPick={(next) => onChange(swapCellElement(cell, next, presets))}
         />
-        {/* Thứ tự pill do chủ sản phẩm chốt: phong cách → đục nền → viền → cỡ.
+        {/* Thứ tự pill: phong cách → đục nền → trang trí → bố trí → cỡ.
             «Chất liệu» ĐÃ BỊ BỎ HẲN (không ẩn đi, không đổi tên): nó ăn theo prompt
             tổng phong cách — xem khối chú thích đầu `glaze.ts`.
             Nhãn trục đi VÀO pill (`axis`) thay vì làm chữ nối rời — xem `PillAxis`. */}
         <OptionPill compact axis="Phong cách" kind="style" value={cell.styleId} onChange={(styleId) => onChange({ ...cell, styleId })} />
         <OptionPill compact axis="Đục nền" kind="glaze" value={cell.glazeId} onChange={(glazeId) => onChange({ ...cell, glazeId })} />
-        <OptionPill compact axis="Viền" kind="decor" value={cell.decor} onChange={(decor) => onChange({ ...cell, decor })} />
+        <OptionPill compact axis="Trang trí" kind="decor" value={cell.decor} onChange={(decor) => onChange({ ...cell, decor })} />
+        {/* PILL «BỐ TRÍ» BIẾN MẤT KHI Ô ĐỂ «Không».
+            Ẩn chứ không làm mờ: một pill mờ vẫn chiếm chỗ trong hàng `flex-nowrap`
+            này (sáu pill đã là chật) và vẫn mời người ta bấm vào một câu hỏi không
+            còn nghĩa. Giá trị đã chọn KHÔNG bị xoá theo — nó nằm yên trong
+            `cell.decorPlace` và hiện lại nguyên vẹn khi kéo trang trí lên. */}
+        {hasDecorPlacement(cell.decor) && (
+          <OptionPill compact axis="Bố trí" kind="decorPlace" value={cell.decorPlace} onChange={(decorPlace) => onChange({ ...cell, decorPlace })} />
+        )}
         <SizePill label={label} element={element} value={cell.sizeId} onChange={(sizeId) => onChange({ ...cell, sizeId })} />
         <RemoveButton what={`element ${label}`} onRemove={onRemove} />
       </RowTop>
@@ -267,6 +275,7 @@ function syncCellFromDoc(cell: UiCell, doc: JSONContent): UiCell {
        thứ duy nhất còn lại để dựng lại ô. */
     styleId: pills.style ?? cell.styleId,
     decor: pills.decor ?? cell.decor,
+    decorPlace: pills.decorPlace ?? cell.decorPlace,
     glazeId: pills.glaze ?? cell.glazeId,
   };
 }

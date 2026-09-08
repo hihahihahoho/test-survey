@@ -15,7 +15,7 @@ import { defaultSizeOf } from "@/features/prompt-lab/lib/cell-size";
 import { glazeFromMaterial, glazeOrAuto } from "@/features/kit-core/lib/glaze";
 import { EXPRESSIONS } from "@/features/kit-core/lib/poses";
 import { DEFAULT_VIEW } from "@/features/prompt-lab/lib/pose/pose-state";
-import { getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
+import { decorLevelOf, decorPlaceOf, getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
 import { INHERIT } from "@/features/prompt-lab/lib/pill-registry";
 import { NODE } from "@/features/prompt-lab/lib/schema";
 import { readPillImage } from "./pill-image";
@@ -82,7 +82,17 @@ function readCell(raw: unknown, index: number, presets: PresetBundle): UiCell | 
   const elementId = str(raw["elementId"]);
   if (!elementId) return null;
   const styleId = str(raw["styleId"]);
-  const decor = str(raw["decor"]);
+  /**
+   * SỐ ĐỜI CŨ → ID CHỮ, và THIẾU → «Vừa».
+   *
+   * Bản nháp lưu trước 09/2026 mang `decor: "4"` — độ dày viền trên thang 1..7.
+   * Thang ấy đã thành bốn nấc LƯỢNG TRANG TRÍ, nên "4" không tra ra mục nào:
+   * `phraseOf` trả rỗng và dòng element im lặng mất câu trang trí. Cùng họ với
+   * `sizeId`/`glazeId` ngay dưới — vá tại cửa đọc, một lần, cho mọi đường vào.
+   */
+  const decor = decorLevelOf(raw["decor"]);
+  /* Bản nháp đời cũ KHÔNG có trường này ⇒ «Cân đối», nấc mặc định. */
+  const decorPlace = decorPlaceOf(raw["decorPlace"]);
   /**
    * DI TRÚ `materialId` → `glazeId`, RỒI VÁ RỖNG → `auto`.
    *
@@ -112,6 +122,7 @@ function readCell(raw: unknown, index: number, presets: PresetBundle): UiCell | 
     elementId,
     styleId,
     decor,
+    decorPlace,
     glazeId,
     /* CỠ RỖNG LÀ DI SẢN, KHÔNG PHẢI MỘT LỰA CHỌN. Bản nháp lưu trước 07/09/2026
        để rỗng nghĩa là «theo hệ thống» — một cỡ không ai đọc ra được và còn đổi
@@ -138,7 +149,7 @@ function readCell(raw: unknown, index: number, presets: PresetBundle): UiCell | 
        được cứu hộ mang `kind: "glaze"`, mà một id chất liệu trong pill đục nền là
        một giá trị lạ ⇒ `phraseOf` trả rỗng ⇒ lựa chọn biến mất khỏi prompt. */
     ...(isRecord(raw["doc"])
-      ? { doc: healDoc(raw["doc"] as JSONContent, "uikit", [styleId, glazeId, decor]) }
+      ? { doc: healDoc(raw["doc"] as JSONContent, "uikit", [styleId, glazeId, decor, decorPlace]) }
       : {}),
   };
 }

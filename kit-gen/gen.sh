@@ -599,6 +599,27 @@ for s in cfg["styles"]:
                 "The list names WHAT each cell is; the art style above decides how it looks; the"
                 " coordinates decide where and how big.",
             ]
+            # ── AI QUYẾT LƯỢNG TRANG TRÍ: DÒNG CỦA Ô, KHÔNG PHẢI THEME ─────────
+            # ╔══ BỆNH ĐÃ ĐO (chủ sản phẩm, 09/2026) ═══════════════════════════════╗
+            # ║ Bộ kit theme Tết: *"lần nào nó cũng ra viền decor"* — hoa mai và đèn ║
+            # ║ lồng bám quanh mọi ô, kể cả ô người dùng đã chọn «Không trang trí».  ║
+            # ╚═════════════════════════════════════════════════════════════════════╝
+            # Nguồn của nó không phải một câu sai trong prompt mà là một khoảng
+            # TRỐNG: `## Art style` mô tả cả một bộ nhận diện lễ hội, `## Elements`
+            # thì nói lượng trang trí cho từng ô — và không dòng nào nói ai thắng ai.
+            # Model tự chọn nguồn NÓI TO HƠN, tức là theme. Một dòng, ở đây, phân vai
+            # dứt khoát: theme cấp MÔ-TÍP (hoa gì, đèn kiểu gì), dòng của ô cấp SỐ
+            # LƯỢNG và CHỖ ĐẶT.
+            #
+            # ⚠️ Ở ĐÂY chứ không nối vào từng dòng element, cùng một lý do với luật
+            # alpha ở `## Transparency`: nó đúng với MỌI ô của MỌI tấm, và in lại N
+            # lần thì vừa dài vừa dạy model rằng mỗi ô có một hợp đồng riêng.
+            # Tấm full-bleed KHÔNG nhận dòng này: ở đó mỗi ô là một bức tranh phủ kín,
+            # không có "vật thể" nào để mà đếm hoa văn bám quanh.
+            if not full_bleed:
+                listing.append(
+                    "Ornament amount and placement are set PER ELEMENT on its line below; the"
+                    " theme supplies the motif, not the quantity.")
             # ⚠️ VÌ SAO CỠ ĐẦU RA PHẢI CÓ MẶT TRONG PROMPT dù dao cắt không dùng nó.
             # Ô được lấp bằng hộp LỚN NHẤT vừa lề (geometry.max_fit_box) để ăn trọn
             # độ phân giải ảnh sinh — nhưng nếu chỉ đưa cái hộp to ấy thì model không

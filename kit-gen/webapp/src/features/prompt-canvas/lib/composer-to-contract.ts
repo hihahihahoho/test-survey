@@ -24,7 +24,7 @@ import type { StyleAxes } from "@/features/kit-core/lib/model";
 import { STYLE_AXIS_IDS } from "@/features/kit-core/lib/form-model";
 import { subjectAxisLine } from "@/features/kit-core/lib/style-phrases";
 import { INHERIT, labelOf, phraseOf, type PillKind } from "@/features/prompt-lab/lib/pill-registry";
-import { getPresets, type ElementPreset, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
+import { getPresets, hasDecorPlacement, type ElementPreset, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
 import { NODE } from "@/features/prompt-lab/lib/schema";
 import {
   CUSTOM_ELEMENT_SKEL, SQUARE_CANVAS_PX, defaultSizePx, sizePx, type SizePx,
@@ -612,11 +612,16 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
          `style` và với `cellLine()` của bộ serialize. Ba nơi phải nói một điều. */
       const style = cell.styleId ? phraseOf("style", cell.styleId, presets) : "";
       const decor = phraseOf("decor", cell.decor, presets);
-      /* DANH TỪ ĐỨNG ĐẦU, rồi mới tới phong cách và mức viền. `element.en` nay là
-         một danh từ thuần ("popover"), không còn là câu mô tả có sẵn thuộc tính —
-         xem `ElementPreset.en`. Nhờ vậy thứ tự này đọc ra đúng một câu tiếng Anh:
-         "popover, chunky cartoon style, a thick rim with corner accents…". */
-      const text = [element?.en ?? cell.elementId, style, decor].filter(Boolean).join(", ");
+      /* Ô «Không trang trí» KHÔNG in câu bố trí — cùng luật, cùng hàm với
+         `cellLine()` của bộ serialize: hai cửa nhìn vào một ô thì không được im
+         lặng ở hai chỗ khác nhau. */
+      const place = hasDecorPlacement(cell.decor) ? phraseOf("decorPlace", cell.decorPlace, presets) : "";
+      /* DANH TỪ ĐỨNG ĐẦU, rồi tới phong cách, lượng trang trí, cách bố trí.
+         `element.en` nay là một danh từ thuần ("popover"), không còn là câu mô tả có
+         sẵn thuộc tính — xem `ElementPreset.en`. Nhờ vậy thứ tự này đọc ra đúng một
+         câu tiếng Anh: "popover, chunky cartoon style, a distinct rim with a few
+         ornaments at the corners…, ornaments mirrored symmetrically…". */
+      const text = [element?.en ?? cell.elementId, style, decor, place].filter(Boolean).join(", ");
       /* `resolveElementSpec` là nơi DUY NHẤT biết cách nối câu đục nền vào mô tả
          một ô — dùng lại thay vì chép luật nối chuỗi sang đây. */
       const glaze = { glaze: cell.glazeId };

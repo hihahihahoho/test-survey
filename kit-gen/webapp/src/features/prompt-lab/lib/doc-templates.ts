@@ -1,7 +1,7 @@
 import type { JSONContent } from "@tiptap/react";
 import { NODE } from "./schema";
 import { INHERIT, type PillKind } from "./pill-registry";
-import { getPresets, type PresetBundle } from "./presets-store";
+import { getPresets, hasDecorPlacement, type PresetBundle } from "./presets-store";
 import type { ContextRef, UiCell } from "./composer-model";
 
 /**
@@ -281,6 +281,14 @@ export function uiCellDoc(cell: UiCell, presets: PresetBundle = getPresets()): J
           pill("glaze", cell.glazeId),
           text(comma),
           pill("decor", cell.decor),
+          /* PILL «BỐ TRÍ» VẮNG MẶT KHI Ô KHÔNG TRANG TRÍ — và nó là pill DUY NHẤT
+             của câu này có quyền vắng. Hai điều kiện làm cho phép vắng ấy an toàn:
+             ① nó đứng CUỐI dãy pill, nên `PILL_SLOTS.uikit` (gán `kind` theo VỊ TRÍ)
+                vẫn khớp cho cả câu ba pill lẫn câu bốn pill — thiếu ô cuối thì chỉ
+                là thiếu, không lệch;
+             ② luật ẩn/hiện đọc từ đúng MỘT chỗ (`hasDecorPlacement`), chung với dòng
+                khuôn và hai bộ dịch prompt. */
+          ...(hasDecorPlacement(cell.decor) ? [text(comma), pill("decorPlace", cell.decorPlace)] : []),
           ...(note ? [text(`${comma}${note}`)] : []),
         ],
       },
@@ -347,7 +355,10 @@ export const PILL_SLOTS: Record<"uikit" | "background" | "mascot" | "mascotPose"
      thích trên) — nhưng ở ĐÂY còn một điều kiện thứ hai, dễ quên hơn: `values`
      truyền vào `repairPills` (từ `composer-doc.readCell`) cũng phải đổi thứ tự
      theo. Ba nơi, một thứ tự. */
-  uikit: ["style", "glaze", "decor"],
+  /* Thêm 09/2026: ô thứ tư `decorPlace`, và nó là ô DUY NHẤT của cả bảng có thể
+     KHÔNG có mặt trong tài liệu (ô «Không trang trí» — xem `uiCellDoc`). Bảng vẫn
+     đúng vì phép gán chạy theo tiền tố: câu ba pill ăn ba ô đầu. */
+  uikit: ["style", "glaze", "decor", "decorPlace"],
   /* Ba ô từ 09/2026 — ô ảnh cuối câu đã thành pill `layout`, xem `SCAFFOLD_BACKGROUND`. */
   background: ["scene", "mood", "layout"],
   /* Đổi 09/2026 cùng lượt tách thẻ Nhân vật thành sprite sheet: câu ĐẦU THẺ nay

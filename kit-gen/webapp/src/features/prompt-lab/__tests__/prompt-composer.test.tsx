@@ -10,8 +10,8 @@ import { serializeComposer, countComposerImages } from "../lib/serialize-compose
 import { freeText, serializeDoc, makeContext, type PromptDocNode } from "../lib/serialize";
 import { backgroundDoc, mascotDoc, mascotPoseDoc, SCAFFOLD_BACKGROUND } from "../lib/doc-templates";
 import { slashItems, SLASH_ITEMS } from "../lib/slash-items";
-import { hasBlankChoice, phraseOf, pillOptions, INHERIT } from "../lib/pill-registry";
-import { DECOR_LEVELS, seedPresets } from "../lib/presets-store";
+import { hasBlankChoice, labelOf, nounOf, phraseOf, pillOptions, INHERIT } from "../lib/pill-registry";
+import { DECOR_LEVELS, DECOR_PLACES, hasDecorPlacement, seedPresets } from "../lib/presets-store";
 import { defaultSizeOf, sizePx } from "../lib/cell-size";
 import { gridFor, newCell, newMascotPose, type ComposerState, type UiCell } from "../lib/composer-model";
 import { brandColorName, describeBrandColors } from "../lib/brand-colors";
@@ -223,8 +223,8 @@ describe("màu thương hiệu — hex phải thành CHỮ, không phải một 
 
   it("KHÔNG nhắc lại palette ở từng dòng cell — một bộ nhận diện, không phải mỗi ô một bảng màu", () => {
     const cells: UiCell[] = [
-      { id: "c1", elementId: "button", styleId: INHERIT, decor: "4", glazeId: "", sizeId: "", note: "" },
-      { id: "c2", elementId: "coin", styleId: INHERIT, decor: "2", glazeId: "", sizeId: "", note: "" },
+      { id: "c1", elementId: "button", styleId: INHERIT, decor: "medium", decorPlace: "balanced", glazeId: "", sizeId: "", note: "" },
+      { id: "c2", elementId: "coin", styleId: INHERIT, decor: "light", decorPlace: "balanced", glazeId: "", sizeId: "", note: "" },
     ];
     const out = serializeComposer(
       state({ brandColors: ["#ff5533", "#112233"], blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }),
@@ -236,24 +236,73 @@ describe("màu thương hiệu — hex phải thành CHỮ, không phải một 
 });
 
 /**
- * THANG VIỀN CHỈ TẢ CẤU TRÚC, KHÔNG TẢ CÁCH ĐÁNH BÓNG.
+ * HAI TRỤC TRANG TRÍ — LƯỢNG và CHỖ, mỗi trục một câu hỏi.
  *
- * Cách hoàn thiện (vát khối, chuyển màu, đổ bóng) là việc của PHONG CÁCH — đã
- * nói một lần ở `## Art style` cho cả tấm. Nhắc lại ở từng ô là hai giọng cùng
- * chỉ huy một chuyện: chọn "flat vector" rồi kéo viền lên nấc 4 là prompt tự mâu
- * thuẫn ngay trong chính nó.
+ * Cách hoàn thiện (vát khối, chuyển màu, đổ bóng) vẫn là việc của PHONG CÁCH —
+ * đã nói một lần ở `## Art style` cho cả tấm. Nhắc lại ở từng ô là hai giọng
+ * cùng chỉ huy một chuyện: chọn "flat vector" rồi kéo trang trí lên «Nhiều» là
+ * prompt tự mâu thuẫn ngay trong chính nó.
  */
-describe("thang mức viền — cấu trúc thuần", () => {
-  it("bảy nấc, không nấc nào mang chữ về cách hoàn thiện", () => {
-    expect(DECOR_LEVELS).toHaveLength(7);
-    for (const level of DECOR_LEVELS) {
-      expect(level.en.toLowerCase(), level.vi).not.toMatch(/bevel|gradient|shadow|glow|gloss|sheen/);
+describe("hai trục trang trí — lượng và chỗ", () => {
+  it("bốn nấc lượng, bốn nấc chỗ, không nấc nào mang chữ về cách hoàn thiện", () => {
+    expect(DECOR_LEVELS.map((level) => level.value)).toEqual(["none", "light", "medium", "rich"]);
+    expect(DECOR_PLACES.map((place) => place.value)).toEqual(["balanced", "left", "right", "random"]);
+    for (const option of [...DECOR_LEVELS, ...DECOR_PLACES]) {
+      expect(option.en.toLowerCase(), option.vi).not.toMatch(/bevel|gradient|shadow|glow|gloss|sheen/);
     }
   });
 
-  it("nấc 1 và nấc 7 ĐỐI NHAU: không viền ↔ viền có hoa văn góc", () => {
-    expect(DECOR_LEVELS[0]!.en).toBe("plain edge, no rim");
-    expect(DECOR_LEVELS[6]!.en).toBe("an ornate rim with corner ornaments");
+  /* ══ NẤC «KHÔNG» PHẢI THẮNG ĐƯỢC THEME ═══════════════════════════════════
+     Chủ sản phẩm nhìn khung Tết vẽ ra: *"lần nào nó cũng ra viền decor"*. Câu
+     "plain edge, no rim" đời trước chỉ nói về VIỀN, nên hoa mai và đèn lồng của
+     theme vẫn bám quanh ô một cách hợp lệ. Câu mới phải gọi tên thẳng thứ bị
+     cấm — và ca này khoá đúng điều đó, không khoá câu chữ cho đẹp. */
+  it("nấc «Không» cấm CẢ hoa văn treo vào, không chỉ cấm viền", () => {
+    const none = DECOR_LEVELS[0]!.en.toLowerCase();
+    expect(none).toContain("no rim ornament");
+    for (const thing of ["flowers", "lanterns", "ribbons", "gems", "trinkets"]) {
+      expect(none, thing).toContain(thing);
+    }
+    expect(DECOR_LEVELS[3]!.en).toContain("ornate rim");
+  });
+
+  it("bốn nấc chỗ nói ra CHỖ, và hai nấc lệch thì đối nhau", () => {
+    expect(DECOR_PLACES[0]!.en).toContain("mirrored symmetrically");
+    expect(DECOR_PLACES[1]!.en).toContain("LEFT");
+    expect(DECOR_PLACES[2]!.en).toContain("RIGHT");
+    expect(DECOR_PLACES[3]!.en).toContain("asymmetric");
+  });
+
+  /* Ô «Không trang trí» thì câu hỏi "xếp hoa văn ở đâu" không còn nghĩa — và một
+     dòng nói cả "no decorative objects" lẫn "ornaments mirrored symmetrically" là
+     mời máy vẽ hoà giải hai câu ngược nhau bằng cách vẽ vài bông hoa. */
+  it("pill «Bố trí» chỉ có nghĩa khi ô CÓ trang trí", () => {
+    expect(hasDecorPlacement("none")).toBe(false);
+    for (const level of ["light", "medium", "rich"]) expect(hasDecorPlacement(level)).toBe(true);
+    /* Số đời cũ đi qua cùng một cửa: "1" là «Không», nên nó cũng tắt pill. */
+    expect(hasDecorPlacement("1")).toBe(false);
+    expect(hasDecorPlacement("4")).toBe(true);
+  });
+});
+
+describe("dòng element in đủ hai câu trang trí — và im đúng chỗ", () => {
+  const uikit = (cells: UiCell[]) => state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] });
+
+  it("ô có trang trí ⇒ câu LƯỢNG rồi tới câu CHỖ, đúng thứ tự ấy", () => {
+    const cell: UiCell = { ...newCell("button", PRESETS), decor: "medium", decorPlace: "left" };
+    const out = serializeComposer(uikit([cell]), PRESETS);
+    const amount = phraseOf("decor", "medium", PRESETS);
+    const place = phraseOf("decorPlace", "left", PRESETS);
+    expect(out).toContain(amount);
+    expect(out).toContain(place);
+    expect(out.indexOf(amount)).toBeLessThan(out.indexOf(place));
+  });
+
+  it("ô «Không trang trí» ⇒ có câu cấm, KHÔNG có câu bố trí", () => {
+    const cell: UiCell = { ...newCell("button", PRESETS), decor: "none", decorPlace: "balanced" };
+    const out = serializeComposer(uikit([cell]), PRESETS);
+    expect(out).toContain(phraseOf("decor", "none", PRESETS));
+    expect(out).not.toContain(phraseOf("decorPlace", "balanced", PRESETS));
   });
 });
 
@@ -274,8 +323,8 @@ describe("serialize cả màn — mỗi block một đoạn, ảnh đánh số l
 
   it("block UI kit liệt kê element, KHÔNG có toạ độ — lưới là việc của hệ thống", () => {
     const cells: UiCell[] = [
-      { id: "c1", elementId: "button", styleId: INHERIT, decor: "4", glazeId: "glass", sizeId: "", note: "" },
-      { id: "c2", elementId: "coin", styleId: "match3", decor: "2", glazeId: "", sizeId: "", note: "xoay 15 độ" },
+      { id: "c1", elementId: "button", styleId: INHERIT, decor: "medium", decorPlace: "balanced", glazeId: "glass", sizeId: "", note: "" },
+      { id: "c2", elementId: "coin", styleId: "match3", decor: "light", decorPlace: "balanced", glazeId: "", sizeId: "", note: "xoay 15 độ" },
     ];
     const out = serializeComposer(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), PRESETS);
 
@@ -369,6 +418,30 @@ describe("danh mục — lab đi bằng dữ liệu THẬT của kit-core, khôn
     expect(pillOptions("expression", PRESETS)).toHaveLength(EXPRESSIONS.length);
   });
 
+  it("hai trục trang trí có mặt đủ trong bảng tra: danh mục, nhãn, câu Anh, menu `/`", () => {
+    expect(pillOptions("decor", PRESETS)).toHaveLength(DECOR_LEVELS.length);
+    expect(pillOptions("decorPlace", PRESETS)).toHaveLength(DECOR_PLACES.length);
+    /* Nhãn VI tra ngược được — pill hiện chữ này, không hiện id. */
+    expect(labelOf("decor", "none", PRESETS)).toBe("Không");
+    expect(labelOf("decorPlace", "left", PRESETS)).toBe("Lệch trái");
+    expect(nounOf("decor")).toBe("trang trí");
+    expect(nounOf("decorPlace")).toBe("bố trí");
+    /* Câu Anh đi vào prompt là câu của danh mục, không phải id. */
+    expect(phraseOf("decorPlace", "right", PRESETS)).toBe(DECOR_PLACES[2]!.en);
+    /* Cả hai chèn được vào giữa câu tự do bằng `/`. */
+    for (const id of ["pill-decor", "pill-decorPlace"]) {
+      expect(SLASH_ITEMS.some((item) => item.id === id), id).toBe(true);
+    }
+  });
+
+  /* Mục «— để trống —» bị bỏ khỏi CẢ HAI trục, cùng lý do với `glaze`: để trống
+     nghĩa là không nói gì, mà "không nói gì" ở trục này CHÍNH LÀ cái bệnh đang
+     chữa — theme tự bơm hoa vào ô. Nấc «Không» nói mạnh hơn, và nó có tên. */
+  it("hai trục trang trí KHÔNG có mục để trống — luôn phải nói ra một nấc", () => {
+    expect(hasBlankChoice("decor")).toBe(false);
+    expect(hasBlankChoice("decorPlace")).toBe(false);
+  });
+
   it("pill Đục nền: «Tự động» đứng ĐẦU, «Đục hoàn toàn» có mặt, KHÔNG có mục để trống", () => {
     /* 08/09/2026 — chủ sản phẩm chốt thêm nấc mặc định «tự động theo vật liệu», và
        cùng lượt ấy nấc «đặc» phải có tên riêng: trước đó "đặc" chỉ là hệ quả của
@@ -404,7 +477,11 @@ describe("danh mục — lab đi bằng dữ liệu THẬT của kit-core, khôn
     expect(cell.sizeId).toBe(defaultSizeOf(PRESETS.elements.find((e) => e.id === "coin")));
     const coin = PRESETS.elements.find((e) => e.id === "coin");
     expect(sizePx(cell.sizeId, coin?.skel)?.w).toBe(sizePx(cell.sizeId, coin?.skel)?.h);
-    expect(cell.decor).toBe("2");
+    /* Hạt giống của «Icon tiền» là «Ít» — một đồng xu không cần vành hoa văn. Và
+       cách bố trí thì KHÔNG đến từ danh mục element: nó là «Cân đối» cho mọi ô mới,
+       vì đối xứng là thứ một bộ UI muốn ở gần như mọi món. */
+    expect(cell.decor).toBe("light");
+    expect(cell.decorPlace).toBe("balanced");
   });
 
   it("thực đơn `/` CHỈ chèn pill — cấu trúc đi qua nút '+ Thêm block'", () => {
