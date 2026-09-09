@@ -30,7 +30,11 @@ export type RunKind = z.infer<typeof runKindSchema>;
 
 /** Chẩn đoán 1 dòng cho lượt lỗi (§6.2 kiểu `Run`, cột `diagnosis`). */
 export const diagnosisSchema = z.enum([
-  "QUOTA_SUSPECTED", "NOT_LOGGED_IN", "NO_ARTIFACT", "TIMEOUT", "UNKNOWN",
+  /* `OPAQUE_ALPHA` (09/2026) — ảnh ĐÃ sinh ra, quota ĐÃ tiêu, chỉ có nền là đục:
+     cổng alpha của `gen.sh` đánh trượt cả lượt đầu lẫn lượt vẽ lại tự động. Nó là
+     mã DUY NHẤT mà việc đáng làm tiếp theo là bấm Vẽ, nên nó không được gộp vào
+     `UNKNOWN`. Xem `agent/lib/engine.mjs` (`diagnose`, `DIAGNOSIS_VI`). */
+  "QUOTA_SUSPECTED", "NOT_LOGGED_IN", "NO_ARTIFACT", "TIMEOUT", "OPAQUE_ALPHA", "UNKNOWN",
 ]);
 export type Diagnosis = z.infer<typeof diagnosisSchema>;
 

@@ -1010,9 +1010,56 @@ $(cat "prompts/${job}.txt")
     # làm đúng cũng bị đóng dấu FAIL.
     local fb=0; [[ -f "prompts/${job}.fullbleed" ]] && fb=1
     local av; av="$(alpha_verdict "raw/${job}.png" "$fb")"
+    # ╔══ ẢNH ĐỤC KHÔNG ĐƯỢC NẰM LẠI Ở raw/ ═══════════════════════════════════════╗
+    # ║ Trước bản này, verdict "bad" chỉ in một dòng FAIL rồi thôi — file đục vẫn   ║
+    # ║ nằm nguyên ở `raw/<job>.png`. Tầng agent phán theo SẢN PHẨM                 ║
+    # ║ (`settleGenJobs`: có ảnh mới trong lượt này ⇒ job "ok"), nên nó lật job từ  ║
+    # ║ failed về ok, cắt, và ĐĂNG tấm đục ấy thành phiên bản đang dùng. Hiện       ║
+    # ║ trường: sheet `chinh-nhan-vat` của dự án test là một tấm caro giả, mode     ║
+    # ║ "rgb", và nó là bản người dùng đang nhìn.                                   ║
+    # ║ Nên: đổi tên thành `.rejected.png` (giữ lại để soi, nhưng KHÔNG còn là sản  ║
+    # ║ phẩm), gọi lại codex ĐÚNG MỘT LẦN với cùng task cộng một đoạn nói thẳng     ║
+    # ║ chuyện vừa xảy ra, rồi kiểm lại. Vẫn đục thì raw/<job>.png KHÔNG tồn tại —  ║
+    # ║ và đó chính là thứ giữ cho agent không đăng nó.                             ║
+    # ╚════════════════════════════════════════════════════════════════════════════╝
+    if [[ "$av" == bad* ]]; then
+      mv -f "raw/${job}.png" "raw/${job}.rejected.png" 2>/dev/null
+      echo "alpha lượt 1 hỏng: ${av#bad } — giữ ở raw/${job}.rejected.png, gọi lại codex một lần" >>"logs/${job}.log"
+      # ĐOẠN THÊM ĐỨNG TRƯỚC TASK, và nó nói với AGENT CODEX chứ không phải với máy
+      # vẽ: đây không phải prompt ảnh, nên nó không rơi vào luật "chỉ tả điều muốn".
+      # Vẫn tránh gọi tên thứ không muốn (không có chữ caro/checker ở đây) — đoạn này
+      # đi CÙNG file prompt trong một task, và một cái tên nhắc ra là một cái tên có
+      # cơ hội lọt vào ảnh.
+      local retry_note="The previous attempt came back as an opaque image without an alpha channel. Ask image_gen for a transparent background again and make sure the saved PNG keeps the alpha channel it returns. Do not repair the earlier file and do not build any tool of your own to change it."
+      ${codex_env[@]+"${codex_env[@]}"} codex exec \
+        ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
+        -s workspace-write \
+        -C "${ROOT}" \
+        --skip-git-repo-check \
+        ${att[@]+"${att[@]}"} \
+        -o "logs/${job}.last.txt" \
+        "${retry_note}
+
+${task}" >>"logs/${job}.log" 2>&1
+      rc=$?
+      # Lượt hai KHÔNG ghi được gì ⇒ không có ảnh nào để mà kiểm. Không phục hồi file
+      # `.rejected.png` về đích: nó đã trượt cổng một lần, đưa lại vào raw/ chỉ để
+      # agent đăng nó lên là quay về đúng cái bệnh vừa chữa.
+      local h2; h2="$(file_hash "raw/${job}.png")"
+      if [[ -z "$h2" ]]; then
+        echo "FAIL ${job} (nền KHÔNG trong suốt thật: ${av#bad } — đã thử lại 1 lần, lượt hai không ghi được ảnh nào (rc=${rc}); ảnh bị loại ở raw/${job}.rejected.png, xem logs/${job}.log)"
+        return
+      fi
+      av="$(alpha_verdict "raw/${job}.png" "$fb")"
+      if [[ "$av" == bad* ]]; then
+        mv -f "raw/${job}.png" "raw/${job}.rejected.png" 2>/dev/null
+        echo "FAIL ${job} (nền KHÔNG trong suốt thật: ${av#bad } — đã thử lại 1 lần, vẫn vậy; ảnh bị loại ở raw/${job}.rejected.png, xem logs/${job}.log)"
+        return
+      fi
+      echo "lượt 2 đạt cổng alpha: ${av}" >>"logs/${job}.log"
+    fi
     local tail=""; [[ $rc -ne 0 ]] && tail="  (codex rc=${rc} sau khi đã lưu ảnh — bỏ qua)"
     case "$av" in
-      bad*) echo "FAIL ${job} (nền KHÔNG trong suốt thật: ${av#bad } — xem logs/${job}.log)" ;;
       skip*) echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)${tail}  [${av#skip }]" ;;
       *)    echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)  ${av#ok }${tail}" ;;
     esac

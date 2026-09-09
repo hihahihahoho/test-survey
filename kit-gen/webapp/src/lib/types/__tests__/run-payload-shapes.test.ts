@@ -70,3 +70,49 @@ describe("payload lượt chạy THẬT của agent không được làm vỡ m�
     expect(r.success && r.data.jobs[0]!.artifact!.path).toBe("runs/r-0001/artifacts/chinh-ui.png");
   });
 });
+
+/**
+ * ══ CHẨN ĐOÁN `OPAQUE_ALPHA` (09/2026) ═══════════════════════════════════════
+ *
+ * Cổng alpha của `gen.sh` đánh trượt cả lượt đầu lẫn lượt vẽ lại tự động: ảnh ĐÃ
+ * sinh ra, quota ĐÃ tiêu, chỉ có nền là đục. Đây là mã DUY NHẤT mà việc đáng làm
+ * tiếp theo là bấm Vẽ — nên nó phải qua được schema chứ không rơi về một giá trị
+ * chung. Nguồn: `agent/lib/engine.mjs` (`diagnose` + `DIAGNOSIS_VI`).
+ */
+describe("job trượt cổng alpha đọc được nguyên vẹn ở web", () => {
+  const opaque = () => {
+    const run = runWith([cell("ok")]);
+    return {
+      ...run,
+      failSummary: "1/3 job model trả ảnh đục, không có kênh alpha thật (đã thử lại 1 lần)",
+      jobs: [{
+        job: "chinh-nhan-vat",
+        variant: "chinh",
+        sheet: "nhan-vat",
+        status: "failed",
+        diagnosis: "OPAQUE_ALPHA",
+        errorTail: [
+          "Model trả ảnh đục, không có kênh alpha thật — đã thử lại 1 lần, vẫn đục. Bấm Vẽ lại để thử tiếp.",
+        ],
+      }],
+    };
+  };
+
+  it("`OPAQUE_ALPHA` là giá trị HỢP LỆ, không bị hạ về UNKNOWN", () => {
+    const r = runSchema.safeParse(opaque());
+    expect(r.success).toBe(true);
+    expect(r.success && r.data.jobs[0]!.diagnosis).toBe("OPAQUE_ALPHA");
+  });
+
+  it("câu tiếng Việt của agent tới được web nguyên văn (errorTail)", () => {
+    const r = runSchema.safeParse(opaque());
+    expect(r.success && r.data.jobs[0]!.errorTail?.[0]).toContain("đã thử lại 1 lần");
+    expect(r.success && r.data.failSummary).toContain("không có kênh alpha thật");
+  });
+
+  it("tấm trượt cổng KHÔNG mang `artifact` — và web không được coi đó là lỗi parse", () => {
+    const r = runSchema.safeParse(opaque());
+    expect(r.success).toBe(true);
+    expect(r.success && !r.data.jobs[0]!.artifact).toBe(true);
+  });
+});

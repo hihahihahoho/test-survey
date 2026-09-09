@@ -471,6 +471,66 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     await a8("DELETE", `/api/projects/${gid}`)
   })
 
+  /* ── CỔNG ALPHA: ẢNH ĐỤC KHÔNG ĐƯỢC THÀNH PHIÊN BẢN ĐANG DÙNG ────────────────
+     Hiện trường 09/2026 (dự án test): `gen.sh` in `FAIL <job> (nền KHÔNG trong suốt
+     thật …)`, nhưng file đục vẫn nằm ở `raw/<job>.png`. Agent phán theo SẢN PHẨM
+     (`settleGenJobs`: có ảnh mới trong lượt này ⇒ "ok"), nên nó lật job về ok, cắt,
+     và đăng tấm đục làm phiên bản đang dùng — sheet nhân vật của dự án ấy là một tấm
+     nền giả, mode "rgb", và đó là bản người dùng đang nhìn. */
+  await it("[alpha] tấm trượt cổng alpha: job đỏ, có câu tiếng Việt, KHÔNG có ảnh, KHÔNG cắt", async () => {
+    const { api: aA } = await agentWithEngine("engine-alpha")
+    const created = await createBasicProject(aA, { name: "Cong alpha", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
+    const gid = created.json.project.id
+    const run = await aA("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", autoSliceAfterGen: true } })
+    eq(run.status, 202, "run 202")
+    const rid = run.json.runId
+    await aA("GET", `/api/runs/${rid}/stream?from=0`)
+
+    const got = await aA("GET", `/api/runs/${rid}`)
+    eq(got.json.status, "done-with-errors", "1 tấm trượt cổng ⇒ done-with-errors")
+    const bad = got.json.jobs.find(j => j.sheet === "bg-home")
+    eq(bad.status, "failed", "tấm đục PHẢI đỏ — không được lật về ok vì 'có ảnh mới'")
+    eq(bad.diagnosis, "OPAQUE_ALPHA", "chẩn đoán riêng, không gộp vào UNKNOWN")
+    eq(bad.errorTail?.[0],
+      "Model trả ảnh đục, không có kênh alpha thật — đã thử lại 1 lần, vẫn đục. Bấm Vẽ lại để thử tiếp.",
+      "câu tiếng Việt nói đủ ba vế: chuyện gì, đã thử lại rồi, giờ làm gì")
+    ok(!bad.artifact, "KHÔNG snapshot ảnh cho tấm trượt cổng")
+    eq(got.json.failSummary, "1/3 job model trả ảnh đục, không có kênh alpha thật (đã thử lại 1 lần)",
+      "câu gộp cả lượt cũng nói đúng nguyên nhân")
+
+    /* Và nó KHÔNG được có mặt trong kho kit: hai tấm kia cắt bình thường. */
+    const files = await aA("GET", `/api/projects/${gid}/files`)
+    const assets = JSON.stringify(files.json)
+    ok(!assets.includes("bg-home"), `tấm trượt cổng lọt vào kho kit: ${assets.slice(0, 400)}`)
+    await aA("DELETE", `/api/projects/${gid}`)
+  })
+
+  await it("[alpha] engine ĐỜI CŨ để ảnh đục ở raw/ ⇒ agent vẫn không lật job về ok", async () => {
+    /* Chốt chặn thứ hai, và nó là chốt thật: bản vá phía engine (đổi tên thành
+       `.rejected.png`) chỉ có ở bản mới. Một workspace còn engine cũ trong
+       `.kitgen/engine` vẫn phải an toàn — nếu không thì bản vá này chỉ đúng trên máy
+       vừa cập nhật. */
+    const prev = process.env.KITGEN_TEST_ALPHA_LEAVE_RAW
+    process.env.KITGEN_TEST_ALPHA_LEAVE_RAW = "1"
+    try {
+      const { api: aB } = await agentWithEngine("engine-alpha")
+      const created = await createBasicProject(aB, { name: "Cong alpha cu", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
+      const gid = created.json.project.id
+      const run = await aB("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", autoSliceAfterGen: true } })
+      const rid = run.json.runId
+      await aB("GET", `/api/runs/${rid}/stream?from=0`)
+      const got = await aB("GET", `/api/runs/${rid}`)
+      const bad = got.json.jobs.find(j => j.sheet === "bg-home")
+      eq(bad.status, "failed", "có ảnh mới trên đĩa vẫn KHÔNG đủ để gọi là xong")
+      eq(bad.diagnosis, "OPAQUE_ALPHA", "chẩn đoán giữ nguyên qua settleGenJobs")
+      eq(got.json.progress.done, 2, "chỉ hai tấm được tính là xong")
+      await aB("DELETE", `/api/projects/${gid}`)
+    } finally {
+      if (prev === undefined) delete process.env.KITGEN_TEST_ALPHA_LEAVE_RAW
+      else process.env.KITGEN_TEST_ALPHA_LEAVE_RAW = prev
+    }
+  })
+
   await it("styles.json sinh ra THU HẸP đúng tập lượt đã chọn (filter gen.sh là substring)", async () => {
     const { api: a5 } = await agentWithEngine("engine-fake")
     const created = await createBasicProject(a5, { name: "Chon mot luot", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })

@@ -53,6 +53,14 @@ const SHEET_SLICE_TIMEOUT_MS = 15 * 60 * 1000
    kèm một dòng log NÓI RÕ vì sao — im lặng là thứ đã tốn của lượt CI đầu 74 phút. */
 const WIN_PIPE_GRACE_MS = 5000
 
+/** CÂU NGƯỜI DÙNG ĐỌC khi cổng alpha đánh trượt cả hai lượt.
+ *
+ *  Hẹp có chủ ý: nó nói (a) chuyện gì đã xảy ra, (b) engine ĐÃ tự thử lại rồi, (c)
+ *  việc còn lại là của người dùng. Ba vế ấy quyết định người ta bấm gì tiếp theo —
+ *  "lỗi chưa rõ nguyên nhân" thì họ đi tìm log, còn đây thì họ bấm Vẽ. */
+const OPAQUE_ALPHA_VI =
+  "Model trả ảnh đục, không có kênh alpha thật — đã thử lại 1 lần, vẫn đục. Bấm Vẽ lại để thử tiếp."
+
 /** Cắt ký tự điều khiển khỏi tên job do engine in ra (xem parseGenLine). Chuỗi sạch đi
  *  qua đây KHÔNG đổi một ký tự nào ⇒ darwin/linux giữ nguyên hành vi. */
 const cleanJobName = s => String(s).replace(/[\u0000-\u001f]/g, "")
@@ -439,7 +447,16 @@ export class RunHandle {
     if (j.status === "ok" || j.status === "failed") return
     j.status = status
     j.durationMs = j.startedAt ? Date.now() - Date.parse(j.startedAt) : null
-    if (status === "failed") { j.diagnosis = diagnose([line]); this.run.progress.failed += 1 }
+    if (status === "failed") {
+      j.diagnosis = diagnose([line])
+      /* CÂU TIẾNG VIỆT CHO ĐÚNG MỘT CA, và nó đắt hơn mọi ca khác: ảnh ĐÃ sinh ra,
+         quota ĐÃ tiêu, chỉ có nền là đục — nên người dùng cần biết ngay rằng bấm
+         vẽ lại là việc đáng làm (engine đã tự thử một lần và thua). Ghi vào
+         `errorTail` chứ không vào một trường mới: nó là chỗ web đọc "vì sao tấm
+         này đỏ", và `settleGenJobs` chỉ điền `errorTail` khi còn trống. */
+      if (j.diagnosis === "OPAQUE_ALPHA") j.errorTail = [OPAQUE_ALPHA_VI]
+      this.run.progress.failed += 1
+    }
     else this.run.progress.done += 1
     if (j.durationMs) this.durations.push(j.durationMs)
     this.run.progress.etaSeconds = this.eta()
@@ -520,6 +537,13 @@ export class RunHandle {
    *  `detached` (thư mục đích không còn) và `finished` (lượt đã đóng sổ). */
   async finishSheet(j) {
     if (this.detached || this.finished) return
+    /* TẤM HỎNG KHÔNG ĐƯỢC ĐI TIẾP MỘT BƯỚC NÀO. Chu trình này snapshot ảnh, cắt ra
+       `kits/`, rồi ĐĂNG thành phiên bản đang dùng — làm việc đó cho một tấm engine
+       vừa đánh trượt là ghi đè bản tốt cũ bằng bản hỏng mới. Đường vào đây hôm nay
+       đều đã lọc `status === "ok"`, nên đây là chốt chặn, không phải luật mới; nó có
+       mặt vì cái giá của một đường vào lọt lưới là một phiên bản hỏng trên màn hình
+       người dùng (hiện trường 09/2026: sheet nhân vật đục là bản đang dùng). */
+    if (j.status === "failed") return
     const pdir = projectDir(this.ws, this.run.projectId)
     const png = join(pdir, "raw", `${j.job}.png`)
     if (!(await exists(png))) return
@@ -852,6 +876,15 @@ export class RunHandle {
          Tấm đã kiểm rồi thì `geometryChecked` chặn, không spawn python lần hai. */
       if (fresh) await this.validateArtifact(pdir, j)
       if (fresh) {
+        /* MỘT NGOẠI LỆ CHO PHÉP "PHÁN THEO SẢN PHẨM".
+           Luật chung ở đây là: có ảnh mới trong lượt này ⇒ job xong, bất kể engine
+           in gì (codex hay sập vì lỗi API transient SAU khi đã lưu ảnh). Nhưng cổng
+           alpha thì ngược hẳn: nó nhìn CHÍNH cái ảnh ấy rồi nói "ảnh này không dùng
+           được". Lật nó về "ok" là đăng một tấm đục lên làm phiên bản đang dùng —
+           đúng chuyện đã xảy ra với sheet nhân vật của dự án test.
+           (`gen.sh` nay đổi tên ảnh trượt thành `.rejected.png` nên `fresh` thường
+           đã là false; giữ nhánh này để một bản engine cũ hơn cũng không lọt.) */
+        if (j.status === "failed" && j.diagnosis === "OPAQUE_ALPHA") continue
         if (j.status !== "ok") {
           if (j.status === "failed") this.run.progress.failed = Math.max(0, this.run.progress.failed - 1)
           j.status = "ok"
