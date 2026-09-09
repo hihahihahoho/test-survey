@@ -206,6 +206,9 @@ def _run_one_src():
         block(r"^file_hash\(\).*?^\}"),
         block(r"^PY_CHECK=.*?^\}"),
         block(r"^GEN_MODEL=.*?^fi$", limit=20),
+        # Khối «TẢ ẢNH THÀNH CHỮ»: `run_one` gọi `resolve_descs` ngay trước khi dựng
+        # task, nên trích run_one mà bỏ khối này là chạy một hàm khuyết.
+        block(r"^# ══ «TẢ ẢNH THÀNH CHỮ» — BẮT ĐẦU.*?^# ══ «TẢ ẢNH THÀNH CHỮ» — HẾT.*?$"),
         block(r"^run_one\(\) \{.*?^\}"),
     ])
 
@@ -339,6 +342,74 @@ class NenDucKhongChanTest(unittest.TestCase):
         log = (self.proj / "logs" / "job1.log").read_text(encoding="utf-8")
         self.assertIn("nền đục:", log)
         self.assertIn("chỉ ghi nhận, không chặn", log)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ĐÍNH ẢNH = MẤT NỀN TRONG SUỐT ⇒ TASK CỦA TẤM CẦN ALPHA KHÔNG ĐƯỢC CÓ ẢNH NÀO
+# ═══════════════════════════════════════════════════════════════════════════════
+class DinhAnhChiChoTamPhuKinTest(unittest.TestCase):
+    """╔══ ĐO ĐƯỢC (chủ sản phẩm, 09/09/2026) ═════════════════════════════════════╗
+    ║ Cùng một prompt, cùng một model: gọi `image_gen` KÈM `referenced_image_    ║
+    ║ paths` ⇒ ảnh trả về là RGB, nền caro do model tự vẽ. Bỏ ảnh ra ⇒ RGBA,     ║
+    ║ alpha thật. Tool built-in không có tham số nền nào để xin (skill imagegen  ║
+    ║ ghi rõ `background` chỉ thuộc CLI dự phòng).                               ║
+    ╚═══════════════════════════════════════════════════════════════════════════╝
+
+    Nên `run_one` phải gửi đi HAI loại task khác hẳn nhau, và ranh giới là `.att`:
+      · `.att` rỗng (tấm cần alpha) ⇒ không `-i`, và khối REFERENCE IMAGES + câu
+        "you MUST pass ALL of these paths … referenced_image_paths" biến mất hẳn.
+        Còn sót lại một câu ấy thôi là model đi tìm ảnh và tự bịa ra một danh sách.
+      · `.att` có ảnh (tấm full-bleed) ⇒ y nguyên như cũ, không suy suyển một chữ.
+    Ca này đo trên TASK THẬT mà codex nhận được, không đọc mã nguồn.
+    """
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="kitgen-dinh-anh-"))
+        self.proj = self.tmp / "p"
+        for sub in ("prompts", "raw", "logs", "refs"):
+            (self.proj / sub).mkdir(parents=True)
+        (self.proj / "prompts" / "job1.txt").write_text(
+            "## Canvas\nLANDSCAPE 1536x1024 px.\n", encoding="utf-8")
+        (self.tmp / "bin").mkdir()
+        codex = self.tmp / "bin" / "codex"
+        codex.write_text(FAKE_CODEX, encoding="utf-8")
+        codex.chmod(0o755)
+        self.tasklog = self.tmp / "task.log"
+        self.counter = self.tmp / "counter"
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _chay(self, att_lines):
+        (self.proj / "prompts" / "job1.att").write_text(att_lines, encoding="utf-8")
+        env = dict(os.environ)
+        env["PATH"] = f"{self.tmp / 'bin'}:{env['PATH']}"
+        env["COUNTER"] = str(self.counter)
+        env["TASKLOG"] = str(self.tasklog)
+        img = self.tmp / "src1.png"
+        mem_that().save(img)
+        env["SRC1"] = str(img)
+        script = (f'set -uo pipefail\nROOT="{self.proj}"; ROOT_OUT="$ROOT"; IMG_HOME=""\n'
+                  f"{RUN_ONE}\nrun_one job1\n")
+        subprocess.run(["bash", "-c", script], cwd=self.proj,
+                       capture_output=True, text=True, env=env, timeout=300)
+        return self.tasklog.read_text(encoding="utf-8")
+
+    def test_att_rong_thi_task_KHONG_nhac_toi_anh_nao(self):
+        log = self._chay("")
+        self.assertNotIn("referenced_image_paths", log)
+        self.assertNotIn("REFERENCE IMAGES START", log)
+        self.assertNotIn(" -i ", log, "không được đính `-i` cho tấm cần nền trong suốt")
+        # …nhưng câu dặn image_gen thì KHÔNG được mất theo.
+        self.assertIn("image_gen", log)
+        self.assertIn('background=\"transparent\"', log)
+
+    def test_att_co_anh_thi_moi_thu_cu_con_nguyen(self):
+        (self.proj / "refs" / "cho-tet.png").write_bytes(b"anh canh")
+        log = self._chay("refs/cho-tet.png\n")
+        self.assertIn("referenced_image_paths", log)
+        self.assertIn("REFERENCE IMAGES START", log)
+        self.assertIn(str(self.proj / "refs" / "cho-tet.png"), log)
 
 
 if __name__ == "__main__":

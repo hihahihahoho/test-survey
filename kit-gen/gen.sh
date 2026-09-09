@@ -110,7 +110,7 @@ ROOT="$(pwd)"
 # bị model/JSON hiểu thành ký tự escape.
 ROOT_OUT="$ROOT"
 command -v cygpath >/dev/null 2>&1 && ROOT_OUT="$(cygpath -m "$ROOT")"
-mkdir -p raw logs prompts
+mkdir -p raw logs prompts refs
 
 # Mặc định dùng cấu hình Codex hiện tại. IMG_HOME chỉ được đặt khi user chủ động
 # chọn profile riêng trong installer.
@@ -194,7 +194,7 @@ fi
 
 # Build prompt cho từng (style, sheet) → prompts/<style>-<sheet>.txt
 python3 - <<'PY'
-import json, os, sys
+import hashlib, json, os, sys
 # `python3 - <<PY` chạy từ stdin ⇒ sys.path[0] là "" (cwd). gen.sh đã `cd` về thư
 # mục chứa chính nó ở dòng 5, và agent COPY cả engine vào project, nên geometry.py
 # luôn nằm ngay cạnh. Chèn cwd tường minh để không phụ thuộc mặc định của python.
@@ -240,6 +240,73 @@ cfg = json.load(open("styles.json", encoding="utf-8"))
 # của từng ô cũng vậy. Prompt in ra bốn con số, `slice.py` cắt theo bốn con số —
 # nếu hai bên tự tính thì lời hứa và nhát cắt lệch nhau mà không ai thấy.
 canvas_of = geometry.canvas_of
+
+
+# ╔══ ĐÍNH ẢNH = MẤT NỀN TRONG SUỐT. NÊN ẢNH PHẢI THÀNH CHỮ TRƯỚC KHI VẼ ═══════╗
+# ║ Đo thực tế (chủ sản phẩm, 09/09/2026): cùng một prompt, cùng một model —    ║
+# ║ tấm nào gọi `image_gen` KÈM `referenced_image_paths` thì ảnh về là RGB, nền ║
+# ║ caro vẽ tay; tấm nào gọi TAY KHÔNG thì về đúng RGBA alpha thật. Tool        ║
+# ║ `image_gen` built-in KHÔNG có tham số nền nào để mà xin (skill imagegen ghi ║
+# ║ rõ `background` chỉ thuộc CLI dự phòng), nên không có cách nào vừa đính ảnh ║
+# ║ vừa giữ alpha.                                                              ║
+# ║                                                                             ║
+# ║ Hướng chốt: TẤM CẦN NỀN TRONG SUỐT THÌ KHÔNG ĐÍNH ẢNH NỮA. Mọi ảnh tham     ║
+# ║ chiếu của tấm ấy được đổi thành CHỮ trước khi vẽ — một lượt `codex exec`    ║
+# ║ KHÔNG sinh ảnh, chỉ nhìn ảnh rồi tả lại cho hoạ sĩ. Tấm cảnh nền full-bleed ║
+# ║ không cần alpha nên vẫn đính ảnh y như cũ.                                  ║
+# ║                                                                             ║
+# ║ MỐI NỐI PYTHON → BASH. Việc tả ảnh phải gọi codex, mà codex thì ở tầng      ║
+# ║ bash, chạy SAU khi khối này đã ghi xong prompt. Nên khối này để lại một DẤU ║
+# ║ CHỖ `{{DESC:<đường dẫn>}}` đúng chỗ đoạn mô tả sẽ nằm, cộng một file        ║
+# ║ `prompts/<job>.desc` khai VAI của từng ảnh; `run_one` tả xong thì thay dấu  ║
+# ║ chỗ bằng chữ ngay trong `prompts/<job>.txt` (bản có dấu chỗ giữ ở `.tpl`).  ║
+# ║ Ở chế độ KITGEN_PROMPTS_ONLY thì không có ai tả cả — prompt giữ nguyên dấu  ║
+# ║ chỗ, và đó là thứ đọc được: nó nói thẳng chỗ nào sẽ là mô tả của ảnh nào.   ║
+# ║                                                                             ║
+# ║ CACHE ĐỌC ĐƯỢC TỪ CẢ HAI TẦNG. Bash ghi mô tả vào `refs/<tên ảnh>.desc.txt` ║
+# ║ với dòng khoá `# sha256:<băm nội dung> role:<vai> v1`. Khối python này đọc  ║
+# ║ lại chính file ấy: khoá còn khớp thì nó DÁN THẲNG chữ vào prompt và không   ║
+# ║ để dấu chỗ nào — nên lượt thứ hai của cùng một ảnh không gọi codex lần nào, ║
+# ║ và màn xem trước prompt cũng đọc được đúng đoạn chữ sẽ gửi đi.              ║
+# ╚═════════════════════════════════════════════════════════════════════════════╝
+# Phiên bản CÂU HỎI, không phải phiên bản engine: sửa câu hỏi tả ảnh thì mọi mô tả
+# cũ phải bị coi là hết hạn (chúng trả lời một câu hỏi khác). Đổi ở đây, và đổi
+# cùng lúc với `DESC_V` bên tầng bash — hai chỗ phải nói cùng một con số.
+DESC_V = "v1"
+
+
+def desc_cache_path(path):
+    """Chỗ ở của mô tả: cạnh ảnh, trong `refs/`, tên theo TÊN FILE ảnh.
+
+    Theo tên file chứ không theo cả đường dẫn để người dùng mở `refs/` ra là đọc
+    được ngay mô tả của tấm ảnh mình vừa tải lên. Hai ảnh trùng tên ở hai thư mục
+    khác nhau sẽ dùng chung một chỗ — dòng khoá (băm nội dung) bắt được ngay và
+    lượt sau tả lại, tức là chậm chứ không sai.
+    """
+    return os.path.join("refs", os.path.basename(path) + ".desc.txt")
+
+
+def desc_key(path, role):
+    """Dòng đầu của file cache. PHẢI khớp từng ký tự với `desc_key` bên bash."""
+    try:
+        h = hashlib.sha256(open(path, "rb").read()).hexdigest()
+    except OSError:
+        h = ""
+    return f"# sha256:{h} role:{role} {DESC_V}"
+
+
+def desc_cached(path, role):
+    """Mô tả còn hạn của ảnh này, hoặc chuỗi rỗng nếu chưa có / đã cũ."""
+    cache = desc_cache_path(path)
+    try:
+        if not (os.path.isfile(cache) and os.path.isfile(path)):
+            return ""
+        rows = open(cache, encoding="utf-8").read().splitlines()
+        if not rows or rows[0].strip() != desc_key(path, role):
+            return ""
+        return "\n".join(rows[1:]).strip()
+    except OSError:
+        return ""
 
 
 # ── VÌ SAO Ở ĐÂY KHÔNG CÒN BỘ MÁY GẶM CHỮ VẬT LIỆU ───────────────────────────
@@ -374,7 +441,35 @@ for s in cfg["styles"]:
         else:
             profile = "ui"            # nút, khung, popover… — món đồ giao diện
         ALL = ("ui", "mascot", "background", "screen")
+        # TẤM NÀY CÓ ĐƯỢC ĐÍNH ẢNH KHÔNG — một câu hỏi, một biến, dùng ở bốn chỗ.
+        # Đính ảnh thì ảnh về mất nền trong suốt (xem khối «ĐÍNH ẢNH = MẤT NỀN»
+        # ở đầu file), nên chỉ tấm KHÔNG cần alpha mới còn được đính. Đó đúng là
+        # tấm full-bleed: section «Canvas» của nó vừa nói "there is no transparent
+        # area anywhere".
+        attach_ok = full_bleed
         sections = []
+        # Ảnh phải đổi thành chữ, kèm VAI của từng ảnh — tầng bash đọc lại danh
+        # sách này ở `prompts/<job>.desc` để biết phải hỏi câu nào cho ảnh nào.
+        descs = []
+
+        def as_text(path, role):
+            """Chỗ của MÔ TẢ ảnh `path` trong prompt: chữ đã cache, hoặc dấu chỗ.
+
+            Ghi tên ảnh vào `descs` dù cache đã có: file `.desc` là bản kê ẢNH NÀO
+            ĐI VÀO TẤM NÀY VỚI VAI GÌ, không phải danh sách việc còn tồn. Bash tự
+            bỏ qua ảnh nào không còn dấu chỗ trong prompt.
+
+            MỘT ẢNH = MỘT VAI, và vai ĐẦU TIÊN thắng. Một tấm ảnh được dùng ở hai
+            vai là chuyện thường (logo thương hiệu cũng là ảnh cảm hứng; ảnh nhân
+            vật cũng nằm trong brand.refs) — mà hai vai thì hai câu hỏi, hai mô tả,
+            và cache thì chỉ có MỘT chỗ cho mỗi tên file: lượt nào cũng thấy khoá
+            lệch vai nên lượt nào cũng tả lại, mãi mãi, hai lần cho một ảnh.
+            """
+            cu = dict((pth, r) for r, pth in descs)
+            role = cu.get(path, role)
+            if (role, path) not in descs:
+                descs.append((role, path))
+            return desc_cached(path, role) or ("{{DESC:%s}}" % path)
 
         def section(title, body, on=ALL):
             """Thêm một section — CHỈ KHI loại tấm này có nhận nó.
@@ -410,16 +505,28 @@ for s in cfg["styles"]:
         style_text = str(s.get("style") or "").strip()
         style_body = []
         if use_inspo:
-            style_body += [
+            # HAI CÁCH NÓI VỀ CÙNG MỘT ẢNH, vì tấm này có thể KHÔNG được đính nó.
+            # Nói "the attached reference image(s)" trên một tấm không đính ảnh nào
+            # là dạy model đi tìm một thứ không có — và nó sẽ tự bịa ra thứ nó nghĩ
+            # là đang thiếu. Tấm không đính ảnh trỏ sang section «Style reference»,
+            # nơi có đúng những chữ tả mấy tấm ảnh ấy.
+            style_body += ([
                 "The attached reference image(s) ARE the style: match their rendering technique,",
                 "materials, palette and level of detail. Some of them may instead show SUBJECT",
                 "MATTER — a season, a festival, a setting, a recurring motif; borrow that from",
                 "those. Never copy the layout or composition of any reference.",
-            ]
+            ] if attach_ok else [
+                "The «Style reference» section below describes the style images the designer",
+                "picked: match the rendering technique, materials, palette and level of detail",
+                "written there. A description may instead name SUBJECT MATTER — a season, a",
+                "festival, a setting, a recurring motif; borrow that from it. Never copy a",
+                "composition, and never draw an object just because a description mentions it.",
+            ])
             if style_text:
                 style_body.append(
-                    "Written direction, secondary to those images and never contradicting them: "
-                    + style_text + ".")
+                    "Written direction, secondary to "
+                    + ("those images" if attach_ok else "those descriptions")
+                    + " and never contradicting them: " + style_text + ".")
         elif style_text:
             style_body.append(style_text + ".")
         else:
@@ -445,11 +552,17 @@ for s in cfg["styles"]:
             palette.append(row + "; neutrals derive from them. No other hues unless the art"
                                  " style names them.")
             if use_brand_refs or use_inspo:
-                palette.append("The attached reference images decide the RENDERING, not the hue:"
-                               " re-tint whatever they show into this palette.")
+                palette.append(
+                    ("The attached reference images decide the RENDERING, not the hue:"
+                     " re-tint whatever they show into this palette." if attach_ok else
+                     "The style descriptions below decide the RENDERING, not the hue:"
+                     " re-tint whatever they describe into this palette."))
         elif use_brand_refs or use_inspo:
-            palette.append("Taken from the attached reference image(s), which decide both the"
-                           " rendering and the palette.")
+            palette.append(
+                ("Taken from the attached reference image(s), which decide both the"
+                 " rendering and the palette." if attach_ok else
+                 "Taken from the style descriptions below, which decide both the"
+                 " rendering and the palette."))
         section("Palette", palette)
 
         # ── Layout ────────────────────────────────────────────────────────────
@@ -656,28 +769,62 @@ for s in cfg["styles"]:
                 " keep its original framing, borders or empty margins.",
             ], on=("screen", "background"))
         elif sh.get("ref"):
-            section("Character reference", [
-                "The attached CHARACTER REFERENCE PHOTO is the character: every character cell"
-                " shows EXACTLY this character — same species, face, colours, costume, materials"
-                " and proportions — re-drawn in the art style above. This outranks everything"
-                " else: if any other reference shows a DIFFERENT character, ignore that one.",
+            # ẢNH NHÂN VẬT KHÔNG CÒN ĐƯỢC ĐÍNH — nó được TẢ. Tấm nhân vật là tấm
+            # cần nền trong suốt nhất trong cả bộ (sprite dán lên màn hình game),
+            # mà đính ảnh thì alpha chết. Nên section này không trỏ vào một tấm ảnh
+            # nữa, nó CHỨA nguyên đoạn chữ tả nhân vật ấy.
+            section("Character", [
+                "Every character cell shows EXACTLY the character described here — same species,"
+                " face, colours, costume, materials and proportions — re-drawn in the art style"
+                " above. This description outranks everything else on this sheet: if anything"
+                " below describes a DIFFERENT character, ignore that one.",
+                as_text(sh["ref"], "character"),
             ], on=("mascot",))
-        if sh.get("poseRef"):
-            section("Pose reference", [
-                "The attached POSE REFERENCE SHEET is a grey mannequin in the SAME grid as this"
-                " sheet: cell k there gives the body pose and camera angle for cell k here. Copy"
-                " pose and camera angle only. NEVER draw the mannequin itself — it is grey and"
-                " faceless on purpose, and none of its plastic look may appear in the result.",
-            ], on=("mascot",))
+        # ── TẤM ẢNH DÁNG ĐÃ RỜI KHỎI PROMPT ──────────────────────────────────
+        # `sheet.poseRef` là tấm manơcanh xám do webapp ghép, và nó chỉ có nghĩa khi
+        # được ĐÍNH KÈM: "cell k there gives the pose for cell k here" là một câu chỉ
+        # đọc được nếu model nhìn thấy tấm ấy. Từ khi tấm nhân vật không được đính ảnh
+        # nữa (đính = mất alpha), câu ấy trỏ vào hư không. Tả nó thành chữ cũng vô
+        # nghĩa: dáng của TỪNG Ô đã có sẵn bằng chữ ngay trên dòng của ô đó (xem
+        # section «Elements» — `spec` của mỗi ô là một mệnh đề dáng do webapp dựng).
+        # Nên poseRef không được tả, không được đính, và không có section nào nữa.
         if sh.get("layoutRef"):
             # ẢNH BỐ CỤC KHÔNG BAO GIỜ ĐI VÀO `sheet.ref`. Hai tấm trả lời hai câu
             # khác nhau — «cảnh này là gì» và «cái gì nằm ở đâu» — và trộn chúng vào
             # một field là để model vẽ lại nguyên nét chì của bản phác.
-            section("Layout sketch", [
+            # Ngoài đời `layoutRef` chỉ đến từ pill BỐ CỤC của thẻ Background (tấm
+            # full-bleed, vẫn được đính ảnh); nhánh dưới là cho mọi ca còn lại.
+            section("Layout sketch", ([
                 "The attached LAYOUT SKETCH is a rough composition guide: copy WHERE things sit"
                 " and how much of the frame each area takes; take nothing else from it — not its"
                 " style, colours, line quality or level of finish.",
-            ])
+            ] if attach_ok else [
+                "The LAYOUT SKETCH described here is a rough composition guide: copy WHERE things"
+                " sit and how much of the frame each area takes; take nothing else from it — not"
+                " its style, colours, line quality or level of finish.",
+                as_text(sh["layoutRef"], "layout"),
+            ]))
+        # ── Style reference ───────────────────────────────────────────────────
+        # Ảnh thương hiệu + ảnh cảm hứng của tấm KHÔNG được đính: chúng thành chữ ở
+        # đây, và «Art style» / «Palette» ở trên trỏ xuống đúng section này.
+        if not attach_ok and (use_brand_refs or use_inspo):
+            # ⚠️ KHÔNG đặt tên biến này là `rows`: `rows` là SỐ HÀNG của lưới, đặt
+            # từ đầu vòng lặp và còn được đọc mãi ở dưới (`cols * rows > 1`).
+            style_rows = [
+                "Written descriptions of the style images the designer picked. Match the"
+                " rendering technique, palette, materials, contrast, shape language and"
+                " decorative motifs they describe; a description says HOW things are drawn, not"
+                " WHAT to draw."
+            ]
+            # Ảnh đã đi vào một vai khác (vd `sheet.ref` của tấm nhân vật cũng nằm
+            # trong `brand.refs`) thì KHÔNG liệt kê lại ở đây: nó đã được tả rồi, và
+            # dán đúng đoạn chữ ấy xuống lần thứ hai chỉ làm prompt dài ra.
+            seen = set(pth for _role, pth in descs)
+            for pth in ((b["refs"] if use_brand_refs else []) + (s["inspo"] if use_inspo else [])):
+                if pth and pth not in seen:
+                    seen.add(pth)
+                    style_rows.append(as_text(pth, "style"))
+            section("Style reference", style_rows, on=("ui", "mascot"))
 
         # ── Direction ─────────────────────────────────────────────────────────
         # `note` là mô tả tấm do khuôn/thư viện sinh ra; `directive` là câu NGƯỜI
@@ -877,31 +1024,41 @@ for s in cfg["styles"]:
         # codex trả lời "Please reattach the two reference images"). encoding cũng phải
         # đóng đinh utf-8: prompt có tiếng Việt, locale mặc định Windows là cp1252.
         open(f"prompts/{s['id']}-{sh['id']}.txt", "w", encoding="utf-8", newline="\n").write("\n".join(lines))
-        # File đính kèm cho job: ref nhân vật trước, rồi TẤM ẢNH DÁNG, rồi brand/inspo.
-        # Tấm ảnh dáng đứng NGAY SAU ảnh nhân vật vì hai ảnh ấy nói về cùng một thứ
-        # (nhân vật này, ở những dáng này) và cả hai đều được prompt gọi theo VAI TRÒ
-        # — thứ tự ở đây chỉ để người đọc log thấy chúng đi cùng nhau, không phải để
-        # prompt đếm. Ảnh dáng do công cụ dựng chứ không phải người dùng tải lên; đó
-        # là ngoại lệ DUY NHẤT của câu "toàn bộ là ảnh của người dùng" bên dưới.
+        # ── FILE ĐÍNH KÈM CHO JOB — VÀ NAY NÓ THƯỜNG RỖNG ───────────────────
+        # Chỉ tấm full-bleed còn được đính ảnh (xem khối «ĐÍNH ẢNH = MẤT NỀN TRONG
+        # SUỐT» ở đầu file): nó không cần alpha nên không có gì để mất, và ảnh cảnh
+        # thì tả bằng chữ là hỏng — người dùng đưa lên ảnh cái chợ Tết của họ chứ
+        # không phải một đoạn văn về chợ Tết.
+        # Mọi tấm còn lại ghi ra một `.att` RỖNG. Đó là mối nối duy nhất cần thiết:
+        # `run_one` dựng mảng `-i` và cả khối REFERENCE IMAGES của task từ chính file
+        # này, nên rỗng ở đây là "gọi image_gen tay không" ở dưới kia — không phải
+        # nhớ tắt thêm một cờ nào nữa.
         # (Vị trí đầu tiên từng là `skeleton/<sheet>.png`. Xem khối "KHÔNG CÒN KHUNG
         #  XƯƠNG" ở đầu file: tấm đó vừa lái nhầm phong cách vừa là nguồn hình học
         #  thứ hai lệch 1px với dao cắt.)
         # Một ảnh có thể xuất hiện ở nhiều vai (vd sheet.ref cũng là brand ref).
         # Codex tính token theo từng `-i`; khử trùng lặp ngay lúc dựng argv.
         att = []
-        for p in (([sh["ref"]] if sh.get("ref") else [])
-                  + ([sh["poseRef"]] if sh.get("poseRef") else [])
-                  # BẢN PHÁC BỐ CỤC đứng ngay sau ảnh của tấm vì hai tấm ấy nói về
-                  # cùng một cảnh: một tấm bảo VẼ GÌ, một tấm bảo NẰM ĐÂU. Prompt gọi
-                  # cả hai theo VAI TRÒ nên thứ tự này chỉ để người đọc log thấy chúng
-                  # đi cùng nhau, không phải để model đếm.
-                  + ([sh["layoutRef"]] if sh.get("layoutRef") else [])
-                  + (s["brand"]["refs"] if use_brand_refs else [])
-                  + (s["inspo"] if use_inspo else [])):
-            if p and p not in att:
-                att.append(p)
-        open(f"prompts/{s['id']}-{sh['id']}.att", "w", encoding="utf-8", newline="\n").write("\n".join(att) + "\n")
-        print("prompt →", f"prompts/{s['id']}-{sh['id']}.txt", f"(+{len(att)} ảnh kèm)")
+        if attach_ok:
+            for p in (([sh["ref"]] if sh.get("ref") else [])
+                      # BẢN PHÁC BỐ CỤC đứng ngay sau ảnh của tấm vì hai tấm ấy nói
+                      # về cùng một cảnh: một tấm bảo VẼ GÌ, một tấm bảo NẰM ĐÂU.
+                      # Prompt gọi cả hai theo VAI TRÒ nên thứ tự này chỉ để người
+                      # đọc log thấy chúng đi cùng nhau, không phải để model đếm.
+                      + ([sh["layoutRef"]] if sh.get("layoutRef") else [])
+                      + (s["brand"]["refs"] if use_brand_refs else [])
+                      + (s["inspo"] if use_inspo else [])):
+                if p and p not in att:
+                    att.append(p)
+        open(f"prompts/{s['id']}-{sh['id']}.att", "w", encoding="utf-8", newline="\n").write(
+            ("\n".join(att) + "\n") if att else "")
+        # BẢN KÊ ẢNH → CHỮ. `role<TAB>đường dẫn`, một dòng một ảnh, theo đúng thứ tự
+        # chúng xuất hiện trong prompt. Ghi cả khi rỗng: file cũ của một lượt trước
+        # còn nằm đó thì `run_one` sẽ đi tả những ảnh mà tấm này không còn dùng.
+        open(f"prompts/{s['id']}-{sh['id']}.desc", "w", encoding="utf-8", newline="\n").write(
+            "".join(f"{role}\t{path}\n" for role, path in descs))
+        print("prompt →", f"prompts/{s['id']}-{sh['id']}.txt",
+              f"(+{len(att)} ảnh kèm, {len(descs)} ảnh tả thành chữ)")
 PY
 py_rc=$?
 
@@ -917,9 +1074,213 @@ if [[ -n "$PROMPTS_ONLY" ]]; then
   exit "$py_rc"
 fi
 
+# ══ «TẢ ẢNH THÀNH CHỮ» — BẮT ĐẦU ═══════════════════════════════════════════════
+# (Khối này được test trích nguyên theo hai dòng mốc trên/dưới — đừng đổi chữ mốc.)
+#
+# ╔══ VÌ SAO CÓ BƯỚC NÀY ══════════════════════════════════════════════════════════╗
+# ║ Đo thực tế (chủ sản phẩm, 09/09/2026): đính ảnh tham chiếu vào lời gọi         ║
+# ║ `image_gen` (`referenced_image_paths`) thì ảnh trả về LUÔN mất nền trong suốt  ║
+# ║ — RGB, nền caro do model tự vẽ. Cùng prompt ấy, bỏ ảnh ra thì alpha về thật.   ║
+# ║ Tool built-in không có tham số nền nào để xin (skill imagegen ghi rõ           ║
+# ║ `background` chỉ thuộc CLI dự phòng), nên không có đường nào vừa đính vừa giữ. ║
+# ║                                                                                ║
+# ║ Nên tấm cần nền trong suốt KHÔNG đính ảnh nữa: mỗi ảnh tham chiếu của nó được  ║
+# ║ đổi thành CHỮ bằng MỘT lượt `codex exec` không sinh ảnh, rồi chữ ấy thay vào   ║
+# ║ đúng dấu chỗ `{{DESC:…}}` mà khối python đã để sẵn trong prompt.               ║
+# ║                                                                                ║
+# ║ BA THỨ PHẢI ĐÚNG, và mỗi thứ đã có giá của nó:                                 ║
+# ║  ① KHÔNG ĐƯỢC SINH ẢNH. Một lượt tả mà lỡ gọi image_gen là tiêu một lượt quota ║
+# ║    ảnh cho một việc chỉ cần đọc — nên câu hỏi cấm thẳng, và sandbox là          ║
+# ║    read-only để model không có chỗ nào ghi ra một file ảnh.                     ║
+# ║  ② PHẢI CACHE. Một bộ kit có hàng chục tấm dùng CHUNG mấy tấm ảnh phong cách;   ║
+# ║    tả lại mỗi tấm một lần là nhân số lượt codex lên hàng chục lần cho cùng một  ║
+# ║    câu trả lời. Cache khoá bằng BĂM NỘI DUNG ảnh + vai + phiên bản câu hỏi:     ║
+# ║    người dùng thay ảnh (cùng tên) thì mô tả cũ tự hết hạn.                      ║
+# ║  ③ HỎNG THÌ VẪN VẼ. Codex sập, hết quota, mạng đứt — không được biến một lượt   ║
+# ║    gen thành FAIL vì thiếu một đoạn văn. Dấu chỗ bị xoá, tấm vẫn được vẽ bằng   ║
+# ║    những chữ đang có, và dòng OK mang ghi chú `[thiếu mô tả ảnh: …]` để agent   ║
+# ║    và web nói ra được là ảnh này đã vẽ mà không có mô tả tham chiếu.            ║
+# ╚════════════════════════════════════════════════════════════════════════════════╝
+
+# Phiên bản CÂU HỎI. Sửa câu hỏi thì mọi mô tả cũ trả lời một câu hỏi khác ⇒ phải hết
+# hạn. PHẢI khớp với `DESC_V` trong khối python (nó đọc lại chính cache này).
+DESC_V="v1"
+
+# Dòng khoá của file cache. Khớp từng ký tự với `desc_key` bên python.
+desc_key() { # <đường dẫn tuyệt đối tới ảnh> <vai>
+  printf '# sha256:%s role:%s %s' "$(file_hash "$1")" "$2" "$DESC_V"
+}
+
+desc_question() { # <vai> → câu hỏi gửi codex
+  # BA CÂU KHÁC HẲN NHAU, vì ba vai trả lời ba câu hỏi khác nhau — và cái BỊ CẤM
+  # trong mỗi câu mới là phần đắt giá:
+  #  · nhân vật: cấm tả NỀN và cấm tả DÁNG. Dáng của từng ô đã có bằng chữ trên dòng
+  #    của ô đó; một câu dáng nữa ở đây thì mọi ô ra cùng một tư thế.
+  #  · phong cách: cấm tả BỐ CỤC và VẬT THỂ CỤ THỂ. Mô tả này được áp lên những chủ
+  #    đề hoàn toàn khác; gọi tên thứ trong ảnh là mời model chép lại đúng thứ ấy.
+  #  · bố cục: chỉ tả CHỖ ĐẶT, cấm tả nét/màu/độ hoàn thiện.
+  local chung="Do not generate any image. Do not use image_gen or any image generation tool. Do not write or run any code. Just look at the attached image and reply with the description itself: plain English prose, 60 to 120 words, one paragraph, no heading, no bullet list, no preamble, no closing remark."
+  case "$1" in
+    character)
+      printf '%s' "You are describing a character to an illustrator who will re-draw it from your words alone and will never see this image. ${chung} Cover, in this order: what kind of creature or person it is; body shape and proportions; the face and its default expression; the main colours in words, each with an approximate hex code when you can read one; costume, accessories and anything it wears or carries as part of its identity; materials and surface finish; and any mark that makes this character recognisable at a glance. Do NOT describe the background, the lighting of the photo, or the particular pose it happens to be standing in."
+      ;;
+    style)
+      printf '%s' "You are describing the ART STYLE of this image to an illustrator who will draw COMPLETELY DIFFERENT subjects in that style and will never see this image. ${chung} Cover: the drawing and rendering technique; the colour palette in words, with approximate hex codes; materials and surface finish; contrast and lighting; shape language, line quality and level of detail; and any recurring decorative motif. Do NOT describe the composition, the framing, or the specific objects, characters or scene in the picture — naming them makes them get copied into artwork they do not belong in."
+      ;;
+    layout)
+      printf '%s' "You are describing the COMPOSITION of a rough layout sketch to an illustrator who will never see it. ${chung} Say where each main area or mass sits inside the frame (upper third, lower left, centred band…), roughly how much of the frame each one takes, and in what order the eye reads them. Do NOT describe the drawing style, the colours, the line quality or the level of finish — those come from somewhere else entirely."
+      ;;
+    *) printf '%s' "${chung} Describe what this image shows, for an illustrator who will never see it." ;;
+  esac
+}
+
+describe_ref() { # <vai> <đường dẫn tương đối gốc dự án> → stdout: mô tả; rc≠0 = không có
+  local role="$1" rel="$2"
+  local abs="${ROOT}/${rel}"
+  [[ -f "$abs" ]] || return 1
+  local key; key="$(desc_key "$abs" "$role")"
+  local cache="refs/$(basename "$rel").desc.txt"
+  # CACHE ĐỌC TRƯỚC, LUÔN LUÔN. Đây là chỗ tiết kiệm phần lớn số lượt codex: cả bộ
+  # kit dùng chung mấy tấm ảnh phong cách, và tấm nhân vật thì lượt nào cũng dùng lại.
+  if [[ -f "$cache" && "$(head -n1 "$cache" 2>/dev/null)" == "$key" ]]; then
+    tail -n +2 "$cache"
+    return 0
+  fi
+  # ── MỘT ẢNH, MỘT LƯỢT TẢ, DÙ CÓ MẤY TẤM ĐANG CHẠY SONG SONG ────────────────
+  # `run_one` chạy tối đa MAXJOBS bản cùng lúc, và mấy tấm ấy dùng CHUNG ảnh phong
+  # cách của bộ kit. Không có ổ khoá thì cả bốn cùng thấy cache trống, cả bốn cùng
+  # gọi codex cho đúng một tấm ảnh — nhân bốn số lượt cho cùng một câu trả lời.
+  # `mkdir` là phép khoá nguyên tử rẻ nhất và có sẵn ở mọi máy (không cần flock,
+  # thứ macOS không có). Ai đợi thì ngó lại cache mỗi giây: người kia tả xong là
+  # mình dùng chung ngay, không phải tả lại.
+  local lock; lock="refs/.$(basename "$rel").desc.lock"
+  local held=0 waited=0
+  while (( waited < 300 )); do
+    if mkdir "$lock" 2>/dev/null; then held=1; break; fi
+    sleep 1; waited=$((waited + 1))
+    if [[ -f "$cache" && "$(head -n1 "$cache" 2>/dev/null)" == "$key" ]]; then
+      tail -n +2 "$cache"
+      return 0
+    fi
+  done
+  # Ổ khoá mồ côi (lượt trước bị giết giữa chừng) không được phép treo mọi lượt sau.
+  if (( ! held )); then rm -rf "$lock"; mkdir "$lock" 2>/dev/null && held=1; fi
+  local out; out="logs/desc-$(basename "$rel").last.txt"
+  local log; log="logs/desc-$(basename "$rel").log"
+  rm -f "$out"
+  local codex_env=()
+  [[ -n "$IMG_HOME" ]] && codex_env=(env CODEX_HOME="$IMG_HOME")
+  # `-s read-only`: lượt này KHÔNG được ghi gì ra đĩa. Vừa là hàng rào cho luật "không
+  # sinh ảnh", vừa để model không thể tự chế một công cụ nào cạnh ảnh của người dùng.
+  # `</dev/null` BẮT BUỘC: hàm này được gọi TRONG một vòng `while read` đang đọc file
+  # `.desc`; codex nuốt stdin thì những dòng còn lại của bản kê biến mất.
+  ${codex_env[@]+"${codex_env[@]}"} codex exec \
+    ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
+    -s read-only \
+    -C "${ROOT}" \
+    --skip-git-repo-check \
+    -i "$abs" \
+    -o "$out" \
+    "$(desc_question "$role")" >"$log" 2>&1 </dev/null
+  local rc=$?
+  (( held )) && rmdir "$lock" 2>/dev/null
+  local txt=""
+  [[ -f "$out" ]] && txt="$(tr -d '\r' < "$out")"
+  # Gọt khoảng trắng hai đầu. Chuỗi rỗng = KHÔNG có mô tả, dù codex thoát 0: một file
+  # rỗng ghi vào cache là đóng đinh cái rỗng ấy lại cho mọi lượt sau.
+  txt="$(printf '%s' "$txt" | sed -e '/./,$!d')"
+  if [[ $rc -ne 0 || -z "${txt//[[:space:]]/}" ]]; then
+    echo "tả ảnh THẤT BẠI: ${rel} (vai ${role}, rc=${rc}) — xem ${log}" >&2
+    return 1
+  fi
+  printf '%s\n%s\n' "$key" "$txt" > "$cache"
+  printf '%s' "$txt"
+}
+
+# Thay MỘT dấu chỗ trong prompt bằng chữ — hoặc xoá hẳn dòng ấy khi không tả được.
+# Bằng python chứ không phải `sed`: mô tả là văn tự do (có `&`, `/`, `\`, xuống dòng),
+# và mọi ký tự trong đó đều là cú pháp của sed. Một dấu `&` lọt vào là cả đoạn văn bị
+# nhân đôi lặng lẽ ngay giữa prompt gửi model.
+subst_desc() { # <file prompt> <đường dẫn ảnh> [file chứa mô tả]
+  "$PY_CHECK" - "$1" "$2" "${3:-}" <<'PYD'
+import sys
+prompt, rel, descfile = sys.argv[1], sys.argv[2], sys.argv[3]
+mark = "{{DESC:%s}}" % rel
+text = ""
+if descfile:
+    with open(descfile, encoding="utf-8") as fh:
+        text = fh.read().strip()
+with open(prompt, encoding="utf-8") as fh:
+    rows = fh.read().split("\n")
+out = []
+for row in rows:
+    if row.strip() == mark:
+        if text:
+            out.append(text)
+        continue
+    out.append(row)
+with open(prompt, "w", encoding="utf-8", newline="\n") as fh:
+    fh.write("\n".join(out))
+PYD
+}
+
+# Đổi mọi ảnh của một job thành chữ, ngay trong `prompts/<job>.txt`.
+#
+# STDOUT LÀ CHỖ NÓI VỚI NGƯỜI, KHÔNG PHẢI CHỖ TRẢ GIÁ TRỊ. Mọi dòng gen.sh in ra
+# đều đi thẳng lên nhật ký job của web (agent đọc từng dòng — `parseGenLine` chỉ
+# bắt tiền tố `OK`/`FAIL`/`prompt →`, phần còn lại hiện nguyên văn). Bước tả ảnh
+# tốn vài chục giây mỗi ảnh, nên nó PHẢI nói ra là mình đang làm gì; im lặng ở đây
+# đọc ra thành "gen treo".
+# Vì thế ghi chú cho dòng OK đi qua MỘT FILE (`logs/<job>.descnote`) chứ không qua
+# stdout: hai thứ khác nhau không được tranh nhau một đường ống.
+resolve_descs() { # <job>
+  local job="$1"
+  local note="" role rel dtxt dfile
+  local dlog="logs/${job}.desc.log"
+  local dnote="logs/${job}.descnote"
+  rm -f "$dnote"
+  [[ -s "prompts/${job}.desc" ]] || return 0
+  grep -q '{{DESC:' "prompts/${job}.txt" 2>/dev/null || return 0
+  # Log RIÊNG, không dùng `logs/<job>.log`: lượt `codex exec` vẽ ảnh ngay sau đây
+  # GHI ĐÈ file ấy (`>"logs/${job}.log"`), nên mọi dòng viết vào đó lúc này đều
+  # biến mất đúng lúc người ta cần đọc nó nhất.
+  : > "$dlog"
+  # Bản có dấu chỗ được giữ lại nguyên vẹn: khi ai đó mở prompt ra hỏi "đoạn tả nhân
+  # vật này ở đâu ra", `.tpl` là chỗ trả lời. Đuôi KHÔNG phải `.txt` để không lọt vào
+  # những chỗ quét `prompts/*.txt`.
+  cp -f "prompts/${job}.txt" "prompts/${job}.tpl"
+  while IFS=$'\t' read -r role rel || [[ -n "${rel:-}" ]]; do
+    rel="${rel%$'\r'}"
+    [[ -n "$rel" ]] || continue
+    grep -qF "{{DESC:${rel}}}" "prompts/${job}.txt" || continue
+    dfile="logs/${job}.desc-tmp.txt"
+    echo "${job}: ảnh → chữ, ${rel} (vai ${role})"
+    if dtxt="$(describe_ref "$role" "$rel" 2>>"$dlog")" && [[ -n "${dtxt//[[:space:]]/}" ]]; then
+      printf '%s\n' "$dtxt" > "$dfile"
+      subst_desc "prompts/${job}.txt" "$rel" "$dfile"
+      rm -f "$dfile"
+      echo "tả ảnh ${rel} (vai ${role}) → chữ, đã thay vào prompt" >>"$dlog"
+    else
+      # KHÔNG chặn. Xoá dấu chỗ rồi vẽ tiếp bằng những chữ đang có — mất một đoạn mô
+      # tả thì ảnh kém giống, còn dừng cả lượt thì người dùng không có gì hết.
+      subst_desc "prompts/${job}.txt" "$rel"
+      note+=" [thiếu mô tả ảnh: $(basename "$rel")]"
+      echo "${job}: KHÔNG tả được ${rel} (vai ${role}) — vẫn vẽ, prompt thiếu đoạn mô tả này"
+      echo "KHÔNG tả được ${rel} (vai ${role}) — vẫn vẽ, prompt thiếu đoạn mô tả ảnh này" \
+        >>"$dlog"
+    fi
+  done < "prompts/${job}.desc"
+  [[ -n "$note" ]] && printf '%s' "$note" > "$dnote"
+  return 0
+}
+# ══ «TẢ ẢNH THÀNH CHỮ» — HẾT ═══════════════════════════════════════════════════
+
 run_one() {
   local job="$1"
   local task
+  # Ghi chú "đã vẽ mà thiếu mô tả ảnh" — nối vào dòng OK ở cuối hàm. Khai ở đây vì
+  # `set -u`: hàm có đường thoát sớm nào cũng không được để nó chưa tồn tại.
+  local desc_note=""
 
   # KHỔ ẢNH LÀ CON SỐ, KHÔNG PHẢI LỜI ĐỀ NGHỊ.
   #   Bản cũ bảo model "theo CANVAS ORIENTATION ghi ở dòng đầu prompt (…, if supported)".
@@ -965,6 +1326,14 @@ run_one() {
       att_paths+="${ROOT}/${p}"$'\n'
     fi
   done < "prompts/${job}.att"
+
+  # ── ẢNH THÀNH CHỮ, NGAY TRƯỚC KHI VẼ ────────────────────────────────────────
+  # Tấm không full-bleed có `.att` RỖNG và một bản kê `.desc`: mọi ảnh của nó phải
+  # thành chữ trước khi prompt được gửi đi (xem khối «TẢ ẢNH THÀNH CHỮ» ở trên).
+  # Đứng SAU vòng đọc `.att` và TRƯỚC khi dựng `task` vì `task` cat nguyên
+  # `prompts/<job>.txt` — thay dấu chỗ muộn hơn một dòng là gửi đi bản còn dấu chỗ.
+  resolve_descs "$job"
+  [[ -f "logs/${job}.descnote" ]] && desc_note="$(cat "logs/${job}.descnote")"
 
   # ╔══ VÌ SAO PHẢI LIỆT KÊ ĐƯỜNG DẪN TRONG TASK ═══════════════════════════════╗
   # ║ `-i` chỉ đính ảnh vào CUỘC HỘI THOẠI — tool image_gen KHÔNG tự thấy chúng. ║
@@ -1135,6 +1504,10 @@ $(cat "prompts/${job}.txt")
     local nhan="nền đục"; (( fb )) && nhan="nền"
     [[ "$av" == bad* ]] && echo "${nhan}: ${av#bad } — chỉ ghi nhận, không chặn" >>"logs/${job}.log"
     local tail=""; [[ $rc -ne 0 ]] && tail="  (codex rc=${rc} sau khi đã lưu ảnh — bỏ qua)"
+    # Thiếu mô tả ảnh KHÔNG làm trượt job (xem `resolve_descs`), nhưng nó phải đi ra
+    # tới tận dòng người dùng đọc được: tấm này đã vẽ mà không có đoạn tả nhân vật /
+    # phong cách, nên "sao nó không giống ảnh tôi tải lên" có câu trả lời sẵn.
+    tail="${tail}${desc_note}"
     case "$av" in
       skip*) echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)${tail}  [${av#skip }]" ;;
       bad*) echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)${tail}  [${nhan}: ${av#bad }]" ;;

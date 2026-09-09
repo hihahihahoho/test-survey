@@ -98,6 +98,7 @@ cat > "$WORK/p/styles.json" <<'JSON'
     },
     {
       "id": "nen", "orient": "landscape", "grid": { "cols": 1, "rows": 1 },
+      "ref": "refs/cho.png",
       "components": [
         { "file": "25-bg-home", "vi": "Nền màn chính", "spec": "village scene at dawn",
           "skel": { "shape": "full", "w": 1, "h": 1 } }
@@ -229,8 +230,36 @@ expect "giao diện vẫn có luật TẦM VỚI"      "REACH, not about opaque 
 expect "giao diện vẫn có luật vật liệu"     "glass, ice, water" "$main"
 expect "giao diện vẫn có dòng phân vai trang trí" "Ornament amount" "$main"
 refute "giao diện KHÔNG lãnh luật của dáng người" "Draw the character as ONE natural figure" "$main"
-refute "giao diện KHÔNG lãnh ảnh nhân vật"        "## Character reference" "$main"
+refute "giao diện KHÔNG lãnh section nhân vật"    "## Character" "$main"
 refute "giao diện KHÔNG lãnh tấm ảnh dáng"        "## Pose reference" "$main"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ẢNH THAM CHIẾU THÀNH CHỮ — NỬA PYTHON CỦA MỐI NỐI (đo đường đi đầy đủ ở
+# test/gen-describe-refs.test.sh, ca này chỉ canh thứ KITGEN_PROMPTS_ONLY sinh ra).
+#
+# Đo được 09/09/2026: đính ảnh vào lời gọi image_gen ⇒ ảnh về mất nền trong suốt.
+# Nên tấm cần alpha ghi `.att` RỖNG + một bản kê `.desc`, và prompt mang dấu chỗ
+# `{{DESC:…}}` đúng chỗ đoạn mô tả sẽ nằm. Ở chế độ xem trước thì KHÔNG ai tả cả
+# (không codex, không quota) — dấu chỗ ở nguyên đó, và đó là thứ đọc được: nó nói
+# thẳng chỗ nào sẽ là mô tả của ảnh nào.
+# ═══════════════════════════════════════════════════════════════════════════════
+echo "── tấm cần nền trong suốt: KHÔNG đính ảnh, ảnh đi vào prompt bằng dấu chỗ"
+expect "prompt nhân vật có dấu chỗ của ảnh nhân vật" "{{DESC:refs/mascot.png}}" "$linh"
+expect "…nằm trong section «Character»" "## Character" "$linh"
+refute "…và không còn câu nào trỏ vào ảnh đính kèm" "attached" "$linh"
+if [ -s "$WORK/p/prompts/tet-linh.att" ]; then
+  printf 'LOI  tấm nhân vật vẫn còn ảnh đính kèm:\n%s\n' "$(cat "$WORK/p/prompts/tet-linh.att")" >&2; fail=1
+else
+  printf 'ok   %s\n' "danh sách ảnh kèm của tấm nhân vật RỖNG (đính = mất alpha)"
+fi
+have "bản kê ảnh → chữ của tấm nhân vật" "$WORK/p/prompts/tet-linh.desc"
+expect "…khai đúng vai của ảnh" "character	refs/mascot.png" "$(cat "$WORK/p/prompts/tet-linh.desc")"
+expect "tấm nền full-bleed thì VẪN đính ảnh như cũ" "refs/cho.png" "$(cat "$WORK/p/prompts/tet-nen.att")"
+if [ -s "$WORK/p/prompts/tet-nen.desc" ]; then
+  printf 'LOI  tấm nền không được tả ảnh thành chữ:\n%s\n' "$(cat "$WORK/p/prompts/tet-nen.desc")" >&2; fail=1
+else
+  printf 'ok   %s\n' "tấm nền KHÔNG tiêu một lượt codex nào để tả ảnh"
+fi
 # Tấm mascot ở đây là MỘT Ô, nên nó không có hàng xóm nào để tránh và cũng không có
 # hộp ngoài nào ngoài chính khổ ảnh — luật còn lại đúng một câu: đừng chạm mép.
 expect "tấm một ô: biên duy nhất là mép ảnh" "nothing touches the image edges" "$linh"

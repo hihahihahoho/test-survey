@@ -39,10 +39,11 @@ export interface PillImage {
  * VAI TRÒ của một tấm ảnh trong câu — thứ quyết định nó đi vào ĐÂU của contract.
  *
  * ╔══ VÌ SAO VAI TRÒ PHẢI ĐƯỢC GHI RA, KHÔNG SUY TỪ VỊ TRÍ ══════════════════╗
- * ║ `gen.sh` đính mọi ảnh vào cùng một danh sách `referenced_image_paths` và   ║
- * ║ gọi chúng theo VAI TRÒ trong prompt ("the attached character REFERENCE     ║
- * ║ PHOTO", "brand / inspiration reference images") — nó cố ý không đếm thứ tự ║
- * ║ nữa (xem khối «KHÔNG CÒN "The SECOND attached image"» ở gen.sh). Nhưng để  ║
+ * ║ `gen.sh` gọi mọi ảnh theo VAI TRÒ, không bao giờ theo thứ tự (xem khối     ║
+ * ║ «KHÔNG CÒN "The SECOND attached image"» ở đó) — và từ 09/09/2026 vai trò    ║
+ * ║ còn quyết định cả việc ảnh ấy được ĐÍNH KÈM hay được TẢ THÀNH CHỮ: tấm cần ║
+ * ║ nền trong suốt không được đính ảnh nào (đính ⇒ image_gen trả ảnh mất alpha)║
+ * ║ nên ảnh nhân vật và ảnh phong cách của nó đi vào prompt bằng chữ. Nhưng để ║
  * ║ nói được vai trò thì contract phải xếp tấm ảnh vào đúng ô: `sheet.ref` cho ║
  * ║ nhân vật, `variant.brand.refs` cho logo, `variant.inspo` cho ảnh tả chủ đề ║
  * ║ hay lối vẽ. Một pill ảnh không khai vai trò thì bộ dịch chỉ còn cách đoán  ║

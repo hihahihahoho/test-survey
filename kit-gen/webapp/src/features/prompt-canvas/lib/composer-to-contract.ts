@@ -505,15 +505,20 @@ function mascotSheets(
    *
    * ══ BA NGUỒN (ảnh · chữ · sàn), MỘT THỨ TỰ ƯU TIÊN, VÀ NÓ KHÔNG TUỲ TIỆN ═
    * Có ẢNH ⇒ ảnh nói trước, luôn luôn: một tấm ảnh tả nhân vật chính xác hơn mọi
-   * câu chữ, và `gen.sh` gọi đích danh "the attached character REFERENCE PHOTO".
-   * Chữ người dùng gõ khi ấy đi KÈM chứ không thay — nó vẫn nói được thứ ảnh
-   * không nói ra (tên, tính cách, chi tiết muốn giữ).
+   * câu chữ. Chữ người dùng gõ khi ấy đi KÈM chứ không thay — nó vẫn nói được thứ
+   * ảnh không nói ra (tên, tính cách, chi tiết muốn giữ).
+   *
+   * ⚠️ 09/09/2026 — CÂU NÀY KHÔNG CÒN TRỎ VÀO MỘT TẤM ẢNH ĐÍNH KÈM. Đo được: đính
+   * ảnh vào lời gọi image_gen thì ảnh trả về mất nền trong suốt, không có tham số
+   * nào cứu. Nên `gen.sh` tả ảnh nhân vật thành CHỮ và đặt nguyên đoạn chữ ấy vào
+   * section «Character», ngay trên danh sách ô — nên dòng ô nói "the character
+   * described above". Nói "the reference photo" ở đây là trỏ vào hư không.
    * KHÔNG có ảnh ⇒ chữ ấy LÀ chủ ngữ. Chỉ khi cả hai đều vắng mới rơi về câu
    * chung chung cũ; máy vẽ không có gì để bám thì mỗi lượt ra một con khác nhau,
    * nên câu ấy là mức sàn, không phải mặc định.
    */
   const base = ref
-    ? "the SAME character from the reference photo"
+    ? "the character described above"
     : identity || "the same original mascot character";
   const subject = [
     base,
