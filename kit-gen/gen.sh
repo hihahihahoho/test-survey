@@ -358,21 +358,12 @@ for s in cfg["styles"]:
         # Nền nói ở ĐÂY và chỉ ở đây. Tấm full-bleed đảo ngược câu ấy chứ không im
         # lặng bỏ qua: một tấm mà tranh phủ kín từ mép đến mép mà prompt vẫn xin
         # nền trong suốt là mời model chừa một khung rỗng quanh bốn cạnh.
-        #
-        # 09/09/2026 — CHỦ SẢN PHẨM ĐO ĐƯỢC: câu kỹ thuật "save a PNG with a real
-        # alpha channel, alpha 0 on every pixel…" vẫn ra tấm caro giả, còn prompt
-        # nói kiểu "remove the background" thì được. Máy vẽ không có khái niệm
-        # "alpha 0": nó đọc câu ấy thành "vẽ cho trông như trong suốt" và vẽ đúng
-        # cái nó từng thấy trong ảnh trong suốt — ô caro. "Bỏ nền" thì là một việc
-        # nó biết làm. Nên nền nói bằng NGÔN NGỮ CỦA MÁY VẼ: bỏ nền, không có gì
-        # sau element; không nhắc alpha, không nhắc pixel.
         section("Canvas", [
             f"{canvas_header} px, origin top-left: x grows right, y grows down."
             + (" The artwork covers the whole frame; there is no transparent area anywhere."
                if full_bleed else
-               " Transparent background: remove the background completely, so the PNG keeps"
-               " only the drawn elements with nothing behind them — like a sticker sheet cut"
-               " out from its background."),
+               " Background fully transparent: save a PNG with a real alpha channel, alpha 0 on"
+               " every pixel that is not part of a drawn element."),
         ])
 
         # ── Art style ─────────────────────────────────────────────────────────
@@ -552,17 +543,17 @@ for s in cfg["styles"]:
         # dòng này và model tự hoà giải bằng cách vẽ nửa vời.
         if not screen_sheet:
             section("Transparency", [
-                "- The background is removed, not painted: around and between the elements"
-                " there is nothing at all, and whatever is placed behind this layer later shows"
-                " through there.",
+                "- The space around and between the elements is simply empty: alpha 0 in the"
+                " PNG, with nothing painted there. Whatever is placed behind this layer later"
+                " will show through those pixels.",
                 "- Where something should be see-through — a glass body, the outer halo of a"
-                " light — keep it partly see-through in its own colour, so the layer behind"
-                " shows through it naturally. If a region cannot be made see-through, leave it"
+                " light — draw it in its own colour at a lower alpha, so the layer behind shows"
+                " through it naturally. If a region cannot be made translucent, leave it"
                 " unpainted.",
                 "- Unless an element's own line below says otherwise, its transparency follows"
-                " its material: glass, ice, water and light effects are see-through; every"
-                " other material — metal, wood, stone, plastic, fabric — is solid and fully"
-                " opaque.",
+                " its material: glass, ice, water and light effects are see-through, drawn with"
+                " real alpha; every other material — metal, wood, stone, plastic, fabric — is"
+                " fully opaque (alpha 255), solid all the way through.",
             ])
 
         # ── Text ──────────────────────────────────────────────────────────────
@@ -743,7 +734,7 @@ for s in cfg["styles"]:
             section("Output", [
                 (f"One coherent set: all {n_real} elements share the same style. "
                  if n_real > 1 else "")
-                + f"Game-ready {canvas_ratio} PNG on a transparent background, background removed.",
+                + f"Game-ready {canvas_ratio} PNG with a real alpha channel.",
             ])
 
         # Bỏ dòng trắng cuối cùng: nó là dấu phân cách GIỮA các section, không phải

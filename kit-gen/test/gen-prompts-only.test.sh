@@ -199,9 +199,9 @@ echo "── tấm mascot KHÔNG lãnh khối chỉ dẫn viết cho nút bấm"
 refute "không có luật viền của ô giao diện" "Any rim, border or edge treatment" "$linh"
 expect "thay bằng luật của một dáng người" "Draw the character as ONE natural figure" "$linh"
 expect "nhưng vẫn giữ vùng an toàn" "## Safe zone" "$linh"
-expect "vẫn giữ nền trong suốt (nói kiểu bỏ nền)" "remove the background completely" "$linh"
+expect "vẫn giữ nền trong suốt" "Background fully transparent" "$linh"
 expect "vẫn cấm chữ" "No letters, no digits" "$linh"
-expect "vẫn tả nền trống bằng chữ bỏ nền (không gọi tên caro)" "The background is removed, not painted" "$linh"
+expect "vẫn tả nền trống bằng alpha 0 (không gọi tên caro)" "is simply empty: alpha 0" "$linh"
 refute "không nhắc chữ checker để khỏi nhiễm" "checker" "$linh"
 # Tấm mascot ở đây là MỘT Ô, nên nó không có hàng xóm nào để tránh và cũng không có
 # hộp ngoài nào ngoài chính khổ ảnh — luật còn lại đúng một câu: đừng chạm mép.
