@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import { buildMannequin, POSE_COLORS } from "./mannequin-mesh";
+import { buildMannequin } from "./mannequin-mesh";
 import { CAMERA_TARGET, cameraView, type CameraView, type PoseAngles } from "./pose-state";
 
 /**
@@ -42,16 +42,21 @@ export function renderPoseDataUrl({ angles, rootY, view, size }: RenderPoseInput
     /* Bắt buộc: không có nó, trình duyệt được phép xoá buffer ngay sau khi vẽ và
        `toDataURL` đọc phải khung trống (ảnh đen). */
     preserveDrawingBuffer: true,
-    alpha: false,
+    /* NỀN TRONG SUỐT THẬT, không phải một tấm trắng. Ảnh này đi thẳng vào
+       `referenced_image_paths` của image_gen, và máy vẽ bắt chước ảnh tham chiếu ở
+       mọi tầng — kể cả tầng nền: một manơcanh trên nền trắng đặc dạy nó trả về một
+       tấm nhân vật đục kín, đúng thứ cổng alpha của `gen.sh` đánh trượt. */
+    alpha: true,
   });
   renderer.setPixelRatio(1); // cỡ ảnh do `size` quyết, không do màn hình người dùng
   renderer.setSize(size, size, false);
 
+  /* SCENE KHÔNG CÓ NỀN. `toDataURL` đọc buffer WebGL, nên một `Color` gán làm nền
+     của scene là một tấm nền ĐẶC ghi thẳng vào ảnh nộp cho máy vẽ — và máy vẽ bắt
+     chước cả tầng nền của ảnh tham chiếu. Để trống + `setClearColor(…, 0)` thì
+     buffer giữ nguyên alpha 0, trong ảnh chỉ còn đúng cái manơcanh xám. */
   const scene = new THREE.Scene();
-  /* Nền TRẮNG ĐẶC của SCENE (không phải CSS): `toDataURL` đọc buffer WebGL, nền
-     CSS nằm ngoài buffer. Nền trắng sạch cũng chính là thứ ảnh reference cần —
-     mọi vệt xám trong ảnh đều là thứ máy vẽ có thể bắt chước nhầm. */
-  scene.background = new THREE.Color(POSE_COLORS.background);
+  renderer.setClearColor(0x000000, 0);
 
   const ambient = new THREE.AmbientLight(0xffffff, 0.9);
   const key = new THREE.DirectionalLight(0xffffff, 1.15);

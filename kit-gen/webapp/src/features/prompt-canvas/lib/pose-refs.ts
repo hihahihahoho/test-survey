@@ -8,7 +8,7 @@ import { canComposePoseSheet, composePoseSheet } from "./pose-sheet";
  *
  * ╔══ LỜI HẸN Ở `capture-pose-ref.ts` ═══════════════════════════════════════╗
  * ║ File đó tự ghi luồng đích: người dùng chỉ chọn [dáng] + [góc]; bấm Vẽ ⇒   ║
- * ║ composer gọi `capturePoseRef` ⇒ PNG nền trắng ⇒ ghi vào `refs/` ⇒ đường    ║
+ * ║ composer gọi `capturePoseRef` ⇒ PNG nền TRỐNG ⇒ ghi vào `refs/` ⇒ đường    ║
  * ║ dẫn đi vào prompt. "Người dùng KHÔNG BAO GIỜ thấy bước ③." File này là     ║
  * ║ bước ③, và nó chạy Ở NGAY TRƯỚC lượt vẽ chứ không lúc gõ: chụp mỗi lần     ║
  * ║ đổi pill là mỗi lần một tệp mới trong `refs/` cho một tấm chưa chắc vẽ.    ║

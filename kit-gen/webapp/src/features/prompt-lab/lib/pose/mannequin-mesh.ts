@@ -29,7 +29,8 @@ export const POSE_COLORS = {
   jointActive: "#f59e0b",
   head: "#d7dce3",
   face: "#3a4250",
-  background: "#ffffff",
+  /* KHÔNG còn khoá `background`. Ảnh manơcanh nộp cho máy vẽ nay để nền TRỐNG
+     (alpha 0) — xem `pose-renderer.ts` — nên không có màu nền nào để khai. */
 } as const;
 
 /** Khoá `userData` mang id khớp — đường duy nhất để từ mesh bị bấm trúng suy ra

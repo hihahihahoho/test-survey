@@ -8,7 +8,7 @@ import { cameraView, expandPose, type CameraView } from "./pose-state";
  * ║ Luồng đích, khi nối thật:                                                  ║
  * ║   ① Người dùng chỉ chọn HAI thứ trong composer: pill [dáng] + pill [góc].  ║
  * ║   ② Bấm Gen ⇒ composer gọi `capturePoseRef(poseId, view)`.                 ║
- * ║   ③ Nhận PNG nền trắng ⇒ ghi vào `refs/` của project ⇒ đường dẫn đi vào     ║
+ * ║   ③ Nhận PNG nền TRỐNG (alpha 0) ⇒ ghi vào `refs/` ⇒ đường dẫn đi vào       ║
  * ║      `prompts/<job>.att`, rồi vào `referenced_image_paths` của image_gen.   ║
  * ║ Người dùng KHÔNG BAO GIỜ thấy bước ③ — không có viewport nào phải mở, không ║
  * ║ có nút "chụp" nào phải bấm. Manơcanh 3D là chuyện nội bộ của công cụ.       ║
@@ -68,7 +68,9 @@ export interface CapturePoseRefOptions {
  *                về dáng đầu thay vì ném, vì một bản nháp cũ mang id đã bỏ không
  *                đáng làm hỏng cả lượt gen.
  * @param view    id góc máy trong `CAMERA_VIEWS` — id lạ rơi về "chính diện".
- * @returns       PNG dạng data URL, nền TRẮNG ĐẶC, ảnh vuông `size × size`.
+ * @returns       PNG dạng data URL, ảnh vuông `size × size`, NỀN TRỐNG: chỉ có
+ *                manơcanh xám, mọi pixel còn lại alpha 0. Nền đặc ở đây là thứ
+ *                máy vẽ bắt chước — xem `pose-renderer.ts`.
  * @throws        `PoseRefUnavailableError` khi môi trường không có canvas/WebGL.
  */
 export async function capturePoseRef(

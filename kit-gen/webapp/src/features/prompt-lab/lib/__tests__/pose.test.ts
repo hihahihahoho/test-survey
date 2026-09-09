@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { POSES } from "@/features/kit-core/lib/poses";
 
@@ -259,5 +262,45 @@ describe("capturePoseRef — API mà composer sẽ gọi lúc bấm Gen", () => 
   it("cỡ ảnh: bản gửi máy vẽ lớn hơn hẳn bản xem trước", () => {
     expect(POSE_REF_SIZE).toBeGreaterThan(POSE_REF_PREVIEW_SIZE);
     expect(POSE_REF_PREVIEW_SIZE).toBeGreaterThanOrEqual(256);
+  });
+});
+
+/**
+ * ══ ẢNH MANƠCANH KHÔNG ĐƯỢC MANG NỀN ĐẶC ══════════════════════════════════
+ *
+ * Ảnh này đi thẳng vào `referenced_image_paths` của `image_gen`, và máy vẽ bắt
+ * chước ảnh tham chiếu ở MỌI tầng — kể cả tầng nền. Một manơcanh đặt trên tấm
+ * trắng đặc dạy nó trả về tấm nhân vật đục kín, rồi cổng alpha của `gen.sh` đánh
+ * trượt đúng cái tấm ấy. Cách chữa nằm ở ẢNH, không phải ở một câu dặn thêm trong
+ * prompt: prompt chỉ tả thứ muốn vẽ.
+ *
+ * `pose-renderer.ts` chạm WebGL nên không gọi được ở đây (xem khối đầu file) —
+ * ca này đọc mã nguồn, giống cách `pose-sheet.test.ts` khoá bản mirror hình học.
+ */
+const RENDERER = readFileSync(
+  resolve(fileURLToPath(new URL(".", import.meta.url)), "../pose/pose-renderer.ts"),
+  "utf8",
+);
+
+describe("ảnh dáng nộp cho máy vẽ — nền TRỐNG, chỉ còn manơcanh", () => {
+  it("renderer xin context CÓ alpha và xoá buffer về alpha 0", () => {
+    expect(RENDERER).toContain("alpha: true");
+    expect(RENDERER).toContain("renderer.setClearColor(0x000000, 0)");
+  });
+
+  it("không còn ai đặt `scene.background` — một `Color` ở đó là một tấm nền đặc", () => {
+    expect(RENDERER).not.toContain("scene.background");
+  });
+
+  it("bảng màu manơcanh không còn khoá nền, và không có nét trắng nào", () => {
+    const mesh = readFileSync(
+      resolve(fileURLToPath(new URL(".", import.meta.url)), "../pose/mannequin-mesh.ts"),
+      "utf8",
+    );
+    const colors = /export const POSE_COLORS = \{([\s\S]*?)\} as const;/.exec(mesh)?.[1] ?? "";
+    expect(colors).not.toContain("background:");
+    /* Nét trắng trên nền trống là nét vô hình. Màu xám hiện tại đọc được ở cả hai. */
+    expect(colors.toLowerCase()).not.toContain("#ffffff");
+    expect(colors.toLowerCase()).not.toContain("#fff\"");
   });
 });

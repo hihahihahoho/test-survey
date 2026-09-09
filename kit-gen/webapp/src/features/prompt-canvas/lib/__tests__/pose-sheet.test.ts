@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { CANVAS_SQUARE } from "@/features/kit-core/lib/geometry";
-import { cellBoxes, fitBox } from "../pose-sheet";
+import { cellBoxes, composePoseSheet, fitBox } from "../pose-sheet";
 
 /**
  * pose-sheet.test.ts — TẤM ẢNH DÁNG PHẢI CHỒNG KHÍT LÊN TẤM SẼ VẼ.
@@ -92,5 +92,87 @@ describe("ảnh manơcanh vào ô: vừa khít, KHÔNG méo", () => {
   it("ảnh hỏng (kích thước 0) ⇒ trả về nguyên ô, không sinh NaN", () => {
     const box = { x: 0, y: 0, w: 300, h: 300 };
     expect(fitBox(box, 0, 0)).toEqual(box);
+  });
+});
+
+/**
+ * ══ NỀN CỦA TẤM GHÉP: TRỐNG, KHÔNG PHẢI TRẮNG ═════════════════════════════
+ *
+ * Bản trước tô kín tấm bằng `#ffffff` trước khi vẽ manơcanh. PNG vẫn là RGBA nên
+ * nhìn qua thì "có alpha", nhưng alpha = 255 ở TOÀN BỘ tấm — đo trên
+ * `refs/char-pose-sheet-*.png` của một dự án thật: 0 pixel nào có alpha 0. Máy vẽ
+ * ảnh bắt chước ảnh tham chiếu ở mọi tầng, kể cả tầng nền, nên tấm nhân vật nó trả
+ * về cũng đục kín và rơi thẳng vào cổng alpha của `gen.sh`.
+ *
+ * Môi trường `node` không có canvas thật (không cài `node-canvas`), nên ca này dựng
+ * một canvas GIẢ mang MỘT mảng alpha thật: canvas thật vừa tạo có alpha 0 khắp nơi,
+ * và trong cả file chỉ có `fillRect` là phép nâng được alpha của vùng chưa vẽ gì lên
+ * 255. Đo pixel bốn góc trên mảng ấy trả lời đúng câu cần hỏi — "tấm gửi đi có nền
+ * đặc không" — mà không phải chép lại một bộ dựng ảnh.
+ */
+interface FakeCanvas {
+  alpha: Uint8Array;
+  ops: string[];
+  document: { createElement: (tag: string) => unknown };
+}
+
+function fakeCanvasDoc(size: number): FakeCanvas {
+  const alpha = new Uint8Array(size * size);
+  const ops: string[] = [];
+  const ctx = {
+    fillStyle: "",
+    fillRect(x: number, y: number, w: number, h: number) {
+      ops.push(`fillRect(${x},${y},${w},${h})`);
+      for (let py = Math.max(0, y); py < Math.min(size, y + h); py += 1) {
+        for (let px = Math.max(0, x); px < Math.min(size, x + w); px += 1) alpha[py * size + px] = 255;
+      }
+    },
+    drawImage() {
+      ops.push("drawImage");
+    },
+  };
+  const canvas = {
+    width: 0,
+    height: 0,
+    getContext: () => ctx,
+    toDataURL: () => "data:image/png;base64,GIA",
+  };
+  return { alpha, ops, document: { createElement: () => canvas } };
+}
+
+describe("tấm ảnh dáng gửi máy vẽ có NỀN TRỐNG", () => {
+  it("không tô nền: pixel bốn góc giữ alpha 0", async () => {
+    const size = 64;
+    const fake = fakeCanvasDoc(size);
+    const holder = globalThis as unknown as { document?: unknown };
+    const before = holder.document;
+    holder.document = fake.document;
+    try {
+      /* Ô rỗng = "dòng này không dựng được ảnh". Đúng ca cần đo: nếu tấm vẫn có nền
+         thì nền ấy KHÔNG đến từ ảnh manơcanh nào cả. */
+      await composePoseSheet(["", "", "", ""], 2, 2, size);
+    } finally {
+      if (before === undefined) delete holder.document;
+      else holder.document = before;
+    }
+    for (const i of [0, size - 1, (size - 1) * size, size * size - 1]) {
+      expect(fake.alpha[i], `pixel góc chỉ số ${i} bị tô`).toBe(0);
+    }
+    expect(fake.ops.filter((op) => op.startsWith("fillRect"))).toEqual([]);
+  });
+
+  it("mã nguồn không còn màu nền nào để mà tô", () => {
+    const src = read("webapp/src/features/prompt-canvas/lib/pose-sheet.ts");
+    expect(src).not.toContain("fillRect");
+    expect(src).not.toContain("#ffffff");
+  });
+
+  /* Ảnh dáng LẺ (768², `capturePoseRef`) đi cùng một đường và cùng một lý do — nó
+     được ghi vào `refs/` của dự án. Nền của nó do `pose-renderer.ts` quyết; ca khoá
+     nằm ở `prompt-lab/lib/__tests__/pose.test.ts`. */
+  it("bộ dựng ảnh dáng lẻ cũng để nền trống", () => {
+    const src = read("webapp/src/features/prompt-lab/lib/pose/pose-renderer.ts");
+    expect(src).toContain("alpha: true");
+    expect(src).toContain("setClearColor(0x000000, 0)");
   });
 });

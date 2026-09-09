@@ -21,8 +21,21 @@ import { CANVAS_SQUARE } from "@/features/kit-core/lib/geometry";
  * `geometry.py`.
  */
 
-/** Nền TRẮNG ĐẶC — cùng nền mà `capturePoseRef` trả về, nên các ô không thấy mối. */
-const SHEET_BG = "#ffffff";
+/**
+ * ╔══ TẤM GHÉP KHÔNG CÓ NỀN, VÀ ĐÓ LÀ CẢ VẤN ĐỀ ══════════════════════════════════╗
+ * ║ Bản trước tô kín tấm bằng màu trắng đặc rồi mới vẽ manơcanh lên. PNG gửi đi   ║
+ * ║ vẫn là RGBA, nhưng alpha = 255 ở TOÀN BỘ tấm — đo trên tấm thật của một dự    ║
+ * ║ án (`refs/char-pose-sheet-*.png`): không một pixel nào có alpha 0. Máy vẽ bắt ║
+ * ║ chước ảnh tham chiếu ở mọi tầng, kể cả tầng nền, nên tấm nhân vật nó trả về   ║
+ * ║ cũng đục kín rồi rơi thẳng vào cổng alpha của `gen.sh`.                       ║
+ * ║                                                                               ║
+ * ║ Nên tấm này để TRỐNG: canvas vừa tạo vốn đã alpha 0 khắp nơi, việc duy nhất   ║
+ * ║ phải làm là đừng tô gì lên. Manơcanh xám vẫn đọc rõ trên nền trống.           ║
+ * ║                                                                               ║
+ * ║ Cách chữa nằm ở ẢNH, không phải ở một câu dặn thêm trong prompt: prompt chỉ   ║
+ * ║ tả thứ MUỐN vẽ, còn nền của ảnh đính kèm thì tự nó nói.                       ║
+ * ╚═══════════════════════════════════════════════════════════════════════════════╝
+ */
 
 export interface PoseSheetBox {
   x: number;
@@ -107,8 +120,8 @@ function loadImage(dataUrl: string): Promise<HTMLImageElement> {
  * Nhiều ảnh manơcanh (data URL) → MỘT data URL PNG.
  *
  * `shots[k]` là ảnh của ô thứ k; chuỗi rỗng nghĩa là ô đó không dựng được ảnh —
- * ô ấy để TRẮNG chứ không bị bỏ qua, vì bỏ qua sẽ đẩy mọi ô sau lên một chỗ và
- * cả tấm hết khớp với tấm sắp vẽ.
+ * ô ấy để TRỐNG (alpha 0) chứ không bị bỏ qua, vì bỏ qua sẽ đẩy mọi ô sau lên một
+ * chỗ và cả tấm hết khớp với tấm sắp vẽ.
  *
  * Ném khi không có canvas: nơi gọi coi đó là "vẽ bằng chữ" chứ không phải lỗi —
  * xem `ensurePoseRefs`.
@@ -124,9 +137,6 @@ export async function composePoseSheet(
   canvas.height = size;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Trình duyệt này không dựng được tấm ảnh dáng");
-
-  ctx.fillStyle = SHEET_BG;
-  ctx.fillRect(0, 0, size, size);
 
   const boxes = cellBoxes(cols, rows, shots.length, size);
   for (const [index, shot] of shots.entries()) {
