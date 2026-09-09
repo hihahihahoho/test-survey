@@ -179,6 +179,26 @@ export function elementBox(skel: AnySkel | null | undefined, boxW: number, boxH:
 
 /** Lề chừa cho phần tràn (viền/bevel/quầng), mỗi cạnh — `geometry.py`. */
 export const CELL_MARGIN_RATIO = 0.1;
+/**
+ * Lề của ô CÓ VIỀN / TRANG TRÍ — gấp đôi, hộp vẽ còn 0,6 ô. `geometry.py`.
+ *
+ * Đo trên dự án thật: với lề 0,10 thì safe zone chiếm ~78% bề ngang ô (ô 627px ⇒
+ * chừa 68px mỗi bên), trong khi viền + đèn lồng + hoa của nấc «Nhiều» cần quãng
+ * 130px. `overflowPx` trong `kits/manifest.json` chạm đúng mép ô (69 và 77) — tức
+ * `slice.py` đã cắt cụt phần trang trí. Ô «Không trang trí» giữ lề 0,10: thu nó lại
+ * là vứt một phần tư độ phân giải cho một khoảng trống không ai dùng.
+ */
+export const CELL_MARGIN_RATIO_DECOR = 0.2;
+
+/**
+ * Lề của CHÍNH ô này — gương của `geometry.cell_margin_ratio`.
+ *
+ * `skel.decor` là khoá contract do bộ dịch composer ghi ra. Thiếu khoá (contract đời
+ * cũ, luồng kitset) ⇒ lề thường, tức không đổi một pixel nào so với trước.
+ */
+export function cellMarginRatio(skel: { decor?: boolean } | null | undefined): number {
+  return skel?.decor ? CELL_MARGIN_RATIO_DECOR : CELL_MARGIN_RATIO;
+}
 /** Bước làm tròn XUỐNG của hệ số phóng khi k ≥ 1 (và khi k < 1). */
 export const DRAW_SCALE_STEP = 0.25;
 export const DRAW_SHRINK_STEP = 0.05;

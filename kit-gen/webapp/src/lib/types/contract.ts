@@ -116,6 +116,15 @@ export const skelSchema = z.looseObject({
   /** chỉ có nghĩa khi shape="pose" — 1 trong `characterPoses`. */
   pose: z.string().optional(),
   plain: z.boolean().optional(),
+  /**
+   * Ô này có viền / trang trí không — nấc `decor` khác «Không».
+   *
+   * KHÔNG phải câu chữ (câu trang trí đã nằm trong `spec`): đây là số học. Ô có đồ
+   * trang trí bám quanh cần lề rộng gấp đôi để phần tràn không bị `slice.py` chém
+   * cụt ở mép ô — xem `geometry.cell_margin_ratio` và bản mirror `cellMarginRatio`.
+   * THIẾU khoá (contract đời cũ, luồng kitset) = lề thường, đúng hành vi cũ.
+   */
+  decor: z.boolean().optional(),
 });
 export type Skel = z.infer<typeof skelSchema>;
 

@@ -203,9 +203,10 @@ expect "vẫn giữ nền trong suốt" "Background fully transparent" "$linh"
 expect "vẫn cấm chữ" "No letters, no digits" "$linh"
 expect "vẫn tả nền trống bằng alpha 0 (không gọi tên caro)" "is simply empty: alpha 0" "$linh"
 refute "không nhắc chữ checker để khỏi nhiễm" "checker" "$linh"
-# Ranh giới của tấm mascot nay nói bằng SAFE ZONE của hàng xóm, không bằng "ô":
-# ô là chuyện của dao cắt, còn thứ model phải tránh là vùng của thằng bên cạnh.
-expect "và vẫn cấm lấn sang element khác" "well clear of every other" "$linh"
+# Tấm mascot ở đây là MỘT Ô, nên nó không có hàng xóm nào để tránh và cũng không có
+# hộp ngoài nào ngoài chính khổ ảnh — luật còn lại đúng một câu: đừng chạm mép.
+expect "tấm một ô: biên duy nhất là mép ảnh" "nothing touches the image edges" "$linh"
+refute "và không hứa một hộp ô nào (ô CHÍNH LÀ khổ ảnh)" "stays inside x=" "$linh"
 expect "tấm nút bấm thì VẪN CÓ luật viền" "Any rim, border or edge treatment" "$main"
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -241,6 +242,18 @@ refute "không còn tiêu đề hàng"       "Row 1, left to right" "$allp"
 n_zone=$(printf '%s' "$vuong" | grep -cE '^[0-9]+\) .* — safe zone x=[0-9]+\.\.[0-9]+, y=[0-9]+\.\.[0-9]+ \([0-9]+x[0-9]+ px\)')
 eq_n() { if [ "$2" = "$3" ]; then printf 'ok   %s\n' "$1"; else printf 'LOI  %s (mong %s, thực %s)\n' "$1" "$2" "$3" >&2; fail=1; fi; }
 eq_n "tấm 2x2 có đủ 4 dòng toạ độ" 4 "$n_zone"
+# ── HỘP Ô LÀ GIỚI HẠN NGOÀI (09/2026) ──────────────────────────────────────────
+# Safe zone nói lõi to bằng nào; nó KHÔNG nói phần tràn đi tới đâu. `slice.py` cắt
+# theo hộp Ô, nên viền/trang trí vượt mép ô là bị chém cụt — đo trên dự án thật:
+# overflowPx bên phải 69 và 77, chạm khít mép ô. Nay mỗi dòng nói luôn hộp ngoài.
+expect "ô 1 kèm hộp ô làm giới hạn ngoài" \
+  "(502x251 px); everything of this element, rim and ornaments included, stays inside x=0..627, y=0..627" "$vuong"
+expect "ô 4 (hàng dưới, cột phải) mang đúng hộp ô của nó" \
+  "stays inside x=627..1254, y=627..1254" "$vuong"
+n_cell=$(printf '%s' "$vuong" | grep -cE 'stays inside x=[0-9]+\.\.[0-9]+, y=[0-9]+\.\.[0-9]+$')
+eq_n "cả 4 ô đều có hộp ngoài" 4 "$n_cell"
+expect "và section Layout gọi tên hộp ấy" "the cell box around its safe zone" "$vuong"
+expect "luật vùng an toàn nói phần tràn DỪNG trong ô" "come to rest inside it" "$vuong"
 # Tấm nền MỘT Ô đi hẳn một nhánh khác (chủ sản phẩm 07/09/2026: "prompt dài quá,
 # gen full khung mobile luôn"): nó không phải sprite sheet nên không có lưới, không
 # có hộp cắt, không có luật nền trong suốt — chỉ còn khổ giấy, phong cách, một câu

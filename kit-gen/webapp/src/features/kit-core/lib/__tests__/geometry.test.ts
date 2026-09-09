@@ -23,8 +23,8 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   BLEED_IS_FIXED, CANVAS_LANDSCAPE, CANVAS_PORTRAIT, CANVAS_SQUARE,
-  CELL_MARGIN_RATIO, DRAW_SCALE_STEP, SLICE_BLEED,
-  canvasOf, cellAspect, cellInner, cellMetrics, drawBox, drawScale, effectiveCellHint,
+  CELL_MARGIN_RATIO, CELL_MARGIN_RATIO_DECOR, DRAW_SCALE_STEP, SLICE_BLEED,
+  canvasOf, cellAspect, cellInner, cellMarginRatio, cellMetrics, drawBox, drawScale, effectiveCellHint,
   elementBox, elementMetrics, formatPx, gridOf, maxFitBox, sheetOrient, simpleRatio,
   suggestCellHint,
 } from "../geometry";
@@ -287,6 +287,43 @@ describe("hộp vẽ max-fit — gương của geometry.py", () => {
     expect(engine).toMatch(/e\.drawScale = k/);
     /* Và `gen.sh` là nơi con số ấy thành câu nói với máy vẽ. */
     expect(read("gen.sh")).toContain("final size {ow}x{oh} px, drawn at {k:g}x");
+  });
+
+  /* ── LỀ CỦA Ô CÓ TRANG TRÍ ────────────────────────────────────────────────
+     Đo trên dự án thật: lề 0,10 chừa 62px mỗi bên trên ô 627px, mà `overflowPx`
+     của viền + đèn lồng đo được là 69 và 77 ⇒ `slice.py` (crop theo hộp ô) đã chém
+     cụt. Nấc trang trí khác «Không» ⇒ lề gấp đôi, safe zone tụt từ ~78% xuống ~60%
+     bề ngang ô. Hai bản (python & TS) phải khớp TỪNG SỐ, nếu không thì prompt hứa
+     một hộp còn dao cắt cắt một hộp khác. */
+  it("lề của ô có trang trí: cùng một con số ở geometry.py và ở đây", () => {
+    const src = read("geometry.py");
+    expect(src).toMatch(/CELL_MARGIN_RATIO_DECOR\s*=\s*0\.20/);
+    expect(src).toContain("def cell_margin_ratio(skel):");
+    expect(src).toContain('return CELL_MARGIN_RATIO_DECOR if (skel or {}).get("decor") else CELL_MARGIN_RATIO');
+    expect(CELL_MARGIN_RATIO_DECOR).toBe(0.2);
+  });
+
+  it("thiếu khoá `decor` ⇒ lề THƯỜNG — contract đời cũ không đổi một pixel nào", () => {
+    expect(cellMarginRatio(null)).toBe(CELL_MARGIN_RATIO);
+    expect(cellMarginRatio(undefined)).toBe(CELL_MARGIN_RATIO);
+    expect(cellMarginRatio({})).toBe(CELL_MARGIN_RATIO);
+    expect(cellMarginRatio({ decor: false })).toBe(CELL_MARGIN_RATIO);
+    expect(cellMarginRatio({ decor: true })).toBe(CELL_MARGIN_RATIO_DECOR);
+  });
+
+  it("ô 627 có trang trí: safe zone ~60% ô, chừa 125px mỗi bên thay vì 62", () => {
+    const thuong = cellInner(627, 627, cellMarginRatio({}));
+    const decor = cellInner(627, 627, cellMarginRatio({ decor: true }));
+    expect(thuong).toEqual({ w: 502, h: 502 });
+    expect(decor).toEqual({ w: 376, h: 376 });
+    expect(Math.floor((627 - thuong.w) / 2)).toBe(62);
+    expect(Math.floor((627 - decor.w) / 2)).toBe(125);
+    /* Hộp vẽ nhỏ lại nhưng TỈ LỆ giữ nguyên — thứ duy nhất ta yêu cầu ở máy vẽ. */
+    for (const out of [[245, 85], [195, 195], [270, 207]]) {
+      const box = drawBox(627, 627, out[0]!, out[1]!, cellMarginRatio({ decor: true }));
+      expect(box.w).toBeLessThanOrEqual(decor.w);
+      expect(box.w / box.h).toBeCloseTo(out[0]! / out[1]!, 0);
+    }
   });
 
   it("cỡ đầu ra LỚN HƠN ô ⇒ hệ số tụt dưới 1 nhưng tỉ lệ không méo", () => {

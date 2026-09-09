@@ -302,5 +302,64 @@ class MaxFitBoxTest(unittest.TestCase):
         self.assertAlmostEqual(w / h, 304 / 78, delta=0.2)
 
 
+class DecorMarginTest(unittest.TestCase):
+    """LỀ CỦA Ô CÓ TRANG TRÍ — hộp ô là giới hạn ngoài, và nó phải VỚI TỚI được.
+
+    ╔══ BỆNH ĐÃ ĐO (dự án thật, 09/2026) ══════════════════════════════════════╗
+    ║ Sheet `ui`, lưới 2x2 trên 1254px ⇒ ô 627px. Với lề 0,10 thì safe zone     ║
+    ║ chiếm ~78% bề ngang ô, chừa vỏn vẹn ~68px mỗi bên — mà viền + đèn lồng +  ║
+    ║ hoa của nấc «Nhiều» cần quãng 130px. Sổ đo `kits/manifest.json` nói thẳng:║
+    ║ `overflowPx` bên phải của `01-button` = 69 và của `03-popover` = 77, tức  ║
+    ║ trang trí CHẠM ĐÚNG mép ô và `slice.py` (crop theo `cell_box`) đã chém    ║
+    ║ cụt nó. Cho ô có trang trí một lề gấp đôi là cho phần tràn chỗ để dừng.   ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+    """
+
+    def test_o_khong_trang_tri_KHONG_doi_mot_pixel_nao(self):
+        """Nửa quan trọng nhất của đợt này: ô cũ phải y nguyên."""
+        self.assertEqual(geometry.cell_margin_ratio({}), geometry.CELL_MARGIN_RATIO)
+        self.assertEqual(geometry.cell_margin_ratio({"decor": False}), geometry.CELL_MARGIN_RATIO)
+        # Contract ĐỜI CŨ không có khoá `decor`, và `None` là ca `skel` thiếu hẳn.
+        self.assertEqual(geometry.cell_margin_ratio(None), geometry.CELL_MARGIN_RATIO)
+        self.assertEqual(geometry.cell_margin_ratio({"shape": "pill", "w": 0.8}),
+                         geometry.CELL_MARGIN_RATIO)
+
+    def test_o_co_trang_tri_chua_le_gap_doi(self):
+        self.assertEqual(geometry.cell_margin_ratio({"decor": True}),
+                         geometry.CELL_MARGIN_RATIO_DECOR)
+        self.assertEqual(geometry.CELL_MARGIN_RATIO_DECOR, 0.20)
+
+    def test_safe_zone_tut_tu_78_phan_tram_xuong_60_phan_tram_o(self):
+        """Con số chủ sản phẩm chốt, đo trên ĐÚNG ô 627px của dự án thật."""
+        cell = 627
+        thuong = geometry.cell_inner(cell, cell, geometry.cell_margin_ratio({}))
+        trang_tri = geometry.cell_inner(cell, cell, geometry.cell_margin_ratio({"decor": True}))
+        self.assertAlmostEqual(thuong[0] / cell, 0.80, places=2)
+        self.assertAlmostEqual(trang_tri[0] / cell, 0.60, places=2)
+        # Chỗ chừa MỖI BÊN: 62px là chỗ đã chém cụt trang trí (overflowPx đo được 69 và
+        # 77, tức vượt hẳn); 125px thì đủ cho một cái viền có đèn lồng bám quanh.
+        self.assertEqual((cell - thuong[0]) // 2, 62)
+        self.assertEqual((cell - trang_tri[0]) // 2, 125)
+
+    def test_hop_ve_cua_o_trang_tri_nho_hon_va_van_dung_ti_le(self):
+        for out_w, out_h in [(245, 85), (195, 195), (270, 207)]:
+            w0, h0, _ = geometry.draw_box(627, 627, out_w, out_h,
+                                          geometry.cell_margin_ratio({}))
+            w1, h1, _ = geometry.draw_box(627, 627, out_w, out_h,
+                                          geometry.cell_margin_ratio({"decor": True}))
+            self.assertLess(w1, w0, f"{out_w}x{out_h}: hộp vẽ không nhỏ lại")
+            self.assertAlmostEqual(w1 / h1, out_w / out_h,
+                                   delta=max(0.06, out_w / out_h * 0.03))
+
+    def test_phan_tram_dieu_khien_qua_HAM_chu_khong_qua_hang_roi(self):
+        """`cell_inner`/`max_fit_box`/`draw_scale`/`draw_box` đều nhận `margin`, nên
+        chỗ gọi chỉ cần đưa kết quả của MỘT hàm — không ai được tự chọn số."""
+        src = (ROOT / "geometry.py").read_text(encoding="utf-8")
+        self.assertIn("def cell_margin_ratio(skel):", src)
+        for fn in ("cell_inner", "max_fit_box", "draw_scale", "draw_box"):
+            self.assertIn(f"def {fn}(cell_w, cell_h", src)
+            self.assertIn("margin=CELL_MARGIN_RATIO", src)
+
+
 if __name__ == "__main__":
     unittest.main()

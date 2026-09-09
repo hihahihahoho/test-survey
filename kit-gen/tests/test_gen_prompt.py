@@ -1280,3 +1280,87 @@ class CoDauRaVaHeSoPhongTest(unittest.TestCase):
         txt = render_prompt_text(cfg, name="demo-ui")
         self.assertNotIn("final size", txt)
         self.assertNotIn("drawn at", txt)
+
+
+class HopOLaGioiHanNgoaiTest(unittest.TestCase):
+    """MỖI DÒNG ELEMENT PHẢI NÓI RA HAI HỘP: hộp lõi, và hộp mà phần tràn dừng lại.
+
+    ╔══ BỆNH ĐÃ ĐO (dự án thật, 09/2026) ═════════════════════════════════════════╗
+    ║ Prompt chỉ hứa MỘT hộp — safe zone — rồi dặn "tránh xa vùng của element     ║
+    ║ khác, đừng chạm mép ảnh". Mép ẢNH thì cách cả một ô, nên model đọc ra là     ║
+    ║ "còn nhiều chỗ" và vẽ viền + đèn lồng tràn qua ranh giới ô. Nhưng `slice.py`║
+    ║ cắt theo hộp Ô (`sheet_img.crop(cell)`), nên phần tràn ấy bị chém cụt: sổ đo║
+    ║ `kits/manifest.json` ghi `overflowPx` bên phải của `01-button` = 69 và của  ║
+    ║ `03-popover` = 77 — chạm khít mép ô 627px.                                  ║
+    ║ Nay dòng của ô nói thẳng hộp ô ra, nên model có một con số để dừng trước.   ║
+    ╚═════════════════════════════════════════════════════════════════════════════╝
+    """
+
+    @staticmethod
+    def _cfg_ui():
+        return {"styles": [{"id": "demo", "bg": "magenta", "style": "flat ink"}],
+                "sheets": [{"id": "ui", "canvas": "square", "grid": {"cols": 2, "rows": 2},
+                            "components": [
+                                {"file": "01-button", "spec": "button",
+                                 "skel": {"shape": "pill", "w": 0.6, "h": 0.2, "decor": True}},
+                                {"file": "02-popover", "spec": "popover",
+                                 "skel": {"shape": "rrect", "w": 0.6, "h": 0.45}},
+                                {"file": "03-avatar-frame", "spec": "avatar frame",
+                                 "skel": {"shape": "circle", "w": 0.6, "h": 0.6, "decor": True}},
+                                {"file": "_empty-1", "spec": "", "skel": {"shape": "empty"}}]}]}
+
+    def setUp(self):
+        self.txt = render_prompt_text(self._cfg_ui(), name="demo-ui")
+
+    def _dong(self, dau_dong):
+        for line in self.txt.splitlines():
+            if line.startswith(dau_dong):
+                return line
+        raise AssertionError(f"prompt không có dòng {dau_dong!r}")
+
+    def test_moi_o_that_deu_mang_hop_ngoai(self):
+        for i in (1, 2, 3):
+            self.assertIn("stays inside x=", self._dong(f"{i}) "),
+                          f"ô {i} không có giới hạn ngoài nào")
+
+    def test_hop_ngoai_la_DUNG_hop_o_cua_geometry_py(self):
+        """Không phải một phép chia thứ hai: cùng `cell_box` mà `slice.py` cắt theo."""
+        import geometry
+        for i in range(3):
+            cx0, cy0, cx1, cy1 = geometry.cell_box(1254, 1254, 2, 2, i)
+            self.assertIn(f"stays inside x={cx0}..{cx1}, y={cy0}..{cy1}", self._dong(f"{i + 1}) "))
+
+    def test_hop_ngoai_OM_TRON_safe_zone_cua_chinh_o_ay(self):
+        """Hai hộp lồng nhau, không phải hai hộp cạnh nhau — một dòng hứa ngược là
+        một dòng model không có cách nào làm đúng."""
+        for i in (1, 2, 3):
+            line = self._dong(f"{i}) ")
+            sz = re.search(r"safe zone x=(\d+)\.\.(\d+), y=(\d+)\.\.(\d+)", line)
+            cell = re.search(r"stays inside x=(\d+)\.\.(\d+), y=(\d+)\.\.(\d+)", line)
+            sx0, sx1, sy0, sy1 = (int(v) for v in sz.groups())
+            cx0, cx1, cy0, cy1 = (int(v) for v in cell.groups())
+            self.assertLessEqual(cx0, sx0)
+            self.assertLessEqual(sx1, cx1)
+            self.assertLessEqual(cy0, sy0)
+            self.assertLessEqual(sy1, cy1)
+
+    def test_luat_chung_noi_ra_quan_he_giua_hai_hop(self):
+        self.assertIn("Each element's line gives a second, larger box: its own cell", self.txt)
+        self.assertIn("come to rest inside it", self.txt)
+        # Câu cũ CHỈ nhắc mép ảnh — biên cách cả một ô — đã thay hẳn.
+        self.assertNotIn("must stay well clear of", self.txt)
+        self.assertIn("the cell box around its safe zone", self.txt)
+
+    def test_tam_MOT_O_khong_hua_hop_ngoai_nao(self):
+        """Ở tấm 1×1 hộp ô CHÍNH LÀ khổ ảnh; in nó ra là một dòng dài thêm mà không
+        thêm ràng buộc nào, và luật "đừng chạm mép ảnh" đã nói đúng điều ấy."""
+        txt = render_prompt_text(_cfg(spec="a coin icon"))
+        self.assertIn("safe zone x=", txt)
+        self.assertNotIn("stays inside x=", txt)
+        self.assertIn("nothing touches the image edges", txt)
+
+    def test_giong_van_TU_NHIEN_khong_goi_ten_thu_khong_muon(self):
+        """Cùng luật với `test_prompt_KHONG_nhac_ten_caro`: chỉ tả điều MUỐN."""
+        cau = self._dong("1) ").split("stays inside")[0]
+        for xau in ("checker", "NEVER", "MUST NOT", "do not"):
+            self.assertNotIn(xau, cau)

@@ -24,12 +24,12 @@ import type { StyleAxes } from "@/features/kit-core/lib/model";
 import { STYLE_AXIS_IDS } from "@/features/kit-core/lib/form-model";
 import { subjectAxisLine } from "@/features/kit-core/lib/style-phrases";
 import { INHERIT, labelOf, phraseOf, type PillKind } from "@/features/prompt-lab/lib/pill-registry";
-import { getPresets, hasDecorPlacement, type ElementPreset, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
+import { getPresets, hasDecor, hasDecorPlacement, type ElementPreset, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
 import { NODE } from "@/features/prompt-lab/lib/schema";
 import {
   CUSTOM_ELEMENT_SKEL, SQUARE_CANVAS_PX, defaultSizePx, sizePx, type SizePx,
 } from "@/features/prompt-lab/lib/cell-size";
-import { drawBox } from "@/features/kit-core/lib/geometry";
+import { cellMarginRatio, drawBox } from "@/features/kit-core/lib/geometry";
 import { SCAFFOLDS } from "@/features/prompt-lab/lib/doc-templates";
 import { freeText, makeContext, serializeDoc, tidy, type PromptDocNode } from "@/features/prompt-lab/lib/serialize";
 import { contextFreeText, contextOutfitEN, contextStyleEN, contextThemeEN } from "@/features/prompt-lab/lib/serialize-composer";
@@ -634,10 +634,19 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
            luôn được giao hộp to nhất có thể, kèm hệ số phóng để biết đây là "cái
            nút nhỏ phóng 2,5 lần" chứ không phải một tấm banner. */
       const out = sizePx(cell.sizeId, element?.skel) ?? defaultSizePx(element);
-      const draw = drawBox(cellPx, cellPx, out.w, out.h);
+      /* Ô CÓ TRANG TRÍ VẼ NHỎ LẠI, và đó là phép trừ chứ không phải câu chữ.
+         Lề thường (0,10) chừa ~68px mỗi bên trên ô 627px; một cái viền có đèn lồng
+         và hoa bám quanh cần quãng 130px, nên `overflowPx` trong sổ đo chạm đúng mép
+         ô và `slice.py` chém cụt phần trang trí. Nấc trang trí khác «Không» ⇒ lề gấp
+         đôi. Con số ở `geometry.cell_margin_ratio`, không ở đây. */
+      const decorated = hasDecor(cell.decor);
+      const draw = drawBox(cellPx, cellPx, out.w, out.h, cellMarginRatio({ decor: decorated }));
       /* Về PHÂN SỐ Ô — đơn vị của `skel.w/h` (V-06 ∈ (0,1]), không phải pixel. */
       const size: SizePx = { w: draw.w / cellPx, h: draw.h / cellPx };
-      const skel = cellSkel(element, size);
+      /* `decor` ĐI VÀO contract vì engine cũng phải trả lời được câu "ô này chừa lề
+         nào" — `gen.sh` dựng lại hệ số phóng khi contract thiếu `drawScale`, và
+         `validate_output_geometry.py` chấm hộp theo cùng một lề. */
+      const skel = { ...cellSkel(element, size), decor: decorated };
       const templateSpec = tidy([
         /* Câu đục nền tra từ KHO (`phraseOf`) chứ không để `resolveElementSpec` tự
            tra bảng hằng: nấc đục nền nay sửa được ở màn «Thư viện prompt», và hai

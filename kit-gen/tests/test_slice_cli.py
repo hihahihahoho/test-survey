@@ -160,6 +160,25 @@ class SliceCliTest(unittest.TestCase):
         # Hộp cắt KHÔNG đổi theo `out`: nó vẫn là `round(ô × skel.w/h)` = 96x48.
         self.assertEqual(asset["contractSafe"][2:], [96, 48])
 
+    def test_khoa_decor_KHONG_lam_lech_dao_cat(self):
+        """`skel.decor` là khoá MỚI (09/2026) và nó KHÔNG phải việc của dao cắt.
+
+        Nó chỉ nói "ô này chừa lề rộng" cho bộ dựng contract, và hậu quả duy nhất đã
+        nằm sẵn trong `skel.w/h` mà webapp ghi ra. `slice.py` cắt theo
+        `geometry.safe_offset_in_cell` — cùng hàm, cùng phân số — nên một khoá lạ
+        thêm vào `skel` không được đổi lấy một pixel nào. (Nếu nó đổi, nghĩa là ai
+        đó đã cho dao cắt tự tính lề lần thứ hai.)
+        """
+        styles = json.loads((self.tmp / "styles.json").read_text(encoding="utf-8"))
+        ui = next(sh for sh in styles["sheets"] if sh["id"] == "ui")
+        self.run_slice("v1", "--sheet=ui")
+        truoc = self.manifest()["styles"]["v1"]["assets"][0]["contractSafe"]
+
+        ui["components"][0]["skel"]["decor"] = True
+        (self.tmp / "styles.json").write_text(json.dumps(styles), encoding="utf-8")
+        self.run_slice("v1", "--sheet=ui")
+        self.assertEqual(self.manifest()["styles"]["v1"]["assets"][0]["contractSafe"], truoc)
+
     def test_o_khong_khai_out_thi_manifest_KHONG_bia_outSize(self):
         """Kit đời cũ không có `out`. Bịa một `outSize` mặc định ở đây là ép tầng
         xuất co ảnh về một cỡ chưa ai chọn — im lặng và sai."""

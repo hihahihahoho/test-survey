@@ -444,9 +444,12 @@ for s in cfg["styles"]:
                               " sides of that cell; the only gap allowed is a thin 24px line"
                               " exactly on the cell boundaries.")
             else:
-                layout.append("The coordinates in the element list below are exact pixel crop"
+                layout.append("The safe zones in the element list below are exact pixel crop"
                               " boxes: after generation, software cuts each asset at exactly"
-                              " those four numbers.")
+                              " those four numbers."
+                              + (" Each line also gives the cell box around its safe zone —"
+                                 " that is where everything of that element ends."
+                                 if cols * rows > 1 else ""))
             section("Layout", layout)
 
         # ── Safe zone ─────────────────────────────────────────────────────────
@@ -480,13 +483,25 @@ for s in cfg["styles"]:
                 safe.append("- Any rim, border or edge treatment sits immediately OUTSIDE the safe"
                             " zone; decoration, if the art style calls for any, farther outside"
                             " still.")
-            safe += [
-                "- Whatever overflows may cross its own safe zone but must stay well clear of"
-                " every other element's; elements never touch each other and never touch the"
-                " image edges.",
-                "- Only the core is scored: core missing inside the box is a failure, anything"
-                " reaching outside the box is harmless.",
-            ]
+            # HAI HỘP LỒNG NHAU, và gạch dưới đây là chỗ duy nhất nói ra quan hệ giữa
+            # chúng: safe zone là hộp TRONG (lõi lấp đúng nó), hộp ô là hộp NGOÀI (phần
+            # tràn dừng trước nó). Trước đợt này chỉ có hộp trong, và biên duy nhất được
+            # nhắc tới là mép ẢNH — cách cả một ô — nên trang trí thoải mái tràn sang ô
+            # hàng xóm rồi bị dao cắt chém cụt ở đúng mép ô (`slice.py` crop theo `cell`).
+            # Tấm MỘT Ô không có hộp ngoài nào để nói: ở đó ô CHÍNH LÀ khổ ảnh.
+            if cols * rows > 1:
+                safe.append(
+                    "- Each element's line gives a second, larger box: its own cell. Rim, glow"
+                    " and ornaments are welcome to spill out of the safe zone into that space,"
+                    " and they come to rest inside it — elements stay in their own cell, never"
+                    " touch each other and never touch the image edges.")
+            else:
+                safe.append(
+                    "- Whatever overflows may cross its own safe zone, and it comes to rest well"
+                    " inside the frame — nothing touches the image edges.")
+            safe.append(
+                "- Only the core is scored: core missing inside the safe zone is a failure,"
+                " anything outside it is free.")
             section("Safe zone", safe)
 
         # ── Transparency ──────────────────────────────────────────────────────
@@ -673,6 +688,23 @@ for s in cfg["styles"]:
                     # Bản trước còn nối thêm ", placement guide" cho ô `free` vì tin rằng
                     # dao cắt bám lõi đo được — trong `slice.py` KHÔNG có nhánh nào như thế.
                     spec += f" — safe zone x={x0}..{x1}, y={y0}..{y1} ({x1 - x0}x{y1 - y0} px)"
+                    # ── VÀ ĐÂY LÀ GIỚI HẠN NGOÀI ─────────────────────────────
+                    # Safe zone nói "lõi to bằng này"; nó KHÔNG nói phần tràn được
+                    # đi tới đâu. Bản trước chỉ dặn "tránh xa element bên cạnh, đừng
+                    # chạm mép ảnh" — mà mép ảnh thì cách cả một ô, nên model hiểu là
+                    # còn rất nhiều chỗ và vẽ viền + đèn lồng tràn qua ranh giới ô.
+                    # `slice.py` lại cắt ĐÚNG hộp ô (`sheet_img.crop(cell)`), nên phần
+                    # tràn ấy bị chém cụt — đo trên dự án thật: `overflowPx` bên phải
+                    # của `01-button` = 69 và của `03-popover` = 77, chạm khít mép ô.
+                    # Nói thẳng hộp ô ra thì model có một con số để dừng lại trước.
+                    # Tấm MỘT Ô thì hộp ô CHÍNH LÀ khổ ảnh, và luật "không chạm mép
+                    # ảnh" đã nói điều đó ở section «Safe zone». In lại thành một cặp
+                    # toạ độ nữa chỉ là một dòng dài thêm mà không thêm một ràng buộc
+                    # nào — đúng thứ làm loãng những luật còn lại.
+                    if cols * rows > 1:
+                        cx0, cy0, cx1, cy1 = g["cell"]
+                        spec += (f"; everything of this element, rim and ornaments included,"
+                                 f" stays inside x={cx0}..{cx1}, y={cy0}..{cy1}")
                 elif g["kind"] == "full":
                     spec += " — full-bleed scene, fills its whole cell edge to edge"
                 # 08/09/2026 — HAI NHÁNH `skel.matte` (glow/glass) ĐÃ BỎ Ở ĐÂY.

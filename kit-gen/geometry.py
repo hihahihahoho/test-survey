@@ -130,6 +130,37 @@ def safe_box(width, height, cols, rows, index, skel):
 #: 0,92 …) nên mỗi element chừa một kiểu và không ai đọc ra được luật.
 CELL_MARGIN_RATIO = 0.10
 
+#: Lề của ô CÓ VIỀN / TRANG TRÍ — gấp đôi, tức hộp vẽ chỉ còn 0,6 ô.
+#:
+#: ĐO ĐƯỢC, 09/2026, dự án thật (sheet `ui`, lưới 2x2 trên 1254px ⇒ ô 627px):
+#: safe zone chiếm ~78% bề ngang ô, chừa vỏn vẹn ~68px mỗi bên; mà một cái viền
+#: cộng đèn lồng cộng hoa mai của nấc «Nhiều» cần quãng 130px. Sổ đo
+#: `kits/manifest.json` nói thẳng: `overflowPx` của `01-button` bên phải = 69 và
+#: của `03-popover` = 77 — tức phần trang trí CHẠM ĐÚNG mép ô, và `slice.py` (cắt
+#: theo `cell_box`) đã chém cụt nó. Lề 0,10 đủ cho một cái viền mảnh, không đủ cho
+#: một cái viền có đồ trang trí bám quanh.
+#:
+#: Vì sao KHÔNG hạ lề cho mọi ô: ô «Không trang trí» vẽ to hết cỡ là đúng — thu nó
+#: lại 60% là vứt đi một phần tư độ phân giải của ảnh sinh, cho một khoảng trống
+#: không ai dùng tới.
+CELL_MARGIN_RATIO_DECOR = 0.20
+
+
+def cell_margin_ratio(skel):
+    """Lề của CHÍNH ô này → tỉ lệ mỗi cạnh.
+
+    `skel.decor` (bool) do webapp ghi ra khi ô được chọn một nấc trang trí khác
+    «Không». Contract ĐỜI CŨ không có khoá ấy ⇒ rơi về `CELL_MARGIN_RATIO`, tức là
+    đúng hành vi trước đợt này — một dự án cũ mở lên không đổi một pixel nào.
+
+    ⚠️ Đây là NGUỒN DUY NHẤT của con số ấy. `gen.sh` (số in vào prompt), `slice.py`
+    (hộp cắt qua `safe_offset_in_cell`) và webapp (`kit-core/lib/geometry.ts`, có ca
+    test đọc thẳng file này) đều phải đi qua đây — hai bản lề là hai khung khác nhau
+    cho cùng một ô, và chúng lệch LẶNG LẼ.
+    """
+    return CELL_MARGIN_RATIO_DECOR if (skel or {}).get("decor") else CELL_MARGIN_RATIO
+
+
 #: Hệ số phóng làm tròn XUỐNG về bước 0,25. Vì sao làm tròn: con số đi thẳng vào
 #: câu tiếng Anh của prompt ("drawn at 2.5x"), và "phóng 2,5 lần" là mệnh lệnh mà
 #: model làm theo được, còn "phóng 2,0773 lần" thì không. Vì sao XUỐNG chứ không

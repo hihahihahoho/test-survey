@@ -309,6 +309,19 @@ export function decorPlaceOf(raw: unknown): string {
  * xứng hai bên" trong cùng một câu.
  */
 export function hasDecorPlacement(decor: string): boolean {
+  return hasDecor(decor);
+}
+
+/**
+ * Ô này CÓ viền/trang trí không — nấc «Không» là nấc duy nhất trả `false`.
+ *
+ * Cùng phép so với `hasDecorPlacement` nhưng KHÁC câu hỏi, nên có tên riêng: một
+ * bên hỏi "có gì để mà bố trí không" (bật/tắt pill «Bố trí»), bên kia hỏi "ô này
+ * có cần chừa lề rộng cho phần tràn không" (`skel.decor` của contract →
+ * `geometry.cell_margin_ratio`). Hai câu hỏi tình cờ cùng đáp án hôm nay; gộp
+ * chúng làm một là hẹn ngày đổi một câu thì câu kia im lặng đổi theo.
+ */
+export function hasDecor(decor: string): boolean {
   return decorLevelOf(decor) !== DECOR_NONE;
 }
 
