@@ -1136,13 +1136,126 @@ class KhungPromptSectionTest(unittest.TestCase):
         self.assertEqual(heads, ["Canvas", "Art style", "Layout", "Text", "Scene", "Output"])
 
     def test_tam_nhan_vat_co_them_section_anh_theo_vai_tro(self):
+        """«Text» KHÔNG còn trong danh sách này (09/09/2026 — chủ sản phẩm: *"gen
+        character thì cần gì text"*). Xem `MoiLoaiTamMotBoLuatTest` để biết vì sao."""
         cfg = _cfg(spec="a mascot waving", skel={"shape": "pose", "w": 0.3, "h": 0.85})
         cfg["sheets"][0]["ref"] = "refs/lan.png"
         cfg["sheets"][0]["poseRef"] = "refs/tam-dang.png"
         heads = self._headings(render_prompt_text(cfg))
         self.assertEqual(heads, ["Canvas", "Art style", "Layout", "Safe zone", "Transparency",
-                                 "Text", "Character reference", "Pose reference",
+                                 "Character reference", "Pose reference",
                                  "Elements", "Output"])
+
+
+class MoiLoaiTamMotBoLuatTest(unittest.TestCase):
+    """MỘT BẢNG «TẤM NÀO NHẬN LUẬT NÀO», VÀ NÓ PHẢI ĐO ĐƯỢC TỪ HAI PHÍA.
+
+    ╔══ BỆNH ĐÃ ĐO (chủ sản phẩm, 09/09/2026) ══════════════════════════════════╗
+    ║ Đọc prompt của tấm NHÂN VẬT: *"mấy cái này bị kiểu lặp sang chỗ khác      ║
+    ║ rồi…, ví dụ gen character thì cần gì text…, nhiều chỗ đáng nhẽ phải       ║
+    ║ prompt riêng"*.                                                           ║
+    ╚═══════════════════════════════════════════════════════════════════════════╝
+    Đo lại thì đúng từng chữ: một lưới nhân vật đang đọc «## Text» ("plates,
+    banners, buttons and screens stay BLANK"), ba gạch vật liệu kính/băng/nước/kim
+    loại, "functional CORE", "REACH not opaque paint" và dòng phân vai lượng trang
+    trí — toàn bộ là luật của một món đồ giao diện.
+
+    Lớp này khoá CẢ HAI CHIỀU trên cùng một danh sách, vì dọn một chiều thì lần sau
+    ai đó "cho chắc" là mọi luật lại về chung một rọ mà không có gì đỏ. Nó KHÔNG
+    kiểm cách viết (`profile`, `on=`) — cách viết là chuyện của người sửa; nó kiểm
+    thứ đi ra khỏi engine.
+    """
+
+    # Những câu CHỈ thuộc về tấm giao diện.
+    CHI_CUA_GIAO_DIEN = (
+        "## Text",
+        "No letters, no digits",
+        "functional CORE",
+        "REACH, not about opaque paint",
+        "glass, ice, water",
+        "Ornament amount",
+        "Any rim, border or edge treatment",
+    )
+
+    @staticmethod
+    def _mascot():
+        cfg = _cfg(spec="the same mascot, waving", skel={"shape": "pose", "w": 0.3, "h": 0.85})
+        cfg["sheets"][0]["grid"] = {"cols": 2, "rows": 1}
+        cfg["sheets"][0]["components"].append(
+            {"file": "02-thing", "spec": "the same mascot, pointing",
+             "skel": {"shape": "pose", "w": 0.3, "h": 0.85}})
+        cfg["sheets"][0]["ref"] = "refs/lan.png"
+        return render_prompt_text(cfg)
+
+    def test_tam_nhan_vat_KHONG_lanh_mot_cau_nao_cua_tam_giao_dien(self):
+        txt = self._mascot()
+        for cam in self.CHI_CUA_GIAO_DIEN:
+            self.assertNotIn(cam, txt, f"luật của tấm giao diện bò sang tấm nhân vật: {cam}")
+
+    def test_tam_giao_dien_van_giu_DU_bo_luat_cua_no(self):
+        """Chiều ngược lại, cùng một danh sách: dọn nhầm sang tấm giao diện thì mọi
+        ô UI mất luật hộp cắt của nó — và ca trên vẫn xanh."""
+        txt = render_prompt_text(_cfg(spec="the primary action button"))
+        for phai_co in self.CHI_CUA_GIAO_DIEN:
+            if phai_co == "Ornament amount":
+                continue          # dòng ấy nằm ở tấm nhiều ô lẫn một ô, kiểm riêng dưới
+            self.assertIn(phai_co, txt, f"tấm giao diện mất luật của chính nó: {phai_co}")
+        self.assertIn("Ornament amount and placement are set PER ELEMENT", txt)
+
+    def test_do_trong_cua_nhan_vat_gon_trong_MOT_cau(self):
+        """Nhân vật không cần một đoạn về kính, băng, nước, kim loại, gỗ, đá để rồi
+        tự suy ra rằng cơ thể mình thì đục. Nó cần hai vế: quanh người là trống,
+        thân người là đặc."""
+        txt = self._mascot()
+        than = txt[txt.index("## Transparency"):]
+        than = than[:than.index("\n\n")]
+        self.assertEqual(len(than.splitlines()), 2, than)     # tiêu đề + đúng một câu
+        self.assertIn("The space around the characters is simply empty: alpha 0", than)
+        self.assertIn("solid all the way through", than)
+
+    def test_vung_an_toan_cua_nhan_vat_noi_ve_CHIEU_CAO_va_ve_O_BEN_CANH(self):
+        txt = self._mascot()
+        self.assertIn("the body fills it from top to bottom", txt)
+        self.assertIn("Draw the character as ONE natural figure", txt)
+        self.assertIn("characters stay in their own cell, never touch each other", txt)
+
+    def test_dong_cua_mot_nhan_vat_khong_noi_bang_tu_vung_cua_do_giao_dien(self):
+        """Hộp ngoài vẫn phải in ra — thứ đổi là TÊN của cái tràn ra khỏi nó: tóc,
+        đuôi, món đồ cầm tay, chứ không phải "rim and ornaments"."""
+        txt = self._mascot()
+        self.assertIn("everything of this character, hair and props included, stays inside x=", txt)
+        self.assertNotIn("rim and ornaments included", txt)
+        ui = render_prompt_text(_cfg_ui_2o())
+        self.assertIn("everything of this element, rim and ornaments included, stays inside x=", ui)
+
+    def test_tam_nen_nhieu_o_khong_bi_doi_alpha_0_ngay_duoi_cau_phu_kin_khung(self):
+        """Tấm full-bleed nhiều ô từng nhận nguyên section «Transparency» — tức là
+        engine vừa nói "there is no transparent area anywhere" ở «## Canvas» vừa dạy
+        cách để alpha 0 ở ngay dưới. Hai câu của cùng một engine cãi nhau thì model
+        tự hoà giải, và cách nó hoà giải là chừa một khung rỗng."""
+        txt = render_prompt_text(_cfg_nen(n=2), name="demo-nen")
+        self.assertIn("there is no transparent area anywhere", txt)
+        self.assertNotIn("## Transparency", txt)
+        self.assertNotIn("## Safe zone", txt)
+        self.assertIn("## Text", txt)          # cảnh vẽ ra vẫn không được có chữ
+
+    def test_anh_dinh_kem_cua_tam_nen_NHIEU_O_cung_ta_canh_chu_khong_ta_nhan_vat(self):
+        """Cùng lỗ với tấm nền một ô (đã vá 07/09/2026), chỉ khác ở số ô: `sheet.ref`
+        của một tấm nhiều cảnh vẫn rơi vào nhánh «Character reference» và mọc ra một
+        con mascot giữa mỗi bức tranh."""
+        txt = render_prompt_text(_cfg_nen(n=2, extra={"ref": "refs/cho-tet.png"}), name="demo-nen")
+        self.assertIn("## Scene reference", txt)
+        self.assertNotIn("## Character reference", txt)
+
+
+def _cfg_ui_2o():
+    """Tấm giao diện HAI ô — cần hai ô mới có hộp ngoài để mà in ra."""
+    return {"styles": [{"id": "demo", "bg": "magenta", "style": "flat ink"}], "sheets": [{
+        "id": "pose-demo", "grid": {"cols": 2, "rows": 1},
+        "components": [
+            {"file": "01-a", "spec": "a button", "skel": {"shape": "pill", "w": 0.8, "h": 0.4}},
+            {"file": "02-b", "spec": "a popover panel", "skel": {"shape": "rrect", "w": 0.8, "h": 0.6}},
+        ]}]}
 
 
 class HinhDangOQuyetDinhHopSafeZoneTest(unittest.TestCase):

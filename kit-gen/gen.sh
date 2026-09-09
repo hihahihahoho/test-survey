@@ -338,16 +338,52 @@ for s in cfg["styles"]:
         # ra không đọc nổi thứ mình sắp trả tiền để gửi đi.
         #
         # Nay: MỘT luật, MỘT section, và section có tiêu đề `##` để người đọc (lẫn
-        # model) nhìn ra bố cục ngay. Ba loại tấm — giao diện, nhân vật, màn hình —
-        # dùng CHUNG bộ section này, chỉ khác ở phần nào có mặt.
+        # model) nhìn ra bố cục ngay. Bốn loại tấm — giao diện, nhân vật, cảnh nền,
+        # màn hình — rút section ra từ CÙNG MỘT bảng ngay dưới đây, và mỗi section
+        # tự khai mình đi với loại nào.
         #
         # ⚠️ BA DÒNG ĐẦU LÀ HỢP ĐỒNG VỚI TẦNG BASH: `run_one` đọc ngược khổ giấy
         # bằng `head -n3 … | grep`. Trên cùng là dòng `background="transparent"`
         # (tấm không full-bleed), rồi section «Canvas» phải đứng ngay sau, và dòng
         # dưới tiêu đề của nó phải mang chữ PORTRAIT/SQUARE/LANDSCAPE.
+        # ── BẢNG: TẤM NÀO NHẬN LUẬT NÀO ───────────────────────────────────────
+        # ╔══ BỆNH ĐÃ ĐO (chủ sản phẩm, 09/09/2026) ══════════════════════════════╗
+        # ║ Đọc prompt của một tấm NHÂN VẬT rồi nói: *"mấy cái này bị kiểu lặp     ║
+        # ║ sang chỗ khác rồi…, ví dụ gen character thì cần gì text…, nhiều chỗ    ║
+        # ║ đáng nhẽ phải prompt riêng"*.                                          ║
+        # ╚═══════════════════════════════════════════════════════════════════════╝
+        # Đo lại tấm ấy thì đúng: một lưới nhân vật đang lãnh nguyên bộ luật viết
+        # cho một cái NÚT BẤM — cấm chữ trên "plates, banners, buttons and screens",
+        # ba gạch vật liệu kính/băng/nước/kim loại, "functional CORE", "REACH not
+        # opaque paint", và dòng phân vai lượng trang trí. Không câu nào trong số
+        # đó nói về một nhân vật, và mấy câu vật liệu còn nói NGƯỢC: một cơ thể
+        # không phải một tấm kính có alpha.
+        #
+        # Nguồn của bệnh không nằm ở mấy câu ấy mà ở CÁCH CHỌN. Trước bản này việc
+        # "tấm nào nhận gì" nằm rải rác trong dăm cái `if mascot_sheet` / `if not
+        # screen_sheet` cạnh từng section, nên không ai đọc gen.sh mà trả lời nổi
+        # câu hỏi đơn giản nhất: tấm nhân vật nhận những luật nào. Nay loại tấm có
+        # ĐÚNG MỘT tên gọi, và MỖI section tự khai mình thuộc loại nào bằng `on=`,
+        # ngay cạnh câu chữ của nó — đọc dọc một cột là ra cả bảng.
+        if screen_sheet:
+            profile = "screen"        # MỘT cảnh phủ kín khung: không lưới, không dao cắt
+        elif full_bleed:
+            profile = "background"    # NHIỀU cảnh, mỗi cảnh phủ kín ô của nó
+        elif mascot_sheet:
+            profile = "mascot"        # lưới nhân vật full-body
+        else:
+            profile = "ui"            # nút, khung, popover… — món đồ giao diện
+        ALL = ("ui", "mascot", "background", "screen")
         sections = []
 
-        def section(title, body):
+        def section(title, body, on=ALL):
+            """Thêm một section — CHỈ KHI loại tấm này có nhận nó.
+
+            `on` là lời khai của chính section, đặt ngay cạnh câu chữ của nó. Không
+            khai gì = đúng với mọi loại tấm (khổ giấy, phong cách, bảng màu…).
+            """
+            if profile not in on:
+                return
             rows = [row for row in body if row]
             if not rows:
                 return
@@ -417,7 +453,7 @@ for s in cfg["styles"]:
         section("Palette", palette)
 
         # ── Layout ────────────────────────────────────────────────────────────
-        if screen_sheet:
+        if profile == "screen":
             # ⚠️ MỘT CẢNH NỀN KHÔNG PHẢI MỘT SPRITE SHEET CÓ ĐÚNG MỘT Ô.
             # Chủ sản phẩm 07/09/2026: «Cảnh nền → prompt dài quá, giờ tách ra ko cho
             # nó gen sprite sheet nữa nhé, kiểu gen full khung mobile luôn.» Tấm này
@@ -429,7 +465,7 @@ for s in cfg["styles"]:
                 " no margin, no rounded corners, no vignette band — the art reaches all four"
                 " edges, and a scene sitting inset inside an empty frame is unusable and will be"
                 " regenerated.",
-            ])
+            ], on=("screen",))
         else:
             empties = [str(i + 1) for i, comp in enumerate(comps)
                        if comp["skel"].get("shape") == "empty"]
@@ -447,7 +483,7 @@ for s in cfg["styles"]:
                 layout.append("Cell " + ", ".join(empties)
                               + (" are" if len(empties) > 1 else " is")
                               + " intentionally empty: draw nothing there.")
-            if full_bleed:
+            if profile == "background":
                 layout.append("Each scene fills its own cell edge to edge and bleeds off all four"
                               " sides of that cell; the only gap allowed is a thin 24px line"
                               " exactly on the cell boundaries.")
@@ -458,15 +494,18 @@ for s in cfg["styles"]:
                               + (" Each line also gives the cell box around its safe zone —"
                                  " that is where everything of that element ends."
                                  if cols * rows > 1 else ""))
-            section("Layout", layout)
+            section("Layout", layout, on=("ui", "mascot", "background"))
 
         # ── Safe zone ─────────────────────────────────────────────────────────
-        # BỐN KHỐI CŨ GỘP LẠI CÒN NĂM GẠCH ĐẦU DÒNG. Điểm mấu chốt của bản gốc
-        # được giữ nguyên: nói RA HẬU
-        # QUẢ ("phần mềm sẽ cắt đúng bốn toạ độ này") chứ không chỉ ra lệnh, và cấm
-        # thẳng hành vi hỏng phổ biến nhất §8.1 đã đo — model co mặt nội dung lại
-        # để nhét viền vào trong.
-        if not screen_sheet and not full_bleed:
+        # HAI BỘ LUẬT, KHÔNG PHẢI MỘT BỘ CÓ HAI NHÁNH NHỎ.
+        # Bản trước dựng một danh sách chung rồi thay đúng MỘT gạch cho tấm nhân
+        # vật. Bốn gạch còn lại là chữ viết cho một cái nút bấm và chúng cứ thế đi
+        # sang: "functional CORE" (một cơ thể không có "lõi chức năng"), "REACH not
+        # opaque paint" (viết để cứu ô kính / ô phát sáng), "Rim, glow and ornaments
+        # spill out" (viền và hoa văn của một món đồ giao diện). Nhân vật chỉ cần
+        # ba điều: đứng trọn trong hộp cắt của mình, là một dáng người chứ không
+        # phải cái viền quanh mặt phẳng, và không lấn sang ô bên cạnh.
+        if profile == "ui":
             safe = [
                 "- The element's continuous functional CORE fills its safe zone exactly: same"
                 " left, top, right and bottom, same center. Never shrink it to make room for a"
@@ -480,17 +519,9 @@ for s in cfg["styles"]:
                 "- Filling the box is about REACH, not about opaque paint: a see-through or"
                 " glowing element may fade to full transparency inside its own box, and nothing"
                 " is ever added behind it to fill the space.",
+                "- Any rim, border or edge treatment sits immediately OUTSIDE the safe zone;"
+                " decoration, if the art style calls for any, farther outside still.",
             ]
-            if mascot_sheet:
-                # Khối cấu tạo ba lớp được viết cho NÚT BẤM. Với nhân vật thì không có
-                # "mặt phẳng" nào cả, và model vẫn tuân lệnh: nó vẽ con vật như một cái
-                # huy hiệu có viền, dáng cứng đơ, tóc/tai/đuôi bị ép vào trong.
-                safe.append("- Draw the character as ONE natural figure, not a rim around a flat"
-                            " plate: no forced border, no badge frame, no plaque.")
-            else:
-                safe.append("- Any rim, border or edge treatment sits immediately OUTSIDE the safe"
-                            " zone; decoration, if the art style calls for any, farther outside"
-                            " still.")
             # HAI HỘP LỒNG NHAU, và gạch dưới đây là chỗ duy nhất nói ra quan hệ giữa
             # chúng: safe zone là hộp TRONG (lõi lấp đúng nó), hộp ô là hộp NGOÀI (phần
             # tràn dừng trước nó). Trước đợt này chỉ có hộp trong, và biên duy nhất được
@@ -510,7 +541,32 @@ for s in cfg["styles"]:
             safe.append(
                 "- Only the core is scored: core missing inside the safe zone is a failure,"
                 " anything outside it is free.")
-            section("Safe zone", safe)
+            section("Safe zone", safe, on=("ui",))
+        elif profile == "mascot":
+            # Hộp của một nhân vật là hộp CAO: `geometry` dựng nó từ `skel.w/h` của ô
+            # dáng (0,3 x 0,85 của ô là cỡ thường gặp). Nên câu duy nhất đáng nói về
+            # nó là câu về CHIỀU CAO — đầu chạm mép trên, chân chạm mép dưới. Không
+            # có "lõi chức năng", không có viền để mà đẩy ra ngoài.
+            safe = [
+                "- The safe zone is where this character stands: the body fills it from top to"
+                " bottom, head near the top edge and feet near the bottom edge, centred left to"
+                " right.",
+                # Giữ nguyên câu đã có từ đợt trước: model vẫn hay vẽ nhân vật thành một
+                # cái huy hiệu có viền, dáng cứng đơ, tóc/tai/đuôi bị ép vào trong.
+                "- Draw the character as ONE natural figure, not a rim around a flat plate: no"
+                " forced border, no badge frame, no plaque.",
+            ]
+            if cols * rows > 1:
+                safe.append(
+                    "- Each character's line gives a second, larger box: its own cell. Hair,"
+                    " tail, cape and anything the character holds come to rest inside it —"
+                    " characters stay in their own cell, never touch each other and never touch"
+                    " the image edges.")
+            else:
+                safe.append(
+                    "- The whole character comes to rest well inside the frame — nothing touches"
+                    " the image edges.")
+            section("Safe zone", safe, on=("mascot",))
 
         # ── Transparency ──────────────────────────────────────────────────────
         # 08/09/2026 — CHỦ SẢN PHẨM: "prompt tự nhiên mention mấy cái caro checker
@@ -542,7 +598,16 @@ for s in cfg["styles"]:
         # vẫn nối câu của nó vào `spec` của riêng ô, và câu ấy phải THẮNG luật chung —
         # nếu không thì nấc «Đục hoàn toàn» của một ô trông-như-kính sẽ cãi nhau với
         # dòng này và model tự hoà giải bằng cách vẽ nửa vời.
-        if not screen_sheet:
+        #
+        # ⚠️ VÀ BA GẠCH NÀY LÀ LUẬT VẬT LIỆU CỦA MỘT MÓN ĐỒ GIAO DIỆN, chỉ thế thôi.
+        # 09/09/2026, chủ sản phẩm: *"nhiều chỗ đáng nhẽ phải prompt riêng"*. Một
+        # tấm nhân vật đang phải đọc cả một đoạn về kính, băng, nước, ánh sáng, kim
+        # loại, gỗ, đá — để rồi tự suy ra rằng cơ thể mình thì đục. Nó cần đúng MỘT
+        # câu, và câu ấy nói hai điều: quanh nhân vật là trống, thân nhân vật là đặc.
+        # Tấm nền (full-bleed) thì KHÔNG nhận gì cả: section «Canvas» của nó vừa nói
+        # "there is no transparent area anywhere", nên một đoạn dạy cách để alpha 0
+        # ngay dưới đó là engine tự cãi chính mình.
+        if profile == "ui":
             section("Transparency", [
                 "- The space around and between the elements is simply empty: alpha 0 in the"
                 " PNG, with nothing painted there. Whatever is placed behind this layer later"
@@ -555,20 +620,31 @@ for s in cfg["styles"]:
                 " its material: glass, ice, water and light effects are see-through, drawn with"
                 " real alpha; every other material — metal, wood, stone, plastic, fabric — is"
                 " fully opaque (alpha 255), solid all the way through.",
-            ])
+            ], on=("ui",))
+        elif profile == "mascot":
+            section("Transparency", [
+                "The space around the characters is simply empty: alpha 0 in the PNG, with"
+                " nothing painted there. Each character's own body is solid all the way"
+                " through.",
+            ], on=("mascot",))
 
         # ── Text ──────────────────────────────────────────────────────────────
+        # 09/09/2026 — CHỦ SẢN PHẨM: *"ví dụ gen character thì cần gì text"*. Câu này
+        # sinh ra cho một tấm giao diện, và nó gọi tên đúng những thứ của tấm ấy:
+        # "plates, banners, buttons and screens". Trên một lưới nhân vật thì không có
+        # cái nút nào để mà để trống — chỉ còn một danh sách danh từ giao diện đọc
+        # thẳng vào một tấm không có chúng, tức là mời model vẽ chúng ra.
         section("Text", [
             "No letters, no digits, no words of any language anywhere in the image. Faces,"
             " plates, banners, buttons and screens stay BLANK — text is composited later in the"
             " game engine.",
-        ])
+        ], on=("ui", "background", "screen"))
 
         # ── Ảnh tham chiếu, gọi theo VAI TRÒ ──────────────────────────────────
         # KHÔNG CÒN "The FIRST/SECOND attached image": `referenced_image_paths` là một
         # danh sách phẳng và thứ tự trong đó không phải hợp đồng với model. Gọi theo
         # vai trò thì không có thứ tự nào để mà lệch.
-        if sh.get("ref") and screen_sheet:
+        if sh.get("ref") and profile in ("screen", "background"):
             # ẢNH CỦA TẤM NỀN TẢ CẢNH, KHÔNG TẢ NHÂN VẬT. Một câu duy nhất cho mọi
             # tấm là sai từ khi thẻ Background cho đính ảnh: người dùng đưa lên ảnh
             # một khu chợ Tết, engine bảo model «trong ảnh này là NHÂN VẬT», thế là
@@ -578,21 +654,21 @@ for s in cfg["styles"]:
                 " subject, setting, season and mood from it. Re-draw it in the art style above"
                 " and recompose it to fill this canvas — never copy it pixel for pixel, and never"
                 " keep its original framing, borders or empty margins.",
-            ])
+            ], on=("screen", "background"))
         elif sh.get("ref"):
             section("Character reference", [
                 "The attached CHARACTER REFERENCE PHOTO is the character: every character cell"
                 " shows EXACTLY this character — same species, face, colours, costume, materials"
                 " and proportions — re-drawn in the art style above. This outranks everything"
                 " else: if any other reference shows a DIFFERENT character, ignore that one.",
-            ])
+            ], on=("mascot",))
         if sh.get("poseRef"):
             section("Pose reference", [
                 "The attached POSE REFERENCE SHEET is a grey mannequin in the SAME grid as this"
                 " sheet: cell k there gives the body pose and camera angle for cell k here. Copy"
                 " pose and camera angle only. NEVER draw the mannequin itself — it is grey and"
                 " faceless on purpose, and none of its plastic look may appear in the result.",
-            ])
+            ], on=("mascot",))
         if sh.get("layoutRef"):
             # ẢNH BỐ CỤC KHÔNG BAO GIỜ ĐI VÀO `sheet.ref`. Hai tấm trả lời hai câu
             # khác nhau — «cảnh này là gì» và «cái gì nằm ở đâu» — và trộn chúng vào
@@ -621,8 +697,8 @@ for s in cfg["styles"]:
         # "ô số 3" của bảng này với "3)" của bảng kia). Hộp ô (`geo[i]["cell"]`)
         # KHÔNG được in: nó là chuyện của dao cắt, còn với model nó chỉ mời vẽ cho
         # đầy ô.
-        if screen_sheet:
-            section("Scene", [comps[0]["spec"]])
+        if profile == "screen":
+            section("Scene", [comps[0]["spec"]], on=("screen",))
         else:
             listing = [
                 "The list names WHAT each cell is; the art style above decides how it looks; the"
@@ -645,7 +721,12 @@ for s in cfg["styles"]:
             # lần thì vừa dài vừa dạy model rằng mỗi ô có một hợp đồng riêng.
             # Tấm full-bleed KHÔNG nhận dòng này: ở đó mỗi ô là một bức tranh phủ kín,
             # không có "vật thể" nào để mà đếm hoa văn bám quanh.
-            if not full_bleed:
+            # Tấm full-bleed KHÔNG nhận dòng này: ở đó mỗi ô là một bức tranh phủ kín,
+            # không có "vật thể" nào để mà đếm hoa văn bám quanh. Tấm NHÂN VẬT cũng
+            # không (09/09/2026): lượng trang trí bám quanh một món đồ giao diện không
+            # phải là câu hỏi mà một dáng người đặt ra, và dòng ấy đọc trên một lưới
+            # nhân vật chỉ còn là lời mời đính thêm hoa văn vào người ta.
+            if profile == "ui":
                 listing.append(
                     "Ornament amount and placement are set PER ELEMENT on its line below; the"
                     " theme supplies the motif, not the quantity.")
@@ -711,7 +792,14 @@ for s in cfg["styles"]:
                     # nào — đúng thứ làm loãng những luật còn lại.
                     if cols * rows > 1:
                         cx0, cy0, cx1, cy1 = g["cell"]
-                        spec += (f"; everything of this element, rim and ornaments included,"
+                        # "rim and ornaments" là từ vựng của một món đồ giao diện. Trên
+                        # dòng của một nhân vật thì thứ tràn ra khỏi hộp cắt là tóc, đuôi,
+                        # áo choàng, món đồ cầm trên tay — gọi đúng tên thì model biết
+                        # mình đang phải giữ cái gì lại trong ô.
+                        thua = ("everything of this character, hair and props included"
+                                if profile == "mascot" else
+                                "everything of this element, rim and ornaments included")
+                        spec += (f"; {thua},"
                                  f" stays inside x={cx0}..{cx1}, y={cy0}..{cy1}")
                 elif g["kind"] == "full":
                     spec += " — full-bleed scene, fills its whole cell edge to edge"
@@ -724,19 +812,20 @@ for s in cfg["styles"]:
                 # còn gì để huỷ lệnh nữa. Contract đời cũ vẫn mang `skel.matte`: nó chỉ
                 # đơn giản không được đọc.
                 listing.append(f"{i + 1}) {spec}")
-            section("Scenes" if full_bleed else "Elements", listing)
+            section("Scenes" if profile == "background" else "Elements", listing,
+                    on=("ui", "mascot", "background"))
 
         # ── Output ────────────────────────────────────────────────────────────
-        if screen_sheet:
+        if profile == "screen":
             section("Output", [
                 f"Game-ready mobile game background art, {canvas_ratio}.",
-            ])
+            ], on=("screen",))
         else:
             section("Output", [
                 (f"One coherent set: all {n_real} elements share the same style. "
                  if n_real > 1 else "")
                 + f"Game-ready {canvas_ratio} PNG with a real alpha channel (background=\"transparent\").",
-            ])
+            ], on=("ui", "mascot", "background"))
 
         # Bỏ dòng trắng cuối cùng: nó là dấu phân cách GIỮA các section, không phải
         # một phần của section cuối.

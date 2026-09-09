@@ -196,14 +196,41 @@ touch "$WORK/p/prompts/tet-main.fullbleed"
 havent "lượt sau xoá dấu của tấm không còn full-bleed" "$WORK/p/prompts/tet-main.fullbleed"
 have "dấu của tấm nền vẫn còn" "$WORK/p/prompts/tet-nen.fullbleed"
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# MỖI LOẠI TẤM MỘT BỘ LUẬT (chủ sản phẩm 09/09/2026: *"mấy cái này bị kiểu lặp sang
+# chỗ khác rồi…, ví dụ gen character thì cần gì text…, nhiều chỗ đáng nhẽ phải
+# prompt riêng"*).
+#
+# `linh` là tấm NHÂN VẬT, `main` là tấm GIAO DIỆN, và ca này soi cùng một danh sách
+# trên cả hai — mỗi luật phải CÓ ở đúng một bên và KHÔNG có ở bên kia. Kiểm hai
+# chiều vì dọn một chiều thì lần sau ai đó "cho chắc" là mọi thứ lại về chung một rọ,
+# và không có gì đỏ.
+# ═══════════════════════════════════════════════════════════════════════════════
 echo "── tấm mascot KHÔNG lãnh khối chỉ dẫn viết cho nút bấm"
 refute "không có luật viền của ô giao diện" "Any rim, border or edge treatment" "$linh"
 expect "thay bằng luật của một dáng người" "Draw the character as ONE natural figure" "$linh"
 expect "nhưng vẫn giữ vùng an toàn" "## Safe zone" "$linh"
 expect "vẫn giữ nền trong suốt" "Background fully transparent" "$linh"
-expect "vẫn cấm chữ" "No letters, no digits" "$linh"
-expect "vẫn tả nền trống bằng alpha 0 (không gọi tên caro)" "is simply empty: alpha 0" "$linh"
+# ── NHỮNG THỨ CỦA TẤM GIAO DIỆN, KHÔNG ĐƯỢC BÒ SANG NHÂN VẬT ─────────────────
+refute "nhân vật không lãnh section cấm chữ"        "## Text" "$linh"
+refute "và không lãnh danh sách danh từ giao diện"  "No letters, no digits" "$linh"
+refute "không lãnh 'lõi chức năng' của một cái nút" "functional CORE" "$linh"
+refute "không lãnh luật TẦM VỚI viết cho ô kính"    "REACH, not about opaque paint" "$linh"
+refute "không lãnh luật vật liệu kính/băng/nước"    "glass, ice, water" "$linh"
+refute "không lãnh dòng phân vai lượng trang trí"   "Ornament amount" "$linh"
+expect "độ trong của nhân vật gói trong MỘT câu" \
+  "The space around the characters is simply empty: alpha 0 in the PNG, with nothing painted there." "$linh"
+expect "và câu ấy nói luôn vế thân người đặc" "Each character's own body is solid all the way through." "$linh"
 refute "không nhắc chữ checker để khỏi nhiễm" "checker" "$linh"
+# ── VÀ CHIỀU NGƯỢC LẠI: TẤM GIAO DIỆN VẪN GIỮ ĐỦ ────────────────────────────
+expect "giao diện vẫn cấm chữ"              "## Text" "$main"
+expect "giao diện vẫn có lõi chức năng"     "functional CORE" "$main"
+expect "giao diện vẫn có luật TẦM VỚI"      "REACH, not about opaque paint" "$main"
+expect "giao diện vẫn có luật vật liệu"     "glass, ice, water" "$main"
+expect "giao diện vẫn có dòng phân vai trang trí" "Ornament amount" "$main"
+refute "giao diện KHÔNG lãnh luật của dáng người" "Draw the character as ONE natural figure" "$main"
+refute "giao diện KHÔNG lãnh ảnh nhân vật"        "## Character reference" "$main"
+refute "giao diện KHÔNG lãnh tấm ảnh dáng"        "## Pose reference" "$main"
 # Tấm mascot ở đây là MỘT Ô, nên nó không có hàng xóm nào để tránh và cũng không có
 # hộp ngoài nào ngoài chính khổ ảnh — luật còn lại đúng một câu: đừng chạm mép.
 expect "tấm một ô: biên duy nhất là mép ảnh" "nothing touches the image edges" "$linh"

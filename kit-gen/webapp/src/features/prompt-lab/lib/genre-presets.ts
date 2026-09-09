@@ -18,6 +18,23 @@ import { STYLE_AXIS_IDS, type StyleAxisId } from "@/features/kit-core/lib/form-m
  * khối — thứ model vẽ được. KHÔNG viết "phong cách game merge" (model không biết đó là
  * gì) và KHÔNG nhắc lại thứ 8 trục đã nói (`axes` lo phần đó, hai nguồn nói cùng một
  * điều thì mâu thuẫn là chuyện sớm muộn).
+ *
+ * ⚠️ VÀ KHÔNG TẢ NỀN — MỘT CHỮ CŨNG KHÔNG (09/09/2026).
+ * ╔══ BỆNH ĐÃ ĐO ═══════════════════════════════════════════════════════════════╗
+ * ║ Prompt thật của một tấm nhân vật: «## Canvas … Background fully transparent, ║
+ * ║ alpha 0 on every pixel…» rồi ngay dưới là «## Art style … pastel candy       ║
+ * ║ palette ON WARM CREAM BACKGROUNDS…». Engine xin nền trong suốt, phong cách   ║
+ * ║ xin nền kem — hai câu của cùng một prompt cãi nhau, và model hoà giải bằng   ║
+ * ║ cách tô một mảng kem đặc ra sau mọi element.                                 ║
+ * ╚═════════════════════════════════════════════════════════════════════════════╝
+ * Mọi tấm engine sinh ra đều là sprite sheet nền alpha hoặc một cảnh phủ kín khung do
+ * chính `## Layout` quyết — không có tấm nào mà một câu phong cách được phép chọn hộ
+ * cái nền. Nên brief ở đây chỉ tả VẬT THỂ: chất liệu, ánh sáng, hình khối, bảng màu
+ * của chính vật thể. Guard: `genre-presets.test.ts` cấm chữ "background"/"backdrop"
+ * trong mọi `stylePrompt` mặc định.
+ *
+ * ⚠️ Preset ĐÃ được người dùng lưu vào Thư viện prompt thì GIỮ NGUYÊN câu cũ: đó là
+ * dữ liệu của họ, sửa hộ là xoá chữ người khác. Họ sửa tay ở màn Thư viện prompt.
  */
 export interface GenrePreset {
   id: string;
@@ -33,13 +50,13 @@ export const GENRE_PRESETS: readonly GenrePreset[] = [
   {
     id: "merge",
     vi: "Merge",
-    stylePrompt: "soft rounded 3D clay-like objects with gentle gradients, pastel candy palette on warm cream backgrounds, chunky friendly silhouettes that stay readable at thumbnail size, glossy top highlights and soft contact shadows",
+    stylePrompt: "soft rounded 3D clay-like objects with gentle gradients, pastel candy palette, chunky friendly silhouettes that stay readable at thumbnail size, glossy top highlights and soft contact shadows",
     axes: { age: 6, energy: 5, lux: 4, era: 2, gender: 5, detail: 6, outline: 2, ornament: 3 },
   },
   {
     id: "match3",
     vi: "Match-3",
-    stylePrompt: "glossy jewel-like gems and candy pieces with saturated specular highlights, high-contrast board tiles over a deep vignetted background, sparkle and confetti accents, thick beveled frames with a bright top rim",
+    stylePrompt: "glossy jewel-like gems and candy pieces with saturated specular highlights, high-contrast board tiles, sparkle and confetti accents, thick beveled frames with a bright top rim",
     axes: { age: 6, energy: 2, lux: 3, era: 2, gender: 5, detail: 6, outline: 4, ornament: 4 },
   },
   {

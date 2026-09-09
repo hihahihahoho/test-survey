@@ -44,6 +44,27 @@ describe("bảng preset thể loại", () => {
     // Không hai thể loại nào dùng chung một brief (chép-dán là cách bảng này chết dần).
     expect(new Set(GENRE_PRESETS.map((p) => p.stylePrompt)).size).toBe(GENRE_PRESETS.length);
   });
+
+  /**
+   * KHÔNG PRESET NÀO ĐƯỢC TẢ CÁI NỀN (09/09/2026).
+   *
+   * Bệnh đo được trên prompt thật của một tấm nhân vật: «## Canvas» xin *"Background
+   * fully transparent … alpha 0 on every pixel"*, rồi «## Art style» ngay dưới đó nói
+   * *"pastel candy palette on warm cream backgrounds"*. Hai câu của cùng một prompt cãi
+   * nhau, và cách model hoà giải là tô một mảng kem đặc ra sau mọi element — đúng thứ
+   * `gen.sh` vừa bỏ cả tầng chroma-key để không còn phải chịu.
+   *
+   * Nền do `## Canvas` + `## Layout` quyết, theo LOẠI TẤM. Một câu phong cách không có
+   * tư cách chọn hộ, nên ca này cấm theo TỪ — "background"/"backdrop" — chứ không cấm
+   * đúng cụm "warm cream": cụm nào cũng chỉ là một cách viết của cùng một lỗi.
+   */
+  it("không preset nào tả cái nền — nền là chuyện của loại tấm, không của phong cách", () => {
+    for (const preset of GENRE_PRESETS) {
+      const low = preset.stylePrompt.toLowerCase();
+      expect(low, preset.id).not.toContain("background");
+      expect(low, preset.id).not.toContain("backdrop");
+    }
+  });
 });
 
 describe("bấm chip = điền form", () => {
