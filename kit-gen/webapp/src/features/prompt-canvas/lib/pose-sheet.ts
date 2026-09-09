@@ -37,6 +37,20 @@ import { CANVAS_SQUARE } from "@/features/kit-core/lib/geometry";
  * ╚═══════════════════════════════════════════════════════════════════════════════╝
  */
 
+/**
+ * ĐỜI CỦA BỘ DỰNG ẢNH DÁNG — nằm trong vân tay `poseSheetKey`.
+ *
+ * ╔══ VÌ SAO PHẢI CÓ MỘT CON SỐ Ở ĐÂY ═══════════════════════════════════════════╗
+ * ║ Vân tay của tấm ghép chỉ gồm lưới + cặp (dáng, góc). Đổi CÁCH VẼ manơcanh   ║
+ * ║ (bỏ nền trắng, đổi màu, đổi góc máy) mà vân tay không đổi thì đường nhanh    ║
+ * ║ của `ensurePoseRefs` thấy "tấm còn tươi" và dùng lại tệp cũ MÃI MÃI — đo    ║
+ * ║ được: sau khi bỏ nền trắng, dự án thật vẫn đính tấm nền trắng của hôm trước ║
+ * ║ vì không một lượt Vẽ nào chụp lại. Tăng số này mỗi lần bộ dựng đổi ảnh ra.  ║
+ * ║   1 — nền trắng đặc (đời đầu).  2 — nền trống alpha 0.                       ║
+ * ╚═══════════════════════════════════════════════════════════════════════════════╝
+ */
+export const POSE_RENDER_VERSION = 2;
+
 export interface PoseSheetBox {
   x: number;
   y: number;

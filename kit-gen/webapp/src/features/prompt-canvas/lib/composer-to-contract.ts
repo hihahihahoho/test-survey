@@ -30,6 +30,7 @@ import {
   CUSTOM_ELEMENT_SKEL, SQUARE_CANVAS_PX, defaultSizePx, sizePx, type SizePx,
 } from "@/features/prompt-lab/lib/cell-size";
 import { cellMarginRatio, drawBox } from "@/features/kit-core/lib/geometry";
+import { POSE_RENDER_VERSION } from "./pose-sheet";
 import { SCAFFOLDS } from "@/features/prompt-lab/lib/doc-templates";
 import { freeText, makeContext, serializeDoc, tidy, type PromptDocNode } from "@/features/prompt-lab/lib/serialize";
 import { contextFreeText, contextOutfitEN, contextStyleEN, contextThemeEN } from "@/features/prompt-lab/lib/serialize-composer";
@@ -425,11 +426,15 @@ export function mascotSheetPlan(block: MascotBlock, opts: ComposerContractOption
  *
  * Gồm cả lưới lẫn cặp (dáng, góc) của từng ô theo thứ tự: đổi thứ tự dòng cũng
  * làm ảnh cũ sai chỗ y như đổi dáng, nên nó phải nằm trong vân tay.
+ *
+ * Và ĐỜI BỘ DỰNG đứng đầu (`POSE_RENDER_VERSION`): tấm ghép của bộ dựng đời trước
+ * là một ảnh khác — cùng dáng nhưng nền khác — nên vân tay phải khác theo.
  */
 export function poseSheetKey(block: MascotBlock, opts: ComposerContractOptions = {}): string {
-  return mascotSheetPlan(block, opts)
+  const plans = mascotSheetPlan(block, opts)
     .map((plan) => `${plan.grid.cols}x${plan.grid.rows}:${plan.poses.map((p) => `${p.pose}|${p.view}`).join(",")}`)
     .join(";");
+  return `r${POSE_RENDER_VERSION};${plans}`;
 }
 
 /**

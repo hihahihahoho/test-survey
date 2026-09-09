@@ -5,7 +5,10 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { CANVAS_SQUARE } from "@/features/kit-core/lib/geometry";
-import { cellBoxes, composePoseSheet, fitBox } from "../pose-sheet";
+import { POSE_RENDER_VERSION, cellBoxes, composePoseSheet, fitBox } from "../pose-sheet";
+import { poseSheetKey } from "../composer-to-contract";
+import { newMascotPose, type MascotBlock } from "@/features/prompt-lab/lib/composer-model";
+import { mascotDoc } from "@/features/prompt-lab/lib/doc-templates";
 
 /**
  * pose-sheet.test.ts — TẤM ẢNH DÁNG PHẢI CHỒNG KHÍT LÊN TẤM SẼ VẼ.
@@ -174,5 +177,26 @@ describe("tấm ảnh dáng gửi máy vẽ có NỀN TRỐNG", () => {
     const src = read("webapp/src/features/prompt-lab/lib/pose/pose-renderer.ts");
     expect(src).toContain("alpha: true");
     expect(src).toContain("setClearColor(0x000000, 0)");
+  });
+});
+
+function mascotBlock(id: string, poses = [newMascotPose("idle")]): MascotBlock {
+  return { id, kind: "mascot", mode: "template", doc: mascotDoc(), poses };
+}
+
+describe("poseSheetKey — đời bộ dựng nằm trong vân tay", () => {
+  /* Bỏ nền trắng xong mà dự án thật vẫn đính tấm nền trắng của hôm trước: vân tay
+     cũ chỉ gồm lưới + cặp dáng/góc nên đường nhanh của `ensurePoseRefs` không bao
+     giờ chụp lại. Ca này khoá: đổi đời bộ dựng ⇒ vân tay đổi ⇒ tấm cũ bị coi là cũ. */
+  it("vân tay mở đầu bằng đời bộ dựng hiện tại, và đời ấy đã qua nền trắng", () => {
+    const block = mascotBlock("m1");
+    expect(POSE_RENDER_VERSION).toBeGreaterThanOrEqual(2);
+    expect(poseSheetKey(block).startsWith(`r${POSE_RENDER_VERSION};`)).toBe(true);
+  });
+
+  it("tấm ghép lưu với vân tay đời cũ (không có đời) không còn được coi là tươi", () => {
+    const block = mascotBlock("m1");
+    const cu = poseSheetKey(block).replace(/^r\d+;/, "");
+    expect(cu).not.toBe(poseSheetKey(block));
   });
 });
