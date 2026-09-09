@@ -133,6 +133,16 @@ class DinhTuyenSkillTest(unittest.TestCase):
             self.assertIn(ten, self.task,
                           f"task phải gọi đích danh {ten} — nói chung chung là model không đọc skill")
 
+    def test_goi_dich_danh_tham_so_background_transparent(self):
+        """09/09/2026 — chủ sản phẩm: xin bằng câu văn thì lúc được lúc không, còn
+        từ khoá tham số `background="transparent"` thì được. Task phải mang đúng
+        từ khoá ấy (dấu nháy kép đã thoát trong chuỗi bash) để agent codex truyền
+        vào lời gọi image_gen, và nó đứng ngay câu đầu, trước khối prompt."""
+        kw = 'background=\\"transparent\\"'
+        self.assertEqual(self.task.count(kw), 2,
+                         "từ khoá phải có ở câu đầu và ở câu Generate ONE image")
+        self.assertLess(self.task.index(kw), self.task.index("Generate ONE image"))
+
     def test_cam_tu_che_cong_cu_tach_nen(self):
         """Cấm phải NÊU TÊN thứ đã thật sự bị lạm dụng, không cấm chung chung."""
         t = self.task.lower()

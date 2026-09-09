@@ -734,7 +734,7 @@ for s in cfg["styles"]:
             section("Output", [
                 (f"One coherent set: all {n_real} elements share the same style. "
                  if n_real > 1 else "")
-                + f"Game-ready {canvas_ratio} PNG with a real alpha channel.",
+                + f"Game-ready {canvas_ratio} PNG with a real alpha channel (background=\"transparent\").",
             ])
 
         # Bỏ dòng trắng cuối cùng: nó là dấu phân cách GIỮA các section, không phải
@@ -908,15 +908,19 @@ ${att_paths}--- REFERENCE IMAGES END ---
   # ║ chế công cụ tách nền. Cấm phải đặt ở ĐẦU: chữ ở gần thắng chữ ở xa, và     ║
   # ║ ngay trong thư mục skill có sẵn scripts/remove_chroma_key.py nằm chờ như   ║
   # ║ thể được cấp phép (SKILL.md không hề nhắc nó trong reference map).         ║
+  # ║ 09/09/2026 — CHỦ SẢN PHẨM: gọi thẳng THAM SỐ của tool, background="transparent"║
+  # ║ (tool image_generation của OpenAI có tham số `background`: transparent/    ║
+  # ║ opaque/auto). Xin bằng câu văn thì model tự quyết và hay vẽ caro giả; đưa    ║
+  # ║ đúng từ khoá tham số vào task để agent codex truyền nó vào lời gọi tool.    ║
   # ║ alpha_verdict ở đầu file chỉ GHI NHẬN triệu chứng sau khi đã tốn một lượt  ║
   # ║ gen (và từ 09/09/2026 nó cũng chỉ ghi nhận, không chặn); chữa từ gốc là ở   ║
   # ║ đây, trong câu chữ của task.                                               ║
   # ╚════════════════════════════════════════════════════════════════════════════╝
-  task="Use the imagegen skill and its built-in image_gen tool for this. If you have not read that skill yet, read its SKILL.md first and follow its transparent-image rule: ask image_gen for a genuinely transparent background and preserve the alpha channel it gives back.
+  task="Use the imagegen skill and its built-in image_gen tool for this. If you have not read that skill yet, read its SKILL.md first and follow its transparent-image rule: call image_gen with background=\"transparent\" (PNG output) so the tool itself returns a genuinely transparent background, and preserve the alpha channel it gives back.
 
 One rule matters more than everything else: the transparency has to come from image_gen itself. You must not write, compile or run any program, script or tool of your own that removes, keys out, erases or otherwise edits the background or the alpha channel of the image — that includes Python, Swift, ffmpeg, ImageMagick, chroma keying, remove_chroma_key.py and the CLI fallback scripts/image_gen.py. Copying or moving the resulting file is fine. If image_gen hands you an opaque image, just say so plainly and stop: a background cut out by hand is detected and rejected, and it wastes the whole run.
 
-${att_note}Generate ONE image with the built-in image_gen tool. The output image MUST be exactly ${want_size} pixels (${want_orient}) — this is a hard requirement, not a preference; do not return any other aspect ratio. Use EXACTLY the prompt between the IMAGE PROMPT markers below. Then save/copy the generated PNG to exactly this path: ${ROOT_OUT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
+${att_note}Generate ONE image with the built-in image_gen tool, passing background=\"transparent\" and PNG output. The output image MUST be exactly ${want_size} pixels (${want_orient}) — this is a hard requirement, not a preference; do not return any other aspect ratio. Use EXACTLY the prompt between the IMAGE PROMPT markers below. Then save/copy the generated PNG to exactly this path: ${ROOT_OUT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
 
 --- IMAGE PROMPT START ---
 $(cat "prompts/${job}.txt")
