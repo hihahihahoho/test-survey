@@ -14,7 +14,12 @@ import { api } from "../api/endpoints";
 import { AgentError } from "../api/client";
 import { qk, keysAfterContractSave } from "./keys";
 import { GC, STALE } from "./query-client";
-import { contractConflictDetailsSchema, type ContractConflictDetails, type RefKind } from "../types/api";
+import {
+  contractConflictDetailsSchema,
+  type ContractConflictDetails,
+  type RefDescRole,
+  type RefKind,
+} from "../types/api";
 import type { Contract } from "../types/contract";
 
 /** #22 */
@@ -183,6 +188,36 @@ export function useRemoveRef(projectId: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: qk.refs.all(projectId) });
       void qc.invalidateQueries({ queryKey: qk.contract.all(projectId) });
+    },
+  });
+}
+
+/**
+ * MÔ TẢ CHO MÁY VẼ của một tấm ảnh.
+ *
+ * `enabled` theo cả hai đối số: hộp chọn nguồn mở ra khi pill CHƯA có ảnh cũng
+ * gọi hook này, và hỏi mô tả của một tấm ảnh rỗng là một request 404 chắc chắn.
+ */
+export function useRefDesc(projectId: string | undefined | null, name: string | undefined | null) {
+  return useQuery({
+    queryKey: qk.refs.desc(projectId ?? "", name ?? ""),
+    queryFn: () => api.refs.desc(projectId!, name!),
+    enabled: Boolean(projectId && name),
+    staleTime: STALE.refs,
+  });
+}
+
+/** Lưu mô tả người dùng gõ. Chuỗi rỗng = trả lại cho máy tả ở lượt Vẽ tới. */
+export function useSaveRefDesc(projectId: string, name: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { text: string; role?: RefDescRole }) => api.refs.saveDesc(projectId, name, input),
+    onSuccess: (next) => {
+      /* Ghi thẳng kết quả vào cache TRƯỚC khi mời lại: agent vừa trả về đúng hình
+         dạng của query này, nên ô soạn không phải nhấp nháy qua một nhịp "đang
+         tải" cho một dữ liệu đã nằm trong tay. */
+      qc.setQueryData(qk.refs.desc(projectId, name), next);
+      void qc.invalidateQueries({ queryKey: qk.refs.all(projectId) });
     },
   });
 }

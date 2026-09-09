@@ -158,6 +158,47 @@ describe("#30 — ảnh ref: multipart, agent tự đặt tên, client KHÔNG g�
     expect(calls).toHaveLength(0);
   });
 
+  /* `alpha` quyết định tấm ảnh này tới máy vẽ bằng đường nào: đính thẳng (nền
+     trong suốt thật) hay qua một lượt codex tả thành chữ (nền đục). Agent đời cũ
+     không nói gì về nền — và im lặng KHÔNG được suy thành "trong suốt", vì đường
+     an toàn của cả hai tầng là TẢ. */
+  it("agent không khai `alpha` ⇒ mặc định false, không đoán bừa là trong suốt", async () => {
+    mock([json({ name: "char-lan.png", path: "refs/char-lan.png" }, { status: 201 })]);
+    const r = await api.refs.add("p1", file("lan.png", "image/png", 10), "character");
+    expect(r.alpha).toBe(false);
+  });
+
+  it("`alpha` của agent đi thẳng vào danh sách ref", async () => {
+    mock([json({ items: [{ name: "char-lan.png", alpha: true }, { name: "inspo-1.jpg", alpha: false }] })]);
+    const r = await api.refs.list("p1");
+    expect(r.items.map((i) => i.alpha)).toEqual([true, false]);
+  });
+});
+
+/* ══ MÔ TẢ CHO MÁY VẼ ═══════════════════════════════════════════════════════
+   Ảnh đục đi vào prompt bằng CHỮ, và đoạn chữ ấy quyết định con nhân vật vẽ ra
+   có giống ảnh mẫu không. Hai route này là cả đường đọc lẫn đường sửa nó. */
+describe("mô tả cho máy vẽ của một tấm ảnh (refs/:name/desc)", () => {
+  it("GET đọc đúng đường dẫn và giữ nguyên cờ `user`/`stale`", async () => {
+    const calls = mock([json({ name: "char-lan.png", exists: true, text: "A red squirrel.", user: true, role: "character", stale: false })]);
+    const r = await api.refs.desc("p1", "char-lan.png");
+    expect(calls[0]!.url).toContain("/api/projects/p1/refs/char-lan.png/desc");
+    expect(r).toMatchObject({ text: "A red squirrel.", user: true, stale: false });
+  });
+
+  it("chưa có mô tả ⇒ chuỗi rỗng, KHÔNG phải undefined", async () => {
+    mock([json({ name: "char-lan.png", exists: false })]);
+    const r = await api.refs.desc("p1", "char-lan.png");
+    expect(r.text).toBe("");
+    expect(r.user).toBe(false);
+  });
+
+  it("PUT gửi cả chữ lẫn VAI — vai lệch thì gen.sh coi mô tả là hết hạn và tả lại", async () => {
+    const calls = mock([json({ name: "char-lan.png", exists: true, text: "x", user: true })]);
+    await api.refs.saveDesc("p1", "char-lan.png", { text: "x", role: "character" });
+    expect(calls[0]!.init.method).toBe("PUT");
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ text: "x", role: "character" });
+  });
 });
 
 describe("#32 — bắt đầu lượt chạy", () => {

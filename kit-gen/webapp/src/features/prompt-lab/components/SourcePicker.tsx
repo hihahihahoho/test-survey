@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PillImage } from "@/features/prompt-canvas/lib/pill-image";
 import { useRefThumb } from "./RefImagePill";
+import { RefDescPanel } from "./RefDescPanel";
 import { useLibraryImage } from "@/lib/hooks";
+import type { RefDescRole } from "@/lib/types/api";
 
 /**
  * SourcePicker — MỘT hộp chọn cho MỌI câu hỏi "cái này lấy từ đâu".
@@ -137,6 +139,14 @@ export interface SourcePickerProps {
   onAttach?: (file: File) => void;
   /** Bỏ tấm ảnh đang dùng. Vắng ⇒ không bày nút bỏ. */
   onDropImage?: () => void;
+  /**
+   * VAI của tấm ảnh này trong prompt — có vai thì nấc «Đính ảnh» nói thêm được
+   * ảnh ấy tới máy vẽ bằng đường nào, và mở được đoạn mô tả ra sửa.
+   *
+   * Vắng ⇒ không bày gì thêm, và đó là mặc định đúng: luật "trong suốt thì đính,
+   * đục thì tả" chỉ đúng với tấm CẦN nền trong suốt (xem `RefDescPanel`).
+   */
+  descRole?: RefDescRole;
   onClose: () => void;
   /** Mở ngược lên trên — xem `useMenuFlip` ở `pill-ui.tsx`. */
   dropUp?: boolean;
@@ -229,6 +239,7 @@ export function SourcePicker(props: SourcePickerProps) {
             props.onAttach?.(file);
             onClose();
           }}
+          {...(props.descRole ? { descRole: props.descRole } : {})}
           {...(props.onDropImage
             ? {
                 onDrop: () => {
@@ -503,12 +514,14 @@ function RefPanel({
   image,
   onAttach,
   onDrop,
+  descRole,
 }: {
   label: string;
   projectId: string | null;
   image: PillImage | null;
   onAttach: (file: File) => void;
   onDrop?: () => void;
+  descRole?: RefDescRole;
 }) {
   const input = React.useRef<HTMLInputElement>(null);
   const [over, setOver] = React.useState(false);
@@ -541,6 +554,12 @@ function RefPanel({
             )}
           </span>
         </span>
+      )}
+
+      {/* ĐƯỜNG ĐI CỦA TẤM ẢNH NÀY + đoạn mô tả sửa được. Chỉ khi đã có ảnh THẬT
+          trên đĩa và chỗ này biết vai của nó — xem `RefDescPanel`. */}
+      {image?.path && descRole && (
+        <RefDescPanel projectId={projectId} refName={image.refName} role={descRole} />
       )}
 
       {/* Kéo thả VÀ bấm, không phải chọn một: kéo thả là đường nhanh của người

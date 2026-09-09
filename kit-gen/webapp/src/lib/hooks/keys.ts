@@ -56,6 +56,8 @@ export const qk = {
   refs: {
     all: (projectId: string) => ["refs", projectId] as const,
     list: (projectId: string) => ["refs", projectId, "list"] as const,
+    /** Mô tả cho máy vẽ của MỘT tấm ảnh. Nằm dưới `all` để lưu xong mời lại một lượt là đủ. */
+    desc: (projectId: string, name: string) => ["refs", projectId, "desc", name] as const,
   },
 
   runs: {

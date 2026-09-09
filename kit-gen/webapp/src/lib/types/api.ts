@@ -634,12 +634,29 @@ export const librarySettingsResultSchema = z.looseObject({ settings: librarySett
 
 export const refUsageSchema = z.looseObject({ kind: z.string(), id: z.string() });
 
+/**
+ * `alpha` — ẢNH NÀY CÓ NỀN TRONG SUỐT THẬT KHÔNG, và vì thế nó tới máy vẽ bằng
+ * đường nào.
+ *
+ * ╔══ VÌ SAO MỘT TRƯỜNG BOOLEAN LẠI ĐÁNG CÓ MẶT TRONG API ═══════════════════╗
+ * ║ `gen.sh` đo đúng phép này rồi rẽ hai đường: ảnh nền trong suốt được ĐÍNH   ║
+ * ║ THẲNG vào lời gọi image_gen (giống hơn hẳn), ảnh đục phải đi qua một lượt  ║
+ * ║ codex TẢ THÀNH CHỮ — vì đính một tấm ảnh đục vào là kéo cả sheet về RGB,   ║
+ * ║ mất nền trong suốt của mọi ô. Hai đường ấy cho ra hai mức giống nhau khác  ║
+ * ║ hẳn và một đường còn tốn thêm quota, nên người dùng phải ĐỌC ĐƯỢC mình     ║
+ * ║ đang ở đường nào ngay lúc chọn ảnh — không phải đoán sau khi trả tiền.     ║
+ * ╚═════════════════════════════════════════════════════════════════════════╝
+ * Agent đo bằng Pillow; không có Pillow thì nó trả `false` cho mọi ảnh, ĐÚNG như
+ * gen.sh (cả hai cùng chọn đường an toàn là TẢ). Thiếu trường ⇒ `false`: agent đời
+ * cũ không biết nói gì về nền, và im lặng thì không được suy thành "trong suốt".
+ */
 export const refItemSchema = z.looseObject({
   name: z.string(),
   bytes: z.number().optional(),
   w: z.number().optional(),
   h: z.number().optional(),
   mtime: z.union([z.number(), z.string()]).optional(),
+  alpha: z.boolean().default(false),
   usedBy: z.array(refUsageSchema).default([]),
 });
 export type RefItem = z.infer<typeof refItemSchema>;
@@ -652,9 +669,33 @@ export const refUploadResultSchema = z.looseObject({
   bytes: z.number().optional(),
   w: z.number().optional(),
   h: z.number().optional(),
+  alpha: z.boolean().default(false),
 });
 export const refKindSchema = z.enum(["character", "inspo", "brand"]);
 export type RefKind = z.infer<typeof refKindSchema>;
+
+/**
+ * MÔ TẢ CHO MÁY VẼ của một tấm ảnh — `refs/<tên>.desc.txt`.
+ *
+ * Ảnh đục không đính được, nên `gen.sh` tả nó thành chữ bằng một lượt codex rồi
+ * dán nguyên đoạn ấy vào prompt. Đoạn chữ đó QUYẾT ĐỊNH nhân vật vẽ ra có giống
+ * hay không — nên nó phải đọc được và sửa được.
+ *  · `user`  — chữ do NGƯỜI gõ ⇒ lượt Vẽ tới không tả đè lên nó.
+ *  · `stale` — mô tả này băm một tấm ảnh KHÁC tấm đang có (ảnh đã bị thay sau khi
+ *    mô tả được viết) ⇒ engine sẽ tả lại; chữ đang hiện là chữ tả con vật cũ.
+ */
+export const refDescSchema = z.looseObject({
+  name: z.string(),
+  exists: z.boolean().default(false),
+  text: z.string().default(""),
+  user: z.boolean().default(false),
+  role: z.string().nullish(),
+  stale: z.boolean().default(false),
+});
+export type RefDesc = z.infer<typeof refDescSchema>;
+/** Ba vai mà `desc_question` của gen.sh có câu hỏi riêng. */
+export const refDescRoleSchema = z.enum(["character", "style", "layout"]);
+export type RefDescRole = z.infer<typeof refDescRoleSchema>;
 
 /* ═════════════ E. Lượt chạy (#32–#40) ═════════════ */
 

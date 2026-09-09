@@ -23,13 +23,13 @@ import {
   createProjectResultSchema, deleteProjectResultSchema, doctorSchema, duplicateResultSchema,
   elementLibSchema, kitSchema,
   projectDetailSchema, projectListSchema, projectSchema, promptPreviewSchema, rawHistorySchema, refListSchema,
-  refUploadResultSchema, runListSchema, runSchema,
+  refUploadResultSchema, refDescSchema, runListSchema, runSchema,
   saveContractResultSchema, startRunResultSchema, trashListSchema, usageSchema,
   workspaceListSchema, workflowDraftSchema, userLibrarySchema, libraryItemResultSchema,
   librarySettingsResultSchema, brandProfileResultSchema, libraryPresetResultSchema,
   type LibraryPresetKind,
   type CleanTarget, type CreateProjectInput, type DuplicateInput,
-  type PatchProjectInput, type RefKind, type StartRunInput,
+  type PatchProjectInput, type RefKind, type RefDescRole, type StartRunInput,
   type LibrarySettings,
 } from "../types/api";
 import { normalizeContract, type Contract } from "../types/contract";
@@ -489,6 +489,25 @@ export const refsApi = {
   async remove(id: string, name: string, opts: { force?: boolean } = {}) {
     await httpDelete(`/api/projects/${pid(id)}/refs/${pid(name)}${opts.force ? "?force=1" : ""}`);
     return { ok: true };
+  },
+  /**
+   * MÔ TẢ CHO MÁY VẼ của một tấm ảnh — `refs/<tên>.desc.txt`.
+   *
+   * Ảnh đục đi vào prompt bằng CHỮ (đính ảnh đục ⇒ mất nền trong suốt của cả tấm),
+   * và đoạn chữ ấy là thứ quyết định con nhân vật vẽ ra có giống ảnh mẫu không.
+   * Hai hàm này là cả đường đọc lẫn đường sửa nó.
+   */
+  async desc(id: string, name: string) {
+    return parse(refDescSchema, await httpGet(`/api/projects/${pid(id)}/refs/${pid(name)}/desc`), "mô tả ảnh");
+  },
+  /**
+   * Lưu mô tả do NGƯỜI dùng gõ. Agent đóng dấu `user` vào dòng khoá, và `gen.sh`
+   * thấy dấu ấy thì KHÔNG tả đè lên nữa (chỉ tả lại khi chính tấm ảnh đổi).
+   * Chuỗi rỗng = trả lại cho máy tả — không phải lưu một mô tả rỗng.
+   */
+  async saveDesc(id: string, name: string, input: { text: string; role?: RefDescRole }) {
+    return parse(refDescSchema,
+      await httpPut(`/api/projects/${pid(id)}/refs/${pid(name)}/desc`, input), "mô tả ảnh vừa lưu");
   },
 };
 

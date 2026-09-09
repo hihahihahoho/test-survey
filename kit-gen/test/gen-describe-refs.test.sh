@@ -11,14 +11,23 @@
 # ║ ghi rõ `background` chỉ thuộc CLI dự phòng), nên không có đường thứ ba.       ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 #
+# ⚠️ VÀ PHÉP ĐO ẤY ĐÃ ĐƯỢC HẸP LẠI (09/09/2026, chiều). Memory dự án 21-22/08/2026:
+# `image_gen` GIỮ alpha thật khi ảnh tham chiếu đính kèm CÓ kênh alpha thật. Lần đo
+# ở trên làm bằng một tấm ảnh ĐỤC — hai phép đo nói cùng một điều: model vẽ lại cái
+# nền nó NHÌN THẤY trong ảnh mẫu. Nên luật là của TỪNG TẤM ẢNH, không phải của cả
+# sheet: ảnh nền trong suốt thật ⇒ ĐÍNH THẲNG (giống hơn hẳn, không tốn lượt codex
+# nào); ảnh đục ⇒ mới phải tả thành chữ.
+#
 # BẢN VÁ, và đây là ca kiểm ĐƯỜNG ĐI của nó (chạy gen.sh THẬT, codex GIẢ):
-#   ① tấm cần nền trong suốt: mọi ảnh tham chiếu được đổi thành CHỮ bằng một lượt
+#   ① ảnh ĐỤC của một tấm cần nền trong suốt: được đổi thành CHỮ bằng một lượt
 #      `codex exec` KHÔNG sinh ảnh, rồi chữ thay vào dấu chỗ `{{DESC:…}}`;
 #   ② mô tả được CACHE theo băm nội dung ảnh + vai + phiên bản câu hỏi ⇒ lượt hai
 #      không gọi codex lần nào (đây là nửa đắt tiền nhất: một bộ kit có hàng chục
 #      tấm dùng chung mấy tấm ảnh phong cách);
 #   ③ tả HỎNG thì VẪN VẼ — dấu chỗ bị xoá, dòng OK mang ghi chú `[thiếu mô tả ảnh]`;
-#   ④ tấm FULL-BLEED không đổi một chữ nào: vẫn đính ảnh, vẫn `referenced_image_paths`.
+#   ④ tấm FULL-BLEED không đổi một chữ nào: vẫn đính ảnh, vẫn `referenced_image_paths`;
+#   ⑤ mô tả do NGƯỜI DÙNG gõ (cờ `user`) KHÔNG bị máy tả đè khi `DESC_V` tăng;
+#   ⑥ ảnh có alpha thật thì được ĐÍNH THẲNG, không tả — kể cả trên tấm nhân vật.
 #
 # Không mạng, không quota: `codex` trong PATH là một script sh ghi sổ.
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -163,7 +172,7 @@ have "cache của ảnh phong cách" "$WORK/p/refs/tranh-dan-gian.png.desc.txt"
 key="$(head -n1 "$WORK/p/refs/lan.png.desc.txt")"
 expect "dòng khoá có băm nội dung" "# sha256:" "$key"
 expect "…và vai"                   "role:character" "$key"
-expect "…và phiên bản câu hỏi"     "v1" "$key"
+expect "…và phiên bản câu hỏi"     "v2" "$key"
 
 echo "── ② TASK GỬI CODEX: tấm cần alpha không nhắc tới một tấm ảnh nào"
 # Lượt vẽ của tấm nhân vật là lượt duy nhất có `raw/tet-linh.png` trong đối số.
@@ -213,5 +222,90 @@ expect "và người ngồi xem đọc được ngay trên dòng chạy" \
 eqnum "tả hỏng thì KHÔNG đóng đinh một cache rỗng nào" 0 \
   "$(ls "$WORK/p/refs" | grep -c 'desc.txt$' | tr -d ' ')"
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# ⑤ CHỮ CỦA NGƯỜI DÙNG (cờ `user` ở cuối dòng khoá) KHÔNG BỊ MÁY TẢ ĐÈ.
+#
+# Người ta mở mô tả ra sửa vì bản máy tả sai con vật của họ. Một lượt nâng phiên
+# bản câu hỏi (`DESC_V`) mà xoá chữ ấy đi là quay về đúng cái sai ấy — và họ phải
+# gõ lại, mãi mãi. Nên token cuối dòng khoá phân hai đời chủ:
+#   `… v2`   engine tả  → hết hạn khi DESC_V đổi
+#   `… user` NGƯỜI gõ   → chỉ hết hạn khi ẢNH đổi
+echo "── ⑤ mô tả do NGƯỜI DÙNG gõ: DESC_V tăng cũng không tả đè"
+bam() { { shasum -a 256 "$1" 2>/dev/null || sha256sum "$1" 2>/dev/null; } | cut -d' ' -f1; }
+USER_TEXT="Con so mui hong, tai cup, khan do buoc co, dai 3 dot tren duoi."
+rm -f "$WORK/p/refs"/*.desc.txt
+printf '# sha256:%s role:character user\n%s\n' \
+  "$(bam "$WORK/p/refs/lan.png")" "$USER_TEXT" > "$WORK/p/refs/lan.png.desc.txt"
+# …và cạnh nó, một mô tả do MÁY tả cho một phiên bản câu hỏi ĐỜI TRƯỚC: cái này
+# PHẢI hết hạn. Hai file cạnh nhau trong cùng một lượt là chỗ duy nhất chứng minh
+# được rằng cờ `user` mới là thứ tạo ra khác biệt, không phải "cache nào cũng sống".
+printf '# sha256:%s role:style v0\nMo ta doi cu cua may.\n' \
+  "$(bam "$WORK/p/refs/tranh-dan-gian.png")" > "$WORK/p/refs/tranh-dan-gian.png.desc.txt"
+truoc5="$(wc -l < "$DESC_CALLS" | tr -d ' ')"
+out5="$(chay)"
+eqnum "đúng MỘT lượt tả: chỉ tấm ảnh phong cách đời cũ, không đụng chữ người dùng" \
+  "$((truoc5 + 1))" "$(wc -l < "$DESC_CALLS" | tr -d ' ')"
+linh5="$(cat "$WORK/p/prompts/tet-linh.txt")"
+expect "chữ người dùng đi thẳng vào prompt" "$USER_TEXT" "$linh5"
+refute "và không còn dấu chỗ nào" "{{DESC:" "$linh5"
+expect "file cache của người dùng KHÔNG bị ghi đè" "role:character user" \
+  "$(head -n1 "$WORK/p/refs/lan.png.desc.txt")"
+
+echo "── …nhưng đổi ẢNH thì chữ của người dùng cũng hết hạn (nó tả con vật cũ)"
+printf 'mot con vat KHAC HAN NUA' > "$WORK/p/refs/lan.png"
+truoc6="$(wc -l < "$DESC_CALLS" | tr -d ' ')"
+out6="$(chay)"
+eqnum "đúng thêm MỘT lượt tả (chỉ ảnh vừa đổi)" "$((truoc6 + 1))" \
+  "$(wc -l < "$DESC_CALLS" | tr -d ' ')"
+refute "chữ tả con vật cũ KHÔNG được gửi đi nữa" "$USER_TEXT" \
+  "$(cat "$WORK/p/prompts/tet-linh.txt")"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ⑥ ẢNH CÓ NỀN TRONG SUỐT THẬT THÌ ĐÍNH THẲNG — KHÔNG TẢ, KHÔNG TỐN LƯỢT NÀO.
+#
+# Đo được (memory dự án, 21-22/08/2026): image_gen GIỮ alpha thật khi ảnh tham
+# chiếu đính kèm CÓ kênh alpha thật. Lần đo 09/09 làm bằng một tấm ảnh ĐỤC — cả
+# hai nói cùng một điều: model vẽ lại cái nền nó NHÌN THẤY trong ảnh mẫu.
+echo "── ⑥ ảnh nhân vật có alpha thật ⇒ ĐÍNH THẲNG, không tả"
+if python3 - <<'PYPIL' 2>/dev/null
+import PIL.Image  # noqa
+PYPIL
+then
+  # PNG RGBA trong suốt hoàn toàn, dựng bằng zlib (không cần Pillow để GHI).
+  python3 - "$WORK/p/refs/lan.png" <<'PYPNG'
+import struct, sys, zlib
+w = h = 16
+raw = b"".join(b"\x00" + bytes([200, 60, 60, 0]) * w for _ in range(h))
+def chunk(tag, data):
+    body = tag + data
+    return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+open(sys.argv[1], "wb").write(
+    b"\x89PNG\r\n\x1a\n"
+    + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
+    + chunk(b"IDAT", zlib.compress(raw))
+    + chunk(b"IEND", b""))
+PYPNG
+  rm -f "$WORK/p/refs"/*.desc.txt
+  truoc7="$(wc -l < "$DESC_CALLS" | tr -d ' ')"
+  out7="$(chay)"
+  expect "vẫn vẽ xong" "OK  tet-linh" "$out7"
+  eqnum "chỉ tả ảnh PHONG CÁCH (vẫn đục); ảnh nhân vật không tốn lượt nào" \
+    "$((truoc7 + 1))" "$(wc -l < "$DESC_CALLS" | tr -d ' ')"
+  refute "ảnh nhân vật KHÔNG bị đem đi tả" "lan.png" \
+    "$(tail -n 1 "$DESC_CALLS")"
+  task7="$(cat "$TASKS/tet-linh.txt")"
+  expect "tấm nhân vật nay CÓ truyền referenced_image_paths" "referenced_image_paths" "$task7"
+  expect "…và đính đúng tấm ảnh nhân vật"  "$WORK/p/refs/lan.png" "$task7"
+  linh7="$(cat "$WORK/p/prompts/tet-linh.txt")"
+  expect "prompt trỏ vào ảnh đính kèm bằng VAI TRÒ" \
+    "the attached CHARACTER REFERENCE image" "$linh7"
+  expect "và bó danh tính: dấu hiệu nhận dạng phải có ở mọi ô" \
+    "has to be visible in every cell" "$linh7"
+  refute "ảnh phong cách đục thì vẫn là CHỮ, không lọt vào danh sách đính kèm" \
+    "tranh-dan-gian.png" "$(cat "$WORK/p/prompts/tet-linh.att")"
+else
+  echo "BỎ QUA  ⑥: máy này không có Pillow ⇒ gen.sh coi mọi ảnh là đục (đường an toàn)."
+fi
+
 [ "$fail" -eq 0 ] || { echo; echo "Xem đầu file test này để biết vì sao có bước tả ảnh." >&2; exit 1; }
-echo "OK  gen.sh: ảnh tham chiếu thành chữ (cache theo băm), tấm cần alpha không đính ảnh nào"
+echo "OK  gen.sh: ảnh trong suốt thì đính thẳng, ảnh đục thì thành chữ (cache theo băm + cờ user)"

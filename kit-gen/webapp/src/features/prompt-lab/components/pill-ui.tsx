@@ -368,6 +368,17 @@ export function OptionPill({
         : labelOf(kind, "", presets);
   const title = custom || undefined;
 
+  /**
+   * CHỈ pill nhân vật khai vai của tấm ảnh mình đang giữ.
+   *
+   * Luật "ảnh nền trong suốt thì đính thẳng, ảnh nền đục thì tả thành chữ" chỉ
+   * đúng với tấm CẦN nền trong suốt — mà lưới nhân vật thì luôn là tấm ấy. Một
+   * tấm ảnh phong cách lại đi vào cả sheet nhân vật lẫn sheet cảnh nền full-bleed
+   * cùng một lúc (chỗ sau đính tất, kể cả ảnh đục), nên một dòng chữ chắc nịch về
+   * đường đi của nó ở đó là nói đúng một nửa. Xem `RefDescPanel`.
+   */
+  const descRoleProp = kind === "mascot" ? ({ descRole: "character" } as const) : {};
+
   /* Đóng hộp thì trả focus VỀ ĐÚNG cái pill vừa mở nó. Thiếu bước này thì người
      dùng bàn phím bị thả về đầu tài liệu sau mỗi lượt chọn. */
   const close = React.useCallback(() => {
@@ -418,6 +429,7 @@ export function OptionPill({
           projectId={projectId ?? null}
           dropUp={flip.dropUp}
           {...(manageHref(kind) === "" ? {} : { manageHref: manageHref(kind) })}
+          {...descRoleProp}
           onClose={close}
           /* Bấm một mục có sẵn ⇒ chữ tự gõ bị GỠ. Giữ lại là pill hiện chữ cũ
              trong khi người dùng vừa bấm một mục khác — hai câu trả lời cho một
