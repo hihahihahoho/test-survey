@@ -341,9 +341,10 @@ for s in cfg["styles"]:
         # model) nhìn ra bố cục ngay. Ba loại tấm — giao diện, nhân vật, màn hình —
         # dùng CHUNG bộ section này, chỉ khác ở phần nào có mặt.
         #
-        # ⚠️ HAI DÒNG ĐẦU LÀ HỢP ĐỒNG VỚI TẦNG BASH: `run_one` đọc ngược khổ giấy
-        # bằng `head -n2 … | grep`. Section «Canvas» vì thế phải luôn đứng đầu, và
-        # dòng ngay dưới tiêu đề của nó phải mang chữ PORTRAIT/SQUARE/LANDSCAPE.
+        # ⚠️ BA DÒNG ĐẦU LÀ HỢP ĐỒNG VỚI TẦNG BASH: `run_one` đọc ngược khổ giấy
+        # bằng `head -n3 … | grep`. Trên cùng là dòng `background="transparent"`
+        # (tấm không full-bleed), rồi section «Canvas» phải đứng ngay sau, và dòng
+        # dưới tiêu đề của nó phải mang chữ PORTRAIT/SQUARE/LANDSCAPE.
         sections = []
 
         def section(title, body):
@@ -749,8 +750,8 @@ for s in cfg["styles"]:
         # HAI NGOẠI LỆ, và cả hai đều KHÔNG phải cãi lời người dùng.
         #
         # ① SECTION «Canvas» — ngoại lệ KỸ THUẬT. `run_one` đọc ngược khổ giấy bằng
-        #    `head -n2 … | grep -qiE 'PORTRAIT|SQUARE'` (xem hàm ngay dưới khối python
-        #    này). Mất hai dòng ấy là mọi sheet dọc/vuông bị gửi đi với 1536x1024 ⇒
+        #    `head -n3 … | grep -qiE 'PORTRAIT|SQUARE'` (xem hàm ngay dưới khối python
+        #    này). Mất mấy dòng ấy là mọi sheet dọc/vuông bị gửi đi với 1536x1024 ⇒
         #    ảnh về sai tỉ lệ, cắt lưới méo hết — đúng sự cố mà
         #    test/gen-canvas-size.test.sh sinh ra để chặn. Nó cũng là thông tin người
         #    viết prompt cần biết chứ không phải rác.
@@ -763,6 +764,13 @@ for s in cfg["styles"]:
             lines = sections[:2] + ["", override]
             if direction:
                 lines += ["", "## Direction", *direction]
+        # ── DÒNG ĐẦU TIÊN CỦA PROMPT LÀ TỪ KHOÁ THAM SỐ ──────────────────────
+        # 09/09/2026 — chủ sản phẩm: «(background="transparent") để ngay ở trên đầu».
+        # Đứng TRƯỚC cả «## Canvas»: thứ đầu tiên máy vẽ đọc là tham số nền, không
+        # phải một đoạn văn. Tấm full-bleed thì không có dòng này — nó xin điều ngược
+        # lại. Tầng bash đọc khổ giấy bằng `head -n3` để chừa chỗ cho dòng này.
+        if not full_bleed:
+            lines = ['background="transparent"', *lines]
         # DẤU FULL-BLEED CHO TẦNG BASH. `full_bleed` tính được ở đây (skel.shape của
         # mọi ô là "full") nhưng `alpha_verdict` lại chạy ở bash, sau khi codex trả
         # ảnh — hai tầng không nói chuyện được với nhau ngoài đĩa. Một file rỗng cạnh
@@ -842,11 +850,11 @@ run_one() {
   # `grep -qi PORTRAIT` chạy trước sẽ không bao giờ thấy SQUARE. Đọc MỘT LẦN vào
   # biến để khỏi gọi `head` ba lượt trên cùng một file.
   # HAI DÒNG, không phải một: prompt nay mở đầu bằng tiêu đề section `## Canvas`
-  # và khổ giấy nằm ở dòng ngay dưới. Đọc hai dòng thì cả prompt đời cũ (khổ ở
-  # dòng 1) lẫn prompt đời nay đều khớp — `case` với glob `*PORTRAIT*` không quan
-  # tâm chuỗi có mấy dòng.
+  # và khổ giấy nằm ở dòng ngay dưới; đời nay nữa còn dòng `background="transparent"`
+  # đứng trên cùng. Đọc ba dòng thì cả prompt đời cũ (khổ ở dòng 1) lẫn prompt đời
+  # nay đều khớp — `case` với glob `*PORTRAIT*` không quan tâm chuỗi có mấy dòng.
   local want_size="1536x1024" want_orient="landscape" head1
-  head1="$(head -n2 "prompts/${job}.txt" 2>/dev/null)"
+  head1="$(head -n3 "prompts/${job}.txt" 2>/dev/null)"
   case "$head1" in
     *PORTRAIT*|*portrait*) want_size="1024x1536"; want_orient="portrait" ;;
     # 1254x1254, không phải 1024x1024: tool image_gen không có tham số `size` và

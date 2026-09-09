@@ -155,9 +155,10 @@ linh="$(cat "$WORK/p/prompts/tet-linh.txt")"
 # ảnh nào 2048 hay 2040. Nên con số ta hứa với model phải là 1254 — hứa 1024 rồi
 # nhận về 1254 thì mọi lượt vuông đều trông như "model làm sai".
 # HAI DÒNG ĐẦU, không phải một: prompt nay mở đầu bằng tiêu đề section `## Canvas`
-# và khổ giấy nằm ở dòng ngay dưới — `run_one` đọc `head -n2`.
+# và khổ giấy nằm ở dòng ngay dưới, trên cùng là `background="transparent"` — `run_one` đọc `head -n3`.
 echo "── sheet.canvas = square ⇒ hai dòng đầu prompt khai đúng khổ vuông"
-head_vuong="$(head -n2 "$WORK/p/prompts/tet-vuong.txt")"
+head_vuong="$(head -n3 "$WORK/p/prompts/tet-vuong.txt")"
+expect "dòng đầu tiên là từ khoá tham số nền" 'background="transparent"' "$(head -n1 "$WORK/p/prompts/tet-vuong.txt")"
 expect "mở đầu bằng tiêu đề khổ giấy" "## Canvas" "$head_vuong"
 expect "dòng ngay dưới là SQUARE 1254x1254" "SQUARE 1254x1254 px, origin top-left" "$head_vuong"
 vuong="$(cat "$WORK/p/prompts/tet-vuong.txt")"
@@ -177,7 +178,7 @@ echo "── sheet.promptOverride = prompt của người dùng, NGUYÊN VĂN"
 expect "chữ của người dùng có trong prompt" "TÔI TỰ SOẠN: vẽ một tấm bảng gỗ mộc" "$doc"
 # Dòng khổ giấy là NGOẠI LỆ KỸ THUẬT: run_one đọc ngược khổ bằng `head -n1 | grep PORTRAIT`.
 # Mất nó là mọi tấm dọc bị gửi đi với 1536x1024 (xem test/gen-canvas-size.test.sh).
-head1="$(head -n2 "$WORK/p/prompts/tet-doc.txt")"
+head1="$(head -n3 "$WORK/p/prompts/tet-doc.txt")"
 expect "hai dòng đầu vẫn là khổ giấy, và vẫn đúng PORTRAIT" "PORTRAIT 1024x1536 px" "$head1"
 refute "KHÔNG nối thêm luật của engine (cấm chữ)"  "No letters, no digits" "$doc"
 refute "KHÔNG nối thêm luật của engine (vùng an toàn)" "## Safe zone" "$doc"

@@ -312,7 +312,7 @@ class BangKhoCanvasTest(unittest.TestCase):
         self.assertEqual(gen["canvas_of"]({"canvas": "squre"})[2], "LANDSCAPE 1536x1024")
 
     def test_kho_di_toi_HAI_DONG_DAU_prompt(self):
-        """`run_one` đọc ngược khổ bằng `head -n2 | grep`. Hai dòng đầu lệch một chữ
+        """`run_one` đọc ngược khổ bằng `head -n3 | grep`. Ba dòng đầu lệch một chữ
         là mọi tấm dọc/vuông bị gửi đi với 1536x1024.
 
         HAI chứ không phải MỘT kể từ khi prompt chia section: dòng 1 là tiêu đề
@@ -321,8 +321,11 @@ class BangKhoCanvasTest(unittest.TestCase):
         cfg["sheets"][0]["canvas"] = "square"
         txt = render_prompt_text(cfg)
         rows = txt.splitlines()
-        self.assertEqual(rows[0], "## Canvas")
-        self.assertTrue(rows[1].startswith("SQUARE 1254x1254 px,"), rows[1])
+        # 09/09/2026: dòng 0 là từ khoá tham số nền (chủ sản phẩm: «để ngay ở trên
+        # đầu»), «## Canvas» lùi xuống dòng 1, khổ giấy ở dòng 2 — run_one đọc head -n3.
+        self.assertEqual(rows[0], 'background="transparent"')
+        self.assertEqual(rows[1], "## Canvas")
+        self.assertTrue(rows[2].startswith("SQUARE 1254x1254 px,"), rows[2])
         self.assertIn("square 1:1", txt)
 
     def test_promptOverride_van_giu_SECTION_KHO_GIAY(self):
@@ -333,8 +336,9 @@ class BangKhoCanvasTest(unittest.TestCase):
         cfg["sheets"][0]["promptOverride"] = "TÔI TỰ SOẠN."
         txt = render_prompt_text(cfg)
         rows = txt.splitlines()
-        self.assertEqual(rows[0], "## Canvas")
-        self.assertTrue(rows[1].startswith("SQUARE 1254x1254 px,"), rows[1])
+        self.assertEqual(rows[0], 'background="transparent"')
+        self.assertEqual(rows[1], "## Canvas")
+        self.assertTrue(rows[2].startswith("SQUARE 1254x1254 px,"), rows[2])
         self.assertIn("TÔI TỰ SOẠN.", txt)
         self.assertNotIn("## Safe zone", txt)
         self.assertNotIn("No letters, no digits", txt)
@@ -1001,7 +1005,7 @@ class CanhNenMotKhungTest(unittest.TestCase):
 
     # ── chiều hai: những thứ PHẢI có mặt ─────────────────────────────────────
     def test_hai_dong_dau_van_la_hop_dong_kho_giay_voi_tang_bash(self):
-        """`run_one` đọc ngược khổ bằng `head -n2 … | grep -qiE 'PORTRAIT|SQUARE'`.
+        """`run_one` đọc ngược khổ bằng `head -n3 … | grep -qiE 'PORTRAIT|SQUARE'`.
         Nhánh mới cũng là một nhánh dựng prompt, nên nó cũng phải giữ hợp đồng ấy."""
         rows = self.txt.splitlines()
         self.assertEqual(rows[0], "## Canvas")
