@@ -139,10 +139,6 @@ export function register(r) {
       const raw = join(pdir, "raw", `${job}.png`)
       if (!(await exists(raw))) fail("NOT_FOUND", `raw image for ${job} not found`)
       await removeTree(raw)
-      /* Ảnh bị cổng alpha loại nằm cạnh dưới tên `.rejected.png` (gen.sh). Nó thuộc về
-         đúng lượt vẽ vừa bị xoá, nên để lại là để một cái xác không ai đọc chiếm đĩa. */
-      const rejected = join(pdir, "raw", `${job}.rejected.png`)
-      if (await exists(rejected)) await removeTree(rejected).catch(() => {})
       await dropSheetFromKits(ws, id, job)
 
       /* BẢN MỚI NHẤT CÒN LẠI LÊN THAY CHỖ — và ĐI CHỖ, không phải nhân đôi: chép thì

@@ -42,6 +42,12 @@ for style in cfg["styles"]:
         if not os.path.exists(os.path.join(HERE, "raw", f"{job}.png")):
             print(f"⚠ bỏ qua {job}: chưa có raw/{job}.png")
             continue
+        # NỀN ĐỤC ĐI THEO TỚI TẬN MANIFEST. Bản thật đọc kênh alpha của tấm; ở đây
+        # nội dung ảnh giả đã nói sẵn ("PNGFAKE-DUC"). Đây là thứ DUY NHẤT còn nói
+        # cho người dùng biết tấm này không có nền trong suốt, từ khi phép đo alpha
+        # thôi chặn (chủ sản phẩm chốt 09/09/2026: "cứ để cho nó gen tự nhiên").
+        raw_bytes = open(os.path.join(HERE, "raw", f"{job}.png"), "rb").read()
+        mode = "rgb" if b"DUC" in raw_bytes else "alpha"
         n = 0
         os.makedirs(os.path.join(out, "tight"), exist_ok=True)
         for i, c in enumerate(sh["components"]):
@@ -57,13 +63,13 @@ for style in cfg["styles"]:
             #      · `cell` là KÍCH THƯỚC ô [w, h], KHÔNG phải chỉ số ô
             #      · có `safe` / `content_at` cho đường copy sang Figma
             entry["assets"].append({
-                "file": c["file"] + ".png", "sheet": sh["id"],
+                "file": c["file"] + ".png", "sheet": sh["id"], "mode": mode,
                 "canvas": [522, 348], "cell": [384, 256], "bleed": [69, 46],
                 "content": [248, 110], "content_at": [137, 120],
                 "safe": [111, 123, 300, 102],
             })
             n += 1
-        entry["sheets"][sh["id"]] = {"mode": "fake", "cut": n, "blobs": n}
+        entry["sheets"][sh["id"]] = {"mode": mode, "cut": n, "blobs": n}
         done_sheets.add(sh["id"])
         print(f"cắt {job}: {n} file")
 

@@ -15,14 +15,20 @@ file_hash(){
   { shasum -a 256 "$1" 2>/dev/null || sha256sum "$1" 2>/dev/null; } | cut -d' ' -f1
 }
 
-# ── ẢNH VỪA SINH PHẢI LÀ RGBA VỚI ALPHA THẬT — KIỂM NGAY, KHÔNG ĐỢI TỚI LÚC CẮT ──
+# ── NỀN CỦA ẢNH VỪA SINH: ĐO NGAY, VÀ CHỈ ĐỂ GHI CHÚ (09/09/2026: KHÔNG CHẶN) ──
 #
-# ╔══ VÌ SAO PHẢI KIỂM Ở ĐÂY ═════════════════════════════════════════════════════╗
+# ╔══ VÌ SAO ĐO Ở ĐÂY, VÀ VÌ SAO CHỈ ĐO ═══════════════════════════════════════════╗
 # ║ Từ khi bỏ HẲN đường tách nền, hợp đồng chỉ còn đúng một câu: `image_gen` trả  ║
 # ║ về PNG RGBA có nền trong suốt thật. Prompt đã XIN điều đó — nhưng xin không   ║
-# ║ phải là kiểm. Trước bản này lời phán duy nhất ở đây là "file có đổi byte       ║
-# ║ không", nên một sheet đục hoàn toàn vẫn được đóng dấu OK, và chỗ duy nhất phát ║
-# ║ hiện ra là `slice.py` — tức SAU khi đã tiêu xong quota của cả lượt.            ║
+# ║ phải là biết. Trước bản này lời phán duy nhất ở đây là "file có đổi byte       ║
+# ║ không", nên một sheet đục hoàn toàn cũng không ai nói gì, và chỗ duy nhất phát ║
+# ║ hiện ra là `slice.py` — tức SAU khi đã tiêu xong quota của cả lượt. Nên phép   ║
+# ║ đo đứng ở đây: rẻ nhất, sớm nhất, ngay cạnh cái file vừa ghi.                  ║
+# ║                                                                               ║
+# ║ NHƯNG NÓ KHÔNG PHÁN. Chủ sản phẩm chốt 09/09/2026: "cái này cứ để cho nó gen  ║
+# ║ tự nhiên nhé, ko block". Verdict "bad" chỉ thành một ghi chú trong ngoặc       ║
+# ║ vuông trên dòng `OK` + một dòng log — không thử lại, không loại ảnh, không     ║
+# ║ đánh trượt job. Xem khối "PHÉP ĐO NỀN CHỈ CÒN LÀ MỘT GHI CHÚ" trong `run_one`. ║
 # ╚═══════════════════════════════════════════════════════════════════════════════╝
 #
 # BA PHÉP, phép thứ ba mới là phép đắt giá:
@@ -37,15 +43,15 @@ file_hash(){
 #      `setBlendMode(.clear)`) để xoá nền hộ. Đúng thứ vừa bị bỏ khỏi kit-gen, quay
 #      lại bằng cửa sau. Ngưỡng 0,5% để rất xa cả hai đầu.
 #
-# KHÔNG DÒ ĐƯỢC THÌ KHÔNG PHÁN. Thiếu Pillow ⇒ in cảnh báo rồi cho qua: chặn một
-# lượt gen vì phép kiểm không chạy nổi là đổi một lỗi thật lấy một lỗi tự gây.
+# KHÔNG DÒ ĐƯỢC THÌ KHÔNG NÓI. Thiếu Pillow ⇒ in "skip" kèm lý do rồi thôi: một
+# phép đo không chạy nổi phải TỰ KHAI, chứ không được đoán bừa một câu buộc tội.
 #
 # ⚠️ BA PHÉP TRÊN CHỈ ĐÚNG VỚI SHEET CÓ NỀN. Với sheet FULL-BLEED thì chính prompt
 # ra lệnh ngược lại: dòng 488 viết "NOT ONE PIXEL of empty transparent background
 # may show around a scene". Model làm ĐÚNG hợp đồng ⇒ alpha=0 chiếm 0,00% ⇒ phép ②
-# đóng dấu FAIL "model vẽ đè kín nền", và phép ③ cũng FAIL vì cảnh đục kín thì
-# không có dải mờ nào. Tức engine tự phạt chính thứ nó vừa yêu cầu — mọi sheet nền
-# đều đỏ oan, và người dùng đọc được một lời buộc tội sai hẳn nguyên nhân.
+# kêu "model vẽ đè kín nền", và phép ③ cũng kêu vì cảnh đục kín thì không có dải mờ
+# nào. Tức engine tự tố chính thứ nó vừa yêu cầu — mọi sheet nền đều mang một ghi
+# chú buộc tội sai hẳn nguyên nhân (và hồi phép đo còn quyền chặn thì chúng đỏ oan).
 # Nên tham số thứ hai ("1" = job full-bleed, do khối python đánh dấu bằng file
 # `prompts/<job>.fullbleed`) LẬT NGƯỢC phép kiểm: full-bleed mà TRONG SUỐT NHIỀU
 # mới là hỏng (cảnh bị vẽ thụt vào, chừa khung rỗng quanh 4 cạnh — đúng triệu
@@ -258,7 +264,8 @@ canvas_of = geometry.canvas_of
 # ── CHỈ CÒN ĐÚNG MỘT ĐƯỜNG NỀN: ALPHA THẬT ────────────────────────────────────
 # Bảng màu nền giả-trong-suốt (và cả tầng tách theo nó) đã bỏ — image_gen của codex
 # 0.149 trả RGBA thật, nên prompt xin thẳng nền trong suốt. Chỉ còn một đường nghĩa
-# là nó phải được KIỂM, không chỉ được XIN (xem `alpha_verdict` ở đầu file).
+# là nó phải được ĐO, không chỉ được XIN (xem `alpha_verdict` ở đầu file) — đo để
+# NÓI RA, chứ không để chặn: lượt gen cứ chạy tự nhiên, người dùng tự quyết.
 
 for s in cfg["styles"]:
     for sh in cfg["sheets"]:
@@ -901,8 +908,9 @@ ${att_paths}--- REFERENCE IMAGES END ---
   # ║ chế công cụ tách nền. Cấm phải đặt ở ĐẦU: chữ ở gần thắng chữ ở xa, và     ║
   # ║ ngay trong thư mục skill có sẵn scripts/remove_chroma_key.py nằm chờ như   ║
   # ║ thể được cấp phép (SKILL.md không hề nhắc nó trong reference map).         ║
-  # ║ alpha_verdict ở đầu file chỉ BẮT được triệu chứng sau khi đã tốn một lượt  ║
-  # ║ gen; chặn từ gốc là ở đây.                                                 ║
+  # ║ alpha_verdict ở đầu file chỉ GHI NHẬN triệu chứng sau khi đã tốn một lượt  ║
+  # ║ gen (và từ 09/09/2026 nó cũng chỉ ghi nhận, không chặn); chữa từ gốc là ở   ║
+  # ║ đây, trong câu chữ của task.                                               ║
   # ╚════════════════════════════════════════════════════════════════════════════╝
   task="Use the imagegen skill and its built-in image_gen tool for this. If you have not read that skill yet, read its SKILL.md first and follow its transparent-image rule: ask image_gen for a genuinely transparent background and preserve the alpha channel it gives back.
 
@@ -1010,57 +1018,25 @@ $(cat "prompts/${job}.txt")
     # làm đúng cũng bị đóng dấu FAIL.
     local fb=0; [[ -f "prompts/${job}.fullbleed" ]] && fb=1
     local av; av="$(alpha_verdict "raw/${job}.png" "$fb")"
-    # ╔══ ẢNH ĐỤC KHÔNG ĐƯỢC NẰM LẠI Ở raw/ ═══════════════════════════════════════╗
-    # ║ Trước bản này, verdict "bad" chỉ in một dòng FAIL rồi thôi — file đục vẫn   ║
-    # ║ nằm nguyên ở `raw/<job>.png`. Tầng agent phán theo SẢN PHẨM                 ║
-    # ║ (`settleGenJobs`: có ảnh mới trong lượt này ⇒ job "ok"), nên nó lật job từ  ║
-    # ║ failed về ok, cắt, và ĐĂNG tấm đục ấy thành phiên bản đang dùng. Hiện       ║
-    # ║ trường: sheet `chinh-nhan-vat` của dự án test là một tấm caro giả, mode     ║
-    # ║ "rgb", và nó là bản người dùng đang nhìn.                                   ║
-    # ║ Nên: đổi tên thành `.rejected.png` (giữ lại để soi, nhưng KHÔNG còn là sản  ║
-    # ║ phẩm), gọi lại codex ĐÚNG MỘT LẦN với cùng task cộng một đoạn nói thẳng     ║
-    # ║ chuyện vừa xảy ra, rồi kiểm lại. Vẫn đục thì raw/<job>.png KHÔNG tồn tại —  ║
-    # ║ và đó chính là thứ giữ cho agent không đăng nó.                             ║
+    # ╔══ PHÉP ĐO NỀN CHỈ CÒN LÀ MỘT GHI CHÚ ══════════════════════════════════════╗
+    # ║ Bản trước, verdict "bad" có hậu quả: đổi tên ảnh thành `.rejected.png`,     ║
+    # ║ gọi codex thêm ĐÚNG một lượt, vẫn đục thì FAIL và KHÔNG để lại              ║
+    # ║ `raw/<job>.png` — cốt để tầng agent không đăng tấm đục lên.                  ║
+    # ║ Chủ sản phẩm chốt 09/09/2026: "cái này cứ để cho nó gen tự nhiên nhé, ko     ║
+    # ║ block". Nên phép đo Ở LẠI (nó vẫn nói đúng chuyện gì vừa xảy ra, và log/UI  ║
+    # ║ vẫn cần biết) nhưng nó KHÔNG còn quyền gì: không thử lại, không loại ảnh,   ║
+    # ║ không đánh trượt job. Ảnh model trả về được đăng như mọi ảnh khác, và       ║
+    # ║ người nhìn nó là người quyết — thanh phiên bản đã có sẵn nút vẽ lại và nút  ║
+    # ║ «Xoá bản này».                                                              ║
     # ╚════════════════════════════════════════════════════════════════════════════╝
-    if [[ "$av" == bad* ]]; then
-      mv -f "raw/${job}.png" "raw/${job}.rejected.png" 2>/dev/null
-      echo "alpha lượt 1 hỏng: ${av#bad } — giữ ở raw/${job}.rejected.png, gọi lại codex một lần" >>"logs/${job}.log"
-      # ĐOẠN THÊM ĐỨNG TRƯỚC TASK, và nó nói với AGENT CODEX chứ không phải với máy
-      # vẽ: đây không phải prompt ảnh, nên nó không rơi vào luật "chỉ tả điều muốn".
-      # Vẫn tránh gọi tên thứ không muốn (không có chữ caro/checker ở đây) — đoạn này
-      # đi CÙNG file prompt trong một task, và một cái tên nhắc ra là một cái tên có
-      # cơ hội lọt vào ảnh.
-      local retry_note="The previous attempt came back as an opaque image without an alpha channel. Ask image_gen for a transparent background again and make sure the saved PNG keeps the alpha channel it returns. Do not repair the earlier file and do not build any tool of your own to change it."
-      ${codex_env[@]+"${codex_env[@]}"} codex exec \
-        ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
-        -s workspace-write \
-        -C "${ROOT}" \
-        --skip-git-repo-check \
-        ${att[@]+"${att[@]}"} \
-        -o "logs/${job}.last.txt" \
-        "${retry_note}
-
-${task}" >>"logs/${job}.log" 2>&1
-      rc=$?
-      # Lượt hai KHÔNG ghi được gì ⇒ không có ảnh nào để mà kiểm. Không phục hồi file
-      # `.rejected.png` về đích: nó đã trượt cổng một lần, đưa lại vào raw/ chỉ để
-      # agent đăng nó lên là quay về đúng cái bệnh vừa chữa.
-      local h2; h2="$(file_hash "raw/${job}.png")"
-      if [[ -z "$h2" ]]; then
-        echo "FAIL ${job} (nền KHÔNG trong suốt thật: ${av#bad } — đã thử lại 1 lần, lượt hai không ghi được ảnh nào (rc=${rc}); ảnh bị loại ở raw/${job}.rejected.png, xem logs/${job}.log)"
-        return
-      fi
-      av="$(alpha_verdict "raw/${job}.png" "$fb")"
-      if [[ "$av" == bad* ]]; then
-        mv -f "raw/${job}.png" "raw/${job}.rejected.png" 2>/dev/null
-        echo "FAIL ${job} (nền KHÔNG trong suốt thật: ${av#bad } — đã thử lại 1 lần, vẫn vậy; ảnh bị loại ở raw/${job}.rejected.png, xem logs/${job}.log)"
-        return
-      fi
-      echo "lượt 2 đạt cổng alpha: ${av}" >>"logs/${job}.log"
-    fi
+    # Nhãn phải theo ĐÚNG thứ vừa đo được: tấm full-bleed trượt vì lý do NGƯỢC LẠI
+    # (trong suốt quá nhiều), dán chữ "đục" lên đó là nói sai hẳn nguyên nhân.
+    local nhan="nền đục"; (( fb )) && nhan="nền"
+    [[ "$av" == bad* ]] && echo "${nhan}: ${av#bad } — chỉ ghi nhận, không chặn" >>"logs/${job}.log"
     local tail=""; [[ $rc -ne 0 ]] && tail="  (codex rc=${rc} sau khi đã lưu ảnh — bỏ qua)"
     case "$av" in
       skip*) echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)${tail}  [${av#skip }]" ;;
+      bad*) echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)${tail}  [${nhan}: ${av#bad }]" ;;
       *)    echo "OK  ${job}  $(du -h "raw/${job}.png" | cut -f1)  ${av#ok }${tail}" ;;
     esac
   fi

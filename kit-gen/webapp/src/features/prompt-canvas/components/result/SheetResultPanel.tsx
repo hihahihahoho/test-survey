@@ -243,6 +243,16 @@ export function SheetResultPanel({
    * (`sheet-files.ts`) — đây chỉ là chỗ nối dây.
    */
   const framed = React.useMemo(() => contractFramed(cells), [cells]);
+
+  /* TẤM ĐỤC PHẢI TỰ KHAI — MỘT DÒNG, KHÔNG CHẶN GÌ.
+     Chủ sản phẩm chốt 09/09/2026: "cái này cứ để cho nó gen tự nhiên nhé, ko block".
+     Engine thôi đánh trượt tấm nền đục (không thử lại, không loại ảnh), nên chỗ duy
+     nhất còn nói được sự thật là cờ `mode` mà `slice.py` ghi cho từng ô. Câu này đứng
+     ngay dưới ảnh gốc, cạnh thanh phiên bản — nơi có sẵn nút vẽ lại và «Xoá bản này»,
+     tức người dùng đọc xong là quyết được ngay. Tab «Đã crop» đã có lời cảnh báo dài
+     của riêng nó (`SheetCellGrid`) nên ở đây KHÔNG lặp lại.
+     Kit cắt bằng bản slice.py cũ không có khoá `mode` ⇒ im lặng đúng như trước. */
+  const ducNen = React.useMemo(() => cells.some((c) => c.mode === "rgb"), [cells]);
   const fitScale = React.useCallback(
     (f: KitFile) => framed.scales.get(f.path) ?? 1,
     [framed],
@@ -485,6 +495,12 @@ export function SheetResultPanel({
                   ? "Đây là bản hiện hành — mỗi lượt vẽ ghi đè lên nó."
                   : "Đây là ảnh của đúng lượt chạy này — không bị lượt sau ghi đè."}
               </p>
+              {ducNen && (
+                <p className="mt-1 text-caption text-fg-muted">
+                  Tấm này không có kênh alpha thật — máy vẽ trả nền đục. Vẽ lại hoặc xoá bản
+                  này ở thanh phiên bản nếu bạn cần nền trong suốt.
+                </p>
+              )}
             </>
           )}
         </TabsContent>

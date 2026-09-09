@@ -179,11 +179,12 @@ export function useGenQueue(
               runId: activeRunId,
               total: data.jobs.length,
               /* LÝ DO, KHÔNG CHỈ CON SỐ. `failSummary` là câu agent đã gộp sẵn
-                 ("1/3 job model trả ảnh đục, không có kênh alpha thật (đã thử lại 1
-                 lần)") — dùng nguyên văn để mọi bề mặt nói cùng một câu, đúng luật
-                 mà `run-line.ts` đã theo. Thiếu nó (agent bản cũ) thì rơi về con số
-                 như trước. Câu cuối là việc người dùng làm tiếp: nút Vẽ ngay bên
-                 dưới chính là nút vẽ lại thẻ này. */
+                 (kiểu «2/3 job không ghi được ảnh · 1 nghi chạm giới hạn tạo
+                 ảnh») — dùng nguyên văn để mọi bề mặt nói cùng một câu, đúng luật
+                 mà `run-line.ts` đã theo. Thiếu nó (agent bản cũ) thì rơi về con số như trước. Câu cuối
+                 là việc người dùng làm tiếp: nút Vẽ ngay bên dưới chính là nút vẽ lại
+                 thẻ này. (Tấm nền ĐỤC không tới đây: từ 09/09/2026 nó là một job XONG,
+                 chỉ mang chú thích cạnh ảnh — xem `SheetResultPanel`.) */
               message:
                 data.status === "cancelled"
                   ? "Lượt vẽ đã bị dừng."

@@ -72,47 +72,40 @@ describe("payload lượt chạy THẬT của agent không được làm vỡ m�
 });
 
 /**
- * ══ CHẨN ĐOÁN `OPAQUE_ALPHA` (09/2026) ═══════════════════════════════════════
+ * ══ NỀN ĐỤC KHÔNG CÒN LÀ MỘT CHẨN ĐOÁN ═══════════════════════════════════════
  *
- * Cổng alpha của `gen.sh` đánh trượt cả lượt đầu lẫn lượt vẽ lại tự động: ảnh ĐÃ
- * sinh ra, quota ĐÃ tiêu, chỉ có nền là đục. Đây là mã DUY NHẤT mà việc đáng làm
- * tiếp theo là bấm Vẽ — nên nó phải qua được schema chứ không rơi về một giá trị
- * chung. Nguồn: `agent/lib/engine.mjs` (`diagnose` + `DIAGNOSIS_VI`).
+ * 09/2026 từng có mã `OPAQUE_ALPHA`: cổng alpha của `gen.sh` đánh trượt tấm đục,
+ * job đỏ, ảnh không được đăng. Chủ sản phẩm chốt 09/09/2026 "cái này cứ để cho nó
+ * gen tự nhiên nhé, ko block" — engine in `OK` kèm một ghi chú, job xong bình
+ * thường, và thứ duy nhất còn nói ra sự thật là cờ `mode: "rgb"` của từng ô trong
+ * manifest. Nên `diagnosisSchema` trở lại đúng 5 mã LỖI THẬT, và một payload cũ
+ * mang `OPAQUE_ALPHA` phải bị schema từ chối chứ không lặng lẽ lọt qua.
+ * Nguồn: `agent/lib/engine.mjs` (`diagnose` + `DIAGNOSIS_VI`).
  */
-describe("job trượt cổng alpha đọc được nguyên vẹn ở web", () => {
-  const opaque = () => {
+describe("nền đục đi đường job THÀNH CÔNG, không đường chẩn đoán", () => {
+  it("`OPAQUE_ALPHA` KHÔNG còn là giá trị hợp lệ của `diagnosis`", () => {
     const run = runWith([cell("ok")]);
-    return {
+    const r = runSchema.safeParse({
       ...run,
-      failSummary: "1/3 job model trả ảnh đục, không có kênh alpha thật (đã thử lại 1 lần)",
+      jobs: [{ job: "chinh-nhan-vat", variant: "chinh", sheet: "nhan-vat", status: "failed", diagnosis: "OPAQUE_ALPHA" }],
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("tấm nền đục về web như một job xong: status ok, có artifact, không chẩn đoán", () => {
+    const run = runWith([cell("ok")]);
+    const r = runSchema.safeParse({
+      ...run,
       jobs: [{
         job: "chinh-nhan-vat",
         variant: "chinh",
         sheet: "nhan-vat",
-        status: "failed",
-        diagnosis: "OPAQUE_ALPHA",
-        errorTail: [
-          "Model trả ảnh đục, không có kênh alpha thật — đã thử lại 1 lần, vẫn đục. Bấm Vẽ lại để thử tiếp.",
-        ],
+        status: "ok",
+        artifact: { path: "runs/r-0001/artifacts/chinh-nhan-vat.png", bytes: 1234 },
       }],
-    };
-  };
-
-  it("`OPAQUE_ALPHA` là giá trị HỢP LỆ, không bị hạ về UNKNOWN", () => {
-    const r = runSchema.safeParse(opaque());
+    });
     expect(r.success).toBe(true);
-    expect(r.success && r.data.jobs[0]!.diagnosis).toBe("OPAQUE_ALPHA");
-  });
-
-  it("câu tiếng Việt của agent tới được web nguyên văn (errorTail)", () => {
-    const r = runSchema.safeParse(opaque());
-    expect(r.success && r.data.jobs[0]!.errorTail?.[0]).toContain("đã thử lại 1 lần");
-    expect(r.success && r.data.failSummary).toContain("không có kênh alpha thật");
-  });
-
-  it("tấm trượt cổng KHÔNG mang `artifact` — và web không được coi đó là lỗi parse", () => {
-    const r = runSchema.safeParse(opaque());
-    expect(r.success).toBe(true);
-    expect(r.success && !r.data.jobs[0]!.artifact).toBe(true);
+    expect(r.success && r.data.jobs[0]!.status).toBe("ok");
+    expect(r.success ? (r.data.jobs[0]!.diagnosis ?? null) : "x").toBeNull();
   });
 });

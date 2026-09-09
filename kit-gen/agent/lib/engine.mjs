@@ -244,12 +244,6 @@ export function buildCommand(kind, projectDirAbs, { variants = [], sheets = null
 /** Chẩn đoán 1 dòng cho job lỗi (enum của Run.jobs[].diagnosis). */
 export function diagnose(lines) {
   const hay = lines.join("\n").toLowerCase()
-  /* ĐỨNG ĐẦU vì nó là chẩn đoán HẸP NHẤT và nó có một lối chữa riêng: ảnh đã sinh
-     ra, quota đã tiêu, chỉ có nền là đục. Câu này do `gen.sh` in ra sau khi cổng
-     alpha đánh trượt CẢ HAI lượt (lượt đầu + đúng một lượt vẽ lại) — xem khối
-     "ẢNH ĐỤC KHÔNG ĐƯỢC NẰM LẠI Ở raw/". Nếu nó rơi xuống `UNKNOWN` thì người dùng
-     đọc được "lỗi chưa rõ nguyên nhân" cho đúng cái lỗi engine vừa nói rõ nhất. */
-  if (/không trong suốt thật|không có kênh alpha/.test(hay)) return "OPAQUE_ALPHA"
   if (/rate limit|429|quota|usage limit|too many requests/.test(hay)) return "QUOTA_SUSPECTED"
   if (/not logged in|unauthor|chưa đăng nhập|codex login/.test(hay)) return "NOT_LOGGED_IN"
   if (/timed? ?out|timeout/.test(hay)) return "TIMEOUT"
@@ -266,7 +260,6 @@ const DIAGNOSIS_VI = {
   QUOTA_SUSPECTED: "nghi chạm giới hạn tạo ảnh",
   NOT_LOGGED_IN: "công cụ tạo ảnh chưa đăng nhập",
   NO_ARTIFACT: "không ghi được ảnh",
-  OPAQUE_ALPHA: "model trả ảnh đục, không có kênh alpha thật (đã thử lại 1 lần)",
   TIMEOUT: "quá thời gian chờ",
   UNKNOWN: "lỗi chưa rõ nguyên nhân",
 }

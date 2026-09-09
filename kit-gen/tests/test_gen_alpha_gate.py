@@ -1,11 +1,14 @@
-"""CỔNG ALPHA CỦA gen.sh — BẮT NGAY LÚC SINH, KHÔNG ĐỢI TỚI LÚC CẮT.
+"""PHÉP ĐO NỀN CỦA gen.sh — ĐO NGAY LÚC SINH, VÀ CHỈ ĐỂ GHI CHÚ.
 
 ╔══ VÌ SAO CÓ FILE NÀY ═════════════════════════════════════════════════════════╗
 ║ Từ khi bỏ HẲN đường tách nền, hợp đồng còn đúng một câu: `image_gen` trả về    ║
 ║ PNG RGBA có nền trong suốt thật. Prompt đã XIN điều đó — nhưng xin không phải  ║
-║ là kiểm. Trước bản này lời phán duy nhất sau mỗi lượt là "file có đổi byte     ║
-║ không", nên một sheet đục hoàn toàn vẫn được đóng dấu OK và chỗ duy nhất phát  ║
+║ là biết. Trước bản này lời phán duy nhất sau mỗi lượt là "file có đổi byte     ║
+║ không", nên một sheet đục hoàn toàn cũng không ai nói gì, và chỗ duy nhất phát ║
 ║ hiện ra là slice.py, tức SAU khi đã tiêu xong quota của cả lượt.               ║
+║                                                                               ║
+║ Phép đo NÓI, chứ không chặn: chủ sản phẩm chốt 09/09/2026 "cứ để cho nó gen    ║
+║ tự nhiên nhé, ko block" (xem `NenDucKhongChanTest` ở cuối file).               ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
 
 CA ĐẮT NHẤT LÀ CA ②, và nó không hiển nhiên chút nào: ảnh có kênh alpha, có nền
@@ -172,7 +175,7 @@ class MucNghiTest(unittest.TestCase):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CỔNG ALPHA PHẢI CÓ HẬU QUẢ, KHÔNG CHỈ CÓ LỜI PHÁN
+# PHÉP ĐO NỀN CHỈ ĐƯỢC GHI CHÚ — NÓ KHÔNG ĐƯỢC CHẶN GÌ CẢ
 # ═══════════════════════════════════════════════════════════════════════════════
 def _run_one_src():
     """Bóc đúng bộ hàm cần thiết để chạy `run_one` ngoài đời thật của gen.sh.
@@ -219,24 +222,28 @@ def duc():
     return Image.new("RGB", (64, 64), (200, 80, 40))
 
 
-class CongAlphaCoHauQuaTest(unittest.TestCase):
-    """VERDICT "bad" PHẢI DỌN DẸP HIỆN TRƯỜNG, KHÔNG CHỈ IN MỘT DÒNG.
+class NenDucKhongChanTest(unittest.TestCase):
+    """VERDICT "bad" CHỈ ĐƯỢC NÓI, KHÔNG ĐƯỢC LÀM GÌ.
 
-    ╔══ HIỆN TRƯỜNG (dự án thật, 09/2026) ════════════════════════════════════════╗
-    ║ `alpha_verdict` phán "bad", `gen.sh` in `FAIL <job>` — rồi thôi. File đục    ║
-    ║ vẫn nằm ở `raw/<job>.png`, và tầng agent phán theo SẢN PHẨM                  ║
-    ║ (`run-handle.settleGenJobs`: có ảnh mới trong lượt này ⇒ job "ok"), nên nó   ║
-    ║ lật job từ failed về ok, cắt, và ĐĂNG tấm đục thành phiên bản đang dùng.     ║
-    ║ Kết quả: sheet `chinh-nhan-vat` của dự án test là một tấm nền giả, mode      ║
-    ║ "rgb", và đó là bản người dùng đang nhìn.                                    ║
+    ╔══ HAI ĐỜI CỦA CÙNG MỘT PHÉP ĐO ═════════════════════════════════════════════╗
+    ║ Đời ① (đầu 09/2026): verdict "bad" chỉ in một dòng FAIL rồi thôi — file đục  ║
+    ║   vẫn nằm ở `raw/<job>.png`, và tầng agent phán theo SẢN PHẨM nên nó lật job ║
+    ║   về ok, cắt, rồi đăng tấm đục thành phiên bản đang dùng.                     ║
+    ║ Đời ②: verdict "bad" có hậu quả — đổi tên ảnh thành `.rejected.png`, gọi     ║
+    ║   codex thêm ĐÚNG một lượt, vẫn đục thì FAIL và không để lại `raw/<job>.png`.║
+    ║ Đời ③ (chủ sản phẩm chốt 09/09/2026): "cái này cứ để cho nó gen tự nhiên     ║
+    ║   nhé, ko block". Không thử lại, không loại ảnh, không đánh trượt job. Ảnh   ║
+    ║   model trả về được đăng như mọi ảnh khác; người nhìn nó là người quyết —    ║
+    ║   thanh phiên bản đã có sẵn nút vẽ lại và nút «Xoá bản này».                 ║
     ╚═════════════════════════════════════════════════════════════════════════════╝
 
-    Bản vá: đổi tên ảnh trượt thành `.rejected.png`, gọi codex lại ĐÚNG MỘT LẦN,
-    kiểm lại; vẫn trượt thì `raw/<job>.png` KHÔNG được tồn tại.
+    Phép đo Ở LẠI vì nó vẫn nói đúng chuyện gì vừa xảy ra (log + ghi chú trên dòng
+    `OK` + cờ `mode` mà slice.py ghi vào manifest). Ca ở đây khoá đúng ranh giới ấy:
+    NÓI thì có, LÀM thì không — và nhất là KHÔNG tiêu thêm một lượt quota nào.
     """
 
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="kitgen-alpha-retry-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="kitgen-nen-duc-"))
         self.proj = self.tmp / "p"
         for sub in ("prompts", "raw", "logs"):
             (self.proj / sub).mkdir(parents=True)
@@ -278,60 +285,50 @@ class CongAlphaCoHauQuaTest(unittest.TestCase):
     def raw(self):
         return self.proj / "raw" / "job1.png"
 
-    @property
-    def rejected(self):
-        return self.proj / "raw" / "job1.rejected.png"
-
     def calls(self):
         return int(self.counter.read_text().strip()) if self.counter.exists() else 0
 
-    def test_luot_1_dat_thi_KHONG_goi_lai_lan_nao(self):
-        """Nửa đắt tiền nhất của bản vá: ảnh đúng không được tốn thêm một lượt nào."""
+    def test_anh_dat_van_la_OK_va_chi_ton_mot_luot(self):
         out = self.run_one(mem_that())
         self.assertTrue(out.startswith("OK  job1"), out)
-        self.assertEqual(self.calls(), 1, "ảnh đạt cổng mà vẫn gọi codex lần hai")
+        self.assertNotIn("nền đục", out, "ảnh đạt thì không có gì để ghi chú")
+        self.assertEqual(self.calls(), 1)
         self.assertTrue(self.raw.exists())
-        self.assertFalse(self.rejected.exists())
 
-    def test_luot_1_duc_luot_2_dat_thi_OK_va_anh_truot_duoc_giu_rieng(self):
-        out = self.run_one(duc(), mem_that())
+    def test_anh_duc_VAN_la_OK_kem_ghi_chu(self):
+        """Câu chốt của đời ③: dòng kết là OK, và ghi chú đi kèm chứ không thay chỗ."""
+        out = self.run_one(duc())
         self.assertTrue(out.startswith("OK  job1"), out)
-        self.assertEqual(self.calls(), 2)
-        self.assertTrue(self.raw.exists(), "ảnh đạt của lượt hai phải nằm ở đích")
-        self.assertTrue(self.rejected.exists(), "ảnh trượt phải được giữ lại để soi")
+        self.assertNotIn("FAIL", out, "nền đục KHÔNG còn đánh trượt job")
+        self.assertIn("[nền đục:", out, "phải nói ra, không được im lặng cho qua")
+        self.assertIn("KHÔNG có kênh alpha", out, "ghi chú mang nguyên lý do đã đo được")
 
-    def test_van_duc_sau_luot_2_thi_KHONG_de_lai_raw(self):
-        """Đây là câu chốt: agent phán theo sản phẩm, nên thứ giữ nó không đăng ảnh
-        đục là chính việc `raw/<job>.png` không tồn tại."""
-        out = self.run_one(duc(), duc())
-        self.assertTrue(out.startswith("FAIL job1"), out)
-        self.assertIn("đã thử lại 1 lần", out)
-        self.assertIn("job1.rejected.png", out)
-        self.assertFalse(self.raw.exists(), "ảnh đục vẫn nằm ở raw/ — agent sẽ đăng nó")
-        self.assertTrue(self.rejected.exists())
-        self.assertEqual(self.calls(), 2, "chỉ được thử lại ĐÚNG MỘT LẦN")
+    def test_anh_duc_KHONG_bi_loai_khoi_raw(self):
+        """`raw/<job>.png` là sản phẩm. Không đổi tên, không dọn, không `.rejected`."""
+        self.run_one(duc())
+        self.assertTrue(self.raw.exists(), "ảnh model trả về phải nằm nguyên ở đích")
+        self.assertEqual(
+            sorted(p.name for p in (self.proj / "raw").iterdir()), ["job1.png"],
+            "không được đẻ ra file phụ nào cạnh ảnh")
 
-    def test_luot_2_khong_ghi_gi_cung_khong_hoi_sinh_anh_truot(self):
-        """Không được chép `.rejected.png` ngược về đích: nó đã trượt cổng một lần."""
-        out = self.run_one(duc(), None)
-        self.assertTrue(out.startswith("FAIL job1"), out)
-        self.assertFalse(self.raw.exists())
-        self.assertTrue(self.rejected.exists())
-
-    def test_doan_them_cua_luot_2_noi_dung_chuyen_va_khong_goi_ten_thu_khong_muon(self):
+    def test_anh_duc_KHONG_goi_codex_lan_hai(self):
+        """Nửa đắt tiền nhất: một lượt gen là một lượt quota. Không tự ý tiêu lượt hai."""
         self.run_one(duc(), mem_that())
+        self.assertEqual(self.calls(), 1, "nền đục mà vẫn gọi codex lần hai = tự tiêu quota")
         log = self.tasklog.read_text(encoding="utf-8")
-        lan1, lan2 = log.split("--- CALL 2 ---")
-        self.assertNotIn("opaque image without an alpha channel", lan1,
-                         "lượt đầu không được mang câu của lượt chữa")
-        self.assertIn("opaque image without an alpha channel", lan2)
-        self.assertIn("keeps the alpha channel it returns", lan2)
+        self.assertNotIn("--- CALL 2 ---", log)
+        self.assertNotIn("opaque image without an alpha channel", log,
+                         "đoạn nhắc của lượt chữa đã bị bỏ cùng với chính lượt chữa")
         # Cùng luật với `test_prompt_KHONG_nhac_ten_caro`: một cái tên nhắc ra là một
         # cái tên có cơ hội lọt vào ảnh.
-        self.assertNotIn("checker", lan2.lower())
-        # Và task gốc vẫn đi kèm nguyên vẹn — lượt hai vẽ cùng một tấm, không phải
-        # một yêu cầu khác.
-        self.assertIn("IMAGE PROMPT START", lan2)
+        self.assertNotIn("checker", log.lower())
+
+    def test_ly_do_duoc_ghi_vao_log_cua_job(self):
+        """Ghi chú trên một dòng `OK` thì ngắn; log là chỗ giữ nguyên văn để soi sau."""
+        self.run_one(duc())
+        log = (self.proj / "logs" / "job1.log").read_text(encoding="utf-8")
+        self.assertIn("nền đục:", log)
+        self.assertIn("chỉ ghi nhận, không chặn", log)
 
 
 if __name__ == "__main__":

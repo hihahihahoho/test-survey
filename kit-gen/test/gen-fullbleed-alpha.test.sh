@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════════════════
-# gen.sh: CỔNG ALPHA KHÔNG ĐƯỢC PHẠT OAN TẤM NỀN FULL-BLEED.
+# gen.sh: PHÉP ĐO NỀN KHÔNG ĐƯỢC BUỘC TỘI OAN TẤM NỀN FULL-BLEED.
 #
 # MÂU THUẪN GỐC — hai câu của cùng một engine đá nhau:
 #   · prompt của tấm full-bleed ra lệnh: "NOT ONE PIXEL of empty transparent
 #     background may show around a scene" (khối `place` trong khối python);
-#   · `alpha_verdict` lại phán FAIL khi "alpha=0 chỉ 0,00%" ⇒ "model vẽ đè kín nền".
-# Tức tấm nào làm ĐÚNG hợp đồng cũng bị đóng dấu hỏng, kèm một lời buộc tội sai hẳn
-# nguyên nhân. Phép ③ (dải mờ) cũng vậy: cảnh đục kín thì không có dải mờ nào.
+#   · `alpha_verdict` lại kêu "bad" khi "alpha=0 chỉ 0,00%" ⇒ "model vẽ đè kín nền".
+# Tức tấm nào làm ĐÚNG hợp đồng cũng mang một lời buộc tội sai hẳn nguyên nhân (hồi
+# phép đo còn quyền chặn thì chúng còn bị đóng dấu hỏng). Phép ③ (dải mờ) cũng vậy:
+# cảnh đục kín thì không có dải mờ nào.
 #
 # BẢN VÁ: khối python đánh dấu `prompts/<job>.fullbleed`, run_one truyền cờ đó vào
 # alpha_verdict, và với tấm full-bleed thì phép kiểm LẬT NGƯỢC — trong suốt NHIỀU
 # mới là hỏng (cảnh bị vẽ thụt vào, chừa khung rỗng quanh cạnh).
+#
+# ⚠️ TỪ 09/09/2026 PHÉP ĐO KHÔNG CHẶN NỮA (chủ sản phẩm: "cứ để cho nó gen tự nhiên
+# nhé, ko block"): mọi tấm có ảnh mới đều ra dòng `OK`, verdict "bad" chỉ còn là ghi
+# chú trong ngoặc vuông. Nên ca này đo bằng CHỮ trong ghi chú, không bằng OK/FAIL —
+# thứ nó canh vẫn y nguyên: luật nào được áp cho tấm nào.
 #
 # Ca trích nguyên `alpha_verdict` + `run_one` từ gen.sh rồi chạy với codex giả.
 # Không gọi mạng, không tiêu quota.
@@ -98,20 +104,22 @@ out="$(run_case kin.png)"
 expect "không bị phạt oan"              "OK  job1"   "$out"
 expect "nói rõ nó được xét theo luật full-bleed" "full-bleed" "$out"
 
-echo "── vẫn tấm nền đó, nhưng cảnh bị vẽ thụt vào (50% trong suốt) ⇒ FAIL"
+echo "── vẫn tấm nền đó, nhưng cảnh bị vẽ thụt vào (50% trong suốt) ⇒ bị ghi chú"
 out="$(run_case rong.png)"
-expect "bị bắt"                          "FAIL job1"  "$out"
+expect "không chặn ai cả"                "OK  job1"   "$out"
 expect "nói đúng nguyên nhân"            "phủ KÍN"    "$out"
+expect "nhãn KHÔNG dán chữ đục cho ca ngược" "[nền: " "$out"
 
 echo "── KHÔNG có dấu full-bleed (tấm UI thường): luật cũ giữ nguyên từng chữ"
 rm -f "$WORK/p/prompts/job1.fullbleed"
 out="$(run_case kin.png)"
-expect "ảnh đục ⇒ vẫn FAIL như trước"    "FAIL job1"  "$out"
+expect "ảnh đục vẫn được đăng"           "OK  job1"   "$out"
 expect "vẫn đúng câu buộc tội cũ"        "vẽ đè kín nền" "$out"
+expect "nhãn nói đúng thứ vừa đo"        "[nền đục: " "$out"
 
 out="$(run_case ui.png)"
 expect "ảnh có alpha thật ⇒ OK"          "OK  job1"   "$out"
 expect "vẫn báo dải mờ như trước"        "dải mờ"     "$out"
 
 [ "$fail" -eq 0 ] || { echo; echo "Xem đầu file test này để biết mâu thuẫn gốc." >&2; exit 1; }
-echo "OK  gen.sh: cổng alpha xét tấm full-bleed bằng luật của tấm full-bleed"
+echo "OK  gen.sh: phép đo nền xét tấm full-bleed bằng luật của tấm full-bleed"

@@ -1,21 +1,20 @@
 #!/usr/bin/env bash
-# ENGINE GIẢ #2 — CỔNG ALPHA ĐÁNH TRƯỢT MỘT TẤM.
+# ENGINE GIẢ #2 — MỘT TẤM CÓ NỀN ĐỤC, VÀ NÓ VẪN LÀ MỘT TẤM XONG.
 #
 # ╔══ VÌ SAO CÓ FIXTURE RIÊNG THAY VÌ THÊM MỘT NHÁNH VÀO engine-fake ═══════════╗
 # ║ `engine-fake` đã cố ý cho `bg-home` chết theo kiểu KHÁC (`rc=127`, tức       ║
 # ║ NO_ARTIFACT), và cả một loạt ca đang khoá đúng con số của nó ("1/3 job không ║
-# ║ ghi được ảnh"). Nhồi thêm một kiểu chết thứ hai vào đó là đổi đáp án của      ║
+# ║ ghi được ảnh"). Nhồi thêm một hình dạng thứ hai vào đó là đổi đáp án của      ║
 # ║ những ca ấy vì một lý do không liên quan gì tới chúng.                        ║
 # ╚═════════════════════════════════════════════════════════════════════════════╝
 #
-# Tấm `bg-home` ở đây tái hiện ĐÚNG hình dạng mà `gen.sh` thật để lại sau khi cổng
-# alpha đánh trượt CẢ HAI lượt (lượt đầu + đúng một lượt vẽ lại):
-#   · in `FAIL <job> (nền KHÔNG trong suốt thật: … — đã thử lại 1 lần, vẫn vậy; …)`
-#   · ảnh trượt nằm ở `raw/<job>.rejected.png`
-#   · và `raw/<job>.png` KHÔNG TỒN TẠI — đó mới là thứ giữ cho agent không đăng nó.
-#
-# `KITGEN_TEST_ALPHA_LEAVE_RAW=1` bật ca NGƯỢC: engine (bản cũ hơn) vẫn để ảnh đục
-# nằm ở đích. Agent phải tự chặn, vì `settleGenJobs` vốn phán theo SẢN PHẨM.
+# Tấm `bg-home` ở đây tái hiện ĐÚNG hình dạng mà `gen.sh` thật để lại từ 09/09/2026,
+# sau khi chủ sản phẩm chốt "cứ để cho nó gen tự nhiên nhé, ko block":
+#   · ảnh nằm ở `raw/<job>.png` như mọi tấm khác — KHÔNG bị loại, không `.rejected`;
+#   · dòng kết là `OK <job> <cỡ>  [nền đục: <lý do>]` — phép đo nền chỉ còn là ghi
+#     chú, không thử lại, không đánh trượt job;
+#   · `slice.py` cạnh đây đọc nội dung ảnh và ghi `mode: "rgb"` vào manifest, đúng
+#     như bản thật — đó là thứ duy nhất còn nói cho người dùng biết tấm này đục.
 set -uo pipefail
 cd "$(dirname "$0")"
 mkdir -p raw prompts logs kits
@@ -37,9 +36,10 @@ for j in $jobs; do
   [ -n "${KITGEN_PROMPTS_ONLY:-}" ] && continue
   case "$j" in
     *bg-home)
-      printf 'PNGFAKE-DUC' > "raw/${j}.rejected.png"
-      [ -n "${KITGEN_TEST_ALPHA_LEAVE_RAW:-}" ] && printf 'PNGFAKE-DUC' > "raw/${j}.png"
-      echo "FAIL ${j} (nền KHÔNG trong suốt thật: có kênh alpha nhưng gần như không chỗ nào trong suốt (alpha=0 chỉ 0.00%) — model vẽ đè kín nền. — đã thử lại 1 lần, vẫn vậy; ảnh bị loại ở raw/${j}.rejected.png, xem logs/${j}.log)"
+      printf 'PNGFAKE-DUC' > "raw/${j}.png"
+      echo "nền đục: KHÔNG có kênh alpha (mode=RGB). — chỉ ghi nhận, không chặn" >> "logs/${j}.log"
+      echo "OK  ${j}  8.0K  [nền đục: KHÔNG có kênh alpha (mode=RGB). image_gen phải trả PNG RGBA — đường tách nền đã bỏ nên không có gì cứu được ảnh này.]"
+      sleep 0.1
       continue ;;
   esac
   printf 'PNGFAKE' > "raw/${j}.png"
