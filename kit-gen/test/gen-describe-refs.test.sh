@@ -174,6 +174,25 @@ expect "dòng khoá có băm nội dung" "# sha256:" "$key"
 expect "…và vai"                   "role:character" "$key"
 expect "…và phiên bản câu hỏi"     "v2" "$key"
 
+echo "── bản kê cho màn xem trước: mode<TAB>vai<TAB>đường dẫn, đủ CẢ HAI lối đi"
+# Màn xem trước prompt đọc đúng file này. `.att` chỉ có ảnh đính, `.desc` chỉ có ảnh
+# tả — không file nào một mình trả lời được «tấm này đi kèm những ảnh nào».
+have "bản kê của tấm nhân vật" "$WORK/p/prompts/tet-linh.refs"
+have "bản kê của tấm nền"      "$WORK/p/prompts/tet-nen.refs"
+kelinh="$(cat "$WORK/p/prompts/tet-linh.refs")"
+kenen="$(cat "$WORK/p/prompts/tet-nen.refs")"
+expect "ảnh nhân vật đục đi lối TẢ, và bản kê nói ra vai của nó" \
+  "$(printf 'described\tcharacter\trefs/lan.png')" "$kelinh"
+expect "ảnh cảm hứng cũng lối TẢ, vai phong cách" \
+  "$(printf 'described\tstyle\trefs/tranh-dan-gian.png')" "$kelinh"
+refute "ảnh dáng đục thì không đi lối nào cả, nên không có trong bản kê" \
+  "tam-dang" "$kelinh"
+expect "tấm full-bleed: ảnh cảnh đi lối ĐÍNH" \
+  "$(printf 'attached\tcharacter\trefs/cho-tet.png')" "$kenen"
+expect "…và ảnh cảm hứng của nó cũng đính (không có nền trong suốt nào để mất)" \
+  "$(printf 'attached\tstyle\trefs/tranh-dan-gian.png')" "$kenen"
+eqnum "bản kê của tấm nền đúng hai dòng" 2 "$(grep -c . "$WORK/p/prompts/tet-nen.refs" | tr -d ' ')"
+
 echo "── ② TASK GỬI CODEX: tấm cần alpha không nhắc tới một tấm ảnh nào"
 # Lượt vẽ của tấm nhân vật là lượt duy nhất có `raw/tet-linh.png` trong đối số.
 task_linh="$(cat "$TASKS/tet-linh.txt")"
@@ -303,6 +322,11 @@ PYPNG
     "has to be visible in every cell" "$linh7"
   refute "ảnh phong cách đục thì vẫn là CHỮ, không lọt vào danh sách đính kèm" \
     "tranh-dan-gian.png" "$(cat "$WORK/p/prompts/tet-linh.att")"
+  ke7="$(cat "$WORK/p/prompts/tet-linh.refs")"
+  expect "bản kê đổi theo: ảnh nhân vật nay đi lối ĐÍNH" \
+    "$(printf 'attached\tcharacter\trefs/lan.png')" "$ke7"
+  expect "…còn ảnh phong cách vẫn lối TẢ, cùng một tấm hai lối đi trong một bản kê" \
+    "$(printf 'described\tstyle\trefs/tranh-dan-gian.png')" "$ke7"
 else
   echo "BỎ QUA  ⑥: máy này không có Pillow ⇒ gen.sh coi mọi ảnh là đục (đường an toàn)."
 fi

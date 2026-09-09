@@ -1,5 +1,6 @@
 import * as React from "react";
-import { AlertCircle, Check, Clock, Copy, Download, Loader2, RotateCw, Sparkles, Square, Trash2 } from "lucide-react";
+import { AlertCircle, Check, Clock, Copy, Download, Loader2, Paperclip, RotateCw, Sparkles, Square, Trash2, Type } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
@@ -24,11 +25,13 @@ import {
   MASCOT_BLOCK_TITLE,
 } from "@/features/prompt-lab/components/MascotBlockView";
 import { ModeBadge } from "@/features/prompt-lab/components/BlockCard";
+import { FOCUS as FOCUS_RING } from "@/components/layout/flora";
 import type { Block, DocBlock, MascotBlock, UiKitBlock } from "@/features/prompt-lab/lib/composer-model";
 import type { Sheet } from "@/lib/types/contract";
-import type { PromptPreviewJob } from "@/lib/types/api";
+import type { PromptPreviewImage, PromptPreviewJob } from "@/lib/types/api";
 import type { BlockPromptState } from "../lib/block-prompt";
-import { copyImageBlob, copyProjectImage, copyPromptText, referenceImages } from "../lib/prompt-copy";
+import { copyImageBlob, copyProjectImage, copyPromptText } from "../lib/prompt-copy";
+import { roleLabel, sheetImages, shortName, splitPromptByDesc } from "../lib/prompt-images";
 import type { GenBlockState } from "../lib/gen-queue";
 import { CARD, SECTION_LABEL } from "../lib/ui";
 import { SheetResultSlot } from "./SheetResultSlot";
@@ -434,13 +437,35 @@ function OnePrompt({ projectId, item, hash }: { projectId: string; item: PromptP
      và cũng dễ đọc hơn. */
   const name = item.sheet || item.job;
   /**
-   * ẢNH THAM CHIẾU — lọc từ chính danh sách engine đã ghi ra, không dựng lại.
+   * ẢNH ĐI KÈM — lọc từ chính bản kê engine đã ghi ra, không dựng lại.
    *
    * Thứ tự (ảnh của tấm → ảnh dáng → ảnh bố cục → ảnh thương hiệu → ảnh gợi hứng)
    * là quyết định của engine và đi thẳng qua agent tới đây; lý do đầy đủ nằm ở
-   * `referenceImages` trong `lib/prompt-copy.ts`, cùng với lý do bỏ ảnh khung xương.
+   * `sheetImages` trong `lib/prompt-images.ts`, cùng với lý do bỏ ảnh khung xương.
    */
-  const refs = React.useMemo(() => referenceImages(item.attachments), [item.attachments]);
+  const images = React.useMemo(() => sheetImages(item), [item]);
+  /* Chỉ ảnh ĐÍNH THẲNG mới phải dán tay vào chat — ảnh còn lại đã nằm sẵn trong
+     chữ dưới dạng một đoạn văn, dán thêm tấm ảnh đục vào là kéo cả tấm về nền đặc. */
+  const toPaste = React.useMemo(() => images.filter((i) => i.mode === "attached"), [images]);
+  /* Cắt prompt ra để neo: bấm thumbnail của một ảnh «Tả bằng chữ» thì nhảy tới
+     đúng đoạn văn đang đứng thay cho nó. */
+  const parts = React.useMemo(() => splitPromptByDesc(item.prompt, images), [item.prompt, images]);
+  const anchorId = (index: number) => `kg-desc-${item.job}-${index}`;
+  const [lit, setLit] = React.useState<number | null>(null);
+
+  /* Vệt sáng chỉ để dẫn mắt, tắt sau 2 giây — để nguyên thì lần nhảy sau không
+     phân biệt được đoạn vừa tới với đoạn đã tới lúc trước. */
+  React.useEffect(() => {
+    if (lit === null) return;
+    const t = setTimeout(() => setLit(null), 2000);
+    return () => clearTimeout(t);
+  }, [lit]);
+
+  const jumpTo = (index: number) => {
+    setLit(index);
+    document.getElementById(anchorId(index))?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  };
+
   const [copied, setCopied] = React.useState(false);
 
   /* Nhãn «Đã copy» tự tắt sau 2 giây. Dọn timer khi tắt sớm: người dùng đổi tab
@@ -465,7 +490,7 @@ function OnePrompt({ projectId, item, hash }: { projectId: string; item: PromptP
 
   /* Con số rút ra ngoài chuỗi mẫu cho câu dưới đọc được thành một câu tiếng Việt
      trọn vẹn — cùng lý do với `name` ở trên. */
-  const n = refs.length;
+  const n = toPaste.length;
 
   return (
     <div>
@@ -496,28 +521,77 @@ function OnePrompt({ projectId, item, hash }: { projectId: string; item: PromptP
         aria-label={`Prompt của tấm ${name}`}
         className="max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-2 border border-line-subtle bg-canvas p-3 text-mono text-fg"
       >
-        {item.prompt}
+        {/* Ghép các mẩu lại phải ra ĐÚNG chuỗi gốc — `<span>` không thêm ký tự nào,
+            nên `textContent` của khối này vẫn là nguyên văn prompt (có ca test canh). */}
+        {parts.map((part, index) =>
+          part.imageIndex === null ? (
+            <React.Fragment key={index}>{part.text}</React.Fragment>
+          ) : (
+            <span
+              key={index}
+              id={anchorId(part.imageIndex)}
+              className={cn(
+                "rounded-1 transition-colors",
+                lit === part.imageIndex ? "bg-accent/[var(--kg-tint-b)]" : "",
+              )}
+            >
+              {part.text}
+            </span>
+          ),
+        )}
       </pre>
-      {n > 0 && <Attachments projectId={projectId} paths={refs} hash={hash} />}
+      {images.length > 0 && (
+        <SheetImages
+          projectId={projectId}
+          images={images}
+          hash={hash}
+          onJump={jumpTo}
+          canJump={(index) => parts.some((part) => part.imageIndex === index)}
+        />
+      )}
     </div>
   );
 }
 
 /**
- * PANEL ẢNH THAM CHIẾU — thumbnail thật, không phải một dòng tên file.
+ * KHỐI «ẢNH ĐI KÈM» — thumbnail thật, và CẢ HAI lối đi tới máy vẽ.
  *
  * Bản trước chỉ liệt kê `refs/char-lan.png`. Với người đang hỏi "engine gửi đi cái
  * gì" thì một đường dẫn không trả lời được câu nào: ảnh mẫu có đúng con nhân vật
  * không, tấm dáng có đủ góc không — chỉ nhìn mới biết. Ảnh đi qua `KitImage`
  * (transport có header) vì `<img src>` thẳng tới agent trả 403.
  *
- * ══ HAI NÚT MỖI ẢNH, VÀ VÌ SAO KHÔNG PHẢI MỘT ═════════════════════════════
+ * ══ VÀ TỪ 09/09/2026 KHỐI NÀY PHẢI KỂ CẢ ẢNH KHÔNG ĐƯỢC ĐÍNH ═══════════════
+ * ╔══ BỆNH ĐÃ ĐO (chủ sản phẩm) ══════════════════════════════════════════════╗
+ * ║ Khối này đọc danh sách ĐÍNH KÈM, nên trên một thẻ nhân vật nó hiện đúng    ║
+ * ║ một ô — tấm ảnh dáng — và giấu mất tấm ảnh nhân vật đầu vào. Lý do: ảnh    ║
+ * ║ nhân vật của họ nền ĐỤC, nên engine không đính nó mà đổi nó thành một      ║
+ * ║ đoạn văn. Người dùng nhìn màn hình và kết luận đúng thứ họ thấy: prompt    ║
+ * ║ này chẳng có ảnh nhân vật nào cả.                                          ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ * Nên mỗi ô nay mang một chip nói ra lối đi: «Đính kèm» (ảnh tới máy vẽ nguyên
+ * vẹn) hoặc «Tả bằng chữ» (ảnh tới bằng một đoạn văn). Bấm vào ô «Tả bằng chữ»
+ * là nhảy tới đúng đoạn văn ấy trong khối chữ ngay trên — đó là toàn bộ câu trả
+ * lời cho "vậy con nhân vật của tôi đi đâu trong cái prompt này".
+ *
+ * ══ HAI NÚT MỖI ẢNH, VÀ VÌ SAO CHÚNG CHỈ THUỘC VỀ Ô «ĐÍNH KÈM» ════════════
  * «Copy ảnh» nhanh hơn, nhưng bộ nhớ tạm chỉ giữ được MỘT ảnh: dán bốn ảnh vào
  * chat là bốn vòng bấm-dán xen kẽ, và lỡ nhịp một cái thì mất dấu. «Tải» đưa cả
  * bốn file xuống máy để kéo thả một lượt. Hai thói quen khác nhau, cả hai đều
  * thật — bỏ cái nào cũng là bắt một nửa người dùng làm cách của nửa kia.
+ * Ô «Tả bằng chữ» KHÔNG có hai nút ấy, và đó là chủ ý: engine cố tình không đính
+ * tấm ảnh đục ấy (đính vào là kéo cả tấm sheet về nền đặc), nên mời người dùng
+ * tự dán nó vào chat là mời họ phá đúng thứ engine vừa tránh.
  */
-function Attachments({ projectId, paths, hash }: { projectId: string; paths: readonly string[]; hash: string }) {
+function SheetImages({ projectId, images, hash, onJump, canJump }: {
+  projectId: string;
+  images: readonly PromptPreviewImage[];
+  hash: string;
+  /** Nhảy tới đoạn văn đang đứng thay cho ảnh thứ `index` trong khối chữ. */
+  onJump: (index: number) => void;
+  /** Đoạn văn ấy có tìm thấy trong chữ không — không thấy thì ô không bấm được. */
+  canJump: (index: number) => boolean;
+}) {
   /* Đếm theo ĐƯỜNG DẪN chứ không cộng dồn một con số: bấm «Copy ảnh» hai lần trên
      cùng một tấm là chuyện thường (dán hụt, dán nhầm ô), và một biến đếm sẽ báo
      «Đã copy ảnh 2/2» trong khi tấm thứ hai chưa hề được chạm tới. */
@@ -540,46 +614,106 @@ function Attachments({ projectId, paths, hash }: { projectId: string; paths: rea
   const mark = (path: string) =>
     setCopied((prev) => (prev.includes(path) ? prev : [...prev, path]));
 
+  /* Số "đã copy" đếm trên số ảnh CÓ THỂ copy, không trên cả khối: ô «Tả bằng chữ»
+     không có nút copy nào nên mãi mãi không bao giờ đủ. */
+  const paste = images.filter((image) => image.mode === "attached");
   const done = copied.length;
 
   return (
     <div className="mt-2">
       <div className="mb-1 flex flex-wrap items-center gap-2">
-        <p className="text-caption text-fg-muted">Ảnh tham chiếu ({paths.length})</p>
+        <p className="text-caption text-fg-muted">Ảnh đi kèm ({images.length})</p>
         {done > 0 && (
           <span className="inline-flex items-center gap-1 text-caption text-ok">
             <Check aria-hidden className="size-4" />
-            Đã copy ảnh {done}/{paths.length}
+            Đã copy ảnh {done}/{paste.length}
           </span>
         )}
       </div>
       <div className="flex flex-wrap gap-3">
-        {paths.map((path, index) => (
-          <figure key={path} className="w-32">
-            <KitImage
-              projectId={projectId}
-              path={path}
-              alt={`Ảnh tham chiếu: ${path}`}
-              full={false}
-              width={256}
-              className="aspect-square w-32"
-            />
-            <figcaption className="mt-1 truncate text-caption text-fg-muted" title={path}>
-              {path}
-            </figcaption>
-            <div className="mt-0.5 flex gap-1">
-              <CopyImageButton
-                projectId={projectId}
-                path={path}
-                index={index}
-                onCopied={() => mark(path)}
-              />
-              <SaveImageButton projectId={projectId} path={path} />
-            </div>
-          </figure>
+        {images.map((image, index) => (
+          <OneSheetImage
+            key={image.path}
+            projectId={projectId}
+            image={image}
+            index={index}
+            copyIndex={paste.indexOf(image)}
+            canJump={canJump(index)}
+            onJump={() => onJump(index)}
+            onCopied={() => mark(image.path)}
+          />
         ))}
       </div>
     </div>
+  );
+}
+
+/** Một ô ảnh: thumbnail + vai + chip lối đi, và hai nút nếu ảnh được đính thẳng. */
+function OneSheetImage({ projectId, image, index, copyIndex, canJump, onJump, onCopied }: {
+  projectId: string;
+  image: PromptPreviewImage;
+  index: number;
+  /** Thứ tự trong nhóm ảnh phải dán tay — dùng cho câu «Đã copy ảnh 2». */
+  copyIndex: number;
+  canJump: boolean;
+  onJump: () => void;
+  onCopied: () => void;
+}) {
+  const vai = roleLabel(image.role);
+  const ten = shortName(image.path);
+  const attached = image.mode === "attached";
+  const thumb = (
+    <KitImage
+      projectId={projectId}
+      path={image.path}
+      alt={`${vai}: ${ten}`}
+      full={false}
+      width={256}
+      className="aspect-square w-32"
+    />
+  );
+
+  return (
+    <figure className="w-32">
+      {/* Ô ảnh chỉ bấm được khi có chỗ để nhảy tới. Một nút không làm gì cả còn tệ
+          hơn một tấm ảnh tĩnh: người dùng bấm, không có gì xảy ra, và họ không
+          biết là mình bấm sai chỗ hay sản phẩm hỏng. */}
+      {!attached && canJump ? (
+        <button
+          type="button"
+          onClick={onJump}
+          aria-label={`Xem đoạn tả của ${ten} trong prompt`}
+          className={cn("block w-full rounded-2", FOCUS_RING)}
+        >
+          {thumb}
+        </button>
+      ) : (
+        thumb
+      )}
+      <figcaption className="mt-1 flex flex-col gap-1">
+        <span className="flex flex-wrap items-center gap-1">
+          <span className="text-caption text-fg">{vai}</span>
+          <Badge tone={attached ? "accent" : "never"}>
+            {attached ? <Paperclip aria-hidden strokeWidth={1.5} /> : <Type aria-hidden strokeWidth={1.5} />}
+            {attached ? "Đính kèm" : "Tả bằng chữ"}
+          </Badge>
+        </span>
+        {/* TÊN FILE, KHÔNG PHẢI ĐƯỜNG DẪN. Dòng cũ dán nguyên `refs/char-pose-sheet…`
+            và ô rộng 128px cắt đúng phần phân biệt được ảnh nào với ảnh nào. */}
+        <span className="truncate text-caption text-fg-muted" title={ten}>{ten}</span>
+      </figcaption>
+      {attached && (
+        <div className="mt-0.5 flex gap-1">
+          <CopyImageButton
+            projectId={projectId}
+            path={image.path}
+            index={copyIndex >= 0 ? copyIndex : index}
+            onCopied={onCopied}
+          />
+          <SaveImageButton projectId={projectId} path={image.path} />
+        </div>
+      )}
+    </figure>
   );
 }
 

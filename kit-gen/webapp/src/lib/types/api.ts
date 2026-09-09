@@ -487,12 +487,39 @@ export type Validation = z.infer<typeof validationSchema>;
  * `missing` = tấm mà engine không dựng nổi prompt. Có mặt trong hợp đồng để màn nói
  * được "tấm này chưa xem trước được" thay vì lặng lẽ hiện thiếu một tấm.
  */
+/**
+ * MỘT ẢNH THAM CHIẾU CỦA TẤM, VÀ LỐI NÓ ĐI TỚI MÁY VẼ.
+ *
+ * ╔══ VÌ SAO `attachments` MỘT MÌNH LÀ NỬA SỰ THẬT ══════════════════════════╗
+ * ║ Engine quyết định theo TỪNG tấm ảnh: ảnh có nền trong suốt thật thì đính  ║
+ * ║ thẳng cho máy vẽ, ảnh nền đục thì đi qua một lượt tả thành chữ (đính một  ║
+ * ║ tấm đục vào là kéo cả tấm sheet về nền đặc — đo được 09/09/2026).         ║
+ * ║ `attachments` chỉ kể lối thứ nhất, nên màn xem trước dựng trên nó GIẤU    ║
+ * ║ mất đúng tấm ảnh nhân vật mà người dùng đang hỏi «sao vẽ ra không giống». ║
+ * ╚═════════════════════════════════════════════════════════════════════════════╝
+ *
+ * `desc` = đoạn chữ ĐANG ĐỨNG THAY cho ảnh này trong `prompt` — mô tả thật nếu
+ * engine đã tả, hoặc một câu chờ đọc được nếu chưa. `null` với ảnh đính thẳng: nó
+ * tới máy vẽ bằng chính pixel của mình, không có đoạn nào đứng thay cả.
+ */
+export const promptPreviewImageSchema = z.looseObject({
+  path: z.string(),
+  /** `character` · `pose` · `layout` · `brand` · `style`. Rỗng = engine đời cũ chưa khai. */
+  role: z.string().default(""),
+  mode: z.enum(["attached", "described"]).catch("attached"),
+  alpha: z.boolean().default(false),
+  desc: z.string().nullish(),
+});
+export type PromptPreviewImage = z.infer<typeof promptPreviewImageSchema>;
+
 export const promptPreviewJobSchema = z.looseObject({
   job: z.string(),
   variant: z.string().default(""),
   sheet: z.string().default(""),
   prompt: z.string().default(""),
   attachments: z.array(z.string()).default([]),
+  /* Engine đời cũ không ghi bản kê này ⇒ mảng rỗng, và màn rơi về `attachments`. */
+  images: z.array(promptPreviewImageSchema).default([]),
 });
 export type PromptPreviewJob = z.infer<typeof promptPreviewJobSchema>;
 

@@ -550,6 +550,17 @@ for s in cfg["styles"]:
         style_att = [p for p in style_paths if attachable(p)]
         style_txt = [p for p in style_paths if not attachable(p)]
 
+        def show_role(path, role):
+            """VAI NGƯỜI DÙNG THẤY — cho bản kê `.refs`, không phải cho câu hỏi codex.
+
+            Ảnh thương hiệu và ảnh cảm hứng nhận CÙNG một câu hỏi tả (`desc_question`
+            vai `style`), nên `.desc` gọi cả hai là `style`. Nhưng người dùng tải
+            chúng lên ở HAI chỗ khác nhau trong bản thiết kế, nên trên màn xem trước
+            chúng phải mang hai cái tên khác nhau — nếu không thì «ảnh này ở đâu ra»
+            không có câu trả lời.
+            """
+            return "brand" if role == "style" and path in brand_paths else role
+
         sections = []
         # Ảnh phải đổi thành chữ, kèm VAI của từng ảnh — tầng bash đọc lại danh
         # sách này ở `prompts/<job>.desc` để biết phải hỏi câu nào cho ảnh nào.
@@ -1203,17 +1214,22 @@ for s in cfg["styles"]:
         #
         # ⚠️ MỌI DÒNG Ở ĐÂY PHẢI CÓ MỘT SECTION NÓI RA NÓ LÀ GÌ — đó là lý do bốn vị
         # từ `*_ok` được tính một lần ở đầu vòng và dùng lại ở cả hai chỗ.
-        att = []
-        for p in (([sh["ref"]] if ref_ok else [])
-                  + ([sh["poseRef"]] if pose_ok else [])
-                  # BẢN PHÁC BỐ CỤC đứng ngay sau ảnh của tấm vì hai tấm ấy nói
-                  # về cùng một cảnh: một tấm bảo VẼ GÌ, một tấm bảo NẰM ĐÂU.
-                  # Prompt gọi cả hai theo VAI TRÒ nên thứ tự này chỉ để người
-                  # đọc log thấy chúng đi cùng nhau, không phải để model đếm.
-                  + ([sh["layoutRef"]] if layout_ok else [])
-                  + style_att):
-            if p and p not in att:
-                att.append(p)
+        # VAI ĐI KÈM ĐƯỜNG DẪN, MỘT LẦN, DÙNG CHO CẢ HAI FILE. `.att` là danh sách
+        # đường dẫn trần cho `run_one`; `.refs` (ngay dưới) còn phải nói ẢNH NÀY LÀ
+        # VAI GÌ. Tính hai lần là hai chỗ để lệch — nên tính một lần ở đây rồi bóc
+        # cột đường dẫn ra cho `.att`.
+        att_roles = []
+        for role, p in (([("character", sh["ref"])] if ref_ok else [])
+                        + ([("pose", sh["poseRef"])] if pose_ok else [])
+                        # BẢN PHÁC BỐ CỤC đứng ngay sau ảnh của tấm vì hai tấm ấy nói
+                        # về cùng một cảnh: một tấm bảo VẼ GÌ, một tấm bảo NẰM ĐÂU.
+                        # Prompt gọi cả hai theo VAI TRÒ nên thứ tự này chỉ để người
+                        # đọc log thấy chúng đi cùng nhau, không phải để model đếm.
+                        + ([("layout", sh["layoutRef"])] if layout_ok else [])
+                        + [(show_role(q, "style"), q) for q in style_att]):
+            if p and all(p != q for _r, q in att_roles):
+                att_roles.append((role, p))
+        att = [p for _role, p in att_roles]
         open(f"prompts/{s['id']}-{sh['id']}.att", "w", encoding="utf-8", newline="\n").write(
             ("\n".join(att) + "\n") if att else "")
         # BẢN KÊ ẢNH → CHỮ. `role<TAB>đường dẫn`, một dòng một ảnh, theo đúng thứ tự
@@ -1221,6 +1237,26 @@ for s in cfg["styles"]:
         # còn nằm đó thì `run_one` sẽ đi tả những ảnh mà tấm này không còn dùng.
         open(f"prompts/{s['id']}-{sh['id']}.desc", "w", encoding="utf-8", newline="\n").write(
             "".join(f"{role}\t{path}\n" for role, path in descs))
+        # ── BẢN KÊ CHO MÀN XEM TRƯỚC — `mode<TAB>vai<TAB>đường dẫn` ────────────
+        # ╔══ VÌ SAO CÓ FILE THỨ BA, VÀ VÌ SAO NÓ Ở ĐÂY CHỨ KHÔNG Ở JS ═══════════╗
+        # ║ Màn xem trước prompt phải trả lời được «tấm này đi kèm những ảnh nào,  ║
+        # ║ ảnh nào đính thẳng, ảnh nào chỉ còn là một đoạn văn». `.att` chỉ có    ║
+        # ║ nửa đầu (và không có vai), `.desc` chỉ có nửa sau. Ghép lại ở JS nghĩa ║
+        # ║ là dựng lại luật `attachable` lần thứ hai bằng một ngôn ngữ khác —     ║
+        # ║ đúng loại bản sao trôi khỏi bản gốc trong im lặng mà cả khối chú thích ║
+        # ║ đầu «XEM TRƯỚC PROMPT» của agent viết ra để cấm.                       ║
+        # ╚═══════════════════════════════════════════════════════════════════════╝
+        # HAI VỰNG VAI, VÀ CHÚNG KHÔNG PHẢI MỘT:
+        #   · `.desc` mang VAI CÂU HỎI — hỏi codex câu nào (`desc_question`). Ảnh
+        #     thương hiệu và ảnh cảm hứng nhận CÙNG một câu, nên cùng vai `style`.
+        #   · `.refs` mang VAI NGƯỜI DÙNG THẤY — ảnh này vào đây từ chỗ nào trong
+        #     bản thiết kế. Người dùng phân biệt «ảnh thương hiệu» với «ảnh cảm
+        #     hứng» (hai chỗ tải lên khác nhau), nên `show_role` tách chúng ra.
+        # Hai danh sách dưới đây RỜI NHAU theo dựng: cùng một vị từ `attachable`
+        # quyết định ảnh đi lối đính hay lối tả, nên không ảnh nào ở cả hai lối.
+        open(f"prompts/{s['id']}-{sh['id']}.refs", "w", encoding="utf-8", newline="\n").write(
+            "".join(f"attached\t{role}\t{path}\n" for role, path in att_roles)
+            + "".join(f"described\t{show_role(path, role)}\t{path}\n" for role, path in descs))
         print("prompt →", f"prompts/{s['id']}-{sh['id']}.txt",
               f"(+{len(att)} ảnh kèm, {len(descs)} ảnh tả thành chữ)")
 PY

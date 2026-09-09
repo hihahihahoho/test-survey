@@ -29,15 +29,31 @@ for j in $jobs; do
   # Prompt giả CỐ Ý mang một đường dẫn tuyệt đối + một dòng khổ giấy như bản thật:
   # cửa /prompt-preview phải redact được path (đối xứng với khoá giả nhét vào log ở
   # nhánh *bg-home bên dưới), và phải trả về đúng phần chữ chứ không phải tên file.
+  # ── MỘT ẢNH ĐÍNH THẲNG + MỘT ẢNH TẢ THÀNH CHỮ ─────────────────────────────
+  # Đúng hình dạng đời thật từ 09/09/2026: mỗi ảnh tự trả lời câu hỏi của mình,
+  # nên một tấm bình thường có CẢ HAI lối đi cùng lúc. Ảnh tả thành chữ đi theo
+  # luật cache của bản thật: có `refs/<ten>.desc.txt` thì DÁN chữ vào prompt,
+  # chưa có thì để nguyên dấu chỗ `{{DESC:…}}` cho bước sau thay.
+  desc_cache="refs/phong-cach.png.desc.txt"
+  if [ -f "$desc_cache" ]; then desc_line="$(tail -n +2 "$desc_cache")"
+  else desc_line="{{DESC:refs/phong-cach.png}}"; fi
   {
     echo "Canvas orientation: LANDSCAPE 1536x1024."
     echo "fake prompt for ${j}"
     echo "duong dan tuyet doi cua engine gia: ${PWD}/raw/${j}.png"
+    echo "## Style reference"
+    echo "$desc_line"
   } > "prompts/${j}.txt"
   # .att chỉ còn ẢNH CỦA NGƯỜI DÙNG. Bản thật từng đặt `skeleton/<sheet>.png` ở dòng
   # đầu; khung xương bỏ 27/08/2026 nên fixture phải khai đúng hình dạng mới, không thì
   # ca prompt-preview xanh trên một hợp đồng đã chết.
   echo "refs/${j#*-}.png" > "prompts/${j}.att"
+  # BẢN KÊ ĐẦY ĐỦ. `.att` chỉ có ảnh đính; `.refs` phải nói được CẢ hai lối đi và
+  # vai của từng ảnh — đó là thứ màn xem trước dựng khối «Ảnh đi kèm» lên.
+  {
+    printf 'attached\tcharacter\trefs/%s.png\n' "${j#*-}"
+    printf 'described\tstyle\trefs/phong-cach.png\n'
+  } > "prompts/${j}.refs"
   echo "fake log for ${j}" > "logs/${j}.log"
   # ĐÚNG CHỖ DỪNG CỦA BẢN THẬT: gen.sh thoát ngay sau khi dựng xong prompt/.att, TRƯỚC
   # vòng gọi codex. Fixture phải dừng ở đúng đó thì ca prompt-preview mới chứng minh
