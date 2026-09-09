@@ -626,15 +626,18 @@ class TransparentBackgroundTest(unittest.TestCase):
     def test_prompt_doi_ALPHA_THAT_chu_khong_phai_mau_nen(self):
         # Luật nền nay nói ĐÚNG MỘT LẦN, trong section «Canvas» — không lặp lại ở
         # section «Transparency» nữa (xem `test_luat_trong_suot_CHI_NOI_MOT_LAN`).
-        self.assertIn("Background fully transparent", self.prompt)
-        self.assertIn("real alpha channel", self.prompt)
-        self.assertIn("alpha 0 on every pixel", self.prompt)
+        # 09/09/2026: nói bằng ngôn ngữ của máy vẽ — "bỏ nền", không "alpha 0" (chủ
+        # sản phẩm đo: câu alpha ra caro giả, câu remove background thì được).
+        self.assertIn("Transparent background: remove the background completely", self.prompt)
+        self.assertIn("background removed", self.prompt)
+        canvas = self.prompt.split("## Canvas")[1].split("## ")[0]
+        self.assertNotIn("alpha", canvas.lower(), "câu nền lại nói bằng chữ kỹ thuật")
 
     def test_luat_trong_suot_CHI_NOI_MOT_LAN(self):
         """Bốn khối cũ (nền alpha, cấm caro, "see-through", "fully opaque") gộp còn
         một section ba gạch đầu dòng, và câu nền thì ở hẳn section «Canvas»."""
         self.assertEqual(self.prompt.count("## Transparency"), 1)
-        self.assertEqual(self.prompt.count("is simply empty: alpha 0"), 1)
+        self.assertEqual(self.prompt.count("The background is removed, not painted"), 1)
         for chet in ("This background rule OVERRIDES the art style",
                      "WHENEVER SOMETHING SHOULD BE SEE-THROUGH",
                      "Every element is FULLY OPAQUE with solid fills"):
@@ -657,7 +660,7 @@ class TransparentBackgroundTest(unittest.TestCase):
         self.assertIn("glass, ice, water and light effects are see-through", self.prompt)
         for vat_lieu in ("metal", "wood", "stone", "plastic", "fabric"):
             self.assertIn(vat_lieu, self.prompt, f"luật vật liệu thiếu {vat_lieu}")
-        self.assertIn("fully opaque (alpha 255)", self.prompt)
+        self.assertIn("solid and fully opaque", self.prompt)
 
     def test_nac_TU_DONG_khong_in_lai_o_tung_dong_element(self):
         """GUARD ÂM, và đây là lý do tồn tại của cả cách làm.
@@ -714,8 +717,12 @@ class TransparentBackgroundTest(unittest.TestCase):
         low = self.prompt.lower()
         for cam in ("checker", "transparency pattern"):
             self.assertNotIn(cam, low, f"prompt lại gọi tên thứ mình cấm: {cam}")
-        self.assertIn("is simply empty: alpha 0", self.prompt)
-        self.assertIn("draw it in its own colour at a lower alpha", self.prompt)
+        self.assertIn("The background is removed, not painted", self.prompt)
+        self.assertIn("keep it partly see-through in its own colour", self.prompt)
+        # Section chung không nói "alpha": chữ ấy chỉ còn ở câu của một nấc đục nền
+        # cụ thể (kính/băng) nối vào dòng ô, nơi nó là số đo của vật liệu.
+        trans = self.prompt.split("## Transparency")[1].split("## ")[0]
+        self.assertNotIn("alpha", trans.lower())
         # Giọng tự nhiên: không còn câu cấm in hoa trong section này.
         for gao in ("NEVER DRAW", "FOLLOWS ITS MATERIAL", "FULLY OPAQUE (alpha 255)"):
             self.assertNotIn(gao, self.prompt, f"câu gào mọc lại: {gao}")
