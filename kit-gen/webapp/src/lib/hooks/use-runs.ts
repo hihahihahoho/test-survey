@@ -14,6 +14,9 @@ import { api } from "../api/endpoints";
 import { AgentError } from "../api/client";
 import { LIMITS, STREAM_POLL_FALLBACK_MS } from "../api/constants";
 import { qk, keysAfterRun } from "./keys";
+/* Id của BẢN ĐANG DÙNG mà `#39` phát ra. Nhập từ chỗ khai duy nhất thay vì gõ lại chuỗi:
+   agent (`routes/runs.mjs`) và web phải đồng ý từng ký tự, lệch là mời lại sai bộ khoá. */
+import { CURRENT_ID } from "@/features/prompt-canvas/lib/result/sheet-versions";
 import { GC, STALE } from "./query-client";
 import type { Run, StartRunInput, StreamEvent } from "../types/api";
 
@@ -84,18 +87,26 @@ export function useRawHistory(projectId: string | null, job: string | null) {
 }
 
 /**
- * #39.1 — XOÁ một đời ảnh cũ.
+ * #39.1 — XOÁ một phiên bản, kể cả bản ĐANG DÙNG.
  *
- * Chỉ mời lại LỊCH SỬ, không mời cả `keysAfterRun`: xoá một bản cũ không đụng tới
- * `raw/`, `kits/`, hạn mức hay trạng thái tấm — mời lại tất cả là bắt cả màn dựng lại
- * để lấy về y hệt dữ liệu cũ (đúng cái "lưới lác lác" đã phải chữa một lần).
+ * Hai mức mời lại, vì hai việc khác hẳn nhau:
+ *   · bản CŨ — chỉ mất một file trong `.history/`. `raw/`, `kits/`, hạn mức, trạng thái
+ *     tấm đều không đổi, nên chỉ mời lại LỊCH SỬ; mời lại tất cả là bắt cả màn dựng lại
+ *     để lấy về y hệt dữ liệu cũ (đúng cái "lưới lác lác" đã phải chữa một lần).
+ *   · bản ĐANG DÙNG — agent xoá ảnh gốc, dọn ô đã cắt, rồi đưa bản mới nhất còn lại lên
+ *     thay chỗ. Ảnh, kho ô, và trạng thái tấm («chưa vẽ» khi hết bản) đều đổi cùng lúc,
+ *     nên phải mời lại đúng bộ khoá của một lượt chạy.
  */
 export function useDeleteRawHistory(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ job, historyId }: { job: string; historyId: string }) =>
       api.runs.rawHistoryDelete(projectId, job, historyId),
-    onSuccess: () => {
+    onSuccess: (_res, { historyId }) => {
+      if (historyId === CURRENT_ID) {
+        for (const key of keysAfterRun(projectId)) void qc.invalidateQueries({ queryKey: key });
+        return;
+      }
       void qc.invalidateQueries({ queryKey: qk.runs.rawHistoryOf(projectId) });
     },
   });

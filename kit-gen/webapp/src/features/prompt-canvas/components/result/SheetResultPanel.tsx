@@ -214,7 +214,7 @@ export function SheetResultPanel({
    * `raw/<job>.png` GIỮ NGUYÊN đường dẫn sau mỗi lượt gen và sau mỗi lần khôi phục.
    * Không dọn thì panel hiện lại đúng ảnh cũ, và người dùng kết luận là "gen không
    * ăn". `forgetProject` là cửa dọn DUY NHẤT được export; nó thô (dọn cả dự án) nhưng
-   * chỉ chạy ở hai mốc hiếm và có thật: ảnh mới về, và khôi phục xong.
+   * chỉ chạy ở hai mốc hiếm và có thật: ảnh mới về, và đổi/xoá phiên bản xong.
    */
   const [reloadKey, setReloadKey] = React.useState(0);
   const reloadImage = React.useCallback(() => {
@@ -451,7 +451,7 @@ export function SheetResultPanel({
             <TabsTrigger value="raw"><ImageIcon aria-hidden strokeWidth={1.5} />Ảnh gốc</TabsTrigger>
             <TabsTrigger value="cut">Đã crop{cells.length > 0 ? ` (${cells.length})` : ""}</TabsTrigger>
           </TabsList>
-          <SheetVersionBar projectId={projectId} job={job} name={name} busy={busy} onRestored={reloadImage} />
+          <SheetVersionBar projectId={projectId} job={job} name={name} busy={busy} onSwapped={reloadImage} />
         </div>
 
         <TabsContent value="raw" className="mt-3">

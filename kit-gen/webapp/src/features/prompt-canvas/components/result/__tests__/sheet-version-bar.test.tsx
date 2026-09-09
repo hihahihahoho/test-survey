@@ -1,15 +1,14 @@
 /* @vitest-environment jsdom */
 /**
- * THANH PHIÊN BẢN — KHÔI PHỤC PHẢI HỎI LẠI.
+ * THANH PHIÊN BẢN — CHỌN LÀ ĐỔI, VÀ CÓ NÚT XOÁ CÓ CHỮ.
  *
  * ╔══ VÌ SAO CA NÀY ĐÁNG MỘT FILE TEST RIÊNG ════════════════════════════════╗
- * ║ `#40` chép đè thẳng lên `raw/<job>.png` — đầu vào của bước cắt. Bấm nhầm   ║
- * ║ một lần thì tab «Ảnh gốc» và tab «Đã crop» nói hai chuyện khác nhau cho    ║
- * ║ tới khi cắt lại, mà KHÔNG có gì báo. Đây đúng là loại thao tác không được  ║
- * ║ phép xảy ra sau một cú bấm — nên test phải chứng minh hai điều:            ║
- * ║   ① bấm nút KHÔNG gọi API, chỉ mở hộp hỏi lại;                            ║
- * ║   ② bản ĐANG DÙNG thì nút phải khoá (agent sẽ 404 vì không có file lịch    ║
- * ║      sử nào tên `<job>@current.png`).                                     ║
+ * ║ Chủ sản phẩm 09/09/2026 gạch đi đúng hai thứ của bản trước: nút «Khôi phục ║
+ * ║ bản này» kèm hộp xác nhận ("user select là được mà"), và cái nút xoá chỉ có║
+ * ║ hình thùng rác lại còn trốn đi khi đang đứng ở bản đang dùng ("VẪN KO CÓ   ║
+ * ║ NÚT XOÁ PHIÊN BẢN À???"). Cả hai đều là thứ một ca đếm-số-nút sẽ bỏ lọt,   ║
+ * ║ nên ở đây gọi ĐÍCH DANH: cái đã bỏ phải không quay lại, và cú chọn phải    ║
+ * ║ gọi thẳng `#40` — không qua một nhịp bấm nào nữa.                          ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,15 +26,17 @@ if (!globalThis.ResizeObserver) {
 
 const restoreMutate = vi.fn();
 const deleteMutate = vi.fn();
+let restorePending = false;
 let historyItems: Array<{ id: string; at: string | null; current: boolean }> = [];
 
 vi.mock("@/lib/hooks", () => ({
   useRawHistory: () => ({ data: { items: historyItems }, isLoading: false }),
-  useRestoreRaw: () => ({ mutate: restoreMutate, isPending: false }),
+  useRestoreRaw: () => ({ mutate: restoreMutate, isPending: restorePending }),
   useDeleteRawHistory: () => ({ mutate: deleteMutate, isPending: false }),
 }));
+const toastInfo = vi.fn();
 vi.mock("@/features/projects/lib/feedback", () => ({
-  toastSuccess: vi.fn(), toastInfo: vi.fn(), toastError: vi.fn(),
+  toastSuccess: vi.fn(), toastInfo: (...a: unknown[]) => toastInfo(...a), toastError: vi.fn(),
 }));
 
 const { SheetVersionBar } = await import("../SheetVersionBar");
@@ -44,23 +45,30 @@ const CURRENT = { id: "current", at: "2026-08-24T10:00:00.000Z", current: true }
 const OLD_1 = { id: "r-1756000000000", at: "2026-08-24T09:00:00.000Z", current: false };
 const OLD_2 = { id: "r-1755000000000", at: "2026-08-23T09:00:00.000Z", current: false };
 
-const mount = () => render(<SheetVersionBar projectId="p1" job="chinh-ui" />);
-const restoreButton = () =>
-  screen.getByRole<HTMLButtonElement>("button", { name: /Khôi phục bản này/ });
+const mount = (props: Partial<React.ComponentProps<typeof SheetVersionBar>> = {}) =>
+  render(<SheetVersionBar projectId="p1" job="chinh-ui" {...props} />);
+const picker = () => screen.getByRole<HTMLElement>("combobox");
+/** Mở danh sách rồi bấm một mục — đúng đường người dùng đi, không gọi tay `onValueChange`. */
+const choose = (label: string | RegExp) => {
+  fireEvent.keyDown(picker(), { key: "ArrowDown" });
+  fireEvent.click(screen.getByRole("option", { name: label }));
+};
+const trash = () => screen.getByRole<HTMLButtonElement>("button", { name: /^Xoá/ });
 
 beforeEach(() => {
   restoreMutate.mockReset();
   deleteMutate.mockReset();
+  toastInfo.mockReset();
+  restorePending = false;
   historyItems = [CURRENT, OLD_1, OLD_2];
 });
 afterEach(cleanup);
 
 describe("thanh phiên bản v1 · v2 · v3", () => {
-  it("mở ra là đứng ở bản ĐANG DÙNG, và nút khôi phục khoá", () => {
+  it("mở ra là đứng ở bản ĐANG DÙNG", () => {
     mount();
-    expect(screen.getByRole("combobox").textContent).toContain("v3");
-    expect(screen.getByRole("combobox").textContent).toContain("đang dùng");
-    expect(restoreButton().disabled).toBe(true);
+    expect(picker().textContent).toContain("v3");
+    expect(picker().textContent).toContain("đang dùng");
   });
 
   it("chưa gen lần nào ⇒ không vẽ thanh nào cả", () => {
@@ -69,98 +77,128 @@ describe("thanh phiên bản v1 · v2 · v3", () => {
     expect(container.textContent).toBe("");
   });
 
-  it("nói thẳng là bản cũ chưa xem trước được — .history không nằm trong READABLE_TOP", () => {
+  it("KHÔNG có bản đang dùng ⇒ trỏ vào bản mới nhất, nhưng KHÔNG tự đổi gì", () => {
+    /* Ảnh gốc bị cổng alpha loại ⇒ chỉ còn lịch sử. Con trỏ phải đứng ở đâu đó, nhưng
+       một cú mở panel thì không được phép ghi đè ảnh gốc của người dùng. */
+    historyItems = [OLD_1, OLD_2];
     mount();
-    expect(screen.getByText(/Bản đang dùng/)).toBeTruthy();
+    expect(picker().textContent).toContain("v2");
+    expect(restoreMutate).not.toHaveBeenCalled();
   });
 });
 
-describe("khôi phục — MỘT CÚ BẤM KHÔNG ĐƯỢC PHÉP GHI ĐÈ", () => {
-  /* Không có bản hiện hành (file `raw/<job>.png` đã bị dọn) ⇒ mục chọn sẵn là một bản
-     lịch sử thật, tức nút mở khoá mà không phải lái Radix Select trong jsdom. */
-  const withoutCurrent = () => { historyItems = [OLD_1, OLD_2]; };
-
-  it("bấm nút CHỈ mở hộp xác nhận, KHÔNG gọi API", () => {
-    withoutCurrent();
+/* ══ CHỌN LÀ ĐỔI ═══════════════════════════════════════════════════════════
+   "ko cần nút khôi phục phiên bản này, user select là được mà, nó chỉ swap hiển
+   thị + copy figma thôi" (chủ sản phẩm, 09/09/2026). `#40` nay cắt lại `kits/`
+   ngay trong cùng request, nên một cú chọn đổi cả ba bề mặt cùng lúc. */
+describe("chọn một bản = đổi ngay", () => {
+  it("nút «Khôi phục bản này» và hộp xác nhận ĐÃ BỎ — không đường nào gọi lại", () => {
     mount();
-    expect(restoreButton().disabled).toBe(false);
-    fireEvent.click(restoreButton());
-    expect(restoreMutate).not.toHaveBeenCalled();
-    expect(screen.getByRole("alertdialog").textContent).toMatch(/GHI ĐÈ ảnh gốc đang dùng/);
+    expect(screen.queryByRole("button", { name: /Khôi phục/ })).toBeNull();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.queryByText(/chưa xem trước được/)).toBeNull();
   });
 
-  it("bấm Huỷ ⇒ không có gì xảy ra", () => {
-    withoutCurrent();
+  it("chọn một bản cũ ⇒ gọi thẳng #40, đúng tấm + đúng bản, không qua nhịp bấm nào", () => {
     mount();
-    fireEvent.click(restoreButton());
-    fireEvent.click(screen.getByRole("button", { name: "Huỷ" }));
-    expect(restoreMutate).not.toHaveBeenCalled();
-  });
-
-  it("xác nhận rồi mới gọi #40, đúng job + đúng historyId", () => {
-    withoutCurrent();
-    mount();
-    fireEvent.click(restoreButton());
-    fireEvent.click(screen.getByRole("button", { name: "Khôi phục" }));
+    choose(/^v1/);
     expect(restoreMutate).toHaveBeenCalledTimes(1);
-    expect(restoreMutate.mock.calls[0]?.[0]).toEqual({ job: "chinh-ui", historyId: OLD_1.id });
+    expect(restoreMutate.mock.calls[0]?.[0]).toEqual({ job: "chinh-ui", historyId: OLD_2.id });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
-  it("đang có lượt chạy ⇒ khoá nút, vì #40 trả 409 RUN_ACTIVE", () => {
-    withoutCurrent();
-    render(<SheetVersionBar projectId="p1" job="chinh-ui" busy />);
-    expect(restoreButton().disabled).toBe(true);
+  it("chọn lại đúng bản ĐANG DÙNG ⇒ không gọi gì (agent sẽ 404 cho một việc chẳng đổi gì)", () => {
+    mount();
+    choose(/đang dùng/);
+    expect(restoreMutate).not.toHaveBeenCalled();
+  });
+
+  it("cắt lại hỏng ⇒ NÓI RA, không để hai tab lệch nhau trong im lặng", () => {
+    mount();
+    choose(/^v1/);
+    const onSuccess = restoreMutate.mock.calls[0]?.[1]?.onSuccess as (r: unknown) => void;
+    onSuccess({ restored: true, sliced: false });
+    expect(toastInfo).toHaveBeenCalled();
+    expect(String(toastInfo.mock.calls[0]?.[1])).toMatch(/bản trước/);
+  });
+
+  it("đổi trót lọt ⇒ IM LẶNG, và báo cho panel cha nạp lại ảnh", () => {
+    const onSwapped = vi.fn();
+    mount({ onSwapped });
+    choose(/^v1/);
+    const onSuccess = restoreMutate.mock.calls[0]?.[1]?.onSuccess as (r: unknown) => void;
+    onSuccess({ restored: true, sliced: true });
+    expect(onSwapped).toHaveBeenCalledTimes(1);
+    expect(toastInfo).not.toHaveBeenCalled();
+  });
+
+  it("đang đổi ⇒ ô chọn khoá và nói đang làm gì", () => {
+    restorePending = true;
+    mount();
+    expect(picker().getAttribute("data-disabled")).not.toBeNull();
+    expect(screen.getByText(/Đang đổi ảnh gốc/)).toBeTruthy();
+  });
+
+  it("đang có lượt chạy ⇒ ô chọn khoá, vì #40 trả 409 RUN_ACTIVE", () => {
+    mount({ busy: true });
+    expect(picker().getAttribute("data-disabled")).not.toBeNull();
   });
 });
 
-/* ══ XOÁ BẢN CŨ — "cho phép xoá ver cũ" (chủ sản phẩm, 07/09/2026) ═══════════
-   Hai điều phải đúng cùng lúc, và chúng kéo về hai hướng ngược nhau:
-     ① XOÁ ĐƯỢC, không phải qua ba lớp hộp thoại — nó chỉ bỏ một file trong
-        `.history/`, ảnh đang dùng không suy suyển.
-     ② KHÔNG BAO GIỜ chạm tới bản ĐANG DÙNG: đó là `raw/<tấm>.png`, đầu vào của
-        bước cắt. Agent trả 409 `HISTORY_CURRENT` nếu ai đó thử — nút ở đây phải
-        không tồn tại từ đầu, chứ không phải bấm rồi mới ăn lỗi. */
-describe("xoá bản cũ", () => {
-  const withoutCurrent = () => { historyItems = [OLD_1, OLD_2]; };
-  const trash = () => screen.queryByRole<HTMLButtonElement>("button", { name: /^Xoá v\d/ });
-
-  it("đang đứng ở bản ĐANG DÙNG ⇒ KHÔNG có nút xoá nào để bấm", () => {
+/* ══ XOÁ PHIÊN BẢN — "VẪN KO CÓ NÚT XOÁ PHIÊN BẢN À???" ═════════════════════
+   Bản trước có nút, nhưng nó chỉ là một hình thùng rác không chữ VÀ nó biến mất
+   khi đang đứng ở bản đang dùng — tức là ở đúng chỗ người dùng nhìn vào đầu tiên
+   thì không có gì cả. Nay nút có chữ, luôn có mặt, và xoá được cả bản đang dùng. */
+describe("xoá phiên bản", () => {
+  it("nút xoá CÓ CHỮ và có mặt ngay cả khi đang đứng ở bản đang dùng", () => {
     mount();
-    expect(trash()).toBeNull();
+    expect(trash().textContent).toContain("Xoá bản này");
   });
 
   it("bấm lần đầu CHỈ hỏi lại, chưa gọi API", () => {
-    withoutCurrent();
     mount();
-    const btn = trash();
-    expect(btn).not.toBeNull();
-    fireEvent.click(btn!);
+    fireEvent.click(trash());
     expect(deleteMutate).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Xoá v2?" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Xoá v3?" })).toBeTruthy();
   });
 
-  it("bấm lần hai mới xoá thật, đúng tấm + đúng bản", () => {
-    withoutCurrent();
+  it("bấm lần hai mới xoá thật — BẢN ĐANG DÙNG cũng xoá được", () => {
     mount();
-    fireEvent.click(trash()!);
-    fireEvent.click(screen.getByRole("button", { name: "Xoá v2?" }));
+    fireEvent.click(trash());
+    fireEvent.click(screen.getByRole("button", { name: "Xoá v3?" }));
     expect(deleteMutate).toHaveBeenCalledTimes(1);
+    expect(deleteMutate.mock.calls[0]?.[0]).toEqual({ job: "chinh-ui", historyId: "current" });
+  });
+
+  it("xoá một bản cũ ⇒ đúng id của bản đó", () => {
+    historyItems = [OLD_1, OLD_2];
+    mount();
+    fireEvent.click(trash());
+    fireEvent.click(screen.getByRole("button", { name: "Xoá v2?" }));
     expect(deleteMutate.mock.calls[0]?.[0]).toEqual({ job: "chinh-ui", historyId: OLD_1.id });
   });
 
+  it("xoá bản đang dùng xong ⇒ panel cha phải nạp lại ảnh (ảnh gốc vừa đổi chủ)", () => {
+    const onSwapped = vi.fn();
+    mount({ onSwapped });
+    fireEvent.click(trash());
+    fireEvent.click(screen.getByRole("button", { name: "Xoá v3?" }));
+    const onSuccess = deleteMutate.mock.calls[0]?.[1]?.onSuccess as () => void;
+    onSuccess();
+    expect(onSwapped).toHaveBeenCalledTimes(1);
+  });
+
   it("rời khỏi nút ⇒ lời hỏi tự huỷ, không treo một cú bấm chờ sẵn", () => {
-    withoutCurrent();
     mount();
-    fireEvent.click(trash()!);
-    fireEvent.blur(screen.getByRole("button", { name: "Xoá v2?" }));
-    expect(screen.queryByRole("button", { name: "Xoá v2?" })).toBeNull();
+    fireEvent.click(trash());
+    fireEvent.blur(screen.getByRole("button", { name: "Xoá v3?" }));
+    expect(screen.queryByRole("button", { name: "Xoá v3?" })).toBeNull();
     expect(deleteMutate).not.toHaveBeenCalled();
   });
 
   it("đang có lượt chạy ⇒ nút xoá khoá (agent cũng trả 409 RUN_ACTIVE)", () => {
-    withoutCurrent();
-    render(<SheetVersionBar projectId="p1" job="chinh-ui" busy />);
-    expect(trash()!.disabled).toBe(true);
+    mount({ busy: true });
+    expect(trash().disabled).toBe(true);
   });
 });
 
@@ -172,15 +210,17 @@ describe("đánh số sau khi xoá", () => {
   it("số thứ tự luôn liền mạch v1..vN theo các bản CÒN LẠI", () => {
     historyItems = [CURRENT, OLD_1, OLD_2];
     mount();
-    expect(screen.getByRole("combobox").textContent).toContain("v3");
+    expect(picker().textContent).toContain("v3");
     cleanup();
     historyItems = [CURRENT, OLD_2];   // xoá mất bản Ở GIỮA, không phải bản cuối
     mount();
-    expect(screen.getByRole("combobox").textContent).toContain("v2");
+    expect(picker().textContent).toContain("v2");
   });
 
-  it("NÓI RA việc đánh số lại — không để người dùng tự phát hiện", () => {
+  it("NÓI RA việc đánh số lại VÀ việc chọn là đổi ngay", () => {
     mount();
-    expect(screen.getByRole("combobox").getAttribute("title")).toMatch(/đánh số lại/);
+    const title = picker().getAttribute("title") ?? "";
+    expect(title).toMatch(/đánh số lại/);
+    expect(title).toMatch(/đổi ngay/);
   });
 });

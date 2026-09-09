@@ -663,46 +663,17 @@ export class RunHandle {
 
   /** Cắt HẸP đúng một tấm: `slice.py <variant> --sheet=<sheet>`.
    *  Chạy NGOÀI `runPhase` vì pha chính (gen.sh) vẫn đang chạy — `this.child` và
-   *  `this.phaseDone` thuộc về nó, ghi đè là cancel() giết nhầm tiến trình. */
-  async sliceSheet(pdir, j) {
-    if (this.detached || this.finished) return null
-    const { cmd, args, env } = buildCommand("slice", pdir, { variants: [j.variant], sheets: [j.sheet] })
-    const t0 = Date.now()
-    const code = await new Promise(resolve => {
-      let child
-      try {
-        // `detached: !IS_WIN` — cùng lý do với runPhase: Windows cần windowsHide sống.
-        child = spawn(cmd, args, {
-          cwd: pdir, detached: !IS_WIN, stdio: ["ignore", "pipe", "pipe"],
-          env: { ...process.env, ...env, PATH: env.PATH ?? process.env.PATH },
-          ...winSpawnOpts(),
-        })
-      } catch (e) { return resolve(`spawn: ${e?.message ?? e}`) }
-      this.sideChildren.add(child)
-      const timer = setTimeout(() => killTree(child, "SIGKILL"), SHEET_SLICE_TIMEOUT_MS)
-      timer.unref?.()
-      const onLine = (line, level) => {
-        const s = line.trimEnd()
-        if (s) this.emit({ type: "job.log", job: j.job, level, line: s })
-      }
-      lineReader(child.stdout, l => onLine(l, "info"))
-      lineReader(child.stderr, l => onLine(l, "warn"))
-      child.on("error", e => { clearTimeout(timer); this.sideChildren.delete(child); resolve(`spawn: ${e.message}`) })
-      child.on("close", c => { clearTimeout(timer); this.sideChildren.delete(child); resolve(c) })
-      // Cùng lưới an toàn win32 như runPhase: 'close' đợi ống dẫn, mà cháu trên Windows
-      // giữ ống. Mọi thao tác dưới đây đều idempotent nên nếu 'close' tới trước thì vô hại.
-      if (IS_WIN) {
-        child.on("exit", c => {
-          const t = setTimeout(() => {
-            try { child.stdout?.destroy() } catch { /* đã đóng */ }
-            try { child.stderr?.destroy() } catch { /* đã đóng */ }
-            clearTimeout(timer); this.sideChildren.delete(child); resolve(c)
-          }, WIN_PIPE_GRACE_MS)
-          t.unref?.()
-        })
-      }
+   *  `this.phaseDone` thuộc về nó, ghi đè là cancel() giết nhầm tiến trình.
+   *  Thân lượt cắt nằm ở `sliceSheetOnce` (cuối file) — CÙNG MỘT đường mà route đổi
+   *  phiên bản gọi lại, xem khối chú thích của nó. */
+  sliceSheet(pdir, j) {
+    if (this.detached || this.finished) return Promise.resolve(null)
+    return sliceSheetOnce(pdir, {
+      variant: j.variant, sheet: j.sheet,
+      onLine: (line, level) => this.emit({ type: "job.log", job: j.job, level, line }),
+      onSpawn: child => this.sideChildren.add(child),
+      onSettle: child => this.sideChildren.delete(child),
     })
-    return { ok: code === 0, code, durationMs: Date.now() - t0 }
   }
 
   /** Sinh sẵn bản thu nhỏ (thumbs.mjs vốn sinh LƯỜI lúc web hỏi → ô trống chờ vài trăm ms
@@ -1056,4 +1027,57 @@ function lineReader(stream, onLine) {
     }
   })
   stream.on("end", () => { if (buf.trim()) onLine(buf.slice(0, MAX_CHILD_LINE_CHARS)) })
+}
+
+/**
+ * MỘT LƯỢT `slice.py <variant> --sheet=<sheet>` — CHỖ DUY NHẤT CẮT MỘT TẤM.
+ *
+ * ╔══ VÌ SAO NÓ RỜI KHỎI THÂN LỚP ═══════════════════════════════════════════╗
+ * ║ Từ 09/09/2026 việc "đổi phiên bản ảnh gốc" cắt lại NGAY trong request đổi ║
+ * ║ (`routes/runs.mjs` #40) — ngoài mọi lượt chạy, nên không có `RunHandle`   ║
+ * ║ nào để gọi. Viết một bản cắt thứ hai ở route là mở đúng cái hố mà file    ║
+ * ║ `raw-history.mjs` đã phải chữa một lần: hai nơi cùng dựng một lệnh, lệch  ║
+ * ║ một cờ là một đường cắt cả tấm còn đường kia cắt một tấm, và không test   ║
+ * ║ nào bắt được vì mỗi đường tự đúng theo cách của nó.                       ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * KHÔNG NÉM: trả `{ ok, code, durationMs }` để caller tự quyết. `onSpawn`/`onSettle`
+ * để lượt chạy còn ghi được tiến trình con vào sổ (`cancel()` phải giết được nó);
+ * caller ngoài lượt chạy bỏ trống cả hai.
+ */
+export function sliceSheetOnce(pdir, { variant, sheet, onLine = () => {}, onSpawn = () => {}, onSettle = () => {} }) {
+  const { cmd, args, env } = buildCommand("slice", pdir, { variants: [variant], sheets: [sheet] })
+  const t0 = Date.now()
+  return new Promise(resolve => {
+    let child
+    try {
+      // `detached: !IS_WIN` — cùng lý do với runPhase: Windows cần windowsHide sống.
+      child = spawn(cmd, args, {
+        cwd: pdir, detached: !IS_WIN, stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, ...env, PATH: env.PATH ?? process.env.PATH },
+        ...winSpawnOpts(),
+      })
+    } catch (e) { return resolve({ ok: false, code: `spawn: ${e?.message ?? e}`, durationMs: Date.now() - t0 }) }
+    onSpawn(child)
+    const timer = setTimeout(() => killTree(child, "SIGKILL"), SHEET_SLICE_TIMEOUT_MS)
+    timer.unref?.()
+    const done = code => resolve({ ok: code === 0, code, durationMs: Date.now() - t0 })
+    const say = (line, level) => { const s = String(line).trimEnd(); if (s) onLine(s, level) }
+    lineReader(child.stdout, l => say(l, "info"))
+    lineReader(child.stderr, l => say(l, "warn"))
+    child.on("error", e => { clearTimeout(timer); onSettle(child); done(`spawn: ${e.message}`) })
+    child.on("close", c => { clearTimeout(timer); onSettle(child); done(c) })
+    // Cùng lưới an toàn win32 như runPhase: 'close' đợi ống dẫn, mà cháu trên Windows
+    // giữ ống. Mọi thao tác dưới đây đều idempotent nên nếu 'close' tới trước thì vô hại.
+    if (IS_WIN) {
+      child.on("exit", c => {
+        const t = setTimeout(() => {
+          try { child.stdout?.destroy() } catch { /* đã đóng */ }
+          try { child.stderr?.destroy() } catch { /* đã đóng */ }
+          clearTimeout(timer); onSettle(child); done(c)
+        }, WIN_PIPE_GRACE_MS)
+        t.unref?.()
+      })
+    }
+  })
 }

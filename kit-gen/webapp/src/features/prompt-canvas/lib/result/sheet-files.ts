@@ -15,8 +15,8 @@ import type { KitFile } from "@/lib/types";
  * ẢNH GỐC CỦA MỘT TẤM — hai nguồn, hai ý nghĩa KHÁC NHAU.
  *
  * ╔══ VÌ SAO KHÔNG CHỈ DÙNG `raw/` ═══════════════════════════════════════════╗
- * ║ `raw/<job>.png` là ảnh **hiện hành**: mỗi lượt gen lại ghi đè, và nút      ║
- * ║ "Khôi phục bản này" cũng ghi đè chính nó (agent/routes/runs.mjs:145-161).  ║
+ * ║ `raw/<job>.png` là ảnh **hiện hành**: mỗi lượt gen lại ghi đè, và một cú   ║
+ * ║ chọn phiên bản trên thanh cạnh đó cũng ghi đè chính nó (`#40`).           ║
  * ║ Nghĩa là nó KHÔNG neo được vào một phiên bản: mở lại panel sau một lượt    ║
  * ║ gen khác thì ảnh đã là ảnh khác mà không có gì báo.                        ║
  * ║ `runs/<runId>/artifacts/<job>.png` thì BẤT BIẾN — agent chép sang đó lúc   ║

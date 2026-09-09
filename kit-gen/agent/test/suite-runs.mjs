@@ -1,6 +1,6 @@
 /* suite-runs.mjs — §6.2 E: run-store trên đĩa, chặn trước bằng doctor, UNKNOWN_JOB,
    RUN_CONFLICT, stream NDJSON + reconnect ?from=, dừng run, gen→auto-slice bằng engine giả. */
-import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import {
   describe, it, eq, ok, includes, waitFor, pathExists, lsDir,
@@ -190,14 +190,14 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     await a3("DELETE", `/api/projects/${gid}`)
   })
 
-  /* ══ BA ĐỜI ẢNH GỐC — v1, v2, và quyền XOÁ BẢN CŨ ═══════════════════════════
+  /* ══ BA ĐỜI ẢNH GỐC — v1, v2, và quyền XOÁ ══════════════════════════════════
      Chủ sản phẩm: "gen lại nó phải ver 1 2 chứ, cho phép xoá ver cũ". Trước bản này
      thanh phiên bản đứng ở "v1" vĩnh viễn vì KHÔNG AI ghi vào `.history/raw/`:
      `gen.sh` dặn codex đè thẳng lên `raw/<job>.png`, còn agent chỉ chép snapshot ra
      `runs/<id>/artifacts/` SAU khi ảnh mới đã ghi — bản cũ mất trước đó. Nay
      `run-handle.launch()` cất bản cũ NGAY TRƯỚC khi spawn engine.
      Ca này chạy engine giả HAI lượt trên cùng một tấm và đòi thấy đời thứ hai. */
-  await it("[phiên bản] gen lượt hai ⇒ bản cũ vào lịch sử (v1 + v2), xoá được bản cũ, KHÔNG xoá được bản đang dùng", async () => {
+  await it("[phiên bản] gen lượt hai ⇒ bản cũ vào lịch sử (v1 + v2), xoá được bản cũ", async () => {
     const { api: aH } = await agentWithEngine("engine-fake")
     const created = await createBasicProject(aH, { name: "Ba doi anh", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const gid = created.json.project.id
@@ -221,23 +221,20 @@ export async function run({ api, wsRoot, agentDir, pid }) {
       ok(/^r-\d+$/.test(old.id), `id bản cũ ${old.id} đúng dạng r-<ms>`)
       ok(old.bytes > 0, "bản cũ có bytes thật, không phải file rỗng")
 
-      // ① BẢN ĐANG DÙNG KHÔNG XOÁ ĐƯỢC — đó là `raw/<job>.png`, đầu vào của bước cắt.
-      const cur = await aH("DELETE", `/api/projects/${gid}/raw/tet-main/history/current`)
-      eq(cur.status, 409, "xoá bản đang dùng ⇒ 409")
-      eq(cur.json.error.code, "HISTORY_CURRENT", "có mã riêng để web nói đúng lý do")
-
-      // ② ID LẠ / TRAVERSAL bị chặn TRƯỚC khi chạm đĩa.
+      // ① ID LẠ / TRAVERSAL bị chặn TRƯỚC khi chạm đĩa.
       eq((await aH("DELETE", `/api/projects/${gid}/raw/tet-main/history/r-abc`)).status, 400, "id sai dạng ⇒ 400")
       /* `..` ĐÃ RỖNG NGHĨA TỪ ĐƯỜNG ĐI: router khớp `/history/..` là 404 (không có route
          nào tên đó sau khi chuẩn hoá). Ca này khoá cái quan trọng hơn — dạng ĐÃ MÃ HOÁ,
          thứ đi lọt qua chuẩn hoá URL rồi mới rơi vào tay handler: nó phải chết ở
-         `safeSegment`/`RE_RAW_HISTORY_ID`, KHÔNG bao giờ thành một đường dẫn trên đĩa. */
+         `safeSegment`/`RE_RAW_HISTORY_ID`, KHÔNG bao giờ thành một đường dẫn trên đĩa.
+         Chốt này KHÔNG được nới ra dù `current` nay là một id hợp lệ: `current` chỉ chọn
+         nhánh, nó không bao giờ đi vào một đường dẫn. */
       const escape = await aH("DELETE", `/api/projects/${gid}/raw/tet-main/history/${encodeURIComponent("../../contract.json")}`)
       ok(escape.status === 400, `thoát thư mục ⇒ 400, nhận ${escape.status}`)
       ok(await pathExists(join(wsRoot, "projects", gid, "contract.json")), "contract.json KHÔNG bị đụng tới")
       eq((await aH("DELETE", `/api/projects/${gid}/raw/tet-main/history/r-1`)).status, 404, "id đúng dạng mà không có ⇒ 404")
 
-      // ③ XOÁ THẬT: bản cũ biến mất, bản đang dùng còn nguyên trên đĩa.
+      // ② XOÁ THẬT: bản cũ biến mất, bản đang dùng còn nguyên trên đĩa.
       const del = await aH("DELETE", `/api/projects/${gid}/raw/tet-main/history/${old.id}`)
       eq(del.status, 200, "xoá bản cũ ⇒ 200")
       eq(del.json.deleted, true, "báo đã xoá")
@@ -248,6 +245,105 @@ export async function run({ api, wsRoot, agentDir, pid }) {
         "ảnh gốc đang dùng KHÔNG hề bị đụng tới")
     } finally {
       await aH("DELETE", `/api/projects/${gid}`)
+    }
+  })
+
+  /* ══ ĐỔI PHIÊN BẢN = ĐỔI CẢ Ô ĐÃ CẮT (09/09/2026) ═══════════════════════════
+     Chủ sản phẩm: "user select là được mà, nó chỉ swap hiển thị + copy figma thôi".
+     Hai thứ bị khoá ở đây, và cả hai đều là lỗi THẬT của bản trước:
+       ① `#40` kiểm `historyId` bằng `RE_RUN_ID` = `r-[0-9]{4,8}`, trong khi id lịch sử
+          là `r-<mtime ms>` = 13 chữ số ⇒ MỌI lần đổi phiên bản đều chết ở 400, cho đúng
+          những id mà `#39` vừa phát ra. Không ca nào gọi `#40` nên nó sống yên.
+       ② `#40` chỉ chép đè ảnh gốc, `kits/` vẫn là ô của bản CŨ ⇒ tab «Đã crop» và nút
+          copy Figma nói một chuyện khác hẳn tab «Ảnh gốc», im lặng.
+     Bằng chứng cho ②: XOÁ TAY một ô đã cắt rồi đổi phiên bản — ô phải mọc lại. */
+  await it("[đổi phiên bản] chép ảnh cũ về VÀ cắt lại kits ngay trong cùng request", async () => {
+    const { api: aV } = await agentWithEngine("engine-fake")
+    const created = await createBasicProject(aV, { name: "Doi phien ban", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
+    const gid = created.json.project.id
+    const pdir = join(wsRoot, "projects", gid)
+    const cell = join(pdir, "kits", "tet", "01-btn-pill-red.png")
+    const genOnce = async () => {
+      const r = await aV("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", jobs: ["tet-main"], autoSliceAfterGen: true } })
+      eq(r.status, 202, "run 202")
+      await aV("GET", `/api/runs/${r.json.runId}/stream?from=0`)
+    }
+    try {
+      await genOnce()
+      await genOnce()
+      const h = await aV("GET", `/api/projects/${gid}/raw/tet-main/history`)
+      const old = h.json.items.find(i => !i.current)
+      ok(old, "có bản cũ để chọn")
+      ok(old.id.length > 8, `id lịch sử dài hơn RE_RUN_ID cho phép (${old.id}) — đúng cái đã làm #40 chết`)
+      ok(await pathExists(cell), "trước khi đổi: ô đã cắt có mặt")
+      await rm(cell, { force: true })
+
+      const res = await aV("POST", `/api/projects/${gid}/raw/tet-main/restore`, { body: { historyId: old.id } })
+      eq(res.status, 200, "đổi phiên bản ⇒ 200 (id 13 chữ số KHÔNG còn bị 400)")
+      eq(res.json.restored, true, "báo đã đổi")
+      eq(res.json.sliced, true, "và đã cắt lại ngay trong request")
+      ok(await pathExists(cell), "ô đã cắt mọc lại từ bản vừa chọn — tab «Đã crop» đi theo tab «Ảnh gốc»")
+      const kit = await aV("GET", `/api/projects/${gid}/kit`)
+      ok(kit.json.files.some(f => f.sheet === "main"), "danh mục kit vẫn có ô của tấm này")
+
+      // Bản vừa bị ghi đè phải CÒN trong lịch sử — chọn ngược lại được ngay sau đó.
+      const after = await aV("GET", `/api/projects/${gid}/raw/tet-main/history`)
+      eq(after.json.items.filter(i => i.current).length, 1, "vẫn đúng một bản đang dùng")
+      ok(after.json.items.length >= 2, "bản vừa bị ghi đè nằm lại trong lịch sử")
+    } finally {
+      await aV("DELETE", `/api/projects/${gid}`)
+    }
+  })
+
+  /* ══ XOÁ BẢN ĐANG DÙNG — "VẪN KO CÓ NÚT XOÁ PHIÊN BẢN À???" ════════════════
+     Bản trước từ chối thẳng bằng 409 `HISTORY_CURRENT`, nên thứ người dùng thật sự
+     muốn — vứt một tấm vẽ hỏng đi — không có đường nào làm được. Nay xoá được, và
+     xoá thì phải dọn HẾT: ảnh gốc, ô đã cắt, và mục của tấm trong manifest. Còn bản
+     cũ thì bản mới nhất TỰ LÊN thay chỗ (kèm cắt lại), hết bản thì tấm về «chưa vẽ». */
+  await it("[xoá bản đang dùng] bản mới nhất lên thay chỗ; hết bản thì tấm về chưa vẽ", async () => {
+    const { api: aD } = await agentWithEngine("engine-fake")
+    const created = await createBasicProject(aD, { name: "Xoa ban dang dung", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
+    const gid = created.json.project.id
+    const pdir = join(wsRoot, "projects", gid)
+    const cell = join(pdir, "kits", "tet", "01-btn-pill-red.png")
+    const genOnce = async () => {
+      const r = await aD("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", jobs: ["tet-main"], autoSliceAfterGen: true } })
+      eq(r.status, 202, "run 202")
+      await aD("GET", `/api/runs/${r.json.runId}/stream?from=0`)
+    }
+    try {
+      await genOnce()
+      await genOnce()
+      const h2 = await aD("GET", `/api/projects/${gid}/raw/tet-main/history`)
+      eq(h2.json.items.length, 2, "hai đời trước khi xoá")
+      const older = h2.json.items.find(i => !i.current)
+
+      // ① CÒN BẢN CŨ ⇒ nó lên thay chỗ, và ĐI CHỖ chứ không nhân đôi.
+      const first = await aD("DELETE", `/api/projects/${gid}/raw/tet-main/history/current`)
+      eq(first.status, 200, "xoá bản đang dùng ⇒ 200 (không còn 409 HISTORY_CURRENT)")
+      eq(first.json.nowCurrent, older.id, "bản mới nhất còn lại lên làm bản đang dùng")
+      eq(first.json.sliced, true, "và ô của tấm được cắt lại theo bản mới lên")
+      const h1 = await aD("GET", `/api/projects/${gid}/raw/tet-main/history`)
+      eq(h1.json.items.length, 1, "MỘT phiên bản biến mất — không phải chép sang chỗ khác rồi đếm lại y cũ")
+      eq(h1.json.items[0].current, true, "và bản còn lại là bản đang dùng")
+      eq((await aD("GET", `/api/projects/${gid}/files/raw/tet-main.png`)).status, 200, "ảnh gốc vẫn đọc được")
+      ok(await pathExists(cell), "ô đã cắt vẫn có mặt (của bản vừa lên)")
+
+      // ② HẾT BẢN ⇒ tấm về «chưa vẽ», và không ô nào của nó còn nằm lại trong kho.
+      const last = await aD("DELETE", `/api/projects/${gid}/raw/tet-main/history/current`)
+      eq(last.status, 200, "xoá nốt bản cuối ⇒ 200")
+      eq(last.json.nowCurrent, null, "không còn bản nào để đưa lên")
+      eq((await aD("GET", `/api/projects/${gid}/raw/tet-main/history`)).json.items.length, 0, "lịch sử rỗng")
+      eq((await aD("GET", `/api/projects/${gid}/files/raw/tet-main.png`)).status, 404, "ảnh gốc không còn")
+      ok(!(await pathExists(cell)), "ô đã cắt của tấm bị dọn theo — không phát ô của một tấm không còn tồn tại")
+      const kit = await aD("GET", `/api/projects/${gid}/kit`)
+      ok(!(kit.json.files ?? []).some(f => f.sheet === "main"), "danh mục kit không còn ô nào của tấm này")
+      const st = (await aD("GET", `/api/projects/${gid}`)).json.project.state.jobs
+      eq(st["tet-main"], "never", "tấm về trạng thái chưa vẽ")
+      eq((await aD("DELETE", `/api/projects/${gid}/raw/tet-main/history/current`)).status, 404,
+        "xoá lần nữa ⇒ 404, không có gì để xoá")
+    } finally {
+      await aD("DELETE", `/api/projects/${gid}`)
     }
   })
 

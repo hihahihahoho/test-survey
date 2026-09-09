@@ -1,35 +1,40 @@
 import * as React from "react";
-import { History, RotateCcw, Trash2 } from "lucide-react";
+import { History, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogBody, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDeleteRawHistory, useRawHistory, useRestoreRaw } from "@/lib/hooks";
-import { toastError, toastSuccess } from "@/features/projects/lib/feedback";
+import { toastError, toastInfo, toastSuccess } from "@/features/projects/lib/feedback";
 import {
-  currentVersion, deleteConfirmLabel, restoreWarning, sheetVersions, type SheetVersion,
+  currentVersion, deleteConfirmLabel, sheetVersions, type SheetVersion,
 } from "../../lib/result/sheet-versions";
 
 /**
- * THANH PHIÊN BẢN của một tấm — chọn trong 3 đời ảnh gần nhất rồi khôi phục.
+ * THANH PHIÊN BẢN của một tấm — CHỌN LÀ ĐỔI, và xoá được cả bản đang dùng.
  *
- * ╔══ MỘT SỰ THẬT PHẢI NÓI RA, KHÔNG ĐƯỢC GIẤU ══════════════════════════════╗
- * ║ Bản cũ **KHÔNG XEM TRƯỚC ĐƯỢC**. Ảnh lịch sử nằm ở `.history/raw/…` mà     ║
- * ║ `agent/routes/files.mjs:15` chỉ mở cho `raw, kits, refs, skeleton, prompts,║
- * ║ export, runs, cover` — `.history` không có trong danh sách, xin nó là 400   ║
- * ║ PATH_ESCAPE. Vẽ một khung ảnh rồi để nó hỏng câm là cách tệ nhất; ở đây     ║
- * ║ nói thẳng "chỉ khôi phục được, chưa xem trước được", và chính vì không      ║
- * ║ xem trước được nên nút khôi phục BẮT BUỘC phải hỏi lại trước khi ghi đè.   ║
+ * ╔══ MÔ HÌNH, NÓI BẰNG LỜI CỦA CHỦ SẢN PHẨM (09/09/2026) ═══════════════════╗
+ * ║ "ko cần nút khôi phục phiên bản này, user select là được mà, nó chỉ swap  ║
+ * ║  hiển thị + copy figma thôi" — và "VẪN KO CÓ NÚT XOÁ PHIÊN BẢN À???".     ║
+ * ║ Nên ở đây đúng hai thứ: MỘT ô chọn (chọn xong là đổi ngay, không nút thứ  ║
+ * ║ hai, không hộp thoại) và MỘT nút xoá CÓ CHỮ.                              ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
- * ╔══ VÌ SAO PHẢI XÁC NHẬN ══════════════════════════════════════════════════╗
- * ║ `#40` chép đè thẳng lên `raw/<job>.png` — tức đổi ĐẦU VÀO của bước cắt.    ║
- * ║ Ô đã cắt trong `kits/` vẫn là ô của bản cũ cho tới khi cắt lại, nên sau    ║
- * ║ một cú bấm nhầm, tab «Ảnh gốc» và tab «Đã crop» nói hai chuyện khác nhau   ║
- * ║ mà không có gì báo. Một cú bấm không được phép làm chuyện đó.              ║
+ * ╔══ VÌ SAO MỘT CÚ CHỌN NAY ĐƯỢC PHÉP GHI ĐÈ ẢNH GỐC ═══════════════════════╗
+ * ║ Bản trước bắt xác nhận vì `#40` chỉ chép đè `raw/<tấm>.png` rồi thôi: ô đã ║
+ * ║ cắt trong `kits/` vẫn là ô bản cũ, nên sau một cú bấm nhầm thì tab «Ảnh    ║
+ * ║ gốc» và tab «Đã crop» nói hai chuyện khác nhau mà không có gì báo — và cái ║
+ * ║ giá đó thì một hộp thoại cũng không trả nổi.                              ║
+ * ║ Nay `#40` CẮT LẠI ngay trong cùng request (`lib/sheet-kits.mjs`), nên đổi  ║
+ * ║ phiên bản là đổi cả ba bề mặt cùng lúc: ảnh gốc, ô đã crop, nút copy       ║
+ * ║ Figma. Việc này không tốn hạn mức (slice là PIL thuần) và LUÔN quay lại    ║
+ * ║ được: bản đang dùng được cất vào lịch sử trước khi bị ghi đè, nên nó vẫn   ║
+ * ║ nằm trong chính ô chọn này. Một thao tác hoàn tác được bằng đúng thao tác  ║
+ * ║ vừa làm thì không đáng một hộp thoại.                                     ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * KHÔNG có khung xem trước cho bản cũ: ảnh lịch sử nằm ở `.history/raw/…` mà
+ * `agent/routes/files.mjs` không mở thư mục đó. Nhưng nay điều ấy không còn phải nói
+ * thành câu — chọn một mục là thấy nó ngay ở tab bên cạnh, tức là XEM TRƯỚC bằng chính
+ * cú chọn, và chọn lại mục cũ thì quay về.
  */
 export interface SheetVersionBarProps {
   projectId: string;
@@ -44,70 +49,105 @@ export interface SheetVersionBarProps {
    */
   name?: string;
   /**
-   * true ⇒ đang có lượt chạy cho tấm này. `#40` trả 409 RUN_ACTIVE khi dự án còn
-   * lượt chạy, nên khoá nút từ đây thay vì để người dùng bấm rồi ăn lỗi.
+   * true ⇒ đang có lượt chạy cho tấm này. `#39.1`/`#40` đều trả 409 RUN_ACTIVE khi dự
+   * án còn lượt chạy, nên khoá từ đây thay vì để người dùng bấm rồi ăn lỗi.
    */
   busy?: boolean;
-  /** Gọi sau khi khôi phục xong — panel cha dùng để nạp lại ảnh gốc. */
-  onRestored?: () => void;
+  /** Gọi sau khi ẢNH GỐC ĐANG DÙNG đổi — panel cha dùng để nạp lại ảnh. */
+  onSwapped?: () => void;
   className?: string;
 }
 
-export function SheetVersionBar({ projectId, job, name, busy = false, onRestored, className }: SheetVersionBarProps) {
+export function SheetVersionBar({ projectId, job, name, busy = false, onSwapped, className }: SheetVersionBarProps) {
   const history = useRawHistory(projectId, job);
   const restore = useRestoreRaw(projectId);
   const remove = useDeleteRawHistory(projectId);
   const versions = React.useMemo(() => sheetVersions(history.data?.items), [history.data?.items]);
   const current = currentVersion(versions);
 
-  /* Chọn mặc định = bản ĐANG DÙNG. Mở panel ra mà con trỏ đã nằm sẵn trên một bản
-     cũ là mời người dùng bấm khôi phục nhầm. */
+  /* Chọn mặc định = bản ĐANG DÙNG — đó là thứ mọi bề mặt khác đang hiện, nên ô chọn
+     phải nói đúng tên nó. Không có bản đang dùng (ảnh gốc bị cổng alpha loại, chỉ còn
+     lịch sử) thì trỏ vào bản mới nhất, và CHỈ TRỎ: đổi ảnh gốc là việc của người dùng,
+     không phải của một cú mở panel. */
   const [pickedId, setPickedId] = React.useState<string | null>(null);
   const picked: SheetVersion | null =
     versions.find((v) => v.id === pickedId) ?? current ?? versions[0] ?? null;
-  const [confirming, setConfirming] = React.useState(false);
 
   /**
    * XÁC NHẬN XOÁ MỘT CHẠM, KHÔNG HỘP THOẠI.
    *
-   * ╔══ VÌ SAO XOÁ ĐƯỢC PHÉP NHẸ TAY HƠN KHÔI PHỤC ════════════════════════════╗
-   * ║ Khôi phục GHI ĐÈ `raw/<tấm>.png` — nó đổi đầu vào của bước cắt, và sau một ║
-   * ║ cú bấm nhầm thì hai tab nói hai chuyện khác nhau mà không có gì báo. Nên   ║
-   * ║ nó giữ hộp thoại. Xoá thì chỉ bỏ MỘT bản cũ trong `.history/`: ảnh đang    ║
-   * ║ dùng không suy suyển, không bước nào sau đó đổi kết quả. Một hộp thoại cho ║
-   * ║ việc ấy là bắt người dùng đọc hai lần cùng một câu.                        ║
-   * ║ Vẫn KHÔNG một-chạm-là-mất: nút phải đổi thành «Xoá v1?» rồi mới ăn cú bấm  ║
-   * ║ thứ hai — đủ để một cú chạm trượt không xoá mất bản sinh không lấy lại được.║
-   * ╚═══════════════════════════════════════════════════════════════════════════╝
-   * Khoá theo ID chứ không phải cờ boolean: đổi bản đang chọn giữa chừng thì lời hỏi
-   * tự huỷ, không có cách nào để câu «Xoá v1?» còn treo mà cú bấm lại rơi vào v2.
+   * Xoá là thao tác KHÔNG lấy lại được (khác hẳn đổi phiên bản), nên nó vẫn phải có một
+   * nhịp chặn — nhưng nhịp ấy nằm ngay trên cái nút: bấm lần đầu nút đổi thành «Xoá v2?»,
+   * lần thứ hai mới gọi agent. Đủ để một cú chạm trượt không xoá mất một bản sinh không
+   * lấy lại được, mà không bắt người dùng đọc hai lần cùng một câu trong một hộp thoại.
+   * Khoá theo ID chứ không phải cờ boolean: đổi bản đang chọn giữa chừng thì lời hỏi tự
+   * huỷ, không có cách nào để câu «Xoá v1?» còn treo mà cú bấm lại rơi vào v2.
    */
   const [askDeleteId, setAskDeleteId] = React.useState<string | null>(null);
   const asking = picked !== null && askDeleteId === picked.id;
+  /* Chữ trên nút, tính TRƯỚC khi vẽ: `asking` đã hàm ý `picked` khác null, nhưng trình
+     kiểm kiểu không suy ra được điều đó từ trong JSX. */
+  const deleteLabel = asking && picked !== null ? deleteConfirmLabel(picked) : "Xoá bản này";
 
-  /** Bản cũ mới xoá được. Bản đang dùng là `raw/<tấm>.png` — agent trả 409 nếu thử. */
-  const deletable = picked !== null && !picked.current && picked.restorable;
+  /* Tên tấm rút ra TRƯỚC rồi mới ghép câu — xem chú thích ở prop `name`. */
+  const label = (name ?? "").trim();
+  const pickerLabel = label === "" ? "Phiên bản ảnh gốc của tấm này" : `Phiên bản ảnh gốc của ${label}`;
+
+  const swapping = restore.isPending;
+  const working = swapping || remove.isPending;
+
+  /**
+   * ĐỔI PHIÊN BẢN = ĐỔI ẢNH GỐC + CẮT LẠI Ô, một request, không hỏi lại.
+   *
+   * Chọn đúng mục đang dùng thì KHÔNG gọi gì: agent sẽ 404 (không có file lịch sử nào
+   * tên `<tấm>@current.png`) cho một thao tác vốn chẳng đổi gì.
+   */
+  const pick = (id: string) => {
+    setAskDeleteId(null);
+    const target = versions.find((v) => v.id === id) ?? null;
+    if (target === null || target.id === picked?.id) return;
+    setPickedId(id);
+    if (!target.restorable) return;
+    restore.mutate(
+      { job, historyId: target.id },
+      {
+        onSuccess: (res) => {
+          /* Bỏ lựa chọn tay: sau khi đổi, bản vừa chọn CHÍNH LÀ bản đang dùng, và
+             `#39` đánh số lại theo danh sách mới. Giữ id cũ là ghim con trỏ vào một
+             mục lịch sử vừa mang số khác. */
+          setPickedId(null);
+          onSwapped?.();
+          /* Đổi phiên bản là việc thường ngày ⇒ IM LẶNG khi trót lọt. Chỉ lên tiếng
+             đúng lúc lời hứa không giữ trọn: ảnh gốc đã đổi mà ô chưa cắt lại được
+             (chưa cài engine, python chết) — nếu không nói, tab «Đã crop» và nút copy
+             Figma lặng lẽ phát ra ô của bản trước. */
+          if (res?.sliced === false) {
+            toastInfo("Đã đổi ảnh gốc", "Ô đã crop vẫn là của bản trước — cắt lại để hai bên khớp nhau.");
+          }
+        },
+        onError: (err) => { setPickedId(null); toastError(err, {}); },
+      },
+    );
+  };
 
   const doDelete = () => {
-    if (picked === null || !deletable) return;
+    if (picked === null || !picked.deletable) return;
     if (!asking) { setAskDeleteId(picked.id); return; }
     setAskDeleteId(null);
     const gone = picked.label;
+    const wasCurrent = picked.current;
     remove.mutate(
       { job, historyId: picked.id },
       {
         onSuccess: () => {
           setPickedId(null);
-          toastSuccess("Đã xoá bản cũ", `${gone} không còn nữa. Các bản còn lại được đánh số lại từ v1.`);
+          if (wasCurrent) onSwapped?.();
+          toastSuccess(`Đã xoá ${gone}`);
         },
         onError: (err) => toastError(err, {}),
       },
     );
   };
-
-  /* Tên tấm rút ra TRƯỚC rồi mới ghép câu — xem chú thích ở prop `name`. */
-  const label = (name ?? "").trim();
-  const pickerLabel = label === "" ? "Phiên bản ảnh gốc của tấm này" : `Phiên bản ảnh gốc của ${label}`;
 
   if (history.isLoading) {
     return <p className={className} data-testid="version-loading">Đang đọc lịch sử ảnh…</p>;
@@ -116,27 +156,11 @@ export function SheetVersionBar({ projectId, job, name, busy = false, onRestored
      Hiện một thanh rỗng là thêm nhiễu; im hẳn là đúng. */
   if (versions.length === 0) return null;
 
-  const doRestore = () => {
-    if (picked === null || !picked.restorable) return;
-    setConfirming(false);
-    restore.mutate(
-      { job, historyId: picked.id },
-      {
-        onSuccess: () => {
-          toastSuccess("Đã khôi phục ảnh gốc", `Tấm này quay về ${picked.label}. Cắt lại để ô đã crop khớp bản vừa khôi phục.`);
-          setPickedId(null);
-          onRestored?.();
-        },
-        onError: (err) => toastError(err, {}),
-      },
-    );
-  };
-
   return (
     <div className={className}>
       <div className="flex flex-wrap items-center gap-2">
         <History className="size-4 shrink-0 text-fg-muted" aria-hidden strokeWidth={1.5} />
-        <Select value={picked?.id ?? ""} onValueChange={(v) => { setAskDeleteId(null); setPickedId(v); }}>
+        <Select value={picked?.id ?? ""} onValueChange={pick} disabled={busy || working}>
           {/* SỐ THỨ TỰ ĐÁNH LẠI SAU MỖI LẦN XOÁ — nói ra, đừng để người dùng tự phát hiện.
               `sheetVersions` đánh v1..vN theo các bản CÒN LẠI, nên xoá v1 xong thì v2 cũ
               trở thành v1. Giữ số cũ thì thanh sẽ có lỗ (v1, v3) và số lớn nhất không còn
@@ -144,7 +168,7 @@ export function SheetVersionBar({ projectId, job, name, busy = false, onRestored
           <SelectTrigger
             className="h-ctl-sm w-auto min-w-28"
             aria-label={pickerLabel}
-            title="Đánh số theo thứ tự thời gian của các bản còn lại — xoá một bản thì các bản sau được đánh số lại."
+            title="Chọn một bản là đổi ngay ảnh gốc và ô đã crop. Đánh số theo thứ tự thời gian của các bản còn lại — xoá một bản thì các bản sau được đánh số lại."
           >
             <SelectValue />
           </SelectTrigger>
@@ -156,57 +180,23 @@ export function SheetVersionBar({ projectId, job, name, busy = false, onRestored
             ))}
           </SelectContent>
         </Select>
+        {/* NÚT XOÁ CÓ CHỮ, và LUÔN CÓ MẶT khi còn bản để xoá. Bản trước là một nút chỉ
+            có hình thùng rác, lại còn trốn đi khi đang đứng ở bản đang dùng — đọc ra
+            đúng thành "không có nút xoá". */}
         <Button
           type="button"
-          variant="secondary"
+          variant={asking ? "danger" : "secondary"}
           size="sm"
-          disabled={busy || picked === null || !picked.restorable || restore.isPending}
-          loading={restore.isPending}
-          onClick={() => setConfirming(true)}
+          disabled={busy || picked === null || !picked.deletable || remove.isPending}
+          loading={remove.isPending}
+          onClick={doDelete}
+          onBlur={() => setAskDeleteId(null)}
         >
-          <RotateCcw aria-hidden strokeWidth={1.5} />
-          Khôi phục bản này
+          <Trash2 aria-hidden strokeWidth={1.5} />
+          {deleteLabel}
         </Button>
-        {/* Nút xoá CHỈ hiện khi có bản cũ để xoá. Hiện một nút khoá vĩnh viễn bên cạnh
-            bản đang dùng là mời người ta bấm thử rồi tự hỏi vì sao không được. */}
-        {deletable && (
-          <Button
-            type="button"
-            variant={asking ? "danger" : "ghost"}
-            size="sm"
-            disabled={busy || remove.isPending}
-            loading={remove.isPending}
-            aria-label={asking ? deleteConfirmLabel(picked) : `Xoá ${picked.label}`}
-            onClick={doDelete}
-            onBlur={() => setAskDeleteId(null)}
-          >
-            <Trash2 aria-hidden strokeWidth={1.5} />
-            {asking ? deleteConfirmLabel(picked) : null}
-          </Button>
-        )}
-        {/* Câu này thay cho một khung xem trước KHÔNG dựng được — xem khối chú thích đầu file. */}
-        <span className="text-caption text-fg-muted">
-          {picked?.current === true
-            ? "Bản đang dùng"
-            : "Bản cũ chưa xem trước được — khôi phục rồi mới thấy"}
-        </span>
+        {swapping ? <span className="text-caption text-fg-muted">Đang đổi ảnh gốc…</span> : null}
       </div>
-
-      <AlertDialog open={confirming} onOpenChange={setConfirming}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Khôi phục {picked?.label ?? "bản này"}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {picked === null ? "" : restoreWarning(picked)}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogBody />
-          <AlertDialogFooter>
-            <AlertDialogCancel>Huỷ</AlertDialogCancel>
-            <AlertDialogAction onClick={doRestore}>Khôi phục</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

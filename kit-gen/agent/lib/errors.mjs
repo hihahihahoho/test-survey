@@ -25,9 +25,9 @@ export const STATUS = {
   REF_IN_USE: 409, REF_NOT_FOUND: 404,
   // run
   RUN_CONFLICT: 409, RUN_ACTIVE: 409, RUN_NOT_FOUND: 404, RUN_FINISHED: 409, UNKNOWN_JOB: 422,
-  /* Xoá phiên bản ảnh gốc ĐANG DÙNG (#39.1). 409, không 400: yêu cầu đúng cú pháp,
-     chỉ là xung đột trạng thái — và web cần phân biệt nó với "id sai" để nói đúng lý do. */
-  HISTORY_CURRENT: 409,
+  /* `HISTORY_CURRENT` ĐÃ BỎ (09/09/2026): bản đang dùng nay XOÁ ĐƯỢC — `#39.1` dọn ảnh
+     gốc + ô đã cắt rồi đưa bản mới nhất còn lại lên thay chỗ. Không còn ai từ chối, nên
+     không còn mã để trả; giữ lại một mã chết là để lần sau ai đó tưởng nó vẫn xảy ra. */
   UNKNOWN_VARIANT: 422,
   IMAGEGEN_UNAVAILABLE: 409, LOG_NOT_FOUND: 404, CURSOR_GONE: 416, KIT_NOT_CUT: 404,
   // ảnh bìa (job phụ — xem lib/cover.mjs)

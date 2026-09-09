@@ -4,7 +4,8 @@
  * BA ĐỜI ẢNH CỦA MỘT TẤM → thanh chọn phiên bản v1 · v2 · v3.
  *
  * Phần thuần của thanh phiên bản. Tách khỏi component vì cái dễ sai ở đây là ĐÁNH SỐ
- * và QUYỀN KHÔI PHỤC, chứ không phải cách vẽ cái dropdown.
+ * và QUYỀN của từng mục (đổi sang được không, xoá được không), chứ không phải cách vẽ
+ * cái dropdown.
  */
 /**
  * Một dòng của `#39 GET …/raw/:job/history`.
@@ -42,19 +43,29 @@ export interface SheetVersion {
   /** Bản đang nằm ở `raw/<job>.png` — thứ mọi bước sau (cắt, xuất) đang dùng. */
   current: boolean;
   /**
-   * Bấm "Khôi phục bản này" có nghĩa hay không.
+   * CHỌN MỤC NÀY CÓ ĐỔI ĐƯỢC ẢNH GỐC KHÔNG — tức có gọi `#40` được không.
    *
    * ╔══ HAI CA PHẢI CHẶN, VÀ CẢ HAI ĐỀU TỪ CODE CỦA AGENT ══════════════════╗
    * ║ ① `current` — `#40` đi tìm `.history/raw/<job>@current.png`, file đó   ║
-   * ║   KHÔNG BAO GIỜ tồn tại ⇒ 404 NOT_FOUND. Khôi phục bản đang dùng về    ║
-   * ║   chính nó cũng chẳng có nghĩa gì.                                     ║
-   * ║ ② id lạ — `#40` chạy `assertMatch(RE_RUN_ID, historyId)` ⇒ 400. Agent  ║
-   * ║   đời sau có thể thêm dạng id khác (`restore-<ms>` đã được chính nó ghi ║
-   * ║   ra khi sao lưu trước lúc ghi đè); nút phải im với thứ nó chưa hiểu   ║
-   * ║   thay vì bắn một request chắc chắn hỏng.                             ║
+   * ║   KHÔNG BAO GIỜ tồn tại ⇒ 404 NOT_FOUND. Mà đổi sang bản ĐANG DÙNG thì ║
+   * ║   cũng không có gì để đổi: nó đang là thứ mọi bề mặt đang xem.         ║
+   * ║ ② id lạ — `#40` chạy `assertMatch(RE_RAW_HISTORY_ID, historyId)` ⇒ 400.║
+   * ║   Agent đời sau có thể thêm dạng id khác (`restore-<ms>` đã được chính  ║
+   * ║   nó ghi ra khi sao lưu trước lúc ghi đè); thanh chọn phải im với thứ  ║
+   * ║   nó chưa hiểu thay vì bắn một request chắc chắn hỏng.                 ║
    * ╚═══════════════════════════════════════════════════════════════════════╝
    */
   restorable: boolean;
+  /**
+   * XOÁ ĐƯỢC HAY KHÔNG — RỘNG HƠN `restorable` đúng một mục: BẢN ĐANG DÙNG.
+   *
+   * Từ 09/09/2026 `#39.1` nhận cả id `current`: nó xoá ảnh gốc + ô đã cắt của tấm,
+   * rồi đưa bản mới nhất còn lại lên thay chỗ (hết bản thì tấm về "chưa vẽ"). Trước
+   * đó agent từ chối bằng 409 và nút xoá phải trốn đi — mà "trốn đi" chính là thứ
+   * chủ sản phẩm đọc thành KHÔNG CÓ NÚT XOÁ.
+   * Vẫn KHÔNG phải "mọi mục đều xoá được": một id lạ vẫn là một request chắc chắn hỏng.
+   */
+  deletable: boolean;
 }
 
 /**
@@ -63,7 +74,7 @@ export interface SheetVersion {
  * `#39` trả về **mới nhất trước** (`items.sort` giảm dần theo `at`, runs.mjs:138), nên
  * chỉ số 0 là bản mới nhất và phải mang số v LỚN NHẤT. Đánh số xuôi theo mảng là
  * cách gọi "v1" cho bản vừa gen — ngược hẳn nghĩa thông thường, và người dùng sẽ
- * khôi phục nhầm đúng thứ họ vừa tạo ra.
+ * chọn nhầm (hoặc xoá nhầm) đúng thứ họ vừa tạo ra.
  *
  * Giữ nguyên thứ tự mảng (mới → cũ) để dropdown mở ra là thấy bản mới nhất trên cùng.
  */
@@ -80,6 +91,7 @@ export function sheetVersions(items: readonly RawHistoryEntry[] | undefined | nu
       bytes: typeof item.bytes === "number" ? item.bytes : null,
       current,
       restorable: !current && RE_HISTORY_ID.test(id),
+      deletable: current || RE_HISTORY_ID.test(id),
     };
   });
 }
@@ -92,21 +104,15 @@ export function currentVersion(versions: readonly SheetVersion[]): SheetVersion 
 /**
  * Nhãn của bước hỏi lại khi xoá — «Xoá v1?».
  *
- * Ở cùng chỗ với `restoreWarning` vì cùng một lý do: đây là LỜI HỨA với người dùng về
- * việc sắp xảy ra, và nó phải nói đúng thứ agent làm. `#39.1` chỉ xoá MỘT file trong
- * `.history/raw/`; nó không bao giờ chạm tới `raw/<tấm>.png`, nên câu này không được
- * doạ nhiều hơn thế. Ngắn vì nó nằm ngay trên một cái nút, không phải trong hộp thoại.
+ * Viết ở đây (không nhét trong JSX) vì đây là LỜI HỨA với người dùng về việc sắp xảy
+ * ra, và nó phải nói đúng thứ agent làm. Ngắn vì nó nằm ngay trên một cái nút, không
+ * phải trong hộp thoại: nút đổi chữ tại chỗ, cú bấm thứ hai mới xoá.
  */
 export function deleteConfirmLabel(version: SheetVersion): string {
   return `Xoá ${version.label}?`;
 }
 
-/**
- * Câu hỏi của hộp xác nhận. Viết ở đây (không nhét trong JSX) vì đây là LỜI HỨA với
- * người dùng về việc gì sắp xảy ra, và nó phải khớp đúng thứ agent làm:
- * ghi đè `raw/<job>.png` — tức mọi bước sau (cắt, xuất, copy) đổi theo.
- */
-export function restoreWarning(version: SheetVersion): string {
-  return `Khôi phục ${version.label} sẽ GHI ĐÈ ảnh gốc đang dùng của tấm này. `
-    + "Bản đang dùng được cất vào lịch sử trước khi ghi đè, nhưng ô đã cắt thì phải cắt lại mới khớp.";
-}
+/* `restoreWarning` ĐÃ BỎ (09/09/2026). Nó là câu hỏi của hộp xác nhận trước khi khôi
+   phục, mà cả hộp lẫn nút khôi phục đều không còn: chọn một mục trong danh sách LÀ
+   đổi. Chủ sản phẩm: "ko cần nút khôi phục phiên bản này, user select là được mà".
+   Một chuỗi cảnh báo còn nằm lại mà không ai đọc là một lời hứa không ai giữ. */

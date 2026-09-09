@@ -521,24 +521,33 @@ export const runsApi = {
     return parse(rawHistorySchema, await httpGet(`/api/projects/${pid(id)}/raw/${pid(job)}/history`), "lịch sử ảnh");
   },
   /**
-   * #39.1 — XOÁ một đời ảnh cũ.
+   * #39.1 — XOÁ một phiên bản, KỂ CẢ bản đang dùng (id `current`).
    *
-   * Agent từ chối `current` bằng 409 `HISTORY_CURRENT`: bản đang dùng là
-   * `raw/<tấm>.png`, đầu vào của bước cắt, và nút xoá không bao giờ được chạm tới nó.
-   * Ở đây không tự chặn trước — chặn ở UI (nút không hiện) VÀ ở agent là đủ hai lớp;
-   * thêm một lớp thứ ba trong tầng transport chỉ làm lỗi thật khó lần ra.
+   * Agent nhận `current` từ 09/09/2026: nó xoá ảnh gốc + ô đã cắt của tấm rồi đưa bản
+   * mới nhất còn lại lên thay chỗ — `nowCurrent` là id bản vừa lên (hoặc `null` khi
+   * không còn bản nào và tấm về trạng thái chưa vẽ), `sliced` nói ô đã được cắt lại
+   * hay chưa. Ở đây không tự chặn id nào: chặn ở UI và ở agent là đủ hai lớp; thêm một
+   * lớp thứ ba trong tầng transport chỉ làm lỗi thật khó lần ra.
    */
   async rawHistoryDelete(id: string, job: string, historyId: string) {
     return (await httpDelete(`/api/projects/${pid(id)}/raw/${pid(job)}/history/${pid(historyId)}`)) as {
       deleted?: boolean;
       id?: string;
+      nowCurrent?: string | null;
+      sliced?: boolean;
     };
   },
-  /** #40 */
+  /**
+   * #40 — ĐỔI phiên bản ảnh gốc: chép bản đã chọn về `raw/<tấm>.png` RỒI CẮT LẠI ô
+   * trong cùng request. `sliced: false` ⇒ ảnh gốc đã đổi mà ô đã crop thì chưa (chưa
+   * cài engine, python chết); người gọi phải nói ra, không được để hai bề mặt lệch nhau
+   * trong im lặng.
+   */
   async rawRestore(id: string, job: string, historyId: string) {
     return (await httpPost(`/api/projects/${pid(id)}/raw/${pid(job)}/restore`, { historyId })) as {
       restored?: boolean;
       mtime?: string;
+      sliced?: boolean;
     };
   },
 };
