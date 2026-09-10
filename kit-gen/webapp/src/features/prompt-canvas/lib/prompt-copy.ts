@@ -151,7 +151,7 @@ export async function toPngBlob(blob: Blob): Promise<Blob> {
     if (typeof OffscreenCanvas === "function") {
       const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
       const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Không mở được canvas để chuyển ảnh sang PNG.");
+      if (!ctx) throw new Error("Không mở được bộ vẽ để chuyển ảnh sang PNG.");
       ctx.drawImage(bitmap, 0, 0);
       return await canvas.convertToBlob({ type: "image/png" });
     }
@@ -159,10 +159,10 @@ export async function toPngBlob(blob: Blob): Promise<Blob> {
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;
     const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Không mở được canvas để chuyển ảnh sang PNG.");
+    if (!ctx) throw new Error("Không mở được bộ vẽ để chuyển ảnh sang PNG.");
     ctx.drawImage(bitmap, 0, 0);
     return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Không xuất được PNG từ canvas."))), "image/png");
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Không xuất được PNG khi chuyển ảnh."))), "image/png");
     });
   } finally {
     bitmap.close?.();
