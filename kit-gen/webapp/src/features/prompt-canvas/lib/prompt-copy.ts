@@ -130,11 +130,51 @@ function download(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
+/**
+ * BỘ NHỚ TẠM CHỈ NHẬN PNG — ảnh JPG phải được vẽ lại thành PNG trước khi ghi.
+ *
+ * Hiện trường 10/09/2026: bấm «Copy ảnh» trên ảnh nhân vật (JPG) ⇒ Chrome ném
+ * "Type image/png does not match the blob's type image/jpeg", rồi đường lùi tải
+ * file chạy và toast nói "Đã tải ảnh về máy" kèm nguyên câu lỗi kỹ thuật ấy —
+ * người dùng chỉ muốn dán ảnh, không muốn biết MIME là gì. Chromium chỉ cho ghi
+ * `image/png` (và `image/svg+xml`) vào clipboard, nên mọi ảnh khác đi qua một
+ * canvas: giải mã → vẽ → xuất PNG. Ảnh đã là PNG thì trả về nguyên vẹn, không
+ * mất byte nào (tránh nén lại một tấm alpha).
+ */
+export async function toPngBlob(blob: Blob): Promise<Blob> {
+  if (blob.type === "image/png") return blob;
+  if (typeof createImageBitmap !== "function") {
+    throw new Error("Trình duyệt này không chuyển được ảnh sang PNG để copy.");
+  }
+  const bitmap = await createImageBitmap(blob);
+  try {
+    if (typeof OffscreenCanvas === "function") {
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Không mở được canvas để chuyển ảnh sang PNG.");
+      ctx.drawImage(bitmap, 0, 0);
+      return await canvas.convertToBlob({ type: "image/png" });
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Không mở được canvas để chuyển ảnh sang PNG.");
+    ctx.drawImage(bitmap, 0, 0);
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Không xuất được PNG từ canvas."))), "image/png");
+    });
+  } finally {
+    bitmap.close?.();
+  }
+}
+
 /** Copy ảnh vào bộ nhớ tạm; hỏng thì tải file và TRẢ VỀ SỰ THẬT đó. */
 export async function copyImageBlob(blob: Blob, fileName: string): Promise<CopyResult> {
   try {
     if (typeof ClipboardItem === "function" && navigator.clipboard?.write) {
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      const png = await toPngBlob(blob);
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
       return { outcome: "clipboard" };
     }
     download(blob, fileName);

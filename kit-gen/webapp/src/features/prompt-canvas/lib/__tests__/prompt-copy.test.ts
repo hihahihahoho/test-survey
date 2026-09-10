@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { copyProjectImage, copyPromptText, referenceImages } from "../prompt-copy";
+import { copyImageBlob, copyProjectImage, copyPromptText, referenceImages, toPngBlob } from "../prompt-copy";
 
 /**
  * Test của HAI ĐƯỜNG COPY ở tab Prompt: chữ đi một đường, ảnh đi một đường.
@@ -110,5 +110,56 @@ describe("lấy ảnh lẻ — vẫn đi đường có header", () => {
     expect(loadFull).toHaveBeenCalledWith("p1", "refs/mascot.png");
     expect(blob.type).toBe("image/png");
     expect(blob.size).toBeGreaterThan(0);
+  });
+});
+
+describe("copy ảnh — bộ nhớ tạm chỉ nhận PNG, ảnh JPG phải được vẽ lại", () => {
+  /* Hiện trường 10/09/2026: «Copy ảnh» trên ảnh nhân vật JPG ⇒ Chrome ném
+     "Type image/png does not match the blob's type image/jpeg" và người dùng thấy
+     nguyên câu ấy trong toast. Hai ca dưới giả lập đúng phần trình duyệt làm
+     (createImageBitmap + OffscreenCanvas) để kiểm phần ta làm: JPG đi qua canvas
+     ra PNG, PNG đi thẳng không nén lại. */
+  const g = globalThis as Record<string, unknown>;
+  let saved: Record<string, unknown>;
+  beforeEach(() => {
+    saved = { createImageBitmap: g["createImageBitmap"], OffscreenCanvas: g["OffscreenCanvas"] };
+    g["createImageBitmap"] = vi.fn(async () => ({ width: 2, height: 1, close: vi.fn() }));
+    g["OffscreenCanvas"] = class {
+      constructor(public width: number, public height: number) {}
+      getContext() { return { drawImage: vi.fn() }; }
+      async convertToBlob() { return new Blob(["png"], { type: "image/png" }); }
+    };
+  });
+  afterEach(() => {
+    g["createImageBitmap"] = saved["createImageBitmap"];
+    g["OffscreenCanvas"] = saved["OffscreenCanvas"];
+  });
+
+  it("JPG ⇒ đi qua canvas, ra Blob image/png", async () => {
+    const out = await toPngBlob(new Blob(["jpg"], { type: "image/jpeg" }));
+    expect(out.type).toBe("image/png");
+    expect(g["createImageBitmap"]).toHaveBeenCalledTimes(1);
+  });
+
+  it("PNG ⇒ trả về NGUYÊN blob, không giải mã lại (giữ alpha, giữ byte)", async () => {
+    const png = new Blob(["png"], { type: "image/png" });
+    expect(await toPngBlob(png)).toBe(png);
+    expect(g["createImageBitmap"]).not.toHaveBeenCalled();
+  });
+
+  it("copyImageBlob ghi PNG đã chuyển vào ClipboardItem, không ghi blob JPG gốc", async () => {
+    const write = vi.fn(async () => undefined);
+    const savedClip = { ClipboardItem: g["ClipboardItem"], clipboard: navigator.clipboard };
+    g["ClipboardItem"] = class { constructor(public items: Record<string, Blob>) {} };
+    Object.defineProperty(navigator, "clipboard", { value: { write }, configurable: true });
+    try {
+      const res = await copyImageBlob(new Blob(["jpg"], { type: "image/jpeg" }), "a.jpg");
+      expect(res.outcome).toBe("clipboard");
+      const item = (write.mock.calls[0] as unknown as [Array<{ items: Record<string, Blob> }>])[0][0];
+      expect(item?.items["image/png"]?.type).toBe("image/png");
+    } finally {
+      g["ClipboardItem"] = savedClip.ClipboardItem;
+      Object.defineProperty(navigator, "clipboard", { value: savedClip.clipboard, configurable: true });
+    }
   });
 });
