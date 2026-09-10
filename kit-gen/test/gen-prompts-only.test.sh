@@ -71,6 +71,7 @@ chmod +x "$WORK/bin/codex"
 #   doc    — tấm PORTRAIT + `promptOverride` (khổ giấy phải sống sót)
 #   nen    — tấm full-bleed (mọi ô skel.shape = "full") ⇒ phải có dấu .fullbleed
 #   linh   — tấm mascot (có `ref`) ⇒ KHÔNG được nhận khối "ba lớp" viết cho nút bấm
+#   chay   — tấm mascot MÔ TẢ CHAY (không `ref`) ⇒ không được nhắc tới ảnh nào
 cat > "$WORK/p/styles.json" <<'JSON'
 {
   "styles": [
@@ -98,7 +99,6 @@ cat > "$WORK/p/styles.json" <<'JSON'
     },
     {
       "id": "nen", "orient": "landscape", "grid": { "cols": 1, "rows": 1 },
-      "ref": "refs/cho.png",
       "components": [
         { "file": "25-bg-home", "vi": "Nền màn chính", "spec": "village scene at dawn",
           "skel": { "shape": "full", "w": 1, "h": 1 } }
@@ -109,6 +109,13 @@ cat > "$WORK/p/styles.json" <<'JSON'
       "ref": "refs/mascot.png",
       "components": [
         { "file": "30-pose-vui", "vi": "Dáng vui", "spec": "mascot waving",
+          "skel": { "shape": "pose", "w": 0.8, "h": 0.8 } }
+      ]
+    },
+    {
+      "id": "chay", "orient": "landscape", "grid": { "cols": 1, "rows": 1 },
+      "components": [
+        { "file": "31-pose-chay", "vi": "Dáng chay", "spec": "a round red squirrel with a cream belly, waving",
           "skel": { "shape": "pose", "w": 0.8, "h": 0.8 } }
       ]
     },
@@ -132,7 +139,7 @@ rc=$?
 expect "nói rõ là đã dừng, không gọi codex" "KHÔNG gọi codex" "$out"
 
 echo "── prompt được dựng đủ, ảnh thì không có tấm nào"
-for j in tet-main tet-doc tet-nen tet-linh tet-vuong; do
+for j in tet-main tet-doc tet-nen tet-linh tet-chay tet-vuong; do
   have "prompt của $j" "$WORK/p/prompts/$j.txt"
   have "danh sách ảnh kèm của $j" "$WORK/p/prompts/$j.att"
 done
@@ -146,6 +153,7 @@ fi
 main="$(cat "$WORK/p/prompts/tet-main.txt")"
 doc="$(cat "$WORK/p/prompts/tet-doc.txt")"
 linh="$(cat "$WORK/p/prompts/tet-linh.txt")"
+chay="$(cat "$WORK/p/prompts/tet-chay.txt")"
 
 # ── KHỔ VUÔNG: `sheet.canvas` là field mới, và nó phải đi tới TẬN dòng đầu prompt ──
 # Chủ sản phẩm hỏi "2040x2040 thì phải? codex có option đó không?". Câu trả lời đo
@@ -230,41 +238,49 @@ expect "giao diện vẫn có luật TẦM VỚI"      "REACH, not about opaque 
 expect "giao diện vẫn có luật vật liệu"     "glass, ice, water" "$main"
 expect "giao diện vẫn có dòng phân vai trang trí" "Ornament amount" "$main"
 refute "giao diện KHÔNG lãnh luật của dáng người" "Draw the character as ONE natural figure" "$main"
-refute "giao diện KHÔNG lãnh section nhân vật"    "## Character" "$main"
+refute "giao diện KHÔNG lãnh ảnh nhân vật"        "## Character reference" "$main"
 refute "giao diện KHÔNG lãnh tấm ảnh dáng"        "## Pose reference" "$main"
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# ẢNH THAM CHIẾU THÀNH CHỮ — NỬA PYTHON CỦA MỐI NỐI (đo đường đi đầy đủ ở
-# test/gen-describe-refs.test.sh, ca này chỉ canh thứ KITGEN_PROMPTS_ONLY sinh ra).
-#
-# Đo được 09/09/2026: đính ảnh vào lời gọi image_gen ⇒ ảnh về mất nền trong suốt.
-# Nên tấm cần alpha ghi `.att` RỖNG + một bản kê `.desc`, và prompt mang dấu chỗ
-# `{{DESC:…}}` đúng chỗ đoạn mô tả sẽ nằm. Ở chế độ xem trước thì KHÔNG ai tả cả
-# (không codex, không quota) — dấu chỗ ở nguyên đó, và đó là thứ đọc được: nó nói
-# thẳng chỗ nào sẽ là mô tả của ảnh nào.
-# ═══════════════════════════════════════════════════════════════════════════════
-echo "── tấm cần nền trong suốt: KHÔNG đính ảnh, ảnh đi vào prompt bằng dấu chỗ"
-expect "prompt nhân vật có dấu chỗ của ảnh nhân vật" "{{DESC:refs/mascot.png}}" "$linh"
-expect "…nằm trong section «Character»" "## Character" "$linh"
-refute "…và không còn câu nào trỏ vào ảnh đính kèm" "attached" "$linh"
-if [ -s "$WORK/p/prompts/tet-linh.att" ]; then
-  printf 'LOI  tấm nhân vật vẫn còn ảnh đính kèm:\n%s\n' "$(cat "$WORK/p/prompts/tet-linh.att")" >&2; fail=1
-else
-  printf 'ok   %s\n' "danh sách ảnh kèm của tấm nhân vật RỖNG (đính = mất alpha)"
-fi
-have "bản kê ảnh → chữ của tấm nhân vật" "$WORK/p/prompts/tet-linh.desc"
-expect "…khai đúng vai của ảnh" "character	refs/mascot.png" "$(cat "$WORK/p/prompts/tet-linh.desc")"
-expect "tấm nền full-bleed thì VẪN đính ảnh như cũ" "refs/cho.png" "$(cat "$WORK/p/prompts/tet-nen.att")"
-if [ -s "$WORK/p/prompts/tet-nen.desc" ]; then
-  printf 'LOI  tấm nền không được tả ảnh thành chữ:\n%s\n' "$(cat "$WORK/p/prompts/tet-nen.desc")" >&2; fail=1
-else
-  printf 'ok   %s\n' "tấm nền KHÔNG tiêu một lượt codex nào để tả ảnh"
-fi
 # Tấm mascot ở đây là MỘT Ô, nên nó không có hàng xóm nào để tránh và cũng không có
 # hộp ngoài nào ngoài chính khổ ảnh — luật còn lại đúng một câu: đừng chạm mép.
 expect "tấm một ô: biên duy nhất là mép ảnh" "nothing touches the image edges" "$linh"
 refute "và không hứa một hộp ô nào (ô CHÍNH LÀ khổ ảnh)" "stays inside x=" "$linh"
 expect "tấm nút bấm thì VẪN CÓ luật viền" "Any rim, border or edge treatment" "$main"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ẢNH THAM CHIẾU ĐI THẲNG VÀO LỜI GỌI image_gen — VÀ CHỈ KHI CÓ ẢNH THẬT
+#
+# ╔══ QUYẾT ĐỊNH ĐANG ĐƯỢC KHOÁ Ở ĐÂY (chủ sản phẩm, 10/09/2026) ═══════════════╗
+# ║ Đính ảnh vào image_gen làm ảnh trả về mất nền trong suốt (đo 09/09/2026).    ║
+# ║ Một bản đã thử đổi ảnh thành CHỮ để né; nó giữ được alpha nhưng đánh mất     ║
+# ║ đúng thứ người ta tải ảnh lên để có. Chốt: CHẤP NHẬN nền đục, đính thẳng     ║
+# ║ mọi ảnh, chờ codex sửa đầu nguồn. Hai chiều dưới đây khoá cả quyết định ấy   ║
+# ║ lẫn ca «mô tả nhân vật CHAY»: không ảnh thì prompt tuyệt đối không được nhắc ║
+# ║ tới một tấm ảnh nào — trỏ vào hư không là mời máy vẽ tự bịa ra thứ đang thiếu.║
+# ╚═════════════════════════════════════════════════════════════════════════════╝
+# ═══════════════════════════════════════════════════════════════════════════════
+echo "── có ảnh ⇒ đính thẳng, và prompt gọi nó theo VAI TRÒ"
+expect "tấm nhân vật có section ảnh"       "## Character reference" "$linh"
+expect "…và câu ấy nói tới ảnh ĐÍNH KÈM"   "The attached CHARACTER REFERENCE PHOTO is the character" "$linh"
+expect "danh sách ảnh kèm có ảnh nhân vật" "refs/mascot.png" "$(cat "$WORK/p/prompts/tet-linh.att")"
+have "bản kê vai của tấm nhân vật" "$WORK/p/prompts/tet-linh.refs"
+expect "…khai đúng vai của ảnh" "character	refs/mascot.png" "$(cat "$WORK/p/prompts/tet-linh.refs")"
+
+echo "── mô tả nhân vật CHAY (không ảnh) ⇒ prompt không nhắc tới ảnh nào"
+expect "vẫn là tấm nhân vật (luật dáng người)" "Draw the character as ONE natural figure" "$chay"
+expect "chữ người dùng gõ đi thẳng vào ô" "a round red squirrel with a cream belly" "$chay"
+refute "KHÔNG có section ảnh nhân vật" "## Character reference" "$chay"
+refute "KHÔNG có section ảnh dáng"     "## Pose reference" "$chay"
+refute "KHÔNG một câu nào trỏ vào ảnh đính kèm" "attached" "$chay"
+if [ -s "$WORK/p/prompts/tet-chay.refs" ]; then
+  printf 'LOI  tấm mô tả chay không được kê ảnh nào:\n%s\n' "$(cat "$WORK/p/prompts/tet-chay.refs")" >&2; fail=1
+else
+  printf 'ok   %s\n' "bản kê ảnh của tấm mô tả chay RỖNG"
+fi
+if [ -n "$(tr -d '[:space:]' < "$WORK/p/prompts/tet-chay.att")" ]; then
+  printf 'LOI  tấm mô tả chay vẫn có ảnh đính kèm:\n%s\n' "$(cat "$WORK/p/prompts/tet-chay.att")" >&2; fail=1
+else
+  printf 'ok   %s\n' "danh sách ảnh kèm của tấm mô tả chay RỖNG"
+fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # BỎ SKELETON — PROMPT PHẢI TỰ NÓI TOẠ ĐỘ (27/08/2026)
@@ -328,7 +344,7 @@ echo "── KHÔNG còn một dấu vết nào của khung xương trong thứ 
 for bad in "skeleton" "silhouette" "FIRST attached image" "gray silhouette" "guide box" "grid lines" "attached image is the geometry"; do
   refute "prompt sạch: $bad" "$bad" "$allp"
 done
-for j in tet-main tet-doc tet-nen tet-linh tet-vuong; do
+for j in tet-main tet-doc tet-nen tet-linh tet-chay tet-vuong; do
   refute ".att của $j không còn ảnh khung xương" "skeleton/" "$(cat "$WORK/p/prompts/$j.att")"
 done
 havent "và engine KHÔNG tạo thư mục skeleton/ nữa" "$WORK/p/skeleton"

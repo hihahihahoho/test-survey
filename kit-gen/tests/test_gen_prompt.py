@@ -4,7 +4,7 @@ gen.sh nhúng một khối Python heredoc. Test nạp ĐÚNG mã đang ship (c�
 trước vòng lặp dựng prompt) chứ không chép lại — chép lại là test xanh mà sản
 phẩm đỏ.
 """
-import contextlib, hashlib, io, json, os, re, shutil, tempfile, unittest
+import contextlib, io, json, os, re, shutil, tempfile, unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,7 +34,6 @@ def _seed_workspace(td, cfg):
     """
     Path(td, "styles.json").write_text(json.dumps(cfg), encoding="utf-8")
     Path(td, "prompts").mkdir()
-    Path(td, "refs").mkdir(exist_ok=True)
     shutil.copy(ROOT / "geometry.py", Path(td, "geometry.py"))
 
 
@@ -51,81 +50,6 @@ def render_prompt_files(cfg):
             return Path(td, "prompts", "demo-pose-demo.att").read_text(encoding="utf-8").splitlines()
         finally:
             os.chdir(cwd)
-
-
-def render_desc_file(cfg, name="demo-pose-demo"):
-    """Bản kê «ảnh nào phải đổi thành CHỮ, với vai gì» — `prompts/<job>.desc`.
-
-    Đây là mối nối python → bash của bước tả ảnh: khối python biết vai của từng ảnh
-    (nhân vật / phong cách / bố cục), còn codex thì chỉ gọi được từ tầng bash.
-    """
-    src = (ROOT / "gen.sh").read_text(encoding="utf-8")
-    block = re.search(r"python3 - <<'PY'\n(.*?)\nPY\n", src, re.S).group(1)
-    with tempfile.TemporaryDirectory() as td:
-        _seed_workspace(td, cfg)
-        cwd = os.getcwd()
-        os.chdir(td)
-        try:
-            exec(compile(block, "gen.sh:PY", "exec"), {"__name__": "gen_prompt_test"})
-            rows = Path(td, "prompts", f"{name}.desc").read_text(encoding="utf-8").splitlines()
-            return [tuple(row.split("\t")) for row in rows if row]
-        finally:
-            os.chdir(cwd)
-
-
-def _run_block_in(td, name):
-    """Chạy khối dựng prompt trong một workspace ĐÃ GIEO SẴN (cache mô tả, ảnh…)."""
-    src = (ROOT / "gen.sh").read_text(encoding="utf-8")
-    block = re.search(r"python3 - <<'PY'\n(.*?)\nPY\n", src, re.S).group(1)
-    cwd = os.getcwd()
-    os.chdir(td)
-    try:
-        exec(compile(block, "gen.sh:PY", "exec"), {"__name__": "gen_prompt_test"})
-        return Path(td, "prompts", f"{name}.txt").read_text(encoding="utf-8")
-    finally:
-        os.chdir(cwd)
-
-
-def _att_in(td, name):
-    """Danh sách ảnh ĐÍNH KÈM của một workspace đã chạy — đọc sau `_run_block_in`."""
-    return Path(td, "prompts", f"{name}.att").read_text(encoding="utf-8").split()
-
-
-def _desc_in(td, name):
-    """Bản kê «ảnh nào phải tả thành chữ» của một workspace đã chạy."""
-    rows = Path(td, "prompts", f"{name}.desc").read_text(encoding="utf-8").splitlines()
-    return [tuple(row.split("\t")) for row in rows if row]
-
-
-def png_rgba(w, h, a):
-    """PNG RGBA đặc một màu, `a=0` là trong suốt hoàn toàn — dựng TAY.
-
-    Bằng `zlib` + `struct` chứ không bằng Pillow: phép đo "ảnh này có nền trong
-    suốt thật không" LÀ thứ đang được kiểm, nên ca test không được phụ thuộc vào
-    việc máy chạy nó có Pillow hay không theo một đường khác. Ảnh thì tự dựng
-    được; còn `ref_has_alpha` của gen.sh cần Pillow thật thì ca test tự bỏ qua.
-    """
-    import struct
-    import zlib
-
-    raw = b"".join(b"\x00" + bytes([200, 60, 60, a]) * w for _ in range(h))
-
-    def chunk(tag, data):
-        body = tag + data
-        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
-
-    return (b"\x89PNG\r\n\x1a\n"
-            + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(raw))
-            + chunk(b"IEND", b""))
-
-
-def co_pillow():
-    try:
-        import PIL.Image  # noqa: F401
-        return True
-    except Exception:
-        return False
 
 
 def render_prompt_text(cfg, name="demo-pose-demo"):
@@ -512,153 +436,24 @@ class ThuVienChiCoDANHTUTest(unittest.TestCase):
 
 
 class AttachmentListTest(unittest.TestCase):
-    """AI ĐƯỢC ĐÍNH KÈM — VÀ TỪ 09/09/2026 CÂU TRẢ LỜI THƯỜNG LÀ "KHÔNG AI CẢ".
-
-    ╔══ ĐO ĐƯỢC (chủ sản phẩm, 09/09/2026) ═════════════════════════════════════╗
-    ║ Cùng một prompt, cùng một model: gọi `image_gen` KÈM `referenced_image_    ║
-    ║ paths` ⇒ ảnh về là RGB, nền caro vẽ tay. Bỏ ảnh ra ⇒ alpha thật. Tool      ║
-    ║ built-in không có tham số nền nào để xin.                                  ║
-    ╚═══════════════════════════════════════════════════════════════════════════╝
-    Nên `.att` (danh sách `-i` + khối REFERENCE IMAGES của task) chỉ còn dành cho
-    tấm FULL-BLEED; mọi tấm cần alpha ghi `.att` RỖNG và một bản kê `.desc`.
-
-    ⚠️ LUẬT ẤY ĐÃ HẸP LẠI: phép đo trên làm bằng một tấm ảnh ĐỤC, và ảnh tham chiếu
-    CÓ alpha thật thì đính vẫn giữ được alpha (memory dự án 21-22/08/2026). Lớp này
-    chạy trên một workspace KHÔNG có file ảnh nào, nên `ref_has_alpha` trả `False`
-    cho tất cả — tức nó khoá đúng nhánh ẢNH ĐỤC. Nhánh còn lại:
-    `AnhTrongSuotThiDinhThangTest`.
-    """
-
-    CHUNG = "refs/shared.png"
-
-    def _cfg(self, skel, ref=None):
-        return {
+    def test_moi_anh_chi_duoc_dinh_kem_mot_lan_trong_mot_job(self):
+        shared = "refs/shared.png"
+        got = render_prompt_files({
             "styles": [{
                 "id": "demo", "bg": "magenta", "style": "flat ink",
-                "brand": {"mode": "image", "refs": [self.CHUNG, "refs/brand.png", self.CHUNG]},
-                "inspo": [self.CHUNG, "refs/inspo.png", "refs/inspo.png"],
+                "brand": {"mode": "image", "refs": [shared, "refs/brand.png", shared]},
+                "inspo": [shared, "refs/inspo.png", "refs/inspo.png"],
             }],
             "sheets": [{
                 "id": "pose-demo", "grid": {"cols": 1, "rows": 1},
-                "components": [{"file": "01-thing", "spec": "blank button", "skel": skel}],
-                **({"ref": ref} if ref else {}),
+                "components": [{"file": "01-thing", "spec": "blank button",
+                                "skel": {"shape": "rrect", "w": 0.8, "h": 0.6}}],
+                "ref": shared,
             }],
-        }
-
-    def test_tam_can_alpha_KHONG_dinh_mot_anh_nao(self):
-        got = render_prompt_files(self._cfg({"shape": "rrect", "w": 0.8, "h": 0.6},
-                                            ref=self.CHUNG))
-        self.assertEqual(got, [], "đính ảnh = mất nền trong suốt (đo được)")
-
-    def test_tam_full_bleed_van_dinh_kem_va_van_khu_trung_lap(self):
-        """Ảnh CẢNH phải được đính thật: tả một khu chợ Tết thành văn rồi vẽ lại là
-        mất đúng thứ người dùng tải lên. Tấm ấy không cần alpha nên không mất gì.
-
-        Khử trùng lặp vẫn là luật cũ: codex tính token theo từng `-i`."""
-        got = render_prompt_files(self._cfg({"shape": "full", "w": 1, "h": 1}, ref=self.CHUNG))
-        self.assertEqual(got, [self.CHUNG, "refs/brand.png", "refs/inspo.png"])
-
-    def test_ban_ke_desc_khai_dung_VAI_cua_tung_anh(self):
-        """`.desc` là mối nối python → bash: bash đọc VAI để biết hỏi câu nào."""
-        got = render_desc_file(self._cfg({"shape": "rrect", "w": 0.8, "h": 0.6},
-                                         ref=self.CHUNG))
-        self.assertEqual(got, [("character", self.CHUNG),
-                               ("style", "refs/brand.png"),
-                               ("style", "refs/inspo.png")])
-
-    def test_tam_full_bleed_KHONG_ta_anh_thanh_chu(self):
-        got = render_desc_file(self._cfg({"shape": "full", "w": 1, "h": 1}, ref=self.CHUNG))
-        self.assertEqual(got, [], "tấm đính được ảnh thì không tiêu một lượt codex nào để tả")
-
-
-class AnhThanhChuTest(unittest.TestCase):
-    """ẢNH THAM CHIẾU ĐI VÀO PROMPT BẰNG CHỮ, KHÔNG BẰNG FILE ĐÍNH KÈM.
-
-    ╔══ ĐO ĐƯỢC (chủ sản phẩm, 09/09/2026) ═════════════════════════════════════╗
-    ║ Đính ảnh vào lời gọi `image_gen` (`referenced_image_paths`) ⇒ ảnh trả về   ║
-    ║ mất nền trong suốt: RGB, nền caro do model tự vẽ. Cùng prompt ấy, bỏ ảnh   ║
-    ║ ra ⇒ alpha thật. Tool built-in KHÔNG có tham số nền nào để xin.            ║
-    ╚═══════════════════════════════════════════════════════════════════════════╝
-    Nên tấm cần alpha đổi mọi ảnh của nó thành CHỮ trước khi vẽ. Khối python để
-    lại dấu chỗ `{{DESC:<ảnh>}}`; tầng bash tả xong thì thay vào (xem
-    `test/gen-describe-refs.test.sh`). Lớp này khoá nửa python của mối nối ấy.
-    """
-
-    @staticmethod
-    def _mascot(**sheet):
-        cfg = _cfg(spec="a mascot waving", skel={"shape": "pose", "w": 0.3, "h": 0.85})
-        cfg["sheets"][0].update(sheet)
-        return cfg
-
-    def test_prompt_nhan_vat_KHONG_con_mot_chu_nao_ve_anh_dinh_kem(self):
-        """Trỏ vào một tấm ảnh không có trong lượt vẽ là dạy model đi tìm thứ không
-        tồn tại — và nó sẽ tự bịa ra thứ nó nghĩ là đang thiếu."""
-        txt = render_prompt_text(self._mascot(ref="refs/lan.png"))
-        for cam in ("attached", "REFERENCE PHOTO", "reference photo", "referenced_image_paths"):
-            self.assertNotIn(cam, txt, f"prompt còn trỏ vào ảnh đính kèm: {cam}")
-
-    def test_anh_phong_cach_thanh_section_Style_reference(self):
-        cfg = self._mascot()
-        cfg["styles"][0]["inspo"] = ["refs/inspo.png"]
-        txt = render_prompt_text(cfg)
-        self.assertIn("## Style reference", txt)
-        self.assertIn("{{DESC:refs/inspo.png}}", txt)
-        # …và «Art style» phải trỏ xuống section ấy, không trỏ vào ảnh đính kèm.
-        self.assertIn("The «Style reference» section below describes", txt)
-        self.assertNotIn("The attached reference image(s) ARE the style", txt)
-
-    def test_tam_full_bleed_GIU_NGUYEN_loi_noi_ve_anh_dinh_kem(self):
-        """Chiều ngược lại: tấm cảnh nền không cần alpha nên nó vẫn đính ảnh thật,
-        và mọi câu chữ cũ của nó phải còn nguyên."""
-        cfg = _cfg_nen(extra={"ref": "refs/cho-tet.png"})
-        cfg["styles"][0]["inspo"] = ["refs/inspo.png"]
-        txt = render_prompt_text(cfg, name="demo-nen")
-        self.assertIn("The attached SCENE REFERENCE image", txt)
-        self.assertIn("The attached reference image(s) ARE the style", txt)
-        self.assertNotIn("{{DESC:", txt)
-
-    def test_cache_con_han_thi_prompt_MANG_LUON_CHU_va_khong_con_dau_cho(self):
-        """Nửa đắt tiền nhất của bước tả ảnh: KHÔNG gọi codex lần thứ hai cho cùng
-        một tấm ảnh. Cache do bash ghi, khối python đọc lại được — nên lượt sau (và
-        cả màn xem trước prompt) có sẵn chữ, không còn việc gì để làm."""
-        cfg = self._mascot(ref="refs/lan.png")
-        with tempfile.TemporaryDirectory() as td:
-            _seed_workspace(td, cfg)
-            anh = Path(td, "refs", "lan.png")
-            anh.write_bytes(b"mot tam anh gia")
-            key = ("# sha256:" + hashlib.sha256(anh.read_bytes()).hexdigest()
-                   + " role:character v2")
-            Path(td, "refs", "lan.png.desc.txt").write_text(
-                key + "\nA round red squirrel with a cream belly.\n", encoding="utf-8")
-            txt = _run_block_in(td, "demo-pose-demo")
-        self.assertIn("A round red squirrel with a cream belly.", txt)
-        self.assertNotIn("{{DESC:", txt)
-
-    def test_cache_lech_BAM_thi_coi_nhu_khong_co(self):
-        """Người dùng thay ảnh nhưng giữ nguyên tên file là ca thường gặp nhất. Khoá
-        cache là BĂM NỘI DUNG chứ không phải tên, nên mô tả cũ tự hết hạn."""
-        cfg = self._mascot(ref="refs/lan.png")
-        with tempfile.TemporaryDirectory() as td:
-            _seed_workspace(td, cfg)
-            Path(td, "refs", "lan.png").write_bytes(b"anh MOI")
-            Path(td, "refs", "lan.png.desc.txt").write_text(
-                "# sha256:deadbeef role:character v2\nCon sóc của ảnh cũ.\n", encoding="utf-8")
-            txt = _run_block_in(td, "demo-pose-demo")
-        self.assertNotIn("Con sóc của ảnh cũ", txt)
-        self.assertIn("{{DESC:refs/lan.png}}", txt)
-
-    def test_cache_lech_VAI_cung_coi_nhu_khong_co(self):
-        cfg = self._mascot(ref="refs/lan.png")
-        with tempfile.TemporaryDirectory() as td:
-            _seed_workspace(td, cfg)
-            anh = Path(td, "refs", "lan.png")
-            anh.write_bytes(b"x")
-            key = ("# sha256:" + hashlib.sha256(b"x").hexdigest() + " role:style v2")
-            Path(td, "refs", "lan.png.desc.txt").write_text(
-                key + "\nMot mo ta phong cach.\n", encoding="utf-8")
-            txt = _run_block_in(td, "demo-pose-demo")
-        self.assertNotIn("Mot mo ta phong cach", txt)
-        self.assertIn("{{DESC:refs/lan.png}}", txt)
+        })
+        # KHÔNG còn `skeleton/pose-demo.png` ở vị trí đầu: engine không đính ảnh của
+        # chính nó nữa (khung xương bỏ 27/08/2026). `.att` giờ TOÀN LÀ ảnh người dùng.
+        self.assertEqual(got, [shared, "refs/brand.png", "refs/inspo.png"])
 
 
 class PoseSheetTest(unittest.TestCase):
@@ -695,31 +490,19 @@ class PoseSheetTest(unittest.TestCase):
         self.assertNotIn("REFERENCE PHOTO", txt)
         self.assertNotIn("## Character reference", txt)
 
-    def test_co_ref_thi_anh_nhan_vat_thanh_CHU_chu_khong_thanh_anh_dinh_kem(self):
-        """Section «Character reference» (trỏ vào ảnh đính kèm) đã thành «Character»
-        (CHỨA đoạn chữ tả nhân vật) — xem `AttachmentListTest` để biết vì sao."""
+    def test_co_ref_thi_van_noi_dung_cau_cu(self):
         txt = render_prompt_text(self._pose_cfg(ref="refs/lan.png"))
-        self.assertIn("## Character", txt)
-        self.assertNotIn("## Character reference", txt)
-        self.assertIn("Every character cell shows EXACTLY the character described here", txt)
-        self.assertIn("{{DESC:refs/lan.png}}", txt, "phải có dấu chỗ cho tầng bash thay chữ")
-        # Không còn một chữ nào trỏ vào một tấm ảnh mà lượt vẽ này không hề có.
-        self.assertNotIn("REFERENCE PHOTO", txt)
-        self.assertNotIn("attached", txt.lower())
+        self.assertIn("## Character reference", txt)
+        self.assertIn("The attached CHARACTER REFERENCE PHOTO is the character", txt)
 
-    def test_poseRef_KHONG_dinh_duoc_thi_KHONG_co_section_nao(self):
-        """Tấm manơcanh chỉ có nghĩa khi được ĐÍNH ("cell k there gives the pose for
-        cell k here"). Không đính được thì câu ấy trỏ vào hư không — và dáng của
-        từng ô đã có sẵn bằng chữ ngay trên dòng của ô đó, nên tả nó cũng vô nghĩa.
-
-        Ở đây file ảnh không tồn tại ⇒ không đo được nền ⇒ coi như đục ⇒ không đính.
-        Ca ngược lại (ảnh có alpha thật ⇒ đính lại và có section) nằm ở
-        `AnhTrongSuotThiDinhThangTest`."""
+    def test_poseRef_duoc_NOI_RA_theo_vai_tro_va_bi_cam_ve_lai(self):
         txt = render_prompt_text(self._pose_cfg(ref="refs/lan.png", poseRef="refs/tam-dang.png"))
-        self.assertNotIn("## Pose reference", txt)
-        self.assertNotIn("POSE REFERENCE SHEET", txt)
-        self.assertNotIn("mannequin", txt)
-        self.assertNotIn("tam-dang", txt, "tấm dáng không được tả, cũng không được đính")
+        self.assertIn("## Pose reference", txt)
+        self.assertIn("POSE REFERENCE SHEET", txt)
+        self.assertIn("cell k there gives the body pose and camera angle", txt)
+        self.assertIn("NEVER draw the mannequin itself", txt)
+        # Vai trò, KHÔNG phải thứ tự đính kèm — cùng luật đã bỏ "The SECOND attached image".
+        self.assertNotIn("SECOND attached image", txt)
 
     def test_poseRef_mot_minh_van_du_de_vao_nhanh_mascot(self):
         cfg = _cfg(spec="a mascot waving")            # skel mặc định: rrect, KHÔNG phải pose
@@ -757,8 +540,8 @@ class PoseSheetTest(unittest.TestCase):
         })
         self.assertEqual(got, ["refs/cho-tet.png", "refs/bo-cuc.png"])
 
-    def test_tam_nhan_vat_khong_dinh_kem_gi_va_tam_dang_khong_co_trong_ban_ke(self):
-        cfg = {
+    def test_poseRef_dinh_kem_NGAY_SAU_anh_nhan_vat(self):
+        got = render_prompt_files({
             "styles": [{
                 "id": "demo", "bg": "magenta", "style": "flat ink",
                 "brand": {"mode": "image", "refs": ["refs/brand.png"]},
@@ -771,237 +554,8 @@ class PoseSheetTest(unittest.TestCase):
                 "ref": "refs/lan.png",
                 "poseRef": "refs/tam-dang.png",
             }],
-        }
-        self.assertEqual(render_prompt_files(cfg), [])
-        self.assertEqual(render_desc_file(cfg),
-                         [("character", "refs/lan.png"),
-                          ("style", "refs/brand.png"),
-                          ("style", "refs/inspo.png")],
-                         "tấm dáng KHÔNG được tả — mỗi lượt tả là một lượt codex")
-
-
-class AnhTrongSuotThiDinhThangTest(unittest.TestCase):
-    """ĐÍNH HAY TẢ LÀ CÂU HỎI CỦA TỪNG TẤM ẢNH, KHÔNG PHẢI CỦA CẢ TẤM SHEET.
-
-    ╔══ HAI PHÉP ĐO, VÀ CHÚNG KHÔNG MÂU THUẪN NHAU ═════════════════════════════╗
-    ║ · 21-22/08/2026: `image_gen` GIỮ alpha thật khi ảnh tham chiếu đính kèm CÓ ║
-    ║   kênh alpha thật.                                                        ║
-    ║ · 09/09/2026: đính ảnh vào `image_gen` thì ảnh trả về mất nền trong suốt.  ║
-    ║ Lần đo thứ hai làm bằng một tấm ảnh ĐỤC. Cả hai nói cùng một điều: model   ║
-    ║ vẽ lại cái nền nó NHÌN THẤY trong ảnh mẫu.                                 ║
-    ╚═══════════════════════════════════════════════════════════════════════════╝
-    Nên luật là: ảnh nền trong suốt thật ⇒ ĐÍNH THẲNG (giống hơn hẳn một đoạn văn
-    tả lại, và không tốn lượt codex nào); ảnh đục ⇒ tả thành chữ.
-
-    ⚠️ Không có Pillow thì `ref_has_alpha` trả `False` cho MỌI ảnh (đường an toàn),
-    nên cả lớp này mất hết khả năng phân biệt và tự bỏ qua.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        if not co_pillow():
-            raise unittest.SkipTest("máy này không có Pillow ⇒ mọi ảnh bị coi là đục")
-
-    def _cfg(self, **sheet):
-        cfg = _cfg(spec="a mascot waving", skel={"shape": "pose", "w": 0.3, "h": 0.85})
-        cfg["sheets"][0].update(sheet)
-        return cfg
-
-    def _chay(self, cfg, anh):
-        """Gieo workspace kèm ẢNH THẬT rồi chạy khối dựng prompt."""
-        td = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, td, True)
-        _seed_workspace(td, cfg)
-        for ten, data in anh.items():
-            Path(td, "refs", ten).write_bytes(data)
-        txt = _run_block_in(td, "demo-pose-demo")
-        return txt, _att_in(td, "demo-pose-demo"), _desc_in(td, "demo-pose-demo")
-
-    def test_anh_nhan_vat_TRONG_SUOT_duoc_dinh_thang_va_KHONG_bi_ta(self):
-        txt, att, descs = self._chay(self._cfg(ref="refs/lan.png"),
-                                     {"lan.png": png_rgba(16, 16, 0)})
-        self.assertEqual(att, ["refs/lan.png"], "ảnh trong suốt thì đính, không tả")
-        self.assertEqual(descs, [], "và không tiêu một lượt codex nào để tả")
-        self.assertNotIn("{{DESC:", txt)
-        self.assertIn("the attached CHARACTER REFERENCE image", txt)
-        # CÂU CẦU. Dòng ô do webapp dựng luôn nói "the character described above" —
-        # webapp không biết ảnh có alpha hay không, và engine thì KHÔNG viết lại chữ
-        # của ai (xem `test_spec_di_thang_vao_prompt_KHONG_bi_sua_mot_ky_tu`). Nên
-        # section «Character» phải nói cụm ấy trỏ vào đâu, thay vì bỏ nó trỏ vào
-        # một đoạn mô tả không tồn tại trên tấm này.
-        self.assertIn("where a cell line says «the character described above», it means"
-                      " the character in that image", txt)
-
-    def test_anh_nhan_vat_DUC_van_di_duong_ta_thanh_chu(self):
-        """PNG RGBA alpha 255 toàn tấm là ĐỤC — "có kênh alpha" không phải là chuẩn."""
-        txt, att, descs = self._chay(self._cfg(ref="refs/lan.png"),
-                                     {"lan.png": png_rgba(16, 16, 255)})
-        self.assertEqual(att, [], "đính một tấm ảnh đục là kéo cả sheet về RGB")
-        self.assertEqual(descs, [("character", "refs/lan.png")])
-        self.assertIn("{{DESC:refs/lan.png}}", txt)
-        self.assertNotIn("attached", txt.lower())
-
-    def test_MOT_TAM_CO_CA_HAI_LOAI_anh(self):
-        """Ảnh nhân vật trong suốt + ảnh phong cách đục ⇒ prompt vừa trỏ vào ảnh
-        đính kèm vừa mang một đoạn chữ. Không có nhánh nào phải chọn một."""
-        cfg = self._cfg(ref="refs/lan.png")
-        cfg["styles"][0]["inspo"] = ["refs/tranh.png"]
-        txt, att, descs = self._chay(cfg, {"lan.png": png_rgba(16, 16, 0),
-                                           "tranh.png": png_rgba(16, 16, 255)})
-        self.assertEqual(att, ["refs/lan.png"])
-        self.assertEqual(descs, [("style", "refs/tranh.png")])
-        self.assertIn("the attached CHARACTER REFERENCE image", txt)
-        self.assertIn("## Style reference", txt)
-        self.assertIn("{{DESC:refs/tranh.png}}", txt)
-
-    def test_tam_dang_co_alpha_that_thi_QUAY_LAI_ca_section_lan_file_dinh_kem(self):
-        """`pose-sheet.ts` nay ghép tấm manơcanh thành PNG có alpha thật, nên nó lại
-        đính được — và một tấm hình chỉ dáng thì chính xác hơn hẳn một câu chữ."""
-        txt, att, descs = self._chay(self._cfg(ref="refs/lan.png", poseRef="refs/tam-dang.png"),
-                                     {"lan.png": png_rgba(16, 16, 0),
-                                      "tam-dang.png": png_rgba(16, 16, 0)})
-        self.assertEqual(att, ["refs/lan.png", "refs/tam-dang.png"])
-        self.assertIn("## Pose reference", txt)
-        self.assertIn("cell k there gives the body pose", txt)
-        self.assertEqual(descs, [], "tấm dáng KHÔNG bao giờ được tả thành chữ")
-
-    def test_anh_dinh_kem_LUON_co_mot_section_noi_ra_no_la_gi(self):
-        """Một tấm ảnh đính kèm mà prompt không nhắc tới thì model tự gán vai cho nó
-        — thường là «ảnh phong cách», và thế là một tấm manơcanh xám đi vào bảng màu
-        của cả sheet. Bản đời đầu đính `poseRef` của MỌI loại tấm; nay section «Pose
-        reference» chỉ có ở hồ sơ nhân vật, nên `.att` cũng chỉ nhận nó ở đó."""
-        cfg = _cfg(spec="a village market at dawn", skel={"shape": "full", "w": 1, "h": 1})
-        cfg["sheets"][0]["ref"] = "refs/cho-tet.png"
-        cfg["sheets"][0]["poseRef"] = "refs/tam-dang.png"
-        td = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, td, True)
-        _seed_workspace(td, cfg)
-        for ten in ("cho-tet.png", "tam-dang.png"):
-            Path(td, "refs", ten).write_bytes(png_rgba(16, 16, 0))
-        _run_block_in(td, "demo-pose-demo")
-        self.assertEqual(_att_in(td, "demo-pose-demo"), ["refs/cho-tet.png"],
-                         "tấm cảnh có «Scene reference» nói về nó; tấm dáng thì không")
-
-    def test_nguong_alpha_cua_engine_va_cua_agent_la_MOT_con_so(self):
-        """Web nói «ảnh nền đục: máy vẽ nhận mô tả bằng chữ» thì engine phải LÀM đúng
-        thế. Hai tầng đo cùng một phép, nên ngưỡng phải là cùng một con số — lệch
-        nhau là web nói một đằng, prompt gửi đi một nẻo, và không ai thấy."""
-        gen = re.search(r"^REF_ALPHA_MIN = ([\d.]+)$",
-                        (ROOT / "gen.sh").read_text(encoding="utf-8"), re.M)
-        agent = re.search(r"export const REF_ALPHA_MIN = ([\d.]+)",
-                          (ROOT / "agent" / "lib" / "ref-alpha.mjs").read_text(encoding="utf-8"))
-        self.assertIsNotNone(gen, "gen.sh phải khai REF_ALPHA_MIN")
-        self.assertIsNotNone(agent, "agent/lib/ref-alpha.mjs phải khai REF_ALPHA_MIN")
-        self.assertEqual(float(gen.group(1)), float(agent.group(1)))
-
-
-class MoTaNguoiDungSuaTest(unittest.TestCase):
-    """CHỮ CỦA NGƯỜI DÙNG KHÔNG BỊ MỘT LƯỢT NÂNG PHIÊN BẢN XOÁ MẤT.
-
-    Dòng khoá của cache có hai dạng, khác nhau ở token cuối:
-      · `# sha256:<băm> role:<vai> v2`   — engine tả, hết hạn khi `DESC_V` đổi;
-      · `# sha256:<băm> role:<vai> user` — NGƯỜI gõ, chỉ hết hạn khi ẢNH đổi.
-    Người ta sửa mô tả vì bản máy tả sai con vật của họ. Tả lại chính là quay về
-    đúng cái sai ấy — nên `DESC_V` không được đụng tới chữ của họ.
-    """
-
-    def _cfg(self):
-        cfg = _cfg(spec="a mascot waving", skel={"shape": "pose", "w": 0.3, "h": 0.85})
-        cfg["sheets"][0]["ref"] = "refs/lan.png"
-        return cfg
-
-    def _voi_cache(self, khoa_hau_to, noi_dung_anh=b"anh cua toi"):
-        td = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, td, True)
-        _seed_workspace(td, self._cfg())
-        Path(td, "refs", "lan.png").write_bytes(noi_dung_anh)
-        khoa = ("# sha256:" + hashlib.sha256(noi_dung_anh).hexdigest()
-                + " role:character " + khoa_hau_to)
-        Path(td, "refs", "lan.png.desc.txt").write_text(
-            khoa + "\nCon so mui hong, tai cup, deo khan do.\n", encoding="utf-8")
-        return _run_block_in(td, "demo-pose-demo")
-
-    def test_co_user_thi_KHONG_ta_lai_du_phien_ban_cau_hoi_da_khac(self):
-        txt = self._voi_cache("user")
-        self.assertIn("Con so mui hong, tai cup, deo khan do.", txt)
-        self.assertNotIn("{{DESC:", txt, "chữ của người dùng không bao giờ hết hạn theo DESC_V")
-
-    def test_khong_co_user_va_phien_ban_cu_thi_HET_HAN(self):
-        """Chiều ngược lại phải còn nguyên: mô tả do MÁY tả cho một câu hỏi đời trước
-        là câu trả lời cho một câu hỏi khác, giữ lại là giữ một thứ đã sai."""
-        txt = self._voi_cache("v1")
-        self.assertNotIn("Con so mui hong", txt)
-        self.assertIn("{{DESC:refs/lan.png}}", txt)
-
-    def test_doi_ANH_thi_ca_chu_cua_nguoi_dung_cung_het_han(self):
-        """Mô tả ấy tả một con vật KHÔNG CÒN Ở ĐÂY nữa. Giữ lại mới là nói dối."""
-        td = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, td, True)
-        _seed_workspace(td, self._cfg())
-        Path(td, "refs", "lan.png").write_bytes(b"ANH MOI HOAN TOAN")
-        Path(td, "refs", "lan.png.desc.txt").write_text(
-            "# sha256:" + hashlib.sha256(b"anh cu").hexdigest()
-            + " role:character user\nCon so cua anh cu.\n", encoding="utf-8")
-        txt = _run_block_in(td, "demo-pose-demo")
-        self.assertNotIn("Con so cua anh cu", txt)
-        self.assertIn("{{DESC:refs/lan.png}}", txt)
-
-
-class BoDanhTinhNhanVatTest(unittest.TestCase):
-    """*"con nhân vật nó khác với con nhân vật ref, có cách nào prompt bắt buộc bó
-    vào con đó không?"* — chủ sản phẩm, 09/09/2026.
-
-    Ba đòn, và lớp này khoá đòn thứ ba (hai đòn kia: đính thẳng ảnh có alpha, và
-    câu hỏi tả ảnh dài + có cấu trúc ở `desc_question character`).
-    """
-
-    def _txt(self, **sheet):
-        cfg = _cfg(spec="the character described above, waving",
-                   skel={"shape": "pose", "w": 0.3, "h": 0.85})
-        cfg["sheets"][0].update(sheet)
-        return render_prompt_text(cfg)
-
-    def test_moi_dau_hieu_nhan_dang_phai_co_mat_o_MOI_o(self):
-        txt = self._txt(ref="refs/lan.png")
-        self.assertIn("Every identifying detail named above has to be visible in every cell", txt)
-
-    def test_trang_phuc_theo_dong_chi_MAC_THEM_LEN_chu_khong_doi_co_the(self):
-        """Bộ kit theo mùa là chỗ vỡ: dòng ô nói «wearing a Tết áo dài», và không câu
-        nào nói rằng bộ đồ ấy không được đổi cả cái đầu."""
-        txt = self._txt(ref="refs/lan.png")
-        self.assertIn("Clothing goes ON TOP of the character described above", txt)
-        self.assertIn("the body, the head, the face and the main colours stay exactly as described", txt)
-
-    def test_khong_co_anh_thi_KHONG_co_section_Character_va_khong_co_cau_rang_buoc(self):
-        """Không có ảnh nhân vật thì không có gì để bó vào — câu ràng buộc trỏ vào
-        «the character described above» khi không có mô tả nào là dạy model tự bịa."""
-        txt = self._txt()
-        self.assertNotIn("## Character", txt)
-        self.assertNotIn("Every identifying detail named above", txt)
-
-    def test_cau_hoi_ta_anh_nhan_vat_hoi_DU_TAM_muc_va_dai_gap_doi(self):
-        """Danh tính không nằm ở "a round red squirrel" — nó nằm ở TỈ SỐ, ở MÃ MÀU
-        theo vùng, và ở dăm dấu hiệu mà thiếu chúng thì không ai nhận ra con vật."""
-        src = (ROOT / "gen.sh").read_text(encoding="utf-8")
-        cau = re.search(r"You are describing a character to an illustrator.*?\"\n", src, re.S).group(0)
-        self.assertIn("120 to 200 words", cau)
-        for muc in ("(1)", "(2)", "(3)", "(4)", "(5)", "(6)", "(7)", "(8)"):
-            self.assertIn(muc, cau, f"thiếu mục {muc} của bộ khung cố định")
-        self.assertIn("as ratios", cau)
-        self.assertIn("approximate hex code", cau)
-        self.assertIn("three to five identifying marks", cau)
-        # Ba thứ bị cấm vẫn phải còn nguyên — chúng thuộc về chỗ khác trong prompt.
-        self.assertIn("Do NOT describe the background, the lighting of the photo, or the"
-                      " particular pose", cau)
-
-    def test_hai_tang_noi_cung_MOT_con_so_phien_ban_cau_hoi(self):
-        """`DESC_V` bên bash ghi cache, `DESC_V` bên python đọc lại. Lệch nhau là mọi
-        mô tả bị coi là hết hạn ở LƯỢT NÀO CŨNG VẬY — tức nhân số lượt codex lên,
-        lặng lẽ, mãi mãi."""
-        src = (ROOT / "gen.sh").read_text(encoding="utf-8")
-        py = re.search(r'^DESC_V = "(v\d+)"$', src, re.M).group(1)
-        sh = re.search(r'^DESC_V="(v\d+)"$', src, re.M).group(1)
-        self.assertEqual(py, sh)
+        })
+        self.assertEqual(got, ["refs/lan.png", "refs/tam-dang.png", "refs/brand.png", "refs/inspo.png"])
 
 
 class SteeringPromptTest(unittest.TestCase):
@@ -1320,14 +874,8 @@ class MauThuongHieuTest(unittest.TestCase):
         self.assertIn("#0A5C36", txt, "tải logo lên là mất dòng màu thương hiệu")
         self.assertIn("#F2C230", txt)
 
-    def test_va_logo_van_toi_duoc_may_ve_bang_CHU(self):
-        """Tấm này cần nền trong suốt ⇒ không đính ảnh nào (xem `AttachmentListTest`).
-        Logo vẫn phải TỚI được máy vẽ — bằng một đoạn mô tả trong «Style reference»."""
-        self.assertEqual(render_prompt_files(self.CFG), [])
-        self.assertEqual(render_desc_file(self.CFG), [("style", "refs/logo.png")])
-        txt = render_prompt_text(self.CFG)
-        self.assertIn("## Style reference", txt)
-        self.assertIn("{{DESC:refs/logo.png}}", txt)
+    def test_va_logo_van_duoc_dinh_kem(self):
+        self.assertIn("refs/logo.png", render_prompt_files(self.CFG))
 
     # Prompt ngắt dòng ở ~86 cột, nên câu nào cũng có thể bị cắt giữa chừng. Cái
     # phải khớp là CHỮ, không phải chỗ xuống dòng — y hệt mẹo `flat()` mà ca mirror
@@ -1595,7 +1143,8 @@ class KhungPromptSectionTest(unittest.TestCase):
         cfg["sheets"][0]["poseRef"] = "refs/tam-dang.png"
         heads = self._headings(render_prompt_text(cfg))
         self.assertEqual(heads, ["Canvas", "Art style", "Layout", "Safe zone", "Transparency",
-                                 "Character", "Elements", "Output"])
+                                 "Character reference", "Pose reference",
+                                 "Elements", "Output"])
 
 
 class MoiLoaiTamMotBoLuatTest(unittest.TestCase):

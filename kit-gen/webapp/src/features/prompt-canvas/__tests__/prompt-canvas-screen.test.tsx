@@ -466,74 +466,45 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
     expect(screen.getByText("Ảnh đi kèm (1)")).toBeTruthy();
   });
 
-  /* ══ KHỐI «ẢNH ĐI KÈM» — CẢ HAI LỐI ĐI ═══════════════════════════════════
-     ╔══ BỆNH ĐÃ ĐO (chủ sản phẩm, 09/09/2026) ═════════════════════════════╗
-     ║ Xem trước prompt của một thẻ nhân vật hiện đúng MỘT ô ảnh — tấm ảnh   ║
-     ║ dáng — và giấu mất tấm ảnh nhân vật đầu vào, vì khối ảnh chỉ đọc danh ║
-     ║ sách ĐÍNH KÈM còn ảnh nhân vật (nền đục) đi đường tả thành chữ.       ║
-     ║ *"đúng rồi prompt thiếu cái hiển thị ảnh này"*.                        ║
-     ╚══════════════════════════════════════════════════════════════════════╝ */
-  const DESC_LAN = "Con sóc đỏ tròn, bụng kem, đầu to bằng một phần ba thân.";
+  /* ══ KHỐI «ẢNH ĐI KÈM» — MỖI Ô NÓI RA VAI CỦA MÌNH ══════════════════════
+     Bốn tấm ảnh vuông cạnh nhau với tên file bị cắt cụt thì không tấm nào phân
+     biệt được với tấm nào — mà «engine gửi ảnh nào làm ảnh nhân vật» đúng là câu
+     người dùng đang hỏi khi họ mở bản xem trước ra. */
   const withImages = {
     ...ready,
     jobs: [{
       ...ready.jobs[0],
-      prompt: `${READY_PROMPT}\n## Character\n${DESC_LAN}`,
+      attachments: ["refs/lan.png", "refs/tam-dang.png"],
       images: [
-        { path: "refs/lan.png", role: "character", mode: "described", alpha: false, desc: DESC_LAN },
-        { path: "refs/tam-dang.png", role: "pose", mode: "attached", alpha: true, desc: null },
+        { path: "refs/lan.png", role: "character" },
+        { path: "refs/tam-dang.png", role: "pose" },
       ],
     }],
   };
 
-  it("kê CẢ ảnh tả bằng chữ lẫn ảnh đính kèm, mỗi ô một vai và một chip lối đi", () => {
+  it("mỗi ô ảnh mang vai tiếng Việt và tên tệp rút gọn", () => {
     mountBlock(() => {}, "h1", { prompt: withImages });
     fireEvent.click(screen.getByRole("tab", { name: "Prompt" }));
 
     expect(screen.getByText("Ảnh đi kèm (2)")).toBeTruthy();
     expect(screen.getByText("Nhân vật")).toBeTruthy();
     expect(screen.getByText("Dáng")).toBeTruthy();
-    expect(screen.getByText("Tả bằng chữ")).toBeTruthy();
-    expect(screen.getByText("Đính kèm")).toBeTruthy();
     /* Tên đọc được, KHÔNG phải đường dẫn thô: cổng từ cấm §5.4 bắt `refs/` và ô
        rộng 128px cắt mất đúng phần phân biệt ảnh nào với ảnh nào. */
     expect(screen.getByText("lan.png")).toBeTruthy();
     expect(screen.queryByText("refs/lan.png")).toBeNull();
-    /* Chỉ ảnh ĐÍNH KÈM mới phải dán tay vào chat — 2 ảnh, câu dặn nói 1. */
-    expect(screen.getByText(/dán 1 ảnh vào chat trước/)).toBeTruthy();
+    /* MỌI ảnh đều được đính thẳng vào lời gọi image_gen từ 10/09/2026, nên câu dặn
+       đếm cả hai và không ô nào mang chip trạng thái nào. */
+    expect(screen.getByText(/dán 2 ảnh vào chat trước/)).toBeTruthy();
+    expect(screen.queryByText("Tả bằng chữ")).toBeNull();
   });
 
-  it("bấm ô «Tả bằng chữ» ⇒ nhảy tới đúng đoạn văn đang đứng thay cho ảnh ấy", () => {
-    /* jsdom không có `scrollIntoView` — cắm vào để đọc được lời gọi. */
-    const scroll = vi.fn();
-    (Element.prototype as unknown as { scrollIntoView: unknown }).scrollIntoView = scroll;
+  it("khối chữ vẫn là NGUYÊN VĂN prompt, không thừa không thiếu một ký tự", () => {
     mountBlock(() => {}, "h1", { prompt: withImages });
     fireEvent.click(screen.getByRole("tab", { name: "Prompt" }));
-
-    const jump = screen.getByRole("button", { name: /Xem đoạn tả của lan.png/ });
-    fireEvent.click(jump);
-
-    expect(scroll).toHaveBeenCalled();
-    /* Đoạn văn được neo bằng một `<span>` mang id — và khối chữ vẫn là NGUYÊN VĂN
-       prompt, không thừa không thiếu một ký tự. */
-    const anchor = document.getElementById("kg-desc-chinh-nen-0");
-    expect(anchor?.textContent).toBe(DESC_LAN);
-    expect(screen.getByLabelText("Prompt của tấm nen").textContent)
-      .toBe(`${READY_PROMPT}\n## Character\n${DESC_LAN}`);
+    expect(screen.getByLabelText("Prompt của tấm nen").textContent).toBe(READY_PROMPT);
   });
 
-  it("ảnh ĐÍNH KÈM không có ô bấm nhảy — nó tới máy vẽ bằng chính pixel của nó", () => {
-    mountBlock(() => {}, "h1", { prompt: withImages });
-    fireEvent.click(screen.getByRole("tab", { name: "Prompt" }));
-    expect(screen.queryByRole("button", { name: /Xem đoạn tả của tam-dang.png/ })).toBeNull();
-  });
-
-  it("tấm không đi kèm ảnh nào ⇒ KHÔNG có khối «Ảnh đi kèm» rỗng", () => {
-    const trong = { ...ready, jobs: [{ ...ready.jobs[0], attachments: [], images: [] }] };
-    mountBlock(() => {}, "h1", { prompt: trong });
-    fireEvent.click(screen.getByRole("tab", { name: "Prompt" }));
-    expect(screen.queryByText(/Ảnh đi kèm/)).toBeNull();
-  });
 });
 
 /* ══════════════════════════════════════════════════════════════════════════

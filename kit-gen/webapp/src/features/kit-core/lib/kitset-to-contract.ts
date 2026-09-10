@@ -134,15 +134,18 @@ export const HINT_BG = "full-bleed portrait scene";
 export const HINT_POSE = "cell containing ONE full-body character";
 
 /** Chép nguyên `note` của sheet dáng trong `styles.json` — đây là prompt engineering
- *  đã chạy thật, không phải văn tôi viết. Chỉ dùng khi CÓ ảnh ref nhân vật.
+ *  đã chạy thật, không phải văn tôi viết. Chỉ dùng khi CÓ ảnh ref nhân vật —
+ *  không có ảnh thì chủ ngữ là chính chữ người dùng gõ (`character.description`),
+ *  và prompt không được nhắc tới một tấm ảnh nào.
  *
- *  09/09/2026 — "attached REFERENCE PHOTO" đổi thành "described above": tấm nhân vật
- *  KHÔNG còn được đính ảnh nào (đính ảnh ⇒ image_gen trả ảnh mất nền trong suốt, đo
- *  được), `gen.sh` tả ảnh ấy thành chữ và đặt nguyên đoạn chữ vào section «Character»
- *  đứng ngay trên «Direction». Trỏ vào một tấm ảnh không có ở đó là dạy máy vẽ đi tìm
- *  thứ không tồn tại — và nó sẽ tự bịa ra thứ nó nghĩ là đang thiếu. */
+ *  ⚠️ 10/09/2026 — "attached REFERENCE PHOTO" ĐƯỢC GIỮ, và đó là quyết định. Bản
+ *  09/09/2026 đổi nó thành "described above" vì đính ảnh làm image_gen trả về ảnh
+ *  mất nền trong suốt; đường tả-ảnh-thành-chữ ấy đã gỡ (chủ sản phẩm: chấp nhận nền
+ *  đục giả, chờ codex sửa đầu nguồn). Mọi ảnh nay lại được đính thẳng, nên câu này
+ *  trỏ vào một tấm ảnh CÓ THẬT trong lượt gọi. Xem khối «ĐÍNH ẢNH LÀM MẤT NỀN
+ *  TRONG SUỐT» ở gen.sh. */
 export const POSE_NOTE =
-  "All cells show THE SAME character described above: match its " +
+  "All cells show THE SAME character as in the attached REFERENCE PHOTO: match its " +
   "species, face, colors, costume, materials and proportions exactly — only the pose " +
   "and viewing angle change per cell, like one character turnaround sheet.";
 
@@ -859,11 +862,8 @@ export function buildKitsetContract(s: KitsetContractInput, opts: BuildKitsetOpt
    */
   cast.forEach((character) => {
   const charRef = character.ref;
-  /* "described above" chứ KHÔNG phải "from the reference photo": ảnh nhân vật không
-     còn được đính vào lượt vẽ (đính ⇒ mất nền trong suốt), nó đi vào prompt bằng CHỮ
-     ở section «Character». Xem chú thích của POSE_NOTE ở đầu file. */
   const base = charRef
-    ? "the character described above"
+    ? "the SAME character from the reference photo"
     : character.description.trim() || "the same original mascot character";
   /* TRANG PHỤC NẰM Ở SUBJECT, không ở mệnh đề dáng — nó tả CON NGƯỜI ấy, không tả cử
      động. Đặt nhầm chỗ (nối vào cuối câu dáng) thì với dáng `run` ta được "…arms

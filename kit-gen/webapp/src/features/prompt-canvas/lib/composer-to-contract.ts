@@ -505,20 +505,24 @@ function mascotSheets(
    *
    * ══ BA NGUỒN (ảnh · chữ · sàn), MỘT THỨ TỰ ƯU TIÊN, VÀ NÓ KHÔNG TUỲ TIỆN ═
    * Có ẢNH ⇒ ảnh nói trước, luôn luôn: một tấm ảnh tả nhân vật chính xác hơn mọi
-   * câu chữ. Chữ người dùng gõ khi ấy đi KÈM chứ không thay — nó vẫn nói được thứ
-   * ảnh không nói ra (tên, tính cách, chi tiết muốn giữ).
+   * câu chữ, và `gen.sh` gọi đích danh "the attached character REFERENCE PHOTO".
+   * Chữ người dùng gõ khi ấy đi KÈM chứ không thay — nó vẫn nói được thứ ảnh
+   * không nói ra (tên, tính cách, chi tiết muốn giữ).
+   * KHÔNG có ảnh ⇒ chữ ấy LÀ chủ ngữ — đó là đường «mô tả nhân vật CHAY», và nó
+   * phải sống: người dùng gõ con vật của mình bằng lời, prompt không được nhắc tới
+   * một tấm ảnh nào (`sheet.ref` vắng ⇒ engine không dựng section ảnh, `.att` rỗng).
+   * Trỏ vào một tấm ảnh không có ở đó là mời máy vẽ tự bịa ra thứ nó nghĩ đang thiếu.
+   * Chỉ khi cả hai đều vắng mới rơi về câu chung chung cũ; máy vẽ không có gì để bám
+   * thì mỗi lượt ra một con khác nhau, nên câu ấy là mức sàn, không phải mặc định.
    *
-   * ⚠️ 09/09/2026 — CÂU NÀY KHÔNG CÒN TRỎ VÀO MỘT TẤM ẢNH ĐÍNH KÈM. Đo được: đính
-   * ảnh vào lời gọi image_gen thì ảnh trả về mất nền trong suốt, không có tham số
-   * nào cứu. Nên `gen.sh` tả ảnh nhân vật thành CHỮ và đặt nguyên đoạn chữ ấy vào
-   * section «Character», ngay trên danh sách ô — nên dòng ô nói "the character
-   * described above". Nói "the reference photo" ở đây là trỏ vào hư không.
-   * KHÔNG có ảnh ⇒ chữ ấy LÀ chủ ngữ. Chỉ khi cả hai đều vắng mới rơi về câu
-   * chung chung cũ; máy vẽ không có gì để bám thì mỗi lượt ra một con khác nhau,
-   * nên câu ấy là mức sàn, không phải mặc định.
+   * ⚠️ 10/09/2026 — CÂU NÀY LẠI TRỎ VÀO MỘT TẤM ẢNH ĐÍNH KÈM, và đó là quyết định
+   * chứ không phải một chỗ bị bỏ quên. Bản 09/09/2026 đổi nó thành "the character
+   * described above" vì đính ảnh làm image_gen trả về ảnh mất nền trong suốt; đường
+   * tả-thành-chữ ấy đã gỡ (chủ sản phẩm: chấp nhận nền đục giả, chờ codex sửa đầu
+   * nguồn). Xem khối «ĐÍNH ẢNH LÀM MẤT NỀN TRONG SUỐT» ở gen.sh.
    */
   const base = ref
-    ? "the character described above"
+    ? "the SAME character from the reference photo"
     : identity || "the same original mascot character";
   const subject = [
     base,

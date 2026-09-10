@@ -206,9 +206,6 @@ def _run_one_src():
         block(r"^file_hash\(\).*?^\}"),
         block(r"^PY_CHECK=.*?^\}"),
         block(r"^GEN_MODEL=.*?^fi$", limit=20),
-        # Khối «TẢ ẢNH THÀNH CHỮ»: `run_one` gọi `resolve_descs` ngay trước khi dựng
-        # task, nên trích run_one mà bỏ khối này là chạy một hàm khuyết.
-        block(r"^# ══ «TẢ ẢNH THÀNH CHỮ» — BẮT ĐẦU.*?^# ══ «TẢ ẢNH THÀNH CHỮ» — HẾT.*?$"),
         block(r"^run_one\(\) \{.*?^\}"),
     ])
 
@@ -345,26 +342,26 @@ class NenDucKhongChanTest(unittest.TestCase):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ĐÍNH ẢNH = MẤT NỀN TRONG SUỐT ⇒ TASK CỦA TẤM CẦN ALPHA KHÔNG ĐƯỢC CÓ ẢNH NÀO
+# ẢNH THAM CHIẾU ĐI THẲNG VÀO LỜI GỌI image_gen — CÒN KHÔNG CÓ ẢNH THÌ TUYỆT
+# ĐỐI KHÔNG NHẮC TỚI MỘT TẤM NÀO
 # ═══════════════════════════════════════════════════════════════════════════════
-class DinhAnhChiChoTamPhuKinTest(unittest.TestCase):
-    """╔══ ĐO ĐƯỢC (chủ sản phẩm, 09/09/2026) ═════════════════════════════════════╗
-    ║ Cùng một prompt, cùng một model: gọi `image_gen` KÈM `referenced_image_    ║
-    ║ paths` ⇒ ảnh trả về là RGB, nền caro do model tự vẽ. Bỏ ảnh ra ⇒ RGBA,     ║
-    ║ alpha thật. Tool built-in không có tham số nền nào để xin (skill imagegen  ║
-    ║ ghi rõ `background` chỉ thuộc CLI dự phòng).                               ║
-    ╚═══════════════════════════════════════════════════════════════════════════╝
+class DinhThangMoiAnhTest(unittest.TestCase):
+    """╔══ QUYẾT ĐỊNH ĐANG ĐƯỢC KHOÁ Ở ĐÂY (chủ sản phẩm, 10/09/2026) ══════════════╗
+    ║ Đính ảnh vào `image_gen` làm ảnh trả về mất nền trong suốt (đo 09/09/2026): ║
+    ║ RGB với một cái nền ca-rô model tự vẽ. Một bản đã thử né bằng cách đổi ảnh  ║
+    ║ thành CHỮ; nó giữ được alpha nhưng con vật vẽ ra không còn giống ảnh mẫu.   ║
+    ║ Chốt: CHẤP NHẬN nền đục, đính thẳng mọi ảnh, chờ codex sửa đầu nguồn.       ║
+    ╚════════════════════════════════════════════════════════════════════════════╝
 
-    Nên `run_one` phải gửi đi HAI loại task khác hẳn nhau, và ranh giới là `.att`:
-      · `.att` rỗng (tấm cần alpha) ⇒ không `-i`, và khối REFERENCE IMAGES + câu
-        "you MUST pass ALL of these paths … referenced_image_paths" biến mất hẳn.
-        Còn sót lại một câu ấy thôi là model đi tìm ảnh và tự bịa ra một danh sách.
-      · `.att` có ảnh (tấm full-bleed) ⇒ y nguyên như cũ, không suy suyển một chữ.
+    Nên ranh giới của `run_one` chỉ còn MỘT: `.att` có ảnh hay không.
+      · có ảnh  ⇒ `-i` + khối REFERENCE IMAGES + câu dặn `referenced_image_paths`;
+      · KHÔNG ảnh (nhân vật tả CHAY bằng chữ) ⇒ không một câu nào nhắc tới ảnh.
+        Còn sót lại một câu thôi là model đi tìm ảnh và tự bịa ra một danh sách.
     Ca này đo trên TASK THẬT mà codex nhận được, không đọc mã nguồn.
     """
 
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="kitgen-dinh-anh-"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="kitgen-dinh-thang-"))
         self.proj = self.tmp / "p"
         for sub in ("prompts", "raw", "logs", "refs"):
             (self.proj / sub).mkdir(parents=True)
@@ -395,21 +392,22 @@ class DinhAnhChiChoTamPhuKinTest(unittest.TestCase):
                        capture_output=True, text=True, env=env, timeout=300)
         return self.tasklog.read_text(encoding="utf-8")
 
-    def test_att_rong_thi_task_KHONG_nhac_toi_anh_nao(self):
+    def test_co_anh_thi_dinh_thang_vao_image_gen(self):
+        (self.proj / "refs" / "mascot.png").write_bytes(b"anh nhan vat")
+        log = self._chay("refs/mascot.png\n")
+        self.assertIn("referenced_image_paths", log)
+        self.assertIn("REFERENCE IMAGES START", log)
+        self.assertIn(str(self.proj / "refs" / "mascot.png"), log)
+
+    def test_khong_anh_thi_task_KHONG_nhac_toi_anh_nao(self):
+        """Nhân vật tả CHAY: người dùng gõ chữ, không tải ảnh nào lên."""
         log = self._chay("")
         self.assertNotIn("referenced_image_paths", log)
         self.assertNotIn("REFERENCE IMAGES START", log)
-        self.assertNotIn(" -i ", log, "không được đính `-i` cho tấm cần nền trong suốt")
+        self.assertNotIn(" -i ", log, "không có ảnh thì không được đính `-i` nào")
         # …nhưng câu dặn image_gen thì KHÔNG được mất theo.
         self.assertIn("image_gen", log)
         self.assertIn('background=\"transparent\"', log)
-
-    def test_att_co_anh_thi_moi_thu_cu_con_nguyen(self):
-        (self.proj / "refs" / "cho-tet.png").write_bytes(b"anh canh")
-        log = self._chay("refs/cho-tet.png\n")
-        self.assertIn("referenced_image_paths", log)
-        self.assertIn("REFERENCE IMAGES START", log)
-        self.assertIn(str(self.proj / "refs" / "cho-tet.png"), log)
 
 
 if __name__ == "__main__":

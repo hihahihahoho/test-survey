@@ -12,9 +12,7 @@ import { projectDir } from "../lib/projects-dir.mjs"
 import { exists, readFile, removeTree } from "../lib/fsx.mjs"
 import { redactLine, shortenPath } from "../lib/redact.mjs"
 import { resolveEngine, renderPromptsOnly } from "../lib/engine.mjs"
-import { refAlpha } from "../lib/ref-alpha.mjs"
-import { safeJoin } from "../lib/paths.mjs"
-import { descBody, descCacheName, fillDescPlaceholders, parseRefsManifest } from "../lib/prompt-refs.mjs"
+import { parseRefsManifest } from "../lib/prompt-refs.mjs"
 
 export function register(r) {
   // #22 GET contract → ETag = version
@@ -96,72 +94,29 @@ export function register(r) {
 
     const out = []
     const missing = []
-    /* Ảnh nào của tấm nào — gom TRƯỚC, đo alpha SAU, một lượt cho cả lượt xem trước.
-       `refAlpha` mở từng PNG ra đếm histogram bằng một tiến trình python; một dự án
-       thật có 5-15 ảnh dùng chung cho hàng chục tấm, nên đo từng ảnh từng tấm là
-       hàng trăm lượt spawn cho vài câu trả lời. */
-    const pending = []
     for (const j of jobs) {
       const txt = join(pdir, "prompts", `${j.job}.txt`)
       if (!(await exists(txt))) { missing.push(j.job); continue }
-      const rawPrompt = await readFile(txt, "utf8")
-      /* Dấu chỗ `{{DESC:…}}` được thay TRƯỚC khi redact: người đọc bản xem trước
-         không cần thấy cú pháp mối nối python→bash, họ cần biết chỗ ấy sẽ là gì.
-         Prompt THẬT gửi máy vẽ không đổi — xem `fillDescPlaceholders`. */
-      const filled = fillDescPlaceholders(rawPrompt)
       // redactLine như GET /api/runs/:runId/jobs/:job/prompt: hợp đồng "không bao giờ
       // trả path tuyệt đối ra client" là hợp đồng của CỬA RA, không của từng nguồn.
-      const prompt = redactLine(filled.text)
+      const prompt = redactLine(await readFile(txt, "utf8"))
       let attachments = []
       const att = join(pdir, "prompts", `${j.job}.att`)
       if (await exists(att))
         attachments = (await readFile(att, "utf8")).split("\n")
           .map(s => shortenPath(s.trim())).filter(Boolean)
-      /* BẢN KÊ ĐẦY ĐỦ (`.refs`) là nguồn duy nhất cho danh sách ảnh. Engine đời cũ
-         chưa ghi file này ⇒ rơi về `.att`: hiện được nửa sự thật vẫn hơn hiện một
-         khối rỗng, và web sẽ thấy `role` trống thay vì một vai bịa ra. */
+      /* VAI CỦA TỪNG ẢNH đến từ bản kê `.refs` của engine, không suy lại ở đây (xem
+         `lib/prompt-refs.mjs`). Engine đời cũ chưa ghi file ấy ⇒ rơi về `.att`: bày
+         đúng những tấm ảnh sẽ đính, với vai để TRỐNG chứ không phải một vai bịa ra. */
       const refsFile = join(pdir, "prompts", `${j.job}.refs`)
       const rows = (await exists(refsFile))
         ? parseRefsManifest(await readFile(refsFile, "utf8"))
-        : attachments.map(path => ({ mode: "attached", role: "", path }))
-      pending.push({ j, prompt, attachments, rows, standIn: filled.standIn })
-    }
-
-    /* Đường dẫn TUYỆT ĐỐI chỉ sống trong đoạn này — đo alpha cần file thật, còn thứ
-       đi ra response là nhãn tương đối đã qua `shortenPath`. */
-    const absOf = new Map()
-    for (const { rows } of pending)
-      for (const r of rows) {
-        if (absOf.has(r.path)) continue
-        /* `safeJoin` NÉM khi đường dẫn trèo ra ngoài project. Ở đây một ảnh như thế
-           chỉ đáng bị bỏ khỏi phép đo alpha (nó về `false` = "coi như đục", đúng
-           đường an toàn của gen.sh), không đáng làm đổ cả cửa xem trước. */
-        try { absOf.set(r.path, safeJoin(pdir, r.path)) } catch { /* bỏ ảnh này */ }
-      }
-    const alphaOf = await refAlpha([...absOf.values()])
-
-    for (const { j, prompt, attachments, rows, standIn } of pending) {
+        : attachments.map(path => ({ role: "", path }))
       const images = []
       for (const r of rows) {
-        /* MÔ TẢ ĐANG ĐỨNG THAY CHO ẢNH NÀY TRONG PROMPT, không phải "mô tả trong
-           kho". Còn dấu chỗ ⇒ câu chờ vừa đặt vào; hết dấu chỗ ⇒ chính gen.sh đã
-           dán đoạn văn trong cache vào, nên đọc lại đúng file cache ấy. Ảnh đính
-           thẳng thì không có đoạn nào cả — nó tới máy vẽ bằng pixel. */
-        let desc = null
-        if (r.mode === "described") {
-          desc = standIn.get(r.path) ?? null
-          if (desc === null) {
-            const cache = join(pdir, "refs", descCacheName(r.path))
-            if (await exists(cache)) desc = descBody(await readFile(cache, "utf8")) || null
-          }
-        }
-        images.push({
-          path: shortenPath(r.path),
-          role: r.role,
-          mode: r.mode,
-          alpha: alphaOf.get(absOf.get(r.path)) === true,
-          desc: desc === null ? null : redactLine(desc),
-        })
+        const path = shortenPath(r.path)
+        if (images.some(seen => seen.path === path)) continue
+        images.push({ path, role: r.role })
       }
       out.push({ job: j.job, variant: j.variant, sheet: j.sheet, prompt, attachments, images })
     }

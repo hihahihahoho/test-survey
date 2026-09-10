@@ -360,11 +360,8 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     const mascot = contract.sheets.find((s) => s.id === "nhan-vat");
     expect(mascot?.ref).toBe("refs/char-lan.png");
     /* Có ảnh mẫu ⇒ tấm dáng phải mang `note` "cùng một nhân vật", nếu không mỗi
-       ô ra một con khác nhau. Từ 09/09/2026 câu ấy trỏ vào ĐOẠN CHỮ tả nhân vật
-       (`gen.sh` tả ảnh thành chữ ở section «Character»), không trỏ vào một tấm ảnh
-       đính kèm nữa — tấm nhân vật không được đính ảnh nào, vì đính ⇒ mất alpha. */
-    expect(mascot?.note).toContain("THE SAME character described above");
-    expect(mascot?.note).not.toContain("REFERENCE PHOTO");
+       ô ra một con khác nhau. */
+    expect(mascot?.note).toContain("REFERENCE PHOTO");
     expect(contract.variants![0]!.characters?.[0]?.ref).toBe("refs/char-lan.png");
     expect(contract.characterPoses).toEqual(["idle"]);
   });
@@ -1058,12 +1055,19 @@ describe("pill nhân vật: ba nguồn đều tới được chủ ngữ của m
     composerToContract(state({ blocks: [mascotBlock("m1", doc)] }), { presets: PRESETS })
       .sheets[0]!.components[0]!.spec;
 
-  it("GÕ RIÊNG ⇒ chữ người dùng đi NGUYÊN VĂN vào chủ ngữ", () => {
-    const spec = specOf(withMascot({ custom: "một chú mèo mướp đội nón lá" }));
+  it("GÕ RIÊNG ⇒ chữ người dùng đi NGUYÊN VĂN vào chủ ngữ, và KHÔNG nhắc tới ảnh nào", () => {
+    const doc = withMascot({ custom: "một chú mèo mướp đội nón lá" });
+    const contract = composerToContract(state({ blocks: [mascotBlock("m1", doc)] }), { presets: PRESETS });
+    const spec = contract.sheets[0]!.components[0]!.spec;
     expect(spec).toContain("một chú mèo mướp đội nón lá");
     /* Câu sàn "the same original mascot character" chỉ dành cho ca KHÔNG có
        nguồn nào — còn để lại là hai chủ ngữ đá nhau trong một câu. */
     expect(spec).not.toContain("the same original mascot character");
+    /* MÔ TẢ CHAY: không ảnh thì `sheet.ref` phải VẮNG, vì đó là thứ quyết định
+       engine có dựng section «Character reference» và đính ảnh hay không. Một câu
+       trỏ vào tấm ảnh không có ở đó là mời máy vẽ bịa ra thứ nó nghĩ đang thiếu. */
+    expect(contract.sheets[0]!.ref).toBeUndefined();
+    expect(spec).not.toContain("reference photo");
   });
 
   it("ĐÍNH ẢNH ⇒ `sheet.ref` + chủ ngữ trỏ vào tấm ảnh, chữ đi KÈM chứ không mất", () => {
@@ -1081,11 +1085,7 @@ describe("pill nhân vật: ba nguồn đều tới được chủ ngữ của m
     const sheet = contract.sheets[0]!;
     expect(sheet.ref).toBe("refs/lan.png");
     const spec = sheet.components[0]!.spec;
-    /* "described above": ảnh nhân vật đi vào prompt bằng CHỮ (section «Character»
-       của gen.sh), không bằng file đính kèm — đo được là đính ảnh thì image_gen
-       trả về ảnh mất nền trong suốt. */
-    expect(spec).toContain("the character described above");
-    expect(spec).not.toContain("reference photo");
+    expect(spec).toContain("the SAME character from the reference photo");
     expect(spec).toContain("linh vật gấu trúc");
   });
 

@@ -4,10 +4,10 @@
 
    Lịch sử/khôi phục snapshot và validate dry-run KHÔNG còn route (dọn prompt-first):
    luật validate vẫn được canh, nhưng gọi thẳng `validateContract` thay vì qua HTTP. */
-import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { CLIENT, PAGES, PORT, createBasicProject, describe, eq, fakeDoctor, includes, it, lsDir, makeClient, ok, waitFor } from "./harness.mjs"
 import { createAgent } from "../server.mjs"
+import { parseRefsManifest } from "../lib/prompt-refs.mjs"
 import { contractToStylesV1 } from "../lib/engine.mjs"
 import { validateContract } from "../lib/validate.mjs"
 
@@ -124,14 +124,12 @@ export async function run({ api, pid, wsRoot, agentDir }) {
     } finally { await a("DELETE", `/api/projects/${gid}`) }
   })
 
-  /* ══ ẢNH ĐI KÈM MỘT TẤM — CẢ HAI LỐI ĐI ═══════════════════════════════════
-     Từ 09/09/2026 mỗi ảnh tham chiếu tự trả lời câu hỏi của mình: nền trong suốt
-     thật ⇒ ĐÍNH THẲNG, nền đục ⇒ codex TẢ THÀNH CHỮ. `attachments` chỉ biết lối
-     thứ nhất, nên một màn xem trước dựng trên nó sẽ giấu mất đúng tấm ảnh nhân
-     vật mà người dùng đang hỏi "sao con vật vẽ ra không giống ảnh của tôi".
-     Hai ca dưới đây khoá `images` — bản kê đủ hai lối — ở CẢ HAI trạng thái của
-     mô tả: chưa tả lần nào, và đã có chữ trong cache. */
-  await it("prompt-preview trả `images`: ảnh đính kèm VÀ ảnh tả bằng chữ, kèm vai", async () => {
+  /* ══ ẢNH ĐI KÈM MỘT TẤM, VÀ VAI CỦA TỪNG TẤM ══════════════════════════════
+     `attachments` là một cột đường dẫn trần: bày được tấm ảnh ra nhưng không nói
+     được tấm nào là ảnh nhân vật, tấm nào là logo. Vai nằm ở bản kê `.refs` do
+     ENGINE ghi ra — ca này khoá đúng mối nối ấy, kể cả nhánh engine đời cũ không
+     có bản kê. */
+  await it("prompt-preview trả `images` kèm vai lấy từ bản kê của engine", async () => {
     const a = await agentWithEngine("engine-fake")
     const created = await createBasicProject(a, { name: "Anh di kem", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const gid = created.json.project.id
@@ -139,50 +137,54 @@ export async function run({ api, pid, wsRoot, agentDir }) {
       const r = await a("POST", `/api/projects/${gid}/prompt-preview`, { body: {} })
       eq(r.status, 200, "status")
       for (const j of r.json.jobs) {
-        ok(Array.isArray(j.images) && j.images.length >= 2, `tấm ${j.job} phải kê đủ hai lối đi`)
-        const att = j.images.filter(i => i.mode === "attached")
-        const txt = j.images.filter(i => i.mode === "described")
-        ok(att.length >= 1, "có ảnh đính thẳng")
-        ok(txt.length >= 1, "có ảnh tả thành chữ")
-        eq(att[0].role, "character", "vai của ảnh đính kèm")
-        eq(txt[0].role, "style", "vai của ảnh tả thành chữ")
-        for (const i of j.images) {
-          ok(!i.path.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(i.path), `ảnh phải là nhãn tương đối, thấy ${i.path}`)
-          eq(typeof i.alpha, "boolean", "có phán quyết nền trong suốt")
-        }
-        /* CHƯA TẢ LẦN NÀO: dấu chỗ của engine KHÔNG được lọt ra màn hình (chủ sản
-           phẩm đọc `{{DESC:…}}` và tưởng AI bịa nhân vật), mà phải thành một câu
-           tiếng Việt nói đúng chuyện sắp xảy ra — và câu ấy có mặt TRONG prompt để
-           màn hình neo vào đó được. */
-        ok(!j.prompt.includes("{{DESC:"), `prompt ${j.job} còn dấu chỗ thô`)
-        ok(txt[0].desc && txt[0].desc.includes("phong-cach.png"), `câu chờ phải gọi tên ảnh: ${txt[0].desc}`)
-        includes(j.prompt, txt[0].desc, `câu chờ nằm trong chính prompt của ${j.job}`)
-        eq(att[0].desc, null, "ảnh đính thẳng không có đoạn chữ nào đứng thay")
+        ok(Array.isArray(j.images) && j.images.length >= 2, `tấm ${j.job} phải kê đủ ảnh`)
+        eq(j.images[0].role, "character", "vai của ảnh đầu")
+        eq(j.images[1].role, "brand", "vai của ảnh phong cách/thương hiệu")
+        for (const i of j.images)
+          ok(!i.path.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(i.path),
+            `ảnh phải là nhãn tương đối, thấy ${i.path}`)
+        /* Danh sách ảnh và danh sách đính kèm kể CÙNG một câu chuyện: từ 10/09/2026
+           mọi ảnh tham chiếu đều được đính thẳng vào lời gọi image_gen, không còn
+           tấm nào đi vòng. Lệch nhau ở đây là màn xem trước nói dối. */
+        eq(j.images.map(i => i.path), j.attachments, `ảnh kèm khớp bản kê ở ${j.job}`)
+        ok(!j.prompt.includes("{{DESC:"), `prompt ${j.job} không được có dấu chỗ nào`)
       }
     } finally { await a("DELETE", `/api/projects/${gid}`) }
   })
 
-  await it("mô tả đã có trong cache ⇒ `images` trả ĐÚNG đoạn chữ đang nằm trong prompt", async () => {
-    const a = await agentWithEngine("engine-fake")
-    const created = await createBasicProject(a, { name: "Da co mo ta", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
+  await it("engine đời cũ không có bản kê `.refs` ⇒ `images` rơi về `.att`, vai để TRỐNG", async () => {
+    /* `engine-alpha` ghi `.att` mà không ghi `.refs` — đúng hình dạng đĩa của một
+       máy có webapp mới mà engine chưa cập nhật (hai gói cập nhật riêng nhịp).
+       Cửa xem trước phải bày đúng những tấm ảnh sẽ đính, KHÔNG đổ và KHÔNG bịa vai. */
+    const a = await agentWithEngine("engine-alpha")
+    const created = await createBasicProject(a, { name: "Engine cu", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const gid = created.json.project.id
-    const CHU = "Tranh khắc gỗ dân gian: nét dày, màu điệp, nền giấy dó ngả vàng."
     try {
-      /* Đúng hình dạng cache của gen.sh: dòng khoá `# sha256:… role:… v2` rồi tới chữ.
-         Băm ở đây không cần đúng — hạn dùng là việc của engine, agent chỉ đọc lại thứ
-         engine đã dán vào prompt (xem `descBody`). */
-      await mkdir(join(wsRoot, "projects", gid, "refs"), { recursive: true })
-      await writeFile(join(wsRoot, "projects", gid, "refs", "phong-cach.png.desc.txt"),
-        `# sha256:deadbeef role:style v2\n${CHU}\n`, "utf8")
       const r = await a("POST", `/api/projects/${gid}/prompt-preview`, { body: {} })
       eq(r.status, 200, "status")
-      const j = r.json.jobs[0]
-      const txt = j.images.find(i => i.mode === "described")
-      ok(txt, "vẫn kê ảnh đi lối tả")
-      eq(txt.desc, CHU, "trả đúng đoạn chữ trong cache")
-      includes(j.prompt, CHU, "…và đoạn ấy đang nằm trong prompt")
-      ok(!j.prompt.includes("sẽ tự tả"), "không còn câu chờ nào")
+      ok(r.json.jobs.length >= 1, "vẫn có tấm để xem")
+      for (const j of r.json.jobs) {
+        eq(j.images.map(i => i.path), j.attachments, "bày đúng danh sách đính kèm")
+        for (const i of j.images) eq(i.role, "", "không bịa vai nào")
+      }
     } finally { await a("DELETE", `/api/projects/${gid}`) }
+  })
+
+  await it("bộ đọc bản kê: bỏ dòng rác, bỏ đường dẫn tuyệt đối, đọc được cả bản 3 cột đời cũ", async () => {
+    const rows = parseRefsManifest([
+      "character\trefs/lan.png",
+      "brand\trefs/logo.png",
+      "vai-la\trefs/gi-do.png",
+      "character\t/etc/passwd",
+      "character\tC:\\Windows\\hosts",
+      "khong-co-tab",
+      "",
+      "attached\tpose\trefs/dang.png",
+    ].join("\n"))
+    eq(rows.map(r => r.path), ["refs/lan.png", "refs/logo.png", "refs/gi-do.png", "refs/dang.png"],
+      "chỉ giữ đường dẫn tương đối")
+    eq(rows.map(r => r.role), ["character", "brand", "", "pose"],
+      "vai lạ về rỗng; bản 3 cột đời cũ vẫn đọc được vai ở cột giữa")
   })
 
   await it("prompt và ảnh kèm KHÔNG lộ đường dẫn tuyệt đối", async () => {

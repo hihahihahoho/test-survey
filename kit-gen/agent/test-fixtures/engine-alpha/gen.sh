@@ -31,7 +31,10 @@ PY
 for j in $jobs; do
   echo "prompt → prompts/${j}.txt (+0 ảnh kèm)"
   echo "Canvas orientation: LANDSCAPE 1536x1024." > "prompts/${j}.txt"
-  : > "prompts/${j}.att"
+  # ENGINE ĐỜI CŨ: có `.att` nhưng KHÔNG có bản kê vai `.refs`. Đó là hình dạng
+  # đĩa của một máy webapp đã cập nhật mà engine thì chưa — cửa xem trước phải bày
+  # đúng những tấm ảnh này với vai để TRỐNG, chứ không đổ và không bịa vai.
+  echo "refs/mascot.png" > "prompts/${j}.att"
   echo "fake log for ${j}" > "logs/${j}.log"
   [ -n "${KITGEN_PROMPTS_ONLY:-}" ] && continue
   case "$j" in
