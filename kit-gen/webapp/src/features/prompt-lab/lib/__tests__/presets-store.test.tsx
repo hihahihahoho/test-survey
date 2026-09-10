@@ -367,7 +367,8 @@ describe("bộ món: đọc, vá, và gỡ", () => {
   it("thiếu `set` + id hạt giống CÓ BỘ ⇒ vá theo bảng hạt giống", async () => {
     /* Đây là máy đã dùng app từ trước lượt «bộ»: bản ghi «Thanh máu» của họ không
        có khoá `set` nào, và phần đầy vừa được gieo vào. Không vá thì hai món ấy
-       đứng rời nhau ở nhóm «Lẻ», ngay trên máy của người đã dùng lâu nhất. */
+       đứng rời nhau thành hai dòng bộ một phần, ngay trên máy của người đã dùng
+       app lâu nhất — chọn cái này thì không có cái kia. */
     get.mockResolvedValue(library([
       row("preset_h1", "element", "Thanh máu", { key: "healthbar", en: "health bar", decor: "light", glazeId: "", sizeId: "" }),
     ]));

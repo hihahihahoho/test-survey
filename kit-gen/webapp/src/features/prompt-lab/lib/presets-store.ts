@@ -85,7 +85,7 @@ export interface ElementSetRef {
   /** Id của BỘ — mọi phần cùng bộ mang ĐÚNG một chuỗi này. */
   id: string;
   /**
-   * Nhãn tiếng Việt của cả bộ («Thanh máu») — nhãn hiện ở nhóm «Bộ» của hộp chọn.
+   * Nhãn tiếng Việt của cả bộ («Thanh máu») — chữ đứng đầu dòng của bộ trong hộp chọn.
    *
    * CHÉP TRÊN MỌI PHẦN, có chủ ý: kho là một mảng phẳng các bản ghi độc lập trên
    * server (mỗi phần một `POST`), nên không có chỗ nào để cất một bản ghi «bộ» mà
@@ -161,7 +161,8 @@ export interface ElementPreset {
    */
   skel?: Skel;
   /**
-   * BỘ mà món này là một PHẦN — thiếu ⇒ MÓN LẺ (xem `ElementSetRef`).
+   * BỘ mà món này là một PHẦN — thiếu ⇒ MÓN LẺ, tức một bộ có đúng một phần
+   * (xem `ElementSetRef` và `elementSets`).
    *
    * Hai phần cùng bộ phải KHỚP HÌNH HỌC với nhau, và đó là việc của hạt giống chứ
    * không phải của mã: khung và phần đầy của cùng một thanh phải cùng `shape`, và
@@ -596,46 +597,49 @@ export interface ElementSetView {
 }
 
 /**
- * Bao nhiêu phần thì một nhãn bộ mới thật sự là MỘT BỘ.
+ * MỌI THỨ CHỌN ĐƯỢC Ở HỘP «+ Element» — và tất cả đều là BỘ, kể cả bộ một phần.
  *
- * Hai, và con số ấy có việc để làm: người dùng xoá bớt phần cho tới khi còn một
- * thì thứ còn lại không còn là "chọn 1 được nhiều" nữa — nó là một món lẻ đang đeo
- * một nhãn cũ. Bày nó ở nhóm «Bộ» với chữ «1 phần» là mời một cú bấm không khác gì
- * bấm vào chính nó ở nhóm «Lẻ». Nên nó rơi xuống «Lẻ», và nhãn bộ vẫn nằm nguyên
- * trên bản ghi để phần thứ hai quay lại lúc nào cũng được.
+ * ╔══ VÌ SAO KHÔNG CÒN PHÂN ĐÔI «Bộ | Lẻ» ═══════════════════════════════════╗
+ * ║ Chủ sản phẩm: *«lúc pick thì select theo SET, chứ không select lẻ»*. Bản ║
+ * ║ trước bày hai nhóm, và cùng một cái tên hiện ra ở cả hai hình dạng: một  ║
+ * ║ dòng «Thanh máu» (bộ, ra hai ô) và một dòng «Thanh máu» (phần, ra một    ║
+ * ║ ô). Muốn bấm đúng thì phải hiểu sự khác nhau ấy TRƯỚC cú bấm đầu tiên —  ║
+ * ║ mà nó chỉ hiện ra SAU, lúc đếm số dòng vừa mọc thêm.                     ║
+ * ║ Nên: một danh sách, một kiểu dòng, một luật — bấm một dòng là thêm ĐỦ    ║
+ * ║ các phần của nó. Món không đeo nhãn bộ chỉ là một bộ có đúng một phần;   ║
+ * ║ nó không cần một nhóm riêng, vì nó không hành xử khác.                   ║
+ * ║ Ai cần đúng MỘT phần của một bộ vẫn còn đường: pill tên trên một dòng đã ║
+ * ║ có («Đổi loại món») bày danh mục PHẲNG — xem `ElementCatalogue`.         ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Không còn ngưỡng "đủ mấy phần mới là bộ": người dùng xoá phần cho tới khi còn
+ * một thì dòng ấy vẫn là dòng của chính bộ ấy, chỉ ghi «1 phần». Nhãn bộ nằm
+ * nguyên trên bản ghi, nên phần thứ hai quay lại lúc nào cũng được.
  */
-export const MIN_SET_PARTS = 2;
-
-/** Các bộ trong kho — chỉ những nhãn có đủ `MIN_SET_PARTS` phần. */
 export function elementSets(bundle: PresetBundle = getPresets()): ElementSetView[] {
   const order: string[] = [];
-  const byId = new Map<string, ElementSetView>();
+  const byKey = new Map<string, ElementSetView>();
   for (const element of bundle.elements) {
-    const id = element.set?.id ?? "";
-    if (!id) continue;
-    let view = byId.get(id);
+    const setId = element.set?.id ?? "";
+    /* KHOÁ GOM KHÁC ID BỘ, có chủ ý: một món tự đặt tên lấy id từ `slugify` và
+       `slugify("Thanh máu")` ra đúng chuỗi mà một nhãn bộ có thể đang mang. Gom
+       chung theo id trần là ghép một món không liên quan vào bộ ấy. Hai tiền tố
+       tách hẳn hai không gian tên; `id` bày ra ngoài vẫn là id thật. */
+    const key = setId ? `set:${setId}` : `one:${element.id}`;
+    let view = byKey.get(key);
     if (!view) {
       /* PHẦN ĐẦU THẮNG: hai phần cùng bộ mà mang hai chữ khác nhau là dữ liệu đã
          lệch (sửa tay trên đĩa, hoặc một lượt ghi hụt) — chọn một cách dứt khoát
          còn hơn để nhãn bộ nhảy theo thứ tự lọc. */
-      view = { id, vi: element.set?.vi || id, parts: [] };
-      byId.set(id, view);
-      order.push(id);
+      view = setId
+        ? { id: setId, vi: element.set?.vi || setId, parts: [] }
+        : { id: element.id, vi: element.vi, parts: [] };
+      byKey.set(key, view);
+      order.push(key);
     }
     view.parts.push(element);
   }
-  return order
-    .map((id) => byId.get(id))
-    .filter((view): view is ElementSetView => view !== undefined && view.parts.length >= MIN_SET_PARTS);
-}
-
-/** Món KHÔNG thuộc bộ nào đủ phần — thứ hiện ở nhóm «Lẻ» của hộp chọn. */
-export function looseElements(bundle: PresetBundle = getPresets()): ElementPreset[] {
-  const grouped = new Set(elementSets(bundle).map((view) => view.id));
-  return bundle.elements.filter((element) => {
-    const id = element.set?.id ?? "";
-    return !id || !grouped.has(id);
-  });
+  return order.map((key) => byKey.get(key)!);
 }
 
 /* ══ DỊCH GIỮA HAI HÌNH DẠNG ════════════════════════════════════════════════

@@ -6,9 +6,11 @@
  *    dạng và phần đầy phải NHỎ HƠN khung. Lệch thì không có gì báo: hai tấm PNG
  *    vẫn ra, vẫn đẹp, và chỉ tới lúc lập trình game xếp chúng lên nhau mới thấy
  *    cái ruột thò ra ngoài cái vỏ.
- *  ② PHÂN ĐÔI «Bộ | Lẻ» PHẢI PHỦ KÍN. Một món rơi khỏi cả hai nhóm là một món
- *    biến mất khỏi hộp chọn mà vẫn nằm trong danh mục — người dùng thấy nó ở màn
- *    quản lý và không tài nào thêm được vào thẻ.
+ *  ② DANH SÁCH BỘ PHẢI PHỦ KÍN DANH MỤC. Từ 09/2026 hộp «+ Element» CHỈ bày bộ
+ *    (chủ sản phẩm: *«lúc pick thì select theo SET, chứ không select lẻ»*), nên
+ *    một món không rơi vào bộ nào là một món biến mất khỏi hộp chọn mà vẫn nằm
+ *    trong danh mục — người dùng thấy nó ở màn quản lý và không tài nào thêm
+ *    được vào thẻ.
  *  ③ CHỌN BỘ PHẢI RA ĐỦ Ô. Ra thiếu một ô thì tấm vẽ ra thiếu một món, và người
  *    ta chỉ phát hiện sau khi đã trả tiền cho lượt vẽ.
  *  ④ CÂU CỦA MỘT PHẦN PHẢI TỚI ĐƯỢC `spec`. `gen.sh` in mỗi ô một dòng độc lập
@@ -20,13 +22,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { composerToContract } from "@/features/prompt-canvas/lib/composer-to-contract";
-import {
-  MIN_SET_PARTS,
-  elementSets,
-  looseElements,
-  seedPresets,
-  type ElementPreset,
-} from "../lib/presets-store";
+import { elementSets, seedPresets, type ElementPreset } from "../lib/presets-store";
 import { newCell, type ComposerState, type UiCell, type UiKitBlock } from "../lib/composer-model";
 import { UiKitBlockBody } from "../components/UiKitBlockView";
 
@@ -50,11 +46,15 @@ afterEach(cleanup);
    ══════════════════════════════════════════════════════════════════════════ */
 
 describe("① bộ hạt giống: đủ phần, đủ hình, không id trùng", () => {
-  it("mọi bộ có ít nhất hai phần — một phần thì nó là món lẻ, không phải bộ", () => {
-    const sets = elementSets(PRESETS);
-    expect(sets.length).toBeGreaterThan(10);
-    for (const set of sets) {
-      expect(set.parts.length, set.id).toBeGreaterThanOrEqual(MIN_SET_PARTS);
+  it("mọi NHÃN BỘ của hạt giống gom được ít nhất hai phần", () => {
+    /* Luật này nói về DỮ LIỆU HẠT GIỐNG, không về `elementSets`: hàm ấy không còn
+       ngưỡng nào (bộ một phần vẫn là một dòng bộ). Nhưng một nhãn bộ nằm sẵn trong
+       hạt giống mà chỉ đeo đúng một món là một nhãn viết hụt — nó hứa "chọn 1 được
+       nhiều" rồi ra đúng một ô. */
+    const labelled = elementSets(PRESETS).filter((set) => set.parts[0]!.set?.id === set.id);
+    expect(labelled.length).toBeGreaterThan(10);
+    for (const set of labelled) {
+      expect(set.parts.length, set.id).toBeGreaterThanOrEqual(2);
       expect(set.vi.trim().length, set.id).toBeGreaterThan(0);
     }
   });
@@ -106,41 +106,54 @@ describe("① bộ hạt giống: đủ phần, đủ hình, không id trùng", 
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
-   ② «Bộ» VÀ «Lẻ» PHỦ KÍN DANH MỤC, KHÔNG CHỒNG NHAU
+   ② MỘT DANH SÁCH BỘ, PHỦ KÍN DANH MỤC, KHÔNG CHỒNG NHAU
    ══════════════════════════════════════════════════════════════════════════ */
 
-describe("② phân đôi Bộ | Lẻ", () => {
-  it("mỗi món nằm ở ĐÚNG MỘT phía — không món nào rơi khỏi hộp chọn", () => {
-    const inSets = elementSets(PRESETS).flatMap((set) => set.parts.map((part) => part.id));
-    const loose = looseElements(PRESETS).map((element) => element.id);
-    expect(new Set([...inSets, ...loose]).size).toBe(PRESETS.elements.length);
-    expect(inSets.filter((id) => loose.includes(id))).toEqual([]);
+describe("② gom danh mục thành bộ", () => {
+  it("mỗi món nằm ở ĐÚNG MỘT bộ — không món nào rơi khỏi hộp chọn", () => {
+    const parts = elementSets(PRESETS).flatMap((set) => set.parts.map((part) => part.id));
+    expect(parts).toHaveLength(PRESETS.elements.length);
+    expect(new Set(parts).size).toBe(PRESETS.elements.length);
   });
 
-  it("nhãn bộ chỉ còn MỘT phần ⇒ rơi xuống «Lẻ», nhãn vẫn nằm nguyên trên bản ghi", () => {
-    /* Cảnh thật: người dùng xoá bớt phần cho tới khi còn một. */
+  it("món KHÔNG đeo nhãn bộ thành một bộ MỘT PHẦN, không thành một loại dòng thứ hai", () => {
+    const panel = elementSets(PRESETS).find((set) => set.parts[0]!.id === "panel")!;
+    expect(panel.parts.map((part) => part.id)).toEqual(["panel"]);
+    /* Nhãn của bộ một phần LÀ nhãn của chính món ấy — không có chữ nào sinh thêm. */
+    expect(panel.vi).toBe("Bảng nền");
+    expect(panel.id).toBe("panel");
+  });
+
+  it("nhãn bộ chỉ còn MỘT phần ⇒ VẪN là một dòng bộ, không rơi xuống dạng khác", () => {
+    /* Cảnh thật: người dùng xoá bớt phần cho tới khi còn một. Bản trước đẩy nó
+       xuống nhóm «Lẻ»; nay không còn nhóm nào để rơi xuống, và nhãn bộ vẫn nằm
+       nguyên trên bản ghi nên phần thứ hai quay lại lúc nào cũng được. */
     const trimmed = {
       ...PRESETS,
       elements: PRESETS.elements.filter((element) => element.id !== "hp-fill"),
     };
-    expect(elementSets(trimmed).map((set) => set.id)).not.toContain("hp");
-    expect(looseElements(trimmed).map((element) => element.id)).toContain("healthbar");
+    const hp = elementSets(trimmed).find((set) => set.id === "hp")!;
+    expect(hp.parts.map((part) => part.id)).toEqual(["healthbar"]);
+    expect(hp.vi).toBe("Thanh máu");
     expect(elementOf("healthbar").set?.id).toBe("hp");
   });
 
-  it("nhãn bộ của một bộ lấy từ PHẦN ĐẦU TIÊN — hai chữ lệch nhau không làm nhãn nhảy", () => {
-    const skewed = {
+  it("một món lẻ mang đúng id của một nhãn bộ KHÔNG bị nuốt vào bộ ấy", () => {
+    /* `addCustomElement` lấy id từ `slugify`, nên «Hp» ra đúng chuỗi mà nhãn bộ
+       thanh máu đang mang. Gom theo id trần là ghép một món không liên quan vào
+       bộ — xem hai tiền tố khoá trong `elementSets`. */
+    const clash = {
       ...PRESETS,
-      elements: PRESETS.elements.map((element) =>
-        element.id === "hp-fill" && element.set ? { ...element, set: { ...element.set, vi: "Chữ lệch" } } : element,
-      ),
+      elements: [...PRESETS.elements, { id: "hp", vi: "Hp", en: "hp", decor: "none", glazeId: "", sizeId: "" }],
     };
-    expect(elementSets(skewed).find((set) => set.id === "hp")?.vi).toBe("Thanh máu");
+    const rows = elementSets(clash).filter((set) => set.id === "hp");
+    expect(rows).toHaveLength(2);
+    expect(rows.map((set) => set.parts.map((part) => part.id))).toEqual([["healthbar", "hp-fill"], ["hp"]]);
   });
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
-   ③ CHỌN MỘT BỘ ⇒ THÊM ĐỦ CÁC PHẦN
+   ③ HỘP «+ Element» CHỈ CÓ BỘ, VÀ MỘT CÚ BẤM RA ĐỦ Ô
    ══════════════════════════════════════════════════════════════════════════ */
 
 function Harness({ onState }: { onState: (next: UiKitBlock) => void }) {
@@ -159,21 +172,31 @@ function Harness({ onState }: { onState: (next: UiKitBlock) => void }) {
   );
 }
 
-describe("③ hộp chọn: hai nhóm, và một cú bấm ra đủ ô", () => {
-  it("hộp «Thêm món» bày nhóm «Bộ» trước nhóm «Lẻ»", () => {
+describe("③ hộp chọn: một danh sách toàn bộ, và một cú bấm ra đủ ô", () => {
+  const openBox = () => {
     render(<Harness onState={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /Element/ }));
+  };
 
+  it("KHÔNG còn tiêu đề nhóm «Bộ»/«Lẻ» — mọi dòng hành xử như nhau", () => {
+    openBox();
     const box = screen.getByRole("dialog", { name: /Thêm món/ });
     const titles = [...box.querySelectorAll("p")].map((node) => node.textContent);
-    expect(titles).toContain("Bộ");
-    expect(titles).toContain("Lẻ");
-    expect(titles.indexOf("Bộ")).toBeLessThan(titles.indexOf("Lẻ"));
+    expect(titles).not.toContain("Bộ");
+    expect(titles).not.toContain("Lẻ");
+  });
+
+  it("mỗi dòng là MỘT BỘ và nói ra số phần — không dòng nào cho một phần riêng", () => {
+    openBox();
+    const rows = screen.getAllByRole("option").map((node) => node.textContent ?? "");
+    /* Đúng bằng số bộ trong kho: thừa một dòng nghĩa là một phần nào đó đã lọt ra
+       ngoài dưới dạng lựa chọn riêng — đúng thứ chủ sản phẩm bảo bỏ. */
+    expect(rows).toHaveLength(elementSets(PRESETS).length);
+    for (const row of rows) expect(row).toMatch(/· \d+ phần/);
   });
 
   it("dòng của một bộ NÓI RA số phần trước khi người ta bấm", () => {
-    render(<Harness onState={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: /Element/ }));
+    openBox();
     fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "thanh mau" } });
 
     const option = screen.getByRole("option", { name: /Thanh máu/ });
@@ -195,11 +218,38 @@ describe("③ hộp chọn: hai nhóm, và một cú bấm ra đủ ô", () => {
     expect(screen.getByLabelText("Ghi chú cho Thanh máu · phần đầy")).toBeTruthy();
   });
 
-  it("tìm bằng tên MỘT PHẦN cũng ra bộ chứa nó — người ta nhớ phần, không nhớ bộ", () => {
+  it("tìm bằng tên MỘT PHẦN ra BỘ chứa nó, chứ không ra chính phần ấy", () => {
+    openBox();
+    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "phan day" } });
+    /* Hai bộ có phần đầy: thanh máu và thanh tiến trình. Cả hai đều hiện ra dưới
+       dạng BỘ — người ta nhớ cái phần mình cần chứ không nhớ ta xếp nó vào bộ tên
+       gì, nhưng thứ bấm được vẫn là cả bộ. */
+    const rows = screen.getAllByRole("option").map((node) => node.textContent ?? "");
+    expect(rows).toHaveLength(2);
+    for (const row of rows) expect(row).toMatch(/· 2 phần/);
+    expect(screen.getByRole("option", { name: /Thanh máu/ })).toBeTruthy();
+  });
+
+  it("món lẻ hiện như một BỘ MỘT PHẦN, và bấm ra đúng một ô", () => {
+    let latest: UiKitBlock | null = null;
+    render(<Harness onState={(next) => { latest = next; }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Element/ }));
+    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "bang nen" } });
+
+    const option = screen.getByRole("option", { name: /Bảng nền/ });
+    expect(option.textContent).toContain("1 phần");
+    fireEvent.click(option);
+    expect(latest!.cells.map((cell) => cell.elementId)).toEqual(["panel"]);
+  });
+
+  it("bộ đã có ĐỦ phần trong thẻ thì dòng của nó ghi «đã có trong thẻ»", () => {
     render(<Harness onState={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /Element/ }));
-    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "phan day" } });
-    expect(screen.getByRole("option", { name: /Thanh máu/ })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "thanh mau" } });
+    expect(screen.getByRole("option", { name: /Thanh máu/ }).textContent).not.toContain("đã có trong thẻ");
+
+    fireEvent.click(screen.getByRole("option", { name: /Thanh máu/ }));
+    expect(screen.getByRole("option", { name: /Thanh máu/ }).textContent).toContain("đã có trong thẻ");
   });
 
   it("xoá bớt một phần ⇒ các phần còn lại ở nguyên, không kéo cả bộ đi theo", () => {

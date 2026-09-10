@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { foldVi } from "@/features/kit-core/lib/element-lib/source";
-import { addCustomElement, elementSets, hasDecorPlacement, looseElements, usePresets } from "../lib/presets-store";
+import { addCustomElement, elementSets, hasDecorPlacement, usePresets } from "../lib/presets-store";
 import type { ElementPreset, ElementSetView, PresetBundle } from "../lib/presets-store";
 import {
   MAX_SIZE_PX,
@@ -603,11 +603,13 @@ function ElementCatalogue({
   used: ReadonlySet<string>;
   onPick: (element: ElementPreset) => void;
   /**
-   * Có mặt ⇒ hộp này ĐANG THÊM MÓN, và nó bày hai nhóm: «Bộ» và «Lẻ».
+   * Có mặt ⇒ hộp này ĐANG THÊM MÓN, và MỌI DÒNG của nó là một BỘ — không có dòng
+   * nào cho một phần riêng lẻ (xem `elementSets`). Món không đeo nhãn bộ đi cùng
+   * danh sách, cùng kiểu dòng, dưới dạng một bộ có đúng một phần.
    *
    * Vắng ⇒ hộp đang ĐỔI LOẠI của một dòng đã có, và ở đó "chọn một được nhiều"
    * không có nghĩa gì: một dòng chỉ mang được một món. Nên nhánh ấy bày danh mục
-   * PHẲNG — kể cả từng phần của bộ, vì đó là đường duy nhất để đổi một dòng thành
+   * PHẲNG — kể cả từng phần của bộ, vì đó là ĐƯỜNG DUY NHẤT để đổi một dòng thành
    * đúng «Thanh máu · phần đầy».
    */
   onPickSet?: (parts: readonly ElementPreset[]) => void;
@@ -636,8 +638,7 @@ function ElementCatalogue({
     if (!onPickSet) {
       const match = presets.elements.filter(hit);
       return {
-        sets: [],
-        loose: [],
+        sets: [] as ElementSetView[],
         fresh: match.filter((element) => !used.has(element.id)),
         again: match.filter((element) => used.has(element.id)),
       };
@@ -646,22 +647,22 @@ function ElementCatalogue({
     /* MỘT BỘ KHỚP KHI NHÃN BỘ khớp, HOẶC bất kỳ phần nào của nó khớp: gõ "thanh
        mau" phải ra bộ «Thanh máu», mà gõ "phan day" cũng phải ra chính nó — người
        dùng nhớ cái phần mình cần chứ không nhớ ta xếp nó vào bộ tên gì. */
-    const sets = elementSets(presets).filter(
+    const found = elementSets(presets).filter(
       (set) => !needle || foldVi(set.vi).includes(needle) || set.parts.some(hit),
     );
-    const loose = looseElements(presets).filter(hit);
+    /* ĐỦ PHẦN TRONG THẺ RỒI THÌ XUỐNG CUỐI, chứ không biến mất: thêm lại vẫn được
+       (một bộ kit có ba cỡ nút là chuyện thường), nhưng thứ chưa có phải nằm trong
+       tầm mắt trước. Cùng thứ tự mà hai nhóm đời trước bày ra, nay nói bằng chữ
+       trên từng dòng thay vì bằng một tiêu đề. */
+    const full = (set: ElementSetView) => set.parts.every((part) => used.has(part.id));
     return {
-      sets,
-      /* Chưa có trong thẻ đứng trước, đã có xuống dưới — cùng thứ tự mà hai nhóm
-         đời trước bày ra, nay gói trong MỘT nhóm «Lẻ» và phân biệt bằng chữ trên
-         từng dòng thay vì bằng một tiêu đề thứ ba. */
-      loose: [...loose.filter((element) => !used.has(element.id)), ...loose.filter((element) => used.has(element.id))],
+      sets: [...found.filter((set) => !full(set)), ...found.filter(full)],
       fresh: [],
       again: [],
     };
   }, [presets, query, used, onPickSet]);
 
-  const total = hits.sets.length + hits.loose.length + hits.fresh.length + hits.again.length;
+  const total = hits.sets.length + hits.fresh.length + hits.again.length;
 
   return (
     <div
@@ -690,15 +691,10 @@ function ElementCatalogue({
             Không có món nào khớp — đặt tên riêng cho nó ở ngay dưới.
           </p>
         )}
-        {onPickSet && (
-          <>
-            {/* BỘ ĐỨNG TRƯỚC LẺ, không phải theo bảng chữ cái: một bộ là thứ dựng
-                xong ngay được cả cụm, còn món lẻ là thứ nhặt thêm. Ai mở hộp này ra
-                để dựng một bộ kit thì thứ họ cần nhất phải nằm ở dòng đầu. */}
-            <SetPickGroup title="Bộ" sets={hits.sets} onPick={onPickSet} />
-            <PickGroup title="Lẻ" items={hits.loose} used={used} onPick={onPick} />
-          </>
-        )}
+        {/* MỘT DANH SÁCH, KHÔNG TIÊU ĐỀ NHÓM: mọi dòng ở đây là một bộ và hành xử
+            y hệt nhau (bấm ⇒ thêm đủ các phần), nên một tiêu đề chia đôi chỉ hứa
+            một sự khác biệt không có thật. Thứ tự = thứ tự trong danh mục. */}
+        {onPickSet && <SetPickList sets={hits.sets} used={used} onPick={onPickSet} />}
         {!onPickSet && (
           <>
             <PickGroup title="Chưa có trong thẻ" items={hits.fresh} onPick={onPick} />
@@ -863,112 +859,125 @@ function ElementNamePill({
 }
 
 /**
- * NHÓM «Bộ» — mỗi dòng là MỘT LỰA CHỌN THÊM NHIỀU Ô.
+ * DANH SÁCH CỦA HỘP «+ Element» — mỗi dòng là MỘT BỘ, bấm là thêm ĐỦ các phần.
  *
- * ╔══ VÌ SAO BỘ KHÔNG BÀY TỪNG PHẦN RA Ở ĐÂY ═══════════════════════════════╗
- * ║ Bày cả phần lẫn bộ thì danh sách dài gấp ba và mỗi bộ hiện hai lần dưới   ║
- * ║ hai hình dạng — người dùng phải hiểu sự khác nhau giữa «Thanh máu» (bộ)   ║
- * ║ và «Thanh máu · phần đầy» (một phần) TRƯỚC khi bấm được cú đầu tiên.      ║
- * ║ Nên: chọn bộ là thêm đủ các phần, rồi XOÁ phần không cần — một cú bấm     ║
- * ║ thừa, nhưng là cú bấm trên thứ đã hiện ra trước mắt. Ai cần đúng một phần ║
- * ║ vẫn có đường khác: đổi loại của một dòng (hộp ấy bày danh mục phẳng).     ║
- * ╚══════════════════════════════════════════════════════════════════════════╝
+ * ╔══ VÌ SAO KHÔNG CÓ DÒNG NÀO CHO MỘT PHẦN RIÊNG ══════════════════════════╗
+ * ║ Bày cả phần lẫn bộ thì danh sách dài gấp ba và mỗi bộ hiện hai lần dưới  ║
+ * ║ hai hình dạng — người dùng phải hiểu sự khác nhau giữa «Thanh máu» (bộ)  ║
+ * ║ và «Thanh máu · phần đầy» (một phần) TRƯỚC khi bấm được cú đầu tiên.     ║
+ * ║ Nên: chọn bộ là thêm đủ các phần, rồi XOÁ phần không cần — một cú bấm    ║
+ * ║ thừa, nhưng là cú bấm trên thứ đã hiện ra trước mắt. Ai cần đúng một     ║
+ * ║ phần vẫn có đường khác: đổi loại của một dòng (hộp ấy bày danh mục       ║
+ * ║ phẳng — xem `PickGroup`).                                               ║
+ * ║ Món KHÔNG đeo nhãn bộ đi chung danh sách này dưới dạng một bộ MỘT PHẦN:  ║
+ * ║ nó vẫn bấm ra đúng một ô như trước, nên nó không cần một nhóm riêng và   ║
+ * ║ một kiểu dòng riêng để nói điều đó.                                     ║
+ * ╚═════════════════════════════════════════════════════════════════════════╝
  */
-function SetPickGroup({
-  title,
+function SetPickList({
   sets,
+  used,
   onPick,
 }: {
-  title: string;
   sets: readonly ElementSetView[];
+  /** Ô đã có trong thẻ — bộ nào ĐỦ PHẦN nằm trong đây thì dòng của nó nói ra. */
+  used: ReadonlySet<string>;
   onPick: (parts: readonly ElementPreset[]) => void;
 }) {
-  if (sets.length === 0) return null;
   return (
     <>
-      <p className="px-2 pb-1 pt-2 text-caption font-medium uppercase tracking-label text-fg-muted">{title}</p>
-      {sets.map((set) => (
-        <button
-          key={set.id}
-          type="button"
-          role="option"
-          aria-selected={false}
-          onClick={() => onPick(set.parts)}
-          className={cn(
-            "flex w-full flex-col gap-0.5 rounded-1 px-2 py-1.5 text-left",
-            "hover:bg-accent/[var(--kg-tint-a)]",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-          )}
-        >
-          <span className="text-body text-fg-strong">
-            {set.vi} <span className="text-fg-muted">· {set.parts.length} phần</span>
-          </span>
-          {/* Tên từng phần hiện ngay dưới: cú bấm này thêm mấy dòng cùng lúc, và
-              một hành động thay đổi nhiều thứ phải nói trước nó thay đổi những gì. */}
-          <span className="line-clamp-1 text-caption text-fg-muted">
-            {set.parts.map((part) => part.vi).join(" · ")}
-          </span>
-        </button>
-      ))}
-    </>
-  );
-}
-
-function PickGroup({
-  title,
-  items,
-  onPick,
-  muted,
-  used,
-}: {
-  title: string;
-  items: readonly ElementPreset[];
-  onPick: (element: ElementPreset) => void;
-  muted?: boolean;
-  /**
-   * Có mặt ⇒ nhóm này gộp cả món đã có lẫn chưa có, và phân biệt chúng TRÊN TỪNG
-   * DÒNG thay vì bằng hai tiêu đề. Dùng ở nhánh «Bộ | Lẻ»: ở đó một tiêu đề thứ ba
-   * sẽ phá đúng cái mà hai nhóm ấy sinh ra để nói.
-   */
-  used?: ReadonlySet<string>;
-}) {
-  if (items.length === 0) return null;
-  return (
-    <>
-      <p className="px-2 pb-1 pt-2 text-caption font-medium uppercase tracking-label text-fg-muted">{title}</p>
-      {items.map((element) => {
-        const already = used?.has(element.id) === true;
+      {sets.map((set) => {
+        const already = set.parts.every((part) => used.has(part.id));
+        /* DÒNG PHỤ NÓI RA CÚ BẤM NÀY THÊM NHỮNG GÌ — với bộ nhiều phần đó là tên
+           các phần. Với bộ MỘT PHẦN mang đúng tên của chính nó thì tên phần chỉ
+           là chuỗi vừa đọc ở dòng trên, nên chỗ ấy nhường cho DANH TỪ EN — thứ
+           THẬT SỰ đi tới máy vẽ, và ẩn nốt nếu nó cũng trùng nhãn Việt (món tự
+           đặt tên).
+           ⚠️ EN từng là chỗ hiện CÂU MÔ TẢ ("a floating popover panel with a
+           title bar") — thứ chủ sản phẩm chỉ mặt: *"không có thuộc tính nhé"*.
+           Nếu dòng này lại dài ra thì nguồn đã sai, sửa ở `ElementPreset.en`. */
+        const only = set.parts.length === 1 ? set.parts[0]! : undefined;
+        const sub =
+          only && only.vi === set.vi
+            ? only.en.toLowerCase() === only.vi.toLowerCase() ? "" : only.en
+            : set.parts.map((part) => part.vi).join(" · ");
         return (
           <button
-            key={element.id}
+            /* KHOÁ LẤY TỪ PHẦN ĐẦU, không lấy `set.id`: id món là duy nhất trong cả
+               danh mục, còn id bộ và id một món lẻ nằm ở hai không gian tên khác
+               nhau và có quyền trùng chữ nhau (xem `elementSets`). */
+            key={set.parts[0]!.id}
             type="button"
             role="option"
             aria-selected={false}
-            onClick={() => onPick(element)}
+            onClick={() => onPick(set.parts)}
             className={cn(
               "flex w-full flex-col gap-0.5 rounded-1 px-2 py-1.5 text-left",
               "hover:bg-accent/[var(--kg-tint-a)]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
             )}
           >
-            <span className={cn("text-body", muted || already ? "text-fg" : "text-fg-strong")}>
-              {element.vi}
+            <span className={cn("text-body", already ? "text-fg" : "text-fg-strong")}>
+              {set.vi} <span className="text-fg-muted">· {set.parts.length} phần</span>
               {/* Vẫn thêm lại được: một bộ kit có ba cỡ nút là chuyện thường. Chữ
                   này chỉ nói "bạn đã có rồi", không cấm. */}
               {already && <span className="text-caption text-fg-muted"> · đã có trong thẻ</span>}
             </span>
-            {/* DANH TỪ EN là thứ THẬT SỰ đi tới máy vẽ — cho nhìn thấy trước khi chọn.
-                Ẩn khi nó trùng nhãn tiếng Việt (món tự đặt tên): lặp lại nguyên một
-                chuỗi ngay dưới chính nó là một dòng không nói thêm gì.
-                ⚠️ Đây từng là chỗ hiện CÂU MÔ TẢ ("a floating popover panel with a
-                title bar") — thứ chủ sản phẩm chỉ mặt: *"không có thuộc tính nhé"*.
-                Nếu dòng này lại dài ra thì nguồn đã sai, sửa ở `ElementPreset.en`. */}
-            {element.en.toLowerCase() !== element.vi.toLowerCase() && (
-              <span className="line-clamp-1 text-caption text-fg-muted">{element.en}</span>
-            )}
+            {sub !== "" && <span className="line-clamp-1 text-caption text-fg-muted">{sub}</span>}
           </button>
         );
       })}
+    </>
+  );
+}
+
+/**
+ * NHÓM PHẲNG — mỗi dòng đúng MỘT món, và chỉ hộp «Đổi loại món» còn dùng tới.
+ *
+ * Hộp «+ Element» đã bỏ hẳn dạng này (xem `SetPickList`): ở đó bấm một dòng là
+ * thêm cả bộ. Còn ở đây một dòng chỉ mang được một món, nên danh mục phải phẳng —
+ * đó là ĐƯỜNG DUY NHẤT để đổi một dòng thành đúng «Thanh máu · phần đầy».
+ */
+function PickGroup({
+  title,
+  items,
+  onPick,
+  muted,
+}: {
+  title: string;
+  items: readonly ElementPreset[];
+  onPick: (element: ElementPreset) => void;
+  muted?: boolean;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <>
+      <p className="px-2 pb-1 pt-2 text-caption font-medium uppercase tracking-label text-fg-muted">{title}</p>
+      {items.map((element) => (
+        <button
+          key={element.id}
+          type="button"
+          role="option"
+          aria-selected={false}
+          onClick={() => onPick(element)}
+          className={cn(
+            "flex w-full flex-col gap-0.5 rounded-1 px-2 py-1.5 text-left",
+            "hover:bg-accent/[var(--kg-tint-a)]",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+          )}
+        >
+          <span className={cn("text-body", muted ? "text-fg" : "text-fg-strong")}>{element.vi}</span>
+          {/* DANH TỪ EN là thứ THẬT SỰ đi tới máy vẽ — cho nhìn thấy trước khi chọn.
+              Ẩn khi nó trùng nhãn tiếng Việt (món tự đặt tên): lặp lại nguyên một
+              chuỗi ngay dưới chính nó là một dòng không nói thêm gì.
+              ⚠️ Đây từng là chỗ hiện CÂU MÔ TẢ ("a floating popover panel with a
+              title bar") — thứ chủ sản phẩm chỉ mặt: *"không có thuộc tính nhé"*.
+              Nếu dòng này lại dài ra thì nguồn đã sai, sửa ở `ElementPreset.en`. */}
+          {element.en.toLowerCase() !== element.vi.toLowerCase() && (
+            <span className="line-clamp-1 text-caption text-fg-muted">{element.en}</span>
+          )}
+        </button>
+      ))}
     </>
   );
 }

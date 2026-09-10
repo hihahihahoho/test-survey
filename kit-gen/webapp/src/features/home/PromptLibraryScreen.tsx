@@ -297,9 +297,9 @@ export function PromptLibraryScreen() {
   /**
    * CÁC BỘ ĐANG CÓ trong danh mục món — kể cả bộ mới chỉ có MỘT phần.
    *
-   * Cố ý KHÔNG dùng `elementSets()` của kho: hàm ấy lọc bỏ nhãn chưa đủ hai phần
-   * (đúng cho hộp chọn ở thẻ Bộ UI), còn ở màn quản lý thì một bộ một phần chính
-   * là bộ ĐANG ĐƯỢC DỰNG — giấu nó đi là không cho người dùng gắn phần thứ hai vào.
+   * Cố ý KHÔNG dùng `elementSets()` của kho: hàm ấy đọc bundle ĐÃ LƯU, còn ô chọn
+   * này phải bày các bộ theo `rows` — bảng đang sửa, chưa ghi. Gắn một dòng vào
+   * "bộ vừa đặt tên ở dòng trên" chỉ chạy được nếu nguồn của hai chỗ là một.
    */
   const setOptions = React.useMemo(() => {
     const out: { id: string; vi: string; count: number }[] = [];

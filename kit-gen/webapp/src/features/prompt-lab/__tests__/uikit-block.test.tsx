@@ -159,8 +159,9 @@ describe("② nút «+ Element» + bộ chọn", () => {
     expect(box).toBeTruthy();
 
     /* Gõ KHÔNG DẤU: người ta tra danh mục bằng cách gõ nhanh, không bỏ dấu.
-       «Bảng nền» là món LẺ — ca này đo đường một-chọn-một-ô, còn đường chọn cả bộ
-       có ca riêng ở `element-sets.test.tsx`. */
+       «Bảng nền» không đeo nhãn bộ, nên dòng của nó là một BỘ MỘT PHẦN và bấm ra
+       đúng một ô — ca này đo đường ấy, còn bộ nhiều phần có ca riêng ở
+       `element-sets.test.tsx`. */
     fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "bang nen" } });
     expect(screen.queryByRole("option", { name: /Nút bấm/ })).toBeNull();
 
@@ -177,9 +178,9 @@ describe("② nút «+ Element» + bộ chọn", () => {
      bấm ra ngoài, hoặc bấm lại chính cái nút. */
   it("thêm hai món liền tay ⇒ hai dòng, thứ tự đúng thứ tự bấm", () => {
     fireEvent.click(screen.getByRole("button", { name: /Element/ }));
-    /* HAI MÓN LẺ: mỗi cú bấm đúng một dòng. Chọn một BỘ thì một cú bấm ra nhiều
-       dòng — đó là chuyện khác và có ca riêng, trộn vào đây thì ca này hết đo được
-       "thứ tự dòng đúng thứ tự bấm". */
+    /* HAI BỘ MỘT PHẦN: mỗi cú bấm đúng một dòng. Bấm một bộ nhiều phần thì một cú
+       ra nhiều dòng — đó là chuyện khác và có ca riêng, trộn vào đây thì ca này hết
+       đo được "thứ tự dòng đúng thứ tự bấm". */
     for (const name of [/Bảng nền/, /Huy hiệu/]) {
       fireEvent.click(screen.getAllByRole("option", { name })[0]!);
     }

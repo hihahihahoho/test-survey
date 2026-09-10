@@ -298,7 +298,7 @@ describe("④ xoá hai chạm", () => {
    Một bộ KHÔNG phải một bản ghi: nó là một nhãn mà vài món cùng đeo. Nên mọi thao
    tác với bộ đều là một lượt ghi lên NHIỀU dòng, và đó chính là chỗ dễ ghi thiếu:
    đổi tên mà chỉ ghi lên dòng đang mở thì hai phần cùng bộ mang hai chữ khác nhau,
-   và nhóm «Bộ» ở thẻ Bộ UI hiện chữ nào là tuỳ thứ tự. */
+   và dòng bộ ở hộp «+ Element» của thẻ Bộ UI hiện chữ nào là tuỳ thứ tự. */
 describe("⑤ bộ món giao diện", () => {
   /* Radix Select mở bằng pointer, và jsdom không có hai API dưới đây. */
   beforeEach(() => {
