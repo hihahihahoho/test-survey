@@ -412,3 +412,28 @@ describe("không còn ĐƯỜNG NÀO tới ảnh khung xương", () => {
     expect(screen.getByRole("tab", { name: /Ảnh gốc/ })).toBeTruthy();
   });
 });
+
+describe("ô ảnh gốc khi CHƯA CÓ FILE — ba câu trả lời cho ba hoàn cảnh", () => {
+  /* Hiện trường 10/09/2026: thẻ đang «Đang vẽ 0/1» mà ô ảnh đỏ "Thiếu file · Thử
+     lại". Thiếu file lúc đang vẽ là đương nhiên, và không có gì để thử lại. */
+  it("chưa vẽ lần nào ⇒ khối mời bấm Vẽ, không xin ảnh", () => {
+    jobStates = {};
+    mount();
+    expect(screen.getByText("Chưa vẽ tấm này")).toBeTruthy();
+    expect(asked.some((a) => a.path.startsWith("raw/"))).toBe(false);
+  });
+
+  it("đang vẽ mà lượt chưa báo ảnh ⇒ khung «Đang vẽ», KHÔNG xin ảnh (nên không có «Thiếu file»)", () => {
+    jobStates = {};
+    mount({ busy: true });
+    expect(screen.getByRole("status").textContent).toContain("Đang vẽ tấm này");
+    expect(screen.queryByText("Chưa vẽ tấm này")).toBeNull();
+    expect(asked.some((a) => a.path.startsWith("raw/"))).toBe(false);
+  });
+
+  it("đang vẽ và lượt ĐÃ báo ảnh ⇒ hiện ảnh đó, thôi khung chờ", () => {
+    mount({ busy: true, artifactPath: "runs/r1/chinh-ui.png" });
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(asked.some((a) => a.path === "runs/r1/chinh-ui.png")).toBe(true);
+  });
+});

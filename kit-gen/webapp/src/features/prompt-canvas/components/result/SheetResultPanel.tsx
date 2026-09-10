@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, Download, FolderOpen, Image as ImageIcon, Layers, Sparkles, X } from "lucide-react";
+import { Check, Download, FolderOpen, Image as ImageIcon, Layers, Loader2, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -173,6 +173,17 @@ export function SheetResultPanel({
   const jobState = project.data?.state?.jobs?.[job] ?? "never";
   const neverDrawn =
     jobState === "never" && !busy && !(typeof artifactPath === "string" && artifactPath !== "");
+  /**
+   * ĐANG VẼ MÀ CHƯA CÓ ẢNH ⇒ nói «đang vẽ», không nói «Thiếu file».
+   *
+   * Hiện trường 10/09/2026: thẻ nhân vật đang «Đang vẽ 0/1» (bản đang dùng vừa bị
+   * xoá, hoặc tấm chưa từng có ảnh) mà ô ảnh bên dưới đỏ lên "Thiếu file · Thử
+   * lại" — hai chỉ báo cãi nhau trên cùng một màn. `KitImage` nói đúng sự thật của
+   * đĩa (chưa có file), nhưng trả lời sai câu hỏi: lúc này thiếu file là chuyện
+   * ĐƯƠNG NHIÊN, và «thử lại» thì chẳng có gì để thử. Chỉ khi lượt chạy đã báo
+   * `artifactPath` mới có ảnh mà xin; trước đó khung chờ là câu trả lời đúng.
+   */
+  const drawing = busy && !(typeof artifactPath === "string" && artifactPath !== "");
 
   /**
    * TÊN TẤM rút ra TRƯỚC rồi mới ghép vào câu — cùng lý do (và cùng cách) với `OnePrompt`
@@ -467,6 +478,8 @@ export function SheetResultPanel({
         <TabsContent value="raw" className="mt-3">
           {neverDrawn ? (
             <NotDrawnYet what="Chưa vẽ tấm này" />
+          ) : drawing ? (
+            <Drawing what="Đang vẽ tấm này…" />
           ) : (
             <>
               {/* Bấm vào ảnh = xem ở độ nét thật. Lưới dùng bản `?w=512` cho nhẹ, còn popup
@@ -600,6 +613,20 @@ export function SheetResultPanel({
  * và hai chỗ phải sửa mỗi khi luật "vẽ được hay chưa" đổi (thẻ rỗng, agent tắt,
  * đang có lượt khác chạy). Nên khối này chỉ CHỈ ĐƯỜNG, và nói đúng nút nào.
  */
+/** KHUNG CHỜ «ĐANG VẼ» — cùng khuôn với khối «chưa vẽ», chỉ khác icon quay và câu. */
+function Drawing({ what }: { what: string }) {
+  return (
+    <div
+      role="status"
+      className="flex flex-col items-center gap-1 rounded-2 border border-dashed border-line-subtle bg-raised/40 px-4 py-8 text-center"
+    >
+      <Loader2 aria-hidden strokeWidth={1.5} className="size-5 animate-spin text-fg-muted" />
+      <p className="text-body text-fg">{what}</p>
+      <p className="text-caption text-fg-muted">Ảnh sẽ hiện ở đây ngay khi máy vẽ trả về.</p>
+    </div>
+  );
+}
+
 function NotDrawnYet({ what }: { what: string }) {
   return (
     <div className="flex flex-col items-center gap-1 rounded-2 border border-dashed border-line-subtle bg-raised/40 px-4 py-8 text-center">
