@@ -12,13 +12,13 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { foldVi } from "@/features/kit-core/lib/element-lib/source";
-import { SKEL_SHAPES, type Skel } from "@/lib/types/contract";
+import { SKEL_SHAPES, slugify, type Skel } from "@/lib/types/contract";
 import { SIZE_PRESETS } from "@/features/prompt-lab/lib/cell-size";
 import { POSE_PRESETS } from "@/features/prompt-lab/lib/pose/pose-presets";
 import { canAddRow, canDeleteRow } from "@/features/prompt-lab/lib/catalog-seeds";
 import {
   MANAGED_ORDER, managedRows, nextRowId, seedRowsOf, setManagedRows, usePresetSyncError, usePresets,
-  type ManagedKind, type ManagedRow,
+  type ElementSetRef, type ManagedKind, type ManagedRow,
 } from "@/features/prompt-lab/lib/presets-store";
 import { HomeWorkspaceShell } from "./components/HomeWorkspaceShell";
 
@@ -92,8 +92,9 @@ const CATEGORY: Record<ManagedKind, { label: string; blurb: string; where: strin
     where: "Pill «Bố trí» trên mỗi dòng của thẻ Bộ UI — chỉ hiện khi dòng ấy có hoa văn.",
   },
   element: {
-    label: "Món giao diện", blurb: "Danh mục món: nút bấm, popover, thanh máu… kèm hình dạng và cỡ.",
-    where: "Ô chọn món ở đầu mỗi dòng của thẻ Bộ UI.",
+    label: "Món giao diện",
+    blurb: "Danh mục món: nút bấm, popover, thanh máu… kèm hình dạng và cỡ. Vài món gom lại thành một bộ thì chọn một lần là thêm đủ các phần.",
+    where: "Ô chọn món ở đầu mỗi dòng của thẻ Bộ UI — bộ nằm ở nhóm trên cùng.",
   },
   pose: { label: "Dáng", blurb: "Dáng đứng của nhân vật.", where: "Pill «Dáng» trên mỗi dòng của thẻ Nhân vật." },
   view: {
@@ -191,6 +192,18 @@ const PANEL = "shrink-0 self-start rounded-3 border border-line-subtle bg-surfac
 /** Nhãn tạm của một dòng vừa thêm — xem khối chú thích ở `add()`. */
 const NEW_LABEL = "Mục mới";
 
+/**
+ * Hai giá trị KHÔNG PHẢI ID BỘ của ô chọn «Thuộc bộ».
+ *
+ * Chúng bắt đầu bằng `__` còn id bộ thì đi qua `slugify` (chỉ chữ thường, số và
+ * gạch nối) — nên không có cách nào một bộ thật đụng hàng với chúng.
+ */
+const NO_SET = "__none";
+const NEW_SET = "__new";
+
+/** Phần đuôi của một dòng «Món giao diện» khi chưa ai đặt gì — MỘT chỗ, bốn nơi đọc. */
+const ELEMENT_ROW_DEFAULTS: NonNullable<ManagedRow["element"]> = { decor: "medium", glazeId: "auto", sizeId: "" };
+
 /** Dáng nào đã có bảng góc khớp để dựng ảnh mẫu. Xem `pose-presets.ts`. */
 const POSED = new Set(POSE_PRESETS.map((preset) => preset.id));
 
@@ -256,7 +269,7 @@ export function PromptLibraryScreen() {
      */
     const row: ManagedRow = {
       id, vi: NEW_LABEL, en: "",
-      ...(kind === "element" ? { element: { decor: "medium", glazeId: "auto", sizeId: "" } } : {}),
+      ...(kind === "element" ? { element: { ...ELEMENT_ROW_DEFAULTS } } : {}),
     };
     write([...rows, row]);
     setEditingId(id);
@@ -280,6 +293,66 @@ export function PromptLibraryScreen() {
 
   const patch = (id: string, part: Partial<ManagedRow>) =>
     write(rows.map((row) => (row.id === id ? { ...row, ...part } : row)));
+
+  /**
+   * CÁC BỘ ĐANG CÓ trong danh mục món — kể cả bộ mới chỉ có MỘT phần.
+   *
+   * Cố ý KHÔNG dùng `elementSets()` của kho: hàm ấy lọc bỏ nhãn chưa đủ hai phần
+   * (đúng cho hộp chọn ở thẻ Bộ UI), còn ở màn quản lý thì một bộ một phần chính
+   * là bộ ĐANG ĐƯỢC DỰNG — giấu nó đi là không cho người dùng gắn phần thứ hai vào.
+   */
+  const setOptions = React.useMemo(() => {
+    const out: { id: string; vi: string; count: number }[] = [];
+    const at = new Map<string, number>();
+    for (const row of rows) {
+      const ref = row.element?.set;
+      if (!ref?.id) continue;
+      const seen = at.get(ref.id);
+      if (seen === undefined) {
+        at.set(ref.id, out.length);
+        out.push({ id: ref.id, vi: ref.vi || ref.id, count: 1 });
+      } else {
+        const hit = out[seen];
+        if (hit) hit.count += 1;
+      }
+    }
+    return out;
+  }, [rows]);
+
+  /** Gắn / gỡ nhãn bộ của MỘT dòng. `undefined` = món lẻ. */
+  const putRowInSet = (row: ManagedRow, set: ElementSetRef | undefined): ManagedRow => {
+    const { set: _dropped, ...rest } = row.element ?? ELEMENT_ROW_DEFAULTS;
+    return { ...row, element: { ...rest, ...(set ? { set } : {}) } };
+  };
+
+  const pickSet = (row: ManagedRow, value: string) => {
+    if (value === NO_SET) {
+      write(rows.map((item) => (item.id === row.id ? putRowInSet(item, undefined) : item)));
+      return;
+    }
+    if (value === NEW_SET) {
+      /* Id bộ đi vào `data.set.id` của MỌI phần, nên nó phải an toàn ngay từ lúc
+         sinh và không được đụng hàng với một bộ đã có — cùng luật, cùng hàm với id
+         của một dòng danh mục (`nextRowId`). */
+      const vi = (row.vi || NEW_LABEL).trim();
+      const base = slugify(vi) || "bo";
+      const taken = setOptions.map((option) => option.id);
+      let id = base;
+      for (let n = 2; taken.includes(id); n += 1) id = `${base}-${n}`;
+      write(rows.map((item) => (item.id === row.id ? putRowInSet(item, { id, vi }) : item)));
+      return;
+    }
+    const hit = setOptions.find((option) => option.id === value);
+    write(rows.map((item) => (item.id === row.id ? putRowInSet(item, { id: value, vi: hit?.vi ?? value }) : item)));
+  };
+
+  /** Đổi tên bộ = ghi lên MỌI phần cùng lúc — xem `ElementSetRef.vi`. */
+  const renameSet = (setId: string, vi: string) =>
+    write(rows.map((item) => (item.element?.set?.id === setId ? putRowInSet(item, { id: setId, vi }) : item)));
+
+  /** Bỏ bộ: gỡ nhãn khỏi mọi phần, các món ở lại danh mục dưới dạng món lẻ. */
+  const dissolveSet = (setId: string) =>
+    write(rows.map((item) => (item.element?.set?.id === setId ? putRowInSet(item, undefined) : item)));
 
   return (
     <HomeWorkspaceShell
@@ -394,7 +467,11 @@ export function PromptLibraryScreen() {
           <RowEditor
             kind={kind}
             row={editing}
+            setOptions={setOptions}
             onChange={(part) => patch(editing.id, part)}
+            onPickSet={(value) => pickSet(editing, value)}
+            onRenameSet={(vi) => renameSet(editing.element?.set?.id ?? "", vi)}
+            onDissolveSet={() => dissolveSet(editing.element?.set?.id ?? "")}
             onDuplicate={() => duplicate(editing)}
             onDelete={() => remove(editing)}
             onClose={() => setEditingId(null)}
@@ -600,7 +677,14 @@ function RowExtra({ kind, row }: { kind: ManagedKind; row: ManagedRow }) {
     const skel = row.element.skel;
     const shape = SHAPE_OPTIONS.find((option) => option.id === skel?.shape)?.label ?? "Hộp bo góc";
     const size = skel?.w !== undefined && skel.h !== undefined ? ` · ${skel.w.toFixed(2)}×${skel.h.toFixed(2)}` : "";
-    return <span className="mt-0.5 block truncate text-caption text-fg-muted">{shape}{size}</span>;
+    /* Nhãn bộ đứng ĐẦU dòng phụ: nó là thứ duy nhất trên dòng nói được vì sao món
+       này đứng cạnh mấy món kia, và người ta lướt danh sách bằng mép trái. */
+    const set = row.element.set?.vi;
+    return (
+      <span className="mt-0.5 block truncate text-caption text-fg-muted">
+        {set ? `Bộ ${set} · ` : ""}{shape}{size}
+      </span>
+    );
   }
   return null;
 }
@@ -654,11 +738,16 @@ function EmptyEditor({ kind }: { kind: ManagedKind }) {
  * một cách mới để mất chữ (đóng panel = mất). Nút «Xong» chỉ đóng panel.
  */
 function RowEditor({
-  kind, row, onChange, onDuplicate, onDelete, onClose,
+  kind, row, setOptions, onChange, onPickSet, onRenameSet, onDissolveSet, onDuplicate, onDelete, onClose,
 }: {
   kind: ManagedKind;
   row: ManagedRow;
+  /** Các bộ đang có — chỉ trục `element` dùng tới. */
+  setOptions: readonly { id: string; vi: string; count: number }[];
   onChange: (part: Partial<ManagedRow>) => void;
+  onPickSet: (value: string) => void;
+  onRenameSet: (vi: string) => void;
+  onDissolveSet: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
   onClose: () => void;
@@ -676,9 +765,9 @@ function RowEditor({
   const element = row.element;
   const skel: Skel = element?.skel ?? { shape: "rrect", w: 0.8, h: 0.6 };
   const setSkel = (part: Partial<Skel>) =>
-    onChange({ element: { ...(element ?? { decor: "medium", glazeId: "auto", sizeId: "" }), skel: { ...skel, ...part } } });
+    onChange({ element: { ...(element ?? ELEMENT_ROW_DEFAULTS), skel: { ...skel, ...part } } });
   const setElement = (part: Partial<NonNullable<ManagedRow["element"]>>) =>
-    onChange({ element: { ...(element ?? { decor: "medium", glazeId: "auto", sizeId: "" }), ...part } });
+    onChange({ element: { ...(element ?? ELEMENT_ROW_DEFAULTS), ...part } });
 
   return (
     <aside aria-label={`Sửa ${row.vi || "mục mới"}`} className={PANEL}>
@@ -786,6 +875,59 @@ function RowEditor({
                 </SelectContent>
               </Select>
             </Field>
+
+            {/* ══ BỘ ══════════════════════════════════════════════════════════
+                Ở ĐÂY chứ không phải một màn riêng cho bộ: một bộ KHÔNG phải một
+                bản ghi — nó là một nhãn mà vài món cùng đeo (xem `ElementSetRef`).
+                Dựng một màn riêng cho nó là dựng một kho thứ hai cho một thứ không
+                có dữ liệu riêng, và kèm theo là mọi câu hỏi của một kho: bộ rỗng
+                thì sao, bộ trỏ vào món đã xoá thì sao. Một ô chọn trên chính món
+                thì mọi câu ấy tự tan. */}
+            <Field
+              id={`row-set-${row.id}`}
+              label="Thuộc bộ"
+              hint="Món trong một bộ được thêm cùng nhau: chọn bộ ở thẻ Bộ UI là có đủ các phần."
+            >
+              <Select
+                value={element?.set?.id ?? NO_SET}
+                onValueChange={(value) => onPickSet(value)}
+              >
+                <SelectTrigger id={`row-set-${row.id}`}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_SET}>Không thuộc bộ nào</SelectItem>
+                  {setOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.vi} · {option.count} phần
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={NEW_SET}>Bộ mới…</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+
+            {element?.set && (
+              <>
+                <Field
+                  id={`row-setvi-${row.id}`}
+                  label="Tên bộ"
+                  hint="Sửa ở đây thì mọi phần của bộ đổi tên theo — không đi vào prompt."
+                >
+                  <Input
+                    id={`row-setvi-${row.id}`}
+                    value={element.set.vi}
+                    onChange={(event) => onRenameSet(event.target.value)}
+                    placeholder="Ví dụ: Thanh máu"
+                  />
+                </Field>
+                {/* «BỎ BỘ» GỠ NHÃN, KHÔNG XOÁ MÓN — nên nó không phải một nút đỏ và
+                    không hỏi hai lần. Xoá cả một bộ nghĩa là xoá vài món mà người
+                    dùng có thể chỉ muốn dùng lẻ; nếu họ thật sự muốn mất chúng thì
+                    xoá từng món, ở đúng cái nút xoá đã có sẵn ngay dưới. */}
+                <Button type="button" variant="secondary" size="sm" onClick={onDissolveSet}>
+                  Bỏ bộ, giữ các món
+                </Button>
+              </>
+            )}
 
             <Field id={`row-decor-${row.id}`} label="Trang trí mặc định" hint="Áp sẵn khi thêm món này vào một tấm.">
               <Select value={element?.decor ?? "medium"} onValueChange={(value) => setElement({ decor: value })}>

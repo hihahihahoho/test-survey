@@ -410,13 +410,36 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
   it("spec của ô là DANH TỪ THUẦN — không còn câu mô tả thuộc tính", () => {
     const ui = composerToContract(full(), { presets: PRESETS }).sheets.find((s) => s.id === "ui")!;
     for (const preset of PRESETS.elements) {
-      /* Danh mục hạt giống KHÔNG được mang mạo từ hay tính từ thẩm mỹ. Đây là ca
-         bắt được đúng lời than "a rounded background panel for a dialog". */
+      /* ⚠️ LUẬT NÀY CHỈ ÁP CHO MÓN LẺ, và ranh giới ấy là một quyết định.
+         Một món lẻ chỉ phải trả lời "nó LÀ CÁI GÌ", nên ba chữ là quá đủ và mọi
+         chữ thứ tư đều là một tính từ thẩm mỹ lẻn vào — đúng lời than "a rounded
+         background panel for a dialog" mà ca này sinh ra để bắt.
+         Một PHẦN CỦA BỘ thì phải trả lời thêm một câu nữa: "nó là phần nào, và nó
+         khớp với phần kia ra sao" ("the fill bar that sits inside the health bar,
+         the same length and corner radius…"). Bỏ vế ấy đi là bỏ đúng thứ làm cho
+         khung và ruột của một thanh máu vẽ ra ăn khớp nhau. Cái KHÔNG được nới là
+         thẩm mỹ — ca ngay dưới canh chỗ đó. */
+      if (preset.set) continue;
       expect(preset.en.startsWith("a "), preset.id).toBe(false);
       expect(preset.en.split(" ").length, preset.id).toBeLessThanOrEqual(3);
     }
     expect(ui.components[0]!.spec.startsWith("button,")).toBe(true);
     expect(ui.components[0]!.spec).not.toContain("centered label");
+  });
+
+  /* Cùng một câu hỏi, hỏi cho PHẦN CỦA BỘ: được dài, nhưng không được đẹp hộ.
+     Bảng chữ dưới đây là bảng của `__tests__/prompt-composer.test.tsx` (nấc trang
+     trí) — cùng một luật «cấu trúc là việc của ô, hoàn thiện là việc của phong
+     cách», nên nó phải đúng ở cả hai kho chữ. */
+  it("phần của bộ được nói dài, nhưng KHÔNG được nói thẩm mỹ", () => {
+    const banned = ["bevel", "gradient", "shadow", "glow", "glossy", "shiny", "3d", "candy", "foil", "golden", "metallic"];
+    for (const preset of PRESETS.elements) {
+      if (!preset.set) continue;
+      expect(preset.en.trim().length, preset.id).toBeGreaterThan(0);
+      for (const word of banned) {
+        expect(preset.en.toLowerCase(), `${preset.id} · ${word}`).not.toContain(word);
+      }
+    }
   });
 
   /* GUARD ÂM (08/09/2026). Đục nền từng nói HAI LẦN: một câu trong `spec` VÀ một cờ

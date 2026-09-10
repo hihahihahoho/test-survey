@@ -158,14 +158,16 @@ describe("② nút «+ Element» + bộ chọn", () => {
     const box = screen.getByRole("dialog", { name: /Thêm món/ });
     expect(box).toBeTruthy();
 
-    /* Gõ KHÔNG DẤU: người ta tra danh mục bằng cách gõ nhanh, không bỏ dấu. */
-    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "icon tien" } });
+    /* Gõ KHÔNG DẤU: người ta tra danh mục bằng cách gõ nhanh, không bỏ dấu.
+       «Bảng nền» là món LẺ — ca này đo đường một-chọn-một-ô, còn đường chọn cả bộ
+       có ca riêng ở `element-sets.test.tsx`. */
+    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "bang nen" } });
     expect(screen.queryByRole("option", { name: /Nút bấm/ })).toBeNull();
 
-    fireEvent.click(screen.getByRole("option", { name: /Icon tiền/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Bảng nền/ }));
 
     /* Dòng vừa thêm phải hiện ra ngay, mang đúng tên món đã chọn. */
-    expect(screen.getByLabelText("Ghi chú cho Icon tiền")).toBeTruthy();
+    expect(screen.getByLabelText("Ghi chú cho Bảng nền")).toBeTruthy();
     expect(screen.queryByLabelText("Ghi chú cho Nút bấm")).toBeNull();
   });
 
@@ -175,13 +177,16 @@ describe("② nút «+ Element» + bộ chọn", () => {
      bấm ra ngoài, hoặc bấm lại chính cái nút. */
   it("thêm hai món liền tay ⇒ hai dòng, thứ tự đúng thứ tự bấm", () => {
     fireEvent.click(screen.getByRole("button", { name: /Element/ }));
-    for (const name of [/Nút bấm/, /Bảng nền/]) {
+    /* HAI MÓN LẺ: mỗi cú bấm đúng một dòng. Chọn một BỘ thì một cú bấm ra nhiều
+       dòng — đó là chuyện khác và có ca riêng, trộn vào đây thì ca này hết đo được
+       "thứ tự dòng đúng thứ tự bấm". */
+    for (const name of [/Bảng nền/, /Huy hiệu/]) {
       fireEvent.click(screen.getAllByRole("option", { name })[0]!);
     }
     const handles = screen.getAllByRole("button", { name: /^Đổi chỗ/ });
     expect(handles).toHaveLength(2);
-    expect(handles[0]!.getAttribute("aria-label")).toContain("Nút bấm");
-    expect(handles[1]!.getAttribute("aria-label")).toContain("Bảng nền");
+    expect(handles[0]!.getAttribute("aria-label")).toContain("Bảng nền");
+    expect(handles[1]!.getAttribute("aria-label")).toContain("Huy hiệu");
   });
 
   it("gõ chuỗi không khớp gì ⇒ NÓI RA, không im lặng trả về hộp trống", () => {
@@ -418,7 +423,9 @@ describe("⑤ đổi loại element tại chỗ", () => {
     expect(screen.getByRole("dialog", { name: "Đổi loại món" })).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "thanh mau" } });
-    expect(screen.getByRole("option", { name: /Thanh máu/ })).toBeTruthy();
+    /* NEO ĐẦU CHUỖI: hộp «Đổi loại món» bày danh mục PHẲNG, nên "Thanh máu" và
+       "Thanh máu · phần đầy" cùng khớp — mà ca này nói về đúng cái khung. */
+    expect(screen.getByRole("option", { name: /^Thanh máu\s*health bar$/ })).toBeTruthy();
     expect(screen.queryByRole("option", { name: /Icon tiền/ })).toBeNull();
   });
 
@@ -433,7 +440,7 @@ describe("⑤ đổi loại element tại chỗ", () => {
     render(<Harness initial={uikit([cell])} onState={(next) => { latest = next; }} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Đổi loại món/ }));
-    fireEvent.click(screen.getByRole("option", { name: /Thanh máu/ }));
+    fireEvent.click(screen.getByRole("option", { name: /^Thanh máu\s*health bar$/ }));
 
     await waitFor(() => expect(latest?.cells[0]?.elementId).toBe("healthbar"));
     expect(latest!.cells[0]!.decor).toBe("rich");

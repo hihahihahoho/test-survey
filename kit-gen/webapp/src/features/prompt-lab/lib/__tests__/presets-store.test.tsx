@@ -344,6 +344,111 @@ describe("gieo hạt: đúng một lần, kể cả khi nhiều màn cùng mở"
   });
 });
 
+/* ══════════════════════════════════════════════════════════════════════════
+   BỘ MÓN — nhãn bộ trên đĩa, và cửa gieo bù cho máy đời trước
+   ══════════════════════════════════════════════════════════════════════════
+   Nhãn bộ (`data.set`) là khoá MỚI. Ba câu hỏi ở đây, và cả ba đều hỏng câm nếu
+   sai: bản ghi có nhãn đọc ra đúng bộ không · bản ghi ĐỜI CŨ có được vá không ·
+   người dùng gỡ một món khỏi bộ thì lượt đọc sau có kéo nó về không. */
+describe("bộ món: đọc, vá, và gỡ", () => {
+  it("`data.set` trên đĩa ⇒ món thuộc bộ, đọc nguyên cả id lẫn nhãn", async () => {
+    get.mockResolvedValue(library([
+      row("preset_p1", "element", "Khiên", {
+        key: "shield", en: "shield", decor: "light", glazeId: "", sizeId: "",
+        set: { id: "phong-thu", vi: "Phòng thủ" },
+      }),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen?.elements[0]!.set).toEqual({ id: "phong-thu", vi: "Phòng thủ" });
+  });
+
+  it("thiếu `set` + id hạt giống CÓ BỘ ⇒ vá theo bảng hạt giống", async () => {
+    /* Đây là máy đã dùng app từ trước lượt «bộ»: bản ghi «Thanh máu» của họ không
+       có khoá `set` nào, và phần đầy vừa được gieo vào. Không vá thì hai món ấy
+       đứng rời nhau ở nhóm «Lẻ», ngay trên máy của người đã dùng lâu nhất. */
+    get.mockResolvedValue(library([
+      row("preset_h1", "element", "Thanh máu", { key: "healthbar", en: "health bar", decor: "light", glazeId: "", sizeId: "" }),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen?.elements[0]!.set?.id).toBe("hp");
+  });
+
+  it("`set: null` trên đĩa ⇒ ĐÃ GỠ, và lượt đọc sau KHÔNG kéo về bộ cũ", async () => {
+    get.mockResolvedValue(library([
+      row("preset_h1", "element", "Thanh máu", { key: "healthbar", en: "health bar", decor: "light", glazeId: "", sizeId: "", set: null }),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen?.elements[0]!.set).toBeUndefined();
+  });
+
+  it("gỡ một món hạt giống khỏi bộ ⇒ GHI RA `set: null`, không phải vắng khoá", async () => {
+    get.mockResolvedValue(library([
+      row("preset_h1", "element", "Thanh máu", { key: "healthbar", en: "health bar", decor: "light", glazeId: "", sizeId: "", set: { id: "hp", vi: "Thanh máu" } }),
+    ]));
+    mount();
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+
+    const { set: _dropped, ...loose } = seen!.elements[0]!;
+    setPresets({ ...seen!, elements: [loose] });
+
+    await waitFor(() => expect(patchPreset).toHaveBeenCalledTimes(1));
+    expect(patchPreset.mock.calls[0]![1].data.set).toBeNull();
+  });
+});
+
+describe("gieo bù: máy đã có hạt giống ĐỜI TRƯỚC nhưng chưa có bộ", () => {
+  /** Tám món hạt giống đời trước, đúng hình dạng bản ghi mà chúng nằm trên đĩa. */
+  const legacyElementRows = (): Row[] =>
+    ["button", "popover", "healthbar", "coin", "avatar-frame", "panel", "badge", "progress"].map((key) =>
+      row(`preset_element_${key}`, "element", key, { key, en: key, decor: "light", glazeId: "auto", sizeId: "" }));
+
+  it("gieo ĐÚNG những id đời này mới có, KHÔNG đụng tám món cũ", async () => {
+    get.mockResolvedValue(library(legacyElementRows()));
+    mount();
+
+    await waitFor(() => expect(addPreset).toHaveBeenCalled());
+    await waitFor(() => expect(addPreset.mock.calls.length).toBeGreaterThan(30));
+    const keys = addPreset.mock.calls.map((call) => String(call[0].data.key));
+    expect(keys).toContain("hp-fill");
+    expect(keys).toContain("rank-row-self");
+    /* Món cũ đã có trên đĩa ⇒ không POST lại. Ghi đè ở đây là xoá công sửa của họ. */
+    expect(keys).not.toContain("button");
+    expect(keys).not.toContain("panel");
+    /* Và KHÔNG trục nào khác bị đụng: một dòng «Trang trí» người dùng đã xoá từ lâu
+       không được mọc lại chỉ vì hôm nay ta thêm mấy cái bộ. */
+    expect(addPreset.mock.calls.every((call) => call[0].kind === "element")).toBe(true);
+  });
+
+  it("đã có dù MỘT id đời này ⇒ im lặng: mọi chỗ trống còn lại là ý người dùng", async () => {
+    get.mockResolvedValue(library([
+      ...legacyElementRows(),
+      row("preset_element_hp-fill", "element", "Thanh máu · phần đầy", { key: "hp-fill", en: "x", decor: "none", glazeId: "auto", sizeId: "" }),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements.length).toBeGreaterThan(0));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(addPreset).not.toHaveBeenCalled();
+  });
+
+  it("kho toàn món TỰ ĐẶT TÊN ⇒ không nhét bốn mươi dòng vào danh mục người ta tự dựng", async () => {
+    get.mockResolvedValue(library([
+      row("preset_x1", "element", "Khiên", { key: "tu-dat-khien", en: "shield", decor: "light", glazeId: "auto", sizeId: "" }),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(addPreset).not.toHaveBeenCalled();
+  });
+});
+
 describe("ghi: gộp, chỉ đụng cái đổi, và không im lặng khi hỏng", () => {
   const three = () => library([
     row("preset_s1", "style", "Cổ tích", { key: "fairy", en: "storybook" }),

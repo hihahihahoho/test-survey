@@ -61,6 +61,43 @@ export interface StylePreset {
 }
 
 /**
+ * MỘT MÓN LÀ PHẦN CỦA MỘT BỘ — «chọn 1 được 2».
+ *
+ * ╔══ VÌ SAO BỘ LÀ MỘT NHÃN TRÊN TỪNG PHẦN, KHÔNG PHẢI MỘT MẢNG `parts[]` ═══╗
+ * ║ Đường kia — `ElementPreset.parts: [...]` — nghe gọn hơn đúng một phút, rồi ║
+ * ║ đẻ ra HAI LOẠI MÓN: loại tra được trong danh mục và loại nằm lồng bên      ║
+ * ║ trong một món khác. Mà `elementId` của mỗi ô, tên file trong contract,     ║
+ * ║ pill đổi loại, ô tìm kiếm, màn «Thư viện prompt» — tất cả đều tra bằng     ║
+ * ║ MỘT phép `elements.find(id)`. Thêm một tầng lồng là bắt sáu chỗ ấy nhớ hỏi ║
+ * ║ cả hai nguồn, và chỗ nào quên thì hiện ra một id trần (đúng cái lý lẽ đã   ║
+ * ║ viết ở `addCustomElement`).                                               ║
+ * ║ Nên: mỗi PHẦN vẫn là một `ElementPreset` đầy đủ — có id, có danh từ EN, có ║
+ * ║ hình học riêng — và cái «bộ» chỉ là một NHÃN chung mà vài phần cùng đeo.   ║
+ * ║ Đúng hình dạng mà `element-lib-v2.json` của engine đã dùng (`group`).      ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ══ DI TRÚ KHÔNG TỐN GÌ ════════════════════════════════════════════════════
+ * Thiếu `set` = MÓN LẺ. Mọi bản ghi element đã nằm trên workspace từ trước lượt
+ * này đều thiếu nó, và chúng tiếp tục chạy y như hôm qua — không có bước nâng cấp,
+ * không có lượt ghi ngược.
+ */
+export interface ElementSetRef {
+  /** Id của BỘ — mọi phần cùng bộ mang ĐÚNG một chuỗi này. */
+  id: string;
+  /**
+   * Nhãn tiếng Việt của cả bộ («Thanh máu») — nhãn hiện ở nhóm «Bộ» của hộp chọn.
+   *
+   * CHÉP TRÊN MỌI PHẦN, có chủ ý: kho là một mảng phẳng các bản ghi độc lập trên
+   * server (mỗi phần một `POST`), nên không có chỗ nào để cất một bản ghi «bộ» mà
+   * không đẻ ra một loại bản ghi thứ hai cùng những câu hỏi của nó (bộ rỗng thì
+   * sao, bộ mồ côi thì sao). Cái giá: hai phần cùng bộ có thể mang hai chữ khác
+   * nhau nếu ai đó sửa tay trên đĩa — `elementSets` xử lý bằng luật PHẦN ĐẦU
+   * THẮNG, và màn «Thư viện prompt» đổi tên thì ghi lên MỌI phần cùng lúc.
+   */
+  vi: string;
+}
+
+/**
  * Một loại element của bộ UI kit — thứ sinh ra các nút "+ Nút bấm", "+ Popover"…
  *
  * ╔══ `en` LÀ MỘT DANH TỪ, KHÔNG PHẢI MỘT CÂU MÔ TẢ ═════════════════════════╗
@@ -123,6 +160,14 @@ export interface ElementPreset {
    * Thiếu (element tự đặt tên, hoặc bản ghi đời trước) ⇒ `CUSTOM_ELEMENT_SKEL`.
    */
   skel?: Skel;
+  /**
+   * BỘ mà món này là một PHẦN — thiếu ⇒ MÓN LẺ (xem `ElementSetRef`).
+   *
+   * Hai phần cùng bộ phải KHỚP HÌNH HỌC với nhau, và đó là việc của hạt giống chứ
+   * không phải của mã: khung và phần đầy của cùng một thanh phải cùng `shape`, và
+   * phần đầy nhỏ hơn khung đúng một lề. Xem bảng đo ở `seedPresets()`.
+   */
+  set?: ElementSetRef;
 }
 
 export interface MascotPreset {
@@ -341,6 +386,34 @@ export function seedCatalogs(): PresetBundle["catalogs"] {
 
 /** Hạt giống — đọc từ danh mục THẬT của kit-core, không chép tay. */
 export function seedPresets(): PresetBundle {
+  /**
+   * MƯỜI BẢY BỘ — id + nhãn viết ĐÚNG MỘT LẦN, các phần bên dưới trỏ vào.
+   *
+   * Khai TRONG hàm chứ không ở tầng module, cùng lý do với `seedCatalogs()` chép
+   * sâu: `setPresets` nhận về một bundle người dùng vừa sửa, và nếu bundle ấy còn
+   * dùng chung object với một hằng ở tầng module thì một lượt đổi tên bộ sẽ đổi
+   * luôn HẠT GIỐNG — nút «Khôi phục mặc định» khi ấy khôi phục về thứ vừa bị sửa.
+   */
+  const SET = {
+    btn: { id: "btn", vi: "Bộ nút" },
+    hp: { id: "hp", vi: "Thanh máu" },
+    xp: { id: "xp", vi: "Thanh tiến trình" },
+    dialog: { id: "dialog", vi: "Hộp thoại" },
+    rank: { id: "rank", vi: "Xếp hạng" },
+    popup: { id: "popup", vi: "Popup" },
+    tab: { id: "tab", vi: "Tab" },
+    toggle: { id: "toggle", vi: "Công tắc" },
+    check: { id: "check", vi: "Ô chọn" },
+    heart: { id: "heart", vi: "Tim" },
+    star: { id: "star", vi: "Sao" },
+    coins: { id: "coins", vi: "Đồng tiền" },
+    slot: { id: "slot", vi: "Ô túi đồ" },
+    slider: { id: "slider", vi: "Thanh trượt" },
+    arrow: { id: "arrow", vi: "Mũi tên" },
+    envelope: { id: "envelope", vi: "Phong bì" },
+    gift: { id: "gift", vi: "Hộp quà" },
+  } satisfies Record<string, ElementSetRef>;
+
   return {
     catalogs: seedCatalogs(),
     styles: GENRE_PRESETS.map((preset) => ({ id: preset.id, vi: preset.vi, en: preset.stylePrompt })),
@@ -372,15 +445,121 @@ export function seedPresets(): PresetBundle {
        `slice9` bật cho món CO GIÃN ĐƯỢC (nút, thanh, bảng, hộp thoại) và tắt cho
        món tròn — kéo một cái huy hiệu tròn theo 9-slice là méo nó. `sizeId` để
        RỖNG: ghim một nấc cỡ ở đây là đè lên chính hình dạng vừa khai. */
+    /* ══ BỘ: MỘT LỰA CHỌN, NHIỀU Ô ═══════════════════════════════════════════
+       Chủ sản phẩm: *«thanh máu phải tách ra từng phần nhỏ, chọn 1 được 2»*. Một
+       thanh máu vẽ liền một khối thì lập trình game không dùng được: phần đầy phải
+       co giãn được độc lập với khung. Nên nó là HAI ô — và hai ô ấy phải được vẽ
+       trong cùng một lượt, cùng một phong cách, khớp nhau từng bo góc.
+
+       ══ HAI LUẬT CỦA MỘT BỘ, VÀ CẢ HAI NẰM TRONG DỮ LIỆU DƯỚI ĐÂY ═══════════
+       ① HÌNH HỌC KHỚP. Phần đầy cùng `shape` với khung và nhỏ hơn đúng một lề
+          (0,86×0,22 ⇒ 0,81×0,15): cùng tỉ lệ thì hai ô ra hai hộp chồng khít nhau
+          khi lập trình game xếp chúng lên nhau, còn lệch tỉ lệ thì không có cách
+          nào cứu ở tầng dưới.
+       ② CÂU EN TỰ NÓI RA MÌNH LÀ PHẦN NÀO. `gen.sh` in mỗi ô một dòng độc lập, và
+          `chunkBySize` có quyền cắt một bộ sang hai tấm — nên "cái ở trên" không
+          phải một chỗ dựa. Phần đầy vì thế mang nguyên văn quan hệ của nó ("the
+          fill bar that sits inside the health bar, the same length and corner
+          radius, with no track or frame of its own"), đúng lối mà
+          `element-lib-v2.json` của engine đã dùng cho cặp track/fill.
+
+       ⚠️ `en` VẪN LÀ DANH TỪ, KHÔNG PHẢI THẨM MỸ. "the same tab chip, selected"
+       nói VỊ TRÍ TRONG BỘ và TRẠNG THÁI — không nói vật liệu, không nói màu, không
+       nói cách đánh bóng. Luật ở khối chú thích của `ElementPreset.en` không bị nới
+       một chữ nào cho bộ.
+
+       ⚠️ NĂM MÓN CŨ ĐƯỢC GOM VÀO BỘ, KHÔNG BỊ NHÂN ĐÔI: `button`, `popover`,
+       `healthbar`, `coin`, `progress` giữ nguyên id và giữ nguyên NHÃN VIỆT của
+       chúng — chỉ đeo thêm nhãn bộ. Đẻ ra một "Thanh máu (bộ)" thứ hai bên cạnh
+       "Thanh máu" cũ là bắt người dùng đoán xem hai dòng cùng tên khác nhau chỗ nào. */
     elements: [
-      { id: "button", vi: "Nút bấm", en: "button", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true } },
-      { id: "popover", vi: "Popover", en: "popover", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.86, h: 0.66, slice9: true } },
-      { id: "healthbar", vi: "Thanh máu", en: "health bar", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.22, slice9: true } },
-      { id: "coin", vi: "Icon tiền", en: "coin icon", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.4, h: 0.4 } },
+      /* ── Bộ nút ──────────────────────────────────────────────────────────── */
+      { id: "button", vi: "Nút bấm", en: "button", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
+      { id: "btn-secondary", vi: "Bộ nút · phụ", en: "the same button as a secondary action", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
+      { id: "btn-pressed", vi: "Bộ nút · nhấn", en: "the same button, pressed", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
+      { id: "btn-disabled", vi: "Bộ nút · khoá", en: "the same button, disabled", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
+
+      /* ── Thanh máu — khung 0,86×0,22, phần đầy 0,81×0,15 (nhỏ hơn đúng một lề) ── */
+      { id: "healthbar", vi: "Thanh máu", en: "health bar", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.22, slice9: true }, set: SET.hp },
+      /* Phần đầy để «Không trang trí»: một dải màu chạy bên trong khung mà lại mọc
+         viền và hoa văn của riêng nó thì xếp lên nhau là hai lớp viền chồng nhau. */
+      { id: "hp-fill", vi: "Thanh máu · phần đầy", en: "the fill bar that sits inside the health bar, the same length and corner radius, with no track or frame of its own", decor: "none", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.81, h: 0.15, slice9: true }, set: SET.hp },
+
+      /* ── Thanh tiến trình — cùng luật với thanh máu, mảnh hơn ─────────────── */
+      { id: "progress", vi: "Thanh tiến trình", en: "progress bar", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.18, slice9: true }, set: SET.xp },
+      { id: "progress-fill", vi: "Thanh tiến trình · phần đầy", en: "the fill bar that sits inside the progress bar, the same length and corner radius, with no track or frame of its own", decor: "none", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.81, h: 0.12, slice9: true }, set: SET.xp },
+
+      /* ── Hộp thoại ───────────────────────────────────────────────────────── */
+      { id: "dialog-panel", vi: "Hộp thoại · khung", en: "a dialogue box", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.92, h: 0.56, slice9: true }, set: SET.dialog },
+      { id: "dialog-name", vi: "Hộp thoại · bảng tên", en: "the name plate that sits on the same dialogue box", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.16, slice9: true }, set: SET.dialog },
+      { id: "dialog-next", vi: "Hộp thoại · nút tiếp", en: "the continue marker of the same dialogue box", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.3, h: 0.3 }, set: SET.dialog },
+
+      /* ── Xếp hạng ────────────────────────────────────────────────────────── */
+      { id: "rank-1", vi: "Xếp hạng · hạng nhất", en: "a first-place rank medal", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.5, h: 0.5 }, set: SET.rank },
+      { id: "rank-2", vi: "Xếp hạng · hạng nhì", en: "the same rank medal, second place", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.5, h: 0.5 }, set: SET.rank },
+      { id: "rank-3", vi: "Xếp hạng · hạng ba", en: "the same rank medal, third place", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.5, h: 0.5 }, set: SET.rank },
+      { id: "rank-row", vi: "Xếp hạng · hàng thường", en: "a leaderboard row with an avatar slot at the left", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.9, h: 0.22, slice9: true }, set: SET.rank },
+      { id: "rank-row-self", vi: "Xếp hạng · hàng của tôi", en: "the same leaderboard row, highlighted as the current player", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.9, h: 0.22, slice9: true }, set: SET.rank },
+
+      /* ── Popup ───────────────────────────────────────────────────────────── */
+      { id: "popover", vi: "Popover", en: "popover", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.86, h: 0.66, slice9: true }, set: SET.popup },
+      { id: "popup-ribbon", vi: "Popup · ruy băng tiêu đề", en: "the heading banner that sits across the top of the same popover", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.78, h: 0.2, slice9: true }, set: SET.popup },
+      { id: "popup-close", vi: "Popup · nút đóng", en: "the round close button of the same popover, with a cross mark", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.32, h: 0.32 }, set: SET.popup },
+
+      /* ── Tab ─────────────────────────────────────────────────────────────── */
+      { id: "tab-idle", vi: "Tab · thường", en: "a tab chip, unselected", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.6, h: 0.26, slice9: true }, set: SET.tab },
+      { id: "tab-active", vi: "Tab · đang chọn", en: "the same tab chip, selected", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.6, h: 0.26, slice9: true }, set: SET.tab },
+
+      /* ── Công tắc ────────────────────────────────────────────────────────── */
+      { id: "toggle-on", vi: "Công tắc · bật", en: "a toggle switch, on, knob at the right", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.5, h: 0.28 }, set: SET.toggle },
+      { id: "toggle-off", vi: "Công tắc · tắt", en: "the same toggle switch, off, knob at the left", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.5, h: 0.28 }, set: SET.toggle },
+
+      /* ── Ô chọn ──────────────────────────────────────────────────────────── */
+      { id: "check-on", vi: "Ô chọn · bật", en: "a checkbox, checked", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.34, h: 0.34 }, set: SET.check },
+      { id: "check-off", vi: "Ô chọn · tắt", en: "the same checkbox, unchecked", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.34, h: 0.34 }, set: SET.check },
+
+      /* ── Tim ─────────────────────────────────────────────────────────────── */
+      { id: "heart-full", vi: "Tim · đầy", en: "a life heart, full", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.4, h: 0.38 }, set: SET.heart },
+      { id: "heart-empty", vi: "Tim · rỗng", en: "the same life heart, empty", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.4, h: 0.38 }, set: SET.heart },
+
+      /* ── Sao ─────────────────────────────────────────────────────────────── */
+      { id: "star-full", vi: "Sao · đầy", en: "a rating star, earned", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.42, h: 0.4 }, set: SET.star },
+      { id: "star-empty", vi: "Sao · rỗng", en: "the same rating star, not earned", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.42, h: 0.4 }, set: SET.star },
+
+      /* ── Đồng tiền: ô đếm + đồng xu nằm trong ô đếm ấy ────────────────────── */
+      { id: "coin", vi: "Icon tiền", en: "coin icon", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.4, h: 0.4 }, set: SET.coins },
+      { id: "coin-counter", vi: "Đồng tiền · ô đếm", en: "a counter chip with a slot at one end for the coin icon", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.72, h: 0.26, slice9: true }, set: SET.coins },
+
+      /* ── Ô túi đồ ────────────────────────────────────────────────────────── */
+      { id: "slot-empty", vi: "Ô túi đồ · trống", en: "an empty inventory slot", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.5, slice9: true }, set: SET.slot },
+      { id: "slot-filled", vi: "Ô túi đồ · có đồ", en: "the same inventory slot holding an item", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.5, slice9: true }, set: SET.slot },
+      { id: "slot-active", vi: "Ô túi đồ · đang chọn", en: "the same inventory slot, selected", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.5, slice9: true }, set: SET.slot },
+
+      /* ── Thanh trượt ─────────────────────────────────────────────────────── */
+      { id: "slider-track", vi: "Thanh trượt · rãnh", en: "the track of a slider", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.12, slice9: true }, set: SET.slider },
+      { id: "slider-knob", vi: "Thanh trượt · núm", en: "the knob that rides on the same slider track", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.26, h: 0.26 }, set: SET.slider },
+
+      /* ── Mũi tên ─────────────────────────────────────────────────────────── */
+      { id: "arrow-left", vi: "Mũi tên · trái", en: "a round button with a left arrow", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.34, h: 0.34 }, set: SET.arrow },
+      { id: "arrow-right", vi: "Mũi tên · phải", en: "the same round button with a right arrow", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.34, h: 0.34 }, set: SET.arrow },
+
+      /* ── Phong bì: nắp rời, CÙNG BỀ NGANG với thân để dán lại thành một cái ── */
+      { id: "envelope-body", vi: "Phong bì · thân", en: "the body of a lucky-money envelope, without its top flap", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.66 }, set: SET.envelope },
+      { id: "envelope-flap", vi: "Phong bì · nắp", en: "only the detached top flap of the same envelope, the same width as its body", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.28 }, set: SET.envelope },
+
+      /* ── Hộp quà ─────────────────────────────────────────────────────────── */
+      { id: "gift-closed", vi: "Hộp quà · đóng", en: "a closed gift box", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.56 }, set: SET.gift },
+      { id: "gift-open", vi: "Hộp quà · mở", en: "the same gift box, open", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.56 }, set: SET.gift },
+
+      /* ── MÓN LẺ — không phần nào đi kèm, chọn một là được một ─────────────── */
       { id: "avatar-frame", vi: "Khung avatar", en: "avatar frame", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.62, h: 0.62 } },
       { id: "panel", vi: "Bảng nền", en: "panel", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.92, h: 0.8, slice9: true } },
       { id: "badge", vi: "Huy hiệu", en: "badge", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.46, h: 0.46 } },
-      { id: "progress", vi: "Thanh tiến trình", en: "progress bar", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.18, slice9: true } },
+      { id: "lock", vi: "Ổ khoá", en: "padlock", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.42, h: 0.5 } },
+      { id: "timer", vi: "Đồng hồ đếm giờ", en: "countdown timer plate", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.52, h: 0.3, slice9: true } },
+      /* `free`: một cái cúp có quai và đế, không nắn về hộp chữ nhật được — cùng cờ
+         mà `element-lib-v2.json` gắn cho `54-trophy-cup`. */
+      { id: "trophy", vi: "Cúp", en: "trophy cup", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.66, free: true } },
     ],
 
     /* Mascot: ghép dáng + biểu cảm có sẵn thành vài "nhân vật mẫu" để trang
@@ -401,6 +580,62 @@ export function seedPresets(): PresetBundle {
       },
     ],
   };
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   GOM MÓN THÀNH BỘ — một phép đọc THUẦN, không phải một kho thứ hai
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/** Một BỘ đã gom xong: nhãn của bộ + các phần, ĐÚNG thứ tự chúng nằm trong kho. */
+export interface ElementSetView {
+  id: string;
+  /** Nhãn tiếng Việt của bộ — lấy từ PHẦN ĐẦU TIÊN, xem `ElementSetRef.vi`. */
+  vi: string;
+  parts: ElementPreset[];
+}
+
+/**
+ * Bao nhiêu phần thì một nhãn bộ mới thật sự là MỘT BỘ.
+ *
+ * Hai, và con số ấy có việc để làm: người dùng xoá bớt phần cho tới khi còn một
+ * thì thứ còn lại không còn là "chọn 1 được nhiều" nữa — nó là một món lẻ đang đeo
+ * một nhãn cũ. Bày nó ở nhóm «Bộ» với chữ «1 phần» là mời một cú bấm không khác gì
+ * bấm vào chính nó ở nhóm «Lẻ». Nên nó rơi xuống «Lẻ», và nhãn bộ vẫn nằm nguyên
+ * trên bản ghi để phần thứ hai quay lại lúc nào cũng được.
+ */
+export const MIN_SET_PARTS = 2;
+
+/** Các bộ trong kho — chỉ những nhãn có đủ `MIN_SET_PARTS` phần. */
+export function elementSets(bundle: PresetBundle = getPresets()): ElementSetView[] {
+  const order: string[] = [];
+  const byId = new Map<string, ElementSetView>();
+  for (const element of bundle.elements) {
+    const id = element.set?.id ?? "";
+    if (!id) continue;
+    let view = byId.get(id);
+    if (!view) {
+      /* PHẦN ĐẦU THẮNG: hai phần cùng bộ mà mang hai chữ khác nhau là dữ liệu đã
+         lệch (sửa tay trên đĩa, hoặc một lượt ghi hụt) — chọn một cách dứt khoát
+         còn hơn để nhãn bộ nhảy theo thứ tự lọc. */
+      view = { id, vi: element.set?.vi || id, parts: [] };
+      byId.set(id, view);
+      order.push(id);
+    }
+    view.parts.push(element);
+  }
+  return order
+    .map((id) => byId.get(id))
+    .filter((view): view is ElementSetView => view !== undefined && view.parts.length >= MIN_SET_PARTS);
+}
+
+/** Món KHÔNG thuộc bộ nào đủ phần — thứ hiện ở nhóm «Lẻ» của hộp chọn. */
+export function looseElements(bundle: PresetBundle = getPresets()): ElementPreset[] {
+  const grouped = new Set(elementSets(bundle).map((view) => view.id));
+  return bundle.elements.filter((element) => {
+    const id = element.set?.id ?? "";
+    return !id || !grouped.has(id);
+  });
 }
 
 /* ══ DỊCH GIỮA HAI HÌNH DẠNG ════════════════════════════════════════════════
@@ -472,6 +707,20 @@ function payloadOf(kind: PresetKind, preset: AnyPreset): PresetPayload {
         glazeId: preset.glazeId ?? "",
         sizeId: preset.sizeId ?? "",
         ...(preset.skel ? { skel: preset.skel } : {}),
+        /**
+         * NHÃN BỘ — ghi ra khi có; khi KHÔNG có thì tuỳ món.
+         *
+         * Món thường: vắng khoá luôn, vì `flush` so hai `data` bằng JSON và một
+         * khoá rỗng thừa là một PATCH cho bản ghi không đổi gì, nhân với 48 dòng.
+         * NĂM MÓN HẠT GIỐNG ĐƯỢC GOM VÀO BỘ thì khác: `toBundle` vá nhãn bộ cho
+         * chúng theo id (`SEED_SET`), nên với chúng "vắng khoá" đã có sẵn một
+         * nghĩa — «bản ghi đời cũ, hãy vá». Nếu «đã gỡ khỏi bộ» cũng vắng khoá
+         * thì lượt đọc kế tiếp kéo món ấy trở lại bộ, im lặng. Nên riêng năm món
+         * ấy ghi hẳn `set: null` để nói ra «có người đã quyết, và quyết là không».
+         */
+        ...(preset.set
+          ? { set: { id: preset.set.id, vi: preset.set.vi } }
+          : SEED_SET[preset.id] ? { set: null } : {}),
       },
     };
   }
@@ -529,9 +778,38 @@ const LEGACY_ELEMENT_EN: Record<string, string> = {
 
 /** Hình dạng hạt giống, tra theo id — nguồn của cả `seedPresets()` lẫn bảng di trú
  *  ngay dưới, để hai chỗ không thể nói khác nhau. */
+const SEED_ELEMENTS: readonly ElementPreset[] = seedPresets().elements;
+
 const SEED_SKEL: Record<string, Skel | undefined> = Object.fromEntries(
-  seedPresets().elements.map((element) => [element.id, element.skel]),
+  SEED_ELEMENTS.map((element) => [element.id, element.skel]),
 );
+
+/**
+ * Nhãn bộ hạt giống, tra theo id — nguồn của phép vá ở `toBundle`.
+ *
+ * CHỈ chứa món hạt giống THUỘC một bộ; món lẻ không có mặt, nên `SEED_SET[id]`
+ * vừa là "món này thuộc bộ nào" vừa là câu hỏi "đây có phải món hạt giống có bộ
+ * không" mà `payloadOf` cần.
+ */
+const SEED_SET: Record<string, ElementSetRef | undefined> = Object.fromEntries(
+  SEED_ELEMENTS.filter((element) => element.set).map((element) => [element.id, element.set]),
+);
+
+/**
+ * Bản ghi trên đĩa → `ElementSetRef`, hoặc `undefined`.
+ *
+ * `null` (đã gỡ khỏi bộ, xem `payloadOf`) và mọi thứ rác khác đều ra `undefined`
+ * — cùng một nghĩa cuối cùng là «món lẻ», khác nhau chỉ ở chỗ `payloadOf` có phải
+ * nói ra hay không.
+ */
+function readSet(value: unknown): ElementSetRef | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  const id = typeof raw["id"] === "string" ? raw["id"].trim() : "";
+  if (!id) return undefined;
+  const vi = typeof raw["vi"] === "string" ? raw["vi"].trim() : "";
+  return { id, vi: vi || id };
+}
 
 /**
  * DI TRÚ CỠ GHIM: bốn nấc S/M/L/XL của hạt giống ĐỜI TRƯỚC → rỗng (đo theo hình).
@@ -600,6 +878,22 @@ function toBundle(rows: readonly LibraryPreset[]): PresetBundle {
        * kể cả khi người dùng sửa tay trên đĩa.
        */
       const skel = readSkel(data["skel"]) ?? SEED_SKEL[id];
+      /**
+       * DI TRÚ NHÃN BỘ — cùng cách, cùng kỷ luật với `SEED_SKEL` ngay trên.
+       *
+       * `set` là khoá MỚI: mọi workspace mở app trước lượt này giữ tám bản ghi
+       * element không có nó, và `seedOnce` cố ý không ghi đè bản ghi cũ. Không vá
+       * ở đây thì năm món được gom vào bộ (`button`, `popover`, `healthbar`,
+       * `coin`, `progress`) sẽ nằm ngoài bộ của chính chúng trên đúng cái máy đã
+       * dùng app từ trước — còn phần thứ hai của bộ thì vừa được gieo vào.
+       * Tra theo ID HẠT GIỐNG: món người dùng tự thêm (`tu-dat-…`) không có trong
+       * bảng ⇒ vẫn là món lẻ. Bản ghi ĐÃ CÓ `set` thì nó thắng, kể cả khi người
+       * dùng đã tự gỡ món ấy ra khỏi bộ… trừ đúng một ca không phân biệt được:
+       * gỡ khỏi bộ ghi ra một bản ghi KHÔNG có khoá `set`, y hệt bản ghi đời cũ.
+       * Nên «gỡ khỏi bộ» ở màn quản lý ghi `set` rỗng chứ không xoá khoá — xem
+       * `readSet`.
+       */
+      const set = readSet(data["set"]) ?? ("set" in data ? undefined : SEED_SET[id]);
       const savedSize = str(data, "sizeId");
       bundle.elements.push({
         id, vi: row.name,
@@ -608,6 +902,7 @@ function toBundle(rows: readonly LibraryPreset[]): PresetBundle {
         glazeId,
         sizeId: savedSize === LEGACY_ELEMENT_SIZE[id] ? "" : savedSize,
         ...(skel ? { skel } : {}),
+        ...(set ? { set } : {}),
       });
     } else if (row.kind === "mascot") bundle.mascots.push({ id, vi: row.name, en, refName: str(data, "refName") });
     else if (isCatalogKind(row.kind)) {
@@ -750,8 +1045,8 @@ export function addCustomElement(name: string, enInput?: string): ElementPreset 
    ║ màn chỉ biết đúng một kiểu: `ManagedRow`.                                ║
    ╚══════════════════════════════════════════════════════════════════════════╝ */
 
-/** Phần đuôi CHỈ trục `element` có — hình học và mặc định của một loại ô. */
-export type ManagedElementFields = Pick<ElementPreset, "decor" | "glazeId" | "sizeId" | "skel">;
+/** Phần đuôi CHỈ trục `element` có — hình học, mặc định của một loại ô, và nhãn bộ. */
+export type ManagedElementFields = Pick<ElementPreset, "decor" | "glazeId" | "sizeId" | "skel" | "set">;
 
 /** Một dòng bất kỳ của bất kỳ danh mục nào, nhìn từ màn quản lý. */
 export interface ManagedRow extends CatalogRow {
@@ -773,6 +1068,7 @@ export function managedRows(bundle: PresetBundle, kind: ManagedKind): ManagedRow
       element: {
         decor: row.decor, glazeId: row.glazeId, sizeId: row.sizeId,
         ...(row.skel ? { skel: row.skel } : {}),
+        ...(row.set ? { set: row.set } : {}),
       },
     }));
   }
@@ -791,6 +1087,7 @@ export function withManagedRows(bundle: PresetBundle, kind: ManagedKind, rows: r
         glazeId: row.element?.glazeId ?? GLAZE_AUTO,
         sizeId: row.element?.sizeId ?? "",
         ...(row.element?.skel ? { skel: row.element.skel } : {}),
+        ...(row.element?.set ? { set: row.element.set } : {}),
       })),
     };
   }
@@ -981,21 +1278,67 @@ type SeedState = "idle" | "running" | "done";
 let seedState: SeedState = "idle";
 
 /**
- * Kho này còn THIẾU hạt giống nào không.
+ * GIEO CÁI GÌ — `null` là "không gieo gì cả".
  *
- * Không chỉ hỏi "kho có rỗng không" nữa: một workspace mở app trước lượt mười
- * danh mục mới có đủ style/element/mascot mà KHÔNG có dòng nào của chủ đề, khung
- * cảnh, dáng… Hỏi bằng "rỗng hay không" thì nó không bao giờ được gieo, và mười
- * trục ấy vĩnh viễn sống bằng hạt giống trong RAM — sửa được trên màn nhưng mất
- * sạch sau mỗi lần tải lại trang.
+ * `"all"` là cửa cũ: kho rỗng, hoặc một trục chưa có dòng nào.
+ * `"elements"` là cửa MỚI, và nó tồn tại vì một ca có thật: một máy đã dùng app từ
+ * trước lượt «bộ» có ĐỦ mọi trục và đủ tám món hạt giống đời trước — nên cửa cũ trả
+ * `null` và các phần của mười bảy bộ sẽ không bao giờ tới máy ấy.
  */
-function needsSeed(rows: readonly LibraryPreset[]): boolean {
-  if (rows.length === 0) return true;
+type SeedScope = "all" | "elements";
+
+/**
+ * Tám id hạt giống ĐỜI TRƯỚC — đọc từ `LEGACY_ELEMENT_SIZE` chứ không chép lại.
+ * Hai bảng cùng liệt kê "món hạt giống đời trước" là hai bảng sẽ trôi khỏi nhau.
+ */
+const LEGACY_SEED_ELEMENT_IDS: readonly string[] = Object.keys(LEGACY_ELEMENT_SIZE);
+
+/** Id hạt giống CHỈ ĐỜI NÀY MỚI CÓ — vừa là thứ phải gieo bù, vừa là vạch mực. */
+const NEW_SEED_ELEMENT_IDS: readonly string[] = SEED_ELEMENTS
+  .map((element) => element.id)
+  .filter((id) => !LEGACY_SEED_ELEMENT_IDS.includes(id));
+
+/**
+ * Kho này còn thiếu hạt giống nào, và thiếu tới mức nào.
+ *
+ * ╔══ VÌ SAO VẠCH MỰC LÀ «KHÔNG CÓ PHẦN NÀO», KHÔNG PHẢI «THIẾU PHẦN NÀO» ═══╗
+ * ║ Hỏi "thiếu phần nào thì gieo phần ấy" nghe đúng hơn — cho tới lúc người   ║
+ * ║ dùng XOÁ một phần họ không cần. Lần mở app sau, phần ấy thiếu, và ta gieo ║
+ * ║ lại: cú xoá của họ bị hoàn tác bởi một cơ chế họ không nhìn thấy, mãi mãi.║
+ * ║ Nên câu hỏi phải là "máy này đã từng nhận bộ chưa": KHÔNG phần nào có mặt ║
+ * ║ ⇒ chưa từng ⇒ gieo. Có dù chỉ một phần ⇒ đã từng ⇒ mọi khoảng trống còn   ║
+ * ║ lại là QUYẾT ĐỊNH CỦA NGƯỜI DÙNG, và ta không đụng vào.                   ║
+ * ║ Cái giá, nói thẳng: xoá SẠCH mọi phần của mọi bộ thì lần mở sau chúng về  ║
+ * ║ lại. Đổi lấy: xoá bớt — thứ người ta thật sự làm — thì không bao giờ bị   ║
+ * ║ hoàn tác. Ai muốn một bộ biến mất mà không quay lại thì ẩn nó đi.         ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Không chỉ hỏi "kho có rỗng không": một workspace mở app trước lượt mười danh mục
+ * mới có đủ style/element/mascot mà KHÔNG có dòng nào của chủ đề, khung cảnh, dáng…
+ * Hỏi bằng "rỗng hay không" thì nó không bao giờ được gieo, và mười trục ấy vĩnh
+ * viễn sống bằng hạt giống trong RAM — sửa được trên màn nhưng mất sạch sau mỗi lần
+ * tải lại trang.
+ */
+function seedScope(rows: readonly LibraryPreset[]): SeedScope | null {
+  if (rows.length === 0) return "all";
   const kinds = new Set(rows.map((row) => row.kind));
-  return CATALOG_ORDER.some((kind) => !kinds.has(kind));
+  if (CATALOG_ORDER.some((kind) => !kinds.has(kind))) return "all";
+  const have = new Set(
+    rows.filter((row) => row.kind === "element").map((row) => str(row.data ?? {}, "key") || row.id),
+  );
+  /* HAI VẾ, và cả hai đều cần.
+     ① CÓ hạt giống đời trước ⇒ đây đúng là một máy đã nhận danh mục món từ ta, chỉ
+       là nhận bản cũ. Một kho toàn món tự đặt tên thì KHÔNG rơi vào đây: nhét bốn
+       mươi dòng vào một danh mục người ta đã dựng bằng tay là một việc không ai xin.
+     ② CHƯA có id nào của đời này ⇒ chưa từng nhận. Có dù một id ⇒ đã nhận rồi, và
+       mọi chỗ trống còn lại là thứ họ đã tự xoá. */
+  const legacy = LEGACY_SEED_ELEMENT_IDS.some((id) => have.has(id));
+  const modern = NEW_SEED_ELEMENT_IDS.some((id) => have.has(id));
+  if (legacy && !modern) return "elements";
+  return null;
 }
 
-async function seedOnce(): Promise<void> {
+async function seedOnce(scope: SeedScope): Promise<void> {
   if (seedState !== "idle") return;
   seedState = "running";
   try {
@@ -1007,12 +1350,18 @@ async function seedOnce(): Promise<void> {
     const have = new Set((live.presets ?? []).map((row) => rowKey(row.kind, str(row.data ?? {}, "key") || row.id)));
 
     const seed = seedPresets();
-    const jobs: [PresetKind, AnyPreset[]][] = [
-      ["style", seed.styles],
-      ["element", seed.elements],
-      ["mascot", seed.mascots],
-      ...CATALOG_ORDER.map((kind) => [kind, seed.catalogs[kind]] as [PresetKind, AnyPreset[]]),
-    ];
+    /* `"elements"` gieo ĐÚNG những id đời này mới có, không đụng tới mười một trục
+       còn lại và không đụng tới tám món hạt giống đời trước. Gieo cả kho ở nhánh
+       này là mở một cửa hoàn tác thứ hai: một dòng «Trang trí» mà người dùng đã xoá
+       từ lâu sẽ mọc lại chỉ vì hôm nay ta thêm mấy cái bộ. */
+    const jobs: [PresetKind, AnyPreset[]][] = scope === "elements"
+      ? [["element", seed.elements.filter((element) => NEW_SEED_ELEMENT_IDS.includes(element.id))]]
+      : [
+        ["style", seed.styles],
+        ["element", seed.elements],
+        ["mascot", seed.mascots],
+        ...CATALOG_ORDER.map((kind) => [kind, seed.catalogs[kind]] as [PresetKind, AnyPreset[]]),
+      ];
     for (const [kind, list] of jobs) {
       for (const preset of list) {
         /* Khoá đã có trên server ⇒ BỎ QUA. Kể cả khi bản trên server đã bị người
@@ -1074,7 +1423,8 @@ export function usePresets(): PresetBundle {
     hydrate(rows);
     /* Kho rỗng THẬT (đã tải xong, mảng rỗng) ⇒ gieo hạt. Phân biệt với "chưa
        tải" bằng chính `rows === undefined` ở trên: chưa tải thì không làm gì. */
-    if (needsSeed(rows) && !dirty) void seedOnce();
+    const scope = seedScope(rows);
+    if (scope !== null && !dirty) void seedOnce(scope);
   }, [rows]);
 
   return React.useSyncExternalStore(subscribe, getPresets, getPresets);

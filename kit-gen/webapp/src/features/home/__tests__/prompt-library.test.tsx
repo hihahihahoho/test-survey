@@ -291,3 +291,89 @@ describe("④ xoá hai chạm", () => {
     expect(pillOptions("scene").find((option) => option.value === "shop")?.vi).toBe("Cửa hàng");
   });
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⑤ BỘ MÓN GIAO DIỆN — tạo, đổi tên, bỏ
+   ══════════════════════════════════════════════════════════════════════════
+   Một bộ KHÔNG phải một bản ghi: nó là một nhãn mà vài món cùng đeo. Nên mọi thao
+   tác với bộ đều là một lượt ghi lên NHIỀU dòng, và đó chính là chỗ dễ ghi thiếu:
+   đổi tên mà chỉ ghi lên dòng đang mở thì hai phần cùng bộ mang hai chữ khác nhau,
+   và nhóm «Bộ» ở thẻ Bộ UI hiện chữ nào là tuỳ thứ tự. */
+describe("⑤ bộ món giao diện", () => {
+  /* Radix Select mở bằng pointer, và jsdom không có hai API dưới đây. */
+  beforeEach(() => {
+    if (!Element.prototype.hasPointerCapture) Element.prototype.hasPointerCapture = () => false;
+    if (!Element.prototype.releasePointerCapture) Element.prototype.releasePointerCapture = () => {};
+    if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
+  });
+
+  const openElement = async (label: string) => {
+    searchParams = { kind: "element" };
+    mount();
+    await ready();
+    await waitFor(() => expect(screen.getByText(label)).toBeTruthy());
+    fireEvent.click(screen.getByText(label));
+  };
+
+  /* Radix mở menu bằng `pointerdown` — mà jsdom lại không dựng `PointerEvent`, nên
+     `fireEvent.pointerDown` gửi một `Event` trần không có `button`/`pointerType` và
+     Radix bỏ qua. Đường bàn phím thì đi qua đúng cùng một handler mở menu. */
+  const openSetPicker = () => {
+    const trigger = screen.getByLabelText("Thuộc bộ");
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: " " });
+  };
+
+  const elementsNow = async () => {
+    const { getPresets } = await import("@/features/prompt-lab/lib/presets-store");
+    return getPresets().elements;
+  };
+
+  it("dòng của một phần NÓI RA nó thuộc bộ nào, ngay trên danh sách", async () => {
+    searchParams = { kind: "element" };
+    mount();
+    await ready();
+    await waitFor(() => expect(screen.getByText("Thanh máu · phần đầy")).toBeTruthy());
+    const line = screen.getByText("Thanh máu · phần đầy").closest("li")!;
+    expect(line.textContent).toContain("Bộ Thanh máu");
+  });
+
+  it("đổi tên bộ ⇒ MỌI phần đổi theo, không chỉ dòng đang mở", async () => {
+    await openElement("Thanh máu · phần đầy");
+    fireEvent.change(screen.getByLabelText("Tên bộ"), { target: { value: "Thanh sinh lực" } });
+
+    const elements = await elementsNow();
+    const parts = elements.filter((element) => element.set?.id === "hp");
+    expect(parts.length).toBe(2);
+    expect(parts.every((part) => part.set?.vi === "Thanh sinh lực")).toBe(true);
+  });
+
+  it("«Bỏ bộ» gỡ nhãn khỏi mọi phần — và KHÔNG xoá món nào", async () => {
+    await openElement("Thanh máu · phần đầy");
+    const before = (await elementsNow()).length;
+
+    fireEvent.click(screen.getByRole("button", { name: /Bỏ bộ, giữ các món/ }));
+
+    const elements = await elementsNow();
+    expect(elements).toHaveLength(before);
+    expect(elements.some((element) => element.set?.id === "hp")).toBe(false);
+  });
+
+  it("gắn một món LẺ vào một bộ đã có ⇒ nó thành phần thứ n của bộ ấy", async () => {
+    await openElement("Huy hiệu");
+    openSetPicker();
+    fireEvent.click(await screen.findByRole("option", { name: /^Xếp hạng/ }));
+
+    const elements = await elementsNow();
+    expect(elements.find((element) => element.id === "badge")?.set?.id).toBe("rank");
+  });
+
+  it("«Bộ mới…» dựng một bộ mang tên chính món đang mở", async () => {
+    await openElement("Ổ khoá");
+    openSetPicker();
+    fireEvent.click(await screen.findByRole("option", { name: "Bộ mới…" }));
+
+    const made = (await elementsNow()).find((element) => element.id === "lock");
+    expect(made?.set).toEqual({ id: "o-khoa", vi: "Ổ khoá" });
+  });
+});
