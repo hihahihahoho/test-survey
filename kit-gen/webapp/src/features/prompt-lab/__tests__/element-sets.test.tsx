@@ -22,7 +22,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { composerToContract } from "@/features/prompt-canvas/lib/composer-to-contract";
-import { elementSets, seedPresets, type ElementPreset } from "../lib/presets-store";
+import { elementLabel, elementSets, seedPresets, type ElementPreset } from "../lib/presets-store";
 import { newCell, type ComposerState, type UiCell, type UiKitBlock } from "../lib/composer-model";
 import { UiKitBlockBody } from "../components/UiKitBlockView";
 
@@ -119,9 +119,11 @@ describe("② gom danh mục thành bộ", () => {
   it("món KHÔNG đeo nhãn bộ thành một bộ MỘT PHẦN, không thành một loại dòng thứ hai", () => {
     const panel = elementSets(PRESETS).find((set) => set.parts[0]!.id === "panel")!;
     expect(panel.parts.map((part) => part.id)).toEqual(["panel"]);
-    /* Nhãn của bộ một phần LÀ nhãn của chính món ấy — không có chữ nào sinh thêm. */
-    expect(panel.vi).toBe("Bảng nền");
+    /* Nhãn của bộ một phần LÀ nhãn của chính món ấy — không có chữ nào sinh thêm,
+       và `elementLabel` cũng không ghép thêm gì (không có tên bộ để ghép). */
+    expect(panel.vi).toBe("Panel");
     expect(panel.id).toBe("panel");
+    expect(elementLabel(elementOf("panel"), "?")).toBe("Panel");
   });
 
   it("nhãn bộ chỉ còn MỘT phần ⇒ VẪN là một dòng bộ, không rơi xuống dạng khác", () => {
@@ -134,7 +136,7 @@ describe("② gom danh mục thành bộ", () => {
     };
     const hp = elementSets(trimmed).find((set) => set.id === "hp")!;
     expect(hp.parts.map((part) => part.id)).toEqual(["healthbar"]);
-    expect(hp.vi).toBe("Thanh máu");
+    expect(hp.vi).toBe("Health bar");
     expect(elementOf("healthbar").set?.id).toBe("hp");
   });
 
@@ -197,9 +199,9 @@ describe("③ hộp chọn: một danh sách toàn bộ, và một cú bấm ra 
 
   it("dòng của một bộ NÓI RA số phần trước khi người ta bấm", () => {
     openBox();
-    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "thanh mau" } });
+    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "health" } });
 
-    const option = screen.getByRole("option", { name: /Thanh máu/ });
+    const option = screen.getByRole("option", { name: /^Health bar/ });
     expect(option.textContent).toContain("2 phần");
   });
 
@@ -207,36 +209,39 @@ describe("③ hộp chọn: một danh sách toàn bộ, và một cú bấm ra 
     let latest: UiKitBlock | null = null;
     render(<Harness onState={(next) => { latest = next; }} />);
     fireEvent.click(screen.getByRole("button", { name: /Element/ }));
-    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "thanh mau" } });
-    fireEvent.click(screen.getByRole("option", { name: /Thanh máu/ }));
+    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "health" } });
+    fireEvent.click(screen.getByRole("option", { name: /^Health bar/ }));
 
     expect(latest).not.toBeNull();
     expect(latest!.cells.map((cell) => cell.elementId)).toEqual(["healthbar", "hp-fill"]);
-    /* Ô THUỘC BỘ MANG NHÃN CỦA PHẦN, không phải một nhãn gộp: mỗi dòng vẫn là một
-       dòng bình thường — xoá được, kéo được, đổi loại được. */
-    expect(screen.getByLabelText("Ghi chú cho Thanh máu")).toBeTruthy();
-    expect(screen.getByLabelText("Ghi chú cho Thanh máu · phần đầy")).toBeTruthy();
+    /* MỖI PHẦN MỘT DÒNG RIÊNG, không có "dòng gộp": mỗi dòng vẫn là một dòng bình
+       thường — xoá được, kéo được, đổi bộ được. Nhãn của nó là «tên bộ · tên phần»
+       (`elementLabel`), nên hai dòng của cùng một bộ phân biệt được với nhau. */
+    expect(screen.getByLabelText("Ghi chú cho Health bar · frame")).toBeTruthy();
+    expect(screen.getByLabelText("Ghi chú cho Health bar · fill")).toBeTruthy();
   });
 
   it("tìm bằng tên MỘT PHẦN ra BỘ chứa nó, chứ không ra chính phần ấy", () => {
     openBox();
-    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "phan day" } });
-    /* Hai bộ có phần đầy: thanh máu và thanh tiến trình. Cả hai đều hiện ra dưới
-       dạng BỘ — người ta nhớ cái phần mình cần chứ không nhớ ta xếp nó vào bộ tên
-       gì, nhưng thứ bấm được vẫn là cả bộ. */
+    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "fill" } });
+    /* Ba bộ có phần khớp «fill»: Health bar («fill»), Progress bar («fill») và
+       Inventory slot («filled»). Cả ba hiện ra dưới dạng BỘ — người ta nhớ cái
+       phần mình cần chứ không nhớ ta xếp nó vào bộ tên gì, nhưng thứ bấm được vẫn
+       là cả bộ. KHÔNG có dòng nào chỉ mang tên một phần: đó là điều ca này khoá. */
     const rows = screen.getAllByRole("option").map((node) => node.textContent ?? "");
-    expect(rows).toHaveLength(2);
-    for (const row of rows) expect(row).toMatch(/· 2 phần/);
-    expect(screen.getByRole("option", { name: /Thanh máu/ })).toBeTruthy();
+    expect(rows).toHaveLength(3);
+    for (const row of rows) expect(row).toMatch(/· \d+ phần/);
+    expect(screen.getByRole("option", { name: /^Health bar/ })).toBeTruthy();
+    expect(screen.getByRole("option", { name: /^Progress bar/ })).toBeTruthy();
   });
 
   it("món lẻ hiện như một BỘ MỘT PHẦN, và bấm ra đúng một ô", () => {
     let latest: UiKitBlock | null = null;
     render(<Harness onState={(next) => { latest = next; }} />);
     fireEvent.click(screen.getByRole("button", { name: /Element/ }));
-    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "bang nen" } });
+    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "panel" } });
 
-    const option = screen.getByRole("option", { name: /Bảng nền/ });
+    const option = screen.getByRole("option", { name: /^Panel/ });
     expect(option.textContent).toContain("1 phần");
     fireEvent.click(option);
     expect(latest!.cells.map((cell) => cell.elementId)).toEqual(["panel"]);
@@ -245,21 +250,21 @@ describe("③ hộp chọn: một danh sách toàn bộ, và một cú bấm ra 
   it("bộ đã có ĐỦ phần trong thẻ thì dòng của nó ghi «đã có trong thẻ»", () => {
     render(<Harness onState={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /Element/ }));
-    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "thanh mau" } });
-    expect(screen.getByRole("option", { name: /Thanh máu/ }).textContent).not.toContain("đã có trong thẻ");
+    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "health" } });
+    expect(screen.getByRole("option", { name: /^Health bar/ }).textContent).not.toContain("đã có trong thẻ");
 
-    fireEvent.click(screen.getByRole("option", { name: /Thanh máu/ }));
-    expect(screen.getByRole("option", { name: /Thanh máu/ }).textContent).toContain("đã có trong thẻ");
+    fireEvent.click(screen.getByRole("option", { name: /^Health bar/ }));
+    expect(screen.getByRole("option", { name: /^Health bar/ }).textContent).toContain("đã có trong thẻ");
   });
 
   it("xoá bớt một phần ⇒ các phần còn lại ở nguyên, không kéo cả bộ đi theo", () => {
     let latest: UiKitBlock | null = null;
     render(<Harness onState={(next) => { latest = next; }} />);
     fireEvent.click(screen.getByRole("button", { name: /Element/ }));
-    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "thanh mau" } });
-    fireEvent.click(screen.getByRole("option", { name: /Thanh máu/ }));
+    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "health" } });
+    fireEvent.click(screen.getByRole("option", { name: /^Health bar/ }));
 
-    fireEvent.click(screen.getByRole("button", { name: /Bỏ element Thanh máu · phần đầy/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Bỏ element Health bar · fill/ }));
     expect(latest!.cells.map((cell) => cell.elementId)).toEqual(["healthbar"]);
   });
 });
@@ -294,7 +299,9 @@ describe("④ prompt của một ô thuộc bộ", () => {
     expect(fill).toContain("the fill bar");
     expect(fill).toContain("inside the health bar");
     expect(fill).toContain("no track or frame of its own");
-    expect(ui.components[1]!.vi).toBe("Thanh máu · phần đầy");
+    /* CHỮ ĐẦY ĐỦ đi tới tận contract: `vi` của phần là «fill», và một ô tên «fill»
+       đứng trong bảng kết quả thì không ai đọc ra nó là ruột của cái gì. */
+    expect(ui.components[1]!.vi).toBe("Health bar · fill");
   });
 
   it("hộp cắt của phần đầy nhỏ hơn hộp cắt của khung — hình học đi tới tận contract", () => {

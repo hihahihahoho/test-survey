@@ -46,7 +46,7 @@ import type { BlockMode } from "../lib/composer-model";
  * ║ `row` (text-body) là bậc của MỘT DÒNG TRONG DANH SÁCH — dòng element của  ║
  * ║ block Bộ UI. Soi tận mắt trên trình duyệt: để nguyên `prose` ở đó thì gạt ║
  * ║ công tắc «Tự do» làm chữ trong CÙNG MỘT THẺ nhảy một bậc, dòng tràn thành ║
- * ║ hai hàng, và nhãn "#1 Nút bấm" bên trái tụt hẳn khỏi hàng chữ nó chú.     ║
+ * ║ hai hàng, và nhãn "#1 Button · primary" bên trái tụt khỏi hàng chữ nó chú.║
  * ║ Đúng cái "to nhỏ không đều" mà chủ sản phẩm chỉ ra ở đợt trước.           ║
  * ║ Pill KHÔNG khai cỡ riêng (xem `pill-ui.tsx`) nên nó tự đi theo bậc này —  ║
  * ║ đổi một chỗ, cả dòng theo, không có chỗ nào lệch lại.                     ║

@@ -1,5 +1,5 @@
 import { poseSpecFor } from "@/features/kit-core/lib/kitset-to-contract";
-import { getPresets, hasDecorPlacement, themeOutfitEN, type PresetBundle } from "./presets-store";
+import { elementLabel, getPresets, hasDecorPlacement, themeOutfitEN, type PresetBundle } from "./presets-store";
 import { labelOf, phraseOf } from "./pill-registry";
 import { describeBrandColors } from "./brand-colors";
 import { gridFor, type Block, type BlockMode, type ComposerState, type MascotPose, type UiCell } from "./composer-model";
@@ -27,7 +27,9 @@ import { countImageRefs, makeContext, serializeDoc, tidy, type PromptDocNode, ty
  */
 function cellLine(cell: UiCell, index: number, ctx: SerializeContext, mode: BlockMode): string {
   const element = ctx.presets.elements.find((preset) => preset.id === cell.elementId);
-  const name = element?.vi ?? cell.elementId;
+  /* CHỮ ĐẦY ĐỦ («Health bar · fill»): dòng này là để NGƯỜI đối chiếu ô nào với ô
+     nào, và một cái tên «fill» đứng một mình thì không đối chiếu được với gì. */
+  const name = elementLabel(element, cell.elementId);
 
   /* CHẾ ĐỘ TỰ DO: câu của dòng thay cho cả phần ghép pill. Cùng luật với block
      Background/Nhân vật — người dùng đã chọn phá khuôn thì đừng lén dựng lại khuôn

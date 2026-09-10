@@ -418,7 +418,7 @@ export interface ComposerState {
 }
 
 /**
- * Id duy nhất trong phiên. `Date.now()` một mình KHÔNG đủ: bấm "+ Nút bấm" ba
+ * Id duy nhất trong phiên. `Date.now()` một mình KHÔNG đủ: bấm "+ Element" ba
  * lần liên tiếp trong cùng một mili-giây là ba ô trùng key React, và React sẽ
  * tái dùng nhầm DOM giữa chúng.
  */

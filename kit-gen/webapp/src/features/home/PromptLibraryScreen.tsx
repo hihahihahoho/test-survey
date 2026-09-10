@@ -93,8 +93,8 @@ const CATEGORY: Record<ManagedKind, { label: string; blurb: string; where: strin
   },
   element: {
     label: "Món giao diện",
-    blurb: "Danh mục món: nút bấm, popover, thanh máu… kèm hình dạng và cỡ. Vài món gom lại thành một bộ thì chọn một lần là thêm đủ các phần.",
-    where: "Ô chọn món ở đầu mỗi dòng của thẻ Bộ UI — bộ nằm ở nhóm trên cùng.",
+    blurb: "Danh mục món: Button, Popup, Health bar… kèm hình dạng và cỡ. Tên dùng thuật ngữ tiếng Anh của giới làm game UI; nhãn của một phần là tên ngắn của riêng nó (fill, box), tên bộ đứng trước nó trên thẻ Bộ UI.",
+    where: "Ô chọn món ở đầu mỗi dòng của thẻ Bộ UI — mỗi dòng ở đó là một BỘ, chọn một lần là có đủ các phần.",
   },
   pose: { label: "Dáng", blurb: "Dáng đứng của nhân vật.", where: "Pill «Dáng» trên mỗi dòng của thẻ Nhân vật." },
   view: {
@@ -233,7 +233,12 @@ export function PromptLibraryScreen() {
 
   const rows = React.useMemo(() => managedRows(presets, kind), [presets, kind]);
   const q = foldVi(query);
-  const shown = q ? rows.filter((row) => foldVi(`${row.vi} ${row.en} ${row.id}`).includes(q)) : rows;
+  /* TÊN BỘ NẰM TRONG RỔ TÌM, vì từ 09/2026 nhãn của một PHẦN chỉ là tên ngắn của
+     riêng nó («fill», «name plate»). Không có tên bộ ở đây thì gõ "dialog" không
+     ra ba dòng của bộ Dialog — trong khi đó đúng là chữ người dùng nhớ. */
+  const shown = q
+    ? rows.filter((row) => foldVi(`${row.vi} ${row.element?.set?.vi ?? ""} ${row.en} ${row.id}`).includes(q))
+    : rows;
   const editing = rows.find((row) => row.id === editingId) ?? null;
 
   /** Đổi danh mục ⇒ dọn sạch mọi trạng thái tạm: lời hỏi xoá của danh mục cũ mà
@@ -777,7 +782,11 @@ function RowEditor({
       </div>
 
       <div className="space-y-4 pt-4">
-        <Field id={`row-vi-${row.id}`} label="Nhãn tiếng Việt" hint="Chữ hiện trên nút chọn — không đi vào prompt.">
+        {/* «NHÃN HIỂN THỊ», không còn «Nhãn tiếng Việt»: danh mục món nay mang thuật
+            ngữ tiếng Anh của giới làm game UI (Dialog, Health bar), nên một cái nhãn
+            hứa "tiếng Việt" đứng trên một ô chứa chữ "Dialog" là nói sai ngay trên
+            màn. Trường bên dưới vẫn tên `vi` — xem `ElementPreset.vi`. */}
+        <Field id={`row-vi-${row.id}`} label="Nhãn hiển thị" hint="Chữ hiện trên nút chọn — không đi vào prompt.">
           <Input
             id={`row-vi-${row.id}`}
             value={row.vi}
@@ -916,7 +925,7 @@ function RowEditor({
                     id={`row-setvi-${row.id}`}
                     value={element.set.vi}
                     onChange={(event) => onRenameSet(event.target.value)}
-                    placeholder="Ví dụ: Thanh máu"
+                    placeholder="Ví dụ: Health bar"
                   />
                 </Field>
                 {/* «BỎ BỘ» GỠ NHÃN, KHÔNG XOÁ MÓN — nên nó không phải một nút đỏ và

@@ -80,7 +80,7 @@ export function DragHandle({ index, count, onMove, dragFrom, label }: RowDragPro
  * ║ giờ wrap. Một dòng = một chỗ xoá, ở đúng một toạ độ, mọi dòng như nhau.   ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * `what` là cả cụm danh từ ("element Nút bấm", "dáng Đứng chờ") chứ không chỉ cái
+ * `what` là cả cụm danh từ ("element Health bar · fill", "dáng Đứng chờ") chứ không chỉ cái
  * tên: người dùng trình đọc màn hình nghe «Bỏ Đứng chờ» thì không biết mình đang
  * bỏ một dòng hay bỏ một lựa chọn.
  */

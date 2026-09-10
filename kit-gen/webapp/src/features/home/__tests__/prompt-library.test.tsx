@@ -163,7 +163,7 @@ describe("② sửa một dòng ⇒ menu pill đổi theo NGAY", () => {
     await waitFor(() => expect(screen.getByText("Cửa hàng")).toBeTruthy());
 
     fireEvent.click(screen.getByText("Cửa hàng"));
-    const vi = screen.getByLabelText("Nhãn tiếng Việt") as HTMLInputElement;
+    const vi = screen.getByLabelText("Nhãn hiển thị") as HTMLInputElement;
     fireEvent.change(vi, { target: { value: "Quầy hàng" } });
     const en = screen.getByLabelText("Câu tiếng Anh gửi máy vẽ") as HTMLTextAreaElement;
     fireEvent.change(en, { target: { value: "a market stall background" } });
@@ -196,7 +196,7 @@ describe("② sửa một dòng ⇒ menu pill đổi theo NGAY", () => {
     const before = pillOptions("scene").length;
 
     fireEvent.click(screen.getByRole("button", { name: /Thêm mục/ }));
-    fireEvent.change(screen.getByLabelText("Nhãn tiếng Việt"), { target: { value: "Hầm ngục" } });
+    fireEvent.change(screen.getByLabelText("Nhãn hiển thị"), { target: { value: "Hầm ngục" } });
     fireEvent.change(screen.getByLabelText("Câu tiếng Anh gửi máy vẽ"), { target: { value: "a dungeon background" } });
 
     const options = pillOptions("scene");
@@ -217,7 +217,7 @@ describe("② sửa một dòng ⇒ menu pill đổi theo NGAY", () => {
     await ready();
 
     fireEvent.click(screen.getByRole("button", { name: /Thêm mục/ }));
-    expect((screen.getByLabelText("Nhãn tiếng Việt") as HTMLInputElement).value).toBe("Mục mới");
+    expect((screen.getByLabelText("Nhãn hiển thị") as HTMLInputElement).value).toBe("Mục mới");
     expect(pillOptions("scene").at(-1)!.vi).toBe("Mục mới");
   });
 });
@@ -282,7 +282,7 @@ describe("④ xoá hai chạm", () => {
     await waitFor(() => expect(screen.getByText("Cửa hàng")).toBeTruthy());
 
     fireEvent.click(screen.getByText("Cửa hàng"));
-    fireEvent.change(screen.getByLabelText("Nhãn tiếng Việt"), { target: { value: "Đã sửa" } });
+    fireEvent.change(screen.getByLabelText("Nhãn hiển thị"), { target: { value: "Đã sửa" } });
     expect(pillOptions("scene").find((option) => option.value === "shop")?.vi).toBe("Đã sửa");
 
     fireEvent.click(screen.getByRole("button", { name: /Khôi phục mặc định/ }));
@@ -307,12 +307,15 @@ describe("⑤ bộ món giao diện", () => {
     if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
   });
 
+  /* Nhãn phần nay là tên NGẮN, và vài bộ dùng chung một chữ («empty» có ở Hearts,
+     Stars, Inventory slot). Lấy dòng ĐẦU khớp chữ ấy là đủ cho mọi ca dưới đây —
+     chúng đều mở một dòng mà id của nó được kiểm lại ngay sau đó. */
   const openElement = async (label: string) => {
     searchParams = { kind: "element" };
     mount();
     await ready();
-    await waitFor(() => expect(screen.getByText(label)).toBeTruthy());
-    fireEvent.click(screen.getByText(label));
+    await waitFor(() => expect(screen.getAllByText(label).length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByText(label)[0]!);
   };
 
   /* Radix mở menu bằng `pointerdown` — mà jsdom lại không dựng `PointerEvent`, nên
@@ -330,26 +333,41 @@ describe("⑤ bộ món giao diện", () => {
   };
 
   it("dòng của một phần NÓI RA nó thuộc bộ nào, ngay trên danh sách", async () => {
+    /* Từ 09/2026 nhãn của một PHẦN chỉ là tên ngắn của riêng nó («fill»), vì tên
+       bộ đã đứng ngay trước nó trên thẻ Bộ UI (`elementLabel`). Ở màn quản lý thì
+       không có ai đứng trước, nên DÒNG PHỤ phải nói ra bộ — nếu không thì danh
+       sách có ba dòng «empty» không phân biệt được với nhau. */
     searchParams = { kind: "element" };
     mount();
     await ready();
-    await waitFor(() => expect(screen.getByText("Thanh máu · phần đầy")).toBeTruthy());
-    const line = screen.getByText("Thanh máu · phần đầy").closest("li")!;
-    expect(line.textContent).toContain("Bộ Thanh máu");
+    await waitFor(() => expect(screen.getAllByText("fill").length).toBeGreaterThan(0));
+    const line = screen.getAllByText("fill")[0]!.closest("li")!;
+    expect(line.textContent).toContain("Bộ Health bar");
+  });
+
+  it("gõ TÊN BỘ ở ô tìm ⇒ ra đủ các phần của bộ ấy, dù nhãn phần không mang tên bộ", async () => {
+    searchParams = { kind: "element" };
+    mount();
+    await ready();
+    await waitFor(() => expect(screen.getAllByText("box").length).toBeGreaterThan(0));
+
+    fireEvent.change(screen.getByLabelText(/^Tìm trong/), { target: { value: "dialog" } });
+    const shown = screen.getAllByRole("listitem").map((node) => node.textContent ?? "");
+    expect(shown.filter((line) => line.includes("Bộ Dialog"))).toHaveLength(3);
   });
 
   it("đổi tên bộ ⇒ MỌI phần đổi theo, không chỉ dòng đang mở", async () => {
-    await openElement("Thanh máu · phần đầy");
-    fireEvent.change(screen.getByLabelText("Tên bộ"), { target: { value: "Thanh sinh lực" } });
+    await openElement("frame");
+    fireEvent.change(screen.getByLabelText("Tên bộ"), { target: { value: "Life bar" } });
 
     const elements = await elementsNow();
     const parts = elements.filter((element) => element.set?.id === "hp");
     expect(parts.length).toBe(2);
-    expect(parts.every((part) => part.set?.vi === "Thanh sinh lực")).toBe(true);
+    expect(parts.every((part) => part.set?.vi === "Life bar")).toBe(true);
   });
 
   it("«Bỏ bộ» gỡ nhãn khỏi mọi phần — và KHÔNG xoá món nào", async () => {
-    await openElement("Thanh máu · phần đầy");
+    await openElement("frame");
     const before = (await elementsNow()).length;
 
     fireEvent.click(screen.getByRole("button", { name: /Bỏ bộ, giữ các món/ }));
@@ -360,20 +378,20 @@ describe("⑤ bộ món giao diện", () => {
   });
 
   it("gắn một món LẺ vào một bộ đã có ⇒ nó thành phần thứ n của bộ ấy", async () => {
-    await openElement("Huy hiệu");
+    await openElement("Badge");
     openSetPicker();
-    fireEvent.click(await screen.findByRole("option", { name: /^Xếp hạng/ }));
+    fireEvent.click(await screen.findByRole("option", { name: /^Leaderboard/ }));
 
     const elements = await elementsNow();
     expect(elements.find((element) => element.id === "badge")?.set?.id).toBe("rank");
   });
 
   it("«Bộ mới…» dựng một bộ mang tên chính món đang mở", async () => {
-    await openElement("Ổ khoá");
+    await openElement("Lock");
     openSetPicker();
     fireEvent.click(await screen.findByRole("option", { name: "Bộ mới…" }));
 
     const made = (await elementsNow()).find((element) => element.id === "lock");
-    expect(made?.set).toEqual({ id: "o-khoa", vi: "Ổ khoá" });
+    expect(made?.set).toEqual({ id: "lock", vi: "Lock" });
   });
 });

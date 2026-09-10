@@ -377,7 +377,10 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
 
     const first = ui.components[0]!;
     expect(first.file).toBe("01-button");
-    expect(first.vi).toBe("Nút bấm");
+    /* NHÃN ĐẦY ĐỦ («tên bộ · tên phần»), không phải `element.vi` trần: `vi` của một
+       PHẦN là tên ngắn của riêng nó («primary»), và một ô tên «primary» đứng trong
+       bảng kết quả thì không ai đọc ra nó là nút của bộ nào. Xem `elementLabel`. */
+    expect(first.vi).toBe("Button · primary");
     expect(first.spec).toContain(PRESETS.elements.find((e) => e.id === "button")!.en);
     expect(first.spec).toContain(phraseOf("decor", "medium", PRESETS));
     /* Đục nền nối qua `resolveElementSpec`, không phải một luật nối chuỗi thứ hai. */
@@ -493,7 +496,7 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
 
   it("CỠ ĐẦU RA vào `out`; hộp VẼ là max-fit của ô, giữ đúng tỉ lệ ấy", () => {
     const ui = composerToContract(full(), { presets: PRESETS }).sheets.find((s) => s.id === "ui")!;
-    /* Lưới 2×2 trên canvas 1254 ⇒ ô 627px. Ô c2 là «Icon tiền» (tròn 1:1) chọn XL
+    /* Lưới 2×2 trên canvas 1254 ⇒ ô 627px. Ô c2 là «Coin counter · coin» (tròn 1:1) chọn XL
        ⇒ cỡ ĐẦU RA 304×304 — nhưng hộp VẼ không phải 304: máy vẽ được giao hộp lớn
        nhất vừa lề (502²) để ăn trọn độ phân giải, code mới co về 304 lúc xuất. */
     const cellPx = Math.round(SQUARE_CANVAS_PX / ui.grid.cols);
@@ -1222,7 +1225,7 @@ describe("di trú: bản nháp đời trước không có bốn trường mới"
       PRESETS,
     );
     const cells = (doc.composer.blocks[0] as { cells: { sizeId: string }[] }).cells;
-    /* Con số ấy là cỡ mặc định CỦA «Nút bấm», không phải một cỡ hệ thống chung. */
+    /* Con số ấy là cỡ mặc định CỦA «Button · primary», không phải một cỡ hệ thống chung. */
     expect(cells[0]!.sizeId).toBe(defaultSizeOf(PRESETS.elements.find((e) => e.id === "button")));
     /* Cỡ người dùng ĐÃ chọn thì không được đụng tới. */
     expect(cells[1]!.sizeId).toBe("xl");

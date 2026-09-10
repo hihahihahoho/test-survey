@@ -24,7 +24,10 @@ import type { StyleAxes } from "@/features/kit-core/lib/model";
 import { STYLE_AXIS_IDS } from "@/features/kit-core/lib/form-model";
 import { subjectAxisLine } from "@/features/kit-core/lib/style-phrases";
 import { INHERIT, labelOf, phraseOf, type PillKind } from "@/features/prompt-lab/lib/pill-registry";
-import { getPresets, hasDecor, hasDecorPlacement, type ElementPreset, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
+import {
+  elementLabel, getPresets, hasDecor, hasDecorPlacement,
+  type ElementPreset, type PresetBundle,
+} from "@/features/prompt-lab/lib/presets-store";
 import { NODE } from "@/features/prompt-lab/lib/schema";
 import {
   CUSTOM_ELEMENT_SKEL, SQUARE_CANVAS_PX, defaultSizePx, sizePx, type SizePx,
@@ -678,7 +681,11 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
       const spec = freeSpec || templateSpec;
       return {
         file: `${String(k + 1).padStart(2, "0")}-${slugify(cell.elementId) || "o"}`,
-        vi: element?.vi ?? cell.elementId,
+        /* CHỮ ĐẦY ĐỦ («Health bar · fill»), không phải `element.vi` trần: `vi` của
+           một PHẦN là tên ngắn của riêng nó («fill»), và một ô tên «fill» đứng
+           trong bảng kết quả thì không ai đọc ra nó là ruột của cái gì. Cùng hàm
+           với nhãn trên dòng soạn — hai chỗ gọi cùng một ô phải gọi cùng một tên. */
+        vi: elementLabel(element, cell.elementId),
         spec,
         skel: { ...skel },
         out: { w: out.w, h: out.h },

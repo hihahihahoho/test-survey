@@ -85,7 +85,12 @@ export interface ElementSetRef {
   /** Id của BỘ — mọi phần cùng bộ mang ĐÚNG một chuỗi này. */
   id: string;
   /**
-   * Nhãn tiếng Việt của cả bộ («Thanh máu») — chữ đứng đầu dòng của bộ trong hộp chọn.
+   * Nhãn của cả bộ («Health bar») — chữ đứng đầu dòng của bộ trong hộp chọn.
+   *
+   * THUẬT NGỮ GAME UI BẰNG TIẾNG ANH, không phải bản dịch — xem khối «NHÃN LÀ
+   * THUẬT NGỮ TIẾNG ANH» ở `seedPresets()`. Trường vẫn tên `vi` vì nó là NHÃN HIỂN
+   * THỊ (đối lập với `en`, câu đi vào prompt); đổi tên trường là đổi cả `row.name`
+   * của server và mọi chỗ đọc nó, để lấy về đúng một chữ đẹp hơn.
    *
    * CHÉP TRÊN MỌI PHẦN, có chủ ý: kho là một mảng phẳng các bản ghi độc lập trên
    * server (mỗi phần một `POST`), nên không có chỗ nào để cất một bản ghi «bộ» mà
@@ -98,7 +103,7 @@ export interface ElementSetRef {
 }
 
 /**
- * Một loại element của bộ UI kit — thứ sinh ra các nút "+ Nút bấm", "+ Popover"…
+ * Một loại element của bộ UI kit — một dòng trong danh mục mà thẻ Bộ UI tra.
  *
  * ╔══ `en` LÀ MỘT DANH TỪ, KHÔNG PHẢI MỘT CÂU MÔ TẢ ═════════════════════════╗
  * ║ Chủ sản phẩm, khi nhìn thấy "a rounded background panel for a dialog" và  ║
@@ -116,6 +121,12 @@ export interface ElementSetRef {
  */
 export interface ElementPreset {
   id: string;
+  /**
+   * NHÃN HIỂN THỊ của riêng món này — và với một PHẦN, nó là tên phần chứ không
+   * phải tên đầy đủ: «fill», không phải «Health bar fill». Chữ đầy đủ mà người
+   * dùng đọc trên dòng do `elementLabel` ghép, vì nó là chỗ DUY NHẤT biết cả bộ
+   * lẫn phần. Món lẻ (không `set`) thì tên phần chính là tên đầy đủ.
+   */
   vi: string;
   /** DANH TỪ tiếng Anh đi vào `spec` của ô — xem khối chú thích trên. */
   en: string;
@@ -396,23 +407,23 @@ export function seedPresets(): PresetBundle {
    * luôn HẠT GIỐNG — nút «Khôi phục mặc định» khi ấy khôi phục về thứ vừa bị sửa.
    */
   const SET = {
-    btn: { id: "btn", vi: "Bộ nút" },
-    hp: { id: "hp", vi: "Thanh máu" },
-    xp: { id: "xp", vi: "Thanh tiến trình" },
-    dialog: { id: "dialog", vi: "Hộp thoại" },
-    rank: { id: "rank", vi: "Xếp hạng" },
+    btn: { id: "btn", vi: "Button" },
+    hp: { id: "hp", vi: "Health bar" },
+    xp: { id: "xp", vi: "Progress bar" },
+    dialog: { id: "dialog", vi: "Dialog" },
+    rank: { id: "rank", vi: "Leaderboard" },
     popup: { id: "popup", vi: "Popup" },
-    tab: { id: "tab", vi: "Tab" },
-    toggle: { id: "toggle", vi: "Công tắc" },
-    check: { id: "check", vi: "Ô chọn" },
-    heart: { id: "heart", vi: "Tim" },
-    star: { id: "star", vi: "Sao" },
-    coins: { id: "coins", vi: "Đồng tiền" },
-    slot: { id: "slot", vi: "Ô túi đồ" },
-    slider: { id: "slider", vi: "Thanh trượt" },
-    arrow: { id: "arrow", vi: "Mũi tên" },
-    envelope: { id: "envelope", vi: "Phong bì" },
-    gift: { id: "gift", vi: "Hộp quà" },
+    tab: { id: "tab", vi: "Tabs" },
+    toggle: { id: "toggle", vi: "Toggle" },
+    check: { id: "check", vi: "Checkbox" },
+    heart: { id: "heart", vi: "Hearts" },
+    star: { id: "star", vi: "Stars" },
+    coins: { id: "coins", vi: "Coin counter" },
+    slot: { id: "slot", vi: "Inventory slot" },
+    slider: { id: "slider", vi: "Slider" },
+    arrow: { id: "arrow", vi: "Arrows" },
+    envelope: { id: "envelope", vi: "Envelope" },
+    gift: { id: "gift", vi: "Gift box" },
   } satisfies Record<string, ElementSetRef>;
 
   return {
@@ -470,97 +481,111 @@ export function seedPresets(): PresetBundle {
        một chữ nào cho bộ.
 
        ⚠️ NĂM MÓN CŨ ĐƯỢC GOM VÀO BỘ, KHÔNG BỊ NHÂN ĐÔI: `button`, `popover`,
-       `healthbar`, `coin`, `progress` giữ nguyên id và giữ nguyên NHÃN VIỆT của
-       chúng — chỉ đeo thêm nhãn bộ. Đẻ ra một "Thanh máu (bộ)" thứ hai bên cạnh
-       "Thanh máu" cũ là bắt người dùng đoán xem hai dòng cùng tên khác nhau chỗ nào. */
-    elements: [
-      /* ── Bộ nút ──────────────────────────────────────────────────────────── */
-      { id: "button", vi: "Nút bấm", en: "button", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
-      { id: "btn-secondary", vi: "Bộ nút · phụ", en: "the same button as a secondary action", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
-      { id: "btn-pressed", vi: "Bộ nút · nhấn", en: "the same button, pressed", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
-      { id: "btn-disabled", vi: "Bộ nút · khoá", en: "the same button, disabled", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
+       `healthbar`, `coin`, `progress` giữ nguyên id — chỉ đeo thêm nhãn bộ. Đẻ ra
+       một bộ thứ hai bên cạnh món cũ là bắt người dùng đoán xem hai dòng cùng tên
+       khác nhau chỗ nào.
 
-      /* ── Thanh máu — khung 0,86×0,22, phần đầy 0,81×0,15 (nhỏ hơn đúng một lề) ── */
-      { id: "healthbar", vi: "Thanh máu", en: "health bar", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.22, slice9: true }, set: SET.hp },
+       ══ NHÃN LÀ THUẬT NGỮ TIẾNG ANH, KHÔNG PHẢI BẢN DỊCH ═════════════════
+       Chủ sản phẩm: *«hộp thoại → để chọn là Dialog giống như từ chuyên ngành,
+       mấy cái khác cũng thế»*. Người ngồi dựng một bộ kit game gọi món của họ là
+       Dialog · Health bar · Leaderboard — đó là chữ họ đọc trong tài liệu engine,
+       trong tên component của chính dự án họ. Dịch sang «Hộp thoại» là bắt họ
+       dịch ngược lại trong đầu ở mỗi cú bấm, và dịch ngược thì mỗi người ra một
+       chữ khác nhau.
+       Nên `vi` của một BỘ là thuật ngữ đầy đủ (Dialog, Health bar), còn `vi` của
+       một PHẦN là thuật ngữ NGẮN của riêng phần ấy (box, fill, name plate) — tên
+       bộ đã đứng ngay trước nó trên nhãn, xem `elementLabel`. Lặp lại tên bộ trong
+       từng phần («Health bar · Health bar fill») là đọc hai lần một chữ.
+       ⚠️ `vi` KHÔNG đi vào prompt — `en` mới đi. Đổi nhãn không đụng một chữ nào
+       của câu gửi máy vẽ, và đó là lý do lượt đổi tên này không cần đo lại prompt. */
+    elements: [
+      /* ── Button ──────────────────────────────────────────────────────────── */
+      { id: "button", vi: "primary", en: "button", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
+      { id: "btn-secondary", vi: "secondary", en: "the same button as a secondary action", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
+      { id: "btn-pressed", vi: "pressed", en: "the same button, pressed", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
+      { id: "btn-disabled", vi: "disabled", en: "the same button, disabled", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
+
+      /* ── Health bar — khung 0,86×0,22, phần đầy 0,81×0,15 (nhỏ hơn đúng một lề) ── */
+      { id: "healthbar", vi: "frame", en: "health bar", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.22, slice9: true }, set: SET.hp },
       /* Phần đầy để «Không trang trí»: một dải màu chạy bên trong khung mà lại mọc
          viền và hoa văn của riêng nó thì xếp lên nhau là hai lớp viền chồng nhau. */
-      { id: "hp-fill", vi: "Thanh máu · phần đầy", en: "the fill bar that sits inside the health bar, the same length and corner radius, with no track or frame of its own", decor: "none", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.81, h: 0.15, slice9: true }, set: SET.hp },
+      { id: "hp-fill", vi: "fill", en: "the fill bar that sits inside the health bar, the same length and corner radius, with no track or frame of its own", decor: "none", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.81, h: 0.15, slice9: true }, set: SET.hp },
 
-      /* ── Thanh tiến trình — cùng luật với thanh máu, mảnh hơn ─────────────── */
-      { id: "progress", vi: "Thanh tiến trình", en: "progress bar", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.18, slice9: true }, set: SET.xp },
-      { id: "progress-fill", vi: "Thanh tiến trình · phần đầy", en: "the fill bar that sits inside the progress bar, the same length and corner radius, with no track or frame of its own", decor: "none", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.81, h: 0.12, slice9: true }, set: SET.xp },
+      /* ── Progress bar — cùng luật với Health bar, mảnh hơn ─────────────── */
+      { id: "progress", vi: "frame", en: "progress bar", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.18, slice9: true }, set: SET.xp },
+      { id: "progress-fill", vi: "fill", en: "the fill bar that sits inside the progress bar, the same length and corner radius, with no track or frame of its own", decor: "none", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.81, h: 0.12, slice9: true }, set: SET.xp },
 
-      /* ── Hộp thoại ───────────────────────────────────────────────────────── */
-      { id: "dialog-panel", vi: "Hộp thoại · khung", en: "a dialogue box", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.92, h: 0.56, slice9: true }, set: SET.dialog },
-      { id: "dialog-name", vi: "Hộp thoại · bảng tên", en: "the name plate that sits on the same dialogue box", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.16, slice9: true }, set: SET.dialog },
-      { id: "dialog-next", vi: "Hộp thoại · nút tiếp", en: "the continue marker of the same dialogue box", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.3, h: 0.3 }, set: SET.dialog },
+      /* ── Dialog ───────────────────────────────────────────────────────── */
+      { id: "dialog-panel", vi: "box", en: "a dialogue box", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.92, h: 0.56, slice9: true }, set: SET.dialog },
+      { id: "dialog-name", vi: "name plate", en: "the name plate that sits on the same dialogue box", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.16, slice9: true }, set: SET.dialog },
+      { id: "dialog-next", vi: "next button", en: "the continue marker of the same dialogue box", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.3, h: 0.3 }, set: SET.dialog },
 
-      /* ── Xếp hạng ────────────────────────────────────────────────────────── */
-      { id: "rank-1", vi: "Xếp hạng · hạng nhất", en: "a first-place rank medal", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.5, h: 0.5 }, set: SET.rank },
-      { id: "rank-2", vi: "Xếp hạng · hạng nhì", en: "the same rank medal, second place", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.5, h: 0.5 }, set: SET.rank },
-      { id: "rank-3", vi: "Xếp hạng · hạng ba", en: "the same rank medal, third place", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.5, h: 0.5 }, set: SET.rank },
-      { id: "rank-row", vi: "Xếp hạng · hàng thường", en: "a leaderboard row with an avatar slot at the left", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.9, h: 0.22, slice9: true }, set: SET.rank },
-      { id: "rank-row-self", vi: "Xếp hạng · hàng của tôi", en: "the same leaderboard row, highlighted as the current player", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.9, h: 0.22, slice9: true }, set: SET.rank },
+      /* ── Leaderboard ────────────────────────────────────────────────────────── */
+      { id: "rank-1", vi: "rank 1 badge", en: "a first-place rank medal", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.5, h: 0.5 }, set: SET.rank },
+      { id: "rank-2", vi: "rank 2 badge", en: "the same rank medal, second place", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.5, h: 0.5 }, set: SET.rank },
+      { id: "rank-3", vi: "rank 3 badge", en: "the same rank medal, third place", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.5, h: 0.5 }, set: SET.rank },
+      { id: "rank-row", vi: "row", en: "a leaderboard row with an avatar slot at the left", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.9, h: 0.22, slice9: true }, set: SET.rank },
+      { id: "rank-row-self", vi: "my row", en: "the same leaderboard row, highlighted as the current player", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.9, h: 0.22, slice9: true }, set: SET.rank },
 
       /* ── Popup ───────────────────────────────────────────────────────────── */
-      { id: "popover", vi: "Popover", en: "popover", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.86, h: 0.66, slice9: true }, set: SET.popup },
-      { id: "popup-ribbon", vi: "Popup · ruy băng tiêu đề", en: "the heading banner that sits across the top of the same popover", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.78, h: 0.2, slice9: true }, set: SET.popup },
-      { id: "popup-close", vi: "Popup · nút đóng", en: "the round close button of the same popover, with a cross mark", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.32, h: 0.32 }, set: SET.popup },
+      { id: "popover", vi: "panel", en: "popover", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.86, h: 0.66, slice9: true }, set: SET.popup },
+      { id: "popup-ribbon", vi: "ribbon", en: "the heading banner that sits across the top of the same popover", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.78, h: 0.2, slice9: true }, set: SET.popup },
+      { id: "popup-close", vi: "close button", en: "the round close button of the same popover, with a cross mark", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.32, h: 0.32 }, set: SET.popup },
 
-      /* ── Tab ─────────────────────────────────────────────────────────────── */
-      { id: "tab-idle", vi: "Tab · thường", en: "a tab chip, unselected", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.6, h: 0.26, slice9: true }, set: SET.tab },
-      { id: "tab-active", vi: "Tab · đang chọn", en: "the same tab chip, selected", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.6, h: 0.26, slice9: true }, set: SET.tab },
+      /* ── Tabs ─────────────────────────────────────────────────────────────── */
+      { id: "tab-idle", vi: "idle", en: "a tab chip, unselected", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.6, h: 0.26, slice9: true }, set: SET.tab },
+      { id: "tab-active", vi: "active", en: "the same tab chip, selected", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.6, h: 0.26, slice9: true }, set: SET.tab },
 
-      /* ── Công tắc ────────────────────────────────────────────────────────── */
-      { id: "toggle-on", vi: "Công tắc · bật", en: "a toggle switch, on, knob at the right", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.5, h: 0.28 }, set: SET.toggle },
-      { id: "toggle-off", vi: "Công tắc · tắt", en: "the same toggle switch, off, knob at the left", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.5, h: 0.28 }, set: SET.toggle },
+      /* ── Toggle ────────────────────────────────────────────────────────── */
+      { id: "toggle-on", vi: "on", en: "a toggle switch, on, knob at the right", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.5, h: 0.28 }, set: SET.toggle },
+      { id: "toggle-off", vi: "off", en: "the same toggle switch, off, knob at the left", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.5, h: 0.28 }, set: SET.toggle },
 
-      /* ── Ô chọn ──────────────────────────────────────────────────────────── */
-      { id: "check-on", vi: "Ô chọn · bật", en: "a checkbox, checked", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.34, h: 0.34 }, set: SET.check },
-      { id: "check-off", vi: "Ô chọn · tắt", en: "the same checkbox, unchecked", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.34, h: 0.34 }, set: SET.check },
+      /* ── Checkbox ──────────────────────────────────────────────────────────── */
+      { id: "check-on", vi: "on", en: "a checkbox, checked", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.34, h: 0.34 }, set: SET.check },
+      { id: "check-off", vi: "off", en: "the same checkbox, unchecked", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.34, h: 0.34 }, set: SET.check },
 
-      /* ── Tim ─────────────────────────────────────────────────────────────── */
-      { id: "heart-full", vi: "Tim · đầy", en: "a life heart, full", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.4, h: 0.38 }, set: SET.heart },
-      { id: "heart-empty", vi: "Tim · rỗng", en: "the same life heart, empty", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.4, h: 0.38 }, set: SET.heart },
+      /* ── Hearts ─────────────────────────────────────────────────────────────── */
+      { id: "heart-full", vi: "full", en: "a life heart, full", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.4, h: 0.38 }, set: SET.heart },
+      { id: "heart-empty", vi: "empty", en: "the same life heart, empty", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.4, h: 0.38 }, set: SET.heart },
 
-      /* ── Sao ─────────────────────────────────────────────────────────────── */
-      { id: "star-full", vi: "Sao · đầy", en: "a rating star, earned", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.42, h: 0.4 }, set: SET.star },
-      { id: "star-empty", vi: "Sao · rỗng", en: "the same rating star, not earned", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.42, h: 0.4 }, set: SET.star },
+      /* ── Stars ─────────────────────────────────────────────────────────────── */
+      { id: "star-full", vi: "full", en: "a rating star, earned", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.42, h: 0.4 }, set: SET.star },
+      { id: "star-empty", vi: "empty", en: "the same rating star, not earned", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.42, h: 0.4 }, set: SET.star },
 
-      /* ── Đồng tiền: ô đếm + đồng xu nằm trong ô đếm ấy ────────────────────── */
-      { id: "coin", vi: "Icon tiền", en: "coin icon", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.4, h: 0.4 }, set: SET.coins },
-      { id: "coin-counter", vi: "Đồng tiền · ô đếm", en: "a counter chip with a slot at one end for the coin icon", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.72, h: 0.26, slice9: true }, set: SET.coins },
+      /* ── Coin counter: ô đếm + đồng xu nằm trong ô đếm ấy ────────────────────── */
+      { id: "coin", vi: "coin", en: "coin icon", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.4, h: 0.4 }, set: SET.coins },
+      { id: "coin-counter", vi: "counter", en: "a counter chip with a slot at one end for the coin icon", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "pill", w: 0.72, h: 0.26, slice9: true }, set: SET.coins },
 
-      /* ── Ô túi đồ ────────────────────────────────────────────────────────── */
-      { id: "slot-empty", vi: "Ô túi đồ · trống", en: "an empty inventory slot", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.5, slice9: true }, set: SET.slot },
-      { id: "slot-filled", vi: "Ô túi đồ · có đồ", en: "the same inventory slot holding an item", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.5, slice9: true }, set: SET.slot },
-      { id: "slot-active", vi: "Ô túi đồ · đang chọn", en: "the same inventory slot, selected", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.5, slice9: true }, set: SET.slot },
+      /* ── Inventory slot ────────────────────────────────────────────────────────── */
+      { id: "slot-empty", vi: "empty", en: "an empty inventory slot", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.5, slice9: true }, set: SET.slot },
+      { id: "slot-filled", vi: "filled", en: "the same inventory slot holding an item", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.5, slice9: true }, set: SET.slot },
+      { id: "slot-active", vi: "active", en: "the same inventory slot, selected", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.5, slice9: true }, set: SET.slot },
 
-      /* ── Thanh trượt ─────────────────────────────────────────────────────── */
-      { id: "slider-track", vi: "Thanh trượt · rãnh", en: "the track of a slider", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.12, slice9: true }, set: SET.slider },
-      { id: "slider-knob", vi: "Thanh trượt · núm", en: "the knob that rides on the same slider track", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.26, h: 0.26 }, set: SET.slider },
+      /* ── Slider ─────────────────────────────────────────────────────── */
+      { id: "slider-track", vi: "track", en: "the track of a slider", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.12, slice9: true }, set: SET.slider },
+      { id: "slider-knob", vi: "knob", en: "the knob that rides on the same slider track", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.26, h: 0.26 }, set: SET.slider },
 
-      /* ── Mũi tên ─────────────────────────────────────────────────────────── */
-      { id: "arrow-left", vi: "Mũi tên · trái", en: "a round button with a left arrow", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.34, h: 0.34 }, set: SET.arrow },
-      { id: "arrow-right", vi: "Mũi tên · phải", en: "the same round button with a right arrow", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.34, h: 0.34 }, set: SET.arrow },
+      /* ── Arrows ─────────────────────────────────────────────────────────── */
+      { id: "arrow-left", vi: "left", en: "a round button with a left arrow", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.34, h: 0.34 }, set: SET.arrow },
+      { id: "arrow-right", vi: "right", en: "the same round button with a right arrow", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.34, h: 0.34 }, set: SET.arrow },
 
-      /* ── Phong bì: nắp rời, CÙNG BỀ NGANG với thân để dán lại thành một cái ── */
-      { id: "envelope-body", vi: "Phong bì · thân", en: "the body of a lucky-money envelope, without its top flap", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.66 }, set: SET.envelope },
-      { id: "envelope-flap", vi: "Phong bì · nắp", en: "only the detached top flap of the same envelope, the same width as its body", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.28 }, set: SET.envelope },
+      /* ── Envelope: nắp rời, CÙNG BỀ NGANG với thân để dán lại thành một cái ── */
+      { id: "envelope-body", vi: "body", en: "the body of a lucky-money envelope, without its top flap", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.66 }, set: SET.envelope },
+      { id: "envelope-flap", vi: "flap", en: "only the detached top flap of the same envelope, the same width as its body", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.28 }, set: SET.envelope },
 
-      /* ── Hộp quà ─────────────────────────────────────────────────────────── */
-      { id: "gift-closed", vi: "Hộp quà · đóng", en: "a closed gift box", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.56 }, set: SET.gift },
-      { id: "gift-open", vi: "Hộp quà · mở", en: "the same gift box, open", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.56 }, set: SET.gift },
+      /* ── Gift box ─────────────────────────────────────────────────────────── */
+      { id: "gift-closed", vi: "closed", en: "a closed gift box", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.56 }, set: SET.gift },
+      { id: "gift-open", vi: "open", en: "the same gift box, open", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.56 }, set: SET.gift },
 
       /* ── MÓN LẺ — không phần nào đi kèm, chọn một là được một ─────────────── */
-      { id: "avatar-frame", vi: "Khung avatar", en: "avatar frame", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.62, h: 0.62 } },
-      { id: "panel", vi: "Bảng nền", en: "panel", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.92, h: 0.8, slice9: true } },
-      { id: "badge", vi: "Huy hiệu", en: "badge", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.46, h: 0.46 } },
-      { id: "lock", vi: "Ổ khoá", en: "padlock", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.42, h: 0.5 } },
-      { id: "timer", vi: "Đồng hồ đếm giờ", en: "countdown timer plate", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.52, h: 0.3, slice9: true } },
+      { id: "avatar-frame", vi: "Avatar frame", en: "avatar frame", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.62, h: 0.62 } },
+      { id: "panel", vi: "Panel", en: "panel", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.92, h: 0.8, slice9: true } },
+      { id: "badge", vi: "Badge", en: "badge", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "circle", w: 0.46, h: 0.46 } },
+      { id: "lock", vi: "Lock", en: "padlock", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.42, h: 0.5 } },
+      { id: "timer", vi: "Timer", en: "countdown timer plate", decor: "light", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.52, h: 0.3, slice9: true } },
       /* `free`: một cái cúp có quai và đế, không nắn về hộp chữ nhật được — cùng cờ
          mà `element-lib-v2.json` gắn cho `54-trophy-cup`. */
-      { id: "trophy", vi: "Cúp", en: "trophy cup", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.66, free: true } },
+      { id: "trophy", vi: "Trophy", en: "trophy cup", decor: "medium", glazeId: GLAZE_AUTO, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.66, free: true } },
     ],
 
     /* Mascot: ghép dáng + biểu cảm có sẵn thành vài "nhân vật mẫu" để trang
@@ -605,27 +630,68 @@ export interface ElementSetView {
  * ║ dòng «Thanh máu» (bộ, ra hai ô) và một dòng «Thanh máu» (phần, ra một    ║
  * ║ ô). Muốn bấm đúng thì phải hiểu sự khác nhau ấy TRƯỚC cú bấm đầu tiên —  ║
  * ║ mà nó chỉ hiện ra SAU, lúc đếm số dòng vừa mọc thêm.                     ║
- * ║ Nên: một danh sách, một kiểu dòng, một luật — bấm một dòng là thêm ĐỦ    ║
+ * ║ Nên: một danh sách, một kiểu dòng, một luật — bấm một dòng là lấy ĐỦ     ║
  * ║ các phần của nó. Món không đeo nhãn bộ chỉ là một bộ có đúng một phần;   ║
  * ║ nó không cần một nhóm riêng, vì nó không hành xử khác.                   ║
- * ║ Ai cần đúng MỘT phần của một bộ vẫn còn đường: pill tên trên một dòng đã ║
- * ║ có («Đổi loại món») bày danh mục PHẲNG — xem `ElementCatalogue`.         ║
+ * ║ Từ 09/2026 luật ấy phủ CẢ pill tên trên một dòng đã có («Đổi loại món»): ║
+ * ║ hộp ấy từng bày danh mục phẳng, nay bày đúng danh sách này (chủ sản      ║
+ * ║ phẩm: *«select cả cụm chứ»*) — xem `ElementCatalogue`. Ai cần đúng MỘT   ║
+ * ║ phần thì chọn cả bộ rồi xoá dòng thừa: một cú bấm trên thứ đã hiện ra    ║
+ * ║ trước mắt, thay vì một cú bấm đúng trong một danh sách 48 dòng.          ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
  * Không còn ngưỡng "đủ mấy phần mới là bộ": người dùng xoá phần cho tới khi còn
  * một thì dòng ấy vẫn là dòng của chính bộ ấy, chỉ ghi «1 phần». Nhãn bộ nằm
  * nguyên trên bản ghi, nên phần thứ hai quay lại lúc nào cũng được.
  */
+/**
+ * BỘ MÀ MỘT MÓN THUỘC VỀ, dưới dạng một khoá so sánh được.
+ *
+ * KHOÁ GOM KHÁC ID BỘ, có chủ ý: một món tự đặt tên lấy id từ `slugify`, và
+ * `slugify("Health bar")` ra đúng chuỗi mà một nhãn bộ có thể đang mang. Gom chung
+ * theo id trần là ghép một món không liên quan vào bộ ấy. Hai tiền tố tách hẳn hai
+ * không gian tên; `id` bày ra ngoài vẫn là id thật.
+ *
+ * Món KHÔNG tra ra trong danh mục (id lạ trong một bản nháp cũ) ra chuỗi RỖNG —
+ * khác mọi khoá thật, nên nó không bao giờ bị coi là "đã thuộc bộ đang chọn".
+ */
+export function elementSetKey(element: ElementPreset | undefined): string {
+  if (!element) return "";
+  return element.set?.id ? `set:${element.set.id}` : `one:${element.id}`;
+}
+
+/**
+ * CHỮ NGƯỜI DÙNG ĐỌC TRÊN MỘT DÒNG: «Dialog · box», «Health bar · fill», «Panel».
+ *
+ * ╔══ VÌ SAO NHÃN PHẢI ĐƯỢC GHÉP, KHÔNG PHẢI ĐƯỢC LƯU ══════════════════════╗
+ * ║ Vì tên bộ sửa được, ở màn «Thư viện prompt», và một lượt sửa ấy ghi lên   ║
+ * ║ MỌI phần cùng lúc (`renameSet`). Nếu mỗi phần còn lưu thêm một bản chép   ║
+ * ║ của tên bộ trong `vi` của chính nó thì lượt đổi tên phải sửa hai chỗ trên ║
+ * ║ mỗi bản ghi, và chỗ nào quên thì dòng ấy mang tên bộ cũ mãi mãi.          ║
+ * ║ Ghép lúc hiển thị: một nguồn, không có gì để trôi khỏi nhau.              ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * BỘ MỘT PHẦN CHỈ HIỆN MỘT TÊN. Món lẻ không có `set`, nên nhãn của nó là `vi` của
+ * chính nó. Và bản ghi đời cũ có thể mang `set.vi` TRÙNG `vi` (nhãn bộ được vá vào
+ * lúc đọc, xem `SEED_SET`) — lặp lại nguyên một chuỗi ngay sau chính nó thì không
+ * nói thêm được gì, nên ca ấy cũng rút về một tên.
+ *
+ * `fallback` là chữ hiện khi id không còn tra ra món nào (danh mục bị xoá dòng, bản
+ * nháp cũ): chỗ gọi đưa vào `cell.elementId` — một id trần vẫn hơn một ô trống.
+ */
+export function elementLabel(element: ElementPreset | undefined, fallback: string): string {
+  if (!element) return fallback;
+  const set = (element.set?.vi ?? "").trim();
+  if (!set || set === element.vi) return element.vi || fallback;
+  return `${set} · ${element.vi}`;
+}
+
 export function elementSets(bundle: PresetBundle = getPresets()): ElementSetView[] {
   const order: string[] = [];
   const byKey = new Map<string, ElementSetView>();
   for (const element of bundle.elements) {
     const setId = element.set?.id ?? "";
-    /* KHOÁ GOM KHÁC ID BỘ, có chủ ý: một món tự đặt tên lấy id từ `slugify` và
-       `slugify("Thanh máu")` ra đúng chuỗi mà một nhãn bộ có thể đang mang. Gom
-       chung theo id trần là ghép một món không liên quan vào bộ ấy. Hai tiền tố
-       tách hẳn hai không gian tên; `id` bày ra ngoài vẫn là id thật. */
-    const key = setId ? `set:${setId}` : `one:${element.id}`;
+    const key = elementSetKey(element);
     let view = byKey.get(key);
     if (!view) {
       /* PHẦN ĐẦU THẮNG: hai phần cùng bộ mà mang hai chữ khác nhau là dữ liệu đã

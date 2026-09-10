@@ -35,7 +35,7 @@ import {
   sizePx,
   skelSizePx,
 } from "../lib/cell-size";
-import { getPresets, seedPresets, type ElementPreset } from "../lib/presets-store";
+import { elementSets, getPresets, seedPresets, type ElementPreset } from "../lib/presets-store";
 import { PILL_SLOTS, docHasBrokenPill, repairPills, retitleCellDoc, uiCellDoc } from "../lib/doc-templates";
 import { serializeComposer } from "../lib/serialize-composer";
 import {
@@ -106,11 +106,14 @@ describe("① thứ tự dòng = thứ tự ô trong contract", () => {
   });
 
   it("đổi thứ tự dòng ⇒ ĐỔI thứ tự `components[]`, không chỉ đổi trên màn", () => {
+    /* Chữ ở đây là NHÃN ĐẦY ĐỦ («tên bộ · tên phần», xem `elementLabel`), không
+       phải `element.vi` trần — một ô tên «primary» đứng một mình trong bảng kết
+       quả thì không ai đọc ra nó là nút của bộ nào. */
     const before = cellNames(cells());
-    expect(before).toEqual(["Nút bấm", "Icon tiền", "Bảng nền"]);
+    expect(before).toEqual(["Button · primary", "Coin counter · coin", "Panel"]);
 
     const after = cellNames(moveRow(cells(), 2, 0));
-    expect(after).toEqual(["Bảng nền", "Nút bấm", "Icon tiền"]);
+    expect(after).toEqual(["Panel", "Button · primary", "Coin counter · coin"]);
   });
 
   it("tên tệp của ô bám VỊ TRÍ, không bám element — số thứ tự phải chạy lại sau khi kéo", () => {
@@ -148,8 +151,8 @@ describe("② nút «+ Element» + bộ chọn", () => {
   it("dãy chip cũ đã BIẾN MẤT — chỉ còn một nút mở bộ chọn", () => {
     /* Bản trước dựng MỘT nút cho MỖI element trong danh mục. Ca này canh đúng
        cái đã bỏ: không còn nút riêng nào mang tên element. */
-    expect(screen.queryByRole("button", { name: "Nút bấm" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Icon tiền" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Button · primary" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Coin counter · coin" })).toBeNull();
     expect(screen.getByRole("button", { name: /Element/ })).toBeTruthy();
   });
 
@@ -158,18 +161,17 @@ describe("② nút «+ Element» + bộ chọn", () => {
     const box = screen.getByRole("dialog", { name: /Thêm món/ });
     expect(box).toBeTruthy();
 
-    /* Gõ KHÔNG DẤU: người ta tra danh mục bằng cách gõ nhanh, không bỏ dấu.
-       «Bảng nền» không đeo nhãn bộ, nên dòng của nó là một BỘ MỘT PHẦN và bấm ra
+    /* «Panel» không đeo nhãn bộ, nên dòng của nó là một BỘ MỘT PHẦN và bấm ra
        đúng một ô — ca này đo đường ấy, còn bộ nhiều phần có ca riêng ở
        `element-sets.test.tsx`. */
-    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "bang nen" } });
-    expect(screen.queryByRole("option", { name: /Nút bấm/ })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "panel" } });
+    expect(screen.queryByRole("option", { name: /^Button/ })).toBeNull();
 
-    fireEvent.click(screen.getByRole("option", { name: /Bảng nền/ }));
+    fireEvent.click(screen.getByRole("option", { name: /^Panel/ }));
 
     /* Dòng vừa thêm phải hiện ra ngay, mang đúng tên món đã chọn. */
-    expect(screen.getByLabelText("Ghi chú cho Bảng nền")).toBeTruthy();
-    expect(screen.queryByLabelText("Ghi chú cho Nút bấm")).toBeNull();
+    expect(screen.getByLabelText("Ghi chú cho Panel")).toBeTruthy();
+    expect(screen.queryByLabelText("Ghi chú cho Button · primary")).toBeNull();
   });
 
   /* HỘP KHÔNG TỰ ĐÓNG SAU MỖI LẦN CHỌN — và đó là một quyết định, không phải một
@@ -181,13 +183,13 @@ describe("② nút «+ Element» + bộ chọn", () => {
     /* HAI BỘ MỘT PHẦN: mỗi cú bấm đúng một dòng. Bấm một bộ nhiều phần thì một cú
        ra nhiều dòng — đó là chuyện khác và có ca riêng, trộn vào đây thì ca này hết
        đo được "thứ tự dòng đúng thứ tự bấm". */
-    for (const name of [/Bảng nền/, /Huy hiệu/]) {
+    for (const name of [/^Panel/, /^Badge/]) {
       fireEvent.click(screen.getAllByRole("option", { name })[0]!);
     }
     const handles = screen.getAllByRole("button", { name: /^Đổi chỗ/ });
     expect(handles).toHaveLength(2);
-    expect(handles[0]!.getAttribute("aria-label")).toContain("Bảng nền");
-    expect(handles[1]!.getAttribute("aria-label")).toContain("Huy hiệu");
+    expect(handles[0]!.getAttribute("aria-label")).toContain("Panel");
+    expect(handles[1]!.getAttribute("aria-label")).toContain("Badge");
   });
 
   it("gõ chuỗi không khớp gì ⇒ NÓI RA, không im lặng trả về hộp trống", () => {
@@ -228,7 +230,7 @@ describe("③ hai chế độ — dòng element ở «Tự do» là một TipTap
     /* Template = React thuần. Một ProseMirror mọc ra ở đây nghĩa là 16 editor cho
        một bộ kit 16 món — đúng cái giá mà chế độ template tồn tại để không trả. */
     expect(document.querySelector(".ProseMirror")).toBeNull();
-    expect(screen.getByLabelText("Ghi chú cho Nút bấm")).toBeTruthy();
+    expect(screen.getByLabelText("Ghi chú cho Button · primary")).toBeTruthy();
   });
 
   it("gạt sang «Tự do» ⇒ mỗi dòng mount một ô soạn, và ô ghi chú lùi đi", async () => {
@@ -249,7 +251,7 @@ describe("③ hai chế độ — dòng element ở «Tự do» là một TipTap
 
     /* `immediatelyRender: false` ⇒ editor dựng ở effect sau nhịp render đầu. */
     await waitFor(() => expect(document.querySelectorAll(".ProseMirror")).toHaveLength(2));
-    expect(screen.queryByLabelText("Ghi chú cho Nút bấm")).toBeNull();
+    expect(screen.queryByLabelText("Ghi chú cho Button · primary")).toBeNull();
 
     /* Câu khởi điểm được dựng cho MỌI dòng ngay lúc gạt — không đợi ai gõ. */
     expect(latest!.cells.every((cell) => cell.doc)).toBe(true);
@@ -304,7 +306,8 @@ describe("③ câu tự do của một dòng ĐI TỚI ĐƯỢC contract và pro
     const contract = composerToContract(state([uikit(cells(), "free")]), { presets: PRESETS });
     const spec = contract.sheets[0]!.components[0]!.spec;
     expect(spec).toContain(PRESETS.elements.find((e) => e.id === "button")!.en);
-    /* Lượng trang trí mặc định của "Nút bấm" là «Ít» — cụm EN của nó, không phải chữ "Vừa". */
+    /* Lượng trang trí mặc định của «Button · primary» là «Ít» — cụm EN của nó,
+       không phải chữ "Vừa". */
     expect(spec).toContain("a simple rim and at most one small accent");
     expect(spec).not.toContain("Ít");
     /* Và câu BỐ TRÍ đi cùng nó, cũng bằng tiếng Anh: hai pill, hai câu, một dòng. */
@@ -316,7 +319,7 @@ describe("③ câu tự do của một dòng ĐI TỚI ĐƯỢC contract và pro
     const line = serializeComposer(state([uikit(cells(), "free")]), PRESETS);
     expect(line).toContain("khắc hình con rồng ở giữa");
     /* Vẫn giữ khung "cell N (tên)" để người đọc prompt đối chiếu được với màn. */
-    expect(line).toContain("cell 1 (Nút bấm)");
+    expect(line).toContain("cell 1 (Button · primary)");
   });
 
   it("xoá sạch một dòng tự do ⇒ rơi về khuôn, KHÔNG ra ô không mô tả gì", () => {
@@ -414,23 +417,87 @@ describe("④ pill của dòng tự do: đúng kind, đúng value, không mất 
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
-   ⑤ TÊN ELEMENT LÀ PILL CHỌN ĐƯỢC
-   ══════════════════════════════════════════════════════════════════════════ */
-describe("⑤ đổi loại element tại chỗ", () => {
-  it("bấm tên ⇒ mở CÙNG bộ tra danh mục, tìm được bằng chữ không dấu", () => {
+   ⑤ PILL TÊN TRÊN DÒNG CHỌN THEO BỘ
+   ══════════════════════════════════════════════════════════════════════════
+   Chủ sản phẩm, nhìn hộp của pill trên dòng: *«select cả cụm chứ»*. Bản trước cho
+   riêng hộp này một danh mục PHẲNG (từng phần rời: «Thanh máu · phần đầy», «Hộp
+   thoại · bảng tên»…). Ba thứ ca dưới đây khoá lại:
+    · KHÔNG hộp nào còn bày một phần rời — hai hộp bày CÙNG một danh sách bộ;
+    · chọn bộ trên dòng k ⇒ dòng k thành phần đầu, phần còn lại CHÈN NGAY SAU nó
+      (không nối vào cuối: thứ tự dòng là thứ tự ô trên tấm, và cả bộ phải đứng
+      liền một cụm ở đúng chỗ người dùng đang nhìn);
+    · dòng ĐANG là một phần của chính bộ ấy ⇒ KHÔNG đổi gì (bấm «Dialog» trên một
+      dòng vốn đã là «Dialog · name plate» là cú bấm không có ý định nào — chạy nó
+      thì dòng ấy mất phần đã chọn và hai dòng trùng mọc ra bên dưới). */
+describe("⑤ pill tên trên dòng chọn cả bộ", () => {
+  it("hộp «Đổi loại món» bày ĐÚNG danh sách bộ của «+ Element» — không dòng phần rời", () => {
     render(<Harness initial={uikit([{ ...newCell("button", PRESETS), id: "c1" }])} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Đổi loại món/ }));
     expect(screen.getByRole("dialog", { name: "Đổi loại món" })).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "thanh mau" } });
-    /* NEO ĐẦU CHUỖI: hộp «Đổi loại món» bày danh mục PHẲNG, nên "Thanh máu" và
-       "Thanh máu · phần đầy" cùng khớp — mà ca này nói về đúng cái khung. */
-    expect(screen.getByRole("option", { name: /^Thanh máu\s*health bar$/ })).toBeTruthy();
-    expect(screen.queryByRole("option", { name: /Icon tiền/ })).toBeNull();
+    /* Đúng bằng số BỘ trong kho, và mỗi dòng nói ra số phần: thừa một dòng nghĩa
+       là một phần nào đó đã lọt ra ngoài dưới dạng lựa chọn riêng. */
+    const rows = screen.getAllByRole("option").map((node) => node.textContent ?? "");
+    expect(rows).toHaveLength(elementSets(PRESETS).length);
+    for (const row of rows) expect(row).toMatch(/· \d+ phần/);
+
+    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "health" } });
+    expect(screen.getByRole("option", { name: /^Health bar · 2 phần/ })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: /^Coin counter/ })).toBeNull();
   });
 
-  it("đổi loại ⇒ đổi ô trong contract, nhưng GIỮ viền · đục nền · ghi chú", async () => {
+  it("chọn bộ trên dòng ⇒ dòng thành phần ĐẦU, các phần còn lại CHÈN NGAY SAU nó", async () => {
+    let latest: UiKitBlock | null = null;
+    render(
+      <Harness
+        initial={uikit([
+          { ...newCell("button", PRESETS), id: "c1" },
+          { ...newCell("badge", PRESETS), id: "c2" },
+        ])}
+        onState={(next) => { latest = next; }}
+      />,
+    );
+
+    /* Pill của dòng ĐẦU — dòng thứ hai phải ở nguyên chỗ của nó, SAU cả bộ mới. */
+    fireEvent.click(screen.getAllByRole("button", { name: /Đổi loại món/ })[0]!);
+    fireEvent.click(screen.getByRole("option", { name: /^Dialog · 3 phần/ }));
+
+    await waitFor(() =>
+      expect(latest?.cells.map((cell) => cell.elementId))
+        .toEqual(["dialog-panel", "dialog-name", "dialog-next", "badge"]),
+    );
+    /* Phần chèn thêm mang MẶC ĐỊNH CỦA CHÍNH NÓ, y như khi thêm bằng «+ Element». */
+    const next = PRESETS.elements.find((e) => e.id === "dialog-next")!;
+    expect(latest!.cells[2]!.decor).toBe(next.decor);
+    expect(latest!.cells[2]!.glazeId).toBe(next.glazeId);
+  });
+
+  it("dòng ĐANG là một phần của chính bộ ấy ⇒ bấm lại KHÔNG đổi gì", async () => {
+    const changes: UiKitBlock[] = [];
+    render(
+      <Harness
+        initial={uikit([
+          { ...newCell("dialog-panel", PRESETS), id: "c1" },
+          /* Dòng ĐANG MỞ là phần THỨ HAI của bộ, không phải phần đầu: nếu code
+             chỉ so với phần đầu thì ca này đỏ đúng chỗ. */
+          { ...newCell("dialog-name", PRESETS), id: "c2" },
+        ])}
+        onState={(next) => changes.push(next)}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Đổi loại món/ })[1]!);
+    fireEvent.click(screen.getByRole("option", { name: /^Dialog · 3 phần/ }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Đổi loại món" })).toBeNull());
+    /* Không dòng nào mọc thêm, không dòng nào đổi loại — kể cả một lượt ghi "y hệt
+       cái cũ" cũng là một lượt đánh dấu tài liệu đã đổi. */
+    expect(changes.map((block) => block.cells.map((cell) => cell.elementId)))
+      .toEqual([["dialog-panel", "dialog-name"]]);
+  });
+
+  it("đổi sang bộ khác ⇒ đổi ô trong contract, nhưng GIỮ viền · đục nền · ghi chú của dòng", async () => {
     let latest: UiKitBlock | null = null;
     /* Ba thứ người dùng đã chỉnh tay. `decor: "rich"` cố ý KHÁC mặc định của cả hai
        element, để nếu code lỡ áp preset của element mới thì ca này đỏ. */
@@ -441,16 +508,19 @@ describe("⑤ đổi loại element tại chỗ", () => {
     render(<Harness initial={uikit([cell])} onState={(next) => { latest = next; }} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Đổi loại món/ }));
-    fireEvent.click(screen.getByRole("option", { name: /^Thanh máu\s*health bar$/ }));
+    fireEvent.click(screen.getByRole("option", { name: /^Health bar · 2 phần/ }));
 
     await waitFor(() => expect(latest?.cells[0]?.elementId).toBe("healthbar"));
     expect(latest!.cells[0]!.decor).toBe("rich");
     expect(latest!.cells[0]!.glazeId).toBe("ice");
     expect(latest!.cells[0]!.note).toBe("bo góc thật tròn");
+    /* Phần thứ hai của bộ là một dòng MỚI: nó không thừa hưởng gì của dòng cũ. */
+    expect(latest!.cells[1]!.elementId).toBe("hp-fill");
+    expect(latest!.cells[1]!.note).toBe("");
 
     const contract = composerToContract(state([uikit(latest!.cells)]), { presets: PRESETS });
     const component = contract.sheets[0]!.components[0]!;
-    expect(component.vi).toBe("Thanh máu");
+    expect(component.vi).toBe("Health bar · frame");
     expect(component.spec).toContain(PRESETS.elements.find((e) => e.id === "healthbar")!.en);
     expect(component.spec).toContain("bo góc thật tròn");
   });
@@ -515,12 +585,12 @@ describe("⑦ dòng element: hàng 1 có ×, hàng 2 là ghi chú", () => {
     expect(top.lastElementChild).toBe(remove);
 
     /* Ô ghi chú KHÔNG nằm trong hàng 1. Đây là mấu chốt: nó ở tầng dưới. */
-    expect(top.contains(screen.getByLabelText("Ghi chú cho Nút bấm"))).toBe(false);
+    expect(top.contains(screen.getByLabelText("Ghi chú cho Button · primary"))).toBe(false);
   });
 
   it("ô ghi chú là con RIÊNG của dòng, đứng SAU hàng 1 — luôn ở dòng của nó", () => {
-    const note = screen.getByLabelText("Ghi chú cho Nút bấm");
-    const row = rowOf("Nút bấm");
+    const note = screen.getByLabelText("Ghi chú cho Button · primary");
+    const row = rowOf("Button · primary");
     const kids = [...row.children];
 
     expect(kids).toHaveLength(2);
@@ -534,7 +604,7 @@ describe("⑦ dòng element: hàng 1 có ×, hàng 2 là ghi chú", () => {
     /* Chúng là bốn vật không co được nằm xen giữa các pill — đúng thứ đã làm vỡ
        bố cục. Nhãn trục nay nằm TRONG pill (xem `PillAxis`), nên bốn cụm rời này
        phải không còn tồn tại; nếu ai đó thêm lại thì ca này đỏ. */
-    const row = rowOf("Nút bấm");
+    const row = rowOf("Button · primary");
     expect(row.textContent).not.toContain("— phong cách");
     expect(row.textContent).not.toContain(", đục nền");
     expect(row.textContent).not.toContain(", viền");
@@ -552,7 +622,7 @@ describe("⑦ dòng element: hàng 1 có ×, hàng 2 là ghi chú", () => {
   it("ô «Không trang trí» ⇒ pill Bố trí BIẾN MẤT khỏi hàng, không phải mờ đi", () => {
     cleanup();
     render(<Harness initial={uikit([{ ...newCell("button", PRESETS), id: "c1", decor: "none" }])} />);
-    const row = rowOf("Nút bấm");
+    const row = rowOf("Button · primary");
     expect(row.textContent).toContain("Trang trí:Không");
     expect(row.textContent).not.toContain("Bố trí:");
     expect(screen.queryByLabelText(/^Bố trí:/)).toBeNull();
@@ -603,14 +673,14 @@ describe("⑦ dòng element: hàng 1 có ×, hàng 2 là ghi chú", () => {
       mục rỗng biến mất, và cả ba đường vào (thêm dòng, mở nháp cũ, đổi loại)
       đều phải cho ra một con số. */
 describe("⑧ pill cỡ dùng chung hộp chọn nguồn", () => {
-  const openSize = () => fireEvent.click(screen.getByLabelText(/^Cỡ của Nút bấm/));
+  const openSize = () => fireEvent.click(screen.getByLabelText(/^Cỡ của Button · primary/));
 
   beforeEach(() => {
     render(<Harness initial={uikit([{ ...newCell("button", PRESETS), id: "c1" }])} />);
   });
 
   it("pill TỰ XƯNG TÊN — «Cỡ: …», không phải một chữ trôi nổi cạnh chữ nối mờ", () => {
-    expect(screen.getByLabelText(/^Cỡ của Nút bấm/).textContent).toContain("Cỡ:");
+    expect(screen.getByLabelText(/^Cỡ của Button · primary/).textContent).toContain("Cỡ:");
   });
 
   it("mở ra: thanh hai nấc y như pill theme/phong cách", () => {
@@ -635,11 +705,11 @@ describe("⑧ pill cỡ dùng chung hộp chọn nguồn", () => {
     const options = screen.getAllByRole("option").map((o) => o.textContent ?? "");
     expect(options).toHaveLength(SIZE_PRESETS.length + 1);
     expect(options.join(" ")).not.toContain("theo hệ thống");
-    /* Mục đầu nói RA con số của chính loại element — «Nút bấm» là một hộp
+    /* Mục đầu nói RA con số của chính loại element — «Button · primary» là một hộp
        rộng-mỏng, không phải hộp 4:3 dùng chung như trước 07/09/2026. */
     const button = PRESETS.elements.find((e) => e.id === "button");
     const px = defaultSizePx(button);
-    expect(options[0]).toContain("Mặc định của Nút bấm");
+    expect(options[0]).toContain("Mặc định của Button · primary");
     expect(options[0]).toContain(`${px.w}×${px.h}px`);
     expect(px.w / px.h).toBeGreaterThan(2);
     for (const preset of SIZE_PRESETS) {
@@ -693,11 +763,11 @@ describe("⑧ pill cỡ dùng chung hộp chọn nguồn", () => {
         onState={(next) => { latest = next; }}
       />,
     );
-    fireEvent.click(screen.getByLabelText(/^Cỡ của Nút bấm/));
+    fireEvent.click(screen.getByLabelText(/^Cỡ của Button · primary/));
     fireEvent.click(screen.getByRole("option", { name: /XL · tràn ô/ }));
 
     await waitFor(() => expect(latest?.cells[0]?.sizeId).toBe("xl"));
-    expect(screen.getByLabelText(/^Cỡ của Nút bấm/).textContent).toContain("XL · tràn ô");
+    expect(screen.getByLabelText(/^Cỡ của Button · primary/).textContent).toContain("XL · tràn ô");
   });
 
   it("nấc «Gõ riêng» có hai ô W×H + nút chốt — và nó ghi ra chuỗi «<w>x<h>»", async () => {
@@ -709,17 +779,17 @@ describe("⑧ pill cỡ dùng chung hộp chọn nguồn", () => {
         onState={(next) => { latest = next; }}
       />,
     );
-    fireEvent.click(screen.getByLabelText(/^Cỡ của Nút bấm/));
+    fireEvent.click(screen.getByLabelText(/^Cỡ của Button · primary/));
     fireEvent.click(screen.getByRole("tab", { name: "Gõ riêng" }));
 
-    fireEvent.change(screen.getByLabelText("Bề rộng của Nút bấm"), { target: { value: "160" } });
-    fireEvent.change(screen.getByLabelText("Bề cao của Nút bấm"), { target: { value: "120" } });
+    fireEvent.change(screen.getByLabelText("Bề rộng của Button · primary"), { target: { value: "160" } });
+    fireEvent.change(screen.getByLabelText("Bề cao của Button · primary"), { target: { value: "120" } });
     fireEvent.click(screen.getByRole("button", { name: "Dùng cỡ này" }));
 
     await waitFor(() => expect(latest?.cells[0]?.sizeId).toBe("160x120"));
     /* Chốt xong thì hộp đóng lại và pill nói ra con số vừa gõ — không phải chuỗi
        lưu `160x120` chưa được dịch. */
-    expect(screen.getByLabelText(/^Cỡ của Nút bấm/).textContent).toContain("160×120px");
+    expect(screen.getByLabelText(/^Cỡ của Button · primary/).textContent).toContain("160×120px");
   });
 
   it("Enter trong ô số = bấm nút chốt — không ai phải rê chuột để lưu số vừa gõ", async () => {
@@ -731,9 +801,9 @@ describe("⑧ pill cỡ dùng chung hộp chọn nguồn", () => {
         onState={(next) => { latest = next; }}
       />,
     );
-    fireEvent.click(screen.getByLabelText(/^Cỡ của Nút bấm/));
+    fireEvent.click(screen.getByLabelText(/^Cỡ của Button · primary/));
     fireEvent.click(screen.getByRole("tab", { name: "Gõ riêng" }));
-    const wide = screen.getByLabelText("Bề rộng của Nút bấm");
+    const wide = screen.getByLabelText("Bề rộng của Button · primary");
     fireEvent.change(wide, { target: { value: "200" } });
     fireEvent.keyDown(wide, { key: "Enter" });
 
@@ -789,7 +859,7 @@ describe("⑧b cỡ luôn cụ thể, và cụ thể theo hình dạng của lo�
   });
 
   /* ══ NẤC S/M/L/XL = CẠNH DÀI, KHÔNG PHẢI HỘP CỐ ĐỊNH ══════════════════════
-     Chủ sản phẩm nhìn pill Cỡ của «Khung avatar» rồi hỏi: *"mà avatar sao lại có
+     Chủ sản phẩm nhìn pill Cỡ của «Avatar frame» rồi hỏi: *"mà avatar sao lại có
      256×192 nhỉ…"*. Bốn nấc cũ là bốn hộp đóng cứng, nên chọn «L» cho một khung
      vuông là tự tay phá đúng cái hình dạng vừa dựng lên ở lượt trước. */
   it("một nấc, ba tỉ lệ, ba hộp — và cạnh dài LUÔN đúng con số của nấc", () => {
@@ -826,7 +896,7 @@ describe("⑧b cỡ luôn cụ thể, và cụ thể theo hình dạng của lo�
   });
 
   it("nháp cũ lưu một nấc ⇒ nay ĐỌC LẠI theo hình dạng, có chủ ý", () => {
-    /* Một dòng «Khung avatar» lưu `"l"` trước lượt này đọc ra 256×192; nay 256×256.
+    /* Một dòng «Avatar frame» lưu `"l"` trước lượt này đọc ra 256×192; nay 256×256.
        `"l"` luôn có nghĩa «nấc lớn», và nghĩa của nấc lớn nay là «cạnh dài 256, giữ
        hình». Chuỗi TỰ ĐIỀN thì không đi qua bảng nấc nên không đổi một pixel. */
     const avatar = PRESETS.elements.find((e) => e.id === "avatar-frame")?.skel;
@@ -856,7 +926,9 @@ describe("⑧b cỡ luôn cụ thể, và cụ thể theo hình dạng của lo�
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Đổi loại/ }));
-    fireEvent.click(screen.getByRole("option", { name: /Bảng nền/ }));
+    /* «Panel» là một bộ MỘT PHẦN, nên cú bấm này đổi đúng dòng đang mở và không
+       chèn thêm dòng nào — ca cỡ nói về đúng một dòng. */
+    fireEvent.click(screen.getByRole("option", { name: /^Panel/ }));
     /* Một cái nút 245×85 đổi thành bảng nền mà vẫn 245×85 là một cái bảng bằng
        cái nút — nên cỡ phải đi theo hình dạng của loại MỚI. */
     const panel = defaultSizeOf(PRESETS.elements.find((e) => e.id === "panel"));
@@ -872,7 +944,7 @@ describe("⑧b cỡ luôn cụ thể, và cụ thể theo hình dạng của lo�
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Đổi loại/ }));
-    fireEvent.click(screen.getByRole("option", { name: /Bảng nền/ }));
+    fireEvent.click(screen.getByRole("option", { name: /^Panel/ }));
     await waitFor(() => {
       expect(latest?.cells[0]?.elementId).toBe("panel");
       /* Trong CÙNG một `waitFor`: đọc `latest` sau đó thì TypeScript đã thu hẹp nó

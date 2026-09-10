@@ -329,8 +329,11 @@ describe("serialize cả màn — mỗi block một đoạn, ảnh đánh số l
     const out = serializeComposer(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), PRESETS);
 
     expect(out).toContain("hệ thống tự xếp lưới");
-    expect(out).toContain("cell 1 (Nút bấm)");
-    expect(out).toContain("cell 2 (Icon tiền)");
+    /* Tên trong dòng copy-dán là NHÃN ĐẦY ĐỦ («tên bộ · tên phần»): dòng này để
+       NGƯỜI đối chiếu ô nào với ô nào, mà một cái tên «coin» đứng một mình thì
+       không đối chiếu được với gì. */
+    expect(out).toContain("cell 1 (Button · primary)");
+    expect(out).toContain("cell 2 (Coin counter · coin)");
     /* Ô 1 để trống phong cách ⇒ ăn phong cách chung; ô 2 tự chọn ⇒ phong cách riêng. */
     expect(out).toContain(PRESETS.styles[0]!.en);
     expect(out).toContain(PRESETS.styles.find((s) => s.id === "match3")!.en);
@@ -348,7 +351,7 @@ describe("serialize cả màn — mỗi block một đoạn, ảnh đánh số l
     const cells: UiCell[] = [newCell("coin", PRESETS)];
     expect(cells[0]!.glazeId).toBe(GLAZE_AUTO);
     const out = serializeComposer(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), PRESETS);
-    expect(out).toContain("cell 1 (Icon tiền)");
+    expect(out).toContain("cell 1 (Coin counter · coin)");
     expect(out).not.toContain("alpha");
     expect(out).not.toContain("see-through");
     expect(out).not.toContain("tự quyết theo vật liệu");
@@ -477,7 +480,8 @@ describe("danh mục — lab đi bằng dữ liệu THẬT của kit-core, khôn
     expect(cell.sizeId).toBe(defaultSizeOf(PRESETS.elements.find((e) => e.id === "coin")));
     const coin = PRESETS.elements.find((e) => e.id === "coin");
     expect(sizePx(cell.sizeId, coin?.skel)?.w).toBe(sizePx(cell.sizeId, coin?.skel)?.h);
-    /* Hạt giống của «Icon tiền» là «Ít» — một đồng xu không cần vành hoa văn. Và
+    /* Hạt giống của «Coin counter · coin» là «Ít» — một đồng xu không cần vành hoa
+       văn. Và
        cách bố trí thì KHÔNG đến từ danh mục element: nó là «Cân đối» cho mọi ô mới,
        vì đối xứng là thứ một bộ UI muốn ở gần như mọi món. */
     expect(cell.decor).toBe("light");

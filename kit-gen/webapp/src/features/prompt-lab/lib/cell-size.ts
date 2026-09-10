@@ -80,7 +80,7 @@ export interface SizePreset {
  * Bốn NẤC CỠ — mỗi nấc là một CẠNH DÀI, không phải một cái hộp.
  *
  * ╔══ VÌ SAO KHÔNG CÒN LÀ BỐN HỘP CỐ ĐỊNH ══════════════════════════════════╗
- * ║ Chủ sản phẩm nhìn pill Cỡ của «Khung avatar» rồi hỏi: *"mà avatar sao lại ║
+ * ║ Chủ sản phẩm nhìn pill Cỡ của «Avatar frame» rồi hỏi: *"mà avatar sao lại ║
  * ║ có 256×192 nhỉ…"*. Câu hỏi ấy không có câu trả lời nào tử tế: bốn nấc cũ  ║
  * ║ là bốn hộp chữ nhật đóng cứng (112×112 · 192×136 · 256×192 · 304×304), và ║
  * ║ ba trong bốn hộp đó KHÔNG PHẢI hình dạng của một khung avatar vuông. Chọn ║
@@ -89,7 +89,7 @@ export interface SizePreset {
  * ║                                                                          ║
  * ║ ⇒ Nấc chỉ trả lời «TO CỠ NÀO», hình dạng vẫn là của element. Cạnh dài ăn ║
  * ║   đúng con số cũ (112 · 192 · 256 · 304 — thói quen không đổi), cạnh ngắn ║
- * ║   = cạnh dài × tỉ lệ của `skel`. Khung avatar (1:1) ⇒ 256×256; thanh máu  ║
+ * ║   = cạnh dài × tỉ lệ của `skel`. Avatar frame (1:1) ⇒ 256×256; health bar ║
  * ║   (3,9:1) ⇒ 256×65; nút pill (2,9:1) ⇒ 256×89.                            ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
@@ -272,7 +272,7 @@ export function customSizeValue(w: number, h: number): string {
  * có `sizeId` rỗng, và `readCell` mới là chỗ vá chúng (bằng `defaultSizeOf` của
  * chính loại element ấy).
  *
- * ⚠️ NHÁP CŨ LƯU MỘT NẤC SẼ ĐỔI HỘP, CÓ CHỦ Ý. Một dòng «Khung avatar» lưu `"l"`
+ * ⚠️ NHÁP CŨ LƯU MỘT NẤC SẼ ĐỔI HỘP, CÓ CHỦ Ý. Một dòng «Avatar frame» lưu `"l"`
  * trước lượt này đọc ra 256×192; nay nó đọc ra 256×256. Đó KHÔNG phải mất dữ liệu:
  * `"l"` luôn có nghĩa là «nấc lớn», và nghĩa của nấc lớn nay là «cạnh dài 256, giữ
  * hình dạng». Giữ nguyên hộp cũ thì phải lưu thêm một bảng hộp-đời-trước, tức là
