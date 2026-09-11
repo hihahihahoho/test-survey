@@ -290,6 +290,22 @@ export function SheetResultPanel({
     return ` Máy vẽ luôn vẽ to hết ô cho nét, nên ${soO} ô được co về ${co} (${range}).`;
   }, [framed]);
 
+  /**
+   * NÓI RA Ô PHẢI CO CẢ MÓN — thân món trong khung sẽ NHỎ HƠN cỡ vừa chọn.
+   *
+   * Khi ảnh vẽ ra to hơn hộp mà prompt đã hứa, `contractFramed` ôm cả món (thân +
+   * trang trí) vào khung để không ô nào đè sang ô bên cạnh. Cái giá là thân món
+   * không lấp kín khung nữa — người dùng sẽ thấy ngay lúc dán, nên phải nghe trước.
+   * Kể tối đa ba tên: dài hơn thì toast thành một danh sách không ai đọc.
+   */
+  const wholeNote = React.useMemo(() => {
+    const list = framed.wholeFitted;
+    if (list.length === 0) return "";
+    const ke = list.slice(0, 3).map((c) => `${c.name}: ${c.reason}`).join("; ");
+    const con = list.length - 3;
+    return ` ${ke}${con > 0 ? ` (và ${con} ô nữa)` : ""}.`;
+  }, [framed]);
+
   /* Nhãn «Đã copy N ô» tự tắt sau 2 giây — cùng cách với nút «Copy prompt» của
      `CanvasBlock.tsx:426`. Dọn timer khi khối gỡ sớm: người dùng cuộn qua thẻ khác
      ngay sau khi bấm thì `setCopied` sẽ chạy trên một khối không còn nữa. */
@@ -394,6 +410,7 @@ export function SheetResultPanel({
           "Đã copy các ô sang Figma",
           `${name} · ${res.docs} ô, mỗi ô một khung riêng đúng cỡ xuất đã chọn.`
           + fitNote
+          + wholeNote
           + " Dán bằng Ctrl/Cmd+V."
           + (doPhong === 0 ? "" : ` Riêng ${doPhong} ô cắt bằng bản cũ thì khung lấy theo cỡ đo được, có thể lệch cỡ bạn đã chọn.`),
         );
@@ -548,7 +565,7 @@ export function SheetResultPanel({
             disabled={cells.length === 0 || busyCells} loading={busyCells}
             title={cells.length === 0
               ? "Chờ máy cắt xong tấm này thì mới có ô để copy"
-              : `Mỗi ô một khung riêng đúng cỡ xuất đã chọn, ảnh co cho phần chính vừa khít khung.${fitNote}`}
+              : `Mỗi ô một khung riêng đúng cỡ xuất đã chọn, ảnh co cho phần chính vừa khít khung.${fitNote}${wholeNote}`}
           >
             {copied > 0 && !busyCells
               ? <Check aria-hidden strokeWidth={1.5} />

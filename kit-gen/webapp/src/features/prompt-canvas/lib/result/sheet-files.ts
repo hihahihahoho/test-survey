@@ -109,27 +109,58 @@ export function sheetDownloadName(job: string): string {
  * ║ `contractSafe`; thiếu cả hai thì không co gì cả và NÓI RA.                 ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * ╔══ LÕI ĐỂ CO LÀ HỘP HỢP ĐỒNG, KHÔNG PHẢI HỘP ĐO ĐƯỢC ═════════════════════╗
- * ║ Bản trước lấy `core = safe` — bbox α ≥ 128 mà `slice.py:measure_cell` đo    ║
- * ║ trên CẢ Ô. Con số ấy KHÔNG phải thân element: nó ôm luôn trang trí đục      ║
- * ║ (hoa góc, đèn lồng, tua rua), và ranh giới thân/trang trí thì không tách    ║
- * ║ được theo độ đục — `validate_output_geometry.py` đã ghi thẳng chuyện đó.    ║
+ * ╔══ LÕI ĐỂ CO: CHỌN THEO BẰNG CHỨNG, KHÔNG CHỌN SẴN MỘT BÊN ═══════════════╗
+ * ║ Hai hộp, và CẢ HAI đều đã từng đúng — nên luật không phải "lấy hộp nào",   ║
+ * ║ mà là "hộp hứa có được ảnh CHỨNG THỰC không".                              ║
+ * ║   `contractSafe` = hộp prompt đã HỨA (thân món, `outSize × drawScale`).    ║
+ * ║   `safe`         = bbox α ≥ 128 do `slice.py:measure_cell` đo trên CẢ Ô —  ║
+ * ║                    thân CỘNG trang trí đục, không tách được (chính         ║
+ * ║                    `validate_output_geometry.py` cũng chỉ đo bbox ấy).     ║
  * ║                                                                            ║
- * ║ Đo trên dự án thật (`test-e0d4`, `chinh-ui`, ô «01-button»):                ║
- * ║     safe          = [37, 212, 586, 249]   ← ôm cả hoa lẫn đèn lồng          ║
- * ║     contractSafe  = [75, 230, 476, 166]   ← thân nút, đúng hộp prompt hứa   ║
- * ║     outSize       = [112, 39]   drawScale = 4,25                           ║
- * ║   lõi = safe        ⇒ s = min(112/586, 39/249) = 0,157  ← thân co còn 2/3   ║
- * ║   lõi = contractSafe ⇒ s = min(112/476, 39/166) = 0,235 = 1/4,25  ✓         ║
- * ║ Chủ sản phẩm dán ô này sang Figma và đo đúng triệu chứng của con số đầu:    ║
- * ║ khung ra đúng 112×39 nhưng thân nút ngọc chỉ chiếm ~2/3 chỗ trong đó, phần  ║
- * ║ còn lại là hoa và đèn lồng — *"ko đúng safe zone"*, họ nói.                 ║
+ * ║ ── Ca A, `test-e0d4/chinh-ui/01-button` (đời trước dựa vào để chọn hứa):   ║
+ * ║     safe = [37, 212, 586, 249]   contractSafe = [75, 230, 476, 166]        ║
+ * ║     outSize = [112, 39]   drawScale = 4,25                                 ║
+ * ║   lõi = hứa  ⇒ s = 39/166 = 0,235 = 1/4,25; thân lấp khung, NHƯNG ảnh dán  ║
+ * ║                ra là 139×98 trong một khung 112×39 — thò 30px trên và dưới ║
+ * ║                một khung cao 39px.                                         ║
+ * ║   lõi = đo   ⇒ s = 0,157; cả món nằm gọn, thân chỉ chiếm ~2/3 khung.       ║
+ * ║ ── Ca B, `test-vcb-d6fd/chinh-ui`, lượt r-0021 (bệnh đang chữa):           ║
+ * ║     01-button      safe [38,281,587,168]  hứa [129,249,368,128] out 245×85 ║
+ * ║     02-avatar-frame safe [49,134,538,461] hứa [143,143,341,341] out 195×195║
+ * ║     03-progress    safe [34,236,575,124]  hứa [144,278,338,71]  out 270×57 ║
+ * ║   lõi = hứa ⇒ ảnh 03-progress ra 462×103 trong khung 270×57, 02 ra 320×293 ║
+ * ║   trong khung 195×195 ⇒ ô nọ ĐÈ lên ô kia trên bàn Figma. Chủ sản phẩm dán ║
+ * ║   và báo đúng chuyện đó. Prompt lượt này còn dặn model "stays inside        ║
+ * ║   x=0..627" — tức CẢ Ô — nên model vẽ to hết ô và hộp hứa thành hư cấu.     ║
  * ║                                                                            ║
- * ║ Mà `contractSafe` LÀ hộp đúng: QA của chính ô đó đọc `sizeDeviation         ║
- * ║ .maxEdgePx = 0` — thân model vẽ ra khớp hộp hợp đồng, không thiếu một px.   ║
- * ║ ⇒ `safe` đo được chỉ còn là ĐƯỜNG LÙI cho kit cắt bằng bản `slice.py` cũ    ║
- * ║   (chưa ghi `contractSafe`). Khung vẫn = `outSize`, ảnh vẫn = tight × s, và ║
- * ║   trang trí vẫn tràn ra NGOÀI khung — đúng như thiết kế muốn.               ║
+ * ║ HAI CA LÀ MỘT: cái giá của ca A (ảnh thò 2,5 lần chiều cao khung) chính là ║
+ * ║ hoá đơn mà ca B trả. Nên luật mới KHÔNG chọn phe, nó ĐÒI BẰNG CHỨNG:       ║
+ * ║   · ảnh tôn trọng hộp hứa (mỗi cạnh tràn ≤ dung sai) ⇒ lõi = hộp hứa —     ║
+ * ║     thân lấp khung, trang trí tràn ra ngoài đúng như thiết kế muốn;        ║
+ * ║   · tràn quá dung sai ⇒ hộp hứa là hư cấu, lõi = hộp ĐO ĐƯỢC — cả món ôm   ║
+ * ║     vào khung, căn giữa, và NÓI RA tên ô (`wholeFitted`).                  ║
+ * ║ Thiếu một trong hai hộp thì không có gì để đối chiếu: giữ nguyên đường lùi  ║
+ * ║ cũ (có hứa thì theo hứa, chỉ còn đo thì theo đo).                          ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ╔══ DUNG SAI: 15px HOẶC 10% CẠNH HỘP HỨA, LẤY CÁI LỚN HƠN ═════════════════╗
+ * ║ Mỗi cạnh riêng, đo phần lõi đo được THÒ RA NGOÀI hộp hứa (thụt vào trong   ║
+ * ║ không tính — thụt vào là model vẽ nhỏ hơn, `sizeDeviation` của engine đã    ║
+ * ║ canh chuyện đó bằng chính ngưỡng 15px này).                                ║
+ * ║   · 15px = `SIZE_DEVIATION_THRESHOLD_PX` của `slice.py` — dùng lại đúng con ║
+ * ║     số ấy để hai đầu app gọi "khớp hộp" bằng CÙNG một ngưỡng, và vì dưới    ║
+ * ║     15px thì phần lớn là viền răng cưa của ngưỡng α = 128, không phải hình. ║
+ * ║   · 10% cạnh: trên hộp 476px thì 15px là hạt bụi; 10% là bề dày quầng sáng  ║
+ * ║     / bóng đổ mà một món vẽ tử tế vẫn có.                                   ║
+ * ║ ĐIỀU NÓ BẢO ĐẢM (và đây mới là lý do chọn con số này): cạnh nào cũng ≤ 10%  ║
+ * ║ ⇒ lõi đo được ≤ 1,2 lần hộp hứa ⇒ phần ĐỤC (α ≥ 128) vượt khung tối đa 10% ║
+ * ║ mỗi bên. Phần sương α < 128 vẫn tràn tiếp — nó trong suốt, không ai đọc nó  ║
+ * ║ là "ô đè ô". Tràn có TRẦN, nên không ô nào đè được sang ô bên cạnh nữa.     ║
+ * ║ Ca A đo lại bằng luật này: cạnh dưới tràn 65px trên hộp cao 166 (39%) ⇒ rơi ║
+ * ║ vào nhánh "co cả món". CÓ MẤT: thân nút ngọc lại chỉ chiếm ~2/3 khung. Đổi  ║
+ * ║ lấy: không bao giờ có ô đè ô. Thuốc thật cho ca A nằm ở PROMPT (dặn model    ║
+ * ║ hộp hứa thay vì cả ô), không nằm ở đây — ở đây không có phép đo nào tách    ║
+ * ║ được thân khỏi trang trí, nên chỗ này chỉ được chọn cái ÍT HẠI HƠN.         ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
  * ╔══ NỬA THỨ HAI, VÀ LÀ NỬA QUAN TRỌNG HƠN: PHẢI CO ẢNH ════════════════════╗
@@ -175,6 +206,13 @@ export interface FittedCell {
   h: number;
 }
 
+/** Một ô đã phải co CẢ MÓN vì hộp hứa không được ảnh chứng thực. */
+export interface WholeFitCell {
+  name: string;
+  /** Lý do ngắn, tiếng Việt, dán thẳng được vào câu báo cho người dùng. */
+  reason: string;
+}
+
 export interface ContractFramed {
   /** Ô đã đổi khung; thứ tự giữ nguyên đầu vào. */
   files: KitFile[];
@@ -192,6 +230,12 @@ export interface ContractFramed {
   scales: Map<string, number>;
   /** Ô đã bị co/giãn thật sự (≠ 1) — nguồn cho câu báo "co về đúng cỡ (k%)". */
   fitted: FittedCell[];
+  /**
+   * Ô mà ảnh KHÔNG chứng thực hộp đã hứa ⇒ đã co cả món (thân + trang trí) vào
+   * khung. Nói ra chứ không nuốt: thân món trong khung sẽ nhỏ hơn cỡ người dùng vừa
+   * chọn, và họ có quyền biết vì sao trước khi ngồi đo lại từng ô trong Figma.
+   */
+  wholeFitted: WholeFitCell[];
 }
 
 /** `[x, y, w, h]` dùng được (đủ bốn số, `w`/`h` dương)? Cùng luật với `box4`. */
@@ -202,7 +246,7 @@ function usableBox(box: readonly number[] | undefined): boolean {
 }
 
 /** `[x, y, w, h]` → object, chỉ khi cả bốn số dùng được. */
-function boxOf(box: readonly number[] | undefined): { x: number; y: number; w: number; h: number } | null {
+function boxOf(box: readonly number[] | undefined): Box | null {
   if (!usableBox(box)) return null;
   const [x, y, w, h] = box as readonly number[];
   return { x: x ?? 0, y: y ?? 0, w: w as number, h: h as number };
@@ -222,9 +266,46 @@ function sizeOf(size: readonly number[] | undefined): { w: number; h: number } |
  */
 const FIT_EPS = 0.005;
 
+/** Dung sai tuyệt đối — đúng `SIZE_DEVIATION_THRESHOLD_PX` của `slice.py`. */
+const TOL_PX = 15;
+/** Dung sai tương đối: 10% cạnh tương ứng của hộp hứa. Lý do ở khối «DUNG SAI». */
+const TOL_FRAC = 0.1;
+
+/** Câu lý do dán thẳng vào toast — tiếng Việt, không mượn tên khoá kỹ thuật. */
+const WHOLE_FIT_REASON = "máy vẽ to hơn hộp đã hứa, đã co cả món vào khung";
+
+interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Ảnh có CHỨNG THỰC hộp hứa không?
+ *
+ * Chỉ đo phần lõi đo được THÒ RA NGOÀI hộp hứa, từng cạnh một. Thụt vào trong không
+ * tính: thụt vào nghĩa là model vẽ nhỏ hơn lời hứa — vẫn nằm trong khung, không đè
+ * được ai, và đã có QA `sizeDeviation` của engine canh riêng.
+ *
+ * So từng cạnh chứ không so diện tích hay tỉ lệ hai hộp: một cái tua rua dài ở ĐÚNG
+ * MỘT cạnh đủ làm ảnh thò ra khỏi khung, mà diện tích thì gần như không nhúc nhích.
+ */
+function honoursPromise(measuredCore: Box, promise: Box): boolean {
+  const tolX = Math.max(TOL_PX, promise.w * TOL_FRAC);
+  const tolY = Math.max(TOL_PX, promise.h * TOL_FRAC);
+  return (
+    promise.x - measuredCore.x <= tolX &&
+    measuredCore.x + measuredCore.w - (promise.x + promise.w) <= tolX &&
+    promise.y - measuredCore.y <= tolY &&
+    measuredCore.y + measuredCore.h - (promise.y + promise.h) <= tolY
+  );
+}
+
 export function contractFramed(files: readonly KitFile[]): ContractFramed {
   const measured: string[] = [];
   const fitted: FittedCell[] = [];
+  const wholeFitted: WholeFitCell[] = [];
   const scales = new Map<string, number>();
 
   const out = files.map((file) => {
@@ -242,10 +323,17 @@ export function contractFramed(files: readonly KitFile[]): ContractFramed {
       return file;
     }
 
-    /* LÕI = HỘP HỢP ĐỒNG. `safe` (bbox α≥128 do slice.py đo) ôm cả trang trí, nên
-       nó chỉ vào cuộc khi manifest KHÔNG có `contractSafe` — tức kit cắt bằng bản
-       engine cũ. Lý do đầy đủ + số đo ở khối «LÕI ĐỂ CO» phía trên. */
-    const core = box ?? boxOf(file.safe);
+    /* LÕI = HỘP HỨA **NẾU ẢNH CHỨNG THỰC NÓ**, ngược lại là hộp đo được. Có đủ hai
+       hộp thì đối chiếu; thiếu một hộp thì không có gì để đối chiếu và đường lùi cũ
+       giữ nguyên. Dung sai + số đo của cả hai ca ở khối «LÕI ĐỂ CO» phía trên. */
+    const seen = boxOf(file.safe);
+    let core: Box | null;
+    if (box !== null && seen !== null) {
+      core = honoursPromise(seen, box) ? box : seen;
+      if (core === seen) wholeFitted.push({ name: cellName(file), reason: WHOLE_FIT_REASON });
+    } else {
+      core = box ?? seen;
+    }
     if (core === null) {
       /* Có `outSize` nhưng không có hộp nào để căn (không hợp đồng, không đo được):
          không có gì để co, và đoán một tỉ lệ ở đây là bịa. Giữ nguyên, và nói ra. */
@@ -279,5 +367,5 @@ export function contractFramed(files: readonly KitFile[]): ContractFramed {
     };
   });
 
-  return { files: out, measured, scales, fitted };
+  return { files: out, measured, scales, fitted, wholeFitted };
 }

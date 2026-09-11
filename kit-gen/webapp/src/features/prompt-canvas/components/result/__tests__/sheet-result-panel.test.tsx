@@ -291,15 +291,25 @@ describe("nút «Copy N ô sang Figma»", () => {
    */
   describe("tỉ lệ co theo từng ô", () => {
     /**
-     * Ô «01-button» của `test-e0d4`, số chép nguyên từ manifest: cỡ đầu ra 112×39,
-     * hộp hợp đồng 476×166 (engine xin model vẽ to `drawScale` = 4,25 lần) ⇒ co còn
-     * 39/166 ≈ 23%. Lõi co theo HỘP HỢP ĐỒNG chứ không theo `safe` đo được — `safe`
-     * ở đây (586×249) cố ý ôm cả hoa lẫn đèn lồng để ca này thấy được nếu ai đổi lại.
+     * Ô «01-button» của `test-e0d4`: cỡ đầu ra 112×39, hộp đã hứa 476×166 (engine xin
+     * model vẽ to `drawScale` = 4,25 lần) ⇒ co còn 39/166 ≈ 23%. `safe` ở đây là lõi
+     * ĐO ĐƯỢC 556×196 — tràn ra ngoài hộp hứa 40px hai bên và 15px trên dưới, tức
+     * TRONG dung sai, nên hộp hứa được chứng thực và làm lõi (xem `contractFramed`).
      */
     const S_FIT = 39 / 166;
     const fitCell = () => cell("tight/01-button", "ui", 0, {
       w: 591, h: 417, canvas: [627, 627], content: [591, 417], contentAt: [34, 210],
-      safe: [37, 212, 586, 249], contractSafe: [75, 230, 476, 166], outSize: [112, 39],
+      safe: [35, 215, 556, 196], contractSafe: [75, 230, 476, 166], outSize: [112, 39],
+    });
+
+    /**
+     * Ô THẬT của lượt r-0021 (`test-vcb-d6fd`): máy vẽ tràn 91px ra ngoài hộp hứa
+     * rộng 368 (dung sai 36,8) ⇒ hộp hứa là hư cấu, cả món bị co vào khung 245×85 và
+     * panel PHẢI nói ra — thân nút trong khung sẽ nhỏ hơn cỡ người dùng vừa chọn.
+     */
+    const wholeCell = () => cell("tight/01-button", "ui", 0, {
+      w: 592, h: 176, canvas: [627, 627], content: [592, 176], contentAt: [34, 274],
+      safe: [38, 281, 587, 168], contractSafe: [129, 249, 368, 128], outSize: [245, 85],
     });
 
     it("đưa xuống đường dựng khung một HÀM tỉ lệ, không phải một số chung", async () => {
@@ -334,6 +344,23 @@ describe("nút «Copy N ô sang Figma»", () => {
       const title = screen.getByRole("button", { name: /Copy 1 ô sang Figma/ }).getAttribute("title") ?? "";
       expect(title).toContain("cỡ xuất 112×39");
       expect(title).toContain("23%");
+    });
+
+    it("ô phải co CẢ MÓN ⇒ nói thẳng tên ô và lý do, không nuốt", () => {
+      kitFiles = [wholeCell()];
+      mount();
+      const title = screen.getByRole("button", { name: /Copy 1 ô sang Figma/ }).getAttribute("title") ?? "";
+      expect(title).toContain("01-button: máy vẽ to hơn hộp đã hứa, đã co cả món vào khung");
+      /* Vẫn phải kèm tỉ lệ: hai câu trả lời hai câu hỏi khác nhau (co bao nhiêu, và
+         vì sao thân món không lấp kín khung). */
+      expect(title).toContain("cỡ xuất 245×85");
+    });
+
+    it("ô được chứng thực hộp hứa ⇒ KHÔNG có câu «co cả món»", () => {
+      kitFiles = [fitCell()];
+      mount();
+      const title = screen.getByRole("button", { name: /Copy 1 ô sang Figma/ }).getAttribute("title") ?? "";
+      expect(title).not.toContain("co cả món");
     });
 
     it("không ô nào lệch cỡ ⇒ KHÔNG bịa thêm câu «đã co»", () => {
