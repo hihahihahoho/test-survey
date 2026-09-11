@@ -40,10 +40,10 @@
  * êm (`mergeElementSkel` ở `kitset-to-contract.ts`, `engineSkel` ở
  * `agent/lib/engine.mjs`), không tầng nào báo lỗi.
  *
- * ══ TỪ 08/09/2026 (2): `auto` — MẶC ĐỊNH LÀ «MÁY TỰ QUYẾT THEO VẬT LIỆU» ═════
- * Chủ sản phẩm chốt thêm một nấc, và nó là nấc MẶC ĐỊNH: *"model tự quyết độ trong
- * theo vật liệu của element — kính/băng/ánh sáng thì xuyên thấu bằng alpha thật,
- * kim loại/gỗ/đá thì đục hoàn toàn"*.
+ * ══ TỪ 08/09/2026 (2): `auto` — NẤC «MÁY TỰ QUYẾT THEO VẬT LIỆU» ═════════════
+ * Chủ sản phẩm chốt thêm một nấc: *"model tự quyết độ trong theo vật liệu của
+ * element — kính/băng/ánh sáng thì xuyên thấu bằng alpha thật, kim loại/gỗ/đá thì
+ * đục hoàn toàn"*. Nấc ấy TỪNG là mặc định; nay không còn (xem khối 11/09 dưới).
  *
  * ⚠️ `auto.en` RỖNG, VÀ ĐÓ LÀ CẢ THIẾT KẾ. Câu của nó đúng với MỌI ô của MỌI tấm,
  * nên in lại nó ở từng dòng element là nói cùng một luật N lần trong một prompt —
@@ -53,13 +53,29 @@
  * đè lên luật chung, vì gạch đầu dòng kia mở đầu bằng "unless an element's own
  * line below says otherwise".
  *
- * ⚠️ VÌ THẾ KHÔNG CÓ `solid` NÀO ĐI KÈM CHUỖI RỖNG. Trước đợt này `""` vừa là
- * "chưa chọn" vừa là "nền đặc" — hai nghĩa một giá trị, và nghĩa "đặc" chỉ đứng
- * được nhờ `gen.sh` mặc định mọi ô là đục. Nay mặc định ấy đổi thành "theo vật
- * liệu", nên "đặc" phải TỰ NÓI RA: đó là nấc `solid` («Đục hoàn toàn»), có id, có
- * câu tiếng Anh, bấm được. Còn `""` mất hẳn nghĩa: mọi cửa đọc đều đưa nó về
- * `auto` (`glazeOrAuto`), và pill không còn bày mục «— để trống —» cho trục này
- * (`hasBlankChoice` ở `pill-registry.ts`).
+ * ⚠️ `solid` KHÔNG ĐI KÈM CHUỖI RỖNG. Trước 08/09/2026 `""` vừa là "chưa chọn"
+ * vừa là "nền đặc" — hai nghĩa một giá trị. "Đặc" từ đó TỰ NÓI RA: nấc `solid`
+ * («Đục hoàn toàn») có id, có câu tiếng Anh, bấm được. Còn `""` chỉ còn nghĩa "chưa
+ * ai bấm gì" và mọi cửa đọc đưa nó về nấc MẶC ĐỊNH (`glazeOrSolid`); pill không bày
+ * mục «— để trống —» cho trục này (`hasBlankChoice` ở `pill-registry.ts`).
+ *
+ * ══ TỪ 11/09/2026: MẶC ĐỊNH LÀ «ĐỤC HOÀN TOÀN» (`solid`), KHÔNG PHẢI `auto` ═══
+ * Chủ sản phẩm, sau ba ngày dùng thật: một bộ UI kit gần như toàn món ĐỤC (nút,
+ * bảng, khung, huy hiệu), nên để máy tự quyết ở từng ô là đánh cược một tấm vẽ vào
+ * chuyện model đọc "glass panel" trong câu phong cách tổng rồi làm trong một cái
+ * nút. Nấc `auto` vẫn còn nguyên cho ai muốn giao quyền ấy — nó chỉ thôi làm mặc
+ * định. Ba hệ quả, và chỉ ba:
+ *   ① Hạt giống element ghi `solid` (`presets-store.ts`), nên ô mới thêm mang
+ *      «Đục hoàn toàn» và dòng element mang câu `en` của nó.
+ *   ② `glazeOrSolid` (trước là `glazeOrAuto`) đưa RỖNG/THIẾU về `solid`. Bản ghi
+ *      đời cũ trên đĩa để `""` vì lúc ấy `gen.sh` mặc định mọi ô là đục — tức chúng
+ *      NHÌN THẤY một ô đặc, và `solid` mới là thứ giữ đúng tấm ảnh ấy. (Giữa
+ *      08/09 và 11/09 chúng đọc ra `auto`; ba ngày ấy không đủ dài để `auto` thành
+ *      thứ ai đó cố ý chọn bằng cách để trống.)
+ *   ③ Thứ tự menu: `solid` đứng đầu, `auto` ngay sau — mục đầu bảng là mặc định.
+ * Ô ĐÃ NẰM TRONG THẺ giữ nguyên giá trị đang lưu: `readCell` chỉ vá rỗng, không
+ * đụng một id cụ thể. Preset hạt giống trên máy đời trước được vá riêng, có điều
+ * kiện — xem `migrateElementGlaze` ở `presets-store.ts`.
  */
 
 export interface GlazePreset {
@@ -85,23 +101,37 @@ export interface GlazePreset {
   hint?: string;
 }
 
-/** Nấc MẶC ĐỊNH — máy tự quyết theo vật liệu. Id ổn định, đừng gõ lại chuỗi này. */
+/** Nấc «máy tự quyết theo vật liệu». Id ổn định, đừng gõ lại chuỗi này. */
 export const GLAZE_AUTO = "auto";
 
+/** Nấc MẶC ĐỊNH từ 11/09/2026 — nền đặc. Id ổn định, đừng gõ lại chuỗi này. */
+export const GLAZE_SOLID = "solid";
+
 /**
- * Danh mục ĐỤC NỀN. Thứ tự = thứ tự hiện trên menu: `auto` đứng đầu vì nó là mặc
- * định, rồi phần còn lại đi từ đặc tới trong.
+ * Danh mục ĐỤC NỀN. Thứ tự = thứ tự hiện trên menu: `solid` đứng đầu vì từ
+ * 11/09/2026 nó là MẶC ĐỊNH, `auto` ngay sau nó, rồi các nấc trong đi từ đặc tới
+ * trong. (Tới 11/09 `auto` đứng đầu, vì lúc ấy mặc định là nó.)
  *
  * Giá trị RỖNG (`""`) KHÔNG nằm trong bảng, và từ 08/09/2026 nó cũng không còn
- * NGHĨA nào: mọi cửa đọc đưa nó về `auto` (`glazeOrAuto`), pill không bày mục
- * «— để trống —» cho trục này. Trước đó `""` gánh hai nghĩa cùng lúc ("chưa chọn"
- * và "nền đặc"); nghĩa thứ hai nay có id riêng là `solid`.
+ * NGHĨA riêng nào: mọi cửa đọc đưa nó về nấc mặc định (`glazeOrSolid`), pill không
+ * bày mục «— để trống —» cho trục này. Trước đó `""` gánh hai nghĩa cùng lúc
+ * ("chưa chọn" và "nền đặc"); nghĩa thứ hai nay có id riêng là `solid`.
  *
  * Con số alpha trong ba câu kính KHÔNG phải ước lượng tại chỗ: nó là hợp đồng
  * `gen.sh` đã dùng nhiều tháng ("about 64 out of 255 for a clear pane, up to 128
  * for a strongly tinted one"), nay viết thẳng ra chỗ người dùng đọc được.
  */
 export const GLAZE_PRESETS: readonly GlazePreset[] = [
+  {
+    id: GLAZE_SOLID,
+    vi: "Đục hoàn toàn",
+    /* Nấc này TỒN TẠI ĐỂ CÃI LẠI `auto`, nên câu của nó phải nói rõ "kể cả khi
+       trông như kính" — không có vế ấy thì model đọc "một ô kính, fully opaque"
+       và tự hoà giải bằng cách vẽ nửa vời. Câu vẫn được in ra dù đây là mặc định:
+       `gen.sh` không còn mặc định ô nào là đục, nên im lặng là giao lại cho model. */
+    en: "fully opaque everywhere, alpha 255, with no see-through part at all,"
+      + " whatever material it may look like",
+  },
   {
     id: GLAZE_AUTO,
     /* «Tự động», KHÔNG phải «Tự động theo vật liệu». Nhãn này hiện TRÊN PILL, trong
@@ -114,15 +144,6 @@ export const GLAZE_PRESETS: readonly GlazePreset[] = [
        `gen.sh`, section `## Transparency`, và chỉ nằm ở đó. */
     en: "",
     hint: "máy tự quyết theo vật liệu của ô: kính · băng · ánh sáng thì xuyên thấu, kim loại · gỗ · đá thì đục",
-  },
-  {
-    id: "solid",
-    vi: "Đục hoàn toàn",
-    /* Nấc này TỒN TẠI ĐỂ CÃI LẠI `auto`, nên câu của nó phải nói rõ "kể cả khi
-       trông như kính" — không có vế ấy thì model đọc "một ô kính, fully opaque"
-       và tự hoà giải bằng cách vẽ nửa vời. */
-    en: "fully opaque everywhere, alpha 255, with no see-through part at all,"
-      + " whatever material it may look like",
   },
   {
     id: "glass",
@@ -158,22 +179,25 @@ export const GLAZE_PRESETS: readonly GlazePreset[] = [
 ];
 
 /**
- * CHUẨN HOÁ MỘT GIÁ TRỊ ĐÃ LƯU: rỗng ⇒ `auto`, còn lại giữ NGUYÊN VĂN.
+ * CHUẨN HOÁ MỘT GIÁ TRỊ ĐÃ LƯU: rỗng ⇒ nấc mặc định (`solid`), còn lại NGUYÊN VĂN.
  *
- * ╔══ VÌ SAO RỖNG ĐỜI CŨ VỀ `auto` CHỨ KHÔNG VỀ `solid` ═════════════════════╗
- * ║ Rỗng đời cũ nghĩa là "người dùng chưa bấm gì" — và cái họ nhìn thấy lúc   ║
- * ║ ấy là một ô do máy tự quyết độ đục, vì `gen.sh` không nhận được câu nào    ║
- * ║ cho ô đó. Đưa nó về `solid` là GHI một lựa chọn mà họ chưa hề bấm, và với ║
- * ║ một ô "cửa sổ kính" thì lựa chọn ấy còn đổi luôn ảnh ra. `auto` giữ đúng   ║
- * ║ trạng thái cũ: chưa ai quyết, để máy quyết.                               ║
+ * ╔══ RỖNG ĐỜI CŨ VỀ `solid` — ĐỔI 11/09/2026, VÀ ĐÂY LÀ LÝ DO ══════════════╗
+ * ║ Rỗng nghĩa là "người dùng chưa bấm gì", nên câu hỏi đúng là: lúc chưa bấm ║
+ * ║ gì thì họ NHÌN THẤY gì. Bản nháp để `""` đều được vẽ hồi `gen.sh` còn mặc  ║
+ * ║ định mọi ô là ĐỤC — tức tấm ảnh trong tay họ là tấm đặc, và `solid` giữ    ║
+ * ║ đúng tấm ấy. Bản trước (08/09) đưa rỗng về `auto` theo cùng lối suy nghĩ   ║
+ * ║ này, khi mặc định của cả sản phẩm là `auto`; nay mặc định đổi, nên nấc rơi ║
+ * ║ về đổi theo. Ba ngày giữa hai mốc không đủ để "để trống" trở thành một     ║
+ * ║ cách CỐ Ý chọn `auto`: muốn `auto` thì bấm «Tự động», và lúc ấy id được    ║
+ * ║ ghi ra hẳn hoi chứ không nằm ở chỗ rỗng.                                   ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
  * Id LẠ (tài liệu của một bản sau) đi qua nguyên vẹn: `glazePreset` sẽ trả `null`
  * cho nó và không ai in thêm chữ nào — thà mất một hiệu ứng còn hơn âm thầm đổi
  * lựa chọn của người dùng thành một thứ khác.
  */
-export function glazeOrAuto(id: string | null | undefined): string {
-  return (id ?? "").trim() || GLAZE_AUTO;
+export function glazeOrSolid(id: string | null | undefined): string {
+  return (id ?? "").trim() || GLAZE_SOLID;
 }
 
 /** Preset theo id. `null` cho chuỗi rỗng và cho id lạ (tài liệu đời sau). */
@@ -213,10 +237,11 @@ export function glazePhrase(id: string | null | undefined): string {
  * và thẩm mỹ nay do prompt tổng lo. Mất chữ ấy là ĐÚNG ý chủ sản phẩm, không phải
  * một lỗ hổng của phép dịch.
  *
- * VÀ KHÔNG PHẢI `"solid"`. Rỗng ở đây rơi tiếp vào `glazeOrAuto` ⇒ `auto`, mà `auto`
- * nhìn thấy "polished gold metal" thì vẽ đục — cùng một tấm ảnh, không cần ta ghi
- * hộ một lựa chọn. Ghi `solid` thì ngược lại: nó sẽ ĐÈ cả những ô mà chất liệu cũ
- * là "kính nhám" nếu mai này bảng dưới đổi.
+ * VÀ KHÔNG GÕ THẲNG `"solid"` Ở ĐÂY, dù từ 11/09/2026 rỗng rơi tiếp vào
+ * `glazeOrSolid` ⇒ `solid` (gỗ · đá · kim loại ra ô đặc, đúng thứ chất liệu cũ nói).
+ * Rỗng ở bảng này mang nghĩa hẹp hơn: "chất liệu ấy KHÔNG nói gì về độ trong" — nên
+ * nó phải đi theo nấc mặc định của sản phẩm, chứ không ghim cứng một nấc. Ghim
+ * `solid` tại chỗ là mai này mặc định đổi lần nữa thì bảng này im lặng đứng lại.
  */
 const MATERIAL_TO_GLAZE: Record<string, string> = {
   glass: "glass",

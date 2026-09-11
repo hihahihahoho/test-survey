@@ -3,7 +3,9 @@ import type { JSONContent } from "@tiptap/react";
 
 import { contractJobs, contractSchema } from "@/lib/types/contract";
 import { HINT_SQUARE, MAIN_VARIANT_ID, resolveElementSpec } from "@/features/kit-core/lib/kitset-to-contract";
-import { GLAZE_AUTO, glazeFromMaterial, glazeOrAuto, glazePhrase } from "@/features/kit-core/lib/glaze";
+import {
+  GLAZE_AUTO, GLAZE_PRESETS, GLAZE_SOLID, glazeFromMaterial, glazeOrSolid, glazePhrase,
+} from "@/features/kit-core/lib/glaze";
 import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
 import { EXPRESSIONS, OUTFIT_THEMES } from "@/features/kit-core/lib/poses";
 
@@ -458,15 +460,30 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     expect(ui.components[1]!.spec).not.toContain("alpha");
   });
 
-  /* 08/09/2026 — NẤC MẶC ĐỊNH «TỰ ĐỘNG THEO VẬT LIỆU». Chủ sản phẩm chốt: model tự
-     quyết độ trong theo vật liệu của ô. Luật ấy đúng với MỌI ô nên `gen.sh` nói nó
-     một lần ở section `## Transparency`; contract KHÔNG được mang bản sao nào. */
+  /* 08/09/2026 — NẤC «TỰ ĐỘNG THEO VẬT LIỆU». Chủ sản phẩm chốt: model tự quyết độ
+     trong theo vật liệu của ô. Luật ấy đúng với MỌI ô nên `gen.sh` nói nó một lần ở
+     section `## Transparency`; contract KHÔNG được mang bản sao nào. Từ 11/09/2026
+     nấc này thôi làm mặc định, nhưng câu của nó vẫn phải rỗng y như cũ. */
   it("nấc «Tự động» KHÔNG nối chữ nào vào `spec` — và không sinh trường mới nào", () => {
     const spec = resolveElementSpec({ spec: "coin icon" }, { glaze: GLAZE_AUTO });
     expect(spec).toBe("coin icon");
     expect(glazePhrase(GLAZE_AUTO)).toBe("");
-    /* Rỗng đời cũ đi cùng đường: cũng không chữ, cũng không cờ. */
+    /* Rỗng ở TẦNG CONTRACT đi cùng đường: cũng không chữ, cũng không cờ. Tầng đọc
+       bản nháp mới là chỗ rỗng được đặt tên (`glazeOrSolid` ⇒ `solid`), và nó nằm
+       trên tầng này — contract không đoán hộ ai. */
     expect(resolveElementSpec({ spec: "coin icon" }, { glaze: "" })).toBe("coin icon");
+  });
+
+  /* 11/09/2026 — MẶC ĐỊNH LÀ «ĐỤC HOÀN TOÀN». Ca này canh cái GIÁ của lượt đổi ấy:
+     một ô mặc định nay MANG CHỮ vào prompt, chứ không im lặng như thời `auto`. */
+  it("mặc định là `solid`, và mặc định ấy CÓ câu đi vào prompt", () => {
+    expect(GLAZE_PRESETS[0]!.id).toBe(GLAZE_SOLID);
+    expect(GLAZE_PRESETS[1]!.id).toBe(GLAZE_AUTO);
+    expect(glazeOrSolid("")).toBe(GLAZE_SOLID);
+    expect(glazeOrSolid(null)).toBe(GLAZE_SOLID);
+    expect(resolveElementSpec({ spec: "coin icon" }, { glaze: GLAZE_SOLID }))
+      .toBe(`coin icon, ${glazePhrase(GLAZE_SOLID)}`);
+    expect(glazePhrase(GLAZE_SOLID)).toContain("alpha 255");
   });
 
   it("nấc «Đục hoàn toàn» thì CÓ câu — nó tồn tại để cãi lại luật chung của tấm", () => {
@@ -482,12 +499,14 @@ describe("composerToContract — kết quả phải QUA ĐƯỢC schema contract
     expect(glazeFromMaterial("fire")).toBe("glow");
     expect(glazeFromMaterial("glass")).toBe("glass");
     /* Gỗ/đá/kim loại là THẨM MỸ ⇒ rơi về rỗng: thẩm mỹ nay do prompt tổng lo. Rỗng
-       ấy đi tiếp vào `glazeOrAuto` ⇒ `auto`, và `auto` nhìn "polished gold metal" thì
-       vẽ đục — cùng một tấm ảnh, không cần ta ghi hộ một lựa chọn nào. */
+       ấy đi tiếp vào `glazeOrSolid` ⇒ `solid` (11/09/2026) — và một ô "polished gold
+       metal" thì đúng là ô đặc, nên tấm ảnh không đổi so với thời `auto`. */
     expect(glazeFromMaterial("wood")).toBe("");
     expect(glazeFromMaterial("gold-metal")).toBe("");
-    expect(glazeOrAuto(glazeFromMaterial("wood"))).toBe(GLAZE_AUTO);
-    expect(glazeOrAuto("ice")).toBe("ice");
+    expect(glazeOrSolid(glazeFromMaterial("wood"))).toBe(GLAZE_SOLID);
+    expect(glazeOrSolid("ice")).toBe("ice");
+    /* Id CỤ THỂ đứng yên, kể cả `auto`: lượt đổi mặc định không đụng lựa chọn đã bấm. */
+    expect(glazeOrSolid(GLAZE_AUTO)).toBe(GLAZE_AUTO);
     const legacySpec = resolveElementSpec({ spec: "coin icon" }, { material: "ice" });
     expect(legacySpec).toBe(`coin icon, ${glazePhrase("ice")}`);
     expect(legacySpec).toContain("about 128 of 255");
@@ -948,12 +967,13 @@ describe("migrateComposerDoc — chữa tài liệu đã lưu với pill `{kind:
     expect(cell.glazeId).toBe("ice");
   });
 
-  it("bản nháp đời cũ: `glazeId` RỖNG di trú thành `auto`, id cụ thể thì đứng yên", () => {
-    /* 08/09/2026 — rỗng từng gánh hai nghĩa ("chưa chọn" + "nền đặc") và nghĩa thứ
-       hai chỉ đứng được nhờ `gen.sh` mặc định vẽ đục. Mặc định ấy nay là "theo vật
-       liệu", nên rỗng phải nói ra nó là nấc nào: `auto` — ĐÚNG thứ người dùng đang
-       nhìn thấy trước lượt này. Đưa nó về `solid` là ghi hộ một lựa chọn họ chưa bấm,
-       và với một ô "cửa sổ kính" thì lựa chọn ấy còn đổi luôn ảnh ra. */
+  it("bản nháp đời cũ: `glazeId` RỖNG di trú thành `solid`, id cụ thể thì đứng yên", () => {
+    /* 11/09/2026 — rỗng từng gánh hai nghĩa ("chưa chọn" + "nền đặc") và nghĩa thứ
+       hai chỉ đứng được nhờ `gen.sh` mặc định vẽ đục. Nên rỗng phải nói ra nó là nấc
+       nào, và nấc ấy là `solid`: bản nháp để trống đã được vẽ ra thành ô ĐẶC hồi đó,
+       và đó là tấm ảnh người dùng đang có trong tay. (Bản 08/09 đưa rỗng về `auto`
+       vì lúc ấy `auto` là mặc định của cả sản phẩm; mặc định đổi thì nấc rơi về đổi
+       theo — một chỗ, `glazeOrSolid`.) */
     const doc = migrateComposerDoc(
       saved({
         blocks: [{
@@ -961,7 +981,7 @@ describe("migrateComposerDoc — chữa tài liệu đã lưu với pill `{kind:
           cells: [
             { id: "c1", elementId: "coin", styleId: "", decor: "2", glazeId: "", note: "" },
             { id: "c2", elementId: "button", styleId: "", decor: "4", glazeId: "glow", note: "" },
-            /* Không khai `glazeId` mà khai chất liệu ĐỜI CŨ: gỗ → rỗng → `auto`. */
+            /* Không khai `glazeId` mà khai chất liệu ĐỜI CŨ: gỗ → rỗng → `solid`. */
             { id: "c3", elementId: "panel", styleId: "", decor: "6", materialId: "wood", note: "" },
           ],
         }],
@@ -969,7 +989,7 @@ describe("migrateComposerDoc — chữa tài liệu đã lưu với pill `{kind:
       PRESETS,
     );
     const cells = (doc.composer.blocks[0] as { cells: UiCell[] }).cells;
-    expect(cells.map((c) => c.glazeId)).toEqual([GLAZE_AUTO, "glow", GLAZE_AUTO]);
+    expect(cells.map((c) => c.glazeId)).toEqual([GLAZE_SOLID, "glow", GLAZE_SOLID]);
     /* CÙNG MỘT BẢN NHÁP ẤY cũng chứng cho trục trang trí: thang 1..7 → bốn nấc
        (2→«Ít», 4→«Vừa», 6→«Nhiều»), và trường `decorPlace` chưa từng tồn tại ⇒
        «Cân đối». Không vá thì "2" không tra ra mục nào và câu trang trí biến mất. */

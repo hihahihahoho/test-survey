@@ -745,6 +745,15 @@ describe("⑦ dòng element: hàng 1 có ×, hàng 2 là ghi chú", () => {
     }
   });
 
+  it("dòng MỚI: pill Đục nền đọc ra «Đục hoàn toàn», không phải «Tự động»", () => {
+    /* 11/09/2026 — mặc định đổi, và đây là chỗ DUY NHẤT người dùng nhìn thấy nó.
+       Chủ sản phẩm đo bằng mắt trên đúng dòng này, nên ca cũng đo ở đấy chứ không
+       đo `newCell` lần nữa. */
+    const row = rowOf("Button · primary");
+    expect(row.textContent).toContain("Đục nền:Đục hoàn toàn");
+    expect(row.textContent).not.toContain("Đục nền:Tự động");
+  });
+
   /* ── PILL «BỐ TRÍ» LÀ PILL DUY NHẤT ĐƯỢC PHÉP VẮNG MẶT ─────────────────────
      Hàng 1 là `flex-nowrap`, và sáu pill đã là chật. Ẩn hẳn thay vì làm mờ vì hai
      lẽ: một pill mờ VẪN chiếm chỗ trong hàng ấy, và nó vẫn mời người ta bấm vào

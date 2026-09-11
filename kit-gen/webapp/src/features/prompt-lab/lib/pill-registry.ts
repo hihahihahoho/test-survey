@@ -139,11 +139,10 @@ const PLACEHOLDER: Record<PillKind, string> = {
   scene: "khung cảnh",
   mood: "không khí",
   layout: "bố cục",
-  /* «Tự động», KHÔNG phải «không đục». Từ 08/09/2026 rỗng KHÔNG còn nghĩa "ô đặc":
-     mọi cửa đọc đưa nó về `auto` (`glazeOrAuto`), và ô đặc có nấc riêng («Đục hoàn
-     toàn»). Chuỗi này chỉ còn tới được mắt người dùng qua một bản nháp lạ chưa đi
-     qua `readCell` — và lúc ấy nó phải nói ĐÚNG thứ sẽ xảy ra, tức là `auto`. */
-  glaze: "tự động",
+  /* «đục hoàn toàn» — chuỗi này phải nói ĐÚNG thứ sẽ xảy ra với một ô rỗng, và từ
+     11/09/2026 mọi cửa đọc đưa rỗng về `solid` (`glazeOrSolid`), không còn về `auto`.
+     Nó chỉ tới được mắt người dùng qua một bản nháp lạ chưa đi qua `readCell`. */
+  glaze: "đục hoàn toàn",
   material: "chất liệu",
   decor: "trang trí",
   decorPlace: "bố trí",
@@ -346,10 +345,11 @@ export function takesImage(kind: PillKind): boolean {
 export function hasBlankChoice(kind: PillKind): boolean {
   /* `glaze` là ca THỨ HAI, thêm 08/09/2026 và cùng một lý do "hai cửa cho một
      việc": mục để-trống sinh ra làm ĐƯỜNG LÙI khỏi một danh mục đóng, mà đường lùi
-     của trục đục nền nay là một mục có tên hẳn hoi — «Tự động», nấc mặc định, đứng
-     đầu danh sách. Bày thêm «— để trống —» bên trên nó là hai mục cho cùng một
-     nghĩa (`""` và `auto` ra CÙNG một prompt), và người dùng không có cách nào
-     đoán được chúng khác nhau ở đâu. */
+     của trục đục nền nay là những mục có tên hẳn hoi — «Đục hoàn toàn» (nấc mặc
+     định từ 11/09/2026, đứng đầu danh sách) và «Tự động» ngay dưới nó. Bày thêm
+     «— để trống —» bên trên chúng là hai mục cho cùng một nghĩa (`""` và mục đầu
+     bảng ra CÙNG một prompt), và người dùng không có cách nào đoán được chúng khác
+     nhau ở đâu. */
   /* `decor` và `decorPlace` là ca THỨ BA và THỨ TƯ, thêm 09/2026, CÙNG một lý do:
      nấc «Không» của trục trang trí là một mục có tên hẳn hoi, và nó nói MẠNH HƠN
      một ô để trống — để trống chỉ là không nói gì (rồi theme tự bơm hoa vào ô, đúng

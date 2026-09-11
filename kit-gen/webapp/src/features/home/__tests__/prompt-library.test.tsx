@@ -63,7 +63,7 @@ function fullLibrary() {
       id: `e_${row.id}`, kind: "element", name: row.vi,
       data: {
         key: row.id, en: row.en,
-        decor: row.element?.decor ?? "medium", glazeId: row.element?.glazeId ?? "auto", sizeId: "",
+        decor: row.element?.decor ?? "medium", glazeId: row.element?.glazeId ?? "solid", sizeId: "",
         ...(row.element?.skel ? { skel: row.element.skel } : {}),
         ...(row.element?.set ? { set: row.element.set } : {}),
       },
@@ -236,6 +236,21 @@ describe("③ dòng hệ thống · trục không thêm được", () => {
 
     fireEvent.click(screen.getByText("Tự động"));
     expect(screen.getByLabelText("Câu tiếng Anh gửi máy vẽ")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Xoá" })).toBeNull();
+    expect(screen.getByText(/không xoá được/)).toBeTruthy();
+  });
+
+  it("«Đục hoàn toàn» đứng ĐẦU danh sách và cũng KHÔNG xoá được", async () => {
+    /* 11/09/2026 — nó là nấc MẶC ĐỊNH, và mục đầu bảng là mục mặc định. Khoá vì
+       cùng lý do đã khoá «Tự động»: mã nguồn gọi thẳng tên nó (`GLAZE_SOLID`), nên
+       xoá dòng ấy là để lại một mặc định không tra ra mục nào. */
+    searchParams = { kind: "glaze" };
+    mount();
+    await ready();
+    await waitFor(() => expect(screen.getByText("Đục hoàn toàn")).toBeTruthy());
+    expect(pillOptions("glaze")[0]!.vi).toBe("Đục hoàn toàn");
+
+    fireEvent.click(screen.getByText("Đục hoàn toàn"));
     expect(screen.queryByRole("button", { name: "Xoá" })).toBeNull();
     expect(screen.getByText(/không xoá được/)).toBeTruthy();
   });

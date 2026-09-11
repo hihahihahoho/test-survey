@@ -12,7 +12,7 @@ import {
   type UiCell,
 } from "@/features/prompt-lab/lib/composer-model";
 import { defaultSizeOf } from "@/features/prompt-lab/lib/cell-size";
-import { glazeFromMaterial, glazeOrAuto } from "@/features/kit-core/lib/glaze";
+import { glazeFromMaterial, glazeOrSolid } from "@/features/kit-core/lib/glaze";
 import { EXPRESSIONS } from "@/features/kit-core/lib/poses";
 import { DEFAULT_VIEW } from "@/features/prompt-lab/lib/pose/pose-state";
 import { decorLevelOf, decorPlaceOf, getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
@@ -94,7 +94,7 @@ function readCell(raw: unknown, index: number, presets: PresetBundle): UiCell | 
   /* Bản nháp đời cũ KHÔNG có trường này ⇒ «Cân đối», nấc mặc định. */
   const decorPlace = decorPlaceOf(raw["decorPlace"]);
   /**
-   * DI TRÚ `materialId` → `glazeId`, RỒI VÁ RỖNG → `auto`.
+   * DI TRÚ `materialId` → `glazeId`, RỒI VÁ RỖNG → nấc mặc định (`solid`).
    *
    * ── ① chất liệu đời cũ ────────────────────────────────────────────────────
    * Bản nháp đời trước lưu id chất liệu; pill ấy không còn. `glazeFromMaterial` đưa
@@ -107,14 +107,15 @@ function readCell(raw: unknown, index: number, presets: PresetBundle): UiCell | 
    * dùng bỏ đục nền của một dòng cũ xong, mở lại dự án là nó tự quay về theo
    * `materialId` còn sót — hỏng câm, và người dùng không có cách nào gỡ.
    *
-   * ── ② rỗng → `auto` (08/09/2026) ──────────────────────────────────────────
+   * ── ② rỗng → nấc mặc định (08/09/2026; từ 11/09/2026 là `solid`) ──────────
    * RỖNG LÀ DI SẢN, KHÔNG PHẢI MỘT LỰA CHỌN — cùng câu chuyện với `sizeId` ngay
    * dưới. Nó từng gánh hai nghĩa ("chưa chọn" và "nền đặc") và nghĩa thứ hai chỉ
-   * đứng được nhờ `gen.sh` mặc định mọi ô là đục; mặc định ấy nay là "theo vật
-   * liệu". `glazeOrAuto` chốt: rỗng ⇒ `auto` (đúng thứ người dùng ĐANG thấy trước
-   * lượt này), id cụ thể ⇒ giữ nguyên. Muốn ô đặc thì bấm «Đục hoàn toàn».
+   * đứng được nhờ `gen.sh` mặc định mọi ô là đục. `glazeOrSolid` chốt: rỗng ⇒
+   * `solid` — đúng tấm ảnh mà bản nháp ấy đã được vẽ ra hồi đó — còn id CỤ THỂ ⇒
+   * giữ nguyên, kể cả `auto`. Dòng đã có lựa chọn thì lượt đổi mặc định không
+   * chạm tới: ô trong thẻ người ta đang làm dở giữ y nguyên thứ đang lưu.
    */
-  const glazeId = glazeOrAuto(
+  const glazeId = glazeOrSolid(
     "glazeId" in raw ? str(raw["glazeId"]) : glazeFromMaterial(str(raw["materialId"])),
   );
   return {

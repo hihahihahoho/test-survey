@@ -340,6 +340,10 @@ describe("③ hộp chọn: một danh sách toàn bộ, và một cú bấm ra 
        (`elementLabel`), nên hai dòng của cùng một bộ phân biệt được với nhau. */
     expect(screen.getByLabelText("Ghi chú cho Health bar · frame")).toBeTruthy();
     expect(screen.getByLabelText("Ghi chú cho Health bar · fill")).toBeTruthy();
+    /* 11/09/2026 — MỌI ô vừa thêm mang nấc mặc định «Đục hoàn toàn», kể cả khi
+       chúng vào thẻ theo cả cụm: `freshCell` đi qua đúng một cửa (`newCell`), nên
+       không có đường nào lẻn được một mặc định thứ hai vào bộ. */
+    expect(latest!.cells.map((cell) => cell.glazeId)).toEqual(["solid", "solid"]);
   });
 
   it("tìm bằng tên MỘT PHẦN ra BỘ chứa nó — bộ ghép vẫn là một dòng cả cụm", () => {

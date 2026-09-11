@@ -1,4 +1,4 @@
-import { GLAZE_AUTO, GLAZE_PRESETS } from "@/features/kit-core/lib/glaze";
+import { GLAZE_AUTO, GLAZE_PRESETS, GLAZE_SOLID } from "@/features/kit-core/lib/glaze";
 import { EXPRESSIONS, OUTFIT_THEMES, POSES } from "@/features/kit-core/lib/poses";
 import { CAMERA_VIEWS } from "@/features/prompt-lab/lib/pose/pose-state";
 
@@ -156,10 +156,15 @@ const POSE_SEED: readonly SeedRow[] = POSES.map((pose) => ({
 const VIEW_SEED: readonly SeedRow[] = CAMERA_VIEWS.map((view) => ({ id: view.id, vi: view.vi, en: view.en }));
 
 /**
- * ĐỤC NỀN — `id`/`vi`/`en`/`hint` của `GLAZE_PRESETS`.
+ * ĐỤC NỀN — `id`/`vi`/`en`/`hint` của `GLAZE_PRESETS`, GIỮ NGUYÊN THỨ TỰ của bảng
+ * ấy (mục đầu là nấc mặc định «Đục hoàn toàn», xem `GLAZE_PRESETS`).
  *
  * Nấc `auto` mang `en` RỖNG có chủ ý: câu của nó nằm ở `gen.sh` (`## Transparency`)
  * chứ không nối vào dòng element. Dòng phụ trong menu vì thế nhường cho `hint`.
+ *
+ * ⚠️ Thứ tự này chỉ tới được KHO ở lần gieo đầu. Workspace đã gieo trước 11/09/2026
+ * giữ thứ tự cũ (`auto` đứng đầu) cho tới khi ai đó kéo lại ở màn thư viện — đổi
+ * thứ tự hộ họ là ghi đè một danh mục họ có quyền tự sắp.
  */
 const GLAZE_SEED: readonly SeedRow[] = GLAZE_PRESETS.map((preset) => ({
   id: preset.id,
@@ -229,7 +234,7 @@ export const CATALOG_ORDER: readonly Exclude<CatalogKind, "style">[] = [
  *
  * ╔══ VÌ SAO KHOÁ, THAY VÌ CHO XOÁ RỒI TỰ GIEO LẠI ══════════════════════════╗
  * ║ Ba id dưới đây không phải "một lựa chọn trong danh sách" — chúng là GIÁ    ║
- * ║ TRỊ MẶC ĐỊNH mà mã nguồn gọi tên thẳng: `newCell` đặt `glazeId = auto`,   ║
+ * ║ TRỊ MẶC ĐỊNH mà mã nguồn gọi tên thẳng: `newCell` đặt `glazeId = solid`,  ║
  * ║ `decorLevelOf` rơi về `medium` nhưng `hasDecorPlacement` so với `none`,   ║
  * ║ `decorPlaceOf` rơi về `balanced`. Xoá một trong số chúng là để lại một    ║
  * ║ giá trị mặc định không tra ra dòng nào — pill hiện chữ trần, câu rụng      ║
@@ -237,7 +242,10 @@ export const CATALOG_ORDER: readonly Exclude<CatalogKind, "style">[] = [
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 export const LOCKED_ROWS: Partial<Record<CatalogKind, readonly string[]>> = {
-  glaze: [GLAZE_AUTO, "solid"],
+  /* CẢ HAI nấc, dù chỉ `solid` là mặc định (11/09/2026): `auto` vẫn được mã nguồn
+     gọi tên thẳng (`GLAZE_AUTO` là nấc mà `migrateElementGlaze` so nguyên văn), nên
+     xoá nó là để lại một phép di trú so với một dòng không còn tồn tại. */
+  glaze: [GLAZE_SOLID, GLAZE_AUTO],
   decor: ["none"],
   decorPlace: ["balanced"],
 };

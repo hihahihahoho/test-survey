@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { foldVi } from "@/features/kit-core/lib/element-lib/source";
+import { GLAZE_SOLID } from "@/features/kit-core/lib/glaze";
 import { SKEL_SHAPES, slugify, type Skel } from "@/lib/types/contract";
 import { SIZE_PRESETS } from "@/features/prompt-lab/lib/cell-size";
 import { POSE_PRESETS } from "@/features/prompt-lab/lib/pose/pose-presets";
@@ -220,8 +221,10 @@ const SET_KIND_COPY: Record<ElementSetKind, { label: string; hint: string }> = {
   },
 };
 
-/** Phần đuôi của một dòng «Món giao diện» khi chưa ai đặt gì — MỘT chỗ, bốn nơi đọc. */
-const ELEMENT_ROW_DEFAULTS: NonNullable<ManagedRow["element"]> = { decor: "medium", glazeId: "auto", sizeId: "" };
+/** Phần đuôi của một dòng «Món giao diện» khi chưa ai đặt gì — MỘT chỗ, bốn nơi đọc.
+ *  `glazeId` là nấc MẶC ĐỊNH của sản phẩm (`GLAZE_SOLID`), không phải một chuỗi gõ
+ *  tay: đổi mặc định ở `glaze.ts` là chỗ này đi theo. */
+const ELEMENT_ROW_DEFAULTS: NonNullable<ManagedRow["element"]> = { decor: "medium", glazeId: GLAZE_SOLID, sizeId: "" };
 
 /** Dáng nào đã có bảng góc khớp để dựng ảnh mẫu. Xem `pose-presets.ts`. */
 const POSED = new Set(POSE_PRESETS.map((preset) => preset.id));
@@ -1016,7 +1019,7 @@ function RowEditor({
             </Field>
 
             <Field id={`row-glaze-${row.id}`} label="Đục nền mặc định" hint="Áp sẵn khi thêm món này vào một tấm.">
-              <Select value={element?.glazeId || "auto"} onValueChange={(value) => setElement({ glazeId: value })}>
+              <Select value={element?.glazeId || GLAZE_SOLID} onValueChange={(value) => setElement({ glazeId: value })}>
                 <SelectTrigger id={`row-glaze-${row.id}`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <CatalogItems kind="glaze" />

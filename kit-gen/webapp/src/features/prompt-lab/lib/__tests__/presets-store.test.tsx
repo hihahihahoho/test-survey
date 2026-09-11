@@ -561,6 +561,72 @@ describe("di trú nhãn: chỉ đổi khi người dùng CHƯA sửa", () => {
   });
 });
 
+/* ══════════════════════════════════════════════════════════════════════════
+   DI TRÚ ĐỤC NỀN — `auto` mà CHÍNH TA gieo → `solid`, nấc mặc định đời nay
+   ══════════════════════════════════════════════════════════════════════════
+   11/09/2026: mặc định của trục đục nền đổi từ «Tự động» sang «Đục hoàn toàn».
+   Hạt giống đổi theo là xong cho máy MỚI — còn máy đã mở app trong ba ngày
+   08–11/09 đang giữ bốn mươi tám bản ghi element ghi `auto`, và `seedOnce` cố ý
+   không ghi đè chúng. Không vá thì mặc định mới không bao giờ tới được cái máy
+   đã dùng app lâu nhất; vá không điều kiện thì nó xoá cả lựa chọn người ta đã bấm.
+   Ba ca dưới là ba vế của cùng một luật. */
+describe("di trú đục nền: `auto` hạt giống → `solid`, và chỉ thế", () => {
+  const seeded = (key: string, glazeId: string) =>
+    row(`preset_${key}`, "element", key, { key, en: key, decor: "light", glazeId, sizeId: "" });
+
+  it("món HẠT GIỐNG còn nguyên `auto` ⇒ đọc ra `solid`", async () => {
+    get.mockResolvedValue(library([seeded("button", "auto"), seeded("panel", "auto")]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(2));
+    expect(seen!.elements.map((element) => element.glazeId)).toEqual(["solid", "solid"]);
+  });
+
+  it("người dùng ĐÃ TỰ ĐỔI ⇒ giữ nguyên, kể cả sang một nấc kính", async () => {
+    /* Đây là vế phân biệt một phép di trú với một lượt ghi đè: chỉ đúng chuỗi mà
+       CHÍNH ta từng ghi ra mới được đổi. Một ô «Kính trong» là lựa chọn đã bấm. */
+    get.mockResolvedValue(library([seeded("button", "glass"), seeded("panel", "glow")]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(2));
+    expect(seen!.elements.map((element) => element.glazeId)).toEqual(["glass", "glow"]);
+  });
+
+  it("món TỰ ĐẶT TÊN mang `auto` ⇒ không đụng: nó chưa từng là hạt giống của ta", async () => {
+    get.mockResolvedValue(library([seeded("tu-dat-khien", "auto")]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen!.elements[0]!.glazeId).toBe("auto");
+  });
+
+  it("RỖNG đời rất cũ vẫn đi qua nguyên vẹn — nó được vá ở `newCell`, không ở đây", async () => {
+    /* Vá rỗng tại cửa đọc thì `payloadOf` sẽ ghi giá trị đã vá ngược lên server:
+       một lượt PATCH mọi bản ghi mà không ai bấm gì. */
+    get.mockResolvedValue(library([seeded("button", "")]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen!.elements[0]!.glazeId).toBe("");
+  });
+
+  it("vá LÚC ĐỌC ⇒ mở app KHÔNG sinh một lượt ghi nào", async () => {
+    get.mockResolvedValue(library([seeded("button", "auto")]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(patchPreset).not.toHaveBeenCalled();
+  });
+
+  it("hạt giống ĐỜI NAY: cả bốn mươi tám món ghi «Đục hoàn toàn»", async () => {
+    /* Cửa của máy MỚI — `seedPresets()` là thứ `seedOnce` ghi xuống đĩa. */
+    const elements = seedPresets().elements;
+    expect(elements.length).toBeGreaterThan(40);
+    expect(elements.every((element) => element.glazeId === "solid")).toBe(true);
+  });
+});
+
 describe("gieo bù: máy đã có hạt giống ĐỜI TRƯỚC nhưng chưa có bộ", () => {
   /** Tám món hạt giống đời trước, đúng hình dạng bản ghi mà chúng nằm trên đĩa. */
   const legacyElementRows = (): Row[] =>

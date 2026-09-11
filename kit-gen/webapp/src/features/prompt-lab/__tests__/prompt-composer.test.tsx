@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { JSONContent } from "@tiptap/react";
 
-import { GLAZE_AUTO, GLAZE_PRESETS, glazePhrase } from "@/features/kit-core/lib/glaze";
+import { GLAZE_AUTO, GLAZE_PRESETS, GLAZE_SOLID, glazePhrase } from "@/features/kit-core/lib/glaze";
 import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
 import { GENRE_PRESETS } from "@/features/prompt-lab/lib/genre-presets";
 import { EXPRESSIONS, OUTFIT_THEMES, POSES } from "@/features/kit-core/lib/poses";
@@ -347,14 +347,26 @@ describe("serialize cả màn — mỗi block một đoạn, ảnh đánh số l
     /* Bản copy-dán và bản gửi engine là hai cửa nhìn vào CÙNG một ô, nên chúng phải
        im lặng ở cùng một chỗ: nấc `auto` không nối chữ vào dòng nào cả, luật của nó
        do `gen.sh` nói một lần cho cả tấm (section `## Transparency`). Và tuyệt đối
-       không được rò `hint` — dòng chữ VIỆT bày trong menu — ra prompt. */
-    const cells: UiCell[] = [newCell("coin", PRESETS)];
-    expect(cells[0]!.glazeId).toBe(GLAZE_AUTO);
+       không được rò `hint` — dòng chữ VIỆT bày trong menu — ra prompt.
+       Phải BẤM nấc ấy mới có: từ 11/09/2026 ô mới mang `solid`, nên `newCell` không
+       còn là đường tới `auto` nữa. */
+    const cells: UiCell[] = [{ ...newCell("coin", PRESETS), glazeId: GLAZE_AUTO }];
     const out = serializeComposer(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), PRESETS);
     expect(out).toContain("cell 1 (Coin counter · coin)");
     expect(out).not.toContain("alpha");
     expect(out).not.toContain("see-through");
     expect(out).not.toContain("tự quyết theo vật liệu");
+  });
+
+  it("ô MỚI (mặc định «Đục hoàn toàn») ⇒ dòng của nó MANG câu đặc", () => {
+    /* Cái giá của lượt đổi mặc định 11/09/2026, đo thẳng trên bản copy-dán: ô mới
+       thôi im lặng. Đó là chủ ý — `gen.sh` không mặc định ô nào là đục nữa, nên im
+       lặng nghĩa là giao độ trong lại cho model đoán. */
+    const cells: UiCell[] = [newCell("coin", PRESETS)];
+    expect(cells[0]!.glazeId).toBe(GLAZE_SOLID);
+    const out = serializeComposer(state({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }), PRESETS);
+    expect(out).toContain(glazePhrase(GLAZE_SOLID));
+    expect(out).toContain("alpha 255");
   });
 
   /**
@@ -445,18 +457,18 @@ describe("danh mục — lab đi bằng dữ liệu THẬT của kit-core, khôn
     expect(hasBlankChoice("decorPlace")).toBe(false);
   });
 
-  it("pill Đục nền: «Tự động» đứng ĐẦU, «Đục hoàn toàn» có mặt, KHÔNG có mục để trống", () => {
-    /* 08/09/2026 — chủ sản phẩm chốt thêm nấc mặc định «tự động theo vật liệu», và
-       cùng lượt ấy nấc «đặc» phải có tên riêng: trước đó "đặc" chỉ là hệ quả của
-       việc `gen.sh` mặc định vẽ đục, mà mặc định ấy nay là "theo vật liệu". */
+  it("pill Đục nền: «Đục hoàn toàn» đứng ĐẦU, «Tự động» ngay sau, KHÔNG có mục để trống", () => {
+    /* 11/09/2026 — MỤC ĐẦU BẢNG LÀ MẶC ĐỊNH, và mặc định nay là «Đục hoàn toàn»:
+       một bộ UI kit gần như toàn món đặc. Nấc «Tự động theo vật liệu» (thêm 08/09)
+       vẫn còn, đứng ngay dưới — nó chỉ thôi làm mặc định. */
     const options = pillOptions("glaze", PRESETS);
-    expect(options[0]!.value).toBe(GLAZE_AUTO);
-    expect(options.map((o) => o.value)).toContain("solid");
+    expect(options[0]!.value).toBe(GLAZE_SOLID);
+    expect(options[1]!.value).toBe(GLAZE_AUTO);
 
     /* `auto` KHÔNG có cụm tiếng Anh — nó không nối chữ vào dòng element. Dòng phụ
        của nó trong menu là `hint` (chữ Việt), thứ KHÔNG bao giờ đi vào prompt. */
-    expect(options[0]!.en).toBe("");
-    expect(options[0]!.hint).toBeTruthy();
+    expect(options[1]!.en).toBe("");
+    expect(options[1]!.hint).toBeTruthy();
     expect(phraseOf("glaze", GLAZE_AUTO, PRESETS)).toBe("");
 
     /* Mục «— để trống —» bị bỏ khỏi trục này: `""` và `auto` ra CÙNG một prompt, nên
@@ -471,12 +483,12 @@ describe("danh mục — lab đi bằng dữ liệu THẬT của kit-core, khôn
   it("ô mới kế thừa phong cách chung và ăn mặc định của element preset", () => {
     const cell = newCell("coin", PRESETS);
     expect(cell.styleId).toBe(INHERIT);
-    /* Đục nền KHÔNG còn được áp sẵn theo loại element (nó là hiệu ứng, không phải
-       bản chất của "icon tiền"); CỠ thì có, vì cỡ là hình học — và nó đo từ `skel`
-       của chính loại: một đồng xu là hộp VUÔNG.
-       "Không áp sẵn" nay ĐỌC RA là `auto`, không phải rỗng: rỗng từng gánh hai
-       nghĩa ("chưa chọn" + "nền đặc") và nghĩa thứ hai đã có id riêng (`solid`). */
-    expect(cell.glazeId).toBe(GLAZE_AUTO);
+    /* Đục nền KHÔNG được áp sẵn theo loại element (nó là hiệu ứng, không phải bản
+       chất của "icon tiền"); CỠ thì có, vì cỡ là hình học — và nó đo từ `skel` của
+       chính loại: một đồng xu là hộp VUÔNG.
+       "Không áp riêng cho loại này" nay ĐỌC RA là `solid`, nấc mặc định chung của
+       sản phẩm (11/09/2026) — không phải rỗng, và cũng không còn là `auto`. */
+    expect(cell.glazeId).toBe(GLAZE_SOLID);
     expect(cell.sizeId).toBe(defaultSizeOf(PRESETS.elements.find((e) => e.id === "coin")));
     const coin = PRESETS.elements.find((e) => e.id === "coin");
     expect(sizePx(cell.sizeId, coin?.skel)?.w).toBe(sizePx(cell.sizeId, coin?.skel)?.h);
