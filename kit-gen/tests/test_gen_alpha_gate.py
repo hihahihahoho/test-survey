@@ -137,11 +137,43 @@ class DinhTuyenSkillTest(unittest.TestCase):
         """09/09/2026 — chủ sản phẩm: xin bằng câu văn thì lúc được lúc không, còn
         từ khoá tham số `background="transparent"` thì được. Task phải mang đúng
         từ khoá ấy (dấu nháy kép đã thoát trong chuỗi bash) để agent codex truyền
-        vào lời gọi image_gen, và nó đứng ngay câu đầu, trước khối prompt."""
+        vào lời gọi image_gen, và nó đứng ngay câu đầu, trước khối prompt.
+
+        11/09/2026 — SỐ ĐẾM ĐỔI 2 → 3 CÓ CHỦ Ý. Chủ sản phẩm: đặt tham số thôi "vẫn
+        chưa đủ", máy vẽ vẫn có lúc trả ảnh đục hoặc nền giả vẽ bằng pixel. Nên task
+        có thêm MỘT chỗ nhắc lại từ khoá: câu bảo codex vẽ lại lần thứ hai. Ba chỗ
+        ấy là ba việc khác nhau — ① luật của skill, ② lượt vẽ đầu, ③ lượt vẽ lại —
+        nên đây vẫn là số đếm có nghĩa, không phải một con số nới ra cho dễ xanh."""
         kw = 'background=\\"transparent\\"'
-        self.assertEqual(self.task.count(kw), 2,
-                         "từ khoá phải có ở câu đầu và ở câu Generate ONE image")
+        self.assertEqual(self.task.count(kw), 3,
+                         "từ khoá phải có ở câu đầu, ở câu Generate ONE image, và ở câu vẽ lại")
         self.assertLess(self.task.index(kw), self.task.index("Generate ONE image"))
+
+    def test_bat_codex_HOI_LAI_chinh_cong_cu_ve(self):
+        """11/09/2026 — CHỦ SẢN PHẨM: "ask your image generation tool to double check
+        its output" rồi vẽ lại nếu chưa đạt.
+
+        Chỉ là CÂU VĂN cho codex: không script đo, không tự sửa pixel. Ca này ghim ba
+        nửa của nó — có bước hỏi lại, có trần chi phí, và không gọi tên thứ không muốn
+        (chữ "checker" trong task là prompt âm, nói ra là gieo vào ảnh)."""
+        t = self.task
+        self.assertIn("double check its own output", t,
+                      "task phải bảo codex hỏi lại chính công cụ vẽ")
+        self.assertIn("alpha channel is real", t,
+                      "phải nói rõ xác nhận cái gì: alpha THẬT")
+        self.assertIn("imitate transparency", t,
+                      "phải nêu ca nền giả vẽ bằng pixel — nhưng bằng lời tả, không gọi tên")
+        self.assertIn("ONE more time", t, "vẽ lại đúng MỘT lần")
+        self.assertIn("Never more than two image_gen calls", t, "phải có trần chi phí")
+        self.assertLess(t.index("Generate ONE image"), t.index("double check its own output"),
+                        "bước tự kiểm phải đứng SAU lượt vẽ đầu")
+        self.assertNotIn("checker", t.lower(), "task không được gọi tên thứ không muốn")
+
+    def test_khong_bao_codex_DUNG_LAI_truoc_khi_ve_lai(self):
+        """Câu cấm cũ kết bằng "just say so plainly and stop" — đứng một mình thì nó
+        DẬP luôn lượt vẽ lại vừa thêm (hai câu của cùng một task đá nhau, và câu ở
+        trước thì model đọc trước). Nên nó phải nói rõ: dừng SAU lượt vẽ lại."""
+        self.assertIn("after the one retry described below", self.task)
 
     def test_cam_tu_che_cong_cu_tach_nen(self):
         """Cấm phải NÊU TÊN thứ đã thật sự bị lạm dụng, không cấm chung chung."""

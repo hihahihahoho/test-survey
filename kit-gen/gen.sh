@@ -1049,12 +1049,24 @@ ${att_paths}--- REFERENCE IMAGES END ---
   # ║ alpha_verdict ở đầu file chỉ GHI NHẬN triệu chứng sau khi đã tốn một lượt  ║
   # ║ gen (và từ 09/09/2026 nó cũng chỉ ghi nhận, không chặn); chữa từ gốc là ở   ║
   # ║ đây, trong câu chữ của task.                                               ║
+  # ║ 11/09/2026 — CHỦ SẢN PHẨM: đặt tham số thôi "vẫn chưa đủ", máy vẽ vẫn có lúc║
+  # ║ trả ảnh đục hoặc nền giả vẽ bằng pixel. Nên task bảo codex HỎI LẠI chính     ║
+  # ║ công cụ vẽ ("double check its output") rồi vẽ lại ĐÚNG MỘT lần nữa — trần    ║
+  # ║ hai lượt image_gen/job, bằng câu văn chứ không bằng script (không đo bằng    ║
+  # ║ code, không tự sửa pixel).                                                   ║
+  # ║ GIỚI HẠN ĐÃ BIẾT: vòng hỏi lại chỉ cứu được ca "máy vẽ tự vẽ nền giả dù      ║
+  # ║ KHÔNG có ảnh tham chiếu". Hễ đính BẤT KỲ ref nào thì image_gen trả RGB —     ║
+  # ║ đó là giới hạn của công cụ, vẽ lại lần hai cũng vậy (đo 10/09/2026).         ║
   # ╚════════════════════════════════════════════════════════════════════════════╝
   task="Use the imagegen skill and its built-in image_gen tool for this. If you have not read that skill yet, read its SKILL.md first and follow its transparent-image rule: call image_gen with background=\"transparent\" (PNG output) so the tool itself returns a genuinely transparent background, and preserve the alpha channel it gives back.
 
-One rule matters more than everything else: the transparency has to come from image_gen itself. You must not write, compile or run any program, script or tool of your own that removes, keys out, erases or otherwise edits the background or the alpha channel of the image — that includes Python, Swift, ffmpeg, ImageMagick, chroma keying, remove_chroma_key.py and the CLI fallback scripts/image_gen.py. Copying or moving the resulting file is fine. If image_gen hands you an opaque image, just say so plainly and stop: a background cut out by hand is detected and rejected, and it wastes the whole run.
+One rule matters more than everything else: the transparency has to come from image_gen itself. You must not write, compile or run any program, script or tool of your own that removes, keys out, erases or otherwise edits the background or the alpha channel of the image — that includes Python, Swift, ffmpeg, ImageMagick, chroma keying, remove_chroma_key.py and the CLI fallback scripts/image_gen.py. Copying or moving the resulting file is fine. If image_gen still hands you an opaque image after the one retry described below, just say so plainly and stop: a background cut out by hand is detected and rejected, and it wastes the whole run.
 
-${att_note}Generate ONE image with the built-in image_gen tool, passing background=\"transparent\" and PNG output. The output image MUST be exactly ${want_size} pixels (${want_orient}) — this is a hard requirement, not a preference; do not return any other aspect ratio. Use EXACTLY the prompt between the IMAGE PROMPT markers below. Then save/copy the generated PNG to exactly this path: ${ROOT_OUT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. Reply with only the saved file path.
+${att_note}Generate ONE image with the built-in image_gen tool, passing background=\"transparent\" and PNG output. The output image MUST be exactly ${want_size} pixels (${want_orient}) — this is a hard requirement, not a preference; do not return any other aspect ratio. Use EXACTLY the prompt between the IMAGE PROMPT markers below. Then save/copy the generated PNG to exactly this path: ${ROOT_OUT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image.
+
+Before you reply, ask your image generation tool to double check its own output: have image_gen confirm that the file it just produced is a PNG whose alpha channel is real — genuinely empty pixels where the background should be, not a pattern painted onto opaque pixels to imitate transparency. If the tool cannot confirm that, or if it tells you the image came back opaque, call image_gen ONE more time with the same prompt and the same reference images, stating background=\"transparent\" explicitly again, and save that second image to the path above. Never more than two image_gen calls for this job, and never repair the background yourself.
+
+Reply with only the saved file path.
 
 --- IMAGE PROMPT START ---
 $(cat "prompts/${job}.txt")
