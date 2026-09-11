@@ -19,7 +19,7 @@
  */
 import * as React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import { composerToContract } from "@/features/prompt-canvas/lib/composer-to-contract";
 import {
@@ -100,6 +100,39 @@ describe("① bộ hạt giống: đủ phần, đủ hình, không id trùng", 
      viền chồng nhau, và cái ở dưới thì không ai nhìn thấy nữa. */
   it.each(["hp-fill", "progress-fill"])("%s để «Không trang trí» sẵn", (id) => {
     expect(elementOf(id).decor).toBe("none");
+  });
+
+  /* ══ LUẬT RIÊNG CỦA BỘ BIẾN THỂ ═══════════════════════════════════════════
+     Chủ sản phẩm: *«button có thể primary không, không phụ thuộc vào disabled
+     hoặc pressed»*. Hai trạng thái của một món là hai ảnh THAY ĐƯỢC CHO NHAU lúc
+     chạy game — lập trình game đổi ảnh trong cùng một chỗ trên màn. Nên chúng
+     phải cùng hình dạng và cùng tỉ lệ; lệch thì cái nút nhảy cỡ lúc bị bấm, và
+     không có gì báo cho tới khi nhìn thấy nó nhảy. */
+  it("mọi trạng thái của một BỘ BIẾN THỂ dùng chung MỘT hình học", () => {
+    const variants = elementSets(PRESETS).filter((set) => set.kind === "variants");
+    expect(variants.length).toBeGreaterThan(5);
+    for (const set of variants) {
+      const head = set.parts[0]!.skel!;
+      for (const part of set.parts) {
+        expect(part.skel!.shape, `${set.id}/${part.id}`).toBe(head.shape);
+        expect(part.skel!.w, `${set.id}/${part.id}`).toBe(head.w);
+        expect(part.skel!.h, `${set.id}/${part.id}`).toBe(head.h);
+      }
+    }
+  });
+
+  /* Ngược lại: hai MẢNH của một bộ ghép KHÔNG được trùng hình học hoàn toàn —
+     trùng cả hình lẫn tỉ lệ là dấu hiệu chúng thật ra là hai trạng thái bị xếp
+     nhầm loại, và người dùng sẽ bị bắt lấy cả cụm cho một thứ chọn lẻ được. */
+  it("bộ GHÉP nhiều phần: không phải mọi phần đều trùng khít hình học", () => {
+    for (const set of elementSets(PRESETS).filter((view) => view.kind === "composition")) {
+      if (set.parts.length < 2) continue;
+      const head = set.parts[0]!.skel!;
+      const allSame = set.parts.every(
+        (part) => part.skel!.shape === head.shape && part.skel!.w === head.w && part.skel!.h === head.h,
+      );
+      expect(allSame, set.id).toBe(false);
+    }
   });
 
   it("phong bì: nắp CÙNG BỀ NGANG với thân, để dán lại thành một cái", () => {
@@ -203,13 +236,86 @@ describe("③ hộp chọn: một danh sách toàn bộ, và một cú bấm ra 
     expect(titles).not.toContain("Lẻ");
   });
 
-  it("mỗi dòng là MỘT BỘ và nói ra số phần — không dòng nào cho một phần riêng", () => {
+  it("BỘ GHÉP: đúng một dòng cho cả bộ, và dòng ấy nói ra số phần", () => {
     openBox();
-    const rows = screen.getAllByRole("option").map((node) => node.textContent ?? "");
-    /* Đúng bằng số bộ trong kho: thừa một dòng nghĩa là một phần nào đó đã lọt ra
-       ngoài dưới dạng lựa chọn riêng — đúng thứ chủ sản phẩm bảo bỏ. */
-    expect(rows).toHaveLength(elementSets(PRESETS).length);
-    for (const row of rows) expect(row).toMatch(/· \d+ phần/);
+    /* Mỗi bộ ghép đóng góp ĐÚNG MỘT dòng chọn được — thừa một dòng nghĩa là một
+       phần nào đó đã lọt ra ngoài dưới dạng lựa chọn riêng, đúng thứ chủ sản phẩm
+       bảo bỏ với loại bộ này («1 thanh bar thì bắt buộc phải có composition kia»). */
+    for (const set of elementSets(PRESETS).filter((view) => view.kind === "composition")) {
+      const option = screen.getByRole("option", { name: new RegExp(`^${set.vi} · ${set.parts.length} phần`) });
+      expect(option.textContent, set.id).toContain(`${set.parts.length} phần`);
+    }
+  });
+
+  it("SỐ DÒNG CHỌN ĐƯỢC = bộ ghép + (mỗi biến thể một dòng, cộng một dòng «Cả bộ»)", () => {
+    openBox();
+    const sets = elementSets(PRESETS);
+    const expected = sets.reduce(
+      (sum, set) => sum + (set.kind === "variants" && set.parts.length > 1 ? set.parts.length + 1 : 1),
+      0,
+    );
+    expect(screen.getAllByRole("option")).toHaveLength(expected);
+  });
+
+  /* ══ ĐÂY LÀ CA CỦA CHÍNH LỜI CHỦ SẢN PHẨM ═════════════════════════════════
+     *«button có thể primary không, không phụ thuộc vào disabled hoặc pressed»*.
+     Bốn trạng thái là bốn dòng bấm được, và bấm một dòng ra ĐÚNG MỘT ô. */
+  it("BỘ BIẾN THỂ mở ra thành nhóm: tiêu đề + từng trạng thái + «Cả bộ»", () => {
+    openBox();
+    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "button" } });
+
+    const group = screen.getByRole("group", { name: "Button" });
+    /* Tiêu đề KHÔNG bấm được: nếu nó bấm được thì nó và «Cả bộ» là hai cách nói
+       cùng một câu, và người dùng phải đoán xem chúng có khác nhau không. */
+    expect(within(group).getByText(/^Button/).tagName).toBe("P");
+    const rows = within(group).getAllByRole("option").map((node) => node.getAttribute("aria-label"));
+    expect(rows).toEqual([
+      "Button · primary", "Button · secondary", "Button · pressed", "Button · disabled",
+      "Button · Cả bộ (4)",
+    ]);
+    /* KHÔNG có dòng «Button · 4 phần» nào nữa: đó là dòng vừa bị chỉ mặt. */
+    expect(screen.queryByRole("option", { name: /^Button · 4 phần/ })).toBeNull();
+  });
+
+  it("bấm MỘT trạng thái ⇒ thêm ĐÚNG MỘT ô, không kéo ba trạng thái kia theo", () => {
+    let latest: UiKitBlock | null = null;
+    render(<Harness onState={(next) => { latest = next; }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Element/ }));
+    fireEvent.click(screen.getByRole("option", { name: "Button · primary" }));
+
+    expect(latest!.cells.map((cell) => cell.elementId)).toEqual(["button"]);
+  });
+
+  it("bấm «Cả bộ» ⇒ thêm đủ bốn trạng thái, đúng thứ tự danh mục", () => {
+    let latest: UiKitBlock | null = null;
+    render(<Harness onState={(next) => { latest = next; }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Element/ }));
+    fireEvent.click(screen.getByRole("option", { name: "Button · Cả bộ (4)" }));
+
+    expect(latest!.cells.map((cell) => cell.elementId))
+      .toEqual(["button", "btn-secondary", "btn-pressed", "btn-disabled"]);
+  });
+
+  it("«đã có trong thẻ» đánh dấu theo TỪNG trạng thái, không theo cả bộ", () => {
+    render(<Harness onState={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /Element/ }));
+    fireEvent.click(screen.getByRole("option", { name: "Button · primary" }));
+
+    expect(screen.getByRole("option", { name: "Button · primary" }).textContent).toContain("đã có trong thẻ");
+    /* Ba dòng kia KHÔNG được ăn theo: chúng là ba món khác, chưa có cái nào trong
+       thẻ, và nói ngược lại là nói dối về chính danh sách đang hiện. */
+    expect(screen.getByRole("option", { name: "Button · secondary" }).textContent).not.toContain("đã có trong thẻ");
+    expect(screen.getByRole("option", { name: "Button · Cả bộ (4)" }).textContent).not.toContain("đã có trong thẻ");
+  });
+
+  it("tìm theo TÊN MỘT TRẠNG THÁI ra nhóm của nó, và trạng thái ấy bấm được ngay", () => {
+    let latest: UiKitBlock | null = null;
+    render(<Harness onState={(next) => { latest = next; }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Element/ }));
+    fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "pressed" } });
+
+    fireEvent.click(screen.getByRole("option", { name: "Button · pressed" }));
+    expect(latest!.cells.map((cell) => cell.elementId)).toEqual(["btn-pressed"]);
   });
 
   it("dòng của một bộ NÓI RA số phần trước khi người ta bấm", () => {
@@ -236,18 +342,20 @@ describe("③ hộp chọn: một danh sách toàn bộ, và một cú bấm ra 
     expect(screen.getByLabelText("Ghi chú cho Health bar · fill")).toBeTruthy();
   });
 
-  it("tìm bằng tên MỘT PHẦN ra BỘ chứa nó, chứ không ra chính phần ấy", () => {
+  it("tìm bằng tên MỘT PHẦN ra BỘ chứa nó — bộ ghép vẫn là một dòng cả cụm", () => {
     openBox();
     fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "fill" } });
     /* Ba bộ có phần khớp «fill»: Health bar («fill»), Progress bar («fill») và
-       Inventory slot («filled»). Cả ba hiện ra dưới dạng BỘ — người ta nhớ cái
-       phần mình cần chứ không nhớ ta xếp nó vào bộ tên gì, nhưng thứ bấm được vẫn
-       là cả bộ. KHÔNG có dòng nào chỉ mang tên một phần: đó là điều ca này khoá. */
-    const rows = screen.getAllByRole("option").map((node) => node.textContent ?? "");
-    expect(rows).toHaveLength(3);
-    for (const row of rows) expect(row).toMatch(/· \d+ phần/);
-    expect(screen.getByRole("option", { name: /^Health bar/ })).toBeTruthy();
-    expect(screen.getByRole("option", { name: /^Progress bar/ })).toBeTruthy();
+       Inventory slot («filled»). Hai bộ đầu là BỘ GHÉP nên chúng hiện ra đúng một
+       dòng cả cụm — người ta nhớ cái phần mình cần chứ không nhớ ta xếp nó vào bộ
+       tên gì, nhưng thứ bấm được vẫn là cả bộ. Bộ thứ ba là BỘ BIẾN THỂ nên nó mở
+       ra thành nhóm, và «filled» ở đó bấm lẻ được. */
+    expect(screen.getByRole("option", { name: /^Health bar · 2 phần/ })).toBeTruthy();
+    expect(screen.getByRole("option", { name: /^Progress bar · 2 phần/ })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Inventory slot · filled" })).toBeTruthy();
+    /* KHÔNG có dòng nào mang một phần RỜI của hai bộ ghép: đó là điều ca này khoá. */
+    expect(screen.queryByRole("option", { name: "Health bar · fill" })).toBeNull();
+    expect(screen.queryByRole("option", { name: "Progress bar · fill" })).toBeNull();
   });
 
   it("món lẻ hiện như một BỘ MỘT PHẦN, và bấm ra đúng một ô", () => {

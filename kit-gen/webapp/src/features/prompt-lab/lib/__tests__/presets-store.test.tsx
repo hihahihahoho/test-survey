@@ -355,13 +355,13 @@ describe("bộ món: đọc, vá, và gỡ", () => {
     get.mockResolvedValue(library([
       row("preset_p1", "element", "Khiên", {
         key: "shield", en: "shield", decor: "light", glazeId: "", sizeId: "",
-        set: { id: "phong-thu", vi: "Phòng thủ" },
+        set: { id: "phong-thu", vi: "Phòng thủ", kind: "variants" },
       }),
     ]));
     mount();
 
     await waitFor(() => expect(seen?.elements).toHaveLength(1));
-    expect(seen?.elements[0]!.set).toEqual({ id: "phong-thu", vi: "Phòng thủ" });
+    expect(seen?.elements[0]!.set).toEqual({ id: "phong-thu", vi: "Phòng thủ", kind: "variants" });
   });
 
   it("thiếu `set` + id hạt giống CÓ BỘ ⇒ vá theo bảng hạt giống", async () => {
@@ -404,6 +404,83 @@ describe("bộ món: đọc, vá, và gỡ", () => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
+   LOẠI BỘ — mặc định, di trú, và đường ghi xuống đĩa
+   ══════════════════════════════════════════════════════════════════════════
+   `kind` là khoá MỚI trên `data.set`. Ba câu hỏi, và cả ba đều hỏng CÂM — màn
+   vẫn vẽ, hộp chọn vẫn bấm được, chỉ là bấm «Button» lại ra bốn ô trên đúng cái
+   máy của người đã dùng app lâu nhất:
+    · bản ghi KHÔNG nói gì và bộ ấy KHÔNG phải bộ hạt giống ⇒ mặc định an toàn;
+    · bản ghi KHÔNG nói gì nhưng bộ ấy LÀ bộ hạt giống ⇒ vá theo bảng hạt giống;
+    · bản ghi CÓ nói ⇒ chữ của người dùng thắng, kể cả khi nó ngược hạt giống. */
+describe("loại bộ: mặc định, di trú theo hạt giống, và người dùng thắng", () => {
+  const withSet = (set: unknown) =>
+    library([row("preset_p1", "element", "Khiên", {
+      key: "shield", en: "shield", decor: "light", glazeId: "", sizeId: "", set,
+    })]);
+
+  it("bộ LẠ không khai loại ⇒ BỘ GHÉP, mặc định an toàn", async () => {
+    /* Đoán nhầm sang ghép thì người dùng lấy dư vài ô rồi xoá; đoán nhầm sang
+       biến thể thì họ lấy một mảnh vỡ của một món và không có gì báo. */
+    get.mockResolvedValue(withSet({ id: "phong-thu", vi: "Phòng thủ" }));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen?.elements[0]!.set?.kind).toBe("composition");
+  });
+
+  it("bộ HẠT GIỐNG không khai loại ⇒ vá theo bảng hạt giống, không rơi về mặc định", async () => {
+    /* Máy đã mở app trước 11/09/2026: bản ghi «Nút bấm» của họ có `set` nhưng
+       không có `kind`. Rơi về mặc định thì «Button» ở đó vẫn là một dòng bấm-là-
+       lấy-đủ-bốn — đúng thứ vừa bị chỉ mặt, trên đúng cái máy đang được xem. */
+    get.mockResolvedValue(library([
+      row("preset_b1", "element", "Nút bấm", {
+        key: "button", en: "button", decor: "light", glazeId: "", sizeId: "",
+        set: { id: "btn", vi: "Bộ nút" },
+      }),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen?.elements[0]!.set?.kind).toBe("variants");
+  });
+
+  it("chữ trên đĩa THẮNG hạt giống — kể cả khi nó ngược lại", async () => {
+    get.mockResolvedValue(library([
+      row("preset_b1", "element", "primary", {
+        key: "button", en: "button", decor: "light", glazeId: "", sizeId: "",
+        set: { id: "btn", vi: "Button", kind: "composition" },
+      }),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen?.elements[0]!.set?.kind).toBe("composition");
+  });
+
+  it("chuỗi RÁC ở `kind` đi cùng đường với vắng khoá, không lọt xuống dưới", async () => {
+    get.mockResolvedValue(withSet({ id: "phong-thu", vi: "Phòng thủ", kind: "cai-gi-day" }));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen?.elements[0]!.set?.kind).toBe("composition");
+  });
+
+  it("đổi loại bộ ⇒ GHI `kind` xuống đĩa, không chỉ đổi trên màn", async () => {
+    get.mockResolvedValue(withSet({ id: "phong-thu", vi: "Phòng thủ", kind: "composition" }));
+    mount();
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+
+    const element = seen!.elements[0]!;
+    setPresets({ ...seen!, elements: [{ ...element, set: { ...element.set!, kind: "variants" } }] });
+
+    await waitFor(() => expect(patchPreset).toHaveBeenCalledTimes(1));
+    expect(patchPreset.mock.calls[0]![1].data.set).toEqual({
+      id: "phong-thu", vi: "Phòng thủ", kind: "variants",
+    });
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
    DI TRÚ NHÃN — hạt giống tiếng Việt đời trước → thuật ngữ tiếng Anh đời nay
    ══════════════════════════════════════════════════════════════════════════
    Máy nào đã mở app trước 11/09/2026 giữ nguyên `name` tiếng Việt của bốn mươi
@@ -427,7 +504,7 @@ describe("di trú nhãn: chỉ đổi khi người dùng CHƯA sửa", () => {
     await waitFor(() => expect(seen?.elements).toHaveLength(1));
     const element = seen!.elements[0]!;
     expect(element.vi).toBe("fill");
-    expect(element.set).toEqual({ id: "hp", vi: "Health bar" });
+    expect(element.set).toEqual({ id: "hp", vi: "Health bar", kind: "composition" });
     /* Chỗ vỡ mà chủ sản phẩm chụp lại: nhãn một dòng không còn lặp tên bộ. */
     expect(elementLabel(element, "?")).toBe("Health bar · fill");
   });

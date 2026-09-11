@@ -430,21 +430,106 @@ describe("④ pill của dòng tự do: đúng kind, đúng value, không mất 
       dòng vốn đã là «Dialog · name plate» là cú bấm không có ý định nào — chạy nó
       thì dòng ấy mất phần đã chọn và hai dòng trùng mọc ra bên dưới). */
 describe("⑤ pill tên trên dòng chọn cả bộ", () => {
-  it("hộp «Đổi loại món» bày ĐÚNG danh sách bộ của «+ Element» — không dòng phần rời", () => {
+  it("hộp «Đổi loại món» bày ĐÚNG danh sách của «+ Element» — cùng số dòng, cùng hai kiểu mục", () => {
     render(<Harness initial={uikit([{ ...newCell("button", PRESETS), id: "c1" }])} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Đổi loại món/ }));
     expect(screen.getByRole("dialog", { name: "Đổi loại món" })).toBeTruthy();
 
-    /* Đúng bằng số BỘ trong kho, và mỗi dòng nói ra số phần: thừa một dòng nghĩa
-       là một phần nào đó đã lọt ra ngoài dưới dạng lựa chọn riêng. */
-    const rows = screen.getAllByRole("option").map((node) => node.textContent ?? "");
-    expect(rows).toHaveLength(elementSets(PRESETS).length);
-    for (const row of rows) expect(row).toMatch(/· \d+ phần/);
+    /* Hai hộp phải là CÙNG MỘT bộ tra: bộ ghép một dòng cả cụm, bộ biến thể một
+       dòng mỗi trạng thái cộng một dòng «Cả bộ». Lệch một dòng nghĩa là hai hộp
+       đã trôi khỏi nhau, và người dùng học hai lần cho một việc. */
+    const sets = elementSets(PRESETS);
+    const expected = sets.reduce(
+      (sum, set) => sum + (set.kind === "variants" && set.parts.length > 1 ? set.parts.length + 1 : 1),
+      0,
+    );
+    expect(screen.getAllByRole("option")).toHaveLength(expected);
 
     fireEvent.change(screen.getByLabelText("Tìm trong danh mục"), { target: { value: "health" } });
     expect(screen.getByRole("option", { name: /^Health bar · 2 phần/ })).toBeTruthy();
     expect(screen.queryByRole("option", { name: /^Coin counter/ })).toBeNull();
+  });
+
+  /* ══ BỘ BIẾN THỂ TRÊN MỘT DÒNG ĐÃ CÓ ══════════════════════════════════════
+     Chủ sản phẩm: *«button có thể primary không, không phụ thuộc vào disabled
+     hoặc pressed»*. Trên pill của MỘT DÒNG, bấm một trạng thái là bảo «dòng này
+     đổi thành cái đó» — một dòng vào, một dòng ra. Chèn thêm ba dòng ở đây là
+     đúng cái phiền mà lượt này sinh ra để bỏ. */
+  it("bấm MỘT trạng thái trên pill dòng ⇒ ĐỔI đúng dòng ấy, KHÔNG chèn thêm dòng nào", async () => {
+    let latest: UiKitBlock | null = null;
+    render(
+      <Harness
+        initial={uikit([
+          { ...newCell("button", PRESETS), id: "c1" },
+          { ...newCell("badge", PRESETS), id: "c2" },
+        ])}
+        onState={(next) => { latest = next; }}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Đổi loại món/ })[0]!);
+    fireEvent.click(screen.getByRole("option", { name: "Button · disabled" }));
+
+    await waitFor(() =>
+      expect(latest?.cells.map((cell) => cell.elementId)).toEqual(["btn-disabled", "badge"]),
+    );
+  });
+
+  it("đổi trạng thái trong CÙNG một bộ vẫn chạy — cửa «đã ở trong bộ này rồi» không chặn", async () => {
+    /* Cửa ấy có thật và cần thiết ở `applySetAtRow` (chặn cú bấm tên bộ trên dòng
+       vốn đã thuộc bộ ấy — một cú bấm không có ý định nào). Nhưng «primary →
+       pressed» thì ý định rõ mồn một, dù hai món cùng một bộ. */
+    let latest: UiKitBlock | null = null;
+    render(
+      <Harness
+        initial={uikit([{ ...newCell("button", PRESETS), id: "c1" }])}
+        onState={(next) => { latest = next; }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Đổi loại món/ }));
+    fireEvent.click(screen.getByRole("option", { name: "Button · pressed" }));
+
+    await waitFor(() => expect(latest?.cells.map((cell) => cell.elementId)).toEqual(["btn-pressed"]));
+  });
+
+  it("bấm «Cả bộ» trên pill dòng ⇒ dòng thành trạng thái đầu, ba trạng thái kia CHÈN NGAY SAU", async () => {
+    let latest: UiKitBlock | null = null;
+    render(
+      <Harness
+        initial={uikit([
+          { ...newCell("panel", PRESETS), id: "c1" },
+          { ...newCell("badge", PRESETS), id: "c2" },
+        ])}
+        onState={(next) => { latest = next; }}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Đổi loại món/ })[0]!);
+    fireEvent.click(screen.getByRole("option", { name: "Button · Cả bộ (4)" }));
+
+    await waitFor(() =>
+      expect(latest?.cells.map((cell) => cell.elementId))
+        .toEqual(["button", "btn-secondary", "btn-pressed", "btn-disabled", "badge"]),
+    );
+  });
+
+  it("đổi sang một trạng thái ⇒ GIỮ viền · đục nền · ghi chú của dòng, y như đổi sang bộ khác", async () => {
+    let latest: UiKitBlock | null = null;
+    const cell: UiCell = {
+      ...newCell("button", PRESETS), id: "c1",
+      decor: "rich", glazeId: "ice", note: "bo góc thật tròn",
+    };
+    render(<Harness initial={uikit([cell])} onState={(next) => { latest = next; }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Đổi loại món/ }));
+    fireEvent.click(screen.getByRole("option", { name: "Button · secondary" }));
+
+    await waitFor(() => expect(latest?.cells[0]?.elementId).toBe("btn-secondary"));
+    expect(latest!.cells[0]!.decor).toBe("rich");
+    expect(latest!.cells[0]!.glazeId).toBe("ice");
+    expect(latest!.cells[0]!.note).toBe("bo góc thật tròn");
   });
 
   it("chọn bộ trên dòng ⇒ dòng thành phần ĐẦU, các phần còn lại CHÈN NGAY SAU nó", async () => {

@@ -104,8 +104,8 @@ function CellRow({
   cell: UiCell;
   used: ReadonlySet<string>;
   onChange: (next: UiCell) => void;
-  /** Chọn một BỘ trên pill tên — việc này đụng tới CẢ DANH SÁCH, xem `applySetAtRow`. */
-  onPickSet: (parts: readonly ElementPreset[]) => void;
+  /** Bấm một dòng trong hộp chọn — việc này đụng tới CẢ DANH SÁCH, xem `ElementPick`. */
+  onPickSet: (pick: ElementPick) => void;
   onRemove: () => void;
   drag: RowDragProps;
 }) {
@@ -176,7 +176,7 @@ function FreeCellRow({
   used: ReadonlySet<string>;
   onChange: (next: UiCell) => void;
   /** Xem `CellRow` — hai chế độ có CÙNG một hàng 1, nên cùng một cửa đổi bộ. */
-  onPickSet: (parts: readonly ElementPreset[]) => void;
+  onPickSet: (pick: ElementPick) => void;
   onRemove: () => void;
   drag: RowDragProps;
 }) {
@@ -520,6 +520,53 @@ function swapCellElement(cell: UiCell, next: ElementPreset, presets: PresetBundl
 }
 
 /**
+ * MỘT CÚ BẤM trong hộp chọn — và hai cú bấm khác nhau ở CHỖ NÀY, không ở đâu khác.
+ *
+ * ╔══ VÌ SAO CẦN THÊM MỘT LÁ CỜ, KHÔNG CHỈ CẦN MẢNG PHẦN ═══════════════════╗
+ * ║ Chủ sản phẩm: *«button có thể primary không, không phụ thuộc vào         ║
+ * ║ disabled hoặc pressed»*. Bấm «primary» ở hộp của MỘT DÒNG là bảo «dòng   ║
+ * ║ này đổi thành primary» — một dòng vào, một dòng ra. Bấm «Cả bộ» là bảo   ║
+ * ║ «cho tôi đủ bốn trạng thái» — một dòng vào, bốn dòng ra. Hai câu ấy đều  ║
+ * ║ đi kèm một mảng phần, và mảng của câu đầu dài đúng 1 — y hệt mảng của    ║
+ * ║ một BỘ GHÉP một phần («Panel»), thứ vẫn phải đi đường chèn cả cụm.       ║
+ * ║ Nên độ dài mảng KHÔNG phân biệt được hai câu, và lá cờ này phải có thật. ║
+ * ╚═════════════════════════════════════════════════════════════════════════╝
+ */
+export interface ElementPick {
+  /** Các phần lấy về, ĐÚNG thứ tự chúng nằm trong danh mục. */
+  parts: readonly ElementPreset[];
+  /**
+   * `true` khi người dùng chỉ mặt ĐÚNG MỘT biến thể của một bộ biến thể.
+   *
+   * Chỉ nhánh «pill trên dòng» đọc nó: ở «+ Element» thì lấy một biến thể và lấy
+   * một bộ một phần đều là «nối các phần này vào cuối», nên không có gì để hỏi.
+   */
+  one: boolean;
+}
+
+/**
+ * ĐỔI DÒNG k THÀNH ĐÚNG MỘT MÓN — không chèn, không xoá, không đụng dòng nào khác.
+ *
+ * Đường của một BIẾN THỂ được bấm lẻ. Khác `applySetAtRow` ở đúng hai chỗ, và cả
+ * hai đều là hệ quả của cùng một câu «người dùng xin đúng cái này»:
+ *  · không có phần nào chèn thêm sau dòng;
+ *  · KHÔNG có cửa "đã ở trong bộ này rồi ⇒ thôi": đổi một dòng «primary» sang
+ *    «disabled» là một cú bấm có ý định rõ ràng, dù hai món cùng một bộ. Cửa ấy
+ *    tồn tại bên `applySetAtRow` để chặn một cú bấm KHÔNG có ý định nào (bấm tên
+ *    bộ trên dòng vốn đã thuộc bộ ấy); ở đây thì mọi cú bấm đều nói ra một món.
+ */
+function swapOneAtRow(
+  cells: readonly UiCell[],
+  index: number,
+  next: ElementPreset,
+  presets: PresetBundle,
+): UiCell[] {
+  const row = cells[index];
+  if (!row) return [...cells];
+  return [...cells.slice(0, index), swapCellElement(row, next, presets), ...cells.slice(index + 1)];
+}
+
+/**
  * CHỌN MỘT BỘ TRÊN DÒNG k — dòng k thành phần ĐẦU, các phần còn lại chèn sau nó.
  *
  * ╔══ VÌ SAO CHÈN, KHÔNG PHẢI NỐI VÀO CUỐI ═════════════════════════════════╗
@@ -634,7 +681,7 @@ function useCataloguePopover() {
  * tìm không dấu, cùng cách gom nhóm, cùng thứ tự. Hai bản sao của một danh mục là
  * hai chỗ để lệch nhau, và người dùng thì học hai lần cho một việc.
  *
- * ╔══ MỘT DANH SÁCH, VÀ MỌI DÒNG LÀ MỘT BỘ — KỂ CẢ Ở «Đổi loại món» ═════════╗
+ * ╔══ MỘT DANH SÁCH CHO CẢ HAI HỘP, VÀ HAI LOẠI BỘ ĐỌC KHÁC NHAU ════════════╗
  * ║ Chủ sản phẩm, nhìn hộp của pill trên dòng: *«select cả cụm chứ»*. Bản     ║
  * ║ trước cho nhánh «Đổi loại món» một danh mục PHẲNG (từng phần rời: «Health ║
  * ║ bar · fill», «Dialog · name plate»…) với lý lẽ "một dòng chỉ mang         ║
@@ -642,10 +689,12 @@ function useCataloguePopover() {
  * ║ ai đổi một dòng «Panel» thành «Dialog» thì họ muốn CÁI HỘP THOẠI, tức cả  ║
  * ║ khung lẫn bảng tên lẫn nút tiếp — không phải đúng một mảnh của nó rồi tự  ║
  * ║ đi tìm hai mảnh còn lại trong một danh sách 48 dòng.                      ║
- * ║ Nên chọn bộ trên dòng k = dòng k thành phần đầu, các phần còn lại CHÈN    ║
- * ║ ngay sau nó (xem `applySetAtRow`). Ai thật sự cần đúng một phần vẫn còn   ║
- * ║ đường cũ: chọn cả bộ rồi xoá dòng thừa — một cú bấm trên thứ đã hiện ra   ║
- * ║ trước mắt, thay vì một cú bấm đúng trong một danh sách phải học trước.    ║
+ * ║ Nên với BỘ GHÉP: chọn trên dòng k = dòng k thành phần đầu, các phần còn   ║
+ * ║ lại CHÈN ngay sau nó (`applySetAtRow`).                                   ║
+ * ║ BỘ BIẾN THỂ thì lượt sau đã tách ra (chủ sản phẩm: *«button có thể        ║
+ * ║ primary không»*): bấm một trạng thái trên dòng k = ĐỔI đúng dòng k        ║
+ * ║ (`swapOneAtRow`), không chèn thêm dòng nào; bấm «Cả bộ» thì đi đúng       ║
+ * ║ đường của bộ ghép.                                                        ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 function ElementCatalogue({
@@ -657,8 +706,8 @@ function ElementCatalogue({
   label: string;
   dropUp: boolean;
   used: ReadonlySet<string>;
-  /** Nhận CẢ BỘ. Món lẻ đi qua đây dưới dạng một bộ có đúng một phần. */
-  onPick: (parts: readonly ElementPreset[]) => void;
+  /** Nhận một CÚ BẤM — cả bộ, hay đúng một biến thể; xem `ElementPick`. */
+  onPick: (pick: ElementPick) => void;
 }) {
   const presets = usePresets();
   const [query, setQuery] = React.useState("");
@@ -724,9 +773,11 @@ function ElementCatalogue({
             Không có món nào khớp — đặt tên riêng cho nó ở ngay dưới.
           </p>
         )}
-        {/* MỘT DANH SÁCH, KHÔNG TIÊU ĐỀ NHÓM: mọi dòng ở đây là một bộ và hành xử
-            y hệt nhau (bấm ⇒ lấy đủ các phần), nên một tiêu đề chia đôi chỉ hứa
-            một sự khác biệt không có thật. Thứ tự = thứ tự trong danh mục. */}
+        {/* KHÔNG CÓ TIÊU ĐỀ CHIA ĐÔI DANH SÁCH («Bộ»/«Lẻ» của đời trước): thứ tự
+            là thứ tự trong danh mục, và hai loại bộ tự nói ra mình là loại nào
+            bằng HÌNH DẠNG của chính mục — một dòng, hay một nhóm có tiêu đề. Một
+            tiêu đề chia đôi thì hứa một sự phân loại mà người dùng phải học
+            trước cú bấm đầu tiên. */}
         <SetPickList sets={hits} used={used} onPick={onPick} />
       </div>
 
@@ -756,8 +807,8 @@ function ElementCatalogue({
  */
 function CustomElementRow({ query, onPick }: {
   query: string;
-  /** Cùng cửa với mọi dòng của hộp: một món tự đặt tên là một bộ có đúng một phần. */
-  onPick: (parts: readonly ElementPreset[]) => void;
+  /** Cùng cửa với mọi dòng của hộp: một món tự đặt tên là một bộ ghép có đúng một phần. */
+  onPick: (pick: ElementPick) => void;
 }) {
   const [name, setName] = React.useState("");
   /* Chữ đang gõ ở ô tìm kiếm là ứng viên tốt nhất cho cái tên: người ta gõ "rương"
@@ -766,7 +817,7 @@ function CustomElementRow({ query, onPick }: {
   const add = () => {
     const made = addCustomElement(value);
     if (!made) return;
-    onPick([made]);
+    onPick({ parts: [made], one: false });
     setName("");
   };
 
@@ -803,7 +854,7 @@ function ElementPicker({
   used, onPick,
 }: {
   used: ReadonlySet<string>;
-  onPick: (parts: readonly ElementPreset[]) => void;
+  onPick: (pick: ElementPick) => void;
 }) {
   const pop = useCataloguePopover();
 
@@ -851,6 +902,11 @@ function ElementPicker({
  * ║ phần của BỘ TRONG DANH MỤC, còn dòng này là ĐÚNG MỘT phần — dán nó lên    ║
  * ║ mọi dòng là nói sai về chính dòng đang đứng.                              ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Hai hạng chữ ấy đúng cho CẢ HAI loại bộ, và đó là lý do chúng không phải sửa
+ * lại ở lượt tách bộ biến thể: «Button» + «primary» đọc ra đúng một câu người
+ * dùng vừa bấm trong hộp — tên bộ ở dòng tiêu đề nhóm, tên trạng thái ở dòng họ
+ * chọn. Bộ ghép thì cũng thế, chỉ là cả hai nửa đến từ một cú bấm.
  */
 function ElementNamePill({
   element,
@@ -865,8 +921,8 @@ function ElementNamePill({
       `element` không tra ra (id trần). */
   label: string;
   used: ReadonlySet<string>;
-  /** Nhận CẢ BỘ, y như «+ Element» — xem khối chú thích của `ElementCatalogue`. */
-  onPick: (parts: readonly ElementPreset[]) => void;
+  /** Cùng hộp với «+ Element», khác ở chỗ ĐỌC `one` — xem `ElementPick`. */
+  onPick: (pick: ElementPick) => void;
 }) {
   const pop = useCataloguePopover();
   const title = elementTitle(element, label);
@@ -894,8 +950,8 @@ function ElementNamePill({
           label="Đổi loại món"
           dropUp={pop.dropUp}
           used={used}
-          onPick={(parts) => {
-            onPick(parts);
+          onPick={(pick) => {
+            onPick(pick);
             pop.setOpen(false);
           }}
         />
@@ -905,18 +961,23 @@ function ElementNamePill({
 }
 
 /**
- * DANH SÁCH CỦA CẢ HAI HỘP — mỗi dòng là MỘT BỘ, bấm là lấy ĐỦ các phần.
+ * DANH SÁCH CỦA CẢ HAI HỘP — và nó có HAI kiểu mục, vì có hai loại bộ.
  *
- * ╔══ VÌ SAO KHÔNG CÓ DÒNG NÀO CHO MỘT PHẦN RIÊNG, Ở BẤT KỲ HỘP NÀO ════════╗
- * ║ Bày cả phần lẫn bộ thì danh sách dài gấp ba và mỗi bộ hiện hai lần dưới  ║
- * ║ hai hình dạng — người dùng phải hiểu sự khác nhau giữa «Health bar» (bộ) ║
- * ║ và «fill» (một phần) TRƯỚC khi bấm được cú đầu tiên.                     ║
- * ║ Nên: chọn bộ là lấy đủ các phần, rồi XOÁ phần không cần — một cú bấm     ║
- * ║ thừa, nhưng là cú bấm trên thứ đã hiện ra trước mắt.                     ║
- * ║ Món KHÔNG đeo nhãn bộ đi chung danh sách này dưới dạng một bộ MỘT PHẦN:  ║
- * ║ nó vẫn bấm ra đúng một ô như trước, nên nó không cần một nhóm riêng và   ║
- * ║ một kiểu dòng riêng để nói điều đó.                                     ║
+ * ╔══ VÌ SAO MỘT KIỂU MỤC LÀ KHÔNG ĐỦ ══════════════════════════════════════╗
+ * ║ Chủ sản phẩm, nhìn dòng «Button · 4 phần»: *«button phải tách ra chứ…   ║
+ * ║ 1 thanh bar thì bắt buộc phải có composition kia, còn button có thể     ║
+ * ║ primary không, không phụ thuộc vào disabled hoặc pressed»*.             ║
+ * ║ · BỘ GHÉP giữ nguyên MỘT dòng: khung thanh máu không có phần đầy là một ║
+ * ║   cái vỏ rỗng, nên «lấy lẻ một phần» không phải một câu có nghĩa.       ║
+ * ║ · BỘ BIẾN THỂ mở ra thành một NHÓM: dòng tiêu đề (tên bộ, không bấm     ║
+ * ║   được) rồi từng trạng thái một dòng bấm được, và một dòng «Cả bộ» cho  ║
+ * ║   ai muốn đủ. Bốn ô là bốn chỗ trên tấm và một phần của lượt vẽ — bắt   ║
+ * ║   người chỉ cần primary lấy đủ bốn rồi xoá ba là bắt họ trả tiền cho ba ║
+ * ║   ô không ai xin.                                                       ║
  * ╚═════════════════════════════════════════════════════════════════════════╝
+ *
+ * Món KHÔNG đeo nhãn bộ vẫn đi chung danh sách này dưới dạng một bộ GHÉP một
+ * phần: nó bấm ra đúng một ô như trước, nên nó không cần một kiểu mục thứ ba.
  */
 function SetPickList({
   sets,
@@ -924,55 +985,152 @@ function SetPickList({
   onPick,
 }: {
   sets: readonly ElementSetView[];
-  /** Ô đã có trong thẻ — bộ nào ĐỦ PHẦN nằm trong đây thì dòng của nó nói ra. */
+  /** Ô đã có trong thẻ — đánh dấu theo TỪNG PHẦN, không chỉ theo cả bộ. */
   used: ReadonlySet<string>;
-  onPick: (parts: readonly ElementPreset[]) => void;
+  onPick: (pick: ElementPick) => void;
 }) {
   return (
     <>
-      {sets.map((set) => {
-        const already = set.parts.every((part) => used.has(part.id));
-        /* DÒNG PHỤ NÓI RA CÚ BẤM NÀY LẤY VỀ NHỮNG GÌ — với bộ nhiều phần đó là tên
-           các phần («box · name plate · next button»). Với bộ MỘT PHẦN mang đúng
-           tên của chính nó thì tên phần chỉ là chuỗi vừa đọc ở dòng trên, nên chỗ
-           ấy nhường cho DANH TỪ EN — thứ
-           THẬT SỰ đi tới máy vẽ, và ẩn nốt nếu nó cũng trùng nhãn Việt (món tự
-           đặt tên).
-           ⚠️ EN từng là chỗ hiện CÂU MÔ TẢ ("a floating popover panel with a
-           title bar") — thứ chủ sản phẩm chỉ mặt: *"không có thuộc tính nhé"*.
-           Nếu dòng này lại dài ra thì nguồn đã sai, sửa ở `ElementPreset.en`. */
-        const only = set.parts.length === 1 ? set.parts[0]! : undefined;
-        const sub =
-          only && only.vi === set.vi
-            ? only.en.toLowerCase() === only.vi.toLowerCase() ? "" : only.en
-            : set.parts.map((part) => part.vi).join(" · ");
-        return (
-          <button
-            /* KHOÁ LẤY TỪ PHẦN ĐẦU, không lấy `set.id`: id món là duy nhất trong cả
-               danh mục, còn id bộ và id một món lẻ nằm ở hai không gian tên khác
-               nhau và có quyền trùng chữ nhau (xem `elementSets`). */
-            key={set.parts[0]!.id}
-            type="button"
-            role="option"
-            aria-selected={false}
-            onClick={() => onPick(set.parts)}
-            className={cn(
-              "flex w-full flex-col gap-0.5 rounded-1 px-2 py-1.5 text-left",
-              "hover:bg-accent/[var(--kg-tint-a)]",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-            )}
-          >
-            <span className={cn("text-body", already ? "text-fg" : "text-fg-strong")}>
-              {set.vi} <span className="text-fg-muted">· {set.parts.length} phần</span>
-              {/* Vẫn thêm lại được: một bộ kit có ba cỡ nút là chuyện thường. Chữ
-                  này chỉ nói "bạn đã có rồi", không cấm. */}
-              {already && <span className="text-caption text-fg-muted"> · đã có trong thẻ</span>}
-            </span>
-            {sub !== "" && <span className="line-clamp-1 text-caption text-fg-muted">{sub}</span>}
-          </button>
-        );
-      })}
+      {sets.map((set) =>
+        /* BỘ BIẾN THỂ CHỈ CÒN MỘT PHẦN ⇒ VẼ NHƯ BỘ GHÉP (người dùng đã xoá bớt ở
+           màn quản lý). Một dòng tiêu đề, một trạng thái và một dòng «Cả bộ (1)»
+           là ba dòng nói đúng một thứ — ba lần đọc cho một cú bấm. */
+        set.kind === "variants" && set.parts.length > 1 ? (
+          <VariantGroup key={set.parts[0]!.id} set={set} used={used} onPick={onPick} />
+        ) : (
+          /* KHOÁ LẤY TỪ PHẦN ĐẦU, không lấy `set.id`: id món là duy nhất trong cả
+             danh mục, còn id bộ và id một món lẻ nằm ở hai không gian tên khác
+             nhau và có quyền trùng chữ nhau (xem `elementSets`). */
+          <SetRow key={set.parts[0]!.id} set={set} used={used} onPick={onPick} />
+        ),
+      )}
     </>
+  );
+}
+
+/** MỘT DÒNG CỦA MỘT BỘ GHÉP — bấm là lấy ĐỦ các phần, y như trước lượt này. */
+function SetRow({
+  set, used, onPick,
+}: {
+  set: ElementSetView;
+  used: ReadonlySet<string>;
+  onPick: (pick: ElementPick) => void;
+}) {
+  const already = set.parts.every((part) => used.has(part.id));
+  /* DÒNG PHỤ NÓI RA CÚ BẤM NÀY LẤY VỀ NHỮNG GÌ — với bộ nhiều phần đó là tên các
+     phần («box · name plate · next button»). Với bộ MỘT PHẦN mang đúng tên của
+     chính nó thì tên phần chỉ là chuỗi vừa đọc ở dòng trên, nên chỗ ấy nhường cho
+     DANH TỪ EN — thứ THẬT SỰ đi tới máy vẽ, và ẩn nốt nếu nó cũng trùng nhãn Việt
+     (món tự đặt tên).
+     ⚠️ EN từng là chỗ hiện CÂU MÔ TẢ ("a floating popover panel with a title
+     bar") — thứ chủ sản phẩm chỉ mặt: *"không có thuộc tính nhé"*. Nếu dòng này
+     lại dài ra thì nguồn đã sai, sửa ở `ElementPreset.en`. */
+  const only = set.parts.length === 1 ? set.parts[0]! : undefined;
+  const sub =
+    only && only.vi === set.vi
+      ? only.en.toLowerCase() === only.vi.toLowerCase() ? "" : only.en
+      : set.parts.map((part) => part.vi).join(" · ");
+
+  return (
+    <PickRow
+      already={already}
+      sub={sub}
+      onClick={() => onPick({ parts: set.parts, one: false })}
+      label={
+        <>
+          {set.vi} <span className="text-fg-muted">· {set.parts.length} phần</span>
+        </>
+      }
+    />
+  );
+}
+
+/**
+ * MỘT NHÓM CỦA MỘT BỘ BIẾN THỂ — tiêu đề, từng trạng thái, rồi «Cả bộ».
+ *
+ * TIÊU ĐỀ KHÔNG BẤM ĐƯỢC, có chủ ý: nếu nó bấm được thì nó và dòng «Cả bộ» là hai
+ * cách nói cùng một câu, và người dùng phải đoán xem chúng có khác nhau không.
+ * Đọc màn hình vẫn nghe đủ ngữ cảnh vì mỗi trạng thái mang `aria-label` đầy đủ
+ * («Button · primary») — một dòng chỉ đọc ra «primary» thì đứng một mình là vô nghĩa.
+ *
+ * «CẢ BỘ» ĐỨNG CUỐI, sau các trạng thái: người tới đây phần lớn đang tìm MỘT
+ * trạng thái (đó là lý do nhóm này tồn tại), nên thứ họ tìm phải nằm ngay dưới
+ * tiêu đề chứ không bị một dòng tổng đẩy xuống.
+ */
+function VariantGroup({
+  set, used, onPick,
+}: {
+  set: ElementSetView;
+  used: ReadonlySet<string>;
+  onPick: (pick: ElementPick) => void;
+}) {
+  const already = set.parts.every((part) => used.has(part.id));
+
+  return (
+    <div role="group" aria-label={set.vi}>
+      <p className="px-2 pb-0.5 pt-2 text-body text-fg-strong">
+        {set.vi} <span className="text-caption text-fg-muted">· chọn lẻ từng cái</span>
+      </p>
+      {set.parts.map((part) => (
+        <PickRow
+          key={part.id}
+          indent
+          label={part.vi}
+          name={`${set.vi} · ${part.vi}`}
+          already={used.has(part.id)}
+          onClick={() => onPick({ parts: [part], one: true })}
+        />
+      ))}
+      <PickRow
+        indent
+        label={<span className="text-fg-muted">Cả bộ ({set.parts.length})</span>}
+        name={`${set.vi} · Cả bộ (${set.parts.length})`}
+        already={already}
+        onClick={() => onPick({ parts: set.parts, one: false })}
+      />
+    </div>
+  );
+}
+
+/**
+ * MỘT DÒNG BẤM ĐƯỢC của hộp — cùng hình dạng cho cả ba kiểu mục.
+ *
+ * `name` có mặt cho những dòng mà chữ hiện ra KHÔNG đủ để nhận ra chúng: «primary»
+ * lặp ở vài bộ, «empty» lặp ở ba bộ. Chữ trên màn ngắn được vì tiêu đề nhóm đứng
+ * ngay trên; trình đọc màn hình thì nghe từng dòng rời nhau, nên nó cần cả tên bộ.
+ */
+function PickRow({
+  label, sub, name, already, indent, onClick,
+}: {
+  label: React.ReactNode;
+  sub?: string;
+  name?: string;
+  already: boolean;
+  indent?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={false}
+      {...(name !== undefined ? { "aria-label": name } : {})}
+      onClick={onClick}
+      className={cn(
+        "flex w-full flex-col gap-0.5 rounded-1 py-1.5 pr-2 text-left",
+        indent === true ? "pl-5" : "pl-2",
+        "hover:bg-accent/[var(--kg-tint-a)]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+      )}
+    >
+      <span className={cn("text-body", already ? "text-fg" : "text-fg-strong")}>
+        {label}
+        {/* Vẫn thêm lại được: một bộ kit có ba cỡ nút là chuyện thường. Chữ này
+            chỉ nói "bạn đã có rồi", không cấm. */}
+        {already && <span className="text-caption text-fg-muted"> · đã có trong thẻ</span>}
+      </span>
+      {sub !== undefined && sub !== "" && <span className="line-clamp-1 text-caption text-fg-muted">{sub}</span>}
+    </button>
   );
 }
 
@@ -1094,17 +1252,16 @@ export function UiKitBlockBody({
             /* Tìm lại vị trí TRONG `prev` chứ không dùng `index` của lượt render:
                giữa lúc hộp mở với lúc bấm, một dòng khác có thể đã bị kéo đi chỗ
                khác — và chèn nhầm chỗ là bộ vừa chọn nằm rải ra hai cụm. */
-            onPickSet={(parts) =>
-              onChange((prev) => ({
-                ...prev,
-                cells: applySetAtRow(
-                  prev.cells,
-                  prev.cells.findIndex((c) => c.id === cell.id),
-                  parts,
-                  presets,
-                  prev.mode,
-                ),
-              }))
+            onPickSet={(pick) =>
+              onChange((prev) => {
+                const at = prev.cells.findIndex((c) => c.id === cell.id);
+                /* MỘT BIẾN THỂ BẤM LẺ ⇒ ĐỔI ĐÚNG DÒNG NÀY. «Cả bộ» và mọi bộ ghép
+                   ⇒ dòng này thành phần đầu + chèn phần còn lại ngay sau. */
+                const cells = pick.one && pick.parts[0]
+                  ? swapOneAtRow(prev.cells, at, pick.parts[0], presets)
+                  : applySetAtRow(prev.cells, at, pick.parts, presets, prev.mode);
+                return { ...prev, cells };
+              })
             }
             onRemove={() => onChange((prev) => ({ ...prev, cells: prev.cells.filter((c) => c.id !== cell.id) }))}
           />
@@ -1125,10 +1282,10 @@ export function UiKitBlockBody({
             không sắp xếp nổi. */}
         <ElementPicker
           used={used}
-          onPick={(parts) =>
+          onPick={(pick) =>
             onChange((prev) => ({
               ...prev,
-              cells: [...prev.cells, ...parts.map((part) => freshCell(part.id, presets, prev.mode))],
+              cells: [...prev.cells, ...pick.parts.map((part) => freshCell(part.id, presets, prev.mode))],
             }))
           }
         />

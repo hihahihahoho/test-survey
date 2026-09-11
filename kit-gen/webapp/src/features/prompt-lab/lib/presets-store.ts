@@ -100,7 +100,39 @@ export interface ElementSetRef {
    * THẮNG, và màn «Thư viện prompt» đổi tên thì ghi lên MỌI phần cùng lúc.
    */
   vi: string;
+  /**
+   * HAI LOẠI BỘ — và chúng khác nhau ở CHỖ NGƯỜI DÙNG BẤM, không chỉ ở chữ nghĩa.
+   *
+   * ╔══ VÌ SAO MỘT LOẠI BỘ LÀ KHÔNG ĐỦ ═══════════════════════════════════════╗
+   * ║ Chủ sản phẩm, nhìn dòng «Button · 4 phần» trong hộp chọn: *«button phải  ║
+   * ║ tách ra chứ… 1 thanh bar thì bắt buộc phải có composition kia, còn       ║
+   * ║ button có thể primary không, không phụ thuộc vào disabled hoặc           ║
+   * ║ pressed»*. Đúng: khung và phần đầy của một thanh máu là HAI MẢNH CỦA MỘT ║
+   * ║ MÓN — lấy một mảnh là lấy một thứ không dùng được. Còn primary và        ║
+   * ║ disabled là HAI TRẠNG THÁI CỦA MỘT MÓN — một bộ kit có quyền chỉ cần     ║
+   * ║ primary, và bắt họ lấy đủ bốn rồi xoá ba là bắt họ trả tiền cho ba ô     ║
+   * ║ không ai xin (mỗi ô là một chỗ trên tấm và một phần của lượt vẽ).        ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   *
+   * · `composition` — các phần CHỈ CÓ NGHĨA KHI ĐI CÙNG NHAU. Hộp chọn bày đúng
+   *   một dòng cho cả bộ, bấm là lấy cả cụm.
+   * · `variants` — mỗi phần là một TRẠNG THÁI độc lập. Hộp chọn bày một dòng tiêu
+   *   đề rồi từng trạng thái một dòng bấm được, kèm dòng «Cả bộ» cho ai muốn đủ.
+   *
+   * THIẾU ⇒ `composition`, và đó là mặc định AN TOÀN: một bộ bị đoán nhầm thành
+   * ghép thì người dùng lấy dư vài ô rồi xoá; đoán nhầm sang trạng thái thì họ lấy
+   * một mảnh vỡ của một món và không có gì báo cho tới lúc nhìn tấm vẽ xong. Bản
+   * ghi đời cũ trên workspace không mang khoá này, nên bộ hạt giống còn được vá
+   * theo id lúc đọc — xem `SEED_SET_KIND`.
+   */
+  kind: ElementSetKind;
 }
+
+/** Hai loại bộ — xem khối chú thích của `ElementSetRef.kind`. */
+export type ElementSetKind = "composition" | "variants";
+
+/** Loại bộ mặc định khi bản ghi không nói gì. */
+export const SET_KIND_DEFAULT: ElementSetKind = "composition";
 
 /**
  * Một loại element của bộ UI kit — một dòng trong danh mục mà thẻ Bộ UI tra.
@@ -409,24 +441,41 @@ export function seedPresets(): PresetBundle {
    * dùng chung object với một hằng ở tầng module thì một lượt đổi tên bộ sẽ đổi
    * luôn HẠT GIỐNG — nút «Khôi phục mặc định» khi ấy khôi phục về thứ vừa bị sửa.
    */
+  /**
+   * ══ MỖI BỘ KHAI LUÔN NÓ THUỘC LOẠI NÀO ═══════════════════════════════════
+   * Câu hỏi phân loại: «bỏ đi một phần thì phần còn lại còn dùng được không».
+   *  · Còn ⇒ `variants`. Một cái nút primary không cần disabled đứng cạnh mới
+   *    dùng được; một trái tim đầy không cần trái tim rỗng mới vẽ được máu.
+   *  · Không ⇒ `composition`. Một cái khung thanh máu không có phần đầy là một
+   *    cái vỏ rỗng, và phần đầy không có khung thì không ai biết nó dài tới đâu.
+   *
+   * BA CHỖ ĐÁNG NGỜ, và lý do xếp như đang xếp:
+   *  · Leaderboard là GHÉP dù nghe như trạng thái: hạng nhất/nhì/ba là ba huy
+   *    hiệu của MỘT bảng xếp hạng (lấy mỗi hạng nhất thì bảng ấy không xếp được
+   *    hạng nào khác), và «row» + «my row» là hai dòng của cùng bảng ấy.
+   *  · Arrows là TRẠNG THÁI dù hai mũi tên hay đi đôi: một băng chuyền chỉ trượt
+   *    một chiều thì chỉ cần một cái, và hai cái không chồng lên nhau bao giờ.
+   *  · Gift box là TRẠNG THÁI: hộp đóng và hộp mở là hai khoảnh khắc của một cái
+   *    hộp, không phải hai mảnh dán lại — khác hẳn Envelope (thân + nắp rời).
+   */
   const SET = {
-    btn: { id: "btn", vi: "Button" },
-    hp: { id: "hp", vi: "Health bar" },
-    xp: { id: "xp", vi: "Progress bar" },
-    dialog: { id: "dialog", vi: "Dialog" },
-    rank: { id: "rank", vi: "Leaderboard" },
-    popup: { id: "popup", vi: "Popup" },
-    tab: { id: "tab", vi: "Tabs" },
-    toggle: { id: "toggle", vi: "Toggle" },
-    check: { id: "check", vi: "Checkbox" },
-    heart: { id: "heart", vi: "Hearts" },
-    star: { id: "star", vi: "Stars" },
-    coins: { id: "coins", vi: "Coin counter" },
-    slot: { id: "slot", vi: "Inventory slot" },
-    slider: { id: "slider", vi: "Slider" },
-    arrow: { id: "arrow", vi: "Arrows" },
-    envelope: { id: "envelope", vi: "Envelope" },
-    gift: { id: "gift", vi: "Gift box" },
+    btn: { id: "btn", vi: "Button", kind: "variants" },
+    hp: { id: "hp", vi: "Health bar", kind: "composition" },
+    xp: { id: "xp", vi: "Progress bar", kind: "composition" },
+    dialog: { id: "dialog", vi: "Dialog", kind: "composition" },
+    rank: { id: "rank", vi: "Leaderboard", kind: "composition" },
+    popup: { id: "popup", vi: "Popup", kind: "composition" },
+    tab: { id: "tab", vi: "Tabs", kind: "variants" },
+    toggle: { id: "toggle", vi: "Toggle", kind: "variants" },
+    check: { id: "check", vi: "Checkbox", kind: "variants" },
+    heart: { id: "heart", vi: "Hearts", kind: "variants" },
+    star: { id: "star", vi: "Stars", kind: "variants" },
+    coins: { id: "coins", vi: "Coin counter", kind: "composition" },
+    slot: { id: "slot", vi: "Inventory slot", kind: "variants" },
+    slider: { id: "slider", vi: "Slider", kind: "composition" },
+    arrow: { id: "arrow", vi: "Arrows", kind: "variants" },
+    envelope: { id: "envelope", vi: "Envelope", kind: "composition" },
+    gift: { id: "gift", vi: "Gift box", kind: "variants" },
   } satisfies Record<string, ElementSetRef>;
 
   return {
@@ -621,6 +670,14 @@ export interface ElementSetView {
   id: string;
   /** Nhãn tiếng Việt của bộ — lấy từ PHẦN ĐẦU TIÊN, xem `ElementSetRef.vi`. */
   vi: string;
+  /**
+   * Loại bộ — lấy từ PHẦN ĐẦU TIÊN, cùng luật với `vi`.
+   *
+   * MÓN LẺ LUÔN LÀ `composition`, và đó không phải một phép gán cho có: một bộ
+   * đúng một phần thì «lấy cả cụm» và «lấy đúng phần này» là cùng một cú bấm, nên
+   * loại nào cũng ra một kết quả — chọn cái mặc định để hộp chọn khỏi phải hỏi.
+   */
+  kind: ElementSetKind;
   parts: ElementPreset[];
 }
 
@@ -633,14 +690,16 @@ export interface ElementSetView {
  * ║ dòng «Thanh máu» (bộ, ra hai ô) và một dòng «Thanh máu» (phần, ra một    ║
  * ║ ô). Muốn bấm đúng thì phải hiểu sự khác nhau ấy TRƯỚC cú bấm đầu tiên —  ║
  * ║ mà nó chỉ hiện ra SAU, lúc đếm số dòng vừa mọc thêm.                     ║
- * ║ Nên: một danh sách, một kiểu dòng, một luật — bấm một dòng là lấy ĐỦ     ║
- * ║ các phần của nó. Món không đeo nhãn bộ chỉ là một bộ có đúng một phần;   ║
- * ║ nó không cần một nhóm riêng, vì nó không hành xử khác.                   ║
+ * ║ Nên: một danh sách, một thứ tự, một luật — và cái luật ấy là LOẠI BỘ.    ║
+ * ║ Món không đeo nhãn bộ chỉ là một bộ ghép có đúng một phần; nó không cần  ║
+ * ║ một nhóm riêng, vì nó không hành xử khác.                                ║
  * ║ Từ 09/2026 luật ấy phủ CẢ pill tên trên một dòng đã có («Đổi loại món»): ║
  * ║ hộp ấy từng bày danh mục phẳng, nay bày đúng danh sách này (chủ sản      ║
- * ║ phẩm: *«select cả cụm chứ»*) — xem `ElementCatalogue`. Ai cần đúng MỘT   ║
- * ║ phần thì chọn cả bộ rồi xoá dòng thừa: một cú bấm trên thứ đã hiện ra    ║
- * ║ trước mắt, thay vì một cú bấm đúng trong một danh sách 48 dòng.          ║
+ * ║ phẩm: *«select cả cụm chứ»*) — xem `ElementCatalogue`.                   ║
+ * ║ 11/09: danh sách VẪN là một, nhưng một mục KHÔNG còn luôn là một dòng.   ║
+ * ║ Bộ ghép là một dòng (bấm ⇒ cả cụm); bộ biến thể mở ra thành một nhóm     ║
+ * ║ (chủ sản phẩm: *«button có thể primary không, không phụ thuộc vào        ║
+ * ║ disabled hoặc pressed»*) — xem `ElementSetRef.kind`.                     ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
  * Không còn ngưỡng "đủ mấy phần mới là bộ": người dùng xoá phần cho tới khi còn
@@ -742,8 +801,8 @@ export function elementSets(bundle: PresetBundle = getPresets()): ElementSetView
          lệch (sửa tay trên đĩa, hoặc một lượt ghi hụt) — chọn một cách dứt khoát
          còn hơn để nhãn bộ nhảy theo thứ tự lọc. */
       view = setId
-        ? { id: setId, vi: element.set?.vi || setId, parts: [] }
-        : { id: element.id, vi: element.vi, parts: [] };
+        ? { id: setId, vi: element.set?.vi || setId, kind: element.set?.kind ?? SET_KIND_DEFAULT, parts: [] }
+        : { id: element.id, vi: element.vi, kind: SET_KIND_DEFAULT, parts: [] };
       byKey.set(key, view);
       order.push(key);
     }
@@ -833,7 +892,7 @@ function payloadOf(kind: PresetKind, preset: AnyPreset): PresetPayload {
          * ấy ghi hẳn `set: null` để nói ra «có người đã quyết, và quyết là không».
          */
         ...(preset.set
-          ? { set: { id: preset.set.id, vi: preset.set.vi } }
+          ? { set: { id: preset.set.id, vi: preset.set.vi, kind: preset.set.kind } }
           : SEED_SET[preset.id] ? { set: null } : {}),
       },
     };
@@ -910,11 +969,31 @@ const SEED_SET: Record<string, ElementSetRef | undefined> = Object.fromEntries(
 );
 
 /**
+ * LOẠI của từng bộ hạt giống, tra theo ID BỘ — cửa di trú của `kind`.
+ *
+ * `kind` là khoá MỚI (11/09/2026): mọi workspace đã mở app trước lượt này giữ bốn
+ * mươi tám bản ghi element có `set` nhưng KHÔNG có `kind`, và `seedOnce` cố ý không
+ * ghi đè chúng. Rơi thẳng về mặc định thì «Button» trên máy của người đã dùng app
+ * lâu nhất vẫn là một dòng «4 phần» bấm-là-lấy-đủ — đúng thứ vừa bị chỉ mặt, trên
+ * đúng cái máy đang được xem.
+ *
+ * Tra theo ID BỘ chứ không theo id món: bộ người dùng tự dựng ở màn quản lý không
+ * có trong bảng ⇒ rơi về `composition`, đúng mặc định an toàn.
+ */
+const SEED_SET_KIND: Record<string, ElementSetKind | undefined> = Object.fromEntries(
+  SEED_ELEMENTS.filter((element) => element.set).map((element) => [element.set!.id, element.set!.kind]),
+);
+
+/**
  * Bản ghi trên đĩa → `ElementSetRef`, hoặc `undefined`.
  *
  * `null` (đã gỡ khỏi bộ, xem `payloadOf`) và mọi thứ rác khác đều ra `undefined`
  * — cùng một nghĩa cuối cùng là «món lẻ», khác nhau chỉ ở chỗ `payloadOf` có phải
  * nói ra hay không.
+ *
+ * `kind` đọc theo BA NẤC: chữ trên đĩa thắng (người dùng đã quyết) → loại hạt
+ * giống của bộ ấy (bản ghi đời cũ) → mặc định. Một chuỗi lạ ở khoá `kind` đi cùng
+ * đường với «vắng khoá»: nó không nói được gì, nên nó không được nói thay.
  */
 function readSet(value: unknown): ElementSetRef | undefined {
   if (typeof value !== "object" || value === null) return undefined;
@@ -922,7 +1001,10 @@ function readSet(value: unknown): ElementSetRef | undefined {
   const id = typeof raw["id"] === "string" ? raw["id"].trim() : "";
   if (!id) return undefined;
   const vi = typeof raw["vi"] === "string" ? raw["vi"].trim() : "";
-  return { id, vi: vi || id };
+  const said = raw["kind"];
+  const kind: ElementSetKind =
+    said === "variants" || said === "composition" ? said : SEED_SET_KIND[id] ?? SET_KIND_DEFAULT;
+  return { id, vi: vi || id, kind };
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

@@ -61,7 +61,12 @@ function fullLibrary() {
     ...seedRowsOf("style").map((row) => ({ id: `s_${row.id}`, kind: "style", name: row.vi, data: { key: row.id, en: row.en } })),
     ...seedRowsOf("element").map((row) => ({
       id: `e_${row.id}`, kind: "element", name: row.vi,
-      data: { key: row.id, en: row.en, decor: row.element?.decor ?? "medium", glazeId: row.element?.glazeId ?? "auto", sizeId: "", ...(row.element?.skel ? { skel: row.element.skel } : {}) },
+      data: {
+        key: row.id, en: row.en,
+        decor: row.element?.decor ?? "medium", glazeId: row.element?.glazeId ?? "auto", sizeId: "",
+        ...(row.element?.skel ? { skel: row.element.skel } : {}),
+        ...(row.element?.set ? { set: row.element.set } : {}),
+      },
     })),
     ...CATALOG_ORDER.flatMap((kind) => seedRowsOf(kind).map((row) => ({
       id: `${kind}_${row.id}`, kind, name: row.vi,
@@ -392,6 +397,44 @@ describe("⑤ bộ món giao diện", () => {
     fireEvent.click(await screen.findByRole("option", { name: "Bộ mới…" }));
 
     const made = (await elementsNow()).find((element) => element.id === "lock");
-    expect(made?.set).toEqual({ id: "lock", vi: "Lock" });
+    /* Bộ mới sinh ra là BỘ GHÉP — mặc định an toàn, xem `ElementSetRef.kind`. */
+    expect(made?.set).toEqual({ id: "lock", vi: "Lock", kind: "composition" });
+  });
+
+  /* ══ ĐỔI LOẠI BỘ ════════════════════════════════════════════════════════════
+     Chủ sản phẩm: *«button phải tách ra chứ… 1 thanh bar thì bắt buộc phải có
+     composition kia»*. Phân loại hạt giống là ĐỀ XUẤT, không phải luật trời:
+     người dùng thêm/sửa/xoá bộ tuỳ ý, nên loại phải chỉnh được ở đây. Và vì loại
+     nằm trên TỪNG bản ghi (xem `ElementSetRef`), ghi thiếu một phần là để lại một
+     bộ mà hai phần khai hai loại khác nhau — hộp chọn đọc PHẦN ĐẦU, tức lỗi ấy
+     hiện ra hay không là tuỳ thứ tự dòng. */
+  it("hạt giống: Health bar là BỘ GHÉP, Button là BỘ BIẾN THỂ", async () => {
+    await openElement("frame");
+    const elements = await elementsNow();
+    expect(elements.find((element) => element.id === "healthbar")?.set?.kind).toBe("composition");
+    expect(elements.find((element) => element.id === "button")?.set?.kind).toBe("variants");
+  });
+
+  it("ô «Loại bộ» đổi ⇒ MỌI phần của bộ đổi theo, không chỉ dòng đang mở", async () => {
+    await openElement("frame");
+    const trigger = screen.getByLabelText("Loại bộ");
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: " " });
+    fireEvent.click(await screen.findByRole("option", { name: "Bộ biến thể" }));
+
+    const parts = (await elementsNow()).filter((element) => element.set?.id === "hp");
+    expect(parts).toHaveLength(2);
+    expect(parts.every((part) => part.set?.kind === "variants")).toBe(true);
+  });
+
+  it("gắn một món LẺ vào bộ ĐÃ CÓ ⇒ nó mang luôn LOẠI của bộ ấy", async () => {
+    /* Loại là thuộc tính của BỘ, nên một phần mới không có quyền đem một loại
+       khác vào cùng một nhãn — và `Button` là bộ biến thể, không phải ghép. */
+    await openElement("Badge");
+    openSetPicker();
+    fireEvent.click(await screen.findByRole("option", { name: /^Button/ }));
+
+    const made = (await elementsNow()).find((element) => element.id === "badge");
+    expect(made?.set).toEqual({ id: "btn", vi: "Button", kind: "variants" });
   });
 });

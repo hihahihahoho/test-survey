@@ -17,8 +17,9 @@ import { SIZE_PRESETS } from "@/features/prompt-lab/lib/cell-size";
 import { POSE_PRESETS } from "@/features/prompt-lab/lib/pose/pose-presets";
 import { canAddRow, canDeleteRow } from "@/features/prompt-lab/lib/catalog-seeds";
 import {
-  MANAGED_ORDER, managedRows, nextRowId, seedRowsOf, setManagedRows, usePresetSyncError, usePresets,
-  type ElementSetRef, type ManagedKind, type ManagedRow,
+  MANAGED_ORDER, managedRows, nextRowId, seedRowsOf, SET_KIND_DEFAULT, setManagedRows,
+  usePresetSyncError, usePresets,
+  type ElementSetKind, type ElementSetRef, type ManagedKind, type ManagedRow,
 } from "@/features/prompt-lab/lib/presets-store";
 import { HomeWorkspaceShell } from "./components/HomeWorkspaceShell";
 
@@ -94,7 +95,7 @@ const CATEGORY: Record<ManagedKind, { label: string; blurb: string; where: strin
   element: {
     label: "Món giao diện",
     blurb: "Danh mục món: Button, Popup, Health bar… kèm hình dạng và cỡ. Tên dùng thuật ngữ tiếng Anh của giới làm game UI; nhãn của một phần là tên ngắn của riêng nó (fill, box), tên bộ đứng trước nó trên thẻ Bộ UI.",
-    where: "Ô chọn món ở đầu mỗi dòng của thẻ Bộ UI — mỗi dòng ở đó là một BỘ, chọn một lần là có đủ các phần.",
+    where: "Ô chọn món ở đầu mỗi dòng của thẻ Bộ UI — bày theo BỘ: bộ ghép chọn một lần là có đủ các phần, bộ biến thể thì chọn lẻ từng trạng thái.",
   },
   pose: { label: "Dáng", blurb: "Dáng đứng của nhân vật.", where: "Pill «Dáng» trên mỗi dòng của thẻ Nhân vật." },
   view: {
@@ -200,6 +201,24 @@ const NEW_LABEL = "Mục mới";
  */
 const NO_SET = "__none";
 const NEW_SET = "__new";
+
+/**
+ * CHỮ CỦA HAI LOẠI BỘ — một chỗ, vì ô chọn và dòng giải thích phải nói cùng một thứ.
+ *
+ * Nhãn NGẮN, câu giải thích nói ra HẬU QUẢ TRÊN CÚ BẤM chứ không định nghĩa lại
+ * khái niệm: người dùng ở đây đang phân loại một bộ, và thứ họ cần biết là «chọn ở
+ * thẻ Bộ UI thì ra mấy ô».
+ */
+const SET_KIND_COPY: Record<ElementSetKind, { label: string; hint: string }> = {
+  composition: {
+    label: "Bộ ghép",
+    hint: "Các phần chỉ có nghĩa khi đi cùng nhau — chọn ở thẻ Bộ UI là lấy cả cụm. Ví dụ: khung và phần đầy của một thanh máu.",
+  },
+  variants: {
+    label: "Bộ biến thể",
+    hint: "Mỗi phần là một trạng thái đứng riêng được — chọn lẻ từng cái, hoặc bấm «Cả bộ» để lấy hết. Ví dụ: nút primary · secondary · pressed.",
+  },
+};
 
 /** Phần đuôi của một dòng «Món giao diện» khi chưa ai đặt gì — MỘT chỗ, bốn nơi đọc. */
 const ELEMENT_ROW_DEFAULTS: NonNullable<ManagedRow["element"]> = { decor: "medium", glazeId: "auto", sizeId: "" };
@@ -307,7 +326,7 @@ export function PromptLibraryScreen() {
    * "bộ vừa đặt tên ở dòng trên" chỉ chạy được nếu nguồn của hai chỗ là một.
    */
   const setOptions = React.useMemo(() => {
-    const out: { id: string; vi: string; count: number }[] = [];
+    const out: { id: string; vi: string; kind: ElementSetKind; count: number }[] = [];
     const at = new Map<string, number>();
     for (const row of rows) {
       const ref = row.element?.set;
@@ -315,7 +334,7 @@ export function PromptLibraryScreen() {
       const seen = at.get(ref.id);
       if (seen === undefined) {
         at.set(ref.id, out.length);
-        out.push({ id: ref.id, vi: ref.vi || ref.id, count: 1 });
+        out.push({ id: ref.id, vi: ref.vi || ref.id, kind: ref.kind, count: 1 });
       } else {
         const hit = out[seen];
         if (hit) hit.count += 1;
@@ -344,16 +363,36 @@ export function PromptLibraryScreen() {
       const taken = setOptions.map((option) => option.id);
       let id = base;
       for (let n = 2; taken.includes(id); n += 1) id = `${base}-${n}`;
-      write(rows.map((item) => (item.id === row.id ? putRowInSet(item, { id, vi }) : item)));
+      /* Bộ mới sinh ra là BỘ GHÉP — mặc định an toàn, xem `ElementSetRef.kind`.
+         Ô chọn «Loại bộ» hiện ra ngay bên dưới, nên đổi nó là một cú bấm. */
+      write(rows.map((item) => (item.id === row.id ? putRowInSet(item, { id, vi, kind: SET_KIND_DEFAULT }) : item)));
       return;
     }
+    /* Gắn vào một bộ ĐÃ CÓ thì mang luôn loại của bộ ấy: loại là thuộc tính của
+       BỘ, nên một phần mới không có quyền đem một loại khác vào cùng một nhãn. */
     const hit = setOptions.find((option) => option.id === value);
-    write(rows.map((item) => (item.id === row.id ? putRowInSet(item, { id: value, vi: hit?.vi ?? value }) : item)));
+    write(rows.map((item) => (item.id === row.id
+      ? putRowInSet(item, { id: value, vi: hit?.vi ?? value, kind: hit?.kind ?? SET_KIND_DEFAULT })
+      : item)));
   };
 
   /** Đổi tên bộ = ghi lên MỌI phần cùng lúc — xem `ElementSetRef.vi`. */
   const renameSet = (setId: string, vi: string) =>
-    write(rows.map((item) => (item.element?.set?.id === setId ? putRowInSet(item, { id: setId, vi }) : item)));
+    write(rows.map((item) => (item.element?.set?.id === setId
+      ? putRowInSet(item, { id: setId, vi, kind: item.element?.set?.kind ?? SET_KIND_DEFAULT })
+      : item)));
+
+  /**
+   * Đổi LOẠI bộ — cũng ghi lên MỌI phần cùng lúc, cùng lý do với `renameSet`.
+   *
+   * Loại nằm trên từng bản ghi (xem `ElementSetRef`), nên ghi thiếu một phần là để
+   * lại một bộ mà hai phần khai hai loại khác nhau — và hộp chọn ở thẻ Bộ UI đọc
+   * PHẦN ĐẦU, tức lỗi ấy hiện ra hay không là tuỳ thứ tự dòng.
+   */
+  const retypeSet = (setId: string, kind: ElementSetKind) =>
+    write(rows.map((item) => (item.element?.set?.id === setId
+      ? putRowInSet(item, { id: setId, vi: item.element?.set?.vi ?? setId, kind })
+      : item)));
 
   /** Bỏ bộ: gỡ nhãn khỏi mọi phần, các món ở lại danh mục dưới dạng món lẻ. */
   const dissolveSet = (setId: string) =>
@@ -476,6 +515,7 @@ export function PromptLibraryScreen() {
             onChange={(part) => patch(editing.id, part)}
             onPickSet={(value) => pickSet(editing, value)}
             onRenameSet={(vi) => renameSet(editing.element?.set?.id ?? "", vi)}
+            onRetypeSet={(next) => retypeSet(editing.element?.set?.id ?? "", next)}
             onDissolveSet={() => dissolveSet(editing.element?.set?.id ?? "")}
             onDuplicate={() => duplicate(editing)}
             onDelete={() => remove(editing)}
@@ -743,15 +783,17 @@ function EmptyEditor({ kind }: { kind: ManagedKind }) {
  * một cách mới để mất chữ (đóng panel = mất). Nút «Xong» chỉ đóng panel.
  */
 function RowEditor({
-  kind, row, setOptions, onChange, onPickSet, onRenameSet, onDissolveSet, onDuplicate, onDelete, onClose,
+  kind, row, setOptions, onChange, onPickSet, onRenameSet, onRetypeSet, onDissolveSet,
+  onDuplicate, onDelete, onClose,
 }: {
   kind: ManagedKind;
   row: ManagedRow;
   /** Các bộ đang có — chỉ trục `element` dùng tới. */
-  setOptions: readonly { id: string; vi: string; count: number }[];
+  setOptions: readonly { id: string; vi: string; kind: ElementSetKind; count: number }[];
   onChange: (part: Partial<ManagedRow>) => void;
   onPickSet: (value: string) => void;
   onRenameSet: (vi: string) => void;
+  onRetypeSet: (kind: ElementSetKind) => void;
   onDissolveSet: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -927,6 +969,32 @@ function RowEditor({
                     onChange={(event) => onRenameSet(event.target.value)}
                     placeholder="Ví dụ: Health bar"
                   />
+                </Field>
+                {/* ══ LOẠI BỘ ═══════════════════════════════════════════════════
+                    Chủ sản phẩm: *«button phải tách ra chứ… 1 thanh bar thì bắt
+                    buộc phải có composition kia, còn button có thể primary
+                    không»*. Hai loại bộ hành xử khác nhau ở ĐÚNG MỘT chỗ — cú bấm
+                    trong hộp chọn của thẻ Bộ UI — nên ô chọn này đứng ngay cạnh
+                    tên bộ, và câu dưới nó nói ra hậu quả ấy chứ không định nghĩa
+                    lại khái niệm.
+                    Ô CHỌN chứ không phải công tắc: một công tắc «bấm lẻ được»
+                    buộc người đọc phải tự suy ra vế còn lại tên là gì, còn hai
+                    dòng có tên thì đọc xong là biết mình đang ở đâu trong hai. */}
+                <Field
+                  id={`row-setkind-${row.id}`}
+                  label="Loại bộ"
+                  hint={SET_KIND_COPY[element.set.kind].hint}
+                >
+                  <Select
+                    value={element.set.kind}
+                    onValueChange={(value) => onRetypeSet(value as ElementSetKind)}
+                  >
+                    <SelectTrigger id={`row-setkind-${row.id}`}><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="composition">{SET_KIND_COPY.composition.label}</SelectItem>
+                      <SelectItem value="variants">{SET_KIND_COPY.variants.label}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </Field>
                 {/* «BỎ BỘ» GỠ NHÃN, KHÔNG XOÁ MÓN — nên nó không phải một nút đỏ và
                     không hỏi hai lần. Xoá cả một bộ nghĩa là xoá vài món mà người
