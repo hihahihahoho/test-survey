@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { foldVi } from "@/features/kit-core/lib/element-lib/source";
 import {
-  addCustomElement, elementLabel, elementSetKey, elementSets, hasDecorPlacement, usePresets,
+  addCustomElement, elementLabel, elementPart, elementSetKey, elementSets, elementTitle,
+  hasDecorPlacement, usePresets,
 } from "../lib/presets-store";
 import type { ElementPreset, ElementSetView, PresetBundle } from "../lib/presets-store";
 import {
@@ -117,7 +118,7 @@ function CellRow({
       <RowTop>
         <DragHandle {...drag} label={label} />
         <RowIndex index={drag.index} />
-        <ElementNamePill label={label} used={used} onPick={onPickSet} />
+        <ElementNamePill element={element} label={label} used={used} onPick={onPickSet} />
         {/* Thứ tự pill: phong cách → đục nền → trang trí → bố trí → cỡ.
             «Chất liệu» ĐÃ BỊ BỎ HẲN (không ẩn đi, không đổi tên): nó ăn theo prompt
             tổng phong cách — xem khối chú thích đầu `glaze.ts`.
@@ -218,7 +219,7 @@ function FreeCellRow({
       <RowTop>
         <DragHandle {...drag} label={label} />
         <RowIndex index={drag.index} />
-        <ElementNamePill label={label} used={used} onPick={onPickSet} />
+        <ElementNamePill element={element} label={label} used={used} onPick={onPickSet} />
         {/* CỠ Ở NGOÀI EDITOR, kể cả ở chế độ tự do — nó không đi vào prompt một chữ
             nào (nó thành `skel.w`/`skel.h`), nên nó không có chỗ trong một câu văn.
             Cùng lý do với pill tên element đứng ngoài: cả hai là DANH TÍNH/HÌNH HỌC
@@ -635,8 +636,8 @@ function useCataloguePopover() {
  *
  * ╔══ MỘT DANH SÁCH, VÀ MỌI DÒNG LÀ MỘT BỘ — KỂ CẢ Ở «Đổi loại món» ═════════╗
  * ║ Chủ sản phẩm, nhìn hộp của pill trên dòng: *«select cả cụm chứ»*. Bản     ║
- * ║ trước cho nhánh «Đổi loại món» một danh mục PHẲNG (từng phần rời: «Thanh  ║
- * ║ máu · phần đầy», «Hộp thoại · bảng tên»…) với lý lẽ "một dòng chỉ mang    ║
+ * ║ trước cho nhánh «Đổi loại món» một danh mục PHẲNG (từng phần rời: «Health ║
+ * ║ bar · fill», «Dialog · name plate»…) với lý lẽ "một dòng chỉ mang         ║
  * ║ được một món". Lý lẽ ấy đúng về dữ liệu và sai về việc người ta đang làm: ║
  * ║ ai đổi một dòng «Panel» thành «Dialog» thì họ muốn CÁI HỘP THOẠI, tức cả  ║
  * ║ khung lẫn bảng tên lẫn nút tiếp — không phải đúng một mảnh của nó rồi tự  ║
@@ -835,19 +836,41 @@ function ElementPicker({
  * ║ Là pill thì nó cũng nói đúng bản chất: loại element là MỘT LỰA CHỌN trong ║
  * ║ danh mục, y như phong cách hay chất liệu — cùng hình dạng, cùng cách bấm. ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ╔══ PILL HIỆN TIÊU ĐỀ CỦA MỤC, TÊN PHẦN XUỐNG HẠNG PHỤ ═══════════════════╗
+ * ║ Chủ sản phẩm, sau khi bấm «Health bar · 2 phần» trong hộp chọn và thấy    ║
+ * ║ pill hiện «Thanh máu · phần đầy»: *«nó lấy tên TIÊU ĐỀ chứ, ai lại lấy    ║
+ * ║ tên des để thể hiện select»*. Đúng: pill LÀ cái nút mở hộp ấy, nên chữ    ║
+ * ║ chính của nó phải là chữ vừa được bấm — dòng TIÊU ĐỀ của mục («Health     ║
+ * ║ bar»), không phải dòng mô tả bên dưới (nơi «frame · fill» nằm).           ║
+ * ║ Nhưng hai dòng cùng một bộ vẫn phải phân biệt được với nhau, nên tên phần ║
+ * ║ ở lại — MỜ và NHỎ, đúng kiểu chữ của dòng mô tả trong hộp chọn. Hai hạng  ║
+ * ║ chữ trong một pill nói đúng hai thứ: «bạn đã chọn bộ này» và «dòng này là ║
+ * ║ phần nào của nó».                                                        ║
+ * ║ KHÔNG chép nguyên «· 2 phần» của dòng tiêu đề vào đây: con số ấy đếm các  ║
+ * ║ phần của BỘ TRONG DANH MỤC, còn dòng này là ĐÚNG MỘT phần — dán nó lên    ║
+ * ║ mọi dòng là nói sai về chính dòng đang đứng.                              ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 function ElementNamePill({
+  element,
   label,
   used,
   onPick,
 }: {
-  /** Chữ ĐẦY ĐỦ của dòng — «Dialog · box». Nhãn hiển thị, không phải chỗ chọn phần. */
+  /** Món của dòng — nguồn của CẢ tiêu đề lẫn tên phần; `undefined` khi id lạ. */
+  element: ElementPreset | undefined;
+  /** Chữ ĐẦY ĐỦ một dòng («Dialog · box»), cho `aria-label`: trình đọc màn hình
+      nghe một chuỗi liền, không nghe được hai hạng chữ. Cũng là chữ rơi về khi
+      `element` không tra ra (id trần). */
   label: string;
   used: ReadonlySet<string>;
   /** Nhận CẢ BỘ, y như «+ Element» — xem khối chú thích của `ElementCatalogue`. */
   onPick: (parts: readonly ElementPreset[]) => void;
 }) {
   const pop = useCataloguePopover();
+  const title = elementTitle(element, label);
+  const part = elementPart(element);
 
   return (
     <span ref={pop.boxRef as React.RefObject<HTMLSpanElement>} className="relative inline-block shrink-0">
@@ -858,9 +881,9 @@ function ElementNamePill({
         aria-expanded={pop.open}
         aria-label={`Đổi loại món — đang là ${label}`}
         onClick={pop.toggle}
-        className="font-medium"
       >
-        <span>{label}</span>
+        <span className="font-medium">{title}</span>
+        {part !== "" && <span className="text-fg-muted">{part}</span>}
         <PillCaret compact />
       </PillButton>
 

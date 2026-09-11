@@ -126,6 +126,9 @@ export interface ElementPreset {
    * phải tên đầy đủ: «fill», không phải «Health bar fill». Chữ đầy đủ mà người
    * dùng đọc trên dòng do `elementLabel` ghép, vì nó là chỗ DUY NHẤT biết cả bộ
    * lẫn phần. Món lẻ (không `set`) thì tên phần chính là tên đầy đủ.
+   *
+   * Trên PILL của dòng, hai nửa ấy KHÔNG ghép: tên bộ là chữ chính, chữ này là
+   * chữ phụ mờ bên cạnh — xem `elementTitle` / `elementPart`.
    */
   vi: string;
   /** DANH TỪ tiếng Anh đi vào `spec` của ô — xem khối chú thích trên. */
@@ -678,12 +681,53 @@ export function elementSetKey(element: ElementPreset | undefined): string {
  *
  * `fallback` là chữ hiện khi id không còn tra ra món nào (danh mục bị xoá dòng, bản
  * nháp cũ): chỗ gọi đưa vào `cell.elementId` — một id trần vẫn hơn một ô trống.
+ *
+ * ⚠️ ĐÂY LÀ CHỮ MỘT DÒNG, cho chỗ chỉ có MỘT dòng chữ: `component.vi` của contract,
+ * tên ô trong bảng kết quả, `aria-label`. Chỗ nào vẽ được HAI hạng chữ (pill tên
+ * trên dòng) thì dùng `elementTitle` + `elementPart` — xem khối ngay dưới.
  */
 export function elementLabel(element: ElementPreset | undefined, fallback: string): string {
+  const part = elementPart(element);
+  const title = elementTitle(element, fallback);
+  return part ? `${title} · ${part}` : title;
+}
+
+/**
+ * TIÊU ĐỀ của dòng — ĐÚNG chữ đứng ở dòng tiêu đề của mục trong hộp chọn.
+ *
+ * ╔══ VÌ SAO PILL TRÊN DÒNG LẤY CHỮ NÀY, KHÔNG LẤY `elementLabel` ═══════════╗
+ * ║ Chủ sản phẩm, sau khi bấm «Health bar · 2 phần» trong hộp chọn và thấy    ║
+ * ║ pill hiện «Health bar · fill»: *«ở cái select xong là Health bar · 2 phần ║
+ * ║ kiểu đó, nó lấy tên TIÊU ĐỀ chứ, ai lại lấy tên des để thể hiện select»*. ║
+ * ║ Một pill là CÁI NÚT MỞ hộp chọn ấy, nên chữ nó hiện phải là chữ vừa được  ║
+ * ║ bấm — tức dòng tiêu đề của mục («Health bar»), không phải dòng mô tả bên   ║
+ * ║ dưới (nơi tên các phần «frame · fill» nằm).                               ║
+ * ║ Tên phần KHÔNG mất: nó đi xuống hạng phụ (`elementPart`), mờ và nhỏ, đúng ║
+ * ║ kiểu chữ mà dòng mô tả của mục đang dùng — vì hai dòng cùng bộ vẫn phải   ║
+ * ║ phân biệt được với nhau.                                                 ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Bộ MỘT PHẦN (món lẻ) không có tên bộ để lấy, nên tiêu đề của nó là `vi` của
+ * chính nó — «Trophy», và `elementPart` trả về rỗng.
+ */
+export function elementTitle(element: ElementPreset | undefined, fallback: string): string {
   if (!element) return fallback;
   const set = (element.set?.vi ?? "").trim();
-  if (!set || set === element.vi) return element.vi || fallback;
-  return `${set} · ${element.vi}`;
+  return set || element.vi || fallback;
+}
+
+/**
+ * TÊN PHẦN của dòng — «fill», «name plate»; rỗng khi không có gì để nói thêm.
+ *
+ * Rỗng ở hai ca, và cả hai đều là "không nói thêm được gì": món lẻ (không `set`,
+ * nên `vi` của nó ĐÃ là tiêu đề), và bản ghi mang `set.vi` TRÙNG `vi` — lặp lại
+ * nguyên một chuỗi ngay sau chính nó thì chỉ tốn chỗ.
+ */
+export function elementPart(element: ElementPreset | undefined): string {
+  if (!element) return "";
+  const set = (element.set?.vi ?? "").trim();
+  if (!set || set === element.vi) return "";
+  return element.vi;
 }
 
 export function elementSets(bundle: PresetBundle = getPresets()): ElementSetView[] {
@@ -881,6 +925,146 @@ function readSet(value: unknown): ElementSetRef | undefined {
   return { id, vi: vi || id };
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   DI TRÚ NHÃN: hạt giống TIẾNG VIỆT đời trước → THUẬT NGỮ TIẾNG ANH đời nay
+   ══════════════════════════════════════════════════════════════════════════
+
+   ╔══ VÌ SAO ĐỔI HẠT GIỐNG THÔI LÀ CHƯA XONG ═══════════════════════════════╗
+   ║ Hạt giống chỉ gieo vào một kho RỖNG. Máy nào đã mở app trước lượt đổi     ║
+   ║ nhãn (11/09/2026) đang giữ nguyên bốn mươi tám bản ghi với `name` tiếng    ║
+   ║ Việt — «Thanh máu», «Thanh máu · phần đầy» — và `seedOnce` cố ý KHÔNG ghi  ║
+   ║ đè chúng. Hậu quả nhìn thấy được ngay trên màn của chủ sản phẩm: nhãn bộ   ║
+   ║ mới ghép với tên phần cũ ra «Thanh máu · Thanh máu · phần đầy», tức một    ║
+   ║ chuỗi đọc hai lần, và dòng mô tả của mục trong hộp chọn cũng lặp y thế.    ║
+   ║                                                                          ║
+   ║ CÓ ĐIỀU KIỆN, không phải ghi đè: chỉ bản ghi mang ĐÚNG NGUYÊN VĂN nhãn    ║
+   ║ hạt giống đời trước mới được đổi — tức người dùng CHƯA đụng vào nó. Ai đã  ║
+   ║ tự đổi «Thanh máu» thành «Máu nhân vật» thì chuỗi không khớp, và chữ của   ║
+   ║ họ ở nguyên đó. Cùng kỷ luật với `LEGACY_ELEMENT_EN` và                    ║
+   ║ `LEGACY_ELEMENT_SIZE`: khớp nguyên văn, không đoán bằng regex.            ║
+   ║                                                                          ║
+   ║ VÁ LÚC ĐỌC, KHÔNG GHI NGƯỢC — cùng chỗ và cùng cách với bốn bảng di trú   ║
+   ║ đã có (`en`, `skel`, `set`, `sizeId`). Một lượt ghi ngược lúc mở app là    ║
+   ║ bốn mươi tám PATCH mà không ai bấm gì; còn vá lúc đọc thì nhãn mới có mặt  ║
+   ║ ngay trên màn, và nó xuống đĩa ở lượt `flush` đầu tiên do người dùng thật  ║
+   ║ sự sửa một thứ gì đó.                                                     ║
+   ╚══════════════════════════════════════════════════════════════════════════╝
+
+   ⚠️ `en` VÀ `id` KHÔNG ĐỔI MỘT CHỮ NÀO. Chỉ nhãn hiển thị đổi, nên không có
+   câu prompt nào phải đo lại. */
+
+/** Nhãn hạt giống đời nay của từng phần, tra theo id. */
+const SEED_ELEMENT_VI: Record<string, string | undefined> = Object.fromEntries(
+  SEED_ELEMENTS.map((element) => [element.id, element.vi]),
+);
+
+/** Nhãn hạt giống đời nay của từng BỘ, tra theo id bộ. */
+const SEED_SET_VI: Record<string, string | undefined> = Object.fromEntries(
+  SEED_ELEMENTS.filter((element) => element.set).map((element) => [element.set!.id, element.set!.vi]),
+);
+
+/**
+ * Nhãn PHẦN của hạt giống ĐỜI TRƯỚC (tới 5e64756), tra theo id.
+ *
+ * Chép từ chính bản hạt giống ấy, không viết lại từ trí nhớ. Bốn mươi tám dòng và
+ * không thiếu dòng nào: một id vắng mặt ở đây nghĩa là nhãn cũ của nó sống mãi.
+ */
+const LEGACY_ELEMENT_VI: Record<string, string | undefined> = {
+  button: "Nút bấm",
+  "btn-secondary": "Bộ nút · phụ",
+  "btn-pressed": "Bộ nút · nhấn",
+  "btn-disabled": "Bộ nút · khoá",
+  healthbar: "Thanh máu",
+  "hp-fill": "Thanh máu · phần đầy",
+  progress: "Thanh tiến trình",
+  "progress-fill": "Thanh tiến trình · phần đầy",
+  "dialog-panel": "Hộp thoại · khung",
+  "dialog-name": "Hộp thoại · bảng tên",
+  "dialog-next": "Hộp thoại · nút tiếp",
+  "rank-1": "Xếp hạng · hạng nhất",
+  "rank-2": "Xếp hạng · hạng nhì",
+  "rank-3": "Xếp hạng · hạng ba",
+  "rank-row": "Xếp hạng · hàng thường",
+  "rank-row-self": "Xếp hạng · hàng của tôi",
+  popover: "Popover",
+  "popup-ribbon": "Popup · ruy băng tiêu đề",
+  "popup-close": "Popup · nút đóng",
+  "tab-idle": "Tab · thường",
+  "tab-active": "Tab · đang chọn",
+  "toggle-on": "Công tắc · bật",
+  "toggle-off": "Công tắc · tắt",
+  "check-on": "Ô chọn · bật",
+  "check-off": "Ô chọn · tắt",
+  "heart-full": "Tim · đầy",
+  "heart-empty": "Tim · rỗng",
+  "star-full": "Sao · đầy",
+  "star-empty": "Sao · rỗng",
+  coin: "Icon tiền",
+  "coin-counter": "Đồng tiền · ô đếm",
+  "slot-empty": "Ô túi đồ · trống",
+  "slot-filled": "Ô túi đồ · có đồ",
+  "slot-active": "Ô túi đồ · đang chọn",
+  "slider-track": "Thanh trượt · rãnh",
+  "slider-knob": "Thanh trượt · núm",
+  "arrow-left": "Mũi tên · trái",
+  "arrow-right": "Mũi tên · phải",
+  "envelope-body": "Phong bì · thân",
+  "envelope-flap": "Phong bì · nắp",
+  "gift-closed": "Hộp quà · đóng",
+  "gift-open": "Hộp quà · mở",
+  "avatar-frame": "Khung avatar",
+  panel: "Bảng nền",
+  badge: "Huy hiệu",
+  lock: "Ổ khoá",
+  timer: "Đồng hồ đếm giờ",
+  trophy: "Cúp",
+};
+
+/**
+ * Nhãn BỘ của hạt giống ĐỜI TRƯỚC, tra theo id bộ.
+ *
+ * `popup` không có mặt: nhãn của nó đã là «Popup» ở cả hai đời, nên không có gì
+ * để di trú. Liệt kê một cặp cũ-bằng-mới ở đây chỉ tạo ra một dòng không bao giờ
+ * làm gì cả.
+ */
+const LEGACY_SET_VI: Record<string, string | undefined> = {
+  btn: "Bộ nút",
+  hp: "Thanh máu",
+  xp: "Thanh tiến trình",
+  dialog: "Hộp thoại",
+  rank: "Xếp hạng",
+  tab: "Tab",
+  toggle: "Công tắc",
+  check: "Ô chọn",
+  heart: "Tim",
+  star: "Sao",
+  coins: "Đồng tiền",
+  slot: "Ô túi đồ",
+  slider: "Thanh trượt",
+  arrow: "Mũi tên",
+  envelope: "Phong bì",
+  gift: "Hộp quà",
+};
+
+/** Nhãn phần trên đĩa → nhãn đời nay, CHỈ khi nó còn đúng nguyên văn nhãn cũ. */
+function migrateElementVi(id: string, name: string): string {
+  if (name !== LEGACY_ELEMENT_VI[id]) return name;
+  return SEED_ELEMENT_VI[id] ?? name;
+}
+
+/**
+ * Nhãn bộ trên đĩa → nhãn đời nay, cùng luật.
+ *
+ * Nhãn bộ được CHÉP TRÊN MỌI PHẦN (xem `ElementSetRef.vi`), nên phép vá này chạy
+ * một lần cho mỗi phần và ra cùng một kết quả — không cần chỗ nào nhớ "bộ này đã
+ * di trú chưa".
+ */
+function migrateSetVi(set: ElementSetRef | undefined): ElementSetRef | undefined {
+  if (!set || set.vi !== LEGACY_SET_VI[set.id]) return set;
+  const fresh = SEED_SET_VI[set.id];
+  return fresh ? { ...set, vi: fresh } : set;
+}
+
 /**
  * DI TRÚ CỠ GHIM: bốn nấc S/M/L/XL của hạt giống ĐỜI TRƯỚC → rỗng (đo theo hình).
  *
@@ -963,10 +1147,13 @@ function toBundle(rows: readonly LibraryPreset[]): PresetBundle {
        * Nên «gỡ khỏi bộ» ở màn quản lý ghi `set` rỗng chứ không xoá khoá — xem
        * `readSet`.
        */
-      const set = readSet(data["set"]) ?? ("set" in data ? undefined : SEED_SET[id]);
+      /* Nhãn bộ trên đĩa có thể là nhãn TIẾNG VIỆT đời trước — `migrateSetVi` đổi
+         nó khi (và chỉ khi) người dùng chưa sửa. Nhãn vá từ `SEED_SET` thì đã là
+         nhãn đời nay sẵn, nên đi qua phép vá ấy không suy suyển. */
+      const set = migrateSetVi(readSet(data["set"]) ?? ("set" in data ? undefined : SEED_SET[id]));
       const savedSize = str(data, "sizeId");
       bundle.elements.push({
-        id, vi: row.name,
+        id, vi: migrateElementVi(id, row.name),
         en: LEGACY_ELEMENT_EN[en] ?? en,
         decor,
         glazeId,

@@ -548,6 +548,51 @@ describe("⑤ pill tên trên dòng chọn cả bộ", () => {
     };
     expect(retitleCellDoc(mine, "a primary action button with a centered label", "X")).toEqual(mine);
   });
+
+  /* ══ PILL HIỆN TIÊU ĐỀ CỦA MỤC, KHÔNG HIỆN DÒNG MÔ TẢ ═══════════════════════
+     Chủ sản phẩm, sau khi bấm «Health bar · 2 phần» rồi nhìn pill hiện «Thanh máu
+     · phần đầy»: *«nó lấy tên TIÊU ĐỀ chứ, ai lại lấy tên des để thể hiện
+     select»*. Pill là cái nút MỞ hộp chọn, nên chữ chính của nó phải là chữ vừa
+     được bấm — tức dòng tiêu đề của mục, không phải dòng mô tả bên dưới (nơi tên
+     các phần nằm). Tên phần ở lại nhưng xuống hạng phụ, mờ. */
+  const nameTiers = (pill: HTMLElement) => [...pill.querySelectorAll("span")].map((node) => node.textContent);
+
+  it("pill dòng hiện TIÊU ĐỀ BỘ làm chữ chính, tên phần làm chữ phụ MỜ", () => {
+    render(<Harness initial={uikit([{ ...newCell("hp-fill", PRESETS), id: "c1" }])} />);
+
+    const pill = screen.getByRole("button", { name: /Đổi loại món/ });
+    expect(nameTiers(pill)).toEqual(["Health bar", "fill"]);
+
+    const [title, part] = [...pill.querySelectorAll("span")];
+    /* Chữ chính KHÔNG được là tên phần — đúng lỗi vừa bị chỉ mặt. */
+    expect(title!.textContent).toBe("Health bar");
+    expect(title!.className).toContain("font-medium");
+    /* Tên phần mờ, cùng kiểu chữ với dòng mô tả của mục trong hộp chọn. */
+    expect(part!.className).toContain("text-fg-muted");
+
+    /* `aria-label` vẫn là chuỗi ĐẦY ĐỦ một dòng: trình đọc màn hình nghe một
+       chuỗi liền, nó không nghe ra hai hạng chữ. */
+    expect(pill.getAttribute("aria-label")).toBe("Đổi loại món — đang là Health bar · fill");
+  });
+
+  it("bộ MỘT PHẦN ⇒ pill chỉ một hạng chữ, không đẻ ra tên phần rỗng", () => {
+    render(<Harness initial={uikit([{ ...newCell("trophy", PRESETS), id: "c1" }])} />);
+
+    const pill = screen.getByRole("button", { name: /Đổi loại món/ });
+    expect(nameTiers(pill)).toEqual(["Trophy"]);
+  });
+
+  it("hai dòng CÙNG một bộ vẫn phân biệt được — chữ phụ mới là chỗ khác nhau", () => {
+    render(
+      <Harness initial={uikit([
+        { ...newCell("healthbar", PRESETS), id: "c1" },
+        { ...newCell("hp-fill", PRESETS), id: "c2" },
+      ])} />,
+    );
+
+    const pills = screen.getAllByRole("button", { name: /Đổi loại món/ });
+    expect(pills.map(nameTiers)).toEqual([["Health bar", "frame"], ["Health bar", "fill"]]);
+  });
 });
 
 /* ══════════════════════════════════════════════════════════════════════════

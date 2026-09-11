@@ -22,7 +22,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { composerToContract } from "@/features/prompt-canvas/lib/composer-to-contract";
-import { elementLabel, elementSets, seedPresets, type ElementPreset } from "../lib/presets-store";
+import {
+  elementLabel, elementPart, elementSets, elementTitle, seedPresets, type ElementPreset,
+} from "../lib/presets-store";
 import { newCell, type ComposerState, type UiCell, type UiKitBlock } from "../lib/composer-model";
 import { UiKitBlockBody } from "../components/UiKitBlockView";
 
@@ -124,6 +126,19 @@ describe("② gom danh mục thành bộ", () => {
     expect(panel.vi).toBe("Panel");
     expect(panel.id).toBe("panel");
     expect(elementLabel(elementOf("panel"), "?")).toBe("Panel");
+    /* Và hai hạng chữ của pill dòng cũng vậy: tiêu đề là chính nó, phần phụ RỖNG
+       — không có tên bộ nào để nói thêm, nên không được bịa ra một hạng chữ thứ
+       hai chỉ để cho đủ hình dạng. */
+    expect(elementTitle(elementOf("panel"), "?")).toBe("Panel");
+    expect(elementPart(elementOf("panel"))).toBe("");
+  });
+
+  it("phần của một bộ: TIÊU ĐỀ là tên bộ, chữ phụ là tên phần — hai chỗ khác nhau", () => {
+    /* `elementLabel` vẫn ghép cả hai thành MỘT chuỗi (contract, `aria-label`);
+       chỗ nào vẽ được hai hạng chữ thì đọc riêng. Ba hàm, một nguồn. */
+    expect(elementTitle(elementOf("hp-fill"), "?")).toBe("Health bar");
+    expect(elementPart(elementOf("hp-fill"))).toBe("fill");
+    expect(elementLabel(elementOf("hp-fill"), "?")).toBe("Health bar · fill");
   });
 
   it("nhãn bộ chỉ còn MỘT phần ⇒ VẪN là một dòng bộ, không rơi xuống dạng khác", () => {

@@ -37,7 +37,7 @@ vi.mock("@/lib/api/endpoints", () => ({
 const {
   usePresets, usePresetSyncError, setPresets, seedPresets, seedRowsOf, DECOR_DEFAULT,
   MANAGED_ORDER, managedRows, withManagedRows, setManagedRows, themeOutfitEN, nextRowId, getPresets,
-  __resetPresetsStoreForTest,
+  elementLabel, __resetPresetsStoreForTest,
 } = await import("../presets-store");
 const { pillOptions, phraseOf, labelOf } = await import("../pill-registry");
 const { CATALOG_ORDER } = await import("../catalog-seeds");
@@ -400,6 +400,87 @@ describe("bộ món: đọc, vá, và gỡ", () => {
 
     await waitFor(() => expect(patchPreset).toHaveBeenCalledTimes(1));
     expect(patchPreset.mock.calls[0]![1].data.set).toBeNull();
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DI TRÚ NHÃN — hạt giống tiếng Việt đời trước → thuật ngữ tiếng Anh đời nay
+   ══════════════════════════════════════════════════════════════════════════
+   Máy nào đã mở app trước 11/09/2026 giữ nguyên `name` tiếng Việt của bốn mươi
+   tám bản ghi element, và `seedOnce` cố ý không ghi đè chúng. Chủ sản phẩm nhìn
+   thấy hậu quả ngay: nhãn bộ ghép với tên phần cũ ra «Thanh máu · Thanh máu ·
+   phần đầy» — một chuỗi đọc hai lần.
+   Hai ca dưới đây là HAI VẾ của cùng một luật, và vế thứ hai mới là vế khó:
+   di trú phải CÓ ĐIỀU KIỆN, nếu không nó là một lượt ghi đè xoá công sửa tay. */
+describe("di trú nhãn: chỉ đổi khi người dùng CHƯA sửa", () => {
+  /** Bản ghi đúng như máy đã seed trước 11/09 giữ nó — nhãn cũ ở CẢ phần lẫn bộ. */
+  const legacyFill = (name = "Thanh máu · phần đầy", setVi = "Thanh máu") =>
+    row("preset_h2", "element", name, {
+      key: "hp-fill", en: "the fill bar", decor: "none", glazeId: "auto", sizeId: "",
+      set: { id: "hp", vi: setVi },
+    });
+
+  it("nhãn phần VÀ nhãn bộ còn đúng nguyên văn hạt giống cũ ⇒ đổi cả hai", async () => {
+    get.mockResolvedValue(library([legacyFill()]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    const element = seen!.elements[0]!;
+    expect(element.vi).toBe("fill");
+    expect(element.set).toEqual({ id: "hp", vi: "Health bar" });
+    /* Chỗ vỡ mà chủ sản phẩm chụp lại: nhãn một dòng không còn lặp tên bộ. */
+    expect(elementLabel(element, "?")).toBe("Health bar · fill");
+  });
+
+  it("`en` và id KHÔNG đổi một chữ nào ⇒ không câu prompt nào phải đo lại", async () => {
+    get.mockResolvedValue(library([legacyFill()]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen!.elements[0]!.id).toBe("hp-fill");
+    expect(seen!.elements[0]!.en).toBe("the fill bar");
+  });
+
+  it("người dùng đã tự đặt tên ⇒ GIỮ NGUYÊN, cả tên phần lẫn tên bộ", async () => {
+    /* Không khớp nguyên văn ⇒ không đụng. Đây là thứ phân biệt một phép di trú
+       với một lượt ghi đè: bảng chỉ nhận đúng những chuỗi do CHÍNH ta ghi ra. */
+    get.mockResolvedValue(library([legacyFill("Máu nhân vật", "Thanh máu của tôi")]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen!.elements[0]!.vi).toBe("Máu nhân vật");
+    expect(seen!.elements[0]!.set?.vi).toBe("Thanh máu của tôi");
+  });
+
+  it("sửa MỘT trong hai ⇒ chỉ cái còn nguyên văn được đổi", async () => {
+    get.mockResolvedValue(library([legacyFill("Máu nhân vật")]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen!.elements[0]!.vi).toBe("Máu nhân vật");
+    expect(seen!.elements[0]!.set?.vi).toBe("Health bar");
+  });
+
+  it("bản ghi ĐỜI NAY đi qua phép vá không suy suyển", async () => {
+    get.mockResolvedValue(library([legacyFill("fill", "Health bar")]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen!.elements[0]!.vi).toBe("fill");
+    expect(seen!.elements[0]!.set?.vi).toBe("Health bar");
+  });
+
+  it("vá LÚC ĐỌC ⇒ mở app KHÔNG sinh một lượt ghi nào", async () => {
+    /* Cùng kỷ luật với bốn bảng di trú đã có: nhãn mới có mặt ngay trên màn, còn
+       xuống đĩa thì đợi lượt `flush` đầu tiên do người dùng thật sự sửa gì đó.
+       Ghi ngược lúc mở app là bốn mươi tám PATCH mà không ai bấm. */
+    get.mockResolvedValue(library([legacyFill()]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(patchPreset).not.toHaveBeenCalled();
+    expect(addPreset).not.toHaveBeenCalled();
   });
 });
 
