@@ -74,11 +74,15 @@ describe("useUiStore", () => {
     for (const k of Object.keys(mem.dump())) expect(allowed.has(k as never), `khoá lạ: ${k}`).toBe(true);
   });
 
-  /* Đợt 3: `kitgen.ui.v1` chỉ còn ĐÚNG `theme`. Ca này khoá con số đó lại — thêm một
-     field vào store mà quên `PERSISTED_FIELDS`/`SCHEMAS` sẽ hiện ra ở đây. */
-  it("chỉ còn ĐÚNG một tuỳ chọn được ghi ra đĩa: theme", () => {
+  /* `kitgen.ui.v1` có ĐÚNG hai tuỳ chọn, không hơn: `theme`, và `sheetOverlay` (lớp phủ
+     soi ô của panel kết quả — một thói quen xem, nhớ trong trình duyệt chứ KHÔNG lên
+     đĩa, xem `DISK_UI_FIELDS`). Ca này khoá danh sách đó lại theo cả hai chiều: thêm
+     field vào store mà quên `PERSISTED_FIELDS`/`SCHEMAS` thì nó vắng mặt ở đây, còn
+     khai vào `SCHEMAS` một thứ không ai bật/tắt thì nó thừa ra ở đây. */
+  it("chỉ ĐÚNG hai tuỳ chọn được ghi vào trình duyệt: theme · sheetOverlay", () => {
     useUiStore.getState().setTheme("light");
-    expect(Object.keys(onDisk(LS_KEYS.ui)!)).toEqual(["theme"]);
+    useUiStore.getState().setSheetOverlay(true);
+    expect(Object.keys(onDisk(LS_KEYS.ui)!).sort()).toEqual(["sheetOverlay", "theme"]);
   });
 });
 

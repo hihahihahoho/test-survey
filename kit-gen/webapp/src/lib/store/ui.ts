@@ -25,7 +25,8 @@
  * (`SortBy`, `SortDir`, `FilterChip`) đã dời về `features/projects/lib/view.ts` — nơi
  * duy nhất còn dùng chúng, và dùng như THAM SỐ hàm chứ không phải state.
  *
- * Còn lại ĐÚNG MỘT tuỳ chọn: `theme`. Giữ store (không hạ xuống một biến) vì cây cầu
+ * Còn lại hai tuỳ chọn: `theme` và `sheetOverlay` (lớp phủ soi ô của panel kết quả).
+ * Giữ store (không hạ xuống một biến) vì cây cầu
  * `settings-sync.ts` subscribe vào nó, và vì đây là nơi allowlist khoá localStorage
  * được thi hành.
  */
@@ -38,21 +39,33 @@ export type Theme = "dark" | "light" | "system";
 const d = defaultsFor(LS_KEYS.ui);
 
 /** Field được phép ghi ra localStorage — TƯỜNG MINH. Thêm field mới phải sửa cả đây. */
-const PERSISTED_FIELDS = ["theme"] as const;
+const PERSISTED_FIELDS = ["theme", "sheetOverlay"] as const;
 
 export interface UiState {
   theme: Theme;
+  /**
+   * Lớp phủ soi ô trên ảnh kết quả (panel dưới chân mỗi thẻ của màn soạn).
+   *
+   * Ở ĐÂY chứ không phải state cục bộ của panel vì màn soạn dựng MỘT panel cho mỗi tấm
+   * của mỗi thẻ: bật từng cái một là bắt người dùng lặp lại cùng một cú bấm cho cùng
+   * một câu hỏi. Và nó phải sống qua lần tải trang sau — người ta bật nó lên đúng lúc
+   * đang đi truy một món lệch, mà việc ấy kéo dài hơn một lượt vẽ.
+   */
+  sheetOverlay: boolean;
 
   setTheme: (t: Theme) => void;
   toggleTheme: () => void;
+  setSheetOverlay: (on: boolean) => void;
 }
 
 export const useUiStore = create<UiState>()(
   persist(
     (set, get) => ({
       theme: d.theme as Theme,
+      sheetOverlay: d.sheetOverlay,
 
       setTheme: (theme) => set({ theme }),
+      setSheetOverlay: (sheetOverlay) => set({ sheetOverlay }),
       toggleTheme: () => set({ theme: get().theme === "dark" ? "light" : "dark" }),
     }),
     {

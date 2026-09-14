@@ -111,6 +111,15 @@ const projectsCacheSchema = z.object({
    hợp lệ, không vỡ và không mất `theme`. */
 const uiSchema = z.object({
   theme: z.enum(["dark", "light", "system"]).default("dark"),
+  /**
+   * LỚP PHỦ SOI Ô trên ảnh kết quả — mặc định TẮT.
+   *
+   * Nó là một tuỳ chọn XEM, không phải dữ liệu của bộ kit: bật lên là thêm một rừng
+   * đường kẻ và con số lên ảnh, thứ chỉ có ích lúc đang đi truy một món lệch. Nhớ trong
+   * trình duyệt (không lên đĩa, xem `DISK_UI_FIELDS`) vì nó thuộc về THÓI QUEN của người
+   * đang ngồi soi, không thuộc về bộ kit mà mọi máy mở lên đều phải thấy giống nhau.
+   */
+  sheetOverlay: z.boolean().default(false),
 });
 
 /**

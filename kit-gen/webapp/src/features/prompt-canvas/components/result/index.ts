@@ -8,3 +8,4 @@
 export { SheetResultPanel, type SheetResultPanelProps } from "./SheetResultPanel";
 export { SheetCellGrid, type SheetCellGridProps } from "./SheetCellGrid";
 export { SheetVersionBar, type SheetVersionBarProps } from "./SheetVersionBar";
+export { SheetGridOverlay, type SheetGridOverlayProps } from "./SheetGridOverlay";

@@ -127,13 +127,23 @@ const revealMutate = vi.fn();
  */
 let jobStates: Record<string, string> = { "chinh-ui": "ok", "chinh-nen": "ok" };
 
+/**
+ * LỊCH SỬ ẢNH + DANH SÁCH LƯỢT — hai nguồn của LỚP PHỦ SOI Ô.
+ *
+ * Mặc định cả hai rỗng: gần hết ca dưới đây không nói gì về lớp phủ, và một panel
+ * không có số đo phải chạy y như trước. Ca lớp phủ tự nạp số thật (`r-0021`).
+ */
+let rawItems: Array<Record<string, unknown>> = [];
+let runItems: Array<Record<string, unknown>> = [];
+
 vi.mock("@/lib/hooks", () => ({
   useContract: () => ({ data: { version: 1, contract: CONTRACT } }),
   useProject: () => ({ data: { id: "p1", name: "Dự án thử", state: { jobs: jobStates } } }),
   useKit: () => ({ data: { variant: "chinh", files: kitFiles }, isLoading: kitLoading }),
   useRevealProject: () => ({ mutate: revealMutate }),
+  useRuns: () => ({ data: { items: runItems } }),
   /* Thanh phiên bản dùng chung module hooks; ở đây cho nó im (chưa có lịch sử). */
-  useRawHistory: () => ({ data: { items: [] }, isLoading: false }),
+  useRawHistory: () => ({ data: { items: rawItems }, isLoading: false }),
   useRestoreRaw: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteRawHistory: () => ({ mutate: vi.fn(), isPending: false }),
 }));
@@ -142,12 +152,62 @@ const CONTRACT = {
   schemaVersion: 4,
   variants: [{ id: "chinh", vi: "Chính", style: "x" }],
   sheets: [
-    { id: "ui", grid: { cols: 2, rows: 2 }, orient: "landscape", components: [] },
+    { id: "ui", grid: { cols: 2, rows: 2 }, canvas: "square", components: [] },
     { id: "nen", grid: { cols: 1, rows: 1 }, orient: "landscape", components: [] },
   ],
 } as never;
 
+/**
+ * SỐ ĐO THẬT của lượt `r-0021` trong `test-vcb-d6fd` — chép nguyên từ
+ * `runs/r-0021/artifacts/chinh-ui.geometry.json`. Bốn ô trên lưới 2×2 của một tấm
+ * vuông 1254², hai ô đầu bị chấm «cần vẽ lại».
+ * Dùng số thật chứ không bịa: ca này khoá phép DỜI TOẠ ĐỘ, và một bộ số tròn trịa
+ * sẽ xanh y hệt cho cả một phép dời sai.
+ */
+const WRITTEN_AT = "2026-09-11T04:41:32.223Z";
+const GEOMETRY_CELLS = [
+  {
+    file: "01-button", cell: 0, status: "regenerate", reasons: ["position", "size"],
+    expected: [129.5, 249.5, 368.0, 128.0], actual: [38, 281, 587, 168],
+    deviation: { edgesPx: { left: -91.5, top: 31.5, right: 127.5, bottom: 71.5 }, maxEdgePx: 31.5 },
+  },
+  {
+    file: "02-avatar-frame", cell: 1, status: "regenerate", reasons: ["position"],
+    expected: [143.0, 143.0, 341.0, 341.0], actual: [49, 134, 538, 461],
+    deviation: { edgesPx: { left: -94.0, top: -9.0, right: 103.0, bottom: 111.0 }, maxEdgePx: 0 },
+  },
+  {
+    file: "03-progress", cell: 2, status: "ok", reasons: [],
+    expected: [144.5, 278.0, 338.0, 71.0], actual: [34, 236, 575, 124],
+    deviation: { edgesPx: { left: -110.5, top: -42.0, right: 126.5, bottom: 11.0 }, maxEdgePx: 0 },
+  },
+  {
+    file: "04-progress-fill", cell: 3, status: "ok", reasons: [],
+    expected: [91.0, 280.0, 445.0, 67.0], actual: [54, 260, 527, 77],
+    deviation: { edgesPx: { left: -37.0, top: -20.0, right: 45.0, bottom: -10.0 }, maxEdgePx: 10.0 },
+  },
+];
+
+/** Một lượt chạy có số đo, đúng hình dạng `#33` trả về. */
+function runWithGeometry(id = "r-0021", writtenAt: string | null = WRITTEN_AT) {
+  return {
+    id, status: "done",
+    jobs: [{
+      job: "chinh-ui", status: "ok",
+      artifact: {
+        path: `runs/${id}/artifacts/chinh-ui.png`,
+        ...(writtenAt === null ? {} : { writtenAt }),
+        validation: { ok: false, job: "chinh-ui", sheet: "ui", cells: GEOMETRY_CELLS },
+      },
+    }],
+  };
+}
+
+/** Bản «đang dùng» của `#39` — mốc của nó phải KHỚP mốc ghi ảnh của lượt. */
+const currentRaw = (at: string = WRITTEN_AT) => [{ id: "current", at, bytes: 10, current: true }];
+
 const { SheetResultPanel } = await import("../SheetResultPanel");
+const { useUiStore } = await import("@/lib/store");
 
 function cell(file: string, sheet: string, cellIndex: number, over: Partial<KitFile> = {}): KitFile {
   return kitFileSchema.parse({
@@ -168,6 +228,10 @@ beforeEach(() => {
   kitLoading = false;
   jobStates = { "chinh-ui": "ok", "chinh-nen": "ok" };
   revealMutate.mockReset();
+  rawItems = [];
+  runItems = [];
+  localStorage.clear();
+  useUiStore.setState({ sheetOverlay: false });
   kitFiles = [
     cell("tight/01-btn-pill", "ui", 0),
     cell("01-btn-pill", "ui", 0),
@@ -462,5 +526,120 @@ describe("ô ảnh gốc khi CHƯA CÓ FILE — ba câu trả lời cho ba hoàn
     mount({ busy: true, artifactPath: "runs/r1/chinh-ui.png" });
     expect(screen.queryByRole("status")).toBeNull();
     expect(asked.some((a) => a.path === "runs/r1/chinh-ui.png")).toBe(true);
+  });
+});
+
+/**
+ * ══ LỚP PHỦ SOI Ô ══════════════════════════════════════════════════════════
+ *
+ * Chủ sản phẩm hỏi «món này lệch — do máy vẽ hay do thông số?». Lớp phủ trả lời
+ * bằng cách vẽ ra hai hình vốn vô hình: hộp vùng an toàn prompt đã hứa, và hộp
+ * thân món máy vẽ ra. Bốn thứ khoá ở đây đều hỏng LẶNG LẼ nếu không canh:
+ *  ① mặc định phải TẮT — bật sẵn là đổ một rừng đường kẻ lên ảnh của mọi người;
+ *  ② số hộp phải đúng số ô, và toạ độ phải ĐÃ DỜI ra hệ của cả tấm (hộp của ô
+ *    thứ tư mà vẫn nằm ở góc trên-trái là một lớp phủ nói dối);
+ *  ③ thiếu số đo ⇒ nút xám kèm lý do, KHÔNG vẽ lưới của một lượt khác;
+ *  ④ ảnh đã đổi sang bản cũ ⇒ số đo của lượt mới nhất KHÔNG còn thuộc về nó.
+ */
+describe("lớp phủ soi ô trên ảnh gốc", () => {
+  const toggle = () => screen.getByRole("button", { name: /Lưới ô/ });
+
+  it("mặc định TẮT — có nút, chưa có lớp phủ nào", () => {
+    runItems = [runWithGeometry()];
+    rawItems = currentRaw();
+    const { container } = mount();
+    expect(toggle().hasAttribute("disabled")).toBe(false);
+    expect(toggle().getAttribute("aria-pressed")).toBe("false");
+    expect(container.querySelector("[data-testid='sheet-overlay']")).toBeNull();
+  });
+
+  it("bật ⇒ mỗi ô một hộp đã hứa + một hộp đo được, kèm chú giải một dòng", () => {
+    runItems = [runWithGeometry()];
+    rawItems = currentRaw();
+    const { container } = mount();
+    fireEvent.click(toggle());
+    expect(container.querySelectorAll("[data-testid='overlay-cell']")).toHaveLength(4);
+    expect(container.querySelectorAll("[data-testid='overlay-expected']")).toHaveLength(4);
+    expect(container.querySelectorAll("[data-testid='overlay-actual']")).toHaveLength(4);
+    expect(screen.getByText(/Nét đứt: hộp prompt đã hứa · nét liền: hộp máy vẽ ra/)).toBeTruthy();
+  });
+
+  it("toạ độ ĐÃ DỜI ra hệ của cả tấm — ô thứ tư không nằm ở góc trên-trái", () => {
+    runItems = [runWithGeometry()];
+    rawItems = currentRaw();
+    const { container } = mount();
+    fireEvent.click(toggle());
+    const svg = container.querySelector("[data-testid='sheet-overlay']");
+    /* Tấm vuông 1254² chia 2×2 ⇒ ô số 3 bắt đầu ở (627, 627). Hộp đã hứa của nó là
+       [91, 280, …] TRONG ô, nên trên tấm phải là (718, 907). */
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 1254 1254");
+    const last = container.querySelectorAll("[data-testid='overlay-expected']")[3];
+    expect(last?.getAttribute("x")).toBe("718");
+    expect(last?.getAttribute("y")).toBe("907");
+    expect(last?.getAttribute("width")).toBe("445");
+  });
+
+  it("nhãn góc ô nói tên món + cạnh lệch xa nhất, và ô cần vẽ lại thì tô đỏ", () => {
+    runItems = [runWithGeometry()];
+    rawItems = currentRaw();
+    const { container } = mount();
+    fireEvent.click(toggle());
+    const texts = [...container.querySelectorAll("text")].map((t) => t.textContent ?? "");
+    /* Cạnh xa nhất của ô 0 là 127,5px (mép phải) ⇒ làm tròn 128. */
+    expect(texts[0]).toBe("01-button · lệch 128px");
+    expect(texts[3]).toBe("04-progress-fill · lệch 45px");
+    const hot = container.querySelectorAll("text")[0] as SVGTextElement;
+    const cool = container.querySelectorAll("text")[3] as SVGTextElement;
+    expect(hot.getAttribute("style") ?? "").toContain("--kg-danger");
+    expect(cool.getAttribute("style") ?? "").not.toContain("--kg-danger");
+  });
+
+  it("không lượt nào có số đo ⇒ nút XÁM kèm lý do, và không vẽ gì dù đang bật", () => {
+    useUiStore.setState({ sheetOverlay: true });
+    runItems = [];
+    rawItems = currentRaw();
+    const { container } = mount();
+    expect(toggle().hasAttribute("disabled")).toBe(true);
+    expect(toggle().getAttribute("title")).toBe("Bản này không có số đo");
+    expect(container.querySelector("[data-testid='sheet-overlay']")).toBeNull();
+    expect(screen.queryByText(/Nét đứt/)).toBeNull();
+  });
+
+  it("đã đổi sang một bản ảnh khác ⇒ số đo của lượt cũ KHÔNG được đem ra vẽ", () => {
+    useUiStore.setState({ sheetOverlay: true });
+    runItems = [runWithGeometry()];
+    /* Chọn một bản ở thanh phiên bản = ghi đè ảnh gốc ⇒ mốc ghi đổi. */
+    rawItems = currentRaw("2026-09-14T06:30:35.370Z");
+    const { container } = mount();
+    expect(toggle().hasAttribute("disabled")).toBe(true);
+    expect(container.querySelector("[data-testid='sheet-overlay']")).toBeNull();
+  });
+
+  it("xem ảnh BẤT BIẾN của một lượt ⇒ lấy số đo của đúng lượt đó, không cần so mốc", () => {
+    useUiStore.setState({ sheetOverlay: true });
+    runItems = [runWithGeometry("r-0030", null), runWithGeometry("r-0021")];
+    rawItems = currentRaw("2026-09-14T06:30:35.370Z");
+    const { container } = mount({ runId: "r-0021" });
+    expect(container.querySelectorAll("[data-testid='overlay-cell']")).toHaveLength(4);
+  });
+
+  it("trạng thái bật/tắt SỐNG QUA lần mở sau — nó là thói quen, không phải state của một lần xem", () => {
+    runItems = [runWithGeometry()];
+    rawItems = currentRaw();
+    const first = mount();
+    fireEvent.click(toggle());
+    expect(first.container.querySelector("[data-testid='sheet-overlay']")).toBeTruthy();
+    cleanup();
+    const again = mount();
+    expect(again.container.querySelector("[data-testid='sheet-overlay']")).toBeTruthy();
+    expect(toggle().getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("tab «Đã crop» không bày nút này — ở đó không có tấm nào để phủ", () => {
+    runItems = [runWithGeometry()];
+    rawItems = currentRaw();
+    mount();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /Đã crop/ }));
+    expect(screen.queryByRole("button", { name: /Lưới ô/ })).toBeNull();
   });
 });

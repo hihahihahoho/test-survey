@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, Download, FolderOpen, Image as ImageIcon, Layers, Loader2, Sparkles, X } from "lucide-react";
+import { Check, Download, FolderOpen, Grid2x2, Image as ImageIcon, Layers, Loader2, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -17,12 +17,15 @@ import {
 } from "@/features/kit/lib/figma-board";
 import { BOARD_W, cellsOf, copyKitDoc, packKitDoc } from "@/features/kit/lib/figma-kit-doc";
 import { toastError, toastInfo, toastSuccess } from "@/features/projects/lib/feedback";
-import { useContract, useKit, useProject, useRawHistory, useRevealProject } from "@/lib/hooks";
+import { useContract, useKit, useProject, useRawHistory, useRevealProject, useRuns } from "@/lib/hooks";
+import { useUiStore } from "@/lib/store";
 import { cellsOfSheet, contractFramed, rawSheetImagePath } from "../../lib/result/sheet-files";
+import { measureOfSheet, sheetOverlay } from "../../lib/result/sheet-geometry";
 import { copySheetAsFigmaNode, measureImage } from "../../lib/result/sheet-figma";
 import { currentVersion, sheetVersions } from "../../lib/result/sheet-versions";
 import { PREVIEW_MAX_H } from "../../lib/ui";
 import { SheetCellGrid } from "./SheetCellGrid";
+import { SheetGridOverlay } from "./SheetGridOverlay";
 import { SheetVersionBar } from "./SheetVersionBar";
 
 /**
@@ -82,6 +85,17 @@ import { SheetVersionBar } from "./SheetVersionBar";
  * ║ Ảnh gốc thô KHÔNG chết — nó lùi xuống nút phụ và chỉ hiện ở tab «Ảnh gốc», ║
  * ║ đúng nơi người dùng đang nhìn chính tấm ấy. Ở tab «Đã crop» mà bày một nút ║
  * ║ dán nguyên tấm là mời bấm nhầm lần nữa.                                    ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ╔══ LỚP PHỦ SOI Ô — MỘT NÚT, KHÔNG PHẢI MỘT MÀN MỚI ═══════════════════════╗
+ * ║ Chủ sản phẩm xem tấm vừa gen: *"mấy món này hơi lệch so với ô — do máy vẽ  ║
+ * ║ hay do thông số?"*. Không ai trả lời được bằng mắt, vì cả cái ô lẫn cái    ║
+ * ║ hộp vùng an toàn đều KHÔNG có mặt trên ảnh — chúng chỉ là con số trong     ║
+ * ║ prompt. Nút «Lưới ô» vẽ đúng hai hình ấy chồng lên ảnh, cộng hộp thân món  ║
+ * ║ máy thật sự vẽ ra, nên câu hỏi cảm tính thành phép so hai đường kẻ.        ║
+ * ║ Số đo KHÔNG do panel tính: `validate_output_geometry.py` đã đo từng ô ngay ║
+ * ║ sau mỗi tấm, và web chỉ dời toạ độ từ trong-ô ra toàn-tấm                  ║
+ * ║ (`lib/result/sheet-geometry.ts`). Không có số đo ⇒ nút xám, không vẽ bừa.  ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
  * ╔══ «CLIP CONTENT» BẬT KHI DÁN — ĐÃ TRUY, VÀ WEB KHÔNG TẮT ĐƯỢC ═══════════╗
@@ -245,6 +259,33 @@ export function SheetResultPanel({
     () => poseFileSet(contract.data?.contract ?? null),
     [contract.data?.contract],
   );
+
+  /**
+   * ══ LỚP PHỦ SOI Ô — TRẢ LỜI CÂU «DO MÁY VẼ HAY DO SỐ TÔI ĐẶT?» ════════════
+   *
+   * Chủ sản phẩm nhìn tấm vừa gen và thấy các món hơi lệch khỏi ô. Câu hỏi ấy chỉ
+   * trả lời được khi hai hình VÔ HÌNH được vẽ ra: cái ô, và cái hộp vùng an toàn mà
+   * prompt đã hứa. Cả hai đều đã được ĐO rồi — `validate_output_geometry.py` chạy
+   * ngay sau mỗi tấm và ghi kết quả vào `runs/<lượt>/artifacts/<tấm>.geometry.json`,
+   * bản sao của nó nằm sẵn trong `run.json` mà `#33` trả về. Panel KHÔNG đo lại gì.
+   *
+   * `useRuns` dùng chung khoá query với mọi panel khác trên màn (và với màn cha nếu
+   * mai này nó hỏi) nên N tấm vẫn chỉ một request. Số đo không có ⇒ `overlay` là
+   * `null` ⇒ nút xám kèm lời giải thích, chứ không vẽ bừa lưới của một lượt khác:
+   * xem `measureOfSheet` để biết vì sao một bản ảnh cũ được coi là «không có số đo».
+   */
+  const runs = useRuns(projectId);
+  const sheetSpec = React.useMemo(
+    () => (contract.data?.contract?.sheets ?? []).find((s) => s.id === sheetId) ?? null,
+    [contract.data?.contract, sheetId],
+  );
+  const overlay = React.useMemo(
+    () => sheetOverlay(sheetSpec, measureOfSheet(runs.data?.items, job, { runId, rawVersion })),
+    [sheetSpec, runs.data?.items, job, runId, rawVersion],
+  );
+  const wantOverlay = useUiStore((st) => st.sheetOverlay);
+  const setWantOverlay = useUiStore((st) => st.setSheetOverlay);
+  const overlayOn = wantOverlay && overlay !== null;
 
   /**
    * KHUNG = HỘP HỢP ĐỒNG, ẢNH CO SAO CHO LÕI VỪA KHÍT — tính TRƯỚC, ngoài lượt bấm.
@@ -501,24 +542,40 @@ export function SheetResultPanel({
             <>
               {/* Bấm vào ảnh = xem ở độ nét thật. Lưới dùng bản `?w=512` cho nhẹ, còn popup
                   mới xin ảnh gốc — cùng quy ước với `AssetZoomDialog` của tab kết quả cũ. */}
-              <button
-                type="button"
-                onClick={() => setZoom(true)}
-                aria-label={`Phóng to ảnh gốc ${name}`}
-                className={cn("block w-full", FOCUS)}
-              >
-                <KitImage
-                  key={reloadKey}
-                  projectId={projectId}
-                  path={rawPath}
-                  version={rawVersion}
-                  alt={`Ảnh gốc tấm ${name}`}
-                  full={false}
-                  width={512}
-                  className={cn(PREVIEW_MAX_H, "w-full")}
-                  imgClassName={PREVIEW_MAX_H}
-                />
-              </button>
+              {/* Khung `relative` chỉ để LỚP PHỦ có mốc: nó nằm đè đúng hộp của `<img>`,
+                  và `preserveAspectRatio` mặc định của SVG khớp từng pixel với
+                  `object-contain` của ảnh — không có phép quy đổi nào để sai. */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setZoom(true)}
+                  aria-label={`Phóng to ảnh gốc ${name}`}
+                  className={cn("block w-full", FOCUS)}
+                >
+                  <KitImage
+                    key={reloadKey}
+                    projectId={projectId}
+                    path={rawPath}
+                    version={rawVersion}
+                    alt={`Ảnh gốc tấm ${name}`}
+                    full={false}
+                    width={512}
+                    className={cn(PREVIEW_MAX_H, "w-full")}
+                    imgClassName={PREVIEW_MAX_H}
+                  />
+                </button>
+                {overlayOn && overlay !== null && (
+                  <SheetGridOverlay
+                    overlay={overlay}
+                    className="pointer-events-none absolute inset-0 size-full"
+                  />
+                )}
+              </div>
+              {overlayOn && (
+                <p className="mt-2 text-caption text-fg-muted">
+                  Nét đứt: hộp prompt đã hứa · nét liền: hộp máy vẽ ra.
+                </p>
+              )}
               <p className="mt-2 text-caption text-fg-muted">
                 Bấm vào ảnh để phóng to ở độ nét thật.{" "}
                 {runId === null || runId === ""
@@ -587,6 +644,26 @@ export function SheetResultPanel({
               Copy ảnh gốc sang Figma
             </Button>
           )}
+          {/* LỚP PHỦ SOI Ô — chỉ có nghĩa ở tab đang bày chính tấm ấy. Không có số đo
+              thì nút XÁM chứ không biến mất: một nút vắng mặt đọc thành "chưa làm", còn
+              một nút xám kèm lời giải thích nói đúng chuyện đang xảy ra (§2.5-2 chỉ cấm
+              ẩn nút DÙNG ĐƯỢC). */}
+          {tab === "raw" && (
+            <Button
+              type="button"
+              variant={overlayOn ? "secondary" : "ghost"}
+              size="sm"
+              aria-pressed={overlayOn}
+              disabled={overlay === null}
+              onClick={() => setWantOverlay(!wantOverlay)}
+              title={overlay === null
+                ? "Bản này không có số đo"
+                : "Phủ lưới ô và hộp vùng an toàn lên ảnh để thấy món nào lệch khỏi chỗ đã hứa."}
+            >
+              <Grid2x2 aria-hidden strokeWidth={1.5} />
+              Lưới ô
+            </Button>
+          )}
           <Button type="button" variant="ghost" size="sm" onClick={downloadSheet}>
             <Download aria-hidden strokeWidth={1.5} />
             Tải PNG
@@ -607,14 +684,22 @@ export function SheetResultPanel({
             <DialogDescription>Ảnh gốc ở độ nét thật — {rawPath}</DialogDescription>
           </DialogHeader>
           <DialogBody>
-            <KitImage
-              key={`zoom-${reloadKey}`}
-              projectId={projectId}
-              path={rawPath}
-              alt={`Ảnh gốc tấm ${name} ở độ nét thật`}
-              eager
-              className="w-full"
-            />
+            <div className="relative">
+              <KitImage
+                key={`zoom-${reloadKey}`}
+                projectId={projectId}
+                path={rawPath}
+                alt={`Ảnh gốc tấm ${name} ở độ nét thật`}
+                eager
+                className="w-full"
+              />
+              {overlayOn && overlay !== null && (
+                <SheetGridOverlay
+                  overlay={overlay}
+                  className="pointer-events-none absolute inset-0 size-full"
+                />
+              )}
+            </div>
           </DialogBody>
         </DialogContent>
       </Dialog>
