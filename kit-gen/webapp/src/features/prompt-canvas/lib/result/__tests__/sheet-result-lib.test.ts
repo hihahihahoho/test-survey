@@ -18,7 +18,7 @@ import {
 } from "@/features/kit-core/lib/figma-node";
 import type { H2DDocument } from "@/vendor/figma-h2d";
 import { figmaNodeForSheet } from "../sheet-figma";
-import { cellName, cellsOfSheet, contractFramed, rawSheetImagePath } from "../sheet-files";
+import { cellName, cellsOfSheet, contractFramed, rawSheetImagePath, sheetDownloadName } from "../sheet-files";
 import { currentVersion, sheetVersions } from "../sheet-versions";
 
 /* ═════════ ① Spec cho CẢ TẤM ═════════ */
@@ -174,6 +174,34 @@ describe("cellsOfSheet — panel của MỘT block chỉ được hiện ô củ
   it("tấm không có ô nào ⇒ mảng rỗng, không ném", () => {
     expect(cellsOfSheet(files, "khong-co")).toEqual([]);
     expect(cellsOfSheet([], "ui")).toEqual([]);
+  });
+
+  /**
+   * ══ HAI TẤM CỦA CÙNG MỘT THẺ KHÔNG ĐƯỢC ĐÈ NHAU ═════════════════════════
+   * Từ 14/09/2026 một thẻ Bộ UI chia tấm theo nấc «tối đa mỗi tấm», nên `ui` và
+   * `ui2` là chuyện THƯỜNG chứ không còn là ca hiếm của một thẻ 20 món. Hai chỗ
+   * dễ đè nhau nhất đều nằm ngay đây: danh sách ô đem dán sang Figma, và TÊN
+   * node/tệp tải về. `ui` là TIỀN TỐ của `ui2`, nên một phép lọc bằng
+   * `startsWith` sẽ kéo ô của tấm sau vào tấm trước — im lặng và đúng một nửa.
+   */
+  it("`ui` và `ui2` là hai tấm RIÊNG — không tấm nào nuốt ô của tấm kia", () => {
+    const two = [
+      cell("tight/01-btn-pill", "ui", { cellIndex: 0 }),
+      cell("tight/05-popover", "ui2", { cellIndex: 0 }),
+      cell("tight/06-trophy", "ui2", { cellIndex: 1 }),
+    ];
+    expect(cellsOfSheet(two, "ui").map(cellName)).toEqual(["01-btn-pill"]);
+    expect(cellsOfSheet(two, "ui2").map(cellName)).toEqual(["05-popover", "06-trophy"]);
+  });
+
+  it("node Figma của hai tấm mang HAI TÊN — dán ra không chồng lên nhau", () => {
+    const one = figmaNodeForSheet(SHEET_W, SHEET_H, "chinh-ui");
+    const two = figmaNodeForSheet(SHEET_W, SHEET_H, "chinh-ui2");
+    expect(one.name).toBe("chinh-ui");
+    expect(two.name).toBe("chinh-ui2");
+    expect(one.name).not.toBe(two.name);
+    /* Tên tệp tải về đi cùng một tên job, nên nó cũng tách đôi theo. */
+    expect(sheetDownloadName("chinh-ui")).not.toBe(sheetDownloadName("chinh-ui2"));
   });
 });
 

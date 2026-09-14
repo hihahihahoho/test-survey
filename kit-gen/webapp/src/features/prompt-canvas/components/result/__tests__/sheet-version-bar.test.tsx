@@ -29,8 +29,14 @@ const deleteMutate = vi.fn();
 let restorePending = false;
 let historyItems: Array<{ id: string; at: string | null; current: boolean }> = [];
 
+/* Ghi lại (dự án, job) mà thanh này HỎI — từ 14/09/2026 một thẻ chia nhiều tấm,
+   nên hai thanh đứng cạnh nhau phải hỏi hai job khác nhau. */
+const askedFor: Array<[string, string]> = [];
 vi.mock("@/lib/hooks", () => ({
-  useRawHistory: () => ({ data: { items: historyItems }, isLoading: false }),
+  useRawHistory: (projectId: string, job: string) => {
+    askedFor.push([projectId, job]);
+    return { data: { items: historyItems }, isLoading: false };
+  },
   useRestoreRaw: () => ({ mutate: restoreMutate, isPending: restorePending }),
   useDeleteRawHistory: () => ({ mutate: deleteMutate, isPending: false }),
 }));
@@ -222,5 +228,28 @@ describe("đánh số sau khi xoá", () => {
     const title = picker().getAttribute("title") ?? "";
     expect(title).toMatch(/đánh số lại/);
     expect(title).toMatch(/đổi ngay/);
+  });
+});
+
+/* ══ MỖI TẤM MỘT DÒNG PHIÊN BẢN RIÊNG ══════════════════════════════════════
+   Từ 14/09/2026 một thẻ Bộ UI / Nhân vật chia thành nhiều tấm theo nấc «tối đa
+   mỗi tấm», nên hai thanh này đứng cạnh nhau dưới cùng một thẻ là chuyện thường.
+   Chúng đọc lịch sử theo JOB, và `chinh-ui` là TIỀN TỐ của `chinh-ui2`: một chỗ
+   nào đó so tên bằng `startsWith` là hai tấm dùng chung một dòng phiên bản —
+   chọn bản cũ ở tấm này thì tấm kia cũng đổi, im lặng. */
+describe("nhiều tấm cùng một thẻ", () => {
+  it("mỗi thanh hỏi lịch sử của ĐÚNG job mình đứng, không của tấm hàng xóm", () => {
+    askedFor.length = 0;
+    mount({ job: "chinh-ui" });
+    mount({ job: "chinh-ui2" });
+    const jobs = [...new Set(askedFor.map(([, job]) => job))];
+    expect(jobs).toEqual(["chinh-ui", "chinh-ui2"]);
+  });
+
+  it("khôi phục ở tấm thứ hai gửi đi job của CHÍNH nó", () => {
+    mount({ job: "chinh-ui2" });
+    choose(/v1/);
+    expect(restoreMutate).toHaveBeenCalledTimes(1);
+    expect(restoreMutate.mock.calls[0]![0]).toMatchObject({ job: "chinh-ui2" });
   });
 });
