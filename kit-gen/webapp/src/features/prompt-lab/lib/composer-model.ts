@@ -146,6 +146,14 @@ export interface MascotBlock {
   /** Thứ tự trong mảng CHÍNH LÀ thứ tự ô trên tấm — xem `moveRow`. */
   poses: MascotPose[];
   /**
+   * TỐI ĐA Ô MỖI TẤM — `1` · `4` · `9`; thiếu ⇒ `DEFAULT_MAX_PER_SHEET`.
+   *
+   * Nằm trên THẺ chứ không phải một cài đặt chung của dự án: một thẻ «nút bấm»
+   * 9 món nhỏ và một thẻ «khung popup» 2 món to cần hai nấc khác nhau, và cả hai
+   * sống cạnh nhau trong cùng một bộ kit. Xem `maxPerSheetOf`.
+   */
+  maxPerSheet?: number;
+  /**
    * ẢNH DÁNG ĐÃ GHÉP của thẻ này: một tấm manơcanh cùng lưới với tấm sẽ vẽ.
    *
    * ╔══ VÌ SAO NÓ PHẢI ĐƯỢC LƯU, CHỨ KHÔNG DỰNG LẠI MỖI LƯỢT ══════════════════╗
@@ -266,6 +274,14 @@ export interface UiKitBlock {
   mode: BlockMode;
   /** Thứ tự trong mảng CHÍNH LÀ thứ tự ô đi vào contract — xem `moveRow`. */
   cells: UiCell[];
+  /**
+   * TỐI ĐA Ô MỖI TẤM — `1` · `4` · `9`; thiếu ⇒ `DEFAULT_MAX_PER_SHEET`.
+   *
+   * Nằm trên THẺ chứ không phải một cài đặt chung của dự án: một thẻ «nút bấm»
+   * 9 món nhỏ và một thẻ «khung popup» 2 món to cần hai nấc khác nhau, và cả hai
+   * sống cạnh nhau trong cùng một bộ kit. Xem `maxPerSheetOf`.
+   */
+  maxPerSheet?: number;
 }
 
 /**
@@ -297,6 +313,180 @@ export function moveRow<T>(rows: readonly T[], from: number, to: number): T[] {
   if (moved === undefined) return [...rows];
   next.splice(to, 0, moved);
   return next;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TỐI ĐA MỖI TẤM — một cài đặt của THẺ, và phép chia đi theo nó
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Ba nấc người dùng chọn được: **1 · 4 · 9**.
+ *
+ * ╔══ VÌ SAO LÀ BA SỐ CHÍNH PHƯƠNG, KHÔNG PHẢI MỘT Ô GÕ SỐ ══════════════════╗
+ * ║ Tấm vuông chia lưới n×n (xem `UI_CANVAS` ở bộ dịch contract), nên sức     ║
+ * ║ chứa thật của một tấm chỉ nhận được các giá trị 1, 4, 9, 16. Cho gõ «5»   ║
+ * ║ là hứa một thứ hình học không tồn tại: năm ô vẫn phải nằm trên lưới 3×3   ║
+ * ║ và bốn ô trống còn lại vẫn ăn chỗ. Ba nấc thì mỗi nấc là một lưới có      ║
+ * ║ thật, và người dùng đọc ra ngay mình đang đổi cái gì.                     ║
+ * ║ 16 không có trong danh sách vì đó là TRẦN CŨ — một tấm 16 ô đã được đo là ║
+ * ║ quá chật cho một món đồ (xem `MAX_CELLS_SQUARE`); nó vẫn là trần kỹ thuật ║
+ * ║ của bộ dịch, không còn là một lựa chọn bày ra.                            ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export const SHEET_MAX_CHOICES = [1, 4, 9] as const;
+
+/**
+ * MẶC ĐỊNH 4 — lời chủ sản phẩm: *«mặc định là MAX 4 cái 1 sheet gen»*.
+ *
+ * Đây cũng là giá trị của bản nháp ĐỜI CŨ (trước 14/09/2026) khi đọc lên: bản
+ * nháp ấy được vẽ bằng trần 16, nhưng 16 không còn là một lựa chọn bày ra, và
+ * một thẻ cũ mở lại phải hành xử như một thẻ mới — không có nấc "16" bí ẩn chỉ
+ * tồn tại ở những thẻ đủ già.
+ */
+export const DEFAULT_MAX_PER_SHEET = 4;
+
+/** Giá trị lưu trên đĩa → một nấc CÓ THẬT. Lạ / thiếu ⇒ mặc định. */
+export function maxPerSheetOf(value: unknown): number {
+  const asked = Number(value);
+  return (SHEET_MAX_CHOICES as readonly number[]).includes(asked) ? asked : DEFAULT_MAX_PER_SHEET;
+}
+
+/**
+ * CHIA DÒNG THÀNH TẤM — N dòng, trần M ⇒ `ceil(N/M)` tấm, **theo đúng thứ tự dòng**.
+ *
+ * ╔══ BỘ GHÉP KHÔNG BỊ CẮT NGANG, VÀ CHỈ KHI CÒN CHỖ ════════════════════════╗
+ * ║ Một bộ ghép (khung thanh máu + phần đầy) chỉ có nghĩa khi hai phần được   ║
+ * ║ vẽ CÙNG MỘT LƯỢT: hai lượt gọi máy vẽ là hai lần nó tự chọn lại độ bo,    ║
+ * ║ độ dày viền, sắc độ — và cái khung không còn ôm được cái ruột. Nên khi    ║
+ * ║ chỗ trống của tấm đang gom không đủ cho cả cụm, cụm ấy sang tấm sau       ║
+ * ║ NGUYÊN VẸN thay vì bị xé.                                                 ║
+ * ║ Cụm to hơn cả một tấm thì buộc phải cắt — nhưng cắt SAU CÙNG, và cắt      ║
+ * ║ đúng theo thứ tự, chứ không cắt bừa.                                      ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ══ CHỈ GOM DÒNG LIỀN KỀ ══════════════════════════════════════════════════
+ * `groupOf` chỉ gom những dòng **đứng cạnh nhau** cùng khoá, không đi gom cả
+ * danh sách. Gom toàn danh sách thì hai phần cùng bộ nằm ở dòng #1 và dòng #9 sẽ
+ * bị KÉO LẠI VỚI NHAU — tức là thứ tự ô trên tấm không còn là thứ tự dòng người
+ * dùng nhìn thấy, và họ không có cách nào đoán được vì sao. Thêm một bộ ghép vốn
+ * đẻ ra các dòng liền nhau, nên luật liền kề phủ đúng ca thật.
+ */
+export function splitRows<T>(
+  rows: readonly T[],
+  max: number,
+  groupOf?: (row: T) => string,
+): T[][] {
+  const cap = Math.max(1, Math.floor(max));
+  /* ── Gom dòng liền kề cùng khoá thành từng CỤM ─────────────────────────── */
+  const runs: T[][] = [];
+  let lastKey = "";
+  for (const row of rows) {
+    const key = groupOf?.(row) ?? "";
+    const tail = runs[runs.length - 1];
+    if (tail && key !== "" && key === lastKey) tail.push(row);
+    else runs.push([row]);
+    lastKey = key;
+  }
+
+  /* ── Xếp cụm vào tấm ───────────────────────────────────────────────────── */
+  const out: T[][] = [];
+  let cur: T[] = [];
+  for (const run of runs) {
+    if (run.length > cap) {
+      if (cur.length) { out.push(cur); cur = []; }
+      for (let i = 0; i < run.length; i += cap) out.push(run.slice(i, i + cap));
+      continue;
+    }
+    if (cur.length + run.length > cap) { out.push(cur); cur = []; }
+    cur.push(...run);
+  }
+  if (cur.length) out.push(cur);
+  return out;
+}
+
+/**
+ * BỘ GHÉP MÀ MỘT Ô THUỘC VỀ — khoá gom cho `splitRows`, hoặc rỗng.
+ *
+ * ╔══ VÌ SAO CHỈ BỘ `composition`, VÀ VÌ SAO PHẢI ĐÁNH SỐ LƯỢT ══════════════╗
+ * ║ `composition` là loại bộ mà các phần CHỈ CÓ NGHĨA KHI ĐI CÙNG NHAU (khung ║
+ * ║ thanh máu + phần đầy) — xem `ElementSetRef.kind`. Bộ `variants` thì mỗi   ║
+ * ║ phần đứng một mình được (nút primary không cần nút disabled ở cạnh), nên  ║
+ * ║ xé nó ra hai tấm không mất gì; giữ nó liền chỉ làm phép chia chật thêm.   ║
+ * ║                                                                          ║
+ * ║ SỐ LƯỢT (`#1`, `#2`) là thứ phân biệt HAI LẦN thêm cùng một bộ. Thiếu nó, ║
+ * ║ hai cái thanh máu liền nhau thành một cụm bốn phần — và một cụm to hơn    ║
+ * ║ trần thì bị cắt, đúng cái ta đang tránh. Lượt mới bắt đầu khi gặp lại một ║
+ * ║ phần đã có trong lượt đang gom: một bộ không bao giờ có hai phần trùng    ║
+ * ║ tên, nên dấu hiệu ấy chắc chắn là "người dùng thêm bộ này lần nữa".       ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export function compositionGroupOf(
+  cells: readonly UiCell[],
+  presets: PresetBundle,
+): (cell: UiCell) => string {
+  const keys = new Map<UiCell, string>();
+  const inRun = new Set<string>();
+  let runId = "";
+  let runNo = 0;
+  for (const cell of cells) {
+    const set = presets.elements.find((preset) => preset.id === cell.elementId)?.set;
+    const id = set && set.kind === "composition" ? set.id : "";
+    if (!id) {
+      runId = "";
+      inRun.clear();
+      continue;
+    }
+    if (id !== runId || inRun.has(cell.elementId)) {
+      runNo += 1;
+      runId = id;
+      inRun.clear();
+    }
+    inRun.add(cell.elementId);
+    keys.set(cell, `${id}#${runNo}`);
+  }
+  return (cell) => keys.get(cell) ?? "";
+}
+
+/**
+ * DÒNG CỦA TỪNG TẤM cho một thẻ Bộ UI — **nguồn duy nhất** của phép chia ấy.
+ *
+ * Badge trên thẻ («6 element · 2 tấm (4 + 2)») và `uiKitSheets()` của bộ dịch
+ * contract đều gọi hàm này. Hai bản sao của một phép chia là hai câu trả lời có
+ * quyền lệch nhau cho câu hỏi "món cuối nằm ở tấm nào" — mà người dùng đọc câu
+ * trên badge rồi bấm Vẽ theo câu ấy.
+ */
+export function uiKitSplit(
+  block: UiKitBlock,
+  presets: PresetBundle = getPresets(),
+  max: number = maxPerSheetOf(block.maxPerSheet),
+): UiCell[][] {
+  return splitRows(block.cells, max, compositionGroupOf(block.cells, presets));
+}
+
+/**
+ * Dòng của từng tấm cho một thẻ Nhân vật — cùng vai trò với `uiKitSplit`.
+ *
+ * Dáng KHÔNG có bộ ghép nào để giữ liền: mỗi dòng là một dáng đứng độc lập, nên
+ * đây chỉ còn là phép chia theo thứ tự.
+ */
+export function mascotSplit(
+  block: MascotBlock,
+  max: number = maxPerSheetOf(block.maxPerSheet),
+): MascotPose[][] {
+  return splitRows(block.poses, max);
+}
+
+/**
+ * CHỮ TRÊN BADGE nói kết quả chia: «1 tấm» · «2 tấm (4 + 2)».
+ *
+ * Nói SỐ Ô CỦA TỪNG TẤM chứ không chỉ số tấm: đó là thứ trả lời được câu hỏi duy
+ * nhất người dùng có lúc đổi nấc — *«đổi xong thì món cuối nằm ở đâu»*. Một tấm
+ * thì không có gì để liệt kê, nên không bày ra dấu ngoặc rỗng.
+ */
+export function sheetSplitNote(sizes: readonly number[]): string {
+  if (sizes.length === 0) return "chưa có tấm nào";
+  if (sizes.length === 1) return "1 tấm";
+  return `${sizes.length} tấm (${sizes.join(" + ")})`;
 }
 
 /**
@@ -466,7 +656,7 @@ export function retakePose(row: MascotPose, patch: Partial<Pick<MascotPose, "pos
 
 /** Thẻ Nhân vật mới: có câu danh tính, CHƯA có dáng nào — cùng nhịp với thẻ Bộ UI. */
 export function newMascotBlock(): MascotBlock {
-  return { id: newId("mascot"), kind: "mascot", mode: "template", doc: mascotDoc(), poses: [] };
+  return { id: newId("mascot"), kind: "mascot", mode: "template", doc: mascotDoc(), poses: [], maxPerSheet: DEFAULT_MAX_PER_SHEET };
 }
 
 export function newCell(elementId: string, presets: PresetBundle = getPresets()): UiCell {
@@ -497,7 +687,7 @@ export function newCell(elementId: string, presets: PresetBundle = getPresets())
 export function newUiKitBlock(): UiKitBlock {
   /* `template` là mặc định — xem khối chú thích của `UiCell.doc`: chế độ tự do
      mount một editor cho MỖI dòng, và không ai được trả cái giá ấy vì lỡ tay. */
-  return { id: newId("uikit"), kind: "uikit", mode: "template", cells: [] };
+  return { id: newId("uikit"), kind: "uikit", mode: "template", cells: [], maxPerSheet: DEFAULT_MAX_PER_SHEET };
 }
 
 /** Trạng thái lúc mở màn: chỉ có ngữ cảnh chung, chưa block nào. */

@@ -10,6 +10,7 @@ import {
   type ContextRef,
   type MascotPose,
   type UiCell,
+  maxPerSheetOf,
 } from "@/features/prompt-lab/lib/composer-model";
 import { defaultSizeOf } from "@/features/prompt-lab/lib/cell-size";
 import { glazeFromMaterial, glazeOrSolid } from "@/features/kit-core/lib/glaze";
@@ -223,6 +224,8 @@ function readMascotBlock(raw: Record<string, unknown>, id: string, mode: BlockMo
          và nhận nhầm `kind: "mascot"`. */
       doc: healDoc(foldMascotHead(raw["doc"] as JSONContent), "mascot"),
       poses,
+      /* Cùng phép vá với thẻ Bộ UI — xem `readBlock`. */
+      maxPerSheet: maxPerSheetOf(raw["maxPerSheet"]),
       ...(isRecord(sheet) && Array.isArray(sheet["paths"]) && typeof sheet["key"] === "string"
         ? {
             poseSheet: {
@@ -259,6 +262,7 @@ function readMascotBlock(raw: Record<string, unknown>, id: string, mode: BlockMo
        nó là một tệp người dùng đã tải lên. Nên nó được bê sang từng attr một. */
     doc: withHeadImage(mascotDoc(), firstImageAttrs(old), pills.outfit ?? INHERIT),
     poses: [row],
+    maxPerSheet: maxPerSheetOf(raw["maxPerSheet"]),
   };
 }
 
@@ -388,7 +392,11 @@ function readBlock(raw: unknown, index: number, presets: PresetBundle): Block | 
         .map((cell, i) => readCell(cell, i, presets))
         .filter((c): c is UiCell => c !== null)
       : [];
-    return { id, kind: "uikit", mode, cells };
+    /* NẤC «tối đa mỗi tấm» — thiếu ⇒ mặc định. Bản nháp lưu trước 14/09/2026
+       không có trường này; nó được vẽ bằng trần 16 cũ, nhưng 16 không còn là một
+       lựa chọn bày ra, nên thẻ cũ mở lại hành xử như thẻ mới. Vá ngay tại cửa
+       đọc — cùng luật với `sizeId`/`glazeId` ở `readCell`. */
+    return { id, kind: "uikit", mode, cells, maxPerSheet: maxPerSheetOf(raw["maxPerSheet"]) };
   }
   if (kind === "mascot") return readMascotBlock(raw, id, mode);
   if (kind !== "background") return null;

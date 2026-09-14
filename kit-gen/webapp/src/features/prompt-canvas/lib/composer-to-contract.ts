@@ -8,7 +8,6 @@ import {
 } from "@/lib/types/contract";
 import {
   CHARACTER_ID,
-  DEFAULT_SHEET_LIMITS,
   HINT_BG,
   HINT_POSE,
   HINT_SQUARE,
@@ -37,14 +36,18 @@ import { POSE_RENDER_VERSION } from "./pose-sheet";
 import { SCAFFOLDS } from "@/features/prompt-lab/lib/doc-templates";
 import { freeText, makeContext, serializeDoc, tidy, type PromptDocNode } from "@/features/prompt-lab/lib/serialize";
 import { contextFreeText, contextOutfitEN, contextStyleEN, contextThemeEN } from "@/features/prompt-lab/lib/serialize-composer";
-import type {
-  Block,
-  ComposerState,
-  ContextRef,
-  DocBlock,
-  MascotBlock,
-  MascotPose,
-  UiKitBlock,
+import {
+  DEFAULT_MAX_PER_SHEET,
+  SHEET_MAX_CHOICES,
+  mascotSplit,
+  uiKitSplit,
+  type Block,
+  type ComposerState,
+  type ContextRef,
+  type DocBlock,
+  type MascotBlock,
+  type MascotPose,
+  type UiKitBlock,
 } from "@/features/prompt-lab/lib/composer-model";
 import { readPillImage, type PillImage } from "./pill-image";
 import type { ComposerDoc } from "./composer-doc";
@@ -299,12 +302,6 @@ function seriesId(base: string, index: number): string {
   return index === 0 ? base : `${base}${index + 1}`;
 }
 
-function chunkBySize<T>(items: readonly T[], max: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += max) out.push(items.slice(i, i + max));
-  return out;
-}
-
 /* ══════════════════════════════════════════════════════════════════════════
    4. Hàm chính
    ══════════════════════════════════════════════════════════════════════════ */
@@ -320,7 +317,14 @@ export interface ComposerContractOptions {
   styleAvoid?: string;
   /** Ngưỡng cắt của `slice.py`. Mặc định giống bản nháp workflow. */
   sliceThreshold?: number;
-  /** Trần ô mỗi tấm. Chỉ `small` có nghĩa ở đây (block UI kit). */
+  /**
+   * Trần ô mỗi tấm — MẶC ĐỊNH TOÀN CỤC, và chỉ `small` có nghĩa ở đây.
+   *
+   * Từ 14/09/2026 trần THẬT của một tấm là nấc «tối đa mỗi tấm» của CHÍNH THẺ
+   * (`block.maxPerSheet`); trường này chỉ còn là cái sàn cho thẻ chưa khai nấc
+   * nào — chỗ để cắm một mặc định toàn cục nếu màn cài đặt có ngày cần tới. Xem
+   * `cellLimit`.
+   */
   limits?: Partial<SheetLimits>;
 }
 
@@ -418,7 +422,7 @@ export interface MascotSheetPlan {
 }
 
 export function mascotSheetPlan(block: MascotBlock, opts: ComposerContractOptions = {}): MascotSheetPlan[] {
-  return chunkBySize(block.poses, cellLimit(opts)).map((chunk) => ({
+  return mascotSplit(block, cellLimit(block.maxPerSheet, opts)).map((chunk) => ({
     poses: chunk,
     grid: squareGrid(chunk.length),
   }));
@@ -608,7 +612,7 @@ function mascotSheets(
  * (Hai block có câu chữ thì ngược lại — ở đó cả block chỉ sinh MỘT ô phủ kín
  * tấm, nên `promptOverride` cấp tấm mới là chỗ đúng. Xem khối chú thích đầu file.)
  */
-function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundle, limit: number): Sheet[] {
+function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundle, opts: ComposerContractOptions): Sheet[] {
   if (block.cells.length === 0) return [];
   /* Ngữ cảnh RỖNG có chủ ý: pill `style`/`outfit` để trống nghĩa là "theo cái
      chung", và cái chung đã nằm ở `variant.style` — nơi `gen.sh` chèn nó vào MỌI
@@ -616,7 +620,7 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
      thứ mà `composerToContract` tự cấm ở dòng dựng `stylePrompt`. */
   const freeCtx = makeContext({ styleEN: "", themeEN: "", presets, imageCounter: { count: 0 } });
 
-  return chunkBySize(block.cells, limit).map((chunk, i) => {
+  return uiKitSplit(block, presets, cellLimit(block.maxPerSheet, opts)).map((chunk, i) => {
     const grid = squareGrid(chunk.length);
     /* Ô vuông ⇒ một cạnh là đủ. Chia theo LƯỚI THẬT của tấm này, không theo ô
        tham chiếu 4×4: một tấm 4 món có lưới 2×2 ⇒ ô 627px, và hộp vẽ phải là hộp
@@ -741,11 +745,23 @@ export interface BlockSheets {
  * Một trần duy nhất chứ không phải `limits.small` cho Bộ UI và `limits.mascot`
  * cho Nhân vật: cả hai nay là lưới vuông trên cùng một khổ canvas, nên cái quyết
  * định "bao nhiêu ô là còn đọc được" là hình học của tấm, không phải loại nội
- * dung. Quá trần thì CHIA TẤM (`chunkBySize`), không cắt bớt dòng của người dùng.
+ * dung. Quá trần thì CHIA TẤM (`splitRows`), không cắt bớt dòng của người dùng.
+ *
+ * ╔══ BA TẦNG, TẦNG TRƯỚC THẮNG ═════════════════════════════════════════════╗
+ * ║ ① nấc của CHÍNH THẺ (`block.maxPerSheet`) — thứ người dùng bấm ngay trên  ║
+ * ║   thẻ ấy, và là tầng duy nhất có mặt trong ca thường;                     ║
+ * ║ ② `opts.limits.small` — cửa cho một mặc định TOÀN CỤC nếu màn nào có chỗ  ║
+ * ║   cài đặt (hôm nay chưa nơi gọi nào truyền), và cho ca test;              ║
+ * ║ ③ `DEFAULT_MAX_PER_SHEET` = 4.                                           ║
+ * ║ Trần kỹ thuật `MAX_CELLS_SQUARE` vẫn kẹp ở ngoài cùng: contract quá lưới  ║
+ * ║ 4×4 là contract `gen.sh` không vẽ được.                                   ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
  */
-function cellLimit(opts: ComposerContractOptions): number {
+function cellLimit(declared: number | undefined, opts: ComposerContractOptions): number {
+  const own = Number(declared);
+  if ((SHEET_MAX_CHOICES as readonly number[]).includes(own)) return own;
   const asked = Number(opts.limits?.small);
-  return Math.min(Number.isInteger(asked) && asked > 0 ? asked : DEFAULT_SHEET_LIMITS.small, MAX_CELLS_SQUARE);
+  return Math.min(Number.isInteger(asked) && asked > 0 ? asked : DEFAULT_MAX_PER_SHEET, MAX_CELLS_SQUARE);
 }
 
 /** Duyệt các block đúng MỘT lần, đúng MỘT bộ luật — nguồn của cả hai hàm dưới. */
@@ -765,12 +781,11 @@ export function composerBlockSheets(
   /* Đếm RIÊNG theo loại: thứ tự tấm bám thứ tự block trên màn (người dùng nhìn
      thấy), còn hậu tố `2`, `3` bám số tấm CÙNG LOẠI. */
   const seen = { background: 0, mascot: 0, uikit: 0 };
-  const limit = cellLimit(opts);
 
   const out: BlockSheets[] = [];
   for (const block of state.blocks as Block[]) {
     if (block.kind === "uikit") {
-      const made = uiKitSheets(block, seen.uikit, presets, limit);
+      const made = uiKitSheets(block, seen.uikit, presets, opts);
       seen.uikit += made.length;
       out.push({ blockId: block.id, kind: "uikit", sheets: made, poses: [], ref: "" });
       continue;
