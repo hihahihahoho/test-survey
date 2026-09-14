@@ -135,6 +135,18 @@ export interface SheetResultPanelProps {
   cutting?: boolean;
   /** true ⇒ tấm đang chạy: khoá các thao tác ghi (khôi phục phiên bản). */
   busy?: boolean;
+  /**
+   * VẼ LẠI ĐÚNG TẤM NÀY — vắng ⇒ không bày nút.
+   *
+   * ╔══ VÌ SAO NÚT ẤY THUỘC VỀ ĐÂY, CẠNH CHÍNH BỨC ẢNH ═══════════════════════╗
+   * ║ Từ lượt này agent BỎ QUA tấm nào vân tay chưa đổi, nên nút Vẽ của thẻ    ║
+   * ║ không còn là đường vẽ lại một bức ảnh xấu: mô tả y nguyên thì nó giữ      ║
+   * ║ nguyên kết quả. Mà "bức ảnh này xấu" là một phán đoán người ta chỉ đưa ra ║
+   * ║ khi đang NHÌN bức ảnh — tức là ở đây. Nút này ép vẽ lại đúng một tấm,     ║
+   * ║ không đụng tấm khác của cùng thẻ.                                        ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
+   */
+  onRedraw?: () => void;
   className?: string;
 }
 
@@ -149,7 +161,7 @@ const CELL_PHASE_3 = "Dựng khung cho từng ô";
 
 export function SheetResultPanel({
   projectId, sheetId, job, runId = null,
-  artifactPath = null, cutting = false, busy = false, className,
+  artifactPath = null, cutting = false, busy = false, onRedraw, className,
 }: SheetResultPanelProps) {
   const [tab, setTab] = React.useState<TabId>("raw");
   const [zoom, setZoom] = React.useState(false);
@@ -530,7 +542,25 @@ export function SheetResultPanel({
             <TabsTrigger value="raw"><ImageIcon aria-hidden strokeWidth={1.5} />Ảnh gốc</TabsTrigger>
             <TabsTrigger value="cut">Đã crop{cells.length > 0 ? ` (${cells.length})` : ""}</TabsTrigger>
           </TabsList>
-          <SheetVersionBar projectId={projectId} job={job} name={name} busy={busy} onSwapped={reloadImage} />
+          <div className="flex flex-wrap items-center gap-2">
+            <SheetVersionBar projectId={projectId} job={job} name={name} busy={busy} onSwapped={reloadImage} />
+            {onRedraw && (
+              /* Đứng CẠNH thanh chọn phiên bản vì hai thứ trả lời cùng một câu hỏi
+                 ("bức này không ưng thì làm gì tiếp"), và đây là câu trả lời ĐẮT:
+                 `ghost` chứ không `primary` — nút tiêu tiền nổi nhất của thẻ vẫn
+                 là nút Vẽ ở đầu thẻ, một thẻ không được có hai CTA accent. */
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onRedraw}
+                disabled={busy}
+                title="Vẽ lại đúng tấm này — tiêu một lượt tạo. Các tấm khác của thẻ không bị đụng tới."
+              >
+                <Sparkles aria-hidden strokeWidth={1.5} />
+                Vẽ lại tấm này
+              </Button>
+            )}
+          </div>
         </div>
 
         <TabsContent value="raw" className="mt-3">

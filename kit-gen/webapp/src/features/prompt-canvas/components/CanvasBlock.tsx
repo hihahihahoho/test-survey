@@ -115,7 +115,7 @@ const BLOCK_TITLE: Record<Block["kind"], string> = {
 };
 
 export function CanvasBlock(props: CanvasBlockProps) {
-  const { projectId, block, sheets, onDelete, gen, onGen, onDequeue, onStop, stopping, prompt, styleLine, onWantPrompt, hash, promptBusy } = props;
+  const { projectId, block, sheets, onDelete, gen, onGen, onGenSheet, onDequeue, onStop, stopping, prompt, styleLine, onWantPrompt, hash, promptBusy } = props;
   const [tab, setTab] = React.useState<BlockTab>("compose");
 
   const title = BLOCK_TITLE[block.kind];
@@ -183,13 +183,17 @@ export function CanvasBlock(props: CanvasBlockProps) {
 
       {sheets.length > 0 && (
         <div className="mt-5 flex flex-col gap-4 border-t border-line-subtle pt-5">
-          {sheets.map((sheet) => (
+          {sheets.map((sheet, index) => (
             <SheetResultSlot
               key={sheet.id}
               projectId={projectId}
               sheetId={sheet.id}
               runId={gen.runId}
               busy={gen.status === "running"}
+              /* Nút «Vẽ lại tấm này» có mặt kể cả ở thẻ MỘT tấm: từ lượt này nút Vẽ
+                 giữ nguyên kết quả khi mô tả không đổi, nên đây là đường DUY NHẤT để
+                 xin một bức ảnh khác cho cùng một mô tả. */
+              onRedraw={() => onGenSheet(index)}
             />
           ))}
         </div>

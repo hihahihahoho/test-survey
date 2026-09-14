@@ -28,6 +28,8 @@ export interface SheetResultSlotProps {
      đầu `SheetResultPanel`. Panel nay chỉ cần `sheetId` để lọc ô đã cắt. */
   /** Tấm đang chạy ⇒ khoá thao tác ghi trong panel. */
   busy?: boolean;
+  /** Vẽ lại ĐÚNG tấm này (ép vẽ) — vắng ⇒ panel không bày nút. */
+  onRedraw?: () => void;
 }
 
 export function SheetResultSlot({
@@ -36,6 +38,7 @@ export function SheetResultSlot({
   runId = null,
   artifactPath = null,
   busy = false,
+  onRedraw,
 }: SheetResultSlotProps) {
   return (
     <SheetResultPanel
@@ -45,6 +48,7 @@ export function SheetResultSlot({
       runId={runId}
       artifactPath={artifactPath}
       busy={busy}
+      {...(onRedraw ? { onRedraw } : {})}
     />
   );
 }

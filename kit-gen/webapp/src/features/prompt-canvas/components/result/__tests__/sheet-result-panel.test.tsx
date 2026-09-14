@@ -643,3 +643,34 @@ describe("lớp phủ soi ô trên ảnh gốc", () => {
     expect(screen.queryByRole("button", { name: /Lưới ô/ })).toBeNull();
   });
 });
+
+/**
+ * ══ NÚT «VẼ LẠI TẤM NÀY» ═══════════════════════════════════════════════════
+ *
+ * Từ lượt vân tay, nút Vẽ ở đầu thẻ GIỮ NGUYÊN tấm nào mô tả chưa đổi. Nên khi
+ * người dùng nhìn một bức ảnh xấu mà mô tả vẫn đúng ý, đây là đường DUY NHẤT
+ * còn lại để xin một bức khác — mất nó là tính năng tiết kiệm lượt tạo biến
+ * thành một cái khoá không mở được, và không có hộp đỏ nào báo.
+ */
+describe("nút «Vẽ lại tấm này»", () => {
+  it("không ai đưa đường vẽ lại ⇒ KHÔNG bày nút (vỏ lab không tiêu được lượt tạo)", () => {
+    mount();
+    expect(screen.queryByRole("button", { name: /Vẽ lại tấm này/ })).toBeNull();
+  });
+
+  it("có đường vẽ lại ⇒ bấm là gọi ĐÚNG một lần, cho đúng tấm đang xem", () => {
+    const onRedraw = vi.fn();
+    mount({ onRedraw });
+    fireEvent.click(screen.getByRole("button", { name: /Vẽ lại tấm này/ }));
+    expect(onRedraw).toHaveBeenCalledTimes(1);
+  });
+
+  it("tấm đang chạy ⇒ nút XÁM: bấm thêm lần nữa chỉ xếp thêm một lượt tiêu tiền", () => {
+    const onRedraw = vi.fn();
+    mount({ onRedraw, busy: true });
+    const btn = screen.getByRole("button", { name: /Vẽ lại tấm này/ });
+    expect(btn.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(btn);
+    expect(onRedraw).not.toHaveBeenCalled();
+  });
+});
