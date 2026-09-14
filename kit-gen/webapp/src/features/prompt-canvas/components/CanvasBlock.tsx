@@ -131,8 +131,12 @@ export function CanvasBlock(props: CanvasBlockProps) {
             (nó đang ở khuôn hay đã bị chế). Từ đợt này block Bộ UI cũng có hai
             chế độ như hai thẻ kia, nên giấu badge chế độ đi là để người dùng
             phải mở thẻ ra mới biết mình đang ở đâu. */}
-        {block.kind === "uikit" && <UiKitBlockBadge block={block} />}
-        {block.kind === "mascot" && <MascotBlockBadge block={block} />}
+        {block.kind === "uikit" && (
+          <UiKitBlockBadge block={block} onChange={(updater) => props.onChange((prev) => updater(prev as UiKitBlock))} />
+        )}
+        {block.kind === "mascot" && (
+          <MascotBlockBadge block={block} onChange={(updater) => props.onChange((prev) => updater(prev as MascotBlock))} />
+        )}
         <ModeBadge mode={block.mode} />
 
         <div className="ml-auto flex items-center gap-2">

@@ -7,14 +7,17 @@ import { usePresets } from "../lib/presets-store";
 import { mascotPoseDoc, pillValuesOf, SCAFFOLDS } from "../lib/doc-templates";
 import { freeText, type PromptDocNode } from "../lib/serialize";
 import {
+  mascotSplit,
   moveRow,
   newMascotPose,
   retakePose,
+  sheetSplitNote,
   type BlockMode,
   type MascotBlock,
   type MascotPose,
 } from "../lib/composer-model";
 import { BlockCard, ModeBadge, ModeToggle } from "./BlockCard";
+import { SheetMaxPicker } from "./SheetMaxPicker";
 import { BlockEditor } from "./BlockEditor";
 import { DragHandle, NoteField, RemoveButton, RowIndex, RowShell, RowTop, type RowDragProps } from "./row-ui";
 import { OptionPill, PillMenu, PillMenuItem, useMenuFlip } from "./pill-ui";
@@ -245,12 +248,27 @@ function PosePicker({ onPick }: { onPick: (pose: string) => void }) {
  */
 export const MASCOT_BLOCK_TITLE = "Nhân vật (nhiều dáng)";
 
-/** Badge đếm dáng — cùng hình dạng với badge của thẻ Bộ UI. */
-export function MascotBlockBadge({ block }: { block: MascotBlock }) {
+/** Badge đếm dáng + nấc «tối đa mỗi tấm» — cùng hình dạng với badge của thẻ Bộ UI. */
+export function MascotBlockBadge({
+  block,
+  onChange,
+}: {
+  block: MascotBlock;
+  onChange?: (updater: (prev: MascotBlock) => MascotBlock) => void;
+}) {
+  const sizes = mascotSplit(block).map((chunk) => chunk.length);
   return (
-    <span className="rounded-full border border-line-subtle px-2 py-0.5 text-caption text-fg-muted">
-      {block.poses.length} dáng · hệ thống tự xếp lưới
-    </span>
+    <>
+      <span className="rounded-full border border-line-subtle px-2 py-0.5 text-caption text-fg-muted">
+        {block.poses.length} dáng · {sheetSplitNote(sizes)}
+      </span>
+      {onChange && (
+        <SheetMaxPicker
+          value={block.maxPerSheet}
+          onPick={(next) => onChange((prev) => ({ ...prev, maxPerSheet: next }))}
+        />
+      )}
+    </>
   );
 }
 
@@ -415,7 +433,7 @@ export function MascotBlockView({
       title={MASCOT_BLOCK_TITLE}
       badge={
         <>
-          <MascotBlockBadge block={block} />
+          <MascotBlockBadge block={block} onChange={onChange} />
           <ModeBadge mode={block.mode} />
         </>
       }

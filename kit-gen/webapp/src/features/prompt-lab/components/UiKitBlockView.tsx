@@ -26,8 +26,12 @@ import {
   sizePx,
 } from "../lib/cell-size";
 import { pillValuesOf, retitleCellDoc, uiCellDoc } from "../lib/doc-templates";
-import { moveRow, newCell, type BlockMode, type UiCell, type UiKitBlock } from "../lib/composer-model";
+import {
+  moveRow, newCell, sheetSplitNote, uiKitSplit,
+  type BlockMode, type UiCell, type UiKitBlock,
+} from "../lib/composer-model";
 import { BlockCard, ModeBadge, ModeToggle } from "./BlockCard";
+import { SheetMaxPicker } from "./SheetMaxPicker";
 import { BlockEditor } from "./BlockEditor";
 import { DragHandle, NoteField, RemoveButton, RowIndex, RowShell, RowTop, type RowDragProps } from "./row-ui";
 import {
@@ -1141,12 +1145,42 @@ function PickRow({
 /** Nhãn chung của block UI kit — vỏ nào bọc nó cũng phải gọi đúng một tên. */
 export const UI_KIT_BLOCK_TITLE = "Bộ UI (spritesheet)";
 
-/** Badge đếm ô — dùng chung cho vỏ lab và vỏ của màn thật. */
-export function UiKitBlockBadge({ block }: { block: UiKitBlock }) {
+/**
+ * Badge đếm ô + nấc «tối đa mỗi tấm» — dùng chung cho vỏ lab và vỏ của màn thật.
+ *
+ * ╔══ DÒNG NÀY KHÔNG CÒN NÓI «hệ thống tự xếp lưới» ═════════════════════════╗
+ * ║ Câu cũ đúng về CƠ CHẾ (người dùng không xếp ô bằng tay) nhưng nó trả lời  ║
+ * ║ một câu hỏi không ai hỏi. Câu người ta hỏi là «sáu món này ra mấy tấm, và ║
+ * ║ món cuối nằm ở đâu» — và từ lượt này câu trả lời ấy ĐỔI ĐƯỢC ngay cạnh,   ║
+ * ║ nên nó phải hiện ra thành số: «6 element · 2 tấm (4 + 2)».                 ║
+ * ║ Phép chia lấy từ `uiKitSplit` — CÙNG hàm mà bộ dịch contract gọi, không   ║
+ * ║ phải một phép chia thứ hai đọc cùng một cài đặt.                          ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * `onChange` vắng ⇒ chỉ còn dòng đếm, không có chỗ bấm: vỏ nào không sửa được
+ * thẻ thì không được bày ra một control bấm vào không có gì xảy ra.
+ */
+export function UiKitBlockBadge({
+  block,
+  onChange,
+}: {
+  block: UiKitBlock;
+  onChange?: (updater: (prev: UiKitBlock) => UiKitBlock) => void;
+}) {
+  const presets = usePresets();
+  const sizes = uiKitSplit(block, presets).map((chunk) => chunk.length);
   return (
-    <span className="rounded-full border border-line-subtle px-2 py-0.5 text-caption text-fg-muted">
-      {block.cells.length} element · hệ thống tự xếp lưới
-    </span>
+    <>
+      <span className="rounded-full border border-line-subtle px-2 py-0.5 text-caption text-fg-muted">
+        {block.cells.length} element · {sheetSplitNote(sizes)}
+      </span>
+      {onChange && (
+        <SheetMaxPicker
+          value={block.maxPerSheet}
+          onPick={(next) => onChange((prev) => ({ ...prev, maxPerSheet: next }))}
+        />
+      )}
+    </>
   );
 }
 
@@ -1322,7 +1356,7 @@ export function UiKitBlockView({
       title={UI_KIT_BLOCK_TITLE}
       badge={
         <>
-          <UiKitBlockBadge block={block} />
+          <UiKitBlockBadge block={block} onChange={onChange} />
           <ModeBadge mode={block.mode} />
         </>
       }
