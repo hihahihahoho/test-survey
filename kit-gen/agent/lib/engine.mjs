@@ -128,6 +128,10 @@ export function contractToStylesV1(contract, onlyJobs = null) {
          Chỉ `components` bị lọc (bên dưới) vì engine v1 chỉ hiểu 4 khoá của nó. */
       const out = { ...sh }
       delete out.variants
+      /* `fingerprint` là SỔ GHI CHÉP CỦA AGENT (xem `lib/fingerprints.mjs`), không
+         phải đầu vào của engine. Gọt ở đây để một trường nội bộ không bao giờ đi
+         vào `styles.json` — thứ `gen.sh` đọc để dựng prompt. */
+      delete out.fingerprint
       const only = perSheet?.get(sh.id)
       if (only) out.styles = [...only]
       else if (Array.isArray(sh.variants) && sh.variants.length) out.styles = sh.variants

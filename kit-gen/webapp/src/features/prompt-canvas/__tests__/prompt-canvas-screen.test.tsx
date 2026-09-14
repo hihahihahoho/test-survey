@@ -350,6 +350,7 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
         onDelete={() => {}}
         gen={{ status: "idle", message: "", runId: null, done: 0, total: 0 }}
         onGen={() => {}}
+        onGenSheet={() => {}}
         onDequeue={() => {}}
         onStop={() => {}}
         stopping={false}
@@ -378,6 +379,7 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
           onDelete={() => {}}
           gen={{ status: "idle", message: "", runId: null, done: 0, total: 0 }}
           onGen={() => {}}
+          onGenSheet={() => {}}
           onDequeue={() => {}}
         onStop={() => {}}
         stopping={false}
@@ -444,7 +446,7 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
   it("chữ hiện ra là NGUYÊN VĂN prompt của engine — câu phong cách của màn không chen vào", () => {
     mountBlock(() => {}, "h1", { prompt: ready, styleLine: "clean vector shapes with flat fills" });
     fireEvent.click(screen.getByRole("tab", { name: "Prompt" }));
-    expect(screen.getByLabelText("Prompt của tấm nen").textContent).toBe(READY_PROMPT);
+    expect(screen.getByLabelText("Prompt của Tấm 1").textContent).toBe(READY_PROMPT);
   });
 
   it("bấm «Copy prompt» ⇒ vào bộ nhớ tạm đúng chữ ấy, và nhãn đổi thành «Đã copy»", async () => {
@@ -502,7 +504,7 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
   it("khối chữ vẫn là NGUYÊN VĂN prompt, không thừa không thiếu một ký tự", () => {
     mountBlock(() => {}, "h1", { prompt: withImages });
     fireEvent.click(screen.getByRole("tab", { name: "Prompt" }));
-    expect(screen.getByLabelText("Prompt của tấm nen").textContent).toBe(READY_PROMPT);
+    expect(screen.getByLabelText("Prompt của Tấm 1").textContent).toBe(READY_PROMPT);
   });
 
 });
@@ -614,5 +616,88 @@ describe("menu «Thêm thẻ» neo vào nút", () => {
     expect(shell.className).not.toMatch(/\b[pm][btlrxy]?-/);
     /* Và lớp ngoài vẫn còn đệm: sửa bọ không được đổi luôn bố cục của trang. */
     expect(shell.parentElement?.className).toMatch(/\bpb-/);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⑤ TẤM KHÔNG ĐỔI THÌ KHÔNG VẼ LẠI — và người dùng phải ĐỌC được điều đó
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * ╔══ VÌ SAO PHÉP BỎ QUA CẦN CA RIÊNG Ở TẦNG HÀNG ĐỢI ═══════════════════════╗
+ * ║ Quyết định bỏ qua nằm ở agent (vân tay), nhưng HAI hệ quả nằm ở đây và cả ║
+ * ║ hai đều im lặng nếu hỏng:                                                 ║
+ * ║  ① CON SỐ. «Đang vẽ 1/2» phải đếm đúng số tấm THẬT SỰ đi vẽ. Đếm cả tấm   ║
+ * ║    bị bỏ qua thì thanh tiến trình đứng mãi ở 1/2 rồi nhảy sang "xong" —    ║
+ * ║    người dùng đọc ra là "một tấm hỏng".                                    ║
+ * ║  ② CÂU CHỮ. Không nói ra "Tấm 1 giữ nguyên" thì họ bấm Vẽ lần nữa, đúng    ║
+ * ║    cái việc mà cả tính năng này sinh ra để khỏi phải làm.                  ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+describe("bỏ qua tấm không đổi", () => {
+  /** Một thẻ HAI tấm — ca thật mà chủ sản phẩm nêu («6 element · 2 tấm»). */
+  const prepareTwo = async (blockId: string) => [`chinh-${blockId}`, `chinh-${blockId}2`];
+
+  function SkipHarness({ only }: { only?: number }) {
+    const queue = useGenQueue(PID, prepareTwo);
+    const st = queue.stateOf("b1");
+    return (
+      <div>
+        <button type="button" onClick={() => queue.enqueue("b1", only)}>gen</button>
+        <span data-testid="s">{st.status}</span>
+        <span data-testid="m">{st.message}</span>
+        <span data-testid="n">{`${st.done}/${st.total}`}</span>
+      </div>
+    );
+  }
+
+  it("một trong hai tấm được giữ ⇒ chỉ vẽ một, và nói ra tấm nào giữ nguyên", async () => {
+    H.startRun.mockResolvedValueOnce({
+      runId: "r-1",
+      jobs: [{ job: "chinh-b12" }],
+      skipped: [{ job: "chinh-b1", reason: "UNCHANGED" }],
+    });
+    H.getRun.mockImplementation(async (id: string) => makeRun(id, "running", "running"));
+
+    wrap(<SkipHarness />);
+    fireEvent.click(screen.getByText("gen"));
+
+    await waitFor(() => expect(screen.getByTestId("s").textContent).toBe("running"));
+    expect(screen.getByTestId("m").textContent).toContain("Tấm 1 giữ nguyên");
+    /* Vẫn gửi CẢ HAI job lên agent: agent mới là nơi biết tấm nào còn nguyên vân
+       tay. Web đoán hộ là web dựng lại một luật đã có chủ, ở xa dữ liệu. */
+    expect(H.startRun.mock.calls[0]![1]).toMatchObject({ jobs: ["chinh-b1", "chinh-b12"] });
+  });
+
+  it("cả hai tấm đều giữ ⇒ KHÔNG lượt chạy nào, và thẻ vẫn báo XONG", async () => {
+    /* `runId: null` = agent không phóng lượt nào. Đây là ca XONG chứ không phải
+       ca lỗi: kết quả người dùng muốn đã nằm sẵn trên màn, không tốn một lượt nào. */
+    H.startRun.mockResolvedValueOnce({
+      runId: null,
+      jobs: [],
+      skipped: [{ job: "chinh-b1" }, { job: "chinh-b12" }],
+    });
+
+    wrap(<SkipHarness />);
+    fireEvent.click(screen.getByText("gen"));
+
+    await waitFor(() => expect(screen.getByTestId("s").textContent).toBe("done"));
+    expect(screen.getByTestId("m").textContent).toBe("Cả 2 tấm giữ nguyên, chưa đổi gì.");
+    expect(screen.getByTestId("n").textContent).toBe("0/0");
+    /* Không hỏi `#34` lượt nào cả — không có lượt nào để hỏi. */
+    expect(H.getRun).not.toHaveBeenCalled();
+  });
+
+  it("«Vẽ lại tấm này» gửi ĐÚNG một tấm và ÉP vẽ", async () => {
+    H.startRun.mockResolvedValueOnce({ runId: "r-9", jobs: [{ job: "chinh-b12" }], skipped: [] });
+    H.getRun.mockImplementation(async (id: string) => makeRun(id, "running", "running"));
+
+    wrap(<SkipHarness only={1} />);
+    fireEvent.click(screen.getByText("gen"));
+
+    await waitFor(() => expect(H.startRun).toHaveBeenCalledTimes(1));
+    /* `force: true` là phần KHÔNG THỂ BỎ: mô tả không đổi nên vân tay vẫn trùng,
+       và không ép thì agent bỏ qua đúng cái tấm người dùng vừa xin vẽ lại. */
+    expect(H.startRun.mock.calls[0]![1]).toMatchObject({ jobs: ["chinh-b12"], force: true, maxJobs: 1 });
   });
 });

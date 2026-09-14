@@ -14,6 +14,7 @@ import { thumbnail } from "./thumbs.mjs"
    hạn mức được đọc lại — chính codex vừa ghi một dòng `rate_limits` mới vào rollout. */
 import { invalidateUsageCache } from "./usage.mjs"
 import { archiveRaw } from "./raw-history.mjs"
+import { archiveFingerprint, recordFingerprint } from "./fingerprints.mjs"
 import { IS_WIN, pythonCommand, pythonSpawnOpts, killTree, winSpawnOpts } from "./platform.mjs"
 
 const HEARTBEAT_MS = 15000
@@ -299,7 +300,12 @@ export class RunHandle {
        Chỉ cho pha `gen`: pha `slice` không đụng `raw/`, cất ở đó là nhân bản một bản
        y hệt thành một "phiên bản" giả. */
     if (this.run.kind === "gen") {
-      for (const j of this.run.jobs) await archiveRaw(this.ws, this.run.projectId, j.job)
+      /* Vân tay của bản đang dùng ĐI CÙNG nó vào lịch sử, dưới đúng `hid` mà
+         `archiveRaw` vừa đặt — xem `fingerprints.mjs`. Thiếu nhịp này thì khôi phục
+         một bản cũ sẽ không lấy lại được con dấu của nó. */
+      for (const j of this.run.jobs) {
+        await archiveFingerprint(this.ws, this.run.projectId, j.job, await archiveRaw(this.ws, this.run.projectId, j.job))
+      }
     }
     if (this.stopped()) return
     this.run.status = "running"
@@ -957,6 +963,18 @@ export class RunHandle {
     this.run.progress.done = ok
     this.run.progress.failed = failed
     this.run.failSummary = summarizeFailures(this.run.jobs)
+    /* ĐÓNG DẤU VÂN TAY LÊN THỨ ĐÃ VẼ ĐƯỢC. Chỉ job `ok` của pha `gen`, và chỉ khi
+       lượt chạy còn quyền chạm đĩa (`detached` = dự án đã sang thùng rác).
+       Đặt ở `finish` chứ không ở chu trình từng tấm là có chủ ý: mọi đường kết thúc
+       — xong, lỗi, người dùng bấm Dừng — đều đi qua đây, nên không có nhánh nào để
+       lại một bức ảnh đã tốn lượt mà không có con dấu. Ghi sổ hỏng thì
+       `recordFingerprint` tự nuốt: mất sổ chỉ khiến lượt sau vẽ lại, không mất ảnh. */
+    if (!this.detached && this.run.kind === "gen") {
+      for (const j of this.run.jobs) {
+        if (j.status !== "ok" || !j.fingerprint) continue
+        await recordFingerprint(this.ws, this.run.projectId, j.job, j.fingerprint)
+      }
+    }
     /* Lần dọn CUỐI, kể cả những đường KHÔNG đi qua `markJob` (env-failed, engine chết
        ngay khi spawn, người dùng bấm Dừng): web nghe `run.finished` rồi hỏi lại
        `/api/usage` ngay sau đó, và câu trả lời phải là số đọc mới chứ không phải

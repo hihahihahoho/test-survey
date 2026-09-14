@@ -221,6 +221,14 @@ export const sheetSchema = z
        Agent kiểm cùng một luật ở `agent/lib/validate.mjs:42`: có thì phải là chuỗi. */
     directive: z.string().optional(),
     promptOverride: z.string().optional(),
+    /* VÂN TAY CỦA TẤM — "tấm này có còn đúng là tấm đã vẽ không".
+       Web đóng dấu (xem `features/prompt-canvas/lib/fingerprint.ts`), agent giữ nó
+       cạnh ảnh và BỎ QUA lượt vẽ của tấm nào vân tay còn trùng. Khai `.optional()`
+       vì contract của mọi dự án tạo trước 14/09/2026 không có nó — thiếu vân tay
+       nghĩa là "không biết", và không biết thì VẼ, không bao giờ bỏ qua.
+       Nó KHÔNG đi tới engine: `agent/lib/engine.mjs` gọt khoá này khỏi `styles.json`
+       để một trường ghi sổ của agent không bao giờ lọt vào prompt. */
+    fingerprint: z.string().optional(),
     /* QA-FUNC: agent ĐÃ GỬI `ref: null` cho MỌI sheet của MỌI project tạo trước
        08/09/2026 (khi ấy `agent/lib/templates.mjs` và `importer.mjs` dựng sẵn tấm).
        `.optional()` không nhận null ⇒ zod ném ⇒ endpoints.ts biến thành AGENT_INTERNAL

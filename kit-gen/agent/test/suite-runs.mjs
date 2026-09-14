@@ -756,4 +756,92 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     }
   })
 
+  /* ══ VÂN TAY: TẤM KHÔNG ĐỔI THÌ KHÔNG VẼ LẠI ═══════════════════════════════
+     Chủ sản phẩm 14/09/2026: *"mỗi kiểu nếu tràn 2 sheet thì tách ra … như thế khi
+     gen ảnh lại đỡ phải gen lại cả 2 cái"*. Web đóng dấu `sheet.fingerprint` vào
+     contract; agent ghi con dấu ấy cạnh ảnh và BỎ QUA tấm nào còn trùng.
+     Bốn thứ được khoá ở đây, và cả bốn hỏng lặng lẽ:
+       ① trùng vân tay ⇒ KHÔNG phóng lượt nào (không tốn một đơn vị hạn mức nào);
+       ② một tấm đổi, một tấm không ⇒ đúng MỘT job chạy, job kia nằm ở `skipped`;
+       ③ `force: true` phải xuyên qua phép lọc — đó là nút «Vẽ lại tấm này»;
+       ④ vân tay ĐI THEO ẢNH khi đổi phiên bản: khôi phục bản cũ xong thì tấm ấy
+          phải được vẽ lại, không bị coi là "đang đúng". */
+  await it("[vân tay] tấm trùng vân tay bị BỎ QUA, tấm đổi vẫn chạy, và ép vẽ thì xuyên qua", async () => {
+    const { api: aP } = await agentWithEngine("engine-fake")
+    const created = await createBasicProject(aP, { name: "Van tay", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
+    const gid = created.json.project.id
+
+    /** Đóng dấu vân tay lên contract — đúng việc mà web làm trước mỗi lượt Vẽ. */
+    const stamp = async marks => {
+      const got = await aP("GET", `/api/projects/${gid}/contract`)
+      const contract = structuredClone(got.json.contract)
+      for (const sh of contract.sheets) sh.fingerprint = marks[sh.id] ?? `fp1-${sh.id}-v1`
+      const put = await aP("PUT", `/api/projects/${gid}/contract`, {
+        body: { contract }, headers: { "if-match": String(got.json.version) },
+      })
+      eq(put.status, 200, "ghi contract có vân tay")
+    }
+    const gen = (jobs, extra = {}) =>
+      aP("POST", `/api/projects/${gid}/runs`, { body: { kind: "gen", jobs, autoSliceAfterGen: false, ...extra } })
+    const genOnce = async (jobs, extra = {}) => {
+      const r = await gen(jobs, extra)
+      eq(r.status, 202, "run 202")
+      await aP("GET", `/api/runs/${r.json.runId}/stream?from=0`)   // đóng khi run.finished
+      return r
+    }
+
+    try {
+      await stamp({})
+      await genOnce(["tet-main", "tet-tall"])
+
+      // ① Bấm Vẽ lần hai mà không sửa gì ⇒ KHÔNG có lượt chạy nào.
+      const again = await gen(["tet-main", "tet-tall"])
+      eq(again.status, 200, "không còn gì để vẽ ⇒ 200, không phải 202")
+      eq(again.json.runId, null, "không phóng lượt nào")
+      eq(again.json.skipped.map(s => s.job).sort(), ["tet-main", "tet-tall"], "nói rõ tấm nào được giữ")
+      eq(again.json.estimate.quotaUnits, [0, 0], "và ước lượng hạn mức bằng 0")
+
+      // ② Sửa ĐÚNG một tấm ⇒ đúng một job chạy, job kia nằm ở `skipped`.
+      await stamp({ tall: "fp1-tall-v2" })
+      const mixed = await gen(["tet-main", "tet-tall"])
+      eq(mixed.status, 202, "có tấm đổi ⇒ vẫn phóng lượt")
+      eq(mixed.json.jobs.map(j => j.job), ["tet-tall"], "chỉ tấm ĐÃ ĐỔI đi vẽ")
+      eq(mixed.json.skipped.map(s => s.job), ["tet-main"], "tấm không đổi được giữ nguyên")
+      eq(mixed.json.estimate.quotaUnits, [3, 5], "ước lượng hạn mức tính theo ĐÚNG một tấm")
+      await aP("GET", `/api/runs/${mixed.json.runId}/stream?from=0`)
+
+      // ③ ÉP VẼ đi xuyên qua phép lọc — nút «Vẽ lại tấm này» của người dùng.
+      const forced = await gen(["tet-main"], { force: true })
+      eq(forced.status, 202, "ép vẽ ⇒ vẫn phóng lượt dù vân tay còn trùng")
+      eq(forced.json.jobs.map(j => j.job), ["tet-main"], "và vẽ đúng tấm được nêu tên")
+      await aP("GET", `/api/runs/${forced.json.runId}/stream?from=0`)
+
+      /* Vân tay là SỔ CỦA AGENT, không phải đầu vào của engine: một khoá lạ trong
+         `styles.json` là một khoá đi thẳng vào chỗ `gen.sh` dựng prompt. */
+      const styles = JSON.parse(await readFile(join(wsRoot, "projects", gid, "styles.json"), "utf8"))
+      ok(styles.sheets.every(sh => sh.fingerprint === undefined), "styles.json KHÔNG mang vân tay sang engine")
+
+      /* ④ VÂN TAY ĐI THEO ẢNH, KHÔNG Ở LẠI CHỖ CŨ.
+         Sửa mô tả rồi vẽ ⇒ bản đang dùng mang con dấu MỚI, bản vừa bị đẩy vào lịch
+         sử mang con dấu CŨ. Khôi phục bản cũ thì con dấu cũ phải quay lại theo nó —
+         nếu không, agent so con dấu mới với contract mới, thấy trùng, và BỎ QUA đúng
+         cái tấm mà người dùng vừa lùi về một bản cũ để vẽ lại. */
+      await stamp({ main: "fp1-main-v9", tall: "fp1-tall-v2" })
+      await genOnce(["tet-main"])
+      eq((await gen(["tet-main"])).json.runId, null, "vừa vẽ xong bản mới ⇒ bấm lại là giữ nguyên")
+
+      const h = await aP("GET", `/api/projects/${gid}/raw/tet-main/history`)
+      const old = h.json.items.find(i => !i.current)
+      ok(old, "có bản cũ để chọn")
+      eq((await aP("POST", `/api/projects/${gid}/raw/tet-main/restore`, { body: { historyId: old.id } })).status,
+        200, "đổi phiên bản ⇒ 200")
+      const afterRestore = await gen(["tet-main"])
+      eq(afterRestore.status, 202,
+        "ảnh đang dùng là bản CŨ ⇒ vân tay của nó khác contract ⇒ vẫn vẽ lại được")
+      await aP("GET", `/api/runs/${afterRestore.json.runId}/stream?from=0`)
+    } finally {
+      await aP("DELETE", `/api/projects/${gid}`)
+    }
+  })
+
 }

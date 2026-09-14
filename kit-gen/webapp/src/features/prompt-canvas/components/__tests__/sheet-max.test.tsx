@@ -69,6 +69,7 @@ function mount(block: Block, onChange: (updater: (prev: Block) => Block) => void
       onDelete={() => {}}
       gen={{ status: "idle", message: "", runId: null, done: 0, total: 0 }}
       onGen={() => {}}
+      onGenSheet={() => {}}
       onDequeue={() => {}}
       onStop={() => {}}
       stopping={false}

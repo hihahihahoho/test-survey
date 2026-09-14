@@ -28,7 +28,7 @@ import type { Block, DocBlock, MascotBlock, UiKitBlock } from "@/features/prompt
 import type { Sheet } from "@/lib/types/contract";
 import type { PromptPreviewImage, PromptPreviewJob } from "@/lib/types/api";
 import type { BlockPromptState } from "../lib/block-prompt";
-import { copyImageBlob, copyProjectImage, copyPromptText } from "../lib/prompt-copy";
+import { copyImageBlob, copyProjectImage, copyPromptText, joinSheetPrompts } from "../lib/prompt-copy";
 import { roleLabel, sheetImages, shortName } from "../lib/prompt-images";
 import type { GenBlockState } from "../lib/gen-queue";
 import { CARD, SECTION_LABEL } from "../lib/ui";
@@ -71,6 +71,14 @@ export interface CanvasBlockProps {
   onDelete: () => void;
   gen: GenBlockState;
   onGen: () => void;
+  /**
+   * VẼ LẠI ĐÚNG MỘT TẤM của thẻ (chỉ số đếm từ 0).
+   *
+   * Có đường riêng chứ không dùng lại `onGen`: nút «Vẽ lại tấm này» nằm ở vạch
+   * ranh giới tấm, và nó vừa THU HẸP lượt vẽ về một tấm vừa ÉP vẽ — mô tả không
+   * đổi thì agent vốn bỏ qua, nên không ép là bấm vào không có gì xảy ra.
+   */
+  onGenSheet: (sheetIndex: number) => void;
   onDequeue: () => void;
   /** Dừng lượt đang vẽ của thẻ này — xem `GenQueue.stop`. */
   onStop: () => void;
@@ -190,9 +198,21 @@ export function CanvasBlock(props: CanvasBlockProps) {
   );
 }
 
-function BlockBody({ block, onChange, reloadSignal }: CanvasBlockProps) {
+function BlockBody({ block, onChange, reloadSignal, gen, onGenSheet, sheets }: CanvasBlockProps) {
+  /* Thẻ MỘT tấm không có vạch ranh giới nào để đeo nút (xem `SheetBreak`), nên chỉ
+     hai thẻ-danh-sách nhiều tấm mới nhận đường vẽ lẻ. Đang vẽ / đang xếp hàng thì
+     khoá nút: xin thêm một lượt cho cùng một thẻ lúc ấy chỉ tổ đẩy nó ra sau hàng. */
+  const busy = gen.status === "running" || gen.status === "queued";
+  const redraw = sheets.length > 1 ? { onRedrawSheet: onGenSheet, redrawBusy: busy } : {};
+
   if (block.kind === "uikit") {
-    return <UiKitBlockBody block={block} onChange={(updater) => onChange((prev) => updater(prev as UiKitBlock))} />;
+    return (
+      <UiKitBlockBody
+        block={block}
+        onChange={(updater) => onChange((prev) => updater(prev as UiKitBlock))}
+        {...redraw}
+      />
+    );
   }
   if (block.kind === "mascot") {
     return (
@@ -200,6 +220,7 @@ function BlockBody({ block, onChange, reloadSignal }: CanvasBlockProps) {
         block={block}
         onChange={(updater) => onChange((prev) => updater(prev as MascotBlock))}
         reloadSignal={reloadSignal}
+        {...redraw}
       />
     );
   }
@@ -281,8 +302,11 @@ function GenControl({ gen, canGen, onGen, onDequeue, onStop, stopping }: {
   return (
     <span className="flex items-center gap-2">
       {gen.status === "done" && (
+        /* CÂU CỦA HÀNG ĐỢI THẮNG câu mặc định: khi agent giữ nguyên một tấm vì vân
+           tay chưa đổi thì «Đã vẽ xong» là câu trả lời sai cho thứ người dùng vừa
+           thấy («Đang vẽ 1/2»). `gen.message` nói đúng tấm nào được giữ. */
         <span className="inline-flex items-center gap-1 text-caption text-ok">
-          <Check aria-hidden className="size-4" />Đã vẽ xong
+          <Check aria-hidden className="size-4" />{gen.message || "Đã vẽ xong"}
         </span>
       )}
       {gen.status === "fail" && (
@@ -312,7 +336,25 @@ function GenControl({ gen, canGen, onGen, onDequeue, onStop, stopping }: {
    Tab "Prompt"
    ══════════════════════════════════════════════════════════════════════════ */
 
-function PromptPanel({ projectId, prompt, styleLine, stale, canGen, busy, onWantPrompt, hash }: {
+/**
+ * TAB «PROMPT» CỦA MỘT THẺ — MỘT TẤM MỘT PROMPT, CHỌN TẤM Ở TRÊN.
+ *
+ * ╔══ VÌ SAO CHỌN, KHÔNG PHẢI XẾP CHỒNG (chủ sản phẩm, 14/09/2026) ══════════╗
+ * ║ *"cái copy prompt cũng thế, phải tách riêng cho từng tấm — mỗi prompt      ║
+ * ║ giống hệt nhau, khác mỗi phần mô tả"*. Bản trước đã dựng đúng MỘT prompt    ║
+ * ║ cho MỖI tấm (engine dựng, agent trả về theo thứ tự tấm) nhưng bày cả xâu   ║
+ * ║ ra một cột dọc. Hai prompt giống nhau tới 90% nằm chồng nhau thì cuộn tới  ║
+ * ║ đâu cũng không biết mình đang đọc tấm nào — và nút «Copy prompt» của tấm 2 ║
+ * ║ nằm cách đầu tấm 2 đúng ba chục dòng chữ y hệt tấm 1.                      ║
+ * ║ Nên: một hàng chọn «Tấm 1 · Tấm 2», mỗi lúc đọc một tấm, nút copy đứng     ║
+ * ║ ngay trên đúng tấm đang đọc. «Copy tất cả» giữ lại đường lấy cả xâu, có    ║
+ * ║ vạch tiêu đề ngăn giữa (xem `joinSheetPrompts`).                           ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Export để bộ ca gọi thẳng: thứ cần khoá ở đây là "chọn tấm nào thì copy tấm ấy",
+ * mà dựng cả màn chỉ để bấm một cái pill là một bộ ca đắt và dễ vỡ vì lý do khác.
+ */
+export function PromptPanel({ projectId, prompt, styleLine, stale, canGen, busy, onWantPrompt, hash }: {
   projectId: string;
   prompt: BlockPromptState;
   /** Prompt tổng phong cách — `variant.style`, câu engine đặt ở đầu MỌI tấm. */
@@ -324,6 +366,24 @@ function PromptPanel({ projectId, prompt, styleLine, stale, canGen, busy, onWant
   /** Vân tay nội dung hiện tại — đi thẳng xuống panel ảnh để nó biết lúc nào phải quên số đã đếm. */
   hash: string;
 }) {
+  /* Tấm đang đọc. Thẻ bị sửa bớt dòng giữa chừng ⇒ số tấm tụt xuống, nên chỉ số
+     phải được KẸP ở lúc đọc chứ không chỉ ở lúc bấm: một `at` mồ côi là cả panel
+     trống trơn mà không có câu nào giải thích. */
+  const [at, setAt] = React.useState(0);
+  const jobs = prompt.jobs;
+  const current = jobs[Math.min(at, jobs.length - 1)];
+
+  const copyAll = async () => {
+    try {
+      await copyPromptText(joinSheetPrompts(jobs.map((item) => item.prompt)));
+      toast.success(`Đã copy ${jobs.length} tấm`);
+    } catch (error) {
+      toast.error("Không copy được prompt", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
   if (!canGen) {
     return <p className="text-body text-fg-muted">Thẻ này chưa có nội dung nào nên chưa có prompt để xem.</p>;
   }
@@ -391,9 +451,36 @@ function PromptPanel({ projectId, prompt, styleLine, stale, canGen, busy, onWant
         <p className="text-caption text-warn">Chưa xem trước được: {prompt.missing.join(", ")}</p>
       )}
 
-      {prompt.jobs.map((item) => (
-        <OnePrompt key={item.job} projectId={projectId} item={item} hash={hash} />
-      ))}
+      {jobs.length > 1 && (
+        /* HÀNG CHỌN TẤM. Cùng hình dạng với hàng tab «Soạn | Prompt» ở đầu thẻ —
+            người dùng học một lần rồi dùng ở cả hai chỗ. */
+        <div className="flex flex-wrap items-center gap-2">
+          <div role="tablist" aria-label="Chọn tấm để xem prompt" className="inline-flex h-8 items-center rounded-full border border-line-subtle p-0.5">
+            {jobs.map((item, index) => (
+              <TabButton key={item.job} active={index === Math.min(at, jobs.length - 1)} onClick={() => setAt(index)}>
+                Tấm {index + 1}
+              </TabButton>
+            ))}
+          </div>
+          <p className="text-caption text-fg-muted">
+            Các tấm dùng chung phong cách, luật vẽ và khổ chữ — chỉ khác phần liệt kê ô.
+          </p>
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={copyAll}>
+            <Copy aria-hidden strokeWidth={1.5} />
+            Copy tất cả
+          </Button>
+        </div>
+      )}
+
+      {current && (
+        <OnePrompt
+          key={current.job}
+          projectId={projectId}
+          item={current}
+          no={Math.min(at, jobs.length - 1) + 1}
+          hash={hash}
+        />
+      )}
     </div>
   );
 }
@@ -432,12 +519,19 @@ function StyleLine({ text }: { text: string }) {
 }
 
 /** Prompt nguyên văn của MỘT tấm + ảnh tham chiếu của nó. */
-function OnePrompt({ projectId, item, hash }: { projectId: string; item: PromptPreviewJob; hash: string }) {
-  /* Tên tấm rút ra TRƯỚC rồi mới ghép vào câu: cổng từ cấm §5.4 quét cả biểu thức
-     bên trong chuỗi mẫu, nên `${item.sheet}` nằm giữa một câu tiếng Việt bị đọc là
-     chữ kỹ thuật lọt ra UI. Rút ra ngoài thì câu chỉ còn chữ người dùng đọc được —
-     và cũng dễ đọc hơn. */
-  const name = item.sheet || item.job;
+function OnePrompt({ projectId, item, no, hash }: {
+  projectId: string;
+  item: PromptPreviewJob;
+  /** Số thứ tự tấm trong thẻ, đếm từ 1 — cùng con số với vạch ranh giới ở tab Soạn. */
+  no: number;
+  hash: string;
+}) {
+  /* TÊN NGƯỜI ĐỌC ĐƯỢC, không phải id kỹ thuật của tấm. Id (`ui2`, `nhan-vat`) là
+     chữ của contract; người dùng đếm tấm bằng cùng con số mà vạch ranh giới ở tab
+     Soạn và câu «Tấm 1 giữ nguyên» của nút Vẽ đang dùng. Ba bề mặt, một cách gọi.
+     Rút ra biến TRƯỚC khi ghép câu: cổng từ cấm §5.4 quét cả biểu thức trong chuỗi
+     mẫu, nên một id kỹ thuật nhúng giữa câu tiếng Việt bị tính là chữ lọt ra UI. */
+  const name = `Tấm ${no}`;
   /**
    * ẢNH ĐI KÈM — lọc từ chính bản kê engine đã ghi ra, không dựng lại.
    *
@@ -499,7 +593,7 @@ function OnePrompt({ projectId, item, hash }: { projectId: string; item: PromptP
           vài chục dòng, và chủ sản phẩm cần đọc được TRỌN VẸN. Trần cao hơn trước
           (28rem) để phần lớn prompt vào vừa một màn mà không phải cuộn trong cuộn. */}
       <pre
-        aria-label={`Prompt của tấm ${name}`}
+        aria-label={`Prompt của ${name}`}
         className="max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-2 border border-line-subtle bg-canvas p-3 text-mono text-fg"
       >
         {item.prompt}

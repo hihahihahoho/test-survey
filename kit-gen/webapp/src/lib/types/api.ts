@@ -779,12 +779,35 @@ export const startRunInputSchema = z.object({
   jobs: z.array(z.string().regex(RE_JOB)).default([]),
   maxJobs: z.number().int().min(1).max(8).default(4),
   autoSliceAfterGen: z.boolean().default(true),
+  /**
+   * ÉP VẼ LẠI — bỏ qua phép "tấm không đổi thì không vẽ lại" của agent.
+   *
+   * Mặc định `false`: lượt Vẽ bình thường giữ nguyên tấm nào vân tay còn trùng
+   * (xem `agent/lib/fingerprints.mjs`). Người dùng bấm «Vẽ lại tấm này» — vì bức
+   * ảnh xấu chứ không vì mô tả đổi — thì cờ này là đường DUY NHẤT nói ra ý ấy.
+   *
+   * `.optional()` chứ không `.default(false)`: vắng mặt và `false` nói CÙNG một
+   * điều với agent (`body.force !== true`), nên bắt mọi nơi gọi cũ phải gõ thêm
+   * `force: false` chỉ là một dòng nhiễu ở năm chỗ để nói một điều đã mặc định.
+   */
+  force: z.boolean().optional(),
 });
 export type StartRunInput = z.infer<typeof startRunInputSchema>;
 
 export const startRunResultSchema = z.looseObject({
-  runId: z.string(),
+  /**
+   * `null` = KHÔNG CÓ LƯỢT CHẠY NÀO ĐƯỢC PHÓNG, vì mọi tấm được xin đều còn nguyên
+   * vân tay cũ. Không phải lỗi: đó là câu trả lời "không có gì để vẽ, tất cả đang
+   * đúng" — và nó tiết kiệm đúng số lượt tạo mà một run rỗng sẽ đốt.
+   */
+  runId: z.string().nullable(),
   jobs: z.array(z.looseObject({ job: z.string(), status: z.string().optional() })).default([]),
+  /** Tấm agent GIỮ NGUYÊN (vân tay chưa đổi). Agent đời cũ không gửi ⇒ mảng rỗng. */
+  skipped: z.array(z.looseObject({
+    job: z.string(),
+    sheet: z.string().optional(),
+    reason: z.string().optional(),
+  })).default([]),
   /** 3 số BẮT BUỘC của modal M1 (chốt X11): số lượt, ước lượng thời gian, cảnh báo quota. */
   estimate: z.looseObject({
     seconds: z.tuple([z.number(), z.number()]).optional(),

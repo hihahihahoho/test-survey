@@ -45,9 +45,39 @@ const IDLE: GenBlockState = { status: "idle", message: "", runId: null, done: 0,
 /** Câu DUY NHẤT cho ca "phải đợi tấm trước" — hai chỗ nói hai kiểu là hai sự thật. */
 export const WAITING_COPY = "Đang chờ tấm trước";
 
+/**
+ * CÂU NÓI RA TẤM NÀO ĐƯỢC GIỮ NGUYÊN.
+ *
+ * ╔══ VÌ SAO PHẢI NÓI, KHÔNG ĐƯỢC IM ════════════════════════════════════════╗
+ * ║ Agent bỏ qua tấm có vân tay chưa đổi, nên một cú bấm Vẽ trên thẻ hai tấm  ║
+ * ║ có thể chỉ vẽ một. Không nói ra thì người dùng đọc «Đang vẽ 1/2» rồi tưởng║
+ * ║ tấm kia lỗi — và bấm Vẽ lại, đúng cái việc mà phép bỏ qua sinh ra để khỏi ║
+ * ║ phải làm. Câu này trả lời thẳng: tấm ấy KHÔNG hỏng, nó chỉ chưa đổi gì.   ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * `indexes` đếm từ 0 theo thứ tự tấm của thẻ; chữ hiện ra thì đếm từ 1.
+ */
+export function keptCopy(indexes: readonly number[], total: number): string {
+  if (indexes.length === 0) return "";
+  const names = indexes.map((at) => `Tấm ${at + 1}`).join(" · ");
+  if (indexes.length >= total && total > 1) return `Cả ${total} tấm giữ nguyên, chưa đổi gì.`;
+  return `${names} giữ nguyên, chưa đổi gì.`;
+}
+
 interface Entry {
   blockId: string;
+  /** MỌI tấm của thẻ, theo thứ tự — nguồn để gọi tên «Tấm 2» và để cắt ra một tấm. */
+  all: string[];
+  /** Tấm THẬT SỰ được gửi đi vẽ (bằng `all`, hoặc đúng một tấm khi vẽ lại lẻ). */
   jobs: string[];
+  /**
+   * VẼ LẠI RIÊNG TẤM THỨ MẤY (đếm từ 0); `null` = cả thẻ.
+   *
+   * Vẽ lẻ cũng là ÉP VẼ: người dùng bấm «Vẽ lại tấm này» khi bức ảnh xấu, tức là
+   * mô tả KHÔNG đổi và vân tay vẫn trùng — không ép thì agent bỏ qua đúng cái tấm
+   * họ vừa xin, và nút ấy thành một nút bấm vào không có gì xảy ra.
+   */
+  only: number | null;
   /** Lượt của chính thẻ này; `null` = chưa phóng được (đang xếp hàng). */
   runId: string | null;
   message: string;
@@ -55,8 +85,11 @@ interface Entry {
 
 export interface GenQueue {
   stateOf: (blockId: string) => GenBlockState;
-  /** Đưa một thẻ vào cuối hàng. Thẻ đã ở trong hàng ⇒ không làm gì. */
-  enqueue: (blockId: string) => void;
+  /**
+   * Đưa một thẻ vào cuối hàng. Thẻ đã ở trong hàng ⇒ không làm gì.
+   * `onlySheet` (đếm từ 0) ⇒ chỉ vẽ lại ĐÚNG tấm ấy, và ép vẽ — xem `Entry.only`.
+   */
+  enqueue: (blockId: string, onlySheet?: number) => void;
   /**
    * Đưa NHIỀU thẻ vào cuối hàng, giữ nguyên thứ tự đưa vào.
    *
@@ -99,7 +132,7 @@ export interface GenQueue {
 /**
  * @param prepare Việc phải làm NGAY TRƯỚC khi phóng một thẻ: chụp ảnh dáng nếu
  *   thiếu, dựng contract mới nhất, PUT lên server — rồi trả về danh sách job của
- *   thẻ ấy. Ném ⇒ thẻ vào trạng thái lỗi và hàng đợi đi tiếp.
+ *   thẻ ấy, ĐỦ CẢ THẺ và ĐÚNG THỨ TỰ TẤM (hàng đợi tự cắt ra một tấm khi vẽ lẻ). Ném ⇒ thẻ vào trạng thái lỗi và hàng đợi đi tiếp.
  *   Nó chạy ở ĐÚNG lúc phóng chứ không lúc bấm: thẻ thứ ba có thể đợi vài phút,
  *   và trong lúc ấy người dùng còn sửa chữ — thứ được vẽ phải là bản mới nhất.
  */
@@ -138,12 +171,40 @@ export function useGenQueue(
     launchingRef.current = true;
     const blockId = head.blockId;
 
+    const only = head.only;
+
     void (async () => {
       try {
-        const jobs = await prepareRef.current(blockId);
-        if (jobs.length === 0) throw new Error("Thẻ này chưa có gì để vẽ — thêm nội dung trước đã.");
-        const res = await startRef.current(jobs);
-        setEntries((prev) => prev.map((e) => (e.blockId === blockId ? { ...e, jobs, runId: res.runId, message: "" } : e)));
+        const all = await prepareRef.current(blockId);
+        if (all.length === 0) throw new Error("Thẻ này chưa có gì để vẽ — thêm nội dung trước đã.");
+        /* Cắt ra ĐÚNG một tấm khi vẽ lẻ. Chỉ số ngoài khoảng (thẻ vừa bị sửa bớt
+           dòng giữa lúc chờ) ⇒ rơi về cả thẻ thay vì gửi một mảng rỗng: một lượt
+           vẽ 0 tấm là một cú bấm không có kết quả và không có lời giải thích. */
+        const one = only !== null ? all[only] : undefined;
+        const jobs = one ? [one] : all;
+        const res = await startRef.current(jobs, only !== null);
+        /* Tấm agent GIỮ NGUYÊN → chỉ số tấm trong thẻ, để câu chữ gọi đúng tên. */
+        const kept = (res.skipped ?? [])
+          .map((item) => all.indexOf(item.job))
+          .filter((at) => at >= 0)
+          .sort((a, b) => a - b);
+        if (!res.runId) {
+          /* KHÔNG CÓ LƯỢT NÀO ĐƯỢC PHÓNG — mọi tấm được xin đều còn nguyên vân tay.
+             Đây là ca XONG, không phải ca lỗi: kết quả người dùng muốn đã nằm sẵn
+             trên màn, và không một lượt tạo nào bị tiêu. */
+          setSettled((prev) => ({
+            ...prev,
+            [blockId]: {
+              ...IDLE, status: "done", done: 0, total: 0,
+              message: keptCopy(kept, all.length) || "Chưa có gì đổi nên không vẽ lại.",
+            },
+          }));
+          setEntries((prev) => prev.filter((e) => e.blockId !== blockId));
+          return;
+        }
+        setEntries((prev) => prev.map((e) => (
+          e.blockId === blockId ? { ...e, all, jobs, runId: res.runId, message: keptCopy(kept, all.length) } : e
+        )));
         setActiveRunId(res.runId);
       } catch (error) {
         const conflictRun = runIdOfConflict(error);
@@ -190,7 +251,13 @@ export function useGenQueue(
                   ? "Lượt vẽ đã bị dừng."
                   : `${data.failSummary ?? `${failed.length}/${data.jobs.length} tấm không vẽ được`}. Bấm Vẽ để thử lại.`,
             }
-          : { ...IDLE, status: "done", runId: activeRunId, done: data.jobs.length, total: data.jobs.length },
+          : {
+              ...IDLE, status: "done", runId: activeRunId,
+              done: data.jobs.length, total: data.jobs.length,
+              /* Câu "tấm nào giữ nguyên" sống tới tận lúc chốt sổ: nó là lời giải
+                 thích cho con số «1/2» mà người dùng vừa nhìn thấy chạy qua. */
+              message: owner.message,
+            },
       }));
       setEntries((prev) => prev.filter((e) => e.blockId !== owner.blockId));
     }
@@ -205,12 +272,13 @@ export function useGenQueue(
         return { ...IDLE, status: "queued", message: entry.message || WAITING_COPY };
       }
       const progress = run.data?.id === entry.runId ? run.data.progress : null;
+      const kept = entry.message ? ` · ${entry.message}` : "";
       /* Tên pha rút ra TRƯỚC khi ghép câu — xem chú thích cùng kiểu ở `OnePrompt`
          (`CanvasBlock.tsx`): cổng từ cấm quét cả biểu thức trong chuỗi mẫu. */
       const phase = run.data?.phase?.name ?? "";
       return {
         status: "running",
-        message: phase ? `Đang vẽ · ${phase}` : "Đang vẽ…",
+        message: phase ? `Đang vẽ · ${phase}${kept}` : `Đang vẽ…${kept}`,
         runId: entry.runId,
         done: progress?.done ?? 0,
         total: progress?.total ?? entry.jobs.length,
@@ -219,14 +287,18 @@ export function useGenQueue(
     [entries, settled, run.data],
   );
 
-  const enqueue = React.useCallback((blockId: string) => {
+  const enqueue = React.useCallback((blockId: string, onlySheet?: number) => {
     setSettled((prev) => {
       if (!(blockId in prev)) return prev;
       const next = { ...prev };
       delete next[blockId];
       return next;
     });
-    setEntries((prev) => (prev.some((e) => e.blockId === blockId) ? prev : [...prev, { blockId, jobs: [], runId: null, message: WAITING_COPY }]));
+    setEntries((prev) => (prev.some((e) => e.blockId === blockId)
+      ? prev
+      : [...prev, {
+          blockId, all: [], jobs: [], only: onlySheet ?? null, runId: null, message: WAITING_COPY,
+        }]));
   }, []);
 
   const enqueueMany = React.useCallback((blockIds: readonly string[]) => {
@@ -245,7 +317,9 @@ export function useGenQueue(
         /* Khử trùng lặp NGAY TRONG danh sách đưa vào: hai lần cùng một thẻ là hai
            lượt vẽ cùng một tấm, tức là tiêu tiền hai lần cho một kết quả. */
         .filter((id, at, all) => all.indexOf(id) === at)
-        .map((blockId) => ({ blockId, jobs: [] as string[], runId: null, message: WAITING_COPY }));
+        .map((blockId) => ({
+          blockId, all: [] as string[], jobs: [] as string[], only: null, runId: null, message: WAITING_COPY,
+        }));
       return fresh.length === 0 ? prev : [...prev, ...fresh];
     });
   }, []);

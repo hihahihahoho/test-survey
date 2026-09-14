@@ -37,11 +37,20 @@ export function useGenerateRun(projectId: string) {
      *    đến sau vài giây — không ai phải đợi cắt mới thấy ảnh.
      * Vẫn đi qua đúng cửa `useStartRun` này để không mọc thêm lối tiêu quota thứ hai.
      */
-    startJobs: (jobs: string[]) => start.mutateAsync({
+    /**
+     * `force` — ÉP VẼ LẠI, kể cả tấm agent đang giữ vì vân tay chưa đổi.
+     *
+     * Mặc định `false`: một lượt Vẽ thường chỉ tiêu lượt cho tấm ĐÃ ĐỔI (xem
+     * `agent/lib/fingerprints.mjs`). Người dùng bấm «Vẽ lại tấm này» vì bức ảnh
+     * xấu — chứ không vì mô tả đổi — thì đây là đường duy nhất nói ra ý đó, và nó
+     * vẫn đi qua đúng cửa `useStartRun` này, không mọc thêm lối tiêu quota thứ hai.
+     */
+    startJobs: (jobs: string[], force = false) => start.mutateAsync({
       kind: "gen",
       jobs,
       maxJobs: 1,
       autoSliceAfterGen: true,
+      force,
     }),
     startContract: (contract: Contract) => start.mutateAsync({
       kind: "gen",

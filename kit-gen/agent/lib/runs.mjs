@@ -8,6 +8,7 @@ import { fail } from "./errors.mjs"
 import { RE_RUN_ID, RE_JOB, assertMatch } from "./paths.mjs"
 import { projectDir } from "./projects-dir.mjs"
 import { readContract, contractJobs } from "./contract.mjs"
+import { sheetFingerprintOf } from "./fingerprints.mjs"
 import { RunHandle } from "./run-handle.mjs"
 import { redactLine } from "./redact.mjs"
 
@@ -153,6 +154,11 @@ export class RunStore {
       progress: { done: 0, total, failed: 0, etaSeconds: null },
       jobs: selected.map(j => ({
         job: j.job, variant: j.variant, sheet: j.sheet, status: "queued",
+        /* VÂN TAY CỦA MÔ TẢ ĐANG ĐI VẼ — chụp tại lúc phóng, từ CHÍNH contract mà
+           lượt này chạy. Chụp ở đây chứ không đọc lại lúc job xong: người dùng có
+           thể PUT một contract mới giữa lượt, và con dấu đóng lên bức ảnh phải là
+           con dấu của mô tả đã sinh ra nó, không phải của bản vừa sửa. */
+        fingerprint: sheetFingerprintOf(contract, j.sheet),
         startedAt: null, durationMs: null, artifact: null, recovered: false, diagnosis: null,
         /* BACKLOG #22 — 2-3 dòng cuối stderr/log của job, ĐÃ redact. Khai sẵn `null`
            để hình dạng run.json không đổi giữa chừng lượt chạy. */

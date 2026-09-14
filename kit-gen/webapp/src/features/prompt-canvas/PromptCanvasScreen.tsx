@@ -370,6 +370,7 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
             onDelete={() => edit((prev) => ({ ...prev, blocks: prev.blocks.filter((b) => b.id !== block.id) }))}
             gen={queue.stateOf(block.id)}
             onGen={() => queue.enqueue(block.id)}
+            onGenSheet={(sheetIndex) => queue.enqueue(block.id, sheetIndex)}
             onDequeue={() => queue.dequeue(block.id)}
             onStop={() => queue.stop(block.id)}
             stopping={queue.stopping === block.id}

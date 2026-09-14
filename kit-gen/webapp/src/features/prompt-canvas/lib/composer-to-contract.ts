@@ -49,6 +49,7 @@ import {
   type MascotPose,
   type UiKitBlock,
 } from "@/features/prompt-lab/lib/composer-model";
+import { stampFingerprints } from "./fingerprint";
 import { readPillImage, type PillImage } from "./pill-image";
 import type { ComposerDoc } from "./composer-doc";
 
@@ -883,7 +884,9 @@ export function composerToContract(input: ComposerDoc | ComposerState, opts: Com
    * kit là bộ kit không còn phong cách nào cả — im lặng gửi đi vẽ như thế thì
    * tốn lượt mà ra ảnh không ai nhận ra.
    */
-  return contractSchema.parse({
+  /* ĐÓNG DẤU VÂN TAY LÀ BƯỚC CUỐI, sau `parse` — xem `stampFingerprints`. Nhờ nó
+     lượt Vẽ sau chỉ tiêu lượt cho tấm ĐÃ ĐỔI; tấm không đổi giữ nguyên ảnh cũ. */
+  return stampFingerprints(contractSchema.parse({
     schemaVersion: 4,
     sheets,
     variants: [
@@ -929,7 +932,7 @@ export function composerToContract(input: ComposerDoc | ComposerState, opts: Com
     ],
     characterPoses: poses,
     slice: { threshold: opts.sliceThreshold ?? DEFAULT_SLICE_THRESHOLD },
-  });
+  }));
 }
 
 /**

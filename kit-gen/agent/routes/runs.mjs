@@ -6,7 +6,8 @@ import { exists, readFile, stat, mtimeOf, ensureDir, removeTree, writeFileAtomic
 import { RE_JOB, assertMatch, safeSegment } from "../lib/paths.mjs"
 import { projectDir, readProject } from "../lib/projects.mjs"
 import { sanitizeRun } from "../lib/runs.mjs"
-import { readContract } from "../lib/contract.mjs"
+import { readContract, contractJobs } from "../lib/contract.mjs"
+import { forgetFingerprint, planSkips, promoteFingerprint, archiveFingerprint } from "../lib/fingerprints.mjs"
 import { validateContract } from "../lib/validate.mjs"
 import {
   RE_RAW_HISTORY_ID, archiveRaw, listRawHistory, rawHistoryDir, rawHistoryName,
@@ -41,9 +42,39 @@ export function register(r) {
           { details: { reason: d.imageGen.reason ?? "UNKNOWN", mode: d.imageGen.mode, needsFallbackHome: d.imageGen.needsFallbackHome } })
     }
 
+    /* ══ TẤM KHÔNG ĐỔI THÌ KHÔNG VẼ LẠI ═══════════════════════════════════════
+       Một thẻ chia hai tấm, sửa một dòng ở tấm 2: trước lượt này cả hai tấm cùng
+       đi vẽ, và tấm 1 tiêu một lượt tạo để nhận về một bức ảnh KHÁC cho một mô tả
+       KHÔNG ĐỔI (máy vẽ không tất định). Vân tay đóng cửa đó lại — xem
+       `lib/fingerprints.mjs`. `force: true` là đường ép vẽ lại của người dùng
+       (nút «Vẽ lại tấm này»); nó KHÔNG đi qua phép lọc nào cả.
+       Chỉ áp cho `gen`: pha `slice` không tiêu lượt tạo nào, và bỏ qua ở đó chỉ
+       làm người dùng mất một lượt cắt mà họ vừa xin. */
+    let skipped = []
+    let jobs = body.jobs
+    if (kind === "gen" && body.force !== true) {
+      const want = Array.isArray(body.jobs) && body.jobs.length
+        ? body.jobs.map(String)
+        : contractJobs(contract).map(j => j.job)
+      const plan = await planSkips(ws, id, contract, want)
+      skipped = plan.skipped
+      jobs = plan.run
+      /* KHÔNG CÒN GÌ ĐỂ VẼ ⇒ KHÔNG TẠO LƯỢT CHẠY NÀO. Một run rỗng vẫn là một run:
+         nó chiếm chỗ "dự án đang chạy" (409 cho lượt kế), sinh thư mục, phát
+         `run.finished` — tất cả để nói một câu mà `skipped` đã nói rõ hơn.
+         200 chứ không 202: 202 là lời hứa "đã nhận, đang chạy", mà ở đây không có
+         gì chạy cả. Web đọc `runId: null` và nói "giữ nguyên, chưa đổi gì". */
+      if (!plan.run.length) {
+        return {
+          status: 200,
+          json: { runId: null, jobs: [], skipped, estimate: { seconds: [0, 0], quotaUnits: [0, 0] } },
+        }
+      }
+    }
+
     const handle = await ctx.runs.start(id, {
       kind,
-      jobs: body.jobs,
+      jobs,
       maxJobs: body.maxJobs,
       autoSliceAfterGen: body.autoSliceAfterGen !== false,
     })
@@ -53,6 +84,9 @@ export function register(r) {
       json: {
         runId: handle.id,
         jobs: handle.run.jobs.map(j => ({ job: j.job, status: j.status })),
+        /* Tấm được giữ nguyên đi kèm NGAY TRONG câu trả lời của lượt phóng: web
+           đếm "Đang vẽ 1/2" theo `jobs` và nói ra tấm nào giữ nguyên theo đây. */
+        skipped,
         estimate: {
           seconds: [Math.round((n / handle.run.maxJobs) * 90), Math.round((n / handle.run.maxJobs) * 150)],
           quotaUnits: [n * QUOTA_PER_JOB[0], n * QUOTA_PER_JOB[1]],
@@ -145,6 +179,10 @@ export function register(r) {
          nó vừa là bản đang dùng vừa còn nguyên trong lịch sử, tức xoá một phiên bản mà
          thanh chọn vẫn đúng bấy nhiêu mục — người dùng đọc ra là "bấm xoá không ăn". */
       const [next] = await listRawHistory(ws, id, job)
+      /* VÂN TAY ĐI THEO ẢNH, KHÔNG Ở LẠI. Ảnh đang dùng vừa bị vứt: nếu con dấu của
+         nó nằm lại thì lượt Vẽ sau so trúng và BỎ QUA đúng cái tấm vừa bị xoá.
+         `promoteFingerprint(…, null)` xoá trắng; có bản kế thì lấy con dấu của bản kế. */
+      await promoteFingerprint(ws, id, job, next ? next.id : null)
       if (!next) return { status: 200, json: { deleted: true, id: CURRENT_ID, nowCurrent: null, sliced: false } }
       const src = join(rawHistoryDir(ws, id), rawHistoryName(job, next.id))
       const bytes = await readFile(src)
@@ -159,6 +197,7 @@ export function register(r) {
     const abs = join(rawHistoryDir(ws, id), rawHistoryName(job, hid))
     if (!(await exists(abs))) fail("NOT_FOUND", `raw history ${hid} for ${job} not found`)
     await removeTree(abs)
+    await forgetFingerprint(ws, id, job, hid)
     return { status: 200, json: { deleted: true, id: hid } }
   })
 
@@ -200,8 +239,15 @@ export function register(r) {
        Cất bằng đúng hàm mà lượt gen dùng: bản đang dùng vào lịch sử trước khi bị ghi
        đè, nên người dùng chọn ngược lại được ngay sau đó. */
     const bytes = await readFile(src)
-    await archiveRaw(ws, id, job)
+    /* Cất bản đang dùng VÀ con dấu của nó cùng một nhịp, dưới CÙNG một `hid`: lệch
+       nhau là một đời ảnh có ảnh mà không có vân tay, và lượt Vẽ sau coi nó là
+       "không biết" rồi vẽ lại một lượt thừa. */
+    await archiveFingerprint(ws, id, job, await archiveRaw(ws, id, job))
     await writeFileAtomic(dst, bytes)
+    /* Bản vừa khôi phục mang lại ĐÚNG vân tay của chính nó. Bỏ bước này thì ảnh là
+       bản cũ còn con dấu là của bản mới vừa bị đẩy đi — lượt Vẽ sau so trúng và bỏ
+       qua, tức người dùng chọn một bản cũ rồi không bao giờ vẽ lại được nữa. */
+    await promoteFingerprint(ws, id, job, historyId)
     const sliced = await resliceSheet(ws, id, job)
     return {
       status: 200,

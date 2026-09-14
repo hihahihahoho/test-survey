@@ -60,6 +60,28 @@ export function referenceImages(attachments: readonly string[]): string[] {
 }
 
 /**
+ * NHIỀU TẤM → MỘT CHUỖI, mỗi tấm một tiêu đề.
+ *
+ * ╔══ VÌ SAO CÓ TIÊU ĐỀ, VÀ VÌ SAO CẢ TẤM ĐẦU CŨNG CÓ ═══════════════════════╗
+ * ║ Chủ sản phẩm: *"mỗi prompt sheet giống hệt nhau, khác mỗi phần mô tả"*.    ║
+ * ║ Đúng thế — và chính vì giống nhau tới 90% mà hai prompt dán nối nhau       ║
+ * ║ KHÔNG phân biệt được bằng mắt: người ta dán cả cụm vào chat rồi mới nhận   ║
+ * ║ ra máy vẽ đang đọc một mớ hai bản chồng lên nhau. Vạch tiêu đề là ranh     ║
+ * ║ giới nhìn thấy được ấy.                                                    ║
+ * ║ Tấm ĐẦU cũng có tiêu đề: bỏ nó đi thì tấm 1 là phần "không tên" còn tấm 2  ║
+ * ║ có tên — người đọc phải suy ra luật thay vì đọc thẳng.                     ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Một tấm thì KHÔNG có tiêu đề nào: đây cũng là chữ của nút «Copy prompt» khi thẻ
+ * chỉ sinh một tấm, và thêm một dòng rào vào một prompt đơn là thêm chữ lạ vào
+ * đúng thứ ta hứa là "nguyên văn engine sẽ gửi".
+ */
+export function joinSheetPrompts(prompts: readonly string[]): string {
+  if (prompts.length <= 1) return prompts[0] ?? "";
+  return prompts.map((text, at) => `=== Tấm ${at + 1} ===\n\n${text}`).join("\n\n");
+}
+
+/**
  * Copy CHỮ vào bộ nhớ tạm — cửa duy nhất cho nút «Copy prompt».
  *
  * Ném thay vì trả cờ: nơi gọi phải hiện lỗi, và một hàm trả `false` lặng lẽ là
