@@ -189,7 +189,11 @@ export function CanvasBlock(props: CanvasBlockProps) {
               projectId={projectId}
               sheetId={sheet.id}
               runId={gen.runId}
-              busy={gen.status === "running"}
+              /* KHÔNG đưa xuống trạng thái của CẢ THẺ nữa — đưa DANH SÁCH TẤM của
+                 lượt, để mỗi ô ảnh tự tra tên mình vào. Lý do đầy đủ (con bọ "cả
+                 hai ô cùng hiện đang vẽ") nằm ở `SheetResultSlot`. */
+              runJobs={gen.jobs}
+              drawingJobs={gen.status === "running" ? gen.drawing : []}
               /* Nút «Vẽ lại tấm này» có mặt kể cả ở thẻ MỘT tấm: từ lượt này nút Vẽ
                  giữ nguyên kết quả khi mô tả không đổi, nên đây là đường DUY NHẤT để
                  xin một bức ảnh khác cho cùng một mô tả. */

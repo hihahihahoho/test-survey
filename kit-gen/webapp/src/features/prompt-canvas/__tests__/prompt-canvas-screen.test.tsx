@@ -348,7 +348,7 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
         sheets={[sheet as never]}
         onChange={() => {}}
         onDelete={() => {}}
-        gen={{ status: "idle", message: "", runId: null, done: 0, total: 0 }}
+        gen={{ status: "idle", message: "", runId: null, done: 0, total: 0, jobs: [], drawing: [] }}
         onGen={() => {}}
         onGenSheet={() => {}}
         onDequeue={() => {}}
@@ -377,7 +377,7 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
           sheets={[sheet as never]}
           onChange={() => {}}
           onDelete={() => {}}
-          gen={{ status: "idle", message: "", runId: null, done: 0, total: 0 }}
+          gen={{ status: "idle", message: "", runId: null, done: 0, total: 0, jobs: [], drawing: [] }}
           onGen={() => {}}
           onGenSheet={() => {}}
           onDequeue={() => {}}
@@ -647,9 +647,19 @@ describe("bỏ qua tấm không đổi", () => {
         <span data-testid="s">{st.status}</span>
         <span data-testid="m">{st.message}</span>
         <span data-testid="n">{`${st.done}/${st.total}`}</span>
+        {/* HAI DANH SÁCH mà mỗi ô ảnh tra tên mình vào — xem `SheetResultSlot`. */}
+        <span data-testid="jobs">{st.jobs.join(",")}</span>
+        <span data-testid="drawing">{st.drawing.join(",")}</span>
       </div>
     );
   }
+
+  /** Lượt chạy mang ĐÚNG những job này, đúng hình dạng `#34` trả về. */
+  const runWithJobs = (id: string, status: Run["status"], jobs: Array<{ job: string; status: string }>): Run => ({
+    ...makeRun(id, status, "running"),
+    progress: { done: jobs.filter((j) => j.status === "ok").length, total: jobs.length, failed: 0, etaSeconds: null },
+    jobs,
+  }) as unknown as Run;
 
   it("một trong hai tấm được giữ ⇒ chỉ vẽ một, và nói ra tấm nào giữ nguyên", async () => {
     H.startRun.mockResolvedValueOnce({
@@ -699,5 +709,70 @@ describe("bỏ qua tấm không đổi", () => {
     /* `force: true` là phần KHÔNG THỂ BỎ: mô tả không đổi nên vân tay vẫn trùng,
        và không ép thì agent bỏ qua đúng cái tấm người dùng vừa xin vẽ lại. */
     expect(H.startRun.mock.calls[0]![1]).toMatchObject({ jobs: ["chinh-b12"], force: true, maxJobs: 1 });
+  });
+
+  /**
+   * ╔══ VÀ HỆ QUẢ THỨ BA, TÌM RA NGÀY 14/09/2026 ══════════════════════════════╗
+   * ║ Trạng thái của thẻ đi xuống MỌI ô ảnh của thẻ. Nên một lượt chỉ vẽ tấm 2  ║
+   * ║ vẫn bắt ô của tấm 1 hiện «Đang vẽ tấm này…» và đọc ảnh trong thư mục của   ║
+   * ║ lượt ấy — nơi không có file nào của nó. Ảnh đang có của tấm 1 biến mất.    ║
+   * ║ Hàng đợi là nơi DUY NHẤT biết lượt này mang tấm nào, nên nó phải nói ra:   ║
+   * ║ `jobs` (tấm của lượt) và `drawing` (tấm còn đang vẽ).                      ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  describe("nói ra lượt này mang tấm nào", () => {
+    it("tấm bị giữ nguyên KHÔNG nằm trong danh sách đang vẽ", async () => {
+      H.startRun.mockResolvedValueOnce({
+        runId: "r-1",
+        jobs: [{ job: "chinh-b12" }],
+        skipped: [{ job: "chinh-b1", reason: "UNCHANGED" }],
+      });
+      H.getRun.mockImplementation(async (id: string) =>
+        runWithJobs(id, "running", [{ job: "chinh-b1", status: "ok" }, { job: "chinh-b12", status: "running" }]));
+
+      wrap(<SkipHarness />);
+      fireEvent.click(screen.getByText("gen"));
+
+      await waitFor(() => expect(screen.getByTestId("s").textContent).toBe("running"));
+      expect(screen.getByTestId("jobs").textContent).toBe("chinh-b12");
+      expect(screen.getByTestId("drawing").textContent).toBe("chinh-b12");
+    });
+
+    it("tấm vẽ xong giữa chừng rời khỏi danh sách đang vẽ, nhưng vẫn là tấm CỦA lượt", async () => {
+      H.startRun.mockResolvedValueOnce({
+        runId: "r-2",
+        jobs: [{ job: "chinh-b1" }, { job: "chinh-b12" }],
+        skipped: [],
+      });
+      H.getRun.mockImplementation(async (id: string) =>
+        runWithJobs(id, "running", [{ job: "chinh-b1", status: "ok" }, { job: "chinh-b12", status: "running" }]));
+
+      wrap(<SkipHarness />);
+      fireEvent.click(screen.getByText("gen"));
+
+      await waitFor(() => expect(screen.getByTestId("s").textContent).toBe("running"));
+      /* Ảnh của tấm 1 đã nằm trên đĩa ⇒ thôi quay vòng chờ; nhưng nó vẫn thuộc lượt
+         này nên ô ảnh của nó vẫn neo vào ảnh bất biến của lượt. */
+      expect(screen.getByTestId("jobs").textContent).toBe("chinh-b1,chinh-b12");
+      expect(screen.getByTestId("drawing").textContent).toBe("chinh-b12");
+      expect(screen.getByTestId("n").textContent).toBe("1/2");
+    });
+
+    it("lượt xong rồi thì không tấm nào còn «đang vẽ», mà danh sách tấm của lượt vẫn còn", async () => {
+      H.startRun.mockResolvedValueOnce({
+        runId: "r-3",
+        jobs: [{ job: "chinh-b12" }],
+        skipped: [{ job: "chinh-b1" }],
+      });
+      H.getRun.mockImplementation(async (id: string) =>
+        runWithJobs(id, "done", [{ job: "chinh-b12", status: "ok" }]));
+
+      wrap(<SkipHarness />);
+      fireEvent.click(screen.getByText("gen"));
+
+      await waitFor(() => expect(screen.getByTestId("s").textContent).toBe("done"));
+      expect(screen.getByTestId("jobs").textContent).toBe("chinh-b12");
+      expect(screen.getByTestId("drawing").textContent).toBe("");
+    });
   });
 });
