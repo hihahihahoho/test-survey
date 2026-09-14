@@ -490,6 +490,40 @@ export function sheetSplitNote(sizes: readonly number[]): string {
 }
 
 /**
+ * RANH GIỚI TẤM trong một danh sách dòng — mỗi tấm bắt đầu ở DÒNG nào.
+ *
+ * ╔══ VÌ SAO LÀ MỘT HÀM CHUNG, KHÔNG PHẢI HAI VÒNG LẶP TRONG HAI THẺ ════════╗
+ * ║ Vạch ranh giới vẽ trên màn phải nằm ĐÚNG chỗ mà `splitRows` cắt — nếu     ║
+ * ║ lệch một dòng thì người dùng kéo một món qua vạch, thấy nó "sang tấm 2",  ║
+ * ║ rồi bấm Vẽ và nhận về một tấm 1 vẫn còn nó. Nên chỗ cắt chỉ được TÍNH RA  ║
+ * ║ TỪ kết quả chia thật (`sizes` của `uiKitSplit`/`mascotSplit`), không bao   ║
+ * ║ giờ từ một phép `index % max` dựng lại ở tầng hiển thị.                   ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Bộ ghép làm cho một tấm ngắn hơn trần (cụm không đủ chỗ thì sang tấm sau
+ * NGUYÊN VẸN), nên `at` KHÔNG phải bội số của trần — đó chính là ca mà phép
+ * `index % max` nói sai và hàm này nói đúng.
+ */
+export interface SheetBreakAt {
+  /** Số thứ tự tấm, đếm từ 1 — đúng con số hiện trên nhãn. */
+  no: number;
+  /** Chỉ số DÒNG mở đầu tấm này trong danh sách phẳng. */
+  at: number;
+  /** Số ô của tấm này. */
+  size: number;
+}
+
+export function sheetBreaks(sizes: readonly number[]): SheetBreakAt[] {
+  const out: SheetBreakAt[] = [];
+  let at = 0;
+  for (const size of sizes) {
+    out.push({ no: out.length + 1, at, size });
+    at += size;
+  }
+  return out;
+}
+
+/**
  * Khung lưới hiển thị cho N ô. Rẻ nhất mà vẫn đúng tinh thần "hệ thống tự lo":
  * 3 cột cho tới 9 ô, nở sang 4 cột khi đông hơn; luôn hiện tối thiểu 3 hàng để
  * ô đầu tiên không lơ lửng một mình trên một khung dẹt.

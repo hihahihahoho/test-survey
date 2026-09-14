@@ -10,6 +10,7 @@ import {
   maxPerSheetOf,
   newCell,
   newMascotPose,
+  sheetBreaks,
   sheetSplitNote,
   splitRows,
   uiKitSplit,
@@ -358,5 +359,86 @@ describe("sheetSplitNote — câu người dùng đọc trên thẻ", () => {
 
   it("thẻ rỗng nói thẳng là chưa có tấm nào", () => {
     expect(sheetSplitNote([])).toBe("chưa có tấm nào");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⑥ Vạch ranh giới tấm — chỗ cắt mà người dùng NHÌN THẤY
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * ╔══ VÌ SAO VẠCH PHẢI TÍNH TỪ KẾT QUẢ CHIA, KHÔNG TỪ `index % trần` ════════╗
+ * ║ Bộ ghép làm một tấm NGẮN HƠN trần (cụm không đủ chỗ thì sang tấm sau      ║
+ * ║ nguyên vẹn). Một phép `index % 4` vẽ vạch ở dòng 4 trong khi phép chia    ║
+ * ║ thật cắt ở dòng 3 — người dùng kéo một món "qua vạch", thấy nó sang tấm 2 ║
+ * ║ trên màn, rồi bấm Vẽ và nhận về một tấm 1 vẫn còn nó.                     ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+describe("sheetBreaks — mỗi tấm bắt đầu ở dòng nào", () => {
+  it("một tấm ⇒ một mốc duy nhất ở dòng 0", () => {
+    expect(sheetBreaks([3])).toEqual([{ no: 1, at: 0, size: 3 }]);
+  });
+
+  it("6 dòng trần 4 ⇒ vạch ở dòng 0 và dòng 4", () => {
+    expect(sheetBreaks([4, 2])).toEqual([
+      { no: 1, at: 0, size: 4 },
+      { no: 2, at: 4, size: 2 },
+    ]);
+  });
+
+  it("không có dòng nào ⇒ không có vạch nào", () => {
+    expect(sheetBreaks([])).toEqual([]);
+  });
+
+  it("tấm NGẮN vì bộ ghép ⇒ vạch đi theo phép chia thật, không theo trần", () => {
+    /* Hai dòng lẻ rồi bộ ghép `dialog` ba phần, trần 4: cụm không còn đủ chỗ ở tấm
+       1 nên nó sang tấm 2 NGUYÊN VẸN ⇒ tấm 1 chỉ có 2 ô, và vạch nằm ở dòng 2 —
+       không phải dòng 4 như một phép `index % trần` sẽ nói. */
+    const block = uiBlock(["button", "btn-secondary", "dialog-panel", "dialog-name", "dialog-next"]);
+    const sizes = sizesOf(block);
+    expect(sizes).toEqual([2, 3]);
+    expect(sheetBreaks(sizes).map((b) => b.at)).toEqual([0, 2]);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⑦ Hai tấm của MỘT thẻ: phần chung y hệt, phần ô khác nhau
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Chủ sản phẩm: *"mỗi prompt tấm giống hệt nhau, khác mỗi phần mô tả"*. Đó là một
+ * lời hứa ĐO ĐƯỢC ngay ở contract — thứ engine dựng prompt từ đó: khổ, lời gợi ý ô,
+ * và câu phong cách của cả bộ phải bằng nhau TỪNG CHỮ giữa hai tấm; chỉ `components`
+ * được khác. Lệch một trong mấy trường ấy là hai tấm vẽ ra hai lối, và người dùng
+ * không có cách nào đoán vì sao.
+ */
+describe("một thẻ → nhiều tấm: phần chung không được lệch", () => {
+  it("hai tấm cùng khổ, cùng lời gợi ý ô, chỉ khác danh sách ô", () => {
+    const sheets = sheetsOf(uiBlock(["button", "coin", "panel", "badge", "button", "coin"]));
+    expect(sheets).toHaveLength(2);
+    const [one, two] = sheets;
+    expect(two!.canvas).toBe(one!.canvas);
+    expect(two!.cell_hint).toBe(one!.cell_hint);
+    expect(two!.orient).toBe(one!.orient);
+    /* Khác id (hai tấm là hai job) và khác danh sách ô — đó là toàn bộ chỗ được khác. */
+    expect(two!.id).not.toBe(one!.id);
+    expect(two!.components.map((c) => c.vi)).not.toEqual(one!.components.map((c) => c.vi));
+  });
+
+  it("tấm 1 ô có lưới 1×1 — món đó chiếm trọn khổ", () => {
+    const sheets = sheetsOf(uiBlock(["button", "coin"], 1));
+    expect(sheets).toHaveLength(2);
+    for (const sheet of sheets) expect(sheet.grid).toEqual({ cols: 1, rows: 1 });
+  });
+
+  it("câu phong cách của cả bộ là MỘT, dùng chung cho mọi tấm", () => {
+    const contract = composerToContract(
+      state([uiBlock(["button", "coin", "panel", "badge", "button", "coin"])]),
+      { presets: PRESETS },
+    );
+    expect(contract.sheets).toHaveLength(2);
+    /* Một `variant` duy nhất ⇒ `gen.sh` chèn ĐÚNG một câu phong cách vào cả hai tấm. */
+    expect(contract.variants).toHaveLength(1);
+    expect(contract.variants?.[0]!.style).not.toBe("");
   });
 });

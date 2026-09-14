@@ -19,7 +19,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { PromptProjectContext } from "@/features/prompt-canvas/lib/project-context";
 import { BrandBindingProvider } from "../extensions/BrandProfilePill";
 import type { BrandBinding, BrandMascot } from "../components/BrandPickerPill";
-import { newMascotBlock, type MascotBlock } from "../lib/composer-model";
+import { newMascotBlock, newMascotPose, type MascotBlock } from "../lib/composer-model";
 import { MascotBlockBody } from "../components/MascotBlockView";
 
 /* Kho preset thật đi qua TanStack Query + agent; ca ở đây nói về pill, không về
@@ -169,5 +169,54 @@ describe("pill nhân vật: danh sách chọn sẵn CHỈ đến từ thương h
     /* Ảnh tải bất đồng bộ; trước khi về thì đã có ô giữ chỗ cùng cỡ — danh sách
        không nhảy khi ảnh tới. */
     expect(row.querySelector("img, span[aria-hidden].size-8")).not.toBeNull();
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RANH GIỚI TẤM — thẻ Nhân vật dùng CHUNG cơ chế với thẻ Bộ UI
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Hai thẻ-danh-sách phải giống nhau tới từng chữ trên nhãn: người dùng học cách
+ * đọc vạch ranh giới đúng MỘT lần rồi dùng ở cả hai (cùng lập luận đã dựng nên
+ * `row-ui.tsx`). Ca này khoá phía Nhân vật; phía Bộ UI ở `uikit-block.test.tsx`.
+ */
+describe("vạch ranh giới tấm trên danh sách dáng", () => {
+  const poses = (n: number) =>
+    Array.from({ length: n }, (_unused, i) => ({ ...newMascotPose(), id: `p${i + 1}` }));
+
+  function block(n: number): MascotBlock {
+    return { ...newMascotBlock(), poses: poses(n) };
+  }
+
+  it("sáu dáng ở nấc mặc định ⇒ «Tấm 1 · 4 ô» và «Tấm 2 · 2 ô»", () => {
+    render(<MascotBlockBody block={block(6)} onChange={() => {}} />);
+    expect(screen.getByText("Tấm 1 · 4 ô")).toBeTruthy();
+    expect(screen.getByText("Tấm 2 · 2 ô")).toBeTruthy();
+  });
+
+  it("bốn dáng ⇒ một tấm, không vạch nào", () => {
+    render(<MascotBlockBody block={block(4)} onChange={() => {}} />);
+    expect(screen.queryByText(/^Tấm \d/)).toBeNull();
+  });
+
+  it("kéo dáng #1 thả vào vạch «Tấm 2» ⇒ nó thành dáng đầu của tấm 2", () => {
+    let latest: MascotBlock | null = null;
+    function Host() {
+      const [b, setB] = React.useState<MascotBlock>(() => block(6));
+      return (
+        <MascotBlockBody
+          block={b}
+          onChange={(updater) => setB((prev) => { const next = updater(prev); latest = next; return next; })}
+        />
+      );
+    }
+    render(<Host />);
+
+    fireEvent.dragStart(screen.getAllByRole("button", { name: /^Đổi chỗ/ })[0]!);
+    fireEvent.drop(screen.getByRole("separator", { name: /tấm 2/i }));
+
+    expect(latest).not.toBeNull();
+    expect(latest!.poses.map((p) => p.id)).toEqual(["p2", "p3", "p4", "p5", "p1", "p6"]);
   });
 });

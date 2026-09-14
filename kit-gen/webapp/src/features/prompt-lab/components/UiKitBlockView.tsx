@@ -27,13 +27,15 @@ import {
 } from "../lib/cell-size";
 import { pillValuesOf, retitleCellDoc, uiCellDoc } from "../lib/doc-templates";
 import {
-  moveRow, newCell, sheetSplitNote, uiKitSplit,
+  moveRow, newCell, sheetBreaks, sheetSplitNote, uiKitSplit,
   type BlockMode, type UiCell, type UiKitBlock,
 } from "../lib/composer-model";
 import { BlockCard, ModeBadge, ModeToggle } from "./BlockCard";
 import { SheetMaxPicker } from "./SheetMaxPicker";
 import { BlockEditor } from "./BlockEditor";
-import { DragHandle, NoteField, RemoveButton, RowIndex, RowShell, RowTop, type RowDragProps } from "./row-ui";
+import {
+  DragHandle, NoteField, RemoveButton, RowIndex, RowShell, RowTop, SheetBreak, type RowDragProps,
+} from "./row-ui";
 import {
   OptionPill,
   PillAxis,
@@ -1205,10 +1207,20 @@ function cellEdited(cell: UiCell, presets: PresetBundle): boolean {
 export function UiKitBlockBody({
   block,
   onChange,
+  onRedrawSheet,
+  redrawBusy = false,
 }: {
   block: UiKitBlock;
   /** Nhận HÀM cập nhật, không nhận giá trị — xem `updateBlock` trong PromptComposerScreen. */
   onChange: (updater: (prev: UiKitBlock) => UiKitBlock) => void;
+  /**
+   * VẼ LẠI RIÊNG MỘT TẤM (chỉ số đếm từ 0, đúng thứ tự tấm của phép chia).
+   *
+   * Vắng ở vỏ lab — nơi ấy không có đường nào tiêu lượt tạo, nên bày một nút vẽ
+   * ở đó là một nút bấm vào không có gì xảy ra. Vỏ `/k/:id` thì truyền vào.
+   */
+  onRedrawSheet?: (sheetIndex: number) => void;
+  redrawBusy?: boolean;
 }) {
   const presets = usePresets();
   const [askReset, setAskReset] = React.useState(false);
@@ -1253,6 +1265,13 @@ export function UiKitBlockBody({
 
   const Row = block.mode === "free" ? FreeCellRow : CellRow;
 
+  /* PHÉP CHIA THẬT, không phải một phép chia thứ hai dựng lại ở tầng hiển thị:
+     cùng `uiKitSplit` mà badge trên thẻ và bộ dịch contract cùng gọi. Vạch ranh
+     giới chỉ hiện khi thẻ CÓ nhiều hơn một tấm — một tấm thì không có gì để ngăn,
+     và một cái nhãn "Tấm 1" đứng một mình chỉ là chữ thừa trên mọi thẻ nhỏ. */
+  const breaks = sheetBreaks(uiKitSplit(block, presets).map((chunk) => chunk.length));
+  const breakAt = new Map(breaks.length > 1 ? breaks.map((b) => [b.at, b]) : []);
+
   return (
     <>
       <div className="mb-3">
@@ -1275,8 +1294,19 @@ export function UiKitBlockBody({
 
       <div className="flex flex-col">
         {block.cells.map((cell, index) => (
+          <React.Fragment key={cell.id}>
+          {breakAt.get(index) && (
+            <SheetBreak
+              no={breakAt.get(index)!.no}
+              size={breakAt.get(index)!.size}
+              at={index}
+              onMove={move}
+              dragFrom={dragFrom}
+              {...(onRedrawSheet ? { onRedraw: () => onRedrawSheet(breakAt.get(index)!.no - 1) } : {})}
+              redrawBusy={redrawBusy}
+            />
+          )}
           <Row
-            key={cell.id}
             cell={cell}
             used={used}
             drag={{ index, count: block.cells.length, onMove: move, dragFrom }}
@@ -1299,6 +1329,7 @@ export function UiKitBlockBody({
             }
             onRemove={() => onChange((prev) => ({ ...prev, cells: prev.cells.filter((c) => c.id !== cell.id) }))}
           />
+          </React.Fragment>
         ))}
       </div>
 

@@ -222,6 +222,97 @@ describe("② tay nắm kéo — bàn phím phải làm được đúng việc c
   });
 });
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ②b VẠCH RANH GIỚI TẤM — và kéo một dòng QUA vạch
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * ╔══ VÌ SAO CA NÀY TỒN TẠI ═════════════════════════════════════════════════╗
+ * ║ Chủ sản phẩm: *"mỗi kiểu nếu tràn 2 tấm thì tách ra kiểu kéo thả giữa các ║
+ * ║ tấm, như thế khi gen ảnh lại đỡ phải gen lại cả 2 cái"*. Hai nửa của câu   ║
+ * ║ ấy đều hỏng lặng được: vạch vẽ SAI CHỖ thì người dùng tưởng món của mình   ║
+ * ║ đã sang tấm 2 (mà không), còn thả vào vạch mà KHÔNG đổi thứ tự thì cả      ║
+ * ║ tính năng chỉ là một đường kẻ trang trí.                                  ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+describe("②b ranh giới tấm trong danh sách dòng", () => {
+  const six = () =>
+    ["button", "coin", "panel", "badge", "popover", "trophy"].map((id, i) => ({
+      ...newCell(id, PRESETS),
+      id: `c${i + 1}`,
+    }));
+
+  it("sáu dòng ở nấc mặc định ⇒ hai vạch, đúng «Tấm 1 · 4 ô» và «Tấm 2 · 2 ô»", () => {
+    render(<Harness initial={uikit(six())} />);
+    expect(screen.getByText("Tấm 1 · 4 ô")).toBeTruthy();
+    expect(screen.getByText("Tấm 2 · 2 ô")).toBeTruthy();
+  });
+
+  it("một tấm ⇒ KHÔNG vạch nào — không có gì để ngăn thì không kẻ", () => {
+    render(<Harness initial={uikit(six().slice(0, 3))} />);
+    expect(screen.queryByText(/^Tấm \d/)).toBeNull();
+  });
+
+  it("vạch nằm ĐÚNG TRƯỚC dòng mở đầu tấm, không trôi xuống cuối danh sách", () => {
+    render(<Harness initial={uikit(six())} />);
+    const labels = [...document.querySelectorAll("[role=\"separator\"], [aria-label^=\"Đổi chỗ\"]")]
+      .map((el) => (el.getAttribute("role") === "separator" ? "vạch" : "dòng"));
+    /* vạch · 4 dòng · vạch · 2 dòng — thứ tự này LÀ phép chia, đọc thẳng trên cây DOM. */
+    expect(labels).toEqual(["vạch", "dòng", "dòng", "dòng", "dòng", "vạch", "dòng", "dòng"]);
+  });
+
+  it("kéo dòng #1 thả vào vạch «Tấm 2» ⇒ nó thành dòng ĐẦU của tấm 2, dòng cuối tấm 1 trôi xuống", () => {
+    let latest: UiKitBlock | null = null;
+    render(<Harness initial={uikit(six())} onState={(next) => { latest = next; }} />);
+
+    const handles = screen.getAllByRole("button", { name: /^Đổi chỗ/ });
+    const line = screen.getByRole("separator", { name: /tấm 2/i });
+    fireEvent.dragStart(handles[0]!);
+    fireEvent.drop(line);
+
+    expect(latest).not.toBeNull();
+    /* `button` rơi vào vị trí #5 (đếm từ 1) = ô đầu của tấm 2 ở nấc 4; `popover` —
+       vốn là dòng đầu tấm 2 — bị đẩy lên làm ô cuối của tấm 1. Đó là HỆ QUẢ của
+       phép chia theo thứ tự, không phải một luật riêng của phép kéo. */
+    expect(latest!.cells.map((c) => c.elementId)).toEqual([
+      "coin", "panel", "badge", "popover", "button", "trophy",
+    ]);
+  });
+
+  it("kéo một dòng của tấm 2 thả vào vạch «Tấm 1» ⇒ nó lên làm dòng đầu cả thẻ", () => {
+    let latest: UiKitBlock | null = null;
+    render(<Harness initial={uikit(six())} onState={(next) => { latest = next; }} />);
+
+    const handles = screen.getAllByRole("button", { name: /^Đổi chỗ/ });
+    fireEvent.dragStart(handles[5]!);
+    fireEvent.drop(screen.getByRole("separator", { name: /tấm 1/i }));
+
+    expect(latest!.cells.map((c) => c.elementId)).toEqual([
+      "trophy", "button", "coin", "panel", "badge", "popover",
+    ]);
+  });
+
+  it("vỏ KHÔNG vẽ được thì không bày nút «Vẽ lại tấm này»", () => {
+    render(<Harness initial={uikit(six())} />);
+    expect(screen.queryByRole("button", { name: "Vẽ lại tấm này" })).toBeNull();
+  });
+
+  it("vỏ có đường vẽ ⇒ mỗi vạch một nút, bấm nút của vạch «Tấm 2» báo đúng tấm số 1 (đếm từ 0)", () => {
+    const asked: number[] = [];
+    render(
+      <UiKitBlockBody
+        block={uikit(six())}
+        onChange={() => {}}
+        onRedrawSheet={(at) => asked.push(at)}
+      />,
+    );
+    const buttons = screen.getAllByRole("button", { name: "Vẽ lại tấm này" });
+    expect(buttons).toHaveLength(2);
+    fireEvent.click(buttons[1]!);
+    expect(asked).toEqual([1]);
+  });
+});
+
 describe("③ hai chế độ — dòng element ở «Tự do» là một TipTap thật", () => {
   it("chế độ mặc định là template: có công tắc, KHÔNG có ô soạn nào", () => {
     render(<Harness initial={uikit([{ ...newCell("button", PRESETS), id: "c1" }])} />);

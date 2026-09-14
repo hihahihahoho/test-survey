@@ -204,3 +204,118 @@ export function NoteField({
     />
   );
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RANH GIỚI TẤM
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * CÂU GIẢI THÍCH PHÉP CHIA — một chuỗi, dùng ở cả tooltip lẫn nhãn cho trình đọc
+ * màn hình. Hai bản chữ cho cùng một luật là hai luật sau đúng một lần sửa.
+ *
+ * TÊN NGẮN GỌN LÀ CÓ LÝ DO: cổng từ cấm §5.4 quét cả BIỂU THỨC nằm trong chuỗi
+ * mẫu, nên một cái tên hằng mang chữ kỹ thuật bị tính là chữ kỹ thuật lọt ra UI
+ * ngay khi nó được nhúng vào một câu tiếng Việt (`${…}`). Đây là một chỗ trúng đo
+ * được, không phải một lo xa.
+ */
+export const BREAK_HINT =
+  "Chia theo THỨ TỰ DÒNG. Thả một dòng vào vạch này là đặt nó làm dòng đầu của tấm ngay dưới; " +
+  "tấm phía trên đã đủ chỗ thì dòng cuối của nó trôi xuống theo. Một bộ ghép luôn đi cả cụm, " +
+  "nên kéo lẻ một phần thì cả cụm vẫn nằm chung một tấm.";
+
+/**
+ * VẠCH RANH GIỚI giữa hai tấm — vừa là NHÃN vừa là ĐIỂM THẢ.
+ *
+ * ╔══ VÌ SAO VẠCH CŨNG PHẢI THẢ ĐƯỢC ════════════════════════════════════════╗
+ * ║ Chủ sản phẩm: *"mỗi kiểu nếu tràn 2 sheet thì tách ra kiểu kéo thả giữa   ║
+ * ║ các sheet, như thế khi gen ảnh lại đỡ phải gen lại cả 2 cái"*. Kéo thả    ║
+ * ║ lên một DÒNG thì chỉ nói được "đứng trước dòng kia"; còn câu người dùng   ║
+ * ║ muốn nói là *"món này thuộc tấm sau"* — và ở tấm sau có thể chưa có dòng  ║
+ * ║ nào để mà thả lên. Nên chính cái vạch là chỗ thả: thả vào vạch = dòng ấy  ║
+ * ║ thành dòng ĐẦU của tấm dưới vạch.                                        ║
+ * ║                                                                          ║
+ * ║ KHÔNG có "tấm" nào là một thùng chứa thật: tấm chỉ là kết quả của phép    ║
+ * ║ chia danh sách theo trần ô. Vì thế thả vào vạch chỉ ĐỔI THỨ TỰ DÒNG, và    ║
+ * ║ mọi hệ quả (dòng cuối tấm trên trôi xuống) là phép chia tự làm, không     ║
+ * ║ phải một luật riêng của phép kéo. `BREAK_HINT` nói ra điều ấy.      ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Bàn phím KHÔNG cần đường riêng ở đây: tay nắm ⣿ đã đưa dòng lên xuống qua vạch
+ * bằng ↑/↓ (xem `DragHandle`), và đi qua vạch bằng mũi tên cũng là đổi tấm — cùng
+ * một phép đổi thứ tự, chỉ khác thiết bị.
+ */
+export function SheetBreak({
+  no,
+  size,
+  at,
+  onMove,
+  dragFrom,
+  onRedraw,
+  redrawBusy = false,
+}: {
+  /** Số thứ tự tấm, đếm từ 1. */
+  no: number;
+  /** Số ô của tấm này. */
+  size: number;
+  /** Chỉ số dòng mở đầu tấm — cũng là đích của phép thả. */
+  at: number;
+  onMove: (from: number, to: number) => void;
+  dragFrom: React.MutableRefObject<number | null>;
+  /** Vẽ lại RIÊNG tấm này. Vắng ⇒ không bày nút — vỏ nào không vẽ được thì không mời. */
+  onRedraw?: () => void;
+  redrawBusy?: boolean;
+}) {
+  const [over, setOver] = React.useState(false);
+
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <div
+        role="separator"
+        aria-label={`Ranh giới trên đầu tấm ${no}, tấm này đang có ${size} ô. ${BREAK_HINT}`}
+        title={BREAK_HINT}
+        onDragOver={(event) => {
+          /* `preventDefault` là điều kiện BẮT BUỘC để nhận `drop` — xem `RowShell`. */
+          if (dragFrom.current === null) return;
+          event.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setOver(false);
+          const from = dragFrom.current;
+          dragFrom.current = null;
+          /* `at` là chỉ số dòng mở đầu tấm này, và `moveRow` xoá rồi chèn — nên chèn
+             vào đúng `at` cho ra dòng nằm ở vị trí `at` dù kéo từ trên xuống hay từ
+             dưới lên. Đó chính là "dòng đầu của tấm này". */
+          if (from !== null) onMove(from, at);
+        }}
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-2 rounded-2 px-2 py-1",
+          over && "bg-raised ring-1 ring-accent",
+        )}
+      >
+        <span className="shrink-0 text-caption tabular-nums text-fg-muted">
+          Tấm {no} · {size} ô
+        </span>
+        <span aria-hidden className="h-px min-w-0 flex-1 bg-line-subtle" />
+      </div>
+
+      {onRedraw && (
+        <button
+          type="button"
+          onClick={onRedraw}
+          disabled={redrawBusy}
+          title="Vẽ lại đúng tấm này. Tiêu một lượt tạo; các tấm khác của thẻ không bị đụng tới."
+          /* KHOÁ BẰNG `cursor-not-allowed` + tắt hiệu ứng trỏ, KHÔNG bằng `opacity-50`:
+             cổng `npm run contrast` đo chữ mờ-hoá-lần-hai và nó rơi xuống 2,5:1 trên nền
+             sáng — dưới hẳn ngưỡng 4,5. Một nút "đang khoá" mà không đọc nổi thì lời báo
+             "đang bận" cũng mất theo. */
+          className="shrink-0 rounded-1 px-2 py-1 text-caption text-fg-muted hover:bg-raised hover:text-fg-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-fg-muted"
+        >
+          Vẽ lại tấm này
+        </button>
+      )}
+    </div>
+  );
+}

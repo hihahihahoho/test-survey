@@ -11,6 +11,7 @@ import {
   moveRow,
   newMascotPose,
   retakePose,
+  sheetBreaks,
   sheetSplitNote,
   type BlockMode,
   type MascotBlock,
@@ -19,7 +20,9 @@ import {
 import { BlockCard, ModeBadge, ModeToggle } from "./BlockCard";
 import { SheetMaxPicker } from "./SheetMaxPicker";
 import { BlockEditor } from "./BlockEditor";
-import { DragHandle, NoteField, RemoveButton, RowIndex, RowShell, RowTop, type RowDragProps } from "./row-ui";
+import {
+  DragHandle, NoteField, RemoveButton, RowIndex, RowShell, RowTop, SheetBreak, type RowDragProps,
+} from "./row-ui";
 import { OptionPill, PillMenu, PillMenuItem, useMenuFlip } from "./pill-ui";
 
 /**
@@ -300,12 +303,17 @@ export function MascotBlockBody({
   block,
   onChange,
   reloadSignal = 0,
+  onRedrawSheet,
+  redrawBusy = false,
 }: {
   block: MascotBlock;
   /** Nhận HÀM cập nhật, không nhận giá trị — xem `updateBlock` trong màn. */
   onChange: (updater: (prev: MascotBlock) => MascotBlock) => void;
   /** Tín hiệu nạp lại CÂU ĐẦU THẺ khi nó bị sửa từ ngoài editor (ảnh vừa tải lên). */
   reloadSignal?: number;
+  /** Vẽ lại RIÊNG một tấm — cùng hợp đồng với `UiKitBlockBody`, xem chú thích ở đó. */
+  onRedrawSheet?: (sheetIndex: number) => void;
+  redrawBusy?: boolean;
 }) {
   const [askReset, setAskReset] = React.useState(false);
   /* MỘT ref cho cả danh sách: `dragstart` xảy ra ở dòng này còn `drop` ở dòng kia. */
@@ -351,6 +359,10 @@ export function MascotBlockBody({
 
   const Row = block.mode === "free" ? FreePoseRow : PoseRow;
 
+  /* Cùng nguồn chia với badge của thẻ và với bộ dịch contract — xem `UiKitBlockBody`. */
+  const breaks = sheetBreaks(mascotSplit(block).map((chunk) => chunk.length));
+  const breakAt = new Map(breaks.length > 1 ? breaks.map((b) => [b.at, b]) : []);
+
   return (
     <>
       <div className="mb-3">
@@ -387,8 +399,19 @@ export function MascotBlockBody({
 
       <div className="mt-3 flex flex-col border-t border-line-subtle pt-3">
         {block.poses.map((row, index) => (
+          <React.Fragment key={row.id}>
+          {breakAt.get(index) && (
+            <SheetBreak
+              no={breakAt.get(index)!.no}
+              size={breakAt.get(index)!.size}
+              at={index}
+              onMove={move}
+              dragFrom={dragFrom}
+              {...(onRedrawSheet ? { onRedraw: () => onRedrawSheet(breakAt.get(index)!.no - 1) } : {})}
+              redrawBusy={redrawBusy}
+            />
+          )}
           <Row
-            key={row.id}
             row={row}
             drag={{ index, count: block.poses.length, onMove: move, dragFrom }}
             onChange={(next) =>
@@ -396,6 +419,7 @@ export function MascotBlockBody({
             }
             onRemove={() => onChange((prev) => ({ ...prev, poses: prev.poses.filter((p) => p.id !== row.id) }))}
           />
+          </React.Fragment>
         ))}
       </div>
 
