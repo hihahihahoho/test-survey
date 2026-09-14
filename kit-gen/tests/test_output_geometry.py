@@ -167,5 +167,61 @@ class CoreVaDecorationTest(unittest.TestCase):
         self.assertEqual(code, 0)
 
 
+class LechTiLeTest(unittest.TestCase):
+    """`geometry.json` phải mang được LỆCH TỈ LỆ, không chỉ lệch pixel (14/09/2026).
+
+    Prompt thôi hứa hộp pixel — model không vẽ theo toạ độ (đo r-0021: lõi 587px
+    trong hộp hứa 368px, mọi ô lệch 1,5–1,7 lần, qua codex lẫn qua web ChatGPT).
+    Thứ nó hứa nay là tỉ lệ W:H của lõi, nên file này phải đo được đúng thứ ấy;
+    `deviation` (lệch pixel) ở lại nguyên vẹn vì nó vẫn là số theo dõi hữu ích.
+    """
+
+    @staticmethod
+    def _contract(out):
+        return contract(comps=[{"file": "button", "out": out,
+                                "skel": {"shape": "rrect", "w": .5, "h": .5}}])
+
+    def test_lo_DUNG_DANG_thi_lech_gan_0_du_to_hay_nho(self):
+        # Lõi 100x50 (2:1) trên canvas 200x100; `out` 240x120 cũng là 2:1.
+        _code, out = run_tool(sheet((200, 100), (50, 25, 149, 74)),
+                              self._contract({"w": 240, "h": 120}))
+        qa = out['cells'][0]['aspectDeviation']
+        self.assertLess(qa['value'], 0.001)
+        self.assertFalse(qa['flagged'])
+        self.assertEqual(qa['metric'], 'core_aspect')
+
+    def test_lo_SAI_DANG_thi_gan_co(self):
+        # Cùng lõi 2:1, nhưng người dùng đặt cỡ 120x120 (1:1) ⇒ lệch 100%.
+        _code, out = run_tool(sheet((200, 100), (50, 25, 149, 74)),
+                              self._contract({"w": 120, "h": 120}))
+        qa = out['cells'][0]['aspectDeviation']
+        self.assertAlmostEqual(qa['value'], 1.0, places=2)
+        self.assertTrue(qa['flagged'])
+
+    def test_o_KHONG_khai_out_thi_khong_bia_ra_lech(self):
+        _code, out = run_tool(sheet((200, 100), (50, 25, 149, 74)), contract())
+        self.assertIsNone(out['cells'][0]['aspectDeviation']['value'])
+
+    def test_chi_so_moi_KHONG_dong_them_mot_cong_gen_lai_nao(self):
+        """`status` vẫn do `reasons` quyết. Biến một ngưỡng vừa ra đời thành cổng
+        gen lại là cách nhanh nhất để cả lượt đỏ vì một con số chưa ai đo trên dự
+        án thật."""
+        code, out = run_tool(sheet((200, 100), (50, 25, 149, 74)),
+                             self._contract({"w": 120, "h": 120}))
+        cell = out['cells'][0]
+        self.assertTrue(cell['aspectDeviation']['flagged'])
+        self.assertEqual(cell['status'], 'ok')
+        self.assertEqual(cell['reasons'], [])
+        self.assertEqual(code, 0)
+
+    def test_o_trong_co_y_khong_mang_so_do_nao(self):
+        data = contract(cols=2, rows=1, comps=[
+            {"file": "button", "out": {"w": 240, "h": 120},
+             "skel": {"shape": "rrect", "w": .5, "h": .5}},
+            {"file": "_empty-1", "skel": {"shape": "empty"}}])
+        _code, out = run_tool(sheet((400, 200), (50, 50, 149, 149)), data)
+        self.assertIsNone(out['cells'][1].get('aspectDeviation'))
+
+
 if __name__ == '__main__':
     unittest.main()

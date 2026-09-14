@@ -43,6 +43,23 @@ import geometry                                                   # noqa: E402
 # có ý nghĩa; không đặt thấp hơn sàn nhiễu.
 SIZE_DEVIATION_THRESHOLD_PX = 15
 
+# ── LỆCH TỈ LỆ: CHỈ SỐ ĐO ĐÚNG THỨ PROMPT YÊU CẦU (14/09/2026) ────────────────
+# ╔══ VÌ SAO THÊM MỘT CHỈ SỐ NỮA THAY VÌ SIẾT CÁI CŨ ════════════════════════════╗
+# ║ `sizeDeviation` đo lõi đo được so với HỘP HỨA tính bằng pixel. Từ 14/09/2026 ║
+# ║ prompt không hứa hộp pixel nào nữa: đo r-0021 cho thấy model vẽ đúng tâm mà  ║
+# ║ cỡ gấp 1,5–1,7 lần ở MỌI ô (lõi 587px / hộp hứa 368px), qua codex lẫn qua    ║
+# ║ web ChatGPT — toạ độ không điều khiển được nó. Nên `sizeDeviation` nay đo    ║
+# ║ một lời hứa KHÔNG AI CÒN HỨA: nó vẫn đúng như một số theo dõi (và webapp     ║
+# ║ đang đọc), nhưng nó không còn là điểm số của prompt.                        ║
+# ║ Thứ prompt hứa bây giờ là TỈ LỆ W:H của lõi, và đó là thứ hạ nguồn KHÔNG     ║
+# ║ chữa được: webapp co lõi đo được về `outSize` — co đồng dạng thì không méo,  ║
+# ║ nhưng sai tỉ lệ thì chỉ còn cách chèn viền rỗng trong khung.                 ║
+# ╚═════════════════════════════════════════════════════════════════════════════╝
+# 0,15 = lệch 15% tỉ lệ. Một nút 2,9:1 vẽ thành 2,5:1 hay 3,4:1 thì qua; vẽ thành
+# 2,0:1 (lệch 31%) thì gắn cờ. Ngưỡng TƯƠNG ĐỐI chứ không phải pixel: tỉ lệ không
+# có đơn vị, và cùng một % sai lệch trên ô to hay ô nhỏ đều nát như nhau.
+ASPECT_DEVIATION_THRESHOLD = 0.15
+
 #: Từ mức này trở lên coi là ĐỤC HẲN — xem `snap_solid_alpha`.
 SOLID_ALPHA = 240
 #: Ngưỡng đo LÕI (`safe`). Không phải ngưỡng cắt: không một pixel nào bị bỏ vì nó.
@@ -168,7 +185,36 @@ def _xywh(rect):
     return None if rect is None else [rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]]
 
 
-def measure_cell(canvas, contract_safe, threshold=SIZE_DEVIATION_THRESHOLD_PX):
+def aspect_deviation(safe, out, threshold=ASPECT_DEVIATION_THRESHOLD):
+    """Lệch TỈ LỆ giữa lõi đo được và cỡ người dùng đặt.
+
+    ``|(safe.w / safe.h) / (out.w / out.h) − 1|`` — không đơn vị, không phụ thuộc
+    ô to hay nhỏ, và đối xứng đủ dùng ở dải lệch ta quan tâm.
+
+    `safe` là ``[x, y, w, h]`` (lõi đo được, bbox α ≥ CORE_ALPHA); `out` là
+    ``{"w","h"}`` của contract. Thiếu bên nào ⇒ `value` là None, `flagged` False:
+    ô không đo được KHÔNG phải ô đạt, và cũng không phải ô hỏng.
+    """
+    val = sa = oa = None
+    try:
+        ow, oh = float(out["w"]), float(out["h"])
+        sw, sh = float(safe[2]), float(safe[3])
+    except (TypeError, KeyError, IndexError, ValueError):
+        ow = oh = sw = sh = 0.0
+    if ow > 0 and oh > 0 and sw > 0 and sh > 0:
+        sa, oa = sw / sh, ow / oh
+        val = round(abs(sa / oa - 1), 4)
+    return {
+        "value": val,
+        "flagged": bool(val is not None and val > threshold),
+        "threshold": threshold,
+        "safeAspect": None if sa is None else round(sa, 4),
+        "outAspect": None if oa is None else round(oa, 4),
+        "metric": "core_aspect",
+    }
+
+
+def measure_cell(canvas, contract_safe, threshold=SIZE_DEVIATION_THRESHOLD_PX, out=None):
     """Sổ đo của một ô đã cắt → dict ``{safe, contractSafe, sizeDeviation}``.
 
     `safe` = bbox của pixel α ≥ CORE_ALPHA trên CẢ Ô. Đây là "lõi đo được" — hộp mà
@@ -199,6 +245,11 @@ def measure_cell(canvas, contract_safe, threshold=SIZE_DEVIATION_THRESHOLD_PX):
     return {
         "safe": safe,
         "contractSafe": list(contract_safe) if contract_safe is not None else None,
+        # LỆCH TỈ LỆ ĐI CẠNH LỆCH PIXEL, KHÔNG THAY NÓ. Hai số trả lời hai câu hỏi
+        # khác nhau ("lõi có lấp đúng hộp cũ không" / "lõi có đúng dáng không") và
+        # webapp đang đọc số thứ nhất — bỏ nó đi là làm vỡ màn kết quả để nói một
+        # điều mà thêm một khoá cũng nói được.
+        "aspectDeviation": aspect_deviation(safe, out),
         "sizeDeviation": {
             "maxEdgePx": max_edge,
             "flagged": bool(max_edge is not None and max_edge > threshold),
@@ -329,12 +380,43 @@ def summarize_size_deviation(assets, threshold=SIZE_DEVIATION_THRESHOLD_PX, styl
     }
 
 
+def summarize_aspect_deviation(assets, threshold=ASPECT_DEVIATION_THRESHOLD, style_id=None):
+    """Tổng hợp lệch TỈ LỆ. Cùng hình dạng với `summarize_size_deviation` có chủ ý:
+    web đọc hai khối cạnh nhau thì chúng phải có cùng tên khoá, chỉ khác đơn vị
+    (`maxValue` là tỉ lệ 0..n, không phải pixel)."""
+    measured = []
+    flagged_assets = []
+    worst = None
+    for asset in assets or []:
+        qa = asset.get("aspectDeviation") or {}
+        val = qa.get("value")
+        if not isinstance(val, (int, float)):
+            continue
+        measured.append(asset)
+        worst = max(abs(val), worst or 0)
+        if qa.get("flagged"):
+            flagged_assets.append({
+                "style": style_id if style_id is not None else asset.get("_style"),
+                "file": asset.get("file"),
+                "value": val,
+            })
+    return {
+        "threshold": threshold,
+        "measured": len(measured),
+        "flagged": bool(flagged_assets),
+        "flaggedCount": len(flagged_assets),
+        "maxValue": worst,
+        "flaggedAssets": flagged_assets,
+    }
+
+
 def summarize_manifest_qa(manifest, threshold=SIZE_DEVIATION_THRESHOLD_PX):
     """QA toàn manifest, chỉ chứa ID asset + số; không chứa đường dẫn máy."""
     all_assets = []
     for style_id, entry in (manifest.get("styles") or {}).items():
         all_assets.extend({**asset, "_style": style_id} for asset in entry.get("assets") or [])
-    return {"sizeDeviation": summarize_size_deviation(all_assets, threshold)}
+    return {"sizeDeviation": summarize_size_deviation(all_assets, threshold),
+            "aspectDeviation": summarize_aspect_deviation(all_assets)}
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
@@ -414,9 +496,11 @@ if __name__ == "__main__":
                 cx0, cy0 = geometry.cell_origin(W, H, COLS, ROWS, idx)
                 canvas = sheet_img.crop((cx0, cy0, cx0 + CW, cy0 + CH))
 
-                # ② KHUNG HỢP ĐỒNG. `geometry.safe_offset_in_cell` là cùng hàm khối
-                # python của gen.sh gọi để in "safe zone x=…, y=…" vào prompt, nên
-                # lệch một pixel là một test đỏ chứ không phải một asset lệch âm thầm.
+                # ② KHUNG HỢP ĐỒNG. Hộp này là chuyện của DAO CẮT và của QA, không
+                # còn là một lời hứa với model: từ 14/09/2026 prompt không in toạ độ
+                # nào (model vẽ đúng tâm mà cỡ gấp 1,5–1,7 lần — đo r-0021: lõi 587px
+                # trên hộp hứa 368px). Nó ở lại vì `sizeDeviation` đối chiếu theo nó
+                # và webapp đang đọc số ấy; lời hứa thật thì đo bằng `aspectDeviation`.
                 # Ô full-bleed không có khung nào để hứa ⇒ khung = cả ô.
                 if sk["shape"] == "full":
                     contract_safe = [0, 0, CW, CH]
@@ -443,7 +527,14 @@ if __name__ == "__main__":
                     print(f"  ⚠ {sid}/{comp['file']}: cả ô không có pixel nào α ≥ "
                           f"{CONTENT_ALPHA} — chỉ là sương mờ. Vẫn cắt nguyên, nhưng "
                           "lượt vẽ này gần như trống.")
-                ledger = measure_cell(canvas, contract_safe, qa_threshold)
+                ledger = measure_cell(canvas, contract_safe, qa_threshold,
+                                      comp.get("out"))
+                if ledger["aspectDeviation"]["flagged"]:
+                    print(f"  ⚠ QA {sid}/{comp['file']}: aspectDeviation "
+                          f"{ledger['aspectDeviation']['value']:.0%} > "
+                          f"{ASPECT_DEVIATION_THRESHOLD:.0%} "
+                          f"(lõi {ledger['aspectDeviation']['safeAspect']}:1 vs "
+                          f"hứa {ledger['aspectDeviation']['outAspect']}:1)")
                 if ledger["sizeDeviation"]["flagged"]:
                     print(f"  ⚠ QA {sid}/{comp['file']}: sizeDeviation "
                           f"max {ledger['sizeDeviation']['maxEdgePx']}px > {qa_threshold}px "
@@ -465,7 +556,8 @@ if __name__ == "__main__":
                          "content": [pw, ph], "content_at": [ox, oy],
                          "safe": ledger["safe"] or contract_safe,
                          "contractSafe": contract_safe,
-                         "sizeDeviation": ledger["sizeDeviation"]}
+                         "sizeDeviation": ledger["sizeDeviation"],
+                         "aspectDeviation": ledger["aspectDeviation"]}
                 # CỠ ĐẦU RA CHỈ ĐI QUA, KHÔNG THAM GIA CẮT. `out` là cỡ người dùng
                 # muốn có khi element rời khỏi app (dán Figma, xuất PNG); ô thì luôn
                 # được vẽ to hết cỡ lề cho phép để ăn trọn độ phân giải ảnh sinh.
@@ -507,7 +599,9 @@ if __name__ == "__main__":
 
 
         entry["qa"] = {"sizeDeviation": summarize_size_deviation(
-            entry["assets"], qa_threshold, sid)}
+            entry["assets"], qa_threshold, sid),
+            "aspectDeviation": summarize_aspect_deviation(
+                entry["assets"], ASPECT_DEVIATION_THRESHOLD, sid)}
         manifest["styles"][sid] = entry
         total = len(entry["assets"])
         want = sum(sum(1 for c in sh["components"] if c["skel"]["shape"] != "empty")
@@ -524,5 +618,9 @@ if __name__ == "__main__":
     q = manifest["qa"]["sizeDeviation"]
     print(f"— QA sizeDeviation: {q['flaggedCount']} flagged / {q['measured']} measured, "
           f"threshold {q['threshold']}px (không auto-regen)")
+    # CHỈ SỐ CỦA LỜI HỨA HÔM NAY: prompt nói tỉ lệ, nên QA phải đọc được tỉ lệ.
+    a = manifest["qa"]["aspectDeviation"]
+    print(f"— QA aspectDeviation: {a['flaggedCount']} flagged / {a['measured']} measured, "
+          f"threshold {a['threshold']:.0%} (không auto-regen)")
     dump_manifest(mpath, manifest)
     print("→ kits/manifest.json")

@@ -6,18 +6,23 @@
 ║ tích tính tay không. Khung xương đã bỏ hẳn 27/08/2026 — prompt nay IN THẲNG     ║
 ║ toạ độ — nên toàn bộ những phép đo ấy không còn đối tượng.                      ║
 ║                                                                                ║
-║ Thứ THAY THẾ chúng, và là thứ đắt hơn hẳn: bốn con số mà prompt HỨA với model   ║
-║ phải bằng đúng bốn con số mà `slice.py` DÙNG để cắt. Bản cũ không có cách nào   ║
-║ kiểm điều đó — một bên là hình ảnh, một bên là số — và hai bên đã lệch nhau     ║
-║ đúng 1px suốt nhiều tháng (`skeleton-svg.js` cộng CELL_BORDER, `slice.py` thì   ║
-║ không) mà không một test nào đỏ.                                               ║
+║ Thứ thay thế chúng từng là: bốn con số prompt HỨA phải bằng bốn con số          ║
+║ `slice.py` DÙNG để cắt — và hai bên đã lệch nhau đúng 1px suốt nhiều tháng mà   ║
+║ không test nào đỏ.                                                             ║
+║                                                                                ║
+║ 14/09/2026 — LỜI HỨA ẤY ĐÃ RÚT. Đo r-0021: model vẽ đúng tâm, đúng ô, nhưng lõi ║
+║ 587px trong một hộp hứa 368px; mọi ô lệch 1,5–1,7 lần, qua codex lẫn qua web    ║
+║ ChatGPT. Toạ độ pixel không điều khiển được model — chúng chỉ làm loãng những   ║
+║ câu nó đọc được. `geometry.py` vẫn là nguồn số học DUY NHẤT của dao cắt (mục 2  ║
+║ và 4 dưới đây không đổi một dòng); chỉ có prompt là thôi đọc nó, và nói tỉ lệ.  ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 Bốn nhóm ca:
   1. ``CanvasTableTest``   — bảng khổ: ba khổ, `canvas` thắng `orient`, chữ lạ không ném.
   2. ``CellAndSafeBoxTest``— số học ô + safe zone, so với con số tính tay.
-  3. ``PromptMatchesSliceTest`` — TRÙNG KHỚP: toạ độ đọc ra từ prompt THẬT của `gen.sh`
-     == toạ độ `slice.py` tính. Đây là ca đắt nhất của file.
+  3. ``PromptNoiTiLeChuKhongNoiPixelTest`` — 14/09/2026: prompt THÔI in toạ độ. Ca
+     này khoá chiều ngược lại — không một hộp pixel nào lọt ra prompt nữa — và khoá
+     phép mới: tỉ lệ in ra == tỉ lệ của `out` mà người dùng đặt.
   4. ``SliceUsesTheModuleTest`` — `slice.py` phải GỌI module, không được chép công thức.
 """
 import json
@@ -64,6 +69,9 @@ def sheet_3x3_square(w=0.5, h=0.345):
             "id": "ui", "canvas": "square", "grid": {"cols": 3, "rows": 3},
             "components": [
                 {"file": f"{i + 1:02d}-x", "spec": f"element {i + 1}",
+                 # `out` = cỡ người dùng đặt. Từ 14/09/2026 đây là nguồn DUY NHẤT
+                 # của câu hình học trong prompt (tỉ lệ W:H), nên tấm mẫu phải có.
+                 "out": {"w": 245, "h": 85},
                  "skel": {"shape": "rrect", "w": w, "h": h}}
                 for i in range(9)
             ],
@@ -159,59 +167,64 @@ class CellAndSafeBoxTest(unittest.TestCase):
         self.assertEqual([g["index"] for g in geo], list(range(9)))
 
 
-class PromptMatchesSliceTest(unittest.TestCase):
-    """CA ĐẮT NHẤT CỦA FILE: prompt hứa gì thì dao cắt phải cắt đúng đó.
+class PromptNoiTiLeChuKhongNoiPixelTest(unittest.TestCase):
+    """PROMPT KHÔNG CÒN HỨA MỘT HỘP PIXEL NÀO, VÀ TỈ LỆ NÓ NÓI PHẢI ĐÚNG.
 
-    Đọc ngược toạ độ RA KHỎI prompt thật (bằng regex, y như một người đọc), rồi so với
-    `geometry.safe_box`. `slice.py` gọi cùng hàm ấy (ca `SliceUsesTheModuleTest` khoá
-    điều đó), nên bằng nhau ở đây nghĩa là bằng nhau tới tận pixel cuối cùng.
+    Lớp này từng tên là `PromptMatchesSliceTest` và làm việc ngược lại: đọc toạ độ
+    ra khỏi prompt rồi so với `geometry.safe_box`. Hai vế ấy khớp nhau tuyệt đối
+    suốt — chỉ có điều người nhận lời hứa không thực hiện được nó (đo r-0021: lõi
+    587px trên hộp hứa 368px, lệch 1,5–1,7 lần ở mọi ô, cả qua codex lẫn qua web
+    ChatGPT). Nên nay có hai việc phải canh, và chúng là hai việc khác nhau:
+      · CHIỀU ÂM — không một toạ độ nào lọt lại vào prompt (dễ tái phát: hộp có
+        sẵn trong `geo`, nối thêm vào `spec` chỉ tốn một dòng);
+      · CHIỀU DƯƠNG — tỉ lệ in ra phải là tỉ lệ của `out`, tức cỡ người dùng đặt,
+        chứ không phải tỉ lệ của hộp max-fit trong ô (hai số ấy khác nhau, và lấy
+        nhầm thì mọi element đều mang tỉ lệ của Ô).
     """
 
-    ZONE = re.compile(
-        r"^(\d+)\) .*? — safe zone x=(\d+)\.\.(\d+), y=(\d+)\.\.(\d+) \((\d+)x(\d+) px\)",
-        re.M)
+    ASPECT = re.compile(r"^(\d+)\) .*? — core aspect ([\d.]+):([\d.]+) \(([^)]*)\)", re.M)
 
-    def zones_of(self, txt):
-        out = {}
-        for m in self.ZONE.finditer(txt):
-            n, x0, x1, y0, y1, w, h = (int(g) for g in m.groups())
-            out[n] = (x0, y0, x1, y1)
-            self.assertEqual((x1 - x0, y1 - y0), (w, h),
-                             f"ô {n}: kích thước in ra không khớp chính hai đầu mút của nó")
-        return out
+    def setUp(self):
+        self.cfg = sheet_3x3_square()
+        self.txt = render_prompt(self.cfg, "demo-ui")
 
-    def test_3x3_vuong_moi_o_dung_so(self):
+    def test_khong_mot_toa_do_nao_con_trong_prompt(self):
+        for chet in ("safe zone x=", "stays inside x=", "drawn at", "final size",
+                     "crop box", "cell box"):
+            self.assertNotIn(chet, self.txt, f"toạ độ/hộp pixel quay lại prompt: {chet}")
+        self.assertIsNone(re.search(r"x=\d+\.\.\d+", self.txt),
+                          "còn một cặp toạ độ kiểu x=..  trong prompt")
+
+    def test_moi_o_mang_ti_le_cua_out_chu_khong_phai_ti_le_cua_o(self):
+        found = {int(m.group(1)): (float(m.group(2)), float(m.group(3)))
+                 for m in self.ASPECT.finditer(self.txt)}
+        self.assertEqual(len(found), 9, "thiếu ô nào là ô đó không có hợp đồng hình học")
+        # 245x85 = 2,88 ⇒ 2.9:1. Tỉ lệ của Ô (hộp max-fit 0.5x0.345 trên ô vuông) là
+        # 1,45 — nếu con số dưới đây hoá thành 1.4 thì engine đang đọc nhầm nguồn.
+        for n, (a, b) in found.items():
+            self.assertEqual((a, b), (2.9, 1.0), f"ô {n}: tỉ lệ không phải tỉ lệ của out")
+
+    def test_ti_le_duoc_TA_BANG_CHU_chu_khong_chi_bang_ky_hieu(self):
+        """«2.9:1» một mình là ký hiệu; model ảnh đọc câu chữ. Đây là cả lý do đổi
+        cách nói, nên nó phải có ca riêng chứ không nấp trong regex ở trên."""
+        m = self.ASPECT.search(self.txt)
+        self.assertEqual(m.group(4), "about three times wider than tall")
+
+    def test_o_CAO_HON_RONG_doi_ve_so_cho_model_de_doc(self):
+        """0,625 là một con số; «1:1.6, taller than wide» là một hình dạng."""
         cfg = sheet_3x3_square()
-        zones = self.zones_of(render_prompt(cfg, "demo-ui"))
-        self.assertEqual(len(zones), 9, "thiếu ô nào là ô đó không có hợp đồng hình học")
-        skel = cfg["sheets"][0]["components"][0]["skel"]
-        for i in range(9):
-            self.assertEqual(zones[i + 1], geometry.safe_box(1254, 1254, 3, 3, i, skel),
-                             f"ô {i + 1}: prompt hứa một hộp, geometry tính một hộp khác")
-        # và con số cụ thể của ô đầu — để một thay đổi âm thầm trong công thức không
-        # thể "đúng với chính nó" mà vẫn sai với thực tế.
-        self.assertEqual(zones[1], (104, 137, 313, 281))
+        for c in cfg["sheets"][0]["components"]:
+            c["out"] = {"w": 100, "h": 160}
+        m = self.ASPECT.search(render_prompt(cfg, "demo-ui"))
+        self.assertEqual((m.group(2), m.group(3), m.group(4)),
+                         ("1", "1.6", "taller than wide"))
 
-    def test_kho_ngang_va_kho_doc_cung_khop(self):
-        for canvas, (W, H) in (("landscape", (1536, 1024)), ("portrait", (1024, 1536))):
-            cfg = sheet_3x3_square()
-            cfg["sheets"][0]["canvas"] = canvas
-            zones = self.zones_of(render_prompt(cfg, "demo-ui"))
-            skel = cfg["sheets"][0]["components"][0]["skel"]
-            for i in range(9):
-                self.assertEqual(zones[i + 1], geometry.safe_box(W, H, 3, 3, i, skel),
-                                 f"{canvas} ô {i + 1} lệch")
-
-    def test_anchor_bottom_di_toi_tan_prompt(self):
-        """Nhánh dễ bị bỏ quên nhất, vì nó chỉ khác căn giữa ở TRỤC DỌC — lệch ở đây
-        không nhìn ra bằng mắt trên một tấm prompt, chỉ hiện ra khi asset bị cắt cụt."""
-        cfg = sheet_3x3_square()
-        cfg["sheets"][0]["components"][0]["skel"] = {"shape": "figure", "w": 0.5, "h": 0.5,
-                                                     "anchor": "bottom"}
-        zones = self.zones_of(render_prompt(cfg, "demo-ui"))
-        comps = cfg["sheets"][0]["components"]
-        self.assertEqual(zones[1], geometry.safe_box(1254, 1254, 3, 3, 0, comps[0]["skel"]))
-        self.assertNotEqual(zones[1][1], zones[3][1], "neo đáy phải KHÁC căn giữa")
+    def test_geometry_py_VAN_LA_nguon_cua_dao_cat_du_prompt_thoi_doc_no(self):
+        """Prompt rút lui khỏi toạ độ KHÔNG có nghĩa là hình học bị bỏ: `slice.py`
+        vẫn cắt theo đúng `geometry.safe_box`. Ca này là cái chốt giữ mục đích của
+        cả file khi lớp trên đã đổi việc."""
+        skel = self.cfg["sheets"][0]["components"][0]["skel"]
+        self.assertEqual(geometry.safe_box(1254, 1254, 3, 3, 0, skel), (104, 137, 313, 281))
 
     def test_prompt_khong_con_mot_chu_nao_ve_khung_xuong(self):
         txt = render_prompt(sheet_3x3_square(), "demo-ui")

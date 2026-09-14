@@ -186,9 +186,15 @@ fi
 # ║  ③ Nó bắt cả sản phẩm phụ thuộc @resvg/resvg-wasm chỉ để nói một điều mà chữ   ║
 # ║     nói được rẻ hơn và chính xác hơn: BỐN CON SỐ.                              ║
 # ║                                                                                ║
-# ║ Thay thế: khối python dưới đây in thẳng toạ độ safe zone của từng ô vào prompt,║
-# ║ lấy từ `geometry.py` — CÙNG hàm mà `slice.py` dùng để cắt. Hứa và cắt nay là   ║
-# ║ một phép tính, không phải hai.                                                 ║
+# ║ Thay thế: khối python dưới đây nói hình học BẰNG LỜI — tỉ lệ W:H của lõi từng ║
+# ║ ô ("core aspect 2.9:1, about three times wider than tall").                    ║
+# ║ 14/09/2026 — TỪNG LÀ TOẠ ĐỘ PIXEL, VÀ ĐÃ BỎ. Bản ấy in thẳng hộp safe zone của ║
+# ║ `geometry.py` (cùng hàm dao cắt dùng) nên hứa và cắt khớp nhau tuyệt đối — chỉ ║
+# ║ có điều ĐẦU KIA KHÔNG ĐỌC ĐƯỢC. Đo r-0021: tâm đúng, ô đúng, mà lõi 587px nằm  ║
+# ║ trong hộp hứa 368px; mọi ô lệch 1,5–1,7 lần, cả qua codex lẫn dán tay vào web  ║
+# ║ ChatGPT. Cỡ tuyệt đối nay là việc của HẠ NGUỒN (`slice.py` cắt theo ô + đo bbox ║
+# ║ α≥128; webapp co lõi đo được về `outSize`), còn prompt giữ đúng thứ hạ nguồn   ║
+# ║ không chữa nổi: TỈ LỆ. `geometry.py` vẫn là nguồn số học duy nhất cho dao cắt. ║
 # ║ Ảnh tham chiếu của NGƯỜI DÙNG (mascot ref, brand, inspo) KHÔNG đổi gì.         ║
 # ╚════════════════════════════════════════════════════════════════════════════════╝
 
@@ -200,14 +206,74 @@ import json, os, sys
 # luôn nằm ngay cạnh. Chèn cwd tường minh để không phụ thuộc mặc định của python.
 sys.path.insert(0, os.getcwd())
 import geometry
+
+# ── TỈ LỆ LÕI: THỨ DUY NHẤT MODEL THẬT SỰ GIỮ ĐƯỢC ───────────────────────────
+# 14/09/2026. Prompt từng đưa hộp pixel; đo ra model vẽ đúng tâm mà cỡ gấp
+# 1,5–1,7 lần (r-0021: lõi 587px / hộp hứa 368px). Toạ độ không điều khiển được
+# nó. Tỉ lệ thì có — và tỉ lệ là thứ hạ nguồn KHÔNG chữa được: `slice.py` +
+# webapp co lõi đo được về `outSize`, co đồng dạng không méo, nhưng sai tỉ lệ
+# thì chỉ còn cách chèn viền rỗng cho vừa khung.
+#
+# Viết theo lối MODEL ĐỌC ĐƯỢC: số tròn một chữ số thập phân, KÈM lời tả bằng
+# chữ ("nearly five times wider than tall"). Một mình "4.7:1" là ký hiệu; câu
+# chữ mới là thứ đi vào ảnh.
+_SO_CHU = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
+           6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+
+
+def _boi_so(muoi):
+    """Bội số tính theo PHẦN MƯỜI (29 ⇒ 2,9 lần) → «about three» / «nearly five».
+
+    Nhận số nguyên phần mười chứ không nhận float, và so bằng số nguyên: con số
+    model đọc được là con số ĐÃ LÀM TRÒN ("2.9:1"), nên lời tả phải bám vào chính
+    nó. So trên float thì 2,88 hoá "nearly three" cạnh một nhãn ghi 2.9 — hai vế
+    của cùng một dấu ngoặc cãi nhau, và không có phép so sánh dấu phẩy động nào
+    ở biên 0,1 mà đọc lại được.
+    """
+    n = max(1, int(round(muoi / 10)))
+    chu = _SO_CHU.get(n, str(n))
+    if muoi < n * 10 - 1:
+        return "nearly " + chu
+    if muoi > n * 10 + 1:
+        return "just over " + chu
+    return "about " + chu
+
+
+def core_aspect(out):
+    """Cỡ đầu ra ``{"w","h"}`` → câu «core aspect W:H (…)», hoặc None nếu không có.
+
+    KHÔNG dùng hộp safe zone để tính: hộp ấy là hộp LỚN NHẤT vừa lề của ô (dao cắt
+    dựng nó để ăn trọn độ phân giải), tỉ lệ của nó là tỉ lệ Ô chứ không phải tỉ lệ
+    element. Tỉ lệ thật của element chỉ có ở `out` — cỡ người dùng đặt.
+    """
+    try:
+        w, h = float(out["w"]), float(out["h"])
+    except (TypeError, KeyError, ValueError):
+        return None
+    if w <= 0 or h <= 0:
+        return None
+    r = w / h
+    if abs(r - 1) < 0.05:
+        return "core aspect 1:1 (square)"
+    muoi = int(round((r if r > 1 else 1 / r) * 10))
+    if r > 1:
+        ta = _boi_so(muoi) + " times wider than tall"
+        if muoi >= 40:
+            ta = "a long thin bar, " + ta
+        return f"core aspect {muoi / 10:g}:1 ({ta})"
+    ta = ("taller than wide" if muoi < 18
+          else _boi_so(muoi) + " times taller than wide")
+    return f"core aspect 1:{muoi / 10:g} ({ta})"
+
 cfg = json.load(open("styles.json", encoding="utf-8"))
 
 # ╔══ PROMPT ĐƯỢC LẮP THEO LỐI COMPOSITION ════════════════════════════════════╗
 # ║ Bốn khối, đúng bốn nguồn sự thật, không khối nào lấn sân khối khác:        ║
 # ║   ① PHONG CÁCH TỔNG — style + bảng màu + ảnh ref của người dùng. ĐỨNG ĐẦU. ║
 # ║      Đây là nơi DUY NHẤT nói một thứ TRÔNG THẾ NÀO.                        ║
-# ║   ② HÌNH HỌC — canvas, lưới, và TOẠ ĐỘ safe zone của từng ô. Thuần kỹ      ║
-# ║      thuật, không một tính từ thẩm mỹ nào, không một ảnh nào.              ║
+# ║   ② HÌNH HỌC — canvas, lưới, và TỈ LỆ LÕI của từng ô. Thuần kỹ thuật,      ║
+# ║      không một tính từ thẩm mỹ nào, không một ảnh nào, và từ 14/09/2026    ║
+# ║      không một toạ độ pixel nào (model không đọc được chúng — xem đầu file).║
 # ║   ③ RÀNG BUỘC KỸ THUẬT — nền alpha thật (tả điều muốn, không gọi tên      ║
 # ║      caro), cấm chữ, cấm tràn ô.                                          ║
 # ║   ④ DANH SÁCH Ô — mỗi ô là một DANH TỪ (+ trạng thái người dùng chọn).     ║
@@ -487,86 +553,87 @@ for s in cfg["styles"]:
                 layout.append("Each scene fills its own cell edge to edge and bleeds off all four"
                               " sides of that cell; the only gap allowed is a thin 24px line"
                               " exactly on the cell boundaries.")
-            else:
-                layout.append("The safe zones in the element list below are exact pixel crop"
-                              " boxes: after generation, software cuts each asset at exactly"
-                              " those four numbers."
-                              + (" Each line also gives the cell box around its safe zone —"
-                                 " that is where everything of that element ends."
-                                 if cols * rows > 1 else ""))
+            # 14/09/2026 — Ở ĐÂY TỪNG CÓ MỘT NHÁNH `else` HỨA HỘP CẮT BẰNG PIXEL
+            # ("the safe zones … are exact pixel crop boxes", "the cell box around its
+            # safe zone"). Nó nói thật về `slice.py` nhưng nói với SAI NGƯỜI: dao cắt
+            # không đọc prompt, còn model thì không vẽ theo bốn con số (đo r-0021:
+            # lõi 587px trên hộp hứa 368px, lệch 1,5–1,7 lần ở mọi ô). Luật hình học
+            # nay nằm trọn ở section «Geometry» và nói bằng TỈ LỆ.
             section("Layout", layout, on=("ui", "mascot", "background"))
 
-        # ── Safe zone ─────────────────────────────────────────────────────────
-        # HAI BỘ LUẬT, KHÔNG PHẢI MỘT BỘ CÓ HAI NHÁNH NHỎ.
-        # Bản trước dựng một danh sách chung rồi thay đúng MỘT gạch cho tấm nhân
-        # vật. Bốn gạch còn lại là chữ viết cho một cái nút bấm và chúng cứ thế đi
-        # sang: "functional CORE" (một cơ thể không có "lõi chức năng"), "REACH not
-        # opaque paint" (viết để cứu ô kính / ô phát sáng), "Rim, glow and ornaments
-        # spill out" (viền và hoa văn của một món đồ giao diện). Nhân vật chỉ cần
-        # ba điều: đứng trọn trong hộp cắt của mình, là một dáng người chứ không
-        # phải cái viền quanh mặt phẳng, và không lấn sang ô bên cạnh.
+        # ── Geometry ──────────────────────────────────────────────────────────
+        # 14/09/2026 — SECTION NÀY TỪNG TÊN LÀ «Safe zone» VÀ NÓI BẰNG PIXEL.
+        # Nó hứa với model một hộp cắt bốn số ("lõi lấp đúng hộp này") rồi hứa thêm
+        # một hộp ô bao ngoài. Đo r-0021: model vẽ đúng tâm, đúng ô, nhưng lõi to
+        # 587px trên một hộp hứa 368px — gấp 1,6 lần; mọi ô, cả qua codex lẫn dán
+        # tay vào web ChatGPT, đều lệch 1,5–1,7 lần. Một lời hứa mà đầu kia không
+        # thực hiện được không phải là ràng buộc, nó là nhiễu — và nó đứng chen
+        # giữa những câu model THẬT SỰ làm theo.
+        # Nên: cỡ tuyệt đối giao hẳn cho hạ nguồn (`slice.py` cắt theo ô + đo bbox
+        # α≥128, webapp co bản đo được về `outSize`), còn ở đây chỉ giữ thứ hạ nguồn
+        # không sửa nổi — TỈ LỆ W:H của lõi. Co đồng dạng thì không méo; sai tỉ lệ
+        # thì chỉ còn cách chèn viền rỗng cho vừa khung.
+        # ⚠️ HAI BỘ LUẬT, KHÔNG PHẢI MỘT BỘ CÓ HAI NHÁNH: chữ viết cho một món đồ
+        # giao diện ("lõi chức năng", "viền và hoa văn ở ngoài lõi") đọc trên một
+        # dáng người là vô nghĩa, nên nhân vật có danh sách riêng.
         if profile == "ui":
-            safe = [
-                "- The element's continuous functional CORE fills its safe zone exactly: same"
-                " left, top, right and bottom, same center. Never shrink it to make room for a"
-                " border, and never enlarge, stretch, move or recenter it.",
-                # TRUNG LẬP VỚI Ô KÍNH / Ô ÁNH SÁNG. Luật trên nói "lấp kín hộp", và
-                # model đọc nó thành "phủ SƠN ĐẶC kín hộp": với một quầng sáng hay một
-                # tấm kính thì nó lấp phần trong suốt bằng thứ nó nghĩ là "trong suốt",
-                # tức cái đế caro. Bản trước chữa bằng một câu HUỶ LỆNH in riêng cho
-                # từng ô phát sáng — hai luật cãi nhau trong cùng một prompt. Nói
-                # một lần, ở đây, rằng "lấp kín" là chuyện TẦM VỚI chứ không phải độ đục.
-                "- Filling the box is about REACH, not about opaque paint: a see-through or"
-                " glowing element may fade to full transparency inside its own box, and nothing"
-                " is ever added behind it to fill the space.",
-                "- Any rim, border or edge treatment sits immediately OUTSIDE the safe zone;"
-                " decoration, if the art style calls for any, farther outside still.",
+            geom = [
+                "- GEOMETRY IS STRICT. Each element's line gives the width-to-height ratio of"
+                " its functional CORE — the continuous body of the thing. Draw the core at that"
+                " ratio.",
+                "- Never make a core taller, shorter, wider or more square because it looks"
+                " better that way: something described as nearly five times wider than tall is"
+                " drawn nearly five times wider than tall.",
+                "- Rim, border, glow and ornament are NOT part of the core: they are excluded"
+                " from that ratio and sit outside the core.",
+                # TRUNG LẬP VỚI Ô KÍNH / Ô ÁNH SÁNG. Câu "lấp gần kín ô" bị model đọc
+                # thành "phủ SƠN ĐẶC": với quầng sáng hay tấm kính nó lấp phần trong
+                # suốt bằng thứ nó nghĩ là "trong suốt", tức cái đế caro. Nói một lần,
+                # ở đây, rằng lấp là chuyện TẦM VỚI chứ không phải độ đục.
+                "- Filling space is about REACH, not about opaque paint: a see-through or glowing"
+                " element may fade to full transparency inside its own body, and nothing is ever"
+                " added behind it to fill the gap.",
             ]
-            # HAI HỘP LỒNG NHAU, và gạch dưới đây là chỗ duy nhất nói ra quan hệ giữa
-            # chúng: safe zone là hộp TRONG (lõi lấp đúng nó), hộp ô là hộp NGOÀI (phần
-            # tràn dừng trước nó). Trước đợt này chỉ có hộp trong, và biên duy nhất được
-            # nhắc tới là mép ẢNH — cách cả một ô — nên trang trí thoải mái tràn sang ô
-            # hàng xóm rồi bị dao cắt chém cụt ở đúng mép ô (`slice.py` crop theo `cell`).
-            # Tấm MỘT Ô không có hộp ngoài nào để nói: ở đó ô CHÍNH LÀ khổ ảnh.
             if cols * rows > 1:
-                safe.append(
-                    "- Each element's line gives a second, larger box: its own cell. Rim, glow"
-                    " and ornaments are welcome to spill out of the safe zone into that space,"
-                    " and they come to rest inside it — elements stay in their own cell, never"
-                    " touch each other and never touch the image edges.")
+                geom.append(
+                    "- Each element is centred in its own cell and fills most of that cell while"
+                    " keeping a clear margin all round. Everything of an element, rim and"
+                    " ornament included, stays in its own cell: elements never touch each other"
+                    " and never touch the image edges.")
             else:
-                safe.append(
-                    "- Whatever overflows may cross its own safe zone, and it comes to rest well"
-                    " inside the frame — nothing touches the image edges.")
-            safe.append(
-                "- Only the core is scored: core missing inside the safe zone is a failure,"
-                " anything outside it is free.")
-            section("Safe zone", safe, on=("ui",))
+                geom.append(
+                    "- The element is centred in the frame and fills most of it while keeping a"
+                    " clear margin all round — nothing, rim and ornament included, touches the"
+                    " image edges.")
+            section("Geometry", geom, on=("ui",))
         elif profile == "mascot":
-            # Hộp của một nhân vật là hộp CAO: `geometry` dựng nó từ `skel.w/h` của ô
-            # dáng (0,3 x 0,85 của ô là cỡ thường gặp). Nên câu duy nhất đáng nói về
-            # nó là câu về CHIỀU CAO — đầu chạm mép trên, chân chạm mép dưới. Không
-            # có "lõi chức năng", không có viền để mà đẩy ra ngoài.
-            safe = [
-                "- The safe zone is where this character stands: the body fills it from top to"
-                " bottom, head near the top edge and feet near the bottom edge, centred left to"
-                " right.",
+            # Một dáng người không có "lõi chức năng" và không có viền để mà đẩy ra
+            # ngoài. Ba điều đáng nói: đứng trọn trong ô của mình, là một dáng người
+            # chứ không phải cái viền quanh mặt phẳng, và giữ tỉ lệ nếu có khai.
+            geom = [
+                "- GEOMETRY IS STRICT. Each pose is centred in its own cell and stands upright,"
+                " the full figure inside the cell with a clear margin above the head and below"
+                " the feet.",
                 # Giữ nguyên câu đã có từ đợt trước: model vẫn hay vẽ nhân vật thành một
                 # cái huy hiệu có viền, dáng cứng đơ, tóc/tai/đuôi bị ép vào trong.
                 "- Draw the character as ONE natural figure, not a rim around a flat plate: no"
                 " forced border, no badge frame, no plaque.",
             ]
+            if any(c.get("out") for c in comps):
+                geom.append(
+                    "- Where a line gives a width-to-height ratio, that is the ratio of the"
+                    " figure itself: keep it, and never stretch or squash the character to fill"
+                    " space.")
             if cols * rows > 1:
-                safe.append(
-                    "- Each character's line gives a second, larger box: its own cell. Hair,"
-                    " tail, cape and anything the character holds come to rest inside it —"
-                    " characters stay in their own cell, never touch each other and never touch"
-                    " the image edges.")
+                geom.append(
+                    "- Hair, tail, cape and anything the character holds come to rest inside the"
+                    " same cell — characters stay in their own cell, never touch each other and"
+                    " never touch the image edges.")
             else:
-                safe.append(
+                geom.append(
                     "- The whole character comes to rest well inside the frame — nothing touches"
                     " the image edges.")
-            section("Safe zone", safe, on=("mascot",))
+            section("Geometry", geom, on=("mascot",))
 
         # ── Transparency ──────────────────────────────────────────────────────
         # 08/09/2026 — CHỦ SẢN PHẨM: "prompt tự nhiên mention mấy cái caro checker
@@ -700,9 +767,16 @@ for s in cfg["styles"]:
         if profile == "screen":
             section("Scene", [comps[0]["spec"]], on=("screen",))
         else:
+            # Ô nào cũng có `out` hay không có ô nào — hai nhánh, vì câu dẫn phải nói
+            # đúng thứ danh sách BÊN DƯỚI thật sự mang. Contract đời cũ không khai cỡ
+            # nào ⇒ không dòng nào có tỉ lệ, và một câu dẫn trỏ vào thứ không tồn tại
+            # là cách rẻ nhất để model tự bịa ra nó.
+            co_ti_le = any(c.get("out") for c in comps)
             listing = [
-                "The list names WHAT each cell is; the art style above decides how it looks; the"
-                " coordinates decide where and how big.",
+                "The list names WHAT each cell is; the art style above decides how it looks;"
+                + (" the core aspect ratio on its line decides its shape."
+                   if co_ti_le else
+                   " the geometry rules above decide shape and placement."),
             ]
             # ── AI QUYẾT LƯỢNG TRANG TRÍ: DÒNG CỦA Ô, KHÔNG PHẢI THEME ─────────
             # ╔══ BỆNH ĐÃ ĐO (chủ sản phẩm, 09/2026) ═══════════════════════════════╗
@@ -730,20 +804,18 @@ for s in cfg["styles"]:
                 listing.append(
                     "Ornament amount and placement are set PER ELEMENT on its line below; the"
                     " theme supplies the motif, not the quantity.")
-            # ⚠️ VÌ SAO CỠ ĐẦU RA PHẢI CÓ MẶT TRONG PROMPT dù dao cắt không dùng nó.
-            # Ô được lấp bằng hộp LỚN NHẤT vừa lề (geometry.max_fit_box) để ăn trọn
-            # độ phân giải ảnh sinh — nhưng nếu chỉ đưa cái hộp to ấy thì model không
-            # có cách nào biết element này ngoài đời là 120x52 hay 600x260, nên nó
-            # chọn độ dày nét / bán kính bo / mật độ chi tiết theo hộp: cái nút nhỏ
-            # ra thành tấm banner viền mảnh, co về cỡ thật là nát. Nói ra CỠ THẬT +
-            # HỆ SỐ PHÓNG thì mọi nét được thiết kế ở cỡ thật rồi mới phóng lên.
+            # ⚠️ VÌ SAO CỠ TRÊN MÀN VẪN Ở LẠI dù hộp pixel đã đi (14/09/2026).
+            # Cỡ tuyệt đối trong ảnh sinh không còn là lời hứa với model — dao cắt
+            # và bộ co lo phần ấy. Nhưng element này ngoài đời là 120x52 hay 600x260
+            # thì vẫn phải nói, vì đó là thứ quyết ĐỘ DÀY NÉT và BÁN KÍNH BO: vẽ một
+            # cái nút nhỏ bằng ngôn ngữ của tấm banner thì co về cỡ thật là nát.
+            # Nói bằng lời ("about 245 px wide on screen"), không bằng hộp bốn số.
             if any(c.get("out") for c in comps):
                 listing.append(
-                    "Each element is drawn ENLARGED from its final on-screen size; its line gives"
-                    " the final size and the multiplier. Design every stroke weight, corner"
-                    " radius, bevel and detail for the FINAL size, then draw the whole thing"
-                    " scaled up by the multiplier — a small button drawn at 2.5x must still read"
-                    " as a small button.")
+                    "Each line also says roughly how wide that element sits on screen in the"
+                    " finished game. Design every stroke weight, corner radius, bevel and detail"
+                    " for that size, then draw it large and crisp — a small button must still"
+                    " read as a small button, never as a wide banner with hairline edges.")
             for i, comp in enumerate(comps):
                 g = geo[i]
                 # Ô TRỐNG KHÔNG CÓ DÒNG RIÊNG NỮA. Section «Layout» đã gọi tên chúng
@@ -755,59 +827,40 @@ for s in cfg["styles"]:
                     continue
                 spec = comp["spec"]
                 out = comp.get("out") or None
-                if out and g["safe"]:
-                    # `drawScale` do webapp tính sẵn; thiếu thì dựng lại tại chỗ bằng
-                    # ĐÚNG hàm mà webapp mirror, để hai bên không thể lệch.
-                    ow, oh = int(out["w"]), int(out["h"])
-                    dw, dh = g["safe"][2] - g["safe"][0], g["safe"][3] - g["safe"][1]
-                    # HỆ SỐ PHẢI KHỚP CHÍNH HỘP IN Ở CUỐI DÒNG. `drawScale` của
-                    # contract là con số đẹp (bội 0,25) và bình thường nó đúng khít;
-                    # nhưng contract đời cũ / sửa tay có thể mang `skel` không dựng
-                    # từ `out` — lúc ấy in "drawn at 2x" cạnh một hộp 2,09 lần là nói
-                    # dối model đúng cái điều dòng này sinh ra để nói thật.
-                    k = comp.get("drawScale")
-                    if not k or abs(ow * float(k) - dw) > 1:
-                        k = round(dw / ow, 2) if ow else 1
-                    spec += (f" — final size {ow}x{oh} px, drawn at {k:g}x"
-                             f" = {dw}x{dh} px")
                 if g["safe"]:
-                    x0, y0, x1, y1 = g["safe"]
-                    # HỘP NÀY LÀ HỘP CẮT, KHÔNG PHẢI GỢI Ý. `slice.py` cắt MỌI ô không
-                    # full-bleed theo đúng toạ độ in ra đây (`geometry.safe_offset_in_cell`).
-                    # Bản trước còn nối thêm ", placement guide" cho ô `free` vì tin rằng
-                    # dao cắt bám lõi đo được — trong `slice.py` KHÔNG có nhánh nào như thế.
-                    spec += f" — safe zone x={x0}..{x1}, y={y0}..{y1} ({x1 - x0}x{y1 - y0} px)"
-                    # ── VÀ ĐÂY LÀ GIỚI HẠN NGOÀI ─────────────────────────────
-                    # Safe zone nói "lõi to bằng này"; nó KHÔNG nói phần tràn được
-                    # đi tới đâu. Bản trước chỉ dặn "tránh xa element bên cạnh, đừng
-                    # chạm mép ảnh" — mà mép ảnh thì cách cả một ô, nên model hiểu là
-                    # còn rất nhiều chỗ và vẽ viền + đèn lồng tràn qua ranh giới ô.
-                    # `slice.py` lại cắt ĐÚNG hộp ô (`sheet_img.crop(cell)`), nên phần
-                    # tràn ấy bị chém cụt — đo trên dự án thật: `overflowPx` bên phải
-                    # của `01-button` = 69 và của `03-popover` = 77, chạm khít mép ô.
-                    # Nói thẳng hộp ô ra thì model có một con số để dừng lại trước.
-                    # Tấm MỘT Ô thì hộp ô CHÍNH LÀ khổ ảnh, và luật "không chạm mép
-                    # ảnh" đã nói điều đó ở section «Safe zone». In lại thành một cặp
-                    # toạ độ nữa chỉ là một dòng dài thêm mà không thêm một ràng buộc
-                    # nào — đúng thứ làm loãng những luật còn lại.
-                    if cols * rows > 1:
-                        cx0, cy0, cx1, cy1 = g["cell"]
-                        # "rim and ornaments" là từ vựng của một món đồ giao diện. Trên
-                        # dòng của một nhân vật thì thứ tràn ra khỏi hộp cắt là tóc, đuôi,
-                        # áo choàng, món đồ cầm trên tay — gọi đúng tên thì model biết
-                        # mình đang phải giữ cái gì lại trong ô.
-                        thua = ("everything of this character, hair and props included"
-                                if profile == "mascot" else
-                                "everything of this element, rim and ornaments included")
-                        spec += (f"; {thua},"
-                                 f" stays inside x={cx0}..{cx1}, y={cy0}..{cy1}")
+                    # ── 14/09/2026 — HỘP PIXEL RA KHỎI PROMPT, TỈ LỆ Ở LẠI ───────
+                    # ╔══ SỐ ĐO ĐÃ CHỐT VIỆC NÀY ═══════════════════════════════════╗
+                    # ║ Lượt r-0021: prompt hứa hộp 368px, model vẽ lõi 587px —     ║
+                    # ║ đúng tâm, đúng ô, nhưng to gấp 1,6 lần. Mọi ô đều thế, gấp  ║
+                    # ║ 1,5–1,7 lần, cả khi gen qua codex lẫn khi dán tay vào web   ║
+                    # ║ ChatGPT. Model không đọc được toạ độ pixel; bốn con số ấy   ║
+                    # ║ chỉ làm loãng những câu nó ĐỌC ĐƯỢC.                        ║
+                    # ╚═════════════════════════════════════════════════════════════╝
+                    # Và hộp pixel không còn ai cần ở đầu này nữa: `slice.py` cắt
+                    # theo Ô (không theo hộp hứa), đo lõi bằng bbox α≥128 rồi ghi
+                    # `safe`; webapp co bản đo được ấy về `outSize` (31d96d0). Nghĩa
+                    # là cỡ tuyệt đối do HẠ NGUỒN lo, và thứ hạ nguồn KHÔNG sửa được
+                    # là TỈ LỆ: co đồng dạng thì không méo, sai tỉ lệ thì chỉ còn
+                    # cách chèn viền rỗng trong khung. Nên prompt nay hứa đúng một
+                    # điều, và là điều model giữ được: W:H của lõi.
+                    aspect = core_aspect(out) if out else None
+                    if aspect:
+                        spec += " — " + aspect
+                        ow = int(out["w"])
+                        # GỢI Ý CỠ TRÊN MÀN, BẰNG LỜI, KHÔNG PHẢI MỘT HỘP. Không có
+                        # nó thì model chọn độ dày nét / bán kính bo theo khổ ảnh
+                        # sinh: cái nút nhỏ ra thành banner viền mảnh, co về cỡ thật
+                        # là nát. Một con số thôi (bề ngang), không toạ độ, không
+                        # hệ số phóng — hai thứ sau chỉ có nghĩa khi có hộp.
+                        if ow > 0:
+                            spec += f", about {ow} px wide on screen"
                 elif g["kind"] == "full":
                     spec += " — full-bleed scene, fills its whole cell edge to edge"
                 # 08/09/2026 — HAI NHÁNH `skel.matte` (glow/glass) ĐÃ BỎ Ở ĐÂY.
                 # Chúng nối thêm một khối câu chữ về độ trong cho riêng ô, trong khi
                 # webapp CŨNG nối một câu đục nền vào `spec` của chính ô ấy: cùng một
                 # luật, hai kho, không gì bắt chúng khớp nhau. Nay độ trong chỉ còn là
-                # chữ trong `spec` (webapp `kit-core/lib/glaze.ts`), và luật «Safe zone»
+                # chữ trong `spec` (webapp `kit-core/lib/glaze.ts`), và luật «Geometry»
                 # ở trên đã viết lại cho trung lập với ô kính / ô ánh sáng, nên không
                 # còn gì để huỷ lệnh nữa. Contract đời cũ vẫn mang `skel.matte`: nó chỉ
                 # đơn giản không được đọc.

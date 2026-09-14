@@ -134,6 +134,13 @@ export function register(r) {
            một ô ra sai cỡ: lệch nằm ở lời dặn hay ở nét vẽ. Kit cắt bằng bản cũ ⇒ null. */
         drawScale: typeof meta?.drawScale === "number" ? meta.drawScale : null,
         sizeDeviation: meta?.sizeDeviation ?? null,
+        /* LỆCH TỈ LỆ (14/09/2026) — số đo của lời hứa HÔM NAY. Prompt thôi hứa hộp
+           pixel (model không vẽ theo toạ độ: đo r-0021, lõi 587px trên hộp hứa
+           368px, mọi ô lệch 1,5–1,7 lần); nó hứa TỈ LỆ W:H của lõi, và đó là thứ
+           duy nhất hạ nguồn không chữa hộ được — webapp co lõi về `outSize`, co
+           đồng dạng thì không méo, sai tỉ lệ thì chỉ còn cách chèn viền rỗng.
+           `sizeDeviation` ở lại nguyên vẹn: web đang đọc nó. */
+        aspectDeviation: meta?.aspectDeviation ?? null,
         contentAt: meta?.content_at ?? null,
         content: meta?.content ?? null,
         canvas: meta?.canvas ?? null,

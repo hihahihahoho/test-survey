@@ -45,9 +45,14 @@ logs/           log từng con codex
 
 ## Điểm cần biết
 
-- **PROMPT LÀ SẢN PHẨM.** `gen.sh` in prompt theo section và nói toạ độ safe zone **bằng
-  số tuyệt đối** ("safe zone x=104..313, y=104..313"); `slice.py` cắt đúng bốn con số đó.
-  Cả hai lấy toạ độ từ cùng một hàm trong `geometry.py`, nên hai bên không thể lệch nhau.
+- **PROMPT LÀ SẢN PHẨM, VÀ NÓ NÓI HÌNH HỌC BẰNG TỈ LỆ.** `gen.sh` in prompt theo section;
+  mỗi ô mang **tỉ lệ W:H của lõi** kèm lời tả ("core aspect 2.9:1, about three times wider
+  than tall") và bề ngang trên màn bằng lời — **không toạ độ pixel nào**. Cho tới
+  14/09/2026 nó in hộp cắt bằng bốn con số tuyệt đối; số đo lượt r-0021 kết thúc chuyện
+  đó: model vẽ đúng tâm, đúng ô, mà lõi 587px nằm trong hộp hứa 368px — mọi ô lệch
+  1,5–1,7 lần, qua codex lẫn khi dán tay vào web ChatGPT. Cỡ tuyệt đối nay là việc của hạ
+  nguồn: `slice.py` cắt theo ô rồi đo lõi bằng bbox α≥128, webapp co bản đo được về
+  `outSize`. `geometry.py` vẫn là nguồn số học DUY NHẤT của dao cắt.
 - **KHÔNG CÓ TẦNG TÁCH NỀN.** Sheet do model sinh mang **alpha thật**, nên `slice.py`
   CHỈ CẮT: không chroma-key, không matting, không lấp lỗ, không nắn lõi về khung. Mọi cỗ
   máy đó đã bỏ (07/09/2026) vì chúng gặm ruột element có alpha thật — đo được: ruột thanh

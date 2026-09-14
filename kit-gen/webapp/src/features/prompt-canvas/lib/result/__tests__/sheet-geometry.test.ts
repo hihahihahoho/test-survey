@@ -139,4 +139,25 @@ describe("nhãn góc ô", () => {
     const only = sheetOverlay(SHEET, measureOfSheet([run("r-1", bare)], "chinh-ui"))?.cells ?? [];
     expect(cellBadge(only[0]!)).toBe("03-progress");
   });
+
+  /* ── LỆCH TỈ LỆ ĐỨNG CẠNH LỆCH PIXEL (14/09/2026) ────────────────────────────
+     Prompt thôi hứa hộp pixel: trên chính lượt r-0021 ở trên, model vẽ đúng tâm mà
+     lõi 587px nằm trong hộp hứa 368px — mọi ô lệch 1,5–1,7 lần, qua codex lẫn qua
+     web ChatGPT. Thứ nó hứa nay là TỈ LỆ, và đó là thứ web KHÔNG co về được. */
+  it("có lệch tỉ lệ thì nhãn nói cả hai, mỗi thứ một đơn vị", () => {
+    const co = [{
+      file: "01-button", cell: 0, status: "ok",
+      expected: [129.5, 249.5, 368, 128], actual: [38, 281, 587, 168],
+      deviation: { edgesPx: { left: 0, top: 0, right: 12, bottom: 0 }, maxEdgePx: 12 },
+      aspectDeviation: { value: 0.1234, flagged: false, threshold: 0.15 },
+    }];
+    const cell = sheetOverlay(SHEET, measureOfSheet([run("r-1", co)], "chinh-ui"))!.cells[0]!;
+    expect(cell.aspectOff).toBeCloseTo(0.1234, 4);
+    expect(cellBadge(cell)).toBe("01-button · lệch 12px · tỉ lệ lệch 12%");
+  });
+
+  it("số đo đời cũ không có khối tỉ lệ ⇒ nhãn giữ nguyên như trước, không thêm '0%'", () => {
+    expect(cells()[0]!.aspectOff).toBeNull();
+    expect(cellBadge(cells()[0]!)).toBe("01-button · lệch 128px");
+  });
 });

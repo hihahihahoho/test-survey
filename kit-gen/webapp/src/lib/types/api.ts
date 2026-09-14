@@ -907,6 +907,28 @@ export const kitSizeDeviationSchema = z.looseObject({
 });
 export type KitSizeDeviation = z.infer<typeof kitSizeDeviationSchema>;
 
+/**
+ * ══ LỆCH TỈ LỆ — SỐ ĐO CỦA LỜI HỨA HÔM NAY (14/09/2026) ═════════════════════
+ *
+ * `sizeDeviation` đo lõi so với HỘP HỨA bằng pixel. Prompt thôi hứa hộp pixel:
+ * đo lượt r-0021, model vẽ đúng tâm, đúng ô, mà lõi 587px nằm trong hộp hứa
+ * 368px — mọi ô lệch 1,5–1,7 lần, qua codex lẫn khi dán tay vào web ChatGPT.
+ * Toạ độ không điều khiển được model. Thứ nó hứa nay là TỈ LỆ W:H của lõi, và
+ * đó là thứ DUY NHẤT hạ nguồn không chữa được: web co lõi đo được về `outSize`,
+ * co đồng dạng thì không méo, sai tỉ lệ thì chỉ còn cách chèn viền rỗng.
+ *
+ * `value` là phân số (0,12 = lệch 12%), `null` khi ô chưa đặt cỡ hoặc không đo
+ * được — "không đo được" KHÔNG phải "đạt".
+ */
+export const kitAspectDeviationSchema = z.looseObject({
+  value: kitOptionalNumber,
+  flagged: z.boolean().nullish().transform((v) => v ?? false),
+  threshold: kitOptionalNumber,
+  safeAspect: kitOptionalNumber,
+  outAspect: kitOptionalNumber,
+});
+export type KitAspectDeviation = z.infer<typeof kitAspectDeviationSchema>;
+
 /** Tổng QA của cả manifest (`slice.py:1384`), agent trả ở khoá `qa` của #42. */
 export const kitQaSchema = z.looseObject({
   sizeDeviation: z.looseObject({
@@ -920,6 +942,20 @@ export const kitQaSchema = z.looseObject({
       style: kitOptionalString,
       file: kitOptionalString,
       maxEdgePx: kitOptionalNumber,
+    })).nullish().transform((v) => v ?? []),
+  }).nullish().transform((v) => v ?? undefined),
+  /** Tổng lệch TỈ LỆ (`slice.py:summarize_aspect_deviation`). Kit cắt bằng bản
+      slice.py cũ ⇒ không có khối này, và kit ấy phải mở được như thường. */
+  aspectDeviation: z.looseObject({
+    threshold: kitOptionalNumber,
+    measured: kitOptionalNumber,
+    flagged: z.boolean().nullish().transform((v) => v ?? false),
+    flaggedCount: kitOptionalNumber,
+    maxValue: kitOptionalNumber,
+    flaggedAssets: z.array(z.looseObject({
+      style: kitOptionalString,
+      file: kitOptionalString,
+      value: kitOptionalNumber,
     })).nullish().transform((v) => v ?? []),
   }).nullish().transform((v) => v ?? undefined),
 });
@@ -996,6 +1032,8 @@ export const kitFileSchema = z.looseObject({
   mtime: kitOptionalString,
   /** Sổ đo QA của riêng ô này; thiếu ⇒ ô không đo được hoặc kit cắt bằng bản cũ. */
   sizeDeviation: kitSizeDeviationSchema.nullish().transform((v) => v ?? undefined),
+  /** Lệch TỈ LỆ của riêng ô này — xem `kitAspectDeviationSchema`. */
+  aspectDeviation: kitAspectDeviationSchema.nullish().transform((v) => v ?? undefined),
   /** `empty:true` ⇒ dải cảnh báo "N file trống" + [Xem sheet gốc] (S5). */
   empty: z.boolean().default(false),
 });

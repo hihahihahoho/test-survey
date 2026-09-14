@@ -285,8 +285,17 @@ describe("hộp vẽ max-fit — gương của geometry.py", () => {
     const engine = read("agent/lib/engine.mjs");
     expect(engine).toMatch(/e\.out = \{ w: Math\.round\(ow\), h: Math\.round\(oh\) \}/);
     expect(engine).toMatch(/e\.drawScale = k/);
-    /* Và `gen.sh` là nơi con số ấy thành câu nói với máy vẽ. */
-    expect(read("gen.sh")).toContain("final size {ow}x{oh} px, drawn at {k:g}x");
+    /* Và `gen.sh` là nơi con số ấy thành câu nói với máy vẽ. Từ 14/09/2026 câu ấy
+       KHÔNG còn là một hộp pixel: đo r-0021 cho thấy model vẽ đúng tâm mà lõi 587px
+       nằm trong hộp hứa 368px — mọi ô lệch 1,5–1,7 lần, qua codex lẫn qua web
+       ChatGPT. Nên `out` nay đi vào prompt theo hai lối model đọc được: TỈ LỆ W:H
+       (`core_aspect`) và bề ngang trên màn bằng lời. Mắt xích vẫn phải liền —
+       `out` không tới `gen.sh` thì cả hai câu biến mất, lặng lẽ. */
+    const gen = read("gen.sh");
+    expect(gen).toContain("def core_aspect(out)");
+    expect(gen).toContain('spec += " — " + aspect');
+    expect(gen).toContain("about {ow} px wide on screen");
+    expect(gen).not.toContain("final size {ow}x{oh} px, drawn at {k:g}x");
   });
 
   /* ── LỀ CỦA Ô CÓ TRANG TRÍ ────────────────────────────────────────────────

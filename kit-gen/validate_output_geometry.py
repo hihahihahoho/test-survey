@@ -93,6 +93,36 @@ def _measure_core_decoration(image):
     }
 
 
+#: Lệch TỈ LỆ tối đa còn chấp nhận — cùng con số `slice.py:ASPECT_DEVIATION_THRESHOLD`.
+#: 14/09/2026: prompt thôi hứa hộp pixel (model vẽ đúng tâm mà cỡ gấp 1,5–1,7 lần ở
+#: mọi ô — đo r-0021: lõi 587px trên hộp hứa 368px), nay chỉ hứa TỈ LỆ W:H của lõi.
+#: Nên file này cũng phải đo được đúng thứ ấy: cỡ tuyệt đối do dao cắt + bộ co lo,
+#: tỉ lệ thì không ai chữa hộ được.
+ASPECT_DEVIATION_THRESHOLD = 0.15
+
+
+def _aspect_deviation(box, out, threshold=ASPECT_DEVIATION_THRESHOLD):
+    """``|(box.w/box.h) / (out.w/out.h) − 1|`` → sổ đo, hoặc `value=None` nếu thiếu số.
+
+    Cố ý chép công thức của `slice.py` thay vì import: file này chạy độc lập trong
+    tools/. Đổi một bên thì phải đổi bên kia — và hai bên có test riêng canh.
+    """
+    val = ba = oa = None
+    try:
+        ow, oh = float(out["w"]), float(out["h"])
+        bw, bh = float(box[2] - box[0]), float(box[3] - box[1])
+    except (TypeError, KeyError, IndexError, ValueError):
+        ow = oh = bw = bh = 0.0
+    if ow > 0 and oh > 0 and bw > 0 and bh > 0:
+        ba, oa = bw / bh, ow / oh
+        val = round(abs(ba / oa - 1), 4)
+    return {"value": val, "flagged": bool(val is not None and val > threshold),
+            "threshold": threshold,
+            "coreAspect": None if ba is None else round(ba, 4),
+            "outAspect": None if oa is None else round(oa, 4),
+            "metric": "core_aspect"}
+
+
 def _one_sided_deviation(box, expected):
     errors = {
         "left": box[0] - expected[0],
@@ -157,6 +187,12 @@ def validate(image, contract, job, position_tolerance=.08, size_tolerance=.15):
             'deviation': ({'edgesPx': errors, 'undershootPx': undershoot,
                           'overflowPx': overflow, 'maxEdgePx': max(undershoot.values()),
                           'metric': 'core_undershoot'} if box is not None else None),
+            # SỐ THEO DÕI, KHÔNG PHẢI CỔNG. `status` vẫn do `reasons` quyết như cũ:
+            # đây là chỉ số MỚI (lệch tỉ lệ so với cỡ người dùng đặt), và biến một
+            # chỉ số vừa ra đời thành cổng gen lại là cách nhanh nhất để cả lượt gen
+            # đỏ vì một ngưỡng chưa ai đo trên dự án thật.
+            'aspectDeviation': (_aspect_deviation(box, component.get('out'))
+                                if box is not None else None),
         })
     return {'ok':all(x['status'] in ('ok','empty') for x in results),'job':job,'sheet':sheet_id,
             'bg_mode':'alpha','cells':results}

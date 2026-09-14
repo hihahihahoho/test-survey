@@ -80,6 +80,14 @@ cùng. Ảnh tham chiếu của NGƯỜI DÙNG (mascot ref, brand, inspo) không
 import. Danh từ và toạ độ nằm trên CÙNG MỘT DÒNG; không còn hai danh sách song song và
 không còn tiêu đề `Row r, left to right:`.
 
+> **14/09/2026 — vế "in thẳng toạ độ" đã bị thay.** Hộp khớp dao cắt tuyệt đối, nhưng
+> model không đọc được nó: lượt r-0021 đo lõi 587px trong hộp hứa 368px, mọi ô lệch
+> 1,5–1,7 lần, qua codex lẫn khi dán tay vào web ChatGPT. Prompt nay nói TỈ LỆ W:H của
+> lõi (`core aspect 2.9:1 (about three times wider than tall)`) + bề ngang trên màn bằng
+> lời; cỡ tuyệt đối do hạ nguồn lo (`slice.py` cắt theo ô + đo bbox α≥128, webapp co về
+> `outSize`). Phần còn lại của mục này — bỏ ảnh khung xương, `geometry.py` là nguồn số
+> học duy nhất của dao cắt — vẫn đúng nguyên.
+
 **Vì sao — ba lý do, không phải một:**
 1. Model **bắt chước** ảnh tham chiếu chứ không chỉ đọc nó. Khung xương là hình phẳng
    viền cứng, nên nó lái luôn phong cách: nhân vật ra như huy hiệu có viền, dáng cứng đơ.

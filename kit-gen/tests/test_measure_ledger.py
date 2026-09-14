@@ -92,5 +92,75 @@ class MeasureCellTest(unittest.TestCase):
         self.assertEqual(list(im.getdata()), truoc)
 
 
+class AspectDeviationTest(unittest.TestCase):
+    """LỆCH TỈ LỆ — CHỈ SỐ ĐO ĐÚNG THỨ PROMPT HỨA (14/09/2026).
+
+    ╔══ VÌ SAO THÊM MỘT CHỈ SỐ NỮA THAY VÌ SIẾT CÁI CŨ ═══════════════════════════╗
+    ║ `sizeDeviation` đo lõi so với HỘP HỨA bằng pixel. Từ 14/09/2026 prompt không ║
+    ║ hứa hộp pixel nào nữa: đo r-0021 cho thấy model vẽ đúng tâm mà cỡ gấp        ║
+    ║ 1,5–1,7 lần ở mọi ô (lõi 587px / hộp hứa 368px), qua codex lẫn qua web       ║
+    ║ ChatGPT. Cỡ tuyệt đối nay do hạ nguồn lo — `slice.py` cắt theo ô, webapp co  ║
+    ║ lõi đo được về `outSize`. Thứ hạ nguồn KHÔNG chữa được là tỉ lệ: co đồng     ║
+    ║ dạng thì không méo, sai tỉ lệ thì chỉ còn cách chèn viền rỗng trong khung.   ║
+    ╚═════════════════════════════════════════════════════════════════════════════╝
+    """
+
+    def test_ve_dung_ti_le_thi_lech_gan_0_du_CO_TO_GAP_DOI(self):
+        """Ca trung tâm: một lõi to gấp đôi nhưng ĐÚNG DÁNG phải qua. Đây chính là
+        thứ `sizeDeviation` gắn cờ và `aspectDeviation` thì không — hai câu hỏi
+        khác nhau, nên hai số."""
+        qa = s.aspect_deviation([0, 0, 490, 170], {"w": 245, "h": 85})
+        self.assertLess(qa["value"], 0.001)
+        self.assertFalse(qa["flagged"])
+        self.assertEqual((qa["safeAspect"], qa["outAspect"]), (2.8824, 2.8824))
+
+    def test_ve_sai_dang_thi_gan_co_du_CO_DUNG_KHIT(self):
+        """Chiều ngược lại: đúng cỡ, sai dáng. 245x85 (2,88:1) vẽ thành 245x120
+        (2,04:1) ⇒ lệch 29% — co về khung thì hoặc méo hoặc phải chèn viền rỗng."""
+        qa = s.aspect_deviation([0, 0, 245, 120], {"w": 245, "h": 85})
+        self.assertAlmostEqual(qa["value"], 0.2917, places=3)
+        self.assertTrue(qa["flagged"])
+
+    def test_nguong_la_15_phan_tram_va_no_nam_o_MOT_CHO(self):
+        self.assertEqual(s.ASPECT_DEVIATION_THRESHOLD, 0.15)
+        self.assertFalse(s.aspect_deviation([0, 0, 280, 85], {"w": 245, "h": 85})["flagged"])
+        self.assertTrue(s.aspect_deviation([0, 0, 300, 85], {"w": 245, "h": 85})["flagged"])
+
+    def test_thieu_out_hoac_thieu_lo_thi_KHONG_bia_ra_lech(self):
+        """Ô `full`, ô chưa đặt cỡ, ô trong suốt hoàn toàn: `value` là None chứ
+        không phải 0 — "không đo được" không phải là "đạt"."""
+        for safe, out in (([0, 0, 245, 85], None), (None, {"w": 245, "h": 85}),
+                          ([0, 0, 245, 0], {"w": 245, "h": 85}),
+                          ([0, 0, 245, 85], {"w": 0, "h": 85})):
+            qa = s.aspect_deviation(safe, out)
+            self.assertIsNone(qa["value"], (safe, out))
+            self.assertFalse(qa["flagged"])
+
+    def test_measure_cell_mang_ca_HAI_so_do(self):
+        """Webapp đang đọc `sizeDeviation`; thêm số mới mà làm mất số cũ là làm vỡ
+        màn kết quả để nói một điều mà thêm một khoá cũng nói được."""
+        im = canvas()
+        ImageDraw.Draw(im).rectangle((40, 30, 159, 129), fill=(100, 45, 200, 255))
+        led = s.measure_cell(im, [40, 30, 120, 100], out={"w": 240, "h": 200})
+        self.assertEqual(led["sizeDeviation"]["maxEdgePx"], 0)
+        self.assertEqual(led["aspectDeviation"]["value"], 0.0)
+        self.assertEqual(led["aspectDeviation"]["metric"], "core_aspect")
+
+    def test_tong_hop_cua_ca_bo_dem_dung_so_o_bi_co(self):
+        assets = [
+            {"file": "a.png", "aspectDeviation": s.aspect_deviation([0, 0, 245, 120],
+                                                                    {"w": 245, "h": 85})},
+            {"file": "b.png", "aspectDeviation": s.aspect_deviation([0, 0, 490, 170],
+                                                                    {"w": 245, "h": 85})},
+            {"file": "c.png", "aspectDeviation": s.aspect_deviation(None, None)},
+        ]
+        tong = s.summarize_aspect_deviation(assets, style_id="tet")
+        self.assertEqual((tong["measured"], tong["flaggedCount"]), (2, 1))
+        self.assertTrue(tong["flagged"])
+        self.assertEqual(tong["flaggedAssets"][0]["file"], "a.png")
+        self.assertEqual(tong["flaggedAssets"][0]["style"], "tet")
+        self.assertAlmostEqual(tong["maxValue"], 0.2917, places=3)
+
+
 if __name__ == "__main__":
     unittest.main()

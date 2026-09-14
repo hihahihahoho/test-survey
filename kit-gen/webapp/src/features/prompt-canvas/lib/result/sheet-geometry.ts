@@ -50,6 +50,17 @@ export interface MeasuredCell {
   actual: Box | null;
   /** Cạnh lệch xa nhất, px. `null` = không đo được cạnh nào. */
   offsetPx: number | null;
+  /**
+   * LỆCH TỈ LỆ, dạng phân số (0,12 = 12%). `null` = ô chưa đặt cỡ, hoặc số đo đời cũ.
+   *
+   * Từ 14/09/2026 prompt KHÔNG còn hứa một hộp pixel nào — đo lượt r-0021: model vẽ
+   * đúng tâm, đúng ô, mà lõi 587px nằm trong hộp hứa 368px; mọi ô lệch 1,5–1,7 lần,
+   * qua codex lẫn khi dán tay vào web ChatGPT. Thứ prompt hứa nay là TỈ LỆ W:H của
+   * lõi, và đó là thứ DUY NHẤT không sửa được ở hạ nguồn: web co lõi đo được về
+   * `outSize`, co đồng dạng thì không méo, sai tỉ lệ thì chỉ còn cách chèn viền rỗng.
+   * `offsetPx` ở lại cạnh nó: hai con số, hai câu hỏi khác nhau.
+   */
+  aspectOff: number | null;
 }
 
 /** Số đo của CẢ TẤM, kèm dấu vết nó từ đâu ra. */
@@ -116,6 +127,7 @@ function measuredCell(raw: unknown, fallbackIndex: number): MeasuredCell | null 
     expected,
     actual,
     offsetPx: offsetOf(c["deviation"]),
+    aspectOff: num(rec(c["aspectDeviation"])?.["value"]),
   };
 }
 
@@ -260,11 +272,22 @@ export function sheetOverlay(
   return { width: canvas.w, height: canvas.h, cols: grid.cols, rows: grid.rows, cells };
 }
 
-/** Nhãn góc ô: tên món + cạnh lệch xa nhất. Không đo được cạnh nào ⇒ chỉ tên. */
+/**
+ * Nhãn góc ô: tên món + cạnh lệch xa nhất + lệch tỉ lệ.
+ *
+ * Hai số đứng cạnh nhau chứ không thay nhau, vì chúng trả lời hai câu khác nhau:
+ * «món này thò ra/thụt vào bao nhiêu pixel so với hộp đã hứa» và «nó có đúng DÁNG
+ * không». Từ 14/09/2026 chỉ câu thứ hai là thứ prompt còn hứa (hộp pixel đã rút:
+ * model vẽ đúng tâm mà cỡ gấp 1,5–1,7 lần ở mọi ô), nhưng câu thứ nhất vẫn là số
+ * người dùng đang đọc — nên giữ cả hai, ngắn.
+ * Không đo được gì ⇒ chỉ còn tên; không có tên ⇒ chỉ còn số.
+ */
 export function cellBadge(cell: OverlayCell): string {
   const name = cell.name.trim();
-  if (cell.offsetPx === null) return name;
-  const px = Math.round(cell.offsetPx);
-  const note = `lệch ${px}px`;
+  const notes: string[] = [];
+  if (cell.offsetPx !== null) notes.push(`lệch ${Math.round(cell.offsetPx)}px`);
+  if (cell.aspectOff !== null) notes.push(`tỉ lệ lệch ${Math.round(cell.aspectOff * 100)}%`);
+  if (notes.length === 0) return name;
+  const note = notes.join(" · ");
   return name === "" ? note : `${name} · ${note}`;
 }

@@ -90,10 +90,10 @@ def first_cell_line(txt):
     """
     lines = txt.splitlines()
     for i, line in enumerate(lines):
-        if line.startswith("1) ") and " — safe zone " in line:
+        if line.startswith("1) ") and " — core aspect " in line:
             return i
-        if line.startswith("1) ") and "content surface" not in line and "safe zone" not in line:
-            return i          # ô full-bleed / ô trống: không có toạ độ để mang
+        if line.startswith("1) ") and "content surface" not in line and "core aspect" not in line:
+            return i          # ô full-bleed / ô không khai `out`: không có tỉ lệ để mang
     raise AssertionError("prompt không có danh sách ô nào")
 
 
@@ -233,8 +233,8 @@ class PromptKhongNhiemTest(unittest.TestCase):
         lines = txt.splitlines()
         head = first_cell_line(lines and txt)
         # Spec đi thẳng, KHÔNG bị sửa một ký tự — phần engine nối thêm chỉ được nằm
-        # SAU nó (toạ độ safe zone), không được chen vào giữa.
-        self.assertTrue(lines[head].startswith(f"1) {spec} — safe zone x="),
+        # SAU nó (tỉ lệ lõi), không được chen vào giữa.
+        self.assertTrue(lines[head].startswith(f"1) {spec} — core aspect "),
                         f"dòng ô bị sửa: {lines[head]!r}")
 
     def test_engine_van_TUYEN_BO_THU_HANG_thay_vi_viet_lai_chu_cua_ai(self):
@@ -244,10 +244,12 @@ class PromptKhongNhiemTest(unittest.TestCase):
         txt = self.texts["ui"]
         head = txt[:cell_list_offset(txt)]
         # MỘT DÒNG thay cho khối 9 dòng cũ: cùng ba thứ hạng (danh từ / lối vẽ /
-        # toạ độ), nói một lần, ngay trên danh sách.
+        # hình dạng), nói một lần, ngay trên danh sách. Vế thứ ba từng là "the
+        # coordinates decide where and how big" — toạ độ đã rút khỏi prompt
+        # 14/09/2026 (model không đọc được chúng), nên vế ấy nay là TỈ LỆ.
         self.assertIn("The list names WHAT each cell is", head)
         self.assertIn("the art style above decides how it looks", head)
-        self.assertIn("the coordinates decide where and how big", head)
+        self.assertIn("the core aspect ratio on its line decides its shape", head)
 
     def test_luong_trang_tri_do_DONG_CUA_O_quyet_dinh_khong_phai_theme(self):
         """CHỦ SẢN PHẨM, 09/2026: *"lần nào nó cũng ra viền decor"*.
@@ -571,10 +573,21 @@ class SteeringPromptTest(unittest.TestCase):
     def setUp(self):
         self.txt = render_prompt_text(_cfg())
 
-    def test_luat_core_noi_bang_toa_do_chu_khong_bang_anh(self):
-        self.assertIn("exact pixel crop boxes", self.txt)
-        self.assertIn("fills its safe zone exactly", self.txt)
+    def test_luat_core_noi_bang_TI_LE_chu_khong_bang_anh_cung_khong_bang_toa_do(self):
+        """14/09/2026 — vế thứ hai của tên ca này là phần MỚI.
+
+        Bản trước ca đòi "exact pixel crop boxes" + "fills its safe zone exactly":
+        luật hình học nói bằng bốn con số. Đo r-0021 cho thấy model vẽ đúng tâm mà
+        lõi 587px trong hộp hứa 368px — mọi ô lệch 1,5–1,7 lần, qua codex lẫn qua
+        web ChatGPT. Toạ độ không điều khiển được model; thứ điều khiển được là TỈ
+        LỆ, và tỉ lệ cũng là thứ hạ nguồn không chữa hộ được (co đồng dạng không
+        méo, sai tỉ lệ thì chỉ còn cách chèn viền rỗng)."""
+        self.assertIn("GEOMETRY IS STRICT", self.txt)
+        self.assertIn("core aspect", first_cell_line_text(self.txt))
         self.assertIn("origin top-left", self.txt)
+        for chet in ("exact pixel crop boxes", "fills its safe zone exactly",
+                     "safe zone x=", "stays inside x=", "drawn at 4x"):
+            self.assertNotIn(chet, self.txt, f"hộp pixel quay lại prompt: {chet}")
 
     def test_luat_vung_an_toan_CHI_NOI_MOT_LAN(self):
         """Chủ sản phẩm 07/09/2026: *"khá dài dòng và không chuẩn"*. Đo được: luật
@@ -582,11 +595,9 @@ class SteeringPromptTest(unittest.TestCase):
         from the inside out", "The continuous content surface is the CORE", và một
         dòng kết lặp lại lần nữa). Nói một luật bốn lần không làm model tuân bốn
         lần — nó làm mọi luật khác loãng đi."""
-        self.assertEqual(self.txt.count("## Safe zone"), 1)
-        # Cụm "safe zone" vẫn được nhắc ở dòng toạ độ của từng ô — đó là DỮ LIỆU,
-        # không phải luật. Cái phải đúng một lần là LUẬT, và luật có đúng một nhà.
+        self.assertEqual(self.txt.count("## Geometry"), 1)
         head = self.txt[:self.txt.index("## Elements")]
-        self.assertEqual(head.count("## Safe zone"), 1)
+        self.assertEqual(head.count("## Geometry"), 1)
         for chet in ("Build each element from the inside out",
                      "production crop box",
                      "The continuous content surface is the CORE",
@@ -601,14 +612,20 @@ class SteeringPromptTest(unittest.TestCase):
             self.assertNotIn(chet, self.txt, f"prompt còn dấu vết khung xương: {chet}")
 
 
-def _cfg(spec="blank button", skel=None, extra=None):
+def _cfg(spec="blank button", skel=None, extra=None, out={"w": 245, "h": 85}):
+    """Tấm mẫu một ô. `out` = cỡ người dùng đặt — từ 14/09/2026 đây là nguồn DUY
+    NHẤT của câu hình học trong prompt (tỉ lệ W:H của lõi), nên mặc định phải có.
+    `out=None` dựng lại contract đời cũ (không ai khai cỡ) để kiểm nhánh câm."""
     sk = {"shape": "rrect", "w": 0.8, "h": 0.6}
     sk.update(skel or {})
     st = {"id": "demo", "bg": "magenta", "style": "flat ink"}
     st.update(extra or {})
+    comp = {"file": "01-thing", "spec": spec, "skel": sk}
+    if out:
+        comp["out"] = dict(out)
     return {"styles": [st], "sheets": [{
         "id": "pose-demo", "grid": {"cols": 1, "rows": 1},
-        "components": [{"file": "01-thing", "spec": spec, "skel": sk}]}]}
+        "components": [comp]}]}
 
 
 class TransparentBackgroundTest(unittest.TestCase):
@@ -734,8 +751,11 @@ class TransparentBackgroundTest(unittest.TestCase):
         mọi ô không full-bleed theo đúng toạ độ này. Câu đó là nói dối model, và model
         vẽ tràn ra ngoài hộp đúng như được cho phép."""
         p = render_prompt_text(_cfg(skel={"shape": "rrect", "w": 0.5, "h": 0.5, "free": True}))
-        self.assertIn("safe zone x=", p)
+        # Hộp đã rút khỏi prompt hẳn (14/09/2026) — nên ca này canh phần còn lại của
+        # cùng một luật: cờ `free` không đẻ ra một hợp đồng riêng cho ô nào cả.
         self.assertNotIn("placement guide", p)
+        self.assertNotIn("safe zone x=", p)
+        self.assertIn("core aspect", first_cell_line_text(p))
 
     def test_o_glow_khong_con_bat_ve_NEN_DEN(self):
         """Nền đen từng là cách duy nhất lấy quầng sáng (C = α·F trên đen). Alpha
@@ -757,8 +777,8 @@ class TransparentBackgroundTest(unittest.TestCase):
         Nay luật gốc TỰ trung lập — nói một lần, cho mọi ô — nên không còn câu huỷ
         lệnh nào, và cũng không cần cờ nào để bật nó."""
         p = render_prompt_text(_cfg(skel={"shape": "rrect", "w": 0.5, "h": 0.5}))
-        self.assertIn("Filling the box is about REACH, not about opaque paint", p)
-        self.assertIn("fade to full transparency inside its own box", p)
+        self.assertIn("Filling space is about REACH, not about opaque paint", p)
+        self.assertIn("fade to full transparency inside its own body", p)
         # Không còn câu nào bảo model BỎ QUA một luật khác của chính prompt này.
         self.assertNotIn("Ignore the safe-zone fill rule", p)
 
@@ -775,7 +795,8 @@ class TransparentBackgroundTest(unittest.TestCase):
         # cho cả tấm — đó là luật chung, không phải câu riêng của ô.)
         tron = render_prompt_text(_cfg(spec="a coin icon", skel={"matte": "glass"}))
         dong = next(l for l in tron.splitlines() if l.startswith("1) "))
-        self.assertEqual(dong, "1) a coin icon — safe zone x=153..1382, y=205..819 (1229x614 px)")
+        self.assertEqual(dong, "1) a coin icon — core aspect 2.9:1 (about three times"
+                               " wider than tall), about 245 px wide on screen")
 
     def test_KHONG_MOT_MANH_CHROMA_NAO_CON_SONG(self):
         """Quyết định của chủ sản phẩm 22/08: bỏ HẲN, cả hai vế.
@@ -865,6 +886,7 @@ class MauThuongHieuTest(unittest.TestCase):
         "sheets": [{
             "id": "pose-demo", "grid": {"cols": 1, "rows": 1},
             "components": [{"file": "01-thing", "spec": "the primary action button",
+                            "out": {"w": 245, "h": 85},
                             "skel": {"shape": "rrect", "w": 0.8, "h": 0.6}}],
         }],
     }
@@ -920,7 +942,7 @@ class MauThuongHieuTest(unittest.TestCase):
         lines = txt.splitlines()
         head = first_cell_line(txt)
         self.assertTrue(
-            lines[head].startswith("1) " + self.CFG["sheets"][0]["components"][0]["spec"] + " — safe zone x="),
+            lines[head].startswith("1) " + self.CFG["sheets"][0]["components"][0]["spec"] + " — core aspect "),
             "spec của người dùng phải đi thẳng vào prompt, không bị sửa")
         truoc = txt[:cell_list_offset(txt)]
         self.assertIn("the art style above decides how it looks", truoc,
@@ -1108,7 +1130,7 @@ class KhungPromptSectionTest(unittest.TestCase):
     def test_tam_giao_dien_co_dung_bo_section_va_dung_thu_tu(self):
         self.assertEqual(
             self._headings(self._ui3()),
-            ["Canvas", "Art style", "Palette", "Layout", "Safe zone",
+            ["Canvas", "Art style", "Palette", "Layout", "Geometry",
              "Transparency", "Text", "Elements", "Output"])
 
     def test_tam_giao_dien_ba_element_khong_qua_50_dong(self):
@@ -1142,7 +1164,7 @@ class KhungPromptSectionTest(unittest.TestCase):
         cfg["sheets"][0]["ref"] = "refs/lan.png"
         cfg["sheets"][0]["poseRef"] = "refs/tam-dang.png"
         heads = self._headings(render_prompt_text(cfg))
-        self.assertEqual(heads, ["Canvas", "Art style", "Layout", "Safe zone", "Transparency",
+        self.assertEqual(heads, ["Canvas", "Art style", "Layout", "Geometry", "Transparency",
                                  "Character reference", "Pose reference",
                                  "Elements", "Output"])
 
@@ -1174,7 +1196,7 @@ class MoiLoaiTamMotBoLuatTest(unittest.TestCase):
         "REACH, not about opaque paint",
         "glass, ice, water",
         "Ornament amount",
-        "Any rim, border or edge treatment",
+        "Rim, border, glow and ornament are NOT part of the core",
     )
 
     @staticmethod
@@ -1194,7 +1216,7 @@ class MoiLoaiTamMotBoLuatTest(unittest.TestCase):
 
     def test_tam_giao_dien_van_giu_DU_bo_luat_cua_no(self):
         """Chiều ngược lại, cùng một danh sách: dọn nhầm sang tấm giao diện thì mọi
-        ô UI mất luật hộp cắt của nó — và ca trên vẫn xanh."""
+        ô UI mất luật hình học của nó — và ca trên vẫn xanh."""
         txt = render_prompt_text(_cfg(spec="the primary action button"))
         for phai_co in self.CHI_CUA_GIAO_DIEN:
             if phai_co == "Ornament amount":
@@ -1213,20 +1235,28 @@ class MoiLoaiTamMotBoLuatTest(unittest.TestCase):
         self.assertIn("The space around the characters is simply empty: alpha 0", than)
         self.assertIn("solid all the way through", than)
 
-    def test_vung_an_toan_cua_nhan_vat_noi_ve_CHIEU_CAO_va_ve_O_BEN_CANH(self):
+    def test_hinh_hoc_cua_nhan_vat_noi_ve_DANG_DUNG_va_ve_O_BEN_CANH(self):
+        """Câu cũ ("the body fills it from top to bottom") nói về một HỘP; hộp đã
+        rút khỏi prompt 14/09/2026. Thứ ở lại là hai điều model làm được: đứng trọn
+        trong ô của mình, và không lấn sang ô bên."""
         txt = self._mascot()
-        self.assertIn("the body fills it from top to bottom", txt)
+        self.assertIn("the full figure inside the cell with a clear margin", txt)
         self.assertIn("Draw the character as ONE natural figure", txt)
         self.assertIn("characters stay in their own cell, never touch each other", txt)
 
-    def test_dong_cua_mot_nhan_vat_khong_noi_bang_tu_vung_cua_do_giao_dien(self):
-        """Hộp ngoài vẫn phải in ra — thứ đổi là TÊN của cái tràn ra khỏi nó: tóc,
-        đuôi, món đồ cầm tay, chứ không phải "rim and ornaments"."""
+    def test_ranh_gioi_o_cua_nhan_vat_khong_noi_bang_tu_vung_cua_do_giao_dien(self):
+        """Thứ tràn ra khỏi một nhân vật là tóc, đuôi, món đồ cầm tay — không phải
+        "rim and ornaments". Luật ấy nay nằm ở section «Geometry» (một lần cho cả
+        tấm) chứ không nối vào từng dòng ô nữa: dòng ô chỉ còn danh từ + tỉ lệ."""
         txt = self._mascot()
-        self.assertIn("everything of this character, hair and props included, stays inside x=", txt)
-        self.assertNotIn("rim and ornaments included", txt)
+        self.assertIn("Hair, tail, cape and anything the character holds", txt)
+        self.assertNotIn("rim and ornament included", txt)
         ui = render_prompt_text(_cfg_ui_2o())
-        self.assertIn("everything of this element, rim and ornaments included, stays inside x=", ui)
+        self.assertIn("Everything of an element, rim and ornament included, stays in its"
+                      " own cell", ui)
+        # Và không bên nào nối hộp vào dòng ô nữa.
+        for t in (txt, ui):
+            self.assertNotIn("stays inside x=", t)
 
     def test_tam_nen_nhieu_o_khong_bi_doi_alpha_0_ngay_duoi_cau_phu_kin_khung(self):
         """Tấm full-bleed nhiều ô từng nhận nguyên section «Transparency» — tức là
@@ -1236,7 +1266,7 @@ class MoiLoaiTamMotBoLuatTest(unittest.TestCase):
         txt = render_prompt_text(_cfg_nen(n=2), name="demo-nen")
         self.assertIn("there is no transparent area anywhere", txt)
         self.assertNotIn("## Transparency", txt)
-        self.assertNotIn("## Safe zone", txt)
+        self.assertNotIn("## Geometry", txt)
         self.assertIn("## Text", txt)          # cảnh vẽ ra vẫn không được có chữ
 
     def test_anh_dinh_kem_cua_tam_nen_NHIEU_O_cung_ta_canh_chu_khong_ta_nhan_vat(self):
@@ -1258,24 +1288,22 @@ def _cfg_ui_2o():
         ]}]}
 
 
-class HinhDangOQuyetDinhHopSafeZoneTest(unittest.TestCase):
-    """DÒNG ELEMENT PHẢI IN HỘP ĐÚNG HÌNH DẠNG CỦA ELEMENT ẤY.
+class HinhDangOQuyetDinhTiLeLoiTest(unittest.TestCase):
+    """DÒNG ELEMENT PHẢI NÓI ĐÚNG HÌNH DẠNG CỦA ELEMENT ẤY.
 
-    Bệnh đo được 07/09/2026 trên tấm Bộ UI thật của dự án ``test``
-    (``kits/manifest.json``): prompt in
+    ╔══ BỆNH ĐÃ ĐO (dự án thật, 07/09/2026) ══════════════════════════════════════╗
+    ║ Prompt in CÙNG một cái hộp 4:3 cho một thanh máu dài mỏng và một khung      ║
+    ║ avatar tròn, vì contract khai `skel` giống hệt nhau cho mọi ô. Model vẽ ra   ║
+    ║ hình hợp lý (lõi 370×97 và 303×263) nên cả hai "sai" so với lời hứa.        ║
+    ║ Cái sai nằm ở LỜI HỨA, không ở model.                                       ║
+    ╚═════════════════════════════════════════════════════════════════════════════╝
 
-        2) health bar … — safe zone x=815..1066, y=219..407 (251x188 px)
-        3) avatar frame … — safe zone x=188..439, y=846..1034 (251x188 px)
-
-    CÙNG một cái hộp 4:3 cho một thanh dài mỏng và một khung tròn, vì contract khai
-    ``skel`` giống hệt nhau (``rrect`` 0.8×0.6) cho mọi ô. Model vẽ ra hình hợp lý —
-    lõi đo được 370×97 và 303×263 — nên cả hai "sai" so với lời hứa, QA gắn cờ 46px,
-    và ô dán sang Figma lệch cỡ. Cái sai nằm ở LỜI HỨA, không ở model.
-
-    Lớp này khoá phía engine của bản vá: cùng một tấm, ô ``bar`` phải ra hộp
-    RỘNG-MỎNG và ô ``circle`` phải ra hộp VUÔNG. Nó không kiểm một chuỗi cứng nào —
-    chuỗi cứng sẽ chết theo lần đầu ai đó chỉnh bảng tỉ lệ; nó kiểm QUAN HỆ giữa
-    hình dạng và hộp, thứ không được phép đổi.
+    14/09/2026 — LỜI HỨA ẤY NAY LÀ MỘT TỈ LỆ, KHÔNG PHẢI MỘT HỘP. Đo r-0021: hộp
+    pixel không điều khiển được model (lõi 587px trên hộp hứa 368px, lệch 1,5–1,7
+    lần ở mọi ô). Nhưng câu hỏi của lớp này KHÔNG đổi và nó vẫn là câu hỏi đúng:
+    ba ô ba hình dạng thì prompt phải nói ra BA hình dạng. Chỉ có đơn vị đổi —
+    và nguồn đổi: tỉ lệ đến từ `out` (cỡ người dùng đặt), không từ `skel` (hộp
+    max-fit trong ô, tức hình dạng của Ô).
     """
 
     @staticmethod
@@ -1286,131 +1314,166 @@ class HinhDangOQuyetDinhHopSafeZoneTest(unittest.TestCase):
                 "sheets": [{"id": "ui", "canvas": "square", "grid": {"cols": 2, "rows": 2},
                             "components": [
                                 {"file": "01-button", "spec": "button",
+                                 "out": {"w": 245, "h": 85},
                                  "skel": {"shape": "pill", "w": 0.391, "h": 0.136, "slice9": True}},
                                 {"file": "02-healthbar", "spec": "health bar",
+                                 "out": {"w": 270, "h": 57},
                                  "skel": {"shape": "bar", "w": 0.431, "h": 0.11, "slice9": True}},
                                 {"file": "03-avatar-frame", "spec": "avatar frame",
+                                 "out": {"w": 195, "h": 195},
                                  "skel": {"shape": "circle", "w": 0.311, "h": 0.311}},
                                 {"file": "_empty-1", "spec": "", "skel": {"shape": "empty"}}]}]}
 
     def setUp(self):
         self.txt = render_prompt_text(self._cfg_ui(), name="demo-ui")
 
-    def _hop(self, dau_dong):
-        """(w, h) mà dòng ô ấy hứa với model — đọc từ chính chuỗi prompt."""
+    def _ti_le(self, dau_dong):
+        """(w, h) tỉ lệ mà dòng ô ấy hứa với model — đọc từ chính chuỗi prompt."""
         for line in self.txt.splitlines():
             if line.startswith(dau_dong):
-                hit = re.search(r"\((\d+)x(\d+) px\)", line)
-                self.assertIsNotNone(hit, f"dòng không mang hộp nào: {line}")
-                return int(hit.group(1)), int(hit.group(2))
+                hit = re.search(r"core aspect ([\d.]+):([\d.]+)", line)
+                self.assertIsNotNone(hit, f"dòng không mang tỉ lệ nào: {line}")
+                return float(hit.group(1)), float(hit.group(2))
         raise AssertionError(f"prompt không có dòng {dau_dong!r}")
 
-    def test_ba_o_ba_hop_KHAC_NHAU(self):
-        hop = [self._hop(f"{i}) ") for i in (1, 2, 3)]
-        self.assertEqual(len(set(hop)), 3, f"vẫn còn hai ô dùng chung một hộp: {hop}")
+    def test_ba_o_ba_TI_LE_KHAC_NHAU(self):
+        ti = [self._ti_le(f"{i}) ") for i in (1, 2, 3)]
+        self.assertEqual(len(set(ti)), 3, f"vẫn còn hai ô dùng chung một tỉ lệ: {ti}")
 
-    def test_thanh_mau_ra_hop_RONG_MONG(self):
-        w, h = self._hop("2) ")
-        self.assertGreater(w / h, 3, f"thanh máu ra hộp {w}x{h} — không phải hình một cái thanh")
+    def test_thanh_mau_ra_TI_LE_DAI_MONG(self):
+        w, h = self._ti_le("2) ")
+        self.assertEqual((w, h), (4.7, 1.0), "thanh máu 270x57 phải ra 4.7:1")
+        self.assertIn("a long thin bar", self._dong_cua("2) "))
 
-    def test_khung_avatar_ra_hop_VUONG(self):
-        w, h = self._hop("3) ")
-        # Ô vuông ⇒ w/h của skel LÀ tỉ lệ hình; lệch 1px là chuyện làm tròn của
-        # `safe_offset_in_cell`, không phải chuyện hình dạng.
-        self.assertLessEqual(abs(w - h), 1, f"khung avatar ra hộp {w}x{h} — không vuông")
+    def test_khung_avatar_ra_TI_LE_VUONG(self):
+        self.assertEqual(self._ti_le("3) "), (1.0, 1.0))
+        self.assertIn("(square)", self._dong_cua("3) "))
 
-    def test_hop_in_ra_KHOP_voi_geometry_py_chu_khong_phai_mot_phep_nhan_thu_hai(self):
-        """Con số trong prompt phải đến từ `geometry.safe_box` — cùng hàm mà
-        `slice.py` dùng để cắt. Hai phép nhân song song là hai con số sẽ trôi."""
+    def _dong_cua(self, dau_dong):
+        return next(l for l in self.txt.splitlines() if l.startswith(dau_dong))
+
+    def test_ti_le_den_tu_OUT_chu_khong_tu_HOP_MAX_FIT_TRONG_O(self):
+        """Nguồn sai vẫn cho ra một con số trông hợp lý, nên phải chỉ đích danh:
+        `skel` của ô 1 là 0.391×0.136 ⇒ hộp trong ô có tỉ lệ 2,87 — GẦN 2,9 một
+        cách nguy hiểm. Ô 3 mới tách được hai nguồn: `skel` vuông cho 1:1, còn
+        `out` 195×195 cũng cho 1:1… nên ca thật nằm ở ô 2, nơi hộp là 3,92:1 mà
+        `out` là 4,7:1."""
+        self.assertEqual(self._ti_le("2) "), (4.7, 1.0))
         import geometry
         sheet = self._cfg_ui()["sheets"][0]
-        for i, comp in enumerate(sheet["components"][:3]):
-            x0, y0, x1, y1 = geometry.safe_box(1254, 1254, 2, 2, i, comp["skel"])
-            self.assertEqual(self._hop(f"{i + 1}) "), (x1 - x0, y1 - y0))
+        x0, y0, x1, y1 = geometry.safe_box(1254, 1254, 2, 2, 1, sheet["components"][1]["skel"])
+        self.assertNotAlmostEqual((x1 - x0) / (y1 - y0), 4.7, places=1,
+                                  msg="tấm mẫu hỏng: hộp ô và out đang trùng tỉ lệ")
 
-
-class CoDauRaVaHeSoPhongTest(unittest.TestCase):
-    """PROMPT PHẢI NÓI CỠ THẬT + HỆ SỐ PHÓNG, không chỉ nói cái hộp to.
-
-    Chủ sản phẩm 07/09/2026: *«vẫn phải bảo nó là khi scale ra thật thì là size bao
-    nhiêu, tức là bảo nó upscale bao nhiêu lần… độ dày của border»*. Lỗ hổng thật:
-    ô nay được lấp bằng hộp lớn nhất vừa lề, nên một cái nút 120×52 được vẽ ở
-    480×208 — nếu model không biết cỡ thật, nó chọn độ dày nét / bán kính bo / mật
-    độ chi tiết theo hộp 480×208 và ra một tấm banner viền mảnh; co về 120×52 là
-    nát. Ba con số phải cùng có mặt trên MỘT dòng: cỡ thật, hệ số, hộp.
-    """
-
-    @staticmethod
-    def _cfg():
-        return {"styles": [{"id": "demo", "bg": "magenta", "style": "flat ink"}],
-                "sheets": [{"id": "ui", "canvas": "square", "grid": {"cols": 2, "rows": 2},
-                            "components": [
-                                {"file": "01-button", "spec": "button",
-                                 "skel": {"shape": "pill", "w": 0.765, "h": 0.332},
-                                 "out": {"w": 120, "h": 52}, "drawScale": 4.0},
-                                {"file": "02-healthbar", "spec": "health bar",
-                                 "skel": {"shape": "bar", "w": 0.8, "h": 0.205},
-                                 "out": {"w": 240, "h": 62}},
-                                {"file": "03-avatar-frame", "spec": "avatar frame",
-                                 "skel": {"shape": "circle", "w": 0.777, "h": 0.777},
-                                 "out": {"w": 195, "h": 195}, "drawScale": 2.5},
-                                {"file": "_empty-1", "spec": "", "skel": {"shape": "empty"}}]}]}
-
-    def setUp(self):
-        self.txt = render_prompt_text(self._cfg(), name="demo-ui")
-
-    def _dong(self, dau_dong):
-        for line in self.txt.splitlines():
-            if line.startswith(dau_dong):
-                return line
-        raise AssertionError(f"prompt không có dòng {dau_dong!r}")
-
-    def test_dong_element_mang_co_that_va_he_so(self):
-        line = self._dong("1) ")
-        self.assertIn("final size 120x52 px", line)
-        self.assertIn("drawn at 4x", line)
-        # Hộp sau dấu "=" phải là ĐÚNG hộp safe zone in ở cuối dòng, không phải một
-        # con số thứ hai: hứa hai hộp khác nhau trên cùng một dòng là hỏng cả dòng.
-        hop = re.findall(r"(\d+)x(\d+) px", line)
-        self.assertEqual(hop[1], hop[2], f"hộp phóng ≠ hộp safe zone: {line}")
-
-    def test_he_so_thieu_thi_engine_TU_TINH_chu_khong_im_lang(self):
-        """Contract do bản webapp cũ sinh ra không có `drawScale`. Bỏ trống câu ấy
-        là để model đoán cỡ thật — đúng cái bệnh này sinh ra để chữa."""
-        line = self._dong("2) ")
-        self.assertIn("final size 240x62 px", line)
-        # Hệ số dựng lại từ CHÍNH hộp in ở cuối dòng ⇒ dòng luôn tự nhất quán, kể cả
-        # với contract sửa tay có `skel` không dựng từ `out`.
-        hop = re.findall(r"(\d+)x(\d+) px", line)
-        k = float(re.search(r"drawn at ([\d.]+)x", line).group(1))
-        self.assertAlmostEqual(int(hop[1][0]) / 240, k, places=2)
-
-    def test_cau_chung_giai_thich_HE_SO_dung_mot_lan(self):
-        self.assertEqual(self.txt.count("drawn ENLARGED from its final on-screen size"), 1)
-        self.assertIn("a small button drawn at 2.5x must still read as a small button", self.txt)
-
-    def test_o_khong_co_out_thi_KHONG_bia_ra_co(self):
-        cfg = self._cfg()
+    def test_o_KHONG_khai_out_thi_dong_ay_CAM_chu_khong_bia_ti_le(self):
+        """Contract đời cũ (và ô người dùng chưa đặt cỡ) không có `out`. Bịa một tỉ
+        lệ từ `skel` ở đó là dựng lại đúng cái bệnh trên: mọi ô mang tỉ lệ của Ô."""
+        cfg = self._cfg_ui()
         for comp in cfg["sheets"][0]["components"]:
             comp.pop("out", None)
-            comp.pop("drawScale", None)
         txt = render_prompt_text(cfg, name="demo-ui")
-        self.assertNotIn("final size", txt)
+        self.assertNotIn("core aspect", txt)
+        self.assertEqual(next(l for l in txt.splitlines() if l.startswith("1) ")), "1) button")
+
+
+class CoTrenManVaTiLeLoiTest(unittest.TestCase):
+    """DÒNG ELEMENT NÓI HAI ĐIỀU, VÀ CHỈ HAI: TỈ LỆ LÕI + CỠ TRÊN MÀN.
+
+    Lớp này từng tên là `CoDauRaVaHeSoPhongTest` và đòi ba con số trên một dòng:
+    cỡ thật, hệ số phóng, hộp vẽ ("final size 120x52 px, drawn at 4x = 480x208 px").
+    Hai trong ba con số ấy chỉ có nghĩa khi có một cái hộp để phóng TỚI, và hộp đã
+    rút khỏi prompt 14/09/2026 (đo r-0021: model vẽ đúng tâm, lõi 587px trên hộp
+    hứa 368px — mọi ô lệch 1,5–1,7 lần, qua codex lẫn qua web ChatGPT).
+
+    Thứ Ở LẠI là cái lý do ban đầu của chủ sản phẩm, 07/09/2026: *«vẫn phải bảo nó
+    là khi scale ra thật thì là size bao nhiêu… độ dày của border»*. Cỡ trên màn
+    quyết ĐỘ DÀY NÉT và BÁN KÍNH BO, và nó nói được bằng MỘT con số, bằng lời,
+    không cần hộp nào.
+    """
+
+    #: (out.w, out.h) → nguyên văn phần trong ngoặc sau tỉ lệ. Bảng này là hợp đồng
+    #: người-đọc-được của `core_aspect`: số tròn một chữ số + lời tả.
+    BANG = {
+        (245, 85): ("2.9:1", "about three times wider than tall"),
+        (195, 195): ("1:1", "square"),
+        (270, 57): ("4.7:1", "a long thin bar, nearly five times wider than tall"),
+        (254, 38): ("6.7:1", "a long thin bar, nearly seven times wider than tall"),
+        (100, 160): ("1:1.6", "taller than wide"),
+    }
+
+    @staticmethod
+    def _cfg(out=None, drawScale=None):
+        comp = {"file": "01-button", "spec": "button",
+                "skel": {"shape": "pill", "w": 0.765, "h": 0.332}}
+        if out:
+            comp["out"] = dict(out)
+        if drawScale:
+            comp["drawScale"] = drawScale
+        return {"styles": [{"id": "demo", "bg": "magenta", "style": "flat ink"}],
+                "sheets": [{"id": "ui", "canvas": "square", "grid": {"cols": 1, "rows": 1},
+                            "components": [comp]}]}
+
+    def _dong(self, out):
+        txt = render_prompt_text(self._cfg({"w": out[0], "h": out[1]}), name="demo-ui")
+        return next(l for l in txt.splitlines() if l.startswith("1) "))
+
+    def test_bang_ti_le_DUNG_TUNG_CHU(self):
+        """Năm cỡ thật lấy từ thư viện element của dự án. Đây là ca đắt nhất của
+        lớp: một thay đổi trong phép làm tròn hay trong lời tả hiện ra ở đây chứ
+        không hiện ra trong một tấm ảnh ba ngày sau."""
+        for out, (so, ta) in self.BANG.items():
+            self.assertEqual(self._dong(out),
+                             f"1) button — core aspect {so} ({ta}), about {out[0]} px"
+                             f" wide on screen", f"cỡ {out[0]}x{out[1]}")
+
+    def test_dong_element_KHONG_con_hop_pixel_nao(self):
+        line = self._dong((245, 85))
+        for chet in ("final size", "drawn at", "safe zone", "stays inside", "px)"):
+            self.assertNotIn(chet, line, f"hộp pixel quay lại dòng ô: {chet}")
+        # "px —" là dấu vết riêng của lối cũ ("… 120x52 px, drawn at 4x = … px — safe
+        # zone x=…"): một con số pixel đứng ngay trước một mệnh đề hình học nữa.
+        self.assertNotIn("px —", line)
+
+    def test_cau_chung_giai_thich_CO_TREN_MAN_dung_mot_lan(self):
+        txt = render_prompt_text(self._cfg({"w": 245, "h": 85}), name="demo-ui")
+        self.assertEqual(txt.count("Each line also says roughly how wide that element"
+                                   " sits on screen"), 1)
+        self.assertIn("a small button must still read as a small button", txt)
+        # Câu cũ dạy model một phép nhân mà nay không còn số để nhân.
+        self.assertNotIn("drawn ENLARGED from its final on-screen size", txt)
+
+    def test_o_khong_co_out_thi_KHONG_bia_ra_co(self):
+        txt = render_prompt_text(self._cfg(), name="demo-ui")
+        for chet in ("final size", "drawn at", "core aspect", "px wide on screen"):
+            self.assertNotIn(chet, txt)
+
+    def test_drawScale_cua_contract_KHONG_con_di_vao_prompt(self):
+        """`drawScale` vẫn sống trong contract và trong manifest (hạ nguồn đối chiếu
+        cỡ bằng nó). Nó chỉ thôi là một câu nói với model — hệ số phóng chỉ có nghĩa
+        cạnh một cái hộp."""
+        txt = render_prompt_text(self._cfg({"w": 245, "h": 85}, drawScale=4.0), name="demo-ui")
+        # "4x" trần thì trúng cả "SQUARE 1254x1254" ở dòng khổ giấy — quét đúng cụm
+        # mà lối cũ in ra.
+        self.assertNotIn("at 4x", txt)
         self.assertNotIn("drawn at", txt)
+        self.assertNotIn("drawScale", txt)
 
 
-class HopOLaGioiHanNgoaiTest(unittest.TestCase):
-    """MỖI DÒNG ELEMENT PHẢI NÓI RA HAI HỘP: hộp lõi, và hộp mà phần tràn dừng lại.
+class RanhGioiONamOSectionGeometryTest(unittest.TestCase):
+    """PHẦN TRÀN DỪNG LẠI Ở RANH GIỚI Ô — NÓI MỘT LẦN, CHO CẢ TẤM.
 
     ╔══ BỆNH ĐÃ ĐO (dự án thật, 09/2026) ═════════════════════════════════════════╗
-    ║ Prompt chỉ hứa MỘT hộp — safe zone — rồi dặn "tránh xa vùng của element     ║
-    ║ khác, đừng chạm mép ảnh". Mép ẢNH thì cách cả một ô, nên model đọc ra là     ║
-    ║ "còn nhiều chỗ" và vẽ viền + đèn lồng tràn qua ranh giới ô. Nhưng `slice.py`║
-    ║ cắt theo hộp Ô (`sheet_img.crop(cell)`), nên phần tràn ấy bị chém cụt: sổ đo║
-    ║ `kits/manifest.json` ghi `overflowPx` bên phải của `01-button` = 69 và của  ║
-    ║ `03-popover` = 77 — chạm khít mép ô 627px.                                  ║
-    ║ Nay dòng của ô nói thẳng hộp ô ra, nên model có một con số để dừng trước.   ║
+    ║ Prompt chỉ hứa MỘT hộp rồi dặn "đừng chạm mép ảnh". Mép ẢNH cách cả một ô,  ║
+    ║ nên model đọc ra là "còn nhiều chỗ" và vẽ viền + đèn lồng tràn qua ranh giới ║
+    ║ ô; `slice.py` cắt theo hộp Ô nên phần tràn bị chém cụt (`overflowPx` bên     ║
+    ║ phải của `01-button` = 69, của `03-popover` = 77 — khít mép ô 627px).       ║
     ╚═════════════════════════════════════════════════════════════════════════════╝
+
+    Bản vá trước chữa bằng cách in HỘP Ô vào cuối mỗi dòng element. 14/09/2026 bỏ:
+    model không vẽ theo toạ độ (đo r-0021), và một cặp toạ độ nữa trên mỗi dòng chỉ
+    làm loãng phần dòng ấy nói được. Luật vẫn còn nguyên — nó chuyển về section
+    «Geometry», nói bằng quan hệ ("ô của mình", "không chạm ô bên"), một lần cho cả
+    tấm. Lớp này khoá cả hai: luật PHẢI có, hộp KHÔNG được quay lại.
     """
 
     @staticmethod
@@ -1419,10 +1482,13 @@ class HopOLaGioiHanNgoaiTest(unittest.TestCase):
                 "sheets": [{"id": "ui", "canvas": "square", "grid": {"cols": 2, "rows": 2},
                             "components": [
                                 {"file": "01-button", "spec": "button",
+                                 "out": {"w": 245, "h": 85},
                                  "skel": {"shape": "pill", "w": 0.6, "h": 0.2, "decor": True}},
                                 {"file": "02-popover", "spec": "popover",
+                                 "out": {"w": 195, "h": 195},
                                  "skel": {"shape": "rrect", "w": 0.6, "h": 0.45}},
                                 {"file": "03-avatar-frame", "spec": "avatar frame",
+                                 "out": {"w": 100, "h": 160},
                                  "skel": {"shape": "circle", "w": 0.6, "h": 0.6, "decor": True}},
                                 {"file": "_empty-1", "spec": "", "skel": {"shape": "empty"}}]}]}
 
@@ -1435,49 +1501,34 @@ class HopOLaGioiHanNgoaiTest(unittest.TestCase):
                 return line
         raise AssertionError(f"prompt không có dòng {dau_dong!r}")
 
-    def test_moi_o_that_deu_mang_hop_ngoai(self):
-        for i in (1, 2, 3):
-            self.assertIn("stays inside x=", self._dong(f"{i}) "),
-                          f"ô {i} không có giới hạn ngoài nào")
+    def test_luat_ranh_gioi_o_nam_o_section_Geometry(self):
+        geo = self.txt[self.txt.index("## Geometry"):self.txt.index("## Transparency")]
+        self.assertIn("centred in its own cell", geo)
+        self.assertIn("fills most of that cell while keeping a clear margin", geo)
+        self.assertIn("stays in its own cell", geo)
+        self.assertIn("never touch the image edges", geo)
 
-    def test_hop_ngoai_la_DUNG_hop_o_cua_geometry_py(self):
-        """Không phải một phép chia thứ hai: cùng `cell_box` mà `slice.py` cắt theo."""
-        import geometry
-        for i in range(3):
-            cx0, cy0, cx1, cy1 = geometry.cell_box(1254, 1254, 2, 2, i)
-            self.assertIn(f"stays inside x={cx0}..{cx1}, y={cy0}..{cy1}", self._dong(f"{i + 1}) "))
-
-    def test_hop_ngoai_OM_TRON_safe_zone_cua_chinh_o_ay(self):
-        """Hai hộp lồng nhau, không phải hai hộp cạnh nhau — một dòng hứa ngược là
-        một dòng model không có cách nào làm đúng."""
+    def test_khong_mot_dong_o_nao_mang_hop_nua(self):
         for i in (1, 2, 3):
             line = self._dong(f"{i}) ")
-            sz = re.search(r"safe zone x=(\d+)\.\.(\d+), y=(\d+)\.\.(\d+)", line)
-            cell = re.search(r"stays inside x=(\d+)\.\.(\d+), y=(\d+)\.\.(\d+)", line)
-            sx0, sx1, sy0, sy1 = (int(v) for v in sz.groups())
-            cx0, cx1, cy0, cy1 = (int(v) for v in cell.groups())
-            self.assertLessEqual(cx0, sx0)
-            self.assertLessEqual(sx1, cx1)
-            self.assertLessEqual(cy0, sy0)
-            self.assertLessEqual(sy1, cy1)
+            self.assertNotIn("stays inside x=", line)
+            self.assertIsNone(re.search(r"x=\d+\.\.\d+", line), line)
+            self.assertIn("core aspect", line)
 
-    def test_luat_chung_noi_ra_quan_he_giua_hai_hop(self):
-        self.assertIn("Each element's line gives a second, larger box: its own cell", self.txt)
-        self.assertIn("come to rest inside it", self.txt)
-        # Câu cũ CHỈ nhắc mép ảnh — biên cách cả một ô — đã thay hẳn.
+    def test_cau_cu_CHI_NHAC_MEP_ANH_khong_duoc_quay_lai(self):
         self.assertNotIn("must stay well clear of", self.txt)
-        self.assertIn("the cell box around its safe zone", self.txt)
+        self.assertNotIn("the cell box around its safe zone", self.txt)
+        self.assertNotIn("exact pixel crop boxes", self.txt)
 
-    def test_tam_MOT_O_khong_hua_hop_ngoai_nao(self):
-        """Ở tấm 1×1 hộp ô CHÍNH LÀ khổ ảnh; in nó ra là một dòng dài thêm mà không
-        thêm ràng buộc nào, và luật "đừng chạm mép ảnh" đã nói đúng điều ấy."""
+    def test_tam_MOT_O_noi_ve_KHUNG_ANH_chu_khong_ve_o_ben_canh(self):
+        """Ở tấm 1×1 không có ô hàng xóm nào: câu về "ô bên cạnh" ở đó là một ràng
+        buộc trỏ vào hư không, và model tự diễn giải nó thành một cái khung."""
         txt = render_prompt_text(_cfg(spec="a coin icon"))
-        self.assertIn("safe zone x=", txt)
-        self.assertNotIn("stays inside x=", txt)
-        self.assertIn("nothing touches the image edges", txt)
+        self.assertIn("The element is centred in the frame", txt)
+        self.assertNotIn("neighbouring", txt)
+        self.assertNotIn("stays in its own cell", txt)
 
     def test_giong_van_TU_NHIEN_khong_goi_ten_thu_khong_muon(self):
         """Cùng luật với `test_prompt_KHONG_nhac_ten_caro`: chỉ tả điều MUỐN."""
-        cau = self._dong("1) ").split("stays inside")[0]
         for xau in ("checker", "NEVER", "MUST NOT", "do not"):
-            self.assertNotIn(xau, cau)
+            self.assertNotIn(xau, self._dong("1) "))
