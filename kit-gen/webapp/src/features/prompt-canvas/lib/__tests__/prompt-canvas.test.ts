@@ -29,7 +29,7 @@ import { backgroundDoc, contextDoc, mascotDoc } from "@/features/prompt-lab/lib/
 import { NODE } from "@/features/prompt-lab/lib/schema";
 import { phraseOf, pillOptions } from "@/features/prompt-lab/lib/pill-registry";
 import { countComposerImages, serializeComposer } from "@/features/prompt-lab/lib/serialize-composer";
-import { newMascotPose, type Block, type ComposerState, type MascotBlock, type MascotPose, type UiCell } from "@/features/prompt-lab/lib/composer-model";
+import { newMascotPose, newUiKitBlock, DEFAULT_FIGMA_FIT, figmaFitOf, fitScalePercentOf, withFigmaFit, type Block, type ComposerState, type MascotBlock, type MascotPose, type UiCell } from "@/features/prompt-lab/lib/composer-model";
 
 import { COMPOSER_DOC_VERSION, emptyComposerDoc, migrateComposerDoc, type ComposerDoc } from "../composer-doc";
 import { composerBlockSheets, composerStyleLine, composerToContract } from "../composer-to-contract";
@@ -1649,5 +1649,93 @@ describe("đổi thương hiệu: chỉ ảnh CỦA THƯƠNG HIỆU bị thay, �
       { path: "refs/logo.png", role: "logo" as const, assetId: "a1" },
     ];
     expect(swapBrandRefs(before, [])).toEqual([{ path: "refs/toi-tu-chup.png", role: "style" }]);
+  });
+});
+
+/**
+ * ══ NẤC «KHỚP KHUNG» SỐNG TRONG TÀI LIỆU, KHÔNG SỐNG TRONG MÀN HÌNH ════════
+ *
+ * Nấc này quyết định ảnh dán ra Figma trông thế nào, nên nó phải sống qua lần
+ * đóng dự án — và phải GIỐNG NHAU ở cả hai tấm của một thẻ. Chỗ duy nhất thoả cả
+ * hai là tài liệu composer. Ba thứ được khoá ở đây:
+ *  ① bản nháp cũ (chưa có trường này) mở ra ở nấc AN TOÀN, không ở nấc tự động —
+ *    một thẻ cũ không được mang một cài đặt bí ẩn chỉ vì nó đủ già;
+ *  ② giá trị rác không đi xa hơn cửa đọc;
+ *  ③ ghi xuống rồi đọc lên ra ĐÚNG thứ đã ghi, ở cả ba loại thẻ.
+ */
+describe("khớp khung — cài đặt của THẺ, đọc/ghi qua tài liệu composer", () => {
+  const withFit = (raw: unknown) =>
+    migrateComposerDoc(
+      {
+        docVersion: COMPOSER_DOC_VERSION,
+        updatedAt: "",
+        composer: state({
+          blocks: [
+            { id: "u1", kind: "uikit", mode: "template", cells: [], ...(raw === undefined ? {} : { figmaFit: raw }) },
+          ] as unknown as Block[],
+        }),
+      },
+      PRESETS,
+    ).composer.blocks[0] as { figmaFit?: unknown };
+
+  it("bản nháp CŨ (không có trường này) ⇒ nấc an toàn «cả món vừa khung», 100%", () => {
+    expect(withFit(undefined).figmaFit).toEqual({ mode: "whole", scale: 100 });
+    expect(DEFAULT_FIGMA_FIT).toEqual({ mode: "whole", scale: 100 });
+  });
+
+  it.each([[null], ["whole"], [42], [{ mode: "khong-co-that" }], [{ scale: "to lên" }], [[]]])(
+    "giá trị rác %p ⇒ về mặc định, không đi xa hơn cửa đọc",
+    (raw) => {
+      expect(withFit(raw).figmaFit).toEqual(DEFAULT_FIGMA_FIT);
+    },
+  );
+
+  it("nấc đã lưu đọc lại NGUYÊN VẸN, cả cách khớp lẫn tỉ lệ thêm", () => {
+    expect(withFit({ mode: "body", scale: 120 }).figmaFit).toEqual({ mode: "body", scale: 120 });
+    expect(withFit({ mode: "auto", scale: 50 }).figmaFit).toEqual({ mode: "auto", scale: 50 });
+  });
+
+  it("tỉ lệ thêm bị KẸP về khoảng và về đúng bước 5", () => {
+    expect(fitScalePercentOf(10)).toBe(50);
+    expect(fitScalePercentOf(999)).toBe(150);
+    expect(fitScalePercentOf(103)).toBe(105);
+    expect(fitScalePercentOf(102)).toBe(100);
+    expect(fitScalePercentOf("rác")).toBe(100);
+    /* Và cửa đọc dùng đúng phép kẹp ấy — không có bản sao thứ hai để lệch. */
+    expect(withFit({ mode: "body", scale: 999 }).figmaFit).toEqual({ mode: "body", scale: 150 });
+    expect(withFit({ mode: "body", scale: 3 }).figmaFit).toEqual({ mode: "body", scale: 50 });
+  });
+
+  it("thẻ mới sinh ra đã mang sẵn nấc mặc định — mở lại không đổi một chữ", () => {
+    const moi = newUiKitBlock();
+    expect(moi.figmaFit).toEqual(DEFAULT_FIGMA_FIT);
+    expect(figmaFitOf(moi.figmaFit)).toEqual(DEFAULT_FIGMA_FIT);
+  });
+
+  it("đổi nấc KHÔNG đụng gì khác của thẻ, và giữ đúng loại thẻ", () => {
+    const moi = newUiKitBlock();
+    const sau = withFigmaFit(moi, { mode: "body", scale: 85 });
+    expect(sau.figmaFit).toEqual({ mode: "body", scale: 85 });
+    expect(sau.kind).toBe("uikit");
+    expect({ ...sau, figmaFit: moi.figmaFit }).toEqual(moi);
+    /* Thẻ cũ KHÔNG bị sửa tại chỗ: màn hình so tham chiếu để biết có gì đổi. */
+    expect(moi.figmaFit).toEqual(DEFAULT_FIGMA_FIT);
+  });
+
+  it("ba loại thẻ đều giữ được nấc qua một vòng ghi–đọc", () => {
+    const blocks = [
+      { id: "b1", kind: "background", mode: "template", doc: backgroundDoc(), note: "", figmaFit: { mode: "body", scale: 115 } },
+      { id: "u1", kind: "uikit", mode: "template", cells: [], figmaFit: { mode: "auto", scale: 70 } },
+      { id: "m1", kind: "mascot", mode: "template", doc: mascotDoc(), poses: [], figmaFit: { mode: "whole", scale: 140 } },
+    ] as unknown as Block[];
+    const back = migrateComposerDoc(
+      JSON.parse(JSON.stringify({ docVersion: COMPOSER_DOC_VERSION, updatedAt: "", composer: state({ blocks }) })),
+      PRESETS,
+    ).composer.blocks as Array<{ figmaFit?: unknown }>;
+    expect(back.map((b) => b.figmaFit)).toEqual([
+      { mode: "body", scale: 115 },
+      { mode: "auto", scale: 70 },
+      { mode: "whole", scale: 140 },
+    ]);
   });
 });

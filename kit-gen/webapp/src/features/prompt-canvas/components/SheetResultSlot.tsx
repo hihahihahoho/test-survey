@@ -1,3 +1,4 @@
+import type { FigmaFit } from "@/features/prompt-lab/lib/composer-model";
 import { jobIdOf } from "../lib/block-jobs";
 import { SheetResultPanel } from "./result";
 
@@ -50,6 +51,14 @@ export interface SheetResultSlotProps {
   drawingJobs?: readonly string[];
   /** Vẽ lại ĐÚNG tấm này (ép vẽ) — vắng ⇒ panel không bày nút. */
   onRedraw?: () => void;
+  /**
+   * KHỚP KHUNG của THẺ — mọi tấm của một thẻ nhận CÙNG một giá trị.
+   *
+   * Đi thẳng từ vỏ thẻ xuống, không dừng lại ở lớp này: nấc ấy không liên quan gì
+   * tới phép ghép tên lượt vẽ — việc duy nhất của lớp này.
+   */
+  fit?: FigmaFit;
+  onFitChange?: (next: FigmaFit) => void;
 }
 
 export function SheetResultSlot({
@@ -60,6 +69,8 @@ export function SheetResultSlot({
   runJobs = [],
   drawingJobs = [],
   onRedraw,
+  fit,
+  onFitChange,
 }: SheetResultSlotProps) {
   const job = jobIdOf(sheetId);
   /* Tấm có trong lượt ⇒ neo vào ảnh bất biến của lượt; không có ⇒ `null`, tức
@@ -74,6 +85,8 @@ export function SheetResultSlot({
       artifactPath={artifactPath}
       busy={drawingJobs.includes(job)}
       {...(onRedraw ? { onRedraw } : {})}
+      {...(fit ? { fit } : {})}
+      {...(onFitChange ? { onFitChange } : {})}
     />
   );
 }

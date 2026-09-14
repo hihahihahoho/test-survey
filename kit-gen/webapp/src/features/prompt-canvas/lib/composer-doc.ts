@@ -10,6 +10,7 @@ import {
   type ContextRef,
   type MascotPose,
   type UiCell,
+  figmaFitOf,
   maxPerSheetOf,
 } from "@/features/prompt-lab/lib/composer-model";
 import { defaultSizeOf } from "@/features/prompt-lab/lib/cell-size";
@@ -226,6 +227,9 @@ function readMascotBlock(raw: Record<string, unknown>, id: string, mode: BlockMo
       poses,
       /* Cùng phép vá với thẻ Bộ UI — xem `readBlock`. */
       maxPerSheet: maxPerSheetOf(raw["maxPerSheet"]),
+      /* NẤC «khớp khung» của thẻ — thiếu ⇒ mặc định an toàn. Cùng cửa vá với
+         `maxPerSheet`; xem `figmaFitOf`. */
+      figmaFit: figmaFitOf(raw["figmaFit"]),
       ...(isRecord(sheet) && Array.isArray(sheet["paths"]) && typeof sheet["key"] === "string"
         ? {
             poseSheet: {
@@ -263,6 +267,7 @@ function readMascotBlock(raw: Record<string, unknown>, id: string, mode: BlockMo
     doc: withHeadImage(mascotDoc(), firstImageAttrs(old), pills.outfit ?? INHERIT),
     poses: [row],
     maxPerSheet: maxPerSheetOf(raw["maxPerSheet"]),
+    figmaFit: figmaFitOf(raw["figmaFit"]),
   };
 }
 
@@ -396,7 +401,11 @@ function readBlock(raw: unknown, index: number, presets: PresetBundle): Block | 
        không có trường này; nó được vẽ bằng trần 16 cũ, nhưng 16 không còn là một
        lựa chọn bày ra, nên thẻ cũ mở lại hành xử như thẻ mới. Vá ngay tại cửa
        đọc — cùng luật với `sizeId`/`glazeId` ở `readCell`. */
-    return { id, kind: "uikit", mode, cells, maxPerSheet: maxPerSheetOf(raw["maxPerSheet"]) };
+    return {
+      id, kind: "uikit", mode, cells,
+      maxPerSheet: maxPerSheetOf(raw["maxPerSheet"]),
+      figmaFit: figmaFitOf(raw["figmaFit"]),
+    };
   }
   if (kind === "mascot") return readMascotBlock(raw, id, mode);
   if (kind !== "background") return null;
@@ -413,6 +422,7 @@ function readBlock(raw: unknown, index: number, presets: PresetBundle): Block | 
     /* Thiếu ⇒ rỗng, đúng thứ nó đang là: bản nháp lưu trước lượt có ô ghi chú thì
        người dùng chưa từng gõ gì vào đó. */
     note: str(raw["note"]),
+    figmaFit: figmaFitOf(raw["figmaFit"]),
   };
 }
 

@@ -627,3 +627,148 @@ describe("sheetVersions — v LỚN NHẤT là bản MỚI NHẤT", () => {
     expect(currentVersion([])).toBeNull();
   });
 });
+
+/**
+ * ══ BA NẤC «KHỚP KHUNG» — QUYỀN CHỌN, KHÔNG PHẢI BA THUẬT TOÁN MỚI ══════════
+ *
+ * Chủ sản phẩm dán tấm ra Figma rồi hỏi: *"giờ làm sao để chỉnh cái khung bắn ra
+ * và cỡ của ảnh bên trong, cho vào tâm?"*. Trước lượt này câu ấy không có chỗ trả
+ * lời: lõi để co do một luật dung sai tự chọn, người dùng không thấy và không đổi
+ * được. Ba nấc dưới đây khoá đúng bốn lời hứa của cái nút mới:
+ *  ① mỗi nấc chọn LÕI nào — và hai nấc tay phải ra kết quả KHÁC nhau ở đúng cái
+ *    ô mà luật tự động phải phân vân, nếu không thì cái nút chỉ để trang trí;
+ *  ② tỉ lệ thêm nhân vào ẢNH, KHÔNG đụng khung;
+ *  ③ tâm ảnh = tâm khung, neo theo hộp ĐO ĐƯỢC ở nấc «cả món»;
+ *  ④ không truyền gì ⇒ y hệt hành vi trước khi có nút.
+ */
+describe("contractFramed — ba nấc «khớp khung» của thẻ", () => {
+  /** Máy vẽ LỐ: lõi đo được tràn xa khỏi hộp đã hứa (ô thật của lượt r-0021). */
+  const lo = cell("tight/01-button", "ui", {
+    w: 592, h: 176, cellIndex: 0,
+    canvas: [627, 627], content: [592, 176], contentAt: [34, 274],
+    safe: [38, 281, 587, 168],
+    contractSafe: [129, 249, 368, 128],
+    outSize: [245, 85],
+  });
+  /** Máy vẽ NGOAN: chỉ quầng sáng tràn, trong dung sai (ô thật của `test-e0d4`). */
+  const ngoan = cell("tight/01-button", "ui", {
+    w: 591, h: 417, cellIndex: 0,
+    canvas: [627, 627], content: [591, 417], contentAt: [34, 210],
+    safe: [35, 215, 556, 196],
+    contractSafe: [75, 230, 476, 166],
+    outSize: [112, 39],
+  });
+
+  /** Tỉ lệ nếu lấy hộp ĐO ĐƯỢC làm lõi (cả món ôm vào khung). */
+  const sDo = (c: typeof lo) => {
+    const [, , w, h] = c.safe as number[];
+    const [ow, oh] = c.outSize as number[];
+    return Math.min(ow! / w!, oh! / h!);
+  };
+  /** Tỉ lệ nếu lấy hộp ĐÃ HỨA làm lõi (thân lấp khung). */
+  const sHua = (c: typeof lo) => {
+    const [, , w, h] = c.contractSafe as number[];
+    const [ow, oh] = c.outSize as number[];
+    return Math.min(ow! / w!, oh! / h!);
+  };
+
+  it("«cả món vừa khung» luôn lấy hộp ĐO ĐƯỢC, kể cả khi máy vẽ ngoan", () => {
+    expect(contractFramed([lo], { mode: "whole" }).scales.get(lo.path)).toBeCloseTo(sDo(lo), 6);
+    expect(contractFramed([ngoan], { mode: "whole" }).scales.get(ngoan.path)).toBeCloseTo(sDo(ngoan), 6);
+    /* Và nó PHẢI khác nhánh kia ở ô ngoan — nếu bằng nhau thì nấc này thừa. */
+    expect(sDo(ngoan)).not.toBeCloseTo(sHua(ngoan), 3);
+  });
+
+  it("«thân lấp khung» luôn lấy hộp ĐÃ HỨA, kể cả khi máy vẽ lố", () => {
+    expect(contractFramed([lo], { mode: "body" }).scales.get(lo.path)).toBeCloseTo(sHua(lo), 6);
+    expect(contractFramed([ngoan], { mode: "body" }).scales.get(ngoan.path)).toBeCloseTo(sHua(ngoan), 6);
+    expect(sDo(lo)).not.toBeCloseTo(sHua(lo), 3);
+  });
+
+  it("«tự động» giữ nguyên luật dung sai: ô lố theo hộp đo, ô ngoan theo hộp hứa", () => {
+    expect(contractFramed([lo], { mode: "auto" }).scales.get(lo.path)).toBeCloseTo(sDo(lo), 6);
+    expect(contractFramed([ngoan], { mode: "auto" }).scales.get(ngoan.path)).toBeCloseTo(sHua(ngoan), 6);
+  });
+
+  /**
+   * Câu «đã co cả món vào khung» có LÝ DO đi kèm: *máy vẽ to hơn hộp đã hứa*. Ở
+   * nấc tay, co cả món là do NGƯỜI DÙNG chọn chứ không phải do máy vẽ lố — nói
+   * câu ấy lúc máy vẽ ngoan là đổ oan cho một lượt vẽ tử tế.
+   */
+  it("chỉ báo «co cả món» khi lời hứa THẬT SỰ vỡ, không báo vì người dùng chọn tay", () => {
+    expect(contractFramed([lo], { mode: "whole" }).wholeFitted.map((c) => c.name)).toEqual(["01-button"]);
+    expect(contractFramed([ngoan], { mode: "whole" }).wholeFitted).toEqual([]);
+    /* Nấc «thân lấp khung» KHÔNG co cả món ô nào, nên danh sách ấy luôn rỗng. */
+    expect(contractFramed([lo], { mode: "body" }).wholeFitted).toEqual([]);
+  });
+
+  it("tỉ lệ thêm 120% ⇒ ẢNH ×1,2, KHUNG không đổi một pixel", () => {
+    const goc = contractFramed([lo], { mode: "whole" });
+    const to = contractFramed([lo], { mode: "whole", scalePercent: 120 });
+    const s0 = goc.scales.get(lo.path)!;
+    const s1 = to.scales.get(lo.path)!;
+    expect(s1).toBeCloseTo(s0 * 1.2, 6);
+
+    /* KHUNG = hộp ảo × tỉ lệ xuất (đúng phép nhân của `buildFigmaNodeForAsset`).
+       Cả hai nấc phải ra đúng `outSize` — đó là con số người dùng đã đặt. */
+    for (const [out, s] of [[goc, s0], [to, s1]] as const) {
+      const box = out.files[0]!.safe as number[];
+      expect(box[2]! * s).toBeCloseTo(245, 6);
+      expect(box[3]! * s).toBeCloseTo(85, 6);
+    }
+  });
+
+  it("tỉ lệ thêm 50% và 150% đều đi thẳng vào tỉ lệ ảnh", () => {
+    const s0 = contractFramed([ngoan], { mode: "body" }).scales.get(ngoan.path)!;
+    expect(contractFramed([ngoan], { mode: "body", scalePercent: 50 }).scales.get(ngoan.path))
+      .toBeCloseTo(s0 * 0.5, 6);
+    expect(contractFramed([ngoan], { mode: "body", scalePercent: 150 }).scales.get(ngoan.path))
+      .toBeCloseTo(s0 * 1.5, 6);
+  });
+
+  /**
+   * TÂM ẢNH = TÂM KHUNG, và mốc là hộp ĐO ĐƯỢC ở nấc «cả món».
+   *
+   * Hộp ảo căn giữa quanh tâm lõi ⇒ khi nhân ngược ra khung, lõi nằm đúng giữa.
+   * Neo nhầm sang hộp đã hứa ở nấc này là đẩy cả món lệch sang một bên đúng bằng
+   * khoảng cách giữa hai tâm — và không có gì trên màn nói ra chuyện đó.
+   */
+  it("nấc «cả món»: tâm hộp ảo TRÙNG tâm hộp đo được, ở mọi tỉ lệ thêm", () => {
+    const tamX = 38 + 587 / 2;
+    const tamY = 281 + 168 / 2;
+    for (const pct of [100, 50, 120, 150]) {
+      const box = contractFramed([lo], { mode: "whole", scalePercent: pct }).files[0]!.safe as number[];
+      expect(box[0]! + box[2]! / 2).toBeCloseTo(tamX, 6);
+      expect(box[1]! + box[3]! / 2).toBeCloseTo(tamY, 6);
+    }
+  });
+
+  it("không truyền gì ⇒ ĐÚNG hành vi cũ («tự động», 100%)", () => {
+    for (const c of [lo, ngoan]) {
+      const cu = contractFramed([c]);
+      const ro = contractFramed([c], { mode: "auto", scalePercent: 100 });
+      expect(cu.files).toEqual(ro.files);
+      expect([...cu.scales]).toEqual([...ro.scales]);
+      expect(cu.fitted).toEqual(ro.fitted);
+      expect(cu.wholeFitted).toEqual(ro.wholeFitted);
+      expect(cu.measured).toEqual(ro.measured);
+    }
+  });
+
+  it("tỉ lệ thêm rác (0, âm, NaN) ⇒ coi như 100%, không dựng khung 0×0", () => {
+    const chuan = contractFramed([lo], { mode: "whole" }).scales.get(lo.path)!;
+    for (const pct of [0, -20, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(contractFramed([lo], { mode: "whole", scalePercent: pct }).scales.get(lo.path))
+        .toBeCloseTo(chuan, 6);
+    }
+  });
+
+  it("kit cắt bằng bản cũ (thiếu cỡ đầu ra) ⇒ nấc nào cũng giữ nguyên, tỉ lệ 1", () => {
+    const cu = cell("tight/01-button", "ui", { safe: [10, 10, 100, 100] });
+    for (const mode of ["whole", "body", "auto"] as const) {
+      const out = contractFramed([cu], { mode, scalePercent: 130 });
+      expect(out.scales.get(cu.path)).toBe(1);
+      expect(out.measured).toEqual(["01-button"]);
+    }
+  });
+});

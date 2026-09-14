@@ -25,6 +25,7 @@ import {
 } from "@/features/prompt-lab/components/MascotBlockView";
 import { ModeBadge } from "@/features/prompt-lab/components/BlockCard";
 import type { Block, DocBlock, MascotBlock, UiKitBlock } from "@/features/prompt-lab/lib/composer-model";
+import { figmaFitOf, withFigmaFit } from "@/features/prompt-lab/lib/composer-model";
 import type { Sheet } from "@/lib/types/contract";
 import type { PromptPreviewImage, PromptPreviewJob } from "@/lib/types/api";
 import type { BlockPromptState } from "../lib/block-prompt";
@@ -198,6 +199,11 @@ export function CanvasBlock(props: CanvasBlockProps) {
                  giữ nguyên kết quả khi mô tả không đổi, nên đây là đường DUY NHẤT để
                  xin một bức ảnh khác cho cùng một mô tả. */
               onRedraw={() => onGenSheet(index)}
+              /* NẤC «khớp khung» là của THẺ, nên mọi tấm của thẻ nhận cùng một giá
+                 trị và một cú đổi ở tấm nào cũng ghi về cùng một chỗ. Per-ô thì mỗi
+                 bộ kit có hàng chục núm, và không núm nào được ai chỉnh. */
+              fit={figmaFitOf(block.figmaFit)}
+              onFitChange={(next) => props.onChange((prev) => withFigmaFit(prev, next))}
             />
           ))}
         </div>

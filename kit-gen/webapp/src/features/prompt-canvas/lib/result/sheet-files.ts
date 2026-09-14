@@ -10,6 +10,10 @@
  * lần là bug 400 PATH_ESCAPE mà `features/kit/lib/download.ts` đã kể lại).
  */
 import type { KitFile } from "@/lib/types";
+/* CHỈ LẤY KIỂU — `import type` bị xoá sạch lúc biên dịch, nên lib thuần này không
+   kéo theo một dòng nào của màn soạn vào bundle. Dùng chung đúng ba tên nấc với
+   tài liệu composer là cách duy nhất để nút bấm và phép tính không trôi khỏi nhau. */
+import type { FigmaFitMode } from "@/features/prompt-lab/lib/composer-model";
 
 /**
  * ẢNH GỐC CỦA MỘT TẤM — hai nguồn, hai ý nghĩa KHÁC NHAU.
@@ -302,7 +306,28 @@ function honoursPromise(measuredCore: Box, promise: Box): boolean {
   );
 }
 
-export function contractFramed(files: readonly KitFile[]): ContractFramed {
+/**
+ * NẤC «KHỚP KHUNG» NGƯỜI DÙNG CHỌN — thiếu ⇒ ĐÚNG hành vi trước khi có nút.
+ *
+ * Mặc định của HÀM là `auto` + 100%, không phải mặc định của một THẺ MỚI
+ * (`DEFAULT_FIGMA_FIT` = `whole`). Hai mặc định khác nhau là cố ý: hàm này còn
+ * được gọi ở những chỗ không có thẻ nào đứng sau (và bởi mọi ca kiểm đã viết
+ * trước lượt này), nên "không truyền gì" phải nghĩa là "y như cũ". Thẻ thì có
+ * người dùng thật đứng sau, và nấc an toàn mới là nấc họ đáng được nhận.
+ */
+export interface FramedOptions {
+  /** `whole` · `body` · `auto`. Thiếu ⇒ `auto`. */
+  mode?: FigmaFitMode;
+  /** Tỉ lệ THÊM, tính bằng phần trăm. Thiếu / rác ⇒ 100 (không can thiệp). */
+  scalePercent?: number;
+}
+
+export function contractFramed(files: readonly KitFile[], opts: FramedOptions = {}): ContractFramed {
+  const mode: FigmaFitMode = opts.mode ?? "auto";
+  /* Tỉ lệ thêm chỉ nhân vào ẢNH: khung vẫn là `outSize`, vì đó là con số người
+     dùng đã đặt và sắp đo lại. Số rác ⇒ 1, chứ không dựng một khung 0×0. */
+  const askedPercent = Number(opts.scalePercent);
+  const mul = Number.isFinite(askedPercent) && askedPercent > 0 ? askedPercent / 100 : 1;
   const measured: string[] = [];
   const fitted: FittedCell[] = [];
   const wholeFitted: WholeFitCell[] = [];
@@ -329,8 +354,12 @@ export function contractFramed(files: readonly KitFile[]): ContractFramed {
     const seen = boxOf(file.safe);
     let core: Box | null;
     if (box !== null && seen !== null) {
-      core = honoursPromise(seen, box) ? box : seen;
-      if (core === seen) wholeFitted.push({ name: cellName(file), reason: WHOLE_FIT_REASON });
+      /* Hộp hứa có được ảnh chứng thực không — CÂU HỎI NÀY VẪN ĐƯỢC HỎI Ở CẢ BA
+         nấc, dù chỉ `auto` dùng nó để chọn. Hai nấc kia dùng nó để NÓI THẬT:
+         chỉ khi lời hứa đã vỡ thì câu «đã co cả món vào khung» mới đúng. */
+      const hua = honoursPromise(seen, box);
+      core = mode === "whole" ? seen : mode === "body" ? box : hua ? box : seen;
+      if (core === seen && !hua) wholeFitted.push({ name: cellName(file), reason: WHOLE_FIT_REASON });
     } else {
       core = box ?? seen;
     }
@@ -341,7 +370,7 @@ export function contractFramed(files: readonly KitFile[]): ContractFramed {
       return file;
     }
 
-    const s = Math.min(target.w / core.w, target.h / core.h);
+    const s = Math.min(target.w / core.w, target.h / core.h) * mul;
     if (!Number.isFinite(s) || s <= 0) {
       return { ...file, safe: [core.x, core.y, core.w, core.h] };
     }

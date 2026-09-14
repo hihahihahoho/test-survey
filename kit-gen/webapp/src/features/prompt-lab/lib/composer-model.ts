@@ -78,6 +78,12 @@ export interface DocBlock {
    * ╚══════════════════════════════════════════════════════════════════════════╝
    */
   note: string;
+  /**
+   * KHỚP KHUNG lúc copy sang Figma — dùng chung cho MỌI tấm của thẻ.
+   *
+   * Thiếu (bản nháp trước 14/09/2026) ⇒ `DEFAULT_FIGMA_FIT`. Xem `FigmaFit`.
+   */
+  figmaFit?: FigmaFit;
 }
 
 /**
@@ -170,6 +176,12 @@ export interface MascotBlock {
    * `mascotSheets`); chuỗi rỗng = tấm đó không dựng được ảnh nào.
    */
   poseSheet?: { key: string; paths: string[] };
+  /**
+   * KHỚP KHUNG lúc copy sang Figma — dùng chung cho MỌI tấm của thẻ.
+   *
+   * Thiếu (bản nháp trước 14/09/2026) ⇒ `DEFAULT_FIGMA_FIT`. Xem `FigmaFit`.
+   */
+  figmaFit?: FigmaFit;
 }
 
 /** Một ô của lưới spritesheet. */
@@ -282,6 +294,12 @@ export interface UiKitBlock {
    * sống cạnh nhau trong cùng một bộ kit. Xem `maxPerSheetOf`.
    */
   maxPerSheet?: number;
+  /**
+   * KHỚP KHUNG lúc copy sang Figma — dùng chung cho MỌI tấm của thẻ.
+   *
+   * Thiếu (bản nháp trước 14/09/2026) ⇒ `DEFAULT_FIGMA_FIT`. Xem `FigmaFit`.
+   */
+  figmaFit?: FigmaFit;
 }
 
 /**
@@ -349,6 +367,99 @@ export const DEFAULT_MAX_PER_SHEET = 4;
 export function maxPerSheetOf(value: unknown): number {
   const asked = Number(value);
   return (SHEET_MAX_CHOICES as readonly number[]).includes(asked) ? asked : DEFAULT_MAX_PER_SHEET;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   KHỚP KHUNG — cách ảnh được đặt vào khung lúc copy sang Figma
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * BA CÁCH KHỚP, và cả ba đều là những thứ ĐÃ CHẠY — không có nấc nào mới toanh.
+ *
+ * ╔══ VÌ SAO PHẢI CÓ NÚT, TRONG KHI ĐÃ CÓ MỘT LUẬT TỰ ĐỘNG ══════════════════╗
+ * ║ Phép khớp (xem `contractFramed` ở `result/sheet-files.ts`) phải chọn một   ║
+ * ║ trong hai hộp làm lõi để co, và KHÔNG có phép đo nào tách được thân món    ║
+ * ║ khỏi trang trí. Luật tự động đoán bằng dung sai, và nó đoán ĐÚNG phần lớn  ║
+ * ║ lượt — nhưng "phần lớn" nghĩa là có lượt nó đoán sai, và lúc ấy người dùng ║
+ * ║ không có cửa nào ngoài việc ngồi co tay từng ô trong Figma.                ║
+ * ║ Ba nấc này biến một phép đoán câm thành một lựa chọn nói ra được:          ║
+ * ║  · `whole` — toàn bộ phần đục (α ≥ 128) nằm gọn trong khung. An toàn tuyệt ║
+ * ║    đối (không ô nào đè ô nào), giá phải trả là thân món nhỏ hơn khung.     ║
+ * ║  · `body`  — thân món (hộp mà prompt đã hứa) lấp đầy khung, trang trí tràn ║
+ * ║    ra ngoài. Đẹp hơn khi máy vẽ ngoan, nhưng máy vẽ lố thì ô đè sang ô.    ║
+ * ║  · `auto`  — luật dung sai cũ tự chọn giữa hai nấc trên cho từng ô.        ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * MẶC ĐỊNH LÀ `whole`, không phải `auto`: nấc an toàn phải là nấc người dùng
+ * nhận được khi chưa từng bấm gì. Một bản nháp cũ (chưa có trường này) vì thế
+ * cũng mở ra ở `whole` — xem `figmaFitOf`.
+ */
+export type FigmaFitMode = "whole" | "body" | "auto";
+
+/** Ba nấc, đúng thứ tự bày ra cho người dùng. */
+export const FIGMA_FIT_MODES: readonly FigmaFitMode[] = ["whole", "body", "auto"];
+
+/**
+ * TỈ LỆ THÊM (phần trăm) — nhân vào SAU khi cách khớp đã chọn xong lõi.
+ *
+ * Khung KHÔNG đổi theo nó (khung vẫn là cỡ đầu ra người dùng đặt); chỉ ẢNH bên
+ * trong to/nhỏ đi. Đây là cái van tay cho hai ca mà không phép đo nào bắt được:
+ * món vẽ ra có quầng sáng dày (muốn thu nhỏ), hoặc thân món quá khiêm tốn trong
+ * khung (muốn nới ra). 100 = đúng như phép tính, tức là không can thiệp.
+ */
+export const FIT_SCALE_MIN = 50;
+export const FIT_SCALE_MAX = 150;
+export const FIT_SCALE_STEP = 5;
+export const DEFAULT_FIT_SCALE = 100;
+
+/**
+ * CÀI ĐẶT KHỚP KHUNG CỦA MỘT THẺ — dùng chung cho MỌI tấm của thẻ.
+ *
+ * Per-thẻ chứ không per-ô: một thẻ là một lượt vẽ, một phong cách, một kiểu
+ * trang trí — nếu ô này cần nấc khác ô kia thì chuyện phải sửa là mô tả, không
+ * phải mười sáu cái núm. Và mười sáu núm thì không ai chỉnh, không ai kiểm được.
+ */
+export interface FigmaFit {
+  mode: FigmaFitMode;
+  /** Phần trăm, `FIT_SCALE_MIN`..`FIT_SCALE_MAX`, bước `FIT_SCALE_STEP`. */
+  scale: number;
+}
+
+export const DEFAULT_FIGMA_FIT: FigmaFit = { mode: "whole", scale: DEFAULT_FIT_SCALE };
+
+/** Kẹp một tỉ lệ thêm về nấc CÓ THẬT: trong khoảng, và đúng bước 5. */
+export function fitScalePercentOf(value: unknown): number {
+  const asked = Number(value);
+  if (!Number.isFinite(asked)) return DEFAULT_FIT_SCALE;
+  const stepped = Math.round(asked / FIT_SCALE_STEP) * FIT_SCALE_STEP;
+  return Math.min(FIT_SCALE_MAX, Math.max(FIT_SCALE_MIN, stepped));
+}
+
+/**
+ * Giá trị lưu trên đĩa → một cài đặt DÙNG ĐƯỢC. Thiếu / rác ⇒ mặc định.
+ *
+ * Vá ngay tại cửa đọc, cùng luật với `maxPerSheetOf` và `sizeId` của ô: một giá
+ * trị lạ lọt vào trong ruột app sẽ đi rất xa trước khi có ai nhận ra.
+ */
+/**
+ * Đặt nấc khớp khung cho một thẻ, giữ nguyên mọi thứ khác.
+ *
+ * Generic theo `T` để thẻ vào kiểu gì thì ra đúng kiểu ấy: vỏ thẻ cầm một `Block`
+ * hợp nhất ba loại, và một phép trải thẳng ở chỗ gọi sẽ làm TypeScript mất dấu
+ * loại thẻ — rồi chỗ nào đó phải chữa bằng một cú ép kiểu không ai kiểm được.
+ */
+export function withFigmaFit<T extends Block>(block: T, fit: FigmaFit): T {
+  return { ...block, figmaFit: fit };
+}
+
+export function figmaFitOf(value: unknown): FigmaFit {
+  if (typeof value !== "object" || value === null) return { ...DEFAULT_FIGMA_FIT };
+  const raw = value as Record<string, unknown>;
+  const asked = raw["mode"];
+  const mode = FIGMA_FIT_MODES.includes(asked as FigmaFitMode)
+    ? (asked as FigmaFitMode)
+    : DEFAULT_FIGMA_FIT.mode;
+  return { mode, scale: fitScalePercentOf(raw["scale"]) };
 }
 
 /**
@@ -653,7 +764,7 @@ export function newId(prefix: string): string {
 }
 
 export function newDocBlock(kind: "background" = "background"): DocBlock {
-  return { id: newId(kind), kind, mode: "template", doc: backgroundDoc(), note: "" };
+  return { id: newId(kind), kind, mode: "template", doc: backgroundDoc(), note: "", figmaFit: { ...DEFAULT_FIGMA_FIT } };
 }
 
 /** Dáng mặc định của một dòng mới — cùng id với `DEFAULT_POSE` của bộ dịch. */
@@ -690,7 +801,7 @@ export function retakePose(row: MascotPose, patch: Partial<Pick<MascotPose, "pos
 
 /** Thẻ Nhân vật mới: có câu danh tính, CHƯA có dáng nào — cùng nhịp với thẻ Bộ UI. */
 export function newMascotBlock(): MascotBlock {
-  return { id: newId("mascot"), kind: "mascot", mode: "template", doc: mascotDoc(), poses: [], maxPerSheet: DEFAULT_MAX_PER_SHEET };
+  return { id: newId("mascot"), kind: "mascot", mode: "template", doc: mascotDoc(), poses: [], maxPerSheet: DEFAULT_MAX_PER_SHEET, figmaFit: { ...DEFAULT_FIGMA_FIT } };
 }
 
 export function newCell(elementId: string, presets: PresetBundle = getPresets()): UiCell {
@@ -721,7 +832,7 @@ export function newCell(elementId: string, presets: PresetBundle = getPresets())
 export function newUiKitBlock(): UiKitBlock {
   /* `template` là mặc định — xem khối chú thích của `UiCell.doc`: chế độ tự do
      mount một editor cho MỖI dòng, và không ai được trả cái giá ấy vì lỡ tay. */
-  return { id: newId("uikit"), kind: "uikit", mode: "template", cells: [], maxPerSheet: DEFAULT_MAX_PER_SHEET };
+  return { id: newId("uikit"), kind: "uikit", mode: "template", cells: [], maxPerSheet: DEFAULT_MAX_PER_SHEET, figmaFit: { ...DEFAULT_FIGMA_FIT } };
 }
 
 /** Trạng thái lúc mở màn: chỉ có ngữ cảnh chung, chưa block nào. */

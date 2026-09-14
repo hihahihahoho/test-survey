@@ -355,6 +355,16 @@ describe("nút «Copy N ô sang Figma»", () => {
    */
   describe("tỉ lệ co theo từng ô", () => {
     /**
+     * BA CA DƯỚI ĐÂY ĐO NHÁNH «hộp hứa được chứng thực» — nhánh mà nấc TỰ ĐỘNG
+     * chọn khi máy vẽ ngoan. Từ lượt có nút «Khớp khung», nấc mặc định của một thẻ
+     * là «Cả món vừa khung» (nấc an toàn), nên ca nào đo nhánh kia phải NÓI RA nấc
+     * mình đang đo thay vì mượn mặc định — mượn mặc định là để một cú đổi mặc định
+     * ngày mai âm thầm đổi nghĩa cả ba ca.
+     */
+    const mountAuto = (props: Partial<React.ComponentProps<typeof SheetResultPanel>> = {}) =>
+      mount({ fit: { mode: "auto", scale: 100 }, ...props });
+
+    /**
      * Ô «01-button» của `test-e0d4`: cỡ đầu ra 112×39, hộp đã hứa 476×166 (engine xin
      * model vẽ to `drawScale` = 4,25 lần) ⇒ co còn 39/166 ≈ 23%. `safe` ở đây là lõi
      * ĐO ĐƯỢC 556×196 — tràn ra ngoài hộp hứa 40px hai bên và 15px trên dưới, tức
@@ -378,7 +388,7 @@ describe("nút «Copy N ô sang Figma»", () => {
 
     it("đưa xuống đường dựng khung một HÀM tỉ lệ, không phải một số chung", async () => {
       kitFiles = [fitCell(), cell("tight/02-chip", "ui", 1)];
-      mount();
+      mountAuto();
       fireEvent.click(screen.getByRole("button", { name: /Copy 2 ô sang Figma/ }));
       await screen.findByRole("button", { name: /Đã copy 2 ô/ });
       expect(packCalls).toHaveLength(1);
@@ -393,7 +403,7 @@ describe("nút «Copy N ô sang Figma»", () => {
     it("đường lùi nhận CÙNG hàm tỉ lệ ⇒ hai đường không thể co khác nhau", async () => {
       packEmpty = true;
       kitFiles = [fitCell()];
-      mount();
+      mountAuto();
       fireEvent.click(screen.getByRole("button", { name: /Copy 1 ô sang Figma/ }));
       await screen.findByRole("button", { name: /Đã copy 1 ô/ });
       expect(boardCalls).toHaveLength(1);
@@ -404,7 +414,7 @@ describe("nút «Copy N ô sang Figma»", () => {
 
     it("nói ra phép co ngay trên nút: cỡ xuất + phần trăm", () => {
       kitFiles = [fitCell()];
-      mount();
+      mountAuto();
       const title = screen.getByRole("button", { name: /Copy 1 ô sang Figma/ }).getAttribute("title") ?? "";
       expect(title).toContain("cỡ xuất 112×39");
       expect(title).toContain("23%");
@@ -672,5 +682,122 @@ describe("nút «Vẽ lại tấm này»", () => {
     expect(btn.hasAttribute("disabled")).toBe(true);
     fireEvent.click(btn);
     expect(onRedraw).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ══ NÚT «KHỚP KHUNG» — QUYỀN CHỌN PHẢI TỚI ĐƯỢC PHÉP TÍNH ══════════════════
+ *
+ * Chủ sản phẩm dán tấm ra Figma rồi hỏi cách chỉnh khung và cỡ ảnh bên trong.
+ * Một nút đổi được mà phép tính vẫn chạy theo nấc cũ thì tệ hơn không có nút: nó
+ * hứa một quyền không tồn tại, và người dùng sẽ đổ cho máy vẽ. Nên ca nặng nhất ở
+ * đây KHÔNG phải "nút có hiện không", mà là "đối số xuống tầng dựng khung có đổi
+ * theo không".
+ */
+const feedback = await import("@/features/projects/lib/feedback");
+
+describe("«Khớp khung» — nấc của thẻ, và nó đi thẳng vào phép dựng khung", () => {
+  /** Máy vẽ NGOAN: lõi đo được chỉ tràn trong dung sai ⇒ hai nấc tay ra hai số. */
+  const ngoan = () => cell("tight/01-button", "ui", 0, {
+    w: 591, h: 417, canvas: [627, 627], content: [591, 417], contentAt: [34, 210],
+    safe: [35, 215, 556, 196], contractSafe: [75, 230, 476, 166], outSize: [112, 39],
+  });
+  /** Thân lấp khung: cạnh chặt là chiều cao của hộp đã hứa. */
+  const S_THAN = 39 / 166;
+  /** Cả món vừa khung: cạnh chặt là chiều cao của hộp đo được. */
+  const S_CA_MON = Math.min(112 / 556, 39 / 196);
+
+  const onFitChange = vi.fn();
+  beforeEach(() => {
+    onFitChange.mockReset();
+    vi.mocked(feedback.toastSuccess).mockClear();
+    kitFiles = [ngoan()];
+  });
+
+  const scaleOfFirstCopy = () => {
+    const fn = packCalls[0]?.scale as (f: KitFile) => number | undefined;
+    return fn(packCalls[0]!.files[0]!);
+  };
+
+  it("bày NẤC ĐANG DÙNG ngay cạnh nút copy, không giấu trong tooltip", () => {
+    mount({ fit: { mode: "body", scale: 120 }, onFitChange });
+    expect(screen.getByRole("button", { name: /Khớp khung: Thân lấp khung · 120%/ })).toBeTruthy();
+  });
+
+  it("vắng đường ghi ⇒ KHÔNG bày nút đổi, vì đổi xong không lưu được đi đâu", () => {
+    mount({ fit: { mode: "whole", scale: 100 } });
+    expect(screen.queryByRole("button", { name: /Khớp khung/ })).toBeNull();
+  });
+
+  it("ba nấc bày ra kèm câu nói hệ quả, không bắt người dùng đoán", () => {
+    mount({ fit: { mode: "whole", scale: 100 }, onFitChange });
+    fireEvent.click(screen.getByRole("button", { name: /Khớp khung/ }));
+    const nac = screen.getAllByRole("radio");
+    expect(nac.map((n) => n.textContent ?? "")).toHaveLength(3);
+    expect(nac[0]?.textContent).toContain("Cả món vừa khung");
+    expect(nac[0]?.getAttribute("aria-checked")).toBe("true");
+    expect(nac[1]?.textContent).toContain("Thân lấp khung");
+    expect(nac[2]?.textContent).toContain("Tự động");
+    /* Mỗi nấc phải nói CÁI GIÁ của nó, không chỉ cái lợi. */
+    expect(nac[0]?.textContent).toContain("không lấp kín khung");
+    expect(nac[1]?.textContent).toContain("tràn ra ngoài khung");
+  });
+
+  it("chọn nấc khác ⇒ báo RA NGOÀI (thẻ giữ), panel không tự nhớ", () => {
+    mount({ fit: { mode: "whole", scale: 100 }, onFitChange });
+    fireEvent.click(screen.getByRole("button", { name: /Khớp khung/ }));
+    fireEvent.click(screen.getAllByRole("radio")[1]!);
+    expect(onFitChange).toHaveBeenCalledWith({ mode: "body", scale: 100 });
+    /* Mặt nút KHÔNG tự đổi: nấc do thẻ giữ, panel chỉ vẽ lại khi thẻ đưa xuống
+       giá trị mới. Tự đổi ở đây là hai nguồn sự thật cho cùng một nấc. */
+    expect(screen.getByRole("button", { name: /Khớp khung: Cả món vừa khung · 100%/ })).toBeTruthy();
+  });
+
+  it("tỉ lệ thêm đi từng bước 5 và KHÔNG ra khỏi khoảng 50–150", () => {
+    mount({ fit: { mode: "whole", scale: 100 }, onFitChange });
+    fireEvent.click(screen.getByRole("button", { name: /Khớp khung/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Phóng ảnh to lên/ }));
+    expect(onFitChange).toHaveBeenCalledWith({ mode: "whole", scale: 105 });
+    fireEvent.click(screen.getByRole("button", { name: /Thu ảnh nhỏ lại/ }));
+    expect(onFitChange).toHaveBeenLastCalledWith({ mode: "whole", scale: 95 });
+    cleanup();
+
+    mount({ fit: { mode: "whole", scale: 150 }, onFitChange });
+    fireEvent.click(screen.getByRole("button", { name: /Khớp khung/ }));
+    expect(screen.getByRole("button", { name: /Phóng ảnh to lên/ }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("«thân lấp khung» và «cả món vừa khung» ĐƯA XUỐNG hai tỉ lệ khác nhau", async () => {
+    mount({ fit: { mode: "body", scale: 100 }, onFitChange });
+    fireEvent.click(screen.getByRole("button", { name: /Copy 1 ô sang Figma/ }));
+    await screen.findByRole("button", { name: /Đã copy 1 ô/ });
+    expect(scaleOfFirstCopy()).toBeCloseTo(S_THAN, 6);
+    cleanup();
+    packCalls.length = 0;
+
+    mount({ fit: { mode: "whole", scale: 100 }, onFitChange });
+    fireEvent.click(screen.getByRole("button", { name: /Copy 1 ô sang Figma/ }));
+    await screen.findByRole("button", { name: /Đã copy 1 ô/ });
+    expect(scaleOfFirstCopy()).toBeCloseTo(S_CA_MON, 6);
+  });
+
+  it("tỉ lệ thêm 120% ⇒ ẢNH to thêm 1,2 lần, KHUNG vẫn đúng cỡ đã đặt", async () => {
+    mount({ fit: { mode: "whole", scale: 120 }, onFitChange });
+    fireEvent.click(screen.getByRole("button", { name: /Copy 1 ô sang Figma/ }));
+    await screen.findByRole("button", { name: /Đã copy 1 ô/ });
+    const s = scaleOfFirstCopy()!;
+    expect(s).toBeCloseTo(S_CA_MON * 1.2, 6);
+    /* Khung = hộp ảo × tỉ lệ xuất; nó phải ra đúng 112×39 — con số người dùng đặt. */
+    const box = packCalls[0]!.files[0]!.safe as number[];
+    expect(box[2]! * s).toBeCloseTo(112, 6);
+    expect(box[3]! * s).toBeCloseTo(39, 6);
+  });
+
+  it("câu báo sau khi copy NÓI RA nấc đang dùng", async () => {
+    mount({ fit: { mode: "body", scale: 115 }, onFitChange });
+    fireEvent.click(screen.getByRole("button", { name: /Copy 1 ô sang Figma/ }));
+    await screen.findByRole("button", { name: /Đã copy 1 ô/ });
+    const noiDung = vi.mocked(feedback.toastSuccess).mock.calls[0]?.[1] ?? "";
+    expect(noiDung).toContain("Cách khớp: Thân lấp khung · 115%");
   });
 });

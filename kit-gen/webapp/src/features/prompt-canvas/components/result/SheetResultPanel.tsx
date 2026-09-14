@@ -20,12 +20,14 @@ import { toastError, toastInfo, toastSuccess } from "@/features/projects/lib/fee
 import { useContract, useKit, useProject, useRawHistory, useRevealProject, useRuns } from "@/lib/hooks";
 import { useUiStore } from "@/lib/store";
 import { cellsOfSheet, contractFramed, rawSheetImagePath } from "../../lib/result/sheet-files";
+import { DEFAULT_FIGMA_FIT, type FigmaFit } from "@/features/prompt-lab/lib/composer-model";
 import { measureOfSheet, sheetOverlay } from "../../lib/result/sheet-geometry";
 import { copySheetAsFigmaNode, measureImage } from "../../lib/result/sheet-figma";
 import { currentVersion, sheetVersions } from "../../lib/result/sheet-versions";
 import { PREVIEW_MAX_H } from "../../lib/ui";
 import { SheetCellGrid } from "./SheetCellGrid";
 import { SheetGridOverlay } from "./SheetGridOverlay";
+import { SheetFitPicker, fitSummary } from "./SheetFitPicker";
 import { SheetVersionBar } from "./SheetVersionBar";
 
 /**
@@ -147,6 +149,16 @@ export interface SheetResultPanelProps {
    * ╚═════════════════════════════════════════════════════════════════════════╝
    */
   onRedraw?: () => void;
+  /**
+   * KHỚP KHUNG — cài đặt của THẺ, dùng chung cho mọi tấm của thẻ ấy.
+   *
+   * Vắng ⇒ `DEFAULT_FIGMA_FIT`. Panel KHÔNG tự giữ nấc này trong state của mình:
+   * hai tấm của cùng một thẻ phải đọc ra cùng một nấc, và nấc ấy còn phải sống
+   * qua lần mở lại dự án — nên chỗ giữ nó là tài liệu composer, không phải đây.
+   */
+  fit?: FigmaFit;
+  /** Vắng ⇒ panel chỉ NÓI nấc đang dùng, không bày nút đổi (vỏ không có chỗ ghi). */
+  onFitChange?: (next: FigmaFit) => void;
   className?: string;
 }
 
@@ -161,7 +173,8 @@ const CELL_PHASE_3 = "Dựng khung cho từng ô";
 
 export function SheetResultPanel({
   projectId, sheetId, job, runId = null,
-  artifactPath = null, cutting = false, busy = false, onRedraw, className,
+  artifactPath = null, cutting = false, busy = false, onRedraw,
+  fit = DEFAULT_FIGMA_FIT, onFitChange, className,
 }: SheetResultPanelProps) {
   const [tab, setTab] = React.useState<TabId>("raw");
   const [zoom, setZoom] = React.useState(false);
@@ -306,7 +319,10 @@ export function SheetResultPanel({
    * có cách nào để hai đường co ảnh khác nhau. Lý do đầy đủ nằm ở `contractFramed`
    * (`sheet-files.ts`) — đây chỉ là chỗ nối dây.
    */
-  const framed = React.useMemo(() => contractFramed(cells), [cells]);
+  const framed = React.useMemo(
+    () => contractFramed(cells, { mode: fit.mode, scalePercent: fit.scale }),
+    [cells, fit.mode, fit.scale],
+  );
 
   /* TẤM ĐỤC PHẢI TỰ KHAI — MỘT DÒNG, KHÔNG CHẶN GÌ.
      Chủ sản phẩm chốt 09/09/2026: "cái này cứ để cho nó gen tự nhiên nhé, ko block".
@@ -358,6 +374,15 @@ export function SheetResultPanel({
     const con = list.length - 3;
     return ` ${ke}${con > 0 ? ` (và ${con} ô nữa)` : ""}.`;
   }, [framed]);
+
+  /**
+   * NẤC ĐANG DÙNG, rút ra MỘT biến — và nó đi vào cả nút lẫn câu báo.
+   *
+   * Rút ra ngoài chuỗi mẫu vì cùng lý do với `name`: cổng từ cấm §5.4 đọc cả biểu
+   * thức nằm giữa câu tiếng Việt. Và vì câu báo với mặt nút phải nói y hệt nhau —
+   * hai chỗ tự ghép lấy là hai chỗ để một cái được sửa còn cái kia thì không.
+   */
+  const fitLine = fitSummary(fit);
 
   /* Nhãn «Đã copy N ô» tự tắt sau 2 giây — cùng cách với nút «Copy prompt» của
      `CanvasBlock.tsx:426`. Dọn timer khi khối gỡ sớm: người dùng cuộn qua thẻ khác
@@ -462,6 +487,10 @@ export function SheetResultPanel({
         toastSuccess(
           "Đã copy các ô sang Figma",
           `${name} · ${res.docs} ô, mỗi ô một khung riêng đúng cỡ xuất đã chọn.`
+          /* NÓI RA NẤC ĐANG DÙNG: ba nấc cho ra ba bố cục khác nhau trên cùng một
+             tấm, nên người dán phải biết mình vừa nhận về bố cục nào — nhất là khi
+             họ đổi nấc rồi copy lại để so hai bản. */
+          + ` Cách khớp: ${fitLine}.`
           + fitNote
           + wholeNote
           + " Dán bằng Ctrl/Cmd+V."
@@ -652,6 +681,10 @@ export function SheetResultPanel({
             disabled={cells.length === 0 || busyCells} loading={busyCells}
             title={cells.length === 0
               ? "Chờ máy cắt xong tấm này thì mới có ô để copy"
+              /* Nấc đang dùng KHÔNG lặp lại ở đây: nó đã nằm thường trực trên mặt
+                 nút «Khớp khung» ngay bên cạnh, và một tooltip nhắc lại thứ người
+                 đọc vừa nhìn thấy chỉ đẩy câu quan trọng (đã co bao nhiêu) xuống
+                 dưới. Câu báo sau khi copy thì CÓ nói — lúc ấy popover đã đóng. */
               : `Mỗi ô một khung riêng đúng cỡ xuất đã chọn, ảnh co cho phần chính vừa khít khung.${fitNote}${wholeNote}`}
           >
             {copied > 0 && !busyCells
@@ -659,6 +692,12 @@ export function SheetResultPanel({
               : <Layers aria-hidden strokeWidth={1.5} />}
             {cellsButtonLabel}
           </Button>
+          {/* ĐỨNG NGAY CẠNH NÚT CHÍNH vì nó đổi chính thứ nút ấy sắp dán ra, và nó
+              phải đọc được TRƯỚC cú bấm — để sau lưng hàng nút thì người dùng chỉ
+              tìm thấy nó sau khi đã dán một bản sai và đi hỏi. Vắng đường ghi
+              (`onFitChange`) ⇒ không bày: một nút đổi được mà không lưu được là
+              một nút nói dối. */}
+          {onFitChange && <SheetFitPicker fit={fit} onChange={onFitChange} />}
           {busyCells && (
             <Button type="button" variant="ghost" size="sm" onClick={() => abortRef.current?.abort()}>
               <X aria-hidden strokeWidth={1.5} />
