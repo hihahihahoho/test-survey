@@ -42,6 +42,13 @@ expect() { # <nhãn> <chuỗi phải có> <output>
   esac
 }
 
+refute() { # <nhãn> <chuỗi KHÔNG được có> <output>
+  case "$3" in
+    *"$2"*) printf 'LOI  %s\n  không được có: %s\n' "$1" "$2" >&2; fail=1 ;;
+    *) printf 'ok   %s\n' "$1" ;;
+  esac
+}
+
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/kitgen-fullbleed.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/bin" "$WORK/p/prompts" "$WORK/p/raw" "$WORK/p/logs"
@@ -120,6 +127,49 @@ expect "nhãn nói đúng thứ vừa đo"        "[nền đục: " "$out"
 out="$(run_case ui.png)"
 expect "ảnh có alpha thật ⇒ OK"          "OK  job1"   "$out"
 expect "vẫn báo dải mờ như trước"        "dải mờ"     "$out"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 15/09/2026 — DẤU FULL-BLEED PHẢI ĐỔI CẢ CÂU CHỮ GỬI CODEX, KHÔNG CHỈ PHÉP ĐO.
+#
+# Đo `r-0041/artifacts/chinh-nen.png`: 1024x1536 RGBA, 340.413 pixel alpha=0 (nguyên
+# mảng trời trong suốt), 74 hàng trên cùng trống hẳn — trong khi prompt của chính tấm
+# ấy nói "The artwork covers the whole frame; there is no transparent area anywhere".
+# Prompt nói một đằng, TASK (lớp chữ bash gói quanh prompt) nói một nẻo: nó bảo gọi
+# image_gen với background="transparent", tự xác nhận "alpha channel is real", và vẽ
+# LẠI nếu ảnh về đục. Task đứng gần lời gọi tool hơn prompt, nên codex nghe task.
+# ═══════════════════════════════════════════════════════════════════════════════
+echo "── TASK gửi codex phân nhánh theo dấu full-bleed"
+cat > "$WORK/bin/codex" <<'FAKETASK'
+#!/bin/sh
+if [ "$1" = "debug" ]; then echo '{"models":[{"slug":"gpt-5.6-luna"}]}'; exit 0; fi
+echo "$*" > "$TASKLOG"
+cp "$SRC" raw/job1.png
+exit 0
+FAKETASK
+chmod +x "$WORK/bin/codex"
+export TASKLOG="$WORK/task.log"
+
+: > "$WORK/p/prompts/job1.fullbleed"
+run_case kin.png >/dev/null
+tk_nen="$(cat "$TASKLOG")"
+expect "tấm nền gọi image_gen với nền ĐỤC" 'call image_gen with background="opaque" (PNG output)' "$tk_nen"
+expect "và nhắc lại đúng từ khoá ở lượt vẽ" 'passing background="opaque" and PNG output' "$tk_nen"
+expect "nói thẳng đây là tấm phủ kín khung" "a FULL-FRAME background" "$tk_nen"
+expect "bước tự kiểm đối chiếu NGƯỢC LẠI" "fully opaque edge to edge" "$tk_nen"
+expect "và nêu cả ca chừa lề" "no empty margin along any side" "$tk_nen"
+expect "trần hai lượt vẫn còn" "Never more than two image_gen calls" "$tk_nen"
+expect "lệnh cấm tự sửa ảnh vẫn còn" "remove_chroma_key.py" "$tk_nen"
+for bad in 'background="transparent"' "transparent-image rule" "alpha channel is real" "preserve the alpha channel"; do
+  refute "task của tấm nền không còn xin nền trong suốt: $bad" "$bad" "$tk_nen"
+done
+
+rm -f "$WORK/p/prompts/job1.fullbleed"
+run_case kin.png >/dev/null
+tk_ui="$(cat "$TASKLOG")"
+expect "tấm thường vẫn xin nền trong suốt" 'call image_gen with background="transparent" (PNG output)' "$tk_ui"
+expect "và vẫn đúng câu tự kiểm cũ" "alpha channel is real" "$tk_ui"
+expect "và vẫn đúng câu dừng cũ" "a background cut out by hand is detected and rejected" "$tk_ui"
+refute "tấm thường KHÔNG được xin nền đục" 'background="opaque"' "$tk_ui"
 
 [ "$fail" -eq 0 ] || { echo; echo "Xem đầu file test này để biết mâu thuẫn gốc." >&2; exit 1; }
 echo "OK  gen.sh: phép đo nền xét tấm full-bleed bằng luật của tấm full-bleed"

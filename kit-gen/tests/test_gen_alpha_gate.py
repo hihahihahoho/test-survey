@@ -121,12 +121,15 @@ class DinhTuyenSkillTest(unittest.TestCase):
     tự viết công cụ cắt nền. Ca kiểm này ghim cả hai nửa: GỌI TÊN, và CẤM tự chế.
     """
 
-    TASK = re.search(r'^  task="(.*?)^--- IMAGE PROMPT START ---',
-                     (ROOT / "gen.sh").read_text(encoding="utf-8"), re.S | re.M)
+    @classmethod
+    def setUpClass(cls):
+        # TASK THẬT, dựng bằng chính bash (xem `render_task`): từ 15/09/2026 task có
+        # HAI nhánh và cái khuôn trong mã nguồn không còn là thứ model nhận được.
+        cls.task_sprite = render_task(fullbleed=False)
+        cls.task_nen = render_task(fullbleed=True)
 
     def setUp(self):
-        self.assertIsNotNone(self.TASK, "không tách được câu task khỏi gen.sh")
-        self.task = self.TASK.group(1)
+        self.task = self.task_sprite
 
     def test_goi_dich_danh_skill_va_tool(self):
         for ten in ("imagegen", "image_gen", "SKILL.md"):
@@ -144,10 +147,14 @@ class DinhTuyenSkillTest(unittest.TestCase):
         có thêm MỘT chỗ nhắc lại từ khoá: câu bảo codex vẽ lại lần thứ hai. Ba chỗ
         ấy là ba việc khác nhau — ① luật của skill, ② lượt vẽ đầu, ③ lượt vẽ lại —
         nên đây vẫn là số đếm có nghĩa, không phải một con số nới ra cho dễ xanh."""
-        kw = 'background=\\"transparent\\"'
+        kw = 'background="transparent"'
         self.assertEqual(self.task.count(kw), 3,
                          "từ khoá phải có ở câu đầu, ở câu Generate ONE image, và ở câu vẽ lại")
         self.assertLess(self.task.index(kw), self.task.index("Generate ONE image"))
+        # Tấm NỀN đi nhánh ngược: ba chỗ ấy phải nói `opaque`, và không một chỗ nào
+        # trong task của nó được xin nền trong suốt (xem `TamNenXinNenDucTest`).
+        self.assertEqual(self.task_nen.count('background="opaque"'), 3)
+        self.assertNotIn(kw, self.task_nen)
 
     def test_bat_codex_HOI_LAI_chinh_cong_cu_ve(self):
         """11/09/2026 — CHỦ SẢN PHẨM: "ask your image generation tool to double check
@@ -191,6 +198,76 @@ class DinhTuyenSkillTest(unittest.TestCase):
     def test_KHONG_cam_nham_viec_chep_file(self):
         """Model vẫn phải copy PNG về raw/. Cấm quá tay là tự tay làm hỏng lượt gen."""
         self.assertIn("Copying or moving the resulting file", self.task)
+
+
+class TamNenXinNenDUCTest(unittest.TestCase):
+    """TẤM NỀN FULL-BLEED PHẢI XIN NỀN ĐỤC — CẢ Ở PROMPT LẪN Ở TASK.
+
+    ╔══ BỆNH ĐÃ ĐO (15/09/2026) ══════════════════════════════════════════════════╗
+    ║ `r-0041/artifacts/chinh-nen.png`: 1024x1536 RGBA, 340.413 pixel alpha=0 —   ║
+    ║ nguyên mảng trời trong suốt, 74 hàng trên cùng trống hẳn. Prompt của chính  ║
+    ║ tấm ấy nói đúng điều ngược lại ở section «Canvas»: "The artwork covers the  ║
+    ║ whole frame; there is no transparent area anywhere."                        ║
+    ╚═════════════════════════════════════════════════════════════════════════════╝
+
+    Nguồn không nằm ở prompt mà ở TASK — lớp chữ bash gói quanh prompt. Nó không có
+    nhánh nào cho tấm nền: mọi job đều được bảo gọi `image_gen` với
+    `background="transparent"`, tự xác nhận "alpha channel is real", và vẽ LẠI nếu
+    ảnh về đục. Ba câu ấy đứng gần lời gọi tool hơn prompt, nên codex nghe chúng.
+
+    Dấu `prompts/<job>.fullbleed` đã có sẵn (khối python để lại); bản này chỉ đọc
+    nó sớm hơn một nhịp, TRƯỚC khi dựng task.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.task = render_task(fullbleed=True)
+        cls.sprite = render_task(fullbleed=False)
+
+    def test_goi_image_gen_voi_background_opaque(self):
+        """`background` của tool nhận đúng ba giá trị — transparent / opaque / auto
+        (`references/image-api.md` của skill imagegen) — nên nhánh nền gọi thẳng
+        `opaque`, không phải bỏ tham số rồi tả bằng lời."""
+        self.assertIn('call image_gen with background="opaque" (PNG output)', self.task)
+        self.assertIn('passing background="opaque" and PNG output', self.task)
+        self.assertIn("a FULL-FRAME background", self.task)
+
+    def test_KHONG_mot_cau_nao_con_xin_nen_trong_suot(self):
+        """Sót một câu là đủ: codex đọc câu gần nhất nói về nền."""
+        for cam in ('background="transparent"', "transparent-image rule",
+                    "genuinely transparent background", "alpha channel is real",
+                    "preserve the alpha channel"):
+            self.assertNotIn(cam, self.task, f"task của tấm nền vẫn xin nền trong suốt: {cam}")
+
+    def test_buoc_tu_kiem_doi_chieu_NGUOC_LAI(self):
+        """Vòng hỏi lại vẫn còn, và trần hai lượt vẫn còn — chỉ đổi thứ phải xác
+        nhận, vì với tấm nền thì "ảnh về đục" là ĐẠT chứ không phải hỏng."""
+        self.assertIn("fully opaque edge to edge", self.task)
+        self.assertIn("no transparent or semi-transparent pixel anywhere", self.task)
+        self.assertIn("no empty margin along any side", self.task)
+        self.assertIn("If any part came back transparent, call image_gen ONE more time",
+                      self.task)
+        self.assertIn("Never more than two image_gen calls", self.task)
+
+    def test_cau_CAM_TU_SUA_ANH_giu_nguyen_o_ca_hai_nhanh(self):
+        """Lệnh cấm chưa bao giờ nói về NỀN — nó nói ảnh phải do image_gen sinh ra,
+        và điều đó đúng với mọi tấm. Nó là thứ đã chặn được vụ .tmp_remove_checker.swift."""
+        for tu in ("must not write, compile or run any program",
+                   "remove_chroma_key.py", "Copying or moving the resulting file is fine"):
+            self.assertIn(tu, self.task)
+            self.assertIn(tu, self.sprite)
+
+    def test_khong_goi_ten_thu_khong_muon(self):
+        self.assertNotIn("checker", self.task.lower())
+
+    def test_khong_co_dau_thi_van_la_nhanh_cu_TUNG_CHU(self):
+        """Ranh giới của cả bản vá: không có `prompts/<job>.fullbleed` thì task phải
+        giống hệt đời trước. Mọi sheet sprite đều đi đường này."""
+        self.assertIn('background="transparent"', self.sprite)
+        self.assertNotIn('background="opaque"', self.sprite)
+        self.assertIn("follow its transparent-image rule", self.sprite)
+        self.assertIn("the transparency has to come from image_gen itself", self.sprite)
+        self.assertIn("a background cut out by hand is detected and rejected", self.sprite)
 
 
 class MucNghiTest(unittest.TestCase):
@@ -257,6 +334,42 @@ eval "src=\$SRC$n"
 if [ -n "$src" ]; then cp "$src" raw/job1.png; fi
 exit 0
 """
+
+
+def render_task(fullbleed=False):
+    """TASK THẬT mà codex nhận được cho một job — chạy `run_one` qua bash, không đọc mã.
+
+    15/09/2026 — TRƯỚC ĐÂY LỚP `DinhTuyenSkillTest` BÓC CHUỖI `task="…"` BẰNG REGEX.
+    Cách ấy chết ngay khi task có hai nhánh (sprite xin nền trong suốt / tấm nền xin
+    nền đục): thứ regex bóc ra là cái KHUÔN còn nguyên `${p_skill}`, tức là đúng thứ
+    không ai nhận. Nay dựng task bằng chính bash, với dấu `prompts/<job>.fullbleed`
+    bật hay tắt — đọc được đúng chữ đi tới model, cho cả hai nhánh.
+    """
+    td = Path(tempfile.mkdtemp(prefix="kitgen-task-"))
+    for sub in ("prompts", "raw", "logs", "bin"):
+        (td / sub).mkdir(parents=True)
+    (td / "prompts" / "job1.txt").write_text("## Canvas\nLANDSCAPE 1536x1024 px.\n",
+                                             encoding="utf-8")
+    (td / "prompts" / "job1.att").write_text("", encoding="utf-8")
+    if fullbleed:
+        (td / "prompts" / "job1.fullbleed").write_text("", encoding="utf-8")
+    codex = td / "bin" / "codex"
+    codex.write_text(FAKE_CODEX, encoding="utf-8")
+    codex.chmod(0o755)
+    env = dict(os.environ)
+    env["PATH"] = f"{td / 'bin'}:{env['PATH']}"
+    env["COUNTER"] = str(td / "counter")
+    env["TASKLOG"] = str(td / "task.log")
+    img = td / "src1.png"
+    mem_that().save(img)
+    env["SRC1"] = str(img)
+    script = (f'set -uo pipefail\nROOT="{td}"; ROOT_OUT="$ROOT"; IMG_HOME=""\n'
+              f"{RUN_ONE}\nrun_one job1\n")
+    subprocess.run(["bash", "-c", script], cwd=td, capture_output=True, text=True,
+                   env=env, timeout=300)
+    out = (td / "task.log").read_text(encoding="utf-8")
+    shutil.rmtree(td, ignore_errors=True)
+    return out
 
 
 def duc():

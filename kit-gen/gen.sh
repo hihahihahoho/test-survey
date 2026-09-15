@@ -1065,6 +1065,19 @@ run_one() {
   local job="$1"
   local task
 
+  # ╔══ DẤU FULL-BLEED PHẢI ĐỌC TRƯỚC KHI DỰNG TASK ════════════════════════════╗
+  # ║ 15/09/2026. Dấu này có từ lâu nhưng chỉ được đọc ở CUỐI hàm, để lật ngược ║
+  # ║ phép đo alpha. Tầng task thì không biết gì: mọi job đều được bảo «gọi     ║
+  # ║ image_gen với background="transparent"», «xác nhận alpha là thật», «vẽ    ║
+  # ║ lại nếu ảnh về đục». Với một tấm NỀN thì cả ba câu đều nói ngược hợp đồng ║
+  # ║ của nó, và codex làm đúng thứ được bảo: đo `r-0041/artifacts/chinh-nen.png`║
+  # ║ — 1024x1536 RGBA, 340.413 pixel alpha=0 (nguyên mảng trời), 74 hàng trên  ║
+  # ║ cùng trống hẳn, dù `## Canvas` của chính prompt ấy nói "covers the whole  ║
+  # ║ frame; there is no transparent area anywhere".                            ║
+  # ║ Prompt nói một đằng, task nói một nẻo, và task đứng gần lời gọi tool hơn. ║
+  # ╚════════════════════════════════════════════════════════════════════════════╝
+  local fb=0; [[ -f "prompts/${job}.fullbleed" ]] && fb=1
+
   # KHỔ ẢNH LÀ CON SỐ, KHÔNG PHẢI LỜI ĐỀ NGHỊ.
   #   Bản cũ bảo model "theo CANVAS ORIENTATION ghi ở dòng đầu prompt (…, if supported)".
   #   Hai chỗ sai cùng lúc: (a) bắt model tự đi tìm một dòng trong khối chữ dài, (b) "if
@@ -1165,13 +1178,40 @@ ${att_paths}--- REFERENCE IMAGES END ---
   # ║ KHÔNG có ảnh tham chiếu". Hễ đính BẤT KỲ ref nào thì image_gen trả RGB —     ║
   # ║ đó là giới hạn của công cụ, vẽ lại lần hai cũng vậy (đo 10/09/2026).         ║
   # ╚════════════════════════════════════════════════════════════════════════════╝
-  task="Use the imagegen skill and its built-in image_gen tool for this. If you have not read that skill yet, read its SKILL.md first and follow its transparent-image rule: call image_gen with background=\"transparent\" (PNG output) so the tool itself returns a genuinely transparent background, and preserve the alpha channel it gives back.
+  # ╔══ HAI NHÁNH, VÌ CÓ HAI HỢP ĐỒNG NỀN ══════════════════════════════════════╗
+  # ║ 15/09/2026. Bốn đoạn dưới đây nói với codex về NỀN, và tấm nền full-bleed ║
+  # ║ có hợp đồng NGƯỢC HẲN tấm sprite: nó phải đục từ mép tới mép. Trước bản   ║
+  # ║ này chỉ có một nhánh, nên tấm nền cũng bị bảo đi xin alpha — và nó xin    ║
+  # ║ được (r-0041: 340.413 pixel alpha=0, 74 hàng trên cùng trống hẳn).        ║
+  # ║ `background` của tool nhận đúng ba giá trị — transparent / opaque / auto  ║
+  # ║ (`references/image-api.md` của skill imagegen) — nên nhánh nền gọi thẳng  ║
+  # ║ `opaque`, không phải bỏ tham số rồi tả bằng lời.                          ║
+  # ║ Câu CẤM tự sửa ảnh giữ nguyên ở cả hai nhánh: nó chưa bao giờ nói về nền, ║
+  # ║ nó nói rằng ảnh phải do image_gen sinh ra, và điều đó đúng với mọi tấm.   ║
+  # ╚════════════════════════════════════════════════════════════════════════════╝
+  # ⚠️ NHÁY KÉP TRẦN, KHÔNG THOÁT: chuỗi nháy đơn không qua phép bóc dấu của bash,
+  # và nội dung một biến KHÔNG được bóc dấu lần nữa khi nó nở ra trong "$task".
+  # Viết \" ở đây thì codex nhận nguyên hai ký tự backslash-nháy.
+  local bg_kw='background="transparent"' p_skill p_rule p_fail p_check
+  p_skill="follow its transparent-image rule: call image_gen with background=\"transparent\" (PNG output) so the tool itself returns a genuinely transparent background, and preserve the alpha channel it gives back."
+  p_rule="One rule matters more than everything else: the transparency has to come from image_gen itself."
+  p_fail="If image_gen still hands you an opaque image after the one retry described below, just say so plainly and stop: a background cut out by hand is detected and rejected, and it wastes the whole run."
+  p_check="Before you reply, ask your image generation tool to double check its own output: have image_gen confirm that the file it just produced is a PNG whose alpha channel is real — genuinely empty pixels where the background should be, not a pattern painted onto opaque pixels to imitate transparency. If the tool cannot confirm that, or if it tells you the image came back opaque, call image_gen ONE more time with the same prompt and the same reference images, stating background=\"transparent\" explicitly again, and save that second image to the path above."
+  if (( fb )); then
+    bg_kw='background="opaque"'
+    p_skill="then treat this sheet as what it is — a FULL-FRAME background: call image_gen with background=\"opaque\" (PNG output) so the tool returns an image that is solid from edge to edge, and do not ask it for transparency of any kind."
+    p_rule="One rule matters more than everything else: the image has to come from image_gen itself."
+    p_fail="If image_gen still hands you an image with transparent areas after the one retry described below, just say so plainly and stop: a background flattened by hand is detected and rejected, and it wastes the whole run."
+    p_check="Before you reply, ask your image generation tool to double check its own output: have image_gen confirm the PNG is fully opaque edge to edge — no transparent or semi-transparent pixel anywhere, and no empty margin along any side. If any part came back transparent, call image_gen ONE more time with the same prompt and the same reference images, stating background=\"opaque\" explicitly again, and save that second image to the path above."
+  fi
 
-One rule matters more than everything else: the transparency has to come from image_gen itself. You must not write, compile or run any program, script or tool of your own that removes, keys out, erases or otherwise edits the background or the alpha channel of the image — that includes Python, Swift, ffmpeg, ImageMagick, chroma keying, remove_chroma_key.py and the CLI fallback scripts/image_gen.py. Copying or moving the resulting file is fine. If image_gen still hands you an opaque image after the one retry described below, just say so plainly and stop: a background cut out by hand is detected and rejected, and it wastes the whole run.
+  task="Use the imagegen skill and its built-in image_gen tool for this. If you have not read that skill yet, read its SKILL.md first and ${p_skill}
 
-${att_note}Generate ONE image with the built-in image_gen tool, passing background=\"transparent\" and PNG output. The output image MUST be exactly ${want_size} pixels (${want_orient}) — this is a hard requirement, not a preference; do not return any other aspect ratio. Use EXACTLY the prompt between the IMAGE PROMPT markers below. Then save/copy the generated PNG to exactly this path: ${ROOT_OUT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image.
+${p_rule} You must not write, compile or run any program, script or tool of your own that removes, keys out, erases or otherwise edits the background or the alpha channel of the image — that includes Python, Swift, ffmpeg, ImageMagick, chroma keying, remove_chroma_key.py and the CLI fallback scripts/image_gen.py. Copying or moving the resulting file is fine. ${p_fail}
 
-Before you reply, ask your image generation tool to double check its own output: have image_gen confirm that the file it just produced is a PNG whose alpha channel is real — genuinely empty pixels where the background should be, not a pattern painted onto opaque pixels to imitate transparency. If the tool cannot confirm that, or if it tells you the image came back opaque, call image_gen ONE more time with the same prompt and the same reference images, stating background=\"transparent\" explicitly again, and save that second image to the path above. Never more than two image_gen calls for this job, and never repair the background yourself.
+${att_note}Generate ONE image with the built-in image_gen tool, passing ${bg_kw} and PNG output. The output image MUST be exactly ${want_size} pixels (${want_orient}) — this is a hard requirement, not a preference; do not return any other aspect ratio. Use EXACTLY the prompt between the IMAGE PROMPT markers below. Then save/copy the generated PNG to exactly this path: ${ROOT_OUT}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image.
+
+${p_check} Never more than two image_gen calls for this job, and never repair the background yourself.
 
 Reply with only the saved file path.
 
@@ -1273,7 +1313,7 @@ $(cat "prompts/${job}.txt")
     # Dấu do khối python để lại (xem `fb_marker`): tấm này là nền full-bleed, tức
     # hợp đồng của nó là PHỦ KÍN — phép kiểm alpha phải lật ngược, không thì tấm nào
     # làm đúng cũng bị đóng dấu FAIL.
-    local fb=0; [[ -f "prompts/${job}.fullbleed" ]] && fb=1
+    # `fb` đọc một lần ở đầu hàm (nó phân nhánh cả câu chữ của task, xem ở trên).
     local av; av="$(alpha_verdict "raw/${job}.png" "$fb")"
     # ╔══ PHÉP ĐO NỀN CHỈ CÒN LÀ MỘT GHI CHÚ ══════════════════════════════════════╗
     # ║ Bản trước, verdict "bad" có hậu quả: đổi tên ảnh thành `.rejected.png`,     ║
