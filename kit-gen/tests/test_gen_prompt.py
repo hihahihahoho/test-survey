@@ -972,6 +972,90 @@ def _cfg_nen(spec="a village square at dawn, red lanterns overhead", n=1, extra=
     return {"styles": [{"id": "demo", "bg": "magenta", "style": "flat ink"}], "sheets": [sheet]}
 
 
+class LopNenCoVungTrongTest(unittest.TestCase):
+    """«PHỦ KÍN KHUNG» VÀ «NỀN ĐỤC» LÀ HAI CÂU HỎI — `skel.alpha` tách chúng ra.
+
+    ╔══ VÌ SAO CẦN ═════════════════════════════════════════════════════════════╗
+    ║ Một lớp parallax / lớp tiền cảnh (lá cây, sương, mái hiên) vẫn trải hết   ║
+    ║ khung, nhưng chỗ nào không có gì thì phải RỖNG để lớp dưới lộ ra. Trước   ║
+    ║ bản này contract không nói được điều đó: `shape:"full"` ở mọi ô vừa chọn  ║
+    ║ hồ sơ "một cảnh phủ kín" VỪA đóng luôn hợp đồng "không một pixel trong    ║
+    ║ suốt nào".                                                                ║
+    ╚═══════════════════════════════════════════════════════════════════════════╝
+
+    Tách bằng một cờ RIÊNG chứ không bằng `shape`: đổi `shape` thì tấm rơi sang hồ
+    sơ "ui" và lãnh bộ luật của một cái nút ("lõi chức năng", "căn giữa khung và
+    chừa lề") ⇒ cảnh bị vẽ thụt vào thành hòn đảo giữa khung — đúng thứ nhánh
+    full-bleed sinh ra để chặn. Lớp này khoá cả hai chiều.
+    """
+
+    @staticmethod
+    def _cfg(alpha):
+        skel = {"shape": "full", "w": 1, "h": 1}
+        if alpha:
+            skel["alpha"] = True
+        return {"styles": [{"id": "demo", "bg": "magenta", "style": "flat ink"}],
+                "sheets": [{"id": "nen", "canvas": "portrait", "grid": {"cols": 1, "rows": 1},
+                            "components": [{"file": "01-nen", "vi": "Nền",
+                                            "spec": "a jungle canopy foreground layer",
+                                            "skel": skel}]}]}
+
+    def setUp(self):
+        self.txt = render_prompt_text(self._cfg(True), name="demo-nen")
+        self.duc = render_prompt_text(self._cfg(False), name="demo-nen")
+
+    def test_canvas_xin_alpha_that_chu_khong_cam_vung_trong(self):
+        self.assertIn("this is a LAYER meant to sit over another one", self.txt)
+        self.assertIn("alpha 0 on every pixel the artwork does not cover", self.txt)
+        self.assertNotIn("there is no transparent area anywhere", self.txt)
+        # Dòng tham số nền quay lại đầu prompt — tầng bash đọc khổ giấy bằng head -n3.
+        self.assertEqual(self.txt.splitlines()[:2], ['background="transparent"', "## Canvas"])
+        self.assertIn("PORTRAIT 1024x1536 px", self.txt.splitlines()[2])
+
+    def test_van_la_MOT_CANH_TRAI_HET_KHUNG_chu_khong_phai_mot_mon_do(self):
+        """Chiều âm đắt nhất: lớp nền KHÔNG được rơi sang hồ sơ của một cái nút."""
+        self.assertIn("A single full-screen mobile game layer", self.txt)
+        self.assertIn("the art reaches all four edges", self.txt)
+        for chet in ("GEOMETRY IS STRICT", "functional CORE", "core aspect",
+                     "grid", "centred in the frame"):
+            self.assertNotIn(chet, self.txt, f"lớp nền lãnh luật của tấm sprite: {chet}")
+
+    def test_noi_RO_cho_nao_de_trong_bang_vi_du(self):
+        """"Để trống chỗ không có gì" nói trừu tượng thì model lấp bằng một mảng màu
+        mà nó cho là "nền"."""
+        geo = self.txt[self.txt.index("## Transparency"):self.txt.index("## Text")]
+        self.assertIn("the gaps between leaves", geo)
+        self.assertIn("alpha 0 in the PNG", geo)
+        self.assertIn("The scene's own body stays solid", geo)
+
+    def test_KHONG_co_co_thi_tam_nen_giu_nguyen_TUNG_CHU(self):
+        """Ranh giới của cả bản vá: thiếu `skel.alpha` ⇒ đúng prompt đời trước."""
+        self.assertIn("The artwork covers the whole frame; there is no transparent area"
+                      " anywhere.", self.duc)
+        self.assertIn("A single full-screen mobile game background", self.duc)
+        self.assertNotIn("## Transparency", self.duc)
+        self.assertFalse(self.duc.startswith('background="transparent"'))
+
+    def test_dau_fullbleed_KHONG_duoc_dat_cho_lop_co_vung_trong(self):
+        """Dấu `prompts/<job>.fullbleed` nói với tầng bash đúng một điều — "tấm này
+        phải ĐỤC" — và nó lái cả câu chữ gửi codex lẫn chiều của phép đo alpha. Một
+        lớp parallax đóng dấu ấy sẽ bị đi xin `background="opaque"` rồi bị bắt vẽ
+        lại vì "còn pixel trong suốt"."""
+        src = (ROOT / "gen.sh").read_text(encoding="utf-8")
+        block = re.search(r"python3 - <<'PY'\n(.*?)\nPY\n", src, re.S).group(1)
+        for alpha, co_dau in ((True, False), (False, True)):
+            with tempfile.TemporaryDirectory() as td:
+                _seed_workspace(td, self._cfg(alpha))
+                cwd = os.getcwd()
+                os.chdir(td)
+                try:
+                    exec(compile(block, "gen.sh:PY", "exec"), {"__name__": "gen_prompt_test"})
+                finally:
+                    os.chdir(cwd)
+                self.assertEqual(Path(td, "prompts", "demo-nen.fullbleed").exists(), co_dau,
+                                 f"skel.alpha={alpha}")
+
+
 class CanhNenMotKhungTest(unittest.TestCase):
     """MỘT CẢNH NỀN LÀ MỘT MÀN HÌNH, KHÔNG PHẢI MỘT SPRITE SHEET CÓ ĐÚNG MỘT Ô.
 

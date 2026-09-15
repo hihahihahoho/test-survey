@@ -14,6 +14,7 @@ import * as React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
+import { BG_SOLID } from "@/features/kit-core/lib/glaze";
 import { newDocBlock, type DocBlock } from "../lib/composer-model";
 import { DocBlockBody } from "../components/DocBlockView";
 
@@ -47,5 +48,32 @@ describe("ô ghi chú của thẻ Background", () => {
   it("VẪN có mặt ở chế độ TỰ DO — nó không phải bản thay thế của chế độ ấy", () => {
     render(<Harness start={{ ...newDocBlock(), mode: "free", note: "màn chính của game" }} />);
     expect((screen.getByLabelText("Ghi chú cho Background") as HTMLInputElement).value).toBe("màn chính của game");
+  });
+});
+
+/**
+ * ═══ Ô «NỀN» (15/09/2026) ══════════════════════════════════════════════════════
+ * Cùng lý do mount DOM thật với ô ghi chú: thứ phải khoá là CÁI CÓ MẶT TRÊN MÀN.
+ * Một ô mất khỏi câu không làm hỏng contract (thiếu pill ⇒ đọc ra nấc mặc định,
+ * `bgAlphaOrSolid`), nó chỉ làm người dùng không còn đường nào nói ra rằng tấm
+ * đang vẽ là một lớp đặt đè lên tấm nền khác.
+ */
+describe("ô «nền» của thẻ Background", () => {
+  it("câu khuôn bày ra ô nền, và nấc mặc định là «Đặc»", () => {
+    const { container } = render(<Harness start={newDocBlock()} />);
+    /* Đọc `textContent` chứ không `getByText`: nhãn trục nằm CÙNG một thẻ `<p>` với
+       ba pill, nên không có phần tử nào chứa đúng mỗi chuỗi ấy. Bản thân pill do
+       node view của TipTap vẽ, mà node view không chạy trong jsdom — nên nấc mặc
+       định được đọc từ chính tài liệu, nguồn mà pill sẽ hiện ra. */
+    expect(container.textContent).toContain(", nền ");
+    const pills: { kind?: string; value?: string }[] = [];
+    const walk = (node: { type?: string; attrs?: Record<string, unknown>; content?: unknown[] }): void => {
+      if (node.type === "optionPill") {
+        pills.push({ kind: String(node.attrs?.["kind"]), value: String(node.attrs?.["value"]) });
+      }
+      for (const child of (node.content ?? []) as typeof node[]) walk(child);
+    };
+    walk(newDocBlock().doc as Parameters<typeof walk>[0]);
+    expect(pills).toContainEqual({ kind: "bgAlpha", value: BG_SOLID });
   });
 });

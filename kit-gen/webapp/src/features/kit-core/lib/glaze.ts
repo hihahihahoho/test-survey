@@ -221,6 +221,70 @@ export function glazePhrase(id: string | null | undefined): string {
   return glazePreset(id)?.en ?? "";
 }
 
+/* ── NỀN CỦA MỘT LỚP BACKGROUND ────────────────────────────────────────────── */
+
+/**
+ * «NỀN: ĐẶC / TRONG SUỐT» của thẻ Background — trục thứ ba của câu, thêm 15/09/2026.
+ *
+ * ╔══ VÌ SAO NÓ Ở ĐÂY, CẠNH ĐỤC NỀN ════════════════════════════════════════╗
+ * ║ Cùng một câu hỏi, khác cấp: `GLAZE_PRESETS` hỏi "thân MỘT MÓN ĐỒ có     ║
+ * ║ xuyên thấu không", bảng này hỏi "CẢ LỚP có vùng rỗng không". Hai bảng    ║
+ * ║ chứ không phải một danh mục dùng chung, vì chúng đi vào hai chỗ khác     ║
+ * ║ hẳn nhau của contract: một cái nối chữ vào `spec`, một cái bật cờ        ║
+ * ║ `skel.alpha`.                                                            ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ⚠️ `en` RỖNG Ở CẢ HAI NẤC, VÀ ĐÓ LÀ CẢ THIẾT KẾ. Trục này KHÔNG nối một chữ
+ * nào vào câu prompt: nó bật một cờ trong contract, và `gen.sh` tự viết cả khối
+ * chữ theo cờ ấy (section «Canvas» + «Layout» + «Transparency» của lớp nền).
+ * Nhét thêm một cụm tiếng Anh vào đây là nói cùng một luật hai lần, hai giọng —
+ * đúng cái bệnh `skel.matte` mắc phải.
+ *
+ * ⚠️ MẶC ĐỊNH LÀ `solid`, VÀ RỖNG CŨNG LÀ `solid` (`bgAlphaOrSolid`): mọi bản
+ * nháp đời trước không có pill này, và tấm chúng đang thấy là tấm nền ĐỤC.
+ */
+export interface BgAlphaPreset {
+  id: string;
+  vi: string;
+  /** Luôn rỗng — xem khối trên. Giữ khoá để dùng chung hình dạng với pill khác. */
+  en: string;
+  hint?: string;
+}
+
+/** Nấc MẶC ĐỊNH — nền đục kín khung. Id ổn định, đừng gõ lại chuỗi này. */
+export const BG_SOLID = "solid";
+
+/** Lớp có vùng rỗng — lớp phủ lên một tấm nền khác. Id ổn định. */
+export const BG_ALPHA = "alpha";
+
+export const BG_ALPHA_PRESETS: readonly BgAlphaPreset[] = [
+  {
+    id: BG_SOLID,
+    vi: "Đặc",
+    en: "",
+    hint: "kín khung, không chỗ nào rỗng",
+  },
+  {
+    id: BG_ALPHA,
+    vi: "Trong suốt",
+    en: "",
+    /* Chữ này hiện trong menu, nên nó nói VIỆC chứ không nói thuật ngữ: người dùng
+       chọn nấc này khi tấm đang vẽ là lớp đặt ĐÈ LÊN một tấm nền khác. */
+    hint: "lớp đặt đè lên tấm nền khác",
+  },
+];
+
+/** Giá trị đã lưu → nấc thật. Rỗng / lạ ⇒ `solid` (hành vi của mọi bản nháp cũ). */
+export function bgAlphaOrSolid(id: string | null | undefined): string {
+  const raw = (id ?? "").trim();
+  return BG_ALPHA_PRESETS.some((preset) => preset.id === raw) ? raw : BG_SOLID;
+}
+
+/** Lớp này có vùng rỗng không — câu hỏi DUY NHẤT mà contract cần trả lời. */
+export function bgKeepsAlpha(id: string | null | undefined): boolean {
+  return bgAlphaOrSolid(id) === BG_ALPHA;
+}
+
 /**
  * DI TRÚ: id chất liệu ĐỜI CŨ → đục nền gần nhất.
  *

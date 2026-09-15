@@ -357,6 +357,19 @@ for s in cfg["styles"]:
         # full-bleed KHÔNG key gì cả nên viền đó đi thẳng vào asset (đã dính: viền
         # magenta 40-55px quanh 25-bg-home ở lần gen thứ hai của BlindTest-B2).
         full_bleed = n_real > 0 and all(c["skel"].get("shape") == "full" for c in real)
+        # ╔══ LỚP NỀN CÓ VÙNG TRỐNG — `skel.alpha` ═══════════════════════════════╗
+        # ║ 15/09/2026. «Phủ kín khung» và «có nền đục» LÀ HAI CÂU HỎI, và trước  ║
+        # ║ bản này chúng dùng chung một câu trả lời: hễ mọi ô `shape:"full"` thì ║
+        # ║ tấm vừa được xếp vào nhánh "một cảnh phủ kín" VỪA bị bắt phải đục.     ║
+        # ║ Một lớp parallax hay một lớp tiền cảnh (lá cây, sương, mái hiên) thì   ║
+        # ║ trả lời KHÁC NHAU cho hai câu ấy: nó vẫn trải hết khung, nhưng chỗ nào ║
+        # ║ không có gì thì phải rỗng để lớp dưới lộ ra.                           ║
+        # ║ Tách bằng một cờ RIÊNG chứ không bằng `shape`: đổi `shape` thì tấm rơi ║
+        # ║ sang hồ sơ "ui" và lãnh nguyên bộ luật của một cái nút — lõi chức năng,║
+        # ║ viền, "căn giữa khung và chừa lề" ⇒ cảnh bị vẽ thụt vào thành một hòn  ║
+        # ║ đảo giữa khung, đúng thứ nhánh full-bleed sinh ra để chặn.             ║
+        # ╚════════════════════════════════════════════════════════════════════════╝
+        keep_alpha = full_bleed and any(c["skel"].get("alpha") for c in real)
         # MỘT Ô FULL-BLEED = MỘT MÀN HÌNH, không phải một sprite sheet 1x1. Tách hẳn
         # vị từ này ra khỏi `full_bleed` vì tấm NHIỀU ô full-bleed (bộ nhiều cảnh trên
         # một canvas) vẫn cần lưới, vẫn cần biết ranh giới ô — nó chỉ giống tấm nền ở
@@ -463,7 +476,11 @@ for s in cfg["styles"]:
         # nền trong suốt là mời model chừa một khung rỗng quanh bốn cạnh.
         section("Canvas", [
             f"{canvas_header} px, origin top-left: x grows right, y grows down."
-            + (" The artwork covers the whole frame; there is no transparent area anywhere."
+            + (" The artwork reaches all four edges of the frame, and this is a LAYER meant to"
+               " sit over another one: save a PNG with a real alpha channel, alpha 0 on every"
+               " pixel the artwork does not cover."
+               if keep_alpha else
+               " The artwork covers the whole frame; there is no transparent area anywhere."
                if full_bleed else
                " Background fully transparent: save a PNG with a real alpha channel, alpha 0 on"
                " every pixel that is not part of a drawn element."),
@@ -526,6 +543,12 @@ for s in cfg["styles"]:
             # không có lưới để xếp, không có hộp nào để cắt ra, và không được phép có
             # một pixel trong suốt nào — nên nó bỏ qua ba section dưới.
             section("Layout", [
+                "A single full-screen mobile game layer, spread across the whole frame edge to"
+                " edge: one layer of one scene, not a sheet of separate parts. No border, no"
+                " frame, no margin, no rounded corners — the art reaches all four edges. It does"
+                " not have to cover every pixel: this layer sits over another one, so wherever"
+                " the scene has nothing, the frame stays empty."
+                if keep_alpha else
                 "A single full-screen mobile game background, filling the whole frame edge to"
                 " edge: one finished screen, not a sheet of separate parts. No border, no frame,"
                 " no margin, no rounded corners, no vignette band — the art reaches all four"
@@ -721,6 +744,17 @@ for s in cfg["styles"]:
                 " nothing painted there. Each character's own body is solid all the way"
                 " through.",
             ], on=("mascot",))
+        elif keep_alpha:
+            # Tấm nền ĐỤC không nhận section này (Canvas của nó vừa nói "không có vùng
+            # trong suốt nào"); lớp nền CÓ vùng trống thì đây là câu quan trọng nhất
+            # của cả prompt, và nó phải tả bằng VÍ DỤ. "Để trống chỗ không có gì" nói
+            # trừu tượng thì model lấp bằng một mảng màu mà nó cho là "nền".
+            section("Transparency", [
+                "Wherever the scene shows nothing — the gaps between leaves, the sky behind a"
+                " treeline, the space between foreground props — leave those pixels empty:"
+                " alpha 0 in the PNG, with nothing painted there. Whatever is placed behind this"
+                " layer later shows through those gaps. The scene's own body stays solid.",
+            ], on=("screen", "background"))
 
         # ── Text ──────────────────────────────────────────────────────────────
         # 09/09/2026 — CHỦ SẢN PHẨM: *"ví dụ gen character thì cần gì text"*. Câu này
@@ -965,7 +999,7 @@ for s in cfg["styles"]:
         # Đứng TRƯỚC cả «## Canvas»: thứ đầu tiên máy vẽ đọc là tham số nền, không
         # phải một đoạn văn. Tấm full-bleed thì không có dòng này — nó xin điều ngược
         # lại. Tầng bash đọc khổ giấy bằng `head -n3` để chừa chỗ cho dòng này.
-        if not full_bleed:
+        if not full_bleed or keep_alpha:
             lines = ['background="transparent"', *lines]
         # DẤU FULL-BLEED CHO TẦNG BASH. `full_bleed` tính được ở đây (skel.shape của
         # mọi ô là "full") nhưng `alpha_verdict` lại chạy ở bash, sau khi codex trả
@@ -973,8 +1007,12 @@ for s in cfg["styles"]:
         # prompt là mối nối rẻ nhất và cùng vòng đời với prompt.
         # XOÁ dấu cũ khi tấm KHÔNG còn full-bleed: prompts/ sống qua nhiều lượt, một
         # dấu mồ côi sẽ tắt phép kiểm alpha của đúng tấm cần nó nhất.
+        # ⚠️ LỚP NỀN CÓ VÙNG TRỐNG KHÔNG ĐƯỢC ĐÓNG DẤU NÀY. Dấu nói với tầng bash
+        # đúng một điều — "tấm này phải ĐỤC" — và nó lái cả câu chữ gửi codex lẫn
+        # chiều của phép đo alpha. Một lớp parallax đóng dấu ấy sẽ bị đi xin
+        # `background="opaque"` rồi bị bắt vẽ lại vì "còn pixel trong suốt".
         fb_marker = f"prompts/{s['id']}-{sh['id']}.fullbleed"
-        if full_bleed:
+        if full_bleed and not keep_alpha:
             open(fb_marker, "w", encoding="utf-8", newline="\n").write("1\n")
         elif os.path.exists(fb_marker):
             os.remove(fb_marker)

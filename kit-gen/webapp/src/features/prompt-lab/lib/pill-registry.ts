@@ -1,3 +1,4 @@
+import { BG_ALPHA_PRESETS } from "@/features/kit-core/lib/glaze";
 import { MATERIAL_PRESETS } from "@/features/kit-core/lib/materials";
 import { getPresets, type CatalogRow, type PresetBundle } from "./presets-store";
 
@@ -50,6 +51,21 @@ export type PillKind =
    * ╚══════════════════════════════════════════════════════════════════════════╝
    */
   | "layout"
+  /**
+   * NỀN của thẻ Background — «Đặc» hay «Trong suốt». Xem `BG_ALPHA_PRESETS`.
+   *
+   * ╔══ VÌ SAO KHÔNG GỘP VÀO `layout` ═════════════════════════════════════════╗
+   * ║ «Bố cục» trả lời "chi tiết dồn vào đâu, chừa chỗ nào cho UI" — một câu   ║
+   * ║ hỏi về THẨM MỸ, và mọi nấc của nó đi vào prompt dưới dạng chữ. Trục này  ║
+   * ║ trả lời "lớp này có vùng rỗng không" — một câu hỏi về CONTRACT, và nó    ║
+   * ║ không nối chữ nào vào câu: nó bật `skel.alpha`, rồi `gen.sh` viết cả ba  ║
+   * ║ section theo cờ ấy. Gộp hai câu hỏi vào một danh mục thì mỗi nấc bố cục  ║
+   * ║ mới người dùng tự thêm lại phải trả lời hộ cả câu hỏi kia.               ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   * Và vì thế nó KHÔNG phải một `CatalogKind`: danh sách đúng hai nấc, sửa được
+   * thì mối nối với contract đứt — cùng lý do `material` có bảng cứng riêng.
+   */
+  | "bgAlpha"
   /**
    * ĐỤC NỀN — pill thay cho `material` từ 08/2026. Xem `glaze.ts`.
    */
@@ -139,6 +155,9 @@ const PLACEHOLDER: Record<PillKind, string> = {
   scene: "khung cảnh",
   mood: "không khí",
   layout: "bố cục",
+  /* «Đặc» — nấc MẶC ĐỊNH, và rỗng cũng đọc ra nó (`bgAlphaOrSolid`). Chuỗi này chỉ
+     tới mắt người dùng qua một bản nháp lạ chưa đi qua `readBlock`. */
+  bgAlpha: "Đặc",
   /* «đục hoàn toàn» — chuỗi này phải nói ĐÚNG thứ sẽ xảy ra với một ô rỗng, và từ
      11/09/2026 mọi cửa đọc đưa rỗng về `solid` (`glazeOrSolid`), không còn về `auto`.
      Nó chỉ tới được mắt người dùng qua một bản nháp lạ chưa đi qua `readCell`. */
@@ -167,6 +186,7 @@ const NOUN: Record<PillKind, string> = {
   scene: "khung cảnh",
   mood: "không khí",
   layout: "bố cục",
+  bgAlpha: "nền",
   glaze: "đục nền",
   material: "chất liệu",
   decor: "trang trí",
@@ -204,6 +224,15 @@ export function pillOptions(kind: PillKind, presets: PresetBundle = getPresets()
 
     case "material":
       return MATERIAL_PRESETS.map((preset) => ({ value: preset.id, vi: preset.vi, en: preset.en }));
+
+    /* BẢNG CỨNG, KHÔNG PHẢI DANH MỤC SỬA ĐƯỢC. Đúng hai nấc, và cả hai đều là mối
+       nối với contract (`skel.alpha`), không phải câu chữ — thêm hay đổi id ở đây
+       là engine đọc một cờ không tồn tại. Cùng thân phận với `material`. */
+    case "bgAlpha":
+      return BG_ALPHA_PRESETS.map((preset) => ({
+        value: preset.id, vi: preset.vi, en: preset.en,
+        ...(preset.hint ? { hint: preset.hint } : {}),
+      }));
 
     /**
      * KHÔNG KHÍ — **DI SẢN, chỉ để ĐỌC**, cùng thân phận với `material`.
@@ -357,7 +386,10 @@ export function hasBlankChoice(kind: PillKind): boolean {
      nghĩa thì cửa YẾU HƠN phải đóng. Trục bố trí thì càng rõ: nó luôn có mặc định
      «Cân đối», và một ô để trống ở đó nghĩa là trả lại chỗ đặt hoa văn cho máy vẽ
      tự quyết — tức là đúng cái «hơi random» mà pill này sinh ra để chấm dứt. */
-  return kind !== "mascot" && kind !== "glaze" && kind !== "decor" && kind !== "decorPlace";
+  /* `bgAlpha` cùng lý do với `glaze`: trục hai nấc mà nấc đầu CHÍNH LÀ mặc định,
+     nên «— để trống —» chỉ là một tên gọi thứ hai của «Đặc». */
+  return kind !== "mascot" && kind !== "glaze" && kind !== "bgAlpha"
+    && kind !== "decor" && kind !== "decorPlace";
 }
 
 /** Kind này có nghĩa "để trống = kế thừa ngữ cảnh chung" không. */

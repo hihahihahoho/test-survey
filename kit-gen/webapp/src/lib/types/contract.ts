@@ -117,6 +117,24 @@ export const skelSchema = z.looseObject({
   pose: z.string().optional(),
   plain: z.boolean().optional(),
   /**
+   * Ô PHỦ KÍN KHUNG NÀY CÓ ĐƯỢC PHÉP CÓ VÙNG TRỐNG KHÔNG — chỉ có nghĩa khi
+   * shape="full".
+   *
+   * ╔══ VÌ SAO LÀ MỘT KHOÁ RIÊNG, KHÔNG PHẢI MỘT `shape` MỚI ══════════════════╗
+   * ║ «Phủ kín khung» và «nền đục» là HAI câu hỏi, và trước 15/09/2026 chúng    ║
+   * ║ dùng chung một câu trả lời: `shape:"full"` ở mọi ô vừa xếp tấm vào nhánh  ║
+   * ║ "một cảnh phủ kín" (không lưới, không dao cắt) VỪA đóng luôn hợp đồng     ║
+   * ║ "không một pixel trong suốt nào". Một lớp parallax / lớp tiền cảnh trả    ║
+   * ║ lời KHÁC NHAU cho hai câu ấy: vẫn trải hết khung, nhưng chỗ nào không có  ║
+   * ║ gì thì phải rỗng để lớp dưới lộ ra.                                       ║
+   * ║ Đổi `shape` để nói điều đó thì tấm rơi sang hồ sơ "ui" của `gen.sh` và    ║
+   * ║ lãnh bộ luật của một cái nút ("lõi chức năng", "căn giữa khung và chừa    ║
+   * ║ lề") ⇒ cảnh bị vẽ thụt vào thành hòn đảo giữa khung.                      ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   * THIẾU khoá (mọi contract đời cũ) = nền ĐỤC, đúng hành vi cũ.
+   */
+  alpha: z.boolean().optional(),
+  /**
    * Ô này có viền / trang trí không — nấc `decor` khác «Không».
    *
    * KHÔNG phải câu chữ (câu trang trí đã nằm trong `spec`): đây là số học. Ô có đồ

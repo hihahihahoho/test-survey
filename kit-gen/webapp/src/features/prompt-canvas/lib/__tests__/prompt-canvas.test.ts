@@ -1338,12 +1338,13 @@ describe("thẻ Background: khung cảnh · bố cục", () => {
     return out;
   };
 
-  it("câu khởi điểm có ĐÚNG hai pill, và không còn node ảnh rời nào", () => {
+  it("câu khởi điểm có ĐÚNG ba pill, và không còn node ảnh rời nào", () => {
     const doc = backgroundDoc();
-    /* HAI, không phải ba: ô «không khí» đã bị bỏ theo yêu cầu chủ sản phẩm. Hai ô
-       còn lại là hai câu hỏi mà một tấm nền game bắt buộc phải trả lời — vẽ cảnh
-       gì, và chừa chỗ nào cho UI. */
-    expect(pillsOf(doc).map((p) => p.kind)).toEqual(["scene", "layout"]);
+    /* BA từ 15/09/2026. Ô «không khí» đã bị bỏ theo yêu cầu chủ sản phẩm; ô thứ ba
+       là ô MỚI và nó hỏi một câu khác hẳn hai ô kia: vẽ cảnh gì · chừa chỗ nào cho
+       UI · lớp này có vùng rỗng không. Ô cuối không góp chữ nào vào prompt — nó bật
+       `skel.alpha`, xem `bgKeepsAlpha`. */
+    expect(pillsOf(doc).map((p) => p.kind)).toEqual(["scene", "layout", "bgAlpha"]);
     expect(JSON.stringify(doc)).not.toContain(NODE.imagePill);
   });
 
@@ -1455,10 +1456,14 @@ describe("thẻ Background: khung cảnh · bố cục", () => {
     /* Ô «không khí» bị GỠ trong cùng một lượt đọc: pill `mood` và mẩu chữ
        «, không khí » của khuôn cũ đi cùng nhau, vì để lại nhãn trục lơ lửng thì
        `freeText()` sẽ coi nó là chữ người dùng gõ thêm và đẩy vào `directive`. */
+    /* Ô «nền» MỚI được nối vào cuối câu khuôn trong cùng lượt đọc, mang nấc mặc
+       định «Đặc» — đúng tấm mà bản nháp này đang sinh ra từ trước tới nay. */
     expect(pillsOf(block.doc)).toEqual([
       { kind: "scene", value: "shop", path: "" },
       { kind: "layout", value: "center-clear", path: "refs/phac.png" },
+      { kind: "bgAlpha", value: "solid", path: "" },
     ]);
+    expect(JSON.stringify(block.doc)).toContain(", nền ");
     expect(JSON.stringify(block.doc)).not.toContain("tham chiếu");
     expect(JSON.stringify(block.doc)).not.toContain("không khí");
     expect(JSON.stringify(block.doc)).toContain("bố cục");
@@ -1475,7 +1480,68 @@ describe("thẻ Background: khung cảnh · bố cục", () => {
     expect(pillsOf((twice.composer.blocks[0] as { doc: JSONContent }).doc).map((p) => p.kind)).toEqual([
       "scene",
       "layout",
+      "bgAlpha",
     ]);
+  });
+
+  /**
+   * ═══ «NỀN: ĐẶC / TRONG SUỐT» (15/09/2026) ══════════════════════════════════
+   * «Phủ kín khung» và «nền đục» là HAI câu hỏi, và tới trước lượt này thẻ
+   * Background chỉ trả lời được câu đầu: mọi tấm ra `skel:{shape:"full"}`, tức
+   * "phủ kín, không một pixel trong suốt". Lớp parallax / lớp tiền cảnh trả lời
+   * KHÁC: vẫn trải hết khung, nhưng chỗ nào không có gì thì phải rỗng.
+   * Đo hiện trường của cái giá ngược lại: `r-0041/artifacts/chinh-nen.png` là một
+   * tấm nền ĐỤC mà về với 340.413 pixel alpha=0.
+   */
+  const nenVoi = (bg: string): JSONContent => {
+    const doc = JSON.parse(JSON.stringify(backgroundDoc())) as JSONContent;
+    const walk = (node: JSONContent): void => {
+      for (const child of node.content ?? []) {
+        if (child.type === NODE.optionPill && child.attrs?.["kind"] === "bgAlpha") {
+          child.attrs["value"] = bg;
+        }
+        walk(child);
+      }
+    };
+    walk(doc);
+    return doc;
+  };
+
+  const skelCua = (bg: string) => {
+    const contract = composerToContract(
+      state({ blocks: [{ id: "b1", kind: "background", mode: "template", doc: nenVoi(bg), note: "" }] }),
+      { presets: PRESETS },
+    );
+    return contract.sheets[0]!.components[0]!.skel;
+  };
+
+  it("nấc «Đặc» ⇒ skel KHÔNG có cờ alpha (đúng contract đời trước)", () => {
+    expect(skelCua("solid")).toEqual({ shape: "full", w: 1, h: 1 });
+  });
+
+  it("nấc «Trong suốt» ⇒ skel.alpha, nhưng shape VẪN là full", () => {
+    /* `shape` trả lời "một cảnh phủ kín khung hay một sprite sheet", và câu trả lời
+       ấy không đổi theo độ trong. Đổi nó để nói "có vùng rỗng" thì `gen.sh` xếp tấm
+       sang hồ sơ "ui" và lớp nền lãnh bộ luật của một cái nút ("lõi chức năng",
+       "căn giữa khung và chừa lề") ⇒ cảnh bị vẽ thụt vào thành hòn đảo giữa khung. */
+    expect(skelCua("alpha")).toEqual({ shape: "full", w: 1, h: 1, alpha: true });
+  });
+
+  it("trục nền KHÔNG góp một chữ nào vào `spec`", () => {
+    /* Nó bật một cờ, và `gen.sh` tự viết cả ba section theo cờ ấy. Nối thêm một cụm
+       tiếng Anh ở đây là nói cùng một luật hai lần, hai giọng — đúng cái bệnh
+       `skel.matte` mắc phải. `take` vẫn phải gọi, nếu không `leftover` nhặt lại pill
+       và in id trần ra giữa câu prompt. */
+    const specCua = (bg: string) => {
+      const contract = composerToContract(
+        state({ blocks: [{ id: "b1", kind: "background", mode: "template", doc: nenVoi(bg), note: "" }] }),
+        { presets: PRESETS },
+      );
+      return contract.sheets[0]!.components[0]!.spec;
+    };
+    expect(specCua("alpha")).toBe(specCua("solid"));
+    expect(specCua("alpha")).not.toContain("alpha");
+    expect(specCua("alpha")).not.toContain("solid");
   });
 });
 

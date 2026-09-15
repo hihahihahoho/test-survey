@@ -14,7 +14,7 @@ import {
   maxPerSheetOf,
 } from "@/features/prompt-lab/lib/composer-model";
 import { defaultSizeOf } from "@/features/prompt-lab/lib/cell-size";
-import { glazeFromMaterial, glazeOrSolid } from "@/features/kit-core/lib/glaze";
+import { BG_SOLID, glazeFromMaterial, glazeOrSolid } from "@/features/kit-core/lib/glaze";
 import { EXPRESSIONS } from "@/features/kit-core/lib/poses";
 import { DEFAULT_VIEW } from "@/features/prompt-lab/lib/pose/pose-state";
 import { decorLevelOf, decorPlaceOf, getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
@@ -23,6 +23,7 @@ import { NODE } from "@/features/prompt-lab/lib/schema";
 import { readPillImage } from "./pill-image";
 import {
   PILL_SLOTS,
+  SCAFFOLD_BACKGROUND,
   docHasBrokenPill,
   mascotDoc,
   pillValuesOf,
@@ -418,7 +419,10 @@ function readBlock(raw: unknown, index: number, presets: PresetBundle): Block | 
        lựa chọn ở đâu ngoài chính tài liệu. Nên chỉ khôi phục được pill ĐÓ LÀ GÌ
        (đúng nhãn, đúng danh sách khi bấm), còn NÓ ĐANG CHỌN GÌ thì đã mất thật —
        và để rỗng là nói đúng điều đó. Xem `repairPills`. */
-    doc: healDoc(dropBackgroundMood(foldBackgroundLayout(raw["doc"] as JSONContent)), kind),
+    doc: healDoc(
+      addBackgroundAlpha(dropBackgroundMood(foldBackgroundLayout(raw["doc"] as JSONContent))),
+      kind,
+    ),
     /* Thiếu ⇒ rỗng, đúng thứ nó đang là: bản nháp lưu trước lượt có ô ghi chú thì
        người dùng chưa từng gõ gì vào đó. */
     note: str(raw["note"]),
@@ -524,6 +528,55 @@ function foldBackgroundLayout(doc: JSONContent): JSONContent {
         : node;
     }
     return node.content ? { ...node, content: node.content.map(walk) } : node;
+  };
+  return walk(doc);
+}
+
+/**
+ * DI TRÚ CÂU BACKGROUND (15/09/2026): thêm ô «, nền [Đặc]» vào cuối câu.
+ *
+ * ╔══ VÌ SAO NỐI VÀO, KHÔNG DỰNG LẠI CÂU ════════════════════════════════════╗
+ * ║ Cùng kỷ luật với `foldBackgroundLayout`: dựng lại từ template mới là mọi  ║
+ * ║ chữ người dùng gõ thêm bay sạch. Ở đây còn rẻ hơn thế — ô mới đứng CUỐI   ║
+ * ║ câu, nên chỉ phải chèn thêm một pill và một mẩu chữ trước dấu chấm.       ║
+ * ║                                                                          ║
+ * ║ Giá trị là `solid` («Đặc») chứ không để rỗng: rỗng cũng đọc ra `solid`    ║
+ * ║ (`bgAlphaOrSolid`), nhưng một pill có giá trị thì người dùng MỞ RA LÀ     ║
+ * ║ THẤY tấm của mình vẫn là tấm nền đục — thứ họ đang nhìn thấy trên màn.    ║
+ * ║                                                                          ║
+ * ║ KHÔNG chạy khi câu đã có pill `bgAlpha`: mở lại lần thứ hai phải đi ra    ║
+ * ║ CHÍNH NÓ, không mọc thêm ô thứ tư.                                        ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+function addBackgroundAlpha(doc: JSONContent): JSONContent {
+  let has = false;
+  const scan = (node: JSONContent): void => {
+    if (node.type === NODE.optionPill && node.attrs?.["kind"] === "bgAlpha") has = true;
+    for (const child of node.content ?? []) scan(child);
+  };
+  scan(doc);
+  if (has) return doc;
+
+  const [, , truoc] = SCAFFOLD_BACKGROUND;      // ", nền "
+  let done = false;
+  const walk = (node: JSONContent): JSONContent => {
+    if (done || !node.content) return node;
+    const hit = node.content.findIndex(
+      (child) => child.type === NODE.optionPill && child.attrs?.["kind"] === "layout",
+    );
+    if (hit < 0) return { ...node, content: node.content.map(walk) };
+    done = true;
+    const them: JSONContent[] = [
+      { type: "text", text: truoc },
+      {
+        type: NODE.optionPill,
+        attrs: { kind: "bgAlpha", value: BG_SOLID, custom: "", path: "", refName: "" },
+      },
+    ];
+    /* Chèn NGAY SAU pill bố cục, không nối vào cuối mảng: câu tự do có thể còn
+       chữ của người dùng sau dấu chấm, và ô mới phải đứng trong CÂU KHUÔN. */
+    return { ...node, content: [...node.content.slice(0, hit + 1), ...them,
+                                ...node.content.slice(hit + 1)] };
   };
   return walk(doc);
 }

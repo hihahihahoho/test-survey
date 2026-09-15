@@ -1,4 +1,5 @@
 import type { JSONContent } from "@tiptap/react";
+import { BG_SOLID } from "@/features/kit-core/lib/glaze";
 import { NODE } from "./schema";
 import { INHERIT, type PillKind } from "./pill-registry";
 import { getPresets, hasDecorPlacement, type PresetBundle } from "./presets-store";
@@ -64,10 +65,20 @@ const pill = (kind: PillKind, value: string, custom = "", image?: { path: string
  * ║ của nó ở lại `pill-registry` dưới dạng DI SẢN chỉ-đọc.                     ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
-export const SCAFFOLD_BACKGROUND = ["Vẽ background ", ", bố cục ", "."] as const;
+/**
+ * ╔══ Ô THỨ BA «NỀN» (15/09/2026) ═══════════════════════════════════════════╗
+ * ║ Một lớp nền không phải lúc nào cũng là MÀN HÌNH: lớp parallax và lớp tiền ║
+ * ║ cảnh (lá cây, sương, mái hiên) vẫn trải hết khung, nhưng chỗ nào không có ║
+ * ║ gì thì phải RỖNG để lớp dưới lộ ra. Trước ô này, thẻ Background không có  ║
+ * ║ cách nào nói điều đó: mọi tấm đều đi ra contract `skel:{shape:"full"}`,   ║
+ * ║ tức "phủ kín, không một pixel trong suốt".                                ║
+ * ║ MẶC ĐỊNH là «Đặc» — đúng hành vi của mọi bản nháp đã có.                  ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export const SCAFFOLD_BACKGROUND = ["Vẽ background ", ", bố cục ", ", nền ", "."] as const;
 
 export function backgroundDoc(): JSONContent {
-  const [a, b, c] = SCAFFOLD_BACKGROUND;
+  const [a, b, c, d] = SCAFFOLD_BACKGROUND;
   return {
     type: "doc",
     content: [
@@ -79,6 +90,8 @@ export function backgroundDoc(): JSONContent {
           text(b),
           pill("layout", "center-clear"),
           text(c),
+          pill("bgAlpha", BG_SOLID),
+          text(d),
         ],
       },
     ],
@@ -372,7 +385,7 @@ export const PILL_SLOTS: Record<"uikit" | "background" | "mascot" | "mascotPose"
      bỏ hẳn. Tài liệu đời trước có ba ô — nhưng chúng KHÔNG đi qua bảng này với ba
      ô nữa: `dropBackgroundMood` (ở `composer-doc.ts`) gỡ pill `mood` TRƯỚC khi
      `repairPills` chạy, nên tới đây câu đã đúng hình dạng hiện tại. */
-  background: ["scene", "layout"],
+  background: ["scene", "layout", "bgAlpha"],
   /* Đổi 09/2026 cùng lượt tách thẻ Nhân vật thành sprite sheet: câu ĐẦU THẺ nay
      chỉ còn danh tính nhân vật + trang phục, còn dáng/góc/nét mặt xuống dòng
      (`mascotPose`). Tài liệu đời trước có ba pill ở câu đầu — nhưng chúng KHÔNG

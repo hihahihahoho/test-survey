@@ -19,6 +19,7 @@ import {
   resolveElementSpec,
   type SheetLimits,
 } from "@/features/kit-core/lib/kitset-to-contract";
+import { bgKeepsAlpha } from "@/features/kit-core/lib/glaze";
 import type { StyleAxes } from "@/features/kit-core/lib/model";
 import { STYLE_AXIS_IDS } from "@/features/kit-core/lib/form-model";
 import { subjectAxisLine } from "@/features/kit-core/lib/style-phrases";
@@ -375,6 +376,13 @@ function backgroundSheet(block: DocBlock, index: number, presets: PresetBundle, 
      trong câu tự do của dự án cũ vẫn đi qua `leftover`, nhưng `pillOptions("mood")`
      trả rỗng nên nó không góp chữ nào — rụng, đúng như đã hẹn. */
   const layout = hitPhrase(take(scan, "layout"), presets);
+  /* NỀN: ĐẶC / TRONG SUỐT — trục DUY NHẤT của thẻ này KHÔNG góp chữ vào `spec`.
+     Nó bật `skel.alpha`, rồi `gen.sh` tự viết cả ba section theo cờ ấy («Canvas»,
+     «Layout», «Transparency» của lớp nền). Nối thêm một cụm tiếng Anh ở đây là nói
+     cùng một luật hai lần, hai giọng — đúng cái bệnh `skel.matte` mắc phải. Nên nó
+     KHÔNG đi qua `hitPhrase`, và `take` vẫn phải gọi để `leftover` không nhặt lại
+     pill ấy rồi in id trần ra giữa câu prompt. */
+  const giuAlpha = bgKeepsAlpha(take(scan, "bgAlpha")?.value);
   const spec = tidy(
     [scene || "a game screen background", layout, ...leftover(scan, presets)].filter(Boolean).join(", "),
   );
@@ -402,7 +410,14 @@ function backgroundSheet(block: DocBlock, index: number, presets: PresetBundle, 
     ...(layoutRef ? { layoutRef } : {}),
     ...(block.mode === "free" ? { promptOverride: line } : {}),
     ...(directive ? { directive } : {}),
-    components: [{ file: "01-nen", vi: "Background", spec: block.mode === "free" ? line : spec, skel: { shape: "full", w: 1, h: 1 } }],
+    /* `shape:"full"` ở CẢ HAI nấc nền: nó trả lời câu hỏi "tấm này là MỘT cảnh phủ
+       kín khung hay một sprite sheet", và câu trả lời ấy không đổi theo độ trong.
+       Đổi `shape` để nói "có vùng rỗng" thì `gen.sh` xếp tấm sang hồ sơ "ui" và lớp
+       nền lãnh bộ luật của một cái nút — xem `skelSchema.alpha`. */
+    components: [{
+      file: "01-nen", vi: "Background", spec: block.mode === "free" ? line : spec,
+      skel: { shape: "full", w: 1, h: 1, ...(giuAlpha ? { alpha: true } : {}) },
+    }],
   };
 }
 
