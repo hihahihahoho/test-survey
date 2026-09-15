@@ -193,7 +193,10 @@ export function CanvasBlock(props: CanvasBlockProps) {
               /* KHÔNG đưa xuống trạng thái của CẢ THẺ nữa — đưa DANH SÁCH TẤM của
                  lượt, để mỗi ô ảnh tự tra tên mình vào. Lý do đầy đủ (con bọ "cả
                  hai ô cùng hiện đang vẽ") nằm ở `SheetResultSlot`. */
-              runJobs={gen.jobs}
+              /* NEO ẢNH hỏi «tấm này đã CÓ ẢNH trong thư mục của lượt chưa»,
+                 không hỏi «có tên trong lượt không»: agent ghi sẵn mọi tên lúc mở
+                 lượt, nên hai câu ấy lệch nhau suốt quãng chờ — xem `SheetResultSlot`. */
+              drawnJobs={gen.drawn}
               drawingJobs={gen.drawing}
               /* Danh sách CÒN NỢ — có từ lúc bấm, kể cả khi lượt chưa phóng được.
                  Không lọc theo `status` như `drawing` từng bị lọc: cả mục đích của

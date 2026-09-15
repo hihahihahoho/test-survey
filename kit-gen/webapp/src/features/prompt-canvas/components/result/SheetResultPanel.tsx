@@ -129,6 +129,11 @@ export interface SheetResultPanelProps {
   /**
    * Có ⇒ ảnh gốc đọc từ `runs/<runId>/artifacts/` — BẤT BIẾN, không bị lượt gen sau
    * ghi đè. Không có ⇒ đọc `raw/<job>.png` (bản hiện hành).
+   *
+   * ⚠️ NGƯỜI GỌI CHỈ ĐƯỢC ĐƯA MÃ LƯỢT KHI TẤM NÀY ĐÃ CÓ ẢNH TRONG LƯỢT ẤY. Có tên
+   * trong lượt là chưa đủ: agent ghi sẵn mọi tên job vào `run.json` ngay lúc mở lượt,
+   * còn file artifact thì ra đời khi vẽ xong — đưa mã lượt sớm là bắt panel xin một
+   * file chưa tồn tại và bày ô đỏ đè lên bức ảnh đang có. Luật ấy ở `SheetResultSlot`.
    */
   runId?: string | null;
   /**
@@ -279,6 +284,15 @@ export function SheetResultPanel({
     () => (typeof artifactPath === "string" && artifactPath !== "" ? artifactPath : rawSheetImagePath(job, runId)),
     [artifactPath, job, runId],
   );
+  /**
+   * ĐANG NEO VÀO MỘT LƯỢT? — hỏi ĐƯỜNG ẢNH ĐANG BÀY, không hỏi một prop.
+   *
+   * Câu chú dưới ảnh hứa một trong hai điều trái ngược ("bản này sẽ bị ghi đè" /
+   * "bản này không ai ghi đè được"), nên nó phải đọc đúng thứ đang hiện ra. Hai
+   * nguồn cùng dẫn tới thư mục lượt (`runId` tự suy, và `artifactPath` do stream
+   * báo), và chỉ có đường dẫn cuối cùng mới biết mình đi về đâu.
+   */
+  const anchored = rawPath.startsWith("runs/");
 
   /**
    * KHOÁ PHIÊN BẢN CỦA ẢNH GỐC = thời điểm ghi của bản ĐANG DÙNG.
@@ -739,9 +753,9 @@ export function SheetResultPanel({
               )}
               <p className="mt-2 text-caption text-fg-muted">
                 Bấm vào ảnh để phóng to ở độ nét thật.{" "}
-                {runId === null || runId === ""
-                  ? "Đây là bản hiện hành — mỗi lượt vẽ ghi đè lên nó."
-                  : "Đây là ảnh của đúng lượt chạy này — không bị lượt sau ghi đè."}
+                {anchored
+                  ? "Đây là ảnh của đúng lượt chạy này — không bị lượt sau ghi đè."
+                  : "Đây là bản hiện hành — mỗi lượt vẽ ghi đè lên nó."}
               </p>
               {ducNen && (
                 <p className="mt-1 text-caption text-fg-muted">

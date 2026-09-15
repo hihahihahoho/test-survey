@@ -21,7 +21,7 @@
  * nguyên một tấm (vân tay chưa đổi) — tấm bị bỏ qua cũng không được hiện khung chờ.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { seedPresets } from "@/features/prompt-lab/lib/presets-store";
@@ -74,6 +74,9 @@ const CONTRACT = {
   ],
 } as never;
 
+/** Ô đã cắt của bộ kit — tab «Đã crop» đọc từ đây. Rỗng ở gần hết ca. */
+let kitFiles: unknown[] = [];
+
 /* MOCK MỘT PHẦN: vỏ thẻ thật còn kéo theo thư viện món của người dùng
    (`usePresets` → `useUserLibrary`), thứ không liên quan gì tới câu hỏi ở đây.
    Thay cả module là phải đếm hộ mọi hook mà cây component gọi — và thiếu một cái
@@ -82,7 +85,7 @@ vi.mock("@/lib/hooks", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   useContract: () => ({ data: { version: 1, contract: CONTRACT } }),
   useProject: () => ({ data: { id: "p1", name: "Bộ kit thử", state: { jobs: { "chinh-ui": "ok", "chinh-ui2": "ok" } } } }),
-  useKit: () => ({ data: { variant: "chinh", files: [] }, isLoading: false }),
+  useKit: () => ({ data: { variant: "chinh", files: kitFiles }, isLoading: false }),
   useRevealProject: () => ({ mutate: vi.fn() }),
   useRuns: () => ({ data: { items: [] } }),
   useRawHistory: () => ({ data: { items: [] }, isLoading: false }),
@@ -144,6 +147,8 @@ function mount(gen: GenBlockState) {
 const ONLY_SHEET_2: GenBlockState = {
   status: "running", message: "Đang vẽ…", runId: "r-0034",
   done: 0, total: 1, jobs: ["chinh-ui2"], requested: ["chinh-ui2"], drawing: ["chinh-ui2"],
+  /* Lượt vừa mở, chưa tấm nào có ảnh trong thư mục của nó ⇒ chưa neo được vào đâu. */
+  drawn: [],
   phase: "drawing",
 };
 
@@ -167,7 +172,10 @@ const rawPaths = () =>
   screen.getAllByRole("img", { name: /^Ảnh gốc tấm / }).map((el) => el.getAttribute("data-path"));
 
 afterEach(cleanup);
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  kitFiles = [];
+});
 
 describe("vẽ lại tấm 2 ⇒ chỉ tấm 2 hiện khung chờ", () => {
   it("MỘT khung chờ duy nhất, không phải hai", () => {
@@ -214,7 +222,8 @@ describe("lượt đã xong vẫn phải trả tấm ngoài lượt về ảnh h
   it("tấm trong lượt đọc ảnh BẤT BIẾN của lượt, tấm ngoài lượt đọc bản hiện hành", () => {
     mount({
       status: "done", message: "Tấm 1 giữ nguyên, chưa đổi gì.", runId: "r-0034",
-      done: 1, total: 1, jobs: ["chinh-ui2"], requested: [], drawing: [], phase: "done",
+      done: 1, total: 1, jobs: ["chinh-ui2"], requested: [], drawing: [],
+      drawn: ["chinh-ui2"], phase: "done",
     });
     expect(screen.queryByText("Đang vẽ tấm này…")).toBeNull();
     expect(rawPaths()).toEqual(["raw/chinh-ui.png", "runs/r-0034/artifacts/chinh-ui2.png"]);
@@ -227,7 +236,8 @@ describe("vẽ CẢ THẺ mà một tấm bị giữ nguyên", () => {
        tấm 2, dù người dùng bấm nút Vẽ của cả thẻ. */
     mount({
       status: "running", message: "Đang vẽ… · Tấm 1 giữ nguyên, chưa đổi gì.", runId: "r-0035",
-      done: 0, total: 1, jobs: ["chinh-ui2"], requested: ["chinh-ui2"], drawing: ["chinh-ui2"], phase: "drawing",
+      done: 0, total: 1, jobs: ["chinh-ui2"], requested: ["chinh-ui2"], drawing: ["chinh-ui2"],
+      drawn: [], phase: "drawing",
     });
     expect(screen.getAllByText("Đang vẽ tấm này…")).toHaveLength(1);
     expect(rawPaths()).toEqual(["raw/chinh-ui.png"]);
@@ -237,7 +247,8 @@ describe("vẽ CẢ THẺ mà một tấm bị giữ nguyên", () => {
     mount({
       status: "running", message: "Đang vẽ…", runId: "r-0036",
       done: 0, total: 2, jobs: ["chinh-ui", "chinh-ui2"],
-      requested: ["chinh-ui", "chinh-ui2"], drawing: ["chinh-ui", "chinh-ui2"], phase: "drawing",
+      requested: ["chinh-ui", "chinh-ui2"], drawing: ["chinh-ui", "chinh-ui2"], drawn: [],
+      phase: "drawing",
     });
     expect(screen.getAllByText("Đang vẽ tấm này…")).toHaveLength(2);
   });
@@ -246,7 +257,9 @@ describe("vẽ CẢ THẺ mà một tấm bị giữ nguyên", () => {
     mount({
       status: "running", message: "Đang vẽ…", runId: "r-0036",
       done: 1, total: 2, jobs: ["chinh-ui", "chinh-ui2"],
-      requested: ["chinh-ui2"], drawing: ["chinh-ui2"], phase: "drawing",
+      requested: ["chinh-ui2"], drawing: ["chinh-ui2"],
+      /* Tấm 1 đã vẽ xong VÀ agent đã chép ảnh sang thư mục lượt ⇒ neo được. */
+      drawn: ["chinh-ui"], phase: "drawing",
     });
     expect(screen.getAllByText("Đang vẽ tấm này…")).toHaveLength(1);
     expect(rawPaths()).toEqual(["runs/r-0036/artifacts/chinh-ui.png"]);
@@ -272,7 +285,8 @@ describe("bấm vẽ lại lúc hàng đợi bận", () => {
   /** Thẻ vừa vào hàng, lượt CHƯA phóng được — `runId` rỗng, `jobs` rỗng. */
   const QUEUED_SHEET_2: GenBlockState = {
     status: "queued", message: "Đang chờ tấm trước", runId: null,
-    done: 0, total: 0, jobs: [], requested: ["chinh-ui2"], drawing: [], phase: "waiting",
+    done: 0, total: 0, jobs: [], requested: ["chinh-ui2"], drawing: [], drawn: [],
+    phase: "waiting",
   };
 
   it("panel của tấm ấy hiện khung «Đang chờ tới lượt…»", () => {
@@ -318,7 +332,7 @@ describe("bấm vẽ lại lúc hàng đợi bận", () => {
       /* Agent ghi sẵn mọi job là `queued` lúc mở lượt và chỉ đẩy từng cái sang
          `running` khi thật sự vẽ tới — nên đây là hình dạng THƯỜNG GẶP của một
          lượt hai tấm, không phải ca hiếm. */
-      requested: ["chinh-ui", "chinh-ui2"], drawing: ["chinh-ui"], phase: "drawing",
+      requested: ["chinh-ui", "chinh-ui2"], drawing: ["chinh-ui"], drawn: [], phase: "drawing",
     });
     expect(screen.getAllByText("Đang vẽ tấm này…")).toHaveLength(1);
     const waiting = within(panels()[1]!).getByRole("status");
@@ -332,10 +346,116 @@ describe("bấm vẽ lại lúc hàng đợi bận", () => {
     mount({
       status: "running", message: "Đang vẽ… · Tấm 2 giữ nguyên, chưa đổi gì.", runId: "r-0041",
       done: 0, total: 1, jobs: ["chinh-ui"], requested: ["chinh-ui"], drawing: ["chinh-ui"],
-      phase: "drawing",
+      drawn: [], phase: "drawing",
     });
     expect(screen.queryByText("Đang chờ tới lượt…")).toBeNull();
     expect(screen.getAllByText("Đang vẽ tấm này…")).toHaveLength(1);
     expect(rawPaths()).toEqual(["raw/chinh-ui2.png"]);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   NEO ẢNH VÀO LƯỢT — CHỈ KHI LƯỢT ẤY ĐÃ CÓ ẢNH CỦA TẤM NÀY
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * ╔══ HIỆN TRƯỜNG 15/09/2026 (ẢNH CHỤP CỦA CHỦ SẢN PHẨM) ═══════════════════╗
+ * ║ Bấm «Vẽ lại tấm này» ⇒ panel hiện ĐÚNG dải «Đang chờ tới lượt… Đã gửi,   ║
+ * ║ chờ máy nhận» — phần vá hôm trước chạy tốt. NHƯNG ngay dưới dải ấy, ô    ║
+ * ║ ảnh đỏ lên «Thiếu file · Thử lại», và dưới nữa là câu «Đây là ảnh của     ║
+ * ║ đúng lượt chạy này — không bị lượt sau ghi đè». Ba câu cãi nhau cả ba:   ║
+ * ║ đang chờ, mà thiếu file, mà lại khoe ảnh của lượt.                       ║
+ * ║                                                                          ║
+ * ║ Gốc: agent mở lượt là ghi NGAY tên mọi job vào `run.json` với trạng thái  ║
+ * ║ `queued` (`runs.mjs:156`), còn `runs/<lượt>/artifacts/<tấm>.png` chỉ ra   ║
+ * ║ đời khi vẽ xong. Bản trước neo theo "có tên trong lượt" nên suốt quãng    ║
+ * ║ giữa hai mốc ấy, ô ảnh đi xin một file chưa tồn tại — trong khi bức ảnh   ║
+ * ║ thật nằm ngay ở `raw/<tấm>.png`.                                         ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Nên bộ ca này soi bốn pha của MỘT tấm trong MỘT lượt đã mở, bằng đúng hai thứ
+ * người dùng nhìn thấy: ĐƯỜNG ẢNH ô đi xin, và câu chú dưới ảnh.
+ */
+describe("lượt đã mở nhưng tấm chưa có ảnh", () => {
+  /** Câu chú dưới ảnh gốc của từng tấm, theo thứ tự tấm trên thẻ. */
+  const anchorNotes = () =>
+    panels().map((p) => (within(p).queryByText(/đúng lượt chạy này/) === null ? "hiện hành" : "của lượt"));
+
+  it("job còn xếp hàng ⇒ KHÔNG xin thư mục lượt, ảnh hiện hành ở lại trong DOM", () => {
+    /* Hình dạng THƯỜNG GẶP nhất của một lượt vừa mở: hai job đều `queued`, chưa
+       job nào `running`. `drawn` rỗng vì chưa có một file artifact nào. */
+    mount({
+      status: "running", message: "Đang vẽ…", runId: "r-0050",
+      done: 0, total: 2, jobs: ["chinh-ui", "chinh-ui2"],
+      requested: ["chinh-ui", "chinh-ui2"], drawing: [], drawn: [], phase: "waiting",
+    });
+    /* KHÔNG một đường nào trỏ vào `runs/…/artifacts` — đó chính là ô đỏ trong ảnh
+       chụp, vì file ấy chưa tồn tại lúc job còn `queued`. */
+    expect(rawPaths()).toEqual(["raw/chinh-ui.png", "raw/chinh-ui2.png"]);
+    /* Và cả hai panel vẫn bày dải chờ, đứng TRÊN ảnh chứ không thay ảnh. */
+    expect(screen.getAllByText("Đang chờ tới lượt…")).toHaveLength(2);
+  });
+
+  it("job còn xếp hàng ⇒ câu chú nói «bản hiện hành», không khoe ảnh của lượt", () => {
+    mount({
+      status: "running", message: "Đang vẽ…", runId: "r-0050",
+      done: 0, total: 2, jobs: ["chinh-ui", "chinh-ui2"],
+      requested: ["chinh-ui", "chinh-ui2"], drawing: [], drawn: [], phase: "waiting",
+    });
+    expect(anchorNotes()).toEqual(["hiện hành", "hiện hành"]);
+  });
+
+  it("máy cầm tới tấm ⇒ khung «Đang vẽ tấm này…», và tấm ấy KHÔNG xin file nào", () => {
+    mount({
+      status: "running", message: "Đang vẽ…", runId: "r-0051",
+      done: 0, total: 2, jobs: ["chinh-ui", "chinh-ui2"],
+      requested: ["chinh-ui", "chinh-ui2"], drawing: ["chinh-ui2"], drawn: [], phase: "drawing",
+    });
+    expect(screen.getAllByText("Đang vẽ tấm này…")).toHaveLength(1);
+    /* Chỉ còn ô ảnh của tấm 1, và nó đọc bản hiện hành: lượt này chưa chép được
+       một byte nào sang thư mục của nó. */
+    expect(rawPaths()).toEqual(["raw/chinh-ui.png"]);
+  });
+
+  it("tấm vẽ XONG và đã có ảnh của lượt ⇒ neo vào lượt, và nói ra điều đó", () => {
+    mount({
+      status: "running", message: "Đang vẽ…", runId: "r-0052",
+      done: 1, total: 2, jobs: ["chinh-ui", "chinh-ui2"],
+      requested: ["chinh-ui2"], drawing: ["chinh-ui2"], drawn: ["chinh-ui"], phase: "drawing",
+    });
+    expect(rawPaths()).toEqual(["runs/r-0052/artifacts/chinh-ui.png"]);
+    /* Panel của tấm 2 đang là khung «Đang vẽ» nên không có câu chú nào ở đó. */
+    expect(anchorNotes()[0]).toBe("của lượt");
+  });
+
+  it("tấm vẽ HỎNG ⇒ ảnh cũ ở lại, không neo vào một lượt không có ảnh của nó", () => {
+    /* Lượt chốt sổ với một tấm `failed`: tấm ấy không có artifact nào, nên nó rơi
+       về bản hiện hành — thứ người dùng vẫn cần nhìn để quyết định vẽ lại hay không.
+       Câu lỗi là việc của thẻ (`message`), không phải của ô ảnh. */
+    mount({
+      status: "fail", message: "1/2 tấm không vẽ được. Bấm Vẽ để thử lại.", runId: "r-0053",
+      done: 0, total: 2, jobs: ["chinh-ui", "chinh-ui2"],
+      requested: [], drawing: [], drawn: ["chinh-ui"], phase: "fail",
+    });
+    expect(rawPaths()).toEqual(["runs/r-0053/artifacts/chinh-ui.png", "raw/chinh-ui2.png"]);
+    expect(anchorNotes()).toEqual(["của lượt", "hiện hành"]);
+    expect(screen.getByText(/1\/2 tấm không vẽ được/)).toBeTruthy();
+  });
+
+  it("tab «Đã crop» theo CÙNG luật: ô đọc từ kho kit, không đi qua thư mục lượt", () => {
+    /* Ô đã cắt nằm ở `kits/<phong cách>/…` và KHÔNG bao giờ được chép sang thư mục
+       lượt — nên tab này không có cửa nào để dựng lại con bọ trên. Ca này khoá cửa ấy. */
+    kitFiles = [
+      { file: "tight/01-button", path: "kits/chinh/tight/01-button.png", sheet: "ui", cellIndex: 0, w: 1, h: 1, bytes: 1 },
+    ];
+    mount({
+      status: "running", message: "Đang vẽ…", runId: "r-0054",
+      done: 0, total: 2, jobs: ["chinh-ui", "chinh-ui2"],
+      requested: ["chinh-ui", "chinh-ui2"], drawing: [], drawn: [], phase: "waiting",
+    });
+    fireEvent.mouseDown(within(panels()[0]!).getByRole("tab", { name: /Đã crop/ }));
+    const paths = screen.getAllByRole("img").map((el) => el.getAttribute("data-path") ?? "");
+    expect(paths).toContain("kits/chinh/tight/01-button.png");
+    expect(paths.some((path) => path.includes("/artifacts/"))).toBe(false);
   });
 });

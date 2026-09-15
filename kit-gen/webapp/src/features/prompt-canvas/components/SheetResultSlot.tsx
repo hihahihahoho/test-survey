@@ -30,6 +30,20 @@ import { SheetResultPanel } from "./result";
  * ║    thường như lúc không có lượt nào chạy;                                  ║
  * ║  · có tên tôi nhưng agent đã vẽ xong ⇒ ảnh đã có, thôi quay vòng chờ.      ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ╔══ CON BỌ 15/09/2026 — «ĐANG CHỜ» Ở TRÊN, «THIẾU FILE» Ở DƯỚI ════════════╗
+ * ║ Bấm «Vẽ lại tấm này» ⇒ panel hiện đúng dải «Đang chờ tới lượt… Đã gửi,    ║
+ * ║ chờ máy nhận», NHƯNG ô ảnh ngay bên dưới đỏ lên «Thiếu file · Thử lại»,   ║
+ * ║ kèm câu chú «Đây là ảnh của đúng lượt chạy này». Ba câu, cãi nhau cả ba.  ║
+ * ║ Vì bản trước neo theo MỘT bằng chứng: có tên trong lượt. Mà agent ghi sẵn ║
+ * ║ tên mọi job vào `run.json` ngay lúc mở lượt (`queued`), còn file          ║
+ * ║ `runs/<lượt>/artifacts/<tấm>.png` thì chỉ ra đời khi vẽ xong — nên suốt   ║
+ * ║ quãng chờ, ô ảnh đi xin một file chưa tồn tại và bỏ lại bức ảnh thật nằm  ║
+ * ║ sẵn ở `raw/<tấm>.png`.                                                    ║
+ * ║ Nên neo nay hỏi ĐÚNG câu nó cần: tấm này đã CÓ ẢNH trong thư mục của lượt ║
+ * ║ chưa (`gen.drawn` — đã kết + có đường ảnh thật). Chưa có ⇒ bản hiện hành,  ║
+ * ║ và dải chờ đứng trên nó thay vì thay nó.                                  ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 export interface SheetResultSlotProps {
   projectId: string;
@@ -43,10 +57,15 @@ export interface SheetResultSlotProps {
      vẽ SVG khung xương, và engine thôi dùng ảnh khung xương — xem khối chú thích
      đầu `SheetResultPanel`. Panel nay chỉ cần `sheetId` để lọc ô đã cắt. */
   /**
-   * Job THẬT SỰ nằm trong lượt `runId` (`gen.jobs`). Vắng tên tấm này ⇒ lượt ấy
-   * không đụng tới nó, và ảnh phải đọc từ bản hiện hành.
+   * Job ĐÃ VẼ XONG trong lượt `runId` **và đã có ảnh bất biến** (`gen.drawn`) —
+   * danh sách DUY NHẤT được phép neo ô ảnh vào thư mục của lượt.
+   *
+   * Vắng tên tấm này ⇒ ảnh đọc từ bản hiện hành (`raw/<tấm>.png`). Ba hoàn cảnh
+   * cùng rơi vào đó, và cả ba đều đúng: lượt không đụng tới tấm này; lượt có mang
+   * nó nhưng còn đang xếp hàng/đang vẽ; lượt vẽ hỏng tấm ấy. Trong cả ba, thứ
+   * người dùng đáng được nhìn là bức ảnh đang có, không phải một ô đỏ.
    */
-  runJobs?: readonly string[];
+  drawnJobs?: readonly string[];
   /** Job máy ĐANG VẼ ngay lúc này (`gen.drawing`) — tập con của `requestedJobs`. */
   drawingJobs?: readonly string[];
   /**
@@ -90,7 +109,7 @@ export function SheetResultSlot({
   sheetId,
   runId = null,
   artifactPath = null,
-  runJobs = [],
+  drawnJobs = [],
   drawingJobs = [],
   requestedJobs = [],
   blockBusy = false,
@@ -99,9 +118,11 @@ export function SheetResultSlot({
   onFitChange,
 }: SheetResultSlotProps) {
   const job = jobIdOf(sheetId);
-  /* Tấm có trong lượt ⇒ neo vào ảnh bất biến của lượt; không có ⇒ `null`, tức
-     `raw/<job>.png` — ảnh hiện hành, đúng thứ đang treo trên màn trước cú bấm. */
-  const mine = runJobs.includes(job) ? runId : null;
+  /* Tấm ĐÃ CÓ ẢNH trong lượt ⇒ neo vào ảnh bất biến của lượt; chưa có ⇒ `null`,
+     tức `raw/<job>.png` — ảnh hiện hành, đúng thứ đang treo trên màn trước cú bấm.
+     Hỏi "đã có ảnh chưa" chứ không hỏi "có tên trong lượt không": xem khối «CON BỌ
+     15/09/2026» ở đầu file. */
+  const mine = drawnJobs.includes(job) ? runId : null;
   const busy = drawingJobs.includes(job);
   /* ĐÃ XIN MÀ MÁY CHƯA CẦM TỚI. Hai trạng thái, không gộp: «đang vẽ» là lời hứa
      ảnh sắp về trong vài chục giây, còn «đang chờ» thì không hứa thời điểm nào. */

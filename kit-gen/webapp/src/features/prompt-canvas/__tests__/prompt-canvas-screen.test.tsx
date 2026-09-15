@@ -348,7 +348,7 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
         sheets={[sheet as never]}
         onChange={() => {}}
         onDelete={() => {}}
-        gen={{ status: "idle", message: "", runId: null, done: 0, total: 0, jobs: [], requested: [], drawing: [], phase: "idle" }}
+        gen={{ status: "idle", message: "", runId: null, done: 0, total: 0, jobs: [], requested: [], drawing: [], drawn: [], phase: "idle" }}
         onGen={() => {}}
         onGenSheet={() => {}}
         onDequeue={() => {}}
@@ -377,7 +377,7 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
           sheets={[sheet as never]}
           onChange={() => {}}
           onDelete={() => {}}
-          gen={{ status: "idle", message: "", runId: null, done: 0, total: 0, jobs: [], requested: [], drawing: [], phase: "idle" }}
+          gen={{ status: "idle", message: "", runId: null, done: 0, total: 0, jobs: [], requested: [], drawing: [], drawn: [], phase: "idle" }}
           onGen={() => {}}
           onGenSheet={() => {}}
           onDequeue={() => {}}
@@ -650,12 +650,18 @@ describe("bỏ qua tấm không đổi", () => {
         {/* HAI DANH SÁCH mà mỗi ô ảnh tra tên mình vào — xem `SheetResultSlot`. */}
         <span data-testid="jobs">{st.jobs.join(",")}</span>
         <span data-testid="drawing">{st.drawing.join(",")}</span>
+        {/* Tấm ĐÃ CÓ ẢNH trong thư mục của lượt — danh sách duy nhất được neo vào. */}
+        <span data-testid="drawn">{st.drawn.join(",")}</span>
       </div>
     );
   }
 
   /** Lượt chạy mang ĐÚNG những job này, đúng hình dạng `#34` trả về. */
-  const runWithJobs = (id: string, status: Run["status"], jobs: Array<{ job: string; status: string }>): Run => ({
+  const runWithJobs = (
+    id: string,
+    status: Run["status"],
+    jobs: Array<{ job: string; status: string; artifact?: { path: string } }>,
+  ): Run => ({
     ...makeRun(id, status, "running"),
     progress: { done: jobs.filter((j) => j.status === "ok").length, total: jobs.length, failed: 0, etaSeconds: null },
     jobs,
@@ -773,6 +779,86 @@ describe("bỏ qua tấm không đổi", () => {
       await waitFor(() => expect(screen.getByTestId("s").textContent).toBe("done"));
       expect(screen.getByTestId("jobs").textContent).toBe("chinh-b12");
       expect(screen.getByTestId("drawing").textContent).toBe("");
+    });
+  });
+
+  /**
+   * ╔══ CON BỌ 15/09/2026: «ĐANG CHỜ» Ở TRÊN, «THIẾU FILE» Ở DƯỚI ════════════╗
+   * ║ `jobs` trả lời câu «lượt này MANG tấm nào». Ô ảnh lại dùng nó để trả lời ║
+   * ║ một câu KHÁC: «tấm này đã có ảnh trong thư mục của lượt chưa». Hai câu ấy ║
+   * ║ lệch nhau suốt quãng job còn `queued` — agent ghi sẵn mọi tên lúc mở lượt ║
+   * ║ (`runs.mjs:156`), còn file artifact thì ra đời khi vẽ xong. Kết quả: dải  ║
+   * ║ «Đang chờ tới lượt…» và ô đỏ «Thiếu file · Thử lại» đứng chồng lên nhau.  ║
+   * ║ `drawn` là câu trả lời cho ĐÚNG câu hỏi thứ hai, và nó đòi hai bằng chứng:║
+   * ║ trạng thái đã kết VÀ có đường ảnh thật trong bản kê.                      ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  describe("nói ra tấm nào ĐÃ CÓ ẢNH của lượt", () => {
+    const launchTwo = () => {
+      H.startRun.mockResolvedValueOnce({
+        runId: "r-8", jobs: [{ job: "chinh-b1" }, { job: "chinh-b12" }], skipped: [],
+      });
+    };
+
+    it("job còn xếp hàng ⇒ CÓ TÊN trong lượt nhưng KHÔNG được neo vào lượt", async () => {
+      launchTwo();
+      H.getRun.mockImplementation(async (id: string) =>
+        runWithJobs(id, "running", [
+          { job: "chinh-b1", status: "queued" },
+          { job: "chinh-b12", status: "queued" },
+        ]));
+
+      wrap(<SkipHarness />);
+      fireEvent.click(screen.getByText("gen"));
+
+      await waitFor(() => expect(screen.getByTestId("s").textContent).toBe("running"));
+      expect(screen.getByTestId("jobs").textContent).toBe("chinh-b1,chinh-b12");
+      expect(screen.getByTestId("drawn").textContent).toBe("");
+    });
+
+    it("vẽ xong VÀ đã có đường ảnh ⇒ vào danh sách neo", async () => {
+      launchTwo();
+      H.getRun.mockImplementation(async (id: string) =>
+        runWithJobs(id, "running", [
+          { job: "chinh-b1", status: "ok", artifact: { path: "runs/r-8/artifacts/chinh-b1.png" } },
+          { job: "chinh-b12", status: "running" },
+        ]));
+
+      wrap(<SkipHarness />);
+      fireEvent.click(screen.getByText("gen"));
+
+      await waitFor(() => expect(screen.getByTestId("drawn").textContent).toBe("chinh-b1"));
+      expect(screen.getByTestId("drawing").textContent).toBe("chinh-b12");
+    });
+
+    it("vẽ xong mà bản kê KHÔNG có đường ảnh ⇒ vẫn không neo: không có gì để neo vào", async () => {
+      launchTwo();
+      H.getRun.mockImplementation(async (id: string) =>
+        runWithJobs(id, "running", [
+          { job: "chinh-b1", status: "ok" },
+          { job: "chinh-b12", status: "running" },
+        ]));
+
+      wrap(<SkipHarness />);
+      fireEvent.click(screen.getByText("gen"));
+
+      await waitFor(() => expect(screen.getByTestId("s").textContent).toBe("running"));
+      expect(screen.getByTestId("drawn").textContent).toBe("");
+    });
+
+    it("tấm vẽ HỎNG ⇒ không neo, dù lượt đã chốt sổ", async () => {
+      launchTwo();
+      H.getRun.mockImplementation(async (id: string) =>
+        runWithJobs(id, "done-with-errors", [
+          { job: "chinh-b1", status: "ok", artifact: { path: "runs/r-8/artifacts/chinh-b1.png" } },
+          { job: "chinh-b12", status: "failed" },
+        ]));
+
+      wrap(<SkipHarness />);
+      fireEvent.click(screen.getByText("gen"));
+
+      await waitFor(() => expect(screen.getByTestId("s").textContent).toBe("fail"));
+      expect(screen.getByTestId("drawn").textContent).toBe("chinh-b1");
     });
   });
 });

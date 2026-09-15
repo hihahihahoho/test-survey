@@ -96,13 +96,34 @@ export interface GenBlockState {
    * `requested` và được nói đúng tên việc: đang chờ tới lượt.
    */
   drawing: readonly string[];
+  /**
+   * TẤM ĐÃ VẼ XONG TRONG LƯỢT NÀY **VÀ ĐÃ CÓ ẢNH BẤT BIẾN** — tập con của `jobs`.
+   *
+   * ╔══ CON BỌ 15/09/2026, NỬA SAU ═══════════════════════════════════════════╗
+   * ║ Bấm «Vẽ lại tấm này» ⇒ panel hiện đúng dải «Đang chờ tới lượt…», NHƯNG ô  ║
+   * ║ ảnh ngay dưới đỏ lên «Thiếu file · Thử lại», kèm câu «Đây là ảnh của đúng ║
+   * ║ lượt chạy này». Hai chỉ báo cãi nhau trên cùng một panel.                 ║
+   * ║ Gốc: `jobs` trả lời câu «lượt này MANG tấm nào», và ô ảnh lại dùng nó để  ║
+   * ║ trả lời một câu KHÁC HẲN — «tấm này đã có ảnh trong thư mục của lượt      ║
+   * ║ chưa». Agent ghi tên mọi job vào `run.json` NGAY lúc mở lượt (`queued`),  ║
+   * ║ còn `runs/<lượt>/artifacts/<tấm>.png` thì chỉ ra đời khi vẽ xong. Quãng   ║
+   * ║ giữa hai mốc ấy — vài giây tới vài phút — ô ảnh đi xin một file chưa tồn  ║
+   * ║ tại, và bức ảnh đang có trên đĩa (`raw/<tấm>.png`) thì bị bỏ lại.         ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   *
+   * Nên danh sách này chỉ nhận tấm có ĐỦ HAI bằng chứng trong bản kê của lượt:
+   * trạng thái đã kết (không còn `queued`/`running`, không `failed`) VÀ có đường
+   * ảnh thật. Thiếu một trong hai ⇒ ô ảnh đọc bản hiện hành, đúng thứ đang treo
+   * trên màn trước cú bấm.
+   */
+  drawn: readonly string[];
   /** Pha NHÌN TỪ TẤM — xem `GenPhase`. */
   phase: GenPhase;
 }
 
 const IDLE: GenBlockState = {
   status: "idle", message: "", runId: null, done: 0, total: 0,
-  jobs: [], requested: [], drawing: [], phase: "idle",
+  jobs: [], requested: [], drawing: [], drawn: [], phase: "idle",
 };
 
 /** Câu DUY NHẤT cho ca "phải đợi tấm trước" — hai chỗ nói hai kiểu là hai sự thật. */
@@ -328,6 +349,9 @@ export function useGenQueue(
     const owner = entriesRef.current.find((e) => e.runId === activeRunId);
     if (owner) {
       const failed = data.jobs.filter((job) => job.status === "failed");
+      /* Lượt chết rồi thì danh sách này ĐÓNG BĂNG: tấm nào đã có ảnh trong thư mục
+         của lượt thì neo vào đó mãi, tấm hỏng giữa chừng thì ở lại với bản hiện hành. */
+      const drawn = drawnJobs(owner.jobs, data);
       setSettled((prev) => ({
         ...prev,
         [owner.blockId]: failed.length
@@ -341,6 +365,7 @@ export function useGenQueue(
                  thuộc lượt `runId` này để đọc đúng ảnh bất biến của nó — và tấm
                  KHÔNG thuộc lượt thì vẫn đọc ảnh hiện hành của mình. */
               jobs: owner.jobs,
+              drawn,
               /* LÝ DO, KHÔNG CHỈ CON SỐ. `failSummary` là câu agent đã gộp sẵn
                  (kiểu «2/3 job không ghi được ảnh · 1 nghi chạm giới hạn tạo
                  ảnh») — dùng nguyên văn để mọi bề mặt nói cùng một câu, đúng luật
@@ -357,6 +382,7 @@ export function useGenQueue(
               ...IDLE, status: "done", phase: "done", runId: activeRunId,
               done: data.jobs.length, total: data.jobs.length,
               jobs: owner.jobs,
+              drawn,
               /* Câu "tấm nào giữ nguyên" sống tới tận lúc chốt sổ: nó là lời giải
                  thích cho con số «1/2» mà người dùng vừa nhìn thấy chạy qua. */
               message: owner.message,
@@ -398,6 +424,7 @@ export function useGenQueue(
         jobs: entry.jobs,
         requested: owed,
         drawing,
+        drawn: drawnJobs(entry.jobs, payload),
         /* Không tấm nào còn nợ ⇒ lượt sắp chốt sổ, gọi là "đang vẽ" chứ không phải
            "đang chờ": chờ cái gì nữa khi mọi tấm đã có ảnh? */
         phase: drawing.length > 0 || owed.length === 0 ? "drawing" : "waiting",
@@ -484,7 +511,15 @@ export function useGenQueue(
 }
 
 /** Bản kê job của một lượt, đúng hình dạng `#33`/`#34` trả về. */
-type RunListing = { jobs?: readonly { job: string; status?: string }[] } | null;
+type RunListing = {
+  jobs?: readonly {
+    job: string;
+    status?: string;
+    /* Ảnh BẤT BIẾN của tấm trong lượt. Vắng ⇒ agent chưa chép được gì sang thư mục
+       của lượt, nên không có gì để neo vào — dù trạng thái nói gì đi nữa. */
+    artifact?: { path?: string } | null;
+  }[];
+} | null;
 
 /**
  * TẤM MỘT CÚ BẤM XIN VẼ — biết ngay lúc bấm, không đợi đi mạng.
@@ -542,6 +577,35 @@ function owedJobs(jobs: readonly string[], run: RunListing): string[] {
   return jobs.filter((job) => {
     const found = listed.find((item) => item.job === job);
     return !found || found.status === "queued" || found.status === "running";
+  });
+}
+
+/**
+ * TẤM ĐÃ CÓ ẢNH BẤT BIẾN TRONG LƯỢT — đủ điều kiện để ô ảnh neo vào thư mục lượt.
+ *
+ * ╔══ VÌ SAO KHÔNG DÙNG `jobs` CHO VIỆC NÀY ═════════════════════════════════╗
+ * ║ `agent/lib/runs.mjs:156` ghi SẴN tên mọi job vào `run.json` lúc mở lượt,   ║
+ * ║ trạng thái `queued`, và `runs/<lượt>/artifacts/<tấm>.png` chỉ ra đời sau   ║
+ * ║ khi vẽ xong. Nên "có tên trong lượt" KHÔNG đồng nghĩa "có ảnh của lượt":   ║
+ * ║ lấy cái nọ trả lời cái kia là bắt ô ảnh xin một file chưa tồn tại và bày   ║
+ * ║ ô đỏ, trong khi bản hiện hành nằm ngay trên đĩa.                           ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Hai bằng chứng, thiếu một là không neo:
+ *  · trạng thái đã KẾT — `queued`/`running` là chưa xong, `failed`/`never` là
+ *    không có ảnh nào để mà neo;
+ *  · có ĐƯỜNG ẢNH thật trong bản kê — thứ duy nhất chứng minh agent đã chép
+ *    xong snapshot sang thư mục của lượt.
+ */
+function drawnJobs(jobs: readonly string[], run: RunListing): string[] {
+  const listed = run?.jobs ?? [];
+  if (listed.length === 0) return [];
+  return jobs.filter((job) => {
+    const found = listed.find((item) => item.job === job);
+    if (!found) return false;
+    const status = found.status ?? "";
+    if (status === "queued" || status === "running" || status === "failed" || status === "never") return false;
+    return typeof found.artifact?.path === "string" && found.artifact.path !== "";
   });
 }
 

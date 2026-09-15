@@ -67,7 +67,7 @@ function mount(block: Block, onChange: (updater: (prev: Block) => Block) => void
       sheets={sheetsOf(block) as never}
       onChange={onChange}
       onDelete={() => {}}
-      gen={{ status: "idle", message: "", runId: null, done: 0, total: 0, jobs: [], requested: [], drawing: [], phase: "idle" }}
+      gen={{ status: "idle", message: "", runId: null, done: 0, total: 0, jobs: [], requested: [], drawing: [], drawn: [], phase: "idle" }}
       onGen={() => {}}
       onGenSheet={() => {}}
       onDequeue={() => {}}
