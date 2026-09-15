@@ -86,7 +86,9 @@ vi.mock("@/features/kit/lib/figma-kit-doc", () => ({
       groups: packEmpty ? [] : [{
         category: "ui",
         label: "Giao diện",
-        cells: files.map((f) => ({ file: f, name: f.file, group: "ui", spec: {}, left: 0, top: 0 })),
+        /* `spec` mang TÊN Ô: nút thí nghiệm đưa thẳng `spec` xuống đường dán, nên
+           không có tên thì ca "dán ô nào" chỉ đọc được `undefined`. */
+        cells: files.map((f) => ({ file: f, name: f.file, group: "ui", spec: { name: f.file }, left: 0, top: 0 })),
         bytes: 0,
       }],
       skipped: [],
@@ -116,6 +118,29 @@ vi.mock("@/features/kit/lib/figma-board", () => ({
     });
   },
 }));
+
+/**
+ * ══ NÚT THÍ NGHIỆM DÁN FIGMA — CỜ DEV, KHÔNG PHẢI TÍNH NĂNG ════════════════
+ *
+ * `figmaLabOn()` thật đọc `import.meta.env.DEV`, mà dưới vitest hằng số ấy LUÔN
+ * `true` — nên nếu gọi thẳng hàm thật thì ca "bản người dùng cầm không có nút này"
+ * không bao giờ kiểm được, tức là nửa quan trọng hơn của cái cổng không có ai canh.
+ * Vì vậy cờ được thay bằng một biến bật/tắt được, còn phần quyết định của chính
+ * `labFlagOn` thì có ca riêng ở `kit-core/lib/__tests__/figma-lab.test.ts`.
+ */
+let labOn = false;
+const labCalls: Array<{ name: string; url: string }> = [];
+vi.mock("@/features/kit-core/lib/figma-lab", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/features/kit-core/lib/figma-lab")>();
+  return {
+    ...real,
+    figmaLabOn: () => labOn,
+    copyFigmaLab: (spec: { name: string }, url: string) => {
+      labCalls.push({ name: spec.name, url });
+      return Promise.resolve({ html: "<i></i>", codes: [...real.LAB_CODES], bytes: 10 });
+    },
+  };
+});
 
 let kitFiles: KitFile[] = [];
 let kitLoading = false;
@@ -223,6 +248,8 @@ const mount = (props: Partial<React.ComponentProps<typeof SheetResultPanel>> = {
 
 beforeEach(() => {
   asked.length = 0;
+  labOn = false;
+  labCalls.length = 0;
   docCalls.length = 0;
   packCalls.length = 0;
   boardCalls.length = 0;
@@ -895,5 +922,59 @@ describe("«Khớp khung» — nấc của thẻ, và nó đi thẳng vào phép
     await screen.findByRole("button", { name: /Đã copy 1 ô/ });
     const noiDung = vi.mocked(feedback.toastSuccess).mock.calls[0]?.[1] ?? "";
     expect(noiDung).toContain("Cách khớp: Thân lấp khung · 115%");
+  });
+});
+
+/**
+ * ══ NÚT THÍ NGHIỆM DÁN FIGMA — HAI SỰ THẬT, VÀ SỰ THẬT ĐẦU LÀ "KHÔNG AI THẤY" ══
+ *
+ * Nó là một dụng cụ đo: dán một lượt ra nhiều kiểu đặt ảnh để xem Figma hiểu kiểu
+ * nào. Người dùng cuối không có việc gì với nó, và một nút như thế lọt ra bản
+ * release thì tệ gấp đôi — vừa rác, vừa dán ra một đống hộp không ai giải thích
+ * được. Nên ca đầu tiên canh đúng chỗ đó.
+ */
+const labButton = () => screen.queryByRole("button", { name: /Copy bản thử nhiều kiểu/ });
+
+describe("nút thí nghiệm dán Figma — chỉ sống ở bản dev", () => {
+  it("cờ TẮT (bản người dùng cầm) ⇒ KHÔNG có nút, và hàng nút còn nguyên như cũ", () => {
+    mount();
+    expect(labButton()).toBeNull();
+    expect(screen.getByRole("button", { name: /Copy 2 ô sang Figma/ })).toBeTruthy();
+  });
+
+  it("cờ BẬT ⇒ nút đứng cạnh nút copy, và chưa bấm thì chưa dán gì", () => {
+    labOn = true;
+    mount();
+    expect(labButton()).toBeTruthy();
+    expect(labCalls.length).toBe(0);
+  });
+
+  it("bấm ⇒ dán Ô ĐẦU của ĐÚNG tấm này, bằng ảnh gốc của ô đó", async () => {
+    labOn = true;
+    mount();
+    fireEvent.click(labButton()!);
+    await vi.waitFor(() => expect(labCalls.length).toBe(1));
+    /* Ô đầu của tấm «ui» sau khi bỏ bản trùng — KHÔNG phải ô của tấm «nen». */
+    expect(labCalls[0]!.name).toBe("tight/01-btn-pill");
+    expect(labCalls[0]!.url).toBe("blob:x");
+  });
+
+  it("chưa cắt ra ô nào ⇒ nút XÁM, bấm cũng không dán gì", () => {
+    labOn = true;
+    kitFiles = [];
+    mount();
+    const nut = labButton()!;
+    expect(nut.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(nut);
+    expect(labCalls.length).toBe(0);
+  });
+
+  it("đường copy THẬT không bị đụng tới: bấm nút thí nghiệm KHÔNG gọi nó", async () => {
+    labOn = true;
+    mount();
+    fireEvent.click(labButton()!);
+    await vi.waitFor(() => expect(labCalls.length).toBe(1));
+    expect(docCalls.length).toBe(0);
+    expect(boardCalls.length).toBe(0);
   });
 });

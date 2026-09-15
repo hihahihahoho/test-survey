@@ -257,8 +257,12 @@ export const IMAGE_LAYER_NAME = "image";
  * trong `computedStyles` (`figma-h2d.global.js:555-563`) — chuỗi `%` này chính là
  * thứ đi vào đó. Nhân ngược lại phải ra đúng số cũ: `(v * 100) / base` chứ không
  * `(v / base) * 100`, để bớt một lần làm tròn.
+ *
+ * XUẤT RA NGOÀI chỉ vì `figma-lab.ts` (thí nghiệm dán, chỉ có ở bản dev) phải viết
+ * `%` bằng ĐÚNG phép nhân này: hai công thức làm tròn khác nhau thì hai hộp dán cạnh
+ * nhau lệch vài phần nghìn pixel và ảnh chụp đem so mất nghĩa.
  */
-function pctOf(v: number, base: number): string {
+export function pctOf(v: number, base: number): string {
   if (!(base > 0)) throw new Error(`Khung ngoài ${base}px không chia được — số đo hỏng.`);
   return `${(v * 100) / base}%`;
 }

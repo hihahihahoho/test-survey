@@ -1,5 +1,8 @@
 import * as React from "react";
-import { Check, Clock, Download, FolderOpen, Grid2x2, Image as ImageIcon, Layers, Loader2, Sparkles, X } from "lucide-react";
+import {
+  Check, Clock, Download, FlaskConical, FolderOpen, Grid2x2, Image as ImageIcon, Layers, Loader2,
+  Sparkles, X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -16,6 +19,7 @@ import {
   BoardCancelled, PHASE_LABEL, buildFigmaBoard, type BoardProgress,
 } from "@/features/kit/lib/figma-board";
 import { BOARD_W, cellsOf, copyKitDoc, packKitDoc } from "@/features/kit/lib/figma-kit-doc";
+import { LAB_CODES, copyFigmaLab, figmaLabOn } from "@/features/kit-core/lib/figma-lab";
 import { toastError, toastInfo, toastSuccess } from "@/features/projects/lib/feedback";
 import { useContract, useKit, useProject, useRawHistory, useRevealProject, useRuns } from "@/lib/hooks";
 import { useUiStore } from "@/lib/store";
@@ -208,6 +212,8 @@ export function SheetResultPanel({
   const [progress, setProgress] = React.useState<BoardProgress | null>(null);
   /** Số ô vừa dán được; > 0 ⇒ nhãn nút đổi thành «Đã copy N ô» trong 2 giây. */
   const [copied, setCopied] = React.useState(0);
+  /** Nút thí nghiệm (chỉ bản dev) — xem `copyLab`. */
+  const [labBusy, setLabBusy] = React.useState(false);
   const abortRef = React.useRef<AbortController | null>(null);
 
   const contract = useContract(projectId);
@@ -576,6 +582,47 @@ export function SheetResultPanel({
     })();
   };
 
+  /**
+   * NÚT THÍ NGHIỆM — CHỈ BẢN DEV. Dán MỘT lần, ra N hộp cùng một ảnh viết N kiểu.
+   *
+   * ╔══ VÌ SAO NÓ TỒN TẠI ═════════════════════════════════════════════════════╗
+   * ║ Chủ sản phẩm dán thử bản mới (ảnh là fill của hộp trong, cỡ viết bằng `%`)║
+   * ║ và chụp lại: Constraints ra **Left / Top**, không phải Scale. Phần dịch    ║
+   * ║ CSS sang node nằm trong Figma desktop — không đọc được từ mã nguồn, và     ║
+   * ║ máy làm việc này không có Figma. Đoán tiếp là tốn thêm một vòng «sửa mù →  ║
+   * ║ nhờ dán thử → vẫn sai». Nên thay vì đoán: dọn sẵn CẢ CHÍN cách viết, dán   ║
+   * ║ một lần, chụp một lần, và lần sau sửa bằng số đo.                          ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   *
+   * Lấy Ô ĐẦU TIÊN của chính tấm này, qua ĐÚNG `packKitDoc` + `fitScale` mà nút
+   * chính đang dùng: thí nghiệm phải chạy trên số thật của một ô thật (có độ lệch
+   * âm, có phần co) — một ô vuông vắn tự bịa sẽ cho ảnh chụp đẹp mà vô nghĩa.
+   */
+  const copyLab = () => {
+    if (cells.length === 0) return;
+    setLabBusy(true);
+    void (async () => {
+      try {
+        const nodes = cellsOf(packKitDoc(framed.files, poseFiles, BOARD_W, { scale: fitScale }).groups);
+        const first = nodes[0];
+        if (first === undefined) throw new Error("Không ô nào của tấm này có đủ toạ độ vùng an toàn để dựng hộp.");
+        const url = await loadFull(projectId, first.file.path).promise;
+        const res = await copyFigmaLab(first.spec, url);
+        const soKieu = res.codes.length;
+        const oNao = first.name;
+        toastSuccess(
+          "Đã copy bản thử nhiều kiểu sang Figma",
+          `${soKieu} kiểu đặt ảnh của ô ${oNao}, xếp thành một hàng ngang, mỗi kiểu một hộp mang tên riêng.`
+          + " Dán bằng Ctrl/Cmd+V rồi chụp panel bên phải của từng hộp.",
+        );
+      } catch (err) {
+        toastError(err, {});
+      } finally {
+        setLabBusy(false);
+      }
+    })();
+  };
+
   const downloadSheet = () => {
     void saveProjectFile(projectId, rawPath)
       .then((saved) => toastSuccess("Đã tải ảnh gốc", saved.fileName))
@@ -753,6 +800,20 @@ export function SheetResultPanel({
               (`onFitChange`) ⇒ không bày: một nút đổi được mà không lưu được là
               một nút nói dối. */}
           {onFitChange && <SheetFitPicker fit={fit} onChange={onFitChange} />}
+          {/* NÚT THÍ NGHIỆM — chỉ có ở bản dev (hoặc bản đã build mở kèm `?lab=figma`).
+              Đứng cạnh «Khớp khung» vì nó dán ĐÚNG ô mà hai nút kia sắp dán, chỉ viết
+              ra nhiều kiểu; và nó KHÔNG đổi một byte nào của đường copy thật — xem
+              `figma-lab.ts`. Người dùng cuối không bao giờ thấy nút này. */}
+          {figmaLabOn() && (
+            <Button
+              type="button" variant="ghost" size="sm" onClick={copyLab}
+              disabled={cells.length === 0 || labBusy} loading={labBusy}
+              title={`Dựng ${LAB_CODES.length} kiểu đặt ảnh cạnh nhau rồi copy một lượt, để dán thử và xem Figma hiểu kiểu nào.`}
+            >
+              <FlaskConical aria-hidden strokeWidth={1.5} />
+              Copy bản thử nhiều kiểu
+            </Button>
+          )}
           {busyCells && (
             <Button type="button" variant="ghost" size="sm" onClick={() => abortRef.current?.abort()}>
               <X aria-hidden strokeWidth={1.5} />
