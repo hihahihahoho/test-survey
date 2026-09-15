@@ -13,9 +13,11 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  FIGMA_CLOSE, FIGMA_OPEN, FIGMETA_CLOSE, FIGMETA_OPEN,
-  analysisToJson, analyzeFigmaClipboardHtml, base64ToBytes, describeBytes,
-  extractFigmaClipboardBase64, inflateChunk, parseFigKiwiContainer,
+  FIGMA_CLOSE, FIGMA_OPEN, FIGMETA_CLOSE, FIGMETA_OPEN, HTML_HEAD_CHARS,
+  analysisToJson, analyzeFigmaClipboardHtml, base64ToBytes, countComments, countTags,
+  describeBytes, diagnoseHtml, escapeForPre, extractFigmaClipboardBase64, findMarkerForms,
+  findWordAround, imgSrcKinds, inflateChunk, listDataAttrs, parseFigKiwiContainer,
+  type ClipboardEntry,
 } from "../fig-kiwi";
 import { labFlagOn, LAB_QUERY_KEY, LAB_QUERY_VALUE } from "../figma-lab";
 import { PNG_HEAD, buildFixtureClipboard, bytesToBase64, packFigKiwi } from "./fig-fixture";
@@ -156,6 +158,171 @@ describe("mổ trọn một lượt dán", () => {
     const a = await analyzeFigmaClipboardHtml(html);
     expect(a.figmeta).toEqual({ fileKey: "x" });
     expect(a.errors.join(" ")).toMatch(/vỏ nhị phân/);
+  });
+});
+
+/**
+ * ┌── VÌ SAO CÓ CẢ MỘT CHÙM CA CHO PHẦN «KHÔNG THẤY MỐC» ────────────────────┐
+ * │ Lượt dán thật đầu tiên về: 46 203 ký tự HTML, không mốc nào. Phần chẩn    │
+ * │ đoán sinh ra để nói CÁI GÌ Ở TRONG 46 KB ấy, mà nó chỉ có một cơ hội duy  │
+ * │ nhất: chủ sản phẩm dán một lần rồi gửi JSON đi. Một phép đếm sai ở đây    │
+ * │ không đỏ ở đâu cả — nó chỉ làm cả vòng hỏi-đáp mất thêm một ngày. Nên mọi │
+ * │ hàm chẩn đoán đều THUẦN và đều bị canh bằng chuỗi dựng tay.               │
+ * └──────────────────────────────────────────────────────────────────────────┘
+ */
+describe("escape cho <pre>", () => {
+  it("ba ký tự, và `&` phải đi TRƯỚC", () => {
+    /* Escape `<` trước rồi mới escape `&` thì chính dấu `&` của `&lt;` vừa sinh
+       ra lại bị escape lần nữa: `<b>` hoá `&amp;lt;b&amp;gt;`, tức người đọc
+       nhận về rác thay vì HTML. Ca này canh đúng cái thứ tự đó. */
+    expect(escapeForPre("<b>a & b</b>")).toBe("&lt;b&gt;a &amp; b&lt;/b&gt;");
+  });
+
+  it("chuỗi đã escape sẵn KHÔNG bị escape thành rác hai lần… mà thành đúng một lần nữa", () => {
+    /* Hàm này không đoán xem chuỗi đã escape hay chưa — nó escape, thế thôi.
+       Ghi ra đây để người sau khỏi coi đó là lỗi. */
+    expect(escapeForPre("&lt;b&gt;")).toBe("&amp;lt;b&amp;gt;");
+  });
+});
+
+describe("đếm thẻ", () => {
+  it("chỉ đếm thẻ MỞ, và xếp từ nhiều xuống ít", () => {
+    const out = countTags("<div><span>a</span><span>b</span></div><div></div>");
+    expect(out).toEqual({ div: 2, span: 2 });
+    expect(Object.keys(out)).toEqual(["div", "span"]);
+  });
+
+  it("thẻ đóng KHÔNG bị đếm — nếu không mọi con số nhân đôi vô nghĩa", () => {
+    expect(countTags("<p>x</p>")).toEqual({ p: 1 });
+  });
+
+  it("chú thích và nội dung chữ không thành thẻ", () => {
+    expect(countTags("<!--(figma)AAA(/figma)--> 3 < 4")).toEqual({});
+  });
+
+  it("tên thẻ gộp về chữ thường, giữ cả dấu gạch nối của web component", () => {
+    expect(countTags("<DIV><my-card>")).toEqual({ div: 1, "my-card": 1 });
+  });
+});
+
+describe("tên thuộc tính data-*", () => {
+  it("không trùng lặp, xếp theo chữ cái", () => {
+    const html = `<div data-Slate-Node="x" data-pm-slice="1"><b data-slate-node="y"></b></div>`;
+    expect(listDataAttrs(html)).toEqual(["data-pm-slice", "data-slate-node"]);
+  });
+
+  it("vượt trần ⇒ cắt và ĐẾM phần dư, không lặng lẽ bỏ", () => {
+    const html = ["a", "b", "c", "d"].map((n) => `<i data-${n}="1"></i>`).join("");
+    expect(listDataAttrs(html, 2)).toEqual(["data-a", "data-b", "+2 ten nua"]);
+  });
+});
+
+describe("tìm chữ «figma» trong HTML", () => {
+  it("không phân biệt hoa thường, trả về vị trí và lát cắt ĐÃ escape", () => {
+    const hit = findWordAround("<p>FiGmA</p>", "figma", 20);
+    expect(hit?.index).toBe(3);
+    expect(hit?.around).toContain("&lt;p&gt;FiGmA");
+  });
+
+  it("không có ⇒ null chứ không phải chuỗi rỗng", () => {
+    expect(findWordAround("<p>xin chào</p>", "figma")).toBeNull();
+  });
+});
+
+describe("nguồn ảnh trong HTML", () => {
+  it("tách ba dạng khác hẳn nhau: nhúng thẳng, blob của trang, tải từ máy chủ", () => {
+    const html = [
+      `<img src="data:image/png;base64,AAAA">`,
+      `<img src='data:image/jpeg,AAAA'>`,
+      `<img src="blob:https://figma.com/abc">`,
+      `<img src=https://x.test/a.png>`,
+      `<img alt="không có src">`,
+    ].join("");
+    expect(imgSrcKinds(html)).toEqual({ "data:image/png": 1, "data:image/jpeg": 1, "blob:": 1, http: 1 });
+  });
+
+  it("đường dẫn thường được gọi là «khac», không bị nhét bừa vào http", () => {
+    expect(imgSrcKinds(`<img src="./a.png">`)).toEqual({ khac: 1 });
+  });
+});
+
+describe("đếm chú thích", () => {
+  it("số lần mở `<!--` — số 0 là bằng chứng khối chú thích đã bị lọc mất", () => {
+    expect(countComments("<!--a--><!--b--><p>c</p>")).toBe(2);
+    expect(countComments("<p>c</p>")).toBe(0);
+  });
+});
+
+describe("tìm mốc theo NHIỀU dạng", () => {
+  it("mốc bị escape vẫn tìm ra, và nói rõ nó ở dạng nào", () => {
+    /* Đây là giả thuyết số một cho 46 KB không mốc: HTML đi qua một chỗ nào đó
+       biến `<` thành `&lt;`, mốc còn nguyên chữ nhưng không còn là chú thích. */
+    const forms = findMarkerForms(`<div>&lt;!--(figmeta)eyJhIjoxfQ==(/figmeta)--&gt;</div>`);
+    expect(forms.map((f) => f.form)).toEqual(["figmeta-escaped", "figmeta-tran"]);
+    expect(forms[0]?.sample).toContain("&amp;lt;!--(figmeta)");
+  });
+
+  it("mốc có khoảng trắng chen vào ⇒ dạng «noi-long» bắt được, dạng «chuan» thì không", () => {
+    const forms = findMarkerForms("<!-- (figmeta) -->");
+    expect(forms.map((f) => f.form)).toEqual(["figmeta-noi-long", "figmeta-tran"]);
+  });
+
+  it("mốc chuẩn hiện ở CẢ hai dòng — đó là đúng, vì «noi-long» là câu hỏi chứ không phải mốc khác", () => {
+    const forms = findMarkerForms(`${FIGMETA_OPEN}AA${FIGMETA_CLOSE}${FIGMA_OPEN}BB${FIGMA_CLOSE}`);
+    expect(forms.map((f) => f.form)).toEqual([
+      "figmeta-chuan", "figma-chuan", "figmeta-noi-long", "figma-noi-long", "figmeta-tran",
+    ]);
+  });
+
+  it("tên `figma-clipboard` không ngoặc vẫn được gọi ra", () => {
+    const forms = findMarkerForms(`<div class="figma-clipboard"></div>`);
+    expect(forms.map((f) => f.form)).toEqual(["figma-clipboard"]);
+  });
+
+  it("HTML thường ⇒ KHÔNG dạng nào, chứ không phải một dạng rỗng", () => {
+    expect(findMarkerForms("<p>xin chào</p>")).toEqual([]);
+  });
+});
+
+describe("bản mô tả HTML thô", () => {
+  it("cắt đúng trần và escape phần đầu", () => {
+    const d = diagnoseHtml(`<b>${"x".repeat(HTML_HEAD_CHARS)}</b>`);
+    expect(d.htmlHead.startsWith("&lt;b&gt;")).toBe(true);
+    /* Cắt TRƯỚC rồi escape, nên chuỗi ra dài hơn trần — escape làm một ký tự nở
+       ra bốn. Trần đếm ký tự HTML GỐC, và đó là ý muốn: nó là trần của lượng
+       thông tin chở theo, không phải trần của chuỗi in ra. */
+    expect(d.htmlHead.length).toBeGreaterThanOrEqual(HTML_HEAD_CHARS);
+    expect(d.htmlHead).not.toContain("<b>");
+  });
+
+  it("gộp đủ sáu phép đo", () => {
+    const d = diagnoseHtml(`<!--x--><div data-q="1"><img src="blob:a">figma</div>`);
+    expect(d.tagCounts).toEqual({ div: 1, img: 1 });
+    expect(d.dataAttrs).toEqual(["data-q"]);
+    expect(d.imgSrcKinds).toEqual({ "blob:": 1 });
+    expect(d.commentCount).toBe(1);
+    expect(d.hasFigmaWord?.index).toBe(42);
+    expect(d.markerForms).toEqual([]);
+  });
+});
+
+describe("bản phân tích khi THIẾU mốc", () => {
+  it("thiếu mốc ⇒ có bản mô tả HTML; đủ mốc ⇒ KHÔNG có, vì lúc đó nó là tiếng ồn", async () => {
+    const thieu = await analyzeFigmaClipboardHtml(`<div data-slate-node="x">46 KB gì đó</div>`, ["text/html"]);
+    expect(thieu.htmlDiag?.dataAttrs).toEqual(["data-slate-node"]);
+    expect(thieu.htmlDiag?.markerForms).toEqual([]);
+
+    const { html } = await buildFixtureClipboard();
+    expect((await analyzeFigmaClipboardHtml(html)).htmlDiag).toBeNull();
+  });
+
+  it("bảng kê bộ nhớ tạm được chở nguyên vào bản phân tích", async () => {
+    const detail: ClipboardEntry[] = [
+      { type: "text/html", kind: "chuoi", chars: 46203 },
+      { type: "image/png", kind: "file", chars: null, fileName: "image.png", bytes: 1234 },
+    ];
+    const a = await analyzeFigmaClipboardHtml("<p>x</p>", ["text/html", "Files"], detail);
+    expect(a.clipboardDetail).toEqual(detail);
   });
 });
 

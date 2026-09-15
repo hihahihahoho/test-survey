@@ -85,6 +85,183 @@ export function base64ToBytes(b64: string): Uint8Array {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   ①ʙ KHI KHÔNG THẤY MỐC — ĐO CHÍNH CHUỖI HTML ẤY
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * ┌── VÌ SAO CÓ PHẦN NÀY (15/09/2026) ───────────────────────────────────────┐
+ * │ Lượt dán THẬT đầu tiên về tay: `text/html`, 46 203 ký tự, và KHÔNG có mốc │
+ * │ nào. Bốn mươi sáu KB đó là gì thì chưa ai ở đây biết, mà câu «không thấy  │
+ * │ mốc» lại không chẩn ra được điều gì: nó đúng với cả lượt copy từ panel    │
+ * │ Layers, cả «Copy as PNG/SVG», cả chuyện trình duyệt lọc mất khối chú      │
+ * │ thích, cả chuyện Figma đổi định dạng. Bốn lối rẽ, một câu trả lời — tức   │
+ * │ là chưa đo gì cả. Nên khi thiếu mốc, bàn mổ quay sang đo CÁI HTML đó.     │
+ * │                                                                          │
+ * │ Mọi hàm dưới đây THUẦN: vào một chuỗi, ra một bản mô tả. Không DOM, không │
+ * │ mạng, không bộ nhớ tạm — nên test canh được thẳng, không cần trình duyệt. │
+ * └──────────────────────────────────────────────────────────────────────────┘
+ */
+
+/** Bao nhiêu ký tự đầu của HTML được chở theo bản phân tích. */
+export const HTML_HEAD_CHARS = 2000;
+/** Bề rộng lát cắt quanh một chỗ tìm thấy, tính bằng ký tự. */
+export const AROUND_CHARS = 200;
+/** Trần số tên thuộc tính `data-*` liệt kê ra — phần dư được đếm thành một dòng. */
+export const DATA_ATTR_CAP = 200;
+
+/**
+ * Escape để một mẩu HTML thô hiện ra NGUYÊN VĂN trong `<pre>`, không tự dựng cây.
+ * Ba ký tự là đủ và phải theo đúng thứ tự này: `&` trước, nếu không thì chính
+ * dấu `&` của `&lt;` vừa sinh ra lại bị escape lần nữa thành `&amp;lt;`.
+ */
+export function escapeForPre(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * Đếm thẻ theo tên. Chỉ bắt thẻ MỞ (`</div` không khớp vì sau dấu `<` là `/`,
+ * không phải chữ cái) — đếm cả thẻ đóng thì mọi con số nhân đôi một cách vô nghĩa.
+ * Trả về đã xếp từ nhiều xuống ít: cái đọc bản báo cáo muốn biết HTML này chủ yếu
+ * làm bằng thẻ gì, chứ không phải thứ tự chữ cái.
+ */
+export function countTags(html: string): Record<string, number> {
+  const tally = new Map<string, number>();
+  const re = /<([a-zA-Z][a-zA-Z0-9:-]*)/g;
+  for (let m = re.exec(html); m !== null; m = re.exec(html)) {
+    const name = (m[1] as string).toLowerCase();
+    tally.set(name, (tally.get(name) ?? 0) + 1);
+  }
+  const out: Record<string, number> = {};
+  for (const [name, n] of [...tally].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) out[name] = n;
+  return out;
+}
+
+/**
+ * Tên mọi thuộc tính `data-*` có mặt, không trùng lặp. Đây là chỗ một trình soạn
+ * thảo tự khai tên nó ra (`data-slate-node`, `data-pm-slice`, …) — nếu 46 KB kia
+ * đến từ một app khác chứ không phải Figma thì dấu vết nằm ở đây.
+ */
+export function listDataAttrs(html: string, cap = DATA_ATTR_CAP): string[] {
+  const found = new Set<string>();
+  const re = /\bdata-([a-zA-Z0-9_:.-]+)\s*=/g;
+  for (let m = re.exec(html); m !== null; m = re.exec(html)) found.add(`data-${(m[1] as string).toLowerCase()}`);
+  const all = [...found].sort();
+  if (all.length <= cap) return all;
+  return [...all.slice(0, cap), `+${all.length - cap} ten nua`];
+}
+
+export interface WordHit {
+  /** Vị trí ký tự đầu tiên tìm thấy, tính trên chuỗi gốc. */
+  index: number;
+  /** Lát cắt quanh chỗ đó, ĐÃ escape — chở được qua JSON và qua `<pre>`. */
+  around: string;
+}
+
+/** Tìm một chuỗi con, không phân biệt hoa thường, kèm lát cắt quanh nó. */
+export function findWordAround(html: string, word: string, around = AROUND_CHARS): WordHit | null {
+  const at = html.toLowerCase().indexOf(word.toLowerCase());
+  if (at < 0) return null;
+  const from = Math.max(0, at - Math.floor(around / 2));
+  return { index: at, around: escapeForPre(html.slice(from, from + around)) };
+}
+
+/**
+ * Ảnh trong HTML đó nằm ở dạng nào: nhúng thẳng (`data:image/…`), trỏ vào bộ nhớ
+ * của trang (`blob:`), hay tải từ máy chủ (`http…`). Ba dạng ấy nói ba chuyện khác
+ * hẳn nhau về việc có lấy được ảnh ra không, nên chúng được đếm riêng.
+ * Khoá viết KHÔNG DẤU: đây là tên trường của bản báo cáo máy đọc, không phải câu
+ * nói với người dùng.
+ */
+export function imgSrcKinds(html: string): Record<string, number> {
+  const out: Record<string, number> = {};
+  const re = /<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s">]+))/gi;
+  for (let m = re.exec(html); m !== null; m = re.exec(html)) {
+    const src = (m[1] ?? m[2] ?? m[3] ?? "").trim().toLowerCase();
+    let kind: string;
+    if (src.startsWith("data:image/")) {
+      const end = [src.indexOf(";"), src.indexOf(","), 40].filter((i) => i > 0).sort((a, b) => a - b)[0] as number;
+      kind = src.slice(0, end);
+    } else if (src.startsWith("data:")) kind = "data:khac";
+    else if (src.startsWith("blob:")) kind = "blob:";
+    else if (src.startsWith("http")) kind = "http";
+    else if (src === "") kind = "rong";
+    else kind = "khac";
+    out[kind] = (out[kind] ?? 0) + 1;
+  }
+  return out;
+}
+
+/** Số lần mở chú thích `<!--`. Mốc của Figma NẰM TRONG chú thích, nên con số 0 ở
+ *  đây là bằng chứng mạnh rằng khối chú thích đã bị lọc mất chứ không phải nó
+ *  nằm sai chỗ. */
+export function countComments(html: string): number {
+  return (html.match(/<!--/g) ?? []).length;
+}
+
+export interface MarkerHit {
+  /** Tên dạng tìm thấy, viết không dấu để làm khoá đối chiếu. */
+  form: string;
+  index: number;
+  /** Đúng mẩu chữ đã khớp cộng phần đuôi, ĐÃ escape. */
+  sample: string;
+}
+
+/**
+ * Tìm mốc THEO NHIỀU DẠNG, không chỉ dạng chuẩn. Ba dạng còn lại đều đã thấy
+ * ngoài đời ở chỗ khác: mốc bị escape khi HTML đi qua một ô soạn thảo
+ * (`&lt;!--(figmeta)`), mốc bị chèn khoảng trắng khi đi qua một bộ làm đẹp HTML,
+ * và tên `figma-clipboard` mà một số đường xuất dùng thay cho cặp ngoặc.
+ *
+ * Dạng «noi-long» CỐ Ý khớp cả dạng chuẩn: nó không phải một mốc khác, nó là câu
+ * hỏi «có khoảng trắng chen vào không» — và `sample` chở ra đúng mẩu chữ đã khớp
+ * để người đọc tự thấy. Một mốc chuẩn sẽ hiện ở CẢ HAI dòng, đó là đúng.
+ */
+const MARKER_FORMS: readonly { form: string; re: RegExp }[] = [
+  { form: "figmeta-chuan", re: /<!--\(figmeta\)/ },
+  { form: "figma-chuan", re: /<!--\(figma\)/ },
+  { form: "figmeta-noi-long", re: /<!--\s*\(\s*figmeta\s*\)/i },
+  { form: "figma-noi-long", re: /<!--\s*\(\s*figma\s*\)/i },
+  { form: "figmeta-escaped", re: /&lt;!--\s*\(\s*figmeta\s*\)/i },
+  { form: "figma-escaped", re: /&lt;!--\s*\(\s*figma\s*\)/i },
+  { form: "figma-clipboard", re: /figma-clipboard/i },
+  { form: "figmeta-tran", re: /figmeta/i },
+];
+
+export function findMarkerForms(html: string, around = AROUND_CHARS): MarkerHit[] {
+  const out: MarkerHit[] = [];
+  for (const { form, re } of MARKER_FORMS) {
+    const m = re.exec(html);
+    if (m === null || m.index < 0) continue;
+    out.push({ form, index: m.index, sample: escapeForPre(html.slice(m.index, m.index + around)) });
+  }
+  return out;
+}
+
+export interface HtmlDiagnostics {
+  /** Hai nghìn ký tự đầu, ĐÃ escape — chỗ duy nhất nói ra HTML này TRÔNG như thế nào. */
+  htmlHead: string;
+  tagCounts: Record<string, number>;
+  dataAttrs: string[];
+  hasFigmaWord: WordHit | null;
+  imgSrcKinds: Record<string, number>;
+  commentCount: number;
+  markerForms: MarkerHit[];
+}
+
+/** Gộp cả sáu phép đo lại thành một bản mô tả. Thuần, không ném. */
+export function diagnoseHtml(html: string): HtmlDiagnostics {
+  return {
+    htmlHead: escapeForPre(html.slice(0, HTML_HEAD_CHARS)),
+    tagCounts: countTags(html),
+    dataAttrs: listDataAttrs(html),
+    hasFigmaWord: findWordAround(html, "figma"),
+    imgSrcKinds: imgSrcKinds(html),
+    commentCount: countComments(html),
+    markerForms: findMarkerForms(html),
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    ② VỎ «fig-kiwi» — HÀM THUẦN, TÁCH HẲN KHỎI PHẦN GIẢI NÉN
    ══════════════════════════════════════════════════════════════════════════ */
 
@@ -309,9 +486,28 @@ export interface ChunkReport {
   method: InflateMethod;
 }
 
+/**
+ * Một dòng của bảng kê bộ nhớ tạm. Danh sách `types` mới chỉ nói CÓ những kiểu
+ * gì; muốn biết kiểu nào rỗng và kiểu nào chở thật thì phải có ĐỘ DÀI, và tệp
+ * đính kèm thì không đi qua `getData` nên phải đếm riêng bằng `items`.
+ * Tên trường viết không dấu: đây là bản báo cáo máy đọc.
+ */
+export interface ClipboardEntry {
+  type: string;
+  /** "chuoi" (lấy bằng `getData`) hay "file" (lấy bằng `items[].getAsFile`). */
+  kind: "chuoi" | "file";
+  /** Số ký tự của phần chuỗi; `null` khi kiểu này không lấy ra được bằng `getData`. */
+  chars: number | null;
+  fileName?: string;
+  bytes?: number;
+  note?: string;
+}
+
 export interface FigAnalysis {
   /** Mọi kiểu dữ liệu mà bộ nhớ tạm chào ra — in cả để biết còn cửa nào khác không. */
   clipboardTypes: string[];
+  /** Từng kiểu chở bao nhiêu — xem `ClipboardEntry`. */
+  clipboardDetail: ClipboardEntry[];
   htmlChars: number;
   figmetaBase64Chars: number;
   figmaBase64Chars: number;
@@ -336,6 +532,11 @@ export interface FigAnalysis {
     blobCount: number;
     blobs: BlobSummary[];
   } | null;
+  /**
+   * Chỉ có mặt KHI THIẾU MỐC. Lúc payload mở ra được thì bản mô tả HTML thô là
+   * tiếng ồn; lúc không, nó là toàn bộ manh mối. Xem mục ①ʙ.
+   */
+  htmlDiag: HtmlDiagnostics | null;
   /** Mọi chỗ hỏng, viết ra hết — một bản phân tích im lặng còn tệ hơn không có. */
   errors: string[];
 }
@@ -345,9 +546,10 @@ function errText(err: unknown): string {
 }
 
 /** Bản phân tích rỗng — dùng chung để mọi đường lỗi vẫn trả về đúng một hình dạng. */
-function emptyAnalysis(types: string[], htmlChars: number): FigAnalysis {
+function emptyAnalysis(types: string[], htmlChars: number, detail: ClipboardEntry[]): FigAnalysis {
   return {
     clipboardTypes: types,
+    clipboardDetail: detail,
     htmlChars,
     figmetaBase64Chars: 0,
     figmaBase64Chars: 0,
@@ -356,6 +558,7 @@ function emptyAnalysis(types: string[], htmlChars: number): FigAnalysis {
     chunks: [],
     schema: null,
     message: null,
+    htmlDiag: null,
     errors: [],
   };
 }
@@ -364,9 +567,18 @@ function emptyAnalysis(types: string[], htmlChars: number): FigAnalysis {
  * Mổ một chuỗi HTML bộ nhớ tạm. KHÔNG ném: mọi hỏng hóc đi vào `errors` để phần
  * đọc được vẫn đọc được — một payload mở được nửa chừng vẫn nói được nhiều điều.
  */
-export async function analyzeFigmaClipboardHtml(html: string, clipboardTypes: string[] = []): Promise<FigAnalysis> {
-  const out = emptyAnalysis(clipboardTypes, html.length);
+export async function analyzeFigmaClipboardHtml(
+  html: string,
+  clipboardTypes: string[] = [],
+  clipboardDetail: ClipboardEntry[] = [],
+): Promise<FigAnalysis> {
+  const out = emptyAnalysis(clipboardTypes, html.length, clipboardDetail);
   const b64 = extractFigmaClipboardBase64(html);
+
+  /* THIẾU DÙ CHỈ MỘT MỐC ⇒ đo luôn chuỗi HTML. Đo cả khi chỉ thiếu một nửa là có
+     chủ ý: nửa còn lại vẫn không dựng lại được cái gì, mà manh mối thì chỉ lấy
+     được đúng lúc còn giữ chuỗi trong tay. */
+  if (b64.figmeta === null || b64.figma === null) out.htmlDiag = diagnoseHtml(html);
 
   if (b64.figmeta === null) {
     out.errors.push("Không thấy mốc (figmeta) trong HTML — lượt dán này không đến từ Figma.");
@@ -507,6 +719,14 @@ export function analysisToJson(analysis: FigAnalysis, maxBytes = ANALYSIS_MAX_BY
     }),
     (a) => ({
       ...a,
+      htmlDiag: a.htmlDiag === null ? null : {
+        ...a.htmlDiag,
+        htmlHead: a.htmlDiag.htmlHead.slice(0, 400),
+        dataAttrs: a.htmlDiag.dataAttrs.slice(0, 40),
+      },
+    }),
+    (a) => ({
+      ...a,
       message: a.message === null ? null : { ...a.message, nodes: a.message.nodes.slice(0, 40) },
     }),
     (a) => ({
@@ -532,7 +752,9 @@ export function analysisToJson(analysis: FigAnalysis, maxBytes = ANALYSIS_MAX_BY
     daCat: true,
     ghiChu: "Ban day du vuot tran, chi con phan dau. Hay noi rong tran roi lay lai.",
     clipboardTypes: cut.clipboardTypes,
+    clipboardDetail: cut.clipboardDetail,
     htmlChars: cut.htmlChars,
+    markerForms: cut.htmlDiag?.markerForms ?? null,
     container: cut.container,
     chunks: cut.chunks,
     schemaDefinitionCount: cut.schema?.definitionCount ?? null,
