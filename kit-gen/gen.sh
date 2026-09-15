@@ -265,6 +265,55 @@ def core_aspect(out):
           else _boi_so(muoi) + " times taller than wide")
     return f"core aspect 1:{muoi / 10:g} ({ta})"
 
+
+# ╔══ 15/09/2026 — HỘP IN RA LÀ Ô ĐÃ THỤT VÀO, KHÔNG PHẢI Ô ══════════════════════╗
+# ║ Ba lượt đo liên tiếp trên cùng một tấm (1254², lưới 2×2 ⇒ ô 627px; banner ô 1  ║
+# ║ khai «core aspect 3.9:1»), đo cột có sơn α≥32 ở nửa trên:                      ║
+# ║   · r-0040 — dòng ô CHƯA có hộp nào:          x=46..864 ⇒ lấn ô 2 mất 237 px;  ║
+# ║   · r-0044 — có «its cell is x=0..627 … stays inside that cell» (11cf121):     ║
+# ║                                                x=29..740 ⇒ lấn 113 px;         ║
+# ║   · r-0047 — cùng câu ấy, lượt khác:           x=25..690 ⇒ lấn  63 px.         ║
+# ║                                                                                ║
+# ║ Đọc ra hai điều. ① Hộp bằng số CÓ tác dụng: 237 → 113 → 63 px. ② Model không   ║
+# ║ dừng ĐÚNG ở mép hộp — nó tràn vài chục tới trăm px, và phần tràn luôn là TRANG  ║
+# ║ TRÍ (nhánh holly, cái nơ ở hai đầu banner). Mà dao cắt (`slice.py`) cắt theo Ô: ║
+# ║ phần tràn ấy vừa bị chém cụt vừa dính sang ảnh của ô bên cạnh.                  ║
+# ║                                                                                ║
+# ║ Nên hộp ta HỨA không còn là ô: nó là ô THỤT VÀO đúng cái lề mà `geometry.py`    ║
+# ║ đã định cho chính ô ấy (`cell_margin_ratio` → 0,10, hoặc 0,20 nếu ô có trang    ║
+# ║ trí). Model vẫn tràn vài chục px như thường lệ — nhưng nay nó tràn vào phần ô   ║
+# ║ CÒN TRỐNG, tức vẫn nằm trong khung dao cắt, chứ không tràn sang hàng xóm. Lề    ║
+# ║ 62px trên ô 627 vừa đúng cỡ phần tràn đo được ở r-0047.                        ║
+# ║                                                                                ║
+# ║ ⚠️ Tỉ lệ lề chỉ được lấy từ `geometry.cell_margin_ratio` / `geometry.cell_inner`:║
+# ║ `slice.py` dựng safe zone bằng đúng hai hàm ấy. Gõ tay 0.10 ở đây là dựng bản   ║
+# ║ lề thứ hai, và hai bản lề lệch nhau LẶNG LẼ.                                    ║
+# ╚════════════════════════════════════════════════════════════════════════════════╝
+def inner_box(cell, skel):
+    """Hộp THỤT VÀO của một ô → ``(x0, y0, x1, y1)`` trên sheet.
+
+    Căn giữa bằng `//2` (chia lấy nguyên) chứ không `round(…/2)` — đúng phép mà
+    `geometry.safe_offset_in_cell` dùng, nên hộp hứa và hộp cắt không lệch nửa pixel.
+    """
+    cx0, cy0, cx1, cy1 = cell
+    cw, ch = cx1 - cx0, cy1 - cy0
+    iw, ih = geometry.cell_inner(cw, ch, geometry.cell_margin_ratio(skel))
+    dx, dy = (cw - iw) // 2, (ch - ih) // 2
+    return cx0 + dx, cy0 + dy, cx0 + dx + iw, cy0 + dy + ih
+
+
+def gutter_px(cell_w, cell_h):
+    """Bề rộng dải mép ô PHẢI TRỐNG → một con số px, cho câu «Layout».
+
+    Lấy cạnh HẸP HƠN trong hai cạnh: câu trong prompt chỉ có chỗ cho MỘT con số, và
+    một lời hứa nhỏ hơn sự thật thì vẫn đúng ở cả hai trục, còn lớn hơn thì sai ở
+    một trục. Lề THƯỜNG chứ không phải lề trang trí: đây là dải trống chung cho mọi
+    ô của tấm, mà ô có trang trí chỉ chừa RỘNG HƠN chứ không hẹp hơn.
+    """
+    iw, ih = geometry.cell_inner(cell_w, cell_h)
+    return min((cell_w - iw) // 2, (cell_h - ih) // 2)
+
+
 cfg = json.load(open("styles.json", encoding="utf-8"))
 
 # ╔══ PROMPT ĐƯỢC LẮP THEO LỐI COMPOSITION ════════════════════════════════════╗
@@ -568,9 +617,12 @@ for s in cfg["styles"]:
             # Xem khối «HỘP Ô QUAY LẠI» ở phần danh sách element bên dưới: bỏ sạch số
             # đo khỏi prompt (e5a3f2a) thì model hết thứ để biết một ô rộng bao nhiêu,
             # và nó vẽ banner tràn sang ô bên. Cỡ ô đứng ở «Layout» vì nó đúng cho CẢ
-            # tấm; hộp toạ độ của từng ô thì ở dòng của ô ấy. Tấm 1 ô không in: ô ấy
-            # chính là khổ ảnh, và «Canvas» đã nói khổ ảnh ở dòng thứ hai của prompt.
+            # tấm; hộp toạ độ của từng ô thì ở dòng của ô ấy. Tấm 1 ô không in CỠ Ô:
+            # ô ấy chính là khổ ảnh, và «Canvas» đã nói khổ ảnh ở dòng thứ hai của
+            # prompt. (Hộp THỤT VÀO ở dòng element thì tấm 1 ô vẫn in — nó là một con
+            # số khác khổ ảnh; xem khối «HỘP Ô QUAY LẠI» bên dưới.)
             cell_px = ""
+            _cw = _ch = 0
             if cols * rows > 1:
                 _cw, _ch = geometry.cell_size(canvas_w, canvas_h, cols, rows)
                 cell_px = f" of {_cw}x{_ch} px cells"
@@ -585,9 +637,20 @@ for s in cfg["styles"]:
             # mà ô không chứa nổi. Nên tỉ lệ phải đi kèm một câu nói ai nhường ai:
             # ô là giới hạn cứng, tỉ lệ được vẽ NHỎ LẠI cho vừa ô, không nong ô ra.
             if cols * rows > 1 and profile in ("ui", "mascot"):
-                layout.append("A wide element is at most as wide as its cell: if the cell cannot"
-                              " hold the core at its ratio at the size you want, draw it smaller"
-                              " — never wider than the cell.")
+                layout.append("A wide element is at most as wide as the box on its line: if the"
+                              " box cannot hold the core at its ratio at the size you want, draw"
+                              " it smaller — never wider than the box.")
+                # ── 15/09/2026 — RÃNH TRỐNG, NÓI BẰNG SỐ, MỘT LẦN CHO CẢ TẤM ─────
+                # Hộp trên dòng của ô nói ô ấy được vẽ TỚI ĐÂU; nó không nói vì sao
+                # phần còn lại phải trống, nên model đọc ra "chừa cho đẹp" và tràn
+                # ra bằng cành lá với cái nơ (đo r-0047: hộp ô 0..627, sơn tới 690).
+                # Câu này nói thẳng phần còn lại là RÃNH, và rãnh là của CẢ HAI ô
+                # cạnh nhau — hai lề 62px ghép lại thành 124px không ai được chạm.
+                # Ở «Layout» chứ không nối vào từng dòng: nó đúng với mọi ô của tấm.
+                layout.append(f"Cells are separated by empty gutters: the outer"
+                              f" {gutter_px(_cw, _ch)} px band of every cell stays completely"
+                              " empty — not a leaf tip, not a glow — so neighbouring elements"
+                              " never meet.")
             if empties:
                 layout.append("Cell " + ", ".join(empties)
                               + (" are" if len(empties) > 1 else " is")
@@ -647,12 +710,20 @@ for s in cfg["styles"]:
                 # hứa có thể cãi nhau (r-0040: banner 3.9:1 vẽ rộng 818px trong ô
                 # 627px). Không xếp hạng chúng thì model tự xếp, và nó chọn tỉ lệ.
                 geom.append(
-                    "- The cell box on each line is a hard limit; the ratio is drawn inside it.")
+                    "- The box on each line is a hard limit; the ratio is drawn inside it.")
             else:
                 geom.append(
                     "- The element is centred in the frame and fills most of it while keeping a"
                     " clear margin all round — nothing, rim and ornament included, touches the"
                     " image edges.")
+                # 15/09/2026 — TẤM 1 Ô CŨNG CÓ HỘP, NÊN CŨNG CÓ CÂU XẾP HẠNG.
+                # Lý do tràn không biến mất khi lưới chỉ còn một ô: cùng lượt đo
+                # r-0040/44/47, phần tràn là trang trí ở hai đầu, và ở tấm 1 ô nó
+                # tràn thẳng ra MÉP ẢNH — dao cắt chém cụt y hệt.
+                if any(c.get("out") for c in comps):
+                    geom.append(
+                        "- The box on the element line is a hard limit; the ratio is drawn"
+                        " inside it.")
             section("Geometry", geom, on=("ui",))
         elif profile == "mascot":
             # Một dáng người không có "lõi chức năng" và không có viền để mà đẩy ra
@@ -678,11 +749,15 @@ for s in cfg["styles"]:
                     " same cell — characters stay in their own cell, never touch each other and"
                     " never touch the image edges.")
                 geom.append(
-                    "- The cell box on each line is a hard limit; the ratio is drawn inside it.")
+                    "- The box on each line is a hard limit; the ratio is drawn inside it.")
             else:
                 geom.append(
                     "- The whole character comes to rest well inside the frame — nothing touches"
                     " the image edges.")
+                if any(c.get("out") for c in comps):
+                    geom.append(
+                        "- The box on the element line is a hard limit; the ratio is drawn"
+                        " inside it.")
             section("Geometry", geom, on=("mascot",))
 
         # ── Transparency ──────────────────────────────────────────────────────
@@ -929,19 +1004,46 @@ for s in cfg["styles"]:
                         # ║ hứa khác hẳn: một RANH GIỚI, và ranh giới thì model giữ.  ║
                         # ║ Một hộp số cho mỗi dòng, không hai.                       ║
                         # ╚═══════════════════════════════════════════════════════════╝
-                        # Tấm 1 ô không in: hộp ô ở đó ĐÚNG BẰNG khổ ảnh, mà khổ ảnh
-                        # đã nói ở «Canvas» — in lại là dạy model rằng ô và khung là
-                        # hai thứ khác nhau, rồi nó chừa lề cho cả hai.
-                        if cols * rows > 1:
-                            cx0, cy0, cx1, cy1 = g["cell"]
-                            # Một dáng người không có "viền" hay "hoa văn" để mà dặn;
-                            # thứ tràn khỏi ô của nó là tóc, đuôi, đạo cụ.
-                            thuoc = ("this character, hair and props included"
-                                     if profile == "mascot" else
-                                     "this element, rim and ornaments included")
-                            spec += (f" — its cell is x={cx0}..{cx1}, y={cy0}..{cy1}"
-                                     f" ({cx1 - cx0}x{cy1 - cy0} px); everything of {thuoc},"
-                                     " stays inside that cell")
+                        # ── 15/09/2026 — VÀ HỘP ẤY LÀ Ô ĐÃ THỤT VÀO ────────────────
+                        # Ba lượt trên cùng tấm 1254² lưới 2×2 (ô 627), banner ô 1
+                        # khai 3.9:1, đo cột có sơn α≥32 ở nửa trên:
+                        #   · r-0040 (chưa hộp nào)            x=46..864 ⇒ lấn 237 px
+                        #   · r-0044 («its cell is x=0..627»)  x=29..740 ⇒ lấn 113 px
+                        #   · r-0047 (cùng câu, lượt khác)     x=25..690 ⇒ lấn  63 px
+                        # Hộp có tác dụng (237 → 113 → 63) nhưng model KHÔNG dừng
+                        # đúng mép: nó luôn thừa ra vài chục px, và phần thừa là
+                        # trang trí (holly, nơ ở hai đầu banner). Hứa đúng mép ô thì
+                        # phần thừa rơi sang ô bên — dao cắt vừa chém cụt vừa dây
+                        # bẩn ảnh hàng xóm. Hứa Ô THỤT VÀO thì đúng cái thừa ấy rơi
+                        # vào lề còn trống của CHÍNH ô mình. Lề lấy từ
+                        # `geometry.cell_margin_ratio` (0,10; ô có trang trí 0,20) —
+                        # đúng lề `slice.py` dựng safe zone, xem `inner_box` ở trên.
+                        #
+                        # TẤM 1 Ô NAY CŨNG IN. Lý do cũ ("ô chính là khổ ảnh, Canvas
+                        # đã nói rồi") chỉ đúng khi hộp = ô; hộp nay THỤT VÀO nên nó
+                        # là một con số mới, và lý do lấn mép ở tấm 1 ô cũng có thật
+                        # — ở đó phần trang trí thừa ra tràn thẳng khỏi khổ ảnh.
+                        cx0, cy0, cx1, cy1 = inner_box(g["cell"], comp.get("skel") or {})
+                        # Một dáng người không có "viền" hay "hoa văn" để mà dặn;
+                        # thứ tràn khỏi ô của nó là tóc, đuôi, đạo cụ.
+                        thuoc = ("this character, hair and props included"
+                                 if profile == "mascot" else
+                                 "this element, rim and ornaments included")
+                        spec += (f" — its box is x={cx0}..{cx1}, y={cy0}..{cy1}"
+                                 f" ({cx1 - cx0}x{cy1 - cy0} px); everything of {thuoc},"
+                                 " stays inside that box")
+                        # ── VẾ BỀ NGANG CHO ELEMENT NẰM NGANG (tỉ lệ ≥ 2:1) ────────
+                        # Với một món cao bằng rộng, "nằm trong hộp" là câu đủ. Với
+                        # banner 3.9:1 thì chiều CAO chẳng bao giờ chạm mép, chỉ có
+                        # bề ngang cãi nhau với ô — và bốn con số toạ độ bắt model tự
+                        # làm phép trừ để biết mình được rộng bao nhiêu. Nói thẳng ra
+                        # một con số, và nói rõ trang trí ĐƯỢC TÍNH vào con số ấy:
+                        # cả ba lượt đo trên đều thừa ra ở hai ĐẦU banner.
+                        if float(out["w"]) >= 2 * float(out["h"]):
+                            thuoc_ngang = ("its hair and props" if profile == "mascot"
+                                           else "its ornaments")
+                            spec += (f"; including {thuoc_ngang} it is at most"
+                                     f" {cx1 - cx0} px wide")
                 elif g["kind"] == "full":
                     spec += " — full-bleed scene, fills its whole cell edge to edge"
                 # 08/09/2026 — HAI NHÁNH `skel.matte` (glow/glass) ĐÃ BỎ Ở ĐÂY.

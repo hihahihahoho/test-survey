@@ -188,27 +188,37 @@ class PromptNoiTiLeChuKhongNoiPixelTest(unittest.TestCase):
         self.cfg = sheet_3x3_square()
         self.txt = render_prompt(self.cfg, "demo-ui")
 
-    def test_HOP_SAFE_ZONE_khong_quay_lai_nhung_HOP_O_thi_co(self):
-        """15/09/2026 — CA NÀY ĐỔI CHIỀU MỘT NỬA, CÓ CHỦ Ý.
+    def test_HOP_SAFE_ZONE_khong_quay_lai_nhung_HOP_THUT_VAO_thi_co(self):
+        """15/09/2026 — CA NÀY ĐỔI CHIỀU LẦN THỨ HAI, CÓ CHỦ Ý.
 
-        Bản trước cấm SẠCH mọi cặp toạ độ. Lượt r-0040 đo ra cái giá của vế đó: tấm
-        1254² lưới 2×2 (ô 627), banner ô 1 khai «core aspect 3.9:1» được vẽ liền
-        một mạch từ x=46 tới x=864 — lấn 237px sang ô 2. Ở r-0021, lượt CÒN in hộp
-        ô, không món nào lấn ô. Hai loại hộp không cùng số phận: hộp SAFE ZONE hứa
-        một CỠ LÕI và model không thực hiện nổi; hộp Ô chỉ vạch một RANH GIỚI, và
-        ranh giới thì nó giữ. Nên đúng MỘT hộp được quay lại, và chỉ hộp ấy."""
+        ① Bản đầu cấm SẠCH mọi cặp toạ độ. r-0040 đo ra cái giá: tấm 1254² lưới 2×2
+           (ô 627), banner ô 1 khai «core aspect 3.9:1» vẽ liền một mạch x=46..864 —
+           lấn 237px sang ô 2.
+        ② Bản sau cho hộp Ô quay lại. Nó có tác dụng mà chưa đủ: r-0044 (đã có «its
+           cell is x=0..627 … stays inside that cell») ⇒ x=29..740, còn lấn 113px;
+           r-0047 ⇒ x=25..690, còn lấn 63px. Phần thừa luôn là TRANG TRÍ ở hai đầu.
+        ③ Nay hộp in ra là ô đã THỤT VÀO đúng lề `geometry.cell_margin_ratio` — cùng
+           lề `slice.py` dựng safe zone — nên phần thừa rơi vào lề còn trống của
+           chính ô mình, trong khung dao cắt, chứ không sang ô bên.
+
+        Hộp SAFE ZONE thì vẫn bị cấm: nó hứa một CỠ LÕI (r-0021, lõi 587px trong hộp
+        hứa 368px), và model không thực hiện nổi lời hứa ấy."""
         for chet in ("safe zone x=", "stays inside x=", "drawn at", "final size",
-                     "crop box"):
+                     "crop box", "its cell is"):
             self.assertNotIn(chet, self.txt, f"hộp safe zone quay lại prompt: {chet}")
         for dong in self.txt.splitlines():
             if re.search(r"x=\d+\.\.\d+", dong):
-                self.assertIn("its cell is x=", dong,
-                              f"một cặp toạ độ KHÔNG PHẢI hộp ô lọt vào prompt: {dong}")
-        # Chín ô ⇒ chín hộp ô, không thừa không thiếu.
-        self.assertEqual(self.txt.count(" — its cell is x="), 9)
-        self.assertIn("its cell is x=0..418, y=0..418 (418x418 px); everything of this"
-                      " element, rim and ornaments included, stays inside that cell",
-                      self.txt)
+                self.assertIn("its box is x=", dong,
+                              f"một cặp toạ độ KHÔNG PHẢI hộp thụt vào lọt vào prompt: {dong}")
+        # Chín ô ⇒ chín hộp, không thừa không thiếu.
+        self.assertEqual(self.txt.count(" — its box is x="), 9)
+        # Số tính lại bằng chính module, không gõ tay: ô 418 lề 0,10 ⇒ hộp 334, thụt
+        # 42px mỗi cạnh.
+        iw, ih = geometry.cell_inner(*geometry.cell_size(1254, 1254, 3, 3))
+        dx, dy = (418 - iw) // 2, (418 - ih) // 2
+        self.assertIn(f"its box is x={dx}..{dx + iw}, y={dy}..{dy + ih} ({iw}x{ih} px);"
+                      " everything of this element, rim and ornaments included,"
+                      " stays inside that box", self.txt)
 
     def test_moi_o_mang_ti_le_cua_out_chu_khong_phai_ti_le_cua_o(self):
         found = {int(m.group(1)): (float(m.group(2)), float(m.group(3)))

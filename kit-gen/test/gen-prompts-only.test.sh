@@ -250,7 +250,8 @@ refute "giao diện KHÔNG lãnh tấm ảnh dáng"        "## Pose reference" "
 # Tấm mascot ở đây là MỘT Ô, nên nó không có hàng xóm nào để tránh và cũng không có
 # hộp ngoài nào ngoài chính khổ ảnh — luật còn lại đúng một câu: đừng chạm mép.
 expect "tấm một ô: biên duy nhất là mép ảnh" "nothing touches the image edges" "$linh"
-refute "và không hứa một hộp ô nào (ô CHÍNH LÀ khổ ảnh)" "stays inside x=" "$linh"
+refute "và không hứa một hộp SAFE ZONE nào" "stays inside x=" "$linh"
+refute "hộp Ô (= khổ ảnh) cũng không được in" "its cell is" "$linh"
 expect "tấm nút bấm thì VẪN CÓ luật viền" "Rim, border, glow and ornament are NOT part of the core" "$main"
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -313,10 +314,10 @@ expect "và nó nói rõ mình nghiêm tới đâu" "Never make a core taller, s
 # Tỉ lệ lấy từ `out` (cỡ người dùng đặt), KHÔNG từ `skel` (hộp max-fit trong ô — tức
 # hình dạng của Ô). Con số phải khớp TỪNG CÁI, kèm lời tả: "2.9:1" một mình là ký
 # hiệu, câu chữ mới là thứ đi vào ảnh.
-expect "ô 1 đúng tỉ lệ" "1) a button — core aspect 2.9:1 (about three times wider than tall), about 245 px wide on screen" "$vuong"
-expect "ô 2 vuông"      "2) a popover panel — core aspect 1:1 (square), about 195 px wide on screen" "$vuong"
-expect "ô 3 cao hơn rộng" "3) a checkbox — core aspect 1:1.6 (taller than wide), about 100 px wide on screen" "$vuong"
-expect "ô 4 dài mỏng"   "4) a toggle switch — core aspect 4.7:1 (a long thin bar, nearly five times wider than tall), about 270 px wide on screen" "$vuong"
+expect "ô 1 đúng tỉ lệ" "1) a button — core aspect 2.9:1 (about three times wider than tall), about 245 px wide on screen — its box is x=62..564" "$vuong"
+expect "ô 2 vuông"      "2) a popover panel — core aspect 1:1 (square), about 195 px wide on screen — its box is x=689..1191" "$vuong"
+expect "ô 3 cao hơn rộng" "3) a checkbox — core aspect 1:1.6 (taller than wide), about 100 px wide on screen — its box is x=62..564, y=689..1191" "$vuong"
+expect "ô 4 dài mỏng"   "4) a toggle switch — core aspect 4.7:1 (a long thin bar, nearly five times wider than tall), about 270 px wide on screen — its box is x=689..1191, y=689..1191 (502x502 px); everything of this element, rim and ornaments included, stays inside that box; including its ornaments it is at most 502 px wide" "$vuong"
 # Danh sách CHỈ CÓ MỘT: danh từ và hình học trên cùng dòng (chủ sản phẩm 27/08/2026).
 refute "không có bảng toạ độ thứ hai" "Cell 1 (row 1, col 1)" "$allp"
 refute "không còn tiêu đề hàng"       "Row 1, left to right" "$allp"
@@ -330,29 +331,39 @@ eq_n "tấm 2x2 có đủ 4 dòng tỉ lệ" 4 "$n_zone"
 for bad in "safe zone x=" "stays inside x=" "drawn at" "final size" "crop box"; do
   refute "không còn hộp safe zone: $bad" "$bad" "$allp"
 done
-# ── HỘP Ô: MỘT NGOẠI LỆ, VÀ ĐƯỢC ĐO RA (15/09/2026) ───────────────────────────
-# Lượt r-0040 — lượt đầu sau khi mọi toạ độ rời prompt — tấm 1254² lưới 2×2 (ô 627),
-# banner ô 1 khai «core aspect 3.9:1» vẽ liền một mạch từ x=46 tới x=864, lấn 237px
-# sang ô 2. Lượt r-0021, khi dòng ô CÒN hộp ô, không món nào lấn ô. Hai loại hộp
-# khác nhau về bản chất: hộp SAFE ZONE hứa một CỠ LÕI (model không thực hiện nổi),
-# hộp Ô vạch một RANH GIỚI (model giữ được). Nên đúng một hộp quay lại, và ca này
-# canh rằng chỉ có nó: mọi cặp toạ độ trong mọi prompt phải nằm trên một dòng «its
-# cell is x=».
-n_hop=$(printf '%s' "$allp" | grep -E 'x=[0-9]+\.\.[0-9]+' | grep -cv 'its cell is x=' || true)
-eq_n "không cặp toạ độ nào ngoài hộp Ô" 0 "$n_hop"
-expect "ô 1 mang hộp ô của chính nó" \
-  "its cell is x=0..627, y=0..627 (627x627 px); everything of this element, rim and ornaments included, stays inside that cell" "$vuong"
-expect "ô 2 sang hộp bên phải" "its cell is x=627..1254, y=0..627 (627x627 px)" "$vuong"
-n_cell=$(printf '%s' "$vuong" | grep -c ' — its cell is x=')
-eq_n "tấm 2x2 có đủ 4 hộp ô" 4 "$n_cell"
+# ── HỘP THỤT VÀO: MỘT NGOẠI LỆ, VÀ ĐƯỢC ĐO RA (15/09/2026) ────────────────────
+# Ba lượt trên cùng tấm 1254² lưới 2×2 (ô 627), banner ô 1 khai «core aspect 3.9:1»,
+# đo cột có sơn α≥32 ở nửa trên:
+#   · r-0040, mọi toạ độ đã rời prompt   ⇒ x=46..864, lấn 237px sang ô 2;
+#   · r-0044, dòng ô mang «its cell is x=0..627 … stays inside that cell» (11cf121)
+#                                        ⇒ x=29..740, còn lấn 113px;
+#   · r-0047, cùng câu ấy, lượt khác     ⇒ x=25..690, còn lấn  63px.
+# Hộp bằng số CÓ tác dụng (237 → 113 → 63) nhưng model không dừng đúng mép — phần
+# thừa luôn là TRANG TRÍ ở hai đầu. Nên hộp in ra nay là ô đã THỤT VÀO đúng lề của
+# `geometry.py`: phần thừa rơi vào lề còn trống của chính ô mình, trong khung dao
+# cắt, chứ không sang hàng xóm. Hộp SAFE ZONE vẫn bị cấm — nó hứa một CỠ LÕI và
+# model không thực hiện nổi (r-0021: lõi 587px trong hộp hứa 368px).
+n_hop=$(printf '%s' "$allp" | grep -E 'x=[0-9]+\.\.[0-9]+' | grep -cv 'its box is x=' || true)
+eq_n "không cặp toạ độ nào ngoài hộp thụt vào" 0 "$n_hop"
+expect "ô 1 mang hộp thụt vào của chính nó" \
+  "its box is x=62..564, y=62..564 (502x502 px); everything of this element, rim and ornaments included, stays inside that box" "$vuong"
+expect "ô 2 sang hộp bên phải" "its box is x=689..1191, y=62..564 (502x502 px)" "$vuong"
+n_cell=$(printf '%s' "$vuong" | grep -c ' — its box is x=')
+eq_n "tấm 2x2 có đủ 4 hộp" 4 "$n_cell"
 expect "«Layout» nói cỡ ô, một lần" "2x2 grid of 627x627 px cells, 4 elements in reading order" "$vuong"
+# Rãnh trống nói bằng SỐ: hộp nói ô được vẽ tới đâu, câu này nói phần còn lại là
+# RÃNH của CẢ HAI ô cạnh nhau — hai lề 62px ghép lại thành 124px không ai được chạm.
+expect "«Layout» nói rãnh trống bằng số" \
+  "Cells are separated by empty gutters: the outer 62 px band of every cell stays completely empty — not a leaf tip, not a glow — so neighbouring elements never meet." "$vuong"
 expect "và chốt bề ngang tối đa" \
-  "A wide element is at most as wide as its cell: if the cell cannot hold the core at its ratio at the size you want, draw it smaller — never wider than the cell." "$vuong"
+  "A wide element is at most as wide as the box on its line: if the box cannot hold the core at its ratio at the size you want, draw it smaller — never wider than the box." "$vuong"
 expect "«Geometry» xếp hạng hộp trên tỉ lệ" \
-  "The cell box on each line is a hard limit; the ratio is drawn inside it." "$vuong"
-# Tấm 1 ô: hộp ô ĐÚNG BẰNG khổ ảnh, mà khổ ảnh đã nói ở «Canvas» — in lại là dạy
-# model rằng ô và khung là hai thứ khác nhau, rồi nó chừa lề cho cả hai.
-refute "tấm mascot 1 ô không in hộp ô" "its cell is" "$linh"
+  "The box on each line is a hard limit; the ratio is drawn inside it." "$vuong"
+refute "câu cũ trỏ vào Ô (rộng hơn hộp đúng một lề) không được ở lại" "as wide as its cell" "$allp"
+# Tấm 1 ô: hộp THỤT VÀO vẫn in (nó khác khổ ảnh đúng một cái lề, và ở đó phần trang
+# trí thừa ra tràn thẳng khỏi khổ ảnh) — chỉ CỠ Ô là không, vì ô ấy chính là khổ ảnh.
+expect "tấm mascot 1 ô vẫn có hộp thụt vào" \
+  "its box is x=153..1382, y=102..921 (1229x819 px); everything of this character, hair and props included, stays inside that box" "$linh"
 refute "và «Layout» của nó cũng không nhắc cỡ ô" "px cells" "$linh"
 # ── RANH GIỚI Ô: LUẬT VẪN CÒN, NÓ CHỈ ĐỔI NHÀ ────────────────────────────────
 # `slice.py` cắt theo hộp Ô, nên viền/trang trí vượt mép ô bị chém cụt (đo trên dự
@@ -371,7 +382,7 @@ refute "tấm nền không bị đòi nền trong suốt" "FULLY TRANSPARENT" "$
 expect "tấm nền nói rõ là phủ kín khung" "filling the whole frame edge to edge" "$nen"
 expect "và vẫn mang đúng cảnh người dùng gõ" "village scene at dawn" "$nen"
 expect "tấm mascot mang tỉ lệ của chính dáng người" \
-  "1) mascot waving — core aspect 1:1.5 (taller than wide), about 254 px wide on screen" "$linh"
+  "1) mascot waving — core aspect 1:1.5 (taller than wide), about 254 px wide on screen — its box is x=" "$linh"
 
 echo "── KHÔNG còn một dấu vết nào của khung xương trong thứ gửi đi"
 for bad in "skeleton" "silhouette" "FIRST attached image" "gray silhouette" "guide box" "grid lines" "attached image is the geometry"; do
