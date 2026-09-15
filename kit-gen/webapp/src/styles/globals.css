@@ -154,8 +154,13 @@
 }
 
 /* ══ SÂN KHẤU COPY-FIGMA (figma-node.ts) ═══════════════════════════════════════
-   `.safe-frame` là frame tàng hình dựng tạm để encoder chụp: phần BẤT BIẾN nằm ở
-   đây, phần theo dữ liệu (width/height của hitbox) vẫn inline. `overflow: visible`
-   là hồn của safe-zone — encoder dịch nó thành "Clip content = off" nên phần ảnh
-   tràn ra ngoài hitbox (đổ bóng, trang trí) sống sót sau khi dán vào Figma. */
+   `.safe-frame` là frame NGOÀI (hitbox) của cây tàng hình dựng tạm để encoder
+   chụp: phần BẤT BIẾN nằm ở đây, phần theo dữ liệu (width/height của hitbox) vẫn
+   inline. `overflow: visible` là hồn của safe-zone — encoder dịch nó thành
+   "Clip content = off" nên phần ảnh tràn ra ngoài hitbox (đổ bóng, trang trí)
+   sống sót sau khi dán vào Figma.
+   Frame TRONG (div mang `background-image`, tức image fill của node Figma) CỐ Ý
+   không có class: mọi thuộc tính của nó là hợp đồng dán — cỡ theo `%`,
+   `background-size: 100% 100%`, `aspect-ratio` — nên phải nằm inline nơi test đọc
+   lại được, chứ không giấu trong file này. */
 .safe-frame { position: absolute; left: 0; top: 0; overflow: visible; background: transparent; }

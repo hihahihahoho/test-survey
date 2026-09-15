@@ -20,7 +20,7 @@ import { describe, expect, it } from "vitest";
 import { kitFileSchema } from "@/lib/types/api";
 import type { KitFile } from "@/lib/types";
 import {
-  FigmaNodeUnsupported, assertDocShape, buildFigmaNodeForAsset, geometryOf,
+  FigmaNodeUnsupported, IMAGE_LAYER_NAME, assertDocShape, buildFigmaNodeForAsset, geometryOf,
 } from "../figma-node";
 import type { H2DDocument } from "@/vendor/figma-h2d";
 import manifest from "./fixtures/kit-blindtest-a.manifest.json";
@@ -207,8 +207,19 @@ describe("frame = hitbox, ảnh lệch âm, không kéo méo (handoff §3.3)", (
 });
 
 /* ── Kiểm cấu trúc payload: soi IR trước khi ghi clipboard ──────────────────
-   Không cần Figma thật — chỉ cần chắc rằng thứ đi vào clipboard là một frame DIV
-   có IMG bên trong, clip tắt, ảnh đã nhúng được, và kích thước đo được khớp hitbox. */
+   Không cần Figma thật — chỉ cần chắc rằng thứ đi vào clipboard là frame DIV ngoài
+   ôm một frame DIV trong MANG IMAGE FILL, clip tắt, ảnh đã nhúng được, và cả hai
+   khung đo được đều khớp spec.
+
+   ┌── VÌ SAO FIXTURE ĐỔI TỪ `IMG` SANG `DIV` + background-image ─────────────┐
+   │ Đây là bộ test bị coi là "khoá" hình dạng payload, nên đổi nó phải có lý  │
+   │ do chép ra được: chủ sản phẩm chốt lại cấu trúc node (15/09/2026) để asset│
+   │ RESPONSIVE — ảnh là image fill của frame trong chứ không còn là node ảnh  │
+   │ rời. `renderSpec` không dựng `<img>` nữa, nên một fixture còn `tag:"IMG"` │
+   │ sẽ khoá đúng cái hình dạng mà app KHÔNG còn sinh ra. Sáu con số hình học  │
+   │ thì không đổi — mọi ca ở NỬA TRÊN file này vẫn nguyên văn, và cổng này    │
+   │ nay đo THÊM cả khung ảnh chứ không chỉ khung ngoài.                       │
+   └──────────────────────────────────────────────────────────────────────────┘ */
 describe("gác cổng payload — hỏng thì phải NÉM để nơi gọi rơi về bitmap", () => {
   const spec = buildFigmaNodeForAsset(kitFile(byName("15-reward-giftbox.png"), true));
   const ok = (over: Record<string, unknown> = {}): H2DDocument => ({
@@ -218,7 +229,9 @@ describe("gác cổng payload — hỏng thì phải NÉM để nơi gọi rơi 
       styles: { overflow: "visible" },
       rect: { x: 0, y: 0, width: spec.frame.w, height: spec.frame.h },
       childNodes: [{
-        nodeType: 1, tag: "IMG",
+        nodeType: 1, tag: "DIV",
+        attributes: { "aria-label": IMAGE_LAYER_NAME },
+        styles: { backgroundImage: 'url("blob:x")', backgroundSize: "100% 100%" },
         rect: { x: spec.image.x, y: spec.image.y, width: spec.image.w, height: spec.image.h },
       }],
     },
@@ -239,10 +252,16 @@ describe("gác cổng payload — hỏng thì phải NÉM để nơi gọi rơi 
     expect(() => assertDocShape(doc, spec)).toThrow(/không phải frame DIV/);
   });
 
-  it("thiếu node ảnh raster ⇒ ném (dán ra sẽ là frame rỗng)", () => {
+  it("thiếu khung ảnh bên trong ⇒ ném (dán ra sẽ là frame rỗng)", () => {
     const doc = ok();
     doc.root.childNodes = [];
-    expect(() => assertDocShape(doc, spec)).toThrow(/thiếu node ảnh/);
+    expect(() => assertDocShape(doc, spec)).toThrow(/Thiếu khung ảnh bên trong/);
+  });
+
+  it("khung ảnh bên trong không gắn được ảnh ⇒ ném", () => {
+    const doc = ok();
+    doc.root.childNodes![0]!.styles = { backgroundSize: "100% 100%" };
+    expect(() => assertDocShape(doc, spec)).toThrow(/không gắn được ảnh/);
   });
 
   it("frame bật clip ⇒ ném — sai đúng điều §3.3 cấm", () => {
@@ -258,9 +277,35 @@ describe("gác cổng payload — hỏng thì phải NÉM để nơi gọi rơi 
     expect(() => assertDocShape(doc, spec)).toThrow(/404/);
   });
 
+  /* Bảng asset RỖNG là ca riêng, không phải ca trên: phép lọc `blob === null`
+     chạy trên mảng rỗng cũng trả rỗng ⇒ payload không ảnh sẽ lọt nếu không hỏi. */
+  it("không gom được asset nào ⇒ ném, dù không có lỗi tải nào", () => {
+    expect(() => assertDocShape(ok({ assets: new Map() }), spec))
+      .toThrow(/Không nhúng được ảnh nào/);
+  });
+
   it("frame đo được lệch hitbox ⇒ ném", () => {
     const doc = ok();
     doc.root.rect = { x: 0, y: 0, width: spec.frame.w + 40, height: spec.frame.h };
     expect(() => assertDocShape(doc, spec)).toThrow(/lệch so với safe zone/);
+  });
+
+  it("khung ảnh đo được lệch spec ⇒ ném (phép nhân ngược từ % trượt)", () => {
+    const doc = ok();
+    doc.root.childNodes![0]!.rect = {
+      x: spec.image.x, y: spec.image.y, width: spec.image.w + 8, height: spec.image.h,
+    };
+    expect(() => assertDocShape(doc, spec)).toThrow(/Khung ảnh đo được/);
+  });
+
+  /* Đường «Copy N ô» đặt mỗi frame tại một `at` khác nhau ⇒ `rect` của IR là toạ
+     độ viewport, không phải toạ độ trong frame. Cổng phải đo TƯƠNG ĐỐI. */
+  it("cả cụm nằm ở (400, 900) trên sân khấu vẫn đi qua — đo tương đối", () => {
+    const doc = ok();
+    doc.root.rect = { x: 400, y: 900, width: spec.frame.w, height: spec.frame.h };
+    doc.root.childNodes![0]!.rect = {
+      x: 400 + spec.image.x, y: 900 + spec.image.y, width: spec.image.w, height: spec.image.h,
+    };
+    expect(() => assertDocShape(doc, spec)).not.toThrow();
   });
 });

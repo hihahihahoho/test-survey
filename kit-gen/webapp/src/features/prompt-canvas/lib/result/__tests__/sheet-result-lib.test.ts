@@ -69,15 +69,23 @@ describe("figmaNodeForSheet — cả tấm là MỘT ảnh chữ nhật, không 
       expect(frame.style.width).toBe("1536px");
       expect(frame.style.height).toBe("1024px");
 
-      const img = frame.querySelector("img");
-      expect(img).not.toBeNull();
-      expect(img?.style.left).toBe("0px");
-      expect(img?.style.top).toBe("0px");
-      expect(img?.style.width).toBe("1536px");
-      /* `max-width:none` — thiếu nó thì ảnh to hơn frame bị CSS co lại và dán ra sai cỡ. */
-      expect(img?.style.maxWidth).toBe("none");
+      /* ── CẤU TRÚC MỚI (15/09/2026): ẢNH LÀ FILL, KHÔNG PHẢI NODE <img> ──────
+         Cả tấm đi CHUNG `renderSpec` với ô đã cắt, nên nó cũng ra hai frame lồng
+         nhau. Ca này từng khoá `img.maxWidth`/`img.mixBlendMode`; hai thuộc tính
+         ấy là chuyện của thẻ <img>, mà thẻ <img> không còn. Thứ phải khoá bây giờ
+         là: có đúng một khung ảnh, nó mang image fill, và với CẢ TẤM thì khung ấy
+         trùng khít frame ngoài (0% / 100%) — tức không mượn safe zone của ô nào. */
+      expect(frame.querySelector("img")).toBeNull();
+      const image = frame.firstElementChild as HTMLElement;
+      expect(image.tagName).toBe("DIV");
+      expect(image.style.left).toBe("0%");
+      expect(image.style.top).toBe("0%");
+      expect(image.style.width).toBe("100%");
+      expect(image.style.height).toBe("100%");
+      expect(image.style.backgroundImage).toContain("blob:sheet");
+      expect(image.style.backgroundSize).toBe("100% 100%");
       /* Tấm thường không phải vật liệu cộng ⇒ KHÔNG được dính mix-blend-mode. */
-      expect(img?.style.mixBlendMode).toBe("");
+      expect(image.style.mixBlendMode).toBe("");
 
       const doc = docFrom(frame, spec.frame);
       expect(() => assertDocShape(doc, spec)).not.toThrow();
@@ -106,7 +114,11 @@ describe("figmaNodeForSheet — cả tấm là MỘT ảnh chữ nhật, không 
  * "đây là thứ trình duyệt thật sẽ đo được".
  */
 function docFrom(frame: HTMLElement, measured: { w: number; h: number }): H2DDocument {
-  const img = frame.querySelector("img");
+  const image = frame.firstElementChild as HTMLElement | null;
+  /* Khung ảnh viết bằng `%` ⇒ số đo trình duyệt sẽ trả về là % nhân với frame ĐO
+     ĐƯỢC. Nhân lại ở đây chứ không chép số của spec: ca "lệch spec" bên dưới cố ý
+     đo frame rộng hơn, và phải thấy khung ảnh giãn theo đúng như trình duyệt làm. */
+  const of = (v: string | undefined, base: number) => Number.parseFloat(v ?? "0") / 100 * base;
   return {
     root: {
       nodeType: 1, tag: "DIV",
@@ -114,12 +126,14 @@ function docFrom(frame: HTMLElement, measured: { w: number; h: number }): H2DDoc
       styles: { overflow: "visible" },
       rect: { x: 0, y: 0, width: measured.w, height: measured.h },
       childNodes: [{
-        nodeType: 1, tag: "IMG",
+        nodeType: 1, tag: "DIV",
+        attributes: { "aria-label": image?.getAttribute("aria-label") ?? "" },
+        styles: { backgroundImage: image?.style.backgroundImage ?? "", backgroundSize: "100% 100%" },
         rect: {
-          x: Number.parseFloat(img?.style.left ?? "0"),
-          y: Number.parseFloat(img?.style.top ?? "0"),
-          width: Number.parseFloat(img?.style.width ?? "0"),
-          height: Number.parseFloat(img?.style.height ?? "0"),
+          x: of(image?.style.left, measured.w),
+          y: of(image?.style.top, measured.h),
+          width: of(image?.style.width, measured.w),
+          height: of(image?.style.height, measured.h),
         },
       }],
     },

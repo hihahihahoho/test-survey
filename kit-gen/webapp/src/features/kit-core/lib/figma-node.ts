@@ -9,6 +9,15 @@
  * ║ • Không biến image thành frame giả và **không kéo méo image**.             ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
+ * ┌── SỬA ĐỔI 15/09/2026: ẢNH LÀ **FILL**, KHÔNG PHẢI NODE RỜI ──────────────┐
+ * │ Chủ sản phẩm chốt lại hình dạng node để asset RESPONSIVE trong Figma: hai │
+ * │ frame lồng nhau, ảnh là image fill (Crop) của frame trong. SÁU CON SỐ     │
+ * │ dưới đây KHÔNG đổi một pixel — chỉ đổi chỗ chúng được viết ra: cỡ ảnh và  │
+ * │ độ lệch nay là `%` của frame ngoài, để khung trong co giãn theo khung      │
+ * │ ngoài. "Không kéo méo" vẫn giữ: frame trong đúng tỉ lệ ảnh, fill trải kín │
+ * │ nó. Chi tiết và giới hạn: khối chú thích của `renderSpec`.                │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ *
  * Nói bằng số — đúng bốn dòng của `figma-export/copy-sprite-images.mjs:41-48`, bản
  * đã dán thử thành công và được ghi lại ở handoff §7.2:
  *
@@ -233,10 +242,69 @@ export function mountStage(): HTMLDivElement {
 }
 
 /**
- * Cây DOM = cây node Figma. Giữ ĐÚNG hình dạng và thuộc tính mà
- * `copy-sprite-images.mjs:88-96` đã dán thử thành công — `aria-label` thành tên
- * frame, `overflow:visible` thành `Clip content = off`, `max-width:none` để ảnh
- * to hơn frame không bị co lại.
+ * Tên node của lớp ảnh trong Figma. Frame ngoài mang TÊN Ô (để tìm trong panel
+ * Layers), frame trong chỉ cần một cái tên chung — nó là cái khung ảnh, không phải
+ * một asset thứ hai. Bản cũ đặt `alt = "Image · <tên ô>"` và Figma dán ra node tên
+ * `Image (Image · 01-btn-pill-red)` — tên lặp hai lần vì Figma tự thêm tiền tố.
+ */
+export const IMAGE_LAYER_NAME = "image";
+
+/**
+ * `v` theo PHẦN TRĂM của `base` — kênh duy nhất xin được constraint SCALE.
+ *
+ * `getComputedStyle` luôn resolve width/height ra px, nên nếu chỉ đọc `styles` thì
+ * "50%" và "184.25px" là một. Encoder biết điều đó và chở thêm GIÁ TRỊ KHAI BÁO
+ * trong `computedStyles` (`figma-h2d.global.js:555-563`) — chuỗi `%` này chính là
+ * thứ đi vào đó. Nhân ngược lại phải ra đúng số cũ: `(v * 100) / base` chứ không
+ * `(v / base) * 100`, để bớt một lần làm tròn.
+ */
+function pctOf(v: number, base: number): string {
+  if (!(base > 0)) throw new Error(`Khung ngoài ${base}px không chia được — số đo hỏng.`);
+  return `${(v * 100) / base}%`;
+}
+
+/**
+ * Cây DOM = cây node Figma — HAI FRAME LỒNG NHAU, ẢNH LÀ **FILL** CỦA FRAME TRONG.
+ *
+ * ┌── HÌNH DẠNG CHỦ SẢN PHẨM CHỐT (15/09/2026) ──────────────────────────────┐
+ * │  <div .safe-frame aria-label="«tên ô»">          ← frame NGOÀI = hitbox   │
+ * │    <div aria-label="image"                       ← frame TRONG = cỡ ảnh   │
+ * │         left/top/width/height TÍNH BẰNG %        ← xin constraint SCALE   │
+ * │         background-image:url(…); background-size:100% 100%>               │
+ * │ KHÔNG còn node `<img>` rời. Lý do là một chữ: RESPONSIVE. Designer kéo to │
+ * │ frame ngoài thì cả khung ảnh lẫn phần crop phải đi theo; một node ảnh rời │
+ * │ neo bằng px thì đứng yên tại chỗ và bố cục vỡ ngay cú kéo đầu tiên.       │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ *
+ * ┌── BIỂU ĐẠT ĐƯỢC TỚI ĐÂU — ĐỌC TỪ CHÍNH ENCODER, KHÔNG ĐOÁN ─────────────┐
+ * │ IR của `vendor/figma-h2d` KHÔNG có từ vựng Figma. `walkElement` phát ra   │
+ * │ đúng `{nodeType, id, tag, attributes, styles, rect, childNodes, …}`       │
+ * │ (`figma-h2d.global.js:1103-1118`): không `constraints`, không             │
+ * │ `constrainProportions`, không `fills[].scaleMode/imageTransform`. Phần    │
+ * │ dịch CSS → node Figma nằm TRONG Figma desktop, không đọc được từ đây. Nên │
+ * │ cửa duy nhất là CSS, và đây là ba lá bài đặt lên bàn:                     │
+ * │  ① CỠ THEO %: `extractStyles` chở riêng GIÁ TRỊ KHAI BÁO của width/height │
+ * │    qua `computedStyleMap()` vào `computedStyles` (`:555-563`, danh sách   │
+ * │    `SIZING_PROPS`), trong khi `styles` chỉ có px đã resolve. Encoder giữ  │
+ * │    hai bản CHÍNH VÌ bên nhận cần phân biệt "cỡ co theo cha" với "cỡ đóng  │
+ * │    cứng" ⇒ đây là kênh hợp lệ nhất để xin `horizontal/vertical = SCALE`.  │
+ * │  ② `aspect-ratio` trên CẢ HAI frame — thứ duy nhất trong CSS mang nghĩa   │
+ * │    "khoá tỉ lệ". Cả hai frame đều khai CẢ width LẪN height nên            │
+ * │    `aspect-ratio` không đổi một pixel layout nào; nó chỉ đi vào payload   │
+ * │    làm lời đề nghị.                                                      │
+ * │  ③ `background-size:100% 100%` — CSS cho "trải kín khung, không tự giữ   │
+ * │    tỉ lệ ảnh", đúng nghĩa `Crop` của Figma; `cover`/`contain` mới là      │
+ * │    `Fill`/`Fit`. Frame trong ĐÚNG BẰNG ảnh nên ba cách vẽ ra hệt nhau —   │
+ * │    chọn cách mang đúng NGHĨA để bên nhận suy ra Crop (ma trận đơn vị).    │
+ * │ KHÔNG bịa thêm khoá vào IR sau `captureElement`: một khoá Figma không     │
+ * │ biết thì rẻ nhất là bị bỏ qua, tệ nhất là làm hỏng cú dán DUY NHẤT đang   │
+ * │ chạy được. CHƯA DÁN THỬ ĐƯỢC ba lá bài này (không có Figma ở đây) — test  │
+ * │ chỉ khoá được "payload có mang đúng chuỗi ấy đi", không khoá được "Figma  │
+ * │ đọc ra đúng thuộc tính ấy". Nói thẳng chứ không lén đặt cược.             │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ *
+ * `overflow:visible` của frame ngoài vẫn là hồn của safe zone — encoder dịch nó
+ * thành `Clip content = off` nên phần ảnh tràn ra ngoài hitbox vẫn sống.
  *
  * ┌── KHÔNG CÒN `mix-blend-mode` (07/09/2026) ────────────────────────────────┐
  * │ Node từng mang `mixBlendMode:"screen"` cho ô hiệu ứng phát sáng, vì        │
@@ -267,16 +335,21 @@ export function renderSpec(
   frame.setAttribute("aria-label", spec.name);
   frame.style.cssText =
     (at === undefined ? "position:relative;" : `position:absolute;left:${at.x}px;top:${at.y}px;`)
-    + `width:${spec.frame.w}px;height:${spec.frame.h}px`;
+    + `width:${spec.frame.w}px;height:${spec.frame.h}px;`
+    + `aspect-ratio:${spec.frame.w} / ${spec.frame.h}`;
 
-  const img = document.createElement("img");
-  img.alt = `Image · ${spec.name}`;
-  img.src = imageUrl;
-  img.style.cssText =
-    `position:absolute;left:${spec.image.x}px;top:${spec.image.y}px;`
-    + `width:${spec.image.w}px;height:${spec.image.h}px;display:block;max-width:none`;
+  /* Frame trong: CHÍNH NÓ mang ảnh, dưới dạng fill. Mọi thuộc tính hợp đồng đặt
+     INLINE chứ không giấu vào `globals.css` — test đọc lại được đúng thứ đã khai,
+     và người đọc thấy cả hợp đồng trong một khối. */
+  const image = document.createElement("div");
+  image.setAttribute("aria-label", IMAGE_LAYER_NAME);
+  image.style.cssText =
+    `position:absolute;left:${pctOf(spec.image.x, spec.frame.w)};top:${pctOf(spec.image.y, spec.frame.h)};`
+    + `width:${pctOf(spec.image.w, spec.frame.w)};height:${pctOf(spec.image.h, spec.frame.h)};`
+    + `aspect-ratio:${spec.image.w} / ${spec.image.h};`
+    + `background-image:url("${imageUrl}");background-size:100% 100%;background-repeat:no-repeat`;
 
-  frame.appendChild(img);
+  frame.appendChild(image);
   stage.appendChild(frame);
   return frame;
 }
@@ -289,10 +362,20 @@ export function renderSpec(
 export function assertDocShape(doc: H2DDocument, spec: FigmaNodeSpec): void {
   const root: H2DNode | undefined = doc.root;
   if (root?.tag !== "DIV") throw new Error(`Root của payload không phải frame DIV (${String(root?.tag)}).`);
-  const image = root.childNodes?.find((n) => n?.tag === "IMG");
-  if (image === undefined) throw new Error("Payload thiếu node ảnh raster bên trong frame.");
   if (root.styles?.overflow === "hidden") throw new Error("Frame đang bật clip content — sai hợp đồng §3.3.");
-  const failed = [...doc.assets.values()].filter((a) => a.blob === null);
+  const image = root.childNodes?.find((n) => n?.tag === "DIV");
+  if (image === undefined) throw new Error("Thiếu khung ảnh bên trong ô — dán ra sẽ là một ô rỗng.");
+  if (!String(image.styles?.backgroundImage ?? "").includes("url(")) {
+    throw new Error("Khung ảnh bên trong không gắn được ảnh — dán ra sẽ là một ô rỗng.");
+  }
+  const assets = [...doc.assets.values()];
+  /* Ảnh nay đi bằng `background-image`: sai một chữ trong `url(…)` là encoder
+     KHÔNG gom được asset nào, mà bảng rỗng thì phép lọc `blob === null` dưới đây
+     cũng rỗng ⇒ im lặng đi qua. Hỏi thẳng câu "có ảnh nào không" trước. */
+  if (assets.length === 0) {
+    throw new Error("Không nhúng được ảnh nào vào bộ nhớ tạm — dán ra sẽ là một ô rỗng.");
+  }
+  const failed = assets.filter((a) => a.blob === null);
   if (failed.length > 0) {
     throw new Error(`Không nhúng được ảnh vào payload: ${failed[0]?.error ?? "không rõ lý do"}`);
   }
@@ -300,6 +383,26 @@ export function assertDocShape(doc: H2DDocument, spec: FigmaNodeSpec): void {
   const rh = root.rect?.height ?? 0;
   if (Math.abs(rw - spec.frame.w) > 1 || Math.abs(rh - spec.frame.h) > 1) {
     throw new Error(`Frame đo được ${rw}×${rh}, lệch so với safe zone ${spec.frame.w}×${spec.frame.h}.`);
+  }
+  /* ── FRAME TRONG, ĐO TƯƠNG ĐỐI ──────────────────────────────────────────────
+     Cỡ và vị trí của nó nay viết bằng `%`, tức trình duyệt tính lại chứ không
+     chép số của mình — cổng này là chỗ duy nhất bắt được nếu phép nhân ngược
+     trượt. Đo TƯƠNG ĐỐI so với frame ngoài vì `rect` của IR là toạ độ viewport:
+     đường «Copy N ô» đặt mỗi frame tại một `at` khác nhau, so số tuyệt đối là sai
+     ngay từ ô thứ hai. Ngưỡng 1px: giá trị % rơi vào lưới 1/64px của trình duyệt. */
+  const dx = (image.rect?.x ?? 0) - (root.rect?.x ?? 0);
+  const dy = (image.rect?.y ?? 0) - (root.rect?.y ?? 0);
+  const iw = image.rect?.width ?? 0;
+  const ih = image.rect?.height ?? 0;
+  const off = Math.max(
+    Math.abs(dx - spec.image.x), Math.abs(dy - spec.image.y),
+    Math.abs(iw - spec.image.w), Math.abs(ih - spec.image.h),
+  );
+  if (off > 1) {
+    throw new Error(
+      `Khung ảnh đo được ${iw}×${ih} tại (${dx}, ${dy}), lệch so với spec `
+      + `${spec.image.w}×${spec.image.h} tại (${spec.image.x}, ${spec.image.y}).`,
+    );
   }
 }
 

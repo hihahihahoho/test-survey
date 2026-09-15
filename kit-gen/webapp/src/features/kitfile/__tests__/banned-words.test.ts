@@ -26,6 +26,7 @@ const hits = scanBannedWords("src/features");
  *   · Đợt 2 — gộp về một màn soạn (2026-09-08): **105** chỗ trúng / 41 file — hạ trần.
  *   · Nấc «Tự động theo vật liệu» (2026-09-08): **79** chỗ trúng / 33 file — hạ trần.
  *   · Gỡ hai màn thư viện ảnh (2026-09-08): **78** chỗ trúng / 32 file — hạ trần.
+ *   · Ảnh thành fill của khung trong khi dán Figma (2026-09-15): **77** chỗ trúng — hạ trần.
  *
  * Số giảm ở đợt Wave 4·B vì wizard `workflow-v4` bị khai tử: `WorkflowScreen` ·
  * `steps/Stepper` · `steps/ReviewStep` · `components/{PromptStudio,SyncBadge,RunPanel}`
@@ -60,6 +61,13 @@ const hits = scanBannedWords("src/features");
  * rail thư viện prompt, câu chỉ chỗ của mười hai danh mục, panel rỗng, câu gợi ý khởi
  * động lại — đo lại đều sạch, delta bằng 0.
  *
+ * Lượt 77 (15/09/2026) KHÔNG sửa một chữ nào của người dùng: cấu trúc node dán sang
+ * Figma đổi thành hai khung lồng nhau (`kit-core/lib/figma-node.ts`), câu lỗi cũ
+ * «Payload thiếu node ảnh raster bên trong frame.» biến mất cùng cái node ảnh rời.
+ * Ba câu lỗi thay chỗ nó — thiếu khung ảnh bên trong · không gắn được ảnh · không
+ * nhúng được ảnh nào — viết bằng chữ thường, đo lại đều sạch, nên trần đi xuống một
+ * nấc thay vì đứng yên tặng nhánh sau một hạn mức không ai quyết định.
+ *
  * HẠ TRẦN LÀ BẮT BUỘC, không phải lịch sự. Để nguyên 300 sau khi xoá 11 chỗ nghĩa là
  * tặng cho nhánh sau một hạn mức 11 từ cấm mới mà không ai quyết định cả — bánh cóc
  * chỉ có tác dụng khi răng của nó siết theo số đo thật.
@@ -68,7 +76,7 @@ const hits = scanBannedWords("src/features");
  * tự so với chính nó và KHÔNG BAO GIỜ đỏ được, tức là một cổng giả.
  * Ai kéo số xuống thì HẠ luôn trần này (và ghi vào report của mình).
  */
-const BASELINE_TOTAL = 78;
+const BASELINE_TOTAL = 77;
 
 describe("§5.4 — vùng S1 sở hữu: 0 từ cấm, không ngoại lệ", () => {
   it("features/kitfile/** hoàn toàn sạch", () => {
