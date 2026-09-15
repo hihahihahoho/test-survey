@@ -78,7 +78,7 @@ describe("payload lượt chạy THẬT của agent không được làm vỡ m�
  * job đỏ, ảnh không được đăng. Chủ sản phẩm chốt 09/09/2026 "cái này cứ để cho nó
  * gen tự nhiên nhé, ko block" — engine in `OK` kèm một ghi chú, job xong bình
  * thường, và thứ duy nhất còn nói ra sự thật là cờ `mode: "rgb"` của từng ô trong
- * manifest. Nên `diagnosisSchema` trở lại đúng 5 mã LỖI THẬT, và một payload cũ
+ * manifest. Nên `diagnosisSchema` chỉ còn các mã LỖI THẬT, và một payload cũ
  * mang `OPAQUE_ALPHA` phải bị schema từ chối chứ không lặng lẽ lọt qua.
  * Nguồn: `agent/lib/engine.mjs` (`diagnose` + `DIAGNOSIS_VI`).
  */
@@ -107,5 +107,19 @@ describe("nền đục đi đường job THÀNH CÔNG, không đường chẩn �
     expect(r.success).toBe(true);
     expect(r.success && r.data.jobs[0]!.status).toBe("ok");
     expect(r.success ? (r.data.jobs[0]!.diagnosis ?? null) : "x").toBeNull();
+  });
+
+  /* 15/09/2026 — r-0059: agent đọc «Selected model is at capacity» trong log job và
+     đóng dấu `MODEL_BUSY`. Schema của web mà không biết mã ấy thì cả payload lượt
+     chạy bị từ chối ở cổng, và người dùng mất luôn màn hình kết quả — hỏng to hơn
+     hẳn thứ nó đang cố nói. */
+  it("`MODEL_BUSY` là chẩn đoán hợp lệ (máy vẽ quá tải ≠ hết lượt)", () => {
+    const run = runWith([cell("ok")]);
+    const r = runSchema.safeParse({
+      ...run,
+      jobs: [{ job: "chinh-ui2", variant: "chinh", sheet: "ui2", status: "failed", diagnosis: "MODEL_BUSY" }],
+    });
+    expect(r.success).toBe(true);
+    expect(r.success && r.data.jobs[0]!.diagnosis).toBe("MODEL_BUSY");
   });
 });

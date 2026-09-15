@@ -1463,6 +1463,11 @@ $(cat "prompts/${job}.txt")
     -o "logs/${job}.last.txt" \
     "${task}" >"logs/${job}.log" 2>&1
   local rc=$?
+  # Dòng đầu tiên của LƯỢT CODEX GẦN NHẤT trong log. Cần nó vì mọi lượt sau đều ghi
+  # NỐI (>>): grep cả file thì lời than "at capacity" của lượt trước còn nằm đó mãi,
+  # và vòng thử lại bên dưới sẽ đọc một vết cũ thành một sự cố mới, quay vòng cho tới
+  # khi hết lượt. Lượt đầu ghi ĐÈ (>) nên mốc của nó là dòng 1.
+  local log_from=1
 
   # TỰ CHỮA KHI PROVIDER TỪ CHỐI MODEL.
   # Catalog ở đầu file chỉ nói codex BIẾT tên model, không nói provider chịu phục vụ.
@@ -1484,6 +1489,7 @@ $(cat "prompts/${job}.txt")
     # phải trả giá. Nên ghim mức nghĩ ở CẢ hai lượt, không thả nổi.
     local retry_effort=()
     [[ -n "$GEN_EFFORT" ]] && retry_effort=(-c "model_reasoning_effort=\"$GEN_EFFORT\"")
+    log_from=$(( $(wc -l <"logs/${job}.log" 2>/dev/null || echo 0) + 1 ))
     ${codex_env[@]+"${codex_env[@]}"} codex exec \
       ${retry_effort[@]+"${retry_effort[@]}"} \
       -s workspace-write \
@@ -1494,6 +1500,61 @@ $(cat "prompts/${job}.txt")
       "${task}" >>"logs/${job}.log" 2>&1
     rc=$?
   fi
+
+  # ╔══ MÁY VẼ QUÁ TẢI ⇒ NGỦ RỒI GỌI LẠI, CÙNG MODEL ═══════════════════════════════╗
+  # ║ Sự cố 15/09/2026, run r-0059. Job `chinh-ui2` chạy 223 giây rồi chết với đúng ║
+  # ║ hai dòng «ERROR: Selected model is at capacity. Please try a different model.» ║
+  # ║ Không một ảnh nào được sinh. Chủ sản phẩm nói nó hay xảy ra khi bấm vẽ lại CẢ  ║
+  # ║ THẺ — nhiều lượt liên tiếp đập vào cùng một model.                             ║
+  # ║                                                                                ║
+  # ║ VÌ SAO KHÔNG HẠ MODEL Ở ĐÂY (khác hẳn khối ngay trên).                         ║
+  # ║   Khối trên hạ cấp vì thứ bị từ chối là CÁI TÊN: provider không phục vụ model  ║
+  # ║   đó, chờ bao lâu cũng vậy. Ở đây cái tên vẫn đúng, chỉ là cỗ máy đang đầy —   ║
+  # ║   một trạng thái TẠM THỜI. Đổi model để lách qua là âm thầm giao cho người     ║
+  # ║   dùng một tấm ảnh vẽ bằng model họ KHÔNG chọn (luna là lựa chọn có chủ đích), ║
+  # ║   và họ chỉ phát hiện ra khi nhìn thấy nét vẽ lạ. Nên: cùng model, cùng task,  ║
+  # ║   cùng ảnh đính — chỉ đổi thời điểm.                                           ║
+  # ║ VÌ SAO KHÔNG SỢ TỐN QUOTA: lỗi capacity xảy ra TRƯỚC khi sinh ảnh, không tấm   ║
+  # ║   nào được vẽ ⇒ không có gì để tính tiền. Điều kiện "chưa có ảnh mới" (đo bằng ║
+  # ║   mtime, y như khối hạ cấp) giữ cho lời hứa đó đúng cả khi codex nói dối.      ║
+  # ╚════════════════════════════════════════════════════════════════════════════════╝
+  # Hai biến để ca test đặt về 0 / số nhỏ — không thì bộ ca ngồi chờ 155 giây thật.
+  local busy_max="${GEN_BUSY_RETRIES:-3}"
+  [[ "$busy_max" =~ ^[0-9]+$ ]] || busy_max=3
+  local busy_waits=(${GEN_BUSY_BACKOFF:-20 45 90})
+  local busy_k=0
+  # `tail -n +N` cắt đúng phần log của LƯỢT GẦN NHẤT (xem `log_from`): lượt mới hỏng vì
+  # lý do khác thì vòng này dừng ngay, không bám vào vết "at capacity" đã cũ.
+  # KHÔNG bắt "429"/"rate limit" ở đây: đó là hạn mức của TÀI KHOẢN, thử lại sau 20
+  # giây chỉ tốn thêm một lần bị từ chối (và `diagnose` đã có mã riêng cho nó).
+  while (( busy_k < busy_max )) && (( rc != 0 )) \
+     && [[ $(mtime_epoch "raw/${job}.png") -lt "$t0" ]] \
+     && tail -n "+${log_from}" "logs/${job}.log" 2>/dev/null | grep -qiE "at capacity|overloaded|503"; do
+    local nap=20
+    if (( ${#busy_waits[@]} > 0 )); then
+      if (( busy_k < ${#busy_waits[@]} )); then nap="${busy_waits[busy_k]}"
+      else nap="${busy_waits[${#busy_waits[@]} - 1]}"; fi
+    fi
+    busy_k=$(( busy_k + 1 ))
+    # Hai bản của CÙNG một câu: một cho người mổ xẻ log của job, một cho người đang
+    # ngồi nhìn màn hình. Dòng ra stdout đi thẳng vào kênh `job.log` của agent (xem
+    # run-handle `parseGenLine`) nên nó phải mang TÊN JOB — stdout là của cả lượt chạy,
+    # không của riêng ai. Nó cố ý không bắt đầu bằng OK/FAIL/prompt để không bị nhận
+    # nhầm thành một phán quyết.
+    echo "model quá tải — thử lại lần ${busy_k} sau ${nap}s" >>"logs/${job}.log"
+    echo "⏳ ${job}: model quá tải — thử lại lần ${busy_k} sau ${nap}s"
+    sleep "$nap"
+    log_from=$(( $(wc -l <"logs/${job}.log" 2>/dev/null || echo 0) + 1 ))
+    ${codex_env[@]+"${codex_env[@]}"} codex exec \
+      ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
+      -s workspace-write \
+      -C "${ROOT}" \
+      --skip-git-repo-check \
+      ${att[@]+"${att[@]}"} \
+      -o "logs/${job}.last.txt" \
+      "${task}" >>"logs/${job}.log" 2>&1
+    rc=$?
+  done
   # VỚT ẢNH (codex ≥0.147): có khi model sinh ảnh xong nhưng KHÔNG tự copy về đích —
   # tool báo cho model một đường dẫn generated_images không tồn tại trên máy (vd
   # /root/.codex/... khi provider tuỳ biến chạy tool trong container của họ), hoặc model
@@ -1569,7 +1630,17 @@ match() {
   local f; for f in "${FILTERS[@]}"; do [[ "$1" == *"$f"* ]] && return 0; done
   return 1
 }
-echo "Bắt đầu $(date +%H:%M:%S) — chạy song song${FILTERS[*]:+ (lọc: ${FILTERS[*]})}"
+# DÒNG NÀY ĐI THẲNG LÊN MÀN HÌNH NGƯỜI DÙNG, NÊN NÓ PHẢI NÓI ĐÚNG SỐ.
+# Trước 15/09/2026 nó nói "chạy song song" bất kể MAXJOBS. Khi mổ run r-0059 (maxJobs=1)
+# thì chính dòng ấy — cộng với việc agent phát `job.started` cho MỌI job ngay lúc ghi
+# xong prompt, tức TRƯỚC vòng gọi codex — làm cả hai người đọc log tin rằng hai job đã
+# chạy chồng lên nhau và nghi maxJobs bị phớt lờ. Nó không bị phớt lờ (mốc thời gian
+# trong events chứng minh hai lượt nối đuôi nhau), chỉ là lời tường thuật sai.
+if (( MAXJOBS > 1 )); then
+  echo "Bắt đầu $(date +%H:%M:%S) — chạy tối đa ${MAXJOBS} tấm cùng lúc${FILTERS[*]:+ (lọc: ${FILTERS[*]})}"
+else
+  echo "Bắt đầu $(date +%H:%M:%S) — chạy lần lượt từng tấm${FILTERS[*]:+ (lọc: ${FILTERS[*]})}"
+fi
 while read -r job; do
   match "$job" || continue
   # Throttle: image-gen ăn quota ChatGPT gấp 3-5x lượt thường; bung cả 28 job dễ dính rate limit.

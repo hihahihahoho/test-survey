@@ -7,11 +7,63 @@ import {
   makeClient, fakeDoctor, CLIENT, PAGES, PORT, createBasicProject,
 } from "./harness.mjs"
 import { createAgent } from "../server.mjs"
-import { buildCommand } from "../lib/engine.mjs"
+import { buildCommand, diagnose, summarizeFailures } from "../lib/engine.mjs"
 
 export async function run({ api, wsRoot, agentDir, pid }) {
   // ─────────────────────────────────────────── 9. RUNS
   describe("lượt chạy")
+
+  /* ══ CHẨN ĐOÁN ĐỌC ĐÚNG LỜI THAN CỦA NHÀ CUNG CẤP ═════════════════════════════
+     Sự cố 15/09/2026 (r-0059, job `chinh-ui2`): log codex kết bằng đúng hai dòng
+     «ERROR: Selected model is at capacity. Please try a different model.», không
+     một ảnh nào được sinh — và UI chỉ nói được "1/2 job lỗi chưa rõ nguyên nhân".
+     "Chưa rõ" ở đây là một lời nói dối có thiện chí: nguyên nhân nằm ngay dòng cuối
+     của log, và cách chữa (chờ vài phút rồi bấm Vẽ) khác hẳn cách chữa của hết lượt
+     (chờ hạn mức đặt lại) — nên hai thứ KHÔNG được gộp làm một mã. */
+  await it("«model is at capacity» ⇒ MODEL_BUSY, không phải UNKNOWN cũng không phải QUOTA", () => {
+    eq(diagnose(["ERROR: Selected model is at capacity. Please try a different model."]), "MODEL_BUSY", "at capacity")
+    eq(diagnose(["upstream overloaded, try again"]), "MODEL_BUSY", "overloaded")
+    eq(diagnose(["HTTP 503 Service Unavailable"]), "MODEL_BUSY", "503")
+    eq(diagnose(["The service is temporarily unavailable"]), "MODEL_BUSY", "temporarily unavailable")
+  })
+  await it("hết lượt vẫn là hết lượt: QUOTA đứng TRƯỚC và không nuốt chữ «capacity»", () => {
+    eq(diagnose(["429 rate limit exceeded"]), "QUOTA_SUSPECTED", "429")
+    eq(diagnose(["You have hit your usage limit"]), "QUOTA_SUSPECTED", "usage limit")
+    // Log có CẢ HAI ⇒ hạn mức thắng: thử lại ngay chỉ tốn thêm một lần bị từ chối.
+    eq(diagnose(["quota exceeded", "model at capacity"]), "QUOTA_SUSPECTED", "cả hai ⇒ QUOTA")
+    eq(diagnose(["chưa đăng nhập: codex login"]), "NOT_LOGGED_IN", "đăng nhập vẫn đọc được")
+    eq(diagnose(["cái gì đó lạ hoắc"]), "UNKNOWN", "không có bằng chứng ⇒ UNKNOWN")
+  })
+  /* ══ "CHƯA RÕ" KHÔNG ĐƯỢC PHÉP KHOÁ CỬA ═══════════════════════════════════════
+     `markJob` chẩn đoán trên ĐÚNG MỘT dòng `FAIL <job> (…)` — dòng đó chỉ nói job
+     hỏng, không nói vì sao, nên nó luôn ra "UNKNOWN". Bằng chứng thật nằm trong
+     `logs/<job>.log`, và `settleGenJobs` là nơi duy nhất đọc được nó. Trước
+     15/09/2026 cửa nâng cấp chỉ mở cho `NO_ARTIFACT`, nên r-0059 có một log ghi rõ
+     «model is at capacity» mà run.json vẫn đóng dấu "UNKNOWN". */
+  await it("[r-0059] bằng chứng trong log job LẬT được chẩn đoán «UNKNOWN» thành MODEL_BUSY", async () => {
+    const { RunHandle } = await import("../lib/run-handle.mjs")
+    const h = Object.create(RunHandle.prototype)
+    const job = { job: "chinh-ui2", variant: "chinh", sheet: "ui2", status: "failed", diagnosis: "UNKNOWN" }
+    Object.assign(h, {
+      ws: { projectsDir: join(wsRoot, "projects") },
+      run: { projectId: pid, kind: "gen", jobs: [job], progress: { done: 0, failed: 1, total: 1 } },
+      cancelled: false,
+      // Chỉ cô lập ĐÚNG khúc đang đo: không ảnh mới, và log job nói thẳng nguyên nhân.
+      attachArtifact: async () => false,
+      validateArtifact: async () => {},
+      errorTailFor: async () => ["ERROR: Selected model is at capacity. Please try a different model."],
+      persist: async () => {},
+    })
+    await h.settleGenJobs()
+    eq(job.diagnosis, "MODEL_BUSY", "đọc log xong phải đổi ý, không bám lấy «chưa rõ»")
+    eq(h.run.failSummary, "1/1 job máy vẽ đang quá tải, thử lại sau ít phút", "banner nói đúng thứ vừa đọc được")
+  })
+  await it("một câu cho cả lượt: MODEL_BUSY có lời tiếng Việt riêng, không rơi về «chưa rõ»", () => {
+    const line = summarizeFailures([
+      { status: "ok" }, { status: "failed", diagnosis: "MODEL_BUSY" },
+    ])
+    eq(line, "1/2 job máy vẽ đang quá tải, thử lại sau ít phút", "câu gộp")
+  })
   await it("chạy gen khi chưa tạo được ảnh → 409 IMAGEGEN_UNAVAILABLE (chặn TRƯỚC khi chạy)", async () => {
     const r = await api("POST", `/api/projects/${pid}/runs`, { body: { kind: "gen", jobs: ["tet-main"] } })
     eq(r.status, 409, "status")
@@ -133,7 +185,7 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     ok(await pathExists(join(wsRoot, "projects", gid, okJob.artifact.path)), "snapshot artifact tồn tại trên đĩa")
     ok(okJob.artifact.writtenAt, "có artifact.writtenAt — phán theo sản phẩm, không theo exit code")
     const badJob = got.json.jobs.find(j => j.status === "failed")
-    ok(["QUOTA_SUSPECTED", "NOT_LOGGED_IN", "NO_ARTIFACT", "TIMEOUT", "UNKNOWN"].includes(badJob.diagnosis),
+    ok(["QUOTA_SUSPECTED", "MODEL_BUSY", "NOT_LOGGED_IN", "NO_ARTIFACT", "TIMEOUT", "UNKNOWN"].includes(badJob.diagnosis),
       `job lỗi có chẩn đoán enum: ${badJob.diagnosis}`)
 
     // reconnect bằng ?from=<seq>: không mất, không lặp

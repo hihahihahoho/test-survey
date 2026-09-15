@@ -33,9 +33,12 @@ export const diagnosisSchema = z.enum([
   /* 09/2026 có thêm `OPAQUE_ALPHA` cho tấm nền đục; chủ sản phẩm chốt 09/09/2026
      "cứ để cho nó gen tự nhiên nhé, ko block" nên nền đục KHÔNG còn làm job đỏ —
      nó chỉ là ghi chú trên dòng `OK` của engine + cờ `mode: "rgb"` trong manifest
-     (xem `SheetResultPanel`). Danh sách này vì thế trở lại đúng 5 mã lỗi thật.
+     (xem `SheetResultPanel`). Danh sách này vì thế trở lại đúng các mã lỗi THẬT.
+     `MODEL_BUSY` (15/09/2026): nhà cung cấp trả «Selected model is at capacity» —
+     máy vẽ đầy, KHÔNG phải tài khoản hết lượt. Lời mời vẫn là nút Vẽ sẵn có, chỉ
+     khác ở chỗ lần này thử lại thật sự có cửa thắng.
      Nguồn: `agent/lib/engine.mjs` (`diagnose`, `DIAGNOSIS_VI`). */
-  "QUOTA_SUSPECTED", "NOT_LOGGED_IN", "NO_ARTIFACT", "TIMEOUT", "UNKNOWN",
+  "QUOTA_SUSPECTED", "MODEL_BUSY", "NOT_LOGGED_IN", "NO_ARTIFACT", "TIMEOUT", "UNKNOWN",
 ]);
 export type Diagnosis = z.infer<typeof diagnosisSchema>;
 

@@ -248,7 +248,19 @@ export function buildCommand(kind, projectDirAbs, { variants = [], sheets = null
 /** Chẩn đoán 1 dòng cho job lỗi (enum của Run.jobs[].diagnosis). */
 export function diagnose(lines) {
   const hay = lines.join("\n").toLowerCase()
+  /* THỨ TỰ LÀ MỘT PHÁN QUYẾT, KHÔNG PHẢI THÓI QUEN GÕ PHÍM.
+     QUOTA đứng TRƯỚC MODEL_BUSY vì hai câu chuyện nghe giống nhau mà cách chữa
+     ngược nhau: hết lượt thì thử lại NGAY chỉ tốn thêm một lần bị từ chối (phải
+     chờ hạn mức đặt lại), còn máy vẽ quá tải thì thử lại sau vài phút là xong.
+     Mẫu QUOTA cố tình KHÔNG có chữ "capacity": «Selected model is at capacity»
+     là lời của NHÀ CUNG CẤP về cỗ máy của họ, không phải về hạn mức của tài khoản
+     — nuốt nhầm nó thì người dùng được khuyên đi chờ hạn mức mà hạn mức vẫn đầy. */
   if (/rate limit|429|quota|usage limit|too many requests/.test(hay)) return "QUOTA_SUSPECTED"
+  /* SỰ CỐ 15/09/2026 (r-0059, job `chinh-ui2`): log codex kết bằng ĐÚNG hai dòng
+     «ERROR: Selected model is at capacity. Please try a different model.», không
+     một ảnh nào được sinh — mà UI chỉ nói được "1/2 job lỗi chưa rõ nguyên nhân".
+     Hay gặp nhất khi bấm vẽ lại CẢ THẺ: nhiều lượt liên tiếp đập vào cùng một model. */
+  if (/at capacity|capacity|overloaded|service unavailable|503|temporarily unavailable/.test(hay)) return "MODEL_BUSY"
   if (/not logged in|unauthor|chưa đăng nhập|codex login/.test(hay)) return "NOT_LOGGED_IN"
   if (/timed? ?out|timeout/.test(hay)) return "TIMEOUT"
   if (/ảnh không được ghi|no artifact/.test(hay)) return "NO_ARTIFACT"
@@ -262,6 +274,7 @@ export function diagnose(lines) {
    (banner project, thẻ Home, khối copy chẩn đoán) đọc CÙNG một chuỗi, không ai tự chế. */
 const DIAGNOSIS_VI = {
   QUOTA_SUSPECTED: "nghi chạm giới hạn tạo ảnh",
+  MODEL_BUSY: "máy vẽ đang quá tải, thử lại sau ít phút",
   NOT_LOGGED_IN: "công cụ tạo ảnh chưa đăng nhập",
   NO_ARTIFACT: "không ghi được ảnh",
   TIMEOUT: "quá thời gian chờ",

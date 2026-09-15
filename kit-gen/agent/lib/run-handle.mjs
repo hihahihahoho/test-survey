@@ -869,9 +869,17 @@ export class RunHandle {
     for (const j of this.run.jobs) {
       if (j.status !== "failed" || j.errorTail?.length) continue
       j.errorTail = await this.errorTailFor(pdir, j.job)
-      // Enum lấy từ chính bằng chứng: `FAIL <job>` chỉ nói "ảnh không được ghi",
-      // còn `rc=127` / `SyntaxError` nằm trong log riêng và mới là nguyên nhân thật.
-      if (!j.diagnosis || j.diagnosis === "NO_ARTIFACT") {
+      /* Enum lấy từ chính bằng chứng: `FAIL <job>` chỉ nói "ảnh không được ghi",
+         còn `rc=127` / `SyntaxError` nằm trong log riêng và mới là nguyên nhân thật.
+         ⚠ "UNKNOWN" CŨNG PHẢI ĐƯỢC THAY. Trước 15/09/2026 danh sách này chỉ có
+         `NO_ARTIFACT`, mà `markJob` thì luôn chạy `diagnose` trên MỘT dòng `FAIL …`
+         — dòng ấy không chứa nguyên nhân nào nên trả về "UNKNOWN", và "UNKNOWN" là
+         giá trị THẬT (truthy, khác NO_ARTIFACT) nên nó KHOÁ luôn cửa nâng cấp.
+         Hệ quả đo được (r-0059): log job ghi rõ «model is at capacity», bằng chứng
+         nằm ngay trong `errorTail`, mà run.json vẫn đóng dấu "UNKNOWN" và banner vẫn
+         đọc "1/2 job lỗi chưa rõ nguyên nhân". "Chưa rõ" chưa bao giờ là một kết
+         luận — nó chỉ là chỗ trống chờ bằng chứng, nên bằng chứng tới thì phải nhường. */
+      if (!j.diagnosis || j.diagnosis === "NO_ARTIFACT" || j.diagnosis === "UNKNOWN") {
         const better = diagnose(j.errorTail)
         if (better !== "UNKNOWN") j.diagnosis = better
       }
