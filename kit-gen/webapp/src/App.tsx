@@ -18,6 +18,10 @@ import { useUiStore, applyTheme } from "@/lib/store";
 /* Import THẲNG file, không qua cửa chung `@/lib/store` — lý do ở cuối `lib/store/index.ts`. */
 import { SettingsSync } from "@/lib/store/settings-sync";
 import { ErrorBoundary, UpdateOverlay, UpdateResultNotice } from "@/components/layout";
+/* BÀN MỔ CHỈ-DEV: dán MỘT lượt copy từ Figma vào để đọc ra định dạng gốc của nó.
+   Treo ở đây (ngoài router) vì nó không thuộc màn nào — nó là dụng cụ đo, và phải
+   với tới được từ bất kỳ đâu. Tự tắt ở bản người dùng cầm (`figmaLabOn`). */
+import { FigmaPasteLab } from "@/features/kit-core/components/FigmaPasteLab";
 import { routeTree } from "./routeTree";
 import { detectBaseHref, toRouterBasepath } from "@/lib/basepath";
 import { NotFoundScreen } from "./routes/-not-found";
@@ -88,6 +92,7 @@ export function App() {
           <RouterProvider router={router} />
           <UpdateOverlay />
           <UpdateResultNotice />
+          <FigmaPasteLab />
           <Toaster />
         </TooltipProvider>
       </QueryClientProvider>
