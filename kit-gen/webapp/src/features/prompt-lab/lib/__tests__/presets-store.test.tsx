@@ -890,3 +890,62 @@ describe("danh mục dòng-đơn: hạt giống · đọc · ghi", () => {
 function getSeen() {
   return getPresets();
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   «popover» → «popup panel» — TỪ CỦA NGƯỜI VẼ GAME, KHÔNG PHẢI CỦA RADIX
+   ══════════════════════════════════════════════════════════════════════════
+   Chủ sản phẩm, 15/09/2026, đọc prompt thật `chinh-ui2.txt`: *"nó là popup mà"*.
+   Ba chuỗi `en` của bộ Popup đi THẲNG vào prompt gửi máy vẽ, nên chúng phải nói
+   bằng tiếng của người đặt hàng. `id` KHÔNG đổi — đổi id là làm mọi dự án cũ mất ô.
+
+   Và hạt giống một mình thì không đủ: `seedOnce` cố ý không ghi đè bản ghi đã có
+   trên đĩa, nên máy đang test vẫn hiện chữ cũ. Đường vá là `LEGACY_ELEMENT_EN` —
+   cùng cơ chế đã dùng cho tám câu mô tả đời trước. */
+describe("bộ Popup nói «popup», không nói «popover»", () => {
+  const seed = seedPresets();
+  const enOf = (id: string) => seed.elements.find((element) => element.id === id)?.en ?? "";
+
+  it("hạt giống đời nay: ba món của bộ đều nói «popup»", () => {
+    expect(enOf("popover")).toBe("popup panel");
+    expect(enOf("popup-ribbon")).toBe("the heading banner that sits across the top of the same popup");
+    expect(enOf("popup-close")).toBe("the round close button of the same popup, with a cross mark");
+    /* `id` là danh tính của ô trong mọi dự án đã lưu — không đổi một chữ. */
+    expect(seed.elements.some((element) => element.id === "popover")).toBe(true);
+  });
+
+  it("không một chuỗi `en` nào của hạt giống còn chữ «popover»", () => {
+    expect(seed.elements.filter((element) => element.en.includes("popover"))).toEqual([]);
+  });
+
+  it("máy ĐÃ CÓ bản ghi chữ cũ ⇒ đọc lên là đã thành «popup»", async () => {
+    get.mockResolvedValue(library([
+      row("preset_p1", "element", "panel", { key: "popover", en: "popover", decor: "medium", glazeId: "solid", sizeId: "" }),
+      row("preset_p2", "element", "ribbon", {
+        key: "popup-ribbon", decor: "medium", glazeId: "solid", sizeId: "",
+        en: "the heading banner that sits across the top of the same popover",
+      }),
+      row("preset_p3", "element", "close button", {
+        key: "popup-close", decor: "light", glazeId: "solid", sizeId: "",
+        en: "the round close button of the same popover, with a cross mark",
+      }),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(3));
+    expect(seen!.elements.map((element) => element.en)).toEqual([
+      "popup panel",
+      "the heading banner that sits across the top of the same popup",
+      "the round close button of the same popup, with a cross mark",
+    ]);
+  });
+
+  it("người dùng tự sửa một chữ ⇒ không khớp bảng ⇒ chữ của họ ở nguyên", async () => {
+    get.mockResolvedValue(library([
+      row("preset_p1", "element", "panel", { key: "popover", en: "my own popover wording", decor: "medium", glazeId: "solid", sizeId: "" }),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen!.elements[0]!.en).toBe("my own popover wording");
+  });
+});

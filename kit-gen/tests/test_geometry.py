@@ -242,7 +242,7 @@ class PromptNoiTiLeChuKhongNoiPixelTest(unittest.TestCase):
             c["out"] = {"w": 100, "h": 160}
         m = self.ASPECT.search(render_prompt(cfg, "demo-ui"))
         self.assertEqual((m.group(2), m.group(3), m.group(4)),
-                         ("1", "1.6", "taller than wide"))
+                         ("1", "1.6", "taller than wide, about 2:3"))
 
     def test_geometry_py_VAN_LA_nguon_cua_dao_cat_du_prompt_thoi_doc_no(self):
         """Prompt rút lui khỏi toạ độ KHÔNG có nghĩa là hình học bị bỏ: `slice.py`

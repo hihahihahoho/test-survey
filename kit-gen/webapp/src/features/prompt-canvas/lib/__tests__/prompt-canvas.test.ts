@@ -1805,3 +1805,48 @@ describe("khớp khung — cài đặt của THẺ, đọc/ghi qua tài liệu c
     ]);
   });
 });
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   GHI CHÚ CỦA NGƯỜI DÙNG LÀ MỘT MỆNH ĐỀ CÓ NHÃN, Ở CUỐI DÒNG
+
+   ╔══ BỆNH ĐÃ ĐỌC ĐƯỢC TRONG PROMPT THẬT (15/09/2026) ═══════════════════════════╗
+   ║ `chinh-nhan-vat.txt`, ô 1: «…, seen from a three-quarter left view, không đội ║
+   ║ mũ, full body». Ghi chú tiếng Việt nằm LỌT GIỮA những mệnh đề tiếng Anh do    ║
+   ║ khuôn sinh ra, không có gì phân biệt hai giọng — mà ô ấy còn mang trang phục  ║
+   ║ preset «a red santa hat». Hai câu cãi nhau về cái mũ, và câu thắng là câu     ║
+   ║ đứng ĐẦU, vì câu sau trông như một mảnh nữa của cùng danh sách.               ║
+   ╚══════════════════════════════════════════════════════════════════════════════╝
+   Chữ của người dùng KHÔNG bị dịch và KHÔNG bị sửa — thứ đổi là VỊ TRÍ và NHÃN.
+   ══════════════════════════════════════════════════════════════════════════════ */
+describe("ghi chú của người thiết kế — cuối dòng, có nhãn, nguyên văn", () => {
+  const contractOf = (st: ComposerState) => composerToContract(st, { presets: PRESETS, kitName: "K" });
+
+  it("dòng dáng: ghi chú đứng SAU «full body», mang nhãn, và không bị dịch", () => {
+    const row = { ...newMascotPose("wave"), note: "đội mũ lưỡi chai Newyork Yankee" };
+    const contract = contractOf(state({ blocks: [mascotBlock("m1", mascotDoc(), [row])] }));
+    const spec = contract.sheets.find((s) => s.id.startsWith("nhan-vat"))!.components[0]!.spec;
+    expect(spec).toContain("full body, designer's note: đội mũ lưỡi chai Newyork Yankee");
+    /* Và nó KHÔNG còn nằm giữa những mệnh đề của khuôn. */
+    expect(spec).not.toContain("Newyork Yankee, full body");
+    expect(spec.endsWith("designer's note: đội mũ lưỡi chai Newyork Yankee")).toBe(true);
+  });
+
+  it("dòng element: cùng một luật, cùng một nhãn", () => {
+    const st = state({
+      blocks: [{
+        id: "u1", kind: "uikit", mode: "template",
+        cells: [{ id: "c1", elementId: "button", styleId: "", decor: "none", decorPlace: "balanced", glazeId: "", sizeId: "", note: "bo góc to" }],
+      }],
+    } as unknown as Partial<ComposerState>);
+    const spec = contractOf(st).sheets.find((s) => s.id.startsWith("ui"))!.components[0]!.spec;
+    expect(spec).toContain("designer's note: bo góc to");
+    expect(spec.endsWith("designer's note: bo góc to")).toBe(true);
+  });
+
+  it("không có ghi chú ⇒ không có nhãn nào mọc ra", () => {
+    const contract = contractOf(state({ blocks: [mascotBlock("m1", mascotDoc(), [newMascotPose("wave")])] }));
+    const spec = contract.sheets.find((s) => s.id.startsWith("nhan-vat"))!.components[0]!.spec;
+    expect(spec).not.toContain("designer's note");
+    expect(spec.endsWith("full body")).toBe(true);
+  });
+});

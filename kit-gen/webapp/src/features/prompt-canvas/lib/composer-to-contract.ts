@@ -162,6 +162,25 @@ const UI_CANVAS = "square" as const;
 const POSE_SKEL = { shape: "pose" as const, w: 0.3, h: 0.85 };
 
 /**
+ * Ghi chú người dùng gõ cho MỘT ô → mệnh đề cuối dòng, có nhãn.
+ *
+ * ╔══ BỆNH ĐÃ ĐỌC ĐƯỢC TRONG PROMPT THẬT (15/09/2026) ═══════════════════════════╗
+ * ║ `chinh-nhan-vat.txt`, ô 1: «…, seen from a three-quarter left view, không đội ║
+ * ║ mũ, full body» — ghi chú tiếng Việt nằm LỌT GIỮA những mệnh đề tiếng Anh do   ║
+ * ║ khuôn sinh ra, không có gì phân biệt hai giọng. Mà ô ấy còn mang trang phục   ║
+ * ║ preset «a red santa hat»: hai câu cãi nhau về cái mũ, và câu THẮNG lại là câu ║
+ * ║ đứng ĐẦU (preset), vì câu sau trông như một mảnh của cùng danh sách.          ║
+ * ╚══════════════════════════════════════════════════════════════════════════════╝
+ * Ghi chú KHÔNG được dịch — đó là chữ của người dùng, và engine không có quyền
+ * diễn giải lại nó. Thứ engine làm được là nói ra VAI của nó: một mệnh đề riêng, ở
+ * cuối, mang nhãn — để model đọc ra "đây là yêu cầu thêm, ưu tiên hơn khuôn".
+ */
+function designerNote(note: string | null | undefined): string {
+  const t = (note ?? "").trim();
+  return t === "" ? "" : `designer's note: ${t}`;
+}
+
+/**
  * Nấc giữa của 8 trục phong cách.
  *
  * Composer CHƯA có thanh trượt trục nào — nó tả phong cách bằng câu chữ. Nhưng
@@ -579,7 +598,7 @@ function mascotSheets(
       const free = block.mode === "free" ? tidy(serializeDoc(row.doc as PromptDocNode, rowCtx)) : "";
       /* Câu tự do RỖNG (người dùng xoá sạch dòng) ⇒ rơi về khuôn, KHÔNG ra ô không
          mô tả gì — cùng luật với dòng element. */
-      const body = free || [poseSpecFor(row.pose, expression), viewEN, row.note.trim()].filter(Boolean).join(", ");
+      const body = free || [poseSpecFor(row.pose, expression), viewEN].filter(Boolean).join(", ");
       return {
         /* Tên ô KHÔNG mang tiền tố `pose-` như `styles.json`: agent
            (`validate.mjs`) chỉ miễn luật tên file cho `shape:"empty"`, nên `pose-…`
@@ -587,7 +606,10 @@ function mascotSheets(
            lần ở `buildKitsetContract`, không trả lại lần hai. */
         file: `${String(k + 1).padStart(2, "0")}-${slugify(row.pose) || "dang"}`,
         vi: labelOf("pose", row.pose, presets),
-        spec: tidy([subject, body, "full body"].filter(Boolean).join(", ")),
+        /* Ghi chú đứng SAU «full body», không lọt giữa các mệnh đề của khuôn —
+           xem `designerNote`. Chế độ tự do thì cả dòng đã là chữ người dùng. */
+        spec: tidy([subject, body, "full body",
+                    free ? "" : designerNote(row.note)].filter(Boolean).join(", ")),
         skel: { ...POSE_SKEL, pose: row.pose },
       };
     });
@@ -689,7 +711,9 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
            tra bảng hằng: nấc đục nền nay sửa được ở màn «Thư viện prompt», và hai
            đường tra khác nhau là hai câu khác nhau cho cùng một ô. */
         resolveElementSpec({ spec: text }, glaze, phraseOf("glaze", cell.glazeId, presets)),
-        cell.note.trim(),
+        /* Cùng luật với dòng dáng: ghi chú của người dùng là một mệnh đề CÓ NHÃN,
+           không phải một mảnh nữa của danh sách khuôn — xem `designerNote`. */
+        designerNote(cell.note),
       ].filter(Boolean).join(", "));
       /* Câu tự do RỖNG (người dùng xoá sạch dòng) ⇒ rơi về khuôn, KHÔNG ra ô
          không mô tả gì. Bỏ hẳn ô đi thì lưới tụt một bậc và mọi ô sau nhảy chỗ —

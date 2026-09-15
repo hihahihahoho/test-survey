@@ -585,9 +585,9 @@ export function seedPresets(): PresetBundle {
       { id: "rank-row-self", vi: "my row", en: "the same leaderboard row, highlighted as the current player", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "bar", w: 0.9, h: 0.22, slice9: true }, set: SET.rank },
 
       /* ── Popup ───────────────────────────────────────────────────────────── */
-      { id: "popover", vi: "panel", en: "popover", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.86, h: 0.66, slice9: true }, set: SET.popup },
-      { id: "popup-ribbon", vi: "ribbon", en: "the heading banner that sits across the top of the same popover", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.78, h: 0.2, slice9: true }, set: SET.popup },
-      { id: "popup-close", vi: "close button", en: "the round close button of the same popover, with a cross mark", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.32, h: 0.32 }, set: SET.popup },
+      { id: "popover", vi: "panel", en: "popup panel", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.86, h: 0.66, slice9: true }, set: SET.popup },
+      { id: "popup-ribbon", vi: "ribbon", en: "the heading banner that sits across the top of the same popup", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.78, h: 0.2, slice9: true }, set: SET.popup },
+      { id: "popup-close", vi: "close button", en: "the round close button of the same popup, with a cross mark", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.32, h: 0.32 }, set: SET.popup },
 
       /* ── Tabs ─────────────────────────────────────────────────────────────── */
       { id: "tab-idle", vi: "idle", en: "a tab chip, unselected", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.6, h: 0.26, slice9: true }, set: SET.tab },
@@ -945,7 +945,16 @@ function str(data: Record<string, unknown>, field: string, fallback = ""): strin
  */
 const LEGACY_ELEMENT_EN: Record<string, string> = {
   "a primary action button with a centered label": "button",
-  "a floating popover panel with a title bar": "popover",
+  /* 15/09/2026 — chủ sản phẩm, đọc prompt thật: *"nó là popup mà"*. `popover` là
+     từ của thư viện giao diện web (Radix), không phải từ của người vẽ game; ba câu
+     dưới đây đi THẲNG vào prompt nên chúng phải nói bằng tiếng của người đặt hàng.
+     `id` không đổi một chữ — đổi id là làm mọi dự án cũ mất ô. */
+  "a floating popover panel with a title bar": "popup panel",
+  popover: "popup panel",
+  "the heading banner that sits across the top of the same popover":
+    "the heading banner that sits across the top of the same popup",
+  "the round close button of the same popover, with a cross mark":
+    "the round close button of the same popup, with a cross mark",
   "a horizontal health bar with a filled track": "health bar",
   "a coin currency icon seen from a slight angle": "coin icon",
   "a circular avatar frame with a rim": "avatar frame",

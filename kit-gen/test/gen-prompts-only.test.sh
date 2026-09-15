@@ -316,8 +316,8 @@ expect "và nó nói rõ mình nghiêm tới đâu" "Never make a core taller, s
 # hiệu, câu chữ mới là thứ đi vào ảnh.
 expect "ô 1 đúng tỉ lệ" "1) a button — core aspect 2.9:1 (about three times wider than tall), about 245 px wide on screen — its box is x=62..564" "$vuong"
 expect "ô 2 vuông"      "2) a popover panel — core aspect 1:1 (square), about 195 px wide on screen — its box is x=689..1191" "$vuong"
-expect "ô 3 cao hơn rộng" "3) a checkbox — core aspect 1:1.6 (taller than wide), about 100 px wide on screen — its box is x=62..564, y=689..1191" "$vuong"
-expect "ô 4 dài mỏng"   "4) a toggle switch — core aspect 4.7:1 (a long thin bar, nearly five times wider than tall), about 270 px wide on screen — its box is x=689..1191, y=689..1191 (502x502 px); everything of this element, rim and ornaments included, stays inside that box; including its ornaments it is at most 502 px wide" "$vuong"
+expect "ô 3 cao hơn rộng" "3) a checkbox — core aspect 1:1.6 (taller than wide, about 2:3), about 100 px wide on screen — its box is x=62..564, y=689..1191" "$vuong"
+expect "ô 4 dài mỏng"   "4) a toggle switch — core aspect 4.7:1 (nearly five times wider than tall), about 270 px wide on screen — its box is x=689..1191, y=689..1191 (502x502 px); everything of this element, rim and ornaments included, stays inside that box; including its ornaments it is at most 502 px wide" "$vuong"
 # Danh sách CHỈ CÓ MỘT: danh từ và hình học trên cùng dòng (chủ sản phẩm 27/08/2026).
 refute "không có bảng toạ độ thứ hai" "Cell 1 (row 1, col 1)" "$allp"
 refute "không còn tiêu đề hàng"       "Row 1, left to right" "$allp"
@@ -354,7 +354,9 @@ expect "«Layout» nói cỡ ô, một lần" "2x2 grid of 627x627 px cells, 4 e
 # Rãnh trống nói bằng SỐ: hộp nói ô được vẽ tới đâu, câu này nói phần còn lại là
 # RÃNH của CẢ HAI ô cạnh nhau — hai lề 62px ghép lại thành 124px không ai được chạm.
 expect "«Layout» nói rãnh trống bằng số" \
-  "Cells are separated by empty gutters: the outer 62 px band of every cell stays completely empty — not a leaf tip, not a glow — so neighbouring elements never meet." "$vuong"
+  "Cells are separated by empty gutters: the outer 62 px band of every cell — everything outside that box — stays completely empty, not a leaf tip, not a glow, so neighbouring elements never meet." "$vuong"
+expect "«Layout» định nghĩa Ô và HỘP, một lần" \
+  "Each cell has a box, given on that element's line below: the box is the part of the cell that may be painted." "$vuong"
 expect "và chốt bề ngang tối đa" \
   "A wide element is at most as wide as the box on its line: if the box cannot hold the core at its ratio at the size you want, draw it smaller — never wider than the box." "$vuong"
 expect "«Geometry» xếp hạng hộp trên tỉ lệ" \
@@ -370,8 +372,12 @@ refute "và «Layout» của nó cũng không nhắc cỡ ô" "px cells" "$linh"
 # án thật: overflowPx bên phải 69 và 77, khít mép ô 627px). Bản trước nói điều đó
 # bằng một cặp toạ độ ở cuối mỗi dòng; nay nói bằng quan hệ, một lần, ở «Geometry».
 expect "luật ranh giới ô nói bằng quan hệ" \
-  "Everything of an element, rim and ornament included, stays in its own cell" "$vuong"
-expect "và nói luôn phần lấp ô" "fills most of that cell while keeping a clear margin" "$vuong"
+  "Everything of an element, rim and ornament included, stays inside that box" "$vuong"
+expect "và nói luôn phần lấp ô" "fills most of its box" "$vuong"
+# «Ô» và «HỘP» phải là hai chữ nhất quán: engine không được vừa vẽ một cái hộp vừa
+# bảo model lấp đầy thứ BAO NGOÀI cái hộp (r-0044 lấn 113px, r-0047 lấn 63px).
+refute "không còn câu bảo lấp đầy Ô" "fills most of that cell" "$allp"
+refute "không còn câu «nằm trong Ô của mình»" "stays in its own cell" "$allp"
 # Tấm nền MỘT Ô đi hẳn một nhánh khác (chủ sản phẩm 07/09/2026: "prompt dài quá,
 # gen full khung mobile luôn"): nó không phải sprite sheet nên không có lưới, không
 # có hộp cắt, không có luật nền trong suốt — chỉ còn khổ giấy, phong cách, một câu
@@ -382,7 +388,25 @@ refute "tấm nền không bị đòi nền trong suốt" "FULLY TRANSPARENT" "$
 expect "tấm nền nói rõ là phủ kín khung" "filling the whole frame edge to edge" "$nen"
 expect "và vẫn mang đúng cảnh người dùng gõ" "village scene at dawn" "$nen"
 expect "tấm mascot mang tỉ lệ của chính dáng người" \
-  "1) mascot waving — core aspect 1:1.5 (taller than wide), about 254 px wide on screen — its box is x=" "$linh"
+  "1) mascot waving — core aspect 1:1.5 (taller than wide, about 2:3), about 254 px wide on screen — its box is x=" "$linh"
+# ── TẤM NHÂN VẬT KHÔNG LÃNH TỪ VỰNG CỦA ĐỒ GIAO DIỆN (15/09/2026) ─────────────
+# Đọc prompt thật `chinh-nhan-vat.txt`: câu chốt bề ngang nói bằng hai từ một dáng
+# người không có ("core", "ratio"), và luật hộp kèm vế "; the ratio is drawn inside
+# it" trỏ vào một con số mà dòng dáng không mang.
+chay="$(cat "$WORK/p/prompts/tet-chay.txt")"
+for t in "$linh" "$chay"; do
+  refute "nhân vật không lãnh câu chốt bề ngang" "A wide element is at most" "$t"
+  refute "và luật hộp không có vế tỉ lệ"        "the ratio is drawn inside it" "$t"
+  expect "luật hộp của nhân vật nói đúng một điều" "- The box on the element line is a hard limit." "$t"
+done
+# Dáng KHÔNG khai cỡ vẫn phải có ranh giới: hộp không phải là tỉ lệ.
+refute "dáng không khai cỡ thì không bịa tỉ lệ" "core aspect" "$chay"
+expect "…nhưng vẫn có hộp"                      "its box is x=" "$chay"
+# ── `cell_hint` LÀ CỤM DANH TỪ, PROMPT PHẢI DỰNG CÂU TỪ NÓ ───────────────────
+# «Each cell is a square 1:1 cell.» và «Each cell is a cell containing ONE full-body
+# character.» — cả hai đều do một dòng ghép thẳng `f"Each cell is a {hint}."`
+refute "không còn câu «Each cell is a …»" "Each cell is a" "$allp"
+refute "và ô không còn được định nghĩa là một cái ô" "is a cell" "$allp"
 
 echo "── KHÔNG còn một dấu vết nào của khung xương trong thứ gửi đi"
 for bad in "skeleton" "silhouette" "FIRST attached image" "gray silhouette" "guide box" "grid lines" "attached image is the geometry"; do
