@@ -11,7 +11,7 @@ export { PromptCanvasScreen } from "./PromptCanvasScreen";
 export { SheetResultSlot, type SheetResultSlotProps } from "./components/SheetResultSlot";
 export { CanvasBlock, type CanvasBlockProps } from "./components/CanvasBlock";
 export { jobIdOf, rawPathOf, sheetsHash } from "./lib/block-jobs";
-export { useGenQueue, WAITING_COPY, type GenBlockState, type GenQueue, type GenStatus } from "./lib/gen-queue";
+export { useGenQueue, WAITING_COPY, type GenBlockState, type GenPhase, type GenQueue, type GenStatus } from "./lib/gen-queue";
 export { useBlockPrompts, type BlockPromptState, type BlockPrompts } from "./lib/block-prompt";
 export { ensurePoseRefs, type PoseRefOutcome } from "./lib/pose-refs";
 export { canComposePoseSheet, cellBoxes, composePoseSheet, fitBox, type PoseSheetBox } from "./lib/pose-sheet";

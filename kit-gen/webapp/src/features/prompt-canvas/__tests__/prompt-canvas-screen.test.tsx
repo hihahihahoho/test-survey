@@ -348,7 +348,7 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
         sheets={[sheet as never]}
         onChange={() => {}}
         onDelete={() => {}}
-        gen={{ status: "idle", message: "", runId: null, done: 0, total: 0, jobs: [], drawing: [] }}
+        gen={{ status: "idle", message: "", runId: null, done: 0, total: 0, jobs: [], requested: [], drawing: [], phase: "idle" }}
         onGen={() => {}}
         onGenSheet={() => {}}
         onDequeue={() => {}}
@@ -377,7 +377,7 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
           sheets={[sheet as never]}
           onChange={() => {}}
           onDelete={() => {}}
-          gen={{ status: "idle", message: "", runId: null, done: 0, total: 0, jobs: [], drawing: [] }}
+          gen={{ status: "idle", message: "", runId: null, done: 0, total: 0, jobs: [], requested: [], drawing: [], phase: "idle" }}
           onGen={() => {}}
           onGenSheet={() => {}}
           onDequeue={() => {}}
@@ -774,5 +774,131 @@ describe("bỏ qua tấm không đổi", () => {
       expect(screen.getByTestId("jobs").textContent).toBe("chinh-b12");
       expect(screen.getByTestId("drawing").textContent).toBe("");
     });
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⑥ CÚ BẤM PHẢI CÓ TIẾNG VỌNG NGAY, KHÔNG ĐỢI AGENT TRẢ LỜI
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * ╔══ HIỆN TRƯỜNG 15/09/2026 ════════════════════════════════════════════════╗
+ * ║ Bấm «Vẽ lại tấm này» lúc hàng đợi đang bận ⇒ panel của tấm KHÔNG hiện gì. ║
+ * ║ Vì `jobs`/`drawing` chỉ có nội dung khi agent đã mở lượt; trước đó cả hai  ║
+ * ║ rỗng, và mọi chỉ báo ở panel im lặng. Người dùng bấm lại — đúng phản xạ    ║
+ * ║ với một nút không phản hồi, và hàng đợi thì lặng lẽ bỏ qua cú bấm ấy.      ║
+ * ║ `requested` trả lời NGAY: nó dựng từ danh sách tấm đang bày trên màn, đọc  ║
+ * ║ đồng bộ ở `jobsOf`, không đợi một vòng mạng nào.                          ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+describe("tấm đã xin vẽ — biết ngay từ lúc bấm", () => {
+  const prepareTwo = async (blockId: string) => [`chinh-${blockId}`, `chinh-${blockId}2`];
+  /** Đồng bộ và KHÔNG đi mạng — đúng vai của nó: chỉ nói thẻ này có tấm nào. */
+  const jobsOf = (blockId: string) => [`chinh-${blockId}`, `chinh-${blockId}2`];
+
+  function AskHarness({ only }: { only?: number }) {
+    const queue = useGenQueue(PID, prepareTwo, jobsOf);
+    const st = queue.stateOf("b1");
+    return (
+      <div>
+        <button type="button" onClick={() => queue.enqueue("b1", only)}>gen</button>
+        <span data-testid="s">{st.status}</span>
+        <span data-testid="p">{st.phase}</span>
+        <span data-testid="requested">{st.requested.join(",")}</span>
+        <span data-testid="drawing">{st.drawing.join(",")}</span>
+      </div>
+    );
+  }
+
+  const runWithJobs = (id: string, status: Run["status"], jobs: Array<{ job: string; status: string }>): Run => ({
+    ...makeRun(id, status, "running"),
+    progress: { done: jobs.filter((j) => j.status === "ok").length, total: jobs.length, failed: 0, etaSeconds: null },
+    jobs,
+  }) as unknown as Run;
+
+  it("hàng đợi đang bận ⇒ tấm vừa bấm đã nằm trong danh sách chờ, dù CHƯA có lượt", async () => {
+    /* 409 của một lượt do tab khác giữ — ca thật mà chủ sản phẩm gặp. */
+    H.startRun.mockRejectedValueOnce(new AgentError({
+      code: "RUN_CONFLICT", status: 409, transport: "http-error",
+      message: "already has run r-77", details: { runId: "r-77" },
+    }));
+    H.getRun.mockImplementation(async (id: string) => makeRun(id, "running", "running"));
+
+    wrap(<AskHarness only={1} />);
+    fireEvent.click(screen.getByText("gen"));
+
+    await waitFor(() => expect(screen.getByTestId("s").textContent).toBe("queued"));
+    /* ĐÚNG MỘT tấm: bấm vẽ lại tấm 2 thì tấm 1 không được phép hiện khung chờ. */
+    expect(screen.getByTestId("requested").textContent).toBe("chinh-b12");
+    expect(screen.getByTestId("drawing").textContent).toBe("");
+    expect(screen.getByTestId("p").textContent).toBe("waiting");
+  });
+
+  it("vẽ CẢ THẺ ⇒ mọi tấm của thẻ vào danh sách chờ ngay từ cú bấm", () => {
+    H.startRun.mockImplementation(() => new Promise(() => {}));
+    wrap(<AskHarness />);
+    fireEvent.click(screen.getByText("gen"));
+    expect(screen.getByTestId("requested").textContent).toBe("chinh-b1,chinh-b12");
+  });
+
+  it("lượt trả về KHÔNG có tấm bị giữ nguyên ⇒ tấm ấy rời danh sách chờ NGAY", async () => {
+    H.startRun.mockResolvedValueOnce({
+      runId: "r-5",
+      jobs: [{ job: "chinh-b12" }],
+      skipped: [{ job: "chinh-b1", reason: "UNCHANGED" }],
+    });
+    H.getRun.mockImplementation(async (id: string) =>
+      runWithJobs(id, "running", [{ job: "chinh-b12", status: "running" }]));
+
+    wrap(<AskHarness />);
+    fireEvent.click(screen.getByText("gen"));
+
+    await waitFor(() => expect(screen.getByTestId("s").textContent).toBe("running"));
+    /* Không quay vòng chờ tới hết lượt cho một tấm không ai đụng tới. */
+    expect(screen.getByTestId("requested").textContent).toBe("chinh-b12");
+    expect(screen.getByTestId("drawing").textContent).toBe("chinh-b12");
+  });
+
+  /**
+   * Agent ghi SẴN mọi job là `queued` lúc mở lượt (`runs.mjs:156`) và chỉ đẩy
+   * từng cái sang `running` khi thật sự vẽ tới (`run-handle.mjs:438`). Gộp hai
+   * trạng thái ấy làm một là bắt cả lượt cùng hiện «Đang vẽ tấm này…» trong khi
+   * máy mới cầm một tấm — và mỗi khung chờ thừa là một bức ảnh bị đẩy khỏi màn.
+   */
+  it("tấm còn XẾP HÀNG trong lượt thì đang chờ, chỉ tấm RUNNING mới là đang vẽ", async () => {
+    H.startRun.mockResolvedValueOnce({
+      runId: "r-6", jobs: [{ job: "chinh-b1" }, { job: "chinh-b12" }], skipped: [],
+    });
+    H.getRun.mockImplementation(async (id: string) =>
+      runWithJobs(id, "running", [
+        { job: "chinh-b1", status: "running" },
+        { job: "chinh-b12", status: "queued" },
+      ]));
+
+    wrap(<AskHarness />);
+    fireEvent.click(screen.getByText("gen"));
+
+    await waitFor(() => expect(screen.getByTestId("s").textContent).toBe("running"));
+    expect(screen.getByTestId("drawing").textContent).toBe("chinh-b1");
+    expect(screen.getByTestId("requested").textContent).toBe("chinh-b1,chinh-b12");
+    expect(screen.getByTestId("p").textContent).toBe("drawing");
+  });
+
+  it("tấm vẽ xong rời danh sách chờ; lượt chốt sổ thì danh sách rỗng hẳn", async () => {
+    H.startRun.mockResolvedValueOnce({
+      runId: "r-7", jobs: [{ job: "chinh-b1" }, { job: "chinh-b12" }], skipped: [],
+    });
+    H.getRun.mockImplementation(async (id: string) =>
+      runWithJobs(id, "running", [
+        { job: "chinh-b1", status: "ok" },
+        { job: "chinh-b12", status: "running" },
+      ]));
+
+    wrap(<AskHarness />);
+    fireEvent.click(screen.getByText("gen"));
+
+    await waitFor(() => expect(screen.getByTestId("s").textContent).toBe("running"));
+    /* Ảnh của tấm 1 đã nằm trên đĩa ⇒ bắt nó quay vòng chờ thêm là nói dối. */
+    expect(screen.getByTestId("requested").textContent).toBe("chinh-b12");
   });
 });

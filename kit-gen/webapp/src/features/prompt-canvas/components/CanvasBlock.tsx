@@ -194,7 +194,12 @@ export function CanvasBlock(props: CanvasBlockProps) {
                  lượt, để mỗi ô ảnh tự tra tên mình vào. Lý do đầy đủ (con bọ "cả
                  hai ô cùng hiện đang vẽ") nằm ở `SheetResultSlot`. */
               runJobs={gen.jobs}
-              drawingJobs={gen.status === "running" ? gen.drawing : []}
+              drawingJobs={gen.drawing}
+              /* Danh sách CÒN NỢ — có từ lúc bấm, kể cả khi lượt chưa phóng được.
+                 Không lọc theo `status` như `drawing` từng bị lọc: cả mục đích của
+                 nó là nói thay cho quãng `queued`, quãng mà trước đây panel câm. */
+              requestedJobs={gen.requested}
+              blockBusy={gen.status === "running" || gen.status === "queued"}
               /* Nút «Vẽ lại tấm này» có mặt kể cả ở thẻ MỘT tấm: từ lượt này nút Vẽ
                  giữ nguyên kết quả khi mô tả không đổi, nên đây là đường DUY NHẤT để
                  xin một bức ảnh khác cho cùng một mô tả. */

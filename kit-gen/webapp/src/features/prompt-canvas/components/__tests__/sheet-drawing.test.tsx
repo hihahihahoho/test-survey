@@ -21,7 +21,7 @@
  * nguyên một tấm (vân tay chưa đổi) — tấm bị bỏ qua cũng không được hiện khung chờ.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { seedPresets } from "@/features/prompt-lab/lib/presets-store";
@@ -143,20 +143,24 @@ function mount(gen: GenBlockState) {
 /** Lượt đang chạy chỉ mang ĐÚNG tấm 2 — đúng hình dạng `r-0034` ngoài đời. */
 const ONLY_SHEET_2: GenBlockState = {
   status: "running", message: "Đang vẽ…", runId: "r-0034",
-  done: 0, total: 1, jobs: ["chinh-ui2"], drawing: ["chinh-ui2"],
+  done: 0, total: 1, jobs: ["chinh-ui2"], requested: ["chinh-ui2"], drawing: ["chinh-ui2"],
+  phase: "drawing",
 };
+
+/** Panel kết quả của từng tấm, theo thứ tự tấm trên thẻ. */
+const panels = () => screen.getAllByRole("region", { name: /^Kết quả tấm / });
 
 /**
  * Nút «Vẽ lại tấm này» CỦA PANEL KẾT QUẢ, theo thứ tự tấm.
  *
- * Cùng một chữ ấy còn nằm ở vạch ranh giới tấm trong tab Soạn (`row-ui.tsx`), và
- * nút đó khoá theo CẢ THẺ — đúng như nó nên thế (xin thêm một lượt cho thẻ đang
- * chạy chỉ tổ đẩy nó ra sau hàng). Lọc theo `title` để ca này soi đúng nút đứng
- * cạnh bức ảnh, chứ không đếm nhầm sang nút kia rồi xanh/đỏ vì lý do khác.
+ * Cùng một chữ ấy còn nằm ở vạch ranh giới tấm trong tab Soạn (`row-ui.tsx`), nên
+ * ca này hỏi TRONG panel chứ không quét cả thẻ — nếu không, một cú đổi nhãn ở nút
+ * kia sẽ làm ca này xanh/đỏ vì một lý do chẳng liên quan.
+ * Ba mặt nút đều tính: nhãn đổi theo trạng thái, và chính phép đổi ấy là thứ được
+ * canh ở đây.
  */
 const panelRedrawButtons = () =>
-  screen.getAllByRole("button", { name: "Vẽ lại tấm này" })
-    .filter((el) => (el.getAttribute("title") ?? "").includes("—"));
+  panels().map((p) => within(p).getByRole("button", { name: /Vẽ lại tấm này|Đang vẽ…|Đang chờ…/ }));
 
 /** Đường mà từng ô ảnh gốc đi xin, theo thứ tự tấm trên thẻ. */
 const rawPaths = () =>
@@ -179,14 +183,25 @@ describe("vẽ lại tấm 2 ⇒ chỉ tấm 2 hiện khung chờ", () => {
     expect(rawPaths()).toEqual(["raw/chinh-ui.png"]);
   });
 
-  it("tấm 1 giữ nguyên nút «Vẽ lại tấm này» dùng được", () => {
+  /**
+   * ╔══ ĐỔI Ý 15/09/2026: TẤM 1 CŨNG PHẢI KHOÁ ═══════════════════════════════╗
+   * ║ Bản trước để nút của tấm 1 bấm được, và ca này canh đúng chuyện đó. Nhưng ║
+   * ║ hàng đợi nhận MỘT lượt cho mỗi thẻ (`enqueue` bỏ qua thẻ đã có mặt), nên  ║
+   * ║ cú bấm ấy rơi vào hư không: không lượt mới, không khung chờ, không một    ║
+   * ║ dòng chữ nào. "Bấm được" mà không có gì xảy ra tệ hơn hẳn "xám kèm lý do" ║
+   * ║ — nó dạy người dùng rằng nút này thỉnh thoảng hỏng.                       ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  it("tấm 1 cũng khoá, và tooltip nói rõ chờ gì — hàng đợi chỉ nhận một lượt mỗi thẻ", () => {
     mount(ONLY_SHEET_2);
     const buttons = panelRedrawButtons();
     expect(buttons).toHaveLength(2);
-    expect((buttons[0] as HTMLButtonElement).disabled).toBe(false);
-    /* Tấm ĐANG vẽ thì khoá — xin thêm một lượt cho đúng tấm đang chạy là tiêu tiền
-       cho một kết quả sắp bị chính nó ghi đè. */
+    expect((buttons[0] as HTMLButtonElement).disabled).toBe(true);
+    expect(buttons[0]?.getAttribute("title")).toBe("Chờ lượt hiện tại xong");
+    /* Tấm ĐANG vẽ thì khoá bằng chính mặt nút — xin thêm một lượt cho đúng tấm
+       đang chạy là tiêu tiền cho một kết quả sắp bị chính nó ghi đè. */
     expect((buttons[1] as HTMLButtonElement).disabled).toBe(true);
+    expect(buttons[1]?.textContent).toContain("Đang vẽ…");
   });
 
   it("đầu thẻ đếm theo số tấm THẬT của lượt: «Đang vẽ 0/1», không phải 0/2", () => {
@@ -199,7 +214,7 @@ describe("lượt đã xong vẫn phải trả tấm ngoài lượt về ảnh h
   it("tấm trong lượt đọc ảnh BẤT BIẾN của lượt, tấm ngoài lượt đọc bản hiện hành", () => {
     mount({
       status: "done", message: "Tấm 1 giữ nguyên, chưa đổi gì.", runId: "r-0034",
-      done: 1, total: 1, jobs: ["chinh-ui2"], drawing: [],
+      done: 1, total: 1, jobs: ["chinh-ui2"], requested: [], drawing: [], phase: "done",
     });
     expect(screen.queryByText("Đang vẽ tấm này…")).toBeNull();
     expect(rawPaths()).toEqual(["raw/chinh-ui.png", "runs/r-0034/artifacts/chinh-ui2.png"]);
@@ -212,7 +227,7 @@ describe("vẽ CẢ THẺ mà một tấm bị giữ nguyên", () => {
        tấm 2, dù người dùng bấm nút Vẽ của cả thẻ. */
     mount({
       status: "running", message: "Đang vẽ… · Tấm 1 giữ nguyên, chưa đổi gì.", runId: "r-0035",
-      done: 0, total: 1, jobs: ["chinh-ui2"], drawing: ["chinh-ui2"],
+      done: 0, total: 1, jobs: ["chinh-ui2"], requested: ["chinh-ui2"], drawing: ["chinh-ui2"], phase: "drawing",
     });
     expect(screen.getAllByText("Đang vẽ tấm này…")).toHaveLength(1);
     expect(rawPaths()).toEqual(["raw/chinh-ui.png"]);
@@ -221,7 +236,8 @@ describe("vẽ CẢ THẺ mà một tấm bị giữ nguyên", () => {
   it("cả hai tấm cùng vẽ ⇒ cả hai cùng hiện khung chờ", () => {
     mount({
       status: "running", message: "Đang vẽ…", runId: "r-0036",
-      done: 0, total: 2, jobs: ["chinh-ui", "chinh-ui2"], drawing: ["chinh-ui", "chinh-ui2"],
+      done: 0, total: 2, jobs: ["chinh-ui", "chinh-ui2"],
+      requested: ["chinh-ui", "chinh-ui2"], drawing: ["chinh-ui", "chinh-ui2"], phase: "drawing",
     });
     expect(screen.getAllByText("Đang vẽ tấm này…")).toHaveLength(2);
   });
@@ -229,9 +245,97 @@ describe("vẽ CẢ THẺ mà một tấm bị giữ nguyên", () => {
   it("tấm vẽ xong giữa chừng thôi quay vòng chờ, dù lượt vẫn đang chạy", () => {
     mount({
       status: "running", message: "Đang vẽ…", runId: "r-0036",
-      done: 1, total: 2, jobs: ["chinh-ui", "chinh-ui2"], drawing: ["chinh-ui2"],
+      done: 1, total: 2, jobs: ["chinh-ui", "chinh-ui2"],
+      requested: ["chinh-ui2"], drawing: ["chinh-ui2"], phase: "drawing",
     });
     expect(screen.getAllByText("Đang vẽ tấm này…")).toHaveLength(1);
     expect(rawPaths()).toEqual(["runs/r-0036/artifacts/chinh-ui.png"]);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BẤM LÚC HÀNG ĐỢI ĐANG BẬN — CÚ BẤM PHẢI CÓ TIẾNG VỌNG NGAY TẠI PANEL
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * ╔══ HIỆN TRƯỜNG 15/09/2026 ════════════════════════════════════════════════╗
+ * ║ Chủ sản phẩm bấm «Vẽ lại tấm này» ở panel kết quả trong lúc một lượt khác ║
+ * ║ đang chạy. Panel của tấm ấy KHÔNG hiện gì: lượt chưa phóng được nên chưa   ║
+ * ║ có `runId`, mà hai danh sách cũ (`jobs`, `drawing`) chỉ có nội dung khi    ║
+ * ║ agent đã mở lượt. Chữ duy nhất nói ra là «Đang vẽ k/N» ở ĐẦU thẻ — phải   ║
+ * ║ cuộn ngược lên mới thấy, tức màn hình bắt người dùng đi tìm câu trả lời    ║
+ * ║ cho cú bấm của chính họ.                                                  ║
+ * ║ `requested` lấp đúng quãng ấy: nó có TỪ LÚC BẤM, không đợi ai trả lời.     ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+describe("bấm vẽ lại lúc hàng đợi bận", () => {
+  /** Thẻ vừa vào hàng, lượt CHƯA phóng được — `runId` rỗng, `jobs` rỗng. */
+  const QUEUED_SHEET_2: GenBlockState = {
+    status: "queued", message: "Đang chờ tấm trước", runId: null,
+    done: 0, total: 0, jobs: [], requested: ["chinh-ui2"], drawing: [], phase: "waiting",
+  };
+
+  it("panel của tấm ấy hiện khung «Đang chờ tới lượt…»", () => {
+    mount(QUEUED_SHEET_2);
+    const waiting = within(panels()[1]!).getByRole("status");
+    expect(waiting.textContent).toContain("Đang chờ tới lượt…");
+    /* Chưa tấm nào đang được vẽ ⇒ câu phụ chỉ dám nói tới chỗ ta biết chắc. */
+    expect(waiting.textContent).toContain("Đã gửi, chờ máy nhận");
+  });
+
+  it("ẢNH CŨ CỦA TẤM ẤY VẪN TRONG DOM — khung chờ đứng trên nó, không thay nó", () => {
+    mount(QUEUED_SHEET_2);
+    /* Đây là khác biệt sống còn với khung «Đang vẽ»: tấm đang xếp hàng có thể còn
+       vài phút nữa mới tới lượt, lấy mất bức ảnh đang có suốt quãng ấy là dựng lại
+       đúng con bọ 14/09. */
+    expect(rawPaths()).toEqual(["raw/chinh-ui.png", "raw/chinh-ui2.png"]);
+  });
+
+  it("tấm KHÔNG được xin thì không có khung chờ nào mọc lên", () => {
+    mount(QUEUED_SHEET_2);
+    expect(within(panels()[0]!).queryByRole("status")).toBeNull();
+  });
+
+  it("nút của tấm ấy đổi mặt thành «Đang chờ…», tấm kia xám kèm lý do", () => {
+    mount(QUEUED_SHEET_2);
+    const buttons = panelRedrawButtons();
+    expect(buttons[1]?.textContent).toContain("Đang chờ…");
+    expect((buttons[1] as HTMLButtonElement).disabled).toBe(true);
+    expect((buttons[0] as HTMLButtonElement).disabled).toBe(true);
+    expect(buttons[0]?.getAttribute("title")).toBe("Chờ lượt hiện tại xong");
+  });
+
+  it("máy cầm tới tấm ấy ⇒ khung chờ đổi hẳn sang «Đang vẽ tấm này…»", () => {
+    mount(ONLY_SHEET_2);
+    expect(screen.getAllByText("Đang vẽ tấm này…")).toHaveLength(1);
+    expect(screen.queryByText("Đang chờ tới lượt…")).toBeNull();
+  });
+
+  it("máy đang vẽ tấm khác ⇒ câu phụ nói thẳng là tấm này xếp sau", () => {
+    mount({
+      status: "running", message: "Đang vẽ…", runId: "r-0040",
+      done: 0, total: 2, jobs: ["chinh-ui", "chinh-ui2"],
+      /* Agent ghi sẵn mọi job là `queued` lúc mở lượt và chỉ đẩy từng cái sang
+         `running` khi thật sự vẽ tới — nên đây là hình dạng THƯỜNG GẶP của một
+         lượt hai tấm, không phải ca hiếm. */
+      requested: ["chinh-ui", "chinh-ui2"], drawing: ["chinh-ui"], phase: "drawing",
+    });
+    expect(screen.getAllByText("Đang vẽ tấm này…")).toHaveLength(1);
+    const waiting = within(panels()[1]!).getByRole("status");
+    expect(waiting.textContent).toContain("Đang chờ tới lượt…");
+    expect(waiting.textContent).toContain("Máy đang vẽ tấm khác, tấm này xếp sau");
+  });
+
+  it("lượt trả về KHÔNG có tấm ấy (bị giữ nguyên) ⇒ khung chờ biến mất ngay", () => {
+    /* Hàng đợi thu `requested` về đúng `jobs` thật lúc agent trả lượt: tấm bị bỏ
+       qua vì vân tay chưa đổi thoát khỏi chờ NGAY, không quay vòng tới hết lượt. */
+    mount({
+      status: "running", message: "Đang vẽ… · Tấm 2 giữ nguyên, chưa đổi gì.", runId: "r-0041",
+      done: 0, total: 1, jobs: ["chinh-ui"], requested: ["chinh-ui"], drawing: ["chinh-ui"],
+      phase: "drawing",
+    });
+    expect(screen.queryByText("Đang chờ tới lượt…")).toBeNull();
+    expect(screen.getAllByText("Đang vẽ tấm này…")).toHaveLength(1);
+    expect(rawPaths()).toEqual(["raw/chinh-ui2.png"]);
   });
 });

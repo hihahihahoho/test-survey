@@ -255,7 +255,16 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
     [projectId, contractOpts, putContract, store],
   );
 
-  const queue = useGenQueue(projectId, prepare);
+  /* ── Tấm nào được xin, biết NGAY LÚC BẤM ──────────────────────────────────
+     `prepare` ở trên chỉ chạy lúc PHÓNG (nó còn đi mạng), nên trong lúc thẻ xếp
+     hàng thì không ai biết cú bấm vừa xin tấm nào — và panel của tấm ấy đứng im.
+     Danh sách tấm đang bày trên màn đã sẵn ở đây, đọc đồng bộ, không tốn gì. */
+  const jobsOfBlock = React.useCallback(
+    (blockId: string) => sheetsOf(blockId).map((sheet) => jobIdOf(sheet.id)),
+    [sheetsOf],
+  );
+
+  const queue = useGenQueue(projectId, prepare, jobsOfBlock);
   const prompts = useBlockPrompts(projectId);
 
   const wantPrompt = React.useCallback(

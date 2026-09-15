@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, Download, FolderOpen, Grid2x2, Image as ImageIcon, Layers, Loader2, Sparkles, X } from "lucide-react";
+import { Check, Clock, Download, FolderOpen, Grid2x2, Image as ImageIcon, Layers, Loader2, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -138,6 +138,30 @@ export interface SheetResultPanelProps {
   /** true ⇒ tấm đang chạy: khoá các thao tác ghi (khôi phục phiên bản). */
   busy?: boolean;
   /**
+   * ĐÃ XIN VẼ, MÁY CHƯA CẦM TỚI — khung chờ NHẸ, không phải khung «Đang vẽ».
+   *
+   * ╔══ VÌ SAO HAI KHUNG CHỨ KHÔNG MỘT ════════════════════════════════════════╗
+   * ║ Chủ sản phẩm bấm «Vẽ lại tấm này» lúc hàng đợi đang bận và panel KHÔNG    ║
+   * ║ hiện gì — cú bấm rơi vào im lặng, nên họ bấm lại. Nhưng dùng luôn khung   ║
+   * ║ «Đang vẽ tấm này…» cho quãng ấy thì sai hai lần: nó hứa ảnh sắp về (có    ║
+   * ║ thể còn vài phút nữa mới tới lượt), và nó ĐẨY BỨC ẢNH ĐANG CÓ ra khỏi     ║
+   * ║ màn — đúng con bọ 14/09 vừa vá xong.                                     ║
+   * ║ Nên khung chờ này đứng TRÊN ảnh và giữ ảnh lại phía sau, chỉ làm mờ: cái  ║
+   * ║ đang có vẫn xem được, chỉ nói thêm rằng nó sắp được thay.                 ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  waiting?: boolean;
+  /** Câu phụ dưới «Đang chờ tới lượt…» — chỉ nói khi BIẾT (xem `SheetResultSlot`). */
+  waitingWhy?: string;
+  /**
+   * THẺ ĐANG CÓ LƯỢT, còn tấm này thì không nằm trong đó ⇒ nút vẽ lại xám.
+   *
+   * Hàng đợi nhận MỘT lượt cho mỗi thẻ, nên cú bấm lúc này sẽ bị bỏ qua lặng lẽ.
+   * Xám kèm tooltip nói rõ phải chờ gì, chứ không ẩn nút (§2.5-2 chỉ cấm ẩn nút
+   * DÙNG ĐƯỢC) và cũng không để nó bấm được rồi không có gì xảy ra.
+   */
+  queueBusy?: boolean;
+  /**
    * VẼ LẠI ĐÚNG TẤM NÀY — vắng ⇒ không bày nút.
    *
    * ╔══ VÌ SAO NÚT ẤY THUỘC VỀ ĐÂY, CẠNH CHÍNH BỨC ẢNH ═══════════════════════╗
@@ -173,7 +197,8 @@ const CELL_PHASE_3 = "Dựng khung cho từng ô";
 
 export function SheetResultPanel({
   projectId, sheetId, job, runId = null,
-  artifactPath = null, cutting = false, busy = false, onRedraw,
+  artifactPath = null, cutting = false, busy = false,
+  waiting = false, waitingWhy = "", queueBusy = false, onRedraw,
   fit = DEFAULT_FIGMA_FIT, onFitChange, className,
 }: SheetResultPanelProps) {
   const [tab, setTab] = React.useState<TabId>("raw");
@@ -210,8 +235,8 @@ export function SheetResultPanel({
    */
   const project = useProject(projectId);
   const jobState = project.data?.state?.jobs?.[job] ?? "never";
-  const neverDrawn =
-    jobState === "never" && !busy && !(typeof artifactPath === "string" && artifactPath !== "");
+  const hasArtifact = typeof artifactPath === "string" && artifactPath !== "";
+  const neverDrawn = jobState === "never" && !busy && !waiting && !hasArtifact;
   /**
    * ĐANG VẼ MÀ CHƯA CÓ ẢNH ⇒ nói «đang vẽ», không nói «Thiếu file».
    *
@@ -222,7 +247,15 @@ export function SheetResultPanel({
    * ĐƯƠNG NHIÊN, và «thử lại» thì chẳng có gì để thử. Chỉ khi lượt chạy đã báo
    * `artifactPath` mới có ảnh mà xin; trước đó khung chờ là câu trả lời đúng.
    */
-  const drawing = busy && !(typeof artifactPath === "string" && artifactPath !== "");
+  const drawing = busy && !hasArtifact;
+  /**
+   * CHỜ MÀ CHƯA CÓ GÌ ĐỂ GIỮ LẠI ⇒ khung chờ chiếm cả chỗ ảnh.
+   *
+   * Tấm chưa từng vẽ thì không có bức nào để làm mờ phía sau, và xin `raw/<tấm>.png`
+   * lúc này chỉ nhận về ô đỏ "Thiếu file · Thử lại" — đúng câu trả lời sai cho
+   * hoàn cảnh này, y như ca «đang vẽ» ngay trên.
+   */
+  const waitingBlank = waiting && jobState === "never" && !hasArtifact;
 
   /**
    * TÊN TẤM rút ra TRƯỚC rồi mới ghép vào câu — cùng lý do (và cùng cách) với `OnePrompt`
@@ -572,21 +605,30 @@ export function SheetResultPanel({
             <TabsTrigger value="cut">Đã crop{cells.length > 0 ? ` (${cells.length})` : ""}</TabsTrigger>
           </TabsList>
           <div className="flex flex-wrap items-center gap-2">
-            <SheetVersionBar projectId={projectId} job={job} name={name} busy={busy} onSwapped={reloadImage} />
+            {/* Tấm ĐANG CHỜ cũng khoá thanh phiên bản: khôi phục một bản cũ ngay
+                trước khi lượt đã xếp hàng ghi đè lên chính nó là tiêu công vô ích,
+                và người dùng sẽ đọc kết quả ấy thành "nút khôi phục không ăn". */}
+            <SheetVersionBar projectId={projectId} job={job} name={name} busy={busy || waiting} onSwapped={reloadImage} />
             {onRedraw && (
               /* Đứng CẠNH thanh chọn phiên bản vì hai thứ trả lời cùng một câu hỏi
                  ("bức này không ưng thì làm gì tiếp"), và đây là câu trả lời ĐẮT:
                  `ghost` chứ không `primary` — nút tiêu tiền nổi nhất của thẻ vẫn
                  là nút Vẽ ở đầu thẻ, một thẻ không được có hai CTA accent. */
+              /* BỐN MẶT, MỖI MẶT MỘT SỰ THẬT — và ba mặt sau đều là "đừng bấm nữa",
+                 nói bằng ba lý do khác nhau. Trước lượt này cả ba gộp thành một nút
+                 xám không lời giải thích (hoặc tệ hơn: một nút bấm được mà hàng đợi
+                 lặng lẽ bỏ qua), nên cú bấm thứ hai của người dùng là chuyện đương
+                 nhiên chứ không phải chuyện lạ. */
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={onRedraw}
-                disabled={busy}
-                title="Vẽ lại đúng tấm này — tiêu một lượt tạo. Các tấm khác của thẻ không bị đụng tới."
+                disabled={busy || waiting || queueBusy}
+                loading={busy || waiting}
+                title={redrawTitle({ busy, waiting, queueBusy })}
               >
-                <Sparkles aria-hidden strokeWidth={1.5} />
-                Vẽ lại tấm này
+                {!busy && !waiting && <Sparkles aria-hidden strokeWidth={1.5} />}
+                {busy ? "Đang vẽ…" : waiting ? "Đang chờ…" : "Vẽ lại tấm này"}
               </Button>
             )}
           </div>
@@ -597,14 +639,27 @@ export function SheetResultPanel({
             <NotDrawnYet what="Chưa vẽ tấm này" />
           ) : drawing ? (
             <Drawing what="Đang vẽ tấm này…" />
+          ) : waitingBlank ? (
+            <WaitingTurn why={waitingWhy} />
           ) : (
             <>
+              {/* KHUNG CHỜ ĐỨNG TRÊN ẢNH, KHÔNG THAY ẢNH. Đây là khác biệt duy nhất
+                  giữa nó và khung «Đang vẽ» — và là cả lý do nó tồn tại: tấm đang xếp
+                  hàng có thể còn vài phút nữa mới tới lượt, lấy mất bức ảnh đang có
+                  suốt quãng ấy là tự tay dựng lại con bọ 14/09. */}
+              {waiting && <WaitingTurn why={waitingWhy} compact />}
               {/* Bấm vào ảnh = xem ở độ nét thật. Lưới dùng bản `?w=512` cho nhẹ, còn popup
                   mới xin ảnh gốc — cùng quy ước với `AssetZoomDialog` của tab kết quả cũ. */}
               {/* Khung `relative` chỉ để LỚP PHỦ có mốc: nó nằm đè đúng hộp của `<img>`,
                   và `preserveAspectRatio` mặc định của SVG khớp từng pixel với
                   `object-contain` của ảnh — không có phép quy đổi nào để sai. */}
-              <div className="relative">
+              {/* MỜ ĐI CHỈ KHỐI ẢNH, và ĐÚNG NẤC 60% — hai điều kiện, cả hai có lý do.
+                  · Khối này không chứa một chữ nào (hai câu chú thích nằm NGOÀI nó):
+                    cổng `npm run contrast` cấm mờ-hoá chữ, vì chữ mờ là chữ mất, còn
+                    ảnh mờ thì vẫn là ảnh — xem khối chú thích ở `row-ui.tsx`.
+                  · Nấc 60% là nấc ĐÃ CÓ TRONG BẢNG ĐO của cổng (`UiKitBlockView`),
+                    nên không đẻ thêm một alpha nữa cho người sau phải đo lại. */}
+              <div className={cn("relative", waiting && "opacity-60")}>
                 <button
                   type="button"
                   onClick={() => setZoom(true)}
@@ -784,6 +839,58 @@ export function SheetResultPanel({
  * và hai chỗ phải sửa mỗi khi luật "vẽ được hay chưa" đổi (thẻ rỗng, agent tắt,
  * đang có lượt khác chạy). Nên khối này chỉ CHỈ ĐƯỜNG, và nói đúng nút nào.
  */
+/**
+ * TOOLTIP CỦA NÚT VẼ LẠI — một hàm, vì bốn mặt nút phải nói bốn lý do khác nhau.
+ *
+ * Rút ra ngoài component để mỗi câu đứng riêng một dòng: cổng từ cấm §5.4 quét
+ * chuỗi, và một biểu thức ba tầng nhét trong JSX thì không ai sửa nổi câu chữ mà
+ * không sửa nhầm nhánh.
+ */
+function redrawTitle({ busy, waiting, queueBusy }: { busy: boolean; waiting: boolean; queueBusy: boolean }): string {
+  if (busy) return "Tấm này đang được vẽ — chờ máy trả ảnh về.";
+  if (waiting) return "Tấm này đã vào hàng chờ — máy sẽ vẽ ngay khi tới lượt.";
+  /* Nguyên văn câu chủ sản phẩm sẽ đọc khi bấm nhầm sang tấm khác của thẻ đang
+     bận: hàng đợi nhận một lượt mỗi thẻ, nên đây là điều kiện thật, không phải
+     một giới hạn bịa ra để chống bấm nhanh. */
+  if (queueBusy) return "Chờ lượt hiện tại xong";
+  return "Vẽ lại đúng tấm này — tiêu một lượt tạo. Các tấm khác của thẻ không bị đụng tới.";
+}
+
+/**
+ * KHUNG CHỜ «ĐANG CHỜ TỚI LƯỢT» — em của `Drawing`, và cố ý NHẸ HƠN nó.
+ *
+ * `compact` = có ảnh cũ nằm dưới: lúc ấy khung này chỉ là một dải chữ trên đầu
+ * ảnh, vì thứ quan trọng nhất trong khung hình vẫn là bức ảnh người dùng đang có.
+ * Không `compact` = tấm chưa từng vẽ, không có gì để giữ, nên nó chiếm cả chỗ ảnh
+ * đúng như khối «Chưa vẽ tấm này».
+ */
+function WaitingTurn({ why, compact = false }: { why: string; compact?: boolean }) {
+  if (compact) {
+    return (
+      <div
+        role="status"
+        className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-2 border border-dashed border-line-subtle bg-raised/40 px-3 py-2"
+      >
+        <Clock aria-hidden strokeWidth={1.5} className="size-4 text-fg-muted" />
+        <p className="text-caption text-fg">Đang chờ tới lượt…</p>
+        {why !== "" && <p className="text-caption text-fg-muted">{why}</p>}
+      </div>
+    );
+  }
+  return (
+    <div
+      role="status"
+      className="flex flex-col items-center gap-1 rounded-2 border border-dashed border-line-subtle bg-raised/40 px-4 py-8 text-center"
+    >
+      <Clock aria-hidden strokeWidth={1.5} className="size-5 text-fg-muted" />
+      <p className="text-body text-fg">Đang chờ tới lượt…</p>
+      <p className="text-caption text-fg-muted">
+        {why === "" ? "Máy sẽ vẽ tấm này ngay khi tới lượt." : why}
+      </p>
+    </div>
+  );
+}
+
 /** KHUNG CHỜ «ĐANG VẼ» — cùng khuôn với khối «chưa vẽ», chỉ khác icon quay và câu. */
 function Drawing({ what }: { what: string }) {
   return (

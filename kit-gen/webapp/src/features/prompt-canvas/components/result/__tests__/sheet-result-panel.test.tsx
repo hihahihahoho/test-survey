@@ -698,13 +698,86 @@ describe("nút «Vẽ lại tấm này»", () => {
     expect(onRedraw).toHaveBeenCalledTimes(1);
   });
 
-  it("tấm đang chạy ⇒ nút XÁM: bấm thêm lần nữa chỉ xếp thêm một lượt tiêu tiền", () => {
+  it("tấm đang chạy ⇒ nút ĐỔI MẶT thành «Đang vẽ…» và khoá lại", () => {
     const onRedraw = vi.fn();
     mount({ onRedraw, busy: true });
-    const btn = screen.getByRole("button", { name: /Vẽ lại tấm này/ });
+    /* Nhãn đổi hẳn chứ không chỉ xám đi: một nút xám mang nguyên chữ mời bấm là
+       câu đố, còn «Đang vẽ…» kèm spinner là câu trả lời cho chính cú bấm vừa rồi. */
+    const btn = screen.getByRole("button", { name: /Đang vẽ…/ });
+    expect(btn.hasAttribute("disabled")).toBe(true);
+    expect(screen.queryByRole("button", { name: /^Vẽ lại tấm này$/ })).toBeNull();
+    fireEvent.click(btn);
+    expect(onRedraw).not.toHaveBeenCalled();
+  });
+
+  /**
+   * ╔══ CON BỌ 15/09/2026 — CÚ BẤM RƠI VÀO IM LẶNG ═══════════════════════════╗
+   * ║ Bấm «Vẽ lại tấm này» lúc hàng đợi đang bận: lượt chưa phóng được nên      ║
+   * ║ panel không có `runId`, không có danh sách job, và KHÔNG hiện gì. Chữ duy ║
+   * ║ nhất nói ra nằm ở đầu thẻ. Người dùng bấm lại — đúng phản xạ với một nút   ║
+   * ║ không phản hồi.                                                          ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  it("tấm đang CHỜ TỚI LƯỢT ⇒ nút «Đang chờ…», khoá lại", () => {
+    const onRedraw = vi.fn();
+    mount({ onRedraw, waiting: true });
+    const btn = screen.getByRole("button", { name: /Đang chờ…/ });
     expect(btn.hasAttribute("disabled")).toBe(true);
     fireEvent.click(btn);
     expect(onRedraw).not.toHaveBeenCalled();
+  });
+
+  it("thẻ đang bận mà tấm này ngoài lượt ⇒ vẫn khoá, và NÓI RA phải chờ gì", () => {
+    const onRedraw = vi.fn();
+    mount({ onRedraw, queueBusy: true });
+    /* Hàng đợi nhận MỘT lượt mỗi thẻ (`enqueue` bỏ qua thẻ đã có mặt), nên nút
+       này bấm được cũng không có gì xảy ra — xám kèm lý do là sự thật, không phải
+       một giới hạn bịa ra. */
+    const btn = screen.getByRole("button", { name: /Vẽ lại tấm này/ });
+    expect(btn.hasAttribute("disabled")).toBe(true);
+    expect(btn.getAttribute("title")).toBe("Chờ lượt hiện tại xong");
+    fireEvent.click(btn);
+    expect(onRedraw).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ══ KHUNG CHỜ «ĐANG CHỜ TỚI LƯỢT» — NHẸ HƠN «ĐANG VẼ», VÀ GIỮ LẠI ẢNH ═══════
+ *
+ * Hai khung, hai lời hứa khác nhau. «Đang vẽ» hứa ảnh sắp về nên nó được phép
+ * chiếm chỗ bức ảnh cũ; «Đang chờ» không hứa thời điểm nào, nên lấy mất bức ảnh
+ * đang có suốt quãng ấy là dựng lại đúng con bọ 14/09 (ảnh biến mất khỏi màn).
+ */
+describe("khung chờ khi tấm còn xếp hàng", () => {
+  it("đang chờ ⇒ có khung chờ, và ẢNH CŨ VẪN NẰM TRONG DOM", () => {
+    mount({ waiting: true, waitingWhy: "Máy đang vẽ tấm khác, tấm này xếp sau" });
+    expect(screen.getByRole("status").textContent).toContain("Đang chờ tới lượt…");
+    expect(screen.getByRole("status").textContent).toContain("Máy đang vẽ tấm khác");
+    expect(screen.getByRole("img", { name: /Ảnh gốc tấm/ })).toBeTruthy();
+    expect(asked.some((a) => a.path === "raw/chinh-ui.png")).toBe(true);
+  });
+
+  it("chờ mà tấm CHƯA TỪNG VẼ ⇒ khung chờ chiếm chỗ ảnh, KHÔNG xin file (nên không có ô đỏ)", () => {
+    jobStates = {};
+    mount({ waiting: true, waitingWhy: "Đã gửi, chờ máy nhận" });
+    expect(screen.getByRole("status").textContent).toContain("Đang chờ tới lượt…");
+    expect(screen.queryByText("Chưa vẽ tấm này")).toBeNull();
+    expect(asked.some((a) => a.path.startsWith("raw/"))).toBe(false);
+  });
+
+  it("máy cầm tới tấm này ⇒ đổi hẳn sang «Đang vẽ», không còn khung chờ", () => {
+    jobStates = {};
+    mount({ busy: true, waiting: false });
+    expect(screen.getByRole("status").textContent).toContain("Đang vẽ tấm này");
+    expect(screen.queryByText("Đang chờ tới lượt…")).toBeNull();
+  });
+
+  it("lượt trả về KHÔNG có tấm này (bị giữ nguyên) ⇒ khung chờ biến mất, ảnh ở lại", () => {
+    /* `waiting:false` là đúng thứ hàng đợi làm khi agent trả danh sách job thật:
+       tấm bị bỏ qua rời `requested` NGAY, không quay vòng chờ tới hết lượt. */
+    mount({ waiting: false });
+    expect(screen.queryByText("Đang chờ tới lượt…")).toBeNull();
+    expect(screen.getByRole("img", { name: /Ảnh gốc tấm/ })).toBeTruthy();
   });
 });
 

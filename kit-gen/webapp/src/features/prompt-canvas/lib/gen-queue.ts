@@ -30,6 +30,18 @@ import { isRunLive } from "@/features/kit-core/lib/generated-results";
 
 export type GenStatus = "idle" | "queued" | "running" | "done" | "fail";
 
+/**
+ * PHA CỦA MỘT CÚ BẤM, nhìn từ phía TẤM — không phải từ phía lượt chạy.
+ *
+ * ╔══ VÌ SAO `status` KHÔNG TRẢ LỜI ĐƯỢC ════════════════════════════════════╗
+ * ║ `status` nói về THẺ và về hàng đợi: "đang xếp hàng" / "đang chạy". Nhưng   ║
+ * ║ câu người dùng hỏi khi nhìn một ô ảnh là "tấm NÀY đang được vẽ, hay đang   ║
+ * ║ đứng chờ?" — và hai câu ấy lệch nhau ở hai chỗ có thật: lượt chưa phóng    ║
+ * ║ được (thẻ khác đang giữ chỗ), và lượt đã mở nhưng máy còn vẽ tấm khác.     ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export type GenPhase = "idle" | "waiting" | "drawing" | "done" | "fail";
+
 export interface GenBlockState {
   status: GenStatus;
   /** Câu hiện dưới nút — lý do chờ, tiến trình, hoặc lỗi. Rỗng khi không có gì để nói. */
@@ -56,12 +68,41 @@ export interface GenBlockState {
    * vẽ, nên nó cũng không được phép hiện khung chờ.
    */
   jobs: readonly string[];
-  /** Tấm CÒN đang chờ/đang vẽ ngay lúc này (tập con của `jobs`). Rỗng khi lượt đã kết thúc. */
+  /**
+   * TẤM ĐÃ XIN VẼ MÀ CHƯA CÓ ẢNH MỚI — danh sách CÒN NỢ của cú bấm này.
+   *
+   * ╔══ CON BỌ 15/09/2026: BẤM RỒI MÀ PANEL IM RE ════════════════════════════╗
+   * ║ Bấm «Vẽ lại tấm này» lúc hàng đợi đang bận ⇒ thẻ vào hàng với `runId`     ║
+   * ║ rỗng, nên CẢ `jobs` lẫn `drawing` đều rỗng, và panel của tấm KHÔNG hiện   ║
+   * ║ một dấu hiệu nào. Chữ duy nhất nói ra là «Đang vẽ k/N» ở ĐẦU thẻ — phải   ║
+   * ║ kéo lên mới thấy. Người dùng bấm lại, rồi lại, cho một hàng đợi vốn đã    ║
+   * ║ nhận đủ.                                                                 ║
+   * ║ Danh sách này biết ngay TỪ LÚC BẤM (vẽ một tấm ⇒ đúng tấm ấy; vẽ cả thẻ   ║
+   * ║ ⇒ mọi tấm của thẻ), nên panel có thứ để bày trước cả khi agent mở lượt.   ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   *
+   * Nó CO LẠI hai lần, và cả hai lần đều để không hứa thừa:
+   *  · agent trả lượt ⇒ thu về đúng `jobs` thật (tấm bị giữ nguyên vì vân tay
+   *    chưa đổi thoát khỏi chờ ngay, không quay vòng tới hết lượt);
+   *  · tấm nào vẽ xong (`ok`/`failed`) ⇒ rời danh sách, vì ảnh đã có trên đĩa.
+   */
+  requested: readonly string[];
+  /**
+   * TẤM MÁY ĐANG VẼ NGAY LÚC NÀY — job ở trạng thái `running`, tập con của `requested`.
+   *
+   * Từ 15/09/2026 danh sách này KHÔNG còn ôm cả job `queued`: agent ghi sẵn mọi
+   * job là `queued` ngay lúc mở lượt, nên ôm cả chúng là bắt bốn tấm cùng hiện
+   * «Đang vẽ tấm này…» trong khi máy mới cầm một tấm. Tấm còn `queued` nay nằm ở
+   * `requested` và được nói đúng tên việc: đang chờ tới lượt.
+   */
   drawing: readonly string[];
+  /** Pha NHÌN TỪ TẤM — xem `GenPhase`. */
+  phase: GenPhase;
 }
 
 const IDLE: GenBlockState = {
-  status: "idle", message: "", runId: null, done: 0, total: 0, jobs: [], drawing: [],
+  status: "idle", message: "", runId: null, done: 0, total: 0,
+  jobs: [], requested: [], drawing: [], phase: "idle",
 };
 
 /** Câu DUY NHẤT cho ca "phải đợi tấm trước" — hai chỗ nói hai kiểu là hai sự thật. */
@@ -96,6 +137,16 @@ interface Entry {
    * tiến trình của agent, và là danh sách mà mỗi ô ảnh tra tên mình vào.
    */
   jobs: string[];
+  /**
+   * TẤM ĐÃ XIN — điền NGAY LÚC BẤM, trước khi biết agent nhận cái nào.
+   *
+   * Trước khi lượt phóng được, đây là thứ DUY NHẤT nói được "tấm nào đang chờ":
+   * `all`/`jobs` còn rỗng vì `prepare` chỉ chạy lúc phóng. Lúc lượt trả về thì nó
+   * thu ngay về `jobs` thật — xem `GenBlockState.requested`.
+   * Rỗng khi nơi gọi không cấp `jobsOf` (vỏ test cũ): hàng đợi vẫn chạy y như cũ,
+   * chỉ là không có gì để bày sớm.
+   */
+  requested: string[];
   /**
    * VẼ LẠI RIÊNG TẤM THỨ MẤY (đếm từ 0); `null` = cả thẻ.
    *
@@ -161,10 +212,15 @@ export interface GenQueue {
  *   thẻ ấy, ĐỦ CẢ THẺ và ĐÚNG THỨ TỰ TẤM (hàng đợi tự cắt ra một tấm khi vẽ lẻ). Ném ⇒ thẻ vào trạng thái lỗi và hàng đợi đi tiếp.
  *   Nó chạy ở ĐÚNG lúc phóng chứ không lúc bấm: thẻ thứ ba có thể đợi vài phút,
  *   và trong lúc ấy người dùng còn sửa chữ — thứ được vẽ phải là bản mới nhất.
+ * @param jobsOf Tên job của một thẻ, ĐỌC ĐƯỢC NGAY LÚC BẤM (đồng bộ, đúng thứ tự
+ *   tấm). Khác `prepare` ở chỗ nó KHÔNG đi mạng và KHÔNG hứa hẹn gì: nó chỉ trả
+ *   lời "cú bấm này xin những tấm nào", để panel của từng tấm có cái mà bày trong
+ *   lúc còn xếp hàng. Vắng ⇒ không có chỉ báo sớm, mọi thứ khác y nguyên.
  */
 export function useGenQueue(
   projectId: string,
   prepare: (blockId: string) => Promise<string[]>,
+  jobsOf?: (blockId: string) => readonly string[],
 ): GenQueue {
   const [entries, setEntries] = React.useState<Entry[]>([]);
   const [settled, setSettled] = React.useState<Record<string, GenBlockState>>({});
@@ -182,6 +238,8 @@ export function useGenQueue(
   entriesRef.current = entries;
   const prepareRef = React.useRef(prepare);
   prepareRef.current = prepare;
+  const jobsOfRef = React.useRef(jobsOf);
+  jobsOfRef.current = jobsOf;
   const startRef = React.useRef(gen.startJobs);
   startRef.current = gen.startJobs;
   /* Một lượt phóng đang bay. `useRef` chứ không `useState`: nó là cái KHOÁ, và
@@ -226,15 +284,20 @@ export function useGenQueue(
           setSettled((prev) => ({
             ...prev,
             [blockId]: {
-              ...IDLE, status: "done", done: 0, total: 0,
+              ...IDLE, status: "done", phase: "done", done: 0, total: 0,
               message: keptCopy(kept, all.length) || "Chưa có gì đổi nên không vẽ lại.",
             },
           }));
           setEntries((prev) => prev.filter((e) => e.blockId !== blockId));
           return;
         }
+        /* THU DANH SÁCH CHỜ VỀ ĐÚNG SỰ THẬT: từ đây trở đi "tấm đã xin" chính là
+           "tấm của lượt". Tấm bị giữ nguyên rời khung chờ NGAY, không phải đợi
+           tới lúc lượt chốt sổ — nó có được vẽ đâu mà chờ. */
         setEntries((prev) => prev.map((e) => (
-          e.blockId === blockId ? { ...e, all, jobs: live, runId: res.runId, message: keptCopy(kept, all.length) } : e
+          e.blockId === blockId
+            ? { ...e, all, jobs: live, requested: live, runId: res.runId, message: keptCopy(kept, all.length) }
+            : e
         )));
         setActiveRunId(res.runId);
       } catch (error) {
@@ -246,7 +309,10 @@ export function useGenQueue(
           setActiveRunId(conflictRun);
           return;
         }
-        setSettled((prev) => ({ ...prev, [blockId]: { ...IDLE, status: "fail", message: failCopy(error) } }));
+        setSettled((prev) => ({
+          ...prev,
+          [blockId]: { ...IDLE, status: "fail", phase: "fail", message: failCopy(error) },
+        }));
         setEntries((prev) => prev.filter((e) => e.blockId !== blockId));
       } finally {
         launchingRef.current = false;
@@ -268,6 +334,7 @@ export function useGenQueue(
           ? {
               ...IDLE,
               status: "fail",
+              phase: "fail",
               runId: activeRunId,
               total: data.jobs.length,
               /* Danh sách sống TIẾP sau khi lượt chết: ô ảnh vẫn phải biết tấm nào
@@ -287,7 +354,7 @@ export function useGenQueue(
                   : `${data.failSummary ?? `${failed.length}/${data.jobs.length} tấm không vẽ được`}. Bấm Vẽ để thử lại.`,
             }
           : {
-              ...IDLE, status: "done", runId: activeRunId,
+              ...IDLE, status: "done", phase: "done", runId: activeRunId,
               done: data.jobs.length, total: data.jobs.length,
               jobs: owner.jobs,
               /* Câu "tấm nào giữ nguyên" sống tới tận lúc chốt sổ: nó là lời giải
@@ -305,7 +372,14 @@ export function useGenQueue(
       const entry = entries.find((e) => e.blockId === blockId);
       if (!entry) return settled[blockId] ?? IDLE;
       if (!entry.runId) {
-        return { ...IDLE, status: "queued", message: entry.message || WAITING_COPY };
+        /* CHƯA CÓ LƯỢT, NHƯNG ĐÃ CÓ LỜI HỨA. Danh sách tấm đã xin đi ra từ đây,
+           và đó là toàn bộ chỗ dựa của khung chờ dưới mỗi tấm trong lúc thẻ còn
+           xếp hàng — trước lượt này quãng ấy hoàn toàn câm. */
+        return {
+          ...IDLE, status: "queued", phase: "waiting",
+          message: entry.message || WAITING_COPY,
+          requested: entry.requested,
+        };
       }
       const payload = run.data?.id === entry.runId ? run.data : null;
       const progress = payload?.progress ?? null;
@@ -313,6 +387,8 @@ export function useGenQueue(
       /* Tên pha rút ra TRƯỚC khi ghép câu — xem chú thích cùng kiểu ở `OnePrompt`
          (`CanvasBlock.tsx`): cổng từ cấm quét cả biểu thức trong chuỗi mẫu. */
       const phase = run.data?.phase?.name ?? "";
+      const drawing = runningJobs(entry.jobs, payload);
+      const owed = owedJobs(entry.jobs, payload);
       return {
         status: "running",
         message: phase ? `Đang vẽ · ${phase}${kept}` : `Đang vẽ…${kept}`,
@@ -320,7 +396,11 @@ export function useGenQueue(
         done: progress?.done ?? 0,
         total: progress?.total ?? entry.jobs.length,
         jobs: entry.jobs,
-        drawing: drawingJobs(entry.jobs, payload),
+        requested: owed,
+        drawing,
+        /* Không tấm nào còn nợ ⇒ lượt sắp chốt sổ, gọi là "đang vẽ" chứ không phải
+           "đang chờ": chờ cái gì nữa khi mọi tấm đã có ảnh? */
+        phase: drawing.length > 0 || owed.length === 0 ? "drawing" : "waiting",
       };
     },
     [entries, settled, run.data],
@@ -336,7 +416,8 @@ export function useGenQueue(
     setEntries((prev) => (prev.some((e) => e.blockId === blockId)
       ? prev
       : [...prev, {
-          blockId, all: [], jobs: [], only: onlySheet ?? null, runId: null, message: WAITING_COPY,
+          blockId, all: [], jobs: [], requested: askedJobs(jobsOfRef.current, blockId, onlySheet),
+          only: onlySheet ?? null, runId: null, message: WAITING_COPY,
         }]));
   }, []);
 
@@ -357,7 +438,9 @@ export function useGenQueue(
            lượt vẽ cùng một tấm, tức là tiêu tiền hai lần cho một kết quả. */
         .filter((id, at, all) => all.indexOf(id) === at)
         .map((blockId) => ({
-          blockId, all: [] as string[], jobs: [] as string[], only: null, runId: null, message: WAITING_COPY,
+          blockId, all: [] as string[], jobs: [] as string[],
+          requested: askedJobs(jobsOfRef.current, blockId, undefined),
+          only: null, runId: null, message: WAITING_COPY,
         }));
       return fresh.length === 0 ? prev : [...prev, ...fresh];
     });
@@ -400,20 +483,60 @@ export function useGenQueue(
   };
 }
 
+/** Bản kê job của một lượt, đúng hình dạng `#33`/`#34` trả về. */
+type RunListing = { jobs?: readonly { job: string; status?: string }[] } | null;
+
 /**
- * TẤM NÀO CÒN ĐANG VẼ ngay lúc này — lọc từ chính bản kê job của lượt.
+ * TẤM MỘT CÚ BẤM XIN VẼ — biết ngay lúc bấm, không đợi đi mạng.
  *
- * ╔══ VÌ SAO TIN ĐƯỢC BẢN KÊ NÀY NGAY TỪ NHỊP ĐẦU ═══════════════════════════╗
- * ║ `agent/lib/runs.mjs:156` ghi SẴN mọi job ở trạng thái `queued` ngay lúc mở ║
- * ║ lượt, nên bản kê không bao giờ "thiếu tấm vì chưa tới lượt nó". Tấm vẽ      ║
- * ║ xong giữa chừng chuyển sang `ok` và rời khỏi danh sách này — ảnh của nó đã  ║
- * ║ nằm trên đĩa rồi, để nó quay vòng chờ thêm vài phút nữa là nói dối.        ║
+ * Chỉ số ngoài khoảng (thẻ vừa bị sửa bớt dòng giữa lúc chờ) ⇒ rơi về CẢ THẺ,
+ * đúng như nhánh phóng lượt ở trên: hai chỗ đoán khác nhau thì khung chờ sẽ mọc
+ * trên một tấm mà lượt không hề mang theo.
+ */
+function askedJobs(
+  jobsOf: ((blockId: string) => readonly string[]) | undefined,
+  blockId: string,
+  only: number | undefined,
+): string[] {
+  const all = jobsOf?.(blockId) ?? [];
+  if (only === undefined || only === null) return [...all];
+  const one = all[only];
+  return one ? [one] : [...all];
+}
+
+/**
+ * TẤM MÁY ĐANG CẦM TRONG TAY ngay lúc này — job `running`, không hơn.
+ *
+ * ╔══ VÌ SAO KHÔNG TÍNH CẢ `queued` (ĐỔI Ý 15/09/2026) ══════════════════════╗
+ * ║ `agent/lib/runs.mjs:156` ghi SẴN mọi job là `queued` ngay lúc mở lượt, và ║
+ * ║ engine chỉ đẩy từng job sang `running` khi thật sự bắt đầu vẽ nó           ║
+ * ║ (`run-handle.mjs:438`). Gộp `queued` vào đây là bắt cả bốn tấm của thẻ     ║
+ * ║ cùng hiện «Đang vẽ tấm này…» trong khi máy mới cầm một tấm — ba lời hứa     ║
+ * ║ sai, và ba bức ảnh đang có bị khung chờ đẩy ra khỏi màn.                    ║
+ * ║ Tấm `queued` KHÔNG mất chỉ báo: nó nằm ở `requested` và được gọi đúng tên  ║
+ * ║ việc — đang chờ tới lượt.                                                 ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * Chưa lấy được bản kê (lượt vừa phóng, `#33` chưa trả) ⇒ coi CẢ lượt còn đang vẽ:
- * đó là sự thật gần đúng duy nhất có trong tay, và nó sai về phía an toàn.
+ * Chưa lấy được bản kê (lượt vừa phóng, `#33` chưa trả) ⇒ CHƯA tấm nào đang vẽ.
+ * Quãng ấy `owedJobs` phủ kín bằng khung chờ, nên không có khoảng trống nào.
  */
-function drawingJobs(jobs: readonly string[], run: { jobs?: readonly { job: string; status?: string }[] } | null): string[] {
+function runningJobs(jobs: readonly string[], run: RunListing): string[] {
+  const listed = run?.jobs ?? [];
+  if (listed.length === 0) return [];
+  return jobs.filter((job) => listed.find((item) => item.job === job)?.status === "running");
+}
+
+/**
+ * TẤM CÒN NỢ MỘT BỨC ẢNH — `queued`, `running`, hoặc chưa có tên trong bản kê.
+ *
+ * Tấm vẽ xong giữa chừng chuyển sang `ok` và rời khỏi đây ngay: ảnh của nó đã nằm
+ * trên đĩa rồi, để nó quay vòng chờ thêm vài phút nữa là nói dối. Tấm `failed`
+ * cũng rời — lượt sẽ chốt sổ bằng câu lỗi, không phải bằng một khung chờ đứng mãi.
+ *
+ * Chưa có bản kê ⇒ coi cả lượt còn nợ: đó là sự thật gần đúng duy nhất có trong
+ * tay, và nó sai về phía an toàn (bày khung chờ thừa, không phải giấu mất chờ).
+ */
+function owedJobs(jobs: readonly string[], run: RunListing): string[] {
   const listed = run?.jobs ?? [];
   if (listed.length === 0) return [...jobs];
   return jobs.filter((job) => {

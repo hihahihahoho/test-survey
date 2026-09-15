@@ -47,8 +47,32 @@ export interface SheetResultSlotProps {
    * không đụng tới nó, và ảnh phải đọc từ bản hiện hành.
    */
   runJobs?: readonly string[];
-  /** Job CÒN đang chờ/đang vẽ (`gen.drawing`) — tập con của `runJobs`. */
+  /** Job máy ĐANG VẼ ngay lúc này (`gen.drawing`) — tập con của `requestedJobs`. */
   drawingJobs?: readonly string[];
+  /**
+   * Job ĐÃ XIN mà chưa có ảnh mới (`gen.requested`) — có TỪ LÚC BẤM, kể cả khi
+   * lượt chưa phóng được.
+   *
+   * ╔══ CON BỌ 15/09/2026 ═════════════════════════════════════════════════════╗
+   * ║ Bấm «Vẽ lại tấm này» lúc hàng đợi đang bận ⇒ panel của tấm KHÔNG hiện gì. ║
+   * ║ Vì hai danh sách kia (`runJobs`, `drawingJobs`) chỉ có nội dung khi agent  ║
+   * ║ đã mở lượt; trước đó cả hai rỗng, và mọi chỉ báo của tấm im lặng. Chữ duy  ║
+   * ║ nhất nói ra là «Đang vẽ k/N» ở ĐẦU thẻ — muốn thấy phải cuộn ngược lên,   ║
+   * ║ tức là màn hình bắt người dùng đi tìm câu trả lời cho cú bấm của chính họ. ║
+   * ║ Danh sách này lấp đúng quãng ấy: tấm có tên trong đây mà chưa được vẽ thì  ║
+   * ║ panel bày khung chờ NHẸ — giữ nguyên bức ảnh đang có, chỉ làm mờ đi.       ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  requestedJobs?: readonly string[];
+  /**
+   * THẺ ĐANG CÓ MỘT LƯỢT (đang xếp hàng hoặc đang chạy).
+   *
+   * Hàng đợi chỉ nhận MỘT lượt cho mỗi thẻ (`enqueue` bỏ qua thẻ đã có mặt), nên
+   * nút «Vẽ lại tấm này» của MỌI tấm trong thẻ đều là nút bấm vào không có gì xảy
+   * ra cho tới khi lượt ấy xong. Khoá cả thẻ và nói ra lý do, đúng như vạch ranh
+   * giới tấm ở tab Soạn (`row-ui.tsx`) đã làm.
+   */
+  blockBusy?: boolean;
   /** Vẽ lại ĐÚNG tấm này (ép vẽ) — vắng ⇒ panel không bày nút. */
   onRedraw?: () => void;
   /**
@@ -68,6 +92,8 @@ export function SheetResultSlot({
   artifactPath = null,
   runJobs = [],
   drawingJobs = [],
+  requestedJobs = [],
+  blockBusy = false,
   onRedraw,
   fit,
   onFitChange,
@@ -76,6 +102,16 @@ export function SheetResultSlot({
   /* Tấm có trong lượt ⇒ neo vào ảnh bất biến của lượt; không có ⇒ `null`, tức
      `raw/<job>.png` — ảnh hiện hành, đúng thứ đang treo trên màn trước cú bấm. */
   const mine = runJobs.includes(job) ? runId : null;
+  const busy = drawingJobs.includes(job);
+  /* ĐÃ XIN MÀ MÁY CHƯA CẦM TỚI. Hai trạng thái, không gộp: «đang vẽ» là lời hứa
+     ảnh sắp về trong vài chục giây, còn «đang chờ» thì không hứa thời điểm nào. */
+  const waiting = !busy && requestedJobs.includes(job);
+  /* LÝ DO CHỜ, nói bằng thứ ta BIẾT CHẮC. Có tấm khác đang được vẽ ⇒ nói thẳng là
+     tấm này xếp sau. Chưa tấm nào ⇒ lượt còn chưa tới tay agent; đừng đoán hộ nó
+     đang kẹt vì thẻ khác hay vì mạng — câu duy nhất đúng là "đã gửi, đang chờ". */
+  const waitingWhy = drawingJobs.length > 0
+    ? "Máy đang vẽ tấm khác, tấm này xếp sau"
+    : "Đã gửi, chờ máy nhận";
   return (
     <SheetResultPanel
       projectId={projectId}
@@ -83,7 +119,12 @@ export function SheetResultSlot({
       job={job}
       runId={mine}
       artifactPath={artifactPath}
-      busy={drawingJobs.includes(job)}
+      busy={busy}
+      waiting={waiting}
+      waitingWhy={waitingWhy}
+      /* Thẻ bận mà tấm này KHÔNG nằm trong lượt ⇒ nút vẫn phải xám: hàng đợi sẽ
+         bỏ qua cú bấm ấy, và một nút bấm được mà không làm gì là lời nói dối. */
+      queueBusy={blockBusy}
       {...(onRedraw ? { onRedraw } : {})}
       {...(fit ? { fit } : {})}
       {...(onFitChange ? { onFitChange } : {})}
