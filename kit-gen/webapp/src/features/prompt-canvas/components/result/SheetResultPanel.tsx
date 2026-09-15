@@ -632,7 +632,7 @@ export function SheetResultPanel({
               </div>
               {overlayOn && (
                 <p className="mt-2 text-caption text-fg-muted">
-                  Nét đứt: hộp prompt đã hứa · nét liền: hộp máy vẽ ra.
+                  Nét đứt: hộp prompt đã hứa · nét liền: hộp máy vẽ ra · nét chấm: thân máy đoán.
                 </p>
               )}
               <p className="mt-2 text-caption text-fg-muted">

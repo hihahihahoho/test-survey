@@ -263,6 +263,311 @@ def measure_cell(canvas, contract_safe, threshold=SIZE_DEVIATION_THRESHOLD_PX, o
     }
 
 
+# ── ĐOÁN HỘP THÂN: MÉP TRUNG VỊ (15/09/2026) ─────────────────────────────────
+# ╔══ VÌ SAO PHẢI ĐOÁN, VÀ VÌ SAO KHÔNG ĐOÁN BẰNG HỘP HỨA ══════════════════════╗
+# ║ Model vẽ CẢ CỤM: thân món + lá holly + mũ tuyết + quầng sáng. `safe` (bbox   ║
+# ║ α ≥ 128) đo đúng cụm ấy — không có chỗ nào trong nó tách được thân. Webapp   ║
+# ║ thì có một nấc tên «Thân lấp khung», và tới 14/09/2026 nấc ấy lấy            ║
+# ║ `contractSafe` làm thân: một hộp mà PROMPT đã thôi hứa (đo r-0021: model vẽ  ║
+# ║ đúng tâm mà cỡ gấp 1,5–1,7 lần ở mọi ô). Nấc «thân» đang căn theo một con số ║
+# ║ không còn ai tôn trọng. Nên thân phải ĐO RA TỪ PIXEL, hoặc không có.         ║
+# ╚═════════════════════════════════════════════════════════════════════════════╝
+#
+# ╔══ PHÉP CHÍNH: MÉP TRUNG VỊ, KHÔNG PHẢI DIỆN TÍCH, KHÔNG PHẢI BBOX ══════════╗
+# ║ Cạnh trên của thân = TRUNG VỊ của «y nhỏ nhất có sơn» lấy trên các cột nằm   ║
+# ║ trong dải giữa 60% bề rộng cụm. Ba tính chất, và cả ba đều cần:              ║
+# ║  ① Trang trí thò ra (holly, tuyết, ruy băng) chỉ chiếm THIỂU SỐ cột ⇒ không  ║
+# ║    kéo nổi trung vị. bbox thì chỉ cần MỘT cột là phình ra hết cỡ.            ║
+# ║  ② Thân RỖNG RUỘT (vòng avatar, khung popup) vẫn có mép ngoài ở MỌI cột ⇒    ║
+# ║    trung vị đọc đúng vòng. Phép đo theo DIỆN TÍCH thì chết ở đây: một cái    ║
+# ║    vòng phủ ~45% hộp của chính nó (đo 02-avatar-frame thật: 0,456).          ║
+# ║  ③ Bo góc chỉ làm tụt độ phủ vài %, mà không dời mép ngoài của dải giữa.     ║
+# ║ CÁI GIÁ, ghi ra chứ không giấu: trang trí trải dọc HẾT một cạnh (mũ tuyết    ║
+# ║ phủ cả bề ngang một thanh) là ĐA SỐ, nên nó được tính vào thân. Phép này     ║
+# ║ không có cách nào phân biệt «mũ tuyết phủ hết cạnh» với «thân dày hơn».      ║
+# ╚═════════════════════════════════════════════════════════════════════════════╝
+#
+# ╔══ NỚI THEO MAD: VÌ MÉP CONG KHÔNG PHẢI MÉP LỆCH ═══════════════════════════╗
+# ║ Trung vị trần trụi cắt cụt mọi hình CONG: trên một vòng tròn, trung vị của   ║
+# ║ mép trên lấy ở dải giữa nằm THẤP HƠN đỉnh vòng ~7% đường kính — không phải   ║
+# ║ vì có trang trí, mà vì vòng cong xuống ở hai bên. Nên sau khi có trung vị,   ║
+# ║ mép được NỚI ra tới giá trị ngoài cùng còn nằm trong `MAD_K × MAD`:          ║
+# ║   · hình cong  ⇒ các mép tản đều ⇒ MAD lớn ⇒ nới tới đúng đỉnh vòng;         ║
+# ║   · thân phẳng + trang trí ⇒ đa số mép BẰNG NHAU ⇒ MAD = 0 ⇒ không nới,      ║
+# ║     trang trí bị bỏ lại ngoài đúng như ý.                                    ║
+# ║ MAD (độ lệch tuyệt đối trung vị) chứ không phải độ lệch chuẩn: chính đám     ║
+# ║ trang trí ta muốn loại lại là thứ thổi phồng độ lệch chuẩn nhất.             ║
+# ╚═════════════════════════════════════════════════════════════════════════════╝
+
+#: Ngưỡng «CÓ SƠN». Thấp hơn `CORE_ALPHA` một cách CÓ CHỦ Ý: mặt kính / glass mà
+#: model vẽ ở α ≈ 64 vẫn là THÂN, và với ngưỡng 128 thì ruột một thanh kính rỗng
+#: hoàn toàn ⇒ mọi phép đo độ phủ đọc nó thành «khung rỗng». Vẫn cao hơn hẳn màn
+#: sương α = 1..3 phủ cả ô (xem `CONTENT_ALPHA`), nên nền trống không thành thân.
+PAINT_ALPHA = 32
+#: Dải giữa dùng để lấy trung vị: 60% bề rộng (cho mép trên/dưới) và 60% chiều cao
+#: (cho mép trái/phải) của cụm. Hẹp hơn thì vài chục cột quyết cả cạnh; rộng hơn thì
+#: chính bốn góc — nơi trang trí hay đậu — được bỏ phiếu.
+CORE_BAND = 0.6
+#: Hệ số nới mép theo MAD. 3 là quy ước quen của phép loại ngoại lai theo MAD.
+CORE_MAD_K = 3.0
+#: Sàn nới, px: với thân phẳng MAD = 0, mà viền răng cưa của ngưỡng alpha vẫn dao
+#: động 1–2px. Không có sàn thì mép bám đúng một giá trị trung vị và cắt mất viền.
+CORE_EDGE_FLOOR_PX = 2
+#: Nhỏ hơn ngần này so với cụm theo MỘT chiều ⇒ coi là ĐOÁN HỎNG, trả None.
+CORE_MIN_CLUSTER_FRAC = 0.35
+#: Lớn hơn ngần này so với cụm theo CẢ HAI chiều ⇒ món không có trang trí; trả None
+#: để hạ nguồn dùng thẳng cụm, thay vì bày ra hai con số lệch nhau vài pixel.
+CORE_WHOLE_CLUSTER_FRAC = 0.97
+#: ĐƯỜNG PHỤ (quét độ phủ): cột/hàng thuộc thân khi tỉ lệ pixel có sơn trong dải
+#: ngang qua nó đạt ngần này.
+CORE_COVER_MIN = 0.85
+#: …và dừng sau ngần này cột/hàng liên tiếp KHÔNG đạt — một cột hụt là khe hở của
+#: hình, ba cột liền là đã ra khỏi thân.
+CORE_COVER_GAP = 3
+#: Số vòng lặp của đường phụ: bề rộng đo trong một dải cao, chiều cao đo trong một
+#: dải rộng, nên hai số phụ thuộc nhau và phải lặp lại cho đứng yên.
+CORE_COVER_ROUNDS = 3
+
+
+def paint_mask(alpha):
+    """Kênh alpha → mặt nạ 0/255 của pixel CÓ SƠN (α ≥ `PAINT_ALPHA`)."""
+    return alpha.point(lambda v: 255 if v >= PAINT_ALPHA else 0)
+
+
+def _slice_profile(mask, lo, hi, across0, across1, vertical):
+    """Mỗi lát (cột nếu `vertical`, hàng nếu không) → ``(mép nhỏ, mép lớn, số px sơn)``.
+
+    Lát nào không có sơn thì VẮNG MẶT trong dict — «không có sơn» khác «có sơn ở
+    mép 0». Mỗi lát tốn đúng một `crop` + `getbbox` + `histogram`, cả ba ở tầng C
+    của Pillow; không một vòng lặp Python nào chạm tới pixel. Một ô 627² tốn ~750
+    lát, rẻ hơn hẳn việc kéo 393k pixel qua `getdata()`.
+    """
+    out = {}
+    for i in range(lo, hi):
+        strip = mask.crop((i, across0, i + 1, across1)) if vertical \
+            else mask.crop((across0, i, across1, i + 1))
+        bb = strip.getbbox()
+        if bb is None:
+            continue
+        painted = strip.histogram()[255]
+        out[i] = ((bb[1] + across0, bb[3] - 1 + across0, painted) if vertical
+                  else (bb[0] + across0, bb[2] - 1 + across0, painted))
+    return out
+
+
+def _median(vals):
+    s = sorted(vals)
+    n = len(s)
+    return float(s[n // 2]) if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2.0
+
+
+def _robust_edge(vals, outward):
+    """Mép thân từ danh sách mép ngoài của từng lát. `outward` = -1 (trên/trái) hoặc +1.
+
+    Trung vị trước, rồi NỚI tới giá trị ngoài cùng còn nằm trong `MAD_K × MAD` (sàn
+    `CORE_EDGE_FLOOR_PX`). Vì sao cả hai bước: xem khối «NỚI THEO MAD».
+    """
+    med = _median(vals)
+    mad = _median([abs(v - med) for v in vals])
+    tol = max(float(CORE_EDGE_FLOOR_PX), CORE_MAD_K * mad)
+    keep = [v for v in vals if (v >= med - tol if outward < 0 else v <= med + tol)]
+    if not keep:
+        return int(round(med))
+    return min(keep) if outward < 0 else max(keep)
+
+
+def _median_core_box(mask, cluster):
+    """Hộp thân theo mép trung vị → ``[x, y, w, h]``, hoặc None nếu dải giữa trống."""
+    x, y, w, h = cluster
+    ix, iy = int(round(w * (1 - CORE_BAND) / 2)), int(round(h * (1 - CORE_BAND) / 2))
+    cols = _slice_profile(mask, x + ix, x + w - ix, y, y + h, True)
+    rows = _slice_profile(mask, y + iy, y + h - iy, x, x + w, False)
+    if not cols or not rows:
+        return None
+    top = _robust_edge([v[0] for v in cols.values()], -1)
+    bottom = _robust_edge([v[1] for v in cols.values()], +1)
+    left = _robust_edge([v[0] for v in rows.values()], -1)
+    right = _robust_edge([v[1] for v in rows.values()], +1)
+    if right <= left or bottom <= top:
+        return None
+    return [left, top, right - left + 1, bottom - top + 1]
+
+
+def _run_edge(profile, start, step, span, lo_limit, hi_limit):
+    """Từ `start` đi theo `step`: lát cuối cùng còn đủ độ phủ trước khi hụt liên tiếp."""
+    edge = None
+    gap = 0
+    i = int(start)
+    while lo_limit <= i <= hi_limit:
+        cell = profile.get(i)
+        if cell is not None and span > 0 and cell[2] / float(span) >= CORE_COVER_MIN:
+            edge, gap = i, 0
+        else:
+            gap += 1
+            if gap >= CORE_COVER_GAP:
+                break
+        i += step
+    return edge
+
+
+def _coverage_core_box(mask, cluster, center):
+    """ĐƯỜNG PHỤ: quét ĐỘ PHỦ cột/hàng từ tâm ra hai bên. Dùng khi mép trung vị câm.
+
+    Quét theo độ phủ chứ không theo diện tích hộp: bo góc làm diện tích tụt 5–8% dù
+    thân vẫn đúng, còn độ phủ của một CỘT thì chỉ tụt ở đúng mấy cột sát góc.
+    """
+    x, y, w, h = cluster
+    cx, cy = center
+    hc, wc = float(h), float(w)
+    left = right = top = bottom = None
+    for _ in range(CORE_COVER_ROUNDS):
+        y0, y1 = max(y, int(round(cy - hc / 2))), min(y + h, int(round(cy + hc / 2)))
+        if y1 <= y0:
+            return None
+        cols = _slice_profile(mask, x, x + w, y0, y1, True)
+        left = _run_edge(cols, round(cx), -1, y1 - y0, x, x + w - 1)
+        right = _run_edge(cols, round(cx), +1, y1 - y0, x, x + w - 1)
+        if left is None or right is None or right <= left:
+            return None
+        wc = float(right - left + 1)
+        x0, x1 = max(x, int(round(cx - wc / 2))), min(x + w, int(round(cx + wc / 2)))
+        if x1 <= x0:
+            return None
+        rows = _slice_profile(mask, y, y + h, x0, x1, False)
+        top = _run_edge(rows, round(cy), -1, x1 - x0, y, y + h - 1)
+        bottom = _run_edge(rows, round(cy), +1, x1 - x0, y, y + h - 1)
+        if top is None or bottom is None or bottom <= top:
+            return None
+        hc = float(bottom - top + 1)
+    return [left, top, right - left + 1, bottom - top + 1]
+
+
+def _paint_centroid(mask, cluster):
+    """Trọng tâm khối lượng của phần CÓ SƠN trong cụm → ``(cx, cy)`` hoặc None."""
+    x, y, w, h = cluster
+    cols = _slice_profile(mask, x, x + w, y, y + h, True)
+    rows = _slice_profile(mask, y, y + h, x, x + w, False)
+    tw = sum(v[2] for v in cols.values())
+    th = sum(v[2] for v in rows.values())
+    if tw <= 0 or th <= 0:
+        return None
+    return (sum(i * v[2] for i, v in cols.items()) / float(tw),
+            sum(i * v[2] for i, v in rows.items()) / float(th))
+
+
+def _fit_aspect(box, aspect, bounds):
+    """Hộp lớn nhất có tỉ lệ `aspect` NẰM GỌN trong `box`, cùng tâm, kẹp trong `bounds`.
+
+    «Nằm gọn» chứ không phải «phủ kín», và đây là chỗ phép đoán trả nợ nhiều nhất:
+    một viên thuốc 470×160 kèm hai cụm holly hai đầu cho hộp trung vị 590×160 (holly
+    chiếm đa số HÀNG của dải giữa nên nó thắng ở mép trái/phải) — ép về tỉ lệ 2,94
+    thì chiều cao là cạnh chặt hơn, và bề rộng rút đúng về 470.
+    """
+    x, y, w, h = box
+    if w / float(h) > aspect:
+        nh = float(h)
+        nw = nh * aspect
+    else:
+        nw = float(w)
+        nh = nw / aspect
+    nx = int(round(x + w / 2.0 - nw / 2.0))
+    ny = int(round(y + h / 2.0 - nh / 2.0))
+    nw, nh = int(round(nw)), int(round(nh))
+    bx, by, bw, bh = bounds
+    nw, nh = min(nw, bw), min(nh, bh)
+    nx = max(bx, min(nx, bx + bw - nw))
+    ny = max(by, min(ny, by + bh - nh))
+    return [nx, ny, nw, nh]
+
+
+def guess_core_box(alpha, aspect, cluster_box):
+    """ĐOÁN HỘP THÂN trong một ô → ``[x, y, w, h]`` (toạ độ ô), hoặc None.
+
+    `alpha` = kênh alpha của ô (ảnh Pillow mode "L"); `aspect` = `w/h` của cỡ đầu ra
+    người dùng đặt (`comp["out"]`), None nếu ô không đặt cỡ; `cluster_box` = hộp CẢ
+    CỤM (`safe`).
+
+    None nghĩa là «không đoán được, hạ nguồn cứ dùng cả cụm» — KHÔNG phải «lỗi». Bốn
+    lối rơi về None, và không lối nào đoán bừa thay:
+      · không có cỡ đầu ra ⇒ không có tỉ lệ để ép, mà mép trung vị trần trụi thì
+        không tự tách được thân khỏi trang trí ở hai đầu;
+      · ô không một pixel nào có sơn;
+      · hộp đoán được < 35% cụm theo một chiều ⇒ phép đoán vừa cắt mất thân;
+      · hộp đoán được ≥ 97% cụm theo CẢ HAI chiều ⇒ món không có trang trí.
+    ĐÃ BỎ (theo yêu cầu chủ sản phẩm, 15/09/2026) điều kiện «độ phủ diện tích < 0,6
+    ⇒ None»: nó giết đúng những món RỖNG RUỘT hợp lệ — vòng avatar đo được 0,456,
+    khung popup 0,667 — mà đó lại chính là loại món cần đoán thân nhất.
+    """
+    try:
+        a = float(aspect)
+    except (TypeError, ValueError):
+        return None
+    if not (a > 0):
+        return None
+    try:
+        gx, gy, gw, gh = (int(v) for v in cluster_box[:4])
+    except (TypeError, ValueError, IndexError):
+        return None
+    if gw <= 0 or gh <= 0:
+        return None
+
+    mask = paint_mask(alpha)
+    paint = mask.getbbox()
+    if paint is None:
+        return None
+    # CỤM = HỢP của hộp đã đo (α ≥ 128) và bbox phần có sơn (α ≥ 32), kẹp trong ô.
+    # Hợp chứ không phải một trong hai: `safe` là thứ hạ nguồn gọi là «cả cụm», còn
+    # bbox có sơn là thứ MẮT nhìn thấy — một thân kính α = 64 nằm ngoài `safe` vẫn
+    # phải được tính vào cụm, nếu không mọi tỉ lệ so với cụm đều nói dối.
+    W, H = mask.size
+    x0, y0 = max(0, min(gx, paint[0])), max(0, min(gy, paint[1]))
+    x1, y1 = min(W, max(gx + gw, paint[2])), min(H, max(gy + gh, paint[3]))
+    if x1 <= x0 or y1 <= y0:
+        return None
+    cluster = [x0, y0, x1 - x0, y1 - y0]
+
+    box = _median_core_box(mask, cluster)
+    if box is None:
+        # Dải giữa câm (hình chỉ có mực ở rìa, kiểu dấu «=»): rơi sang đường phụ.
+        # Hai tâm, LẤY HỘP LỚN HƠN — tâm hộp cụm đúng với món căn giữa, trọng tâm
+        # khối lượng đúng với món dồn mực về một phía; không có cách nào biết
+        # trước cái nào đúng, nên thử cả hai và giữ cái ít cắt vào thân hơn.
+        centers = [(cluster[0] + cluster[2] / 2.0, cluster[1] + cluster[3] / 2.0)]
+        centroid = _paint_centroid(mask, cluster)
+        if centroid is not None:
+            centers.append(centroid)
+        found = [b for b in (_coverage_core_box(mask, cluster, c) for c in centers)
+                 if b is not None]
+        if not found:
+            return None
+        box = max(found, key=lambda b: b[2] * b[3])
+
+    core = _fit_aspect(box, a, cluster)
+    if core[2] < CORE_MIN_CLUSTER_FRAC * cluster[2] or core[3] < CORE_MIN_CLUSTER_FRAC * cluster[3]:
+        return None
+    if (core[2] >= CORE_WHOLE_CLUSTER_FRAC * cluster[2]
+            and core[3] >= CORE_WHOLE_CLUSTER_FRAC * cluster[3]):
+        return None
+    return core
+
+
+def paint_coverage(alpha, box):
+    """Tỉ lệ pixel CÓ SƠN trong `box` → 0..1, hoặc None nếu hộp rỗng.
+
+    Chỉ là SỐ ĐỂ SOI, không phải cổng: `guess_core_box` không đọc nó (một cái vòng
+    rỗng ruột phủ ~0,45 mà vẫn là thân đúng). Nó có mặt để khi một ô ra hộp lạ thì
+    còn đọc được «thân này đặc hay rỗng» mà không phải mở lại ảnh.
+    """
+    try:
+        x, y, w, h = (int(v) for v in box[:4])
+    except (TypeError, ValueError, IndexError):
+        return None
+    if w <= 0 or h <= 0:
+        return None
+    crop = paint_mask(alpha).crop((x, y, x + w, y + h))
+    return crop.histogram()[255] / float(w * h)
+
+
 # ── CLI: tham số + ổ khoá manifest ───────────────────────────────────────────
 # CẮT LŨY TIẾN (14/08 → 15/08). Trước: cả lượt gen xong 10 tấm mới cắt MỘT LẦN, người
 # dùng ngồi nhìn màn hình trống 15 phút. Nay agent gọi slice.py NGAY khi một tấm gen
@@ -566,6 +871,25 @@ if __name__ == "__main__":
                     asset["outSize"] = [int(out["w"]), int(out["h"])]
                     if comp.get("drawScale"):
                         asset["drawScale"] = float(comp["drawScale"])
+
+                # ④ ĐOÁN THÂN. Cũng chỉ ĐỌC pixel. `safe` đo CẢ CỤM (thân + holly +
+                # tuyết + quầng sáng), mà webapp có một nấc tên «Thân lấp khung» và
+                # tới nay nấc ấy căn theo `contractSafe` — một hộp prompt đã thôi
+                # hứa. Hộp này là câu trả lời đo được cho nấc đó; vắng khoá nghĩa là
+                # «không đoán được», và webapp quay lại dùng cả cụm.
+                core_aspect = None
+                if isinstance(out, dict) and out.get("w") and out.get("h"):
+                    try:
+                        core_aspect = float(out["w"]) / float(out["h"])
+                    except (TypeError, ValueError, ZeroDivisionError):
+                        core_aspect = None
+                core_box = guess_core_box(canvas.getchannel("A"), core_aspect,
+                                          ledger["safe"] or contract_safe)
+                if core_box is not None:
+                    asset["coreBox"] = core_box
+                    cov = paint_coverage(canvas.getchannel("A"), core_box)
+                    if cov is not None:
+                        asset["coreCoverage"] = round(cov, 4)
                 entry["assets"].append(asset)
                 n_ok += 1
 

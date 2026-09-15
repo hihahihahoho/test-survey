@@ -55,7 +55,7 @@ export const FIT_MODE_HINT: Record<FigmaFitMode, string> = {
   whole:
     "Toàn bộ phần đục của món nằm gọn trong khung, không ô nào đè sang ô bên cạnh. Đổi lại, thân món có thể không lấp kín khung.",
   body:
-    "Thân món lấp đầy khung đúng cỡ bạn đã đặt; bóng đổ và trang trí tràn ra ngoài khung. Máy vẽ lố thì ô có thể đè sang ô bên cạnh.",
+    "Lấp khung theo thân máy đoán; không đoán được thì cả món. Bóng đổ và trang trí tràn ra ngoài khung, nên ô có thể đè sang ô bên cạnh.",
   auto:
     "Từng ô một: máy vẽ sát cỡ đã đặt thì thân lấp khung, vẽ lố quá nhiều thì ôm cả món vào khung.",
 };

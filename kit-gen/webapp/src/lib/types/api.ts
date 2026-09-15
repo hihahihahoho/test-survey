@@ -1018,6 +1018,26 @@ export const kitFileSchema = z.looseObject({
    */
   outSize: kitBox,
   /**
+   * `[x, y, w, h]` — HỘP THÂN MÀ `slice.py` ĐOÁN ĐƯỢC, toạ độ trong ô như `safe`.
+   *
+   * ╔══ NÓ TRẢ LỜI CÂU MÀ `safe` VÀ `contractSafe` ĐỀU KHÔNG TRẢ LỜI ĐƯỢC ═════╗
+   * ║ `safe` là bbox α ≥ 128 của CẢ CỤM — thân CỘNG lá holly, mũ tuyết, quầng   ║
+   * ║ sáng — nên nấc «Thân lấp khung» không dùng được nó. `contractSafe` thì là  ║
+   * ║ hộp prompt đã THÔI hứa từ 14/09/2026 (model vẽ đúng tâm mà cỡ gấp 1,5–1,7 ║
+   * ║ lần), nên nấc ấy đang căn theo một con số không ai tôn trọng.             ║
+   * ║ `coreBox` là thân ĐO RA TỪ PIXEL: mép trung vị của dải giữa, ép về tỉ lệ   ║
+   * ║ `outSize`. Vắng khoá ⇒ engine KHÔNG đoán được (hoặc kit cắt bản cũ), và   ║
+   * ║ nấc «Thân lấp khung» quay về đường lùi cũ — xem `contractFramed`.         ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
+   */
+  coreBox: kitBox,
+  /**
+   * Tỉ lệ pixel có sơn (α ≥ 32) nằm trong `coreBox` — 0..1. CHỈ ĐỂ SOI, không có
+   * nhánh code nào rẽ theo nó: thân rỗng ruột hợp lệ (vòng avatar đo được 0,456)
+   * và thân đặc (0,94) đều là thân đúng.
+   */
+  coreCoverage: kitOptionalNumber,
+  /**
    * Hệ số phóng mà prompt đã nói với máy vẽ: `outSize × drawScale` = hộp vẽ trong ô.
    * Chỉ để ĐỐI CHIẾU khi một ô ra sai cỡ (lệch ở lời dặn hay ở nét vẽ) — phép co dán
    * ra Figma vẫn lấy `outSize` làm đích. Kit cắt bằng bản engine cũ ⇒ `undefined`.

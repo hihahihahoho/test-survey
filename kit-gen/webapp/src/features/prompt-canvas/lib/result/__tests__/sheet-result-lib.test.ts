@@ -572,6 +572,85 @@ describe("contractFramed — hộp hứa chỉ được làm lõi khi ẢNH CH�
   });
 });
 
+describe("contractFramed — `coreBox` là THÂN, và nó thắng hộp hứa ở nấc «thân»", () => {
+  /**
+   * Ô THẬT `test-vcb-d6fd/chinh/02-popup-close`, kèm hộp thân mà `slice.py` đoán
+   * được trên chính ảnh ấy. Đây là ca cho thấy vì sao hộp hứa không dùng được nữa:
+   * cụm đo được nằm ở y = 230..554, mà hộp hứa nằm ở y = 63..563 — tức cạnh trên
+   * của nó cách pixel đầu tiên của món 167px. Lấy hộp hứa làm thân là căn khung
+   * Figma theo một vùng KHÔNG CÓ MỘT PIXEL NÀO.
+   */
+  const dong = cell("tight/02-popup-close", "ui", {
+    w: 587, h: 325, cellIndex: 1,
+    canvas: [627, 627], content: [587, 325], contentAt: [0, 229],
+    safe: [0, 230, 587, 324],
+    contractSafe: [63, 63, 500, 500],
+    coreBox: [131, 229, 325, 325],
+    coreCoverage: 0.667,
+    outSize: [100, 100],
+  });
+  /** Cùng ô, nhưng kit cắt bằng bản engine chưa biết đoán thân. */
+  const cu = cell("tight/02-popup-close", "ui", { ...dong, coreBox: undefined } as Partial<KitFile>);
+
+  const sOf = (box: readonly number[]) => Math.min(100 / box[2]!, 100 / box[3]!);
+
+  it("nấc «thân lấp khung» lấy `coreBox`, không lấy hộp hứa", () => {
+    expect(contractFramed([dong], { mode: "body" }).scales.get(dong.path))
+      .toBeCloseTo(sOf([131, 229, 325, 325]), 6);
+    /* …và nó THẬT SỰ khác con số cũ, nếu không thì cả lượt này thừa. */
+    expect(contractFramed([cu], { mode: "body" }).scales.get(cu.path))
+      .toBeCloseTo(sOf([63, 63, 500, 500]), 6);
+  });
+
+  it("nấc «tự động» cũng dùng `coreBox`: hộp thân KHÔNG cần ai chứng thực", () => {
+    /* Ô này vẽ lố so với hộp hứa (cụm 587 trên hộp 500), nên luật dung sai cũ sẽ
+       rơi về cả cụm. Có `coreBox` thì không phải hỏi câu đó nữa — thân đã đo được. */
+    expect(contractFramed([cu], { mode: "auto" }).scales.get(cu.path))
+      .toBeCloseTo(sOf([0, 230, 587, 324]), 6);
+    expect(contractFramed([dong], { mode: "auto" }).scales.get(dong.path))
+      .toBeCloseTo(sOf([131, 229, 325, 325]), 6);
+    /* Và nấc tự động không còn phải kêu «đã co cả món» ở ô này. */
+    expect(contractFramed([dong], { mode: "auto" }).wholeFitted).toEqual([]);
+    expect(contractFramed([cu], { mode: "auto" }).wholeFitted.map((c) => c.name))
+      .toEqual(["02-popup-close"]);
+  });
+
+  it("nấc «cả món vừa khung» KHÔNG đổi một chữ — nó nói về cụm, không về thân", () => {
+    expect(contractFramed([dong], { mode: "whole" }).scales.get(dong.path))
+      .toBeCloseTo(sOf([0, 230, 587, 324]), 6);
+    expect(contractFramed([cu], { mode: "whole" }).scales.get(cu.path))
+      .toBeCloseTo(sOf([0, 230, 587, 324]), 6);
+  });
+
+  it("khung dán ra vẫn đúng cỡ người dùng đặt, dù lõi là hộp nào", () => {
+    for (const mode of ["whole", "body", "auto"] as const) {
+      const out = contractFramed([dong], { mode });
+      const s = out.scales.get(dong.path)!;
+      const box = out.files[0]!.safe as number[];
+      expect(box[2]! * s).toBeCloseTo(100, 6);
+      expect(box[3]! * s).toBeCloseTo(100, 6);
+    }
+  });
+
+  it("`coreBox` rác đi qua zod thì cũng không được dùng làm lõi", () => {
+    for (const rac of [[0, 0, 0, 10], [1, 2], [5, 5, -1, 9]]) {
+      const xau = cell("tight/02-popup-close", "ui", { ...dong, coreBox: rac } as Partial<KitFile>);
+      expect(contractFramed([xau], { mode: "body" }).scales.get(xau.path))
+        .toBeCloseTo(sOf([63, 63, 500, 500]), 6);
+    }
+  });
+
+  it("thiếu hộp hứa mà có `coreBox` ⇒ nấc «thân» vẫn có thân để căn", () => {
+    const khongHua = cell("tight/02-popup-close", "ui",
+      { ...dong, contractSafe: undefined } as Partial<KitFile>);
+    expect(contractFramed([khongHua], { mode: "body" }).scales.get(khongHua.path))
+      .toBeCloseTo(sOf([131, 229, 325, 325]), 6);
+    /* Nấc «cả món» ở cùng ô ấy vẫn phải là cụm — không được mượn thân. */
+    expect(contractFramed([khongHua], { mode: "whole" }).scales.get(khongHua.path))
+      .toBeCloseTo(sOf([0, 230, 587, 324]), 6);
+  });
+});
+
 describe("đường dẫn ảnh — runs/ là bản BẤT BIẾN, raw/ là bản bị ghi đè", () => {
   it("không có runId ⇒ raw/<job>.png", () => {
     expect(rawSheetImagePath("chinh-ui")).toBe("raw/chinh-ui.png");

@@ -129,6 +129,15 @@ export function register(r) {
            `sheet-files.ts` lặng lẽ rơi về `contractSafe` — tức dán ra Figma đúng cỡ
            máy vẽ chứ không đúng cỡ người dùng chọn. */
         outSize: meta?.outSize ?? null,
+        /* HỘP THÂN MÁY ĐOÁN (`slice.py:guess_core_box`). `safe` là bbox của CẢ CỤM —
+           thân cộng holly/tuyết/quầng sáng — nên nấc «Thân lấp khung» của web không
+           dùng được nó, và hộp hứa thì prompt đã thôi hứa từ 14/09/2026. Không trả
+           khoá này ra thì nấc ấy lại căn theo `contractSafe`, tức một con số không
+           ai còn tôn trọng. Vắng ⇒ engine không đoán được, web quay về cả cụm. */
+        coreBox: meta?.coreBox ?? null,
+        /* Độ phủ của phần có sơn trong hộp trên — SỐ ĐỂ SOI, không nhánh nào rẽ theo
+           nó (vòng avatar rỗng ruột phủ 0,456 mà vẫn là thân đúng). */
+        coreCoverage: typeof meta?.coreCoverage === "number" ? meta.coreCoverage : null,
         /* HỆ SỐ PHÓNG mà prompt đã nói với máy vẽ (`out` × k = hộp vẽ). Không tham gia
            phép co ở web — `outSize` mới là đích — nhưng nó là con số để ĐỐI CHIẾU khi
            một ô ra sai cỡ: lệch nằm ở lời dặn hay ở nét vẽ. Kit cắt bằng bản cũ ⇒ null. */

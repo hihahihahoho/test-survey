@@ -23,7 +23,7 @@ File này CỐ Ý tự chứa (không import slice.py): runtime deploy nó cạn
 nhưng cũng chạy độc lập trong tools/. Chỉ ``core_undershoot`` vào safe-zone làm
 cell regenerate; `silhouette`/`decoration` là số theo dõi overflow.
 """
-import argparse, json
+import argparse, importlib.util, json
 from pathlib import Path
 from PIL import Image
 
@@ -123,6 +123,64 @@ def _aspect_deviation(box, out, threshold=ASPECT_DEVIATION_THRESHOLD):
             "metric": "core_aspect"}
 
 
+# ── HỘP THÂN ĐOÁN ĐƯỢC: MƯỢN CỦA `slice.py`, KHÔNG CHÉP LẠI ──────────────────
+# ╔══ VÌ SAO Ở ĐÂY LẠI IMPORT, TRONG KHI `_aspect_deviation` THÌ CHÉP ══════════╗
+# ║ `_aspect_deviation` là MỘT DÒNG số học — chép nó thì hai bên còn đọc được    ║
+# ║ nhau bằng mắt, và mỗi bên có test riêng canh. `guess_core_box` là hơn trăm   ║
+# ║ dòng có ngưỡng, có trung vị, có MAD: hai bản của nó sẽ trôi khỏi nhau trong  ║
+# ║ đúng một lượt sửa, và lúc ấy lớp phủ «Lưới ô» vẽ một hộp KHÁC hộp mà webapp  ║
+# ║ dùng để đặt ảnh vào khung — tức là vẽ ra đúng cái nó sinh ra để bác bỏ.      ║
+# ║                                                                             ║
+# ║ Nên nó mượn, nhưng mượn theo kiểu KHÔNG BAO GIỜ LÀM HỎNG LƯỢT: nạp bằng      ║
+# ║ importlib, bọc try, và thiếu thì `core_guess` vắng mặt — status không đổi    ║
+# ║ một chữ. Lời hứa «file này chạy độc lập trong tools/» vẫn còn nguyên: chạy   ║
+# ║ một mình thì không có `slice.py`/`styles.json` cạnh bên, và nó im lặng bỏ    ║
+# ║ qua đúng một khoá theo dõi.                                                  ║
+# ╚═════════════════════════════════════════════════════════════════════════════╝
+_CORE = []                             # hộp nạp một lần: [] chưa thử, [None] thử rồi mà không có
+
+
+def _core_module():
+    if _CORE:
+        return _CORE[0]
+    mod = None
+    try:
+        path = Path(__file__).resolve().parent / 'slice.py'
+        if path.exists():
+            spec = importlib.util.spec_from_file_location('kitgen_slice_core', path)
+            cand = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(cand)
+            if hasattr(cand, 'guess_core_box') and hasattr(cand, 'paint_coverage'):
+                mod = cand
+    except Exception:
+        mod = None                     # engine đời cũ / chạy lẻ trong tools/ — không sao
+    _CORE.append(mod)
+    return mod
+
+
+def _core_guess(crop, out, cluster):
+    """``{'box': [x, y, w, h], 'coverage': 0..1}`` của thân đoán được, hoặc None.
+
+    SỐ THEO DÕI, KHÔNG PHẢI CỔNG — `status` của ô không đọc nó. Nó có mặt để lớp
+    phủ «Lưới ô» của web vẽ được HỘP THÂN bằng đúng con số mà `slice.py` ghi vào
+    manifest, thay vì để web tự đoán lần thứ hai.
+    """
+    mod = _core_module()
+    if mod is None or cluster is None:
+        return None
+    try:
+        aspect = float(out['w']) / float(out['h'])
+    except (TypeError, KeyError, ValueError, ZeroDivisionError):
+        return None
+    alpha = crop.convert('RGBA').getchannel('A')
+    l, t, r, b = cluster
+    box = mod.guess_core_box(alpha, aspect, [l, t, r - l, b - t])
+    if box is None:
+        return None
+    cov = mod.paint_coverage(alpha, box)
+    return {'box': box, 'coverage': None if cov is None else round(cov, 4)}
+
+
 def _one_sided_deviation(box, expected):
     errors = {
         "left": box[0] - expected[0],
@@ -193,6 +251,10 @@ def validate(image, contract, job, position_tolerance=.08, size_tolerance=.15):
             # đỏ vì một ngưỡng chưa ai đo trên dự án thật.
             'aspectDeviation': (_aspect_deviation(box, component.get('out'))
                                 if box is not None else None),
+            # HỘP THÂN ĐOÁN ĐƯỢC — cùng phép, cùng con số mà `slice.py` ghi vào
+            # manifest (`coreBox`). Ở đây nó chỉ để lớp phủ «Lưới ô» vẽ được cái
+            # hộp ấy lên chính tấm ảnh; nó KHÔNG tham gia `status`.
+            'core_guess': _core_guess(crop, component.get('out'), box),
         })
     return {'ok':all(x['status'] in ('ok','empty') for x in results),'job':job,'sheet':sheet_id,
             'bg_mode':'alpha','cells':results}

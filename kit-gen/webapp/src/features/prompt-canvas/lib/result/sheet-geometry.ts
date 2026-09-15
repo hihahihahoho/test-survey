@@ -48,6 +48,17 @@ export interface MeasuredCell {
   expected: Box | null;
   /** Hộp thân món đo được (alpha ≥ 128); `null` = không tìm thấy thân. */
   actual: Box | null;
+  /**
+   * HỘP THÂN MÁY ĐOÁN (`core_guess.box` của `validate_output_geometry.py`, cùng phép
+   * với `coreBox` trong manifest). `null` = engine không đoán được, hoặc số đo đời cũ.
+   *
+   * Vì sao nó KHÔNG thừa bên cạnh `actual`: `actual` là bbox α ≥ 128 của CẢ CỤM —
+   * thân cộng lá holly, mũ tuyết, quầng sáng. Hộp này là phần thân, và nó chính là
+   * hộp mà nấc «Thân lấp khung» dùng để đặt ảnh vào khung Figma. Vẽ được nó lên ảnh
+   * thì người dùng thấy MÁY ĐANG COI CÁI GÌ LÀ THÂN trước khi dán, chứ không phải
+   * sau khi đã dán vào file thật.
+   */
+  core: Box | null;
   /** Cạnh lệch xa nhất, px. `null` = không đo được cạnh nào. */
   offsetPx: number | null;
   /**
@@ -120,12 +131,14 @@ function measuredCell(raw: unknown, fallbackIndex: number): MeasuredCell | null 
   const expected = box(c["expected"]);
   const actual = box(c["actual"]);
   if (expected === null && actual === null) return null;
+  const core = box(rec(c["core_guess"])?.["box"]);
   return {
     name: str(c["file"]),
     index: num(c["cell"]) ?? fallbackIndex,
     regenerate: str(c["status"]) === "regenerate",
     expected,
     actual,
+    core,
     offsetPx: offsetOf(c["deviation"]),
     aspectOff: num(rec(c["aspectDeviation"])?.["value"]),
   };
@@ -212,6 +225,8 @@ export interface OverlayCell extends MeasuredCell {
   expectedAt: Box | null;
   /** Hộp đo được, đã dời ra hệ toạ độ tấm. */
   actualAt: Box | null;
+  /** Hộp thân máy đoán, đã dời ra hệ toạ độ tấm. */
+  coreAt: Box | null;
 }
 
 export interface SheetOverlay {
@@ -266,6 +281,7 @@ export function sheetOverlay(
       cell,
       expectedAt: shift(c.expected, x0, y0),
       actualAt: shift(c.actual, x0, y0),
+      coreAt: shift(c.core, x0, y0),
     });
   }
   if (cells.length === 0) return null;

@@ -115,6 +115,27 @@ function CellMarks({ cell, font, pad }: { cell: OverlayCell; font: number; pad: 
           style={{ stroke: measured, strokeWidth: BOX_STROKE }}
         />
       )}
+      {/* THÂN MÁY ĐOÁN — nét CHẤM, màu thứ ba. Ba hộp chồng nhau thì ba nét phải
+          phân biệt được bằng KIỂU NÉT chứ không chỉ bằng màu: người mù màu vẫn phải
+          đọc ra hộp nào là hộp nào, và trên một ảnh nhiều màu thì màu là thứ mất
+          trước. Đứt (6 5) là hộp hứa, chấm (1 4) là thân đoán, liền là cả cụm. */}
+      {cell.coreAt !== null && (
+        <rect
+          x={cell.coreAt.x}
+          y={cell.coreAt.y}
+          width={cell.coreAt.w}
+          height={cell.coreAt.h}
+          fill="none"
+          vectorEffect="non-scaling-stroke"
+          data-testid="overlay-core"
+          style={{
+            stroke: "rgb(var(--kg-warn))",
+            strokeWidth: BOX_STROKE,
+            strokeDasharray: "1 4",
+            strokeLinecap: "round",
+          }}
+        />
+      )}
       {badge !== "" && (
         <>
           {/* NỀN MỜ DƯỚI CHỮ — ảnh bên dưới có thể là bất cứ màu gì, nên chữ phải mang

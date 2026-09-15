@@ -200,6 +200,23 @@ export function sheetDownloadName(job: string): string {
  *     lệch  = (content_at − safe.xy) × s         ✓ trang trí tràn đúng chỗ
  * Không một dòng số học nào bị chép lại — nếu công thức của `figma-node.ts` đổi,
  * chỗ này đổi theo, không trôi khỏi nhau.
+ *
+ * ╔══ 15/09/2026 — THÂN NAY ĐO ĐƯỢC, KHÔNG CÒN PHẢI MƯỢN HỘP HỨA ════════════╗
+ * ║ Cả khối trên viết vào lúc KHÔNG CÓ phép đo nào tách được thân khỏi trang   ║
+ * ║ trí, nên nấc «Thân lấp khung» đành mượn `contractSafe` — hộp prompt đã     ║
+ * ║ thôi hứa — làm thân. `slice.py:guess_core_box` nay đo thân bằng mép trung  ║
+ * ║ vị của dải giữa rồi ép về tỉ lệ `outSize`, và ghi ra `coreBox`.            ║
+ * ║ Đo trên kit thật (`test-vcb-d6fd/chinh`): `02-avatar-frame` cụm 501×478 ⇒  ║
+ * ║ thân 491×491; `02-popup-close` cụm 587×324 ⇒ thân 325×325 — trong khi hộp  ║
+ * ║ hứa của ô ấy nằm ở y=63, chỗ không có lấy một pixel nào.                   ║
+ * ║ Nên thứ tự ưu tiên của thân đổi, và chỉ đổi ở chỗ nói về THÂN:             ║
+ * ║   · nấc «Thân lấp khung» : `coreBox` → `contractSafe` → `safe`;            ║
+ * ║   · nấc «Tự động»        : có `coreBox` thì dùng nó (nó đã là thân, không  ║
+ * ║     cần hỏi hộp hứa có được chứng thực không); không có thì y như cũ;      ║
+ * ║   · nấc «Cả món vừa khung» KHÔNG ĐỔI MỘT CHỮ — nó nói về cả cụm.           ║
+ * ║ `coreBox` không bao giờ vượt ra ngoài cụm (nó được kẹp trong cụm ngay ở    ║
+ * ║ engine), nên nấc «thân» không thể sinh ra ô đè ô rộng hơn nấc «cả món».    ║
+ * ╚═════════════════════════════════════════════════════════════════════════╝
  */
 export interface FittedCell {
   name: string;
@@ -352,16 +369,20 @@ export function contractFramed(files: readonly KitFile[], opts: FramedOptions = 
        hộp thì đối chiếu; thiếu một hộp thì không có gì để đối chiếu và đường lùi cũ
        giữ nguyên. Dung sai + số đo của cả hai ca ở khối «LÕI ĐỂ CO» phía trên. */
     const seen = boxOf(file.safe);
+    /* THÂN MÁY ĐOÁN — hộp duy nhất trong ba hộp được ĐO trên chính pixel của thân.
+       Vắng nghĩa là engine không đoán được (món không có trang trí, hoặc ô không
+       đặt cỡ), và mọi nhánh dưới đây quay về đúng luật trước 15/09/2026. */
+    const body = boxOf(file.coreBox);
     let core: Box | null;
     if (box !== null && seen !== null) {
       /* Hộp hứa có được ảnh chứng thực không — CÂU HỎI NÀY VẪN ĐƯỢC HỎI Ở CẢ BA
          nấc, dù chỉ `auto` dùng nó để chọn. Hai nấc kia dùng nó để NÓI THẬT:
          chỉ khi lời hứa đã vỡ thì câu «đã co cả món vào khung» mới đúng. */
       const hua = honoursPromise(seen, box);
-      core = mode === "whole" ? seen : mode === "body" ? box : hua ? box : seen;
+      core = mode === "whole" ? seen : mode === "body" ? body ?? box : body ?? (hua ? box : seen);
       if (core === seen && !hua) wholeFitted.push({ name: cellName(file), reason: WHOLE_FIT_REASON });
     } else {
-      core = box ?? seen;
+      core = mode === "whole" ? seen ?? box : body ?? box ?? seen;
     }
     if (core === null) {
       /* Có `outSize` nhưng không có hộp nào để căn (không hợp đồng, không đo được):

@@ -27,6 +27,10 @@ const CELLS = [
     file: "02-avatar-frame", cell: 1, status: "ok",
     expected: [143.0, 143.0, 341.0, 341.0], actual: [49, 134, 538, 461],
     deviation: { edgesPx: { left: -94.0, top: -9.0, right: 103.0, bottom: 111.0 }, maxEdgePx: 0 },
+    /* Hộp THÂN mà engine đoán trên chính ô ấy — `slice.py:guess_core_box`, đo lại
+       trên `kits/chinh/02-avatar-frame.png` của dự án thật. Cụm 501×478 (vòng cộng
+       trang trí bốn góc) ⇒ thân 491×491, phủ 0,456 vì vòng rỗng ruột. */
+    core_guess: { box: [68, 90, 491, 491], coverage: 0.456 },
   },
 ];
 
@@ -111,6 +115,23 @@ describe("dời toạ độ từ trong-ô ra cả-tấm", () => {
     expect(cell?.cell).toEqual({ x: 627, y: 0, w: 627, h: 627 });
     expect(cell?.expectedAt).toEqual({ x: 770, y: 143, w: 341, h: 341 });
     expect(cell?.actualAt).toEqual({ x: 676, y: 134, w: 538, h: 461 });
+    expect(cell?.coreAt).toEqual({ x: 695, y: 90, w: 491, h: 491 });
+  });
+
+  /* Ô 0 của chính lượt thật ấy KHÔNG có `core_guess` (số đo ghi bằng bản engine cũ).
+     Hai ô cạnh nhau, một có một không, là hình dạng dữ liệu THẬT trong lúc chuyển
+     bản — lớp phủ phải vẽ được ô nào có và im lặng ở ô nào không. */
+  it("ô không có hộp thân ⇒ `coreAt` là null, KHÔNG mượn của ô bên", () => {
+    expect(overlay()?.cells[0]?.coreAt).toBeNull();
+  });
+
+  it("hộp thân hỏng/thiếu số ⇒ null chứ không ném, và ô vẫn vẽ hai hộp kia", () => {
+    for (const rac of [{ box: [1, 2] }, { box: [0, 0, 0, 5] }, { box: "x" }, {}, null, 7]) {
+      const cells = [{ ...CELLS[1], core_guess: rac }];
+      const o = sheetOverlay(SHEET, measureOfSheet([run("r-1", cells)], "chinh-ui"));
+      expect(o?.cells[0]?.coreAt).toBeNull();
+      expect(o?.cells[0]?.actualAt).not.toBeNull();
+    }
   });
 
   it("ô vượt quá số hàng của lưới thì BỎ, không vẽ ra ngoài tấm", () => {

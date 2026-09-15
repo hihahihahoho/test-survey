@@ -175,6 +175,9 @@ const GEOMETRY_CELLS = [
     file: "02-avatar-frame", cell: 1, status: "regenerate", reasons: ["position"],
     expected: [143.0, 143.0, 341.0, 341.0], actual: [49, 134, 538, 461],
     deviation: { edgesPx: { left: -94.0, top: -9.0, right: 103.0, bottom: 111.0 }, maxEdgePx: 0 },
+    /* CHỈ MỘT ô có hộp thân, và đó là chủ ý: engine chỉ đoán được thân ở ô nào món
+       CÓ trang trí để mà tách. Lớp phủ phải vẽ được ô ấy mà không bịa ra ba ô kia. */
+    core_guess: { box: [68, 90, 491, 491], coverage: 0.456 },
   },
   {
     file: "03-progress", cell: 2, status: "ok", reasons: [],
@@ -571,7 +574,27 @@ describe("lớp phủ soi ô trên ảnh gốc", () => {
     expect(container.querySelectorAll("[data-testid='overlay-cell']")).toHaveLength(4);
     expect(container.querySelectorAll("[data-testid='overlay-expected']")).toHaveLength(4);
     expect(container.querySelectorAll("[data-testid='overlay-actual']")).toHaveLength(4);
-    expect(screen.getByText(/Nét đứt: hộp prompt đã hứa · nét liền: hộp máy vẽ ra/)).toBeTruthy();
+    expect(screen.getByText(
+      /Nét đứt: hộp prompt đã hứa · nét liền: hộp máy vẽ ra · nét chấm: thân máy đoán\./,
+    )).toBeTruthy();
+  });
+
+  it("hộp THÂN máy đoán vẽ bằng nét chấm, và chỉ ở ô nào engine đoán được", () => {
+    runItems = [runWithGeometry()];
+    rawItems = currentRaw();
+    const { container } = mount();
+    fireEvent.click(toggle());
+    const cores = container.querySelectorAll("[data-testid='overlay-core']");
+    expect(cores).toHaveLength(1);
+    /* Ô số 1 nằm ở cột 2 của tấm vuông 1254² ⇒ hộp trong ô [68, 90] dời thành (695, 90). */
+    expect(cores[0]?.getAttribute("x")).toBe("695");
+    expect(cores[0]?.getAttribute("y")).toBe("90");
+    expect(cores[0]?.getAttribute("width")).toBe("491");
+    /* Ba nét phải phân biệt được bằng KIỂU nét, không chỉ bằng màu. */
+    const kieu = (el: Element | null | undefined) =>
+      (el as HTMLElement | null)?.style.strokeDasharray ?? "";
+    expect(kieu(cores[0])).not.toBe(kieu(container.querySelector("[data-testid='overlay-expected']")));
+    expect(kieu(container.querySelector("[data-testid='overlay-actual']"))).toBe("");
   });
 
   it("toạ độ ĐÃ DỜI ra hệ của cả tấm — ô thứ tư không nằm ở góc trên-trái", () => {
