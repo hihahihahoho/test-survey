@@ -517,7 +517,7 @@ class PoseSheetTest(unittest.TestCase):
         cfg["sheets"][0]["components"].append(
             {"file": "02-thing", "spec": "waving", "skel": {"shape": "pose", "w": 0.3, "h": 0.85}})
         txt = render_prompt_text(cfg)
-        self.assertIn("2x1 grid, 2 elements in reading order", txt)
+        self.assertIn("2x1 grid of 768x1024 px cells, 2 elements in reading order", txt)
         self.assertIn("Draw the character as ONE natural figure", txt)
 
     def test_layoutRef_duoc_NOI_RA_theo_vai_tro_va_KHONG_lai_loi_ve(self):
@@ -1068,7 +1068,7 @@ class CanhNenMotKhungTest(unittest.TestCase):
         """Nhiều cảnh trên một canvas thì vẫn phải có lưới và ranh giới ô — nó chỉ
         giống tấm nền ở chỗ không có pixel rỗng."""
         txt = render_prompt_text(_cfg_nen(n=2), name="demo-nen")
-        self.assertIn("1x2 grid, 2 elements in reading order", txt)
+        self.assertIn("1x2 grid of 1024x768 px cells, 2 elements in reading order", txt)
         self.assertIn("full-bleed scene, fills its whole cell", txt)
         self.assertIn("bleeds off all four sides of that cell", txt)
         self.assertIn("## Scenes", txt)
@@ -1508,12 +1508,45 @@ class RanhGioiONamOSectionGeometryTest(unittest.TestCase):
         self.assertIn("stays in its own cell", geo)
         self.assertIn("never touch the image edges", geo)
 
-    def test_khong_mot_dong_o_nao_mang_hop_nua(self):
-        for i in (1, 2, 3):
+    def test_moi_dong_o_mang_DUNG_MOT_hop_va_do_la_hop_O(self):
+        """15/09/2026 — CA NÀY TỪNG ĐÒI NGƯỢC LẠI (`test_khong_mot_dong_o_nao_mang_hop_nua`).
+
+        Đo r-0040, lượt đầu tiên sau khi hộp ô rời prompt: tấm 1254² lưới 2×2 (ô
+        627), banner ô 1 khai «core aspect 3.9:1» vẽ liền một mạch từ x=46 tới
+        x=864 — lấn 237px sang ô 2. Lượt r-0021, khi dòng ô còn hộp ô, không món
+        nào lấn ô. Vậy thứ e5a3f2a đo đúng là hộp SAFE ZONE vô dụng (nó hứa CỠ
+        LÕI, và model vẽ lõi 587px trong hộp hứa 368px); hộp Ô thì không hứa cỡ
+        nào, nó vạch ranh giới — và ranh giới là thứ model giữ được."""
+        for i, (x0, x1, y0, y1) in enumerate(
+                [(0, 627, 0, 627), (627, 1254, 0, 627), (0, 627, 627, 1254)], start=1):
             line = self._dong(f"{i}) ")
-            self.assertNotIn("stays inside x=", line)
-            self.assertIsNone(re.search(r"x=\d+\.\.\d+", line), line)
             self.assertIn("core aspect", line)
+            self.assertIn(f"— its cell is x={x0}..{x1}, y={y0}..{y1} (627x627 px);"
+                          " everything of this element, rim and ornaments included,"
+                          " stays inside that cell", line)
+            # ĐÚNG MỘT hộp trên một dòng: hộp safe zone không được quay lại cùng nó.
+            self.assertNotIn("stays inside x=", line)
+            self.assertEqual(len(re.findall(r"x=\d+\.\.\d+", line)), 1, line)
+
+    def test_hop_O_la_GIOI_HAN_CUNG_va_prompt_noi_ra_dieu_do(self):
+        """Một cái hộp cạnh một tỉ lệ là hai lời hứa có thể cãi nhau (r-0040: tỉ lệ
+        đòi 818px bề ngang, ô chỉ có 627px). Prompt phải tự xếp hạng chúng, nếu
+        không model xếp hộ — và nó chọn tỉ lệ."""
+        self.assertIn("The cell box on each line is a hard limit; the ratio is drawn"
+                      " inside it.", self.txt)
+        self.assertIn("A wide element is at most as wide as its cell: if the cell cannot"
+                      " hold the core at its ratio at the size you want, draw it smaller"
+                      " — never wider than the cell.", self.txt)
+        # Cỡ ô nói MỘT LẦN, ở «Layout» — không lặp lại ở mọi dòng dưới dạng lời văn.
+        self.assertEqual(self.txt.count("2x2 grid of 627x627 px cells"), 1)
+
+    def test_tam_MOT_O_KHONG_in_hop_o(self):
+        """Ô của tấm 1×1 đúng bằng khổ ảnh, và «Canvas» đã nói khổ ảnh ở dòng thứ
+        hai. In lại là dạy model rằng ô và khung là hai thứ, rồi nó chừa lề cho cả
+        hai."""
+        txt = render_prompt_text(_cfg(spec="a coin icon"))
+        self.assertNotIn("its cell is", txt)
+        self.assertNotIn("px cells", txt)
 
     def test_cau_cu_CHI_NHAC_MEP_ANH_khong_duoc_quay_lai(self):
         self.assertNotIn("must stay well clear of", self.txt)

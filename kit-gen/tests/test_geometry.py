@@ -188,12 +188,27 @@ class PromptNoiTiLeChuKhongNoiPixelTest(unittest.TestCase):
         self.cfg = sheet_3x3_square()
         self.txt = render_prompt(self.cfg, "demo-ui")
 
-    def test_khong_mot_toa_do_nao_con_trong_prompt(self):
+    def test_HOP_SAFE_ZONE_khong_quay_lai_nhung_HOP_O_thi_co(self):
+        """15/09/2026 — CA NÀY ĐỔI CHIỀU MỘT NỬA, CÓ CHỦ Ý.
+
+        Bản trước cấm SẠCH mọi cặp toạ độ. Lượt r-0040 đo ra cái giá của vế đó: tấm
+        1254² lưới 2×2 (ô 627), banner ô 1 khai «core aspect 3.9:1» được vẽ liền
+        một mạch từ x=46 tới x=864 — lấn 237px sang ô 2. Ở r-0021, lượt CÒN in hộp
+        ô, không món nào lấn ô. Hai loại hộp không cùng số phận: hộp SAFE ZONE hứa
+        một CỠ LÕI và model không thực hiện nổi; hộp Ô chỉ vạch một RANH GIỚI, và
+        ranh giới thì nó giữ. Nên đúng MỘT hộp được quay lại, và chỉ hộp ấy."""
         for chet in ("safe zone x=", "stays inside x=", "drawn at", "final size",
-                     "crop box", "cell box"):
-            self.assertNotIn(chet, self.txt, f"toạ độ/hộp pixel quay lại prompt: {chet}")
-        self.assertIsNone(re.search(r"x=\d+\.\.\d+", self.txt),
-                          "còn một cặp toạ độ kiểu x=..  trong prompt")
+                     "crop box"):
+            self.assertNotIn(chet, self.txt, f"hộp safe zone quay lại prompt: {chet}")
+        for dong in self.txt.splitlines():
+            if re.search(r"x=\d+\.\.\d+", dong):
+                self.assertIn("its cell is x=", dong,
+                              f"một cặp toạ độ KHÔNG PHẢI hộp ô lọt vào prompt: {dong}")
+        # Chín ô ⇒ chín hộp ô, không thừa không thiếu.
+        self.assertEqual(self.txt.count(" — its cell is x="), 9)
+        self.assertIn("its cell is x=0..418, y=0..418 (418x418 px); everything of this"
+                      " element, rim and ornaments included, stays inside that cell",
+                      self.txt)
 
     def test_moi_o_mang_ti_le_cua_out_chu_khong_phai_ti_le_cua_o(self):
         found = {int(m.group(1)): (float(m.group(2)), float(m.group(3)))

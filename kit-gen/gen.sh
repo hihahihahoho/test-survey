@@ -541,10 +541,30 @@ for s in cfg["styles"]:
             # trên màn thiết kế (`effectiveCellHint`). Bỏ nó đi là bỏ một trường
             # contract mà không ai quyết định — và ô hình chữ nhật lại được vẽ vuông.
             cell_hint = str(sh.get('cell_hint', 'cell') or 'cell').strip()
-            grid_row = f"{cols}x{rows} grid, {n_real} " + ("elements" if n_real != 1 else "element")
+            # 15/09/2026 — CỠ Ô BẰNG SỐ, NÓI ĐÚNG MỘT LẦN Ở ĐÂY.
+            # Xem khối «HỘP Ô QUAY LẠI» ở phần danh sách element bên dưới: bỏ sạch số
+            # đo khỏi prompt (e5a3f2a) thì model hết thứ để biết một ô rộng bao nhiêu,
+            # và nó vẽ banner tràn sang ô bên. Cỡ ô đứng ở «Layout» vì nó đúng cho CẢ
+            # tấm; hộp toạ độ của từng ô thì ở dòng của ô ấy. Tấm 1 ô không in: ô ấy
+            # chính là khổ ảnh, và «Canvas» đã nói khổ ảnh ở dòng thứ hai của prompt.
+            cell_px = ""
+            if cols * rows > 1:
+                _cw, _ch = geometry.cell_size(canvas_w, canvas_h, cols, rows)
+                cell_px = f" of {_cw}x{_ch} px cells"
+            grid_row = (f"{cols}x{rows} grid{cell_px}, {n_real} "
+                        + ("elements" if n_real != 1 else "element"))
             grid_row += f" in reading order. Each cell is a {cell_hint}."
             grid_row += " Keep exactly this many cells in exactly this order."
             layout = [grid_row]
+            # ⚠️ CÂU CHỐT BỀ NGANG. Đo r-0040 (tấm 1254² lưới 2×2, ô 627): banner ô 1
+            # khai «core aspect 3.9:1» được vẽ liền một mạch từ x=46 tới x=864 — lấn
+            # 237px sang ô 2. Model giữ ĐÚNG tỉ lệ đã hứa, nó chỉ chọn một bề ngang
+            # mà ô không chứa nổi. Nên tỉ lệ phải đi kèm một câu nói ai nhường ai:
+            # ô là giới hạn cứng, tỉ lệ được vẽ NHỎ LẠI cho vừa ô, không nong ô ra.
+            if cols * rows > 1 and profile in ("ui", "mascot"):
+                layout.append("A wide element is at most as wide as its cell: if the cell cannot"
+                              " hold the core at its ratio at the size you want, draw it smaller"
+                              " — never wider than the cell.")
             if empties:
                 layout.append("Cell " + ", ".join(empties)
                               + (" are" if len(empties) > 1 else " is")
@@ -600,6 +620,11 @@ for s in cfg["styles"]:
                     " keeping a clear margin all round. Everything of an element, rim and"
                     " ornament included, stays in its own cell: elements never touch each other"
                     " and never touch the image edges.")
+                # 15/09/2026 — AI THẮNG AI, NÓI THẲNG RA. Tỉ lệ và hộp ô là hai lời
+                # hứa có thể cãi nhau (r-0040: banner 3.9:1 vẽ rộng 818px trong ô
+                # 627px). Không xếp hạng chúng thì model tự xếp, và nó chọn tỉ lệ.
+                geom.append(
+                    "- The cell box on each line is a hard limit; the ratio is drawn inside it.")
             else:
                 geom.append(
                     "- The element is centred in the frame and fills most of it while keeping a"
@@ -629,6 +654,8 @@ for s in cfg["styles"]:
                     "- Hair, tail, cape and anything the character holds come to rest inside the"
                     " same cell — characters stay in their own cell, never touch each other and"
                     " never touch the image edges.")
+                geom.append(
+                    "- The cell box on each line is a hard limit; the ratio is drawn inside it.")
             else:
                 geom.append(
                     "- The whole character comes to rest well inside the frame — nothing touches"
@@ -854,6 +881,33 @@ for s in cfg["styles"]:
                         # hệ số phóng — hai thứ sau chỉ có nghĩa khi có hộp.
                         if ow > 0:
                             spec += f", about {ow} px wide on screen"
+                        # ╔══ 15/09/2026 — HỘP Ô QUAY LẠI, VÀ CHỈ HỘP Ô ══════════════╗
+                        # ║ e5a3f2a bỏ MỌI toạ độ khỏi prompt, kể cả câu cuối dòng   ║
+                        # ║ «everything of this element … stays inside x=0..627,      ║
+                        # ║ y=0..627». Lượt ngay sau đó đo được cái giá: r-0040, tấm  ║
+                        # ║ 1254² lưới 2×2 (ô 627), banner ô 1 khai 3.9:1 vẽ liền một ║
+                        # ║ mạch từ x=46 tới x=864 — lấn 237px sang ô 2. Ở r-0021,    ║
+                        # ║ lượt CÒN hộp ô, không một món nào lấn ô.                  ║
+                        # ║                                                           ║
+                        # ║ Nên đọc lại kết luận của e5a3f2a cho đúng: thứ model      ║
+                        # ║ không thực hiện được là hộp SAFE ZONE (một lời hứa về CỠ  ║
+                        # ║ LÕI — lõi 587px trong hộp hứa 368px). Hộp Ô là một lời    ║
+                        # ║ hứa khác hẳn: một RANH GIỚI, và ranh giới thì model giữ.  ║
+                        # ║ Một hộp số cho mỗi dòng, không hai.                       ║
+                        # ╚═══════════════════════════════════════════════════════════╝
+                        # Tấm 1 ô không in: hộp ô ở đó ĐÚNG BẰNG khổ ảnh, mà khổ ảnh
+                        # đã nói ở «Canvas» — in lại là dạy model rằng ô và khung là
+                        # hai thứ khác nhau, rồi nó chừa lề cho cả hai.
+                        if cols * rows > 1:
+                            cx0, cy0, cx1, cy1 = g["cell"]
+                            # Một dáng người không có "viền" hay "hoa văn" để mà dặn;
+                            # thứ tràn khỏi ô của nó là tóc, đuôi, đạo cụ.
+                            thuoc = ("this character, hair and props included"
+                                     if profile == "mascot" else
+                                     "this element, rim and ornaments included")
+                            spec += (f" — its cell is x={cx0}..{cx1}, y={cy0}..{cy1}"
+                                     f" ({cx1 - cx0}x{cy1 - cy0} px); everything of {thuoc},"
+                                     " stays inside that cell")
                 elif g["kind"] == "full":
                     spec += " — full-bleed scene, fills its whole cell edge to edge"
                 # 08/09/2026 — HAI NHÁNH `skel.matte` (glow/glass) ĐÃ BỎ Ở ĐÂY.

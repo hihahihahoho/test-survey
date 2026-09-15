@@ -327,11 +327,33 @@ eq_n "tấm 2x2 có đủ 4 dòng tỉ lệ" 4 "$n_zone"
 # ── CHIỀU ÂM: KHÔNG MỘT HỘP PIXEL NÀO ĐƯỢC QUAY LẠI ───────────────────────────
 # Dễ tái phát nhất trong cả bản vá này: hộp có sẵn trong `geo`, nối thêm vào `spec`
 # chỉ tốn một dòng, và prompt trông "đầy đủ hơn" nên không ai thấy sai.
-for bad in "safe zone x=" "stays inside x=" "drawn at" "final size" "crop box" "cell box"; do
-  refute "không còn hộp pixel: $bad" "$bad" "$allp"
+for bad in "safe zone x=" "stays inside x=" "drawn at" "final size" "crop box"; do
+  refute "không còn hộp safe zone: $bad" "$bad" "$allp"
 done
-n_hop=$(printf '%s' "$allp" | grep -cE 'x=[0-9]+\.\.[0-9]+' || true)
-eq_n "không một cặp toạ độ nào trong mọi prompt" 0 "$n_hop"
+# ── HỘP Ô: MỘT NGOẠI LỆ, VÀ ĐƯỢC ĐO RA (15/09/2026) ───────────────────────────
+# Lượt r-0040 — lượt đầu sau khi mọi toạ độ rời prompt — tấm 1254² lưới 2×2 (ô 627),
+# banner ô 1 khai «core aspect 3.9:1» vẽ liền một mạch từ x=46 tới x=864, lấn 237px
+# sang ô 2. Lượt r-0021, khi dòng ô CÒN hộp ô, không món nào lấn ô. Hai loại hộp
+# khác nhau về bản chất: hộp SAFE ZONE hứa một CỠ LÕI (model không thực hiện nổi),
+# hộp Ô vạch một RANH GIỚI (model giữ được). Nên đúng một hộp quay lại, và ca này
+# canh rằng chỉ có nó: mọi cặp toạ độ trong mọi prompt phải nằm trên một dòng «its
+# cell is x=».
+n_hop=$(printf '%s' "$allp" | grep -E 'x=[0-9]+\.\.[0-9]+' | grep -cv 'its cell is x=' || true)
+eq_n "không cặp toạ độ nào ngoài hộp Ô" 0 "$n_hop"
+expect "ô 1 mang hộp ô của chính nó" \
+  "its cell is x=0..627, y=0..627 (627x627 px); everything of this element, rim and ornaments included, stays inside that cell" "$vuong"
+expect "ô 2 sang hộp bên phải" "its cell is x=627..1254, y=0..627 (627x627 px)" "$vuong"
+n_cell=$(printf '%s' "$vuong" | grep -c ' — its cell is x=')
+eq_n "tấm 2x2 có đủ 4 hộp ô" 4 "$n_cell"
+expect "«Layout» nói cỡ ô, một lần" "2x2 grid of 627x627 px cells, 4 elements in reading order" "$vuong"
+expect "và chốt bề ngang tối đa" \
+  "A wide element is at most as wide as its cell: if the cell cannot hold the core at its ratio at the size you want, draw it smaller — never wider than the cell." "$vuong"
+expect "«Geometry» xếp hạng hộp trên tỉ lệ" \
+  "The cell box on each line is a hard limit; the ratio is drawn inside it." "$vuong"
+# Tấm 1 ô: hộp ô ĐÚNG BẰNG khổ ảnh, mà khổ ảnh đã nói ở «Canvas» — in lại là dạy
+# model rằng ô và khung là hai thứ khác nhau, rồi nó chừa lề cho cả hai.
+refute "tấm mascot 1 ô không in hộp ô" "its cell is" "$linh"
+refute "và «Layout» của nó cũng không nhắc cỡ ô" "px cells" "$linh"
 # ── RANH GIỚI Ô: LUẬT VẪN CÒN, NÓ CHỈ ĐỔI NHÀ ────────────────────────────────
 # `slice.py` cắt theo hộp Ô, nên viền/trang trí vượt mép ô bị chém cụt (đo trên dự
 # án thật: overflowPx bên phải 69 và 77, khít mép ô 627px). Bản trước nói điều đó
