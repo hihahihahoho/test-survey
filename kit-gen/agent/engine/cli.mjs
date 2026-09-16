@@ -14,6 +14,38 @@
  * HERE = project (xem `agent/lib/engine.mjs`). Bản JS không copy gì cả — engine
  * nằm trong gói agent — nên thư mục project phải được truyền vào tường minh.
  *
+ * ╔══ HỢP ĐỒNG CHO BƯỚC ④ (agent đổi lệnh spawn) ═══════════════════════════════╗
+ * ║ `agent/lib/engine.mjs::buildCommand` hôm nay trả về `bash <project>/gen.sh`.  ║
+ * ║ Bước ④ đổi nó thành:                                                          ║
+ * ║   gen   → { cmd: process.execPath,                                            ║
+ * ║            args: [<agent>/engine/cli.mjs, "gen", projectDirAbs],               ║
+ * ║            env:  { MAXJOBS, IMG_HOME? } }                                     ║
+ * ║   cover → { cmd: process.execPath,                                            ║
+ * ║            args: [<agent>/engine/cli.mjs, "cover", projectDirAbs],             ║
+ * ║            env:  { IMG_HOME? } }                                              ║
+ * ║ và `prepareEngine` thôi CHÉP `gen.sh`/`cover.sh`/`geometry.py` vào project —   ║
+ * ║ engine JS nằm trong gói agent, project chỉ còn là DỮ LIỆU.                     ║
+ * ║                                                                               ║
+ * ║ NHỮNG THỨ KHÔNG ĐỔI, và vì thế không cần đụng tới `run-handle.mjs`:           ║
+ * ║  · cwd của tiến trình con vẫn là <project>; mọi đường dẫn tương đối trong      ║
+ * ║    stdout/log (`prompts/…`, `raw/…`, `logs/…`) neo theo đó y như cũ;           ║
+ * ║  · bốn mẫu dòng mà `parseGenLine` bám (xem `gen.mjs`) giữ nguyên từng ký tự;   ║
+ * ║  · file ghi ra giữ nguyên tên và vị trí: `raw/<job>.png`, `logs/<job>.log`,    ║
+ * ║    `logs/<job>.last.txt`, `cover/cover.png`, `cover/cover.raw.png`;            ║
+ * ║  · mã thoát: 0 cho mọi ca thường, 1 khi hồ sơ Codex riêng chưa đăng nhập,      ║
+ * ║    2 khi thiếu thư mục project / thiếu `prompts/cover.txt` (chỉ `cover`);      ║
+ * ║  · biến môi trường đọc y hệt: MAXJOBS · IMG_HOME · KITGEN_GEN_MODEL ·          ║
+ * ║    KITGEN_GEN_EFFORT · KITGEN_PROMPTS_ONLY · GEN_BUSY_RETRIES ·                ║
+ * ║    GEN_BUSY_BACKOFF, cộng KITGEN_CODEX_BIN (cửa thoát của bộ ca, cùng lối với  ║
+ * ║    `lib/codex-login.mjs`) mà bản bash không có.                                ║
+ * ║                                                                               ║
+ * ║ BA CHỖ BẢN JS CỐ Ý KHÔNG GIỐNG, đã đo và ghi ở ngay chỗ ấy:                    ║
+ * ║  ① `ls -la raw/` cuối `gen.sh` không được chép (không thể trùng trên hai máy,  ║
+ * ║     không ai đọc) — xem `runGen`;                                             ║
+ * ║  ② cách IN của `du -h` theo bản BSD; GNU không đệm khoảng trắng — `humanSize`; ║
+ * ║  ③ `MAXJOBS=0` đọc thành 4 thay vì treo vô hạn — `readEnv`.                    ║
+ * ╚═══════════════════════════════════════════════════════════════════════════════╝
+ *
  * ── LỌC JOB: KHÁC BẢN CŨ MỘT CHÚT, VÀ ĐÂY LÀ CHỖ NÓI RA ──────────────────────
  * `gen.sh` đọc `FILTERS=("$@")` Ở SAU chỗ thoát của KITGEN_PROMPTS_ONLY, nên ở chế
  * độ xem trước nó DỰNG PROMPT CHO MỌI JOB bất kể argv. Lệnh `prompts` nhận filter
