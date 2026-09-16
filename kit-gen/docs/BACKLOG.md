@@ -31,8 +31,9 @@ installer, không cho engine. Kèm theo:
 - **Máy cài bản ≤2.1.45 không nhận được gói mới nếu chạy installer CŨ.** `is_release()`
   đời cũ nhận diện gói bằng `engine/gen.sh`; gói mới không có file ấy ⇒ installer cũ
   nói "Invalid KitGen runtime archive". Đường update thật đi qua `kitgen update` →
-  `~/.kitgen/install.sh` (bản cũ) nên **phải quyết ở lúc phát hành**: hoặc để lại một
-  `engine/gen.sh` giả trong gói một đời, hoặc bắt người dùng chạy lại easy-install.
+  `~/.kitgen/install.sh` (bản cũ). **Đã quyết 16/09/2026**: `scripts/build-runtime.sh`
+  để lại một `engine/gen.sh` giả (thoát mã 2, không ai gọi) trong gói **một đời**; gỡ khi
+  không còn máy nào ở ≤2.1.45.
 - Bỏ nốt `findBash`/`bashEnv`/`toBashPath` khi installer không còn là bash.
 
 **Bug của engine cũ đã ghi nhận trong lúc port** (chép nguyên ở ③ để hai bản còn so

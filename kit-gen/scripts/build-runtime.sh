@@ -70,6 +70,23 @@ rm -rf "$STAGE/$PKG/agent/test" "$STAGE/$PKG/agent/test-fixtures" "$STAGE/$PKG/a
   exit 1
 }
 cp "$ROOT/element-lib.json" "$STAGE/$PKG/element-lib.json"
+# ── CẦU MỘT ĐỜI CHO ĐƯỜNG NÂNG CẤP: `engine/gen.sh` GIẢ ─────────────────────────
+# `kitgen update` trên máy đang cài ≤2.1.45 chạy `~/.kitgen/install.sh` CŨ (agent
+# `update.mjs::stageInstaller` chép installer đang có, KHÔNG phải installer trong gói mới),
+# và `is_release()` đời ấy đòi `engine/gen.sh` — thiếu là "Invalid KitGen runtime archive"
+# và người dùng kẹt ở bản cũ mãi. Installer cũ sau khi cài xong mới chép install.sh MỚI
+# vào ~/.kitgen, nên chỉ cần gói MỘT đời còn mang file này. Không ai gọi nó: agent spawn
+# `agent/engine/cli.mjs`; installer cũ chép nó vào `<workspace>/.kitgen/engine`, installer
+# mới dọn thư mục đó ở lượt kế. Gỡ khối này khi không còn máy nào ở ≤2.1.45.
+mkdir -p "$STAGE/$PKG/engine"
+cat > "$STAGE/$PKG/engine/gen.sh" <<'STUB'
+#!/usr/bin/env bash
+# KitGen: engine bash đã được thay bằng agent/engine/cli.mjs (JS) từ 16/09/2026.
+# File này chỉ tồn tại để installer đời ≤2.1.45 nhận diện gói khi nâng cấp.
+echo "gen.sh đã nghỉ — engine nay là node agent/engine/cli.mjs" >&2
+exit 2
+STUB
+chmod +x "$STAGE/$PKG/engine/gen.sh"
 cp -R "$ROOT/webapp/dist/." "$STAGE/$PKG/app/"
 cp -R "$ROOT/runtime/bin" "$ROOT/runtime/service" "$STAGE/$PKG/runtime/"
 printf '%s\n' "$VERSION" > "$STAGE/$PKG/VERSION"
