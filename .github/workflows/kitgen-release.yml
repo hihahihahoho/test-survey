@@ -89,6 +89,10 @@ jobs:
           # JS nên đường ấy không còn, và thứ phải canh là chiều ngược lại: KHÔNG installer
           # nào được chạm tới Python nữa, và di sản đời cũ phải bị dọn.
           bash ../test/install-no-python.test.sh
+          # BỘ CA NÀY CŨNG CHƯA TỪNG ĐƯỢC CI GỌI (khoảng trống có từ lúc nó ra đời,
+          # 16/09/2026). Nó khoá luật «npm của KitGen không được làm việc thay npm của
+          # người dùng» — đúng con bug làm gói @openai/codex 277 MB rơi vào tools/node.
+          bash ../test/install-codex-update-path.test.sh
           # Mọi ca engine cũ (gen-*.test.sh · engine-empty-array · slice-orientation)
           # đã xoá cùng `gen.sh`/`slice.py`. Chúng trích `run_one` từ chính engine bash;
           # thứ canh những nhánh ấy nay là `node ../agent/test-agent.mjs` ngay dưới

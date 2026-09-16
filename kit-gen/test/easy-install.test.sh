@@ -40,84 +40,76 @@ done
 
 MAC_ZIP="$TEST_ROOT/kitgen-easy-install-macos.zip"
 WINDOWS_ZIP="$TEST_ROOT/kitgen-easy-install-windows.zip"
-python3 - "$ROOT/easy-install" "$MAC_ZIP" "$WINDOWS_ZIP" <<'PY'
-import stat
-import sys
-import zipfile
-from pathlib import Path
-
-root = Path(sys.argv[1])
-packages = {
-    sys.argv[2]: ("README-macos.md", [
-        "install.command",
-        "start-server.command",
-        "stop-server.command",
-        "uninstall.command",
-    ]),
-    sys.argv[3]: ("README-windows.md", [
-        "install.bat",
-        "start-server.bat",
-        "stop-server.bat",
-        "uninstall.bat",
-    ]),
+# ── DỰNG HAI GÓI ZIP — BẰNG `zip`, KHÔNG BẰNG PYTHON ────────────────────────
+# Trước 16/09/2026 chỗ này là hai heredoc `python3` (~70 dòng `zipfile`). Sau khi cả
+# sản phẩm bỏ Python, một bộ ca còn cần python3 mới chạy được là một bộ ca đo sản phẩm
+# bằng cái máy mà sản phẩm không hứa. Quan trọng hơn: workflow phát hành dựng ZIP bằng
+# `zip -q -X` — nên bộ ca phải dựng ĐÚNG CÁCH ẤY, chứ không phải một cách thứ hai vốn
+# có thể xanh trong khi đường thật đỏ.
+build_zip() {   # build_zip <zip> <README nguồn> <wrapper…>
+  _zip="$1"; _readme="$2"; shift 2
+  _stage="$TEST_ROOT/stage-$(basename "$_zip" .zip)"
+  rm -rf "$_stage"; mkdir -p "$_stage"
+  [ -f "$ROOT/easy-install/$_readme" ] || fail "missing easy-install file: $_readme"
+  cp "$ROOT/easy-install/$_readme" "$_stage/README.md"
+  for _w in "$@"; do
+    [ -f "$ROOT/easy-install/$_w" ] || fail "missing easy-install file: $_w"
+    cp -p "$ROOT/easy-install/$_w" "$_stage/$_w"
+  done
+  rm -f "$_zip"
+  ( cd "$_stage" && zip -q -X "$_zip" README.md "$@" ) || fail "zip thất bại: $_zip"
+  echo "built $_zip"
 }
+MAC_WRAPPERS="install.command start-server.command stop-server.command uninstall.command"
+WIN_WRAPPERS="install.bat start-server.bat stop-server.bat uninstall.bat"
+# Bit +x phải có TỪ TRONG KHO (git mode 100755) — workflow cũng `chmod +x` thêm một lần,
+# nhưng nếu kho mất bit thì người tải ZIP từ Releases vẫn nhận được file không chạy được.
+for w in $MAC_WRAPPERS; do
+  [ -x "$ROOT/easy-install/$w" ] || fail "easy-install/$w mất bit thực thi trong kho (git mode phải là 100755)"
+done
+build_zip "$MAC_ZIP" README-macos.md $MAC_WRAPPERS
+build_zip "$WINDOWS_ZIP" README-windows.md $WIN_WRAPPERS
 
-for destination_name, (readme, wrappers) in packages.items():
-    destination = Path(destination_name)
-    sources = [("README.md", readme), *((name, name) for name in wrappers)]
-    missing = [source for _, source in sources if not (root / source).is_file()]
-    if missing:
-        raise SystemExit("missing easy-install files: " + ", ".join(missing))
-    with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for archive_name, source_name in sources:
-            path = root / source_name
-            info = zipfile.ZipInfo(archive_name)
-            info.create_system = 3
-            info.date_time = (1980, 1, 1, 0, 0, 0)
-            info.external_attr = (stat.S_IMODE(path.stat().st_mode) & 0xFFFF) << 16
-            info.compress_type = zipfile.ZIP_DEFLATED
-            archive.writestr(info, path.read_bytes())
-    print("built", destination)
-PY
-
-python3 - "$MAC_ZIP" "$WINDOWS_ZIP" <<'PY'
-import stat
-import sys
-import zipfile
-
-macos_zip, windows_zip = sys.argv[1:]
-expected = {
-    macos_zip: ["README.md", "install.command", "start-server.command", "stop-server.command", "uninstall.command"],
-    windows_zip: ["README.md", "install.bat", "start-server.bat", "stop-server.bat", "uninstall.bat"],
+# ── KIỂM HAI GÓI ─────────────────────────────────────────────────────────────
+check_names() {   # check_names <zip> <tên…>
+  _zip="$1"; shift
+  _want="$(printf '%s\n' "$@")"
+  _got="$(zipinfo -1 "$_zip")"
+  [ "$_got" = "$_want" ] || fail "$_zip: wrong file list: $(printf '%s' "$_got" | tr '\n' ' ')"
 }
+check_names "$MAC_ZIP" README.md $MAC_WRAPPERS
+check_names "$WINDOWS_ZIP" README.md $WIN_WRAPPERS
 
-for filename, names in expected.items():
-    with zipfile.ZipFile(filename) as archive:
-        actual = archive.namelist()
-        if actual != names:
-            raise SystemExit(f"{filename}: wrong file list: {actual!r}")
-        if filename == macos_zip:
-            if any(name.endswith(".bat") for name in actual):
-                raise SystemExit("macOS ZIP contains a Windows wrapper")
-            for name in names[1:]:
-                info = archive.getinfo(name)
-                mode = (info.external_attr >> 16) & 0xFFFF
-                if info.create_system != 3 or stat.S_IMODE(mode) != 0o755:
-                    raise SystemExit(f"macOS ZIP lost execute mode for {name}: {oct(mode)}")
-        else:
-            if any(name.endswith(".command") for name in actual):
-                raise SystemExit("Windows ZIP contains a macOS wrapper")
-        readme = archive.read("README.md").decode("utf-8")
-        if filename == macos_zip:
-            required = ("macOS", "quarantine", "right-click", "Open", "~/KitGen", "KEEPS")
-            if any(term not in readme for term in required) or any(term.lower() in readme.lower() for term in ("windows", ".bat", "smartscreen")):
-                raise SystemExit("macOS ZIP README is not macOS-only")
-        else:
-            required = ("Windows", "SmartScreen", "More info", "Run anyway", "Explorer", "temporary", "%USERPROFILE%\\KitGen", "KEEPS")
-            if any(term not in readme for term in required) or any(term.lower() in readme.lower() for term in ("macos", ".command", "quarantine")):
-                raise SystemExit("Windows ZIP README is not Windows-only")
-    print("verified", filename)
-PY
+zipinfo -1 "$MAC_ZIP" | grep -q '\.bat$' && fail "macOS ZIP contains a Windows wrapper"
+zipinfo -1 "$WINDOWS_ZIP" | grep -q '\.command$' && fail "Windows ZIP contains a macOS wrapper"
+
+# `zipinfo` in: "-rwxr-xr-x  3.0 unx  <cỡ> …  <tên>". Cột 1 là quyền, cột 3 là HỆ ĐIỀU
+# HÀNH dựng gói ("unx"). Cả hai đều phải đúng, nếu không macOS tải về sẽ có một file
+# .command bấm đúp KHÔNG CHẠY — đúng ca người dùng thật gặp.
+for w in $MAC_WRAPPERS; do
+  line="$(zipinfo "$MAC_ZIP" "$w" | tail -n 1)"
+  case "$line" in
+    -rwxr-xr-x*' unx '*) : ;;
+    *) fail "macOS ZIP lost execute mode for $w: $line" ;;
+  esac
+done
+
+# README trong gói phải là README của ĐÚNG nền tảng đó (đổi tên thành README.md).
+readme_of() { unzip -p "$1" README.md; }
+for term in 'macOS' 'quarantine' 'right-click' 'Open' '~/KitGen' 'KEEPS'; do
+  readme_of "$MAC_ZIP" | grep -qF "$term" || fail "macOS ZIP README thiếu «$term»"
+done
+for term in 'windows' '.bat' 'smartscreen'; do
+  readme_of "$MAC_ZIP" | grep -qiF "$term" && fail "macOS ZIP README is not macOS-only (có «$term»)"
+done
+for term in 'Windows' 'SmartScreen' 'More info' 'Run anyway' 'Explorer' 'temporary' '%USERPROFILE%\KitGen' 'KEEPS'; do
+  readme_of "$WINDOWS_ZIP" | grep -qF "$term" || fail "Windows ZIP README thiếu «$term»"
+done
+for term in 'macos' '.command' 'quarantine'; do
+  readme_of "$WINDOWS_ZIP" | grep -qiF "$term" && fail "Windows ZIP README is not Windows-only (có «$term»)"
+done
+echo "verified $MAC_ZIP"
+echo "verified $WINDOWS_ZIP"
 
 FAKE_BIN="$TEST_ROOT/bin"
 mkdir -p "$FAKE_BIN"

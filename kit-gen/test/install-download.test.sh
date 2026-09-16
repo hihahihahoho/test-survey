@@ -13,8 +13,10 @@
 #   ② lỗi mạng/5xx là chuyện KHÁC ⇒ mã thoát 20, không được nói dối là "đang đóng gói";
 #   ③ .tar.gz có mà .sha256 chưa có (bản phát hành upload được một nửa) ⇒ vẫn là ①.
 #
-# Không đụng tới mạng thật: một `python3 -m http.server` trên 127.0.0.1 đóng vai
-# GitHub Releases, và cổng chết đóng vai "mất mạng".
+# Không đụng tới mạng thật: một server tĩnh ~15 dòng bằng NODE trên 127.0.0.1 đóng vai
+# GitHub Releases, và cổng chết đóng vai "mất mạng". (Trước 16/09/2026 đây là
+# `python3 -m http.server`; bộ ca của một sản phẩm không cần Python thì cũng không được
+# cần Python — máy nào chạy được KitGen phải chạy được bộ ca của nó.)
 # ═══════════════════════════════════════════════════════════════════════════════
 set -eu
 
@@ -40,7 +42,24 @@ done
 [ "$PORT" != 0 ] || { echo "không tìm được cổng trống cho server giả" >&2; exit 1; }
 DEAD_PORT=$((PORT + 1))
 
-(cd "$TEST_ROOT/www" && exec python3 -m http.server "$PORT" --bind 127.0.0.1) >/dev/null 2>&1 &
+cat > "$TEST_ROOT/serve.mjs" <<SERVE
+/* Server tĩnh tối giản: có file ⇒ 200 + nội dung, không có ⇒ 404. Đúng hai hành vi
+   mà bộ ca cần ở GitHub Releases. */
+import { createServer } from "node:http"
+import { createReadStream, statSync } from "node:fs"
+import { join, normalize } from "node:path"
+const [root, port] = process.argv.slice(2)
+createServer((req, res) => {
+  const rel = normalize(decodeURIComponent(new URL(req.url, "http://x").pathname)).replace(/^([/\\.]+)/, "")
+  const file = join(root, rel)
+  let st
+  try { st = statSync(file) } catch { res.writeHead(404); res.end("not found"); return }
+  if (!st.isFile()) { res.writeHead(404); res.end("not found"); return }
+  res.writeHead(200, { "content-length": String(st.size), "content-type": "application/octet-stream" })
+  createReadStream(file).pipe(res)
+}).listen(Number(port), "127.0.0.1")
+SERVE
+node "$TEST_ROOT/serve.mjs" "$TEST_ROOT/www" "$PORT" >/dev/null 2>&1 &
 SERVER_PID=$!
 for _ in $(seq 1 30); do
   curl -fsS -o /dev/null "http://127.0.0.1:$PORT/" 2>/dev/null && break
