@@ -15,7 +15,7 @@
  * Prompt do AGENT dựng (`agent/lib/cover.mjs`) chứ không dựng ở đây — nội dung phụ
  * thuộc contract (màu thương hiệu, mascot) và cần kiểm bằng unit test.
  *
- * ╔══ HAI CHỖ `cover.sh` LỆCH KHỎI `gen.sh`, VÀ CHÚNG ĐƯỢC CHÉP NGUYÊN ═════════╗
+ * ╔══ HAI CHỖ `cover.sh` LỆCH KHỎI `gen.sh` — ĐÃ VÁ Ở BƯỚC ④ (16/09/2026) ══════╗
  * ║ ① Cổng model hỏi `codex debug models` mà KHÔNG đặt `CODEX_HOME=$IMG_HOME`,   ║
  * ║   trong khi lượt `codex exec` ngay dưới thì có. Đúng con bug mà `gen.sh` đã   ║
  * ║   vá ("SOI ĐÚNG HOME sẽ gen"): hồ sơ riêng biết model mà cổng hỏi hồ sơ mặc   ║
@@ -23,8 +23,9 @@
  * ║ ② Lượt hạ cấp bỏ CẢ `-m` LẪN `-c model_reasoning_effort` — cũng là con bug mà ║
  * ║   `gen.sh` đã vá (thứ bị từ chối là cái TÊN, mức nghĩ vẫn hợp lệ; thả nổi thì ║
  * ║   rơi về mức "fast" của hồ sơ, tức bỏ luôn bước đọc SKILL.md).                ║
- * ║ Cả hai Ở LẠI vì bước ③ là PORT, không phải bản vá: sửa lặng lẽ một hành vi ở  ║
- * ║ một bản thì hai bản hết là một, và không ca nào bắt được sự khác nhau ấy.     ║
+ * ║ Bước ③ CHÉP NGUYÊN cả hai để hai engine còn so được với nhau từng dòng. Bước  ║
+ * ║ ④ vá, vì `cover.sh` sắp bị xoá (bước ⑤) và ảnh bìa không đáng phải giữ lại    ║
+ * ║ hai con bug đã có tên. Hai chỗ vá được đánh dấu `① VÁ` / `② VÁ` dưới thân hàm.║
  * ╚════════════════════════════════════════════════════════════════════════════════╝
  */
 import { spawn } from "node:child_process"
@@ -112,12 +113,12 @@ async function runCodex({ args, cwd, env, logPath, append }) {
   } finally { await fh.close() }
 }
 
-/** `codex debug models | grep -q "\"<model>\""` — KHÔNG kèm CODEX_HOME, xem ① ở đầu file. */
-async function codexKnowsModel(model) {
+/** `codex debug models | grep -q "\"<model>\""` — HỎI ĐÚNG HOME SẼ VẼ (① VÁ, xem đầu file). */
+async function codexKnowsModel(model, env = process.env) {
   return await new Promise(resolve => {
     let out = ""
     let child
-    try { child = spawn(codexBin(), ["debug", "models"], { stdio: ["ignore", "pipe", "ignore"] }) }
+    try { child = spawn(codexBin(), ["debug", "models"], { stdio: ["ignore", "pipe", "ignore"], env }) }
     catch { return resolve(false) }
     child.stdout.on("data", d => { out += d })
     child.on("error", () => resolve(false))
@@ -160,8 +161,12 @@ export async function runCover(projectDir, opts = {}) {
     return 1
   }
 
+  /* `env` dựng Ở ĐÂY chứ không ở sát lượt `codex exec` như bản bash: cổng model ngay
+     dưới phải hỏi ĐÚNG cái home sẽ vẽ (① VÁ). Nội dung không đổi một khoá nào. */
+  const env = imgHome ? { ...process.env, CODEX_HOME: imgHome } : { ...process.env }
+
   let modelArgs = []
-  if (envCfg.genModel && await codexKnowsModel(envCfg.genModel)) {
+  if (envCfg.genModel && await codexKnowsModel(envCfg.genModel, env)) {
     modelArgs = ["-m", envCfg.genModel]
     if (envCfg.genEffort) modelArgs.push("-c", `model_reasoning_effort="${envCfg.genEffort}"`)
   }
@@ -193,7 +198,6 @@ ${promptText.replace(/\n+$/, "")}
   }
 
   const t0 = Math.floor(Date.now() / 1000)
-  const env = imgHome ? { ...process.env, CODEX_HOME: imgHome } : { ...process.env }
   const args = extra => [
     "exec", ...extra,
     "-s", "workspace-write",
@@ -214,7 +218,12 @@ ${promptText.replace(/\n+$/, "")}
         .test(await logText())) {
     await appendFile(logPath,
       `model '${envCfg.genModel}' bị provider từ chối — chạy lại bằng model mặc định của hồ sơ\n`)
-    rc = await runCodex({ args: args([]), cwd: root, env, logPath, append: true })   // ② mất cả effort
+    /* ② VÁ: BỎ `-m`, GIỮ mức nghĩ — y hệt `gen.mjs::runOne`. Thứ bị provider từ chối là
+       cái TÊN MODEL; mức nghĩ độc lập với model và luôn hợp lệ. Thả nổi nó thì lượt
+       chạy lại rơi về mức của hồ sơ, mà hồ sơ có thể đang để "fast" — mức bỏ luôn bước
+       đọc SKILL.md, tức đúng thứ vừa phải trả giá để có. */
+    const retryEffort = envCfg.genEffort ? ["-c", `model_reasoning_effort="${envCfg.genEffort}"`] : []
+    rc = await runCodex({ args: args(retryEffort), cwd: root, env, logPath, append: true })
   }
 
   // VỚT ẢNH — y hệt gen.sh: codex ≥0.147 nhiều lần sinh xong nhưng không tự copy về đích.

@@ -523,9 +523,11 @@ export async function runGen(projectDir, filters = [], opts = {}) {
      dựng prompt cho MỌI job, và chỉ vòng gọi codex mới lọc. Hai bản phải giống nhau
      ở cả chỗ này, vì tầng agent phát `job.started` theo chính những dòng ấy. */
   let pyRc = 0
+  let pyErr = null
   try {
     await renderPrompts(root, [], print)
   } catch (e) {
+    pyErr = String(e?.message ?? e).split("\n")[0]
     process.stderr.write(String(e?.stack ?? e) + "\n")
     pyRc = 1
   }
@@ -535,11 +537,23 @@ export async function runGen(projectDir, filters = [], opts = {}) {
     return pyRc
   }
 
-  /* ⚠️ BUG CỦA BẢN CŨ, CHÉP NGUYÊN: `py_rc` chỉ được dùng ở nhánh xem-trước ngay
-     trên. Ở lượt gen thật, khối python chết giữa chừng (vd `assert` lưới sai số ô)
-     KHÔNG dừng được gì — bash chạy tiếp vào vòng gọi codex với những prompt CŨ hoặc
-     KHÔNG CÓ, và tiêu quota cho chúng. Không sửa ở đây: `gen.sh` là tham chiếu, và
-     sửa lặng lẽ một hành vi ở một bản thì hai bản hết là một. Ghi ra để bước ④ quyết. */
+  /* ══ CHỖ BẢN JS SỬA MỘT BUG CỦA `gen.sh` (bước ④, 16/09/2026) ═══════════════
+     `py_rc` của bash chỉ có quyền ở nhánh xem-trước ngay trên. Ở lượt gen THẬT, khối
+     python chết giữa chừng (vd `assert` lưới sai số ô) KHÔNG dừng được gì: bash chạy
+     tiếp vào vòng gọi codex với những prompt CŨ hoặc KHÔNG CÓ, rồi TIÊU QUOTA cho
+     chúng — tiền thật, cho một prompt không ai dựng nổi.
+     Bước ③ chép nguyên con bug ấy để hai engine còn so được với nhau. Bước ④ sửa, và
+     sửa ở ĐÂY là đủ vì `gen.sh` sắp bị xoá (bước ⑤): hỏng ở khâu dựng prompt thì
+     DỪNG TRƯỚC vòng gọi codex, nói ra bằng một dòng đọc được, và thoát KHÁC 0.
+     Mã 3 (không phải 1) để phân biệt với ca "hồ sơ Codex chưa đăng nhập" — xem bảng
+     mã thoát ở đầu `cli.mjs`. `markJob` của agent bỏ qua dòng này (không có job nào
+     tên `dựng-prompt`), nên nó chỉ là bằng chứng cho người đọc log; mọi job của lượt
+     rơi vào NO_ARTIFACT với đúng stderr ở trên làm bằng chứng. */
+  if (pyRc !== 0) {
+    print(`FAIL dựng-prompt (khối dựng prompt chết giữa chừng: ${pyErr ?? "không rõ"}` +
+      " — KHÔNG gọi codex, KHÔNG tiêu quota; xem stderr)")
+    return 3
+  }
 
   /* DÒNG NÀY ĐI THẲNG LÊN MÀN HÌNH NGƯỜI DÙNG, NÊN NÓ PHẢI NÓI ĐÚNG SỐ. Trước
      15/09/2026 nó nói "chạy song song" bất kể MAXJOBS, và khi mổ run r-0059

@@ -30,7 +30,7 @@ import { describe, it, eq, ok, includes, rmTemp } from "./harness.mjs"
 import { encode, decode } from "../engine/png.mjs"
 import { resize, thumbnailSize, reduce } from "../engine/resample.mjs"
 import { thumbnail } from "../engine/thumbs.mjs"
-import { cropCover } from "../engine/cover.mjs"
+import { cropCover, runCover } from "../engine/cover.mjs"
 import {
   alphaVerdict, buildTask, canvasOf, duH, humanSize, prepare, runOne, runGen,
 } from "../engine/gen.mjs"
@@ -81,7 +81,11 @@ function pngRgb() {                        // KHÔNG có kênh alpha
 const FAKE_CODEX = `#!/usr/bin/env node
 import { appendFileSync, copyFileSync, readFileSync, writeFileSync } from "node:fs"
 const a = process.argv.slice(2)
-if (a[0] === "debug") { process.stdout.write(JSON.stringify({ models: [{ slug: "gpt-5.6-luna" }] })); process.exit(0) }
+if (a[0] === "debug") {
+  // Cổng model phải hỏi ĐÚNG hồ sơ sẽ vẽ: ghi lại CODEX_HOME mà nó được gọi kèm.
+  if (process.env.HOME_LOG) writeFileSync(process.env.HOME_LOG, process.env.CODEX_HOME || "")
+  process.stdout.write(JSON.stringify({ models: [{ slug: "gpt-5.6-luna" }] })); process.exit(0)
+}
 // CHỈ GHI CỜ, bỏ đối số cuối (khối task nhiều dòng). Bộ ca shell ghi cả task rồi
 // soi bằng \`tail -1\`, nên khẳng định "lượt chạy lại đã bỏ -m" của nó thật ra đang
 // soi dòng cuối của TASK — một khẳng định luôn đúng, tức không khẳng định gì.
@@ -552,6 +556,95 @@ export async function run() {
       await rmTemp(work)
     })
 
+    /* ══ HAI CON BUG CỦA `cover.sh`, VÁ Ở BƯỚC ④ ═════════════════════════════════
+       Bước ③ chép nguyên chúng (xem đầu `engine/cover.mjs`); ca này là cái khoá để
+       chúng không quay lại. Cả hai đều VÔ HÌNH nếu chỉ nhìn ảnh bìa: lượt vẽ vẫn ra
+       một tấm, chỉ là bằng model/mức nghĩ mà không ai chọn. */
+    await it("cover: cổng model hỏi ĐÚNG home sẽ vẽ, và lượt hạ cấp GIỮ mức nghĩ", async () => {
+      const w = await mkdtemp(join(tmpdir(), "kitgen-cov-bug-"))
+      const bin = await fakeCodex(w)
+      for (const d of ["cover", "logs", "prompts"]) await mkdir(join(w, d), { recursive: true })
+      await writeFile(join(w, "prompts/cover.txt"), "một prompt ảnh bìa\n", "utf8")
+      // Hồ sơ ảnh RIÊNG, đã đăng nhập: đúng hình dạng mà bug ① chỉ lộ ra ở đó.
+      const home = join(w, "codex-home")
+      await mkdir(home, { recursive: true })
+      await writeFile(join(home, "auth.json"), "{}", "utf8")
+
+      const argvLog = join(w, "argv.txt")
+      const homeLog = join(w, "home.txt")
+      await writeFile(argvLog, "", "utf8")
+      const vars = {
+        KITGEN_CODEX_BIN: bin, IMG_HOME: home, MODE: "reject",
+        ARGV_LOG: argvLog, HOME_LOG: homeLog,
+      }
+      const prev = {}
+      for (const [k, v] of Object.entries(vars)) { prev[k] = process.env[k]; process.env[k] = v }
+      const lines = []
+      try {
+        await runCover(w, { env: { ...process.env }, print: s2 => lines.push(s2) })
+      } finally {
+        for (const [k, v] of Object.entries(prev)) {
+          if (v === undefined) delete process.env[k]; else process.env[k] = v
+        }
+      }
+
+      // ① `codex debug models` phải được hỏi VỚI CODEX_HOME của hồ sơ ảnh.
+      eq(await readFile(homeLog, "utf8"), home, "cổng model soi đúng home sẽ vẽ")
+
+      const calls = (await readFile(argvLog, "utf8")).trim().split("\n").filter(Boolean)
+      eq(calls.length, 2, "một lượt bị từ chối + đúng một lượt hạ cấp")
+      includes(calls[0], "-m gpt-5.6-luna", "lượt đầu có tên model")
+      includes(calls[0], 'model_reasoning_effort="medium"', "và có mức nghĩ")
+      // ② Hạ cấp bỏ TÊN MODEL, nhưng mức nghĩ thì không việc gì phải bỏ.
+      ok(!calls[1].includes("-m "), "lượt hạ cấp KHÔNG còn -m")
+      includes(calls[1], 'model_reasoning_effort="medium"', "lượt hạ cấp vẫn GIỮ mức nghĩ")
+      await rmTemp(w)
+    })
+
+    await it("khối dựng prompt CHẾT giữa chừng: bản JS DỪNG TRƯỚC vòng gọi codex", async () => {
+      /* ⚠️ ĐÂY LÀ CHỖ HAI ENGINE CỐ Ý KHÁC NHAU, VÀ ĐÓ LÀ CẢ Ý NGHĨA CỦA CA NÀY.
+         `gen.sh` để `py_rc` chỉ có quyền ở nhánh xem-trước prompt: ở lượt gen thật,
+         `assert` lưới sai số ô giết khối python GIỮA CHỪNG mà không dừng được gì —
+         bash chạy tiếp vào vòng gọi codex với những prompt CŨ hoặc KHÔNG CÓ, và TIÊU
+         QUOTA cho chúng. Bước ③ chép nguyên con bug để so được hai bản; bước ④ vá ở
+         bản JS (xem `runGen`), vì bản bash sắp bị xoá.
+         Ca này vì thế KHÔNG so stdout hai bên nữa. Nó đòi đúng ba điều ở bản JS:
+         KHÔNG có dòng phán quyết nào của một job, codex KHÔNG hề được gọi, và mã
+         thoát KHÁC 0 (3 = "prompt chết", phân biệt với 1 = "chưa đăng nhập"). */
+      const seed = await mkdtemp(join(tmpdir(), "kitgen-bad-seed-"))
+      const codexSrc = await fakeCodex(seed)
+      const styles = JSON.stringify({
+        styles: [{ id: "v", style: "x" }],
+        sheets: [{
+          id: "s", canvas: "square", grid: { cols: 2, rows: 2 },
+          components: [{ file: "a", spec: "a", skel: { shape: "rrect", w: 0.5, h: 0.5 } }],
+        }],
+      }, null, 2)
+
+      const jw = await mkdtemp(join(tmpdir(), "kitgen-bad-js-"))
+      await writeFile(join(jw, "styles.json"), styles, "utf8")
+      const calls = join(jw, "calls.txt")
+      await writeFile(calls, "0", "utf8")
+      const jsEnv = {
+        ...process.env, KITGEN_CODEX_BIN: codexSrc, MAXJOBS: "1", MODE: "none",
+        GEN_BUSY_RETRIES: "0", CALLS: calls,
+      }
+      delete jsEnv.DST
+      const js = await exec(process.execPath, [join(ENGINE, "cli.mjs"), "gen", jw], { cwd: jw, env: jsEnv })
+
+      eq(js.code, 3, "mã thoát — KHÁC 0, và là mã riêng của ca prompt chết")
+      ok(!/^OK /m.test(js.out), "không job nào được tuyên OK")
+      ok(!/^FAIL v-s/m.test(js.out), "KHÔNG gọi codex cho job không có prompt")
+      includes(js.out, "FAIL dựng-prompt", "nói thẳng hỏng ở khâu dựng prompt")
+      includes(js.out, "component ≠ lưới", "và nói luôn lý do trên chính dòng ấy")
+      includes(js.out, "KHÔNG tiêu quota", "và nói thẳng rằng không tiêu quota")
+      includes(js.err, "component ≠ lưới", "bằng chứng thật vẫn ra stderr, không bị nuốt")
+      eq((await readFile(calls, "utf8")).trim(), "0", "codex giả KHÔNG hề bị gọi lần nào")
+      ok(!(await readdir(join(jw, "prompts")).catch(() => [])).some(f => f.endsWith(".txt")),
+        "và không có prompt nào được ghi ra để mà gửi đi")
+      await rmTemp(jw); await rmTemp(seed)
+    })
+
     // Trả PATH của codex về như cũ: bộ ca sau không được thừa kế một con codex giả.
     delete process.env.KITGEN_CODEX_BIN
   }
@@ -675,52 +768,6 @@ export async function run() {
         await rmTemp(bw); await rmTemp(jw); await rmTemp(seed)
       })
     }
-
-    await it("khối dựng prompt CHẾT giữa chừng: hai engine hỏng GIỐNG HỆT nhau", async () => {
-      /* ⚠️ ĐÂY LÀ MỘT BUG CỦA BẢN CŨ, ĐƯỢC CHÉP CHỨ KHÔNG ĐƯỢC VÁ.
-         `py_rc` chỉ có quyền ở nhánh xem-trước prompt. Ở lượt gen thật, `assert` lưới
-         sai số ô giết khối python GIỮA CHỪNG mà không dừng được gì: bash chạy tiếp vào
-         vòng gọi codex với những prompt CŨ hoặc KHÔNG CÓ, và tiêu quota cho chúng.
-         Ca này không khen hành vi ấy — nó ĐÓNG ĐINH rằng bản JS hỏng y hệt, để bước ④
-         sửa CẢ HAI cùng lúc chứ không sửa lén một bên. */
-      const seed = await mkdtemp(join(tmpdir(), "kitgen-bad-seed-"))
-      const codexSrc = await fakeCodex(seed)
-      const styles = JSON.stringify({
-        styles: [{ id: "v", style: "x" }],
-        sheets: [{
-          id: "s", canvas: "square", grid: { cols: 2, rows: 2 },
-          components: [{ file: "a", spec: "a", skel: { shape: "rrect", w: 0.5, h: 0.5 } }],
-        }],
-      }, null, 2)
-
-      const bw = await mkdtemp(join(tmpdir(), "kitgen-bad-bash-"))
-      await writeFile(join(bw, "styles.json"), styles, "utf8")
-      await cp(join(REPO, "gen.sh"), join(bw, "gen.sh"))
-      await cp(join(REPO, "geometry.py"), join(bw, "geometry.py"))
-      await chmod(join(bw, "gen.sh"), 0o755)
-      await cp(codexSrc, join(bw, "codex"))
-      await chmod(join(bw, "codex"), 0o755)
-      const shEnv = { ...process.env, PATH: `${bw}:${process.env.PATH}`, MAXJOBS: "1", MODE: "none", GEN_BUSY_RETRIES: "0" }
-      delete shEnv.KITGEN_CODEX_BIN
-      delete shEnv.DST
-      const sh = await exec("bash", ["./gen.sh"], { cwd: bw, env: shEnv })
-
-      const jw = await mkdtemp(join(tmpdir(), "kitgen-bad-js-"))
-      await writeFile(join(jw, "styles.json"), styles, "utf8")
-      const jsEnv = { ...process.env, KITGEN_CODEX_BIN: codexSrc, MAXJOBS: "1", MODE: "none", GEN_BUSY_RETRIES: "0" }
-      delete jsEnv.DST
-      const js = await exec(process.execPath, [join(ENGINE, "cli.mjs"), "gen", jw], { cwd: jw, env: jsEnv })
-
-      const norm = out => out.split("\n")
-        .filter(l => !/^(total |[-dlbcps][rwxSsTt-]{9})/.test(l))
-        .map(l => l.replace(/\d\d:\d\d:\d\d/, "<giờ>"))
-        .join("\n").replace(/\n+$/, "")
-      eq(norm(js.out), norm(sh.out), "stdout")
-      eq(js.code, sh.code, "mã thoát — CẢ HAI vẫn 0 dù prompt chưa bao giờ được dựng")
-      includes(sh.out, "FAIL v-s", "bash vẫn gọi codex cho job không có prompt")
-      includes(js.out, "FAIL v-s", "và bản JS cũng vậy")
-      await rmTemp(bw); await rmTemp(jw); await rmTemp(seed)
-    })
 
     await it("cover: `bash cover.sh` và `node cli.mjs cover` ra cùng stdout và CÙNG PIXEL", async () => {
       const seed = await mkdtemp(join(tmpdir(), "kitgen-cov-seed-"))
