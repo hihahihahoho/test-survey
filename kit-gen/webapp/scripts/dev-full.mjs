@@ -27,14 +27,16 @@
  *    giữ `~/.kitgen/agent.lock`, và agent repo trỏ vào `~/KitGen-dev` vẫn chết ngay
  *    với `KitGen agent da chay (PID …)`. Nên phải tách CẢ HAI.
  *
- *    Giá phải trả, nói thẳng: `KITGEN_HOME` cũng là nơi `platform.mjs` tìm shim
- *    `python3` và `node` cho `gen.sh` TRÊN WINDOWS. Chạy `dev:full` rồi bấm Vẽ
- *    trên Windows thì trỏ `KITGEN_DEV_HOME` về bản cài thật (và tắt bản cài trước).
- *    Trên macOS/Linux `gen.sh` dùng `python3`/`node` của PATH nên không ảnh hưởng.
+ *    Giá phải trả, nói thẳng: `KITGEN_HOME` là nơi bản cài để `releases/` và
+ *    `agent.lock`. Trỏ nó sang chỗ khác nghĩa là phiên dev KHÔNG thấy bản cài thật —
+ *    đúng điều ta muốn, nhưng hãy nhớ khi đi soi log hay thư mục bản phát hành.
+ *    (Trước 16/09/2026 ở đây còn một cái giá nữa: `KITGEN_HOME` là chỗ
+ *    `platform.mjs` tìm shim `python3`/`node` cho `gen.sh` trên Windows. Engine nay
+ *    là JS chạy bằng chính Node của agent — không còn shim nào để trỏ nhầm.)
  *
  * ② TỰ DÒ CỔNG TRỐNG thay vì ghim cứng một số.
  *    8799 là cổng mặc định ở đây, nhưng máy dev nào cũng có thể đã có thứ khác ngồi
- *    đó (máy viết script này: một tiến trình Python). Ghim cứng thì agent chết vì
+ *    đó (máy viết script này: một dịch vụ nền không liên quan). Ghim cứng thì agent chết vì
  *    `EADDRINUSE` và người chạy phải đi đọc log để biết vì sao. Dò rồi TRUYỀN CÙNG
  *    MỘT SỐ cho cả agent lẫn vite ⇒ proxy không bao giờ trỏ nhầm chỗ.
  *

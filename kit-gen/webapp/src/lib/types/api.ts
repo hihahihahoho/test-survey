@@ -104,14 +104,12 @@ export const doctorSchema = z.looseObject({
   shell: z.string().optional(),
   kernel: z.string().optional(),
   node: z.looseObject({ ok: z.boolean(), version: z.string().nullish() }).optional(),
-  python: z.looseObject({
-    ok: z.boolean(),
-    version: z.string().nullish(),
-    venv: z.boolean().optional(),
-    deps: z.record(z.string(), z.boolean()).optional(),
-  }).optional(),
-  /* Khoá `renderer` (@resvg/resvg-wasm) đã bỏ ở Đợt 2 cùng bộ khung xương: agent thôi
-     khai nó, và `looseObject` cho khoá lạ của agent CŨ đi qua mà không vỡ. */
+  /* Khoá `python` (Python 3 + Pillow) đã bỏ 16/09/2026 cùng lượt port engine sang JS:
+     agent thôi dò nó (`agent/lib/doctor.mjs`) vì không còn đường nào của sản phẩm gọi
+     tới python — cắt sheet, ảnh bìa và ảnh thu nhỏ nay là JS trong gói agent.
+     Agent 2.1.45 (bản người dùng đang chạy) VẪN gửi khoá này; `looseObject` cho nó đi
+     qua nguyên vẹn mà không vỡ phép parse, đúng như khoá `renderer` (@resvg/resvg-wasm)
+     bỏ ở Đợt 2 — không ai đọc nữa nên không khai nữa. */
   codex: z.looseObject({
     ok: z.boolean(),
     version: z.string().nullish(),

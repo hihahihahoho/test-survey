@@ -4,9 +4,13 @@
  *
  * ┌──────────────────────────────────────────────────────────────────────────┐
  * │ GỠ CỔNG NÀY CHỈ KHI CHỦ DỰ ÁN CHỐT BẰNG VĂN BẢN.                         │
- * │ `gen.sh:163` (`codex exec`) là dòng tiêu tiền DUY NHẤT của cả hệ thống.  │
+ * │ `spawn(codexBin(), …)` trong `agent/engine/gen.mjs` (hàm `runCodex`) là  │
+ * │ dòng tiêu tiền của cả hệ thống — `agent/engine/cover.mjs` có một lượt y  │
+ * │ hệt cho ảnh bìa. KHÔNG có lượt nào khác, và KHÔNG có lượt nào ở webapp.  │
  * │ Đường đi tới nó: POST /api/projects/:id/runs với `kind:"gen"`            │
- * │            → agent/lib/engine.mjs:137 → bash gen.sh → gen.sh:163.        │
+ * │       → agent/lib/engine.mjs → `node agent/engine/cli.mjs` → runCodex.   │
+ * │ (Tới 16/09/2026 đường ấy là `bash gen.sh` → `gen.sh:163`; engine đã port │
+ * │  sang JS, cửa tiêu tiền KHÔNG đổi chỗ, chỉ đổi file.)                    │
  * │ 41/42 endpoint còn lại là I/O đĩa thuần — KHÔNG tốn một lượt AI nào.     │
  * │ Cửa DUY NHẤT tiêu quota nay là src/lib/hooks/use-generate-run.ts — nó    │
  * │ nằm NGOÀI mọi vùng cấm bên dưới, có chủ ý: cổng này chỉ có nghĩa khi cửa │
@@ -77,6 +81,25 @@ const GUARDED = [
  * luật ③ tồn tại vì `kind` lỏng ở hook cắt là đường vòng qua luật ①.
  */
 const SLICE_HOOKS = [];
+
+/**
+ * NEO CỦA KHỐI CHÚ THÍCH ĐẦU FILE — hai file engine THẬT SỰ tiêu tiền.
+ *
+ * Khối trên nói "cửa tiêu tiền nằm ở `agent/engine/gen.mjs` + `cover.mjs`". Một câu
+ * như thế mục rất nhanh: engine vừa dời từ `gen.sh` sang JS (16/09/2026), và lần
+ * sau nó dời nữa thì lời chỉ đường này thành sai mà cổng vẫn xanh — người đọc đi
+ * tìm cửa tiêu tiền ở một file không còn tồn tại.
+ *
+ * `existsSync` bao ngoài CÓ CHỦ Ý: `webapp/` phải build được một mình (Cloudflare
+ * Pages không có `agent/` bên cạnh). Thiếu file thì BỎ QUA, có file thì phải còn
+ * đúng lượt spawn — ở đó mới có gì để mà kiểm.
+ */
+const SPEND_SITES = [
+  "../agent/engine/gen.mjs",
+  "../agent/engine/cover.mjs",
+];
+/** Lượt gọi codex thật: `spawn(codexBin(), …)`. */
+const RE_SPEND = /spawn\(\s*codexBin\(\)/;
 
 function walk(dir, acc = []) {
   if (!existsSync(dir)) return acc;
@@ -162,10 +185,22 @@ for (const relPath of SLICE_HOOKS) {
   });
 }
 
+/* ── Luật ④ — lời chỉ đường tới cửa tiêu tiền phải còn đúng ──────────────── */
+let spendSeen = 0;
+for (const relPath of SPEND_SITES) {
+  const file = join(root, relPath);
+  if (!existsSync(file)) continue; // webapp build một mình: không có agent/ để soi
+  spendSeen += 1;
+  if (!RE_SPEND.test(readFileSync(file, "utf8"))) {
+    failures.push(`${relPath}  — KHÔNG còn lượt \`spawn(codexBin(), …)\`: cửa tiêu tiền đã dời, sửa khối chú thích đầu file này.`);
+  }
+}
+
 for (const f of failures) console.log(`  FAIL  ${f}`);
 console.log(
   failures.length === 0
-    ? `KẾT QUẢ: 0 lời gọi tiêu tiền (đã soi ${GUARDED.length} vùng cấm + ${SLICE_HOOKS.filter((p) => existsSync(join(root, p))).length} hook cắt)`
+    ? `KẾT QUẢ: 0 lời gọi tiêu tiền ở webapp (đã soi ${GUARDED.length} vùng cấm + ${SLICE_HOOKS.filter((p) => existsSync(join(root, p))).length} hook cắt`
+      + `; cửa tiêu tiền thật: ${spendSeen}/${SPEND_SITES.length} file engine${spendSeen === SPEND_SITES.length ? "" : " — số còn lại không có ở đây để soi"})`
     : `KẾT QUẢ: ${failures.length} LỜI GỌI TIÊU TIỀN — xem UPGRADE-PLAN §W3-0 trước khi gỡ cổng`,
 );
 process.exit(failures.length === 0 ? 0 : 1);

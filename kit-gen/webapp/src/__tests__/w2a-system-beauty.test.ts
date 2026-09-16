@@ -136,7 +136,7 @@ describe("W2A-3 · không còn control thô của hệ điều hành", () => {
   /**
    * BACKLOG #18 từng khoá phép kiểm này vào `explainChromaKey` — swatch phải vẽ key
    * HIỆU LỰC chứ không phải key chọn tay. Nay không còn key nào cả: nền sheet là
-   * alpha thật, `gen.sh` không nhắc tên màu, nên ô "Màu nền tách" ở bước Phong cách
+   * alpha thật, engine không nhắc tên màu, nên ô "Màu nền tách" ở bước Phong cách
    * đã bị bỏ cùng cả cỗ máy §5b.
    *
    * Phép kiểm ĐỔI CHIỀU thay vì bị xoá: một ô swatch mọc lại ở đây nghĩa là ai đó

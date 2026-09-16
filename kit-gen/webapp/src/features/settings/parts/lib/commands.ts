@@ -16,17 +16,16 @@
  *  3. KHÔNG có `curl … | bash` (user phải đọc được file trước khi chạy).
  */
 
-/** Lệnh cài từng phụ thuộc — hiện ở dòng ✗ của doctor (§3.9 CODEX_MISSING/PY_DEPS_MISSING). */
+/** Lệnh cài từng phụ thuộc — hiện ở dòng ✗ của doctor (§3.9 CODEX_MISSING). */
 export const INSTALL_CMD = {
   /* Đường npm đã bỏ 24/08/2026 — bản npm gen hỏng ngoài hiện trường. Chỉ còn installer
      chính thức của OpenAI; luật ③ của file này cấm `curl … | bash` nên đưa link, không
      đưa lệnh pipe (cùng kiểu với INSTALL_CMD.node). */
   codex: "# Cài Codex CLI: chạy lại bộ cài KitGen, hoặc installer chính thức tại https://chatgpt.com/codex",
-  /* CHỈ CÒN PILLOW. `slice.py` nay chỉ CẮT theo toạ độ và giữ nguyên alpha của model,
-     nên numpy (tầng tách nền) không còn đường nào gọi tới — bảo user cài thêm một gói
-     mà sản phẩm không dùng là bắt họ trả giá cho thứ vô ích. */
-  python: "python3 -m venv ~/KitGen/.venv && ~/KitGen/.venv/bin/pip install pillow",
-  pyDeps: "~/KitGen/.venv/bin/pip install pillow",
+  /* HAI LỆNH `pip install pillow` (khoá `python` + `pyDeps`) ĐÃ BỎ 16/09/2026. Chúng
+     tồn tại vì engine là `slice.py` chạy bằng Pillow; engine nay là JS trong gói agent
+     nên một máy KHÔNG CÓ python vẫn cắt được sheet và vẫn co được ảnh. Giữ lại chỉ để
+     "cho đủ bộ" là đưa cho user một lệnh không chữa bệnh nào cả. */
   node: "# Cài Node.js ≥ 20 từ https://nodejs.org rồi mở lại Terminal",
 } as const;
 

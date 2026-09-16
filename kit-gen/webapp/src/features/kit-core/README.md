@@ -63,6 +63,8 @@ bản README trước (`item-prompt`, `refs-sync`, `result-copy`) đã được 
   (`useStartRun`, `kind:"gen"`), cùng `prompt-canvas`. Cổng **đỏ** nếu một vùng
   cấm không tồn tại — để lần đổi tên sau không làm cổng xanh vì mù. Cửa quota duy
   nhất của web nằm ngoài hai vùng đó, ở `lib/hooks/use-generate-run.ts`.
-- `lib/__tests__/geometry.test.ts` — đọc `kit-gen/geometry.py` và so từng con số
-  với `lib/geometry.ts`. Hai file này **phải khớp**; đừng sửa một bên.
+- `lib/__tests__/geometry.test.ts` — **nạp và gọi** `agent/engine/geometry.mjs` (engine
+  thật, bản JS) rồi so từng con số với `lib/geometry.ts`. Hai bên **phải khớp**; đừng sửa
+  một bên. Một ca ghi rõ chỗ DUY NHẤT hai bên lệch 1px (ca hoà đúng nửa pixel: engine làm
+  tròn về số chẵn kiểu Python, webapp làm tròn lên) — lệch ấy có từ trước lượt port.
 - `lib/__tests__/shape-source.test.ts` — canh bảng pose/silhouette của `shapes.ts`.

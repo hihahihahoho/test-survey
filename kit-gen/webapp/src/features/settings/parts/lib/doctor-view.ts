@@ -128,12 +128,10 @@ function codexRow(doctor: Doctor | null | undefined): CheckRow {
 }
 
 /**
- * Checklist từng dòng ✓/✗ (§3-S0 bảng trạng thái `CODEX_MISSING` / `PY_DEPS_MISSING`).
+ * Checklist từng dòng ✓/✗ (§3-S0 bảng trạng thái `CODEX_MISSING`).
  * Mỗi dòng thiếu đều có LỆNH SỬA — không có dòng nào chỉ báo lỗi rồi bỏ đó.
  */
 export function checkRows(doctor: Doctor | null | undefined, workspaceFree?: string): CheckRow[] {
-  const py = doctor?.python;
-  const deps = py?.deps ?? {};
   const ws = doctor?.workspace;
 
   return [
@@ -147,27 +145,14 @@ export function checkRows(doctor: Doctor | null | undefined, workspaceFree?: str
       consequence: "Công cụ local cần Node ≥ 20 mới chạy được.",
       cmd: INSTALL_CMD.node,
     },
-    {
-      key: "python",
-      ok: py?.ok === true,
-      known: py !== undefined,
-      label: "Python 3",
-      value: [ver(py?.version), py?.venv ? "môi trường riêng" : ""].filter(Boolean).join(" · "),
-      consequence: "Không có Python thì không cắt được sheet thành từng file PNG.",
-      cmd: INSTALL_CMD.python,
-    },
-    {
-      key: "pillow",
-      ok: deps.pillow === true,
-      known: py?.deps !== undefined,
-      label: "Pillow",
-      value: "",
-      consequence: "Thiếu Pillow: không cắt ảnh và không tạo được ảnh thu nhỏ.",
-      cmd: INSTALL_CMD.pyDeps,
-    },
-    /* Dòng "numpy" và dòng "Trình render khung xương" (@resvg/resvg-wasm) đã bỏ ở Đợt 2:
-       `slice.py` chỉ còn cắt theo toạ độ nên không cần numpy, và bộ khung xương SVG không
-       còn được render ra ảnh nữa. Agent cũng thôi khai hai mục đó trong `doctor`. */
+    /* DÒNG "Python 3" VÀ DÒNG "Pillow" ĐÃ BỎ (16/09/2026, cùng lượt port engine sang JS).
+       Chúng hỏi về thứ DUY NHẤT từng cần python: `slice.py` cắt sheet và Pillow co ảnh
+       thu nhỏ. Cả hai đường nay là JS trong gói agent, nên một máy không có python vẫn
+       cắt được và vẫn co được — để hai dòng ấy lại là bày ra một dòng đỏ cùng một lệnh
+       `pip install` không chữa bệnh nào cả. `agent/lib/doctor.mjs` cũng đã thôi khai
+       khoá `python`; agent 2.1.45 còn gửi thì webapp lặng lẽ bỏ qua.
+       Dòng "numpy" và dòng "Trình render khung xương" (@resvg/resvg-wasm) đã bỏ từ Đợt 2
+       vì bộ khung xương SVG không còn được render ra ảnh nữa. */
     {
       key: "workspace",
       ok: ws?.writable === true,

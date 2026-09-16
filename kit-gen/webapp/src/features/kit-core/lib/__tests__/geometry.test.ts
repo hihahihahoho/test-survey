@@ -7,20 +7,23 @@
  *
  * NGUỒN ĐỔI 27/08/2026 — BỎ SKELETON. Trước đó hình học engine nằm ở `skeleton-svg.js`
  * (bộ dựng ảnh khung xương đính kèm cho model), và các ca dưới đây đọc file đó. Khung
- * xương đã bỏ hẳn: prompt nay IN THẲNG toạ độ safe zone, `skeleton-svg.js` /
- * `skeleton.html` / `render-skeleton.mjs` đã xoá, và toàn bộ số học dời sang
- * **`geometry.py`** — module mà CẢ `gen.sh` (dựng prompt) lẫn `slice.py` (cắt asset)
- * cùng import. Đó là một cải thiện cho ca này chứ không phải một sự bất tiện: trước
- * đây "engine" có hai bản hình học lệch nhau 1px, nên đối chiếu với bản nào cũng
- * không đủ; nay chỉ có một bản để mà đối chiếu.
+ * xương đã bỏ hẳn: prompt nay IN THẲNG toạ độ safe zone, và toàn bộ số học dời sang
+ * MỘT module dùng chung bởi cả bên dựng prompt lẫn bên cắt asset. Đó là một cải thiện
+ * cho ca này chứ không phải một sự bất tiện: trước đây "engine" có hai bản hình học
+ * lệch nhau 1px, nên đối chiếu với bản nào cũng không đủ; nay chỉ có một bản.
  *
- * Ý NGHĨA GIỮ NGUYÊN: hằng số của webapp phải khớp MÃ ENGINE THẬT, không phải khớp
- * trí nhớ. Chỉ đổi chỗ đọc.
+ * NGUỒN ĐỔI LẦN HAI, 16/09/2026 — ENGINE SANG JS. `geometry.py` → `agent/engine/
+ * geometry.mjs`, `gen.sh` → `gen.mjs` + `prompt.mjs`, `slice.py` → `slice.mjs`.
+ * Và cách ĐỐI CHIẾU đổi theo, mạnh hơn hẳn: trước đây ca này chỉ so được CHỮ trong
+ * mã python (khoá cách viết, không khoá kết quả); nay engine cùng ngôn ngữ với
+ * webapp nên ca GỌI THẲNG hàm của engine và so TỪNG SỐ. Vài ca vẫn đọc mã nguồn,
+ * nhưng chỉ cho câu hỏi mà con số không trả lời được: *"engine có THẬT SỰ gọi module
+ * chung không, hay đã lặng lẽ dựng lại một bảng cục bộ?"*.
+ *
+ * Ý NGHĨA GIỮ NGUYÊN: hằng số của webapp phải khớp ENGINE THẬT, không phải khớp trí nhớ.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { engineGeometry, readRepo as read } from "@/__tests__/engine-geometry";
 import {
   BLEED_IS_FIXED, CANVAS_LANDSCAPE, CANVAS_PORTRAIT, CANVAS_SQUARE,
   CELL_MARGIN_RATIO, CELL_MARGIN_RATIO_DECOR, DRAW_SCALE_STEP, SLICE_BLEED,
@@ -29,27 +32,26 @@ import {
   suggestCellHint,
 } from "../geometry";
 
-const REPO = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../../../../");
-const read = (p: string) => readFileSync(resolve(REPO, p), "utf8");
-
 const sheet = (cols: number, rows: number, orient?: "landscape" | "portrait") => ({
   orient,
   grid: { cols, rows },
 });
 
-describe("khổ ảnh sinh — đúng bảng CANVAS của geometry.py", () => {
-  it("con số 1536×1024 / 1024×1536 / 1254×1254 có THẬT trong mã engine", () => {
-    /* Bảng nằm ở geometry.py và CHỈ ở đó. Mỗi dòng mang cả con số lẫn chuỗi header —
-       header chính là dòng đầu prompt mà `run_one` (bash) grep ngược để biết phải xin
-       model khổ nào, nên hai thứ đó phải đi cùng một dòng, không được tách. */
-    const geo = read("geometry.py");
-    expect(geo).toMatch(/"landscape":\s*\(1536,\s*1024,\s*"LANDSCAPE 1536x1024"/);
-    expect(geo).toMatch(/"portrait":\s*\(1024,\s*1536,\s*"PORTRAIT 1024x1536"/);
-    expect(geo).toMatch(/"square":\s*\(1254,\s*1254,\s*"SQUARE 1254x1254"/);
-    // …và gen.sh phải THẬT SỰ dùng bảng đó, không dựng lại một bảng cục bộ.
-    expect(read("gen.sh")).toContain("import geometry");
-    expect(read("gen.sh")).toContain("canvas_of = geometry.canvas_of");
-    expect(read("slice.py")).toContain("import geometry");
+describe("khổ ảnh sinh — đúng bảng CANVAS của geometry.mjs", () => {
+  it("con số 1536×1024 / 1024×1536 / 1254×1254 là con số ENGINE thật sự trả về", async () => {
+    /* Bảng nằm ở `geometry.mjs` và CHỈ ở đó. Mỗi dòng mang cả con số lẫn chuỗi header —
+       header chính là dòng đầu prompt mà `gen.mjs` đọc ngược để biết phải xin model
+       khổ nào, nên hai thứ đó phải đi cùng một hàng, không được tách. */
+    const geo = await engineGeometry();
+    expect(geo.CANVAS.landscape?.slice(0, 3)).toEqual([1536, 1024, "LANDSCAPE 1536x1024"]);
+    expect(geo.CANVAS.portrait?.slice(0, 3)).toEqual([1024, 1536, "PORTRAIT 1024x1536"]);
+    expect(geo.CANVAS.square?.slice(0, 3)).toEqual([1254, 1254, "SQUARE 1254x1254"]);
+    /* …và hai bên của engine phải THẬT SỰ dùng bảng đó, không dựng lại một bảng cục
+       bộ. Câu này con số không trả lời được — một bản sao trùng số hôm nay vẫn trôi
+       khỏi nhau ngày mai — nên ở đây (và chỉ ở đây) ca đọc mã nguồn. */
+    expect(read("agent/engine/prompt.mjs")).toContain('import * as geometry from "./geometry.mjs"');
+    expect(read("agent/engine/prompt.mjs")).toContain("const canvas_of = geometry.canvas_of");
+    expect(read("agent/engine/slice.mjs")).toContain('import * as geometry from "./geometry.mjs"');
   });
 
   it("khớp hằng số trong code của tôi", () => {
@@ -69,11 +71,14 @@ describe("khổ ảnh sinh — đúng bảng CANVAS của geometry.py", () => {
 });
 
 describe("chia ô — `geometry.cell_size`, dùng chung bởi prompt và dao cắt", () => {
-  it("công thức của engine chỉ còn MỘT bản, và tôi dùng đúng nó", () => {
+  it("công thức của engine chỉ còn MỘT bản, và tôi dùng đúng nó", async () => {
     // Trước 27/08/2026 đây là ca đối chiếu HAI bản (skeleton-svg.js vs slice.py).
-    // Nay chỉ còn một hàm; ca đổi thành "hàm đó đúng, và slice.py thật sự gọi nó".
-    expect(read("geometry.py")).toMatch(/return round\(width \/ cols\), round\(height \/ rows\)/);
-    expect(read("slice.py")).toMatch(/CW,\s*CH\s*=\s*geometry\.cell_size\(W,\s*H,\s*COLS,\s*ROWS\)/);
+    // Nay chỉ còn một hàm; ca đổi thành "hàm đó đúng, và dao cắt thật sự gọi nó".
+    const geo = await engineGeometry();
+    expect(geo.cell_size(1536, 1024, 4, 4)).toEqual([384, 256]);
+    expect(read("agent/engine/slice.mjs")).toMatch(
+      /\[CW,\s*CH\]\s*=\s*geometry\.cell_size\(W,\s*H,\s*COLS,\s*ROWS\)/,
+    );
     const m = cellMetrics(sheet(4, 4));
     expect(m.cellPx).toEqual({ w: 384, h: 256 });
   });
@@ -102,17 +107,17 @@ describe("chia ô — `geometry.cell_size`, dùng chung bởi prompt và dao c�
 });
 
 describe("KHÔNG CÒN vành bleed — canvas file cắt ra = ĐÚNG một ô (07/09/2026)", () => {
-  it("slice.py không còn hằng số BLEED nào", () => {
-    expect(read("slice.py")).not.toMatch(/^BLEED\s*=/m);
+  it("slice.mjs không còn hằng số BLEED nào", () => {
+    expect(read("agent/engine/slice.mjs")).not.toMatch(/^(?:export )?const BLEED\s*=/m);
     expect(SLICE_BLEED).toBe(0);
     expect(BLEED_IS_FIXED).toBe(true);
   });
 
   it("dao cắt lấy ĐÚNG hộp ô, không nới sang ô bên", () => {
-    /* Chính dòng crop của slice.py. Nới vùng cắt ra ngoài ranh giới ô là cách vệt
+    /* Chính dòng crop của slice.mjs. Nới vùng cắt ra ngoài ranh giới ô là cách vệt
        vàng của ô dưới lọt vào `01-button` (dự án test-e0d4) — nên hình dạng của
        dòng này là thứ phải khoá, không phải một con số. */
-    expect(read("slice.py")).toMatch(/crop\(\(cx0,\s*cy0,\s*cx0\s*\+\s*CW,\s*cy0\s*\+\s*CH\)\)/);
+    expect(read("agent/engine/slice.mjs")).toMatch(/crop\(\[cx0,\s*cy0,\s*cx0\s*\+\s*CW,\s*cy0\s*\+\s*CH\]\)/);
     const m = cellMetrics(sheet(4, 4));
     expect(m.bleedPx).toEqual({ x: 0, y: 0 });
     expect(m.exportPx).toEqual({ w: 384, h: 256 });
@@ -120,15 +125,18 @@ describe("KHÔNG CÒN vành bleed — canvas file cắt ra = ĐÚNG một ô (07
 });
 
 describe("đặt element trong ô — geometry.safe_offset_in_cell", () => {
-  it("công thức căn giữa + anchor bottom có thật trong geometry.py", () => {
-    const src = read("geometry.py");
+  it("engine đặt hộp safe ĐÚNG chỗ webapp vẽ nó — căn giữa, và neo đáy chừa 4%", async () => {
     /* 08/09/2026 — engine bỏ `contentSafe` (vùng chữ/hitbox khai riêng w/h của đời
        thử nghiệm): không nơi nào phát ra nó nữa, nên `safe_spec_of` biến mất và tham
-       số đổi tên `spec` → `skel`. Công thức thì KHÔNG đổi, và đó là điều ca này canh. */
-    expect(src).toMatch(/sw\s*=\s*round\(cell_w \* skel\["w"\]\)/);
-    expect(src).toMatch(/sh\s*=\s*round\(cell_h \* skel\["h"\]\)/);
-    expect(src).toMatch(/skel\.get\("anchor"\)\s*==\s*"bottom"/);
-    expect(src).toMatch(/BOTTOM_ANCHOR_RATIO\s*=\s*0\.04/);
+       số đổi tên `spec` → `skel`. Công thức thì KHÔNG đổi, và đó là điều ca này canh —
+       nay canh bằng CHÍNH SỐ engine trả về, không bằng hình dạng câu lệnh. */
+    const geo = await engineGeometry();
+    expect(geo.BOTTOM_ANCHOR_RATIO).toBe(0.04);
+    // Nút pill 0,78×0,4 trong ô 384×256: hộp 300×102, canh giữa ⇒ lệch 42 / 77.
+    expect(geo.safe_offset_in_cell(384, 256, { w: 0.78, h: 0.4 })).toEqual([42, 77, 300, 102]);
+    // Cùng ô, `anchor:"bottom"`: hộp 192×205 dán đáy, chừa 10px (= round(256 × 0,04)).
+    expect(geo.safe_offset_in_cell(384, 256, { w: 0.5, h: 0.8, anchor: "bottom" }))
+      .toEqual([96, 41, 192, 205]);
   });
 
   it("căn giữa: nút pill 0.78×0.4 trong ô 4×4 ra 300×102 px", () => {
@@ -151,7 +159,7 @@ describe("đặt element trong ô — geometry.safe_offset_in_cell", () => {
     expect(box.hasSafeFrame).toBe(false);
   });
 
-  it("`free` là NHÃN TRƯNG BÀY của app — engine không còn nhánh nào cho nó", () => {
+  it("`free` là NHÃN TRƯNG BÀY của app — engine không còn nhánh nào cho nó", async () => {
     /* 08/09/2026 — `cell_kind` của engine bỏ hẳn loại "free". Nó từng hứa "dao cắt
        bám lõi đo được của artwork", nhưng `slice.py` CHƯA BAO GIỜ có nhánh ấy: mọi ô
        không full-bleed đều cắt theo `safe_offset_in_cell`. Lời hứa ấy bị gỡ ở engine
@@ -160,9 +168,13 @@ describe("đặt element trong ô — geometry.safe_offset_in_cell", () => {
        đó nay là một quyết định TRÌNH BÀY, không phải một bản sao của luật engine:
        khung nét đứt nói "hộp này là hộp cắt", mà với `free` thì tác giả element đã
        nói rằng mình không muốn người xem đọc nó như vậy. */
-    const engine = read("geometry.py");
-    expect(engine).toContain('KHÔNG CÒN "free"');
-    expect(engine).not.toMatch(/return "free"/);
+    const geo = await engineGeometry();
+    for (const shape of ["burst", "pill", "figure", "icon"]) {
+      expect(geo.cell_kind({ shape, free: true }), shape).toBe("safe");
+    }
+    expect(geo.cell_kind({ shape: "full" })).toBe("full");
+    expect(geo.cell_kind({ shape: "empty" })).toBe("empty");
+    expect(read("agent/engine/geometry.mjs")).not.toMatch(/return "free"/);
     expect(elementBox({ shape: "burst", w: 0.6, h: 0.9, free: true }, 384, 256).hasSafeFrame).toBe(false);
     expect(elementBox({ shape: "burst", w: 0.6, h: 0.9 }, 384, 256).hasSafeFrame).toBe(true);
   });
@@ -202,9 +214,11 @@ describe("định dạng cho người đọc", () => {
   });
 });
 
-describe("cell_hint — câu ghép thẳng vào prompt (gen.sh dòng 43)", () => {
-  it("gen.sh thật sự nhét `cell_hint` vào prompt", () => {
-    expect(read("gen.sh")).toContain(`sh.get('cell_hint', 'cell')`);
+describe("cell_hint — câu ghép thẳng vào prompt (`prompt.mjs`)", () => {
+  it("engine thật sự nhét `cell_hint` vào prompt", () => {
+    const src = read("agent/engine/prompt.mjs");
+    expect(src).toContain("sh.cell_hint");
+    expect(src).toContain("cell_sentence(cell_hint)");
   });
 
   it("sheet có hint thì dùng nguyên văn, không tự chế", () => {
@@ -222,40 +236,74 @@ describe("cell_hint — câu ghép thẳng vào prompt (gen.sh dòng 43)", () =>
 });
 
 /* ────────────────────────────────────────────────────────────────────────────
-   HỘP VẼ MAX-FIT — cùng bốn hàm với `geometry.py`
+   HỘP VẼ MAX-FIT — cùng bốn hàm với `agent/engine/geometry.mjs`
 
    Vì sao có cả một nhóm ca cho thứ trông như một phép chia: đây là chỗ CỠ NGƯỜI
-   DÙNG CHỌN thôi làm cỡ vẽ. Nếu bản TS và bản python trôi khỏi nhau thì prompt
-   hứa một hộp còn dao cắt cắt một hộp khác — đúng cái bệnh mà `geometry.py` sinh
-   ra để chấm dứt, chỉ khác là lần này biên giới nằm giữa hai NGÔN NGỮ.
+   DÙNG CHỌN thôi làm cỡ vẽ. Nếu bản của webapp và bản của engine trôi khỏi nhau thì
+   prompt hứa một hộp còn dao cắt cắt một hộp khác — đúng cái bệnh mà module hình học
+   dùng chung sinh ra để chấm dứt, chỉ khác là lần này biên giới nằm giữa HAI GÓI.
    ──────────────────────────────────────────────────────────────────────────── */
-describe("hộp vẽ max-fit — gương của geometry.py", () => {
-  it("hằng số lề và bước hệ số có THẬT trong geometry.py", () => {
-    const src = read("geometry.py");
-    expect(src).toMatch(/CELL_MARGIN_RATIO\s*=\s*0\.10/);
-    expect(src).toMatch(/DRAW_SCALE_STEP\s*=\s*0\.25/);
-    expect(src).toMatch(/DRAW_SHRINK_STEP\s*=\s*0\.05/);
-    expect(CELL_MARGIN_RATIO).toBe(0.1);
-    expect(DRAW_SCALE_STEP).toBe(0.25);
+describe("hộp vẽ max-fit — gương của geometry.mjs", () => {
+  it("hằng số lề và bước hệ số: cùng một con số ở engine và ở đây", async () => {
+    const geo = await engineGeometry();
+    expect(geo.CELL_MARGIN_RATIO).toBe(0.1);
+    expect(geo.DRAW_SCALE_STEP).toBe(0.25);
+    expect(geo.DRAW_SHRINK_STEP).toBe(0.05);
+    expect(CELL_MARGIN_RATIO).toBe(geo.CELL_MARGIN_RATIO);
+    expect(DRAW_SCALE_STEP).toBe(geo.DRAW_SCALE_STEP);
   });
 
-  it("công thức max-fit có thật trong geometry.py và ô 313 ra khung trong 250", () => {
-    const src = read("geometry.py");
-    expect(src).toMatch(/def max_fit_box\(cell_w, cell_h, aspect, margin=CELL_MARGIN_RATIO\)/);
-    expect(src).toMatch(/w = min\(aw, ah \* aspect\)/);
-    expect(src).toMatch(/return round\(w\), round\(w \/ aspect\)/);
+  it("max-fit của webapp = max-fit của engine, TỪNG SỐ; ô 313 ra khung trong 250", async () => {
+    const geo = await engineGeometry();
     /* Con số chủ sản phẩm nêu: ô 313px ⇒ hộp vuông ~250², thanh 3,9:1 ⇒ ~250×64. */
     expect(cellInner(313, 313)).toEqual({ w: 250, h: 250 });
     expect(maxFitBox(313, 313, 1)).toEqual({ w: 250, h: 250 });
     expect(maxFitBox(313, 313, 3.909)).toEqual({ w: 250, h: 64 });
+    /* …và ĐÚNG những con số ấy là thứ engine trả về. Khung trong khớp tuyệt đối. */
+    for (const [cw, ch] of [[313, 313], [384, 256], [627, 627], [250, 64], [768, 256]] as const) {
+      expect(cellInner(cw, ch), `inner ${cw}×${ch}`).toEqual({
+        w: geo.cell_inner(cw, ch)[0], h: geo.cell_inner(cw, ch)[1],
+      });
+      for (const aspect of [1, 1.5, 3.909, 0.5]) {
+        const mine = maxFitBox(cw, ch, aspect);
+        const [ew, eh] = geo.max_fit_box(cw, ch, aspect);
+        expect(Math.abs(mine.w - ew), `maxfit ${cw}×${ch} @${aspect} lệch bề ngang`).toBeLessThanOrEqual(1);
+        expect(Math.abs(mine.h - eh), `maxfit ${cw}×${ch} @${aspect} lệch chiều cao`).toBeLessThanOrEqual(1);
+      }
+    }
   });
 
-  it("hệ số phóng làm tròn XUỐNG bước 0,25 và hộp vẽ KHÔNG BAO GIỜ vượt lề", () => {
-    expect(read("geometry.py")).toMatch(/raw = min\(aw \/ out_w, ah \/ out_h\)/);
+  /**
+   * ⚠️ MỘT PIXEL LỆCH CÓ THẬT — VÀ NÓ CÓ TRƯỚC LƯỢT PORT SANG JS, KHÔNG PHẢI DO NÓ.
+   *
+   * Engine làm tròn KIỂU PYTHON: nửa chừng về số CHẴN (`pyRound`, di sản đúng-từng-số
+   * của `geometry.py`). Webapp dùng `Math.round`: nửa chừng LÊN. Hai phép ấy CHỈ tách
+   * nhau ở ca đúng .5 — đo được: ô 384×256, tỉ lệ 0,5 ⇒ bề ngang thật 102,5 ⇒ engine
+   * trả 102, webapp trả 103. Bản python cũ cũng trả 102, nên đây là một lệch nằm sẵn
+   * ở đó từ lâu; bộ ca cũ chỉ so CHỮ trong mã python nên không có cách nào thấy.
+   *
+   * GHI RA CHỨ KHÔNG LÀM NGƠ, và cũng KHÔNG tự ý chữa: đổi phép làm tròn của webapp là
+   * đổi con số hiện cho người dùng ở mọi ô, một quyết định của chủ sản phẩm chứ không
+   * phải hệ quả phụ của một lượt dọn. Ca này khoá đúng điều đang đúng — lệch không bao
+   * giờ quá 1px (ca trên), và ca hoà thì mỗi bên đi về một phía ĐÃ BIẾT (ca này). Ngày
+   * ai đó chỉnh phép làm tròn, một trong hai ca sẽ nói ra ngay.
+   */
+  it("ca hoà đúng nửa pixel: engine về số chẵn, webapp làm tròn lên — lệch 1px, đã biết", async () => {
+    const geo = await engineGeometry();
+    expect(geo.max_fit_box(384, 256, 0.5)[0]).toBe(102);
+    expect(maxFitBox(384, 256, 0.5).w).toBe(103);
+    expect(geo.pyRound(102.5)).toBe(102);
+    expect(Math.round(102.5)).toBe(103);
+  });
+
+  it("hệ số phóng làm tròn XUỐNG bước 0,25 và hộp vẽ KHÔNG BAO GIỜ vượt lề", async () => {
+    const geo = await engineGeometry();
     /* Nút 120×52 trong ô 627 (khung trong 502): 502/120 = 4,18 ⇒ 4,0 chẵn. */
+    expect(geo.draw_box(627, 627, 120, 52)).toEqual([480, 208, 4]);
     expect(drawScale(627, 627, 120, 52)).toBe(4);
     expect(drawBox(627, 627, 120, 52)).toEqual({ w: 480, h: 208, scale: 4 });
-    /* Quét rộng: mọi cỡ đầu ra hợp lệ trên mọi lưới đều phải nằm gọn trong lề. */
+    /* Quét rộng: mọi cỡ đầu ra hợp lệ trên mọi lưới đều phải nằm gọn trong lề —
+       VÀ phải là đúng hộp engine tính, kể cả ở nhánh thu nhỏ (bước 0,05). */
     const inner = cellInner(313, 313);
     for (const out of [[120, 52], [195, 195], [304, 78], [8, 4096], [1254, 1254], [40, 40]]) {
       const box = drawBox(313, 313, out[0]!, out[1]!);
@@ -263,15 +311,18 @@ describe("hộp vẽ max-fit — gương của geometry.py", () => {
       expect(box.h).toBeLessThanOrEqual(inner.h);
       /* Tỉ lệ được GIỮ — đó là thứ duy nhất ta thật sự yêu cầu ở máy vẽ. */
       expect(box.w / box.h).toBeCloseTo(out[0]! / out[1]!, 0);
+      const [ew, eh, ek] = geo.draw_box(313, 313, out[0]!, out[1]!);
+      expect([box.w, box.h, box.scale], `draw_box 313 ← ${out[0]}×${out[1]}`).toEqual([ew, eh, ek]);
     }
   });
 
-  it("CỠ ĐẦU RA đi hết đường: contract → slice.py → manifest → route /kit", () => {
+  it("CỠ ĐẦU RA đi hết đường: contract → slice.mjs → manifest → route /kit", () => {
     /* Ba mắt xích, đứt một mắt là cả tính năng chết LẶNG LẼ: webapp không thấy
        `outSize` thì `sheet-files.ts` rơi về `contractSafe`, tức dán ra Figma đúng
        cỡ MÁY VẼ (hộp max-fit) chứ không đúng cỡ người dùng chọn — và không có gì
        đỏ ở đâu cả. Đọc mã thật của cả ba, không tin trí nhớ. */
-    expect(read("slice.py")).toMatch(/asset\["outSize"\] = \[int\(out\["w"\]\), int\(out\["h"\]\)\]/);
+    expect(read("agent/engine/slice.mjs"))
+      .toMatch(/asset\.set\("outSize", \[pyInt\(get\(out, "w"\)\), pyInt\(get\(out, "h"\)\)\]\)/);
     expect(read("agent/routes/files.mjs")).toMatch(/outSize: meta\?\.outSize/);
     /* Và engine phải CHẤP NHẬN trường ấy, không đánh nó là schema lạ. */
     expect(read("agent/lib/validate.mjs")).toContain("OUT_SIZE");
@@ -285,31 +336,34 @@ describe("hộp vẽ max-fit — gương của geometry.py", () => {
     const engine = read("agent/lib/engine.mjs");
     expect(engine).toMatch(/e\.out = \{ w: Math\.round\(ow\), h: Math\.round\(oh\) \}/);
     expect(engine).toMatch(/e\.drawScale = k/);
-    /* Và `gen.sh` là nơi con số ấy thành câu nói với máy vẽ. Từ 14/09/2026 câu ấy
+    /* Và `prompt.mjs` là nơi con số ấy thành câu nói với máy vẽ. Từ 14/09/2026 câu ấy
        KHÔNG còn là một hộp pixel: đo r-0021 cho thấy model vẽ đúng tâm mà lõi 587px
        nằm trong hộp hứa 368px — mọi ô lệch 1,5–1,7 lần, qua codex lẫn qua web
        ChatGPT. Nên `out` nay đi vào prompt theo hai lối model đọc được: TỈ LỆ W:H
        (`core_aspect`) và bề ngang trên màn bằng lời. Mắt xích vẫn phải liền —
-       `out` không tới `gen.sh` thì cả hai câu biến mất, lặng lẽ. */
-    const gen = read("gen.sh");
-    expect(gen).toContain("def core_aspect(out)");
-    expect(gen).toContain('spec += " — " + aspect');
-    expect(gen).toContain("about {ow} px wide on screen");
-    expect(gen).not.toContain("final size {ow}x{oh} px, drawn at {k:g}x");
+       `out` không tới `prompt.mjs` thì cả hai câu biến mất, lặng lẽ. */
+    const prompt = read("agent/engine/prompt.mjs");
+    expect(prompt).toContain("export function core_aspect(out)");
+    expect(prompt).toContain('spec += " — " + aspect');
+    expect(prompt).toContain("about ${ow} px wide on screen");
+    expect(prompt).not.toContain("final size ${ow}x${oh} px, drawn at");
   });
 
   /* ── LỀ CỦA Ô CÓ TRANG TRÍ ────────────────────────────────────────────────
      Đo trên dự án thật: lề 0,10 chừa 62px mỗi bên trên ô 627px, mà `overflowPx`
-     của viền + đèn lồng đo được là 69 và 77 ⇒ `slice.py` (crop theo hộp ô) đã chém
+     của viền + đèn lồng đo được là 69 và 77 ⇒ dao cắt (crop theo hộp ô) đã chém
      cụt. Nấc trang trí khác «Không» ⇒ lề gấp đôi, safe zone tụt từ ~78% xuống ~60%
-     bề ngang ô. Hai bản (python & TS) phải khớp TỪNG SỐ, nếu không thì prompt hứa
-     một hộp còn dao cắt cắt một hộp khác. */
-  it("lề của ô có trang trí: cùng một con số ở geometry.py và ở đây", () => {
-    const src = read("geometry.py");
-    expect(src).toMatch(/CELL_MARGIN_RATIO_DECOR\s*=\s*0\.20/);
-    expect(src).toContain("def cell_margin_ratio(skel):");
-    expect(src).toContain('return CELL_MARGIN_RATIO_DECOR if (skel or {}).get("decor") else CELL_MARGIN_RATIO');
-    expect(CELL_MARGIN_RATIO_DECOR).toBe(0.2);
+     bề ngang ô. Hai bản (engine & webapp) phải khớp TỪNG SỐ, nếu không thì prompt
+     hứa một hộp còn dao cắt cắt một hộp khác. */
+  it("lề của ô có trang trí: cùng một con số ở geometry.mjs và ở đây", async () => {
+    const geo = await engineGeometry();
+    expect(geo.CELL_MARGIN_RATIO_DECOR).toBe(0.2);
+    expect(CELL_MARGIN_RATIO_DECOR).toBe(geo.CELL_MARGIN_RATIO_DECOR);
+    /* Và cùng một LUẬT chọn lề, không chỉ cùng một con số: thiếu khoá `decor` ⇒ lề
+       thường ở CẢ HAI bên, nếu không thì contract đời cũ cắt lệch một cách lặng lẽ. */
+    for (const skel of [null, undefined, {}, { decor: false }, { decor: true }]) {
+      expect(cellMarginRatio(skel), JSON.stringify(skel)).toBe(geo.cell_margin_ratio(skel));
+    }
   });
 
   it("thiếu khoá `decor` ⇒ lề THƯỜNG — contract đời cũ không đổi một pixel nào", () => {

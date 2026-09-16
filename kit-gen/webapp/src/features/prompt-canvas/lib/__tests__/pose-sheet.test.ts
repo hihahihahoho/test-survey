@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
+import { engineGeometry, readRepo as read } from "@/__tests__/engine-geometry";
 import { CANVAS_SQUARE } from "@/features/kit-core/lib/geometry";
 import { POSE_RENDER_VERSION, cellBoxes, composePoseSheet, fitBox } from "../pose-sheet";
 import { poseSheetKey } from "../composer-to-contract";
@@ -13,44 +10,50 @@ import { mascotDoc } from "@/features/prompt-lab/lib/doc-templates";
 /**
  * pose-sheet.test.ts — TẤM ẢNH DÁNG PHẢI CHỒNG KHÍT LÊN TẤM SẼ VẼ.
  *
- * ╔══ VÌ SAO CA NÀY ĐÁNG MỘT LƯỢT GỌI PYTHON ════════════════════════════════╗
- * ║ `composePoseSheet` hứa một điều rất hẹp với `gen.sh`: "ô k của tấm manơ-  ║
+ * ╔══ VÌ SAO CA NÀY NẠP ENGINE THẬT ═════════════════════════════════════════╗
+ * ║ `composePoseSheet` hứa một điều rất hẹp với engine: "ô k của tấm manơ-    ║
  * ║ canh là dáng của ô k ở đây". Lời hứa ấy chỉ đúng khi toạ độ ô của tấm     ║
- * ║ ghép bằng ĐÚNG toạ độ mà engine dùng — mà engine tính chúng ở `geometry.py`.║
+ * ║ ghép bằng ĐÚNG toạ độ mà engine dùng — engine tính chúng ở `geometry.mjs`.║
  * ║ Lệch một pixel thì không có gì báo: prompt vẫn hợp lệ, ảnh vẫn đính, model ║
  * ║ vẫn vẽ — chỉ là nó chép dáng của ô bên cạnh.                              ║
- * ║ Nên ca này KHÔNG so với một bảng số tôi gõ tay: nó CHẠY `geometry.py` thật ║
+ * ║ Nên ca này KHÔNG so với một bảng số tôi gõ tay: nó GỌI `geometry.mjs` thật ║
  * ║ và so từng ô. Một bảng gõ tay chỉ khoá được trí nhớ của tôi lúc viết.     ║
+ * ║                                                                           ║
+ * ║ 16/09/2026 — trước đó ca này `execFileSync("python3", …)` để chạy         ║
+ * ║ `geometry.py`. Engine nay là JS, nên lượt gọi ấy là một phụ thuộc mà SẢN  ║
+ * ║ PHẨM KHÔNG CÒN CÓ: cùng những con số, không cần python trên máy ai cả.    ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 
-const REPO = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../../../..");
-const read = (p: string) => readFileSync(resolve(REPO, p), "utf8");
-
-/** Gọi thẳng `geometry.py` — cùng module mà `gen.sh` và `slice.py` cùng import. */
-function enginePython(cols: number, rows: number, count: number): { x: number; y: number; w: number; h: number }[] {
-  const code = [
-    "import json, sys, geometry",
-    `cols, rows, n = ${cols}, ${rows}, ${count}`,
-    `W = H = ${CANVAS_SQUARE.w}`,
-    "cw, ch = geometry.cell_size(W, H, cols, rows)",
-    "out = []",
-    "for i in range(n):",
-    "    x, y = geometry.cell_origin(W, H, cols, rows, i)",
-    "    out.append({'x': x, 'y': y, 'w': cw, 'h': ch})",
-    "sys.stdout.write(json.dumps(out))",
-  ].join("\n");
-  return JSON.parse(execFileSync("python3", ["-c", code], { cwd: REPO, encoding: "utf8" }));
+/** Gọi thẳng `geometry.mjs` — cùng module mà `prompt.mjs` và `slice.mjs` cùng import. */
+async function engineBoxes(
+  cols: number,
+  rows: number,
+  count: number,
+): Promise<{ x: number; y: number; w: number; h: number }[]> {
+  const geo = await engineGeometry();
+  const W = CANVAS_SQUARE.w;
+  const H = CANVAS_SQUARE.w;
+  const [w, h] = geo.cell_size(W, H, cols, rows);
+  return Array.from({ length: count }, (_, i) => {
+    const [x, y] = geo.cell_origin(W, H, cols, rows, i);
+    return { x, y, w, h };
+  });
 }
 
 describe("toạ độ ô của tấm ảnh dáng = toạ độ của engine, không phải một phép chia thứ hai", () => {
-  it("`geometry.py` vẫn là nơi DUY NHẤT giữ phép chia ấy", () => {
-    const geo = read("geometry.py");
-    expect(geo).toContain("def cell_size(");
-    expect(geo).toContain("def cell_origin(");
+  it("`geometry.mjs` vẫn là nơi DUY NHẤT giữ phép chia ấy", async () => {
+    const geo = await engineGeometry();
+    expect(typeof geo.cell_size).toBe("function");
+    expect(typeof geo.cell_origin).toBe("function");
     /* Làm tròn TỪ TOẠ ĐỘ THẬT, không cộng dồn `col * cw` — đó là chi tiết mà
-       `cellBoxes` phải chép đúng, và cũng là chi tiết dễ bị viết lại cho "gọn". */
-    expect(geo).toContain("return round(col * cell_w), round(row * cell_h)");
+       `cellBoxes` phải chép đúng, và cũng là chi tiết dễ bị viết lại cho "gọn".
+       Ô vuông 1254 chia 4 = 313,5 nên HAI PHÉP ẤY RA HAI SỐ KHÁC NHAU, đo được:
+       cộng dồn cho ô cột 3 ra 3×314 = 942, làm tròn từ toạ độ thật ra 940 (940,5
+       làm tròn về số CHẴN kiểu Python). Số 940 mới là số dao cắt dùng. */
+    expect(geo.cell_size(1254, 1254, 4, 4)).toEqual([314, 314]);
+    expect(geo.cell_origin(1254, 1254, 4, 4, 2)[0]).toBe(627);
+    expect(geo.cell_origin(1254, 1254, 4, 4, 3)[0]).toBe(940);
   });
 
   it.each([
@@ -61,15 +64,15 @@ describe("toạ độ ô của tấm ảnh dáng = toạ độ của engine, kh�
     /* Lưới KHÔNG chia hết 1254 — chính là ca mà phép cộng dồn sẽ trượt ở ô cuối. */
     [3, 3, 7],
     [4, 3, 11],
-  ])("lưới %ix%i, %i ô: từng ô khớp `geometry.py`", (cols, rows, count) => {
-    expect(cellBoxes(cols, rows, count)).toEqual(enginePython(cols, rows, count));
+  ])("lưới %ix%i, %i ô: từng ô khớp `geometry.mjs`", async (cols, rows, count) => {
+    expect(cellBoxes(cols, rows, count)).toEqual(await engineBoxes(cols, rows, count));
   });
 
   /**
    * Ô CUỐI ĐƯỢC PHÉP THÒ RA MỘT PIXEL, và đó là hành vi của engine chứ không phải
    * lỗi của tấm ghép: `cell_size` làm tròn LÊN (1254/5 = 250,8 ⇒ 251) trong khi
    * `cell_origin` của ô cuối làm tròn từ toạ độ thật. Canvas HTML tự cắt phần thừa,
-   * y như `slice.py` kẹp hộp về trong ảnh. Khoá số 1 ở đây để ai đó đổi phép làm
+   * y như `slice.mjs` kẹp hộp về trong ảnh. Khoá số 1 ở đây để ai đó đổi phép làm
    * tròn thì thấy ngay — chứ không phải để đòi nó bằng 0.
    */
   it("ô cuối cùng không thò ra quá một pixel — cùng sai số làm tròn với engine", () => {
@@ -105,7 +108,7 @@ describe("ảnh manơcanh vào ô: vừa khít, KHÔNG méo", () => {
  * nhìn qua thì "có alpha", nhưng alpha = 255 ở TOÀN BỘ tấm — đo trên
  * `refs/char-pose-sheet-*.png` của một dự án thật: 0 pixel nào có alpha 0. Máy vẽ
  * ảnh bắt chước ảnh tham chiếu ở mọi tầng, kể cả tầng nền, nên tấm nhân vật nó trả
- * về cũng đục kín và rơi thẳng vào cổng alpha của `gen.sh`.
+ * về cũng đục kín và rơi thẳng vào cổng alpha của `gen.mjs`.
  *
  * Môi trường `node` không có canvas thật (không cài `node-canvas`), nên ca này dựng
  * một canvas GIẢ mang MỘT mảng alpha thật: canvas thật vừa tạo có alpha 0 khắp nơi,

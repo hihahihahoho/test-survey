@@ -8,13 +8,13 @@ import { bytes, hhmm } from "@/lib/format";
 import { useCopy } from "./lib/use-copy";
 
 /**
- * Checklist "Máy của bạn" — từng dòng ✓/✗ (§3-S0 bước 4, các mã CODEX_MISSING/PY_DEPS_MISSING).
+ * Checklist "Máy của bạn" — từng dòng ✓/✗ (§3-S0 bước 4, mã CODEX_MISSING).
  *
  * Ba quy tắc:
  *  · §5.8-A3 — không dùng màu làm dấu hiệu duy nhất: mỗi dòng có ICON + chữ ẩn cho screen
  *    reader ("Đã có:" / "Còn thiếu:" / "Chưa kiểm được:").
  *  · mỗi dòng thiếu nêu HỆ QUẢ bằng tiếng Việt (mất gì) rồi mới tới lệnh sửa. Biết "thiếu
- *    Pillow" mà không biết mất gì thì user không quyết định được có cần sửa ngay không.
+ *    codex" mà không biết mất gì thì user không quyết định được có cần sửa ngay không.
  *  · agent không khai mục nào ⇒ hiện "chưa kiểm được", KHÔNG bịa ✗. Sai lệch kiểu đó làm
  *    user đi cài lại thứ họ đã có.
  */

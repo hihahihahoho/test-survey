@@ -2,7 +2,7 @@
  * WAVE 3 §W3-1 — bằng chứng cho hòn đá móng `kitset-to-contract.ts`.
  *
  * Luật của bộ test này: **đối chiếu với dữ liệu THẬT trên đĩa, không với trí nhớ.**
- * `styles.example.json` là contract mẫu mà `gen.sh` ăn được; `element-lib.json` là
+ * `styles.example.json` là contract mẫu mà engine ăn được; `element-lib.json` là
  * catalogue 42 món mà agent phục vụ. Ca nào cũng phải trả lời được câu
  * *"nếu tôi sai thì `gen.sh` hỏng ở dòng nào?"*.
  */
@@ -29,7 +29,12 @@ import { glazePhrase } from "../glaze";
 
 /** Gốc repo `kit-gen/` — `process.cwd()` là `webapp/` khi chạy `npm test`. */
 const REPO = resolve(process.cwd(), "..");
-const stylesExample = JSON.parse(readFileSync(resolve(REPO, "styles.example.json"), "utf8")) as {
+/* 16/09/2026 — contract mẫu TỪNG nằm ở `kit-gen/styles.example.json`; lượt port engine
+   sang JS xoá nó khỏi gốc repo và bản mẫu được giữ lại trong `webapp/src/__tests__/
+   fixtures/`. Lược đồ không đổi một khoá nào — engine JS vẫn ăn đúng contract v4 ấy. */
+const stylesExample = JSON.parse(
+  readFileSync(resolve(REPO, "webapp/src/__tests__/fixtures/styles.example.json"), "utf8"),
+) as {
   sheets: unknown[];
   styles: { id: string; bg: string; brand: unknown }[];
   characterPoses: string[];

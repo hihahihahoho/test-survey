@@ -4,16 +4,17 @@
  * KÍCH THƯỚC THẬT (px) của ô và element — mục 3 của brief: "user biết element sẽ
  * to nhỏ ra sao" TRƯỚC KHI tốn lượt sinh ảnh.
  *
- * MỌI CON SỐ Ở ĐÂY ĐỀU RÚT TỪ ENGINE, KHÔNG TỰ ĐẶT:
+ * MỌI CON SỐ Ở ĐÂY ĐỀU RÚT TỪ ENGINE, KHÔNG TỰ ĐẶT. Engine ấy nay là JS và nằm ở
+ * MỘT chỗ: `agent/engine/geometry.mjs` (16/09/2026 — trước đó là `geometry.py`, và
+ * trước nữa là `gen.sh`/`skeleton.py`/`skeleton.html`, những file không còn tồn tại):
  *
- *  · Khổ ảnh sinh — `gen.sh` dòng 35 và `skeleton.py` dòng 26 + `skeleton.html`:
- *        landscape 1536×1024 · portrait 1024×1536
- *  · Ô = chia đều khổ ảnh — `skeleton.py` dòng 95 (`cw, ch = SW/cols, SH/rows`)
- *    và `slice.py` dòng 661 (`cell_w, cell_h = W/COLS, H/ROWS`).
+ *  · Khổ ảnh sinh — bảng `CANVAS`: landscape 1536×1024 · portrait 1024×1536 ·
+ *    square 1254×1254.
+ *  · Ô = chia đều khổ ảnh — `cell_size` / `cell_origin`.
  *  · Element = ô × (skel.w, skel.h), CĂN GIỮA; `anchor:"bottom"` thì dán đáy
- *    chừa 4% chiều cao ô — `skeleton.py` dòng 105–107, `skeleton.html` dòng 52–54.
+ *    chừa 4% chiều cao ô — `safe_offset_in_cell` + `BOTTOM_ANCHOR_RATIO`.
  *  · Canvas file PNG cắt ra = ĐÚNG MỘT Ô, không hơn một pixel (07/09/2026).
- *    `slice.py` từng nới vùng cắt ra một vành `BLEED = 0.18` mỗi phía để "vớt trang
+ *    Dao cắt từng nới vùng cắt ra một vành `BLEED = 0.18` mỗi phía để "vớt trang
  *    trí tràn", rồi phải dựng cả bộ mask sở hữu khối để đuổi lại đồ của ô hàng xóm
  *    vừa múc vào — và vẫn lọt (vệt vàng lẻ loi dưới `01-button`, dự án `test-e0d4`).
  *    Vành đó đã bỏ: lề 10% mỗi cạnh mà luật safe zone chừa sẵn NẰM TRONG ô, nên
@@ -41,14 +42,15 @@ import { SLICE_CONST, type SkelLike as ShapeSkelLike } from "./shapes";
 export type SkelLike = ShapeSkelLike;
 export type AnySkel = Skel | SkelLike;
 
-/** Khổ ảnh sinh — bản sao có nhãn của bảng `CANVAS` trong gen.sh (nguồn sự thật).
+/** Khổ ảnh sinh — bản sao có nhãn của bảng `CANVAS` trong `agent/engine/geometry.mjs`
+ *  (nguồn sự thật).
  *  Vuông là 1254×1254 chứ không phải 1024²: tool image_gen của codex không có
  *  tham số size, luôn trả ~1,57 triệu pixel — đo 685 ảnh thật, ảnh vuông đều 1254. */
 export const CANVAS_LANDSCAPE = { w: 1536, h: 1024 } as const;
 export const CANVAS_PORTRAIT = { w: 1024, h: 1536 } as const;
 export const CANVAS_SQUARE = { w: 1254, h: 1254 } as const;
 
-/** Vành ngoài ô — nay là 0. Số lấy từ `SLICE_CONST` (rút tự động từ slice.py),
+/** Vành ngoài ô — nay là 0. Số lấy từ `SLICE_CONST` (rút từ dao cắt của engine),
  *  KHÔNG gõ lại: đổi ở engine là đổi ở đây, không phải sửa hai chỗ. */
 export const SLICE_BLEED = SLICE_CONST.bleed;
 export const BLEED_IS_FIXED = SLICE_CONST.bleedIsModuleConstant;
@@ -56,7 +58,7 @@ export const BLEED_IS_FIXED = SLICE_CONST.bleedIsModuleConstant;
 export type Orient = "landscape" | "portrait" | "square";
 
 /** `canvas` (mới, có "square") thắng `orient` (cũ, chỉ 2 khổ) — cùng thứ tự ưu tiên
- *  với `sheetSize()` trong skeleton-svg.js, kẻo preview vẽ khác tấm thật. */
+ *  với `canvas_of()` của engine, kẻo preview vẽ khác tấm thật. */
 export function sheetOrient(sheet: Pick<Sheet, "orient" | "canvas"> | null | undefined): Orient {
   const c = sheet?.canvas;
   if (c === "square" || c === "portrait" || c === "landscape") return c;
@@ -93,11 +95,11 @@ export interface CellMetrics {
   grid: { cols: number; rows: number };
   /** ô = khổ ảnh ÷ lưới (px thật, chưa làm tròn) */
   cell: { w: number; h: number };
-  /** ô làm tròn — đúng `CW, CH = round(cell_w), round(cell_h)` của slice.py dòng 662 */
+  /** ô làm tròn — đúng `[CW, CH] = geometry.cell_size(W, H, COLS, ROWS)` của dao cắt */
   cellPx: { w: number; h: number };
-  /** vành bleed mỗi phía (px) — slice.py dòng 788 */
+  /** vành bleed mỗi phía (px) — nay luôn 0, xem khối đầu file */
   bleedPx: { x: number; y: number };
-  /** canvas của FILE PNG cắt ra = ô + 2×bleed — slice.py dòng 789 */
+  /** canvas của FILE PNG cắt ra = ô + 2×bleed, tức ĐÚNG một ô khi bleed = 0 */
   exportPx: { w: number; h: number };
   /** hằng số, UI không đổi được (M4) */
   bleedIsFixed: boolean;
@@ -138,15 +140,15 @@ export interface ElementBox {
   y: number;
   w: number;
   h: number;
-  /** `full` phủ kín ô ⇒ không vẽ khung safe (skeleton.py dòng 101–103) */
+  /** `full` phủ kín ô ⇒ không vẽ khung safe (`geometry.cell_kind` trả "full") */
   isFull: boolean;
-  /** `free` = khung động theo art ⇒ KHÔNG vẽ khung safe (skeleton.py dòng 114) */
+  /** `free` = khung động theo art ⇒ KHÔNG vẽ khung safe (nhãn trưng bày của app) */
   hasSafeFrame: boolean;
 }
 
 /**
  * Hộp của element trong một ô cỡ `boxW × boxH`.
- * Chép đúng `skeleton.py` dòng 104–107 / `skeleton.html` dòng 51–54:
+ * Chép đúng `geometry.safe_offset_in_cell` của engine:
  *   ew, eh = cw*w, ch*h · ex = (cw-ew)/2 · ey = anchor bottom ? ch-eh-ch*0.04 : (ch-eh)/2
  */
 export function elementBox(skel: AnySkel | null | undefined, boxW: number, boxH: number): ElementBox {
@@ -167,9 +169,9 @@ export function elementBox(skel: AnySkel | null | undefined, boxW: number, boxH:
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
- * HỘP VẼ MAX-FIT — gương của `geometry.py` (`CELL_MARGIN_RATIO`, `max_fit_box`,
+ * HỘP VẼ MAX-FIT — gương của `agent/engine/geometry.mjs` (`CELL_MARGIN_RATIO`, `max_fit_box`,
  * `draw_scale`, `draw_box`). Khoá bằng `__tests__/geometry.test.ts`, test ấy ĐỌC
- * `geometry.py` chứ không chép số.
+ * engine chứ không chép số.
  *
  * Vì sao hộp vẽ không còn là "cỡ người dùng chọn": máy vẽ nên lấp trọn ô để ăn
  * hết độ phân giải của ảnh sinh, còn cỡ thật là việc của code lúc xuất. Cái duy
@@ -177,15 +179,15 @@ export function elementBox(skel: AnySkel | null | undefined, boxW: number, boxH:
  * độ dày nét và bán kính bo được thiết kế ở cỡ thật rồi mới phóng lên.
  * ──────────────────────────────────────────────────────────────────────────── */
 
-/** Lề chừa cho phần tràn (viền/bevel/quầng), mỗi cạnh — `geometry.py`. */
+/** Lề chừa cho phần tràn (viền/bevel/quầng), mỗi cạnh — `geometry.mjs`. */
 export const CELL_MARGIN_RATIO = 0.1;
 /**
- * Lề của ô CÓ VIỀN / TRANG TRÍ — gấp đôi, hộp vẽ còn 0,6 ô. `geometry.py`.
+ * Lề của ô CÓ VIỀN / TRANG TRÍ — gấp đôi, hộp vẽ còn 0,6 ô. `geometry.mjs`.
  *
  * Đo trên dự án thật: với lề 0,10 thì safe zone chiếm ~78% bề ngang ô (ô 627px ⇒
  * chừa 68px mỗi bên), trong khi viền + đèn lồng + hoa của nấc «Nhiều» cần quãng
  * 130px. `overflowPx` trong `kits/manifest.json` chạm đúng mép ô (69 và 77) — tức
- * `slice.py` đã cắt cụt phần trang trí. Ô «Không trang trí» giữ lề 0,10: thu nó lại
+ * dao cắt đã cắt cụt phần trang trí. Ô «Không trang trí» giữ lề 0,10: thu nó lại
  * là vứt một phần tư độ phân giải cho một khoảng trống không ai dùng.
  */
 export const CELL_MARGIN_RATIO_DECOR = 0.2;
@@ -231,7 +233,7 @@ export interface DrawBox { w: number; h: number; scale: number; }
  * Hộp vẽ của một ô = cỡ đầu ra × hệ số phóng, kẹp trong lề.
  * Ca cỡ đầu ra LỚN HƠN ô: hệ số tụt xuống dưới 1 (bước 0,05) và TỈ LỆ ĐƯỢC GIỮ —
  * kẹp `min` theo từng trục thay vào đó sẽ bóp thanh máu 3,9:1 thành 3,2:1, tức
- * làm hỏng đúng thứ duy nhất ta yêu cầu ở máy vẽ. Xem `geometry.py:draw_box`.
+ * làm hỏng đúng thứ duy nhất ta yêu cầu ở máy vẽ. Xem `geometry.mjs:draw_box`.
  */
 export function drawBox(cellW: number, cellH: number, outW: number, outH: number, margin = CELL_MARGIN_RATIO): DrawBox {
   const scale = drawScale(cellW, cellH, outW, outH, margin);
@@ -296,7 +298,7 @@ export function formatPx(w: number, h: number): string {
 }
 
 /**
- * `cell_hint` là câu tiếng Anh nhét thẳng vào prompt (`gen.sh` dòng 43:
+ * `cell_hint` là câu tiếng Anh nhét thẳng vào prompt (`agent/engine/prompt.mjs`:
  * `f"Each cell is a {sh.get('cell_hint','cell')}."`). Khi sheet chưa có hint thì
  * gợi ý câu khớp tỉ lệ ô thật, đúng cách `studio.html`/`ops.js` đặt.
  */

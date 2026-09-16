@@ -72,11 +72,16 @@ const hits = scanBannedWords("src/features");
  * tặng cho nhánh sau một hạn mức 11 từ cấm mới mà không ai quyết định cả — bánh cóc
  * chỉ có tác dụng khi răng của nó siết theo số đo thật.
  *
+ * Lượt 16/09/2026 (bước ⑤b của lượt port engine sang JS) KHÔNG sửa một chữ nào của
+ * người dùng: hai dòng checklist «Python 3» và «Pillow» ở màn Cài đặt bị BỎ — engine
+ * thôi cần python nên hỏi han về nó chỉ còn là một dòng đỏ kèm lệnh `pip install` không
+ * chữa bệnh nào — và chúng mang theo đúng một chỗ trúng («Pillow»). Trần xuống 76.
+ *
  * Cố ý viết bằng SỐ CỨNG chứ không phải `hits.length` — nếu lấy `hits.length` thì cổng
  * tự so với chính nó và KHÔNG BAO GIỜ đỏ được, tức là một cổng giả.
  * Ai kéo số xuống thì HẠ luôn trần này (và ghi vào report của mình).
  */
-const BASELINE_TOTAL = 77;
+const BASELINE_TOTAL = 76;
 
 describe("§5.4 — vùng S1 sở hữu: 0 từ cấm, không ngoại lệ", () => {
   it("features/kitfile/** hoàn toàn sạch", () => {

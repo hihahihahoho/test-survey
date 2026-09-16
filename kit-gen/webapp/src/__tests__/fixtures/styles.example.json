@@ -1,0 +1,39 @@
+{
+  "_note": "Contract v4 — rút từ Figma game thật (VietinBank iPay 'Mở túi - Khui quà', fileKey vqpCLz0PsQXhddbSHWRH5R). Element nào code cần điều khiển độc lập (đổi %, swap state) thì tách thành file riêng, nằm ở Ô KHÁC NHAU trên sheet. Thứ tự trong components = thứ tự ô row-major; tên file giữ số thứ tự semantic. Element có glow đặt ở ô biên/góc. Track và fill của progress KHÔNG kề nhau. skel = SAFE ZONE của ô: shape + w/h theo tỷ lệ ô; anchor 'bottom' = dính đáy ô. dao cắt của engine (agent/engine/slice.mjs) cắt asset theo w/h này (qua geometry.mjs). PROMPT thì KHÔNG mang toạ độ nào: từ 14/09/2026 nó nói tỉ lệ W:H của lõi, lấy từ `out` của element ('core aspect 2.9:1, about three times wider than tall') — đo r-0021 cho thấy model vẽ đúng tâm mà cỡ gấp 1,5–1,7 lần, tức toạ độ pixel không điều khiển được nó. (Trước 27/08/2026 hình học còn được VẼ thành một ảnh khung xương đính kèm cho codex; ảnh đó đã bỏ.)",
+  "sheets": [],
+  "styles": [
+    {
+      "id": "demo",
+      "vi": "demo",
+      "style": "",
+      "styleMode": "prompt",
+      "brand": {
+        "mode": "colors",
+        "primary": "#d42a1e",
+        "secondary": "#f5c64a"
+      },
+      "characters": []
+    }
+  ],
+  "characterPoses": [
+    "idle",
+    "wave",
+    "point",
+    "hold-gift",
+    "cheer",
+    "sad",
+    "run",
+    "think",
+    "sit",
+    "jump",
+    "bow",
+    "thumbs-up",
+    "fly",
+    "walk",
+    "dance",
+    "present",
+    "view-34",
+    "view-side",
+    "view-back"
+  ]
+}

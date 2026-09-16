@@ -21,8 +21,8 @@
  * học safe zone, và ai dựng lại một màn xem trước khung sẽ cần đúng chúng.
  *
  * Những gì Ở LẠI vẫn đối chiếu với mã nguồn THẬT — whitelist shape của
- * `agent/lib/validate.mjs` và các hằng số cắt của `slice.py`. Đó vẫn là chỗ webapp
- * có thể trôi khỏi engine một cách lặng lẽ.
+ * `agent/lib/validate.mjs` và các hằng số cắt của `agent/engine/slice.mjs`. Đó vẫn là
+ * chỗ webapp có thể trôi khỏi engine một cách lặng lẽ.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -83,37 +83,40 @@ describe("bảng dáng — 19 dáng, mỗi dáng 13 khớp", () => {
   });
 });
 
-describe("hằng số engine rút từ slice.py", () => {
-  /* GUARD ÂM (08/09/2026). `skel.matte` từng là cờ mà CẢ HAI tầng cùng đọc — gen.sh
-     in thêm một khối "LIGHT EFFECT…"/"SEE-THROUGH ELEMENT…", slice.py chọn nhánh giải
-     ngược. Cả hai vế đã bỏ: độ trong của một ô nay CHỈ là câu chữ của `glaze.ts` nằm
-     trong `spec`. Ca này canh cái cờ ấy không lặng lẽ mọc lại ở tầng engine — mọc lại
-     là có ngay hai bản của cùng một luật, đúng thứ đợt dọn này gỡ đi.
-     Quét LỜI GỌI chứ không quét chữ: docstring của cả hai file cố ý kể lại lịch sử. */
-  it("engine KHÔNG còn đọc `skel.matte` — cả gen.sh lẫn slice.py", () => {
-    for (const f of ["gen.sh", "slice.py"]) {
+describe("hằng số engine rút từ slice.mjs", () => {
+  /* GUARD ÂM (08/09/2026). `skel.matte` từng là cờ mà CẢ HAI tầng cùng đọc — bên dựng
+     prompt in thêm một khối "LIGHT EFFECT…"/"SEE-THROUGH ELEMENT…", bên cắt chọn nhánh
+     giải ngược. Cả hai vế đã bỏ: độ trong của một ô nay CHỈ là câu chữ của `glaze.ts`
+     nằm trong `spec`. Ca này canh cái cờ ấy không lặng lẽ mọc lại ở tầng engine — mọc
+     lại là có ngay hai bản của cùng một luật, đúng thứ đợt dọn này gỡ đi.
+     16/09/2026 — engine sang JS, nên ba file được soi là `prompt.mjs` (dựng prompt),
+     `gen.mjs` (lượt gọi codex) và `slice.mjs` (dao cắt). Quét LỜI GỌI chứ không quét
+     chữ: chú thích của các file ấy cố ý kể lại lịch sử. */
+  it("engine KHÔNG còn đọc `skel.matte` — cả bên dựng prompt lẫn dao cắt", () => {
+    for (const f of ["agent/engine/prompt.mjs", "agent/engine/gen.mjs", "agent/engine/slice.mjs"]) {
       const src = read(f);
-      expect(src, f).not.toMatch(/get\("matte"\)/);
-      expect(src, f).not.toMatch(/\["matte"\]/);
+      expect(src, f).not.toMatch(/\.matte\b/);
+      expect(src, f).not.toMatch(/\bmatte\b\s*[:,)]/);
+      expect(src, f).not.toMatch(/["']matte["']/);
     }
     // …và không câu prompt nào của engine còn tự phát ra hợp đồng alpha của riêng nó.
-    const gen = read("gen.sh");
-    expect(gen).not.toMatch(/LIGHT EFFECT/);
-    expect(gen).not.toMatch(/SEE-THROUGH ELEMENT/);
+    const prompt = read("agent/engine/prompt.mjs");
+    expect(prompt).not.toMatch(/LIGHT EFFECT/);
+    expect(prompt).not.toMatch(/SEE-THROUGH ELEMENT/);
   });
 
-  it("KHÔNG còn tham số cắt nào — slice.py chỉ crop theo toạ độ", () => {
-    const src = read("slice.py");
+  it("KHÔNG còn tham số cắt nào — slice.mjs chỉ crop theo toạ độ", () => {
+    const src = read("agent/engine/slice.mjs");
     // Vành ngoài ô: bỏ hẳn. Nó từng nới vùng cắt sang đất ô hàng xóm rồi phải dựng
     // mask sở hữu khối để đuổi lại — và vẫn lọt rác (`01-button`, dự án test-e0d4).
-    expect(src).not.toMatch(/^BLEED\s*=/m);
+    expect(src).not.toMatch(/^(?:export )?const BLEED\s*=/m);
     expect(SLICE_CONST.bleed).toBe(0);
     expect(SLICE_CONST.bleedIsModuleConstant).toBe(true);
     // Hai ngưỡng của mask tách nền: bỏ cùng cỗ máy tách nền.
-    expect(src).not.toMatch(/^DEFAULT_THRESHOLD\s*=/m);
-    expect(src).not.toMatch(/^GROW_OFFSET\s*=/m);
-    expect(src).not.toMatch(/style\.get\("threshold"/);
-    expect(src).not.toMatch(/style\.get\("grow_threshold"/);
+    expect(src).not.toMatch(/^(?:export )?const DEFAULT_THRESHOLD\s*=/m);
+    expect(src).not.toMatch(/^(?:export )?const GROW_OFFSET\s*=/m);
+    expect(src).not.toMatch(/get\(style,\s*"threshold"/);
+    expect(src).not.toMatch(/get\(style,\s*"grow_threshold"/);
     expect(SLICE_CONST.threshold).toBeNull();
     expect(SLICE_CONST.growOffset).toBeNull();
   });
@@ -123,11 +126,11 @@ describe("kích thước ô thật", () => {
   it("tỉ lệ landscape 3:2 · portrait 2:3", () => {
     expect(cellAspect("landscape")).toBeCloseTo(1.5);
     expect(cellAspect("portrait")).toBeCloseTo(2 / 3);
-    expect(cellAspect(undefined)).toBeCloseTo(1.5); // mặc định của skeleton.py
+    expect(cellAspect(undefined)).toBeCloseTo(1.5); // mặc định của engine: landscape
   });
 
-  it("px của element khớp cách skeleton.py tính (SW/cols × w)", () => {
-    // skeleton.py: SW,SH = (1024,1536) nếu portrait, ngược lại (1536,1024)
+  it("px của element khớp cách engine tính (khổ ảnh / cols × w)", () => {
+    // `geometry.CANVAS`: (1024,1536) nếu portrait, ngược lại (1536,1024)
     expect(elementPixels("landscape", { cols: 4, rows: 4 }, { w: 0.78, h: 0.4 })).toEqual({ w: 300, h: 102 });
     expect(elementPixels("portrait", { cols: 1, rows: 1 }, { shape: "full" })).toEqual({ w: 1024, h: 1536 });
   });

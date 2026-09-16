@@ -6,8 +6,9 @@
  * ║ Chủ sản phẩm dán blob đang xem trong app: **512×341**, trong khi file trên  ║
  * ║ đĩa là 1536×1024. Khác biệt duy nhất là chuỗi `?w=` trên URL:               ║
  * ║                                                                            ║
- * ║   ?w=512  → agent/lib/thumbs.mjs chạy Pillow `im.thumbnail((w, w*4))`,      ║
- * ║             ghi PNG 512×341 vào .kitgen/cache/thumbs/ rồi TRẢ FILE ĐÓ       ║
+ * ║   ?w=512  → agent/lib/thumbs.mjs co ảnh về `(w, w*4)` (nay là JS thuần,     ║
+ * ║             `agent/engine/thumbs.mjs`; trước 16/09/2026 là Pillow),        ║
+ * ║             ghi PNG 512×341 vào .kitgen/cache/thumbs/ rồi TRẢ FILE ĐÓ      ║
  * ║   (trống) → agent trả thẳng file gốc                                       ║
  * ║                                                                            ║
  * ║ Tức pixel mất THẬT trước khi tới trình duyệt. CSS không cứu lại được, và ô  ║

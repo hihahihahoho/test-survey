@@ -241,7 +241,12 @@ describe("DỮ LIỆU THẬT trên đĩa — schema không được báo sai", (
   });
 
   it("styles.example.json parse sạch", () => {
-    const raw = readJson("styles.example.json");
+    /* 16/09/2026 — file này TỪNG nằm ở `kit-gen/styles.example.json`, cạnh `gen.sh`.
+       Lượt port engine sang JS xoá nó khỏi gốc repo, nên bản mẫu được giữ lại ở đây:
+       hợp đồng contract v4 KHÔNG đổi (engine JS vẫn ăn đúng lược đồ ấy), chỉ có chỗ
+       cất là đổi. Giữ ca này vì nó hỏi một câu mà không fixture tự chế nào hỏi được:
+       "một contract THẬT, đã chạy qua engine, có parse sạch bằng lược đồ của web không". */
+    const raw = readJson("webapp/src/__tests__/fixtures/styles.example.json");
     const r = contractSchema.safeParse(raw);
     expect(r.success).toBe(true);
     expect(r.data!.characterPoses).toHaveLength(19);

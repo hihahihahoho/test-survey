@@ -38,9 +38,11 @@ khoá cho cả máy** chứ không phải một khoá mỗi workspace. Chỉ đ�
 vẫn chết ngay lúc khởi động với `KitGen agent da chay (PID …)` vì bản cài đang giữ
 `~/.kitgen/agent.lock`. Ctrl+C hạ cả hai tiến trình.
 
-> Trên **Windows**, `KITGEN_HOME` cũng là nơi `gen.sh` tìm shim `python3`/`node`. Nếu cần
-> bấm Vẽ thật khi đang `dev:full` trên Windows: tắt bản cài rồi chạy với
-> `KITGEN_DEV_HOME=<thư mục cài thật>`. macOS/Linux không vướng (dùng PATH).
+> `KITGEN_HOME` cũng là nơi bản cài để `releases/`, nên phiên `dev:full` KHÔNG thấy bản
+> cài thật. Muốn bấm Vẽ trên chính bản cài: tắt nó rồi chạy với
+> `KITGEN_DEV_HOME=<thư mục cài thật>`.
+> (Tới 16/09/2026 đây còn là chỗ `gen.sh` tìm shim `python3`/`node` trên Windows —
+> engine nay là JS, chạy bằng chính Node của agent, không còn shim nào.)
 
 ## Quy ước cho team màn — đọc trước khi viết dòng đầu tiên
 
