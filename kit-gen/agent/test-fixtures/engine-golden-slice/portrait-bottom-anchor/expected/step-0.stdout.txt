@@ -1,0 +1,15 @@
+  ⚠ QA kit/01-o: aspectDeviation 17% > 15% (lõi 1.0:1 vs hứa 1.2:1)
+  ⚠ QA kit/02-o: aspectDeviation 17% > 15% (lõi 1.0:1 vs hứa 1.2:1)
+  ⚠ QA kit/02-o: sizeDeviation max 30px > 15px (chỉ gắn cờ, không tự gen lại)
+  ⚠ QA kit/03-o: aspectDeviation 17% > 15% (lõi 1.0:1 vs hứa 1.2:1)
+  ⚠ QA kit/04-o: aspectDeviation 17% > 15% (lõi 1.0:1 vs hứa 1.2:1)
+  ⚠ QA kit/04-o: sizeDeviation max 30px > 15px (chỉ gắn cờ, không tự gen lại)
+  ⚠ QA kit/05-o: aspectDeviation 17% > 15% (lõi 1.0:1 vs hứa 1.2:1)
+  ⚠ QA kit/06-o: aspectDeviation 17% > 15% (lõi 1.0:1 vs hứa 1.2:1)
+  ⚠ QA kit/06-o: sizeDeviation max 30px > 15px (chỉ gắn cờ, không tự gen lại)
+✓ kit-doc: 6/6 ô (canvas = ô 256x256), alpha
+— kit: 6/6 asset
+  ⚠ QA summary kit: 3 ô vượt 15px (chỉ dữ liệu; người dùng tự quyết gen lại)
+— QA sizeDeviation: 3 flagged / 6 measured, threshold 15px (không auto-regen)
+— QA aspectDeviation: 6 flagged / 6 measured, threshold 15% (không auto-regen)
+→ kits/manifest.json

@@ -1,0 +1,6 @@
+  ⚠ QA kit/01-o: aspectDeviation 17% > 15% (lõi 0.6667:1 vs hứa 0.8:1)
+✓ kit-ui: 2/2 ô (canvas = ô 120x160), alpha
+— kit: 2/2 asset
+— QA sizeDeviation: 0 flagged / 2 measured, threshold 15px (không auto-regen)
+— QA aspectDeviation: 1 flagged / 1 measured, threshold 15% (không auto-regen)
+→ kits/manifest.json

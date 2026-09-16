@@ -1,0 +1,9 @@
+  ⚠ QA kit/01-vien-thuoc: aspectDeviation 20% > 15% (lõi 3.5119:1 vs hứa 2.9375:1)
+  ⚠ QA kit/02-vong: sizeDeviation max 19px > 15px (chỉ gắn cờ, không tự gen lại)
+  ⚠ QA kit/04-thanh: aspectDeviation 16% > 15% (lõi 5.6421:1 vs hứa 6.7:1)
+✓ kit-vuong: 4/4 ô (canvas = ô 640x640), alpha
+— kit: 4/4 asset
+  ⚠ QA summary kit: 1 ô vượt 15px (chỉ dữ liệu; người dùng tự quyết gen lại)
+— QA sizeDeviation: 1 flagged / 4 measured, threshold 15px (không auto-regen)
+— QA aspectDeviation: 2 flagged / 4 measured, threshold 15% (không auto-regen)
+→ kits/manifest.json

@@ -1,0 +1,8 @@
+  ⚠ QA chinh/02-popup-ribbon: aspectDeviation 17% > 15% (lõi 3.2275:1 vs hứa 3.8889:1)
+  ⚠ QA chinh/03-popup-close: sizeDeviation max 65px > 15px (chỉ gắn cờ, không tự gen lại)
+✓ chinh-ui2: 3/4 ô (canvas = ô 627x627), alpha
+— chinh: 3/3 asset
+  ⚠ QA summary chinh: 1 ô vượt 15px (chỉ dữ liệu; người dùng tự quyết gen lại)
+— QA sizeDeviation: 1 flagged / 3 measured, threshold 15px (không auto-regen)
+— QA aspectDeviation: 1 flagged / 3 measured, threshold 15% (không auto-regen)
+→ kits/manifest.json

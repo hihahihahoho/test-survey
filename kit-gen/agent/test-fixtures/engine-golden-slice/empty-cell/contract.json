@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 4,
+  "variants": [
+    {
+      "id": "kit"
+    }
+  ],
+  "sheets": [
+    {
+      "id": "ui",
+      "grid": {
+        "cols": 2,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "components": [
+        {
+          "file": "01-co",
+          "vi": "01-co",
+          "spec": "01-co",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6
+          }
+        },
+        {
+          "file": "02-trong",
+          "vi": "02-trong",
+          "spec": "02-trong",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6
+          }
+        }
+      ]
+    }
+  ]
+}

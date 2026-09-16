@@ -1,0 +1,6 @@
+  ⚠ QA kit/01-kinh: aspectDeviation 24% > 15% (lõi 3.7143:1 vs hứa 3.0:1)
+✓ kit-kinh: 1/1 ô (canvas = ô 640x640), alpha
+— kit: 1/1 asset
+— QA sizeDeviation: 0 flagged / 1 measured, threshold 15px (không auto-regen)
+— QA aspectDeviation: 1 flagged / 1 measured, threshold 15% (không auto-regen)
+→ kits/manifest.json

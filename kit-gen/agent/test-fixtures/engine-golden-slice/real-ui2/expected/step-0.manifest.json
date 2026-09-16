@@ -1,0 +1,328 @@
+{
+  "styles": {
+    "chinh": {
+      "sheets": {
+        "ui2": {
+          "mode": "alpha",
+          "canvas": [
+            627,
+            627
+          ],
+          "cell": [
+            627,
+            627
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "size": [
+            1254,
+            1254
+          ],
+          "cut": 3
+        }
+      },
+      "assets": [
+        {
+          "file": "01-popover.png",
+          "sheet": "ui2",
+          "mode": "alpha",
+          "canvas": [
+            627,
+            627
+          ],
+          "cell": [
+            627,
+            627
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            576,
+            500
+          ],
+          "content_at": [
+            25,
+            100
+          ],
+          "safe": [
+            28,
+            103,
+            570,
+            495
+          ],
+          "contractSafe": [
+            144,
+            184,
+            338,
+            259
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 0,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": -116,
+              "top": -81,
+              "right": 116,
+              "bottom": 155
+            },
+            "undershootPx": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 116,
+              "top": 81,
+              "right": 116,
+              "bottom": 155
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.1172,
+            "flagged": false,
+            "threshold": 0.15,
+            "safeAspect": 1.1515,
+            "outAspect": 1.3043,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            270,
+            207
+          ],
+          "drawScale": 1.25,
+          "coreBox": [
+            37,
+            154,
+            555,
+            426
+          ],
+          "coreCoverage": 0.9833
+        },
+        {
+          "file": "02-popup-ribbon.png",
+          "sheet": "ui2",
+          "mode": "alpha",
+          "canvas": [
+            627,
+            627
+          ],
+          "cell": [
+            627,
+            627
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            622,
+            193
+          ],
+          "content_at": [
+            5,
+            258
+          ],
+          "safe": [
+            9,
+            261,
+            610,
+            189
+          ],
+          "contractSafe": [
+            129,
+            266,
+            368,
+            95
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 0,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": -120,
+              "top": -5,
+              "right": 122,
+              "bottom": 89
+            },
+            "undershootPx": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 120,
+              "top": 5,
+              "right": 122,
+              "bottom": 89
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.1701,
+            "flagged": true,
+            "threshold": 0.15,
+            "safeAspect": 3.2275,
+            "outAspect": 3.8889,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            245,
+            63
+          ],
+          "drawScale": 1.5,
+          "coreBox": [
+            35,
+            280,
+            556,
+            143
+          ],
+          "coreCoverage": 0.9728
+        },
+        {
+          "file": "03-popup-close.png",
+          "sheet": "ui2",
+          "mode": "alpha",
+          "canvas": [
+            627,
+            627
+          ],
+          "cell": [
+            627,
+            627
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            388,
+            389
+          ],
+          "content_at": [
+            119,
+            125
+          ],
+          "safe": [
+            122,
+            128,
+            382,
+            384
+          ],
+          "contractSafe": [
+            63,
+            63,
+            500,
+            500
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 65,
+            "flagged": true,
+            "threshold": 15,
+            "edgesPx": {
+              "left": 59,
+              "top": 65,
+              "right": -59,
+              "bottom": -51
+            },
+            "undershootPx": {
+              "left": 59,
+              "top": 65,
+              "right": 59,
+              "bottom": 51
+            },
+            "overflowPx": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.0052,
+            "flagged": false,
+            "threshold": 0.15,
+            "safeAspect": 0.9948,
+            "outAspect": 1.0,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            100,
+            100
+          ],
+          "drawScale": 5.0
+        }
+      ],
+      "empty_cells": [],
+      "qa": {
+        "sizeDeviation": {
+          "threshold": 15,
+          "measured": 3,
+          "flagged": true,
+          "flaggedCount": 1,
+          "maxEdgePx": 65,
+          "flaggedAssets": [
+            {
+              "style": "chinh",
+              "file": "03-popup-close.png",
+              "maxEdgePx": 65
+            }
+          ]
+        },
+        "aspectDeviation": {
+          "threshold": 0.15,
+          "measured": 3,
+          "flagged": true,
+          "flaggedCount": 1,
+          "maxValue": 0.1701,
+          "flaggedAssets": [
+            {
+              "style": "chinh",
+              "file": "02-popup-ribbon.png",
+              "value": 0.1701
+            }
+          ]
+        }
+      }
+    }
+  },
+  "schemaVersion": 2,
+  "qa": {
+    "sizeDeviation": {
+      "threshold": 15,
+      "measured": 3,
+      "flagged": true,
+      "flaggedCount": 1,
+      "maxEdgePx": 65,
+      "flaggedAssets": [
+        {
+          "style": "chinh",
+          "file": "03-popup-close.png",
+          "maxEdgePx": 65
+        }
+      ]
+    },
+    "aspectDeviation": {
+      "threshold": 0.15,
+      "measured": 3,
+      "flagged": true,
+      "flaggedCount": 1,
+      "maxValue": 0.1701,
+      "flaggedAssets": [
+        {
+          "style": "chinh",
+          "file": "02-popup-ribbon.png",
+          "value": 0.1701
+        }
+      ]
+    }
+  }
+}

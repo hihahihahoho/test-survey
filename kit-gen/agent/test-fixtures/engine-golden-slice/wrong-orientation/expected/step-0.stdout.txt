@@ -1,0 +1,5 @@
+⚠ bỏ qua kit-ui: sheet khai landscape (1536x1024) nhung anh la 256x384. Cắt lưới 2x1 trên khổ sai sẽ ra ô méo — sinh lại sheet này thay vì dùng ảnh hiện có.
+— kit: 0/0 asset
+— QA sizeDeviation: 0 flagged / 0 measured, threshold 15px (không auto-regen)
+— QA aspectDeviation: 0 flagged / 0 measured, threshold 15% (không auto-regen)
+→ kits/manifest.json

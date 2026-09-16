@@ -1,0 +1,414 @@
+{
+  "styles": {
+    "chinh": {
+      "sheets": {
+        "ui": {
+          "mode": "alpha",
+          "canvas": [
+            627,
+            627
+          ],
+          "cell": [
+            627,
+            627
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "size": [
+            1254,
+            1254
+          ],
+          "cut": 4
+        }
+      },
+      "assets": [
+        {
+          "file": "01-button.png",
+          "sheet": "ui",
+          "mode": "alpha",
+          "canvas": [
+            627,
+            627
+          ],
+          "cell": [
+            627,
+            627
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            600,
+            190
+          ],
+          "content_at": [
+            27,
+            258
+          ],
+          "safe": [
+            30,
+            262,
+            597,
+            183
+          ],
+          "contractSafe": [
+            129,
+            249,
+            368,
+            128
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 13,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": -99,
+              "top": 13,
+              "right": 130,
+              "bottom": 68
+            },
+            "undershootPx": {
+              "left": 0,
+              "top": 13,
+              "right": 0,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 99,
+              "top": 0,
+              "right": 130,
+              "bottom": 68
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.1318,
+            "flagged": false,
+            "threshold": 0.15,
+            "safeAspect": 3.2623,
+            "outAspect": 2.8824,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            245,
+            85
+          ],
+          "drawScale": 1.5,
+          "coreBox": [
+            70,
+            261,
+            533,
+            185
+          ],
+          "coreCoverage": 0.9249
+        },
+        {
+          "file": "02-avatar-frame.png",
+          "sheet": "ui",
+          "mode": "alpha",
+          "canvas": [
+            627,
+            627
+          ],
+          "cell": [
+            627,
+            627
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            563,
+            458
+          ],
+          "content_at": [
+            0,
+            112
+          ],
+          "safe": [
+            0,
+            115,
+            560,
+            452
+          ],
+          "contractSafe": [
+            143,
+            143,
+            341,
+            341
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 0,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": -143,
+              "top": -28,
+              "right": 76,
+              "bottom": 83
+            },
+            "undershootPx": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 143,
+              "top": 28,
+              "right": 76,
+              "bottom": 83
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.2389,
+            "flagged": true,
+            "threshold": 0.15,
+            "safeAspect": 1.2389,
+            "outAspect": 1.0,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            195,
+            195
+          ],
+          "drawScale": 1.75,
+          "coreBox": [
+            90,
+            114,
+            451,
+            451
+          ],
+          "coreCoverage": 0.4739
+        },
+        {
+          "file": "03-progress.png",
+          "sheet": "ui",
+          "mode": "alpha",
+          "canvas": [
+            627,
+            627
+          ],
+          "cell": [
+            627,
+            627
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            596,
+            172
+          ],
+          "content_at": [
+            18,
+            199
+          ],
+          "safe": [
+            20,
+            201,
+            591,
+            168
+          ],
+          "contractSafe": [
+            144,
+            278,
+            338,
+            71
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 0,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": -124,
+              "top": -77,
+              "right": 129,
+              "bottom": 20
+            },
+            "undershootPx": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 124,
+              "top": 77,
+              "right": 129,
+              "bottom": 20
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.2573,
+            "flagged": true,
+            "threshold": 0.15,
+            "safeAspect": 3.5179,
+            "outAspect": 4.7368,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            270,
+            57
+          ],
+          "drawScale": 1.25,
+          "coreBox": [
+            20,
+            238,
+            592,
+            125
+          ],
+          "coreCoverage": 0.9464
+        },
+        {
+          "file": "04-progress-fill.png",
+          "sheet": "ui",
+          "mode": "alpha",
+          "canvas": [
+            627,
+            627
+          ],
+          "cell": [
+            627,
+            627
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            520,
+            78
+          ],
+          "content_at": [
+            57,
+            266
+          ],
+          "safe": [
+            60,
+            269,
+            514,
+            72
+          ],
+          "contractSafe": [
+            91,
+            280,
+            445,
+            67
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 6,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": -31,
+              "top": -11,
+              "right": 38,
+              "bottom": -6
+            },
+            "undershootPx": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 6
+            },
+            "overflowPx": {
+              "left": 31,
+              "top": 11,
+              "right": 38,
+              "bottom": 0
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.068,
+            "flagged": false,
+            "threshold": 0.15,
+            "safeAspect": 7.1389,
+            "outAspect": 6.6842,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            254,
+            38
+          ],
+          "drawScale": 1.75,
+          "coreBox": [
+            70,
+            268,
+            495,
+            74
+          ],
+          "coreCoverage": 0.9875
+        }
+      ],
+      "empty_cells": [],
+      "qa": {
+        "sizeDeviation": {
+          "threshold": 15,
+          "measured": 4,
+          "flagged": false,
+          "flaggedCount": 0,
+          "maxEdgePx": 13,
+          "flaggedAssets": []
+        },
+        "aspectDeviation": {
+          "threshold": 0.15,
+          "measured": 4,
+          "flagged": true,
+          "flaggedCount": 2,
+          "maxValue": 0.2573,
+          "flaggedAssets": [
+            {
+              "style": "chinh",
+              "file": "02-avatar-frame.png",
+              "value": 0.2389
+            },
+            {
+              "style": "chinh",
+              "file": "03-progress.png",
+              "value": 0.2573
+            }
+          ]
+        }
+      }
+    }
+  },
+  "schemaVersion": 2,
+  "qa": {
+    "sizeDeviation": {
+      "threshold": 15,
+      "measured": 4,
+      "flagged": false,
+      "flaggedCount": 0,
+      "maxEdgePx": 13,
+      "flaggedAssets": []
+    },
+    "aspectDeviation": {
+      "threshold": 0.15,
+      "measured": 4,
+      "flagged": true,
+      "flaggedCount": 2,
+      "maxValue": 0.2573,
+      "flaggedAssets": [
+        {
+          "style": "chinh",
+          "file": "02-avatar-frame.png",
+          "value": 0.2389
+        },
+        {
+          "style": "chinh",
+          "file": "03-progress.png",
+          "value": 0.2573
+        }
+      ]
+    }
+  }
+}

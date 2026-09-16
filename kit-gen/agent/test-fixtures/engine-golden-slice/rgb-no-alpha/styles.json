@@ -1,0 +1,40 @@
+{
+  "styles": [
+    {
+      "id": "kit",
+      "vi": "Kit"
+    }
+  ],
+  "sheets": [
+    {
+      "id": "duc",
+      "grid": {
+        "cols": 2,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "components": [
+        {
+          "file": "01-o",
+          "vi": "01-o",
+          "spec": "01-o",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6
+          }
+        },
+        {
+          "file": "02-o",
+          "vi": "02-o",
+          "spec": "02-o",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6
+          }
+        }
+      ]
+    }
+  ]
+}

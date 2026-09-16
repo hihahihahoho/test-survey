@@ -1,0 +1,423 @@
+{
+  "styles": {
+    "kit": {
+      "sheets": {
+        "vuong": {
+          "mode": "alpha",
+          "canvas": [
+            640,
+            640
+          ],
+          "cell": [
+            640,
+            640
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "size": [
+            1280,
+            1280
+          ],
+          "cut": 4
+        }
+      },
+      "assets": [
+        {
+          "file": "01-vien-thuoc.png",
+          "sheet": "vuong",
+          "mode": "alpha",
+          "canvas": [
+            640,
+            640
+          ],
+          "cell": [
+            640,
+            640
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            590,
+            168
+          ],
+          "content_at": [
+            25,
+            232
+          ],
+          "safe": [
+            25,
+            232,
+            590,
+            168
+          ],
+          "contractSafe": [
+            80,
+            230,
+            480,
+            179
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 9,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": -55,
+              "top": 2,
+              "right": 55,
+              "bottom": -9
+            },
+            "undershootPx": {
+              "left": 0,
+              "top": 2,
+              "right": 0,
+              "bottom": 9
+            },
+            "overflowPx": {
+              "left": 55,
+              "top": 0,
+              "right": 55,
+              "bottom": 0
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.1955,
+            "flagged": true,
+            "threshold": 0.15,
+            "safeAspect": 3.5119,
+            "outAspect": 2.9375,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            470,
+            160
+          ],
+          "coreBox": [
+            85,
+            240,
+            470,
+            160
+          ],
+          "coreCoverage": 0.9264
+        },
+        {
+          "file": "02-vong.png",
+          "sheet": "vuong",
+          "mode": "alpha",
+          "canvas": [
+            640,
+            640
+          ],
+          "cell": [
+            640,
+            640
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            430,
+            430
+          ],
+          "content_at": [
+            95,
+            95
+          ],
+          "safe": [
+            95,
+            95,
+            430,
+            430
+          ],
+          "contractSafe": [
+            96,
+            96,
+            448,
+            448
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 19,
+            "flagged": true,
+            "threshold": 15,
+            "edgesPx": {
+              "left": -1,
+              "top": -1,
+              "right": -19,
+              "bottom": -19
+            },
+            "undershootPx": {
+              "left": 0,
+              "top": 0,
+              "right": 19,
+              "bottom": 19
+            },
+            "overflowPx": {
+              "left": 1,
+              "top": 1,
+              "right": 0,
+              "bottom": 0
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.0,
+            "flagged": false,
+            "threshold": 0.15,
+            "safeAspect": 1.0,
+            "outAspect": 1.0,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            400,
+            400
+          ],
+          "coreBox": [
+            120,
+            120,
+            400,
+            400
+          ],
+          "coreCoverage": 0.3572
+        },
+        {
+          "file": "03-popup.png",
+          "sheet": "vuong",
+          "mode": "alpha",
+          "canvas": [
+            640,
+            640
+          ],
+          "cell": [
+            640,
+            640
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            400,
+            340
+          ],
+          "content_at": [
+            120,
+            140
+          ],
+          "safe": [
+            120,
+            140,
+            400,
+            340
+          ],
+          "contractSafe": [
+            112,
+            160,
+            416,
+            320
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 8,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": 8,
+              "top": -20,
+              "right": -8,
+              "bottom": 0
+            },
+            "undershootPx": {
+              "left": 8,
+              "top": 0,
+              "right": 8,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 0,
+              "top": 20,
+              "right": 0,
+              "bottom": 0
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.1176,
+            "flagged": false,
+            "threshold": 0.15,
+            "safeAspect": 1.1765,
+            "outAspect": 1.3333,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            400,
+            300
+          ],
+          "coreBox": [
+            120,
+            180,
+            400,
+            300
+          ],
+          "coreCoverage": 0.1419
+        },
+        {
+          "file": "04-thanh.png",
+          "sheet": "vuong",
+          "mode": "alpha",
+          "canvas": [
+            640,
+            640
+          ],
+          "cell": [
+            640,
+            640
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            600,
+            151
+          ],
+          "content_at": [
+            20,
+            250
+          ],
+          "safe": [
+            52,
+            265,
+            536,
+            95
+          ],
+          "contractSafe": [
+            48,
+            275,
+            544,
+            90
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 5,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": 4,
+              "top": -10,
+              "right": -4,
+              "bottom": -5
+            },
+            "undershootPx": {
+              "left": 4,
+              "top": 0,
+              "right": 4,
+              "bottom": 5
+            },
+            "overflowPx": {
+              "left": 0,
+              "top": 10,
+              "right": 0,
+              "bottom": 0
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.1579,
+            "flagged": true,
+            "threshold": 0.15,
+            "safeAspect": 5.6421,
+            "outAspect": 6.7,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            536,
+            80
+          ],
+          "drawScale": 1.0,
+          "coreBox": [
+            20,
+            281,
+            600,
+            90
+          ],
+          "coreCoverage": 1.0
+        }
+      ],
+      "empty_cells": [],
+      "qa": {
+        "sizeDeviation": {
+          "threshold": 15,
+          "measured": 4,
+          "flagged": true,
+          "flaggedCount": 1,
+          "maxEdgePx": 19,
+          "flaggedAssets": [
+            {
+              "style": "kit",
+              "file": "02-vong.png",
+              "maxEdgePx": 19
+            }
+          ]
+        },
+        "aspectDeviation": {
+          "threshold": 0.15,
+          "measured": 4,
+          "flagged": true,
+          "flaggedCount": 2,
+          "maxValue": 0.1955,
+          "flaggedAssets": [
+            {
+              "style": "kit",
+              "file": "01-vien-thuoc.png",
+              "value": 0.1955
+            },
+            {
+              "style": "kit",
+              "file": "04-thanh.png",
+              "value": 0.1579
+            }
+          ]
+        }
+      }
+    }
+  },
+  "schemaVersion": 2,
+  "qa": {
+    "sizeDeviation": {
+      "threshold": 15,
+      "measured": 4,
+      "flagged": true,
+      "flaggedCount": 1,
+      "maxEdgePx": 19,
+      "flaggedAssets": [
+        {
+          "style": "kit",
+          "file": "02-vong.png",
+          "maxEdgePx": 19
+        }
+      ]
+    },
+    "aspectDeviation": {
+      "threshold": 0.15,
+      "measured": 4,
+      "flagged": true,
+      "flaggedCount": 2,
+      "maxValue": 0.1955,
+      "flaggedAssets": [
+        {
+          "style": "kit",
+          "file": "01-vien-thuoc.png",
+          "value": 0.1955
+        },
+        {
+          "style": "kit",
+          "file": "04-thanh.png",
+          "value": 0.1579
+        }
+      ]
+    }
+  }
+}

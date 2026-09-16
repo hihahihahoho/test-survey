@@ -1,0 +1,8 @@
+  ⚠ QA kit/01-co: sizeDeviation max 32px > 15px (chỉ gắn cờ, không tự gen lại)
+  · kit/02-trong: ô TRỐNG (không pixel nào có alpha)
+✓ kit-ui: 1/2 ô (canvas = ô 192x256), alpha
+— kit: 1/2 asset, Ô TRỐNG: ['02-trong']
+  ⚠ QA summary kit: 1 ô vượt 15px (chỉ dữ liệu; người dùng tự quyết gen lại)
+— QA sizeDeviation: 1 flagged / 1 measured, threshold 15px (không auto-regen)
+— QA aspectDeviation: 0 flagged / 0 measured, threshold 15% (không auto-regen)
+→ kits/manifest.json

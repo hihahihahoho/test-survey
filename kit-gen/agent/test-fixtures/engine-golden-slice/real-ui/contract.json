@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 4,
+  "variants": [
+    {
+      "id": "chinh"
+    }
+  ],
+  "sheets": [
+    {
+      "id": "ui",
+      "grid": {
+        "cols": 2,
+        "rows": 2
+      },
+      "components": [
+        {
+          "file": "01-button",
+          "vi": "Button · primary",
+          "spec": "button, a simple rim and at most one small accent, no clusters of ornaments, ornaments mirrored symmetrically, left and right halves matching",
+          "skel": {
+            "shape": "pill",
+            "w": 0.5869218500797448,
+            "h": 0.20414673046251994,
+            "slice9": true,
+            "decor": true
+          },
+          "out": {
+            "w": 245,
+            "h": 85
+          },
+          "drawScale": 1.5
+        },
+        {
+          "file": "02-avatar-frame",
+          "vi": "Avatar frame",
+          "spec": "avatar frame, a distinct rim with a few ornaments at the corners, the body itself left clear, ornaments mirrored symmetrically, left and right halves matching, fully opaque everywhere, alpha 255, with no see-through part at all, whatever material it may look like",
+          "skel": {
+            "shape": "circle",
+            "w": 0.543859649122807,
+            "h": 0.543859649122807,
+            "decor": true
+          },
+          "out": {
+            "w": 195,
+            "h": 195
+          },
+          "drawScale": 1.75
+        },
+        {
+          "file": "03-progress",
+          "vi": "Progress bar · frame",
+          "spec": "progress bar, a simple rim and at most one small accent, no clusters of ornaments, ornaments mirrored symmetrically, left and right halves matching, a see-through pane of barely tinted glass drawn at low alpha, about 64 of 255, keeping its own tint colour at that alpha; frame, rim and highlights stay fully opaque",
+          "skel": {
+            "shape": "bar",
+            "w": 0.5390749601275917,
+            "h": 0.11323763955342903,
+            "slice9": true,
+            "decor": true
+          },
+          "out": {
+            "w": 270,
+            "h": 57
+          },
+          "drawScale": 1.25
+        },
+        {
+          "file": "04-progress-fill",
+          "vi": "Progress bar · fill",
+          "spec": "the fill bar that sits inside the progress bar, the same length and corner radius, with no track or frame of its own, clean silhouette: a plain edge with no rim ornament and NO decorative objects attached — no flowers, lanterns, ribbons, gems or trinkets on or around it",
+          "skel": {
+            "shape": "bar",
+            "w": 0.7097288676236044,
+            "h": 0.10685805422647528,
+            "slice9": true,
+            "decor": false
+          },
+          "out": {
+            "w": 254,
+            "h": 38
+          },
+          "drawScale": 1.75
+        }
+      ],
+      "cell_hint": "square 1:1 cell",
+      "orient": "landscape",
+      "canvas": "square",
+      "styles": [
+        "chinh"
+      ]
+    }
+  ]
+}

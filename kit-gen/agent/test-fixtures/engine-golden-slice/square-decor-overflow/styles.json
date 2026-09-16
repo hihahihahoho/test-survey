@@ -1,0 +1,78 @@
+{
+  "styles": [
+    {
+      "id": "kit",
+      "vi": "Kit"
+    }
+  ],
+  "sheets": [
+    {
+      "id": "vuong",
+      "grid": {
+        "cols": 2,
+        "rows": 2
+      },
+      "canvas": "square",
+      "components": [
+        {
+          "file": "01-vien-thuoc",
+          "vi": "01-vien-thuoc",
+          "spec": "01-vien-thuoc",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.75,
+            "h": 0.28
+          },
+          "out": {
+            "w": 470,
+            "h": 160
+          }
+        },
+        {
+          "file": "02-vong",
+          "vi": "02-vong",
+          "spec": "02-vong",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.7,
+            "h": 0.7,
+            "decor": true
+          },
+          "out": {
+            "w": 400,
+            "h": 400
+          }
+        },
+        {
+          "file": "03-popup",
+          "vi": "03-popup",
+          "spec": "03-popup",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.65,
+            "h": 0.5
+          },
+          "out": {
+            "w": 400,
+            "h": 300
+          }
+        },
+        {
+          "file": "04-thanh",
+          "vi": "04-thanh",
+          "spec": "04-thanh",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.85,
+            "h": 0.14
+          },
+          "out": {
+            "w": 536,
+            "h": 80
+          },
+          "drawScale": 1.0
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+  ⚠ QA chinh/02-avatar-frame: aspectDeviation 24% > 15% (lõi 1.2389:1 vs hứa 1.0:1)
+  ⚠ QA chinh/03-progress: aspectDeviation 26% > 15% (lõi 3.5179:1 vs hứa 4.7368:1)
+✓ chinh-ui: 4/4 ô (canvas = ô 627x627), alpha
+— chinh: 4/4 asset
+— QA sizeDeviation: 0 flagged / 4 measured, threshold 15px (không auto-regen)
+— QA aspectDeviation: 2 flagged / 4 measured, threshold 15% (không auto-regen)
+→ kits/manifest.json

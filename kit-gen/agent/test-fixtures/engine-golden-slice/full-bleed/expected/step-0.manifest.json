@@ -1,0 +1,206 @@
+{
+  "styles": {
+    "kit": {
+      "sheets": {
+        "nen": {
+          "mode": "alpha",
+          "canvas": [
+            192,
+            256
+          ],
+          "cell": [
+            192,
+            256
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "size": [
+            384,
+            256
+          ],
+          "cut": 2
+        }
+      },
+      "assets": [
+        {
+          "file": "25-bg-home.png",
+          "sheet": "nen",
+          "mode": "alpha",
+          "canvas": [
+            192,
+            256
+          ],
+          "cell": [
+            192,
+            256
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            178,
+            256
+          ],
+          "content_at": [
+            8,
+            0
+          ],
+          "safe": [
+            8,
+            0,
+            178,
+            256
+          ],
+          "contractSafe": [
+            0,
+            0,
+            192,
+            256
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 8,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": 8,
+              "top": 0,
+              "right": -6,
+              "bottom": 0
+            },
+            "undershootPx": {
+              "left": 8,
+              "top": 0,
+              "right": 6,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": null,
+            "flagged": false,
+            "threshold": 0.15,
+            "safeAspect": null,
+            "outAspect": null,
+            "metric": "core_aspect"
+          }
+        },
+        {
+          "file": "26-bg-play.png",
+          "sheet": "nen",
+          "mode": "alpha",
+          "canvas": [
+            192,
+            256
+          ],
+          "cell": [
+            192,
+            256
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            186,
+            256
+          ],
+          "content_at": [
+            6,
+            0
+          ],
+          "safe": [
+            6,
+            0,
+            186,
+            256
+          ],
+          "contractSafe": [
+            0,
+            0,
+            192,
+            256
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 6,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": 6,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "undershootPx": {
+              "left": 6,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": null,
+            "flagged": false,
+            "threshold": 0.15,
+            "safeAspect": null,
+            "outAspect": null,
+            "metric": "core_aspect"
+          }
+        }
+      ],
+      "empty_cells": [],
+      "qa": {
+        "sizeDeviation": {
+          "threshold": 15,
+          "measured": 2,
+          "flagged": false,
+          "flaggedCount": 0,
+          "maxEdgePx": 8,
+          "flaggedAssets": []
+        },
+        "aspectDeviation": {
+          "threshold": 0.15,
+          "measured": 0,
+          "flagged": false,
+          "flaggedCount": 0,
+          "maxValue": null,
+          "flaggedAssets": []
+        }
+      }
+    }
+  },
+  "schemaVersion": 2,
+  "qa": {
+    "sizeDeviation": {
+      "threshold": 15,
+      "measured": 2,
+      "flagged": false,
+      "flaggedCount": 0,
+      "maxEdgePx": 8,
+      "flaggedAssets": []
+    },
+    "aspectDeviation": {
+      "threshold": 0.15,
+      "measured": 0,
+      "flagged": false,
+      "flaggedCount": 0,
+      "maxValue": null,
+      "flaggedAssets": []
+    }
+  }
+}

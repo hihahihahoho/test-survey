@@ -31,3 +31,15 @@ auth.json
 .env.*
 config.toml
 KitGen/
+
+# ── NGOẠI LỆ: FIXTURE GOLDEN CỦA ENGINE JS ───────────────────────────────────
+# `raw/`, `kits/`, `styles.json` ở trên là DỮ LIỆU CỤC BỘ của một lượt gen thật và
+# không bao giờ được commit. Nhưng fixture golden (`agent/test-fixtures/engine-*`)
+# CỐ Ý mang đúng ba cái tên ấy: nó là bản chụp một thư mục project thật để bản JS
+# chạy trên đúng bố cục mà `slice.py` chạy. Đổi tên trong fixture là để test chạy
+# trên một bố cục không ai dùng — đúng loại "nhánh mặc định không ai đi".
+!agent/test-fixtures/**/raw/
+!agent/test-fixtures/**/raw/**
+!agent/test-fixtures/**/kits/
+!agent/test-fixtures/**/kits/**
+!agent/test-fixtures/**/styles.json

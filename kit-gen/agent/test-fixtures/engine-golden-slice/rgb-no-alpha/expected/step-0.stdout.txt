@@ -1,0 +1,6 @@
+  ⚠ kit-duc: ảnh KHÔNG có nền trong suốt (mode rgb). Vẫn cắt nguyên, KHÔNG tự chế alpha — manifest ghi mode:"rgb" để web báo cho người dùng biết mà sinh lại.
+✓ kit-duc: 2/2 ô (canvas = ô 192x256), rgb
+— kit: 2/2 asset
+— QA sizeDeviation: 0 flagged / 2 measured, threshold 15px (không auto-regen)
+— QA aspectDeviation: 0 flagged / 0 measured, threshold 15% (không auto-regen)
+→ kits/manifest.json

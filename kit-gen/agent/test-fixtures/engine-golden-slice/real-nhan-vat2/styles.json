@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 4,
+  "characterPoses": [
+    "idle",
+    "wave",
+    "point",
+    "present",
+    "fly"
+  ],
+  "sheets": [
+    {
+      "id": "nhan-vat2",
+      "grid": {
+        "cols": 1,
+        "rows": 1
+      },
+      "components": [
+        {
+          "file": "01-fly",
+          "vi": "Bay",
+          "spec": "the SAME character from the reference photo, wearing a light summer outfit with short sleeves and sunglasses, flying forward, body horizontal, arms stretched ahead, a determined confident expression, seen straight from the front, full body",
+          "skel": {
+            "shape": "pose",
+            "w": 0.3,
+            "h": 0.85,
+            "pose": "fly"
+          }
+        }
+      ],
+      "cell_hint": "cell containing ONE full-body character",
+      "orient": "landscape",
+      "canvas": "square",
+      "note": "All cells show THE SAME character as in the attached REFERENCE PHOTO: match its species, face, colors, costume, materials and proportions exactly — only the pose and viewing angle change per cell, like one character turnaround sheet.",
+      "ref": "refs/char-asset-7718b693fe183f40.jpg",
+      "poseRef": "refs/char-pose-sheet-mascot-mtsfpcq2-7-2.png",
+      "styles": [
+        "chinh"
+      ]
+    }
+  ],
+  "styles": [
+    {
+      "id": "chinh",
+      "vi": "test vcb",
+      "style": "soft rounded 3D clay-like objects with gentle gradients, pastel candy palette on warm cream backgrounds, chunky friendly silhouettes that stay readable at thumbnail size, glossy top highlights and soft contact shadows, summer theme: sun-bright blues and warm sand, waves, palm leaves and ice-cream motifs",
+      "styleMode": "prompt",
+      "brand": {
+        "mode": "colors",
+        "primary": "#00502f",
+        "secondary": "#629f0d",
+        "refs": []
+      },
+      "characters": [
+        {
+          "id": "nhan-vat",
+          "vi": "Nhân vật",
+          "ref": "refs/char-asset-7718b693fe183f40.jpg",
+          "poses": [
+            "idle",
+            "wave",
+            "point",
+            "present",
+            "fly"
+          ]
+        }
+      ],
+      "inspo": []
+    }
+  ]
+}

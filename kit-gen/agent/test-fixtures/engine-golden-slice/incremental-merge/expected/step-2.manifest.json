@@ -1,0 +1,331 @@
+{
+  "styles": {
+    "v1": {
+      "sheets": {
+        "nen": {
+          "mode": "alpha",
+          "canvas": [
+            120,
+            160
+          ],
+          "cell": [
+            120,
+            160
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "size": [
+            240,
+            160
+          ],
+          "cut": 2
+        },
+        "ui": {
+          "mode": "alpha",
+          "canvas": [
+            180,
+            120
+          ],
+          "cell": [
+            180,
+            120
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "size": [
+            180,
+            120
+          ],
+          "cut": 1
+        }
+      },
+      "assets": [
+        {
+          "file": "25-bg-home.png",
+          "sheet": "nen",
+          "mode": "alpha",
+          "canvas": [
+            120,
+            160
+          ],
+          "cell": [
+            120,
+            160
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            114,
+            160
+          ],
+          "content_at": [
+            0,
+            0
+          ],
+          "safe": [
+            0,
+            0,
+            114,
+            160
+          ],
+          "contractSafe": [
+            0,
+            0,
+            120,
+            160
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 6,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": 0,
+              "top": 0,
+              "right": -6,
+              "bottom": 0
+            },
+            "undershootPx": {
+              "left": 0,
+              "top": 0,
+              "right": 6,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": null,
+            "flagged": false,
+            "threshold": 0.15,
+            "safeAspect": null,
+            "outAspect": null,
+            "metric": "core_aspect"
+          }
+        },
+        {
+          "file": "26-bg-play.png",
+          "sheet": "nen",
+          "mode": "alpha",
+          "canvas": [
+            120,
+            160
+          ],
+          "cell": [
+            120,
+            160
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            114,
+            160
+          ],
+          "content_at": [
+            6,
+            0
+          ],
+          "safe": [
+            6,
+            0,
+            114,
+            160
+          ],
+          "contractSafe": [
+            0,
+            0,
+            120,
+            160
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 6,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": 6,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "undershootPx": {
+              "left": 6,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": null,
+            "flagged": false,
+            "threshold": 0.15,
+            "safeAspect": null,
+            "outAspect": null,
+            "metric": "core_aspect"
+          }
+        },
+        {
+          "file": "01-btn.png",
+          "sheet": "ui",
+          "mode": "alpha",
+          "canvas": [
+            180,
+            120
+          ],
+          "cell": [
+            180,
+            120
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            105,
+            61
+          ],
+          "content_at": [
+            38,
+            30
+          ],
+          "safe": [
+            38,
+            30,
+            105,
+            61
+          ],
+          "contractSafe": [
+            18,
+            24,
+            144,
+            72
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 20,
+            "flagged": true,
+            "threshold": 15,
+            "edgesPx": {
+              "left": 20,
+              "top": 6,
+              "right": -19,
+              "bottom": -5
+            },
+            "undershootPx": {
+              "left": 20,
+              "top": 6,
+              "right": 19,
+              "bottom": 5
+            },
+            "overflowPx": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.2541,
+            "flagged": true,
+            "threshold": 0.15,
+            "safeAspect": 1.7213,
+            "outAspect": 2.3077,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            120,
+            52
+          ],
+          "drawScale": 2.5,
+          "coreBox": [
+            38,
+            38,
+            105,
+            46
+          ],
+          "coreCoverage": 1.0
+        }
+      ],
+      "empty_cells": [],
+      "qa": {
+        "sizeDeviation": {
+          "threshold": 15,
+          "measured": 3,
+          "flagged": true,
+          "flaggedCount": 1,
+          "maxEdgePx": 20,
+          "flaggedAssets": [
+            {
+              "style": "v1",
+              "file": "01-btn.png",
+              "maxEdgePx": 20
+            }
+          ]
+        },
+        "aspectDeviation": {
+          "threshold": 0.15,
+          "measured": 1,
+          "flagged": true,
+          "flaggedCount": 1,
+          "maxValue": 0.2541,
+          "flaggedAssets": [
+            {
+              "style": "v1",
+              "file": "01-btn.png",
+              "value": 0.2541
+            }
+          ]
+        }
+      }
+    }
+  },
+  "schemaVersion": 2,
+  "qa": {
+    "sizeDeviation": {
+      "threshold": 15,
+      "measured": 3,
+      "flagged": true,
+      "flaggedCount": 1,
+      "maxEdgePx": 20,
+      "flaggedAssets": [
+        {
+          "style": "v1",
+          "file": "01-btn.png",
+          "maxEdgePx": 20
+        }
+      ]
+    },
+    "aspectDeviation": {
+      "threshold": 0.15,
+      "measured": 1,
+      "flagged": true,
+      "flaggedCount": 1,
+      "maxValue": 0.2541,
+      "flaggedAssets": [
+        {
+          "style": "v1",
+          "file": "01-btn.png",
+          "value": 0.2541
+        }
+      ]
+    }
+  }
+}

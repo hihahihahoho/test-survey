@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 4,
+  "variants": [
+    {
+      "id": "chinh"
+    }
+  ],
+  "sheets": [
+    {
+      "id": "ui2",
+      "grid": {
+        "cols": 2,
+        "rows": 2
+      },
+      "components": [
+        {
+          "file": "01-popover",
+          "vi": "Popup · panel",
+          "spec": "popup panel, a distinct rim with a few ornaments at the corners, the body itself left clear, ornaments mirrored symmetrically, left and right halves matching, a see-through pane of barely tinted glass drawn at low alpha, about 64 of 255, keeping its own tint colour at that alpha; frame, rim and highlights stay fully opaque, designer's note: vật liệu là phao, phóng cách trang trí phao và drink giải nhiệt",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.5390749601275917,
+            "h": 0.4130781499202552,
+            "slice9": true,
+            "decor": true
+          },
+          "out": {
+            "w": 270,
+            "h": 207
+          },
+          "drawScale": 1.25
+        },
+        {
+          "file": "02-popup-ribbon",
+          "vi": "Popup · ribbon",
+          "spec": "the heading banner that sits across the top of the same popup, a distinct rim with a few ornaments at the corners, the body itself left clear, ornaments mirrored symmetrically, left and right halves matching, fully opaque everywhere, alpha 255, with no see-through part at all, whatever material it may look like",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.5869218500797448,
+            "h": 0.15151515151515152,
+            "slice9": true,
+            "decor": true
+          },
+          "out": {
+            "w": 245,
+            "h": 63
+          },
+          "drawScale": 1.5
+        },
+        {
+          "file": "03-popup-close",
+          "vi": "Popup · close button",
+          "spec": "the round close button of the same popup, with a cross mark, clean silhouette: a plain edge with no rim ornament and NO decorative objects attached — no flowers, lanterns, ribbons, gems or trinkets on or around it, fully opaque everywhere, alpha 255, with no see-through part at all, whatever material it may look like",
+          "skel": {
+            "shape": "circle",
+            "w": 0.7974481658692185,
+            "h": 0.7974481658692185,
+            "decor": false
+          },
+          "out": {
+            "w": 100,
+            "h": 100
+          },
+          "drawScale": 5
+        },
+        {
+          "file": "_empty-1",
+          "vi": "",
+          "spec": "",
+          "skel": {
+            "shape": "empty"
+          }
+        }
+      ],
+      "cell_hint": "square 1:1 cell",
+      "orient": "landscape",
+      "canvas": "square",
+      "styles": [
+        "chinh"
+      ]
+    }
+  ]
+}

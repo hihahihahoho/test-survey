@@ -1,0 +1,7 @@
+  ⚠ QA chinh/01-fly: sizeDeviation max 138px > 15px (chỉ gắn cờ, không tự gen lại)
+✓ chinh-nhan-vat2: 1/1 ô (canvas = ô 1254x1254), alpha
+— chinh: 1/1 asset
+  ⚠ QA summary chinh: 1 ô vượt 15px (chỉ dữ liệu; người dùng tự quyết gen lại)
+— QA sizeDeviation: 1 flagged / 1 measured, threshold 15px (không auto-regen)
+— QA aspectDeviation: 0 flagged / 0 measured, threshold 15% (không auto-regen)
+→ kits/manifest.json

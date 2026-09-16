@@ -1,0 +1,111 @@
+{
+  "styles": [
+    {
+      "id": "kit",
+      "vi": "Kit"
+    }
+  ],
+  "sheets": [
+    {
+      "id": "doc",
+      "grid": {
+        "cols": 2,
+        "rows": 3
+      },
+      "canvas": "portrait",
+      "orient": "portrait",
+      "components": [
+        {
+          "file": "01-o",
+          "vi": "01-o",
+          "spec": "01-o",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.6,
+            "h": 0.5,
+            "anchor": "center"
+          },
+          "out": {
+            "w": 96,
+            "h": 80
+          }
+        },
+        {
+          "file": "02-o",
+          "vi": "02-o",
+          "spec": "02-o",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.6,
+            "h": 0.5,
+            "anchor": "bottom"
+          },
+          "out": {
+            "w": 96,
+            "h": 80
+          }
+        },
+        {
+          "file": "03-o",
+          "vi": "03-o",
+          "spec": "03-o",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.6,
+            "h": 0.5,
+            "anchor": "center"
+          },
+          "out": {
+            "w": 96,
+            "h": 80
+          }
+        },
+        {
+          "file": "04-o",
+          "vi": "04-o",
+          "spec": "04-o",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.6,
+            "h": 0.5,
+            "anchor": "bottom"
+          },
+          "out": {
+            "w": 96,
+            "h": 80
+          }
+        },
+        {
+          "file": "05-o",
+          "vi": "05-o",
+          "spec": "05-o",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.6,
+            "h": 0.5,
+            "anchor": "center"
+          },
+          "out": {
+            "w": 96,
+            "h": 80
+          }
+        },
+        {
+          "file": "06-o",
+          "vi": "06-o",
+          "spec": "06-o",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.6,
+            "h": 0.5,
+            "anchor": "bottom"
+          },
+          "out": {
+            "w": 96,
+            "h": 80
+          }
+        }
+      ]
+    }
+  ]
+}

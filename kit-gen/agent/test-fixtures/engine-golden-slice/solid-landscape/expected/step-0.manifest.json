@@ -1,0 +1,664 @@
+{
+  "styles": {
+    "kit": {
+      "sheets": {
+        "ui": {
+          "mode": "alpha",
+          "canvas": [
+            192,
+            256
+          ],
+          "cell": [
+            192,
+            256
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "size": [
+            768,
+            512
+          ],
+          "cut": 7
+        }
+      },
+      "assets": [
+        {
+          "file": "01-o.png",
+          "sheet": "ui",
+          "mode": "alpha",
+          "canvas": [
+            192,
+            256
+          ],
+          "cell": [
+            192,
+            256
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            144,
+            196
+          ],
+          "content_at": [
+            24,
+            30
+          ],
+          "safe": [
+            24,
+            30,
+            144,
+            196
+          ],
+          "contractSafe": [
+            29,
+            57,
+            134,
+            141
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 0,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": -5,
+              "top": -27,
+              "right": 5,
+              "bottom": 28
+            },
+            "undershootPx": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 5,
+              "top": 27,
+              "right": 5,
+              "bottom": 28
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.6816,
+            "flagged": true,
+            "threshold": 0.15,
+            "safeAspect": 0.7347,
+            "outAspect": 2.3077,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            120,
+            52
+          ],
+          "drawScale": 2.5
+        },
+        {
+          "file": "02-o.png",
+          "sheet": "ui",
+          "mode": "alpha",
+          "canvas": [
+            192,
+            256
+          ],
+          "cell": [
+            192,
+            256
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            128,
+            176
+          ],
+          "content_at": [
+            32,
+            40
+          ],
+          "safe": [
+            32,
+            40,
+            128,
+            176
+          ],
+          "contractSafe": [
+            24,
+            57,
+            144,
+            141
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 8,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": 8,
+              "top": -17,
+              "right": -8,
+              "bottom": 18
+            },
+            "undershootPx": {
+              "left": 8,
+              "top": 0,
+              "right": 8,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 0,
+              "top": 17,
+              "right": 0,
+              "bottom": 18
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.6867,
+            "flagged": true,
+            "threshold": 0.15,
+            "safeAspect": 0.7273,
+            "outAspect": 2.3214,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            130,
+            56
+          ]
+        },
+        {
+          "file": "03-o.png",
+          "sheet": "ui",
+          "mode": "alpha",
+          "canvas": [
+            192,
+            256
+          ],
+          "cell": [
+            192,
+            256
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            112,
+            196
+          ],
+          "content_at": [
+            40,
+            30
+          ],
+          "safe": [
+            40,
+            30,
+            112,
+            196
+          ],
+          "contractSafe": [
+            19,
+            57,
+            154,
+            141
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 21,
+            "flagged": true,
+            "threshold": 15,
+            "edgesPx": {
+              "left": 21,
+              "top": -27,
+              "right": -21,
+              "bottom": 28
+            },
+            "undershootPx": {
+              "left": 21,
+              "top": 0,
+              "right": 21,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 0,
+              "top": 27,
+              "right": 0,
+              "bottom": 28
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.7551,
+            "flagged": true,
+            "threshold": 0.15,
+            "safeAspect": 0.5714,
+            "outAspect": 2.3333,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            140,
+            60
+          ]
+        },
+        {
+          "file": "04-o.png",
+          "sheet": "ui",
+          "mode": "alpha",
+          "canvas": [
+            192,
+            256
+          ],
+          "cell": [
+            192,
+            256
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            144,
+            176
+          ],
+          "content_at": [
+            24,
+            40
+          ],
+          "safe": [
+            24,
+            40,
+            144,
+            176
+          ],
+          "contractSafe": [
+            29,
+            57,
+            134,
+            141
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 0,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": -5,
+              "top": -17,
+              "right": 5,
+              "bottom": 18
+            },
+            "undershootPx": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 5,
+              "top": 17,
+              "right": 5,
+              "bottom": 18
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.6509,
+            "flagged": true,
+            "threshold": 0.15,
+            "safeAspect": 0.8182,
+            "outAspect": 2.3438,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            150,
+            64
+          ]
+        },
+        {
+          "file": "05-o.png",
+          "sheet": "ui",
+          "mode": "alpha",
+          "canvas": [
+            192,
+            256
+          ],
+          "cell": [
+            192,
+            256
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            128,
+            196
+          ],
+          "content_at": [
+            32,
+            30
+          ],
+          "safe": [
+            32,
+            30,
+            128,
+            196
+          ],
+          "contractSafe": [
+            24,
+            57,
+            144,
+            141
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 8,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": 8,
+              "top": -27,
+              "right": -8,
+              "bottom": 28
+            },
+            "undershootPx": {
+              "left": 8,
+              "top": 0,
+              "right": 8,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 0,
+              "top": 27,
+              "right": 0,
+              "bottom": 28
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.7224,
+            "flagged": true,
+            "threshold": 0.15,
+            "safeAspect": 0.6531,
+            "outAspect": 2.3529,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            160,
+            68
+          ]
+        },
+        {
+          "file": "07-o.png",
+          "sheet": "ui",
+          "mode": "alpha",
+          "canvas": [
+            192,
+            256
+          ],
+          "cell": [
+            192,
+            256
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            144,
+            196
+          ],
+          "content_at": [
+            24,
+            30
+          ],
+          "safe": [
+            24,
+            30,
+            144,
+            196
+          ],
+          "contractSafe": [
+            29,
+            57,
+            134,
+            141
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 0,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": -5,
+              "top": -27,
+              "right": 5,
+              "bottom": 28
+            },
+            "undershootPx": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 5,
+              "top": 27,
+              "right": 5,
+              "bottom": 28
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.6898,
+            "flagged": true,
+            "threshold": 0.15,
+            "safeAspect": 0.7347,
+            "outAspect": 2.3684,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            180,
+            76
+          ]
+        },
+        {
+          "file": "08-o.png",
+          "sheet": "ui",
+          "mode": "alpha",
+          "canvas": [
+            192,
+            256
+          ],
+          "cell": [
+            192,
+            256
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            128,
+            176
+          ],
+          "content_at": [
+            32,
+            40
+          ],
+          "safe": [
+            32,
+            40,
+            128,
+            176
+          ],
+          "contractSafe": [
+            24,
+            57,
+            144,
+            141
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 8,
+            "flagged": false,
+            "threshold": 15,
+            "edgesPx": {
+              "left": 8,
+              "top": -17,
+              "right": -8,
+              "bottom": 18
+            },
+            "undershootPx": {
+              "left": 8,
+              "top": 0,
+              "right": 8,
+              "bottom": 0
+            },
+            "overflowPx": {
+              "left": 0,
+              "top": 17,
+              "right": 0,
+              "bottom": 18
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": 0.6938,
+            "flagged": true,
+            "threshold": 0.15,
+            "safeAspect": 0.7273,
+            "outAspect": 2.375,
+            "metric": "core_aspect"
+          },
+          "outSize": [
+            190,
+            80
+          ]
+        }
+      ],
+      "empty_cells": [],
+      "qa": {
+        "sizeDeviation": {
+          "threshold": 15,
+          "measured": 7,
+          "flagged": true,
+          "flaggedCount": 1,
+          "maxEdgePx": 21,
+          "flaggedAssets": [
+            {
+              "style": "kit",
+              "file": "03-o.png",
+              "maxEdgePx": 21
+            }
+          ]
+        },
+        "aspectDeviation": {
+          "threshold": 0.15,
+          "measured": 7,
+          "flagged": true,
+          "flaggedCount": 7,
+          "maxValue": 0.7551,
+          "flaggedAssets": [
+            {
+              "style": "kit",
+              "file": "01-o.png",
+              "value": 0.6816
+            },
+            {
+              "style": "kit",
+              "file": "02-o.png",
+              "value": 0.6867
+            },
+            {
+              "style": "kit",
+              "file": "03-o.png",
+              "value": 0.7551
+            },
+            {
+              "style": "kit",
+              "file": "04-o.png",
+              "value": 0.6509
+            },
+            {
+              "style": "kit",
+              "file": "05-o.png",
+              "value": 0.7224
+            },
+            {
+              "style": "kit",
+              "file": "07-o.png",
+              "value": 0.6898
+            },
+            {
+              "style": "kit",
+              "file": "08-o.png",
+              "value": 0.6938
+            }
+          ]
+        }
+      }
+    }
+  },
+  "schemaVersion": 2,
+  "qa": {
+    "sizeDeviation": {
+      "threshold": 15,
+      "measured": 7,
+      "flagged": true,
+      "flaggedCount": 1,
+      "maxEdgePx": 21,
+      "flaggedAssets": [
+        {
+          "style": "kit",
+          "file": "03-o.png",
+          "maxEdgePx": 21
+        }
+      ]
+    },
+    "aspectDeviation": {
+      "threshold": 0.15,
+      "measured": 7,
+      "flagged": true,
+      "flaggedCount": 7,
+      "maxValue": 0.7551,
+      "flaggedAssets": [
+        {
+          "style": "kit",
+          "file": "01-o.png",
+          "value": 0.6816
+        },
+        {
+          "style": "kit",
+          "file": "02-o.png",
+          "value": 0.6867
+        },
+        {
+          "style": "kit",
+          "file": "03-o.png",
+          "value": 0.7551
+        },
+        {
+          "style": "kit",
+          "file": "04-o.png",
+          "value": 0.6509
+        },
+        {
+          "style": "kit",
+          "file": "05-o.png",
+          "value": 0.7224
+        },
+        {
+          "style": "kit",
+          "file": "07-o.png",
+          "value": 0.6898
+        },
+        {
+          "style": "kit",
+          "file": "08-o.png",
+          "value": 0.6938
+        }
+      ]
+    }
+  }
+}

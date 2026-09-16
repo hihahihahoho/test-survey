@@ -1,0 +1,151 @@
+{
+  "styles": {
+    "kit": {
+      "sheets": {
+        "ui": {
+          "mode": "alpha",
+          "canvas": [
+            192,
+            256
+          ],
+          "cell": [
+            192,
+            256
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "size": [
+            384,
+            256
+          ],
+          "cut": 1
+        }
+      },
+      "assets": [
+        {
+          "file": "01-co.png",
+          "sheet": "ui",
+          "mode": "alpha",
+          "canvas": [
+            192,
+            256
+          ],
+          "cell": [
+            192,
+            256
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            101,
+            131
+          ],
+          "content_at": [
+            40,
+            60
+          ],
+          "safe": [
+            40,
+            60,
+            101,
+            131
+          ],
+          "contractSafe": [
+            19,
+            51,
+            154,
+            154
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 32,
+            "flagged": true,
+            "threshold": 15,
+            "edgesPx": {
+              "left": 21,
+              "top": 9,
+              "right": -32,
+              "bottom": -14
+            },
+            "undershootPx": {
+              "left": 21,
+              "top": 9,
+              "right": 32,
+              "bottom": 14
+            },
+            "overflowPx": {
+              "left": 0,
+              "top": 0,
+              "right": 0,
+              "bottom": 0
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": null,
+            "flagged": false,
+            "threshold": 0.15,
+            "safeAspect": null,
+            "outAspect": null,
+            "metric": "core_aspect"
+          }
+        }
+      ],
+      "empty_cells": [
+        "02-trong"
+      ],
+      "qa": {
+        "sizeDeviation": {
+          "threshold": 15,
+          "measured": 1,
+          "flagged": true,
+          "flaggedCount": 1,
+          "maxEdgePx": 32,
+          "flaggedAssets": [
+            {
+              "style": "kit",
+              "file": "01-co.png",
+              "maxEdgePx": 32
+            }
+          ]
+        },
+        "aspectDeviation": {
+          "threshold": 0.15,
+          "measured": 0,
+          "flagged": false,
+          "flaggedCount": 0,
+          "maxValue": null,
+          "flaggedAssets": []
+        }
+      }
+    }
+  },
+  "schemaVersion": 2,
+  "qa": {
+    "sizeDeviation": {
+      "threshold": 15,
+      "measured": 1,
+      "flagged": true,
+      "flaggedCount": 1,
+      "maxEdgePx": 32,
+      "flaggedAssets": [
+        {
+          "style": "kit",
+          "file": "01-co.png",
+          "maxEdgePx": 32
+        }
+      ]
+    },
+    "aspectDeviation": {
+      "threshold": 0.15,
+      "measured": 0,
+      "flagged": false,
+      "flaggedCount": 0,
+      "maxValue": null,
+      "flaggedAssets": []
+    }
+  }
+}

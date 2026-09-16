@@ -1,0 +1,46 @@
+{
+  "styles": {
+    "kit": {
+      "sheets": {},
+      "assets": [],
+      "empty_cells": [],
+      "qa": {
+        "sizeDeviation": {
+          "threshold": 15,
+          "measured": 0,
+          "flagged": false,
+          "flaggedCount": 0,
+          "maxEdgePx": null,
+          "flaggedAssets": []
+        },
+        "aspectDeviation": {
+          "threshold": 0.15,
+          "measured": 0,
+          "flagged": false,
+          "flaggedCount": 0,
+          "maxValue": null,
+          "flaggedAssets": []
+        }
+      }
+    }
+  },
+  "schemaVersion": 2,
+  "qa": {
+    "sizeDeviation": {
+      "threshold": 15,
+      "measured": 0,
+      "flagged": false,
+      "flaggedCount": 0,
+      "maxEdgePx": null,
+      "flaggedAssets": []
+    },
+    "aspectDeviation": {
+      "threshold": 0.15,
+      "measured": 0,
+      "flagged": false,
+      "flaggedCount": 0,
+      "maxValue": null,
+      "flaggedAssets": []
+    }
+  }
+}

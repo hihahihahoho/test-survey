@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 4,
+  "variants": [
+    {
+      "id": "kit"
+    }
+  ],
+  "sheets": [
+    {
+      "id": "kinh",
+      "grid": {
+        "cols": 1,
+        "rows": 1
+      },
+      "canvas": "square",
+      "components": [
+        {
+          "file": "01-kinh",
+          "vi": "01-kinh",
+          "spec": "01-kinh",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.7,
+            "h": 0.25
+          },
+          "out": {
+            "w": 420,
+            "h": 140
+          }
+        }
+      ]
+    }
+  ]
+}

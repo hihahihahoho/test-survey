@@ -1,0 +1,9 @@
+  ⚠ QA v1/01-btn: aspectDeviation 25% > 15% (lõi 1.7213:1 vs hứa 2.3077:1)
+  ⚠ QA v1/01-btn: sizeDeviation max 20px > 15px (chỉ gắn cờ, không tự gen lại)
+✓ v1-ui: 1/1 ô (canvas = ô 180x120), alpha
+  ↺ v1: giữ nguyên 1 sheet không chạy lượt này (nen)
+— v1: 3/3 asset
+  ⚠ QA summary v1: 1 ô vượt 15px (chỉ dữ liệu; người dùng tự quyết gen lại)
+— QA sizeDeviation: 1 flagged / 3 measured, threshold 15px (không auto-regen)
+— QA aspectDeviation: 1 flagged / 1 measured, threshold 15% (không auto-regen)
+→ kits/manifest.json

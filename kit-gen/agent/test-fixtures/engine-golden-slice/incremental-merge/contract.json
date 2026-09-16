@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 4,
+  "variants": [
+    {
+      "id": "v1"
+    }
+  ],
+  "sheets": [
+    {
+      "id": "nen",
+      "grid": {
+        "cols": 2,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "components": [
+        {
+          "file": "25-bg-home",
+          "vi": "25-bg-home",
+          "spec": "25-bg-home",
+          "skel": {
+            "shape": "full",
+            "w": 0.8,
+            "h": 0.6
+          }
+        },
+        {
+          "file": "26-bg-play",
+          "vi": "26-bg-play",
+          "spec": "26-bg-play",
+          "skel": {
+            "shape": "full",
+            "w": 0.8,
+            "h": 0.6
+          }
+        }
+      ]
+    },
+    {
+      "id": "ui",
+      "grid": {
+        "cols": 1,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "components": [
+        {
+          "file": "01-btn",
+          "vi": "01-btn",
+          "spec": "01-btn",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6
+          },
+          "out": {
+            "w": 120,
+            "h": 52
+          },
+          "drawScale": 2.5
+        }
+      ]
+    }
+  ]
+}

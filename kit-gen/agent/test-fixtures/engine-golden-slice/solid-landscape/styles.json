@@ -1,0 +1,130 @@
+{
+  "styles": [
+    {
+      "id": "kit",
+      "vi": "Kit"
+    }
+  ],
+  "sheets": [
+    {
+      "id": "ui",
+      "grid": {
+        "cols": 4,
+        "rows": 2
+      },
+      "canvas": "landscape",
+      "orient": "landscape",
+      "components": [
+        {
+          "file": "01-o",
+          "vi": "01-o",
+          "spec": "01-o",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.7,
+            "h": 0.55
+          },
+          "out": {
+            "w": 120,
+            "h": 52
+          },
+          "drawScale": 2.5
+        },
+        {
+          "file": "02-o",
+          "vi": "02-o",
+          "spec": "02-o",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.75,
+            "h": 0.55
+          },
+          "out": {
+            "w": 130,
+            "h": 56
+          }
+        },
+        {
+          "file": "03-o",
+          "vi": "03-o",
+          "spec": "03-o",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.7999999999999999,
+            "h": 0.55
+          },
+          "out": {
+            "w": 140,
+            "h": 60
+          }
+        },
+        {
+          "file": "04-o",
+          "vi": "04-o",
+          "spec": "04-o",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.7,
+            "h": 0.55
+          },
+          "out": {
+            "w": 150,
+            "h": 64
+          }
+        },
+        {
+          "file": "05-o",
+          "vi": "05-o",
+          "spec": "05-o",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.75,
+            "h": 0.55
+          },
+          "out": {
+            "w": 160,
+            "h": 68
+          }
+        },
+        {
+          "file": "06-cach",
+          "vi": "06-cach",
+          "spec": "06-cach",
+          "skel": {
+            "shape": "empty",
+            "w": 0.8,
+            "h": 0.6
+          }
+        },
+        {
+          "file": "07-o",
+          "vi": "07-o",
+          "spec": "07-o",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.7,
+            "h": 0.55
+          },
+          "out": {
+            "w": 180,
+            "h": 76
+          }
+        },
+        {
+          "file": "08-o",
+          "vi": "08-o",
+          "spec": "08-o",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.75,
+            "h": 0.55
+          },
+          "out": {
+            "w": 190,
+            "h": 80
+          }
+        }
+      ]
+    }
+  ]
+}

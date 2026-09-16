@@ -1,0 +1,149 @@
+{
+  "styles": {
+    "chinh": {
+      "sheets": {
+        "nhan-vat2": {
+          "mode": "alpha",
+          "canvas": [
+            1254,
+            1254
+          ],
+          "cell": [
+            1254,
+            1254
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "size": [
+            1254,
+            1254
+          ],
+          "cut": 1
+        }
+      },
+      "assets": [
+        {
+          "file": "01-fly.png",
+          "sheet": "nhan-vat2",
+          "mode": "alpha",
+          "canvas": [
+            1254,
+            1254
+          ],
+          "cell": [
+            1254,
+            1254
+          ],
+          "bleed": [
+            0,
+            0
+          ],
+          "content": [
+            1095,
+            841
+          ],
+          "content_at": [
+            101,
+            183
+          ],
+          "safe": [
+            104,
+            185,
+            1090,
+            837
+          ],
+          "contractSafe": [
+            439,
+            94,
+            376,
+            1066
+          ],
+          "sizeDeviation": {
+            "maxEdgePx": 138,
+            "flagged": true,
+            "threshold": 15,
+            "edgesPx": {
+              "left": -335,
+              "top": 91,
+              "right": 379,
+              "bottom": -138
+            },
+            "undershootPx": {
+              "left": 0,
+              "top": 91,
+              "right": 0,
+              "bottom": 138
+            },
+            "overflowPx": {
+              "left": 335,
+              "top": 0,
+              "right": 379,
+              "bottom": 0
+            },
+            "metric": "safe_undershoot"
+          },
+          "aspectDeviation": {
+            "value": null,
+            "flagged": false,
+            "threshold": 0.15,
+            "safeAspect": null,
+            "outAspect": null,
+            "metric": "core_aspect"
+          }
+        }
+      ],
+      "empty_cells": [],
+      "qa": {
+        "sizeDeviation": {
+          "threshold": 15,
+          "measured": 1,
+          "flagged": true,
+          "flaggedCount": 1,
+          "maxEdgePx": 138,
+          "flaggedAssets": [
+            {
+              "style": "chinh",
+              "file": "01-fly.png",
+              "maxEdgePx": 138
+            }
+          ]
+        },
+        "aspectDeviation": {
+          "threshold": 0.15,
+          "measured": 0,
+          "flagged": false,
+          "flaggedCount": 0,
+          "maxValue": null,
+          "flaggedAssets": []
+        }
+      }
+    }
+  },
+  "schemaVersion": 2,
+  "qa": {
+    "sizeDeviation": {
+      "threshold": 15,
+      "measured": 1,
+      "flagged": true,
+      "flaggedCount": 1,
+      "maxEdgePx": 138,
+      "flaggedAssets": [
+        {
+          "style": "chinh",
+          "file": "01-fly.png",
+          "maxEdgePx": 138
+        }
+      ]
+    },
+    "aspectDeviation": {
+      "threshold": 0.15,
+      "measured": 0,
+      "flagged": false,
+      "flaggedCount": 0,
+      "maxValue": null,
+      "flaggedAssets": []
+    }
+  }
+}
