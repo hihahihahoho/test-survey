@@ -29,3 +29,32 @@ The files use PowerShell with `-NoProfile -ExecutionPolicy Bypass`; no execution
 `uninstall.bat` mặc định **GIỮ NGUYÊN** dữ liệu trong `%USERPROFILE%\KitGen`. Chỉ trả lời `Y` khi muốn xoá dữ liệu đó.
 
 `uninstall.bat` **KEEPS** data in `%USERPROFILE%\KitGen` by default. Answer `Y` only if you want to delete that data.
+
+## Gỡ bản cũ, cài bản mới tinh / Clean reinstall
+
+Bản cũ (2.1.44 trở về trước) để lại trên máy khoảng **1 GB** thứ nay không còn dùng: một
+môi trường Python nặng (numpy/scipy/pymatting, ~314 MB) và một bộ Chromium đóng gói riêng
+(~790 MB). Cập nhật thẳng thì đống đó vẫn nằm lại, nên nếu bạn đang ở bản cũ hãy gỡ rồi cài lại:
+
+1. Bấm đúp `uninstall.bat`. Khi được hỏi có xoá dữ liệu không, trả lời `n` (hoặc cứ bấm Enter) — **giữ dữ liệu**.
+2. Bấm đúp `install.bat`, chờ cài xong và app tự mở.
+3. Nếu app hỏi đăng nhập Codex, đăng nhập lại một lần.
+
+Project trong `%USERPROFILE%\KitGen\projects` và cấu hình `%USERPROFILE%\KitGen\.kitgen\config.json`
+**không mất**. Bước 1 chỉ dọn thêm phần chạy mà installer dựng lại được:
+`%USERPROFILE%\KitGen\.venv` và `%USERPROFILE%\KitGen\.kitgen\engine`.
+Muốn xoá sạch cả dữ liệu thì ở bước 1 trả lời `Y`.
+
+An older version (2.1.44 or earlier) leaves about **1 GB** of files that are no longer used:
+a heavy Python environment (numpy/scipy/pymatting, ~314 MB) and a bundled Chromium build
+(~790 MB). Updating in place keeps all of that, so if you are on an older version, uninstall
+first and then install again:
+
+1. Double-click `uninstall.bat`. When asked whether to delete your data, answer `n` (or just press Enter) — this **KEEPS** your data.
+2. Double-click `install.bat` and wait for it to finish.
+3. If the app asks you to sign in to Codex, sign in once.
+
+Your projects in `%USERPROFILE%\KitGen\projects` and `%USERPROFILE%\KitGen\.kitgen\config.json`
+are kept. Step 1 also removes the runtime the installer can rebuild:
+`%USERPROFILE%\KitGen\.venv` and `%USERPROFILE%\KitGen\.kitgen\engine`.
+Answer `Y` in step 1 if you want the data deleted too.

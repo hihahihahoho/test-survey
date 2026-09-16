@@ -8,20 +8,23 @@ if exist "%KITGEN_HOME%\config.cmd" call "%KITGEN_HOME%\config.cmd" >nul 2>&1
 if exist "%KITGEN_HOME%\bin\kitgen.cmd" call "%KITGEN_HOME%\bin\kitgen.cmd" stop >nul 2>&1
 
 echo This removes the KitGen runtime and its login startup entry.
-echo User data is kept by default.
+echo User data is kept by default (projects and .kitgen\config.json).
+echo The runtime that lives inside the data folder (.venv and .kitgen\engine) is
+echo always removed - the installer rebuilds it, and the old .venv alone is ~314 MB.
 set /p "KITGEN_ANSWER=Delete the KitGen user data too? [y/N]: "
 if /I "%KITGEN_ANSWER%"=="Y" set "KITGEN_REMOVE_WORKSPACE=1"
 
 rem NOTE: never assign to reserved PowerShell automatic variables ($home, $host,
 rem $pid, $error, ...) inside the -Command payload below - they are read-only and
 rem the assignment throws, aborting the whole uninstall. Field bug of 2026-08-24.
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop';$startup=[Environment]::GetFolderPath('Startup');$vbs=Join-Path $startup 'KitGen.vbs';if(Test-Path -LiteralPath $vbs){Remove-Item -LiteralPath $vbs -Force};$kgHome=$env:KITGEN_HOME;if($kgHome -and (Test-Path -LiteralPath $kgHome)){Get-Process node,codex,python -ErrorAction SilentlyContinue|Where-Object{$_.Path -and $_.Path.StartsWith($kgHome,[StringComparison]::OrdinalIgnoreCase)}|Stop-Process -Force -ErrorAction SilentlyContinue;Start-Sleep -Seconds 1;$junction=Get-Item -LiteralPath (Join-Path $kgHome 'current') -Force -ErrorAction SilentlyContinue;if($junction -and ($junction.Attributes -band [IO.FileAttributes]::ReparsePoint)){$junction.Delete()};Remove-Item -LiteralPath $kgHome -Recurse -Force}else{Write-Host ('KitGen runtime not found at '+$kgHome)};if($env:KITGEN_REMOVE_WORKSPACE -eq '1'){$ws=$env:KITGEN_WORKSPACE;$wsRoot=[IO.Path]::GetPathRoot($ws);if($ws -and $ws.TrimEnd('\') -ne $wsRoot -and (Test-Path -LiteralPath $ws)){Remove-Item -LiteralPath $ws -Recurse -Force}}"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop';$startup=[Environment]::GetFolderPath('Startup');$vbs=Join-Path $startup 'KitGen.vbs';if(Test-Path -LiteralPath $vbs){Remove-Item -LiteralPath $vbs -Force};$kgHome=$env:KITGEN_HOME;if($kgHome -and (Test-Path -LiteralPath $kgHome)){Get-Process node,codex,python -ErrorAction SilentlyContinue|Where-Object{$_.Path -and $_.Path.StartsWith($kgHome,[StringComparison]::OrdinalIgnoreCase)}|Stop-Process -Force -ErrorAction SilentlyContinue;Start-Sleep -Seconds 1;$junction=Get-Item -LiteralPath (Join-Path $kgHome 'current') -Force -ErrorAction SilentlyContinue;if($junction -and ($junction.Attributes -band [IO.FileAttributes]::ReparsePoint)){$junction.Delete()};Remove-Item -LiteralPath $kgHome -Recurse -Force}else{Write-Host ('KitGen runtime not found at '+$kgHome)};$ws=$env:KITGEN_WORKSPACE;$wsRoot=[IO.Path]::GetPathRoot($ws);$wsOk=[bool]($ws -and $ws.TrimEnd('\') -ne $wsRoot);if($env:KITGEN_REMOVE_WORKSPACE -eq '1'){if($wsOk -and (Test-Path -LiteralPath $ws)){Remove-Item -LiteralPath $ws -Recurse -Force}}elseif($wsOk){foreach($rel in @('.venv','.kitgen\engine')){$leftover=Join-Path $ws $rel;if(Test-Path -LiteralPath $leftover){Remove-Item -LiteralPath $leftover -Recurse -Force;Write-Host ('Removed runtime '+$leftover)}}}"
 if errorlevel 1 goto :failed
 
 if "%KITGEN_REMOVE_WORKSPACE%"=="1" (
   echo KitGen runtime and user data removed.
 ) else (
-  echo KitGen runtime removed. User data was kept.
+  echo KitGen runtime removed, including .venv and .kitgen\engine inside the data folder.
+  echo Your projects and .kitgen\config.json were kept.
 )
 set "KITGEN_RC=0"
 goto :finish

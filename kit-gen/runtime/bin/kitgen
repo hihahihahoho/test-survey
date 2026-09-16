@@ -45,7 +45,6 @@ agent_cmd() {
   exec env PATH="$WORKSPACE/.venv/bin:$NODE_DIR:$CODEX_DIR:$PATH" \
     KITGEN_CODEX_BIN="$CODEX_BIN" \
     NODE_PATH="${NODE_PATH:-$HOME_DIR/tools/node_modules}" \
-    PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME_DIR/tools/playwright-browsers}" \
     "$NODE" "$SOURCE/agent/server.mjs" \
     --workspace "$WORKSPACE" --port "$PORT" --origin "$ORIGIN" --app-root "$SOURCE/app"
 }

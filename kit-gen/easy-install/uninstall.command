@@ -79,6 +79,32 @@ safe_remove_workspace() {
   fi
 }
 
+# RUNTIME NAM LAN TRONG THU MUC DU LIEU — va no khong phai du lieu.
+#
+# `<workspace>/.venv` (moi truong Python; ban doi cu con mang numpy/scipy/pymatting,
+# khoang 314 MB) va `<workspace>/.kitgen/engine` (ban COPY cua engine) deu do installer
+# dung ra va dung lai duoc bat cu luc nao. Giu chung lai khi "go cai" nghia la nguoi
+# dung go xong van con gan 1 GB rac, va lan cai sau van chay tren venv nang doi cu.
+# `projects/` va `.kitgen/config.json` la DU LIEU THAT — khong dung toi.
+remove_workspace_runtime() {
+  [ -n "$WORKSPACE" ] || return 0
+  [ "$WORKSPACE" != "/" ] || { echo "Tu choi xoa root filesystem." >&2; return 1; }
+  [ "${WORKSPACE##*/}" = "KitGen" ] || {
+    echo "Duong dan du lieu bat ngo: $WORKSPACE; khong xoa runtime trong do." >&2
+    return 1
+  }
+  local removed=0 target
+  for target in "$WORKSPACE/.venv" "$WORKSPACE/.kitgen/engine"; do
+    if [ -e "$target" ] || [ -L "$target" ]; then
+      rm -rf -- "$target"
+      echo "Da xoa runtime $target (installer dung lai duoc)"
+      removed=1
+    fi
+  done
+  [ "$removed" -eq 1 ] || echo "Khong co runtime thua trong $WORKSPACE"
+  return 0
+}
+
 finish() {
   local rc="$1"
   trap - EXIT
@@ -100,12 +126,16 @@ rm -f -- "$PLIST"
 # Loi o buoc nao thi ghi nhan roi van di tiep — khong bo do giua chung.
 safe_remove_kitgen_home || FAILED=1
 
-echo "Mac dinh GIU NGUYEN du lieu $WORKSPACE."
+echo "Mac dinh GIU NGUYEN du lieu $WORKSPACE (project + cau hinh)."
+echo "Rieng runtime nam trong do (.venv, .kitgen/engine) van bi xoa — installer dung lai duoc."
 answer=""
 read -r -p "Ban co muon xoa toan bo du lieu $WORKSPACE khong? [y/N] " answer || true
 case "$answer" in
   y|Y|yes|YES) safe_remove_workspace || FAILED=1 ;;
-  *) echo "Da giu nguyen du lieu $WORKSPACE." ;;
+  *)
+    remove_workspace_runtime || FAILED=1
+    echo "Da giu: $WORKSPACE/projects va $WORKSPACE/.kitgen/config.json (du lieu cua ban)."
+    ;;
 esac
 
 [ "$FAILED" -eq 0 ]

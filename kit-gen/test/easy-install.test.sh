@@ -137,6 +137,15 @@ run_uninstall_fixture() {
   local home="$1" answer="$2"
   mkdir -p "$home/.kitgen" "$home/Library/LaunchAgents" "$home/KitGen"
   printf '%s\n' keep > "$home/KitGen/keep.txt"
+  # Trong thu muc DU LIEU co ca RUNTIME: `.venv` (ban doi cu con numpy/scipy/pymatting,
+  # ~314 MB) va `.kitgen/engine` (ban copy cua engine). Ca hai do installer dung lai
+  # duoc, nen "giu du lieu" KHONG duoc phep giu chung.
+  mkdir -p "$home/KitGen/.venv/lib/python3.13/site-packages/numpy" \
+           "$home/KitGen/.kitgen/engine" "$home/KitGen/projects/demo"
+  printf '%s\n' venv > "$home/KitGen/.venv/pyvenv.cfg"
+  printf '%s\n' engine > "$home/KitGen/.kitgen/engine/gen.sh"
+  printf '%s\n' '{"workspaceVersion":1}' > "$home/KitGen/.kitgen/config.json"
+  printf '%s\n' project > "$home/KitGen/projects/demo/kit.json"
   printf '%s\n' service > "$home/.kitgen/marker"
   printf '%s\n' plist > "$home/Library/LaunchAgents/com.kitgen.agent.plist"
   KITGEN_TEST_STATE="$TEST_ROOT/state-$answer"
@@ -151,6 +160,14 @@ run_uninstall_fixture "$HOME_NO" n
 [ ! -e "$HOME_NO/.kitgen" ] || fail "default uninstall kept .kitgen"
 [ ! -e "$HOME_NO/Library/LaunchAgents/com.kitgen.agent.plist" ] || fail "LaunchAgent plist remained"
 [ -f "$HOME_NO/KitGen/keep.txt" ] || fail "default uninstall deleted user data"
+[ -f "$HOME_NO/KitGen/projects/demo/kit.json" ] || fail "default uninstall deleted a project"
+[ -f "$HOME_NO/KitGen/.kitgen/config.json" ] || fail "default uninstall deleted workspace config"
+# Runtime trong thu muc du lieu PHAI di, ke ca khi nguoi dung chon giu du lieu.
+[ ! -e "$HOME_NO/KitGen/.venv" ] || fail "default uninstall kept the heavy .venv runtime"
+[ ! -e "$HOME_NO/KitGen/.kitgen/engine" ] || fail "default uninstall kept the copied engine"
+grep -q '\.venv' "$HOME_NO/uninstall.out" || fail "uninstall did not say it removed .venv"
+grep -q '\.kitgen/engine' "$HOME_NO/uninstall.out" || fail "uninstall did not say it removed the engine copy"
+grep -q 'projects' "$HOME_NO/uninstall.out" || fail "uninstall did not say what it kept"
 grep -q 'gui/501/com.kitgen.agent' "$TEST_ROOT/state-n/launchctl.log" || fail "wrong launchd label/domain"
 
 HOME_Y="$TEST_ROOT/home-yes"
@@ -190,4 +207,14 @@ printf '\n' |
 [ ! -e "$RUN_STATE/up" ] || fail "stop wrapper did not run kitgen stop"
 grep -q 'KitGen da dung' "$RUN_HOME/stop.out" || fail "stop wrapper did not confirm stopped"
 
-echo "easy-install: 8 wrappers, two platform ZIPs, file separation/README/mode checks, syntax/encoding checks, start/stop health/browser, uninstall fixture keep/delete passed"
+# `uninstall.bat` phai lam DUNG viec do tren Windows: khong chay duoc o day nen kiem
+# theo VAN BAN — mot nhanh `else` xoa .venv + .kitgen\engine khi giu du lieu.
+grep -q "@('\.venv','\.kitgen\\\\engine')" "$ROOT/easy-install/uninstall.bat" || \
+  fail "uninstall.bat khong xoa .venv/.kitgen\\engine khi giu du lieu"
+
+# Huong dan "go ban cu, cai ban moi tinh" phai co trong CA HAI README dong vao ZIP.
+grep -q 'Gỡ bản cũ' "$ROOT/easy-install/README-macos.md" || fail "README macOS thieu muc go ban cu"
+grep -q 'Gỡ bản cũ' "$ROOT/easy-install/README-windows.md" || fail "README Windows thieu muc go ban cu"
+grep -q 'Gỡ bản cũ' "$ROOT/README-USER.md" || fail "README-USER.md thieu muc go ban cu"
+
+echo "easy-install: 8 wrappers, two platform ZIPs, file separation/README/mode checks, syntax/encoding checks, start/stop health/browser, uninstall fixture keep/delete (runtime .venv + engine luon bi xoa), huong dan cai moi tinh passed"

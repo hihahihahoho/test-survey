@@ -601,7 +601,27 @@ $venvPy  = Join-Path $venv 'Scripts\python.exe'   # Windows: Scripts\, KHONG pha
 $engineBase = (Invoke-ExeCapture $pyExe ($pyPre + @('-c', 'import sys;print(sys.base_prefix)'))).Out
 $venvBase   = ''
 if (Test-Path -LiteralPath $venvPy) { $venvBase = (Invoke-ExeCapture $venvPy @('-c', 'import sys;print(sys.base_prefix)')).Out }
-if ((-not (Test-Path -LiteralPath $venvPy)) -or ($venvBase -ne $engineBase)) {
+
+# TANG DUC NEN DOI CU PHAI BI DON, khong chi "thoi khong cai nua" (doi xung voi khoi
+# cung ten trong install.sh). Ban <=2.1.44 cai numpy/scipy/pymatting (keo theo
+# numba/llvmlite) vao venv: ~314 MB cho mot tang tach nen KHONG CON AI GOI. Dieu kien
+# base_prefix o tren KHONG bat duoc ca nay — venv van tro dung Python, chi la nang.
+# Do bang TEN THU MUC trong site-packages: khong phai khoi dong Python, va dung ca khi
+# venv da gay khong chay noi.
+$legacyMatting = @()
+$sitePackages  = Join-Path $venv 'Lib\site-packages'
+if (Test-Path -LiteralPath $sitePackages) {
+  foreach ($pkg in @('numpy', 'scipy', 'pymatting', 'numba', 'llvmlite')) {
+    $distInfo = @(Get-ChildItem -LiteralPath $sitePackages -Filter "$pkg-*.dist-info" -ErrorAction SilentlyContinue)
+    $hit = (Test-Path -LiteralPath (Join-Path $sitePackages $pkg)) -or ($distInfo.Count -gt 0)
+    if ($hit -and ($legacyMatting -notcontains $pkg)) { $legacyMatting += $pkg }
+  }
+}
+if ((-not (Test-Path -LiteralPath $venvPy)) -or ($venvBase -ne $engineBase) -or ($legacyMatting.Count -gt 0)) {
+  if ($legacyMatting.Count -gt 0) {
+    Write-Host ('  don tang duc nen doi cu trong venv (' + ($legacyMatting -join ', ') + ' - khoang 314 MB khong con ai goi) ...')
+    Write-Host '  dung lai venv chi voi Pillow (~4 MB) ...'
+  }
   Write-Host '  tao virtualenv ...'
   if (Test-Path -LiteralPath $venv) { Remove-Item -LiteralPath $venv -Recurse -Force }
   if ((Invoke-ExeSoft $pyExe ($pyPre + @('-m', 'venv', $venv))) -ne 0) { Die "khong tao duoc venv tu $pyExe" }
@@ -651,7 +671,7 @@ exec "$pyPosix" "`$@"
 Write-Ok 'shim python3 (cho Git-Bash)'
 
 
-# ── 6. Codex CLI + trình render khung xương ───────────────────────────────────
+# ── 6. Codex CLI ──────────────────────────────────────────────────────────────
 Write-Step '6/8' 'Codex CLI'
 $toolsPrefix = Join-Path $KitgenHome 'tools'
 New-Dir $toolsPrefix
@@ -770,7 +790,9 @@ if ($codexBin) {
 }
 
 # Don rac doi Playwright (790,9 MB) o luot update. May sach khong co gi de xoa.
-foreach ($p in @('playwright-browsers', 'node_modules\playwright', 'node_modules\playwright-core')) {
+# Cung ly do, `@resvg/resvg-wasm` (2,4 MB) bi go khoi duong cai tu 07/09/2026: khong con
+# anh SVG nao de render, nhung may update tu ban cu van giu nguyen goi trong tools\.
+foreach ($p in @('playwright-browsers', 'node_modules\playwright', 'node_modules\playwright-core', 'node_modules\@resvg')) {
   Remove-Item -LiteralPath (Join-Path $toolsPrefix $p) -Recurse -Force -ErrorAction SilentlyContinue
 }
 

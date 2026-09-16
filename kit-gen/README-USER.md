@@ -200,6 +200,24 @@ Nếu script báo không cài được, thường là do mạng hoặc proxy cô
 
 `pillow` là thư viện Python **duy nhất** công cụ cần.
 
+### Gỡ bản cũ, cài bản mới tinh
+
+Bản cũ (2.1.44 trở về trước) để lại trên máy khoảng **1 GB** thứ nay không còn ai gọi:
+môi trường Python nặng (`numpy`/`scipy`/`pymatting`, ~314 MB) và một bộ Chromium đóng gói
+riêng (~790 MB). Bấm **Cập nhật** thì đống đó vẫn nằm lại. Muốn máy sạch hẳn thì gỡ rồi cài lại:
+
+1. **Gỡ (giữ dữ liệu).** Dùng bộ Easy Install: chạy `uninstall.command` (macOS) hoặc
+   `uninstall.bat` (Windows), khi được hỏi có xoá dữ liệu không thì trả lời `n` / cứ Enter.
+2. **Cài lại.** Chạy `install.command` / `install.bat` (hoặc `bash install.sh`) và chờ xong.
+3. **Đăng nhập Codex lại** nếu app hỏi.
+
+Project trong `~/KitGen/projects` và cấu hình `~/KitGen/.kitgen/config.json` **không mất**.
+Bước 1 chỉ dọn thêm phần chạy mà installer dựng lại được: `~/KitGen/.venv` và
+`~/KitGen/.kitgen/engine`. Muốn xoá sạch cả dữ liệu thì ở bước 1 trả lời `y`/`Y`.
+
+Từ bản này, installer cũng **tự dọn**: thấy `numpy`/`scipy`/`pymatting`/`numba`/`llvmlite`
+trong `.venv` là nó xoá venv rồi dựng lại chỉ với Pillow (~4 MB), và in ra một dòng nói rõ.
+
 ### Muốn đổi thư mục làm việc
 
 ```bash

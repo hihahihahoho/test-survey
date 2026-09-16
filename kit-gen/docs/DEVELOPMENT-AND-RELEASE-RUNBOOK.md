@@ -284,7 +284,8 @@ cat "$KITGEN_TEST_HOME/current/VERSION"
 
 `--no-start` kiểm package/install mà không đăng ký service. Shell tests ở trên mới
 là bằng chứng cho health-check và rollback service. Lần cài thử đầu vẫn có thể tải
-private Node, Codex, Python package và Chromium, nên cần mạng và có thể mất vài phút.
+private Node, Codex và (chỉ khi Python hệ thống ngoài dải 3.11–3.13) bản Python riêng,
+nên cần mạng và có thể mất vài phút. Đường SHIP không tải Chromium/Playwright nữa.
 
 ## 6. Bump version
 

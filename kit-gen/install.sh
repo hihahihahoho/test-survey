@@ -650,7 +650,31 @@ VENV="$WORKSPACE/.venv"
 # `bin/python` gãy symlink hoặc vẫn là 3.14 ⇒ pip lại đi tìm sdist. Dựng lại rẻ hơn đoán.
 VENV_BASE="$( [ -x "$VENV/bin/python" ] && "$VENV/bin/python" -c 'import sys;print(sys.base_prefix)' 2>/dev/null || printf '' )"
 ENGINE_BASE="$("$ENGINE_PYTHON" -c 'import sys;print(sys.base_prefix)')"
-if [ ! -x "$VENV/bin/python" ] || [ "$VENV_BASE" != "$ENGINE_BASE" ]; then
+# ── TẦNG ĐỤC NỀN ĐỜI CŨ PHẢI BỊ DỌN, KHÔNG CHỈ "THÔI KHÔNG CÀI NỮA" ───────────
+# Bản ≤2.1.44 cài numpy/scipy/pymatting (kéo theo numba/llvmlite) vào venv: ~314 MB
+# cho một tầng tách nền KHÔNG CÒN AI GỌI. Điều kiện base_prefix ở trên KHÔNG bắt được
+# ca này — venv vẫn trỏ đúng Python, chỉ là nặng — nên máy update từ bản cũ giữ nguyên
+# đống đó vĩnh viễn. Dựng lại venv chỉ với Pillow là ~4 MB, và rẻ hơn mọi lời giải thích.
+# Dò bằng TÊN THƯ MỤC trong site-packages: không phải khởi động Python (một lần import
+# numpy trên máy cũ cũng mất cả giây), và đúng cả khi venv đã gãy không chạy nổi.
+venv_legacy_matting_pkgs(){   # in ra tên các gói đời cũ tìm thấy trong $VENV, cách nhau bởi dấu cách
+  _legacy=""
+  for _pkg in numpy scipy pymatting numba llvmlite; do
+    for _hit in "$VENV"/lib/python*/site-packages/"$_pkg" \
+                "$VENV"/lib/python*/site-packages/"$_pkg"-*.dist-info; do
+      [ -e "$_hit" ] || continue
+      _legacy="$_legacy $_pkg"
+      break
+    done
+  done
+  printf '%s' "${_legacy# }"
+}
+LEGACY_MATTING="$(venv_legacy_matting_pkgs)"
+if [ ! -x "$VENV/bin/python" ] || [ "$VENV_BASE" != "$ENGINE_BASE" ] || [ -n "$LEGACY_MATTING" ]; then
+  if [ -n "$LEGACY_MATTING" ]; then
+    echo "Dọn tầng đục nền đời cũ trong venv ($LEGACY_MATTING — khoảng 314 MB không còn ai gọi)."
+    echo "Dựng lại venv chỉ với Pillow (~4 MB)..."
+  fi
   rm -rf "$VENV"
   "$ENGINE_PYTHON" -m venv "$VENV"
 fi
@@ -781,9 +805,12 @@ run_with_timeout 60 env CODEX_HOME="$HOME/.codex" "$CODEX_BIN" debug prompt-inpu
 # Dọn rác đời Playwright ở LƯỢT UPDATE: 790,9 MB không còn ai dùng (browser 772,7 MB
 # + gói npm 18,1 MB). Máy sạch không có gì để xoá; đây chỉ là đường dọn cho máy đã trót
 # cài đời trước — kể cả bản 2.1.21 vừa tải thêm chromium/firefox/webkit.
+# Cùng lý do, `@resvg/resvg-wasm` (2,4 MB) bị gỡ khỏi đường cài từ 07/09/2026: không
+# còn ảnh SVG nào để render, nhưng máy update từ bản cũ vẫn giữ nguyên gói trong tools/.
 rm -rf "$KITGEN_HOME/tools/playwright-browsers" \
        "$KITGEN_HOME/tools/node_modules/playwright" \
-       "$KITGEN_HOME/tools/node_modules/playwright-core" 2>/dev/null || true
+       "$KITGEN_HOME/tools/node_modules/playwright-core" \
+       "$KITGEN_HOME/tools/node_modules/@resvg" 2>/dev/null || true
 mkdir -p "$WORKSPACE/.kitgen/engine" "$WORKSPACE/projects"
 # Engine có thể đang được gen.sh/cover.sh đọc. Copy từng file qua inode tạm để lượt
 # đang chạy giữ nguyên byte cũ; lượt mới thấy toàn bộ file mới sau rename.
@@ -936,7 +963,7 @@ echo "  KitGen $VERSION đã cài xong."
 echo ""
 echo "  Ứng dụng      http://127.0.0.1:$PORT/app/   ← mở cái này"
 echo "  Dữ liệu       $WORKSPACE   (project, kit, ảnh — thứ cần sao lưu)"
-echo "  Bản chạy      $KITGEN_HOME   (runtime, log, Node/Codex/Chromium riêng)"
+echo "  Bản chạy      $KITGEN_HOME   (runtime, log, Node/Codex riêng)"
 echo "                 bản $VERSION: $DEST"
 echo "  Origin        $ORIGIN"
 echo "  Lệnh          $BIN {start|stop|restart|status|logs|open}"

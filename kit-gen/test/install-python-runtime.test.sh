@@ -10,14 +10,18 @@
 # Gốc rễ sâu hơn: mình để MÁY NGƯỜI DÙNG quyết định phiên bản Python, trong khi Node
 # đã pin cứng + kiểm checksum từ lâu.
 #
-# Bộ này khoá sáu mệnh đề:
+# Bộ này khoá chín mệnh đề:
 #   ① MỌI lời gọi pip trong CẢ HAI installer đều mang `--only-binary=:all:`;
 #   ② pin Python (version + build) của install.sh và install.ps1 là MỘT;
 #   ③ checksum được đối chiếu TRƯỚC khi giải nén, ở cả hai installer;
 #   ④ install.ps1 không còn đường "cài xong nhưng chưa gen được ảnh";
 #   ⑤ máy có Python trong dải có wheel ⇒ KHÔNG tải gì thêm, và pip vẫn mang cờ;
 #   ⑥ máy có Python ngoài dải ⇒ tải ĐÚNG asset đã pin, và checksum lệch thì DỪNG,
-#      tuyệt đối không giải nén.
+#      tuyệt đối không giải nén;
+#   ⑦ venv SẠCH (chỉ Pillow) thì KHÔNG bị dựng lại vô cớ;
+#   ⑧ venv mang tầng đục nền đời cũ (numpy/scipy/pymatting/numba/llvmlite) thì bị XOÁ
+#      và dựng lại — có nói ra tên gói — chứ không nằm lại ~314 MB vĩnh viễn;
+#   ⑨ danh sách gói đời cũ ấy có mặt ở CẢ HAI installer.
 #
 # Không ra mạng: `curl` giả phục vụ một "GitHub release" dựng ngay trong thư mục tạm.
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -280,4 +284,60 @@ unset KITGEN_TEST_SUMS_SUFFIX
 [ ! -e "$KITGEN_HOME/tools/python/bin/python3" ] || \
   fail "installer giải nén gói Python dù không có gì để đối chiếu" "$OUT"
 
-echo "install-python-runtime: pip luôn --only-binary=:all: · pin khớp hai nền tảng · checksum trước khi giải nén · hệ thống 3.13 không tải · 3.14 tải đúng asset · checksum lệch/thiếu thì dừng"
+# ═══════════════════════════════════════════════════════════════════════════════
+# ⑦/⑧ VENV ĐỜI CŨ PHẢI BỊ DỌN, VENV SẠCH PHẢI ĐƯỢC GIỮ.
+#
+# Máy update từ bản ≤2.1.44 mang một venv ~314 MB (numpy/scipy/pymatting + numba/
+# llvmlite) cho tầng tách nền KHÔNG CÒN AI GỌI. Điều kiện `base_prefix` cũ không bắt
+# được ca đó — venv vẫn trỏ đúng Python, chỉ là nặng — nên nó ở lại vĩnh viễn. Hai ca
+# dưới đây khoá cả hai chiều: thấy gói nặng thì DỰNG LẠI, không thấy thì ĐỪNG ĐỘNG VÀO
+# (dựng lại vô cớ là bắt người dùng tải lại Pillow mỗi lượt cập nhật).
+# ═══════════════════════════════════════════════════════════════════════════════
+reset_state
+export KITGEN_TEST_PY_MINOR=3.13
+OUT="$TEST_ROOT/out-venv-seed.txt"
+run_install "$OUT"
+[ "$status" -eq 0 ] || fail "ca venv: lượt cài đầu tiên hỏng" "$OUT"
+VENV_DIR="$KITGEN_WORKSPACE/.venv"
+[ -x "$VENV_DIR/bin/python" ] || fail "lượt cài đầu tiên không dựng venv" "$OUT"
+
+# ── ⑦ venv SẠCH (chỉ Pillow) ⇒ GIỮ NGUYÊN ────────────────────────────────────
+mkdir -p "$VENV_DIR/lib/python3.13/site-packages/PIL"
+printf '%s\n' 'pillow' > "$VENV_DIR/lib/python3.13/site-packages/pillow-12.3.0.dist-info"
+: > "$VENV_DIR/dau-cua-luot-truoc"
+rm -f "$KITGEN_TEST_STATE/py.log"
+OUT="$TEST_ROOT/out-venv-clean.txt"
+run_install "$OUT"
+[ "$status" -eq 0 ] || fail "venv sạch: installer hỏng" "$OUT"
+[ -e "$VENV_DIR/dau-cua-luot-truoc" ] || \
+  fail "venv chỉ có Pillow mà vẫn bị dựng lại — mỗi lượt cập nhật lại bắt tải lại Pillow" "$OUT"
+[ ! -s "$KITGEN_TEST_STATE/py.log" ] || \
+  fail "venv sạch mà installer vẫn gọi -m venv" "$KITGEN_TEST_STATE/py.log" "$OUT"
+grep -q 'tầng đục nền đời cũ' "$OUT" && \
+  fail "venv sạch mà installer vẫn báo đang dọn tầng đục nền" "$OUT"
+
+# ── ⑧ venv có numpy (đời cũ) ⇒ XOÁ và DỰNG LẠI, có nói ra ────────────────────
+mkdir -p "$VENV_DIR/lib/python3.13/site-packages/numpy"
+printf '%s\n' 'numpy' > "$VENV_DIR/lib/python3.13/site-packages/numpy/__init__.py"
+rm -f "$KITGEN_TEST_STATE/py.log" "$KITGEN_TEST_STATE/pip.log"
+OUT="$TEST_ROOT/out-venv-legacy.txt"
+run_install "$OUT"
+[ "$status" -eq 0 ] || fail "venv đời cũ: installer hỏng" "$OUT"
+[ ! -e "$VENV_DIR/dau-cua-luot-truoc" ] || \
+  fail "venv mang numpy mà KHÔNG bị dựng lại — máy update từ bản cũ giữ nguyên ~314 MB" "$OUT"
+[ ! -e "$VENV_DIR/lib/python3.13/site-packages/numpy" ] || fail "numpy vẫn còn sau lượt cài" "$OUT"
+grep -q '^venv ' "$KITGEN_TEST_STATE/py.log" || \
+  fail "installer không dựng lại venv" "$KITGEN_TEST_STATE/py.log" "$OUT"
+grep -q 'tầng đục nền đời cũ' "$OUT" || \
+  fail "installer dọn venv nặng mà KHÔNG nói một chữ cho người dùng" "$OUT"
+grep -q 'numpy' "$OUT" || fail "installer không nêu tên gói đời cũ vừa dọn" "$OUT"
+grep -q -- '--only-binary=:all:' "$KITGEN_TEST_STATE/pip.log" || \
+  fail "venv dựng lại nhưng pip mất --only-binary=:all:" "$KITGEN_TEST_STATE/pip.log" "$OUT"
+
+# ── ⑨ Cả hai installer cùng nhìn một danh sách gói đời cũ ────────────────────
+for pkg in numpy scipy pymatting numba llvmlite; do
+  grep -q "$pkg" "$INSTALL_SH" || fail "install.sh không dò gói đời cũ $pkg"
+  grep -q "$pkg" "$INSTALL_PS1" || fail "install.ps1 không dò gói đời cũ $pkg"
+done
+
+echo "install-python-runtime: pip luôn --only-binary=:all: · pin khớp hai nền tảng · checksum trước khi giải nén · hệ thống 3.13 không tải · 3.14 tải đúng asset · checksum lệch/thiếu thì dừng · venv sạch giữ nguyên · venv đời cũ (numpy) bị dựng lại và nói ra"
