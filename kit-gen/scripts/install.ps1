@@ -82,6 +82,16 @@ $ErrorActionPreference = 'Stop'
 # Thanh tiến trình của Invoke-WebRequest làm tải file chậm đi hàng chục lần trên PS 5.1.
 $ProgressPreference = 'SilentlyContinue'
 
+# ── PATH GỐC CỦA NGƯỜI DÙNG: CHỤP LẠI TRƯỚC KHI AI ĐÓ KỊP ĐỘNG VÀO ───────────────
+# Hôm nay install.ps1 KHÔNG chèn gì vào $env:Path (khác install.sh, nơi Node riêng bị
+# đặt lên đầu PATH) — nhưng bước `codex update` bên dưới PHẢI chạy với PATH của người
+# dùng, và điều đó không được phép phụ thuộc vào việc "hiện giờ chưa ai chèn".
+# ĐO ĐƯỢC 16/09/2026 TRÊN macOS: codex bản cài-qua-npm chạy `npm install -g
+# @openai/codex@latest`, npm ĐẦU TIÊN trên PATH quyết định gói rơi vào đâu; npm của
+# KitGen đứng đầu ⇒ 277 MB @openai/codex (binary MỌI nền tảng) rơi vào tools\node của
+# KitGen, còn codex THẬT của người dùng không hề được nâng.
+$KitgenOrigPath = $env:Path
+
 # ── PSModulePath: vá lại đường tìm module của CHÍNH PS 5.1 ────────────────────────
 # Ai chạy installer TỪ BÊN TRONG PowerShell 7 (`powershell -File install.ps1` gõ trong
 # pwsh, hoặc terminal mặc định của VS Code, hoặc một CI dùng shell pwsh) thì tiến trình
@@ -676,6 +686,10 @@ Write-Step '6/8' 'Codex CLI'
 $toolsPrefix = Join-Path $KitgenHome 'tools'
 New-Dir $toolsPrefix
 $codexBin = $null
+# Doi xung voi install.sh: codex cua MAY phai duoc do tren PATH cua NGUOI DUNG. O day
+# dieu do dung san vi install.ps1 KHONG chen gi vao $env:Path ($KitgenOrigPath o dau
+# file chinh la $env:Path nay) — dung them $nodeDir vao PATH truoc dong nay, neu khong
+# mot ban @openai/codex lac trong Node rieng se tu nhan lam codex cua may.
 $sysCodex = Get-Command codex -ErrorAction SilentlyContinue
 if ($sysCodex) {
   # `codex --version` cua mot ban cai hong in ra stderr — voi `2>$null` + EAP='Stop'
@@ -728,6 +742,37 @@ if ((Test-Path -LiteralPath $oldNpmCodex) -and ($codexBin -ne (Join-Path $toolsP
   Remove-Item -LiteralPath (Join-Path $toolsPrefix 'node_modules\.bin\codex') -Force -ErrorAction SilentlyContinue
   Write-Ok 'da don ban Codex npm cu trong tools\ (chi con mot duong cai chinh thuc)'
 }
+# Don goi codex ma chinh installer doi truoc da VO TINH tu cai vao Node rieng. Tren
+# Windows, npm global prefix cua ban Node giai nen tu ZIP CHINH LA thu muc node, nen
+# `npm install -g @openai/codex` do nguyen goi (binary cho MOI nen tang, ~277 MB) vao
+# <nodeDir>\node_modules\@openai\codex kem shim codex.cmd/codex.ps1/codex nam ngay
+# canh node.exe. Khong ai goi toi no — codex that nam cho khac — nen no chi la dia mat
+# trang, va luot update nao cung phinh them mot ban moi.
+$strayNpmCodex = Join-Path $nodeDir 'node_modules\@openai\codex'
+$strayShims    = @('codex.cmd', 'codex.ps1', 'codex')
+$strayIsLive   = $false
+if ($codexBin) {
+  if ($codexBin.StartsWith($strayNpmCodex, [System.StringComparison]::OrdinalIgnoreCase)) { $strayIsLive = $true }
+  foreach ($shim in $strayShims) {
+    if ($codexBin -eq (Join-Path $nodeDir $shim)) { $strayIsLive = $true }
+  }
+}
+if ((Test-Path -LiteralPath $strayNpmCodex) -and (-not $strayIsLive)) {
+  $strayBytes = 0
+  try {
+    $strayBytes = [int64]((Get-ChildItem -LiteralPath $strayNpmCodex -Recurse -Force -ErrorAction SilentlyContinue | Where-Object { -not $_.PSIsContainer } | Measure-Object -Property Length -Sum).Sum)
+  } catch { $strayBytes = 0 }
+  $strayMb = [math]::Round($strayBytes / 1MB, 1)
+  Remove-Item -LiteralPath $strayNpmCodex -Recurse -Force -ErrorAction SilentlyContinue
+  $openaiDir = Join-Path $nodeDir 'node_modules\@openai'
+  if ((Test-Path -LiteralPath $openaiDir) -and (-not (Get-ChildItem -LiteralPath $openaiDir -Force -ErrorAction SilentlyContinue))) {
+    Remove-Item -LiteralPath $openaiDir -Force -ErrorAction SilentlyContinue
+  }
+  foreach ($shim in $strayShims) {
+    Remove-Item -LiteralPath (Join-Path $nodeDir $shim) -Force -ErrorAction SilentlyContinue
+  }
+  Write-Ok "da don $strayMb MB goi @openai/codex lac vao Node rieng cua KitGen - do lenh codex update doi truoc chay nham npm cua KitGen; codex that dang o $codexBin"
+}
 
 # ── NANG CODEX LEN BAN MOI (doi xung voi khoi cung ten trong install.sh) ──────
 # Cong cu tao anh KHONG nam trong ban phat hanh KitGen — no la tool/skill di kem goi
@@ -756,6 +801,12 @@ if ($codexBin) {
       $psi.UseShellExecute = $false
       $psi.RedirectStandardOutput = $true
       $psi.RedirectStandardError = $true
+      # PATH GOC, khong phai PATH cua installer: `codex update` cua ban cai-qua-npm goi
+      # thang `npm install -g @openai/codex@latest`, va npm DAU TIEN tren PATH la ke
+      # quyet dinh goi roi vao dau. Node rieng cua KitGen dung dau thi goi 277 MB roi
+      # vao tools\node con codex cua nguoi dung KHONG duoc nang — installer van in
+      # "Codex da la ban moi nhat". Tra lai PATH goc la tra viec nang codex ve dung chu.
+      $psi.EnvironmentVariables['PATH'] = $KitgenOrigPath
       $proc = [System.Diagnostics.Process]::Start($psi)
       if ($proc.WaitForExit(180000)) { $updated = ($proc.ExitCode -eq 0) }
       else { try { $proc.Kill() } catch { } }

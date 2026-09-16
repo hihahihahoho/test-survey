@@ -568,6 +568,13 @@ if [ "$MAJOR" -lt 20 ]; then
 fi
 # npm, npx, .bin shims, and npm postinstall scripts use `#!/usr/bin/env node`.
 # The private Node directory must be visible before any npm invocation.
+#
+# NHƯNG: PATH này CHỈ dành cho những lệnh của CHÍNH KitGen. Giữ lại bản gốc, vì bên
+# dưới có một lệnh KHÔNG được phép nhìn thấy Node riêng — `codex update` (xem khối
+# NÂNG CODEX). Đo được 16/09/2026: codex bản npm chạy `npm install -g @openai/codex`,
+# npm đầu PATH là npm của KitGen ⇒ 277 MB @openai/codex (binary MỌI nền tảng) rơi vào
+# tools/node của KitGen, còn codex THẬT của người dùng không hề được nâng.
+KITGEN_ORIG_PATH="$PATH"; export KITGEN_ORIG_PATH
 PATH="$(dirname "$NODE"):$PATH"; export PATH
 progress "2/6" "Health check môi trường nền"
 check_ok "Node $($NODE --version 2>/dev/null || printf '>=20') · $NODE"
@@ -701,7 +708,12 @@ fi
 # Prefer an existing healthy Codex CLI. Persisting its absolute path means the
 # background service does not depend on launchd/systemd inheriting the shell PATH.
 progress "3/6" "Health check Codex CLI"
-SYSTEM_CODEX="$(command -v codex 2>/dev/null || true)"
+# TÌM TRÊN PATH GỐC, không phải PATH đã chèn Node riêng ở bước [2/6]: nếu một lượt cài
+# đời trước đã lỡ để `npm install -g @openai/codex` đổ vào tools/node (xem khối dọn bên
+# dưới), thì `tools/node/bin/codex` đứng NGAY ĐẦU PATH và installer sẽ nhận nhầm bản lạc
+# ấy làm codex của máy — vừa tự khoá khối dọn, vừa ghim KitGen vào đúng bản npm đã gen
+# hỏng ngoài hiện trường. Codex của MÁY thì phải tìm trên PATH của NGƯỜI DÙNG.
+SYSTEM_CODEX="$(PATH="$KITGEN_ORIG_PATH" command -v codex 2>/dev/null || true)"
 if [ -n "$SYSTEM_CODEX" ] && [ -x "$SYSTEM_CODEX" ] && "$SYSTEM_CODEX" --version >/dev/null 2>&1; then
   CODEX_BIN="$SYSTEM_CODEX"
   check_ok "dùng Codex đã có: $($CODEX_BIN --version 2>/dev/null | head -n1) · $CODEX_BIN"
@@ -745,6 +757,20 @@ if [ -e "$KITGEN_HOME/tools/node_modules/@openai/codex" ] \
   rm -rf "$KITGEN_HOME/tools/node_modules/@openai/codex" "$KITGEN_HOME/tools/node_modules/.bin/codex" 2>/dev/null || true
   check_ok "đã dọn bản Codex npm cũ trong tools/ (chỉ còn một đường cài chính thức)"
 fi
+# Dọn gói codex mà chính installer đời trước đã VÔ TÌNH tự cài vào Node riêng: `codex
+# update` chạy với npm của KitGen ở đầu PATH thì npm prefix là tools/node, nên
+# `npm install -g @openai/codex` đổ nguyên gói (binary cho MỌI nền tảng, ~277 MB) vào
+# tools/node/lib/node_modules. Không ai gọi tới nó — codex thật nằm chỗ khác — nên nó
+# chỉ là đĩa mất trắng, và lượt update nào cũng phình thêm một bản mới.
+STRAY_NPM_CODEX="$KITGEN_HOME/tools/node/lib/node_modules/@openai/codex"
+case "$CODEX_BIN" in "$STRAY_NPM_CODEX"/*) STRAY_IS_LIVE=1 ;; *) STRAY_IS_LIVE="" ;; esac
+if [ -e "$STRAY_NPM_CODEX" ] && [ -z "$STRAY_IS_LIVE" ] \
+   && [ "$CODEX_BIN" != "$KITGEN_HOME/tools/node/bin/codex" ]; then
+  STRAY_SIZE="$(du -sh "$STRAY_NPM_CODEX" 2>/dev/null | awk '{print $1}')"
+  rm -rf "$STRAY_NPM_CODEX" "$KITGEN_HOME/tools/node/bin/codex" 2>/dev/null || true
+  rmdir "$KITGEN_HOME/tools/node/lib/node_modules/@openai" 2>/dev/null || true
+  check_ok "đã dọn ${STRAY_SIZE:-?} gói @openai/codex lạc vào Node riêng của KitGen — do «codex update» đời trước chạy nhầm npm của KitGen; codex thật đang ở $CODEX_BIN"
+fi
 # Đường vừa dò được có thể là shim ephemeral của shell — quy về đường bền + ĐÚNG TÊN
 # trước khi bất cứ ai ghi nó ra đĩa (xem khối resolve_codex_bin ở đầu file).
 CODEX_BIN="$(resolve_codex_bin "$CODEX_BIN")"
@@ -784,7 +810,12 @@ run_with_timeout(){ # <giây> <lệnh...> → 0 nếu xong đúng hạn, khác 0
 CODEX_VER_BEFORE="$("$CODEX_BIN" --version 2>/dev/null | head -n1)"
 if [ -n "${KITGEN_SKIP_CODEX_UPDATE:-}" ]; then
   check_ok "bỏ qua nâng Codex theo KITGEN_SKIP_CODEX_UPDATE — giữ $CODEX_VER_BEFORE"
-elif run_with_timeout 180 "$CODEX_BIN" update >/dev/null 2>&1; then
+# PATH GỐC, không phải PATH đã chèn Node riêng: `codex update` của bản cài-qua-npm
+# gọi thẳng `npm install -g @openai/codex@latest`, và npm ĐẦU TIÊN trên PATH là kẻ
+# quyết định gói rơi vào đâu. Để npm của KitGen đứng đầu thì gói 277 MB rơi vào
+# tools/node của KitGen còn codex của người dùng KHÔNG được nâng — installer vẫn in
+# «Codex đã là bản mới nhất». Trả lại PATH gốc là trả việc nâng codex về đúng chủ.
+elif run_with_timeout 180 env PATH="$KITGEN_ORIG_PATH" "$CODEX_BIN" update >/dev/null 2>&1; then
   CODEX_VER_AFTER="$("$CODEX_BIN" --version 2>/dev/null | head -n1)"
   if [ "$CODEX_VER_AFTER" != "$CODEX_VER_BEFORE" ]; then
     check_ok "đã nâng Codex: $CODEX_VER_BEFORE → $CODEX_VER_AFTER"
