@@ -83,26 +83,16 @@ jobs:
           # Bộ ca này TỒN TẠI TỪ LÂU nhưng chưa lần nào được CI chạy — đúng kiểu lỗ hổng
           # "có test mà không ai gọi". Nó canh vòng đời stop/start/restart của dịch vụ.
           bash ../test/install-restart.test.sh
-          # pip TUYỆT ĐỐI KHÔNG ĐƯỢC BIÊN DỊCH (thiếu --only-binary là ninja ăn hết RAM
-          # và treo máy người dùng), và nhánh chọn/tải Python riêng phải đi đúng đường.
-          bash ../test/install-python-runtime.test.sh
-          # gen.sh/cover.sh chưa lần nào được CI soi — chỉ có `bash -n` trên vài bản GIẢ.
-          # Sự cố 20/08/2026: expand mảng RỖNG dưới bash 3.2 của macOS + `set -u` giết
-          # 100% lượt gen của người dùng hồ sơ Codex mặc định, mà cả đội dev dùng hồ sơ
-          # riêng nên không ai thấy. Ca này soi văn bản engine thật, không phải bản giả.
-          bash ../test/engine-empty-array.test.sh
-          # Truyền `-m <model>` là đặt cược vào provider của NGƯỜI DÙNG có phục vụ model
-          # đó không. Đoán sai thì hỏng cả lượt, nên nhánh hạ cấp phải có máy canh.
-          bash ../test/gen-model-fallback.test.sh
-          # "OK" của engine từng có thể là OK GIẢ: model chép lại ảnh cũ vào đích rồi
-          # báo thành công, mtime mới tinh nên gen.sh gật đầu. 413.302 token cho hai
-          # lượt như vậy, không sinh ra ảnh nào.
-          bash ../test/gen-fake-ok.test.sh
-          # Ảnh sai khổ mà đem cắt = mọi ô méo lặng lẽ, chỉ lộ ra sau khi đã tiêu tiền.
-          python3 ../test/slice-orientation.test.py
-          # ...và chặn NGAY TỪ ĐẦU NGUỒN: khổ phải đi tới model dưới dạng số, không
-          # kèm đường lui "if supported" — chính chỗ hedge đó đẻ ra ảnh sai khổ.
-          bash ../test/gen-canvas-size.test.sh
+          # ĐỔI CHIỀU 16/09/2026. Ca cũ (install-python-runtime) canh đường "tải Python
+          # cho đúng": pin cứng bản CPython, kiểm checksum, `pip --only-binary=:all:`
+          # (thiếu cờ đó là ninja ăn hết RAM và treo máy người dùng thật). Engine nay là
+          # JS nên đường ấy không còn, và thứ phải canh là chiều ngược lại: KHÔNG installer
+          # nào được chạm tới Python nữa, và di sản đời cũ phải bị dọn.
+          bash ../test/install-no-python.test.sh
+          # Mọi ca engine cũ (gen-*.test.sh · engine-empty-array · slice-orientation)
+          # đã xoá cùng `gen.sh`/`slice.py`. Chúng trích `run_one` từ chính engine bash;
+          # thứ canh những nhánh ấy nay là `node ../agent/test-agent.mjs` ngay dưới
+          # (suite-engine-gen · suite-engine-prompt · suite-engine-slice).
       # `verify:release` = nogen + typecheck + contrast + deadclass + test:release + build.
       # Đó là TOÀN BỘ cổng của webapp; đừng thêm bước `npm run <x>` nào vào đây mà không
       # mở `kit-gen/webapp/package.json` xem script ấy còn sống không — chính chỗ này đã
@@ -140,51 +130,30 @@ jobs:
           set -eu
           bash kit-gen/test/easy-install.test.sh
           chmod +x kit-gen/easy-install/*.command
-          python3 - "$RUNNER_TEMP/release" <<'PY'
-          import stat
-          import sys
-          import zipfile
-          from pathlib import Path
-
-          root = Path("kit-gen/easy-install")
-          release = Path(sys.argv[1])
-          packages = {
-              "kitgen-easy-install-macos.zip": (
-                  "README-macos.md",
-                  [
-                      "install.command",
-                      "start-server.command",
-                      "stop-server.command",
-                      "uninstall.command",
-                  ],
-              ),
-              "kitgen-easy-install-windows.zip": (
-                  "README-windows.md",
-                  [
-                      "install.bat",
-                      "start-server.bat",
-                      "stop-server.bat",
-                      "uninstall.bat",
-                  ],
-              ),
-          }
-          for archive_name, (readme, wrappers) in packages.items():
-              names = [("README.md", readme), *((name, name) for name in wrappers)]
-              missing = [source for _, source in names if not (root / source).is_file()]
-              if missing:
-                  raise SystemExit("missing easy-install files: " + ", ".join(missing))
-              destination = release / archive_name
-              with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-                  for archive_name_in_zip, source_name in names:
-                      path = root / source_name
-                      info = zipfile.ZipInfo(archive_name_in_zip)
-                      info.create_system = 3
-                      info.date_time = (1980, 1, 1, 0, 0, 0)
-                      info.external_attr = (stat.S_IMODE(path.stat().st_mode) & 0xFFFF) << 16
-                      info.compress_type = zipfile.ZIP_DEFLATED
-                      archive.writestr(info, path.read_bytes())
-              print("built", destination)
-          PY
+          # ZIP DỰNG BẰNG `zip`, KHÔNG PHẢI HEREDOC PYTHON. Khối cũ là ~30 dòng
+          # `zipfile` chỉ để đổi tên README-<nền tảng>.md thành README.md và giữ bit
+          # thực thi. Sau khi cả sản phẩm đã bỏ Python, để lại một lời gọi python3 trong
+          # chính workflow phát hành là giữ một tiền đề mà không ai còn khai — và người
+          # đọc kế tiếp sẽ tưởng KitGen vẫn cần Python ở đâu đó.
+          # `zip` của Info-ZIP giữ nguyên quyền trên Unix, nên bit +x của .command sống sót.
+          rel="$RUNNER_TEMP/release"
+          for plat in macos windows; do
+            case "$plat" in
+              macos)   files="install.command start-server.command stop-server.command uninstall.command" ;;
+              windows) files="install.bat start-server.bat stop-server.bat uninstall.bat" ;;
+            esac
+            stage="$RUNNER_TEMP/easy-stage/$plat"
+            rm -rf "$stage"; mkdir -p "$stage"
+            cp "kit-gen/easy-install/README-$plat.md" "$stage/README.md"
+            for f in $files; do
+              [ -f "kit-gen/easy-install/$f" ] || { echo "::error::thieu kit-gen/easy-install/$f"; exit 1; }
+              cp "kit-gen/easy-install/$f" "$stage/$f"
+            done
+            rm -f "$rel/kitgen-easy-install-$plat.zip"
+            ( cd "$stage" && zip -q -X "$rel/kitgen-easy-install-$plat.zip" README.md $files )
+            echo "built $rel/kitgen-easy-install-$plat.zip"
+            unzip -l "$rel/kitgen-easy-install-$plat.zip"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: kitgen-runtime-${{ steps.version.outputs.version }}
@@ -206,16 +175,10 @@ jobs:
   #  Máy nào có Node hệ thống thì thoát nạn — mà runner CI thì LUÔN có Node. Nên chừng
   #  nào chưa tước PATH, ca này là ca không thể đỏ.
   #
-  #  ĐÁNH ĐỔI ĐÃ CHỌN — Python: PATH tối thiểu vẫn còn /usr/bin/python3 (3.9 trên máy
-  #  Apple), tức NGOÀI dải có wheel, nên installer sẽ đi nhánh tải Python riêng ~24 MB
-  #  từ release `runtime-python-*`. Release đó do kitgen-runtime-python.yml sinh ra và
-  #  hiện chưa được chạy ⇒ job sẽ đỏ vì một lý do KHÔNG liên quan đến thứ đang cần test.
-  #  Vì vậy ta truyền KITGEN_PYTHON3 = một Python 3.13 hermetic (setup-python) để
-  #  installer đi nhánh "Python hệ thống trong dải có wheel". Đoạn đường ĐANG CẦN TEST
-  #  (Node riêng → PATH → npm → Codex CLI) KHÔNG bị né một bước nào; nhánh tải Python
-  #  riêng thì đã có bộ ca riêng của nó: kit-gen/test/install-python-runtime.test.sh.
-  #  KHI release runtime-python-* đã tồn tại: bỏ dòng KITGEN_PYTHON3 bên dưới để job
-  #  này đi luôn cả nhánh tải Python riêng.
+  #  PYTHON: KHÔNG CÒN LIÊN QUAN (16/09/2026). Bản trước phải mượn setup-python và
+  #  truyền KITGEN_PYTHON3 để installer khỏi đi tải CPython ~24 MB giữa job. Installer
+  #  nay không hỏi han gì về Python, nên job này khẳng định điều ngược lại: cài xong mà
+  #  `tools/python` và `.venv` đều KHÔNG tồn tại.
   # ═══════════════════════════════════════════════════════════════════════════
   install-macos:
     name: Cai dat tren macOS (PATH tuoc sach)
@@ -228,11 +191,6 @@ jobs:
         with:
           name: kitgen-runtime-${{ needs.verify-and-package.outputs.version }}
           path: ${{ runner.temp }}/pkg
-      - uses: actions/setup-python@v5
-        id: py
-        with:
-          python-version: "3.13"
-
       # Nếu runner lỡ có `node` ngay trong PATH tối thiểu thì cả job này vô nghĩa —
       # phải ĐỎ ngay tại đây chứ không được xanh giả.
       - name: PATH toi thieu phai that su trong node
@@ -243,8 +201,6 @@ jobs:
             echo "PATH   = $PATH"
             echo "node   = $(command -v node    || echo "(khong co)")"
             echo "npm    = $(command -v npm     || echo "(khong co)")"
-            echo "python3= $(command -v python3 || echo "(khong co)")"
-            command -v python3 >/dev/null && python3 -V 2>&1 || true
           '
           if env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/sh -c 'command -v node >/dev/null 2>&1'; then
             echo "::error::runner co san node NGAY TRONG PATH toi thieu - ca nay khong con la chan dung may nguoi dung, sua lai danh sach thu muc"
@@ -253,18 +209,15 @@ jobs:
           echo "OK  PATH toi thieu khong co node (dung chan dung may nguoi dung)"
 
       # Cài THẬT, trong HOME tạm, PATH tối thiểu. `--no-start` để không đụng launchd
-      # của runner; mọi bước còn lại (Node riêng, venv, pip, npm Codex CLI, npm resvg)
-      # đều chạy đủ — đó mới là đoạn đường có bug.
+      # của runner; mọi bước còn lại (Node riêng, Codex CLI chính thức) đều chạy đủ —
+      # đó mới là đoạn đường có bug.
       - name: Cai dat trong PATH toi thieu (khong co node)
         shell: bash
-        env:
-          PYBIN: ${{ steps.py.outputs.python-path }}
         run: |
           set -u
           tar="$(ls "$RUNNER_TEMP"/pkg/kitgen-runtime-*.tar.gz | head -1)"
           [ -f "$tar" ] || { echo "::error::khong thay tarball runtime trong artifact"; exit 1; }
           echo "goi: $tar"
-          echo "python cho engine: $PYBIN ($("$PYBIN" -V 2>&1))"
           H="$RUNNER_TEMP/fakehome"
           mkdir -p "$H"
           log="$RUNNER_TEMP/install-macos.log"
@@ -273,7 +226,6 @@ jobs:
             HOME="$H" \
             PATH=/usr/bin:/bin:/usr/sbin:/sbin \
             KITGEN_HOME="$H/.kitgen" \
-            KITGEN_PYTHON3="$PYBIN" \
             bash kit-gen/install.sh \
               --archive "$tar" --workspace "$H/KitGen" --port 8899 --no-start > "$log" 2>&1
           code=$?
@@ -291,9 +243,11 @@ jobs:
             echo "::error file=kit-gen/install.sh::npm chay bang shebang '#!/usr/bin/env node' ma Node rieng khong co trong PATH. Bo sung/giu dong PATH=\"\$(dirname \"\$NODE\"):\$PATH\" ngay sau khoi tai Node."
             rc=1
           fi
-          # Phai di QUA duoc buoc Codex CLI, khong duoc dung truoc do.
-          grep -q '\[3/7\]' "$log" || { echo "::error::log khong den buoc [3/7] Codex CLI"; rc=1; }
-          grep -q '\[7/7\]' "$log" || { echo "::error::log khong den buoc [7/7] - installer dung giua chung"; rc=1; }
+          # Phai di QUA duoc buoc Codex CLI, khong duoc dung truoc do. CON SO PHAI KHOP
+          # `progress` cua install.sh: no in [1/6]..[6/6]. Hai dong nay tung do [3/7]/[7/7]
+          # — mot so buoc khong con ton tai, nghia la ca nay DO mot thu khong bao gio in ra.
+          grep -q '\[3/6\]' "$log" || { echo "::error::log khong den buoc [3/6] Codex CLI"; rc=1; }
+          grep -q '\[6/6\]' "$log" || { echo "::error::log khong den buoc [6/6] - installer dung giua chung"; rc=1; }
           for f in "$H/.kitgen/tools/node/bin/node" \
                    "$H/.kitgen/current/agent/server.mjs" \
                    "$H/.kitgen/bin/kitgen"; do
@@ -302,6 +256,14 @@ jobs:
           # Codex: tu 24/08/2026 chi con MOT duong cai — installer CHINH THUC cua
           # OpenAI (~/.local/bin/codex); duong npm da bo han (ban npm gen hong).
           [ -x "$H/.local/bin/codex" ] || { echo "::error::thieu $H/.local/bin/codex (codex chinh thuc)"; rc=1; }
+          # ENGINE JS PHAI CO MAT, VA PYTHON PHAI KHONG. Day la ca duy nhat chay installer
+          # THAT tren mot HOME trang, nen no la cho duy nhat phat hien duoc "van tai Python
+          # o mot nhanh nao do" hay "van chep engine vao workspace".
+          [ -f "$H/.kitgen/current/agent/engine/cli.mjs" ] \
+            || { echo "::error::thieu cua vao engine JS trong ban da cai"; rc=1; }
+          for bad in "$H/.kitgen/tools/python" "$H/KitGen/.venv" "$H/KitGen/.kitgen/engine"; do
+            [ ! -e "$bad" ] || { echo "::error::installer van de lai $bad - KitGen chi con can Node"; rc=1; }
+          done
           [ "$rc" -eq 0 ] && echo "OK  cai xong ma 0 trong PATH khong co node; Codex CLI chinh thuc da vao ~/.local/bin"
           exit $rc
 

@@ -3,8 +3,10 @@
 #
 #  VÌ SAO CÓ FILE NÀY: bản port Windows (scripts/install.ps1 + agent/lib/platform.mjs)
 #  được viết TRÊN macOS và CHƯA TỪNG chạy trên một máy Windows nào (docs/WINDOWS-PORT.md
-#  §6.1). Runner `windows-latest` của GitHub có sẵn ĐÚNG bộ tiền đề mà installer đòi:
-#  Git for Windows (bash + coreutils ở <Git>\usr\bin), Python 3, tar.exe, Node.
+#  §6.1). Runner `windows-latest` của GitHub có `tar.exe` + `git.exe` — đủ để CHÍNH
+#  workflow này chạy. Installer thì nay chỉ còn đòi `tar.exe`: từ 16/09/2026 nó không
+#  cần Git for Windows (engine thôi là bash) và cũng không cần Python (engine thôi là
+#  python3) — cả hai đều là JS chạy bằng Node riêng của KitGen.
 #  ⇒ mỗi lượt push là một máy Win sạch, lỗi báo về ngay, không phải chờ mượn máy thật.
 #
 #  KHÔNG gắn vào kitgen-release.yml: bản Mac không được chờ và không được đỏ vì bản
@@ -231,9 +233,8 @@ jobs:
           cd kit-gen
           bash -n install.sh
           bash -n scripts/build-runtime.sh
-          bash -n agent/test-fixtures/engine-fake/gen.sh
-          bash -n agent/test-fixtures/engine-fake/cover.sh
-          bash -n agent/test-fixtures/engine-slow/gen.sh
+          # Engine giả của bộ ca nay là .mjs (commit b8bed60), nên `bash -n` không còn
+          # gì để soi ở đó; `node --check` của test-agent lo phần ấy.
           echo 'OK  bash -n sach'
 
   # ────────────────────────────────────────────────────────────────────────────
@@ -306,21 +307,24 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $bad = @()
+          # bash.exe CHỈ CÒN LÀ GHI NHẬN. Trước 16/09/2026 nó là tiền đề của installer
+          # (engine là `gen.sh`), nên thiếu là đỏ. Engine nay là JS: installer.ps1 không
+          # dò bash nữa, và `lib/update.mjs` trên Windows chạy install.ps1 qua
+          # powershell.exe. Đòi nó ở đây là đòi máy phải bẩn đúng chỗ mà máy người dùng
+          # thật thì trống trơn.
           $bash = 'C:\Program Files\Git\bin\bash.exe'
-          if (Test-Path -LiteralPath $bash) {
-            Write-Host ("OK   bash   : {0}" -f $bash)
-            Write-Host ("     coreutils <Git>\usr\bin\grep.exe: {0}" -f (Test-Path 'C:\Program Files\Git\usr\bin\grep.exe'))
-          } else { $bad += 'bash.exe cua Git for Windows' }
+          if (Test-Path -LiteralPath $bash) { Write-Host ("ghi nhan bash   : {0} (installer KHONG con doi)" -f $bash) }
+          else { Write-Host 'ghi nhan bash   : khong co (giong may nguoi dung — va nay la du)' }
           # BẮT BUỘC = thứ CHÍNH WORKFLOW này cần để chạy (giải nén gói, checkout).
           foreach ($exe in 'tar.exe', 'git.exe') {
             $c = Get-Command $exe -ErrorAction SilentlyContinue
             if ($c) { Write-Host ("OK   {0,-10}: {1}" -f $exe, $c.Source) } else { $bad += $exe }
           }
           # CHỈ GHI NHẬN, KHÔNG BẮT BUỘC — và đây là một sửa lỗi có chủ đích:
-          # trước đây job này BÁO LỖI NẾU RUNNER THIẾU node.exe/python.exe, tức là nó
-          # ĐÒI máy phải bẩn đúng chỗ mà máy người dùng thật thì trống trơn. Installer
-          # phải tự mang Node/Python riêng; nếu nó lỡ dựa vào bản của máy thì đó là BUG
-          # cần đỏ, không phải tiền đề cần khai. Cứ in ra để đọc log, nhưng không chặn.
+          # trước đây job này BÁO LỖI NẾU RUNNER THIẾU node.exe, tức là nó ĐÒI máy phải
+          # bẩn đúng chỗ mà máy người dùng thật thì trống trơn. Installer phải tự mang
+          # Node riêng; nếu nó lỡ dựa vào bản của máy thì đó là BUG cần đỏ, không phải
+          # tiền đề cần khai. Cứ in ra để đọc log, nhưng không chặn.
           foreach ($exe in 'python.exe', 'node.exe') {
             $c = Get-Command $exe -ErrorAction SilentlyContinue
             if ($c) { Write-Host ("ghi nhan {0,-10}: {1} (installer KHONG duoc phu thuoc)" -f $exe, $c.Source) }
@@ -446,7 +450,6 @@ jobs:
           $need = @(
             'manifest.sha256 hop le',
             'OK   runtime',
-            'shim python3',
             'dung Codex da co',
             'config.json',
             'bo qua theo -NoStart'
@@ -481,27 +484,40 @@ jobs:
           $must = @(
             (Join-Path $home_ 'bin\kitgen.cmd'),
             (Join-Path $home_ 'bin\kitgen-hidden.vbs'),
-            (Join-Path $home_ 'bin\python3'),
             (Join-Path $home_ 'config.cmd'),
             (Join-Path $home_ 'install.ps1'),
             (Join-Path $home_ 'tools\node\node.exe'),
             (Join-Path $home_ 'tools\node\npm.cmd'),
             (Join-Path $home_ "releases\$ver\VERSION"),
             (Join-Path $home_ "releases\$ver\agent\server.mjs"),
-            (Join-Path $home_ "releases\$ver\engine\gen.sh"),
-            (Join-Path $home_ "releases\$ver\engine\cover.sh"),
-            (Join-Path $home_ "releases\$ver\engine\slice.py"),
+            # Engine JS đi CÙNG agent trong gói; `cli.mjs` là cửa vào duy nhất mà agent
+            # spawn, và cũng là dấu nhận diện gói của install.ps1::Test-ReleaseDir.
+            (Join-Path $home_ "releases\$ver\agent\engine\cli.mjs"),
+            (Join-Path $home_ "releases\$ver\agent\engine\slice.mjs"),
+            (Join-Path $home_ "releases\$ver\agent\engine\cover.mjs"),
+            (Join-Path $home_ "releases\$ver\element-lib.json"),
             (Join-Path $home_ "releases\$ver\app\index.html"),
             (Join-Path $home_ "releases\$ver\manifest.sha256"),
             (Join-Path $ws '.kitgen\config.json'),
-            (Join-Path $ws '.kitgen\engine\gen.sh'),
-            (Join-Path $ws '.kitgen\engine\slice.py'),
-            (Join-Path $ws 'projects'),
-            (Join-Path $ws '.venv\Scripts\python.exe')
+            (Join-Path $ws 'projects')
           )
           $miss = @($must | Where-Object { -not (Test-Path -LiteralPath $_) })
           if ($miss.Count -gt 0) {
             foreach ($m in $miss) { Write-Host ("::error::thieu {0}" -f $m) }
+            exit 1
+          }
+          # VÀ NHỮNG THỨ PHẢI KHÔNG CÓ. Đây là nơi duy nhất chạy installer THẬT trên một
+          # máy Windows, nên nó là nơi duy nhất bắt được "vẫn còn một nhánh tải Python"
+          # hay "vẫn chép engine vào workspace".
+          $cam = @(
+            (Join-Path $home_ 'tools\python'),
+            (Join-Path $home_ 'bin\python3'),
+            (Join-Path $ws '.venv'),
+            (Join-Path $ws '.kitgen\engine')
+          )
+          $thua = @($cam | Where-Object { Test-Path -LiteralPath $_ })
+          if ($thua.Count -gt 0) {
+            foreach ($x in $thua) { Write-Host ("::error::installer van de lai {0} - KitGen chi con can Node" -f $x) }
             exit 1
           }
           # `current` la junction (NTFS, khong can quyen admin). Installer coi that bai la
@@ -543,26 +559,20 @@ jobs:
             if ($m.Success) { $vars[$m.Groups[1].Value] = $m.Groups[2].Value }
           }
           foreach ($k in 'KITGEN_HOME', 'KITGEN_SOURCE', 'KITGEN_WORKSPACE', 'KITGEN_PORT', 'KITGEN_ORIGIN',
-                         'KITGEN_NODE', 'KITGEN_CODEX_BIN', 'KITGEN_PYTHON', 'KITGEN_BASH', 'NODE_PATH',
+                         'KITGEN_NODE', 'KITGEN_CODEX_BIN', 'NODE_PATH',
                          'KITGEN_RELEASE_MANIFEST') {
             if (-not $vars.ContainsKey($k) -or -not $vars[$k]) { Write-Host ("::error::config.cmd thieu/rong {0}" -f $k); $fail = 1 }
           }
           if ($vars.ContainsKey('KITGEN_CODEX_PROFILE')) { Write-Host '::error::config.cmd: van con KITGEN_CODEX_PROFILE (ho so anh rieng da bo)'; $fail = 1 }
+          # KITGEN_PYTHON / KITGEN_BASH da bo 16/09/2026 cung engine bash+python. Con
+          # lai trong config.cmd nghia la installer van tro vao mot thu khong ton tai.
+          foreach ($k in 'KITGEN_PYTHON', 'KITGEN_BASH') {
+            if ($vars.ContainsKey($k)) { Write-Host ("::error::config.cmd: van con {0} (da bo cung engine bash/python)" -f $k); $fail = 1 }
+          }
           if ($vars['KITGEN_PORT'] -ne '8765')              { Write-Host '::error::config.cmd: KITGEN_PORT != 8765'; $fail = 1 }
-          foreach ($k in 'KITGEN_BASH', 'KITGEN_PYTHON', 'KITGEN_NODE') {
-            if ($vars[$k] -and -not (Test-Path -LiteralPath $vars[$k])) {
-              Write-Host ("::error::config.cmd: {0} tro toi file khong ton tai: {1}" -f $k, $vars[$k]); $fail = 1
-            }
+          if ($vars['KITGEN_NODE'] -and -not (Test-Path -LiteralPath $vars['KITGEN_NODE'])) {
+            Write-Host ("::error::config.cmd: KITGEN_NODE tro toi file khong ton tai: {0}" -f $vars['KITGEN_NODE']); $fail = 1
           }
-
-          # ③ shim python3 — bash cua Git-Bash chi chay duoc khi KHONG BOM va xuong dong LF
-          $shim = Join-Path $home_ 'bin\python3'
-          $bytes = [IO.File]::ReadAllBytes($shim)
-          if ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
-            Write-Host '::error::shim python3 co BOM - bash se bao "bad interpreter"'; $fail = 1
-          }
-          if ($bytes -contains 0x0D) { Write-Host '::error::shim python3 co CR (CRLF) - bash se bao "bad interpreter"'; $fail = 1 }
-          Write-Host ("shim python3:`n{0}" -f [Text.Encoding]::UTF8.GetString($bytes))
           exit $fail
 
       - name: Kiểm lệnh kitgen.cmd
@@ -751,22 +761,6 @@ jobs:
           if (-not $p.HasExited) { & taskkill /PID $p.Id /T /F 2>&1 | Out-Null }
           exit $bad
 
-      # §7 buoc 12 cua checklist, chay tu dong: gen.sh goi `python3`, Windows khong co
-      # lenh do — shim + PATH cua Git-Bash phai bu duoc.
-      - name: Kiểm shim python3 chạy được trong Git-Bash
-        shell: bash
-        run: |
-          set -eu
-          home_="$(cygpath -u "$LOCALAPPDATA")/KitGen"
-          export PATH="$home_/bin:$PATH"
-          echo "PATH co: $home_/bin"
-          command -v python3
-          python3 -c "import sys; print('python3 shim OK ->', sys.version.split()[0])"
-          python3 - <<'PY'
-          import json
-          print("heredoc python3 OK ->", json.dumps({"ok": True}))
-          PY
-
       # WINDOWS-PORT §9.3: "chua kiem build-runtime.sh co chay duoc trong Git-Bash khong".
       # Kiem tai day. webapp/dist duoc khoi phuc tu chinh goi da dung o job 2 nen buoc nay
       # KHONG phai chay npm/vite tren Windows (cham va khong lien quan den cau hoi).
@@ -862,7 +856,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          foreach ($exe in 'node.exe', 'python.exe', 'git.exe', 'taskkill.exe') {
+          foreach ($exe in 'node.exe', 'git.exe', 'taskkill.exe') {
             $c = Get-Command $exe -ErrorAction SilentlyContinue
             Write-Host ("{0,-14}: {1}" -f $exe, $(if ($c) { $c.Source } else { 'KHONG CO' }))
           }
@@ -879,39 +873,9 @@ jobs:
           }
           exit 0
 
-      # Bo ca spawn engine gia bang bash cua Git-Bash, va engine gia goi `python3` —
-      # lenh KHONG TON TAI tren Windows. May that duoc installer bu bang shim
-      # %LOCALAPPDATA%\KitGen\bin\python3; o day dung y het cach do (cung noi dung,
-      # cung LF/khong BOM) de bo ca chay dung dieu kien cua may da cai.
-      - name: Shim python3 cho Git-Bash (y hệt installer sinh ra)
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $py = (Get-Command python.exe -ErrorAction Stop).Source
-          $dir = "$env:RUNNER_TEMP\kg-shim"
-          New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          $lines = @(
-            '#!/usr/bin/env bash',
-            '# Ban sao shim ma install.ps1 sinh ra - Windows khong co lenh python3.',
-            ('exec "' + ($py -replace '\\', '/') + '" "$@"')
-          )
-          # KHONG BOM + xuong dong LF: BOM/CRLF trong shebang la bash bao "bad interpreter".
-          $enc = New-Object System.Text.UTF8Encoding($false)
-          [IO.File]::WriteAllText("$dir\python3", (($lines -join "`n") + "`n"), $enc)
-          Add-Content -LiteralPath $env:GITHUB_PATH -Value $dir
-          Write-Host ("shim: {0}\python3 -> {1}" -f $dir, $py)
-          exit 0
-
-      - name: Git-Bash thấy python3
-        shell: bash
-        run: |
-          set -eu
-          command -v python3
-          python3 -c "import sys; print(sys.version.split()[0])"
-
       # Defender quet THOI GIAN THUC tung file moi ghi va tung tien trinh moi spawn. Bo ca
       # nay lam dung hai viec do vai nghin lan (moi ca dung mot workspace tam, nhieu ca
-      # spawn bash/python that), nen tren runner no la thue phi lon nhat va la nghi can so
+      # spawn tien trinh that), nen tren runner no la thue phi lon nhat va la nghi can so
       # 1 cua vu treo 74 phut. Loai tru thu muc tam KHONG lam sai phep thu port: engine,
       # spawn, taskkill, duong dan van chay y het. May that cua user van co Defender, va
       # dieu do duoc ghi lai o WINDOWS-PORT muc 9.2 nhu mot ghi chu ve HIEU NANG, khong
@@ -927,74 +891,6 @@ jobs:
           } catch {
             Write-Host ('WARN khong loai tru duoc Defender: {0}' -f $_.Exception.Message)
           }
-          exit 0
-
-      # ── BÀN MỔ: engine giả chạy tay, in ra ĐÚNG những gì agent nhìn thấy ─────────
-      # Vòng 9 có 5 ca đỏ cùng một câu chuyện: engine chạy, agent đọc được "OK <job>",
-      # nhưng tới lúc đối chiếu sản phẩm thì `3/3 job khong ghi duoc anh`. Từ log của bộ
-      # ca KHÔNG phân biệt nổi ba khả năng: (a) file không được ghi, (b) tên file lệch
-      # (CR của CRLF chẳng hạn), (c) file có nhưng `mtime` bị đọc là CŨ HƠN lúc mở lượt.
-      # Bước này tái dựng đúng phép spawn của run-handle rồi in cả ba câu trả lời. Nó
-      # KHÔNG bao giờ làm đỏ job (chỉ để đọc), và chạy TRƯỚC bộ ca để log nằm ngay trên.
-      - name: Bàn mổ engine giả (chẩn đoán, không chặn)
-        shell: bash
-        continue-on-error: true
-        run: |
-          set -u
-          repo="$(pwd)"
-          d="$(cygpath -u "$RUNNER_TEMP")/enginelab"
-          rm -rf "$d"; mkdir -p "$d/raw" "$d/prompts" "$d/logs" "$d/kits"
-          cp "$repo/kit-gen/agent/test-fixtures/engine-fake/gen.sh" "$d/gen.sh"
-          cat > "$d/styles.json" <<'JSON'
-          {"styles":[{"id":"tet","vi":"Tet do"}],
-           "sheets":[{"id":"main","components":[]},{"id":"bg-home","components":[]},{"id":"props","components":[]}]}
-          JSON
-          cat > "$d/probe.mjs" <<'PROBE'
-          import { spawn } from "node:child_process"
-          import { readdirSync, statSync, writeFileSync } from "node:fs"
-          import { join } from "node:path"
-          const [dir, repo] = process.argv.slice(2)
-          const { bashCommand, pythonEnv } = await import(
-            new URL("kit-gen/agent/lib/platform.mjs", "file:///" + repo.replace(/\\/g, "/") + "/").href)
-          const marker = join(dir, ".t0")
-          writeFileSync(marker, "t0\n")
-          const t0wall = Date.now()
-          const t0fs = statSync(marker).mtimeMs
-          console.log("t0 dong ho JS   :", t0wall)
-          console.log("t0 he thong file:", t0fs, " lech(ms) =", t0wall - t0fs)
-          const b = bashCommand([join(dir, "gen.sh")])
-          console.log("lenh            :", b.cmd, JSON.stringify(b.args))
-          const child = spawn(b.cmd, b.args, {
-            cwd: dir, detached: true, stdio: ["ignore", "pipe", "pipe"],
-            env: { ...process.env, ...b.env, ...pythonEnv(), PATH: b.env.PATH ?? process.env.PATH },
-            windowsHide: true,
-          })
-          let out = "", err = ""
-          child.stdout.on("data", c => { out += c })
-          child.stderr.on("data", c => { err += c })
-          child.on("close", code => {
-            console.log("--- exit:", code, "---")
-            console.log("stdout (JSON, thay CR neu co):")
-            for (const l of out.split("\n")) if (l) console.log("   ", JSON.stringify(l))
-            if (err.trim()) console.log("stderr:\n" + err)
-            const raw = join(dir, "raw")
-            const files = readdirSync(raw)
-            console.log("raw/ co", files.length, "file")
-            const now = Date.now()
-            for (const f of files) {
-              const mt = statSync(join(raw, f)).mtimeMs
-              console.log("   ", JSON.stringify(f),
-                "mtimeMs=" + mt,
-                "| LUAT CU floor(mt/1000)>=floor(t0/1000) ->",
-                Math.floor(mt / 1000) >= Math.floor(t0wall / 1000),
-                "| LUAT MOI mt>=t0fs-2000 ->", mt >= t0fs - 2000,
-                "| mt-t0wall=" + Math.round(mt - t0wall) + "ms")
-            }
-            console.log("do tre cua dong ho file (now - mtime moi nhat):",
-              files.length ? Math.round(now - Math.max(...files.map(f => statSync(join(raw, f)).mtimeMs))) + "ms" : "n/a")
-          })
-          PROBE
-          node "$d/probe.mjs" "$d" "$repo"
           exit 0
 
       # PHEP THU THAT DAU TIEN cua platform.mjs. Do o day = loi port, phai sua that.
