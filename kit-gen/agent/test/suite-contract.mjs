@@ -40,6 +40,75 @@ export async function run({ api, pid, wsRoot, agentDir }) {
     ok(r.json.snapshot, "có snapshot")
     version = r.json.version
   })
+
+  /* ══ 423 GIẢ TRÊN WINDOWS: "ĐANG BỊ GIỮ" KHÔNG PHẢI "KHÔNG GHI ĐƯỢC" ═══════
+     CI Windows 15/09/2026 (run 34955842044) đỏ đúng một ca — `[vân tay]` — ở lời
+     `PUT /contract` NGAY SAU khi lượt vẽ đóng sổ: `expected 200, got 423`. 423 =
+     WORKSPACE_UNWRITABLE, và nó chỉ ra đời từ `toAgentError` khi một lời gọi đĩa ném
+     EACCES/EPERM. Cùng ca ấy XANH ở lần chạy 7 tiếng trước ⇒ không phải luật sai mà
+     là một cuộc ĐUA: `finish()` vừa kích job vẽ bìa chạy nền, job ấy mở
+     `contract.json` + `project.json` để đọc, và Windows từ chối `rename` đè lên file
+     đang có handle mở. Người dùng thật gặp đúng cảnh đó mỗi lần sửa một tấm rồi bấm
+     Lưu ngay sau khi vẽ xong — và nhận một câu "thư mục làm việc không ghi được" về
+     một thư mục ghi được hoàn toàn.
+     Không có máy Windows trong bộ ca, nên điều kiện ấy được BƠM THẲNG vào `rename`.
+     Ca này canh cả bốn vế của cách chữa, vì bỏ vế nào cũng hỏng theo một kiểu riêng. */
+  await it("[Windows] rename bị giữ (EACCES/EPERM) là ĐỢI RỒI THỬ LẠI, không phải 423 giả", async () => {
+    const { renameAtomic, writeJsonAtomic } = await import("../lib/fsx.mjs")
+    const held = code => { const e = new Error("access denied"); e.code = code; return e }
+
+    // ① Hai nhịp đầu bị giữ, nhịp ba nhả ⇒ lượt ghi phải ĐI TIẾP, và phải có ĐỢI
+    //    ở giữa (thử lại ngay lập tức thì handle kia chưa kịp nhả — vô nghĩa).
+    let calls = 0
+    const slept = []
+    await renameAtomic("tmp", "dich", {
+      rename: async () => { if (++calls < 3) throw held(calls === 1 ? "EACCES" : "EPERM") },
+      sleep: ms => { slept.push(ms); return Promise.resolve() },
+    })
+    eq(calls, 3, "thử lại tới khi handle được nhả")
+    eq(slept.length, 2, "có đợi giữa các nhịp")
+    ok(slept[1] > slept[0], `lùi dần: thấy ${slept.join(", ")}`)
+
+    // ② ENOENT KHÔNG được thử lại: ở run-handle.persist() nó là tín hiệu THẬT
+    //    "project đã sang thùng rác", thử lại chỉ làm chậm một kết luận đúng.
+    let enoent = 0
+    const gone = await renameAtomic("tmp", "dich", {
+      rename: async () => { enoent++; throw held("ENOENT") },
+      sleep: () => Promise.resolve(),
+    }).then(() => null, e => e)
+    eq(gone?.code, "ENOENT", "ném thẳng ENOENT")
+    eq(enoent, 1, "và chỉ gọi đúng MỘT lần")
+
+    // ③ Giữ mãi thì vẫn phải BUÔNG: workspace read-only thật vẫn được trả lời 423,
+    //    chứ không treo request vô hạn.
+    let forever = 0
+    const stuck = await renameAtomic("tmp", "dich", {
+      rename: async () => { forever++; throw held("EPERM") },
+      tries: 4, sleep: () => Promise.resolve(),
+    }).then(() => null, e => e)
+    eq(stuck?.code, "EPERM", "hết nhịp thì ném đúng lỗi gốc")
+    eq(forever, 4, "đúng số nhịp đã hẹn, không hơn")
+
+    // ④ DÂY NỐI. Ba vế trên đều xanh được với một hàm KHÔNG AI GỌI — mà cái hỏng
+    //    ngoài đời nằm ở `writeJsonAtomic`/`writeFileAtomic` (contract.json,
+    //    project.json, run.json, meta bìa đều đi qua đúng hai cửa ấy). Nên canh
+    //    thẳng: hai cửa ghi nguyên tử phải rename QUA vòng thử lại, không gọi thẳng.
+    const { readFile, rm } = await import("node:fs/promises")
+    const src = await readFile(new URL("../lib/fsx.mjs", import.meta.url), "utf8")
+    for (const fn of ["writeJsonAtomic", "writeFileAtomic"]) {
+      const at = src.indexOf(`export async function ${fn}(`)
+      ok(at >= 0, `${fn} còn trong fsx.mjs`)
+      const body = src.slice(at).split("\n}")[0]
+      ok(/\brenameAtomic\(/.test(body), `${fn} phải đổi tên qua renameAtomic`)
+      ok(!/\bawait rename\(/.test(body), `${fn} không được gọi thẳng rename`)
+    }
+    // …và cửa ấy vẫn ghi ra file đọc lại được.
+    const file = join(wsRoot, "projects", pid, "rename-atomic-probe.json")
+    await writeJsonAtomic(file, { ok: 1 })
+    eq(JSON.parse(await readFile(file, "utf8")).ok, 1, "writeJsonAtomic vẫn ghi xuống đĩa")
+    await rm(file, { force: true })
+  })
+
   await it("PUT với version LỆCH → 409 CONTRACT_CONFLICT + serverVersion + diffSummary", async () => {
     const g = await api("GET", `/api/projects/${pid}/contract`)
     const r = await api("PUT", `/api/projects/${pid}/contract`, {
