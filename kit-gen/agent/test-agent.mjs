@@ -19,6 +19,7 @@
      suite-import    /app/ same-origin · /bridge.html · redact
      suite-codex-login  nút đăng nhập device-auth: lọc theo danh sách trắng · mã dùng xong bỏ
      suite-engine-prompt engine JS: prompt so TỪNG BYTE với golden dựng từ gen.sh · hình học
+     suite-engine-slice  engine JS: cắt + hình học đầu ra so TỪNG PIXEL/TỪNG BYTE với golden dựng từ slice.py · codec PNG
    ========================================================================== */
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -42,6 +43,7 @@ import { run as runLibrary } from "./test/suite-library.mjs"
 import { run as runUpdateCure } from "./test/suite-update-cure.mjs"
 import { run as runCodexLogin } from "./test/suite-codex-login.mjs"
 import { run as runEnginePrompt } from "./test/suite-engine-prompt.mjs"
+import { run as runEngineSlice } from "./test/suite-engine-slice.mjs"
 
 const AGENT_DIR = dirname(fileURLToPath(import.meta.url))
 
@@ -99,6 +101,7 @@ await runImport({ ...base, pid })
 await runUpdateCure({ ...base })
 await runCodexLogin({ ...base })
 await runEnginePrompt({ ...base })
+await runEngineSlice({ ...base })
 
 /* Dọn workspace tạm. Trên Windows bước này ĐÃ TỪNG giết cả bộ ca (run 31784778492):
    `rmdir … ENOTEMPTY` ném ra ở top-level ⇒ unhandled rejection ⇒ tiến trình chết TRƯỚC

@@ -474,6 +474,10 @@ export class SystemExit extends Error {}
  * ╚═════════════════════════════════════════════════════════════════════════════╝ */
 
 const LOCK_NAME = ".manifest.node.lock"
+/* TUỔI THỌ của một ổ khoá ma — CỐ ĐỊNH, không lấy theo `timeout` của người gọi.
+   Lấy theo người gọi thì một lượt "chờ 0,2 giây rồi bỏ cuộc" sẽ coi ổ khoá vừa
+   đặt 0,2 giây trước là ma và CƯỚP nó — đúng cái mà ổ khoá sinh ra để chặn. */
+const LOCK_STALE_MS = MANIFEST_LOCK_TIMEOUT * 1000
 
 function lockIsStale(path, timeoutMs) {
   let info
@@ -509,7 +513,7 @@ export function acquireManifestLock(kitsDir, timeout = MANIFEST_LOCK_TIMEOUT, po
       return handle
     } catch (e) {
       if (e.code !== "EEXIST") throw e
-      if (lockIsStale(path, timeout * 1000)) { try { unlinkSync(path) } catch { /* đua */ } continue }
+      if (lockIsStale(path, LOCK_STALE_MS)) { try { unlinkSync(path) } catch { /* đua */ } continue }
       if (Date.now() >= deadline) {
         throw new SystemExit("slice.py: chờ quá lâu ổ khoá kits/manifest.json — "
           + "còn một lượt cắt khác đang chạy trong cùng thư mục")
