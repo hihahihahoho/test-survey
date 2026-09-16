@@ -1,74 +1,68 @@
-/* engine.mjs — adapter mỏng sang engine v1. KHÔNG sửa gen.sh / slice.py.
+/* engine.mjs — adapter mỏng sang ENGINE JS (`agent/engine/`).
  *
- * SỰ THẬT ĐÃ ĐỌC TỪ MÃ (không phải giả định):
- *   · gen.sh dòng 5:   `cd "$(dirname "$0")"` ; ROOT="$(pwd)"
- *   · slice.py:        HERE = dirname(abspath(__file__)) ; đọc HERE/styles.json + HERE/geometry.py,
- *                      ghi HERE/kits
- *   ⇒ engine neo mọi đường dẫn theo THƯ MỤC CHỨA SCRIPT, **không** theo cwd.
- *     Vì vậy chạy `bash <engine>/gen.sh` với cwd=<project> vẫn đọc styles.json của <engine>.
+ * ╔══ BƯỚC ④, 16/09/2026: AGENT THÔI SPAWN bash/python ════════════════════════╗
+ * ║ TRƯỚC: engine là `gen.sh` + `slice.py` + `geometry.py`, và cả ba neo đường   ║
+ * ║ dẫn theo THƯ MỤC CHỨA SCRIPT (`cd "$(dirname "$0")"` / `HERE = dirname(     ║
+ * ║ abspath(__file__))`). Agent vì thế phải COPY engine vào từng project để      ║
+ * ║ HERE = project — mỗi project mang theo một bản sao engine.                   ║
+ * ║ NAY: engine là JS, nằm trong gói agent, và nhận `<projectDir>` bằng argv.    ║
+ * ║   · `prepareEngine` KHÔNG chép file nào nữa (project chỉ còn là DỮ LIỆU);    ║
+ * ║   · `buildCommand` trả `node <engineDir>/cli.mjs <lệnh> <projectDir> …`;     ║
+ * ║   · `resolveEngine` tìm `cli.mjs`, không tìm `gen.sh`.                       ║
+ * ║ `gen.sh`/`slice.py` VẪN CÒN trong repo tới bước ⑤ (xoá cùng installer),      ║
+ * ║ nhưng KHÔNG còn đường nào của agent chạy tới chúng.                          ║
+ * ╚═════════════════════════════════════════════════════════════════════════════╝
  *
- * CÁCH XỬ LÝ: COPY engine vào chính thư mục project rồi chạy bản copy đó.
- *   → HERE = <project> ⇒ styles.json / raw / kits / prompts / logs đều nằm trong project
- *   → đúng tinh thần "project tự chứa" (architecture §2.2), không sửa một dòng engine nào.
- *
- * CHỐNG "ĐỔ QUOTA OAN": filter của gen.sh là SUBSTRING (dòng ~180), nên truyền "tet-main"
- * sẽ chạy luôn "tet-main2". Vì vậy pha gen KHÔNG dùng argv filter: agent ghi styles.json
- * **thu hẹp đúng tập job đã chọn** (đóng E7). Pha slice thì dùng argv vì slice.py so khớp
- * TẬP CHÍNH XÁC (`sid not in ONLY`).
+ * CHỐNG "ĐỔ QUOTA OAN": filter của `gen` là SUBSTRING (`prompts-io.mjs::match`), nên
+ * truyền "tet-main" sẽ chạy luôn "tet-main2". Vì vậy pha gen KHÔNG dùng argv filter:
+ * agent ghi styles.json **thu hẹp đúng tập job đã chọn** (đóng E7). Pha slice thì dùng
+ * argv vì `slice.mjs` so khớp TẬP CHÍNH XÁC (`!ONLY.has(sid)`).
  */
 import { spawn } from "node:child_process"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { homedir } from "node:os"
-import { exists, writeJsonAtomic, ensureDir, copyFile } from "./fsx.mjs"
-import { IS_WIN, bashCommand, pythonCommand, pythonEnv, killTree, winSpawnOpts } from "./platform.mjs"
+import { exists, writeJsonAtomic, ensureDir } from "./fsx.mjs"
+import { IS_WIN, killTree, winSpawnOpts } from "./platform.mjs"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO_DIR = resolve(HERE, "..", "..")
 
-/** File engine cần có cạnh nhau để chạy. Thiếu file tuỳ chọn thì engine tự fallback. */
-const ENGINE_FILES = [
-  { name: "gen.sh", required: true, mode: 0o755 },
-  { name: "slice.py", required: true },
-  /* geometry.py là BẮT BUỘC, và bắt buộc theo nghĩa mạnh nhất: cả hai file trên đều
-     `import geometry`. Thiếu nó thì gen.sh chết ở dòng import với một `ModuleNotFoundError`
-     mà người dùng không đọc ra được điều gì.
-     Từ 27/08/2026 nó thay chỗ của bộ khung xương (skeleton.html / skeleton-svg.js /
-     render-skeleton.mjs, đã xoá): prompt nay TỰ NÓI toạ độ safe zone thay vì đính một
-     tấm PNG vẽ khung, và toạ độ đó phải ra từ cùng hàm mà slice.py cắt.
-     `silhouettes.js` KHÔNG còn trong danh sách — engine không nạp nó nữa; file vẫn ở
-     repo vì webapp rút dữ liệu shape từ đó (features/design/scripts/extract-shapes.mjs). */
-  { name: "geometry.py", required: true },
-  { name: "element-lib.json", required: false },
-  { name: "validate_output_geometry.py", required: false },
-]
+/** Cửa vào của engine JS — file DUY NHẤT mà agent spawn. */
+export const ENGINE_CLI_NAME = "cli.mjs"
 
-/** Tìm engine: bản cài trong workspace (.kitgen/engine) trước, rồi bản repo (dev). */
+/** Thư mục engine đi kèm gói agent (`agent/engine`). Đây là engine của mọi máy thật;
+ *  `ws.engineDir` chỉ thắng khi ở đó có một bản engine JS mới hơn do installer đặt. */
+const BUILTIN_ENGINE_DIR = resolve(HERE, "..", "engine")
+
+/* DANH SÁCH FILE ENGINE PHẢI CHÉP VÀO PROJECT: KHÔNG CÒN CÁI NÀO, và đó là cả điểm
+   của bước ④. Trước đây nó là `gen.sh` · `slice.py` · `geometry.py` · `element-lib.json`
+   · `validate_output_geometry.py`. Engine JS đọc đúng MỘT file dữ liệu trong project —
+   `styles.json` — và file ấy do `materializeStyles()` ghi ra chứ không chép từ đâu cả
+   (đã soi: `prompts-io.mjs`, `prompt.mjs`, `gen.mjs`, `slice.mjs` không mở file nào
+   khác của engine; `element-lib.json` do `lib/templates.mjs` đọc THẲNG từ engineDir,
+   chưa bao giờ đọc bản chép trong project). Hằng số ở lại để nói ra điều đó thành lời
+   thay vì để lại một khoảng trống không ai giải thích. */
+export const ENGINE_FILES = []
+
+/** Tìm engine: bản cài trong workspace (.kitgen/engine) trước, rồi bản đi kèm agent.
+ *  `null` là "máy này không có engine nào" — trên máy thật KHÔNG BAO GIỜ xảy ra
+ *  (engine nằm trong chính gói agent đang chạy), nhưng test trỏ `ws.engineDir` sang
+ *  một engine giả và route vẫn phải có câu trả lời cho ca "không tìm thấy". */
 export async function resolveEngine(ws) {
-  for (const dir of [ws.engineDir, REPO_DIR]) {
-    if (await exists(join(dir, "gen.sh"))) return dir
+  for (const dir of [ws.engineDir, BUILTIN_ENGINE_DIR]) {
+    if (dir && await exists(join(dir, ENGINE_CLI_NAME))) return dir
   }
   return null
 }
 
-/** Copy engine vào project để HERE = project. Trả danh sách file đã đặt. */
+/** Trước đây: chép engine vào project để HERE = project. Nay KHÔNG CHÉP GÌ — chỉ đảm
+ *  bảo thư mục project có mặt. Giữ chữ ký cũ vì ba caller (`run-handle`, `sheet-kits`,
+ *  `renderPromptsOnly`) đều gọi nó ngay trước khi ghi `styles.json`, và "thư mục có
+ *  tồn tại không" vẫn là câu hỏi phải trả lời ở đúng chỗ ấy. */
 export async function prepareEngine(engineDir, projectDirAbs) {
   await ensureDir(projectDirAbs)
-  const placed = []
-  for (const f of ENGINE_FILES) {
-    const src = join(engineDir, f.name)
-    if (!(await exists(src))) {
-      if (f.required) throw new Error(`engine thiếu ${f.name}`)
-      continue
-    }
-    const dst = join(projectDirAbs, f.name)
-    await copyFile(src, dst)
-    // Bit thực thi không tồn tại trên NTFS: Node chmod ở đó chỉ lật cờ read-only.
-    // Bỏ hẳn trên win32 để không có tác dụng phụ nào ngoài ý muốn (gate: darwin/linux giữ nguyên).
-    if (f.mode && !IS_WIN) { const { chmod } = await import("node:fs/promises"); await chmod(dst, f.mode) }
-    placed.push(f.name)
-  }
-  return placed
+  return []
 }
 
 /* CHUẨN HOÁ SHAPE Ở ĐÚNG MỐI NỐI agent → engine.
@@ -168,32 +162,33 @@ export async function materializeStyles(projectDirAbs, contract, onlyJobs = null
 }
 
 /* ══ XEM TRƯỚC PROMPT (KITGEN_PROMPTS_ONLY) ═══════════════════════════════════
-   MỘT NGUỒN SỰ THẬT DUY NHẤT. Prompt được lắp trong gen.sh, nên bất kỳ bản "dựng
-   lại prompt bằng JS" nào ở agent cũng là bản SAO CHÉP — và bản sao thì trôi khỏi
+   MỘT NGUỒN SỰ THẬT DUY NHẤT. Prompt được lắp trong engine (`engine/prompt.mjs`), nên
+   bất kỳ bản "dựng lại prompt" nào ở tầng agent cũng là bản SAO CHÉP — và bản sao thì trôi khỏi
    bản gốc trong im lặng, đúng lúc người dùng đang tin nó để sửa câu chữ. Vì vậy
-   xem trước = CHẠY THẬT gen.sh, chỉ chặn nó lại trước vòng gọi codex.
+   xem trước = CHẠY THẬT engine, chỉ chặn nó lại trước vòng gọi codex.
    Rẻ và tất định: chỉ có khung xương + văn bản, không mạng, không quota.
 
    TRẦN THỜI GIAN là bắt buộc: đây là đường ĐỒNG BỘ của một request HTTP, không
-   phải run-store có nút Dừng. Hết giờ thì giết cả cây tiến trình (gen.sh đẻ node
-   + python) rồi vẫn TRẢ VỀ những gì đã kịp ghi — caller tự quyết. */
+   phải run-store có nút Dừng. Hết giờ thì giết cả cây tiến trình rồi vẫn TRẢ VỀ
+   những gì đã kịp ghi — caller tự quyết. */
 export const PROMPTS_ONLY_TIMEOUT_MS = 60_000
 
-/** Chạy gen.sh ở chế độ chỉ-dựng-prompt. Không ném: trả về phán quyết để caller xử. */
+/** Chạy engine ở chế độ chỉ-dựng-prompt. Không ném: trả về phán quyết để caller xử. */
 export async function renderPromptsOnly(engineDir, projectDirAbs, contract, { timeoutMs = PROMPTS_ONLY_TIMEOUT_MS } = {}) {
   await prepareEngine(engineDir, projectDirAbs)
   await materializeStyles(projectDirAbs, contract)
   for (const d of ["prompts", "logs"]) await ensureDir(join(projectDirAbs, d))
-  const { cmd, args, env } = buildCommand("gen", projectDirAbs, { maxJobs: 1 })
+  const { cmd, args, env } = buildCommand("gen", projectDirAbs, { maxJobs: 1, engineDir })
   return new Promise(done => {
     let child
     try {
       child = spawn(cmd, args, {
         cwd: projectDirAbs, detached: !IS_WIN, stdio: ["ignore", "pipe", "pipe"],
-        // KITGEN_PROMPTS_ONLY là CÔNG TẮC DUY NHẤT khác với một lượt gen thật —
-        // mọi thứ còn lại (bash của Git-Bash, PATH coreutils, PYTHONUTF8) phải y hệt,
-        // không thì "xem trước" lại xem một thứ khác với thứ sẽ chạy.
-        env: { ...process.env, ...env, KITGEN_PROMPTS_ONLY: "1", PATH: env.PATH ?? process.env.PATH },
+        // KITGEN_PROMPTS_ONLY là CÔNG TẮC DUY NHẤT khác với một lượt gen thật — mọi
+        // biến còn lại phải y hệt, không thì "xem trước" lại xem một thứ khác với thứ
+        // sẽ chạy. (Từ bước ④ không còn PATH riêng nào để giữ: tiến trình con là
+        // chính `process.execPath`, không đi qua shell.)
+        env: { ...process.env, ...env, KITGEN_PROMPTS_ONLY: "1" },
         ...winSpawnOpts(),
       })
     } catch (e) { return done({ code: -1, timedOut: false, output: `spawn failed: ${e?.message ?? e}` }) }
@@ -209,8 +204,18 @@ export async function renderPromptsOnly(engineDir, projectDirAbs, contract, { ti
   })
 }
 
-/** argv cho từng pha. Client chỉ gửi DANH TỪ; argv do agent dựng, không có chuỗi shell nào của client. */
-export function buildCommand(kind, projectDirAbs, { variants = [], sheets = null, maxJobs = 4, imgHome = null }) {
+/**
+ * argv cho từng pha. Client chỉ gửi DANH TỪ; argv do agent dựng, không có chuỗi shell
+ * nào của client — và từ bước ④ cũng không có SHELL nào: `cmd` luôn là `process.execPath`
+ * (chính binary node đang chạy agent), nên không còn phụ thuộc vào PATH, vào `bash` của
+ * Git for Windows, hay vào một `python3` mà máy người dùng có thể không có.
+ *
+ * `engineDir` mặc định là engine đi kèm agent; test trỏ nó sang engine giả.
+ */
+export function buildCommand(kind, projectDirAbs, {
+  variants = [], sheets = null, maxJobs = 4, imgHome = null, engineDir = null,
+} = {}) {
+  const cli = join(engineDir ?? BUILTIN_ENGINE_DIR, ENGINE_CLI_NAME)
   const env = {}
   if (kind === "gen") {
     env.MAXJOBS = String(maxJobs)
@@ -222,21 +227,21 @@ export function buildCommand(kind, projectDirAbs, { variants = [], sheets = null
       const raw = String(homeOverride)
       env.IMG_HOME = raw.startsWith("~") ? join(homedir(), raw.slice(1)) : raw
     }
-    // KHÔNG truyền argv filter: styles.json đã thu hẹp đúng tập job (filter của gen.sh là substring)
-    // bashCommand(): darwin/linux trả ĐÚNG {cmd:"bash", args:[abs], env:{}} như trước;
-    // win32 trả bash.exe của Git for Windows + path dạng /c/… + PATH có coreutils.
-    const b = bashCommand([join(projectDirAbs, "gen.sh")])
-    // pythonEnv(): gen.sh có heredoc `python3 - <<PY` đọc styles.json (UTF-8, có tiếng
-    // Việt). Trên Windows thiếu biến này là engine chết ngay dòng đầu. Non-win trả {}.
-    return { cmd: b.cmd, args: b.args, env: { ...env, ...b.env, ...pythonEnv() } }
+    // KHÔNG truyền argv filter: styles.json đã thu hẹp đúng tập job (filter của `gen`
+    // là substring — xem khối đầu file).
+    return { cmd: process.execPath, args: [cli, "gen", projectDirAbs], env }
   }
   if (kind === "slice") {
-    /* `--sheet=<id>` = CẮT LŨY TIẾN (slice.py: parse_cli). Không truyền `sheets` thì
+    /* `--sheet=<id>` = CẮT LŨY TIẾN (`slice.mjs: parseCli`). Không truyền `sheets` thì
        argv giống hệt bản cũ ⇒ pha cắt tổng cuối lượt không đổi một chữ. Chỉ nhận
        DANH TỪ có sẵn trong contract (caller là run-handle, không phải client). */
     const only = Array.isArray(sheets) && sheets.length ? sheets.map(s => `--sheet=${s}`) : []
-    const p = pythonCommand([join(projectDirAbs, "slice.py"), ...variants, ...only])
-    return { cmd: p.cmd, args: p.args, env: { ...env, ...pythonEnv() } }
+    return { cmd: process.execPath, args: [cli, "slice", projectDirAbs, ...variants, ...only], env }
+  }
+  if (kind === "validate") {
+    /* `validate_output_geometry.py` cũ. Caller truyền cờ đã dựng sẵn (`--image …`);
+       ở đây chỉ nối `<projectDir>` vào đầu cho cùng hình dạng với hai lệnh trên. */
+    return { cmd: process.execPath, args: [cli, "validate", projectDirAbs, ...variants], env }
   }
   /* KHÔNG CÒN `kind === "skeleton"`. Nó từng chạy `render-skeleton.mjs` cho nút "vẽ
      lại khung xương". Khung xương đã bỏ (xem khối đầu gen.sh), nên nhánh này không

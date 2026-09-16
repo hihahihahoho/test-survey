@@ -15,7 +15,7 @@ import { thumbnail } from "./thumbs.mjs"
 import { invalidateUsageCache } from "./usage.mjs"
 import { archiveRaw } from "./raw-history.mjs"
 import { archiveFingerprint, recordFingerprint } from "./fingerprints.mjs"
-import { IS_WIN, pythonCommand, pythonSpawnOpts, killTree, winSpawnOpts } from "./platform.mjs"
+import { IS_WIN, killTree, winSpawnOpts } from "./platform.mjs"
 
 const HEARTBEAT_MS = 15000
 export const MAX_BUFFER_EVENTS = 4000
@@ -282,10 +282,15 @@ export class RunHandle {
   async launch() {
     if (this.stopped()) return
     const engineDir = await resolveEngine(this.ws)
-    if (!engineDir) return this.failEnv("engine not installed (gen.sh not found)")
+    if (!engineDir) return this.failEnv("engine not installed (cli.mjs not found)")
     if (this.stopped()) return
+    /* NHỚ LẠI engine của lượt: chu trình per-sheet (`sliceSheet`) và phép kiểm hình
+       học chạy NGOÀI `launch()` nhưng phải dùng ĐÚNG engine này — test trỏ
+       `ws.engineDir` sang engine giả, và một lượt chạy nửa giả nửa thật không chứng
+       minh được điều gì. */
+    this.engineDir = engineDir
     const pdir = projectDir(this.ws, this.run.projectId)
-    // engine neo đường dẫn theo thư mục chứa script → copy engine vào project (xem engine.mjs)
+    // Engine JS không được chép vào project nữa; đây chỉ còn là "thư mục có tồn tại không".
     try { await prepareEngine(engineDir, pdir) }
     catch (e) { return this.failEnv(String(e?.message ?? e)) }
     if (this.stopped()) return
@@ -338,20 +343,21 @@ export class RunHandle {
     if (this.stopped()) return Promise.resolve()      // đã dừng → không spawn thêm tiến trình
     const vs = variants ?? [...new Set(this.run.jobs.map(j => j.variant))]
     const { cmd, args, env } = buildCommand(kind, pdir,
-      { variants: vs, maxJobs: this.run.maxJobs, imgHome: this.opts.imgHome })
+      { variants: vs, maxJobs: this.run.maxJobs, imgHome: this.opts.imgHome, engineDir })
     // Giữ promise để cancel() đợi được child chết + settleGenJobs()/persist() ghi xong.
     this.phaseDone = new Promise(done => {
       /* `detached: !IS_WIN` — hai lý do KHÁC NHAU trên hai hệ:
          · POSIX cần detached để killTree giết cả nhóm (`kill(-pid)`).
-         · Windows: DETACHED_PROCESS vô hiệu CREATE_NO_WINDOW (windowsHide) — con của
-           bash/python tự mở cửa sổ console MỚI nhấp nháy liên tục suốt lượt gen (lỗi
-           hiện trường 24/08/2026). killTree trên Windows dùng `taskkill /T` nên không
-           cần process group ⇒ bỏ detached là mất đúng cái popup, không mất gì khác. */
+         · Windows: DETACHED_PROCESS vô hiệu CREATE_NO_WINDOW (windowsHide) — tiến
+           trình con (nay là node, trước là bash/python) tự mở cửa sổ console MỚI nhấp
+           nháy liên tục suốt lượt gen (lỗi hiện trường 24/08/2026). killTree trên
+           Windows dùng `taskkill /T` nên không cần process group ⇒ bỏ detached là mất
+           đúng cái popup, không mất gì khác. */
       const child = spawn(cmd, args, {
         cwd: pdir, detached: !IS_WIN, stdio: ["ignore", "pipe", "pipe"],
-        // `env.PATH` CHỈ tồn tại trên win32 (bashCommand thêm coreutils của Git-Bash).
-        // Trên darwin/linux buildCommand không bao giờ đặt PATH ⇒ biểu thức này = mã cũ.
-        env: { ...process.env, ...env, PATH: env.PATH ?? process.env.PATH },
+        // `env` của buildCommand chỉ còn MAXJOBS/IMG_HOME: tiến trình con là chính
+        // `process.execPath`, không qua shell, nên không có PATH riêng nào để dựng.
+        env: { ...process.env, ...env },
         ...winSpawnOpts(),
       })
       this.child = child
@@ -653,15 +659,15 @@ export class RunHandle {
     return validation
   }
 
-  /** Cắt HẸP đúng một tấm: `slice.py <variant> --sheet=<sheet>`.
-   *  Chạy NGOÀI `runPhase` vì pha chính (gen.sh) vẫn đang chạy — `this.child` và
+  /** Cắt HẸP đúng một tấm: `cli.mjs slice <project> <variant> --sheet=<sheet>`.
+   *  Chạy NGOÀI `runPhase` vì pha chính (gen) vẫn đang chạy — `this.child` và
    *  `this.phaseDone` thuộc về nó, ghi đè là cancel() giết nhầm tiến trình.
    *  Thân lượt cắt nằm ở `sliceSheetOnce` (cuối file) — CÙNG MỘT đường mà route đổi
    *  phiên bản gọi lại, xem khối chú thích của nó. */
   sliceSheet(pdir, j) {
     if (this.detached || this.finished) return Promise.resolve(null)
     return sliceSheetOnce(pdir, {
-      variant: j.variant, sheet: j.sheet,
+      variant: j.variant, sheet: j.sheet, engineDir: this.engineDir,
       onLine: (line, level) => this.emit({ type: "job.log", job: j.job, level, line }),
       onSpawn: child => this.sideChildren.add(child),
       onSettle: child => this.sideChildren.delete(child),
@@ -771,12 +777,19 @@ export class RunHandle {
   }
 
   async validateGeometry(pdir, png, job) {
-    const tool = join(pdir, "validate_output_geometry.py")
-    if (!(await exists(tool))) return null
+    /* `validate_output_geometry.py` cũ, nay là `cli.mjs validate` (bước ④). Vẫn chạy
+       trong TIẾN TRÌNH RIÊNG chứ không gọi thẳng hàm: nó giải mã cả tấm PNG 1536×1024
+       và quét từng pixel — hàng trăm ms CPU — mà agent chỉ có một luồng, đang bơm
+       event của lượt gen ra cho web. Trần thời gian + killTree ở dưới cũng chỉ có
+       nghĩa khi đây là một tiến trình. */
+    const engineDir = this.engineDir ?? (await resolveEngine(this.ws))
+    if (!engineDir) return null
     const output = join(this.dir, "artifacts", `${job}.geometry.json`)
-    const py = pythonCommand([tool, "--image", png, "--contract", join(pdir, "contract.json"), "--job", job, "--output", output])
+    const { cmd, args, env } = buildCommand("validate", pdir, {
+      engineDir,
+      variants: ["--image", png, "--contract", join(pdir, "contract.json"), "--job", job, "--output", output],
+    })
     return new Promise(resolve => {
-      // pythonSpawnOpts(): công cụ này đọc contract.json (UTF-8, tiếng Việt) — xem platform.mjs.
       let child
       try {
         /* `detached: !IS_WIN` — CÙNG LÝ DO với runPhase/sliceSheet, và nay nó là điều
@@ -784,8 +797,9 @@ export class RunHandle {
            chỉ trỏ đúng nhóm khi tiến trình con LÀ trưởng nhóm. Không detached thì lệnh
            đó hoặc trượt hoặc trỏ nhầm nhóm khác. Trên Windows KHÔNG detached (giữ
            windowsHide, tránh popup console) — ở đó killTree dùng `taskkill /T`. */
-        child = spawn(py.cmd, py.args, {
-          cwd: pdir, detached: !IS_WIN, stdio: ["ignore", "pipe", "pipe"], ...pythonSpawnOpts(),
+        child = spawn(cmd, args, {
+          cwd: pdir, detached: !IS_WIN, stdio: ["ignore", "pipe", "pipe"],
+          env: { ...process.env, ...env }, ...winSpawnOpts(),
         })
       } catch { return resolve(null) }
       this.sideChildren.add(child)
@@ -797,10 +811,8 @@ export class RunHandle {
         this.sideChildren.delete(child)
         resolve(v)
       }
-      /* TRẦN THỜI GIAN + KILLTREE. `python` ở đây có thể là launcher (`py -3` trên
-         Windows) nên tiến trình thật là CHÁU — `child.kill()` giết vỏ mà để lại ruột;
-         killTree là đường duy nhất giết đủ. Hết giờ thì coi như "không kiểm được",
-         KHÔNG phải lỗi của lượt chạy: ảnh đã tới web từ nhịp 1 và vẫn dùng được. */
+      /* TRẦN THỜI GIAN + KILLTREE. Hết giờ thì coi như "không kiểm được", KHÔNG phải
+         lỗi của lượt chạy: ảnh đã tới web từ nhịp 1 và vẫn dùng được. */
       const timer = setTimeout(() => {
         this.emit({
           type: "job.log", job, level: "warn",
@@ -1038,7 +1050,7 @@ function lineReader(stream, onLine) {
 }
 
 /**
- * MỘT LƯỢT `slice.py <variant> --sheet=<sheet>` — CHỖ DUY NHẤT CẮT MỘT TẤM.
+ * MỘT LƯỢT `slice <variant> --sheet=<sheet>` — CHỖ DUY NHẤT CẮT MỘT TẤM.
  *
  * ╔══ VÌ SAO NÓ RỜI KHỎI THÂN LỚP ═══════════════════════════════════════════╗
  * ║ Từ 09/09/2026 việc "đổi phiên bản ảnh gốc" cắt lại NGAY trong request đổi ║
@@ -1053,8 +1065,10 @@ function lineReader(stream, onLine) {
  * để lượt chạy còn ghi được tiến trình con vào sổ (`cancel()` phải giết được nó);
  * caller ngoài lượt chạy bỏ trống cả hai.
  */
-export function sliceSheetOnce(pdir, { variant, sheet, onLine = () => {}, onSpawn = () => {}, onSettle = () => {} }) {
-  const { cmd, args, env } = buildCommand("slice", pdir, { variants: [variant], sheets: [sheet] })
+export function sliceSheetOnce(pdir, {
+  variant, sheet, engineDir = null, onLine = () => {}, onSpawn = () => {}, onSettle = () => {},
+}) {
+  const { cmd, args, env } = buildCommand("slice", pdir, { variants: [variant], sheets: [sheet], engineDir })
   const t0 = Date.now()
   return new Promise(resolve => {
     let child
@@ -1062,7 +1076,7 @@ export function sliceSheetOnce(pdir, { variant, sheet, onLine = () => {}, onSpaw
       // `detached: !IS_WIN` — cùng lý do với runPhase: Windows cần windowsHide sống.
       child = spawn(cmd, args, {
         cwd: pdir, detached: !IS_WIN, stdio: ["ignore", "pipe", "pipe"],
-        env: { ...process.env, ...env, PATH: env.PATH ?? process.env.PATH },
+        env: { ...process.env, ...env },
         ...winSpawnOpts(),
       })
     } catch (e) { return resolve({ ok: false, code: `spawn: ${e?.message ?? e}`, durationMs: Date.now() - t0 }) }

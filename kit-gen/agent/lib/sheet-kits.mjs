@@ -50,7 +50,7 @@ export async function resliceSheet(ws, id, job) {
     await materializeStyles(pdir, contract, [parts])
     await ensureDir(join(pdir, "kits"))
   } catch (e) { return { ok: false, reason: "ENGINE_PREPARE_FAILED", detail: String(e?.message ?? e) } }
-  const res = await sliceSheetOnce(pdir, { variant: parts.variant, sheet: parts.sheet })
+  const res = await sliceSheetOnce(pdir, { variant: parts.variant, sheet: parts.sheet, engineDir })
   return { ok: res?.ok === true, code: res?.code ?? null, durationMs: res?.durationMs ?? null }
 }
 

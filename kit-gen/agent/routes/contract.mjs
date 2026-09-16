@@ -76,7 +76,7 @@ export function register(r) {
 
     const engineDir = await resolveEngine(ws)
     if (!engineDir)
-      fail("PROMPT_PREVIEW_FAILED", "engine not installed (gen.sh not found)", { details: { reason: "ENGINE_MISSING" } })
+      fail("PROMPT_PREVIEW_FAILED", "engine not installed (cli.mjs not found)", { details: { reason: "ENGINE_MISSING" } })
 
     const pdir = projectDir(ws, id)
     const jobs = contractJobs(contract)
