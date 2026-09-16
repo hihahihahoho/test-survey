@@ -36,8 +36,10 @@ bash setup.sh
 
 Script sẽ hỏi bạn muốn đặt thư mục làm việc ở đâu. Cứ **Enter** để lấy gợi ý sẵn (`~/KitGen`).
 
-Nó tự kiểm tra và chuẩn bị: Node.js, Python, các thư viện cắt ảnh, codex CLI, thư mục làm việc,
-rồi bật công cụ local. **Mỗi bước đều in rõ OK hay lỗi; lỗi nào cũng kèm dòng "phải làm".**
+Nó tự kiểm tra và chuẩn bị: Node.js, codex CLI, thư mục làm việc, rồi bật công cụ local.
+**Mỗi bước đều in rõ OK hay lỗi; lỗi nào cũng kèm dòng "phải làm".**
+
+(Từ 16/09/2026 KitGen **không cần Python** nữa — bộ cắt ảnh nay chạy bằng chính Node.)
 
 Muốn xem trước script sẽ làm gì mà **chưa** thay đổi gì trên máy:
 
@@ -190,21 +192,18 @@ Vì mỗi lượt tạo ảnh ăn quota gấp 3–5 lần câu chat thường, m
 
 ### Thiếu thư viện cắt ảnh (Pillow)
 
-Nếu script báo không cài được, thường là do mạng hoặc proxy công ty. Chạy lại:
-
-```bash
-"$HOME/KitGen/.venv/bin/python" -m pip install pillow
-```
-
-(thay `$HOME/KitGen` bằng thư mục làm việc của bạn). Log đầy đủ ở `<thư-mục-làm-việc>/.kitgen/pip-install.log`.
-
-`pillow` là thư viện Python **duy nhất** công cụ cần.
+**Mục này không còn áp dụng từ 16/09/2026.** Bộ cắt ảnh nay là JavaScript, chạy bằng
+chính Node.js mà KitGen tự mang theo: không Python, không `.venv`, không `pip`, nên cũng
+không còn bước nào để hỏng vì mạng hay proxy công ty. Máy đã cài bản cũ thì lượt **Cập
+nhật** kế tiếp sẽ tự xoá `~/KitGen/.venv` và bản Python riêng, kèm một dòng nói dọn bao
+nhiêu MB.
 
 ### Gỡ bản cũ, cài bản mới tinh
 
 Bản cũ (2.1.44 trở về trước) để lại trên máy khoảng **1 GB** thứ nay không còn ai gọi:
 môi trường Python nặng (`numpy`/`scipy`/`pymatting`, ~314 MB) và một bộ Chromium đóng gói
-riêng (~790 MB). Bấm **Cập nhật** thì đống đó vẫn nằm lại. Muốn máy sạch hẳn thì gỡ rồi cài lại:
+riêng (~790 MB). Bản mới **không cài Python** chút nào. Bấm **Cập nhật** thì bản mới đã tự
+dọn phần Python; muốn máy sạch hẳn (kể cả Chromium đời cũ) thì gỡ rồi cài lại:
 
 1. **Gỡ (giữ dữ liệu).** Dùng bộ Easy Install: chạy `uninstall.command` (macOS) hoặc
    `uninstall.bat` (Windows), khi được hỏi có xoá dữ liệu không thì trả lời `n` / cứ Enter.
@@ -215,8 +214,9 @@ Project trong `~/KitGen/projects` và cấu hình `~/KitGen/.kitgen/config.json`
 Bước 1 chỉ dọn thêm phần chạy mà installer dựng lại được: `~/KitGen/.venv` và
 `~/KitGen/.kitgen/engine`. Muốn xoá sạch cả dữ liệu thì ở bước 1 trả lời `y`/`Y`.
 
-Từ bản này, installer cũng **tự dọn**: thấy `numpy`/`scipy`/`pymatting`/`numba`/`llvmlite`
-trong `.venv` là nó xoá venv rồi dựng lại chỉ với Pillow (~4 MB), và in ra một dòng nói rõ.
+Từ 16/09/2026, chỉ cần bấm **Cập nhật** là installer cũng **tự dọn**: bản Python riêng
+(`~/.kitgen/tools/python`), `~/KitGen/.venv` và bản chép engine cũ
+(`~/KitGen/.kitgen/engine`) đều bị xoá, kèm một dòng nói dọn bao nhiêu MB.
 
 ### Muốn đổi thư mục làm việc
 

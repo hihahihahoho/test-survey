@@ -36,6 +36,11 @@ Bản cũ (2.1.44 trở về trước) để lại trên máy khoảng **1 GB** 
 môi trường Python nặng (numpy/scipy/pymatting, ~314 MB) và một bộ Chromium đóng gói riêng
 (~790 MB). Cập nhật thẳng thì đống đó vẫn nằm lại, nên nếu bạn đang ở bản cũ hãy gỡ rồi cài lại:
 
+**Bản mới KHÔNG cài Python.** Từ 16/09/2026 engine là JS chạy trên Node có sẵn của KitGen,
+nên bản mới không tải CPython, không dựng venv, không cài Pillow — và lượt cài/cập nhật
+còn tự dọn phần Python đời cũ còn sót (`tools/python`, `%USERPROFILE%\KitGen\.venv`,
+`%USERPROFILE%\KitGen\.kitgen\engine`), có in ra một dòng nói đã dọn bao nhiêu MB.
+
 1. Bấm đúp `uninstall.bat`. Khi được hỏi có xoá dữ liệu không, trả lời `n` (hoặc cứ bấm Enter) — **giữ dữ liệu**.
 2. Bấm đúp `install.bat`, chờ cài xong và app tự mở.
 3. Nếu app hỏi đăng nhập Codex, đăng nhập lại một lần.
@@ -49,6 +54,12 @@ An older version (2.1.44 or earlier) leaves about **1 GB** of files that are no 
 a heavy Python environment (numpy/scipy/pymatting, ~314 MB) and a bundled Chromium build
 (~790 MB). Updating in place keeps all of that, so if you are on an older version, uninstall
 first and then install again:
+
+**The new build installs no Python.** Since 2026-09-16 the engine is plain JS running on
+the Node runtime KitGen already ships, so nothing downloads CPython, creates a venv or
+installs Pillow — and install/update now deletes the leftovers from the Python era
+(`tools/python`, `%USERPROFILE%\KitGen\.venv`, `%USERPROFILE%\KitGen\.kitgen\engine`), printing one line saying
+how much it cleaned.
 
 1. Double-click `uninstall.bat`. When asked whether to delete your data, answer `n` (or just press Enter) — this **KEEPS** your data.
 2. Double-click `install.bat` and wait for it to finish.

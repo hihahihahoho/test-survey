@@ -18,7 +18,7 @@ Máy người dùng
   └── http://127.0.0.1:8765/app/
       ├── React tĩnh do agent Node phục vụ
       ├── API cùng origin tại /api/*
-      └── agent gọi gen.sh, Codex CLI và Python khi cần
+      └── agent spawn `node agent/engine/cli.mjs` và Codex CLI khi cần
 ```
 
 ## Build local cho developer
@@ -31,8 +31,11 @@ cd ../..
 bash kit-gen/scripts/build-runtime.sh 2.0.1 /tmp/kitgen-release
 ```
 
-Artifact không chứa source React. Nó gồm `app/`, `agent/`, `engine/`, launcher và manifest checksum.
-Node chỉ chạy agent HTTP/API; không có SSR hoặc Next.js runtime. Python chỉ chạy engine cắt ảnh.
+Artifact không chứa source React. Nó gồm `app/`, `agent/` (engine JS nằm trong
+`agent/engine/`), `element-lib.json`, launcher và manifest checksum. **Không còn thư mục
+`engine/` riêng** và **không còn Python**: từ 16/09/2026 một bản cài KitGen chỉ cần đúng một
+runtime — Node, mà chính installer tải và pin cứng. Node chạy cả agent HTTP/API lẫn engine
+cắt ảnh; không có SSR hoặc Next.js runtime.
 
 ## GitHub Actions và quyền
 

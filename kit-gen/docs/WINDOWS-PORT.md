@@ -9,6 +9,29 @@
 > thật. Đừng phát cho người dùng cuối trước khi §7 xanh hết.
 >
 > Ngày viết: 2026-08-14 · Nhánh: `feat/kitgen-local-runtime`
+>
+> ---
+>
+> **CẬP NHẬT 16/09/2026 — TỪ BẢN NÀY, ENGINE KHÔNG CẦN GIT BASH VÀ KHÔNG CẦN PYTHON.**
+>
+> Engine đã port sang JS thuần (`agent/engine/*.mjs`); `gen.sh` · `cover.sh` ·
+> `slice.py` · `geometry.py` · `validate_output_geometry.py` đã **xoá khỏi kho**.
+> Agent gọi `node <engine>/cli.mjs gen|slice|validate|thumb`, và cover chạy
+> **trong tiến trình** agent. Trên Windows nghĩa là:
+>
+> - **Không cần cài Git for Windows** để dùng KitGen. Installer là `install.ps1`
+>   (PowerShell 5.1) và `lib/update.mjs::stageInstaller` ưu tiên nó, nên đường
+>   update cũng không đi qua `bash.exe`.
+> - **Không cần `python.exe`, không cần venv, không cần shim `python3`.** Installer
+>   thôi tải CPython riêng; máy update từ bản ≤2.1.45 được dọn `tools\python`,
+>   `<workspace>\.venv`, `<workspace>\.kitgen\engine` và `bin\python3`.
+> - `platform.mjs` vẫn còn `findBash`/`bashEnvPath`/`toBashPath`: chúng phục vụ
+>   **installer bash** (`install.sh`) ở nhánh dự phòng, không phục vụ engine nữa.
+>   Bước ⑥ (port installer sang JS) sẽ dọn nốt.
+>
+> Mọi mục dưới đây nói về `gen.sh`/`slice.py`/venv/`python3` là **lịch sử** — giữ lại
+> vì chúng ghi đúng các cái bẫy đã trả giá để biết (và để đối chiếu nếu phải đọc lại
+> mã cũ ở commit `b8bed60`), chứ không mô tả sản phẩm hôm nay nữa.
 
 ---
 

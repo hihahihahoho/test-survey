@@ -24,18 +24,25 @@ từng đó tên.
 
 ## Chạy
 
+Engine là **JS thuần**, chạy bằng chính Node mà app dùng — không bash, không Python,
+không venv, không thư viện ngoài (16/09/2026; trước đó là `gen.sh` + `slice.py` + Pillow).
+
 ```bash
-./gen.sh              # codex exec song song, mỗi con 1 style → raw/<style>.png
-python3 slice.py      # cắt theo toạ độ → kits/<style>/01-….png …
+node agent/engine/cli.mjs gen   <project>   # codex exec song song → raw/<style>.png
+node agent/engine/cli.mjs slice <project>   # cắt theo toạ độ → kits/<style>/01-….png …
 ```
+
+Bình thường không ai gõ hai lệnh này: agent spawn chúng khi người dùng bấm Gen trong app.
 
 ## Cấu trúc
 
 ```
-styles.json     contract: lưới, element (id + spec + skel), style (id + mô tả)
-gen.sh          dựng prompt từ contract, chạy codex exec -s workspace-write song song
-geometry.py     nguồn hình học DÙNG CHUNG — gen.sh và slice.py cùng gọi
-slice.py        cắt sheet theo đúng toạ độ gen.sh đã hứa
+styles.json            contract: lưới, element (id + spec + skel), style (id + mô tả)
+agent/engine/cli.mjs   cửa vào DUY NHẤT của engine: gen · slice · cover · thumb · validate
+agent/engine/gen.mjs   dựng prompt từ contract, chạy codex exec -s workspace-write song song
+agent/engine/geometry.mjs  nguồn hình học DÙNG CHUNG — gen.mjs và slice.mjs cùng gọi
+agent/engine/slice.mjs cắt sheet theo đúng toạ độ gen.mjs đã hứa
+agent/engine/png.mjs   codec PNG + resample, chỗ Pillow từng đứng
 raw/            sprite sheet gốc từng style
 kits/<style>/   asset đã cắt — TÊN FILE GIỐNG NHAU giữa các style; `tight/` là bản khít viền
 kits/manifest.json  canvas/lõi/safe zone từng asset, ô trống nếu có
@@ -45,15 +52,15 @@ logs/           log từng con codex
 
 ## Điểm cần biết
 
-- **PROMPT LÀ SẢN PHẨM, VÀ NÓ NÓI HÌNH HỌC BẰNG TỈ LỆ.** `gen.sh` in prompt theo section;
+- **PROMPT LÀ SẢN PHẨM, VÀ NÓ NÓI HÌNH HỌC BẰNG TỈ LỆ.** `gen.mjs` in prompt theo section;
   mỗi ô mang **tỉ lệ W:H của lõi** kèm lời tả ("core aspect 2.9:1, about three times wider
   than tall") và bề ngang trên màn bằng lời — **không toạ độ pixel nào**. Cho tới
   14/09/2026 nó in hộp cắt bằng bốn con số tuyệt đối; số đo lượt r-0021 kết thúc chuyện
   đó: model vẽ đúng tâm, đúng ô, mà lõi 587px nằm trong hộp hứa 368px — mọi ô lệch
   1,5–1,7 lần, qua codex lẫn khi dán tay vào web ChatGPT. Cỡ tuyệt đối nay là việc của hạ
-  nguồn: `slice.py` cắt theo ô rồi đo lõi bằng bbox α≥128, webapp co bản đo được về
-  `outSize`. `geometry.py` vẫn là nguồn số học DUY NHẤT của dao cắt.
-- **KHÔNG CÓ TẦNG TÁCH NỀN.** Sheet do model sinh mang **alpha thật**, nên `slice.py`
+  nguồn: `slice.mjs` cắt theo ô rồi đo lõi bằng bbox α≥128, webapp co bản đo được về
+  `outSize`. `geometry.mjs` vẫn là nguồn số học DUY NHẤT của dao cắt.
+- **KHÔNG CÓ TẦNG TÁCH NỀN.** Sheet do model sinh mang **alpha thật**, nên `slice.mjs`
   CHỈ CẮT: không chroma-key, không matting, không lấp lỗ, không nắn lõi về khung. Mọi cỗ
   máy đó đã bỏ (07/09/2026) vì chúng gặm ruột element có alpha thật — đo được: ruột thanh
   máu α≈90 ra α≈5. Ô cần nhìn xuyên thì nói bằng prompt (pill «Đục nền» của app nối

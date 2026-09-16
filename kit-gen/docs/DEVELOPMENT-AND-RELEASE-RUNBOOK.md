@@ -23,7 +23,7 @@ Sau khi đọc, người tiếp quản phải có thể:
 Git checkout
 ├── Prototype HTML cũ           dùng để hiểu pipeline/interaction
 ├── React webapp source         giao diện chính đang phát triển
-├── Node agent + Python engine  backend local và pipeline ảnh
+├── Node agent + engine JS     backend local và pipeline ảnh (cùng một runtime)
 └── Release scripts             đóng gói runtime source-free
 
 Máy đã cài KitGen
@@ -39,9 +39,12 @@ Toàn bộ prototype một-trang đã xoá trong đợt dọn prompt-first (07/0
 và SPA vanilla `web/` (kèm `scripts/pages-build.sh`). Không còn gì để chạy qua
 `python3 -m http.server`.
 
-Nơi duy nhất còn mô tả pipeline ảnh là mã thật: `gen.sh` (prompt theo section, in toạ
-độ safe zone bằng số), `geometry.py` (nguồn hình học dùng chung) và `slice.py` (CẮT
-theo đúng toạ độ ấy, giữ nguyên alpha của model).
+Nơi duy nhất còn mô tả pipeline ảnh là mã thật, nay là JS trong `kit-gen/agent/engine/`:
+`gen.mjs` (prompt theo section, in toạ độ safe zone bằng số), `geometry.mjs` (nguồn hình
+học dùng chung) và `slice.mjs` (CẮT theo đúng toạ độ ấy, giữ nguyên alpha của model).
+Bản bash/python đời trước (`gen.sh` · `cover.sh` · `slice.py` · `geometry.py` ·
+`validate_output_geometry.py`) đã xoá khỏi kho 16/09/2026; lấy lại bằng
+`git checkout b8bed60 -- …` nếu cần đối chiếu.
 
 `kit-gen/experiments/` vẫn là chỗ để ảnh/prompt thử local và đang bị Git ignore.
 
@@ -67,10 +70,14 @@ Backend local là `kit-gen/agent/`. Nó phục vụ:
 - React bundle tại `/app/` trong runtime cài đặt;
 - thao tác file/project và chạy engine.
 
-Pipeline ảnh được đóng từ các file engine ở gốc `kit-gen/`, gồm `gen.sh`, `cover.sh`,
-`slice.py`, `geometry.py` (toạ độ ô + safe zone, dùng chung bởi gen.sh và slice.py),
-element library và geometry validator. Danh sách thật nằm ở `scripts/build-runtime.sh`
-— nó `exit 1` khi thiếu một file, nên đừng để hai danh sách lệch nhau.
+Pipeline ảnh **đi cùng agent**: nó là `kit-gen/agent/engine/*.mjs`, nên `cp -R agent` của
+`scripts/build-runtime.sh` đã mang trọn nó vào gói — không còn danh sách file phải giữ
+đồng bộ bằng tay (trước 16/09/2026 là sáu file rời ở gốc `kit-gen/`, và quên một file
+nghĩa là `ModuleNotFoundError` trên máy người dùng). Build vẫn `exit 1` khi thiếu
+`agent/engine/cli.mjs` hoặc `element-lib.json`.
+
+Agent chạy engine bằng `node <engineDir>/cli.mjs <lệnh> <projectDir>` — **không spawn
+bash, không spawn python3**, và không chép engine vào project nữa.
 
 ### 2.3 Runtime đã cài
 
@@ -80,8 +87,8 @@ Runtime release là **source-free package**, không phải Git checkout. Sau khi
 ~/.kitgen/
 ├── releases/<version>/
 │   ├── app/             React bundle đã build, không có src/
-│   ├── agent/           local Node agent
-│   ├── engine/          pipeline ảnh cần lúc chạy
+│   ├── agent/           local Node agent + engine JS (agent/engine/*.mjs)
+│   ├── element-lib.json catalogue element chỉ-đọc cho /api/element-lib
 │   ├── runtime/         launcher + service templates
 │   ├── install.sh
 │   ├── VERSION
@@ -91,7 +98,7 @@ Runtime release là **source-free package**, không phải Git checkout. Sau khi
 ├── install.sh
 ├── config.env
 ├── install.log
-└── tools/               private Node, private Python, Codex fallback
+└── tools/               private Node (runtime DUY NHẤT), Codex fallback
 ```
 
 Vì vậy, nếu Finder chỉ thấy `install.sh` và một file installer khác ở thư mục vừa
@@ -110,12 +117,14 @@ find "$HOME/.kitgen/current" -maxdepth 1 -mindepth 1 -print
 
 Mặc định dữ liệu nằm ngoài runtime, tại `~/KitGen`:
 
+Từ 16/09/2026 ở đây **không còn `.venv/`** (Python environment) và **không còn
+`.kitgen/engine/`** (bản engine copy): engine đi trong gói agent và chạy bằng Node.
+Lượt update đầu tiên sau bản này tự xoá cả hai, kèm một dòng nói dọn bao nhiêu MB.
+
 ```text
 ~/KitGen/
-├── .venv/                    Python environment
 ├── .kitgen/
-│   ├── config.json
-│   └── engine/               bản engine copy cho workspace
+│   └── config.json
 └── projects/<projectId>/
     ├── project.json
     ├── contract.json
@@ -284,8 +293,9 @@ cat "$KITGEN_TEST_HOME/current/VERSION"
 
 `--no-start` kiểm package/install mà không đăng ký service. Shell tests ở trên mới
 là bằng chứng cho health-check và rollback service. Lần cài thử đầu vẫn có thể tải
-private Node, Codex và (chỉ khi Python hệ thống ngoài dải 3.11–3.13) bản Python riêng,
-nên cần mạng và có thể mất vài phút. Đường SHIP không tải Chromium/Playwright nữa.
+private Node và Codex, nên cần mạng và có thể mất vài phút. Đường SHIP không tải
+Chromium/Playwright, và từ 16/09/2026 cũng không tải CPython nữa — Node là runtime duy
+nhất KitGen mang theo.
 
 ## 6. Bump version
 
@@ -317,26 +327,30 @@ Lệnh này cập nhật:
 }
 ```
 
-Kiểm tra bằng Python, không cần `jq`:
+Kiểm tra bằng Node, không cần `jq` (và không cần Python — KitGen đã bỏ nó khỏi mọi
+đường cài, nên cũng đừng để nó quay lại qua cửa runbook):
 
 ```bash
-KITGEN_NEXT_VERSION=2.1.14
-python3 - "$KITGEN_NEXT_VERSION" <<'PY'
-import json, pathlib, sys
-version = sys.argv[1]
-package = json.loads(pathlib.Path("kit-gen/webapp/package.json").read_text())
-lock = json.loads(pathlib.Path("kit-gen/webapp/package-lock.json").read_text())
-release = json.loads(pathlib.Path("kit-gen/release.json").read_text())
-assert package["version"] == version
-assert lock["version"] == version
-assert lock["packages"][""]["version"] == version
-assert release["version"] == version
-assert release["tag"] == f"kitgen-v{version}"
-assert release["archive"].endswith(
-    f"/kitgen-v{version}/kitgen-runtime-{version}.tar.gz"
-)
-print(f"version metadata OK: {version}")
-PY
+KITGEN_NEXT_VERSION=2.1.14 node <<'JS'
+const fs = require("fs")
+const version = process.env.KITGEN_NEXT_VERSION
+const read = p => JSON.parse(fs.readFileSync(p, "utf8"))
+const pkg     = read("kit-gen/webapp/package.json")
+const lock    = read("kit-gen/webapp/package-lock.json")
+const release = read("kit-gen/release.json")
+const eq = (got, want, what) => {
+  if (got !== want) { console.error(`LECH ${what}: ${got} != ${want}`); process.exit(1) }
+}
+eq(pkg.version, version, "webapp/package.json")
+eq(lock.version, version, "package-lock.json")
+eq(lock.packages[""].version, version, "package-lock.json packages[root]")
+eq(release.version, version, "release.json")
+eq(release.tag, `kitgen-v${version}`, "release.json tag")
+if (!release.archive.endsWith(`/kitgen-v${version}/kitgen-runtime-${version}.tar.gz`)) {
+  console.error(`LECH release.json archive: ${release.archive}`); process.exit(1)
+}
+console.log(`version metadata OK: ${version}`)
+JS
 ```
 
 ## 7. Git và release GitHub
@@ -456,7 +470,7 @@ Sau đó kiểm tra raw manifest đã cập nhật:
 ```bash
 curl -fsSL \
   https://raw.githubusercontent.com/hihahihahoho/test-survey/feat/kitgen-local-runtime/kit-gen/release.json \
-  | python3 -m json.tool
+  | node -e 'process.stdout.write(JSON.stringify(JSON.parse(require("fs").readFileSync(0,"utf8")),null,2)+"\n")'
 ```
 
 ### 7.5 Nếu workflow tag thất bại
@@ -487,7 +501,7 @@ Installer sẽ:
 2. tải archive và `.sha256` từ GitHub Release;
 3. kiểm checksum ngoài và manifest trong archive;
 4. cài private Node/Codex nếu cần;
-5. tạo Python venv cho workspace;
+5. dọn di sản đời cũ (`tools/python`, `<workspace>/.venv`, `<workspace>/.kitgen/engine`);
 6. chuyển symlink `~/.kitgen/current`;
 7. khởi động service và kiểm health;
 8. rollback runtime cũ nếu health của bản mới thất bại.
@@ -549,7 +563,7 @@ curl -fsS \
   -H 'X-KitGen-Client: 1' \
   -H 'Origin: http://127.0.0.1:8765' \
   http://127.0.0.1:8765/health \
-  | python3 -m json.tool
+  | node -e 'process.stdout.write(JSON.stringify(JSON.parse(require("fs").readFileSync(0,"utf8")),null,2)+"\n")'
 ```
 
 ### 9.2 Khi thấy `Update failed health check`

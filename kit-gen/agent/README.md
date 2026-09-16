@@ -4,6 +4,11 @@ Agent là **nơi duy nhất được chạm ổ đĩa và spawn tiến trình** 
 Web tĩnh không có quyền nào cả: nó chỉ gọi HTTP tới agent.
 
 - Node stdlib **thuần** — không `npm install`, không dependency ngoài.
+- **Engine cũng là Node** (từ 16/09/2026, bước ①–⑤a của đợt port): agent spawn
+  `node agent/engine/cli.mjs gen|slice|cover|thumb|validate`. KHÔNG còn bash, KHÔNG còn
+  python3, KHÔNG còn Pillow — nghĩa là máy người dùng chỉ cần đúng một runtime, và
+  Windows thôi phải cài Git for Windows. Tài liệu bên dưới còn nhắc `gen.sh`/`slice.py`
+  ở những chỗ **mô tả lịch sử một quyết định**; chúng không còn tồn tại trong kho.
 - Bind **`127.0.0.1` và `[::1]`**, **không bao giờ `0.0.0.0`**.
 - **Không token, không cookie.** Phòng thủ xếp tầng (xem §Bảo mật).
 - Không đọc, không lưu, không trả về API key / token / nội dung `auth.json`.
@@ -40,7 +45,8 @@ In ra:
 
 ```bash
 curl -sS -H 'X-KitGen-Client: 1' -H 'Origin: https://kitgen.pages.dev' \
-     http://127.0.0.1:8765/health | python3 -m json.tool
+     http://127.0.0.1:8765/health |
+  node -e 'process.stdout.write(JSON.stringify(JSON.parse(require("fs").readFileSync(0,"utf8")),null,2)+"\n")'
 ```
 
 Gọi từ terminal **không có** header `Origin` sẽ bị **403** — cố ý (§Bảo mật lớp 2).
@@ -68,7 +74,8 @@ cho các cổng dò (8765–8767) — để đường vào (2) tự chạy. **Kh
 <workspace>/
 ├─ .kitgen/
 │  ├─ config.json                     # {maxJobs, imageGen:{mode,codexHome}} — KHÔNG có secret
-│  ├─ engine/                          # bản pipeline: gen.sh, slice.py, geometry.py, element-lib.json…
+│  │                                   # (`engine/` ĐÃ BỎ 16/09/2026 — engine đi trong gói
+│  │                                   #  agent; installer xoá thư mục này ở lượt update)
 │  ├─ app/                             # (tuỳ chọn) bundle giao diện phục vụ tại /app/
 │  ├─ cache/thumbs/                    # thumbnail cho ?w=256
 │  └─ trash/<yyyymmdd-hhmmss>-<id>/    # project đã xoá, giữ 30 ngày
@@ -83,16 +90,23 @@ cho các cổng dò (8765–8767) — để đường vào (2) tự chạy. **Kh
 **Thư mục là database** (architecture §1.3-1): copy một thư mục project vào `projects/` là nó hiện trong UI.
 `project.json` hỏng → agent trả `{broken:true, error:{file,line}}` để UI hiện thẻ đỏ, **không biến mất im lặng**.
 
-### Adapter sang engine v1 (không sửa một dòng nào của `gen.sh`/`slice.py`)
+### Adapter sang engine (`lib/engine.mjs`)
 
-`gen.sh` dòng 5 `cd "$(dirname "$0")"` và `slice.py` dòng 60 `HERE = dirname(abspath(__file__))`
-⇒ engine neo mọi đường dẫn theo **thư mục chứa script**, không theo `cwd`.
-Vì vậy agent **copy engine vào chính thư mục project** rồi chạy bản copy đó ⇒ `HERE = <project>`, mọi
-`raw/ kits/ prompts/ logs/` nằm trong project (project tự chứa, không còn `kits/manifest.json` dùng chung như v1).
+Agent spawn **đúng một cửa**: `node <engineDir>/cli.mjs <lệnh> <projectDir> …`. `engineDir`
+là engine đi kèm gói agent (`agent/engine`); `<workspace>/.kitgen/engine` vẫn được thử
+TRƯỚC, nhưng chỉ để một installer đời sau có chỗ đặt bản vá — installer hiện tại XOÁ
+thư mục ấy.
 
-Ngoài ra filter của `gen.sh` là **substring** (`"tet-main"` sẽ chạy luôn `tet-main2`), nên agent
-**không dùng argv filter** cho pha gen: nó ghi `styles.json` **thu hẹp đúng tập lượt đã chọn**.
-Pha slice thì dùng argv vì `slice.py` so khớp tập chính xác. (Đóng E7 của audit.)
+**Project KHÔNG còn chứa bản sao engine nào.** Tới bản 2.1.45, `gen.sh` (`cd "$(dirname
+"$0")"`) và `slice.py` (`HERE = dirname(abspath(__file__))`) neo mọi đường dẫn theo **thư
+mục chứa script**, nên agent phải copy cả engine vào từng project để `HERE = <project>`.
+Engine JS nhận `<projectDir>` bằng argv, nên `prepareEngine` nay chỉ đảm bảo thư mục
+project tồn tại và **chép 0 file**. Project vẫn tự chứa: `raw/ kits/ prompts/ logs/` đều
+nằm trong nó, không có `kits/manifest.json` dùng chung như v1.
+
+Filter của pha gen vẫn là **substring** (`"tet-main"` sẽ chạy luôn `tet-main2`), nên agent
+**không dùng argv filter** cho pha gen: nó ghi `styles.json` **thu hẹp đúng tập lượt đã
+chọn**. Pha slice thì dùng argv vì `slice.mjs` so khớp tập chính xác. (Đóng E7 của audit.)
 
 ---
 
@@ -173,8 +187,9 @@ Mọi response có `X-KitGen-Protocol: 1`. Lỗi luôn theo envelope §6.1:
 | 41 | GET | `/api/projects/:id/files/*` | `?w=128\|256\|512` → thumbnail (cache trong `.kitgen/cache/thumbs`). `ETag: "<mtimeMs>-<size>"`, `Cache-Control: no-cache`. **Chỉ** đọc được `raw/ kits/ refs/ skeleton/ prompts/ export/` (`skeleton/` chỉ-đọc, cho dự án đời cũ) + `project.json contract.json styles.json` — **thu hẹp** so với v1 (v1 phục vụ cả repo, lộ `.git/config`) |
 | 42 | GET | `/api/projects/:id/kit?variant=<id>` | Danh mục file đã cắt từ `kits/manifest.json` |
 
-> Thumbnail cần Pillow (đã là phụ thuộc của `slice.py`). Không có Pillow → trả **ảnh gốc** kèm
-> header `X-KitGen-Thumb: unavailable`, không vỡ UI và **không giả vờ đã resize**.
+> Thumbnail chạy **trong tiến trình agent** (`engine/thumbs.mjs` + `engine/png.mjs`), không
+> Pillow, không spawn. Vẫn giữ nguyên lối thất bại thật thà: co ảnh không được thì trả
+> **ảnh gốc** kèm header `X-KitGen-Thumb: unavailable`, không vỡ UI và **không giả vờ đã resize**.
 
 ### Sự kiện NDJSON (#35)
 
@@ -200,18 +215,17 @@ Run có job lỗi → `done-with-errors`, **không bao giờ** là `done` trơn.
 #### `sheet.ready` — CHU TRÌNH TỪNG TẤM (15/08)
 
 `job.done` chỉ nói "tấm này gen xong". `sheet.ready` nói **tấm này đã DÙNG ĐƯỢC**: ảnh đã
-có snapshot bất biến trong `runs/<id>/artifacts/`, đã **cắt xong** (`slice.py <variant>
---sheet=<sheet>`), đã có **thumbnail `?w=256`** nằm sẵn trong cache. Nó tới **giữa lượt**,
+có snapshot bất biến trong `runs/<id>/artifacts/`, đã **cắt xong** (`cli.mjs slice <projectDir> <variant> --sheet=<sheet>`), đã có **thumbnail `?w=256`** nằm sẵn trong cache. Nó tới **giữa lượt**,
 ngay sau tấm đó — không phải sau khi cả lượt kết thúc.
 
 * Trước bản này, `job.artifact` chỉ được điền ở `settleGenJobs()` (sau khi **cả pha gen**
   đóng) ⇒ ô "Đã xong" của tab *Ảnh gốc* là **ô đen** suốt lượt: web đọc `job.artifact.path`
   và ô đó còn `null`.
-* Các lượt cắt hẹp **xếp hàng một làn** trong agent, và `slice.py` còn giữ **ổ khoá hệ điều
-  hành** quanh đọc–sửa–ghi `kits/manifest.json` (ghi qua `tmp + os.replace`) ⇒ hai lượt cắt
+* Các lượt cắt hẹp **xếp hàng một làn** trong agent, và `engine/slice.mjs` còn giữ **ổ khoá hệ điều
+  hành** quanh đọc–sửa–ghi `kits/manifest.json` (ghi qua `tmp + rename`) ⇒ hai lượt cắt
   không ăn mất phần của nhau.
 * Pha **cắt tổng cuối lượt vẫn chạy** như lưới an toàn — nó idempotent, và khối merge của
-  `slice.py` giữ nguyên tấm không chạy lượt đó.
+  `engine/slice.mjs` giữ nguyên tấm không chạy lượt đó.
 * Field mới đều **tuỳ chọn**; client cũ bỏ qua type lạ (§6.5-6) nên không cần đổi gì.
 * **Ảnh bìa** cũng được kích ngay khi tấm đầu xong (job phụ, chạy ngoài hàng đợi tạo ảnh,
   vẫn đúng một lượt codex cho cả run). `maxJobs = 1` = người dùng đã nói "đừng chạy nhiều
@@ -226,14 +240,14 @@ mất lượt đó — tức là trả tiền cho một tấm không bao giờ v
 
 | | Làm gì | KHÔNG làm gì |
 |---|---|---|
-| **Dừng** (#36) | Ngừng phát tấm mới · `SIGTERM` cả process group của `gen.sh` (+ mọi lượt cắt hẹp đang chạy) · giữ nguyên ảnh đã có · **cắt nốt** tấm đã tốn quota mà chưa kịp cắt · `run.status = cancelled` | Không treo tiến trình · không xoá `raw/` · không gọi thêm một lượt codex nào (kể cả ảnh bìa) |
+| **Dừng** (#36) | Ngừng phát tấm mới · `SIGTERM` cả process group của engine (`cli.mjs gen`) (+ mọi lượt cắt hẹp đang chạy) · giữ nguyên ảnh đã có · **cắt nốt** tấm đã tốn quota mà chưa kịp cắt · `run.status = cancelled` | Không treo tiến trình · không xoá `raw/` · không gọi thêm một lượt codex nào (kể cả ảnh bìa) |
 | **Chạy tiếp** (#32) | Một run **MỚI** với `jobs: […]` = đúng tập tấm còn thiếu · agent thu hẹp `styles.json` về đúng tập ấy | Không phải "resume" cùng một run: run cũ đã đóng sổ, `runId` mới, `seq` mới |
 
 Ba luật hệ quả, đều có ca test khoá trong `agent/test/suite-pause.mjs`:
 
 * **Đã tốn quota thì phải sạch.** Tấm gen xong — kể cả tấm xong ĐÚNG LÚC bấm Dừng — vẫn đi
   hết chu trình: snapshot `runs/<id>/artifacts/`, cắt ra `kits/`, thumbnail, `sheet.ready`
-  (`RunHandle.settleCancelledSheets`). Việc dọn này là `slice.py` thuần PIL, **không tốn
+  (`RunHandle.settleCancelledSheets`). Việc dọn này là `engine/slice.mjs` thuần JS, **không tốn
   quota**. Ngoại lệ DUY NHẤT: `DELETE /api/projects/:id` gọi `cancel({settle:false})` — thư
   mục sắp sang thùng rác, ghi thêm vào đó là dựng lại "thư mục ma" của C-01.
 * **Người dùng dừng thì không có ai "hỏng".** Tấm đang bay lúc bấm Dừng về `queued` trong
@@ -319,8 +333,8 @@ Hồi quy nằm ở `agent/test/suite-codex-login.mjs`; ca đắt nhất đổ n
 ```jsonc
 { "os":"darwin-arm64",
   "node":   {"ok":true,"version":"24.13.0"},
-  "python": {"ok":true,"version":"3.9.6","venv":false,
-             "deps":{"pillow":true}},   // CHỈ pillow — slice.py không còn tầng tách nền
+  // KHOÁ "python" ĐÃ BỎ (16/09/2026): engine + thumbnail là JS, nên hỏi han về python
+  // chỉ là dò một thứ sản phẩm không dùng rồi bày một lệnh `pip install` không chữa gì.
   "codex":  {"ok":true,"version":"0.146.0"},
   "imageGen": {
     "mode":"default-home",        // default-home | img-home | profile-overlay | unavailable | unknown
@@ -344,7 +358,7 @@ Cách kiểm `image_gen` theo `teams/t3-auth/PLAN.md` §6.1 — **fallback, khô
    - không có `auth.json` ⇒ `reason: "NOT_LOGGED_IN"`, **`needsFallbackHome: true`**
      (web hiện hướng dẫn `CODEX_HOME=~/.codex-img codex login`);
    - có nhưng đếm vẫn `= 0` ⇒ `reason: "FEATURE_OFF"`, `needsFallbackHome: true`.
-4. Khi chạy gen, nếu `mode === "img-home"` thì agent truyền `IMG_HOME=<path>` cho `gen.sh` — **chỉ là đường dẫn**,
+4. Khi chạy gen, nếu `mode === "img-home"` thì agent truyền `IMG_HOME=<path>` cho engine (`cli.mjs gen`) — **chỉ là đường dẫn**,
    agent không bao giờ mở file bên trong.
 
 `POST /api/projects/:id/runs` với `kind:"gen"` **chặn trước** bằng `409 IMAGEGEN_UNAVAILABLE` nếu
@@ -427,8 +441,8 @@ và symlink ra ngoài · CORS origin lạ 403 · Host sai 421 · contract 409 kh
 + reconnect · dừng run · **dừng giữa chừng rồi chạy tiếp phần thiếu** (`suite-pause`) · nhập
 styles.json cũ không mất dữ liệu · `/app/` same-origin · redact.
 
-Ca gen dùng **engine giả** ở `agent/test-fixtures/engine-fake/` — cùng giao diện với `gen.sh` thật
-(neo theo thư mục script, in `OK`/`FAIL`, ghi `raw/<job>.png`) nhưng **không gọi codex ⇒ không tốn quota**.
+Ca gen dùng **engine giả** ở `agent/test-fixtures/engine-fake/` — cùng giao diện với engine thật
+(nhận `<projectDir>` qua argv, in `OK`/`FAIL`, ghi `raw/<job>.png`) nhưng **không gọi codex ⇒ không tốn quota**.
 Ba bản: `engine-fake` (xong tức thì, có 1 job đỏ cố ý), `engine-slow` (xong 1 job rồi treo),
 `engine-stepped` (mọi job đều xanh, cách nhau `KITGEN_FAKE_STEP` giây — để bấm Dừng ở GIỮA lượt).
 
@@ -465,7 +479,7 @@ agent/
 │  ├─ contract.mjs          version + If-Match + snapshot 50 bản (snapshot: chỉ ghi, không còn route đọc)
 │  ├─ validate.mjs          V-01..V-08 (agent validate LẠI, client không đáng tin)
 │  ├─ templates.mjs         contract lúc tạo dự án (`blank`) + element-lib chỉ-đọc
-│  ├─ engine.mjs            adapter sang gen.sh/slice.py + thu hẹp styles.json
+│  ├─ engine.mjs            adapter sang engine JS (spawn `node engine/cli.mjs`) + thu hẹp styles.json
 │  ├─ runs.mjs              run-store: 1 run/project, tìm run trên đĩa
 │  ├─ run-handle.mjs        spawn engine, event NDJSON, phán theo sản phẩm, cancel
 │  ├─ raw-history.mjs       giữ bản ảnh gốc đời trước mỗi lần gen lại (.history v1/v2)
@@ -476,15 +490,19 @@ agent/
 │  ├─ codex-account.mjs     đọc tài khoản/gói hiện hành để hiện trong Cài đặt
 │  ├─ usage.mjs             hạn mức codex còn lại (đọc, có cache)
 │  ├─ update.mjs            kiểm bản mới + cài + khoá chống chạy chồng + log xoay vòng
-│  ├─ thumbs.mjs            thumbnail qua Pillow, có fallback thật thà
+│  ├─ thumbs.mjs            thumbnail trong tiến trình (engine/png.mjs), có fallback thật thà
 │  ├─ multipart.mjs         parser multipart + magic bytes + đọc kích thước ảnh
 │  ├─ zip.mjs               GHI zip bằng zlib (chỉ phục vụ `export.zip`)
 │  └─ confirm.mjs           mã 4 số in ra terminal
+├─ engine/                  ENGINE JS — cli.mjs (cửa vào) · gen · slice · cover · thumbs ·
+│                           prompt · geometry · validate · png · resample · image · pyjson
 ├─ routes/                  system · settings · projects · contract · refs · runs · files · library · cover · app
 ├─ test/                    harness + suite-*.mjs
 └─ test-fixtures/           engine giả + `basic-contract.json` (bộ khung mẫu 3 tấm / 25 ô — đồ thử, không phải mã sản phẩm)
 ```
 
-**Không sửa gì ngoài `agent/`.** `gen.sh`, `slice.py`, `styles.json`, `element-lib.json`,
-`geometry.py` giữ nguyên. (Bộ khung xương xoá 27/08/2026; `studio.html` / `studio-server.mjs`
-/ `demo.html` / `figma.html` / `preview.html` / `web/` xoá 07/09/2026.)
+**Engine nay Ở TRONG `agent/`.** Câu luật cũ — "không sửa gì ngoài `agent/`; `gen.sh`,
+`slice.py`, `geometry.py` giữ nguyên" — hết nghĩa từ 16/09/2026: năm file ấy đã bị xoá khỏi
+kho và engine là `agent/engine/*.mjs`. Thứ CÒN nguyên vẹn ngoài `agent/` là dữ liệu:
+`styles.json`, `element-lib.json`. (Bộ khung xương xoá 27/08/2026; `studio.html` /
+`studio-server.mjs` / `demo.html` / `figma.html` / `preview.html` / `web/` xoá 07/09/2026.)
