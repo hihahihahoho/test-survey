@@ -7,10 +7,8 @@
  *  ③ prompt nêu ĐÚNG TOẠ ĐỘ vùng tiêu đề và CẤM vẽ chữ;
  *  ④ ảnh bìa hỏng KHÔNG kéo lượt gen xuống thất bại, và không cướp ảnh bìa user tự chọn.
  */
-import { execFile as execFileCb } from "node:child_process"
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
-import { promisify } from "node:util"
 import { join } from "node:path"
 import {
   describe, it, eq, ok, includes, waitFor, pathExists,
@@ -23,7 +21,6 @@ import {
   COVER_TITLE_MAX, sanitizeCoverTitle, hasMascotCoverSource,
 } from "../lib/cover.mjs"
 
-const execFile = promisify(execFileCb)
 
 /** Contract nhỏ có đủ chất liệu nhận diện: màu thương hiệu, mascot, tấm dáng, style "bẫy". */
 const BRANDED = {
@@ -215,38 +212,48 @@ export async function run({ api, wsRoot, agentDir }) {
     eq(expandHomePath("/tmp/.codex-img"), "/tmp/.codex-img", "không đụng đường dẫn tuyệt đối")
   })
 
-  await it("cover.sh mở rộng IMG_HOME=~ trước auth check — shim codex, 0 quota", async () => {
-    const root = await mkdtemp(join(wsRoot, "cover-shim-"))
+  /* ══ IMG_HOME="~/.codex-img" PHẢI ĐƯỢC MỞ RỘNG TRƯỚC CỔNG ĐĂNG NHẬP ══════════
+     Config lưu NHÃN `~/.codex-img`; cổng đăng nhập thì mở một FILE (`<home>/auth.json`).
+     Quên bóc dấu ngã là engine đi tìm một thư mục tên đúng chữ "~" — không bao giờ có
+     — nên MỌI người dùng đặt hồ sơ ảnh riêng đều nhận "profile Codex riêng chưa đăng
+     nhập" dù họ đã đăng nhập.
+     Ca này KHÔNG cần một binary codex nào: nó trỏ `KITGEN_CODEX_BIN` vào một đường dẫn
+     KHÔNG TỒN TẠI và đọc PHÁN QUYẾT. Hai kết cục khác hẳn nhau, và đó là cả phép đo:
+       · có auth.json ⇒ qua được cổng ⇒ chết ở chỗ KHÁC (không có ảnh), thoát 0;
+       · không có     ⇒ chặn ngay tại cổng, thoát 1, nói đúng câu "chưa đăng nhập".
+     Không codex, không quota, và chạy được trên cả Windows (không cần shebang). */
+  await it("engine mở rộng IMG_HOME=~ TRƯỚC cổng đăng nhập (không quota, không codex)", async () => {
+    const { runCover } = await import("../engine/cover.mjs")
+    const root = await mkdtemp(join(wsRoot, "cover-tilde-"))
+    const prevBin = process.env.KITGEN_CODEX_BIN
+    process.env.KITGEN_CODEX_BIN = join(root, "khong-co-codex-o-day")
     try {
       const fakeHome = join(root, "home")
-      const fakeBin = join(root, "bin")
       const project = join(root, "project")
       await mkdir(join(fakeHome, ".codex-img"), { recursive: true })
-      await mkdir(join(fakeBin), { recursive: true })
       await mkdir(join(project, "prompts"), { recursive: true })
-      await writeFile(join(fakeHome, ".codex-img", "auth.json"), "{}\n")
       await writeFile(join(project, "prompts", "cover.txt"), "COVER_SHIM\n")
-      await writeFile(join(fakeBin, "codex"), [
-        "#!/usr/bin/env bash",
-        "set -eu",
-        "printf 'FAKE-CODEX' > cover/cover.raw.png",
-        "printf '%s\\n' \"$*\" > logs/fake-codex.args",
-        "exit 0",
-        "",
-      ].join("\n"), { mode: 0o755 })
-      const { stdout, stderr } = await execFile("bash", [join(agentDir, "..", "cover.sh"), project], {
-        env: {
-          ...process.env,
-          HOME: fakeHome,
-          IMG_HOME: "~/.codex-img",
-          PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
-        },
-        maxBuffer: 1 << 20,
-      })
-      includes(`${stdout}\n${stderr}`, "OK  cover", "cover chạy qua auth check")
-      ok(await pathExists(join(project, "cover", "cover.raw.png")), "shim đã được gọi, có ảnh raw")
-      ok(await pathExists(join(project, "cover", "cover.png")), "cover.sh ghi ảnh đích")
+      const env = { ...process.env, HOME: fakeHome, IMG_HOME: "~/.codex-img" }
+
+      // ① CHƯA đăng nhập: cổng phải chặn, và phải chặn bằng ĐÚNG câu ấy.
+      const chua = []
+      const rcChua = await runCover(project, { env, print: l => chua.push(l) })
+      eq(rcChua, 1, "chưa đăng nhập ⇒ thoát 1")
+      includes(chua.join("\n"), "chưa đăng nhập", "nói đúng nguyên nhân")
+      includes(chua.join("\n"), join(fakeHome, ".codex-img"),
+        "và nói đường dẫn ĐÃ BÓC dấu ngã, không phải chuỗi '~/.codex-img'")
+
+      // ② ĐÃ đăng nhập: qua cổng, rồi chết ở chỗ khác — codex không tồn tại.
+      await writeFile(join(fakeHome, ".codex-img", "auth.json"), "{}\n")
+      const roi = []
+      const rcRoi = await runCover(project, { env, print: l => roi.push(l) })
+      eq(rcRoi, 0, "qua được cổng ⇒ thất bại của ảnh bìa KHÔNG là thất bại của lượt gen")
+      const out = roi.join("\n")
+      ok(!out.includes("chưa đăng nhập"), `không được chặn ở cổng nữa: ${out}`)
+      includes(out, "ảnh không được ghi mới", "chết ở chỗ đúng: không có codex để vẽ")
     } finally {
+      if (prevBin === undefined) delete process.env.KITGEN_CODEX_BIN
+      else process.env.KITGEN_CODEX_BIN = prevBin
       await rmTemp(root)
     }
   })
@@ -579,13 +586,13 @@ export async function run({ api, wsRoot, agentDir }) {
     await a("DELETE", `/api/projects/${id}`)
   })
 
-  await it("engine chưa có cover.sh → 409 COVER_UNAVAILABLE (không phải 500, không job ma)", async () => {
-    // engine-slow cố ý KHÔNG có cover.sh: đúng cảnh máy đang chạy bản engine cũ.
+  await it("engine chưa có cover.mjs → 409 COVER_UNAVAILABLE (không phải 500, không job ma)", async () => {
+    // engine-slow cố ý KHÔNG có cover.mjs: đúng cảnh máy đang chạy bản engine cũ.
     const b = await agentWithEngine("engine-slow")
     const created = await createBasicProject(b, { name: "Engine cu khong co bia", firstVariant: { id: "tet", vi: "Tết", bg: "magenta" } })
     const id = created.json.project.id
     const r = await b("POST", `/api/projects/${id}/cover`)
-    eq(r.status, 409, "thiếu cover.sh → 409 chứ không phải 500")
+    eq(r.status, 409, "thiếu cover.mjs → 409 chứ không phải 500")
     eq(r.json.error.code, "COVER_UNAVAILABLE", "code")
     const st = await b("GET", `/api/projects/${id}/cover`)
     eq(st.json.cover.status, "none", "không để lại job treo")
@@ -593,9 +600,12 @@ export async function run({ api, wsRoot, agentDir }) {
   })
 
   await it("titleEmbedded=true → pipeline không có tầng composite chữ sau gen", async () => {
-    const coverSh = await readFile(join(agentDir, "..", "cover.sh"), "utf8")
-    ok(!/\b(?:ImageDraw|draw\.text|alpha_composite)\b/.test(coverSh),
-      "cover.sh chỉ crop raw, không composite title lần hai")
+    /* Soi ENGINE ĐANG CHẠY (`agent/engine/cover.mjs`), không soi `cover.sh` nữa —
+       từ bước ④ nó là file duy nhất vẽ bìa. Lời hứa không đổi: engine CHỈ cắt 16:9
+       tấm model trả về; không có tầng nào kẻ chữ lần hai đè lên tranh. */
+    const coverJs = await readFile(join(agentDir, "engine", "cover.mjs"), "utf8")
+    ok(!/\b(?:ImageDraw|draw\.text|alpha_composite|fillText|drawText)\b/.test(coverJs),
+      "engine chỉ crop raw, không composite title lần hai")
     const { prompt, titleEmbedded } = await buildCoverPrompt({
       project: { name: "Chữ hòa cảnh" }, contract: NO_MASCOT, hasFile: async () => false,
     })

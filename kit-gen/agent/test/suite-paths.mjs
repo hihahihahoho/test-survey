@@ -140,8 +140,10 @@ export async function run({ api, wsRoot, outsideRoot, pid }) {
     const thumb = await api("GET", `/api/projects/${pid}/files/${rel}?w=128`)
     eq(thumb.status, 200, "status ?w=128")
     if (thumb.headers["x-kitgen-thumb"] === "unavailable") {
-      // Máy không có Pillow: thumbs.mjs cố ý trả ảnh gốc + khai báo thật thà.
-      ok(thumb.body.equals(original), "không Pillow ⇒ trả gốc kèm X-KitGen-Thumb: unavailable")
+      // Co không được (ảnh hỏng, không phải PNG): thumbs.mjs cố ý trả ảnh gốc + khai
+      // báo thật thà. Trước bước ④ ca thường gặp nhất của nhánh này là "máy thiếu
+      // Pillow"; nay engine JS luôn có mặt nên nhánh này hiếm hẳn — nhưng vẫn phải còn.
+      ok(thumb.body.equals(original), "co không được ⇒ trả gốc kèm X-KitGen-Thumb: unavailable")
     } else {
       eq(imageSize(thumb.body).w, 128, "?w=128 ⇒ ảnh rộng 128px")
       ok(!thumb.body.equals(full.body), "gốc và thumbnail KHÔNG được là cùng một thứ")

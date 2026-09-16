@@ -9,7 +9,7 @@
  * Nên ca đắt nhất ở đây là ca PHỦ ĐỊNH: đổ nguyên một token vào stdout của codex giả
  * rồi khẳng định KHÔNG một byte nào của nó có mặt trong bất kỳ response nào.
  *
- * WINDOWS: các ca có spawn dùng shim `/bin/sh` nên chỉ chạy trên darwin/linux. Phần
+ * WINDOWS: các ca có spawn dùng shim có shebang nên chỉ chạy trên darwin/linux. Phần
  * thuần hàm (`harvest`, `loginCodexHome`, ảnh chụp trạng thái) chạy ở mọi nền —
  * và đó cũng chính là chỗ chứa toàn bộ luật lọc.
  */
@@ -106,14 +106,22 @@ export async function run({ api, wsRoot }) {
   })
 
   if (IS_WIN) {
-    await it("[bỏ qua trên Windows] ca có spawn dùng shim /bin/sh", async () => { ok(true) })
+    await it("[bỏ qua trên Windows] ca có spawn dùng shim có shebang", async () => { ok(true) })
     return
   }
+
+  /* SHIM BẰNG NODE, KHÔNG BẰNG /bin/sh (đổi ở bước ④).
+     `codex` thật vẫn là một binary ngoài, nên giả nó bằng một script là đúng — nhưng
+     script `sh` cần `cat` và `sleep` CÓ TRÊN PATH, và từ bước ④ bộ ca phải chạy được
+     trên một PATH chỉ có `node` (đó là cách duy nhất ĐO được lời hứa "không cần bash,
+     không cần python"). Node thì tự in và tự hẹn giờ được. */
+  const nodeShim = body => `#!/usr/bin/env node\n${body}\n`
 
   /** Dựng một `codex` giả in ra `text` rồi treo (để phiên ở trạng thái chờ). */
   async function shim(dir, text) {
     const bin = join(dir, "codex")
-    await writeFile(bin, `#!/bin/sh\ncat <<'EOF'\n${text}\nEOF\nexec sleep 20\n`)
+    await writeFile(bin, nodeShim(
+      `process.stdout.write(${JSON.stringify(text + "\n")})\nsetTimeout(() => {}, 20000)`))
     await chmod(bin, 0o755)
     return bin
   }
@@ -200,7 +208,7 @@ export async function run({ api, wsRoot }) {
     try {
       _resetLogin()
       const bin = join(dir, "codex")
-      await writeFile(bin, "#!/bin/sh\nexit 7\n")
+      await writeFile(bin, nodeShim("process.exit(7)"))
       await chmod(bin, 0o755)
       process.env.KITGEN_CODEX_BIN = bin
 
@@ -228,7 +236,8 @@ export async function run({ api, wsRoot }) {
     try {
       _resetLogin()
       const bin = join(dir, "codex")
-      await writeFile(bin, `#!/bin/sh\ncat <<'EOF'\n${REAL_OUTPUT}\nEOF\nsleep 1\nexit 0\n`)
+      await writeFile(bin, nodeShim(
+        `process.stdout.write(${JSON.stringify(REAL_OUTPUT + "\n")})\nsetTimeout(() => process.exit(0), 1000)`))
       await chmod(bin, 0o755)
       process.env.KITGEN_CODEX_BIN = bin
 

@@ -165,11 +165,13 @@ export function apiFor(server) {
   return { call, api }
 }
 
-/** doctor giả: test KHÔNG được phụ thuộc máy có codex/python hay không. */
+/** doctor giả: test KHÔNG được phụ thuộc máy có codex hay không.
+ *  KHÔNG còn khoá `python`: từ bước ④ doctor thật cũng thôi khai nó (engine là JS,
+ *  không còn slice.py/Pillow để mà dò) — một doctor giả khai thừa là một hợp đồng
+ *  chết mà test vẫn tưởng mình đang canh. */
 export function fakeDoctor(imageGenAvailable) {
   return async ws => ({
     os: "test", node: { ok: true, version: process.versions.node },
-    python: { ok: true, version: "3.12.0", venv: false, deps: { pillow: true, numpy: true, torch: false, transformers: false } },
     renderer: { ok: false, engine: "@resvg/resvg-wasm" },
     codex: { ok: true, version: "0.146.0" },
     imageGen: {
