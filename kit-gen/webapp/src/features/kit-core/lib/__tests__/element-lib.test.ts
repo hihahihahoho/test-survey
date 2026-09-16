@@ -10,7 +10,7 @@
  * — thao tác "thêm element vào bản thiết kế" của màn S3) đi cùng màn ấy khi nó bị xoá.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { skelSchema } from "@/lib/types/contract";
@@ -40,10 +40,19 @@ describe("bản v2 đóng gói trong bundle KHÔNG được trôi khỏi bản g
    */
   const ALPHA_CELLS = ["03-btn-pill-outline", "16-fx-burst", "22-board-panel"];
 
-  it("khác bản bàn giao ĐÚNG ba ô có độ trong, không hơn", () => {
+  /**
+   * Bản bàn giao nằm trong `teams/` — thư mục KHÔNG đi theo git (`.gitignore:3`), nên
+   * trên runner CI file này không tồn tại và ca test đỏ vì ENOENT chứ không vì bản đóng
+   * gói trôi (đã làm hụt bản 2.1.45: run 35078933320, 2121/2122 xanh). Ca này chỉ có
+   * nghĩa trên máy dev có bản bàn giao; thiếu file thì BỎ QUA CÓ NÓI, không giả xanh.
+   */
+  const GOC = "teams/t1-chuanhoa/element-lib-v2.json";
+  const coBanGoc = existsSync(resolve(REPO, GOC));
+
+  it.skipIf(!coBanGoc)("khác bản bàn giao ĐÚNG ba ô có độ trong, không hơn", () => {
     type El = { file: string; spec: string; skel: Record<string, unknown> };
     const parse = (p: string) => JSON.parse(read(p)) as { elements: El[] };
-    const goc = parse("teams/t1-chuanhoa/element-lib-v2.json");
+    const goc = parse(GOC);
     const dongGoi = parse("webapp/src/features/kit-core/lib/element-lib/element-lib-v2.json");
 
     expect(dongGoi.elements.map((e) => e.file)).toEqual(goc.elements.map((e) => e.file));

@@ -314,7 +314,7 @@ jobs:
           # thật thì trống trơn.
           $bash = 'C:\Program Files\Git\bin\bash.exe'
           if (Test-Path -LiteralPath $bash) { Write-Host ("ghi nhan bash   : {0} (installer KHONG con doi)" -f $bash) }
-          else { Write-Host 'ghi nhan bash   : khong co (giong may nguoi dung — va nay la du)' }
+          else { Write-Host 'ghi nhan bash   : khong co (giong may nguoi dung - va nay la du)' }
           # BẮT BUỘC = thứ CHÍNH WORKFLOW này cần để chạy (giải nén gói, checkout).
           foreach ($exe in 'tar.exe', 'git.exe') {
             $c = Get-Command $exe -ErrorAction SilentlyContinue
