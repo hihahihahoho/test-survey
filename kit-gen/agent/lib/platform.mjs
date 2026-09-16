@@ -18,8 +18,16 @@
    ║                                                                             ║
    ║ CÒN LẠI phần bash, và CHỈ CHO ĐÚNG MỘT VIỆC: `findBash` / `bashEnv` /       ║
    ║ `toBashPath` phục vụ BỘ CÀI (`lib/update.mjs` chạy `install.sh` đã tải về,  ║
-   ║ và `test/suite-update-cure.mjs` canh nó). Đó là địa hạt của installer —      ║
-   ║ bước ⑤ xử lý cùng lúc với việc xoá `gen.sh`/`slice.py` khỏi repo.           ║
+   ║ và `test/suite-update-cure.mjs` canh nó).                                   ║
+   ║                                                                             ║
+   ║ HIỆN TRẠNG SAU BƯỚC ⑤a (16/09/2026): engine bash/python ĐÃ BỊ XOÁ khỏi kho, ║
+   ║ và install.ps1 thôi dò/đòi Git for Windows. Ba hàm này Ở LẠI vì INSTALLER   ║
+   ║ VẪN LÀ BASH. Trên Windows đó là đường LÙI — `stageInstaller` ưu tiên        ║
+   ║ `install.ps1`, và build-runtime.sh BẮT BUỘC file ấy có trong gói — nhưng    ║
+   ║ một gói đời trước 24/08/2026 (chưa có install.ps1) vẫn phải update được.    ║
+   ║ Bước ⑥ port installer sang JS sẽ dọn nốt; tới lúc đó KHÔNG được xoá chúng.  ║
+   ║ `KITGEN_BASH` thì KHÔNG còn ai ghi ra (install.ps1 đã bỏ khỏi config.cmd);  ║
+   ║ `findBash` tự đi tìm, và biến môi trường chỉ còn là cửa thoát thủ công.     ║
    ╚═════════════════════════════════════════════════════════════════════════════╝
 
    VÌ SAO PHẦN CÒN LẠI VẪN CẦN:

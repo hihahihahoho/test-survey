@@ -104,9 +104,10 @@ async function codexWhere() {
                      parse của cả payload doctor. Loại (và webapp cấm sửa ở bước này).
    Vắng khoá thì webapp rơi vào nhánh nó ĐÃ CÓ SẴN và đã viết thành lời:
    «agent không khai mục nào ⇒ hiện "chưa kiểm được", KHÔNG bịa ✗» (DoctorChecklist.tsx)
-   — `python` khai `.optional()` trong lược đồ nên payload vẫn hợp lệ. Bước ⑤ gỡ hai
-   dòng ấy khỏi webapp; tới lúc đó chúng nói "Công cụ local chưa báo về mục này", đúng
-   nghĩa đen của việc vừa xảy ra. */
+   — `python` khai `.optional()` trong lược đồ nên payload vẫn hợp lệ. Bước ⑤b gỡ hai
+   dòng ấy khỏi webapp (đợt ⑤ chia đôi: ⑤a installer/CI/tài liệu, ⑤b webapp); cho tới
+   lúc đó chúng nói "Công cụ local chưa báo về mục này", đúng nghĩa đen của việc vừa
+   xảy ra. */
 
 /* join() chứ không replace chuỗi: trên Windows homedir() dùng backslash, ghép "~/x"
    bằng replace sẽ ra "C:\Users\a/x" — path lai hai kiểu ngăn cách, so sánh/label sai. */

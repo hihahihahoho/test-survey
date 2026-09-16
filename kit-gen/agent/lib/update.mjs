@@ -391,6 +391,10 @@ export function scheduleUpdate({ kitgenHome = defaultKitgenHome(), spawnImpl = s
       KITGEN_UPDATE_LOCK: updateLockDir(kitgenHome),
       KITGEN_UPDATE_LOCK_TOKEN: token,
     }
+    /* KITGEN_BASH không còn được installer ghi ra config.cmd từ 16/09/2026 (Windows
+       thôi đòi Git for Windows), nên thực tế đây là `findBash()` cộng một cửa thoát
+       thủ công. Cả nhánh này chỉ chạy khi gói KHÔNG có install.ps1 — tức gói đời
+       trước 24/08/2026; mọi gói mới đều đi nhánh powershell ngay dưới. */
     const bashExe = process.env.KITGEN_BASH || findBash() || "bash.exe"
     const env = IS_WIN && !staged.powershell ? bashEnv(baseEnv, bashExe) : baseEnv
     if (IS_WIN && !staged.powershell) {
