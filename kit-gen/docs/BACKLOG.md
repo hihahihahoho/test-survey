@@ -1,4 +1,75 @@
-# BACKLOG — cập nhật 2026-09-08
+# BACKLOG — cập nhật 2026-09-16
+
+## Port engine sang JS — đã xong ①–⑤a, còn ⑥ installer JS
+
+**Vì sao:** engine đời cũ là bash + Python (`gen.sh` · `cover.sh` · `slice.py` ·
+`geometry.py` · `validate_output_geometry.py`), nên máy người dùng phải có bash
+(Windows: Git for Windows), một CPython riêng ~80 MB tải về `~/.kitgen/tools/python`,
+một venv và Pillow. Ba thứ ấy chỉ để cắt ảnh và nối chuỗi prompt.
+
+**Đã xong (16/09/2026):**
+
+- ① `agent/engine/prompt.mjs` + `geometry.mjs` + `pyjson.mjs` — khối dựng prompt,
+  so **từng byte** với golden dựng từ `KITGEN_PROMPTS_ONLY=1 bash gen.sh`.
+- ② `slice.mjs` + `png.mjs` + `image.mjs` + `validate.mjs` — dao cắt, so **từng
+  pixel** và từng chữ của `kits/manifest.json` với golden do `slice.py` + Pillow sinh.
+- ③ `gen.mjs` + `cover.mjs` + `resample.mjs` + `thumbs.mjs` — vòng gọi codex, ảnh bìa
+  và thumbnail; `resample.mjs` chép `Resample.c` của Pillow (hệ số 22-bit số nguyên)
+  nên trùng **từng byte** với Pillow 11.3.
+- ④ Agent gọi `node <engine>/cli.mjs gen|slice|validate|thumb`; cover nạp trong tiến
+  trình. Không còn `spawn("bash"|"python3")` nào trong `agent/lib` và `agent/routes`.
+  `prepareEngine` thôi chép engine vào `<workspace>/.kitgen/engine`.
+- ⑤a Installer, đóng gói, CI và tài liệu bỏ Python/venv/Pillow và engine bash; xoá
+  engine cũ + bộ pytest của nó khỏi kho. Golden đóng băng ở commit `b8bed60` — cách
+  dựng lại xem `agent/test/engine-golden/README.md`.
+
+**Còn lại — ⑥: port installer sang JS.** Hôm nay `install.sh` vẫn là bash và
+`install.ps1` vẫn là PowerShell, nên `agent/lib/platform.mjs` còn giữ
+`findBash`/`bashEnvPath`/`toBashPath` và `lib/update.mjs` còn nhánh bash — **chỉ** cho
+installer, không cho engine. Kèm theo:
+
+- **Máy cài bản ≤2.1.45 không nhận được gói mới nếu chạy installer CŨ.** `is_release()`
+  đời cũ nhận diện gói bằng `engine/gen.sh`; gói mới không có file ấy ⇒ installer cũ
+  nói "Invalid KitGen runtime archive". Đường update thật đi qua `kitgen update` →
+  `~/.kitgen/install.sh` (bản cũ) nên **phải quyết ở lúc phát hành**: hoặc để lại một
+  `engine/gen.sh` giả trong gói một đời, hoặc bắt người dùng chạy lại easy-install.
+- Bỏ nốt `findBash`/`bashEnv`/`toBashPath` khi installer không còn là bash.
+
+**Bug của engine cũ đã ghi nhận trong lúc port** (chép nguyên ở ③ để hai bản còn so
+được với nhau, rồi vá ở ④ vì bản cũ sắp xoá):
+
+1. `cover.sh` hỏi `codex debug models` mà **không** đặt `CODEX_HOME=$IMG_HOME`, trong
+   khi `codex exec` ngay dưới thì có ⇒ `MODEL_ARGS` rỗng ⇒ ảnh bìa âm thầm rơi về
+   model/mức nghĩ của hồ sơ mặc định. (`gen.sh` đã vá, `cover.sh` thì chưa.) → **đã vá**
+   trong `cover.mjs` (`① VÁ`).
+2. `cover.sh` lúc hạ cấp model bỏ **cả** `-m` **lẫn** `-c model_reasoning_effort` — thứ
+   bị từ chối chỉ là cái TÊN model, mức nghĩ vẫn hợp lệ; thả nổi thì rơi về "fast", tức
+   bỏ luôn bước đọc SKILL.md. → **đã vá** trong `cover.mjs` (`② VÁ`).
+3. `gen.sh`: khối Python dựng prompt chết giữa chừng thì `py_rc` **chỉ** có quyền ở
+   nhánh xem-trước; lượt gen thật vẫn đi tiếp vào vòng gọi codex với prompt cũ hoặc
+   không có, và **tiêu quota thật**. → **đã vá** trong `gen.mjs`: dừng trước vòng gọi
+   codex, in `FAIL dựng-prompt (…)`, thoát mã 3.
+4. `gen.sh` đọc `FILTERS=("$@")` **sau** chỗ thoát của `KITGEN_PROMPTS_ONLY`, nên chế độ
+   xem trước dựng prompt cho **mọi** job bất kể argv. → lệnh `prompts` của bản JS nhận
+   filter thật; không truyền filter thì hai bản giống nhau từng byte.
+5. `gen.sh` in "chạy song song" bất kể `MAXJOBS` — chính lời tường thuật sai ấy làm cả
+   hai người đọc log run r-0059 (maxJobs=1) tin rằng hai job chạy chồng nhau. → bản JS
+   in đúng số, và `MAXJOBS=0` đọc thành 4 thay vì treo vô hạn.
+6. `validate_output_geometry.py` tự tính lưới ô bằng `round(col*cw)…round((col+1)*cw)`,
+   **khác** lưới của `geometry.py`/`slice.py` (`cell_origin + cell_size`) — lệch tới 1px
+   khi khổ không chia hết. → **giữ nguyên** trong `validate.mjs`: đổi là đổi số đo agent
+   đang đọc, không thuộc phạm vi port. Cần quyết riêng.
+7. `validate_output_geometry.py` trả `undershootPx` lẫn `int` với `float` trong cùng một
+   dict (`{"left": 0, "right": 8.0}`) do `max(0, …)` của Python. → giữ nguyên, bản JS
+   mang nhãn `F()` để ghi ra y hệt.
+8. `thumbs` đời cũ: thiếu Pillow thì `agent/lib/thumbs.mjs` phục vụ **ảnh gốc** (3 MB
+   một ô) — "không vỡ" nhưng cũng không còn là thumbnail. → biến mất cùng Pillow.
+9. Chỗ **không** khớp được, nói ra cho rõ: ảnh mode "P" (bảng màu) được Pillow nội suy
+   trên **chỉ số bảng màu** rồi mới tra bảng; bản JS nội suy trên màu đã tra. Không tấm
+   nào của KitGen là "P", nên nhánh ấy không có ai đi — nhưng nó tồn tại. Tương tự
+   `du -h` in theo kiểu BSD (macOS) chứ không GNU, và `ls -la raw/` cuối `gen.sh` không
+   được chép (không thể trùng trên hai máy, không ai đọc).
+
 
 ## Quyết định 07/09/2026 — **PROMPT-FIRST**
 
