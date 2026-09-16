@@ -21,7 +21,7 @@
  */
 import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
-import { chmod, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
+import { chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -592,7 +592,21 @@ export async function run() {
       return work
     }
 
-    for (const [fixture, mode] of [["ui-1x1", "src"], ["bg-multi-scenes", "src"], ["multi-style-sheetbreaks", "none"]]) {
+    /** Ảnh tham chiếu mà `.att` của ca trỏ tới. Có mặt thật thì `-i` mới được đính và
+     *  đường dẫn mới được liệt kê trong task — nhánh đắt nhất của `run_one`. */
+    async function seedRefs(dir, names) {
+      if (!names.length) return
+      await mkdir(join(dir, "refs"), { recursive: true })
+      for (const n of names) await writeFile(join(dir, "refs", n), pngUi())
+    }
+
+    const REFS = ["shared.png", "layout.png", "brand-logo.png", "inspo-1.jpg"]
+    for (const [fixture, mode, refs] of [
+      ["ui-1x1", "src", []],
+      ["bg-multi-scenes", "src", []],
+      ["multi-style-sheetbreaks", "none", []],
+      ["inspo-brand-refs", "src", REFS],          // .att có ảnh THẬT ⇒ `-i` + khối REFERENCE IMAGES
+    ]) {
       await it(`ca «${fixture}» (MODE=${mode}) — stdout của hai engine trùng từng dòng`, async () => {
         const seed = await mkdtemp(join(tmpdir(), "kitgen-cmp-seed-"))
         const codexSrc = await fakeCodex(seed)
@@ -601,6 +615,7 @@ export async function run() {
 
         // ① bash gen.sh — codex giả nằm trong PATH, đúng lối của bộ ca shell.
         const bw = await bashWork(fixture, codexSrc)
+        await seedRefs(bw, refs)
         // codex giả nằm trong PATH — đúng lối của bộ ca shell. Nó tự suy đích ra từ
         // `-o logs/<job>.last.txt` nên không cần `DST`, và phục vụ được lượt nhiều job.
         const shEnv = {
@@ -616,6 +631,7 @@ export async function run() {
         delete jsEnv.DST
         const jw = await mkdtemp(join(tmpdir(), "kitgen-cmp-js-"))
         await cp(join(FIX, fixture, "input"), jw, { recursive: true })
+        await seedRefs(jw, refs)
         const js = await exec(process.execPath, [join(ENGINE, "cli.mjs"), "gen", jw], {
           cwd: jw,
           env: { ...jsEnv, KITGEN_CODEX_BIN: codexSrc, MAXJOBS: "1", MODE: mode, SRC: src, GEN_BUSY_RETRIES: "0" },
@@ -633,6 +649,29 @@ export async function run() {
           }
         }
         eq(b, a, `${fixture}: stdout`)
+
+        /* STDOUT GIỐNG NHAU CHƯA ĐỦ khi ca có ảnh tham chiếu: khối chữ gửi CHO CODEX
+           mới là thứ tốn tiền, và nó chứa đường dẫn tuyệt đối của từng ảnh. So luôn
+           `logs/<job>.last.txt`? Không — codex giả không ghi file ấy. So bằng cách
+           bắt chính task: chạy lại một lượt với TASK_LOG cho cả hai bên. */
+        if (refs.length) {
+          /* Thay CẢ hai cách viết cùng một thư mục. Trên macOS `/var` là symlink tới
+             `/private/var`: bash lấy `pwd` từ `getcwd()` (biến PWD thừa kế không khớp
+             thư mục thật) nên nó viết `/private/var/…`, còn Node giữ `/var/…`. Hai
+             chuỗi, một thư mục — và nếu không gạt thì ca đỏ vì symlink của hệ điều
+             hành chứ không vì engine. */
+          const grab = async (dir, cmd, env) => {
+            const tl = join(dir, "task.txt")
+            await exec(cmd[0], cmd[1], { cwd: dir, env: { ...env, TASK_LOG: tl } })
+            const real = await realpath(dir)
+            return (await readFile(tl, "utf8")).split(real).join("<project>").split(dir).join("<project>")
+          }
+          const tSh = await grab(bw, ["bash", ["./gen.sh"]], shEnv)
+          const tJs = await grab(jw, [process.execPath, [join(ENGINE, "cli.mjs"), "gen", jw]],
+            { ...jsEnv, KITGEN_CODEX_BIN: codexSrc, MAXJOBS: "1", MODE: mode, SRC: src, GEN_BUSY_RETRIES: "0" })
+          includes(tSh, "--- REFERENCE IMAGES START ---", "ca này phải có ảnh kèm thật")
+          eq(tJs, tSh, `${fixture}: khối task gửi codex`)
+        }
         await rmTemp(bw); await rmTemp(jw); await rmTemp(seed)
       })
     }
