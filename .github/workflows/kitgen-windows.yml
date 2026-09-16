@@ -403,10 +403,18 @@ jobs:
             exit 1
           }
           # Hop dong cua installer khi thieu tien de: KHONG khoi dong, IN CHECKLIST.
-          $need = @('[1/8]', '[8/8]', 'THIEU Codex CLI', 'BO QUA khoi dong', 'CHUA CHAY DUOC', 'chatgpt.com/codex/install.ps1')
-          # .Contains() = so chuoi tho. KHONG dung -like: '[1/8]' la LOP KY TU cua wildcard,
-          # '*[1/8]*' se khop moi chuoi co '1' hoac '/' hoac '8' => ca kiem im lang mai mai.
+          $need = @('THIEU Codex CLI', 'BO QUA khoi dong', 'CHUA CHAY DUOC', 'chatgpt.com/codex/install.ps1')
+          # .Contains() = so chuoi tho. KHONG dung -like: '[1/7]' la LOP KY TU cua wildcard,
+          # '*[1/7]*' se khop moi chuoi co '1' hoac '/' hoac '7' => ca kiem im lang mai mai.
           $miss = @($need | Where-Object { -not $text.Contains($_) })
+          # Dau buoc dau [1/N] va buoc cuoi [N/N] phai CUNG mot N. Khong ghim so cung: so buoc
+          # cua install.ps1 da doi 8 -> 7 khi bo Git-Bash (run 35082075983 do vi ghim '[1/8]'),
+          # va se con doi khi them buoc don ban cu. Cai can kiem la "co dau buoc, va di het".
+          if ($text -notmatch '\[1/(\d+)\]') {
+            $miss += '[1/N]'
+          } elseif (-not $text.Contains(('[{0}/{0}]' -f $Matches[1]))) {
+            $miss += ('[{0}/{0}]' -f $Matches[1])
+          }
           if ($miss.Count -gt 0) {
             Write-Host ("::error::khong tim thay trong log: {0}" -f ($miss -join ' | '))
             exit 1

@@ -1,0 +1,10 @@
+# Golden fixtures của engine JS được so TỪNG BYTE với đầu ra thật (prompt, manifest, stdout,
+# JSON validate). Runner Windows checkout với core.autocrlf=true đã đổi \n thành \r\n trong
+# 47 file mốc => 47 ca đỏ giả (run 35082075983, 16/09/2026). Fixture là dữ liệu đóng băng,
+# git không được đụng vào một byte nào.
+kit-gen/agent/test-fixtures/** -text
+
+# Mã chạy trên mọi hệ điều hành và tự sinh \n: giữ LF khi checkout để hành vi trùng nhau
+# giữa Mac, Linux và Windows (template literal nhiều dòng trong .mjs, heredoc trong .sh).
+*.mjs text eol=lf
+*.sh  text eol=lf
