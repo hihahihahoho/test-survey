@@ -107,7 +107,7 @@ export function DocBlockBody({
       </div>
 
       {askReset && (
-        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2 border border-warn/40 bg-warn/[var(--kg-tint-a)] px-3 py-2">
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2 border border-warn/60 bg-warn/[var(--kg-tint-a)] px-3 py-2">
           <span className="text-body text-fg-strong">Quay về template sẽ bỏ chỉnh sửa tự do.</span>
           <div className="ml-auto flex gap-2">
             <Button variant="secondary" size="sm" onClick={() => setAskReset(false)}>

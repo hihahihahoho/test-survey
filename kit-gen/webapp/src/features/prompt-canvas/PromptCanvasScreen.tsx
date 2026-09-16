@@ -633,7 +633,7 @@ function SaveState({ updatedAt, dirty, saving, error }: {
 /** Câu hỏi CHẶN — xem khối chú thích đầu file để biết vì sao nó chặn chứ không nhắc. */
 function LegacyDraftGate({ onAccept }: { onAccept: () => void }) {
   return (
-    <div role="alertdialog" aria-label="Thay bản nháp cũ" className="flex flex-wrap items-center gap-4 rounded-3 border border-warn/40 bg-warn/[var(--kg-tint-a)] px-4 py-3">
+    <div role="alertdialog" aria-label="Thay bản nháp cũ" className="flex flex-wrap items-center gap-4 rounded-3 border border-warn/60 bg-warn/[var(--kg-tint-a)] px-4 py-3">
       <div className="min-w-0 flex-1">
         <p className="text-subtitle text-fg-strong">Dự án này đang có một bản nháp kiểu cũ</p>
         <p className="text-body text-fg-muted">

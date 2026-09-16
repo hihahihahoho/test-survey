@@ -714,13 +714,17 @@ export function SheetResultPanel({
               {/* Khung `relative` chỉ để LỚP PHỦ có mốc: nó nằm đè đúng hộp của `<img>`,
                   và `preserveAspectRatio` mặc định của SVG khớp từng pixel với
                   `object-contain` của ảnh — không có phép quy đổi nào để sai. */}
-              {/* MỜ ĐI CHỈ KHỐI ẢNH, và ĐÚNG NẤC 60% — hai điều kiện, cả hai có lý do.
+              {/* MỜ ĐI CHỈ KHỐI ẢNH, và ĐÚNG NẤC 80% — hai điều kiện, cả hai có lý do.
                   · Khối này không chứa một chữ nào (hai câu chú thích nằm NGOÀI nó):
                     cổng `npm run contrast` cấm mờ-hoá chữ, vì chữ mờ là chữ mất, còn
                     ảnh mờ thì vẫn là ảnh — xem khối chú thích ở `row-ui.tsx`.
-                  · Nấc 60% là nấc ĐÃ CÓ TRONG BẢNG ĐO của cổng (`UiKitBlockView`),
-                    nên không đẻ thêm một alpha nữa cho người sau phải đo lại. */}
-              <div className={cn("relative", waiting && "opacity-60")}>
+                  · Nấc 80% chứ không phải 60%: cổng đo `opacity-<n>` theo NẤC, không
+                    theo nơi đeo — nó không biết khối này rỗng chữ, nên một nấc 60%
+                    đeo ở đây vẫn bị chấm bằng thước chữ và ra 3.31:1 (fg-muted trên
+                    `raised`, xem lượt đo 10/09). Nấc 80% là nấc DUY NHẤT còn lại vừa
+                    đã có trong bảng đo (`KitCard`) vừa PASS cả hai theme (5.38/4.74
+                    dark · 5.29/4.83 light), nên không đẻ thêm alpha cho người sau. */}
+              <div className={cn("relative", waiting && "opacity-80")}>
                 <button
                   type="button"
                   onClick={() => setZoom(true)}

@@ -397,7 +397,7 @@ function SizePill({ label, element, value, onChange }: {
         <span className="truncate">{sizeLabel(value)}</span>
         {/* Cái bút: cùng quy ước với `OptionPill` — "con số này do bạn gõ, không
             phải một nấc có sẵn". */}
-        {typed && <Pencil aria-hidden className="size-3.5 shrink-0 opacity-60" />}
+        {typed && <Pencil aria-hidden className="size-3.5 shrink-0 opacity-80" />}
         <PillCaret compact />
       </PillButton>
 
@@ -1279,7 +1279,7 @@ export function UiKitBlockBody({
       </div>
 
       {askReset && (
-        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2 border border-warn/40 bg-warn/[var(--kg-tint-a)] px-3 py-2">
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2 border border-warn/60 bg-warn/[var(--kg-tint-a)] px-3 py-2">
           <span className="text-body text-fg-strong">Quay về template sẽ bỏ câu tự do của các dòng.</span>
           <div className="ml-auto flex gap-2">
             <Button variant="secondary" size="sm" onClick={() => setAskReset(false)}>

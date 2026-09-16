@@ -69,7 +69,7 @@ PillButton.displayName = "PillButton";
 
 /** Mũi tên ⌄ của pill mở được menu — đúng dấu hiệu trong ảnh mẫu. */
 export function PillCaret({ compact }: { compact?: boolean }) {
-  return <ChevronDown aria-hidden className={cn("shrink-0 opacity-60", compact ? "size-3" : "size-4")} />;
+  return <ChevronDown aria-hidden className={cn("shrink-0 opacity-80", compact ? "size-3" : "size-4")} />;
 }
 
 /**
@@ -402,7 +402,7 @@ export function OptionPill({
         {/* Cái bút nói ra "chữ này do bạn viết, không phải một mục có sẵn" — nếu
             không thì một mô tả tự gõ trông y hệt một preset và người dùng đi tìm
             nó trong danh sách. */}
-        {!shot && custom && <Pencil aria-hidden className="size-3.5 shrink-0 opacity-60" />}
+        {!shot && custom && <Pencil aria-hidden className="size-3.5 shrink-0 opacity-80" />}
         {attaching && <Loader aria-hidden />}
         <PillCaret compact={compact} />
       </PillButton>

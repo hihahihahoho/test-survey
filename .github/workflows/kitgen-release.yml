@@ -103,33 +103,19 @@ jobs:
           # ...và chặn NGAY TỪ ĐẦU NGUỒN: khổ phải đi tới model dưới dạng số, không
           # kèm đường lui "if supported" — chính chỗ hedge đó đẻ ra ảnh sai khổ.
           bash ../test/gen-canvas-size.test.sh
+      # `verify:release` = nogen + typecheck + contrast + deadclass + test:release + build.
+      # Đó là TOÀN BỘ cổng của webapp; đừng thêm bước `npm run <x>` nào vào đây mà không
+      # mở `kit-gen/webapp/package.json` xem script ấy còn sống không — chính chỗ này đã
+      # đỏ liên tục từ 10/09 vì workflow còn gọi `test:integration`, `playwright install`
+      # và `test:e2e` sau khi commit 7488baa («dọn đợt 2») xoá cả ba: script, gói
+      # @playwright/test lẫn thư mục `tests/e2e`. Luồng trình duyệt nay KHÔNG có máy canh
+      # ở CI — đó là khoảng trống đã biết và đã chọn, không phải điều bị bỏ quên; nếu dựng
+      # lại bộ e2e thì dựng lại luôn cả bước cache Chromium (không cache thì mỗi lượt tải
+      # ~150MB, ngày 2026-08-18 CDN Playwright treo làm release 2.1.29 kẹt 40+ phút).
       - name: Verify web application
         run: npm run verify:release
-      - name: Verify integration contracts
-        run: npm run test:integration
       - name: Verify local agent
         run: node ../agent/test-agent.mjs
-      # Cache ~/.cache/ms-playwright: khong cache thi MOI run tai ~150MB Chromium tu CDN
-      # Playwright — ngay 2026-08-18 CDN treo lam release 2.1.29 ket 40+ phut o step nay.
-      # timeout-minutes de CDN treo thi step FAIL nhanh cho rerun, khong ngoi cho vo han.
-      - name: Cache Chromium (Playwright)
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('kit-gen/webapp/package-lock.json') }}
-      - name: Install Chromium
-        timeout-minutes: 12
-        run: npx playwright install --with-deps chromium
-      # --workers=1 LÀ CỐ Ý, KHÔNG PHẢI "cho chắc".
-      # Hai ca @visual của trang Cài đặt đỏ NGẪU NHIÊN khi playwright chạy `fullyParallel`
-      # trên runner CI; chạy nối tiếp thì luôn xanh. Đã tái hiện trên baseline KHÔNG có
-      # patch nào ⇒ đây là flake của bộ e2e (nhiều tab cùng nói chuyện với một dev server
-      # vite duy nhất), không phải hồi quy của bản phát hành. Một lượt release đỏ vì flake
-      # tốn nhiều hơn vài phút chạy chậm.
-      # GỠ CỜ NÀY KHI: root cause của 2 ca @visual đã sửa và bộ e2e xanh 10 lượt liên tiếp
-      # ở chế độ song song (kiểm bằng `npx playwright test --repeat-each=10`).
-      - name: Verify browser flows
-        run: npm run test:e2e -- --workers=1
       - name: Resolve package version
         id: version
         working-directory: .

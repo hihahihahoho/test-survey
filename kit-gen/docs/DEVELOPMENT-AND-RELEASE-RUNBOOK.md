@@ -56,7 +56,6 @@ kit-gen/webapp/
 ├── src/routeTree.ts    cây route khai báo tay
 ├── src/features/       màn hình và workflow sản phẩm
 ├── src/components/     layout và UI primitives
-├── tests/e2e/          Playwright
 ├── package.json        version và lệnh build/test
 └── dist/               output build; không phải source
 ```
@@ -223,13 +222,7 @@ Không dựa vào `webapp/dist` cũ. Build app trước, rồi mới đóng gói
 cd kit-gen/webapp
 npm ci
 npm run verify:release
-npm run test:integration
 node ../agent/test-agent.mjs
-# `npx playwright install chromium` chỉ cần cho e2e của webapp (devDependency).
-# Đường SHIP không có Playwright, và từ 07/09/2026 cũng không còn @resvg/resvg-wasm:
-# engine chỉ còn bash + python3 (Pillow).
-npx playwright install chromium
-npm run test:e2e
 cd ../..
 
 bash kit-gen/test/kitgen-run-env.test.sh
@@ -243,6 +236,13 @@ bash kit-gen/scripts/build-runtime.sh \
   "$KITGEN_RELEASE_OUT"
 ls -lh "$KITGEN_RELEASE_OUT"
 ```
+
+`npm run verify:release` đã gộp sẵn `nogen → typecheck → contrast → deadclass →
+test:release → build`, nên không cần gọi lại từng cái. KHÔNG còn bước Playwright:
+commit 7488baa («dọn đợt 2») đã xoá `tests/e2e`, script `test:e2e`/`test:integration`
+lẫn gói `@playwright/test`. Gõ lại mấy lệnh đó chỉ nhận `npm ERR! Missing script` —
+và đó chính là thứ làm CI «KitGen release» đỏ suốt từ 10/09. Luồng trình duyệt hiện
+KHÔNG có máy canh tự động: đổi màn nào thì phải mở `npm run dev` bấm tay màn đó.
 
 Thay `2.1.14` bằng version thật. Kết quả gồm đúng một archive và checksum:
 
@@ -611,7 +611,7 @@ khôi phục, LaunchAgent cũ được bootstrap nếu thiếu, restart và heal
 [ ] Giữ dữ liệu thử nghiệm ngoài release nếu chưa quyết định force-add
 [ ] Bump package.json + package-lock.json + release.json cùng version
 [ ] Chạy shell installer tests
-[ ] Chạy verify:release + integration + agent + e2e Playwright của webapp
+[ ] Chạy verify:release + test-agent.mjs của webapp
 [ ] Build archive local và kiểm SHA-256
 [ ] Inspect file staged; không git add . mù quáng
 [ ] Commit một release candidate rõ ràng
