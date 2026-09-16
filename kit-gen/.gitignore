@@ -1,14 +1,11 @@
-# Dữ liệu gen/test cục bộ — repo chỉ giữ bộ công cụ trắng (styles.example.json là mẫu)
+# Dữ liệu gen/test cục bộ — repo chỉ giữ bộ công cụ trắng (mẫu styles: webapp/src/__tests__/fixtures/styles.example.json)
 raw/
 kits/
 logs/
 prompts/
 refs/
-matte-compare/
 styles.json
-styles.json.bak
 nohup.out
-skeleton/
 teams/*
 !teams/easy-install/
 !teams/easy-install/**
@@ -17,8 +14,6 @@ teams/*
 !teams/easy-install-guide/
 !teams/easy-install-guide/**
 dist/
-__pycache__/
-*.pyc
 figma-export/.captures/
 # Ảnh thử nghiệm được giữ cục bộ; chỉ force-add mốc đã chọn để làm tài liệu.
 experiments/
