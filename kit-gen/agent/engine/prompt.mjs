@@ -79,8 +79,18 @@ export function fmtG(x) {
   return s
 }
 
-/** `str(x).strip()` — cùng tập ký tự trắng cho mọi chuỗi mà contract thật mang. */
-function strip(v) { return pyStr(v).trim() }
+/* ⚠️ `str.strip()` CỦA PYTHON VÀ `trim()` CỦA JS KHÔNG CÙNG MỘT TẬP KÝ TỰ.
+ * Đo bằng lệnh thật (16/09/2026): Python còn cắt \x1c-\x1f (bốn ký tự phân tách
+ * bản ghi của đời máy in) và \x85 (NEL) mà JS giữ lại; JS thì cắt \ufeff (BOM) mà
+ * Python giữ lại. Nghe như chuyện không bao giờ xảy ra — cho tới khi một `note` dán
+ * từ Word mang theo một BOM giữa chuỗi và hai engine in ra hai prompt khác nhau,
+ * LẶNG LẼ. Hợp đồng ở đây là từng byte, nên tập ký tự phải là tập của Python. */
+const PY_WS = "\\t\\n\\v\\f\\r \\x1c-\\x1f\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000"
+const PY_STRIP = new RegExp(`^[${PY_WS}]+|[${PY_WS}]+$`, "g")
+
+/** `str(x).strip()` của Python — ĐÚNG tập ký tự trắng của Python, xem khối trên. */
+export function pyStrip(v) { return pyStr(v).replace(PY_STRIP, "") }
+const strip = pyStrip
 
 /* ══ TỈ LỆ LÕI: THỨ DUY NHẤT MODEL THẬT SỰ GIỮ ĐƯỢC (gen.sh ~210-280) ═════════
    Prompt từng đưa hộp pixel; đo ra model vẽ đúng tâm mà cỡ gấp 1,5–1,7 lần
@@ -159,7 +169,7 @@ export function cell_sentence(hint) {
     if (low.startsWith(dau)) return "Each cell contains " + h.slice(dau.length).replace(/\.+$/, "") + "."
   }
   if (low.endsWith(" cell")) {
-    h = h.slice(0, -5).trim()
+    h = pyStrip(h.slice(0, -5))
     low = h.toLowerCase()
   }
   if (low === "" || low === "cell" || low === "cells") return ""

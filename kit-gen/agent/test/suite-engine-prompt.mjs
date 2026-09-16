@@ -22,7 +22,7 @@ import { spawn } from "node:child_process"
 
 import { describe, it, eq, ok, includes, rmTemp } from "./harness.mjs"
 import * as G from "../engine/geometry.mjs"
-import { buildPrompt, core_aspect, cell_sentence, inner_box, gutter_px, listJobs } from "../engine/prompt.mjs"
+import { buildPrompt, core_aspect, cell_sentence, inner_box, gutter_px, listJobs, pyStrip } from "../engine/prompt.mjs"
 import { renderPrompts, match } from "../engine/cli.mjs"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -473,6 +473,15 @@ export async function run() {
     const [cw, ch] = G.cell_size(1536, 1024, 2, 2)
     eq(gutter_px(cw, ch), Math.min(Math.floor((cw - G.cell_inner(cw, ch)[0]) / 2),
       Math.floor((ch - G.cell_inner(cw, ch)[1]) / 2)), "ô không vuông lấy cạnh hẹp hơn")
+  })
+
+  await it("`strip()` cắt ĐÚNG tập ký tự trắng của Python, không của JS", () => {
+    // Đo bằng lệnh thật: Python còn cắt \x1c-\x1f và \x85 mà JS giữ; JS cắt \ufeff
+    // (BOM) mà Python giữ. Một `note` dán từ Word mang BOM là đủ để hai engine in ra
+    // hai prompt khác nhau, LẶNG LẼ — mà hợp đồng ở đây là từng byte.
+    eq(pyStrip("\u001c a \u0085"), "a", "ký tự Python cắt mà JS không")
+    eq(pyStrip("\ufeff a \ufeff"), "\ufeff a \ufeff", "BOM: Python GIỮ, nên ta cũng giữ")
+    eq(pyStrip("  b\t\n"), "b", "ký tự trắng thường")
   })
 
   await it("`bool()` của Python: mảng rỗng và object rỗng là SAI", async () => {
