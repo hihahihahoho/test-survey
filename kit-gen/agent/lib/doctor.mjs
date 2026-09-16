@@ -7,9 +7,9 @@ import { execFile } from "node:child_process"
 import { homedir, platform, arch, release } from "node:os"
 import { join } from "node:path"
 import { statfs, readFile } from "node:fs/promises"
-import { resolveEngine } from "./engine.mjs"
+import { readEnv } from "../engine/gen.mjs"
 import { shortenPath } from "./redact.mjs"
-import { pythonCommand, winShellOpts, winSpawnOpts, pythonEnv } from "./platform.mjs"
+import { winShellOpts, winSpawnOpts } from "./platform.mjs"
 
 const CACHE_MS = 60_000
 let cache = { at: 0, data: null }
@@ -24,9 +24,6 @@ function run(cmd, args, { timeout = 6000, env = {} } = {}) {
       (err, stdout, stderr) => resolve({ ok: !err, code: err?.code ?? 0, stdout: stdout ?? "", stderr: stderr ?? "" }))
   })
 }
-
-/** python3 trên Unix; python.exe của venv (KITGEN_PYTHON) trên Windows. */
-function runPy(args, opts) { const c = pythonCommand(args); return run(c.cmd, c.args, { ...opts, env: { ...(opts?.env ?? {}), ...pythonEnv() } }) }
 
 async function firstLineVersion(cmd, args = ["--version"]) {
   const r = await run(cmd, args, { timeout: 5000 })
@@ -92,21 +89,24 @@ async function codexWhere() {
   }
 }
 
-/* CHỈ CÒN PILLOW. `slice.py` nay chỉ CẮT theo toạ độ và giữ nguyên alpha của model;
-   cả chồng thư viện của tầng tách nền cũ không còn đường nào gọi tới, và dò chúng
-   chỉ tạo ra một dòng đỏ cho thứ không ai cần. */
-async function pythonInfo() {
-  const v = await firstLineVersion(pythonCommand().cmd)
-  if (!v.ok) return { ok: false, version: null, venv: false, deps: {} }
-  const probe = await runPy(["-c",
-    "import importlib.util as u,json;print(json.dumps({'PIL':u.find_spec('PIL') is not None}))"])
-  let deps = {}
-  try {
-    deps = { pillow: !!JSON.parse(probe.stdout.trim() || "{}").PIL }
-  } catch { deps = { pillow: false } }
-  const venvProbe = await runPy(["-c", "import sys;print('1' if sys.prefix!=sys.base_prefix else '0')"])
-  return { ok: true, version: v.version, venv: venvProbe.stdout.trim() === "1", deps }
-}
+/* ══ MỤC «PYTHON 3» + «PILLOW» ĐÃ BỎ (bước ④, 16/09/2026) ═════════════════════
+   Chúng có mặt vì engine là `slice.py` (Pillow) và vì thumbnail chạy bằng Pillow.
+   Cả hai đường nay là JS trong gói agent, nên một máy KHÔNG CÓ python vẫn cắt được
+   sheet và vẫn co được ảnh — hỏi han về python ở đây chỉ còn là dò một thứ mà sản
+   phẩm không dùng, rồi bày cho người dùng một dòng đỏ và một lệnh `pip install`
+   không chữa gì cả.
+
+   KHOÁ `python` BỊ BỎ KHỎI PAYLOAD, và đó là lựa chọn ÍT DỐI NHẤT trong ba lựa chọn:
+     · `ok: true`  — hai dòng checklist hiện ✓ cho một thứ agent KHÔNG hề kiểm, ngay
+                     tại màn hình mà cả giá trị của nó là nói thật. Loại.
+     · `ok: false` — hiện ✗ đỏ kèm lệnh `pip install pillow` không chữa gì. Loại.
+     · `ok: null`  — `lib/types/api.ts` khai `ok: z.boolean()`, null làm HỎNG phép
+                     parse của cả payload doctor. Loại (và webapp cấm sửa ở bước này).
+   Vắng khoá thì webapp rơi vào nhánh nó ĐÃ CÓ SẴN và đã viết thành lời:
+   «agent không khai mục nào ⇒ hiện "chưa kiểm được", KHÔNG bịa ✗» (DoctorChecklist.tsx)
+   — `python` khai `.optional()` trong lược đồ nên payload vẫn hợp lệ. Bước ⑤ gỡ hai
+   dòng ấy khỏi webapp; tới lúc đó chúng nói "Công cụ local chưa báo về mục này", đúng
+   nghĩa đen của việc vừa xảy ra. */
 
 /* join() chứ không replace chuỗi: trên Windows homedir() dùng backslash, ghép "~/x"
    bằng replace sẽ ra "C:\Users\a/x" — path lai hai kiểu ngăn cách, so sánh/label sai. */
@@ -174,55 +174,32 @@ async function imageGenInfo(ws) {
   return out
 }
 
-/* ══ MODEL DÙNG ĐỂ TẠO ẢNH — ĐỌC RA TỪ ENGINE, KHÔNG CHÉP LẠI ═══════════════════
+/* ══ MODEL DÙNG ĐỂ TẠO ẢNH — HỎI ENGINE, KHÔNG CHÉP LẠI ═════════════════════════
  *
- * `gen.sh` mới là nơi quyết định model/effort:
- *     GEN_MODEL="${KITGEN_GEN_MODEL-gpt-5.6-luna}"
- *     GEN_EFFORT="${KITGEN_GEN_EFFORT-medium}"
- * Chép hai giá trị đó sang JS là tạo ra một bản sao thứ hai để lệch dần — đúng họ bug
- * mà `item-prompt.ts` đã phải dựng một test đọc gen.sh từ đĩa để canh. Nên ở đây ĐỌC
- * THẲNG file engine đang thật sự được chạy: sửa gen.sh là màn Cài đặt đổi theo, không
- * ai phải nhớ sửa hai chỗ.
+ * `engine/gen.mjs::readEnv` là nơi DUY NHẤT quyết định model/effort:
+ *     genModel:  dashDefault(env.KITGEN_GEN_MODEL, "gpt-5.6-luna")
+ *     genEffort: dashDefault(env.KITGEN_GEN_EFFORT, "medium")
+ * Chép hai giá trị đó sang đây là tạo một bản sao thứ hai để lệch dần — đúng họ bug
+ * mà `item-prompt.ts` đã phải dựng một test đọc engine từ đĩa để canh. Trước bước ④
+ * doctor phải BÓC HAI DÒNG BASH của `gen.sh` bằng regex; nay engine là JS nên nó gọi
+ * thẳng chính cái hàm mà lượt gen sẽ gọi. Không còn gì để lệch.
  *
- * Đọc gen.sh KHÔNG vi phạm hợp đồng §4.4-4: nó là script của chính sản phẩm, không
- * phải `auth.json` / `config.toml`. Thứ trả ra vẫn chỉ là tên model + một enum effort.
- *
- * `-` chứ không `:-` trong bash: đặt `KITGEN_GEN_MODEL=""` là CỐ Ý TẮT (trả engine về
- * model của hồ sơ), khác hẳn với không đặt gì. JS phải phân biệt đúng như vậy, nên
- * dùng `!== undefined` chứ không dùng `||`.
+ * `dashDefault` (tức `-` chứ không `:-` trong bash): đặt `KITGEN_GEN_MODEL=""` là CỐ Ý
+ * TẮT (trả engine về model của hồ sơ), khác hẳn với không đặt gì — `readEnv` giữ đúng
+ * phân biệt ấy, ở đây chỉ dịch nó sang `null`.
  */
-const MODEL_LINE = /^GEN_MODEL="\$\{KITGEN_GEN_MODEL-([^}"]*)\}"/m
-const EFFORT_LINE = /^GEN_EFFORT="\$\{KITGEN_GEN_EFFORT-([^}"]*)\}"/m
-
-/** Giá trị hiệu lực của một biến: env của agent (gen.sh là tiến trình con) hoặc mặc định của engine. */
-function envOr(name, fallback) {
-  const raw = process.env[name]
-  return raw !== undefined ? raw : fallback
-}
-
 async function genModelInfo(ws, { probe = true } = {}) {
+  void ws
   const out = { requested: null, effort: null, known: null, source: "unknown" }
-  let text = null
-  try {
-    const dir = await resolveEngine(ws)
-    if (dir) text = await readFile(join(dir, "gen.sh"), "utf8")
-  } catch { /* không đọc được engine ⇒ nói "chưa rõ", không đoán bừa */ }
-  if (text === null) return out
-
-  const defModel = text.match(MODEL_LINE)?.[1] ?? null
-  const defEffort = text.match(EFFORT_LINE)?.[1] ?? null
-  if (defModel === null) return out
-
-  const model = envOr("KITGEN_GEN_MODEL", defModel)
-  const effort = envOr("KITGEN_GEN_EFFORT", defEffort ?? "")
+  const cfg = readEnv(process.env)
   out.source = process.env.KITGEN_GEN_MODEL !== undefined ? "env" : "engine"
-  out.requested = model === "" ? null : model
-  out.effort = effort === "" ? null : effort
+  out.requested = cfg.genModel === "" ? null : cfg.genModel
+  out.effort = cfg.genEffort === "" ? null : cfg.genEffort
   if (out.requested === null || !probe) return out
 
-  /* CỔNG CỦA gen.sh, chạy y nguyên: catalog TĨNH nằm sẵn trên máy (~0,03s, không gọi
+  /* CỔNG CỦA ENGINE, chạy y nguyên: catalog TĨNH nằm sẵn trên máy (~0,03s, không gọi
      mạng). Nó chỉ chứng minh bản codex này BIẾT tên model — không chứng minh provider
-     chịu phục vụ; gen.sh còn một nhánh tự chữa nữa khi provider từ chối, và nhánh đó
+     chịu phục vụ; engine còn một nhánh tự chữa nữa khi provider từ chối, và nhánh đó
      chỉ lộ ra trong log của lượt chạy. Vì vậy UI phải nói "sẽ yêu cầu", không nói
      "chắc chắn chạy bằng".
      CODEX_HOME đặt TƯỜNG MINH theo `resolveCodexHome` — cùng home mà gen dùng.
@@ -248,15 +225,14 @@ export async function doctor(ws, { refresh = false } = {}) {
     const data = {
       os: `${platform()}-${arch()}`, shell: "unknown", kernel: release(),
       node: { ok: true, version: process.versions.node },
-      python: { ok: false, version: null, venv: false, deps: {} },
       codex: { ok: false, version: null, binLabel: null, shellOk: null, shellDirLabel: null },
       imageGen: {
         mode: "unknown", profile: "default-home", available: false,
         codexHomeLabel: shortenPath(resolveCodexHome()),
         authPresent: false,
         verifiedAt: new Date().toISOString(), reason: "UNKNOWN", needsFallbackHome: true,
-        /* LITE cấm spawn ⇒ không hỏi catalog được. Vẫn ĐỌC được gen.sh (thuần I/O file)
-           nên tên model là thật; `known` để null đúng nghĩa "chưa kiểm". */
+        /* LITE cấm spawn ⇒ không hỏi catalog được. Vẫn HỎI ĐƯỢC engine (chỉ là đọc
+           biến môi trường) nên tên model là thật; `known` để null = "chưa kiểm". */
         model: await genModelInfo(ws, { probe: false }),
       },
       workspace: await workspaceInfo(ws), checkedAt: new Date().toISOString(), lite: true,
@@ -264,9 +240,8 @@ export async function doctor(ws, { refresh = false } = {}) {
     cache = { at: Date.now(), data }
     return data
   }
-  const [node, py, codex, where, img, wsInfo] = await Promise.all([
+  const [node, codex, where, img, wsInfo] = await Promise.all([
     firstLineVersion(process.execPath),
-    pythonInfo(),
     firstLineVersion(CODEX),
     codexWhere(),
     imageGenInfo(ws),
@@ -275,8 +250,11 @@ export async function doctor(ws, { refresh = false } = {}) {
   const data = {
     os: `${platform()}-${arch()}`, shell: (process.env.SHELL ?? "").split("/").pop() || "unknown",
     kernel: release(),
-    node: { ok: true, version: process.versions.node },
-    python: py,
+    /* NODE: không dò bằng cách spawn một `node --version` nữa — agent ĐANG CHẠY
+       bằng chính nó, nên `process.versions.node` là câu trả lời chắc chắn đúng và
+       rẻ hơn một tiến trình con. (`firstLineVersion(process.execPath)` vẫn được gọi
+       ở trên cho ca hi hữu binary hỏng, nhưng nó không được quyền nói "không ok".) */
+    node: { ok: true, version: node.version ?? process.versions.node },
     /* `ok` = AGENT chạy được. `shellOk` = TERMINAL CỦA KHÁCH gõ được. Hai câu khác
        nhau — xem `codexWhere`; gộp chúng lại chính là con bug đã tốn một chuyến
        lên máy khách. */

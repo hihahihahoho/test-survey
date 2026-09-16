@@ -3,13 +3,26 @@
 
    HỢP ĐỒNG BẤT DI BẤT DỊCH CỦA FILE NÀY:
      Trên darwin/linux MỌI hàm ở đây phải trả về ĐÚNG thứ mà mã cũ đã hard-code
-     ("bash", "python3", process.kill(-pid, sig), {} cho options). Không một nhánh
-     nào được đổi hành vi ngoài `process.platform === "win32"`. Nếu đời sau sửa file
-     này, kiểm lại bằng `node agent/test-agent.mjs` (phải xanh 100% trên macOS).
+     ("bash", process.kill(-pid, sig), {} cho options). Không một nhánh nào được đổi
+     hành vi ngoài `process.platform === "win32"`. Nếu đời sau sửa file này, kiểm lại
+     bằng `node agent/test-agent.mjs` (phải xanh 100% trên macOS).
 
-   VÌ SAO CẦN:
-     · engine là gen.sh / cover.sh (bash) + slice.py (python3) — Windows không có
-       sẵn thứ nào. Bash lấy từ Git for Windows (bundled), python từ python.org.
+   ╔══ BƯỚC ④, 16/09/2026: NỬA FILE NÀY ĐÃ BIẾN MẤT ════════════════════════════╗
+   ║ ĐÃ BỎ: `bashCommand` · `bashEnvPath` · `pythonCommand` · `pythonEnv` ·      ║
+   ║ `pythonSpawnOpts`. Chúng tồn tại vì MỘT lý do duy nhất: engine là `gen.sh`  ║
+   ║ (bash) + `slice.py` (python3), mà Windows không có sẵn thứ nào — nên agent  ║
+   ║ phải đi tìm `bash.exe` của Git for Windows, dựng lại PATH cho coreutils, và ║
+   ║ bơm `PYTHONUTF8=1` để `open()` của Python đừng đọc styles.json bằng CP1252. ║
+   ║ Engine nay là JS và chạy bằng `process.execPath` — không PATH, không shell, ║
+   ║ không bảng mã locale. Cả họ bug ấy không còn cửa nào để quay lại.           ║
+   ║                                                                             ║
+   ║ CÒN LẠI phần bash, và CHỈ CHO ĐÚNG MỘT VIỆC: `findBash` / `bashEnv` /       ║
+   ║ `toBashPath` phục vụ BỘ CÀI (`lib/update.mjs` chạy `install.sh` đã tải về,  ║
+   ║ và `test/suite-update-cure.mjs` canh nó). Đó là địa hạt của installer —      ║
+   ║ bước ⑤ xử lý cùng lúc với việc xoá `gen.sh`/`slice.py` khỏi repo.           ║
+   ╚═════════════════════════════════════════════════════════════════════════════╝
+
+   VÌ SAO PHẦN CÒN LẠI VẪN CẦN:
      · Node spawn KHÔNG dùng shell nên không chạy được `.cmd` (Node ≥18.20 chặn hẳn
        để vá CVE-2024-27980) ⇒ npm-bin của codex trên Windows cần shell: true.
      · Không có process group POSIX ⇒ `process.kill(-pid)` vô nghĩa; phải taskkill /T.
@@ -25,10 +38,10 @@ export const IS_WIN = process.platform === "win32"
 
 /**
  * Đường dẫn Windows → dạng MSYS mà bash của Git for Windows hiểu.
- *   C:\Users\a\gen.sh → /c/Users/a/gen.sh
- * BẮT BUỘC: gen.sh chạy `cd "$(dirname "$0")"`. Với `$0 = C:\...\gen.sh` thì
- * `dirname` trả "." (không có dấu "/" nào) ⇒ engine sẽ neo sai thư mục.
- * Trên non-win đây là hàm đồng nhất.
+ *   C:\Users\a\install.sh → /c/Users/a/install.sh
+ * BẮT BUỘC cho bộ cài: script chạy `cd "$(dirname "$0")"`, mà với
+ * `$0 = C:\...\install.sh` thì `dirname` trả "." (không có dấu "/" nào) ⇒ nó neo
+ * sai thư mục. Trên non-win đây là hàm đồng nhất.
  */
 export function toBashPath(p) {
   if (!IS_WIN) return String(p)
@@ -104,88 +117,15 @@ export function findBash() {
   return bashCache
 }
 
-/**
- * PATH cho tiến trình bash con.
- * Git for Windows để bash.exe ở <Git>\bin nhưng coreutils (grep, sed, date, du,
- * cp, wc, tail…) ở <Git>\usr\bin — thứ KHÔNG có trong PATH của Windows. Chạy
- * bash.exe với PATH nguyên bản là gen.sh chết ngay dòng `date +%s`.
- * Thêm cả <KITGEN_HOME>\bin để shim `python3` (installer sinh ra) được thấy.
- */
-function bashEnvPath(bashExe) {
-  const gitRoot = dirname(dirname(bashExe))
-  const home = process.env.KITGEN_HOME || null
-  const dirs = [
-    // shim `python3` do installer sinh (Windows không có lệnh tên python3)
-    home ? join(home, "bin") : null,
-    // node cho mọi thứ gen.sh/cover.sh gọi bằng node (và cho `codex` do npm cài)
-    home ? join(home, "tools", "node") : null,
-    // gen.sh/cover.sh gọi `codex` — npm sinh script không đuôi ở .bin, bash chạy được
-    home ? join(home, "tools", "node_modules", ".bin") : null,
-    process.env.KITGEN_CODEX_BIN ? dirname(process.env.KITGEN_CODEX_BIN) : null,
-    // coreutils (grep/sed/date/du/cp/wc/tail) — KHÔNG nằm trong PATH của Windows
-    join(gitRoot, "usr", "bin"),
-    join(gitRoot, "mingw64", "bin"),
-    join(gitRoot, "bin"),
-  ].filter(Boolean)
-  return dirs.join(";") + ";" + (process.env.PATH ?? "")
-}
-
-/**
- * Lệnh chạy một script bash. `paths` là CÁC ĐƯỜNG DẪN (script + tham số path).
- * @returns {{cmd:string, args:string[], env:Object}} env rỗng trên non-win.
- * Không tìm thấy bash.exe → vẫn trả "bash" để spawn ném ENOENT và đi vào nhánh
- * `child.on("error")` sẵn có (báo lỗi cho người dùng, không làm sập agent).
- */
-export function bashCommand(paths) {
-  if (!IS_WIN) return { cmd: "bash", args: paths, env: {} }
-  const bash = findBash()
-  if (!bash) return { cmd: "bash", args: paths, env: {} }
-  return { cmd: bash, args: paths.map(toBashPath), env: bashEnv({ ...process.env, PATH: bashEnvPath(bash) }, bash) }
-}
-
-/* ── 3. Python ───────────────────────────────────────────────────────────── */
-
-/**
- * Windows KHÔNG có lệnh `python3` (python.org cài `python.exe` + launcher `py`).
- * Installer ghi KITGEN_PYTHON = đường dẫn tuyệt đối tới python.exe của venv.
- */
-export function pythonCommand(args = []) {
-  if (!IS_WIN) return { cmd: "python3", args }
-  return { cmd: process.env.KITGEN_PYTHON || "python", args }
-}
-
-/**
- * Biến môi trường BẮT BUỘC cho mọi tiến trình Python trên Windows. Rỗng trên non-win.
- *
- * `open(path)` của Python KHÔNG mặc định UTF-8: nó dùng bảng mã của locale, mà locale
- * mặc định của Windows tiếng Việt/Anh là CP1252/CP1258. `styles.json`, `contract.json`,
- * `manifest.json` đều là UTF-8 và đều có tiếng Việt ⇒ `json.load(open(...))` nổ ngay:
- *     UnicodeDecodeError: 'charmap' codec can't decode byte 0x8f in position 627
- * Chiều ngược lại cũng hỏng: `print("→ kits/manifest.json")` ra stdout CP1252 =
- * UnicodeEncodeError. ĐÃ ĐO ĐƯỢC trên runner (run 31793695016, job 4): mọi ca có
- * spawn engine đều đỏ chỉ vì dòng `json.load(open('styles.json'))` trong engine.
- *
- * `PYTHONUTF8=1` (UTF-8 Mode, Python 3.7+) đổi mặc định của `open()` VÀ của stdio sang
- * UTF-8 cho CẢ tiến trình — vá được cả `slice.py`, `geometry.py` lẫn mọi heredoc python
- * trong gen.sh/cover.sh mà không phải sửa từng lời gọi `open()`. `PYTHONIOENCODING`
- * chốt thêm phần stdio phòng khi UTF-8 Mode bị tắt bằng `-X utf8=0`.
- *
- * Đây là LỚP CHẮN, không phải lời bào chữa: `slice.py` vẫn nên ghi rõ `encoding="utf-8"`
- * ở từng lời gọi `open()` (WINDOWS-PORT §4.4) cho người chạy tay ngoài agent.
- */
-export function pythonEnv() {
-  return IS_WIN ? { PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" } : {}
-}
-
-/**
- * Options cho `spawn` một tiến trình Python: winSpawnOpts + môi trường UTF-8.
- * Trên darwin/linux trả `{}` — ĐÚNG thứ mà `...winSpawnOpts()` trả trước đây, nên chỗ
- * gọi không đổi một chút hành vi nào ngoài win32.
- */
-export function pythonSpawnOpts() {
-  if (!IS_WIN) return {}
-  return { ...winSpawnOpts(), env: { ...process.env, ...pythonEnv() } }
-}
+/* ── 3. Python: KHÔNG CÒN GÌ Ở ĐÂY ───────────────────────────────────────────
+   `pythonCommand` / `pythonEnv` / `pythonSpawnOpts` đã bỏ ở bước ④ cùng `slice.py`
+   và khối Pillow của thumbnail. Ba đường từng gọi chúng nay gọi `process.execPath`:
+     · `lib/engine.mjs::buildCommand("slice")`      → `cli.mjs slice`
+     · `lib/run-handle.mjs::validateGeometry`       → `cli.mjs validate`
+     · `lib/thumbs.mjs`                             → `cli.mjs thumb`
+   và `lib/doctor.mjs` thôi dò python/Pillow hoàn toàn. KHÔNG khôi phục chúng để
+   "chạy tạm một script python": mỗi lời gọi như thế là một lần nữa bắt người dùng
+   phải có python trên máy — đúng thứ cả bước ①-④ vừa gỡ ra. */
 
 /* ── 4. spawn/exec options ───────────────────────────────────────────────── */
 
@@ -208,8 +148,8 @@ export function winShellOpts(cmd) {
 /**
  * POSIX: y hệt mã cũ — `process.kill(-pid, sig)` rồi rơi về `child.kill(sig)`.
  * Windows: không có process group ⇒ `taskkill /PID <pid> /T` (thêm /F cho SIGKILL).
- * Bắt buộc phải /T: codex là tiến trình CHÁU của bash, giết mỗi bash thì codex
- * vẫn chạy tiếp và vẫn đốt quota sau khi người dùng đã bấm Dừng.
+ * Bắt buộc phải /T: codex là tiến trình CHÁU (con của engine), giết mỗi engine thì
+ * codex vẫn chạy tiếp và vẫn đốt quota sau khi người dùng đã bấm Dừng.
  */
 /**
  * Tham số cho `taskkill`. LUÔN có cả /T và /F, kể cả khi được xin SIGTERM "nhẹ nhàng".
