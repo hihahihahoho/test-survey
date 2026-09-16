@@ -209,13 +209,16 @@ async function filesUnder(root, dir = root) {
 async function makeRuntimeFixture(tmp, repoInstall, { version = "2.1.25", installerSuffix = "" } = {}) {
   const root = join(tmp, "fixture", `kitgen-runtime-${version}`)
   await mkdir(join(root, "agent"), { recursive: true })
-  await mkdir(join(root, "engine"), { recursive: true })
+  await mkdir(join(root, "agent", "engine"), { recursive: true })
   await mkdir(join(root, "app"), { recursive: true })
   await mkdir(join(root, "runtime", "bin"), { recursive: true })
   await mkdir(join(root, "runtime", "service"), { recursive: true })
   await writeFile(join(root, "VERSION"), `${version}\n`)
   await writeFile(join(root, "agent", "server.mjs"), "export {}\n")
-  await writeFile(join(root, "engine", "gen.sh"), "#!/bin/sh\nexit 0\n")
+  /* DẤU NHẬN DIỆN GÓI PHÁT HÀNH (install.sh::is_release) là `agent/engine/cli.mjs`,
+     không còn là `engine/gen.sh`. Fixture sai dấu ⇒ installer gọi chính nó là
+     "Invalid KitGen runtime archive" và cả bộ ca này đo nhầm một thứ khác. */
+  await writeFile(join(root, "agent", "engine", "cli.mjs"), "export {}\n")
   await writeFile(join(root, "app", "index.html"), "<!doctype html>\n")
   const sourceServiceDir = join(dirname(repoInstall), "runtime", "service")
   await writeFile(join(root, "runtime", "service", "com.kitgen.agent.plist.in"),
@@ -231,7 +234,6 @@ async function makeRuntimeFixture(tmp, repoInstall, { version = "2.1.25", instal
     "  restart|run) exit 0 ;;",
     "esac",
   ].join("\n") + "\n")
-  await chmod(join(root, "engine", "gen.sh"), 0o755)
   await chmod(join(root, "runtime", "bin", "kitgen"), 0o755)
 
   const manifest = []

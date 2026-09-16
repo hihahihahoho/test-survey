@@ -68,55 +68,25 @@ STRAY_SHIM="$KITGEN_HOME/tools/node/bin/codex"
 
 mkdir -p "$FAKE_BIN" "$KITGEN_TEST_STATE" "$HOME/.local/bin" \
   "$KITGEN_HOME/releases" "$KITGEN_HOME/tools/node/bin" "$KITGEN_HOME/tools/node_modules/.bin" \
-  "$RELEASE/agent" "$RELEASE/app" "$RELEASE/engine" "$RELEASE/runtime/bin" "$RELEASE/runtime/service"
+  "$RELEASE/agent/engine" "$RELEASE/app" "$RELEASE/runtime/bin" "$RELEASE/runtime/service"
 
 printf '%s\n' '2.1.5' > "$RELEASE/VERSION"
 printf '%s\n' 'export const testAgent = true' > "$RELEASE/agent/server.mjs"
 printf '%s\n' '<!doctype html><title>KitGen test</title>' > "$RELEASE/app/index.html"
-printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$RELEASE/engine/gen.sh"
+# DẤU NHẬN DIỆN gói phát hành là `agent/engine/cli.mjs` (install.sh::is_release).
+printf '%s\n' 'export {}' > "$RELEASE/agent/engine/cli.mjs"
 cp "$INSTALL_SH" "$RELEASE/install.sh"
 cp "$ROOT/runtime/bin/kitgen" "$RELEASE/runtime/bin/kitgen"
 cp "$ROOT/runtime/service/com.kitgen.agent.plist.in" "$RELEASE/runtime/service/com.kitgen.agent.plist.in"
-chmod +x "$RELEASE/install.sh" "$RELEASE/engine/gen.sh" "$RELEASE/runtime/bin/kitgen"
+chmod +x "$RELEASE/install.sh" "$RELEASE/runtime/bin/kitgen"
 (
   cd "$RELEASE"
   find . -type f ! -name manifest.sha256 -print0 | sort -z | xargs -0 shasum -a 256 > manifest.sha256
 )
 
-# ── Python giả: khai 3.13 (trong dải có wheel) ⇒ installer không tải gì ───────
-REAL_PYTHON3="$(command -v python3)"
-cat > "$FAKE_BIN/python3" <<EOF
-#!/usr/bin/env bash
-REAL_PYTHON3='$REAL_PYTHON3'
-EOF
-cat >> "$FAKE_BIN/python3" <<'EOF'
-_self_base="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-if [ "${1:-}" = "-m" ] && [ "${2:-}" = "venv" ]; then
-  _venv="$3"
-  mkdir -p "$_venv/bin"
-  cat > "$_venv/bin/python" <<'VEOF'
-#!/usr/bin/env bash
-case "$*" in
-  *"sys.base_prefix"*) printf '%s\n' "$(dirname "$(dirname "$(command -v python3)")")"; exit 0 ;;
-  *"sys.version.split"*) printf '%s\n' '3.13.15'; exit 0 ;;
-  *"import PIL"*) exit 1 ;;
-esac
-[ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ] && exit 0
-exit 0
-VEOF
-  chmod +x "$_venv/bin/python"
-  ln -sf python "$_venv/bin/python3"
-  exit 0
-fi
-case "$*" in
-  *"sys.version_info[:3]"*) printf '%s\n' '3.13.15'; exit 0 ;;
-  *"sys.version_info[:2]"*) printf '%s\n' '3.13'; exit 0 ;;
-  *"sys.base_prefix"*) printf '%s\n' "$_self_base"; exit 0 ;;
-  --version) printf 'Python 3.13.15\n'; exit 0 ;;
-esac
-exec "$REAL_PYTHON3" "$@"
-EOF
-chmod +x "$FAKE_BIN/python3"
+# KHÔNG CÒN PYTHON GIẢ. Khối ~35 dòng ở đây từng phải đóng vai một python3 3.13 +
+# một venv + một pip, chỉ để installer đừng đi tải CPython thật (bộ ca cấm ra mạng).
+# Từ 16/09/2026 installer không hỏi han gì về Python nữa.
 
 cat > "$FAKE_BIN/uname" <<'EOF'
 #!/usr/bin/env bash

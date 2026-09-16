@@ -21,21 +21,22 @@ mkdir -p \
   "$KITGEN_HOME/releases" \
   "$KITGEN_HOME/tools/node/bin" \
   "$KITGEN_HOME/tools/node_modules/.bin" \
-  "$KITGEN_WORKSPACE/.venv/bin" \
   "$RELEASE/agent" \
   "$RELEASE/app" \
-  "$RELEASE/engine" \
   "$RELEASE/runtime/bin" \
   "$RELEASE/runtime/service"
 
 printf '%s\n' '2.1.5' > "$RELEASE/VERSION"
 printf '%s\n' 'export const testAgent = true' > "$RELEASE/agent/server.mjs"
 printf '%s\n' '<!doctype html><title>KitGen test</title>' > "$RELEASE/app/index.html"
-printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$RELEASE/engine/gen.sh"
+# DẤU NHẬN DIỆN gói phát hành là `agent/engine/cli.mjs` (install.sh::is_release),
+# không còn là `engine/gen.sh` — engine bash đã bị xoá 16/09/2026.
+mkdir -p "$RELEASE/agent/engine"
+printf '%s\n' 'export {}' > "$RELEASE/agent/engine/cli.mjs"
 cp "$ROOT/install.sh" "$RELEASE/install.sh"
 cp "$ROOT/runtime/bin/kitgen" "$RELEASE/runtime/bin/kitgen"
 cp "$ROOT/runtime/service/com.kitgen.agent.plist.in" "$RELEASE/runtime/service/com.kitgen.agent.plist.in"
-chmod +x "$RELEASE/install.sh" "$RELEASE/engine/gen.sh" "$RELEASE/runtime/bin/kitgen"
+chmod +x "$RELEASE/install.sh" "$RELEASE/runtime/bin/kitgen"
 (
   cd "$RELEASE"
   find . -type f ! -name manifest.sha256 -print0 | sort -z | xargs -0 shasum -a 256 > manifest.sha256
@@ -63,35 +64,14 @@ EOF
 mkdir -p "$HOME/.local/bin"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$HOME/.local/bin/codex"
 chmod +x "$HOME/.local/bin/codex"
-# Python riêng của KitGen (GIẢ). Bộ test không được phụ thuộc phiên bản Python của máy
-# chạy nó: macOS mặc định là /usr/bin/python3 3.9 — ngoài dải có wheel — nên installer
-# thật sẽ đi TẢI bản riêng ~24 MB, mà test thì cấm ra mạng. Dựng sẵn bản riêng ở đây là
-# installer đi nhánh ① (dùng lại bản đã có) và không đụng tới mạng.
-mkdir -p "$KITGEN_HOME/tools/python/bin"
-cat > "$KITGEN_HOME/tools/python/bin/python3" <<'EOF'
-#!/usr/bin/env bash
-case "$*" in
-  *"sys.version_info[:3]"*) printf '3.13.15\n' ;;
-  *"sys.version_info[:2]"*) printf '3.13\n' ;;
-  *"sys.base_prefix"*) printf '%s\n' "$KITGEN_HOME/tools/python" ;;
-  *) exit 0 ;;
-esac
-EOF
-chmod +x "$KITGEN_HOME/tools/python/bin/python3"
-
-cat > "$KITGEN_WORKSPACE/.venv/bin/python" <<'EOF'
-#!/usr/bin/env bash
-# `sys.base_prefix` phải khớp bản Python riêng ở trên, nếu không installer coi venv này
-# là đồ thừa của một Python khác và dựng lại (đúng như thiết kế) — rồi chạy pip thật.
-case "$*" in
-  *"sys.base_prefix"*) printf '%s\n' "$KITGEN_HOME/tools/python" ;;
-  *) exit 0 ;;
-esac
-EOF
+# KHÔNG CÒN PYTHON GIẢ Ở ĐÂY. Trước 16/09/2026 bộ ca phải dựng sẵn một "Python riêng
+# của KitGen" và một venv giả, nếu không installer sẽ đi TẢI CPython ~24 MB — mà test
+# thì cấm ra mạng. Installer nay không hỏi han gì về Python nữa, nên cả khối ấy biến mất
+# cùng thứ nó mô phỏng. (Ca «installer KHÔNG được chạm tới Python» ở
+# test/install-no-python.test.sh.)
 chmod +x \
   "$KITGEN_HOME/tools/node/bin/node" \
-  "$KITGEN_HOME/tools/node_modules/.bin/codex" \
-  "$KITGEN_WORKSPACE/.venv/bin/python"
+  "$KITGEN_HOME/tools/node_modules/.bin/codex"
 
 cat > "$FAKE_BIN/uname" <<'EOF'
 #!/usr/bin/env bash

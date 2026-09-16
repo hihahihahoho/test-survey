@@ -1,15 +1,14 @@
-/* suite-engine-gen.mjs — VÒNG GỌI CODEX CỦA BẢN JS PHẢI PHÁN GIỐNG BẢN BASH.
+/* suite-engine-gen.mjs — VÒNG GỌI CODEX CỦA ENGINE JS.
  *
- * ╔══ BA TẦNG, VÀ CHÚNG CANH BA THỨ KHÁC NHAU ══════════════════════════════════╗
- * ║ ① PORT TỪNG CA CỦA BỘ TEST SHELL. Mỗi ca ở đây có một ca anh em trong        ║
- * ║   `test/gen-*.test.sh`; ca shell trích `run_one` từ `gen.sh` rồi chạy, ca này ║
- * ║   gọi `runOne` của JS — cùng codex giả, cùng câu hỏi, cùng câu trả lời phải   ║
- * ║   nhận. Sửa `gen.mjs` mà làm hỏng nhánh nào thì ĐỎ ở đây; sửa `gen.sh` mà làm ║
- * ║   hỏng nhánh ấy thì đỏ ở kia. Hai bộ ca, hai engine, cùng một hợp đồng.       ║
- * ║ ② SO TRỰC TIẾP HAI ENGINE. Chạy `bash gen.sh` THẬT và `node cli.mjs gen`      ║
- * ║   trên cùng một fixture với cùng một codex giả, rồi so stdout từng dòng. Đây  ║
- * ║   là ca đắt nhất và cũng là ca duy nhất không tin lời ai: nó ĐO.              ║
- * ║ ③ ẢNH: cover crop 16:9 và thumbnail, so với mốc Pillow đã đóng băng.          ║
+ * ╔══ HAI TẦNG, VÀ CHÚNG CANH HAI THỨ KHÁC NHAU ════════════════════════════════╗
+ * ║ ① MỌI NHÁNH CỦA `runOne`. Mỗi ca ở đây từng có một ca anh em trong           ║
+ * ║   `test/gen-*.test.sh` (bộ ca shell trích `run_one` từ `gen.sh` rồi chạy).   ║
+ * ║   Bước ⑤a xoá cả engine bash lẫn bộ ca shell ấy, nên ĐÂY là nơi DUY NHẤT còn ║
+ * ║   canh những nhánh đó: busy-retry, model fallback, OK giả, khổ canvas, alpha. ║
+ * ║ ② ẢNH: cover crop 16:9 và thumbnail, so từng pixel với mốc Pillow đã đóng     ║
+ * ║   băng (`engine-resample/pillow.json`).                                      ║
+ * ║ Mục ③ cũ — chạy song song `bash gen.sh` để so trực tiếp — đã xoá cùng engine  ║
+ * ║ bash; xem khối giải thích ở giữa file và `engine-golden/README.md`.           ║
  * ╚═════════════════════════════════════════════════════════════════════════════╝
  *
  * KHÔNG GỌI CODEX THẬT. `codex` giả là một script Node có shebang, ghi đúng những
@@ -649,174 +648,19 @@ export async function run() {
     delete process.env.KITGEN_CODEX_BIN
   }
 
-  // ══════════════════════════════════════════ 3. SO TRỰC TIẾP VỚI gen.sh
-  describe("engine JS › gen: so TRỰC TIẾP với gen.sh trên cùng codex giả")
+  /* ══════════════════════════════════════════ 3. SO TRỰC TIẾP VỚI gen.sh — ĐÃ XOÁ
+     Ở đây từng có 169 dòng chạy SONG SONG `bash gen.sh` + `bash cover.sh` thật và
+     `node cli.mjs` trên cùng một fixture với cùng một codex giả, rồi so stdout từng
+     dòng và ảnh bìa từng pixel. Đó là ca đã CHỨNG MINH bản port đúng, và nó đã làm
+     xong việc của mình: bước ⑤a (16/09/2026) xoá hẳn `gen.sh`/`cover.sh`/`slice.py`
+     khỏi kho, nên vế trái của phép so không còn tồn tại.
 
-  /* Thiếu Pillow thì `alpha_verdict` của bash trả "skip" cho MỌI ảnh, còn bản JS vẫn
-     đo thật — hai bên nói khác nhau vì máy thiếu thư viện, không vì engine sai. Một ca
-     không chạy được phải TỰ KHAI, chứ không được giả vờ xanh. */
-  const canRunBash = !IS_WIN && (await exec("python3", ["-c", "import PIL"])).code === 0
-
-  if (!canRunBash) {
-    await it("[bỏ qua] máy này không chạy được gen.sh (cần bash + python3)", async () => { ok(true) })
-  } else {
-    /**
-     * Chuẩn hoá stdout trước khi so. Ba thứ bị gạt, và mỗi thứ có lý do:
-     *  · giờ `HH:MM:SS` — hai lượt chạy ở hai thời điểm;
-     *  · cỡ file sau `OK  <job>` — `du -h` của BSD/GNU in khác nhau (xem `humanSize`);
-     *  · khối `ls -la raw/` mà `gen.sh` in ở dòng cuối — bản JS cố ý KHÔNG chép.
-     */
-    const norm = out => out
-      .split("\n")
-      .filter(l => !/^(total |[-dlbcps][rwxSsTt-]{9})/.test(l))     // ls -la
-      .map(l => l.replace(/\d\d:\d\d:\d\d/, "<giờ>"))
-      .map(l => l.replace(/^(OK {2}\S+) +\S+/, "$1  <cỡ>"))
-      .join("\n").replace(/\n+$/, "")
-
-    /** Chép engine bash vào một thư mục làm việc, đúng hình dạng agent dựng trên máy thật. */
-    async function bashWork(fixture, codexSrc) {
-      const work = await mkdtemp(join(tmpdir(), "kitgen-cmp-bash-"))
-      await cp(join(FIX, fixture, "input"), work, { recursive: true })
-      await cp(join(REPO, "gen.sh"), join(work, "gen.sh"))
-      await cp(join(REPO, "geometry.py"), join(work, "geometry.py"))
-      await chmod(join(work, "gen.sh"), 0o755)
-      await cp(codexSrc, join(work, "codex"))
-      await chmod(join(work, "codex"), 0o755)
-      return work
-    }
-
-    /** Ảnh tham chiếu mà `.att` của ca trỏ tới. Có mặt thật thì `-i` mới được đính và
-     *  đường dẫn mới được liệt kê trong task — nhánh đắt nhất của `run_one`. */
-    async function seedRefs(dir, names) {
-      if (!names.length) return
-      await mkdir(join(dir, "refs"), { recursive: true })
-      for (const n of names) await writeFile(join(dir, "refs", n), pngUi())
-    }
-
-    const REFS = ["shared.png", "layout.png", "brand-logo.png", "inspo-1.jpg"]
-    for (const [fixture, mode, refs] of [
-      ["ui-1x1", "src", []],
-      ["bg-multi-scenes", "src", []],
-      ["multi-style-sheetbreaks", "none", []],
-      ["inspo-brand-refs", "src", REFS],          // .att có ảnh THẬT ⇒ `-i` + khối REFERENCE IMAGES
-    ]) {
-      await it(`ca «${fixture}» (MODE=${mode}) — stdout của hai engine trùng từng dòng`, async () => {
-        const seed = await mkdtemp(join(tmpdir(), "kitgen-cmp-seed-"))
-        const codexSrc = await fakeCodex(seed)
-        const src = join(seed, "anh.png")
-        await writeFile(src, pngUi())
-
-        // ① bash gen.sh — codex giả nằm trong PATH, đúng lối của bộ ca shell.
-        const bw = await bashWork(fixture, codexSrc)
-        await seedRefs(bw, refs)
-        // codex giả nằm trong PATH — đúng lối của bộ ca shell. Nó tự suy đích ra từ
-        // `-o logs/<job>.last.txt` nên không cần `DST`, và phục vụ được lượt nhiều job.
-        const shEnv = {
-          ...process.env, PATH: `${bw}:${process.env.PATH}`,
-          MAXJOBS: "1", MODE: mode, SRC: src, GEN_BUSY_RETRIES: "0",
-        }
-        delete shEnv.KITGEN_CODEX_BIN
-        delete shEnv.DST
-        const sh = await exec("bash", ["./gen.sh"], { cwd: bw, env: shEnv })
-
-        // ② node cli.mjs gen
-        const jsEnv = { ...process.env }
-        delete jsEnv.DST
-        const jw = await mkdtemp(join(tmpdir(), "kitgen-cmp-js-"))
-        await cp(join(FIX, fixture, "input"), jw, { recursive: true })
-        await seedRefs(jw, refs)
-        const js = await exec(process.execPath, [join(ENGINE, "cli.mjs"), "gen", jw], {
-          cwd: jw,
-          env: { ...jsEnv, KITGEN_CODEX_BIN: codexSrc, MAXJOBS: "1", MODE: mode, SRC: src, GEN_BUSY_RETRIES: "0" },
-        })
-
-        eq(js.code, sh.code, "mã thoát")
-        const a = norm(sh.out), b = norm(js.out)
-        if (a !== b) {
-          const al = a.split("\n"), bl = b.split("\n")
-          for (let i = 0; i < Math.max(al.length, bl.length); i++) {
-            if (al[i] !== bl[i]) {
-              throw new Error(`${fixture}: stdout lệch ở dòng ${i + 1}\n` +
-                `    gen.sh: ${JSON.stringify(al[i])}\n    js    : ${JSON.stringify(bl[i])}`)
-            }
-          }
-        }
-        eq(b, a, `${fixture}: stdout`)
-
-        /* STDOUT GIỐNG NHAU CHƯA ĐỦ khi ca có ảnh tham chiếu: khối chữ gửi CHO CODEX
-           mới là thứ tốn tiền, và nó chứa đường dẫn tuyệt đối của từng ảnh. So luôn
-           `logs/<job>.last.txt`? Không — codex giả không ghi file ấy. So bằng cách
-           bắt chính task: chạy lại một lượt với TASK_LOG cho cả hai bên. */
-        if (refs.length) {
-          /* Thay CẢ hai cách viết cùng một thư mục. Trên macOS `/var` là symlink tới
-             `/private/var`: bash lấy `pwd` từ `getcwd()` (biến PWD thừa kế không khớp
-             thư mục thật) nên nó viết `/private/var/…`, còn Node giữ `/var/…`. Hai
-             chuỗi, một thư mục — và nếu không gạt thì ca đỏ vì symlink của hệ điều
-             hành chứ không vì engine. */
-          const grab = async (dir, cmd, env) => {
-            const tl = join(dir, "task.txt")
-            await exec(cmd[0], cmd[1], { cwd: dir, env: { ...env, TASK_LOG: tl } })
-            const real = await realpath(dir)
-            return (await readFile(tl, "utf8")).split(real).join("<project>").split(dir).join("<project>")
-          }
-          const tSh = await grab(bw, ["bash", ["./gen.sh"]], shEnv)
-          const tJs = await grab(jw, [process.execPath, [join(ENGINE, "cli.mjs"), "gen", jw]],
-            { ...jsEnv, KITGEN_CODEX_BIN: codexSrc, MAXJOBS: "1", MODE: mode, SRC: src, GEN_BUSY_RETRIES: "0" })
-          includes(tSh, "--- REFERENCE IMAGES START ---", "ca này phải có ảnh kèm thật")
-          eq(tJs, tSh, `${fixture}: khối task gửi codex`)
-        }
-        await rmTemp(bw); await rmTemp(jw); await rmTemp(seed)
-      })
-    }
-
-    await it("cover: `bash cover.sh` và `node cli.mjs cover` ra cùng stdout và CÙNG PIXEL", async () => {
-      const seed = await mkdtemp(join(tmpdir(), "kitgen-cov-seed-"))
-      const codexSrc = await fakeCodex(seed)
-      const src = join(FIX_RS, "src.png")
-
-      /** Dựng một project chỉ có đúng thứ `cover.sh` cần đọc. */
-      async function mk(withScript) {
-        const w = await mkdtemp(join(tmpdir(), "kitgen-cov-"))
-        for (const d of ["cover", "logs", "prompts"]) await mkdir(join(w, d), { recursive: true })
-        await writeFile(join(w, "prompts/cover.txt"), "một prompt ảnh bìa\n", "utf8")
-        if (withScript) {
-          await cp(join(REPO, "cover.sh"), join(w, "cover.sh"))
-          await chmod(join(w, "cover.sh"), 0o755)
-          await cp(codexSrc, join(w, "codex"))
-          await chmod(join(w, "codex"), 0o755)
-        }
-        return w
-      }
-
-      const bw = await mk(true)
-      const shEnv = { ...process.env, PATH: `${bw}:${process.env.PATH}`, MODE: "cover", SRC: src }
-      delete shEnv.KITGEN_CODEX_BIN
-      delete shEnv.DST
-      const sh = await exec("bash", [join(bw, "cover.sh"), bw], { cwd: bw, env: shEnv })
-
-      const jw = await mk(false)
-      const jsEnv = { ...process.env, KITGEN_CODEX_BIN: codexSrc, MODE: "cover", SRC: src }
-      delete jsEnv.DST
-      const js = await exec(process.execPath, [join(ENGINE, "cli.mjs"), "cover", jw], { cwd: jw, env: jsEnv })
-
-      eq(js.code, sh.code, "mã thoát")
-      // Hai lượt chạy ở hai thư mục tạm khác nhau, và `du -h` in khác nhau giữa BSD/GNU.
-      const norm = (out, dir) => out.split("\n")
-        .map(l => l.split(dir).join("<project>"))
-        .map(l => l.replace(/^(OK {2}cover) +\S+$/, "$1  <cỡ>"))
-        .join("\n").replace(/\n+$/, "")
-      eq(norm(js.out, jw), norm(sh.out, bw), "stdout")
-      includes(sh.out, "OK  cover", "bản bash phải đi tới nhánh cắt được (máy này có Pillow)")
-
-      const a = decode(await readFile(join(bw, "cover/cover.png")))
-      const b = decode(await readFile(join(jw, "cover/cover.png")))
-      eq([b.width, b.height, b.bands], [a.width, a.height, a.bands], "khổ + số kênh")
-      let lech = 0
-      for (let i = 0; i < a.data.length; i++) if (a.data[i] !== b.data[i]) lech++
-      eq(lech, 0, `số byte pixel lệch (Pillow vs JS) — ${a.width}x${a.height}`)
-      await rmTemp(bw); await rmTemp(jw); await rmTemp(seed)
-    })
-  }
+     Ca ấy còn tự tắt trên máy thiếu `python3` + Pillow (gate `canRunBash`) — nghĩa là
+     ngay trước khi xoá, nó đã không chạy trên chính cấu hình mà sản phẩm hứa hẹn.
+     Thứ Ở LẠI là mốc ĐÃ ĐÓNG BĂNG do bản Python sinh ra: prompt golden
+     (`suite-engine-prompt.mjs`), đầu ra cắt golden (`suite-engine-slice.mjs`) và băm
+     pixel của Pillow ở mục 4 ngay dưới. Chúng so cùng một thứ, nhưng không cần bản
+     Python còn sống — xem `agent/test/engine-golden/README.md`. */
 
   // ══════════════════════════════════════════ 4. ẢNH: cover + thumbnail
   describe("engine JS › ảnh: cover 16:9 · thumbnail")

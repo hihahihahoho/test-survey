@@ -12,7 +12,7 @@ WORKSPACE="$HOME/KitGen"
 NODE_DIR="$KITGEN_HOME/tools/node/bin"
 CODEX_DIR="$KITGEN_HOME/tools/node_modules/.bin"
 STATE="$TEST_ROOT/node-env"
-mkdir -p "$KITGEN_HOME" "$NODE_DIR" "$CODEX_DIR" "$WORKSPACE/.venv/bin" "$KITGEN_HOME/current/agent" "$KITGEN_HOME/current/app"
+mkdir -p "$KITGEN_HOME" "$NODE_DIR" "$CODEX_DIR" "$KITGEN_HOME/current/agent" "$KITGEN_HOME/current/app"
 
 cat > "$NODE_DIR/node" <<EOF
 #!/usr/bin/env bash
@@ -38,7 +38,10 @@ EOF
 
 PATH="/usr/bin:/bin:/usr/sbin:/sbin" "$ROOT/runtime/bin/kitgen" run
 
-expected_prefix="$WORKSPACE/.venv/bin:$NODE_DIR:$CODEX_DIR:"
+# `$WORKSPACE/.venv/bin` ĐÃ RA KHỎI tiền tố này (16/09/2026): engine là JS, KitGen
+# không dựng venv nào nữa. Hai thư mục còn lại là hai thứ agent THẬT SỰ spawn —
+# Node riêng (chạy `agent/engine/cli.mjs`) và codex.
+expected_prefix="$NODE_DIR:$CODEX_DIR:"
 actual_path="$(sed -n '1p' "$STATE")"
 case "$actual_path" in
   "$expected_prefix"*) ;;

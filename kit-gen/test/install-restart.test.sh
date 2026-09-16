@@ -7,11 +7,11 @@
 # ở đây, mỗi cái ứng với một mảnh của sự cố:
 #
 #   ① CÀI DỞ THÌ KHÔNG ĐƯỢC ĐỔI GÌ — installer chết SAU khi đã dựng xong bản mới
-#      trong `releases/` nhưng TRƯỚC khi kích hoạt (ở đây: pillow cài hỏng, bước 2/6)
-#      phải để `current` y nguyên. Trước 2.1.21 symlink đổi ở bước 2/7 nên mọi lỗi sau
-#      đó đều để lại đúng cái trạng thái nửa vời không ai đọc được.
-#      (Bản trước dùng health check @resvg/resvg-wasm làm chỗ chết; trình render khung
-#      xương đã bỏ hẳn khỏi installer, nên chỗ chết chuyển sang pip.)
+#      trong `releases/` nhưng TRƯỚC khi kích hoạt (ở đây: không cài được Codex CLI,
+#      bước 3/6) phải để `current` y nguyên. Trước 2.1.21 symlink đổi ở bước 2/7 nên
+#      mọi lỗi sau đó đều để lại đúng cái trạng thái nửa vời không ai đọc được.
+#      (Chỗ chết đã đổi hai lần vì chính cái bước ấy biến mất: health check
+#      @resvg/resvg-wasm → pip/pillow → Codex. Điều được đo thì không đổi một chữ.)
 #   ② "CÓ AI TRẢ LỜI" KHÔNG PHẢI "BẢN MỚI ĐANG CHẠY" — agent cũ trả lời /health được.
 #      Restart không ăn ⇒ installer phải thử lại rồi HỎNG TO kèm lệnh chữa, không được
 #      in "OK agent phản hồi" rồi thoát 0.
@@ -39,23 +39,24 @@ mkdir -p \
   "$KITGEN_HOME/releases" \
   "$KITGEN_HOME/tools/node/bin" \
   "$KITGEN_HOME/tools/node_modules/.bin" \
-  "$KITGEN_WORKSPACE/.venv/bin" \
   "$HOME/Library/LaunchAgents" \
   "$RELEASE/agent" \
   "$RELEASE/app" \
-  "$RELEASE/engine" \
   "$RELEASE/runtime/bin" \
   "$RELEASE/runtime/service"
 
 printf '%s\n' '2.1.5' > "$RELEASE/VERSION"
 printf '%s\n' 'export const testAgent = true' > "$RELEASE/agent/server.mjs"
 printf '%s\n' '<!doctype html><title>KitGen test</title>' > "$RELEASE/app/index.html"
-printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$RELEASE/engine/gen.sh"
+# DẤU NHẬN DIỆN gói phát hành là `agent/engine/cli.mjs` (install.sh::is_release),
+# không còn là `engine/gen.sh` — engine bash đã bị xoá 16/09/2026.
+mkdir -p "$RELEASE/agent/engine"
+printf '%s\n' 'export {}' > "$RELEASE/agent/engine/cli.mjs"
 INSTALLER_SOURCE="${KITGEN_INSTALL_SOURCE:-$ROOT/install.sh}"
 cp "$INSTALLER_SOURCE" "$RELEASE/install.sh"
 cp "$ROOT/runtime/bin/kitgen" "$RELEASE/runtime/bin/kitgen"
 cp "$ROOT/runtime/service/com.kitgen.agent.plist.in" "$RELEASE/runtime/service/com.kitgen.agent.plist.in"
-chmod +x "$RELEASE/install.sh" "$RELEASE/engine/gen.sh" "$RELEASE/runtime/bin/kitgen"
+chmod +x "$RELEASE/install.sh" "$RELEASE/runtime/bin/kitgen"
 (
   cd "$RELEASE"
   find . -type f ! -name manifest.sha256 -print0 | sort -z | xargs -0 shasum -a 256 > manifest.sha256
@@ -88,38 +89,14 @@ cat > "$KITGEN_HOME/tools/node_modules/.bin/codex" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
-# Python riêng của KitGen (GIẢ). Bộ test không được phụ thuộc phiên bản Python của máy
-# chạy nó: macOS mặc định là /usr/bin/python3 3.9 — ngoài dải có wheel — nên installer
-# thật sẽ đi TẢI bản riêng ~24 MB, mà test thì cấm ra mạng. Dựng sẵn bản riêng ở đây là
-# installer đi nhánh ① (dùng lại bản đã có) và không đụng tới mạng.
-mkdir -p "$KITGEN_HOME/tools/python/bin"
-cat > "$KITGEN_HOME/tools/python/bin/python3" <<'EOF'
-#!/usr/bin/env bash
-case "$*" in
-  *"sys.version_info[:3]"*) printf '3.13.15\n' ;;
-  *"sys.version_info[:2]"*) printf '3.13\n' ;;
-  *"sys.base_prefix"*) printf '%s\n' "$KITGEN_HOME/tools/python" ;;
-  *) exit 0 ;;
-esac
-EOF
-chmod +x "$KITGEN_HOME/tools/python/bin/python3"
-
-cat > "$KITGEN_WORKSPACE/.venv/bin/python" <<'EOF'
-#!/usr/bin/env bash
-# `sys.base_prefix` phải khớp bản Python riêng ở trên, nếu không installer coi venv này
-# là đồ thừa của một Python khác và dựng lại (đúng như thiết kế) — rồi chạy pip thật.
-# Cờ `pip-fails` dựng lại ca "installer chết SAU khi đã dựng xong bản mới": `import PIL`
-# báo THIẾU ⇒ installer đi cài ⇒ pip hỏng ⇒ thoát 1, và `current` chưa được đụng tới.
-case "$*" in
-  *"sys.base_prefix"*) printf '%s\n' "$KITGEN_HOME/tools/python" ;;
-  *) [ ! -f "$KITGEN_TEST_STATE/pip-fails" ] || exit 1; exit 0 ;;
-esac
-EOF
+# KHÔNG CÒN PYTHON GIẢ Ở ĐÂY. Trước 16/09/2026 bộ ca phải dựng sẵn một "Python riêng của
+# KitGen" + một venv giả, nếu không installer sẽ đi TẢI CPython ~24 MB — mà test thì cấm
+# ra mạng. Installer nay không hỏi han gì về Python nữa, nên cả khối ấy biến mất cùng
+# thứ nó mô phỏng, và cờ `pip-fails` đổi thành `codex-fails` (xem `curl` giả bên dưới).
 chmod +x \
   "$KITGEN_HOME/tools/node/bin/node" \
   "$KITGEN_HOME/tools/node/bin/npm" \
-  "$KITGEN_HOME/tools/node_modules/.bin/codex" \
-  "$KITGEN_WORKSPACE/.venv/bin/python"
+  "$KITGEN_HOME/tools/node_modules/.bin/codex"
 
 cat > "$FAKE_BIN/uname" <<'EOF'
 #!/usr/bin/env bash
@@ -161,6 +138,15 @@ set -eu
 for a in "$@"; do
   case "$a" in
     *chatgpt.com/codex/install.sh*)
+      # Cờ `codex-fails` dựng lại ca "installer chết SAU khi đã dựng xong bản mới":
+      # installer chính thức chạy xong nhưng `codex --version` KHÔNG chạy được ⇒
+      # install.sh thoát 1 ở bước [3/6], tức sau khi $DEST đã xong và TRƯỚC activation.
+      if [ -f "$KITGEN_TEST_STATE/codex-fails" ]; then
+        printf '%s\n' 'mkdir -p "$HOME/.local/bin"' \
+          'printf '\''#!/usr/bin/env bash\nexit 1\n'\'' > "$HOME/.local/bin/codex"' \
+          'chmod +x "$HOME/.local/bin/codex"'
+        exit 0
+      fi
       printf '%s\n' 'mkdir -p "$HOME/.local/bin"' \
         'printf '\''#!/usr/bin/env bash\nexit 0\n'\'' > "$HOME/.local/bin/codex"' \
         'chmod +x "$HOME/.local/bin/codex"'
@@ -184,20 +170,20 @@ run_install(){
 }
 
 # ── ① Cài dở ⇒ KHÔNG được đụng vào bản đang chạy ────────────────────────────
-: > "$KITGEN_TEST_STATE/pip-fails"
+: > "$KITGEN_TEST_STATE/codex-fails"
 OUT1="$TEST_ROOT/install-abort.out"
 run_install "$OUT1"
-rm -f "$KITGEN_TEST_STATE/pip-fails"
+rm -f "$KITGEN_TEST_STATE/codex-fails"
 
 [ "$status" -ne 0 ] || {
-  echo "installer đã nuốt lỗi ở bước thư viện ảnh — thiếu pillow là KHÔNG cắt được ảnh" >&2
+  echo "installer đã nuốt lỗi ở bước Codex — không có Codex là KHÔNG gen được ảnh" >&2
   cat "$OUT1" >&2
   exit 1
 }
 # Chết ĐÚNG CHỖ: nếu ca này rơi vào một lỗi khác thì hai mệnh đề dưới vẫn xanh mà
 # chẳng đo được gì. Bắt installer nói tên gói còn thiếu.
-grep -q 'thiếu pillow' "$OUT1" || {
-  echo "installer chết ở đâu đó khác, không phải ở bước cài thư viện ảnh" >&2
+grep -q 'KHÔNG cài được Codex CLI chính thức' "$OUT1" || {
+  echo "installer chết ở đâu đó khác, không phải ở bước Codex CLI" >&2
   cat "$OUT1" >&2
   exit 1
 }
