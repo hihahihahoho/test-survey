@@ -42,7 +42,10 @@ agent_cmd() {
   ensure_codex_name
   NODE_DIR="$(dirname "$NODE")"
   CODEX_DIR="$(dirname "$CODEX_BIN")"
-  exec env PATH="$WORKSPACE/.venv/bin:$NODE_DIR:$CODEX_DIR:$PATH" \
+  # $WORKSPACE/.venv/bin ĐÃ BỎ khỏi PATH (16/09/2026): engine nay là JS, KitGen không
+  # còn venv nào để trỏ tới. Thư mục cũ còn sót trên máy update từ bản ≤2.1.45 thì
+  # installer xoá hẳn, nên để lại ở đây chỉ là một lời hứa về một đường dẫn đã chết.
+  exec env PATH="$NODE_DIR:$CODEX_DIR:$PATH" \
     KITGEN_CODEX_BIN="$CODEX_BIN" \
     NODE_PATH="${NODE_PATH:-$HOME_DIR/tools/node_modules}" \
     "$NODE" "$SOURCE/agent/server.mjs" \

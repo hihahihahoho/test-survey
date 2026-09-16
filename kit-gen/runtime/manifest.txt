@@ -1,9 +1,4 @@
 agent/
-gen.sh
-cover.sh
-slice.py
-geometry.py
-validate_output_geometry.py
 element-lib.json
 webapp/dist/
 runtime/

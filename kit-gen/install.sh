@@ -54,50 +54,25 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 SELF_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-# LaunchAgent/systemd may start an update without the interactive shell's PATH.
-# Keep one absolute Python path for every installer-side helper and subprocess.
-PYTHON3="${KITGEN_PYTHON3:-$(command -v python3 2>/dev/null || true)}"
-if [ -z "$PYTHON3" ]; then
-  for _python_candidate in /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3; do
-    if [ -x "$_python_candidate" ]; then PYTHON3="$_python_candidate"; break; fi
-  done
-fi
-# ── PYTHON RIÊNG CỦA KITGEN: PIN CỨNG, KHÔNG ĐỂ MÁY NGƯỜI DÙNG QUYẾT ĐỊNH ─────
-# Cùng khuôn với khối tải Node bên dưới (tải → đối chiếu SHA-256 → giải nén vào
-# $KITGEN_HOME/tools → dùng bản riêng đó). Vì sao phải mang theo Python: wheel dựng sẵn
-# chỉ có cho một DẢI phiên bản Python; rơi ra ngoài dải đó thì pip BIÊN DỊCH từ nguồn
-# — ninja bung một tiến trình mỗi nhân CPU, mỗi
-# tiến trình hơn 1 GB RAM — và đã ĐƠ TOÀN MÁY một người dùng thật (chuột còn di được,
-# bấm gì cũng không ăn, phải giữ nút nguồn). Node đã pin cứng từ lâu; Python thì trước
-# bản này vẫn đi dò 3.13→3.12→3.11→`py -3` trên máy người dùng, mà "máy user thì không
-# có ai cài sẵn Python 3.13 cho họ" (docs/WINDOWS-PORT.md).
+# ── KITGEN KHÔNG CÒN CẦN PYTHON (16/09/2026, bước ⑤a của đợt port engine sang JS) ──
+# Tới bản 2.1.45 engine là `gen.sh` + `slice.py` + `geometry.py`, nên installer phải
+# MANG THEO cả một bản CPython pin cứng (~24 MB vào `$KITGEN_HOME/tools/python`), dựng
+# venv trong workspace và `pip install pillow` vào đó. Toàn bộ engine nay là JS chạy
+# bằng đúng Node riêng mà installer vẫn tải (`agent/engine/cli.mjs`), nên:
+#   · KHÔNG dò python3 của máy, KHÔNG tải CPython, KHÔNG dựng venv, KHÔNG gọi pip;
+#   · những thứ đời trước đã cài (tools/python, <workspace>/.venv) bị DỌN ở lượt update
+#     — xem khối "DỌN DI SẢN ĐỜI PYTHON" bên dưới; để lại là ~330 MB không ai gọi.
+# Vài helper phía installer trước đây mượn python3 (realpath, đọc JSON): nay dùng Node
+# riêng hoặc `sed`, xem `realpath_of` và `json_str`.
 #
-# NGUỒN TẢI = một GitHub release SỐNG LÂU của CHÍNH kho KitGen (tag runtime-python-*),
-# KHÔNG phải kho astral-sh. CI của mình kéo tarball gốc về, tự sinh SHA256SUMS rồi đính
-# vào release đó (.github/workflows/kitgen-runtime-python.yml). Ba lý do:
-#   · không phụ thuộc kho bên thứ ba còn sống hay không;
-#   · người dùng chỉ phải mở MỘT tên miền (máy công ty/ngân hàng lọc theo domain);
-#   · checksum do CI của mình sinh nên tin được.
-# Bản phát hành KitGen vẫn 3,1 MB — tarball Python KHÔNG đính vào từng bản release.
-PYTHON_VERSION="3.13.15"      # ĐỒNG BỘ TAY với scripts/install.ps1 ($PYTHON_VERSION)
-PYTHON_BUILD="20260814"       # ĐỒNG BỘ TAY với scripts/install.ps1 ($PYTHON_BUILD)
-PYTHON_RUNTIME_TAG="${KITGEN_PYTHON_RUNTIME_TAG:-runtime-python-$PYTHON_VERSION}"
-PYTHON_RUNTIME_BASE="${KITGEN_PYTHON_RUNTIME_BASE:-https://github.com/$RELEASE_REPO/releases/download/$PYTHON_RUNTIME_TAG}"
-PYTHON_HOME="$KITGEN_HOME/tools/python"
-# Dải phiên bản CHẮC CHẮN có wheel dựng sẵn cho cả 4 gói. Python hệ thống nằm trong dải
-# này thì dùng luôn cho đỡ tải ~24 MB; ngoài dải thì tải bản riêng — KHÔNG thử pip rồi
-# cầu may, vì cái giá của lần thử đó là treo máy.
-PYTHON_WHEEL_OK="3.11 3.12 3.13"
+# Tarball CPython cũ vẫn nằm trên GitHub Releases (tag `runtime-python-3.13.15`) và CỨ
+# ĐỂ NGUYÊN: máy còn chạy bản ≤2.1.45 vẫn tải từ đó khi cài lại.
 
-# "major.minor" của một trình Python; rỗng + mã lỗi nếu trình đó không chạy được.
-python_minor(){
-  [ -n "${1:-}" ] && [ -x "$1" ] || return 1
-  "$1" -c 'import sys;print("%d.%d" % sys.version_info[:2])' 2>/dev/null
-}
-python_wheels_ok(){
-  _pv="$(python_minor "${1:-}" || true)"
-  [ -n "$_pv" ] || return 1
-  case " $PYTHON_WHEEL_OK " in *" $_pv "*) return 0 ;; *) return 1 ;; esac
+# Lấy một field CHUỖI của một JSON PHẲNG do CHÍNH mình sinh ra (release.json). Cùng khuôn
+# với `json_field` trong runtime/bin/kitgen, và cùng lý do: không kéo thêm một runtime
+# nữa vào đường cài chỉ để đọc hai chuỗi.
+json_str(){
+  sed -n 's/.*"'"$1"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
 }
 
 # macOS có shasum, Git Bash/Linux tối giản chỉ có sha256sum — dùng được cả hai.
@@ -264,8 +239,13 @@ recover_update_txn(){
 recover_update_txn
 
 # A release directory has these three roots. Running from source is supported for development.
-is_release(){ [ -f "$1/agent/server.mjs" ] && [ -f "$1/engine/gen.sh" ] && [ -f "$1/app/index.html" ]; }
-is_source(){ [ -f "$1/agent/server.mjs" ] && [ -f "$1/gen.sh" ] && [ -f "$1/scripts/build-runtime.sh" ]; }
+#
+# DẤU NHẬN DIỆN LÀ `agent/engine/cli.mjs`, KHÔNG PHẢI `engine/gen.sh` NỮA. Hai hàm này
+# quyết định "thư mục kia có phải KitGen không"; quên đổi chúng cùng lúc với việc xoá
+# engine bash là mọi bản mới bị CHÍNH installer của nó gọi là "Invalid KitGen runtime
+# archive" — hỏng câm ngay ở bước đầu, trước cả khi có gì để đọc trong log.
+is_release(){ [ -f "$1/agent/server.mjs" ] && [ -f "$1/agent/engine/cli.mjs" ] && [ -f "$1/app/index.html" ]; }
+is_source(){ [ -f "$1/agent/server.mjs" ] && [ -f "$1/agent/engine/cli.mjs" ] && [ -f "$1/scripts/build-runtime.sh" ]; }
 wait_for_health(){
   attempts="${1:-10}"
   while [ "$attempts" -gt 0 ]; do
@@ -403,8 +383,25 @@ release_download_failed(){
 # `codex`, và có cả `node` nằm cạnh nên shebang `#!/usr/bin/env node` cũng chạy được.
 # Không đạt thì tự dựng shim tên `codex` trong $KITGEN_HOME/tools/bin (do KitGen sở
 # hữu, không phụ thuộc cách người dùng cài node).
+# Trước 16/09/2026 hàm này gọi `python3 -c os.path.realpath`. Nay Node riêng của KitGen
+# đã có mặt từ bước [2/6] và mọi caller đều đứng sau bước ấy, nên `fs.realpathSync` làm
+# đúng việc đó mà không cần thêm một runtime nào. Đường lui `cd … && pwd -P` gỡ được
+# symlink của THƯ MỤC (đủ cho ca fnm multishell ở trên) khi Node vì lý do gì đó chưa có.
 realpath_of(){
-  [ -n "$PYTHON3" ] && "$PYTHON3" -c 'import os,sys;print(os.path.realpath(sys.argv[1]))' "$1" 2>/dev/null || printf '%s' "$1"
+  _rp_out=""
+  if [ -n "${NODE:-}" ] && [ -x "${NODE:-}" ]; then
+    _rp_out="$("$NODE" -p 'require("fs").realpathSync(process.argv[1])' "$1" 2>/dev/null || true)"
+  fi
+  # KHÔNG tin bừa đầu ra: đường dẫn thật thì phải TUYỆT ĐỐI và PHẢI TỒN TẠI. Bộ ca cài
+  # đặt thay `node` bằng một script giả trả lời cố định, và một chuỗi rác trôi từ đây ra
+  # sẽ đi thẳng vào `config.env` dưới dạng đường dẫn Codex — đúng họ bug 14/08.
+  case "$_rp_out" in
+    /*) [ -e "$_rp_out" ] && { printf '%s' "$_rp_out"; return 0; } ;;
+  esac
+  _rp_dir="$(dirname -- "$1")"
+  _rp_base="$(basename -- "$1")"
+  _rp_real="$(CDPATH= cd -- "$_rp_dir" 2>/dev/null && pwd -P || printf '%s' "$_rp_dir")"
+  printf '%s/%s' "$_rp_real" "$_rp_base"
 }
 
 write_codex_shim(){
@@ -427,7 +424,7 @@ resolve_codex_bin(){
   _raw="$1"
   _dir="$(realpath_of "$(dirname "$_raw")")"
   # realpath phải GỠ được lớp ephemeral; còn dấu vết fnm_multishells nghĩa là không gỡ
-  # được (thiếu python3 chẳng hạn) ⇒ tuyệt đối không ghi đường dẫn đó ra config.env.
+  # được ⇒ tuyệt đối không ghi đường dẫn đó ra config.env.
   case "$_dir" in *fnm_multishells*) _dir="" ;; esac
   if [ -n "$_dir" ] && [ -x "$_dir/codex" ] && "$_dir/codex" --version >/dev/null 2>&1; then
     printf '%s' "$_dir/codex"; return 0
@@ -474,12 +471,11 @@ if ! is_release "$SELF_DIR" && ! is_source "$SELF_DIR" && [ -z "$ARCHIVE" ] && [
   if [ -n "$META" ]; then
     # Lấy luôn `version` để câu báo lỗi gọi được TÊN BẢN ("bản 2.1.22 đang được đóng gói")
     # thay vì một URL dài — xem `release_download_failed`.
-    META_FIELDS="$(printf '%s' "$META" | "$PYTHON3" -c 'import json,sys
-m = json.load(sys.stdin)
-print(m.get("archive", ""))
-print(m.get("version", ""))')"
-    RELEASE_URL="$(printf '%s\n' "$META_FIELDS" | sed -n '1p')"
-    RELEASE_VERSION="$(printf '%s\n' "$META_FIELDS" | sed -n '2p')"
+    # `sed` chứ không phải một trình JSON: khối này chạy TRƯỚC khi Node riêng được tải
+    # (máy trắng chưa có gì), còn release.json thì do CI của mình sinh ra và chỉ có ba
+    # field chuỗi phẳng. Đây là lý do duy nhất install.sh từng phải dò python3 trên PATH.
+    RELEASE_URL="$(printf '%s' "$META" | json_str archive)"
+    RELEASE_VERSION="$(printf '%s' "$META" | json_str version)"
   else
     echo "Cannot read the KitGen release manifest." >&2
     exit 1
@@ -578,61 +574,11 @@ KITGEN_ORIG_PATH="$PATH"; export KITGEN_ORIG_PATH
 PATH="$(dirname "$NODE"):$PATH"; export PATH
 progress "2/6" "Health check môi trường nền"
 check_ok "Node $($NODE --version 2>/dev/null || printf '>=20') · $NODE"
-# ── Python: bản riêng pin cứng, hoặc bản hệ thống CHẮC CHẮN có wheel ──────────
-# Thứ tự: ① bản riêng đã tải lần trước → ② Python hệ thống trong dải 3.11-3.13 (đỡ tải
-# ~24 MB) → ③ tải bản riêng pin cứng, kiểm SHA-256 TRƯỚC KHI giải nén.
-# KHÔNG có nhánh thứ tư kiểu "cài xong nhưng chưa gen được ảnh": tới đây mà hỏng là
-# hỏng thật, dừng hẳn và nói rõ cách chữa — không im lặng hạ chất lượng, không đẩy việc
-# đi cài Python sang người dùng.
-ENGINE_PYTHON=""
-if python_wheels_ok "$PYTHON_HOME/bin/python3"; then
-  ENGINE_PYTHON="$PYTHON_HOME/bin/python3"
-  check_ok "Python riêng của KitGen $("$ENGINE_PYTHON" -c 'import sys;print("%d.%d.%d" % sys.version_info[:3])') · $ENGINE_PYTHON"
-elif python_wheels_ok "$PYTHON3"; then
-  ENGINE_PYTHON="$PYTHON3"
-  check_ok "$("$PYTHON3" --version 2>&1) · $PYTHON3 (trong dải có wheel — không cần tải bản riêng)"
-  # Máy đã tự đủ ⇒ trả lại đĩa cho bản riêng hỏng/lạc còn sót từ lượt trước.
-  rm -rf "$PYTHON_HOME"
-else
-  case "$(uname -s)-$(uname -m)" in
-    Darwin-arm64) PYTHON_PLATFORM="aarch64-apple-darwin" ;;
-    Darwin-x86_64) PYTHON_PLATFORM="x86_64-apple-darwin" ;;
-    *)
-      # Cố ý KHÔNG đoán tên asset cho nền tảng chưa được CI dựng: thà nói thẳng còn hơn
-      # tải về một file 404 rồi giải nén rác.
-      echo "KitGen cần Python $PYTHON_WHEEL_OK và chưa có bản Python dựng sẵn cho $(uname -s) $(uname -m)." >&2
-      echo "Cách xử: cài Python 3.13, hoặc chạy lại với KITGEN_PYTHON3=/đường/dẫn/tới/python3." >&2
-      exit 1 ;;
-  esac
-  PYTHON_PKG="cpython-$PYTHON_VERSION+$PYTHON_BUILD-$PYTHON_PLATFORM-install_only.tar.gz"
-  _sys_minor="$(python_minor "$PYTHON3" || true)"
-  if [ -n "$_sys_minor" ]; then
-    echo "Python hệ thống là $_sys_minor — ngoài dải có wheel ($PYTHON_WHEEL_OK)."
-  fi
-  echo "Installing private Python $PYTHON_VERSION runtime (~24 MB)..."
-  curl -fsSL --retry 3 "$PYTHON_RUNTIME_BASE/$PYTHON_PKG" -o "$TMP/$PYTHON_PKG" || {
-    echo "Không tải được $PYTHON_RUNTIME_BASE/$PYTHON_PKG" >&2
-    echo "Cách xử: kiểm tra mạng/tường lửa tới github.com rồi chạy lại installer." >&2
-    exit 1; }
-  # BẢNG CHECKSUM LÀ BẮT BUỘC. Không tải được bảng = không kiểm được gói = KHÔNG GIẢI NÉN.
-  curl -fsSL --retry 3 "$PYTHON_RUNTIME_BASE/SHA256SUMS" -o "$TMP/python-shasums.txt" || {
-    echo "Không tải được bảng checksum $PYTHON_RUNTIME_BASE/SHA256SUMS — dừng, không giải nén gói chưa kiểm." >&2
-    exit 1; }
-  # `sha256sum` in "<hash>␠*<file>" khi đọc nhị phân, `shasum` in hai dấu cách ⇒ nhận cả hai.
-  EXPECTED_PYTHON_SHA="$(awk -v f="$PYTHON_PKG" '$2 == f || $2 == "*" f { print $1 }' "$TMP/python-shasums.txt")"
-  ACTUAL_PYTHON_SHA="$(sha256_file "$TMP/$PYTHON_PKG")"
-  [ -n "$EXPECTED_PYTHON_SHA" ] && [ "$EXPECTED_PYTHON_SHA" = "$ACTUAL_PYTHON_SHA" ] || { echo "Python checksum mismatch." >&2; exit 1; }
-  # Dọn bản Python cũ y hệt cách dọn Node: MỘT thư mục duy nhất, xoá sạch trước khi giải
-  # nén, nên $KITGEN_HOME không phình thêm sau mỗi lần update.
-  rm -rf "$PYTHON_HOME"
-  mkdir -p "$PYTHON_HOME"
-  tar -xzf "$TMP/$PYTHON_PKG" -C "$PYTHON_HOME" --strip-components=1
-  ENGINE_PYTHON="$PYTHON_HOME/bin/python3"
-  python_wheels_ok "$ENGINE_PYTHON" || { echo "Bản Python vừa giải nén không chạy được: $ENGINE_PYTHON" >&2; exit 1; }
-  check_ok "Python riêng của KitGen $PYTHON_VERSION · $ENGINE_PYTHON"
-fi
-# Máy hoàn toàn không có python3 hệ thống vẫn phải chạy được các helper phía installer.
-[ -n "$PYTHON3" ] && [ -x "$PYTHON3" ] || PYTHON3="$ENGINE_PYTHON"
+# ── Python: KHÔNG CÒN GÌ Ở ĐÂY (16/09/2026) ──────────────────────────────────
+# Chỗ này từng là 55 dòng dò/tải/giải nén một bản CPython pin cứng, chỉ để `slice.py`
+# và `gen.sh` chạy được. Engine JS chạy bằng đúng $NODE ở ngay trên, nên bước [2/6]
+# tới đây là đã xong. Di sản đời Python (tools/python, <workspace>/.venv) được DỌN ở
+# bước [4/6] — xem khối "DỌN DI SẢN ĐỜI PYTHON".
 # Self-test before switching current; production artifacts intentionally omit tests.
 "$NODE" --check "$NEW/agent/server.mjs" >/dev/null
 rm -rf "$DEST"
@@ -641,8 +587,8 @@ mv "$NEW" "$DEST"
 # KÍCH HOẠT VÀO PHÚT CHÓT — vì sao `ln -sfn current` KHÔNG nằm ở đây nữa.
 #
 # Trước 2.1.21, symlink `current` được trỏ sang bản mới NGAY TẠI DÒNG NÀY, tức bước 2/6,
-# rồi script còn phải đi qua mấy bước hay hỏng nhất (venv+pip, cài/dò Codex, ghi
-# config) trước khi tới bước khởi động lại ở 4/6. Bất kỳ lỗi nào trong quãng
+# rồi script còn phải đi qua mấy bước hay hỏng nhất (đời đó là venv+pip; nay là
+# cài/dò Codex, dọn di sản, ghi config) trước khi tới bước khởi động lại ở 4/6. Bất kỳ lỗi nào trong quãng
 # đó là `set -e` thoát ngay ⇒ để lại ĐÚNG hiện trường ngày 14/08: `current` đã trỏ 2.1.20,
 # tiến trình agent vẫn là 2.1.19, không có dòng log nào, UI vẫn mời cập nhật.
 #
@@ -651,60 +597,6 @@ mv "$NEW" "$DEST"
 # sẵn ở $DEST suốt quá trình — không ai đọc nó cho tới lúc đổi symlink.
 # ═══════════════════════════════════════════════════════════════════════════════
 PREVIOUS="$(readlink "$KITGEN_HOME/current" 2>/dev/null || true)"
-VENV="$WORKSPACE/.venv"
-# venv PHẢI được dựng từ đúng $ENGINE_PYTHON. Một venv đời trước trỏ vào Python khác
-# (bản hệ thống vừa được nâng cấp, hoặc bản riêng vừa bị dọn) là cái bẫy kinh điển:
-# `bin/python` gãy symlink hoặc vẫn là 3.14 ⇒ pip lại đi tìm sdist. Dựng lại rẻ hơn đoán.
-VENV_BASE="$( [ -x "$VENV/bin/python" ] && "$VENV/bin/python" -c 'import sys;print(sys.base_prefix)' 2>/dev/null || printf '' )"
-ENGINE_BASE="$("$ENGINE_PYTHON" -c 'import sys;print(sys.base_prefix)')"
-# ── TẦNG ĐỤC NỀN ĐỜI CŨ PHẢI BỊ DỌN, KHÔNG CHỈ "THÔI KHÔNG CÀI NỮA" ───────────
-# Bản ≤2.1.44 cài numpy/scipy/pymatting (kéo theo numba/llvmlite) vào venv: ~314 MB
-# cho một tầng tách nền KHÔNG CÒN AI GỌI. Điều kiện base_prefix ở trên KHÔNG bắt được
-# ca này — venv vẫn trỏ đúng Python, chỉ là nặng — nên máy update từ bản cũ giữ nguyên
-# đống đó vĩnh viễn. Dựng lại venv chỉ với Pillow là ~4 MB, và rẻ hơn mọi lời giải thích.
-# Dò bằng TÊN THƯ MỤC trong site-packages: không phải khởi động Python (một lần import
-# numpy trên máy cũ cũng mất cả giây), và đúng cả khi venv đã gãy không chạy nổi.
-venv_legacy_matting_pkgs(){   # in ra tên các gói đời cũ tìm thấy trong $VENV, cách nhau bởi dấu cách
-  _legacy=""
-  for _pkg in numpy scipy pymatting numba llvmlite; do
-    for _hit in "$VENV"/lib/python*/site-packages/"$_pkg" \
-                "$VENV"/lib/python*/site-packages/"$_pkg"-*.dist-info; do
-      [ -e "$_hit" ] || continue
-      _legacy="$_legacy $_pkg"
-      break
-    done
-  done
-  printf '%s' "${_legacy# }"
-}
-LEGACY_MATTING="$(venv_legacy_matting_pkgs)"
-if [ ! -x "$VENV/bin/python" ] || [ "$VENV_BASE" != "$ENGINE_BASE" ] || [ -n "$LEGACY_MATTING" ]; then
-  if [ -n "$LEGACY_MATTING" ]; then
-    echo "Dọn tầng đục nền đời cũ trong venv ($LEGACY_MATTING — khoảng 314 MB không còn ai gọi)."
-    echo "Dựng lại venv chỉ với Pillow (~4 MB)..."
-  fi
-  rm -rf "$VENV"
-  "$ENGINE_PYTHON" -m venv "$VENV"
-fi
-# CHỈ CÒN PILLOW. `slice.py` nay CẮT theo toạ độ và giữ nguyên alpha của model, nên
-# numpy/scipy/pymatting (tầng tách nền cũ) không còn ai gọi.
-if ! "$VENV/bin/python" -c 'import PIL' >/dev/null 2>&1; then
-  echo "Installing image-processing dependencies..."
-  # ═════════════════════════════════════════════════════════════════════════════
-  # `--only-binary=:all:` KHÔNG phải tuỳ chọn cho đẹp — ĐỪNG BAO GIỜ BỎ NÓ.
-  # Thiếu cờ này, máy nào không có wheel sẽ để pip BIÊN DỊCH gói từ nguồn: đã có
-  # người dùng thật ĐƠ TOÀN MÁY vì việc đó (chuột còn di được, bấm gì cũng không
-  # ăn, phải giữ nút nguồn). Không có wheel thì phải hỏng NGAY và RẺ, kèm câu chữa.
-  # install.ps1 cũng vậy.
-  # ═════════════════════════════════════════════════════════════════════════════
-  if ! PIP_DISABLE_PIP_VERSION_CHECK=1 "$VENV/bin/python" -m pip install --quiet --upgrade --only-binary=:all: pillow; then
-    echo "Cài đặt KitGen dừng trước khi kích hoạt — CHƯA CẮT ĐƯỢC ẢNH — thiếu pillow." >&2
-    echo "Python đang dùng: $("$VENV/bin/python" -c 'import sys;print(sys.version.split()[0])' 2>/dev/null || printf '?') · $ENGINE_PYTHON" >&2
-    echo "Cách xử: 1) đọc dòng lỗi pip ở trên; 2) mất mạng / proxy chặn pypi.org thì cài lại khi có mạng; 3) xoá thư mục .venv trong workspace rồi chạy lại installer." >&2
-    echo "Installer CỐ Ý KHÔNG biên dịch gói từ nguồn (--only-binary=:all:): việc đó ngốn hàng GB RAM và đã treo máy người dùng." >&2
-    exit 1
-  fi
-fi
-
 # Prefer an existing healthy Codex CLI. Persisting its absolute path means the
 # background service does not depend on launchd/systemd inheriting the shell PATH.
 progress "3/6" "Health check Codex CLI"
@@ -842,34 +734,49 @@ rm -rf "$KITGEN_HOME/tools/playwright-browsers" \
        "$KITGEN_HOME/tools/node_modules/playwright" \
        "$KITGEN_HOME/tools/node_modules/playwright-core" \
        "$KITGEN_HOME/tools/node_modules/@resvg" 2>/dev/null || true
-mkdir -p "$WORKSPACE/.kitgen/engine" "$WORKSPACE/projects"
-# Engine có thể đang được gen.sh/cover.sh đọc. Copy từng file qua inode tạm để lượt
-# đang chạy giữ nguyên byte cũ; lượt mới thấy toàn bộ file mới sau rename.
-while IFS= read -r -d '' _engine_src; do
-  _engine_rel="${_engine_src#"$DEST/engine/"}"
-  _engine_dst="$WORKSPACE/.kitgen/engine/$_engine_rel"
-  if [[ "$_engine_rel" == *.sh ]]; then
-    atomic_copy_file "$_engine_src" "$_engine_dst" 1
-  else
-    atomic_copy_file "$_engine_src" "$_engine_dst"
-  fi
-done < <(find "$DEST/engine" -type f -print0)
+mkdir -p "$WORKSPACE/.kitgen" "$WORKSPACE/projects"
+# ── DỌN DI SẢN ĐỜI PYTHON / ĐỜI ENGINE-CHÉP-VÀO-WORKSPACE ────────────────────
+# Ba thư mục dưới đây là thứ bản ≤2.1.45 tạo ra và bản này KHÔNG CÒN AI GỌI:
+#   · $KITGEN_HOME/tools/python   — CPython riêng, ~24 MB (engine nay là JS);
+#   · $WORKSPACE/.venv            — venv + Pillow, ~4 MB (bản rất cũ: ~314 MB vì còn
+#                                   numpy/scipy/pymatting);
+#   · $WORKSPACE/.kitgen/engine   — bản chép của engine. `lib/engine.mjs::prepareEngine`
+#                                   nay KHÔNG chép file nào, và `resolveEngine` đọc
+#                                   engine đi kèm gói agent. Để lại là để một engine
+#                                   ĐỜI CŨ nằm ĐẦU danh sách tìm kiếm của agent mới —
+#                                   `ws.engineDir` vẫn được thử trước.
+# "Thôi không cài nữa" là chưa đủ: máy update từ bản cũ sẽ giữ nguyên đống đó vĩnh viễn.
+# In ra MỘT dòng nói dọn bao nhiêu — im lặng xoá vài trăm MB của người khác là không đàng hoàng.
+LEGACY_TOTAL=""
+LEGACY_WHAT=""
+for _legacy in "$KITGEN_HOME/tools/python" "$WORKSPACE/.venv" "$WORKSPACE/.kitgen/engine"; do
+  [ -e "$_legacy" ] || continue
+  LEGACY_WHAT="$LEGACY_WHAT $(basename "$_legacy")"
+  LEGACY_TOTAL="$LEGACY_TOTAL$(du -sk "$_legacy" 2>/dev/null | awk '{print $1}') "
+  rm -rf "$_legacy" 2>/dev/null || true
+done
+if [ -n "$LEGACY_WHAT" ]; then
+  LEGACY_MB="$(printf '%s' "$LEGACY_TOTAL" | awk '{s=0; for(i=1;i<=NF;i++) s+=$i; printf "%.0f", s/1024}')"
+  check_ok "đã dọn ${LEGACY_MB:-?} MB di sản đời Python/engine-bash:$LEGACY_WHAT (KitGen nay chỉ cần Node)"
+fi
 # `bin/kitgen` cũng là shell script có thể đang được đọc bởi lệnh update/status.
 atomic_copy_file "$DEST/runtime/bin/kitgen" "$KITGEN_HOME/bin/kitgen" 1
-"$PYTHON3" - "$WORKSPACE/.kitgen/config.json" <<'PY'
-import json, os, sys
-p = sys.argv[1]
-try:
-    with open(p) as f: cfg = json.load(f)
-except Exception: cfg = {}
-cfg.setdefault("workspaceVersion", 1); cfg.setdefault("maxJobs", 4)
-# Hồ sơ ảnh riêng đã bỏ 24/08/2026: mọi máy dùng thẳng ~/.codex. Xoá khối `imageGen`
-# sót lại từ bản cũ để không ai (kể cả engine cũ chưa update xong) đọc nhầm nó nữa.
-cfg.pop("imageGen", None)
-tmp = p + ".tmp"
-with open(tmp, "w") as f: json.dump(cfg, f, indent=2); f.write("\n")
-os.replace(tmp, p)
-PY
+# config.json: trước 16/09/2026 khối này là một heredoc python3. Nay Node riêng làm —
+# cùng một việc, và là runtime DUY NHẤT mà KitGen còn mang theo.
+"$NODE" -e '
+const fs = require("fs");
+const p = process.argv[1];
+let cfg = {};
+try { cfg = JSON.parse(fs.readFileSync(p, "utf8")) || {} } catch { cfg = {} }
+if (typeof cfg !== "object" || Array.isArray(cfg)) cfg = {};
+if (cfg.workspaceVersion === undefined) cfg.workspaceVersion = 1;
+if (cfg.maxJobs === undefined) cfg.maxJobs = 4;
+/* Hồ sơ ảnh riêng đã bỏ 24/08/2026: mọi máy dùng thẳng ~/.codex. Xoá khối `imageGen`
+   sót lại từ bản cũ để không ai đọc nhầm nó nữa. */
+delete cfg.imageGen;
+fs.writeFileSync(p + ".tmp", JSON.stringify(cfg, null, 2) + "\n");
+fs.renameSync(p + ".tmp", p);
+' "$WORKSPACE/.kitgen/config.json"
 # Installer có thể đang chạy đúng từ `$KITGEN_HOME/install.sh`; rename inode mới để
 # Bash tiếp tục đọc bản cũ an toàn, kể cả khi bản phát hành mới dài hơn nhiều dòng.
 atomic_copy_file "$DEST/install.sh" "$KITGEN_HOME/install.sh" 1

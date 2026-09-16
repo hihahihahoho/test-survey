@@ -37,7 +37,7 @@ fi
 sha256_text() { sed 's/^\([0-9a-fA-F]\{64\}\) \*/\1  /'; }
 
 rm -rf "$STAGE"
-mkdir -p "$STAGE/$PKG/engine" "$STAGE/$PKG/app" "$STAGE/$PKG/runtime"
+mkdir -p "$STAGE/$PKG/app" "$STAGE/$PKG/runtime"
 # A reused output directory must never leak an older archive/checksum into the
 # upload glob. CI uploads every matching file, so stale payloads break publish.
 find "$OUT" -maxdepth 1 -type f \( -name 'kitgen-runtime-*.tar.gz' -o -name 'kitgen-runtime-*.tar.gz.sha256' \) -delete
@@ -45,26 +45,31 @@ find "$OUT" -maxdepth 1 -type f \( -name 'kitgen-runtime-*.tar.gz' -o -name 'kit
 if [ ! -f "$ROOT/webapp/dist/index.html" ]; then
   (cd "$ROOT/webapp" && npm run build)
 fi
+# ── ENGINE ĐI CÙNG AGENT, KHÔNG CÒN THƯ MỤC `engine/` RIÊNG ───────────────────
+# Tới 2.1.45 engine là sáu file rời ở gốc kho (gen.sh · cover.sh · slice.py ·
+# geometry.py · validate_output_geometry.py · element-lib.json) và được chép vào
+# `$PKG/engine/`, rồi installer lại chép tiếp vào `<workspace>/.kitgen/engine`.
+# Từ 16/09/2026 engine là JS và nằm TRONG gói agent (`agent/engine/*.mjs`), nên `cp -R
+# agent` ở dưới đã mang nó đi — không còn danh sách nào phải giữ cho đồng bộ bằng tay,
+# và không còn ca "quên một file ⇒ ModuleNotFoundError trên máy người dùng".
 cp -R "$ROOT/agent" "$STAGE/$PKG/agent"
 rm -rf "$STAGE/$PKG/agent/test" "$STAGE/$PKG/agent/test-fixtures" "$STAGE/$PKG/agent/test-agent.mjs"
-# cover.sh đi CÙNG gen.sh: agent tìm nó cạnh gen.sh trong engine đã cài. Thiếu ⇒ ảnh bìa
-# trả 409 COVER_UNAVAILABLE trên máy người dùng dù test ở repo vẫn xanh.
-# geometry.py là NGUỒN SỰ THẬT hình học: CẢ gen.sh (in toạ độ safe zone vào prompt) lẫn
-# slice.py (cắt asset theo đúng toạ độ ấy) đều `import geometry` ngay dòng đầu. Thiếu nó
-# thì lượt gen chết bằng ModuleNotFoundError trên máy người dùng.
-# (Chỗ này trước 27/08/2026 chép bộ khung xương — skeleton.html / skeleton-svg.js /
-#  render-skeleton.mjs / silhouettes.js. Khung xương đã bỏ hẳn: prompt tự nói toạ độ,
-#  không còn ảnh nào để render; @resvg/resvg-wasm nay cũng không còn được cài nữa.)
-# Thiếu file ở đây KHÔNG được im lặng: bản build vẫn ra tar.gz, cài xong mới hỏng trên
-# máy người dùng. `[ -f ] && cp` đời cũ vừa bỏ qua âm thầm vừa làm `set -e` bắn nhầm khi
-# file cuối danh sách vắng mặt.
-for f in gen.sh cover.sh slice.py geometry.py element-lib.json validate_output_geometry.py; do
-  if [ ! -f "$ROOT/$f" ]; then
-    echo "build-runtime: thiếu file engine bắt buộc: $f" >&2
-    exit 1
-  fi
-  cp "$ROOT/$f" "$STAGE/$PKG/engine/$f"
-done
+# Cửa vào engine PHẢI có mặt: nó vừa là thứ agent spawn, vừa là DẤU NHẬN DIỆN mà
+# `install.sh::is_release` dùng để nói "đây có phải gói KitGen không".
+[ -f "$STAGE/$PKG/agent/engine/cli.mjs" ] || {
+  echo "build-runtime: gói thiếu agent/engine/cli.mjs — installer sẽ từ chối chính gói này" >&2
+  exit 1
+}
+# `element-lib.json` là catalogue element CHỈ-ĐỌC cho `GET /api/element-lib`. Nó KHÔNG
+# phải mã engine (không file .mjs nào mở nó), mà là dữ liệu do `lib/templates.mjs` đọc:
+# ưu tiên `<workspace>/.kitgen/engine/`, rồi tới GỐC GÓI (`resolve(agent/lib, "..", "..")`
+# = thư mục bản phát hành). Đường thứ nhất đã chết cùng việc chép engine vào workspace,
+# nên file này phải nằm ở GỐC gói — thiếu là UI mở bảng chọn element ra rỗng.
+[ -f "$ROOT/element-lib.json" ] || {
+  echo "build-runtime: thiếu element-lib.json — /api/element-lib sẽ trả catalogue rỗng" >&2
+  exit 1
+}
+cp "$ROOT/element-lib.json" "$STAGE/$PKG/element-lib.json"
 cp -R "$ROOT/webapp/dist/." "$STAGE/$PKG/app/"
 cp -R "$ROOT/runtime/bin" "$ROOT/runtime/service" "$STAGE/$PKG/runtime/"
 printf '%s\n' "$VERSION" > "$STAGE/$PKG/VERSION"
@@ -84,7 +89,7 @@ if [ "$(head -c 3 "$ROOT/scripts/install.ps1" | od -An -tx1 | tr -d ' \n')" != "
   echo "build-runtime: scripts/install.ps1 mất BOM UTF-8 — PS 5.1 sẽ parse hỏng" >&2
   exit 1
 fi
-chmod +x "$STAGE/$PKG/install.sh" "$STAGE/$PKG/runtime/bin/kitgen" "$STAGE/$PKG/engine/gen.sh"
+chmod +x "$STAGE/$PKG/install.sh" "$STAGE/$PKG/runtime/bin/kitgen"
 (
   cd "$STAGE/$PKG"
   find . -type f ! -name manifest.sha256 -print0 | sort -z | xargs -0 $SHA256 | sha256_text > manifest.sha256
