@@ -19,22 +19,22 @@ macOS có thể hiện cảnh báo quarantine cho file `.command`. Lần đầu,
 
 ## Gỡ bản cũ, cài bản mới tinh
 
-Bản cũ (2.1.44 trở về trước) để lại trên máy khoảng **1 GB** thứ nay không còn dùng: một
+Bản cũ (2.1.45 trở về trước) để lại trên máy khoảng **1 GB** thứ nay không còn dùng: một
 môi trường Python nặng (numpy/scipy/pymatting, ~314 MB) và một bộ Chromium đóng gói riêng
-(~790 MB). Cập nhật thẳng thì đống đó vẫn nằm lại, nên nếu bạn đang ở bản cũ hãy gỡ rồi cài lại:
+(~790 MB).
 
-**Bản mới KHÔNG cài Python.** Từ 16/09/2026 engine là JS chạy trên Node có sẵn của KitGen,
-nên bản mới không tải CPython, không dựng venv, không cài Pillow — và lượt cài/cập nhật
-còn tự dọn phần Python đời cũ còn sót (`tools/python`, `~/KitGen/.venv`,
-`~/KitGen/.kitgen/engine`), có in ra một dòng nói đã dọn bao nhiêu MB.
+**Từ bản 3.0 bạn không phải gỡ gì cả.** Bấm đúp `install.command` (hoặc bấm **Cập nhật**
+trong app): installer nhận ra máy đang ở đời cũ, rồi đi đúng trình tự — tải bản mới và
+kiểm checksum → dừng dịch vụ → **gỡ sạch bản cũ** (`~/.kitgen/releases`, `current`,
+`~/.kitgen/tools` gồm cả Python riêng và Chromium, `~/KitGen/.venv`,
+`~/KitGen/.kitgen/engine`) → nâng Codex → cài bản mới → kiểm tra chạy được. Màn hình in
+một dòng nói đã dọn bao nhiêu MB.
 
-1. Bấm đúp `uninstall.command`. Khi được hỏi có xoá dữ liệu không, trả lời `n` (hoặc cứ bấm Enter) — **giữ dữ liệu**.
-2. Bấm đúp `install.command`, chờ cài xong và app tự mở.
-3. Nếu app hỏi đăng nhập Codex, đăng nhập lại một lần.
+**Dữ liệu của bạn ở nguyên chỗ cũ:** project trong `~/KitGen/projects`, cấu hình
+`~/KitGen/.kitgen/config.json` và `~/.kitgen/config.env`, nhật ký `~/.kitgen/logs/` —
+installer không đụng tới.
 
-Project trong `~/KitGen/projects` và cấu hình `~/KitGen/.kitgen/config.json` **không mất**.
-Bước 1 chỉ dọn thêm phần chạy mà installer dựng lại được: `~/KitGen/.venv` và `~/KitGen/.kitgen/engine`.
-Muốn xoá sạch cả dữ liệu thì ở bước 1 trả lời `y`.
+Chỉ khi muốn xoá **cả dữ liệu** thì mới cần `uninstall.command` và trả lời `y`.
 
 ## English
 

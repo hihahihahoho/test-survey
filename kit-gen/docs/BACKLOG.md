@@ -23,6 +23,32 @@ một venv và Pillow. Ba thứ ấy chỉ để cắt ảnh và nối chuỗi p
   engine cũ + bộ pytest của nó khỏi kho. Golden đóng băng ở commit `b8bed60` — cách
   dựng lại xem `agent/test/engine-golden/README.md`.
 
+**⑤b — installer TỰ GỠ BẢN CŨ rồi cài bản 3.x (quyết 16/09/2026).** Máy đang ở
+≤2.1.45 gánh gần 1 GB di sản (`tools/python`, Playwright, `@resvg`, engine bash chép vào
+workspace, cả chục bản trong `releases/`), và cách dọn cũ là **ba khối `rm -rf` rải rác**
+chạy ở mọi lượt update — mỗi lần bỏ thêm một thứ khỏi đường cài lại phải nhớ viết thêm
+một dòng, quên thứ nào thì nó nằm lại vĩnh viễn. Nay gộp thành **một** cơ chế trong cả
+`install.sh` lẫn `scripts/install.ps1`:
+
+- **Dò**: `tools/python` · `current/engine/gen.sh` còn mà `current/agent/engine/cli.mjs`
+  không có · VERSION đã cài có major < 3 · `<workspace>/.kitgen/engine` · `<workspace>/.venv`.
+  Ép bằng `--fresh` / `-Fresh` / `KITGEN_FRESH=1`.
+- **Rào ①**: chỉ quét khi GÓI ĐANG CÀI là đời ≥3. Cài 2.x đè 2.x là update **cùng đời**,
+  ở đó bản cũ chính là đường lùi (`install-launchd`/`install-restart` đo đúng đường ấy).
+- **Rào ②**: giữ `tools/node` nếu Node ở đó còn chạy được và ≥20 — xoá một Node lành lặn
+  rồi mới đi tải lại 30 MB là đặt cả lượt cài vào tay đường mạng NGAY SAU khi vừa xoá bản
+  cũ. (Khác một chữ với đề bài "xoá sạch `tools/`": đây là chỗ cố ý lệch, và vì sao.)
+- **Trình tự**: tải + kiểm checksum gói mới → dừng dịch vụ → quét → Node → `codex update`
+  → đăng ký dịch vụ → health check. Không phá gì khi chưa cầm chắc thứ thay thế.
+- **Danh sách giữ**: `config.env`/`config.cmd`, `logs/`, `bin/`, và **toàn bộ workspace**
+  trừ năm đường di sản đã gõ thẳng tên. `projects/` là dữ liệu người dùng.
+- **Không có rollback** ở lượt này và installer nói thẳng ra thế (bản cũ đã bị gỡ).
+- Installer nay còn đọc workspace từ `config.env`/`config.cmd`: hai đường gọi update đều
+  `source` file ấy rồi `exec`, mà biến không `export` thì không đi qua `exec` — nên trước
+  đây máy đặt workspace chỗ khác bị kéo về mặc định. Đọc nhầm workspace ⇒ quét nhầm thư mục.
+- Bộ ca: `test/install-fresh-sweep.test.sh` (gỡ đủ · giữ đủ · cài lại được · 3.x→3.x vẫn
+  giữ bản lùi · `--fresh` ép được).
+
 **Còn lại — ⑥: port installer sang JS.** Hôm nay `install.sh` vẫn là bash và
 `install.ps1` vẫn là PowerShell, nên `agent/lib/platform.mjs` còn giữ
 `findBash`/`bashEnvPath`/`toBashPath` và `lib/update.mjs` còn nhánh bash — **chỉ** cho

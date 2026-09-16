@@ -321,30 +321,41 @@ từng file trong `manifest.sha256`, chỉ khởi động khi mọi tiền đề
 | `~/KitGen/.venv/bin/python` | `%USERPROFILE%\KitGen\.venv\Scripts\python.exe` |
 | LaunchAgent plist / systemd unit | shortcut `KitGen.vbs` trong thư mục **Startup** + `wscript.exe` (ẩn cửa sổ console) |
 
-### 5.2 Tám bước installer
+### 5.2 Các bước của installer (7 bước, hoặc **8 khi phải gỡ bản đời cũ**)
 
-1. **Tiền đề hệ thống** — `tar.exe`, Git-Bash (`bash.exe` + `<Git>\usr\bin\grep.exe`),
-   Python 3 (ưu tiên launcher `py -3`, biết loại trừ **alias giả `python.exe` trong
-   `WindowsApps`** chỉ mở Microsoft Store). Thiếu → ghi vào danh sách `Blockers`, **không
-   dừng ngay** mà chạy tiếp để in đủ checklist một lần.
+*Cập nhật 16/09/2026: engine đã port sang JS, nên hai bước "Python" và "Git-Bash" biến
+mất, và một bước MỚI xuất hiện — "Gỡ bản cũ". Số bước nay do `Write-StepNext` đếm, không
+gõ tay ở từng chỗ.*
+
+1. **Tiền đề hệ thống** — chỉ còn `tar.exe` (Windows 10 1803+). Không còn đòi Git for
+   Windows, không còn đòi Python: cả engine lẫn agent đều chạy bằng Node riêng của KitGen.
+   Thiếu → ghi vào danh sách `Blockers`, **không dừng ngay** mà chạy tiếp để in đủ checklist.
 2. **Gói runtime** — `-Archive` / `-ReleaseUrl` / `release.json`; sha256 gói; `tar -xzf`;
    **bắt buộc đúng một thư mục gốc `kitgen-runtime-*`**; đối chiếu từng file theo
-   `manifest.sha256`.
-3. **Node riêng** — `node-v20.19.5-win-{x64|arm64|x86}.zip` từ `nodejs.org/dist`, đối chiếu
+   `manifest.sha256`. Dấu nhận diện gói là `agent\engine\cli.mjs`.
+3. **Gỡ bản cũ (CHỈ in ra khi máy có dấu hiệu đời cũ)** — xem khối `CAI LAI TU DAU` ở đầu
+   `install.ps1`. Dấu hiệu: `tools\python`; `current\engine\gen.sh` còn mà
+   `current\agent\engine\cli.mjs` không có; VERSION đã cài có major < 3;
+   `<workspace>\.kitgen\engine` hoặc `<workspace>\.venv`. Ép bằng `-Fresh` /
+   `KITGEN_FRESH=1`. Khi quét: dừng dịch vụ (trừ `-NoStart`) rồi xoá `releases\`,
+   `current`, **toàn bộ `tools\`** (giữ `tools\node` nếu Node ở đó còn chạy được và
+   >= 20), `install.ps1`/`install.sh` cũ trong KitgenHome, và năm đường di sản trong
+   workspace. **Giữ:** `config.cmd`, `logs\`, `bin\`, và mọi thứ còn lại của workspace.
+   Gói 2.x cài đè 2.x thì KHÔNG quét (update cùng đời — bản trước là đường lùi).
+4. **Node riêng** — `node-v20.19.5-win-{x64|arm64|x86}.zip` từ `nodejs.org/dist`, đối chiếu
    `SHASUMS256.txt`, `Expand-Archive`, bỏ thư mục lồng. Rồi `node --check agent/server.mjs`
    như bản Unix.
-4. **Cài runtime + engine** — `releases\<version>`, junction `current`, copy engine sang
-   `%USERPROFILE%\KitGen\.kitgen\engine`.
-5. **Python** — venv `.venv\Scripts\python.exe`, `pip install pillow` (chỉ pillow từ
-   07/09/2026), và sinh **shim `bin\python3`** (LF, không BOM) cho Git-Bash.
-6. **Codex CLI** — ưu tiên `codex` đã có trên PATH; nếu không thì
-   `npm --prefix <tools> install @openai/codex`. (Bước cài `@resvg/resvg-wasm` đã bỏ.)
-7. **Cấu hình + lệnh** — `config.cmd`, `bin\kitgen.cmd`, `bin\kitgen-hidden.vbs`, và
-   `.kitgen\config.json` **giữ nguyên lựa chọn hồ sơ ảnh của người dùng khi update**
-   (đúng lý lẽ đã ghi trong khối `python3 - "$WORKSPACE/.kitgen/config.json"` của `install.sh`:
-   người dùng đổi hồ sơ qua UI sau khi cài, update không được reset lựa chọn đó).
+5. **Cài runtime** — `releases\<version>`, junction `current`. KHÔNG còn copy engine sang
+   `%USERPROFILE%\KitGen\.kitgen\engine`: engine đi trong gói agent.
+6. **Codex CLI** — ưu tiên `codex` đã có trên PATH / `%USERPROFILE%\.local\bin`, nếu chưa
+   có thì chạy installer **chính thức** của OpenAI (đường npm đã bỏ 24/08/2026). Rồi
+   `codex update` với **PATH gốc của người dùng** (`KITGEN_SKIP_CODEX_UPDATE=1` để bỏ qua).
+   Codex là công cụ **dùng chung của cả máy**: KitGen chỉ nâng, không bao giờ gỡ hay dời nó.
+7. **Cấu hình + lệnh** — `config.cmd`, `bin\kitgen.cmd`, `bin\kitgen-hidden.vbs`,
+   `rotate-log.ps1`, và `.kitgen\config.json` (chỉ còn `workspaceVersion`/`maxJobs`).
 8. **Khởi động** — chỉ khi `Blockers` rỗng và không có `-NoStart`; copy `.vbs` vào Startup;
-   `kitgen.cmd start`; chờ `/health` tối đa 15 s.
+   `kitgen.cmd start`; chờ `/health` tối đa 15 s. Nếu lượt này là "cài lại từ đầu" mà health
+   check không xanh thì nói thẳng: **không có bản cũ để lùi về**, chạy lại installer.
 
 ### 5.3 Chạy nền không có cửa sổ đen
 
@@ -367,7 +378,12 @@ Không có launchd/systemd. Ba lựa chọn đã cân nhắc:
 - Không đăng ký `kitgen` vào PATH hệ thống (sẽ ghi `HKCU\Environment`, cần đăng xuất mới
   có hiệu lực). Người dùng gọi bằng đường dẫn đầy đủ hoặc dùng shortcut.
 - Không có bước rollback tự động về bản trước như `install.sh` (nhánh `PREVIOUS`/`ln -sfn`).
-  **Ghi backlog** — cần khi bản Windows ra khỏi trạng thái EXPERIMENTAL.
+  **Ghi backlog** — cần khi bản Windows ra khỏi trạng thái EXPERIMENTAL. (Riêng lượt "cài
+  lại từ đầu" thì KHÔNG có rollback ở cả hai nền tảng — bản cũ đã bị gỡ, và installer nói
+  thẳng điều đó thay vì hứa một đường lùi không tồn tại.)
+- Không gỡ, không dời, không cài lại Codex của máy; hành động duy nhất là `codex update`.
+- Không xoá bất cứ thứ gì ngoài `%LOCALAPPDATA%\KitGen` và năm đường di sản đã kể tên
+  trong thư mục làm việc. `projects\` là dữ liệu người dùng.
 
 ### 5.5 ⚠️ Khác biệt bảo mật cần biết
 

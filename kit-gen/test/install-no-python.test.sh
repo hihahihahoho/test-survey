@@ -17,7 +17,9 @@
 #   ② lệnh `kitgen` không còn dựng PATH qua `.venv`, config.cmd không còn KITGEN_PYTHON;
 #   ③ HÀNH VI: chạy install.sh với PATH KHÔNG CÓ python3 ⇒ cài trọn 6/6, mã 0, và
 #      không đẻ ra `tools/python` hay `.venv` nào;
-#   ④ di sản đời cũ (tools/python · .venv · .kitgen/engine) bị DỌN, có nói ra.
+#   ④ di sản đời cũ (tools/python · .venv · .kitgen/engine) bị DỌN, có nói ra — từ
+#      16/09/2026 việc dọn ấy là bước "Gỡ bản cũ" của lượt CÀI LẠI TỪ ĐẦU: thấy dấu
+#      hiệu đời cũ ⇒ gỡ sạch rồi cài mới, và config.env + project phải sống sót.
 #
 # Không ra mạng: `curl` giả hỏng mọi lượt gọi và ghi sổ, nên một nhánh tải lén lút sẽ
 # lộ ra ngay ở ca ③ chứ không âm thầm xanh.
@@ -66,13 +68,13 @@ export KITGEN_HOME="$HOME/.kitgen"
 export KITGEN_WORKSPACE="$HOME/KitGen"
 export KITGEN_TEST_STATE="$TEST_ROOT/state"
 FAKE_BIN="$TEST_ROOT/bin"
-RELEASE="$TEST_ROOT/kitgen-runtime-2.1.5"
+RELEASE="$TEST_ROOT/kitgen-runtime-3.0.0"
 
 mkdir -p "$FAKE_BIN" "$KITGEN_TEST_STATE" \
   "$KITGEN_HOME/releases" "$KITGEN_HOME/tools/node/bin" "$KITGEN_HOME/tools/node_modules/.bin" \
   "$RELEASE/agent/engine" "$RELEASE/app" "$RELEASE/runtime/bin" "$RELEASE/runtime/service"
 
-printf '%s\n' '2.1.5' > "$RELEASE/VERSION"
+printf '%s\n' '3.0.0' > "$RELEASE/VERSION"
 printf '%s\n' 'export const testAgent = true' > "$RELEASE/agent/server.mjs"
 printf '%s\n' 'export {}' > "$RELEASE/agent/engine/cli.mjs"
 printf '%s\n' '<!doctype html><title>KitGen test</title>' > "$RELEASE/app/index.html"
@@ -147,7 +149,7 @@ grep -q '\[6/6\]' "$OUT" || fail "installer không đi hết 6/6" "$OUT"
 [ ! -e "$KITGEN_WORKSPACE/.venv" ] || fail "installer vẫn dựng venv trong workspace" "$OUT"
 [ ! -e "$KITGEN_WORKSPACE/.kitgen/engine" ] || \
   fail "installer vẫn chép engine vào workspace — agent nay đọc engine đi kèm gói" "$OUT"
-[ -f "$KITGEN_HOME/releases/2.1.5/agent/engine/cli.mjs" ] || \
+[ -f "$KITGEN_HOME/releases/3.0.0/agent/engine/cli.mjs" ] || \
   fail "gói đã cài thiếu cửa vào engine JS" "$OUT"
 [ ! -s "$KITGEN_TEST_STATE/curl.log" ] || \
   fail "installer ra mạng dù mọi thứ đã có sẵn" "$KITGEN_TEST_STATE/curl.log" "$OUT"
@@ -156,8 +158,15 @@ grep -q '\[6/6\]' "$OUT" || fail "installer không đi hết 6/6" "$OUT"
 # Máy update từ bản ≤2.1.45 mang sẵn ba thư mục này. "Thôi không cài nữa" là chưa đủ:
 # không dọn thì chúng nằm lại vĩnh viễn, và `.kitgen/engine` còn nguy hơn — `resolveEngine`
 # thử `ws.engineDir` TRƯỚC, nên một engine đời cũ ở đó sẽ được agent mới chạy.
-mkdir -p "$KITGEN_HOME/tools/python/bin" "$KITGEN_WORKSPACE/.venv/lib" "$KITGEN_WORKSPACE/.kitgen/engine"
+#
+# Từ 16/09/2026 đây là ĐƯỜNG DUY NHẤT dọn những thứ ấy: installer nhận ra dấu hiệu đời
+# cũ (tools/python · .venv · .kitgen/engine · VERSION đời <3) và gỡ SẠCH bản cũ trước
+# khi cài bản mới. Nên ca này còn phải chứng minh vế thứ hai của lời hứa: thứ của NGƯỜI
+# DÙNG (config.env, project) không được đi theo.
+mkdir -p "$KITGEN_HOME/tools/python/bin" "$KITGEN_WORKSPACE/.venv/lib" "$KITGEN_WORKSPACE/.kitgen/engine" \
+  "$KITGEN_WORKSPACE/projects/du-an-cua-toi"
 printf '%s\n' 'giả' > "$KITGEN_HOME/tools/python/bin/python3"
+printf '%s\n' 'kit.json của người dùng' > "$KITGEN_WORKSPACE/projects/du-an-cua-toi/kit.json"
 printf '%s\n' 'giả' > "$KITGEN_WORKSPACE/.venv/pyvenv.cfg"
 printf '%s\n' 'giả' > "$KITGEN_WORKSPACE/.kitgen/engine/gen.sh"
 OUT2="$TEST_ROOT/install-cleanup.out"
@@ -171,8 +180,17 @@ set -e
 [ ! -e "$KITGEN_WORKSPACE/.kitgen/engine" ] || fail ".kitgen/engine đời cũ không bị dọn" "$OUT2"
 grep -q 'đã dọn .* di sản' "$OUT2" || \
   fail "installer xoá vài trăm MB của người dùng mà không nói một câu" "$OUT2"
-# Dữ liệu thật thì KHÔNG được đụng tới.
+grep -q 'Gỡ bản cũ (cài lại từ đầu)' "$OUT2" || \
+  fail "lượt gỡ sạch không hiện thành một bước riêng — người dùng không biết máy vừa bị làm gì" "$OUT2"
+[ -f "$KITGEN_HOME/releases/3.0.0/agent/engine/cli.mjs" ] || \
+  fail "gỡ xong mà bản mới không được cài lại" "$OUT2"
+[ "$(readlink "$KITGEN_HOME/current")" = "$KITGEN_HOME/releases/3.0.0" ] || \
+  fail "current không trỏ bản vừa cài sau lượt gỡ sạch" "$OUT2"
+# DANH SÁCH GIỮ: thứ của người dùng KHÔNG được đi theo bản cũ.
 [ -d "$KITGEN_WORKSPACE/projects" ] || fail "thư mục projects biến mất sau lượt dọn" "$OUT2"
+[ -f "$KITGEN_WORKSPACE/projects/du-an-cua-toi/kit.json" ] || \
+  fail "project của người dùng bị xoá theo — đây là dữ liệu, không phải di sản" "$OUT2"
+[ -f "$KITGEN_HOME/config.env" ] || fail "config.env không còn sau lượt gỡ sạch" "$OUT2"
 
 if [ "$HAVE_SYS_PY" -eq 1 ]; then
   echo "install-no-python: (máy chạy test CÓ python3 — ca ③ vẫn chạy với PATH đã chắn)"

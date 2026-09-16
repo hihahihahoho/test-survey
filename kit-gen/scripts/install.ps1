@@ -23,6 +23,7 @@
    powershell -ExecutionPolicy Bypass -File install.ps1
    powershell -ExecutionPolicy Bypass -File install.ps1 -Archive .\kitgen-runtime-2.1.19.tar.gz
    powershell -ExecutionPolicy Bypass -File install.ps1 -NoStart
+   powershell -ExecutionPolicy Bypass -File install.ps1 -Fresh    (gỡ sạch bản cũ rồi cài)
 
  ┌────────────────────────────────────────────────────────────────────────────┐
  │ FILE NÀY PHẢI ĐƯỢC LƯU LÀ **UTF-8 CÓ BOM** (EF BB BF). ĐỪNG BỎ BOM ĐI.      │
@@ -66,6 +67,9 @@ param(
   [switch] $CodexDefault,
   [switch] $CodexImg,
   [switch] $Update,
+  # Go SACH ban cu roi moi cai ban moi. Mac dinh la TU DO (xem khoi DAU HIEU BAN DOI
+  # CU); co nay chi de ep bang tay khi may hong ma khong con dau hieu nao.
+  [switch] $Fresh,
   [string] $ReleaseManifest = 'https://raw.githubusercontent.com/hihahihahoho/test-survey/feat/kitgen-local-runtime/kit-gen/release.json'
 )
 
@@ -113,8 +117,9 @@ $NODE_VERSION = '20.19.5'
 # Cho nay tung la khoi pin cung mot ban CPython rieng (~45 MB) + venv + pip pillow,
 # chi vi engine doi cu la `gen.sh` + `slice.py`. Engine nay la JS va chay bang dung
 # ban Node rieng ma installer van tai, nen Windows KHONG con phai co Python, KHONG
-# con venv, va cung KHONG con phai co Git for Windows (xem buoc [1/7]).
-# Di san doi cu (tools\python, <workspace>\.venv) bi DON o buoc [4/7].
+# con venv, va cung KHONG con phai co Git for Windows (xem buoc 'Kiem tra tien de').
+# Di san doi cu (tools\python, <workspace>\.venv) bi GO SACH o buoc 'Go ban cu' —
+# xem khoi CAI LAI TU DAU ngay truoc buoc [1/N].
 $RELEASE_REPO = 'hihahihahoho/test-survey'
 
 # ── tiện ích in ────────────────────────────────────────────────────────────────
@@ -122,6 +127,15 @@ $script:Warnings = New-Object System.Collections.ArrayList
 $script:Blockers = New-Object System.Collections.ArrayList
 
 function Write-Step([string] $n, [string] $text) { Write-Host ''; Write-Host "[$n] $text" }
+# So buoc KHONG con la hang so: luot "cai lai tu dau" chen them dung mot buoc (xem khoi
+# DAU HIEU BAN DOI CU). Dem bang bien chu khong go tay "3/7" o tung cho - go tay la thu
+# se lech ngay lan sau co ai chen them mot buoc nua.
+$script:StepN = 0
+$script:StepTotal = 7
+function Write-StepNext([string] $text) {
+  $script:StepN = $script:StepN + 1
+  Write-Step "$($script:StepN)/$($script:StepTotal)" $text
+}
 function Write-Ok  ([string] $text) { Write-Host "  OK   $text" }
 function Write-Warn([string] $text) { Write-Host "  WARN $text" -ForegroundColor Yellow; [void]$script:Warnings.Add($text) }
 function Write-Block([string] $text, [string] $how) {
@@ -231,6 +245,22 @@ function Invoke-ExeCapture([string] $exe, [string[]] $exeArgs) {
 
 # ── 0. đường dẫn & tham số ─────────────────────────────────────────────────────
 if (-not $KitgenHome) { $KitgenHome = Join-Path $env:LOCALAPPDATA 'KitGen' }
+# ── WORKSPACE THAT, KHONG PHAI WORKSPACE MAC DINH ────────────────────────────
+# `kitgen.cmd update` goi install.ps1 KHONG kem -Workspace (chi -Update), nen may nao
+# dat workspace o cho khac se bi installer keo ve mac dinh %USERPROFILE%\KitGen va dung
+# mot workspace thu hai khong ai mo. Truoc day do la phien mot chut; tu 16/09/2026 buoc
+# "Go ban cu" XOA mot so duong TRONG workspace, nen doc nham workspace la xoa trong mot
+# thu muc khong phai cua luot cai nay. config.cmd la noi duy nhat ghi lai cho du lieu
+# nam o dau (doi xung voi install.sh doc config.env).
+if (-not $Workspace) {
+  $cfgCmdPath = Join-Path $KitgenHome 'config.cmd'
+  if (Test-Path -LiteralPath $cfgCmdPath) {
+    foreach ($cfgLine in (Get-Content -LiteralPath $cfgCmdPath -ErrorAction SilentlyContinue)) {
+      $cfgMatch = [regex]::Match($cfgLine, '^\s*set\s+"KITGEN_WORKSPACE=(.+)"\s*$')
+      if ($cfgMatch.Success) { $Workspace = $cfgMatch.Groups[1].Value }
+    }
+  }
+}
 if (-not $Workspace)  { $Workspace  = Join-Path $env:USERPROFILE 'KitGen' }
 if (-not $Origin)     { $Origin     = "http://127.0.0.1:$Port" }
 if ($CodexImg) { Write-Warn 'tham so -CodexImg da bo — KitGen luon dung Codex mac dinh (~/.codex)' }
@@ -238,6 +268,119 @@ if ($CodexImg) { Write-Warn 'tham so -CodexImg da bo — KitGen luon dung Codex 
 $SelfDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Tmp     = Join-Path ([IO.Path]::GetTempPath()) ("kitgen-install-" + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Dir $Tmp
+
+<#
+================================================================================
+ CAI LAI TU DAU - MAY DOI CU PHAI DUOC GO SACH TRUOC KHI CAI BAN 3.x
+ (16/09/2026, doi xung voi khoi cung ten trong install.sh)
+
+ VI SAO: may nao tung cai <=2.1.45 dang ganh nguyen mot doi truoc - tools\python
+ (CPython + venv), engine bash chep vao workspace, Playwright, @resvg, mot ban
+ @openai/codex lac trong Node rieng, va ca chuc ban phat hanh cu trong releases\.
+ Truoc ban nay installer don tung thu mot, o hai khoi rai rac trong file: thu nao
+ quen thi nam lai vinh vien. Nay chi con MOT co che.
+
+ TRINH TU, va trinh tu la phan quan trong nhat:
+   (1) goi moi da tai ve + doi chieu checksum XONG (buoc [2/N]) - khong bao gio pha
+       thu dang chay khi chua cam chac thu thay the;
+   (2) dung dich vu + tien trinh agent cu;
+   (3) quet: releases\, current, tools\, install.ps1|install.sh cu trong KitgenHome,
+       va may duong di san trong workspace. GIU: config.cmd, logs\, bin\ va TOAN BO
+       phan con lai cua workspace (projects la du lieu nguoi dung - khong dung);
+   (4) roi moi di tiep dung trinh tu thuong: Node -> Codex (`codex update`) ->
+       config/lenh -> khoi dong + health check.
+
+ KHONG CO DUONG LUI o luot nay: ban cu da bi go, nen health check hong thi noi thang
+ "chay lai installer", khong gia vo co rollback.
+
+ HAI RAO CHAN, moi cai vi mot ca hong cu the:
+  · CHI quet khi GOI DANG CAI la doi 3 tro len. Cai mot goi 2.x de len 2.x la luot
+    update CUNG DOI: o do ban cu chinh la duong lui, quet di la vut mat rollback.
+    -Fresh van ep duoc bang tay.
+  · GIU LAI tools\node NEU no chay duoc va du doi (>=20). Xoa mot Node dang lanh lan
+    roi moi di tai lai 30 MB la tu dat ca luot cai vao tay duong mang, NGAY SAU khi
+    vua xoa ban cu - mang rot o dung khe do la may khong con gi de chay.
+
+ Phan DO DAU HIEU phai chay TRUOC khi in buoc [1/N]: so buoc cua ca luot phu thuoc
+ vao no, ma buoc dau thi in ngay duoi day.
+================================================================================
+#>
+function Get-VersionMajor([string] $v) {
+  $mm = [regex]::Match([string]$v, '^\s*(\d+)')
+  if ($mm.Success) { return [int]$mm.Groups[1].Value }
+  return 0
+}
+$script:FreshMarks = @()
+$script:FreshForced = ($Fresh -or [bool]$env:KITGEN_FRESH)
+$doFresh = $false
+$installedVersion = ''
+foreach ($vf in @((Join-Path $KitgenHome 'current\VERSION'), (Join-Path $KitgenHome 'VERSION'))) {
+  if ((-not $installedVersion) -and (Test-Path -LiteralPath $vf)) {
+    try { $installedVersion = (Get-Content -LiteralPath $vf -Raw).Trim() } catch { }
+  }
+}
+if (Test-Path -LiteralPath (Join-Path $KitgenHome 'tools\python')) {
+  $script:FreshMarks += 'co tools\python (CPython doi cu)'
+}
+if ((Test-Path -LiteralPath (Join-Path $KitgenHome 'current\engine\gen.sh')) -and
+    (-not (Test-Path -LiteralPath (Join-Path $KitgenHome 'current\agent\engine\cli.mjs')))) {
+  $script:FreshMarks += 'ban dang cai con engine bash (current\engine\gen.sh)'
+}
+if ($installedVersion -and ((Get-VersionMajor $installedVersion) -lt 3)) {
+  $script:FreshMarks += "ban da cai la $installedVersion (doi truoc 3.x)"
+}
+if (Test-Path -LiteralPath (Join-Path $Workspace '.kitgen\engine')) {
+  $script:FreshMarks += 'co workspace\.kitgen\engine (engine chep vao workspace)'
+}
+if (Test-Path -LiteralPath (Join-Path $Workspace '.venv')) {
+  $script:FreshMarks += 'co workspace\.venv (venv doi Python)'
+}
+if ($script:FreshForced -or ($script:FreshMarks.Count -gt 0)) { $script:StepTotal = 8 }
+
+# Dung dung cay agent dang chay. Dung lai DUNG duong da co o buoc "Cai runtime" (node
+# giu khoa file trong releases\<ver>), khong bia them cach thu hai.
+function Stop-KitgenAgent {
+  $oldCmd = Join-Path $KitgenHome 'bin\kitgen.cmd'
+  if (Test-Path -LiteralPath $oldCmd) {
+    # Invoke-ExeSoft chu khong goi truc tiep `&`: stderr cua lenh ngoai + EAP='Stop'
+    # trong PS 5.1 bien mot canh bao thanh loi chet giua chung.
+    $comspec = if ($env:ComSpec) { $env:ComSpec } else { 'cmd.exe' }
+    [void](Invoke-ExeSoft $comspec @('/d', '/c', "call `"$oldCmd`" stop") -Quiet)
+    Start-Sleep -Milliseconds 500
+  }
+  Get-Process node, codex -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -and $_.Path.StartsWith($KitgenHome, [StringComparison]::OrdinalIgnoreCase) } |
+    Stop-Process -Force -ErrorAction SilentlyContinue
+  Start-Sleep -Milliseconds 500
+}
+
+# Xoa MOT duong dan DA DUOC KE TEN, cong don dung luong, va nho ten de in ra. Khong
+# wildcard, khong de quy tu do: moi thu bi xoa deu phai duoc go thang ten o danh sach quet.
+$script:SweepMb = 0.0
+$script:SweepWhat = @()
+function Remove-SweepPath([string] $path, [string] $label) {
+  if (-not (Test-Path -LiteralPath $path)) { return }
+  $mb = 0.0
+  try {
+    $bytes = (Get-ChildItem -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue |
+      Where-Object { -not $_.PSIsContainer } | Measure-Object -Property Length -Sum).Sum
+    if ($bytes) { $mb = [double]$bytes / 1MB }
+  } catch { }
+  try {
+    $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+    # `current` la JUNCTION: xoa diem noi, tuyet doi khong di xuyen sang dich.
+    if ($item -and ($item.LinkType -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0))) {
+      Remove-ReparsePointSafe $path
+    } else {
+      Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop
+    }
+  } catch {
+    Write-Warn "khong xoa duoc $path - don tay roi chay lai installer"
+    return
+  }
+  $script:SweepMb = $script:SweepMb + $mb
+  $script:SweepWhat += $label
+}
 
 Write-Host ''
 Write-Host '  KitGen · ban cai Windows (EXPERIMENTAL)' -ForegroundColor Cyan
@@ -247,7 +390,7 @@ Write-Host "  workspace : $Workspace"
 try {
 
 # ── 1. tiền đề của hệ thống ────────────────────────────────────────────────────
-Write-Step '1/7' 'Kiem tra tien de he thong'
+Write-StepNext 'Kiem tra tien de he thong'
 
 # tar.exe: Windows 10 build 17063+ có sẵn (bsdtar). Không có ⇒ không giải nén được
 # runtime .tar.gz và cũng không có đường vòng nào rẻ hơn là bảo user nâng cấp Windows.
@@ -270,7 +413,7 @@ else { Write-Block 'tar.exe (Windows 10 1803 tro len)' 'Nang cap Windows, hoac g
 # PYTHON: cung khong con. Xem khoi hang so o dau file.
 
 # ── 2. lấy gói runtime ─────────────────────────────────────────────────────────
-Write-Step '2/7' 'Lay goi runtime'
+Write-StepNext 'Lay goi runtime'
 
 # DAU NHAN DIEN GOI la `agent\engine\cli.mjs`, KHONG con la `engine\gen.sh`. Quen doi
 # cho nay cung luc voi viec xoa engine bash = moi goi moi bi chinh installer cua no goi
@@ -353,8 +496,65 @@ $version = (Get-Content -LiteralPath (Join-Path $candidate 'VERSION') -Raw).Trim
 if ($version -notmatch '^[0-9A-Za-z._-]+$') { Die "version khong hop le: $version" }
 Write-Ok "runtime $version"
 
-# ── 3. Node runtime riêng ──────────────────────────────────────────────────────
-Write-Step '3/7' 'Node.js rieng cua KitGen'
+# ── 3. go ban cu (chi in ra khi may CO dau hieu doi cu) ───────────────────────
+# Xem khoi CAI LAI TU DAU o dau file: vi sao co buoc nay, quet gi va giu gi.
+if ($script:FreshForced -or ($script:FreshMarks.Count -gt 0)) {
+  Write-StepNext 'Go ban cu (cai lai tu dau)'
+  if ($script:FreshForced) { $doFresh = $true }
+  elseif ((Get-VersionMajor $version) -ge 3) { $doFresh = $true }
+  if (-not $doFresh) {
+    # Co dau hieu doi cu nhung goi dang cai cung la doi cu ⇒ day la luot update CUNG
+    # DOI. Ban truoc la duong lui, khong phai rac.
+    Write-Ok "goi dang cai la $version (doi truoc 3.x) - luot update cung doi: giu ban truoc de lui, khong quet"
+  } else {
+    if ($script:FreshMarks.Count -gt 0) {
+      foreach ($why in $script:FreshMarks) { Write-Ok "nhan ra ban doi cu: $why" }
+    } else {
+      Write-Ok 'quet theo -Fresh/KITGEN_FRESH (khong tim thay dau hieu nao, van go sach theo yeu cau)'
+    }
+    # -NoStart = "installer khong duoc dung toi dich vu", ca bat LAN tat: co nay chi
+    # nguoi goi tu quan dich vu (CI, bo ca, cai vao HOME tam) moi dung.
+    if ($NoStart) { Write-Ok '-NoStart: khong dung toi dich vu dang chay' }
+    else { Stop-KitgenAgent; Write-Ok 'da dung dich vu va tien trinh agent cu' }
+    $keepNode = $false
+    $freshNodeExe = Join-Path $KitgenHome 'tools\node\node.exe'
+    if (Test-Path -LiteralPath $freshNodeExe) {
+      $rn = Invoke-ExeCapture $freshNodeExe @('-p', 'process.versions.node')
+      if (($rn.Code -eq 0) -and ($rn.Out -match '^(\d+)\.') -and ([int]$Matches[1] -ge 20)) { $keepNode = $true }
+    }
+    # `releases\` TRUOC `current`: current la junction tro vao releases, xoa dich truoc
+    # thi phep do dung luong cua junction khong the di xuyen sang dau ca.
+    Remove-SweepPath (Join-Path $KitgenHome 'releases') 'releases\'
+    Remove-SweepPath (Join-Path $KitgenHome 'current') 'current'
+    $sweepTools = Join-Path $KitgenHome 'tools'
+    if (Test-Path -LiteralPath $sweepTools) {
+      foreach ($child in (Get-ChildItem -LiteralPath $sweepTools -Force -ErrorAction SilentlyContinue)) {
+        if ($keepNode -and ($child.Name -eq 'node')) { continue }
+        Remove-SweepPath $child.FullName ('tools\' + $child.Name)
+      }
+    }
+    Remove-SweepPath (Join-Path $KitgenHome 'install.ps1') 'install.ps1 (ban cu)'
+    Remove-SweepPath (Join-Path $KitgenHome 'install.sh') 'install.sh (ban cu)'
+    # bin\ thi GIU (kitgen.cmd duoc ghi de o buoc [7/8]), tru mot file: shim `python3`
+    # cho Git-Bash, sinh ra chi vi Windows khong co lenh ten do ma `gen.sh` goi no tran.
+    Remove-SweepPath (Join-Path $KitgenHome 'bin\python3') 'bin\python3 (shim doi cu)'
+    # Workspace: DUNG NAM duong nay, khong hon. `projects\` va moi thu khac la du lieu
+    # nguoi dung - installer khong co viec gi o do.
+    foreach ($wp in @('.kitgen\engine', '.kitgen\.venv', '.kitgen\__pycache__', '.venv', '__pycache__')) {
+      Remove-SweepPath (Join-Path $Workspace $wp) ('workspace\' + $wp)
+    }
+    if ($script:SweepWhat.Count -gt 0) {
+      Write-Ok ("da don {0:N0} MB di san doi cu: {1}" -f $script:SweepMb, ($script:SweepWhat -join ', '))
+    } else {
+      Write-Ok 'da don: khong con gi cua doi cu tren may'
+    }
+    if ($keepNode) { Write-Ok 'giu lai Node rieng dang lanh lan trong tools\node (khong tai lai 30 MB)' }
+    Write-Ok 'giu nguyen: config.cmd, logs\, va toan bo workspace ngoai cac duong tren (project la du lieu cua ban)'
+  }
+}
+
+# ── 4. Node runtime riêng ──────────────────────────────────────────────────────
+Write-StepNext 'Node.js rieng cua KitGen'
 $nodeDir  = Join-Path $KitgenHome 'tools\node'
 $nodeExe  = Join-Path $nodeDir 'node.exe'
 $npmCmd   = Join-Path $nodeDir 'npm.cmd'
@@ -409,8 +609,8 @@ if ($needNode) {
 }
 Invoke-Exe $nodeExe @('--check', (Join-Path $candidate 'agent\server.mjs')) 'kiem cu phap agent'
 
-# ── 4. cài runtime, dọn di sản đời cũ ──────────────────────────────────────────
-Write-Step '4/7' 'Cai runtime'
+# ── 5. cài runtime (di sản đời cũ đã dọn ở bước 3) ──────────────────────────────────────────
+Write-StepNext 'Cai runtime'
 $dest = Join-Path $KitgenHome "releases\$version"
 $new  = "$dest.new"
 if (Test-Path -LiteralPath $new)  { Remove-Item -LiteralPath $new -Recurse -Force }
@@ -420,19 +620,9 @@ Copy-TreeContents $candidate $new
 # Remove-Item se chet giua chung va ban cai cu da bi pha truoc khi ban moi vao.
 # Phai dung server TRUOC khi xoa (buoc 8 se tu start lai).
 if (Test-Path -LiteralPath $dest) {
-  $oldCmd = Join-Path $KitgenHome 'bin\kitgen.cmd'
-  if (Test-Path -LiteralPath $oldCmd) {
-    # Dung Invoke-ExeSoft (khong -Quiet cung duoc nhung stop hong la binh thuong):
-    # goi truc tiep `&` bi cong tinh CI cam — stderr cua lenh ngoai + EAP='Stop'
-    # trong PS 5.1 se bien canh bao thanh loi chet giua chung.
-    $comspec = if ($env:ComSpec) { $env:ComSpec } else { 'cmd.exe' }
-    [void](Invoke-ExeSoft $comspec @('/d', '/c', "call `"$oldCmd`" stop") -Quiet)
-    Start-Sleep -Milliseconds 500
-  }
-  Get-Process node, codex -ErrorAction SilentlyContinue |
-    Where-Object { $_.Path -and $_.Path.StartsWith($KitgenHome, [StringComparison]::OrdinalIgnoreCase) } |
-    Stop-Process -Force -ErrorAction SilentlyContinue
-  Start-Sleep -Milliseconds 500
+  # (Luot "cai lai tu dau" da dung dich vu o buoc [3/8]; goi lai o day la vo hai va
+  # giu cho duong cai de - noi node.exe con giu khoa file trong releases\<ver>.)
+  Stop-KitgenAgent
   Remove-Item -LiteralPath $dest -Recurse -Force
 }
 Move-Item -LiteralPath $new -Destination $dest
@@ -445,44 +635,23 @@ $source  = $dest
 New-Dir (Join-Path $Workspace '.kitgen')
 New-Dir (Join-Path $Workspace 'projects')
 
-# ── DON DI SAN DOI PYTHON / DOI ENGINE-CHEP-VAO-WORKSPACE ─────────────────────
-# Ba thu muc nay do ban <=2.1.45 tao ra va nay KHONG CON AI GOI:
-#   · tools\python           — CPython rieng (~45 MB tren Windows);
-#   · <workspace>\.venv      — venv + Pillow;
-#   · <workspace>\.kitgen\engine — ban chep cua engine. `lib/engine.mjs::prepareEngine`
-#     nay KHONG chep file nao; de lai la de mot engine DOI CU nam DAU danh sach tim
-#     kiem cua agent moi (`resolveEngine` thu `ws.engineDir` truoc).
-# "Thoi khong cai nua" la chua du: may update tu ban cu se giu nguyen dong do vinh vien.
-$legacyPaths = @(
-  (Join-Path $KitgenHome 'tools\python'),
-  (Join-Path $Workspace '.venv'),
-  (Join-Path $Workspace '.kitgen\engine'),
-  (Join-Path $KitgenHome 'bin\python3')      # shim `python3` cho Git-Bash, da bo
-)
-$legacyMb = 0.0
-$legacyWhat = @()
-foreach ($lp in $legacyPaths) {
-  if (-not (Test-Path -LiteralPath $lp)) { continue }
-  try {
-    $bytes = (Get-ChildItem -LiteralPath $lp -Recurse -Force -File -ErrorAction SilentlyContinue |
-      Measure-Object -Property Length -Sum).Sum
-    if ($bytes) { $legacyMb += ($bytes / 1MB) }
-  } catch { }
-  $legacyWhat += (Split-Path -Leaf $lp)
-  Remove-Item -LiteralPath $lp -Recurse -Force -ErrorAction SilentlyContinue
-}
-if ($legacyWhat.Count -gt 0) {
-  Write-Ok ("da don {0:N0} MB di san doi Python/engine-bash: {1} (KitGen nay chi can Node)" -f $legacyMb, ($legacyWhat -join ', '))
-}
+# ── (DA GOP) DON DI SAN DOI PYTHON / ENGINE-CHEP-VAO-WORKSPACE ───────────────
+# Khoi nay tung xoa tools\python, <workspace>\.venv, <workspace>\.kitgen\engine va
+# bin\python3 o MOI luot update. Ba duong dau nay la DAU HIEU nhan ra may doi cu chu
+# khong con la viec don lat vat: thay mot trong ba la ca may duoc go sach o buoc "Go
+# ban cu" (khoi CAI LAI TU DAU o dau file). Mot co che, mot cho de doc, mot dong bao cao.
+#
+# `.kitgen\engine` nguy nhat trong ba: `resolveEngine` thu `ws.engineDir` TRUOC, nen mot
+# engine doi cu nam do se duoc agent MOI chay.
 
 # ── (DA BO) Python rieng + venv + shim python3 ───────────────────────────────
 # Khoi ~150 dong o day tung lam bon viec: do/tai CPython pin cung, dung venv, pip
 # pillow, va sinh mot shim `python3` khong duoi file cho Git-Bash (vi Windows khong co
 # lenh ten do, ma `gen.sh` thi goi no tran). Ca bon deu chet cung engine bash/python
-# ngay 16/09/2026. Cac buoc sau day tu dong lui mot so: [5/7], [6/7], [7/7].
+# ngay 16/09/2026. So buoc cua ca luot nay do Write-StepNext dem, khong go tay nua.
 
-# ── 5. Codex CLI ──────────────────────────────────────────────────────────────
-Write-Step '5/7' 'Codex CLI'
+# ── 6. Codex CLI ──────────────────────────────────────────────────────────────
+Write-StepNext 'Codex CLI'
 $toolsPrefix = Join-Path $KitgenHome 'tools'
 New-Dir $toolsPrefix
 $codexBin = $null
@@ -640,15 +809,13 @@ if ($codexBin) {
   }
 }
 
-# Don rac doi Playwright (790,9 MB) o luot update. May sach khong co gi de xoa.
-# Cung ly do, `@resvg/resvg-wasm` (2,4 MB) bi go khoi duong cai tu 07/09/2026: khong con
-# anh SVG nao de render, nhung may update tu ban cu van giu nguyen goi trong tools\.
-foreach ($p in @('playwright-browsers', 'node_modules\playwright', 'node_modules\playwright-core', 'node_modules\@resvg')) {
-  Remove-Item -LiteralPath (Join-Path $toolsPrefix $p) -Recurse -Force -ErrorAction SilentlyContinue
-}
+# (DA GOP) Rac doi Playwright (790,9 MB) va @resvg/resvg-wasm (2,4 MB) tung duoc xoa
+# bang mot foreach rieng o day. Ca hai nam trong tools\, ma luot "cai lai tu dau" xoa
+# NGUYEN tools\ (tru Node rieng dang lanh lan), nen khong con gi de ke ten o day nua.
+# May da qua mot luot 3.x thi khong con thu nao trong danh sach ay.
 
-# ── 6. config + lệnh kitgen ────────────────────────────────────────────────────
-Write-Step '6/7' 'Cau hinh va lenh kitgen'
+# ── 7. config + lệnh kitgen ────────────────────────────────────────────────────
+Write-StepNext 'Cau hinh va lenh kitgen'
 
 # .kitgen\config.json — chi con workspaceVersion/maxJobs; khoi `imageGen` cu bi xoa
 # (ho so anh rieng da bo 24/08/2026, doi xung voi khoi cung ten trong install.sh).
@@ -823,8 +990,8 @@ if ($script:Blockers.Count -eq 0) {
   }
 }
 
-# ── 7. khởi động ───────────────────────────────────────────────────────────────
-Write-Step '7/7' 'Khoi dong dich vu'
+# ── 8. khởi động ───────────────────────────────────────────────────────────────
+Write-StepNext 'Khoi dong dich vu'
 if ($script:Blockers.Count -gt 0) {
   Write-Warn 'BO QUA khoi dong: con tien de chua du (xem checklist ben duoi)'
 } elseif ($NoStart) {
@@ -856,6 +1023,12 @@ if ($script:Blockers.Count -gt 0) {
   else {
     $seen = if ($healthSeen) { "ban $healthSeen" } else { 'khong co phan hoi' }
     Write-Warn "agent chua phan hoi dung ban $version sau 15s ($seen) - xem log: $logFile"
+    if ($doFresh) {
+      # KHONG CO DUONG LUI, va phai noi ra nhu the. Luot nay da go sach ban doi cu o
+      # buoc [3/8], nen khong con ban nao de tra ve - vo nhu co rollback o day la de
+      # nguoi dung ngoi doi mot thu khong ton tai.
+      Write-Warn 'luot nay la cai lai tu dau (ban doi cu da duoc go) - KHONG co ban cu de lui ve. Chay lai chinh lenh cai dat nay mot lan nua.'
+    }
   }
 }
 

@@ -198,25 +198,41 @@ không còn bước nào để hỏng vì mạng hay proxy công ty. Máy đã c
 nhật** kế tiếp sẽ tự xoá `~/KitGen/.venv` và bản Python riêng, kèm một dòng nói dọn bao
 nhiêu MB.
 
-### Gỡ bản cũ, cài bản mới tinh
+### Gỡ bản cũ, cài bản 3.0 — installer tự làm, bạn không phải gỡ gì
 
-Bản cũ (2.1.44 trở về trước) để lại trên máy khoảng **1 GB** thứ nay không còn ai gọi:
-môi trường Python nặng (`numpy`/`scipy`/`pymatting`, ~314 MB) và một bộ Chromium đóng gói
-riêng (~790 MB). Bản mới **không cài Python** chút nào. Bấm **Cập nhật** thì bản mới đã tự
-dọn phần Python; muốn máy sạch hẳn (kể cả Chromium đời cũ) thì gỡ rồi cài lại:
+Bản cũ (2.1.45 trở về trước) để lại trên máy khoảng **1 GB** thứ nay không còn ai gọi:
+môi trường Python nặng (`numpy`/`scipy`/`pymatting`, ~314 MB), một bộ Chromium đóng gói
+riêng (~790 MB), engine đời bash chép vào thư mục làm việc, và cả chục bản phát hành cũ.
 
-1. **Gỡ (giữ dữ liệu).** Dùng bộ Easy Install: chạy `uninstall.command` (macOS) hoặc
-   `uninstall.bat` (Windows), khi được hỏi có xoá dữ liệu không thì trả lời `n` / cứ Enter.
-2. **Cài lại.** Chạy `install.command` / `install.bat` (hoặc `bash install.sh`) và chờ xong.
-3. **Đăng nhập Codex lại** nếu app hỏi.
+Từ **16/09/2026 (bản 3.0)** bạn không phải tự gỡ gì cả. Cứ bấm **Cập nhật** trong app
+(hoặc chạy lại lệnh cài đặt): installer **nhận ra máy đang ở đời cũ** rồi đi đúng trình tự
 
-Project trong `~/KitGen/projects` và cấu hình `~/KitGen/.kitgen/config.json` **không mất**.
-Bước 1 chỉ dọn thêm phần chạy mà installer dựng lại được: `~/KitGen/.venv` và
-`~/KitGen/.kitgen/engine`. Muốn xoá sạch cả dữ liệu thì ở bước 1 trả lời `y`/`Y`.
+1. **tải bản mới về và kiểm checksum** — chưa động vào gì trên máy cho tới khi gói mới
+   đã nằm chắc trên đĩa;
+2. **dừng dịch vụ đang chạy**;
+3. **gỡ sạch bản cũ** — `~/.kitgen/releases`, `current`, `~/.kitgen/tools` (Python riêng,
+   Chromium, gói npm cũ), installer đời cũ, `~/KitGen/.venv` và `~/KitGen/.kitgen/engine`.
+   Màn hình in một dòng nói **đã dọn bao nhiêu MB và dọn những gì**;
+4. **nâng Codex** (`codex update` — Codex vẫn là bản dùng chung của máy bạn, KitGen
+   không bao giờ gỡ hay dời nó đi);
+5. **cài bản mới, đăng ký dịch vụ, health check**.
 
-Từ 16/09/2026, chỉ cần bấm **Cập nhật** là installer cũng **tự dọn**: bản Python riêng
-(`~/.kitgen/tools/python`), `~/KitGen/.venv` và bản chép engine cũ
-(`~/KitGen/.kitgen/engine`) đều bị xoá, kèm một dòng nói dọn bao nhiêu MB.
+**Thứ của bạn thì ở nguyên chỗ cũ.** Installer giữ lại: cấu hình `~/.kitgen/config.env`,
+nhật ký `~/.kitgen/logs/`, và **toàn bộ thư mục làm việc** — `~/KitGen/projects` cùng
+`~/KitGen/.kitgen/config.json` không bị đụng tới. Ảnh, kit, project: không mất gì.
+
+Lượt cập nhật giữa các bản 3.x với nhau thì **không** gỡ gì cả: bản trước được giữ lại
+làm đường lùi, đúng như trước nay.
+
+Muốn ép gỡ sạch bằng tay (máy hỏng lạ, cài lại cho chắc):
+
+```bash
+bash install.sh --fresh              # macOS/Linux
+powershell -ExecutionPolicy Bypass -File install.ps1 -Fresh   # Windows
+```
+
+Nếu health check ở bước cuối không xanh, installer nói thẳng là **không có bản cũ để
+lùi về** và bảo bạn chạy lại lệnh cài đặt — không có bước nào ngồi đợi vô ích.
 
 ### Muốn đổi thư mục làm việc
 

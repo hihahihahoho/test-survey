@@ -14,7 +14,11 @@ EXIT_DOWNLOAD_FAILED=20
 EXIT_ARCHIVE_PENDING=21
 EXIT_UPDATE_RUNNING=22
 KITGEN_HOME="${KITGEN_HOME:-$HOME/.kitgen}"
-WORKSPACE="${KITGEN_WORKSPACE:-$HOME/KitGen}"
+# WORKSPACE được chốt SAU vòng đọc tham số: thứ tự là --workspace > $KITGEN_WORKSPACE >
+# config.env của bản đang cài > mặc định $HOME/KitGen. Xem khối "WORKSPACE THẬT" dưới.
+WORKSPACE="${KITGEN_WORKSPACE:-}"
+WORKSPACE_EXPLICIT=0
+[ -z "$WORKSPACE" ] || WORKSPACE_EXPLICIT=1
 PORT="${KITGEN_PORT:-8765}"
 ORIGIN="${KITGEN_ORIGIN:-http://127.0.0.1:$PORT}"
 RELEASE_URL="${KITGEN_RELEASE_URL:-}"
@@ -29,13 +33,19 @@ ARCHIVE=""
 EXPECTED_SHA=""
 NO_START=0
 IS_UPDATE=0
+# QUÉT SẠCH BẢN ĐỜI CŨ RỒI MỚI CÀI (16/09/2026, bản 3.0.0).
+# 0 = tự dò (mặc định), 1 = ép bằng `--fresh` hoặc KITGEN_FRESH=1. Xem khối
+# "CÀI LẠI TỪ ĐẦU" ở giữa file để biết dò bằng dấu hiệu nào và quét những gì.
+FRESH_FORCED=0
+[ -z "${KITGEN_FRESH:-}" ] || FRESH_FORCED=1
+FRESH=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --archive) ARCHIVE="$2"; shift ;;
     --release-url) RELEASE_URL="$2"; shift ;;
     --repo) RELEASE_REPO="$2"; shift ;;
     --sha256) EXPECTED_SHA="$2"; shift ;;
-    --workspace) WORKSPACE="$2"; shift ;;
+    --workspace) WORKSPACE="$2"; WORKSPACE_EXPLICIT=1; shift ;;
     --origin) ORIGIN="$2"; shift ;;
     --port) PORT="$2"; [ "$ORIGIN" = "http://127.0.0.1:8765" ] && ORIGIN="http://127.0.0.1:$2"; shift ;;
     --no-start) NO_START=1 ;;
@@ -44,16 +54,32 @@ while [ "$#" -gt 0 ]; do
     # cũ (config.env còn truyền cờ) không chết vì "Unknown option".
     --codex-default|--codex-img) echo "Cảnh báo: $1 đã bỏ — KitGen luôn dùng Codex mặc định (~/.codex)." >&2 ;;
     --update) IS_UPDATE=1 ;;
+    --fresh) FRESH_FORCED=1 ;;
     -h|--help)
       echo "Usage: install.sh [--archive runtime.tar.gz | --release-url URL] [--sha256 HASH]"
       echo "                  [--repo OWNER/REPO]"
       echo "                  [--workspace PATH] [--origin URL] [--port N] [--no-start]"
+      echo "                  [--fresh]   gỡ sạch bản cũ rồi cài mới (mặc định: tự dò bản đời cũ)"
       exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
   shift
 done
 SELF_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+# ── WORKSPACE THẬT, KHÔNG PHẢI WORKSPACE MẶC ĐỊNH ────────────────────────────
+# `bin/kitgen update` và agent (`lib/update.mjs`) đều SOURCE `config.env` rồi `exec`
+# installer. Nhưng config.env ghi `KITGEN_WORKSPACE='…'` KHÔNG kèm `export`, mà biến
+# không export thì không đi qua `exec` — nên tới đây nó đã biến mất, và installer lặng
+# lẽ quay về mặc định `$HOME/KitGen`. Máy nào đặt workspace chỗ khác thì mỗi lượt update
+# lại dựng một workspace thứ hai ở chỗ không ai mở.
+# Từ 16/09/2026 chuyện này không còn là phiền một chút: bước "Gỡ bản cũ" XOÁ mấy đường
+# di sản TRONG workspace, nên đọc nhầm workspace là xoá trong một thư mục không phải của
+# lượt cài này. Đọc thẳng từ config.env — nguồn sự thật duy nhất về chỗ dữ liệu nằm.
+if [ "$WORKSPACE_EXPLICIT" -eq 0 ] && [ -f "$KITGEN_HOME/config.env" ]; then
+  CFG_WORKSPACE="$(sed -n "s/^KITGEN_WORKSPACE='\(.*\)'\$/\1/p" "$KITGEN_HOME/config.env" | head -n 1)"
+  case "$CFG_WORKSPACE" in /*) WORKSPACE="$CFG_WORKSPACE" ;; esac
+fi
+[ -n "$WORKSPACE" ] || WORKSPACE="$HOME/KitGen"
 # ── KITGEN KHÔNG CÒN CẦN PYTHON (16/09/2026, bước ⑤a của đợt port engine sang JS) ──
 # Tới bản 2.1.45 engine là `gen.sh` + `slice.py` + `geometry.py`, nên installer phải
 # MANG THEO cả một bản CPython pin cứng (~24 MB vào `$KITGEN_HOME/tools/python`), dựng
@@ -288,6 +314,12 @@ append_install_log(){
   } >> "$KITGEN_HOME/install.log"
 }
 progress(){ printf '\n[%s] %s\n' "$1" "$2"; }
+# Số bước KHÔNG còn là hằng số: lượt "quét sạch bản đời cũ" chèn thêm đúng một bước
+# (xem khối CÀI LẠI TỪ ĐẦU). Đếm bằng biến chứ không gõ tay "3/6" ở từng chỗ — gõ tay
+# là thứ sẽ lệch ngay lần sau có ai chèn thêm một bước nữa.
+STEP_N=0
+STEP_TOTAL=6
+step(){ STEP_N=$((STEP_N + 1)); progress "$STEP_N/$STEP_TOTAL" "$1"; }
 check_ok(){ printf '  OK   %s\n' "$1"; }
 check_warn(){ printf '  WARN %s\n' "$1" >&2; }
 
@@ -528,8 +560,172 @@ is_release "$CANDIDATE" || { echo "Invalid KitGen runtime archive." >&2; exit 1;
 VERSION="$(cat "$CANDIDATE/VERSION")"
 case "$VERSION" in *[!0-9A-Za-z._-]*|'') echo "Invalid runtime version." >&2; exit 1 ;; esac
 DEST="$KITGEN_HOME/releases/$VERSION"
-progress "1/6" "Kiểm tra gói cài đặt"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CÀI LẠI TỪ ĐẦU — MÁY ĐỜI CŨ PHẢI ĐƯỢC GỠ SẠCH TRƯỚC KHI CÀI BẢN 3.x.
+#
+# VÌ SAO (16/09/2026, đợt port engine sang JS): máy nào từng cài ≤2.1.45 đang gánh
+# nguyên một đời trước — `tools/python` (CPython + venv, hàng trăm MB), engine bash
+# chép vào workspace, Playwright, @resvg, một bản @openai/codex lạc trong Node riêng,
+# và cả chục bản phát hành cũ trong `releases/`. Trước bản này installer dọn từng
+# thứ một, ở ba khối rải rác trong file: mỗi lần bỏ thêm một thứ lại phải nhớ viết
+# thêm một dòng `rm -rf`, và thứ nào quên thì nằm lại vĩnh viễn. Nay chỉ còn MỘT cơ
+# chế: thấy dấu hiệu đời cũ ⇒ gỡ sạch theo DANH SÁCH GIỮ (allowlist) rồi cài mới.
+#
+# TRÌNH TỰ, và trình tự là phần quan trọng nhất:
+#   ① gói mới đã tải về + đối chiếu checksum XONG (ngay trên dòng này) — không bao giờ
+#      phá thứ đang chạy khi chưa cầm chắc thứ thay thế;
+#   ② dừng dịch vụ + tiến trình agent cũ;
+#   ③ quét: releases/, current, tools/, install.sh|install.ps1 cũ trong KITGEN_HOME,
+#      và năm đường di sản trong workspace (gõ thẳng tên, không `find`). GIỮ:
+#      config.env, logs/, bin/ và TOÀN BỘ
+#      phần còn lại của workspace (projects là dữ liệu người dùng — không đụng);
+#   ④ rồi mới đi tiếp đúng trình tự thường: Node → Codex (`codex update`) → đăng ký
+#      dịch vụ → health check.
+#
+# KHÔNG CÓ ĐƯỜNG LÙI ở lượt này: bản cũ đã bị gỡ, nên health check hỏng thì nói thẳng
+# "chạy lại installer", không giả vờ có rollback (xem nhánh health check bên dưới).
+#
+# HAI RÀO CHẮN, mỗi cái vì một ca hỏng cụ thể:
+#  · CHỈ quét khi GÓI ĐANG CÀI là đời 3 trở lên. Cài một gói 2.x đè lên 2.x là lượt
+#    update CÙNG ĐỜI: ở đó bản cũ chính là đường lùi, quét đi là vứt mất rollback —
+#    đúng thứ mà install-launchd/install-restart đo. `--fresh` vẫn ép được bằng tay.
+#  · GIỮ LẠI `tools/node` NẾU nó chạy được và đủ đời (>=20). Xoá một Node đang lành
+#    lặn rồi mới đi tải lại 30 MB là tự đặt cả lượt cài vào tay đường mạng, NGAY SAU
+#    khi vừa xoá bản cũ — mạng rớt ở đúng khe đó là máy không còn gì để chạy. Node
+#    hỏng/quá cũ thì vẫn xoá như mọi thứ khác trong tools/ (bước sau tải lại, có
+#    checksum). Phần lạc trong tools/node (gói @openai/codex 277 MB) do khối "dọn gói
+#    codex lạc" ở bước Codex xử — nó có rào riêng để không xoá nhầm codex của máy.
+# ═══════════════════════════════════════════════════════════════════════════════
+# Xoá nhầm gốc của một thư mục lớn là hỏng máy người dùng, không phải phiền một chút.
+case "$KITGEN_HOME" in
+  ''|/|"$HOME"|"$HOME"/) echo "KITGEN_HOME không hợp lệ: '$KITGEN_HOME'" >&2; exit 1 ;;
+esac
+case "$WORKSPACE" in
+  ''|/|"$HOME"|"$HOME"/) echo "KITGEN_WORKSPACE không hợp lệ: '$WORKSPACE'" >&2; exit 1 ;;
+esac
+# "3.0.0-rc1" → 3; "" hoặc rác → 0 (0 = KHÔNG KẾT LUẬN ĐƯỢC, không phải "đời cũ").
+version_major(){
+  _vm="${1%%.*}"
+  _vm="$(printf '%s' "$_vm" | sed 's/[^0-9].*//')"
+  case "$_vm" in ''|*[!0-9]*) printf '0' ;; *) printf '%s' "$_vm" ;; esac
+}
+NEW_MAJOR="$(version_major "$VERSION")"
+INSTALLED_VERSION="$(cat "$KITGEN_HOME/current/VERSION" 2>/dev/null || true)"
+[ -n "$INSTALLED_VERSION" ] || INSTALLED_VERSION="$(cat "$KITGEN_HOME/VERSION" 2>/dev/null || true)"
+FRESH_WHY=""
+fresh_why(){ FRESH_WHY="$FRESH_WHY${FRESH_WHY:+; }$1"; }
+[ ! -e "$KITGEN_HOME/tools/python" ] || fresh_why "có $KITGEN_HOME/tools/python (CPython đời cũ)"
+if [ -f "$KITGEN_HOME/current/engine/gen.sh" ] && [ ! -f "$KITGEN_HOME/current/agent/engine/cli.mjs" ]; then
+  fresh_why "bản đang cài còn engine bash (current/engine/gen.sh)"
+fi
+if [ -n "$INSTALLED_VERSION" ] && [ "$(version_major "$INSTALLED_VERSION")" -lt 3 ]; then
+  fresh_why "bản đã cài là $INSTALLED_VERSION (đời trước 3.x)"
+fi
+[ ! -e "$WORKSPACE/.kitgen/engine" ] || fresh_why "có $WORKSPACE/.kitgen/engine (engine chép vào workspace)"
+[ ! -e "$WORKSPACE/.venv" ] || fresh_why "có $WORKSPACE/.venv (venv đời Python)"
+if [ "$FRESH_FORCED" -eq 1 ]; then
+  FRESH=1
+  [ -n "$FRESH_WHY" ] || FRESH_WHY="ép bằng --fresh/KITGEN_FRESH"
+elif [ -n "$FRESH_WHY" ] && [ "$NEW_MAJOR" -ge 3 ]; then
+  FRESH=1
+fi
+[ "$FRESH" -eq 0 ] || STEP_TOTAL=7
+
+SWEEP_KB=0
+SWEEP_WHAT=""
+# Xoá một đường dẫn ĐÃ ĐƯỢC KỂ TÊN, cộng dồn dung lượng, và nhớ tên để in ra. Không
+# `find`, không glob đệ quy: mọi thứ bị xoá đều phải gõ thẳng tên ở danh sách dưới.
+sweep_rm(){ # sweep_rm <đường dẫn> <tên hiển thị>
+  [ -e "$1" ] || [ -L "$1" ] || return 0
+  _kb="$(du -sk "$1" 2>/dev/null | awk 'NR==1{print $1}')"
+  case "$_kb" in ''|*[!0-9]*) _kb=0 ;; esac
+  if rm -rf "$1" 2>/dev/null; then
+    SWEEP_KB=$((SWEEP_KB + _kb))
+    SWEEP_WHAT="$SWEEP_WHAT $2"
+  else
+    check_warn "không xoá được $1 — dọn tay rồi chạy lại installer"
+  fi
+}
+# Dừng dịch vụ TRƯỚC khi xoá `releases/`. Dùng lại đúng đường dừng của bước đăng ký
+# dịch vụ bên dưới, không bịa thêm cách thứ hai.
+#
+# `--no-start` = "installer không được đụng tới dịch vụ", cả bật LẪN tắt: cờ này chỉ
+# có người gọi tự quản dịch vụ (CI, bộ ca, cài vào HOME tạm) mới dùng, và ở đó nhãn
+# launchd `com.kitgen.agent` là của MÁY THẬT — bootout ở đó là tắt KitGen của chính
+# người đang chạy test.
+fresh_stop_service(){
+  if [ "$NO_START" -eq 1 ]; then
+    check_ok "--no-start: không đụng tới dịch vụ đang chạy"
+    return 0
+  fi
+  [ ! -x "$BIN" ] || "$BIN" stop >/dev/null 2>&1 || true
+  if [ "$(uname -s)" = Darwin ]; then
+    _domain="gui/$(id -u)"
+    launchctl bootout "$_domain/com.kitgen.agent" >/dev/null 2>&1 || \
+      launchctl unload "$HOME/Library/LaunchAgents/com.kitgen.agent.plist" >/dev/null 2>&1 || true
+    for _ in 1 2 3 4 5; do
+      launchctl print "$_domain/com.kitgen.agent" >/dev/null 2>&1 || break
+      sleep 1
+    done
+  elif command -v systemctl >/dev/null 2>&1; then
+    systemctl --user stop kitgen-agent >/dev/null 2>&1 || true
+  fi
+  # Đường cuối cho bản cài không qua launchd/systemd (`nohup kitgen run`). Chỉ giết
+  # tiến trình chạy agent TRONG $KITGEN_HOME — installer đang chạy từ thư mục tạm nên
+  # không tự giết mình (agent spawn nó bằng `setsid`, session khác — xem update.mjs ①).
+  pkill -f "$KITGEN_HOME/.*agent/server.mjs" >/dev/null 2>&1 || true
+  check_ok "đã dừng dịch vụ và tiến trình agent cũ"
+}
+if [ "$FRESH" -eq 1 ]; then
+  # Gói có thể đang nằm NGAY TRONG $KITGEN_HOME (ai đó chạy install.sh của một bản đã
+  # giải nén trong releases/). Chép ra chỗ khác trước khi quét, nếu không thì bước quét
+  # xoá mất chính thứ đang định cài.
+  case "$CANDIDATE" in
+    "$KITGEN_HOME"/*)
+      mkdir -p "$TMP/candidate"
+      cp -R "$CANDIDATE/." "$TMP/candidate/"
+      CANDIDATE="$TMP/candidate"
+      ;;
+  esac
+fi
+step "Kiểm tra gói cài đặt"
 check_ok "runtime $VERSION và checksum hợp lệ"
+if [ "$FRESH" -eq 1 ]; then
+  step "Gỡ bản cũ (cài lại từ đầu)"
+  check_ok "nhận ra bản đời cũ: $FRESH_WHY"
+  fresh_stop_service
+  FRESH_KEEP_NODE=0
+  if [ -x "$KITGEN_HOME/tools/node/bin/node" ]; then
+    _node_major="$("$KITGEN_HOME/tools/node/bin/node" -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || printf '0')"
+    case "$_node_major" in ''|*[!0-9]*) _node_major=0 ;; esac
+    [ "$_node_major" -lt 20 ] || FRESH_KEEP_NODE=1
+  fi
+  sweep_rm "$KITGEN_HOME/releases" "releases/"
+  sweep_rm "$KITGEN_HOME/current" "current"
+  for _t in "$KITGEN_HOME"/tools/* "$KITGEN_HOME"/tools/.[!.]*; do
+    [ -e "$_t" ] || [ -L "$_t" ] || continue
+    if [ "$FRESH_KEEP_NODE" -eq 1 ] && [ "$(basename "$_t")" = node ]; then continue; fi
+    sweep_rm "$_t" "tools/$(basename "$_t")"
+  done
+  sweep_rm "$KITGEN_HOME/install.sh" "install.sh (bản cũ)"
+  sweep_rm "$KITGEN_HOME/install.ps1" "install.ps1 (bản cũ)"
+  # Workspace: ĐÚNG NĂM đường dẫn này, không hơn. `projects/` và mọi thứ khác là dữ
+  # liệu người dùng — installer không có việc gì ở đó.
+  sweep_rm "$WORKSPACE/.kitgen/engine" "workspace/.kitgen/engine"
+  sweep_rm "$WORKSPACE/.kitgen/.venv" "workspace/.kitgen/.venv"
+  sweep_rm "$WORKSPACE/.kitgen/__pycache__" "workspace/.kitgen/__pycache__"
+  sweep_rm "$WORKSPACE/.venv" "workspace/.venv"
+  sweep_rm "$WORKSPACE/__pycache__" "workspace/__pycache__"
+  if [ -n "$SWEEP_WHAT" ]; then
+    SWEEP_MB="$(printf '%s' "$SWEEP_KB" | awk '{printf "%.0f", $1/1024}')"
+    check_ok "đã dọn ${SWEEP_MB:-?} MB di sản đời cũ:$SWEEP_WHAT"
+  else
+    check_ok "đã dọn: không còn gì của đời cũ trên máy"
+  fi
+  [ "$FRESH_KEEP_NODE" -eq 0 ] || check_ok "giữ lại Node riêng đang lành lặn trong tools/node (không tải lại 30 MB)"
+  check_ok "giữ nguyên: config.env, logs/, và toàn bộ workspace ngoài các đường trên (project là dữ liệu của bạn)"
+fi
 NEW="$DEST.new"
 rm -rf "$NEW"
 mkdir -p "$NEW"
@@ -572,7 +768,7 @@ fi
 # tools/node của KitGen, còn codex THẬT của người dùng không hề được nâng.
 KITGEN_ORIG_PATH="$PATH"; export KITGEN_ORIG_PATH
 PATH="$(dirname "$NODE"):$PATH"; export PATH
-progress "2/6" "Health check môi trường nền"
+step "Health check môi trường nền"
 check_ok "Node $($NODE --version 2>/dev/null || printf '>=20') · $NODE"
 # ── Python: KHÔNG CÒN GÌ Ở ĐÂY (16/09/2026) ──────────────────────────────────
 # Chỗ này từng là 55 dòng dò/tải/giải nén một bản CPython pin cứng, chỉ để `slice.py`
@@ -599,7 +795,7 @@ mv "$NEW" "$DEST"
 PREVIOUS="$(readlink "$KITGEN_HOME/current" 2>/dev/null || true)"
 # Prefer an existing healthy Codex CLI. Persisting its absolute path means the
 # background service does not depend on launchd/systemd inheriting the shell PATH.
-progress "3/6" "Health check Codex CLI"
+step "Health check Codex CLI"
 # TÌM TRÊN PATH GỐC, không phải PATH đã chèn Node riêng ở bước [2/6]: nếu một lượt cài
 # đời trước đã lỡ để `npm install -g @openai/codex` đổ vào tools/node (xem khối dọn bên
 # dưới), thì `tools/node/bin/codex` đứng NGAY ĐẦU PATH và installer sẽ nhận nhầm bản lạc
@@ -725,40 +921,25 @@ fi
 # người dùng thật. `debug prompt-input` rẻ: không mạng, không quota, chỉ liệt kê skill.
 run_with_timeout 60 env CODEX_HOME="$HOME/.codex" "$CODEX_BIN" debug prompt-input >/dev/null 2>&1 || true
 
-# Dọn rác đời Playwright ở LƯỢT UPDATE: 790,9 MB không còn ai dùng (browser 772,7 MB
-# + gói npm 18,1 MB). Máy sạch không có gì để xoá; đây chỉ là đường dọn cho máy đã trót
-# cài đời trước — kể cả bản 2.1.21 vừa tải thêm chromium/firefox/webkit.
-# Cùng lý do, `@resvg/resvg-wasm` (2,4 MB) bị gỡ khỏi đường cài từ 07/09/2026: không
-# còn ảnh SVG nào để render, nhưng máy update từ bản cũ vẫn giữ nguyên gói trong tools/.
-rm -rf "$KITGEN_HOME/tools/playwright-browsers" \
-       "$KITGEN_HOME/tools/node_modules/playwright" \
-       "$KITGEN_HOME/tools/node_modules/playwright-core" \
-       "$KITGEN_HOME/tools/node_modules/@resvg" 2>/dev/null || true
+# ── (ĐÃ GỘP) DỌN RÁC ĐỜI PLAYWRIGHT / @resvg / PYTHON ────────────────────────
+# Ở đây từng có HAI khối `rm -rf` rời nhau: một khối xoá `tools/playwright-browsers`
+# (790,9 MB) + `@resvg/resvg-wasm`, một khối xoá `tools/python` + `<workspace>/.venv`
+# + `<workspace>/.kitgen/engine` rồi in "đã dọn N MB di sản". Cả hai chạy ở MỌI lượt
+# update, và mỗi lần bỏ thêm một thứ khỏi đường cài lại phải nhớ thêm một dòng nữa.
+# Từ 16/09/2026 chỉ còn MỘT cơ chế: máy còn dấu hiệu đời cũ thì bị GỠ SẠCH ở bước
+# "Gỡ bản cũ" (khối CÀI LẠI TỪ ĐẦU, ngay trước bước [1/N]) — nguyên thư mục `tools/`
+# ra đi, nên không còn thứ gì để kể tên ở đây nữa. Lượt update 3.x → 3.x không có di
+# sản nào để dọn, và giữ nguyên bản trước để lùi.
 mkdir -p "$WORKSPACE/.kitgen" "$WORKSPACE/projects"
-# ── DỌN DI SẢN ĐỜI PYTHON / ĐỜI ENGINE-CHÉP-VÀO-WORKSPACE ────────────────────
-# Ba thư mục dưới đây là thứ bản ≤2.1.45 tạo ra và bản này KHÔNG CÒN AI GỌI:
-#   · $KITGEN_HOME/tools/python   — CPython riêng, ~24 MB (engine nay là JS);
-#   · $WORKSPACE/.venv            — venv + Pillow, ~4 MB (bản rất cũ: ~314 MB vì còn
-#                                   numpy/scipy/pymatting);
-#   · $WORKSPACE/.kitgen/engine   — bản chép của engine. `lib/engine.mjs::prepareEngine`
-#                                   nay KHÔNG chép file nào, và `resolveEngine` đọc
-#                                   engine đi kèm gói agent. Để lại là để một engine
-#                                   ĐỜI CŨ nằm ĐẦU danh sách tìm kiếm của agent mới —
-#                                   `ws.engineDir` vẫn được thử trước.
-# "Thôi không cài nữa" là chưa đủ: máy update từ bản cũ sẽ giữ nguyên đống đó vĩnh viễn.
-# In ra MỘT dòng nói dọn bao nhiêu — im lặng xoá vài trăm MB của người khác là không đàng hoàng.
-LEGACY_TOTAL=""
-LEGACY_WHAT=""
-for _legacy in "$KITGEN_HOME/tools/python" "$WORKSPACE/.venv" "$WORKSPACE/.kitgen/engine"; do
-  [ -e "$_legacy" ] || continue
-  LEGACY_WHAT="$LEGACY_WHAT $(basename "$_legacy")"
-  LEGACY_TOTAL="$LEGACY_TOTAL$(du -sk "$_legacy" 2>/dev/null | awk '{print $1}') "
-  rm -rf "$_legacy" 2>/dev/null || true
-done
-if [ -n "$LEGACY_WHAT" ]; then
-  LEGACY_MB="$(printf '%s' "$LEGACY_TOTAL" | awk '{s=0; for(i=1;i<=NF;i++) s+=$i; printf "%.0f", s/1024}')"
-  check_ok "đã dọn ${LEGACY_MB:-?} MB di sản đời Python/engine-bash:$LEGACY_WHAT (KitGen nay chỉ cần Node)"
-fi
+# ── (ĐÃ GỘP) DI SẢN ĐỜI PYTHON / ĐỜI ENGINE-CHÉP-VÀO-WORKSPACE ───────────────
+# Khối này từng xoá `tools/python`, `<workspace>/.venv`, `<workspace>/.kitgen/engine`
+# ở MỌI lượt update. Ba đường ấy nay là DẤU HIỆU nhận ra máy đời cũ chứ không còn là
+# việc dọn lặt vặt: thấy một trong ba là cả máy được gỡ sạch ở bước "Gỡ bản cũ" (khối
+# CÀI LẠI TỪ ĐẦU). Một cơ chế, một chỗ để đọc, một dòng báo cáo.
+#
+# `.kitgen/engine` nguy nhất trong ba: `resolveEngine` thử `ws.engineDir` TRƯỚC, nên
+# một engine đời cũ nằm đó sẽ được agent MỚI chạy. Đó là lý do nó nằm trong danh sách
+# dấu hiệu, không phải chỉ trong danh sách quét.
 # `bin/kitgen` cũng là shell script có thể đang được đọc bởi lệnh update/status.
 atomic_copy_file "$DEST/runtime/bin/kitgen" "$KITGEN_HOME/bin/kitgen" 1
 # config.json: trước 16/09/2026 khối này là một heredoc python3. Nay Node riêng làm —
@@ -797,7 +978,7 @@ CFG
 chmod 600 "$ATOMIC_TMP"
 mv -f "$ATOMIC_TMP" "$KITGEN_HOME/config.env"
 ATOMIC_TMP=""
-progress "4/6" "Đăng ký dịch vụ local"
+step "Đăng ký dịch vụ local"
 # Đây là điểm KHÔNG QUAY ĐẦU: từ dòng này `current` là bản mới, và mọi đường thoát
 # phía dưới đều phải tự nói ra mình để lại máy ở trạng thái nào (xem `cleanup`).
 ACTIVATED=1
@@ -846,6 +1027,18 @@ if [ "$NO_START" -eq 0 ]; then
       else
         echo "Update failed health check; previous runtime files were restored, but its agent could not be restarted." >&2
       fi
+    elif [ "$FRESH" -eq 1 ]; then
+      # KHÔNG CÓ ĐƯỜNG LÙI, và phải nói ra như thế. Lượt này đã gỡ sạch bản đời cũ
+      # (bước "Gỡ bản cũ"), nên không còn bản nào để trả về — vờ như có rollback ở đây
+      # là để người dùng ngồi đợi một thứ không tồn tại.
+      {
+        printf '\n'
+        printf 'KitGen %s đã cài xong nhưng dịch vụ KHÔNG phản hồi.\n' "$VERSION"
+        printf 'Lượt này là cài lại từ đầu (bản đời cũ đã được gỡ), nên KHÔNG có bản cũ để lùi về.\n'
+        printf 'Chạy lại lệnh cài đặt một lần nữa:\n\n'
+        printf '  %s\n\n' "$KITGEN_HOME/bin/kitgen update"
+        printf 'Dữ liệu trong %s KHÔNG bị đụng tới. Nhật ký: %s\n' "$WORKSPACE" "$KITGEN_HOME/install.log"
+      } | tee -a "$KITGEN_HOME/install.log" >&2
     else
       echo "Install failed health check; no previous runtime is available." >&2
       fi
@@ -880,14 +1073,14 @@ if [ "$NO_START" -eq 0 ]; then
       exit 1
     fi
   fi
-  progress "5/6" "Health check dịch vụ"
+  step "Health check dịch vụ"
   check_ok "agent $VERSION phản hồi tại http://127.0.0.1:$PORT/health"
 else
   ACTIVATED=0   # --no-start: cài xong, cố ý không chạy — không có gì để lùi
-  progress "5/6" "Bỏ qua health check dịch vụ (--no-start)"
+  step "Bỏ qua health check dịch vụ (--no-start)"
 fi
 clear_update_txn
-progress "6/6" "Dọn bản cũ"
+step "Dọn bản cũ"
 prune_releases
 
 # TỔNG KẾT "MỌI THỨ NẰM ĐÂU".

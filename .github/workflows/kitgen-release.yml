@@ -89,6 +89,10 @@ jobs:
           # JS nên đường ấy không còn, và thứ phải canh là chiều ngược lại: KHÔNG installer
           # nào được chạm tới Python nữa, và di sản đời cũ phải bị dọn.
           bash ../test/install-no-python.test.sh
+          # BAN 3.0: installer TU GO BAN CU roi cai ban moi. Bo ca nay canh ca hai ve cua
+          # loi hua — go du (releases/ · current · tools/ · di san trong workspace) VA giu
+          # du (config.env · logs/ · project). Xoa nham project cua nguoi dung la mat trang.
+          bash ../test/install-fresh-sweep.test.sh
           # BỘ CA NÀY CŨNG CHƯA TỪNG ĐƯỢC CI GỌI (khoảng trống có từ lúc nó ra đời,
           # 16/09/2026). Nó khoá luật «npm của KitGen không được làm việc thay npm của
           # người dùng» — đúng con bug làm gói @openai/codex 277 MB rơi vào tools/node.
