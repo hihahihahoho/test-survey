@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   cover.mjs — ẢNH BÌA của project: dựng prompt, chạy cover.sh, ghi cover/cover.png.
+   cover.mjs — ẢNH BÌA của project: dựng prompt, chạy engine cover, ghi cover/cover.png.
 
    BA QUYẾT ĐỊNH ĐÃ CHỐT VỚI CHỦ SẢN PHẨM, viết lại ở đây để đời sau đừng "sửa cho
    gọn" rồi làm mất lý do:
@@ -58,17 +58,16 @@
       `titleEmbedded:false` để webapp dán overlay như trước. Cờ boolean đó là toàn bộ hợp
       đồng với web — API #43 KHÔNG BAO GIỜ trả chuỗi tên ra ngoài (xem `coverStatus`).
    ════════════════════════════════════════════════════════════════════════════ */
-import { spawn } from "node:child_process"
 import { mkdir } from "node:fs/promises"
 import { homedir } from "node:os"
 import { join } from "node:path"
+import { pathToFileURL } from "node:url"
 import { exists, mtimeOf, readJsonFile, writeFileAtomic, writeJsonAtomic } from "./fsx.mjs"
 import { redactLine } from "./redact.mjs"
 import { projectDir } from "./projects-dir.mjs"
 import { readProject, saveProject } from "./projects.mjs"
 import { readContract } from "./contract.mjs"
 import { resolveEngine } from "./engine.mjs"
-import { IS_WIN, bashCommand, pythonEnv, winSpawnOpts } from "./platform.mjs"
 
 /** Thư mục + đường dẫn tương đối của ảnh bìa tự sinh. `files.mjs` mở đúng thư mục này. */
 export const COVER_DIR = "cover"
@@ -76,7 +75,7 @@ export const COVER_REL = "cover/cover.png"
 export const COVER_META_REL = "cover/cover.json"
 /** Khổ ảnh bìa cuối cùng (16:9). */
 export const COVER_SIZE = [1600, 900]
-/** Khổ model sinh ra (codex chỉ nhận 3:2 / 2:3 / 1:1) — cover.sh cắt dải giữa về 16:9. */
+/** Khổ model sinh ra (codex chỉ nhận 3:2 / 2:3 / 1:1) — engine cắt dải giữa về 16:9. */
 export const GEN_CANVAS = [1536, 1024]
 
 /** Config lưu nhãn `~/.codex-img`; tiến trình con cần đường dẫn thật. */
@@ -535,8 +534,9 @@ export async function buildCoverPrompt({ project, contract, hasFile, readJson })
 
 const STATUS_NONE = "none"
 
-/** Hạn chờ 'close' sau khi đã có 'exit' — CHỈ dùng trên win32 (xem chỗ spawn cover.sh). */
-const WIN_PIPE_GRACE_MS = 5000
+/* `WIN_PIPE_GRACE_MS` ĐÃ BỎ (bước ④): nó là hạn chờ 'close' sau 'exit' cho ca
+   "tiến trình cháu trên Windows còn giữ ống dẫn stdout của bash". Không còn bash,
+   không còn ống dẫn nào để treo — lượt vẽ bìa nay chạy trong chính tiến trình agent. */
 const MAX_COVER_LOG_BYTES = 64 * 1024
 
 /** Đọc meta ảnh bìa trên đĩa (không có = chưa từng chạy). */
@@ -648,9 +648,17 @@ export async function startCover(ws, id, { imgHome = null, wait = false, force =
   const key = keyOf(ws, id)
   if (running.has(key)) return { status: "running", reason: "ALREADY_RUNNING", startedAt: running.get(key).startedAt }
 
+  /* ĐƯỜNG VẼ BÌA CỦA ENGINE. Trước bước ④ đây là `<engine>/cover.sh` được spawn bằng
+     bash; nay là module `<engine>/cover.mjs` NẠP THẲNG vào tiến trình agent.
+     VÌ SAO KHÔNG ĐI QUA `cli.mjs cover` như pha gen/slice: ảnh bìa không có nút Dừng,
+     không có stream riêng, không có gì để giết — thứ duy nhất agent cần ở nó là vài
+     dòng log và một phán quyết. Một tiến trình nữa chỉ để lấy hai thứ đó là thêm một
+     chỗ hỏng (ống dẫn treo trên Windows — cả khối `WIN_PIPE_GRACE_MS` cũ sinh ra vì nó).
+     VÀ nó giữ nguyên hợp đồng 409 COVER_UNAVAILABLE: engine ĐỜI CŨ (chưa có bìa) đơn
+     giản là không có file này, y hệt ngày trước không có `cover.sh`. */
   const engineDir = await resolveEngine(ws)
-  const script = engineDir ? join(engineDir, "cover.sh") : null
-  if (!script || !(await exists(script)))
+  const enginePath = engineDir ? join(engineDir, "cover.mjs") : null
+  if (!enginePath || !(await exists(enginePath)))
     return { status: "skipped", reason: "COVER_ENGINE_MISSING", startedAt: null }
 
   const pdir = projectDir(ws, id)
@@ -708,38 +716,20 @@ export async function startCover(ws, id, { imgHome = null, wait = false, force =
         logBytes -= Buffer.byteLength(lines.shift())
       }
     }
-    // darwin/linux: bashCommand trả đúng {cmd:"bash", args:[script, pdir], env:{}} như mã cũ.
-    // win32: bash.exe của Git for Windows, path đổi sang /c/… (cover.sh `cd "$1"`), PATH có coreutils.
-    const b = bashCommand([script, pdir])
-    await new Promise(resolve => {
-      let child
-      try {
-        // pythonEnv(): cover.sh cũng gọi python3 (crop/ghép ảnh bìa) — xem platform.mjs.
-        child = spawn(b.cmd, b.args, { cwd: pdir, stdio: ["ignore", "pipe", "pipe"], env: { ...env, ...b.env, ...pythonEnv() }, ...winSpawnOpts() })
-      } catch { return resolve() }
-      const onData = buf => { keepLog(buf) }
-      child.stdout.on("data", onData)
-      child.stderr.on("data", onData)
-      child.on("error", () => resolve())
-      child.on("close", () => resolve())
-      /* WINDOWS: 'close' đợi ống dẫn stdout/stderr đóng, mà trên Windows tiến trình CHÁU
-         (codex do cover.sh gọi) thừa kế đúng hai ống đó — bash chết rồi ống vẫn mở thì
-         'close' KHÔNG BAO GIỜ tới và job vẽ bìa treo vĩnh viễn ở "running" (ở đây còn
-         không có trần thời gian nào như slice). Chỉ vá cho win32: 'exit' đã tới mà quá
-         hạn vẫn chưa 'close' thì tự đóng ống rồi đi tiếp — phán vẫn THEO SẢN PHẨM
-         (file mới hơn t0) nên không đổi kết quả, chỉ đổi việc có thoát ra được hay không.
-         darwin/linux: khối này không tồn tại. */
-      if (IS_WIN) {
-        child.on("exit", () => {
-          const t = setTimeout(() => {
-            try { child.stdout?.destroy() } catch { /* đã đóng */ }
-            try { child.stderr?.destroy() } catch { /* đã đóng */ }
-            resolve()
-          }, WIN_PIPE_GRACE_MS)
-          t.unref?.()
-        })
-      }
-    })
+    /* MỘT LƯỢT VẼ BÌA, TRONG TIẾN TRÌNH NÀY.
+       `runCover` đọc cấu hình từ `env` (IMG_HOME/KITGEN_GEN_MODEL…), tự spawn codex,
+       tự ghi `cover/cover.raw.png` + `cover/cover.png` + `logs/cover.log`, và trả mã
+       thoát y hệt `bash cover.sh`. Mã thoát KHÔNG được dùng để phán (xem ngay dưới) —
+       nó chỉ vào log.
+       KHÔNG BAO GIỜ ĐƯỢC NÉM RA NGOÀI: caller cuối cùng là `run-handle.finish()`, ở
+       đó một lỗi lọt ra là unhandled rejection và giết cả tiến trình agent. */
+    try {
+      const { runCover } = await import(pathToFileURL(enginePath).href)
+      const code = await runCover(pdir, { env, print: line => keepLog(String(line) + "\n") })
+      keepLog(`[cover exit ${code}]\n`)
+    } catch (e) {
+      keepLog(`engine cover lỗi: ${String(e?.message ?? e)}\n`)
+    }
 
     /* PHÁN THEO SẢN PHẨM, y hệt lượt gen: file mới hơn t0 = xong. Mã thoát của codex
        không đáng tin (nó sập vì lỗi API transient SAU khi đã lưu ảnh). */
