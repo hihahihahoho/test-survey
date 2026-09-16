@@ -1,0 +1,2 @@
+prompt → prompts/cam-hung-ui.txt (+4 ảnh kèm)
+KITGEN_PROMPTS_ONLY: đã dựng xong prompt trong prompts/ — KHÔNG gọi codex, KHÔNG đụng raw/.

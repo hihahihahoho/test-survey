@@ -1,0 +1,12 @@
+background="transparent"
+## Canvas
+PORTRAIT 1024x1536 px, origin top-left: x grows right, y grows down. Background fully transparent: save a PNG with a real alpha channel, alpha 0 on every pixel that is not part of a drawn element.
+
+Tôi tự viết prompt này.
+Dòng thứ hai của tôi.
+
+Và một đoạn nữa.
+
+## Direction
+ghi chú của khuôn
+From the designer: giữ nguyên bố cục cũ

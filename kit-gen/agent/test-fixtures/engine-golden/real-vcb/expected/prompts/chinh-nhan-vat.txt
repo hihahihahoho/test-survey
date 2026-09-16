@@ -1,0 +1,39 @@
+background="transparent"
+## Canvas
+SQUARE 1254x1254 px, origin top-left: x grows right, y grows down. Background fully transparent: save a PNG with a real alpha channel, alpha 0 on every pixel that is not part of a drawn element.
+
+## Art style
+soft rounded 3D clay-like objects with gentle gradients, pastel candy palette on warm cream backgrounds, chunky friendly silhouettes that stay readable at thumbnail size, glossy top highlights and soft contact shadows, summer theme: sun-bright blues and warm sand, waves, palm leaves and ice-cream motifs.
+
+## Palette
+Primary #00502f (dominant: primary actions and key surfaces), secondary #629f0d (secondary actions); neutrals derive from them. No other hues unless the art style names them.
+
+## Layout
+2x2 grid of 627x627 px cells, 4 elements in reading order. Each cell contains ONE full-body character. Keep exactly this many cells in exactly this order.
+Each cell has a box, given on that element's line below: the box is the part of the cell that may be painted.
+Cells are separated by empty gutters: the outer 62 px band of every cell — everything outside that box — stays completely empty, not a leaf tip, not a glow, so neighbouring elements never meet.
+
+## Geometry
+- GEOMETRY IS STRICT. Each pose is centred in its own cell and stands upright, the full figure inside its box with a clear margin above the head and below the feet.
+- Draw the character as ONE natural figure, not a rim around a flat plate: no forced border, no badge frame, no plaque.
+- Hair, tail, cape and anything the character holds come to rest inside the box on that line — characters stay inside their own box, never touch each other and never touch the image edges.
+- The box on each line is a hard limit.
+
+## Transparency
+The space around the characters is simply empty: alpha 0 in the PNG, with nothing painted there. Each character's own body is solid all the way through.
+
+## Character reference
+The attached CHARACTER REFERENCE PHOTO is the character: every character cell shows EXACTLY this character — same species, face, colours, costume, materials and proportions — re-drawn in the art style above. This outranks everything else: if any other reference shows a DIFFERENT character, ignore that one.
+
+## Pose reference
+The attached POSE REFERENCE SHEET is a grey mannequin in the SAME grid as this sheet: cell k there gives the body pose and camera angle for cell k here. Copy pose and camera angle only. NEVER draw the mannequin itself — it is grey and faceless on purpose, and none of its plastic look may appear in the result.
+
+## Elements
+The list names WHAT each cell is; the art style above decides how it looks; the geometry rules above decide shape and placement.
+1) the SAME character from the reference photo, wearing a light summer outfit with short sleeves and sunglasses, standing still in a neutral relaxed idle pose, facing the viewer, an excited thrilled expression, eyes wide open, seen from a three-quarter left view, full body, designer's note: không đội mũ — its box is x=62..564, y=62..564 (502x502 px); everything of this character, hair and props included, stays inside that box
+2) the SAME character from the reference photo, wearing a light summer outfit with short sleeves and sunglasses, waving one hand high in greeting, a big bright smile, seen from a three-quarter left view, full body, designer's note: đội mũ lưỡi chai Newyork Yankee — its box is x=689..1191, y=62..564 (502x502 px); everything of this character, hair and props included, stays inside that box
+3) the SAME character from the reference photo, wearing a light summer outfit with short sleeves and sunglasses, pointing forward with one arm extended, a big bright smile, seen from a three-quarter left view, full body — its box is x=62..564, y=689..1191 (502x502 px); everything of this character, hair and props included, stays inside that box
+4) the SAME character from the reference photo, wearing a light summer outfit with short sleeves and sunglasses, presenting with one open palm to the side, as if showing a reward, a big bright smile, seen from a three-quarter left view, full body — its box is x=689..1191, y=689..1191 (502x502 px); everything of this character, hair and props included, stays inside that box
+
+## Output
+One coherent set: all 4 elements share the same style. Game-ready square 1:1 PNG with a real alpha channel (background="transparent").

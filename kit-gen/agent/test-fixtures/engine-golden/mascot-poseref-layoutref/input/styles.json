@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 4,
+  "characterPoses": [
+    "idle",
+    "wave"
+  ],
+  "styles": [
+    {
+      "id": "tet",
+      "vi": "Tết đỏ",
+      "style": "flat vector, red and gold, paper-cut lanterns and apricot blossom",
+      "brand": {
+        "mode": "colors",
+        "primary": "#C0202A",
+        "secondary": "#E8B923",
+        "refs": []
+      }
+    }
+  ],
+  "sheets": [
+    {
+      "id": "dang2",
+      "grid": {
+        "cols": 2,
+        "rows": 1
+      },
+      "canvas": "square",
+      "cell_hint": "cell containing ONE full-body character",
+      "note": "All cells show THE SAME character as in the attached REFERENCE PHOTO: match its species, face, colors, costume, materials and proportions exactly — only the pose and viewing angle change per cell, like one character turnaround sheet.",
+      "poseRef": "refs/char-pose-sheet-abc.png",
+      "layoutRef": "refs/layout-sketch.png",
+      "components": [
+        {
+          "file": "01-idle",
+          "vi": "01-idle",
+          "spec": "the same character, idle pose, full body",
+          "skel": {
+            "shape": "pose",
+            "w": 0.3,
+            "h": 0.85,
+            "pose": "idle"
+          }
+        },
+        {
+          "file": "02-wave",
+          "vi": "02-wave",
+          "spec": "the same character, waving, full body",
+          "skel": {
+            "shape": "pose",
+            "w": 0.3,
+            "h": 0.85,
+            "pose": "wave"
+          }
+        }
+      ]
+    }
+  ]
+}

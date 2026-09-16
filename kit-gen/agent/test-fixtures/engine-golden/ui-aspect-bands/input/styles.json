@@ -1,0 +1,270 @@
+{
+  "schemaVersion": 4,
+  "characterPoses": [],
+  "styles": [
+    {
+      "id": "tet",
+      "vi": "Tết đỏ",
+      "style": "flat vector, red and gold, paper-cut lanterns and apricot blossom",
+      "brand": {
+        "mode": "colors",
+        "primary": "#C0202A",
+        "secondary": "#E8B923",
+        "refs": []
+      }
+    }
+  ],
+  "sheets": [
+    {
+      "id": "dai",
+      "grid": {
+        "cols": 4,
+        "rows": 4
+      },
+      "canvas": "landscape",
+      "cell_hint": "landscape 3:2 cell",
+      "components": [
+        {
+          "file": "01-a",
+          "vi": "01-a",
+          "spec": "a shaped plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6,
+            "decor": true
+          },
+          "out": {
+            "w": 200,
+            "h": 200
+          }
+        },
+        {
+          "file": "02-a",
+          "vi": "02-a",
+          "spec": "a shaped plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6,
+            "decor": false
+          },
+          "out": {
+            "w": 240,
+            "h": 180
+          }
+        },
+        {
+          "file": "03-a",
+          "vi": "03-a",
+          "spec": "a shaped plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6,
+            "decor": false
+          },
+          "out": {
+            "w": 300,
+            "h": 200
+          }
+        },
+        {
+          "file": "04-a",
+          "vi": "04-a",
+          "spec": "a shaped plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6,
+            "decor": true
+          },
+          "out": {
+            "w": 400,
+            "h": 200
+          }
+        },
+        {
+          "file": "05-a",
+          "vi": "05-a",
+          "spec": "a shaped plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6,
+            "decor": false
+          },
+          "out": {
+            "w": 500,
+            "h": 200
+          }
+        },
+        {
+          "file": "06-a",
+          "vi": "06-a",
+          "spec": "a shaped plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6,
+            "decor": false
+          },
+          "out": {
+            "w": 600,
+            "h": 200
+          }
+        },
+        {
+          "file": "07-a",
+          "vi": "07-a",
+          "spec": "a shaped plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6,
+            "decor": true
+          },
+          "out": {
+            "w": 800,
+            "h": 200
+          }
+        },
+        {
+          "file": "08-a",
+          "vi": "08-a",
+          "spec": "a shaped plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6,
+            "decor": false
+          },
+          "out": {
+            "w": 1000,
+            "h": 200
+          }
+        },
+        {
+          "file": "09-a",
+          "vi": "09-a",
+          "spec": "a shaped plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6,
+            "decor": false
+          },
+          "out": {
+            "w": 1600,
+            "h": 200
+          }
+        },
+        {
+          "file": "10-a",
+          "vi": "10-a",
+          "spec": "a shaped plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6,
+            "decor": true
+          },
+          "out": {
+            "w": 180,
+            "h": 240
+          }
+        },
+        {
+          "file": "11-a",
+          "vi": "11-a",
+          "spec": "a shaped plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6,
+            "decor": false
+          },
+          "out": {
+            "w": 200,
+            "h": 300
+          }
+        },
+        {
+          "file": "12-a",
+          "vi": "12-a",
+          "spec": "a shaped plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6,
+            "decor": false
+          },
+          "out": {
+            "w": 200,
+            "h": 400
+          }
+        },
+        {
+          "file": "13-a",
+          "vi": "13-a",
+          "spec": "a shaped plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6,
+            "decor": true
+          },
+          "out": {
+            "w": 200,
+            "h": 500
+          }
+        },
+        {
+          "file": "14-a",
+          "vi": "14-a",
+          "spec": "a shaped plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6,
+            "decor": false
+          },
+          "out": {
+            "w": 200,
+            "h": 600
+          }
+        },
+        {
+          "file": "15-a",
+          "vi": "15-a",
+          "spec": "a shaped plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6,
+            "decor": false
+          },
+          "out": {
+            "w": 200,
+            "h": 1000
+          }
+        },
+        {
+          "file": "16-a",
+          "vi": "16-a",
+          "spec": "a shaped plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6,
+            "decor": true
+          },
+          "out": {
+            "w": 200,
+            "h": 1600
+          }
+        }
+      ]
+    }
+  ]
+}

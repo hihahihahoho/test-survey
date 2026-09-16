@@ -1,0 +1,40 @@
+background="transparent"
+## Canvas
+LANDSCAPE 1536x1024 px, origin top-left: x grows right, y grows down. Background fully transparent: save a PNG with a real alpha channel, alpha 0 on every pixel that is not part of a drawn element.
+
+## Art style
+flat vector, red and gold, paper-cut lanterns and apricot blossom.
+
+## Palette
+Primary #C0202A (dominant: primary actions and key surfaces), secondary #E8B923 (secondary actions); neutrals derive from them. No other hues unless the art style names them.
+
+## Layout
+3x2 grid of 512x512 px cells, 6 elements in reading order. Each cell contains ONE full-body character. Keep exactly this many cells in exactly this order.
+Each cell has a box, given on that element's line below: the box is the part of the cell that may be painted.
+Cells are separated by empty gutters: the outer 51 px band of every cell — everything outside that box — stays completely empty, not a leaf tip, not a glow, so neighbouring elements never meet.
+
+## Geometry
+- GEOMETRY IS STRICT. Each pose is centred in its own cell and stands upright, the full figure inside its box with a clear margin above the head and below the feet.
+- Draw the character as ONE natural figure, not a rim around a flat plate: no forced border, no badge frame, no plaque.
+- Where a line gives a width-to-height ratio, that is the ratio of the figure itself: keep it, and never stretch or squash the character to fill space.
+- Hair, tail, cape and anything the character holds come to rest inside the box on that line — characters stay inside their own box, never touch each other and never touch the image edges.
+- The box on each line is a hard limit.
+
+## Transparency
+The space around the characters is simply empty: alpha 0 in the PNG, with nothing painted there. Each character's own body is solid all the way through.
+
+## Direction
+All cells show THE SAME character as in the attached REFERENCE PHOTO: match its species, face, colors, costume, materials and proportions exactly — only the pose and viewing angle change per cell, like one character turnaround sheet.
+
+## Elements
+The list names WHAT each cell is; the art style above decides how it looks; the core aspect ratio on its line decides its shape.
+Each line also says roughly how wide that element sits on screen in the finished game. Design every stroke weight, corner radius, bevel and detail for that size, then draw it large and crisp — a small button must still read as a small button, never as a wide banner with hairline edges.
+1) the same original mascot character, idle pose, full body — core aspect 1:2.7 (about two and a half times taller than wide), about 300 px wide on screen — its box is x=51..461, y=51..461 (410x410 px); everything of this character, hair and props included, stays inside that box
+2) the same original mascot character, wave pose, full body — its box is x=563..973, y=51..461 (410x410 px); everything of this character, hair and props included, stays inside that box
+3) the same original mascot character, point pose, full body — its box is x=1075..1485, y=51..461 (410x410 px); everything of this character, hair and props included, stays inside that box
+4) the same original mascot character, run pose, full body — its box is x=51..461, y=563..973 (410x410 px); everything of this character, hair and props included, stays inside that box
+5) the same original mascot character, jump pose, full body — its box is x=563..973, y=563..973 (410x410 px); everything of this character, hair and props included, stays inside that box
+6) the same original mascot character, sit pose, full body — its box is x=1075..1485, y=563..973 (410x410 px); everything of this character, hair and props included, stays inside that box
+
+## Output
+One coherent set: all 6 elements share the same style. Game-ready landscape 3:2 PNG with a real alpha channel (background="transparent").

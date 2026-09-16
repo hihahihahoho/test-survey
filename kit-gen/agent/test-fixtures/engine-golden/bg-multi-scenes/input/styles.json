@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 4,
+  "characterPoses": [],
+  "styles": [
+    {
+      "id": "tet",
+      "vi": "Tết đỏ",
+      "style": "flat vector, red and gold, paper-cut lanterns and apricot blossom",
+      "brand": {
+        "mode": "colors",
+        "primary": "#C0202A",
+        "secondary": "#E8B923",
+        "refs": []
+      }
+    }
+  ],
+  "sheets": [
+    {
+      "id": "canh",
+      "grid": {
+        "cols": 2,
+        "rows": 2
+      },
+      "canvas": "landscape",
+      "cell_hint": "full-bleed landscape scene",
+      "ref": "refs/scene-cho-tet.jpg",
+      "directive": "thêm mưa xuân rơi nhẹ",
+      "components": [
+        {
+          "file": "01-a flower market",
+          "vi": "01-a flower market",
+          "spec": "a full-bleed scene of a flower market",
+          "skel": {
+            "shape": "full",
+            "w": 1,
+            "h": 1
+          }
+        },
+        {
+          "file": "02-a temple yard",
+          "vi": "02-a temple yard",
+          "spec": "a full-bleed scene of a temple yard",
+          "skel": {
+            "shape": "full",
+            "w": 1,
+            "h": 1
+          }
+        },
+        {
+          "file": "03-a river at dusk",
+          "vi": "03-a river at dusk",
+          "spec": "a full-bleed scene of a river at dusk",
+          "skel": {
+            "shape": "full",
+            "w": 1,
+            "h": 1
+          }
+        },
+        {
+          "file": "04-a lantern street",
+          "vi": "04-a lantern street",
+          "spec": "a full-bleed scene of a lantern street",
+          "skel": {
+            "shape": "full",
+            "w": 1,
+            "h": 1
+          }
+        }
+      ]
+    }
+  ]
+}

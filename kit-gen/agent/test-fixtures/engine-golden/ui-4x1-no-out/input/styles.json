@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 4,
+  "characterPoses": [],
+  "styles": [
+    {
+      "id": "tron",
+      "vi": "Trơn",
+      "style": "",
+      "brand": {}
+    }
+  ],
+  "sheets": [
+    {
+      "id": "cu",
+      "grid": {
+        "cols": 4,
+        "rows": 1
+      },
+      "orient": "landscape",
+      "cell_hint": "cell",
+      "components": [
+        {
+          "file": "01-x",
+          "vi": "01-x",
+          "spec": "element number 1",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6
+          }
+        },
+        {
+          "file": "02-x",
+          "vi": "02-x",
+          "spec": "element number 2",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6
+          }
+        },
+        {
+          "file": "03-x",
+          "vi": "03-x",
+          "spec": "element number 3",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6
+          }
+        },
+        {
+          "file": "04-x",
+          "vi": "04-x",
+          "spec": "element number 4",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.6
+          }
+        }
+      ]
+    }
+  ]
+}

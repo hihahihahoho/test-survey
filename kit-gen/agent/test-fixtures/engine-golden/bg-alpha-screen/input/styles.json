@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 4,
+  "characterPoses": [],
+  "styles": [
+    {
+      "id": "tet",
+      "vi": "Tết đỏ",
+      "style": "flat vector, red and gold, paper-cut lanterns and apricot blossom",
+      "brand": {
+        "mode": "colors",
+        "primary": "#C0202A",
+        "secondary": "#E8B923",
+        "refs": []
+      }
+    }
+  ],
+  "sheets": [
+    {
+      "id": "lop-truoc",
+      "grid": {
+        "cols": 1,
+        "rows": 1
+      },
+      "canvas": "square",
+      "cell_hint": "full-bleed square scene",
+      "note": "lớp tiền cảnh: lá cây và mái hiên, phần còn lại để rỗng",
+      "components": [
+        {
+          "file": "01-foreground",
+          "vi": "01-foreground",
+          "spec": "a foreground parallax layer of leaves and eaves framing the screen",
+          "skel": {
+            "shape": "full",
+            "w": 1,
+            "h": 1,
+            "alpha": true
+          }
+        }
+      ]
+    }
+  ]
+}

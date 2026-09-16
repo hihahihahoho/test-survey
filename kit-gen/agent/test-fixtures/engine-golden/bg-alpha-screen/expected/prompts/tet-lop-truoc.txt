@@ -1,0 +1,27 @@
+background="transparent"
+## Canvas
+SQUARE 1254x1254 px, origin top-left: x grows right, y grows down. The artwork reaches all four edges of the frame, and this is a LAYER meant to sit over another one: save a PNG with a real alpha channel, alpha 0 on every pixel the artwork does not cover.
+
+## Art style
+flat vector, red and gold, paper-cut lanterns and apricot blossom.
+
+## Palette
+Primary #C0202A (dominant: primary actions and key surfaces), secondary #E8B923 (secondary actions); neutrals derive from them. No other hues unless the art style names them.
+
+## Layout
+A single full-screen mobile game layer, spread across the whole frame edge to edge: one layer of one scene, not a sheet of separate parts. No border, no frame, no margin, no rounded corners — the art reaches all four edges. It does not have to cover every pixel: this layer sits over another one, so wherever the scene has nothing, the frame stays empty.
+
+## Transparency
+Wherever the scene shows nothing — the gaps between leaves, the sky behind a treeline, the space between foreground props — leave those pixels empty: alpha 0 in the PNG, with nothing painted there. Whatever is placed behind this layer later shows through those gaps. The scene's own body stays solid.
+
+## Text
+No letters, no digits, no words of any language anywhere in the image. Faces, plates, banners, buttons and screens stay BLANK — text is composited later in the game engine.
+
+## Direction
+lớp tiền cảnh: lá cây và mái hiên, phần còn lại để rỗng
+
+## Scene
+a foreground parallax layer of leaves and eaves framing the screen
+
+## Output
+Game-ready mobile game background art, square 1:1.

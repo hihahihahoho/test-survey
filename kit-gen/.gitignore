@@ -43,3 +43,10 @@ KitGen/
 !agent/test-fixtures/**/kits/
 !agent/test-fixtures/**/kits/**
 !agent/test-fixtures/**/styles.json
+# `prompts/` và `logs/` cũng vậy: golden của bộ lắp prompt LÀ nội dung thư mục
+# `prompts/` mà gen.sh ghi ra (.txt · .att · .refs · .fullbleed). Thiếu ngoại lệ này
+# thì `git add` nuốt im toàn bộ mốc đối chứng và bộ ca so byte không có gì để so.
+!agent/test-fixtures/**/prompts/
+!agent/test-fixtures/**/prompts/**
+!agent/test-fixtures/**/logs/
+!agent/test-fixtures/**/logs/**

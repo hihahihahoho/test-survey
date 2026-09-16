@@ -1,0 +1,34 @@
+background="transparent"
+## Canvas
+SQUARE 1254x1254 px, origin top-left: x grows right, y grows down. Background fully transparent: save a PNG with a real alpha channel, alpha 0 on every pixel that is not part of a drawn element.
+
+## Art style
+soft rounded 3D clay-like objects with gentle gradients, pastel candy palette on warm cream backgrounds, chunky friendly silhouettes that stay readable at thumbnail size, glossy top highlights and soft contact shadows, summer theme: sun-bright blues and warm sand, waves, palm leaves and ice-cream motifs.
+
+## Palette
+Primary #00502f (dominant: primary actions and key surfaces), secondary #629f0d (secondary actions); neutrals derive from them. No other hues unless the art style names them.
+
+## Layout
+1x1 grid, 1 element in reading order. Each cell contains ONE full-body character. Keep exactly this many cells in exactly this order.
+
+## Geometry
+- GEOMETRY IS STRICT. Each pose is centred in its own cell and stands upright, the full figure inside its box with a clear margin above the head and below the feet.
+- Draw the character as ONE natural figure, not a rim around a flat plate: no forced border, no badge frame, no plaque.
+- The whole character comes to rest well inside the frame — nothing touches the image edges.
+- The box on the element line is a hard limit.
+
+## Transparency
+The space around the characters is simply empty: alpha 0 in the PNG, with nothing painted there. Each character's own body is solid all the way through.
+
+## Character reference
+The attached CHARACTER REFERENCE PHOTO is the character: every character cell shows EXACTLY this character — same species, face, colours, costume, materials and proportions — re-drawn in the art style above. This outranks everything else: if any other reference shows a DIFFERENT character, ignore that one.
+
+## Pose reference
+The attached POSE REFERENCE SHEET is a grey mannequin in the SAME grid as this sheet: cell k there gives the body pose and camera angle for cell k here. Copy pose and camera angle only. NEVER draw the mannequin itself — it is grey and faceless on purpose, and none of its plastic look may appear in the result.
+
+## Elements
+The list names WHAT each cell is; the art style above decides how it looks; the geometry rules above decide shape and placement.
+1) the SAME character from the reference photo, wearing a light summer outfit with short sleeves and sunglasses, flying forward, body horizontal, arms stretched ahead, a determined confident expression, seen straight from the front, full body — its box is x=125..1128, y=125..1128 (1003x1003 px); everything of this character, hair and props included, stays inside that box
+
+## Output
+Game-ready square 1:1 PNG with a real alpha channel (background="transparent").

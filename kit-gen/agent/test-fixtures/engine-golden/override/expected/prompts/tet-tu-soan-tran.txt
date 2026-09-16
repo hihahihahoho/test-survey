@@ -1,0 +1,5 @@
+background="transparent"
+## Canvas
+SQUARE 1254x1254 px, origin top-left: x grows right, y grows down. Background fully transparent: save a PNG with a real alpha channel, alpha 0 on every pixel that is not part of a drawn element.
+
+Chỉ một dòng, không ghi chú, không chỉ đạo.

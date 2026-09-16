@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 4,
+  "characterPoses": [],
+  "styles": [
+    {
+      "id": "tet",
+      "vi": "Tết đỏ",
+      "style": "flat vector, red and gold, paper-cut lanterns and apricot blossom",
+      "brand": {
+        "mode": "colors",
+        "primary": "#C0202A",
+        "secondary": "#E8B923",
+        "refs": []
+      }
+    }
+  ],
+  "sheets": [
+    {
+      "id": "lop",
+      "grid": {
+        "cols": 3,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "cell_hint": "full-bleed landscape scene",
+      "components": [
+        {
+          "file": "01-far",
+          "vi": "01-far",
+          "spec": "the far parallax layer of distant hills",
+          "skel": {
+            "shape": "full",
+            "w": 1,
+            "h": 1,
+            "alpha": true
+          }
+        },
+        {
+          "file": "02-mid",
+          "vi": "02-mid",
+          "spec": "the middle parallax layer of trees",
+          "skel": {
+            "shape": "full",
+            "w": 1,
+            "h": 1,
+            "alpha": true
+          }
+        },
+        {
+          "file": "03-near",
+          "vi": "03-near",
+          "spec": "the near parallax layer of grass",
+          "skel": {
+            "shape": "full",
+            "w": 1,
+            "h": 1
+          }
+        }
+      ]
+    }
+  ]
+}

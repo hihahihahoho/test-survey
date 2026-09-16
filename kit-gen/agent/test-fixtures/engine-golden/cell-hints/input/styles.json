@@ -1,0 +1,370 @@
+{
+  "schemaVersion": 4,
+  "characterPoses": [],
+  "styles": [
+    {
+      "id": "tet",
+      "vi": "Tết đỏ",
+      "style": "flat vector, red and gold, paper-cut lanterns and apricot blossom",
+      "brand": {
+        "mode": "colors",
+        "primary": "#C0202A",
+        "secondary": "#E8B923",
+        "refs": []
+      }
+    }
+  ],
+  "sheets": [
+    {
+      "id": "h-square",
+      "grid": {
+        "cols": 2,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "cell_hint": "square 1:1 cell",
+      "components": [
+        {
+          "file": "01-a",
+          "vi": "01-a",
+          "spec": "the first plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "02-b",
+          "vi": "02-b",
+          "spec": "the second plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-land",
+      "grid": {
+        "cols": 2,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "cell_hint": "landscape 3:2 cell",
+      "components": [
+        {
+          "file": "01-a",
+          "vi": "01-a",
+          "spec": "the first plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "02-b",
+          "vi": "02-b",
+          "spec": "the second plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-port",
+      "grid": {
+        "cols": 2,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "cell_hint": "portrait 3:4 cell",
+      "components": [
+        {
+          "file": "01-a",
+          "vi": "01-a",
+          "spec": "the first plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "02-b",
+          "vi": "02-b",
+          "spec": "the second plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-contains",
+      "grid": {
+        "cols": 2,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "cell_hint": "cell containing ONE full-body character",
+      "components": [
+        {
+          "file": "01-a",
+          "vi": "01-a",
+          "spec": "the first plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "02-b",
+          "vi": "02-b",
+          "spec": "the second plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-with",
+      "grid": {
+        "cols": 2,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "cell_hint": "cell with a single icon.",
+      "components": [
+        {
+          "file": "01-a",
+          "vi": "01-a",
+          "spec": "the first plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "02-b",
+          "vi": "02-b",
+          "spec": "the second plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-plain",
+      "grid": {
+        "cols": 2,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "cell_hint": "cell",
+      "components": [
+        {
+          "file": "01-a",
+          "vi": "01-a",
+          "spec": "the first plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "02-b",
+          "vi": "02-b",
+          "spec": "the second plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-empty",
+      "grid": {
+        "cols": 2,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "cell_hint": "",
+      "components": [
+        {
+          "file": "01-a",
+          "vi": "01-a",
+          "spec": "the first plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "02-b",
+          "vi": "02-b",
+          "spec": "the second plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-free",
+      "grid": {
+        "cols": 2,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "cell_hint": "wide banner cell",
+      "components": [
+        {
+          "file": "01-a",
+          "vi": "01-a",
+          "spec": "the first plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "02-b",
+          "vi": "02-b",
+          "spec": "the second plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-that",
+      "grid": {
+        "cols": 2,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "cell_hint": "cell that contains one prop",
+      "components": [
+        {
+          "file": "01-a",
+          "vi": "01-a",
+          "spec": "the first plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "02-b",
+          "vi": "02-b",
+          "spec": "the second plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        }
+      ]
+    }
+  ]
+}

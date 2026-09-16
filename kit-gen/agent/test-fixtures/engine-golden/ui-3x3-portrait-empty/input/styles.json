@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 4,
+  "characterPoses": [],
+  "styles": [
+    {
+      "id": "tet",
+      "vi": "Tết đỏ",
+      "style": "flat vector, red and gold, paper-cut lanterns and apricot blossom",
+      "brand": {
+        "mode": "colors",
+        "primary": "#C0202A",
+        "secondary": "#E8B923",
+        "refs": []
+      }
+    }
+  ],
+  "sheets": [
+    {
+      "id": "ui9",
+      "grid": {
+        "cols": 3,
+        "rows": 3
+      },
+      "canvas": "portrait",
+      "cell_hint": "portrait 3:4 cell",
+      "components": [
+        {
+          "file": "01-btn",
+          "vi": "01-btn",
+          "spec": "the primary action button",
+          "skel": {
+            "shape": "pill",
+            "w": 0.78,
+            "h": 0.4,
+            "slice9": true,
+            "decor": true
+          },
+          "out": {
+            "w": 245,
+            "h": 85
+          }
+        },
+        {
+          "file": "02-btn2",
+          "vi": "02-btn2",
+          "spec": "the secondary action button",
+          "skel": {
+            "shape": "pill",
+            "w": 0.78,
+            "h": 0.4,
+            "slice9": true
+          },
+          "out": {
+            "w": 245,
+            "h": 85
+          }
+        },
+        {
+          "file": "_empty-1",
+          "vi": "",
+          "spec": "",
+          "skel": {
+            "shape": "empty"
+          }
+        },
+        {
+          "file": "04-icon",
+          "vi": "04-icon",
+          "spec": "a round icon button",
+          "skel": {
+            "shape": "circle",
+            "w": 0.55,
+            "h": 0.55
+          },
+          "out": {
+            "w": 96,
+            "h": 96
+          }
+        },
+        {
+          "file": "05-bar",
+          "vi": "05-bar",
+          "spec": "an empty progress bar track",
+          "skel": {
+            "shape": "bar",
+            "w": 0.84,
+            "h": 0.18,
+            "slice9": true
+          },
+          "out": {
+            "w": 270,
+            "h": 42
+          }
+        },
+        {
+          "file": "06-plate",
+          "vi": "06-plate",
+          "spec": "a countdown digit plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.38,
+            "h": 0.58,
+            "slice9": true
+          },
+          "out": {
+            "w": 64,
+            "h": 96
+          }
+        },
+        {
+          "file": "07-burst",
+          "vi": "07-burst",
+          "spec": "a radial light burst",
+          "skel": {
+            "shape": "burst",
+            "w": 0.6,
+            "h": 0.9,
+            "free": true
+          },
+          "out": {
+            "w": 200,
+            "h": 200
+          }
+        },
+        {
+          "file": "_empty-2",
+          "vi": "",
+          "spec": "",
+          "skel": {
+            "shape": "empty"
+          }
+        },
+        {
+          "file": "09-tab",
+          "vi": "09-tab",
+          "spec": "a tab chip, idle",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.6,
+            "h": 0.3,
+            "slice9": true
+          },
+          "out": {
+            "w": 150,
+            "h": 60
+          }
+        }
+      ]
+    }
+  ]
+}

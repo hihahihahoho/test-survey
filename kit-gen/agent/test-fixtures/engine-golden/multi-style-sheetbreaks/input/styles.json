@@ -1,0 +1,227 @@
+{
+  "schemaVersion": 4,
+  "characterPoses": [],
+  "styles": [
+    {
+      "id": "tet",
+      "vi": "Tết đỏ",
+      "style": "flat vector, red and gold, paper-cut lanterns and apricot blossom",
+      "brand": {
+        "mode": "colors",
+        "primary": "#C0202A",
+        "secondary": "#E8B923",
+        "refs": []
+      }
+    },
+    {
+      "id": "noel",
+      "vi": "Noel",
+      "style": "cosy winter, pine and snow",
+      "brand": {
+        "mode": "colors",
+        "primary": "#0B6E4F",
+        "refs": []
+      }
+    }
+  ],
+  "sheets": [
+    {
+      "id": "ui",
+      "grid": {
+        "cols": 2,
+        "rows": 2
+      },
+      "canvas": "square",
+      "cell_hint": "square 1:1 cell",
+      "components": [
+        {
+          "file": "01-x",
+          "vi": "01-x",
+          "spec": "plate 1",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "02-x",
+          "vi": "02-x",
+          "spec": "plate 2",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "03-x",
+          "vi": "03-x",
+          "spec": "plate 3",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "04-x",
+          "vi": "04-x",
+          "spec": "plate 4",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        }
+      ]
+    },
+    {
+      "id": "ui2",
+      "grid": {
+        "cols": 2,
+        "rows": 2
+      },
+      "canvas": "square",
+      "cell_hint": "square 1:1 cell",
+      "components": [
+        {
+          "file": "01-y",
+          "vi": "01-y",
+          "spec": "panel 1",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "02-y",
+          "vi": "02-y",
+          "spec": "panel 2",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "03-y",
+          "vi": "03-y",
+          "spec": "panel 3",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "_empty-1",
+          "vi": "",
+          "spec": "",
+          "skel": {
+            "shape": "empty"
+          }
+        }
+      ]
+    },
+    {
+      "id": "chi-tet",
+      "grid": {
+        "cols": 1,
+        "rows": 2
+      },
+      "canvas": "portrait",
+      "cell_hint": "portrait 2:3 cell",
+      "styles": [
+        "tet"
+      ],
+      "components": [
+        {
+          "file": "01-z",
+          "vi": "01-z",
+          "spec": "tet only plate 1",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 300
+          }
+        },
+        {
+          "file": "02-z",
+          "vi": "02-z",
+          "spec": "tet only plate 2",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 300
+          }
+        }
+      ]
+    },
+    {
+      "id": "chi-noel",
+      "grid": {
+        "cols": 1,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "cell_hint": "landscape 3:2 cell",
+      "styles": [
+        "noel"
+      ],
+      "components": [
+        {
+          "file": "01-w",
+          "vi": "01-w",
+          "spec": "noel only plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        }
+      ]
+    }
+  ]
+}

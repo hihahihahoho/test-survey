@@ -1,0 +1,43 @@
+background="transparent"
+## Canvas
+SQUARE 1254x1254 px, origin top-left: x grows right, y grows down. Background fully transparent: save a PNG with a real alpha channel, alpha 0 on every pixel that is not part of a drawn element.
+
+## Art style
+soft rounded 3D clay-like objects with gentle gradients, pastel candy palette on warm cream backgrounds, chunky friendly silhouettes that stay readable at thumbnail size, glossy top highlights and soft contact shadows, summer theme: sun-bright blues and warm sand, waves, palm leaves and ice-cream motifs.
+
+## Palette
+Primary #00502f (dominant: primary actions and key surfaces), secondary #629f0d (secondary actions); neutrals derive from them. No other hues unless the art style names them.
+
+## Layout
+2x2 grid of 627x627 px cells, 4 elements in reading order. Each cell is square. Keep exactly this many cells in exactly this order.
+A wide element is at most as wide as the box on its line: if the box cannot hold the core at its ratio at the size you want, draw it smaller — never wider than the box.
+Each cell has a box, given on that element's line below: the box is the part of the cell that may be painted.
+Cells are separated by empty gutters: the outer 62 px band of every cell — everything outside that box — stays completely empty, not a leaf tip, not a glow, so neighbouring elements never meet.
+
+## Geometry
+- GEOMETRY IS STRICT. Each element's line gives the width-to-height ratio of its functional CORE — the continuous body of the thing. Draw the core at that ratio.
+- Never make a core taller, shorter, wider or more square because it looks better that way: something described as nearly five times wider than tall is drawn nearly five times wider than tall.
+- Rim, border, glow and ornament are NOT part of the core: they are excluded from that ratio and sit outside the core.
+- Filling space is about REACH, not about opaque paint: a see-through or glowing element may fade to full transparency inside its own body, and nothing is ever added behind it to fill the gap.
+- Each element is centred in its own cell and fills most of its box. Everything of an element, rim and ornament included, stays inside that box: elements never touch each other and never touch the image edges.
+- The box on each line is a hard limit; the ratio is drawn inside it.
+
+## Transparency
+- The space around and between the elements is simply empty: alpha 0 in the PNG, with nothing painted there. Whatever is placed behind this layer later will show through those pixels.
+- Where something should be see-through — a glass body, the outer halo of a light — draw it in its own colour at a lower alpha, so the layer behind shows through it naturally. If a region cannot be made translucent, leave it unpainted.
+- Unless an element's own line below says otherwise, its transparency follows its material: glass, ice, water and light effects are see-through, drawn with real alpha; every other material — metal, wood, stone, plastic, fabric — is fully opaque (alpha 255), solid all the way through.
+
+## Text
+No letters, no digits, no words of any language anywhere in the image. Faces, plates, banners, buttons and screens stay BLANK — text is composited later in the game engine.
+
+## Elements
+The list names WHAT each cell is; the art style above decides how it looks; the core aspect ratio on its line decides its shape.
+Ornament amount and placement are set PER ELEMENT on its line below; the theme supplies the motif, not the quantity.
+Each line also says roughly how wide that element sits on screen in the finished game. Design every stroke weight, corner radius, bevel and detail for that size, then draw it large and crisp — a small button must still read as a small button, never as a wide banner with hairline edges.
+1) button, a simple rim and at most one small accent, no clusters of ornaments, ornaments mirrored symmetrically, left and right halves matching — core aspect 2.9:1 (about three times wider than tall), about 245 px wide on screen — its box is x=62..564, y=62..564 (502x502 px); everything of this element, rim and ornaments included, stays inside that box; including its ornaments it is at most 502 px wide
+2) avatar frame, a distinct rim with a few ornaments at the corners, the body itself left clear, ornaments mirrored symmetrically, left and right halves matching, fully opaque everywhere, alpha 255, with no see-through part at all, whatever material it may look like — core aspect 1:1 (square), about 195 px wide on screen — its box is x=689..1191, y=62..564 (502x502 px); everything of this element, rim and ornaments included, stays inside that box
+3) progress bar, a simple rim and at most one small accent, no clusters of ornaments, ornaments mirrored symmetrically, left and right halves matching, a see-through pane of barely tinted glass drawn at low alpha, about 64 of 255, keeping its own tint colour at that alpha; frame, rim and highlights stay fully opaque — core aspect 4.7:1 (nearly five times wider than tall), about 270 px wide on screen — its box is x=62..564, y=689..1191 (502x502 px); everything of this element, rim and ornaments included, stays inside that box; including its ornaments it is at most 502 px wide
+4) the fill bar that sits inside the progress bar, the same length and corner radius, with no track or frame of its own, clean silhouette: a plain edge with no rim ornament and NO decorative objects attached — no flowers, lanterns, ribbons, gems or trinkets on or around it — core aspect 6.7:1 (a long thin bar, 7 times wider than tall), about 254 px wide on screen — its box is x=689..1191, y=689..1191 (502x502 px); everything of this element, rim and ornaments included, stays inside that box; including its ornaments it is at most 502 px wide
+
+## Output
+One coherent set: all 4 elements share the same style. Game-ready square 1:1 PNG with a real alpha channel (background="transparent").

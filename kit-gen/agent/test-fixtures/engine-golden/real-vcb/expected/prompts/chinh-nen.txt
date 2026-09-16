@@ -1,0 +1,23 @@
+## Canvas
+PORTRAIT 1024x1536 px, origin top-left: x grows right, y grows down. The artwork covers the whole frame; there is no transparent area anywhere.
+
+## Art style
+soft rounded 3D clay-like objects with gentle gradients, pastel candy palette on warm cream backgrounds, chunky friendly silhouettes that stay readable at thumbnail size, glossy top highlights and soft contact shadows, summer theme: sun-bright blues and warm sand, waves, palm leaves and ice-cream motifs.
+
+## Palette
+Primary #00502f (dominant: primary actions and key surfaces), secondary #629f0d (secondary actions); neutrals derive from them. No other hues unless the art style names them.
+
+## Layout
+A single full-screen mobile game background, filling the whole frame edge to edge: one finished screen, not a sheet of separate parts. No border, no frame, no margin, no rounded corners, no vignette band — the art reaches all four edges, and a scene sitting inset inside an empty frame is unusable and will be regenerated.
+
+## Text
+No letters, no digits, no words of any language anywhere in the image. Faces, plates, banners, buttons and screens stay BLANK — text is composited later in the game engine.
+
+## Direction
+From the designer: thành phố đằng sau
+
+## Scene
+a main menu screen background, composition: keep the middle third of the frame open and low in detail so UI can sit there, and concentrate the detail along the top and bottom edges
+
+## Output
+Game-ready mobile game background art, portrait 2:3.

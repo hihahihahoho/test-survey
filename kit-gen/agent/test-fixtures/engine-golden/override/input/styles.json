@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 4,
+  "characterPoses": [],
+  "styles": [
+    {
+      "id": "tet",
+      "vi": "Tết đỏ",
+      "style": "flat vector, red and gold, paper-cut lanterns and apricot blossom",
+      "brand": {
+        "mode": "colors",
+        "primary": "#C0202A",
+        "secondary": "#E8B923",
+        "refs": []
+      }
+    }
+  ],
+  "sheets": [
+    {
+      "id": "tu-soan",
+      "grid": {
+        "cols": 2,
+        "rows": 1
+      },
+      "canvas": "portrait",
+      "cell_hint": "portrait 2:3 cell",
+      "note": "ghi chú của khuôn",
+      "directive": "giữ nguyên bố cục cũ",
+      "promptOverride": "Tôi tự viết prompt này.\nDòng thứ hai của tôi.\n\nVà một đoạn nữa.",
+      "components": [
+        {
+          "file": "01-a",
+          "vi": "01-a",
+          "spec": "the first plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 300,
+            "h": 200
+          }
+        },
+        {
+          "file": "02-b",
+          "vi": "02-b",
+          "spec": "the second plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 300,
+            "h": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "tu-soan-tran",
+      "grid": {
+        "cols": 1,
+        "rows": 1
+      },
+      "canvas": "square",
+      "cell_hint": "square 1:1 cell",
+      "promptOverride": "Chỉ một dòng, không ghi chú, không chỉ đạo.",
+      "components": [
+        {
+          "file": "01-a",
+          "vi": "01-a",
+          "spec": "the only plate",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5
+          },
+          "out": {
+            "w": 300,
+            "h": 200
+          }
+        }
+      ]
+    }
+  ]
+}

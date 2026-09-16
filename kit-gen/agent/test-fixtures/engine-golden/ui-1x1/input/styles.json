@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 4,
+  "characterPoses": [],
+  "styles": [
+    {
+      "id": "tet",
+      "vi": "Tết đỏ",
+      "style": "flat vector, red and gold, paper-cut lanterns and apricot blossom",
+      "brand": {
+        "mode": "colors",
+        "primary": "#C0202A",
+        "secondary": "#E8B923",
+        "refs": []
+      }
+    }
+  ],
+  "sheets": [
+    {
+      "id": "don",
+      "grid": {
+        "cols": 1,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "cell_hint": "landscape 3:2 cell",
+      "note": "một element duy nhất trên cả tấm",
+      "components": [
+        {
+          "file": "01-banner",
+          "vi": "01-banner",
+          "spec": "the top banner of the home screen",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.84,
+            "h": 0.44,
+            "slice9": true
+          },
+          "out": {
+            "w": 600,
+            "h": 160
+          }
+        }
+      ]
+    }
+  ]
+}

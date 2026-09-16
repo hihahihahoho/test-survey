@@ -1,0 +1,10 @@
+prompt → prompts/tet-h-square.txt (+0 ảnh kèm)
+prompt → prompts/tet-h-land.txt (+0 ảnh kèm)
+prompt → prompts/tet-h-port.txt (+0 ảnh kèm)
+prompt → prompts/tet-h-contains.txt (+0 ảnh kèm)
+prompt → prompts/tet-h-with.txt (+0 ảnh kèm)
+prompt → prompts/tet-h-plain.txt (+0 ảnh kèm)
+prompt → prompts/tet-h-empty.txt (+0 ảnh kèm)
+prompt → prompts/tet-h-free.txt (+0 ảnh kèm)
+prompt → prompts/tet-h-that.txt (+0 ảnh kèm)
+KITGEN_PROMPTS_ONLY: đã dựng xong prompt trong prompts/ — KHÔNG gọi codex, KHÔNG đụng raw/.

@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 4,
+  "characterPoses": [
+    "idle",
+    "wave",
+    "point",
+    "run",
+    "jump",
+    "sit"
+  ],
+  "styles": [
+    {
+      "id": "tet",
+      "vi": "Tết đỏ",
+      "style": "flat vector, red and gold, paper-cut lanterns and apricot blossom",
+      "brand": {
+        "mode": "colors",
+        "primary": "#C0202A",
+        "secondary": "#E8B923",
+        "refs": []
+      }
+    }
+  ],
+  "sheets": [
+    {
+      "id": "dang",
+      "grid": {
+        "cols": 3,
+        "rows": 2
+      },
+      "canvas": "landscape",
+      "cell_hint": "cell containing ONE full-body character",
+      "note": "All cells show THE SAME character as in the attached REFERENCE PHOTO: match its species, face, colors, costume, materials and proportions exactly — only the pose and viewing angle change per cell, like one character turnaround sheet.",
+      "components": [
+        {
+          "file": "01-idle",
+          "vi": "01-idle",
+          "spec": "the same original mascot character, idle pose, full body",
+          "skel": {
+            "shape": "pose",
+            "w": 0.3,
+            "h": 0.85,
+            "pose": "idle"
+          },
+          "out": {
+            "w": 300,
+            "h": 800
+          }
+        },
+        {
+          "file": "02-wave",
+          "vi": "02-wave",
+          "spec": "the same original mascot character, wave pose, full body",
+          "skel": {
+            "shape": "pose",
+            "w": 0.3,
+            "h": 0.85,
+            "pose": "wave"
+          }
+        },
+        {
+          "file": "03-point",
+          "vi": "03-point",
+          "spec": "the same original mascot character, point pose, full body",
+          "skel": {
+            "shape": "pose",
+            "w": 0.3,
+            "h": 0.85,
+            "pose": "point"
+          }
+        },
+        {
+          "file": "04-run",
+          "vi": "04-run",
+          "spec": "the same original mascot character, run pose, full body",
+          "skel": {
+            "shape": "pose",
+            "w": 0.3,
+            "h": 0.85,
+            "pose": "run"
+          }
+        },
+        {
+          "file": "05-jump",
+          "vi": "05-jump",
+          "spec": "the same original mascot character, jump pose, full body",
+          "skel": {
+            "shape": "pose",
+            "w": 0.3,
+            "h": 0.85,
+            "pose": "jump"
+          }
+        },
+        {
+          "file": "06-sit",
+          "vi": "06-sit",
+          "spec": "the same original mascot character, sit pose, full body",
+          "skel": {
+            "shape": "pose",
+            "w": 0.3,
+            "h": 0.85,
+            "pose": "sit"
+          }
+        }
+      ]
+    }
+  ]
+}

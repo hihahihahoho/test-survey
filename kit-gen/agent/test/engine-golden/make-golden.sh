@@ -37,7 +37,7 @@
 # ══════════════════════════════════════════════════════════════════════════════
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-REPO="$(cd "$HERE/../.." && pwd)"          # kit-gen/
+REPO="$(cd "$HERE/../../.." && pwd)"       # kit-gen/ (HERE = agent/test/engine-golden)
 FIX="$REPO/agent/test-fixtures/engine-golden"
 
 command -v python3 >/dev/null 2>&1 || { echo "cần python3 (chỉ trên máy dev)" >&2; exit 2; }
@@ -47,6 +47,7 @@ if [ ${#cases[@]} -eq 0 ]; then
   cases=()
   for d in "$FIX"/*/; do [ -d "$d/input" ] && cases+=("$(basename "$d")"); done
 fi
+[ ${#cases[@]} -eq 0 ] && { echo "không có ca nào trong $FIX" >&2; exit 2; }
 
 rc=0
 for name in "${cases[@]}"; do

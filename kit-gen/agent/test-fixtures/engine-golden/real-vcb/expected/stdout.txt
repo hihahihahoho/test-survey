@@ -1,0 +1,6 @@
+prompt → prompts/chinh-ui.txt (+0 ảnh kèm)
+prompt → prompts/chinh-ui2.txt (+0 ảnh kèm)
+prompt → prompts/chinh-nhan-vat.txt (+2 ảnh kèm)
+prompt → prompts/chinh-nhan-vat2.txt (+2 ảnh kèm)
+prompt → prompts/chinh-nen.txt (+0 ảnh kèm)
+KITGEN_PROMPTS_ONLY: đã dựng xong prompt trong prompts/ — KHÔNG gọi codex, KHÔNG đụng raw/.

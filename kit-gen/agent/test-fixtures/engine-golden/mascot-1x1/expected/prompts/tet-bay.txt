@@ -1,0 +1,31 @@
+background="transparent"
+## Canvas
+PORTRAIT 1024x1536 px, origin top-left: x grows right, y grows down. Background fully transparent: save a PNG with a real alpha channel, alpha 0 on every pixel that is not part of a drawn element.
+
+## Art style
+flat vector, red and gold, paper-cut lanterns and apricot blossom.
+
+## Palette
+Primary #C0202A (dominant: primary actions and key surfaces), secondary #E8B923 (secondary actions); neutrals derive from them. No other hues unless the art style names them.
+
+## Layout
+1x1 grid, 1 element in reading order. Each cell contains ONE full-body character. Keep exactly this many cells in exactly this order.
+
+## Geometry
+- GEOMETRY IS STRICT. Each pose is centred in its own cell and stands upright, the full figure inside its box with a clear margin above the head and below the feet.
+- Draw the character as ONE natural figure, not a rim around a flat plate: no forced border, no badge frame, no plaque.
+- The whole character comes to rest well inside the frame — nothing touches the image edges.
+- The box on the element line is a hard limit.
+
+## Transparency
+The space around the characters is simply empty: alpha 0 in the PNG, with nothing painted there. Each character's own body is solid all the way through.
+
+## Direction
+nhân vật bay lên, nhìn từ dưới lên
+
+## Elements
+The list names WHAT each cell is; the art style above decides how it looks; the geometry rules above decide shape and placement.
+1) the same original mascot character, flying, full body — its box is x=102..921, y=153..1382 (819x1229 px); everything of this character, hair and props included, stays inside that box
+
+## Output
+Game-ready portrait 2:3 PNG with a real alpha channel (background="transparent").

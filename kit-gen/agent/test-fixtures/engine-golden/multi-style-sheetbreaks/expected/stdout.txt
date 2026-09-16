@@ -1,0 +1,7 @@
+prompt → prompts/tet-ui.txt (+0 ảnh kèm)
+prompt → prompts/tet-ui2.txt (+0 ảnh kèm)
+prompt → prompts/tet-chi-tet.txt (+0 ảnh kèm)
+prompt → prompts/noel-ui.txt (+0 ảnh kèm)
+prompt → prompts/noel-ui2.txt (+0 ảnh kèm)
+prompt → prompts/noel-chi-noel.txt (+0 ảnh kèm)
+KITGEN_PROMPTS_ONLY: đã dựng xong prompt trong prompts/ — KHÔNG gọi codex, KHÔNG đụng raw/.

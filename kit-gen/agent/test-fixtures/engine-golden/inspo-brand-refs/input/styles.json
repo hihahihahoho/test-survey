@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 4,
+  "characterPoses": [],
+  "styles": [
+    {
+      "id": "cam-hung",
+      "vi": "Cảm hứng",
+      "style": "painterly, warm",
+      "styleMode": "prompt",
+      "brand": {
+        "mode": "refs",
+        "primary": "#101820",
+        "secondary": "#F2AA4C",
+        "gradient": "#101820 → #F2AA4C",
+        "refs": [
+          "refs/brand-logo.png",
+          "refs/shared.png"
+        ]
+      },
+      "inspo": [
+        "refs/inspo-1.jpg",
+        "refs/shared.png"
+      ]
+    }
+  ],
+  "sheets": [
+    {
+      "id": "ui",
+      "grid": {
+        "cols": 2,
+        "rows": 2
+      },
+      "canvas": "square",
+      "cell_hint": "square 1:1 cell",
+      "ref": "refs/shared.png",
+      "layoutRef": "refs/layout.png",
+      "components": [
+        {
+          "file": "01-x",
+          "vi": "01-x",
+          "spec": "plate number 1",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5,
+            "decor": true
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "02-x",
+          "vi": "02-x",
+          "spec": "plate number 2",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5,
+            "decor": false
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "03-x",
+          "vi": "03-x",
+          "spec": "plate number 3",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5,
+            "decor": false
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        },
+        {
+          "file": "04-x",
+          "vi": "04-x",
+          "spec": "plate number 4",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.8,
+            "h": 0.5,
+            "decor": false
+          },
+          "out": {
+            "w": 240,
+            "h": 120
+          }
+        }
+      ]
+    }
+  ]
+}

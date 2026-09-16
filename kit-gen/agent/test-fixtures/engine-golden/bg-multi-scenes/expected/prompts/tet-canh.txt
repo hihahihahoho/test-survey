@@ -1,0 +1,31 @@
+## Canvas
+LANDSCAPE 1536x1024 px, origin top-left: x grows right, y grows down. The artwork covers the whole frame; there is no transparent area anywhere.
+
+## Art style
+flat vector, red and gold, paper-cut lanterns and apricot blossom.
+
+## Palette
+Primary #C0202A (dominant: primary actions and key surfaces), secondary #E8B923 (secondary actions); neutrals derive from them. No other hues unless the art style names them.
+
+## Layout
+2x2 grid of 768x512 px cells, 4 elements in reading order. Each cell is full-bleed landscape scene. Keep exactly this many cells in exactly this order.
+Each scene fills its own cell edge to edge and bleeds off all four sides of that cell; the only gap allowed is a thin 24px line exactly on the cell boundaries.
+
+## Text
+No letters, no digits, no words of any language anywhere in the image. Faces, plates, banners, buttons and screens stay BLANK — text is composited later in the game engine.
+
+## Scene reference
+The attached SCENE REFERENCE image says WHAT this background shows: take its subject, setting, season and mood from it. Re-draw it in the art style above and recompose it to fill this canvas — never copy it pixel for pixel, and never keep its original framing, borders or empty margins.
+
+## Direction
+From the designer: thêm mưa xuân rơi nhẹ
+
+## Scenes
+The list names WHAT each cell is; the art style above decides how it looks; the geometry rules above decide shape and placement.
+1) a full-bleed scene of a flower market — full-bleed scene, fills its whole cell edge to edge
+2) a full-bleed scene of a temple yard — full-bleed scene, fills its whole cell edge to edge
+3) a full-bleed scene of a river at dusk — full-bleed scene, fills its whole cell edge to edge
+4) a full-bleed scene of a lantern street — full-bleed scene, fills its whole cell edge to edge
+
+## Output
+One coherent set: all 4 elements share the same style. Game-ready landscape 3:2 PNG with a real alpha channel (background="transparent").

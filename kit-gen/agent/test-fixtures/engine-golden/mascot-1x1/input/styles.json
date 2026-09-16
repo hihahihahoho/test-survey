@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 4,
+  "characterPoses": [
+    "fly"
+  ],
+  "styles": [
+    {
+      "id": "tet",
+      "vi": "Tết đỏ",
+      "style": "flat vector, red and gold, paper-cut lanterns and apricot blossom",
+      "brand": {
+        "mode": "colors",
+        "primary": "#C0202A",
+        "secondary": "#E8B923",
+        "refs": []
+      }
+    }
+  ],
+  "sheets": [
+    {
+      "id": "bay",
+      "grid": {
+        "cols": 1,
+        "rows": 1
+      },
+      "canvas": "portrait",
+      "cell_hint": "cell containing ONE full-body character",
+      "note": "nhân vật bay lên, nhìn từ dưới lên",
+      "components": [
+        {
+          "file": "01-fly",
+          "vi": "01-fly",
+          "spec": "the same original mascot character, flying, full body",
+          "skel": {
+            "shape": "pose",
+            "w": 0.3,
+            "h": 0.85,
+            "pose": "fly"
+          }
+        }
+      ]
+    }
+  ]
+}

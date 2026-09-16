@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 4,
+  "characterPoses": [],
+  "styles": [
+    {
+      "id": "anh",
+      "vi": "Ảnh",
+      "style": "",
+      "brand": {
+        "mode": "refs",
+        "refs": []
+      },
+      "inspo": [
+        "refs/moodboard.jpg"
+      ]
+    }
+  ],
+  "sheets": [
+    {
+      "id": "ui",
+      "grid": {
+        "cols": 2,
+        "rows": 1
+      },
+      "canvas": "landscape",
+      "cell_hint": "landscape 3:2 cell",
+      "components": [
+        {
+          "file": "01-a",
+          "vi": "01-a",
+          "spec": "a wide banner",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.84,
+            "h": 0.3
+          },
+          "out": {
+            "w": 600,
+            "h": 140
+          }
+        },
+        {
+          "file": "02-b",
+          "vi": "02-b",
+          "spec": "a small chip",
+          "skel": {
+            "shape": "rrect",
+            "w": 0.4,
+            "h": 0.3
+          },
+          "out": {
+            "w": 120,
+            "h": 60
+          }
+        }
+      ]
+    }
+  ]
+}

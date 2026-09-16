@@ -1,0 +1,39 @@
+background="transparent"
+## Canvas
+LANDSCAPE 1536x1024 px, origin top-left: x grows right, y grows down. Background fully transparent: save a PNG with a real alpha channel, alpha 0 on every pixel that is not part of a drawn element.
+
+## Art style
+None was given for this project: choose one coherent look and apply it to every element here without exception.
+
+## Layout
+4x1 grid of 384x1024 px cells, 4 elements in reading order. Keep exactly this many cells in exactly this order.
+A wide element is at most as wide as the box on its line: if the box cannot hold the core at its ratio at the size you want, draw it smaller — never wider than the box.
+Each cell has a box, given on that element's line below: the box is the part of the cell that may be painted.
+Cells are separated by empty gutters: the outer 38 px band of every cell — everything outside that box — stays completely empty, not a leaf tip, not a glow, so neighbouring elements never meet.
+
+## Geometry
+- GEOMETRY IS STRICT. Each element's line gives the width-to-height ratio of its functional CORE — the continuous body of the thing. Draw the core at that ratio.
+- Never make a core taller, shorter, wider or more square because it looks better that way: something described as nearly five times wider than tall is drawn nearly five times wider than tall.
+- Rim, border, glow and ornament are NOT part of the core: they are excluded from that ratio and sit outside the core.
+- Filling space is about REACH, not about opaque paint: a see-through or glowing element may fade to full transparency inside its own body, and nothing is ever added behind it to fill the gap.
+- Each element is centred in its own cell and fills most of its box. Everything of an element, rim and ornament included, stays inside that box: elements never touch each other and never touch the image edges.
+- The box on each line is a hard limit; the ratio is drawn inside it.
+
+## Transparency
+- The space around and between the elements is simply empty: alpha 0 in the PNG, with nothing painted there. Whatever is placed behind this layer later will show through those pixels.
+- Where something should be see-through — a glass body, the outer halo of a light — draw it in its own colour at a lower alpha, so the layer behind shows through it naturally. If a region cannot be made translucent, leave it unpainted.
+- Unless an element's own line below says otherwise, its transparency follows its material: glass, ice, water and light effects are see-through, drawn with real alpha; every other material — metal, wood, stone, plastic, fabric — is fully opaque (alpha 255), solid all the way through.
+
+## Text
+No letters, no digits, no words of any language anywhere in the image. Faces, plates, banners, buttons and screens stay BLANK — text is composited later in the game engine.
+
+## Elements
+The list names WHAT each cell is; the art style above decides how it looks; the geometry rules above decide shape and placement.
+Ornament amount and placement are set PER ELEMENT on its line below; the theme supplies the motif, not the quantity.
+1) element number 1 — its box is x=38..345, y=102..921 (307x819 px); everything of this element, rim and ornaments included, stays inside that box
+2) element number 2 — its box is x=422..729, y=102..921 (307x819 px); everything of this element, rim and ornaments included, stays inside that box
+3) element number 3 — its box is x=806..1113, y=102..921 (307x819 px); everything of this element, rim and ornaments included, stays inside that box
+4) element number 4 — its box is x=1190..1497, y=102..921 (307x819 px); everything of this element, rim and ornaments included, stays inside that box
+
+## Output
+One coherent set: all 4 elements share the same style. Game-ready landscape 3:2 PNG with a real alpha channel (background="transparent").
