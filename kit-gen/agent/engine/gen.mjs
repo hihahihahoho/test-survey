@@ -263,6 +263,10 @@ export function readEnv(env = process.env) {
   const backoff = (env.GEN_BUSY_BACKOFF || "20 45 90").trim().split(/\s+/).filter(Boolean).map(Number)
   return {
     imgHome: env.IMG_HOME || "",
+    /* `MAXJOBS=0` là ca DUY NHẤT bản này cố ý không chép: bash rơi vào
+       `while (( $(jobs -pr | wc -l) >= 0 )); do sleep 0.5; done` — một vòng lặp
+       KHÔNG BAO GIỜ thoát, và lượt gen treo im lặng tới khi ai đó bấm Dừng. Treo
+       không phải một hành vi, nó là một chỗ hỏng; ở đây 0 đọc thành mặc định 4. */
     maxJobs: Number(env.MAXJOBS || "4") || 4,
     promptsOnly: env.KITGEN_PROMPTS_ONLY || "",
     genModel: dashDefault(env.KITGEN_GEN_MODEL, "gpt-5.6-luna"),

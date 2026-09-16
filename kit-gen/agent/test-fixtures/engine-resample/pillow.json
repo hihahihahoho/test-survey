@@ -1,0 +1,38 @@
+{
+  "pillow": "11.3.0",
+  "python": "3.9.6",
+  "note": "sha256 của mảng pixel (im.tobytes()), KHÔNG phải của file PNG",
+  "cases": {
+    "cover": "c6f8af4dc965209953ad2d65b255a70c40e2b9ce06708928d956a1f813c0594c",
+    "thumb-rgba-32": "010e5ef6de84ea405563429aa526405383f8151675d610d2730eee8eae7e5576",
+    "thumb-rgba-32-size": [
+      32,
+      20
+    ],
+    "thumb-rgba-64": "697d8c534c646bb68d7b8c604d811b3baa9393135432ac59d1d976661649e2f2",
+    "thumb-rgba-64-size": [
+      64,
+      40
+    ],
+    "thumb-rgba-128": "81832da36eff77ed604dec901a0b72a3a00bfde9403b0f2a9a54744517825625",
+    "thumb-rgba-128-size": [
+      128,
+      80
+    ],
+    "thumb-rgb-32": "0b4290cf26dd14c46d0dc01b83c88e9e2e1795fb269e9f7fa021b43857f20a57",
+    "thumb-rgb-32-size": [
+      32,
+      20
+    ],
+    "thumb-rgb-64": "fc82d6da6162ff2a89b694ea3845fe29885756246790fe81a1a500fd96b28bc9",
+    "thumb-rgb-64-size": [
+      64,
+      40
+    ],
+    "thumb-rgb-128": "1f0be9dfe34e982625bd949ba32613da3cd8f47d2acca20115c030a7bc75fca0",
+    "thumb-rgb-128-size": [
+      128,
+      80
+    ]
+  }
+}
