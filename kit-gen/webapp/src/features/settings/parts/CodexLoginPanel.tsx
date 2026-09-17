@@ -50,7 +50,7 @@ import { Note } from "./StepCard";
  */
 const REASON_TEXT: Record<string, string> = {
   NO_CODEX: "Máy chưa có công cụ Codex, nên chưa mở được phiên đăng nhập.",
-  NO_DEVICE_CODE: "Codex không đưa ra mã đăng nhập (có thể là bản quá cũ). Thử cách chạy lệnh bên dưới.",
+  NO_DEVICE_CODE: "Codex không đưa ra mã đăng nhập sau 45 giây. Bấm Thử lại; vẫn vậy thì dùng cách chạy lệnh bên dưới.",
   DECLINED: "Phiên đăng nhập kết thúc mà chưa thành công. Bạn thử lại nhé.",
   EXPIRED: "Mã đã quá hạn 15 phút. Bấm lại để lấy mã mới.",
   SPAWN_FAILED: "Không mở được phiên đăng nhập.",

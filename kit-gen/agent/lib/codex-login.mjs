@@ -124,8 +124,15 @@ function pickUrl(line) {
 /** MÁY LỌC. Nhận một khúc stdout/stderr, giữ lại đúng hai thứ, quên phần còn lại.
  *  Cố ý là một hàm thuần trên `state` để suite test gọi thẳng được mà không cần
  *  spawn codex thật. */
+/** Mã màu ANSI (`ESC [ … m`, con trỏ, xoá dòng). codex ≥ 0.154 tô màu link và mã KỂ CẢ
+ *  khi stdout là pipe: `\x1b[94mHQGH-GZ9EI\x1b[0m`. CODE_RE cần \b trước mã, mà «m» của
+ *  `[94m` dính liền chữ đầu ⇒ không bao giờ khớp; URL thì nuốt luôn `\x1b[0m` vào path.
+ *  Hiện trường 17/09/2026: máy Windows vừa `codex update` ⇒ nút Đăng nhập chờ 45 giây
+ *  rồi báo NO_DEVICE_CODE «có thể là bản quá cũ» — trong khi thật ra là bản QUÁ MỚI. */
+const ANSI_RE = /\x1b\[[0-9;?]*[ -\/]*[@-~]/g
+
 export function harvest(state, chunk) {
-  for (const line of String(chunk).split(/\r?\n/)) {
+  for (const line of String(chunk).replace(ANSI_RE, "").split(/\r?\n/)) {
     if (!state.verificationUrl) {
       const url = pickUrl(line)
       if (url) state.verificationUrl = url
@@ -196,7 +203,8 @@ export function startLogin(cfg) {
       // stdin đóng: luồng device-auth không hỏi gì, và một tiến trình con đang chờ
       // gõ phím sẽ treo mãi mà không ai thấy.
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, CODEX_HOME: home },
+      // NO_COLOR/TERM=dumb: xin codex đừng tô màu; ANSI_RE ở harvest là lưới thứ hai.
+      env: { ...process.env, CODEX_HOME: home, NO_COLOR: "1", TERM: "dumb" },
       ...winSpawnOpts(),
       ...winShellOpts(bin),
     })

@@ -44,6 +44,30 @@ export async function run({ api, wsRoot }) {
     eq(s.userCode, "3P0N-7GY2Q", "mã dùng một lần")
   })
 
+  /* codex 0.154.0 (17/09/2026) tô màu link và mã kể cả khi stdout là pipe. Máy Windows
+     vừa `codex update` ⇒ nút Đăng nhập chờ 45s rồi báo «bản quá cũ». Bản ghi dưới là
+     output THẬT chụp bằng `codex login --device-auth > file 2>&1` (ESC giữ nguyên). */
+  await it("output có mã màu ANSI (codex ≥ 0.154) vẫn bóc được link + mã", async () => {
+    const COLORED = [
+      "",
+      "Welcome to Codex [v\x1b[90m0.154.0\x1b[0m]",
+      "\x1b[90mOpenAI's command-line coding agent\x1b[0m",
+      "",
+      "Follow these steps to sign in with ChatGPT using device code authorization:",
+      "",
+      "1. Open this link in your browser and sign in to your account",
+      "   \x1b[94mhttps://auth.openai.com/codex/device\x1b[0m",
+      "",
+      "2. Enter this one-time code \x1b[90m(expires in 15 minutes)\x1b[0m",
+      "   \x1b[94mHQGH-GZ9EI\x1b[0m",
+      "",
+      "\x1b[90mContinue only if you started this login in Codex.\x1b[0m",
+    ].join("\n")
+    const s = harvest(fresh(), COLORED)
+    eq(s.verificationUrl, "https://auth.openai.com/codex/device", "link sạch, không dính ESC vào path")
+    eq(s.userCode, "HQGH-GZ9EI", "mã sạch")
+  })
+
   await it("KHÔNG giữ lại gì ngoài hai trường đó — stdout không có chỗ nào để đọng", async () => {
     const s = harvest(fresh(), `${REAL_OUTPUT}\nsk-proj-AAAABBBBCCCCDDDDEEEEFFFF\ntoken: xyzzy-123456\n`)
     eq(Object.keys(s).sort().join(","), "userCode,verificationUrl", "đúng 2 khoá, không hơn")
