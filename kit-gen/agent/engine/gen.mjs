@@ -19,7 +19,7 @@
  */
 import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
-import { open, readFile, appendFile, stat, copyFile, mkdir } from "node:fs/promises"
+import { open, readFile, appendFile, readdir, stat, copyFile, mkdir } from "node:fs/promises"
 import { homedir } from "node:os"
 import { join } from "node:path"
 
@@ -390,16 +390,63 @@ export async function runOne(ctx, job) {
      được — để phán FAIL như cũ, KHÔNG đoán mò một ảnh khác. */
   if ((await mtimeEpoch(rawPng)) < t0) {
     const ghome = join(imgHome || join(ctx.home, ".codex"), "generated_images")
+    /** Chép về đích và ghi ĐÚNG một dòng log; false = không có gì để vớt. */
+    const salvage = async (src, note) => {
+      if (!(await stat(src).then(f => f.isFile(), () => false))) return false
+      try {
+        await copyFile(src, rawPng)
+        await appendFile(logPath, `${note}\n`)
+        return true
+      } catch { return false }  // `cp -f` hỏng ⇒ bash bỏ qua vế `&&`, không vớt được thì thôi
+    }
+
     // `grep -oE` khớp TRONG MỘT DÒNG, nên lớp ký tự phải loại cả xuống dòng.
-    const hits = (await logText()).match(/generated_images\/[^"' \n]*\.png/g)
+    /* HAI DẤU GẠCH, VÌ CODEX IN ĐƯỜNG DẪN CỦA HỆ ĐIỀU HÀNH CHỨ KHÔNG PHẢI CỦA URL:
+       trên Windows nó là `C:\…\.codex\generated_images\<session>\exec-….png`, và khi
+       đường dẫn ấy nằm trong một thông báo lỗi của codex thì nó còn là chuỗi Debug
+       của Rust nên MỖI dấu gạch bị nhân lên 8 lần. Mẫu chỉ có `/` thì cửa vớt IM LẶNG
+       không bao giờ mở trên Windows — đúng chỗ người dùng thật đang ngồi.
+       `rel` giữ nguyên chữ codex đã in (để ghi log cho khớp), còn phần đuôi thì tách
+       theo CẢ HAI dấu — `+` nuốt luôn cả cụm gạch nhân bản — rồi `join` lại thành
+       đường dẫn của MÁY NÀY. Dấu nháy và dấu cách bị loại khỏi lớp ký tự chính là thứ
+       giữ cho vế `-Destination '…\raw\chinh-nen.png'` (cũng kết thúc bằng .png!)
+       không bị nuốt chung vào một match. */
+    const hits = (await logText()).match(/generated_images[\/\\][^"' \n]*\.png/g)
     const rel = hits ? hits[hits.length - 1] : null
+    let saved = false
     if (rel) {
-      const src = join(ghome, strip(rel, "generated_images/"))
-      if (await stat(src).then(s => s.isFile(), () => false)) {
-        try {
-          await copyFile(src, rawPng)
-          await appendFile(logPath, `vớt ${rel} → raw/${job}.png (model không tự copy về đích)\n`)
-        } catch { /* `cp -f` hỏng ⇒ bash bỏ qua vế `&&`, không vớt được thì thôi */ }
+      const parts = rel.slice("generated_images".length).split(/[\/\\]+/).filter(Boolean)
+      saved = await salvage(join(ghome, ...parts), `vớt ${rel} → raw/${job}.png (model không tự copy về đích)`)
+    }
+
+    /* ── DÂY AN TOÀN THỨ HAI: THEO SESSION ID ───────────────────────────────────
+       SỰ CỐ 17/09/2026 (Windows, codex 0.154, job `chinh-nen`): header log ghi
+       `sandbox: read-only` DÙ engine truyền `-s workspace-write` — codex tự hạ cấp,
+       và với `approval: never` thì MỌI exec đều «rejected: blocked by policy». Model
+       sinh được ảnh, bị chặn lúc Copy-Item, rồi vẫn trả lời bằng đường dẫn đích ⇒
+       codex thoát 0, không có raw/<job>.png, người dùng nhận một thẻ đỏ "chưa rõ
+       nguyên nhân" trong khi ẢNH ĐANG NẰM SẴN trong .codex.
+       Khi đường dẫn không đọc được (log bị cắt, thông báo đổi dạng), vẫn còn một
+       DANH TỪ chắc chắn: `session id:` ở đầu log, và codex cất ảnh dưới
+       `generated_images/<session id>/`. Chỉ nhận thư mục của CHÍNH lượt này và chỉ
+       nhận ảnh mới hơn `t0` — ảnh của session khác là ĐOÁN MÒ, thà FAIL còn hơn
+       đăng nhầm tấm của job khác. */
+    if (!saved) {
+      const sid = [...(await logTail()).matchAll(/^session id:\s*(\S+)\s*$/gim)].pop()?.[1]
+      if (sid && /^[A-Za-z0-9._-]+$/.test(sid)) {
+        const dir = join(ghome, sid)
+        const names = await readdir(dir).catch(() => [])
+        let best = null
+        for (const name of names) {
+          if (!/\.png$/i.test(name)) continue
+          const m = await mtimeEpoch(join(dir, name))
+          if (m < t0) continue                       // tàn dư của lượt trước, không phải sản phẩm lượt này
+          if (!best || m > best.m) best = { name, m }
+        }
+        if (best) {
+          await salvage(join(dir, best.name),
+            `vớt generated_images/${sid}/${best.name} → raw/${job}.png (theo session id)`)
+        }
       }
     }
   }

@@ -268,7 +268,14 @@ export function diagnose(lines) {
   if (/at capacity|capacity|overloaded|service unavailable|503|temporarily unavailable/.test(hay)) return "MODEL_BUSY"
   if (/not logged in|unauthor|chưa đăng nhập|codex login/.test(hay)) return "NOT_LOGGED_IN"
   if (/timed? ?out|timeout/.test(hay)) return "TIMEOUT"
-  if (/ảnh không được ghi|no artifact/.test(hay)) return "NO_ARTIFACT"
+  /* NGÔN NGỮ CỦA ENGINE ĐÃ ĐỔI KHI PORT SANG JS (16/09/2026), MẪU Ở ĐÂY THÌ KHÔNG.
+     `gen.sh` xưa in «ảnh không được ghi»; `gen.mjs` nay in
+     «FAIL <job> (rc=0, không có raw/<job>.png — xem logs/<job>.log)» hoặc
+     «… ảnh KHÔNG ĐỔI so với trước lượt chạy …». Cả hai đều là "không ghi được ảnh"
+     mà không câu nào khớp mẫu cũ ⇒ MỌI job hỏng của engine JS đọc ra "UNKNOWN".
+     Đã đo ngoài đời: KitGen 3.0.5 · r-0007 · «1/1 job lỗi chưa rõ nguyên nhân» trong
+     khi codex chạy xong êm ru. Hai vế cũ ở lại vì agent mới vẫn phải đọc log cũ. */
+  if (/ảnh không được ghi|no artifact|không có raw\/|ảnh không đổi/.test(hay)) return "NO_ARTIFACT"
   return "UNKNOWN"
 }
 

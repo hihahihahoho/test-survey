@@ -453,6 +453,17 @@ export class RunHandle {
     j.durationMs = j.startedAt ? Date.now() - Date.parse(j.startedAt) : null
     if (status === "failed") {
       j.diagnosis = diagnose([line])
+      /* DÒNG `FAIL …` LÀ CÂU DUY NHẤT NÓI VÌ SAO, VÀ NÓ KHÔNG NẰM TRONG LOG NÀO CẢ.
+         `runOne` phán hỏng SAU khi codex thoát, rồi in lý do ra stdout CỦA CẢ LƯỢT;
+         `logs/<job>.log` chỉ chứa lời của codex — mà codex thì vừa nói xong «tokens
+         used» kèm đường dẫn đích, tức là nó tưởng mình đã thành công. Trước đây
+         `diagnose` xong là VỨT dòng này, nên nút «Copy lỗi» chép ra đúng 3 dòng log
+         không hề nhắc tới nguyên nhân (KitGen 3.0.5 · r-0007). Giữ lại để
+         `settleGenJobs` đặt nó LÊN ĐẦU `errorTail`.
+         Non-enumerable là CỐ Ý: đây là ghi chú nội bộ của agent, KHÔNG phải một
+         trường của `Run.jobs[]` — JSON.stringify bỏ qua nên run.json, event stream
+         và API không mọc thêm một khoá nào. */
+      if (line) Object.defineProperty(j, "failLine", { value: line, writable: true, configurable: true })
       this.run.progress.failed += 1
     }
     else this.run.progress.done += 1
@@ -880,7 +891,14 @@ export class RunHandle {
        của từng job đã ghi xong, mà thư mục project thì vẫn còn (chưa qua finish()). */
     for (const j of this.run.jobs) {
       if (j.status !== "failed" || j.errorTail?.length) continue
-      j.errorTail = await this.errorTailFor(pdir, j.job)
+      const tail = await this.errorTailFor(pdir, j.job)
+      /* LÝ DO TRƯỚC, BẰNG CHỨNG SAU. Dòng `FAIL …` nói ĐIỀU ĐÃ XẢY RA ("không có
+         raw/<job>.png"), mấy dòng log chỉ là những gì codex kịp nói trước đó. Người
+         dùng chép khối này đi hỏi, nên câu quan trọng nhất phải là dòng ĐẦU.
+         Vẫn đi qua `tidyTail` — cửa DUY NHẤT dựng errorTail (redact + cắt dài), dòng
+         FAIL cũng mang đường dẫn nên không có ngoại lệ nào ở đây. Vì thế khối này
+         có thể dài ERROR_TAIL_LINES + 1 dòng. */
+      j.errorTail = j.failLine ? [...this.tidyTail([j.failLine]), ...tail] : tail
       /* Enum lấy từ chính bằng chứng: `FAIL <job>` chỉ nói "ảnh không được ghi",
          còn `rc=127` / `SyntaxError` nằm trong log riêng và mới là nguyên nhân thật.
          ⚠ "UNKNOWN" CŨNG PHẢI ĐƯỢC THAY. Trước 15/09/2026 danh sách này chỉ có

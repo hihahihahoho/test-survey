@@ -121,6 +121,27 @@ switch (process.env.MODE) {
   case "cover": copyFileSync(process.env.SRC, "cover/cover.raw.png"); break
   case "salvage":                                  // sinh ảnh nhưng KHÔNG copy về đích
     console.log("saved to generated_images/" + process.env.SALVAGE_NAME + ".png"); break
+  case "salvage-win":                              // y hệt, nhưng in đường dẫn kiểu Windows
+    console.log("saved to C:\\\\fake\\\\.codex\\\\generated_images\\\\" + process.env.SALVAGE_NAME + ".png"); break
+  case "salvage-debug": {                          // ĐÚNG hình dạng log Windows 17/09/2026:
+    // đường dẫn nằm trong chuỗi Debug của Rust ⇒ mỗi dấu gạch nhân 8 lần, và phía sau
+    // còn một vế -Destination trỏ vào raw/job1.png cũng kết thúc bằng .png.
+    // B/Q dựng bằng fromCharCode để KHÔNG phải đếm dấu thoát qua ba tầng chuỗi.
+    const B = String.fromCharCode(92).repeat(8), Q = String.fromCharCode(34)
+    const src = "C:" + B + "Users" + B + "phuongna" + B + ".codex" + B + "generated_images" +
+      B + process.env.SALVAGE_SID + B + process.env.SALVAGE_NAME + ".png"
+    const dst = "C:" + B + "Users" + B + "phuongna" + B + "KitGen" + B + "raw" + B + "job1.png"
+    console.log("ERROR codex_core::tools::router: error=exec_command failed: CreateProcess { message: " +
+      Q + "Rejected(" + B + Q + "powershell.exe -NoProfile -Command Copy-Item -LiteralPath '" + src +
+      "' -Destination '" + dst + "' -Force" + B + Q + " rejected: blocked by policy)" + Q + " }")
+    break
+  }
+  case "salvage-session":                          // KHÔNG in đường dẫn nào, chỉ có header
+    writeFileSync(process.env.SALVAGE_DIR + "/" + process.env.SALVAGE_NAME + ".png",
+      readFileSync(process.env.SALVAGE_SEED))
+    console.log("session id: " + process.env.SALVAGE_SID)
+    console.log("Reply with only the saved file path.")
+    break
 }
 process.exit(0)
 `
@@ -156,7 +177,8 @@ async function runCase(work, envExtra = {}) {
   await writeFile(env.CALLS, "0", "utf8")
   await writeFile(env.ARGV_LOG, "", "utf8")
   const prevEnv = {}
-  for (const k of ["DST", "ARGV_LOG", "CALLS", "MODE", "SRC", "TASK_LOG", "SALVAGE_NAME"]) {
+  for (const k of ["DST", "ARGV_LOG", "CALLS", "MODE", "SRC", "TASK_LOG", "SALVAGE_NAME",
+    "SALVAGE_SID", "SALVAGE_DIR", "SALVAGE_SEED"]) {
     prevEnv[k] = process.env[k]
     if (env[k] === undefined) delete process.env[k]; else process.env[k] = env[k]
   }
@@ -467,6 +489,73 @@ export async function run() {
       const r = await runCase(work, { MODE: "salvage", SALVAGE_NAME: "abc", IMG_HOME: ghome })
       includes(r.out, "OK  job1", "vớt được thì job vẫn OK")
       includes(r.log, "vớt generated_images/abc.png", "log nói rõ đã vớt")
+      ok(await stat(join(work, "raw/job1.png")).then(() => true, () => false), "ảnh đã về đích")
+      await rmTemp(work)
+    })
+
+    /* CÙNG MỘT SỰ VIỆC, HAI CÁCH ĐÁNH VẦN — VÀ WINDOWS LÀ CÁCH KHÔNG AI THỬ.
+       codex in đường dẫn của HỆ ĐIỀU HÀNH: `C:\…\generated_images\abc.png`. Mẫu cũ
+       chỉ nhận `/` nên trên máy người dùng thật cửa vớt IM LẶNG không bao giờ mở —
+       job chết oan dù ảnh đang nằm sẵn trong .codex. Thư mục nguồn vẫn là `ghome`
+       của máy này (chuỗi `C:\fake\…` chỉ là cái vỏ codex in ra). */
+    await it("VỚT ẢNH: đường dẫn kiểu Windows (dấu \\) cũng phải vớt được", async () => {
+      const work = await fresh()
+      const ghome = join(work, "codexhome-win")
+      await mkdir(join(ghome, "generated_images"), { recursive: true })
+      await writeFile(join(ghome, "auth.json"), "{}", "utf8")
+      await writeFile(join(ghome, "generated_images", "win.png"), pngUi())
+      const r = await runCase(work, { MODE: "salvage-win", SALVAGE_NAME: "win", IMG_HOME: ghome })
+      includes(r.out, "OK  job1", "vớt được thì job vẫn OK")
+      includes(r.log, "generated_images\\win.png", "log chép đúng chữ codex đã in")
+      ok(await stat(join(work, "raw/job1.png")).then(() => true, () => false), "ảnh đã về đích")
+      await rmTemp(work)
+    })
+
+    /* ══ BẰNG CHỨNG THẬT 17/09/2026 (Windows · codex 0.154 · job `chinh-nen`) ═════
+       `sandbox: read-only` dù engine truyền `-s workspace-write`, `approval: never`
+       ⇒ Copy-Item của model bị «rejected: blocked by policy». Đường dẫn ảnh CHỈ còn
+       xuất hiện bên trong dòng ERROR, dưới dạng chuỗi Debug của Rust (mỗi dấu gạch
+       nhân 8 lần), và ngay sau nó là `-Destination '…\raw\chinh-nen.png'` — cũng
+       kết thúc bằng .png. Vớt nhầm cái sau thì chép chính đường dẫn KHÔNG tồn tại. */
+    await it("VỚT ẢNH: đường dẫn nằm trong chuỗi Debug của Rust (gạch nhân 8) vẫn đọc ra đúng file", async () => {
+      const work = await fresh()
+      const ghome = join(work, "codexhome-dbg")
+      const sid = "01a0ae6f-1a9f-7e42-ab07-58f141c1984f"
+      await mkdir(join(ghome, "generated_images", sid), { recursive: true })
+      await writeFile(join(ghome, "auth.json"), "{}", "utf8")
+      const want = pngUi()
+      await writeFile(join(ghome, "generated_images", sid, "exec-8ec3e681.png"), want)
+      const r = await runCase(work, {
+        MODE: "salvage-debug", SALVAGE_SID: sid, SALVAGE_NAME: "exec-8ec3e681", IMG_HOME: ghome,
+      })
+      includes(r.out, "OK  job1", "ảnh nằm sẵn trong .codex ⇒ không được FAIL")
+      includes(r.log, "vớt generated_images", "log nói rõ đã vớt")
+      const got = await readFile(join(work, "raw/job1.png"))
+      eq(Buffer.compare(got, want), 0, "vớt ĐÚNG file nguồn, không phải đường dẫn -Destination")
+      await rmTemp(work)
+    })
+
+    /* Dây an toàn thứ hai: log không in một đường dẫn nào (bị cắt, hoặc codex đổi câu
+       báo lỗi) — vẫn còn `session id:` ở header, mà codex cất ảnh dưới đúng thư mục
+       mang tên session ấy. Chỉ nhận ảnh của CHÍNH session này và mới hơn lúc bắt đầu. */
+    await it("VỚT ẢNH: không có đường dẫn nào trong log ⇒ lần theo `session id`", async () => {
+      const work = await fresh()
+      const ghome = join(work, "codexhome-sid")
+      const sid = "01a0b111-2222-7e42-ab07-58f141c19999"
+      const dir = join(ghome, "generated_images", sid)
+      await mkdir(dir, { recursive: true })
+      await writeFile(join(ghome, "auth.json"), "{}", "utf8")
+      // codex GIẢ tự ghi ảnh TRONG lượt chạy ⇒ mtime chắc chắn mới hơn mốc bắt đầu.
+      const seed = join(work, "seed.png")
+      await writeFile(seed, pngUi())
+      const r = await runCase(work, {
+        MODE: "salvage-session", SALVAGE_SID: sid, SALVAGE_NAME: "exec-moi",
+        SALVAGE_DIR: dir, SALVAGE_SEED: seed,
+        IMG_HOME: ghome,
+      })
+      includes(r.out, "OK  job1", "ảnh của chính lượt này ⇒ vớt được")
+      includes(r.log, `vớt generated_images/${sid}/exec-moi.png`, "log nói rõ vớt theo session id")
+      includes(r.log, "theo session id", "và nói rõ đường nào đã vớt")
       ok(await stat(join(work, "raw/job1.png")).then(() => true, () => false), "ảnh đã về đích")
       await rmTemp(work)
     })

@@ -58,6 +58,48 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     eq(job.diagnosis, "MODEL_BUSY", "đọc log xong phải đổi ý, không bám lấy «chưa rõ»")
     eq(h.run.failSummary, "1/1 job máy vẽ đang quá tải, thử lại sau ít phút", "banner nói đúng thứ vừa đọc được")
   })
+  /* ══ ENGINE ĐỔI TIẾNG NÓI THÌ NGƯỜI NGHE PHẢI HỌC LẠI ════════════════════════
+     Port sang JS (16/09/2026) đổi câu phán hỏng: `gen.sh` in «ảnh không được ghi»,
+     `gen.mjs` in «không có raw/<job>.png» / «ảnh KHÔNG ĐỔI…». Mẫu cũ không khớp câu
+     nào ⇒ MỌI job hỏng của engine JS đọc ra "UNKNOWN" (KitGen 3.0.5 · r-0007:
+     «1/1 job lỗi chưa rõ nguyên nhân» dù codex chạy xong êm ru). */
+  await it("[r-0007] câu phán hỏng của engine JS cũng phải đọc ra NO_ARTIFACT", () => {
+    eq(diagnose(["FAIL chinh-nen (rc=0, không có raw/chinh-nen.png — xem logs/chinh-nen.log)"]),
+      "NO_ARTIFACT", "không có raw/")
+    eq(diagnose(["FAIL chinh-nen (rc=0, ảnh KHÔNG ĐỔI so với trước lượt chạy — model không sinh ảnh mới)"]),
+      "NO_ARTIFACT", "ảnh không đổi — cũng là không ghi được ảnh")
+    eq(diagnose(["ảnh không được ghi"]), "NO_ARTIFACT", "câu của bash cũ vẫn đọc được")
+    /* Engine chết giữa chừng thì KHÔNG được đoán bừa: `NO_ARTIFACT` đọc là "chạy xong
+       mà không có ảnh", còn đây là "chưa chạy tới nơi" — cứ để UNKNOWN cho log job nói. */
+    eq(diagnose(["FAIL dựng-prompt (rc=1, engine lỗi: ENOENT contract.json)"]),
+      "UNKNOWN", "engine lỗi ⇒ vẫn chờ bằng chứng thật")
+  })
+  /* ══ NGUYÊN NHÂN PHẢI NẰM TRONG THỨ NGƯỜI DÙNG CHÉP ĐI ════════════════════════
+     r-0007: codex chạy xong, in «tokens used» + đường dẫn đích, nên `logs/<job>.log`
+     KHÔNG có một chữ nào về lỗi. Câu duy nhất nói vì sao là dòng `FAIL …` mà agent
+     in ra stdout của lượt — và trước bản vá này nó bị vứt ngay sau khi chẩn đoán,
+     nên nút «Copy lỗi» chép ra ba dòng log vô can. */
+  await it("[r-0007] dòng FAIL là bằng chứng ĐẦU TIÊN trong errorTail, không bị vứt", async () => {
+    const { RunHandle } = await import("../lib/run-handle.mjs")
+    const h = Object.create(RunHandle.prototype)
+    const job = { job: "chinh-nen", variant: "chinh", sheet: "nen", status: "running", startedAt: new Date().toISOString() }
+    Object.assign(h, {
+      ws: { projectsDir: join(wsRoot, "projects") },
+      run: { projectId: pid, kind: "gen", jobs: [job], progress: { done: 0, failed: 0, total: 1 } },
+      cancelled: false, durations: [],
+      emit: () => {}, persist: async () => {},
+      attachArtifact: async () => false, validateArtifact: async () => {},
+      // Log job đúng như ngoài đời: codex nói xong việc của nó, không nói lỗi.
+      errorTailFor: async () => ["tokens used", "53,832", "raw/chinh-nen.png"],
+    })
+    h.parseGenLine("FAIL chinh-nen (rc=0, không có raw/chinh-nen.png — xem logs/chinh-nen.log)")
+    eq(job.diagnosis, "NO_ARTIFACT", "chẩn đoán ngay lúc job đóng sổ")
+    await h.settleGenJobs()
+    ok(job.errorTail[0].startsWith("FAIL chinh-nen"), `dòng đầu là lý do: ${job.errorTail[0]}`)
+    eq(job.errorTail.length, 4, "lý do + 3 dòng log (được phép dài hơn ERROR_TAIL_LINES đúng 1)")
+    eq(job.diagnosis, "NO_ARTIFACT", "log vô can thì không lật được chẩn đoán")
+    ok(!JSON.stringify(job).includes("failLine"), "ghi chú nội bộ KHÔNG rò vào run.json/API")
+  })
   await it("một câu cho cả lượt: MODEL_BUSY có lời tiếng Việt riêng, không rơi về «chưa rõ»", () => {
     const line = summarizeFailures([
       { status: "ok" }, { status: "failed", diagnosis: "MODEL_BUSY" },
@@ -592,7 +634,11 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     ok(bad, "có job lỗi")
     eq(bad.diagnosis, "NO_ARTIFACT", "chẩn đoán vẫn là NO_ARTIFACT")
     ok(Array.isArray(bad.errorTail), `errorTail phải là mảng, thấy ${JSON.stringify(bad.errorTail)}`)
-    ok(bad.errorTail.length >= 1 && bad.errorTail.length <= 3, `2–3 dòng cuối, thấy ${bad.errorTail.length}`)
+    /* TRẦN LÀ 3 DÒNG LOG + 1 DÒNG LÝ DO. Dòng `FAIL <job> (…)` không nằm trong
+       logs/<job>.log (engine in nó ra stdout của CẢ LƯỢT sau khi codex thoát), nên nó
+       được ghép LÊN ĐẦU khối bằng chứng — xem ca "[r-0007]" ở đầu suite này. */
+    ok(bad.errorTail.length >= 1 && bad.errorTail.length <= 4, `tối đa 3 dòng log + 1 dòng lý do, thấy ${bad.errorTail.length}`)
+    ok(bad.errorTail[0].startsWith(`FAIL ${bad.job}`), `lý do đứng đầu, thấy ${bad.errorTail[0]}`)
     includes(bad.errorTail.join("\n"), "rc=127",
       "nguyên nhân THẬT phải đi kèm — khỏi phải đào events.ndjson")
     ok(got.json.jobs.filter(j => j.status === "ok").every(j => !j.errorTail?.length),
