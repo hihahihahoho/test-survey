@@ -666,17 +666,49 @@ if ($sysCodex) {
   if ((Invoke-ExeSoft $sysCodex.Source @('--version') -Quiet) -eq 0) { $codexBin = $sysCodex.Source; Write-Ok "dung Codex da co: $codexBin" }
   else { Write-Warn "co lenh codex tai $($sysCodex.Source) nhung --version that bai" }
 }
-if (-not $codexBin) {
-  # Cai bang installer CHINH THUC cua OpenAI (binary native). BANG CHUNG HIEN TRUONG
-  # 24/08/2026: ban codex cai qua npm KHONG gen duoc anh tren may khach; cai lai bang
-  # installer chinh thuc thi gen duoc ngay. npm chi con la duong lui khi tai that bai.
-  $codexInstallDir = Join-Path $env:USERPROFILE '.local\bin'
-  $officialCodex = Join-Path $codexInstallDir 'codex.exe'
-  # Ban chinh thuc da cai tu luot truoc (thu muc nay co the chua vao PATH) ⇒ dung lai,
-  # khong tai lai installer moi lan update.
-  if ((Test-Path -LiteralPath $officialCodex) -and ((Invoke-ExeSoft $officialCodex @('--version') -Quiet) -eq 0)) {
-    $codexBin = $officialCodex; Write-Ok "dung Codex chinh thuc da co: $officialCodex"
+# ── CODEX CHINH THUC NAM O DAU TREN WINDOWS (doc installer OpenAI ngay 17/09/2026) ──
+# chatgpt.com/codex/install.ps1 giai nen vao %USERPROFILE%\.codex\packages\standalone\
+# current\bin\codex.exe, roi tao mot JUNCTION %LOCALAPPDATA%\Programs\OpenAI\Codex\bin
+# tro vao do, va them junction ay vao PATH NGUOI DUNG trong registry — tuc chi cua so
+# PowerShell mo SAU moi thay `codex`.
+#
+# BAO CAO THUC TE 17/09/2026 (may Windows cua dong nghiep, cai 3.0.0): "[5/7] THIEU Codex
+# CLI" du mang binh thuong. Goc: 3.0.0 dat CODEX_INSTALL_DIR=%USERPROFILE%\.local\bin de
+# bat chuoc macOS, ma installer chinh thuc hieu bien ay la "bien CA THU MUC .local\bin
+# thanh junction" — gap thu muc da co file thi no nem "Refusing to replace non-empty
+# directory", con gap thu muc chua co thi no chiem luon .local\bin cua nguoi dung. Ca hai
+# deu sai; va `catch { }` cua ta nuot loi nen man hinh khong noi gi. Codex tai xong van
+# nam trong .codex\packages, chi la KitGen khong nhin toi.
+#
+# Nay: KHONG ep thu muc cai (de mac dinh Programs\OpenAI\Codex\bin), tim codex o DU MOI
+# CHO installer chinh thuc co the de — ke ca PATH nguoi dung trong registry ma tien
+# trinh nay chua duoc ke thua — va khi installer chinh thuc hong thi IN nguyen nhan.
+function Find-OfficialCodex {
+  $cands = New-Object System.Collections.ArrayList
+  [void]$cands.Add((Join-Path $env:LOCALAPPDATA 'Programs\OpenAI\Codex\bin\codex.exe'))
+  [void]$cands.Add((Join-Path $env:USERPROFILE '.codex\packages\standalone\current\bin\codex.exe'))
+  # 3.0.0 da lo cai vao day tren vai may — van phai nhan ra, khong bat tai lai.
+  [void]$cands.Add((Join-Path $env:USERPROFILE '.local\bin\codex.exe'))
+  foreach ($scope in @('User', 'Machine')) {
+    $p = [Environment]::GetEnvironmentVariable('Path', $scope)
+    if (-not $p) { continue }
+    foreach ($d in ($p -split ';')) {
+      $d = $d.Trim().Trim('"')
+      if (-not $d) { continue }
+      [void]$cands.Add(($d.TrimEnd('\') + '\codex.exe'))
+      [void]$cands.Add(($d.TrimEnd('\') + '\codex.cmd'))
+    }
   }
+  foreach ($c in $cands) {
+    try {
+      if ((Test-Path -LiteralPath $c) -and ((Invoke-ExeSoft $c @('--version') -Quiet) -eq 0)) { return $c }
+    } catch { }   # mot muc PATH rac (ky tu cam) khong duoc lam sap ca luot cai
+  }
+  return $null
+}
+if (-not $codexBin) {
+  $found = Find-OfficialCodex
+  if ($found) { $codexBin = $found; Write-Ok "dung Codex chinh thuc da co: $codexBin" }
 }
 if ((-not $codexBin) -and $env:KITGEN_SKIP_CODEX_INSTALL) {
   # Duong tat cho CI/test: mo phong "may khong tai duoc codex" ma khong cham mang that
@@ -684,20 +716,21 @@ if ((-not $codexBin) -and $env:KITGEN_SKIP_CODEX_INSTALL) {
   Write-Warn 'bo qua tai Codex chinh thuc theo KITGEN_SKIP_CODEX_INSTALL'
 } elseif (-not $codexBin) {
   Write-Host '  Codex CLI (installer chinh thuc cua OpenAI) ...'
+  $codexInstallError = $null
   try {
-    $env:CODEX_INSTALL_DIR = $codexInstallDir
     $env:CODEX_NON_INTERACTIVE = '1'
     $codexInstallScript = (Invoke-WebRequest -UseBasicParsing -Uri 'https://chatgpt.com/codex/install.ps1').Content
     # Chay trong scope con de bien/ham cua script installer khong tran vao script nay.
-    & ([scriptblock]::Create($codexInstallScript)) | Out-Null
-  } catch { }
+    # In tung dong no noi ra: cai codex la viec MOT LAN, va khi hong thi dong cuoi cua no
+    # chinh la nguyen nhan — Out-Null o day la ly do 3.0.0 hong ma khong ai biet vi sao.
+    & ([scriptblock]::Create($codexInstallScript)) 2>&1 | ForEach-Object { Write-Host "       $_" }
+  } catch { $codexInstallError = [string]$_.Exception.Message }
   finally {
-    Remove-Item Env:CODEX_INSTALL_DIR -ErrorAction SilentlyContinue
     Remove-Item Env:CODEX_NON_INTERACTIVE -ErrorAction SilentlyContinue
   }
-  if ((Test-Path -LiteralPath $officialCodex) -and ((Invoke-ExeSoft $officialCodex @('--version') -Quiet) -eq 0)) {
-    $codexBin = $officialCodex; Write-Ok "cai Codex chinh thuc: $officialCodex"
-  }
+  if ($codexInstallError) { Write-Warn "installer Codex chinh thuc dung giua chung: $codexInstallError" }
+  $found = Find-OfficialCodex
+  if ($found) { $codexBin = $found; Write-Ok "cai Codex chinh thuc: $codexBin" }
 }
 # KHONG lui ve npm: ban npm la dung ban da gen hong ngoai hien truong — cai no vao la
 # den xanh ma khong ra anh. Mot duong cai duy nhat = mot duong update duy nhat.

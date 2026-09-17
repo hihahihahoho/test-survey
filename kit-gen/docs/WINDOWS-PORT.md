@@ -347,8 +347,13 @@ gõ tay ở từng chỗ.*
    như bản Unix.
 5. **Cài runtime** — `releases\<version>`, junction `current`. KHÔNG còn copy engine sang
    `%USERPROFILE%\KitGen\.kitgen\engine`: engine đi trong gói agent.
-6. **Codex CLI** — ưu tiên `codex` đã có trên PATH / `%USERPROFILE%\.local\bin`, nếu chưa
-   có thì chạy installer **chính thức** của OpenAI (đường npm đã bỏ 24/08/2026). Rồi
+6. **Codex CLI** — ưu tiên `codex` đã có trên PATH; rồi dò các chỗ installer chính thức
+   của OpenAI để binary: `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` (junction),
+   `%USERPROFILE%\.codex\packages\standalone\current\bin`, PATH người dùng trong registry
+   (installer vừa thêm, tiến trình chưa thấy), và `%USERPROFILE%\.local\bin` (3.0.0 lỡ ép
+   vào đó). Chưa có thì chạy installer **chính thức** với thư mục MẶC ĐỊNH của nó — không
+   đặt `CODEX_INSTALL_DIR`, vì installer hiểu biến ấy là "biến cả thư mục thành junction"
+   và từ chối thư mục đã có file (bug 3.0.0, 17/09/2026). Rồi
    `codex update` với **PATH gốc của người dùng** (`KITGEN_SKIP_CODEX_UPDATE=1` để bỏ qua).
    Codex là công cụ **dùng chung của cả máy**: KitGen chỉ nâng, không bao giờ gỡ hay dời nó.
 7. **Cấu hình + lệnh** — `config.cmd`, `bin\kitgen.cmd`, `bin\kitgen-hidden.vbs`,
