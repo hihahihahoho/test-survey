@@ -716,19 +716,32 @@ if ((-not $codexBin) -and $env:KITGEN_SKIP_CODEX_INSTALL) {
   Write-Warn 'bo qua tai Codex chinh thuc theo KITGEN_SKIP_CODEX_INSTALL'
 } elseif (-not $codexBin) {
   Write-Host '  Codex CLI (installer chinh thuc cua OpenAI) ...'
-  $codexInstallError = $null
+  # BAO CAO THUC TE 17/09/2026 (3.0.0 va 3.0.1, may Windows cua dong nghiep):
+  #   Exception calling "Create" with "1" argument(s): "At line:1 char:4
+  #   + 91 67 109 100 108 101 116 66 105 110 100 105 110 103 40 41 93 10 112 ...
+  #   Unexpected token '67' in expression or statement."
+  # 91 67 109 100 = "[Cmd" — chatgpt.com tra install.ps1 voi content-type KHONG phai text,
+  # nen (Invoke-WebRequest).Content la byte[] chu khong phai chuoi; [scriptblock]::Create
+  # ep mang thanh "91 67 109 ..." roi parse hong. Ma ke ca decode dung thi chay script cua
+  # OpenAI TRONG tien trinh nay van sai: no goi `exit 1` khi hong, va exit ay giet luon
+  # installer KitGen. Nay: tai xuong FILE (-OutFile ghi byte tho, khong decode gi), roi chay
+  # bang MOT powershell.exe CON qua Invoke-ExeSoft — hong thi chi tra ma thoat, moi dong no
+  # in deu hien ra man hinh, va PATH/PSModulePath da va o tren duoc ke thua.
+  # KITGEN_CODEX_INSTALLER_SRC: CI thay bang mot file installer gia (khong ra mang).
+  $codexInstallerSrc = if ($env:KITGEN_CODEX_INSTALLER_SRC) { $env:KITGEN_CODEX_INSTALLER_SRC } else { 'https://chatgpt.com/codex/install.ps1' }
+  $codexInstallerFile = Join-Path $env:TEMP ('kitgen-codex-install-{0}.ps1' -f $PID)
+  $codexInstallRc = -1
   try {
+    if (Test-Path -LiteralPath $codexInstallerSrc) { Copy-Item -LiteralPath $codexInstallerSrc -Destination $codexInstallerFile -Force }
+    else { Invoke-WebRequest -UseBasicParsing -Uri $codexInstallerSrc -OutFile $codexInstallerFile }
     $env:CODEX_NON_INTERACTIVE = '1'
-    $codexInstallScript = (Invoke-WebRequest -UseBasicParsing -Uri 'https://chatgpt.com/codex/install.ps1').Content
-    # Chay trong scope con de bien/ham cua script installer khong tran vao script nay.
-    # In tung dong no noi ra: cai codex la viec MOT LAN, va khi hong thi dong cuoi cua no
-    # chinh la nguyen nhan — Out-Null o day la ly do 3.0.0 hong ma khong ai biet vi sao.
-    & ([scriptblock]::Create($codexInstallScript)) 2>&1 | ForEach-Object { Write-Host "       $_" }
-  } catch { $codexInstallError = [string]$_.Exception.Message }
+    $codexInstallRc = Invoke-ExeSoft 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $codexInstallerFile)
+  } catch { Write-Warn "khong tai duoc installer Codex chinh thuc: $([string]$_.Exception.Message)" }
   finally {
     Remove-Item Env:CODEX_NON_INTERACTIVE -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $codexInstallerFile -Force -ErrorAction SilentlyContinue
   }
-  if ($codexInstallError) { Write-Warn "installer Codex chinh thuc dung giua chung: $codexInstallError" }
+  if ($codexInstallRc -ne 0) { Write-Warn "installer Codex chinh thuc thoat voi ma $codexInstallRc (xem cac dong no in o tren)" }
   $found = Find-OfficialCodex
   if ($found) { $codexBin = $found; Write-Ok "cai Codex chinh thuc: $codexBin" }
 }

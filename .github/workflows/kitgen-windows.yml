@@ -422,6 +422,53 @@ jobs:
           Write-Host 'OK   thieu Codex => in checklist, khong khoi dong, thoat 0'
           exit 0
 
+      # ── Lần cài 1b: máy thiếu Codex, installer TỰ TẢI installer chính thức. ──
+      # 3.0.0 và 3.0.1 hỏng đúng nhánh này ngoài hiện trường (17/09/2026): tải về được nhưng
+      # chạy hỏng, và trước đó chưa ca nào đi qua nhánh ấy vì lần 1 luôn SKIP_CODEX_INSTALL.
+      # Installer chính thức được thay bằng một file .ps1 GIẢ đặt codex.cmd đúng chỗ + ghi
+      # PATH người dùng vào registry — y như cách installer thật làm — không ra mạng.
+      - name: Cài lần 1b — tự tải Codex qua installer chính thức (giả lập, không ra mạng)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tar = @(Get-ChildItem -LiteralPath "$env:RUNNER_TEMP\pkg" -File | Where-Object { $_.Name -like 'kitgen-runtime-*.tar.gz' })[0]
+          $machine = [Environment]::GetEnvironmentVariable('PSModulePath', 'Machine')
+          $user    = [Environment]::GetEnvironmentVariable('PSModulePath', 'User')
+          $env:PSModulePath = (@($user, $machine) | Where-Object { $_ }) -join ';'
+          $fakeBin = Join-Path $env:LOCALAPPDATA 'Programs\OpenAI\Codex\bin'
+          $fakeInstaller = "$env:RUNNER_TEMP\codex-install-gia.ps1"
+          # Installer gia: ASCII thuan, ket thuc bang `exit 0` nhu ban that (phai chay o
+          # tien trinh con thi exit ay moi khong giet installer KitGen).
+          $lines = New-Object System.Collections.ArrayList
+          [void]$lines.Add('$ErrorActionPreference = "Stop"')
+          [void]$lines.Add('New-Item -ItemType Directory -Force -Path "' + $fakeBin + '" | Out-Null')
+          [void]$lines.Add('$cmd = "@echo off`r`nif /I ""%~1""==""--version"" ( echo codex-cli 0.0.0-gia-tai & exit /b 0 )`r`nexit /b 0`r`n"')
+          [void]$lines.Add('[IO.File]::WriteAllText("' + $fakeBin + '\codex.cmd", $cmd, [Text.Encoding]::ASCII)')
+          [void]$lines.Add('$p = [Environment]::GetEnvironmentVariable("Path", "User")')
+          [void]$lines.Add('[Environment]::SetEnvironmentVariable("Path", ("' + $fakeBin + ';" + $p), "User")')
+          [void]$lines.Add('Write-Host "Installing Codex CLI (gia lap)"')
+          [void]$lines.Add('exit 0')
+          [IO.File]::WriteAllLines($fakeInstaller, [string[]]$lines, [Text.Encoding]::ASCII)
+          $env:KITGEN_CODEX_INSTALLER_SRC = $fakeInstaller
+          Remove-Item Env:KITGEN_SKIP_CODEX_INSTALL -ErrorAction SilentlyContinue
+          $out = "$env:RUNNER_TEMP\install-1b.out.log"
+          $err = "$env:RUNNER_TEMP\install-1b.err.log"
+          $ps1 = Join-Path $PWD 'kit-gen\scripts\install.ps1'
+          $argline = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -Archive "{1}" -NoStart' -f $ps1, $tar.FullName
+          $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $argline -Wait -PassThru -NoNewWindow `
+                 -RedirectStandardOutput $out -RedirectStandardError $err
+          $text = [string](Get-Content -Raw -LiteralPath $out) + "`n" + [string](Get-Content -Raw -LiteralPath $err)
+          Write-Host '--------- stdout/stderr cua install.ps1 ---------'
+          Write-Host $text
+          Write-Host '------------------------------------------------'
+          if ($p.ExitCode -ne 0) { Write-Host ("::error::install.ps1 thoat voi ma {0} (co codex roi thi phai thoat 0)" -f $p.ExitCode); exit 1 }
+          $need = @('Installing Codex CLI (gia lap)', 'cai Codex chinh thuc:', 'codex.cmd')
+          $miss = @($need | Where-Object { -not $text.Contains($_) })
+          if ($miss.Count -gt 0) { Write-Host ("::error::khong tim thay trong log: {0}" -f ($miss -join ' | ')); exit 1 }
+          if ($text.Contains('THIEU Codex CLI')) { Write-Host '::error::van bao THIEU Codex du installer chinh thuc (gia) da dat codex vao PATH registry'; exit 1 }
+          Write-Host 'OK   tai installer chinh thuc -> chay o tien trinh con -> tim thay codex qua PATH registry'
+          exit 0
+
       # ── Lần cài 2: đủ tiền đề. Cũng là phép thử "cai xong thi chay lai" (§7 bước 2). ──
       # VÀ là phép thử môi trường BẨN: ở đây CỐ Ý **không** đụng vào PSModulePath, tức
       # `powershell.exe` con thừa kế đường module của PS 7 — đúng cảnh người dùng gõ
