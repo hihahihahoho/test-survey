@@ -82,6 +82,9 @@ process.env.KITGEN_DOCTOR_LITE = "1"    // doctor không spawn ra ngoài khi ch�
 const agent = await createAgent({
   workspaces: [wsRoot], port: PORT, origins: [PAGES], print: () => {},
   rateLimit: 500, doctor: fakeDoctor(false),
+  /* Bộ ca chạy từ checkout source nhưng ĐÓNG VAI bản cài: mọi ca về /api/update đo hành vi
+     của bản cài. Ca «checkout source» riêng tự dựng agent với cờ ngược lại (suite-system). */
+  sourceCheckout: false,
 })
 agent.state.port = PORT
 const { api, call } = apiFor(agent.server)

@@ -75,8 +75,10 @@ export interface UpdateCheck {
   latestVersion: string | null;
   tag: string | null;
   available: boolean;
-  /** enum, chỉ có khi `ok:false` */
-  reason?: "OFFLINE" | "MANIFEST_UNREADABLE" | "ARCHIVE_PENDING";
+  /** enum. `OFFLINE`/`MANIFEST_UNREADABLE` đi với `ok:false`; `ARCHIVE_PENDING` và
+   *  `SOURCE_CHECKOUT` (agent chạy từ mã nguồn — dev server — cập nhật bằng git, không
+   *  có installer để bấm) đi với `ok:true` + `available:false`. */
+  reason?: "OFFLINE" | "MANIFEST_UNREADABLE" | "ARCHIVE_PENDING" | "SOURCE_CHECKOUT";
   /** lệnh cập nhật thủ công, dạng nhãn rút gọn (~/…) */
   updateCommand: string;
   /**

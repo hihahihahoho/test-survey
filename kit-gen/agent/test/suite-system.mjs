@@ -3,8 +3,8 @@
    không wildcard CORS, chỉ bind loopback). */
 import { fstatSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { describe, it, eq, ok, includes, stripComments, PAGES, CLIENT } from "./harness.mjs"
-import { PROTOCOL_VERSION } from "../server.mjs"
+import { describe, it, eq, ok, includes, stripComments, PAGES, CLIENT, PORT, apiFor, fakeDoctor } from "./harness.mjs"
+import { PROTOCOL_VERSION, createAgent } from "../server.mjs"
 import { readRuntimeVersion } from "../lib/update.mjs"
 
 /* Nhãn lệnh trả ra API ĐỔI THEO HỆ ĐIỀU HÀNH (lib/update.mjs: UPDATE_COMMAND /
@@ -345,6 +345,39 @@ export async function run({ api, call, agent, agentDir, tmp }) {
       eq(seen.filter(s => s.method === "HEAD").length, 1, "đúng MỘT request HEAD, không tải cả file")
       eq(seen.find(s => s.method === "HEAD").url, "https://example.test/kitgen-runtime-99.0.0.tar.gz",
         "hỏi ĐÚNG cái URL mà installer sẽ tải")
+    } finally { globalThis.fetch = original }
+  })
+  /* ══════════════════════════════════════════════════════════════════════════
+     CHECKOUT SOURCE (dev server) KHÔNG ĐƯỢC MỜI BẤM «CẬP NHẬT» — 17/09/2026.
+     Agent dev đọc version từ webapp/package.json lúc khởi động; manifest nhánh phát hành
+     nhảy lên 3.0.0 ⇒ UI dev mời cập nhật, bấm vào thì không có installer nào để chạy ⇒
+     «từ chối cài bản mới», ba lần một buổi sáng. Checkout cập nhật bằng git: agent vẫn
+     nói thật bản mới nhất là bản nào, nhưng `available:false` + reason SOURCE_CHECKOUT,
+     và không HEAD tarball (chẳng ai sắp tải nó).
+     ══════════════════════════════════════════════════════════════════════════ */
+  await it("chạy từ checkout source ⇒ biết có bản mới nhưng KHÔNG mời (reason SOURCE_CHECKOUT)", async () => {
+    const dev = await createAgent({
+      workspaces: [agent.registry.active.root], port: PORT, origins: [PAGES], print: () => {},
+      rateLimit: 500, doctor: fakeDoctor(false), sourceCheckout: true,
+    })
+    dev.state.port = PORT
+    const devApi = apiFor(dev.server).api
+    const original = globalThis.fetch
+    const seen = []
+    globalThis.fetch = async (url, init = {}) => {
+      seen.push({ url: String(url), method: init.method ?? "GET" })
+      return new Response(JSON.stringify({
+        version: "99.0.0", archive: "https://example.test/kitgen-runtime-99.0.0.tar.gz",
+      }), { status: 200, headers: { "content-type": "application/json" } })
+    }
+    try {
+      const r = await devApi("GET", "/api/update")
+      eq(r.status, 200, "status")
+      eq(r.json.ok, true, "manifest đọc được")
+      eq(r.json.latestVersion, "99.0.0", "vẫn nói thật bản mới nhất")
+      eq(r.json.available, false, "checkout source: KHÔNG mời bấm — không có installer để chạy")
+      eq(r.json.reason, "SOURCE_CHECKOUT", "reason là enum riêng, UI phân biệt được với ARCHIVE_PENDING")
+      eq(seen.filter(s => s.method === "HEAD").length, 0, "không HEAD tarball: chẳng ai sắp tải nó")
     } finally { globalThis.fetch = original }
   })
   await it("không có bản mới thì KHÔNG bắn thêm request nào ra ngoài", async () => {

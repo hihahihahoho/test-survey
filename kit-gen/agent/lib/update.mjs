@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process"
 import { randomBytes } from "node:crypto"
-import { appendFileSync, chmodSync, closeSync, copyFileSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs"
+import { appendFileSync, chmodSync, closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
@@ -122,6 +122,22 @@ export function compareVersions(a, b) {
  *   2. checkout source — `kit-gen/webapp/package.json` (release.json luôn bump cùng nó).
  * Thiếu cả hai mới trả null; khi đó `checkForUpdate` mới lùi về "0.0.0".
  */
+/**
+ * Tiến trình này chạy từ CHECKOUT SOURCE (dev server) chứ không từ bản cài? Bản cài có
+ * `VERSION` cạnh gói agent; checkout thì không, và có `webapp/package.json` thay vào.
+ *
+ * VÌ SAO PHẢI BIẾT (17/09/2026): chủ sản phẩm chạy `npm run dev:full`, agent dev đọc
+ * version cũ từ package.json lúc khởi động, manifest trên nhánh phát hành vừa nhảy lên
+ * 3.0.0 ⇒ UI dev mời «Cập nhật», bấm vào thì `stageInstaller` không có installer nào để
+ * chạy (KITGEN_HOME của dev không phải bản cài) ⇒ «từ chối cài bản mới». Ba lần trong
+ * một buổi sáng, và câu hỏi đặt ra là «local không cập nhật được à?» — trong khi bản
+ * cài thật cập nhật bình thường. Checkout source cập nhật bằng git; đừng mời nút bấm.
+ */
+export function isSourceCheckout() {
+  const here = dirname(fileURLToPath(import.meta.url))
+  return !existsSync(resolve(here, "../../VERSION")) && existsSync(resolve(here, "../../webapp/package.json"))
+}
+
 export async function readRuntimeVersion() {
   const here = dirname(fileURLToPath(import.meta.url))
   try {
@@ -211,7 +227,7 @@ export async function archiveReady(url, { fetchImpl = fetch, timeoutMs = 8000 } 
  * `reason: "ARCHIVE_PENDING"` đi kèm `ok:true` (KHÁC hai reason còn lại, vốn chỉ có ở
  * `ok:false`): manifest đọc được và hợp lệ, chỉ là bản nó khai chưa tải về được.
  */
-export async function checkForUpdate({ currentVersion, fetchImpl = fetch, kitgenHome, verifyArchive = archiveReady } = {}) {
+export async function checkForUpdate({ currentVersion, fetchImpl = fetch, kitgenHome, verifyArchive = archiveReady, sourceCheckout = false } = {}) {
   const current = currentVersion || await readRuntimeVersion() || "0.0.0"
   const restart = await restartState({ currentVersion: current, kitgenHome })
   const install = updateInstallState({ kitgenHome })
@@ -220,14 +236,16 @@ export async function checkForUpdate({ currentVersion, fetchImpl = fetch, kitgen
   const manifest = await res.json()
   if (!manifest || typeof manifest.version !== "string" || typeof manifest.archive !== "string") throw new Error("invalid release manifest")
   const newer = compareVersions(current, manifest.version) < 0
-  const ready = newer ? await verifyArchive(manifest.archive, { fetchImpl }) : true
+  /* Checkout source: vẫn báo số hiệu bản mới (thông tin đúng), nhưng KHÔNG `available` —
+     không có installer nào để bấm; và không HEAD tarball vì chẳng ai sắp tải nó. */
+  const ready = newer && !sourceCheckout ? await verifyArchive(manifest.archive, { fetchImpl }) : true
   return {
     ok: true,
     currentVersion: current,
     latestVersion: manifest.version,
     tag: typeof manifest.tag === "string" ? manifest.tag : null,
-    available: newer && ready,
-    ...(newer && !ready ? { reason: "ARCHIVE_PENDING" } : {}),
+    available: newer && ready && !sourceCheckout,
+    ...(newer && sourceCheckout ? { reason: "SOURCE_CHECKOUT" } : newer && !ready ? { reason: "ARCHIVE_PENDING" } : {}),
     updateCommand: UPDATE_COMMAND,
     ...restart,
     installState: install.state,

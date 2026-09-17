@@ -42,7 +42,7 @@ import { register as registerCover } from "./routes/cover.mjs"
 import { register as registerApp } from "./routes/app.mjs"
 import { register as registerLibrary } from "./routes/library.mjs"
 import { sweepOrphanCovers } from "./lib/cover.mjs"
-import { readRuntimeVersion } from "./lib/update.mjs"
+import { isSourceCheckout, readRuntimeVersion } from "./lib/update.mjs"
 import { defaultKitgenHome } from "./lib/platform.mjs"
 import { acquireInstanceLock, releaseInstanceLock } from "./lib/instance-lock.mjs"
 
@@ -161,6 +161,7 @@ export async function createAgent(opts = {}) {
   /* Đọc MỘT LẦN lúc boot, không đọc lại mỗi nhịp /health: file VERSION chỉ đổi khi bản
      mới được cài, mà cài xong thì tiến trình này đã bị thay bằng tiến trình khác. */
   const runtimeVersion = await readRuntimeVersion().catch(() => null)
+  const sourceCheckout = opts.sourceCheckout ?? isSourceCheckout()
 
   const label = instanceLabel()
   const confirm = new ConfirmCodes(opts.print ?? (s => process.stdout.write(String(s) + "\n")))
@@ -223,6 +224,9 @@ export async function createAgent(opts = {}) {
         req, res, url, params: hit.params, registry, runs, confirm,
         origins: originSet, limits: LIMITS, version: PROTOCOL_VERSION, runtimeVersion: state.runtimeVersion, buildId: BUILD_ID,
         kitgenHome,
+        /* Chạy từ checkout source (dev server) thì /api/update không được mời bấm — không có
+           installer nào để chạy. Test truyền `sourceCheckout:false` để đóng vai bản cài. */
+        sourceCheckout,
         instanceLabel: label, appRootOverride: opts.appRoot ?? null,
         doctor: opts.doctor ?? realDoctor,
         healthProjectCount,

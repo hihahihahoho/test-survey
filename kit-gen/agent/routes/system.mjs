@@ -101,7 +101,7 @@ export function register(r) {
    *  chưa upload xong ⇒ `available:false` + `reason:"ARCHIVE_PENDING"` (BACKLOG #23). */
   r.get("/api/update", async ctx => ({
     status: 200,
-    json: await checkForUpdateSafe({ currentVersion: ctx.runtimeVersion ?? undefined, kitgenHome: ctx.kitgenHome }),
+    json: await checkForUpdateSafe({ currentVersion: ctx.runtimeVersion ?? undefined, kitgenHome: ctx.kitgenHome, sourceCheckout: ctx.sourceCheckout === true }),
   }))
 
   const installUpdate = async ctx => {
