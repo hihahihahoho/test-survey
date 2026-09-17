@@ -428,13 +428,25 @@ export function scheduleUpdate({ kitgenHome = defaultKitgenHome(), spawnImpl = s
         ["-c", 'sleep 1; exec "$1" --update', "kitgen-update", toBashPath(staged.path)],
         { detached: false, stdio: ["ignore", out, out], env, ...winSpawnOpts() })
     } else if (IS_WIN) {
-      /* PowerShell is not an executable script host. Keep the cmd.exe bridge for
-         install.ps1, whose environment intentionally remains Windows-native. */
-      child = spawnImpl(process.env.ComSpec || "cmd.exe",
-        /* `ping -n 2` thay cho `timeout /t 1`: timeout.exe đòi console input — trong tiến
-           trình không console (stdin=NUL) nó chết ngay "Input redirection is not supported"
-           và bước nhường 1 giây biến mất. ping không cần console và chờ đúng ~1s. */
-        ["/d", "/s", "/c", `ping -n 2 127.0.0.1 >nul & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${staged.path}" -Update -KitgenHome "${kitgenHome}"`],
+      /* GỌI THẲNG powershell.exe, KHÔNG QUA cmd.exe (17/09/2026, máy Windows của người
+         dùng: bấm «Cập nhật» 3.0.3→3.0.4, web chờ 180 giây, agent KHÔNG hề tắt, đĩa vẫn
+         3.0.3 — installer chưa bao giờ chạy).
+
+         Bản trước ghép cả dòng lệnh thành MỘT tham số cho `cmd.exe /d /s /c` và tự đặt
+         dấu nháy quanh hai đường dẫn. libuv thấy tham số có khoảng trắng LẪN dấu nháy nên
+         bọc cả chuỗi vào "…" và đổi mỗi `"` bên trong thành `\"`. cmd.exe không hiểu `\"`
+         (với nó `\` là ký tự thường) nên chuyển nguyên `\"C:\…\install.ps1\"` cho
+         powershell.exe; powershell.exe lại parse theo luật CRT, ở đó `\"` là DẤU NHÁY
+         THẬT ⇒ tham số -File thành `"C:\…\install.ps1"` KÈM hai ký tự nháy ⇒ «file does
+         not exist», thoát ngay, agent sống tiếp với bản cũ. Ba tầng quoting (libuv →
+         cmd → CRT) không bao giờ đồng ý với nhau; đường duy nhất chắc là KHÔNG có tầng
+         cmd: đưa từng tham số một cho powershell.exe, để libuv (bọc "…" quanh tham số có
+         khoảng trắng, không có nháy bên trong để phải escape) và CRT nói chuyện trực tiếp.
+
+         Không còn bước nhường 1 giây: install.ps1 tải manifest + gói + đối chiếu checksum
+         (nhiều giây) TRƯỚC khi dừng agent, nên câu trả lời 202 luôn kịp ra khỏi cửa. */
+      child = spawnImpl("powershell.exe",
+        ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", staged.path, "-Update", "-KitgenHome", kitgenHome],
         { detached: false, stdio: ["ignore", out, out], env, ...winSpawnOpts() })
     } else {
       child = spawnImpl("sh", ["-c", 'sleep 1; if [ -f "$1/config.env" ]; then . "$1/config.env"; fi; exec "$2" --update', "kitgen-update", kitgenHome, staged.path],

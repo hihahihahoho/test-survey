@@ -513,6 +513,46 @@ export async function run({ api, call, agent, agentDir, tmp }) {
   })
 
   /* ══════════════════════════════════════════════════════════════════════════
+     WINDOWS: INSTALLER PHẢI THẬT SỰ CHẠY ĐƯỢC TỪ NÚT «CẬP NHẬT» (17/09/2026).
+     Máy Windows của người dùng: bấm Cập nhật 3.0.3→3.0.4, web chờ 180 giây, agent
+     không hề tắt, đĩa vẫn 3.0.3. Nhánh .ps1 của scheduleUpdate trước đó đi qua
+     `cmd.exe /s /c "…"` với dấu nháy tự đặt, và ba tầng quoting (libuv → cmd → CRT)
+     biến `-File "C:\…\install.ps1"` thành một đường dẫn KÈM ký tự nháy ⇒ powershell
+     từ chối ngay. Mọi ca trước chỉ giả lập spawn nên không ai thấy. Ca này spawn THẬT
+     trên runner Windows: install.ps1 giả ghi tham số nó nhận được ra file, và KitgenHome
+     cố ý có khoảng trắng để bắt đúng tầng quoting. Ngoài Windows thì bỏ qua.
+     ══════════════════════════════════════════════════════════════════════════ */
+  await it("Windows: scheduleUpdate chạy được install.ps1 thật với đường dẫn có khoảng trắng", async () => {
+    if (process.platform !== "win32") return
+    const fakeHome = join(tmp, "kitgen home ps1")
+    mkdirSync(fakeHome, { recursive: true })
+    const marker = join(fakeHome, "marker.txt")
+    // ASCII thuần: powershell.exe đọc file không BOM theo codepage máy, không phải UTF-8.
+    writeFileSync(join(fakeHome, "install.ps1"), [
+      "param([string] $KitgenHome, [switch] $Update)",
+      "$text = 'home=' + $KitgenHome + \"`n\" + 'update=' + $Update + \"`n\" + 'self=' + $PSCommandPath + \"`n\"",
+      "[IO.File]::WriteAllText((Join-Path $KitgenHome 'marker.txt'), $text)",
+      "exit 0",
+      "",
+    ].join("\r\n"))
+    const { scheduleUpdate, resetUpdateInstallLock } = await import("../lib/update.mjs")
+    const out = scheduleUpdate({ kitgenHome: fakeHome })
+    eq(out.status, "started", "scheduler nhận lượt")
+    let text = ""
+    const deadline = Date.now() + 30_000
+    while (Date.now() < deadline) {
+      try { text = readFileSync(marker, "utf8"); if (text.includes("self=")) break } catch { /* chưa có */ }
+      await new Promise(r => setTimeout(r, 250))
+    }
+    const log = (() => { try { return readFileSync(join(fakeHome, "update.log"), "utf8") } catch { return "(không có update.log)" } })()
+    ok(text.includes("self="), `install.ps1 giả phải chạy tới nơi — update.log:\n${log.slice(-1500)}`)
+    includes(text, `home=${fakeHome}`, "-KitgenHome tới nơi nguyên vẹn, kể cả khoảng trắng")
+    includes(text, "update=True", "-Update là switch bật")
+    ok(!/self=.*"/.test(text), "đường dẫn -File không lẫn ký tự nháy")
+    resetUpdateInstallLock({ kitgenHome: fakeHome })
+  })
+
+  /* ══════════════════════════════════════════════════════════════════════════
      LƯỢT SAU KHÔNG ĐƯỢC XOÁ VẾT CỦA LƯỢT TRƯỚC (máy chủ SP, 14/08).
      Người dùng bấm [Cập nhật] hai lần: lượt 1 hỏng, lượt 2 xong. Đi tìm nguyên nhân
      thì update.log chỉ còn ĐÚNG lượt 2 — `openSync(logFile, "w")` của chính lượt chữa
