@@ -481,31 +481,89 @@ jobs:
           Write-Host ("PSModulePath (ban, thua ke tu pwsh - CO Y): {0}" -f $env:PSModulePath)
           # codex.cmd GIA: chi de installer di nhanh "dung Codex da co" va KHONG npm-install
           # goi that. No khong goi mang, khong doc credential, khong sinh anh.
+          #
+          # NO CON PHAI ON AO. Bug hien truong 3.0.3->3.0.4 (nut "Cap nhat" tren Windows):
+          # install.ps1 chay `codex update` va `codex debug prompt-input` qua
+          # ProcessStartInfo voi RedirectStandardOutput/Error ma KHONG doc hai ong ay.
+          # Ong ao cua Windows chi chua ~4 KB: con ghi day roi TAC, cha TAC trong
+          # WaitForExit, va loi goi chi roi ra khi HET GIO (180 s + 60 s). Agent nam
+          # chet suot tung ay, nen web UI bao "Cong cu local chua khoi dong lai sau 180
+          # giay" du ban cai van dang chay ngon lanh.
+          # Stub cu chi in MOT dong => no khong bao gio cham vao cai bay nay. Nay no in
+          # hon 64 KB (1000 dong x 100 ky tu) cho ca `update` lan `debug`, tuc gap 25 lan
+          # suc chua cua ong: khong hut ong thi buoc nay TAT DEN vi qua 120 giay.
           $stub = "$env:RUNNER_TEMP\stub-bin"
           New-Item -ItemType Directory -Force -Path $stub | Out-Null
+          $line100 = '0123456789' * 10
           Set-Content -LiteralPath "$stub\codex.cmd" -Encoding ascii -Value @(
             '@echo off',
             'if /I "%~1"=="--version" ( echo codex-cli 0.0.0-gia & exit /b 0 )',
+            'if /I "%~1"=="update" goto :onao',
+            'if /I "%~1"=="debug" goto :onao',
             'echo codex gia: khong lam gi ca',
+            'exit /b 0',
+            ':onao',
+            ('set "L=' + $line100 + '"'),
+            'for /L %%i in (1,1,1000) do echo %L%',
             'exit /b 0'
           )
           $env:PATH = "$stub;$env:PATH"
+          # `codex debug prompt-input` chi duoc goi khi %USERPROFILE%\.codex ton tai.
+          # Khong tao thi nhanh on ao thu hai KHONG duoc di qua mot lan nao.
+          New-Item -ItemType Directory -Force -Path (Join-Path $env:USERPROFILE '.codex') | Out-Null
+          # KHOA MOT LUOT CAI: dung y cach agent dat no truoc khi spawn installer
+          # (agent/lib/update.mjs) - thu muc + file owner = "reserved:<token>". install.ps1
+          # phai nhan ban giao (ghi pid cua no vao owner) va phai XOA thu muc khi xong.
+          # Khong lam thi agent het 15 giay an han se bao installState = "idle" trong khi
+          # installer van chay, va web UI mat cau "van dang cai".
+          $lockDir = Join-Path $env:RUNNER_TEMP 'kitgen-update-lock-2'
+          if (Test-Path -LiteralPath $lockDir) { Remove-Item -LiteralPath $lockDir -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $lockDir | Out-Null
+          Set-Content -LiteralPath (Join-Path $lockDir 'owner') -Encoding ascii -Value 'reserved:abc'
+          $env:KITGEN_UPDATE_LOCK = $lockDir
+          $env:KITGEN_UPDATE_LOCK_TOKEN = 'abc'
           $tar = @(Get-ChildItem -LiteralPath "$env:RUNNER_TEMP\pkg" -File | Where-Object { $_.Name -like 'kitgen-runtime-*.tar.gz' })[0]
           $out = "$env:RUNNER_TEMP\install-2.out.log"
           $err = "$env:RUNNER_TEMP\install-2.err.log"
           $ps1 = Join-Path $PWD 'kit-gen\scripts\install.ps1'
           $argline = '-NoProfile -ExecutionPolicy Bypass -File "{0}" -Archive "{1}" -NoStart' -f $ps1, $tar.FullName
+          $sw = [Diagnostics.Stopwatch]::StartNew()
           $p = Start-Process -FilePath 'powershell.exe' -ArgumentList $argline -Wait -PassThru -NoNewWindow `
                  -RedirectStandardOutput $out -RedirectStandardError $err
+          $sw.Stop()
+          $secs = [math]::Round($sw.Elapsed.TotalSeconds, 1)
           $text = [string](Get-Content -Raw -LiteralPath $out) + "`n" + [string](Get-Content -Raw -LiteralPath $err)
           Write-Host '--------- stdout/stderr cua install.ps1 ---------'
           Write-Host $text
           Write-Host '------------------------------------------------'
+          Write-Host ("install.ps1 chay het {0} giay" -f $secs)
           if ($p.ExitCode -ne 0) { Write-Host ("::error::install.ps1 thoat voi ma {0}" -f $p.ExitCode); exit 1 }
+          # DONG HO LA PHEP THU THAT. Khong hut ong thi rieng hai loi goi codex da an
+          # 180 + 60 giay, con hut roi thi stub in 100 KB het chua toi mot giay.
+          if ($sw.Elapsed.TotalSeconds -gt 120) {
+            Write-Host ("::error::install.ps1 chay het {0} giay (nguong 120). Dau hieu: ong dan cua tien trinh con codex khong duoc hut, WaitForExit doi cho het gio chu khong doi tien trinh." -f $secs)
+            exit 1
+          }
+          # Stub in 64 KB+ roi thoat 0, nen MOI that bai cua buoc Codex o day deu la
+          # deadlock ong dan chu khong phai mang hay quyen.
+          foreach ($cam in @('het gio', 'khong nang duoc Codex')) {
+            if ($text.Contains($cam)) {
+              Write-Host ("::error::log co chuoi cam {0} - codex gia in >64 KB roi thoat 0, that bai o day chi co the la ong dan bi tac" -f $cam)
+              exit 1
+            }
+          }
+          if (Test-Path -LiteralPath $lockDir) {
+            Write-Host ("::error::installer khong nha khoa {0} - agent se ket o installState=running cho den khi PID chet" -f $lockDir)
+            Get-ChildItem -LiteralPath $lockDir -Force -ErrorAction SilentlyContinue |
+              ForEach-Object { Write-Host ('     con lai: ' + $_.Name) }
+            exit 1
+          }
+          Write-Host ("OK   khoa {0} da duoc nhan ban giao va nha lai" -f $lockDir)
           $need = @(
             'manifest.sha256 hop le',
             'OK   runtime',
             'dung Codex da co',
+            'Codex da la ban moi nhat',
             'config.json',
             'bo qua theo -NoStart'
           )

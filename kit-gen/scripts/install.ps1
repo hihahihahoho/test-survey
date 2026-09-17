@@ -142,7 +142,9 @@ function Write-Block([string] $text, [string] $how) {
   Write-Host "  THIEU $text" -ForegroundColor Red
   [void]$script:Blockers.Add(@{ What = $text; How = $how })
 }
-function Die([string] $text) { Write-Host ''; Write-Host "LOI: $text" -ForegroundColor Red; exit 1 }
+# $code: install.sh co EXIT_UPDATE_RUNNING=22 cho rieng ca "mot installer khac dang chay".
+# Ma 1 la "hong that"; tron hai thu lam mot la lam mat kha nang phan biet o phia goi.
+function Die([string] $text, [int] $code = 1) { Write-Host ''; Write-Host "LOI: $text" -ForegroundColor Red; exit $code }
 
 function New-Dir([string] $p) { if (-not (Test-Path -LiteralPath $p)) { [void](New-Item -ItemType Directory -Path $p -Force) } }
 
@@ -241,6 +243,32 @@ function Invoke-ExeCapture([string] $exe, [string[]] $exeArgs) {
     $out = & $exe @exeArgs 2>$null   # NATIVE-OK
     return @{ Code = $LASTEXITCODE; Out = (($out | Out-String).Trim()) }
   } catch { return @{ Code = 9009; Out = '' } } finally { $ErrorActionPreference = $old }
+}
+
+# ── ONG DAN CUA TIEN TRINH CON PHAI DUOC HUT, KHONG CHI DUOC MO ───────────────
+# RedirectStandardOutput/Error mo mot anonymous pipe ~4 KB. Khong ai doc thi con ghi
+# day 4 KB roi TAC o lenh ghi, cha tac trong WaitForExit, va ca cap chi roi ra khi het
+# gio. Cach duy nhat dung voi ProcessStartInfo la goi ReadToEndAsync() NGAY SAU Start()
+# roi moi WaitForExit(ms) — hai Task ay hut ong lien tuc nen con khong bao gio tac.
+# Ham nay lay ve chu cua mot Task da/ho chay xong ma khong bao gio nem.
+function Get-TaskText($task) {
+  if (-not $task) { return '' }
+  try { [void]$task.Wait(5000) } catch { }
+  try {
+    if ($task.IsCompleted -and (-not $task.IsFaulted) -and (-not $task.IsCanceled)) { return [string]$task.Result }
+  } catch { }
+  return ''
+}
+
+# In 15 dong cuoi dau ra cua tien trinh con vao nhat ky. Khong co no thi "khong nang
+# duoc Codex" la mot cau khong the dieu tra: hien truong chi con mot dong canh bao.
+function Write-ChildTail([string] $what, [string] $text) {
+  if (-not $text) { return }
+  $lines = @(($text -split "`r?`n") | Where-Object { $_.Trim() -ne '' })
+  if ($lines.Count -eq 0) { return }
+  $tail = @($lines | Select-Object -Last 15)
+  Write-Host ("       {0} - {1} dong cuoi cua dau ra:" -f $what, $tail.Count)
+  foreach ($l in $tail) { Write-Host ("       | " + $l) }
 }
 
 # ── 0. đường dẫn & tham số ─────────────────────────────────────────────────────
@@ -382,12 +410,59 @@ function Remove-SweepPath([string] $path, [string] $label) {
   $script:SweepWhat += $label
 }
 
+# ── KHOA MOT LUOT CAI, LIEN TIEN TRINH (doi xung voi claim_update_lock trong install.sh) ──
+# Agent (agent/lib/update.mjs) TAO SAN thu muc khoa voi owner = `reserved:<token>` roi
+# spawn installer kem KITGEN_UPDATE_LOCK + KITGEN_UPDATE_LOCK_TOKEN, va coi nhu da ban
+# giao khoa cho installer. install.sh nhan ban giao ay; install.ps1 thi TRUOC BAN NAY
+# khong he dung toi. Hau qua: sau UPDATE_LOCK_GRACE_MS (15 giay) agent thay khoa
+# `reserved:` qua han nen bao installState = "idle" TRONG KHI installer van dang chay,
+# va web UI mat cau "van dang cai" — no chi con biet dem nguoc roi bao loi.
+# Ghi `pid:<PID>` vao owner la tra lai cho agent mot su that kiem chung duoc: chung nao
+# tien trinh ay con song thi luot cai con song (agent do bang process.kill(pid, 0)).
+$UpdateLock = $env:KITGEN_UPDATE_LOCK
+if (-not $UpdateLock) { $UpdateLock = Join-Path $KitgenHome '.update-lock' }
+$script:LockOwned = $false
+
 Write-Host ''
 Write-Host '  KitGen · ban cai Windows (EXPERIMENTAL)' -ForegroundColor Cyan
 Write-Host "  runtime   : $KitgenHome"
 Write-Host "  workspace : $Workspace"
 
 try {
+
+# Gianh khoa TRUOC moi buoc: tu buoc "Cai runtime" tro di agent da bi dung, nen mot
+# installer thu hai chen vao la hai tien trinh cung sua `current`, config va dich vu.
+if (Test-Path -LiteralPath $UpdateLock) {
+  $lockOwner = ''
+  try { $lockOwner = ([string](Get-Content -LiteralPath (Join-Path $UpdateLock 'owner') -Raw -ErrorAction SilentlyContinue)).Trim() } catch { $lockOwner = '' }
+  if ($lockOwner.StartsWith('reserved:')) {
+    # Chi child do agent vua spawn biet token. Mot installer khac khong duoc gianh khoa
+    # trong khoang child chua kip ghi PID cua minh.
+    if ($env:KITGEN_UPDATE_LOCK_TOKEN -and $lockOwner -eq ('reserved:' + $env:KITGEN_UPDATE_LOCK_TOKEN)) {
+      Write-TextCrLf (Join-Path $UpdateLock 'owner') "pid:$PID"
+      $script:LockOwned = $true
+    } else {
+      Die 'KitGen dang cai/nang cap o mot tien trinh khac - doi luot do xong roi chay lai.' 22
+    }
+  } elseif ($lockOwner -match '^(?:pid:)?([0-9]+)$') {
+    $lockPid = [int]$Matches[1]
+    if ($lockPid -ne $PID -and (Get-Process -Id $lockPid -ErrorAction SilentlyContinue)) {
+      Die 'KitGen dang cai/nang cap o mot tien trinh khac - doi luot do xong roi chay lai.' 22
+    }
+    # PID da chet: khoa mo coi do mot installer bi giet giua chung. Thu hoi.
+    Remove-Item -LiteralPath $UpdateLock -Recurse -Force -ErrorAction SilentlyContinue
+  } else {
+    Die 'KitGen dang cai/nang cap o mot tien trinh khac - doi luot do xong roi chay lai.' 22
+  }
+}
+if (-not $script:LockOwned) {
+  # New-Item KHONG kem -Force: thu muc da ton tai thi nem, tuc phep thu-va-tao van la
+  # mot nuoc di duy nhat truoc hai installer chay song song.
+  try { [void](New-Item -ItemType Directory -Path $UpdateLock -ErrorAction Stop) }
+  catch { Die 'KitGen dang cai/nang cap o mot tien trinh khac - doi luot do xong roi chay lai.' 22 }
+  Write-TextCrLf (Join-Path $UpdateLock 'owner') "pid:$PID"
+  $script:LockOwned = $true
+}
 
 # ── 1. tiền đề của hệ thống ────────────────────────────────────────────────────
 Write-StepNext 'Kiem tra tien de he thong'
@@ -809,6 +884,8 @@ if ($codexBin) {
     Write-Ok "bo qua nang Codex theo KITGEN_SKIP_CODEX_UPDATE - giu $verBefore"
   } else {
     $updated = $false
+    $codexOut = ''
+    $codexTimedOut = $false
     try {
       $psi = New-Object System.Diagnostics.ProcessStartInfo
       $psi.FileName = $codexBin
@@ -823,8 +900,15 @@ if ($codexBin) {
       # "Codex da la ban moi nhat". Tra lai PATH goc la tra viec nang codex ve dung chu.
       $psi.EnvironmentVariables['PATH'] = $KitgenOrigPath
       $proc = [System.Diagnostics.Process]::Start($psi)
+      # HUT ONG NGAY, TRUOC WaitForExit — xem Get-TaskText. `codex update` ve tay nguoi
+      # dung Windows la mot thanh tien trinh ~40 KB; de day ong 4 KB thi chinh cai
+      # WaitForExit(180000) nay dung du 180 giay, agent nam im tung ay lau, va web UI
+      # bao "cong cu local chua khoi dong lai sau 180 giay" du ban cai van dang chay.
+      $so = $proc.StandardOutput.ReadToEndAsync()
+      $se = $proc.StandardError.ReadToEndAsync()
       if ($proc.WaitForExit(180000)) { $updated = ($proc.ExitCode -eq 0) }
-      else { try { $proc.Kill() } catch { } }
+      else { $codexTimedOut = $true; try { $proc.Kill() } catch { } }
+      $codexOut = (Get-TaskText $so) + "`n" + (Get-TaskText $se)
     } catch { $updated = $false }
     if ($updated) {
       $verAfter = (& { $ErrorActionPreference = 'Continue'; (& $codexBin '--version' 2>&1 | Select-Object -First 1) })   # NATIVE-OK
@@ -832,6 +916,8 @@ if ($codexBin) {
       else { Write-Ok "Codex da la ban moi nhat: $verBefore" }
     } else {
       Write-Warn "khong nang duoc Codex (mat mang, het gio, hoac thieu quyen) - van dung $verBefore"
+      if ($codexTimedOut) { Write-Host '       (het 180 giay - da giet tien trinh codex update)' }
+      Write-ChildTail 'codex update' $codexOut
     }
   }
 
@@ -850,7 +936,14 @@ if ($codexBin) {
       $psi2.RedirectStandardError = $true
       $psi2.EnvironmentVariables['CODEX_HOME'] = $skillHome
       $proc2 = [System.Diagnostics.Process]::Start($psi2)
+      # Cung mot cai bay, va o day no CHAC CHAN sap: `codex debug prompt-input` in ca
+      # prompt he thong (do duoc 39 411 byte tren may that), gap muoi lan suc chua cua
+      # ong. Truoc ban nay loi goi nay LUON dot du 60 giay.
+      $so2 = $proc2.StandardOutput.ReadToEndAsync()
+      $se2 = $proc2.StandardError.ReadToEndAsync()
       if (-not $proc2.WaitForExit(60000)) { try { $proc2.Kill() } catch { } }
+      [void](Get-TaskText $so2)
+      [void](Get-TaskText $se2)
     } catch { }
   }
 }
@@ -1115,4 +1208,7 @@ if ($script:Blockers.Count -gt 0) { exit 2 }
 
 } finally {
   if (Test-Path -LiteralPath $Tmp) { Remove-Item -LiteralPath $Tmp -Recurse -Force -ErrorAction SilentlyContinue }
+  # Nha khoa SAU CUNG, va chi khi chinh luot nay gianh duoc no: luot ke tiep khong duoc
+  # chen vao khe con dang don dep. `exit` cua PowerShell van chay finally, ke ca exit 2.
+  if ($script:LockOwned -and $UpdateLock) { Remove-Item -LiteralPath $UpdateLock -Recurse -Force -ErrorAction SilentlyContinue }
 }
