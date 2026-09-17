@@ -212,9 +212,18 @@ const RM_OPTS = process.platform === "win32"
 
 export async function removeTree(p) { await rm(p, RM_OPTS) }
 
-export async function moveTree(src, dst) {
+/** Move cả cây (project → thùng rác, và ngược lại).
+ *
+ *  Windows, ca C-01 «xoá project khi đang chạy» (runner CI 17/09/2026, run 35178610996):
+ *    EBUSY: resource busy or locked, rename 'projects\<id>' -> 'trash\<stamp>-<id>'
+ *  DELETE đã `cancel({ waitMs })` và child đã chết, nhưng Windows trả handle thư mục về
+ *  MUỘN hơn cái chết của tiến trình vài trăm ms (taskkill /T + AV quét file vừa ghi).
+ *  Cùng họ với `renameAtomic` — chỉ khác đây là THƯ MỤC vừa có tiến trình ngồi trong,
+ *  nên cửa sổ đợi phải dài hơn file tạm: tối đa ~5.5s (100·(1+…+10) ms), POSIX không
+ *  bao giờ quay quá một nhịp. `rename`/`sleep` bơm được để test dựng điều kiện Windows. */
+export async function moveTree(src, dst, { rename: doRename = rename, sleep } = {}) {
   await ensureDir(dirname(dst))
-  try { await rename(src, dst) }
+  try { await renameAtomic(src, dst, { rename: doRename, tries: 10, delayMs: 100, ...(sleep ? { sleep } : {}) }) }
   catch (e) {
     if (e.code !== "EXDEV") throw e
     await cp(src, dst, { recursive: true, dereference: false })

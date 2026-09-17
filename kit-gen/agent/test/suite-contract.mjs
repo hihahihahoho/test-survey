@@ -53,6 +53,30 @@ export async function run({ api, pid, wsRoot, agentDir }) {
      một thư mục ghi được hoàn toàn.
      Không có máy Windows trong bộ ca, nên điều kiện ấy được BƠM THẲNG vào `rename`.
      Ca này canh cả bốn vế của cách chữa, vì bỏ vế nào cũng hỏng theo một kiểu riêng. */
+  /* C-01 trên runner Windows (17/09/2026, run 35178610996): DELETE project khi đang chạy
+     ⇒ 500 «EBUSY … rename projects\<id> -> trash\…». Child đã chết, Windows nhả handle
+     thư mục muộn. `moveTree` phải đợi rồi thử lại như `renameAtomic`, với cửa sổ dài hơn
+     (thư mục vừa có tiến trình ngồi trong), và KHÔNG được rơi sang nhánh cp+rm (đó là
+     đường EXDEV — khác ổ đĩa — không phải đường «đang bị giữ»). */
+  await it("[Windows] moveTree (project → thùng rác) bị EBUSY là ĐỢI RỒI THỬ LẠI, không 500", async () => {
+    const { moveTree } = await import("../lib/fsx.mjs")
+    const { mkdtemp, rm } = await import("node:fs/promises")
+    const { tmpdir } = await import("node:os")
+    const { join } = await import("node:path")
+    const root = await mkdtemp(join(tmpdir(), "kitgen-movetree-"))
+    try {
+      let calls = 0
+      const slept = []
+      await moveTree(join(root, "a"), join(root, "thung-rac", "a"), {
+        rename: async () => { if (++calls < 4) { const e = new Error("resource busy or locked"); e.code = "EBUSY"; throw e } },
+        sleep: ms => { slept.push(ms); return Promise.resolve() },
+      })
+      eq(calls, 4, "thử lại tới khi Windows nhả thư mục")
+      eq(slept.length, 3, "có đợi giữa các nhịp")
+      ok(slept[0] >= 100, `cửa sổ đợi cho THƯ MỤC dài hơn file tạm: nhịp đầu ${slept[0]}ms`)
+      ok(slept[2] > slept[0], `lùi dần: ${slept.join(", ")}`)
+    } finally { await rm(root, { recursive: true, force: true }) }
+  })
   await it("[Windows] rename bị giữ (EACCES/EPERM) là ĐỢI RỒI THỬ LẠI, không phải 423 giả", async () => {
     const { renameAtomic, writeJsonAtomic } = await import("../lib/fsx.mjs")
     const held = code => { const e = new Error("access denied"); e.code = code; return e }
