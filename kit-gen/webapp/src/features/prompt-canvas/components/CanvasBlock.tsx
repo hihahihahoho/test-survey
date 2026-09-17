@@ -1,5 +1,6 @@
 import * as React from "react";
 import { AlertCircle, Check, Clock, Copy, Download, Loader2, RotateCw, Sparkles, Square, Trash2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
@@ -31,7 +32,10 @@ import type { PromptPreviewImage, PromptPreviewJob } from "@/lib/types/api";
 import type { BlockPromptState } from "../lib/block-prompt";
 import { copyImageBlob, copyProjectImage, copyPromptText, joinSheetPrompts } from "../lib/prompt-copy";
 import { roleLabel, sheetImages, shortName } from "../lib/prompt-images";
+import { qk, useAgentStatus } from "@/lib/hooks";
+import type { Doctor } from "@/lib/types";
 import type { GenBlockState } from "../lib/gen-queue";
+import { buildFailReport } from "../lib/fail-report";
 import { CARD, SECTION_LABEL } from "../lib/ui";
 import { SheetResultSlot } from "./SheetResultSlot";
 
@@ -155,7 +159,7 @@ export function CanvasBlock(props: CanvasBlockProps) {
             <TabButton active={tab === "compose"} onClick={() => setTab("compose")}>Soạn</TabButton>
             <TabButton active={tab === "prompt"} onClick={openPrompt}>Prompt</TabButton>
           </div>
-          <GenControl gen={gen} canGen={canGen} onGen={onGen} onDequeue={onDequeue} onStop={onStop} stopping={stopping} />
+          <GenControl projectId={projectId} gen={gen} canGen={canGen} onGen={onGen} onDequeue={onDequeue} onStop={onStop} stopping={stopping} />
           <button
             type="button"
             onClick={onDelete}
@@ -277,7 +281,8 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
    Nút Vẽ + trạng thái hàng đợi
    ══════════════════════════════════════════════════════════════════════════ */
 
-function GenControl({ gen, canGen, onGen, onDequeue, onStop, stopping }: {
+function GenControl({ projectId, gen, canGen, onGen, onDequeue, onStop, stopping }: {
+  projectId: string;
   gen: GenBlockState;
   canGen: boolean;
   onGen: () => void;
@@ -322,7 +327,9 @@ function GenControl({ gen, canGen, onGen, onDequeue, onStop, stopping }: {
   }
 
   return (
-    <span className="flex items-center gap-2">
+    /* `flex-wrap` vì ô chữ dự phòng (khi trình duyệt không cho copy) rộng hơn
+       một hàng nút — không cho xuống dòng thì nó bóp nát cả hàng control. */
+    <div className="flex flex-wrap items-center justify-end gap-2">
       {gen.status === "done" && (
         /* CÂU CỦA HÀNG ĐỢI THẮNG câu mặc định: khi agent giữ nguyên một tấm vì vân
            tay chưa đổi thì «Đã vẽ xong» là câu trả lời sai cho thứ người dùng vừa
@@ -332,9 +339,15 @@ function GenControl({ gen, canGen, onGen, onDequeue, onStop, stopping }: {
         </span>
       )}
       {gen.status === "fail" && (
-        <span role="alert" className="inline-flex items-center gap-1 text-caption text-danger">
-          <AlertCircle aria-hidden className="size-4" />{gen.message}
-        </span>
+        <>
+          <span role="alert" className="inline-flex items-center gap-1 text-caption text-danger">
+            <AlertCircle aria-hidden className="size-4" />{gen.message}
+          </span>
+          {/* Nút này ĐỨNG NGAY CẠNH câu đỏ, không nằm trong một menu «…»: nó là
+              việc DUY NHẤT người dùng làm được với một lỗi họ không tự chữa
+              được — gửi nó cho người chữa được. */}
+          <CopyFailButton projectId={projectId} gen={gen} />
+        </>
       )}
       {/* NÚT PRIMARY DUY NHẤT của cả màn (§5.4 UX-SPEC: đúng một CTA accent mỗi
           màn — ở đây "màn" là một thẻ, vì mỗi thẻ là một đơn vị việc trọn vẹn).
@@ -350,7 +363,89 @@ function GenControl({ gen, canGen, onGen, onDequeue, onStop, stopping }: {
         <Sparkles aria-hidden />
         Vẽ · tiêu lượt
       </Button>
-    </span>
+    </div>
+  );
+}
+
+/**
+ * NÚT «COPY LỖI» — MỘT KHỐI CHỮ ĐỦ ĐỂ HỎI NGƯỜI KHÁC.
+ *
+ * ╔══ HIỆN TRƯỜNG ══════════════════════════════════════════════════════════╗
+ * ║ Một người dùng Windows thấy «1/1 job lỗi chưa rõ nguyên nhân. Bấm Vẽ để  ║
+ * ║ thử lại.» — bấm lại, hỏng lại, và hết đường. Câu ấy KHÔNG nói được gì    ║
+ * ║ thêm, trong khi agent đã gửi kèm `diagnosis` + `errorTail` (đuôi log đã  ║
+ * ║ redact) cho từng tấm hỏng. Cách duy nhất để họ tới được nguyên nhân là   ║
+ * ║ có người bảo họ đi tìm một file log trên máy mình.                       ║
+ * ╚═════════════════════════════════════════════════════════════════════════╝
+ *
+ * ══ VÌ SAO ĐỌC TRẠNG THÁI AGENT Ở ĐÂY, VÀ ĐỌC KIỂU NÀY ════════════════════
+ * Dòng đầu của khối chữ cần version công cụ local + thư mục làm việc —
+ * `useAgentStatus()` là cửa CHÍNH THỨC vào chúng và nó chỉ là một ô cửa nhìn
+ * vào vòng probe DÙNG CHUNG của app (`health-probe.ts`), nên thêm một người
+ * nghe không đẻ thêm một request `/health` nào.
+ * Nền tảng (`win32`/`darwin`) thì KHÔNG đi hỏi: `/api/doctor` bị cấm poll
+ * (§6.2 — mỗi lần nó chạy `codex debug prompt-input` ~1s). Ta chỉ NGÓ vào cache
+ * Query: màn Cài đặt đã hỏi thì có, chưa hỏi thì dòng đầu thiếu một đoạn —
+ * đúng luật "thiếu thì bỏ trống, không bịa" của `fail-report.ts`.
+ */
+function CopyFailButton({ projectId, gen }: { projectId: string; gen: GenBlockState }) {
+  const { status } = useAgentStatus();
+  const qc = useQueryClient();
+  const [copied, setCopied] = React.useState(false);
+  /* Chữ để người dùng TỰ bôi đen — chỉ dựng khi clipboard từ chối. §3.9 cấm
+     "thao tác thất bại mà không phản hồi gì", và một toast báo lỗi rồi biến mất
+     thì cũng chẳng để lại gì để copy. */
+  const [manual, setManual] = React.useState<string | null>(null);
+
+  /* «Đã copy» tự tắt sau 2 giây: nó là lời xác nhận, không phải trạng thái mới
+     của nút. Dọn timer khi rời thẻ để không `setState` lên một component đã chết. */
+  React.useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  const onCopy = async () => {
+    const text = buildFailReport({
+      projectId,
+      summary: gen.message,
+      jobs: gen.failures ?? [],
+      runId: gen.runId,
+      agentVersion: status.agentVersion,
+      platform: qc.getQueryData<Doctor>(qk.doctor())?.os ?? null,
+      workspaceLabel: status.workspaceLabel,
+    });
+    try {
+      /* Không có API thì NÉM, đừng để `undefined.writeText` ném hộ — cùng luật
+         với `prompt-copy.ts`: không bao giờ báo "đã copy" khi chưa copy được. */
+      if (!navigator.clipboard?.writeText) throw new Error("Trình duyệt không mở clipboard");
+      await navigator.clipboard.writeText(text);
+      setManual(null);
+      setCopied(true);
+    } catch {
+      setManual(text);
+    }
+  };
+
+  return (
+    <>
+      <Button variant="ghost" size="sm" onClick={onCopy} title="Copy chi tiết lỗi để gửi cho người hỗ trợ">
+        {copied ? <Check aria-hidden strokeWidth={1.5} /> : <Copy aria-hidden strokeWidth={1.5} />}
+        {copied ? "Đã copy" : "Copy lỗi"}
+      </Button>
+      {manual !== null && (
+        <div className="flex w-full flex-col items-stretch gap-1">
+          <span role="alert" className="text-caption text-danger">Không copy được — chọn và copy tay</span>
+          <pre
+            tabIndex={0}
+            aria-label="Chi tiết lỗi để copy tay"
+            className="max-h-[12rem] overflow-auto whitespace-pre-wrap rounded-2 border border-line-subtle bg-canvas p-3 text-left text-mono text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+          >
+            {manual}
+          </pre>
+        </div>
+      )}
+    </>
   );
 }
 

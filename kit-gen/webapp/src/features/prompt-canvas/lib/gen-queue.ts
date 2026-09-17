@@ -4,6 +4,7 @@ import { presentError } from "@/lib/api/errors";
 import { useCancelRun, useRun, useRunStream } from "@/lib/hooks";
 import { useGenerateRun } from "@/lib/hooks";
 import { isRunLive } from "@/features/kit-core/lib/generated-results";
+import type { FailedJobInfo } from "./fail-report";
 
 /**
  * gen-queue.ts — HÀNG ĐỢI VẼ PHÍA WEB, vì agent chỉ cho MỘT lượt mỗi dự án.
@@ -117,6 +118,23 @@ export interface GenBlockState {
    * trên màn trước cú bấm.
    */
   drawn: readonly string[];
+  /**
+   * TẤM NÀO HỎNG, VÀ AGENT NÓI GÌ VỀ NÓ — chỉ có nghĩa ở trạng thái `fail`.
+   *
+   * ╔══ VÌ SAO PHẢI CHÉP RA KHỎI `run.data` ═══════════════════════════════════╗
+   * ║ Dòng đỏ trên thẻ là câu GỘP của agent («1/1 job lỗi chưa rõ nguyên       ║
+   * ║ nhân»), và với mã `UNKNOWN` nó không mang một chữ nào về nguyên nhân     ║
+   * ║ thật. Thứ mang nguyên nhân là `diagnosis` + `errorTail` của TỪNG job —   ║
+   * ║ chúng có trong bản kê lượt, nhưng bản kê ấy chỉ sống khi `activeRunId`   ║
+   * ║ còn trỏ vào nó. Lượt chốt sổ xong `activeRunId` về `null`, `useRun(null)`║
+   * ║ thôi trả dữ liệu, và nút «Copy lỗi» — thứ người dùng bấm SAU khi đã đọc  ║
+   * ║ dòng đỏ — sẽ không còn gì để copy.                                       ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
+   *
+   * `?` chứ không bắt buộc: trạng thái lỗi còn đến từ nhánh «không phóng nổi
+   * lượt» (ném ngay lúc `prepare`/POST), nơi chưa hề có job nào để kể tên.
+   */
+  failures?: readonly FailedJobInfo[];
   /** Pha NHÌN TỪ TẤM — xem `GenPhase`. */
   phase: GenPhase;
 }
@@ -366,6 +384,14 @@ export function useGenQueue(
                  KHÔNG thuộc lượt thì vẫn đọc ảnh hiện hành của mình. */
               jobs: owner.jobs,
               drawn,
+              /* Chép sang trạng thái CHỐT SỔ thay vì đọc lại `run.data`: xem
+                 `GenBlockState.failures`. Đây là lần DUY NHẤT dữ liệu này còn
+                 nằm trong tay màn hình. */
+              failures: failed.map((job) => ({
+                job: job.job,
+                diagnosis: job.diagnosis ?? null,
+                errorTail: job.errorTail ?? null,
+              })),
               /* LÝ DO, KHÔNG CHỈ CON SỐ. `failSummary` là câu agent đã gộp sẵn
                  (kiểu «2/3 job không ghi được ảnh · 1 nghi chạm giới hạn tạo
                  ảnh») — dùng nguyên văn để mọi bề mặt nói cùng một câu, đúng luật

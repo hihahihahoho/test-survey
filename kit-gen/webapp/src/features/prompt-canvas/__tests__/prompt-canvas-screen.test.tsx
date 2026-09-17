@@ -652,6 +652,10 @@ describe("bỏ qua tấm không đổi", () => {
         <span data-testid="drawing">{st.drawing.join(",")}</span>
         {/* Tấm ĐÃ CÓ ẢNH trong thư mục của lượt — danh sách duy nhất được neo vào. */}
         <span data-testid="drawn">{st.drawn.join(",")}</span>
+        {/* LÝ DO CỦA TỪNG TẤM HỎNG, chốt sổ cùng thẻ — nguồn của nút «Copy lỗi». */}
+        <span data-testid="fails">
+          {(st.failures ?? []).map((f) => `${f.job}|${f.diagnosis}|${(f.errorTail ?? []).join("/")}`).join(";")}
+        </span>
       </div>
     );
   }
@@ -660,7 +664,12 @@ describe("bỏ qua tấm không đổi", () => {
   const runWithJobs = (
     id: string,
     status: Run["status"],
-    jobs: Array<{ job: string; status: string; artifact?: { path: string } }>,
+    jobs: Array<{
+      job: string; status: string; artifact?: { path: string };
+      /* Hai khoá agent gửi kèm cho job HỎNG (`RunJob`) — thứ duy nhất nói được
+         nguyên nhân thật khi `failSummary` chỉ kêu «chưa rõ nguyên nhân». */
+      diagnosis?: string; errorTail?: string[];
+    }>,
   ): Run => ({
     ...makeRun(id, status, "running"),
     progress: { done: jobs.filter((j) => j.status === "ok").length, total: jobs.length, failed: 0, etaSeconds: null },
@@ -859,6 +868,31 @@ describe("bỏ qua tấm không đổi", () => {
 
       await waitFor(() => expect(screen.getByTestId("s").textContent).toBe("fail"));
       expect(screen.getByTestId("drawn").textContent).toBe("chinh-b1");
+    });
+
+    /**
+     * ╔══ LÝ DO PHẢI SỐNG SÓT QUA LÚC CHỐT SỔ ═════════════════════════════════╗
+     * ║ Nút «Copy lỗi» được bấm SAU khi lượt đã chết — mà lúc ấy `activeRunId`  ║
+     * ║ đã về `null` và `useRun(null)` thôi trả bản kê. Không chép `diagnosis` +║
+     * ║ `errorTail` vào trạng thái chốt sổ thì nút ấy chỉ copy được đúng câu đỏ ║
+     * ║ mà người dùng vốn đã đọc — tức là không copy được gì mới.               ║
+     * ╚════════════════════════════════════════════════════════════════════════╝
+     */
+    it("tấm hỏng mang theo chẩn đoán + đuôi log vào trạng thái chốt sổ", async () => {
+      launchTwo();
+      H.getRun.mockImplementation(async (id: string) =>
+        runWithJobs(id, "done-with-errors", [
+          { job: "chinh-b1", status: "ok", artifact: { path: "runs/r-8/artifacts/chinh-b1.png" } },
+          { job: "chinh-b12", status: "failed", diagnosis: "NO_ARTIFACT", errorTail: ["rc=127", "codex: not found"] },
+        ]));
+
+      wrap(<SkipHarness />);
+      fireEvent.click(screen.getByText("gen"));
+
+      await waitFor(() => expect(screen.getByTestId("s").textContent).toBe("fail"));
+      /* CHỈ tấm hỏng, không kèm tấm đã xong — khối chữ copy ra là danh sách lỗi. */
+      expect(screen.getByTestId("fails").textContent?.trim())
+        .toBe("chinh-b12|NO_ARTIFACT|rc=127/codex: not found");
     });
   });
 });
