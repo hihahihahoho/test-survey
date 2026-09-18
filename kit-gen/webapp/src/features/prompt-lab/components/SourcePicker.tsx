@@ -156,10 +156,24 @@ export interface SourcePickerProps {
    * không phải tải lại gì.
    */
   manageHref?: string;
+  /**
+   * ẢNH XEM TRƯỚC 80×80 của một mục — data URL, hoặc `null` cho ô giữ chỗ.
+   *
+   * ╔══ VÌ SAO MỘT HÀM TRA, KHÔNG PHẢI MỘT TRƯỜNG TRONG `SourceOption` ════════╗
+   * ║ Hộp này phục vụ bảy trục; chỉ hai trong số đó (dáng · góc máy) có hình để ║
+   * ║ bày, và tấm hình ấy KHÔNG thuộc về mục: cùng mục «Vẫy tay» phải vẽ khác   ║
+   * ║ nhau tuỳ GÓC MÁY CỦA DÒNG đang sửa. Nhét ảnh vào mục là buộc nơi dựng     ║
+   * ║ danh sách phải dựng lại cả mảng mỗi lần dòng đổi góc — và mảng ấy là       ║
+   * ║ `pillOptions`, thứ dùng chung cho mọi pill trên màn.                      ║
+   * ║ Một hàm tra thì hộp vẫn KHÔNG biết gì về manơcanh 3D: nó chỉ biết "mục    ║
+   * ║ này có ảnh hay không". Vắng hàm ⇒ hộp giữ nguyên bố cục cũ, không chừa ô. ║
+   * ╚═══════════════════════════════════════════════════════════════════════════╝
+   */
+  previewOf?: (value: string) => string | null;
 }
 
 export function SourcePicker(props: SourcePickerProps) {
-  const { label, groups, emptyLabel, value, custom, image, onClose, dropUp, manageHref } = props;
+  const { label, groups, emptyLabel, value, custom, image, onClose, dropUp, manageHref, previewOf } = props;
   const box = React.useRef<HTMLSpanElement>(null);
   useDismiss(box, onClose);
 
@@ -213,6 +227,7 @@ export function SourcePicker(props: SourcePickerProps) {
              tick ở đây sẽ nói rằng preset ấy đang có hiệu lực, mà nó thì không. */
           marked={!custom && !image?.path}
           {...(manageHref === undefined ? {} : { manageHref })}
+          {...(previewOf === undefined ? {} : { previewOf })}
           onChoose={(next) => {
             props.onChoose(next);
             onClose();
@@ -320,6 +335,7 @@ function PresetPanel({
   value,
   marked,
   manageHref,
+  previewOf,
   onChoose,
 }: {
   label: string;
@@ -328,6 +344,7 @@ function PresetPanel({
   value: string;
   marked: boolean;
   manageHref?: string;
+  previewOf?: (value: string) => string | null;
   onChoose: (value: string) => void;
 }) {
   const [query, setQuery] = React.useState("");
@@ -372,6 +389,10 @@ function PresetPanel({
             vừa bấm. */}
         {emptyLabel !== undefined && (
           <SourceRow selected={marked && !value} onSelect={() => onChoose("")}>
+            {/* «Để trống» không có hình — nhưng vẫn phải chừa Ô: thiếu nó thì mục
+                đầu danh sách thụt vào 80px so với mọi mục dưới, và cả cột chữ
+                trông như hai danh sách dán cạnh nhau. */}
+            {previewOf && <OptionPreview src={null} />}
             <span className="text-fg-muted">{emptyLabel}</span>
           </SourceRow>
         )}
@@ -387,6 +408,7 @@ function PresetPanel({
                 selected={marked && option.value === value}
                 onSelect={() => onChoose(option.value)}
               >
+                {previewOf && <OptionPreview src={previewOf(option.value)} />}
                 {option.assetId && <AssetThumb id={option.assetId} alt={option.vi} />}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-fg-strong">{option.vi}</span>
@@ -440,6 +462,36 @@ function PresetPanel({
  * cách dài hơn thế, nên người dùng bàn phím không được phải Tab qua từng mục để
  * ra khỏi nó.
  */
+/**
+ * Ô XEM TRƯỚC 80×80 của một dòng — có ảnh thì bày ảnh, không thì bày ô trống.
+ *
+ * ╔══ VÌ SAO Ô TRỐNG VẪN CHIẾM ĐỦ 80px ══════════════════════════════════════╗
+ * ║ Trong cùng một danh sách có dòng vẽ được và dòng không (11/19 dáng chưa có ║
+ * ║ bảng góc khớp). Để ô ấy biến mất là mỗi dòng một lề trái, và mắt không còn ║
+ * ║ cột nào để chạy dọc — đúng cái bệnh mà ô tick giữ-chỗ-cố-định ở `SourceRow`║
+ * ║ đã chữa một lần cho dấu ✓. Cùng một luật, cùng một lý do.                  ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * `alt=""` + `aria-hidden`: dòng đã nói tên dáng bằng chữ ngay bên cạnh, nên một
+ * `alt` nữa là trình đọc màn hình đọc hai lần cùng một thứ. Ảnh ở đây là để NHÌN.
+ *
+ * `object-contain` chứ không `object-cover`: manơcanh dáng «Nhảy» cao hơn dáng
+ * «Ngồi», và `cover` sẽ xén mất phần thò ra — tức là xén đúng chỗ khác biệt giữa
+ * hai dáng, thứ duy nhất tấm ảnh này sinh ra để cho thấy.
+ */
+function OptionPreview({ src }: { src: string | null }) {
+  return src ? (
+    <img
+      src={src}
+      alt=""
+      aria-hidden
+      className="size-20 shrink-0 rounded-1 border border-line-subtle bg-raised object-contain"
+    />
+  ) : (
+    <span aria-hidden className="size-20 shrink-0 rounded-1 border border-line-subtle bg-raised" />
+  );
+}
+
 /** Thumbnail của một mục lấy từ kho dùng chung — người chọn nhân vật phải THẤY mặt nó. */
 function AssetThumb({ id, alt }: { id: string; alt: string }) {
   const src = useLibraryImage(id);

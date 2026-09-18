@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import type { PillImage } from "@/features/prompt-canvas/lib/pill-image";
 import { hasBlankChoice, inheritsWhenEmpty, labelOf, nounOf, pillOptions, type PillKind } from "../lib/pill-registry";
 import { usePresets } from "../lib/presets-store";
+import { usePoseThumbs } from "../lib/pose/use-pose-thumbs";
 import { RefImageBody } from "./RefImagePill";
 import { SourcePicker, useDismiss, type SourceGroup } from "./SourcePicker";
 
@@ -346,6 +347,15 @@ export function OptionPill({
     [extraGroups, options],
   );
 
+  /* ẢNH XEM TRƯỚC — chỉ trục dáng/góc máy có, và chỉ dựng khi hộp ĐANG MỞ. Đứng
+     ở đây chứ không ở `SourcePicker` vì hộp ấy dùng chung cho bảy trục và không
+     được phép biết manơcanh 3D là gì; còn pill thì đã biết `kind` của mình. */
+  const previewValues = React.useMemo(
+    () => groups.flatMap((group) => group.options.map((option) => option.value)),
+    [groups],
+  );
+  const previewOf = usePoseThumbs(kind, previewValues, flip.open);
+
   const shot = image?.path ? image : null;
   /**
    * CHỮ trên pill.
@@ -418,6 +428,7 @@ export function OptionPill({
           projectId={projectId ?? null}
           dropUp={flip.dropUp}
           {...(manageHref(kind) === "" ? {} : { manageHref: manageHref(kind) })}
+          {...(previewOf ? { previewOf } : {})}
           onClose={close}
           /* Bấm một mục có sẵn ⇒ chữ tự gõ bị GỠ. Giữ lại là pill hiện chữ cũ
              trong khi người dùng vừa bấm một mục khác — hai câu trả lời cho một

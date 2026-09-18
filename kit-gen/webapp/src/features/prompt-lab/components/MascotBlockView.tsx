@@ -24,6 +24,7 @@ import {
   DragHandle, NoteField, RemoveButton, RowIndex, RowShell, RowTop, SheetBreak, type RowDragProps,
 } from "./row-ui";
 import { OptionPill, PillMenu, PillMenuItem, useMenuFlip } from "./pill-ui";
+import { PoseRowContext, type PoseRowPills } from "../lib/pose/use-pose-thumbs";
 
 /**
  * MascotBlockView — thẻ «Nhân vật»: MỘT CÂU DANH TÍNH + MỘT DANH SÁCH DÁNG.
@@ -83,22 +84,27 @@ function PoseRow({
 
   return (
     <RowShell {...drag}>
-      <RowTop>
-        <DragHandle {...drag} label={label} />
-        <RowIndex index={drag.index} />
-        {/* `retakePose` chứ không phải `{...row, pose}`: đổi dáng/góc làm ảnh
-            manơcanh đã chụp hết hiệu lực, và luật ấy chỉ có MỘT chỗ. */}
-        <OptionPill compact axis="Dáng" kind="pose" value={row.pose} onChange={(pose) => onChange(retakePose(row, { pose }))} />
-        <OptionPill compact axis="Góc" kind="view" value={row.view} onChange={(view) => onChange(retakePose(row, { view }))} />
-        <OptionPill
-          compact
-          axis="Biểu cảm"
-          kind="expression"
-          value={row.expression}
-          onChange={(expression) => onChange({ ...row, expression })}
-        />
-        <RemoveButton what={`dáng ${label}`} onRemove={onRemove} />
-      </RowTop>
+      {/* DÒNG NÀY ĐANG Ở DÁNG NÀO · GÓC NÀO — hộp chọn cần biết để vẽ ô xem trước
+          cho ĐÚNG dòng này. `PoseRowShot` không sinh thẻ nào, nên bố cục dòng
+          không đổi một pixel. */}
+      <PoseRowShot pose={row.pose} view={row.view}>
+        <RowTop>
+          <DragHandle {...drag} label={label} />
+          <RowIndex index={drag.index} />
+          {/* `retakePose` chứ không phải `{...row, pose}`: đổi dáng/góc làm ảnh
+              manơcanh đã chụp hết hiệu lực, và luật ấy chỉ có MỘT chỗ. */}
+          <OptionPill compact axis="Dáng" kind="pose" value={row.pose} onChange={(pose) => onChange(retakePose(row, { pose }))} />
+          <OptionPill compact axis="Góc" kind="view" value={row.view} onChange={(view) => onChange(retakePose(row, { view }))} />
+          <OptionPill
+            compact
+            axis="Biểu cảm"
+            kind="expression"
+            value={row.expression}
+            onChange={(expression) => onChange({ ...row, expression })}
+          />
+          <RemoveButton what={`dáng ${label}`} onRemove={onRemove} />
+        </RowTop>
+      </PoseRowShot>
 
       <NoteField
         label={label}
@@ -108,6 +114,19 @@ function PoseRow({
       />
     </RowShell>
   );
+}
+
+/**
+ * VỎ CONTEXT của một dòng dáng — thứ duy nhất nó làm là nói cho mọi pill bên
+ * trong biết dòng này đang ở dáng nào, góc nào.
+ *
+ * Một component riêng chỉ vì `useMemo`: giá trị context là một object, và một
+ * object mới mỗi lần render sẽ bắt MỌI pill trong dòng vẽ lại sau mỗi ký tự gõ
+ * vào ô ghi chú. Hai trường này thì cả buổi mới đổi một lần.
+ */
+function PoseRowShot({ pose, view, children }: PoseRowPills & { children: React.ReactNode }) {
+  const pills = React.useMemo<PoseRowPills>(() => ({ pose, view }), [pose, view]);
+  return <PoseRowContext.Provider value={pills}>{children}</PoseRowContext.Provider>;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -147,20 +166,26 @@ function FreePoseRow({
         <RemoveButton what={`dáng ${label}`} onRemove={onRemove} />
       </RowTop>
 
-      <div data-prompt-lab="" className="min-w-0">
-        <BlockEditor
-          doc={doc}
-          mode="free"
-          scale="row"
-          /* KHÔNG nạp lại: mọi thay đổi của dòng này đều do chính editor bắn ra,
-             và nạp lại vì chúng là một đường để con trỏ nhảy về đầu dòng sau mỗi
-             ký tự. (Thẻ Bộ UI phải nạp lại vì pill TÊN ELEMENT sửa `doc` sau lưng
-             editor; ở đây không có pill nào đứng ngoài câu.) */
-          resetToken={0}
-          placeholder="Viết mô tả riêng cho dáng này… (gõ / để chèn pill)"
-          onChange={(next) => onChange(syncPoseFromDoc(row, next))}
-        />
-      </div>
+      {/* CÙNG vỏ context với dòng khuôn: ở chế độ tự do pill là node ProseMirror
+          nằm giữa câu, không có đường prop nào tới nó — và `row.pose`/`row.view`
+          vẫn được `syncPoseFromDoc` giữ đúng với câu, nên ô xem trước ở hai chế
+          độ nói cùng một thứ. */}
+      <PoseRowShot pose={row.pose} view={row.view}>
+        <div data-prompt-lab="" className="min-w-0">
+          <BlockEditor
+            doc={doc}
+            mode="free"
+            scale="row"
+            /* KHÔNG nạp lại: mọi thay đổi của dòng này đều do chính editor bắn ra,
+               và nạp lại vì chúng là một đường để con trỏ nhảy về đầu dòng sau mỗi
+               ký tự. (Thẻ Bộ UI phải nạp lại vì pill TÊN ELEMENT sửa `doc` sau lưng
+               editor; ở đây không có pill nào đứng ngoài câu.) */
+            resetToken={0}
+            placeholder="Viết mô tả riêng cho dáng này… (gõ / để chèn pill)"
+            onChange={(next) => onChange(syncPoseFromDoc(row, next))}
+          />
+        </div>
+      </PoseRowShot>
     </RowShell>
   );
 }
