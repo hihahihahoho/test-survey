@@ -181,8 +181,42 @@ export const componentSchema = z
     out: z.looseObject({ w: z.number().int(), h: z.number().int() }).optional(),
     /** Hệ số phóng từ `out` lên hộp vẽ — chỉ để prompt nói ra ("drawn at 2.5x"). */
     drawScale: z.number().optional(),
+    /**
+     * ẢNH KHUNG CỦA RIÊNG Ô NÀY — `refs/shape-N.png`, cùng luật đường dẫn với `sheet.ref`.
+     *
+     * ╔══ VÌ SAO NẰM TRÊN Ô, KHÔNG PHẢI TRÊN TẤM ════════════════════════════════╗
+     * ║ `sheet.layoutRef` (bản phác bố cục) trả lời «chỗ nào đặt gì trên TẤM»;    ║
+     * ║ tấm này trả lời «CÁI NÀY hình thù ra sao» cho ĐÚNG MỘT món. Một tấm 9 ô có ║
+     * ║ quyền có 9 cái khung khác nhau, nên nhét chúng vào một trường của tấm là   ║
+     * ║ bắt chín ô chia nhau một câu — và tám ô sẽ bị vẽ theo khung của ô thứ chín.║
+     * ╚══════════════════════════════════════════════════════════════════════════╝
+     *
+     * `.nullish()` chứ không `.optional()`: cùng bài học với `sheet.ref` — một
+     * `null` do đời code trước ghi xuống đĩa mà schema từ chối là cả màn không mở
+     * được, chứ không phải một ô mất ảnh.
+     */
+    shapeRef: z.string().nullish(),
+    /**
+     * MÔ TẢ BẮT BUỘC đi kèm `shapeRef` — «ảnh chỉ nói hình dáng, mô tả nói nó là gì».
+     *
+     * Bắt buộc ở CỬA NHẬP (nút «Thêm» xám cho tới khi có chữ), không bắt buộc ở
+     * schema: contract đã lưu của người dùng và contract do tay người khác dựng vẫn
+     * phải mở được. Thiếu chữ thì engine vẫn in câu, chỉ là câu ấy nghèo đi.
+     */
+    shapeNote: z.string().optional(),
   })
   .superRefine((c, ctx) => {
+    /* Cùng luật REF_PATH với `sheet.ref`/`poseRef`/`layoutRef` — xem `superRefine` của
+       `sheetSchema`. Ở đây vì tấm ảnh nằm sâu hơn một tầng (trên ô, không trên tấm) nên
+       nó dễ bị bỏ quên khỏi vòng kiểm ấy; kiểm ngay tại chỗ nó sống thì không quên được. */
+    if (c.shapeRef && (c.shapeRef.includes("..") || c.shapeRef.startsWith("/"))) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["shapeRef"],
+        message: "Đường dẫn ảnh phải nằm trong project.",
+        params: { rule: "REF_PATH" },
+      });
+    }
     // V-01 — "Tên file: 2 số + gạch nối + chữ thường. Gợi ý: `17-btn-close`"
     if (isFileNameExempt(c.skel?.shape)) return;
     if (!RE_COMPONENT_FILE.test(c.file)) {

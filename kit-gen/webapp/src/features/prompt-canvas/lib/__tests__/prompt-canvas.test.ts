@@ -1356,6 +1356,34 @@ describe("di trú: bản nháp đời trước không có bốn trường mới"
     expect(cells[1]!.sizeId).toBe("xl");
   });
 
+  it("ảnh khung của dòng đọc lại được, và đường dẫn thoát ra ngoài bị BỎ chứ không sửa", () => {
+    /* Bản nháp là JSON của người dùng: một `../../etc/passwd` trong đó phải thành
+       RỖNG, không được "sửa cho hợp lệ" (bài học `refs/../gen.sh`). Và mô tả chỉ
+       theo được vào khi CÓ ảnh — hai trường ấy chỉ có nghĩa khi đi cùng nhau. */
+    const doc = migrateComposerDoc(
+      saved({
+        blocks: [{
+          id: "u1", kind: "uikit", mode: "template",
+          cells: [
+            { id: "c1", elementId: "button", styleId: "", decor: "medium", decorPlace: "balanced", glazeId: "solid", sizeId: "m", note: "",
+              shapeRef: "refs/shape-1.png", shapeNote: "khung nhiệm vụ" },
+            { id: "c2", elementId: "coin", styleId: "", decor: "light", decorPlace: "balanced", glazeId: "solid", sizeId: "m", note: "",
+              shapeRef: "../../etc/passwd.png", shapeNote: "đi ra ngoài" },
+            { id: "c3", elementId: "panel", styleId: "", decor: "light", decorPlace: "balanced", glazeId: "solid", sizeId: "m", note: "",
+              shapeNote: "mô tả trơ trọi, không ảnh" },
+          ],
+        }],
+      }),
+      PRESETS,
+    );
+    const cells = (doc.composer.blocks[0] as { cells: { shapeRef?: string; shapeNote?: string }[] }).cells;
+    expect(cells[0]!.shapeRef).toBe("refs/shape-1.png");
+    expect(cells[0]!.shapeNote).toBe("khung nhiệm vụ");
+    expect(cells[1]!.shapeRef).toBeUndefined();
+    expect(cells[1]!.shapeNote).toBeUndefined();
+    expect(cells[2]!.shapeNote).toBeUndefined();
+  });
+
   it("`brandAssets` chỉ nhận cặp chuỗi-chuỗi", () => {
     const doc = migrateComposerDoc(saved({ blocks: [], brandAssets: { a1: "refs/logo.png", a2: 7, a3: "" } }), PRESETS);
     expect(doc.composer.brandAssets).toEqual({ a1: "refs/logo.png" });

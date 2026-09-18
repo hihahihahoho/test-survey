@@ -484,6 +484,84 @@ export async function run() {
     eq(pyStrip("  b\t\n"), "b", "ký tự trắng thường")
   })
 
+  // ══════════════════════════════════════════ 3b. ẢNH KHUNG CỦA MỘT Ô
+  describe("engine JS › ảnh khung của một ô (shapeRef)")
+
+  /* Tấm 1×1 gọn nhất có thể: ca này nói về MỘT trường mới, nên mọi thứ khác phải
+     đứng yên để chỗ lệch duy nhất là chỗ đang đo. */
+  const tamMotO = (extra = {}) => ({
+    styles: [{ id: "demo", style: "flat ink" }],
+    sheets: [{
+      id: "ui", canvas: "square", grid: { cols: 1, rows: 1 },
+      components: [{
+        file: "01-khung", vi: "Khung nhiệm vụ", spec: "a quest frame",
+        out: { w: 240, h: 160 }, skel: { shape: "rrect", w: .6, h: .4 }, ...extra,
+      }],
+    }],
+  })
+
+  await it("KHÔNG có `shapeRef` ⇒ prompt y HỆT bản trước — không một byte thừa", () => {
+    // Đây là vế quan trọng hơn của cả nhóm: bộ golden 12 ca chứng minh điều này cho
+    // dữ liệu thật, ca này chứng minh cho đúng cặp trường vừa thêm.
+    const p0 = buildPrompt(tamMotO().styles[0], tamMotO().sheets[0])
+    const p1 = buildPrompt(tamMotO({ shapeNote: "có mô tả mà không có ảnh" }).styles[0],
+                           tamMotO({ shapeNote: "có mô tả mà không có ảnh" }).sheets[0])
+    eq(p1.text, p0.text, "mô tả trơ trọi KHÔNG được tự sinh ra câu nào")
+    eq(p0.att, [], "không ảnh kèm")
+    ok(!p0.text.includes("ELEMENT SHAPE REFERENCE"), "không có ảnh thì không nhắc tới ảnh khung")
+    ok(!p0.text.includes("shape as in the attached reference"), "dòng của ô cũng không mọc thêm cụm nào")
+  })
+
+  await it("có `shapeRef` ⇒ ảnh vào `.att` ĐÚNG MỘT LẦN và prompt nói ra vai của nó", () => {
+    const cfg = tamMotO({ shapeRef: "refs/shape-1.png", shapeNote: "khung nhiệm vụ ba cạnh" })
+    const p = buildPrompt(cfg.styles[0], cfg.sheets[0])
+    eq(p.att, ["refs/shape-1.png"], "`.att` có đúng một đường dẫn")
+    eq(p.attRoles, [["shape", "refs/shape-1.png"]], "vai của nó là `shape`, cho màn xem trước")
+    includes(p.text, "## Element shape references", "có section riêng")
+    includes(p.text,
+      "ELEMENT SHAPE REFERENCE for cell 1 (Khung nhiệm vụ): khung nhiệm vụ ba cạnh."
+      + " Copy its silhouette, proportions and part layout; take NOTHING else from it"
+      + " — not its style, colours, text or level of finish.", "câu đầy đủ")
+    includes(p.text, "1) a quest frame (shape as in the attached reference) — core aspect",
+      "dòng của ô tự nói nó có ảnh khung")
+  })
+
+  await it("hai ô dùng CHUNG một tấm ⇒ một `-i`, nhưng HAI câu (mỗi ô một mô tả)", () => {
+    // codex tính token theo từng `-i`: đính hai lần cùng một tấm là trả tiền hai lần
+    // cho một tấm ảnh. Câu thì vẫn phải hai, vì hai ô là hai món khác nhau.
+    const cfg = {
+      styles: [{ id: "demo", style: "flat ink" }],
+      sheets: [{
+        id: "ui", canvas: "square", grid: { cols: 2, rows: 1 },
+        components: [
+          { file: "01-a", vi: "Khung A", spec: "frame A", skel: { shape: "rrect", w: .6, h: .4 },
+            shapeRef: "refs/shape-1.png", shapeNote: "khung dọc" },
+          { file: "02-b", vi: "Khung B", spec: "frame B", skel: { shape: "rrect", w: .6, h: .4 },
+            shapeRef: "refs/shape-1.png", shapeNote: "khung ngang" },
+        ],
+      }],
+    }
+    const p = buildPrompt(cfg.styles[0], cfg.sheets[0])
+    eq(p.att, ["refs/shape-1.png"], "khử trùng lặp")
+    eq(p.text.split("ELEMENT SHAPE REFERENCE").length - 1, 2, "hai câu")
+    includes(p.text, "for cell 1 (Khung A): khung dọc.", "ô 1")
+    includes(p.text, "for cell 2 (Khung B): khung ngang.", "ô 2")
+  })
+
+  await it("mô tả đã có dấu chấm ⇒ KHÔNG mọc thêm cái thứ hai", () => {
+    const cfg = tamMotO({ shapeRef: "refs/shape-1.png", shapeNote: "một cái khiên." })
+    includes(buildPrompt(cfg.styles[0], cfg.sheets[0]).text,
+      "(Khung nhiệm vụ): một cái khiên. Copy its silhouette", "một dấu chấm")
+  })
+
+  await it("hình học KHÔNG đọc `shapeRef` — dao cắt cắt y như cũ", () => {
+    // Trường mới nằm trên component, cạnh `skel`. Nếu nó lọt vào phép tính hộp thì ô
+    // có ảnh khung sẽ bị cắt lệch so với ô không có, và không ai đọc ra vì sao.
+    const a = G.sheet_geometry(tamMotO().sheets[0])
+    const b = G.sheet_geometry(tamMotO({ shapeRef: "refs/shape-1.png", shapeNote: "x" }).sheets[0])
+    eq(b, a, "geometry giống hệt")
+  })
+
   await it("`bool()` của Python: mảng rỗng và object rỗng là SAI", async () => {
     // `bool(b.get("refs"))` với `refs: []` phải ra false, không thì mọi contract có
     // mảng rỗng đều mọc thêm section «Palette» và một danh sách ảnh kèm rỗng.

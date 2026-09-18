@@ -25,6 +25,10 @@ const ROLE_LABEL: Record<string, string> = {
   style: "Phong cách",
   brand: "Thương hiệu",
   layout: "Bố cục",
+  /* Ảnh KHUNG của một ô (18/09/2026) — «Khung», không phải «Bố cục»: bố cục nói chỗ
+     đặt trên cả tấm, khung nói hình thù của đúng một món. Hai tấm ấy có quyền cùng
+     nằm trong một prompt, nên hai nhãn phải phân biệt được với nhau. */
+  shape: "Khung",
 };
 
 /**

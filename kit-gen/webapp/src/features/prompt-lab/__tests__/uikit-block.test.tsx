@@ -37,7 +37,7 @@ import {
 } from "../lib/cell-size";
 import { elementSets, getPresets, seedPresets, type ElementPreset } from "../lib/presets-store";
 import { PILL_SLOTS, docHasBrokenPill, repairPills, retitleCellDoc, uiCellDoc } from "../lib/doc-templates";
-import { serializeComposer } from "../lib/serialize-composer";
+import { countComposerImages, serializeComposer } from "../lib/serialize-composer";
 import {
   moveRow,
   newCell,
@@ -1224,5 +1224,141 @@ describe("⑥ mount một dòng tự do KHÔNG được tự ghi lại tài li�
     fireEvent.click(screen.getAllByRole("option")[3]!);
 
     await waitFor(() => expect(changes.length).toBeGreaterThan(0));
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⑨ ẢNH KHUNG CỦA MỘT MÓN — hình dáng đi bằng ảnh, «nó là gì» đi bằng chữ
+   ══════════════════════════════════════════════════════════════════════════
+   Chủ sản phẩm muốn thả một bản phác «khung nhiệm vụ» vào một dòng rồi bắt máy vẽ
+   chép ĐÚNG hình ấy. Ba chỗ có thể hỏng câm, và cả ba đều ở đây:
+    · cửa nhập cho đính ảnh mà KHÔNG bắt mô tả ⇒ máy vẽ nhận một khối hình câm và
+      đoán xem nó là tấm biển hay cái khiên;
+    · ảnh vào được ô mà KHÔNG vào contract ⇒ người dùng thấy thumbnail trên dòng,
+      còn engine thì không bao giờ nhận tấm ảnh;
+    · vào contract mà KHÔNG vào prompt copy-dán ⇒ hai cửa nhìn vào một ô nói hai
+      điều khác nhau. */
+
+const SHAPE_CELL = (): UiCell => ({
+  ...newCell("button", PRESETS),
+  id: "c1",
+  shapeRef: "refs/shape-1.png",
+  shapeNote: "khung nhiệm vụ ba cạnh",
+});
+
+/** Mở hộp của pill TÊN ELEMENT ở dòng đầu tiên. */
+function openNamePill() {
+  fireEvent.click(screen.getByRole("button", { name: /Đổi loại món/ }));
+}
+
+describe("⑨ cửa «Đính ảnh khung» trong hộp của pill tên element", () => {
+  it("nút «+ Element» KHÔNG có nấc ấy — chưa có món thì chưa có hình dáng để hỏi", () => {
+    render(<Harness initial={uikit([])} />);
+    fireEvent.click(screen.getByRole("button", { name: /Element/ }));
+    expect(screen.queryByRole("tab", { name: "Đính ảnh khung" })).toBeNull();
+    /* Danh mục vẫn ở nguyên đó — thanh nấc vắng mặt chứ không phải hộp đổi việc. */
+    expect(screen.getByLabelText("Tìm trong danh mục")).toBeTruthy();
+  });
+
+  it("pill tên element có HAI nấc, và nấc đang hiệu lực mở sẵn", () => {
+    render(<Harness initial={uikit([SHAPE_CELL()])} />);
+    openNamePill();
+    expect(screen.getByRole("tab", { name: "Chọn sẵn" })).toBeTruthy();
+    /* Dòng đang mang ảnh ⇒ hộp mở ra ở nấc ảnh, không ở danh mục: mở ra mà thấy
+       danh sách chọn sẵn trong khi pill đang đeo một tấm ảnh là hộp nói khác pill. */
+    expect(screen.getByRole("tab", { name: "Đính ảnh khung" }).getAttribute("aria-selected")).toBe("true");
+    expect((screen.getByLabelText("Mô tả món trong ảnh khung") as HTMLTextAreaElement).value)
+      .toBe("khung nhiệm vụ ba cạnh");
+  });
+
+  it("dòng CHƯA có ảnh ⇒ mở ở danh mục, và «Thêm» xám vì chưa có tấm nào", () => {
+    render(<Harness initial={uikit([{ ...newCell("button", PRESETS), id: "c1" }])} />);
+    openNamePill();
+    expect(screen.getByRole("tab", { name: "Chọn sẵn" }).getAttribute("aria-selected")).toBe("true");
+    fireEvent.click(screen.getByRole("tab", { name: "Đính ảnh khung" }));
+    expect((screen.getByRole("button", { name: "Thêm" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Chọn một tấm ảnh trước.")).toBeTruthy();
+  });
+
+  it("MÔ TẢ LÀ BẮT BUỘC: xoá trắng ⇒ «Thêm» xám, và lý do nói ra bằng chữ", () => {
+    render(<Harness initial={uikit([SHAPE_CELL()])} />);
+    openNamePill();
+    const note = screen.getByLabelText("Mô tả món trong ảnh khung");
+    expect((screen.getByRole("button", { name: "Thêm" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.change(note, { target: { value: "   " } });
+    expect((screen.getByRole("button", { name: "Thêm" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Viết mô tả rồi mới thêm được.")).toBeTruthy();
+    /* Câu giải thích LUÔN hiện, không phải một tooltip phải rê chuột mới thấy. */
+    expect(screen.getByText("Ảnh chỉ nói hình dáng, mô tả nói nó là gì.")).toBeTruthy();
+  });
+
+  it("gõ mô tả rồi «Thêm» ⇒ ô mang ĐÚNG cặp ảnh + mô tả", () => {
+    let latest: UiKitBlock | null = null;
+    render(<Harness initial={uikit([SHAPE_CELL()])} onState={(next) => { latest = next; }} />);
+    openNamePill();
+    fireEvent.change(screen.getByLabelText("Mô tả món trong ảnh khung"), {
+      target: { value: "  cái khiên tròn có núm giữa  " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Thêm" }));
+    const cell = (latest as unknown as UiKitBlock).cells[0]!;
+    expect(cell.shapeRef).toBe("refs/shape-1.png");
+    expect(cell.shapeNote).toBe("cái khiên tròn có núm giữa");
+    /* Loại element KHÔNG đổi: đính ảnh khung không phải một cú chọn trong danh mục. */
+    expect(cell.elementId).toBe("button");
+  });
+
+  it("«Bỏ ảnh khung» xoá CẢ HAI trường — một mô tả không ảnh là chữ không cửa nào đọc", () => {
+    let latest: UiKitBlock | null = null;
+    render(<Harness initial={uikit([SHAPE_CELL()])} onState={(next) => { latest = next; }} />);
+    openNamePill();
+    fireEvent.click(screen.getByRole("button", { name: /Bỏ ảnh khung/ }));
+    const cell = (latest as unknown as UiKitBlock).cells[0]!;
+    expect(cell.shapeRef).toBeUndefined();
+    expect(cell.shapeNote).toBeUndefined();
+  });
+});
+
+describe("⑨ ảnh khung đi tới contract và tới prompt copy-dán", () => {
+  it("contract mang `shapeRef` + `shapeNote` ở ĐÚNG ô đó, không lây sang ô bên cạnh", () => {
+    const contract = composerToContract(
+      state([uikit([SHAPE_CELL(), { ...newCell("panel", PRESETS), id: "c2" }])]),
+      { presets: PRESETS },
+    );
+    const comps = contract.sheets[0]!.components;
+    expect(comps[0]!.shapeRef).toBe("refs/shape-1.png");
+    expect(comps[0]!.shapeNote).toBe("khung nhiệm vụ ba cạnh");
+    expect(comps[1]!.shapeRef).toBeUndefined();
+  });
+
+  it("ô KHÔNG có ảnh khung thì contract KHÔNG mọc thêm khoá nào", () => {
+    /* Khai `shapeRef: ""` cho mọi ô là đổi vân tay của MỌI tấm đã vẽ — một lượt vẽ
+       lại toàn bộ dự án cho một trường không ai dùng. */
+    const contract = composerToContract(state([uikit([{ ...newCell("button", PRESETS), id: "c1" }])]), { presets: PRESETS });
+    expect("shapeRef" in contract.sheets[0]!.components[0]!).toBe(false);
+    expect("shapeNote" in contract.sheets[0]!.components[0]!).toBe(false);
+  });
+
+  it("đường dẫn thoát ra ngoài project bị chặn ngay lúc dịch, không đợi agent", () => {
+    const contract = composerToContract(
+      state([uikit([{ ...SHAPE_CELL(), shapeRef: "../../etc/passwd.png" }])]),
+      { presets: PRESETS },
+    );
+    expect("shapeRef" in contract.sheets[0]!.components[0]!).toBe(false);
+  });
+
+  it("prompt copy-dán trỏ tới tấm ảnh bằng cái móc CÓ SỐ, kèm mô tả", () => {
+    const line = serializeComposer(state([uikit([SHAPE_CELL()])]), PRESETS);
+    expect(line).toContain("shape as in [ảnh tham chiếu 1]: khung nhiệm vụ ba cạnh");
+  });
+
+  it("chế độ TỰ DO cũng nói ra tấm ảnh — nó nằm ngoài câu chữ nên dễ rơi nhất", () => {
+    const cell = { ...SHAPE_CELL(), doc: uiCellDoc(SHAPE_CELL(), PRESETS) };
+    const line = serializeComposer(state([uikit([cell], "free")]), PRESETS);
+    expect(line).toContain("shape as in [ảnh tham chiếu 1]: khung nhiệm vụ ba cạnh");
+  });
+
+  it("thanh nhắc «nhớ đính kèm N ảnh» đếm cả ảnh khung của từng dòng", () => {
+    expect(countComposerImages(state([uikit([SHAPE_CELL(), { ...newCell("panel", PRESETS), id: "c2" }])]))).toBe(1);
+    expect(countComposerImages(state([uikit([{ ...newCell("button", PRESETS), id: "c1" }])]))).toBe(0);
   });
 });

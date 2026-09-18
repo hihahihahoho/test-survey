@@ -288,8 +288,13 @@ export function SourcePicker(props: SourcePickerProps) {
  * ảnh rồi bấm sang nấc chọn sẵn thì người dùng vẫn phải thấy được "cái đang có
  * hiệu lực là tấm ảnh" — nếu không, họ chọn một preset và ngạc nhiên vì ảnh biến
  * mất. Nên nấc hiệu lực đeo một chấm, kể cả khi không phải nấc đang xem.
+ *
+ * XUẤT RA (18/09/2026) cho hộp tra danh mục element ở `UiKitBlockView`: hộp ấy cũng
+ * có hai ngả («chọn sẵn» · «đính ảnh khung»), và một thanh nấc thứ hai vẽ lại tại chỗ
+ * là hai thanh nấc cạnh nhau trên cùng một màn với hai kiểu tô "đang chọn" — đúng thứ
+ * file này sinh ra để chặn (xem khối «MỘT HỘP CHO BỐN CHỖ» ở đầu file).
  */
-function TabButton({
+export function TabButton({
   active,
   live,
   onPick,
@@ -476,10 +481,13 @@ function PresetPanel({
  * Ô XEM TRƯỚC 80×80 của một dòng — có ảnh thì bày ảnh, không thì bày ô trống.
  *
  * ╔══ VÌ SAO Ô TRỐNG VẪN CHIẾM ĐỦ 80px ══════════════════════════════════════╗
- * ║ Trong cùng một danh sách có dòng vẽ được và dòng không (11/19 dáng chưa có ║
- * ║ bảng góc khớp). Để ô ấy biến mất là mỗi dòng một lề trái, và mắt không còn ║
- * ║ cột nào để chạy dọc — đúng cái bệnh mà ô tick giữ-chỗ-cố-định ở `SourceRow`║
- * ║ đã chữa một lần cho dấu ✓. Cùng một luật, cùng một lý do.                  ║
+ * ║ Trong cùng một danh sách vẫn có dòng vẽ được và dòng không: mục «— để      ║
+ * ║ trống —» luôn đứng đầu và không bao giờ có hình, và một tấm chưa dựng xong ║
+ * ║ thì trong nhịp ấy cũng chưa có gì để bày. Để ô ấy biến mất là mỗi dòng một ║
+ * ║ lề trái, và mắt không còn cột nào để chạy dọc — đúng cái bệnh mà ô tick    ║
+ * ║ giữ-chỗ-cố-định ở `SourceRow` đã chữa một lần cho dấu ✓. Cùng một luật.    ║
+ * ║ (Từ 18/09/2026 cả 19 dáng đều có bảng góc khớp, nên lý do "dáng chỉ-có-chữ"║
+ * ║ không còn — hai lý do trên thì còn nguyên.)                                ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
  * `alt=""` + `aria-hidden`: dòng đã nói tên dáng bằng chữ ngay bên cạnh, nên một

@@ -556,6 +556,32 @@ export function buildPrompt(style, sheet) {
     ])
   }
 
+  // ── KHUNG CỦA TỪNG Ô ────────────────────────────────────────────────────────
+  // ╔══ ẢNH KHUNG LÀ CHUYỆN CỦA MỘT Ô, KHÔNG PHẢI CỦA CẢ TẤM ═══════════════════╗
+  // ║ `layoutRef` ngay trên trả lời «chỗ nào đặt gì trên TẤM»; `shapeRef` trả lời║
+  // ║ «CÁI NÀY hình thù ra sao» cho ĐÚNG MỘT ô. Nên nó nằm trên component chứ    ║
+  // ║ không trên sheet — một tấm 9 ô có quyền có 9 cái khung khác nhau, và nhét  ║
+  // ║ chúng vào một trường của tấm là bắt chín ô chia nhau một câu.              ║
+  // ║ Câu dựng Ở ĐÂY, ngay cạnh «Layout sketch», để thứ tự đọc của mọi vai ảnh   ║
+  // ║ vẫn là một mạch: ảnh của tấm trước, ảnh của ô sau, rồi mới tới danh sách ô.║
+  // ╚═══════════════════════════════════════════════════════════════════════════╝
+  const shape_cells = comps
+    .map((c, i) => [i, c])
+    .filter(([, c]) => pyTruthy(c.shapeRef))
+  if (shape_cells.length) {
+    section("Element shape references", shape_cells.map(([i, c]) => {
+      // MÔ TẢ LÀ BẮT BUỘC ở tầng giao diện (ảnh chỉ nói hình dáng, mô tả nói nó là
+      // gì), nhưng contract của người khác có thể tới đây thiếu chữ — câu vẫn phải
+      // đọc được, và dấu chấm không được mọc thành hai cái khi mô tả đã có sẵn một.
+      const note = strip(pyTruthy(c.shapeNote) ? c.shapeNote : "")
+      const ten = strip(pyTruthy(c.vi) ? c.vi : c.file)
+      return `ELEMENT SHAPE REFERENCE for cell ${i + 1} (${ten}): ${note}`
+        + (note.endsWith(".") ? "" : ".")
+        + " Copy its silhouette, proportions and part layout; take NOTHING else from"
+        + " it — not its style, colours, text or level of finish."
+    }))
+  }
+
   // ── Direction ───────────────────────────────────────────────────────────────
   // `note` là mô tả tấm do khuôn/thư viện sinh ra; `directive` là câu NGƯỜI THIẾT KẾ
   // gõ thêm cho đúng tấm này ở đúng lượt này. Nói RA NGUỒN có chủ ý.
@@ -606,6 +632,11 @@ export function buildPrompt(style, sheet) {
       // trống là chuỗi rỗng nên dòng ấy mở đầu bằng một số không có danh từ theo sau.
       if (g.kind === "empty") continue
       let spec = comp.spec
+      // Ô CÓ ẢNH KHUNG ⇒ NÓI RA NGAY TRONG DÒNG CỦA NÓ. Section «Element shape
+      // references» ở trên đã đánh số ô, nhưng model đọc danh sách ô theo thứ tự và
+      // không ai bắt nó ngược lên trên đối chiếu — một cụm ngắn ngay tại dòng là chỗ
+      // nối duy nhất không phải đi tìm.
+      if (pyTruthy(comp.shapeRef)) spec += " (shape as in the attached reference)"
       const out = pyTruthy(comp.out) ? comp.out : null
       if (g.safe) {
         // HỘP PIXEL RA KHỎI PROMPT, TỈ LỆ Ở LẠI (r-0021: hộp hứa 368px, lõi vẽ 587px).
@@ -686,6 +717,9 @@ export function buildPrompt(style, sheet) {
     ...(pyTruthy(sh.ref) ? [["character", sh.ref]] : []),
     ...(pyTruthy(sh.poseRef) ? [["pose", sh.poseRef]] : []),
     ...(pyTruthy(sh.layoutRef) ? [["layout", sh.layoutRef]] : []),
+    // Ảnh khung của từng ô — MỘT `-i` cho mỗi tấm, và hai ô lỡ dùng chung một tấm
+    // thì vòng khử trùng lặp ngay dưới gộp lại, y như mọi vai khác.
+    ...comps.filter(c => pyTruthy(c.shapeRef)).map(c => ["shape", c.shapeRef]),
     ...(use_brand_refs ? b.refs.map(q => ["brand", q]) : []),
     ...(use_inspo ? s.inspo.map(q => ["style", q]) : []),
   ]

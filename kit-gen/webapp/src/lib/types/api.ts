@@ -675,7 +675,9 @@ export const refUploadResultSchema = z.looseObject({
   w: z.number().optional(),
   h: z.number().optional(),
 });
-export const refKindSchema = z.enum(["character", "inspo", "brand"]);
+/* `shape` = ảnh KHUNG của một ô (18/09/2026) — agent đặt tên theo dãy riêng
+   `shape-N.<ext>`, không lẫn số với `inspo-N`. Xem `KINDS` ở `agent/routes/refs.mjs`. */
+export const refKindSchema = z.enum(["character", "inspo", "brand", "shape"]);
 export type RefKind = z.infer<typeof refKindSchema>;
 
 /* ═════════════ E. Lượt chạy (#32–#40) ═════════════ */

@@ -38,7 +38,11 @@ function cellLine(cell: UiCell, index: number, ctx: SerializeContext, mode: Bloc
      bản copy ra ChatGPT là hai thứ khác nhau. */
   if (mode === "free") {
     const line = tidy(serializeDoc(cell.doc as PromptDocNode, ctx));
-    if (line) return tidy(`cell ${index + 1} (${name}): ${line}`);
+    /* ẢNH KHUNG ĐỨNG NGOÀI CÂU, nên nó phải được nối vào CẢ HAI chế độ. Nó không
+       nằm trong `cell.doc` (nó là một trường có cấu trúc, y như `sizeId`), nên gạt
+       sang «Tự do» mà quên dòng này là tấm ảnh biến mất khỏi prompt copy-dán trong
+       khi contract vẫn mang nó — hai cửa nhìn vào một ô, nói hai điều. */
+    if (line) return tidy(`cell ${index + 1} (${name}): ${[line, shapeClause(cell, ctx)].filter(Boolean).join(", ")}`);
   }
 
   /* Phong cách của ô: rỗng = theo phong cách chung. Cùng luật với pill `style`
@@ -59,8 +63,33 @@ function cellLine(cell: UiCell, index: number, ctx: SerializeContext, mode: Bloc
        dòng khuôn trên màn và với bộ dịch contract. */
     hasDecorPlacement(cell.decor) ? phraseOf("decorPlace", cell.decorPlace, ctx.presets) : "",
     cell.note.trim(),
+    shapeClause(cell, ctx),
   ].filter(Boolean);
   return tidy(`cell ${index + 1} (${name}): ${parts.join(", ")}`);
+}
+
+/**
+ * MỆNH ĐỀ «ẢNH KHUNG» của một ô — cái móc có số, kèm mô tả bắt buộc của nó.
+ *
+ * ╔══ VÌ SAO MÔ TẢ ĐI CÙNG CÁI MÓC, KHÔNG ĐỨNG RỜI ══════════════════════════╗
+ * ║ Người dán prompt vào ChatGPT phải kéo N tấm ảnh vào khung chat theo đúng   ║
+ * ║ thứ tự cái móc đánh số. Một dòng chỉ ghi «[ảnh tham chiếu 3]» thì họ biết   ║
+ * ║ phải kéo tấm thứ ba, còn model thì nhận một tấm hình câm — nó thấy ba cạnh ║
+ * ║ và một cái móc nhưng không biết đang vẽ tấm biển hay cái khiên, và nó đoán. ║
+ * ║ Chữ «shape as in» là CÙNG một cụm mà engine in ra («shape as in the        ║
+ * ║ attached reference»): bản copy-dán và bản engine gửi phải nói một điều.    ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Ảnh CHƯA có (chỉ có mô tả) ⇒ KHÔNG mệnh đề nào: đánh số cho một tấm không tồn
+ * tại là bảo người dùng đi tìm tấm thứ ba trong một danh sách hai tấm. Cùng luật
+ * với `imageText()` bên `serialize.ts`, và cùng luật với engine (`prompt.mjs` chỉ
+ * in câu khi có `shapeRef`).
+ */
+function shapeClause(cell: UiCell, ctx: SerializeContext): string {
+  if (!cell.shapeRef) return "";
+  const note = (cell.shapeNote ?? "").trim();
+  const anchor = `[ảnh tham chiếu ${(ctx.imageCounter.count += 1)}]`;
+  return note ? `shape as in ${anchor}: ${note}` : `shape as in ${anchor}`;
 }
 
 /**
@@ -324,7 +353,14 @@ export function serializeComposer(state: ComposerState, presets: PresetBundle = 
  */
 export function countComposerImages(state: ComposerState): number {
   return state.blocks.reduce(
-    (total, block) => (block.kind === "uikit" ? total : total + countImageRefs(block.doc as PromptDocNode)),
+    (total, block) =>
+      block.kind === "uikit"
+        /* Thẻ Bộ UI KHÔNG có câu chữ cấp thẻ để đếm, nhưng từ 18/09/2026 từng DÒNG
+           của nó có quyền mang một ảnh khung — và đó là ảnh NGƯỜI DÙNG tự tải lên,
+           đúng loại mà thanh nhắc "nhớ đính kèm N ảnh" sinh ra để đếm. Bỏ sót nó thì
+           câu prompt trỏ tới «[ảnh tham chiếu 5]» trong khi thanh dưới bảo "4 ảnh". */
+        ? total + block.cells.filter((cell) => Boolean(cell.shapeRef)).length
+        : total + countImageRefs(block.doc as PromptDocNode),
     0,
   );
 }

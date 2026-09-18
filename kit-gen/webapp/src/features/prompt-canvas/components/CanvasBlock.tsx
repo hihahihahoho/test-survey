@@ -224,7 +224,7 @@ export function CanvasBlock(props: CanvasBlockProps) {
   );
 }
 
-function BlockBody({ block, onChange, reloadSignal, gen, onGenSheet, sheets }: CanvasBlockProps) {
+function BlockBody({ block, onChange, reloadSignal, gen, onGenSheet, sheets, projectId }: CanvasBlockProps) {
   /* Thẻ MỘT tấm không có vạch ranh giới nào để đeo nút (xem `SheetBreak`), nên chỉ
      hai thẻ-danh-sách nhiều tấm mới nhận đường vẽ lẻ. Đang vẽ / đang xếp hàng thì
      khoá nút: xin thêm một lượt cho cùng một thẻ lúc ấy chỉ tổ đẩy nó ra sau hàng. */
@@ -236,6 +236,9 @@ function BlockBody({ block, onChange, reloadSignal, gen, onGenSheet, sheets }: C
       <UiKitBlockBody
         block={block}
         onChange={(updater) => onChange((prev) => updater(prev as UiKitBlock))}
+        /* Ảnh khung của từng dòng nằm trong `refs/` của DỰ ÁN, nên ruột thẻ phải
+           biết mình đang ở dự án nào. Vỏ lab không truyền (không có dự án nào). */
+        projectId={projectId}
         {...redraw}
       />
     );

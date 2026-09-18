@@ -1,7 +1,7 @@
 import * as React from "react";
 import type { JSONContent } from "@tiptap/react";
 import type { Skel } from "@/lib/types/contract";
-import { Pencil, Plus, Search } from "lucide-react";
+import { ImagePlus, Pencil, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -44,7 +44,9 @@ import {
   SOURCE_PICKER_MAX_PX,
   useMenuFlip,
 } from "./pill-ui";
-import { SourcePicker, type SourceGroup } from "./SourcePicker";
+import { SourcePicker, TabButton as SourceTabButton, type SourceGroup } from "./SourcePicker";
+import { useRefThumb } from "./RefImagePill";
+import { uploadPillImage } from "@/features/prompt-canvas/lib/pill-image";
 
 /**
  * UiKitBlockView — block "Bộ UI": một DANH SÁCH DÒNG, mỗi dòng một element.
@@ -106,6 +108,7 @@ function CellRow({
   onPickSet,
   onRemove,
   drag,
+  projectId,
 }: {
   cell: UiCell;
   used: ReadonlySet<string>;
@@ -114,6 +117,8 @@ function CellRow({
   onPickSet: (pick: ElementPick) => void;
   onRemove: () => void;
   drag: RowDragProps;
+  /** Dự án đang mở — ảnh khung của dòng cần nó để tải lên và để đọc thumbnail. */
+  projectId?: string | null;
 }) {
   const presets = usePresets();
   const element = presets.elements.find((preset) => preset.id === cell.elementId);
@@ -124,7 +129,15 @@ function CellRow({
       <RowTop>
         <DragHandle {...drag} label={label} />
         <RowIndex index={drag.index} />
-        <ElementNamePill element={element} label={label} used={used} onPick={onPickSet} />
+        <ElementNamePill
+          element={element}
+          label={label}
+          used={used}
+          onPick={onPickSet}
+          projectId={projectId ?? null}
+          shape={shapeOf(cell)}
+          onShape={(next) => onChange(withShape(cell, next))}
+        />
         {/* Thứ tự pill: phong cách → đục nền → trang trí → bố trí → cỡ.
             «Chất liệu» ĐÃ BỊ BỎ HẲN (không ẩn đi, không đổi tên): nó ăn theo prompt
             tổng phong cách — xem khối chú thích đầu `glaze.ts`.
@@ -177,6 +190,7 @@ function FreeCellRow({
   onPickSet,
   onRemove,
   drag,
+  projectId,
 }: {
   cell: UiCell;
   used: ReadonlySet<string>;
@@ -185,6 +199,8 @@ function FreeCellRow({
   onPickSet: (pick: ElementPick) => void;
   onRemove: () => void;
   drag: RowDragProps;
+  /** Xem `CellRow` — hai chế độ có CÙNG một hàng 1, nên cùng một đường ảnh khung. */
+  projectId?: string | null;
 }) {
   const presets = usePresets();
   const element = presets.elements.find((preset) => preset.id === cell.elementId);
@@ -225,7 +241,15 @@ function FreeCellRow({
       <RowTop>
         <DragHandle {...drag} label={label} />
         <RowIndex index={drag.index} />
-        <ElementNamePill element={element} label={label} used={used} onPick={onPickSet} />
+        <ElementNamePill
+          element={element}
+          label={label}
+          used={used}
+          onPick={onPickSet}
+          projectId={projectId ?? null}
+          shape={shapeOf(cell)}
+          onShape={(next) => onChange(withShape(cell, next))}
+        />
         {/* CỠ Ở NGOÀI EDITOR, kể cả ở chế độ tự do — nó không đi vào prompt một chữ
             nào (nó thành `skel.w`/`skel.h`), nên nó không có chỗ trong một câu văn.
             Cùng lý do với pill tên element đứng ngoài: cả hai là DANH TÍNH/HÌNH HỌC
@@ -618,8 +642,23 @@ function applySetAtRow(
    Bộ chọn element
    ══════════════════════════════════════════════════════════════════════════ */
 
-/** Trần cao của hộp tra danh mục — PHẢI khớp `max-h-96` ở class, xem `dropUp`. */
-const PICKER_MAX_PX = 384;
+/**
+ * Trần cao của hộp tra danh mục — PHẢI khớp `max-h-[30rem]` ở class, xem `dropUp`.
+ *
+ * ╔══ 384 → 480 (18/09/2026), VÀ ĐÓ LÀ MỘT CON SỐ ĐO ĐƯỢC ═══════════════════╗
+ * ║ Chủ sản phẩm, nhìn ảnh chụp hộp của pill trên dòng: vùng cuộn quá nhỏ.    ║
+ * ║ Trần 384px trừ đi ô tìm ghim trên (~44px), thanh nấc (~36px) và cả khối    ║
+ * ║ «TỰ ĐẶT TÊN» ghim dưới (~90px) thì chỗ còn lại cho DANH SÁCH chỉ quãng     ║
+ * ║ 200px — bốn dòng, trong một danh mục hàng chục món. 480px đưa con số ấy    ║
+ * ║ lên quãng 300px mà vẫn còn 288px lề ở màn 1366×768 (chiều cao hay gặp      ║
+ * ║ nhất của laptop công ty), y hệt cách hộp dáng vừa được nâng lên cùng số.   ║
+ * ║ ⚠️ Con số này KHÔNG chỉ là cái nhìn thấy: `shouldDropUp` đo chỗ trống bằng  ║
+ * ║ chính nó. Sửa class mà quên sửa đây là hộp tưởng mình thấp hơn thực tế,    ║
+ * ║ mở xuống dưới ở một dòng gần đáy màn, rồi bị cắt mất phần chân — mà phần   ║
+ * ║ chân chính là cửa «TỰ ĐẶT TÊN».                                            ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+const PICKER_MAX_PX = 480;
 
 /**
  * «+ Element» — một nút, một hộp tra danh mục.
@@ -708,16 +747,38 @@ function ElementCatalogue({
   dropUp,
   used,
   onPick,
+  projectId,
+  shape,
+  onShape,
 }: {
   label: string;
   dropUp: boolean;
   used: ReadonlySet<string>;
   /** Nhận một CÚ BẤM — cả bộ, hay đúng một biến thể; xem `ElementPick`. */
   onPick: (pick: ElementPick) => void;
+  /** Dự án đang mở — cần để tải ảnh khung lên và để đọc thumbnail. */
+  projectId?: string | null;
+  /** Ảnh khung ĐANG dùng của dòng mở hộp này. */
+  shape?: CellShape;
+  /**
+   * Vắng ⇒ KHÔNG có nấc «Đính ảnh khung».
+   *
+   * ╔══ VÌ SAO NÚT «+ Element» KHÔNG CÓ NẤC NÀY ═══════════════════════════════╗
+   * ║ Ảnh khung là ảnh của MỘT MÓN CỤ THỂ, mà ở «+ Element» thì món ấy chưa tồn ║
+   * ║ tại — bày cửa đính ảnh ở đó là hỏi «vẽ cái này theo hình nào» trước khi    ║
+   * ║ hỏi «cái này là cái gì». Ai muốn một món chưa có trong danh mục thì đi     ║
+   * ║ «TỰ ĐẶT TÊN» ngay dưới, rồi mở pill tên của chính dòng vừa hiện ra.        ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   * `null` = bỏ tấm ảnh (và bỏ luôn mô tả — xem `CellShape`).
+   */
+  onShape?: (next: CellShape | null) => void;
 }) {
   const presets = usePresets();
   const [query, setQuery] = React.useState("");
   const searchRef = React.useRef<HTMLInputElement>(null);
+  /* Mở SẴN ở nấc đang hiệu lực, cùng luật với `SourcePicker.live`: dòng đang mang
+     một tấm ảnh khung mà hộp mở ra ở danh mục là hộp nói khác cái pill. */
+  const [tab, setTab] = React.useState<"preset" | "shape">(shape?.ref ? "shape" : "preset");
 
   React.useEffect(() => {
     /* Mở ra là gõ được ngay: hộp này tồn tại để TRA, và bắt người dùng bấm thêm
@@ -757,41 +818,261 @@ function ElementCatalogue({
       role="dialog"
       aria-label={label}
       className={cn(
-        "absolute left-0 z-40 flex max-h-96 w-80 flex-col rounded-2 border border-line-subtle bg-overlay p-2 shadow-2",
+        "absolute left-0 z-40 flex max-h-[30rem] w-80 flex-col rounded-2 border border-line-subtle bg-overlay p-2 shadow-2",
         dropUp ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]",
       )}
     >
-      <div className="relative">
-        <Search aria-hidden className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-fg-muted" />
-        <Input
-          ref={searchRef}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Tìm trong danh mục…"
-          aria-label="Tìm trong danh mục"
-          className="pl-8"
+      {/* THANH HAI NẤC — chỉ hiện khi CÓ đường đính ảnh (tức là hộp của pill trên
+          dòng). `shrink-0` là thứ giữ nó đứng yên khi ruột cuộn; cùng thành phần
+          `TabButton` với `SourcePicker` để hai hộp trên một màn không có hai kiểu
+          tô "đang chọn". */}
+      {onShape && (
+        <div role="tablist" aria-label={`Cách chọn ${label}`} className="mb-2 flex shrink-0 gap-1 border-b border-line-subtle pb-2">
+          <SourceTabButton active={tab === "preset"} live={!shape?.ref} onPick={() => setTab("preset")}>
+            Chọn sẵn
+          </SourceTabButton>
+          {/* «Đính ảnh khung», KHÔNG phải «Đính ảnh»: cùng họ chữ với nấc của
+              `SourcePicker`, nhưng tấm ảnh ở đây trả lời một câu khác hẳn — nó nói
+              HÌNH DÁNG của một món, không nói phong cách của cả bộ kit. */}
+          <SourceTabButton active={tab === "shape"} live={Boolean(shape?.ref)} onPick={() => setTab("shape")}>
+            Đính ảnh khung
+          </SourceTabButton>
+        </div>
+      )}
+
+      {onShape && tab === "shape" ? (
+        <ShapeRefPanel
+          projectId={projectId ?? null}
+          shape={shape ?? EMPTY_CELL_SHAPE}
+          onApply={onShape}
         />
-      </div>
+      ) : (
+        <>
+          {/* `shrink-0` GHIM Ô TÌM ở đỉnh hộp: nó là anh em của cửa «TỰ ĐẶT TÊN» ghim
+              dưới đáy, và một lối đi trôi khỏi tầm mắt sau ba nhịp cuộn thì đúng bằng
+              không có nó. Không có cờ này thì flexbox co CẢ HAI đầu để nhường chỗ cho
+              danh sách — càng thấy rõ từ khi trần hộp lên 480px. */}
+          <div className="relative shrink-0">
+            <Search aria-hidden className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-fg-muted" />
+            <Input
+              ref={searchRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Tìm trong danh mục…"
+              aria-label="Tìm trong danh mục"
+              className="pl-8"
+            />
+          </div>
 
-      <div role="listbox" aria-label="Danh mục món giao diện" className="mt-2 min-h-0 flex-1 overflow-y-auto">
-        {hits.length === 0 && (
-          <p className="px-2 py-4 text-center text-body text-fg-muted">
-            Không có món nào khớp — đặt tên riêng cho nó ở ngay dưới.
-          </p>
+          <div role="listbox" aria-label="Danh mục món giao diện" className="mt-2 min-h-0 flex-1 overflow-y-auto">
+            {hits.length === 0 && (
+              <p className="px-2 py-4 text-center text-body text-fg-muted">
+                Không có món nào khớp — đặt tên riêng cho nó ở ngay dưới.
+              </p>
+            )}
+            {/* KHÔNG CÓ TIÊU ĐỀ CHIA ĐÔI DANH SÁCH («Bộ»/«Lẻ» của đời trước): thứ tự
+                là thứ tự trong danh mục, và hai loại bộ tự nói ra mình là loại nào
+                bằng HÌNH DẠNG của chính mục — một dòng, hay một nhóm có tiêu đề. Một
+                tiêu đề chia đôi thì hứa một sự phân loại mà người dùng phải học
+                trước cú bấm đầu tiên. */}
+            <SetPickList sets={hits} used={used} onPick={onPick} />
+          </div>
+
+          {/* CỬA TỰ ĐẶT TÊN nằm ở ĐÁY và LUÔN hiện, không phải chỉ khi tìm không ra:
+              nó điền sẵn đúng chữ vừa gõ, nên "gõ tên món của mình rồi bấm thêm" là
+              một mạch liền — còn nếu nó chỉ xuất hiện lúc danh mục rỗng thì người dùng
+              phải học rằng "tìm hụt mới đặt tên được". */}
+          <CustomElementRow query={query} onPick={onPick} />
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   NẤC «ĐÍNH ẢNH KHUNG» — một tấm ảnh hình dáng + một mô tả BẮT BUỘC
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/** Ảnh khung của một dòng, đúng cặp trường mà `UiCell` giữ. */
+export interface CellShape {
+  /** `refs/shape-N.png` — rỗng nghĩa là chưa đính tấm nào. */
+  ref: string;
+  /** Mô tả bắt buộc đi kèm; xem `UiCell.shapeNote`. */
+  note: string;
+}
+
+const EMPTY_CELL_SHAPE: CellShape = { ref: "", note: "" };
+
+const SHAPE_ACCEPT = "image/png,image/jpeg,image/webp";
+
+/**
+ * Ô đính ảnh khung cho MỘT món.
+ *
+ * ╔══ VÌ SAO MÔ TẢ LÀ BẮT BUỘC, VÀ VÌ SAO PHẢI NÓI RA LÝ DO ═════════════════╗
+ * ║ Một tấm phác nói được HÌNH DÁNG và chỉ hình dáng: máy vẽ thấy ba cạnh, một║
+ * ║ cái móc và hai ô tròn — nó không biết mình đang vẽ một tấm biển nhiệm vụ  ║
+ * ║ hay một cái khiên, nên nó sẽ ĐOÁN, và đoán sai thì cả lượt vẽ đi luôn.    ║
+ * ║ Một nút xám không có lời giải thích thì người dùng đọc thành «hỏng»; nên  ║
+ * ║ câu «Ảnh chỉ nói hình dáng, mô tả nói nó là gì» đứng ngay dưới ô gõ, luôn ║
+ * ║ hiện, không phải một tooltip phải rê chuột mới thấy.                      ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * TẢI LÊN NGAY LÚC THẢ, chốt thì mới ghi vào dòng: byte phải nằm trên đĩa project
+ * trước đã (agent tự đặt tên — luật G1, xem `uploadPillImage`), còn `shapeRef` chỉ
+ * được ghi vào ô khi đã có ĐỦ CẶP ảnh + mô tả. Người bỏ dở giữa chừng để lại một
+ * tấm mồ côi trong `refs/` chứ không để lại một dòng nửa vời trong bản nháp.
+ */
+function ShapeRefPanel({
+  projectId,
+  shape,
+  onApply,
+}: {
+  projectId: string | null;
+  shape: CellShape;
+  onApply: (next: CellShape | null) => void;
+}) {
+  const [path, setPath] = React.useState(shape.ref);
+  const [note, setNote] = React.useState(shape.note);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState("");
+  const [over, setOver] = React.useState(false);
+  const input = React.useRef<HTMLInputElement>(null);
+  const thumb = useRefThumb(projectId, path);
+
+  const upload = async (file: File) => {
+    if (!projectId) {
+      setErr("Chưa mở dự án nào nên chưa có chỗ cất ảnh.");
+      return;
+    }
+    setBusy(true);
+    setErr("");
+    try {
+      const image = await uploadPillImage(projectId, file, { kind: "shape", hintName: `shape-${file.name}` });
+      setPath(image.path);
+    } catch (error) {
+      /* NÓI RA, không nuốt: hộp này đóng lại sau khi chốt, nên một lỗi im lặng ở
+         đây là người dùng bấm «Thêm» hoài mà không hiểu vì sao không có gì xảy ra. */
+      setErr(error instanceof Error ? error.message : "Không tải được ảnh lên.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const ready = path !== "" && note.trim() !== "";
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-1">
+      {path !== "" && (
+        <div className="flex items-center gap-3">
+          {thumb ? (
+            <img src={thumb} alt="" aria-hidden className="size-16 shrink-0 rounded-1 border border-line-subtle object-contain" />
+          ) : (
+            <span aria-hidden className="size-16 shrink-0 rounded-1 border border-line-subtle bg-raised" />
+          )}
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="truncate text-caption text-fg-muted" title={path}>
+              {path.slice("refs/".length)}
+            </span>
+            {/* BỎ ẢNH XOÁ CẢ MÔ TẢ, trong một cú bấm: hai trường ấy chỉ có nghĩa khi
+                đi cùng nhau, và để lại một dòng mô tả không ảnh là để lại chữ mà
+                không cửa nào đọc. */}
+            <span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setPath("");
+                  setNote("");
+                  onApply(null);
+                }}
+              >
+                <X aria-hidden strokeWidth={1.5} />
+                Bỏ ảnh khung
+              </Button>
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Kéo thả VÀ bấm, cùng lý do với `RefPanel` của `SourcePicker`: kéo thả là
+          đường nhanh của người đang mở sẵn ảnh bên cạnh, hộp chọn tệp là đường duy
+          nhất của người dùng bàn phím. */}
+      <button
+        type="button"
+        onClick={() => input.current?.click()}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setOver(false);
+          const file = event.dataTransfer.files?.[0];
+          if (file) void upload(file);
+        }}
+        className={cn(
+          "flex flex-col items-center gap-1 rounded-2 border border-dashed px-3 py-5 text-center",
+          "transition-colors duration-fast ease-out",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+          over ? "border-accent bg-accent/[var(--kg-tint-a)]" : "border-line hover:border-line-strong",
         )}
-        {/* KHÔNG CÓ TIÊU ĐỀ CHIA ĐÔI DANH SÁCH («Bộ»/«Lẻ» của đời trước): thứ tự
-            là thứ tự trong danh mục, và hai loại bộ tự nói ra mình là loại nào
-            bằng HÌNH DẠNG của chính mục — một dòng, hay một nhóm có tiêu đề. Một
-            tiêu đề chia đôi thì hứa một sự phân loại mà người dùng phải học
-            trước cú bấm đầu tiên. */}
-        <SetPickList sets={hits} used={used} onPick={onPick} />
+      >
+        <ImagePlus aria-hidden className="size-5 text-fg-muted" />
+        <span className="text-body text-fg-strong">
+          {busy ? "Đang tải ảnh lên…" : path ? "Đổi ảnh khung" : "Thả ảnh khung vào đây, hoặc bấm để chọn tệp"}
+        </span>
+        <span className="text-caption text-fg-muted">PNG · JPG · WebP</span>
+      </button>
+
+      <input
+        ref={input}
+        type="file"
+        accept={SHAPE_ACCEPT}
+        className="hidden"
+        aria-label="Chọn tệp ảnh khung"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          /* Xoá value để chọn LẠI ĐÚNG tấm vừa chọn vẫn bắn `change`. */
+          event.target.value = "";
+          if (file) void upload(file);
+        }}
+      />
+
+      {err !== "" && <p className="text-caption text-danger">{err}</p>}
+
+      <div>
+        <textarea
+          rows={2}
+          value={note}
+          aria-label="Mô tả món trong ảnh khung"
+          placeholder="Món này là gì? Ví dụ «khung nhiệm vụ ba cạnh, có dải ruy băng trên đỉnh»"
+          onChange={(event) => setNote(event.target.value)}
+          className={cn(
+            "w-full resize-none rounded-1 border border-line bg-raised px-2 py-1.5 text-body text-fg-strong",
+            "outline-none placeholder:text-fg-muted focus-visible:ring-2 focus-visible:ring-focus-ring",
+          )}
+        />
+        <p className="mt-1 text-caption text-fg-muted">Ảnh chỉ nói hình dáng, mô tả nói nó là gì.</p>
       </div>
 
-      {/* CỬA TỰ ĐẶT TÊN nằm ở ĐÁY và LUÔN hiện, không phải chỉ khi tìm không ra:
-          nó điền sẵn đúng chữ vừa gõ, nên "gõ tên món của mình rồi bấm thêm" là
-          một mạch liền — còn nếu nó chỉ xuất hiện lúc danh mục rỗng thì người dùng
-          phải học rằng "tìm hụt mới đặt tên được". */}
-      <CustomElementRow query={query} onPick={onPick} />
+      <div className="flex items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={!ready || busy}
+          onClick={() => onApply({ ref: path, note: note.trim() })}
+        >
+          Thêm
+        </Button>
+        {/* Nói RA điều kiện còn thiếu, đúng cái đang thiếu: một nút xám không lời
+            là một nút hỏng trong mắt người bấm. */}
+        {!ready && (
+          <span className="text-caption text-fg-muted">
+            {path === "" ? "Chọn một tấm ảnh trước." : "Viết mô tả rồi mới thêm được."}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -828,7 +1109,7 @@ function CustomElementRow({ query, onPick }: {
   };
 
   return (
-    <div className="mt-2 border-t border-line-subtle px-1 pt-2">
+    <div className="mt-2 shrink-0 border-t border-line-subtle px-1 pt-2">
       <p className="mb-1 px-1 text-caption font-medium uppercase tracking-label text-fg-muted">Tự đặt tên</p>
       <div className="flex items-center gap-1.5">
         <Input
@@ -919,6 +1200,9 @@ function ElementNamePill({
   label,
   used,
   onPick,
+  projectId,
+  shape,
+  onShape,
 }: {
   /** Món của dòng — nguồn của CẢ tiêu đề lẫn tên phần; `undefined` khi id lạ. */
   element: ElementPreset | undefined;
@@ -929,10 +1213,18 @@ function ElementNamePill({
   used: ReadonlySet<string>;
   /** Cùng hộp với «+ Element», khác ở chỗ ĐỌC `one` — xem `ElementPick`. */
   onPick: (pick: ElementPick) => void;
+  /** Dự án đang mở — cần để tải/đọc ảnh khung. */
+  projectId?: string | null;
+  /** Ảnh khung của dòng; `ref` rỗng ⇒ dòng chưa đính tấm nào. */
+  shape: CellShape;
+  onShape: (next: CellShape | null) => void;
 }) {
   const pop = useCataloguePopover();
   const title = elementTitle(element, label);
   const part = elementPart(element);
+  /* Cùng hook thumbnail với mọi pill ảnh khác (`RefImagePill`): một đường đọc ảnh
+     thứ hai là một chỗ nữa để cache và luật huỷ blob URL lệch nhau. */
+  const thumb = useRefThumb(projectId ?? null, shape.ref);
 
   return (
     <span ref={pop.boxRef as React.RefObject<HTMLSpanElement>} className="relative inline-block shrink-0">
@@ -941,9 +1233,26 @@ function ElementNamePill({
         active={pop.open}
         aria-haspopup="dialog"
         aria-expanded={pop.open}
-        aria-label={`Đổi loại món — đang là ${label}`}
+        aria-label={
+          shape.ref ? `Đổi loại món — đang là ${label}, có ảnh khung` : `Đổi loại món — đang là ${label}`
+        }
         onClick={pop.toggle}
       >
+        {/* TẤM ẢNH ĐỨNG TRƯỚC TÊN, và chỉ khi có thật: pill là chỗ DUY NHẤT trên
+            dòng nói ra "món này đang được vẽ theo một tấm khung". Không có ô giữ
+            chỗ cho dòng không ảnh — hàng 1 đã chật với sáu pill, và một ô trống
+            16px trên mọi dòng là 16px lấy đi của chữ. */}
+        {shape.ref !== "" &&
+          (thumb ? (
+            <img
+              src={thumb}
+              alt=""
+              aria-hidden
+              className="size-4 shrink-0 rounded-1 border border-line-subtle object-cover"
+            />
+          ) : (
+            <span aria-hidden className="size-4 shrink-0 rounded-1 border border-line-subtle bg-raised" />
+          ))}
         <span className="font-medium">{title}</span>
         {part !== "" && <span className="text-fg-muted">{part}</span>}
         <PillCaret compact />
@@ -960,10 +1269,33 @@ function ElementNamePill({
             onPick(pick);
             pop.setOpen(false);
           }}
+          projectId={projectId ?? null}
+          shape={shape}
+          onShape={(next) => {
+            onShape(next);
+            pop.setOpen(false);
+          }}
         />
       )}
     </span>
   );
+}
+
+/** Ảnh khung của một dòng, đọc từ hai trường rời của ô. */
+function shapeOf(cell: UiCell): CellShape {
+  return { ref: cell.shapeRef ?? "", note: cell.shapeNote ?? "" };
+}
+
+/**
+ * Ghi ảnh khung vào ô — hoặc BỎ nó, và bỏ thì bỏ CẢ HAI trường.
+ *
+ * Xoá khoá chứ không để chuỗi rỗng: `composerToContract` chỉ khai `shapeRef` khi nó
+ * CÓ THẬT, và một `""` sót lại trong bản nháp sẽ khiến `readCell` đọc ra "có ảnh"
+ * ở lần mở sau — đúng kiểu hỏng câm mà `refPath()` sinh ra để chặn.
+ */
+function withShape(cell: UiCell, next: CellShape | null): UiCell {
+  const { shapeRef: _ref, shapeNote: _note, ...rest } = cell;
+  return next && next.ref ? { ...rest, shapeRef: next.ref, shapeNote: next.note } : rest;
 }
 
 /**
@@ -1209,6 +1541,7 @@ export function UiKitBlockBody({
   onChange,
   onRedrawSheet,
   redrawBusy = false,
+  projectId,
 }: {
   block: UiKitBlock;
   /** Nhận HÀM cập nhật, không nhận giá trị — xem `updateBlock` trong PromptComposerScreen. */
@@ -1221,6 +1554,14 @@ export function UiKitBlockBody({
    */
   onRedrawSheet?: (sheetIndex: number) => void;
   redrawBusy?: boolean;
+  /**
+   * Dự án đang mở — CHỈ để đính/đọc ảnh khung của từng dòng.
+   *
+   * Vắng ở vỏ lab (nơi không có project nào trên đĩa) ⇒ nấc «Đính ảnh khung» vẫn
+   * bày ra nhưng báo thẳng "chưa mở dự án nào" khi thả ảnh, thay vì im lặng nuốt
+   * tấm ảnh người dùng vừa kéo vào.
+   */
+  projectId?: string | null;
 }) {
   const presets = usePresets();
   const [askReset, setAskReset] = React.useState(false);
@@ -1309,6 +1650,7 @@ export function UiKitBlockBody({
           <Row
             cell={cell}
             used={used}
+            projectId={projectId ?? null}
             drag={{ index, count: block.cells.length, onMove: move, dragFrom }}
             onChange={(next) =>
               onChange((prev) => ({ ...prev, cells: prev.cells.map((c) => (c.id === cell.id ? next : c)) }))

@@ -146,6 +146,13 @@ export function contractToStylesV1(contract, onlyJobs = null) {
         if (ow > 0 && oh > 0) e.out = { w: Math.round(ow), h: Math.round(oh) }
         const k = Number(c.drawScale)
         if (k > 0) e.drawScale = k
+        /* ẢNH KHUNG CỦA Ô (18/09/2026) — đúng cái bẫy mà khối chú thích trên vừa kể:
+           quên ghi tên vào đây thì contract lưu đúng, màn xem trước của web hiện đúng,
+           mà `styles.json` không có gì ⇒ `prompt.mjs` không in câu «ELEMENT SHAPE
+           REFERENCE» và không đính tấm ảnh — người dùng tải ảnh lên rồi vẽ ra một món
+           chẳng liên quan, im lặng. Engine chỉ ĐỌC hai khoá này, không cắt theo. */
+        if (typeof c.shapeRef === "string" && c.shapeRef) e.shapeRef = c.shapeRef
+        if (typeof c.shapeNote === "string" && c.shapeNote) e.shapeNote = c.shapeNote
         return e
       })
       return out

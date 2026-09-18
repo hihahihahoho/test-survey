@@ -19,6 +19,7 @@ import { EXPRESSIONS } from "@/features/kit-core/lib/poses";
 import { DEFAULT_VIEW } from "@/features/prompt-lab/lib/pose/pose-state";
 import { decorLevelOf, decorPlaceOf, getPresets, type PresetBundle } from "@/features/prompt-lab/lib/presets-store";
 import { INHERIT } from "@/features/prompt-lab/lib/pill-registry";
+import { refPath } from "@/features/kit-core/lib/kitset-to-contract";
 import { NODE } from "@/features/prompt-lab/lib/schema";
 import { readPillImage } from "./pill-image";
 import {
@@ -139,6 +140,15 @@ function readCell(raw: unknown, index: number, presets: PresetBundle): UiCell | 
        đúng cái lỗi mà lượt này đang chữa — xem `cell-size.ts`. */
     sizeId: str(raw["sizeId"]) || defaultSizeOf(presets.elements.find((preset) => preset.id === elementId)),
     note: str(raw["note"]),
+    /* ẢNH KHUNG CỦA Ô — đi qua `refPath()` y như mọi đường dẫn ảnh khác đọc từ đĩa:
+       bản nháp là JSON của người dùng, và một chuỗi `../../etc/passwd` trong đó phải
+       thành RỖNG chứ không được "sửa cho hợp lệ" (xem `readPillImage`).
+       Hai trường đi CÙNG NHAU hoặc không đi: một mô tả không có ảnh là chữ không ai
+       đọc (engine bỏ qua — xem ca «mô tả trơ trọi» ở suite-engine-prompt), còn một
+       tấm ảnh không mô tả thì cửa nhập đã chặn từ đầu. */
+    ...(refPath(str(raw["shapeRef"]))
+      ? { shapeRef: refPath(str(raw["shapeRef"])), shapeNote: str(raw["shapeNote"]) }
+      : {}),
     /* Câu tự do của riêng dòng (chế độ `free`). Thiếu ⇒ để `undefined` chứ KHÔNG
        dựng câu khởi điểm ở đây: dựng ở đây là ghi một tài liệu TipTap vào mọi ô
        của mọi dự án cũ, kể cả những ô sẽ không bao giờ vào chế độ tự do. Chỗ

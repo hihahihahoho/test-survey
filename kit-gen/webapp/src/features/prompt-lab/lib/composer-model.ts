@@ -236,6 +236,28 @@ export interface UiCell {
   /** Ghi chú tự do của người dùng cho riêng ô này. */
   note: string;
   /**
+   * ẢNH KHUNG CỦA MÓN NÀY — `refs/shape-N.png`, hoặc vắng khi chưa đính tấm nào.
+   *
+   * ╔══ MỘT TẤM ẢNH CHO MỘT Ô, KHÔNG PHẢI CHO CẢ THẺ ══════════════════════════╗
+   * ║ Chủ sản phẩm muốn thả một bản phác / ảnh chụp một «khung nhiệm vụ» rồi    ║
+   * ║ bắt máy vẽ chép ĐÚNG hình dáng ấy. Ảnh cấp THẺ (`contextRefs`) không làm   ║
+   * ║ được việc đó: nó nói về phong cách của cả bộ kit, và một tấm phác của MỘT  ║
+   * ║ món nằm ở đó sẽ được đọc thành «vẽ mọi thứ trông như tấm này».            ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   *
+   * Đi thẳng vào `components[].shapeRef` của contract — cùng tên, cố ý: hai đầu
+   * của một đường dây mà mang hai tên là hai chỗ để người sau đi tìm nhau.
+   */
+  shapeRef?: string;
+  /**
+   * MÔ TẢ BẮT BUỘC của tấm ảnh khung — «Ảnh chỉ nói hình dáng, mô tả nói nó là gì».
+   *
+   * Không có nó thì máy vẽ nhận một khối hình câm: nó thấy ba cạnh và một cái móc,
+   * nhưng không biết mình đang vẽ một tấm biển hay một cái khiên — và nó sẽ đoán.
+   * Cửa nhập khoá nút «Thêm» cho tới khi có chữ; xem `ShapeRefPanel`.
+   */
+  shapeNote?: string;
+  /**
    * CÂU TỰ DO CỦA RIÊNG DÒNG NÀY — chỉ có nghĩa khi block đang ở chế độ `free`.
    *
    * ╔══ VÌ SAO MỘT TÀI LIỆU TIPTAP CHO MỖI DÒNG, TRÁI VỚI CHÚ THÍCH ĐỜI TRƯỚC ═╗

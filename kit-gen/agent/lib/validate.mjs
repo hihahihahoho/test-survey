@@ -143,6 +143,15 @@ export function validateContract(contract) {
       const r = String(sh[field])
       if (r.includes("..") || r.startsWith("/")) E("REF_PATH", `sheets[${i}].${field}`, `${field} must be a relative path inside project`)
     }
+    // `shapeRef` là ảnh khung của MỘT Ô — cùng thư mục `refs/`, cùng vai «một tấm ảnh
+    // trong project», nên nó chịu ĐÚNG luật đường dẫn ấy. Nó nằm sâu hơn một tầng
+    // (trên component), và đó chính là lý do nó dễ bị bỏ sót khỏi vòng kiểm này.
+    for (const [j, c] of (sh?.components ?? []).entries()) {
+      if (c?.shapeRef === undefined || c.shapeRef === null) continue
+      const r = String(c.shapeRef)
+      if (r.includes("..") || r.startsWith("/"))
+        E("REF_PATH", `sheets[${i}].components[${j}].shapeRef`, "shapeRef must be a relative path inside project")
+    }
   }
   return { errors, warnings }
 }
@@ -158,6 +167,11 @@ export function refUsage(contract, refName) {
     if (hit(sh.poseRef)) used.push({ kind: "sheetPose", id: sh.id })
     // Bản phác bố cục cũng vậy: xoá nó đi là tấm nền mất chỗ dựa bố cục, im lặng.
     if (hit(sh.layoutRef)) used.push({ kind: "sheetLayout", id: sh.id })
+    // Ảnh khung của một ô cũng là một chỗ DÙNG ảnh: thiếu dòng này thì lệnh xoá ref
+    // coi tấm ấy là mồ côi và xoá được, rồi ô mất khung mà không ai cảnh báo.
+    ;(sh.components ?? []).forEach(c => {
+      if (hit(c?.shapeRef)) used.push({ kind: "cellShape", id: sh.id })
+    })
   })
   ;(contract?.variants ?? []).forEach(v => {
     for (const p of v.inspo ?? []) if (hit(p)) used.push({ kind: "variantInspo", id: v.id })

@@ -144,4 +144,61 @@ export async function run({ api, pid }) {
     ok(JSON.stringify(r.json.error.details).includes("REF_PATH"), "nêu đúng luật REF_PATH")
   })
 
+  /* ẢNH KHUNG CỦA MỘT Ô (`kind=shape`, 18/09/2026). Ba điều phải đúng, và cả ba đều
+     hỏng câm nếu sai: ① agent nhận kind mới (không thì màn soạn báo BAD_REQUEST giữa
+     lúc người dùng vừa thả ảnh), ② tên tệp đi dãy RIÊNG `shape-N` — dùng chung dãy
+     `inspo-N` thì hai loại ảnh khác hẳn nhau trộn số với nhau, ③ ô đang dùng tấm ấy
+     thì nó KHÔNG mồ côi. */
+  await it("kind `shape` được nhận và đặt tên theo dãy riêng `shape-N`", async () => {
+    const mp = multipart([
+      { name: "file", filename: "khung nhiem vu.png", contentType: "image/png", data: PNG_1x1 },
+      { name: "kind", data: "shape" },
+    ])
+    const r = await api("POST", `/api/projects/${pid}/refs`, {
+      headers: { "content-type": mp.contentType }, body: mp.body,
+    })
+    eq(r.status, 201, "status")
+    eq(r.json.name, "shape-1.png", "dãy riêng, không lẫn vào inspo-N")
+    eq(r.json.path, "refs/shape-1.png", "path tương đối trong project")
+    eq(r.json.kind, "shape", "trả về đúng kind vừa nhận")
+  })
+
+  await it("ảnh khung của một Ô cũng được tính là ĐANG DÙNG", async () => {
+    const mp = multipart([
+      { name: "file", filename: "khung2.png", contentType: "image/png", data: PNG_1x1 },
+      { name: "kind", data: "shape" },
+    ])
+    const up = await api("POST", `/api/projects/${pid}/refs`, {
+      headers: { "content-type": mp.contentType }, body: mp.body,
+    })
+    eq(up.status, 201, "tải ảnh khung lên")
+    eq(up.json.name, "shape-2.png", "tấm thứ hai đi tiếp dãy")
+
+    const g = await api("GET", `/api/projects/${pid}/contract`)
+    const c = structuredClone(g.json.contract)
+    c.sheets[0].components[0].shapeRef = up.json.path
+    c.sheets[0].components[0].shapeNote = "khung nhiem vu ba canh"
+    const put = await api("PUT", `/api/projects/${pid}/contract`, {
+      headers: { "if-match": String(g.json.version) }, body: { contract: c },
+    })
+    eq(put.status, 200, "contract có shapeRef vẫn lưu được")
+
+    const r = await api("DELETE", `/api/projects/${pid}/refs/${up.json.name}`)
+    eq(r.status, 409, "status")
+    eq(r.json.error.code, "REF_IN_USE", "code")
+    ok(r.json.error.details.usedBy.some(u => u.kind === "cellShape"), "nói rõ nó bị dùng làm ảnh khung của ô")
+  })
+
+  await it("shapeRef có `..` → contract bị TỪ CHỐI, y như ref", async () => {
+    const g = await api("GET", `/api/projects/${pid}/contract`)
+    const c = structuredClone(g.json.contract)
+    c.sheets[0].components[0].shapeRef = "../../etc/passwd.png"
+    const r = await api("PUT", `/api/projects/${pid}/contract`, {
+      headers: { "if-match": String(g.json.version) }, body: { contract: c },
+    })
+    eq(r.status, 422, "status")
+    eq(r.json.error.code, "CONTRACT_INVALID", "code")
+    ok(JSON.stringify(r.json.error.details).includes("REF_PATH"), "nêu đúng luật REF_PATH")
+  })
+
 }

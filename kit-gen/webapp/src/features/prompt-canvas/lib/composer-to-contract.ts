@@ -15,6 +15,7 @@ import {
   POSE_NOTE,
   buildVariantStyle,
   mergeElementSkel,
+  refPath,
   poseSpecFor,
   resolveElementSpec,
   type SheetLimits,
@@ -734,6 +735,14 @@ function uiKitSheets(block: UiKitBlock, startIndex: number, presets: PresetBundl
         skel: { ...skel },
         out: { w: out.w, h: out.h },
         drawScale: draw.scale,
+        /* ẢNH KHUNG CỦA Ô — chỉ khai khi CÓ THẬT. Khai `shapeRef: ""` cho mọi ô là
+           đổi vân tay của MỌI tấm đã vẽ (`stampFingerprints` băm nguyên contract),
+           tức là một lượt vẽ lại toàn bộ dự án cho một trường không ai dùng.
+           `refPath()` chặn lần cuối trước khi giá trị đi vào contract: cùng luật, cùng
+           lý do với `uploadPillImage` — thà rỗng còn hơn một đường dẫn đi ra ngoài. */
+        ...(refPath(cell.shapeRef ?? "")
+          ? { shapeRef: refPath(cell.shapeRef ?? ""), shapeNote: (cell.shapeNote ?? "").trim() }
+          : {}),
       };
     });
     return {

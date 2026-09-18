@@ -12,7 +12,12 @@ import { parseMultipart, sniff, imageSize } from "../lib/multipart.mjs"
 import { slugify } from "../lib/projects.mjs"
 
 const IMAGE_EXT = new Set(["png", "jpg", "webp"])
-const KINDS = new Set(["character", "inspo", "brand"])
+/* `shape` (18/09/2026) — ẢNH KHUNG CỦA MỘT Ô, không phải ảnh của cả tấm: người dùng
+   thả một bản phác/ảnh chụp một «khung nhiệm vụ» rồi bắt máy vẽ chép ĐÚNG hình dáng ấy.
+   Phải là một KIND RIÊNG chứ không mượn `inspo`: hai loại đánh số trong cùng một dãy thì
+   `inspo-3.png` lúc là ảnh cảm hứng của cả bộ kit lúc là khung của ô số 3 — và người dùng
+   xoá một tấm ở màn Ảnh sẽ không đoán nổi mình vừa xoá mất cái nào. */
+const KINDS = new Set(["character", "inspo", "brand", "shape"])
 
 /* Tàn dư của một đường đã gỡ: bản 09/09/2026 từng tả ảnh thành chữ và cất bản tả
    ngay cạnh ảnh, ở `refs/<tên ảnh>.desc.txt`. Đường ấy đã bỏ (xem khối «ĐÍNH ẢNH
@@ -110,7 +115,7 @@ async function pickRefName(dir, kind, hint, ext) {
     while (await exists(join(dir, name))) name = `char-${base}-${n++}.${ext}`
     return name
   }
-  const prefix = kind === "brand" ? "brand" : "inspo"
+  const prefix = kind === "brand" ? "brand" : kind === "shape" ? "shape" : "inspo"
   let n = 1
   let name = `${prefix}-${n}.${ext}`
   while (await exists(join(dir, name))) name = `${prefix}-${++n}.${ext}`
