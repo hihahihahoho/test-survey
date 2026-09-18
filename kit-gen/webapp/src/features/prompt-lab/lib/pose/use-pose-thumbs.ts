@@ -63,13 +63,23 @@ export const PoseRowContext = React.createContext<PoseRowPills | null>(null);
  * @param open   hộp có đang mở không — đóng thì không vẽ gì, và lượt đang chạy
  *               dở bị bỏ kết quả.
  */
+/**
+ * Trục này CÓ ô xem trước không.
+ *
+ * Tách khỏi `usePoseThumbs` vì câu trả lời phải có TRƯỚC khi hộp mở: `pill-ui`
+ * cần nó để chọn trần cao đem đi đo phép lật, mà phép lật thì đo ngay lúc bấm.
+ */
+export function hasPoseThumbs(kind: PillKind): boolean {
+  return kind === "pose" || kind === "view";
+}
+
 export function usePoseThumbs(
   kind: PillKind,
   values: readonly string[],
   open: boolean,
 ): ((value: string) => string | null) | undefined {
   const row = React.useContext(PoseRowContext);
-  const axis: PoseAxis | null = kind === "pose" ? "pose" : kind === "view" ? "view" : null;
+  const axis: PoseAxis | null = hasPoseThumbs(kind) ? (kind as PoseAxis) : null;
 
   /* Đo dpr MỘT LẦN cho cả vòng đời pill: nó nằm trong khoá nhớ, và một phép đo
      lại giữa chừng (kéo cửa sổ sang màn hình thứ hai) chỉ tổ sinh một bộ khoá mới

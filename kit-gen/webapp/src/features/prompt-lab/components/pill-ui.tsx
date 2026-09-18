@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import type { PillImage } from "@/features/prompt-canvas/lib/pill-image";
 import { hasBlankChoice, hasCatalog, inheritsWhenEmpty, labelOf, nounOf, pillOptions, refRoleOf, type PillKind } from "../lib/pill-registry";
 import { usePresets } from "../lib/presets-store";
-import { usePoseThumbs } from "../lib/pose/use-pose-thumbs";
+import { hasPoseThumbs, usePoseThumbs } from "../lib/pose/use-pose-thumbs";
 import { RefImageBody } from "./RefImagePill";
 import { SourcePicker, useDismiss, type SourceGroup } from "./SourcePicker";
 
@@ -103,6 +103,21 @@ export function PillAxis({ children }: { children: React.ReactNode }) {
 export const PILL_MENU_MAX_PX = 320;
 /** Trần cao của `SourcePicker` — PHẢI khớp `max-h-[22.5rem]` trong class của nó. */
 export const SOURCE_PICKER_MAX_PX = 360;
+/**
+ * Trần cao của `SourcePicker` KHI CÓ Ô XEM TRƯỚC — PHẢI khớp `max-h-[30rem]`.
+ *
+ * ╔══ VÌ SAO HAI TRẦN, KHÔNG PHẢI MỘT ═══════════════════════════════════════╗
+ * ║ Dòng có ô ảnh 72px cao ~84px, gấp hơn hai lần dòng chữ trần. Giữ trần 360px║
+ * ║ thì hộp dáng chỉ bày được ~3 trong 19 mục: ô xem trước giúp NHẬN RA dáng    ║
+ * ║ nhưng lại làm khó việc TÌM dáng, và đổi một cái khó lấy một cái khó là      ║
+ * ║ không đổi gì cả. Nâng trần cho MỌI hộp thì ngược lại: hộp chủ đề 6 dòng     ║
+ * ║ chữ sẽ mở ra một khung cao 480px với một nửa là khoảng trắng.               ║
+ * ║ Con số này KHÔNG chỉ là cái nhìn thấy — `shouldDropUp` đo chỗ trống bằng    ║
+ * ║ chính nó. Sửa class mà quên sửa đây là hộp tưởng mình thấp hơn thực tế,     ║
+ * ║ mở xuống dưới ở một pill gần đáy màn, rồi bị cắt mất phần chân.             ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export const SOURCE_PICKER_TALL_PX = 480;
 /** Khe giữa nút và menu — khớp `calc(100% + 8px)` ở cả hai chiều. */
 export const PILL_MENU_GAP_PX = 8;
 
@@ -332,7 +347,9 @@ export function OptionPill({
   /** Dự án đang mở — cần để hộp đọc được thumbnail của ảnh đã đính. */
   projectId?: string | null;
 }) {
-  const flip = useMenuFlip(SOURCE_PICKER_MAX_PX);
+  /* Trần cao phải quyết ĐƯỢC TRƯỚC KHI hộp mở (phép lật đo ngay lúc bấm), nên nó
+     đi theo `kind` — thứ biết từ đầu — chứ không theo việc hộp đã có ảnh hay chưa. */
+  const flip = useMenuFlip(hasPoseThumbs(kind) ? SOURCE_PICKER_TALL_PX : SOURCE_PICKER_MAX_PX);
   const button = React.useRef<HTMLButtonElement>(null);
   const presets = usePresets();
   const options = React.useMemo(() => pillOptions(kind, presets), [kind, presets]);

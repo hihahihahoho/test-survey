@@ -30,7 +30,7 @@ vi.mock("../lib/presets-store", async (orig) => {
 });
 
 import { SourcePicker } from "../components/SourcePicker";
-import { OptionPill } from "../components/pill-ui";
+import { OptionPill, SOURCE_PICKER_MAX_PX, SOURCE_PICKER_TALL_PX } from "../components/pill-ui";
 import { PoseRowContext } from "../lib/pose/use-pose-thumbs";
 import { resetPoseThumbs } from "../lib/pose/pose-thumb";
 
@@ -60,9 +60,26 @@ function Box({ previewOf }: { previewOf?: (value: string) => string | null }) {
   );
 }
 
-/** Ô ảnh và ô giữ chỗ dùng chung một cỡ — `size-20` LÀ 80px, cỡ chủ sản phẩm chốt. */
+/** Ô ảnh và ô giữ chỗ dùng chung một cỡ — `size-[4.5rem]` LÀ 72px. */
 function boxes(root: HTMLElement) {
-  return [...root.querySelectorAll(".size-20")];
+  return [...root.querySelectorAll('[class*="size-[4.5rem]"]')];
+}
+
+/** Khung ngoài của hộp — nơi đeo trần cao. */
+function panel(root: HTMLElement) {
+  return root.querySelector("[aria-label^='Nguồn cho']");
+}
+
+/**
+ * Trần cao ĐỌC RA TỪ CLASS, tính bằng px — để so THẲNG với hằng mà phép lật dùng.
+ * Đây là cái chốt giữ hai con số ấy đi cùng nhau: đổi `max-h-[…]` mà quên đổi
+ * `SOURCE_PICKER_*_PX` thì hộp đo chỗ trống bằng một chiều cao nó không có, mở
+ * xuống dưới ở một pill gần đáy màn rồi bị cắt mất chân — một hỏng chỉ hiện ra ở
+ * đúng vài trăm pixel cuối trang, tức là thứ không ai gặp lúc đang sửa nó.
+ */
+function maxHeightPx(box: Element | null): number {
+  const rem = /max-h-\[([0-9.]+)rem\]/.exec(box?.className ?? "")?.[1];
+  return Number(rem) * 16;
 }
 
 describe("hộp chọn bày ô xem trước", () => {
@@ -85,7 +102,19 @@ describe("hộp chọn bày ô xem trước", () => {
     expect(boxes(container)).toHaveLength(0);
   });
 
-  it("③ ô tìm nhanh và «Quản lý…» vẫn ở nguyên chỗ khi có ảnh — ô ảnh không được nuốt lối đi nào", () => {
+  it("③ có ô xem trước ⇒ hộp CAO HƠN; không có thì giữ nguyên trần cũ", () => {
+    /* Trần không phải chuyện thẩm mỹ: dòng có ảnh cao ~84px, nên trần 360px chỉ
+       bày nổi ~3 trong 19 dáng. Hai con số này còn phải khớp `SOURCE_PICKER_*_PX`
+       — chính chúng nói cho hộp biết còn chỗ mở xuống dưới hay phải lật lên. */
+    const { container: withShots } = render(<Box previewOf={() => THUMB} />);
+    expect(maxHeightPx(panel(withShots))).toBe(SOURCE_PICKER_TALL_PX);
+
+    cleanup();
+    const { container: plain } = render(<Box />);
+    expect(maxHeightPx(panel(plain))).toBe(SOURCE_PICKER_MAX_PX);
+  });
+
+  it("④ ô tìm nhanh và «Quản lý…» vẫn ở nguyên chỗ khi có ảnh — ô ảnh không được nuốt lối đi nào", () => {
     render(
       <SourcePicker
         label="dáng"
@@ -115,7 +144,7 @@ function Pill({ kind, value, pose, view }: { kind: "pose" | "view"; value: strin
 }
 
 describe("pill dáng/góc vẽ ĐÚNG tấm của dòng", () => {
-  it("④ hộp «Dáng» vẽ mỗi dáng ở GÓC CỦA DÒNG, không phải góc mặc định", async () => {
+  it("⑤ hộp «Dáng» vẽ mỗi dáng ở GÓC CỦA DÒNG, không phải góc mặc định", async () => {
     const { container } = render(<Pill kind="pose" value="wave" pose="wave" view="side-right" />);
     fireEvent.click(screen.getByRole("button"));
 
@@ -128,7 +157,7 @@ describe("pill dáng/góc vẽ ĐÚNG tấm của dòng", () => {
     expect(container.querySelectorAll("img")).toHaveLength(8);
   });
 
-  it("⑤ hộp «Góc» vẽ DÁNG CỦA DÒNG ở từng góc — chín góc, cùng một dáng", async () => {
+  it("⑥ hộp «Góc» vẽ DÁNG CỦA DÒNG ở từng góc — chín góc, cùng một dáng", async () => {
     const { container } = render(<Pill kind="view" value="front" pose="jump" view="front" />);
     fireEvent.click(screen.getByRole("button"));
 
@@ -141,7 +170,7 @@ describe("pill dáng/góc vẽ ĐÚNG tấm của dòng", () => {
     expect(new Set(renderPoseDataUrl.mock.calls.map((call) => call[0]?.view)).size).toBe(9);
   });
 
-  it("⑥ dòng đang ở một dáng KHÔNG dựng được hình ⇒ hộp «Góc» vẫn cho thấy góc, bằng dáng nghỉ", async () => {
+  it("⑦ dòng đang ở một dáng KHÔNG dựng được hình ⇒ hộp «Góc» vẫn cho thấy góc, bằng dáng nghỉ", async () => {
     /* «Ăn mừng» có trong danh mục nhưng không có bảng góc khớp. Bày chín ô trống ở
        đây là giấu mất thứ người dùng đang đi tìm — chính là góc máy. */
     const { container } = render(<Pill kind="view" value="front" pose="cheer" view="front" />);
@@ -152,7 +181,7 @@ describe("pill dáng/góc vẽ ĐÚNG tấm của dòng", () => {
     expect([...roots]).toEqual([0]); // `idle` không nhấc gốc lên
   });
 
-  it("⑦ mở lại hộp KHÔNG vẽ lại gì — cái nhớ là thứ giữ cho GPU khỏi cháy", async () => {
+  it("⑧ mở lại hộp KHÔNG vẽ lại gì — cái nhớ là thứ giữ cho GPU khỏi cháy", async () => {
     const { container } = render(<Pill kind="pose" value="wave" pose="wave" view="front" />);
     const button = screen.getByRole("button");
 

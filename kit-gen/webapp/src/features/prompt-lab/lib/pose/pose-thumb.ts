@@ -23,8 +23,17 @@ import { POSE_PRESETS, presetById } from "./pose-presets";
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 
-/** Cạnh ô xem trước, tính bằng **CSS px**. Pixel thật = `size × dpr`. */
-export const POSE_THUMB_SIZE = 80;
+/**
+ * Cạnh ô xem trước, tính bằng **CSS px**. Pixel thật = `size × dpr`.
+ *
+ * 72 chứ không phải 80: một dòng có ô 80px cao 92px, và ở trần hộp 480px thì chỉ
+ * còn ~4 dòng lọt vào tầm mắt. 72px đưa dòng về ~84px ⇒ ~5 dòng, mà cái mất thì
+ * không đo được bằng mắt — manơcanh vẫn đọc ra dáng ở cả hai cỡ.
+ * PHẢI khớp `size-[4.5rem]` của `OptionPreview` (`SourcePicker.tsx`); lệch nhau
+ * thì ảnh dựng ra một cỡ rồi bị CSS kéo sang cỡ khác, tức là lại nhoè đúng thứ
+ * mà phép nhân dpr sinh ra để tránh.
+ */
+export const POSE_THUMB_SIZE = 72;
 
 /**
  * Trần số tấm giữ lại. 19 dáng × 9 góc = 171 tấm — tức là một người dùng bấm hết

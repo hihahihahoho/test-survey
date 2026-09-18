@@ -89,9 +89,10 @@ describe("nhớ", () => {
 
     expect(first).toBe(second);
     expect(renderPoseDataUrl).toHaveBeenCalledTimes(1);
-    /* Cạnh THẬT = 80 CSS px × dpr 2 — ảnh dựng đúng 80px rồi phóng lên màn Retina
-       là một manơcanh nhoè, mà nhìn ra dáng mới là cả điểm của tính năng. */
-    expect(renderPoseDataUrl.mock.calls[0]?.[0]?.size).toBe(160);
+    /* Cạnh THẬT = cạnh CSS × dpr 2 (72 ⇒ 144) — ảnh dựng đúng cỡ CSS rồi phóng lên
+       màn Retina là một manơcanh nhoè, mà nhìn ra dáng mới là cả điểm của tính năng. */
+    expect(POSE_THUMB_SIZE).toBe(72);
+    expect(renderPoseDataUrl.mock.calls[0]?.[0]?.size).toBe(POSE_THUMB_SIZE * 2);
   });
 
   it("⑥ hai lượt hỏi CÙNG LÚC gộp làm một — mở hộp hai nhịp không thành hai context WebGL", async () => {

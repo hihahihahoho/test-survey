@@ -201,7 +201,17 @@ export function SourcePicker(props: SourcePickerProps) {
       /* `text-body`: hộp KHÔNG kế thừa cỡ chữ của câu (20px) — một danh sách 10
          mục ở cỡ tiêu đề thì cao hơn cả màn hình. */
       className={cn(
-        "absolute left-0 z-40 flex max-h-[22.5rem] w-80 flex-col rounded-2 border border-line-subtle bg-overlay text-body shadow-2",
+        "absolute left-0 z-40 flex w-80 flex-col rounded-2 border border-line-subtle bg-overlay text-body shadow-2",
+        /* TRẦN CAO ĐI THEO CỠ DÒNG, và hai con số này phải khớp `SOURCE_PICKER_MAX_PX`
+           / `SOURCE_PICKER_TALL_PX` ở `pill-ui.tsx` — chính chúng quyết định hộp có
+           lật ngược lên trên hay không. Lệch một trong hai là hộp đo chỗ trống bằng
+           một chiều cao nó không có, rồi mở xuống dưới và bị cắt.
+           Vì sao phải cao hơn khi có ảnh: dòng có ô 72px cao ~84px, nên ở trần cũ
+           (360px) người dùng chỉ thấy ~3 trong 19 dáng — một danh sách phải cuộn sáu
+           nhịp mới đi hết thì ô xem trước giúp NHẬN RA dáng nhưng lại làm khó việc
+           TÌM dáng. 480px đưa con số ấy về ~5 dòng, và vẫn còn 288px lề ở màn
+           1366×768 (chiều cao hay gặp nhất của laptop công ty). */
+        previewOf ? "max-h-[30rem]" : "max-h-[22.5rem]",
         dropUp ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]",
       )}
     >
@@ -390,7 +400,7 @@ function PresetPanel({
         {emptyLabel !== undefined && (
           <SourceRow selected={marked && !value} onSelect={() => onChoose("")}>
             {/* «Để trống» không có hình — nhưng vẫn phải chừa Ô: thiếu nó thì mục
-                đầu danh sách thụt vào 80px so với mọi mục dưới, và cả cột chữ
+                đầu danh sách thụt vào 72px so với mọi mục dưới, và cả cột chữ
                 trông như hai danh sách dán cạnh nhau. */}
             {previewOf && <OptionPreview src={null} />}
             <span className="text-fg-muted">{emptyLabel}</span>
@@ -485,10 +495,10 @@ function OptionPreview({ src }: { src: string | null }) {
       src={src}
       alt=""
       aria-hidden
-      className="size-20 shrink-0 rounded-1 border border-line-subtle bg-raised object-contain"
+      className="size-[4.5rem] shrink-0 rounded-1 border border-line-subtle bg-raised object-contain"
     />
   ) : (
-    <span aria-hidden className="size-20 shrink-0 rounded-1 border border-line-subtle bg-raised" />
+    <span aria-hidden className="size-[4.5rem] shrink-0 rounded-1 border border-line-subtle bg-raised" />
   );
 }
 
