@@ -13,11 +13,13 @@
  * jsdom không có WebGL, nên `renderPoseDataUrl` bị thay bằng một hàm trả chuỗi có
  * ghi sẵn dáng+góc — nhờ thế ca dưới đọc được TẤM NÀO đã được đặt vẽ.
  */
+import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const renderPoseDataUrl = vi.fn(
-  (input: { view: string; rootY: number }) => `data:image/png;base64,${input.view}|${input.rootY}`,
+  (input: { view: string; rootY: number; size: number }) =>
+    `data:image/png;base64,${input.view}|${input.rootY}|${input.size}`,
 );
 vi.mock("../lib/pose/pose-renderer", () => ({ renderPoseDataUrl, POSE_FOV: 34 }));
 
@@ -30,9 +32,11 @@ vi.mock("../lib/presets-store", async (orig) => {
 });
 
 import { SourcePicker } from "../components/SourcePicker";
+import { MascotBlockBody } from "../components/MascotBlockView";
 import { OptionPill, SOURCE_PICKER_MAX_PX, SOURCE_PICKER_TALL_PX } from "../components/pill-ui";
+import { newMascotBlock, newMascotPose, type MascotBlock } from "../lib/composer-model";
 import { PoseRowContext } from "../lib/pose/use-pose-thumbs";
-import { resetPoseThumbs } from "../lib/pose/pose-thumb";
+import { POSE_THUMB_SIZE, ROW_THUMB_SIZE, resetPoseThumbs } from "../lib/pose/pose-thumb";
 
 const THUMB = "data:image/png;base64,co-hinh";
 
@@ -150,11 +154,12 @@ describe("pill dáng/góc vẽ ĐÚNG tấm của dòng", () => {
 
     await waitFor(() => expect(container.querySelectorAll("img").length).toBeGreaterThan(0));
 
+    await waitFor(() => expect(container.querySelectorAll("img")).toHaveLength(19));
+
     const views = new Set(renderPoseDataUrl.mock.calls.map((call) => call[0]?.view));
     expect([...views]).toEqual(["side-right"]);
-    /* 8/19 dáng có bảng góc khớp; 11 dáng còn lại KHÔNG được mượn ảnh của `idle`. */
-    expect(renderPoseDataUrl).toHaveBeenCalledTimes(8);
-    expect(container.querySelectorAll("img")).toHaveLength(8);
+    /* 19/19 từ 18/09/2026 — không dòng nào trong danh mục còn bày ô xám. */
+    expect(renderPoseDataUrl).toHaveBeenCalledTimes(19);
   });
 
   it("⑥ hộp «Góc» vẽ DÁNG CỦA DÒNG ở từng góc — chín góc, cùng một dáng", async () => {
@@ -171,9 +176,9 @@ describe("pill dáng/góc vẽ ĐÚNG tấm của dòng", () => {
   });
 
   it("⑦ dòng đang ở một dáng KHÔNG dựng được hình ⇒ hộp «Góc» vẫn cho thấy góc, bằng dáng nghỉ", async () => {
-    /* «Ăn mừng» có trong danh mục nhưng không có bảng góc khớp. Bày chín ô trống ở
-       đây là giấu mất thứ người dùng đang đi tìm — chính là góc máy. */
-    const { container } = render(<Pill kind="view" value="front" pose="cheer" view="front" />);
+    /* Ô dáng ĐỂ TRỐNG (hoặc một câu người dùng tự gõ) — bày chín ô trống ở đây là
+       giấu mất thứ người dùng đang đi tìm, chính là góc máy. */
+    const { container } = render(<Pill kind="view" value="front" pose="" view="front" />);
     fireEvent.click(screen.getByRole("button"));
 
     await waitFor(() => expect(container.querySelectorAll("img").length).toBe(9));
@@ -186,14 +191,91 @@ describe("pill dáng/góc vẽ ĐÚNG tấm của dòng", () => {
     const button = screen.getByRole("button");
 
     fireEvent.click(button);
-    await waitFor(() => expect(container.querySelectorAll("img")).toHaveLength(8));
+    await waitFor(() => expect(container.querySelectorAll("img")).toHaveLength(19));
     const first = renderPoseDataUrl.mock.calls.length;
 
     fireEvent.click(button); // đóng
     fireEvent.click(button); // mở lại
     /* Có hình NGAY ở nhịp render đầu, không nháy một vòng ô trống: `peek` đồng bộ. */
-    expect(container.querySelectorAll("img")).toHaveLength(8);
+    expect(container.querySelectorAll("img")).toHaveLength(19);
 
     await waitFor(() => expect(renderPoseDataUrl.mock.calls.length).toBe(first));
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Ô XEM TRƯỚC Ở ĐẦU DÒNG — «chọn xong rồi thì thấy mình vừa chọn cái gì»
+   ══════════════════════════════════════════════════════════════════════════
+   Hộp chọn đóng lại ngay sau cú bấm, và thứ còn lại trên màn là hai chữ trong
+   một pill. Ca dưới đây khoá cái phần CÒN LẠI ấy: một bản nháp 12 dòng phải đọc
+   được bằng mắt, không phải bằng cách mở lại 12 cái hộp. */
+
+/** Một thẻ Nhân vật đúng MỘT dòng, dáng và góc do ca chỉ định. */
+function Rows({ pose, view }: { pose: string; view: string }) {
+  const block = React.useMemo<MascotBlock>(
+    () => ({ ...newMascotBlock(), poses: [{ ...newMascotPose(pose, view), id: "p1" }] }),
+    [pose, view],
+  );
+  return <MascotBlockBody block={block} onChange={() => {}} />;
+}
+
+/** Ô 40px ở đầu dòng — ảnh thật hoặc ô giữ chỗ tàng hình, cùng một cỡ. */
+function rowBoxes(root: HTMLElement) {
+  return [...root.querySelectorAll('[class~="size-10"]')];
+}
+
+describe("đầu dòng mang tấm ảnh của chính dòng ấy", () => {
+  it("⑨ dòng đã chọn dáng ⇒ một tấm 40px, dựng ĐÚNG cỡ 40 (không phải cỡ hộp chọn bị CSS thu nhỏ)", async () => {
+    const { container } = render(<Rows pose="bow" view="side-right" />);
+
+    await waitFor(() => expect(container.querySelectorAll("img")).toHaveLength(1));
+    const shot = container.querySelector("img")!;
+
+    /* Dấu vết của mock ghi cả góc lẫn cạnh: đủ để nói tấm này là tấm của DÒNG,
+       không phải một tấm nào khác lọt vào. */
+    expect(shot.getAttribute("src")).toContain("side-right|");
+    expect(shot.getAttribute("src")).toContain(`|${ROW_THUMB_SIZE}`);
+    /* Không một lượt nào dựng ở cỡ hộp chọn: dựng 72 rồi để CSS kéo về 40 là một
+       manơcanh nhoè và gấp ba lần byte giữ trong RAM cho mỗi dòng. */
+    expect(renderPoseDataUrl.mock.calls.map((call) => call[0]?.size)).not.toContain(POSE_THUMB_SIZE);
+
+    /* ĐỨNG NGAY CẠNH SỐ THỨ TỰ — đó là cột mắt người dùng chạy dọc. */
+    expect(shot.previousElementSibling?.textContent).toBe("#1");
+  });
+
+  it("⑩ ô dáng để trống ⇒ KHÔNG ảnh và KHÔNG chừa chỗ: dòng chưa từng có dáng không mọc thêm ô rỗng", async () => {
+    const { container } = render(<Rows pose="" view="front" />);
+
+    await waitFor(() => expect(screen.getByText("#1")).toBeTruthy());
+    expect(container.querySelectorAll("img")).toHaveLength(0);
+    expect(rowBoxes(container)).toHaveLength(0);
+    expect(renderPoseDataUrl).not.toHaveBeenCalled();
+  });
+
+  it("⑪ xoá dáng của một dòng ĐÃ có ảnh ⇒ ô giữ chỗ TÀNG HÌNH thay vào, dòng không tụt chiều cao", async () => {
+    /* Chốt một chiều: chiều cao hàng 1 chỉ được đổi đúng một lần, ở nhịp dòng có
+       ảnh lần đầu. Bấm «— để trống —» mà dòng tụt một bậc là mọi dòng bên dưới
+       nhảy lên ngay dưới ngón tay người vừa bấm. */
+    const { container, rerender } = render(<Rows pose="wave" view="front" />);
+    await waitFor(() => expect(container.querySelectorAll("img")).toHaveLength(1));
+
+    rerender(<Rows pose="" view="front" />);
+
+    expect(container.querySelectorAll("img")).toHaveLength(0);
+    const cho = rowBoxes(container);
+    expect(cho).toHaveLength(1);
+    /* TÀNG HÌNH, không viền: nó là khoảng trống, không phải một tấm ảnh hỏng. */
+    expect(cho[0]?.className).not.toContain("border");
+    expect(cho[0]?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("⑫ đổi GÓC của dòng ⇒ tấm đầu dòng đổi theo ngay, không đợi mở hộp nào", async () => {
+    const { container, rerender } = render(<Rows pose="wave" view="front" />);
+    await waitFor(() => expect(container.querySelector("img")?.getAttribute("src")).toContain("front|"));
+
+    rerender(<Rows pose="wave" view="back" />);
+    await waitFor(() => expect(container.querySelector("img")?.getAttribute("src")).toContain("back|"));
+
+    expect(renderPoseDataUrl).toHaveBeenCalledTimes(2);
   });
 });

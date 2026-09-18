@@ -10,6 +10,7 @@ import {
   poseThumb,
   poseThumbKey,
   POSE_THUMB_SIZE,
+  ROW_THUMB_SIZE,
   thumbPixelRatio,
 } from "./pose-thumb";
 
@@ -50,8 +51,8 @@ export const PoseRowContext = React.createContext<PoseRowPills | null>(null);
  * ảnh khi có hàm này, nên hộp chọn phong cách/chủ đề giữ nguyên bố cục cũ.
  *
  * ╔══ VÌ SAO VẼ CẢ DANH SÁCH LÚC MỞ, KHÔNG VẼ THEO DÒNG LỌT VÀO TẦM MẮT ═════╗
- * ║ Chỉ 8/19 dáng có bảng góc khớp và chỉ có 9 góc máy, nên cả một hộp mở ra   ║
- * ║ là NHIỀU NHẤT 9 lượt vẽ ~10ms — và từ lần mở thứ hai là 0 lượt, vì cái nhớ ║
+ * ║ Cả danh mục là 19 dáng và 9 góc máy, nên một hộp mở ra là NHIỀU NHẤT 19    ║
+ * ║ lượt vẽ ~10ms — và từ lần mở thứ hai là 0 lượt, vì cái nhớ                 ║
  * ║ đã giữ đủ. Dựng thêm một `IntersectionObserver` cho mỗi dòng để tiết kiệm  ║
  * ║ vài lượt ấy là thêm một bộ máy phải nhớ gỡ, đổi lấy một khoản không đo      ║
  * ║ được. Vẽ LẦN LƯỢT (await từng tấm) mới là chỗ đáng giữ: nó bảo đảm không   ║
@@ -130,6 +131,58 @@ export function usePoseThumbs(
 }
 
 type PoseAxis = "pose" | "view";
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Ô XEM TRƯỚC Ở ĐẦU DÒNG
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Tấm ảnh của DÒNG NÀY — dáng đang chọn, ở góc đang chọn. `null` = không có gì
+ * để bày (ô dáng để trống, chữ tự gõ, hoặc máy này không dựng được hình).
+ *
+ * ╔══ VÌ SAO ĐẦU DÒNG CẦN MỘT TẤM NỮA TRONG KHI HỘP CHỌN ĐÃ CÓ ══════════════╗
+ * ║ Hộp chọn trả lời "dáng nào là dáng nào" — nhưng nó ĐÓNG LẠI ngay sau cú    ║
+ * ║ bấm, và thứ còn lại trên màn là đúng hai chữ «Giới thiệu» trong một pill.  ║
+ * ║ Một bản nháp 12 dòng ⇒ 12 dòng chữ, tức là quay về đúng cái danh mục chữ   ║
+ * ║ mà ô xem trước vừa chữa, chỉ dời chỗ. Chủ sản phẩm nói thẳng: chọn xong     ║
+ * ║ phải THẤY mình vừa chọn cái gì, ngay trên dòng.                            ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * TRẢ ĐỒNG BỘ nếu cái nhớ đã có tấm ấy (`peek`) — đó là thứ giữ cho một bản nháp
+ * mở lại không nháy một loạt ô trống. Chưa có thì đặt một lượt vẽ vào HÀNG ĐỢI
+ * một-làn của `pose-thumb.ts` và vẽ lại đúng component này khi tấm về; 20 dòng
+ * cùng mở ra là 20 lượt NỐI ĐUÔI, không phải 20 context WebGL cùng lúc.
+ */
+export function useRowPoseThumb(pose: string, view: string): string | null {
+  const dpr = React.useMemo(() => thumbPixelRatio(), []);
+
+  /* Không rơi về `idle`/góc mặc định như hộp chọn: ô này nói "DÒNG NÀY đang ở
+     dáng nào", nên một dáng không dựng được hình phải ra ô TRỐNG. Bày tấm «Đứng
+     chờ» ở đây là dán một câu trả lời sai lên đúng chỗ người dùng đi tìm. */
+  const spec =
+    hasPoseSkeleton(pose) && isCameraView(view)
+      ? { poseId: pose, view, size: ROW_THUMB_SIZE, dpr }
+      : null;
+  const key = spec ? poseThumbKey(spec) : "";
+
+  const [, bump] = React.useReducer((n: number) => n + 1, 0);
+
+  React.useEffect(() => {
+    if (!spec || peekPoseThumb(key)) return;
+
+    let alive = true;
+    void poseThumb(spec).then((url) => {
+      if (alive && url) bump();
+    });
+    return () => {
+      alive = false;
+    };
+    /* `key` gói trọn bốn thứ của `spec`, nên nó là dependency ĐỦ — để cả `spec`
+       vào đây là một object mới mỗi lần render, tức là effect chạy lại vô hạn. */
+  }, [key]);
+
+  return key ? peekPoseThumb(key) : null;
+}
 
 /**
  * Mục thứ `value` của trục này tả TẤM ẢNH NÀO. `null` = mục không vẽ được (mục

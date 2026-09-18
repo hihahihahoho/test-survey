@@ -8,9 +8,9 @@
  * ║ Một lỗi ở đây KHÔNG hiện ra thành màn hỏng: hộp chọn vẫn đúng ảnh, chỉ là  ║
  * ║ mỗi lần cuộn lại đốt GPU cho những tấm không đổi — thứ không cổng nào      ║
  * ║ khác trong repo này nhìn thấy được.                                       ║
- * ║ Ca thứ hai (`hasPoseSkeleton`) còn đắt hơn: danh mục có 19 dáng mà chỉ 8   ║
- * ║ dáng có bảng góc khớp, và `presetById` cố ý rơi về `idle` với id lạ — bỏ   ║
- * ║ cổng ấy đi là 11 dáng cùng bày ra ảnh của «Đứng chờ» và NÓI DỐI người dùng.║
+ * ║ Ca thứ hai (`hasPoseSkeleton`) còn đắt hơn: `presetById` cố ý rơi về       ║
+ * ║ `idle` với id lạ, nên bỏ cổng ấy đi là ô dáng ĐỂ TRỐNG và mọi chữ người    ║
+ * ║ dùng tự gõ đều bày ra ảnh của «Đứng chờ» — NÓI DỐI người dùng.             ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
  * `renderPoseDataUrl` bị thay: jsdom không có WebGL, và ca ở đây nói về CÁI NHỚ
@@ -23,6 +23,8 @@ const renderPoseDataUrl = vi.fn(
 );
 
 vi.mock("../pose-renderer", () => ({ renderPoseDataUrl, POSE_FOV: 34 }));
+
+import { POSES } from "@/features/kit-core/lib/poses";
 
 import {
   hasPoseSkeleton,
@@ -64,12 +66,21 @@ describe("khoá nhớ", () => {
 });
 
 describe("dáng nào vẽ được", () => {
-  it("③ chỉ dáng CÓ bảng góc khớp mới có hình; dáng chỉ-có-chữ trả `null` chứ không mượn ảnh dáng khác", async () => {
-    expect(hasPoseSkeleton("wave")).toBe(true);
-    /* «Ăn mừng» có thật trong danh mục 19 dáng, nhưng KHÔNG có trong `POSE_PRESETS`. */
-    expect(hasPoseSkeleton("cheer")).toBe(false);
+  it("③ MỌI dáng trong danh mục đều có bảng góc khớp — không dòng nào còn bày ô xám", () => {
+    /* Đây là cái chốt của cả đợt 18/09/2026. Thêm một dáng vào `POSES` mà quên
+       bảng góc là dòng ấy hiện ra một ô trống trên màn người dùng, và không cổng
+       nào khác trong repo nhìn thấy được. */
+    const thieu = POSES.filter((pose) => !hasPoseSkeleton(pose.id)).map((pose) => pose.id);
+    expect(thieu, `dáng chưa có bảng góc khớp: ${thieu.join(", ")}`).toEqual([]);
+    expect(POSES).toHaveLength(19);
+  });
 
-    await expect(poseThumb({ ...SHOT, poseId: "cheer" })).resolves.toBeNull();
+  it("③b chữ tự gõ / ô để trống KHÔNG được mượn ảnh của «Đứng chờ»", async () => {
+    expect(hasPoseSkeleton("wave")).toBe(true);
+    expect(hasPoseSkeleton("")).toBe(false);
+    expect(hasPoseSkeleton("dang-toi-tu-nghi-ra")).toBe(false);
+
+    await expect(poseThumb({ ...SHOT, poseId: "dang-toi-tu-nghi-ra" })).resolves.toBeNull();
     expect(renderPoseDataUrl).not.toHaveBeenCalled();
   });
 
@@ -100,6 +111,30 @@ describe("nhớ", () => {
 
     expect(a).toBe(b);
     expect(renderPoseDataUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("⑥b nhiều KHOÁ KHÁC NHAU hỏi cùng lúc ⇒ vẽ NỐI ĐUÔI, đúng thứ tự hỏi, và THỞ giữa hai tấm", async () => {
+    /* `inflight` chỉ gộp những lượt CÙNG khoá — 20 dòng của một bản nháp thì mỗi
+       dòng một khoá. Thứ giữ cho chúng không dính thành một cú đứng hình là hàng
+       đợi một-làn, và nhịp `setTimeout` giữa hai lượt là thứ trả lại quyền vẽ cho
+       trình duyệt. Cắm một `setTimeout` khác vào GIỮA hàng đợi: nếu hàng đợi có
+       thở thật thì mốc ấy phải rơi vào giữa dãy, không phải sau chót. */
+    const nhat: string[] = [];
+    renderPoseDataUrl.mockImplementation((input: { view: string; size: number }) => {
+      nhat.push(`ve-${input.size}`);
+      return `data:image/png;base64,${input.view}-${input.size}`;
+    });
+    setTimeout(() => nhat.push("trinh-duyet-tho"), 0);
+
+    const dang = ["wave", "cheer", "think", "bow", "fly", "dance"];
+    await Promise.all(dang.map((poseId, at) => poseThumb({ ...SHOT, poseId, size: at + 1 })));
+
+    expect(renderPoseDataUrl).toHaveBeenCalledTimes(6);
+    /* Đúng thứ tự hỏi — hàng đợi không được xáo trộn, nếu không thì dòng #1 có
+       thể là dòng cuối cùng có ảnh. Cạnh ghi trong dấu vết là cạnh THẬT
+       (cạnh CSS × dpr 2), nên `size: at + 1` ra `ve-2`, `ve-4`, … */
+    expect(nhat.filter((b) => b.startsWith("ve-"))).toEqual(dang.map((_, at) => `ve-${(at + 1) * 2}`));
+    expect(nhat.indexOf("trinh-duyet-tho")).toBeLessThan(nhat.length - 1);
   });
 
   it("⑦ `peek` là ĐỒNG BỘ: trống trước khi vẽ, có ngay sau — đó là thứ giúp mở lại hộp không nháy ô trống", async () => {

@@ -24,7 +24,7 @@ import {
   DragHandle, NoteField, RemoveButton, RowIndex, RowShell, RowTop, SheetBreak, type RowDragProps,
 } from "./row-ui";
 import { OptionPill, PillMenu, PillMenuItem, useMenuFlip } from "./pill-ui";
-import { PoseRowContext, type PoseRowPills } from "../lib/pose/use-pose-thumbs";
+import { PoseRowContext, useRowPoseThumb, type PoseRowPills } from "../lib/pose/use-pose-thumbs";
 
 /**
  * MascotBlockView — thẻ «Nhân vật»: MỘT CÂU DANH TÍNH + MỘT DANH SÁCH DÁNG.
@@ -91,6 +91,7 @@ function PoseRow({
         <RowTop>
           <DragHandle {...drag} label={label} />
           <RowIndex index={drag.index} />
+          <RowPoseShot pose={row.pose} view={row.view} />
           {/* `retakePose` chứ không phải `{...row, pose}`: đổi dáng/góc làm ảnh
               manơcanh đã chụp hết hiệu lực, và luật ấy chỉ có MỘT chỗ. */}
           <OptionPill compact axis="Dáng" kind="pose" value={row.pose} onChange={(pose) => onChange(retakePose(row, { pose }))} />
@@ -129,6 +130,64 @@ function PoseRowShot({ pose, view, children }: PoseRowPills & { children: React.
   return <PoseRowContext.Provider value={pills}>{children}</PoseRowContext.Provider>;
 }
 
+/**
+ * TẤM ẢNH CỦA CHÍNH DÒNG NÀY — dáng đang chọn, ở góc đang chọn, 40×40 ngay cạnh
+ * số thứ tự.
+ *
+ * ╔══ VÌ SAO NÓ ĐỨNG Ở ĐẦU DÒNG, KHÔNG PHẢI TRONG PILL ══════════════════════╗
+ * ║ Người dùng quét một bản nháp 12 dòng bằng cách chạy mắt DỌC theo cột trái  ║
+ * ║ (⣿ · #1 · #2 · …). Đặt tấm ảnh vào đúng cột ấy thì mười hai dáng đọc được  ║
+ * ║ trong một lượt mắt; nhét nó vào trong pill «Dáng» thì mỗi tấm nằm ở một     ║
+ * ║ hoành độ khác (pill co giãn theo độ dài chữ), và cột duy nhất còn lại để    ║
+ * ║ chạy mắt là cột chữ — tức là không có gì thay đổi so với trước.            ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ╔══ VÌ SAO Ô GIỮ CHỖ CHỈ XUẤT HIỆN SAU KHI DÒNG ĐÃ TỪNG CÓ ẢNH ════════════╗
+ * ║ Hàng 1 KHÔNG ĐƯỢC PHÉP WRAP và mọi dòng phải cao BẰNG NHAU (xem `RowTop`). ║
+ * ║ Hai luật ấy đá nhau ở đây: bày ô 40px khi có dáng rồi bỏ hẳn khi xoá dáng   ║
+ * ║ là dòng ấy TỤT một bậc chiều cao ngay dưới ngón tay người vừa bấm «— để     ║
+ * ║ trống —», kéo theo mọi dòng bên dưới nhảy lên. Mà chừa sẵn ô cho MỌI dòng   ║
+ * ║ thì một thẻ ở chế độ tự do — nơi dáng có thể chưa bao giờ được đặt — mang    ║
+ * ║ một cột ô rỗng suốt đời.                                                   ║
+ * ║ Nên cái chốt là MỘT CHIỀU: dòng nào đã từng hiện được ảnh thì giữ chỗ vĩnh  ║
+ * ║ viễn (ô trống TÀNG HÌNH, không viền — nó là khoảng trống, không phải một    ║
+ * ║ tấm ảnh hỏng), dòng chưa từng có thì không bao giờ mọc thêm ô. Chiều cao    ║
+ * ║ của một dòng vì thế chỉ đổi đúng một lần, ở nhịp nó có ảnh lần đầu.        ║
+ * ║ (Khác hẳn ô giữ chỗ CÓ VIỀN trong hộp chọn: ở đó 19 dòng nằm cạnh nhau     ║
+ * ║ trong một danh sách và cần một cột thẳng; ở đây mỗi dòng là một thẻ riêng.) ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * CÂM, CỐ Ý. Nó không bấm được: `OptionPill` tự giữ trạng thái mở/đóng hộp của
+ * mình (`useMenuFlip`), nên biến tấm ảnh thành cửa thứ hai mở hộp «Dáng» đòi mở
+ * API của pill ra cho người ngoài điều khiển — một cái cửa dùng chung cho BẢY
+ * trục pill, đổi vì một tấm ảnh trang trí thì không đáng. Pill «Dáng» đứng cách
+ * nó đúng 6px và vẫn là cửa duy nhất.
+ * `alt=""` + `aria-hidden` cùng lý do với ô trong hộp chọn: tên dáng đã nằm ngay
+ * bên cạnh bằng chữ, đọc hai lần là thừa. Ảnh ở đây để NHÌN.
+ */
+function RowPoseShot({ pose, view }: PoseRowPills) {
+  const src = useRowPoseThumb(pose, view);
+  /* Chốt một chiều "dòng này đã từng có ảnh". Ghi trong effect chứ không giữa
+     lúc render — render phải thuần, và nhịp duy nhất cần nó đúng thì cũng là
+     nhịp đang có `src` để bày. */
+  const everShown = React.useRef(false);
+  React.useEffect(() => {
+    if (src) everShown.current = true;
+  }, [src]);
+
+  if (!src) return everShown.current ? <span aria-hidden className="size-10 shrink-0" /> : null;
+  return (
+    <img
+      src={src}
+      alt=""
+      aria-hidden
+      /* `object-contain`: dáng «Nhảy» cao hơn dáng «Ngồi», và `cover` sẽ xén đúng
+         chỗ khác biệt giữa hai dáng — thứ duy nhất tấm ảnh này sinh ra để cho thấy. */
+      className="size-10 shrink-0 rounded-1 border border-line-subtle bg-raised object-contain"
+    />
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    Dòng ở CHẾ ĐỘ TỰ DO — một TipTap thật cho mỗi dòng
    ══════════════════════════════════════════════════════════════════════════ */
@@ -163,6 +222,10 @@ function FreePoseRow({
       <RowTop>
         <DragHandle {...drag} label={label} />
         <RowIndex index={drag.index} />
+        {/* CÙNG chỗ với dòng khuôn, và đọc CÙNG hai trường: `syncPoseFromDoc` giữ
+            `row.pose`/`row.view` đúng với câu chữ, nên gạt công tắc chế độ không
+            làm tấm ảnh đầu dòng đổi. */}
+        <RowPoseShot pose={row.pose} view={row.view} />
         <RemoveButton what={`dáng ${label}`} onRemove={onRemove} />
       </RowTop>
 

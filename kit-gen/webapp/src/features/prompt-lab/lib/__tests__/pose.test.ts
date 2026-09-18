@@ -14,7 +14,10 @@ import {
   POSE_REF_PREVIEW_SIZE, POSE_REF_SIZE, PoseRefUnavailableError, canCapturePoseRef,
   capturePoseRef, poseRefLabel,
 } from "../pose/capture-pose-ref";
-import { JOINTS, JOINT_GROUPS, JOINT_IDS, childrenOf, deg, joint, rad, rootJoints } from "../pose/skeleton";
+import {
+  JOINTS, JOINT_GROUPS, JOINT_IDS, childrenOf, deg, joint, rad, rootJoints,
+  type JointId, type Vec3,
+} from "../pose/skeleton";
 
 /**
  * MANƠCANH 3D — phần SỐNG TIẾP của lab «Pose & Sketch» đã bị xoá (07/09/2026).
@@ -92,13 +95,50 @@ describe("cây khớp — thứ mà mọi bảng góc và mọi slider đứng l
 });
 
 describe("bảng dáng — id phải là id THẬT của KitGen, không phải tên lab tự đặt", () => {
-  it("cả 8 preset đều có trong danh mục 19 dáng của kit-core (`lib/poses.ts`)", () => {
+  it("mọi preset đều có trong danh mục 19 dáng của kit-core (`lib/poses.ts`)", () => {
     const known = new Set<string>(POSES.map((p) => p.id));
-    expect(POSE_PRESETS).toHaveLength(8);
     for (const preset of POSE_PRESETS) {
       expect(known.has(preset.id), `dáng "${preset.id}" không có trong POSES`).toBe(true);
       /* Nhãn tra ngược từ danh mục thật ⇒ KHÔNG được rơi về chính id. */
       expect(presetLabel(preset.id)).not.toBe(preset.id);
+    }
+  });
+
+  it("VÀ NGƯỢC LẠI: mọi dáng của danh mục đều có bảng góc — 19/19, không id nào rơi về `idle`", () => {
+    /* Chiều này mới là chiều người dùng nhìn thấy. Thiếu một bảng góc thì
+       `presetById` lặng lẽ trả về «Đứng chờ» (đường lùi cố ý của nó), và dòng ấy
+       bày ra ảnh của một dáng KHÁC — hoặc, ở hộp chọn, một ô xám. Chủ sản phẩm
+       gửi ảnh chụp màn đúng ca ấy ngày 18/09/2026: 11 trong 19 dòng là ô xám. */
+    const co = new Set(POSE_PRESETS.map((preset) => preset.id));
+    const thieu = POSES.filter((pose) => !co.has(pose.id)).map((pose) => pose.id);
+    expect(thieu, `dáng chưa có bảng góc khớp: ${thieu.join(", ")}`).toEqual([]);
+    expect(POSE_PRESETS).toHaveLength(POSES.length);
+
+    for (const pose of POSES) {
+      expect(presetById(pose.id).id, `"${pose.id}" rơi về đường lùi`).toBe(pose.id);
+    }
+  });
+
+  it("mọi góc đều nằm trong dải của trục, và không preset nào đặt số cho một trục KHÔNG TỒN TẠI", () => {
+    /* Trục không tồn tại là ca im lặng nhất trong cả bảng: `wristL` không có trục
+       `y`, `kneeL` chỉ có `x`, `ankleL` không có `z` — viết số vào đó thì
+       `expandPose` chép nó sang three.js và khớp xoay theo một trục mà slider
+       không bao giờ chỉnh lại được, tức là một dáng không ai sửa nổi. */
+    const TRUC = ["x", "y", "z"] as const;
+    for (const preset of POSE_PRESETS) {
+      for (const [id, goc] of Object.entries(preset.data.angles)) {
+        const def = joint(id as never);
+        TRUC.forEach((truc, at) => {
+          const spec = def.axes.find((a) => a.axis === truc);
+          const so = goc?.[at] ?? 0;
+          if (!spec) {
+            expect(so, `${preset.id}.${id}: khớp này không có trục ${truc}`).toBe(0);
+            return;
+          }
+          expect(so, `${preset.id}.${id}.${truc} = ${so} ra ngoài dải`).toBeGreaterThanOrEqual(spec.min);
+          expect(so).toBeLessThanOrEqual(spec.max);
+        });
+      }
     }
   });
 
@@ -120,7 +160,7 @@ describe("bảng dáng — id phải là id THẬT của KitGen, không phải t
     expect(expandPose(preset.data).shoulderR[0]).not.toBe(999);
   });
 
-  it("id dáng lạ rơi về dáng đầu thay vì làm trắng màn", () => {
+  it("id dáng lạ (bản nháp cũ mang dáng đã bị bỏ) vẫn rơi về dáng đầu thay vì làm trắng màn", () => {
     expect(presetById("khong-ton-tai").id).toBe("idle");
   });
 
@@ -302,5 +342,186 @@ describe("ảnh dáng nộp cho máy vẽ — nền TRỐNG, chỉ còn manơcan
     /* Nét trắng trên nền trống là nét vô hình. Màu xám hiện tại đọc được ở cả hai. */
     expect(colors.toLowerCase()).not.toContain("#ffffff");
     expect(colors.toLowerCase()).not.toContain("#fff\"");
+  });
+});
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BẢNG GÓC CÓ RA ĐÚNG CÁI DÁNG NÓ TỰ XƯNG KHÔNG
+   ══════════════════════════════════════════════════════════════════════════
+
+   ╔══ VÌ SAO PHẢI TỰ DỰNG LẠI PHÉP TÍNH VỊ TRÍ ═════════════════════════════╗
+   ║ 19 bảng góc là 19 tờ giấy đầy số, và một số SAI DẤU vẫn ra một hình trông  ║
+   ║ hợp lý — chỉ là hình của một dáng khác. Ca thật đã xảy ra khi dựng bảng    ║
+   ║ này: `bow` viết `shoulder.x = +58` để "bù lại chỗ ngực đã gập", và cái dấu ║
+   ║ dương ấy hất hai cánh tay LÊN TRỜI SAU LƯNG thay vì buông thẳng đứng. Mọi  ║
+   ║ cổng khác trong repo đều cho nó qua: id có trong danh mục ✓, khớp có thật  ║
+   ║ ✓, góc trong dải ✓, ảnh dựng ra không ném ✓. Chỉ có MẮT NGƯỜI bắt được —   ║
+   ║ mà mắt người thì không chạy trong CI.                                     ║
+   ║ Nên ca này dựng lại đúng phép biến đổi của three.js (`Matrix4.compose` với ║
+   ║ Euler thứ tự mặc định XYZ, tức R = Rx·Ry·Rz) để đọc ra TOẠ ĐỘ THẬT của cổ  ║
+   ║ tay, cổ chân, quả đầu — rồi hỏi từng dáng đúng cái câu mà `note` của nó đã ║
+   ║ hứa với người dùng. Sai dấu ở đây là đỏ, không phải là một tấm ảnh lạ.     ║
+   ╚═══════════════════════════════════════════════════════════════════════════╝ */
+
+type M9 = readonly number[];
+const EYE: M9 = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+
+function mul(a: M9, b: M9): M9 {
+  const out: number[] = [];
+  for (let i = 0; i < 3; i += 1) {
+    for (let j = 0; j < 3; j += 1) {
+      let sum = 0;
+      for (let k = 0; k < 3; k += 1) sum += a[i * 3 + k]! * b[k * 3 + j]!;
+      out[i * 3 + j] = sum;
+    }
+  }
+  return out;
+}
+
+function apply(m: M9, v: Vec3): Vec3 {
+  return [
+    m[0]! * v[0] + m[1]! * v[1] + m[2]! * v[2],
+    m[3]! * v[0] + m[4]! * v[1] + m[5]! * v[2],
+    m[6]! * v[0] + m[7]! * v[1] + m[8]! * v[2],
+  ];
+}
+
+/** R = Rx·Ry·Rz — ĐÚNG thứ tự Euler mặc định của three.js (`Euler.order = "XYZ"`),
+ *  thứ tự mà `mannequin-mesh.setAngles` dựa vào khi gán thẳng `rotation.set(…)`. */
+function rotXYZ([x, y, z]: Vec3): M9 {
+  const [a, b] = [Math.cos(rad(x)), Math.sin(rad(x))];
+  const [c, d] = [Math.cos(rad(y)), Math.sin(rad(y))];
+  const [e, f] = [Math.cos(rad(z)), Math.sin(rad(z))];
+  return mul(mul([1, 0, 0, 0, a, -b, 0, b, a], [c, 0, d, 0, 1, 0, -d, 0, c]), [e, -f, 0, f, e, 0, 0, 0, 1]);
+}
+
+interface Landmarks {
+  at: Record<JointId, Vec3>;
+  /** Tâm quả đầu — `mannequin-mesh` đặt nó cách gốc khớp `head` đúng một bán kính. */
+  headCenter: Vec3;
+  /** Hướng MẶT nhìn: +Z của khớp gốc. */
+  facing: Vec3;
+  /** Gốc khớp thấp nhất — "có chạm đất không". Dáng đứng thường là ~0.06 (cổ chân). */
+  lowest: number;
+}
+
+function landmarksOf(id: string): Landmarks {
+  const preset = presetById(id);
+  expect(preset.id, `không có bảng góc cho "${id}"`).toBe(id);
+  const angles = expandPose(preset.data);
+
+  const world = new Map<JointId, { R: M9; p: Vec3 }>();
+  /* `JOINTS` khai CHA TRƯỚC CON (luật ghi ở `skeleton.ts`), nên một vòng lặp
+     thẳng là đủ — không cần đệ quy. */
+  for (const def of JOINTS) {
+    const parent = def.parent
+      ? world.get(def.parent)!
+      : { R: EYE, p: [0, preset.data.rootY ?? 0, 0] as Vec3 };
+    const offset = apply(parent.R, def.offset);
+    world.set(def.id, {
+      R: mul(parent.R, rotXYZ(angles[def.id])),
+      p: [parent.p[0] + offset[0], parent.p[1] + offset[1], parent.p[2] + offset[2]],
+    });
+  }
+
+  const at = {} as Record<JointId, Vec3>;
+  let lowest = Infinity;
+  for (const def of JOINTS) {
+    at[def.id] = world.get(def.id)!.p;
+    lowest = Math.min(lowest, at[def.id][1]);
+  }
+
+  const head = world.get("head")!;
+  const lift = apply(head.R, [0, joint("head").headRadius ?? 0, 0]);
+  return {
+    at,
+    headCenter: [head.p[0] + lift[0], head.p[1] + lift[1], head.p[2] + lift[2]],
+    facing: apply(world.get("hips")!.R, [0, 0, 1]),
+    lowest,
+  };
+}
+
+describe("mỗi dáng phải ra đúng cái hình mà `note` của nó hứa", () => {
+  it("«Đứng chờ» là mốc: mặt nhìn thẳng vào camera, hai tay buông dưới hông, chân chạm đất", () => {
+    const m = landmarksOf("idle");
+    expect(m.facing[2]).toBeCloseTo(1, 2);
+    expect(m.at.wristL[1]).toBeLessThan(m.at.hips[1]);
+    expect(m.at.wristR[1]).toBeLessThan(m.at.hips[1]);
+    expect(m.lowest).toBeLessThan(0.1);
+  });
+
+  it("«Giới thiệu» — tay phải mở NGANG (ra xa thân) và hơi ra trước, cao ngang vai", () => {
+    const m = landmarksOf("present");
+    expect(m.at.wristR[0]).toBeLessThan(-0.9);
+    expect(m.at.wristR[2]).toBeGreaterThan(0.3);
+    expect(Math.abs(m.at.wristR[1] - m.at.shoulderR[1])).toBeLessThan(0.4);
+  });
+
+  it("«Ăn mừng» — HAI cổ tay cao hơn quả đầu, mà chân vẫn bám đất (đó là chỗ khác «Nhảy»)", () => {
+    const m = landmarksOf("cheer");
+    expect(m.at.wristL[1]).toBeGreaterThan(m.headCenter[1]);
+    expect(m.at.wristR[1]).toBeGreaterThan(m.headCenter[1]);
+    expect(m.lowest).toBeLessThan(0.15);
+    expect(m.lowest).toBeLessThan(landmarksOf("jump").lowest - 0.3);
+  });
+
+  it("«Suy nghĩ» — bàn tay phải áp vào quả đầu (chống cằm), không dừng lại ngang vai", () => {
+    const m = landmarksOf("think");
+    const xa = Math.hypot(
+      m.at.wristR[0] - m.headCenter[0],
+      m.at.wristR[1] - m.headCenter[1],
+      m.at.wristR[2] - m.headCenter[2],
+    );
+    expect(xa).toBeLessThan(0.75);
+    expect(m.at.wristR[1]).toBeGreaterThan(m.at.elbowR[1]);
+  });
+
+  it("«Giơ ngón cái» — nắm tay CAO HƠN và RA TRƯỚC khuỷu, tức là đang chìa về người xem", () => {
+    const m = landmarksOf("thumbs-up");
+    expect(m.at.wristR[1]).toBeGreaterThan(m.at.elbowR[1] + 0.3);
+    expect(m.at.wristR[2]).toBeGreaterThan(m.at.elbowR[2] + 0.1);
+  });
+
+  it("«Đi bộ» — một bàn chân trước một bàn chân sau, và CẢ HAI còn sát đất (khác «Chạy»)", () => {
+    const m = landmarksOf("walk");
+    expect(m.at.ankleL[2] - m.at.ankleR[2]).toBeGreaterThan(0.8);
+    expect(Math.max(m.at.ankleL[1], m.at.ankleR[1])).toBeLessThan(0.25);
+    /* «Chạy» thì bốc hẳn lên — hai dáng không được ra cùng một hình. */
+    expect(landmarksOf("run").lowest).toBeGreaterThan(m.lowest + 0.25);
+  });
+
+  it("«Nhảy múa» — BẤT ĐỐI XỨNG: tay trái vươn trên đầu, tay phải mở ngang, gối trái nhấc khỏi đất", () => {
+    const m = landmarksOf("dance");
+    expect(m.at.wristL[1]).toBeGreaterThan(m.headCenter[1]);
+    expect(m.at.wristR[0]).toBeLessThan(-1);
+    expect(m.at.ankleL[1]).toBeGreaterThan(m.at.ankleR[1] + 0.15);
+  });
+
+  it("«Cúi chào» — đầu đổ HẲN ra trước và xuống thấp, hai tay BUÔNG XUỐNG chứ không hất lên sau lưng", () => {
+    const m = landmarksOf("bow");
+    expect(m.headCenter[2]).toBeGreaterThan(m.at.hips[2] + 0.9);
+    expect(m.headCenter[1]).toBeLessThan(2);
+    /* ĐÂY là cái chốt của cả ca: bản nháp đầu hất hai tay lên trời sau lưng vì
+       một dấu cộng, và không cổng nào khác nhìn thấy. */
+    expect(m.at.wristL[1]).toBeLessThan(m.at.shoulderL[1] - 0.6);
+    expect(m.at.wristR[1]).toBeLessThan(m.at.shoulderR[1] - 0.6);
+  });
+
+  it("«Bay» — cả người lơ lửng, đầu và tay phải vươn về trước, hai bàn chân kéo lại phía sau", () => {
+    const m = landmarksOf("fly");
+    expect(m.lowest).toBeGreaterThan(1);
+    expect(m.at.wristR[2]).toBeGreaterThan(m.headCenter[2] + 0.5);
+    expect(m.at.ankleL[2]).toBeLessThan(m.at.hips[2] - 0.8);
+  });
+
+  it("ba dáng nhóm «Góc nhìn» quay người đúng số độ chúng hứa, không dáng nào quay nhầm chiều", () => {
+    /* `hips.y` dương quay mặt về +X = bên TRÁI người xem (quy ước `skeleton.ts`). */
+    const ba = landmarksOf("view-34");
+    expect(ba.facing[0]).toBeCloseTo(Math.sin(rad(40)), 2);
+    expect(ba.facing[2]).toBeCloseTo(Math.cos(rad(40)), 2);
+
+    expect(landmarksOf("view-side").facing[0]).toBeCloseTo(1, 2);
+    expect(landmarksOf("view-back").facing[2]).toBeCloseTo(-1, 2);
   });
 });

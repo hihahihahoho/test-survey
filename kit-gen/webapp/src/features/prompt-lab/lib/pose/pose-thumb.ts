@@ -36,11 +36,31 @@ import { POSE_PRESETS, presetById } from "./pose-presets";
 export const POSE_THUMB_SIZE = 72;
 
 /**
- * Trần số tấm giữ lại. 19 dáng × 9 góc = 171 tấm — tức là một người dùng bấm hết
- * mọi tổ hợp vẫn chưa chạm trần, còn một bản nháp 30 dòng thì không giữ nổi 30
- * cái ảnh khác nhau trong RAM nếu không có trần nào.
+ * Cạnh ô xem trước Ở ĐẦU DÒNG, tính bằng **CSS px**.
+ *
+ * 40 chứ không phải 72: ô này đứng chen giữa tay nắm ⣿, số thứ tự và ba pill trên
+ * một hàng KHÔNG ĐƯỢC PHÉP WRAP (`RowTop`), nên mỗi pixel nó lấy là một pixel chữ
+ * trong pill mất đi. 40px vẫn đọc ra "tay giơ lên hay buông xuống, người đứng hay
+ * ngồi" — đúng và đủ câu hỏi mà ô này trả lời: *"dòng này tôi vừa chọn cái gì?"*.
+ * Câu hỏi *"dáng nào là dáng nào"* thì đã có ô 72px trong hộp chọn trả lời rồi.
+ *
+ * DỰNG ĐÚNG 40 (× dpr), KHÔNG dựng 72 rồi để CSS thu nhỏ: cạnh nằm TRONG khoá nhớ
+ * nên hai cỡ là hai tấm riêng biệt, tức là dùng lại tấm 72 chẳng tiết kiệm được
+ * lượt GPU nào mà chỉ đổi lấy một tấm bị trình duyệt thu nhỏ (nhoè hơn hẳn phép
+ * hạ mẫu của chính bộ dựng) và gấp ~3 lần byte giữ trong RAM cho mỗi dòng.
  */
-export const POSE_THUMB_MAX = 200;
+export const ROW_THUMB_SIZE = 40;
+
+/**
+ * Trần số tấm giữ lại.
+ *
+ * 19 dáng × 9 góc = 171 tấm cho hộp chọn — một người dùng bấm hết mọi tổ hợp vẫn
+ * chưa chạm trần. Cộng thêm ô đầu dòng: cạnh 40 là một KHOÁ KHÁC, nên một bản
+ * nháp 20 dòng gửi thêm tối đa 20 tấm nữa vào cùng cái nhớ. 280 để tổng ấy (~191)
+ * còn lề; trần 200 cũ thì vừa đủ chạm, và chạm trần nghĩa là mỗi lần mở lại hộp
+ * chọn lại đốt GPU cho những tấm vừa bị đẩy ra — đúng thứ cái nhớ sinh ra để tránh.
+ */
+export const POSE_THUMB_MAX = 280;
 
 export interface PoseThumbSpec {
   /** Id dáng trong danh mục THẬT (`kit-core/lib/poses.ts`). */
@@ -63,10 +83,15 @@ export function poseThumbKey({ poseId, view, size, dpr }: PoseThumbSpec): string
  * ╔══ VÌ SAO KHÔNG DÙNG THẲNG `presetById` ══════════════════════════════════╗
  * ║ `presetById` cố ý rơi về dáng đầu (`idle`) với id lạ — đúng cho lượt gen   ║
  * ║ (một bản nháp cũ mang id đã bỏ không đáng làm hỏng cả lượt vẽ), nhưng SAI   ║
- * ║ chết người cho một ô xem trước: danh mục có 19 dáng mà `POSE_PRESETS` chỉ  ║
- * ║ có 8, nên «Ăn mừng», «Suy nghĩ», «Cúi chào»… sẽ cùng bày ra ẢNH CỦA «Đứng  ║
- * ║ chờ» và nói với người dùng rằng bốn dáng ấy y hệt nhau. Không có hình thì  ║
- * ║ ô giữ chỗ trống — im lặng nhưng thật; một hình SAI thì không.              ║
+ * ║ chết người cho một ô xem trước: một dáng mượn ảnh của «Đứng chờ» là lời    ║
+ * ║ nói dối "hai dáng này y hệt nhau", và người dùng tiêu một lượt vẽ mới biết.║
+ * ║ Không có hình thì ô giữ chỗ trống — im lặng nhưng thật; một hình SAI thì   ║
+ * ║ không.                                                                     ║
+ * ║ Từ 18/09/2026 `POSE_PRESETS` đã phủ đủ 19/19 id của danh mục, nên với một  ║
+ * ║ id LẤY TỪ DANH MỤC hàm này luôn `true` — cửa dưới đây nay chỉ còn chặn ô   ║
+ * ║ dáng để trống và chữ người dùng tự gõ. Đừng bỏ nó đi vì "không bao giờ trả ║
+ * ║ false nữa": hai ca ấy có thật, và ngày ai đó thêm dáng thứ 20 vào danh mục ║
+ * ║ thì nó là thứ duy nhất đứng giữa cái dáng mới và một tấm ảnh nói dối.      ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 export function hasPoseSkeleton(poseId: string): boolean {
@@ -99,6 +124,53 @@ export function thumbPixelRatio(): number {
    `Map` của JS giữ ĐÚNG thứ tự chèn, nên "cũ nhất" chính là khoá đầu tiên của
    `keys()` — không cần danh sách liên kết nào. Mỗi lần trúng thì xoá-rồi-chèn
    lại để khoá ấy nhảy về cuối hàng; đó là toàn bộ phép "vừa dùng gần đây". */
+
+/**
+ * HÀNG ĐỢI MỘT LÀN — mọi lượt vẽ nối đuôi nhau, không bao giờ có hai cái chạy song song.
+ *
+ * ╔══ VÌ SAO KHÔNG ĐỂ CHÚNG TỰ CHẠY ═════════════════════════════════════════╗
+ * ║ Đời đầu, người gọi DUY NHẤT là vòng lặp trong `usePoseThumbs`, và vòng ấy  ║
+ * ║ đã `await` từng tấm — tính tuần tự là của NGƯỜI GỌI, không phải của kho.   ║
+ * ║ Từ lúc ô xem trước xuống tới ĐẦU DÒNG (18/09/2026) thì người gọi không còn ║
+ * ║ là một nữa: mở một bản nháp 20 dòng là 20 component cùng hỏi 20 tấm khác   ║
+ * ║ khoá nhau trong đúng một nhịp effect. `inflight` không cứu được — nó chỉ    ║
+ * ║ gộp những lượt CÙNG KHOÁ. Kết quả là 20 context WebGL đòi mở cùng lúc,     ║
+ * ║ trên trần ~16 của trình duyệt: những cái mở sau bị từ chối, `draw` bắt      ║
+ * ║ được exception rồi bật `webglRefused`, và từ đó CẢ TRANG không còn tấm ảnh ║
+ * ║ nào cho tới lúc tải lại. Một tính năng tự tắt chính nó khi có nhiều dòng.  ║
+ * ║ Nối đuôi thì trần ấy không bao giờ bị chạm: đúng một context sống mỗi lúc, ║
+ * ║ y như trước, chỉ khác là luật ấy nay nằm ở kho chứ không nằm ở người gọi.  ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ╔══ VÌ SAO GIỮA HAI LƯỢT PHẢI THỞ MỘT NHỊP ════════════════════════════════╗
+ * ║ `renderPoseDataUrl` chạy ĐỒNG BỘ từ đầu tới cuối (dựng scene · render ·    ║
+ * ║ `toDataURL` · huỷ renderer), nên "nối đuôi bằng promise" KHÔNG đủ: chuỗi   ║
+ * ║ microtask không nhường cho trình duyệt vẽ lại một lần nào, và mười chín    ║
+ * ║ lượt ~10ms dính liền nhau là một cú đứng hình ~200ms — mở hộp chọn thì     ║
+ * ║ thấy nguyên cái hộp đông cứng rồi mới có ảnh. `setTimeout(0)` là chỗ NGẮT: ║
+ * ║ giữa hai tấm, trình duyệt lấy lại quyền, vẽ tấm vừa xong, rồi mới tới tấm  ║
+ * ║ sau. Người dùng thấy ảnh hiện dần thay vì thấy một khoảng lặng.            ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Ảnh đã nhớ KHÔNG đi qua đây (xem `poseThumb`): một dòng có sẵn tấm của mình
+ * phải hiện hình NGAY, không xếp hàng sau mười chín dòng khác.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+
+function breathe(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
+function enqueue<T>(job: () => Promise<T>): Promise<T> {
+  /* Cùng `job` cho cả hai nhánh: lượt trước hỏng không được chặn lượt sau. */
+  const next = queue.then(job, job);
+  /* Nhịp thở nằm SAU `next`, không nằm trong nó: người gọi nhận ảnh ngay khi vẽ
+     xong, chỉ có lượt KẾ TIẾP mới phải đợi trình duyệt kịp thở. */
+  queue = next.then(breathe, breathe);
+  return next;
+}
 
 const cache = new Map<string, string>();
 
@@ -144,6 +216,7 @@ export function poseThumbCount(): number {
 export function resetPoseThumbs(): void {
   cache.clear();
   inflight.clear();
+  queue = Promise.resolve();
   webglRefused = false;
 }
 
@@ -163,7 +236,7 @@ export async function poseThumb(spec: PoseThumbSpec): Promise<string | null> {
   const live = inflight.get(key);
   if (live) return live;
 
-  const job = draw(spec, key).finally(() => {
+  const job = enqueue(() => draw(spec, key)).finally(() => {
     inflight.delete(key);
   });
   inflight.set(key, job);
