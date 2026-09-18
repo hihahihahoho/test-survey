@@ -37,8 +37,12 @@ export const diagnosisSchema = z.enum([
      `MODEL_BUSY` (15/09/2026): nhà cung cấp trả «Selected model is at capacity» —
      máy vẽ đầy, KHÔNG phải tài khoản hết lượt. Lời mời vẫn là nút Vẽ sẵn có, chỉ
      khác ở chỗ lần này thử lại thật sự có cửa thắng.
+     `REF_CORRUPT` (18/09/2026): ảnh THAM CHIẾU người dùng đính vào hỏng byte — codex
+     từ chối giải mã nó (sự cố Windows 3.0.6). Khác hẳn `NO_ARTIFACT` ở chỗ lời mời
+     KHÔNG phải nút Vẽ: vẽ lại bao nhiêu lần cũng hỏng cho tới khi thay ảnh kèm.
      Nguồn: `agent/lib/engine.mjs` (`diagnose`, `DIAGNOSIS_VI`). */
-  "QUOTA_SUSPECTED", "MODEL_BUSY", "NOT_LOGGED_IN", "NO_ARTIFACT", "TIMEOUT", "UNKNOWN",
+  "QUOTA_SUSPECTED", "MODEL_BUSY", "NOT_LOGGED_IN", "NO_ARTIFACT", "REF_CORRUPT",
+  "TIMEOUT", "UNKNOWN",
 ]);
 export type Diagnosis = z.infer<typeof diagnosisSchema>;
 

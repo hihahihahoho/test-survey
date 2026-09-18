@@ -24,6 +24,7 @@ import { chmod, cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, write
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { deflateSync, inflateSync } from "node:zlib"
 
 import { describe, it, eq, ok, includes, rmTemp } from "./harness.mjs"
 import { encode, decode } from "../engine/png.mjs"
@@ -68,6 +69,44 @@ function pngUi() {                         // có alpha=0 LẪN dải mờ liên
   }
   return encode({ width: 64, height: 64, data: d })
 }
+/* ── ẢNH THAM CHIẾU HỎNG ────────────────────────────────────────────────────
+   Ba tấm dưới đây dựng lại ĐÚNG hình dạng sự cố Windows 3.0.6: chữ ký PNG hoàn
+   toàn hợp lệ, hỏng nằm SÂU bên trong — chỗ mà một phép liếc magic byte không
+   bao giờ thấy, và cũng là chỗ decoder của codex vấp. */
+
+/** Vị trí + độ dài payload của chunk IDAT đầu tiên. */
+function idatAt(buf) {
+  const i = buf.indexOf("IDAT", 0, "latin1")
+  return { i, len: buf.readUInt32BE(i - 4) }
+}
+
+/** IDAT là RÁC ⇒ zlib gãy ngay ở header — «Corrupt deflate stream» của ngoài đời. */
+function pngIdatRac() {
+  const b = pngKin()
+  const { i, len } = idatAt(b)
+  b.fill(0xff, i + 4, i + 4 + len)
+  return b
+}
+
+/** Byte filter của dòng 0 là 7 ⇒ ĐÚNG câu codex than: «Unknown filter method 7».
+ *  CRC để 0: `png.mjs` (như phần lớn decoder nhanh) không soi CRC, nên CRC không
+ *  phải thứ ca này đang đo — thứ đang đo là chuyện hỏng nằm sau lớp nén. */
+function pngFilterLa() {
+  const src = pngKin()
+  const { i, len } = idatAt(src)
+  const raw = Buffer.from(inflateSync(src.subarray(i + 4, i + 4 + len)))
+  raw[0] = 7
+  const body = deflateSync(raw)
+  const head = Buffer.alloc(8)
+  head.writeUInt32BE(body.length, 0)
+  head.write("IDAT", 4, "latin1")
+  return Buffer.concat([src.subarray(0, i - 4), head, body, Buffer.alloc(4),
+    src.subarray(i + 4 + len + 4)])
+}
+
+/** JPEG mất dấu kết EOI — hình dạng của một cú ghi file dở dang. */
+const jpegCut = () => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64, 0x20)])
+
 function pngRgb() {                        // KHÔNG có kênh alpha
   const d = new Uint8Array(8 * 8 * 4)
   for (let i = 0; i < 64; i++) { d[i * 4] = 10; d[i * 4 + 1] = 20; d[i * 4 + 2] = 30; d[i * 4 + 3] = 255 }
@@ -731,6 +770,55 @@ export async function run() {
       ok(!(await readdir(join(jw, "prompts")).catch(() => [])).some(f => f.endsWith(".txt")),
         "và không có prompt nào được ghi ra để mà gửi đi")
       await rmTemp(jw); await rmTemp(seed)
+    })
+
+    /* ══ ẢNH THAM CHIẾU HỎNG PHẢI CHẶN TRƯỚC KHI TIÊU MỘT TOKEN NÀO ═══════════
+       Windows 3.0.6: ba job, mỗi job ~40k token và hai phút, rồi codex mới từ chối
+       cái ảnh kèm. Phép đo THẬT của cụm ca này không phải dòng chữ FAIL mà là
+       `calls === 0`: codex giả ghi sổ mọi lần bị gọi, nên sổ trắng = chưa ai trả
+       tiền. Dòng chữ chỉ là thứ nhì — nhưng nó phải MANG TÊN FILE, vì «không ghi
+       được ảnh» đã là đúng câu người dùng nhận được mà chẳng làm gì được. */
+
+    /** Đặt một ảnh tham chiếu vào `refs/` rồi khai nó trong `.att` của job1. */
+    async function withRef(work, name, bytes) {
+      await mkdir(join(work, "refs"), { recursive: true })
+      await writeFile(join(work, "refs", name), bytes)
+      await writeFile(join(work, "prompts/job1.att"), `refs/${name}\n`, "utf8")
+    }
+
+    for (const [nhan, name, bytes, why] of [
+      ["PNG ruột rác (zlib gãy)", "inspo-5.png", pngIdatRac(), null],
+      ["PNG byte filter lạ", "inspo-7.png", pngFilterLa(), "filter lạ 7"],
+      ["JPEG cụt", "inspo.jpg", jpegCut(), "JPEG cụt"],
+      ["file rỗng", "inspo-0.png", Buffer.alloc(0), "file rỗng"],
+      ["không phải ảnh nào cả", "inspo.gif", Buffer.from("GIF89a-khong-phai-anh"), "không phải PNG/JPG/WebP"],
+    ]) {
+      await it(`ảnh tham chiếu hỏng (${nhan}) ⇒ FAIL ngay, KHÔNG gọi codex`, async () => {
+        const work = await fresh()
+        await withRef(work, name, bytes)
+        const r = await runCase(work, { MODE: "fresh" })
+        eq(r.calls, 0, "codex giả KHÔNG hề bị gọi — đây là 40k token không bị đốt")
+        eq(r.argv.trim(), "", "và không một dòng argv nào được ghi")
+        includes(r.out, `FAIL job1 (rc=0, ảnh tham chiếu hỏng: refs/${name}`, "dòng FAIL mang TÊN FILE")
+        includes(r.out, "xem logs/job1.log", "và chỉ đường tới bằng chứng đầy đủ")
+        includes(r.log, `ảnh tham chiếu hỏng: refs/${name} — `, "log job nói cùng một câu, kèm lý do")
+        if (why) includes(r.log, why, "lý do là lời của decoder, không phải một câu chung chung")
+        ok(!(await stat(join(work, "raw/job1.png")).then(() => true, () => false)),
+          "không có ảnh nào được sinh ra")
+        await rmTemp(work)
+      })
+    }
+
+    await it("ảnh tham chiếu LÀNH ⇒ đi tiếp như cũ, codex nhận đủ -i", async () => {
+      // Vế còn lại của phép chặn: một cửa chặn luôn đóng thì cũng hỏng như không có.
+      const work = await fresh()
+      await withRef(work, "inspo-ok.png", pngKin())
+      const r = await runCase(work, { MODE: "fresh" })
+      eq(r.calls, 1, "codex vẫn được gọi đúng một lần")
+      includes(r.argv, join(work, "refs", "inspo-ok.png"), "ảnh kèm vẫn đi theo -i")
+      includes(r.out, "OK  job1", "job vẫn kết OK")
+      ok(!r.log.includes("ảnh tham chiếu hỏng"), "và không ai bị buộc tội oan")
+      await rmTemp(work)
     })
 
     // Trả PATH của codex về như cũ: bộ ca sau không được thừa kế một con codex giả.

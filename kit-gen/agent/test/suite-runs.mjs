@@ -74,6 +74,25 @@ export async function run({ api, wsRoot, agentDir, pid }) {
     eq(diagnose(["FAIL dựng-prompt (rc=1, engine lỗi: ENOENT contract.json)"]),
       "UNKNOWN", "engine lỗi ⇒ vẫn chờ bằng chứng thật")
   })
+  /* ══ ẢNH KÈM HỎNG KHÔNG ĐƯỢC ĐỌC RA "KHÔNG GHI ĐƯỢC ẢNH" ════════════════════
+     Windows 3.0.6: ba job đốt ~40k token mỗi job rồi codex từ chối ĐÚNG cái ảnh kèm.
+     Hai câu nói về nó đến từ hai phía và cả hai đều phải đọc ra một mã: câu của
+     `gen.mjs` (chặn trước khi gọi codex) và câu của chính codex trong `logs/<job>.log`
+     (khi ảnh lọt qua được cửa chặn). Mã ấy KHÔNG phải NO_ARTIFACT: vẽ lại vô ích cho
+     tới khi người dùng thay ảnh tham chiếu. */
+  await it("ảnh tham chiếu hỏng đọc ra REF_CORRUPT, không rơi vào NO_ARTIFACT", () => {
+    eq(diagnose(["ERROR codex_core::tools::router: error=unable to process referenced image at " +
+      "`C:\\Users\\x\\refs\\inspo-5.png`: failed to decode image at " +
+      "C:\\Users\\x\\refs\\inspo-5.png: Format error decoding Png: Unknown filter method 7."]),
+      "REF_CORRUPT", "lời của codex")
+    eq(diagnose(["FAIL chinh-ui2 (rc=0, ảnh tham chiếu hỏng: refs/inspo-5.png — xem logs/chinh-ui2.log)"]),
+      "REF_CORRUPT", "câu phán của gen.mjs")
+    /* Log có CẢ HAI câu ⇒ ảnh hỏng thắng: "không ghi được ảnh" đúng mà vô dụng, còn
+       câu kia chỉ thẳng file phải đi sửa. Đây là lý do mẫu REF_CORRUPT đứng TRƯỚC. */
+    eq(diagnose(["failed to decode image at refs/a.png",
+      "FAIL j (rc=0, không có raw/j.png — xem logs/j.log)"]),
+      "REF_CORRUPT", "cụ thể thắng chung chung")
+  })
   /* ══ NGUYÊN NHÂN PHẢI NẰM TRONG THỨ NGƯỜI DÙNG CHÉP ĐI ════════════════════════
      r-0007: codex chạy xong, in «tokens used» + đường dẫn đích, nên `logs/<job>.log`
      KHÔNG có một chữ nào về lỗi. Câu duy nhất nói vì sao là dòng `FAIL …` mà agent

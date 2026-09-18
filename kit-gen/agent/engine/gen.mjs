@@ -277,6 +277,40 @@ export function readEnv(env = process.env) {
   }
 }
 
+/* ── ẢNH THAM CHIẾU ─────────────────────────────────────────────────────────── */
+
+/**
+ * Một ảnh kèm có ĐỌC ĐƯỢC không? Trả `null` khi lành, hoặc CÂU TIẾNG VIỆT/lời của
+ * decoder nói vì sao hỏng.
+ *
+ * Ba mức nghiêm khắc khác nhau, và sự chênh lệch ấy là CỐ Ý:
+ *  · PNG — giải mã ĐẦY ĐỦ. Đây là định dạng KitGen tự sinh và tự đính, cũng là đúng
+ *    định dạng đã hỏng ngoài đời; nửa vời ở đây thì cả phép kiểm này vô nghĩa.
+ *  · JPEG/WebP — chỉ soi chữ ký + cỡ + (JPEG) dấu kết EOI `FF D9`. KHÔNG viết thêm
+ *    decoder: một decoder JPEG thuần JS là hàng nghìn dòng mà chưa một tấm JPEG nào
+ *    hỏng ngoài đời, và code không ai cần là code không ai kiểm.
+ *  · Còn lại — chữ ký lạ hoặc 0 byte: codex sẽ từ chối, nên ta từ chối trước.
+ *
+ * KHÔNG spawn gì cả: chặn một lượt codex bằng cách gọi một tiến trình con nữa là
+ * đem đúng loại rủi ro mình đang tránh về đặt cạnh cửa.
+ */
+export async function refReason(path) {
+  let buf
+  try { buf = await readFile(path) } catch (e) { return `không đọc được (${e?.code ?? e?.message ?? e})` }
+  if (buf.length === 0) return "file rỗng"
+  if (buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+    // `decode` inflate + bỏ filter thật ⇒ zlib gãy và byte filter lạ đều nổ ở đây.
+    try { decode(buf); return null } catch (e) { return String(e?.message ?? e) }
+  }
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    // EOI thiếu = file bị cắt giữa chừng — đúng hình dạng của một cú ghi dở dang.
+    return (buf[buf.length - 2] === 0xff && buf[buf.length - 1] === 0xd9) ? null : "JPEG cụt"
+  }
+  if (buf.length >= 12 && buf.toString("latin1", 0, 4) === "RIFF"
+      && buf.toString("latin1", 8, 12) === "WEBP") return null
+  return "không phải PNG/JPG/WebP"
+}
+
 /* ── MỘT JOB ────────────────────────────────────────────────────────────────── */
 
 /**
@@ -303,6 +337,7 @@ export async function runOne(ctx, job) {
      phép kiểm tồn tại fail LẶNG LẼ ⇒ mọi ảnh đính kèm rơi hết. */
   const attPaths = []
   const attArgs = []
+  const attRels = []
   const attRaw = await readFile(P(`prompts/${job}.att`), "utf8").catch(() => "")
   for (let line of attRaw.split("\n")) {
     line = line.replace(/\r$/, "")
@@ -311,6 +346,31 @@ export async function runOne(ctx, job) {
     if (!(await stat(abs).then(s => s.isFile(), () => false))) continue
     attArgs.push("-i", abs)
     attPaths.push(abs)
+    attRels.push(line)
+  }
+
+  /* ── ẢNH THAM CHIẾU HỎNG ⇒ CHẶN TRƯỚC KHI ĐỐT TOKEN ─────────────────────────
+     SỰ CỐ WINDOWS (KitGen 3.0.6): ba job, mỗi job ~40k token và hai phút, rồi tool ảnh
+     của codex mới từ chối cái ảnh kèm — «failed to decode image …: Unknown filter
+     method 7». Cùng đúng file ấy, lần đọc khác lại than «Corrupt deflate stream» hay
+     «filter method 254»: BYTE TRÊN MÁY ẤY ĐANG ĐỔI, và nguyên nhân gốc vẫn chưa rõ.
+     Người dùng chỉ nhận được «không ghi được ảnh», không một tên file nào.
+     Phép kiểm này KHÔNG chữa nguyên nhân — nó trả lại hai thứ đã mất: TÊN FILE HỎNG
+     và 40k token. Nó phải đứng ở ĐÂY, trước `buildTask`/`runCodex`, vì sau đó thì
+     tiền đã tiêu rồi.
+     Vì sao GIẢI MÃ THẬT chứ không liếc chữ ký: đúng những lỗi codex bắt (zlib gãy,
+     byte filter lạ) nằm SAU một chữ ký PNG hoàn toàn hợp lệ. `decode()` của png.mjs
+     inflate IDAT rồi bỏ filter TỪNG DÒNG, nên nó vấp đúng chỗ decoder của codex vấp.
+     Giá đo được trên corpus golden: một tấm 1536×1024 hết ~55 ms — rẻ hơn một lượt
+     codex bốn bậc độ lớn, nên không có lý do nào để đi đường tắt. */
+  for (let i = 0; i < attPaths.length; i++) {
+    const why = await refReason(attPaths[i])
+    if (!why) continue
+    /* MỘT file hỏng là đủ để dừng: lượt chạy này chắc chắn không ra ảnh, và liệt kê
+       tiếp chỉ làm loãng cái tên mà người dùng cần đi sửa. */
+    await appendFile(logPath, `ảnh tham chiếu hỏng: ${attRels[i]} — ${why}\n`)
+    print(`FAIL ${job} (rc=0, ảnh tham chiếu hỏng: ${attRels[i]} — xem ${logRel})`)
+    return
   }
 
   const task = buildTask({ job, promptText, attPaths, rootOut, fullBleed: fb })

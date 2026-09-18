@@ -275,6 +275,13 @@ export function diagnose(lines) {
      mà không câu nào khớp mẫu cũ ⇒ MỌI job hỏng của engine JS đọc ra "UNKNOWN".
      Đã đo ngoài đời: KitGen 3.0.5 · r-0007 · «1/1 job lỗi chưa rõ nguyên nhân» trong
      khi codex chạy xong êm ru. Hai vế cũ ở lại vì agent mới vẫn phải đọc log cũ. */
+  /* ĐỨNG TRƯỚC NO_ARTIFACT LÀ MỘT PHÁN QUYẾT: cùng một job hỏng có thể mang CẢ HAI
+     câu. `gen.mjs` chặn trước khi gọi codex thì chỉ có câu này; nhưng khi ảnh kèm
+     hỏng LỌT qua (engine đời cũ, hoặc byte đổi giữa hai lần đọc — sự cố Windows
+     3.0.6) thì log codex có «failed to decode image at …» còn dòng `FAIL` lại là câu
+     chung chung "không có raw/…". Đặt sau, người dùng nhận đúng câu VÔ DỤNG ấy trong
+     khi log đã nói thẳng file nào hỏng. */
+  if (/ảnh tham chiếu hỏng|referenced image|failed to decode image/.test(hay)) return "REF_CORRUPT"
   if (/ảnh không được ghi|no artifact|không có raw\/|ảnh không đổi/.test(hay)) return "NO_ARTIFACT"
   return "UNKNOWN"
 }
@@ -289,6 +296,7 @@ const DIAGNOSIS_VI = {
   MODEL_BUSY: "máy vẽ đang quá tải, thử lại sau ít phút",
   NOT_LOGGED_IN: "công cụ tạo ảnh chưa đăng nhập",
   NO_ARTIFACT: "không ghi được ảnh",
+  REF_CORRUPT: "ảnh tham chiếu hỏng",
   TIMEOUT: "quá thời gian chờ",
   UNKNOWN: "lỗi chưa rõ nguyên nhân",
 }

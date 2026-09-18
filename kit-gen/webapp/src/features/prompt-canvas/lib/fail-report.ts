@@ -42,6 +42,7 @@ export const DIAGNOSIS_VI: Record<string, string> = {
   MODEL_BUSY: "máy vẽ đang quá tải, thử lại sau ít phút",
   NOT_LOGGED_IN: "công cụ tạo ảnh chưa đăng nhập",
   NO_ARTIFACT: "không ghi được ảnh",
+  REF_CORRUPT: "ảnh tham chiếu hỏng",
   TIMEOUT: "quá thời gian chờ",
   UNKNOWN: "lỗi chưa rõ nguyên nhân",
 };

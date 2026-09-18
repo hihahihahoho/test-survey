@@ -23,6 +23,10 @@ describe("diagnosisVi", () => {
   it("dịch đúng mã agent gửi, mã lạ rơi về câu của UNKNOWN", () => {
     expect(diagnosisVi("NO_ARTIFACT")).toBe("không ghi được ảnh");
     expect(diagnosisVi("MODEL_BUSY")).toBe("máy vẽ đang quá tải, thử lại sau ít phút");
+    /* 18/09/2026: ảnh THAM CHIẾU người dùng đính vào hỏng byte (sự cố Windows
+       3.0.6). Câu phải nói về ẢNH KÈM chứ không phải ảnh sinh ra — vẽ lại vô ích
+       cho tới khi thay ảnh ấy. */
+    expect(diagnosisVi("REF_CORRUPT")).toBe("ảnh tham chiếu hỏng");
     /* Agent mới hơn webapp ⇒ mã chưa biết. Người dùng KHÔNG được thấy chuỗi hoa
        gạch dưới — cùng luật `coverFailReason` đã theo ở thẻ Home. */
     expect(diagnosisVi("SOMETHING_NEW")).toBe("lỗi chưa rõ nguyên nhân");
