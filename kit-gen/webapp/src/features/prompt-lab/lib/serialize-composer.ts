@@ -156,6 +156,37 @@ const BLOCK_LABEL: Record<Block["kind"], string> = {
  * máy vẽ NHẬN.
  */
 /**
+ * PILL NGỮ CẢNH ĐANG LẤY NGUỒN TỪ MỘT TẤM ẢNH — và vì thế nó THÔI nói bằng chữ.
+ *
+ * ╔══ LUẬT NÀY ĐÃ CÓ SẴN TRÊN MÀN, CHỈ CHƯA AI CHÉP NÓ XUỐNG PROMPT ═════════╗
+ * ║ Hộp chọn nguồn tính nấc đang hiệu lực đúng một dòng (`SourcePicker.live`):║
+ * ║ `image?.path ? "ref" : custom ? "custom" : "preset"` — ẢNH THẮNG TẤT.     ║
+ * ║ Đính một tấm vào pill «phong cách» là người dùng vừa trả lời câu hỏi ấy    ║
+ * ║ bằng tấm ảnh, và hộp nói lại với họ đúng như thế.                         ║
+ * ║                                                                          ║
+ * ║ Cho tới 18/09/2026 chỉ HỘP biết luật ấy: bộ ghép chữ vẫn đi hỏi preset và ║
+ * ║ nối cụm của nó vào `variant.style`. Đo trên prompt thật của chủ sản phẩm:  ║
+ * ║ tấm ảnh làm engine viết «The attached reference image(s) ARE the style»,   ║
+ * ║ rồi NGAY DƯỚI là «Written direction, secondary…: cozy storybook farmland  ║
+ * ║ palette…» — cụm của một preset người dùng đã thôi không dùng. Hai câu      ║
+ * ║ ngược nhau trong cùng một section, và máy vẽ hoà giải chúng bằng cách vẽ   ║
+ * ║ nửa nọ nửa kia. Nên luật «ảnh thắng» nay nằm ở ĐÂY, chỗ mà cả bốn cửa      ║
+ * ║ tiêu thụ (prompt copy-dán · `variant.style` · `styleEN` của từng tấm ·     ║
+ * ║ nhãn trên pill) đều phải đi qua.                                          ║
+ * ║                                                                          ║
+ * ║ CHỈ hai vai `theme`/`style`, vì chỉ chúng có cửa ảnh cấp BỘ KIT            ║
+ * ║ (`variant.inspo` — xem `refRoleOf`). Ảnh của pill nhân vật/bố cục là ảnh   ║
+ * ║ của MỘT tấm và không thay lời cho preset nào cả.                          ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export function hasContextImage(
+  state: Partial<Pick<ComposerState, "contextRefs">>,
+  role: "theme" | "style",
+): boolean {
+  return (state.contextRefs ?? []).some((ref) => ref.role === role && Boolean(ref.path));
+}
+
+/**
  * CỤM EN CỦA THEME CHUNG — chữ tự gõ thắng preset.
  *
  * ╔══ VÌ SAO PHẢI LÀ MỘT HÀM, KHÔNG PHẢI `state.themeCustom || phraseOf(...)` ═╗
@@ -167,9 +198,11 @@ const BLOCK_LABEL: Record<Block["kind"], string> = {
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 export function contextThemeEN(
-  state: Pick<ComposerState, "themeValue" | "themeCustom">,
+  state: Pick<ComposerState, "themeValue" | "themeCustom"> & Partial<Pick<ComposerState, "contextRefs">>,
   presets: PresetBundle = getPresets(),
 ): string {
+  /* Ảnh trên pill chủ đề ⇒ KHÔNG chữ nào, kể cả chữ tự gõ — xem `hasContextImage`. */
+  if (hasContextImage(state, "theme")) return "";
   return (state.themeCustom ?? "").trim() || phraseOf("theme", state.themeValue, presets);
 }
 
@@ -183,9 +216,14 @@ export function contextThemeEN(
  * đề vừa là trang phục — họ chỉ có một ô, ta không được bịa ra ô thứ hai.
  */
 export function contextOutfitEN(
-  state: Pick<ComposerState, "themeValue" | "themeCustom">,
+  state: Pick<ComposerState, "themeValue" | "themeCustom"> & Partial<Pick<ComposerState, "contextRefs">>,
   presets: PresetBundle = getPresets(),
 ): string {
+  /* Chủ đề nay là một TẤM ẢNH ⇒ nhân vật cũng không có cụm quần áo nào để kế
+     thừa. Lùi về preset ở đây là mặc cho nhân vật bộ đồ của một chủ đề mà người
+     dùng vừa thay bằng ảnh — và câu ấy sẽ đứng ngay cạnh tấm ảnh trong cùng một
+     prompt, nói ngược lại nó. Xem `hasContextImage`. */
+  if (hasContextImage(state, "theme")) return "";
   /* `themeOutfitEN`, KHÔNG phải `phraseOf("outfit", …)`: cụm trang phục của một
      chủ đề nay nằm TRONG chính dòng chủ đề (`CatalogRow.en2`). Tra chéo sang danh
      mục trang phục bằng id chỉ đúng với sáu chủ đề hạt giống — một chủ đề người
@@ -194,11 +232,18 @@ export function contextOutfitEN(
   return (state.themeCustom ?? "").trim() || themeOutfitEN(state.themeValue, presets);
 }
 
-/** Cụm EN của phong cách chung — chữ tự gõ thắng preset. Xem `contextThemeEN`. */
+/**
+ * Cụm EN của phong cách chung — ẢNH thắng chữ tự gõ, chữ tự gõ thắng preset.
+ * Xem `hasContextImage` cho vế đầu và `contextThemeEN` cho vế sau.
+ */
 export function contextStyleEN(
-  state: Pick<ComposerState, "styleId" | "styleCustom">,
+  state: Pick<ComposerState, "styleId" | "styleCustom"> & Partial<Pick<ComposerState, "contextRefs">>,
   presets: PresetBundle = getPresets(),
 ): string {
+  /* «Đính ảnh» ⇒ TẤM ẢNH LÀ PHONG CÁCH. Engine tự viết câu ấy khi `inspo` có ảnh
+     (`use_inspo` trong `prompt.mjs`), và nối thêm một câu chữ vào sau nó chỉ tạo
+     ra một chỉ thị thứ hai cạnh tranh với chính tấm ảnh. */
+  if (hasContextImage(state, "style")) return "";
   return (state.styleCustom ?? "").trim() || phraseOf("style", state.styleId, presets);
 }
 
@@ -231,11 +276,16 @@ export function serializeComposer(state: ComposerState, presets: PresetBundle = 
   const brandEN = describeBrandColors(state.brandColors);
   const ctx = makeContext({ styleEN, themeEN, outfitEN: contextOutfitEN(state, presets), presets, imageCounter: { count: 0 } });
 
+  /* MỖI NHÃN ĐI THEO ĐÚNG CỤM CỦA NÓ. Bản trước gắn chữ «theme» vào câu khi có
+     BẤT KỲ cụm nào, nên một bộ kit chỉ có phong cách đọc ra «Bộ kit theme chunky
+     cartoon style» — gọi lối vẽ là chủ đề, ngay ở câu đầu prompt. Chuyện hiếm cho
+     tới 18/09/2026, vì chủ đề được gieo sẵn; từ lượt này chủ đề mở màn là RỖNG
+     (xem `initialComposer`) nên đó thành câu mặc định của mọi dự án mới. */
   const lead = tidy(
     [
-      themeEN || styleEN ? "Bộ kit theme" : "Bộ kit",
+      themeEN ? "Bộ kit theme" : "Bộ kit",
       themeEN,
-      themeEN && styleEN ? "phong cách" : "",
+      styleEN ? "phong cách" : "",
       styleEN,
     ]
       .filter(Boolean)

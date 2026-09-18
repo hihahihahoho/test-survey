@@ -29,7 +29,7 @@ import { backgroundDoc, contextDoc, mascotDoc } from "@/features/prompt-lab/lib/
 import { NODE } from "@/features/prompt-lab/lib/schema";
 import { phraseOf, pillOptions } from "@/features/prompt-lab/lib/pill-registry";
 import { countComposerImages, serializeComposer } from "@/features/prompt-lab/lib/serialize-composer";
-import { newMascotPose, newUiKitBlock, DEFAULT_FIGMA_FIT, figmaFitOf, fitScalePercentOf, withFigmaFit, type Block, type ComposerState, type MascotBlock, type MascotPose, type UiCell } from "@/features/prompt-lab/lib/composer-model";
+import { initialComposer, newMascotPose, newUiKitBlock, DEFAULT_FIGMA_FIT, figmaFitOf, fitScalePercentOf, withFigmaFit, type Block, type ComposerState, type MascotBlock, type MascotPose, type UiCell } from "@/features/prompt-lab/lib/composer-model";
 
 import { COMPOSER_DOC_VERSION, emptyComposerDoc, migrateComposerDoc, type ComposerDoc } from "../composer-doc";
 import { composerBlockSheets, composerStyleLine, composerToContract } from "../composer-to-contract";
@@ -1192,6 +1192,111 @@ describe("ảnh cấp BỘ KIT đi tới đúng hai cửa của contract", () =>
   it("tên thương hiệu KHÔNG lọt vào prompt — chỉ màu và logo mới nói lên nó", () => {
     const line = composerStyleLine(state({ brandId: "brand-vinamilk", brandColors: ["#ff5533"] }), { presets: PRESETS });
     expect(line).not.toContain("brand-vinamilk");
+  });
+});
+
+/**
+ * «ĐÍNH ẢNH» LÀ MỘT CÂU TRẢ LỜI, KHÔNG PHẢI MỘT PHỤ KIỆN — và đó là cả chùm ca này.
+ *
+ * Đo trên prompt thật của chủ sản phẩm (18/09/2026): đính một tấm inspo vào pill
+ * phong cách trong khi preset «Nông trại (cozy)» vẫn đang chọn ⇒ section
+ * `## Art style` có ĐỦ HAI câu — «The attached reference image(s) ARE the style»
+ * rồi «Written direction, secondary…: cozy storybook farmland palette…». Câu thứ
+ * hai là cụm của một preset người dùng đã thôi không dùng, và máy vẽ hoà giải hai
+ * câu ngược nhau bằng cách vẽ nửa nọ nửa kia.
+ *
+ * Luật nay nằm ở MỘT chỗ (`hasContextImage`) và mọi cửa dưới đây đi qua nó.
+ */
+describe("ảnh trên pill ngữ cảnh ⇒ cụm chữ của preset KHÔNG đi kèm để cãi lại nó", () => {
+  const STYLE_EN = phraseOf("style", PRESETS.styles[0]!.id, PRESETS);
+  const THEME_EN = phraseOf("theme", OUTFIT_THEMES[0]!.value, PRESETS);
+  /** Đúng cảnh trong ảnh chụp: preset phong cách vẫn chọn, và có một tấm inspo. */
+  const styleShot = (partial: Partial<ComposerState> = {}): ComposerState =>
+    state({ contextRefs: [{ path: "refs/inspo-1.jpg", role: "style" }], ...partial });
+
+  it("`variant.style` mất cụm phong cách, và chỉ cụm phong cách", () => {
+    const line = composerStyleLine(styleShot(), { presets: PRESETS });
+    expect(line).not.toContain(STYLE_EN);
+    /* Chủ đề là một lựa chọn KHÁC, của một pill KHÁC — tấm ảnh phong cách không
+       có quyền xoá nó. Engine đã nói với máy vẽ rằng ảnh tham chiếu có thể mang
+       cả nội dung lẫn lối vẽ, nên chủ đề bằng chữ vẫn có việc để làm. */
+    expect(line).toContain(THEME_EN);
+  });
+
+  it("chữ tự gõ cũng im: hộp chọn nguồn cho ẢNH thắng cả nấc «Gõ riêng»", () => {
+    const line = composerStyleLine(styleShot({ styleCustom: "nét khắc gỗ Đông Hồ" }), { presets: PRESETS });
+    expect(line).not.toContain("nét khắc gỗ Đông Hồ");
+  });
+
+  it("prompt copy-dán nói Y HỆT: câu mở đầu không còn cụm phong cách", () => {
+    const text = serializeComposer(styleShot(), PRESETS);
+    expect(text).not.toContain(STYLE_EN);
+    expect(text).toContain(THEME_EN);
+    /* Và không để lại chữ «phong cách» lủng lẳng không có gì đứng sau. */
+    expect(text.split("\n")[0]).not.toMatch(/phong cách\s*[.,]/);
+  });
+
+  it("từng Ô của tấm cũng không được nhắc lại cụm ấy qua đường kế thừa", () => {
+    const cells: UiCell[] = [
+      { id: "c1", elementId: "button", styleId: "", decor: "none", decorPlace: "balanced", glazeId: "solid", sizeId: "", note: "" },
+    ];
+    const contract = composerToContract(
+      styleShot({ blocks: [{ id: "u1", kind: "uikit", mode: "template", cells }] }),
+      { presets: PRESETS },
+    );
+    expect(JSON.stringify(contract)).not.toContain(STYLE_EN);
+  });
+
+  it("ảnh trên pill CHỦ ĐỀ ⇒ chủ đề im, và nhân vật không mặc bộ đồ của nó", () => {
+    const composer = state({
+      contextRefs: [{ path: "refs/tet.jpg", role: "theme" }],
+      blocks: [mascotBlock("m1", mascotDoc())],
+    });
+    expect(composerStyleLine(composer, { presets: PRESETS })).not.toContain(THEME_EN);
+    const spec = composerToContract(composer, { presets: PRESETS }).sheets[0]!.components[0]!.spec;
+    expect(spec).not.toContain(OUTFIT_THEMES[0]!.value);
+    expect(spec).not.toContain("wearing ,");
+  });
+
+  it("chế độ TỰ DO cũng một luật: pill trong câu im, chỉ còn cái móc trỏ tới ảnh", () => {
+    const base = styleShot({ contextMode: "free" });
+    const composer = { ...base, contextDoc: contextDoc(base) };
+    const line = composerStyleLine(composer, { presets: PRESETS });
+    expect(line).not.toContain(STYLE_EN);
+    /* Cái móc PHẢI ở lại: nó là chỗ câu prompt trỏ tới tấm sắp đính kèm, và
+       thanh nhắc "nhớ kèm N ảnh" đếm bằng chính nó. */
+    expect(line).toContain("[ảnh tham chiếu");
+  });
+
+  it("KHÔNG ảnh ⇒ mọi thứ y như cũ (chốt chặn hồi quy)", () => {
+    const line = composerStyleLine(state(), { presets: PRESETS });
+    expect(line).toContain(STYLE_EN);
+    expect(line).toContain(THEME_EN);
+    expect(serializeComposer(state(), PRESETS)).toContain(STYLE_EN);
+  });
+});
+
+/**
+ * CHỦ ĐỀ RỖNG PHẢI IM Ở CẢ BA CỬA.
+ *
+ * Ảnh chụp 18/09/2026 còn một câu thứ hai không ai gọi: «Vietnamese Tết theme:
+ * red and gold, lanterns…» trong khi pill chủ đề trên màn đang hiện placeholder.
+ * Gốc là một giá trị GIEO SẴN ở `initialComposer` — xem khối chú thích ở đó.
+ */
+describe("chủ đề rỗng không đóng góp chữ nào", () => {
+  it("mở màn KHÔNG gieo sẵn chủ đề nào", () => {
+    expect(initialComposer(PRESETS).themeValue).toBe("");
+  });
+
+  it("rỗng ⇒ vắng khỏi `variant.style`, khỏi câu mở đầu, và khỏi bộ đồ của nhân vật", () => {
+    const composer = state({ themeValue: "", blocks: [mascotBlock("m1", mascotDoc())] });
+    const line = composerStyleLine(composer, { presets: PRESETS });
+    expect(line).not.toContain(phraseOf("theme", OUTFIT_THEMES[0]!.value, PRESETS));
+    expect(line).toContain(phraseOf("style", PRESETS.styles[0]!.id, PRESETS));
+    const text = serializeComposer(composer, PRESETS);
+    expect(text).not.toContain("theme:");
+    const spec = composerToContract(composer, { presets: PRESETS }).sheets[0]!.components[0]!.spec;
+    expect(spec).not.toContain("wearing");
   });
 });
 

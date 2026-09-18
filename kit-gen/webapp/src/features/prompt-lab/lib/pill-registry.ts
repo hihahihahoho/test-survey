@@ -397,6 +397,25 @@ export function inheritsWhenEmpty(kind: PillKind): boolean {
   return kind === "style" || kind === "outfit";
 }
 
+/**
+ * Trục này CÓ một bảng tra nhãn không — câu hỏi về TRỤC, không về độ dài danh sách.
+ *
+ * ╔══ VÌ SAO KHÔNG HỎI `pillOptions(kind).length > 0` ═══════════════════════╗
+ * ║ Nhãn trên pill từng hỏi đúng câu ấy, và nó SAI ở đúng cái ca đáng sợ      ║
+ * ║ nhất: danh mục rỗng NHẤT THỜI (kho của người dùng chưa gieo xong, hoặc    ║
+ * ║ mọi dòng của trục đang bị ẩn) làm pill hiện chữ placeholder — tức là nói  ║
+ * ║ «chưa chọn gì» — trong khi `phraseOf` vẫn đọc ra cụm EN của giá trị đang  ║
+ * ║ lưu và đẩy nó vào prompt. Màn hình nói một đằng, máy vẽ nhận một nẻo, và  ║
+ * ║ không có chỗ nào trên màn để gỡ cái mình không thấy.                      ║
+ * ║ `mascot` là trục DUY NHẤT thật sự không có bảng tra (danh sách của nó đến ║
+ * ║ từ kho thương hiệu, xem `pillOptions`), `mood` là di sản chỉ để đọc — chỉ ║
+ * ║ hai trục ấy mới được phép nuốt `value` khỏi nhãn.                         ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export function hasCatalog(kind: PillKind): boolean {
+  return kind !== "mascot" && kind !== "mood";
+}
+
 /** Nhãn VI hiện trên pill. Giá trị lạ ⇒ hiện nguyên văn (còn debug được). */
 export function labelOf(kind: PillKind, value: string, presets: PresetBundle = getPresets()): string {
   const raw = (value ?? "").trim();

@@ -2,7 +2,7 @@ import * as React from "react";
 import { ChevronDown, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PillImage } from "@/features/prompt-canvas/lib/pill-image";
-import { hasBlankChoice, inheritsWhenEmpty, labelOf, nounOf, pillOptions, type PillKind } from "../lib/pill-registry";
+import { hasBlankChoice, hasCatalog, inheritsWhenEmpty, labelOf, nounOf, pillOptions, refRoleOf, type PillKind } from "../lib/pill-registry";
 import { usePresets } from "../lib/presets-store";
 import { usePoseThumbs } from "../lib/pose/use-pose-thumbs";
 import { RefImageBody } from "./RefImagePill";
@@ -369,13 +369,27 @@ export function OptionPill({
      danh mục nào (xem `pillOptions`), nên một `value` sót lại từ bản nháp lượt
      trước sẽ hiện ra nguyên id thô ("mascot-default") — một chữ người dùng chưa
      bao giờ gõ, cho một lựa chọn không còn tồn tại. */
-  const label = custom
-    ? shorten(custom)
-    : value && options.length > 0
-      ? labelOf(kind, value, presets)
-      : shot
-        ? imageLabel || shot.refName
-        : labelOf(kind, "", presets);
+  /* PILL CẤP BỘ KIT ĐANG MANG ẢNH ⇒ NHÃN LÀ TẤM ẢNH, không phải preset cũ.
+     Ngoại lệ có chủ ý của đoạn chú thích ngay trên, và nó hẹp đúng bằng luật đã
+     ghi ở `hasContextImage` (`serialize-composer.ts`): với `theme`/`style`, tấm
+     ảnh THAY LỜI cho preset — cụm chữ của preset không còn đi vào prompt nữa.
+     Để pill tiếp tục đọc «Tết» trong khi prompt không còn nhắc Tết là dựng lại
+     đúng cái nói dối vừa vá, chỉ đổi đầu. Với `mascot`/`layout` thì ảnh và chữ
+     là hai mẩu của CÙNG một lựa chọn (ảnh linh vật + tên linh vật, bản phác bố
+     cục + nấc bố cục), nên ở đó ảnh vẫn không nuốt chữ. */
+  const refSourced = shot && refRoleOf(kind) !== "" ? shot : null;
+  const label = refSourced
+    ? imageLabel || refSourced.refName
+    : custom
+      ? shorten(custom)
+      /* `hasCatalog`, KHÔNG phải `options.length > 0`: một danh mục rỗng nhất
+         thời không được biến một giá trị ĐANG LƯU thành chữ «chưa chọn» — xem
+         khối chú thích của `hasCatalog`. */
+      : value && hasCatalog(kind)
+        ? labelOf(kind, value, presets)
+        : shot
+          ? imageLabel || shot.refName
+          : labelOf(kind, "", presets);
   const title = custom || undefined;
 
   /* Đóng hộp thì trả focus VỀ ĐÚNG cái pill vừa mở nó. Thiếu bước này thì người

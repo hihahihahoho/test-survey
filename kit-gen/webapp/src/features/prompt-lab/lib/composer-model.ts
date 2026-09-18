@@ -838,7 +838,24 @@ export function newUiKitBlock(): UiKitBlock {
 /** Trạng thái lúc mở màn: chỉ có ngữ cảnh chung, chưa block nào. */
 export function initialComposer(presets: PresetBundle = getPresets()): ComposerState {
   return {
-    themeValue: "a Vietnamese Tết festive outfit with red and gold",
+    /**
+     * CHỦ ĐỀ MỞ MÀN = RỖNG, và đó là một bản vá chứ không phải một lựa chọn thẩm mỹ.
+     *
+     * ╔══ MỘT CHỦ ĐỀ KHÔNG AI CHỌN LÀ MỘT CHỦ ĐỀ KHÔNG AI GỠ ĐƯỢC ═════════════╗
+     * ║ Tới 18/09/2026 chỗ này gieo sẵn chủ đề Tết. Hệ quả đo trên prompt thật:║
+     * ║ `## Art style` của MỌI tấm — kể cả tấm 16 nút bấm — mang câu           ║
+     * ║ «Vietnamese Tết theme: red and gold, lanterns, apricot and peach        ║
+     * ║ blossom motifs», trong khi người dùng chưa từng bấm vào pill chủ đề và ║
+     * ║ không có lý do nào để đi tìm cái cần tắt. Một giá trị mặc định thì phải ║
+     * ║ là thứ ĐÚNG cho mọi bộ kit; "Tết" thì đúng cho đúng một mùa của đúng    ║
+     * ║ một nước.                                                              ║
+     * ║ Rỗng thì pill hiện chữ «chủ đề» (placeholder) — màn hình và prompt nói  ║
+     * ║ CÙNG một điều: chưa chọn chủ đề nào, nên không có câu chủ đề nào cả.    ║
+     * ║ Phong cách thì GIỮ mặc định: preset đầu bảng hiện rõ TÊN trên pill, nên ║
+     * ║ nó là một lựa chọn người dùng nhìn thấy và đổi được ngay.               ║
+     * ╚═══════════════════════════════════════════════════════════════════════╝
+     */
+    themeValue: "",
     styleId: presets.styles[0]?.id ?? "",
     /* Mở màn có SẴN hai màu chứ không phải một ô trống: demo này để người ta
        thấy màu đi vào prompt ra chữ gì, mà một danh sách rỗng thì không thấy

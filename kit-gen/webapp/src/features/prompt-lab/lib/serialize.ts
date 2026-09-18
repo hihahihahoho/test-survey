@@ -1,6 +1,6 @@
 import { NODE } from "./schema";
 import { readPillImage } from "@/features/prompt-canvas/lib/pill-image";
-import { INHERIT, phraseOf, type PillKind } from "./pill-registry";
+import { INHERIT, phraseOf, refRoleOf, type PillKind } from "./pill-registry";
 import { describeBrandColors } from "./brand-colors";
 import { getPresets, type PresetBundle } from "./presets-store";
 
@@ -94,6 +94,13 @@ function pillText(node: PromptDocNode, ctx: SerializeContext): string {
   const kind = readAttr(node.attrs, "kind") as PillKind;
   const value = readAttr(node.attrs, "value");
   const custom = readAttr(node.attrs, "custom").trim();
+  /* ẢNH THẮNG CẢ CHỮ TỰ GÕ, và chỉ với hai pill cấp BỘ KIT (theme/phong cách).
+     Cùng một luật với câu khuôn (`hasContextImage` ở `serialize-composer.ts`) và
+     với chính hộp chọn nguồn (`SourcePicker.live`): đính ảnh vào pill phong cách
+     là tấm ảnh ẤY thành phong cách, nên cụm chữ của preset cũ không được đi kèm
+     xuống prompt để cãi lại nó. Cái móc `[ảnh tham chiếu N]` vẫn được `walkInline`
+     đặt ngay sau, nên câu không mất chỗ trỏ tới tấm ảnh. */
+  if (refRoleOf(kind) !== "" && readPillImage(node.attrs).path) return "";
   if (custom) return custom;
   if (value === INHERIT) {
     if (kind === "style") return ctx.styleEN;

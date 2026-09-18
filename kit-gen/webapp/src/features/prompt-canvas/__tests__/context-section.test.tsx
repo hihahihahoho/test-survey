@@ -242,10 +242,16 @@ describe("pill theme/phong cách mở ra hộp chọn nguồn ba nấc", () => {
         onState={(next) => { latest = next; }}
       />,
     );
-    /* Pill có cả ảnh lẫn giá trị ⇒ nhãn là GIÁ TRỊ (ảnh chỉ đứng thêm vào, không
-       nuốt chữ); ô ảnh chưa tải là một ô giữ chỗ câm, không in tên tệp. Nút bỏ
-       ảnh («Bỏ ảnh tet.png») là vật RIÊNG nằm trong pill. */
-    fireEvent.click(screen.getByRole("button", { name: /Tết festive outfit/ }));
+    /* NHÃN LÀ TẤM ẢNH, kể từ 18/09/2026 — trước đó nhãn là GIÁ TRỊ ("ảnh chỉ
+       đứng thêm vào, không nuốt chữ"). Luật đổi vì cụm chữ của preset nay KHÔNG
+       còn đi vào prompt khi pill theme/phong cách mang ảnh (`hasContextImage`
+       ở `serialize-composer.ts`): để «Tết» đứng lại trên nhãn là màn hình hứa
+       một thứ mà `variant.style` không nhận, đúng cái nói dối vừa vá. */
+    expect(screen.queryByText(/festive outfit/)).toBeNull();
+    /* Bấm vào CHỮ trên pill (sự kiện nổi bọt lên nút bọc ngoài): tên tệp lúc này
+       đứng ở hai chỗ — nhãn và `aria-label` của nút bỏ ảnh — nên hỏi theo vai
+       "button" sẽ ra hai vật. */
+    fireEvent.click(screen.getByText("tet.png"));
     expect(screen.getByRole("tab", { name: "Đính ảnh" }).getAttribute("aria-selected")).toBe("true");
 
     fireEvent.click(screen.getByRole("button", { name: "Bỏ ảnh" }));
