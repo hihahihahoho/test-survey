@@ -268,44 +268,25 @@ export function useRunStream(runId: string | null, opts: { enabled?: boolean } =
       }
     };
 
-    const loop = async () => {
-      while (!stoppedRef.current && !ac.signal.aborted) {
-        try {
-          setConnected(true);
-          stopPoll();
-          const r = await api.runs.stream(runId, {
-            from: lastSeqRef.current > 0 ? lastSeqRef.current + 1 : 0,
-            onEvent,
-            onStall: () => startPoll(),
-            signal: ac.signal,
-          });
-          if (r.cursorGone) {
-            // 416: log đầu đã bị dọn. Lấy trạng thái đầy đủ rồi stream LẠI TỪ ĐẦU (§6.3).
-            await qc.invalidateQueries({ queryKey: qk.runs.detail(runId) });
-            lastSeqRef.current = 0;
-            setLines([]);
-            continue;
-          }
-          if (r.stalled) {
-            startPoll();
-            await sleep(STREAM_POLL_FALLBACK_MS);
-            continue;
-          }
-          // Stream đóng bình thường: run đã xong hoặc agent đóng kết nối.
-          const run = qc.getQueryData<Run>(qk.runs.detail(runId));
-          if (run && run.status !== "running" && run.status !== "queued") break;
-          await sleep(500);
-        } catch (e) {
-          if (ac.signal.aborted) break;
-          setConnected(false);
-          // Agent tắt giữa chừng: hạ xuống poll. Poll cũng fail thì Query tự vào chế độ
-          // lỗi và §2.5 lo phần hiển thị — tầng này không dựng thông điệp riêng.
-          if (e instanceof AgentError) startPoll();
-          await sleep(STREAM_POLL_FALLBACK_MS);
-        }
-      }
-      setConnected(false);
-    };
+    const loop = () => runStreamLoop({
+      stream: (o) => api.runs.stream(runId, { ...o, signal: ac.signal }),
+      cachedRun: () => qc.getQueryData<Run>(qk.runs.detail(runId)),
+      /* `fetchQuery` chứ không `invalidateQueries`: chỗ gọi nó CẦN CÂU TRẢ LỜI để quyết
+         định dừng hay nối lại, mà `invalidateQueries` chỉ đánh dấu cũ rồi trả về ngay. */
+      fetchRun: () => qc.fetchQuery({
+        queryKey: qk.runs.detail(runId), queryFn: () => api.runs.get(runId), staleTime: 0,
+      }) as Promise<Run>,
+      refetchRun: () => qc.invalidateQueries({ queryKey: qk.runs.detail(runId) }),
+      onEvent,
+      setConnected,
+      startPoll,
+      stopPoll,
+      resetLines: () => { setLines([]); },
+      lastSeq: lastSeqRef,
+      stopped: () => stoppedRef.current,
+      aborted: () => ac.signal.aborted,
+      sleep,
+    });
 
     void loop();
     return () => {
@@ -319,6 +300,135 @@ export function useRunStream(runId: string | null, opts: { enabled?: boolean } =
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/* ═══════════ VÒNG STREAM — VIẾT RIÊNG RA ĐỂ KHÔNG BAO GIỜ QUAY TÍT ═══════════
+ *
+ * BUG HIỆN TRƯỜNG (3.0.6, Windows): màn kết quả kẹt ở «đang gen» và không thoát ra được,
+ * console đầy 429. Cơ chế là một VÒNG PHẢN HỒI DƯƠNG giữa vòng này và bộ hạn nhịp của
+ * agent, chứ không phải một lỗi đơn lẻ:
+ *
+ *   1. stream đóng (hoặc 429) ⇒ vòng đọc `runs.detail` TỪ CACHE. Cache còn «running».
+ *   2. cache còn «running» ⇒ ngủ 500ms rồi nối lại ⇒ 2 req/s vào đúng cái bucket đang đầy.
+ *   3. mọi request khác của màn (kể cả chính `runs.detail` đi mời lại trạng thái MỚI)
+ *      cũng 429 ⇒ cache KHÔNG BAO GIỜ rời khỏi «running» ⇒ quay lại bước 1, vĩnh viễn.
+ *
+ * Ba điều khoản cắt vòng đó, mỗi cái đóng một mắt xích:
+ *   (a) EVENT KẾT THÚC LÀ LỜI CUỐI. Đã nghe `run.finished` thì dừng, BẤT KỂ cache nói gì —
+ *       cache có thể cũ hoặc trống (vào thẳng bằng link, F5 giữa lượt), nhưng event thì
+ *       chính agent vừa phát ra. Trước đây cache cũ đủ sức bắt vòng chạy tiếp mãi mãi.
+ *   (b) 429 CHỜ ĐÚNG MỨC AGENT XIN, và dài dần khi vẫn bị chặn (2s → 10s). Chờ ngắn hơn
+ *       `Retry-After` thì lần gọi lại chỉ tốn thêm một slot của cửa sổ đang đầy.
+ *   (c) ĐÓNG BÌNH THƯỜNG MÀ CACHE CÒN «running» ⇒ HỎI LẠI AGENT VÀ CHỜ CÂU TRẢ LỜI
+ *       (`fetchQuery`, có await) thay vì ngủ 500ms rồi đoán. Trạng thái thật quyết định,
+ *       và nhịp nối lại giãn 1s → 5s để một agent đang nghẹt có chỗ thở.
+ *
+ * Tách khỏi `useEffect` để test được thẳng: vòng này là thứ duy nhất trong tầng hook có
+ * thể chạy vô hạn, nên nó phải có ca khoá, mà ca khoá thì không nên phải dựng cả React.
+ */
+
+/** Event nói "hết lượt". Agent chỉ phát MỘT tên (kể cả khi user bấm Dừng — lúc đó
+ *  `run.finished` mang `status: "cancelled"`), xem `agent/lib/run-handle.mjs`. */
+export const TERMINAL_STREAM_EVENTS: ReadonlySet<string> = new Set(["run.finished"]);
+
+/** Nối lại sau một lần đóng bình thường: 1s, gấp đôi dần, trần 5s. */
+export const RECONNECT_MIN_MS = 1_000;
+export const RECONNECT_MAX_MS = 5_000;
+/** Chờ sau 429: sàn 2s (bằng `Retry-After` của agent), gấp đôi theo chuỗi lỗi, trần 10s. */
+export const RATE_LIMIT_WAIT_MIN_MS = 2_000;
+export const RATE_LIMIT_WAIT_MAX_MS = 10_000;
+
+/** `streak` = số lần 429 LIÊN TIẾP (1 = lần đầu). Reset khi có một lần mở stream trót lọt. */
+export function rateLimitWaitMs(retryAfterMs: number | null | undefined, streak: number): number {
+  const base = Math.max(RATE_LIMIT_WAIT_MIN_MS, retryAfterMs ?? 0);
+  const grown = base * 2 ** Math.max(0, streak - 1);
+  return Math.min(RATE_LIMIT_WAIT_MAX_MS, grown);
+}
+
+export interface StreamLoopIO {
+  stream: (o: {
+    from: number;
+    onEvent: (ev: StreamEvent) => void;
+    onStall: () => void;
+  }) => Promise<{ cursorGone: boolean; stalled: boolean }>;
+  /** trạng thái run ĐANG CÓ trong cache — có thể cũ, có thể chưa có. */
+  cachedRun: () => Run | undefined;
+  /** hỏi lại agent, CÓ CHỜ. Ném thì coi như "chưa biết", vòng sẽ nối lại. */
+  fetchRun: () => Promise<Run | undefined>;
+  /** chỉ đánh dấu cũ (dùng cho 416: sau đó stream lại từ đầu sẽ mang đủ trạng thái). */
+  refetchRun: () => Promise<unknown>;
+  onEvent: (ev: StreamEvent) => void;
+  setConnected: (v: boolean) => void;
+  startPoll: () => void;
+  stopPoll: () => void;
+  resetLines: () => void;
+  lastSeq: { current: number };
+  stopped: () => boolean;
+  aborted: () => boolean;
+  sleep: (ms: number) => Promise<void>;
+}
+
+const isOver = (run: Run | undefined | null): boolean =>
+  run !== null && run !== undefined && run.status !== "running" && run.status !== "queued";
+
+export async function runStreamLoop(io: StreamLoopIO): Promise<void> {
+  let lastEventType: string | null = null;
+  let reconnectMs = RECONNECT_MIN_MS;
+  let rateLimitStreak = 0;
+
+  while (!io.stopped() && !io.aborted()) {
+    try {
+      io.setConnected(true);
+      io.stopPoll();
+      const r = await io.stream({
+        from: io.lastSeq.current > 0 ? io.lastSeq.current + 1 : 0,
+        onEvent: (ev) => {
+          if (typeof ev?.type === "string") lastEventType = ev.type;
+          io.onEvent(ev);
+        },
+        onStall: () => io.startPoll(),
+      });
+      rateLimitStreak = 0; // mở được stream ⇒ chuỗi bị chặn đã đứt
+      if (r.cursorGone) {
+        // 416: log đầu đã bị dọn. Lấy trạng thái đầy đủ rồi stream LẠI TỪ ĐẦU (§6.3).
+        await io.refetchRun();
+        io.lastSeq.current = 0;
+        io.resetLines();
+        continue;
+      }
+      if (r.stalled) {
+        io.startPoll();
+        await io.sleep(STREAM_POLL_FALLBACK_MS);
+        continue;
+      }
+      // (a) agent đã nói "xong" — không cache nào được phép cãi lại.
+      if (lastEventType !== null && TERMINAL_STREAM_EVENTS.has(lastEventType)) break;
+      if (isOver(io.cachedRun())) break;
+      // (c) cache còn «running»: hỏi lại và CHỜ. Hỏi hụt (agent nghẹt/tắt) ⇒ coi như
+      //     chưa biết, nối lại theo nhịp giãn dần chứ không nã 2 req/s như bản cũ.
+      let fresh: Run | undefined;
+      try { fresh = await io.fetchRun(); } catch { fresh = undefined; }
+      if (isOver(fresh)) break;
+      await io.sleep(reconnectMs);
+      reconnectMs = Math.min(RECONNECT_MAX_MS, reconnectMs * 2);
+    } catch (e) {
+      if (io.aborted()) break;
+      io.setConnected(false);
+      // Agent tắt giữa chừng: hạ xuống poll. Poll cũng fail thì Query tự vào chế độ
+      // lỗi và §2.5 lo phần hiển thị — tầng này không dựng thông điệp riêng.
+      if (e instanceof AgentError) {
+        io.startPoll();
+        if (e.status === 429) {
+          // (b) 429 KHÔNG phải sự cố: agent đang nói nhịp. Nghe đúng con số nó đưa.
+          rateLimitStreak += 1;
+          await io.sleep(rateLimitWaitMs(e.retryAfterMs, rateLimitStreak));
+          continue;
+        }
+      }
+      await io.sleep(STREAM_POLL_FALLBACK_MS);
+    }
+  }
+  io.setConnected(false);
+}
 
 /**
  * Áp một event lên bản `Run` đang có trong cache. Thuần khiết, không đụng mạng —

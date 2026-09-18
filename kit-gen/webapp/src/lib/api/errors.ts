@@ -366,9 +366,12 @@ export const ERROR_TABLE: Record<string, ErrorEntry> = {
     actions: [A.RELOAD_DATA], where: [W.inline], severity: "warn",
   },
   /* ── Chung ───────────────────────────────────────────────────────────── */
+  /* «Bạn bấm quá nhanh» đổ tội cho người dùng một việc họ không làm: chùm 429 hiện trường
+     đến từ CHÍNH giao diện — alt-tab về là `refetchOnWindowFocus` bắn lại mọi query đang
+     sống, cộng nắm key mời lại khi một lượt chạy vừa xong. Người dùng chỉ ngồi nhìn. */
   RATE_LIMITED: {
-    title: "Bạn bấm quá nhanh",
-    explain: "Đang tự thử lại sau vài giây.",
+    title: "Giao diện đang bận gọi lại dữ liệu",
+    explain: "Giao diện đang gửi quá nhiều yêu cầu một lúc; tự thử lại sau vài giây.",
     actions: [], where: [W.toast], severity: "info",
   },
   BAD_REQUEST: {

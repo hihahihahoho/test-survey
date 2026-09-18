@@ -5,8 +5,13 @@
  */
 import { describe, expect, it } from "vitest";
 import { keysAfterContractSave, keysAfterRun, qk } from "../keys";
-import { GC, STALE, shouldRetry } from "../query-client";
-import { applyEvent } from "../use-runs";
+import {
+  GC, RATE_LIMIT_MIN_DELAY_MS, RETRY_DELAY_MS, STALE, retryDelay, shouldRetry,
+} from "../query-client";
+import {
+  RATE_LIMIT_WAIT_MAX_MS, RECONNECT_MAX_MS, applyEvent, rateLimitWaitMs, runStreamLoop,
+  type StreamLoopIO,
+} from "../use-runs";
 import { AgentError } from "../../api/client";
 import { runSchema, type Run, type StreamEvent } from "../../types/api";
 
@@ -129,6 +134,39 @@ describe("chính sách retry ở tầng Query", () => {
   it("lỗi không phải AgentError vẫn được thử lại 1 lần", () => {
     expect(shouldRetry(0, new Error("lạ"))).toBe(true);
     expect(shouldRetry(1, new Error("lạ"))).toBe(false);
+  });
+
+  /* 3.0.6: chùm 429 đến từ CHÍNH giao diện (refetchOnWindowFocus + keysAfterRun), và
+     bản cũ thử lại sau 400ms — tức là trước khi cửa sổ trượt 1s của agent trôi hết. */
+  it("429 được 2 lượt thử lại (đủ phủ cửa sổ trượt của agent), lỗi khác vẫn 1", () => {
+    const rl = new AgentError({ code: "RATE_LIMITED", status: 429, retryAfterMs: 2000 });
+    expect(shouldRetry(0, rl)).toBe(true);
+    expect(shouldRetry(1, rl)).toBe(true);
+    expect(shouldRetry(2, rl)).toBe(false);
+    expect(shouldRetry(1, agentErr("AGENT_INTERNAL", 500))).toBe(false);
+  });
+
+  it("429 chờ theo Retry-After, SÀN 2s — không bao giờ là 400ms", () => {
+    const zero = () => 0;
+    expect(retryDelay(0, new AgentError({ code: "RATE_LIMITED", status: 429, retryAfterMs: 2000 }), zero))
+      .toBe(2_000);
+    // agent xin lâu hơn sàn ⇒ nghe agent
+    expect(retryDelay(0, new AgentError({ code: "RATE_LIMITED", status: 429, retryAfterMs: 7_000 }), zero))
+      .toBe(7_000);
+    // không có header ⇒ vẫn phải ≥ sàn, KHÔNG rơi về 400ms
+    expect(retryDelay(0, new AgentError({ code: "RATE_LIMITED", status: 429 }), zero))
+      .toBe(RATE_LIMIT_MIN_DELAY_MS);
+  });
+
+  it("jitter 0–500ms để N query cùng bị chặn không quay lại cùng một mili-giây", () => {
+    const err = new AgentError({ code: "RATE_LIMITED", status: 429, retryAfterMs: 2000 });
+    expect(retryDelay(0, err, () => 0.999)).toBe(2_499);
+    expect(retryDelay(0, err, () => 0)).toBe(2_000);
+  });
+
+  it("mọi lỗi KHÔNG phải 429 giữ nguyên 400ms", () => {
+    expect(retryDelay(0, agentErr("AGENT_INTERNAL", 500))).toBe(RETRY_DELAY_MS);
+    expect(retryDelay(0, new Error("lạ"))).toBe(RETRY_DELAY_MS);
   });
 });
 
@@ -257,5 +295,119 @@ describe("applyEvent — stream và poll phải cho CÙNG hình dạng dữ li�
     const r = applyEvent(base, { seq: 402, type: "job.started", job: "khong-co" } as StreamEvent);
     expect(r.jobs).toHaveLength(2);
     expect(r.jobs.every((j) => j.status === "queued")).toBe(true);
+  });
+});
+
+/* ═══ VÒNG STREAM KHÔNG ĐƯỢC PHÉP QUAY TÍT ═══════════════════════════════════
+ *
+ * Bug hiện trường 3.0.6 (Windows): màn kết quả kẹt ở «đang gen», console đầy 429.
+ * Cơ chế là một vòng phản hồi dương: stream đứt → cache vẫn «running» → nối lại sau
+ * 500ms → lại 429 → `runs.detail` đi mời lại cũng 429 → cache KHÔNG BAO GIỜ đổi.
+ * Ba ca dưới khoá đúng ba mắt xích đã cắt. Vòng chạy với đồng hồ GIẢ (`sleep` ghi sổ
+ * rồi trả về ngay) nên ca chạy tức thì — nếu vòng còn quay tít thì ca treo/đếm vọt,
+ * chứ không âm thầm xanh.
+ */
+describe("runStreamLoop — vòng stream phải DỪNG được", () => {
+  const runningRun: Run = runSchema.parse({
+    id: "r-0017", projectId: "p1", kind: "gen", status: "running",
+    progress: { done: 1, total: 2, failed: 0 },
+    jobs: [{ job: "chinh-ui", variant: "tet", sheet: "main", status: "running" }],
+    seq: 0,
+  });
+  const doneRun: Run = { ...runningRun, status: "done" };
+  const finishedEvent = { seq: 54, type: "run.finished", status: "done", ok: 1, failed: 0 } as StreamEvent;
+
+  /** Bộ IO giả + sổ ghi. `sleep` KHÔNG chờ thật, chỉ ghi lại số ms đã hứa chờ. */
+  function makeIO(over: Partial<StreamLoopIO> = {}) {
+    const waits: number[] = [];
+    const log: string[] = [];
+    const io: StreamLoopIO & { waits: number[]; log: string[]; streamCalls: number; fetchCalls: number } = {
+      waits, log, streamCalls: 0, fetchCalls: 0,
+      stream: async () => { io.streamCalls++; log.push("stream"); return { cursorGone: false, stalled: false }; },
+      cachedRun: () => runningRun,
+      fetchRun: async () => { io.fetchCalls++; log.push("fetch"); return runningRun; },
+      refetchRun: async () => undefined,
+      onEvent: () => {},
+      setConnected: () => {},
+      startPoll: () => {},
+      stopPoll: () => {},
+      resetLines: () => {},
+      lastSeq: { current: 0 },
+      stopped: () => false,
+      aborted: () => false,
+      sleep: async (ms: number) => { waits.push(ms); log.push(`sleep:${ms}`); },
+      ...over,
+    };
+    return io;
+  }
+
+  it("event KẾT THÚC là lời cuối — cache còn nói «running» cũng không giữ được vòng", async () => {
+    const io = makeIO({
+      stream: async (o) => { io.streamCalls++; o.onEvent(finishedEvent); return { cursorGone: false, stalled: false }; },
+      cachedRun: () => runningRun,   // cache NÓI DỐI: vẫn đang chạy
+    });
+    await runStreamLoop(io);
+    expect(io.streamCalls).toBe(1);
+    // và không thèm hỏi lại agent: chính agent vừa phát ra event kết thúc
+    expect(io.fetchCalls).toBe(0);
+  });
+
+  it("429 ⇒ KHÔNG nối lại trước khi hết Retry-After, và chờ dài dần khi vẫn bị chặn", async () => {
+    const rl = new AgentError({ code: "RATE_LIMITED", status: 429, retryAfterMs: 2000 });
+    let n = 0;
+    const io = makeIO({
+      stream: async (o) => {
+        io.streamCalls++;
+        io.log.push("stream");
+        if (n++ < 2) throw rl;
+        o.onEvent(finishedEvent);
+        return { cursorGone: false, stalled: false };
+      },
+    });
+    await runStreamLoop(io);
+    expect(io.streamCalls).toBe(3);
+    // Mỗi lần nối lại phải đứng SAU một lần chờ ≥ Retry-After — không có "stream,stream".
+    expect(io.log).toEqual(["stream", "sleep:2000", "stream", "sleep:4000", "stream"]);
+  });
+
+  it("chờ sau 429 có TRẦN 10s — vòng chậm lại chứ không tự treo vô hạn", () => {
+    expect(rateLimitWaitMs(2000, 1)).toBe(2_000);
+    expect(rateLimitWaitMs(2000, 3)).toBe(8_000);
+    expect(rateLimitWaitMs(2000, 9)).toBe(RATE_LIMIT_WAIT_MAX_MS);
+    // không có header ⇒ vẫn sàn 2s
+    expect(rateLimitWaitMs(null, 1)).toBe(2_000);
+  });
+
+  it("cache còn «running» nhưng AGENT nói đã xong ⇒ hỏi lại, CHỜ câu trả lời, rồi dừng", async () => {
+    const io = makeIO({
+      cachedRun: () => runningRun,          // cache cũ, kẹt ở «đang gen»
+      fetchRun: async () => { io.fetchCalls++; io.log.push("fetch"); return doneRun; },
+    });
+    await runStreamLoop(io);
+    expect(io.streamCalls).toBe(1);
+    expect(io.fetchCalls).toBe(1);
+    expect(io.waits).toEqual([]);           // dừng ngay, không ngủ 500ms rồi nối lại
+    expect(io.log).toEqual(["stream", "fetch"]);
+  });
+
+  it("agent thật sự còn chạy ⇒ nối lại theo nhịp GIÃN DẦN 1s→5s, không phải 2 req/s", async () => {
+    let n = 0;
+    const io = makeIO({
+      stream: async () => { io.streamCalls++; return { cursorGone: false, stalled: false }; },
+      stopped: () => n++ >= 5,             // cắt vòng sau 5 nhịp để ca không chạy mãi
+    });
+    await runStreamLoop(io);
+    expect(io.waits).toEqual([1_000, 2_000, 4_000, RECONNECT_MAX_MS, RECONNECT_MAX_MS]);
+  });
+
+  it("hỏi lại agent mà HỤT (agent nghẹt/tắt) ⇒ coi như chưa biết, vẫn giãn nhịp chứ không nã", async () => {
+    let n = 0;
+    const io = makeIO({
+      fetchRun: async () => { io.fetchCalls++; throw new AgentError({ code: "RATE_LIMITED", status: 429 }); },
+      stopped: () => n++ >= 3,
+    });
+    await runStreamLoop(io);
+    expect(io.fetchCalls).toBe(3);
+    expect(io.waits).toEqual([1_000, 2_000, 4_000]);
   });
 });

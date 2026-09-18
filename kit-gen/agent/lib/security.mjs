@@ -119,18 +119,29 @@ export function corsHeaders(origin) {
 
 /** Đường dẫn CHỈ-ĐỌC tài nguyên tĩnh: bundle /app/* và đọc file/thumbnail trong project.
  *  Một trang mở ra nạp cả trăm ES module (bundle không có build step) và lưới kit có thể
- *  xin ~100 thumbnail cùng lúc ⇒ dùng chung bucket 20 req/s với API là TỰ CHẶN CHÍNH MÌNH. */
+ *  xin ~100 thumbnail cùng lúc ⇒ bắt chúng chen chung bucket với API là TỰ CHẶN CHÍNH MÌNH. */
 const STATIC_READ = [/^\/app(\/|$)/, /^\/api\/projects\/[^/]+\/files\//, /^\/favicon\.ico$/]
 export function isStaticRead(pathname) {
   return STATIC_READ.some(re => re.test(String(pathname)))
 }
 
 /** Rate limit thô: cửa sổ trượt 1s. HAI BUCKET riêng (lớp 9):
- *   · `api`    — mặc định 20 req/s: đủ cho thao tác thật của người dùng, chặn vòng lặp lỗi.
+ *   · `api`    — mặc định 50 req/s: đủ cho một chùm refetch hợp lệ, chặn vòng lặp lỗi.
  *   · `static` — hào phóng hơn nhiều (mặc định 30×): chỉ đọc file trong bundle/project,
  *                không spawn tiến trình, không ghi đĩa ⇒ không phải bề mặt tấn công đáng giá.
- *  Vẫn là trần: kể cả bucket static cũng có giới hạn, không mở toang. */
-export function makeRateLimiter({ limit = 20, windowMs = 1000, staticLimit = null } = {}) {
+ *  Vẫn là trần: kể cả bucket static cũng có giới hạn, không mở toang.
+ *
+ *  VÌ SAO 50 CHỨ KHÔNG CÒN 20 (bug hiện trường 3.0.6, Windows).
+ *  Con số 20 được đo cho một giao diện mà người dùng BẤM: người nhanh nhất cũng không
+ *  sinh nổi 20 yêu cầu trong một giây bằng tay. Nhưng giao diện hiện tại không gọi theo
+ *  nhịp ngón tay — nó gọi theo nhịp của React Query: alt-tab về tab là MỌI query đang
+ *  sống refetch cùng lúc, và khi một lượt chạy vừa xong thì cả bộ khoá `keysAfterRun`
+ *  mời lại thêm một nắm nữa. Một màn project vì thế bắn 30–40 request trong vài chục ms
+ *  — HỢP LỆ, từ MỘT tab, không có gì chạy loạn. Trần 20 biến nhịp bình thường đó thành
+ *  một chùm 429, và bản cũ của web thử lại sau 400ms nên chùm ấy tự nuôi chính nó.
+ *  Cái mà lớp này sinh ra để chặn là VÒNG LẶP KHÔNG ĐÁY (stream đứt → nối lại → đứt,
+ *  vài trăm req/s) — 50/s vẫn chặn đứng đúng loại đó, chỉ thôi chặn nhầm người ngay thật. */
+export function makeRateLimiter({ limit = 50, windowMs = 1000, staticLimit = null } = {}) {
   const buckets = { api: [], static: [] }
   const limits = { api: limit, static: staticLimit ?? limit * 30 }
   return function take(pathname = "") {
@@ -143,6 +154,35 @@ export function makeRateLimiter({ limit = 20, windowMs = 1000, staticLimit = nul
       throw new AgentError("RATE_LIMITED", `rate limit ${cap}/${windowMs}ms exceeded (${kind})`,
         { hint: "retry-after-2s", headers: { "Retry-After": "2" } })
     hits.push(now)
+  }
+}
+
+/** Gom 429 lại và in TỐI ĐA MỘT DÒNG MỖI GIÂY.
+ *
+ *  Trước bản này agent KHÔNG in gì khi chặn: chùm 429 hiện trường 3.0.6 chỉ tồn tại
+ *  trong console của trình duyệt, nên nhìn từ phía agent thì "không có chuyện gì xảy ra"
+ *  và cái vòng lặp tự nuôi nó chạy cả buổi mà log agent trắng tinh. Nhưng in MỘT DÒNG
+ *  MỖI LẦN CHẶN thì còn tệ hơn: đúng lúc đang bị nã vài trăm req/s, log biến thành nơi
+ *  đốt I/O và tự nó thành một phần của sự cố. Nên: đếm hết, in một dòng mỗi giây, kèm
+ *  MỘT ví dụ để biết ai đang gõ cửa.
+ *
+ *  Dòng in chỉ có method + pathname: KHÔNG query string, KHÔNG đường dẫn trên máy. */
+export function makeRateLimitLogger({ write = s => process.stderr.write(s), now = Date.now, windowMs = 1000 } = {}) {
+  let blocked = 0
+  let sample = ""
+  /* `-Infinity` chứ không phải 0: lần chặn ĐẦU TIÊN phải ra log ngay, không nằm chờ
+     hết một giây — đó là dòng duy nhất nói cho người đọc log biết sự cố đã bắt đầu. */
+  let lastLog = -Infinity
+  return function note(method, pathname) {
+    blocked += 1
+    sample = `${String(method ?? "?")} ${String(pathname ?? "/").slice(0, 120)}`
+    const t = now()
+    if (t - lastLog < windowMs) return false
+    lastLog = t
+    const n = blocked
+    blocked = 0
+    write(`[agent] rate limit: ${n} yêu cầu bị chặn trong 1 s, ví dụ ${sample}\n`)
+    return true
   }
 }
 

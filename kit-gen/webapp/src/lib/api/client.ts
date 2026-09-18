@@ -36,6 +36,8 @@ export interface AgentErrorInit {
   transport?: TransportOutcome;
   entry?: Entry;
   cause?: unknown;
+  /** Số ms agent YÊU CẦU chờ trước khi gọi lại (header `Retry-After`). Xem `retryAfterMs`. */
+  retryAfterMs?: number | null;
 }
 
 /**
@@ -57,6 +59,14 @@ export class AgentError extends Error {
   readonly url: string;
   readonly transport: TransportOutcome;
   readonly entry: Entry | null;
+  /**
+   * 429 KHÔNG phải "lỗi", nó là AGENT ĐANG NÓI NHỊP GỌI ĐÚNG là bao nhiêu — và nó nói
+   * bằng header `Retry-After`. Trước bản này con số ấy bị vứt ngay tại chỗ parse, nên
+   * mọi tầng trên chỉ còn đoán: tầng Query chờ cứng 400ms, vòng stream chờ cứng 2s.
+   * Chờ NGẮN HƠN mức agent xin thì lần gọi lại cũng 429 ⇒ vòng lặp tự nuôi chính nó.
+   * `null` = response không kèm header (hoặc không phải lỗi HTTP).
+   */
+  readonly retryAfterMs: number | null;
 
   constructor(init: AgentErrorInit) {
     super(init.message ?? init.code ?? "AGENT_ERROR");
@@ -70,6 +80,7 @@ export class AgentError extends Error {
     this.url = init.url ?? "";
     this.transport = init.transport ?? "http-error";
     this.entry = init.entry ?? null;
+    this.retryAfterMs = init.retryAfterMs ?? null;
     if (init.cause !== undefined) this.cause = init.cause;
   }
 
@@ -373,6 +384,26 @@ export function protocolMismatch(p: number | null | undefined): "AGENT_PROTOCOL_
   return null;
 }
 
+/**
+ * `Retry-After` theo RFC 9110 có HAI dạng: số GIÂY, hoặc một mốc HTTP-date. Agent local
+ * chỉ gửi dạng số ("2"), nhưng proxy/người khác có thể gửi dạng ngày — đọc cả hai thì
+ * không bao giờ phải quay lại đây. Giá trị vô nghĩa (âm, không phải số, ngày quá khứ)
+ * trả `null` để nơi gọi dùng sàn của riêng nó, KHÔNG trả 0 (0 nghĩa là "gọi lại ngay").
+ */
+export function parseRetryAfter(raw: string | null | undefined): number | null {
+  if (raw === null || raw === undefined) return null;
+  const s = String(raw).trim();
+  if (s === "") return null;
+  if (/^\d+$/.test(s)) {
+    const secs = Number(s);
+    return Number.isFinite(secs) ? secs * 1000 : null;
+  }
+  const at = Date.parse(s);
+  if (!Number.isFinite(at)) return null;
+  const ms = at - Date.now();
+  return ms > 0 ? ms : null;
+}
+
 async function parseErrorEnvelope(res: Response, method: string, url: string, entry: Entry): Promise<AgentError> {
   let body: unknown = null;
   try {
@@ -394,6 +425,7 @@ async function parseErrorEnvelope(res: Response, method: string, url: string, en
     entry,
     // ĐÃ nhận được response ⇒ agent sống và đã trả lời. Không bao giờ đổ tội trình duyệt.
     transport: "http-error",
+    retryAfterMs: parseRetryAfter(res.headers?.get?.("Retry-After")),
   });
 }
 

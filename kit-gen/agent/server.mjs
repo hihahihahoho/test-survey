@@ -24,7 +24,7 @@ import { sendJson, sendText, sendEmpty, sendError, sendFile } from "./lib/http.m
 import { shortenPath, redactLine } from "./lib/redact.mjs"
 import {
   buildOriginAllowlist, buildHostAllowlist, checkHost, checkOrigin,
-  checkClientHeader, corsHeaders, makeRateLimiter, readBody, readJson,
+  checkClientHeader, corsHeaders, makeRateLimiter, makeRateLimitLogger, readBody, readJson,
 } from "./lib/security.mjs"
 import { Router } from "./lib/router.mjs"
 import { WorkspaceRegistry, defaultWorkspaceRoot } from "./lib/workspace.mjs"
@@ -187,9 +187,12 @@ export async function createAgent(opts = {}) {
   const kitgenHome = opts.kitgenHome
   // Hai bucket: API (thao tác thật) và đọc tĩnh (/app/* + files/*). Xem makeRateLimiter.
   const rate = makeRateLimiter({
-    limit: Number(opts.rateLimit ?? 20), windowMs: 1000,
+    limit: Number(opts.rateLimit ?? 50), windowMs: 1000,
     staticLimit: opts.staticRateLimit !== undefined ? Number(opts.staticRateLimit) : null,
   })
+  /* Chặn mà im lặng thì sự cố 429 chỉ tồn tại trong console trình duyệt — xem chú thích
+     của `makeRateLimitLogger`. Tối đa 1 dòng/giây để chính cái log không thành sự cố. */
+  const note429 = makeRateLimitLogger(opts.onRateLimited ? { write: opts.onRateLimited } : {})
 
   function origins() {
     return buildOriginAllowlist({
@@ -201,8 +204,12 @@ export async function createAgent(opts = {}) {
 
   const server = createServer(async (req, res) => {
     let origin = null
+    /* Giữ NGOÀI `try`: khi lớp bảo mật ném, khối catch vẫn cần biết yêu cầu nào bị chặn.
+       Chỉ pathname — không query string, không gì dính đường dẫn trên máy người dùng. */
+    let pathname = "/"
     try {
       const url = new URL(req.url, `http://127.0.0.1:${state.port}`)
+      pathname = url.pathname
       const originSet = origins()
 
       // ── lớp bảo mật, đúng thứ tự ───────────────────────────────────────────
@@ -240,6 +247,7 @@ export async function createAgent(opts = {}) {
     } catch (err) {
       const e = toAgentError(err, shortenPath)
       if (e.status >= 500) process.stderr.write(`[agent] ${redactLine(e.message)}\n`)
+      if (e.code === "RATE_LIMITED") note429(req.method, pathname)
       sendError(res, e, corsHeaders(origin))
     }
   })

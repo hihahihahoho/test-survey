@@ -285,7 +285,7 @@ Agent là cửa cho phép chạy `codex exec -s workspace-write` trên máy user
 | 6 | **Sandbox đường dẫn**: `resolve` + so prefix **theo từng đoạn** + `realpath` cả đích và tổ tiên ⇒ chặn `../`, `%2e%2e`, path tuyệt đối, và **symlink trỏ ra ngoài**. **Không dùng regex** (v1 dùng `/^refs\//` — thua symlink) | `lib/paths.mjs` `safeJoin` |
 | 7 | **Chỉ nhận danh từ, không nhận lệnh**: client gửi `jobs:["tet-main"]`, agent đối chiếu contract rồi tự dựng argv. Không endpoint nào nhận chuỗi shell/flag | `lib/runs.mjs` + `lib/engine.mjs` |
 | 8 | **Xác nhận ngoài băng**: xoá vĩnh viễn cần mã 4 số **in ra terminal**, dùng 1 lần, hết hạn 60s, sai 3 lần khoá 60s. Mã không lưu ở đâu, không trả qua HTTP | `lib/confirm.mjs` |
-| 9 | **Rate limit** 20 req/s → **429** (+`Retry-After: 2`); body ≤ 25 MB, upload ≤ 200 MB, ảnh ref ≤ 20 MB → **413** | `makeRateLimiter`, `readBody` |
+| 9 | **Rate limit** 50 req/s (bucket đọc tĩnh 30×) → **429** (+`Retry-After: 2`, agent log tối đa 1 dòng/giây); body ≤ 25 MB, upload ≤ 200 MB, ảnh ref ≤ 20 MB → **413** | `makeRateLimiter`, `makeRateLimitLogger`, `readBody` |
 | 10 | **Xoá là chuyển vào `.trash/`**, không `rm -rf`. Không cho xoá ngoài workspace | `lib/projects.mjs` `trashProject` |
 | 11 | **Redact bắt buộc** ở lớp cuối: mọi JSON qua `redactDeep`, mọi dòng log qua `redactLine`; đường dẫn tuyệt đối rút thành `~/…` (PII) | `lib/redact.mjs` + `lib/http.mjs` |
 | 12 | **Kiểm magic bytes** khi upload, không tin `Content-Type` của client | `lib/multipart.mjs` `sniff` |

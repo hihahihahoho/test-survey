@@ -550,7 +550,7 @@ export const DOC_ENTRIES: DocEntry[] = [
   {
     code: "RATE_LIMITED",
     group: "Khác",
-    why: "Bạn gửi quá nhiều yêu cầu trong thời gian ngắn nên công cụ local tạm hoãn để giữ máy nhẹ.",
+    why: "Giao diện gửi quá nhiều yêu cầu cùng lúc (quay lại tab là mọi khung dữ liệu đều hỏi lại một lượt) nên công cụ local tạm hoãn bớt để giữ máy nhẹ.",
     fix: ["Không cần làm gì: giao diện tự thử lại sau vài giây."],
   },
   {

@@ -3,6 +3,7 @@
 import http from "node:http"
 import { describe, it, eq, ok, socketPair, makeClient, CLIENT, PAGES, PORT } from "./harness.mjs"
 import { createAgent } from "../server.mjs"
+import { makeRateLimiter, makeRateLimitLogger } from "../lib/security.mjs"
 
 export async function run({ api, call, wsRoot, pid }) {
   // ─────────────────────────────────────────── 7. BODY LIMIT / RATE LIMIT
@@ -69,6 +70,54 @@ export async function run({ api, call, wsRoot, pid }) {
     ok(got429, "phải có ít nhất 1 lần 429")
     eq(got429.json.error.code, "RATE_LIMITED", "code")
     eq(got429.headers["retry-after"], "2", "Retry-After")
+  })
+
+  /* 3.0.6 hiện trường: trần 20 được đo cho giao diện BẤM TAY, nhưng React Query refetch
+     mọi query đang sống khi tab lấy lại focus và khi một lượt chạy vừa xong ⇒ 30–40
+     request hợp lệ từ MỘT tab. Ca này khoá con số mặc định để không ai hạ lại về 20
+     mà không đọc chú thích trong `makeRateLimiter`. */
+  await it("trần API mặc định là 50 req/s — đủ cho một chùm refetch hợp lệ của MỘT tab", async () => {
+    const take = makeRateLimiter()
+    let passed = 0
+    for (let i = 0; i < 60; i++) {
+      try { take("/api/projects"); passed++ } catch { break }
+    }
+    eq(passed, 50, "số request lọt qua trong 1 cửa sổ")
+    // bucket đọc tĩnh vẫn là 30× — một trang nạp cả trăm module + thumbnail
+    const takeStatic = makeRateLimiter()
+    let passedStatic = 0
+    for (let i = 0; i < 1600; i++) {
+      try { takeStatic("/app/index.html"); passedStatic++ } catch { break }
+    }
+    eq(passedStatic, 50 * 30, "trần bucket static")
+  })
+
+  await it("429 có vào log agent — nhưng TỐI ĐA 1 dòng mỗi giây, kèm 1 ví dụ", async () => {
+    const out = []
+    let clock = 0
+    const note = makeRateLimitLogger({ write: s => out.push(s), now: () => clock })
+    note("GET", "/api/runs/r-0017")                       // t=0 → in ngay, đếm 1
+    for (let i = 0; i < 40; i++) note("GET", "/api/runs/r-0017/stream")  // cùng giây → im
+    eq(out.length, 1, "trong giây đầu chỉ MỘT dòng")
+    eq(out[0], "[agent] rate limit: 1 yêu cầu bị chặn trong 1 s, ví dụ GET /api/runs/r-0017\n", "dòng đầu")
+    clock = 1000
+    note("POST", "/api/projects/p1/runs")
+    eq(out.length, 2, "sang giây sau mới in tiếp")
+    eq(out[1], "[agent] rate limit: 41 yêu cầu bị chặn trong 1 s, ví dụ POST /api/projects/p1/runs\n", "gom đủ số bị nuốt")
+    ok(!out.some(l => l.includes("?")), "không query string trong log")
+  })
+
+  await it("server ĐẨY được dòng 429 ra log (không còn chặn trong im lặng)", async () => {
+    const out = []
+    const noisy = await createAgent({
+      workspaces: [wsRoot], port: PORT, origins: [PAGES], print: () => {}, rateLimit: 2,
+      onRateLimited: s => out.push(s),
+    })
+    noisy.state.port = PORT
+    const callNoisy = makeClient(noisy.server)
+    for (let i = 0; i < 8; i++) await callNoisy("GET", "/health", { headers: CLIENT })
+    ok(out.length >= 1, `phải có ít nhất 1 dòng log (có ${out.length})`)
+    ok(/^\[agent\] rate limit: \d+ yêu cầu bị chặn trong 1 s, ví dụ GET \/health\n$/.test(out[0]), `dạng dòng: ${JSON.stringify(out[0])}`)
   })
 
 }
