@@ -1280,30 +1280,46 @@ describe("⑨ cửa «Đính ảnh khung» trong hộp của pill tên element",
     expect(screen.getByText("Chọn một tấm ảnh trước.")).toBeTruthy();
   });
 
-  it("MÔ TẢ LÀ BẮT BUỘC: xoá trắng ⇒ «Thêm» xám, và lý do nói ra bằng chữ", () => {
+  it("MÔ TẢ LÀ BẮT BUỘC: xoá trắng ⇒ nút chốt xám, và lý do nói ra bằng chữ", () => {
     render(<Harness initial={uikit([SHAPE_CELL()])} />);
     openNamePill();
     const note = screen.getByLabelText("Mô tả món trong ảnh khung");
-    expect((screen.getByRole("button", { name: "Thêm" }) as HTMLButtonElement).disabled).toBe(false);
+    /* Dòng ĐÃ có ảnh ⇒ đây là một lượt SỬA, nên nút đọc «Cập nhật»: «Thêm» trên một
+       tấm đã đính là hứa một tấm thứ hai, mà ô này chỉ giữ được một. */
+    expect((screen.getByRole("button", { name: "Cập nhật" }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.change(note, { target: { value: "   " } });
-    expect((screen.getByRole("button", { name: "Thêm" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Cập nhật" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText("Viết mô tả rồi mới thêm được.")).toBeTruthy();
-    /* Câu giải thích LUÔN hiện, không phải một tooltip phải rê chuột mới thấy. */
-    expect(screen.getByText("Ảnh chỉ nói hình dáng, mô tả nói nó là gì.")).toBeTruthy();
+    /* Câu giải thích LUÔN hiện, không phải một tooltip phải rê chuột mới thấy — và nay
+       nó nói về CẢ CẶP tên + mô tả, vì cả hai đều đi vào prompt. */
+    expect(screen.getByText(/Tên đi vào prompt như tên món; ảnh chỉ nói hình dáng/)).toBeTruthy();
   });
 
-  it("gõ mô tả rồi «Thêm» ⇒ ô mang ĐÚNG cặp ảnh + mô tả", () => {
+  it("TÊN LÀ BẮT BUỘC: xoá trắng ⇒ nút chốt xám, kèm đúng câu lý do của riêng nó", () => {
+    render(<Harness initial={uikit([SHAPE_CELL()])} />);
+    openNamePill();
+    fireEvent.change(screen.getByLabelText("Tên món trong ảnh khung"), { target: { value: "  " } });
+    expect((screen.getByRole("button", { name: "Cập nhật" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Đặt tên món rồi mới thêm được.")).toBeTruthy();
+  });
+
+  it("sửa mô tả rồi chốt ⇒ ô mang ĐÚNG cặp ảnh + mô tả, và tên điền sẵn KHÔNG đẻ món mới", () => {
     let latest: UiKitBlock | null = null;
     render(<Harness initial={uikit([SHAPE_CELL()])} onState={(next) => { latest = next; }} />);
     openNamePill();
+    /* Ô tên mở ra mang đúng nhãn đang hiện trên pill — xem `editing` ở `ShapeRefPanel`. */
+    expect((screen.getByLabelText("Tên món trong ảnh khung") as HTMLInputElement).value)
+      .toBe("Button · primary");
     fireEvent.change(screen.getByLabelText("Mô tả món trong ảnh khung"), {
       target: { value: "  cái khiên tròn có núm giữa  " },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Thêm" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cập nhật" }));
     const cell = (latest as unknown as UiKitBlock).cells[0]!;
     expect(cell.shapeRef).toBe("refs/shape-1.png");
     expect(cell.shapeNote).toBe("cái khiên tròn có núm giữa");
-    /* Loại element KHÔNG đổi: đính ảnh khung không phải một cú chọn trong danh mục. */
+    /* KHÔNG đụng tới loại element: người dùng chỉ sửa một dòng mô tả, họ không đổi tên
+       món — và cái tên điền sẵn là NHÃN ĐANG HIỆN, nên nó phải đi qua cửa "gõ lại đúng
+       nhãn ⇒ không đổi gì" của `applyShapeToCell`, chứ không đẻ ra «Button · primary». */
     expect(cell.elementId).toBe("button");
   });
 
@@ -1336,6 +1352,29 @@ describe("⑨ ảnh khung đi tới contract và tới prompt copy-dán", () => 
     const contract = composerToContract(state([uikit([{ ...newCell("button", PRESETS), id: "c1" }])]), { presets: PRESETS });
     expect("shapeRef" in contract.sheets[0]!.components[0]!).toBe(false);
     expect("shapeNote" in contract.sheets[0]!.components[0]!).toBe(false);
+  });
+
+  it("món TỰ ĐẶT TÊN vẫn mang đủ cặp ảnh/mô tả, và DANH TỪ là chữ người dùng gõ", () => {
+    /* Đây là cái hố mà lượt này lấp: trước đó dòng giữ nguyên `elementId` của danh
+       mục, nên contract nói «Popup · panel» ngay cạnh mô tả người dùng tự viết — hai
+       câu chửi nhau trong cùng một ô. Nay `elementId` là món họ đặt tên, nên `vi`
+       (và qua đó cả tên file) đọc ra đúng chữ ấy. */
+    const { skel: _skel, set: _set, ...base } = PRESETS.elements.find((e) => e.id === "popover")!;
+    const custom: ElementPreset = { ...base, id: "tu-dat-khung-nhiem-vu", vi: "Khung nhiệm vụ", en: "Khung nhiệm vụ" };
+    const bundle = { ...PRESETS, elements: [...PRESETS.elements, custom] };
+    const cell: UiCell = {
+      ...newCell(custom.id, bundle),
+      id: "c1",
+      shapeRef: "refs/shape-1.png",
+      shapeNote: "khung ba cạnh, có dải ruy băng trên đỉnh",
+    };
+    const comp = composerToContract(state([uikit([cell])]), { presets: bundle }).sheets[0]!.components[0]!;
+    expect(comp.vi).toBe("Khung nhiệm vụ");
+    expect(comp.shapeRef).toBe("refs/shape-1.png");
+    expect(comp.shapeNote).toBe("khung ba cạnh, có dải ruy băng trên đỉnh");
+    /* Danh từ của danh mục KHÔNG còn ở đâu trong ô — đó là cả ý nghĩa của lượt này. */
+    expect(`${comp.vi} ${comp.spec}`).not.toContain("popup panel");
+    expect(comp.file).toContain("tu-dat-khung-nhiem-vu");
   });
 
   it("đường dẫn thoát ra ngoài project bị chặn ngay lúc dịch, không đợi agent", () => {

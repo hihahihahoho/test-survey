@@ -139,7 +139,7 @@ function CellRow({
           onPick={onPickSet}
           projectId={projectId ?? null}
           shape={shapeOf(cell)}
-          onShape={(next) => onChange(withShape(cell, next))}
+          onShape={(next) => onChange(applyShapeToCell(cell, next, presets))}
         />
         {/* Thứ tự pill: phong cách → đục nền → trang trí → bố trí → cỡ.
             «Chất liệu» ĐÃ BỊ BỎ HẲN (không ẩn đi, không đổi tên): nó ăn theo prompt
@@ -251,7 +251,7 @@ function FreeCellRow({
           onPick={onPickSet}
           projectId={projectId ?? null}
           shape={shapeOf(cell)}
-          onShape={(next) => onChange(withShape(cell, next))}
+          onShape={(next) => onChange(applyShapeToCell(cell, next, presets))}
         />
         {/* CỠ Ở NGOÀI EDITOR, kể cả ở chế độ tự do — nó không đi vào prompt một chữ
             nào (nó thành `skel.w`/`skel.h`), nên nó không có chỗ trong một câu văn.
@@ -765,6 +765,7 @@ function ElementCatalogue({
   onPick,
   projectId,
   shape,
+  elementName,
   onShape,
 }: {
   label: string;
@@ -776,6 +777,8 @@ function ElementCatalogue({
   projectId?: string | null;
   /** Ảnh khung ĐANG dùng của dòng mở hộp này. */
   shape?: CellShape;
+  /** Nhãn món đang hiện trên pill — nấc ảnh khung điền sẵn nó khi SỬA. */
+  elementName?: string;
   /**
    * Vắng ⇒ KHÔNG có nấc «Đính ảnh khung».
    *
@@ -785,9 +788,11 @@ function ElementCatalogue({
    * ║ hỏi «cái này là cái gì». Ai muốn một món chưa có trong danh mục thì đi qua ║
    * ║ nấc «Gõ riêng», rồi mở pill tên của chính dòng vừa hiện ra.                ║
    * ╚══════════════════════════════════════════════════════════════════════════╝
-   * `null` = bỏ tấm ảnh (và bỏ luôn mô tả — xem `CellShape`).
+   * `null` = bỏ tấm ảnh (và bỏ luôn mô tả — xem `CellShape`). Loại element của
+   * dòng thì KHÔNG bị trả về danh mục: món ấy vẫn là món họ đã đặt tên, nó chỉ
+   * thôi có bản phác đi kèm.
    */
-  onShape?: (next: CellShape | null) => void;
+  onShape?: (next: ShapeApply | null) => void;
 }) {
   const presets = usePresets();
   const [query, setQuery] = React.useState("");
@@ -865,6 +870,7 @@ function ElementCatalogue({
         <ShapeRefPanel
           projectId={projectId ?? null}
           shape={shape ?? EMPTY_CELL_SHAPE}
+          elementName={elementName ?? ""}
           onApply={onShape}
         />
       )}
@@ -946,7 +952,7 @@ type CatalogueTab = "preset" | "shape" | "custom";
 const ELEMENT_LIBRARY_HREF = "/library/prompts?kind=element";
 
 /* ══════════════════════════════════════════════════════════════════════════
-   NẤC «ĐÍNH ẢNH KHUNG» — một tấm ảnh hình dáng + một mô tả BẮT BUỘC
+   NẤC «ĐÍNH ẢNH KHUNG» — một tấm ảnh, một cái TÊN, và một mô tả; cả ba BẮT BUỘC
    ══════════════════════════════════════════════════════════════════════════ */
 
 /** Ảnh khung của một dòng, đúng cặp trường mà `UiCell` giữ. */
@@ -957,12 +963,43 @@ export interface CellShape {
   note: string;
 }
 
+/**
+ * CÚ BẤM «Thêm»/«Cập nhật» của nấc ảnh khung — một tấm ảnh, một mô tả, VÀ MỘT CÁI TÊN.
+ *
+ * ╔══ VÌ SAO CÁI TÊN ĐI CHUNG CHUYẾN, KHÔNG PHẢI MỘT CỬA RIÊNG ══════════════╗
+ * ║ Chủ sản phẩm, nhìn ảnh chụp dòng #5 vừa đính xong một tấm phác:           ║
+ * ║ *«mà cái này tôi up custom sao nó vẫn chọn là popup pannel nhỉ»*.         ║
+ * ║ Đính một tấm phác + gõ «nó là gì» LÀ hành vi khai một món mới — nhưng đời ║
+ * ║ trước chỉ ghi `shapeRef`/`shapeNote` rồi để nguyên `elementId`, nên dòng   ║
+ * ║ ấy vẫn đeo danh từ của danh mục. Prompt gửi đi đọc ra hai câu chửi nhau:  ║
+ * ║ «popup panel (shape as in the attached reference)» + «ELEMENT SHAPE       ║
+ * ║ REFERENCE … (Popup panel): khung nhiệm vụ ba cạnh». Máy vẽ chọn một trong ║
+ * ║ hai, và nó chọn cái danh từ.                                             ║
+ * ║ Nên `name` KHÔNG phải một trường tuỳ chọn thêm vào cho đẹp: nó là nửa còn ║
+ * ║ thiếu của chính cú bấm ấy, và nó đi cùng chuyến với hai trường kia.       ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ */
+export type ShapeApply = CellShape & {
+  /** Tên món người dùng tự đặt — `addCustomElement` biến nó thành `elementId` của dòng. */
+  name: string;
+};
+
 const EMPTY_CELL_SHAPE: CellShape = { ref: "", note: "" };
 
 const SHAPE_ACCEPT = "image/png,image/jpeg,image/webp";
 
 /**
- * Ô đính ảnh khung cho MỘT món.
+ * CÂU GIẢI THÍCH CỦA CẢ CẶP TÊN + MÔ TẢ — một dòng, luôn hiện, không phải tooltip.
+ *
+ * Vế sau CHÉP NGUYÊN VĂN `SHAPE_NOTE_HINT` ở màn «Thư viện prompt»: hai cửa cùng
+ * để lại đúng cặp `shapeRef` + `shapeNote` trong contract, nên chúng phải nói cùng
+ * một câu về cùng một ràng buộc. Vế trước chỉ có ở ĐÂY, vì chỉ ở đây cái tên mới là
+ * một ô phải gõ — bên kho thì món đã có sẵn cột tên của chính nó.
+ */
+const SHAPE_PAIR_HINT = "Tên đi vào prompt như tên món; ảnh chỉ nói hình dáng, mô tả nói nó là gì.";
+
+/**
+ * Ô KHAI MỘT MÓN bằng một tấm phác: tên + ảnh + mô tả, chốt một lần.
  *
  * ╔══ VÌ SAO MÔ TẢ LÀ BẮT BUỘC, VÀ VÌ SAO PHẢI NÓI RA LÝ DO ═════════════════╗
  * ║ Một tấm phác nói được HÌNH DÁNG và chỉ hình dáng: máy vẽ thấy ba cạnh, một║
@@ -975,18 +1012,44 @@ const SHAPE_ACCEPT = "image/png,image/jpeg,image/webp";
  *
  * TẢI LÊN NGAY LÚC THẢ, chốt thì mới ghi vào dòng: byte phải nằm trên đĩa project
  * trước đã (agent tự đặt tên — luật G1, xem `uploadPillImage`), còn `shapeRef` chỉ
- * được ghi vào ô khi đã có ĐỦ CẶP ảnh + mô tả. Người bỏ dở giữa chừng để lại một
- * tấm mồ côi trong `refs/` chứ không để lại một dòng nửa vời trong bản nháp.
+ * được ghi vào ô khi đã có ĐỦ BỘ BA tên + ảnh + mô tả. Người bỏ dở giữa chừng để
+ * lại một tấm mồ côi trong `refs/` chứ không để lại một dòng nửa vời trong bản nháp.
+ *
+ * Cú chốt ĐỔI LUÔN LOẠI ELEMENT của dòng, không chỉ đính thêm hai trường — xem
+ * `ShapeApply` để biết vì sao, và `applyShapeToCell` để biết bằng cách nào.
  */
 function ShapeRefPanel({
   projectId,
   shape,
+  elementName,
   onApply,
 }: {
   projectId: string | null;
   shape: CellShape;
-  onApply: (next: CellShape | null) => void;
+  /** Nhãn món ĐANG hiện trên pill — chỉ để điền sẵn lúc SỬA, xem `editing`. */
+  elementName: string;
+  onApply: (next: ShapeApply | null) => void;
 }) {
+  /**
+   * ĐANG SỬA MỘT TẤM ĐÃ CÓ, hay ĐANG KHAI MỘT MÓN MỚI — và hai ca ấy điền sẵn khác nhau.
+   *
+   * ╔══ VÌ SAO Ô TÊN KHÔNG ĐƯỢC ĐIỀN SẴN «Popup panel» ═══════════════════════╗
+   * ║ Mở nấc này trên một dòng đang đeo món danh mục là người dùng sắp nói     ║
+   * ║ «món ấy KHÔNG phải cái tôi cần, đây mới là». Điền sẵn đúng cái danh từ    ║
+   * ║ họ đang muốn bỏ đi là mời họ bấm «Thêm» mà không đọc — và dòng lại ra     ║
+   * ║ đúng cái tên cũ, đúng lỗi chủ sản phẩm vừa báo. Ô rỗng thì câu hỏi «món   ║
+   * ║ bạn vừa tải lên tên gì» hiện ra nguyên vẹn, và nút xám nói tiếp lý do.    ║
+   * ║ Ngược lại, dòng ĐÃ có ảnh thì cái tên đang hiện CHÍNH LÀ tên họ đặt lần   ║
+   * ║ trước — xoá nó đi để bắt gõ lại mỗi lần sửa một chữ trong mô tả là bắt    ║
+   * ║ họ trả giá cho việc quay lại.                                            ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   *
+   * Đóng đinh LÚC MỞ HỘP chứ không đọc `shape.ref` mỗi lượt render: giữa lúc mở với
+   * lúc bấm, chính ô này đổi `path` — lấy nó làm mốc thì nhãn nút nhảy từ «Thêm»
+   * sang «Cập nhật» ngay khi ảnh vừa tải lên xong, trong lúc chưa có gì được ghi.
+   */
+  const editing = React.useRef(shape.ref !== "").current;
+  const [name, setName] = React.useState(editing ? elementName : "");
   const [path, setPath] = React.useState(shape.ref);
   const [note, setNote] = React.useState(shape.note);
   const [busy, setBusy] = React.useState(false);
@@ -1014,7 +1077,15 @@ function ShapeRefPanel({
     }
   };
 
-  const ready = path !== "" && note.trim() !== "";
+  const ready = path !== "" && name.trim() !== "" && note.trim() !== "";
+  /* ĐÚNG MỘT CÂU, đúng cái đang thiếu, theo thứ tự mắt đọc từ trên xuống: ảnh →
+     tên → mô tả. Một nút xám không lời là một nút hỏng trong mắt người bấm. */
+  const missing =
+    path === ""
+      ? "Chọn một tấm ảnh trước."
+      : name.trim() === ""
+        ? "Đặt tên món rồi mới thêm được."
+        : "Viết mô tả rồi mới thêm được.";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-1">
@@ -1097,7 +1168,17 @@ function ShapeRefPanel({
 
       {err !== "" && <p className="text-caption text-danger">{err}</p>}
 
-      <div>
+      {/* TÊN ĐỨNG TRÊN MÔ TẢ, và hai ô đứng CHUNG MỘT CỤM dưới một câu giải thích:
+          chúng trả lời hai nửa của cùng một câu hỏi («món này tên gì» / «nó là cái
+          gì»), nên tách chúng ra hai cụm có lề riêng là mời người dùng đọc ô tên
+          thành một trường phụ bỏ qua được. */}
+      <div className="flex flex-col gap-2">
+        <Input
+          value={name}
+          aria-label="Tên món trong ảnh khung"
+          placeholder="Tên món, ví dụ «Khung nhiệm vụ»"
+          onChange={(event) => setName(event.target.value)}
+        />
         <textarea
           rows={2}
           value={note}
@@ -1109,25 +1190,27 @@ function ShapeRefPanel({
             "outline-none placeholder:text-fg-muted focus-visible:ring-2 focus-visible:ring-focus-ring",
           )}
         />
-        <p className="mt-1 text-caption text-fg-muted">Ảnh chỉ nói hình dáng, mô tả nói nó là gì.</p>
+        <p className="text-caption text-fg-muted">{SHAPE_PAIR_HINT}</p>
       </div>
 
-      <div className="flex items-center gap-2">
+      {/* ══ NÚT CHỐT — TRẢI HẾT BỀ NGANG, VÀ LÝ DO NẰM DƯỚI NÓ ═══════════════
+          Chủ sản phẩm: *«với cả nút thêm cho full khung, user thấy rõ?»*. Nút cỡ
+          `sm` nép bên trái, cạnh một câu chữ nhỏ, đọc ra như một chú thích chứ
+          không như CÁI VIỆC PHẢI LÀM để chốt cả nấc này — mà nó là cú bấm duy nhất
+          trong nấc có hậu quả. Full width + cỡ mặc định thì nó là thứ nặng nhất
+          trong khung, đúng hạng của nó.
+          Câu lý do XUỐNG DƯỚI theo: đứng cạnh một nút trải hết bề ngang thì nó
+          không còn chỗ, và nó vẫn phải LUÔN hiện khi chưa đủ điều kiện. */}
+      <div>
         <Button
           variant="secondary"
-          size="sm"
+          className="w-full"
           disabled={!ready || busy}
-          onClick={() => onApply({ ref: path, note: note.trim() })}
+          onClick={() => onApply({ ref: path, note: note.trim(), name: name.trim() })}
         >
-          Thêm
+          {editing ? "Cập nhật" : "Thêm"}
         </Button>
-        {/* Nói RA điều kiện còn thiếu, đúng cái đang thiếu: một nút xám không lời
-            là một nút hỏng trong mắt người bấm. */}
-        {!ready && (
-          <span className="text-caption text-fg-muted">
-            {path === "" ? "Chọn một tấm ảnh trước." : "Viết mô tả rồi mới thêm được."}
-          </span>
-        )}
+        {!ready && <p className="mt-1.5 text-caption text-fg-muted">{missing}</p>}
       </div>
 
       {/* ══ CỬA RA CHO TẤM ẢNH DÙNG ĐƯỢC NHIỀU LẦN ═══════════════════════════
@@ -1306,7 +1389,7 @@ function ElementNamePill({
   projectId?: string | null;
   /** Ảnh khung của dòng; `ref` rỗng ⇒ dòng chưa đính tấm nào. */
   shape: CellShape;
-  onShape: (next: CellShape | null) => void;
+  onShape: (next: ShapeApply | null) => void;
 }) {
   const pop = useCataloguePopover();
   const title = elementTitle(element, label);
@@ -1360,6 +1443,7 @@ function ElementNamePill({
           }}
           projectId={projectId ?? null}
           shape={shape}
+          elementName={label}
           onShape={(next) => {
             onShape(next);
             pop.setOpen(false);
@@ -1385,6 +1469,44 @@ function shapeOf(cell: UiCell): CellShape {
 function withShape(cell: UiCell, next: CellShape | null): UiCell {
   const { shapeRef: _ref, shapeNote: _note, ...rest } = cell;
   return next && next.ref ? { ...rest, shapeRef: next.ref, shapeNote: next.note } : rest;
+}
+
+/**
+ * CHỐT NẤC «ĐÍNH ẢNH KHUNG» VÀO MỘT DÒNG — đổi cả DANH TÍNH của dòng, không chỉ hai trường.
+ *
+ * ╔══ VÌ SAO PHẢI ĐỔI `elementId`, KHÔNG CHỈ GHI `shapeRef` ═════════════════╗
+ * ║ Chủ sản phẩm: *«mà cái này tôi up custom sao nó vẫn chọn là popup        ║
+ * ║ pannel nhỉ»*. Đời trước cú chốt chỉ đắp ảnh + mô tả lên một dòng vẫn đeo ║
+ * ║ `elementId: "popover"`, nên prompt gửi đi mang cả hai: danh từ của danh  ║
+ * ║ mục («popup panel») và câu người dùng tự viết. Người dùng thì đã coi     ║
+ * ║ việc tải ảnh + gõ mô tả LÀ hành vi khai món — và họ đúng.                ║
+ * ╚═════════════════════════════════════════════════════════════════════════╝
+ *
+ * Món mới vào THẲNG danh mục qua `addCustomElement` (cùng cửa với nấc «Gõ riêng»),
+ * nên nó dùng lại được ở thẻ khác và sửa/xoá được ở trang preset. Hàm ấy gộp theo
+ * `vi` không phân biệt hoa thường, nên gõ đúng tên một món đã có là NHẬN LẠI món ấy
+ * chứ không đẻ ra bản sao — đó là cửa thoát cho ai chỉ muốn đính ảnh vào đúng món
+ * danh mục đang chọn.
+ *
+ * ╔══ GÕ LẠI ĐÚNG NHÃN ĐANG HIỆN ⇒ KHÔNG ĐỔI GÌ ════════════════════════════╗
+ * ║ Cửa thoát trên đi qua `vi`, mà pill hiện NHÃN («Button · primary», gồm   ║
+ * ║ cả tên bộ) chứ không hiện `vi` («primary»). Lúc SỬA một tấm đã đính, ô   ║
+ * ║ tên được điền sẵn đúng cái nhãn ấy — nên nếu không chặn ở đây thì bấm    ║
+ * ║ «Cập nhật» để sửa một chữ trong mô tả sẽ đẻ ra một món tên «Button ·     ║
+ * ║ primary», và cái dấu chấm giữa đi thẳng vào prompt. So bằng nhãn là so   ║
+ * ║ đúng thứ người dùng nhìn thấy.                                          ║
+ * ╚═════════════════════════════════════════════════════════════════════════╝
+ *
+ * Đổi loại đi qua `swapCellElement` nên mọi công chỉnh tay của dòng (cỡ, đục nền,
+ * trang trí, ghi chú, câu tự do) đi qua nguyên vẹn theo đúng luật của hàm ấy.
+ */
+function applyShapeToCell(cell: UiCell, next: ShapeApply | null, presets: PresetBundle): UiCell {
+  if (!next) return withShape(cell, null);
+  const name = next.name.trim();
+  const current = presets.elements.find((preset) => preset.id === cell.elementId);
+  const same = name.toLowerCase() === elementLabel(current, cell.elementId).trim().toLowerCase();
+  const made = same ? null : addCustomElement(name);
+  return withShape(made ? swapCellElement(cell, made, presets) : cell, next);
 }
 
 /**

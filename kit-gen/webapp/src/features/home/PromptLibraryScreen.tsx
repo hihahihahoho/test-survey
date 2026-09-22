@@ -232,12 +232,17 @@ const ELEMENT_ROW_DEFAULTS: NonNullable<ManagedRow["element"]> = { decor: "mediu
 const SHAPE_ACCEPT = "image/png,image/jpeg,image/webp";
 
 /**
- * CÂU GIẢI THÍCH CỦA Ô ẢNH KHUNG — CHÉP NGUYÊN VĂN từ `ShapeRefPanel` ở thẻ Bộ UI.
+ * CÂU GIẢI THÍCH CỦA Ô ẢNH KHUNG — VẾ SAU của `SHAPE_PAIR_HINT` ở thẻ Bộ UI.
  *
  * Hai cửa, một luật: đính ảnh khung cho MỘT DÒNG của một thẻ (ở đó) và đính ảnh khung
  * cho MỘT MÓN trong danh mục (ở đây) đều để lại đúng cặp `shapeRef` + `shapeNote`
  * trong contract. Nói hai câu khác nhau về cùng một ràng buộc là dạy người dùng rằng
  * hai chỗ ấy làm hai việc khác nhau.
+ *
+ * Bên `ShapeRefPanel` câu này có THÊM một vế đầu về cái tên, và đó là khác biệt
+ * THẬT giữa hai cửa: ở đó cái tên là một ô phải gõ trong cùng khung (đính ảnh + gõ
+ * mô tả LÀ khai một món mới — xem `ShapeApply`), còn ở đây món đã có sẵn cột tên
+ * của chính nó ngay trên đầu dòng.
  */
 const SHAPE_NOTE_HINT = "Ảnh chỉ nói hình dáng, mô tả nói nó là gì.";
 

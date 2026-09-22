@@ -19,6 +19,15 @@
  *  ④ MÓN CÓ ẢNH KHUNG PHẢI MANG ẢNH THEO SANG DÒNG. Ảnh nằm ở kho dùng chung còn
  *    `gen.sh` chỉ đính được tệp trong dự án — không chép thì người dùng thấy
  *    thumbnail trong hộp chọn, chọn xong dòng trống trơn, và không có gì báo.
+ *
+ * ══ ⑤ 22/09/2026 — ĐÍNH ẢNH KHUNG *LÀ* KHAI MỘT MÓN ═══════════════════════════
+ * Chủ sản phẩm, kèm ảnh chụp dòng #5 vừa tải lên một tấm phác của riêng mình:
+ * *«mà cái này tôi up custom sao nó vẫn chọn là popup pannel nhỉ, với cả nút thêm
+ * cho full khung, user thấy rõ?»*.
+ * Việc đầu hỏng CÂM: đời trước cú chốt chỉ ghi `shapeRef`/`shapeNote` rồi để nguyên
+ * `elementId`, nên prompt gửi đi mang CẢ danh từ của danh mục lẫn câu người dùng tự
+ * viết («popup panel (shape as in the attached reference)» + «… (Popup panel): khung
+ * nhiệm vụ ba cạnh»). Màn hình vẫn đẹp, máy vẽ vẫn vẽ ra cái popup panel.
  */
 import * as React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -35,9 +44,9 @@ import { UiKitBlockBody } from "../components/UiKitBlockView";
  * nên một hằng số khai ở thân file sẽ chưa tồn tại lúc factory chạy — và lỗi ấy
  * hiện ra dưới dạng "Cannot access before initialization" ở một dòng `import`.
  */
-const { SHAPED, HALF } = vi.hoisted(() => ({
-  /** Món TỰ ĐẶT TÊN mang sẵn ảnh khung trong kho dùng chung — thứ lượt này thêm vào. */
-  SHAPED: {
+const { SHAPED, HALF, ELEMENTS, UPLOADED } = vi.hoisted(() => {
+  /** Món TỰ ĐẶT TÊN mang sẵn ảnh khung trong kho dùng chung — thứ lượt trước thêm vào. */
+  const SHAPED: ElementPreset = {
     id: "tu-dat-khung-nhiem-vu",
     vi: "Khung nhiệm vụ",
     en: "quest frame",
@@ -46,9 +55,9 @@ const { SHAPED, HALF } = vi.hoisted(() => ({
     sizeId: "",
     shapeAssetId: "asset_quest",
     shapeNote: "khung ba cạnh, có dải ruy băng trên đỉnh",
-  },
+  };
   /** Món CÓ ảnh nhưng THIẾU mô tả — bản ghi nửa vời, phải bị bỏ qua. */
-  HALF: {
+  const HALF: ElementPreset = {
     id: "tu-dat-nua-voi",
     vi: "Món nửa vời",
     en: "half done",
@@ -57,23 +66,57 @@ const { SHAPED, HALF } = vi.hoisted(() => ({
     sizeId: "",
     shapeAssetId: "asset_half",
     shapeNote: "   ",
-  },
-}));
+  };
+  return {
+    SHAPED,
+    HALF,
+    /**
+     * DANH MỤC SỐNG của file này — mảng THẬT mà `usePresets` trả ra, không phải bản chép.
+     *
+     * Nấc «Đính ảnh khung» nay ĐẺ RA element (xem ⑤), và cú chốt ấy chỉ đọc được là
+     * đúng nếu cái pill ngay sau đó TRA ĐƯỢC món vừa sinh. Một bản chép đóng băng lúc
+     * mock thì pill mãi hiện id trần, và ca test đỏ vì đồ giả chứ không vì code.
+     */
+    ELEMENTS: [] as ElementPreset[],
+    /** Tấm ảnh mà phép tải lên (đã mock) trả về. */
+    UPLOADED: { refName: "shape-1.png", path: "refs/shape-1.png" },
+  };
+});
 
 vi.mock("../lib/presets-store", async (orig) => {
   const real = (await orig()) as Record<string, unknown>;
+  const { slugify } = await import("@/lib/types/contract");
   const seed = (real["seedPresets"] as () => PresetBundle)();
-  const bundle = { ...seed, elements: [...seed.elements, SHAPED, HALF] };
+  ELEMENTS.push(...seed.elements, SHAPED, HALF);
+  const bundle = { ...seed, elements: ELEMENTS };
   return {
     ...real,
     usePresets: () => bundle,
     getPresets: () => bundle,
-    /* Nấc «Gõ riêng» ghi thẳng vào kho thật; ở đây chỉ cần biết nó ĐƯỢC GỌI với
-       chữ nào và cú bấm sau đó có ra một dòng hay không. */
-    addCustomElement: (name: string): ElementPreset | null =>
-      name.trim() ? { id: `tu-dat-${name.trim()}`, vi: name.trim(), en: name.trim(), decor: "medium", glazeId: "solid", sizeId: "" } : null,
+    /* BẢN RÚT GỌN CỦA `addCustomElement` THẬT, không phải một cái tem: cùng luật gộp
+       theo `vi` không phân biệt hoa thường, cùng khuôn id `tu-dat-<slug>` (chính hàm
+       `slugify` của contract). Chỉ vòng ghi lên server là bị bỏ. Hai luật ấy LÀ thứ ca
+       ⑤ đọc — làm giả chúng thì ca ấy khoá một hành vi không tồn tại. */
+    addCustomElement: (name: string): ElementPreset | null => {
+      const label = name.trim();
+      if (!label) return null;
+      const same = ELEMENTS.find((element) => element.vi.toLowerCase() === label.toLowerCase());
+      if (same) return same;
+      const made: ElementPreset = {
+        id: `tu-dat-${slugify(label)}`, vi: label, en: label, decor: "medium", glazeId: "solid", sizeId: "",
+      };
+      ELEMENTS.push(made);
+      return made;
+    },
   };
 });
+
+/* Nấc «Đính ảnh khung» đẩy tệp qua agent rồi mới cầm được `refs/…`. Ca ở đây nói về
+   CÚ CHỐT, không về đường tải — nên phép tải trả thẳng một đường dẫn có thật. */
+vi.mock("@/features/prompt-canvas/lib/pill-image", async (orig) => ({
+  ...((await orig()) as Record<string, unknown>),
+  uploadPillImage: async () => UPLOADED,
+}));
 
 /* Thumbnail đọc kho dùng chung qua `useLibraryImage`. Ca ở đây nói về hộp chọn,
    không về đường tải ảnh — nên hook trả thẳng một chuỗi. */
@@ -118,8 +161,28 @@ function Harness({
 
 const openAdd = () => fireEvent.click(screen.getByRole("button", { name: /Element/ }));
 const openNamePill = () => fireEvent.click(screen.getByRole("button", { name: /Đổi loại món/ }));
+const openShapeTab = () => {
+  openNamePill();
+  fireEvent.click(screen.getByRole("tab", { name: "Đính ảnh khung" }));
+};
 
-afterEach(cleanup);
+/** Thả một tấm ảnh vào ô đính — qua ĐÚNG ô chọn tệp mà người dùng bấm tới. */
+async function attachImage() {
+  fireEvent.change(screen.getByLabelText("Chọn tệp ảnh khung"), {
+    target: { files: [new File(["x"], "phac.png", { type: "image/png" })] },
+  });
+  await waitFor(() => expect(screen.getByText("Đổi ảnh khung")).toBeTruthy());
+}
+
+/** Số món của danh mục lúc chưa ai gõ thêm gì — xem `ELEMENTS`. */
+const SEED_COUNT = ELEMENTS.length;
+
+afterEach(() => {
+  cleanup();
+  /* Danh mục là một mảng SỐNG dùng chung cả file, nên món của ca này không được
+     còn đó ở ca sau: một cú gộp theo tên trúng rác của ca trước là một ca xanh giả. */
+  ELEMENTS.length = SEED_COUNT;
+});
 
 /* ══════════════════════════════════════════════════════════════════════════
    ① THANH NẤC — LUÔN CÓ MẶT, HAI HAY BA NẤC TUỲ CHỖ MỞ
@@ -228,7 +291,9 @@ describe("③ tìm không ra thì đặt tên, ngay tại chỗ tìm hụt", () 
     fireEvent.click(screen.getByRole("button", { name: "Thêm" }));
 
     expect((latest as unknown as UiKitBlock).cells).toHaveLength(1);
-    expect((latest as unknown as UiKitBlock).cells[0]!.elementId).toBe("tu-dat-Ô rương");
+    /* Id đi thẳng vào TÊN FILE của ô trong contract, nên nó là một slug ngay từ lúc
+       sinh — không phải chữ người dùng gõ kèm dấu và khoảng trắng. */
+    expect((latest as unknown as UiKitBlock).cells[0]!.elementId).toBe("tu-dat-o-ruong");
   });
 });
 
@@ -316,5 +381,137 @@ describe("④ chọn một món có ảnh khung sẵn", () => {
 
     await waitFor(() => expect(screen.getByText(/Không chép được ảnh khung của «Khung nhiệm vụ»/)).toBeTruthy());
     expect(screen.getByText(/mạng chết/)).toBeTruthy();
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⑤ ĐÍNH ẢNH KHUNG = KHAI MỘT MÓN — dòng thôi đeo danh từ của danh mục
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const SHAPED_CELL = () =>
+  cellOf(SHAPED.id, "c1", { shapeRef: UPLOADED.path, shapeNote: SHAPED.shapeNote! });
+
+describe("⑤ cú chốt của nấc «Đính ảnh khung» đổi luôn danh tính của dòng", () => {
+  it("mở trên một dòng đang đeo món DANH MỤC ⇒ ô tên RỖNG, không điền sẵn «Popup · panel»", () => {
+    render(<Harness initial={uikit([cellOf("popover", "c1")])} copyShapeAsset={async () => IMAGE} />);
+    openShapeTab();
+    /* Điền sẵn đúng cái danh từ họ đang muốn bỏ đi là mời họ bấm «Thêm» mà không đọc. */
+    expect((screen.getByLabelText("Tên món trong ảnh khung") as HTMLInputElement).value).toBe("");
+    expect(screen.getByRole("button", { name: "Thêm" })).toBeTruthy();
+    expect(screen.getByText("Chọn một tấm ảnh trước.")).toBeTruthy();
+  });
+
+  it("TÊN LÀ BẮT BUỘC: có ảnh, có mô tả mà chưa có tên ⇒ nút xám, lý do nói ra bằng chữ", async () => {
+    render(<Harness initial={uikit([cellOf("popover", "c1")])} copyShapeAsset={async () => IMAGE} />);
+    openShapeTab();
+    await attachImage();
+    fireEvent.change(screen.getByLabelText("Mô tả món trong ảnh khung"), { target: { value: "ba cạnh" } });
+    expect((screen.getByRole("button", { name: "Thêm" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Đặt tên món rồi mới thêm được.")).toBeTruthy();
+  });
+
+  it("chốt ⇒ dòng thành món TỰ ĐẶT TÊN `tu-dat-<slug>`, mang cả ảnh lẫn mô tả, và PILL đọc ra tên mới", async () => {
+    let latest: UiKitBlock | null = null;
+    render(
+      <Harness
+        initial={uikit([cellOf("popover", "c1")])}
+        copyShapeAsset={async () => IMAGE}
+        onState={(next) => { latest = next; }}
+      />,
+    );
+    openShapeTab();
+    await attachImage();
+    fireEvent.change(screen.getByLabelText("Tên món trong ảnh khung"), { target: { value: "Khung chiến lợi phẩm" } });
+    fireEvent.change(screen.getByLabelText("Mô tả món trong ảnh khung"), {
+      target: { value: "  khung ba cạnh, có dải ruy băng trên đỉnh  " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Thêm" }));
+
+    const cell = (latest as unknown as UiKitBlock).cells[0]!;
+    expect(cell.elementId).toBe("tu-dat-khung-chien-loi-pham");
+    expect(cell.shapeRef).toBe(UPLOADED.path);
+    expect(cell.shapeNote).toBe("khung ba cạnh, có dải ruy băng trên đỉnh");
+    /* ĐÚNG CÁI CHỦ SẢN PHẨM NHÌN VÀO: cái pill, sau khi hộp đóng. */
+    expect(screen.getByRole("button", { name: /Đổi loại món — đang là Khung chiến lợi phẩm, có ảnh khung/ })).toBeTruthy();
+    expect(screen.queryByText("Popup")).toBeNull();
+  });
+
+  it("cỡ và công chỉnh tay của dòng đi qua nguyên vẹn — cú chốt không dựng lại dòng", async () => {
+    let latest: UiKitBlock | null = null;
+    render(
+      <Harness
+        initial={uikit([cellOf("popover", "c1", { note: "bo góc thật tròn", glazeId: "glass" })])}
+        copyShapeAsset={async () => IMAGE}
+        onState={(next) => { latest = next; }}
+      />,
+    );
+    openShapeTab();
+    await attachImage();
+    fireEvent.change(screen.getByLabelText("Tên món trong ảnh khung"), { target: { value: "Khung chiến lợi phẩm" } });
+    fireEvent.change(screen.getByLabelText("Mô tả món trong ảnh khung"), { target: { value: "ba cạnh" } });
+    fireEvent.click(screen.getByRole("button", { name: "Thêm" }));
+
+    const cell = (latest as unknown as UiKitBlock).cells[0]!;
+    expect(cell.id).toBe("c1");
+    expect(cell.note).toBe("bo góc thật tròn");
+    expect(cell.glazeId).toBe("glass");
+  });
+
+  it("gõ ĐÚNG TÊN một món đã có ⇒ nhận lại chính món ấy, không đẻ bản sao — cửa thoát cho ai chỉ muốn đính ảnh", async () => {
+    let latest: UiKitBlock | null = null;
+    render(
+      <Harness
+        initial={uikit([cellOf("badge", "c1")])}
+        copyShapeAsset={async () => IMAGE}
+        onState={(next) => { latest = next; }}
+      />,
+    );
+    openShapeTab();
+    await attachImage();
+    /* Gõ thường hết — phép gộp KHÔNG phân biệt hoa thường, đúng luật của `addCustomElement`. */
+    fireEvent.change(screen.getByLabelText("Tên món trong ảnh khung"), { target: { value: "badge" } });
+    fireEvent.change(screen.getByLabelText("Mô tả món trong ảnh khung"), { target: { value: "huy hiệu tròn" } });
+    fireEvent.click(screen.getByRole("button", { name: "Thêm" }));
+
+    expect((latest as unknown as UiKitBlock).cells[0]!.elementId).toBe("badge");
+    expect((latest as unknown as UiKitBlock).cells[0]!.shapeRef).toBe(UPLOADED.path);
+    expect(ELEMENTS).toHaveLength(SEED_COUNT);
+  });
+
+  it("dòng ĐÃ có ảnh ⇒ ô tên điền sẵn tên đang hiện, và nút đọc «Cập nhật»", () => {
+    render(<Harness initial={uikit([SHAPED_CELL()])} copyShapeAsset={async () => IMAGE} />);
+    openNamePill();
+    expect((screen.getByLabelText("Tên món trong ảnh khung") as HTMLInputElement).value).toBe("Khung nhiệm vụ");
+    expect((screen.getByLabelText("Mô tả món trong ảnh khung") as HTMLTextAreaElement).value).toBe(SHAPED.shapeNote);
+    expect(screen.getByRole("button", { name: "Cập nhật" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Thêm" })).toBeNull();
+  });
+
+  it("nút chốt TRẢI HẾT BỀ NGANG, và câu lý do nằm DƯỚI nó", () => {
+    /* *«với cả nút thêm cho full khung, user thấy rõ?»* — nút `sm` nép bên trái cạnh
+       một câu chữ nhỏ đọc ra như chú thích, chứ không như CÚ BẤM duy nhất có hậu quả. */
+    render(<Harness initial={uikit([cellOf("popover", "c1")])} copyShapeAsset={async () => IMAGE} />);
+    openShapeTab();
+    const button = screen.getByRole("button", { name: "Thêm" });
+    expect(button.className).toContain("w-full");
+    const why = screen.getByText("Chọn một tấm ảnh trước.");
+    expect(why.parentElement).toBe(button.parentElement);
+    expect(button.compareDocumentPosition(why) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    /* Lối ra kho vẫn ở dưới cùng — nó không bị nút mới đẩy đi đâu cả. */
+    expect(screen.getByRole("link", { name: /Lưu vào kho element/ })).toBeTruthy();
+  });
+
+  it("«Bỏ ảnh khung» bỏ ảnh + mô tả, nhưng KHÔNG trả món về danh mục", () => {
+    let latest: UiKitBlock | null = null;
+    render(
+      <Harness initial={uikit([SHAPED_CELL()])} copyShapeAsset={async () => IMAGE} onState={(next) => { latest = next; }} />,
+    );
+    openNamePill();
+    fireEvent.click(screen.getByRole("button", { name: /Bỏ ảnh khung/ }));
+    const cell = (latest as unknown as UiKitBlock).cells[0]!;
+    expect(cell.shapeRef).toBeUndefined();
+    expect(cell.shapeNote).toBeUndefined();
+    /* Món vẫn là món họ đã đặt tên — nó chỉ thôi có bản phác đi kèm. */
+    expect(cell.elementId).toBe(SHAPED.id);
   });
 });
