@@ -8,7 +8,13 @@ import { imageSize, sniff } from "./multipart.mjs"
 
 const IMAGE_EXT = new Set(["png", "jpg", "webp"])
 const KINDS = new Set(["ui", "mascot", "reference"])
-const GROUPS = new Set(["background", "popup", "small", "props", "mascot", "style", "mascot-reference", "brand-logo", "brand-style", "brand-mascot"])
+/* `element-shape` (22/09/2026): ảnh KHUNG của một món trong danh mục element —
+   người dùng đính một bản phác vào dòng «Món giao diện» ở màn «Thư viện prompt»,
+   và mọi dự án chọn món ấy đều nhận lại đúng tấm hình dáng đó. Nó là một nhóm
+   RIÊNG chứ không mượn `small`/`props`: hai nhóm ấy đi vào hạn mức sinh ảnh
+   (`LIBRARY_DEFAULTS`) còn tấm này chỉ là tư liệu tham chiếu, không sinh tấm nào.
+   Nhóm lạ vẫn bị 400 — whitelist này là hàng rào, và mở nó ra là một quyết định. */
+const GROUPS = new Set(["background", "popup", "small", "props", "mascot", "style", "mascot-reference", "brand-logo", "brand-style", "brand-mascot", "element-shape"])
 const CELLS = new Set(["landscape", "portrait", "full"])
 const SHAPES = new Set(["pill", "bar", "rrect", "rect", "circle", "burst", "puzzle", "full"])
 export const LIBRARY_DEFAULTS = { background: 2, popup: 4, small: 16, props: 16, mascot: 4 }

@@ -575,7 +575,12 @@ export type ElementLib = z.infer<typeof elementLibSchema>;
 export const libraryItemSchema = z.looseObject({
   id: z.string(),
   kind: z.enum(["ui", "mascot", "reference"]),
-  group: z.enum(["background", "popup", "small", "props", "mascot", "style", "mascot-reference", "brand-logo", "brand-style", "brand-mascot"]),
+  /* `element-shape` = ảnh KHUNG của một món trong danh mục element (xem
+     `ElementPreset.shapeAssetId`). Phải khớp NGUYÊN VĂN `GROUPS` ở
+     `agent/lib/library.mjs`: thiếu một tên ở đây thì ảnh tải lên được nhưng
+     `GET /api/library` đọc về là zod ném — tức cả kho dùng chung tắt ngóm vì
+     một tấm ảnh. */
+  group: z.enum(["background", "popup", "small", "props", "mascot", "style", "mascot-reference", "brand-logo", "brand-style", "brand-mascot", "element-shape"]),
   name: z.string(),
   description: z.string().default(""),
   tags: z.array(z.string()).default([]),

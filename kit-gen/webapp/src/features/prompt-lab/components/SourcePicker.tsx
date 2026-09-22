@@ -442,31 +442,45 @@ function PresetPanel({
         )}
       </span>
 
-      {/* GHIM Ở CHÂN HỘP, ngoài vùng cuộn: cùng lý do với ô tìm ghim ở đỉnh — một
-          lối đi trôi khỏi tầm mắt sau ba nhịp cuộn thì đúng bằng không có nó. */}
-      {manageHref !== undefined && (
-        <span className="block shrink-0 p-1">
-          {/* CÙNG KHUÔN với «Quản lý thương hiệu…» của BrandPickerPill: vạch ngăn +
-              một dòng menu có icon, chữ «Quản lý <danh mục>…». Một lối đi trong hộp
-              chọn phải trông như mọi dòng khác của hộp, không phải một câu link lạ. */}
-          <span aria-hidden className="mb-1 block h-px bg-line-subtle" />
-          <a
-            href={manageHref}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`Quản lý ${label} ở Thư viện prompt`}
-            className={cn(
-              "flex w-full items-center gap-2 rounded-1 px-2 py-1.5 text-left text-body text-fg",
-              "hover:bg-accent/[var(--kg-tint-a)] hover:text-fg-strong",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-            )}
-          >
-            <Settings2 aria-hidden className="size-4 shrink-0 text-fg-muted" />
-            <span className="text-fg-strong">Quản lý {label}…</span>
-          </a>
-        </span>
-      )}
+      {manageHref !== undefined && <ManageRow href={manageHref} label={label} />}
     </>
+  );
+}
+
+/**
+ * LỐI TẮT «Quản lý <danh mục>…» ghim ở CHÂN hộp chọn.
+ *
+ * GHIM NGOÀI VÙNG CUỘN: cùng lý do với ô tìm ghim ở đỉnh — một lối đi trôi khỏi tầm
+ * mắt sau ba nhịp cuộn thì đúng bằng không có nó.
+ *
+ * CÙNG KHUÔN với «Quản lý thương hiệu…» của `BrandPickerPill`: vạch ngăn + một dòng
+ * menu có icon, chữ «Quản lý <danh mục>…». Một lối đi trong hộp chọn phải trông như
+ * mọi dòng khác của hộp, không phải một câu link lạ.
+ *
+ * XUẤT RA (22/09/2026) cho hộp tra danh mục element ở `UiKitBlockView`: nấc «Chọn
+ * sẵn» của hộp ấy nay cũng có lối tắt này, và chép lại mười dòng markup là hai cái
+ * chân hộp bắt đầu lệch nhau ngay ở lượt sửa sau.
+ */
+export function ManageRow({ href, label }: { href: string; label: string }) {
+  return (
+    <span className="block shrink-0 p-1">
+      <span aria-hidden className="mb-1 block h-px bg-line-subtle" />
+      <a
+        href={href}
+        /* MỞ TAB MỚI, không điều hướng tại chỗ — xem `SourcePickerProps.manageHref`. */
+        target="_blank"
+        rel="noreferrer"
+        aria-label={`Quản lý ${label} ở Thư viện prompt`}
+        className={cn(
+          "flex w-full items-center gap-2 rounded-1 px-2 py-1.5 text-left text-body text-fg",
+          "hover:bg-accent/[var(--kg-tint-a)] hover:text-fg-strong",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+        )}
+      >
+        <Settings2 aria-hidden className="size-4 shrink-0 text-fg-muted" />
+        <span className="text-fg-strong">Quản lý {label}…</span>
+      </a>
+    </span>
   );
 }
 
@@ -510,8 +524,15 @@ function OptionPreview({ src }: { src: string | null }) {
   );
 }
 
-/** Thumbnail của một mục lấy từ kho dùng chung — người chọn nhân vật phải THẤY mặt nó. */
-function AssetThumb({ id, alt }: { id: string; alt: string }) {
+/**
+ * Thumbnail của một mục lấy từ kho dùng chung — người chọn nhân vật phải THẤY mặt nó.
+ *
+ * XUẤT RA (22/09/2026) cho hộp tra danh mục element: một món có ẢNH KHUNG cũng phải
+ * nhận ra được bằng mắt trong danh sách, và nó lấy ảnh từ đúng cái kho ấy bằng đúng
+ * cái hook ấy. Một đường đọc ảnh thứ hai là một chỗ nữa để cache và luật huỷ blob URL
+ * lệch nhau.
+ */
+export function AssetThumb({ id, alt }: { id: string; alt: string }) {
   const src = useLibraryImage(id);
   return src ? (
     <img src={src} alt={alt} className="size-8 shrink-0 rounded-1 border border-line-subtle object-cover" />

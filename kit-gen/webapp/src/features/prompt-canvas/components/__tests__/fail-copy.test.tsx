@@ -148,6 +148,7 @@ function mount(gen: GenBlockState) {
         promptBusy={false}
         hash="h1"
         reloadSignal={0}
+        copyShapeAsset={async () => ({ refName: "", path: "" })}
         onReload={() => {}}
       />
     </QueryClientProvider>,

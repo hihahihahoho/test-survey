@@ -360,6 +360,7 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
         promptBusy={false}
         hash={hash}
         reloadSignal={0}
+        copyShapeAsset={async () => ({ refName: "", path: "" })}
         onReload={() => {}}
       />,
     );
@@ -389,6 +390,7 @@ describe("tab Prompt — engine chỉ chạy khi có người bấm", () => {
           promptBusy={false}
           hash="h2"
           reloadSignal={0}
+          copyShapeAsset={async () => ({ refName: "", path: "" })}
           onReload={() => {}}
         />
       </QueryClientProvider>,

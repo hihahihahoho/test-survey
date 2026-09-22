@@ -45,6 +45,7 @@ import { drawableBlockIds, jobIdOf, lotsOf, sheetsHash } from "./lib/block-jobs"
 import { useBlockPrompts } from "./lib/block-prompt";
 import { useGenQueue, type GenQueue } from "./lib/gen-queue";
 import { useBrandBinding } from "./lib/brand-binding";
+import { useShapeBinding } from "./lib/shape-binding";
 import { PAGE } from "./lib/ui";
 import { ensurePoseRefs } from "./lib/pose-refs";
 
@@ -303,6 +304,10 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
      câu hỏi "thay bản nháp cũ" chặn lại như mọi lượt sửa khác. */
   const brand = useBrandBinding(projectId, store.composer, edit, () => void navigate({ to: "/brands" }));
 
+  /* Ảnh khung của danh mục element đi cùng một đường và qua cùng cửa `edit` —
+     xem `useShapeBinding` để biết vì sao nó KHÔNG dùng chung bảng nhớ với thương hiệu. */
+  const copyShapeAsset = useShapeBinding(projectId, store.composer, edit);
+
   const updateBlock = React.useCallback(
     <T extends Block>(id: string, updater: (prev: T) => T) =>
       edit((prev) => ({ ...prev, blocks: prev.blocks.map((b) => (b.id === id ? updater(b as T) : b)) })),
@@ -388,6 +393,7 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
             onWantPrompt={() => wantPrompt(block.id)}
             promptBusy={prompts.busy}
             hash={sheetsHash(sheetsOf(block.id), variantKey)}
+            copyShapeAsset={copyShapeAsset}
             reloadSignal={reloads[block.id] ?? 0}
             onReload={() => setReloads((prev) => ({ ...prev, [block.id]: (prev[block.id] ?? 0) + 1 }))}
           />

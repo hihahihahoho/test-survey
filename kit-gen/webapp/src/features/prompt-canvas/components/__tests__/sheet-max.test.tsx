@@ -79,6 +79,7 @@ function mount(block: Block, onChange: (updater: (prev: Block) => Block) => void
       promptBusy={false}
       hash="h1"
       reloadSignal={0}
+      copyShapeAsset={async () => ({ refName: "", path: "" })}
       onReload={() => {}}
     />
     </QueryClientProvider>,

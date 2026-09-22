@@ -39,6 +39,11 @@ vi.mock("../components/HomeWorkspaceShell", () => ({
 }));
 
 const get = vi.fn();
+/* Ba cửa ẢNH của kho dùng chung — ô «Ảnh khung của món» gọi chúng. `blob` phải có
+   mặt kể cả ở ca không đụng tới ảnh: thumbnail đọc nó ngay lúc mount một dòng có ảnh. */
+const addItem = vi.fn(async (..._args: unknown[]) => ({ id: "asset_moi" }));
+const removeItem = vi.fn(async (..._args: unknown[]) => ({ ok: true }));
+const itemBlob = vi.fn(async (..._args: unknown[]) => new Blob(["x"], { type: "image/png" }));
 vi.mock("@/lib/api/endpoints", () => ({
   api: {
     library: {
@@ -46,6 +51,9 @@ vi.mock("@/lib/api/endpoints", () => ({
       addPreset: vi.fn(async () => ({ id: "x", kind: "style", name: "", data: {} })),
       patchPreset: vi.fn(async () => undefined),
       removePreset: vi.fn(async () => undefined),
+      add: (...args: unknown[]) => addItem(...args),
+      remove: (...args: unknown[]) => removeItem(...args),
+      blob: (...args: unknown[]) => itemBlob(...args),
     },
   },
 }));
@@ -54,6 +62,9 @@ const { PromptLibraryScreen } = await import("../PromptLibraryScreen");
 const { seedRowsOf, __resetPresetsStoreForTest } = await import("@/features/prompt-lab/lib/presets-store");
 const { CATALOG_ORDER } = await import("@/features/prompt-lab/lib/catalog-seeds");
 const { pillOptions } = await import("@/features/prompt-lab/lib/pill-registry");
+
+/** Ảnh khung nằm sẵn trên dòng «Panel» của kho giả. */
+const SHAPE_ASSET = "asset_panel_shape";
 
 /** Kho giả ĐÃ GIEO XONG — nếu thiếu một trục thì store bắn một loạt POST gieo hạt. */
 function fullLibrary() {
@@ -66,6 +77,9 @@ function fullLibrary() {
         decor: row.element?.decor ?? "medium", glazeId: row.element?.glazeId ?? "solid", sizeId: "",
         ...(row.element?.skel ? { skel: row.element.skel } : {}),
         ...(row.element?.set ? { set: row.element.set } : {}),
+        /* Một dòng ĐÃ CÓ sẵn ảnh khung, để ca đọc được cả đường "mở ra thấy ảnh"
+           chứ không chỉ đường "vừa tải lên xong". */
+        ...(row.id === "panel" ? { shapeAssetId: SHAPE_ASSET, shapeNote: "khung ba cạnh" } : {}),
       },
     })),
     ...CATALOG_ORDER.flatMap((kind) => seedRowsOf(kind).map((row) => ({
@@ -73,7 +87,11 @@ function fullLibrary() {
       data: { key: row.id, en: row.en, ...(row.hint ? { hint: row.hint } : {}), ...(row.en2 ? { en2: row.en2 } : {}) },
     }))),
   ];
-  return { version: 4, brands: [], settings: { background: 2, popup: 4, small: 16, props: 16, mascot: 4 }, items: [], presets };
+  const items = [{
+    id: SHAPE_ASSET, kind: "reference", group: "element-shape", name: "Panel",
+    description: "", tags: [], filename: "panel.png", poses: [],
+  }];
+  return { version: 4, brands: [], settings: { background: 2, popup: 4, small: 16, props: 16, mascot: 4 }, items, presets };
 }
 
 function mount() {
@@ -90,6 +108,9 @@ beforeEach(() => {
   searchParams = {};
   get.mockReset();
   get.mockResolvedValue(fullLibrary());
+  addItem.mockClear();
+  removeItem.mockClear();
+  itemBlob.mockClear();
 });
 
 afterEach(() => cleanup());
@@ -451,5 +472,113 @@ describe("⑤ bộ món giao diện", () => {
 
     const made = (await elementsNow()).find((element) => element.id === "badge");
     expect(made?.set).toEqual({ id: "btn", vi: "Button", kind: "variants" });
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⑥ ẢNH KHUNG CỦA MỘT MÓN — hình dáng đi bằng ảnh, «nó là gì» đi bằng chữ
+   ══════════════════════════════════════════════════════════════════════════
+   Chủ sản phẩm: *«element cũng cho kiểu up ảnh + gõ mô tả → sau select được bên
+   tab đầu nhé»*. Ba chỗ hỏng câm:
+    · ẢNH KHÔNG CÓ MÔ TẢ lọt xuống kho ⇒ mọi bộ kit chọn món ấy gửi cho máy vẽ
+      một khối hình câm, và nó đoán xem ba cạnh với một cái móc là cái gì;
+    · BỎ ẢNH mà giữ mô tả ⇒ để lại chữ không cửa nào đọc;
+    · XOÁ DÒNG mà giữ ảnh ⇒ rác vĩnh viễn trong kho, không màn nào bày ra để dọn. */
+
+describe("⑥ ảnh khung của một món giao diện", () => {
+  const openElement = async (label: string) => {
+    searchParams = { kind: "element" };
+    mount();
+    await ready();
+    await waitFor(() => expect(screen.getAllByText(label).length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByText(label)[0]!);
+  };
+
+  const elementsNow = async () => {
+    const { getPresets } = await import("@/features/prompt-lab/lib/presets-store");
+    return getPresets().elements;
+  };
+
+  it("dòng ĐÃ CÓ ảnh mở ra với thumbnail + mô tả, và «Xong» bấm được", async () => {
+    await openElement("Panel");
+    const panel = screen.getByRole("complementary", { name: /^Sửa / });
+    expect((within(panel).getByLabelText("Mô tả món trong ảnh khung") as HTMLTextAreaElement).value)
+      .toBe("khung ba cạnh");
+    expect(within(panel).getByText("Ảnh chỉ nói hình dáng, mô tả nói nó là gì.")).toBeTruthy();
+    expect((within(panel).getByRole("button", { name: "Xong" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("XOÁ TRẮNG MÔ TẢ ⇒ «Xong» xám, và lý do nói ra bằng chữ", async () => {
+    await openElement("Panel");
+    const panel = screen.getByRole("complementary", { name: /^Sửa / });
+    fireEvent.change(within(panel).getByLabelText("Mô tả món trong ảnh khung"), { target: { value: "   " } });
+
+    await waitFor(() =>
+      expect((screen.getByRole("button", { name: "Xong" }) as HTMLButtonElement).disabled).toBe(true),
+    );
+    expect(screen.getByText("Viết mô tả cho ảnh khung rồi mới xong được.")).toBeTruthy();
+  });
+
+  it("dòng KHÔNG có ảnh ⇒ không có ràng buộc nào: «Xong» bấm được dù mô tả rỗng", async () => {
+    await openElement("Badge");
+    const panel = screen.getByRole("complementary", { name: /^Sửa / });
+    expect((within(panel).getByLabelText("Mô tả món trong ảnh khung") as HTMLTextAreaElement).value).toBe("");
+    expect((within(panel).getByRole("button", { name: "Xong" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("«Bỏ ảnh khung» xoá CẢ HAI trường, và bỏ luôn tấm ảnh khỏi kho", async () => {
+    await openElement("Panel");
+    fireEvent.click(screen.getByRole("button", { name: /Bỏ ảnh khung/ }));
+
+    await waitFor(async () => {
+      const made = (await elementsNow()).find((element) => element.id === "panel");
+      expect(made?.shapeAssetId).toBeUndefined();
+      expect(made?.shapeNote).toBeUndefined();
+    });
+    /* Tấm này chỉ phục vụ đúng dòng ấy — không màn nào khác bày nhóm `element-shape`,
+       nên giữ lại là để rác vĩnh viễn trong kho. */
+    expect(removeItem.mock.calls[0]?.[0]).toBe(SHAPE_ASSET);
+  });
+
+  it("XOÁ DÒNG mang ảnh ⇒ ảnh cũng rời kho", async () => {
+    await openElement("Panel");
+    const panel = screen.getByRole("complementary", { name: /^Sửa / });
+    /* Xoá hai chạm, cùng khuôn với mọi chỗ xoá khác của màn. */
+    fireEvent.click(within(panel).getByRole("button", { name: "Xoá" }));
+    fireEvent.click(within(panel).getByRole("button", { name: /^Xoá Panel\?/ }));
+
+    await waitFor(() => expect(removeItem.mock.calls[0]?.[0]).toBe(SHAPE_ASSET));
+  });
+
+  it("NHÂN BẢN rồi xoá bản sao ⇒ ảnh Ở LẠI, vì dòng gốc vẫn đang dùng nó", async () => {
+    await openElement("Panel");
+    const panel = screen.getByRole("complementary", { name: /^Sửa / });
+    fireEvent.click(within(panel).getByRole("button", { name: /Nhân bản/ }));
+
+    await waitFor(() => expect(screen.getAllByText(/Panel \(bản sao\)/).length).toBeGreaterThan(0));
+    const copyPanel = screen.getByRole("complementary", { name: /^Sửa Panel \(bản sao\)/ });
+    fireEvent.click(within(copyPanel).getByRole("button", { name: "Xoá" }));
+    fireEvent.click(within(copyPanel).getByRole("button", { name: /^Xoá Panel \(bản sao\)\?/ }));
+
+    await waitFor(async () => {
+      expect((await elementsNow()).some((element) => element.vi === "Panel (bản sao)")).toBe(false);
+    });
+    /* Xoá tấm ảnh ở đây là làm hỏng dòng gốc trong im lặng: nó vẫn khai có ảnh. */
+    expect(removeItem).not.toHaveBeenCalled();
+  });
+
+  it("thả một tấm ảnh lên dòng CHƯA có ⇒ tải lên kho, nhóm `element-shape`, và ghi id vào dòng", async () => {
+    await openElement("Badge");
+    const file = new File([new Uint8Array([1, 2, 3])], "khien.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText("Chọn tệp ảnh khung"), { target: { files: [file] } });
+
+    await waitFor(() => expect(addItem).toHaveBeenCalled());
+    expect(addItem.mock.calls[0]![0] as Record<string, unknown>).toMatchObject({ group: "element-shape", kind: "reference", name: "Badge" });
+
+    await waitFor(async () => {
+      expect((await elementsNow()).find((element) => element.id === "badge")?.shapeAssetId).toBe("asset_moi");
+    });
+    /* Vừa tải xong thì CHƯA có mô tả ⇒ panel chưa cho «Xong». */
+    expect((screen.getByRole("button", { name: "Xong" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

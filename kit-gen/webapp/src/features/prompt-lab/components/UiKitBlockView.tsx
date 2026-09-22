@@ -10,6 +10,7 @@ import {
   addCustomElement, elementLabel, elementPart, elementSetKey, elementSets, elementTitle,
   hasDecorPlacement, usePresets,
 } from "../lib/presets-store";
+import type { PillImage } from "@/features/prompt-canvas/lib/pill-image";
 import type { ElementPreset, ElementSetView, PresetBundle } from "../lib/presets-store";
 import {
   MAX_SIZE_PX,
@@ -44,7 +45,9 @@ import {
   SOURCE_PICKER_MAX_PX,
   useMenuFlip,
 } from "./pill-ui";
-import { SourcePicker, TabButton as SourceTabButton, type SourceGroup } from "./SourcePicker";
+import {
+  AssetThumb, ManageRow, SourcePicker, TabButton as SourceTabButton, type SourceGroup,
+} from "./SourcePicker";
 import { useRefThumb } from "./RefImagePill";
 import { uploadPillImage } from "@/features/prompt-canvas/lib/pill-image";
 
@@ -617,13 +620,23 @@ function swapOneAtRow(
  * Phần ĐẦU đi qua `swapCellElement` để giữ nguyên công chỉnh tay của dòng (trang
  * trí, đục nền, ghi chú, câu tự do); các phần CHÈN THÊM là dòng mới tinh, mang
  * đúng mặc định của chính phần ấy — y như khi thêm bộ bằng nút «+ Element».
+ *
+ * ╔══ VÌ SAO CÁC DÒNG CHÈN THÊM ĐƯỢC DỰNG SẴN Ở NƠI GỌI ════════════════════╗
+ * ║ Hàm này chạy TRONG một updater của `setState`, nơi React được phép gọi   ║
+ * ║ lại nó (StrictMode gọi hai lần). Dựng dòng mới ở trong ấy nghĩa là sinh  ║
+ * ║ `id` ở trong ấy — và cái id cuối cùng nằm trong state KHÁC cái id ta vừa ║
+ * ║ thấy. Từ 22/09/2026 việc ấy có hậu quả thật: chọn một món có ẢNH KHUNG   ║
+ * ║ thì phép chép ảnh chạy bất đồng bộ rồi mới quay về vá đúng dòng ĐÓ — mà  ║
+ * ║ nó chỉ tìm được dòng ấy bằng id. Nên id phải sinh MỘT LẦN, ngoài updater.║
+ * ╚═════════════════════════════════════════════════════════════════════════╝
  */
 function applySetAtRow(
   cells: readonly UiCell[],
   index: number,
   parts: readonly ElementPreset[],
   presets: PresetBundle,
-  mode: BlockMode,
+  /** Dòng mới cho các phần SAU phần đầu, dựng sẵn ở nơi gọi — xem khối trên. */
+  rest: readonly UiCell[],
 ): UiCell[] {
   const row = cells[index];
   const head = parts[0];
@@ -633,7 +646,7 @@ function applySetAtRow(
   return [
     ...cells.slice(0, index),
     swapCellElement(row, head, presets),
-    ...parts.slice(1).map((part) => freshCell(part.id, presets, mode)),
+    ...rest,
     ...cells.slice(index + 1),
   ];
 }
@@ -652,10 +665,13 @@ function applySetAtRow(
  * ║ 200px — bốn dòng, trong một danh mục hàng chục món. 480px đưa con số ấy    ║
  * ║ lên quãng 300px mà vẫn còn 288px lề ở màn 1366×768 (chiều cao hay gặp      ║
  * ║ nhất của laptop công ty), y hệt cách hộp dáng vừa được nâng lên cùng số.   ║
+ * ║ GIỮ NGUYÊN 480px sau khi khối «TỰ ĐẶT TÊN» rời xuống thành một NẤC         ║
+ * ║ (22/09/2026): ~90px ấy về hết cho vùng cuộn, tức danh sách dài thêm hai    ║
+ * ║ dòng nữa — hạ trần xuống là tiêu mất đúng phần vừa lấy lại được.           ║
  * ║ ⚠️ Con số này KHÔNG chỉ là cái nhìn thấy: `shouldDropUp` đo chỗ trống bằng  ║
  * ║ chính nó. Sửa class mà quên sửa đây là hộp tưởng mình thấp hơn thực tế,    ║
  * ║ mở xuống dưới ở một dòng gần đáy màn, rồi bị cắt mất phần chân — mà phần   ║
- * ║ chân chính là cửa «TỰ ĐẶT TÊN».                                            ║
+ * ║ chân chính là lối tắt «Quản lý element…».                                  ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 const PICKER_MAX_PX = 480;
@@ -766,8 +782,8 @@ function ElementCatalogue({
    * ╔══ VÌ SAO NÚT «+ Element» KHÔNG CÓ NẤC NÀY ═══════════════════════════════╗
    * ║ Ảnh khung là ảnh của MỘT MÓN CỤ THỂ, mà ở «+ Element» thì món ấy chưa tồn ║
    * ║ tại — bày cửa đính ảnh ở đó là hỏi «vẽ cái này theo hình nào» trước khi    ║
-   * ║ hỏi «cái này là cái gì». Ai muốn một món chưa có trong danh mục thì đi     ║
-   * ║ «TỰ ĐẶT TÊN» ngay dưới, rồi mở pill tên của chính dòng vừa hiện ra.        ║
+   * ║ hỏi «cái này là cái gì». Ai muốn một món chưa có trong danh mục thì đi qua ║
+   * ║ nấc «Gõ riêng», rồi mở pill tên của chính dòng vừa hiện ra.                ║
    * ╚══════════════════════════════════════════════════════════════════════════╝
    * `null` = bỏ tấm ảnh (và bỏ luôn mô tả — xem `CellShape`).
    */
@@ -778,7 +794,7 @@ function ElementCatalogue({
   const searchRef = React.useRef<HTMLInputElement>(null);
   /* Mở SẴN ở nấc đang hiệu lực, cùng luật với `SourcePicker.live`: dòng đang mang
      một tấm ảnh khung mà hộp mở ra ở danh mục là hộp nói khác cái pill. */
-  const [tab, setTab] = React.useState<"preset" | "shape">(shape?.ref ? "shape" : "preset");
+  const [tab, setTab] = React.useState<CatalogueTab>(shape?.ref ? "shape" : "preset");
 
   React.useEffect(() => {
     /* Mở ra là gõ được ngay: hộp này tồn tại để TRA, và bắt người dùng bấm thêm
@@ -822,36 +838,50 @@ function ElementCatalogue({
         dropUp ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]",
       )}
     >
-      {/* THANH HAI NẤC — chỉ hiện khi CÓ đường đính ảnh (tức là hộp của pill trên
-          dòng). `shrink-0` là thứ giữ nó đứng yên khi ruột cuộn; cùng thành phần
-          `TabButton` với `SourcePicker` để hai hộp trên một màn không có hai kiểu
-          tô "đang chọn". */}
-      {onShape && (
-        <div role="tablist" aria-label={`Cách chọn ${label}`} className="mb-2 flex shrink-0 gap-1 border-b border-line-subtle pb-2">
-          <SourceTabButton active={tab === "preset"} live={!shape?.ref} onPick={() => setTab("preset")}>
-            Chọn sẵn
-          </SourceTabButton>
-          {/* «Đính ảnh khung», KHÔNG phải «Đính ảnh»: cùng họ chữ với nấc của
-              `SourcePicker`, nhưng tấm ảnh ở đây trả lời một câu khác hẳn — nó nói
-              HÌNH DÁNG của một món, không nói phong cách của cả bộ kit. */}
+      {/* THANH NẤC — LUÔN có mặt, kể cả ở «+ Element» (hai nấc thay vì ba).
+          Trước lượt này nó chỉ hiện khi có đường đính ảnh, nên cùng một hộp mở ở hai
+          chỗ lại có hai hình dạng: một chỗ là hộp-có-nấc, chỗ kia là một danh sách
+          với một khối lạ dán ở đáy. `shrink-0` giữ nó đứng yên khi ruột cuộn; cùng
+          thành phần `TabButton` với `SourcePicker` để hai hộp trên một màn không có
+          hai kiểu tô "đang chọn". */}
+      <div role="tablist" aria-label={`Cách chọn ${label}`} className="mb-2 flex shrink-0 gap-1 border-b border-line-subtle pb-2">
+        <SourceTabButton active={tab === "preset"} live={!shape?.ref} onPick={() => setTab("preset")}>
+          Chọn sẵn
+        </SourceTabButton>
+        {/* «Đính ảnh khung», KHÔNG phải «Đính ảnh»: cùng họ chữ với nấc của
+            `SourcePicker`, nhưng tấm ảnh ở đây trả lời một câu khác hẳn — nó nói
+            HÌNH DÁNG của một món, không nói phong cách của cả bộ kit. */}
+        {onShape && (
           <SourceTabButton active={tab === "shape"} live={Boolean(shape?.ref)} onPick={() => setTab("shape")}>
             Đính ảnh khung
           </SourceTabButton>
-        </div>
-      )}
+        )}
+        <SourceTabButton active={tab === "custom"} live={false} onPick={() => setTab("custom")}>
+          Gõ riêng
+        </SourceTabButton>
+      </div>
 
-      {onShape && tab === "shape" ? (
+      {tab === "shape" && onShape && (
         <ShapeRefPanel
           projectId={projectId ?? null}
           shape={shape ?? EMPTY_CELL_SHAPE}
           onApply={onShape}
         />
-      ) : (
+      )}
+
+      {tab === "custom" && (
+        <CustomElementPanel
+          query={query}
+          onPick={onPick}
+        />
+      )}
+
+      {tab === "preset" && (
         <>
-          {/* `shrink-0` GHIM Ô TÌM ở đỉnh hộp: nó là anh em của cửa «TỰ ĐẶT TÊN» ghim
-              dưới đáy, và một lối đi trôi khỏi tầm mắt sau ba nhịp cuộn thì đúng bằng
-              không có nó. Không có cờ này thì flexbox co CẢ HAI đầu để nhường chỗ cho
-              danh sách — càng thấy rõ từ khi trần hộp lên 480px. */}
+          {/* `shrink-0` GHIM Ô TÌM ở đỉnh hộp: nó là anh em của lối tắt «Quản lý
+              element…» ghim dưới đáy, và một lối đi trôi khỏi tầm mắt sau ba nhịp
+              cuộn thì đúng bằng không có nó. Không có cờ này thì flexbox co CẢ HAI
+              đầu để nhường chỗ cho danh sách — càng thấy rõ từ khi trần hộp lên 480px. */}
           <div className="relative shrink-0">
             <Search aria-hidden className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-fg-muted" />
             <Input
@@ -866,9 +896,21 @@ function ElementCatalogue({
 
           <div role="listbox" aria-label="Danh mục món giao diện" className="mt-2 min-h-0 flex-1 overflow-y-auto">
             {hits.length === 0 && (
-              <p className="px-2 py-4 text-center text-body text-fg-muted">
-                Không có món nào khớp — đặt tên riêng cho nó ở ngay dưới.
-              </p>
+              /* TÌM HỤT ⇒ MỘT CÚ BẤM, không phải một câu chỉ đường. Chữ vừa gõ đã là
+                 cái tên người ta muốn; bắt họ đọc «đặt tên riêng ở ngay dưới» rồi tự
+                 tìm lấy chỗ ấy là bắt họ làm lại một việc vừa làm xong. Nút này nhảy
+                 sang nấc «Gõ riêng» với tên điền sẵn — xem `CustomElementPanel`. */
+              <div className="px-2 py-4 text-center">
+                <p className="text-body text-fg-muted">Không có món nào khớp chữ bạn gõ.</p>
+                {query.trim() !== "" && (
+                  <span className="mt-2 inline-block">
+                    <Button variant="secondary" size="sm" onClick={() => setTab("custom")}>
+                      <Pencil aria-hidden strokeWidth={1.5} />
+                      Đặt tên “{query.trim()}”
+                    </Button>
+                  </span>
+                )}
+              </div>
             )}
             {/* KHÔNG CÓ TIÊU ĐỀ CHIA ĐÔI DANH SÁCH («Bộ»/«Lẻ» của đời trước): thứ tự
                 là thứ tự trong danh mục, và hai loại bộ tự nói ra mình là loại nào
@@ -878,16 +920,30 @@ function ElementCatalogue({
             <SetPickList sets={hits} used={used} onPick={onPick} />
           </div>
 
-          {/* CỬA TỰ ĐẶT TÊN nằm ở ĐÁY và LUÔN hiện, không phải chỉ khi tìm không ra:
-              nó điền sẵn đúng chữ vừa gõ, nên "gõ tên món của mình rồi bấm thêm" là
-              một mạch liền — còn nếu nó chỉ xuất hiện lúc danh mục rỗng thì người dùng
-              phải học rằng "tìm hụt mới đặt tên được". */}
-          <CustomElementRow query={query} onPick={onPick} />
+          {/* LỐI TẮT SANG KHO ELEMENT — cùng thành phần, cùng khuôn với chân hộp của
+              mọi pill khác (`SourcePicker.ManageRow`). Đây là chỗ cửa «TỰ ĐẶT TÊN»
+              từng đứng, và nó thay đúng một việc: người dùng phát hiện danh mục thiếu
+              món ĐÚNG LÚC mở hộp này ra, nên đường tới chỗ sửa danh mục phải nằm ngay
+              đây. Việc «gõ một cái tên cho nhanh» thì đã có nấc «Gõ riêng». */}
+          <ManageRow href={ELEMENT_LIBRARY_HREF} label="element" />
         </>
       )}
     </div>
   );
 }
+
+/** Ba cách trả lời câu «dòng này là món gì» — thứ tự này là thứ tự nút, và nó cố định. */
+type CatalogueTab = "preset" | "shape" | "custom";
+
+/**
+ * ĐƯỜNG TỚI KHO ELEMENT — cùng hình dạng với `manageHref()` ở `pill-ui.tsx`.
+ *
+ * Gõ thẳng chuỗi chứ không gọi hàm ấy: `element` KHÔNG phải một `PillKind` (nó là
+ * một `ManagedKind` — danh mục món giao diện không đứng sau pill chọn-một nào), nên
+ * nới kiểu của hàm kia ra chỉ để dùng lại một phép nối chuỗi là mở một cửa cho sáu
+ * trục khác lọt vào chỗ chúng không có mục nào.
+ */
+const ELEMENT_LIBRARY_HREF = "/library/prompts?kind=element";
 
 /* ══════════════════════════════════════════════════════════════════════════
    NẤC «ĐÍNH ẢNH KHUNG» — một tấm ảnh hình dáng + một mô tả BẮT BUỘC
@@ -1073,12 +1129,33 @@ function ShapeRefPanel({
           </span>
         )}
       </div>
+
+      {/* ══ CỬA RA CHO TẤM ẢNH DÙNG ĐƯỢC NHIỀU LẦN ═══════════════════════════
+          Tấm đính ở đây sống trong `refs/` của ĐÚNG dự án này và chết cùng nó: mở
+          dự án thứ hai là phải thả lại đúng tấm ấy. Người dùng không có cách nào
+          biết điều đó cho tới lần thứ hai — nên nói ra tại chỗ, kèm đường đi.
+          MỘT LINK TRẦN, KHÔNG ĐIỀN SẴN GÌ: điền sẵn nghĩa là đẩy tấm ảnh này lên
+          KHO DÙNG CHUNG (một vòng tải lên nữa, vào một nhóm khác) trước khi người
+          dùng nói rằng họ muốn thế — và nếu họ đóng tab ấy thì ta để lại một tấm
+          mồ côi trong kho mà không ai xin. Kho element ở tab kia có đủ cửa nhận ảnh. */}
+      <a
+        href={ELEMENT_LIBRARY_HREF}
+        target="_blank"
+        rel="noreferrer"
+        className="text-caption text-fg-muted underline-offset-2 hover:text-fg-strong hover:underline"
+      >
+        Dùng lại nhiều lần? Lưu vào kho element
+      </a>
     </div>
   );
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   NẤC «GÕ RIÊNG» — thêm một element KHÔNG có trong danh mục
+   ══════════════════════════════════════════════════════════════════════════ */
+
 /**
- * «Tự đặt tên…» — thêm một element KHÔNG có trong danh mục.
+ * Ô đặt tên một món chưa có trong danh mục.
  *
  * ╔══ VÌ SAO CHỦ SẢN PHẨM CẦN CỬA NÀY ═══════════════════════════════════════╗
  * ║ *«Bảng nền,… custom element cũng cho điền custom.»* Danh mục hạt giống có ║
@@ -1088,11 +1165,23 @@ function ShapeRefPanel({
  * ║ việc mà họ đang nghĩ tới ngay lúc này.                                    ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
+ * ╔══ VÌ SAO NÓ THÀNH MỘT NẤC, THÔI DÁN Ở ĐÁY DANH SÁCH (22/09/2026) ════════╗
+ * ║ Chủ sản phẩm, nhìn hộp này cạnh hộp của mọi pill khác: *«phần này cũng    ║
+ * ║ nên bỏ cái Tự đặt tên… tức là thêm 1 tab gõ riêng như mấy chỗ khác?»*.    ║
+ * ║ Khối ghim ở đáy là một CÁCH TRẢ LỜI đứng lẫn trong danh sách CÂU TRẢ LỜI  ║
+ * ║ — đúng cái lỗi hạng mục mà `SourcePicker` sinh ra để chữa (xem khối «VÌ   ║
+ * ║ SAO PHẢI GOM LẠI» ở đầu file ấy). Nó cũng ăn ~90px của vùng cuộn trên MỌI ║
+ * ║ lần mở hộp, kể cả khi người dùng chỉ đang tra danh mục.                   ║
+ * ║ Cái mất: cửa này thôi nằm trong tầm mắt lúc danh sách rỗng. Cái bù: nút   ║
+ * ║ «Đặt tên “…”» ngay chỗ tìm hụt, nhảy sang đây với tên điền sẵn.           ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
  * Món tạo ra vào THẲNG danh mục (`addCustomElement`), nên nó dùng lại được ở thẻ
  * khác và sửa/xoá được ở trang preset — xem chú thích của hàm ấy để biết vì sao
  * không giữ tên riêng trên từng dòng.
  */
-function CustomElementRow({ query, onPick }: {
+function CustomElementPanel({ query, onPick }: {
+  /** Chữ đang gõ ở ô tìm của nấc «Chọn sẵn» — điền sẵn làm tên. */
   query: string;
   /** Cùng cửa với mọi dòng của hộp: một món tự đặt tên là một bộ ghép có đúng một phần. */
   onPick: (pick: ElementPick) => void;
@@ -1109,10 +1198,10 @@ function CustomElementRow({ query, onPick }: {
   };
 
   return (
-    <div className="mt-2 shrink-0 border-t border-line-subtle px-1 pt-2">
-      <p className="mb-1 px-1 text-caption font-medium uppercase tracking-label text-fg-muted">Tự đặt tên</p>
+    <div className="flex min-h-0 flex-1 flex-col gap-2 p-1">
       <div className="flex items-center gap-1.5">
         <Input
+          autoFocus
           value={value}
           onChange={(event) => setName(event.target.value)}
           onKeyDown={(event) => {
@@ -1130,7 +1219,7 @@ function CustomElementRow({ query, onPick }: {
       {/* NÓI THẲNG chuyện gì xảy ra với chữ tiếng Việt: nó đi NGUYÊN VĂN tới máy vẽ.
           Không dịch hộ — dịch máy một danh từ chuyên ngành là đoán, mà đoán sai thì
           máy vẽ ra một món khác hẳn (xem `addCustomElement`). */}
-      <p className="mt-1 px-1 text-caption text-fg-muted">
+      <p className="px-1 text-caption text-fg-muted">
         Gõ tiếng Anh thì chữ đó đi thẳng tới máy vẽ; gõ tiếng Việt cũng được, sửa lại sau ở «Quản lý preset».
       </p>
     </div>
@@ -1369,11 +1458,16 @@ function SetRow({
       ? only.en.toLowerCase() === only.vi.toLowerCase() ? "" : only.en
       : set.parts.map((part) => part.vi).join(" · ");
 
+  /* ẢNH KHUNG CỦA BỘ = ảnh của phần ĐẦU TIÊN có ảnh. Với một món lẻ (bộ một phần
+     — hình dạng của gần như mọi món người dùng tự thêm) đó chính là ảnh của nó. */
+  const shapeAssetId = set.parts.find((part) => part.shapeAssetId)?.shapeAssetId;
+
   return (
     <PickRow
       already={already}
       sub={sub}
       onClick={() => onPick({ parts: set.parts, one: false })}
+      {...(shapeAssetId ? { thumb: <AssetThumb id={shapeAssetId} alt="" /> } : {})}
       label={
         <>
           {set.vi} <span className="text-fg-muted">· {set.parts.length} phần</span>
@@ -1416,6 +1510,7 @@ function VariantGroup({
           label={part.vi}
           name={`${set.vi} · ${part.vi}`}
           already={used.has(part.id)}
+          {...(part.shapeAssetId ? { thumb: <AssetThumb id={part.shapeAssetId} alt="" /> } : {})}
           onClick={() => onPick({ parts: [part], one: true })}
         />
       ))}
@@ -1438,13 +1533,22 @@ function VariantGroup({
  * ngay trên; trình đọc màn hình thì nghe từng dòng rời nhau, nên nó cần cả tên bộ.
  */
 function PickRow({
-  label, sub, name, already, indent, onClick,
+  label, sub, name, already, indent, thumb, onClick,
 }: {
   label: React.ReactNode;
   sub?: string;
   name?: string;
   already: boolean;
   indent?: boolean;
+  /**
+   * Ô ảnh 32px đứng TRƯỚC chữ — chỉ những món CÓ ảnh khung trong kho mới có.
+   *
+   * KHÔNG chừa ô giữ chỗ cho dòng không ảnh, ngược với ô 72px của hộp dáng: ở đây
+   * ảnh là NGOẠI LỆ (đa số món chỉ có tên), nên một ô trống 32px trên mọi dòng là
+   * 32px lấy đi của chữ ở cả một danh mục bốn mươi tám món để phục vụ vài dòng.
+   * Cùng lý lẽ với pill trên dòng, xem `ElementNamePill`.
+   */
+  thumb?: React.ReactNode;
   onClick: () => void;
 }) {
   return (
@@ -1455,19 +1559,22 @@ function PickRow({
       {...(name !== undefined ? { "aria-label": name } : {})}
       onClick={onClick}
       className={cn(
-        "flex w-full flex-col gap-0.5 rounded-1 py-1.5 pr-2 text-left",
+        "flex w-full items-center gap-2 rounded-1 py-1.5 pr-2 text-left",
         indent === true ? "pl-5" : "pl-2",
         "hover:bg-accent/[var(--kg-tint-a)]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
       )}
     >
-      <span className={cn("text-body", already ? "text-fg" : "text-fg-strong")}>
-        {label}
-        {/* Vẫn thêm lại được: một bộ kit có ba cỡ nút là chuyện thường. Chữ này
-            chỉ nói "bạn đã có rồi", không cấm. */}
-        {already && <span className="text-caption text-fg-muted"> · đã có trong thẻ</span>}
+      {thumb}
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className={cn("text-body", already ? "text-fg" : "text-fg-strong")}>
+          {label}
+          {/* Vẫn thêm lại được: một bộ kit có ba cỡ nút là chuyện thường. Chữ này
+              chỉ nói "bạn đã có rồi", không cấm. */}
+          {already && <span className="text-caption text-fg-muted"> · đã có trong thẻ</span>}
+        </span>
+        {sub !== undefined && sub !== "" && <span className="line-clamp-1 text-caption text-fg-muted">{sub}</span>}
       </span>
-      {sub !== undefined && sub !== "" && <span className="line-clamp-1 text-caption text-fg-muted">{sub}</span>}
     </button>
   );
 }
@@ -1542,6 +1649,7 @@ export function UiKitBlockBody({
   onRedrawSheet,
   redrawBusy = false,
   projectId,
+  copyShapeAsset,
 }: {
   block: UiKitBlock;
   /** Nhận HÀM cập nhật, không nhận giá trị — xem `updateBlock` trong PromptComposerScreen. */
@@ -1562,14 +1670,87 @@ export function UiKitBlockBody({
    * tấm ảnh người dùng vừa kéo vào.
    */
   projectId?: string | null;
+  /**
+   * CHÉP ẢNH KHUNG CỦA MỘT MÓN từ kho dùng chung sang `refs/` của dự án.
+   *
+   * ╔══ VÌ SAO NÓ ĐI BẰNG PROP, KHÔNG PHẢI MỘT HOOK GỌI TẠI CHỖ ══════════════╗
+   * ║ Bảng nhớ "đã chép rồi" phải sống trong BẢN NHÁP của dự án               ║
+   * ║ (`ComposerState.shapeAssets`), để chọn lại cùng một món ở thẻ khác — hay ║
+   * ║ mở lại dự án hôm sau — không trả lại giá một vòng tải xuống + một vòng   ║
+   * ║ tải lên. Ruột thẻ này KHÔNG biết gì về `ComposerState`: nó chỉ cầm một    ║
+   * ║ `UiKitBlock`. Cho nó biết là mở đường để ba thẻ trên một màn mỗi thẻ giữ  ║
+   * ║ một bảng nhớ riêng, và bốn tấm giống nhau nằm trong `refs/`.             ║
+   * ║ Nên chủ sở hữu bản nháp (`PromptCanvasScreen`) đưa xuống đúng MỘT hàm,    ║
+   * ║ và nó là cùng phép chép mà thương hiệu đã dùng — xem `useShapeBinding`.  ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
+   * Vắng (vỏ lab, không có dự án nào) ⇒ chọn món vẫn chạy, chỉ là không có ảnh
+   * khung đi kèm — cùng cách xử sự với `ShapeRefPanel` khi thiếu dự án.
+   */
+  copyShapeAsset?: (assetId: string) => Promise<PillImage>;
 }) {
   const presets = usePresets();
   const [askReset, setAskReset] = React.useState(false);
+  /**
+   * Món nào vừa chép ảnh khung HỎNG — nói ra, không nuốt.
+   *
+   * Phép chép chạy sau khi hộp đã đóng, nên không còn chỗ nào trong hộp để báo.
+   * Im lặng ở đây nghĩa là người dùng chọn một món họ BIẾT là có hình phác, thấy
+   * dòng hiện ra không có thumbnail, và không có gì giải thích — rồi họ bấm Vẽ.
+   */
+  const [shapeError, setShapeError] = React.useState("");
   /* MỘT ref cho cả danh sách: `dragstart` xảy ra ở dòng này còn `drop` ở dòng
      kia, nên chỗ nhớ "đang kéo dòng nào" phải nằm TRÊN cả hai. */
   const dragFrom = React.useRef<number | null>(null);
 
   const used = React.useMemo(() => new Set(block.cells.map((cell) => cell.elementId)), [block.cells]);
+
+  /**
+   * CHÉP ẢNH KHUNG của các món vừa được bấm vào ĐÚNG dòng của chúng.
+   *
+   * ╔══ DÒNG HIỆN RA NGAY, ẢNH THEO SAU ═══════════════════════════════════════╗
+   * ║ Hai việc, hai tốc độ — cùng luật với phép chọn thương hiệu (xem `pick`    ║
+   * ║ trong `brand-binding.ts`): «món này là gì» là dữ liệu đã có trong tay nên ║
+   * ║ dòng phải hiện ra trong cùng nhịp bấm; tấm ảnh cần hai vòng mạng. Gộp      ║
+   * ║ chúng vào một lượt ghi sau khi chép xong thì hộp đóng lại mà màn hình      ║
+   * ║ đứng im vài giây, và người dùng bấm lần nữa.                              ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   *
+   * Vá theo `id` DÒNG chứ không theo chỉ số: giữa lúc bấm với lúc chép xong, người
+   * dùng có thể đã kéo dòng đi chỗ khác hoặc xoá hẳn nó. Không còn dòng ấy ⇒ `map`
+   * đi qua không đổi gì, đúng thứ ta muốn.
+   */
+  const attachShapes = React.useCallback(
+    (made: readonly { preset: ElementPreset; cellId: string }[]) => {
+      const copy = copyShapeAsset;
+      /* Không có dự án nào (vỏ lab) ⇒ chọn món vẫn chạy, chỉ là không có chỗ cất
+         tấm ảnh. Cùng cách xử sự với `ShapeRefPanel` khi thiếu dự án. */
+      if (!copy) return;
+      for (const { preset, cellId } of made) {
+        const assetId = preset.shapeAssetId;
+        const note = (preset.shapeNote ?? "").trim();
+        /* CẶP KHÔNG ĐỦ ⇒ KHÔNG CHÉP. Một tấm ảnh không mô tả là thứ `ShapeRefPanel`
+           cấm người dùng tạo ra bằng tay (máy vẽ sẽ đoán xem khối hình ấy là gì),
+           nên nó cũng không được lọt vào bằng cửa danh mục. */
+        if (!assetId || !note) continue;
+        void (async () => {
+          try {
+            const image = await copy(assetId);
+            onChange((prev) => ({
+              ...prev,
+              cells: prev.cells.map((cell) =>
+                cell.id === cellId ? { ...cell, shapeRef: image.path, shapeNote: note } : cell,
+              ),
+            }));
+          } catch (error) {
+            setShapeError(
+              `Không chép được ảnh khung của «${preset.vi}»: ${error instanceof Error ? error.message : "lỗi không rõ"}`,
+            );
+          }
+        })();
+      }
+    },
+    [copyShapeAsset, onChange],
+  );
 
   const pick = (next: BlockMode) => {
     if (next === block.mode) return;
@@ -1633,6 +1814,20 @@ export function UiKitBlockBody({
         </div>
       )}
 
+      {shapeError !== "" && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2 border border-warn/60 bg-warn/[var(--kg-tint-a)] px-3 py-2">
+          <span className="text-body text-fg-strong">{shapeError}</span>
+          {/* Món ĐÃ vào dòng rồi, chỉ thiếu tấm ảnh — nên đây là một lời báo đóng
+              được, không phải một lỗi chặn đường. Đính tay vẫn còn nguyên ở nấc
+              «Đính ảnh khung» của pill tên dòng. */}
+          <div className="ml-auto">
+            <Button variant="secondary" size="sm" onClick={() => setShapeError("")}>
+              Đã hiểu
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col">
         {block.cells.map((cell, index) => (
           <React.Fragment key={cell.id}>
@@ -1655,20 +1850,39 @@ export function UiKitBlockBody({
             onChange={(next) =>
               onChange((prev) => ({ ...prev, cells: prev.cells.map((c) => (c.id === cell.id ? next : c)) }))
             }
-            /* Tìm lại vị trí TRONG `prev` chứ không dùng `index` của lượt render:
-               giữa lúc hộp mở với lúc bấm, một dòng khác có thể đã bị kéo đi chỗ
-               khác — và chèn nhầm chỗ là bộ vừa chọn nằm rải ra hai cụm. */
-            onPickSet={(pick) =>
+            onPickSet={(pick) => {
+              const head = pick.parts[0];
+              if (!head) return;
+              /* «ĐÃ Ở TRONG BỘ NÀY RỒI» ⇒ cú bấm không có ý định nào, `applySetAtRow`
+                 trả nguyên mảng cũ — nên ở đây cũng không được chép ảnh khung gì.
+                 Hỏi TRƯỚC, ngoài updater: bên trong ấy ta không có cách nào nói ra
+                 cho phần chép ảnh biết là mình vừa không làm gì. */
+              const current = presets.elements.find((preset) => preset.id === cell.elementId);
+              const noop = !pick.one && elementSetKey(current) === elementSetKey(head);
+              /* Dòng chèn thêm dựng SẴN ở đây, ngoài updater — xem `applySetAtRow`. */
+              const rest = pick.one
+                ? []
+                : pick.parts.slice(1).map((part) => freshCell(part.id, presets, block.mode));
+              /* Tìm lại vị trí TRONG `prev` chứ không dùng `index` của lượt render:
+                 giữa lúc hộp mở với lúc bấm, một dòng khác có thể đã bị kéo đi chỗ
+                 khác — và chèn nhầm chỗ là bộ vừa chọn nằm rải ra hai cụm. */
               onChange((prev) => {
                 const at = prev.cells.findIndex((c) => c.id === cell.id);
                 /* MỘT BIẾN THỂ BẤM LẺ ⇒ ĐỔI ĐÚNG DÒNG NÀY. «Cả bộ» và mọi bộ ghép
                    ⇒ dòng này thành phần đầu + chèn phần còn lại ngay sau. */
-                const cells = pick.one && pick.parts[0]
-                  ? swapOneAtRow(prev.cells, at, pick.parts[0], presets)
-                  : applySetAtRow(prev.cells, at, pick.parts, presets, prev.mode);
+                const cells = pick.one
+                  ? swapOneAtRow(prev.cells, at, head, presets)
+                  : applySetAtRow(prev.cells, at, pick.parts, presets, rest);
                 return { ...prev, cells };
-              })
-            }
+              });
+              if (noop) return;
+              /* Phần ĐẦU đổi chính dòng này (id giữ nguyên qua `swapCellElement`);
+                 các phần sau nằm ở những dòng vừa dựng, theo đúng thứ tự. */
+              attachShapes([
+                { preset: head, cellId: cell.id },
+                ...rest.map((made, at) => ({ preset: pick.parts[at + 1]!, cellId: made.id })),
+              ]);
+            }}
             onRemove={() => onChange((prev) => ({ ...prev, cells: prev.cells.filter((c) => c.id !== cell.id) }))}
           />
           </React.Fragment>
@@ -1689,12 +1903,13 @@ export function UiKitBlockBody({
             không sắp xếp nổi. */}
         <ElementPicker
           used={used}
-          onPick={(pick) =>
-            onChange((prev) => ({
-              ...prev,
-              cells: [...prev.cells, ...pick.parts.map((part) => freshCell(part.id, presets, prev.mode))],
-            }))
-          }
+          onPick={(pick) => {
+            /* Dòng dựng SẴN ở đây, ngoài updater: phép chép ảnh khung quay về vá
+               đúng dòng này bằng `id`, nên id phải sinh một lần — xem `applySetAtRow`. */
+            const made = pick.parts.map((part) => ({ preset: part, cell: freshCell(part.id, presets, block.mode) }));
+            onChange((prev) => ({ ...prev, cells: [...prev.cells, ...made.map((entry) => entry.cell)] }));
+            attachShapes(made.map((entry) => ({ preset: entry.preset, cellId: entry.cell.id })));
+          }}
         />
       </div>
     </>

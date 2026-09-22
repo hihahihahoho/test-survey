@@ -608,20 +608,33 @@ function readContextRef(raw: unknown): ContextRef | null {
   return { path, role, ...(assetId ? { assetId } : {}) };
 }
 
+/**
+ * Bảng «id asset thư viện → `refs/<tên>`» đọc từ đĩa — CHỈ nhận cặp chuỗi-chuỗi.
+ *
+ * Một giá trị không phải chuỗi ở đây sẽ đi thẳng vào `sheet.ref` / `shapeRef` của
+ * contract dưới dạng `undefined`. Hai bảng (`brandAssets`, `shapeAssets`) dùng
+ * chung cửa này để không có hai luật lọc cho cùng một hình dạng dữ liệu.
+ */
+function readAssetCache(raw: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!isRecord(raw)) return out;
+  for (const [id, path] of Object.entries(raw)) {
+    if (typeof path === "string" && path) out[id] = path;
+  }
+  return out;
+}
+
 function readComposer(raw: unknown, presets: PresetBundle): ComposerState {
   const base = initialComposer(presets);
   if (!isRecord(raw)) return base;
   const brand = Array.isArray(raw["brandColors"])
     ? (raw["brandColors"] as unknown[]).filter((c): c is string => typeof c === "string")
     : base.brandColors;
-  /* Bảng cache asset: chỉ nhận cặp chuỗi-chuỗi. Một giá trị không phải chuỗi ở
-     đây sẽ đi thẳng vào `sheet.ref` của contract dưới dạng `undefined`. */
-  const assets: Record<string, string> = {};
-  if (isRecord(raw["brandAssets"])) {
-    for (const [id, path] of Object.entries(raw["brandAssets"])) {
-      if (typeof path === "string" && path) assets[id] = path;
-    }
-  }
+  const assets = readAssetCache(raw["brandAssets"]);
+  /* Bảng ảnh khung: MỚI (22/09/2026), nên mọi bản nháp trên đĩa đều thiếu nó —
+     và thiếu là đúng, nghĩa là "chưa chép tấm nào". Cùng cửa đọc với
+     `brandAssets` để hai bảng không có hai luật lọc. */
+  const shapes = readAssetCache(raw["shapeAssets"]);
   return {
     themeValue: typeof raw["themeValue"] === "string" ? (raw["themeValue"] as string) : base.themeValue,
     styleId: typeof raw["styleId"] === "string" ? (raw["styleId"] as string) : base.styleId,
@@ -637,6 +650,7 @@ function readComposer(raw: unknown, presets: PresetBundle): ComposerState {
       ? (raw["contextRefs"] as unknown[]).map(readContextRef).filter((r): r is ContextRef => r !== null)
       : [],
     brandAssets: assets,
+    ...(Object.keys(shapes).length > 0 ? { shapeAssets: shapes } : {}),
     /* Dự án lưu TRƯỚC khi khối Ngữ cảnh có hai chế độ ⇒ `template`, đúng thứ nó
        đang là — cùng luật với block Bộ UI ở `readBlock`. */
     contextMode: raw["contextMode"] === "free" ? "free" : "template",

@@ -404,6 +404,68 @@ describe("bộ món: đọc, vá, và gỡ", () => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
+   ẢNH KHUNG CỦA MỘT MÓN — một CẶP, và nó phải đi trọn vòng đĩa
+   ══════════════════════════════════════════════════════════════════════════
+   `shapeAssetId` + `shapeNote` là khoá MỚI (22/09/2026). Rơi mất một trong hai ở
+   bất kỳ chặng nào (đọc · dòng quản lý · ghi) đều hỏng CÂM theo cùng một kiểu:
+   danh mục vẫn mở, món vẫn chọn được, chỉ là tấm phác biến mất — hoặc tệ hơn, chữ
+   còn mà ảnh mất, và máy vẽ nhận một mô tả không có hình nào đi kèm. */
+describe("ảnh khung của một món: đọc · dòng quản lý · ghi", () => {
+  const SHAPED = { key: "tudat", en: "quest frame", decor: "medium", glazeId: "solid", sizeId: "", shapeAssetId: "asset_q", shapeNote: "khung ba cạnh" };
+
+  it("bản ghi trên đĩa mang CẢ CẶP ⇒ đọc ra đủ cả hai", async () => {
+    get.mockResolvedValue(library([row("preset_q", "element", "Khung nhiệm vụ", SHAPED)]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen?.elements[0]!.shapeAssetId).toBe("asset_q");
+    expect(seen?.elements[0]!.shapeNote).toBe("khung ba cạnh");
+  });
+
+  it("MÔ TẢ MỒ CÔI (không ảnh) ⇒ BỎ — chữ không cửa nào đọc thì không được bày ra", async () => {
+    get.mockResolvedValue(library([
+      row("preset_q", "element", "Khung nhiệm vụ", { ...SHAPED, shapeAssetId: "" }),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+    expect(seen?.elements[0]!.shapeAssetId).toBeUndefined();
+    expect(seen?.elements[0]!.shapeNote).toBeUndefined();
+  });
+
+  it("`managedRows` ↔ `withManagedRows` giữ nguyên cặp ấy — màn quản lý là một vòng ĐI VÀ VỀ", async () => {
+    get.mockResolvedValue(library([row("preset_q", "element", "Khung nhiệm vụ", SHAPED)]));
+    mount();
+    await waitFor(() => expect(seen?.elements).toHaveLength(1));
+
+    const rows = managedRows(seen!, "element");
+    expect(rows[0]!.element).toMatchObject({ shapeAssetId: "asset_q", shapeNote: "khung ba cạnh" });
+    /* Đi một vòng rồi về: một trường bị bỏ quên ở `withManagedRows` thì đúng lượt
+       sửa NHÃN của một món sẽ ném mất tấm ảnh của nó, im lặng. */
+    const back = withManagedRows(seen!, "element", rows.map((r) => ({ ...r, vi: "Tên khác" })));
+    expect(back.elements[0]).toMatchObject({ vi: "Tên khác", shapeAssetId: "asset_q", shapeNote: "khung ba cạnh" });
+  });
+
+  it("GHI XUỐNG ĐĨA cả cặp; món KHÔNG có ảnh thì KHÔNG mọc thêm khoá rỗng nào", async () => {
+    get.mockResolvedValue(library([
+      row("preset_q", "element", "Khung nhiệm vụ", SHAPED),
+      row("preset_p", "element", "Panel", { key: "panel", en: "panel", decor: "medium", glazeId: "solid", sizeId: "" }),
+    ]));
+    mount();
+    await waitFor(() => expect(seen?.elements).toHaveLength(2));
+
+    setPresets({ ...seen!, elements: seen!.elements.map((e) => ({ ...e, vi: `${e.vi} 2` })) });
+    await waitFor(() => expect(patchPreset).toHaveBeenCalledTimes(2));
+
+    const byKey = new Map(patchPreset.mock.calls.map(([, input]) => [String(input.data.key), input.data]));
+    expect(byKey.get("tudat")).toMatchObject({ shapeAssetId: "asset_q", shapeNote: "khung ba cạnh" });
+    /* Khoá rỗng thừa = một PATCH cho bản ghi không đổi gì, nhân với cả danh mục. */
+    expect(byKey.get("panel")).not.toHaveProperty("shapeAssetId");
+    expect(byKey.get("panel")).not.toHaveProperty("shapeNote");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
    LOẠI BỘ — mặc định, di trú, và đường ghi xuống đĩa
    ══════════════════════════════════════════════════════════════════════════
    `kind` là khoá MỚI trên `data.set`. Ba câu hỏi, và cả ba đều hỏng CÂM — màn

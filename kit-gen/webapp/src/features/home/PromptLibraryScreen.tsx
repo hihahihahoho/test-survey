@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Copy, GripVertical, MoreHorizontal, Pencil, Plus, RotateCcw, Search, Trash2, TriangleAlert } from "lucide-react";
+import { Copy, GripVertical, ImagePlus, MoreHorizontal, Pencil, Plus, RotateCcw, Search, Trash2, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -18,10 +18,13 @@ import { SIZE_PRESETS } from "@/features/prompt-lab/lib/cell-size";
 import { POSE_PRESETS } from "@/features/prompt-lab/lib/pose/pose-presets";
 import { canAddRow, canDeleteRow } from "@/features/prompt-lab/lib/catalog-seeds";
 import {
+  ELEMENT_SHAPE_GROUP,
   MANAGED_ORDER, managedRows, nextRowId, seedRowsOf, SET_KIND_DEFAULT, setManagedRows,
   usePresetSyncError, usePresets,
   type ElementSetKind, type ElementSetRef, type ManagedKind, type ManagedRow,
 } from "@/features/prompt-lab/lib/presets-store";
+import { AssetThumb } from "@/features/prompt-lab/components/SourcePicker";
+import { useAddLibraryItem, useLibraryImage, useRemoveLibraryItem } from "@/lib/hooks/use-library";
 import { HomeWorkspaceShell } from "./components/HomeWorkspaceShell";
 
 /**
@@ -226,6 +229,18 @@ const SET_KIND_COPY: Record<ElementSetKind, { label: string; hint: string }> = {
  *  tay: đổi mặc định ở `glaze.ts` là chỗ này đi theo. */
 const ELEMENT_ROW_DEFAULTS: NonNullable<ManagedRow["element"]> = { decor: "medium", glazeId: GLAZE_SOLID, sizeId: "" };
 
+const SHAPE_ACCEPT = "image/png,image/jpeg,image/webp";
+
+/**
+ * CÂU GIẢI THÍCH CỦA Ô ẢNH KHUNG — CHÉP NGUYÊN VĂN từ `ShapeRefPanel` ở thẻ Bộ UI.
+ *
+ * Hai cửa, một luật: đính ảnh khung cho MỘT DÒNG của một thẻ (ở đó) và đính ảnh khung
+ * cho MỘT MÓN trong danh mục (ở đây) đều để lại đúng cặp `shapeRef` + `shapeNote`
+ * trong contract. Nói hai câu khác nhau về cùng một ràng buộc là dạy người dùng rằng
+ * hai chỗ ấy làm hai việc khác nhau.
+ */
+const SHAPE_NOTE_HINT = "Ảnh chỉ nói hình dáng, mô tả nói nó là gì.";
+
 /** Dáng nào đã có bảng góc khớp để dựng ảnh mẫu. Xem `pose-presets.ts`. */
 const POSED = new Set(POSE_PRESETS.map((preset) => preset.id));
 
@@ -246,6 +261,9 @@ export function PromptLibraryScreen() {
      người dùng tự đi tìm lại thứ mình vừa đứng cạnh. */
   const search = useSearch({ strict: false }) as { kind?: string };
   const kind: ManagedKind = isManagedKind(search.kind) ? search.kind : "style";
+
+  const addAsset = useAddLibraryItem();
+  const removeAsset = useRemoveLibraryItem();
 
   const [query, setQuery] = React.useState("");
   const [editingId, setEditingId] = React.useState<string | null>(null);
@@ -312,7 +330,33 @@ export function PromptLibraryScreen() {
     setEditingId(id);
   };
 
+  /**
+   * Tấm ảnh khung của một dòng có ai KHÁC đang dùng không.
+   *
+   * «Nhân bản» chép nguyên `shapeAssetId` sang dòng mới, nên hai dòng dùng chung một
+   * tấm là chuyện bình thường. Xoá tấm ấy khỏi kho vì một trong hai dòng bị xoá là
+   * làm hỏng dòng còn lại trong im lặng — nó vẫn khai có ảnh, và ảnh thì không còn.
+   */
+  const shapeUsedElsewhere = (assetId: string, exceptId: string) =>
+    rows.some((item) => item.id !== exceptId && item.element?.shapeAssetId === assetId);
+
+  /**
+   * Bỏ tấm ảnh khung của một dòng KHỎI KHO DÙNG CHUNG.
+   *
+   * Tấm này được tải lên CHỈ để phục vụ dòng ấy (không có màn nào khác bày nhóm
+   * `element-shape`), nên bỏ dòng mà giữ ảnh là để lại rác vĩnh viễn trong kho —
+   * người dùng không có cửa nào nhìn thấy nó để mà dọn.
+   * LỖI XOÁ KHÔNG CHẶN ĐƯỜNG: cùng lắm là một tấm mồ côi, còn dòng thì người dùng
+   * đã bảo xoá. Dựng một dải cảnh báo cho việc dọn dẹp là bắt họ xử lý việc của ta.
+   */
+  const dropShapeAsset = (row: ManagedRow) => {
+    const assetId = row.element?.shapeAssetId;
+    if (!assetId || shapeUsedElsewhere(assetId, row.id)) return;
+    removeAsset.mutate(assetId);
+  };
+
   const remove = (row: ManagedRow) => {
+    dropShapeAsset(row);
     write(rows.filter((item) => item.id !== row.id));
     setAskDeleteId(null);
     if (editingId === row.id) setEditingId(null);
@@ -523,6 +567,20 @@ export function PromptLibraryScreen() {
             onDuplicate={() => duplicate(editing)}
             onDelete={() => remove(editing)}
             onClose={() => setEditingId(null)}
+            onUploadShape={async (file) =>
+              (await addAsset.mutateAsync({
+                file,
+                /* `reference`, KHÔNG phải `ui` — cùng phân loại với ảnh logo và ảnh
+                   phong cách của thương hiệu. Tấm này là TƯ LIỆU tham chiếu, không
+                   phải một khung UI mà `userUiElements()` đem đi sinh ô. Khai `ui`
+                   thì agent còn tự gán hình học mặc định cho nó, một phép đoán mà
+                   không ai đọc. */
+                kind: "reference",
+                group: ELEMENT_SHAPE_GROUP,
+                name: editing.vi || editing.id,
+              })).id
+            }
+            onDropShape={() => dropShapeAsset(editing)}
           />
         ) : (
           <EmptyEditor kind={kind} />
@@ -658,6 +716,17 @@ function RowLine({
         <GripVertical aria-hidden className="size-4" />
       </button>
 
+      {/* ẢNH KHUNG ĐỨNG TRƯỚC CHỮ, và chỉ khi có thật: dòng là chỗ DUY NHẤT trong
+          danh sách nói ra "món này đã có hình phác". Không chừa ô giữ chỗ cho dòng
+          không ảnh — ảnh ở đây là ngoại lệ, và một ô trống 32px trên bốn mươi tám
+          dòng là 32px lấy đi của chữ để phục vụ vài dòng. Cùng lý lẽ với `PickRow`
+          của hộp tra danh mục và với pill trên dòng thẻ Bộ UI. */}
+      {row.element?.shapeAssetId && (
+        <span className="mt-0.5 shrink-0">
+          <AssetThumb id={row.element.shapeAssetId} alt="" />
+        </span>
+      )}
+
       <button
         type="button"
         onClick={onEdit}
@@ -787,7 +856,7 @@ function EmptyEditor({ kind }: { kind: ManagedKind }) {
  */
 function RowEditor({
   kind, row, setOptions, onChange, onPickSet, onRenameSet, onRetypeSet, onDissolveSet,
-  onDuplicate, onDelete, onClose,
+  onDuplicate, onDelete, onClose, onUploadShape, onDropShape,
 }: {
   kind: ManagedKind;
   row: ManagedRow;
@@ -801,6 +870,10 @@ function RowEditor({
   onDuplicate: () => void;
   onDelete: () => void;
   onClose: () => void;
+  /** Tải một tấm ảnh khung lên kho dùng chung; trả id của nó. Ném khi hỏng. */
+  onUploadShape: (file: File) => Promise<string>;
+  /** Bỏ tấm ảnh khung của dòng này khỏi kho (nếu không dòng nào khác đang dùng). */
+  onDropShape: () => void;
 }) {
   const locked = !canDeleteRow(kind, row.id);
   /**
@@ -818,13 +891,32 @@ function RowEditor({
     onChange({ element: { ...(element ?? ELEMENT_ROW_DEFAULTS), skel: { ...skel, ...part } } });
   const setElement = (part: Partial<NonNullable<ManagedRow["element"]>>) =>
     onChange({ element: { ...(element ?? ELEMENT_ROW_DEFAULTS), ...part } });
+  /* CÓ ẢNH MÀ CHƯA CÓ CHỮ = bản ghi nửa vời. Xem `ElementPreset.shapeNote`. */
+  const shapeUnfinished = !!element?.shapeAssetId && (element.shapeNote ?? "").trim() === "";
 
   return (
     <aside aria-label={`Sửa ${row.vi || "mục mới"}`} className={PANEL}>
       <div className="flex items-center justify-between gap-2 border-b border-line-subtle pb-3">
         <h3 className="truncate text-label text-fg-strong">Sửa mục</h3>
-        <Button type="button" variant="secondary" size="sm" onClick={onClose}>Xong</Button>
+        {/* ══ CỬA CHỐT DUY NHẤT CỦA PANEL NÀY, VÀ ĐÓ LÀ CHỖ RÀNG BUỘC PHẢI ĐỨNG ══
+            Panel này KHÔNG có nút Lưu, có chủ ý (xem khối chú thích ở đầu hàm): kho
+            ghi theo từng phím. Nên thứ duy nhất đóng vai "xong việc" là nút này — và
+            một dòng khai có ảnh khung mà chưa có mô tả thì CHƯA xong: nó sẽ đi vào
+            mọi bộ kit chọn món ấy dưới dạng một khối hình câm cho máy vẽ đoán.
+            Vẫn bấm được dòng khác bên trái để đi tiếp, nên đây là một cái phanh, không
+            phải một cái cũi. Đường ra nhanh nhất nằm ngay trong ô: «Bỏ ảnh khung». */}
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={shapeUnfinished}
+          {...(shapeUnfinished ? { title: SHAPE_NEEDS_NOTE } : {})}
+          onClick={onClose}
+        >
+          Xong
+        </Button>
       </div>
+      {shapeUnfinished && <p className="mt-2 text-caption text-danger">{SHAPE_NEEDS_NOTE}</p>}
 
       <div className="space-y-4 pt-4">
         {/* «NHÃN HIỂN THỊ», không còn «Nhãn tiếng Việt»: danh mục món nay mang thuật
@@ -929,6 +1021,13 @@ function RowEditor({
                 </SelectContent>
               </Select>
             </Field>
+
+            <ElementShapeField
+              row={row}
+              onSet={(part) => setElement(part)}
+              onUpload={onUploadShape}
+              onDrop={onDropShape}
+            />
 
             {/* ══ BỘ ══════════════════════════════════════════════════════════
                 Ở ĐÂY chứ không phải một màn riêng cho bộ: một bộ KHÔNG phải một
@@ -1068,6 +1167,156 @@ function RowEditor({
         <p className="text-caption text-fg-muted">Mã mục: <span className="font-mono">{row.id}</span> — không đổi được, vì các bản nháp đã lưu đang trỏ vào nó.</p>
       </div>
     </aside>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Ô ẢNH KHUNG CỦA MỘT MÓN — hình dáng đi bằng ảnh, «nó là gì» đi bằng chữ
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const SHAPE_NEEDS_NOTE = "Viết mô tả cho ảnh khung rồi mới xong được.";
+
+/**
+ * Đính một bản phác cho MỘT MÓN trong danh mục.
+ *
+ * ╔══ VÌ SAO Ô NÀY THUỘC VỀ DANH MỤC, KHÔNG CHỈ THUỘC VỀ MỘT DÒNG THẺ ═══════╗
+ * ║ Chủ sản phẩm: *«element cũng cho kiểu up ảnh + gõ mô tả → sau select     ║
+ * ║ được bên tab đầu»*. Cửa đính ảnh đã có ở thẻ Bộ UI (`ShapeRefPanel`),    ║
+ * ║ nhưng tấm ảnh ấy sống trong `refs/` của ĐÚNG một dự án và chết cùng nó:  ║
+ * ║ mở dự án thứ hai là phải thả lại đúng tấm ấy, mỗi lần. Ở đây thì tấm ảnh ║
+ * ║ đi vào KHO DÙNG CHUNG và dính vào chính cái tên món — chọn món ấy ở bất  ║
+ * ║ kỳ bộ kit nào cũng nhận lại đúng hình dáng đó (xem `attachShapes`).      ║
+ * ╚═════════════════════════════════════════════════════════════════════════╝
+ *
+ * ╔══ MÔ TẢ LÀ BẮT BUỘC, VÀ RÀNG BUỘC ẤY NẶNG HƠN Ở ĐÂY ════════════════════╗
+ * ║ Một tấm phác nói được HÌNH DÁNG và chỉ hình dáng: máy vẽ thấy ba cạnh và ║
+ * ║ một cái móc, nó không biết mình đang vẽ tấm biển nhiệm vụ hay cái khiên. ║
+ * ║ Ở thẻ Bộ UI, một cặp thiếu chữ chỉ hỏng MỘT dòng của MỘT dự án. Ở đây nó ║
+ * ║ hỏng mọi dự án chọn món ấy, từ nay về sau — nên cửa chốt của cả panel    ║
+ * ║ (nút «Xong») khoá lại cho tới khi có chữ.                                ║
+ * ╚═════════════════════════════════════════════════════════════════════════╝
+ *
+ * TẢI LÊN NGAY LÚC THẢ và ghi `shapeAssetId` ngay: panel này vốn ghi theo từng phím
+ * (không có nút Lưu), nên giữ tấm ảnh lơ lửng trong state cục bộ là dựng đúng cái
+ * trạng thái "đã chọn nhưng chưa lưu" mà cả màn cố ý không có — và là một cách mới
+ * để mất ảnh (bấm sang dòng khác = mất).
+ */
+function ElementShapeField({
+  row, onSet, onUpload, onDrop,
+}: {
+  row: ManagedRow;
+  onSet: (part: Partial<NonNullable<ManagedRow["element"]>>) => void;
+  onUpload: (file: File) => Promise<string>;
+  onDrop: () => void;
+}) {
+  const assetId = row.element?.shapeAssetId ?? "";
+  const note = row.element?.shapeNote ?? "";
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState("");
+  const [over, setOver] = React.useState(false);
+  const input = React.useRef<HTMLInputElement>(null);
+  const thumb = useLibraryImage(assetId || null);
+
+  const upload = async (file: File) => {
+    setBusy(true);
+    setErr("");
+    try {
+      onSet({ shapeAssetId: await onUpload(file), shapeNote: note });
+    } catch (error) {
+      /* NÓI RA, không nuốt: thả một tấm ảnh rồi không thấy gì xảy ra là người dùng
+         thả lại lần nữa, rồi lần nữa — mỗi lần một request hỏng. */
+      setErr(error instanceof Error ? error.message : "Không tải được ảnh lên.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={`row-shapenote-${row.id}`}>Ảnh khung của món</Label>
+
+      {assetId !== "" && (
+        <div className="flex items-center gap-3">
+          {thumb ? (
+            <img src={thumb} alt="" aria-hidden className="size-16 shrink-0 rounded-1 border border-line-subtle object-contain" />
+          ) : (
+            <span aria-hidden className="size-16 shrink-0 rounded-1 border border-line-subtle bg-raised" />
+          )}
+          {/* BỎ ẢNH XOÁ CẢ MÔ TẢ, trong một cú bấm — cùng luật với `ShapeRefPanel`:
+              hai trường ấy chỉ có nghĩa khi đi cùng nhau, và để lại một dòng mô tả
+              không ảnh là để lại chữ mà không cửa nào đọc. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              onDrop();
+              onSet({ shapeAssetId: "", shapeNote: "" });
+            }}
+          >
+            <X aria-hidden strokeWidth={1.5} />
+            Bỏ ảnh khung
+          </Button>
+        </div>
+      )}
+
+      {/* Kéo thả VÀ bấm, cùng lý do với mọi ô ảnh khác của sản phẩm: kéo thả là
+          đường nhanh của người đang mở sẵn ảnh bên cạnh, hộp chọn tệp là đường duy
+          nhất của người dùng bàn phím. */}
+      <button
+        type="button"
+        onClick={() => input.current?.click()}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setOver(false);
+          const file = event.dataTransfer.files?.[0];
+          if (file) void upload(file);
+        }}
+        className={cn(
+          "flex w-full flex-col items-center gap-1 rounded-2 border border-dashed px-3 py-4 text-center",
+          "transition-colors duration-fast ease-out",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+          over ? "border-accent bg-accent/[var(--kg-tint-a)]" : "border-line hover:border-line-strong",
+        )}
+      >
+        <ImagePlus aria-hidden className="size-5 text-fg-muted" />
+        <span className="text-body text-fg-strong">
+          {busy ? "Đang tải ảnh lên…" : assetId ? "Đổi ảnh khung" : "Thả ảnh khung vào đây, hoặc bấm để chọn tệp"}
+        </span>
+        <span className="text-caption text-fg-muted">PNG · JPG · WebP</span>
+      </button>
+
+      <input
+        ref={input}
+        type="file"
+        accept={SHAPE_ACCEPT}
+        className="hidden"
+        aria-label="Chọn tệp ảnh khung"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          /* Xoá value để chọn LẠI ĐÚNG tấm vừa chọn vẫn bắn `change`. */
+          event.target.value = "";
+          if (file) void upload(file);
+        }}
+      />
+
+      {err !== "" && <p className="text-caption text-danger">{err}</p>}
+
+      <Textarea
+        id={`row-shapenote-${row.id}`}
+        rows={2}
+        value={note}
+        aria-label="Mô tả món trong ảnh khung"
+        placeholder="Món này là gì? Ví dụ «khung nhiệm vụ ba cạnh, có dải ruy băng trên đỉnh»"
+        onChange={(event) => onSet({ shapeNote: event.target.value })}
+      />
+      <p className="text-caption text-fg-muted">{SHAPE_NOTE_HINT}</p>
+    </div>
   );
 }
 

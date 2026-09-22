@@ -35,6 +35,7 @@ import { roleLabel, sheetImages, shortName } from "../lib/prompt-images";
 import { qk, useAgentStatus } from "@/lib/hooks";
 import type { Doctor } from "@/lib/types";
 import type { GenBlockState } from "../lib/gen-queue";
+import type { PillImage } from "../lib/pill-image";
 import { buildFailReport } from "../lib/fail-report";
 import { CARD, SECTION_LABEL } from "../lib/ui";
 import { SheetResultSlot } from "./SheetResultSlot";
@@ -108,6 +109,14 @@ export interface CanvasBlockProps {
   onReload: () => void;
   /** Có lượt xem prompt khác đang chạy ⇒ nút này phải đợi. */
   promptBusy: boolean;
+  /**
+   * Chép ảnh khung của một món từ kho dùng chung sang `refs/` — xem `useShapeBinding`.
+   *
+   * Đi xuyên qua vỏ này mà vỏ không đọc: bảng nhớ của phép chép sống trong BẢN NHÁP
+   * (`ComposerState.shapeAssets`), thứ mà chỉ màn mới cầm. Xem khối chú thích ở
+   * `UiKitBlockBody.copyShapeAsset` để biết vì sao nó không phải một hook gọi tại chỗ.
+   */
+  copyShapeAsset: (assetId: string) => Promise<PillImage>;
 }
 
 const GEN_HINT = "Vẽ ảnh bằng AI — tiêu lượt tạo.";
@@ -224,7 +233,7 @@ export function CanvasBlock(props: CanvasBlockProps) {
   );
 }
 
-function BlockBody({ block, onChange, reloadSignal, gen, onGenSheet, sheets, projectId }: CanvasBlockProps) {
+function BlockBody({ block, onChange, reloadSignal, gen, onGenSheet, sheets, projectId, copyShapeAsset }: CanvasBlockProps) {
   /* Thẻ MỘT tấm không có vạch ranh giới nào để đeo nút (xem `SheetBreak`), nên chỉ
      hai thẻ-danh-sách nhiều tấm mới nhận đường vẽ lẻ. Đang vẽ / đang xếp hàng thì
      khoá nút: xin thêm một lượt cho cùng một thẻ lúc ấy chỉ tổ đẩy nó ra sau hàng. */
@@ -239,6 +248,7 @@ function BlockBody({ block, onChange, reloadSignal, gen, onGenSheet, sheets, pro
         /* Ảnh khung của từng dòng nằm trong `refs/` của DỰ ÁN, nên ruột thẻ phải
            biết mình đang ở dự án nào. Vỏ lab không truyền (không có dự án nào). */
         projectId={projectId}
+        copyShapeAsset={copyShapeAsset}
         {...redraw}
       />
     );

@@ -749,6 +749,20 @@ export interface ComposerState {
    */
   brandAssets: Record<string, string>;
   /**
+   * CÙNG MỘT BẢNG CHỐNG TẢI LẠI, cho ảnh KHUNG của danh mục element.
+   *
+   * ╔══ VÌ SAO KHÔNG DÙNG CHUNG `brandAssets` ════════════════════════════════╗
+   * ║ Hai bảng trỏ cùng một kiểu (id asset → `refs/<tên>`) nhưng chúng trả lời ║
+   * ║ hai câu khác nhau, và câu ấy có hậu quả: `swapBrandRefs` / `labelOfRef`  ║
+   * ║ ĐỌC `brandAssets` để biết tấm nào "do thương hiệu mang tới" — tức là tấm ║
+   * ║ nào bị gỡ khi người dùng đổi sang thương hiệu khác. Trộn ảnh khung của   ║
+   * ║ một món vào đó là mời cả hai phép ấy nhận nhầm, và tấm ảnh khung của một ║
+   * ║ dòng sẽ mang tên một logo trên pill, rồi biến mất khi đổi thương hiệu.   ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
+   * Nó CHỈ là cache: đường dẫn thật đang dùng nằm ở `UiCell.shapeRef`.
+   */
+  shapeAssets?: Record<string, string>;
+  /**
    * Màu thương hiệu, `#rrggbb` thường, THEO THỨ TỰ VAI TRÒ: [0] là màu chủ đạo,
    * [1] là màu nhấn, còn lại là màu phụ. Thứ tự mảng CHÍNH LÀ ngữ nghĩa — xem
    * `describeBrandColors()`. Nên không có trường `role` riêng để hai nguồn sự

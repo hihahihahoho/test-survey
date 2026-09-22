@@ -220,7 +220,43 @@ export interface ElementPreset {
    * phần đầy nhỏ hơn khung đúng một lề. Xem bảng đo ở `seedPresets()`.
    */
   set?: ElementSetRef;
+  /**
+   * ẢNH KHUNG CỦA MÓN — id một ảnh trong KHO DÙNG CHUNG (`group: "element-shape"`).
+   *
+   * ╔══ VÌ SAO TẤM ẢNH Ở KHO DÙNG CHUNG, KHÔNG Ở `refs/` CỦA MỘT DỰ ÁN ═══════╗
+   * ║ Chủ sản phẩm: *«element cũng cho kiểu up ảnh + gõ mô tả → sau select     ║
+   * ║ được bên tab đầu»*. Tức tấm ảnh này phải sống LÂU HƠN một dự án: đính     ║
+   * ║ một lần ở «Thư viện prompt», rồi mọi bộ kit chọn món ấy đều nhận lại      ║
+   * ║ đúng hình dáng đó. `refs/` thì ngược lại — nó là thư mục của MỘT dự án,   ║
+   * ║ và một danh mục dùng chung trỏ vào đó là một đường dẫn chết ngay khi mở   ║
+   * ║ dự án thứ hai.                                                           ║
+   * ║ Cái giá: `gen.sh` chỉ đính được tệp TRONG dự án, nên lúc CHỌN món phải    ║
+   * ║ chép tấm ảnh sang `refs/` — đúng phép chép mà thương hiệu đã làm, và có   ║
+   * ║ cùng một bảng nhớ để không chép lại (`ComposerState.shapeAssets`).       ║
+   * ╚═════════════════════════════════════════════════════════════════════════╝
+   */
+  shapeAssetId?: string;
+  /**
+   * MÔ TẢ BẮT BUỘC đi kèm ảnh khung — «nó là cái gì», bằng chữ.
+   *
+   * Cùng luật với `UiCell.shapeNote` và ô đính ảnh của một dòng: một tấm phác nói
+   * được HÌNH DÁNG và chỉ hình dáng, nên thiếu câu này thì máy vẽ đoán xem ba cạnh
+   * với một cái móc là tấm biển nhiệm vụ hay cái khiên — và đoán sai thì cả lượt
+   * vẽ đi luôn. Có `shapeAssetId` mà thiếu chữ này là một bản ghi NỬA VỜI; màn
+   * quản lý chặn ngay tại cửa nhập.
+   */
+  shapeNote?: string;
 }
+
+/**
+ * NHÓM của ảnh khung trong kho dùng chung — một chuỗi, một chỗ.
+ *
+ * Phải khớp NGUYÊN VĂN `GROUPS` ở `agent/lib/library.mjs` và `libraryItemSchema`
+ * ở `lib/types/api.ts`: agent từ chối nhóm lạ bằng 400, và zod của web thì ném khi
+ * ĐỌC kho về. Gõ tay chuỗi này ở ba chỗ là ba chỗ để lệch nhau, mà lệch ở đây thì
+ * tấm ảnh tải lên được rồi cả kho dùng chung tắt ngóm ở lần tải lại sau.
+ */
+export const ELEMENT_SHAPE_GROUP = "element-shape";
 
 export interface MascotPreset {
   id: string;
@@ -899,6 +935,18 @@ function payloadOf(kind: PresetKind, preset: AnyPreset): PresetPayload {
         ...(preset.set
           ? { set: { id: preset.set.id, vi: preset.set.vi, kind: preset.set.kind } }
           : SEED_SET[preset.id] ? { set: null } : {}),
+        /**
+         * ẢNH KHUNG — ghi ra CẢ CẶP, và chỉ khi có ảnh.
+         *
+         * Vắng khoá khi không có ảnh, cùng lý do với mọi trường phụ khác ở file
+         * này: `flush` so hai `data` bằng JSON, nên một `shapeAssetId: ""` thừa
+         * là một PATCH cho bản ghi không đổi gì, nhân với bốn mươi tám dòng.
+         * Không có món hạt giống nào mang ảnh khung, nên ở đây KHÔNG cần đường
+         * `null` "đã gỡ" mà nhãn bộ phải có: vắng khoá chỉ có đúng một nghĩa.
+         */
+        ...(preset.shapeAssetId
+          ? { shapeAssetId: preset.shapeAssetId, shapeNote: preset.shapeNote ?? "" }
+          : {}),
       },
     };
   }
@@ -1309,6 +1357,13 @@ function toBundle(rows: readonly LibraryPreset[]): PresetBundle {
         sizeId: savedSize === LEGACY_ELEMENT_SIZE[id] ? "" : savedSize,
         ...(skel ? { skel } : {}),
         ...(set ? { set } : {}),
+        /* Ảnh khung đọc PHÒNG THỦ như mọi trường khác của `data`, và đọc theo
+           CẶP: một `shapeNote` mồ côi (ảnh đã bị xoá khỏi kho, hoặc ai đó sửa tay
+           trên đĩa) là chữ không cửa nào đọc — bỏ luôn, đừng bày ra một dòng nửa
+           vời trong danh mục. */
+        ...(str(data, "shapeAssetId")
+          ? { shapeAssetId: str(data, "shapeAssetId"), shapeNote: str(data, "shapeNote") }
+          : {}),
       });
     } else if (row.kind === "mascot") bundle.mascots.push({ id, vi: row.name, en, refName: str(data, "refName") });
     else if (isCatalogKind(row.kind)) {
@@ -1452,7 +1507,10 @@ export function addCustomElement(name: string, enInput?: string): ElementPreset 
    ╚══════════════════════════════════════════════════════════════════════════╝ */
 
 /** Phần đuôi CHỈ trục `element` có — hình học, mặc định của một loại ô, và nhãn bộ. */
-export type ManagedElementFields = Pick<ElementPreset, "decor" | "glazeId" | "sizeId" | "skel" | "set">;
+export type ManagedElementFields = Pick<
+  ElementPreset,
+  "decor" | "glazeId" | "sizeId" | "skel" | "set" | "shapeAssetId" | "shapeNote"
+>;
 
 /** Một dòng bất kỳ của bất kỳ danh mục nào, nhìn từ màn quản lý. */
 export interface ManagedRow extends CatalogRow {
@@ -1475,6 +1533,9 @@ export function managedRows(bundle: PresetBundle, kind: ManagedKind): ManagedRow
         decor: row.decor, glazeId: row.glazeId, sizeId: row.sizeId,
         ...(row.skel ? { skel: row.skel } : {}),
         ...(row.set ? { set: row.set } : {}),
+        /* CẶP ĐI LIỀN NHAU, không tách: bỏ ảnh là bỏ cả mô tả (cùng luật với
+           `withShape` ở thẻ Bộ UI), nên hai khoá này chỉ có mặt cùng nhau. */
+        ...(row.shapeAssetId ? { shapeAssetId: row.shapeAssetId, shapeNote: row.shapeNote ?? "" } : {}),
       },
     }));
   }
@@ -1494,6 +1555,9 @@ export function withManagedRows(bundle: PresetBundle, kind: ManagedKind, rows: r
         sizeId: row.element?.sizeId ?? "",
         ...(row.element?.skel ? { skel: row.element.skel } : {}),
         ...(row.element?.set ? { set: row.element.set } : {}),
+        ...(row.element?.shapeAssetId
+          ? { shapeAssetId: row.element.shapeAssetId, shapeNote: row.element.shapeNote ?? "" }
+          : {}),
       })),
     };
   }
