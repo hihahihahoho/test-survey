@@ -335,6 +335,33 @@ export async function run() {
       .includes("REFERENCE IMAGES"), "không có ảnh kèm thì không có khối nào")
   })
 
+  await it("TASK tự đủ khi bị chặn đọc SKILL.md / chạy lệnh (r-0021 Windows 22/09/2026)", () => {
+    // Ba tấm rc=0 không ảnh, model tự thuật: «policy blocked reading the required
+    // SKILL.md, the workspace is read-only, and the available image_gen tool lacks
+    // explicit background, PNG, size, and alpha-verification controls. No file was
+    // created.» — nó KHÔNG GỌI image_gen lần nào. Task phải nói trước: bị chặn là
+    // bình thường, luật cần thiết nằm ngay đây, thiếu tham số thì xin bằng chữ.
+    const common = { job: "j", promptText: "Canvas orientation: PORTRAIT 1024x1536.", attPaths: [], rootOut: "/p" }
+    const ui = buildTask({ ...common, fullBleed: false })
+    includes(ui, '"rejected: blocked by policy"', "gọi tên đúng thông điệp chặn mà codex Windows in ra")
+    includes(ui, "NOT a reason to stop or to report failure", "bị chặn không phải lý do dừng")
+    includes(ui, "ask for a transparent background, PNG output and a 1024x1536 (portrait) canvas in the text you send it",
+      "thiếu tham số thì xin bằng chữ — đúng nền, đúng khổ")
+    includes(ui, "Never answer that a parameter or a verification control is missing", "cấm câu trả lời «tool thiếu tham số»")
+    includes(ui, "never skip the image_gen call", "cấm bỏ qua lượt gọi tool")
+    includes(ui, "image_gen has no verification control and you do not need one", "bước tự kiểm là NHÌN, không phải một tham số")
+    ok(!ui.includes("ask your image generation tool to double check"), "không còn bảo tool tự kiểm — câu đó bị đọc thành một tham số thiếu")
+    includes(ui, "the app collects the image itself from the folder image_gen saved it in", "chép bị từ chối thì engine tự vớt")
+    includes(ui, "do NOT try again with another command", "không thử chép lại nhiều lần (tốn ~1 phút mỗi tấm)")
+    includes(ui, "the path image_gen reported", "trả lời bằng đường dẫn tool đã ghi")
+    const nen = buildTask({ ...common, fullBleed: true })
+    includes(nen, "ask for an opaque, full-frame background, PNG output and a 1024x1536 (portrait) canvas", "tấm nền xin nền đục trong đoạn dự phòng")
+    ok(!nen.includes("ask for a transparent background"), "tấm nền không xin nền trong suốt ở đoạn dự phòng")
+    for (const bad of ["alpha channel is real", "preserve the alpha channel"]) {
+      ok(!nen.includes(bad), `task của tấm nền không được còn xin nền trong suốt: ${bad}`)
+    }
+  })
+
   // ══════════════════════════════════════════ 1. PHÉP ĐO NỀN
   describe("engine JS › gen: alpha_verdict")
 

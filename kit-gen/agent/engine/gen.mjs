@@ -156,14 +156,32 @@ export function buildTask({ job, promptText, attPaths, rootOut, fullBleed }) {
   let pSkill = 'follow its transparent-image rule: call image_gen with background="transparent" (PNG output) so the tool itself returns a genuinely transparent background, and preserve the alpha channel it gives back.'
   let pRule = "One rule matters more than everything else: the transparency has to come from image_gen itself."
   let pFail = "If image_gen still hands you an opaque image after the one retry described below, just say so plainly and stop: a background cut out by hand is detected and rejected, and it wastes the whole run."
-  let pCheck = "Before you reply, ask your image generation tool to double check its own output: have image_gen confirm that the file it just produced is a PNG whose alpha channel is real — genuinely empty pixels where the background should be, not a pattern painted onto opaque pixels to imitate transparency. If the tool cannot confirm that, or if it tells you the image came back opaque, call image_gen ONE more time with the same prompt and the same reference images, stating background=\"transparent\" explicitly again, and save that second image to the path above."
+  let pCheck = "Before you reply, look at the image image_gen returned — it is shown to you in this conversation — and check that its alpha channel is real: genuinely empty pixels where the background should be, not a pattern painted onto opaque pixels to imitate transparency. This is a visual check by you; image_gen has no verification control and you do not need one. If the image came back opaque, call image_gen ONE more time with the same prompt and the same reference images, asking for background=\"transparent\" explicitly again, and save that second image to the path above."
+  let pWant = "a transparent background"
   if (fullBleed) {
     bgKw = 'background="opaque"'
     pSkill = 'then treat this sheet as what it is — a FULL-FRAME background: call image_gen with background="opaque" (PNG output) so the tool returns an image that is solid from edge to edge, and do not ask it for transparency of any kind.'
     pRule = "One rule matters more than everything else: the image has to come from image_gen itself."
     pFail = "If image_gen still hands you an image with transparent areas after the one retry described below, just say so plainly and stop: a background flattened by hand is detected and rejected, and it wastes the whole run."
-    pCheck = "Before you reply, ask your image generation tool to double check its own output: have image_gen confirm the PNG is fully opaque edge to edge — no transparent or semi-transparent pixel anywhere, and no empty margin along any side. If any part came back transparent, call image_gen ONE more time with the same prompt and the same reference images, stating background=\"opaque\" explicitly again, and save that second image to the path above."
+    pCheck = "Before you reply, look at the image image_gen returned — it is shown to you in this conversation — and check that the PNG is fully opaque edge to edge: no transparent or semi-transparent pixel anywhere, and no empty margin along any side. This is a visual check by you; image_gen has no verification control and you do not need one. If any part came back transparent, call image_gen ONE more time with the same prompt and the same reference images, asking for background=\"opaque\" explicitly again, and save that second image to the path above."
+    pWant = "an opaque, full-frame background"
   }
+
+  /* ╔══ VÌ SAO TASK PHẢI TỰ ĐỦ, KHÔNG ĐƯỢC DỰA VÀO VIỆC ĐỌC SKILL.md ═══════════╗
+     ║ r-0021 máy Windows phuongna 22/09/2026 (3.0.9), cả ba tấm rc=0 mà không     ║
+     ║ có ảnh, model tự thuật: «policy blocked reading the required SKILL.md, the  ║
+     ║ workspace is read-only, and the available image_gen tool lacks explicit     ║
+     ║ background, PNG, size, and alpha-verification controls. No file was         ║
+     ║ created.» Codex trên Windows hạ sandbox xuống read-only nên mọi exec (kể cả ║
+     ║ đọc SKILL.md) bị chặn; task thì đòi tham số mà tool không có; model suy ra  ║
+     ║ «không làm được» và KHÔNG GỌI image_gen lần nào. Nên: (1) nói trước rằng    ║
+     ║ bị chặn đọc/chạy là chuyện BÌNH THƯỜNG, không phải lý do dừng; (2) chép     ║
+     ║ đúng luật cần thiết của SKILL.md vào đây — nền, PNG, khổ đi trong CHỮ gửi   ║
+     ║ tool nếu tool không có tham số; (3) chép về raw/ mà bị từ chối thì đừng thử ║
+     ║ lại, trả về đường dẫn tool đã ghi, engine tự vớt (xem `salvage`).          ║
+     ╚══════════════════════════════════════════════════════════════════════════╝ */
+  const pBlocked = `If this session refuses to read files or to run commands — a read-only sandbox, or a message such as "rejected: blocked by policy" — that is EXPECTED on some machines and is NOT a reason to stop or to report failure. Everything you need from the skill is already here: the built-in image_gen tool takes a prompt and referenced_image_paths; if it does not expose background, size or output-format parameters, ask for ${pWant}, PNG output and a ${size} (${orient}) canvas in the text you send it and carry on. Never answer that a parameter or a verification control is missing, never fall back to the CLI script, and never skip the image_gen call.`
+  const pCopyBlocked = `If that copy is refused (read-only sandbox, "blocked by policy"), do NOT try again with another command and do NOT report a failure: the app collects the image itself from the folder image_gen saved it in. Just reply with the path image_gen reported.`
 
   /* `-i` chỉ đính ảnh vào CUỘC HỘI THOẠI — tool image_gen KHÔNG tự thấy chúng. Muốn
      ảnh tới tay tool thì đường dẫn phải được NÓI RA để model truyền vào
@@ -178,13 +196,15 @@ export function buildTask({ job, promptText, attPaths, rootOut, fullBleed }) {
 
   return `Use the imagegen skill and its built-in image_gen tool for this. If you have not read that skill yet, read its SKILL.md first and ${pSkill}
 
+${pBlocked}
+
 ${pRule} You must not write, compile or run any program, script or tool of your own that removes, keys out, erases or otherwise edits the background or the alpha channel of the image — that includes Python, Swift, ffmpeg, ImageMagick, chroma keying, remove_chroma_key.py and the CLI fallback scripts/image_gen.py. Copying or moving the resulting file is fine. ${pFail}
 
-${attNote}Generate ONE image with the built-in image_gen tool, passing ${bgKw} and PNG output. The output image MUST be exactly ${size} pixels (${orient}) — this is a hard requirement, not a preference; do not return any other aspect ratio. Use EXACTLY the prompt between the IMAGE PROMPT markers below. Then save/copy the generated PNG to exactly this path: ${rootOut}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image.
+${attNote}Generate ONE image with the built-in image_gen tool, passing ${bgKw} and PNG output. The output image MUST be exactly ${size} pixels (${orient}) — this is a hard requirement, not a preference; do not return any other aspect ratio. Use EXACTLY the prompt between the IMAGE PROMPT markers below. Then save/copy the generated PNG to exactly this path: ${rootOut}/raw/${job}.png (overwrite if it exists). Do not edit, crop or annotate the image. ${pCopyBlocked}
 
 ${pCheck} Never more than two image_gen calls for this job, and never repair the background yourself.
 
-Reply with only the saved file path.
+Reply with only the saved file path (or, if the copy was refused, the path image_gen reported).
 
 --- IMAGE PROMPT START ---
 ${promptText.replace(/\n+$/, "")}
