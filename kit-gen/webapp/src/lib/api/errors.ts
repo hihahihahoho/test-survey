@@ -256,6 +256,13 @@ export const ERROR_TABLE: Record<string, ErrorEntry> = {
     explain: "Có người hoặc tab khác đã lưu sau bạn.",
     actions: [A.COMPARE, A.RELOAD_DATA, A.SAVE_AS_COPY], where: [W.modal], severity: "warn",
   },
+  /* Sự cố 23/09/2026: tab cầm bản nháp cũ định tự lưu đè lên bản mới hơn trên đĩa.
+     Màn soạn có băng riêng (nút «Tải bản mới nhất»), bảng này là copy dùng chung. */
+  DRAFT_CONFLICT: {
+    title: "Bản soạn đã được lưu ở nơi khác",
+    explain: "Một tab hoặc máy khác vừa lưu bản mới hơn — tab này đã ngừng tự lưu để không ghi đè lên nó.",
+    actions: [A.RELOAD_DATA], where: [W.banner], severity: "warn",
+  },
   CONTRACT_INVALID: {
     title: "Bản thiết kế có lỗi",
     explain: "Sửa những chỗ được đánh dấu rồi lưu lại.",

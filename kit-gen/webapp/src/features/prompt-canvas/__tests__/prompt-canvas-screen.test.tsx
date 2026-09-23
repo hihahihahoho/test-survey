@@ -1024,3 +1024,179 @@ describe("tấm đã xin vẽ — biết ngay từ lúc bấm", () => {
     expect(screen.getByTestId("requested").textContent).toBe("chinh-b12");
   });
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⑦ CHƯA NHẬN BẢN TRÊN ĐĨA ⇒ KHÔNG SỬA, KHÔNG GHI — sự cố 23/09/2026
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * ╔══ CON BỌ CÓ THẬT ═════════════════════════════════════════════════════════╗
+ * ║ test-vcb-d6fd: GET bản nháp hỏng, màn vẫn hiện tài liệu RỖNG cho sửa. Hai ║
+ * ║ cú «Thêm thẻ» + lượt tự lưu = composer rỗng PUT đè lên mọi thẻ của người  ║
+ * ║ dùng. Các ca dưới khoá ba lớp của web: không ghi trước khi nhận bản trên  ║
+ * ║ đĩa, màn chặn khi GET hỏng, và PUT mang `baseUpdatedAt` + dừng khi 409.   ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+const { useComposerDoc, COMPOSER_SAVE_DEBOUNCE_MS } = await import("../lib/composer-doc");
+const { createQueryClient } = await import("@/lib/hooks/query-client");
+const { renderHook } = await import("@testing-library/react");
+
+const DISK_AT = "2026-09-23T08:00:00.000Z";
+const SAVED_AT = "2026-09-23T09:00:00.000Z";
+const composerDraft = (updatedAt = DISK_AT) => ({ docVersion: 1, updatedAt, composer: { blocks: [] } });
+
+function hookWrapper(qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })) {
+  return ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+}
+
+/** Thêm một thẻ chữ — thao tác sửa thật nhỏ nhất. */
+const addDoc = (prev: import("@/features/prompt-lab/lib/composer-model").ComposerState) =>
+  ({ ...prev, blocks: [...prev.blocks, newDocBlock()] });
+
+const conflictError = () => new AgentError({
+  code: "DRAFT_CONFLICT", status: 409, message: "draft on disk is newer",
+  details: { updatedAt: "2026-09-23T09:30:00.000Z" },
+});
+
+describe("bản nháp chưa nhận ⇒ không sửa, không ghi", () => {
+  it("GET hỏng ⇒ setComposer + flush KHÔNG bắn PUT nào, và hook báo loadError", async () => {
+    H.workflowDraft.mockRejectedValue(new AgentError({ code: "AGENT_NOT_RUNNING", status: 0, message: "fetch failed" }));
+    const { result } = renderHook(() => useComposerDoc(PID), { wrapper: hookWrapper() });
+    await waitFor(() => expect(result.current.loadError).toBeTruthy());
+    expect(result.current.loading).toBe(false);
+
+    act(() => result.current.setComposer(addDoc));
+    act(() => result.current.flush());
+    await new Promise((r) => setTimeout(r, COMPOSER_SAVE_DEBOUNCE_MS + 50));
+    expect(H.saveWorkflowDraft).not.toHaveBeenCalled();
+    expect(result.current.composer.blocks).toHaveLength(0);
+  });
+
+  it("GET còn đang bay ⇒ vẫn `loading`, sửa là không-làm-gì, không PUT", async () => {
+    H.workflowDraft.mockReturnValue(new Promise(() => {}));
+    const { result } = renderHook(() => useComposerDoc(PID), { wrapper: hookWrapper() });
+    expect(result.current.loading).toBe(true);
+    act(() => result.current.setComposer(addDoc));
+    act(() => result.current.flush());
+    await new Promise((r) => setTimeout(r, COMPOSER_SAVE_DEBOUNCE_MS + 50));
+    expect(H.saveWorkflowDraft).not.toHaveBeenCalled();
+    expect(result.current.loading).toBe(true);
+  });
+
+  it("màn CHẶN với lời giải thích + «Thử lại»; thử lại được thì mở ra bản trên đĩa", async () => {
+    H.workflowDraft.mockRejectedValueOnce(new AgentError({ code: "AGENT_NOT_RUNNING", status: 0, message: "fetch failed" }));
+    wrap(<PromptCanvasScreen projectId={PID} />);
+    const alert = await screen.findByRole("alert", { name: "Chưa đọc được bản nháp" });
+    expect(alert.textContent).toContain("Không cho sửa lúc này để khỏi ghi đè thứ đang có trên đĩa");
+    // Không có editor ⇒ không có đường nào tới một lượt ghi.
+    expect(screen.queryByRole("button", { name: /Thêm thẻ/ })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Soạn bộ kit" })).toBeNull();
+
+    H.workflowDraft.mockResolvedValue({ completed: false, draft: composerDraft(), updatedAt: DISK_AT });
+    fireEvent.click(screen.getByRole("button", { name: "Thử lại" }));
+    expect(await screen.findByRole("heading", { name: "Soạn bộ kit" })).toBeTruthy();
+    expect(screen.queryByRole("alert", { name: "Chưa đọc được bản nháp" })).toBeNull();
+    expect(H.saveWorkflowDraft).not.toHaveBeenCalled();
+  });
+
+  it("429 vẫn được Query thử lại theo nhịp agent TRƯỚC khi màn báo lỗi", async () => {
+    H.workflowDraft
+      .mockRejectedValueOnce(new AgentError({ code: "RATE_LIMITED", status: 429, message: "slow down", retryAfterMs: 0 }))
+      .mockResolvedValue({ completed: false, draft: composerDraft(), updatedAt: DISK_AT });
+    const qc = createQueryClient();
+    render(<QueryClientProvider client={qc}><PromptCanvasScreen projectId={PID} /></QueryClientProvider>);
+    // Trong lúc chờ lượt thử lại: vẫn là "đang mở", KHÔNG phải màn lỗi.
+    await waitFor(() => expect(H.workflowDraft).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("alert", { name: "Chưa đọc được bản nháp" })).toBeNull();
+    expect(screen.getByText(/Đang mở bản soạn/)).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Soạn bộ kit" }, { timeout: 4000 })).toBeTruthy();
+    expect(H.workflowDraft).toHaveBeenCalledTimes(2);
+    qc.clear();
+  }, 8000);
+});
+
+describe("PUT mang baseUpdatedAt, 409 thì dừng tự lưu", () => {
+  it("PUT mang mốc vừa nhận từ đĩa, lượt sau mang mốc agent vừa trả", async () => {
+    H.workflowDraft.mockResolvedValue({ completed: false, draft: composerDraft(), updatedAt: DISK_AT });
+    H.saveWorkflowDraft.mockImplementation(async (_id: string, input: { draft: unknown }) =>
+      ({ completed: false, draft: input.draft, updatedAt: SAVED_AT }));
+    const { result } = renderHook(() => useComposerDoc(PID), { wrapper: hookWrapper() });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => result.current.setComposer(addDoc));
+    act(() => result.current.flush());
+    await waitFor(() => expect(H.saveWorkflowDraft).toHaveBeenCalledTimes(1));
+    expect(H.saveWorkflowDraft.mock.calls[0]![0]).toBe(PID);
+    expect(H.saveWorkflowDraft.mock.calls[0]![1]).toMatchObject({ completed: false, baseUpdatedAt: DISK_AT });
+    await waitFor(() => expect(result.current.saving).toBe(false));
+
+    act(() => result.current.setComposer(addDoc));
+    act(() => result.current.flush());
+    await waitFor(() => expect(H.saveWorkflowDraft).toHaveBeenCalledTimes(2));
+    expect(H.saveWorkflowDraft.mock.calls[1]![1]).toMatchObject({ baseUpdatedAt: SAVED_AT });
+  });
+
+  it("sửa lúc một PUT còn đang bay ⇒ KHÔNG bắn PUT song song; ghi nốt sau đó với mốc mới", async () => {
+    H.workflowDraft.mockResolvedValue({ completed: false, draft: composerDraft(), updatedAt: DISK_AT });
+    let release: (v: unknown) => void = () => {};
+    H.saveWorkflowDraft
+      .mockImplementationOnce((_id: string, input: { draft: unknown }) =>
+        new Promise((r) => { release = () => r({ completed: false, draft: input.draft, updatedAt: SAVED_AT }); }))
+      .mockImplementation(async (_id: string, input: { draft: unknown }) =>
+        ({ completed: false, draft: input.draft, updatedAt: "2026-09-23T09:00:05.000Z" }));
+    const { result } = renderHook(() => useComposerDoc(PID), { wrapper: hookWrapper() });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => result.current.setComposer(addDoc));
+    act(() => result.current.flush());
+    act(() => result.current.setComposer(addDoc));
+    act(() => result.current.flush());
+    expect(H.saveWorkflowDraft).toHaveBeenCalledTimes(1);
+    await act(async () => { release(null); });
+    await waitFor(() => expect(H.saveWorkflowDraft).toHaveBeenCalledTimes(2));
+    expect(H.saveWorkflowDraft.mock.calls[1]![1]).toMatchObject({ baseUpdatedAt: SAVED_AT });
+    const sent = H.saveWorkflowDraft.mock.calls[1]![1] as { draft: { composer: { blocks: unknown[] } } };
+    expect(sent.draft.composer.blocks).toHaveLength(2);
+  });
+
+  it("409 DRAFT_CONFLICT ⇒ tự lưu DỪNG, chữ vẫn trong RAM, và báo mốc của đĩa", async () => {
+    H.workflowDraft.mockResolvedValue({ completed: false, draft: composerDraft(), updatedAt: DISK_AT });
+    H.saveWorkflowDraft.mockRejectedValue(conflictError());
+    const { result } = renderHook(() => useComposerDoc(PID), { wrapper: hookWrapper() });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => result.current.setComposer(addDoc));
+    act(() => result.current.flush());
+    await waitFor(() => expect(result.current.conflict).toEqual({ updatedAt: "2026-09-23T09:30:00.000Z" }));
+    expect(result.current.composer.blocks).toHaveLength(1);
+
+    act(() => result.current.setComposer(addDoc));
+    act(() => result.current.flush());
+    await new Promise((r) => setTimeout(r, COMPOSER_SAVE_DEBOUNCE_MS + 50));
+    expect(H.saveWorkflowDraft).toHaveBeenCalledTimes(1);
+    expect(result.current.composer.blocks).toHaveLength(2);
+  });
+
+  it("màn hiện băng xung đột; «Tải bản mới nhất» bỏ bản trong RAM, nhận lại bản trên đĩa", async () => {
+    H.workflowDraft.mockResolvedValue({ completed: false, draft: composerDraft(), updatedAt: DISK_AT });
+    H.saveWorkflowDraft.mockRejectedValue(conflictError());
+    wrap(<PromptCanvasScreen projectId={PID} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Thêm thẻ/ }));
+    fireEvent.click(await screen.findByRole("option", { name: /Bộ UI/ }));
+    await waitFor(() => expect(H.saveWorkflowDraft).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    expect(H.saveWorkflowDraft.mock.calls[0]![1]).toMatchObject({ baseUpdatedAt: DISK_AT });
+
+    const banner = await screen.findByRole("alertdialog", { name: "Bản soạn đã được lưu ở nơi khác" });
+    expect(banner.textContent).toContain("NGỪNG tự lưu");
+    // Cửa sửa khoá: chất thêm chữ lên một bản sẽ không bao giờ được ghi là vô ích.
+    expect((screen.getByRole("button", { name: /Thêm thẻ/ }) as HTMLButtonElement).disabled).toBe(true);
+
+    const newer = { docVersion: 1, updatedAt: "2026-09-23T09:30:00.000Z", composer: { blocks: [newDocBlock()] } };
+    H.workflowDraft.mockResolvedValue({ completed: false, draft: newer, updatedAt: "2026-09-23T09:30:00.000Z" });
+    fireEvent.click(screen.getByRole("button", { name: "Tải bản mới nhất" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog", { name: "Bản soạn đã được lưu ở nơi khác" })).toBeNull());
+    expect((screen.getByRole("button", { name: /Thêm thẻ/ }) as HTMLButtonElement).disabled).toBe(false);
+    expect(H.saveWorkflowDraft).toHaveBeenCalledTimes(1);
+  });
+});

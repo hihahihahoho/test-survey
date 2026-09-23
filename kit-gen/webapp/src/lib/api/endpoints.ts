@@ -25,12 +25,12 @@ import {
   projectDetailSchema, projectListSchema, projectSchema, promptPreviewSchema, rawHistorySchema, refListSchema,
   refUploadResultSchema, runListSchema, runSchema,
   saveContractResultSchema, startRunResultSchema, trashListSchema, usageSchema,
-  workspaceListSchema, workflowDraftSchema, userLibrarySchema, libraryItemResultSchema,
+  workspaceListSchema, workflowDraftSchema, draftHistorySchema, draftSnapshotSchema, userLibrarySchema, libraryItemResultSchema,
   librarySettingsResultSchema, brandProfileResultSchema, libraryPresetResultSchema,
   type LibraryPresetKind,
   type CleanTarget, type CreateProjectInput, type DuplicateInput,
   type PatchProjectInput, type RefKind, type StartRunInput,
-  type LibrarySettings,
+  type LibrarySettings, type SaveWorkflowDraftInput,
 } from "../types/api";
 import { normalizeContract, type Contract } from "../types/contract";
 /* Hình dạng của tuỳ chọn-trên-đĩa được LẤY RA TỪ schema localStorage (xem file đó để biết
@@ -298,8 +298,15 @@ export const projectsApi = {
   async workflowDraft(id: string) {
     return parse(workflowDraftSchema, await httpGet(`/api/projects/${pid(id)}/workflow-draft`), "bản nháp wizard");
   },
-  async saveWorkflowDraft(id: string, input: { completed: boolean; draft: Record<string, unknown> }) {
+  async saveWorkflowDraft(id: string, input: SaveWorkflowDraftInput) {
     return parse(workflowDraftSchema, await httpPut(`/api/projects/${pid(id)}/workflow-draft`, input), "bản nháp wizard vừa lưu");
+  },
+  /** Lịch sử bản nháp (agent ≥ bản có `.history/draft`) — đường cứu dữ liệu, chỉ đọc. */
+  async workflowDraftHistory(id: string) {
+    return parse(draftHistorySchema, await httpGet(`/api/projects/${pid(id)}/workflow-draft/history`), "lịch sử bản nháp");
+  },
+  async workflowDraftSnapshot(id: string, name: string) {
+    return parse(draftSnapshotSchema, await httpGet(`/api/projects/${pid(id)}/workflow-draft/history/${encodeURIComponent(name)}`), "một bản nháp cũ");
   },
 };
 

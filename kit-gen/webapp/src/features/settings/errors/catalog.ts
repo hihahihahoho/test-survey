@@ -380,6 +380,18 @@ export const DOC_ENTRIES: DocEntry[] = [
     related: ["IF_MATCH_REQUIRED"],
   },
   {
+    code: "DRAFT_CONFLICT",
+    group: "Project",
+    why:
+      "Bản soạn của dự án trên đĩa đã được lưu sau lúc tab này mở nó — thường vì dự án đang mở ở hai tab " +
+      "hoặc hai máy cùng dùng một thư mục. Tab này ngừng tự lưu để không xoá mất phần việc bên kia.",
+    fix: [
+      "Bấm «Tải bản mới nhất» để mở bản đang có trên đĩa (những gì vừa sửa ở tab này sẽ bị bỏ).",
+      "Muốn giữ phần vừa sửa: chép phần chữ cần giữ ra trước, rồi mới tải bản mới nhất.",
+    ],
+    related: ["CONTRACT_CONFLICT"],
+  },
+  {
     code: "CONTRACT_INVALID",
     group: "Bản thiết kế",
     why: "Bản thiết kế có lỗi khiến việc sinh ảnh chắc chắn thất bại (ví dụ trùng mã sheet, ô vượt khỏi lưới, thiếu mô tả).",

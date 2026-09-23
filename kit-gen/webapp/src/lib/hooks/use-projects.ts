@@ -15,6 +15,7 @@ import { qk } from "./keys";
 import { GC, STALE } from "./query-client";
 import type {
   CleanTarget, CreateProjectInput, DuplicateInput, PatchProjectInput, Project, ProjectList,
+  SaveWorkflowDraftInput,
 } from "../types/api";
 /* Bản nháp workflow nằm ở `localStorage`, ngoài tầm với của TanStack Query — nên vòng đời
    của nó phải bám vào đúng hai mutation này (UPGRADE-PLAN §W1-1). Module được nhập là
@@ -54,7 +55,7 @@ export function useWorkflowDraft(id: string | undefined | null) {
 
 export function useSaveWorkflowDraft(id: string) {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: (input: { completed: boolean; draft: Record<string, unknown> }) => api.projects.saveWorkflowDraft(id, input), onSuccess: data => { qc.setQueryData(qk.projects.workflowDraft(id), data); void qc.invalidateQueries({ queryKey: qk.projects.detail(id) }); } });
+  return useMutation({ mutationFn: (input: SaveWorkflowDraftInput) => api.projects.saveWorkflowDraft(id, input), onSuccess: data => { qc.setQueryData(qk.projects.workflowDraft(id), data); void qc.invalidateQueries({ queryKey: qk.projects.detail(id) }); } });
 }
 
 /** #12 — thùng rác 30 ngày. */

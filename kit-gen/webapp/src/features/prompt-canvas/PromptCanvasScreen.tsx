@@ -292,12 +292,16 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
      MỘT cửa duy nhất, và nó đi qua `locked`: mọi đường sửa (pill ngữ cảnh, thêm
      thẻ, gõ chữ trong thẻ) đều gọi hàm này, nên không có lối nào lách được câu
      hỏi "có thay bản nháp cũ không". */
+  /* Xung đột bản nháp (409 DRAFT_CONFLICT) cũng đi qua cửa này: tự lưu đã dừng,
+     nên cho gõ tiếp là để người dùng chất thêm chữ lên một bản sẽ không bao giờ
+     được ghi. Thứ đã sửa vẫn nằm nguyên trên màn cho tới khi họ chọn. */
+  const readOnly = locked || store.conflict !== null;
   const edit = React.useCallback(
     (updater: (prev: ComposerState) => ComposerState) => {
-      if (locked) return;
+      if (readOnly) return;
       store.setComposer(updater);
     },
-    [locked, store],
+    [readOnly, store],
   );
 
   /* Kho thương hiệu đi qua ĐÚNG cửa `edit` ở trên, nên chọn thương hiệu cũng bị
@@ -322,6 +326,17 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
     edit((prev) => ({ ...prev, blocks: [...prev.blocks, block] }));
     setAddOpen(false);
   };
+
+  /* GET bản nháp hỏng HẲN (sau các lượt thử lại của Query) ⇒ CHẶN, không phải một
+     trang trắng cho sửa. Trang trắng cho sửa chính là sự cố 23/09/2026: hai cú «Thêm
+     thẻ» trên màn rỗng, lượt tự lưu đè lên mọi thẻ của người dùng. */
+  if (store.loadError) {
+    return (
+      <div className={PAGE}>
+        <DraftLoadFailed reloading={store.reloading} onRetry={store.retryLoad} />
+      </div>
+    );
+  }
 
   if (store.loading) {
     return (
@@ -366,6 +381,8 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
 
         {locked && <LegacyDraftGate onAccept={() => setReplaceOk(true)} />}
 
+        {store.conflict && <DraftConflictBanner savedAt={store.conflict.updatedAt} onReload={store.reloadLatest} />}
+
         {buildError && (
           <p role="alert" className="rounded-2 border border-danger/60 bg-danger/[var(--kg-tint-b)] px-4 py-3 text-body text-fg-strong">
             Bản thiết kế chưa dựng được: {buildError}
@@ -405,7 +422,7 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
             đó chính là con bọ "menu Thêm thẻ dính đáy màn hình". Xem `PillMenu`. */}
         <div className="pb-16">
           <span className="relative inline-block">
-            <PillButton active={addOpen} onClick={toggleAdd} aria-expanded={addOpen} disabled={locked} className="text-body">
+            <PillButton active={addOpen} onClick={toggleAdd} aria-expanded={addOpen} disabled={readOnly} className="text-body">
               <Plus aria-hidden className="size-4" />
               <span>Thêm thẻ</span>
               <PillCaret />
@@ -634,6 +651,59 @@ function SaveState({ updatedAt, dirty, saving, error }: {
     ? updatedAt
     : `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
   return <p className="text-caption text-fg-muted">Đã lưu {clock}</p>;
+}
+
+/**
+ * Màn CHẶN khi chưa đọc được bản nháp từ máy. Nói rõ vì sao không cho sửa — người
+ * dùng thấy một nút «Thử lại» trơ trọi sẽ tưởng app hỏng, còn thấy một trang trắng
+ * cho sửa thì sẽ sửa, và đó là cách họ đã mất bản nháp ngày 23/09/2026.
+ */
+function DraftLoadFailed({ reloading, onRetry }: { reloading: boolean; onRetry: () => void }) {
+  return (
+    <div role="alert" aria-label="Chưa đọc được bản nháp" className="flex flex-col items-start gap-3 rounded-3 border border-danger/60 bg-danger/[var(--kg-tint-a)] px-4 py-4">
+      <p className="text-subtitle text-fg-strong">Chưa đọc được bản nháp của dự án này từ máy</p>
+      <p className="max-w-[68ch] text-body text-fg-muted">
+        Không cho sửa lúc này để khỏi ghi đè thứ đang có trên đĩa. Kiểm tra KitGen trên máy còn chạy, rồi thử lại.
+      </p>
+      <Button variant="secondary" onClick={onRetry} disabled={reloading} aria-busy={reloading || undefined}>
+        {reloading ? "Đang thử lại…" : "Thử lại"}
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Băng XUNG ĐỘT: tab/máy khác đã lưu bản mới hơn (409 `DRAFT_CONFLICT`). Tự lưu đã
+ * dừng; chữ đang sửa ở tab này vẫn còn trên màn cho tới khi người dùng bấm tải lại.
+ * KHÔNG có nút "ghi đè bằng bản của tôi": đó đúng là thao tác mà 409 sinh ra để chặn.
+ */
+function DraftConflictBanner({ savedAt, onReload }: { savedAt: string | null; onReload: () => Promise<void> }) {
+  const [busy, setBusy] = React.useState(false);
+  const at = savedAt ? new Date(savedAt) : null;
+  const clock = at && !Number.isNaN(at.getTime())
+    ? ` lúc ${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`
+    : "";
+  return (
+    <div role="alertdialog" aria-label="Bản soạn đã được lưu ở nơi khác" className="flex flex-wrap items-center gap-4 rounded-3 border border-warn/60 bg-warn/[var(--kg-tint-a)] px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-subtitle text-fg-strong">Một tab hoặc máy khác vừa lưu bản mới hơn{clock}</p>
+        <p className="text-body text-fg-muted">
+          Tab này đã NGỪNG tự lưu để không ghi đè lên bản ấy. Những gì bạn vừa sửa ở đây vẫn còn trên màn nhưng chưa
+          được lưu — chép lại phần cần giữ trước khi tải bản mới nhất.
+        </p>
+      </div>
+      <Button
+        variant="secondary"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          void onReload().finally(() => setBusy(false));
+        }}
+      >
+        {busy ? "Đang tải…" : "Tải bản mới nhất"}
+      </Button>
+    </div>
+  );
 }
 
 /** Câu hỏi CHẶN — xem khối chú thích đầu file để biết vì sao nó chặn chứ không nhắc. */

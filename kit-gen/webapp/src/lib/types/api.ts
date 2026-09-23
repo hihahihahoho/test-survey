@@ -358,6 +358,35 @@ export const workflowDraftSchema = z.looseObject({
 });
 export type WorkflowDraft = z.infer<typeof workflowDraftSchema>;
 
+/**
+ * Thân PUT bản nháp. `baseUpdatedAt` = mốc `updatedAt` mà tab này đã NHẬN từ đĩa (hoặc
+ * vừa lưu thành công). Đĩa mới hơn ⇒ agent trả 409 `DRAFT_CONFLICT` thay vì để tab cũ
+ * ghi đè (sự cố 23/09/2026). Vắng = client đời cũ, agent nhận như trước; `null` = "tôi
+ * mở ra lúc chưa từng có lượt lưu nào".
+ */
+export interface SaveWorkflowDraftInput {
+  completed: boolean;
+  draft: Record<string, unknown>;
+  baseUpdatedAt?: string | null;
+}
+
+/** `details` của 409 DRAFT_CONFLICT — mốc của bản đang nằm trên đĩa. */
+export const draftConflictDetailsSchema = z.looseObject({ updatedAt: z.string().nullish() });
+export type DraftConflictDetails = z.infer<typeof draftConflictDetailsSchema>;
+
+/** `GET /api/projects/:id/workflow-draft/history` — bản cất trước mỗi lần bị ghi đè, MỚI NHẤT TRƯỚC. */
+export const draftSnapshotInfoSchema = z.looseObject({
+  name: z.string(),
+  size: z.number().default(0),
+  updatedAt: z.string().nullish(),
+});
+export const draftHistorySchema = z.looseObject({ items: z.array(draftSnapshotInfoSchema).default([]) });
+export type DraftHistory = z.infer<typeof draftHistorySchema>;
+
+/** `GET …/workflow-draft/history/:name` — một bản cất, nguyên văn. */
+export const draftSnapshotSchema = draftSnapshotInfoSchema.extend({ draft: z.unknown() });
+export type DraftSnapshot = z.infer<typeof draftSnapshotSchema>;
+
 /** #7 `GET /api/projects` */
 export const projectListSchema = z.looseObject({
   items: z.array(projectSchema).default([]),

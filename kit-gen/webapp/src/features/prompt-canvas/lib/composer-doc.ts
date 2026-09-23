@@ -1,6 +1,11 @@
 import * as React from "react";
 import type { JSONContent } from "@tiptap/react";
-import { useSaveWorkflowDraft, useWorkflowDraft } from "@/lib/hooks/use-projects";
+import { useQueryClient } from "@tanstack/react-query";
+import { useWorkflowDraft } from "@/lib/hooks/use-projects";
+import { qk } from "@/lib/hooks/keys";
+import { api } from "@/lib/api";
+import { AgentError } from "@/lib/api/client";
+import { draftConflictDetailsSchema, type WorkflowDraft } from "@/lib/types/api";
 import {
   DEFAULT_MASCOT_POSE,
   initialComposer,
@@ -731,8 +736,22 @@ export interface ComposerDocStore {
   composer: ComposerState;
   /** Thời điểm ghi thành công gần nhất (ISO). Rỗng = chưa từng lưu. */
   updatedAt: string;
-  /** Chưa nạp xong bản trên đĩa — UI đừng cho sửa vội, sửa lúc này là ghi đè mù. */
+  /**
+   * CHƯA NHẬN bản trên đĩa cho dự án này — UI không được cho sửa. `true` suốt từ lúc
+   * mở cho tới khi bản trên đĩa được nhận, KHÔNG chỉ trong lúc đang gọi mạng: lượt
+   * GET hỏng thì vẫn "chưa nhận", và cho sửa lúc đó là ghi đè mù (sự cố 23/09/2026).
+   */
   loading: boolean;
+  /**
+   * Lượt GET bản nháp đã hỏng HẲN (sau khi Query thử lại — 429 chờ theo `Retry-After`)
+   * và chưa có bản nào được nhận ⇒ màn phải CHẶN, không phải hiện một tài liệu rỗng.
+   * `null` = không lỗi. Có lỗi thì `loading` là `false`: hai trạng thái loại trừ nhau.
+   */
+  loadError: unknown;
+  /** Đang gọi lại sau lỗi (bấm «Thử lại»). */
+  reloading: boolean;
+  /** Gọi lại GET bản nháp. */
+  retryLoad: () => void;
   /**
    * Ô nhớ đang giữ BẢN NHÁP WIZARD CŨ ⇒ màn PHẢI hỏi trước khi cho gõ chữ đầu
    * tiên. Xem `isLegacyWizardDraft`. `false` khi chưa nạp xong (chưa biết thì
@@ -744,10 +763,51 @@ export interface ComposerDocStore {
   saving: boolean;
   /** Lỗi của lần ghi gần nhất — UI phải NÓI RA, không được nuốt. */
   saveError: unknown;
+  /**
+   * Agent trả 409 `DRAFT_CONFLICT`: tab/máy khác đã lưu bản MỚI hơn bản tab này đang
+   * cầm. Tự lưu DỪNG hẳn; thứ đang sửa vẫn nằm trong RAM cho tới khi người dùng chọn.
+   * `updatedAt` = mốc của bản trên đĩa (có thể `null` nếu agent không nói).
+   */
+  conflict: { updatedAt: string | null } | null;
+  /** Bỏ bản trong RAM, nhận lại bản mới nhất trên đĩa. */
+  reloadLatest: () => Promise<void>;
   setComposer: (next: ComposerState | ((prev: ComposerState) => ComposerState)) => void;
   /** Ghi NGAY, bỏ qua debounce (rời màn, bấm "Vẽ"). */
   flush: () => void;
 }
+
+/**
+ * Mọi thứ về việc GHI của MỘT dự án, gói trong một object sống ngoài React.
+ *
+ * ╔══ VÌ SAO KHÔNG CÒN DÙNG `useMutation` ═══════════════════════════════════╗
+ * ║ Ba lý do, cả ba đều là lỗi thật chứ không phải khẩu vị:                  ║
+ * ║ ① Lượt ghi cuối bắn lúc RỜI MÀN. Callback riêng của `mutate` không chạy  ║
+ * ║   khi component đã gỡ, nên `base` (mốc của lượt vừa lưu) không bao giờ   ║
+ * ║   được cập nhật — lượt kế sẽ tự 409 với chính mình.                      ║
+ * ║ ② Đổi dự án: `useSaveWorkflowDraft(projectId)` đổi theo NGAY lượt render  ║
+ * ║   mới, còn lượt ghi cuối của dự án cũ bắn SAU đó ⇒ chữ của dự án A được  ║
+ * ║   PUT vào dự án B. Phiên mang `pid` của riêng nó thì không lẫn được.     ║
+ * ║ ③ Phải ghi TUẦN TỰ: hai PUT bay song song cùng cầm một `base` thì PUT     ║
+ * ║   thứ hai chắc chắn 409 (agent đã tăng mốc sau PUT thứ nhất).            ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+interface DraftSession {
+  pid: string;
+  /** Bản trên đĩa đã được NHẬN — trước đó mọi lượt ghi là ghi mù ⇒ cấm. */
+  adopted: boolean;
+  /** Mốc `updatedAt` của agent mà phiên này đang đứng trên (gửi làm `baseUpdatedAt`). */
+  base: string | null;
+  /** Bản mới nhất CHƯA ghi. */
+  pending: ComposerState | null;
+  timer: ReturnType<typeof setTimeout> | null;
+  inflight: boolean;
+  /** Đã nhận 409 ⇒ không ghi gì nữa cho tới khi nhận lại bản trên đĩa. */
+  conflict: boolean;
+}
+
+const newSession = (pid: string): DraftSession => ({
+  pid, adopted: false, base: null, pending: null, timer: null, inflight: false, conflict: false,
+});
 
 /**
  * Tài liệu composer của MỘT dự án: nạp + di trú + tự lưu.
@@ -757,108 +817,200 @@ export interface ComposerDocStore {
  * chỉ đổi dữ liệu sau một vòng mạng. Nếu ô soạn thảo đọc thẳng `query.data` thì
  * mỗi lần refetch là con trỏ nhảy về chữ của server — thứ mà `BlockEditor` đã
  * phải chống bằng `resetToken`. Bản RAM là nguồn sự thật lúc đang sửa; bản của
- * server chỉ được nhận vào KHI TA CHƯA SỬA GÌ (`adoptedRef`).
+ * server chỉ được nhận vào KHI TA CHƯA SỬA GÌ (`adopted`).
+ *
+ * ╔══ CHƯA NHẬN BẢN TRÊN ĐĨA ⇒ KHÔNG SỬA, KHÔNG GHI (sự cố 23/09/2026) ══════╗
+ * ║ test-vcb-d6fd: GET bản nháp hỏng (mạng chập / 429 / agent bận). Bản cũ   ║
+ * ║ của hook này vẫn trả `doc.composer` — tài liệu RỖNG — và `loading` chỉ là ║
+ * ║ `isLoading`, tức là `false` ngay khi GET chịu thua. Màn hiện một trang    ║
+ * ║ trắng cho sửa; hai cú «Thêm thẻ» và lượt tự lưu PUT composer rỗng đè lên  ║
+ * ║ `workflow-draft.json`. Mọi thẻ của người dùng mất, không có bản sao nào. ║
+ * ║                                                                          ║
+ * ║ Nên: `setComposer`/`flush`/lượt ghi đều là KHÔNG-LÀM-GÌ khi phiên chưa   ║
+ * ║ nhận bản trên đĩa; `loading` kéo dài tới lúc NHẬN chứ không tới lúc mạng ║
+ * ║ trả lời; GET hỏng hẳn ⇒ `loadError` để màn chặn và mời «Thử lại». Và mỗi  ║
+ * ║ PUT mang `baseUpdatedAt` để agent chặn một tab cũ ghi đè bản mới hơn.    ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 export function useComposerDoc(
   projectId: string | null | undefined,
   presets: PresetBundle = getPresets(),
 ): ComposerDocStore {
+  const qc = useQueryClient();
   const query = useWorkflowDraft(projectId);
-  const save = useSaveWorkflowDraft(projectId ?? "");
 
   const [composer, setComposerState] = React.useState<ComposerState | null>(null);
+  /** Dự án mà `composer` đang là bản của nó. Khác `projectId` ⇒ chưa nhận. */
+  const [adoptedFor, setAdoptedFor] = React.useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = React.useState("");
   const [dirty, setDirty] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<unknown>(null);
+  const [conflict, setConflict] = React.useState<{ updatedAt: string | null } | null>(null);
 
-  /* Bản trên đĩa CHỈ được nhận một lần cho mỗi dự án. Nhận lại ở lần refetch thứ
-     hai là xoá thẳng thứ người dùng đang gõ. */
-  const adoptedRef = React.useRef<string | null>(null);
-  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  /* Giữ bản mới nhất ngoài closure của `setTimeout`: hàm hẹn giờ được tạo lúc
-     bấm phím đầu tiên, còn thứ phải ghi là trạng thái lúc hết giờ. */
-  const pendingRef = React.useRef<ComposerState | null>(null);
-  const saveRef = React.useRef(save);
-  saveRef.current = save;
+  /* Phiên của dự án hiện tại. Đổi dự án ⇒ phiên MỚI; phiên cũ vẫn được closure của
+     lượt ghi cuối giữ lại, nên chữ của dự án cũ chỉ đi về đúng dự án cũ. */
+  const sessionRef = React.useRef<DraftSession | null>(null);
+  if (projectId && sessionRef.current?.pid !== projectId) sessionRef.current = newSession(projectId);
+  if (!projectId) sessionRef.current = null;
+  const session = sessionRef.current;
+  const isCurrent = (s: DraftSession) => sessionRef.current === s;
 
   const doc = React.useMemo(
     () => migrateComposerDoc(query.data?.draft, presets),
     [query.data, presets],
   );
 
+  const adopt = React.useCallback(
+    (s: DraftSession, data: WorkflowDraft) => {
+      if (s.timer) clearTimeout(s.timer);
+      s.timer = null;
+      s.pending = null;
+      s.conflict = false;
+      s.adopted = true;
+      s.base = data.updatedAt ?? null;
+      const fresh = migrateComposerDoc(data.draft, presets);
+      setComposerState(fresh.composer);
+      setAdoptedFor(s.pid);
+      setUpdatedAt(fresh.updatedAt || (data.updatedAt ?? ""));
+      setDirty(false);
+      setSaveError(null);
+      setConflict(null);
+    },
+    [presets],
+  );
+
+  /* Bản trên đĩa CHỈ được nhận một lần cho mỗi phiên. Nhận lại ở lần refetch thứ
+     hai là xoá thẳng thứ người dùng đang gõ.
+     Đợi `!isFetching`: cache có thể đang giữ bản của lần mở TRƯỚC (gcTime 10 phút)
+     và một lượt refetch đang bay — nhận bản cache cũ rồi sửa lên nó là tự chuốc 409. */
   React.useEffect(() => {
-    if (!projectId) return;
-    if (adoptedRef.current === projectId) return;
-    if (query.data === undefined) return;
-    adoptedRef.current = projectId;
-    setComposerState(doc.composer);
-    setUpdatedAt(doc.updatedAt || (query.data.updatedAt ?? ""));
-    setDirty(false);
-  }, [projectId, query.data, doc]);
+    if (!session || session.adopted) return;
+    if (query.data === undefined || query.isFetching) return;
+    adopt(session, query.data);
+  }, [session, query.data, query.isFetching, adopt]);
 
   const write = React.useCallback(
-    (state: ComposerState) => {
-      if (!projectId) return;
+    (s: DraftSession) => {
+      if (!s.adopted || s.conflict || s.inflight || !s.pending) return;
+      const state = s.pending;
+      s.pending = null;
+      s.inflight = true;
+      if (isCurrent(s)) setSaving(true);
       const at = new Date().toISOString();
       const payload: ComposerDoc = { docVersion: COMPOSER_DOC_VERSION, updatedAt: at, composer: state };
-      pendingRef.current = null;
-      saveRef.current.mutate(
-        /* `completed: false` — trường này thuộc bản nháp wizard và không có nghĩa
-           gì với composer; gửi `true` là nói với phần còn lại của app rằng wizard
-           đã xong. Xem chú thích di trú ở trên. */
-        { completed: false, draft: payload as unknown as Record<string, unknown> },
-        {
-          onSuccess: (data) => {
-            setUpdatedAt(data?.updatedAt ?? at);
-            /* Chỉ hết "bẩn" khi KHÔNG có thay đổi nào chen vào giữa lúc đang bay
-               — nếu có, `pendingRef` đã được đặt lại và một lượt ghi nữa đang chờ. */
-            if (pendingRef.current === null) setDirty(false);
-          },
-        },
-      );
+      let ok = false;
+      void api.projects
+        .saveWorkflowDraft(s.pid, {
+          /* `completed: false` — trường này thuộc bản nháp wizard và không có nghĩa
+             gì với composer; gửi `true` là nói với phần còn lại của app rằng wizard
+             đã xong. Xem chú thích di trú ở trên. */
+          completed: false,
+          draft: payload as unknown as Record<string, unknown>,
+          baseUpdatedAt: s.base,
+        })
+        .then((data) => {
+          ok = true;
+          s.base = data.updatedAt ?? s.base;
+          qc.setQueryData(qk.projects.workflowDraft(s.pid), data);
+          void qc.invalidateQueries({ queryKey: qk.projects.detail(s.pid) });
+          if (!isCurrent(s)) return;
+          setUpdatedAt(data.updatedAt ?? at);
+          setSaveError(null);
+          /* Chỉ hết "bẩn" khi KHÔNG có thay đổi nào chen vào giữa lúc đang bay. */
+          if (s.pending === null) setDirty(false);
+        })
+        .catch((error: unknown) => {
+          if (error instanceof AgentError && error.code === "DRAFT_CONFLICT") {
+            s.conflict = true;
+            if (s.timer) clearTimeout(s.timer);
+            s.timer = null;
+            const parsed = draftConflictDetailsSchema.safeParse(error.details);
+            if (isCurrent(s)) setConflict({ updatedAt: parsed.success ? (parsed.data.updatedAt ?? null) : null });
+          } else if (isCurrent(s)) {
+            setSaveError(error);
+          }
+          /* Bản chưa ghi được TRẢ LẠI hàng chờ (trừ khi đã có bản mới hơn chen vào):
+             lượt sửa kế tiếp hoặc `flush` sẽ ghi lại nó, chứ không để nó rơi mất. */
+          if (s.pending === null) s.pending = state;
+        })
+        .finally(() => {
+          s.inflight = false;
+          if (isCurrent(s)) setSaving(false);
+          /* Có bản chen vào lúc đang bay mà hẹn giờ của nó đã hết ⇒ ghi nốt, với
+             `base` vừa nhận. Chỉ khi lượt vừa rồi THÀNH CÔNG — lỗi thì không tự lặp. */
+          if (ok && s.pending && !s.timer) write(s);
+        });
     },
-    [projectId],
+    [qc],
   );
 
   const setComposer = React.useCallback(
     (next: ComposerState | ((prev: ComposerState) => ComposerState)) => {
+      const s = sessionRef.current;
+      /* CHƯA NHẬN bản trên đĩa ⇒ không có gì để sửa lên. Xem khối chú thích đầu hook. */
+      if (!s || !s.adopted) return;
       setComposerState((prev) => {
-        const base = prev ?? doc.composer;
-        const value = typeof next === "function" ? (next as (p: ComposerState) => ComposerState)(base) : next;
-        pendingRef.current = value;
-        if (timerRef.current) clearTimeout(timerRef.current);
-        timerRef.current = setTimeout(() => {
-          timerRef.current = null;
-          const latest = pendingRef.current;
-          if (latest) write(latest);
+        if (prev === null) return prev;
+        const value = typeof next === "function" ? (next as (p: ComposerState) => ComposerState)(prev) : next;
+        s.pending = value;
+        if (s.conflict) return value; // giữ trong RAM, KHÔNG hẹn ghi
+        if (s.timer) clearTimeout(s.timer);
+        s.timer = setTimeout(() => {
+          s.timer = null;
+          write(s);
         }, COMPOSER_SAVE_DEBOUNCE_MS);
         return value;
       });
       setDirty(true);
     },
-    [doc.composer, write],
+    [write],
   );
 
-  const flush = React.useCallback(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    const latest = pendingRef.current;
-    if (latest) write(latest);
-  }, [write]);
+  const flushSession = React.useCallback(
+    (s: DraftSession | null) => {
+      if (!s) return;
+      if (s.timer) {
+        clearTimeout(s.timer);
+        s.timer = null;
+      }
+      write(s);
+    },
+    [write],
+  );
 
-  /* Rời màn giữa chừng KHÔNG được mất chữ: hẹn giờ bị huỷ cùng component, nên
-     lượt ghi cuối phải bắn ngay tại đây. */
-  React.useEffect(() => flush, [flush]);
+  const flush = React.useCallback(() => flushSession(sessionRef.current), [flushSession]);
+
+  /* Rời màn (hoặc đổi dự án) giữa chừng KHÔNG được mất chữ: hẹn giờ bị huỷ cùng
+     component, nên lượt ghi cuối phải bắn ngay tại đây — cho ĐÚNG phiên cũ. */
+  React.useEffect(() => () => flushSession(session), [session, flushSession]);
+
+  const refetch = query.refetch;
+  const retryLoad = React.useCallback(() => void refetch(), [refetch]);
+
+  const reloadLatest = React.useCallback(async () => {
+    const s = sessionRef.current;
+    if (!s) return;
+    const r = await refetch();
+    if (r.data !== undefined && isCurrent(s)) adopt(s, r.data);
+  }, [refetch, adopt]);
+
+  const adopted = Boolean(projectId) && adoptedFor === projectId && Boolean(session?.adopted);
+  const loadError = projectId && !adopted && query.isError && query.data === undefined ? query.error : null;
 
   return {
-    composer: composer ?? doc.composer,
-    updatedAt,
-    loading: Boolean(projectId) && query.isLoading,
-    legacyDraft: query.data !== undefined && isLegacyWizardDraft(query.data.draft),
+    composer: (adopted ? composer : null) ?? doc.composer,
+    updatedAt: adopted ? updatedAt : "",
+    loading: Boolean(projectId) && !adopted && !loadError,
+    loadError,
+    reloading: query.isFetching,
+    retryLoad,
+    legacyDraft: adopted && query.data !== undefined && isLegacyWizardDraft(query.data.draft),
     dirty,
-    saving: save.isPending,
-    saveError: save.error,
+    saving,
+    saveError,
+    conflict,
+    reloadLatest,
     setComposer,
     flush,
   };
