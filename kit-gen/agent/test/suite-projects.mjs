@@ -1,6 +1,6 @@
 /* suite-projects.mjs — §6.2 B: CRUD project trọn vòng + thùng rác 30 ngày + phục hồi
    + mã xác nhận 4 số ngoài băng (§3.4 lớp 8) + export .zip. */
-import { mkdir, writeFile, readFile } from "node:fs/promises"
+import { mkdir, writeFile, readFile, readdir, utimes } from "node:fs/promises"
 import { join } from "node:path"
 import { createBasicProject, describe, eq, includes, it, ok, readZip, rmTemp } from "./harness.mjs"
 
@@ -236,6 +236,133 @@ export async function run({ api, agent, wsRoot }) {
     eq(good.status, 204, "đúng project và xác nhận → 204")
     const list = await api("GET", "/api/trash")
     ok(!list.json.items.some(i => i.trashId === tid), "đã rời thùng rác")
+  })
+
+  // ─────────────────────────────────────────── 3b. BẢN NHÁP: LỊCH SỬ + CHỐNG GHI ĐÈ
+  /* Sự cố 23/09/2026 (test-vcb-d6fd): GET bản nháp hỏng, web vẫn cho sửa trên màn
+     trắng, cú sửa đầu PUT đè composer rỗng lên `workflow-draft.json` — và `.history/`
+     không có gì của bản nháp để cứu. Hai lớp của agent: cất bản cũ trước khi đè, và
+     409 khi tab cầm mốc cũ định ghi đè bản mới hơn. */
+  describe("bản nháp — lịch sử + chống ghi đè")
+  let dp = null
+  const draftFile = () => join(wsRoot, "projects", dp, "workflow-draft.json")
+  const histDir = () => join(wsRoot, "projects", dp, ".history", "draft")
+  /** Lùi mtime của bản nháp hiện hành 2 giờ ⇒ nó là bản "nằm yên" của phiên trước. */
+  const ageDraft = async () => { const t = new Date(Date.now() - 2 * 3600e3); await utimes(draftFile(), t, t) }
+  const history = async () => (await api("GET", `/api/projects/${dp}/workflow-draft/history`)).json.items
+  const put = (draft, extra = {}) => api("PUT", `/api/projects/${dp}/workflow-draft`, { body: { completed: false, draft, ...extra } })
+
+  await it("ghi đè bản nháp đã có ⇒ bản cũ được cất vào .history/draft, đọc lại được qua API", async () => {
+    const r = await createBasicProject(api, { name: "Bản nháp có lịch sử", firstVariant: { vi: "V1" } })
+    eq(r.status, 201, "tạo dự án")
+    dp = r.json.project.id
+    eq((await put({ docVersion: 1, v: "A" })).status, 200, "lưu A")
+    eq((await history()).length, 0, "lần lưu đầu: chưa có gì bị đè ⇒ chưa có bản cất")
+    eq((await put({ docVersion: 1, v: "B" })).status, 200, "lưu B")
+    const items = await history()
+    eq(items.length, 1, "một bản cất")
+    ok(/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}\.[0-9]{3}Z$/.test(items[0].name), `tên đúng kiểu mốc: ${items[0].name}`)
+    ok(items[0].size > 0 && !Number.isNaN(Date.parse(items[0].updatedAt)), "có size + updatedAt")
+    const one = await api("GET", `/api/projects/${dp}/workflow-draft/history/${items[0].name}`)
+    eq(one.status, 200, "đọc một bản")
+    eq(one.json.draft, { docVersion: 1, v: "A" }, "bản cất là A — thứ vừa bị đè")
+  })
+
+  await it("hai lượt tự lưu liền nhau giữa lúc gõ ⇒ KHÔNG cất thêm (20 suất không cháy trong một phút)", async () => {
+    eq((await put({ docVersion: 1, v: "C" })).status, 200)
+    eq((await history()).length, 1, "vẫn một bản cất")
+  })
+
+  await it("bản nằm yên của phiên trước LUÔN được cất; nội dung trùng bản cất gần nhất thì không cất lại", async () => {
+    await ageDraft()
+    eq((await put({ docVersion: 1, v: "D" })).status, 200)
+    let items = await history()
+    eq(items.length, 2, "C nằm yên ⇒ được cất")
+    eq((await api("GET", `/api/projects/${dp}/workflow-draft/history/${items[0].name}`)).json.draft.v, "C", "mới nhất trước")
+    await ageDraft()
+    eq((await put({ docVersion: 1, v: "D" })).status, 200)
+    items = await history()
+    eq(items.length, 3, "D nằm yên, khác C ⇒ cất")
+    await ageDraft()
+    eq((await put({ docVersion: 1, v: "E" })).status, 200)
+    eq((await history()).length, 3, "D trùng từng byte với bản cất mới nhất ⇒ không cất lần hai")
+  })
+
+  await it("tỉa còn đúng 20 bản mới nhất", async () => {
+    await mkdir(histDir(), { recursive: true })
+    for (let i = 0; i < 25; i++)
+      await writeFile(join(histDir(), `2020-01-01T0000${String(i).padStart(2, "0")}.000Z.json`), JSON.stringify({ old: i }))
+    await ageDraft()
+    eq((await put({ docVersion: 1, v: "F" })).status, 200)
+    const names = (await readdir(histDir())).filter(f => f.endsWith(".json")).sort()
+    eq(names.length, 20, "20 file")
+    ok(!names.includes("2020-01-01T000000.000Z.json"), "bản cũ nhất bị tỉa")
+    const items = await history()
+    eq(items.length, 20, "API cũng thấy 20")
+    eq((await api("GET", `/api/projects/${dp}/workflow-draft/history/${items[0].name}`)).json.draft.v, "E", "bản mới nhất còn nguyên")
+  })
+
+  await it("tên bản cất lạ / leo thư mục ⇒ 400, không đọc ra ngoài .history/draft", async () => {
+    /* `%2e%2e` trần thì URL tự chuẩn hoá thành thư mục cha TRƯỚC khi tới router (ra
+       GET bản nháp, 200) — không phải lỗ. Thứ phải chặn là `..` còn sống tới handler. */
+    for (const bad of ["..%2F..%2Fproject.json", "%2e%2e%2Fproject.json", "..%5Cproject.json", "2026-01-01T000000.000Z.json", "project", "2026-01-01T000000Z"]) {
+      const r = await api("GET", `/api/projects/${dp}/workflow-draft/history/${bad}`)
+      eq(r.status, 400, `status cho ${bad}`)
+      eq(r.json.error.code, "BAD_REQUEST", `code cho ${bad}`)
+    }
+    const missing = await api("GET", `/api/projects/${dp}/workflow-draft/history/2019-01-01T000000.000Z`)
+    eq(missing.status, 404, "đúng dạng mà không có ⇒ 404")
+    eq((await api("GET", "/api/projects/khong-co-du-an/workflow-draft/history")).status, 404, "dự án vắng ⇒ 404")
+  })
+
+  await it("cất lịch sử hỏng thì VẪN lưu, và agent la lên trong log", async () => {
+    const { rm } = await import("node:fs/promises")
+    await rm(histDir(), { recursive: true, force: true })
+    await writeFile(histDir(), "không phải thư mục")          // ensureDir/copy chắc chắn hỏng
+    await ageDraft()
+    const lines = []
+    const orig = process.stderr.write
+    process.stderr.write = (chunk, ...rest) => { lines.push(String(chunk)); return true }
+    let r
+    try { r = await put({ docVersion: 1, v: "G" }) } finally { process.stderr.write = orig }
+    eq(r.status, 200, "lượt lưu không bị chặn")
+    eq(JSON.parse(await readFile(draftFile(), "utf8")).v, "G", "đĩa có bản mới")
+    ok(lines.some(l => l.includes("lịch sử bản nháp") && l.includes(dp)), `có dòng cảnh báo: ${lines.join("|")}`)
+    await rm(histDir(), { force: true })
+  })
+
+  await it("baseUpdatedAt cũ hơn đĩa ⇒ 409 DRAFT_CONFLICT kèm mốc của đĩa, và đĩa KHÔNG đổi", async () => {
+    const u1 = (await api("GET", `/api/projects/${dp}/workflow-draft`)).json.updatedAt
+    const a = await put({ docVersion: 1, v: "tab1" }, { baseUpdatedAt: u1 })
+    eq(a.status, 200, "tab 1 lưu với mốc đúng")
+    const u2 = a.json.updatedAt
+    ok(u2 !== u1 && Date.parse(u2) > Date.parse(u1), "mốc tăng")
+    const b = await put({ docVersion: 1, v: "tab2-cu" }, { baseUpdatedAt: u1 })
+    eq(b.status, 409, "tab 2 cầm mốc cũ")
+    eq(b.json.error.code, "DRAFT_CONFLICT", "code")
+    eq(b.json.error.details.updatedAt, u2, "details.updatedAt = mốc đĩa")
+    eq(JSON.parse(await readFile(draftFile(), "utf8")).v, "tab1", "đĩa giữ bản của tab 1")
+    const n = await put({ docVersion: 1, v: "chua-tung-thay" }, { baseUpdatedAt: null })
+    eq(n.status, 409, "null = 'tôi chưa thấy lượt lưu nào' ⇒ cũng là xung đột khi đĩa đã có mốc")
+    const bad = await put({ docVersion: 1 }, { baseUpdatedAt: 123 })
+    eq(bad.status, 400, "mốc không phải chuỗi ⇒ 400")
+    const c = await put({ docVersion: 1, v: "tab1-tiep" }, { baseUpdatedAt: u2 })
+    eq(c.status, 200, "mốc khớp ⇒ lưu tiếp")
+  })
+
+  await it("hai PUT cùng mốc bay song song ⇒ đúng MỘT lượt qua, lượt kia 409", async () => {
+    const u = (await api("GET", `/api/projects/${dp}/workflow-draft`)).json.updatedAt
+    const [x, y] = await Promise.all([
+      put({ docVersion: 1, v: "x" }, { baseUpdatedAt: u }),
+      put({ docVersion: 1, v: "y" }, { baseUpdatedAt: u }),
+    ])
+    eq([x.status, y.status].sort(), [200, 409], "một qua, một bị chặn")
+  })
+
+  await it("client đời cũ KHÔNG gửi baseUpdatedAt ⇒ vẫn lưu như trước (tương thích ngược)", async () => {
+    const r = await put({ docVersion: 1, v: "client-cu" })
+    eq(r.status, 200, "status")
+    eq(JSON.parse(await readFile(draftFile(), "utf8")).v, "client-cu", "đã ghi")
   })
 
   // project mới cho các nhóm test sau

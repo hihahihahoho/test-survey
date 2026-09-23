@@ -13,6 +13,9 @@ export const STATUS = {
   // project
   PROJECT_NOT_FOUND: 404, PROJECT_IN_TRASH: 410, PROJECT_BROKEN: 422, PROJECT_ID_TAKEN: 409,
   INVALID_NAME: 400, INVALID_SLUG: 400, IMPORT_INVALID: 422,
+  /* Bản nháp trên đĩa MỚI hơn mốc mà tab này đã nhận ⇒ tab khác/máy khác đã lưu sau
+     (sự cố 23/09/2026 — xem `saveWorkflowDraft`). */
+  DRAFT_CONFLICT: 409,
   // trash
   TRASH_NOT_FOUND: 404, CONFIRM_REQUIRED: 412, CONFIRM_INVALID: 403, CONFIRM_LOCKED: 429,
   // contract

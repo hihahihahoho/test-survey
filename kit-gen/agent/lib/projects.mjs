@@ -12,6 +12,7 @@ import { RE_PROJECT_ID, RE_SLUG, assertMatch, safeSegment } from "./paths.mjs"
 import { projectDir } from "./projects-dir.mjs"
 import { readContract, contractJobs } from "./contract.mjs"
 import { redactLine } from "./redact.mjs"
+import { archiveDraft } from "./draft-history.mjs"
 
 /* Thư mục DẪN XUẤT — sinh lại được, nên được phép dọn.
    "skeleton" Ở LẠI DANH SÁCH dù engine không còn sinh nó (khung xương bỏ 27/08/2026):
@@ -244,17 +245,75 @@ export async function readWorkflowDraft(ws, id) {
   return { completed: project.workflow?.completed === true, draft, updatedAt: project.workflow?.updatedAt ?? null }
 }
 
+/* Một hàng đợi GHI cho mỗi bản nháp. Phép so `baseUpdatedAt` ↔ đĩa rồi ghi là ba lượt
+   await; không xếp hàng thì hai tab PUT cùng lúc cùng đọc thấy mốc cũ, cùng qua cửa, và
+   bản đến sau đè bản đến trước — đúng thứ 409 sinh ra để chặn. */
+const draftLocks = new WeakMap()
+function withDraftLock(ws, id, fn) {
+  let m = draftLocks.get(ws)
+  if (!m) draftLocks.set(ws, m = new Map())
+  const prev = m.get(id) ?? Promise.resolve()
+  const run = prev.then(fn, fn)
+  const tail = run.catch(() => {})
+  m.set(id, tail)
+  tail.then(() => { if (m.get(id) === tail) m.delete(id) })
+  return run
+}
+
+/**
+ * PUT bản nháp.
+ *
+ * ╔══ `baseUpdatedAt` — CHẶN MỘT TAB CŨ GHI ĐÈ BẢN MỚI HƠN (sự cố 23/09/2026) ═╗
+ * ║ Web gửi mốc `updatedAt` mà nó đã NHẬN từ đĩa (hoặc vừa lưu thành công).   ║
+ * ║ Đĩa đã có mốc khác, MỚI hơn ⇒ có ai đó (tab khác, máy khác) đã lưu sau lúc ║
+ * ║ tab này mở ⇒ 409 `DRAFT_CONFLICT`, kèm mốc của đĩa. Ghi tiếp là xoá công   ║
+ * ║ của người kia mà không ai hay.                                            ║
+ * ║                                                                          ║
+ * ║ VẮNG hẳn trường này = web đời cũ (agent và web cài lệch phiên bản là       ║
+ * ║ chuyện thường) ⇒ nhận như trước giờ. `null` thì KHÁC vắng: nó nói "tôi mở ║
+ * ║ ra lúc chưa từng có lượt lưu nào" — đĩa đã có mốc thì đó là xung đột.      ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Trước khi đè, bản hiện hành được cất vào `.history/draft/` (xem draft-history.mjs).
+ * Cất hỏng KHÔNG chặn lượt lưu — chặn thì người dùng mất luôn chữ đang gõ — nhưng
+ * phải LA LÊN trong log của agent, không được nuốt.
+ */
 export async function saveWorkflowDraft(ws, id, input) {
-  const project = await readProject(ws, id)
-  if (project.broken) fail("PROJECT_BROKEN", "cannot save workflow draft for a broken project")
+  const hasBase = input != null && Object.hasOwn(input, "baseUpdatedAt") && input.baseUpdatedAt !== undefined
+  if (hasBase && input.baseUpdatedAt !== null && typeof input.baseUpdatedAt !== "string")
+    fail("BAD_REQUEST", "baseUpdatedAt must be a string or null")
   const serialized = JSON.stringify(input?.draft ?? null)
   if (serialized.length > 2_000_000) fail("TOO_LARGE", "workflow draft exceeds 2 MB")
-  const completed = input?.completed === true
-  const updatedAt = new Date().toISOString()
-  await writeJsonAtomic(join(projectDir(ws, id), WORKFLOW_DRAFT_FILE), input?.draft ?? null)
-  project.workflow = { completed, updatedAt }
-  await saveProject(ws, id, project)
-  return { completed, draft: input?.draft ?? null, updatedAt }
+  return withDraftLock(ws, id, async () => {
+    const project = await readProject(ws, id)
+    if (project.broken) fail("PROJECT_BROKEN", "cannot save workflow draft for a broken project")
+    const disk = project.workflow?.updatedAt ?? null
+    if (hasBase && disk && input.baseUpdatedAt !== disk) {
+      const baseMs = Date.parse(input.baseUpdatedAt ?? "")
+      const diskMs = Date.parse(disk)
+      /* Chỉ chặn khi đĩa MỚI hơn. Mốc gửi lên mới hơn đĩa (đĩa vừa được khôi phục
+         từ bản sao lưu, đồng hồ lệch) thì không có "công của người khác" nào để mất. */
+      if (!Number.isFinite(baseMs) || !Number.isFinite(diskMs) || diskMs > baseMs)
+        fail("DRAFT_CONFLICT", `workflow draft on disk (${disk}) is newer than base (${input.baseUpdatedAt})`,
+          { details: { updatedAt: disk } })
+    }
+    const file = join(projectDir(ws, id), WORKFLOW_DRAFT_FILE)
+    try { await archiveDraft(ws, id, file) }
+    catch (e) {
+      process.stderr.write(`[agent] project ${id}: KHÔNG cất được lịch sử bản nháp trước khi ghi đè — vẫn lưu: ${redactLine(String(e?.message ?? e))}\n`)
+    }
+    const completed = input?.completed === true
+    /* Mốc phải TĂNG ngặt: hai lượt lưu trong cùng một mili-giây mà mang cùng mốc thì
+       một tab cầm mốc cũ vẫn lọt qua phép so ở trên. */
+    let now = Date.now()
+    const diskMs = Date.parse(disk ?? "")
+    if (Number.isFinite(diskMs) && now <= diskMs) now = diskMs + 1
+    const updatedAt = new Date(now).toISOString()
+    await writeJsonAtomic(file, input?.draft ?? null)
+    project.workflow = { completed, updatedAt }
+    await saveProject(ws, id, project)
+    return { completed, draft: input?.draft ?? null, updatedAt }
+  })
 }
 
 /** PATCH: chỉ name/slug/description/tags/cover. id và thư mục KHÔNG đổi (§4.2). */

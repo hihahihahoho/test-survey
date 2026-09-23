@@ -6,6 +6,7 @@ import {
   idTaken, projectDir, copyTree,
   readWorkflowDraft, saveWorkflowDraft,
 } from "../lib/projects.mjs"
+import { listDraftHistory, readDraftSnapshot } from "../lib/draft-history.mjs"
 import { buildTemplateContract } from "../lib/templates.mjs"
 import { writeContract, readContract } from "../lib/contract.mjs"
 import { fail } from "../lib/errors.mjs"
@@ -109,6 +110,19 @@ export function register(r) {
 
   r.get("/api/projects/:id/workflow-draft", async ctx => ({ status: 200, json: await readWorkflowDraft(ctx.registry.active, ctx.params.id) }))
   r.put("/api/projects/:id/workflow-draft", async ctx => ({ status: 200, json: await saveWorkflowDraft(ctx.registry.active, ctx.params.id, await ctx.json()) }))
+  /* Lịch sử bản nháp (`.history/draft/`) — CHỈ ĐỌC. Đường cứu dữ liệu sau sự cố
+     23/09/2026; màn phục hồi chưa có, nhưng dữ liệu phải lấy ra được mà không cần
+     mở Finder. `readProject` trước để dự án vắng/trong thùng rác trả đúng mã của nó. */
+  r.get("/api/projects/:id/workflow-draft/history", async ctx => {
+    const ws = ctx.registry.active
+    await readProject(ws, ctx.params.id)
+    return { status: 200, json: { items: await listDraftHistory(ws, ctx.params.id) } }
+  })
+  r.get("/api/projects/:id/workflow-draft/history/:name", async ctx => {
+    const ws = ctx.registry.active
+    await readProject(ws, ctx.params.id)
+    return { status: 200, json: await readDraftSnapshot(ws, ctx.params.id, ctx.params.name) }
+  })
 
   // #11 DELETE /api/projects/:id → .trash/ (soft). KHÔNG rm thẳng.
   r.delete("/api/projects/:id", async ctx => {
