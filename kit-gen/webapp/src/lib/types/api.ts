@@ -154,11 +154,20 @@ export const doctorSchema = z.looseObject({
      * hồ sơ Codex tự chọn — khác hẳn "không đọc được", trạng thái đó là `source:"unknown"`.
      * `known` là cổng `codex debug models` của gen.sh: false ⇒ engine sẽ rơi về model
      * của hồ sơ. null = chưa kiểm được.
+     *
+     * 23/09/2026 (mặc định lên gpt-6-luna): engine có thêm nấc DỰ PHÒNG — codex chưa
+     * biết model chính (0.154 chưa có gpt-6-luna) thì chạy `fallback` (gpt-5.6-luna)
+     * trước khi rơi về hồ sơ. `effective` = cái engine SẼ gửi bằng `-m` (null = model
+     * của hồ sơ, hoặc chưa kiểm khi `known` null). Ba field mới đều `nullish` vì agent
+     * cũ không gửi chúng — thiếu thì màn Cài đặt nói như trước.
      */
     model: z.looseObject({
       requested: z.string().nullish(),
+      fallback: z.string().nullish(),
       effort: z.string().nullish(),
       known: z.boolean().nullish(),
+      fallbackKnown: z.boolean().nullish(),
+      effective: z.string().nullish(),
       source: z.enum(["engine", "env", "unknown"]).catch("unknown"),
     }).optional(),
   }).optional(),

@@ -247,21 +247,82 @@ async function runCodex({ args, cwd, env, logPath, append }) {
   } finally { await fh.close() }
 }
 
-/** `codex debug models | grep -q "\"<model>\""` — cổng RẺ, chạy trên đĩa, không gọi mạng.
- *  Nó chỉ chứng minh bản codex này BIẾT tên model; provider có chịu phục vụ hay không
- *  thì chỉ nhánh tự chữa trong `runOne` mới trả lời được. */
-async function codexKnowsModel(model, env) {
+/** `codex debug models` — cổng RẺ, chạy trên đĩa, không gọi mạng. Trả stdout (catalog)
+ *  hoặc `null` khi không hỏi được. Hỏi MỘT lần rồi tra cả model chính lẫn model dự
+ *  phòng trên cùng một bản: hai lần spawn là hai cơ hội để hai câu trả lời lệch nhau.
+ *  Catalog chỉ chứng minh bản codex này BIẾT tên model; provider có chịu phục vụ hay
+ *  không thì chỉ nhánh tự chữa trong `runOne` mới trả lời được. */
+async function codexModelCatalog(env) {
   return await new Promise(resolve => {
     let out = ""
     let child
     try {
       child = spawn(codexBin(), ["debug", "models"], { env, stdio: ["ignore", "pipe", "ignore"] })
-    } catch { return resolve(false) }
+    } catch { return resolve(null) }
     child.stdout.on("data", d => { out += d })
-    child.on("error", () => resolve(false))
-    child.on("close", code => resolve(code === 0 && out.includes(`"${model}"`)))
+    child.on("error", () => resolve(null))
+    child.on("close", code => resolve(code === 0 ? out : null))
   })
 }
+
+const effortArgs = effort => (effort ? ["-c", `model_reasoning_effort="${effort}"`] : [])
+
+/* ══ CHỌN MODEL: CHÍNH → DỰ PHÒNG → HỒ SƠ ══════════════════════════════════════
+ *
+ * 23/09/2026 mặc định lên `gpt-6-luna`. Nhưng tên đó MỚI: codex 0.154.0 trên máy dev
+ * (`codex debug models`, catalog server kéo về `models_cache.json` với client_version
+ * 0.154.0) chỉ liệt kê gpt-6-astra, gpt-5.6-sol/terra/luna, gpt-5.5 — KHÔNG có
+ * gpt-6-luna; chuỗi `gpt-6-luna` chỉ có trong binary của @openai/codex 0.156.1. Nút
+ * «Cập nhật» có chạy `codex update`, nhưng bước ấy có thể quá hạn 180s, bị tắt bằng
+ * KITGEN_SKIP_CODEX_UPDATE, hoặc người dùng gen trước khi bấm cập nhật.
+ *
+ * Trước bản này, cổng chỉ có HAI nấc: biết model ⇒ `-m`, không biết ⇒ rơi thẳng về
+ * model của HỒ SƠ — tức cái config.toml đang để, có máy là model đắt ở mức "xhigh".
+ * Đổi mặc định sang một tên mới mà giữ hai nấc là đẩy MỌI máy codex cũ về nấc ấy.
+ * Nên chen giữa một nấc: model dự phòng `gpt-5.6-luna` (mặc định cũ, đã chạy ổn),
+ * vẫn ép `-m` và mức nghĩ.
+ *
+ * Nấc hồ sơ cũng GHIM MỨC NGHĨ: mức nghĩ độc lập với model (đúng lý do nhánh tự chữa
+ * trong `runOne` giữ nó), để hồ sơ tự chọn cả hai là cho "xhigh" cơ hội quay lại.
+ * `KITGEN_GEN_MODEL=""` thì KHÁC: đó là người dùng cố ý bảo "đừng ép gì" ⇒ không
+ * `-m`, không mức nghĩ, như trước.
+ *
+ * @returns `{ modelArgs, model, retryArgs, retryModel, note }`
+ *   · `model`      — tên sẽ gửi bằng `-m` (null = model của hồ sơ);
+ *   · `retryArgs`  — cờ cho ĐÚNG MỘT lượt chạy lại khi provider từ chối `model`:
+ *                    dự phòng nếu đang dùng model chính và codex biết dự phòng,
+ *                    không thì bỏ `-m` và giữ mức nghĩ;
+ *   · `note`       — câu nói cho người đang nhìn màn hình khi phải hạ nấc, hoặc null.
+ */
+export async function pickModel(cfg, env) {
+  const { genModel: primary, genModelFallback: fb, genEffort } = cfg
+  const eff = effortArgs(genEffort)
+  if (!primary) return { modelArgs: [], model: null, retryArgs: [], retryModel: null, note: null }
+  const catalog = (await codexModelCatalog(env)) ?? ""
+  const knows = m => !!m && catalog.includes(`"${m}"`)
+  const fallback = fb && fb !== primary ? fb : ""
+  if (knows(primary)) {
+    const viaFb = knows(fallback)
+    return {
+      modelArgs: ["-m", primary, ...eff], model: primary,
+      retryArgs: viaFb ? ["-m", fallback, ...eff] : eff, retryModel: viaFb ? fallback : null,
+      note: null,
+    }
+  }
+  if (knows(fallback)) {
+    return {
+      modelArgs: ["-m", fallback, ...eff], model: fallback, retryArgs: eff, retryModel: null,
+      note: `codex trên máy chưa biết model '${primary}' — dùng '${fallback}'. Bấm Cập nhật để nâng codex.`,
+    }
+  }
+  return {
+    modelArgs: eff, model: null, retryArgs: eff, retryModel: null,
+    note: `codex không biết model '${primary}'${fallback ? ` lẫn '${fallback}'` : ""} — dùng model mặc định của hồ sơ.`,
+  }
+}
+
+/** Nhãn của model trong log: tên, hoặc "model mặc định của hồ sơ". */
+export const modelLabel = m => (m ? `'${m}'` : "model mặc định của hồ sơ")
 
 const sleep = s => new Promise(r => { const t = setTimeout(r, s * 1000); t.unref?.() })
 
@@ -289,7 +350,10 @@ export function readEnv(env = process.env) {
        không phải một hành vi, nó là một chỗ hỏng; ở đây 0 đọc thành mặc định 4. */
     maxJobs: Number(env.MAXJOBS || "4") || 4,
     promptsOnly: env.KITGEN_PROMPTS_ONLY || "",
-    genModel: dashDefault(env.KITGEN_GEN_MODEL, "gpt-5.6-luna"),
+    /* gpt-6-luna cần codex ≥ ~0.156 — codex cũ hơn tự hạ về `genModelFallback`
+       (xem `pickModel`). `KITGEN_GEN_MODEL_FALLBACK=""` tắt nấc dự phòng. */
+    genModel: dashDefault(env.KITGEN_GEN_MODEL, "gpt-6-luna"),
+    genModelFallback: dashDefault(env.KITGEN_GEN_MODEL_FALLBACK, "gpt-5.6-luna"),
     genEffort: dashDefault(env.KITGEN_GEN_EFFORT, "medium"),
     busyMax: /^[0-9]+$/.test(busyRaw) ? Number(busyRaw) : 3,
     busyWaits: backoff.every(Number.isFinite) ? backoff : [20, 45, 90],
@@ -337,10 +401,17 @@ export async function refReason(path) {
  * `run_one <job>` — một lượt codex (kèm hai nhánh tự chữa), rồi PHÁN.
  *
  * `ctx` mang những thứ mà bản bash để ở biến toàn cục: `root`, `rootOut`,
- * `modelArgs`, `imgHome`, `busy*`, và `print` (thay `echo` ra stdout).
+ * `modelArgs` (+ `model`/`retryArgs`/`retryModel` của `pickModel`), `imgHome`, `busy*`,
+ * và `print` (thay `echo` ra stdout).
  */
 export async function runOne(ctx, job) {
-  const { root, rootOut, modelArgs, genModel, genEffort, imgHome, busyMax, busyWaits, print } = ctx
+  const { root, rootOut, modelArgs, genEffort, imgHome, busyMax, busyWaits, print } = ctx
+  /* ctx dựng tay (không qua `prepare`) thì chưa có các khoá của `pickModel`: suy ra
+     y như hành vi trước 23/09/2026 — model là cái đứng sau `-m`, chạy lại bỏ `-m`. */
+  const mi = modelArgs.indexOf("-m")
+  const usedModel = ctx.model !== undefined ? ctx.model : (mi >= 0 ? modelArgs[mi + 1] : null)
+  const retryArgs = ctx.retryArgs ?? effortArgs(genEffort)
+  const retryModel = ctx.retryModel ?? null
   const P = p => join(root, p)
   const rawPng = P(`raw/${job}.png`)
   const logRel = `logs/${job}.log`
@@ -425,20 +496,26 @@ export async function runOne(ctx, job) {
     return n
   }
 
-  /* ── PROVIDER TỪ CHỐI TÊN MODEL ⇒ HẠ XUỐNG MODEL CỦA HỒ SƠ, ĐÚNG MỘT LẦN ──
+  /* ── PROVIDER TỪ CHỐI TÊN MODEL ⇒ HẠ MỘT NẤC, ĐÚNG MỘT LẦN ──────────────
+     Nấc hạ do `pickModel` chọn sẵn: đang dùng model chính mà codex biết model dự
+     phòng ⇒ chạy lại bằng dự phòng; còn lại ⇒ model của hồ sơ. Vẫn ĐÚNG MỘT lượt:
+     dự phòng mà cũng bị từ chối thì dừng, không leo thang tiếp.
      Chỉ thử lại khi CHƯA CÓ ẢNH MỚI: có ảnh rồi mà chạy lại là tốn thêm một lượt
-     sinh ảnh chẳng để làm gì. */
-  if (modelArgs.length > 0 && rc !== 0 && (await mtimeEpoch(rawPng)) < t0 &&
+     sinh ảnh chẳng để làm gì. Điều kiện là có `-m` chứ không phải "có cờ": nấc hồ sơ
+     chỉ mang mức nghĩ, và chạy lại y nguyên cờ ấy thì chẳng hạ được gì. */
+  let curArgs = modelArgs
+  if (usedModel && rc !== 0 && (await mtimeEpoch(rawPng)) < t0 &&
       /unknown model|model not (found|supported)|unsupported model|invalid model|does not (exist|support)|model_not_found/i
         .test(await logText())) {
     await appendFile(logPath,
-      `model '${genModel}' bị provider từ chối — chạy lại bằng model mặc định của hồ sơ\n`)
-    /* BỎ `-m`, GIỮ mức nghĩ. Thứ bị từ chối là TÊN MODEL; mức nghĩ độc lập với model
-       và luôn hợp lệ. Thả nổi mức nghĩ thì lượt chạy lại rơi về hồ sơ, mà hồ sơ có thể
-       đang để "fast" — mức bỏ luôn bước đọc SKILL.md, đúng thứ vừa phải trả giá. */
-    const retryEffort = genEffort ? ["-c", `model_reasoning_effort="${genEffort}"`] : []
+      `model '${usedModel}' bị provider từ chối — chạy lại bằng ${modelLabel(retryModel)}\n`)
+    /* BỎ `-m` (hoặc đổi sang dự phòng), GIỮ mức nghĩ. Thứ bị từ chối là TÊN MODEL;
+       mức nghĩ độc lập với model và luôn hợp lệ. Thả nổi mức nghĩ thì lượt chạy lại
+       rơi về hồ sơ, mà hồ sơ có thể đang để "fast" — mức bỏ luôn bước đọc SKILL.md,
+       đúng thứ vừa phải trả giá. */
+    curArgs = retryArgs
     logFrom = (await countLines()) + 1
-    rc = await runCodex({ args: baseArgs(retryEffort), cwd: root, env, logPath, append: true })
+    rc = await runCodex({ args: baseArgs(curArgs), cwd: root, env, logPath, append: true })
   }
 
   /* ── MÁY VẼ QUÁ TẢI ⇒ NGỦ RỒI GỌI LẠI, CÙNG MODEL ────────────────────────
@@ -460,7 +537,9 @@ export async function runOne(ctx, job) {
     print(`⏳ ${job}: model quá tải — thử lại lần ${busyK} sau ${nap}s`)
     await sleep(nap)
     logFrom = (await countLines()) + 1
-    rc = await runCodex({ args: baseArgs(modelArgs), cwd: root, env, logPath, append: true })
+    /* `curArgs`, KHÔNG phải `modelArgs`: sau một lượt hạ nấc, gọi lại bằng cái tên vừa
+       bị từ chối là chắc chắn hỏng lần nữa. */
+    rc = await runCodex({ args: baseArgs(curArgs), cwd: root, env, logPath, append: true })
   }
 
   /* ── VỚT ẢNH (codex ≥0.147) ──────────────────────────────────────────────
@@ -589,24 +668,18 @@ export async function prepare(projectDir, { env, print, rootOut } = {}) {
   const say = print ?? (s => process.stdout.write(s + "\n"))
   for (const d of ["raw", "logs", "prompts"]) await mkdir(join(projectDir, d), { recursive: true })
 
-  let modelArgs = []
   // SOI ĐÚNG HOME SẼ GEN. Bug cũ: `IMG_HOME` được đặt mà cổng này vẫn hỏi home mặc
   // định ⇒ MODEL_ARGS rỗng ⇒ âm thầm rơi về model/mức nghĩ của hồ sơ.
   const childEnv = cfgEnv.imgHome ? { ...process.env, CODEX_HOME: cfgEnv.imgHome } : { ...process.env }
-  if (!cfgEnv.promptsOnly && cfgEnv.genModel) {
-    /* Catalog TĨNH, nằm sẵn trên máy: nó chỉ chứng minh bản codex này BIẾT tên model,
-       KHÔNG chứng minh provider của người dùng chịu phục vụ. Đây là cửa RẺ; cửa thật
-       là nhánh tự chữa trong `runOne`. */
-    if (await codexKnowsModel(cfgEnv.genModel, childEnv)) {
-      modelArgs = ["-m", cfgEnv.genModel]
-      // PHẢI đặt cả effort: `model_reasoning_effort` trong config.toml của người dùng
-      // áp lên BẤT KỲ model nào, và có máy đang để "xhigh" — đốt token cho một việc
-      // mà nghĩ nhiều không làm ảnh đẹp hơn (ảnh do tool vẽ).
-      if (cfgEnv.genEffort) modelArgs.push("-c", `model_reasoning_effort="${cfgEnv.genEffort}"`)
-    } else {
-      say(`codex không biết model '${cfgEnv.genModel}' — dùng model mặc định của hồ sơ.`)
-    }
-  }
+  /* Catalog TĨNH, nằm sẵn trên máy: nó chỉ chứng minh bản codex này BIẾT tên model,
+     KHÔNG chứng minh provider của người dùng chịu phục vụ. Đây là cửa RẺ; cửa thật
+     là nhánh tự chữa trong `runOne`.
+     PHẢI đặt cả effort: `model_reasoning_effort` trong config.toml của người dùng áp
+     lên BẤT KỲ model nào, và có máy đang để "xhigh" — đốt token cho một việc mà nghĩ
+     nhiều không làm ảnh đẹp hơn (ảnh do tool vẽ). `pickModel` lo cả hai. */
+  let pick = { modelArgs: [], model: null, retryArgs: [], retryModel: null, note: null }
+  if (!cfgEnv.promptsOnly) pick = await pickModel(cfgEnv, childEnv)
+  if (pick.note) say(pick.note)
   if (!cfgEnv.promptsOnly && cfgEnv.imgHome &&
       !(await stat(join(cfgEnv.imgHome, "auth.json")).then(() => true, () => false))) {
     say(`FATAL: profile Codex riêng chưa đăng nhập. Chạy: CODEX_HOME=${cfgEnv.imgHome} codex login`)
@@ -615,7 +688,9 @@ export async function prepare(projectDir, { env, print, rootOut } = {}) {
   return {
     fatal: false,
     ctx: {
-      root: projectDir, rootOut: rootOut ?? projectDir, modelArgs, print: say,
+      root: projectDir, rootOut: rootOut ?? projectDir, print: say,
+      modelArgs: pick.modelArgs, model: pick.model,
+      retryArgs: pick.retryArgs, retryModel: pick.retryModel,
       genModel: cfgEnv.genModel, genEffort: cfgEnv.genEffort, imgHome: cfgEnv.imgHome,
       busyMax: cfgEnv.busyMax, busyWaits: cfgEnv.busyWaits, home: cfgEnv.home,
     },

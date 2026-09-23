@@ -121,6 +121,37 @@ export async function run({ api, call, agent, agentDir, tmp }) {
     eq(d.imageGen.model.source, "engine", "không có env ghi đè ⇒ nguồn là engine")
   })
 
+  /* ── gpt-6-luna CẦN codex ≥ ~0.156 ─────────────────────────────────────────
+     Codex 0.154.0 (23/09/2026) chưa có gpt-6-luna trong catalog ⇒ engine hạ về
+     gpt-5.6-luna. Màn Cài đặt phải nói CÁI SẼ CHẠY, không nói cái được xin. */
+  await it("doctor khai model dự phòng, và `effective` theo đúng thứ tự của engine", async () => {
+    const { doctor, applyModelCatalog } = await import("../lib/doctor.mjs")
+    const { readEnv } = await import("../engine/gen.mjs")
+    const def = readEnv({})
+    eq(def.genModel, "gpt-6-luna", "mặc định mới (PO 23/09/2026)")
+    eq(def.genModelFallback, "gpt-5.6-luna", "dự phòng = mặc định cũ")
+    eq(def.genEffort, "medium", "mức nghĩ medium")
+
+    const d = await doctor(agent.registry.active, { refresh: true })
+    eq(d.imageGen.model.fallback, def.genModelFallback, "dự phòng khớp engine")
+    /* Không khẳng định `effective` của doctor thật: nó tuỳ bản codex của máy chạy test.
+       Chỉ đòi nó là MỘT trong ba nấc của engine. */
+    ok([def.genModel, def.genModelFallback, null].includes(d.imageGen.model.effective ?? null),
+      `effective phải là chính/dự phòng/hồ sơ, nhận: ${d.imageGen.model.effective}`)
+
+    const base = { ...d.imageGen.model }
+    const cat = (...m) => JSON.stringify({ models: m.map(slug => ({ slug })) })
+    const neu = applyModelCatalog(base, cat("gpt-6-luna", "gpt-5.6-luna"))
+    eq(neu.known, true, "codex mới biết gpt-6-luna")
+    eq(neu.effective, "gpt-6-luna", "chạy bằng model chính")
+    const cu = applyModelCatalog(base, cat("gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"))
+    eq(cu.known, false, "catalog codex 0.154.0 không có gpt-6-luna")
+    eq(cu.fallbackKnown, true, "nhưng có gpt-5.6-luna")
+    eq(cu.effective, "gpt-5.6-luna", "⇒ chạy bằng dự phòng")
+    const none = applyModelCatalog(base, cat("gpt-5.5"))
+    eq(none.effective, null, "không biết cả hai ⇒ model của hồ sơ")
+  })
+
   await it('KITGEN_GEN_MODEL="" là CỐ Ý TẮT, không phải "chưa đặt"', async () => {
     const { doctor } = await import("../lib/doctor.mjs")
     const ws = agent.registry.active

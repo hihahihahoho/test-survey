@@ -178,8 +178,9 @@ async function imageGenInfo(ws) {
 /* ══ MODEL DÙNG ĐỂ TẠO ẢNH — HỎI ENGINE, KHÔNG CHÉP LẠI ═════════════════════════
  *
  * `engine/gen.mjs::readEnv` là nơi DUY NHẤT quyết định model/effort:
- *     genModel:  dashDefault(env.KITGEN_GEN_MODEL, "gpt-5.6-luna")
- *     genEffort: dashDefault(env.KITGEN_GEN_EFFORT, "medium")
+ *     genModel:         dashDefault(env.KITGEN_GEN_MODEL, "gpt-6-luna")
+ *     genModelFallback: dashDefault(env.KITGEN_GEN_MODEL_FALLBACK, "gpt-5.6-luna")
+ *     genEffort:        dashDefault(env.KITGEN_GEN_EFFORT, "medium")
  * Chép hai giá trị đó sang đây là tạo một bản sao thứ hai để lệch dần — đúng họ bug
  * mà `item-prompt.ts` đã phải dựng một test đọc engine từ đĩa để canh. Trước bước ④
  * doctor phải BÓC HAI DÒNG BASH của `gen.sh` bằng regex; nay engine là JS nên nó gọi
@@ -191,10 +192,14 @@ async function imageGenInfo(ws) {
  */
 async function genModelInfo(ws, { probe = true } = {}) {
   void ws
-  const out = { requested: null, effort: null, known: null, source: "unknown" }
+  const out = {
+    requested: null, fallback: null, effort: null,
+    known: null, fallbackKnown: null, effective: null, source: "unknown",
+  }
   const cfg = readEnv(process.env)
   out.source = process.env.KITGEN_GEN_MODEL !== undefined ? "env" : "engine"
   out.requested = cfg.genModel === "" ? null : cfg.genModel
+  out.fallback = cfg.genModelFallback && cfg.genModelFallback !== cfg.genModel ? cfg.genModelFallback : null
   out.effort = cfg.genEffort === "" ? null : cfg.genEffort
   if (out.requested === null || !probe) return out
 
@@ -205,9 +210,26 @@ async function genModelInfo(ws, { probe = true } = {}) {
      "chắc chắn chạy bằng".
      CODEX_HOME đặt TƯỜNG MINH theo `resolveCodexHome` — cùng home mà gen dùng.
      Bug cũ (một-home-hai-hồ-sơ): cổng này soi home mặc định trong khi ảnh gen
-     bằng hồ sơ riêng ⇒ MODEL_ARGS rỗng, gen âm thầm rơi về model của profile. */
+     bằng hồ sơ riêng ⇒ MODEL_ARGS rỗng, gen âm thầm rơi về model của profile.
+
+     `effective` = cái `pickModel` của engine SẼ gửi bằng `-m`: model chính nếu codex
+     biết, không thì model dự phòng nếu codex biết, không thì null (= model của hồ sơ).
+     Màn Cài đặt phải nói CÁI SẼ CHẠY — nói "gpt-6-luna" trên một máy codex 0.154 là
+     nói dối, vì bản ấy chưa biết tên đó. */
   const r = await run(CODEX, ["debug", "models"], { timeout: 8000, env: { CODEX_HOME: resolveCodexHome() } })
-  out.known = r.ok || r.stdout ? r.stdout.includes(`"${out.requested}"`) : null
+  return r.ok || r.stdout ? applyModelCatalog(out, r.stdout) : out
+}
+
+/** Tra `requested`/`fallback` trong catalog (stdout `codex debug models`) và điền
+ *  `known`/`fallbackKnown`/`effective` — y hệt thứ tự của `pickModel` trong engine.
+ *  Tách riêng để test được mà không spawn codex (doctor LITE cấm spawn). */
+export function applyModelCatalog(info, catalog) {
+  const out = { ...info }
+  if (!out.requested) return out
+  const knows = m => catalog.includes(`"${m}"`)
+  out.known = knows(out.requested)
+  out.fallbackKnown = out.fallback ? knows(out.fallback) : null
+  out.effective = out.known ? out.requested : (out.fallbackKnown ? out.fallback : null)
   return out
 }
 

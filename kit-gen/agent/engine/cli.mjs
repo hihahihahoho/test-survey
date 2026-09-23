@@ -43,6 +43,7 @@
  * ║  · file ghi ra giữ nguyên tên và vị trí: `raw/<job>.png`, `logs/<job>.log`,    ║
  * ║    `logs/<job>.last.txt`, `cover/cover.png`, `cover/cover.raw.png`;            ║
  * ║  · biến môi trường đọc y hệt: MAXJOBS · IMG_HOME · KITGEN_GEN_MODEL ·          ║
+ * ║    KITGEN_GEN_MODEL_FALLBACK (mới 23/09/2026, bash không có) ·                 ║
  * ║    KITGEN_GEN_EFFORT · KITGEN_PROMPTS_ONLY · GEN_BUSY_RETRIES ·                ║
  * ║    GEN_BUSY_BACKOFF, cộng KITGEN_CODEX_BIN (cửa thoát của bộ ca, cùng lối với  ║
  * ║    `lib/codex-login.mjs`) mà bản bash không có.                                ║

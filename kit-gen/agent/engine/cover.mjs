@@ -36,7 +36,7 @@ import { join } from "node:path"
 import { decode, encode } from "./png.mjs"
 import { pyRound } from "./pyjson.mjs"
 import { resize } from "./resample.mjs"
-import { codexBin, duH, mtimeEpoch, readEnv } from "./gen.mjs"
+import { codexBin, duH, modelLabel, mtimeEpoch, pickModel, readEnv } from "./gen.mjs"
 
 /** Khổ ảnh bìa của app. Model chỉ nhận 3:2 nên `cropCover` cắt DẢI GIỮA rồi co lại. */
 export const TARGET_W = 1600
@@ -113,19 +113,6 @@ async function runCodex({ args, cwd, env, logPath, append }) {
   } finally { await fh.close() }
 }
 
-/** `codex debug models | grep -q "\"<model>\""` — HỎI ĐÚNG HOME SẼ VẼ (① VÁ, xem đầu file). */
-async function codexKnowsModel(model, env = process.env) {
-  return await new Promise(resolve => {
-    let out = ""
-    let child
-    try { child = spawn(codexBin(), ["debug", "models"], { stdio: ["ignore", "pipe", "ignore"], env }) }
-    catch { return resolve(false) }
-    child.stdout.on("data", d => { out += d })
-    child.on("error", () => resolve(false))
-    child.on("close", code => resolve(code === 0 && out.includes(`"${model}"`)))
-  })
-}
-
 const exists = p => stat(p).then(() => true, () => false)
 const isFile = p => stat(p).then(s => s.isFile(), () => false)
 const strip = (s, prefix) => (s.startsWith(prefix) ? s.slice(prefix.length) : s)
@@ -165,11 +152,11 @@ export async function runCover(projectDir, opts = {}) {
      dưới phải hỏi ĐÚNG cái home sẽ vẽ (① VÁ). Nội dung không đổi một khoá nào. */
   const env = imgHome ? { ...process.env, CODEX_HOME: imgHome } : { ...process.env }
 
-  let modelArgs = []
-  if (envCfg.genModel && await codexKnowsModel(envCfg.genModel, env)) {
-    modelArgs = ["-m", envCfg.genModel]
-    if (envCfg.genEffort) modelArgs.push("-c", `model_reasoning_effort="${envCfg.genEffort}"`)
-  }
+  /* Cùng MỘT cổng với `gen.mjs` (chính → dự phòng → hồ sơ, xem `pickModel`), hỏi
+     ĐÚNG home sẽ vẽ (① VÁ). Chép lại cổng ở đây là để hai engine lệch nhau lần nữa. */
+  const pick = await pickModel(envCfg, env)
+  if (pick.note) print(pick.note)
+  const modelArgs = pick.modelArgs
 
   const RAW = join(root, "cover/cover.raw.png")
   const OUT = join(root, "cover/cover.png")
@@ -211,19 +198,18 @@ ${promptText.replace(/\n+$/, "")}
   let rc = await runCodex({ args: args(modelArgs), cwd: root, env, logPath, append: false })
 
   const logText = () => readFile(logPath, "utf8").catch(() => "")
-  // Provider từ chối model ⇒ hạ xuống model của hồ sơ, chạy lại ĐÚNG MỘT LẦN. Chỉ thử
+  // Provider từ chối model ⇒ hạ một nấc (dự phòng hoặc hồ sơ), chạy lại ĐÚNG MỘT LẦN. Chỉ thử
   // lại khi chưa có ảnh mới — có ảnh rồi mà chạy lại là tốn thêm một lần sinh ảnh.
-  if (modelArgs.length > 0 && rc !== 0 && (await mtimeEpoch(RAW)) < t0 &&
+  if (pick.model && rc !== 0 && (await mtimeEpoch(RAW)) < t0 &&
       /unknown model|model not (found|supported)|unsupported model|invalid model|does not (exist|support)|model_not_found/i
         .test(await logText())) {
     await appendFile(logPath,
-      `model '${envCfg.genModel}' bị provider từ chối — chạy lại bằng model mặc định của hồ sơ\n`)
-    /* ② VÁ: BỎ `-m`, GIỮ mức nghĩ — y hệt `gen.mjs::runOne`. Thứ bị provider từ chối là
-       cái TÊN MODEL; mức nghĩ độc lập với model và luôn hợp lệ. Thả nổi nó thì lượt
-       chạy lại rơi về mức của hồ sơ, mà hồ sơ có thể đang để "fast" — mức bỏ luôn bước
-       đọc SKILL.md, tức đúng thứ vừa phải trả giá để có. */
-    const retryEffort = envCfg.genEffort ? ["-c", `model_reasoning_effort="${envCfg.genEffort}"`] : []
-    rc = await runCodex({ args: args(retryEffort), cwd: root, env, logPath, append: true })
+      `model '${pick.model}' bị provider từ chối — chạy lại bằng ${modelLabel(pick.retryModel)}\n`)
+    /* ② VÁ: BỎ `-m` (hoặc đổi sang model dự phòng), GIỮ mức nghĩ — y hệt
+       `gen.mjs::runOne`. Thứ bị provider từ chối là cái TÊN MODEL; mức nghĩ độc lập
+       với model và luôn hợp lệ. Thả nổi nó thì lượt chạy lại rơi về mức của hồ sơ, mà
+       hồ sơ có thể đang để "fast" — mức bỏ luôn bước đọc SKILL.md. */
+    rc = await runCodex({ args: args(pick.retryArgs), cwd: root, env, logPath, append: true })
   }
 
   // VỚT ẢNH — y hệt gen.sh: codex ≥0.147 nhiều lần sinh xong nhưng không tự copy về đích.

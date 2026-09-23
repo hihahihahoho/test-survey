@@ -44,16 +44,42 @@ afterEach(cleanup);
 
 describe("hàng «sẽ yêu cầu model …» của thẻ Tạo ảnh AI", () => {
   it("đọc được từ engine ⇒ nêu ĐÍCH DANH tên model và mức nghĩ", () => {
-    const all = textOf({ requested: "gpt-5.6-luna", effort: "medium", known: true, source: "engine" });
-    expect(all).toContain("gpt-5.6-luna");
+    const all = textOf({
+      requested: "gpt-6-luna", fallback: "gpt-5.6-luna", effort: "medium",
+      known: true, fallbackKnown: true, effective: "gpt-6-luna", source: "engine",
+    });
+    expect(all).toContain("gpt-6-luna");
     expect(all).toContain("medium");
+    expect(all).not.toContain("dự phòng");
+  });
+
+  /* 23/09/2026: codex 0.154 chưa có gpt-6-luna trong catalog ⇒ engine chạy gpt-5.6-luna.
+     Hiện "gpt-6-luna" ở đây là cam đoan sai về chính cái đang chạy. */
+  it("codex chưa biết model chính ⇒ hiện model DỰ PHÒNG và chỉ lối Cập nhật", () => {
+    const all = textOf({
+      requested: "gpt-6-luna", fallback: "gpt-5.6-luna", effort: "medium",
+      known: false, fallbackKnown: true, effective: "gpt-5.6-luna", source: "engine",
+    });
+    expect(all).toContain("gpt-5.6-luna");
+    expect(all).toContain("dự phòng — codex chưa biết gpt-6-luna, bấm Cập nhật");
+    expect(all).toContain("medium");
+    expect(all).not.toContain("mặc định của hồ sơ");
   });
 
   it("codex KHÔNG biết model ⇒ nói thẳng là engine sẽ bỏ qua, không cam đoan suông", () => {
+    const all = textOf({
+      requested: "gpt-6-luna", fallback: "gpt-5.6-luna", effort: "medium",
+      known: false, fallbackKnown: false, effective: null, source: "engine",
+    });
+    expect(all).toContain("gpt-6-luna");
+    expect(all).toContain("mặc định của hồ sơ");
+    expect(all).toContain("tốn token");
+  });
+
+  it("agent cũ chưa gửi field dự phòng ⇒ nói như trước", () => {
     const all = textOf({ requested: "gpt-5.6-luna", effort: "medium", known: false, source: "engine" });
     expect(all).toContain("gpt-5.6-luna");
     expect(all).toContain("mặc định của hồ sơ");
-    expect(all).toContain("tốn token");
   });
 
   it("bị đặt bằng biến môi trường ⇒ nói ra, để không ai đi tìm chỗ sửa trong app", () => {

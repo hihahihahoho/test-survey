@@ -122,7 +122,10 @@ const a = process.argv.slice(2)
 if (a[0] === "debug") {
   // Cổng model phải hỏi ĐÚNG hồ sơ sẽ vẽ: ghi lại CODEX_HOME mà nó được gọi kèm.
   if (process.env.HOME_LOG) writeFileSync(process.env.HOME_LOG, process.env.CODEX_HOME || "")
-  process.stdout.write(JSON.stringify({ models: [{ slug: "gpt-5.6-luna" }] })); process.exit(0)
+  // CATALOG = danh sách model bản codex giả "biết", phẩy ngăn cách. Mặc định là một
+  // codex đủ mới (≥0.156) biết cả gpt-6-luna lẫn model dự phòng gpt-5.6-luna.
+  const cat = (process.env.CATALOG ?? "gpt-6-luna,gpt-5.6-luna").split(",").filter(Boolean)
+  process.stdout.write(JSON.stringify({ models: cat.map(slug => ({ slug })) })); process.exit(0)
 }
 // CHỈ GHI CỜ, bỏ đối số cuối (khối task nhiều dòng). Bộ ca shell ghi cả task rồi
 // soi bằng \`tail -1\`, nên khẳng định "lượt chạy lại đã bỏ -m" của nó thật ra đang
@@ -145,6 +148,13 @@ switch (process.env.MODE) {
   case "reject":                                   // từ chối khi có -m, nhận khi không
     if (a.includes("-m")) { console.log("unknown model requested"); process.exit(1) }
     break
+  case "reject-primary":                           // provider chưa mở gpt-6-luna, model khác thì vẽ
+    if (a.includes("gpt-6-luna")) { console.log("unknown model requested"); process.exit(1) }
+    writeFileSync(dst, "anh-moi-" + n); break
+  case "reject-primary-busy":                      // từ chối gpt-6-luna, rồi dự phòng quá tải 1 lần
+    if (a.includes("gpt-6-luna")) { console.log("unknown model requested"); process.exit(1) }
+    if (n < 3) { console.log(BUSY); process.exit(1) }
+    writeFileSync(dst, "anh-moi-" + n); break
   case "other": console.log("429 rate limit"); process.exit(1)
   case "busy-then-ok":
     if (n >= 3) { writeFileSync(dst, "anh-moi-" + n); console.log("saved " + dst); break }
@@ -217,7 +227,7 @@ async function runCase(work, envExtra = {}) {
   await writeFile(env.ARGV_LOG, "", "utf8")
   const prevEnv = {}
   for (const k of ["DST", "ARGV_LOG", "CALLS", "MODE", "SRC", "TASK_LOG", "SALVAGE_NAME",
-    "SALVAGE_SID", "SALVAGE_DIR", "SALVAGE_SEED"]) {
+    "SALVAGE_SID", "SALVAGE_DIR", "SALVAGE_SEED", "CATALOG"]) {
     prevEnv[k] = process.env[k]
     if (env[k] === undefined) delete process.env[k]; else process.env[k] = env[k]
   }
@@ -417,21 +427,88 @@ export async function run() {
       const work = await fresh()
       const r = await runCase(work, { MODE: "ok" })
       eq(r.calls, 1, "chỉ gọi codex một lần")
-      includes(r.argv, "-m gpt-5.6-luna", "argv có -m")
+      // 23/09/2026: mặc định lên gpt-6-luna (PO: «update model thành gpt 6 luna medium»).
+      includes(r.argv, "-m gpt-6-luna", "argv có -m gpt-6-luna")
       includes(r.argv, 'model_reasoning_effort="medium"', "argv có effort medium")
+      ok(!r.out.includes("chưa biết model"), "codex đủ mới ⇒ không có dòng hạ nấc")
       await rmTemp(work)
     })
 
-    await it("provider TỪ CHỐI model ⇒ chạy lại KHÔNG có -m, nhưng GIỮ mức nghĩ", async () => {
+    /* ── NẤC DỰ PHÒNG: codex 0.154 chưa biết gpt-6-luna ────────────────────────
+       Catalog của codex 0.154.0 (23/09/2026) có gpt-6-astra, gpt-5.6-sol/terra/luna,
+       gpt-5.5 — không có gpt-6-luna. Không có nấc này thì mọi máy chưa bấm Cập nhật
+       rơi thẳng về model của hồ sơ. */
+    await it("codex chỉ biết gpt-5.6-luna ⇒ -m gpt-5.6-luna + effort, và NÓI RA", async () => {
+      const work = await fresh()
+      const r = await runCase(work, { MODE: "ok", CATALOG: "gpt-6-astra,gpt-5.6-sol,gpt-5.6-luna,gpt-5.5" })
+      eq(r.calls, 1, "chỉ gọi codex một lần")
+      includes(r.argv, "-m gpt-5.6-luna", "hạ về model dự phòng")
+      ok(!r.argv.includes("gpt-6-luna"), "không gửi cái tên codex chưa biết")
+      includes(r.argv, 'model_reasoning_effort="medium"', "vẫn ghim effort")
+      includes(r.out, "chưa biết model 'gpt-6-luna' — dùng 'gpt-5.6-luna'", "dòng hạ nấc nêu cả hai tên")
+      includes(r.out, "Cập nhật", "chỉ lối nâng codex")
+      await rmTemp(work)
+    })
+
+    await it("codex không biết model nào ⇒ model của hồ sơ, nhưng VẪN ghim mức nghĩ", async () => {
+      const work = await fresh()
+      const r = await runCase(work, { MODE: "ok", CATALOG: "gpt-5.5" })
+      eq(r.calls, 1, "chỉ gọi codex một lần")
+      ok(!r.argv.includes("-m "), "không có -m")
+      includes(r.argv, 'model_reasoning_effort="medium"', "mức nghĩ không trả về cho hồ sơ")
+      includes(r.out, "mặc định của hồ sơ", "nói rõ đang dùng model của hồ sơ")
+      await rmTemp(work)
+    })
+
+    await it("KITGEN_GEN_MODEL_FALLBACK='' ⇒ tắt nấc dự phòng", async () => {
+      const work = await fresh()
+      const r = await runCase(work, { MODE: "ok", CATALOG: "gpt-5.6-luna", KITGEN_GEN_MODEL_FALLBACK: "" })
+      ok(!r.argv.includes("-m "), "không hạ về gpt-5.6-luna khi đã tắt")
+      includes(r.argv, 'model_reasoning_effort="medium"', "mức nghĩ vẫn ghim")
+      await rmTemp(work)
+    })
+
+    await it("provider TỪ CHỐI gpt-6-luna ⇒ ĐÚNG MỘT lượt lại bằng gpt-5.6-luna", async () => {
+      const work = await fresh()
+      const r = await runCase(work, { MODE: "reject-primary" })
+      eq(r.calls, 2, "lần đầu + một lượt hạ nấc")
+      const [first, last] = r.argv.trim().split("\n")
+      includes(first, "-m gpt-6-luna", "lượt đầu xin gpt-6-luna")
+      includes(last, "-m gpt-5.6-luna", "lượt hai bằng model dự phòng")
+      includes(last, 'model_reasoning_effort="medium"', "mức nghĩ vẫn ghim ở lượt hai")
+      includes(r.log, "model 'gpt-6-luna' bị provider từ chối — chạy lại bằng 'gpt-5.6-luna'",
+        "log nêu đúng model thật sự chạy lại")
+      includes(r.out, "OK  job1", "job xong")
+      await rmTemp(work)
+    })
+
+    await it("dự phòng CŨNG bị từ chối ⇒ dừng, không leo thang thêm lượt nào", async () => {
       const work = await fresh()
       const r = await runCase(work, { MODE: "reject" })
+      eq(r.calls, 2, "vẫn đúng một lượt chạy lại")
+      await rmTemp(work)
+    })
+
+    await it("hạ nấc rồi quá tải ⇒ vòng thử lại dùng model ĐÃ HẠ, không gọi lại tên bị từ chối", async () => {
+      const work = await fresh()
+      const r = await runCase(work, { MODE: "reject-primary-busy" })
+      eq(r.calls, 3, "từ chối + quá tải + vẽ được")
+      eq(count(r.argv, "-m gpt-6-luna"), 1, "gpt-6-luna chỉ bị xin đúng một lần")
+      eq(count(r.argv, "-m gpt-5.6-luna"), 2, "hai lượt sau đều bằng dự phòng")
+      includes(r.out, "OK  job1", "job xong")
+      await rmTemp(work)
+    })
+
+    await it("provider TỪ CHỐI model, codex không biết dự phòng ⇒ chạy lại KHÔNG có -m, GIỮ mức nghĩ", async () => {
+      const work = await fresh()
+      const r = await runCase(work, { MODE: "reject", CATALOG: "gpt-6-luna" })
       eq(r.calls, 2, "gọi hai lần (lần đầu + hạ cấp)")
       const last = r.argv.trim().split("\n").pop()
       ok(!last.includes("-m "), "lần chạy lại đã bỏ -m")
       // gen.sh vá 15/09: bản cũ bỏ CẢ cụm MODEL_ARGS nên lượt hai rơi về mức nghĩ của
       // hồ sơ, mà hồ sơ có thể đang để "fast" — mức bỏ luôn bước đọc SKILL.md.
       includes(last, 'model_reasoning_effort="medium"', "mức nghĩ vẫn được ghim ở lượt hai")
-      includes(r.log, "bị provider từ chối", "log ghi lại vì sao có lượt hai")
+      includes(r.log, "bị provider từ chối — chạy lại bằng model mặc định của hồ sơ", "log ghi lại vì sao có lượt hai")
       await rmTemp(work)
     })
 
@@ -458,9 +535,9 @@ export async function run() {
       includes(r.log, "thử lại lần 1 sau 0s", "đánh số lần thử lại 1")
       includes(r.log, "thử lại lần 2 sau 0s", "đánh số lần thử lại 2")
       includes(r.out, "job1: model quá tải", "dòng ấy cũng ra stdout, KÈM TÊN JOB")
-      // CÙNG model ở mọi lượt: `gpt-5.6-luna` là lựa chọn có chủ đích, lách sang model
+      // CÙNG model ở mọi lượt: `gpt-6-luna` là lựa chọn có chủ đích, lách sang model
       // khác là âm thầm giao tấm ảnh vẽ bằng model người dùng KHÔNG chọn.
-      eq(count(r.argv, "-m gpt-5.6-luna"), 3, "mọi lượt đều kèm -m gpt-5.6-luna")
+      eq(count(r.argv, "-m gpt-6-luna"), 3, "mọi lượt đều kèm -m gpt-6-luna")
       eq(count(r.argv, 'model_reasoning_effort="medium"'), 3, "mọi lượt đều ghim effort")
       await rmTemp(work)
     })
@@ -730,6 +807,8 @@ export async function run() {
       const vars = {
         KITGEN_CODEX_BIN: bin, IMG_HOME: home, MODE: "reject",
         ARGV_LOG: argvLog, HOME_LOG: homeLog,
+        // Codex chỉ biết model chính ⇒ không có nấc dự phòng, hạ thẳng về hồ sơ.
+        CATALOG: "gpt-6-luna",
       }
       const prev = {}
       for (const [k, v] of Object.entries(vars)) { prev[k] = process.env[k]; process.env[k] = v }
@@ -747,11 +826,50 @@ export async function run() {
 
       const calls = (await readFile(argvLog, "utf8")).trim().split("\n").filter(Boolean)
       eq(calls.length, 2, "một lượt bị từ chối + đúng một lượt hạ cấp")
-      includes(calls[0], "-m gpt-5.6-luna", "lượt đầu có tên model")
+      includes(calls[0], "-m gpt-6-luna", "lượt đầu có tên model")
       includes(calls[0], 'model_reasoning_effort="medium"', "và có mức nghĩ")
       // ② Hạ cấp bỏ TÊN MODEL, nhưng mức nghĩ thì không việc gì phải bỏ.
       ok(!calls[1].includes("-m "), "lượt hạ cấp KHÔNG còn -m")
       includes(calls[1], 'model_reasoning_effort="medium"', "lượt hạ cấp vẫn GIỮ mức nghĩ")
+      await rmTemp(w)
+    })
+
+    await it("cover: cùng cổng model — codex cũ hạ về gpt-5.6-luna, provider từ chối thì dự phòng", async () => {
+      const w = await mkdtemp(join(tmpdir(), "kitgen-cov-fb-"))
+      const bin = await fakeCodex(w)
+      for (const d of ["cover", "logs", "prompts"]) await mkdir(join(w, d), { recursive: true })
+      await writeFile(join(w, "prompts/cover.txt"), "một prompt ảnh bìa\n", "utf8")
+      const argvLog = join(w, "argv.txt")
+      const runWith = async vars => {
+        await writeFile(argvLog, "", "utf8")
+        const prev = {}
+        const all = { KITGEN_CODEX_BIN: bin, ARGV_LOG: argvLog, IMG_HOME: undefined, ...vars }
+        for (const [k, v] of Object.entries(all)) {
+          prev[k] = process.env[k]
+          if (v === undefined) delete process.env[k]; else process.env[k] = v
+        }
+        const lines = []
+        try {
+          await runCover(w, { env: { ...process.env }, print: s2 => lines.push(s2) })
+        } finally {
+          for (const [k, v] of Object.entries(prev)) {
+            if (v === undefined) delete process.env[k]; else process.env[k] = v
+          }
+        }
+        return { out: lines.join("\n"), calls: (await readFile(argvLog, "utf8")).trim().split("\n").filter(Boolean) }
+      }
+
+      const old = await runWith({ MODE: "none", CATALOG: "gpt-5.6-luna" })
+      eq(old.calls.length, 1, "một lượt")
+      includes(old.calls[0], "-m gpt-5.6-luna", "codex chưa biết gpt-6-luna ⇒ dự phòng")
+      includes(old.calls[0], 'model_reasoning_effort="medium"', "ghim mức nghĩ")
+      includes(old.out, "chưa biết model 'gpt-6-luna'", "nói ra chuyện hạ nấc")
+
+      const rej = await runWith({ MODE: "reject-primary", CATALOG: undefined, DST: join(w, "cover/cover.raw.png") })
+      eq(rej.calls.length, 2, "từ chối + đúng một lượt lại")
+      includes(rej.calls[0], "-m gpt-6-luna", "lượt đầu xin gpt-6-luna")
+      includes(rej.calls[1], "-m gpt-5.6-luna", "lượt lại bằng dự phòng")
+      includes(await readFile(join(w, "logs/cover.log"), "utf8"), "chạy lại bằng 'gpt-5.6-luna'", "log nêu model chạy lại")
       await rmTemp(w)
     })
 

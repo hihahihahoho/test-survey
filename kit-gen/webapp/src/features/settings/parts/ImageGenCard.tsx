@@ -44,10 +44,13 @@ const PRIVACY_LINE =
  * nào cho biết điều đó có thật sự đang xảy ra hay không, nên câu hỏi "sao tốn token
  * thế" không có cách nào tự trả lời — phải đi đọc rollout của codex mới biết.
  *
- * BA TRẠNG THÁI, VÀ KHÔNG TRẠNG THÁI NÀO ĐƯỢC PHÉP NÓI QUÁ:
- *  · `known === false` — codex trên máy KHÔNG biết tên model này ⇒ chính cổng của
- *    gen.sh sẽ bỏ `-m` và chạy bằng model của hồ sơ. Phải cảnh báo, vì đây đúng là ca
- *    "tưởng đang chạy model rẻ mà không phải".
+ * BỐN TRẠNG THÁI, VÀ KHÔNG TRẠNG THÁI NÀO ĐƯỢC PHÉP NÓI QUÁ:
+ *  · `known === false` mà `fallbackKnown` — codex trên máy chưa biết model chính
+ *    (23/09/2026: codex 0.154 chưa có gpt-6-luna) ⇒ engine chạy model DỰ PHÒNG. Hiện
+ *    TÊN DỰ PHÒNG, không hiện cái tên được xin, và chỉ lối «Cập nhật».
+ *  · `known === false`, không có dự phòng — engine bỏ `-m` và chạy bằng model của hồ
+ *    sơ (mức nghĩ vẫn ghim). Phải cảnh báo, vì đây đúng là ca "tưởng đang chạy model
+ *    rẻ mà không phải".
  *  · `requested === null` — engine CỐ Ý không ép (`KITGEN_GEN_MODEL=""`).
  *  · `source === "unknown"` — không đọc được gen.sh. Im lặng còn hơn bịa một cái tên.
  *
@@ -68,19 +71,26 @@ function GenModelRow({ model }: { model: GenModel | undefined }) {
     );
   }
 
-  const gated = model.known === false;
+  const viaFallback = model.known === false && model.fallbackKnown === true && !!model.fallback;
+  const gated = model.known === false && !viaFallback;
+  const shown = viaFallback ? model.fallback : model.requested;
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-caption text-fg-muted">Sẽ yêu cầu</span>
         <Badge tone={gated ? "warn" : "outline"}>
-          <span className="font-mono">{model.requested}</span>
+          <span className="font-mono">{shown}</span>
         </Badge>
         {model.effort && (
           <>
             <span className="text-caption text-fg-muted">mức nghĩ</span>
             <Badge tone={gated ? "warn" : "outline"}><span className="font-mono">{model.effort}</span></Badge>
           </>
+        )}
+        {viaFallback && (
+          <span className="text-caption text-fg-muted">
+            (dự phòng — codex chưa biết <span className="font-mono">{model.requested}</span>, bấm Cập nhật)
+          </span>
         )}
         {model.source === "env" && (
           <span className="text-caption text-fg-muted">(đặt bằng <span className="font-mono">KITGEN_GEN_MODEL</span>)</span>
@@ -89,7 +99,7 @@ function GenModelRow({ model }: { model: GenModel | undefined }) {
       {gated && (
         <Note>
           Bản Codex trên máy không có tên model này trong danh mục, nên engine sẽ bỏ qua và
-          chạy bằng model mặc định của hồ sơ — có thể nghĩ sâu hơn và tốn token hơn.
+          chạy bằng model mặc định của hồ sơ — có thể tốn token hơn. Bấm Cập nhật để nâng Codex.
         </Note>
       )}
     </div>
