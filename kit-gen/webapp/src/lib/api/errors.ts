@@ -299,6 +299,22 @@ export const ERROR_TABLE: Record<string, ErrorEntry> = {
     explain: "Project này đang ở trong thùng rác.",
     actions: [A.VIEW_TRASH, A.BACK_TO_LIST], where: [W.screen], severity: "warn",
   },
+  /* ── Template người dùng (agent/lib/project-templates.mjs) ─────────────── */
+  NO_COMPOSER_DRAFT: {
+    title: "Dự án này chưa có bản soạn để lưu",
+    explain: "Mở dự án, soạn ít nhất một thẻ cho nó tự lưu, rồi lưu làm template.",
+    actions: [], where: [W.inline], severity: "warn",
+  },
+  TEMPLATE_NOT_FOUND: {
+    title: "Template không còn ở đây",
+    explain: "Có thể nó vừa bị xoá hoặc hỏng. Chọn template khác hoặc bắt đầu từ dự án trống.",
+    actions: [A.RELOAD_DATA], where: [W.inline], severity: "warn",
+  },
+  TEMPLATE_TOO_LARGE: {
+    title: "Ảnh tham chiếu của dự án quá nặng để lưu làm template",
+    explain: "Template chứa tối đa 200 MB ảnh tham chiếu. Gỡ bớt ảnh không dùng rồi thử lại.",
+    actions: [], where: [W.inline], severity: "warn",
+  },
   INVALID_NAME: {
     title: "Tên chưa dùng được",
     explain: "Nhập tên project có ít nhất 1 ký tự.",

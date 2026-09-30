@@ -34,6 +34,7 @@
  */
 import { httpGet } from "@/lib/api/client";
 import { LIMITS } from "@/lib/api";
+import { api } from "@/lib/api/endpoints";
 
 
 /* ═════════ Ảnh bìa: tải qua transport, cache object URL ═════════ */
@@ -92,5 +93,42 @@ export function forgetThumbs(projectId: string): void {
       thumbs.delete(key);
       void old?.then((u) => URL.revokeObjectURL(u)).catch(() => {});
     }
+  }
+}
+
+
+/* ═════════ Hình thu nhỏ của TEMPLATE: cùng lý do, cùng cách ═════════
+   `GET /api/templates/:id/cover?w=128` cũng cần header `X-KitGen-Client` như mọi route
+   của agent ⇒ tải qua transport (`api.templates.coverBlob`) rồi dựng object URL.
+   Khoá kèm `createdAt`: nội dung một template BẤT BIẾN sau khi lưu, nên cặp (id, mốc
+   lưu) là đủ để biết tấm trong cache còn đúng — kể cả khi đổi workspace mà trùng id. */
+
+const templateCovers = new Map<string, Promise<string>>();
+
+export function loadTemplateCover(templateId: string, stamp = ""): Promise<string> {
+  const key = `${templateId}|${stamp}`;
+  const hit = templateCovers.get(key);
+  if (hit) return hit;
+  const p = api.templates.coverBlob(templateId, 128).then((blob) => URL.createObjectURL(blob));
+  p.catch(() => templateCovers.delete(key));
+  templateCovers.set(key, p);
+  if (templateCovers.size > MAX_CACHED_THUMBS) {
+    const oldest = templateCovers.keys().next();
+    if (!oldest.done) {
+      const old = templateCovers.get(oldest.value);
+      templateCovers.delete(oldest.value);
+      void old?.then((u) => URL.revokeObjectURL(u)).catch(() => {});
+    }
+  }
+  return p;
+}
+
+/** Quên hình thu nhỏ của một template (sau khi xoá). */
+export function forgetTemplateCover(templateId: string): void {
+  for (const key of [...templateCovers.keys()]) {
+    if (!key.startsWith(`${templateId}|`)) continue;
+    const old = templateCovers.get(key);
+    templateCovers.delete(key);
+    void old?.then((u) => URL.revokeObjectURL(u)).catch(() => {});
   }
 }

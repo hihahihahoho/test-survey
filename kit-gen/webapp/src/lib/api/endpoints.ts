@@ -27,7 +27,8 @@ import {
   saveContractResultSchema, startRunResultSchema, trashListSchema, usageSchema,
   workspaceListSchema, workflowDraftSchema, draftHistorySchema, draftSnapshotSchema, userLibrarySchema, libraryItemResultSchema,
   librarySettingsResultSchema, brandProfileResultSchema, libraryPresetResultSchema,
-  type LibraryPresetKind,
+  templateListSchema, templateResultSchema,
+  type LibraryPresetKind, type PatchTemplateInput, type SaveTemplateInput, type TemplateList,
   type CleanTarget, type CreateProjectInput, type DuplicateInput,
   type PatchProjectInput, type RefKind, type StartRunInput,
   type LibrarySettings, type SaveWorkflowDraftInput,
@@ -328,6 +329,50 @@ export const trashApi = {
   },
 };
 
+/* ═════════ B'. Template người dùng (agent/routes/templates.mjs) ═════════ */
+
+/**
+ * TEMPLATE — chụp phần dựng của một dự án (mọi thẻ, cài đặt, ảnh tham chiếu) để mở dự
+ * án mới từ đó. Đường TẠO dự án từ template là `projects.create({ …, fromTemplate })`,
+ * không có cửa tạo thứ hai.
+ */
+export const templatesApi = {
+  /**
+   * Danh sách, mới lưu trước.
+   *
+   * AGENT ĐỜI CŨ KHÔNG CÓ ROUTE NÀY (404 `NOT_FOUND` "no route"): web và agent cài lệch
+   * phiên bản là chuyện thường, nhất là agent dev chạy từ checkout cũ. Với hộp Tạo dự án,
+   * "chưa có tính năng template" và "chưa có template nào" dẫn tới CÙNG một màn — chỉ
+   * còn «Dự án trống» — nên 404 ở đây là danh sách rỗng, không phải một băng lỗi đỏ
+   * chắn giữa người dùng và nút Tạo.
+   */
+  async list(): Promise<TemplateList> {
+    try {
+      return parse(templateListSchema, await httpGet("/api/templates"), "danh sách template");
+    } catch (error) {
+      if (error instanceof AgentError && error.status === 404) return { items: [] };
+      throw error;
+    }
+  },
+  /** Chụp dự án thành template. Agent từ chối (422 `NO_COMPOSER_DRAFT`) khi dự án chưa có bản soạn. */
+  async saveFromProject(projectId: string, input: SaveTemplateInput) {
+    return parse(templateResultSchema, await httpPost(`/api/projects/${pid(projectId)}/save-template`, input), "template vừa lưu").template;
+  },
+  async patch(id: string, input: PatchTemplateInput) {
+    return parse(templateResultSchema, await httpPatch(`/api/templates/${pid(id)}`, input), "template vừa sửa").template;
+  },
+  /** Xoá MỀM (agent chuyển vào thùng rác của workspace). */
+  async remove(id: string) {
+    await httpDelete(`/api/templates/${pid(id)}`);
+    return { ok: true };
+  },
+  /** Hình thu nhỏ — qua transport như mọi ảnh của agent (`<img src>` thẳng bị 403, xem agent-blob.ts). */
+  async coverBlob(id: string, width = 128) {
+    const response = await httpGet<Response>(`/api/templates/${pid(id)}/cover?w=${width}`, { raw: true, kind: "get" });
+    return response.blob();
+  },
+};
+
 /* #18 `export.zip`, #19 `POST /api/uploads` và #20 `POST /api/import/preview` ĐÃ RỜI KHỎI
    BỀ MẶT NÀY ở Đợt 2: xuất/nhập project bằng file .zip không còn trong sản phẩm, nên
    webapp không còn nơi nào gọi ba route đó (agent gỡ chúng ở phía kia). */
@@ -578,6 +623,7 @@ export const filesApi = {
 export const api = {
   system: systemApi,
   projects: projectsApi,
+  templates: templatesApi,
   trash: trashApi,
   contract: contractApi,
   elementLib: elementLibApi,

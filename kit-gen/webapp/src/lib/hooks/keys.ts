@@ -45,6 +45,12 @@ export const qk = {
     list: () => ["trash", "list"] as const,
   },
 
+  /** Template người dùng — cấp WORKSPACE (không thuộc dự án nào). */
+  templates: {
+    all: () => ["templates"] as const,
+    list: () => ["templates", "list"] as const,
+  },
+
   contract: {
     all: (projectId: string) => ["contract", projectId] as const,
     current: (projectId: string) => ["contract", projectId, "current"] as const,

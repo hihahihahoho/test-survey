@@ -423,6 +423,12 @@ export const createProjectInputSchema = z.object({
     vi: z.string().min(1, "Đặt tên cho phong cách đầu tiên."),
   }),
   tags: z.array(z.string()).default([]),
+  /**
+   * Id một TEMPLATE NGƯỜI DÙNG ĐÃ LƯU (`GET /api/templates`). Agent tạo dự án như thường
+   * (bản thiết kế trống) rồi đổ bản soạn + ảnh tham chiếu của template vào. KHÔNG phải
+   * một giá trị mới của `template`: khoá ấy vẫn chỉ có `"blank"`. Vắng = dự án trống.
+   */
+  fromTemplate: z.string().optional(),
 });
 export type CreateProjectInput = z.infer<typeof createProjectInputSchema>;
 
@@ -434,6 +440,36 @@ export const createProjectResultSchema = z.looseObject({
     count: z.number().optional(),
   })).default([]),
 });
+
+/**
+ * TEMPLATE NGƯỜI DÙNG — `<ws>/.kitgen/templates/<id>/template.json` (agent/lib/project-templates.mjs).
+ * Chụp phần DỰNG của một dự án (mọi thẻ + cài đặt + mọi ảnh tham chiếu); kết quả đã vẽ
+ * KHÔNG đi theo. `stats.refs` = số ảnh tham chiếu, `stats.blocks` = số thẻ.
+ */
+export const templateStatsSchema = z.looseObject({
+  blocks: z.number().default(0),
+  refs: z.number().default(0),
+  bytes: z.number().default(0),
+});
+export const templateSchema = z.looseObject({
+  schemaVersion: z.number().optional(),
+  id: z.string(),
+  name: z.string(),
+  description: z.string().default(""),
+  tags: z.array(z.string()).default([]),
+  createdAt: z.string().nullish(),
+  updatedAt: z.string().nullish(),
+  sourceProjectId: z.string().nullish(),
+  sourceProjectName: z.string().nullish(),
+  stats: templateStatsSchema.default({ blocks: 0, refs: 0, bytes: 0 }),
+  hasCover: z.boolean().default(false),
+});
+export type Template = z.infer<typeof templateSchema>;
+export const templateListSchema = z.looseObject({ items: z.array(templateSchema).default([]) });
+export type TemplateList = z.infer<typeof templateListSchema>;
+export const templateResultSchema = z.looseObject({ template: templateSchema });
+export interface SaveTemplateInput { name: string; description?: string }
+export interface PatchTemplateInput { name?: string; description?: string }
 
 /** #9 `GET /api/projects/:id` */
 export const projectDetailSchema = z.looseObject({ project: projectSchema });

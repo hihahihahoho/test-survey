@@ -4,6 +4,7 @@ import { DuplicateProjectDialog } from "./dialogs/DuplicateProjectDialog";
 import { DeleteProjectDialog } from "./dialogs/DeleteProjectDialog";
 import { CleanProjectDialog } from "./dialogs/CleanProjectDialog";
 import { BrokenProjectDialog } from "./dialogs/BrokenProjectDialog";
+import { SaveTemplateDialog } from "./dialogs/SaveTemplateDialog";
 import type { Project } from "@/lib/types";
 import type { Gate } from "./lib/gate";
 import type { ProjectNav } from "./lib/nav";
@@ -84,6 +85,15 @@ export function ProjectDialogs({
         project={dialogs.target}
         open={dialogs.isOpen("broken")}
         onOpenChange={dialogs.setOpen("broken")}
+        gate={gate}
+      />
+
+      {/* Mở từ menu thẻ: dự án không mở ở đâu cả ⇒ không có bản soạn trong RAM nào để
+          `flush`, bản trên đĩa là bản mới nhất. Màn soạn tự dựng hộp này kèm `composer`. */}
+      <SaveTemplateDialog
+        project={dialogs.target}
+        open={dialogs.isOpen("saveTemplate")}
+        onOpenChange={dialogs.setOpen("saveTemplate")}
         gate={gate}
       />
     </>

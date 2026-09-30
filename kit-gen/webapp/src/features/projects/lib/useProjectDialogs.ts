@@ -22,7 +22,9 @@ export type DialogKind =
   | "duplicate"
   | "delete"
   | "clean"
-  | "broken";
+  | "broken"
+  /** «Lưu làm template» từ menu thẻ — xem `SaveTemplateDialog`. */
+  | "saveTemplate";
 
 export interface DialogState {
   open: DialogKind | null;

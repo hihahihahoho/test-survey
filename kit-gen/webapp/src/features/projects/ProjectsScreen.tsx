@@ -131,6 +131,7 @@ export function ProjectsScreen(_props: ScreenProps) {
       rename: (p) => dialogs.openDialog("rename", p),
       duplicate: (p) => dialogs.openDialog("duplicate", p),
       remove: (p) => dialogs.openForMany("delete", [p]),
+      saveTemplate: (p) => dialogs.openDialog("saveTemplate", p),
     }),
     [dialogs, openProject],
   );

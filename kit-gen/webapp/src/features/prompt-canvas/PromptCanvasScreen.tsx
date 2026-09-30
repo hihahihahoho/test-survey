@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Image as ImageIcon, LayoutGrid, Plus, Settings, Smile, Sparkles, Trash2 } from "lucide-react";
+import { BookmarkPlus, Image as ImageIcon, LayoutGrid, Plus, Settings, Smile, Sparkles, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
@@ -14,6 +14,11 @@ import { createNav } from "@/features/projects/lib/nav";
 import { useProjectDialogs } from "@/features/projects/lib/useProjectDialogs";
 import { ProjectDialogs } from "@/features/projects/ProjectDialogs";
 import { ProjectSettingsDialog } from "@/features/project/components/ProjectSettingsDialog";
+import {
+  SaveTemplateDialog,
+  saveTemplateBlockReason,
+  type ComposerSnapshotState,
+} from "@/features/projects/dialogs/SaveTemplateDialog";
 import { CopyFigmaButton, DownloadKitButton } from "@/features/kit/components/KitExits";
 
 import { PillButton, PillCaret, PillMenu, PillMenuItem, useMenuFlip } from "@/features/prompt-lab/components/pill-ui";
@@ -31,7 +36,7 @@ import {
 import "@/features/prompt-lab/prompt-lab.css";
 
 import { CanvasBlock } from "./components/CanvasBlock";
-import { useComposerDoc } from "./lib/composer-doc";
+import { useComposerDoc, type ComposerDocStore } from "./lib/composer-doc";
 import { PromptProjectContext } from "./lib/project-context";
 import {
   composerBlockSheets,
@@ -373,6 +378,7 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
           </div>
           <div className="flex flex-wrap items-center gap-4">
             <SaveState updatedAt={store.updatedAt} dirty={store.dirty} saving={store.saving} error={store.saveError} />
+            <SaveTemplateButton projectId={projectId} store={store} />
             <GenAllButton blocks={blockSheets} queue={queue} locked={locked} />
           </div>
         </header>
@@ -536,6 +542,61 @@ function ExitRow({ projectId, settingsOpen, onSettingsOpenChange }: {
         onDeleted={() => void navigate({ to: "/" })}
       />
     </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   «Lưu làm template»
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * CHỤP DỰ ÁN THÀNH TEMPLATE — cạnh dòng «Đã lưu», vì hai thứ nói về cùng một bản soạn.
+ *
+ * Chủ sản phẩm (30/09/2026): «…sẽ có nút save template (bao gồm cả save ảnh,
+ * setting...), khi tạo mới 1 project -> sẽ có thể chọn template sẵn».
+ *
+ * `ghost` + `sm`: việc làm MỘT LẦN, nên nhẹ hơn «Vẽ tất cả» về thị giác — cùng luật
+ * với hàng cửa ra (`ExitRow`). Bản soạn chưa đọc được / đang xung đột / còn bản nháp
+ * wizard cũ ⇒ nút KHOÁ và nói lý do ở `title`: chụp lúc đó là chụp một bản không phải
+ * bản trên màn. Hộp thoại mang `composer` để `flush()` rồi đợi ghi xong trước khi chụp.
+ */
+function SaveTemplateButton({ projectId, store }: { projectId: string; store: ComposerDocStore }) {
+  const project = useProject(projectId);
+  const { status } = useAgentStatus();
+  const narrow = useNarrowViewport();
+  const gate = React.useMemo(() => gateOf(status, narrow), [status, narrow]);
+  const [open, setOpen] = React.useState(false);
+
+  const composer: ComposerSnapshotState = {
+    dirty: store.dirty,
+    saving: store.saving,
+    saveError: store.saveError,
+    loadError: store.loadError,
+    conflict: store.conflict,
+    /* Bản nháp wizard cũ còn TRÊN ĐĨA (kể cả khi người dùng đã bấm «Thay» mà chưa gõ
+       gì): agent chụp bản trên đĩa, nên sẽ từ chối — khoá trước, nói lý do trước. */
+    legacyDraft: store.legacyDraft,
+    flush: store.flush,
+  };
+  const why = gate.readOnly ? gate.reason : saveTemplateBlockReason(composer);
+  const data = project.data;
+
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={!data || Boolean(why)}
+        title={why ?? "Lưu mọi thẻ, cài đặt và ảnh tham chiếu để tạo dự án mới từ đây"}
+        onClick={() => setOpen(true)}
+      >
+        <BookmarkPlus aria-hidden strokeWidth={1.5} />
+        Lưu làm template
+      </Button>
+      {data && (
+        <SaveTemplateDialog project={data} open={open} onOpenChange={setOpen} gate={gate} composer={composer} />
+      )}
+    </>
   );
 }
 

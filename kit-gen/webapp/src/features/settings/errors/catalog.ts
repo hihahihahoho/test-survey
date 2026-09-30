@@ -345,6 +345,35 @@ export const DOC_ENTRIES: DocEntry[] = [
     related: ["INVALID_SLUG"],
   },
   {
+    code: "NO_COMPOSER_DRAFT",
+    group: "Project",
+    why:
+      // kg-allow-jargon: «template» là TÊN TÍNH NĂNG do chủ sản phẩm đặt («save template»), không phải chữ kỹ thuật lọt ra.
+      "Template chụp lại bản soạn của dự án (mọi thẻ và cài đặt). Dự án này chưa có bản soạn nào trên máy — " +
+      "hoặc vì chưa gõ gì, hoặc vì nó còn giữ bản nháp kiểu cũ của trình tạo 6 bước.",
+    fix: [
+      "Mở dự án, thêm hoặc sửa một thẻ và đợi dòng «Đã lưu» hiện ra.",
+      // kg-allow-jargon: tên tính năng «template», như trên.
+      "Nếu dự án hỏi «Thay bản nháp cũ», trả lời trước đã rồi mới lưu làm template.",
+    ],
+  },
+  {
+    code: "TEMPLATE_NOT_FOUND",
+    group: "Project",
+    // kg-allow-jargon: tên tính năng «template», như trên.
+    why: "Template vừa chọn không còn trong thư mục làm việc — đã bị xoá ở nơi khác, hoặc file của nó bị hỏng.",
+    // kg-allow-jargon: tên tính năng «template», như trên.
+    fix: ["Đóng rồi mở lại hộp Tạo dự án để thấy danh sách mới.", "Chọn template khác, hoặc bắt đầu từ dự án trống."],
+  },
+  {
+    code: "TEMPLATE_TOO_LARGE",
+    group: "Project",
+    // kg-allow-jargon: tên tính năng «template», như trên.
+    why: "Template mang theo toàn bộ ảnh tham chiếu của dự án, tối đa 200 MB. Dự án này có nhiều ảnh hơn thế.",
+    fix: ["Gỡ những ảnh tham chiếu không còn dùng khỏi dự án rồi lưu lại.", "Hoặc dùng «Nhân bản dự án» nếu cần mang hết."],
+    related: ["TOO_LARGE"],
+  },
+  {
     code: "INVALID_NAME",
     group: "Project",
     why: "Tên project đang để trống hoặc chỉ có khoảng trắng.",

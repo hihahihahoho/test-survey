@@ -1,5 +1,5 @@
 import {
-  ArrowUpRight, Copy, FolderOpen, MoreHorizontal, Pencil, Trash2,
+  ArrowUpRight, BookmarkPlus, Copy, FolderOpen, MoreHorizontal, Pencil, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,8 +13,9 @@ import type { Gate } from "@/features/projects/lib/gate";
 import { toastError, toastSuccess } from "@/features/projects/lib/feedback";
 
 /**
- * MENU `⋯` CỦA THẺ BỘ KIT — 6 mục, thứ tự cố định theo UX-V3 §1.3:
+ * MENU `⋯` CỦA THẺ BỘ KIT — thứ tự cố định theo UX-V3 §1.3:
  *   Mở · Đổi tên · Tạo bộ kit từ bộ này · Tải về máy (.zip) · Mở thư mục trên máy · ─ · Xoá
+ * (30/09/2026: thêm «Lưu làm template» ngay sau «Nhân bản dự án».)
  *
  * ══ RANH GIỚI H1 / H2 — nói rõ để không ai tưởng đã xong ═════════════════════════
  * H1 dựng **khung menu + chữ đúng §1.3 + trạng thái khoá**. Ba thứ thuộc H2
@@ -37,6 +38,8 @@ export interface KitActions {
   rename: (p: Project) => void;
   duplicate: (p: Project) => void;
   remove: (p: Project) => void;
+  /** «Lưu làm template» — tuỳ chọn để nơi dựng thẻ không cần template thì bỏ qua. */
+  saveTemplate?: (p: Project) => void;
 }
 
 export function KitCardMenu({
@@ -95,6 +98,15 @@ export function KitCardMenu({
           {label("Nhân bản dự án")}
           <DropdownMenuShortcut>⌘D</DropdownMenuShortcut>
         </DropdownMenuItem>
+
+        {/* Cạnh «Nhân bản» vì là họ hàng gần: nhân bản mang theo cả ảnh đã vẽ và tạo
+            dự án NGAY; template chỉ mang phần dựng và để dành cho lần tạo sau. */}
+        {actions.saveTemplate && (
+          <DropdownMenuItem disabled={ro || kit.broken} onSelect={() => actions.saveTemplate?.(kit)}>
+            <BookmarkPlus aria-hidden />
+            {label("Lưu làm template") /* kg-allow-jargon: «template» là TÊN TÍNH NĂNG do chủ sản phẩm đặt («save template»), không phải chữ kỹ thuật lọt ra */}
+          </DropdownMenuItem>
+        )}
 
 
         <DropdownMenuItem disabled={ro} onSelect={doReveal}>
