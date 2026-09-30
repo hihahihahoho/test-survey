@@ -120,7 +120,11 @@ export function corsHeaders(origin) {
 /** Đường dẫn CHỈ-ĐỌC tài nguyên tĩnh: bundle /app/* và đọc file/thumbnail trong project.
  *  Một trang mở ra nạp cả trăm ES module (bundle không có build step) và lưới kit có thể
  *  xin ~100 thumbnail cùng lúc ⇒ bắt chúng chen chung bucket với API là TỰ CHẶN CHÍNH MÌNH. */
-const STATIC_READ = [/^\/app(\/|$)/, /^\/api\/projects\/[^/]+\/files\//, /^\/favicon\.ico$/]
+/* Ảnh thu nhỏ của template (`GET /api/templates/:id/cover`) cùng loại: hộp Tạo dự án
+   xin một tấm cho MỖI dòng template ngay lúc mở, cùng nhịp với danh sách. */
+const STATIC_READ = [
+  /^\/app(\/|$)/, /^\/api\/projects\/[^/]+\/files\//, /^\/api\/templates\/[^/]+\/cover$/, /^\/favicon\.ico$/,
+]
 export function isStaticRead(pathname) {
   return STATIC_READ.some(re => re.test(String(pathname)))
 }

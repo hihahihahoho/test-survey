@@ -16,6 +16,12 @@ export const STATUS = {
   /* Bản nháp trên đĩa MỚI hơn mốc mà tab này đã nhận ⇒ tab khác/máy khác đã lưu sau
      (sự cố 23/09/2026 — xem `saveWorkflowDraft`). */
   DRAFT_CONFLICT: 409,
+  /* Template (lib/project-templates.mjs). NO_COMPOSER_DRAFT = dự án chưa có bản soạn
+     prompt nào để chụp (chưa lưu lần nào, hoặc ô nhớ còn bản nháp wizard đời cũ).
+     TEMPLATE_TOO_LARGE tách khỏi TOO_LARGE: TOO_LARGE là "body/file BẠN GỬI quá to"
+     (web dịch thành «Ảnh tối đa 20 MB…» + nút chọn file khác) — ở đây không ai gửi
+     file nào, thứ quá to là thư mục ảnh tham chiếu đã nằm sẵn trong dự án. */
+  NO_COMPOSER_DRAFT: 422, TEMPLATE_NOT_FOUND: 404, TEMPLATE_TOO_LARGE: 413,
   // trash
   TRASH_NOT_FOUND: 404, CONFIRM_REQUIRED: 412, CONFIRM_INVALID: 403, CONFIRM_LOCKED: 429,
   // contract

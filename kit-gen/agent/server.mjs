@@ -41,6 +41,7 @@ import { register as registerFiles } from "./routes/files.mjs"
 import { register as registerCover } from "./routes/cover.mjs"
 import { register as registerApp } from "./routes/app.mjs"
 import { register as registerLibrary } from "./routes/library.mjs"
+import { register as registerTemplates } from "./routes/templates.mjs"
 import { sweepOrphanCovers } from "./lib/cover.mjs"
 import { isSourceCheckout, readRuntimeVersion } from "./lib/update.mjs"
 import { defaultKitgenHome } from "./lib/platform.mjs"
@@ -177,6 +178,7 @@ export async function createAgent(opts = {}) {
   registerFiles(router)
   registerCover(router)
   registerLibrary(router)
+  registerTemplates(router)
   registerApp(router)
 
   const LIMITS = { ...DEFAULT_LIMITS, ...(opts.limits ?? {}) }

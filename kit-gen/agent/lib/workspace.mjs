@@ -37,6 +37,9 @@ export class Workspace {
     this.engineDir = join(this.kitgenDir, "engine")
     this.cacheDir = join(this.kitgenDir, "cache")
     this.libraryDir = join(this.kitgenDir, "library")
+    /* Template của người dùng (lib/project-templates.mjs) — cấp WORKSPACE như kho dùng
+       chung, vì chúng sinh ra để đi từ dự án này sang dự án khác. */
+    this.templatesDir = join(this.kitgenDir, "templates")
   }
   get label() { return workspaceLabel(this.root) }
   get fingerprint() { return workspaceFingerprint(this.root) }
@@ -46,6 +49,7 @@ export class Workspace {
     await ensureDir(this.trashDir)
     await ensureDir(this.cacheDir)
     await ensureDir(this.libraryDir)
+    await ensureDir(this.templatesDir)
     if (!(await exists(this.configPath))) await writeJsonAtomic(this.configPath, CONFIG_DEFAULT)
     return this
   }

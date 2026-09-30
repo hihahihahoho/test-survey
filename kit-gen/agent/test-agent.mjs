@@ -13,6 +13,7 @@
      suite-contract  version + If-Match (412/409) · validate V-01..V-08 · lịch sử
      suite-limits    413 body (2 đường) · 429 rate limit
      suite-refs      multipart · agent tự đặt tên · magic bytes · REF_IN_USE
+     suite-templates template người dùng: lưu (bản soạn + refs/ + bìa, không kết quả vẽ) · tạo dự án từ template · id lạ · xoá mềm
      suite-runs      run-store trên đĩa · stream NDJSON + reconnect · dừng · gen→slice thật
      suite-pause     dừng giữa chừng → chạy tiếp phần thiếu · run mồ côi sau khi agent chết
      suite-cover     ảnh bìa: prompt neo branding gốc · toạ độ vùng tiêu đề · job phụ không phá run
@@ -41,6 +42,7 @@ import { run as runPause } from "./test/suite-pause.mjs"
 import { run as runCover } from "./test/suite-cover.mjs"
 import { run as runImport } from "./test/suite-import.mjs"
 import { run as runLibrary } from "./test/suite-library.mjs"
+import { run as runTemplates } from "./test/suite-templates.mjs"
 import { run as runUpdateCure } from "./test/suite-update-cure.mjs"
 import { run as runCodexLogin } from "./test/suite-codex-login.mjs"
 import { run as runEnginePrompt } from "./test/suite-engine-prompt.mjs"
@@ -99,6 +101,7 @@ await runContract({ ...base, pid })
 await runLimits({ ...base, pid })
 await runRefs({ ...base, pid })
 await runLibrary(base)
+await runTemplates(base)
 await runRuns({ ...base, pid })
 await runPause({ ...base, pid })
 await runCover({ ...base, pid })

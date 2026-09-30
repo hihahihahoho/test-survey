@@ -11,7 +11,8 @@ import { buildTemplateContract } from "../lib/templates.mjs"
 import { writeContract, readContract } from "../lib/contract.mjs"
 import { fail } from "../lib/errors.mjs"
 import { RE_SLUG, RE_VARIANT_ID, assertMatch } from "../lib/paths.mjs"
-import { exists, walkFiles, dirStats, sha256 } from "../lib/fsx.mjs"
+import { exists, walkFiles, dirStats, sha256, removeTree } from "../lib/fsx.mjs"
+import { applyTemplateToProject, mergeTags, readTemplate } from "../lib/project-templates.mjs"
 import { forgetCover } from "../lib/cover.mjs"
 import { makeZip } from "../lib/zip.mjs"
 
@@ -56,6 +57,15 @@ export function register(r) {
     const template = String(body.template ?? "blank")
     if (template !== "blank") fail("BAD_REQUEST", `unknown template ${template}`)
 
+    /* `fromTemplate` — mở dự án từ một TEMPLATE NGƯỜI DÙNG ĐÃ LƯU (lib/project-templates.mjs).
+       KHÔNG phải một giá trị mới của `template`: `template` nói bản thiết kế khởi đầu
+       (vẫn luôn trống — composer dựng lại nó ở cú bấm Vẽ), còn `fromTemplate` nói bản
+       soạn + ảnh tham chiếu đổ vào sau đó. Đọc template TRƯỚC khi tạo thư mục: id sai
+       khuôn là 400, không có là 404, và cả hai không được để lại một dự án rỗng nào. */
+    const fromTemplate = body.fromTemplate === undefined || body.fromTemplate === null || body.fromTemplate === ""
+      ? null
+      : await readTemplate(ws, String(body.fromTemplate))
+
     const slug = body.slug !== undefined && body.slug !== null && body.slug !== ""
       ? assertMatch(RE_SLUG, body.slug, "INVALID_SLUG", "slug")
       : slugify(name)
@@ -75,8 +85,22 @@ export function register(r) {
       style: fv.style ?? "",
     }
 
-    await createProjectDir(ws, { id, name, slug, description: body.description, tags: body.tags })
-    await writeContract(ws, id, buildTemplateContract(firstVariant), { ifMatch: 0 })
+    const description = body.description ?? fromTemplate?.description
+    const tags = fromTemplate ? mergeTags(body.tags, fromTemplate.tags) : body.tags
+    const { dir } = await createProjectDir(ws, { id, name, slug, description, tags })
+    try {
+      await writeContract(ws, id, buildTemplateContract(firstVariant), { ifMatch: 0 })
+      /* Ảnh bìa CỐ Ý không chép: nó là kết quả vẽ của dự án cũ (chỉ là hình thu nhỏ của
+         template). Dự án mới tự có bìa sau lượt vẽ đầu tiên của chính nó. */
+      if (fromTemplate) await applyTemplateToProject(ws, fromTemplate.id, id)
+    } catch (e) {
+      /* Chép hỏng giữa chừng ⇒ dọn nguyên dự án dở dang. Một dự án có tên mà thiếu nửa
+         ảnh là thứ tệ nhất để trao cho người dùng: trông như thành công, rồi hỏng ở cú
+         bấm Vẽ đầu tiên. Chỉ dọn thư mục VỪA TẠO — `createProjectDir` ném (id trùng)
+         thì không tới được đây. Đường `blank` giữ nguyên hành vi cũ. */
+      if (fromTemplate) await removeTree(dir).catch(() => {})
+      throw e
+    }
 
     const p = await readProject(ws, id)
     Object.assign(p, await computeState(ws, id, p))

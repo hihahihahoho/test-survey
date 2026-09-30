@@ -79,10 +79,18 @@ export async function readProject(ws, id) {
   }
 }
 
+/* Template xoá mềm (lib/project-templates.mjs) nằm CHUNG thùng rác với dự án, dưới tiền
+   tố này. `listTrash` và `findInTrash` phải bỏ qua chúng: không thì một template đã xoá
+   hiện thành "dự án trong thùng rác" (bấm Phục hồi là dựng một dự án không có
+   project.json), và một dự án trùng đuôi id với template đã xoá bị báo "đang trong
+   thùng rác" dù chưa từng bị xoá. */
+export const TEMPLATE_TRASH_PREFIX = "template-"
+const isTemplateTrash = name => name.startsWith(TEMPLATE_TRASH_PREFIX)
+
 async function findInTrash(ws, projectId) {
   try {
     const ents = await readdir(ws.trashDir, { withFileTypes: true })
-    for (const e of ents) if (e.isDirectory() && e.name.endsWith("-" + projectId)) return { trashId: e.name }
+    for (const e of ents) if (e.isDirectory() && !isTemplateTrash(e.name) && e.name.endsWith("-" + projectId)) return { trashId: e.name }
   } catch { /* chưa có thùng rác */ }
   return null
 }
@@ -366,7 +374,7 @@ export async function listTrash(ws) {
   const ents = await readdir(ws.trashDir, { withFileTypes: true }).catch(() => [])
   const items = []
   for (const e of ents) {
-    if (!e.isDirectory()) continue
+    if (!e.isDirectory() || isTemplateTrash(e.name)) continue
     const metaFile = join(ws.trashDir, e.name, ".trash-meta.json")
     let meta
     try { meta = await readJsonFile(metaFile) }
