@@ -764,4 +764,44 @@ export async function run({ api, call, agent, agentDir, tmp }) {
     ok(calls.some(c => c.includes('"::1"')), "có bind [::1]")
   })
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     CLIENT BỎ ĐI GIỮA CHỪNG THÌ FILE PHẢI ĐƯỢC ĐÓNG (runner Windows 30/09/2026).
+     `sendFile` bản cũ dùng `.pipe(res)`: đích đóng thì nguồn chỉ bị tháo ống, KHÔNG bị hủy ⇒
+     ReadStream đứng im với fd mở suốt đời agent, promise không bao giờ xong. Trên Windows
+     thư mục chứa file đó không đổi tên được nữa ⇒ xoá template vừa xem bìa trả 423.
+     Ở đây client thật (socket TCP) nhận vài byte đầu rồi cắt. Phán ở hai chỗ: `sendFile`
+     phải XONG (bản cũ treo mãi), và thư mục chứa file phải đổi tên được (Windows mới thấy).
+     ══════════════════════════════════════════════════════════════════════════ */
+  describe("phục vụ file")
+  await it("client cắt kết nối giữa chừng ⇒ sendFile xong và nhả file (thư mục đổi tên được)", async () => {
+    const http = await import("node:http")
+    const net = await import("node:net")
+    const { sendFile } = await import("../lib/http.mjs")
+    const { renameAtomic } = await import("../lib/fsx.mjs")
+    const dir = join(tmp, "sendfile-abort")
+    mkdirSync(dir, { recursive: true })
+    const big = join(dir, "anh-lon.png")
+    writeFileSync(big, Buffer.alloc(8_000_000, 7))      // lớn hơn mọi bộ đệm socket ⇒ chắc chắn còn dở
+    let settled
+    const done = new Promise(r => { settled = r })
+    const server = http.createServer((req, res) => {
+      sendFile(res, big, { req }).then(() => settled("xong"), e => settled(`ném ${e?.code ?? e}`))
+    })
+    await new Promise(r => server.listen(0, "127.0.0.1", r))
+    try {
+      const sock = net.connect(server.address().port, "127.0.0.1")
+      sock.write("GET /anh-lon.png HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+      await new Promise(r => sock.once("data", r))
+      sock.destroy()
+      const verdict = await Promise.race([done, new Promise(r => setTimeout(() => r("TREO"), 5_000))])
+      eq(verdict, "xong", "sendFile phải kết thúc êm khi client bỏ đi (bản cũ treo mãi, fd mở)")
+      const moved = join(tmp, "sendfile-abort-da-doi-ten")
+      await renameAtomic(dir, moved)
+      ok(statSync(join(moved, "anh-lon.png")).isFile(), "thư mục chứa file vừa phục vụ đổi tên được")
+    } finally {
+      server.close()
+      server.closeAllConnections?.()
+    }
+  })
+
 }

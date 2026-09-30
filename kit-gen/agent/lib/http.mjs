@@ -2,6 +2,7 @@
    (architecture §4.4-4: lớp chặn cuối cùng). */
 import { createReadStream } from "node:fs"
 import { stat } from "node:fs/promises"
+import { pipeline } from "node:stream/promises"
 import { extname } from "node:path"
 import { redactDeep } from "./redact.mjs"
 import { AgentError } from "./errors.mjs"
@@ -62,5 +63,17 @@ export async function sendFile(res, abs, { headers = {}, req, download = null, c
   base["Content-Length"] = st.size
   res.writeHead(200, base)
   if (req?.method === "HEAD") return res.end()
-  await new Promise((ok, err) => createReadStream(abs).on("error", err).on("end", ok).pipe(res))
+  /* `pipeline`, KHÔNG `.pipe()` (runner Windows 30/09/2026, bản 3.0.15): `.pipe()` KHÔNG hủy
+     nguồn khi đích đóng. Client bỏ đi giữa chừng — trình duyệt hủy tải ảnh khi cuộn lưới,
+     đóng hộp thoại, rời trang — là ReadStream đứng im mãi với fd còn mở, suốt đời agent.
+     POSIX thì chỉ rò fd; Windows thì KHÔNG đổi tên được thư mục chứa file đó ⇒ xoá dự án /
+     template trả 423 «thư mục làm việc không ghi được» cho tới khi tắt agent.
+     Header đã đi rồi thì không còn phong bì lỗi nào gửi được: bản cũ ném ra để `sendError`
+     gọi writeHead lần hai (ERR_HTTP_HEADERS_SENT). Client tự bỏ đi là chuyện thường, im; đọc
+     đĩa hỏng giữa chừng thì ghi một dòng, không kèm đường dẫn. */
+  try { await pipeline(createReadStream(abs), res) }
+  catch (e) {
+    if (e?.code !== "ERR_STREAM_PREMATURE_CLOSE") process.stderr.write(`[agent] đọc file hỏng giữa chừng: ${e?.code ?? "?"}\n`)
+    res.destroy()
+  }
 }

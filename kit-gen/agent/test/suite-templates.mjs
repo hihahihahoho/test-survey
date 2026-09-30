@@ -339,17 +339,15 @@ export async function run({ api, agent, wsRoot }) {
     eq(await lsDir(join(projects, r.json.project.id, "refs")), [], "refs/ trống")
   })
 
-  // Dọn: dự án của suite này vào thùng rác, template còn lại vào thùng rác.
-  /* VẾT DỌN (30/09/2026): trên runner Windows tiến trình bộ ca chết NGAY SAU ca cuối
-     của suite này, không móc nào kêu — rename thư mục template gặp EPERM, nhịp đợi thử
-     lại bị unref (đã vá ở `renameAtomic`). Giữ vết: nếu Windows còn giữ thư mục quá cả
-     cửa sổ thử lại thì dòng này nói ra mã lỗi thay vì một khoảng lặng. */
-  const trace = t => process.stdout.write(`  [dọn template] ${t}\n`)
-  const del = async path => {
-    const t0 = Date.now()
-    const r = await api("DELETE", path)
-    trace(`DELETE ${path} → ${r.status} (${Date.now() - t0}ms)${r.status === 200 ? "" : ` ${r.text.slice(0, 300)}`}`)
-  }
-  for (const id of made) await del(`/api/projects/${id}`)
-  await del(`/api/templates/${tpl.id}`)
+  /* ── XOÁ TEMPLATE ĐÃ ĐƯỢC DÙNG (runner Windows 30/09/2026, bản 3.0.15) ─────────
+     Template này đã được xem bìa (GET cover) và đã dùng để mở dự án. `sendFile` bản cũ để
+     fd của cover.png mở mãi khi client đóng kết nối trước lúc ReadStream đọc tới EOF (bộ
+     ca này đúng như thế) ⇒ Windows không cho đổi tên thư mục ⇒ DELETE trả 423 sau cả cửa
+     sổ thử lại 4,5 s. Trên macOS/Linux ca này xanh cả với bản cũ; chỉ runner Windows phán. */
+  await it("xoá template VỪA xem bìa + vừa mở dự án ⇒ 200 (Windows: không file nào còn bị giữ)", async () => {
+    for (const id of made) eq((await api("DELETE", `/api/projects/${id}`)).status, 200, `dọn dự án ${id}`)
+    const r = await api("DELETE", `/api/templates/${tpl.id}`)
+    eq(r.status, 200, `xoá template: ${r.text.slice(0, 300)}`)
+    ok(!(await pathExists(join(templatesDir, tpl.id))), "rời thư mục templates")
+  })
 }
