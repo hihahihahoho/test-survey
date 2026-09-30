@@ -341,13 +341,15 @@ export async function run({ api, agent, wsRoot }) {
 
   // Dọn: dự án của suite này vào thùng rác, template còn lại vào thùng rác.
   /* VẾT DỌN (30/09/2026): trên runner Windows tiến trình bộ ca chết NGAY SAU ca cuối
-     của suite này, không móc nào kêu. In từng bước để lần sau chỉ ra đúng lệnh cuối. */
+     của suite này, không móc nào kêu — rename thư mục template gặp EPERM, nhịp đợi thử
+     lại bị unref (đã vá ở `renameAtomic`). Giữ vết: nếu Windows còn giữ thư mục quá cả
+     cửa sổ thử lại thì dòng này nói ra mã lỗi thay vì một khoảng lặng. */
   const trace = t => process.stdout.write(`  [dọn template] ${t}\n`)
-  for (const id of made) {
-    trace(`DELETE /api/projects/${id} …`)
-    trace(`  → ${(await api("DELETE", `/api/projects/${id}`)).status}`)
+  const del = async path => {
+    const t0 = Date.now()
+    const r = await api("DELETE", path)
+    trace(`DELETE ${path} → ${r.status} (${Date.now() - t0}ms)${r.status === 200 ? "" : ` ${r.text.slice(0, 300)}`}`)
   }
-  trace(`DELETE /api/templates/${tpl.id} …`)
-  trace(`  → ${(await api("DELETE", `/api/templates/${tpl.id}`)).status}`)
-  trace("xong")
+  for (const id of made) await del(`/api/projects/${id}`)
+  await del(`/api/templates/${tpl.id}`)
 }

@@ -132,6 +132,22 @@ export async function run({ api, pid, wsRoot, agentDir }) {
     eq(JSON.parse(await readFile(file, "utf8")).ok, 1, "writeJsonAtomic vẫn ghi xuống đĩa")
     await rm(file, { force: true })
   })
+  /* Runner Windows 30/09/2026: `DELETE /api/templates` gặp một nhịp EPERM, nhịp đợi mặc
+     định bị unref ⇒ vòng sự kiện của bộ ca cạn ⇒ Node thoát câm giữa lượt rename. Mọi ca
+     ở trên đều BƠM `sleep` nên nhịp đợi mặc định chưa từng được chạy. Ca này chạy nó thật,
+     trong một tiến trình con không có gì khác giữ vòng sự kiện — đúng cảnh của bộ ca. */
+  await it("nhịp đợi MẶC ĐỊNH của renameAtomic giữ tiến trình sống tới khi rename xong", async () => {
+    const { execFile } = await import("node:child_process")
+    const fsx = new URL("../lib/fsx.mjs", import.meta.url).href
+    const script = `import { renameAtomic } from ${JSON.stringify(fsx)}
+let n = 0
+await renameAtomic("tmp", "dich", { rename: async () => { if (++n < 3) throw Object.assign(new Error("held"), { code: "EPERM" }) } })
+process.stdout.write("xong sau " + n + " nhịp")`
+    const r = await new Promise(res => execFile(process.execPath, ["--input-type=module", "-e", script],
+      { timeout: 15_000 }, (err, stdout, stderr) => res({ code: err?.code ?? 0, stdout, stderr })))
+    eq(r.stdout, "xong sau 3 nhịp", `tiến trình phải sống qua hai nhịp đợi (mã ${r.code}, stderr ${r.stderr.slice(0, 200)})`)
+    eq(r.code, 0, "thoát bình thường")
+  })
 
   await it("PUT với version LỆCH → 409 CONTRACT_CONFLICT + serverVersion + diffSummary", async () => {
     const g = await api("GET", `/api/projects/${pid}/contract`)

@@ -89,12 +89,18 @@ const RENAME_TRIES = 10
 const RENAME_DELAY_MS = 40
 
 /** `rename(from → to)` có thử lại cho ĐÚNG bộ mã "đang bị giữ". Tham số `rename`/`sleep`
- *  để ca test bơm được điều kiện Windows vào (không có máy Windows nào trong bộ ca). */
+ *  để ca test bơm được điều kiện Windows vào (không có máy Windows nào trong bộ ca).
+ *
+ *  Nhịp đợi KHÔNG `unref()` (runner Windows 30/09/2026, bản 3.0.15): một lượt ghi đang thử
+ *  lại LÀ việc đang dở. Bản cũ unref nhịp đợi, nên trong một tiến trình không có gì khác giữ
+ *  vòng sự kiện (bộ ca gọi agent qua cặp duplex trong bộ nhớ, không có cổng nào mở) thì
+ *  một lần EPERM duy nhất ⇒ vòng sự kiện cạn ⇒ Node thoát NGAY, không lỗi, không móc
+ *  `exit` nào kêu — và rename bỏ dở. Bộ ca chết câm 4 lần liền ở `DELETE /api/templates`. */
 export async function renameAtomic(from, to, {
   rename: doRename = rename,
   tries = RENAME_TRIES,
   delayMs = RENAME_DELAY_MS,
-  sleep = ms => new Promise(r => { const t = setTimeout(r, ms); t.unref?.() }),
+  sleep = ms => new Promise(r => setTimeout(r, ms)),
 } = {}) {
   for (let attempt = 1; ; attempt++) {
     try { return await doRename(from, to) }

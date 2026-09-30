@@ -99,11 +99,18 @@ process.on("unhandledRejection", died("unhandledRejection"))
    phải lỗi JS. Còn hai khả năng: ai đó gọi `process.exit()` (móc `exit` in được ai gọi —
    stack đồng bộ còn nguyên), hoặc tiến trình bị giết từ ngoài (khi đó móc này im, và
    chính sự im lặng ấy là câu trả lời). Chỉ in khi thoát KHÁC 0 và chưa qua báo cáo. */
+/* Và ĐÂY là thủ phạm thật của bốn lần chết câm ấy: vòng sự kiện CẠN giữa chừng (một await
+   chỉ còn một timer đã unref giữ — xem `renameAtomic`). Node 20 khi đó phát `exit` với mã
+   0 rồi mới tự đổi thành 13 ⇒ bản cũ của móc này (`code === 0 ⇒ im`) im đúng lúc cần kêu.
+   Chưa qua báo cáo mà đã thoát thì dù mã gì cũng là chết giữa chừng. */
 process.on("exit", code => {
-  if (code === 0 || reported) return
-  process.stdout.write(
-    `\n\n╳ process.exit(${code}) — ai gọi:\n${new Error("exit").stack}\n` +
-    `  ca gần nhất : ${currentCase() ?? "(ngoài ca)"}\n`)
+  if (reported) return
+  process.exitCode = 1
+  process.stdout.write(code === 0
+    ? `\n\n╳ VÒNG SỰ KIỆN CẠN TRƯỚC KHI BỘ CA XONG — một await không còn gì giữ tiến trình sống (timer unref?)\n` +
+      `  ca gần nhất : ${currentCase() ?? "(ngoài ca)"}\n`
+    : `\n\n╳ process.exit(${code}) — ai gọi:\n${new Error("exit").stack}\n` +
+      `  ca gần nhất : ${currentCase() ?? "(ngoài ca)"}\n`)
 })
 
 const tmp = await mkdtemp(join(tmpdir(), "kitgen-test-"))
@@ -139,7 +146,6 @@ try {
   await runRefs({ ...base, pid })
   await runLibrary(base)
   await runTemplates(base)
-  process.stdout.write("  [suite template đã trả về]\n")
   await runRuns({ ...base, pid })
   await runPause({ ...base, pid })
   await runCover({ ...base, pid })
