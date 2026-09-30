@@ -340,6 +340,14 @@ export async function run({ api, agent, wsRoot }) {
   })
 
   // Dọn: dự án của suite này vào thùng rác, template còn lại vào thùng rác.
-  for (const id of made) await api("DELETE", `/api/projects/${id}`)
-  await api("DELETE", `/api/templates/${tpl.id}`)
+  /* VẾT DỌN (30/09/2026): trên runner Windows tiến trình bộ ca chết NGAY SAU ca cuối
+     của suite này, không móc nào kêu. In từng bước để lần sau chỉ ra đúng lệnh cuối. */
+  const trace = t => process.stdout.write(`  [dọn template] ${t}\n`)
+  for (const id of made) {
+    trace(`DELETE /api/projects/${id} …`)
+    trace(`  → ${(await api("DELETE", `/api/projects/${id}`)).status}`)
+  }
+  trace(`DELETE /api/templates/${tpl.id} …`)
+  trace(`  → ${(await api("DELETE", `/api/templates/${tpl.id}`)).status}`)
+  trace("xong")
 }

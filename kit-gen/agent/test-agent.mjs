@@ -79,6 +79,10 @@ watchdog.unref()
    `error` không ai bắt) đi thẳng ra stderr rồi chết, và trên runner đó dòng stderr
    ấy không tới log. Từ nay nó đi qua STDOUT kèm tên ca đang chạy, rồi in báo cáo
    tới thời điểm đó — giống hệt nhánh quá ngân sách ở trên. */
+/* stderr → stdout: hai lần chết im trên Windows không để lại dòng stderr nào trong log.
+   Soi luôn ở stdout cho chắc — một dòng `[agent] …` in lúc 500 là manh mối duy nhất. */
+const errWrite = process.stderr.write.bind(process.stderr)
+process.stderr.write = (chunk, ...rest) => { try { process.stdout.write(`[stderr] ${chunk}`) } catch {} return errWrite(chunk, ...rest) }
 let reported = false
 const died = kind => err => {
   process.stdout.write(
@@ -135,6 +139,7 @@ try {
   await runRefs({ ...base, pid })
   await runLibrary(base)
   await runTemplates(base)
+  process.stdout.write("  [suite template đã trả về]\n")
   await runRuns({ ...base, pid })
   await runPause({ ...base, pid })
   await runCover({ ...base, pid })
