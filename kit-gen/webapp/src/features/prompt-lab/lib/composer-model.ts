@@ -2,7 +2,7 @@ import type { JSONContent } from "@tiptap/react";
 import { EXPRESSIONS } from "@/features/kit-core/lib/poses";
 import { glazeOrSolid } from "@/features/kit-core/lib/glaze";
 import { DEFAULT_VIEW } from "@/features/prompt-lab/lib/pose/pose-state";
-import { DECOR_PLACE_DEFAULT, decorLevelOf, getPresets, type PresetBundle } from "./presets-store";
+import { DECOR_DEFAULT, DECOR_PLACE_DEFAULT, decorLevelOf, getPresets, type PresetBundle } from "./presets-store";
 import { INHERIT } from "./pill-registry";
 import { defaultSizeOf } from "./cell-size";
 import { backgroundDoc, mascotDoc } from "./doc-templates";
@@ -848,7 +848,10 @@ export function newCell(elementId: string, presets: PresetBundle = getPresets())
     /* Kế thừa phong cách chung là mặc định — một ô vừa thêm KHÔNG được tự ý
        tách khỏi phong cách của cả bộ kit. */
     styleId: INHERIT,
-    decor: decorLevelOf(preset?.decor),
+    /* Loại element không có trong danh mục (tên tự gõ chưa kịp vào kho) ⇒ «Không»,
+       mặc định của ô mới — KHÔNG phải `decorLevelOf(undefined)`, nhánh ấy dành cho
+       bản ghi cũ không nói gì về trang trí (xem `DECOR_DEFAULT`). */
+    decor: preset ? decorLevelOf(preset.decor) : DECOR_DEFAULT,
     /* «Cân đối» cho mọi ô mới, kể cả ô «Không trang trí»: trường sống độc lập với
        việc nó có được in ra hay không (xem `UiCell.decorPlace`). */
     decorPlace: DECOR_PLACE_DEFAULT,

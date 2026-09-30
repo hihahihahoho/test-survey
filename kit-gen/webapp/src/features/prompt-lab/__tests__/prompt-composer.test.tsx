@@ -492,12 +492,17 @@ describe("danh mục — lab đi bằng dữ liệu THẬT của kit-core, khôn
     expect(cell.sizeId).toBe(defaultSizeOf(PRESETS.elements.find((e) => e.id === "coin")));
     const coin = PRESETS.elements.find((e) => e.id === "coin");
     expect(sizePx(cell.sizeId, coin?.skel)?.w).toBe(sizePx(cell.sizeId, coin?.skel)?.h);
-    /* Hạt giống của «Coin counter · coin» là «Ít» — một đồng xu không cần vành hoa
-       văn. Và
-       cách bố trí thì KHÔNG đến từ danh mục element: nó là «Cân đối» cho mọi ô mới,
+    /* Hạt giống mọi món là «Không» (30/09/2026 — designer hiếm khi dùng trang trí).
+       Cách bố trí thì KHÔNG đến từ danh mục element: nó là «Cân đối» cho mọi ô mới,
        vì đối xứng là thứ một bộ UI muốn ở gần như mọi món. */
-    expect(cell.decor).toBe("light");
+    expect(cell.decor).toBe("none");
     expect(cell.decorPlace).toBe("balanced");
+  });
+
+  it("ô mới ăn nấc trang trí của CHÍNH loại element trong danh mục, và «Không» khi loại ấy vắng", () => {
+    const withRich = { ...PRESETS, elements: PRESETS.elements.map((e) => (e.id === "coin" ? { ...e, decor: "rich" } : e)) };
+    expect(newCell("coin", withRich).decor).toBe("rich");
+    expect(newCell("khong-co-trong-kho", PRESETS).decor).toBe("none");
   });
 
   it("thực đơn `/` CHỈ chèn pill — cấu trúc đi qua nút '+ Thêm block'", () => {

@@ -356,7 +356,8 @@ describe("③ hai chế độ — dòng element ở «Tự do» là một TipTap
    * value, và tài liệu đã lưu của dự án biến thành `{kind: null, value: null}`.
    */
   it("mỗi pill mang `data-kind`/`data-value` ngay trên DOM — đường DOM→doc phục hồi được", async () => {
-    const cell: UiCell = { ...newCell("coin", PRESETS), id: "c1", glazeId: "glow" };
+    /* «Ít» đặt tay: ô mới nay là «Không» và khi ấy pill Bố trí vắng — ca này cần đủ bốn. */
+    const cell: UiCell = { ...newCell("coin", PRESETS), id: "c1", glazeId: "glow", decor: "light" };
     render(<Harness initial={uikit([cell], "free")} />);
     await waitFor(() => expect(document.querySelector(".ProseMirror")).not.toBeNull());
 
@@ -376,7 +377,7 @@ describe("③ câu tự do của một dòng ĐI TỚI ĐƯỢC contract và pro
   }
 
   const cells = () => [
-    withText({ ...newCell("button", PRESETS), id: "c1" }, ", khắc hình con rồng ở giữa"),
+    withText({ ...newCell("button", PRESETS), id: "c1", decor: "light" }, ", khắc hình con rồng ở giữa"),
     { ...newCell("coin", PRESETS), id: "c2" },
   ];
 
@@ -397,8 +398,7 @@ describe("③ câu tự do của một dòng ĐI TỚI ĐƯỢC contract và pro
     const contract = composerToContract(state([uikit(cells(), "free")]), { presets: PRESETS });
     const spec = contract.sheets[0]!.components[0]!.spec;
     expect(spec).toContain(PRESETS.elements.find((e) => e.id === "button")!.en);
-    /* Lượng trang trí mặc định của «Button · primary» là «Ít» — cụm EN của nó,
-       không phải chữ "Vừa". */
+    /* Ô c1 chọn «Ít» — cụm EN của nó, không phải chữ "Ít". */
     expect(spec).toContain("a simple rim and at most one small accent");
     expect(spec).not.toContain("Ít");
     /* Và câu BỐ TRÍ đi cùng nó, cũng bằng tiếng Anh: hai pill, hai câu, một dòng. */
@@ -830,10 +830,18 @@ describe("⑦ dòng element: hàng 1 có ×, hàng 2 là ghi chú", () => {
     expect(row.textContent).not.toContain(", đục nền");
     expect(row.textContent).not.toContain(", viền");
 
-    /* Nhưng TÊN TRỤC thì vẫn phải đọc được — bỏ chữ nối không phải bỏ nhãn. */
-    for (const axis of ["Phong cách:", "Đục nền:", "Trang trí:", "Bố trí:", "Cỡ:"]) {
+    /* Nhưng TÊN TRỤC thì vẫn phải đọc được — bỏ chữ nối không phải bỏ nhãn.
+       «Bố trí:» vắng ở dòng mới vì trang trí mặc định là «Không» — ca ngay dưới. */
+    for (const axis of ["Phong cách:", "Đục nền:", "Trang trí:", "Cỡ:"]) {
       expect(row.textContent).toContain(axis);
     }
+  });
+
+  it("dòng MỚI: pill Trang trí đọc ra «Không», và vì thế không có pill Bố trí", () => {
+    /* 30/09/2026 — designer hiếm khi dùng trang trí, nên mặc định là «Không». */
+    const row = rowOf("Button · primary");
+    expect(row.textContent).toContain("Trang trí:Không");
+    expect(row.textContent).not.toContain("Bố trí:");
   });
 
   it("dòng MỚI: pill Đục nền đọc ra «Đục hoàn toàn», không phải «Tự động»", () => {

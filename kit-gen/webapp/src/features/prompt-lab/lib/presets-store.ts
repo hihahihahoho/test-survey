@@ -364,8 +364,24 @@ export const DECOR_LEVELS: readonly { value: string; vi: string; en: string }[] 
 /** Nấc «Không» — nấc DUY NHẤT làm pill «Bố trí» mất nghĩa. Xem `hasDecorPlacement`. */
 export const DECOR_NONE = "none";
 
-/** Nấc mặc định của một ô mới và của một bản ghi không đọc ra nấc nào. */
-export const DECOR_DEFAULT = "medium";
+/**
+ * Nấc mặc định của một ô MỚI và của một loại element MỚI: «Không».
+ *
+ * Đổi 30/09/2026 theo góp ý của designer — họ hiếm khi dùng trang trí, nên để
+ * sẵn «Ít»/«Vừa» là bắt họ gạt nó về «Không» ở gần như mọi dòng. Tới hôm ấy mặc
+ * định là «Vừa», và hạt giống ghi «Ít»/«Vừa» cho từng món; hạt giống đã nằm trên
+ * đĩa thì `migrateElementDecor` vá.
+ */
+export const DECOR_DEFAULT = DECOR_NONE;
+
+/**
+ * Nấc của một bản ghi / một ô KHÔNG NÓI GÌ về trang trí (khoá vắng, chuỗi rỗng).
+ *
+ * KHÁC `DECOR_DEFAULT`, cố ý: thứ đã nằm trên đĩa mà không mang nấc nào thì xưa
+ * nay vẫn được vẽ có viền «Vừa», và đổi mặc định cho ô mới không phải lý do để
+ * đổi thứ người dùng đang thấy ở ô cũ.
+ */
+const DECOR_BLANK = "medium";
 
 /**
  * BỐN CÁCH BỐ TRÍ chỗ trang trí — thang của pill `decorPlace`.
@@ -404,13 +420,15 @@ export const DECOR_PLACE_DEFAULT = "balanced";
  * ║ người thật sự sửa danh mục. Xem chú thích của `payloadOf`.                 ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * Bảng số: 1→«Không», 2-3→«Ít», 4-5→«Vừa», 6-7→«Nhiều». Rỗng/rác ⇒ «Vừa» — mặc
- * định của một ô mới, chứ KHÔNG phải «Không»: một ô không nói gì về trang trí thì
- * xưa nay vẫn được vẽ có viền, và di trú không phải chỗ để đổi thứ người dùng thấy.
+ * Bảng số: 1→«Không», 2-3→«Ít», 4-5→«Vừa», 6-7→«Nhiều». Rỗng ⇒ «Vừa»
+ * (`DECOR_BLANK`), KHÔNG phải mặc định của ô mới (`DECOR_DEFAULT` = «Không»): một
+ * ô không nói gì về trang trí thì xưa nay vẫn được vẽ có viền, và di trú không
+ * phải chỗ để đổi thứ người dùng thấy. Ô mới không đi qua nhánh này — `newCell`
+ * tự lấy `DECOR_DEFAULT` khi loại element không có trong danh mục.
  */
 export function decorLevelOf(raw: unknown): string {
   const value = typeof raw === "number" ? String(raw) : typeof raw === "string" ? raw.trim() : "";
-  if (!value) return DECOR_DEFAULT;
+  if (!value) return DECOR_BLANK;
   const n = Number(value);
   /* KHÔNG PHẢI SỐ ⇒ TRẢ NGUYÊN VĂN, kể cả khi nó không nằm trong bốn nấc gốc.
      Đổi 09/2026 cùng lượt danh mục trang trí thành sửa được: bản trước so với
@@ -421,7 +439,7 @@ export function decorLevelOf(raw: unknown): string {
   if (!Number.isFinite(n)) return value;
   if (n <= 1) return DECOR_NONE;
   if (n <= 3) return "light";
-  if (n <= 5) return DECOR_DEFAULT;
+  if (n <= 5) return "medium";
   return "rich";
 }
 
@@ -593,92 +611,92 @@ export function seedPresets(): PresetBundle {
        của câu gửi máy vẽ, và đó là lý do lượt đổi tên này không cần đo lại prompt. */
     elements: [
       /* ── Button ──────────────────────────────────────────────────────────── */
-      { id: "button", vi: "primary", en: "button", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
-      { id: "btn-secondary", vi: "secondary", en: "the same button as a secondary action", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
-      { id: "btn-pressed", vi: "pressed", en: "the same button, pressed", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
-      { id: "btn-disabled", vi: "disabled", en: "the same button, disabled", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
+      { id: "button", vi: "primary", en: "button", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
+      { id: "btn-secondary", vi: "secondary", en: "the same button as a secondary action", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
+      { id: "btn-pressed", vi: "pressed", en: "the same button, pressed", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
+      { id: "btn-disabled", vi: "disabled", en: "the same button, disabled", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "pill", w: 0.78, h: 0.27, slice9: true }, set: SET.btn },
 
       /* ── Health bar — khung 0,86×0,22, phần đầy 0,81×0,15 (nhỏ hơn đúng một lề) ── */
-      { id: "healthbar", vi: "frame", en: "health bar", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.22, slice9: true }, set: SET.hp },
+      { id: "healthbar", vi: "frame", en: "health bar", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.22, slice9: true }, set: SET.hp },
       /* Phần đầy để «Không trang trí»: một dải màu chạy bên trong khung mà lại mọc
          viền và hoa văn của riêng nó thì xếp lên nhau là hai lớp viền chồng nhau. */
       { id: "hp-fill", vi: "fill", en: "the fill bar that sits inside the health bar, the same length and corner radius, with no track or frame of its own", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "bar", w: 0.81, h: 0.15, slice9: true }, set: SET.hp },
 
       /* ── Progress bar — cùng luật với Health bar, mảnh hơn ─────────────── */
-      { id: "progress", vi: "frame", en: "progress bar", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.18, slice9: true }, set: SET.xp },
+      { id: "progress", vi: "frame", en: "progress bar", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.18, slice9: true }, set: SET.xp },
       { id: "progress-fill", vi: "fill", en: "the fill bar that sits inside the progress bar, the same length and corner radius, with no track or frame of its own", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "bar", w: 0.81, h: 0.12, slice9: true }, set: SET.xp },
 
       /* ── Dialog ───────────────────────────────────────────────────────── */
-      { id: "dialog-panel", vi: "box", en: "a dialogue box", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.92, h: 0.56, slice9: true }, set: SET.dialog },
-      { id: "dialog-name", vi: "name plate", en: "the name plate that sits on the same dialogue box", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.16, slice9: true }, set: SET.dialog },
-      { id: "dialog-next", vi: "next button", en: "the continue marker of the same dialogue box", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.3, h: 0.3 }, set: SET.dialog },
+      { id: "dialog-panel", vi: "box", en: "a dialogue box", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.92, h: 0.56, slice9: true }, set: SET.dialog },
+      { id: "dialog-name", vi: "name plate", en: "the name plate that sits on the same dialogue box", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.16, slice9: true }, set: SET.dialog },
+      { id: "dialog-next", vi: "next button", en: "the continue marker of the same dialogue box", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.3, h: 0.3 }, set: SET.dialog },
 
       /* ── Leaderboard ────────────────────────────────────────────────────────── */
-      { id: "rank-1", vi: "rank 1 badge", en: "a first-place rank medal", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.5, h: 0.5 }, set: SET.rank },
-      { id: "rank-2", vi: "rank 2 badge", en: "the same rank medal, second place", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.5, h: 0.5 }, set: SET.rank },
-      { id: "rank-3", vi: "rank 3 badge", en: "the same rank medal, third place", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.5, h: 0.5 }, set: SET.rank },
-      { id: "rank-row", vi: "row", en: "a leaderboard row with an avatar slot at the left", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "bar", w: 0.9, h: 0.22, slice9: true }, set: SET.rank },
-      { id: "rank-row-self", vi: "my row", en: "the same leaderboard row, highlighted as the current player", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "bar", w: 0.9, h: 0.22, slice9: true }, set: SET.rank },
+      { id: "rank-1", vi: "rank 1 badge", en: "a first-place rank medal", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.5, h: 0.5 }, set: SET.rank },
+      { id: "rank-2", vi: "rank 2 badge", en: "the same rank medal, second place", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.5, h: 0.5 }, set: SET.rank },
+      { id: "rank-3", vi: "rank 3 badge", en: "the same rank medal, third place", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.5, h: 0.5 }, set: SET.rank },
+      { id: "rank-row", vi: "row", en: "a leaderboard row with an avatar slot at the left", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "bar", w: 0.9, h: 0.22, slice9: true }, set: SET.rank },
+      { id: "rank-row-self", vi: "my row", en: "the same leaderboard row, highlighted as the current player", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "bar", w: 0.9, h: 0.22, slice9: true }, set: SET.rank },
 
       /* ── Popup ───────────────────────────────────────────────────────────── */
-      { id: "popover", vi: "panel", en: "popup panel", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.86, h: 0.66, slice9: true }, set: SET.popup },
-      { id: "popup-ribbon", vi: "ribbon", en: "the heading banner that sits across the top of the same popup", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.78, h: 0.2, slice9: true }, set: SET.popup },
-      { id: "popup-close", vi: "close button", en: "the round close button of the same popup, with a cross mark", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.32, h: 0.32 }, set: SET.popup },
+      { id: "popover", vi: "panel", en: "popup panel", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.86, h: 0.66, slice9: true }, set: SET.popup },
+      { id: "popup-ribbon", vi: "ribbon", en: "the heading banner that sits across the top of the same popup", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.78, h: 0.2, slice9: true }, set: SET.popup },
+      { id: "popup-close", vi: "close button", en: "the round close button of the same popup, with a cross mark", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.32, h: 0.32 }, set: SET.popup },
 
       /* ── Tabs ─────────────────────────────────────────────────────────────── */
-      { id: "tab-idle", vi: "idle", en: "a tab chip, unselected", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.6, h: 0.26, slice9: true }, set: SET.tab },
-      { id: "tab-active", vi: "active", en: "the same tab chip, selected", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.6, h: 0.26, slice9: true }, set: SET.tab },
+      { id: "tab-idle", vi: "idle", en: "a tab chip, unselected", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.6, h: 0.26, slice9: true }, set: SET.tab },
+      { id: "tab-active", vi: "active", en: "the same tab chip, selected", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.6, h: 0.26, slice9: true }, set: SET.tab },
 
       /* ── Toggle ────────────────────────────────────────────────────────── */
-      { id: "toggle-on", vi: "on", en: "a toggle switch, on, knob at the right", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "pill", w: 0.5, h: 0.28 }, set: SET.toggle },
-      { id: "toggle-off", vi: "off", en: "the same toggle switch, off, knob at the left", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "pill", w: 0.5, h: 0.28 }, set: SET.toggle },
+      { id: "toggle-on", vi: "on", en: "a toggle switch, on, knob at the right", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "pill", w: 0.5, h: 0.28 }, set: SET.toggle },
+      { id: "toggle-off", vi: "off", en: "the same toggle switch, off, knob at the left", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "pill", w: 0.5, h: 0.28 }, set: SET.toggle },
 
       /* ── Checkbox ──────────────────────────────────────────────────────────── */
-      { id: "check-on", vi: "on", en: "a checkbox, checked", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.34, h: 0.34 }, set: SET.check },
-      { id: "check-off", vi: "off", en: "the same checkbox, unchecked", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.34, h: 0.34 }, set: SET.check },
+      { id: "check-on", vi: "on", en: "a checkbox, checked", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.34, h: 0.34 }, set: SET.check },
+      { id: "check-off", vi: "off", en: "the same checkbox, unchecked", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.34, h: 0.34 }, set: SET.check },
 
       /* ── Hearts ─────────────────────────────────────────────────────────────── */
-      { id: "heart-full", vi: "full", en: "a life heart, full", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.4, h: 0.38 }, set: SET.heart },
-      { id: "heart-empty", vi: "empty", en: "the same life heart, empty", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.4, h: 0.38 }, set: SET.heart },
+      { id: "heart-full", vi: "full", en: "a life heart, full", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.4, h: 0.38 }, set: SET.heart },
+      { id: "heart-empty", vi: "empty", en: "the same life heart, empty", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.4, h: 0.38 }, set: SET.heart },
 
       /* ── Stars ─────────────────────────────────────────────────────────────── */
-      { id: "star-full", vi: "full", en: "a rating star, earned", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.42, h: 0.4 }, set: SET.star },
-      { id: "star-empty", vi: "empty", en: "the same rating star, not earned", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.42, h: 0.4 }, set: SET.star },
+      { id: "star-full", vi: "full", en: "a rating star, earned", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.42, h: 0.4 }, set: SET.star },
+      { id: "star-empty", vi: "empty", en: "the same rating star, not earned", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.42, h: 0.4 }, set: SET.star },
 
       /* ── Coin counter: ô đếm + đồng xu nằm trong ô đếm ấy ────────────────────── */
-      { id: "coin", vi: "coin", en: "coin icon", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.4, h: 0.4 }, set: SET.coins },
-      { id: "coin-counter", vi: "counter", en: "a counter chip with a slot at one end for the coin icon", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "pill", w: 0.72, h: 0.26, slice9: true }, set: SET.coins },
+      { id: "coin", vi: "coin", en: "coin icon", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.4, h: 0.4 }, set: SET.coins },
+      { id: "coin-counter", vi: "counter", en: "a counter chip with a slot at one end for the coin icon", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "pill", w: 0.72, h: 0.26, slice9: true }, set: SET.coins },
 
       /* ── Inventory slot ────────────────────────────────────────────────────────── */
-      { id: "slot-empty", vi: "empty", en: "an empty inventory slot", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.5, slice9: true }, set: SET.slot },
-      { id: "slot-filled", vi: "filled", en: "the same inventory slot holding an item", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.5, slice9: true }, set: SET.slot },
-      { id: "slot-active", vi: "active", en: "the same inventory slot, selected", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.5, slice9: true }, set: SET.slot },
+      { id: "slot-empty", vi: "empty", en: "an empty inventory slot", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.5, slice9: true }, set: SET.slot },
+      { id: "slot-filled", vi: "filled", en: "the same inventory slot holding an item", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.5, slice9: true }, set: SET.slot },
+      { id: "slot-active", vi: "active", en: "the same inventory slot, selected", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.5, slice9: true }, set: SET.slot },
 
       /* ── Slider ─────────────────────────────────────────────────────── */
-      { id: "slider-track", vi: "track", en: "the track of a slider", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.12, slice9: true }, set: SET.slider },
-      { id: "slider-knob", vi: "knob", en: "the knob that rides on the same slider track", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.26, h: 0.26 }, set: SET.slider },
+      { id: "slider-track", vi: "track", en: "the track of a slider", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "bar", w: 0.86, h: 0.12, slice9: true }, set: SET.slider },
+      { id: "slider-knob", vi: "knob", en: "the knob that rides on the same slider track", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.26, h: 0.26 }, set: SET.slider },
 
       /* ── Arrows ─────────────────────────────────────────────────────────── */
-      { id: "arrow-left", vi: "left", en: "a round button with a left arrow", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.34, h: 0.34 }, set: SET.arrow },
-      { id: "arrow-right", vi: "right", en: "the same round button with a right arrow", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.34, h: 0.34 }, set: SET.arrow },
+      { id: "arrow-left", vi: "left", en: "a round button with a left arrow", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.34, h: 0.34 }, set: SET.arrow },
+      { id: "arrow-right", vi: "right", en: "the same round button with a right arrow", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.34, h: 0.34 }, set: SET.arrow },
 
       /* ── Envelope: nắp rời, CÙNG BỀ NGANG với thân để dán lại thành một cái ── */
-      { id: "envelope-body", vi: "body", en: "the body of a lucky-money envelope, without its top flap", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.66 }, set: SET.envelope },
-      { id: "envelope-flap", vi: "flap", en: "only the detached top flap of the same envelope, the same width as its body", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.28 }, set: SET.envelope },
+      { id: "envelope-body", vi: "body", en: "the body of a lucky-money envelope, without its top flap", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.66 }, set: SET.envelope },
+      { id: "envelope-flap", vi: "flap", en: "only the detached top flap of the same envelope, the same width as its body", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.28 }, set: SET.envelope },
 
       /* ── Gift box ─────────────────────────────────────────────────────────── */
-      { id: "gift-closed", vi: "closed", en: "a closed gift box", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.56 }, set: SET.gift },
-      { id: "gift-open", vi: "open", en: "the same gift box, open", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.56 }, set: SET.gift },
+      { id: "gift-closed", vi: "closed", en: "a closed gift box", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.56 }, set: SET.gift },
+      { id: "gift-open", vi: "open", en: "the same gift box, open", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.56, h: 0.56 }, set: SET.gift },
 
       /* ── MÓN LẺ — không phần nào đi kèm, chọn một là được một ─────────────── */
-      { id: "avatar-frame", vi: "Avatar frame", en: "avatar frame", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.62, h: 0.62 } },
-      { id: "panel", vi: "Panel", en: "panel", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.92, h: 0.8, slice9: true } },
-      { id: "badge", vi: "Badge", en: "badge", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.46, h: 0.46 } },
-      { id: "lock", vi: "Lock", en: "padlock", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.42, h: 0.5 } },
-      { id: "timer", vi: "Timer", en: "countdown timer plate", decor: "light", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.52, h: 0.3, slice9: true } },
+      { id: "avatar-frame", vi: "Avatar frame", en: "avatar frame", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.62, h: 0.62 } },
+      { id: "panel", vi: "Panel", en: "panel", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.92, h: 0.8, slice9: true } },
+      { id: "badge", vi: "Badge", en: "badge", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "circle", w: 0.46, h: 0.46 } },
+      { id: "lock", vi: "Lock", en: "padlock", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.42, h: 0.5 } },
+      { id: "timer", vi: "Timer", en: "countdown timer plate", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.52, h: 0.3, slice9: true } },
       /* `free`: một cái cúp có quai và đế, không nắn về hộp chữ nhật được — cùng cờ
          mà `element-lib-v2.json` gắn cho `54-trophy-cup`. */
-      { id: "trophy", vi: "Trophy", en: "trophy cup", decor: "medium", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.66, free: true } },
+      { id: "trophy", vi: "Trophy", en: "trophy cup", decor: "none", glazeId: GLAZE_SOLID, sizeId: "", skel: { shape: "rrect", w: 0.5, h: 0.66, free: true } },
     ],
 
     /* Mascot: ghép dáng + biểu cảm có sẵn thành vài "nhân vật mẫu" để trang
@@ -1257,6 +1275,54 @@ function migrateElementGlaze(id: string, glazeId: string): string {
   return SEED_ELEMENT_GLAZE[id] ?? glazeId;
 }
 
+/** Nấc trang trí hạt giống ĐỜI NAY của từng món — cả bốn mươi tám đều «Không». */
+const SEED_ELEMENT_DECOR: Record<string, string | undefined> = Object.fromEntries(
+  SEED_ELEMENTS.map((element) => [element.id, element.decor]),
+);
+
+/**
+ * Nấc hạt giống ĐỜI TRƯỚC (tới 30/09/2026) của một món hạt giống. Mười ba món ghi
+ * «Vừa», hai phần đầy vốn đã «Không», còn lại «Ít». Hai tập chứ không phải bảng
+ * bốn mươi tám dòng: «Ít» là số đông.
+ */
+const LEGACY_DECOR_MEDIUM: ReadonlySet<string> = new Set([
+  "dialog-panel", "rank-1", "rank-2", "rank-3", "popover", "popup-ribbon",
+  "envelope-body", "envelope-flap", "gift-closed", "gift-open", "avatar-frame", "panel", "trophy",
+]);
+const LEGACY_DECOR_NONE: ReadonlySet<string> = new Set(["hp-fill", "progress-fill"]);
+
+function legacySeedDecor(id: string): string {
+  if (LEGACY_DECOR_NONE.has(id)) return DECOR_NONE;
+  return LEGACY_DECOR_MEDIUM.has(id) ? "medium" : "light";
+}
+
+/**
+ * DI TRÚ TRANG TRÍ: nấc do CHÍNH TA gieo → «Không» (hạt giống đời nay).
+ *
+ * Cùng lý do, cùng kỷ luật với `migrateElementGlaze` ngay trên: `seedOnce` đã ghi
+ * «Ít»/«Vừa» xuống đĩa hộ người dùng, không ai bấm nó cả. Đổi hạt giống mà bỏ qua
+ * chúng là máy mới ra «Không», còn máy của người đã dùng app — đúng những designer
+ * xin đổi — vẫn «Ít».
+ *
+ *  · id phải là id HẠT GIỐNG — món tự thêm (`tu-dat-…`) giữ nguyên nấc của nó;
+ *  · nấc trên đĩa phải còn ĐÚNG nấc hạt giống cũ của món ấy. Ai đã tự bấm «Nhiều»,
+ *    hay đổi một món «Ít» lên «Vừa», thì không khớp và giữ nguyên.
+ *  · `button` khớp CẢ «Vừa»: hạt giống đời số (trước 08/09/2026) ghi nó là 4, và
+ *    `decorLevelOf` đọc 4 thành «Vừa». Bảy món đời số còn lại ra đúng nấc chữ sau
+ *    này của chúng.
+ *
+ * Ca không phân biệt được — ai tự chọn đúng bằng nấc cũ — giống hệt ca của
+ * `LEGACY_ELEMENT_SIZE`; giá của nó là một cú bấm lại trên màn Thư viện prompt.
+ * VÁ LÚC ĐỌC, không ghi ngược, và KHÔNG đụng ô đã nằm trong thẻ (thẻ giữ `decor`
+ * của riêng từng ô).
+ */
+function migrateElementDecor(id: string, decor: string): string {
+  const fresh = SEED_ELEMENT_DECOR[id];
+  if (fresh === undefined || decor === fresh) return decor;
+  const matches = decor === legacySeedDecor(id) || (id === "button" && decor === "medium");
+  return matches ? fresh : decor;
+}
+
 /**
  * DI TRÚ CỠ GHIM: bốn nấc S/M/L/XL của hạt giống ĐỜI TRƯỚC → rỗng (đo theo hình).
  *
@@ -1299,8 +1365,9 @@ function toBundle(rows: readonly LibraryPreset[]): PresetBundle {
     if (row.kind === "style") bundle.styles.push({ id, vi: row.name, en });
     else if (row.kind === "element") {
       /* SỐ ĐỜI CŨ → ID CHỮ, ngay tại cửa đọc. Xem khối chú thích của `decorLevelOf`
-         để biết vì sao trục này được vá lúc đọc còn `glazeId` thì không. */
-      const decor = decorLevelOf(data["decor"]);
+         để biết vì sao trục này được vá lúc đọc còn `glazeId` thì không. Rồi nấc
+         hạt giống cũ → «Không» (`migrateElementDecor`). */
+      const decor = migrateElementDecor(id, decorLevelOf(data["decor"]));
       /* Bản ghi đời trước chỉ có `materialId` ⇒ dịch sang đục nền gần nhất.
          Bản ghi đời nay có `glazeId` ⇒ nó thắng, nên phải hỏi `"glazeId" in data`
          chứ không phải `str(...) || fallback` — nếu không thì bỏ đục nền là nó tự

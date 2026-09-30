@@ -154,16 +154,19 @@ describe("đọc: server là nguồn, id bundle giữ nguyên qua `data.key`", (
          đồng nghĩa với "rác". Rác thật thì vô hại — `phraseOf` trả rỗng như mọi
          giá trị lạ của mọi trục pill. Xem `decorLevelOf`. */
       row("preset_ffff", "element", "Sai kiểu decor", { key: "odd", en: "x", decor: "sáu" }),
+      row("preset_gggg", "element", "Không nói gì về decor", { key: "mute", en: "y" }),
     ]));
     mount();
 
     await waitFor(() => expect(seen?.styles).toHaveLength(1));
     /* Thiếu `key` thì thà một id xấu (id server) còn hơn nuốt mất bản ghi. */
     expect(seen?.styles[0]!.id).toBe("preset_dddd");
-    expect(seen?.elements).toHaveLength(1);
+    expect(seen?.elements).toHaveLength(2);
     expect(seen?.elements[0]!.decor).toBe("sáu");
-    /* Còn THIẾU HẲN trục ấy thì mới rơi về mặc định. */
-    expect(DECOR_DEFAULT).toBe("medium");
+    /* THIẾU HẲN trục ấy ⇒ «Vừa», thứ bản ghi ấy xưa nay vẫn được vẽ — KHÔNG phải
+       «Không» của ô mới (`DECOR_DEFAULT`, 30/09/2026). */
+    expect(seen?.elements[1]!.decor).toBe("medium");
+    expect(DECOR_DEFAULT).toBe("none");
     expect(seen?.mascots).toHaveLength(0);
   });
 });
@@ -686,6 +689,76 @@ describe("di trú đục nền: `auto` hạt giống → `solid`, và chỉ th�
     const elements = seedPresets().elements;
     expect(elements.length).toBeGreaterThan(40);
     expect(elements.every((element) => element.glazeId === "solid")).toBe(true);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DI TRÚ TRANG TRÍ — nấc «Ít»/«Vừa» mà CHÍNH TA gieo → «Không»
+   ══════════════════════════════════════════════════════════════════════════
+   30/09/2026: designer góp ý họ hiếm khi dùng trang trí ⇒ mặc định đổi sang
+   «Không». Cùng cái bẫy, cùng ba vế với phép di trú đục nền ngay trên. */
+describe("di trú trang trí: nấc hạt giống cũ → «Không», và chỉ thế", () => {
+  const seeded = (key: string, decor: unknown) =>
+    row(`preset_${key}`, "element", key, { key, en: key, decor, glazeId: "solid", sizeId: "" });
+
+  it("món HẠT GIỐNG còn nguyên nấc cũ («Ít» / «Vừa» / số đời trước) ⇒ đọc ra «Không»", async () => {
+    get.mockResolvedValue(library([
+      seeded("button", "light"), seeded("panel", "medium"), seeded("coin", 2),
+      /* Nút bấm đời số ghi 4 ⇒ «Vừa», dù hạt giống chữ sau đó ghi «Ít». */
+      seeded("btn-secondary", "light"), seeded("healthbar", 3),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(5));
+    expect(seen!.elements.map((element) => element.decor)).toEqual(["none", "none", "none", "none", "none"]);
+  });
+
+  it("nút bấm đời số (4 ⇒ «Vừa») cũng về «Không»", async () => {
+    get.mockResolvedValue(library([seeded("button", 4), seeded("button-x", 4)]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(2));
+    /* `button-x` không phải id hạt giống ⇒ giữ «Vừa». */
+    expect(seen!.elements.map((element) => element.decor)).toEqual(["none", "medium"]);
+  });
+
+  it("người dùng ĐÃ TỰ ĐỔI khác nấc cũ ⇒ giữ nguyên", async () => {
+    get.mockResolvedValue(library([
+      seeded("button", "rich"),
+      /* Bảng nền hạt giống cũ là «Vừa» ⇒ «Ít» là lựa chọn đã bấm. */
+      seeded("panel", "light"),
+      /* Phần đầy hạt giống cũ vốn «Không» ⇒ «Ít» trên phần đầy là người ta tự bấm. */
+      seeded("hp-fill", "light"),
+      /* Món ghi «Ít» từ hạt giống ⇒ «Vừa» là tự bấm. */
+      seeded("coin", "medium"),
+    ]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(4));
+    expect(seen!.elements.map((element) => element.decor)).toEqual(["rich", "light", "light", "medium"]);
+  });
+
+  it("món TỰ ĐẶT TÊN ⇒ không đụng: nó chưa từng là hạt giống của ta", async () => {
+    get.mockResolvedValue(library([seeded("tu-dat-khien", "medium"), seeded("tu-dat-khung", "light")]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(2));
+    expect(seen!.elements.map((element) => element.decor)).toEqual(["medium", "light"]);
+  });
+
+  it("vá LÚC ĐỌC ⇒ mở app KHÔNG sinh một lượt ghi nào", async () => {
+    get.mockResolvedValue(library([seeded("button", "light"), seeded("panel", "medium")]));
+    mount();
+
+    await waitFor(() => expect(seen?.elements).toHaveLength(2));
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(patchPreset).not.toHaveBeenCalled();
+  });
+
+  it("hạt giống ĐỜI NAY: cả bốn mươi tám món ghi «Không»", () => {
+    const elements = seedPresets().elements;
+    expect(elements.length).toBeGreaterThan(40);
+    expect(elements.every((element) => element.decor === "none")).toBe(true);
   });
 });
 

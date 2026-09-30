@@ -18,7 +18,7 @@ import { SIZE_PRESETS } from "@/features/prompt-lab/lib/cell-size";
 import { POSE_PRESETS } from "@/features/prompt-lab/lib/pose/pose-presets";
 import { canAddRow, canDeleteRow } from "@/features/prompt-lab/lib/catalog-seeds";
 import {
-  ELEMENT_SHAPE_GROUP,
+  DECOR_DEFAULT, ELEMENT_SHAPE_GROUP,
   MANAGED_ORDER, managedRows, nextRowId, seedRowsOf, SET_KIND_DEFAULT, setManagedRows,
   usePresetSyncError, usePresets,
   type ElementSetKind, type ElementSetRef, type ManagedKind, type ManagedRow,
@@ -225,9 +225,9 @@ const SET_KIND_COPY: Record<ElementSetKind, { label: string; hint: string }> = {
 };
 
 /** Phần đuôi của một dòng «Món giao diện» khi chưa ai đặt gì — MỘT chỗ, bốn nơi đọc.
- *  `glazeId` là nấc MẶC ĐỊNH của sản phẩm (`GLAZE_SOLID`), không phải một chuỗi gõ
- *  tay: đổi mặc định ở `glaze.ts` là chỗ này đi theo. */
-const ELEMENT_ROW_DEFAULTS: NonNullable<ManagedRow["element"]> = { decor: "medium", glazeId: GLAZE_SOLID, sizeId: "" };
+ *  `decor`/`glazeId` là nấc MẶC ĐỊNH của sản phẩm (`DECOR_DEFAULT`, `GLAZE_SOLID`),
+ *  không phải chuỗi gõ tay: đổi mặc định ở kho là chỗ này đi theo. */
+const ELEMENT_ROW_DEFAULTS: NonNullable<ManagedRow["element"]> = { decor: DECOR_DEFAULT, glazeId: GLAZE_SOLID, sizeId: "" };
 
 const SHAPE_ACCEPT = "image/png,image/jpeg,image/webp";
 
@@ -1114,7 +1114,7 @@ function RowEditor({
             )}
 
             <Field id={`row-decor-${row.id}`} label="Trang trí mặc định" hint="Áp sẵn khi thêm món này vào một tấm.">
-              <Select value={element?.decor ?? "medium"} onValueChange={(value) => setElement({ decor: value })}>
+              <Select value={element?.decor ?? DECOR_DEFAULT} onValueChange={(value) => setElement({ decor: value })}>
                 <SelectTrigger id={`row-decor-${row.id}`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <CatalogItems kind="decor" />
