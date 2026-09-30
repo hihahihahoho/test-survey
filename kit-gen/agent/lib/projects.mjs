@@ -87,6 +87,19 @@ export async function readProject(ws, id) {
 export const TEMPLATE_TRASH_PREFIX = "template-"
 const isTemplateTrash = name => name.startsWith(TEMPLATE_TRASH_PREFIX)
 
+/* ══ DỰ ÁN LÀM VIỆC CỦA PHIÊN SỬA TEMPLATE — CÓ THẬT NHƯNG VÔ HÌNH ══════════════
+   Sửa nội dung một template diễn ra trong một dự án thật (màn soạn gắn chặt với dự án —
+   xem lib/project-templates.mjs), đánh dấu bằng `project.json.templateEdit`. Nó là GIẤY
+   NHÁP, không phải dự án của người dùng: không hiện ở danh sách, thùng rác, số đếm dự án
+   của /health và workspace. Mọi route ĐI THEO ID thì vẫn chạy y như mọi dự án — đó chính
+   là đường màn soạn sửa nó.
+   Một vị từ, một chỗ khai: listProjects/listTrash/countProjects và bộ quét phiên sửa
+   (`scanEditClaims`) phải cùng một ý về "thế nào là dự án làm việc". Lệch nhau là một dự
+   án vừa ẩn khỏi danh sách vừa không thuộc phiên nào — rác vô hình vĩnh viễn. */
+export const isWorkingProject = p =>
+  p !== null && typeof p === "object" && p.templateEdit !== null && typeof p.templateEdit === "object" &&
+  typeof p.templateEdit.templateId === "string"
+
 async function findInTrash(ws, projectId) {
   try {
     const ents = await readdir(ws.trashDir, { withFileTypes: true })
@@ -199,6 +212,7 @@ export async function listProjects(ws, { includeStats = true, runs = null } = {}
     if (!RE_PROJECT_ID.test(e.name)) continue
     if (!(await exists(join(ws.projectsDir, e.name, "project.json")))) continue
     const p = await readProject(ws, e.name)
+    if (isWorkingProject(p)) continue      // giấy nháp của phiên sửa template — xem isWorkingProject
     if (!p.broken && includeStats) {
       Object.assign(p, await computeState(ws, e.name, p))
       if (runs) applyActiveRun(p, runs.activeForProject(e.name))
@@ -219,8 +233,11 @@ export async function idTaken(ws, id) {
   return (await exists(join(ws.projectsDir, id))) || (await findInTrash(ws, id)) !== null
 }
 
-/** Tạo thư mục project rỗng + project.json. Contract do caller ghi (template/import). */
-export async function createProjectDir(ws, { id, name, slug, description = "", tags = [] }) {
+/** Tạo thư mục project rỗng + project.json. Contract do caller ghi (template/import).
+ *  `templateEdit` (chỉ phiên sửa template dùng) nằm trong project.json NGAY TỪ LẦN GHI ĐẦU:
+ *  ghi bù sau đó là để dự án làm việc lộ ra danh sách dự án trong một nhịp — và nếu agent
+ *  chết đúng nhịp ấy thì lộ mãi, thành một dự án «trùng tên template» thiếu nửa ảnh. */
+export async function createProjectDir(ws, { id, name, slug, description = "", tags = [], templateEdit = null }) {
   if (await idTaken(ws, id))
     fail("PROJECT_ID_TAKEN", `project id ${id} already exists`, { details: { suggestion: `${id}-2` } })
   const dir = join(ws.projectsDir, id)
@@ -238,6 +255,7 @@ export async function createProjectDir(ws, { id, name, slug, description = "", t
     contract: { file: "contract.json", version: 0, hash: null },
     cover: null, tags: Array.isArray(tags) ? tags.map(String).slice(0, 12) : [],
     workflow: { completed: !Array.isArray(tags) || !tags.includes("kg-workflow"), updatedAt: now },
+    ...(templateEdit ? { templateEdit } : {}),
   }
   await writeJsonAtomic(join(dir, "project.json"), project)
   return { dir, project }
@@ -375,6 +393,10 @@ export async function listTrash(ws) {
   const items = []
   for (const e of ents) {
     if (!e.isDirectory() || isTemplateTrash(e.name)) continue
+    /* Dự án làm việc KHÔNG BAO GIỜ vào thùng rác (xoá nó = huỷ phiên sửa, xoá hẳn — xem
+       DELETE /api/projects/:id). Chốt thêm ở đây cho mọi đường khác đưa nó tới (chép tay,
+       bản sao lưu): một mục "Phục hồi" dựng lại một phiên sửa ma mà không màn nào mở được. */
+    if (isWorkingProject(await readJsonFile(join(ws.trashDir, e.name, "project.json")).catch(() => null))) continue
     const metaFile = join(ws.trashDir, e.name, ".trash-meta.json")
     let meta
     try { meta = await readJsonFile(metaFile) }

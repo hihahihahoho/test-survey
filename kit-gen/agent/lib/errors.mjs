@@ -22,6 +22,13 @@ export const STATUS = {
      (web dịch thành «Ảnh tối đa 20 MB…» + nút chọn file khác) — ở đây không ai gửi
      file nào, thứ quá to là thư mục ảnh tham chiếu đã nằm sẵn trong dự án. */
   NO_COMPOSER_DRAFT: 422, TEMPLATE_NOT_FOUND: 404, TEMPLATE_TOO_LARGE: 413,
+  /* Sửa NỘI DUNG template (xem khối «SỬA NỘI DUNG TEMPLATE» ở lib/project-templates.mjs).
+     TEMPLATE_EDIT_NOT_FOUND tách khỏi TEMPLATE_NOT_FOUND: template VẪN CÒN, chỉ là không có
+     phiên sửa nào để lưu (đã lưu ở tab khác, đã huỷ, dự án làm việc bị xoá tay) — web nói
+     «phiên sửa đã kết thúc», không phải «template không còn».
+     TEMPLATE_EDIT_NO_RUN = việc TIÊU LƯỢT VẼ (Vẽ, vẽ bìa) hoặc chụp thành template MỚI trong
+     một DỰ ÁN LÀM VIỆC của phiên sửa template. `details.action` nói việc nào bị chặn. */
+  TEMPLATE_EDIT_NOT_FOUND: 404, TEMPLATE_EDIT_NO_RUN: 409,
   // trash
   TRASH_NOT_FOUND: 404, CONFIRM_REQUIRED: 412, CONFIRM_INVALID: 403, CONFIRM_LOCKED: 429,
   // contract

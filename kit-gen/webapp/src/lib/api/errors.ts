@@ -315,6 +315,17 @@ export const ERROR_TABLE: Record<string, ErrorEntry> = {
     explain: "Template chứa tối đa 200 MB ảnh tham chiếu. Gỡ bớt ảnh không dùng rồi thử lại.",
     actions: [], where: [W.inline], severity: "warn",
   },
+  /* Sửa nội dung template: phiên = một dự án làm việc ẩn (agent/routes/templates.mjs). */
+  TEMPLATE_EDIT_NOT_FOUND: {
+    title: "Phiên sửa template này không còn nữa",
+    explain: "Có thể nó vừa được lưu hoặc bị bỏ ở một tab khác. Mở lại template ở màn «Template dự án» để sửa tiếp.",
+    actions: [], where: [W.inline], severity: "warn",
+  },
+  TEMPLATE_EDIT_NO_RUN: {
+    title: "Đang sửa template — chưa vẽ ở đây được",
+    explain: "Template chỉ giữ thẻ, cài đặt và ảnh tham chiếu. Lưu vào template, rồi tạo dự án từ nó để vẽ.",
+    actions: [], where: [W.inline, W.toast], severity: "info",
+  },
   INVALID_NAME: {
     title: "Tên chưa dùng được",
     explain: "Nhập tên project có ít nhất 1 ký tự.",

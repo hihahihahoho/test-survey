@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { fail } from "../lib/errors.mjs"
 import { exists, readFile, stat, mtimeOf, ensureDir, removeTree, writeFileAtomic } from "../lib/fsx.mjs"
 import { RE_JOB, assertMatch, safeSegment } from "../lib/paths.mjs"
-import { projectDir, readProject } from "../lib/projects.mjs"
+import { isWorkingProject, projectDir, readProject } from "../lib/projects.mjs"
 import { sanitizeRun } from "../lib/runs.mjs"
 import { readContract, contractJobs } from "../lib/contract.mjs"
 import { forgetFingerprint, planSkips, promoteFingerprint, archiveFingerprint } from "../lib/fingerprints.mjs"
@@ -25,7 +25,15 @@ export function register(r) {
   r.post("/api/projects/:id/runs", async ctx => {
     const ws = ctx.registry.active
     const id = ctx.params.id
-    await readProject(ws, id)
+    const project = await readProject(ws, id)
+    /* DỰ ÁN LÀM VIỆC của phiên sửa template (lib/project-templates.mjs) là giấy nháp của
+       TEMPLATE — template không mang kết quả vẽ nào, nên một lượt Vẽ ở đây tiêu quota
+       cho những tấm ảnh sẽ bị vứt cùng tờ nháp lúc Lưu/Huỷ. Chặn TRƯỚC mọi thứ khác
+       (kể cả IMAGEGEN_UNAVAILABLE): lý do đúng là "đây không phải chỗ vẽ", không phải
+       "máy chưa vẽ được". */
+    if (isWorkingProject(project))
+      fail("TEMPLATE_EDIT_NO_RUN", `project ${id} is a template-edit working project; runs are disabled`,
+        { details: { action: "run", templateId: project.templateEdit.templateId } })
     const body = await ctx.json()
     const kind = String(body.kind ?? "gen")
 

@@ -772,8 +772,25 @@ export interface ComposerDocStore {
   /** Bỏ bản trong RAM, nhận lại bản mới nhất trên đĩa. */
   reloadLatest: () => Promise<void>;
   setComposer: (next: ComposerState | ((prev: ComposerState) => ComposerState)) => void;
-  /** Ghi NGAY, bỏ qua debounce (rời màn, bấm "Vẽ"). */
+  /** Ghi NGAY, bỏ qua debounce (rời màn, bấm "Vẽ"). Bắn rồi quên — xem `persist` nếu cần đợi. */
   flush: () => void;
+  /**
+   * Ghi NGAY mọi thứ còn chờ và ĐỢI tới khi bản trên đĩa CHÍNH LÀ bản trên màn.
+   *
+   * Resolve ⇒ không còn gì bẩn, không còn lượt nào đang bay, lượt cuối đã thành công.
+   * Reject ⇒ chưa chắc — lỗi của lượt ghi (409 `DRAFT_CONFLICT`, mạng, 404…) hoặc bản trên
+   * đĩa chưa từng được nhận. Nơi gọi PHẢI dừng ở đó, không được coi như đã lưu.
+   *
+   * Dùng cho việc mà agent làm trên BẢN TRÊN ĐĨA ngay sau đó (lưu vào template): `flush`
+   * bắn-rồi-quên thì việc ấy chạy trên bản của 600ms trước — không lỗi, không báo.
+   */
+  persist: () => Promise<void>;
+  /**
+   * ĐÓNG phiên ghi: bỏ thứ chưa ghi và không ghi gì nữa, kể cả lượt ghi cuối lúc rời màn.
+   * Chỉ gọi khi dự án sắp thôi tồn tại (phiên sửa template vừa được lưu/bỏ) — ghi vào đó
+   * nữa chỉ là một PUT 404 vào một thư mục đã xoá.
+   */
+  close: () => void;
 }
 
 /**
@@ -801,12 +818,23 @@ interface DraftSession {
   pending: ComposerState | null;
   timer: ReturnType<typeof setTimeout> | null;
   inflight: boolean;
+  /**
+   * Lượt ghi đang bay, dưới dạng một lời hứa KHÔNG BAO GIỜ reject — `persist` đợi nó để
+   * biết lượt ấy đáp xuống ra sao. Resolve SAU khi `finally` của lượt ghi đã chạy, nên
+   * nếu lượt ấy tự nối thêm một lượt nữa thì `inflight`/`flight` đã trỏ sang lượt mới.
+   */
+  flight: Promise<{ ok: boolean; error: unknown }> | null;
   /** Đã nhận 409 ⇒ không ghi gì nữa cho tới khi nhận lại bản trên đĩa. */
   conflict: boolean;
+  /** Lỗi 409 vừa nhận — `persist` ném lại đúng nó thay vì bịa một lỗi khác. */
+  conflictError: unknown;
+  /** Đã `close()` ⇒ không ghi gì nữa, mãi mãi (dự án sắp bị xoá). */
+  closed: boolean;
 }
 
 const newSession = (pid: string): DraftSession => ({
-  pid, adopted: false, base: null, pending: null, timer: null, inflight: false, conflict: false,
+  pid, adopted: false, base: null, pending: null, timer: null, inflight: false, flight: null,
+  conflict: false, conflictError: null, closed: false,
 });
 
 /**
@@ -867,6 +895,7 @@ export function useComposerDoc(
       s.timer = null;
       s.pending = null;
       s.conflict = false;
+      s.conflictError = null;
       s.adopted = true;
       s.base = data.updatedAt ?? null;
       const fresh = migrateComposerDoc(data.draft, presets);
@@ -892,7 +921,7 @@ export function useComposerDoc(
 
   const write = React.useCallback(
     (s: DraftSession) => {
-      if (!s.adopted || s.conflict || s.inflight || !s.pending) return;
+      if (!s.adopted || s.conflict || s.closed || s.inflight || !s.pending) return;
       const state = s.pending;
       s.pending = null;
       s.inflight = true;
@@ -900,7 +929,8 @@ export function useComposerDoc(
       const at = new Date().toISOString();
       const payload: ComposerDoc = { docVersion: COMPOSER_DOC_VERSION, updatedAt: at, composer: state };
       let ok = false;
-      void api.projects
+      let failure: unknown = null;
+      s.flight = api.projects
         .saveWorkflowDraft(s.pid, {
           /* `completed: false` — trường này thuộc bản nháp wizard và không có nghĩa
              gì với composer; gửi `true` là nói với phần còn lại của app rằng wizard
@@ -921,8 +951,10 @@ export function useComposerDoc(
           if (s.pending === null) setDirty(false);
         })
         .catch((error: unknown) => {
+          failure = error;
           if (error instanceof AgentError && error.code === "DRAFT_CONFLICT") {
             s.conflict = true;
+            s.conflictError = error;
             if (s.timer) clearTimeout(s.timer);
             s.timer = null;
             const parsed = draftConflictDetailsSchema.safeParse(error.details);
@@ -940,7 +972,8 @@ export function useComposerDoc(
           /* Có bản chen vào lúc đang bay mà hẹn giờ của nó đã hết ⇒ ghi nốt, với
              `base` vừa nhận. Chỉ khi lượt vừa rồi THÀNH CÔNG — lỗi thì không tự lặp. */
           if (ok && s.pending && !s.timer) write(s);
-        });
+        })
+        .then(() => ({ ok, error: failure }));
     },
     [qc],
   );
@@ -948,8 +981,9 @@ export function useComposerDoc(
   const setComposer = React.useCallback(
     (next: ComposerState | ((prev: ComposerState) => ComposerState)) => {
       const s = sessionRef.current;
-      /* CHƯA NHẬN bản trên đĩa ⇒ không có gì để sửa lên. Xem khối chú thích đầu hook. */
-      if (!s || !s.adopted) return;
+      /* CHƯA NHẬN bản trên đĩa ⇒ không có gì để sửa lên. Xem khối chú thích đầu hook.
+         ĐÃ ĐÓNG ⇒ dự án sắp bị xoá, không còn chỗ nào cho chữ mới đi về. */
+      if (!s || !s.adopted || s.closed) return;
       setComposerState((prev) => {
         if (prev === null) return prev;
         const value = typeof next === "function" ? (next as (p: ComposerState) => ComposerState)(prev) : next;
@@ -980,6 +1014,51 @@ export function useComposerDoc(
   );
 
   const flush = React.useCallback(() => flushSession(sessionRef.current), [flushSession]);
+
+  /**
+   * ╔══ `persist` — «ĐÃ XUỐNG ĐĨA» LÀ MỘT SỰ THẬT ĐO ĐƯỢC, KHÔNG PHẢI MỘT CÁI ĐOÁN ═╗
+   * ║ Vòng lặp nhỏ trên CHÍNH phiên ghi, không trên state React: `dirty`/`saving`  ║
+   * ║ của React chỉ đổi sau một lượt vẽ lại, còn `pending`/`inflight`/`flight` của ║
+   * ║ phiên đổi NGAY trong lượt ghi. Mỗi vòng:                                     ║
+   * ║   ① còn hẹn giờ ⇒ huỷ nó (ta ghi ngay bây giờ, không đợi 600ms);            ║
+   * ║   ② không có gì đang bay mà còn bản chờ ⇒ bắn lượt ghi;                      ║
+   * ║   ③ không có gì đang bay, không còn gì chờ ⇒ đĩa = màn ⇒ XONG;               ║
+   * ║   ④ còn lượt đang bay ⇒ đợi nó đáp; hỏng ⇒ NÉM đúng lỗi ấy; ổn ⇒ vòng lại —   ║
+   * ║     vì trong lúc nó bay có thể đã có bản mới chen vào hàng chờ.              ║
+   * ║ Lượt ghi đang bay KHÔNG bị bắn chồng (luật ③ của `DraftSession`): hai PUT     ║
+   * ║ cùng cầm một `base` thì PUT thứ hai chắc chắn 409 với chính mình.            ║
+   * ╚═══════════════════════════════════════════════════════════════════════════════╝
+   */
+  const persist = React.useCallback(async () => {
+    const s = sessionRef.current;
+    if (!s || !s.adopted) {
+      throw new AgentError({
+        code: "REQUEST_NOT_SENT", transport: "client",
+        message: "composer draft not adopted yet — nothing safe to persist",
+      });
+    }
+    for (;;) {
+      if (s.conflict) throw s.conflictError ?? new AgentError({ code: "DRAFT_CONFLICT", status: 409, message: "draft conflict" });
+      if (s.closed) return;
+      if (s.timer) {
+        clearTimeout(s.timer);
+        s.timer = null;
+      }
+      if (!s.inflight && s.pending) write(s);
+      if (!s.inflight || !s.flight) return;
+      const landed = await s.flight;
+      if (!landed.ok) throw landed.error;
+    }
+  }, [write]);
+
+  const close = React.useCallback(() => {
+    const s = sessionRef.current;
+    if (!s) return;
+    s.closed = true;
+    if (s.timer) clearTimeout(s.timer);
+    s.timer = null;
+    s.pending = null;
+  }, []);
 
   /* Rời màn (hoặc đổi dự án) giữa chừng KHÔNG được mất chữ: hẹn giờ bị huỷ cùng
      component, nên lượt ghi cuối phải bắn ngay tại đây — cho ĐÚNG phiên cũ. */
@@ -1013,5 +1092,7 @@ export function useComposerDoc(
     reloadLatest,
     setComposer,
     flush,
+    persist,
+    close,
   };
 }

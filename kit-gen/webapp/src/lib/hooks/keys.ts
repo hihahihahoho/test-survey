@@ -132,6 +132,27 @@ export function keysAfterRun(projectId: string) {
   ] as const;
 }
 
+/**
+ * MỌI tiền tố cache thuộc về MỘT dự án — để QUÊN SẠCH một dự án vừa thôi tồn tại.
+ *
+ * Ca dùng thật: dự án làm việc ẩn của một phiên sửa template, bị agent xoá ngay khi
+ * phiên được lưu vào template hoặc bị bỏ. Để lại cache của nó là để một lần mở phiên
+ * sau (agent có thể dùng lại đúng id ấy) nhìn thấy bản nháp, ảnh tham chiếu, chi tiết
+ * của phiên TRƯỚC trong vài trăm mili-giây đầu — đủ để màn soạn nhận nhầm bản cũ.
+ * `projects.detail(id)` là tiền tố của cả bản nháp lẫn ảnh bìa của dự án.
+ */
+export function keysOfProject(projectId: string) {
+  return [
+    qk.projects.detail(projectId),
+    qk.contract.all(projectId),
+    qk.refs.all(projectId),
+    qk.runs.ofProject(projectId),
+    qk.runs.rawHistoryOf(projectId),
+    qk.kit.all(projectId),
+    qk.docs.ofProject(projectId),
+  ] as const;
+}
+
 /** Sau khi lưu contract: contract + lịch sử + project (version/stats/stale đổi). */
 export function keysAfterContractSave(projectId: string) {
   return [

@@ -27,7 +27,7 @@ import {
   saveContractResultSchema, startRunResultSchema, trashListSchema, usageSchema,
   workspaceListSchema, workflowDraftSchema, draftHistorySchema, draftSnapshotSchema, userLibrarySchema, libraryItemResultSchema,
   librarySettingsResultSchema, brandProfileResultSchema, libraryPresetResultSchema,
-  templateListSchema, templateResultSchema,
+  templateListSchema, templateResultSchema, templateEditSessionSchema,
   type LibraryPresetKind, type PatchTemplateInput, type SaveTemplateInput, type TemplateList,
   type CleanTarget, type CreateProjectInput, type DuplicateInput,
   type PatchProjectInput, type RefKind, type StartRunInput,
@@ -370,6 +370,32 @@ export const templatesApi = {
   async coverBlob(id: string, width = 128) {
     const response = await httpGet<Response>(`/api/templates/${pid(id)}/cover?w=${width}`, { raw: true, kind: "get" });
     return response.blob();
+  },
+  /**
+   * ── SỬA NỘI DUNG TEMPLATE (ba cửa, một phiên) ─────────────────────────────
+   * Agent dựng một DỰ ÁN LÀM VIỆC ẨN từ template; màn soạn sửa nó như mọi dự án (tự lưu,
+   * chống ghi đè, ảnh tham chiếu…), rồi `commitEdit` chép nó ngược vào template. Đóng tab
+   * giữa chừng không mất gì: phiên nằm trên đĩa, lần bấm sau `startEdit` trả lại đúng nó
+   * (`resumed: true`).
+   *
+   * `startEdit` idempotent — phiên đã có thì trả phiên ấy, không dựng dự án thứ hai.
+   */
+  async startEdit(id: string) {
+    return parse(templateEditSessionSchema, await httpPost(`/api/templates/${pid(id)}/edit`, {}), "phiên sửa template");
+  },
+  /**
+   * Chép bản soạn của dự án làm việc vào template (giữ tên, mô tả, ảnh bìa) và đóng phiên.
+   * Lỗi: 404 `TEMPLATE_EDIT_NOT_FOUND` (không còn phiên) · 422 `NO_COMPOSER_DRAFT` ·
+   * 413 `TEMPLATE_TOO_LARGE` · 404 `TEMPLATE_NOT_FOUND`.
+   * GỌI SAU KHI bản soạn đã xuống đĩa (`ComposerDocStore.persist`) — agent chép bản TRÊN ĐĨA.
+   */
+  async commitEdit(id: string) {
+    return parse(templateResultSchema, await httpPost(`/api/templates/${pid(id)}/edit/commit`, {}), "template vừa lưu").template;
+  },
+  /** Bỏ phiên sửa (xoá dự án làm việc); template giữ nguyên. Idempotent. */
+  async discardEdit(id: string) {
+    await httpDelete(`/api/templates/${pid(id)}/edit`);
+    return { ok: true };
   },
 };
 

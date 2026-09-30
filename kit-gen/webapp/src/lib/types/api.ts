@@ -328,6 +328,19 @@ export const projectStateSchema = z.looseObject({
 export type ProjectState = z.infer<typeof projectStateSchema>;
 
 /**
+ * `project.templateEdit` — phiên sửa nội dung một template mà dự án làm việc này đang gánh.
+ * `templateName` là tên LÚC MỞ phiên (để băng «Đang sửa template «X»» có chữ ngay, không
+ * phải đợi thêm một lượt gọi danh sách template).
+ */
+export const templateEditInfoSchema = z.looseObject({
+  templateId: z.string(),
+  templateName: z.string().default(""),
+  startedAt: z.string().nullish(),
+  templateUpdatedAt: z.string().nullish(),
+});
+export type TemplateEditInfo = z.infer<typeof templateEditInfoSchema>;
+
+/**
  * Kiểu `Project` (#7, #8, #9, #10, #16) — đúng `project.json` arch §2.3 + `state.jobs`.
  * `broken:true` ⇒ thẻ đỏ ở S1, KHÔNG được biến mất im lặng (arch §2.5).
  */
@@ -350,6 +363,13 @@ export const projectSchema = z.looseObject({
   }).optional(),
   cover: z.string().nullish(),
   workflow: z.looseObject({ completed: z.boolean().default(true), updatedAt: z.string().nullish() }).optional(),
+  /**
+   * CÓ ⇒ đây là DỰ ÁN LÀM VIỆC ẨN của một phiên sửa template (`POST /api/templates/:id/edit`),
+   * không phải một dự án của người dùng. Màn soạn đọc cờ này để vào chế độ sửa template —
+   * đọc từ DỰ ÁN chứ không từ URL, để F5 giữa chừng vẫn mở lại đúng chế độ. Agent đời cũ
+   * không có trường này ⇒ vắng ⇒ dự án thường.
+   */
+  templateEdit: templateEditInfoSchema.nullish(),
   stats: projectStatsSchema.optional(),
   state: projectStateSchema.optional(),
   broken: z.boolean().default(false),
@@ -463,11 +483,30 @@ export const templateSchema = z.looseObject({
   sourceProjectName: z.string().nullish(),
   stats: templateStatsSchema.default({ blocks: 0, refs: 0, bytes: 0 }),
   hasCover: z.boolean().default(false),
+  /**
+   * Phiên SỬA NỘI DUNG đang dở của template này (`null` = không có). Có ⇒ thẻ ở màn
+   * «Template dự án» đeo nhãn «Đang sửa dở», và bấm vào thì hỏi tiếp tục hay bỏ trước khi
+   * mở. `nullish` chứ không `default(null)`: agent đời cũ không gửi trường này, và vắng
+   * cũng nghĩa là "không có phiên nào".
+   */
+  editing: z.looseObject({ projectId: z.string(), startedAt: z.string().nullish() }).nullish(),
 });
 export type Template = z.infer<typeof templateSchema>;
 export const templateListSchema = z.looseObject({ items: z.array(templateSchema).default([]) });
 export type TemplateList = z.infer<typeof templateListSchema>;
 export const templateResultSchema = z.looseObject({ template: templateSchema });
+
+/**
+ * `POST /api/templates/:id/edit` — mở (hoặc NỐI LẠI) phiên sửa nội dung template.
+ * `resumed: true` ⇒ agent trả phiên đã có sẵn thay vì dựng dự án làm việc mới; web phải
+ * hỏi người dùng tiếp tục bản dở hay bỏ nó đi, không được tự chọn thay.
+ */
+export const templateEditSessionSchema = z.looseObject({
+  project: projectSchema,
+  template: templateSchema,
+  resumed: z.boolean().default(false),
+});
+export type TemplateEditSession = z.infer<typeof templateEditSessionSchema>;
 export interface SaveTemplateInput { name: string; description?: string }
 export interface PatchTemplateInput { name?: string; description?: string }
 

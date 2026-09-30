@@ -3,7 +3,7 @@ import { join } from "node:path"
 import {
   listProjects, readProject, computeState, applyActiveRun, createProjectDir, patchProject, trashProject,
   listTrash, restoreFromTrash, purgeFromTrash, cleanProject, slugify, newProjectId,
-  idTaken, projectDir, copyTree,
+  idTaken, projectDir, copyTree, isWorkingProject,
   readWorkflowDraft, saveWorkflowDraft,
 } from "../lib/projects.mjs"
 import { listDraftHistory, readDraftSnapshot } from "../lib/draft-history.mjs"
@@ -11,8 +11,10 @@ import { buildTemplateContract } from "../lib/templates.mjs"
 import { writeContract, readContract } from "../lib/contract.mjs"
 import { fail } from "../lib/errors.mjs"
 import { RE_SLUG, RE_VARIANT_ID, assertMatch } from "../lib/paths.mjs"
-import { exists, walkFiles, dirStats, sha256, removeTree } from "../lib/fsx.mjs"
-import { applyTemplateToProject, mergeTags, readTemplate } from "../lib/project-templates.mjs"
+import { exists, walkFiles, dirStats, sha256 } from "../lib/fsx.mjs"
+import {
+  createProjectFromTemplate, discardWorkingProject, mergeTags, readTemplate,
+} from "../lib/project-templates.mjs"
 import { forgetCover } from "../lib/cover.mjs"
 import { makeZip } from "../lib/zip.mjs"
 
@@ -87,19 +89,16 @@ export function register(r) {
 
     const description = body.description ?? fromTemplate?.description
     const tags = fromTemplate ? mergeTags(body.tags, fromTemplate.tags) : body.tags
-    const { dir } = await createProjectDir(ws, { id, name, slug, description, tags })
-    try {
-      await writeContract(ws, id, buildTemplateContract(firstVariant), { ifMatch: 0 })
+    if (fromTemplate) {
       /* Ảnh bìa CỐ Ý không chép: nó là kết quả vẽ của dự án cũ (chỉ là hình thu nhỏ của
-         template). Dự án mới tự có bìa sau lượt vẽ đầu tiên của chính nó. */
-      if (fromTemplate) await applyTemplateToProject(ws, fromTemplate.id, id)
-    } catch (e) {
-      /* Chép hỏng giữa chừng ⇒ dọn nguyên dự án dở dang. Một dự án có tên mà thiếu nửa
-         ảnh là thứ tệ nhất để trao cho người dùng: trông như thành công, rồi hỏng ở cú
-         bấm Vẽ đầu tiên. Chỉ dọn thư mục VỪA TẠO — `createProjectDir` ném (id trùng)
-         thì không tới được đây. Đường `blank` giữ nguyên hành vi cũ. */
-      if (fromTemplate) await removeTree(dir).catch(() => {})
-      throw e
+         template). Dự án mới tự có bìa sau lượt vẽ đầu tiên của chính nó.
+         Chép hỏng giữa chừng ⇒ helper dọn nguyên dự án dở dang (lý do ở chính nó). CÙNG
+         helper với dự án làm việc của phiên sửa template — một đường, không phải hai. */
+      await createProjectFromTemplate(ws, fromTemplate.id, { id, name, slug, description, tags, firstVariant })
+    } else {
+      /* Đường `blank` giữ nguyên hành vi cũ. */
+      await createProjectDir(ws, { id, name, slug, description, tags })
+      await writeContract(ws, id, buildTemplateContract(firstVariant), { ifMatch: 0 })
     }
 
     const p = await readProject(ws, id)
@@ -157,6 +156,20 @@ export function register(r) {
        projects/<id>/ VỪA chuyển sang thùng rác sẽ dựng lại thư mục ma và giết nút
        Hoàn tác. Job vẽ bìa cũng ghi xuống đúng thư mục đó ⇒ cũng phải bị quên đi. */
     forgetCover(ws, id)
+    /* DỰ ÁN LÀM VIỆC của phiên sửa template ⇒ HUỶ PHIÊN (xoá hẳn), KHÔNG vào thùng rác:
+       nó là giấy nháp vô hình — một mục thùng rác mà màn Thùng rác không hiện (listTrash
+       lọc nó) là rác không ai dọn được, còn «Phục hồi» thì dựng lại một phiên ma. Từ chối
+       (409) cũng không hơn: người gọi đã nói rõ họ muốn nó biến mất, và huỷ phiên là
+       đúng nghĩa đó. `trashId: null` = không có gì để hoàn tác. */
+    const current = await readProject(ws, id).catch(() => null)
+    if (isWorkingProject(current)) {
+      const { bytes } = await dirStats(projectDir(ws, id))
+      await discardWorkingProject(ws, id, current.templateEdit.templateId)
+      return {
+        status: 200,
+        json: { ok: true, trashId: null, restoreBefore: null, cancelledRuns, bytes, discarded: true },
+      }
+    }
     const meta = await trashProject(ws, id)
     return {
       status: 200,

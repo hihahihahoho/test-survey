@@ -7,6 +7,7 @@ import { createHash } from "node:crypto"
 import { ensureDir, exists, readJsonFile, writeJsonAtomic, canWrite, readdir } from "./fsx.mjs"
 import { shortenPath } from "./redact.mjs"
 import { fail } from "./errors.mjs"
+import { isWorkingProject } from "./projects.mjs"
 
 export function workspaceId(absPath) {
   return "ws_" + createHash("sha256").update(resolve(absPath)).digest("hex").slice(0, 8)
@@ -66,11 +67,21 @@ export class Workspace {
   }
   async writable() { return canWrite(this.root) && canWrite(this.projectsDir) }
 
+  /** Số dự án NGƯỜI DÙNG THẤY. Dự án làm việc của phiên sửa template không tính (xem
+   *  `isWorkingProject`): /health nói "3 dự án" thì màn Home phải đếm được đúng 3 thẻ.
+   *  Vì thế phải ĐỌC project.json chứ không chỉ hỏi nó có tồn tại không; file hỏng thì vẫn
+   *  đếm — listProjects cũng hiện nó (thẻ "hỏng"). */
   async countProjects() {
     try {
       const ents = await readdir(this.projectsDir, { withFileTypes: true })
       let n = 0
-      for (const e of ents) if (e.isDirectory() && await exists(join(this.projectsDir, e.name, "project.json"))) n++
+      for (const e of ents) {
+        if (!e.isDirectory()) continue
+        const file = join(this.projectsDir, e.name, "project.json")
+        if (!(await exists(file))) continue
+        if (isWorkingProject(await readJsonFile(file).catch(() => null))) continue
+        n++
+      }
       return n
     } catch { return 0 }
   }

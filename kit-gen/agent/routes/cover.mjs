@@ -10,7 +10,7 @@
  * chiếm suất "mỗi project một run", không xuất hiện trong lịch sử lượt chạy.
  */
 import { fail } from "../lib/errors.mjs"
-import { readProject } from "../lib/projects.mjs"
+import { isWorkingProject, readProject } from "../lib/projects.mjs"
 import { coverRunning, coverStatus, startCover } from "../lib/cover.mjs"
 
 export function register(r) {
@@ -27,6 +27,11 @@ export function register(r) {
     const id = ctx.params.id
     const project = await readProject(ws, id)
     if (project.broken) fail("PROJECT_BROKEN", "cannot draw a cover for a broken project")
+    /* Vẽ bìa cũng tiêu lượt tạo ảnh — cùng luật với lượt Vẽ (#32) cho dự án làm việc của
+       phiên sửa template. Bìa của template là bìa của dự án nó được chụp từ, không vẽ lại. */
+    if (isWorkingProject(project))
+      fail("TEMPLATE_EDIT_NO_RUN", `project ${id} is a template-edit working project; cover drawing is disabled`,
+        { details: { action: "cover", templateId: project.templateEdit.templateId } })
 
     if (coverRunning(ws, id))
       fail("COVER_RUNNING", `project ${id} is already drawing its cover`,

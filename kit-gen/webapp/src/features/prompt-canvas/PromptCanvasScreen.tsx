@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { AgentError } from "@/lib/api/client";
 import { contractConflictDetailsSchema } from "@/lib/types/api";
-import { useAgentStatus, useContract, useProject, useSaveContract } from "@/lib/hooks";
+import { useAgentStatus, useContract, useProject, useSaveContract, useTemplateEditOf } from "@/lib/hooks";
 import type { Contract } from "@/lib/types/contract";
 
 import { gateOf, useNarrowViewport } from "@/features/projects/lib/gate";
@@ -36,7 +36,9 @@ import {
 import "@/features/prompt-lab/prompt-lab.css";
 
 import { CanvasBlock } from "./components/CanvasBlock";
+import { TemplateEditBar, TemplateEditGone } from "./components/TemplateEditBar";
 import { useComposerDoc, type ComposerDocStore } from "./lib/composer-doc";
+import { isEditSessionGone, useTemplateEditActions } from "./lib/template-edit";
 import { PromptProjectContext } from "./lib/project-context";
 import {
   composerBlockSheets,
@@ -87,12 +89,42 @@ import { ensurePoseRefs } from "./lib/pose-refs";
  * `setComposer` đầu tiên sẽ GHI ĐÈ lên nó. Nên trước khi cho gõ chữ đầu tiên,
  * màn hỏi một câu — và trong lúc chưa trả lời thì KHÔNG có một lượt ghi nào.
  *
+ * ══ CHẾ ĐỘ SỬA TEMPLATE (`project.templateEdit`) ═══════════════════════════
+ * Cùng màn này, trên DỰ ÁN LÀM VIỆC ẨN của một phiên sửa template (xem
+ * `lib/template-edit.ts`). Đọc cờ từ DỰ ÁN chứ không từ URL: F5 giữa chừng vẫn ra đúng
+ * chế độ. Khác màn dự án đúng ở những chỗ sau, và CHỈ những chỗ này:
+ *  · băng dính «Đang sửa template «X»» với «Huỷ thay đổi» + «Lưu vào template»;
+ *  · KHÔNG «Vẽ tất cả», không nút Vẽ / «Vẽ lại tấm này» / ô kết quả trên thẻ;
+ *  · KHÔNG «Lưu làm template» (agent từ chối trên dự án làm việc);
+ *  · KHÔNG hàng cửa ra (tải kit · copy Figma · cài đặt dự án · xoá dự án) — cả bốn nói
+ *    về một DỰ ÁN, mà dự án này là chuyện nội bộ của phiên, không phải của người dùng;
+ *  · nút quay về ở header đưa về «Template dự án» (`AppLayout`).
+ * Mọi lớp chống mất chữ (tự lưu, 409, chặn khi chưa nạp, băng xung đột) giữ NGUYÊN.
+ *
  * ══ KHUNG TRANG ═══════════════════════════════════════════════════════════
  * `FloraShell` KHÔNG cấp padding nào cho `<main>`. Trước lượt này màn tự dựng một
  * `<div className="flex flex-col gap-4">` trần, nên nội dung dán sát mép trái cửa
  * sổ và trải hết bề ngang màn 27". Đó là lời chê *"sát sàn sạt, không có max
  * width"*. Hộp trang nay là `PAGE` — xem `lib/ui.ts` để biết vì sao 1120px.
  */
+
+/**
+ * Chữ riêng của chế độ sửa template. «template» là TÊN TÍNH NĂNG do chủ sản phẩm đặt —
+ * mỗi dòng tự xin miễn cổng từ cấm (`banned-scan.ts`) ngay tại chỗ.
+ */
+const TPL_COPY = {
+  title: "Soạn template", // kg-allow-jargon: tên tính năng
+  intro: "Thêm, bớt, sửa thẻ và ảnh tham chiếu như ở một dự án. Ở đây không vẽ — template chỉ giữ phần dựng.", // kg-allow-jargon: tên tính năng
+} as const;
+
+/**
+ * Lý do CHƯA lưu vào template được — `null` = được. Cùng các lý do của «Lưu làm template»
+ * (bản soạn đang xung đột / còn bản nháp kiểu cũ): cả hai nút đều nhờ agent chép bản TRÊN
+ * ĐĨA, nên cả hai cùng phải đứng khi bản trên đĩa chưa chắc là bản trên màn.
+ */
+function templateSaveBlockReason(gateReason: string | null, store: ComposerDocStore): string | null {
+  return gateReason ?? saveTemplateBlockReason(store);
+}
 
 const ADD_ITEMS: { kind: BlockKind; label: string; hint: string; icon: React.ReactNode }[] = [
   { kind: "background", label: "Background", hint: "Một tấm nền: khung cảnh, không khí, bố cục", icon: <ImageIcon aria-hidden className="size-4" /> },
@@ -126,6 +158,43 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
   const project = useProject(projectId);
   const contractQuery = useContract(projectId);
   const saveContract = useSaveContract(projectId);
+
+  /* ── CHẾ ĐỘ SỬA TEMPLATE ────────────────────────────────────────────────
+     `useTemplateEditOf` NHỚ cờ đã thấy: dự án làm việc 404 giữa chừng (bị bỏ ở tab
+     khác) thì màn vẫn biết mình đang sửa template, để chỉ đường về «Template dự án»
+     thay vì tụt về giao diện dự án thường trên một dự án không còn. */
+  const templateEdit = useTemplateEditOf(projectId, project.data);
+  const editingTemplate = templateEdit !== null;
+  /* Chế độ chỉ BIẾT được khi đã có `project` (hoặc GET hỏng hẳn). Mở thẳng URL của một
+     phiên (tải lại tab) thì bản soạn có thể về TRƯỚC dự án: vẽ nút Vẽ / «Lưu làm template»
+     trong nhịp ấy là chúng nhá lên rồi biến mất ngay dưới tay người dùng — và một cú bấm
+     trúng nhịp đó là một lượt agent từ chối. Nên nút nào CHỈ thuộc về dự án thường thì
+     đợi tới khi chế độ đã rõ. Từ màn «Template dự án» vào thì cache đã có sẵn dự án. */
+  const modeKnown = project.data !== undefined || project.isError;
+  const projectOnly = modeKnown && !editingTemplate;
+  const tpl = useTemplateEditActions({ projectId, info: templateEdit, store });
+  /* Hai nguồn "phiên đã mất": lượt kết phiên của chính màn này (`tpl.gone`), và một lượt
+     đọc/ghi nền đáp về 404. Nguồn thứ hai CHỈ tính khi không có lượt kết phiên nào đang
+     chạy: lượt lưu vừa xoá dự án làm việc là CHỦ Ý, và một lượt đọc lại dự án (mỗi PUT
+     bản soạn đều làm mới nó) về 404 đúng nhịp ấy không được nháy lên «phiên không còn»
+     ngay trước lúc màn rời về «Template dự án». Lỗi của chính lượt kết phiên thì
+     `useTemplateEditActions` tự phân loại. */
+  const tplGone = editingTemplate
+    && (tpl.gone || (tpl.phase === "idle" && (isEditSessionGone(project.error) || isEditSessionGone(store.saveError))));
+  /* Cùng cổng ghi với mọi nút ghi khác của app: công cụ local tắt / màn quá hẹp ⇒ hai nút
+     kết phiên KHOÁ kèm lý do, không ẩn (§2.5-2). */
+  const { status: agentStatus } = useAgentStatus();
+  const narrow = useNarrowViewport();
+  const writeGate = React.useMemo(() => gateOf(agentStatus, narrow), [agentStatus, narrow]);
+  const gateReason = writeGate.readOnly ? writeGate.reason : null;
+  /* Đang lưu vào / bỏ phiên ⇒ cả khu soạn TRƠ (`inert`): không gõ được một chữ nào lọt
+     vào giữa lượt ghi cuối và lượt chép — xem `useTemplateEditActions`. Cửa `edit` bên
+     dưới đã chặn ghi; `inert` chặn luôn cả chữ hiện lên trong ô soạn rồi bị bỏ lặng lẽ. */
+  const tplBusy = tpl.phase !== "idle";
+  const bodyRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (bodyRef.current) bodyRef.current.inert = tplBusy;
+  }, [tplBusy]);
 
   /* Người dùng đã đồng ý thay bản nháp wizard cũ. State của TAB, không lưu đâu
      cả: một khi composer ghi lần đầu thì `docVersion` đã đúng và câu hỏi tự biến
@@ -300,7 +369,9 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
   /* Xung đột bản nháp (409 DRAFT_CONFLICT) cũng đi qua cửa này: tự lưu đã dừng,
      nên cho gõ tiếp là để người dùng chất thêm chữ lên một bản sẽ không bao giờ
      được ghi. Thứ đã sửa vẫn nằm nguyên trên màn cho tới khi họ chọn. */
-  const readOnly = locked || store.conflict !== null;
+  /* Chế độ sửa template thêm hai lý do khoá: đang kết phiên (xem `tplBusy`), và phiên
+     đã mất — sửa tiếp là chất chữ lên một dự án không còn chỗ nào để lưu. */
+  const readOnly = locked || store.conflict !== null || tplBusy || tplGone;
   const edit = React.useCallback(
     (updater: (prev: ComposerState) => ComposerState) => {
       if (readOnly) return;
@@ -338,7 +409,11 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
   if (store.loadError) {
     return (
       <div className={PAGE}>
-        <DraftLoadFailed reloading={store.reloading} onRetry={store.retryLoad} />
+        {/* Phiên sửa template đã mất (dự án làm việc 404): «Thử lại» không cứu được gì —
+            chỉ đường về, không mời thử lại một thứ chắc chắn hỏng lần nữa. */}
+        {editingTemplate && isEditSessionGone(store.loadError)
+          ? <TemplateEditGone onBack={tpl.toTemplates} />
+          : <DraftLoadFailed reloading={store.reloading} onRetry={store.retryLoad} />}
       </div>
     );
   }
@@ -366,24 +441,46 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
           ở từng chỗ thì cứ thêm một ô nhập là thêm một chỗ dễ quên, và chỗ quên
           nào cũng hiện ra thành một vòng xanh 2px lạc lõng giữa màn. */}
       <div data-prompt-lab="" className={`${PAGE} flex flex-col gap-6`}>
+        {templateEdit && (
+          <TemplateEditBar
+            info={templateEdit}
+            actions={tpl}
+            saveBlocked={templateSaveBlockReason(gateReason, store)}
+            discardBlocked={gateReason}
+            gone={tplGone}
+          />
+        )}
+
+        {/* `contents`: vỏ này KHÔNG có hộp riêng — các con vẫn là hàng của cột `gap-6`
+            bên ngoài như trước. Nó tồn tại chỉ để có một chỗ đeo `inert` (xem `tplBusy`)
+            mà không kéo băng sửa template vào cùng. */}
+        <div ref={bodyRef} className="contents">
         <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
           <div className="min-w-0">
             {/* `display-3` (22px) chứ không `DISPLAY` (32→44px): đây là một khu làm
                 việc, không phải một trang giới thiệu. Tên dự án đã nằm trên topbar
                 và trên `<title>`, nên H1 ở đây chỉ cần nói ĐANG LÀM GÌ. */}
-            <h1 className="text-display-3 text-fg-strong">Soạn bộ kit</h1>
+            <h1 className="text-display-3 text-fg-strong">{editingTemplate ? TPL_COPY.title : "Soạn bộ kit"}</h1>
             <p className="mt-1 max-w-[68ch] text-body text-fg-muted">
-              Đặt ngữ cảnh chung, rồi thêm từng thẻ. Mỗi thẻ có nút Vẽ riêng và tab Prompt để xem chữ engine sẽ gửi.
+              {editingTemplate
+                ? TPL_COPY.intro
+                : "Đặt ngữ cảnh chung, rồi thêm từng thẻ. Mỗi thẻ có nút Vẽ riêng và tab Prompt để xem chữ engine sẽ gửi."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-4">
-            <SaveState updatedAt={store.updatedAt} dirty={store.dirty} saving={store.saving} error={store.saveError} />
-            <SaveTemplateButton projectId={projectId} store={store} />
-            <GenAllButton blocks={blockSheets} queue={queue} locked={locked} />
+            {/* Phiên đã mất ⇒ «Chưa lưu được — thay đổi vẫn còn trên máy này» là một lời
+                hứa sai: không còn chỗ nào để lưu. Băng phía trên đã nói đúng chuyện. */}
+            {!tplGone && (
+              <SaveState updatedAt={store.updatedAt} dirty={store.dirty} saving={store.saving} error={store.saveError} />
+            )}
+            {projectOnly && <SaveTemplateButton projectId={projectId} store={store} />}
+            {projectOnly && <GenAllButton blocks={blockSheets} queue={queue} locked={locked} />}
           </div>
         </header>
 
-        <ExitRow projectId={projectId} settingsOpen={settingsOpen} onSettingsOpenChange={onSettingsOpenChange} />
+        {!editingTemplate && (
+          <ExitRow projectId={projectId} settingsOpen={settingsOpen} onSettingsOpenChange={onSettingsOpenChange} />
+        )}
 
         {locked && <LegacyDraftGate onAccept={() => setReplaceOk(true)} />}
 
@@ -419,6 +516,7 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
             copyShapeAsset={copyShapeAsset}
             reloadSignal={reloads[block.id] ?? 0}
             onReload={() => setReloads((prev) => ({ ...prev, [block.id]: (prev[block.id] ?? 0) + 1 }))}
+            noGen={!projectOnly}
           />
         ))}
 
@@ -448,6 +546,7 @@ export function PromptCanvasScreen({ projectId, settingsOpen, onSettingsOpenChan
               </PillMenu>
             )}
           </span>
+        </div>
         </div>
       </div>
       </BrandBindingProvider>

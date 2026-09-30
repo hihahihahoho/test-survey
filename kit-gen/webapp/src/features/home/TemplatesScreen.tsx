@@ -1,6 +1,9 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { LayoutTemplate, MoreHorizontal, Pencil, Plus, RefreshCw, Search, SearchX, Trash2 } from "lucide-react";
+import {
+  LayoutTemplate, Loader2, MoreHorizontal, Pencil, PencilLine, Plus, RefreshCw, Search, SearchX, Trash2,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -14,12 +17,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDestructive, EmptyState, ErrorState, LoadingState } from "@/components/common";
 import { CARD } from "@/components/layout/flora";
 import { cn } from "@/lib/utils";
-import { useAgentStatus, useDeleteTemplate, usePatchTemplate, useTemplates } from "@/lib/hooks";
-import type { Template } from "@/lib/types";
+import {
+  useAgentStatus, useDeleteTemplate, useDiscardTemplateEdit, usePatchTemplate, useStartTemplateEdit, useTemplates,
+} from "@/lib/hooks";
+import { absTime, relTime } from "@/lib/format";
+import type { Template, TemplateEditSession } from "@/lib/types";
 import { CreateModeDialog } from "@/features/projects/dialogs/CreateModeDialog";
 import { InlineError, OfflineNotice } from "@/features/projects/dialogs/parts";
 import { forgetTemplateCover } from "@/features/projects/lib/agent-blob";
-import { errorDetail, toastSuccess } from "@/features/projects/lib/feedback";
+import { errorDetail, toastInfo, toastSuccess } from "@/features/projects/lib/feedback";
 import { gateOf, useNarrowViewport, type Gate } from "@/features/projects/lib/gate";
 import { createNav, openCreatedWith } from "@/features/projects/lib/nav";
 import {
@@ -40,13 +46,18 @@ import { HomeWorkspaceShell } from "./components/HomeWorkspaceShell";
  * ║ một hộp riêng.                                                          ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  *
- * Nội dung một template BẤT BIẾN sau khi lưu (agent chỉ cho PATCH tên + mô tả): muốn
- * đổi thẻ/ảnh bên trong thì mở dự án, sửa, rồi lưu thành template mới. Nên màn này
- * không có nút «Sửa template» — có thì nó sẽ phải nói dối về việc sửa được gì.
+ * ╔══ SỬA NỘI DUNG (30/09/2026, chủ sản phẩm duyệt) ═══════════════════════════╗
+ * ║ Bấm BÌA hoặc TÊN thẻ (hay «Sửa nội dung» ở menu ⋯) ⇒ mở CHÍNH màn soạn quen ║
+ * ║ thuộc ở chế độ sửa template: agent dựng một dự án làm việc ẩn từ template,  ║
+ * ║ màn soạn sửa nó như mọi dự án, rồi «Lưu vào template» / «Huỷ thay đổi».     ║
+ * ║ Đóng tab giữa chừng không mất gì — phiên nằm trên đĩa. Lần bấm sau mà phiên ║
+ * ║ còn ⇒ HỎI tiếp tục hay bỏ bản dở (thẻ đeo nhãn «Đang sửa dở» từ trước đó),  ║
+ * ║ không tự chọn thay người dùng: một bên là công sửa dở, một bên là bản sạch.║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
- * NÚT CHÍNH CỦA THẺ LÀ «TẠO DỰ ÁN», không phải «Mở»: không có gì để mở. Nó mở hộp Tạo
- * dự án với template này CHỌN SẴN, rồi điều hướng y như tạo từ danh sách dự án
- * (`openCreatedWith` — MỘT luật cho cả hai màn).
+ * NÚT «TẠO DỰ ÁN» VẪN LÀ NÚT RIÊNG ở chân thẻ: mở hộp Tạo dự án với template này CHỌN
+ * SẴN, rồi điều hướng y như tạo từ danh sách dự án (`openCreatedWith` — MỘT luật cho cả
+ * hai màn). Dự án tạo ra lấy nội dung ĐÃ LƯU của template, không lấy bản đang sửa dở.
  *
  * CHỈ-ĐỌC khi agent không sẵn sàng / màn hẹp (`gateOf(status, narrow)`, cùng cổng với
  * danh sách dự án): nút ghi KHOÁ kèm lý do, không ẩn (§2.5-2).
@@ -64,7 +75,7 @@ const NAME_MAX = TEMPLATE_NAME_MAX;
  */
 const COPY = {
   title: "Template dự án", // kg-allow-jargon: tên tính năng
-  intro: "Mỗi template giữ mọi thẻ, cài đặt và ảnh tham chiếu của một dự án, để bắt đầu dự án sau từ đó. Ảnh đã vẽ không đi theo.", // kg-allow-jargon: tên tính năng
+  intro: "Mỗi template giữ mọi thẻ, cài đặt và ảnh tham chiếu của một dự án, để bắt đầu dự án sau từ đó. Ảnh đã vẽ không đi theo. Bấm vào một template để sửa nội dung của nó.", // kg-allow-jargon: tên tính năng
   loading: "Đang tải danh sách template…", // kg-allow-jargon: tên tính năng
   errorTitle: "Chưa lấy được danh sách template.", // kg-allow-jargon: tên tính năng
   errorBody: "Template nằm trên máy bạn. Bấm Thử lại, hoặc kiểm tra công cụ trên máy.", // kg-allow-jargon: tên tính năng
@@ -84,6 +95,18 @@ const COPY = {
   deleteBody: "Template không còn hiện ở «Bắt đầu từ» khi tạo dự án.", // kg-allow-jargon: tên tính năng
   deleteAction: "Xoá template", // kg-allow-jargon: tên tính năng
   deleted: (name: string) => `Đã xoá template «${name}»`, // kg-allow-jargon: tên tính năng
+  editOpen: (name: string) => `Sửa nội dung ${name}`,
+  editing: "Đang sửa dở",
+  editingSince: (at: string | null | undefined) => `Có bản sửa dở từ ${absTime(at)} — bấm để tiếp tục hoặc bỏ`,
+  opening: "Đang mở để sửa…",
+  resumeTitle: "Tiếp tục bản sửa dở?",
+  resumeBody: (name: string, at: string | null | undefined) =>
+    `Bạn có bản sửa dở của template «${name}» từ ${relTime(at)}.`, // kg-allow-jargon: tên tính năng
+  resumeNote: "«Bỏ bản dở» xoá mọi chỗ đã sửa trong bản ấy rồi mở lại từ nội dung đang lưu — không hoàn tác được.",
+  resumeKeep: "Tiếp tục sửa",
+  resumeDrop: "Bỏ bản dở, mở lại từ template", // kg-allow-jargon: tên tính năng
+  resumeGone: "Bản sửa dở không còn nữa",
+  resumeGoneBody: "Có thể nó vừa được lưu hoặc bỏ ở tab khác — đã mở lại từ nội dung đang lưu.",
 } as const;
 
 export function TemplatesScreen() {
@@ -104,6 +127,50 @@ export function TemplatesScreen() {
   const [editOpen, setEditOpen] = React.useState(false);
   const [removing, setRemoving] = React.useState<Template | null>(null);
   const [removeOpen, setRemoveOpen] = React.useState(false);
+
+  /* ── Sửa nội dung ────────────────────────────────────────────────────────
+     MỘT lượt mở một lúc cho cả lưới: hai cú bấm vào hai thẻ trong lúc lượt đầu còn bay
+     thì cú sau đưa người dùng đi đâu? Khoá cả lưới cho tới khi lượt đầu xong (vài trăm ms). */
+  const startEdit = useStartTemplateEdit();
+  const [starting, setStarting] = React.useState<string | null>(null);
+  const [startFailure, setStartFailure] = React.useState<{ id: string; error: unknown } | null>(null);
+  const [resume, setResume] = React.useState<ResumeTarget | null>(null);
+  const [resumeOpen, setResumeOpen] = React.useState(false);
+
+  const goEdit = React.useCallback((projectId: string) => nav.openWizard(projectId), [nav]);
+
+  const openEdit = async (t: Template) => {
+    if (gate.readOnly || starting) return;
+    setStartFailure(null);
+    /* Danh sách đã nói có phiên dở ⇒ HỎI TRƯỚC, chưa gọi gì: tiếp tục hay bỏ là quyết định
+       của người dùng, và cả hai đường đều bắt đầu bằng một lời gọi khác nhau. */
+    if (t.editing) {
+      setResume({ template: t, projectId: t.editing.projectId, startedAt: t.editing.startedAt ?? null, session: null });
+      setResumeOpen(true);
+      return;
+    }
+    setStarting(t.id);
+    try {
+      const session = await startEdit.mutateAsync(t.id);
+      /* Danh sách CŨ (phiên mở ở tab khác sau lần tải cuối) ⇒ agent trả phiên sẵn có.
+         Vẫn hỏi — đúng câu hỏi ấy, chỉ là muộn hơn một nhịp. */
+      if (session.resumed) {
+        setResume({
+          template: session.template,
+          projectId: session.project.id,
+          startedAt: session.project.templateEdit?.startedAt ?? session.template.editing?.startedAt ?? null,
+          session,
+        });
+        setResumeOpen(true);
+        return;
+      }
+      goEdit(session.project.id);
+    } catch (error) {
+      setStartFailure({ id: t.id, error });
+    } finally {
+      setStarting(null);
+    }
+  };
 
   const all = templates.data?.items ?? [];
   const searchable = all.length > SEARCH_ABOVE;
@@ -146,6 +213,10 @@ export function TemplatesScreen() {
             key={t.id}
             template={t}
             gate={gate}
+            opening={starting === t.id}
+            locked={starting !== null}
+            failure={startFailure?.id === t.id ? startFailure.error : null}
+            onOpenEdit={() => void openEdit(t)}
             onCreate={() => { setCreateFrom(t.id); setCreateOpen(true); }}
             onEdit={() => { setEditing(t); setEditOpen(true); }}
             onRemove={() => { setRemoving(t); setRemoveOpen(true); }}
@@ -184,6 +255,14 @@ export function TemplatesScreen() {
       />
       <EditTemplateDialog template={editing} open={editOpen} onOpenChange={setEditOpen} gate={gate} />
       <DeleteTemplateDialog template={removing} open={removeOpen} onOpenChange={setRemoveOpen} />
+      <ResumeEditDialog
+        target={resume}
+        open={resumeOpen}
+        onOpenChange={setResumeOpen}
+        gate={gate}
+        onGo={goEdit}
+        onRestartFailed={(id, error) => { setResumeOpen(false); setStartFailure({ id, error }); }}
+      />
     </HomeWorkspaceShell>
   );
 }
@@ -208,13 +287,26 @@ function TemplatesEmpty({ onProjects }: { onProjects: () => void }) {
 
 /**
  * MỘT THẺ TEMPLATE — cùng khung với thẻ dự án (`CARD`, bìa 16:10 bo `rounded-3`) để
- * hai lưới trông là một họ. Thứ tự đọc: bìa → tên → mô tả → số thẻ/ảnh/ngày lưu → gốc
- * từ dự án nào → nút. Dòng «Từ dự án» là thứ phân biệt hai template cùng tên lưu từ
- * hai dự án khác nhau.
+ * hai lưới trông là một họ. Thứ tự đọc: bìa → tên → nhãn «Đang sửa dở» → mô tả → số
+ * thẻ/ảnh/ngày lưu → gốc từ dự án nào → nút. Dòng «Từ dự án» là thứ phân biệt hai
+ * template cùng tên lưu từ hai dự án khác nhau.
+ *
+ * ══ BÌA VÀ TÊN LÀ CỬA VÀO «SỬA NỘI DUNG» ════════════════════════════════════
+ * Chủ sản phẩm: bấm vào template là mở ra sửa — đúng phản xạ của mọi lưới thẻ. TÊN là
+ * nút thật (bàn phím, trình đọc màn hình đi qua đây); BÌA là cùng cửa ấy cho chuột,
+ * nên nó rời khỏi thứ tự Tab và cây a11y — hai nút cùng làm một việc đọc lên hai lần
+ * chỉ làm người dùng trình đọc màn hình đếm sai số thẻ.
  */
-function TemplateCard({ template, gate, onCreate, onEdit, onRemove }: {
+function TemplateCard({ template, gate, opening, locked, failure, onOpenEdit, onCreate, onEdit, onRemove }: {
   template: Template;
   gate: Gate;
+  /** Lượt mở phiên sửa CỦA THẺ NÀY đang bay. */
+  opening: boolean;
+  /** Có một lượt mở phiên sửa đang bay (thẻ nào cũng được) ⇒ khoá cửa vào của mọi thẻ. */
+  locked: boolean;
+  /** Lượt mở phiên sửa gần nhất của thẻ này hỏng — nói ngay trên thẻ. */
+  failure: unknown;
+  onOpenEdit: () => void;
   onCreate: () => void;
   onEdit: () => void;
   onRemove: () => void;
@@ -224,23 +316,66 @@ function TemplateCard({ template, gate, onCreate, onEdit, onRemove }: {
   const ro = gate.readOnly;
   const label = (text: string) => (ro ? `${text} — ${gate.reason}` : text);
   const description = template.description.trim();
+  const editBlocked = ro || locked;
+  const editTitle = ro
+    ? gate.reason
+    : template.editing
+      ? COPY.editingSince(template.editing.startedAt)
+      : COPY.editOpen(name);
 
   return (
     <article
       data-template-card={template.id}
       aria-labelledby={headingId}
+      aria-busy={opening || undefined}
       className={cn("flex min-w-0 flex-col gap-3 p-3", CARD)}
     >
-      <TemplateCover template={template} />
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-hidden
+        data-template-open=""
+        disabled={editBlocked}
+        title={editTitle}
+        onClick={onOpenEdit}
+        className="block w-full rounded-3 text-left disabled:cursor-not-allowed"
+      >
+        <TemplateCover template={template} />
+      </button>
 
       <div className="flex min-w-0 items-start justify-between gap-2 px-1">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h2 id={headingId} className="truncate text-subtitle text-fg-strong" title={name}>{name}</h2>
+          <h2 id={headingId} className="truncate text-subtitle text-fg-strong" title={name}>
+            <button
+              type="button"
+              disabled={editBlocked}
+              title={editTitle}
+              onClick={onOpenEdit}
+              className={cn(
+                "max-w-full truncate rounded-1 text-left hover:underline disabled:cursor-not-allowed disabled:no-underline",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+              )}
+            >
+              {name}
+            </button>
+          </h2>
+          {template.editing && (
+            <Badge tone="warn" className="self-start" title={COPY.editingSince(template.editing.startedAt)}>
+              <PencilLine aria-hidden />
+              {COPY.editing}
+            </Badge>
+          )}
           {description && <p className="line-clamp-2 text-caption text-fg" title={description}>{description}</p>}
           <p className="truncate text-caption text-fg-muted">{templateCaption(template)}</p>
           {template.sourceProjectName && (
             <p className="truncate text-caption text-fg-muted" title={template.sourceProjectName}>
               Từ dự án: {template.sourceProjectName}
+            </p>
+          )}
+          {opening && (
+            <p role="status" className="inline-flex items-center gap-1.5 text-caption text-fg-muted">
+              <Loader2 aria-hidden className="size-3.5 animate-spin" />
+              {COPY.opening}
             </p>
           )}
         </div>
@@ -252,6 +387,10 @@ function TemplateCard({ template, gate, onCreate, onEdit, onRemove }: {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-60">
+            <DropdownMenuItem disabled={editBlocked} onSelect={onOpenEdit}>
+              <PencilLine aria-hidden />
+              {label("Sửa nội dung")}
+            </DropdownMenuItem>
             <DropdownMenuItem disabled={ro} onSelect={onEdit}>
               <Pencil aria-hidden />
               {label("Đổi tên & mô tả")}
@@ -264,6 +403,12 @@ function TemplateCard({ template, gate, onCreate, onEdit, onRemove }: {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {failure != null && (
+        <div className="px-1">
+          <InlineError error={failure} detail={errorDetail(failure)} />
+        </div>
+      )}
 
       <div className="mt-auto px-1 pb-1">
         {/* `secondary`, không `primary`: luật màn TỐI ĐA MỘT nút primary (`button.tsx`),
@@ -506,5 +651,141 @@ function DeleteTemplateDialog({ template, open, onOpenChange }: {
         {failure != null && <InlineError error={failure} detail={errorDetail(failure)} />}
       </div>
     </ConfirmDestructive>
+  );
+}
+
+/** Đích của hộp «Tiếp tục bản sửa dở?» — bản chụp lúc hỏi, không tra lại theo id. */
+interface ResumeTarget {
+  template: Template;
+  /** Dự án làm việc của phiên dở — để quên cache của nó khi người dùng bỏ phiên. */
+  projectId: string;
+  startedAt: string | null;
+  /** Phiên agent VỪA trả (`resumed: true`) — có thì «Tiếp tục» đi thẳng, không gọi lại. */
+  session: TemplateEditSession | null;
+}
+
+/**
+ * «TIẾP TỤC BẢN SỬA DỞ?» — hỏi khi bấm vào một template đang có phiên sửa dở.
+ *
+ * ╔══ VÌ SAO HỎI, VÀ VÌ SAO «TIẾP TỤC» LÀ LỰA CHỌN MẶC ĐỊNH ═════════════════╗
+ * ║ Hai đường đều hợp lý và KHÔNG đường nào đoán được thay người dùng: công   ║
+ * ║ sửa dở từ hôm qua, hay một bản sạch từ nội dung đang lưu. Nhưng chỉ MỘT   ║
+ * ║ trong hai không hoàn tác được — bỏ bản dở là xoá dự án làm việc. Nên nút  ║
+ * ║ nhận focus (Enter) là «Tiếp tục sửa»: bấm lướt thì không mất gì.          ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * Bỏ bản dở = xoá phiên RỒI mở phiên mới; bước xoá hỏng ⇒ lỗi ngay trong hộp, chưa có gì
+ * mất. Bước mở hỏng SAU khi đã xoá ⇒ hộp đóng (hai lựa chọn của nó không còn đúng nữa)
+ * và lỗi về đứng trên thẻ, nơi bấm lại là mở một phiên sạch.
+ */
+function ResumeEditDialog({ target, open, onOpenChange, gate, onGo, onRestartFailed }: {
+  target: ResumeTarget | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  gate: Gate;
+  onGo: (projectId: string) => void;
+  onRestartFailed: (templateId: string, error: unknown) => void;
+}) {
+  const startEdit = useStartTemplateEdit();
+  const discardEdit = useDiscardTemplateEdit();
+  const [phase, setPhase] = React.useState<"idle" | "resuming" | "restarting">("idle");
+  const [failure, setFailure] = React.useState<unknown>(null);
+  const keepRef = React.useRef<HTMLButtonElement>(null);
+
+  const targetId = target?.template.id ?? null;
+  React.useEffect(() => {
+    if (!open) return;
+    setPhase("idle");
+    setFailure(null);
+  }, [open, targetId]);
+
+  if (!target) return null;
+
+  const busy = phase !== "idle";
+  const ro = gate.readOnly;
+  const { template } = target;
+
+  const keep = async () => {
+    if (busy || ro) return;
+    setPhase("resuming");
+    setFailure(null);
+    try {
+      if (target.session) {
+        onGo(target.session.project.id);
+        return;
+      }
+      const session = await startEdit.mutateAsync(template.id);
+      /* Phiên dở biến mất giữa lúc hỏi và lúc bấm (bị lưu/bỏ ở tab khác) ⇒ agent vừa
+         mở một phiên SẠCH. Vẫn đi — người dùng muốn sửa — nhưng nói ra, kẻo họ tìm chỗ
+         sửa hôm qua trong một bản không có nó. */
+      if (!session.resumed) toastInfo(COPY.resumeGone, COPY.resumeGoneBody);
+      onGo(session.project.id);
+    } catch (error) {
+      setPhase("idle");
+      setFailure(error);
+    }
+  };
+
+  const restart = async () => {
+    if (busy || ro) return;
+    setPhase("restarting");
+    setFailure(null);
+    try {
+      await discardEdit.mutateAsync({ templateId: template.id, projectId: target.projectId });
+    } catch (error) {
+      setPhase("idle");
+      setFailure(error);
+      return;
+    }
+    try {
+      const session = await startEdit.mutateAsync(template.id);
+      onGo(session.project.id);
+    } catch (error) {
+      setPhase("idle");
+      onRestartFailed(template.id, error);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={busy ? () => {} : onOpenChange}>
+      <DialogContent
+        size="sm"
+        onOpenAutoFocus={(e) => { e.preventDefault(); keepRef.current?.focus(); }}
+        onEscapeKeyDown={(e) => busy && e.preventDefault()}
+        onPointerDownOutside={(e) => busy && e.preventDefault()}
+        onInteractOutside={(e) => busy && e.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle>{COPY.resumeTitle}</DialogTitle>
+          <DialogDescription>{COPY.resumeBody(template.name, target.startedAt)}</DialogDescription>
+        </DialogHeader>
+        <DialogBody className="flex flex-col gap-3">
+          {ro && <OfflineNotice text={gate.longReason} />}
+          <p className="text-caption text-fg-muted">{COPY.resumeNote}</p>
+          {failure != null && <InlineError error={failure} detail={errorDetail(failure)} />}
+        </DialogBody>
+        <DialogFooter>
+          <Button
+            variant="secondary"
+            loading={phase === "restarting"}
+            disabled={busy || ro}
+            title={ro ? gate.reason : undefined}
+            onClick={() => void restart()}
+          >
+            {COPY.resumeDrop}
+          </Button>
+          <Button
+            ref={keepRef}
+            variant="primary"
+            loading={phase === "resuming"}
+            disabled={busy || ro}
+            title={ro ? gate.reason : undefined}
+            onClick={() => void keep()}
+          >
+            {COPY.resumeKeep}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

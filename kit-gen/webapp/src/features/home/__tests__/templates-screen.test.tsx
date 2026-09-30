@@ -10,7 +10,9 @@
  *  ③ đổi tên gửi đi một tên trống / quá 80 ký tự ⇒ agent 400, người dùng thấy băng lỗi
  *    chung chung thay vì lý do ngay dưới ô;
  *  ④ xoá ở cú bấm đầu, hoặc xoá hỏng mà hộp đã đóng ⇒ thẻ quay lại không một lời giải thích;
- *  ⑤ ảnh bìa thẻ to dùng chung tấm 128px của ô chọn nhỏ ⇒ nhoè, không lỗi.
+ *  ⑤ ảnh bìa thẻ to dùng chung tấm 128px của ô chọn nhỏ ⇒ nhoè, không lỗi;
+ *  ⑥ «sửa nội dung» (bìa · tên · menu) mở nhầm phiên, hoặc tự chọn thay người dùng giữa
+ *    «tiếp tục bản dở» và «bỏ bản dở» ⇒ mất công sửa hôm qua, không một lời báo.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -35,7 +37,10 @@ const H = vi.hoisted(() => ({
   create: vi.fn(),
   trash: vi.fn(),
   toastSuccess: vi.fn(),
+  toastInfo: vi.fn(),
   forget: vi.fn(),
+  startEdit: vi.fn(),
+  discardEdit: vi.fn(),
   status: { current: null as unknown },
 }));
 
@@ -49,7 +54,10 @@ vi.mock("@/lib/api/endpoints", async (orig) => {
   const real = (await orig()) as { api: Record<string, Record<string, unknown>>; [k: string]: unknown };
   const api = {
     ...real.api,
-    templates: { ...real.api.templates, list: H.list, patch: H.patch, remove: H.remove, coverBlob: H.coverBlob },
+    templates: {
+      ...real.api.templates, list: H.list, patch: H.patch, remove: H.remove, coverBlob: H.coverBlob,
+      startEdit: H.startEdit, discardEdit: H.discardEdit,
+    },
     projects: { ...real.api.projects, create: H.create },
     trash: { ...real.api.trash, list: H.trash },
   };
@@ -64,6 +72,7 @@ vi.mock("@/lib/hooks", async (orig) => ({
 vi.mock("@/features/projects/lib/feedback", async (orig) => ({
   ...((await orig()) as Record<string, unknown>),
   toastSuccess: H.toastSuccess,
+  toastInfo: H.toastInfo,
 }));
 
 vi.mock("@/features/projects/lib/agent-blob", async (orig) => {
@@ -102,6 +111,26 @@ function mount() {
 
 const card = (name: string) => screen.getByRole("article", { name });
 const findCard = (name: string) => screen.findByRole("article", { name });
+/** Tên thẻ là NÚT THẬT nằm trong heading — cửa vào «sửa nội dung» cho bàn phím. */
+const titleButton = (name: string) =>
+  within(within(card(name)).getByRole("heading", { level: 2 })).getByRole("button") as HTMLButtonElement;
+/** Bìa: cùng cửa ấy cho chuột — rời cây a11y có chủ ý, nên tìm bằng thuộc tính. */
+const coverButton = (name: string) => card(name).querySelector("[data-template-open]") as HTMLButtonElement;
+
+/** Phiên sửa mà agent trả — dự án làm việc ẩn mang `templateEdit`. */
+function session(templateId: string, over: { resumed: boolean; projectId?: string; startedAt?: string }) {
+  const t = templateId === GAME.id ? GAME : SHOP;
+  const projectId = over.projectId ?? `tpl-edit-${templateId}`;
+  const startedAt = over.startedAt ?? "2026-09-30T09:00:00.000Z";
+  return {
+    project: {
+      id: projectId, name: t.name, tags: [], broken: false,
+      templateEdit: { templateId, templateName: t.name, startedAt, templateUpdatedAt: t.updatedAt },
+    },
+    template: { ...t, editing: { projectId, startedAt } },
+    resumed: over.resumed,
+  };
+}
 
 /** Radix mở menu bằng `pointerdown` mà jsdom không dựng `PointerEvent` — đi đường bàn phím. */
 async function openMenu(name: string) {
@@ -112,7 +141,10 @@ async function openMenu(name: string) {
 }
 
 beforeEach(() => {
-  for (const fn of [H.navigate, H.list, H.patch, H.remove, H.coverBlob, H.create, H.trash, H.toastSuccess, H.forget]) fn.mockReset();
+  for (const fn of [
+    H.navigate, H.list, H.patch, H.remove, H.coverBlob, H.create, H.trash, H.toastSuccess, H.toastInfo, H.forget,
+    H.startEdit, H.discardEdit,
+  ]) fn.mockReset();
   H.status.current = CONNECTED;
   H.list.mockResolvedValue({ items: [GAME, SHOP] });
   H.trash.mockResolvedValue({ items: [] });
@@ -121,6 +153,8 @@ beforeEach(() => {
     ...(id === GAME.id ? GAME : SHOP), ...input, updatedAt: "2026-09-30T10:00:00.000Z",
   }));
   H.remove.mockResolvedValue({ ok: true });
+  H.discardEdit.mockResolvedValue({ ok: true });
+  H.startEdit.mockImplementation(async (id: string) => session(id, { resumed: false }));
   H.create.mockImplementation(async (input: { name: string }) => ({
     project: { id: "moi-1c2d", name: input.name, slug: "moi", tags: [], broken: false },
     warnings: [],
@@ -406,6 +440,157 @@ describe("xoá template", () => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
+   ⑥ «Sửa nội dung» — bìa · tên · menu, và câu hỏi «tiếp tục hay bỏ bản dở»
+   ══════════════════════════════════════════════════════════════════════════ */
+
+describe("⑥ «Sửa nội dung»", () => {
+  const toKit = (projectId: string) => ({ to: "/k/$projectId", params: { projectId } });
+  const STARTED = "2026-09-30T09:00:00.000Z";
+  const GAME_EDITING = { ...GAME, editing: { projectId: "tpl-edit-cu", startedAt: STARTED } };
+
+  it("bấm TÊN ⇒ mở phiên của đúng template rồi vào màn soạn của dự án làm việc", async () => {
+    mount();
+    await findCard("Game UI");
+    fireEvent.click(titleButton("Game UI"));
+    await waitFor(() => expect(H.navigate).toHaveBeenCalledWith(toKit("tpl-edit-game-ui-a1b2")));
+    expect(H.startEdit).toHaveBeenCalledTimes(1);
+    expect(H.startEdit).toHaveBeenCalledWith("game-ui-a1b2");
+    // Phiên mới ⇒ không có gì để hỏi.
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("bấm BÌA ⇒ cùng cửa ấy (và bìa rời thứ tự Tab — tên mới là cửa cho bàn phím)", async () => {
+    mount();
+    await findCard("Shop Tết");
+    const cover = coverButton("Shop Tết");
+    expect(cover.tabIndex).toBe(-1);
+    expect(cover.getAttribute("aria-hidden")).toBe("true");
+    fireEvent.click(cover.querySelector("[data-template-cover]")!);
+    await waitFor(() => expect(H.navigate).toHaveBeenCalledWith(toKit("tpl-edit-shop-9c0d")));
+    expect(H.startEdit).toHaveBeenCalledWith("shop-9c0d");
+  });
+
+  it("menu ⋯: «Sửa nội dung» ĐỨNG ĐẦU, bấm thì mở phiên; «Tạo dự án» vẫn là nút riêng ở chân thẻ", async () => {
+    mount();
+    const menu = await openMenu("Shop Tết");
+    const items = within(menu).getAllByRole("menuitem");
+    expect(items.map((i) => i.textContent)).toEqual(["Sửa nội dung", "Đổi tên & mô tả", "Xoá"]);
+    fireEvent.click(items[0]!);
+    await waitFor(() => expect(H.navigate).toHaveBeenCalledWith(toKit("tpl-edit-shop-9c0d")));
+    expect(within(card("Shop Tết")).getByRole("button", { name: "Tạo dự án từ Shop Tết" })).toBeTruthy();
+  });
+
+  it("agent trả `resumed: true` (danh sách cũ hơn tab khác) ⇒ HỎI, không tự đi; «Tiếp tục sửa» vào thẳng phiên ấy", async () => {
+    H.startEdit.mockImplementation(async (id: string) => session(id, { resumed: true, projectId: "tpl-edit-cu" }));
+    mount();
+    await findCard("Game UI");
+    fireEvent.click(titleButton("Game UI"));
+    const dialog = await screen.findByRole("dialog", { name: "Tiếp tục bản sửa dở?" });
+    expect(H.navigate).not.toHaveBeenCalled();
+    expect(dialog.textContent).toContain("Bạn có bản sửa dở của template «Game UI» từ");
+    expect(dialog.textContent).toContain("không hoàn tác được");
+    expect(within(dialog).getByRole("button", { name: "Bỏ bản dở, mở lại từ template" })).toBeTruthy();
+    // Focus mặc định ở lựa chọn KHÔNG làm mất gì.
+    expect(document.activeElement?.textContent).toBe("Tiếp tục sửa");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Tiếp tục sửa" }));
+    await waitFor(() => expect(H.navigate).toHaveBeenCalledWith(toKit("tpl-edit-cu")));
+    // Phiên đã nằm trong tay ⇒ không gọi agent lần hai, không bỏ gì.
+    expect(H.startEdit).toHaveBeenCalledTimes(1);
+    expect(H.discardEdit).not.toHaveBeenCalled();
+  });
+
+  it("thẻ có phiên dở ⇒ nhãn «Đang sửa dở»; bấm ⇒ hỏi NGAY, chưa gọi agent", async () => {
+    H.list.mockResolvedValue({ items: [GAME_EDITING, SHOP] });
+    mount();
+    const game = await findCard("Game UI");
+    expect(within(game).getByText("Đang sửa dở")).toBeTruthy();
+    expect(within(card("Shop Tết")).queryByText("Đang sửa dở")).toBeNull();
+    fireEvent.click(coverButton("Game UI"));
+    await screen.findByRole("dialog", { name: "Tiếp tục bản sửa dở?" });
+    expect(H.startEdit).not.toHaveBeenCalled();
+    expect(H.navigate).not.toHaveBeenCalled();
+  });
+
+  it("«Tiếp tục sửa» từ nhãn ⇒ nối lại phiên (agent trả đúng phiên cũ) rồi đi, không nhắc gì thêm", async () => {
+    H.list.mockResolvedValue({ items: [GAME_EDITING, SHOP] });
+    H.startEdit.mockImplementation(async (id: string) => session(id, { resumed: true, projectId: "tpl-edit-cu" }));
+    mount();
+    await findCard("Game UI");
+    fireEvent.click(titleButton("Game UI"));
+    const dialog = await screen.findByRole("dialog", { name: "Tiếp tục bản sửa dở?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Tiếp tục sửa" }));
+    await waitFor(() => expect(H.navigate).toHaveBeenCalledWith(toKit("tpl-edit-cu")));
+    expect(H.startEdit).toHaveBeenCalledWith("game-ui-a1b2");
+    expect(H.discardEdit).not.toHaveBeenCalled();
+    expect(H.toastInfo).not.toHaveBeenCalled();
+  });
+
+  it("bản dở biến mất giữa lúc hỏi và lúc bấm «Tiếp tục» ⇒ vẫn mở (bản sạch) nhưng NÓI RA", async () => {
+    H.list.mockResolvedValue({ items: [GAME_EDITING, SHOP] });
+    H.startEdit.mockImplementation(async (id: string) => session(id, { resumed: false, projectId: "tpl-edit-moi" }));
+    mount();
+    await findCard("Game UI");
+    fireEvent.click(titleButton("Game UI"));
+    const dialog = await screen.findByRole("dialog", { name: "Tiếp tục bản sửa dở?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Tiếp tục sửa" }));
+    await waitFor(() => expect(H.navigate).toHaveBeenCalledWith(toKit("tpl-edit-moi")));
+    expect(H.toastInfo).toHaveBeenCalledWith("Bản sửa dở không còn nữa", expect.stringContaining("mở lại từ nội dung đang lưu"));
+  });
+
+  it("«Bỏ bản dở, mở lại từ template» ⇒ bỏ phiên cũ TRƯỚC, mở phiên mới SAU, rồi vào phiên mới", async () => {
+    H.list.mockResolvedValue({ items: [GAME_EDITING, SHOP] });
+    H.startEdit.mockImplementation(async (id: string) => session(id, { resumed: false, projectId: "tpl-edit-moi" }));
+    mount();
+    await findCard("Game UI");
+    fireEvent.click(titleButton("Game UI"));
+    const dialog = await screen.findByRole("dialog", { name: "Tiếp tục bản sửa dở?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Bỏ bản dở, mở lại từ template" }));
+    await waitFor(() => expect(H.navigate).toHaveBeenCalledWith(toKit("tpl-edit-moi")));
+    expect(H.discardEdit).toHaveBeenCalledWith("game-ui-a1b2");
+    expect(H.discardEdit.mock.invocationCallOrder[0]!).toBeLessThan(H.startEdit.mock.invocationCallOrder[0]!);
+  });
+
+  it("bỏ bản dở HỎNG ⇒ lỗi trong hộp, hộp vẫn mở, không mở phiên nào", async () => {
+    const { AgentError } = await import("@/lib/api/client");
+    H.list.mockResolvedValue({ items: [GAME_EDITING, SHOP] });
+    H.discardEdit.mockRejectedValue(new AgentError({ code: "AGENT_NOT_RUNNING", status: 0, message: "fetch failed" }));
+    mount();
+    await findCard("Game UI");
+    fireEvent.click(titleButton("Game UI"));
+    const dialog = await screen.findByRole("dialog", { name: "Tiếp tục bản sửa dở?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Bỏ bản dở, mở lại từ template" }));
+    await waitFor(() => expect(within(dialog).getByRole("alert")).toBeTruthy());
+    expect(H.startEdit).not.toHaveBeenCalled();
+    expect(H.navigate).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "Tiếp tục bản sửa dở?" })).toBeTruthy();
+  });
+
+  it("mở phiên hỏng ⇒ lỗi hiện NGAY TRÊN THẺ ấy (chữ từ bảng lỗi), không đi đâu", async () => {
+    const { AgentError } = await import("@/lib/api/client");
+    H.startEdit.mockRejectedValue(new AgentError({ code: "TEMPLATE_NOT_FOUND", status: 404, message: "template gone" }));
+    mount();
+    await findCard("Game UI");
+    fireEvent.click(titleButton("Game UI"));
+    await waitFor(() => expect(within(card("Game UI")).getByRole("alert").textContent).toContain("Template không còn ở đây"));
+    expect(within(card("Shop Tết")).queryByRole("alert")).toBeNull();
+    expect(H.navigate).not.toHaveBeenCalled();
+  });
+
+  it("đang mở phiên ⇒ thẻ nói «Đang mở để sửa…» và cửa vào của MỌI thẻ khoá (một lượt một lúc)", async () => {
+    H.startEdit.mockReturnValue(new Promise(() => {}));
+    mount();
+    await findCard("Game UI");
+    fireEvent.click(titleButton("Game UI"));
+    await waitFor(() => expect(within(card("Game UI")).getByRole("status").textContent).toBe("Đang mở để sửa…"));
+    expect(card("Game UI").getAttribute("aria-busy")).toBe("true");
+    expect(titleButton("Shop Tết").disabled).toBe(true);
+    fireEvent.click(coverButton("Shop Tết"));
+    expect(H.startEdit).toHaveBeenCalledTimes(1);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
    Chỉ-đọc
    ══════════════════════════════════════════════════════════════════════════ */
 
@@ -421,10 +606,25 @@ describe("công cụ local chưa chạy ⇒ nút ghi KHOÁ kèm lý do, không �
     const menu = await openMenu("Game UI");
     const items = within(menu).getAllByRole("menuitem");
     expect(items.map((i) => i.textContent)).toEqual([
+      "Sửa nội dung — Cần công cụ local đang chạy",
       "Đổi tên & mô tả — Cần công cụ local đang chạy",
       "Xoá — Cần công cụ local đang chạy",
     ]);
     expect(items.every((i) => i.getAttribute("aria-disabled") === "true")).toBe(true);
+  });
+
+  it("«Sửa nội dung» qua bìa / tên cũng khoá — bấm không gọi agent", () => {
+    H.status.current = OFFLINE;
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    qc.setQueryData(["templates", "list"], { items: [GAME] });
+    render(<QueryClientProvider client={qc}><TemplatesScreen /></QueryClientProvider>);
+    const title = titleButton("Game UI");
+    expect(title.disabled).toBe(true);
+    expect(title.title).toBe("Cần công cụ local đang chạy");
+    expect(coverButton("Game UI").disabled).toBe(true);
+    fireEvent.click(title);
+    fireEvent.click(coverButton("Game UI"));
+    expect(H.startEdit).not.toHaveBeenCalled();
   });
 });
 

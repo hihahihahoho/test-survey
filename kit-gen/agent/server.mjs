@@ -43,6 +43,7 @@ import { register as registerApp } from "./routes/app.mjs"
 import { register as registerLibrary } from "./routes/library.mjs"
 import { register as registerTemplates } from "./routes/templates.mjs"
 import { sweepOrphanCovers } from "./lib/cover.mjs"
+import { sweepTemplateEdits } from "./lib/project-templates.mjs"
 import { isSourceCheckout, readRuntimeVersion } from "./lib/update.mjs"
 import { defaultKitgenHome } from "./lib/platform.mjs"
 import { acquireInstanceLock, releaseInstanceLock } from "./lib/instance-lock.mjs"
@@ -139,6 +140,10 @@ export async function createAgent(opts = {}) {
     /* Cùng lý do, cho LƯỢT CHẠY: `run.json` còn "running" mà tiến trình chủ của nó đã
        chết ⇒ web quay vòng vĩnh viễn. Quét dọn + nhặt lại ảnh đã tốn quota (lib/runs.mjs). */
     await sweepOrphanRuns(w).catch(() => {})
+    /* Và cho PHIÊN SỬA TEMPLATE: lượt lưu chết giữa hai lần rename thì đẩy nốt bản mới vào
+       chỗ; dự án làm việc mồ côi / đã lưu / dở dang thì dọn (lib/project-templates.mjs).
+       Trước khi đếm dự án — dù đếm cũng đã bỏ qua chúng. */
+    await sweepTemplateEdits(w).catch(() => {})
     healthProjectCounts.set(w.id, await w.countProjects().catch(() => 0))
     healthProjectAt.set(w.id, Date.now())
   }

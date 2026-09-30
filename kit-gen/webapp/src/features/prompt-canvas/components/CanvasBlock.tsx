@@ -117,6 +117,14 @@ export interface CanvasBlockProps {
    * `UiKitBlockBody.copyShapeAsset` để biết vì sao nó không phải một hook gọi tại chỗ.
    */
   copyShapeAsset: (assetId: string) => Promise<PillImage>;
+  /**
+   * CHẾ ĐỘ SỬA TEMPLATE — thẻ chỉ để DỰNG: không nút Vẽ, không «Vẽ lại tấm này», không ô
+   * kết quả dưới chân thẻ. Template không giữ ảnh đã vẽ, nên một nút Vẽ ở đây là tiêu lượt
+   * tạo cho những tấm ảnh sẽ bị bỏ lại (agent cũng từ chối: 409 `TEMPLATE_EDIT_NO_RUN`),
+   * còn ô kết quả chỉ biết nói «Chưa vẽ tấm này» mãi mãi. Tab Prompt GIỮ: xem trước chữ
+   * engine sẽ gửi là cách kiểm một template trước khi lưu, và nó không tiêu lượt nào.
+   */
+  noGen?: boolean;
 }
 
 const GEN_HINT = "Vẽ ảnh bằng AI — tiêu lượt tạo.";
@@ -129,7 +137,7 @@ const BLOCK_TITLE: Record<Block["kind"], string> = {
 };
 
 export function CanvasBlock(props: CanvasBlockProps) {
-  const { projectId, block, sheets, onDelete, gen, onGen, onGenSheet, onDequeue, onStop, stopping, prompt, styleLine, onWantPrompt, hash, promptBusy } = props;
+  const { projectId, block, sheets, onDelete, gen, onGen, onGenSheet, onDequeue, onStop, stopping, prompt, styleLine, onWantPrompt, hash, promptBusy, noGen = false } = props;
   const [tab, setTab] = React.useState<BlockTab>("compose");
 
   const title = BLOCK_TITLE[block.kind];
@@ -168,7 +176,9 @@ export function CanvasBlock(props: CanvasBlockProps) {
             <TabButton active={tab === "compose"} onClick={() => setTab("compose")}>Soạn</TabButton>
             <TabButton active={tab === "prompt"} onClick={openPrompt}>Prompt</TabButton>
           </div>
-          <GenControl projectId={projectId} gen={gen} canGen={canGen} onGen={onGen} onDequeue={onDequeue} onStop={onStop} stopping={stopping} />
+          {!noGen && (
+            <GenControl projectId={projectId} gen={gen} canGen={canGen} onGen={onGen} onDequeue={onDequeue} onStop={onStop} stopping={stopping} />
+          )}
           <button
             type="button"
             onClick={onDelete}
@@ -195,7 +205,7 @@ export function CanvasBlock(props: CanvasBlockProps) {
         />
       )}
 
-      {sheets.length > 0 && (
+      {sheets.length > 0 && !noGen && (
         <div className="mt-5 flex flex-col gap-4 border-t border-line-subtle pt-5">
           {sheets.map((sheet, index) => (
             <SheetResultSlot
@@ -233,12 +243,14 @@ export function CanvasBlock(props: CanvasBlockProps) {
   );
 }
 
-function BlockBody({ block, onChange, reloadSignal, gen, onGenSheet, sheets, projectId, copyShapeAsset }: CanvasBlockProps) {
+function BlockBody({ block, onChange, reloadSignal, gen, onGenSheet, sheets, projectId, copyShapeAsset, noGen = false }: CanvasBlockProps) {
   /* Thẻ MỘT tấm không có vạch ranh giới nào để đeo nút (xem `SheetBreak`), nên chỉ
      hai thẻ-danh-sách nhiều tấm mới nhận đường vẽ lẻ. Đang vẽ / đang xếp hàng thì
-     khoá nút: xin thêm một lượt cho cùng một thẻ lúc ấy chỉ tổ đẩy nó ra sau hàng. */
+     khoá nút: xin thêm một lượt cho cùng một thẻ lúc ấy chỉ tổ đẩy nó ra sau hàng.
+     Chế độ sửa template (`noGen`) ⇒ không có đường vẽ lẻ nào — vạch ranh giới tấm vẫn
+     hiện (nó nói thẻ sẽ ra mấy tấm), chỉ thiếu nút. */
   const busy = gen.status === "running" || gen.status === "queued";
-  const redraw = sheets.length > 1 ? { onRedrawSheet: onGenSheet, redrawBusy: busy } : {};
+  const redraw = sheets.length > 1 && !noGen ? { onRedrawSheet: onGenSheet, redrawBusy: busy } : {};
 
   if (block.kind === "uikit") {
     return (

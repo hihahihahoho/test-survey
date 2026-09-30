@@ -386,6 +386,36 @@ export const DOC_ENTRIES: DocEntry[] = [
     related: ["TOO_LARGE"],
   },
   {
+    code: "TEMPLATE_EDIT_NOT_FOUND",
+    group: "Project",
+    why:
+      // kg-allow-jargon: tên tính năng «template», như trên.
+      "Mỗi lần sửa nội dung template là một phiên riêng, lưu trên máy tới khi bạn bấm «Lưu vào template» hoặc " +
+      "«Huỷ thay đổi». Phiên này đã kết thúc — thường vì nó vừa được lưu hoặc bị bỏ ở một tab khác.",
+    fix: [
+      // kg-allow-jargon: tên tính năng «template», như trên.
+      "Về màn «Template dự án» và bấm lại vào template để mở một phiên sửa mới.",
+      // kg-allow-jargon: tên tính năng «template», như trên.
+      "Nếu phiên vừa được lưu ở tab kia, template đã có nội dung mới — mở ra là thấy.",
+    ],
+    related: ["TEMPLATE_NOT_FOUND"],
+  },
+  {
+    code: "TEMPLATE_EDIT_NO_RUN",
+    group: "Project",
+    why:
+      // kg-allow-jargon: tên tính năng «template», như trên.
+      "Khi đang sửa nội dung một template, màn soạn chỉ để dựng: thẻ, cài đặt, ảnh tham chiếu. Template không " +
+      // kg-allow-jargon: tên tính năng «template», như trên.
+      "giữ ảnh đã vẽ, nên vẽ ở đây là tiêu lượt tạo cho những tấm ảnh sẽ không đi theo template.",
+    fix: [
+      // kg-allow-jargon: tên tính năng «template», như trên.
+      "Bấm «Lưu vào template» để cất phần đã sửa.",
+      // kg-allow-jargon: tên tính năng «template», như trên.
+      "Tạo một dự án từ template ấy (nút «Tạo dự án» ở màn «Template dự án») rồi vẽ trong dự án đó.",
+    ],
+  },
+  {
     code: "INVALID_NAME",
     group: "Project",
     why: "Tên project đang để trống hoặc chỉ có khoảng trắng.",

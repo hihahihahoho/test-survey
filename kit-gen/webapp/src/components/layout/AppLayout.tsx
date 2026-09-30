@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { FloraShell } from "./FloraShell";
-import { useAgentStatus, useProject } from "@/lib/hooks";
+import { useAgentStatus, useProject, useTemplateEditOf } from "@/lib/hooks";
 import { useRecentStore } from "@/lib/store";
 import type { AgentStatus } from "@/lib/status";
 import { SCREEN_LABEL, ShellEnvProvider, type ScreenId } from "./screen-contract";
@@ -45,6 +45,9 @@ export function AppLayout({ screen, projectId, children }: AppLayoutProps) {
   const navigate = useNavigate();
 
   const project = useProject(projectId);
+  /* Dự án làm việc của một phiên SỬA TEMPLATE: đường về là màn «Template dự án», không
+     phải danh sách dự án (dự án này ẩn khỏi danh sách ấy — về đó là lạc). */
+  const templateEdit = useTemplateEditOf(projectId, project.data);
   const activeRuns = project.data?.state?.activeRun?.runId ? 1 : 0;
   // Nhịp probe nhanh hơn khi có lượt đang chạy (arch §5.3).
   const { status, recheck } = useAgentStatus({ hasActiveRun: activeRuns > 0 });
@@ -57,9 +60,11 @@ export function AppLayout({ screen, projectId, children }: AppLayoutProps) {
   // §5.8-A13: <title> đổi theo màn. Tên project ưu tiên hơn tên màn vì đó là
   // thứ user phân biệt được khi mở nhiều tab.
   React.useEffect(() => {
-    const parts = [project.data?.name, SCREEN_LABEL[screen], "kit-gen"].filter(Boolean);
+    /* Tên dự án làm việc là chuyện nội bộ của agent; thứ người dùng đang sửa là TEMPLATE. */
+    const head = templateEdit ? `Sửa template «${templateEdit.templateName}»` : project.data?.name;
+    const parts = [head, SCREEN_LABEL[screen], "kit-gen"].filter(Boolean);
     document.title = parts.join(" · ");
-  }, [screen, project.data?.name]);
+  }, [screen, project.data?.name, templateEdit]);
 
   const shellEnv = React.useMemo(() => ({ agentOffline: !status.connected, agentCommand: RUN_CMD }), [status.connected]);
 
@@ -98,7 +103,8 @@ export function AppLayout({ screen, projectId, children }: AppLayoutProps) {
       connectionStatus={status}
       onRecheck={recheck}
       onSettingsClick={projectId ? openAppSettings : undefined}
-      onHomeClick={() => void navigate({ to: "/" })}
+      onHomeClick={() => void navigate({ to: templateEdit ? "/templates" : "/" })}
+      homeLabel={templateEdit ? "Template dự án" : undefined}
     >
       {children}
     </FloraShell>

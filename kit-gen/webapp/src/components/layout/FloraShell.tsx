@@ -62,6 +62,12 @@ export interface FloraShellProps {
   onSettingsClick?: () => void;
   onCommandPaletteOpen?: () => void;
   onHomeClick?: () => void;
+  /**
+   * Chữ của nút quay về ở góc trái header. Mặc định «Dự án». Màn sửa nội dung template
+   * đổi thành «Template dự án»: nút ấy đưa về màn template, và một nút nói «Dự án» mà
+   * đưa đi chỗ khác là nút nói dối.
+   */
+  homeLabel?: string;
   children: React.ReactNode;
 }
 
@@ -81,6 +87,7 @@ export function FloraShell({
   onSettingsClick,
   onCommandPaletteOpen,
   onHomeClick,
+  homeLabel = "Dự án",
   children,
 }: FloraShellProps) {
   void breadcrumb;
@@ -112,7 +119,7 @@ export function FloraShell({
               )}
             >
               <ArrowLeft className="size-4" aria-hidden />
-              <span>Dự án</span>
+              <span>{homeLabel}</span>
             </button>
             <div className="flex items-center gap-2">
               {/* Quota Codex còn lại — chip gọn NGAY CẠNH [Cài đặt], hover ra số chi tiết
