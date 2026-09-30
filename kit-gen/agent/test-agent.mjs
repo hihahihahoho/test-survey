@@ -79,16 +79,28 @@ watchdog.unref()
    `error` không ai bắt) đi thẳng ra stderr rồi chết, và trên runner đó dòng stderr
    ấy không tới log. Từ nay nó đi qua STDOUT kèm tên ca đang chạy, rồi in báo cáo
    tới thời điểm đó — giống hệt nhánh quá ngân sách ở trên. */
+let reported = false
 const died = kind => err => {
   process.stdout.write(
     `\n\n╳ ${kind} — BỘ CA CHẾT NGOÀI MỌI CA\n` +
     `  ca gần nhất : ${currentCase() ?? "(chưa vào ca nào / đang dọn dẹp giữa hai suite)"}\n` +
     `  lỗi        : ${err?.stack ?? err}\n`)
+  reported = true
   report()
   process.exit(1)
 }
 process.on("uncaughtException", died("uncaughtException"))
 process.on("unhandledRejection", died("unhandledRejection"))
+/* Lần chạy lại (run 36663045520) chết đúng chỗ cũ mà hai móc trên KHÔNG kêu ⇒ không
+   phải lỗi JS. Còn hai khả năng: ai đó gọi `process.exit()` (móc `exit` in được ai gọi —
+   stack đồng bộ còn nguyên), hoặc tiến trình bị giết từ ngoài (khi đó móc này im, và
+   chính sự im lặng ấy là câu trả lời). Chỉ in khi thoát KHÁC 0 và chưa qua báo cáo. */
+process.on("exit", code => {
+  if (code === 0 || reported) return
+  process.stdout.write(
+    `\n\n╳ process.exit(${code}) — ai gọi:\n${new Error("exit").stack}\n` +
+    `  ca gần nhất : ${currentCase() ?? "(ngoài ca)"}\n`)
+})
 
 const tmp = await mkdtemp(join(tmpdir(), "kitgen-test-"))
 const wsRoot = join(tmp, "KitGen")
@@ -158,4 +170,5 @@ if (process.env.KITGEN_TEST_KEEP_TMP) {
   process.stdout.write(`\n[cảnh báo] không dọn được thư mục tạm ${tmp}: ${e?.code ?? e}\n` +
     "           (kết quả bộ ca bên dưới vẫn đúng; trên Windows đây là dấu hiệu còn handle mở)\n")
 }
+reported = true
 process.exit(report() ? 1 : 0)
