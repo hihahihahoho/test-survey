@@ -44,13 +44,14 @@ const matchAt = (pathname: string, search: Record<string, unknown> = {}) =>
 const leaf = (pathname: string): string =>
   (matchAt(pathname).at(-1)?.routeId as string | undefined) ?? "";
 
-describe("sitemap — 8 đường dẫn khớp đúng route", () => {
+describe("sitemap — 9 đường dẫn khớp đúng route", () => {
   it.each([
     ["/", "/"],
     ["/settings", "/settings"],
     ["/trash", "/trash"],
     ["/brands", "/brands"],
     ["/references", "/references"],
+    ["/templates", "/templates"],
     ["/library/prompts", "/library/prompts"],
     [`/k/${PID}`, "/k/$projectId"],
     [`/p/${PID}`, "/p/$"],
@@ -63,6 +64,7 @@ describe("sitemap — 8 đường dẫn khớp đúng route", () => {
     expect(leaf(`/k/${PID}`)).toBe("/k/$projectId");
     expect(leaf("/settings")).toBe("/settings");
     expect(leaf("/references")).toBe("/references");
+    expect(leaf("/templates")).toBe("/templates");
     expect(leaf("/library/prompts")).toBe("/library/prompts");
   });
 

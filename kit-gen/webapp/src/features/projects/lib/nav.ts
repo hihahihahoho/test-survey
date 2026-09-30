@@ -5,7 +5,7 @@
  */
 
 import type { useNavigate } from "@tanstack/react-router";
-import { readMode } from "@/features/kitfile/lib/kit-mode";
+import { readMode, type KitMode } from "@/features/kitfile/lib/kit-mode";
 
 type Navigate = ReturnType<typeof useNavigate>;
 
@@ -24,6 +24,8 @@ export interface ProjectNav {
   openRuns: (id: string) => void;
   /** Footer "Thùng rác N project ›" (§3-S1-5). */
   openTrash: () => void;
+  /** «Quản lý template…» ở chân ô «Bắt đầu từ» của hộp Tạo dự án ⇒ màn `/templates`. */
+  openTemplates: () => void;
 }
 
 /**
@@ -93,6 +95,18 @@ export function openProjectWith(
 }
 
 /**
+ * SAU KHI HỘP «TẠO DỰ ÁN» TẠO XONG — đi đâu.
+ *
+ * Hộp ấy mở từ HAI màn: danh sách dự án (`ProjectDialogs`) và màn «Template dự án»
+ * (nút «Tạo dự án» trên từng thẻ). Hai màn phải đưa dự án mới tới CÙNG một chỗ; viết
+ * luật này hai lần là ngày một bên đổi đích, bên kia vẫn đổ người dùng về chỗ cũ.
+ */
+export function openCreatedWith(nav: ProjectNav, project: { id: string }, mode: KitMode): void {
+  // Dự án mới luôn bắt đầu bằng khu soạn prompt.
+  if (mode === "workflow") nav.openWizard(project.id);
+}
+
+/**
  * ══ TÁM CỬA, MỘT ĐÍCH ══════════════════════════════════════════════════════
  * Tám hàm dưới đây từng dẫn tới tám màn: tổng quan · kết quả · wizard · bàn làm
  * việc · bản thiết kế · phong cách · lượt chạy. App nay chỉ còn MỘT màn làm việc
@@ -114,5 +128,6 @@ export function createNav(navigate: Navigate): ProjectNav {
     openStyles: toKit,
     openRuns: toKit,
     openTrash: () => void navigate({ to: "/trash" }),
+    openTemplates: () => void navigate({ to: "/templates" }),
   };
 }

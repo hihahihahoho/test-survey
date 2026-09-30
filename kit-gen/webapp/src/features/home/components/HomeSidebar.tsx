@@ -1,5 +1,6 @@
 import {
   Images,
+  LayoutTemplate,
   ListTree,
   Palette,
   LayoutGrid,
@@ -13,7 +14,8 @@ import { UsageMeter } from "./UsageMeter";
 
 /** Mục "Gần đây" đã bỏ theo yêu cầu chủ sản phẩm — chỉ còn một danh sách Dự án. */
 export type HomeSection = "all";
-export type HomeDestination = "projects" | "brands" | "prompt-library" | "references" | "trash" | "settings";
+export type HomeDestination =
+  | "projects" | "brands" | "prompt-library" | "references" | "templates" | "trash" | "settings";
 
 export interface HomeSidebarProps {
   section: HomeSection;
@@ -25,6 +27,8 @@ export interface HomeSidebarProps {
   onBrands: () => void;
   onPromptLibrary: () => void;
   onReferences: () => void;
+  /** «Template dự án» — màn `/templates`. */
+  onTemplates: () => void;
 }
 
 export function HomeSidebar({
@@ -37,6 +41,7 @@ export function HomeSidebar({
   onBrands,
   onPromptLibrary,
   onReferences,
+  onTemplates,
 }: HomeSidebarProps) {
   const item = (id: HomeSection, label: string, Icon: typeof LayoutGrid) => (
     <button
@@ -104,6 +109,12 @@ export function HomeSidebar({
             chúng: mọi thứ hai màn ấy từng tả bằng ảnh nay tả bằng prompt. */}
         {destination("prompt-library", "Prompt", ListTree, onPromptLibrary)}
         {destination("references", "Ảnh phong cách", Images, onReferences)}
+        {/* «Template dự án» đứng CUỐI nhóm, sau ba thư viện kia: ba mục trên là NGUYÊN
+            LIỆU đi vào từng thẻ (thương hiệu, câu chữ, ảnh), còn template là cả một dự
+            án đã dựng xong được đóng gói lại — đơn vị lớn nhất của nhóm. Người ta cũng
+            ít ghé đây nhất: việc hằng ngày với template (chọn nó) diễn ra ở hộp «Tạo dự
+            án»; màn này chỉ để đổi tên, viết mô tả, dọn bớt. */}
+        {destination("templates", "Template dự án" /* kg-allow-jargon: «template» là TÊN TÍNH NĂNG do chủ sản phẩm đặt, không phải chữ kỹ thuật lọt ra */, LayoutTemplate, onTemplates)}
       </nav>
 
       <div className="my-4 border-t border-line-subtle" />

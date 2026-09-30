@@ -1,12 +1,41 @@
 /**
- * features/projects/lib/templates.ts — LUẬT THUẦN của template ở hộp Tạo dự án.
+ * features/projects/lib/templates.ts — LUẬT THUẦN của template ở hộp Tạo dự án và ở
+ * màn «Template dự án» (`features/home/TemplatesScreen.tsx`).
  *
  * Tách khỏi component để test không cần DOM, và vì luật điền tên (bên dưới) là thứ
  * dễ làm sai nhất mà sai thì im lặng: nó xoá chữ người dùng vừa gõ.
  */
 import type { Template } from "@/lib/types";
+import { foldCase } from "@/lib/format";
 
 const pad = (n: number) => String(n).padStart(2, "0");
+
+/** Trần độ dài tên — cùng số với `TEMPLATE_NAME_MAX` của agent (`lib/project-templates.mjs`). */
+export const TEMPLATE_NAME_MAX = 80;
+
+/**
+ * Tên template dùng được chưa — `null` = được. Cùng luật agent áp khi PATCH (trim rồi
+ * 1..80 ký tự, sai thì 400 `INVALID_NAME`); kiểm TRƯỚC ở đây để người dùng thấy lý do
+ * ngay dưới ô, không phải một băng lỗi chung chung sau một vòng mạng.
+ */
+export function templateNameError(raw: string): string | null {
+  const name = raw.trim();
+  // kg-allow-jargon: «template» là TÊN TÍNH NĂNG do chủ sản phẩm đặt («save template»), không phải chữ kỹ thuật lọt ra.
+  if (!name) return "Đặt tên cho template.";
+  const max = TEMPLATE_NAME_MAX;
+  if (name.length > max) return `Tên dài tối đa ${max} ký tự — đang có ${name.length}.`;
+  return null;
+}
+
+/**
+ * Ô tìm template (ở «Bắt đầu từ» và ở màn «Template dự án») — khớp theo TÊN, bỏ dấu,
+ * không phân biệt hoa thường: gõ «tet» ra «Shop Tết». Không khớp mô tả hay id: id là
+ * slug của tên kèm đuôi hex, khớp nó chỉ sinh kết quả trông như ngẫu nhiên.
+ */
+export function matchesTemplate(t: Pick<Template, "name">, query: string): boolean {
+  const q = foldCase(query.trim());
+  return !q || foldCase(t.name).includes(q);
+}
 
 /** «hôm nay» · «hôm qua» · «05/09/2026». Ngày lưu, không cần giờ — đây là nhãn nhận diện. */
 export function savedDay(iso: string | null | undefined, now: number = Date.now()): string {

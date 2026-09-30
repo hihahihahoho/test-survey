@@ -1,35 +1,64 @@
 import * as React from "react";
-import { FilePlus2, LayoutTemplate, Trash2 } from "lucide-react";
+import { Check, ChevronsUpDown, FilePlus2, LayoutTemplate, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import type { Template } from "@/lib/types";
-import { loadTemplateCover } from "../lib/agent-blob";
-import { templateCaption } from "../lib/templates";
+import { useTemplateCover } from "../lib/useTemplateCover";
+import { matchesTemplate, templateCaption } from "../lib/templates";
 
 /**
  * «BẮT ĐẦU TỪ» — chọn nguồn cho dự án mới trong hộp Tạo dự án: «Dự án trống» hoặc
  * một template người dùng đã lưu (nút «Lưu làm template» ở màn soạn / menu thẻ).
  *
- * A11y: `role="radiogroup"`, mỗi lựa chọn là `<button role="radio">` — MỘT tabstop cho
- * cả nhóm (lựa chọn đang chọn), mũi tên lên/xuống vừa di chuyển vừa chọn (mẫu WAI-ARIA
- * của radiogroup, cùng cách `CoverPicker` đã làm). Nút xoá của từng dòng là nút
- * THƯỜNG nằm CẠNH radio chứ không lồng trong nó: nút trong nút là HTML sai, và trình
- * đọc màn hình sẽ đọc gộp tên template với chữ «Xoá».
+ * ╔══ VÌ SAO LÀ MỘT Ô CHỌN MỘT DÒNG, KHÔNG CÒN LÀ DANH SÁCH BÀY SẴN ══════════╗
+ * ║ Chủ sản phẩm (30/09/2026, kèm ảnh chụp hộp Tạo dự án): lưu nhiều template  ║
+ * ║ là «Bắt đầu từ» thành một cột dòng to không đáy, đẩy nút «Tiếp tục» ra     ║
+ * ║ khỏi màn. Nay ô đóng chỉ nói LỰA CHỌN ĐANG DÙNG (bìa + tên + dòng phụ), cao ║
+ * ║ đúng một dòng dù có ba hay ba chục template; bấm vào mới bung danh sách —  ║
+ * ║ có ô tìm, cuộn bên trong, tối đa chừng sáu dòng.                          ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
  *
- * XOÁ HAI CHẠM, không `confirm()` của trình duyệt: chạm đầu biến nút thành «Xoá thật?»,
- * chạm hai mới xoá. Rời nút (blur) hoặc đợi 4 giây là thôi. Một cú trượt tay trong
- * danh sách chọn không được ném đi một template người ta dựng cả buổi.
+ * CUỘN RIÊNG Ở ĐÂY LÀ ĐƯỢC, dù `CoverPicker` cấm: luật ấy cấm hai tầng cuộn LỒNG
+ * nhau trong `DialogBody`. Danh sách này nằm trong một popover dựng qua portal, ra
+ * ngoài thân dialog — nó là ổ cuộn duy nhất dưới con trỏ.
  *
- * KHÔNG `max-h` + cuộn riêng: danh sách nằm trong `DialogBody`, vốn đã là ổ cuộn của
- * dialog — hai tầng cuộn lồng nhau là lăn chuột bị khựng (xem `CoverPicker`).
+ * POPOVER `modal` — không phải cho đẹp: dialog Tạo dự án khoá cuộn mọi thứ nằm ngoài
+ * thân nó (react-remove-scroll), mà popover qua portal thì nằm ngoài ⇒ lăn chuột trên
+ * danh sách không nhúc nhích. Popover modal dựng khoá cuộn CỦA NÓ lên đầu ngăn xếp, và
+ * chỉ khoá trên cùng có hiệu lực. Esc đóng popover trước (lớp trên cùng), dialog vẫn mở.
+ *
+ * KHÔNG CÒN NÚT XOÁ Ở ĐÂY. Chọn và xoá đứng cạnh nhau trong cùng một danh sách là một
+ * cú trượt tay ném đi template dựng cả buổi; xoá, đổi tên, mô tả dọn sang màn «Template
+ * dự án» (`/templates`), mở từ dòng «Quản lý template…» ở chân popover.
+ *
+ * A11y: nút mở là `<button>` thật, tên = «Bắt đầu từ» + tên lựa chọn đang dùng
+ * (`aria-labelledby` ghép nhãn nhìn thấy với ô giá trị — nói đúng chữ người ta đọc),
+ * dòng phụ nối bằng `aria-describedby`; Radix gắn `aria-expanded`/`aria-controls`.
+ * Trong popover là mẫu combobox của cmdk: ô tìm giữ focus, mũi tên đi, Enter chọn và
+ * đóng. Lựa chọn đang dùng mang `aria-checked` (cmdk dùng `aria-selected` cho dòng
+ * đang TRỎ, không phải dòng đã CHỌN) kèm dấu ✓.
  */
+
+/** Giá trị cmdk của hai dòng không phải template. Id template khớp `^[a-z0-9]…` nên không đụng. */
+const BLANK = "__blank__";
+const MANAGE = "__manage__";
+const BLANK_TITLE = "Dự án trống";
+const BLANK_CAPTION = "Bắt đầu từ trang trắng";
+// kg-allow-jargon: «template» là TÊN TÍNH NĂNG do chủ sản phẩm đặt («save template»), không phải chữ kỹ thuật lọt ra.
+const SEARCH_PLACEHOLDER = "Tìm template…";
+const SEARCH_LABEL = "Tìm template"; // kg-allow-jargon: tên tính năng, như trên.
+const MANAGE_LABEL = "Quản lý template…"; // kg-allow-jargon: tên tính năng, như trên.
+const savedHeading = (n: number) => `Template đã lưu · ${n}`; // kg-allow-jargon: tên tính năng, như trên.
+const noMatch = (q: string) => `Không có template nào tên «${q}».`; // kg-allow-jargon: tên tính năng, như trên.
+
 export function TemplatePicker({
   templates,
   loading,
   failed,
   value,
   onChange,
-  onDelete,
-  deletingId,
+  onManage,
   disabled,
 }: {
   templates: readonly Template[];
@@ -39,107 +68,89 @@ export function TemplatePicker({
   /** Id template đang chọn; `null` = «Dự án trống». */
   value: string | null;
   onChange: (id: string | null) => void;
-  onDelete: (template: Template) => void;
-  deletingId: string | null;
+  /** «Quản lý template…» ở chân popover. Không truyền ⇒ không có dòng ấy (vd đang ở chính màn quản lý). */
+  onManage?: () => void;
   disabled?: boolean;
 }) {
-  const groupRef = React.useRef<HTMLDivElement>(null);
-  const ids = React.useMemo<(string | null)[]>(() => [null, ...templates.map((t) => t.id)], [templates]);
-  const [confirmId, setConfirmId] = React.useState<string | null>(null);
+  const [open, setOpen] = React.useState(false);
+  const uid = React.useId();
+  const labelId = `${uid}-label`;
+  const valueId = `${uid}-value`;
+  const captionId = `${uid}-caption`;
+
+  const chosen = value ? (templates.find((t) => t.id === value) ?? null) : null;
+  /* Chưa có template nào thì ô chọn chỉ có đúng MỘT lựa chọn — một ô bấm vào chỉ để
+     thấy «Dự án trống» là một cú bấm phí. Khi đó chỉ còn câu chỉ đường bên dưới. */
+  const hasChoices = templates.length > 0;
+  const empty = !loading && !failed && !hasChoices;
 
   React.useEffect(() => {
-    if (!confirmId) return;
-    const t = setTimeout(() => setConfirmId(null), 4000);
-    return () => clearTimeout(t);
-  }, [confirmId]);
-
-  const move = (dir: 1 | -1 | "first" | "last") => {
-    const idx = Math.max(0, ids.indexOf(value));
-    const next = dir === "first" ? 0 : dir === "last" ? ids.length - 1 : (idx + dir + ids.length) % ids.length;
-    const id = ids[next] ?? null;
-    onChange(id);
-    groupRef.current?.querySelector<HTMLButtonElement>(`[data-source="${id ?? ""}"]`)?.focus();
-  };
-
-  const empty = !loading && !failed && templates.length === 0;
+    if (disabled) setOpen(false);
+  }, [disabled]);
 
   return (
     <div className="flex flex-col gap-2">
-      <span id="create-source-label" className="text-label text-fg-strong">Bắt đầu từ</span>
-      <div
-        ref={groupRef}
-        role="radiogroup"
-        aria-labelledby="create-source-label"
-        aria-disabled={disabled || undefined}
-        className="flex flex-col gap-1.5"
-        onKeyDown={(e) => {
-          if (disabled || !(e.target instanceof HTMLElement) || e.target.getAttribute("role") !== "radio") return;
-          const key = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1, Home: "first", End: "last" } as const;
-          const dir = key[e.key as keyof typeof key];
-          if (dir === undefined) return;
-          e.preventDefault();
-          move(dir);
-        }}
-      >
-        <SourceRow
-          source=""
-          checked={value === null}
-          disabled={disabled}
-          onSelect={() => onChange(null)}
-          thumb={<ThumbBox><FilePlus2 aria-hidden className="size-5 text-fg-muted" /></ThumbBox>}
-          title="Dự án trống"
-          caption="Bắt đầu từ trang trắng"
-        />
-        {templates.map((t) => {
-          const confirming = confirmId === t.id;
-          // kg-allow-jargon: «template» là TÊN TÍNH NĂNG do chủ sản phẩm đặt («save template»), không phải chữ kỹ thuật lọt ra.
-          const deleteLabel = confirming ? `Xác nhận xoá template ${t.name}` : `Xoá template ${t.name}`;
-          // kg-allow-jargon: tên tính năng «template», như trên.
-          const deleteHint = confirming ? "Bấm lần nữa để xoá" : "Xoá template";
-          return (
-            <SourceRow
-              key={t.id}
-              source={t.id}
-              checked={value === t.id}
-              disabled={disabled || deletingId === t.id}
-              onSelect={() => onChange(t.id)}
-              thumb={<TemplateThumb template={t} />}
-              title={t.name}
-              caption={templateCaption(t)}
-              trailing={
-                <button
-                  type="button"
-                  disabled={disabled || deletingId === t.id}
-                  aria-label={deleteLabel}
-                  title={deleteHint}
-                  onBlur={() => setConfirmId((c) => (c === t.id ? null : c))}
-                  onClick={() => {
-                    if (confirming) {
-                      setConfirmId(null);
-                      onDelete(t);
-                    } else {
-                      setConfirmId(t.id);
-                    }
-                  }}
-                  className={cn(
-                    "inline-flex h-ctl-sm shrink-0 items-center gap-1 rounded-1 px-2 text-label transition-colors",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-                    /* Khoá = màu TRUNG TÍNH ĐẶC, không `opacity-*`: chữ nhoè theo nền là rớt
-                       tương phản (scripts/check-contrast.mjs ③, cùng luật với `button.tsx`). */
-                    "disabled:cursor-not-allowed disabled:bg-transparent disabled:text-fg-muted",
-                    confirming
-                      ? "bg-danger-solid text-fg-on-danger hover:bg-danger-solid/90"
-                      : "text-fg-muted hover:bg-raised hover:text-danger",
-                  )}
-                >
-                  <Trash2 aria-hidden className="size-4" />
-                  {confirming && <span>Xoá thật?</span>}
-                </button>
-              }
+      <span id={labelId} className="text-label text-fg-strong">Bắt đầu từ</span>
+      {hasChoices && (
+        <Popover open={open} onOpenChange={setOpen} modal>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              disabled={disabled}
+              aria-labelledby={`${labelId} ${valueId}`}
+              aria-describedby={captionId}
+              className={cn(
+                /* Cùng chất liệu với ô «Tên dự án» ngay trên (`Input`): viền `line`, nền
+                   `raised`, bo `rounded-2`, focus viền accent + ring. Cao hơn ô ấy vì phải
+                   chứa HAI dòng (tên + dòng phụ) — cắt dòng phụ đi là mất đúng thứ phân
+                   biệt hai template trùng tên. */
+                "group flex w-full items-center gap-3 rounded-2 border border-line bg-raised py-1.5 pl-1.5 pr-3 text-left",
+                "transition-colors duration-fast hover:border-line-strong data-[state=open]:border-accent",
+                "focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+                /* Khoá = màu TRUNG TÍNH ĐẶC, không `opacity-*`: chữ nhoè theo nền là rớt
+                   tương phản (scripts/check-contrast.mjs ③, cùng luật với `button.tsx`). */
+                "disabled:cursor-not-allowed disabled:border-line-subtle disabled:hover:border-line-subtle",
+              )}
+            >
+              {chosen ? <TemplateThumb template={chosen} size="sm" /> : <BlankThumb size="sm" />}
+              <span className="min-w-0 flex-1">
+                <span id={valueId} className="block truncate text-label text-fg-strong group-disabled:text-fg-muted">
+                  {chosen ? chosen.name : BLANK_TITLE}
+                </span>
+                <span id={captionId} className="block truncate text-caption text-fg-muted">
+                  {chosen ? templateCaption(chosen) : BLANK_CAPTION}
+                </span>
+              </span>
+              <ChevronsUpDown aria-hidden className="size-4 shrink-0 text-fg-muted" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="start"
+            sideOffset={6}
+            /* LUÔN NẰM DƯỚI Ô, không lật (thử trên màn thật 30/09/2026): hộp Tạo dự án ở giữa
+               màn nên chỗ trống dưới ô thường không đủ 6 dòng ⇒ Radix lật danh sách lên TRÊN,
+               che ô tên — rồi gõ tìm vài chữ, danh sách ngắn lại vừa chỗ dưới, nó NHẢY xuống
+               ngay dưới ngón tay. Thay vì lật: danh sách co theo chỗ trống bên dưới (khối
+               cuộn ở `SourceMenu`), như một ô chọn thường nối dài xuống. */
+            side="bottom"
+            avoidCollisions={false}
+            aria-labelledby={labelId}
+            /* Rộng đúng bằng ô mở nó: danh sách là phần nối dài của ô, không phải một
+               menu nổi rộng tuỳ ý che mất ô tên phía trên. */
+            className="w-[var(--radix-popover-trigger-width)] overflow-hidden p-0"
+          >
+            <SourceMenu
+              templates={templates}
+              value={chosen ? chosen.id : null}
+              onPick={(id) => {
+                setOpen(false);
+                onChange(id);
+              }}
+              onManage={onManage ? () => { setOpen(false); onManage(); } : undefined}
             />
-          );
-        })}
-      </div>
+          </PopoverContent>
+        </Popover>
+      )}
       {loading && <p className="text-caption text-fg-muted">Đang tải template…</p>}
       {failed && <p className="text-caption text-fg-muted">Chưa tải được danh sách template — vẫn tạo được dự án trống.</p>}
       {empty && (
@@ -151,74 +162,132 @@ export function TemplatePicker({
   );
 }
 
-function SourceRow({
-  source, checked, disabled, onSelect, thumb, title, caption, trailing,
+/**
+ * Ruột popover. Tách riêng để ô tìm SINH RA cùng popover: đóng rồi mở lại là ô tìm
+ * trống và dòng được trỏ là lựa chọn đang dùng — không kẹt lại chữ tìm của lần trước
+ * với một danh sách đã lọc mất lựa chọn hiện tại.
+ */
+function SourceMenu({
+  templates,
+  value,
+  onPick,
+  onManage,
 }: {
-  source: string;
+  templates: readonly Template[];
+  value: string | null;
+  onPick: (id: string | null) => void;
+  onManage?: () => void;
+}) {
+  const [query, setQuery] = React.useState("");
+  const q = query.trim();
+  const shown = q ? templates.filter((t) => matchesTemplate(t, q)) : templates;
+  /* Đang tìm thì «Dự án trống» chỉ ở lại nếu chính nó khớp: gõ «shop» rồi Enter phải ra
+     template tên Shop, không phải dòng trống đứng đầu danh sách. */
+  const blankShown = !q || matchesTemplate({ name: BLANK_TITLE }, q);
+
+  return (
+    <Command
+      /* Tự lọc (theo TÊN, bỏ dấu — `matchesTemplate`): bộ lọc mờ mặc định của cmdk chấm
+         điểm cả id, nên «a1» khớp mọi template có đuôi hex chứa a1. */
+      shouldFilter={false}
+      loop
+      /* Mở ra là trỏ sẵn vào lựa chọn đang dùng (và cuộn tới nó), không phải dòng đầu. */
+      defaultValue={value ?? BLANK}
+      label={SEARCH_LABEL}
+      className={cn(
+        "rounded-none bg-transparent",
+        "[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-2",
+        "[&_[cmdk-group-heading]]:text-caption [&_[cmdk-group-heading]]:text-fg-muted-raised",
+      )}
+    >
+      <CommandInput value={query} onValueChange={setQuery} placeholder={SEARCH_PLACEHOLDER} />
+      {/* Bỏ trần cao + cuộn của `CommandList`: ổ cuộn là khối bên trong, để dòng «Quản
+          lý template…» đứng yên ở chân thay vì trôi mất dưới đáy danh sách dài. */}
+      <CommandList label="Bắt đầu từ" className="max-h-none overflow-visible p-0">
+        <div
+          data-template-scroll
+          /* ~6 dòng; chỗ trống DƯỚI ô ít hơn thì co lại theo đó (trừ ô tìm + chân), nhưng
+             không dưới ~2,5 dòng — màn quá thấp thì thà tràn mép dưới một chút còn hơn một
+             khe cuộn chỉ lọt nửa dòng. */
+          className="max-h-[max(9rem,min(20rem,calc(var(--radix-popover-content-available-height)_-_7rem)))] overflow-y-auto overscroll-contain p-1"
+        >
+          {blankShown && (
+            <SourceItem value={BLANK} checked={value === null} onSelect={() => onPick(null)}
+              thumb={<BlankThumb size="md" />} title={BLANK_TITLE} caption={BLANK_CAPTION} />
+          )}
+          {shown.length > 0 && (
+            <CommandGroup heading={savedHeading(templates.length)} className="p-0">
+              {shown.map((t) => (
+                <SourceItem key={t.id} value={t.id} checked={value === t.id} onSelect={() => onPick(t.id)}
+                  thumb={<TemplateThumb template={t} size="md" />} title={t.name} caption={templateCaption(t)} />
+              ))}
+            </CommandGroup>
+          )}
+          {!blankShown && shown.length === 0 && (
+            <p className="px-2 py-6 text-center text-body text-fg">{noMatch(q)}</p>
+          )}
+        </div>
+        {onManage && (
+          <div className="border-t border-line-subtle p-1">
+            <CommandItem value={MANAGE} onSelect={onManage} className="text-fg">
+              <Settings2 aria-hidden />
+              {MANAGE_LABEL}
+            </CommandItem>
+          </div>
+        )}
+      </CommandList>
+    </Command>
+  );
+}
+
+function SourceItem({
+  value, checked, onSelect, thumb, title, caption,
+}: {
+  value: string;
   checked: boolean;
-  disabled?: boolean;
   onSelect: () => void;
   thumb: React.ReactNode;
   title: string;
   caption: string;
-  trailing?: React.ReactNode;
 }) {
   return (
-    <div
-      className={cn(
-        "flex items-center gap-2 rounded-3 border p-1.5 pr-2 transition-colors",
-        checked ? "border-accent bg-accent/[var(--kg-tint-a)]" : "border-line-subtle hover:bg-raised",
-      )}
-    >
-      <button
-        type="button"
-        role="radio"
-        aria-checked={checked}
-        data-source={source}
-        tabIndex={checked ? 0 : -1}
-        disabled={disabled}
-        onClick={onSelect}
-        className={cn(
-          "group flex min-w-0 flex-1 items-center gap-3 rounded-2 text-left",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-          "disabled:cursor-not-allowed",
-        )}
-      >
-        {thumb}
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-label text-fg-strong group-disabled:text-fg-muted">{title}</span>
-          <span className="block truncate text-caption text-fg-muted">{caption}</span>
-        </span>
-      </button>
-      {trailing}
-    </div>
+    <CommandItem value={value} onSelect={onSelect} aria-checked={checked} className="gap-3 py-1.5">
+      {thumb}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-label text-fg-strong">{title}</span>
+        <span className="block truncate text-caption text-fg-muted">{caption}</span>
+      </span>
+      {/* Chỗ của dấu ✓ luôn được giữ: dòng chọn và dòng không chọn cùng một bề ngang chữ. */}
+      {checked ? <Check aria-hidden className="text-accent-text" /> : <span aria-hidden className="size-4 shrink-0" />}
+    </CommandItem>
   );
 }
 
-function ThumbBox({ children }: { children: React.ReactNode }) {
+const THUMB_SIZE = { sm: "size-8", md: "size-10" } as const;
+
+function ThumbBox({ size, children }: { size: keyof typeof THUMB_SIZE; children: React.ReactNode }) {
   return (
-    <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-2 border border-line-subtle bg-raised">
+    <span className={cn(
+      "flex shrink-0 items-center justify-center overflow-hidden rounded-1 border border-line-subtle bg-raised",
+      THUMB_SIZE[size],
+    )}>
       {children}
     </span>
   );
 }
 
-/** Ảnh bìa 48px của template (`?w=128` cho màn retina). Không bìa / tải hỏng ⇒ ô giữ chỗ. */
-function TemplateThumb({ template }: { template: Template }) {
-  const [url, setUrl] = React.useState<string | null>(null);
-  React.useEffect(() => {
-    if (!template.hasCover) return;
-    let alive = true;
-    loadTemplateCover(template.id, template.createdAt ?? "")
-      .then((u) => { if (alive) setUrl(u); })
-      .catch(() => { if (alive) setUrl(null); });
-    return () => { alive = false; };
-  }, [template.id, template.createdAt, template.hasCover]);
+function BlankThumb({ size }: { size: keyof typeof THUMB_SIZE }) {
+  return <ThumbBox size={size}><FilePlus2 aria-hidden className="size-4 text-fg-muted" /></ThumbBox>;
+}
+
+/** Ảnh bìa nhỏ của template (`?w=128` — đủ nét cho ô 40px ở màn retina). Không bìa / tải hỏng ⇒ ô giữ chỗ. */
+function TemplateThumb({ template, size }: { template: Template; size: keyof typeof THUMB_SIZE }) {
+  const url = useTemplateCover(template, 128);
   return (
-    <ThumbBox>
+    <ThumbBox size={size}>
       {url
         ? <img src={url} alt="" className="size-full object-cover" />
-        : <LayoutTemplate aria-hidden className="size-5 text-fg-muted" />}
+        : <LayoutTemplate aria-hidden className="size-4 text-fg-muted" />}
     </ThumbBox>
   );
 }

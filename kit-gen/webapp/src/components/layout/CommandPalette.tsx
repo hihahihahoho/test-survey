@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
-  BookOpen, Boxes, Compass, Keyboard, Pencil, Plus,
+  BookOpen, Boxes, Compass, Keyboard, LayoutTemplate, Pencil, Plus,
   RefreshCw, Settings, Terminal, Trash2, Upload, Wrench,
 } from "lucide-react";
 import {
@@ -78,6 +78,11 @@ export function CommandPalette(props: CommandPaletteProps) {
 
       { id: "nav.projects", group: "Điều hướng", icon: Boxes, label: "Về danh sách dự án", hint: ["g", "p"], hintSequence: true,
         run: go(() => void navigate({ to: "/" })) },
+      /* Đứng ngay sau «danh sách dự án»: đây là màn duy nhất của thanh bên mà người ta
+         hay tìm bằng một chữ KHÁC tên nó («mẫu», «mẫu dự án») — `keywords` gánh chỗ đó. */
+      // kg-allow-jargon: «template» là TÊN TÍNH NĂNG do chủ sản phẩm đặt («save template»), không phải chữ kỹ thuật lọt ra.
+      { id: "nav.templates", group: "Điều hướng", icon: LayoutTemplate, label: "Template dự án", keywords: "mau du an mau template",
+        run: go(() => void navigate({ to: "/templates" })) },
       { id: "nav.settings.agent", group: "Điều hướng", icon: Terminal, label: "Cài đặt · Công cụ local & Thư mục làm việc",
         run: go(() => void navigate({ to: "/settings", search: { tab: "agent" } })) },
       { id: "nav.settings.env", group: "Điều hướng", icon: Wrench, label: "Cài đặt · Môi trường và Tạo ảnh AI",

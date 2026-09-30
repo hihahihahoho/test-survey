@@ -26,6 +26,7 @@ const fakeNav = (): ProjectNav => ({
   openStyles: vi.fn(),
   openRuns: vi.fn(),
   openTrash: vi.fn(),
+  openTemplates: vi.fn(),
 });
 
 describe("§W1-8 — mở bộ kit là vào ĐÚNG PHÒNG của nó", () => {

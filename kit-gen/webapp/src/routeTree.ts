@@ -4,6 +4,7 @@ import { Route as settingsRoute } from "./routes/settings";
 import { Route as promptLibraryRoute } from "./routes/library.prompts";
 import { Route as brandsRoute } from "./routes/brands";
 import { Route as referencesRoute } from "./routes/references";
+import { Route as templatesRoute } from "./routes/templates";
 import { Route as trashRoute } from "./routes/trash";
 import { Route as kitMainRoute } from "./routes/k.$projectId";
 import { Route as legacyProjectRoute } from "./routes/p.$";
@@ -18,10 +19,11 @@ import { Route as legacyProjectRoute } from "./routes/p.$";
  * └────────────────────────────────────────────────────────────────────────┘
  *
  * ══ IA PROMPT-FIRST: MỘT MÀN LÀM VIỆC, MỘT LỚP VỎ ═════════════════════════
- * `/k/:projectId` là màn làm việc DUY NHẤT (khu soạn prompt). Bảy route còn lại
- * là vỏ: trang chủ, cài đặt máy, thùng rác, và BA thư viện — «Thư viện prompt»
+ * `/k/:projectId` là màn làm việc DUY NHẤT (khu soạn prompt). Tám route còn lại
+ * là vỏ: trang chủ, cài đặt máy, thùng rác, BA thư viện — «Thư viện prompt»
  * (`/library/prompts`, 09/2026) là chỗ sửa mọi danh mục đi vào prompt, cạnh
- * «Nhận dạng thương hiệu» (`/brands`) và «Ảnh phong cách» (`/references`).
+ * «Nhận dạng thương hiệu» (`/brands`) và «Ảnh phong cách» (`/references`) — và
+ * «Template dự án» (`/templates`).
  *
  * `/p/$` là TẤM BIỂN CHỈ ĐƯỜNG cho mọi địa chỉ đời cũ — xem `routes/p.$.tsx`.
  * Nó phải đứng CUỐI: một route splat khớp rất rộng, đặt trước là nó nuốt mất
@@ -37,6 +39,10 @@ import { Route as legacyProjectRoute } from "./routes/p.$";
  * Đo lại thì đúng: không màn nào của luồng prompt-first đọc ảnh thư viện loại
  * `ui`/`mascot`. Kho phía agent GIỮ NGUYÊN (dữ liệu cũ + ảnh của `/brands`); chỉ
  * hai màn ra đi. Ai dựng lại một màn duyệt ảnh thì khai route mới ở ĐÂY.
+ * 30/09/2026 — THÊM `/templates` («Template dự án»): nơi đổi tên, viết mô tả và xoá
+ * template đã lưu. Chủ sản phẩm: danh sách «Bắt đầu từ» trong hộp Tạo dự án phình
+ * không đáy khi có nhiều template, và xoá ngay trong danh sách chọn thì dễ trượt tay
+ * — hộp ấy nay chỉ để CHỌN, việc quản lý dọn sang đây.
  */
 export const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -44,6 +50,7 @@ export const routeTree = rootRoute.addChildren([
   promptLibraryRoute,
   brandsRoute,
   referencesRoute,
+  templatesRoute,
   trashRoute,
   kitMainRoute,
   legacyProjectRoute,

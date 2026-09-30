@@ -7,7 +7,7 @@ import { BrokenProjectDialog } from "./dialogs/BrokenProjectDialog";
 import { SaveTemplateDialog } from "./dialogs/SaveTemplateDialog";
 import type { Project } from "@/lib/types";
 import type { Gate } from "./lib/gate";
-import type { ProjectNav } from "./lib/nav";
+import { openCreatedWith, type ProjectNav } from "./lib/nav";
 import type { DialogState } from "./lib/useProjectDialogs";
 
 /**
@@ -43,10 +43,8 @@ export function ProjectDialogs({
         open={dialogs.isOpen("create")}
         onOpenChange={dialogs.setOpen("create")}
         gate={gate}
-        onCreated={(project, mode) => {
-          // Dự án mới luôn bắt đầu bằng khu soạn prompt.
-          if (mode === "workflow") nav.openWizard(project.id);
-        }}
+        onCreated={(project, mode) => openCreatedWith(nav, project, mode)}
+        onManageTemplates={() => nav.openTemplates()}
       />
 
       <RenameProjectDialog

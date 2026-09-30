@@ -26,6 +26,7 @@ export function HomeWorkspaceShell({
     brands: () => void navigate({ to: "/brands" }),
     prompts: () => void navigate({ to: "/library/prompts", search: {} }),
     references: () => void navigate({ to: "/references" }),
+    templates: () => void navigate({ to: "/templates" }),
     trash: () => void navigate({ to: "/trash" }),
     settings: () => void navigate({ to: "/settings", search: { tab: "agent" } }),
   };
@@ -40,6 +41,7 @@ export function HomeWorkspaceShell({
         onBrands={go.brands}
         onPromptLibrary={go.prompts}
         onReferences={go.references}
+        onTemplates={go.templates}
         onTrash={go.trash}
         onSettings={go.settings}
       />

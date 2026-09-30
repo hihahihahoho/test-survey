@@ -4,7 +4,7 @@ import { useAgentStatus, useTrash } from "@/lib/hooks";
 import { useRecentStore } from "@/lib/store";
 import type { ScreenProps } from "@/components/layout";
 import { Input } from "@/components/ui/input";
-import { Images, Search, Settings, Trash2 } from "lucide-react";
+import { Images, LayoutTemplate, Search, Settings, Trash2 } from "lucide-react";
 import type { Project } from "@/lib/types";
 
 import { gateOf, useNarrowViewport } from "./lib/gate";
@@ -192,6 +192,7 @@ export function ProjectsScreen(_props: ScreenProps) {
         onBrands={() => void navigate({ to: "/brands" })}
         onPromptLibrary={() => void navigate({ to: "/library/prompts", search: {} })}
         onReferences={() => void navigate({ to: "/references" })}
+        onTemplates={() => nav.openTemplates()}
         onTrash={() => nav.openTrash()}
         onSettings={() => void navigate({ to: "/settings", search: { tab: "agent" } })}
       />
@@ -225,6 +226,10 @@ export function ProjectsScreen(_props: ScreenProps) {
         <nav aria-label="Điều hướng trên màn hình nhỏ" className="mt-3 flex items-center gap-1 overflow-x-auto pb-1 md:hidden">
           <button type="button" onClick={() => void navigate({ to: "/references" })} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Ảnh phong cách">
             <Images className="size-4" aria-hidden />Tham chiếu
+          </button>
+          {/* Chữ ngắn «Template» cho thanh cuộn ngang hẹp, như «Tham chiếu» ở trên; tên đủ nằm ở aria-label. */}
+          <button type="button" onClick={() => nav.openTemplates()} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Template dự án" /* kg-allow-jargon: tên tính năng do chủ sản phẩm đặt */>
+            <LayoutTemplate className="size-4" aria-hidden />Template
           </button>
           <button type="button" onClick={() => nav.openTrash()} className="flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-2 px-3 text-label text-fg" aria-label="Thùng rác">
             <Trash2 className="size-4" aria-hidden />Thùng rác

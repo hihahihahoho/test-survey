@@ -30,6 +30,7 @@ function mount(onPromptLibrary = vi.fn()) {
       onBrands={vi.fn()}
       onPromptLibrary={onPromptLibrary}
       onReferences={vi.fn()}
+      onTemplates={vi.fn()}
     />,
   );
   return onPromptLibrary;

@@ -98,18 +98,28 @@ export function forgetThumbs(projectId: string): void {
 
 
 /* ═════════ Hình thu nhỏ của TEMPLATE: cùng lý do, cùng cách ═════════
-   `GET /api/templates/:id/cover?w=128` cũng cần header `X-KitGen-Client` như mọi route
+   `GET /api/templates/:id/cover?w=…` cũng cần header `X-KitGen-Client` như mọi route
    của agent ⇒ tải qua transport (`api.templates.coverBlob`) rồi dựng object URL.
    Khoá kèm `createdAt`: nội dung một template BẤT BIẾN sau khi lưu, nên cặp (id, mốc
-   lưu) là đủ để biết tấm trong cache còn đúng — kể cả khi đổi workspace mà trùng id. */
+   lưu) là đủ để biết tấm trong cache còn đúng — kể cả khi đổi workspace mà trùng id.
+
+   BỀ RỘNG NẰM TRONG KHOÁ. Hai nơi xin hai cỡ: ô 32–40px của «Bắt đầu từ» xin 128, thẻ
+   của màn «Template dự án» xin 512. Khoá thiếu bề rộng thì nơi nào hỏi TRƯỚC thắng:
+   mở hộp Tạo dự án trước rồi sang màn quản lý là thẻ to hiện tấm 128px bị kéo giãn
+   nhoè — không lỗi, không báo. Agent tự nắn mọi số về 128/256/512 (`ALLOWED_W`), nên
+   kiểu dưới đây chỉ cho đúng ba số ấy để hai khoá khác nhau không bao giờ trỏ cùng
+   một tấm ảnh. */
+
+/** Ba bề rộng agent phục vụ được (`agent/engine/thumbs.mjs` `ALLOWED_W`). */
+export type TemplateCoverWidth = 128 | 256 | 512;
 
 const templateCovers = new Map<string, Promise<string>>();
 
-export function loadTemplateCover(templateId: string, stamp = ""): Promise<string> {
-  const key = `${templateId}|${stamp}`;
+export function loadTemplateCover(templateId: string, stamp = "", width: TemplateCoverWidth = 128): Promise<string> {
+  const key = `${templateId}|${stamp}|${width}`;
   const hit = templateCovers.get(key);
   if (hit) return hit;
-  const p = api.templates.coverBlob(templateId, 128).then((blob) => URL.createObjectURL(blob));
+  const p = api.templates.coverBlob(templateId, width).then((blob) => URL.createObjectURL(blob));
   p.catch(() => templateCovers.delete(key));
   templateCovers.set(key, p);
   if (templateCovers.size > MAX_CACHED_THUMBS) {
@@ -123,7 +133,7 @@ export function loadTemplateCover(templateId: string, stamp = ""): Promise<strin
   return p;
 }
 
-/** Quên hình thu nhỏ của một template (sau khi xoá). */
+/** Quên hình thu nhỏ của một template (sau khi xoá) — MỌI bề rộng, vì khoá bắt đầu bằng `<id>|`. */
 export function forgetTemplateCover(templateId: string): void {
   for (const key of [...templateCovers.keys()]) {
     if (!key.startsWith(`${templateId}|`)) continue;
