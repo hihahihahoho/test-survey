@@ -114,6 +114,18 @@ export const DOC_ENTRIES: DocEntry[] = [
     fix: ["Chờ 2–3 giây rồi bấm Kiểm tra lại."],
   },
   {
+    code: "AGENT_FEATURE_MISSING",
+    group: "Kết nối với công cụ local",
+    why:
+      "Công cụ local trên máy bạn là bản cũ hơn giao diện, nên nó chưa biết tính năng vừa bấm. " +
+      "Mọi thứ khác vẫn chạy bình thường.",
+    fix: [
+      "Bấm «Cập nhật» trong Cài đặt để lên bản mới rồi thử lại.",
+      "Đang chạy bản dev: tắt rồi chạy lại lệnh khởi động để agent nạp mã mới.",
+    ],
+    related: ["AGENT_PROTOCOL_OLD"],
+  },
+  {
     code: "AGENT_PROTOCOL_OLD",
     group: "Kết nối với công cụ local",
     why:

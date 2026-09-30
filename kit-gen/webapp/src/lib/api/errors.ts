@@ -402,6 +402,18 @@ export const ERROR_TABLE: Record<string, ErrorEntry> = {
     explain: "Tải lại trang rồi thử lại. Nếu vẫn lỗi, gửi phần chi tiết kỹ thuật cho người phát triển.",
     actions: [A.HARD_RELOAD, A.SHOW_DETAILS], where: [W.toast], severity: "danger",
   },
+  /**
+   * 404 «no route for …» — agent TRẢ LỜI được nhưng không biết đường này: nó là bản cũ
+   * hơn giao diện. Ca thật 30/09/2026: web dev 3.0.15 gọi «Lưu làm template» vào agent
+   * dev khởi động từ 21/09 ⇒ hộp lỗi «Không tìm thấy thứ bạn cần / dữ liệu có thể đã bị
+   * xoá» — nói sai nguyên nhân và chỉ sai cách chữa. Không `readOnly`: mọi thứ khác
+   * vẫn chạy, chỉ riêng tính năng mới là chưa có.
+   */
+  AGENT_FEATURE_MISSING: {
+    title: "Công cụ local chưa có tính năng này",
+    explain: "KitGen trên máy đang chạy bản cũ hơn giao diện. Bấm «Cập nhật» trong Cài đặt hoặc khởi động lại KitGen, rồi thử lại.",
+    actions: [A.COPY_UPDATE_CMD], where: [W.toast], severity: "warn",
+  },
   NOT_FOUND: {
     title: "Không tìm thấy thứ bạn cần",
     explain: "Dữ liệu có thể đã bị xoá hoặc đổi tên.",
@@ -497,7 +509,7 @@ export interface PresentedError {
 export function presentError(err: unknown): PresentedError {
   const code = extractCode(err);
   const c0 = canonicalCode(code);
-  const c = c0 !== null ? refineCatchAll(c0, err) : null;
+  const c = c0 !== null ? refineMissingRoute(refineCatchAll(c0, err), err) : null;
   const hit = c !== null ? ERROR_TABLE[c] : undefined;
   const entry = hit ?? UNKNOWN_ENTRY;
   return {
@@ -572,6 +584,14 @@ export function refineCatchAll(code: string, err: unknown): string {
   }
   // Còn lại: có response ≥500 ⇒ đúng nghĩa "agent hỏng khi xử lý".
   return CATCH_ALL;
+}
+
+/** 404 `NOT_FOUND` mà thông điệp là «no route for …» (agent/server.mjs) ⇒ agent cũ hơn
+ *  giao diện, không phải dữ liệu biến mất. Mọi 404 khác giữ nguyên. */
+export function refineMissingRoute(code: string, err: unknown): string {
+  if (code !== "NOT_FOUND") return code;
+  const msg = err && typeof err === "object" ? (err as Record<string, unknown>).message : null;
+  return typeof msg === "string" && msg.startsWith("no route for ") ? "AGENT_FEATURE_MISSING" : code;
 }
 
 function extractCode(err: unknown): string | null {
