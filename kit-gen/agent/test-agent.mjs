@@ -72,6 +72,24 @@ const watchdog = setTimeout(() => {
 }, BUDGET_MS)
 watchdog.unref()
 
+/* ══ CHẾT GIỮA CHỪNG PHẢI CÓ TÊN, VÀ PHẢI IN RA STDOUT ════════════════════════
+   Runner Windows 30/09/2026 (run 36662492293, bản 3.0.15): ca [165] xanh, 130 ms sau
+   tiến trình thoát mã 1 — không một dòng lỗi, không báo cáo, bước khám nghiệm cũng
+   không nói được gì. Lỗi ném ngoài mọi `it()` (dọn dẹp cuối một suite, một listener
+   `error` không ai bắt) đi thẳng ra stderr rồi chết, và trên runner đó dòng stderr
+   ấy không tới log. Từ nay nó đi qua STDOUT kèm tên ca đang chạy, rồi in báo cáo
+   tới thời điểm đó — giống hệt nhánh quá ngân sách ở trên. */
+const died = kind => err => {
+  process.stdout.write(
+    `\n\n╳ ${kind} — BỘ CA CHẾT NGOÀI MỌI CA\n` +
+    `  ca gần nhất : ${currentCase() ?? "(chưa vào ca nào / đang dọn dẹp giữa hai suite)"}\n` +
+    `  lỗi        : ${err?.stack ?? err}\n`)
+  report()
+  process.exit(1)
+}
+process.on("uncaughtException", died("uncaughtException"))
+process.on("unhandledRejection", died("unhandledRejection"))
+
 const tmp = await mkdtemp(join(tmpdir(), "kitgen-test-"))
 const wsRoot = join(tmp, "KitGen")
 const outsideRoot = join(tmp, "outside")
@@ -93,24 +111,30 @@ const { api, call } = apiFor(agent.server)
 
 const base = { api, call, agent, wsRoot, outsideRoot, tmp, agentDir: AGENT_DIR }
 
-await runSystem(base)
-await runSettings(base)
-const { pid } = await runProjects(base)
-await runPaths({ ...base, pid })
-await runContract({ ...base, pid })
-await runLimits({ ...base, pid })
-await runRefs({ ...base, pid })
-await runLibrary(base)
-await runTemplates(base)
-await runRuns({ ...base, pid })
-await runPause({ ...base, pid })
-await runCover({ ...base, pid })
-await runImport({ ...base, pid })
-await runUpdateCure({ ...base })
-await runCodexLogin({ ...base })
-await runEnginePrompt({ ...base })
-await runEngineSlice({ ...base })
-await runEngineGen({ ...base })
+/* try/catch quanh CẢ chuỗi suite: một lỗi ném ra ở top-level await không đảm bảo đi
+   qua `uncaughtException` ở mọi bản Node — bắt tận tay cho chắc (xem khối `died`). */
+try {
+  await runSystem(base)
+  await runSettings(base)
+  const { pid } = await runProjects(base)
+  await runPaths({ ...base, pid })
+  await runContract({ ...base, pid })
+  await runLimits({ ...base, pid })
+  await runRefs({ ...base, pid })
+  await runLibrary(base)
+  await runTemplates(base)
+  await runRuns({ ...base, pid })
+  await runPause({ ...base, pid })
+  await runCover({ ...base, pid })
+  await runImport({ ...base, pid })
+  await runUpdateCure({ ...base })
+  await runCodexLogin({ ...base })
+  await runEnginePrompt({ ...base })
+  await runEngineSlice({ ...base })
+  await runEngineGen({ ...base })
+} catch (e) {
+  died("lỗi ném ra ngoài mọi ca")(e)
+}
 
 /* Dọn workspace tạm. Trên Windows bước này ĐÃ TỪNG giết cả bộ ca (run 31784778492):
    `rmdir … ENOTEMPTY` ném ra ở top-level ⇒ unhandled rejection ⇒ tiến trình chết TRƯỚC
